@@ -18,6 +18,9 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type" FORCE)
 endif()
 
+# ── Visual Studio: set wow_export as the startup project ──────
+set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT wow_export)
+
 # ════════════════════════════════════════════════════════════════
 #  Dependencies (all from extern/ git submodules)
 # ════════════════════════════════════════════════════════════════
@@ -28,11 +31,11 @@ set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL        OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_WAYLAND  OFF CACHE BOOL "" FORCE)
-add_subdirectory(extern/glfw)
+add_subdirectory(extern/glfw EXCLUDE_FROM_ALL)
 
 # ── GLAD2 (OpenGL 4.6 core loader, regenerated every build) ───
 set(GLAD_SOURCES_DIR "${CMAKE_SOURCE_DIR}/extern/glad" CACHE STRING "" FORCE)
-add_subdirectory(extern/glad/cmake)
+add_subdirectory(extern/glad/cmake EXCLUDE_FROM_ALL)
 glad_add_library(glad_gl_core_46 STATIC REPRODUCIBLE API gl:core=4.6)
 
 # ── Dear ImGui (docking branch, compiled as a static library) ──
@@ -56,27 +59,37 @@ target_compile_definitions(imgui PUBLIC
 )
 
 # ── GLM (math, header-only) ───────────────────────────────────
-add_subdirectory(extern/glm)
+set(GLM_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
+set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
+add_subdirectory(extern/glm EXCLUDE_FROM_ALL)
 
 # ── nlohmann/json (JSON parsing) ──────────────────────────────
 set(JSON_BuildTests     OFF CACHE BOOL "" FORCE)
 set(JSON_Install        OFF CACHE BOOL "" FORCE)
 set(JSON_MultipleHeaders OFF CACHE BOOL "" FORCE)
-add_subdirectory(extern/json)
+set(JSON_CI             OFF CACHE BOOL "" FORCE)
+add_subdirectory(extern/json EXCLUDE_FROM_ALL)
 
 # ── spdlog (logging, bundles fmt) ─────────────────────────────
-set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
-set(SPDLOG_INSTALL       OFF CACHE BOOL "" FORCE)
-add_subdirectory(extern/spdlog)
+set(SPDLOG_BUILD_EXAMPLE    OFF CACHE BOOL "" FORCE)
+set(SPDLOG_BUILD_EXAMPLE_HO OFF CACHE BOOL "" FORCE)
+set(SPDLOG_BUILD_TESTS      OFF CACHE BOOL "" FORCE)
+set(SPDLOG_BUILD_TESTS_HO   OFF CACHE BOOL "" FORCE)
+set(SPDLOG_BUILD_BENCH      OFF CACHE BOOL "" FORCE)
+set(SPDLOG_BUILD_ALL        OFF CACHE BOOL "" FORCE)
+set(SPDLOG_INSTALL          OFF CACHE BOOL "" FORCE)
+add_subdirectory(extern/spdlog EXCLUDE_FROM_ALL)
 
 # ── cpp-httplib (HTTP client/server, header-only) ─────────────
 set(HTTPLIB_COMPILE OFF CACHE BOOL "" FORCE)
-add_subdirectory(extern/cpp-httplib)
+set(HTTPLIB_TEST    OFF CACHE BOOL "" FORCE)
+add_subdirectory(extern/cpp-httplib EXCLUDE_FROM_ALL)
 
 # ── zlib (compression) ────────────────────────────────────────
 set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_TESTING  OFF CACHE BOOL "" FORCE)
 set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
-add_subdirectory(extern/zlib)
+add_subdirectory(extern/zlib EXCLUDE_FROM_ALL)
 # zlib's CMake names its target "zlibstatic" for static builds.
 # Fix interface include dirs (zlib's CMakeLists.txt uses raw paths
 # that CMake rejects for installed/exported targets).
@@ -97,12 +110,15 @@ set(WEBP_BUILD_IMG2WEBP   OFF CACHE BOOL "" FORCE)
 set(WEBP_BUILD_VWEBP      OFF CACHE BOOL "" FORCE)
 set(WEBP_BUILD_WEBPINFO   OFF CACHE BOOL "" FORCE)
 set(WEBP_BUILD_WEBPMUX    OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_LIBWEBPMUX OFF CACHE BOOL "" FORCE)
 set(WEBP_BUILD_EXTRAS     OFF CACHE BOOL "" FORCE)
-add_subdirectory(extern/libwebp)
+set(WEBP_BUILD_WEBP_JS    OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_FUZZTEST   OFF CACHE BOOL "" FORCE)
+add_subdirectory(extern/libwebp EXCLUDE_FROM_ALL)
 
 # ── pugixml (XML parsing) ────────────────────────────────────
 set(PUGIXML_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-add_subdirectory(extern/pugixml)
+add_subdirectory(extern/pugixml EXCLUDE_FROM_ALL)
 
 # ── stb (stb_image / stb_image_write, header-only) ───────────
 add_library(stb INTERFACE)
