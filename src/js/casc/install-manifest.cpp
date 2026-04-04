@@ -1,69 +1,66 @@
-const INSTALL_SIG = 0x4E49; // IN
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
+#include "install-manifest.h"
+#include "../buffer.h"
 
-class InstallManifest {
-	/**
-	 * Construct a new InstallManifest instance.
-	 * @param {BLTEReader} data 
-	 */
-	constructor(data) {
-		this.version = 0;
-		this.hashSize = 0;
-		this.numTags = 0;
-		this.numFiles = 0;
-		this.maskSize = 0;
+#include <cmath>
+#include <stdexcept>
 
-		this.tags = [];
-		this.files = [];
+namespace {
+constexpr uint16_t INSTALL_SIG = 0x4E49; // IN
+} // anonymous namespace
 
-		this.parse(data);
+namespace casc {
+
+InstallManifest::InstallManifest(BufferWrapper& data) {
+	parse(data);
+}
+
+void InstallManifest::parse(BufferWrapper& data) {
+	if (data.readUInt16LE() != INSTALL_SIG)
+		throw std::runtime_error("Invalid file signature for install manifest");
+
+	version = data.readUInt8();
+	hashSize = data.readUInt8();
+	numTags = data.readUInt16BE();
+	numFiles = data.readUInt32BE();
+
+	tags.resize(numTags);
+	files.resize(numFiles);
+
+	maskSize = static_cast<uint32_t>(std::ceil(static_cast<double>(numFiles) / 8.0));
+
+	for (uint16_t i = 0; i < numTags; i++) {
+		tags[i].name = data.readNullTerminatedString();
+		tags[i].type = data.readUInt16BE();
+		tags[i].mask = data.readUInt8(maskSize);
 	}
 
-	/**
-	 * Parse data for this install manifest.
-	 * @param {BLTEReader} data 
-	 */
-	parse(data) {
-		if (data.readUInt16LE() !== INSTALL_SIG)
-			throw new Error('Invalid file signature for install manifest');
+	for (uint32_t i = 0; i < numFiles; i++) {
+		files[i].name = data.readNullTerminatedString();
+		files[i].hash = data.readHexString(hashSize);
+		files[i].size = data.readUInt32BE();
+		// files[i].tags is default-constructed as empty vector.
+	}
 
-		this.version = data.readUInt8();
-		this.hashSize = data.readUInt8();
-		this.numTags = data.readUInt16BE();
-		this.numFiles = data.readUInt32BE();
-
-		this.tags = Array(this.numTags);
-		this.files = Array(this.numFiles);
-
-		this.maskSize = Math.ceil(this.numFiles / 8);
-
-		for (let i = 0; i < this.numTags; i++) {
-			this.tags[i] = {
-				name: data.readNullTerminatedString(),
-				type: data.readUInt16BE(),
-				mask: data.readUInt8(this.maskSize)
-			};
-		}
-
-		for (let i = 0; i < this.numFiles; i++) {
-			this.files[i] = {
-				name: data.readNullTerminatedString(),
-				hash: data.readHexString(this.hashSize),
-				size: data.readUInt32BE(),
-				tags: []
-			};
-		}
-
-		// Pre-compute tags.
-		for (const tag of this.tags) {
-			const mask = tag.mask;
-			for (let i = 0, n = mask.length; i < n; i++) {
-				for (let j = 0; j < 8; j++) {
-					if ((mask[i] >>> (7 - j) & 0x1) === 1)
-						this.files[(i % n * 8) + j]?.tags.push(tag.name);
+	// Pre-compute tags.
+	for (const auto& tag : tags) {
+		const auto& mask = tag.mask;
+		const auto n = mask.size();
+		for (std::size_t i = 0; i < n; i++) {
+			for (int j = 0; j < 8; j++) {
+				if (((mask[i] >> (7 - j)) & 0x1) == 1) {
+					std::size_t fileIdx = (i % n * 8) + static_cast<std::size_t>(j);
+					// JS uses optional chaining (?.) — skip if out of range.
+					if (fileIdx < files.size())
+						files[fileIdx].tags.push_back(tag.name);
 				}
 			}
 		}
 	}
 }
 
-module.exports = InstallManifest;
+} // namespace casc

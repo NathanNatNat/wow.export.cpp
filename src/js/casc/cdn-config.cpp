@@ -3,49 +3,105 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const KEY_VAR_PATTERN = /([^\s]+)\s?=\s?(.*)/;
+#include "cdn-config.h"
+
+#include <cctype>
+#include <regex>
+#include <stdexcept>
+#include <vector>
+
+namespace {
+
+const std::regex KEY_VAR_PATTERN(R"(([^\s]+)\s?=\s?(.*))");
 
 /**
  * Convert a config key such as 'encoding-sizes' to 'encodingSizes'.
  * This helps keep things consistent when accessing key properties.
- * @param {string} key 
+ * @param key
  */
-const normalizeKey = (key) => {
-	const keyParts = key.split('-');
-
-	// Nothing to split, just use the normal key.
-	if (keyParts.length === 1)
-		return key;
-
-	for (let i = 1, n = keyParts.length; i < n; i++) {
-		const part = keyParts[i];
-		keyParts[i] = part.charAt(0).toUpperCase() + part.slice(1);
+std::string normalizeKey(const std::string& key) {
+	// Split by '-'.
+	std::vector<std::string> keyParts;
+	std::size_t start = 0;
+	for (std::size_t i = 0; i <= key.size(); i++) {
+		if (i == key.size() || key[i] == '-') {
+			keyParts.push_back(key.substr(start, i - start));
+			start = i + 1;
+		}
 	}
 
-	return keyParts.join('');
-};
+	// Nothing to split, just use the normal key.
+	if (keyParts.size() == 1)
+		return key;
 
-module.exports = data => {
-	const entries = {};
-	let lines = data.split(/\r?\n/);
+	for (std::size_t i = 1, n = keyParts.size(); i < n; i++) {
+		std::string& part = keyParts[i];
+		if (!part.empty())
+			part[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(part[0])));
+	}
+
+	std::string result;
+	for (const auto& part : keyParts)
+		result += part;
+
+	return result;
+}
+
+} // anonymous namespace
+
+namespace casc {
+
+std::unordered_map<std::string, std::string> parseCDNConfig(std::string_view data) {
+	std::unordered_map<std::string, std::string> entries;
+
+	// Split input into lines (handles \r\n and \n).
+	std::vector<std::string_view> lines;
+	std::size_t start = 0;
+	for (std::size_t i = 0; i < data.size(); i++) {
+		if (data[i] == '\n') {
+			std::string_view line = data.substr(start, i - start);
+			if (!line.empty() && line.back() == '\r')
+				line.remove_suffix(1);
+			lines.push_back(line);
+			start = i + 1;
+		}
+	}
+	// Handle last line (no trailing newline).
+	if (start <= data.size()) {
+		std::string_view line = data.substr(start);
+		if (!line.empty() && line.back() == '\r')
+			line.remove_suffix(1);
+		lines.push_back(line);
+	}
 
 	// Valid config files start with "# " (e.g., "# Build Configuration", "# CDN Configuration")
-	const hasValidHeader = lines.length > 0 && lines[0].trim().startsWith('# ');
+	auto trim = [](std::string_view sv) -> std::string_view {
+		while (!sv.empty() && std::isspace(static_cast<unsigned char>(sv.front())))
+			sv.remove_prefix(1);
+		while (!sv.empty() && std::isspace(static_cast<unsigned char>(sv.back())))
+			sv.remove_suffix(1);
+		return sv;
+	};
+
+	bool hasValidHeader = !lines.empty() && trim(lines[0]).substr(0, 2) == "# ";
 
 	if (!hasValidHeader)
-		throw new Error('Invalid CDN config: unexpected start of config');
+		throw std::runtime_error("Invalid CDN config: unexpected start of config");
 
-	for (const line of lines) {
+	for (const auto& lineView : lines) {
 		// Skip empty lines/comments.
-		if (line.trim().length === 0 || line.startsWith('#'))
+		if (trim(lineView).empty() || lineView.front() == '#')
 			continue;
 
-		const match = line.match(KEY_VAR_PATTERN);
-		if (match === null)
-			throw new Error('Invalid token encountered parsing CDN config');
+		std::string line(lineView);
+		std::smatch match;
+		if (!std::regex_search(line, match, KEY_VAR_PATTERN))
+			throw std::runtime_error("Invalid token encountered parsing CDN config");
 
-		entries[normalizeKey(match[1])] = match[2];
+		entries[normalizeKey(match[1].str())] = match[2].str();
 	}
 
 	return entries;
-};
+}
+
+} // namespace casc
