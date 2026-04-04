@@ -5,22 +5,36 @@
  * By Jimmy Wärting, https://github.com/jimmywarting
  * License: MIT
  */
+#include "blob.h"
 
-function array2base64(input) {
-	const byteToCharMap = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-	const output = [];
+#include <algorithm>
+#include <cctype>
+#include <cstring>
 
-	for (let i = 0; i < input.length; i += 3) {
-		const byte1 = input[i];
-		const haveByte2 = i + 1 < input.length;
-		const byte2 = haveByte2 ? input[i + 1] : 0;
-		const haveByte3 = i + 2 < input.length;
-		const byte3 = haveByte3 ? input[i + 2] : 0;
+// --- Internal helpers (JS module-private functions) ---
 
-		const outByte1 = byte1 >> 2;
-		const outByte2 = ((byte1 & 0x03) << 4) | (byte2 >> 4);
-		let outByte3 = ((byte2 & 0x0F) << 2) | (byte3 >> 6);
-		let outByte4 = byte3 & 0x3F;
+/**
+ * JS: array2base64(input) — base64 encode a byte array.
+ * Used internally by URLPolyfill.createObjectURL().
+ */
+static std::string array2base64(std::span<const uint8_t> input) {
+	static constexpr char byteToCharMap[] =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+
+	std::string output;
+	output.reserve(((input.size() + 2) / 3) * 4);
+
+	for (std::size_t i = 0; i < input.size(); i += 3) {
+		const uint8_t byte1 = input[i];
+		const bool haveByte2 = i + 1 < input.size();
+		const uint8_t byte2 = haveByte2 ? input[i + 1] : 0;
+		const bool haveByte3 = i + 2 < input.size();
+		const uint8_t byte3 = haveByte3 ? input[i + 2] : 0;
+
+		const uint8_t outByte1 = byte1 >> 2;
+		const uint8_t outByte2 = ((byte1 & 0x03) << 4) | (byte2 >> 4);
+		uint8_t outByte3 = ((byte2 & 0x0F) << 2) | (byte3 >> 6);
+		uint8_t outByte4 = byte3 & 0x3F;
 
 		if (!haveByte3) {
 			outByte4 = 64;
@@ -28,282 +42,206 @@ function array2base64(input) {
 				outByte3 = 64;
 		}
 
-		output.push(
-			byteToCharMap[outByte1],
-			byteToCharMap[outByte2],
-			byteToCharMap[outByte3],
-			byteToCharMap[outByte4]
-		);
+		output += byteToCharMap[outByte1];
+		output += byteToCharMap[outByte2];
+		output += byteToCharMap[outByte3];
+		output += byteToCharMap[outByte4];
 	}
 
-	return output.join('');
+	return output;
 }
 
-function stringEncode(string) {
-	let pos = 0;
-	const len = string.length;
-	const Arr = Uint8Array || Array;
-
-	let at = 0;
-	let tlen = Math.max(32, len + (len >> 1) + 7);
-	let target = new Arr((tlen >> 3) << 3);
-
-	while (pos < len) {
-		let value = string.charCodeAt(pos++);
-		if (value >= 0xd800 && value <= 0xdbff) {
-			if (pos < len) {
-				const extra = string.charCodeAt(pos);
-				if ((extra & 0xfc00) === 0xdc00) {
-					++pos;
-					value = ((value & 0x3ff) << 10) + (extra & 0x3ff) + 0x10000;
-				}
-			}
-			if (value >= 0xd800 && value <= 0xdbff)
-				continue;
-		}
-
-		if (at + 4 > target.length) {
-			tlen += 8;
-			tlen *= (1.0 + (pos / string.length) * 2);
-			tlen = (tlen >> 3) << 3;
-
-			const update = new Uint8Array(tlen);
-			update.set(target);
-			target = update;
-		}
-
-		if ((value & 0xffffff80) === 0) {
-			target[at++] = value;
-			continue;
-		} else if ((value & 0xfffff800) === 0) {
-			target[at++] = ((value >> 6) & 0x1f) | 0xc0;
-		} else if ((value & 0xffff0000) === 0) {
-			target[at++] = ((value >> 12) & 0x0f) | 0xe0;
-			target[at++] = ((value >> 6) & 0x3f) | 0x80;
-		} else if ((value & 0xffe00000) === 0) {
-			target[at++] = ((value >> 18) & 0x07) | 0xf0;
-			target[at++] = ((value >> 12) & 0x3f) | 0x80;
-			target[at++] = ((value >> 6) & 0x3f) | 0x80;
-		} else {
-			continue;
-		}
-
-		target[at++] = (value & 0x3f) | 0x80;
-	}
-
-	return target.slice(0, at);
+/**
+ * JS: stringEncode(string) — converts a JS string (UTF-16) to UTF-8 bytes.
+ * In C++, std::string_view is already a UTF-8 byte sequence, so this is
+ * a simple byte reinterpretation (no encoding conversion needed).
+ *
+ * JS: textEncode is either native TextEncoder or stringEncode.
+ * In C++, there is only one implementation (strings are already UTF-8).
+ */
+static std::vector<uint8_t> stringEncode(std::string_view str) {
+	return std::vector<uint8_t>(
+		reinterpret_cast<const uint8_t*>(str.data()),
+		reinterpret_cast<const uint8_t*>(str.data()) + str.size());
 }
 
-function stringDecode(buf) {
-	const end = buf.length;
-	const res = [];
-
-	let i = 0;
-	while (i < end) {
-		const firstByte = buf[i];
-		let codePoint = null;
-		let bytesPerSequence = (firstByte > 0xEF) ? 4 :
-			(firstByte > 0xDF) ? 3 :
-			(firstByte > 0xBF) ? 2 : 1;
-
-		if (i + bytesPerSequence <= end) {
-			let secondByte, thirdByte, fourthByte, tempCodePoint;
-
-			switch (bytesPerSequence) {
-				case 1:
-					if (firstByte < 0x80)
-						codePoint = firstByte;
-					break;
-				case 2:
-					secondByte = buf[i + 1];
-					if ((secondByte & 0xC0) === 0x80) {
-						tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F);
-						if (tempCodePoint > 0x7F)
-							codePoint = tempCodePoint;
-					}
-					break;
-				case 3:
-					secondByte = buf[i + 1];
-					thirdByte = buf[i + 2];
-					if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
-						tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F);
-						if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF))
-							codePoint = tempCodePoint;
-					}
-					break;
-				case 4:
-					secondByte = buf[i + 1];
-					thirdByte = buf[i + 2];
-					fourthByte = buf[i + 3];
-					if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
-						tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F);
-						if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000)
-							codePoint = tempCodePoint;
-					}
-			}
-		}
-
-		if (codePoint === null) {
-			codePoint = 0xFFFD;
-			bytesPerSequence = 1;
-		} else if (codePoint > 0xFFFF) {
-			codePoint -= 0x10000;
-			res.push(codePoint >>> 10 & 0x3FF | 0xD800);
-			codePoint = 0xDC00 | codePoint & 0x3FF;
-		}
-
-		res.push(codePoint);
-		i += bytesPerSequence;
-	}
-
-	const len = res.length;
-	let str = '';
-	let j = 0;
-
-	while (j < len)
-		str += String.fromCharCode.apply(String, res.slice(j, j += 0x1000));
-
-	return str;
+/**
+ * JS: stringDecode(buf) — converts UTF-8 bytes to a JS string (UTF-16).
+ * In C++, std::string is already UTF-8, so this is a simple byte copy.
+ *
+ * JS: textDecode is either native TextDecoder or stringDecode.
+ * In C++, there is only one implementation (strings are already UTF-8).
+ */
+static std::string stringDecode(std::span<const uint8_t> buf) {
+	return std::string(reinterpret_cast<const char*>(buf.data()), buf.size());
 }
 
-const textEncode = typeof TextEncoder === 'function' ?
-	TextEncoder.prototype.encode.bind(new TextEncoder()) : stringEncode;
+// JS: bufferClone(buf) — clone an ArrayBuffer.
+// Not needed in C++: std::vector copy construction handles this.
 
-const textDecode = typeof TextDecoder === 'function' ?
-	TextDecoder.prototype.decode.bind(new TextDecoder()) : stringDecode;
+// JS: getObjectTypeName(o), isPrototypeOf(c, o), isDataView(o),
+// arrayBufferClassNames, isArrayBuffer(o) — JS runtime type introspection.
+// Not needed in C++: the type system handles this at compile time
+// through BlobPart's overloaded constructors.
 
-function bufferClone(buf) {
-	const view = new Array(buf.byteLength);
-	const array = new Uint8Array(buf);
-	let i = view.length;
-	while (i--)
-		view[i] = array[i];
-	return view;
+/**
+ * JS: concatTypedarrays(chunks) — concatenate typed arrays into one.
+ */
+static std::vector<uint8_t> concatTypedarrays(const std::vector<std::vector<uint8_t>>& chunks) {
+	std::size_t total_size = 0;
+	for (const auto& chunk : chunks)
+		total_size += chunk.size();
+
+	std::vector<uint8_t> result;
+	result.reserve(total_size);
+
+	for (const auto& chunk : chunks)
+		result.insert(result.end(), chunk.begin(), chunk.end());
+
+	return result;
 }
 
-function getObjectTypeName(o) {
-	return Object.prototype.toString.call(o).slice(8, -1);
-}
+// --- BlobPart constructors ---
 
-function isPrototypeOf(c, o) {
-	return typeof c === 'object' && Object.prototype.isPrototypeOf.call(c.prototype, o);
-}
+BlobPart::BlobPart(std::span<const uint8_t> data)
+	: bytes(data.begin(), data.end()) {}
 
-function isDataView(o) {
-	return getObjectTypeName(o) === 'DataView' || isPrototypeOf(DataView, o);
-}
+BlobPart::BlobPart(const std::vector<uint8_t>& data)
+	: bytes(data) {}
 
-const arrayBufferClassNames = [
-	'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array',
-	'Uint16Array', 'Int32Array', 'Uint32Array', 'Float32Array',
-	'Float64Array', 'ArrayBuffer'
-];
+BlobPart::BlobPart(std::vector<uint8_t>&& data)
+	: bytes(std::move(data)) {}
 
-function isArrayBuffer(o) {
-	return arrayBufferClassNames.indexOf(getObjectTypeName(o)) !== -1 || isPrototypeOf(ArrayBuffer, o);
-}
+// JS: if (typeof chunk === 'string') chunks[i] = textEncode(chunk);
+BlobPart::BlobPart(std::string_view str)
+	: bytes(stringEncode(str)) {}
 
-function concatTypedarrays(chunks) {
-	let size = 0;
-	let j = chunks.length;
-	while (j--)
-		size += chunks[j].length;
+// JS: if (chunk instanceof BlobPolyfill) chunks[i] = chunk._buffer;
+BlobPart::BlobPart(const BlobPolyfill& blob)
+	: bytes(blob.arrayBuffer()) {}
 
-	const b = new Uint8Array(size);
-	let offset = 0;
-	for (let i = 0; i < chunks.length; i++) {
-		const chunk = chunks[i];
-		b.set(chunk, offset);
-		offset += chunk.byteLength || chunk.length;
-	}
+// --- BlobPolyfill ---
 
-	return b;
-}
+BlobPolyfill::BlobPolyfill()
+	: _buffer(), _type() {}
 
-class BlobPolyfill {
-	constructor(chunks, opts) {
-		chunks = chunks ? chunks.slice() : [];
-		opts = opts == null ? {} : opts;
+BlobPolyfill::BlobPolyfill(std::vector<BlobPart> parts, BlobOptions opts) {
+	// JS: chunks = chunks ? chunks.slice() : [];
+	// (parts is already a copy via pass-by-value)
 
-		for (let i = 0, len = chunks.length; i < len; i++) {
-			const chunk = chunks[i];
-			if (chunk instanceof BlobPolyfill) {
-				chunks[i] = chunk._buffer;
-			} else if (typeof chunk === 'string') {
-				chunks[i] = textEncode(chunk);
-			} else if (isDataView(chunk)) {
-				chunks[i] = bufferClone(chunk.buffer);
-			} else if (isArrayBuffer(chunk)) {
-				chunks[i] = bufferClone(chunk);
-			} else {
-				chunks[i] = textEncode(String(chunk));
-			}
-		}
+	// JS: Collect all chunk buffers, then concatenate via concatTypedarrays.
+	// In JS, each chunk is transformed in-place (string → textEncode, blob → _buffer, etc.)
+	// In C++, BlobPart constructors handle this transformation.
+	std::vector<std::vector<uint8_t>> chunks;
+	chunks.reserve(parts.size());
+	for (auto& part : parts)
+		chunks.push_back(std::move(part.bytes));
 
-		this._buffer = Uint8Array ? concatTypedarrays(chunks) : [].concat.apply([], chunks);
-		this.size = this._buffer.length;
+	// JS: this._buffer = Uint8Array ? concatTypedarrays(chunks) : [].concat.apply([], chunks);
+	_buffer = concatTypedarrays(chunks);
 
-		this.type = opts.type || '';
-		if (/[^\u0020-\u007E]/.test(this.type)) {
-			this.type = '';
-		} else {
-			this.type = this.type.toLowerCase();
+	// JS: this.size = this._buffer.length;
+	// (handled by size() method)
+
+	// JS: this.type = opts.type || '';
+	_type = opts.type;
+
+	// JS: if (/[^\u0020-\u007E]/.test(this.type)) this.type = '';
+	// else this.type = this.type.toLowerCase();
+	bool has_non_printable = false;
+	for (unsigned char c : _type) {
+		if (c < 0x20 || c > 0x7E) {
+			has_non_printable = true;
+			break;
 		}
 	}
-
-	arrayBuffer() {
-		return Promise.resolve(this._buffer.buffer || this._buffer);
-	}
-
-	text() {
-		return Promise.resolve(textDecode(this._buffer));
-	}
-
-	slice(start, end, type) {
-		const slice = this._buffer.slice(start || 0, end || this._buffer.length);
-		return new BlobPolyfill([slice], { type });
-	}
-
-	toString() {
-		return '[object Blob]';
-	}
-
-	stream() {
-		let position = 0;
-		const blob = this;
-
-		return new ReadableStream({
-			pull(controller) {
-				const chunk = blob.slice(position, position + 524288);
-				return chunk.arrayBuffer().then(buffer => {
-					position += buffer.byteLength;
-					const uint8array = new Uint8Array(buffer);
-					controller.enqueue(uint8array);
-
-					if (position == blob.size)
-						controller.close();
-				});
-			}
-		});
+	if (has_non_printable) {
+		_type.clear();
+	} else {
+		std::transform(_type.begin(), _type.end(), _type.begin(),
+		               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 	}
 }
 
-BlobPolyfill.isPolyfill = true;
+// JS: arrayBuffer() { return Promise.resolve(this._buffer.buffer || this._buffer); }
+const std::vector<uint8_t>& BlobPolyfill::arrayBuffer() const {
+	return _buffer;
+}
 
-class URLPolyfill {
-	static createObjectURL(blob) {
-		if (blob instanceof BlobPolyfill)
-			return 'data:' + blob.type + ';base64,' + array2base64(blob._buffer);
+// JS: text() { return Promise.resolve(textDecode(this._buffer)); }
+std::string BlobPolyfill::text() const {
+	return stringDecode(_buffer);
+}
 
-		// fallback to native
-		return URL.createObjectURL(blob);
-	}
+// JS: slice(start, end, type) {
+//     const slice = this._buffer.slice(start || 0, end || this._buffer.length);
+//     return new BlobPolyfill([slice], { type });
+// }
+BlobPolyfill BlobPolyfill::slice(std::size_t start,
+                                 std::optional<std::size_t> end,
+                                 const std::string& type) const {
+	// JS: end || this._buffer.length — if end is 0 or undefined, use full length
+	std::size_t actual_end = end.value_or(_buffer.size());
+	if (actual_end > _buffer.size())
+		actual_end = _buffer.size();
+	if (start > actual_end)
+		start = actual_end;
 
-	static revokeObjectURL(url) {
-		// data urls don't need revoking, but call native for non-data urls
-		if (!url.startsWith('data:'))
-			URL.revokeObjectURL(url);
+	std::vector<uint8_t> slice_data(_buffer.begin() + static_cast<std::ptrdiff_t>(start),
+	                                _buffer.begin() + static_cast<std::ptrdiff_t>(actual_end));
+	return BlobPolyfill({BlobPart(std::move(slice_data))}, {type});
+}
+
+// JS: toString() { return '[object Blob]'; }
+std::string BlobPolyfill::toString() const {
+	return "[object Blob]";
+}
+
+// JS: stream() — returns a ReadableStream that yields 512KB chunks.
+// C++ uses a callback instead of ReadableStream.
+void BlobPolyfill::stream(std::function<void(std::span<const uint8_t>)> callback) const {
+	constexpr std::size_t CHUNK_SIZE = 524288; // 512KB, matching JS
+	std::size_t position = 0;
+
+	while (position < _buffer.size()) {
+		std::size_t chunk_end = std::min(position + CHUNK_SIZE, _buffer.size());
+		callback(std::span<const uint8_t>(_buffer.data() + position, chunk_end - position));
+		position = chunk_end;
 	}
 }
 
-module.exports = { BlobPolyfill, URLPolyfill };
+// JS: get size() equivalent
+std::size_t BlobPolyfill::size() const {
+	return _buffer.size();
+}
+
+// JS: get type() equivalent
+const std::string& BlobPolyfill::type() const {
+	return _type;
+}
+
+// --- URLPolyfill ---
+
+// JS: static createObjectURL(blob) {
+//     if (blob instanceof BlobPolyfill)
+//         return 'data:' + blob.type + ';base64,' + array2base64(blob._buffer);
+//     return URL.createObjectURL(blob); // fallback to native
+// }
+// In C++, all blobs are BlobPolyfill, so no native fallback is needed.
+std::string URLPolyfill::createObjectURL(const BlobPolyfill& blob) {
+	return "data:" + blob.type() + ";base64," + array2base64(blob.arrayBuffer());
+}
+
+// JS: static revokeObjectURL(url) {
+//     if (!url.startsWith('data:'))
+//         URL.revokeObjectURL(url); // only revoke non-data URLs
+// }
+// In C++, createObjectURL always produces data URLs, so this is
+// effectively a no-op. We preserve the startsWith check for fidelity.
+void URLPolyfill::revokeObjectURL(const std::string& url) {
+	if (!url.starts_with("data:")) {
+		// In JS: URL.revokeObjectURL(url);
+		// In C++: no native URL system exists. No-op.
+	}
+}
+

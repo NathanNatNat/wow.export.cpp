@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 10 / 188 files converted
+**Progress:** 11 / 188 files converted
 
 ---
 
@@ -21,7 +21,7 @@
 
 - [x] `src/js/crc32.cpp` (35 lines)
 - [x] `src/js/MultiMap.cpp` (31 lines)
-- [ ] `src/js/blob.cpp` (309 lines)
+- [x] `src/js/blob.cpp` (309 lines)
 - [x] `src/js/install-type.cpp` (6 lines)
 - [x] `src/js/xml.cpp` (170 lines)
 - [x] `src/js/subtitles.cpp` (192 lines)
