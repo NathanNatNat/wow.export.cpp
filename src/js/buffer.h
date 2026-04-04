@@ -308,7 +308,7 @@ public:
 	nlohmann::json readJSON(size_t length);
 
 	/**
-	 * Read the entire buffer split by lines (\r\n, \n, \r).
+	 * Read the entire buffer split by lines (\r\n or \n).
 	 * Preserves current offset of the wrapper.
 	 */
 	std::vector<std::string> readLines();
