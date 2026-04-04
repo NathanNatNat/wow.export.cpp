@@ -19,8 +19,7 @@ const COMPONENTS = {
 	DataTable: require('./components/data-table'),
 	ResizeLayer: require('./components/resize-layer'),
 	ContextMenu: require('./components/context-menu'),
-	MarkdownContent: require('./components/markdown-content'),
-	HomeShowcase: require('./components/home-showcase')
+	MarkdownContent: require('./components/markdown-content')
 };
 
 const MODULES = {
@@ -74,8 +73,7 @@ const COMPONENT_PATH_MAP = {
 	DataTable: 'data-table',
 	ResizeLayer: 'resize-layer',
 	ContextMenu: 'context-menu',
-	MarkdownContent: 'markdown-content',
-	HomeShowcase: 'home-showcase'
+	MarkdownContent: 'markdown-content'
 };
 
 let component_cache = {};

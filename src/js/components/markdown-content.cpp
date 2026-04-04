@@ -209,9 +209,6 @@ module.exports = {
 				if (src.startsWith('./'))
 					src = src.substring(2);
 
-				if (!src.startsWith('http://') && !src.startsWith('https://') && !src.startsWith('data:'))
-					src = 'help_docs/' + src;
-
 				return '<img src="' + src + '" alt="' + alt + '">';
 			});
 
@@ -227,9 +224,6 @@ module.exports = {
 
 			// links
 			text = text.replace(/\[(.+?)\]\((.+?)\)/g, (match, label, href) => {
-				if (href.startsWith('::KB'))
-					return '<a data-kb-link="' + href.substring(2) + '">' + label + '</a>';
-
 				return '<a data-external="' + href + '">' + label + '</a>';
 			});
 

@@ -1,7 +1,6 @@
 module.exports = {
 	template: `
 		<div class="tab" id="tab-home">
-			<HomeShowcase />
 			<div id="home-changes">
 				<div v-html="$core.view.whatsNewHTML"></div>
 			</div>
