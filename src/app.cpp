@@ -568,7 +568,7 @@ document.addEventListener('click', function(e) {
 	const cpus = os.cpus();
 	log.write('wow.export has started v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid);
 	log.write('Host %s (%s), CPU %s (%d cores), Memory %s / %s', os.platform, os.arch, cpus[0].model, cpus.length, generics.filesize(os.freemem), generics.filesize(os.totalmem));
-	log.write('INSTALL_PATH %s PERSISTENCE_DIR %s LOG_DIR %s', constants.INSTALL_PATH, constants.PERSISTENCE_DIR, constants.LOG_DIR);
+	log.write('INSTALL_PATH %s DATA_DIR %s LOG_DIR %s', constants.INSTALL_PATH, constants.DATA_DIR, constants.LOG_DIR);
 
 	// log gpu info async to avoid blocking startup
 	gpuInfo.log_gpu_info();
