@@ -10,18 +10,6 @@
 // be removed as dead-code during compile.
 BUILD_RELEASE = process.env.BUILD_RELEASE === 'true';
 
-// Ensure application config and log directories exist before any modules
-// attempt to write to them (log.cpp creates a stream at require-time).
-{
-	const fs = require('fs');
-	const path = require('path');
-	const installPath = process.platform === 'darwin'
-		? path.resolve(path.join(__dirname, '..'))
-		: path.dirname(process.execPath);
-	fs.mkdirSync(path.join(installPath, 'config'), { recursive: true });
-	fs.mkdirSync(path.join(installPath, 'Logs'), { recursive: true });
-}
-
 // check for --disable-auto-update flag
 const DISABLE_AUTO_UPDATE = nw.App.argv.includes('--disable-auto-update');
 

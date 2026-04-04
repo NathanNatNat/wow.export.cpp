@@ -17,6 +17,12 @@ const DATA_PATH = nw.App.dataPath;
 const CONFIG_DIR = path.join(INSTALL_PATH, 'config');
 const LOG_DIR = path.join(INSTALL_PATH, 'Logs');
 
+// Ensure config and log directories exist before any module attempts to
+// write to them (e.g. log.cpp creates a stream at require-time).
+const fs = require('fs');
+fs.mkdirSync(CONFIG_DIR, { recursive: true });
+fs.mkdirSync(LOG_DIR, { recursive: true });
+
 const UPDATER_EXT = { win32: '.exe', darwin: '.app' };
 
 const getBlenderBaseDir = () => {
