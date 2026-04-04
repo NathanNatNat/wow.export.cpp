@@ -43,6 +43,7 @@ _deps/
 compile_commands.json
 CMakeSettings.json
 cmake-build-*/
+build/
 out/build/
 out/install/
 build_test/
