@@ -12,25 +12,51 @@ const path = require('path');
 const INSTALL_PATH = process.platform === 'darwin'
 	? path.resolve(path.join(__dirname, '..'))
 	: path.dirname(process.execPath);
-const DATA_PATH = nw.App.dataPath;
-const CONFIG_DIR = path.join(INSTALL_PATH, 'config');
+const DATA_DIR = path.join(INSTALL_PATH, 'data');
 const LOG_DIR = path.join(INSTALL_PATH, 'Logs');
 
-// Ensure config and log directories exist before any module attempts to
-// write to them (e.g. log.cpp creates a stream at require-time).
+// Migrate legacy directories to the data directory.
 const fs = require('fs');
-fs.mkdirSync(CONFIG_DIR, { recursive: true });
+const legacyDirs = [
+	path.join(INSTALL_PATH, 'config'),      // Original name
+	path.join(INSTALL_PATH, 'persistence'), // Previous rename
+];
+try {
+	if (!fs.existsSync(DATA_DIR)) {
+		for (const legacyDir of legacyDirs) {
+			if (fs.existsSync(legacyDir)) {
+				fs.renameSync(legacyDir, DATA_DIR);
+				break;
+			}
+		}
+	}
+} catch (e) {
+	// Migration failed; data directory will be created fresh below.
+}
+
+// Ensure data and log directories exist before any module attempts to
+// write to them (e.g. log.cpp creates a stream at require-time).
+fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(LOG_DIR, { recursive: true });
+
+// Migrate legacy casc/ cache directory to cache/.
+const legacyCascDir = path.join(DATA_DIR, 'casc');
+const newCacheDir = path.join(DATA_DIR, 'cache');
+try {
+	if (fs.existsSync(legacyCascDir) && !fs.existsSync(newCacheDir))
+		fs.renameSync(legacyCascDir, newCacheDir);
+} catch (e) {
+	// Migration failed; cache directory will be recreated as needed.
+}
 
 const UPDATER_EXT = { win32: '.exe', darwin: '.app' };
 
 module.exports = {
 	INSTALL_PATH, // Path to the application installation.
-	DATA_PATH, // Path to the nw.js data directory (legacy).
-	CONFIG_DIR, // Path to the application config directory.
+	DATA_DIR, // Path to the application data directory.
 	LOG_DIR, // Path to the application logs directory.
 	RUNTIME_LOG: path.join(LOG_DIR, 'runtime.log'), // Path to the runtime log.
-	LAST_EXPORT: path.join(CONFIG_DIR, 'last_export'), // Location of the last export.
+	LAST_EXPORT: path.join(DATA_DIR, 'last_export'), // Location of the last export.
 	MAX_RECENT_LOCAL: 3, // Maximum recent local installations to remember.
 
 	// Location of GL shaders.
@@ -55,30 +81,30 @@ module.exports = {
 	},
 
 	CACHE: {
-		DIR: path.join(CONFIG_DIR, 'casc'), // Cache directory.
-		SIZE: path.join(CONFIG_DIR, 'casc', 'cachesize'), // Cache size.
-		INTEGRITY_FILE: path.join(CONFIG_DIR, 'casc', 'cacheintegrity'), // Cache integrity file.
+		DIR: path.join(DATA_DIR, 'cache'), // Cache directory.
+		SIZE: path.join(DATA_DIR, 'cache', 'cachesize'), // Cache size.
+		INTEGRITY_FILE: path.join(DATA_DIR, 'cache', 'cacheintegrity'), // Cache integrity file.
 		SIZE_UPDATE_DELAY: 5000, // Milliseconds to buffer cache size update writes.
-		DIR_BUILDS: path.join(CONFIG_DIR, 'casc', 'builds'), // Build-specific cache directory.
-		DIR_INDEXES: path.join(CONFIG_DIR, 'casc', 'indices'), // Cache for archive indexes.
-		DIR_DATA: path.join(CONFIG_DIR, 'casc', 'data'), // Cache for single data files.
-		DIR_DBD: path.join(CONFIG_DIR, 'casc', 'dbd'), // Cache for DBD files.
-		DIR_LISTFILE: path.join(CONFIG_DIR, 'casc', 'listfile'), // Master listfile cache directory.
+		DIR_BUILDS: path.join(DATA_DIR, 'cache', 'builds'), // Build-specific cache directory.
+		DIR_INDEXES: path.join(DATA_DIR, 'cache', 'indices'), // Cache for archive indexes.
+		DIR_DATA: path.join(DATA_DIR, 'cache', 'data'), // Cache for single data files.
+		DIR_DBD: path.join(DATA_DIR, 'cache', 'dbd'), // Cache for DBD files.
+		DIR_LISTFILE: path.join(DATA_DIR, 'cache', 'listfile'), // Master listfile cache directory.
 		BUILD_MANIFEST: 'manifest.json', // Build-specific manifest file.
 		BUILD_LISTFILE: 'listfile', // Build-specific listfile file.
 		BUILD_ENCODING: 'encoding', // Build-specific encoding file.
 		BUILD_ROOT: 'root', // Build-specific root file.
 		LISTFILE_DATA: 'listfile.txt', // Master listfile data file.
-		TACT_KEYS: path.join(CONFIG_DIR, 'tact.json'), // Tact key cache.
-		REALMLIST: path.join(CONFIG_DIR, 'realmlist.json'), // Realmlist cache.
+		TACT_KEYS: path.join(DATA_DIR, 'tact.json'), // Tact key cache.
+		REALMLIST: path.join(DATA_DIR, 'realmlist.json'), // Realmlist cache.
 		SUBMIT_URL: 'https://www.kruithne.net/wow.export/v2/cache/submit',
 		FINALIZE_URL: 'https://www.kruithne.net/wow.export/v2/cache/finalize',
-		STATE_FILE: path.join(CONFIG_DIR, 'cache_state.json'),
+		STATE_FILE: path.join(DATA_DIR, 'cache_state.json'),
 	},
 
 	CONFIG:  {
 		DEFAULT_PATH: path.join(INSTALL_PATH, 'src', 'default_config.jsonc'), // Path of default configuration file.
-		USER_PATH: path.join(CONFIG_DIR, 'config.json') // Path of user-defined configuration file.
+		USER_PATH: path.join(DATA_DIR, 'config.json') // Path of user-defined configuration file.
 	},
 
 	UPDATE: {
