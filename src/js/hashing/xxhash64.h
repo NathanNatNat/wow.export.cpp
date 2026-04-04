@@ -1,5 +1,5 @@
 /*!
-	xxHash64 (native BigInt rewrite)
+	xxHash64 (C++ uint64_t implementation)
 	wow.export (https://github.com/Kruithne/wow.export)
 	Authors: Kruithne <kruithne@gmail.com>
 
