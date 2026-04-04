@@ -1,0 +1,8 @@
+Convert these files from JavaScript to true C++.
+Read CONVERSION_GUIDANCE.md for rules.
+100% completion required. Update
+CONVERSION_TRACKER.md when done.
+
+
+
+Double check files are 100% converted with no mistakes and nothing missing.
