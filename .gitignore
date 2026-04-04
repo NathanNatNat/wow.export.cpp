@@ -23,14 +23,12 @@
 *.so
 *.so.*
 *.dll
-*.dylib
 
 # =====================
 # C++ Executables
 # =====================
 *.exe
 *.out
-*.app
 
 # =====================
 # CMake
@@ -139,11 +137,3 @@ $RECYCLE.BIN/
 .directory
 .Trash-*
 .nfs*
-
-# =====================
-# macOS (bonus)
-# =====================
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
