@@ -5,6 +5,24 @@ project(wow_export
     DESCRIPTION "wow.export — WoW game-data export tool (C++ port)"
 )
 
+# ── Force x64 architecture ──────────────────────────────────────
+# Reject any non-64-bit configuration early.
+if(CMAKE_SIZEOF_VOID_P AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR
+        "wow.export requires a 64-bit (x64) build. "
+        "Detected pointer size: ${CMAKE_SIZEOF_VOID_P} bytes. "
+        "Please select an x64 toolchain / preset."
+    )
+endif()
+
+# On MSVC, verify the target processor architecture.
+if(MSVC AND DEFINED CMAKE_VS_PLATFORM_NAME AND NOT CMAKE_VS_PLATFORM_NAME STREQUAL "x64")
+    message(FATAL_ERROR
+        "wow.export requires x64. Current platform: ${CMAKE_VS_PLATFORM_NAME}. "
+        "Use an x64 preset or pass -A x64."
+    )
+endif()
+
 # ── C++ standard ────────────────────────────────────────────────
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -88,6 +106,8 @@ add_subdirectory(extern/cpp-httplib EXCLUDE_FROM_ALL)
 # ── zlib (compression) ────────────────────────────────────────
 set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_TESTING  OFF CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_SHARED   OFF CACHE BOOL "" FORCE)
+set(ZLIB_INSTALL        OFF CACHE BOOL "" FORCE)
 set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
 add_subdirectory(extern/zlib EXCLUDE_FROM_ALL)
 # zlib's CMake names its target "zlibstatic" for static builds.

@@ -1,0 +1,3 @@
+<Project>
+  <!-- Block stray submodule .vcxproj/.csproj files from being built by VS. -->
+</Project>
