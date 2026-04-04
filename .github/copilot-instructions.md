@@ -93,3 +93,73 @@ The following structural translations are inherent to the JS→C++ paradigm shif
 - `process.platform` → compile-time `#ifdef _WIN32` / `#ifdef __linux__`.
 - `process.execPath` / `__dirname` → C++ executable path detection.
 - `fs` / `fsp` (Node.js filesystem) → C++ `<filesystem>` and `<fstream>`.
+- `crypto` (Node.js) → platform crypto or a lightweight hash library.
+
+### Binary Data
+- Node.js `Buffer` / `DataView` → `std::vector<uint8_t>` for owned buffers, `std::span<const uint8_t>` for non-owning views.
+- The JS `BufferWrapper` class (buffer.cpp) must be ported as a C++ class with the same `readUInt8()`, `readUInt16LE()`, `readUInt32LE()`, `readInt32LE()`, `readFloatLE()`, `readString()`, `seek()`, `tell()`, `remaining()` API. Use `std::vector<uint8_t>` as the internal storage.
+- Endianness helpers: JS uses `readIntLE`/`readIntBE` style — map to explicit endian-aware reads in C++.
+
+### Async / Concurrency
+- JS runs on a single-threaded event loop with `async`/`await`. C++ must preserve this execution model for correctness:
+  - **Main thread**: All UI rendering (ImGui), state mutations to `core.view` equivalent, and event dispatch. This is the "event loop" equivalent.
+  - **Background threads**: Use `std::async` / `std::jthread` for I/O-bound work (CASC downloads, file parsing, cache operations).
+  - **Thread safety**: Background threads must NOT directly mutate shared application state. Results from background work must be dispatched back to the main thread (e.g., via a thread-safe task queue that the main loop drains each frame).
+- JS `Worker` (worker_threads) → `std::jthread` running a function, communicating via a thread-safe queue instead of `postMessage`.
+
+### Event System
+- JS `EventEmitter` (`core.events`) → C++ event dispatcher class with `on(event, callback)`, `emit(event, args...)`, `removeListener()` semantics. This is a single class used globally, not a per-file deviation.
+
+### Other Standard Translations
+- JS `Map` → `std::unordered_map` or `std::map`.
+- JS `Set` → `std::unordered_set` or `std::set`.
+- JS `Array` → `std::vector`.
+- JS `Promise` → `std::future` / `std::async`.
+- JS `class` → C++ `class`.
+- JS `const` / `let` → C++ `const` / local variables.
+- JS template literals → `std::format` or `fmt::format`.
+- JS regex → `std::regex`.
+- JS `JSON.parse` / `JSON.stringify` → `nlohmann::json`.
+- JS `console.log` → `spdlog`.
+- JS `setTimeout` / `setInterval` → timer logic in the main loop or `std::jthread` with sleep.
+
+## State Management
+- The JS app uses Vue's reactive state system centered on `core.view` (an object with 80+ properties defined in core.cpp).
+- C++ equivalent: A central `AppState` struct (or equivalent) holding the same fields as `core.view`. Since ImGui is immediate-mode, state changes are reflected automatically on the next frame — no "reactivity" system is needed for rendering.
+- For state that triggers side effects (equivalent to Vue `watch:`), implement a simple change-detection pattern: store the previous value, compare each frame or on mutation, and fire the callback when changed.
+- `core.view.config` → the config module's data, loaded from JSON via nlohmann/json.
+- `core.view.configEdit` → a temporary copy used during settings editing, same as JS.
+
+## UI Styling
+- The C++ ImGui app must visually match the original app. Use app.css as the definitive style reference.
+- Map CSS variables (colors, fonts, shadows) to ImGui style settings:
+  - `--background: #343a40` → `ImGuiStyle::Colors[ImGuiCol_WindowBg]`
+  - `--font-primary: #ffffffcc` → `ImGuiStyle::Colors[ImGuiCol_Text]`
+  - `--nav-option-selected: #22b549` → custom highlight color for selected nav items
+  - etc.
+- Font loading: Use ImGui's font system with the same fonts from `src/fonts/`.
+- Icon rendering: Font Awesome icons (from `src/fa-icons/`) should be loaded as an ImGui icon font.
+
+## Audit Tracker
+- Always keep `AUDIT_TRACKER.md` up to date when making code changes.
+- If a change resolves, modifies, or affects any audit finding, update the finding's severity and description.
+- If a change introduces a new intentional deviation from the JS source, add a new finding with ACCEPTABLE severity.
+- **Systemic translations** (listed above) should each be documented as ONE blanket entry, not per-function.
+- **Individual deviations** (specific to one file or function) should each get their own entry.
+
+## Work Priority Order
+When presenting, suggesting, or tackling work items, always follow this priority:
+**core systems → DB/data layer → rendering → UI → export**
+
+Specifically:
+1. **Core systems**: constants, config, log, generics, buffer (BufferWrapper), core (AppState/events), file-writer, updater, external-links
+2. **DB/data layer**: CASC (casc-source, blte-reader, build-cache, cdn-resolver, listfile, tact-keys, etc.), DB readers (WDCReader, DBDParser, DBCReader), DB caches, MPQ
+3. **Rendering**: GL context, shaders, textures, vertex arrays, UBOs, all renderers (M2, WMO, M3, MDX, ADT, grid, shadow plane, char material), cameras, loaders
+4. **UI**: Components (listbox, combobox, slider, data-table, map-viewer, model-viewer, etc.), modules/tabs (home, source-select, settings, all content tabs)
+5. **Export**: All exporters (M2, WMO, ADT, character, M3), all writers (OBJ, MTL, GLTF, GLB, CSV, SQL, JSON, STL)
+
+## Commit Messages
+- Describe what was done. Avoid using "Phase X", "Step Y", or similar structural labeling.
+- Good: "Convert BufferWrapper to C++ with std::vector<uint8_t> backing"
+- Good: "Port CASC BLTE reader with zlib decompression"
+- Bad: "Phase 2 Step 3: Core systems"
