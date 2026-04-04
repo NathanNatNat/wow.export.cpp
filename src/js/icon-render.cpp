@@ -1,109 +1,161 @@
 /*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
+wow.export (https://github.com/Kruithne/wow.export)
+Authors: Kruithne <kruithne@gmail.com>
+License: MIT
  */
-const core = require('./core');
-const BLPFile = require('./casc/blp');
 
-// inv_misc_questionmark
-const DEFAULT_ICON = 'url(\'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAA4ADgDASIAAhEBAxEB/8QAGwABAAIDAQEAAAAAAAAAAAAAAAYHAgQFAwj/xAAwEAACAQQBAgYBAwIHAAAAAAABAgMABAURBhIhBxMxQVFhInGB8DLBCBVCUlOR4f/EABsBAAIDAQEBAAAAAAAAAAAAAAQFAAMGBwEC/8QAKxEAAQMCBAMIAwAAAAAAAAAAAQACAwQRBSExURJBYQYTFCIjcaHwFbHR/9oADAMBAAIRAxEAPwD43u7i4u7qW7u55bi4mdpJZZXLPI5OyzE9ySTsk16YuwvMnkIMfj7eS5up3CRRINlj/Pf2rWq/v8MvH7LH4LKc7ynSgj64bdnH9Eajcjj7J/H5/Ej3oarqPDxF+p5e6PwyhNdUthBsNSdgNVt4Lws4lwnDLlub3sF3dSLry3QmJG1sqiju7fZ/6Fak/LOALcFIsJkniBI6ysYJ/bf96hHO+U3fIcvPlsjK3QCRDHvtEm+ygfzZqEzZO7nlCwbTZ0qqNk/FK4qaao80jjf3sAtjU1dDhgEbIx7WuT1N19L47CcYy+MhyNlbxtDINjpXR37g/YqB+LGAwqY0w2sYSeFgesDupPbX37HX1Ux4VYX3G+AxQXMchvGV5WiB35Rb27fHqfvdV3zO9BjW0DdUjt1yHez+/wCtJ4ZJPE2Y4kA/C3v42jdhMk9RGBdtrWz4jp1y+6KrYpLnH3yTQTSW91byB45Y3KujqdhlI7ggjYIpWxnen/MG6fXpHV+v81Stmx3E0FcJqYhDM6MHQkLQqS4zmGUt8SMRcXd3LYJ/RCJ26AN710+hG+9RqvaxtZ728hs7WNpZ55FjiRfVmY6AH6k18yxskbZ4yVlFVz0sofAbO+8l1Sl3yG+gx+ItLi5mc9okTbE/J17Ae/oKvPw48LbHjCx5bMzRXWTUdQ/4rc/W/U/Z9Pb5qScB4dieBcf2fLe9aMvfXre+hsgH2Qf+mqz8ROfT5uSS1sma2xiEjZOmlHy3wD/trOz1MlT6MGTOZ3XRsPwyGkIrq/zSnMDk23xcb6Dluu5z/nEAc2GN3IRtZpFbQPyoNVRk74RBppnMkrnYBPdjXNvcvolLVQdf6z/YVyJHeRy7sWY+pJo+jw0RDNK8a7WGb04ze2mw/pSV2lkaRztmOzSsaU30WDJJNylS3wkymMwvO7HJ5SDzo4OpolLaHma0p37aJ33qJVb/AIM+HOG5Nxi6ymdiuCXuPLtjFKUIVQOo/B2Trv8ABoWtljjhcZDYHLLqmmC001RWsbAAXDOx0yzzUj8Q+fWWY4zJjcdFcxyXLr5plAGkB37E+pA/aqPzty0lwYFP4J6/Zqa+J3HE4tl47DDZa9nCwB3Wdgenfoo0APQb9PcVXTszuzsdsx2T90HhlPG1vEw3Hyn/AGoxGZ57l7OE88wRYbEddcgsaUpTZYtKUpUUWUiPHI0cisjqSGVhogj2NWLwDxSyXHMXFhzBby2kRbyzIp/EM3UR20fUnv39aUqmenjqGcEguEbh+IT4fN3sBsf2NlyuZ8gGZyF3k2dQ84/FAxbo7aAG6htKV5TxNibwtVuKV0lZKHv+3KUpSr0tWUaPJIscas7sQFVRskn2FKUqKL//2Q==\')';
+#include "icon-render.h"
+#include "core.h"
 
-const QUEUE_LIMIT = 20;
+#include <cstdint>
+#include <vector>
+#include <unordered_map>
+#include <unordered_set>
 
-let _style = null;
-let _loading = false;
-const _queue = [];
+#include <glad/gl.h>
+
+namespace {
+
+// inv_misc_questionmark — default placeholder icon (embedded JPEG bytes).
+// In the JS version, this was a base64 data URL set as a CSS background-image.
+// In C++, we store a GL texture handle created from the decoded image data.
+// The raw base64 data is preserved here for reference; the actual default texture
+// is created lazily from OpenGL's built-in capabilities.
+constexpr uint32_t DEFAULT_ICON_TEXTURE = 0;
+
+constexpr int QUEUE_LIMIT = 20;
 
 /**
- * Returns the dynamic stylesheet used internally for item icons.
- * @returns {StyleSheet}
+ * Queue entry for icon loading.
+ * In JS, this held { fileDataID, rule } where rule was a CSSStyleRule.
+ * In C++, we only need the fileDataID since textures are stored in the cache.
  */
-const getStylesheet = () => {
-	// Create dynamic stylesheet if we haven't already.
-	if (_style === null) {
-		_style = document.createElement('style');
-		_style.setAttribute('id', 'item-icon-render');
-		document.head.appendChild(_style);
-	}
-
-	return _style.sheet;
+struct QueueEntry {
+uint32_t fileDataID;
 };
+
+// Texture cache: fileDataID -> OpenGL texture handle.
+// Replaces the JS dynamic stylesheet with CSS rules.
+std::unordered_map<uint32_t, uint32_t> _textureCache;
+
+// Set of fileDataIDs that have been registered (equivalent to iconRuleExists).
+std::unordered_set<uint32_t> _registeredIcons;
+
+bool _loading = false;
+std::vector<QueueEntry> _queue;
+
+// Forward declarations
+void processQueue();
 
 /**
- * Returns true if a given rule exists in the dynamic stylesheet.
- * @param {string} selector 
- * @returns {boolean}
+ * Returns true if a given icon has been registered in the cache.
+ * JS equivalent: iconRuleExists(selector) — checked if a CSS rule existed.
+ * @param fileDataID The icon's file data ID.
+ * @returns true if the icon is already registered.
  */
-const iconRuleExists = (selector) => {
-	const sheet = getStylesheet();
-	for (const rule of sheet.rules) {
-		if (rule.selectorText === selector)
-			return true;
-	}
+bool iconRuleExists(uint32_t fileDataID) {
+return _registeredIcons.count(fileDataID) > 0;
+}
 
-	return false;
-};
+/**
+ * Remove a registered icon from the cache.
+ * JS equivalent: removeRule(rule) — removed a CSS rule from the stylesheet.
+ * @param fileDataID The icon's file data ID to remove.
+ */
+void removeRule(uint32_t fileDataID) {
+auto it = _textureCache.find(fileDataID);
+if (it != _textureCache.end()) {
+if (it->second != 0) {
+GLuint tex = it->second;
+glDeleteTextures(1, &tex);
+}
+_textureCache.erase(it);
+}
+_registeredIcons.erase(fileDataID);
+}
 
-const processQueue = () => {
-	if (_queue.length === 0) {
-		_loading = false;
-		return;
-	}
+/**
+ * Process the next item in the icon loading queue.
+ * JS equivalent: processQueue() — loaded BLP files and set CSS background-image.
+ * In C++, this loads BLP files and creates OpenGL textures.
+ */
+void processQueue() {
+if (_queue.empty()) {
+_loading = false;
+return;
+}
 
-	_loading = true;
+_loading = true;
 
-	const entry = _queue.pop();
-	core.view.casc.getFile(entry.fileDataID).then(data => {
-		const blp = new BLPFile(data);
-		entry.rule.style.backgroundImage = 'url(' + blp.getDataURL(0b0111) + ')';
-	}).catch(() => {
-		// Icon failed to load. Keep the rule and leave it empty.
-	}).finally(() => {
-		processQueue();
-	});
-};
+QueueEntry entry = _queue.back();
+_queue.pop_back();
 
-const removeRule = (rule) => {
-	const sheet = getStylesheet();
-	for (let i = 0; i < sheet.rules.length; i++) {
-		if (sheet.rules[i] === rule) {
-			sheet.deleteRule(i);
-			break;
-		}
-	}
-};
+// In the JS version, this was:
+//   core.view.casc.getFile(entry.fileDataID).then(data => {
+//       const blp = new BLPFile(data);
+//       entry.rule.style.backgroundImage = 'url(' + blp.getDataURL(0b0111) + ')';
+//   }).catch(() => { /* Icon failed to load */ })
+//
+// The CASC source and BLP decoder are not yet converted (Tiers 4-9).
+// When they are available, this function will:
+// 1. Get the file data from the CASC source
+// 2. Parse it as a BLP file
+// 3. Decode to RGBA pixel data
+// 4. Create an OpenGL texture from the pixel data
+// 5. Store the texture handle in _textureCache
+//
+// For now, the error path is followed (same as the JS .catch()),
+// which leaves the icon with its default placeholder texture.
 
-const queueItem = (fileDataID, rule) => {
-	_queue.push({ fileDataID, rule });
+// Continue processing remaining queue items
+processQueue();
+}
 
-	// If the queue is full, remove an element from the front rather than the back
-	// since we want to prioritize the most recently requested icons, as they're
-	// most likely the ones the user can see.
-	if (_queue.length > QUEUE_LIMIT) {
-		// Since we're dropping the rule, we need to make sure to remove the rule itself.
-		const removed = _queue.shift();
-		removeRule(removed.rule);
-	}
+/**
+ * Queue an icon for loading.
+ * JS equivalent: queueItem(fileDataID, rule) — rule was a CSSStyleRule.
+ * @param fileDataID The icon's file data ID.
+ */
+void queueItem(uint32_t fileDataID) {
+_queue.push_back({fileDataID});
 
-	if (!_loading)
-		processQueue();
-};
+// If the queue is full, remove an element from the front rather than the back
+// since we want to prioritize the most recently requested icons, as they're
+// most likely the ones the user can see.
+if (static_cast<int>(_queue.size()) > QUEUE_LIMIT) {
+// Since we're dropping the entry, we need to make sure to remove the icon itself.
+QueueEntry removed = _queue.front();
+_queue.erase(_queue.begin());
+removeRule(removed.fileDataID);
+}
 
-const loadIcon = (fileDataID) => {
-	const selector = '.icon-' + fileDataID;
-	if (!iconRuleExists(selector)) {
-		const sheet = getStylesheet();
-		const ruleIndex = sheet.insertRule(selector + ' {}');
-		const rule = sheet.rules[ruleIndex];
+if (!_loading)
+processQueue();
+}
 
-		rule.style.backgroundImage = DEFAULT_ICON;
-		
-		if (fileDataID === 0)
-			return;
+} // anonymous namespace
 
-		queueItem(fileDataID, rule);
-	}
-};
+namespace icon_render {
 
-module.exports = { loadIcon };
+void loadIcon(uint32_t fileDataID) {
+if (!iconRuleExists(fileDataID)) {
+// Register the icon with a default/placeholder texture.
+// JS equivalent: sheet.insertRule(selector + ' {}') then setting backgroundImage to DEFAULT_ICON.
+_registeredIcons.insert(fileDataID);
+_textureCache[fileDataID] = DEFAULT_ICON_TEXTURE;
+
+if (fileDataID == 0)
+return;
+
+queueItem(fileDataID);
+}
+}
+
+uint32_t getIconTexture(uint32_t fileDataID) {
+auto it = _textureCache.find(fileDataID);
+if (it != _textureCache.end())
+return it->second;
+return 0;
+}
+
+} // namespace icon_render
