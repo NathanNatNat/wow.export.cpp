@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 29 / 188 files converted
+**Progress:** 37 / 188 files converted
 
 ---
 
@@ -63,17 +63,17 @@
 
 ## Tier 5 — CASC Readers (3 files)
 
-- [ ] `src/js/casc/blte-reader.cpp` (355 lines)
-- [ ] `src/js/casc/blte-stream-reader.cpp` (244 lines)
-- [ ] `src/js/casc/vp9-avi-demuxer.cpp` (258 lines)
+- [x] `src/js/casc/blte-reader.cpp` (355 lines)
+- [x] `src/js/casc/blte-stream-reader.cpp` (244 lines)
+- [x] `src/js/casc/vp9-avi-demuxer.cpp` (258 lines)
 
 ## Tier 6 — CASC Mid-Level (5 files)
 
-- [ ] `src/js/casc/export-helper.cpp` (293 lines)
-- [ ] `src/js/casc/dbd-manifest.cpp` (84 lines)
-- [ ] `src/js/casc/realmlist.cpp` (68 lines)
-- [ ] `src/js/casc/cdn-resolver.cpp` (219 lines)
-- [ ] `src/js/casc/build-cache.cpp` (258 lines)
+- [x] `src/js/casc/export-helper.cpp` (293 lines)
+- [x] `src/js/casc/dbd-manifest.cpp` (84 lines)
+- [x] `src/js/casc/realmlist.cpp` (68 lines)
+- [x] `src/js/casc/cdn-resolver.cpp` (219 lines)
+- [x] `src/js/casc/build-cache.cpp` (258 lines)
 
 ## Tier 7 — DB Schema & Readers (5 files)
 
