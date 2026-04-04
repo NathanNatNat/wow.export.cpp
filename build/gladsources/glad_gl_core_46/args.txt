@@ -1,0 +1,1 @@
+--out-path /home/runner/work/wow.export.fork2/wow.export.fork2/build/gladsources/glad_gl_core_46 --api gl:core=4.6 --reproducible c

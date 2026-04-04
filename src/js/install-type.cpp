@@ -1,6 +1,9 @@
-const InstallType = {
-	MPQ: 1 << 0,
-	CASC: 1 << 1
-};
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
+#include "install-type.h"
 
-module.exports = InstallType;
+// InstallType is fully defined in the header as an enum.
+// This .cpp exists to match the original JS file structure.

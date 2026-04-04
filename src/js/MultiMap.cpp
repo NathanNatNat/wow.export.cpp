@@ -3,30 +3,7 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-class MultiMap extends Map {
-	/**
-	 * Construct a new multi-value map.
-	 */
-	constructor() {
-		super();
-	}
+#include "MultiMap.h"
 
-	/**
-	 * Set a value for a specific key in this map.
-	 * @param {string} key 
-	 * @param {any} value 
-	 */
-	set(key, value) {
-		const check = this.get(key);
-		if (check !== undefined) {
-			if (Array.isArray(check))
-				check.push(value);
-			else
-				super.set(key, [check, value]);
-		} else {
-			super.set(key, value);
-		}
-	}
-}
-
-module.exports = MultiMap;
+// MultiMap is a template class, fully defined in the header.
+// This .cpp exists to match the original JS file structure.
