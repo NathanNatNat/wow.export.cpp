@@ -568,7 +568,7 @@ document.addEventListener('click', function(e) {
 	const cpus = os.cpus();
 	log.write('wow.export has started v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid);
 	log.write('Host %s (%s), CPU %s (%d cores), Memory %s / %s', os.platform, os.arch, cpus[0].model, cpus.length, generics.filesize(os.freemem), generics.filesize(os.totalmem));
-	log.write('INSTALL_PATH %s DATA_PATH %s', constants.INSTALL_PATH, constants.DATA_PATH);
+	log.write('INSTALL_PATH %s CONFIG_DIR %s LOG_DIR %s', constants.INSTALL_PATH, constants.CONFIG_DIR, constants.LOG_DIR);
 
 	// log gpu info async to avoid blocking startup
 	gpuInfo.log_gpu_info();
@@ -694,14 +694,8 @@ document.addEventListener('click', function(e) {
 			} else {
 				core.hideLoadingScreen();
 				modules.source_select.setActive();
-
-				// No update available, start checking Blender add-on.
-				modules.tab_blender.checkLocalVersion();
 			}
 		});
-	} else {
-		// debug mode or auto-update disabled, skip to blender add-on check
-		modules.tab_blender.checkLocalVersion();
 	}
 
 	// Load what's new HTML on app start

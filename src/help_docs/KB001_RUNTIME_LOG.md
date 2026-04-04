@@ -7,16 +7,9 @@ The quickest way to view your runtime log is to click the context-menu in the to
 ![context menu](res/KB001_context_menu.png)
 
 ## Manual Access
-There may be situations where you are unable to access this menu - loading loops, crashes, etc. In this scenario, you can find the file manually at the following locations.
+There may be situations where you are unable to access this menu - loading loops, crashes, etc. In this scenario, you can find the file manually at the following location inside your wow.export installation directory.
 
-**Windows**
-`%LOCALAPPDATA%\wow.export\User Data\Default`
-
-**Linux**
-`~/.config/wow.export/User Data/Default`
-
-**macOS**
-`~/Library/Application Support/wow.export/User Data/Default`
+`<app folder>/Logs/runtime.log`
 
 ## Privacy
 The runtime log provides developers with diagnostic information from wow.export. This will include the path to your user directory, which references your computer username.

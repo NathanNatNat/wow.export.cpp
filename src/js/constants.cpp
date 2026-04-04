@@ -6,7 +6,6 @@
 
 // This file defines constants used throughout the application.
 const path = require('path');
-const os = require('os');
 
 // on macOS, process.execPath points to the renderer helper binary deep inside
 // the framework, not the app root. use __dirname (app.nw/src/) instead.
@@ -14,29 +13,24 @@ const INSTALL_PATH = process.platform === 'darwin'
 	? path.resolve(path.join(__dirname, '..'))
 	: path.dirname(process.execPath);
 const DATA_PATH = nw.App.dataPath;
+const CONFIG_DIR = path.join(INSTALL_PATH, 'config');
+const LOG_DIR = path.join(INSTALL_PATH, 'Logs');
+
+// Ensure config and log directories exist before any module attempts to
+// write to them (e.g. log.cpp creates a stream at require-time).
+const fs = require('fs');
+fs.mkdirSync(CONFIG_DIR, { recursive: true });
+fs.mkdirSync(LOG_DIR, { recursive: true });
 
 const UPDATER_EXT = { win32: '.exe', darwin: '.app' };
 
-const getBlenderBaseDir = () => {
-	const platform = os.platform();
-	const home_dir = os.homedir();
-	
-	switch (platform) {
-		case 'win32':
-			return path.join(process.env.APPDATA, 'Blender Foundation', 'Blender');
-		case 'darwin': // macOS
-			return path.join(home_dir, 'Library', 'Application Support', 'Blender');
-		case 'linux':
-		default:
-			return path.join(home_dir, '.config', 'blender');
-	}
-};
-
 module.exports = {
 	INSTALL_PATH, // Path to the application installation.
-	DATA_PATH, // Path to the users data directory.
-	RUNTIME_LOG: path.join(DATA_PATH, 'runtime.log'), // Path to the runtime log.
-	LAST_EXPORT: path.join(DATA_PATH, 'last_export'), // Location of the last export.
+	DATA_PATH, // Path to the nw.js data directory (legacy).
+	CONFIG_DIR, // Path to the application config directory.
+	LOG_DIR, // Path to the application logs directory.
+	RUNTIME_LOG: path.join(LOG_DIR, 'runtime.log'), // Path to the runtime log.
+	LAST_EXPORT: path.join(CONFIG_DIR, 'last_export'), // Location of the last export.
 	MAX_RECENT_LOCAL: 3, // Maximum recent local installations to remember.
 
 	// Location of GL shaders.
@@ -51,15 +45,6 @@ module.exports = {
 	// User-agent used for HTTP/HTTPs requests.
 	USER_AGENT: 'wow.export (' + (nw.App.manifest.version) + ')',
 
-	// Defines Blender constants.
-	BLENDER: {
-		DIR: getBlenderBaseDir(), // Blender app-data directory (cross-platform).
-		ADDON_DIR: path.join('scripts', 'addons', 'io_scene_wowobj'), // Install path for add-ons
-		LOCAL_DIR: path.join(INSTALL_PATH, 'addon', 'io_scene_wowobj'), // Local copy of our Blender add-on.
-		ADDON_ENTRY: '__init__.py', // Add-on entry point that contains the version.
-		MIN_VER: 2.8 // Minimum version supported by our add-on.
-	},
-
 	// Defines game-specific constants.
 	GAME: {
 		MAP_SIZE: 64,
@@ -70,30 +55,30 @@ module.exports = {
 	},
 
 	CACHE: {
-		DIR: path.join(DATA_PATH, 'casc'), // Cache directory.
-		SIZE: path.join(DATA_PATH, 'casc', 'cachesize'), // Cache size.
-		INTEGRITY_FILE: path.join(DATA_PATH, 'casc', 'cacheintegrity'), // Cache integrity file.
+		DIR: path.join(CONFIG_DIR, 'casc'), // Cache directory.
+		SIZE: path.join(CONFIG_DIR, 'casc', 'cachesize'), // Cache size.
+		INTEGRITY_FILE: path.join(CONFIG_DIR, 'casc', 'cacheintegrity'), // Cache integrity file.
 		SIZE_UPDATE_DELAY: 5000, // Milliseconds to buffer cache size update writes.
-		DIR_BUILDS: path.join(DATA_PATH, 'casc', 'builds'), // Build-specific cache directory.
-		DIR_INDEXES: path.join(DATA_PATH, 'casc', 'indices'), // Cache for archive indexes.
-		DIR_DATA: path.join(DATA_PATH, 'casc', 'data'), // Cache for single data files.
-		DIR_DBD: path.join(DATA_PATH, 'casc', 'dbd'), // Cache for DBD files.
-		DIR_LISTFILE: path.join(DATA_PATH, 'casc', 'listfile'), // Master listfile cache directory.
+		DIR_BUILDS: path.join(CONFIG_DIR, 'casc', 'builds'), // Build-specific cache directory.
+		DIR_INDEXES: path.join(CONFIG_DIR, 'casc', 'indices'), // Cache for archive indexes.
+		DIR_DATA: path.join(CONFIG_DIR, 'casc', 'data'), // Cache for single data files.
+		DIR_DBD: path.join(CONFIG_DIR, 'casc', 'dbd'), // Cache for DBD files.
+		DIR_LISTFILE: path.join(CONFIG_DIR, 'casc', 'listfile'), // Master listfile cache directory.
 		BUILD_MANIFEST: 'manifest.json', // Build-specific manifest file.
 		BUILD_LISTFILE: 'listfile', // Build-specific listfile file.
 		BUILD_ENCODING: 'encoding', // Build-specific encoding file.
 		BUILD_ROOT: 'root', // Build-specific root file.
 		LISTFILE_DATA: 'listfile.txt', // Master listfile data file.
-		TACT_KEYS: path.join(DATA_PATH, 'tact.json'), // Tact key cache.
-		REALMLIST: path.join(DATA_PATH, 'realmlist.json'), // Realmlist cache.
+		TACT_KEYS: path.join(CONFIG_DIR, 'tact.json'), // Tact key cache.
+		REALMLIST: path.join(CONFIG_DIR, 'realmlist.json'), // Realmlist cache.
 		SUBMIT_URL: 'https://www.kruithne.net/wow.export/v2/cache/submit',
 		FINALIZE_URL: 'https://www.kruithne.net/wow.export/v2/cache/finalize',
-		STATE_FILE: path.join(DATA_PATH, 'cache_state.json'),
+		STATE_FILE: path.join(CONFIG_DIR, 'cache_state.json'),
 	},
 
 	CONFIG:  {
 		DEFAULT_PATH: path.join(INSTALL_PATH, 'src', 'default_config.jsonc'), // Path of default configuration file.
-		USER_PATH: path.join(DATA_PATH, 'config.json') // Path of user-defined configuration file.
+		USER_PATH: path.join(CONFIG_DIR, 'config.json') // Path of user-defined configuration file.
 	},
 
 	UPDATE: {
@@ -199,7 +184,6 @@ module.exports = {
 
 	// context menu item order (module names or static option IDs)
 	CONTEXT_MENU_ORDER: [
-		'tab_blender',
 		'tab_changelog',
 		'runtime-log',
 		'tab_raw',
