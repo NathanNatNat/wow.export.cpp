@@ -8,7 +8,7 @@
 #include <string>
 #include <string_view>
 
-namespace log {
+namespace logging {
 
 /// Initialize the logging stream. Must be called once at startup
 /// after constants::init(), which provides constants::RUNTIME_LOG().
@@ -21,12 +21,12 @@ void write(std::string_view message);
 
 /**
  * Internally mark the current timestamp for measuring
- * performance times with log::timeEnd().
+ * performance times with logging::timeEnd().
  */
 void timeLog();
 
 /**
- * Logs the time (in milliseconds) between the last log::timeLog()
+ * Logs the time (in milliseconds) between the last logging::timeLog()
  * call and this call, with the given label prefixed.
  * @param label Label to prefix the time output.
  */
@@ -37,7 +37,7 @@ void timeEnd(std::string_view label);
  */
 void openRuntimeLog();
 
-} // namespace log
+} // namespace logging
 
 /**
  * Attempts to return the contents of the runtime log.

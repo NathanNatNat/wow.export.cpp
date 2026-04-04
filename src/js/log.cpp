@@ -84,7 +84,7 @@ void drainPool() {
 
 } // anonymous namespace
 
-namespace log {
+namespace logging {
 
 void init() {
 	// Initialize the logging stream.
@@ -130,14 +130,14 @@ void write(std::string_view message) {
 
 /**
  * Internally mark the current timestamp for measuring
- * performance times with log::timeEnd().
+ * performance times with logging::timeEnd().
  */
 void timeLog() {
 	markTimer = std::chrono::steady_clock::now();
 }
 
 /**
- * Logs the time (in milliseconds) between the last log::timeLog()
+ * Logs the time (in milliseconds) between the last logging::timeLog()
  * call and this call, with the given label prefixed.
  * @param label Label to prefix the time output.
  */
@@ -167,7 +167,7 @@ void openRuntimeLog() {
 #endif
 }
 
-} // namespace log
+} // namespace logging
 
 /**
  * Attempts to return the contents of the runtime log.
