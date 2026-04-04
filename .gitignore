@@ -45,6 +45,7 @@ CMakeSettings.json
 cmake-build-*/
 out/build/
 out/install/
+build_test/
 
 # =====================
 # Visual Studio
