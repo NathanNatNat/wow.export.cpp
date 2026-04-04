@@ -74,6 +74,12 @@ std::optional<BufferWrapper> BuildCache::getFile(const std::string& file, const 
 		const fs::path filePath = getFilePath(file, dir);
 		const std::string filePathStr = filePath.string();
 
+		// Cache integrity is not loaded yet, reject.
+		if (!cacheIntegrityLoaded) {
+			logging::write(std::format("Cannot verify integrity of file, cache integrity not loaded ({})", filePathStr));
+			return std::nullopt;
+		}
+
 		// File integrity cannot be verified, reject.
 		if (!cacheIntegrity.contains(filePathStr) || !cacheIntegrity[filePathStr].is_string()) {
 			logging::write(std::format("Cannot verify integrity of file, rejecting cache ({})", filePathStr));
@@ -109,6 +115,13 @@ void BuildCache::storeFile(const std::string& file, BufferWrapper& data, const s
 
 	if (!dir.empty())
 		generics::createDirectory(filePath.parent_path());
+
+	// Cache integrity is not loaded yet, initialize an empty map.
+	if (!cacheIntegrityLoaded) {
+		logging::write("Cache integrity not loaded, initializing empty integrity map.");
+		cacheIntegrity = nlohmann::json::object();
+		cacheIntegrityLoaded = true;
+	}
 
 	// Integrity checking.
 	const std::string hash = data.calculateHash("sha1", "hex");

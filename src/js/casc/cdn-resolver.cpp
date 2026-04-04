@@ -157,10 +157,16 @@ std::vector<HostResult> _resolveHosts(const std::string& region, const std::unor
 void _resolveRegionProduct(const std::string& region, const std::string& product) {
 	try {
 		std::string host;
-		if (region == "cn")
+		if (region == "cn") {
 			host = std::string(constants::PATCH::HOST_CHINA);
-		else
-			host = "https://" + region + ".version.battle.net/";
+		} else {
+			// Use constants::PATCH::HOST with printf-style %s substitution (matching JS util.format)
+			std::string host_fmt(constants::PATCH::HOST);
+			auto pos = host_fmt.find("%s");
+			if (pos != std::string::npos)
+				host_fmt.replace(pos, 2, region);
+			host = host_fmt;
+		}
 
 		std::string url = host + product + std::string(constants::PATCH::SERVER_CONFIG);
 		auto data = generics::get(url);

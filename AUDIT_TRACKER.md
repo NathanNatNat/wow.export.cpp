@@ -195,10 +195,10 @@ These are NOT deviations — they are inherent structural translations from JS t
 
 ### `src/js/casc/cdn-resolver.cpp` — ACCEPTABLE
 - **JS**: Singleton class instance exported. `Promise.allSettled` for parallel pings. `Map`/`Set` for cache/failed hosts. `util.format(constants.PATCH.HOST, region)` for URL construction.
-- **C++**: Namespace with module-level state replaces singleton. `std::async` + `std::future` replaces `Promise.allSettled`. `std::unordered_map`/`std::unordered_set` replace `Map`/`Set`. `std::jthread` for fire-and-forget pre-resolution. URL constructed via string concatenation instead of `util.format`.
+- **C++**: Namespace with module-level state replaces singleton. `std::async` + `std::future` replaces `Promise.allSettled`. `std::unordered_map`/`std::unordered_set` replace `Map`/`Set`. `std::jthread` for fire-and-forget pre-resolution. URL constructed via `constants::PATCH::HOST` with `%s` replacement (matching `util.format`).
 - **Rationale**: Namespace with static state is idiomatic C++ singleton pattern. `std::async` provides equivalent parallel execution. `std::jthread` replaces unawaited async calls.
 
 ### `src/js/casc/build-cache.cpp` — ACCEPTABLE
 - **JS**: Module IIFE loads cache integrity at import time. `core.events.once('cache-integrity-ready', res)` for async readiness. `using _lock = core.create_busy_lock()` (TC39 proposal). `fsp.rm(dir, { recursive: true, force: true })`. `core.view.restartApplication()` for restart.
-- **C++**: `initBuildCacheSystem()` replaces IIFE (must be called at startup). `cacheIntegrityReady` pattern simplified to synchronous load. `auto _lock = core::create_busy_lock()` (RAII). `fs::remove_all()` replaces `fsp.rm`. Restart action emits event instead of calling `restartApplication()` (not yet available).
-- **Rationale**: Explicit init function is more predictable than IIFE in C++. Synchronous integrity load is simpler and equivalent since it runs at startup before any cache access. RAII lock is the C++ equivalent of TC39 `using` proposal.
+- **C++**: `initBuildCacheSystem()` replaces IIFE (must be called at startup). `cacheIntegrityLoaded` flag guards `getFile()`/`storeFile()` to reject or initialize when integrity is not yet loaded. `auto _lock = core::create_busy_lock()` (RAII). `fs::remove_all()` replaces `fsp.rm`. Restart action emits event instead of calling `restartApplication()` (not yet available).
+- **Rationale**: Explicit init function is more predictable than IIFE in C++. The `cacheIntegrityLoaded` check preserves the JS safety guarantee that integrity is available before use. RAII lock is the C++ equivalent of TC39 `using` proposal.
