@@ -217,6 +217,11 @@ std::string sbt_to_srt(std::string_view sbt) {
 	}
 
 	std::string result;
+	std::size_t total_size = 0;
+	for (const auto& line : srt_lines)
+		total_size += line.size() + 1; // +1 for '\n'
+	result.reserve(total_size);
+
 	for (std::size_t i = 0; i < srt_lines.size(); i++) {
 		if (i > 0)
 			result += '\n';
@@ -283,6 +288,11 @@ std::string srt_to_vtt(std::string_view srt) {
 	}
 
 	std::string result;
+	std::size_t total_size = 0;
+	for (const auto& line : vtt_lines)
+		total_size += line.size() + 1; // +1 for '\n'
+	result.reserve(total_size);
+
 	for (std::size_t i = 0; i < vtt_lines.size(); i++) {
 		if (i > 0)
 			result += '\n';
