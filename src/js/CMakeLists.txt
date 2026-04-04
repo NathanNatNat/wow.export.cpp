@@ -2,8 +2,17 @@
 #
 # Usage: after converting a JS file to real C++, add it to the CONVERTED_SOURCES
 # list below so it is compiled into the wow_export executable.
-#
-# Example (uncomment and adapt as conversions land):
-#   target_sources(wow_export PRIVATE
-#       ${CMAKE_CURRENT_SOURCE_DIR}/crc32.cpp
-#   )
+
+target_sources(wow_export PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/install-type.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/MultiMap.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/crc32.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/xml.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/subtitles.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/blob.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/hashing/xxhash64.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/casc/content-flags.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/casc/locale-flags.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/casc/version-config.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/casc/jenkins96.cpp
+)

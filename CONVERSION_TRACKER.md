@@ -13,23 +13,23 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 0 / 188 files converted
+**Progress:** 11 / 188 files converted
 
 ---
 
 ## Tier 0 — Zero-Dependency Primitives (11 files)
 
-- [ ] `src/js/crc32.cpp` (35 lines)
-- [ ] `src/js/MultiMap.cpp` (31 lines)
-- [ ] `src/js/blob.cpp` (309 lines)
-- [ ] `src/js/install-type.cpp` (6 lines)
-- [ ] `src/js/xml.cpp` (170 lines)
-- [ ] `src/js/subtitles.cpp` (192 lines)
-- [ ] `src/js/hashing/xxhash64.cpp` (288 lines)
-- [ ] `src/js/casc/content-flags.cpp` (14 lines)
-- [ ] `src/js/casc/locale-flags.cpp` (39 lines)
-- [ ] `src/js/casc/jenkins96.cpp` (54 lines)
-- [ ] `src/js/casc/version-config.cpp` (32 lines)
+- [x] `src/js/crc32.cpp` (35 lines)
+- [x] `src/js/MultiMap.cpp` (31 lines)
+- [x] `src/js/blob.cpp` (309 lines)
+- [x] `src/js/install-type.cpp` (6 lines)
+- [x] `src/js/xml.cpp` (170 lines)
+- [x] `src/js/subtitles.cpp` (192 lines)
+- [x] `src/js/hashing/xxhash64.cpp` (288 lines)
+- [x] `src/js/casc/content-flags.cpp` (14 lines)
+- [x] `src/js/casc/locale-flags.cpp` (39 lines)
+- [x] `src/js/casc/jenkins96.cpp` (54 lines)
+- [x] `src/js/casc/version-config.cpp` (32 lines)
 
 ## Tier 1 — Core Foundation (7 files)
 

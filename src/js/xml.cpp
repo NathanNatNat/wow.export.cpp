@@ -3,168 +3,201 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const parse_xml = (xml) => {
-	let pos = 0;
+#include "xml.h"
 
-	const skip_whitespace = () => {
-		while (pos < xml.length && /\s/.test(xml[pos]))
+#include <cctype>
+
+namespace {
+
+struct Parser {
+	std::string_view xml;
+	std::size_t pos = 0;
+
+	void skip_whitespace() {
+		while (pos < xml.size() && std::isspace(static_cast<unsigned char>(xml[pos])))
 			pos++;
-	};
+	}
 
-	const parse_tag_name = () => {
-		const start = pos;
-		while (pos < xml.length && /[a-zA-Z0-9_:.-]/.test(xml[pos]))
-			pos++;
+	std::string parse_tag_name() {
+		std::size_t start = pos;
+		while (pos < xml.size()) {
+			char ch = xml[pos];
+			if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+				(ch >= '0' && ch <= '9') || ch == '_' || ch == ':' ||
+				ch == '.' || ch == '-')
+				pos++;
+			else
+				break;
+		}
+		return std::string(xml.substr(start, pos - start));
+	}
 
-		return xml.slice(start, pos);
-	};
+	nlohmann::json parse_attributes() {
+		nlohmann::json attrs = nlohmann::json::object();
 
-	const parse_attributes = () => {
-		const attrs = {};
-
-		while (pos < xml.length) {
+		while (pos < xml.size()) {
 			skip_whitespace();
 
-			if (xml[pos] === '>' || xml[pos] === '/' || xml[pos] === '?')
+			if (xml[pos] == '>' || xml[pos] == '/' || xml[pos] == '?')
 				break;
 
-			const name_start = pos;
-			while (pos < xml.length && /[a-zA-Z0-9_:.-]/.test(xml[pos]))
-				pos++;
+			std::size_t name_start = pos;
+			while (pos < xml.size()) {
+				char ch = xml[pos];
+				if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+					(ch >= '0' && ch <= '9') || ch == '_' || ch == ':' ||
+					ch == '.' || ch == '-')
+					pos++;
+				else
+					break;
+			}
 
-			const name = xml.slice(name_start, pos);
+			std::string name(xml.substr(name_start, pos - name_start));
 
 			skip_whitespace();
 
-			if (xml[pos] === '=') {
+			if (xml[pos] == '=') {
 				pos++;
 				skip_whitespace();
 
-				const quote = xml[pos];
+				char quote = xml[pos];
 				pos++;
 
-				const value_start = pos;
-				while (pos < xml.length && xml[pos] !== quote)
+				std::size_t value_start = pos;
+				while (pos < xml.size() && xml[pos] != quote)
 					pos++;
 
-				const value = xml.slice(value_start, pos);
+				std::string value(xml.substr(value_start, pos - value_start));
 				pos++;
 
-				attrs[`@_${name}`] = value;
+				attrs["@_" + name] = value;
 			}
 		}
 
 		return attrs;
+	}
+
+	struct Node {
+		std::string tag;
+		nlohmann::json attrs;
+		std::vector<Node> children;
+		bool self_closing = false;
+		bool valid = false;
 	};
 
-	const parse_node = () => {
+	Node parse_node() {
 		skip_whitespace();
 
-		if (pos >= xml.length)
-			return null;
+		if (pos >= xml.size())
+			return {};
 
-		if (xml[pos] !== '<')
-			return null;
+		if (xml[pos] != '<')
+			return {};
 
 		pos++;
 
 		// closing tag
-		if (xml[pos] === '/') {
-			while (pos < xml.length && xml[pos] !== '>')
+		if (xml[pos] == '/') {
+			while (pos < xml.size() && xml[pos] != '>')
 				pos++;
 
 			pos++;
-			return null;
+			return {};
 		}
 
 		// processing instruction or xml declaration
-		const is_declaration = xml[pos] === '?';
+		bool is_declaration = (xml[pos] == '?');
 		if (is_declaration)
 			pos++;
 
-		const tag_name = (is_declaration ? '?' : '') + parse_tag_name();
-		const attrs = parse_attributes();
+		std::string tag_name = (is_declaration ? "?" : "") + parse_tag_name();
+		nlohmann::json attrs = parse_attributes();
 
 		// self-closing or declaration
-		if (xml[pos] === '/' || xml[pos] === '?') {
+		if (xml[pos] == '/' || xml[pos] == '?') {
 			pos++;
-			if (xml[pos] === '>')
+			if (xml[pos] == '>')
 				pos++;
 
-			return { tag: tag_name, attrs, children: [], self_closing: true };
+			return { tag_name, attrs, {}, true, true };
 		}
 
-		if (xml[pos] === '>')
+		if (xml[pos] == '>')
 			pos++;
 
-		const children = [];
+		std::vector<Node> children;
 
-		while (pos < xml.length) {
+		while (pos < xml.size()) {
 			skip_whitespace();
 
-			if (pos >= xml.length)
+			if (pos >= xml.size())
 				break;
 
 			// check for closing tag
-			if (xml[pos] === '<' && xml[pos + 1] === '/')
+			if (xml[pos] == '<' && pos + 1 < xml.size() && xml[pos + 1] == '/')
 				break;
 
-			const child = parse_node();
-			if (child)
-				children.push(child);
+			Node child = parse_node();
+			if (child.valid)
+				children.push_back(std::move(child));
 		}
 
 		// skip closing tag
-		if (xml[pos] === '<' && xml[pos + 1] === '/') {
-			while (pos < xml.length && xml[pos] !== '>')
+		if (pos < xml.size() && xml[pos] == '<' && pos + 1 < xml.size() && xml[pos + 1] == '/') {
+			while (pos < xml.size() && xml[pos] != '>')
 				pos++;
 
 			pos++;
 		}
 
-		return { tag: tag_name, attrs, children };
-	};
+		return { tag_name, attrs, std::move(children), false, true };
+	}
 
-	const build_object = (node) => {
-		if (!node)
-			return {};
+	nlohmann::json build_object(const Node& node) {
+		nlohmann::json obj = node.attrs;
 
-		const obj = { ...node.attrs };
-
-		if (node.children.length === 0)
+		if (node.children.empty())
 			return obj;
 
 		// group children by tag name
-		const groups = {};
+		std::unordered_map<std::string, std::vector<const Node*>> groups;
 
-		for (const child of node.children) {
-			if (!groups[child.tag])
-				groups[child.tag] = [];
-
-			groups[child.tag].push(child);
+		for (const auto& child : node.children) {
+			groups[child.tag].push_back(&child);
 		}
 
 		// build child objects
-		for (const [tag, nodes] of Object.entries(groups)) {
-			if (nodes.length === 1)
-				obj[tag] = build_object(nodes[0]);
-			else
-				obj[tag] = nodes.map(build_object);
+		for (const auto& [tag, nodes] : groups) {
+			if (nodes.size() == 1) {
+				obj[tag] = build_object(*nodes[0]);
+			} else {
+				nlohmann::json arr = nlohmann::json::array();
+				for (const auto* n : nodes)
+					arr.push_back(build_object(*n));
+				obj[tag] = std::move(arr);
+			}
 		}
 
 		return obj;
-	};
-
-	const root = {};
-
-	while (pos < xml.length) {
-		const node = parse_node();
-
-		if (node)
-			root[node.tag] = build_object(node);
 	}
 
-	return root;
+	nlohmann::json parse() {
+		nlohmann::json root = nlohmann::json::object();
+
+		while (pos < xml.size()) {
+			Node node = parse_node();
+
+			if (node.valid)
+				root[node.tag] = build_object(node);
+		}
+
+		return root;
+	}
 };
 
-export { parse_xml };
+} // anonymous namespace
+
+nlohmann::json parse_xml(std::string_view xml) {
+	Parser parser{ xml, 0 };
+	return parser.parse();
+}
