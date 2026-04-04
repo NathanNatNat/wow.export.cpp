@@ -341,7 +341,7 @@ Module registration, integrations, and entry point. Convert LAST.
 | `src/js/updater.cpp` | 168 | constants, generics, core, log |
 | `src/js/workers/cache-collector.cpp` | 431 | _(Node worker_threads, https, fs, crypto)_ |
 | `src/js/modules.cpp` | 414 | log, install-type, constants, _all components_ |
-| `src/app.cpp` | — | **Entry point — convert last** |
+| `src/app.cpp` | 713 | **Entry point — convert last** |
 
 ---
 
@@ -369,5 +369,5 @@ Module registration, integrations, and entry point. Convert LAST.
 | 20 | UI helpers | 9 | ~1,845 |
 | 21 | Vue components | 17 | ~4,884 |
 | 22 | App modules/tabs | 33 | ~12,410 |
-| 23 | Top-level glue | 6 | ~1,435 |
-| **Total** | | **188** | **~63,037** |
+| 23 | Top-level glue | 6 | ~2,148 |
+| **Total** | | **188** | **~63,750** |

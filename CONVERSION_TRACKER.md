@@ -272,4 +272,4 @@
 - [ ] `src/js/updater.cpp` (168 lines)
 - [ ] `src/js/workers/cache-collector.cpp` (431 lines)
 - [ ] `src/js/modules.cpp` (414 lines)
-- [ ] `src/app.cpp` — **Entry point, convert last**
+- [ ] `src/app.cpp` (713 lines) — **Entry point, convert last**
