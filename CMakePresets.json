@@ -11,7 +11,7 @@
             "displayName": "Windows MSVC — Debug",
             "description": "Windows x64, MSVC, Debug (default)",
             "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build/${presetName}",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_C_COMPILER": "cl",
@@ -50,7 +50,7 @@
             "displayName": "Linux GCC — Debug",
             "description": "Linux x64, GCC, Debug (default)",
             "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build/${presetName}",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_C_COMPILER": "gcc",
