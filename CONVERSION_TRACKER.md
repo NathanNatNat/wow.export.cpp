@@ -9,7 +9,11 @@
 - `- [x]` Converted and compiles
 - `- [✓]` Converted, compiles, and tested/verified
 
-**Progress:** 0 / 189 files converted
+> **🚫 DO NOT mark a file as `[x]` or `[✓]` unless it is 100% converted with NOTHING missing.**
+> Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
+> A partial conversion stays at `[~]`. No exceptions.
+
+**Progress:** 0 / 188 files converted
 
 ---
 
@@ -211,7 +215,7 @@
 - [ ] `src/js/ui/character-appearance.cpp` (205 lines)
 - [ ] `src/js/ui/model-viewer-utils.cpp` (549 lines)
 
-## Tier 21 — Vue Components → ImGui Widgets (17 files)
+## Tier 21 — Vue Components → ImGui Widgets (16 files)
 
 - [ ] `src/js/components/checkboxlist.cpp` (176 lines)
 - [ ] `src/js/components/combobox.cpp` (94 lines)
@@ -223,7 +227,6 @@
 - [ ] `src/js/components/menu-button.cpp` (81 lines)
 - [ ] `src/js/components/resize-layer.cpp` (25 lines)
 - [ ] `src/js/components/slider.cpp` (98 lines)
-- [ ] `src/js/components/home-showcase.cpp` (65 lines)
 - [ ] `src/js/components/listbox.cpp` (516 lines)
 - [ ] `src/js/components/listbox-maps.cpp` (95 lines)
 - [ ] `src/js/components/listbox-zones.cpp` (95 lines)

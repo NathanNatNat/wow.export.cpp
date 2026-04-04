@@ -1,6 +1,6 @@
 # JS → C++ Conversion Guidance
 
-This document describes the recommended order and principles for converting the 189 `.cpp` files (currently JavaScript with `.cpp` extensions) into true C++.
+This document describes the recommended order and principles for converting the 188 `.cpp` files (currently JavaScript with `.cpp` extensions) into true C++.
 
 ## Key Principles
 
@@ -23,6 +23,19 @@ This document describes the recommended order and principles for converting the 
 | `- [✓]` | Converted, compiles, and tested/verified |
 
 This is critical for coordination — the tracker is the single source of truth for what's done and what's remaining.
+
+## 🚫 100% Completion Required
+
+**A file MUST be 100% converted with NOTHING missing before it can be marked `[x]` (completed).**
+
+This means:
+- Every function in the original JS file has a working C++ equivalent
+- Every exported constant, enum, or data structure is present
+- Every edge case and error path is handled
+- The C++ version compiles and behaves identically to the JS original
+- No stubs, no TODOs, no placeholder implementations
+
+**If any part of a file is incomplete, it stays at `[~]` (in progress). No exceptions.**
 
 ---
 
@@ -272,7 +285,7 @@ Self-contained subsystem for legacy WoW.
 | `src/js/ui/character-appearance.cpp` | 205 | CharMaterialRenderer, DBCharacterCustomization |
 | `src/js/ui/model-viewer-utils.cpp` | 549 | log, buffer, export-helper, listfile, constants, blte-reader, blp, M2RendererGL, M3RendererGL, M2Exporter, M3Exporter, WMORendererGL, WMOExporter, texture-ribbon, uv-drawer, AnimMapper |
 
-### Tier 21 — Vue Components (17 files)
+### Tier 21 — Vue Components (16 files)
 
 | File | Lines | Local Dependencies |
 |------|------:|-------------------|
@@ -286,7 +299,6 @@ Self-contained subsystem for legacy WoW.
 | `src/js/components/menu-button.cpp` | 81 | _(none)_ |
 | `src/js/components/resize-layer.cpp` | 25 | _(none)_ |
 | `src/js/components/slider.cpp` | 98 | _(none)_ |
-| `src/js/components/home-showcase.cpp` | 65 | showcase.json |
 | `src/js/components/listbox.cpp` | 516 | core |
 | `src/js/components/listbox-maps.cpp` | 95 | listbox |
 | `src/js/components/listbox-zones.cpp` | 95 | listbox |
@@ -367,10 +379,10 @@ Module registration, integrations, and entry point. Convert LAST.
 | 18 | 3D renderers | 9 | ~5,792 |
 | 19 | 3D exporters | 7 | ~5,706 |
 | 20 | UI helpers | 9 | ~1,845 |
-| 21 | Vue components | 17 | ~4,884 |
+| 21 | Vue components | 16 | ~4,819 |
 | 22 | App modules/tabs | 31 | ~12,410 |
 | 23 | Top-level glue | 6 | ~2,148 |
-| **Total** | | **189** | **~63,750** |
+| **Total** | | **188** | **~63,685** |
 
 ---
 
@@ -382,9 +394,7 @@ These files aren't `.cpp` but will need to be handled during or after conversion
 |------|-------|
 | `src/app.css` | Main stylesheet — will need C++ UI equivalent (ImGui theming, etc.) |
 | `src/default_config.jsonc` | Default config — keep as embedded resource or parse at runtime |
-| `src/js/showcase.json` | Home showcase data — embed as static data or resource file |
 | `src/shaders/*.shader` (9 files) | GLSL shaders — keep as-is, load from files or embed as string literals |
-| `src/help_docs/*.md` (11 files) | Help/KB articles — embed as resources or keep as external files |
 | `src/fonts/` (3 files) | Font files — embed or load at runtime |
 | `src/images/` | UI images/icons — embed or load at runtime |
 | `src/fa-icons/` | SVG icons — embed or load at runtime |
