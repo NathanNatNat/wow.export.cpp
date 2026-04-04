@@ -1,9 +1,7 @@
 // You should NOT edit this file. To adjust configuration, either:
 // - Use the built-in settings menu inside the application (Recommended).
 // - If you must edit manually, locate your user-config:
-//      Windows: %LOCALAPPDATA%\<name>\User Data\Default\config.json
-//      macOS: ~/Library/Application Support/<name>/User Data/Default/config.json
-//      Linux: ~/.config/<name>/User Data/Default/config.json
+//      <app folder>/config/config.json
 {
 	"enableBinaryListfile": true,
 	"listfileBinarySource": "https://www.kruithne.net/wow.export/data/listfile/%s",

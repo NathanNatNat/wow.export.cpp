@@ -10,6 +10,18 @@
 // be removed as dead-code during compile.
 BUILD_RELEASE = process.env.BUILD_RELEASE === 'true';
 
+// Ensure application config and log directories exist before any modules
+// attempt to write to them (log.cpp creates a stream at require-time).
+{
+	const fs = require('fs');
+	const path = require('path');
+	const installPath = process.platform === 'darwin'
+		? path.resolve(path.join(__dirname, '..'))
+		: path.dirname(process.execPath);
+	fs.mkdirSync(path.join(installPath, 'config'), { recursive: true });
+	fs.mkdirSync(path.join(installPath, 'Logs'), { recursive: true });
+}
+
 // check for --disable-auto-update flag
 const DISABLE_AUTO_UPDATE = nw.App.argv.includes('--disable-auto-update');
 
@@ -568,7 +580,7 @@ document.addEventListener('click', function(e) {
 	const cpus = os.cpus();
 	log.write('wow.export has started v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid);
 	log.write('Host %s (%s), CPU %s (%d cores), Memory %s / %s', os.platform, os.arch, cpus[0].model, cpus.length, generics.filesize(os.freemem), generics.filesize(os.totalmem));
-	log.write('INSTALL_PATH %s DATA_PATH %s', constants.INSTALL_PATH, constants.DATA_PATH);
+	log.write('INSTALL_PATH %s CONFIG_DIR %s LOG_DIR %s', constants.INSTALL_PATH, constants.CONFIG_DIR, constants.LOG_DIR);
 
 	// log gpu info async to avoid blocking startup
 	gpuInfo.log_gpu_info();

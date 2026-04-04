@@ -46,7 +46,18 @@ preview_collections = {}
 
 
 def get_last_export_path():
-    """Get the platform-specific path to the last_export file (nw.js data path)."""
+    """Get the path to the last_export file.
+
+    Checks the wow.export install directory preference first (portable layout),
+    then falls back to the legacy nw.js data path locations.
+    """
+    prefs = bpy.context.preferences.addons.get(__package__)
+    if prefs and prefs.preferences and prefs.preferences.install_path:
+        portable = os.path.join(prefs.preferences.install_path, 'config', 'last_export')
+        if os.path.exists(portable):
+            return portable
+
+    # Legacy platform-specific nw.js data paths as fallback.
     if sys.platform == 'win32':
         base = os.environ.get('LOCALAPPDATA', os.path.expanduser('~'))
         return os.path.join(base, 'wow.export', 'User Data', 'Default', 'last_export')
@@ -279,7 +290,23 @@ class WOWEXPORT_PT_sidebar_panel(bpy.types.Panel):
         layout.operator('wowexport.import_last_export')
 
 
+class WowExportPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__
+
+    install_path: bpy.props.StringProperty(
+        name='wow.export Install Path',
+        description='Path to the wow.export installation directory. Leave empty to use legacy detection',
+        subtype='DIR_PATH',
+        default='',
+    )
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, 'install_path')
+
+
 classes = (
+    WowExportPreferences,
     ImportWoWOBJ,
     WOWEXPORT_OT_import_dialog,
     WOWEXPORT_OT_import_last_export,
