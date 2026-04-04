@@ -3,31 +3,41 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const BufferWrapper = require('../buffer');
-const PNGWriter = require('../png-writer');
-const webp = require('webp-wasm');
+#include "blp.h"
 
-const DXT1 = 0x1;
-const DXT3 = 0x2;
-const DXT5 = 0x4;
+#include "../buffer.h"
+#include "../png-writer.h"
 
-const BLP_MAGIC = 0x32504c42;
+#include <webp/encode.h>
+#include <cmath>
+#include <cstring>
+#include <stdexcept>
+#include <algorithm>
+#include <string>
+
+namespace {
+
+constexpr uint32_t DXT1 = 0x1;
+constexpr uint32_t DXT3 = 0x2;
+constexpr uint32_t DXT5 = 0x4;
+
+constexpr uint32_t BLP_MAGIC = 0x32504c42;
 
 /**
  * Unpack a colour value.
- * @param {Array} block
- * @param {number} index
- * @param {number} ofs
- * @param {Array} colour
- * @param {number} colourOfs
- * @private
+ * @param block  Raw data array.
+ * @param index  Base index into block.
+ * @param ofs    Additional offset.
+ * @param colour Output colour array.
+ * @param colourOfs Offset into colour array.
+ * @returns The packed 16-bit colour value.
  */
-const unpackColour = (block, index, ofs, colour, colourOfs) => {
-	let value = block[index + ofs] | (block[index + 1 + ofs] << 8);
+uint16_t unpackColour(const std::vector<uint8_t>& block, int index, int ofs, int* colour, int colourOfs) {
+	uint16_t value = static_cast<uint16_t>(block[index + ofs] | (block[index + 1 + ofs] << 8));
 
-	let r = (value >> 11) & 0x1F;
-	let g = (value >> 5) & 0x3F;
-	let b = value & 0x1F;
+	int r = (value >> 11) & 0x1F;
+	int g = (value >> 5) & 0x3F;
+	int b = value & 0x1F;
 
 	colour[colourOfs] = (r << 3) | (r >> 2);
 	colour[colourOfs + 1] = (g << 2) | (g >> 4);
@@ -35,475 +45,382 @@ const unpackColour = (block, index, ofs, colour, colourOfs) => {
 	colour[colourOfs + 3] = 255;
 
 	return value;
-};
+}
 
-class BLPImage {
-	/**
-	 * Construct a new BLPImage instance.
-	 * @param {BufferWrapper}
-	 */
-	constructor(data) {
-		this.data = data;
+} // anonymous namespace
 
-		// Check magic value..
-		if (this.data.readUInt32LE() !== BLP_MAGIC)
-			throw new Error('Provided data is not a BLP file (invalid header magic).');
+namespace casc {
 
-		// Check the BLP file type..
-		let type = this.data.readUInt32LE();
-		if (type !== 1)
-			throw new Error('Unsupported BLP type: ' + type);
+BLPImage::BLPImage(BufferWrapper data)
+	: data_(std::move(data)) {
+	// Check magic value..
+	if (data_.readUInt32LE() != BLP_MAGIC)
+		throw std::runtime_error("Provided data is not a BLP file (invalid header magic).");
 
-		// Read file flags..
-		this.encoding = this.data.readUInt8();
-		this.alphaDepth = this.data.readUInt8();
-		this.alphaEncoding = this.data.readUInt8();
-		this.containsMipmaps = this.data.readUInt8();
+	// Check the BLP file type..
+	uint32_t type = data_.readUInt32LE();
+	if (type != 1)
+		throw std::runtime_error("Unsupported BLP type: " + std::to_string(type));
 
-		// Read file dimensions..
-		this.width = this.data.readUInt32LE();
-		this.height = this.data.readUInt32LE();
+	// Read file flags..
+	encoding = data_.readUInt8();
+	alphaDepth = data_.readUInt8();
+	alphaEncoding = data_.readUInt8();
+	containsMipmaps = data_.readUInt8();
 
-		// Read mipmap data..
-		this.mapOffsets = this.data.readUInt32LE(16);
-		this.mapSizes = this.data.readUInt32LE(16);
+	// Read file dimensions..
+	width = data_.readUInt32LE();
+	height = data_.readUInt32LE();
 
-		// Calculate available mipmaps..
-		this.mapCount = 0;
-		for (let ofs of this.mapOffsets) {
-			if (ofs !== 0)
-				this.mapCount++;
-		}
-
-		// Read colour palette..
-		this.palette = [];
-		if (this.encoding === 1) {
-			for (let i = 0; i < 256; i++)
-				this.palette[i] = this.data.readUInt8(4);
-		}
-
-		this.dataURL = null;
+	// Read mipmap data..
+	{
+		auto offsets = data_.readUInt32LE(16);
+		mapOffsets.assign(offsets.begin(), offsets.end());
+	}
+	{
+		auto sizes = data_.readUInt32LE(16);
+		mapSizes.assign(sizes.begin(), sizes.end());
 	}
 
-	/**
-	 * Encode this image as a data URL and return it.
-	 * @param {number} mask
-	 * @param {number} mipmap
-	 * @returns {string}
-	 */
-	getDataURL(mask = 0b1111, mipmap = 0) {
-		return this.toCanvas(mask, mipmap).toDataURL();
+	// Calculate available mipmaps..
+	mapCount = 0;
+	for (uint32_t ofs : mapOffsets) {
+		if (ofs != 0)
+			mapCount++;
 	}
 
-	/**
-	 * Return a canvas with this BLP painted onto it.
-	 * @param {number} mask
-	 * @param {number} mipmap
-	 */
-	toCanvas(mask = 0b1111, mipmap = 0) {
-		const canvas = document.createElement('canvas');
-
-		if (mipmap == 0) {
-			canvas.width = this.width;
-			canvas.height = this.height;
-		} else {
-			const scale = Math.pow(2, mipmap);
-			canvas.width = this.width / scale;
-			canvas.height = this.height / scale;
-		}
-
-		this.drawToCanvas(canvas, mipmap, mask);
-		return canvas;
-	}
-
-	/**
-	 * Retrieve this BLP as a PNG image.
-	 * @param {number} mask 
-	 * @param {number} mipmap 
-	 * @returns {BufferWrapper}
-	 */
-	toPNG(mask = 0b1111, mipmap = 0) {
-		this._prepare(mipmap);
-
-		const png = new PNGWriter(this.scaledWidth, this.scaledHeight);
-		const pixelData = png.getPixelData();
-
-		switch (this.encoding) {
-			case 1: this._getUncompressed(pixelData, mask); break;
-			case 2: this._getCompressed(pixelData, mask); break;
-			case 3: this._marshalBGRA(pixelData, mask); break;
-		}
-
-		return png.getBuffer();
-	}
-
-	/**
-	 * Save this BLP as PNG file.
-	 * @param {string} file
-	 * @param {number} mask
-	 * @param {number} mipmap
-	 */
-	async saveToPNG(file, mask = 0b1111, mipmap = 0) {
-		return await this.toPNG(mask, mipmap).writeToFile(file);
-	}
-
-	/**
-	 * Convert this BLP to WebP format.
-	 * @param {number} mask
-	 * @param {number} mipmap
-	 * @param {number} quality - Quality setting (1-100), 100 = lossless
-	 * @returns {Promise<Buffer>}
-	 */
-	async toWebP(mask = 0b1111, mipmap = 0, quality = 90) {
-		this._prepare(mipmap);
-
-		// Create RGBA pixel data buffer
-		const pixelData = Buffer.alloc(this.scaledWidth * this.scaledHeight * 4);
-
-		switch (this.encoding) {
-			case 1: this._getUncompressed(pixelData, mask); break;
-			case 2: this._getCompressed(pixelData, mask); break;
-			case 3: this._marshalBGRA(pixelData, mask); break;
-		}
-
-		const imgData = {
-			data: pixelData,
-			width: this.scaledWidth,
-			height: this.scaledHeight
-		};
-
-		const options = quality === 100
-			? { lossless: true }
-			: { quality: quality, lossless: false };
-
-		const webpBuffer = await webp.encode(imgData, options);
-
-		return webpBuffer;
-	}
-
-	/**
-	 * Save this BLP as WebP file.
-	 * @param {string} file
-	 * @param {number} mask
-	 * @param {number} mipmap
-	 * @param {number} quality - Quality setting (1-100), 100 = lossless
-	 */
-	async saveToWebP(file, mask = 0b1111, mipmap = 0, quality = 90) {
-		const webpBuffer = await this.toWebP(mask, mipmap, quality);
-		await new BufferWrapper(webpBuffer).writeToFile(file);
-	}
-
-	/**
-	 * Prepare BLP for processing.
-	 * @param {number} mipmap 
-	 */
-	_prepare(mipmap = 0) {
-		// Constrict the requested mipmap to a valid range..
-		mipmap = Math.max(0, Math.min(mipmap || 0, this.mapCount - 1));
-
-		// Calculate the scaled dimensions..
-		this.scale = Math.pow(2, mipmap);
-		this.scaledWidth = this.width / this.scale;
-		this.scaledHeight = this.height / this.scale;
-		this.scaledLength = this.scaledWidth * this.scaledHeight;
-
-		// Extract the raw data we need..
-		this.data.seek(this.mapOffsets[mipmap]);
-		this.rawData = this.data.readUInt8(this.mapSizes[mipmap]);
-	}
-
-	/**
-	 * Draw the contents of this BLP file onto a canvas.
-	 * @param {HTMLElement} canvas 
-	 * @param {number} mipmap 
-	 * @param {number} mask
-	 */
-	drawToCanvas(canvas, mipmap = 0, mask = 0b1111) {
-		this._prepare(mipmap);
-
-		const ctx = canvas.getContext('2d');
-		const canvasData = ctx.createImageData(this.scaledWidth, this.scaledHeight);
-
-		switch (this.encoding) {
-			case 1: this._getUncompressed(canvasData.data, mask); break;
-			case 2: this._getCompressed(canvasData.data, mask); break;
-			case 3: this._marshalBGRA(canvasData.data, mask); break;
-		}
-
-		ctx.putImageData(canvasData, 0, 0);
-	}
-
-	/**
-	 * Get the contents of this BLP as a BufferWrapper instance.
-	 * @param {number} mipmap 
-	 * @param {number} mask 
-	 * @returns {BufferWrapper}
-	 */
-	toBuffer(mipmap = 0, mask = 0b1111) {
-		this._prepare(mipmap);
-
-		switch (this.encoding) {
-			case 1: return this._getUncompressed(null, mask);
-			case 2: return this._getCompressed(null, mask);
-			case 3: return this._marshalBGRA(null, mask);
-		}
-	}
-
-	/**
-	 * Get the contents of this raw BLP mipmap as a Buffer instance.
-	 * @param {number} mipmap 
-	 * @param {number} mask 
-	 * @returns {Buffer}
-	 */
-	getRawMipmap(mipmap = 0) {
-		this._prepare(mipmap);
-		return Buffer.from(this.rawData);
-	}
-
-	/**
-	 * Get the contents of this BLP as an RGBA UInt8 array.
-	 * @param {number} mipmap 
-	 * @param {number} mask
-	 */
-	toUInt8Array(mipmap = 0, mask = 0b1111) {
-		this._prepare(mipmap);
-
-		const arr = new Uint8Array(this.scaledWidth * this.scaledHeight * 4);
-		switch (this.encoding) {
-			case 1: this._getUncompressed(arr, mask); break;
-			case 2: this._getCompressed(arr, mask); break;
-			case 3: this._marshalBGRA(arr, mask); break;
-		}
-
-		return arr;
-	}
-	
-	/**
-	 * Calculate the alpha using this files alpha depth.
-	 * @param {number} index Alpha index.
-	 * @private
-	 */
-	_getAlpha(index) {
-		let byte;
-		switch (this.alphaDepth) {
-			case 1:
-				byte = this.rawData[this.scaledLength + Math.floor(index / 8)];
-				return (byte & (0x01 << (index % 8))) === 0 ? 0x00 : 0xFF;
-
-			case 4:
-				byte = this.rawData[this.scaledLength + (index / 2)];
-				return (index % 2 === 0 ? (byte & 0x0F) << 4 : byte & 0xF0);
-
-			case 8:
-				return this.rawData[this.scaledLength + index];
-
-			default:
-				return 0xFF;
-		}
-	}
-
-	/**
-	 * Extract compressed data.
-	 * @param {ImageData} canvasData
-	 * @param {number} mask
-	 * @private
-	 */
-	_getCompressed(canvasData, mask = 0b1111) {
-		const flags = this.alphaDepth > 1 ? (this.alphaEncoding === 7 ? DXT5 : DXT3) : DXT1;
-		const data = canvasData ? canvasData : Buffer.alloc(this.scaledWidth * this.scaledHeight * 4);
-
-		let pos = 0;
-		const blockBytes = (flags & DXT1) !== 0 ? 8 : 16;
-		const target = new Array(4 * 16);
-
-		for (let y = 0, sh = this.scaledHeight; y < sh; y += 4) {
-			for (let x = 0, sw = this.scaledWidth; x < sw; x+= 4) {
-				let blockPos = 0;
-
-				if (this.rawData.length === pos)
-					continue;
-
-				let colourIndex = pos;
-				if ((flags & (DXT3 | DXT5)) !== 0)
-					colourIndex += 8;
-
-				// Decompress colour..
-				let isDXT1 = (flags & DXT1) !== 0;
-				let colours = [];
-				let a = unpackColour(this.rawData, colourIndex, 0, colours, 0);
-				let b = unpackColour(this.rawData, colourIndex, 2, colours, 4);
-
-				for (let i = 0; i < 3; i++) {
-					let c = colours[i];
-					let d = colours[i + 4];
-
-					if (isDXT1 && a <= b) {
-						colours[i + 8] = (c + d) / 2;
-						colours[i + 12] = 0;
-					} else {
-						colours[i + 8] = (2 * c + d) / 3;
-						colours[i + 12] = (c + 2 * d) / 3;
-					}
-				}
-
-				colours[8 + 3] = 255;
-				colours[12 + 3] = (isDXT1 && a <= b) ? 0 : 255;
-
-				let index = [];
-				for (let i = 0; i < 4; i++) {
-					let packed = this.rawData[colourIndex + 4 + i];
-					index[i * 4] = packed & 0x3;
-					index[1 + i * 4] = (packed >> 2) & 0x3;
-					index[2 + i * 4] = (packed >> 4) & 0x3;
-					index[3 + i * 4] = (packed >> 6) & 0x3;
-				}
-
-				for (let i = 0; i < 16; i++) {
-					let ofs = index[i] * 4;
-					target[4 * i] = colours[ofs];
-					target[4 * i + 1] = colours[ofs + 1];
-					target[4 * i + 2] = colours[ofs + 2];
-					target[4 * i + 3] = colours[ofs + 3];
-				}
-
-				if ((flags & DXT3) !== 0) {
-					for (let i = 0; i < 8; i++) {
-						let quant = this.rawData[pos + i];
-
-						let low = (quant & 0x0F);
-						let high = (quant & 0xF0);
-
-						target[8 * i + 3] = (low | (low << 4));
-						target[8 * i + 7] = (high | (high >> 4));
-					}
-				} else if ((flags & DXT5) !== 0) {
-					let a0 = this.rawData[pos];
-					let a1 = this.rawData[pos + 1];
-
-					let colours = [];
-					colours[0] = a0;
-					colours[1] = a1;
-
-					if (a0 <= a1) {
-						for (let i = 1; i < 5; i++)
-							colours[i + 1] = (((5 - i) * a0 + i * a1) / 5) | 0;
-
-						colours[6] = 0;
-						colours[7] = 255;
-					} else {
-						for (let i = 1; i < 7; i++)
-							colours[i + 1] = (((7 - i) * a0 + i * a1) / 7) | 0;
-					}
-
-					let indices = [];
-					let blockPos = 2;
-					let indicesPos = 0;
-
-					for (let i = 0; i < 2; i++) {
-						let value = 0;
-						for (let j = 0; j < 3; j++) {
-							let byte = this.rawData[pos + blockPos++];
-							value |= (byte << 8 * j);
-						}
-
-						for (let j = 0; j < 8; j++)
-							indices[indicesPos++] = (value >> 3 * j) & 0x07;
-					}
-
-					for (let i = 0; i < 16; i++)
-						target[4 * i + 3] = colours[indices[i]];
-				}
-
-				for (let pY = 0; pY < 4; pY++) {
-					for (let pX = 0; pX < 4; pX++) {
-						let sX = x + pX;
-						let sY = y + pY;
-
-						if (sX < sw && sY < sh) {
-							let pixel = 4 * (sw * sY + sX);
-							data[pixel + 0] = (mask & 0b1) ? target[blockPos + 0] : 0;
-							data[pixel + 1] = (mask & 0b10) ? target[blockPos + 1] : 0;
-							data[pixel + 2] = (mask & 0b100) ? target[blockPos + 2] : 0;
-							data[pixel + 3] = (mask & 0b1000) ? target[blockPos + 3] : 255;
-						}
-						blockPos += 4;
-					}
-				}
-				pos += blockBytes;
-			}
-		}
-		
-		if (!canvasData)
-			return new BufferWrapper(data);
-	}
-
-	/**
-	 * Match the uncompressed data with the palette.
-	 * @param {ImageData} canvasData
-	 * @param {number} mask
-	 * @returns {BufferWrapper|undefined}
-	 * @private
-	 */
-	_getUncompressed(canvasData, mask) {
-		if (canvasData) {
-			for (let i = 0, n = this.scaledLength; i < n; i++) {
-				const ofs = i * 4;
-				const colour = this.palette[this.rawData[i]];
-				
-				canvasData[ofs] = (mask & 0b1) ? colour[2] : 0;
-				canvasData[ofs + 1] = (mask & 0b10) ? colour[1] : 0;
-				canvasData[ofs + 2] = (mask & 0b100) ? colour[0] : 0;
-				canvasData[ofs + 3] = (mask & 0b1000) ? this._getAlpha(i) : 255;
-			}
-		} else {
-			const buf = BufferWrapper.alloc(this.scaledLength * 4);
-			for (let i = 0, n = this.scaledLength; i < n; i++) {
-				const colour = this.palette[this.rawData[i]];
-				buf.writeUInt8([
-					(mask & 0b1) ? colour[2] : 0,
-					(mask & 0b10) ? colour[1] : 0,
-					(mask & 0b100) ? colour[0] : 0,
-					(mask & 0b1000) ? this._getAlpha(i) : 255
-				]);
-			}
-			buf.seek(0);
-			return buf;
-		}
-	}
-
-	/**
-	 * Marshal a BGRA array into an RGBA ordered buffer.
-	 * @param {ImageData} canvasData
-	 * @param {number} mask
-	 * @returns {BufferWrapper|undefined}
-	 * @private
-	 */
-	_marshalBGRA(canvasData, mask) {
-		const data = this.rawData;
-		
-		if (canvasData) {
-			for (let i = 0, n = data.length / 4; i < n; i++) {
-				let ofs = i * 4;
-				canvasData[ofs] = (mask & 0b1) ? data[ofs + 2] : 0;
-				canvasData[ofs + 1] = (mask & 0b10) ? data[ofs + 1] : 0;
-				canvasData[ofs + 2] = (mask & 0b100) ? data[ofs] : 0;
-				canvasData[ofs + 3] = (mask & 0b1000) ? data[ofs + 3] : 255;
-			}
-		} else {
-			const buf = BufferWrapper.alloc(data.length);
-			for (let i = 0, n = data.length / 4; i < n; i++) {
-				let ofs = i * 4;
-				buf.writeUInt8([
-					(mask & 0b1) ? data[ofs + 2] : 0,
-					(mask & 0b10) ? data[ofs + 1] : 0,
-					(mask & 0b100) ? data[ofs] : 0,
-					(mask & 0b1000) ? data[ofs + 3] : 255
-				]);
-			}
-			buf.seek(0);
-			return buf;
-		}
+	// Read colour palette..
+	if (encoding == 1) {
+		palette_.resize(256);
+		for (int i = 0; i < 256; i++)
+			palette_[i] = data_.readUInt8(4);
 	}
 }
 
-module.exports = BLPImage;
+std::string BLPImage::getDataURL(uint8_t mask, int mipmap) {
+	BufferWrapper pngBuf = toPNG(mask, mipmap);
+	return pngBuf.getDataURL();
+}
+
+BufferWrapper BLPImage::toPNG(uint8_t mask, int mipmap) {
+	_prepare(mipmap);
+
+	PNGWriter png(scaledWidth_, scaledHeight_);
+	auto& pixelData = png.getPixelData();
+
+	switch (encoding) {
+		case 1: _getUncompressed(pixelData.data(), mask); break;
+		case 2: _getCompressed(pixelData.data(), mask); break;
+		case 3: _marshalBGRA(pixelData.data(), mask); break;
+	}
+
+	return png.getBuffer();
+}
+
+void BLPImage::saveToPNG(const std::filesystem::path& file, uint8_t mask, int mipmap) {
+	toPNG(mask, mipmap).writeToFile(file);
+}
+
+BufferWrapper BLPImage::toWebP(uint8_t mask, int mipmap, int quality) {
+	_prepare(mipmap);
+
+	// Create RGBA pixel data buffer.
+	std::vector<uint8_t> pixelData(scaledWidth_ * scaledHeight_ * 4, 0);
+
+	switch (encoding) {
+		case 1: _getUncompressed(pixelData.data(), mask); break;
+		case 2: _getCompressed(pixelData.data(), mask); break;
+		case 3: _marshalBGRA(pixelData.data(), mask); break;
+	}
+
+	uint8_t* output = nullptr;
+	size_t outputSize = 0;
+
+	if (quality == 100) {
+		// Lossless encoding.
+		outputSize = WebPEncodeLosslessRGBA(
+			pixelData.data(),
+			static_cast<int>(scaledWidth_),
+			static_cast<int>(scaledHeight_),
+			static_cast<int>(scaledWidth_ * 4),
+			&output
+		);
+	} else {
+		// Lossy encoding.
+		outputSize = WebPEncodeRGBA(
+			pixelData.data(),
+			static_cast<int>(scaledWidth_),
+			static_cast<int>(scaledHeight_),
+			static_cast<int>(scaledWidth_ * 4),
+			static_cast<float>(quality),
+			&output
+		);
+	}
+
+	if (outputSize == 0 || output == nullptr)
+		throw std::runtime_error("WebP encoding failed");
+
+	// Copy into a BufferWrapper and free the WebP-allocated memory.
+	BufferWrapper result = BufferWrapper::from(std::span<const uint8_t>(output, outputSize));
+	WebPFree(output);
+
+	return result;
+}
+
+void BLPImage::saveToWebP(const std::filesystem::path& file, uint8_t mask, int mipmap, int quality) {
+	BufferWrapper webpBuffer = toWebP(mask, mipmap, quality);
+	webpBuffer.writeToFile(file);
+}
+
+void BLPImage::_prepare(int mipmap) {
+	// Constrict the requested mipmap to a valid range..
+	mipmap = std::max(0, std::min(mipmap, mapCount - 1));
+
+	// Calculate the scaled dimensions..
+	scale_ = static_cast<int>(std::pow(2, mipmap));
+	scaledWidth_ = width / static_cast<uint32_t>(scale_);
+	scaledHeight_ = height / static_cast<uint32_t>(scale_);
+	scaledLength_ = scaledWidth_ * scaledHeight_;
+
+	// Extract the raw data we need..
+	data_.seek(mapOffsets[mipmap]);
+	rawData_ = data_.readUInt8(mapSizes[mipmap]);
+}
+
+BufferWrapper BLPImage::toBuffer(int mipmap, uint8_t mask) {
+	_prepare(mipmap);
+
+	switch (encoding) {
+		case 1: return _getUncompressed(nullptr, mask);
+		case 2: return _getCompressed(nullptr, mask);
+		case 3: return _marshalBGRA(nullptr, mask);
+		default: return BufferWrapper();
+	}
+}
+
+BufferWrapper BLPImage::getRawMipmap(int mipmap) {
+	_prepare(mipmap);
+	return BufferWrapper::from(std::span<const uint8_t>(rawData_.data(), rawData_.size()));
+}
+
+std::vector<uint8_t> BLPImage::toUInt8Array(int mipmap, uint8_t mask) {
+	_prepare(mipmap);
+
+	std::vector<uint8_t> arr(scaledWidth_ * scaledHeight_ * 4, 0);
+	switch (encoding) {
+		case 1: _getUncompressed(arr.data(), mask); break;
+		case 2: _getCompressed(arr.data(), mask); break;
+		case 3: _marshalBGRA(arr.data(), mask); break;
+	}
+
+	return arr;
+}
+
+uint8_t BLPImage::_getAlpha(int index) const {
+	uint8_t byte;
+	switch (alphaDepth) {
+		case 1:
+			byte = rawData_[scaledLength_ + static_cast<size_t>(std::floor(index / 8.0))];
+			return (byte & (0x01 << (index % 8))) == 0 ? 0x00 : 0xFF;
+
+		case 4:
+			byte = rawData_[scaledLength_ + (index / 2)];
+			return static_cast<uint8_t>((index % 2 == 0) ? ((byte & 0x0F) << 4) : (byte & 0xF0));
+
+		case 8:
+			return rawData_[scaledLength_ + index];
+
+		default:
+			return 0xFF;
+	}
+}
+
+BufferWrapper BLPImage::_getCompressed(uint8_t* canvasData, uint8_t mask) {
+	const uint32_t flags = alphaDepth > 1 ? (alphaEncoding == 7 ? DXT5 : DXT3) : DXT1;
+
+	std::vector<uint8_t> ownedData;
+	uint8_t* data = canvasData;
+	if (!canvasData) {
+		ownedData.resize(scaledWidth_ * scaledHeight_ * 4, 0);
+		data = ownedData.data();
+	}
+
+	int pos = 0;
+	const int blockBytes = (flags & DXT1) != 0 ? 8 : 16;
+	int target[4 * 16] = {};
+
+	for (uint32_t y = 0, sh = scaledHeight_; y < sh; y += 4) {
+		for (uint32_t x = 0, sw = scaledWidth_; x < sw; x += 4) {
+			int blockPos = 0;
+
+			if (static_cast<size_t>(pos) >= rawData_.size())
+				continue;
+
+			int colourIndex = pos;
+			if ((flags & (DXT3 | DXT5)) != 0)
+				colourIndex += 8;
+
+			// Decompress colour..
+			bool isDXT1 = (flags & DXT1) != 0;
+			int colours[16] = {};
+			uint16_t a = unpackColour(rawData_, colourIndex, 0, colours, 0);
+			uint16_t b = unpackColour(rawData_, colourIndex, 2, colours, 4);
+
+			for (int i = 0; i < 3; i++) {
+				int c = colours[i];
+				int d = colours[i + 4];
+
+				if (isDXT1 && a <= b) {
+					colours[i + 8] = (c + d) / 2;
+					colours[i + 12] = 0;
+				} else {
+					colours[i + 8] = (2 * c + d) / 3;
+					colours[i + 12] = (c + 2 * d) / 3;
+				}
+			}
+
+			colours[8 + 3] = 255;
+			colours[12 + 3] = (isDXT1 && a <= b) ? 0 : 255;
+
+			int index[16] = {};
+			for (int i = 0; i < 4; i++) {
+				uint8_t packed = rawData_[colourIndex + 4 + i];
+				index[i * 4] = packed & 0x3;
+				index[1 + i * 4] = (packed >> 2) & 0x3;
+				index[2 + i * 4] = (packed >> 4) & 0x3;
+				index[3 + i * 4] = (packed >> 6) & 0x3;
+			}
+
+			for (int i = 0; i < 16; i++) {
+				int ofs = index[i] * 4;
+				target[4 * i] = colours[ofs];
+				target[4 * i + 1] = colours[ofs + 1];
+				target[4 * i + 2] = colours[ofs + 2];
+				target[4 * i + 3] = colours[ofs + 3];
+			}
+
+			if ((flags & DXT3) != 0) {
+				for (int i = 0; i < 8; i++) {
+					uint8_t quant = rawData_[pos + i];
+
+					int low = (quant & 0x0F);
+					int high = (quant & 0xF0);
+
+					target[8 * i + 3] = (low | (low << 4));
+					target[8 * i + 7] = (high | (high >> 4));
+				}
+			} else if ((flags & DXT5) != 0) {
+				int a0 = rawData_[pos];
+				int a1 = rawData_[pos + 1];
+
+				int alphaColours[8] = {};
+				alphaColours[0] = a0;
+				alphaColours[1] = a1;
+
+				if (a0 <= a1) {
+					for (int i = 1; i < 5; i++)
+						alphaColours[i + 1] = ((5 - i) * a0 + i * a1) / 5;
+
+					alphaColours[6] = 0;
+					alphaColours[7] = 255;
+				} else {
+					for (int i = 1; i < 7; i++)
+						alphaColours[i + 1] = ((7 - i) * a0 + i * a1) / 7;
+				}
+
+				int indices[16] = {};
+				int alphaBlockPos = 2;
+				int indicesPos = 0;
+
+				for (int i = 0; i < 2; i++) {
+					int value = 0;
+					for (int j = 0; j < 3; j++) {
+						uint8_t byte = rawData_[pos + alphaBlockPos++];
+						value |= (byte << (8 * j));
+					}
+
+					for (int j = 0; j < 8; j++)
+						indices[indicesPos++] = (value >> (3 * j)) & 0x07;
+				}
+
+				for (int i = 0; i < 16; i++)
+					target[4 * i + 3] = alphaColours[indices[i]];
+			}
+
+			for (uint32_t pY = 0; pY < 4; pY++) {
+				for (uint32_t pX = 0; pX < 4; pX++) {
+					uint32_t sX = x + pX;
+					uint32_t sY = y + pY;
+
+					if (sX < sw && sY < sh) {
+						size_t pixel = 4 * (sw * sY + sX);
+						data[pixel + 0] = static_cast<uint8_t>((mask & 0b1) ? target[blockPos + 0] : 0);
+						data[pixel + 1] = static_cast<uint8_t>((mask & 0b10) ? target[blockPos + 1] : 0);
+						data[pixel + 2] = static_cast<uint8_t>((mask & 0b100) ? target[blockPos + 2] : 0);
+						data[pixel + 3] = static_cast<uint8_t>((mask & 0b1000) ? target[blockPos + 3] : 255);
+					}
+					blockPos += 4;
+				}
+			}
+			pos += blockBytes;
+		}
+	}
+
+	if (!canvasData)
+		return BufferWrapper::from(std::move(ownedData));
+	return BufferWrapper();
+}
+
+BufferWrapper BLPImage::_getUncompressed(uint8_t* canvasData, uint8_t mask) {
+	if (canvasData) {
+		for (uint32_t i = 0, n = scaledLength_; i < n; i++) {
+			const size_t ofs = i * 4;
+			const auto& colour = palette_[rawData_[i]];
+
+			canvasData[ofs] = static_cast<uint8_t>((mask & 0b1) ? colour[2] : 0);
+			canvasData[ofs + 1] = static_cast<uint8_t>((mask & 0b10) ? colour[1] : 0);
+			canvasData[ofs + 2] = static_cast<uint8_t>((mask & 0b100) ? colour[0] : 0);
+			canvasData[ofs + 3] = static_cast<uint8_t>((mask & 0b1000) ? _getAlpha(static_cast<int>(i)) : 255);
+		}
+		return BufferWrapper();
+	} else {
+		BufferWrapper buf = BufferWrapper::alloc(scaledLength_ * 4);
+		for (uint32_t i = 0, n = scaledLength_; i < n; i++) {
+			const auto& colour = palette_[rawData_[i]];
+			buf.writeUInt8(static_cast<uint8_t>((mask & 0b1) ? colour[2] : 0));
+			buf.writeUInt8(static_cast<uint8_t>((mask & 0b10) ? colour[1] : 0));
+			buf.writeUInt8(static_cast<uint8_t>((mask & 0b100) ? colour[0] : 0));
+			buf.writeUInt8(static_cast<uint8_t>((mask & 0b1000) ? _getAlpha(static_cast<int>(i)) : 255));
+		}
+		buf.seek(0);
+		return buf;
+	}
+}
+
+BufferWrapper BLPImage::_marshalBGRA(uint8_t* canvasData, uint8_t mask) {
+	const auto& rawRef = rawData_;
+
+	if (canvasData) {
+		for (size_t i = 0, n = rawRef.size() / 4; i < n; i++) {
+			size_t ofs = i * 4;
+			canvasData[ofs] = static_cast<uint8_t>((mask & 0b1) ? rawRef[ofs + 2] : 0);
+			canvasData[ofs + 1] = static_cast<uint8_t>((mask & 0b10) ? rawRef[ofs + 1] : 0);
+			canvasData[ofs + 2] = static_cast<uint8_t>((mask & 0b100) ? rawRef[ofs] : 0);
+			canvasData[ofs + 3] = static_cast<uint8_t>((mask & 0b1000) ? rawRef[ofs + 3] : 255);
+		}
+		return BufferWrapper();
+	} else {
+		BufferWrapper buf = BufferWrapper::alloc(rawRef.size());
+		for (size_t i = 0, n = rawRef.size() / 4; i < n; i++) {
+			size_t ofs = i * 4;
+			buf.writeUInt8(static_cast<uint8_t>((mask & 0b1) ? rawRef[ofs + 2] : 0));
+			buf.writeUInt8(static_cast<uint8_t>((mask & 0b10) ? rawRef[ofs + 1] : 0));
+			buf.writeUInt8(static_cast<uint8_t>((mask & 0b100) ? rawRef[ofs] : 0));
+			buf.writeUInt8(static_cast<uint8_t>((mask & 0b1000) ? rawRef[ofs + 3] : 255));
+		}
+		buf.seek(0);
+		return buf;
+	}
+}
+
+} // namespace casc
