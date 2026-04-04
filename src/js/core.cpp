@@ -24,6 +24,7 @@
 #include <chrono>
 #include <ctime>
 #include <format>
+#include <memory>
 #include <thread>
 
 // ─── EventEmitter ────────────────────────────────────────────────
@@ -36,6 +37,15 @@ size_t EventEmitter::on(const std::string& event, Callback callback) {
 	size_t id = nextId++;
 	listeners[event].push_back({ id, std::move(callback) });
 	return id;
+}
+
+size_t EventEmitter::once(const std::string& event, Callback callback) {
+	auto idPtr = std::make_shared<size_t>(0);
+	*idPtr = on(event, [this, event, idPtr, cb = std::move(callback)]() {
+		off(event, *idPtr);
+		cb();
+	});
+	return *idPtr;
 }
 
 void EventEmitter::off(const std::string& event, size_t id) {

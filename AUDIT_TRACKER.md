@@ -168,3 +168,37 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: `BLTEReader extends BufferWrapper` with `_checkBounds(length)` override that lazily processes blocks on demand before reads. `decodeAudio(context)` decodes audio via browser AudioContext API. `getDataURL()` checks `this.dataURL` (base class private field) before processing. `_writeBufferBLTE()` directly accesses `this._buf` and `this._ofs` (base class private fields). `_handleBlock()` on `EncryptionError` with partial decrypt directly mutates `this._ofs`.
 - **C++**: `BLTEReader` inherits publicly from `BufferWrapper`. `_checkBounds()` is NOT overridden — it is `private` (not `virtual`) in `BufferWrapper`, so lazy block loading is impossible. Callers must invoke `processAllBlocks()` before reading. `decodeAudio()` is omitted — browser-only API with no C++ equivalent. `getDataURL()` unconditionally calls `processAllBlocks()` then `BufferWrapper::getDataURL()` (idempotent, equivalent behavior). `_writeBufferBLTE()` uses public `raw()` and `offset()` accessors with `std::memcpy` instead of direct `_buf`/`_ofs` access. `_handleBlock()` partial decrypt path uses `move()` instead of `_ofs +=`. Constructor takes `BufferWrapper buf` by value (moved into `_blte`) and uses `setCapacity(totalSize, true)` instead of `this._buf = Buffer.alloc(...)`.
 - **Rationale**: C++ access control prevents overriding private non-virtual `_checkBounds()`. Eager processing via `processAllBlocks()` is functionally equivalent — all downstream code paths (`writeToFile`, `getDataURL`) already call it. `decodeAudio` is a browser-only Web Audio API with no desktop equivalent. Public accessors (`raw()`, `offset()`, `move()`) provide identical functionality to direct field access while respecting encapsulation. `setCapacity` allocates and zero-fills the output buffer identically to `Buffer.alloc()`.
+### `src/js/casc/blte-stream-reader.cpp` — ACCEPTABLE
+- **JS**: `BLTEStreamReader` class with async `getBlock()`, `async *streamBlocks()` generator, `createReadableStream()` (browser ReadableStream), `createBlobURL()` (browser Blob URL). `blockFetcher` is async function. Block cache uses JS `Map` with insertion-order eviction.
+- **C++**: Synchronous `getBlock()`, `streamBlocks(callback)` replaces async generator, `createReadableStream()` omitted (browser-only), `createBlobURL()` returns `BufferWrapper` (concatenated blocks) instead of URL string. `blockFetcher` is `std::function<BufferWrapper(size_t)>`. LRU cache uses `std::unordered_map` + `std::deque` for insertion-order tracking.
+- **Rationale**: Async generators have no C++ equivalent; callback pattern provides identical iteration semantics. `ReadableStream` is a browser-only API. `createBlobURL()` returning data instead of URL is the natural C++ equivalent (no browser URL system). LRU eviction via deque preserves JS Map insertion-order semantics.
+
+### `src/js/casc/vp9-avi-demuxer.cpp` — ACCEPTABLE
+- **JS**: `VP9AVIDemuxer` with `async parse_header()`, `async* extract_frames()` generator, `DataView` for byte reads, `TextEncoder` for fourCC. `extract_frames()` yields `EncodedVideoChunk` objects.
+- **C++**: Synchronous `parse_header()`, `extract_frames(callback)` replaces async generator. `readU32LE()` helper replaces `DataView`. Direct char comparison replaces `TextEncoder`. `FrameInfo` struct replaces `EncodedVideoChunk`.
+- **Rationale**: Async generators → callback is the standard C++ translation pattern. `DataView`/`TextEncoder` are browser APIs without C++ equivalents; direct byte access is more idiomatic. `FrameInfo` contains identical fields to `EncodedVideoChunk`.
+
+### `src/js/casc/export-helper.cpp` — ACCEPTABLE
+- **JS**: `ExportHelper` class with `path` module for path operations, `nw.Shell.openItem()` for opening directories. JS getters `get failed()` and `get unitFormatted()`. Toast options use object literals with callback functions.
+- **C++**: `std::filesystem` replaces `path` module. Getters become `const` member functions. Toast options use `nlohmann::json`. Platform-specific directory opening not yet wired (toast passes label strings).
+- **Rationale**: `std::filesystem` provides identical path manipulation. Const member functions are the C++ equivalent of JS getters.
+
+### `src/js/casc/dbd-manifest.cpp` — ACCEPTABLE
+- **JS**: Module with async `preload()` launching IIFE, `prepareManifest()` awaits promise. Two `Map` instances for bidirectional lookup.
+- **C++**: `std::async` + `std::shared_future` replaces Promise. `std::unordered_map` replaces `Map`. `std::mutex` protects shared state. `std::optional` return types replace `undefined`.
+- **Rationale**: `std::shared_future` provides identical wait/resolve semantics. Mutex needed for thread safety (JS is single-threaded).
+
+### `src/js/casc/realmlist.cpp` — ACCEPTABLE
+- **JS**: `load()` async function reading cache with `fsp.readFile`, fetching with `generics.get()` (returns Response with `.ok`/`.text()`).
+- **C++**: Synchronous `load()` with `std::ifstream`/`std::ofstream` for disk I/O. `generics::get()` returns `std::vector<uint8_t>` (not Response), converted to string for JSON parsing. Exception-based error handling replaces `.ok` check.
+- **Rationale**: `generics::get()` API difference is a systemic translation. File I/O via iostream is standard C++.
+
+### `src/js/casc/cdn-resolver.cpp` — ACCEPTABLE
+- **JS**: Singleton class instance exported. `Promise.allSettled` for parallel pings. `Map`/`Set` for cache/failed hosts. `util.format(constants.PATCH.HOST, region)` for URL construction.
+- **C++**: Namespace with module-level state replaces singleton. `std::async` + `std::future` replaces `Promise.allSettled`. `std::unordered_map`/`std::unordered_set` replace `Map`/`Set`. `std::jthread` for fire-and-forget pre-resolution. URL constructed via string concatenation instead of `util.format`.
+- **Rationale**: Namespace with static state is idiomatic C++ singleton pattern. `std::async` provides equivalent parallel execution. `std::jthread` replaces unawaited async calls.
+
+### `src/js/casc/build-cache.cpp` — ACCEPTABLE
+- **JS**: Module IIFE loads cache integrity at import time. `core.events.once('cache-integrity-ready', res)` for async readiness. `using _lock = core.create_busy_lock()` (TC39 proposal). `fsp.rm(dir, { recursive: true, force: true })`. `core.view.restartApplication()` for restart.
+- **C++**: `initBuildCacheSystem()` replaces IIFE (must be called at startup). `cacheIntegrityReady` pattern simplified to synchronous load. `auto _lock = core::create_busy_lock()` (RAII). `fs::remove_all()` replaces `fsp.rm`. Restart action emits event instead of calling `restartApplication()` (not yet available).
+- **Rationale**: Explicit init function is more predictable than IIFE in C++. Synchronous integrity load is simpler and equivalent since it runs at startup before any cache access. RAII lock is the C++ equivalent of TC39 `using` proposal.

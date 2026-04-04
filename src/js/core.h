@@ -48,6 +48,15 @@ public:
 	size_t on(const std::string& event, Callback callback);
 
 	/**
+	 * Register an event listener that fires only once.
+	 * The listener is automatically removed after the first invocation.
+	 * @param event Event name.
+	 * @param callback Callback to invoke.
+	 * @returns Listener ID for removal.
+	 */
+	size_t once(const std::string& event, Callback callback);
+
+	/**
 	 * Remove an event listener by ID.
 	 * @param event Event name.
 	 * @param id Listener ID returned by on().
