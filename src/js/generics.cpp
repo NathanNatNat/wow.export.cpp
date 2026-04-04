@@ -445,14 +445,20 @@ std::string filesize(double input) {
 		double val = input / std::pow(2.0, exponent * 10);
 
 		if (exponent > 0) {
-			// Format with 2 decimal places
+			// Format with 2 decimal places, then strip trailing zeros
+			// to match JS: Number(val.toFixed(2)) — e.g. 1.00 → "1", 1.50 → "1.5"
 			std::ostringstream oss;
 			oss << std::fixed << std::setprecision(2) << val;
 			valueStr = oss.str();
 
-			// Remove trailing zeros like JS Number().toFixed(2) → Number() conversion
-			// JS: Number(val.toFixed(2)) — e.g. 1.00 → "1", 1.50 → "1.5"
-			// But we keep the formatted value as JS does when converting back.
+			// Strip trailing zeros after decimal point
+			if (valueStr.find('.') != std::string::npos) {
+				size_t lastNonZero = valueStr.find_last_not_of('0');
+				if (lastNonZero != std::string::npos && valueStr[lastNonZero] == '.')
+					valueStr.erase(lastNonZero); // Remove decimal point too
+				else
+					valueStr.erase(lastNonZero + 1);
+			}
 		} else {
 			std::ostringstream oss;
 			oss << std::fixed << std::setprecision(0) << val;
