@@ -7,7 +7,7 @@
 #include "constants.h"
 
 #include <fstream>
-#include <vector>
+#include <deque>
 #include <string>
 #include <chrono>
 #include <ctime>
@@ -32,7 +32,7 @@ constexpr int MAX_DRAIN_PER_TICK = 50;
 
 std::chrono::steady_clock::time_point markTimer{};
 bool isClogged = false;
-std::vector<std::string> pool;
+std::deque<std::string> pool;
 std::ofstream stream;
 std::mutex logMutex;
 
@@ -144,7 +144,11 @@ void timeLog() {
 void timeEnd(std::string_view label) {
 	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::steady_clock::now() - markTimer).count();
-	write(std::string(label) + " (" + std::to_string(elapsed) + "ms)");
+	char buf[64];
+	std::snprintf(buf, sizeof(buf), "%.*s (%lldms)",
+		static_cast<int>(label.size()), label.data(),
+		static_cast<long long>(elapsed));
+	write(std::string_view(buf));
 }
 
 /**
@@ -157,7 +161,8 @@ void openRuntimeLog() {
 		nullptr, nullptr, SW_SHOWNORMAL);
 #else
 	// xdg-open is the standard Linux way to open files with the default application.
-	std::string cmd = "xdg-open \"" + constants::RUNTIME_LOG().string() + "\" &";
+	// Single-quote the path to prevent shell interpretation of special characters.
+	std::string cmd = "xdg-open '" + constants::RUNTIME_LOG().string() + "' &";
 	std::system(cmd.c_str());
 #endif
 }

@@ -11,7 +11,7 @@
 namespace log {
 
 /// Initialize the logging stream. Must be called once at startup
-/// after constants::init().
+/// after constants::init(), which provides constants::RUNTIME_LOG().
 void init();
 
 /**
