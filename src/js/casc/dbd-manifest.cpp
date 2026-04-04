@@ -3,82 +3,123 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const core = require('../core');
-const log = require('../log');
-const generics = require('../generics');
+#include "dbd-manifest.h"
 
-let is_preloaded = false;
-let preload_promise = null;
-let table_to_id = new Map();
-let id_to_table = new Map();
+#include "../core.h"
+#include "../log.h"
+#include "../generics.h"
+#include "../buffer.h"
+
+#include <algorithm>
+#include <format>
+#include <future>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include <nlohmann/json.hpp>
+
+namespace {
+
+bool is_preloaded = false;
+std::optional<std::shared_future<void>> preload_promise;
+std::unordered_map<std::string, int> table_to_id;
+std::unordered_map<int, std::string> id_to_table;
+std::mutex manifest_mutex;
+
+} // anonymous namespace
+
+namespace casc {
+namespace dbd_manifest {
 
 /**
  * preload the dbd manifest from configured urls
  */
-function preload() {
-	if (preload_promise !== null)
+void preload() {
+	if (preload_promise.has_value())
 		return;
 
-	preload_promise = (async () => {
+	preload_promise = std::async(std::launch::async, []() {
 		try {
-			const dbd_filename_url = core.view.config.dbdFilenameURL;
-			const dbd_filename_fallback_url = core.view.config.dbdFilenameFallbackURL;
+			const std::string dbd_filename_url = core::view->config["dbdFilenameURL"].get<std::string>();
+			const std::string dbd_filename_fallback_url = core::view->config["dbdFilenameFallbackURL"].get<std::string>();
 
-			const raw = await generics.downloadFile([dbd_filename_url, dbd_filename_fallback_url]);
-			const manifest_data = raw.readJSON();
+			auto raw = generics::downloadFile(std::vector<std::string>{ dbd_filename_url, dbd_filename_fallback_url });
+			const nlohmann::json manifest_data = raw.readJSON();
 
-			for (const entry of manifest_data) {
-				if (entry.tableName && entry.db2FileDataID) {
-					table_to_id.set(entry.tableName, entry.db2FileDataID);
-					id_to_table.set(entry.db2FileDataID, entry.tableName);
+			{
+				std::lock_guard<std::mutex> lock(manifest_mutex);
+				for (const auto& entry : manifest_data) {
+					if (entry.contains("tableName") && entry.contains("db2FileDataID")) {
+						const std::string table_name = entry["tableName"].get<std::string>();
+						const int file_data_id = entry["db2FileDataID"].get<int>();
+						table_to_id[table_name] = file_data_id;
+						id_to_table[file_data_id] = table_name;
+					}
 				}
 			}
 
-			log.write('preloaded dbd manifest with %d entries', table_to_id.size);
+			logging::write(std::format("preloaded dbd manifest with {} entries", table_to_id.size()));
 			is_preloaded = true;
-		} catch (e) {
-			log.write('failed to preload dbd manifest: %s', e.message);
+		} catch (const std::exception& e) {
+			logging::write(std::format("failed to preload dbd manifest: {}", e.what()));
 			is_preloaded = true;
 		}
-	})();
+	}).share();
 }
 
 /**
  * prepare the manifest for use, awaiting preload if necessary
- * @returns {Promise<boolean>}
  */
-async function prepareManifest() {
+void prepareManifest() {
 	if (is_preloaded)
-		return true;
+		return;
 
-	await preload_promise;
-	return true;
+	if (preload_promise.has_value())
+		preload_promise->wait();
 }
 
 /**
  * get table name by filedataid
- * @param {number} id
- * @returns {string|undefined}
+ * @param id
+ * @returns table name or std::nullopt
  */
-function getByID(id) {
-	return id_to_table.get(id);
+std::optional<std::string> getByID(int id) {
+	std::lock_guard<std::mutex> lock(manifest_mutex);
+	auto it = id_to_table.find(id);
+	if (it != id_to_table.end())
+		return it->second;
+	return std::nullopt;
 }
 
 /**
  * get filedataid by table name
- * @param {string} table_name
- * @returns {number|undefined}
+ * @param table_name
+ * @returns filedataid or std::nullopt
  */
-function getByTableName(table_name) {
-	return table_to_id.get(table_name);
+std::optional<int> getByTableName(const std::string& table_name) {
+	std::lock_guard<std::mutex> lock(manifest_mutex);
+	auto it = table_to_id.find(table_name);
+	if (it != table_to_id.end())
+		return it->second;
+	return std::nullopt;
 }
 
 /**
  * get all table names
- * @returns {string[]}
+ * @returns sorted vector of table names
  */
-function getAllTableNames() {
-	return Array.from(table_to_id.keys()).sort();
+std::vector<std::string> getAllTableNames() {
+	std::lock_guard<std::mutex> lock(manifest_mutex);
+	std::vector<std::string> names;
+	names.reserve(table_to_id.size());
+	for (const auto& [key, value] : table_to_id)
+		names.push_back(key);
+	std::sort(names.begin(), names.end());
+	return names;
 }
 
-module.exports = { preload, prepareManifest, getByID, getByTableName, getAllTableNames };
+} // namespace dbd_manifest
+} // namespace casc
