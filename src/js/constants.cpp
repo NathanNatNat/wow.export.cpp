@@ -201,6 +201,7 @@ const std::array<FileIdentifier, 17> FILE_IDENTIFIERS = {{
 	{ {{"MD21"sv}}, 1, ".m2" },
 	{ {{"M3DT"sv}}, 1, ".m3" },
 	{ {{"SKIN"sv}}, 1, ".skin" },
+	// String concatenation required: \x00B would parse 'B' as hex digit (0x0B) in C++.
 	{ {{"\x01\x00\x00\x00""BIDA"sv}}, 1, ".bone" },
 	{ {{"SYHP\x02\x00\x00\x00"sv}}, 1, ".phys" },
 	{ {{"HSXG"sv}}, 1, ".bls" },
