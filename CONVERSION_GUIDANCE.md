@@ -2,6 +2,44 @@
 
 This document describes the recommended order and principles for converting the 188 `.cpp` files (currently JavaScript with `.cpp` extensions) into true C++.
 
+## Build System & CI
+
+### Prerequisites
+
+- **CMake** ≥ 3.20
+- **MSVC** (Windows, via Visual Studio 2022) or **GCC** (Linux)
+- **Python 3** with `jinja2` (`pip install jinja2`) — required at build time for GLAD2 OpenGL loader generation
+- All library dependencies are **git submodules** under `extern/`. No vcpkg.
+
+### Local Build (Windows MSVC)
+
+```powershell
+git submodule update --init --recursive
+pip install jinja2
+cmake -B build -S . -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --config Debug --parallel
+```
+
+### Local Build (Linux GCC)
+
+```bash
+# Install system packages for GLFW/X11/OpenGL
+sudo apt-get install -y libgl-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+
+git submodule update --init --recursive
+pip install jinja2
+cmake -B build -S .
+cmake --build build -j$(nproc)
+```
+
+### CI
+
+CI runs on every push/PR via `.github/workflows/ci.yml`:
+
+- **Platform**: Windows x64 (MSVC, `windows-latest`)
+- **Configuration**: Debug
+- Checks out all submodules, installs Python + Jinja2, then configures and builds with CMake
+
 ## Key Principles
 
 1. **Leaf-first**: Convert files with zero local dependencies first — they can compile standalone.
