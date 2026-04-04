@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "wow-export",
+  "version-string": "0.1.0",
+  "description": "wow.export — WoW game-data export tool (C++ port)",
+  "dependencies": [
+    "zlib",
+    "openssl",
+    "cpp-httplib",
+    "pugixml",
+    "libpng",
+    "libwebp",
+    "spdlog",
+    "nlohmann-json",
+    "fmt"
+  ]
+}
