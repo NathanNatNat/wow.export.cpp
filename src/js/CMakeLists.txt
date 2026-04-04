@@ -18,6 +18,8 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/casc/cdn-config.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/casc/install-manifest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/casc/salsa20.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/casc/tact-keys.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/casc/blp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/constants.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/log.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/file-writer.cpp

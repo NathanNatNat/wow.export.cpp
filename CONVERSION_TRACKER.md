@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 27 / 188 files converted
+**Progress:** 29 / 188 files converted
 
 ---
 
@@ -58,8 +58,8 @@
 - [x] `src/js/casc/cdn-config.cpp` (50 lines)
 - [x] `src/js/casc/install-manifest.cpp` (68 lines)
 - [x] `src/js/casc/salsa20.cpp` (280 lines)
-- [ ] `src/js/casc/tact-keys.cpp` (136 lines)
-- [ ] `src/js/casc/blp.cpp` (508 lines)
+- [x] `src/js/casc/tact-keys.cpp` (136 lines)
+- [x] `src/js/casc/blp.cpp` (508 lines)
 
 ## Tier 5 — CASC Readers (3 files)
 
