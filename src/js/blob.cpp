@@ -148,14 +148,8 @@ BlobPolyfill::BlobPolyfill(std::vector<BlobPart> parts, BlobOptions opts) {
 
 	// JS: if (/[^\u0020-\u007E]/.test(this.type)) this.type = '';
 	// else this.type = this.type.toLowerCase();
-	bool has_non_printable = false;
-	for (unsigned char c : _type) {
-		if (c < 0x20 || c > 0x7E) {
-			has_non_printable = true;
-			break;
-		}
-	}
-	if (has_non_printable) {
+	if (std::any_of(_type.begin(), _type.end(),
+	                [](unsigned char c) { return c < 0x20 || c > 0x7E; })) {
 		_type.clear();
 	} else {
 		std::transform(_type.begin(), _type.end(), _type.begin(),
