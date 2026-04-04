@@ -1,0 +1,565 @@
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
+	License: MIT
+ */
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <vector>
+#include <unordered_map>
+#include <functional>
+#include <any>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <chrono>
+
+#include <nlohmann/json.hpp>
+
+#include "file-writer.h"
+
+// Forward declarations
+namespace casc::locale_flags {
+	struct LocaleEntry;
+}
+
+/**
+ * EventEmitter — C++ equivalent of Node.js EventEmitter.
+ * Provides on(event, callback), emit(event, args...), off(event, callback) semantics.
+ */
+class EventEmitter {
+public:
+	using Callback = std::function<void()>;
+
+	/**
+	 * Set the maximum number of listeners per event.
+	 */
+	void setMaxListeners(int max);
+
+	/**
+	 * Register an event listener.
+	 * @param event Event name.
+	 * @param callback Callback to invoke.
+	 * @returns Listener ID for removal.
+	 */
+	size_t on(const std::string& event, Callback callback);
+
+	/**
+	 * Remove an event listener by ID.
+	 * @param event Event name.
+	 * @param id Listener ID returned by on().
+	 */
+	void off(const std::string& event, size_t id);
+
+	/**
+	 * Emit an event, invoking all registered listeners.
+	 * @param event Event name.
+	 */
+	void emit(const std::string& event);
+
+	/**
+	 * Remove all listeners for an event.
+	 * @param event Event name.
+	 */
+	void removeAllListeners(const std::string& event);
+
+private:
+	struct Listener {
+		size_t id;
+		Callback callback;
+	};
+
+	int maxListeners = 666;
+	size_t nextId = 0;
+	std::unordered_map<std::string, std::vector<Listener>> listeners;
+};
+
+/**
+ * Toast notification data.
+ */
+struct Toast {
+	std::string type;      // 'error', 'info', 'success', 'progress'
+	std::string message;
+	nlohmann::json options;
+	bool closable = true;
+};
+
+/**
+ * Menu button option (label + value pair).
+ */
+struct MenuOption {
+	std::string label;
+	std::string value;
+};
+
+/**
+ * Menu button option with integer value.
+ */
+struct MenuOptionInt {
+	std::string label;
+	int value;
+};
+
+/**
+ * Context menu state nodes.
+ */
+struct ContextMenus {
+	nlohmann::json nodeTextureRibbon;  // Context menu node for the texture ribbon.
+	nlohmann::json nodeItem;           // Context menu node for the items listfile.
+	nlohmann::json nodeDataTable;      // Context menu node for the data table.
+	nlohmann::json nodeListbox;        // Context menu node for generic listbox.
+	nlohmann::json nodeMap;            // Context menu node for maps listbox.
+	nlohmann::json nodeZone;           // Context menu node for zones listbox.
+	bool stateNavExtra = false;        // State controller for the extra nav menu.
+	bool stateModelExport = false;     // State controller for the model export menu.
+	bool stateCDNRegion = false;       // State controller for the CDN region selection menu.
+};
+
+/**
+ * Guild tabard configuration.
+ */
+struct GuildTabardConfig {
+	int background = 0;
+	int border_style = 0;
+	int border_color = 0;
+	int emblem_design = 0;
+	int emblem_color = 0;
+};
+
+/**
+ * Color picker position.
+ */
+struct ColorPickerPosition {
+	int x = 0;
+	int y = 0;
+};
+
+/**
+ * Scroll position state for listbox components.
+ */
+struct ScrollPosition {
+	double scrollRel = 0;
+	int scrollIndex = 0;
+	int64_t timestamp = 0;
+};
+
+/**
+ * Drop handler for drag/drop file support.
+ */
+struct DropHandler {
+	std::vector<std::string> ext;
+	std::function<std::string()> prompt;
+	std::function<void(const std::string&)> process;
+};
+
+/**
+ * AppState — Central application state struct.
+ * C++ equivalent of the JS `makeNewView()` return object.
+ * Since ImGui is immediate-mode, state changes are reflected
+ * automatically on the next frame — no "reactivity" system needed.
+ */
+struct AppState {
+	int installType = 0;                         // Active install type (MPQ or CASC).
+	int isBusy = 0;                              // To prevent race-conditions with multiple tasks.
+#ifdef NDEBUG
+	bool isDev = false;                          // True if in development environment.
+#else
+	bool isDev = true;
+#endif
+	bool isLoading = false;                      // Controls whether the loading overlay is visible.
+	std::string loadingProgress;                 // Sets the progress text for the loading screen.
+	std::string loadingTitle;                    // Sets the title text for the loading screen.
+	double loadPct = -1;                         // Controls active loading bar percentage.
+	std::optional<Toast> toast;                  // Controls the currently active toast bar.
+	nlohmann::json cdnRegions = nlohmann::json::array(); // CDN region data.
+	nlohmann::json selectedCDNRegion;            // Active CDN region.
+	bool lockCDNRegion = false;                  // If true, do not programmatically alter the selected CDN region.
+	nlohmann::json config = nlohmann::json::object();  // Default/user-set configuration.
+	nlohmann::json configEdit = nlohmann::json::object(); // Temporary configuration clone during editing.
+	nlohmann::json availableLocalBuilds;         // Local builds to display during source select.
+	nlohmann::json availableRemoteBuilds;        // Remote builds to display during source select.
+	bool sourceSelectShowBuildSelect = false;    // Controls whether build select is shown.
+	nlohmann::json casc;                         // Active CASC instance.
+	int64_t cacheSize = 0;                       // Active size of the user cache.
+	std::string userInputTactKey;                // Value of manual tact key field.
+	std::string userInputTactKeyName;            // Value of manual tact key name field.
+	std::string userInputFilterTextures;
+	std::string userInputFilterSounds;
+	std::string userInputFilterVideos;
+	std::string userInputFilterText;
+	std::string userInputFilterFonts;
+	std::string userInputFilterModels;
+	std::string userInputFilterMaps;
+	std::string userInputFilterZones;
+	std::string userInputFilterItems;
+	std::string userInputFilterItemSets;
+	std::string userInputFilterDB2s;
+	std::string userInputFilterDataTable;
+	std::string userInputFilterRaw;
+	std::string userInputFilterLegacyModels;
+	std::string userInputFilterDecor;
+	std::string userInputFilterCreatures;
+	nlohmann::json activeModule;                 // Active module component instance.
+	std::vector<nlohmann::json> modNavButtons;   // Module-registered navigation buttons.
+	std::vector<nlohmann::json> modContextMenuOptions; // Module-registered context menu options.
+	std::string userInputFilterInstall;
+	std::vector<std::string> modelQuickFilters = {"m2", "m3", "wmo"};
+	std::vector<std::string> legacyModelQuickFilters = {"m2", "mdx", "wmo"};
+	std::vector<std::string> audioQuickFilters = {"ogg", "mp3", "unk"};
+	std::vector<std::string> textQuickFilters = {"lua", "xml", "txt", "sbt", "wtf", "htm", "toc", "xsd", "srt"};
+	std::vector<nlohmann::json> selectionTextures;
+	std::vector<nlohmann::json> selectionModels;
+	std::vector<nlohmann::json> selectionSounds;
+	std::vector<nlohmann::json> selectionVideos;
+	std::vector<nlohmann::json> selectionText;
+	std::vector<nlohmann::json> selectionFonts;
+	std::vector<nlohmann::json> selectionMaps;
+	std::vector<nlohmann::json> selectionZones;
+	std::vector<nlohmann::json> selectionItems;
+	std::vector<nlohmann::json> selectionItemSets;
+	std::vector<nlohmann::json> selectionDB2s;
+	std::vector<nlohmann::json> selectionDataTable;
+	std::vector<nlohmann::json> selectionRaw;
+	std::vector<nlohmann::json> selectionInstall;
+	std::vector<nlohmann::json> selectionLegacyModels;
+	std::vector<nlohmann::json> selectionDecor;
+	std::vector<nlohmann::json> selectionCreatures;
+	bool installStringsView = false;
+	std::vector<std::string> installStrings;
+	std::string installStringsFileName;
+	std::vector<nlohmann::json> selectionInstallStrings;
+	std::string userInputFilterInstallStrings;
+	std::vector<nlohmann::json> listfileTextures;
+	std::vector<nlohmann::json> listfileSounds;
+	std::vector<nlohmann::json> listfileVideos;
+	std::vector<nlohmann::json> listfileText;
+	std::vector<nlohmann::json> listfileFonts;
+	std::vector<nlohmann::json> listfileModels;
+	std::vector<nlohmann::json> listfileItems;
+	std::vector<nlohmann::json> listfileItemSets;
+	std::vector<int> itemViewerTypeMask;
+	std::vector<int> itemViewerQualityMask;
+	std::vector<nlohmann::json> listfileRaw;
+	std::vector<nlohmann::json> listfileInstall;
+	std::vector<nlohmann::json> listfileLegacyModels;
+	std::vector<nlohmann::json> listfileDecor;
+	std::vector<nlohmann::json> listfileCreatures;
+	std::vector<nlohmann::json> decorCategoryMask;
+	std::vector<nlohmann::json> decorCategoryGroups;
+	std::vector<nlohmann::json> dbdManifest;
+	std::vector<nlohmann::json> installTags;
+	std::vector<nlohmann::json> tableBrowserHeaders;
+	std::vector<nlohmann::json> tableBrowserRows;
+	// availableLocale is the casc::locale_flags::entries array (compile-time constant).
+	nlohmann::json fileDropPrompt;
+	std::string whatsNewHTML;
+	std::string textViewerSelectedText;
+	std::string fontPreviewPlaceholder;
+	std::string fontPreviewText;
+	std::string fontPreviewFontFamily;
+	double soundPlayerSeek = 0;
+	bool soundPlayerState = false;
+	std::string soundPlayerTitle = "No File Selected";
+	double soundPlayerDuration = 0;
+	bool videoPlayerState = false;
+	nlohmann::json modelViewerContext;
+	std::string modelViewerActiveType = "none";
+	std::vector<nlohmann::json> modelViewerGeosets;
+	std::vector<nlohmann::json> modelViewerSkins;
+	std::vector<nlohmann::json> modelViewerSkinsSelection;
+	std::vector<nlohmann::json> modelViewerAnims;
+	nlohmann::json modelViewerAnimSelection;
+	bool modelViewerAnimPaused = false;
+	int modelViewerAnimFrame = 0;
+	int modelViewerAnimFrameCount = 0;
+	std::vector<nlohmann::json> modelViewerWMOGroups;
+	std::vector<nlohmann::json> modelViewerWMOSets;
+	bool modelViewerAutoAdjust = true;
+	nlohmann::json legacyModelViewerContext;
+	std::string legacyModelViewerActiveType = "none";
+	std::vector<nlohmann::json> legacyModelViewerAnims;
+	nlohmann::json legacyModelViewerAnimSelection;
+	bool legacyModelViewerAnimPaused = false;
+	int legacyModelViewerAnimFrame = 0;
+	int legacyModelViewerAnimFrameCount = 0;
+	bool legacyModelViewerAutoAdjust = true;
+	nlohmann::json creatureViewerContext;
+	std::string creatureViewerActiveType = "none";
+	std::vector<nlohmann::json> creatureViewerGeosets;
+	std::vector<nlohmann::json> creatureViewerSkins;
+	std::vector<nlohmann::json> creatureViewerSkinsSelection;
+	std::vector<nlohmann::json> creatureViewerWMOGroups;
+	std::vector<nlohmann::json> creatureViewerWMOSets;
+	bool creatureViewerAutoAdjust = true;
+	std::vector<nlohmann::json> creatureViewerAnims;
+	nlohmann::json creatureViewerAnimSelection;
+	bool creatureViewerAnimPaused = false;
+	int creatureViewerAnimFrame = 0;
+	int creatureViewerAnimFrameCount = 0;
+	std::vector<nlohmann::json> creatureViewerEquipment;
+	std::vector<nlohmann::json> creatureViewerUVLayers;
+	std::string creatureTexturePreviewURL;
+	std::string creatureTexturePreviewUVOverlay;
+	int creatureTexturePreviewWidth = 256;
+	int creatureTexturePreviewHeight = 256;
+	std::string creatureTexturePreviewName;
+	nlohmann::json decorViewerContext;
+	std::string decorViewerActiveType = "none";
+	std::vector<nlohmann::json> decorViewerGeosets;
+	std::vector<nlohmann::json> decorViewerWMOGroups;
+	std::vector<nlohmann::json> decorViewerWMOSets;
+	bool decorViewerAutoAdjust = true;
+	std::vector<nlohmann::json> decorViewerAnims;
+	nlohmann::json decorViewerAnimSelection;
+	bool decorViewerAnimPaused = false;
+	int decorViewerAnimFrame = 0;
+	int decorViewerAnimFrameCount = 0;
+	std::vector<nlohmann::json> decorViewerUVLayers;
+	std::string decorTexturePreviewURL;
+	std::string decorTexturePreviewUVOverlay;
+	int decorTexturePreviewWidth = 256;
+	int decorTexturePreviewHeight = 256;
+	std::string decorTexturePreviewName;
+	std::vector<nlohmann::json> legacyModelViewerSkins;
+	std::vector<nlohmann::json> legacyModelViewerSkinsSelection;
+	std::string legacyModelTexturePreviewURL;
+	double modelViewerRotationSpeed = 0;
+	std::vector<nlohmann::json> textureRibbonStack;
+	int textureRibbonSlotCount = 0;
+	int textureRibbonPage = 0;
+	std::vector<nlohmann::json> textureAtlasOverlayRegions;
+	int textureAtlasOverlayWidth = 0;
+	int textureAtlasOverlayHeight = 0;
+	// itemViewerTypeMask is above with the other masks
+	int modelTexturePreviewWidth = 256;
+	int modelTexturePreviewHeight = 256;
+	std::string modelTexturePreviewURL;
+	std::string modelTexturePreviewName;
+	std::string modelTexturePreviewUVOverlay;
+	std::vector<nlohmann::json> modelViewerUVLayers;
+	int texturePreviewWidth = 256;
+	int texturePreviewHeight = 256;
+	std::string texturePreviewURL;
+	std::string texturePreviewInfo;
+	std::vector<nlohmann::json> overrideModelList;
+	std::string overrideModelName;
+	std::vector<nlohmann::json> overrideTextureList;
+	std::string overrideTextureName;
+	std::vector<nlohmann::json> mapViewerMaps;
+	std::vector<nlohmann::json> zoneViewerZones;
+	std::vector<nlohmann::json> zonePhases;
+	nlohmann::json zonePhaseSelection;
+	int selectedZoneExpansionFilter = -1;
+	bool mapViewerHasWorldModel = false;
+	bool mapViewerIsWMOMinimap = false;
+	nlohmann::json mapViewerTileLoader;
+	nlohmann::json mapViewerSelectedMap;
+	nlohmann::json mapViewerSelectedDir;
+	nlohmann::json mapViewerChunkMask;
+	nlohmann::json mapViewerGridSize;
+	std::vector<nlohmann::json> mapViewerSelection;
+	int selectedExpansionFilter = -1;
+	nlohmann::json chrModelViewerContext;
+	std::vector<nlohmann::json> chrModelViewerAnims;
+	nlohmann::json chrModelViewerAnimSelection;
+	bool chrModelViewerAnimPaused = false;
+	int chrModelViewerAnimFrame = 0;
+	int chrModelViewerAnimFrameCount = 0;
+	std::vector<nlohmann::json> chrCustRaces;
+	std::vector<nlohmann::json> chrCustRaceSelection;
+	std::vector<nlohmann::json> chrCustModels;
+	std::vector<nlohmann::json> chrCustModelSelection;
+	std::vector<nlohmann::json> chrCustOptions;
+	std::vector<nlohmann::json> chrCustOptionSelection;
+	std::vector<nlohmann::json> chrCustChoices;
+	std::vector<nlohmann::json> chrCustChoiceSelection;
+	std::vector<nlohmann::json> chrCustActiveChoices;
+	std::vector<nlohmann::json> chrCustGeosets;
+	std::string chrCustTab = "models";
+	std::string chrCustRightTab = "geosets";
+	bool chrModelLoading = false;
+	bool chrShowGeosetControl = false;
+	std::string chrExportMenu = "export";
+	nlohmann::json colorPickerOpenFor;
+	ColorPickerPosition colorPickerPosition;
+	std::string chrImportChrName;
+	std::vector<nlohmann::json> chrImportRegions;
+	std::string chrImportSelectedRegion;
+	std::vector<nlohmann::json> chrImportRealms;
+	nlohmann::json chrImportSelectedRealm;
+	bool chrImportLoadVisage = false;
+	bool chrImportClassicRealms = false;
+	int chrImportChrModelID = 0;
+	int chrImportTargetModelID = 0;
+	std::vector<nlohmann::json> chrImportChoices;
+	std::string chrImportWowheadURL;
+	std::string characterImportMode = "none";
+	nlohmann::json chrEquippedItems = nlohmann::json::object();
+	GuildTabardConfig chrGuildTabardConfig;
+	nlohmann::json chrEquipmentSlotContext;
+	bool chrSavedCharactersScreen = false;
+	std::vector<nlohmann::json> chrSavedCharacters;
+	bool chrSaveCharacterPrompt = false;
+	std::string chrSaveCharacterName;
+	nlohmann::json chrPendingThumbnail;
+	nlohmann::json realmList = nlohmann::json::object();
+	bool exportCancelled = false;
+	bool isXmas = false; // Set at runtime based on current month.
+	nlohmann::json chrCustBakedNPCTexture;
+	std::string regexTooltip =
+		".* - Matches anything\n"
+		"(a|b) - Matches either a or b.\n"
+		"[a-f] - Matches characters between a-f.\n"
+		"[^a-d] - Matches characters that are not between a-d.\n"
+		"\\s - Matches whitespace characters.\n"
+		"\\d - Matches any digit.\n"
+		"a? - Matches zero or one of a.\n"
+		"a* - Matches zero or more of a.\n"
+		"a+ - Matches one or more of a.\n"
+		"a{3} - Matches exactly 3 of a.";
+	ContextMenus contextMenus;
+	std::vector<MenuOption> menuButtonTextures;
+	std::vector<MenuOption> menuButtonMapExport;
+	std::vector<MenuOptionInt> menuButtonTextureQuality;
+	std::vector<MenuOptionInt> menuButtonHeightmapResolution;
+	std::vector<MenuOptionInt> menuButtonHeightmapBitDepth;
+	std::vector<MenuOption> menuButtonModels;
+	std::vector<MenuOption> menuButtonLegacyModels;
+	std::vector<MenuOption> menuButtonDecor;
+	std::vector<MenuOption> menuButtonCreatures;
+	std::vector<MenuOption> menuButtonCharacterExport;
+	std::vector<MenuOption> menuButtonVideos;
+	std::vector<MenuOption> menuButtonData;
+	std::vector<nlohmann::json> helpArticles;
+	std::vector<nlohmann::json> helpFilteredArticles;
+	nlohmann::json helpSelectedArticle;
+	std::string helpSearchQuery;
+};
+
+/**
+ * BusyLock — RAII busy lock that increments isBusy on creation
+ * and decrements on destruction. Use as a local variable.
+ *
+ * JS equivalent: create_busy_lock() with Symbol.dispose
+ */
+class BusyLock {
+public:
+	explicit BusyLock(AppState& state);
+	~BusyLock();
+
+	BusyLock(const BusyLock&) = delete;
+	BusyLock& operator=(const BusyLock&) = delete;
+	BusyLock(BusyLock&& other) noexcept;
+	BusyLock& operator=(BusyLock&& other) noexcept;
+
+private:
+	AppState* state;
+};
+
+/**
+ * Core module — global event dispatcher and application state management.
+ *
+ * JS equivalent: module.exports = { events, view, makeNewView, create_busy_lock,
+ *     showLoadingScreen, progressLoadingScreen, hideLoadingScreen,
+ *     setToast, hideToast, openExportDirectory, registerDropHandler,
+ *     getDropHandler, openLastExportStream, saveScrollPosition, getScrollPosition }
+ */
+namespace core {
+
+/// Global event emitter.
+extern EventEmitter events;
+
+/// Reference to the main application state (initially nullptr, set after init).
+extern AppState* view;
+
+/**
+ * Create a new AppState with default values.
+ * @returns A fresh AppState instance.
+ */
+AppState makeNewView();
+
+/**
+ * Creates an RAII busy lock that increments isBusy on creation and
+ * decrements on destruction.
+ * @returns BusyLock that decrements on scope exit.
+ */
+BusyLock create_busy_lock();
+
+/**
+ * Show loading screen with specified number of progress steps.
+ * @param segments Number of progress steps.
+ * @param title    Loading screen title.
+ */
+void showLoadingScreen(int segments = 1, const std::string& title = "Loading, please wait...");
+
+/**
+ * Advance loading screen progress by one step.
+ * @param text Progress text to display.
+ */
+void progressLoadingScreen(const std::string& text = "");
+
+/**
+ * Hide loading screen.
+ */
+void hideLoadingScreen();
+
+/**
+ * Display a toast message.
+ * @param toastType 'error', 'info', 'success', 'progress'
+ * @param message   Toast message text.
+ * @param options   Optional JSON options.
+ * @param ttl       Time in milliseconds before removing the toast (-1 = persistent).
+ * @param closable  If true, toast can manually be closed.
+ */
+void setToast(const std::string& toastType, const std::string& message,
+              const nlohmann::json& options = nullptr, int ttl = 10000, bool closable = true);
+
+/**
+ * Hide the currently active toast prompt.
+ * @param userCancel True if the user manually dismissed the toast.
+ */
+void hideToast(bool userCancel = false);
+
+/**
+ * Open user-configured export directory with OS default.
+ */
+void openExportDirectory();
+
+/**
+ * Register a handler for file drops.
+ * @param handler Drop handler to register.
+ */
+void registerDropHandler(DropHandler handler);
+
+/**
+ * Get a drop handler for the given file path.
+ * @param file File path to match against registered handlers.
+ * @returns Pointer to matching handler, or nullptr if none found.
+ */
+const DropHandler* getDropHandler(const std::string& file);
+
+/**
+ * Open a stream to the last export file.
+ * @returns FileWriter instance.
+ */
+FileWriter openLastExportStream();
+
+/**
+ * Save scroll position for a listbox with the given key.
+ * @param key         Unique identifier for the listbox.
+ * @param scrollRel   Relative scroll position (0-1).
+ * @param scrollIndex Current scroll index.
+ */
+void saveScrollPosition(const std::string& key, double scrollRel, int scrollIndex);
+
+/**
+ * Get saved scroll position for a listbox with the given key.
+ * @param key Unique identifier for the listbox.
+ * @returns Saved scroll state, or std::nullopt if not found.
+ */
+std::optional<ScrollPosition> getScrollPosition(const std::string& key);
+
+} // namespace core

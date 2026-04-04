@@ -3,141 +3,123 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const BufferWrapper = require('./buffer');
-const PNGWriter = require('./png-writer');
+#include "tiled-png-writer.h"
+#include "png-writer.h"
+
+#include <cmath>
+#include <cstddef>
+#include <format>
 
 /**
- * Sparse PNG writer that can stitch together tiles without loading
- * the entire image into memory at once.
+ * Construct a new TiledPNGWriter instance.
  */
-class TiledPNGWriter {
-	/**
-	 * Construct a new TiledPNGWriter instance.
-	 * @param {number} width - Total width of the final image
-	 * @param {number} height - Total height of the final image
-	 * @param {number} tileSize - Size of individual tiles (assumes square tiles)
-	 */
-	constructor(width, height, tileSize) {
-		this.width = width;
-		this.height = height;
-		this.tileSize = tileSize;
-		
-		this.tiles = new Map();
-		
-		this.tileCols = Math.ceil(width / tileSize);
-		this.tileRows = Math.ceil(height / tileSize);
-	}
+TiledPNGWriter::TiledPNGWriter(uint32_t width, uint32_t height, uint32_t tileSize)
+	: width(width)
+	, height(height)
+	, tileSize(tileSize)
+	, tileCols(static_cast<uint32_t>(std::ceil(static_cast<double>(width) / tileSize)))
+	, tileRows(static_cast<uint32_t>(std::ceil(static_cast<double>(height) / tileSize)))
+{
+}
 
-	/**
-	 * Add a tile at the specified position.
-	 * @param {number} tileX - Tile X coordinate (in tile units)
-	 * @param {number} tileY - Tile Y coordinate (in tile units)
-	 * @param {ImageData} imageData - Tile image data
-	 */
-	addTile(tileX, tileY, imageData) {
-		const key = `${tileX},${tileY}`;
-		this.tiles.set(key, {
-			x: tileX,
-			y: tileY,
-			data: imageData,
-			actualWidth: imageData.width,
-			actualHeight: imageData.height
-		});
-	}
+/**
+ * Add a tile at the specified position.
+ */
+void TiledPNGWriter::addTile(uint32_t tileX, uint32_t tileY, ImageData imageData) {
+	const std::string key = std::format("{},{}", tileX, tileY);
+	Tile tile;
+	tile.x = tileX;
+	tile.y = tileY;
+	tile.actualWidth = imageData.width;
+	tile.actualHeight = imageData.height;
+	tile.data = std::move(imageData);
+	tiles[key] = std::move(tile);
+}
 
-	/**
-	 * Generate the final PNG buffer.
-	 * @returns {BufferWrapper}
-	 */
-	getBuffer() {
-		const png = new PNGWriter(this.width, this.height);
-		const pixelData = png.getPixelData();
-		
-		pixelData.fill(0);
-		
-		for (const tile of this.tiles.values())
-			this._writeTileToPixelData(tile, pixelData);
-		
-		return png.getBuffer();
-	}
+/**
+ * Generate the final PNG buffer.
+ */
+BufferWrapper TiledPNGWriter::getBuffer() {
+	PNGWriter png(width, height);
+	std::vector<uint8_t>& pixelData = png.getPixelData();
 
-	/**
-	 * Write a tile's data to the pixel buffer at the correct position.
-	 * Uses alpha blending for proper compositing of overlapping tiles.
-	 * @param {Object} tile - Tile object with position and data
-	 * @param {Buffer} pixelData - Target pixel buffer
-	 * @private
-	 */
-	_writeTileToPixelData(tile, pixelData) {
-		const pixelX = tile.x * this.tileSize;
-		const pixelY = tile.y * this.tileSize;
+	std::fill(pixelData.begin(), pixelData.end(), 0);
 
-		const tileData = tile.data.data;
-		const tileWidth = tile.actualWidth;
-		const tileHeight = tile.actualHeight;
+	for (const auto& [key, tile] : tiles)
+		_writeTileToPixelData(tile, pixelData);
 
-		for (let y = 0; y < tileHeight; y++) {
-			for (let x = 0; x < tileWidth; x++) {
-				const targetX = pixelX + x;
-				const targetY = pixelY + y;
+	return png.getBuffer();
+}
 
-				if (targetX >= this.width || targetY >= this.height)
-					continue;
+/**
+ * Write a tile's data to the pixel buffer at the correct position.
+ * Uses alpha blending for proper compositing of overlapping tiles.
+ */
+void TiledPNGWriter::_writeTileToPixelData(const Tile& tile, std::vector<uint8_t>& pixelData) {
+	const uint32_t pixelX = tile.x * tileSize;
+	const uint32_t pixelY = tile.y * tileSize;
 
-				const sourceIndex = (y * tileWidth + x) * 4;
-				const targetIndex = (targetY * this.width + targetX) * 4;
+	const std::vector<uint8_t>& tileData = tile.data.data;
+	const uint32_t tileWidth = tile.actualWidth;
+	const uint32_t tileHeight = tile.actualHeight;
 
-				const srcA = tileData[sourceIndex + 3] / 255;
+	for (uint32_t y = 0; y < tileHeight; y++) {
+		for (uint32_t x = 0; x < tileWidth; x++) {
+			const uint32_t targetX = pixelX + x;
+			const uint32_t targetY = pixelY + y;
 
-				// fully transparent source pixel, skip
-				if (srcA === 0)
-					continue;
+			if (targetX >= width || targetY >= height)
+				continue;
 
-				// fully opaque source pixel, overwrite
-				if (srcA === 1) {
-					pixelData[targetIndex] = tileData[sourceIndex];
-					pixelData[targetIndex + 1] = tileData[sourceIndex + 1];
-					pixelData[targetIndex + 2] = tileData[sourceIndex + 2];
-					pixelData[targetIndex + 3] = 255;
-					continue;
-				}
+			const size_t sourceIndex = (static_cast<size_t>(y) * tileWidth + x) * 4;
+			const size_t targetIndex = (static_cast<size_t>(targetY) * width + targetX) * 4;
 
-				// alpha blend (Porter-Duff "over" operation)
-				const dstA = pixelData[targetIndex + 3] / 255;
-				const outA = srcA + dstA * (1 - srcA);
+			const double srcA = tileData[sourceIndex + 3] / 255.0;
 
-				if (outA > 0) {
-					pixelData[targetIndex] = (tileData[sourceIndex] * srcA + pixelData[targetIndex] * dstA * (1 - srcA)) / outA;
-					pixelData[targetIndex + 1] = (tileData[sourceIndex + 1] * srcA + pixelData[targetIndex + 1] * dstA * (1 - srcA)) / outA;
-					pixelData[targetIndex + 2] = (tileData[sourceIndex + 2] * srcA + pixelData[targetIndex + 2] * dstA * (1 - srcA)) / outA;
-					pixelData[targetIndex + 3] = outA * 255;
-				}
+			// fully transparent source pixel, skip
+			if (srcA == 0)
+				continue;
+
+			// fully opaque source pixel, overwrite
+			if (srcA == 1) {
+				pixelData[targetIndex] = tileData[sourceIndex];
+				pixelData[targetIndex + 1] = tileData[sourceIndex + 1];
+				pixelData[targetIndex + 2] = tileData[sourceIndex + 2];
+				pixelData[targetIndex + 3] = 255;
+				continue;
+			}
+
+			// alpha blend (Porter-Duff "over" operation)
+			const double dstA = pixelData[targetIndex + 3] / 255.0;
+			const double outA = srcA + dstA * (1 - srcA);
+
+			if (outA > 0) {
+				pixelData[targetIndex] = static_cast<uint8_t>((tileData[sourceIndex] * srcA + pixelData[targetIndex] * dstA * (1 - srcA)) / outA);
+				pixelData[targetIndex + 1] = static_cast<uint8_t>((tileData[sourceIndex + 1] * srcA + pixelData[targetIndex + 1] * dstA * (1 - srcA)) / outA);
+				pixelData[targetIndex + 2] = static_cast<uint8_t>((tileData[sourceIndex + 2] * srcA + pixelData[targetIndex + 2] * dstA * (1 - srcA)) / outA);
+				pixelData[targetIndex + 3] = static_cast<uint8_t>(outA * 255);
 			}
 		}
 	}
-
-	/**
-	 * Write this PNG to a file.
-	 * @param {string} file 
-	 */
-	async write(file) {
-		return await this.getBuffer().writeToFile(file);
-	}
-
-	/**
-	 * Get information about the tiles that will be included.
-	 * @returns {Object} Statistics about the tiled image
-	 */
-	getStats() {
-		return {
-			totalTiles: this.tiles.size,
-			imageWidth: this.width,
-			imageHeight: this.height,
-			tileSize: this.tileSize,
-			expectedTiles: this.tileCols * this.tileRows,
-			sparseRatio: this.tiles.size / (this.tileCols * this.tileRows)
-		};
-	}
 }
 
-module.exports = TiledPNGWriter;
+/**
+ * Write this PNG to a file.
+ */
+void TiledPNGWriter::write(const std::filesystem::path& file) {
+	getBuffer().writeToFile(file);
+}
+
+/**
+ * Get information about the tiles that will be included.
+ */
+TiledPNGWriter::Stats TiledPNGWriter::getStats() const {
+	return {
+		.totalTiles = tiles.size(),
+		.imageWidth = width,
+		.imageHeight = height,
+		.tileSize = tileSize,
+		.expectedTiles = tileCols * tileRows,
+		.sparseRatio = static_cast<double>(tiles.size()) / (static_cast<double>(tileCols) * tileRows)
+	};
+}
