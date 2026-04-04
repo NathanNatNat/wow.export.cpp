@@ -7,7 +7,7 @@ This document describes the recommended order and principles for converting the 
 ### Prerequisites
 
 - **CMake** ≥ 3.20
-- **MSVC** (Windows, via Visual Studio 2022) or **GCC** (Linux)
+- **MSVC** (Windows, via latest Visual Studio) or **GCC** (Linux)
 - **Python 3** with `jinja2` (`pip install jinja2`) — required at build time for GLAD2 OpenGL loader generation
 - All library dependencies are **git submodules** under `extern/`. No vcpkg.
 
