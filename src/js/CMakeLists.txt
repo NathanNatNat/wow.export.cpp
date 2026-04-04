@@ -19,4 +19,7 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/log.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/file-writer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/buffer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/png-writer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/generics.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mmap.cpp
 )

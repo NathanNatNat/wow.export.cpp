@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 15 / 188 files converted
+**Progress:** 18 / 188 files converted
 
 ---
 
@@ -37,9 +37,9 @@
 - [x] `src/js/log.cpp` (113 lines)
 - [x] `src/js/file-writer.cpp` (44 lines)
 - [x] `src/js/buffer.cpp` (1127 lines) 🔴
-- [ ] `src/js/png-writer.cpp` (251 lines)
-- [ ] `src/js/generics.cpp` (502 lines)
-- [ ] `src/js/mmap.cpp` (52 lines)
+- [x] `src/js/png-writer.cpp` (251 lines)
+- [x] `src/js/generics.cpp` (502 lines)
+- [x] `src/js/mmap.cpp` (52 lines)
 
 ## Tier 2 — App Core & Event System (3 files)
 

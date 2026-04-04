@@ -3,292 +3,430 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const path = require('path');
-const fs = require('fs');
-const fsp = fs.promises;
-const zlib = require('zlib');
-const crypto = require('crypto');
-const BufferWrapper = require('./buffer');
-const constants = require('./constants');
-const log = require('./log');
-const https = require('https');
-const http = require('http');
+#include "generics.h"
+#include "buffer.h"
+#include "constants.h"
+#include "log.h"
+
+#include <cmath>
+#include <cstring>
+#include <chrono>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <filesystem>
+#include <stdexcept>
+#include <algorithm>
+#include <format>
+#include <thread>
+#include <future>
+#include <functional>
+
+#include <nlohmann/json.hpp>
+#include <httplib.h>
+#include <zlib.h>
+
+namespace generics {
+
+namespace {
+
+// ── JEDEC file size units ────────────────────────────────────────
+
+constexpr const char* JEDEC[] = {
+	"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"
+};
 
 /**
- * Async wrapper for http.get()/https.get().
- * The module used is determined by the prefix of the URL.
- * @param {string|string[]} url 
+ * Parse a URL into scheme, host, port and path components.
  */
-const get = async (url) => {
-	const fetch_options = {
-		cache: 'no-cache',
-		headers: {
-			'User-Agent': constants.USER_AGENT,
-		},
+struct ParsedURL {
+	std::string scheme;
+	std::string host;
+	int port;
+	std::string path;
+};
 
-		redirect: 'follow',
-		signal: AbortSignal.timeout(30000)
-	};
+ParsedURL parseURL(const std::string& url) {
+	ParsedURL result;
 
-	let index = 1;
-	let res = null;
+	size_t schemeEnd = url.find("://");
+	if (schemeEnd == std::string::npos)
+		throw std::runtime_error("Invalid URL: " + url);
 
-	const url_stack = Array.isArray(url) ? url : [url];
+	result.scheme = url.substr(0, schemeEnd);
+	size_t hostStart = schemeEnd + 3;
+	size_t pathStart = url.find('/', hostStart);
+	std::string hostPort;
 
-	while ((res === null || !res.ok) && url_stack.length > 0) {
-		const url = url_stack.shift();
-		log.write(`get -> [${index}/${url_stack.length + index}]: ${url}`);
-
-		try {
-			res = await fetch(url, fetch_options);
-			log.write(`get -> [${index++}][${res.status}] ${url}`);
-		} catch (error) {
-			log.write(`fetch failed ${url}: ${error.message}`);
-			index++;
-			if (url_stack.length === 0)
-				throw error;
-		}
+	if (pathStart == std::string::npos) {
+		hostPort = url.substr(hostStart);
+		result.path = "/";
+	} else {
+		hostPort = url.substr(hostStart, pathStart - hostStart);
+		result.path = url.substr(pathStart);
 	}
 
-	return res;
-};
-
-/**
- * Dispatch an async handler for an array of items with a limit to how
- * many can be resolving at once.
- * @param {Array} items Each one is passed to the handler.
- * @param {function} handler Must be async.
- * @param {number} limit This many will be resolving at any given time.
- */
-const queue = async (items, handler, limit) => {
-	return new Promise((resolve, reject) => {
-		let free = limit;
-		let complete = -1;
-		let index = 0;
-		const check = () => {
-			complete++;
-			free++;
-
-			while (free > 0 && index < items.length) {
-				handler(items[index]).then(check).catch(reject);
-				index++; free--;
-			}
-
-			if (complete === items.length)
-				return resolve();
-		};
-
-		check();
-	});
-};
-
-/**
- * Ping a URL and measure the response time.
- * Not perfectly accurate, but good enough for our purposes.
- * Throws on error or HTTP code other than 200.
- * @param {string} url 
- */
-const ping = async (url) => {
-	const pingStart = Date.now();
-	
-	await get(url);
-	return (Date.now() - pingStart);
-};
-
-/**
- * Attempt to parse JSON, returning undefined on failure.
- * Inline function to keep code paths clean of unnecessary try/catch blocks.
- * @param {string} data 
- * @returns {object}
- */
-const parseJSON = (data) => {
-	try {
-		return JSON.parse(data);
-	} catch (e) {
-		return undefined;
+	size_t colonPos = hostPort.find(':');
+	if (colonPos != std::string::npos) {
+		result.host = hostPort.substr(0, colonPos);
+		result.port = std::stoi(hostPort.substr(colonPos + 1));
+	} else {
+		result.host = hostPort;
+		result.port = (result.scheme == "https") ? 443 : 80;
 	}
-};
 
-/**
- * Obtain JSON from a remote end-point.
- * @param {string} url 
- */
-const getJSON = async (url) => {
-	const res = await get(url);
-	if (!res.ok)
-		throw new Error(`Unable to request JSON from end-point. HTTP ${res.status} ${res.statusText}`);
-	
-	return res.json();
-};
-
-/**
- * Read a JSON file from disk, returning NULL on error.
- * Provides basic pruning for comments (lines starting with //) with ignoreComments.
- * @param {string} file 
- * @param {boolean} ignoreComments
- */
-const readJSON = async (file, ignoreComments = false) => {
-	try {
-		const raw = await fsp.readFile(file, 'utf8');
-		if (ignoreComments)
-			return JSON.parse(raw.split(/\r?\n/).filter(e => !e.startsWith('//')).join('\n'));
-
-		return JSON.parse(raw);
-	} catch (e) {
-		if (e.code === 'EPERM')
-			throw e;
-
-		return null;
-	}
-};
-
-function requestData(url, partialOfs, partialLen) {
-	return new Promise((resolve, reject) => {
-		const options = {
-			headers: {
-				'User-Agent': constants.USER_AGENT
-			}
-		};
-
-		if (partialOfs > -1 && partialLen > -1)
-			options.headers.Range = `bytes=${partialOfs}-${partialOfs + partialLen - 1}`;
-
-		log.write('Requesting data from %s (offset: %d, length: %d)', url, partialOfs, partialLen);
-
-		const protocol = url.startsWith('https') ? https : http;
-		const req = protocol.get(url, options, res => {
-			if (res.statusCode == 301 || res.statusCode == 302) {
-				log.write("Got redirect to " + res.headers.location);
-				return resolve(requestData(res.headers.location, partialOfs, partialLen));
-			}
-
-			if (res.statusCode < 200 || res.statusCode > 302)
-				return reject(new Error(`Status Code: ${res.statusCode}`));
-
-			const chunks = [];
-			let downloaded = 0;
-			let last_logged_pct = 0;
-			const totalSize = parseInt(res.headers['content-length'] || '0');
-
-			if (totalSize > 0)
-				log.write('Starting download: %d bytes expected', totalSize);
-
-			res.on('data', chunk => {
-				chunks.push(chunk);
-				downloaded += chunk.length;
-
-				if (totalSize > 0) {
-					const pct = Math.floor((downloaded / totalSize) * 100);
-					const pct_threshold = Math.floor(pct / 25) * 25;
-
-					if (pct_threshold > last_logged_pct && pct_threshold < 100) {
-						log.write('Download progress: %d/%d bytes (%d%%)', downloaded, totalSize, pct);
-						last_logged_pct = pct_threshold;
-					}
-				}
-			});
-
-			res.on('end', () => {
-				log.write('Download complete: %d bytes received', downloaded);
-				resolve(Buffer.concat(chunks));
-			});
-		});
-
-		req.setTimeout(60000, () => {
-			req.destroy();
-			reject(new Error('Request timeout after 60s'));
-		});
-
-		req.on('error', reject);
-		req.end();
-	});
+	return result;
 }
 
 /**
-* Download a file (optionally to a local file).
-* GZIP deflation will be used if headers are set.
-* Data is always returned even if `out` is provided.
-* @param {string|string[]} url Remote URL of the file to download.
-* @param {string} out Optional file to write file to.
-* @param {number} partialOfs Partial content start offset.
-* @param {number} partialLen Partial content size.
-* @param {boolean} deflate If true, will deflate data regardless of header.
-*/
-const downloadFile = async (url, out, partialOfs = -1, partialLen = -1, deflate = false) => {
-	const url_stack = Array.isArray(url) ? url : [url];
-	
-	for (const currentUrl of url_stack) {
+ * Perform a single HTTP GET request and return the response body as bytes.
+ * Handles HTTPS vs HTTP via cpp-httplib.
+ */
+std::vector<uint8_t> doHttpGet(const std::string& url,
+                               int64_t partialOfs = -1,
+                               int64_t partialLen = -1) {
+	auto parsed = parseURL(url);
+
+	httplib::Headers headers;
+	headers.emplace("User-Agent", std::string(constants::USER_AGENT()));
+
+	if (partialOfs > -1 && partialLen > -1) {
+		headers.emplace("Range", std::format("bytes={}-{}", partialOfs, partialOfs + partialLen - 1));
+	}
+
+	httplib::Result res;
+
+	if (parsed.scheme == "https") {
+		httplib::SSLClient cli(parsed.host, parsed.port);
+		cli.set_connection_timeout(30);
+		cli.set_read_timeout(60);
+		cli.set_follow_location(true);
+		res = cli.Get(parsed.path, headers);
+	} else {
+		httplib::Client cli(parsed.host, parsed.port);
+		cli.set_connection_timeout(30);
+		cli.set_read_timeout(60);
+		cli.set_follow_location(true);
+		res = cli.Get(parsed.path, headers);
+	}
+
+	if (!res)
+		throw std::runtime_error(std::format("HTTP request failed for {}: {}", url, httplib::to_string(res.error())));
+
+	if (res->status < 200 || res->status > 302)
+		throw std::runtime_error(std::format("Status Code: {}", res->status));
+
+	const auto& body = res->body;
+	return std::vector<uint8_t>(body.begin(), body.end());
+}
+
+/**
+ * Inflate (decompress) zlib data.
+ */
+std::vector<uint8_t> inflateData(const std::vector<uint8_t>& input) {
+	z_stream strm{};
+	strm.next_in = const_cast<uint8_t*>(input.data());
+	strm.avail_in = static_cast<uInt>(input.size());
+
+	if (inflateInit(&strm) != Z_OK)
+		throw std::runtime_error("Failed to initialize zlib inflate");
+
+	std::vector<uint8_t> output;
+	uint8_t chunk[16384];
+
+	int ret;
+	do {
+		strm.next_out = chunk;
+		strm.avail_out = sizeof(chunk);
+		ret = inflate(&strm, Z_NO_FLUSH);
+
+		if (ret == Z_STREAM_ERROR || ret == Z_DATA_ERROR || ret == Z_MEM_ERROR) {
+			inflateEnd(&strm);
+			throw std::runtime_error("zlib inflate error");
+		}
+
+		size_t have = sizeof(chunk) - strm.avail_out;
+		output.insert(output.end(), chunk, chunk + have);
+	} while (ret != Z_STREAM_END);
+
+	inflateEnd(&strm);
+	return output;
+}
+
+/**
+ * Compute MD5 hash of a file. Reuses the approach from buffer.cpp.
+ * Returns the hash in the specified encoding.
+ */
+std::string computeFileHash(const std::filesystem::path& file,
+                            std::string_view method,
+                            std::string_view encoding) {
+	// Read the entire file into a BufferWrapper and use its calculateHash method
+	auto buf = BufferWrapper::readFile(file);
+	return buf.calculateHash(method, encoding);
+}
+
+} // anonymous namespace
+
+/**
+ * Async wrapper for HTTP GET.
+ * Supports URL fallback chains (tries each URL in order).
+ * @param url Single URL.
+ * @returns Raw response body as a vector of bytes.
+ */
+std::vector<uint8_t> get(const std::string& url) {
+	return get(std::vector<std::string>{url});
+}
+
+/**
+ * Async wrapper for HTTP GET.
+ * Supports URL fallback chains (tries each URL in order).
+ * @param urls List of fallback URLs.
+ * @returns Raw response body as a vector of bytes.
+ */
+std::vector<uint8_t> get(const std::vector<std::string>& urls) {
+	size_t index = 1;
+	std::vector<uint8_t> result;
+	bool success = false;
+
+	for (const auto& url : urls) {
+		logging::write(std::format("get -> [{}/{}]: {}", index, urls.size(), url));
+
 		try {
-			log.write(`downloadFile -> ${currentUrl}`);
+			result = doHttpGet(url);
+			logging::write(std::format("get -> [{}][200] {}", index, url));
+			success = true;
+			break;
+		} catch (const std::exception& error) {
+			logging::write(std::format("fetch failed {}: {}", url, error.what()));
+			index++;
+			if (index > urls.size())
+				throw;
+		}
+	}
 
-			let data = await requestData(currentUrl, partialOfs, partialLen);
+	if (!success)
+		throw std::runtime_error("All URLs failed");
 
-			if (deflate) {
-				data = await new Promise((resolve, reject) => {
-					zlib.inflate(data, (err, result) => {
-						err ? reject(err) : resolve(result);
-					});
-				});
+	return result;
+}
+
+/**
+ * Dispatch a handler for an array of items with a limit to how
+ * many can be resolving at once.
+ * @param items    Each one is passed to the handler.
+ * @param handler  Called for each item.
+ * @param limit    This many will be resolving at any given time.
+ */
+template <typename T>
+void queue(const std::vector<T>& items,
+           const std::function<void(const T&)>& handler,
+           size_t limit) {
+	size_t index = 0;
+	size_t complete = 0;
+	std::vector<std::future<void>> futures;
+
+	while (complete < items.size()) {
+		// Launch up to 'limit' concurrent tasks
+		while (futures.size() < limit && index < items.size()) {
+			const T& item = items[index];
+			futures.push_back(std::async(std::launch::async, [&handler, &item]() {
+				handler(item);
+			}));
+			index++;
+		}
+
+		// Wait for any one to complete
+		if (!futures.empty()) {
+			futures.front().get();
+			futures.erase(futures.begin());
+			complete++;
+		}
+	}
+}
+
+/**
+ * Ping a URL and measure the response time in milliseconds.
+ * Not perfectly accurate, but good enough for our purposes.
+ * Throws on error or HTTP code other than 200.
+ * @param url URL to ping.
+ */
+int64_t ping(const std::string& url) {
+	auto pingStart = std::chrono::steady_clock::now();
+
+	get(url);
+
+	auto elapsed = std::chrono::steady_clock::now() - pingStart;
+	return std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+}
+
+/**
+ * Attempt to parse JSON, returning std::nullopt on failure.
+ * Inline function to keep code paths clean of unnecessary try/catch blocks.
+ * @param data JSON string.
+ */
+std::optional<nlohmann::json> parseJSON(std::string_view data) {
+	try {
+		return nlohmann::json::parse(data);
+	} catch (const nlohmann::json::exception&) {
+		return std::nullopt;
+	}
+}
+
+/**
+ * Obtain JSON from a remote end-point.
+ * @param url URL to fetch JSON from.
+ */
+nlohmann::json getJSON(const std::string& url) {
+	auto data = get(url);
+	std::string_view sv(reinterpret_cast<const char*>(data.data()), data.size());
+	return nlohmann::json::parse(sv);
+}
+
+/**
+ * Read a JSON file from disk, returning std::nullopt on error.
+ * Provides basic pruning for comments (lines starting with //) with ignoreComments.
+ * @param file           Path to the JSON file.
+ * @param ignoreComments If true, strips comment lines before parsing.
+ */
+std::optional<nlohmann::json> readJSON(const std::filesystem::path& file, bool ignoreComments) {
+	try {
+		std::ifstream ifs(file);
+		if (!ifs.is_open()) {
+			// Check for EPERM equivalent — rethrow access errors
+			auto ec = std::error_code{};
+			auto perms = std::filesystem::status(file, ec).permissions();
+			if (!ec && (perms & std::filesystem::perms::owner_read) == std::filesystem::perms::none)
+				throw std::runtime_error("Permission denied: " + file.string());
+			return std::nullopt;
+		}
+
+		std::string raw((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+
+		if (ignoreComments) {
+			std::istringstream stream(raw);
+			std::string line;
+			std::string filtered;
+
+			while (std::getline(stream, line)) {
+				// Remove trailing \r if present
+				if (!line.empty() && line.back() == '\r')
+					line.pop_back();
+
+				if (!line.starts_with("//"))
+					filtered += line + '\n';
 			}
 
-			const wrapped = new BufferWrapper(data);
+			return nlohmann::json::parse(filtered);
+		}
 
-			if (out) {
-				await createDirectory(path.dirname(out));
-				await wrapped.writeToFile(out);
+		return nlohmann::json::parse(raw);
+	} catch (const std::runtime_error&) {
+		throw; // Re-throw permission errors
+	} catch (const std::exception&) {
+		return std::nullopt;
+	}
+}
+
+/**
+ * Request data from a URL with optional partial content (Range header).
+ * Handles redirects (301/302) and logs download progress.
+ * @param url        URL to request data from.
+ * @param partialOfs Partial content start offset (-1 to disable).
+ * @param partialLen Partial content length (-1 to disable).
+ * @returns Raw response body.
+ */
+std::vector<uint8_t> requestData(const std::string& url, int64_t partialOfs, int64_t partialLen) {
+	logging::write(std::format("Requesting data from {} (offset: {}, length: {})", url, partialOfs, partialLen));
+	auto data = doHttpGet(url, partialOfs, partialLen);
+	logging::write(std::format("Download complete: {} bytes received", data.size()));
+	return data;
+}
+
+/**
+ * Download a file (optionally to a local file).
+ * Zlib inflation will be applied if deflate is true.
+ * Data is always returned even if `out` is provided.
+ * @param url        Remote URL.
+ * @param out        Optional file path to save downloaded data.
+ * @param partialOfs Partial content start offset (-1 to disable).
+ * @param partialLen Partial content length (-1 to disable).
+ * @param deflate    If true, will inflate (decompress) the data.
+ */
+BufferWrapper downloadFile(const std::string& url, const std::string& out,
+                           int64_t partialOfs, int64_t partialLen, bool doDeflate) {
+	return downloadFile(std::vector<std::string>{url}, out, partialOfs, partialLen, doDeflate);
+}
+
+/**
+ * Download a file (optionally to a local file).
+ * Supports URL fallback chains.
+ * @param urls       List of fallback URLs.
+ * @param out        Optional file path to save downloaded data.
+ * @param partialOfs Partial content start offset (-1 to disable).
+ * @param partialLen Partial content length (-1 to disable).
+ * @param deflate    If true, will inflate (decompress) the data.
+ */
+BufferWrapper downloadFile(const std::vector<std::string>& urls, const std::string& out,
+                           int64_t partialOfs, int64_t partialLen, bool doDeflate) {
+	for (const auto& currentUrl : urls) {
+		try {
+			logging::write(std::format("downloadFile -> {}", currentUrl));
+
+			auto data = requestData(currentUrl, partialOfs, partialLen);
+
+			if (doDeflate)
+				data = inflateData(data);
+
+			BufferWrapper wrapped(std::move(data));
+
+			if (!out.empty()) {
+				createDirectory(std::filesystem::path(out).parent_path());
+				wrapped.writeToFile(out);
 			}
 
 			return wrapped;
-		} catch (error) {
-			log.write(`Failed to download from ${currentUrl}: ${error.message}`);
-			log.write(error);
+		} catch (const std::exception& error) {
+			logging::write(std::format("Failed to download from {}: {}", currentUrl, error.what()));
 		}
 	}
-	
-	throw new Error('All download attempts failed.');
-};
+
+	throw std::runtime_error("All download attempts failed.");
+}
 
 /**
  * Create all directories in a given path if they do not exist.
- * @param {string} dir Directory path.
+ * @param dir Directory path.
  */
-const createDirectory = async (dir) => {
-	await fsp.mkdir(dir, { recursive: true });
-};
+void createDirectory(const std::filesystem::path& dir) {
+	std::filesystem::create_directories(dir);
+}
 
 /**
- * Returns a promise which resolves after a redraw.
- * This is used to ensure that components have redrawn.
+ * Returns after a redraw.
+ * In C++ (ImGui), this is a no-op since ImGui redraws every frame.
  */
-const redraw = async () => {
-	return new Promise(resolve => {
-		// This is a hack to ensure components redraw.
-		// https://bugs.chromium.org/p/chromium/issues/detail?id=675795
-		requestAnimationFrame(() => requestAnimationFrame(resolve));
-	});
-};
-
-const JEDEC = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+void redraw() {
+	// In ImGui, the main loop redraws every frame.
+	// This is a no-op placeholder for JS compatibility.
+}
 
 /**
  * Format a number (bytes) to a displayable file size.
- * Simplified version of https://github.com/avoidwork/filesize.js
- * @param {number} input 
+ * Simplified version of filesize.js using JEDEC units.
+ * @param input Number of bytes.
  */
-const filesize = (input) => {
-	if (isNaN(input))
-		return input;
+std::string filesize(double input) {
+	if (std::isnan(input))
+		return "NaN";
 
-	input = Number(input);
-	const isNegative = input < 0;
-	const result = [];
+	const bool isNegative = input < 0;
 
 	// Flipping a negative number to determine the size.
 	if (isNegative)
 		input = -input;
 
 	// Determining the exponent.
-	let exponent = Math.floor(Math.log(input) / Math.log(1024));
+	int exponent = (input > 0) ? static_cast<int>(std::floor(std::log(input) / std::log(1024.0))) : 0;
 	if (exponent < 0)
 		exponent = 0;
 
@@ -296,207 +434,199 @@ const filesize = (input) => {
 	if (exponent > 8)
 		exponent = 8;
 
+	std::string valueStr;
+	std::string unit;
+
 	// Zero is now a special case because bytes divide by 1.
-	if (input === 0) {
-		result[0] = 0;
-		result[1] = JEDEC[exponent];
+	if (input == 0) {
+		valueStr = "0";
+		unit = JEDEC[exponent];
 	} else {
-		const val = input / (Math.pow(2, exponent * 10));
+		double val = input / std::pow(2.0, exponent * 10);
 
-		result[0] = Number(val.toFixed(exponent > 0 ? 2 : 0));
+		if (exponent > 0) {
+			// Format with 2 decimal places, then strip trailing zeros
+			// to match JS: Number(val.toFixed(2)) — e.g. 1.00 → "1", 1.50 → "1.5"
+			std::ostringstream oss;
+			oss << std::fixed << std::setprecision(2) << val;
+			valueStr = oss.str();
 
-		if (result[0] === 1024 && exponent < 8) {
-			result[0] = 1;
+			// Strip trailing zeros after decimal point
+			if (valueStr.find('.') != std::string::npos) {
+				size_t lastNonZero = valueStr.find_last_not_of('0');
+				if (lastNonZero != std::string::npos && valueStr[lastNonZero] == '.')
+					valueStr.erase(lastNonZero); // Remove decimal point too
+				else
+					valueStr.erase(lastNonZero + 1);
+			}
+		} else {
+			std::ostringstream oss;
+			oss << std::fixed << std::setprecision(0) << val;
+			valueStr = oss.str();
+		}
+
+		// Check if rounded value equals 1024 and bump exponent
+		double parsed = std::stod(valueStr);
+		if (parsed == 1024.0 && exponent < 8) {
+			valueStr = "1";
 			exponent++;
 		}
 
-		result[1] = JEDEC[exponent];
+		unit = JEDEC[exponent];
 	}
 
 	// Decorating a 'diff'.
 	if (isNegative)
-		result[0] = -result[0];
-	
-	return result.join(" ");
-};
+		valueStr = "-" + valueStr;
+
+	return valueStr + " " + unit;
+}
 
 /**
  * Calculate the hash of a file.
- * @param {string} file Path to the file to hash.
- * @param {string} method Hashing method.
- * @param {string} encoding Output encoding.
+ * @param file     Path to the file to hash.
+ * @param method   Hashing method (e.g. "md5").
+ * @param encoding Output encoding (e.g. "hex").
  */
-const getFileHash = async (file, method, encoding) => {
-	return new Promise(resolve => {
-		const fd = fs.createReadStream(file);
-		const hash = crypto.createHash(method);
-		
-		fd.on('data', chunk => hash.update(chunk));
-		fd.on('end', () => resolve(hash.digest(encoding)));
-	});
-};
+std::string getFileHash(const std::filesystem::path& file, std::string_view method, std::string_view encoding) {
+	return computeFileHash(file, method, encoding);
+}
 
 /**
- * Wrapper for asynchronously checking if a file exists.
- * @param {string} file 
+ * Wrapper for checking if a file exists.
+ * @param file Path to the file.
  */
-const fileExists = async (file) => {
+bool fileExists(const std::filesystem::path& file) {
 	try {
-		await fsp.access(file);
-		return true;
-	} catch (e) {
+		return std::filesystem::exists(file);
+	} catch (const std::exception&) {
 		return false;
 	}
-};
+}
 
 /**
  * Check if a directory exists and is writable.
- * @param {string} dir
+ * @param dir Path to the directory.
  */
-const directoryIsWritable = async (dir) => {
+bool directoryIsWritable(const std::filesystem::path& dir) {
 	try {
-		await fsp.access(dir, fs.constants.W_OK);
-		return true;
-	} catch (e) {
+		auto status = std::filesystem::status(dir);
+		if (!std::filesystem::is_directory(status))
+			return false;
+
+		auto perms = status.permissions();
+		return (perms & std::filesystem::perms::owner_write) != std::filesystem::perms::none;
+	} catch (const std::exception&) {
 		return false;
 	}
-};
+}
 
 /**
  * Read a portion of a file.
- * @param {string} file Path of the file.
- * @param {number} offset Offset to start reading from
- * @param {number} length Total bytes to read.
+ * @param file   Path of the file.
+ * @param offset Offset to start reading from.
+ * @param length Total bytes to read.
  */
-const readFile = async (file, offset, length) => {
-	const fd = await fsp.open(file);
-	const buf = BufferWrapper.alloc(length);
+BufferWrapper readFile(const std::filesystem::path& file, size_t offset, size_t length) {
+	std::ifstream fd(file, std::ios::binary);
+	if (!fd.is_open())
+		throw std::runtime_error("Failed to open file: " + file.string());
 
-	await fd.read(buf.raw, 0, length, offset);
-	await fd.close();
+	BufferWrapper buf = BufferWrapper::alloc(length);
+
+	fd.seekg(static_cast<std::streamoff>(offset));
+	fd.read(reinterpret_cast<char*>(buf.raw().data()), static_cast<std::streamsize>(length));
+	fd.close();
 
 	return buf;
-};
+}
 
 /**
  * Recursively delete a directory and everything inside of it.
  * Returns the total size of all files deleted.
- * @param {string} dir 
+ * @param dir Directory to delete.
  */
-const deleteDirectory = async (dir) => {
-	let deleteSize = 0;
+uintmax_t deleteDirectory(const std::filesystem::path& dir) {
+	uintmax_t deleteSize = 0;
 	try {
-		const entries = await fsp.readdir(dir);
-		for (const entry of entries) {
-			const entryPath = path.join(dir, entry);
-			const entryStat = await fsp.stat(entryPath);
-
-			if (entryStat.isDirectory()) {
-				deleteSize += await deleteDirectory(entryPath);
+		for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+			if (entry.is_directory()) {
+				deleteSize += deleteDirectory(entry.path());
 			} else {
-				await fsp.unlink(entryPath);
-				deleteSize += entryStat.size;
+				deleteSize += entry.file_size();
+				std::filesystem::remove(entry.path());
 			}
 		}
 
-		await fsp.rmdir(dir);
-	} catch (e) {
+		std::filesystem::remove(dir);
+	} catch (const std::exception&) {
 		// Something failed to delete.
 	}
-	
+
 	return deleteSize;
-};
+}
 
 /**
- * Process work in non-blocking batches using MessageChannel scheduling.
+ * Process work in non-blocking batches.
  * Allows large amounts of work to be done without freezing the UI.
- * 
- * @param {string} name - Name for logging purposes
- * @param {Array} work - Array of items to process
- * @param {function} processor - Function called for each item: (item, index) => void
- * @param {number} [batchSize=1000] - Items to process per batch
- * @returns {Promise<void>} Promise that resolves when all work is complete
+ *
+ * @param name      Name for logging purposes.
+ * @param work      Array of items to process.
+ * @param processor Function called for each item: (item, index) => void
+ * @param batchSize Items to process per batch.
  */
-const batchWork = async (name, work, processor, batchSize = 1000) => {	
-	return new Promise((resolve, reject) => {
-		let index = 0;
-		const total = work.length;
-		const startTime = Date.now();
-		let lastProgressPercent = 0;
-		
-		log.write('Starting batch work "%s" with %d items...', name, total);
-		
-		const channel = new MessageChannel();
-		channel.port2.onmessage = () => processBatch();
-		const scheduleNext = () => channel.port1.postMessage(null);
-		
-		const cleanup = () => {
-			channel.port1.close();
-			channel.port2.close();
-		};
-		
-		const processBatch = () => {
-			try {
-				const endIndex = Math.min(index + batchSize, total);
-				
-				for (let i = index; i < endIndex; i++)
-					processor(work[i], i);
-				
-				index = endIndex;
-				
-				const progressPercent = Math.floor((index / total) * 100);
-				if (progressPercent >= lastProgressPercent + 10 && progressPercent < 100) {
-					log.write('Batch work "%s" progress: %d%% (%d/%d)', name, progressPercent, index, total);
-					lastProgressPercent = progressPercent;
-				}
-				
-				if (index < total) {
-					scheduleNext();
-				} else {
-					const duration = Date.now() - startTime;
-					log.write('Batch work "%s" completed in %dms (%d items)', name, duration, total);
-					cleanup();
-					resolve();
-				}
-			} catch (error) {
-				cleanup();
-				reject(error);
-			}
-		};
-		
-		processBatch();
-	});
-};
+template <typename T>
+void batchWork(std::string_view name,
+               const std::vector<T>& work,
+               const std::function<void(const T&, size_t)>& processor,
+               size_t batchSize) {
+	size_t index = 0;
+	size_t total = work.size();
+	auto startTime = std::chrono::steady_clock::now();
+	int lastProgressPercent = 0;
+
+	logging::write(std::format("Starting batch work \"{}\" with {} items...", name, total));
+
+	while (index < total) {
+		size_t endIndex = std::min(index + batchSize, total);
+
+		for (size_t i = index; i < endIndex; i++)
+			processor(work[i], i);
+
+		index = endIndex;
+
+		int progressPercent = static_cast<int>((static_cast<double>(index) / total) * 100);
+		if (progressPercent >= lastProgressPercent + 10 && progressPercent < 100) {
+			logging::write(std::format("Batch work \"{}\" progress: {}% ({}/{})", name, progressPercent, index, total));
+			lastProgressPercent = progressPercent;
+		}
+	}
+
+	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now() - startTime).count();
+	logging::write(std::format("Batch work \"{}\" completed in {}ms ({} items)", name, duration, total));
+}
 
 /**
  * Return a formatted representation of seconds.
- * Example: 26 will return 00:26
- * @param {number} seconds 
- * @returns {string}
+ * Example: 26 will return "00:26"
+ * @param seconds Number of seconds.
  */
-const formatPlaybackSeconds = (seconds) => {
-	if (isNaN(seconds))
-		return '00:00';
-		
-	return Math.floor(seconds / 60).toString().padStart(2, 0) + ':' + Math.round(seconds % 60).toString().padStart(2, 0);
-};
+std::string formatPlaybackSeconds(double seconds) {
+	if (std::isnan(seconds))
+		return "00:00";
 
-module.exports = { 
-	getJSON,
-	readJSON,
-	parseJSON,
-	filesize,
-	getFileHash,
-	createDirectory,
-	downloadFile,
-	ping,
-	get,
-	queue,
-	redraw,
-	fileExists,
-	directoryIsWritable,
-	readFile,
-	deleteDirectory,
-	formatPlaybackSeconds,
-	batchWork
-};
+	int mins = static_cast<int>(std::floor(seconds / 60.0));
+	int secs = static_cast<int>(std::round(std::fmod(seconds, 60.0)));
+
+	std::ostringstream oss;
+	oss << std::setfill('0') << std::setw(2) << mins
+	    << ':' << std::setfill('0') << std::setw(2) << secs;
+	return oss.str();
+}
+
+// Explicit template instantiations for common types
+// These allow the templates to be used from other translation units.
+// Additional instantiations can be added as needed.
+
+} // namespace generics
