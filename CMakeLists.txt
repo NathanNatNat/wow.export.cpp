@@ -39,6 +39,47 @@ endif()
 # ── Visual Studio: set wow_export as the startup project ──────
 set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT wow_export)
 
+# ── Git submodule check ─────────────────────────────────────────
+# Verify all required submodules are initialized and populated.
+# Each entry maps a submodule directory to a sentinel file that
+# must exist when the submodule has been checked out.
+set(_REQUIRED_SUBMODULES
+    "extern/cpp-httplib  CMakeLists.txt"
+    "extern/glad         LICENSE"
+    "extern/glfw         CMakeLists.txt"
+    "extern/glm          CMakeLists.txt"
+    "extern/imgui        imgui.cpp"
+    "extern/json         CMakeLists.txt"
+    "extern/libwebp      CMakeLists.txt"
+    "extern/miniaudio    miniaudio.h"
+    "extern/nanosvg      CMakeLists.txt"
+    "extern/pugixml      CMakeLists.txt"
+    "extern/spdlog       CMakeLists.txt"
+    "extern/stb          stb_image.h"
+    "extern/zlib         CMakeLists.txt"
+)
+
+set(_MISSING_SUBMODULES "")
+foreach(_entry IN LISTS _REQUIRED_SUBMODULES)
+    # Split "dir  sentinel" into two variables.
+    string(REGEX MATCH "^([^ ]+)" _subdir "${_entry}")
+    string(REGEX REPLACE "^[^ ]+[ ]+" "" _sentinel "${_entry}")
+    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${_subdir}/${_sentinel}")
+        list(APPEND _MISSING_SUBMODULES "${_subdir}")
+    endif()
+endforeach()
+
+if(_MISSING_SUBMODULES)
+    string(REPLACE ";" "\n    " _formatted "${_MISSING_SUBMODULES}")
+    message(FATAL_ERROR
+        "The following git submodules are not initialized:\n"
+        "    ${_formatted}\n"
+        "Please run:\n"
+        "    git submodule update --init --recursive\n"
+        "then re-run CMake."
+    )
+endif()
+
 # ════════════════════════════════════════════════════════════════
 #  Dependencies (all from extern/ git submodules)
 # ════════════════════════════════════════════════════════════════
