@@ -4,66 +4,96 @@
 	License: MIT
  */
 
-const core = require('../core');
-const log = require('../log');
-const constants = require('../constants');
-const fsp = require('fs').promises;
-const generics = require('../generics');
+#include "realmlist.h"
 
-const parseRealmList = (data) => {
-	const realms = {};
+#include "../core.h"
+#include "../log.h"
+#include "../constants.h"
+#include "../generics.h"
 
-	let realmCount = 0;
-	let regionCount = 0;
+#include <nlohmann/json.hpp>
 
-	for (const [regionTag, region] of Object.entries(data)) {
+#include <filesystem>
+#include <fstream>
+#include <format>
+#include <string>
+#include <stdexcept>
+
+namespace {
+
+/**
+ * Parse a realm list JSON object and populate core::view->realmList.
+ * @param data JSON object keyed by region tag, each containing a "realms" array.
+ */
+void parseRealmList(const nlohmann::json& data) {
+	nlohmann::json realms = nlohmann::json::object();
+
+	int realmCount = 0;
+	int regionCount = 0;
+
+	for (const auto& [regionTag, region] : data.items()) {
 		regionCount++;
-		realms[regionTag] = region.realms.map(realm => {
+		nlohmann::json realmArray = nlohmann::json::array();
+		for (const auto& realm : region["realms"]) {
 			realmCount++;
-			return {
-				name: realm.name,
-				id: realm.id,
-				slug: realm.slug
-			};
-		});
-	}
-
-	log.write(`Loaded ${realmCount} realms in ${regionCount} regions.`);
-
-	core.view.realmList = realms;
-};
-
-const load = async () => {
-	log.write('Loading realmlist...');
-
-	let url = String(core.view.config.realmListURL);
-	if (typeof url !== 'string')
-		throw new Error('Missing/malformed realmListURL in configuration!');
-
-	try {
-		const realmList = JSON.parse(await fsp.readFile(constants.CACHE.REALMLIST, 'utf8'));
-		parseRealmList(realmList);
-	} catch (e) {
-		log.write('Failed to load realmlist from disk (not cached)')
-	}
-
-	try {
-		const res = await generics.get(url);
-
-		if (res.ok) {
-			const json_text = await res.text();
-			const json = JSON.parse(json_text);
-			parseRealmList(json);
-
-			await fsp.writeFile(constants.CACHE.REALMLIST, json_text, 'utf8');
-		} else {
-			log.write(`Failed to retrieve realmlist from ${url} (${res.status})`);
+			realmArray.push_back({
+				{ "name", realm["name"] },
+				{ "id", realm["id"] },
+				{ "slug", realm["slug"] }
+			});
 		}
-	} catch (e) {
-		log.write(`Failed to retrieve realmlist from ${url}: ` + e.message);
+		realms[regionTag] = std::move(realmArray);
 	}
-};
 
-module.exports = {
-	load
-};
+	logging::write(std::format("Loaded {} realms in {} regions.", realmCount, regionCount));
+
+	core::view->realmList = std::move(realms);
+}
+
+} // anonymous namespace
+
+namespace casc {
+namespace realmlist {
+
+void load() {
+	logging::write("Loading realmlist...");
+
+	std::string url;
+	if (core::view->config.contains("realmListURL") && core::view->config["realmListURL"].is_string())
+		url = core::view->config["realmListURL"].get<std::string>();
+
+	if (url.empty())
+		throw std::runtime_error("Missing/malformed realmListURL in configuration!");
+
+	// Try loading cached realmlist from disk.
+	try {
+		std::ifstream ifs(constants::CACHE::REALMLIST());
+		if (ifs.is_open()) {
+			std::string content((std::istreambuf_iterator<char>(ifs)),
+			                     std::istreambuf_iterator<char>());
+			nlohmann::json realmList = nlohmann::json::parse(content);
+			parseRealmList(realmList);
+		} else {
+			logging::write("Failed to load realmlist from disk (not cached)");
+		}
+	} catch (const std::exception&) {
+		logging::write("Failed to load realmlist from disk (not cached)");
+	}
+
+	// Fetch latest realmlist from remote URL.
+	try {
+		std::vector<uint8_t> res = generics::get(url);
+		std::string json_text(res.begin(), res.end());
+		nlohmann::json json = nlohmann::json::parse(json_text);
+		parseRealmList(json);
+
+		std::ofstream ofs(constants::CACHE::REALMLIST(), std::ios::trunc);
+		if (ofs.is_open())
+			ofs << json_text;
+	} catch (const std::exception& e) {
+		logging::write(std::format("Failed to retrieve realmlist from {}: {}", url, e.what()));
+	}
+}
+
+} // namespace realmlist
+} // namespace casc
