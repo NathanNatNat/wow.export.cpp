@@ -5,254 +5,210 @@
  */
 
 // This file defines constants used throughout the application.
-const path = require('path');
+#include "constants.h"
 
-// on macOS, process.execPath points to the renderer helper binary deep inside
-// the framework, not the app root. use __dirname (app.nw/src/) instead.
-const INSTALL_PATH = process.platform === 'darwin'
-	? path.resolve(path.join(__dirname, '..'))
-	: path.dirname(process.execPath);
-const DATA_DIR = path.join(INSTALL_PATH, 'data');
-const LOG_DIR = path.join(INSTALL_PATH, 'Logs');
+#include <filesystem>
 
-// Migrate legacy directories to the data directory.
-const fs = require('fs');
-const legacyDirs = [
-	path.join(INSTALL_PATH, 'config'),      // Original name
-	path.join(INSTALL_PATH, 'persistence'), // Previous rename
-];
-try {
-	if (!fs.existsSync(DATA_DIR)) {
-		for (const legacyDir of legacyDirs) {
-			if (fs.existsSync(legacyDir)) {
-				fs.renameSync(legacyDir, DATA_DIR);
-				break;
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <climits>
+#endif
+
+namespace constants {
+
+namespace fs = std::filesystem;
+
+// ── Platform-specific executable path detection ──────────────────
+
+static fs::path getExecutablePath() {
+#ifdef _WIN32
+	wchar_t buf[MAX_PATH];
+	DWORD len = GetModuleFileNameW(nullptr, buf, MAX_PATH);
+	if (len == 0 || len >= MAX_PATH)
+		return fs::current_path();
+	return fs::path(std::wstring_view(buf, len));
+#else
+	char buf[PATH_MAX];
+	ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+	if (len == -1)
+		return fs::current_path();
+	buf[len] = '\0';
+	return fs::path(buf);
+#endif
+}
+
+// ── Internal storage for runtime path constants ──────────────────
+
+namespace {
+	fs::path s_install_path;
+	fs::path s_data_dir;
+	fs::path s_log_dir;
+	fs::path s_runtime_log;
+	fs::path s_last_export;
+	fs::path s_shader_path;
+
+	fs::path s_cache_dir;
+	fs::path s_cache_size;
+	fs::path s_cache_integrity_file;
+	fs::path s_cache_dir_builds;
+	fs::path s_cache_dir_indexes;
+	fs::path s_cache_dir_data;
+	fs::path s_cache_dir_dbd;
+	fs::path s_cache_dir_listfile;
+	fs::path s_cache_tact_keys;
+	fs::path s_cache_realmlist;
+	fs::path s_cache_state_file;
+
+	fs::path s_config_default_path;
+	fs::path s_config_user_path;
+
+	fs::path s_update_directory;
+	std::string s_update_helper;
+
+	std::string s_user_agent;
+}
+
+// ── Initialization ───────────────────────────────────────────────
+
+void init() {
+	// on macOS, process.execPath points to the renderer helper binary deep inside
+	// the framework, not the app root. use __dirname (app.nw/src/) instead.
+	// macOS is not supported in the C++ port — only Windows and Linux.
+	s_install_path = getExecutablePath().parent_path();
+	s_data_dir = s_install_path / "data";
+	s_log_dir = s_install_path / "Logs";
+
+	// Migrate legacy directories to the data directory.
+	const fs::path legacyDirs[] = {
+		s_install_path / "config",      // Original name
+		s_install_path / "persistence"  // Previous rename
+	};
+	try {
+		if (!fs::exists(s_data_dir)) {
+			for (const auto& legacyDir : legacyDirs) {
+				if (fs::exists(legacyDir)) {
+					fs::rename(legacyDir, s_data_dir);
+					break;
+				}
 			}
 		}
+	} catch (...) {
+		// Migration failed; data directory will be created fresh below.
 	}
-} catch (e) {
-	// Migration failed; data directory will be created fresh below.
+
+	// Ensure data and log directories exist before any module attempts to
+	// write to them (e.g. log.cpp creates a stream at require-time).
+	fs::create_directories(s_data_dir);
+	fs::create_directories(s_log_dir);
+
+	// Migrate legacy casc/ cache directory to cache/.
+	const auto legacyCascDir = s_data_dir / "casc";
+	const auto newCacheDir = s_data_dir / "cache";
+	try {
+		if (fs::exists(legacyCascDir) && !fs::exists(newCacheDir))
+			fs::rename(legacyCascDir, newCacheDir);
+	} catch (...) {
+		// Migration failed; cache directory will be recreated as needed.
+	}
+
+	// Compute derived paths.
+	s_runtime_log = s_log_dir / "runtime.log";
+	s_last_export = s_data_dir / "last_export";
+	s_shader_path = s_install_path / "src" / "shaders";
+
+	s_cache_dir = s_data_dir / "cache";
+	s_cache_size = s_cache_dir / "cachesize";
+	s_cache_integrity_file = s_cache_dir / "cacheintegrity";
+	s_cache_dir_builds = s_cache_dir / "builds";
+	s_cache_dir_indexes = s_cache_dir / "indices";
+	s_cache_dir_data = s_cache_dir / "data";
+	s_cache_dir_dbd = s_cache_dir / "dbd";
+	s_cache_dir_listfile = s_cache_dir / "listfile";
+	s_cache_tact_keys = s_data_dir / "tact.json";
+	s_cache_realmlist = s_data_dir / "realmlist.json";
+	s_cache_state_file = s_data_dir / "cache_state.json";
+
+	s_config_default_path = s_install_path / "src" / "default_config.jsonc";
+	s_config_user_path = s_data_dir / "config.json";
+
+	s_update_directory = s_install_path / ".update";
+#ifdef _WIN32
+	s_update_helper = "updater.exe";
+#else
+	s_update_helper = "updater";
+#endif
+
+	s_user_agent = std::string("wow.export (") + std::string(VERSION) + ")";
 }
 
-// Ensure data and log directories exist before any module attempts to
-// write to them (e.g. log.cpp creates a stream at require-time).
-fs.mkdirSync(DATA_DIR, { recursive: true });
-fs.mkdirSync(LOG_DIR, { recursive: true });
+// ── Path accessor functions ──────────────────────────────────────
 
-// Migrate legacy casc/ cache directory to cache/.
-const legacyCascDir = path.join(DATA_DIR, 'casc');
-const newCacheDir = path.join(DATA_DIR, 'cache');
-try {
-	if (fs.existsSync(legacyCascDir) && !fs.existsSync(newCacheDir))
-		fs.renameSync(legacyCascDir, newCacheDir);
-} catch (e) {
-	// Migration failed; cache directory will be recreated as needed.
+const fs::path& INSTALL_PATH() { return s_install_path; }
+const fs::path& DATA_DIR() { return s_data_dir; }
+const fs::path& LOG_DIR() { return s_log_dir; }
+const fs::path& RUNTIME_LOG() { return s_runtime_log; }
+const fs::path& LAST_EXPORT() { return s_last_export; }
+const fs::path& SHADER_PATH() { return s_shader_path; }
+
+namespace CACHE {
+	const fs::path& DIR() { return s_cache_dir; }
+	const fs::path& SIZE() { return s_cache_size; }
+	const fs::path& INTEGRITY_FILE() { return s_cache_integrity_file; }
+	const fs::path& DIR_BUILDS() { return s_cache_dir_builds; }
+	const fs::path& DIR_INDEXES() { return s_cache_dir_indexes; }
+	const fs::path& DIR_DATA() { return s_cache_dir_data; }
+	const fs::path& DIR_DBD() { return s_cache_dir_dbd; }
+	const fs::path& DIR_LISTFILE() { return s_cache_dir_listfile; }
+	const fs::path& TACT_KEYS() { return s_cache_tact_keys; }
+	const fs::path& REALMLIST() { return s_cache_realmlist; }
+	const fs::path& STATE_FILE() { return s_cache_state_file; }
 }
 
-const UPDATER_EXT = { win32: '.exe', darwin: '.app' };
+namespace CONFIG {
+	const fs::path& DEFAULT_PATH() { return s_config_default_path; }
+	const fs::path& USER_PATH() { return s_config_user_path; }
+}
 
-module.exports = {
-	INSTALL_PATH, // Path to the application installation.
-	DATA_DIR, // Path to the application data directory.
-	LOG_DIR, // Path to the application logs directory.
-	RUNTIME_LOG: path.join(LOG_DIR, 'runtime.log'), // Path to the runtime log.
-	LAST_EXPORT: path.join(DATA_DIR, 'last_export'), // Location of the last export.
-	MAX_RECENT_LOCAL: 3, // Maximum recent local installations to remember.
+namespace UPDATE {
+	const fs::path& DIRECTORY() { return s_update_directory; }
+	const std::string& HELPER() { return s_update_helper; }
+}
 
-	// Location of GL shaders.
-	SHADER_PATH: path.join(INSTALL_PATH, 'src', 'shaders'),
+const std::string& USER_AGENT() { return s_user_agent; }
 
-	// Current version of wow.export
-	VERSION: nw.App.manifest.version,
+const std::regex& LISTFILE_MODEL_FILTER() {
+	static const std::regex re(R"((_\d\d\d_)|(_\d\d\d.wmo$)|(lod\d.wmo$))");
+	return re;
+}
 
-	// Filter used to filter out WMO LOD files.
-	LISTFILE_MODEL_FILTER: /(_\d\d\d_)|(_\d\d\d.wmo$)|(lod\d.wmo$)/,
+// ── File identifiers ─────────────────────────────────────────────
 
-	// User-agent used for HTTP/HTTPs requests.
-	USER_AGENT: 'wow.export (' + (nw.App.manifest.version) + ')',
+using namespace std::string_view_literals;
 
-	// Defines game-specific constants.
-	GAME: {
-		MAP_SIZE: 64,
-		MAP_SIZE_SQ: 4096, // MAP_SIZE ^ 2
-		MAP_COORD_BASE: 51200 / 3,
-		TILE_SIZE: (51200 / 3) / 32,
-		MAP_OFFSET: 17066,
-	},
+const std::array<FileIdentifier, 17> FILE_IDENTIFIERS = {{
+	{ {{"OggS"sv}}, 1, ".ogg" },
+	{ {{"ID3"sv, "\xFF\xFB"sv, "\xFF\xF3"sv, "\xFF\xF2"sv}}, 4, ".mp3" },
+	{ {{"AFM2"sv}}, 1, ".anim" },
+	{ {{"AFSA"sv}}, 1, ".anim" },
+	{ {{"AFSB"sv}}, 1, ".anim" },
+	{ {{"BLP2"sv}}, 1, ".blp" },
+	{ {{"MD20"sv}}, 1, ".m2" },
+	{ {{"MD21"sv}}, 1, ".m2" },
+	{ {{"M3DT"sv}}, 1, ".m3" },
+	{ {{"SKIN"sv}}, 1, ".skin" },
+	// String concatenation required: \x00B would parse 'B' as hex digit (0x0B) in C++.
+	{ {{"\x01\x00\x00\x00""BIDA"sv}}, 1, ".bone" },
+	{ {{"SYHP\x02\x00\x00\x00"sv}}, 1, ".phys" },
+	{ {{"HSXG"sv}}, 1, ".bls" },
+	{ {{"RVXT"sv}}, 1, ".tex" },
+	{ {{"RIFF"sv}}, 1, ".avi" },
+	{ {{"WDC3"sv}}, 1, ".db2" },
+	{ {{"WDC4"sv}}, 1, ".db2" }
+}};
 
-	CACHE: {
-		DIR: path.join(DATA_DIR, 'cache'), // Cache directory.
-		SIZE: path.join(DATA_DIR, 'cache', 'cachesize'), // Cache size.
-		INTEGRITY_FILE: path.join(DATA_DIR, 'cache', 'cacheintegrity'), // Cache integrity file.
-		SIZE_UPDATE_DELAY: 5000, // Milliseconds to buffer cache size update writes.
-		DIR_BUILDS: path.join(DATA_DIR, 'cache', 'builds'), // Build-specific cache directory.
-		DIR_INDEXES: path.join(DATA_DIR, 'cache', 'indices'), // Cache for archive indexes.
-		DIR_DATA: path.join(DATA_DIR, 'cache', 'data'), // Cache for single data files.
-		DIR_DBD: path.join(DATA_DIR, 'cache', 'dbd'), // Cache for DBD files.
-		DIR_LISTFILE: path.join(DATA_DIR, 'cache', 'listfile'), // Master listfile cache directory.
-		BUILD_MANIFEST: 'manifest.json', // Build-specific manifest file.
-		BUILD_LISTFILE: 'listfile', // Build-specific listfile file.
-		BUILD_ENCODING: 'encoding', // Build-specific encoding file.
-		BUILD_ROOT: 'root', // Build-specific root file.
-		LISTFILE_DATA: 'listfile.txt', // Master listfile data file.
-		TACT_KEYS: path.join(DATA_DIR, 'tact.json'), // Tact key cache.
-		REALMLIST: path.join(DATA_DIR, 'realmlist.json'), // Realmlist cache.
-		SUBMIT_URL: 'https://www.kruithne.net/wow.export/v2/cache/submit',
-		FINALIZE_URL: 'https://www.kruithne.net/wow.export/v2/cache/finalize',
-		STATE_FILE: path.join(DATA_DIR, 'cache_state.json'),
-	},
-
-	CONFIG:  {
-		DEFAULT_PATH: path.join(INSTALL_PATH, 'src', 'default_config.jsonc'), // Path of default configuration file.
-		USER_PATH: path.join(DATA_DIR, 'config.json') // Path of user-defined configuration file.
-	},
-
-	UPDATE: {
-		DIRECTORY: path.join(INSTALL_PATH, '.update'), // Temporary directory for storing update data.
-		HELPER: 'updater' + (UPDATER_EXT[process.platform] || '') // Path to update helper application.
-	},
-
-	// product: Internal product ID.
-	// title: Label as it appears on the Battle.net launcher.
-	// tag: Specific version tag.
-	PRODUCTS: [
-		{ product: 'wow', title: 'World of Warcraft', tag: 'Retail' },
-		{ product: 'wowt', title: 'PTR: World of Warcraft', tag: 'PTR' },
-		{ product: 'wowxptr', title: 'PTR 2: World of Warcraft', tag: 'PTR 2'},
-		{ product: 'wow_beta', title: 'Beta: World of Warcraft', tag: 'Beta' },
-		{ product: 'wow_classic', title: 'World of Warcraft Classic', tag: 'Classic' },
-		{ product: 'wow_classic_beta', title: 'Beta: World of Warcraft Classic', tag: 'Classic Beta' },
-		{ product: 'wow_classic_ptr', title: 'PTR: World of Warcraft Classic', tag: 'Classic PTR' },
-		{ product: 'wow_classic_era', title: 'World of Warcraft Classic Era', tag: 'Classic Era' },
-		{ product: 'wow_classic_era_ptr', title: 'PTR: World of Warcraft Classic Era', tag: 'Classic Era PTR' },
-		{ product: 'wow_classic_titan', title: 'World of Warcraft Classic Titan Reforged', tag: 'Classic Titan' },
-		{ product: 'wow_anniversary', title: 'World of Warcraft Classic Anniversary', tag: 'Classic Anniversary' }
-	],
-
-	PATCH: {
-		REGIONS: [
-			{ tag: 'eu', name: 'Europe' },
-			{ tag: 'us', name: 'Americas' },
-			{ tag: 'kr', name: 'Korea' },
-			{ tag: 'tw', name: 'Taiwan' },
-			{ tag: 'cn', name: 'China' }
-		],
-		DEFAULT_REGION: 'us', // Region which is selected by default.
-		HOST: 'https://%s.version.battle.net/', // Blizzard patch server host.
-		HOST_CHINA: 'https://cn.version.battlenet.com.cn/', // Blizzard China patch server host.
-		SERVER_CONFIG: '/cdns', // CDN config file on patch server.
-		VERSION_CONFIG: '/versions' // Versions config file on patch server.
-	},
-
-	BUILD: {
-		MANIFEST: '.build.info', // File that contains version information in local installs.
-		DATA_DIR: 'Data'
-	},
-
-	TIME: {
-		DAY: 86400000 // Milliseconds in a day.
-	},
-
-	KINO: {
-		API_URL: 'https://www.kruithne.net/wow.export/v2/get_video',
-		POLL_INTERVAL: 20000
-	},
-
-	MAGIC: {
-		M3DT: 0x5444334D, // M3 model magic.
-		MD21: 0x3132444D, // M2 model magic.
-		MD20: 0x3032444D // M2 model magic (legacy)
-	},
-
-	FILE_IDENTIFIERS: [
-		{ match: 'OggS', ext: '.ogg' },
-		{ match: ['ID3', '\xFF\xFB', '\xFF\xF3', '\xFF\xF2'], ext: '.mp3' },
-		{ match: 'AFM2', ext: '.anim' },
-		{ match: 'AFSA', ext: '.anim' },
-		{ match: 'AFSB', ext: '.anim' },
-		{ match: 'BLP2', ext: '.blp' },
-		{ match: 'MD20', ext: '.m2' },
-		{ match: 'MD21', ext: '.m2' },
-		{ match: 'M3DT', ext: '.m3' },
-		{ match: 'SKIN', ext: '.skin' },
-		{ match: '\x01\x00\x00\x00BIDA', ext: '.bone' },
-		{ match: 'SYHP\x02\x00\x00\x00', ext: '.phys' },
-		{ match: 'HSXG', ext: '.bls' },
-		{ match: 'RVXT', ext: '.tex' },
-		{ match: 'RIFF', ext: '.avi' },
-		{ match: 'WDC3', ext: '.db2' },
-		{ match: 'WDC4', ext: '.db2' }
-	],
-
-	// nav button order (module names)
-	NAV_BUTTON_ORDER: [
-		'tab_models',
-		'tab_textures',
-		'tab_characters',
-		'tab_items',
-		'tab_item_sets',
-		'tab_decor',
-		'tab_creatures',
-		'tab_audio',
-		'tab_videos',
-		'tab_maps',
-		'tab_zones',
-		'tab_text',
-		'tab_fonts',
-		'tab_data',
-		'tab_models_legacy',
-		'legacy_tab_textures',
-		'legacy_tab_audio',
-		'legacy_tab_fonts',
-		'legacy_tab_data',
-		'legacy_tab_files'
-	],
-
-	// context menu item order (module names or static option IDs)
-	CONTEXT_MENU_ORDER: [
-		'tab_changelog',
-		'runtime-log',
-		'tab_raw',
-		'tab_install',
-		'settings',
-		'restart',
-		'reload-shaders',
-		'reload-style',
-		'reload-active',
-		'reload-all',
-		'tab_help'
-	],
-
-	FONT_PREVIEW_QUOTES: [
-		'You take no candle!',
-		'Keep your feet on the ground.',
-		'Me not that kind of orc!',
-		'Time is money, friend.',
-		'Something need doing?',
-		'For the Horde!',
-		'For the Alliance!',
-		'Light be with you.',
-		'Stay away from da voodoo.',
-		'My magic will tear you apart!',
-		'All I ever wanted to do was study!',
-		'Put your faith in the light...',
-		'Storm, earth, and fire! Heed my call!',
-		'Avast ye swabs, repel the invaders!'
-	],
-
-	EXPANSIONS: [
-		{ id: 0, name: 'Classic', shortName: 'Classic' },
-		{ id: 1, name: 'The Burning Crusade', shortName: 'TBC' },
-		{ id: 2, name: 'Wrath of the Lich King', shortName: 'WotLK' },
-		{ id: 3, name: 'Cataclysm', shortName: 'Cataclysm' },
-		{ id: 4, name: 'Mists of Pandaria', shortName: 'MoP' },
-		{ id: 5, name: 'Warlords of Draenor', shortName: 'WoD' },
-		{ id: 6, name: 'Legion', shortName: 'Legion' },
-		{ id: 7, name: 'Battle for Azeroth', shortName: 'BfA' },
-		{ id: 8, name: 'Shadowlands', shortName: 'SL' },
-		{ id: 9, name: 'Dragonflight', shortName: 'DF' },
-		{ id: 10, name: 'The War Within', shortName: 'TWW' },
-		{ id: 11, name: 'Midnight', shortName: 'Midnight' },
-		{ id: 12, name: 'The Last Titan', shortName: 'TLT' }
-	]
-};
+} // namespace constants
