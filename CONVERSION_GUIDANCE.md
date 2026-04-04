@@ -1,6 +1,6 @@
 # JS → C++ Conversion Guidance
 
-This document describes the recommended order and principles for converting the 188 `.cpp` files (currently JavaScript with `.cpp` extensions) into true C++.
+This document describes the recommended order and principles for converting the 189 `.cpp` files (currently JavaScript with `.cpp` extensions) into true C++.
 
 ## Key Principles
 
@@ -294,7 +294,7 @@ Self-contained subsystem for legacy WoW.
 | `src/js/components/map-viewer.cpp` | 1113 🔴 | core, constants |
 | `src/js/components/model-viewer-gl.cpp` | 516 | core, GLContext, CameraControlsGL, CharacterCameraControlsGL, GridRenderer, ShadowPlaneRenderer, EquipmentSlots |
 
-### Tier 22 — App Modules/Tabs (33 files)
+### Tier 22 — App Modules/Tabs (31 files)
 The main application screens. These depend on nearly everything above.
 
 | File | Lines | Local Dependencies |
@@ -368,6 +368,97 @@ Module registration, integrations, and entry point. Convert LAST.
 | 19 | 3D exporters | 7 | ~5,706 |
 | 20 | UI helpers | 9 | ~1,845 |
 | 21 | Vue components | 17 | ~4,884 |
-| 22 | App modules/tabs | 33 | ~12,410 |
+| 22 | App modules/tabs | 31 | ~12,410 |
 | 23 | Top-level glue | 6 | ~2,148 |
-| **Total** | | **188** | **~63,750** |
+| **Total** | | **189** | **~63,750** |
+
+---
+
+## Non-C++ Assets (also need attention)
+
+These files aren't `.cpp` but will need to be handled during or after conversion:
+
+| File | Notes |
+|------|-------|
+| `src/app.css` | Main stylesheet — will need C++ UI equivalent (ImGui theming, etc.) |
+| `src/default_config.jsonc` | Default config — keep as embedded resource or parse at runtime |
+| `src/js/showcase.json` | Home showcase data — embed as static data or resource file |
+| `src/shaders/*.shader` (9 files) | GLSL shaders — keep as-is, load from files or embed as string literals |
+| `src/help_docs/*.md` (11 files) | Help/KB articles — embed as resources or keep as external files |
+| `src/fonts/` (3 files) | Font files — embed or load at runtime |
+| `src/images/` | UI images/icons — embed or load at runtime |
+| `src/fa-icons/` | SVG icons — embed or load at runtime |
+
+---
+
+## Recommended Prompts for the Conversion Process
+
+Use these prompts when working with Copilot to do the conversion. Copy and adapt as needed.
+
+### Starting a conversion session (beginning of a tier)
+
+```
+Convert the following Tier N files to true C++ (they are currently JavaScript with .cpp extensions).
+Follow the CONVERSION_GUIDANCE.md in the repo for ordering and principles.
+After converting each file, update CONVERSION_TRACKER.md to mark it [x].
+
+Files to convert this session:
+- src/js/path/file1.cpp
+- src/js/path/file2.cpp
+- src/js/path/file3.cpp
+```
+
+### Converting a single file
+
+```
+Convert src/js/path/filename.cpp from JavaScript to true C++.
+- Read the current JS code and understand what it does
+- Create a proper C++ header (.h) and implementation (.cpp)
+- Replace require() with #include
+- Replace module.exports with proper class/namespace exports
+- Keep the same logic and behavior
+- After converting, mark it [x] in CONVERSION_TRACKER.md
+```
+
+### Converting a batch of small related files (recommended for small files <100 lines)
+
+```
+Convert these related files from JavaScript to true C++. They are all in the same tier
+and can be done together:
+- src/js/path/file1.cpp (31 lines)
+- src/js/path/file2.cpp (14 lines)
+- src/js/path/file3.cpp (39 lines)
+
+Follow CONVERSION_GUIDANCE.md. Update CONVERSION_TRACKER.md after each file.
+```
+
+### Mid-conversion check-in
+
+```
+Check the CONVERSION_TRACKER.md and tell me:
+1. What tier are we currently on?
+2. How many files remain in this tier?
+3. What files should be converted next?
+```
+
+### After completing a tier
+
+```
+We've finished Tier N. Please:
+1. Verify all Tier N files are marked [x] in CONVERSION_TRACKER.md
+2. Update the progress count at the top
+3. List any issues or TODOs discovered during conversion
+4. Show me what's next in Tier N+1
+```
+
+### How many files per prompt?
+
+| File size | Recommendation |
+|-----------|---------------|
+| **< 50 lines** | Batch 5–10 files per prompt |
+| **50–200 lines** | Batch 2–4 files per prompt |
+| **200–500 lines** | 1–2 files per prompt |
+| **500–800 lines** | 1 file per prompt |
+| **800+ lines** (🔴) | 1 file per prompt, possibly split into multiple prompts |
+
+**General rule**: Ask for 1 file at a time for anything complex or >200 lines. Batch small/simple files together to save time. Always verify the conversion compiles before moving on.

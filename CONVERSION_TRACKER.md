@@ -9,7 +9,7 @@
 - `- [x]` Converted and compiles
 - `- [✓]` Converted, compiles, and tested/verified
 
-**Progress:** 0 / 188 files converted
+**Progress:** 0 / 189 files converted
 
 ---
 
@@ -231,7 +231,7 @@
 - [ ] `src/js/components/map-viewer.cpp` (1113 lines) 🔴
 - [ ] `src/js/components/model-viewer-gl.cpp` (516 lines)
 
-## Tier 22 — App Modules/Tabs (33 files)
+## Tier 22 — App Modules/Tabs (31 files)
 
 - [ ] `src/js/modules/tab_home.cpp` (30 lines)
 - [ ] `src/js/modules/legacy_tab_home.cpp` (30 lines)
