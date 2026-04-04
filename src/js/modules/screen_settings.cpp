@@ -166,7 +166,6 @@ module.exports = {
 			<div>
 				<h1>Export Additional UV Layers</h1>
 				<p>If enabled, additional UV layers will be exported for M2/WMO models, included as non-standard properties (vt2, vt3, etc) in OBJ files.</p>
-				<p>Use the wow.export Blender add-on to import OBJ models with additional UV layers.</p>
 				<label class="ui-checkbox">
 					<input type="checkbox" v-model="$core.view.configEdit.modelsExportUV2"/>
 					<span>Enable</span>

@@ -694,14 +694,8 @@ document.addEventListener('click', function(e) {
 			} else {
 				core.hideLoadingScreen();
 				modules.source_select.setActive();
-
-				// No update available, start checking Blender add-on.
-				modules.tab_blender.checkLocalVersion();
 			}
 		});
-	} else {
-		// debug mode or auto-update disabled, skip to blender add-on check
-		modules.tab_blender.checkLocalVersion();
 	}
 
 	// Load what's new HTML on app start

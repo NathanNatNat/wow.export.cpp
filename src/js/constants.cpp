@@ -6,7 +6,6 @@
 
 // This file defines constants used throughout the application.
 const path = require('path');
-const os = require('os');
 
 // on macOS, process.execPath points to the renderer helper binary deep inside
 // the framework, not the app root. use __dirname (app.nw/src/) instead.
@@ -24,21 +23,6 @@ fs.mkdirSync(CONFIG_DIR, { recursive: true });
 fs.mkdirSync(LOG_DIR, { recursive: true });
 
 const UPDATER_EXT = { win32: '.exe', darwin: '.app' };
-
-const getBlenderBaseDir = () => {
-	const platform = os.platform();
-	const home_dir = os.homedir();
-	
-	switch (platform) {
-		case 'win32':
-			return path.join(process.env.APPDATA, 'Blender Foundation', 'Blender');
-		case 'darwin': // macOS
-			return path.join(home_dir, 'Library', 'Application Support', 'Blender');
-		case 'linux':
-		default:
-			return path.join(home_dir, '.config', 'blender');
-	}
-};
 
 module.exports = {
 	INSTALL_PATH, // Path to the application installation.
@@ -60,15 +44,6 @@ module.exports = {
 
 	// User-agent used for HTTP/HTTPs requests.
 	USER_AGENT: 'wow.export (' + (nw.App.manifest.version) + ')',
-
-	// Defines Blender constants.
-	BLENDER: {
-		DIR: getBlenderBaseDir(), // Blender app-data directory (cross-platform).
-		ADDON_DIR: path.join('scripts', 'addons', 'io_scene_wowobj'), // Install path for add-ons
-		LOCAL_DIR: path.join(INSTALL_PATH, 'addon', 'io_scene_wowobj'), // Local copy of our Blender add-on.
-		ADDON_ENTRY: '__init__.py', // Add-on entry point that contains the version.
-		MIN_VER: 2.8 // Minimum version supported by our add-on.
-	},
 
 	// Defines game-specific constants.
 	GAME: {
@@ -209,7 +184,6 @@ module.exports = {
 
 	// context menu item order (module names or static option IDs)
 	CONTEXT_MENU_ORDER: [
-		'tab_blender',
 		'tab_changelog',
 		'runtime-log',
 		'tab_raw',

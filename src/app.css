@@ -448,36 +448,6 @@ body {
 	opacity: 1;
 }
 
-#blender-info {
-	position: absolute;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	display: flex;
-	justify-content: center;
-	align-items: center;
-	flex-direction: column;
-}
-#blender-info-header {
-	text-align: center;
-}
-#blender-info-header h1 {
-	margin-bottom: 10px;
-}
-#blender-info-header p {
-	margin-bottom: 20px;
-	width: 900px;
-}
-#blender-info-buttons {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-}
-#blender-info-buttons input {
-	margin: 0 10px;
-}
-
 #nav {
 	display: flex;
 	align-items: center;
