@@ -3,361 +3,526 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const { exec } = require('child_process');
-const log = require('./log');
-const generics = require('./generics');
+
+#include "gpu-info.h"
+#include "log.h"
+#include "generics.h"
+
+#include <string>
+#include <string_view>
+#include <vector>
+#include <format>
+#include <cstdio>
+#include <cstdlib>
+#include <array>
+#include <optional>
+#include <regex>
+#include <stdexcept>
+
+#include <glad/gl.h>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <cstring>
+#endif
+
+namespace {
 
 /**
- * Get GPU renderer/vendor info and capabilities via WebGL.
- * @returns {object | null}
+ * GPU capabilities structure.
  */
-const get_webgl_info = () => {
-	try {
-		const canvas = document.createElement('canvas');
-		const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+struct GLCaps {
+	int max_tex_size = 0;
+	int max_cube_size = 0;
+	int max_varyings = 0;
+	int max_vert_uniforms = 0;
+	int max_frag_uniforms = 0;
+	int max_vert_attribs = 0;
+	int max_tex_units = 0;
+	int max_vert_tex_units = 0;
+	int max_combined_tex_units = 0;
+	int max_renderbuffer = 0;
+	std::array<int, 2> max_viewport = {0, 0};
+};
 
-		if (!gl)
-			return null;
+/**
+ * OpenGL info result structure.
+ */
+struct GLInfo {
+	std::string vendor;
+	std::string renderer;
+	GLCaps caps;
+	std::vector<std::string> extensions;
+	std::string error;
+};
 
-		const result = {
-			vendor: null,
-			renderer: null,
-			caps: {},
-			extensions: []
-		};
-
-		// vendor/renderer
-		const debug_info = gl.getExtension('WEBGL_debug_renderer_info');
-		if (debug_info) {
-			result.vendor = gl.getParameter(debug_info.UNMASKED_VENDOR_WEBGL);
-			result.renderer = gl.getParameter(debug_info.UNMASKED_RENDERER_WEBGL);
-		}
-
-		// capability limits
-		result.caps = {
-			max_tex_size: gl.getParameter(gl.MAX_TEXTURE_SIZE),
-			max_cube_size: gl.getParameter(gl.MAX_CUBE_MAP_TEXTURE_SIZE),
-			max_varyings: gl.getParameter(gl.MAX_VARYING_VECTORS),
-			max_vert_uniforms: gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS),
-			max_frag_uniforms: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),
-			max_vert_attribs: gl.getParameter(gl.MAX_VERTEX_ATTRIBS),
-			max_tex_units: gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS),
-			max_vert_tex_units: gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS),
-			max_combined_tex_units: gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS),
-			max_renderbuffer: gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
-			max_viewport: gl.getParameter(gl.MAX_VIEWPORT_DIMS)
-		};
-
-		// extensions
-		result.extensions = gl.getSupportedExtensions() || [];
-
-		return result;
-	} catch (e) {
-		return { error: e.message };
-	}
+/**
+ * Platform GPU info structure.
+ */
+struct PlatformGPUInfo {
+	std::string name = "Unknown";
+	std::string vram = "Unknown";
+	std::string driver = "Unknown";
 };
 
 /**
  * Execute a shell command and return stdout.
- * @param {string} cmd
- * @returns {Promise<string>}
+ * @param cmd Command to execute.
+ * @returns Trimmed stdout output.
  */
-const exec_cmd = (cmd) => {
-	return new Promise((resolve, reject) => {
-		exec(cmd, { timeout: 5000 }, (error, stdout, stderr) => {
-			if (error)
-				reject(error);
-			else
-				resolve(stdout.trim());
-		});
-	});
-};
+std::string exec_cmd(const std::string& cmd) {
+#ifdef _WIN32
+	FILE* pipe = _popen(cmd.c_str(), "r");
+#else
+	FILE* pipe = popen(cmd.c_str(), "r");
+#endif
+	if (!pipe)
+		throw std::runtime_error("Failed to execute command");
+
+	std::string result;
+	std::array<char, 256> buffer;
+
+	while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr)
+		result += buffer.data();
+
+#ifdef _WIN32
+	int status = _pclose(pipe);
+#else
+	int status = pclose(pipe);
+#endif
+
+	if (status != 0)
+		throw std::runtime_error("Command failed with exit code " + std::to_string(status));
+
+	// trim whitespace
+	auto start = result.find_first_not_of(" \t\n\r");
+	auto end = result.find_last_not_of(" \t\n\r");
+	if (start == std::string::npos)
+		return "";
+	return result.substr(start, end - start + 1);
+}
 
 /**
  * Parse VRAM bytes to human-readable format.
- * @param {number} bytes
- * @returns {string}
+ * @param bytes Number of bytes.
+ * @returns Formatted string or "Unknown".
  */
-const format_vram = (bytes) => {
-	if (!bytes || bytes <= 0)
-		return 'Unknown';
+std::string format_vram(int64_t bytes) {
+	if (bytes <= 0)
+		return "Unknown";
 
-	return generics.filesize(bytes);
-};
+	return generics::filesize(static_cast<double>(bytes));
+}
 
 /**
- * Get accurate VRAM from Windows registry.
- * @returns {Promise<number | null>} VRAM in bytes or null
+ * Get GPU renderer/vendor info and capabilities via OpenGL.
+ * @returns GLInfo struct with GPU information.
  */
-const get_windows_registry_vram = async () => {
+GLInfo get_gl_info() {
+	GLInfo result;
+
+	try {
+		// vendor/renderer
+		const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+		const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+
+		if (vendor)
+			result.vendor = vendor;
+		if (renderer)
+			result.renderer = renderer;
+
+		// capability limits
+		glGetIntegerv(GL_MAX_TEXTURE_SIZE, &result.caps.max_tex_size);
+		glGetIntegerv(GL_MAX_CUBE_MAP_TEXTURE_SIZE, &result.caps.max_cube_size);
+		glGetIntegerv(GL_MAX_VARYING_VECTORS, &result.caps.max_varyings);
+		glGetIntegerv(GL_MAX_VERTEX_UNIFORM_COMPONENTS, &result.caps.max_vert_uniforms);
+		glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, &result.caps.max_frag_uniforms);
+		glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &result.caps.max_vert_attribs);
+		glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &result.caps.max_tex_units);
+		glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &result.caps.max_vert_tex_units);
+		glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &result.caps.max_combined_tex_units);
+		glGetIntegerv(GL_MAX_RENDERBUFFER_SIZE, &result.caps.max_renderbuffer);
+		glGetIntegerv(GL_MAX_VIEWPORT_DIMS, result.caps.max_viewport.data());
+
+		// extensions
+		int num_extensions = 0;
+		glGetIntegerv(GL_NUM_EXTENSIONS, &num_extensions);
+		result.extensions.reserve(static_cast<size_t>(num_extensions));
+
+		for (int i = 0; i < num_extensions; ++i) {
+			const char* ext = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i)));
+			if (ext)
+				result.extensions.emplace_back(ext);
+		}
+	} catch (const std::exception& e) {
+		result.error = e.what();
+	}
+
+	return result;
+}
+
+#ifdef _WIN32
+/**
+ * Get accurate VRAM from Windows registry.
+ * @returns VRAM in bytes, or -1 on failure.
+ */
+int64_t get_windows_registry_vram() {
 	try {
 		// query registry for qwMemorySize (64-bit accurate VRAM value)
-		const ps_cmd = 'powershell -Command "Get-ItemProperty -Path \'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0*\' -Name \'HardwareInformation.qwMemorySize\' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty \'HardwareInformation.qwMemorySize\' | Select-Object -First 1"';
-		const output = await exec_cmd(ps_cmd);
-		const vram = parseInt(output.trim(), 10);
+		std::string output = exec_cmd(
+			"powershell -Command \"Get-ItemProperty -Path "
+			"'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0*' "
+			"-Name 'HardwareInformation.qwMemorySize' -ErrorAction SilentlyContinue | "
+			"Select-Object -ExpandProperty 'HardwareInformation.qwMemorySize' | "
+			"Select-Object -First 1\""
+		);
 
-		if (vram > 0)
-			return vram;
-	} catch {
+		// trim and parse
+		auto start = output.find_first_not_of(" \t\n\r");
+		auto end = output.find_last_not_of(" \t\n\r");
+		if (start != std::string::npos) {
+			std::string trimmed = output.substr(start, end - start + 1);
+			int64_t vram = std::stoll(trimmed);
+			if (vram > 0)
+				return vram;
+		}
+	} catch (...) {
 		// registry query failed, fall back to WMI
 	}
 
-	return null;
-};
+	return -1;
+}
 
 /**
  * Get GPU info on Windows via WMIC/PowerShell.
- * @returns {Promise<{ name: string, vram: string, driver: string } | null>}
+ * @returns PlatformGPUInfo or std::nullopt on failure.
  */
-const get_windows_gpu_info = async () => {
+std::optional<PlatformGPUInfo> get_windows_gpu_info() {
 	try {
-		const output = await exec_cmd('wmic path win32_VideoController get Name,AdapterRAM,DriverVersion /format:csv');
+		std::string output = exec_cmd("wmic path win32_VideoController get Name,AdapterRAM,DriverVersion /format:csv");
 
 		// split by both \r\n and \n, filter empty lines
-		const lines = output.split(/\r?\n/).filter(line => line.trim().length > 0);
+		std::vector<std::string> lines;
+		std::string line;
+		for (char c : output) {
+			if (c == '\n') {
+				// trim \r
+				if (!line.empty() && line.back() == '\r')
+					line.pop_back();
+				// trim whitespace
+				auto s = line.find_first_not_of(" \t");
+				if (s != std::string::npos)
+					lines.push_back(line.substr(s));
+				line.clear();
+			} else {
+				line += c;
+			}
+		}
+		if (!line.empty()) {
+			auto s = line.find_first_not_of(" \t");
+			if (s != std::string::npos)
+				lines.push_back(line.substr(s));
+		}
 
-		if (lines.length < 2) {
-			log.write('GPU: WMIC returned insufficient data (%d lines)', lines.length);
-			return null;
+		if (lines.size() < 2) {
+			logging::write(std::format("GPU: WMIC returned insufficient data ({} lines)", lines.size()));
+			return std::nullopt;
 		}
 
 		// csv format: Node,AdapterRAM,DriverVersion,Name
-		const data_line = lines[1].trim();
-		const parts = data_line.split(',');
+		const std::string& data_line = lines[1];
+		std::vector<std::string> parts;
+		std::string part;
+		for (char c : data_line) {
+			if (c == ',') {
+				parts.push_back(part);
+				part.clear();
+			} else {
+				part += c;
+			}
+		}
+		parts.push_back(part);
 
-		if (parts.length < 4) {
-			log.write('GPU: WMIC CSV parse failed, expected 4 fields, got %d', parts.length);
-			return null;
+		if (parts.size() < 4) {
+			logging::write(std::format("GPU: WMIC CSV parse failed, expected 4 fields, got {}", parts.size()));
+			return std::nullopt;
 		}
 
-		let adapter_ram = parseInt(parts[1], 10);
-		const driver_version = parts[2];
-		const name = parts[3];
+		int64_t adapter_ram = 0;
+		try {
+			adapter_ram = std::stoll(parts[1]);
+		} catch (...) {}
+
+		const std::string& driver_version = parts[2];
+		const std::string& name = parts[3];
 
 		// wmi AdapterRAM is 32-bit, try registry for accurate value on >4GB GPUs
-		const registry_vram = await get_windows_registry_vram();
-		if (registry_vram !== null)
+		int64_t registry_vram = get_windows_registry_vram();
+		if (registry_vram > 0)
 			adapter_ram = registry_vram;
 
-		return {
-			name: name || 'Unknown',
-			vram: format_vram(adapter_ram),
-			driver: driver_version || 'Unknown'
-		};
-	} catch (e) {
-		log.write('GPU: Windows WMIC query failed: %s', e.message);
-		return null;
+		PlatformGPUInfo info;
+		info.name = name.empty() ? "Unknown" : name;
+		info.vram = format_vram(adapter_ram);
+		info.driver = driver_version.empty() ? "Unknown" : driver_version;
+		return info;
+	} catch (const std::exception& e) {
+		logging::write(std::format("GPU: Windows WMIC query failed: {}", e.what()));
+		return std::nullopt;
 	}
-};
+}
+#endif // _WIN32
 
+#ifdef __linux__
 /**
  * Get GPU info on Linux.
- * @returns {Promise<{ name: string, vram: string, driver: string } | null>}
+ * @returns PlatformGPUInfo with available information.
  */
-const get_linux_gpu_info = async () => {
-	const result = { name: 'Unknown', vram: 'Unknown', driver: 'Unknown' };
+std::optional<PlatformGPUInfo> get_linux_gpu_info() {
+	PlatformGPUInfo result;
 
 	// gpu name via lspci
 	try {
-		const lspci_output = await exec_cmd('lspci | grep -i vga');
-		const match = lspci_output.match(/: (.+)$/m);
-		if (match)
-			result.name = match[1].trim();
-	} catch (e) {
-		log.write('GPU: Linux lspci query failed: %s', e.message);
+		std::string lspci_output = exec_cmd("lspci | grep -i vga");
+		std::regex re(": (.+)$", std::regex::multiline);
+		std::smatch match;
+		if (std::regex_search(lspci_output, match, re))
+			result.name = match[1].str();
+	} catch (const std::exception& e) {
+		logging::write(std::format("GPU: Linux lspci query failed: {}", e.what()));
 	}
 
 	// nvidia vram + driver
 	try {
-		const nvidia_mem = await exec_cmd('nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits');
-		const mem_mb = parseInt(nvidia_mem, 10);
+		std::string nvidia_mem = exec_cmd("nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits");
+		int64_t mem_mb = std::stoll(nvidia_mem);
 		if (mem_mb > 0)
 			result.vram = format_vram(mem_mb * 1024 * 1024);
 
-		const nvidia_driver = await exec_cmd('nvidia-smi --query-gpu=driver_version --format=csv,noheader');
-		if (nvidia_driver)
-			result.driver = nvidia_driver.trim();
-	} catch {
+		std::string nvidia_driver = exec_cmd("nvidia-smi --query-gpu=driver_version --format=csv,noheader");
+		if (!nvidia_driver.empty())
+			result.driver = nvidia_driver;
+	} catch (...) {
 		// nvidia-smi not available, try glxinfo
 		try {
-			const glx_output = await exec_cmd('glxinfo 2>/dev/null | grep -E "(OpenGL version|Video memory)"');
-			const version_match = glx_output.match(/OpenGL version string: (.+)/);
-			if (version_match)
-				result.driver = version_match[1].trim();
+			std::string glx_output = exec_cmd("glxinfo 2>/dev/null | grep -E \"(OpenGL version|Video memory)\"");
 
-			const mem_match = glx_output.match(/Video memory: (\d+)/);
-			if (mem_match)
-				result.vram = format_vram(parseInt(mem_match[1], 10) * 1024 * 1024);
-		} catch {
+			std::regex version_re("OpenGL version string: (.+)");
+			std::smatch version_match;
+			if (std::regex_search(glx_output, version_match, version_re))
+				result.driver = version_match[1].str();
+
+			std::regex mem_re("Video memory: (\\d+)");
+			std::smatch mem_match;
+			if (std::regex_search(glx_output, mem_match, mem_re)) {
+				int64_t mem_mb = std::stoll(mem_match[1].str());
+				result.vram = format_vram(mem_mb * 1024 * 1024);
+			}
+		} catch (...) {
 			// glxinfo not available
 		}
 	}
 
 	return result;
-};
-
-/**
- * Get GPU info on macOS via system_profiler.
- * @returns {Promise<{ name: string, vram: string, driver: string } | null>}
- */
-const get_macos_gpu_info = async () => {
-	try {
-		const output = await exec_cmd('system_profiler SPDisplaysDataType');
-		const result = { name: 'Unknown', vram: 'Unknown', driver: 'Unknown' };
-
-		const chipset_match = output.match(/Chipset Model: (.+)/);
-		if (chipset_match)
-			result.name = chipset_match[1].trim();
-
-		// vram can be "VRAM (Total):" or "VRAM (Dynamic, Max):"
-		const vram_match = output.match(/VRAM \([^)]+\): (.+)/);
-		if (vram_match)
-			result.vram = vram_match[1].trim();
-
-		const metal_match = output.match(/Metal.*: (.+)/);
-		if (metal_match)
-			result.driver = 'Metal ' + metal_match[1].trim();
-
-		return result;
-	} catch (e) {
-		log.write('GPU: macOS system_profiler query failed: %s', e.message);
-		return null;
-	}
-};
+}
+#endif // __linux__
 
 /**
  * Get platform-specific GPU info (VRAM, driver version).
- * @returns {Promise<{ name: string, vram: string, driver: string } | null>}
+ * @returns PlatformGPUInfo or std::nullopt on failure.
  */
-const get_platform_gpu_info = async () => {
-	const platform = process.platform;
-
-	if (platform === 'win32')
-		return get_windows_gpu_info();
-	else if (platform === 'linux')
-		return get_linux_gpu_info();
-	else if (platform === 'darwin')
-		return get_macos_gpu_info();
-
-	return null;
-};
+std::optional<PlatformGPUInfo> get_platform_gpu_info() {
+#ifdef _WIN32
+	return get_windows_gpu_info();
+#elif defined(__linux__)
+	return get_linux_gpu_info();
+#else
+	return std::nullopt;
+#endif
+}
 
 /**
  * Format extension list into compact categories.
- * @param {string[]} extensions
- * @returns {string}
+ * @param extensions List of GL extension strings.
+ * @returns Formatted compact string.
  */
-const format_extensions = (extensions) => {
-	const categories = {
-		compressed: [],
-		float: [],
-		depth: [],
-		instanced: false,
-		vao: false,
-		anisotropic: false,
-		draw_buffers: false
-	};
+std::string format_extensions(const std::vector<std::string>& extensions) {
+	std::vector<std::string> compressed;
+	std::vector<std::string> float_exts;
+	std::vector<std::string> depth;
+	bool instanced = false;
+	bool vao = false;
+	bool anisotropic = false;
+	bool draw_buffers = false;
 
-	for (const ext of extensions) {
-		if (ext.includes('compressed_texture'))
-			categories.compressed.push(ext.replace('WEBGL_compressed_texture_', '').replace('EXT_texture_compression_', ''));
-		else if (ext.includes('float') || ext.includes('half_float'))
-			categories.float.push(ext.replace('OES_texture_', '').replace('WEBGL_color_buffer_', 'cb_').replace('EXT_color_buffer_', 'cb_'));
-		else if (ext.includes('depth'))
-			categories.depth.push(ext.replace('WEBGL_', '').replace('EXT_', ''));
-		else if (ext.includes('instanced'))
-			categories.instanced = true;
-		else if (ext.includes('vertex_array_object'))
-			categories.vao = true;
-		else if (ext.includes('anisotropic'))
-			categories.anisotropic = true;
-		else if (ext.includes('draw_buffers'))
-			categories.draw_buffers = true;
+	for (const auto& ext : extensions) {
+		if (ext.find("compressed_texture") != std::string::npos) {
+			std::string name = ext;
+			// strip common GL extension prefixes
+			auto pos = name.find("GL_ARB_compressed_texture_");
+			if (pos != std::string::npos) { name = name.substr(pos + 26); }
+			else {
+				pos = name.find("GL_EXT_texture_compression_");
+				if (pos != std::string::npos) { name = name.substr(pos + 27); }
+				else {
+					pos = name.find("compressed_texture_");
+					if (pos != std::string::npos) { name = name.substr(pos + 19); }
+				}
+			}
+			compressed.push_back(name);
+		} else if (ext.find("float") != std::string::npos || ext.find("half_float") != std::string::npos) {
+			std::string name = ext;
+			auto pos = name.find("GL_ARB_");
+			if (pos != std::string::npos) { name = name.substr(pos + 7); }
+			else {
+				pos = name.find("GL_EXT_");
+				if (pos != std::string::npos) { name = name.substr(pos + 7); }
+				else {
+					pos = name.find("GL_OES_");
+					if (pos != std::string::npos) { name = name.substr(pos + 7); }
+				}
+			}
+			// abbreviate color_buffer to cb_
+			auto cb_pos = name.find("color_buffer_");
+			if (cb_pos != std::string::npos)
+				name = "cb_" + name.substr(cb_pos + 13);
+			float_exts.push_back(name);
+		} else if (ext.find("depth") != std::string::npos) {
+			std::string name = ext;
+			auto pos = name.find("GL_ARB_");
+			if (pos != std::string::npos) { name = name.substr(pos + 7); }
+			else {
+				pos = name.find("GL_EXT_");
+				if (pos != std::string::npos) { name = name.substr(pos + 7); }
+			}
+			depth.push_back(name);
+		} else if (ext.find("instanced") != std::string::npos) {
+			instanced = true;
+		} else if (ext.find("vertex_array_object") != std::string::npos) {
+			vao = true;
+		} else if (ext.find("anisotropic") != std::string::npos) {
+			anisotropic = true;
+		} else if (ext.find("draw_buffers") != std::string::npos) {
+			draw_buffers = true;
+		}
 	}
 
-	const parts = [];
+	std::vector<std::string> parts;
 
-	if (categories.compressed.length > 0)
-		parts.push('tex:' + categories.compressed.join('/'));
+	if (!compressed.empty()) {
+		std::string joined;
+		for (size_t i = 0; i < compressed.size(); ++i) {
+			if (i > 0) joined += '/';
+			joined += compressed[i];
+		}
+		parts.push_back("tex:" + joined);
+	}
 
-	if (categories.float.length > 0)
-		parts.push('float:' + categories.float.join('/'));
+	if (!float_exts.empty()) {
+		std::string joined;
+		for (size_t i = 0; i < float_exts.size(); ++i) {
+			if (i > 0) joined += '/';
+			joined += float_exts[i];
+		}
+		parts.push_back("float:" + joined);
+	}
 
-	if (categories.depth.length > 0)
-		parts.push('depth:' + categories.depth.join('/'));
+	if (!depth.empty()) {
+		std::string joined;
+		for (size_t i = 0; i < depth.size(); ++i) {
+			if (i > 0) joined += '/';
+			joined += depth[i];
+		}
+		parts.push_back("depth:" + joined);
+	}
 
-	const flags = [];
-	if (categories.instanced)
-		flags.push('instanced');
-	if (categories.vao)
-		flags.push('vao');
-	if (categories.anisotropic)
-		flags.push('aniso');
-	if (categories.draw_buffers)
-		flags.push('mrt');
+	std::vector<std::string> flags;
+	if (instanced)
+		flags.emplace_back("instanced");
+	if (vao)
+		flags.emplace_back("vao");
+	if (anisotropic)
+		flags.emplace_back("aniso");
+	if (draw_buffers)
+		flags.emplace_back("mrt");
 
-	if (flags.length > 0)
-		parts.push(flags.join(','));
+	if (!flags.empty()) {
+		std::string joined;
+		for (size_t i = 0; i < flags.size(); ++i) {
+			if (i > 0) joined += ',';
+			joined += flags[i];
+		}
+		parts.push_back(joined);
+	}
 
-	return parts.join(' | ');
-};
+	std::string result;
+	for (size_t i = 0; i < parts.size(); ++i) {
+		if (i > 0) result += " | ";
+		result += parts[i];
+	}
+	return result;
+}
 
 /**
  * Format capabilities into compact string.
- * @param {object} caps
- * @returns {string}
+ * @param caps GL capabilities struct.
+ * @returns Formatted compact string.
  */
-const format_caps = (caps) => {
-	const viewport = Array.isArray(caps.max_viewport) ? caps.max_viewport.join('x') : caps.max_viewport;
+std::string format_caps(const GLCaps& caps) {
+	std::string viewport = std::to_string(caps.max_viewport[0]) + "x" + std::to_string(caps.max_viewport[1]);
 
-	return [
-		'tex:' + caps.max_tex_size,
-		'cube:' + caps.max_cube_size,
-		'varyings:' + caps.max_varyings,
-		'uniforms:' + caps.max_vert_uniforms + 'v/' + caps.max_frag_uniforms + 'f',
-		'attribs:' + caps.max_vert_attribs,
-		'texunits:' + caps.max_tex_units + '/' + caps.max_combined_tex_units,
-		'rb:' + caps.max_renderbuffer,
-		'vp:' + viewport
-	].join(' ');
-};
+	return std::format("tex:{} cube:{} varyings:{} uniforms:{}v/{}f attribs:{} texunits:{}/{} rb:{} vp:{}",
+		caps.max_tex_size,
+		caps.max_cube_size,
+		caps.max_varyings,
+		caps.max_vert_uniforms,
+		caps.max_frag_uniforms,
+		caps.max_vert_attribs,
+		caps.max_tex_units,
+		caps.max_combined_tex_units,
+		caps.max_renderbuffer,
+		viewport
+	);
+}
 
-/**
- * Log GPU diagnostic information asynchronously.
- * Errors are logged rather than thrown.
- */
-const log_gpu_info = async () => {
-	const webgl = get_webgl_info();
-	let platform_info = null;
+} // anonymous namespace
+
+namespace gpu_info {
+
+void log_gpu_info() {
+	GLInfo gl = get_gl_info();
+	std::optional<PlatformGPUInfo> platform_info;
 
 	try {
-		platform_info = await get_platform_gpu_info();
-	} catch (e) {
-		log.write('GPU: Platform query failed: %s', e.message);
+		platform_info = get_platform_gpu_info();
+	} catch (const std::exception& e) {
+		logging::write(std::format("GPU: Platform query failed: {}", e.what()));
 	}
 
 	// log everything together
-	if (webgl?.error) {
-		log.write('GPU: WebGL query failed: %s', webgl.error);
-	} else if (webgl) {
-		if (webgl.renderer)
-			log.write('GPU: %s (%s)', webgl.renderer, webgl.vendor);
-		else
-			log.write('GPU: WebGL debug info unavailable');
-
-		if (webgl.caps)
-			log.write('GPU caps: %s', format_caps(webgl.caps));
-
-		if (webgl.extensions?.length > 0)
-			log.write('GPU ext (%d): %s', webgl.extensions.length, format_extensions(webgl.extensions));
+	if (!gl.error.empty()) {
+		logging::write(std::format("GPU: GL query failed: {}", gl.error));
 	} else {
-		log.write('GPU: WebGL unavailable');
+		if (!gl.renderer.empty())
+			logging::write(std::format("GPU: {} ({})", gl.renderer, gl.vendor));
+		else
+			logging::write("GPU: GL debug info unavailable");
+
+		if (gl.caps.max_tex_size > 0)
+			logging::write(std::format("GPU caps: {}", format_caps(gl.caps)));
+
+		if (!gl.extensions.empty())
+			logging::write(std::format("GPU ext ({}): {}", gl.extensions.size(), format_extensions(gl.extensions)));
 	}
 
-	if (platform_info)
-		log.write('GPU: VRAM %s, Driver %s', platform_info.vram, platform_info.driver);
+	if (platform_info.has_value())
+		logging::write(std::format("GPU: VRAM {}, Driver {}", platform_info->vram, platform_info->driver));
 	else
-		log.write('GPU: Platform-specific info unavailable');
-};
+		logging::write("GPU: Platform-specific info unavailable");
+}
 
-module.exports = { log_gpu_info };
+} // namespace gpu_info
