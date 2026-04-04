@@ -33,18 +33,18 @@ std::pair<uint32_t, uint32_t> jenkins96(std::span<const uint8_t> k, uint32_t ini
 	}
 
 	if (len > 0) { // final mix only if len > 0
-		switch (len) { // incorporate trailing bytes before fmix (intentional fall-through)
-			case 12: c += static_cast<uint32_t>(k[o+11]) << 24; [[fallthrough]];
-			case 11: c += static_cast<uint32_t>(k[o+10]) << 16; [[fallthrough]];
-			case 10: c += static_cast<uint32_t>(k[o+9]) << 8;   [[fallthrough]];
-			case 9:  c += static_cast<uint32_t>(k[o+8]);         [[fallthrough]];
-			case 8:  b += static_cast<uint32_t>(k[o+7]) << 24;  [[fallthrough]];
-			case 7:  b += static_cast<uint32_t>(k[o+6]) << 16;  [[fallthrough]];
-			case 6:  b += static_cast<uint32_t>(k[o+5]) << 8;   [[fallthrough]];
-			case 5:  b += static_cast<uint32_t>(k[o+4]);         [[fallthrough]];
-			case 4:  a += static_cast<uint32_t>(k[o+3]) << 24;  [[fallthrough]];
-			case 3:  a += static_cast<uint32_t>(k[o+2]) << 16;  [[fallthrough]];
-			case 2:  a += static_cast<uint32_t>(k[o+1]) << 8;   [[fallthrough]];
+		switch (len) { // incorporate trailing bytes before fmix
+			case 12: c += static_cast<uint32_t>(k[o+11]) << 24; break;
+			case 11: c += static_cast<uint32_t>(k[o+10]) << 16; break;
+			case 10: c += static_cast<uint32_t>(k[o+9]) << 8;   break;
+			case 9:  c += static_cast<uint32_t>(k[o+8]);         break;
+			case 8:  b += static_cast<uint32_t>(k[o+7]) << 24;  break;
+			case 7:  b += static_cast<uint32_t>(k[o+6]) << 16;  break;
+			case 6:  b += static_cast<uint32_t>(k[o+5]) << 8;   break;
+			case 5:  b += static_cast<uint32_t>(k[o+4]);         break;
+			case 4:  a += static_cast<uint32_t>(k[o+3]) << 24;  break;
+			case 3:  a += static_cast<uint32_t>(k[o+2]) << 16;  break;
+			case 2:  a += static_cast<uint32_t>(k[o+1]) << 8;   break;
 			case 1:  a += static_cast<uint32_t>(k[o]);           break;
 		}
 
