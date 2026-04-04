@@ -3,354 +3,274 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const util = require('util');
-const BufferWrapper = require('../buffer');
-const Salsa20 = require('./salsa20');
-const tactKeys = require('./tact-keys');
+#include "blte-reader.h"
+#include "salsa20.h"
+#include "tact-keys.h"
 
-const BLTE_MAGIC = 0x45544c42;
-const ENC_TYPE_SALSA20 = 0x53;
-const EMPTY_HASH = '00000000000000000000000000000000';
+#include <cstring>
+#include <format>
+#include <span>
 
-class EncryptionError extends Error {
-	constructor(key, ...params) {
-		super('[BLTE] Missing decryption key ' + key, ...params);
-		this.key = key;
+namespace casc {
 
-		// Maintain stack trace (V8).
-		Error.captureStackTrace?.(this, EncryptionError);
-	}
+// --- Exception classes ---
+
+EncryptionError::EncryptionError(const std::string& key)
+	: std::runtime_error("[BLTE] Missing decryption key " + key), key(key)
+{
 }
 
-class BLTEIntegrityError extends Error {
-	constructor(expected, actual) {
-		super(util.format('[BLTE] Invalid block data hash. Expected %s, got %s!', expected, actual));
-		
-		// Maintain stack trace (V8).
-		Error.captureStackTrace?.(this, BLTEIntegrityError);
-	}
+BLTEIntegrityError::BLTEIntegrityError(const std::string& expected, const std::string& actual)
+	: std::runtime_error(std::format("[BLTE] Invalid block data hash. Expected {}, got {}!", expected, actual))
+{
 }
 
-class BLTEReader extends BufferWrapper {
-	/**
-	 * Check if the given data is a BLTE file.
-	 * @param {BufferWrapper} data
-	 */
-	static check(data) {
-		if (data.byteLength < 4)
-			return false;
+// --- BLTEReader static methods ---
 
-		const magic = data.readUInt32LE();
-		data.seek(0);
+bool BLTEReader::check(BufferWrapper& data) {
+	if (data.byteLength() < 4)
+		return false;
 
-		return magic === BLTE_MAGIC;
-	}
+	const uint32_t magic = data.readUInt32LE();
+	data.seek(0);
 
-	/**
-	 * Parse BLTE header and return metadata without allocating full buffer.
-	 * @param {BufferWrapper} buf
-	 * @param {string} hash
-	 * @param {boolean} verifyHash
-	 * @param {boolean} restoreOffset - if true, restore buffer offset after parsing
-	 * @returns {object} { blocks: [], headerSize: number, dataStart: number, totalSize: number }
-	 */
-	static parseBLTEHeader(buf, hash, verifyHash = true, restoreOffset = true) {
-		const size = buf.byteLength;
-		if (size < 8)
-			throw new Error('[BLTE] Not enough data (< 8)');
+	return magic == BLTE_MAGIC;
+}
 
-		const originalOffset = buf.offset;
+BLTEMetadata BLTEReader::parseBLTEHeader(BufferWrapper& buf, const std::string& hash, bool verifyHash, bool restoreOffset) {
+	const size_t size = buf.byteLength();
+	if (size < 8)
+		throw std::runtime_error("[BLTE] Not enough data (< 8)");
+
+	const size_t originalOffset = buf.offset();
+	buf.seek(0);
+
+	const uint32_t magic = buf.readUInt32LE();
+	if (magic != BLTE_MAGIC)
+		throw std::runtime_error(std::format("[BLTE] Invalid magic: {}", magic));
+
+	const int32_t headerSize = buf.readInt32BE();
+	const size_t origPos = buf.offset();
+
+	if (verifyHash) {
 		buf.seek(0);
+		const std::string hashCheck = headerSize > 0
+			? buf.readBuffer(static_cast<size_t>(headerSize)).calculateHash()
+			: buf.calculateHash();
 
-		const magic = buf.readUInt32LE();
-		if (magic !== BLTE_MAGIC)
-			throw new Error('[BLTE] Invalid magic: ' + magic);
+		if (hashCheck != hash)
+			throw std::runtime_error(std::format("[BLTE] Invalid MD5 hash, expected {} got {}", hash, hashCheck));
 
-		const headerSize = buf.readInt32BE();
-		const origPos = buf.offset;
+		buf.seek(static_cast<int64_t>(origPos));
+	}
 
-		if (verifyHash) {
-			buf.seek(0);
-			const hashCheck = headerSize > 0 ? buf.readBuffer(headerSize).calculateHash() : buf.calculateHash();
-			if (hashCheck !== hash)
-				throw new Error(util.format('[BLTE] Invalid MD5 hash, expected %s got %s', hash, hashCheck));
+	int numBlocks = 1;
+	size_t dataStart = 8;
 
-			buf.seek(origPos);
+	if (headerSize > 0) {
+		if (size < 12)
+			throw std::runtime_error("[BLTE] Not enough data (< 12)");
+
+		const std::vector<uint8_t> fc = buf.readUInt8(4);
+		numBlocks = fc[1] << 16 | fc[2] << 8 | fc[3] << 0;
+
+		if (fc[0] != 0x0F || numBlocks == 0)
+			throw std::runtime_error("[BLTE] Invalid table format.");
+
+		const int frameHeaderSize = 24 * numBlocks + 12;
+		if (headerSize != frameHeaderSize)
+			throw std::runtime_error("[BLTE] Invalid header size.");
+
+		if (size < static_cast<size_t>(frameHeaderSize))
+			throw std::runtime_error("[BLTE] Not enough data (frameHeader).");
+
+		dataStart = static_cast<size_t>(headerSize);
+	}
+
+	std::vector<BLTEBlock> blocks(numBlocks);
+	int64_t fileOffset = 0;
+	size_t totalDecompSize = 0;
+
+	for (int i = 0; i < numBlocks; i++) {
+		BLTEBlock& block = blocks[i];
+		if (headerSize != 0) {
+			block.CompSize = buf.readInt32BE();
+			block.DecompSize = buf.readInt32BE();
+			block.Hash = buf.readHexString(16);
+		} else {
+			block.CompSize = static_cast<int32_t>(size - 8);
+			block.DecompSize = static_cast<int32_t>(size - 9);
+			block.Hash = EMPTY_HASH;
 		}
 
-		let numBlocks = 1;
-		let dataStart = 8;
+		block.fileOffset = fileOffset;
+		fileOffset += block.CompSize;
+		totalDecompSize += block.DecompSize;
+	}
 
-		if (headerSize > 0) {
-			if (size < 12)
-				throw new Error('[BLTE] Not enough data (< 12)');
+	if (restoreOffset)
+		buf.seek(static_cast<int64_t>(originalOffset));
 
-			const fc = buf.readUInt8(4);
-			numBlocks = fc[1] << 16 | fc[2] << 8 | fc[3] << 0;
+	return BLTEMetadata{
+		.blocks = std::move(blocks),
+		.headerSize = headerSize,
+		.dataStart = dataStart,
+		.totalSize = totalDecompSize
+	};
+}
 
-			if (fc[0] !== 0x0F || numBlocks === 0)
-				throw new Error('[BLTE] Invalid table format.');
+// --- BLTEReader constructor ---
 
-			const frameHeaderSize = 24 * numBlocks + 12;
-			if (headerSize !== frameHeaderSize)
-				throw new Error('[BLTE] Invalid header size.');
+BLTEReader::BLTEReader(BufferWrapper buf, const std::string& hash, bool partialDecrypt)
+	: BufferWrapper(), _blte(std::move(buf)), partialDecrypt(partialDecrypt)
+{
+	BLTEMetadata metadata = parseBLTEHeader(_blte, hash, true, false);
+	blocks = std::move(metadata.blocks);
 
-			if (size < frameHeaderSize)
-				throw new Error('[BLTE] Not enough data (frameHeader).');
+	setCapacity(metadata.totalSize, true);
+}
 
-			dataStart = headerSize;
-		}
+// --- BLTEReader instance methods ---
 
-		const blocks = new Array(numBlocks);
-		let fileOffset = 0;
-		let totalDecompSize = 0;
+void BLTEReader::processAllBlocks() {
+	while (blockIndex < blocks.size())
+		_processBlock();
+}
 
-		for (let i = 0; i < numBlocks; i++) {
-			const block = {};
-			if (headerSize !== 0) {
-				block.CompSize = buf.readInt32BE();
-				block.DecompSize = buf.readInt32BE();
-				block.Hash = buf.readHexString(16);
-			} else {
-				block.CompSize = size - 8;
-				block.DecompSize = size - 9;
-				block.Hash = EMPTY_HASH;
+bool BLTEReader::_processBlock() {
+	// No more blocks to process.
+	if (blockIndex == blocks.size())
+		return false;
+
+	const size_t oldPos = offset();
+	seek(static_cast<int64_t>(blockWriteIndex));
+
+	const BLTEBlock& block = blocks[blockIndex];
+	const size_t bltePos = _blte.offset();
+
+	if (block.Hash != EMPTY_HASH) {
+		BufferWrapper blockData = _blte.readBuffer(block.CompSize);
+		const std::string blockHash = blockData.calculateHash();
+
+		// Reset after reading the hash.
+		_blte.seek(static_cast<int64_t>(bltePos));
+
+		if (blockHash != block.Hash)
+			throw BLTEIntegrityError(block.Hash, blockHash);
+	}
+
+	_handleBlock(_blte, bltePos + block.CompSize, blockIndex);
+	_blte.seek(static_cast<int64_t>(bltePos + block.CompSize));
+
+	blockIndex++;
+	blockWriteIndex = offset();
+
+	seek(static_cast<int64_t>(oldPos));
+	return true;
+}
+
+void BLTEReader::_handleBlock(BufferWrapper& block, size_t blockEnd, size_t index) {
+	const uint8_t flag = block.readUInt8();
+	switch (flag) {
+		case 0x45: { // Encrypted
+			try {
+				BufferWrapper decrypted = _decryptBlock(block, blockEnd, index);
+				_handleBlock(decrypted, decrypted.byteLength(), index);
+			} catch (const EncryptionError&) {
+				// Partial decryption allows us to leave zeroed data.
+				if (partialDecrypt)
+					move(static_cast<int64_t>(blocks[index].DecompSize));
+				else
+					throw;
 			}
 
-			block.fileOffset = fileOffset;
-			fileOffset += block.CompSize;
-			totalDecompSize += block.DecompSize;
-			blocks[i] = block;
+			break;
 		}
 
-		if (restoreOffset)
-			buf.seek(originalOffset);
+		case 0x46: // Frame (Recursive)
+			throw std::runtime_error("[BLTE] No frame decoder implemented!");
 
-		return { blocks, headerSize, dataStart, totalSize: totalDecompSize };
-	}
+		case 0x4E: // Frame (Normal)
+			_writeBufferBLTE(block, blockEnd);
+			break;
 
-	/**
-	 * Construct a new BLTEReader instance.
-	 * @param {BufferWrapper} buf
-	 * @param {string} hash
-	 * @param {boolean} partialDecrypt
-	 */
-	constructor(buf, hash, partialDecrypt = false) {
-		super(null);
+		case 0x5A: // Compressed
+			_decompressBlock(block, blockEnd, index);
+			break;
 
-		this._blte = buf;
-		this.blockIndex = 0;
-		this.blockWriteIndex = 0;
-		this.partialDecrypt = partialDecrypt;
-
-		const metadata = BLTEReader.parseBLTEHeader(buf, hash, true, false);
-		this.blocks = metadata.blocks;
-
-		this._buf = Buffer.alloc(metadata.totalSize);
-	}
-
-	/**
-	 * Process all BLTE blocks in the reader.
-	 */
-	processAllBlocks() {
-		while (this.blockIndex < this.blocks.length)
-			this._processBlock();
-	}
-
-	/**
-	 * Process the next BLTE block.
-	 */
-	_processBlock() {
-		// No more blocks to process.
-		if (this.blockIndex === this.blocks.length)
-			return false;
-
-		const oldPos = this.offset;
-		this.seek(this.blockWriteIndex);
-
-		const block = this.blocks[this.blockIndex];
-		const bltePos = this._blte.offset;
-
-		if (block.Hash !== EMPTY_HASH) {
-			const blockData = this._blte.readBuffer(block.CompSize);
-			const blockHash = blockData.calculateHash();
-
-			// Reset after reading the hash.
-			this._blte.seek(bltePos);
-
-			if (blockHash !== block.Hash)
-				throw new BLTEIntegrityError(block.Hash, blockHash);
-		}
-
-		this._handleBlock(this._blte, bltePos + block.CompSize, this.blockIndex);
-		this._blte.seek(bltePos + block.CompSize);
-
-		this.blockIndex++;
-		this.blockWriteIndex = this.offset;
-
-		this.seek(oldPos);
-	}
-
-	/**
-	 * Handle a BLTE block.
-	 * @param {BufferWrapper} block
-	 * @param {number} blockEnd
-	 * @param {number} index 
-	 */
-	_handleBlock(block, blockEnd, index) {
-		const flag = block.readUInt8();
-		switch (flag) {
-			case 0x45: // Encrypted
-				try {
-					const decrypted = this._decryptBlock(block, blockEnd, index);
-					this._handleBlock(decrypted, decrypted.byteLength, index);
-				} catch (e) {
-					if (e instanceof EncryptionError) {
-						// Partial decryption allows us to leave zeroed data.
-						if (this.partialDecrypt)
-							this._ofs += this.blocks[index].DecompSize;
-						else
-							throw e;
-					}
-				}
-
-				break;
-			
-			case 0x46: // Frame (Recursive)
-				throw new Error('[BLTE] No frame decoder implemented!');
-
-			case 0x4E: // Frame (Normal)
-				this._writeBufferBLTE(block, blockEnd);
-				break;
-
-			case 0x5A: // Compressed
-				this._decompressBlock(block, blockEnd, index);
-				break;
-
-			default:
-				throw new Error('Unknown block: ' + flag);
-		}
-	}
-
-	/**
-	 * Decompress BLTE block.
-	 * @param {BufferWrapper} data 
-	 * @param {number} blockEnd
-	 * @param {number} index 
-	 */
-	_decompressBlock(data, blockEnd, index) {
-		const decomp = data.readBuffer(blockEnd - data.offset, true, true);
-		const expectedSize = this.blocks[index].DecompSize;
-
-		// Reallocate buffer to compensate.
-		if (decomp.byteLength > expectedSize)
-			this.setCapacity(this.byteLength + (decomp.byteLength - expectedSize));
-
-		this._writeBufferBLTE(decomp, decomp.byteLength);
-	}
-
-	/**
-	 * Decrypt BLTE block.
-	 * @param {BufferWrapper} data 
-	 * @param {number} blockEnd
-	 * @param {number} index 
-	 */
-	_decryptBlock(data, blockEnd, index) {
-		const keyNameSize = data.readUInt8();
-		if (keyNameSize === 0 || keyNameSize !== 8)
-			throw new Error('[BLTE] Unexpected keyNameSize: ' + keyNameSize);
-
-		const keyNameBytes = new Array(keyNameSize);
-		for (let i = 0; i < keyNameSize; i++)
-			keyNameBytes[i] = data.readHexString(1);
-
-		const keyName = keyNameBytes.reverse().join('');
-		const ivSize = data.readUInt8();
-
-		if ((ivSize !== 4 && ivSize !== 8) || ivSize > 8)
-			throw new Error('[BLTE] Unexpected ivSize: ' + ivSize);
-
-		const ivShort = data.readUInt8(ivSize);
-		if (data.remainingBytes === 0)
-			throw new Error('[BLTE] Unexpected end of data before encryption flag.');
-
-		const encryptType = data.readUInt8();
-		if (encryptType !== ENC_TYPE_SALSA20)
-			throw new Error('[BLTE] Unexpected encryption type: ' + encryptType);
-
-		for (let shift = 0, i = 0; i < 4; shift += 8, i++)
-			ivShort[i] = (ivShort[i] ^ ((index >> shift) & 0xFF)) & 0xFF;
-
-		const key = tactKeys.getKey(keyName);
-		if (typeof key !== 'string')
-			throw new EncryptionError(keyName);
-
-		const nonce = [];
-		for (let i = 0; i < 8; i++)
-			nonce[i] = (i < ivShort.length ? ivShort[i] : 0x0);
-
-		const instance = new Salsa20(nonce, key);
-		return instance.process(data.readBuffer(blockEnd - data.offset));
-	}
-
-	/**
-	 * Write the contents of a buffer to this instance.
-	 * Skips bound checking for BLTE internal writing.
-	 * @param {BufferWrapper} buf 
-	 * @param {number} blockEnd
-	 */
-	_writeBufferBLTE(buf, blockEnd) {
-		buf.raw.copy(this._buf, this._ofs, buf.offset, blockEnd);
-		this._ofs += blockEnd - buf.offset;
-	}
-
-	/**
-	 * Check a given length does not exceed current capacity.
-	 * @param {number} length 
-	 */
-	_checkBounds(length) {
-		// Check that this read won't go out-of-bounds anyway.
-		super._checkBounds(length);
-
-		// Ensure all blocks required for this read are available.
-		const pos = this.offset + length;
-		while (pos > this.blockWriteIndex) {
-			if (this._processBlock() === false)
-				return;
-		}
-	}
-
-	/**
-	 * Write the contents of this buffer to a file.
-	 * Directory path will be created if needed.
-	 * @param {string} file 
-	 */
-	async writeToFile(file) {
-		this.processAllBlocks();
-		await super.writeToFile(file);
-	}
-
-	/**
-	 * Decode this buffer using the given audio context.
-	 * @param {AudioContext} context 
-	 */
-	async decodeAudio(context) {
-		this.processAllBlocks();
-		return super.decodeAudio(context);
-	}
-
-	/**
-	 * Assign a data URL for this buffer.
-	 * @returns {string}
-	 */
-	getDataURL() {
-		if (!this.dataURL) {
-			this.processAllBlocks();
-			return super.getDataURL();
-		}
-
-		return this.dataURL;
+		default:
+			throw std::runtime_error(std::format("Unknown block: {}", flag));
 	}
 }
 
-module.exports = { BLTEReader, EncryptionError, BLTEIntegrityError };
+void BLTEReader::_decompressBlock(BufferWrapper& data, size_t blockEnd, size_t index) {
+	BufferWrapper decomp = data.readBuffer(blockEnd - data.offset(), true);
+	const size_t expectedSize = static_cast<size_t>(blocks[index].DecompSize);
+
+	// Reallocate buffer to compensate.
+	if (decomp.byteLength() > expectedSize)
+		setCapacity(byteLength() + (decomp.byteLength() - expectedSize));
+
+	_writeBufferBLTE(decomp, decomp.byteLength());
+}
+
+BufferWrapper BLTEReader::_decryptBlock(BufferWrapper& data, size_t blockEnd, size_t index) {
+	const uint8_t keyNameSize = data.readUInt8();
+	if (keyNameSize == 0 || keyNameSize != 8)
+		throw std::runtime_error(std::format("[BLTE] Unexpected keyNameSize: {}", keyNameSize));
+
+	std::vector<std::string> keyNameBytes(keyNameSize);
+	for (uint8_t i = 0; i < keyNameSize; i++)
+		keyNameBytes[i] = data.readHexString(1);
+
+	// Reverse and join to form key name (little-endian to big-endian).
+	std::string keyName;
+	for (auto it = keyNameBytes.rbegin(); it != keyNameBytes.rend(); ++it)
+		keyName += *it;
+
+	const uint8_t ivSize = data.readUInt8();
+
+	if ((ivSize != 4 && ivSize != 8) || ivSize > 8)
+		throw std::runtime_error(std::format("[BLTE] Unexpected ivSize: {}", ivSize));
+
+	std::vector<uint8_t> ivShort = data.readUInt8(ivSize);
+	if (data.remainingBytes() == 0)
+		throw std::runtime_error("[BLTE] Unexpected end of data before encryption flag.");
+
+	const uint8_t encryptType = data.readUInt8();
+	if (encryptType != ENC_TYPE_SALSA20)
+		throw std::runtime_error(std::format("[BLTE] Unexpected encryption type: {}", encryptType));
+
+	for (int shift = 0, i = 0; i < 4; shift += 8, i++)
+		ivShort[i] = (ivShort[i] ^ ((index >> shift) & 0xFF)) & 0xFF;
+
+	const std::string key = tact_keys::getKey(keyName);
+	if (key.empty())
+		throw EncryptionError(keyName);
+
+	std::vector<uint8_t> nonce(8, 0);
+	for (size_t i = 0; i < 8; i++)
+		nonce[i] = (i < ivShort.size() ? ivShort[i] : 0x0);
+
+	Salsa20 instance(std::span<const uint8_t>(nonce), key);
+	BufferWrapper encData = data.readBuffer(blockEnd - data.offset());
+	return instance.process(encData);
+}
+
+void BLTEReader::_writeBufferBLTE(BufferWrapper& buf, size_t blockEnd) {
+	const size_t length = blockEnd - buf.offset();
+	std::memcpy(raw().data() + offset(), buf.raw().data() + buf.offset(), length);
+	move(static_cast<int64_t>(length));
+}
+
+void BLTEReader::writeToFile(const std::filesystem::path& file) {
+	processAllBlocks();
+	BufferWrapper::writeToFile(file);
+}
+
+const std::string& BLTEReader::getDataURL() {
+	processAllBlocks();
+	return BufferWrapper::getDataURL();
+}
+
+} // namespace casc
