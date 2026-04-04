@@ -3,7 +3,7 @@
 import { execFileSync } from 'child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'fs';
 import { join, resolve } from 'path';
-import { log, log_color } from './log.js';
+import { log, log_color } from './log.cpp';
 
 const build_config = await Bun.file('./build.json').json();
 const nw_version = build_config.webkitVersion;

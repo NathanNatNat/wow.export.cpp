@@ -113,7 +113,7 @@ module.exports = {
 					if (!this.$core.view.config.machineId)
 						this.$core.view.config.machineId = crypto.randomUUID();
 
-					const worker = new Worker('./src/js/workers/cache-collector.js', {
+					const worker = new Worker('./src/js/workers/cache-collector.cpp', {
 						workerData: {
 							install_path: casc_source.dir,
 							machine_id: this.$core.view.config.machineId,
