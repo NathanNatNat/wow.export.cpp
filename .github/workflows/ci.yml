@@ -7,6 +7,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Windows MSVC Debug
@@ -27,7 +30,7 @@ jobs:
         run: pip install jinja2
 
       - name: Configure (CMake + MSVC)
-        run: cmake -B build -S . -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Debug
+        run: cmake -B build -S . -A x64 -DCMAKE_BUILD_TYPE=Debug
 
       - name: Build (Debug)
         run: cmake --build build --config Debug --parallel

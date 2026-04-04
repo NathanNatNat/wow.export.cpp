@@ -16,7 +16,7 @@ This document describes the recommended order and principles for converting the 
 ```powershell
 git submodule update --init --recursive
 pip install jinja2
-cmake -B build -S . -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Debug
+cmake -B build -S . -A x64 -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --config Debug --parallel
 ```
 
