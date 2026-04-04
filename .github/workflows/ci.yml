@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  # ── Windows x64 — Self-hosted (MSVC + Ninja) ────────────────
+  # Windows x64 - Self-hosted (MSVC + Ninja)
   windows-self-hosted:
     name: Windows MSVC Debug (self-hosted)
     runs-on: [self-hosted, Windows, X64]
@@ -30,13 +30,13 @@ jobs:
       - name: Ensure Jinja2 is installed
         run: python -m pip install --quiet jinja2
 
-      - name: Configure (preset: windows-msvc-debug)
+      - name: "Configure (preset: windows-msvc-debug)"
         run: cmake --preset windows-msvc-debug
 
-      - name: Build (preset: windows-debug)
+      - name: "Build (preset: windows-debug)"
         run: cmake --build --preset windows-debug --parallel
 
-  # ── Windows x64 — GitHub-hosted (MSVC + Ninja) ──────────────
+  # Windows x64 - GitHub-hosted (MSVC + Ninja)
   windows:
     name: Windows MSVC Debug (x64)
     runs-on: windows-latest
@@ -60,13 +60,13 @@ jobs:
       - name: Install Jinja2
         run: pip install jinja2
 
-      - name: Configure (preset: windows-msvc-debug)
+      - name: "Configure (preset: windows-msvc-debug)"
         run: cmake --preset windows-msvc-debug
 
-      - name: Build (preset: windows-debug)
+      - name: "Build (preset: windows-debug)"
         run: cmake --build --preset windows-debug --parallel
 
-  # ── Linux x64 (GCC + Ninja, same preset as local dev) ───────
+  # Linux x64 (GCC + Ninja, same preset as local dev)
   linux:
     name: Linux GCC Debug (x64)
     runs-on: ubuntu-latest
@@ -90,8 +90,8 @@ jobs:
       - name: Install Jinja2
         run: pip install jinja2
 
-      - name: Configure (preset: linux-gcc-debug)
+      - name: "Configure (preset: linux-gcc-debug)"
         run: cmake --preset linux-gcc-debug
 
-      - name: Build (preset: linux-debug)
+      - name: "Build (preset: linux-debug)"
         run: cmake --build --preset linux-debug --parallel
