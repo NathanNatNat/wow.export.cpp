@@ -3,108 +3,60 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const fsp = require('fs').promises;
-const constants = require('./constants');
-const generics = require('./generics');
-const core = require('./core');
-const log = require('./log');
+#include "config.h"
+#include "constants.h"
+#include "generics.h"
+#include "core.h"
+#include "log.h"
 
-let isSaving = false;
-let isQueued = false;
-let defaultConfig = {};
+#include <nlohmann/json.hpp>
+#include <fstream>
+#include <filesystem>
+#include <stdexcept>
+
+namespace config {
+
+static bool isSaving = false;
+static bool isQueued = false;
+static nlohmann::json defaultConfig = nlohmann::json::object();
 
 /**
  * Clone one config object into another.
  * Arrays are cloned rather than passed by reference.
- * @param {object} src 
- * @param {object} target 
+ * @param src    Source JSON config.
+ * @param target Target JSON config.
  */
-const copyConfig = (src, target) => {
-	for (const [key, value] of Object.entries(src)) {
-		if (Array.isArray(value)) {
+static void copyConfig(const nlohmann::json& src, nlohmann::json& target) {
+	for (auto it = src.begin(); it != src.end(); ++it) {
+		if (it.value().is_array()) {
 			// Clone array rather than passing reference.
-			target[key] = value.slice(0);
+			target[it.key()] = nlohmann::json(it.value());
 		} else {
 			// Pass everything else in wholemeal.
-			target[key] = value;
+			target[it.key()] = it.value();
 		}
 	}
-};
-
-/**
- * Load configuration from disk.
- */
-const load = async () => {
-	defaultConfig = await generics.readJSON(constants.CONFIG.DEFAULT_PATH, true) || {};
-
-	let userConfig = {};
-	try {
-		userConfig = await generics.readJSON(constants.CONFIG.USER_PATH) || {};
-	} catch (e) {
-		if (e.code === 'EPERM') {
-			log.write('Failed to load user config due to restricted permissions (EPERM)');
-			core.setToast('info', 'Restricted permissions detected. Restart wow.export using "Run as Administrator".', null, -1, true);
-		} else {
-			throw e;
-		}
-	}
-
-	log.write('Loaded config defaults: %o', defaultConfig);
-	log.write('Loaded user config: %o', userConfig);
-
-	const config = {};
-	copyConfig(defaultConfig, config);
-	copyConfig(userConfig, config);
-
-	core.view.config = config;
-	core.view.$watch('config', () => save(), { deep: true });
-};
-
-/**
- * Reset a configuration key to default.
- * @param {string} key 
- */
-const resetToDefault = (key) => {
-	if (Object.prototype.hasOwnProperty.call(defaultConfig, key))
-		core.view.config[key] = defaultConfig[key];
-};
-
-/**
- * Reset all configuration to default.
- */
-const resetAllToDefault = () => {
-	// Use JSON parse/stringify to ensure deep non-referenced clone.
-	core.view.config = JSON.parse(JSON.stringify(defaultConfig));
-};
-
-/**
- * Mark configuration for saving.
- */
-const save = () => {
-	if (!isSaving) {
-		isSaving = true;
-		setImmediate(doSave);
-	} else {
-		// Queue another save.
-		isQueued = true;
-	}
-};
+}
 
 /**
  * Persist configuration data to disk.
  */
-const doSave = async () => {
-	const configSave = {};
-	for (const [key, value] of Object.entries(core.view.config)) {
+static void doSave() {
+	nlohmann::json configSave = nlohmann::json::object();
+	for (auto it = core::view->config.begin(); it != core::view->config.end(); ++it) {
 		// Only persist configuration values that do not match defaults.
-		if (Object.prototype.hasOwnProperty.call(defaultConfig, key) && defaultConfig[key] === value)
+		if (defaultConfig.contains(it.key()) && defaultConfig[it.key()] == it.value())
 			continue;
 
-		configSave[key] = value;
+		configSave[it.key()] = it.value();
 	}
 
-	const out = JSON.stringify(configSave, null, '\t');
-	await fsp.writeFile(constants.CONFIG.USER_PATH, out, 'utf8');
+	const std::string out = configSave.dump(1, '\t');
+	std::ofstream file(constants::CONFIG::USER_PATH());
+	if (file.is_open()) {
+		file << out;
+		file.close();
+	}
 
 	// If another save was attempted during this one, re-save.
 	if (isQueued) {
@@ -113,6 +65,75 @@ const doSave = async () => {
 	} else {
 		isSaving = false;
 	}
-};
+}
 
-module.exports = { load, resetToDefault, resetAllToDefault };
+/**
+ * Load configuration from disk.
+ */
+void load() {
+	auto defaultResult = generics::readJSON(constants::CONFIG::DEFAULT_PATH(), true);
+	defaultConfig = defaultResult.value_or(nlohmann::json::object());
+
+	nlohmann::json userConfig = nlohmann::json::object();
+	try {
+		auto userResult = generics::readJSON(constants::CONFIG::USER_PATH());
+		userConfig = userResult.value_or(nlohmann::json::object());
+	} catch (const std::exception& e) {
+		// Check for permission-denied errors (EPERM equivalent).
+		// In C++, permission errors manifest as filesystem exceptions.
+		std::string msg = e.what();
+		if (msg.find("permission") != std::string::npos ||
+		    msg.find("EPERM") != std::string::npos ||
+		    msg.find("Permission denied") != std::string::npos ||
+		    msg.find("Access is denied") != std::string::npos) {
+			logging::write("Failed to load user config due to restricted permissions (EPERM)");
+			core::setToast("info",
+				"Restricted permissions detected. Restart wow.export using \"Run as Administrator\".",
+				nullptr, -1, true);
+		} else {
+			throw;
+		}
+	}
+
+	logging::write("Loaded config defaults: " + defaultConfig.dump());
+	logging::write("Loaded user config: " + userConfig.dump());
+
+	nlohmann::json mergedConfig = nlohmann::json::object();
+	copyConfig(defaultConfig, mergedConfig);
+	copyConfig(userConfig, mergedConfig);
+
+	core::view->config = mergedConfig;
+	// Note: Vue $watch is replaced by explicit save() calls from the UI layer.
+	// In ImGui, config changes trigger config::save() directly.
+}
+
+/**
+ * Reset a configuration key to default.
+ */
+void resetToDefault(const std::string& key) {
+	if (defaultConfig.contains(key))
+		core::view->config[key] = defaultConfig[key];
+}
+
+/**
+ * Reset all configuration to default.
+ */
+void resetAllToDefault() {
+	// Use JSON parse/dump to ensure deep non-referenced clone.
+	core::view->config = nlohmann::json::parse(defaultConfig.dump());
+}
+
+/**
+ * Mark configuration for saving.
+ */
+void save() {
+	if (!isSaving) {
+		isSaving = true;
+		doSave();
+	} else {
+		// Queue another save.
+		isQueued = true;
+	}
+}
+
+} // namespace config
