@@ -3,112 +3,182 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const fs = require('fs');
-const util = require('util');
-const constants = require('./constants');
+#include "log.h"
+#include "constants.h"
 
-const MAX_LOG_POOL = 10000; // 1-2MB~
-const MAX_DRAIN_PER_TICK = 50;
+#include <fstream>
+#include <vector>
+#include <string>
+#include <chrono>
+#include <ctime>
+#include <cstdio>
+#include <mutex>
+#include <iterator>
 
-let markTimer = 0;
-let isClogged = false;
-const pool = [];
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <shellapi.h>
+#else
+#include <cstdlib>
+#endif
+
+namespace {
+
+constexpr int MAX_LOG_POOL = 10000; // 1-2MB~
+constexpr int MAX_DRAIN_PER_TICK = 50;
+
+std::chrono::steady_clock::time_point markTimer{};
+bool isClogged = false;
+std::vector<std::string> pool;
+std::ofstream stream;
+std::mutex logMutex;
 
 /**
  * Return a HH:MM:SS formatted timestamp.
  */
-const getTimestamp = () => {
-	const time = new Date();
-	return util.format(
-		'%s:%s:%s',
-		time.getHours().toString().padStart(2, '0'),
-		time.getMinutes().toString().padStart(2, '0'),
-		time.getSeconds().toString().padStart(2, '0'));
-};
+std::string getTimestamp() {
+	auto now = std::chrono::system_clock::now();
+	auto time = std::chrono::system_clock::to_time_t(now);
+	std::tm tm{};
+#ifdef _WIN32
+	localtime_s(&tm, &time);
+#else
+	localtime_r(&time, &tm);
+#endif
+	char buf[9]; // "HH:MM:SS\0"
+	std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d", tm.tm_hour, tm.tm_min, tm.tm_sec);
+	return std::string(buf);
+}
 
 /**
  * Invoked when the stream has finished flushing.
+ *
+ * In JS, this is triggered by the stream 'drain' event when the
+ * internal buffer has been flushed. In C++, file I/O is synchronous,
+ * so this is called at the start of write() when the stream was
+ * previously in a failed state and has recovered.
  */
-const drainPool = () => {
+void drainPool() {
 	isClogged = false;
 
 	// If the pool is empty, don't slip into a loop.
-	if (pool.length === 0)
+	if (pool.empty())
 		return;
 
-	let ticks = 0;
-	while (!isClogged && ticks < MAX_DRAIN_PER_TICK && pool.length > 0) {
-		isClogged = !stream.write(pool.shift());
+	int ticks = 0;
+	while (!isClogged && ticks < MAX_DRAIN_PER_TICK && !pool.empty()) {
+		stream << pool.front();
+		stream.flush();
+		if (stream.fail()) {
+			stream.clear();
+			isClogged = true;
+		} else {
+			pool.erase(pool.begin());
+		}
 		ticks++;
 	}
+}
 
-	// Only schedule another drain if we're not blocked and we have
-	// something remaining in the pool.
-	if (!isClogged && pool.length > 0)
-		process.nextTick(drainPool);
-};
+} // anonymous namespace
 
-/**
- * Internally mark the current timestamp for measuring
- * performance times with log.timeEnd();
- */
-const timeLog = () => {
-	markTimer = Date.now();
-};
+namespace log {
 
-/**
- * Logs the time (in milliseconds) between the last log.timeLog()
- * call and this call, with the given label prefixed.
- * @param {string} label 
- */
-const timeEnd = (label, ...params) => {
-	write(label + ' (%dms)', ...params, (Date.now() - markTimer));
-};
-
-/**
- * Open the runtime log in the users external editor.
- */
-const openRuntimeLog = () => {
-	nw.Shell.openItem(constants.RUNTIME_LOG);
-};
+void init() {
+	// Initialize the logging stream.
+	stream.open(constants::RUNTIME_LOG().string());
+}
 
 /**
  * Write a message to the log.
  */
-const write = (...parameters) => {
-	const line = '[' + getTimestamp() + '] ' + util.format(...parameters) + '\n';
+void write(std::string_view message) {
+	std::lock_guard<std::mutex> lock(logMutex);
+	std::string line = "[" + getTimestamp() + "] " + std::string(message) + "\n";
+
+	// Try to drain pooled entries if the stream was previously clogged.
+	if (isClogged) {
+		stream.clear();
+		drainPool();
+	}
 
 	if (!isClogged) {
-		isClogged = !stream.write(line);
-	} else {
+		stream << line;
+		stream.flush();
+		if (stream.fail()) {
+			stream.clear();
+			isClogged = true;
+		}
+	}
+
+	if (isClogged) {
 		// Stream is blocked, pool instead.
-		if (pool.length < MAX_LOG_POOL) {
-			pool.push(line);
-		} else if (pool.length === MAX_LOG_POOL) {
-			pool.push('[' + getTimestamp() + '] WARNING: Log pool overflow - some log entries have been truncated.\n');
+		if (pool.size() < static_cast<std::size_t>(MAX_LOG_POOL)) {
+			pool.push_back(std::move(line));
+		} else if (pool.size() == static_cast<std::size_t>(MAX_LOG_POOL)) {
+			pool.push_back("[" + getTimestamp() + "] WARNING: Log pool overflow - some log entries have been truncated.\n");
 		}
 	}
 
 	// Mirror output to debugger.
-	if (!BUILD_RELEASE)
-		console.log(line);
-};
+#ifndef NDEBUG
+	std::fputs(line.c_str(), stdout);
+#endif
+}
+
+/**
+ * Internally mark the current timestamp for measuring
+ * performance times with log::timeEnd().
+ */
+void timeLog() {
+	markTimer = std::chrono::steady_clock::now();
+}
+
+/**
+ * Logs the time (in milliseconds) between the last log::timeLog()
+ * call and this call, with the given label prefixed.
+ * @param label Label to prefix the time output.
+ */
+void timeEnd(std::string_view label) {
+	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now() - markTimer).count();
+	write(std::string(label) + " (" + std::to_string(elapsed) + "ms)");
+}
+
+/**
+ * Open the runtime log in the user's external editor.
+ */
+void openRuntimeLog() {
+#ifdef _WIN32
+	ShellExecuteW(nullptr, L"open",
+		constants::RUNTIME_LOG().wstring().c_str(),
+		nullptr, nullptr, SW_SHOWNORMAL);
+#else
+	// xdg-open is the standard Linux way to open files with the default application.
+	std::string cmd = "xdg-open \"" + constants::RUNTIME_LOG().string() + "\" &";
+	std::system(cmd.c_str());
+#endif
+}
+
+} // namespace log
 
 /**
  * Attempts to return the contents of the runtime log.
  * This is defined as a global as it is requested during
  * an application crash where modules may not be loaded.
  */
-getErrorDump = async () => {
+std::string getErrorDump() {
 	try {
-		return await fs.promises.readFile(constants.RUNTIME_LOG, 'utf8');
-	} catch (e) {
-		return 'Unable to obtain runtime log: ' + e.message;
+		std::ifstream file(constants::RUNTIME_LOG());
+		if (!file)
+			return "Unable to obtain runtime log: file could not be opened";
+
+		return std::string(
+			std::istreambuf_iterator<char>(file),
+			std::istreambuf_iterator<char>());
+	} catch (const std::exception& e) {
+		return std::string("Unable to obtain runtime log: ") + e.what();
 	}
-};
-
-// Initialize the logging stream.
-const stream = fs.createWriteStream(constants.RUNTIME_LOG);
-stream.on('drain', drainPool);
-
-module.exports = { write, timeLog, timeEnd, openRuntimeLog };
+}

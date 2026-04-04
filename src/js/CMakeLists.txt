@@ -16,4 +16,5 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/casc/version-config.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/casc/jenkins96.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/constants.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/log.cpp
 )
