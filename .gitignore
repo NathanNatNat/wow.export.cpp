@@ -45,7 +45,6 @@ CMakeSettings.json
 cmake-build-*/
 out/build/
 out/install/
-vcpkg_installed/
 build_test/
 
 # =====================
