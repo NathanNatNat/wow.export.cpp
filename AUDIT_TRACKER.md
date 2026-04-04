@@ -43,3 +43,18 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: Exports an object with two sub-objects: `flags` (locale→number mapping) and `names` (locale→string mapping), keyed by locale ID strings.
 - **C++**: Provides individual `constexpr uint32_t` constants for flags, a `constexpr std::array<LocaleEntry, 13>` combining both mappings, and `getFlag()`/`getName()` lookup helpers.
 - **Rationale**: C++ cannot export a runtime object literal with string keys like JS. The combined array + lookup functions provide equivalent access patterns. The individual flag constants allow `casc::locale_flags::enUS` syntax matching JS `localeFlags.flags.enUS`.
+
+### `src/js/casc/version-config.cpp` — ACCEPTABLE
+- **JS**: Exports an anonymous function (`module.exports = data => {...}`) that takes a string and returns an array of plain objects with dynamic string keys.
+- **C++**: Named function `casc::parseVersionConfig(std::string_view)` returning `std::vector<std::unordered_map<std::string, std::string>>`. Space removal matches JS `String.replace(' ', '')` exactly — only the first space is removed from each field name.
+- **Rationale**: Anonymous exports need a name in C++. `parseVersionConfig` is derived from the filename. `unordered_map<string,string>` is the natural C++ equivalent of a plain JS object with string values.
+
+### `src/js/casc/jenkins96.cpp` — ACCEPTABLE
+- **JS**: Exports an anonymous function returning `[b >>> 0, c >>> 0]` (a two-element array). Uses `| 0` for int32 truncation and `>>>` for unsigned right shift.
+- **C++**: Named function `casc::jenkins96(std::span<const uint8_t>, uint32_t, uint32_t)` returning `std::pair<uint32_t, uint32_t>`. All arithmetic uses `uint32_t` throughout, which naturally wraps at 32 bits (equivalent to JS `| 0` truncation). C++ `>>` on `uint32_t` is equivalent to JS `>>>`.
+- **Rationale**: `std::pair` replaces the JS two-element array. Using `uint32_t` produces identical bit patterns to JS signed int32 arithmetic with `| 0`/`>>> 0` coercion.
+
+### `src/js/xml.cpp` — ACCEPTABLE
+- **JS**: Exports `parse_xml` function returning a plain JS object hierarchy. Uses closures over mutable `pos` variable for parser state.
+- **C++**: Free function `parse_xml(std::string_view)` returning `nlohmann::json`. Uses a local `Parser` struct in an anonymous namespace to hold mutable state (equivalent to JS closure variables). Internal `Node` struct replaces JS object literals with `{tag, attrs, children, self_closing}`.
+- **Rationale**: `nlohmann::json` is the natural C++ equivalent of JS's dynamic plain objects. The parser struct replaces JS closures while maintaining identical control flow and parse logic.
