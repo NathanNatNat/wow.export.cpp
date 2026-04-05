@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <optional>
 #include <variant>
+#include <memory>
 
 #include "FieldType.h"
 #include "CompressionType.h"
@@ -21,6 +22,7 @@ class BufferWrapper;
 namespace db {
 
 class DBDEntry;
+class DBDField;
 
 /**
  * Schema field value: either a plain FieldType or [FieldType, arrayLength].
