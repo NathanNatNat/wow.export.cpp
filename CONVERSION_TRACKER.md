@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 74 / 184 files converted
+**Progress:** 79 / 184 files converted
 
 ---
 
@@ -131,11 +131,11 @@
 
 ## Tier 13 — 3D GL Abstraction (5 files)
 
-- [ ] `src/js/3D/gl/GLContext.cpp` (412 lines)
-- [ ] `src/js/3D/gl/GLTexture.cpp` (195 lines)
-- [ ] `src/js/3D/gl/UniformBuffer.cpp` (230 lines)
-- [ ] `src/js/3D/gl/VertexArray.cpp` (310 lines)
-- [ ] `src/js/3D/gl/ShaderProgram.cpp` (304 lines)
+- [x] `src/js/3D/gl/GLContext.cpp` (412 lines)
+- [x] `src/js/3D/gl/GLTexture.cpp` (195 lines)
+- [x] `src/js/3D/gl/UniformBuffer.cpp` (230 lines)
+- [x] `src/js/3D/gl/VertexArray.cpp` (310 lines)
+- [x] `src/js/3D/gl/ShaderProgram.cpp` (304 lines)
 
 ## Tier 14 — 3D Shaders & Data Mappings (8 files)
 
