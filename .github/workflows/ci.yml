@@ -2,9 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [ main, 'copilot/**' ]
-  pull_request:
-    branches: [ main ]
+    branches: [ 'copilot/**' ]
+    # branches: [ main, 'copilot/**' ]
   workflow_dispatch:
 
 permissions:
