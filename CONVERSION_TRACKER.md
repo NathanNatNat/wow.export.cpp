@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 42 / 184 files converted
+**Progress:** 44 / 184 files converted
 
 ---
 
@@ -84,8 +84,8 @@
 
 ## Tier 8 — CASC db2 + Listfile (2 files)
 
-- [ ] `src/js/casc/db2.cpp` (95 lines)
-- [ ] `src/js/casc/listfile.cpp` (927 lines) 🔴
+- [x] `src/js/casc/db2.cpp` (95 lines)
+- [x] `src/js/casc/listfile.cpp` (927 lines) 🔴
 
 ## Tier 9 — CASC High-Level Sources (3 files)
 

@@ -629,4 +629,11 @@ std::string formatPlaybackSeconds(double seconds) {
 // These allow the templates to be used from other translation units.
 // Additional instantiations can be added as needed.
 
+template void batchWork<std::string>(std::string_view, const std::vector<std::string>&,
+	const std::function<void(const std::string&, size_t)>&, size_t);
+
+template void batchWork<std::pair<uint32_t, std::string>>(std::string_view,
+	const std::vector<std::pair<uint32_t, std::string>>&,
+	const std::function<void(const std::pair<uint32_t, std::string>&, size_t)>&, size_t);
+
 } // namespace generics
