@@ -4,56 +4,78 @@
 	License: MIT
  */
 
-const log = require('../../log');
-const db2 = require('../../casc/db2');
+#include "DBModelFileData.h"
 
-const modelResIDToFileDataID = new Map();
-const fileDataIDs = new Set();
-let initialized = false;
+#include "../../log.h"
+#include "../../casc/db2.h"
+#include "../WDCReader.h"
+
+#include <format>
+#include <unordered_map>
+
+namespace db::caches {
+
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
+}
+
+static std::unordered_map<uint32_t, std::vector<uint32_t>> modelResIDToFileDataID;
+static std::unordered_set<uint32_t> fileDataIDs;
+static bool initialized = false;
 
 /**
  * Initialize model file data from ModelFileData.db2
  */
-const initializeModelFileData = async () => {
+void initializeModelFileData() {
 	if (initialized)
 		return;
 
-	log.write('Loading model mapping...');
+	logging::write("Loading model mapping...");
 
 	// Using the texture mapping, map all model fileDataIDs to used textures.
-	for (const [modelFileDataID, modelFileDataRow] of await db2.ModelFileData.getAllRows()) {
+	auto allRows = casc::db2::preloadTable("ModelFileData").getAllRows();
+	for (const auto& [modelFileDataID, modelFileDataRow] : allRows) {
 		// Keep a list of all FIDs for listfile unknowns.
-		fileDataIDs.add(modelFileDataID);
+		fileDataIDs.insert(modelFileDataID);
 
-		if (modelResIDToFileDataID.has(modelFileDataRow.ModelResourcesID))
-			modelResIDToFileDataID.get(modelFileDataRow.ModelResourcesID).push(modelFileDataID);
+		uint32_t modelResourcesID = fieldToUint32(modelFileDataRow.at("ModelResourcesID"));
+
+		auto it = modelResIDToFileDataID.find(modelResourcesID);
+		if (it != modelResIDToFileDataID.end())
+			it->second.push_back(modelFileDataID);
 		else
-			modelResIDToFileDataID.set(modelFileDataRow.ModelResourcesID, [modelFileDataID]);
+			modelResIDToFileDataID.emplace(modelResourcesID, std::vector<uint32_t>{modelFileDataID});
 	}
-	log.write('Loaded model mapping for %d models', modelResIDToFileDataID.size);
+
+	logging::write(std::format("Loaded model mapping for {} models", modelResIDToFileDataID.size()));
 	initialized = true;
-};
+}
 
 /**
  * Retrieve a model file data ID.
- * @param {number} modelResID 
- * @returns {?number}
+ * @param modelResID Model resource ID to look up.
+ * @returns Pointer to vector of file data IDs, or nullptr if not found.
  */
-const getModelFileDataID = (modelResID) => {
-	return modelResIDToFileDataID.get(modelResID);
-};
+const std::vector<uint32_t>* getModelFileDataID(uint32_t modelResID) {
+	auto it = modelResIDToFileDataID.find(modelResID);
+	if (it != modelResIDToFileDataID.end())
+		return &it->second;
+	return nullptr;
+}
 
 /**
  * Retrieve a list of all file data IDs cached from ModelFileData.db2
  * NOTE: This is reset once called by the listfile module; adjust if needed elsewhere.
- * @returns {Set}
+ * @returns Reference to the set of all model file data IDs.
  */
-const getFileDataIDs = () => {
+const std::unordered_set<uint32_t>& getFileDataIDs() {
 	return fileDataIDs;
-};
+}
 
-module.exports = {
-	initializeModelFileData,
-	getModelFileDataID,
-	getFileDataIDs
-};
+} // namespace db::caches
