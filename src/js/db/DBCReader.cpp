@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <stdexcept>
+#include <sstream>
 #include <regex>
 #include <memory>
 
@@ -153,7 +154,7 @@ void DBCReader::preload() {
  * Load the schema for this table from DBD definitions.
  */
 void DBCReader::loadSchema() {
-	std::filesystem::path fileBaseName = std::filesystem::path(file_name).stem();
+	std::filesystem::path fileBaseName = std::filesystem::path(file_name).filename();
 	const std::string raw_table_name = casc::ExportHelper::replaceExtension(fileBaseName.string());
 
 	// resolve proper casing from dbd manifest
@@ -278,8 +279,11 @@ void DBCReader::parse(BufferWrapper& data) {
 
 	// read header
 	const uint32_t magic = data.readUInt32LE();
-	if (magic != DBC_MAGIC)
-		throw std::runtime_error("Invalid DBC magic: " + std::to_string(magic));
+	if (magic != DBC_MAGIC) {
+		std::ostringstream oss;
+		oss << std::hex << magic;
+		throw std::runtime_error("Invalid DBC magic: " + oss.str());
+	}
 
 	record_count = data.readUInt32LE();
 	field_count = data.readUInt32LE();

@@ -158,6 +158,7 @@ private:
 
 	std::optional<std::map<uint32_t, DataRecord>> rows;
 	BufferWrapper* data = nullptr;
+	BufferWrapper* string_block = nullptr;
 	uint32_t string_block_offset = 0;
 };
 
