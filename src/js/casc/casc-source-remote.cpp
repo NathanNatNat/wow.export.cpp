@@ -48,20 +48,28 @@ void CASCRemote::init() {
 	// Collect version configs for all products.
 	// JS: const promises = constants.PRODUCTS.map(p => this.getVersionConfig(p.product));
 	// JS: const results = await Promise.allSettled(promises);
-	// In C++, we try each product and catch failures.
+	// In C++, we try each product sequentially and catch failures.
+
+	// Iterate through successful requests and extract product config for our region.
 	for (const auto& p : constants::PRODUCTS) {
 		try {
 			auto config = getVersionConfig(std::string(p.product));
-			// Find entry for our region.
+
+			// JS: result.value.find(e => e.Region === this.region)
+			// .find() returns undefined if no match — we push empty map as equivalent.
+			bool regionFound = false;
 			for (auto& entry : config) {
 				if (entry.count("Region") && entry["Region"] == region) {
 					builds.push_back(entry);
+					regionFound = true;
 					break;
 				}
 			}
+			if (!regionFound)
+				builds.push_back({}); // equivalent to JS undefined from .find()
 		} catch (const std::exception& e) {
-			// Iterate through successful requests only — skip failures.
-			builds.push_back({}); // placeholder for index alignment
+			// JS Promise.allSettled: rejected promises are NOT pushed to builds.
+			// Only fulfilled results contribute to the builds array.
 		}
 	}
 
