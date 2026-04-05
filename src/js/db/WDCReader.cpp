@@ -16,11 +16,9 @@
 #include "../casc/export-helper.h"
 
 #include <cstdint>
-#include <cstring>
 #include <cassert>
 #include <algorithm>
 #include <filesystem>
-#include <format>
 #include <stdexcept>
 #include <sstream>
 #include <iomanip>
@@ -80,16 +78,6 @@ static int64_t fieldValueToInt64(const FieldValue& val) {
 	if (auto* p = std::get_if<float>(&val))
 		return static_cast<int64_t>(*p);
 	return 0;
-}
-
-// Helper to set a scalar int64_t value into a FieldValue.
-static void setFieldValueInt64(DataRecord& out, const std::string& prop, int64_t val) {
-	out[prop] = val;
-}
-
-// Helper to set a scalar uint64_t value into a FieldValue.
-static void setFieldValueUInt64(DataRecord& out, const std::string& prop, uint64_t val) {
-	out[prop] = val;
 }
 
 /**
@@ -1122,33 +1110,63 @@ std::optional<DataRecord> WDCReader::_readRecordFromSection(size_t sectionIndex,
 				}
 			} else {
 				uint32_t arrCount = recordFieldInfo.fieldCompressionPacking[2];
-				// Get the array and reinterpret each element
+				// Get the array and reinterpret each element into the proper variant type.
+				// Compressed arrays are initially stored as vector<uint64_t> but must be
+				// converted to the correct type (vector<int64_t>, vector<float>, etc.)
+				// to match what uncompressed reads produce.
 				if (auto* uArr = std::get_if<std::vector<uint64_t>>(&out[prop])) {
-					for (uint32_t i = 0; i < arrCount && i < uArr->size(); i++) {
-						castBuffer->seek(0);
-						castBuffer->writeBigUInt64LE((*uArr)[i]);
+					switch (fieldType) {
+						case FieldType::String:
+							throw std::runtime_error("Compressed string arrays currently not used/supported.");
 
-						castBuffer->seek(0);
-						switch (fieldType) {
-							case FieldType::String:
-								throw std::runtime_error("Compressed string arrays currently not used/supported.");
-
-							case FieldType::Int8: (*uArr)[i] = static_cast<uint64_t>(static_cast<int8_t>(castBuffer->readInt8())); break;
-							case FieldType::UInt8: (*uArr)[i] = castBuffer->readUInt8(); break;
-							case FieldType::Int16: (*uArr)[i] = static_cast<uint64_t>(static_cast<int16_t>(castBuffer->readInt16LE())); break;
-							case FieldType::UInt16: (*uArr)[i] = castBuffer->readUInt16LE(); break;
-							case FieldType::Int32: (*uArr)[i] = static_cast<uint64_t>(static_cast<int32_t>(castBuffer->readInt32LE())); break;
-							case FieldType::UInt32: (*uArr)[i] = castBuffer->readUInt32LE(); break;
-							case FieldType::Int64: (*uArr)[i] = static_cast<uint64_t>(castBuffer->readInt64LE()); break;
-							case FieldType::UInt64: (*uArr)[i] = castBuffer->readUInt64LE(); break;
-							case FieldType::Float: {
-								float fv = castBuffer->readFloatLE();
-								uint64_t fvBits;
-								std::memcpy(&fvBits, &fv, sizeof(float));
-								(*uArr)[i] = fvBits;
-								break;
+						case FieldType::Float: {
+							std::vector<float> result(arrCount);
+							for (uint32_t i = 0; i < arrCount && i < uArr->size(); i++) {
+								castBuffer->seek(0);
+								castBuffer->writeBigUInt64LE((*uArr)[i]);
+								castBuffer->seek(0);
+								result[i] = castBuffer->readFloatLE();
 							}
-							default: break;
+							out[prop] = std::move(result);
+							break;
+						}
+
+						case FieldType::Int8:
+						case FieldType::Int16:
+						case FieldType::Int32:
+						case FieldType::Int64: {
+							std::vector<int64_t> result(arrCount);
+							for (uint32_t i = 0; i < arrCount && i < uArr->size(); i++) {
+								castBuffer->seek(0);
+								castBuffer->writeBigUInt64LE((*uArr)[i]);
+								castBuffer->seek(0);
+								switch (fieldType) {
+									case FieldType::Int8: result[i] = static_cast<int64_t>(castBuffer->readInt8()); break;
+									case FieldType::Int16: result[i] = static_cast<int64_t>(castBuffer->readInt16LE()); break;
+									case FieldType::Int32: result[i] = static_cast<int64_t>(castBuffer->readInt32LE()); break;
+									case FieldType::Int64: result[i] = castBuffer->readInt64LE(); break;
+									default: break;
+								}
+							}
+							out[prop] = std::move(result);
+							break;
+						}
+
+						default: {
+							// UInt8, UInt16, UInt32, UInt64 — reinterpret in-place (already vector<uint64_t>)
+							for (uint32_t i = 0; i < arrCount && i < uArr->size(); i++) {
+								castBuffer->seek(0);
+								castBuffer->writeBigUInt64LE((*uArr)[i]);
+								castBuffer->seek(0);
+								switch (fieldType) {
+									case FieldType::UInt8: (*uArr)[i] = castBuffer->readUInt8(); break;
+									case FieldType::UInt16: (*uArr)[i] = castBuffer->readUInt16LE(); break;
+									case FieldType::UInt32: (*uArr)[i] = castBuffer->readUInt32LE(); break;
+									case FieldType::UInt64: (*uArr)[i] = castBuffer->readUInt64LE(); break;
+									default: break;
+								}
+							}
+							break;
 						}
 					}
 				}
@@ -1176,5 +1194,3 @@ std::optional<DataRecord> WDCReader::_readRecordFromSection(size_t sectionIndex,
 }
 
 } // namespace db
-
-module.exports = WDCReader;
