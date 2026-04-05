@@ -77,4 +77,21 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/gl/VertexArray.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/gl/ShaderProgram.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/AnimMapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBGuildTabard.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBItemGeosets.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBNpcEquipment.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBItems.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBItemDisplays.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBItemModels.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBItemCharTextures.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBCharacterCustomization.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/BoneMapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/GeosetMapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/WMOShaderMapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/ShaderMapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/Shaders.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/Texture.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/Skin.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/camera/CameraControlsGL.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/camera/CharacterCameraControlsGL.cpp
 )
