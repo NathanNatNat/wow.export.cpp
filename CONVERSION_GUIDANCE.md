@@ -73,6 +73,8 @@ This means:
 - The C++ version compiles and behaves identically to the JS original
 - No stubs, no TODOs, no placeholder implementations
 - **Dead code in the JS source MUST also be converted** — if a function, method, constant, or code path exists in the JS file but is currently unused/unreachable, it must still be ported to C++. It may be used in the future, and omitting it would create a hidden gap in functionality
+- **Commented-out code in the JS source MUST also be converted** — if there is commented-out code in the original JS file, convert it to its C++ equivalent but keep it commented out. Do not delete commented-out code. It was commented out for a reason (e.g., debugging, future use, or historical reference) and the C++ version should preserve it in translated form
+- **Original JS comments MUST be preserved** — all comments from the original JS source (doc comments, inline comments, section headers, TODOs, NOTEs, etc.) must be kept in the C++ conversion. You may add new C++ comments where helpful, but the originals must remain. Do not replace, rewrite, or remove existing comments — only supplement them
 
 **If any part of a file is incomplete, it stays at `[~]` (in progress). No exceptions.**
 
