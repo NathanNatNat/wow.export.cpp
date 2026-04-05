@@ -132,12 +132,16 @@ static std::vector<uint32_t> getFileDataIDsByExtension(const std::vector<ExtFilt
 			for (const auto& ext : exts) {
 				if (ext.has_exclusion) {
 					// JS: if (filename.endsWith(ext[0]) && !filename.match(ext[1]))
-					if (filename.ends_with(ext.ext) && !std::regex_search(filename, constants::LISTFILE_MODEL_FILTER()))
+					if (filename.ends_with(ext.ext) && !std::regex_search(filename, constants::LISTFILE_MODEL_FILTER())) {
 						entries.push_back(fileDataID);
+						break;
+					}
 				} else {
 					// JS: if (filename.endsWith(ext))
-					if (filename.ends_with(ext.ext))
+					if (filename.ends_with(ext.ext)) {
 						entries.push_back(fileDataID);
+						break;
+					}
 				}
 			}
 		}, 1000);
@@ -871,7 +875,8 @@ std::optional<uint32_t> getByFilename(const std::string& filename) {
 
 	// JS: if (!lookup && (filename.endsWith('.mdl') || filename.endsWith('mdx')))
 	//     return getByFilename(ExportHelper.replaceExtension(filename, '.m2'));
-	if (!lookup.has_value() && (lower.ends_with(".mdl") || lower.ends_with(".mdx")))
+	// Note: JS checks 'mdx' without dot (matches any suffix ending in 'mdx').
+	if (!lookup.has_value() && (lower.ends_with(".mdl") || lower.ends_with("mdx")))
 		return getByFilename(ExportHelper::replaceExtension(lower, ".m2"));
 
 	return lookup;
