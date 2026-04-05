@@ -2,194 +2,139 @@
 	wow.export (https://github.com/Kruithne/wow.export)
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
-*/
+ */
 
-class GLTexture {
-	/**
-	 * @param {GLContext} ctx
-	 */
-	constructor(ctx) {
-		this.ctx = ctx;
-		this.gl = ctx.gl;
-		this.texture = this.gl.createTexture();
-		this.width = 0;
-		this.height = 0;
-		this.has_alpha = false;
-	}
+#include "GLTexture.h"
+#include "GLContext.h"
+#include "casc/blp.h"
 
-	/**
-	 * @param {number} unit
-	 */
-	bind(unit) {
-		this.ctx.bind_texture(unit, this.texture);
-	}
+#include <algorithm>
+#include <cstring>
+#include <stdexcept>
+#include <vector>
 
-	/**
-	 * Set texture from RGBA pixel data
-	 * @param {Uint8Array|Uint8ClampedArray} pixels
-	 * @param {number} width
-	 * @param {number} height
-	 * @param {object} [options]
-	 */
-	set_rgba(pixels, width, height, options = {}) {
-		const gl = this.gl;
+namespace gl {
 
-		this.width = width;
-		this.height = height;
-		this.has_alpha = options.has_alpha ?? true;
+GLTexture::GLTexture(GLContext& ctx) : ctx_(ctx) {
+	glGenTextures(1, &texture);
+}
 
-		gl.bindTexture(gl.TEXTURE_2D, this.texture);
+void GLTexture::bind(int unit) {
+	ctx_.bind_texture(unit, texture);
+}
 
-		// flip Y to match Three.js texture loading behavior
-		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+void GLTexture::set_rgba(const uint8_t* pixels, int w, int h,
+                          const TextureOptions& options) {
+	width = w;
+	height = h;
+	has_alpha = options.has_alpha;
 
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+	glBindTexture(GL_TEXTURE_2D, texture);
 
-		// reset flip state
-		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-
-		this._apply_wrap(options.wrap_s, options.wrap_t);
-		this._apply_filter(options.min_filter, options.mag_filter);
-
-		if (options.generate_mipmaps)
-			gl.generateMipmap(gl.TEXTURE_2D);
-	}
-
-	/**
-	 * Set texture from canvas
-	 * @param {HTMLCanvasElement} canvas
-	 * @param {object} [options]
-	 */
-	set_canvas(canvas, options = {}) {
-		const gl = this.gl;
-
-		this.width = canvas.width;
-		this.height = canvas.height;
-		this.has_alpha = true;
-
-		gl.bindTexture(gl.TEXTURE_2D, this.texture);
-
-		// flip Y to match Three.js texture loading behavior
-		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
-
-		// reset flip state
-		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-
-		this._apply_wrap(options.wrap_s, options.wrap_t);
-		this._apply_filter(options.min_filter, options.mag_filter);
-
-		if (options.generate_mipmaps)
-			gl.generateMipmap(gl.TEXTURE_2D);
-	}
-
-	/**
-	 * Set compressed texture (DXT)
-	 * @param {object[]} mipmaps - array of {data, width, height}
-	 * @param {number} format - compressed format
-	 */
-	set_compressed(mipmaps, format) {
-		const gl = this.gl;
-
-		if (!this.ctx.ext_s3tc)
-			throw new Error('S3TC compression not supported');
-
-		gl.bindTexture(gl.TEXTURE_2D, this.texture);
-
-		for (let i = 0; i < mipmaps.length; i++) {
-			const mip = mipmaps[i];
-			gl.compressedTexImage2D(gl.TEXTURE_2D, i, format, mip.width, mip.height, 0, mip.data);
+	// flip Y to match Three.js / WebGL UNPACK_FLIP_Y_WEBGL behaviour.
+	// Desktop GL has no UNPACK_FLIP_Y state, so we flip the rows manually.
+	if (options.flip_y && pixels) {
+		const size_t row_bytes = static_cast<size_t>(w) * 4;
+		std::vector<uint8_t> flipped(static_cast<size_t>(w) * h * 4);
+		for (int row = 0; row < h; ++row) {
+			std::memcpy(flipped.data() + row * row_bytes,
+			            pixels + (h - 1 - row) * row_bytes,
+			            row_bytes);
 		}
-
-		this.width = mipmaps[0].width;
-		this.height = mipmaps[0].height;
-
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, mipmaps.length - 1);
-		this._apply_wrap();
-		this._apply_filter(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0,
+		             GL_RGBA, GL_UNSIGNED_BYTE, flipped.data());
+	} else {
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0,
+		             GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 	}
 
-	/**
-	 * @param {number} [wrap_s]
-	 * @param {number} [wrap_t]
-	 */
-	_apply_wrap(wrap_s, wrap_t) {
-		const gl = this.gl;
+	_apply_wrap(options.wrap_s, options.wrap_t);
+	_apply_filter(options.min_filter, options.mag_filter);
 
-		wrap_s = wrap_s ?? gl.CLAMP_TO_EDGE;
-		wrap_t = wrap_t ?? gl.CLAMP_TO_EDGE;
+	if (options.generate_mipmaps)
+		glGenerateMipmap(GL_TEXTURE_2D);
+}
 
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap_s);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap_t);
+// JS set_canvas: adapted from HTMLCanvasElement → raw pixel data.
+// In the original JS this takes an HTMLCanvasElement and reads its pixels
+// via texImage2D(... canvas).  In desktop C++ there is no canvas, so the
+// caller supplies pixel data + dimensions directly.
+void GLTexture::set_canvas(const uint8_t* pixels, int w, int h,
+                            const TextureOptions& options) {
+	TextureOptions opts = options;
+	opts.has_alpha = true; // canvas is always RGBA
+	set_rgba(pixels, w, h, opts);
+}
+
+void GLTexture::set_compressed(std::span<const CompressedMipmap> mipmaps,
+                                GLenum format) {
+	if (!ctx_.ext_s3tc)
+		throw std::runtime_error("S3TC compression not supported");
+
+	glBindTexture(GL_TEXTURE_2D, texture);
+
+	for (size_t i = 0; i < mipmaps.size(); ++i) {
+		const auto& mip = mipmaps[i];
+		glCompressedTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(i), format,
+		                       mip.width, mip.height, 0,
+		                       static_cast<GLsizei>(mip.data.size()),
+		                       mip.data.data());
 	}
 
-	/**
-	 * @param {number} [min_filter]
-	 * @param {number} [mag_filter]
-	 */
-	_apply_filter(min_filter, mag_filter) {
-		const gl = this.gl;
+	width = mipmaps[0].width;
+	height = mipmaps[0].height;
 
-		min_filter = min_filter ?? gl.LINEAR;
-		mag_filter = mag_filter ?? gl.LINEAR;
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL,
+	                static_cast<GLint>(mipmaps.size() - 1));
+	_apply_wrap();
+	_apply_filter(GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR);
+}
 
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, min_filter);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, mag_filter);
+void GLTexture::_apply_wrap(GLenum wrap_s, GLenum wrap_t) {
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_s);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_t);
+}
 
-		// apply anisotropic filtering if available
-		if (this.ctx.ext_aniso && min_filter !== gl.NEAREST)
-			gl.texParameterf(gl.TEXTURE_2D, this.ctx.ext_aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, this.ctx.max_anisotropy));
-	}
+void GLTexture::_apply_filter(GLenum min_filter, GLenum mag_filter) {
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_filter);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag_filter);
 
-	/**
-	 * Set wrap mode
-	 * @param {number} wrap_s
-	 * @param {number} wrap_t
-	 */
-	set_wrap(wrap_s, wrap_t) {
-		const gl = this.gl;
+	// apply anisotropic filtering if available
+	if (ctx_.ext_aniso && min_filter != GL_NEAREST)
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY,
+		                std::min(8.0f, ctx_.max_anisotropy));
+}
 
-		gl.bindTexture(gl.TEXTURE_2D, this.texture);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap_s);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap_t);
-	}
+void GLTexture::set_wrap(GLenum wrap_s, GLenum wrap_t) {
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_s);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_t);
+}
 
-	/**
-	 * Create texture from BLP file
-	 * @param {BLPFile} blp
-	 * @param {object} [flags] - texture flags from M2/WMO
-	 */
-	set_blp(blp, flags = {}) {
-		const gl = this.gl;
+void GLTexture::set_blp(casc::BLPImage& blp, const BLPTextureFlags& flags) {
+	// determine wrap mode from flags
+	bool should_wrap_s = flags.wrap_s.value_or((flags.flags & 0x1) != 0);
+	bool should_wrap_t = flags.wrap_t.value_or((flags.flags & 0x2) != 0);
+	GLenum wrap_s = should_wrap_s ? GL_REPEAT : GL_CLAMP_TO_EDGE;
+	GLenum wrap_t = should_wrap_t ? GL_REPEAT : GL_CLAMP_TO_EDGE;
 
-		// determine wrap mode from flags
-		const wrap_s = (flags.wrap_s ?? (flags.flags & 0x1)) ? gl.REPEAT : gl.CLAMP_TO_EDGE;
-		const wrap_t = (flags.wrap_t ?? (flags.flags & 0x2)) ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+	// for now, always decode to RGBA
+	// todo: support compressed textures when format issues are resolved
+	std::vector<uint8_t> pixels = blp.toUInt8Array(0, 0b1111);
+	set_rgba(pixels.data(), static_cast<int>(blp.width),
+	         static_cast<int>(blp.height), {
+		.has_alpha = blp.alphaDepth > 0,
+		.wrap_s = wrap_s,
+		.wrap_t = wrap_t,
+		.generate_mipmaps = true
+	});
+}
 
-		// for now, always decode to RGBA
-		// todo: support compressed textures when format issues are resolved
-		const pixels = blp.toUInt8Array(0, 0b1111);
-		this.set_rgba(pixels, blp.width, blp.height, {
-			wrap_s: wrap_s,
-			wrap_t: wrap_t,
-			has_alpha: blp.alphaDepth > 0,
-			generate_mipmaps: true
-		});
-	}
-
-	dispose() {
-		if (this.texture) {
-			this.gl.deleteTexture(this.texture);
-			this.texture = null;
-		}
+void GLTexture::dispose() {
+	if (texture) {
+		glDeleteTextures(1, &texture);
+		texture = 0;
 	}
 }
 
-// DXT format constants (from S3TC extension)
-GLTexture.DXT1_RGB = 0x83F0;
-GLTexture.DXT1_RGBA = 0x83F1;
-GLTexture.DXT3 = 0x83F2;
-GLTexture.DXT5 = 0x83F3;
-
-module.exports = GLTexture;
+} // namespace gl

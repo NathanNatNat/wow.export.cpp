@@ -2,303 +2,245 @@
 	wow.export (https://github.com/Kruithne/wow.export)
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
-*/
+ */
 
-const log = require('../../log');
+#include "ShaderProgram.h"
+#include "GLContext.h"
+#include "log.h"
 
-class ShaderProgram {
-	/**
-	 * @param {GLContext} ctx
-	 * @param {string} vert_source
-	 * @param {string} frag_source
-	 */
-	constructor(ctx, vert_source, frag_source) {
-		this.ctx = ctx;
-		this.gl = ctx.gl;
-		this.program = null;
-		this.uniform_locations = new Map();
-		this.uniform_block_indices = new Map();
+#include <format>
 
-		this._compile(vert_source, frag_source);
-	}
+namespace gl {
 
-	/**
-	 * @param {string} vert_source
-	 * @param {string} frag_source
-	 */
-	_compile(vert_source, frag_source) {
-		const gl = this.gl;
-
-		const vert_shader = this._compile_shader(gl.VERTEX_SHADER, vert_source);
-		const frag_shader = this._compile_shader(gl.FRAGMENT_SHADER, frag_source);
-
-		if (!vert_shader || !frag_shader)
-			return;
-
-		const program = gl.createProgram();
-		gl.attachShader(program, vert_shader);
-		gl.attachShader(program, frag_shader);
-		gl.linkProgram(program);
-
-		// shaders can be deleted after linking
-		gl.deleteShader(vert_shader);
-		gl.deleteShader(frag_shader);
-
-		if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-			const info = gl.getProgramInfoLog(program);
-			log.write('Shader program link error: %s', info);
-			gl.deleteProgram(program);
-			return;
-		}
-
-		this.program = program;
-	}
-
-	/**
-	 * @param {number} type
-	 * @param {string} source
-	 * @returns {WebGLShader|null}
-	 */
-	_compile_shader(type, source) {
-		const gl = this.gl;
-		const shader = gl.createShader(type);
-
-		gl.shaderSource(shader, source);
-		gl.compileShader(shader);
-
-		if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-			const info = gl.getShaderInfoLog(shader);
-			const type_name = type === gl.VERTEX_SHADER ? 'vertex' : 'fragment';
-			log.write('Shader compile error (%s): %s', type_name, info);
-			gl.deleteShader(shader);
-			return null;
-		}
-
-		return shader;
-	}
-
-	/**
-	 * @returns {boolean}
-	 */
-	is_valid() {
-		return this.program !== null;
-	}
-
-	use() {
-		this.ctx.use_program(this.program);
-	}
-
-	/**
-	 * @param {string} name
-	 * @returns {WebGLUniformLocation|null}
-	 */
-	get_uniform_location(name) {
-		if (this.uniform_locations.has(name))
-			return this.uniform_locations.get(name);
-
-		const location = this.gl.getUniformLocation(this.program, name);
-		this.uniform_locations.set(name, location);
-		return location;
-	}
-
-	/**
-	 * @param {string} name
-	 * @returns {number}
-	 */
-	get_uniform_block_index(name) {
-		if (this.uniform_block_indices.has(name))
-			return this.uniform_block_indices.get(name);
-
-		const index = this.gl.getUniformBlockIndex(this.program, name);
-		this.uniform_block_indices.set(name, index);
-		return index;
-	}
-
-	/**
-	 * @param {string} name
-	 * @param {number} binding_point
-	 */
-	bind_uniform_block(name, binding_point) {
-		const index = this.get_uniform_block_index(name);
-		if (index !== this.gl.INVALID_INDEX)
-			this.gl.uniformBlockBinding(this.program, index, binding_point);
-	}
-
-	/**
-	 * @param {string} name
-	 * @param {number} value
-	 */
-	set_uniform_1i(name, value) {
-		const loc = this.get_uniform_location(name);
-		if (loc !== null)
-			this.gl.uniform1i(loc, value);
-	}
-
-	/**
-	 * @param {string} name
-	 * @param {number} value
-	 */
-	set_uniform_1f(name, value) {
-		const loc = this.get_uniform_location(name);
-		if (loc !== null)
-			this.gl.uniform1f(loc, value);
-	}
-
-	/**
-	 * @param {string} name
-	 * @param {number} x
-	 * @param {number} y
-	 */
-	set_uniform_2f(name, x, y) {
-		const loc = this.get_uniform_location(name);
-		if (loc !== null)
-			this.gl.uniform2f(loc, x, y);
-	}
-
-	/**
-	 * @param {string} name
-	 * @param {number} x
-	 * @param {number} y
-	 * @param {number} z
-	 */
-	set_uniform_3f(name, x, y, z) {
-		const loc = this.get_uniform_location(name);
-		if (loc !== null)
-			this.gl.uniform3f(loc, x, y, z);
-	}
-
-	/**
-	 * @param {string} name
-	 * @param {number} x
-	 * @param {number} y
-	 * @param {number} z
-	 * @param {number} w
-	 */
-	set_uniform_4f(name, x, y, z, w) {
-		const loc = this.get_uniform_location(name);
-		if (loc !== null)
-			this.gl.uniform4f(loc, x, y, z, w);
-	}
-
-	/**
-	 * @param {string} name
-	 * @param {Float32Array|number[]} value
-	 */
-	set_uniform_3fv(name, value) {
-		const loc = this.get_uniform_location(name);
-		if (loc !== null)
-			this.gl.uniform3fv(loc, value);
-	}
-
-	/**
-	 * @param {string} name
-	 * @param {Float32Array|number[]} value
-	 */
-	set_uniform_4fv(name, value) {
-		const loc = this.get_uniform_location(name);
-		if (loc !== null)
-			this.gl.uniform4fv(loc, value);
-	}
-
-	/**
-	 * @param {string} name
-	 * @param {boolean} transpose
-	 * @param {Float32Array|number[]} value
-	 */
-	set_uniform_mat3(name, transpose, value) {
-		const loc = this.get_uniform_location(name);
-		if (loc !== null)
-			this.gl.uniformMatrix3fv(loc, transpose, value);
-	}
-
-	/**
-	 * @param {string} name
-	 * @param {boolean} transpose
-	 * @param {Float32Array|number[]} value
-	 */
-	set_uniform_mat4(name, transpose, value) {
-		const loc = this.get_uniform_location(name);
-		if (loc !== null)
-			this.gl.uniformMatrix4fv(loc, transpose, value);
-	}
-
-	/**
-	 * @param {string} name
-	 * @param {boolean} transpose
-	 * @param {Float32Array|number[]} value
-	 */
-	set_uniform_mat4_array(name, transpose, value) {
-		const loc = this.get_uniform_location(name);
-		if (loc !== null)
-			this.gl.uniformMatrix4fv(loc, transpose, value);
-	}
-
-	/**
-	 * Recompile shader with new source (hot-reload)
-	 * @param {string} vert_source
-	 * @param {string} frag_source
-	 * @returns {boolean}
-	 */
-	recompile(vert_source, frag_source) {
-		const gl = this.gl;
-
-		const vert_shader = this._compile_shader(gl.VERTEX_SHADER, vert_source);
-		const frag_shader = this._compile_shader(gl.FRAGMENT_SHADER, frag_source);
-
-		if (!vert_shader || !frag_shader) {
-			if (vert_shader)
-				gl.deleteShader(vert_shader);
-
-			if (frag_shader)
-				gl.deleteShader(frag_shader);
-
-			return false;
-		}
-
-		const new_program = gl.createProgram();
-		gl.attachShader(new_program, vert_shader);
-		gl.attachShader(new_program, frag_shader);
-		gl.linkProgram(new_program);
-
-		gl.deleteShader(vert_shader);
-		gl.deleteShader(frag_shader);
-
-		if (!gl.getProgramParameter(new_program, gl.LINK_STATUS)) {
-			const info = gl.getProgramInfoLog(new_program);
-			const log = require('../../log');
-			log.write('Shader program link error on recompile: %s', info);
-			gl.deleteProgram(new_program);
-			return false;
-		}
-
-		// delete old program and swap in new one
-		if (this.program)
-			gl.deleteProgram(this.program);
-
-		this.program = new_program;
-
-		// clear uniform caches since locations change
-		this.uniform_locations.clear();
-		this.uniform_block_indices.clear();
-
-		return true;
-	}
-
-	dispose() {
-		// unregister from Shaders module if tracked
-		if (this._shader_name) {
-			const Shaders = require('../Shaders');
-			Shaders.unregister(this);
-		}
-
-		if (this.program) {
-			this.gl.deleteProgram(this.program);
-			this.program = null;
-		}
-
-		this.uniform_locations.clear();
-		this.uniform_block_indices.clear();
-	}
+ShaderProgram::ShaderProgram(GLContext& ctx, const std::string& vert_source,
+                              const std::string& frag_source)
+	: ctx_(ctx) {
+	_compile(vert_source, frag_source);
 }
 
-module.exports = ShaderProgram;
+void ShaderProgram::_compile(const std::string& vert_source,
+                              const std::string& frag_source) {
+	GLuint vert_shader = _compile_shader(GL_VERTEX_SHADER, vert_source);
+	GLuint frag_shader = _compile_shader(GL_FRAGMENT_SHADER, frag_source);
+
+	if (!vert_shader || !frag_shader) {
+		if (vert_shader)
+			glDeleteShader(vert_shader);
+		if (frag_shader)
+			glDeleteShader(frag_shader);
+		return;
+	}
+
+	GLuint prog = glCreateProgram();
+	glAttachShader(prog, vert_shader);
+	glAttachShader(prog, frag_shader);
+	glLinkProgram(prog);
+
+	// shaders can be deleted after linking
+	glDeleteShader(vert_shader);
+	glDeleteShader(frag_shader);
+
+	GLint link_status = GL_FALSE;
+	glGetProgramiv(prog, GL_LINK_STATUS, &link_status);
+	if (link_status != GL_TRUE) {
+		GLint log_len = 0;
+		glGetProgramiv(prog, GL_INFO_LOG_LENGTH, &log_len);
+		std::string info(static_cast<size_t>(log_len), '\0');
+		glGetProgramInfoLog(prog, log_len, nullptr, info.data());
+		logging::write(std::format("Shader program link error: {}", info));
+		glDeleteProgram(prog);
+		return;
+	}
+
+	program = prog;
+}
+
+GLuint ShaderProgram::_compile_shader(GLenum type, const std::string& source) {
+	GLuint shader = glCreateShader(type);
+	const char* src = source.c_str();
+	glShaderSource(shader, 1, &src, nullptr);
+	glCompileShader(shader);
+
+	GLint compile_status = GL_FALSE;
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &compile_status);
+	if (compile_status != GL_TRUE) {
+		GLint log_len = 0;
+		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_len);
+		std::string info(static_cast<size_t>(log_len), '\0');
+		glGetShaderInfoLog(shader, log_len, nullptr, info.data());
+		const char* type_name = (type == GL_VERTEX_SHADER) ? "vertex" : "fragment";
+		logging::write(std::format("Shader compile error ({}): {}", type_name, info));
+		glDeleteShader(shader);
+		return 0;
+	}
+
+	return shader;
+}
+
+bool ShaderProgram::is_valid() const {
+	return program != 0;
+}
+
+void ShaderProgram::use() {
+	ctx_.use_program(program);
+}
+
+GLint ShaderProgram::get_uniform_location(const std::string& name) {
+	auto it = uniform_locations.find(name);
+	if (it != uniform_locations.end())
+		return it->second;
+
+	GLint location = glGetUniformLocation(program, name.c_str());
+	uniform_locations[name] = location;
+	return location;
+}
+
+GLuint ShaderProgram::get_uniform_block_index(const std::string& name) {
+	auto it = uniform_block_indices.find(name);
+	if (it != uniform_block_indices.end())
+		return it->second;
+
+	GLuint index = glGetUniformBlockIndex(program, name.c_str());
+	uniform_block_indices[name] = index;
+	return index;
+}
+
+void ShaderProgram::bind_uniform_block(const std::string& name,
+                                        GLuint binding_point) {
+	GLuint index = get_uniform_block_index(name);
+	if (index != GL_INVALID_INDEX)
+		glUniformBlockBinding(program, index, binding_point);
+}
+
+void ShaderProgram::set_uniform_1i(const std::string& name, int value) {
+	GLint loc = get_uniform_location(name);
+	if (loc != -1)
+		glUniform1i(loc, value);
+}
+
+void ShaderProgram::set_uniform_1f(const std::string& name, float value) {
+	GLint loc = get_uniform_location(name);
+	if (loc != -1)
+		glUniform1f(loc, value);
+}
+
+void ShaderProgram::set_uniform_2f(const std::string& name, float x, float y) {
+	GLint loc = get_uniform_location(name);
+	if (loc != -1)
+		glUniform2f(loc, x, y);
+}
+
+void ShaderProgram::set_uniform_3f(const std::string& name, float x, float y,
+                                    float z) {
+	GLint loc = get_uniform_location(name);
+	if (loc != -1)
+		glUniform3f(loc, x, y, z);
+}
+
+void ShaderProgram::set_uniform_4f(const std::string& name, float x, float y,
+                                    float z, float w) {
+	GLint loc = get_uniform_location(name);
+	if (loc != -1)
+		glUniform4f(loc, x, y, z, w);
+}
+
+void ShaderProgram::set_uniform_3fv(const std::string& name,
+                                     const float* value, GLsizei count) {
+	GLint loc = get_uniform_location(name);
+	if (loc != -1)
+		glUniform3fv(loc, count, value);
+}
+
+void ShaderProgram::set_uniform_4fv(const std::string& name,
+                                     const float* value, GLsizei count) {
+	GLint loc = get_uniform_location(name);
+	if (loc != -1)
+		glUniform4fv(loc, count, value);
+}
+
+void ShaderProgram::set_uniform_mat3(const std::string& name, bool transpose,
+                                      const float* value) {
+	GLint loc = get_uniform_location(name);
+	if (loc != -1)
+		glUniformMatrix3fv(loc, 1, transpose ? GL_TRUE : GL_FALSE, value);
+}
+
+void ShaderProgram::set_uniform_mat4(const std::string& name, bool transpose,
+                                      const float* value) {
+	GLint loc = get_uniform_location(name);
+	if (loc != -1)
+		glUniformMatrix4fv(loc, 1, transpose ? GL_TRUE : GL_FALSE, value);
+}
+
+void ShaderProgram::set_uniform_mat4_array(const std::string& name,
+                                            bool transpose,
+                                            const float* value,
+                                            GLsizei count) {
+	GLint loc = get_uniform_location(name);
+	if (loc != -1)
+		glUniformMatrix4fv(loc, count, transpose ? GL_TRUE : GL_FALSE, value);
+}
+
+bool ShaderProgram::recompile(const std::string& vert_source,
+                               const std::string& frag_source) {
+	GLuint vert_shader = _compile_shader(GL_VERTEX_SHADER, vert_source);
+	GLuint frag_shader = _compile_shader(GL_FRAGMENT_SHADER, frag_source);
+
+	if (!vert_shader || !frag_shader) {
+		if (vert_shader)
+			glDeleteShader(vert_shader);
+
+		if (frag_shader)
+			glDeleteShader(frag_shader);
+
+		return false;
+	}
+
+	GLuint new_program = glCreateProgram();
+	glAttachShader(new_program, vert_shader);
+	glAttachShader(new_program, frag_shader);
+	glLinkProgram(new_program);
+
+	glDeleteShader(vert_shader);
+	glDeleteShader(frag_shader);
+
+	GLint link_status = GL_FALSE;
+	glGetProgramiv(new_program, GL_LINK_STATUS, &link_status);
+	if (link_status != GL_TRUE) {
+		GLint log_len = 0;
+		glGetProgramiv(new_program, GL_INFO_LOG_LENGTH, &log_len);
+		std::string info(static_cast<size_t>(log_len), '\0');
+		glGetProgramInfoLog(new_program, log_len, nullptr, info.data());
+		logging::write(std::format("Shader program link error on recompile: {}", info));
+		glDeleteProgram(new_program);
+		return false;
+	}
+
+	// delete old program and swap in new one
+	if (program)
+		glDeleteProgram(program);
+
+	program = new_program;
+
+	// clear uniform caches since locations change
+	uniform_locations.clear();
+	uniform_block_indices.clear();
+
+	return true;
+}
+
+void ShaderProgram::dispose() {
+	// unregister from Shaders module if tracked
+	if (!_shader_name.empty() && _unregister_fn)
+		_unregister_fn(this);
+
+	if (program) {
+		glDeleteProgram(program);
+		program = 0;
+	}
+
+	uniform_locations.clear();
+	uniform_block_indices.clear();
+}
+
+} // namespace gl

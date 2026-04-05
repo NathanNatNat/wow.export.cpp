@@ -71,4 +71,9 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/mpq/mpq.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/mpq/build-version.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/mpq/mpq-install.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/gl/GLContext.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/gl/GLTexture.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/gl/UniformBuffer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/gl/VertexArray.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/gl/ShaderProgram.cpp
 )
