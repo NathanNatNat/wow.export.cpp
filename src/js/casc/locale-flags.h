@@ -51,6 +51,8 @@ constexpr std::array<LocaleEntry, 13> entries = {{
 	{ "esES", esES, "Espa\xc3\xb1ol (Espa\xc3\xb1" "a) [esES]" },
 	{ "zhTW", zhTW, "\xe7\xb9\x81\xe9\xab\x94\xe4\xb8\xad\xe6\x96\x87 [zhTW]" },
 	{ "enGB", enGB, "British English [enGB]" },
+	// { "enCN", enCN, "Unknown [enCN]" },
+	// { "enTW", enTW, "Unknown [enTW]" },
 	{ "esMX", esMX, "Espa\xc3\xb1ol (Am\xc3\xa9rica Latina) [esMX]" },
 	{ "ruRU", ruRU, "\xd0\xa0\xd1\x83\xd1\x81\xd1\x81\xd0\xba\xd0\xb8\xd0\xb9 [ruRU]" },
 	{ "ptBR", ptBR, "Portugu\xc3\xaas (Brasil) [ptBR]" },
