@@ -18,8 +18,8 @@ const db2 = require('../casc/db2');
 const ExportHelper = require('../casc/export-helper');
 const listfile = require('../casc/listfile');
 const realmlist = require('../casc/realmlist');
-const { wmv_parse } = require('../wmv');
-const { wowhead_parse } = require('../wowhead');
+// const { wmv_parse } = require('../wmv'); // Removed: wmv module deleted
+// const { wowhead_parse } = require('../wowhead'); // Removed: wowhead module deleted
 const InstallType = require('../install-type');
 const charTextureOverlay = require('../ui/char-texture-overlay');
 const PNGWriter = require('../png-writer');
@@ -985,62 +985,14 @@ async function import_character(core) {
 	core.view.chrModelLoading = false;
 }
 
+// Removed: import_wmv_character() — wmv module deleted
 async function import_wmv_character(core) {
-	const file_input = document.createElement('input');
-	file_input.setAttribute('type', 'file');
-	file_input.setAttribute('accept', '.chr');
-	file_input.setAttribute('nwworkingdir', core.view.config.lastWMVImportPath || '');
-
-	file_input.addEventListener('change', async () => {
-		if (file_input.files.length === 0)
-			return;
-
-		const file = file_input.files[0];
-		const file_path = file.path;
-
-		if (file_path) {
-			const path = require('path');
-			core.view.config.lastWMVImportPath = path.dirname(file_path);
-		}
-
-		core.view.chrModelLoading = true;
-
-		try {
-			const file_content = await file.text();
-			const wmv_data = wmv_parse(file_content);
-			await apply_import_data(core, wmv_data, 'wmv');
-		} catch (e) {
-			log.write('failed to load .chr file: %s', e.message);
-			core.setToast('error', `failed to load .chr file: ${e.message}`, null, -1);
-		}
-
-		core.view.chrModelLoading = false;
-	});
-
-	file_input.click();
+	return;
 }
 
+// Removed: import_wowhead_character() — wowhead module deleted
 async function import_wowhead_character(core) {
-	core.view.characterImportMode = 'none';
-	core.view.chrModelLoading = true;
-
-	const wowhead_url = core.view.chrImportWowheadURL;
-
-	if (!wowhead_url || !wowhead_url.includes('dressing-room')) {
-		core.setToast('error', 'please enter a valid wowhead dressing room url', null, 3000);
-		core.view.chrModelLoading = false;
-		return;
-	}
-
-	try {
-		const wowhead_data = wowhead_parse(wowhead_url);
-		await apply_import_data(core, wowhead_data, 'wowhead');
-	} catch (e) {
-		log.write('failed to parse wowhead url: %s', e.message);
-		core.setToast('error', `failed to import wowhead character: ${e.message}`, null, -1);
-	}
-
-	core.view.chrModelLoading = false;
+	return;
 }
 
 /**

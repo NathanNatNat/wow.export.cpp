@@ -125,7 +125,6 @@ Depend only on Tier 0 files and Node built-ins.
 | File | Lines | Local Dependencies |
 |------|------:|-------------------|
 | `src/js/gpu-info.cpp` | 363 | log, generics |
-| `src/js/external-links.cpp` | 44 | _(Node util only)_ |
 | `src/js/icon-render.cpp` | 108 | core, blp |
 
 ### Tier 4 — CASC Crypto & Low-Level (5 files)
@@ -368,30 +367,27 @@ The main application screens. These depend on nearly everything above.
 | `src/js/modules/tab_textures.cpp` | 471 | log, listfile, blp, buffer, export-helper, blte-reader, db2, texture-exporter, listbox-context, install-type |
 | `src/js/modules/tab_zones.cpp` | 549 | core, log, install-type, db2, blp, buffer, export-helper |
 | `src/js/modules/tab_videos.cpp` | 858 🔴 | log, export-helper, blte-reader, generics, listfile, db2, install-type, constants, core, subtitles, listbox-context, blob |
-| `src/js/modules/tab_items.cpp` | 348 | log, listfile, MultiMap, external-links, DBModelFileData, DBTextureFileData, db2, ItemSlot, install-type, DBItems, EquipmentSlots |
+| `src/js/modules/tab_items.cpp` | 348 | log, listfile, MultiMap, DBModelFileData, DBTextureFileData, db2, ItemSlot, install-type, DBItems, EquipmentSlots |
 | `src/js/modules/tab_item_sets.cpp` | 119 | log, db2, DBItems, install-type, EquipmentSlots |
 | `src/js/modules/tab_decor.cpp` | 612 | log, export-helper, listfile, blte-reader, install-type, listbox-context, DBDecor, DBModelFileData, DBDecorCategories, texture-ribbon, texture-exporter, model-viewer-utils |
 | `src/js/modules/tab_models.cpp` | 653 | log, export-helper, listfile, blte-reader, install-type, listbox-context, DBModelFileData, DBItemDisplays, DBCreatures, texture-ribbon, texture-exporter, model-viewer-utils, buffer |
 | `src/js/modules/tab_models_legacy.cpp` | 593 | log, buffer, export-helper, install-type, listbox-context, constants, M2LegacyRendererGL, WMOLegacyRendererGL, MDXRendererGL, M2LegacyExporter, WMOLegacyExporter, texture-ribbon, AnimMapper, DBCreaturesLegacy |
 | `src/js/modules/tab_maps.cpp` | 1147 🔴 | core, log, listfile, constants, install-type, db2, blp, WDTLoader, ADTExporter, ADTLoader, export-helper, WMOExporter, WMOLoader, tiled-png-writer, png-writer |
 | `src/js/modules/tab_creatures.cpp` | 1374 🔴 | log, export-helper, listfile, blte-reader, install-type, listbox-context, CharMaterialRenderer, blp, M2RendererGL, M2Exporter, DBModelFileData, DBCreatures, DBCreatureList, DBCharacterCustomization, DBCreatureDisplayExtra, DBNpcEquipment, DBItemModels, DBItemGeosets |
-| `src/js/modules/tab_characters.cpp` | 2704 🔴 | log, buffer, generics, CharMaterialRenderer, M2RendererGL, M2Exporter, CharacterExporter, db2, export-helper, listfile, realmlist, wmv, wowhead, install-type, char-texture-overlay, png-writer |
+| `src/js/modules/tab_characters.cpp` | 2704 🔴 | log, buffer, generics, CharMaterialRenderer, M2RendererGL, M2Exporter, CharacterExporter, db2, export-helper, listfile, realmlist, install-type, char-texture-overlay, png-writer |
 | `src/js/modules/legacy_tab_audio.cpp` | 318 | log, generics, export-helper, buffer, audio-helper, listbox-context, install-type |
 | `src/js/modules/legacy_tab_data.cpp` | 325 | log, DBCReader, data-exporter, install-type, export-helper, buffer |
 | `src/js/modules/legacy_tab_files.cpp` | 117 | log, listbox-context, install-type |
 | `src/js/modules/legacy_tab_fonts.cpp` | 173 | log, listbox-context, install-type, font_helpers |
 | `src/js/modules/legacy_tab_textures.cpp` | 191 | log, blp, buffer, texture-exporter, listbox-context, install-type |
 | `src/js/modules/screen_settings.cpp` | 463 | generics, constants, tact-keys, tab_characters |
-| `src/js/modules/screen_source_select.cpp` | 342 | constants, generics, log, external-links, install-type, casc-source-local, casc-source-remote, cdn-resolver, mpq-install |
+| `src/js/modules/screen_source_select.cpp` | 342 | constants, generics, log, install-type, casc-source-local, casc-source-remote, cdn-resolver, mpq-install |
 
-### Tier 23 — Top-Level Glue (6 files)
+### Tier 23 — Top-Level Glue (3 files)
 Module registration, integrations, and entry point. Convert LAST.
 
 | File | Lines | Local Dependencies |
 |------|------:|-------------------|
-| `src/js/wowhead.cpp` | 245 | _(none)_ |
-| `src/js/wmv.cpp` | 177 | xml, EquipmentSlots |
-| `src/js/updater.cpp` | 168 | constants, generics, core, log |
 | `src/js/workers/cache-collector.cpp` | 431 | _(Node worker_threads, https, fs, crypto)_ |
 | `src/js/modules.cpp` | 414 | log, install-type, constants, _all components_ |
 | `src/app.cpp` | 713 | **Entry point — convert last** |

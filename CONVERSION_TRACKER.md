@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 41 / 188 files converted
+**Progress:** 40 / 184 files converted
 
 ---
 
@@ -47,10 +47,9 @@
 - [x] `src/js/config.cpp` (117 lines)
 - [x] `src/js/tiled-png-writer.cpp` (142 lines)
 
-## Tier 3 — Misc Utilities (3 files)
+## Tier 3 — Misc Utilities (2 files)
 
 - [x] `src/js/gpu-info.cpp` (363 lines)
-- [x] `src/js/external-links.cpp` (44 lines)
 - [x] `src/js/icon-render.cpp` (108 lines)
 
 ## Tier 4 — CASC Crypto & Low-Level (5 files)
@@ -268,11 +267,8 @@
 - [ ] `src/js/modules/screen_settings.cpp` (463 lines)
 - [ ] `src/js/modules/screen_source_select.cpp` (342 lines)
 
-## Tier 23 — Top-Level Glue (6 files)
+## Tier 23 — Top-Level Glue (3 files)
 
-- [ ] `src/js/wowhead.cpp` (245 lines)
-- [ ] `src/js/wmv.cpp` (177 lines)
-- [ ] `src/js/updater.cpp` (168 lines)
 - [ ] `src/js/workers/cache-collector.cpp` (431 lines)
 - [ ] `src/js/modules.cpp` (414 lines)
 - [ ] `src/app.cpp` (713 lines) — **Entry point, convert last**

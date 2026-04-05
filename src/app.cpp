@@ -82,7 +82,7 @@ const os = require('os');
 const path = require('path');
 const constants = require('./js/constants');
 const generics = require('./js/generics');
-const updater = require('./js/updater');
+// const updater = require('./js/updater'); // Removed: updater module deleted
 const core = require('./js/core');
 const listfile = require('./js/casc/listfile');
 const dbd_manifest = require('./js/casc/dbd-manifest');
@@ -92,7 +92,7 @@ const config = require('./js/config');
 const tactKeys = require('./js/casc/tact-keys');
 const fsp = require('fs').promises;
 const ExportHelper = require('./js/casc/export-helper');
-const ExternalLinks = require('./js/external-links');
+// const ExternalLinks = require('./js/external-links'); // Removed: external-links module deleted
 const textureRibbon = require('./js/ui/texture-ribbon');
 const Shaders = require('./js/3D/Shaders');
 const gpuInfo = require('./js/gpu-info');
@@ -119,7 +119,7 @@ document.addEventListener('click', function(e) {
 		return;
 
 	e.preventDefault();
-	ExternalLinks.open(externalElement.getAttribute('data-external'));
+	// ExternalLinks.open(externalElement.getAttribute('data-external')); // Removed: external-links module deleted
 });
 
 (async () => {
@@ -442,12 +442,9 @@ document.addEventListener('click', function(e) {
 				return ExportHelper.getExportPath(file);
 			},
 
-			/**
-			 * Returns a reference to the external links module.
-			 * @returns {ExternalLinks}
-			 */
+			// Removed: getExternalLink() — external-links module deleted
 			getExternalLink: function() {
-				return ExternalLinks;
+				return; // Removed: external-links module deleted
 			}
 		},
 
@@ -676,19 +673,18 @@ document.addEventListener('click', function(e) {
 	// Load/update BLTE decryption keys.
 	tactKeys.load();
 
-	// Check for updates.
-	if (BUILD_RELEASE && !DISABLE_AUTO_UPDATE) {
-		core.showLoadingScreen(1, 'Checking for updates...');
-
-		updater.checkForUpdates().then(updateAvailable => {
-			if (updateAvailable) {
-				updater.applyUpdate();
-			} else {
-				core.hideLoadingScreen();
-				modules.source_select.setActive();
-			}
-		});
-	}
+	// Removed: auto-update check — updater module deleted
+	// if (BUILD_RELEASE && !DISABLE_AUTO_UPDATE) {
+	// 	core.showLoadingScreen(1, 'Checking for updates...');
+	// 	updater.checkForUpdates().then(updateAvailable => {
+	// 		if (updateAvailable) {
+	// 			updater.applyUpdate();
+	// 		} else {
+	// 			core.hideLoadingScreen();
+	// 			modules.source_select.setActive();
+	// 		}
+	// 	});
+	// }
 
 	// Load what's new HTML on app start
 	(async () => {
