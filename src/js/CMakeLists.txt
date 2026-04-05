@@ -64,4 +64,7 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBCreaturesLegacy.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBDecor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBDecorCategories.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mpq/bitstream.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mpq/huffman.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mpq/bzip2.cpp
 )
