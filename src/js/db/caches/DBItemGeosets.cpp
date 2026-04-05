@@ -180,8 +180,9 @@ void initialize() {
 			helmet_geoset_vis = fieldToIntVec(helmetVisIt->second);
 
 		// JS: if (geoset_group || helmet_geoset_vis)
-		bool has_geoset = !geoset_group.empty() && std::any_of(geoset_group.begin(), geoset_group.end(), [](int v) { return v != 0; });
-		bool has_helmet = !helmet_geoset_vis.empty() && std::any_of(helmet_geoset_vis.begin(), helmet_geoset_vis.end(), [](int v) { return v != 0; });
+		// In JS, any array (even all zeros) is truthy, so this checks if the field exists.
+		bool has_geoset = geoGrpIt != row.end();
+		bool has_helmet = helmetVisIt != row.end();
 
 		if (has_geoset || has_helmet) {
 			GeosetData data;

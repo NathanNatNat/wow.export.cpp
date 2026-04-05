@@ -69,8 +69,8 @@ std::optional<int> get_geoset_value(uint32_t geoset_id);
 const std::vector<ChrCustMaterialRef>* get_choice_materials(uint32_t choice_id);
 const ChrCustMaterialInfo* get_chr_cust_material(uint32_t mat_id);
 
-const db::DataRecord* get_model_texture_layer(const std::string& key);
-const db::DataRecord* get_model_material(const std::string& key);
+const db::DataRecord* get_model_texture_layer(uint32_t layout_id, uint32_t target_id);
+const db::DataRecord* get_model_material(uint32_t layout_id, uint32_t texture_type);
 const std::vector<db::DataRecord>* get_texture_sections(uint32_t layout_id);
 
 const std::unordered_map<std::string, db::DataRecord>& get_model_material_map();

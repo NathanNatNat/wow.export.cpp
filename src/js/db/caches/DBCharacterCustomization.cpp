@@ -415,14 +415,16 @@ const ChrCustMaterialInfo* get_chr_cust_material(uint32_t mat_id) {
 	return nullptr;
 }
 
-const db::DataRecord* get_model_texture_layer(const std::string& key) {
+const db::DataRecord* get_model_texture_layer(uint32_t layout_id, uint32_t target_id) {
+	std::string key = std::format("{}-{}", layout_id, target_id);
 	auto it = chr_model_texture_layer_map_data.find(key);
 	if (it != chr_model_texture_layer_map_data.end())
 		return &it->second;
 	return nullptr;
 }
 
-const db::DataRecord* get_model_material(const std::string& key) {
+const db::DataRecord* get_model_material(uint32_t layout_id, uint32_t texture_type) {
+	std::string key = std::format("{}-{}", layout_id, texture_type);
 	auto it = chr_model_material_map_data.find(key);
 	if (it != chr_model_material_map_data.end())
 		return &it->second;
