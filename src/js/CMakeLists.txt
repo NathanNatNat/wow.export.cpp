@@ -67,4 +67,8 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/mpq/bitstream.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/mpq/huffman.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/mpq/bzip2.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mpq/pkware.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mpq/mpq.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mpq/build-version.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mpq/mpq-install.cpp
 )

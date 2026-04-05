@@ -2,161 +2,204 @@
 	wow.export (https://github.com/Kruithne/wow.export)
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
-*/
-const path = require('path');
-const fsp = require('fs').promises;
-const { MPQArchive } = require('./mpq');
-const { detect_build_version } = require('./build-version');
-const log = require('../log');
+ */
 
-class MPQInstall {
-	constructor(directory) {
-		this.directory = directory;
-		this.archives = [];
-		this.listfile = new Map(); // filename -> { archive_index, mpq_name }
-		this.build_id = null;
-	}
+#include "mpq-install.h"
+#include "build-version.h"
 
-	close() {
-		for (const { archive } of this.archives)
-			archive.close();
-	}
+#include "../log.h"
+#include "../core.h"
 
-	async _scan_mpq_files(dir) {
-		const entries = await fsp.readdir(dir, { withFileTypes: true });
-		const results = [];
+#include <filesystem>
+#include <algorithm>
+#include <stdexcept>
+#include <format>
 
-		for (const entry of entries) {
-			const full_path = path.join(dir, entry.name);
+namespace mpq {
 
-			if (entry.isDirectory()) {
-				const sub_results = await this._scan_mpq_files(full_path);
-				results.push(...sub_results);
-			} else if (entry.name.toLowerCase().endsWith('.mpq')) {
-				results.push(full_path);
-			}
-		}
+namespace fs = std::filesystem;
 
-		return results.sort();
-	}
+MPQInstall::MPQInstall(const std::string& directory)
+	: directory(directory) {}
 
-	async loadInstall() {
-		const core = require('../core');
-		await core.progressLoadingScreen('Scanning for MPQ Archives');
-
-		const mpq_files = await this._scan_mpq_files(this.directory);
-
-		if (mpq_files.length === 0)
-			throw new Error('No MPQ archives found in directory');
-
-		log.write('Found %d MPQ archives in %s', mpq_files.length, this.directory);
-
-		await core.progressLoadingScreen('Loading MPQ Archives');
-
-		for (const mpq_path of mpq_files) {
-			const archive = new MPQArchive(mpq_path);
-			const info = archive.getInfo();
-			const mpq_name = path.relative(this.directory, mpq_path);
-
-			this.archives.push({
-				name: mpq_name,
-				archive,
-			});
-
-			log.write('Loaded %s: format v%d, %d files, %d hash entries, %d block entries',
-				mpq_name, info.formatVersion, info.fileCount, info.hashTableEntries, info.blockTableEntries);
-
-			for (const filename of archive.files) {
-				this.listfile.set(filename.toLowerCase(), {
-					archive_index: this.archives.length - 1,
-					mpq_name: mpq_name,
-					original_filename: filename
-				});
-			}
-		}
-
-		await core.progressLoadingScreen('MPQ Archives Loaded');
-		log.write('Total files in listfile: %d', this.listfile.size);
-
-		// detect build version
-		const mpq_names = this.archives.map(a => a.name);
-		this.build_id = detect_build_version(this.directory, mpq_names);
-		log.write('Using build version: %s', this.build_id);
-	}
-
-	getFilesByExtension(extension) {
-		const ext = extension.toLowerCase();
-		const results = [];
-
-		for (const [filename, data] of this.listfile) {
-			if (filename.endsWith(ext))
-				results.push(`${data.mpq_name}\\${filename}`);
-		}
-
-		return results;
-	}
-
-	getAllFiles() {
-		const MPQ_FILE_DELETE_MARKER = 0x02000000;
-		const results = [];
-
-		for (const [filename, data] of this.listfile) {
-			const { archive } = this.archives[data.archive_index];
-			const hash_entry = archive.getHashTableEntry(data.original_filename);
-
-			if (hash_entry) {
-				const block_entry = archive.blockTable[hash_entry.blockTableIndex];
-
-				// Skip files marked as deleted
-				if (block_entry && (block_entry.flags & MPQ_FILE_DELETE_MARKER)) {
-					continue;
-				}
-			}
-
-			results.push(`${data.mpq_name}\\${filename}`);
-		}
-
-		return results;
-	}
-
-	getFile(display_path) {
-		// normalize path separators (some files use forward slashes)
-		const normalized_path = display_path.replace(/\//g, '\\');
-
-		// first try direct lookup (for paths without mpq prefix like texture references)
-		const direct_normalized = normalized_path.toLowerCase();
-		const direct_data = this.listfile.get(direct_normalized);
-
-		if (direct_data !== undefined) {
-			const { archive } = this.archives[direct_data.archive_index];
-			return archive.extractFile(direct_data.original_filename);
-		}
-
-		// try stripping mpq name prefix (for display paths like "patch.mpq\Creature\...")
-		if (normalized_path.includes('\\')) {
-			const parts = normalized_path.split('\\');
-
-			// try progressively stripping path components
-			for (let i = 1; i < parts.length; i++) {
-				const test_filename = parts.slice(i).join('\\').toLowerCase();
-				const test_data = this.listfile.get(test_filename);
-				if (test_data !== undefined) {
-					const { archive } = this.archives[test_data.archive_index];
-					return archive.extractFile(test_data.original_filename);
-				}
-			}
-		}
-
-		return null;
-	}
-
-	getFileCount() {
-		return this.listfile.size;
-	}
-
-	getArchiveCount() {
-		return this.archives.length;
-	}
+void MPQInstall::close() {
+	for (auto& entry : archives)
+		entry.archive->close();
 }
 
-module.exports = { MPQInstall };
+void MPQInstall::_scan_mpq_files(const std::string& dir, std::vector<std::string>& results) {
+	for (const auto& entry : fs::directory_iterator(dir)) {
+		const auto full_path = entry.path().string();
+
+		if (entry.is_directory()) {
+			_scan_mpq_files(full_path, results);
+		} else {
+			std::string filename = entry.path().filename().string();
+			std::transform(filename.begin(), filename.end(), filename.begin(),
+			               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+			if (filename.size() >= 4 && filename.substr(filename.size() - 4) == ".mpq")
+				results.push_back(full_path);
+		}
+	}
+
+	std::sort(results.begin(), results.end());
+}
+
+void MPQInstall::loadInstall() {
+	core::progressLoadingScreen("Scanning for MPQ Archives");
+
+	std::vector<std::string> mpq_files;
+	_scan_mpq_files(directory, mpq_files);
+
+	if (mpq_files.empty())
+		throw std::runtime_error("No MPQ archives found in directory");
+
+	logging::write(std::format("Found {} MPQ archives in {}", mpq_files.size(), directory));
+
+	core::progressLoadingScreen("Loading MPQ Archives");
+
+	for (const auto& mpq_path : mpq_files) {
+		auto archive = std::make_unique<MPQArchive>(mpq_path);
+		const auto info = archive->getInfo();
+		const auto mpq_name = fs::relative(fs::path(mpq_path), fs::path(directory)).string();
+
+		logging::write(std::format("Loaded {}: format v{}, {} files, {} hash entries, {} block entries",
+			mpq_name, info.formatVersion, info.fileCount, info.hashTableEntries, info.blockTableEntries));
+
+		for (const auto& filename : archive->files) {
+			std::string lower_filename = filename;
+			std::transform(lower_filename.begin(), lower_filename.end(), lower_filename.begin(),
+			               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+			listfile[lower_filename] = ListfileEntry{
+				archives.size(),
+				mpq_name,
+				filename
+			};
+		}
+
+		archives.push_back(ArchiveEntry{
+			mpq_name,
+			std::move(archive),
+		});
+	}
+
+	core::progressLoadingScreen("MPQ Archives Loaded");
+	logging::write(std::format("Total files in listfile: {}", listfile.size()));
+
+	// detect build version
+	std::vector<std::string> mpq_names;
+	mpq_names.reserve(archives.size());
+	for (const auto& a : archives)
+		mpq_names.push_back(a.name);
+
+	build_id = detect_build_version(directory, mpq_names);
+	logging::write(std::format("Using build version: {}", build_id));
+}
+
+std::vector<std::string> MPQInstall::getFilesByExtension(const std::string& extension) const {
+	std::string ext = extension;
+	std::transform(ext.begin(), ext.end(), ext.begin(),
+	               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+	std::vector<std::string> results;
+
+	for (const auto& [filename, data] : listfile) {
+		if (filename.size() >= ext.size() &&
+		    filename.compare(filename.size() - ext.size(), ext.size(), ext) == 0) {
+			results.push_back(data.mpq_name + "\\" + filename);
+		}
+	}
+
+	return results;
+}
+
+std::vector<std::string> MPQInstall::getAllFiles() const {
+	std::vector<std::string> results;
+
+	for (const auto& [filename, data] : listfile) {
+		const auto& archive = archives[data.archive_index].archive;
+		const auto* hash_entry = archive->getHashTableEntry(data.original_filename);
+
+		if (hash_entry) {
+			if (hash_entry->blockTableIndex < archive->blockTable.size()) {
+				const auto& block_entry = archive->blockTable[hash_entry->blockTableIndex];
+
+				// Skip files marked as deleted
+				if (block_entry.flags & MPQ_FILE_DELETE_MARKER)
+					continue;
+			}
+		}
+
+		results.push_back(data.mpq_name + "\\" + filename);
+	}
+
+	return results;
+}
+
+std::optional<std::vector<uint8_t>> MPQInstall::getFile(const std::string& display_path) const {
+	// normalize path separators (some files use forward slashes)
+	std::string normalized_path = display_path;
+	std::replace(normalized_path.begin(), normalized_path.end(), '/', '\\');
+
+	// first try direct lookup (for paths without mpq prefix like texture references)
+	std::string direct_normalized = normalized_path;
+	std::transform(direct_normalized.begin(), direct_normalized.end(), direct_normalized.begin(),
+	               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+	auto direct_it = listfile.find(direct_normalized);
+	if (direct_it != listfile.end()) {
+		const auto& data = direct_it->second;
+		const auto& archive = archives[data.archive_index].archive;
+		return archive->extractFile(data.original_filename);
+	}
+
+	// try stripping mpq name prefix (for display paths like "patch.mpq\Creature\...")
+	if (normalized_path.find('\\') != std::string::npos) {
+		// split by backslash
+		std::vector<std::string> parts;
+		size_t start = 0;
+		while (start < normalized_path.size()) {
+			size_t pos = normalized_path.find('\\', start);
+			if (pos == std::string::npos) {
+				parts.push_back(normalized_path.substr(start));
+				break;
+			}
+			parts.push_back(normalized_path.substr(start, pos - start));
+			start = pos + 1;
+		}
+
+		// try progressively stripping path components
+		for (size_t i = 1; i < parts.size(); i++) {
+			std::string test_filename;
+			for (size_t j = i; j < parts.size(); j++) {
+				if (!test_filename.empty())
+					test_filename += '\\';
+				test_filename += parts[j];
+			}
+
+			std::transform(test_filename.begin(), test_filename.end(), test_filename.begin(),
+			               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+			auto test_it = listfile.find(test_filename);
+			if (test_it != listfile.end()) {
+				const auto& data = test_it->second;
+				const auto& archive = archives[data.archive_index].archive;
+				return archive->extractFile(data.original_filename);
+			}
+		}
+	}
+
+	return std::nullopt;
+}
+
+size_t MPQInstall::getFileCount() const {
+	return listfile.size();
+}
+
+size_t MPQInstall::getArchiveCount() const {
+	return archives.size();
+}
+
+} // namespace mpq

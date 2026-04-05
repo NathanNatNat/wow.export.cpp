@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 70 / 184 files converted
+**Progress:** 74 / 184 files converted
 
 ---
 
@@ -124,10 +124,10 @@
 - [x] `src/js/mpq/bitstream.cpp` (61 lines)
 - [x] `src/js/mpq/bzip2.cpp` (843 lines) 🔴
 - [x] `src/js/mpq/huffman.cpp` (340 lines)
-- [ ] `src/js/mpq/pkware.cpp` (204 lines)
-- [ ] `src/js/mpq/mpq.cpp` (655 lines)
-- [ ] `src/js/mpq/build-version.cpp` (162 lines)
-- [ ] `src/js/mpq/mpq-install.cpp` (162 lines)
+- [x] `src/js/mpq/pkware.cpp` (204 lines)
+- [x] `src/js/mpq/mpq.cpp` (655 lines)
+- [x] `src/js/mpq/build-version.cpp` (162 lines)
+- [x] `src/js/mpq/mpq-install.cpp` (162 lines)
 
 ## Tier 13 — 3D GL Abstraction (5 files)
 
