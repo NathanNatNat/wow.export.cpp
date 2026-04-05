@@ -46,4 +46,6 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/db/CompressionType.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/FieldType.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/DBDParser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/WDCReader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/DBCReader.cpp
 )
