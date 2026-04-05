@@ -28,7 +28,7 @@ namespace {
 } // anonymous namespace
 
 VP9AVIDemuxer::VP9AVIDemuxer(BLTEStreamReader& stream_reader)
-	: reader(stream_reader), config(std::nullopt), frame_rate(30.0) {
+	: reader(stream_reader), config(std::nullopt), frame_rate(30.0) { // default, will parse from avih chunk
 }
 
 VP9Config VP9AVIDemuxer::parse_header() {
