@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 59 / 184 files converted
+**Progress:** 67 / 184 files converted
 
 ---
 
@@ -110,14 +110,14 @@
 - [x] `src/js/db/caches/DBCreaturesLegacy.cpp` (146 lines)
 - [x] `src/js/db/caches/DBDecor.cpp` (78 lines)
 - [x] `src/js/db/caches/DBDecorCategories.cpp` (62 lines)
-- [ ] `src/js/db/caches/DBGuildTabard.cpp` (133 lines)
-- [ ] `src/js/db/caches/DBItemGeosets.cpp` (487 lines)
-- [ ] `src/js/db/caches/DBNpcEquipment.cpp` (76 lines)
-- [ ] `src/js/db/caches/DBItems.cpp` (96 lines)
-- [ ] `src/js/db/caches/DBItemDisplays.cpp` (66 lines)
-- [ ] `src/js/db/caches/DBItemModels.cpp` (256 lines)
-- [ ] `src/js/db/caches/DBItemCharTextures.cpp` (149 lines)
-- [ ] `src/js/db/caches/DBCharacterCustomization.cpp` (284 lines)
+- [x] `src/js/db/caches/DBGuildTabard.cpp` (133 lines)
+- [x] `src/js/db/caches/DBItemGeosets.cpp` (487 lines)
+- [x] `src/js/db/caches/DBNpcEquipment.cpp` (76 lines)
+- [x] `src/js/db/caches/DBItems.cpp` (96 lines)
+- [x] `src/js/db/caches/DBItemDisplays.cpp` (66 lines)
+- [x] `src/js/db/caches/DBItemModels.cpp` (256 lines)
+- [x] `src/js/db/caches/DBItemCharTextures.cpp` (149 lines)
+- [x] `src/js/db/caches/DBCharacterCustomization.cpp` (284 lines)
 
 ## Tier 12 — MPQ Legacy Format (7 files)
 
