@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 44 / 184 files converted
+**Progress:** 47 / 184 files converted
 
 ---
 
@@ -89,9 +89,9 @@
 
 ## Tier 9 — CASC High-Level Sources (3 files)
 
-- [ ] `src/js/casc/casc-source.cpp` (494 lines)
-- [ ] `src/js/casc/casc-source-remote.cpp` (558 lines)
-- [ ] `src/js/casc/casc-source-local.cpp` (516 lines)
+- [x] `src/js/casc/casc-source.cpp` (494 lines)
+- [x] `src/js/casc/casc-source-remote.cpp` (558 lines)
+- [x] `src/js/casc/casc-source-local.cpp` (516 lines)
 
 ## Tier 10 — WoW Data Definitions (2 files)
 
