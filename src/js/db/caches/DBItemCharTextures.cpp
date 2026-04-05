@@ -4,146 +4,152 @@
 	License: MIT
  */
 
-const log = require('../../log');
-const db2 = require('../../casc/db2');
-const DBTextureFileData = require('./DBTextureFileData');
-const DBComponentTextureFileData = require('./DBComponentTextureFileData');
+#include "DBItemCharTextures.h"
+
+#include "../../log.h"
+#include "../../casc/db2.h"
+#include "../WDCReader.h"
+
+#include "DBTextureFileData.h"
+#include "DBComponentTextureFileData.h"
+
+#include <format>
+#include <unordered_map>
+
+namespace db::caches::DBItemCharTextures {
+
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
+}
+
+static int fieldToInt(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<int>(*p);
+	return 0;
+}
 
 // maps ItemID -> ItemDisplayInfoID
-const item_to_display_id = new Map();
+static std::unordered_map<uint32_t, uint32_t> item_to_display_id;
 
-// maps ItemDisplayInfoID -> array of { componentSection, materialResourcesID }
-const display_to_component_textures = new Map();
-
-let is_initialized = false;
-let init_promise = null;
-
-// component section enum (matches CharComponentTextureSections.SectionType)
-const COMPONENT_SECTION = {
-	ARM_UPPER: 0,
-	ARM_LOWER: 1,
-	HAND: 2,
-	TORSO_UPPER: 3,
-	TORSO_LOWER: 4,
-	LEG_UPPER: 5,
-	LEG_LOWER: 6,
-	FOOT: 7,
-	ACCESSORY: 8
+// maps ItemDisplayInfoID -> array of { section, materialResourcesID }
+struct ComponentEntry {
+	int section;
+	uint32_t materialResourcesID;
 };
+static std::unordered_map<uint32_t, std::vector<ComponentEntry>> display_to_component_textures;
 
-const initialize = async () => {
+static bool is_initialized = false;
+
+void initialize() {
 	if (is_initialized)
 		return;
 
-	if (init_promise)
-		return init_promise;
+	logging::write("Loading item character textures...");
 
-	init_promise = (async () => {
-		log.write('Loading item character textures...');
+	DBTextureFileData::ensureInitialized();
+	DBComponentTextureFileData::initialize();
 
-		await DBTextureFileData.ensureInitialized();
-		await DBComponentTextureFileData.initialize();
+	// build item -> appearance -> display chain
+	std::unordered_map<uint32_t, uint32_t> appearance_map;
+	for (const auto& [_id, row] : casc::db2::preloadTable("ItemModifiedAppearance").getAllRows()) {
+		(void)_id;
+		uint32_t itemID = fieldToUint32(row.at("ItemID"));
+		uint32_t appearanceID = fieldToUint32(row.at("ItemAppearanceID"));
+		appearance_map[itemID] = appearanceID;
+	}
 
-		// build item -> appearance -> display chain
-		const appearance_map = new Map();
-		for (const row of (await db2.ItemModifiedAppearance.getAllRows()).values())
-			appearance_map.set(row.ItemID, row.ItemAppearanceID);
+	std::unordered_map<uint32_t, uint32_t> appearance_to_display;
+	for (const auto& [id, row] : casc::db2::preloadTable("ItemAppearance").getAllRows()) {
+		uint32_t displayID = fieldToUint32(row.at("ItemDisplayInfoID"));
+		appearance_to_display[id] = displayID;
+	}
 
-		const appearance_to_display = new Map();
-		for (const [id, row] of await db2.ItemAppearance.getAllRows())
-			appearance_to_display.set(id, row.ItemDisplayInfoID);
+	// map item id to display id
+	for (const auto& [item_id, appearance_id] : appearance_map) {
+		auto it = appearance_to_display.find(appearance_id);
+		if (it != appearance_to_display.end() && it->second != 0)
+			item_to_display_id[item_id] = it->second;
+	}
 
-		// map item id to display id
-		for (const [item_id, appearance_id] of appearance_map) {
-			const display_id = appearance_to_display.get(appearance_id);
-			if (display_id !== undefined && display_id !== 0)
-				item_to_display_id.set(item_id, display_id);
-		}
+	// load component textures from ItemDisplayInfoMaterialRes
+	for (const auto& [_id, row] : casc::db2::preloadTable("ItemDisplayInfoMaterialRes").getAllRows()) {
+		(void)_id;
+		uint32_t display_id = fieldToUint32(row.at("ItemDisplayInfoID"));
+		ComponentEntry component;
+		component.section = fieldToInt(row.at("ComponentSection"));
+		component.materialResourcesID = fieldToUint32(row.at("MaterialResourcesID"));
 
-		// load component textures from ItemDisplayInfoMaterialRes
-		for (const row of (await db2.ItemDisplayInfoMaterialRes.getAllRows()).values()) {
-			const display_id = row.ItemDisplayInfoID;
-			const component = {
-				section: row.ComponentSection,
-				materialResourcesID: row.MaterialResourcesID
-			};
+		display_to_component_textures[display_id].push_back(component);
+	}
 
-			if (display_to_component_textures.has(display_id))
-				display_to_component_textures.get(display_id).push(component);
-			else
-				display_to_component_textures.set(display_id, [component]);
-		}
+	logging::write(std::format("Loaded character textures for {} item displays", display_to_component_textures.size()));
+	is_initialized = true;
+}
 
-		log.write('Loaded character textures for %d item displays', display_to_component_textures.size);
-		is_initialized = true;
-		init_promise = null;
-	})();
-
-	return init_promise;
-};
-
-const ensure_initialized = async () => {
+void ensureInitialized() {
 	if (!is_initialized)
-		await initialize();
-};
-
-/**
- * Get character texture components for an item.
- * Returns array of { section, fileDataID } for each body part the item covers.
- * @param {number} item_id
- * @param {number} [race_id] - character race ID for filtering
- * @param {number} [gender_index] - 0=male, 1=female for filtering
- * @returns {Array<{section: number, fileDataID: number}>|null}
- */
-const get_item_textures = (item_id, race_id = null, gender_index = null) => {
-	const display_id = item_to_display_id.get(item_id);
-	if (display_id === undefined)
-		return null;
-
-	return get_textures_by_display_id(display_id, race_id, gender_index);
-};
-
-/**
- * Get ItemDisplayInfoID for an item.
- * @param {number} item_id
- * @returns {number|undefined}
- */
-const get_display_id = (item_id) => {
-	return item_to_display_id.get(item_id);
-};
+		initialize();
+}
 
 /**
  * Get character texture components directly by ItemDisplayInfoID.
- * @param {number} display_id
- * @param {number} [race_id] - character race ID for filtering
- * @param {number} [gender_index] - 0=male, 1=female for filtering
- * @returns {Array<{section: number, fileDataID: number}>|null}
  */
-const get_textures_by_display_id = (display_id, race_id = null, gender_index = null) => {
-	const components = display_to_component_textures.get(display_id);
-	if (components === undefined)
-		return null;
+std::optional<std::vector<TextureComponent>> getTexturesByDisplayId(uint32_t display_id, int race_id, int gender_index) {
+	auto comp_it = display_to_component_textures.find(display_id);
+	if (comp_it == display_to_component_textures.end())
+		return std::nullopt;
 
-	const result = [];
-	for (const component of components) {
-		const file_data_ids = DBTextureFileData.getTextureFDIDsByMatID(component.materialResourcesID);
-		if (file_data_ids && file_data_ids.length > 0) {
-			const bestFileDataID = DBComponentTextureFileData.getTextureForRaceGender(file_data_ids, race_id, gender_index);
-			result.push({
-				section: component.section,
-				fileDataID: bestFileDataID
-			});
+	std::vector<TextureComponent> result;
+	for (const auto& component : comp_it->second) {
+		const auto* file_data_ids = DBTextureFileData::getTextureFDIDsByMatID(component.materialResourcesID);
+		if (file_data_ids && !file_data_ids->empty()) {
+			auto bestFileDataID = DBComponentTextureFileData::getTextureForRaceGender(
+				*file_data_ids,
+				(race_id >= 0) ? static_cast<uint32_t>(race_id) : 0,
+				(gender_index >= 0) ? static_cast<uint32_t>(gender_index) : 0,
+				0);
+
+			TextureComponent tc;
+			tc.section = component.section;
+			tc.fileDataID = bestFileDataID.value_or((*file_data_ids)[0]);
+			result.push_back(tc);
 		}
 	}
 
-	return result.length > 0 ? result : null;
-};
+	if (result.empty())
+		return std::nullopt;
+	return result;
+}
 
-module.exports = {
-	initialize,
-	ensureInitialized: ensure_initialized,
-	getItemTextures: get_item_textures,
-	getDisplayId: get_display_id,
-	getTexturesByDisplayId: get_textures_by_display_id,
-	COMPONENT_SECTION
-};
+/**
+ * Get character texture components for an item.
+ */
+std::optional<std::vector<TextureComponent>> getItemTextures(uint32_t item_id, int race_id, int gender_index) {
+	auto disp_it = item_to_display_id.find(item_id);
+	if (disp_it == item_to_display_id.end())
+		return std::nullopt;
+
+	return getTexturesByDisplayId(disp_it->second, race_id, gender_index);
+}
+
+/**
+ * Get ItemDisplayInfoID for an item.
+ */
+std::optional<uint32_t> getDisplayId(uint32_t item_id) {
+	auto it = item_to_display_id.find(item_id);
+	if (it != item_to_display_id.end())
+		return it->second;
+	return std::nullopt;
+}
+
+} // namespace db::caches::DBItemCharTextures

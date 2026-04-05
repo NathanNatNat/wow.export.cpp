@@ -3,94 +3,116 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const log = require('../../log');
-const db2 = require('../../casc/db2');
-const { get_slot_id_for_inventory_type } = require('../../wow/EquipmentSlots');
 
-const items_by_id = new Map();
-let is_initialized = false;
-let init_promise = null;
+#include "DBItems.h"
 
-const initialize_items = async () => {
-	if (is_initialized)
-		return;
+#include "../../log.h"
+#include "../../casc/db2.h"
+#include "../../wow/EquipmentSlots.h"
+#include "../WDCReader.h"
 
-	if (init_promise)
-		return init_promise;
+#include <format>
+#include <unordered_map>
 
-	init_promise = (async () => {
-		log.write('Loading item cache...');
+namespace db::caches::DBItems {
 
-		// load item class/subclass from Item table
-		const item_class_map = new Map();
-		const item_rows = await db2.Item.getAllRows();
-		for (const [item_id, item_row] of item_rows) {
-			item_class_map.set(item_id, {
-				classID: item_row.ClassID,
-				subclassID: item_row.SubclassID
-			});
-		}
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
+}
 
-		const item_sparse_rows = await db2.ItemSparse.getAllRows();
+static std::string fieldToString(const db::FieldValue& val) {
+	if (auto* p = std::get_if<std::string>(&val))
+		return *p;
+	return "";
+}
 
-		for (const [item_id, item_row] of item_sparse_rows) {
-			const class_info = item_class_map.get(item_id);
-			items_by_id.set(item_id, {
-				id: item_id,
-				name: item_row.Display_lang ?? 'Unknown item #' + item_id,
-				inventoryType: item_row.InventoryType,
-				quality: item_row.OverallQualityID ?? 0,
-				classID: class_info?.classID ?? 0,
-				subclassID: class_info?.subclassID ?? 0
-			});
-		}
-
-		log.write('Loaded %d items into cache', items_by_id.size);
-		is_initialized = true;
-		init_promise = null;
-	})();
-
-	return init_promise;
-};
-
-const ensure_initialized = async () => {
-	if (!is_initialized)
-		await initialize_items();
-};
-
-const get_item_by_id = (item_id) => {
-	return items_by_id.get(item_id) ?? null;
-};
-
-const get_item_slot_id = (item_id) => {
-	const item = items_by_id.get(item_id);
-	if (!item)
-		return null;
-
-	return get_slot_id_for_inventory_type(item.inventoryType);
-};
-
-const is_cache_initialized = () => {
-	return is_initialized;
-};
+static std::unordered_map<uint32_t, ItemInfo> items_by_id;
+static bool is_initialized_flag = false;
 
 // item class 2 = Weapon, subclass 2 = Bow
-const ITEM_CLASS_WEAPON = 2;
-const ITEM_SUBCLASS_BOW = 2;
+static constexpr uint32_t ITEM_CLASS_WEAPON = 2;
+static constexpr uint32_t ITEM_SUBCLASS_BOW = 2;
 
-const is_item_bow = (item_id) => {
-	const item = items_by_id.get(item_id);
-	if (!item)
+void initialize() {
+	if (is_initialized_flag)
+		return;
+
+	logging::write("Loading item cache...");
+
+	// load item class/subclass from Item table
+	std::unordered_map<uint32_t, std::pair<uint32_t, uint32_t>> item_class_map;
+	auto item_rows = casc::db2::preloadTable("Item").getAllRows();
+	for (const auto& [item_id, item_row] : item_rows) {
+		uint32_t classID = fieldToUint32(item_row.at("ClassID"));
+		uint32_t subclassID = fieldToUint32(item_row.at("SubclassID"));
+		item_class_map[item_id] = {classID, subclassID};
+	}
+
+	auto item_sparse_rows = casc::db2::preloadTable("ItemSparse").getAllRows();
+
+	for (const auto& [item_id, item_row] : item_sparse_rows) {
+		ItemInfo info;
+		info.id = item_id;
+
+		// JS: item_row.Display_lang ?? 'Unknown item #' + item_id
+		std::string name = fieldToString(item_row.at("Display_lang"));
+		info.name = name.empty() ? std::format("Unknown item #{}", item_id) : std::move(name);
+
+		info.inventoryType = fieldToUint32(item_row.at("InventoryType"));
+
+		// JS: item_row.OverallQualityID ?? 0
+		auto qualIt = item_row.find("OverallQualityID");
+		info.quality = (qualIt != item_row.end()) ? fieldToUint32(qualIt->second) : 0;
+
+		auto classIt = item_class_map.find(item_id);
+		if (classIt != item_class_map.end()) {
+			info.classID = classIt->second.first;
+			info.subclassID = classIt->second.second;
+		}
+
+		items_by_id.emplace(item_id, std::move(info));
+	}
+
+	logging::write(std::format("Loaded {} items into cache", items_by_id.size()));
+	is_initialized_flag = true;
+}
+
+void ensureInitialized() {
+	if (!is_initialized_flag)
+		initialize();
+}
+
+const ItemInfo* getItemById(uint32_t item_id) {
+	auto it = items_by_id.find(item_id);
+	if (it != items_by_id.end())
+		return &it->second;
+	return nullptr;
+}
+
+std::optional<int> getItemSlotId(uint32_t item_id) {
+	auto it = items_by_id.find(item_id);
+	if (it == items_by_id.end())
+		return std::nullopt;
+
+	return wow::get_slot_id_for_inventory_type(static_cast<int>(it->second.inventoryType));
+}
+
+bool isInitialized() {
+	return is_initialized_flag;
+}
+
+bool isItemBow(uint32_t item_id) {
+	auto it = items_by_id.find(item_id);
+	if (it == items_by_id.end())
 		return false;
 
-	return item.classID === ITEM_CLASS_WEAPON && item.subclassID === ITEM_SUBCLASS_BOW;
-};
+	return it->second.classID == ITEM_CLASS_WEAPON && it->second.subclassID == ITEM_SUBCLASS_BOW;
+}
 
-module.exports = {
-	initialize: initialize_items,
-	ensureInitialized: ensure_initialized,
-	getItemById: get_item_by_id,
-	getItemSlotId: get_item_slot_id,
-	isInitialized: is_cache_initialized,
-	isItemBow: is_item_bow
-};
+} // namespace db::caches::DBItems

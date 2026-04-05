@@ -4,484 +4,464 @@
 	License: MIT
  */
 
-const log = require('../../log');
-const db2 = require('../../casc/db2');
+#include "DBItemGeosets.h"
 
-// maps ItemID -> ItemDisplayInfoID
-const item_to_display_id = new Map();
+#include "../../log.h"
+#include "../../casc/db2.h"
+#include "../WDCReader.h"
 
-// maps ItemDisplayInfoID -> geoset data
-const display_to_geosets = new Map();
+#include <format>
+#include <algorithm>
 
-// maps HelmetGeosetVisDataID -> Map<RaceID, number[]>
-const helmet_hide_map = new Map();
+namespace db::caches::DBItemGeosets {
 
-let is_initialized = false;
-let init_promise = null;
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
+}
 
-// geoset group enum (matches CharGeosets from WMV)
-// the value * 100 gives the geoset base
-const CG = {
-	SKIN_OR_HAIR: 0,
-	FACE_1: 1,
-	FACE_2: 2,
-	FACE_3: 3,
-	GLOVES: 4,
-	BOOTS: 5,
-	TAIL: 6,
-	EARS: 7,
-	SLEEVES: 8,
-	KNEEPADS: 9,
-	CHEST: 10,
-	PANTS: 11,
-	TABARD: 12,
-	TROUSERS: 13,
-	DH_LOINCLOTH: 14,
-	CLOAK: 15,
-	FACIAL_JEWELRY: 16,
-	EYEGLOW: 17,
-	BELT: 18,
-	BONE: 19,
-	FEET: 20,
-	SKULL: 21,
-	TORSO: 22,
-	HAND_ATTACHMENT: 23,
-	HEAD_ATTACHMENT: 24,
-	DH_BLINDFOLDS: 25,
-	SHOULDERS: 26,
-	HELM: 27,
-	ARM_UPPER: 28,
-	MECHAGNOME_ARMS: 29,
-	MECHAGNOME_LEGS: 30,
-	MECHAGNOME_FEET: 31,
-	HEAD_SWAP: 32,
-	EYES: 33,
-	EYEBROWS: 34,
-	PIERCINGS: 35,
-	NECKLACE: 36,
-	HEADDRESS: 37,
-	TAILS: 38,
-	MISC_ACCESSORY: 39,
-	MISC_FEATURE: 40,
-	NOSES: 41,
-	HAIR_DECO_A: 42,
-	HORN_DECO: 43,
-	BODY_SIZE: 44,
-	DRACTHYR: 46,
-	EYE_GLOW_B: 51
-};
+static int fieldToInt(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<int>(*p);
+	return 0;
+}
+
+static std::vector<int> fieldToIntVec(const db::FieldValue& val) {
+	std::vector<int> result;
+	if (auto* p = std::get_if<std::vector<int64_t>>(&val)) {
+		result.reserve(p->size());
+		for (auto v : *p)
+			result.push_back(static_cast<int>(v));
+	} else if (auto* p = std::get_if<std::vector<uint64_t>>(&val)) {
+		result.reserve(p->size());
+		for (auto v : *p)
+			result.push_back(static_cast<int>(v));
+	}
+	return result;
+}
 
 // slot id to geoset group mapping per WoWItem.cpp
-// each entry: { group_index: index in GeosetGroup array, char_geoset: CG enum value }
-const SLOT_GEOSET_MAPPING = {
+const std::unordered_map<int, std::vector<SlotGeosetEntry>> SLOT_GEOSET_MAPPING = {
 	// Head: geosetGroup[0] = HELM, geosetGroup[1] = SKULL
-	1: [
-		{ group_index: 0, char_geoset: CG.HELM },
-		{ group_index: 1, char_geoset: CG.SKULL }
-	],
+	{1, {
+		{0, CG::HELM, false},
+		{1, CG::SKULL, false}
+	}},
 	// Shoulder: geosetGroup[0] = SHOULDERS
-	3: [
-		{ group_index: 0, char_geoset: CG.SHOULDERS }
-	],
+	{3, {
+		{0, CG::SHOULDERS, false}
+	}},
 	// Shirt: geosetGroup[0] = CG_SLEEVES, geosetGroup[1] = CG_CHEST
-	4: [
-		{ group_index: 0, char_geoset: CG.SLEEVES },
-		{ group_index: 1, char_geoset: CG.CHEST }
-	],
+	{4, {
+		{0, CG::SLEEVES, false},
+		{1, CG::CHEST, false}
+	}},
 	// Chest: geosetGroup[0] = CG_SLEEVES, geosetGroup[1] = CG_CHEST, geosetGroup[2] = CG_TROUSERS, geosetGroup[3] = CG_TORSO, geosetGroup[4] = ARM_UPPER
-	5: [
-		{ group_index: 0, char_geoset: CG.SLEEVES },
-		{ group_index: 1, char_geoset: CG.CHEST },
-		{ group_index: 2, char_geoset: CG.TROUSERS },
-		{ group_index: 3, char_geoset: CG.TORSO },
-		{ group_index: 4, char_geoset: CG.ARM_UPPER }
-	],
+	{5, {
+		{0, CG::SLEEVES, false},
+		{1, CG::CHEST, false},
+		{2, CG::TROUSERS, false},
+		{3, CG::TORSO, false},
+		{4, CG::ARM_UPPER, false}
+	}},
 	// Waist/Belt: geosetGroup[0] = CG_BELT
-	6: [
-		{ group_index: 0, char_geoset: CG.BELT }
-	],
+	{6, {
+		{0, CG::BELT, false}
+	}},
 	// Pants/Legs: geosetGroup[0] = CG_PANTS, geosetGroup[1] = CG_KNEEPADS, geosetGroup[2] = CG_TROUSERS
-	7: [
-		{ group_index: 0, char_geoset: CG.PANTS },
-		{ group_index: 1, char_geoset: CG.KNEEPADS },
-		{ group_index: 2, char_geoset: CG.TROUSERS }
-	],
+	{7, {
+		{0, CG::PANTS, false},
+		{1, CG::KNEEPADS, false},
+		{2, CG::TROUSERS, false}
+	}},
 	// Boots/Feet: geosetGroup[0] = CG_BOOTS, geosetGroup[1] = CG_FEET (special handling)
-	8: [
-		{ group_index: 0, char_geoset: CG.BOOTS },
-		{ group_index: 1, char_geoset: CG.FEET, special_feet: true }
-	],
+	{8, {
+		{0, CG::BOOTS, false},
+		{1, CG::FEET, true}
+	}},
 	// Wrist/Bracers: no geoset groups
-	9: [],
+	{9, {}},
 	// Hands/Gloves: geosetGroup[0] = CG_GLOVES, geosetGroup[1] = CG_HAND_ATTACHMENT
-	10: [
-		{ group_index: 0, char_geoset: CG.GLOVES },
-		{ group_index: 1, char_geoset: CG.HAND_ATTACHMENT }
-	],
+	{10, {
+		{0, CG::GLOVES, false},
+		{1, CG::HAND_ATTACHMENT, false}
+	}},
 	// Back/Cloak: geosetGroup[0] = CG_CLOAK
-	15: [
-		{ group_index: 0, char_geoset: CG.CLOAK }
-	],
+	{15, {
+		{0, CG::CLOAK, false}
+	}},
 	// Tabard: geosetGroup[0] = CG_TABARD
-	19: [
-		{ group_index: 0, char_geoset: CG.TABARD }
-	]
+	{19, {
+		{0, CG::TABARD, false}
+	}}
 };
 
 // priority system for conflicting geoset groups
-// when multiple slots affect the same char_geoset, higher priority wins
-// order: first slot in array has highest priority
-const GEOSET_PRIORITY = {
-	[CG.SLEEVES]: [10, 5, 4],      // gloves > chest > shirt
-	[CG.CHEST]: [5, 4],            // chest > shirt
-	[CG.TROUSERS]: [5, 7],         // chest > pants
-	[CG.TABARD]: [19],             // tabard only
-	[CG.CLOAK]: [15],              // cloak only
-	[CG.BELT]: [6],                // belt only
-	[CG.FEET]: [8],                // boots only
-	[CG.TORSO]: [5],               // chest only
-	[CG.HAND_ATTACHMENT]: [10],    // gloves only
-	[CG.HELM]: [1],                // head only
-	[CG.ARM_UPPER]: [5],           // chest only
-	[CG.SKULL]: [1],               // head only
-	[CG.SHOULDERS]: [3],           // shoulder only
-	[CG.BOOTS]: [8],               // boots only
-	[CG.GLOVES]: [10],             // gloves only
-	[CG.PANTS]: [7],               // pants only
-	[CG.KNEEPADS]: [7]             // pants only
+const std::unordered_map<int, std::vector<int>> GEOSET_PRIORITY = {
+	{CG::SLEEVES, {10, 5, 4}},      // gloves > chest > shirt
+	{CG::CHEST, {5, 4}},            // chest > shirt
+	{CG::TROUSERS, {5, 7}},         // chest > pants
+	{CG::TABARD, {19}},             // tabard only
+	{CG::CLOAK, {15}},              // cloak only
+	{CG::BELT, {6}},                // belt only
+	{CG::FEET, {8}},                // boots only
+	{CG::TORSO, {5}},               // chest only
+	{CG::HAND_ATTACHMENT, {10}},    // gloves only
+	{CG::HELM, {1}},                // head only
+	{CG::ARM_UPPER, {5}},           // chest only
+	{CG::SKULL, {1}},               // head only
+	{CG::SHOULDERS, {3}},           // shoulder only
+	{CG::BOOTS, {8}},               // boots only
+	{CG::GLOVES, {10}},             // gloves only
+	{CG::PANTS, {7}},               // pants only
+	{CG::KNEEPADS, {7}}             // pants only
 };
 
-const initialize = async () => {
+// maps ItemID -> ItemDisplayInfoID
+static std::unordered_map<uint32_t, uint32_t> item_to_display_id;
+
+// maps ItemDisplayInfoID -> geoset data
+static std::unordered_map<uint32_t, GeosetData> display_to_geosets;
+
+// maps HelmetGeosetVisDataID -> Map<RaceID, vector<int>>
+static std::unordered_map<uint32_t, std::unordered_map<uint32_t, std::vector<int>>> helmet_hide_map;
+
+static bool is_initialized = false;
+
+void initialize() {
 	if (is_initialized)
 		return;
 
-	if (init_promise)
-		return init_promise;
+	logging::write("Loading item geosets...");
 
-	init_promise = (async () => {
-		log.write('Loading item geosets...');
+	// build item -> appearance -> display chain
+	std::unordered_map<uint32_t, uint32_t> appearance_map;
+	for (const auto& [_id, row] : casc::db2::preloadTable("ItemModifiedAppearance").getAllRows()) {
+		(void)_id;
+		uint32_t itemID = fieldToUint32(row.at("ItemID"));
+		uint32_t appearanceID = fieldToUint32(row.at("ItemAppearanceID"));
+		appearance_map[itemID] = appearanceID;
+	}
 
-		// build item -> appearance -> display chain
-		const appearance_map = new Map();
-		for (const row of (await db2.ItemModifiedAppearance.getAllRows()).values())
-			appearance_map.set(row.ItemID, row.ItemAppearanceID);
+	std::unordered_map<uint32_t, uint32_t> appearance_to_display;
+	for (const auto& [id, row] : casc::db2::preloadTable("ItemAppearance").getAllRows()) {
+		uint32_t displayID = fieldToUint32(row.at("ItemDisplayInfoID"));
+		appearance_to_display[id] = displayID;
+	}
 
-		const appearance_to_display = new Map();
-		for (const [id, row] of await db2.ItemAppearance.getAllRows())
-			appearance_to_display.set(id, row.ItemDisplayInfoID);
+	// map item id to display id
+	for (const auto& [item_id, appearance_id] : appearance_map) {
+		auto it = appearance_to_display.find(appearance_id);
+		if (it != appearance_to_display.end() && it->second != 0)
+			item_to_display_id[item_id] = it->second;
+	}
 
-		// map item id to display id
-		for (const [item_id, appearance_id] of appearance_map) {
-			const display_id = appearance_to_display.get(appearance_id);
-			if (display_id !== undefined && display_id !== 0)
-				item_to_display_id.set(item_id, display_id);
+	// load geoset groups from ItemDisplayInfo
+	for (const auto& [display_id, row] : casc::db2::preloadTable("ItemDisplayInfo").getAllRows()) {
+		auto geoGrpIt = row.find("GeosetGroup");
+		auto helmetVisIt = row.find("HelmetGeosetVis");
+
+		std::vector<int> geoset_group;
+		std::vector<int> helmet_geoset_vis;
+
+		if (geoGrpIt != row.end())
+			geoset_group = fieldToIntVec(geoGrpIt->second);
+
+		if (helmetVisIt != row.end())
+			helmet_geoset_vis = fieldToIntVec(helmetVisIt->second);
+
+		// JS: if (geoset_group || helmet_geoset_vis)
+		// In JS, any array (even all zeros) is truthy, so this checks if the field exists.
+		bool has_geoset = geoGrpIt != row.end();
+		bool has_helmet = helmetVisIt != row.end();
+
+		if (has_geoset || has_helmet) {
+			GeosetData data;
+			data.geosetGroup = geoset_group.empty() ? std::vector<int>{0, 0, 0, 0, 0, 0} : std::move(geoset_group);
+			data.helmetGeosetVis = helmet_geoset_vis.empty() ? std::vector<int>{0, 0} : std::move(helmet_geoset_vis);
+			// Ensure minimum sizes
+			while (data.geosetGroup.size() < 6)
+				data.geosetGroup.push_back(0);
+			while (data.helmetGeosetVis.size() < 2)
+				data.helmetGeosetVis.push_back(0);
+			display_to_geosets[display_id] = std::move(data);
 		}
+	}
 
-		// load geoset groups from ItemDisplayInfo
-		for (const [display_id, row] of await db2.ItemDisplayInfo.getAllRows()) {
-			const geoset_group = row.GeosetGroup;
-			const helmet_geoset_vis = row.HelmetGeosetVis;
+	// load helmet hide data from HelmetGeosetData
+	for (const auto& [_id, row] : casc::db2::preloadTable("HelmetGeosetData").getAllRows()) {
+		(void)_id;
+		uint32_t vis_id = fieldToUint32(row.at("HelmetGeosetVisDataID"));
+		uint32_t race_id = fieldToUint32(row.at("RaceID"));
+		int hide_group = fieldToInt(row.at("HideGeosetGroup"));
 
-			if (geoset_group || helmet_geoset_vis) {
-				display_to_geosets.set(display_id, {
-					geosetGroup: geoset_group || [0, 0, 0, 0, 0, 0],
-					helmetGeosetVis: helmet_geoset_vis || [0, 0]
-				});
-			}
-		}
+		helmet_hide_map[vis_id][race_id].push_back(hide_group);
+	}
 
-		// load helmet hide data from HelmetGeosetData
-		for (const row of (await db2.HelmetGeosetData.getAllRows()).values()) {
-			const vis_id = row.HelmetGeosetVisDataID;
-			const race_id = row.RaceID;
-			const hide_group = row.HideGeosetGroup;
+	logging::write(std::format("Loaded geosets for {} item displays, {} helmet visibility rules", display_to_geosets.size(), helmet_hide_map.size()));
+	is_initialized = true;
+}
 
-			if (!helmet_hide_map.has(vis_id))
-				helmet_hide_map.set(vis_id, new Map());
-
-			const race_map = helmet_hide_map.get(vis_id);
-			if (!race_map.has(race_id))
-				race_map.set(race_id, []);
-
-			race_map.get(race_id).push(hide_group);
-		}
-
-		log.write('Loaded geosets for %d item displays, %d helmet visibility rules', display_to_geosets.size, helmet_hide_map.size);
-		is_initialized = true;
-		init_promise = null;
-	})();
-
-	return init_promise;
-};
-
-const ensure_initialized = async () => {
+void ensureInitialized() {
 	if (!is_initialized)
-		await initialize();
-};
+		initialize();
+}
 
 /**
  * Get geoset data for an item's display.
- * @param {number} item_id
- * @returns {{geosetGroup: number[], helmetGeosetVis: number[]}|null}
  */
-const get_item_geoset_data = (item_id) => {
-	const display_id = item_to_display_id.get(item_id);
-	if (display_id === undefined)
-		return null;
+const GeosetData* getItemGeosetData(uint32_t item_id) {
+	auto disp_it = item_to_display_id.find(item_id);
+	if (disp_it == item_to_display_id.end())
+		return nullptr;
 
-	return display_to_geosets.get(display_id) || null;
-};
+	auto geo_it = display_to_geosets.find(disp_it->second);
+	if (geo_it != display_to_geosets.end())
+		return &geo_it->second;
+	return nullptr;
+}
 
 /**
  * Get ItemDisplayInfoID for an item.
- * @param {number} item_id
- * @returns {number|undefined}
  */
-const get_display_id = (item_id) => {
-	return item_to_display_id.get(item_id);
-};
+std::optional<uint32_t> getDisplayId(uint32_t item_id) {
+	auto it = item_to_display_id.find(item_id);
+	if (it != item_to_display_id.end())
+		return it->second;
+	return std::nullopt;
+}
 
 /**
  * Calculate geoset visibility changes for equipped items.
- * Returns a map of char_geoset (CG enum) -> value to show.
- * The actual geoset ID = char_geoset * 100 + value.
- * @param {Object} equipped_items - Map of slot_id -> item_id
- * @returns {Map<number, number>} - Map of char_geoset -> value
  */
-const calculate_equipment_geosets = (equipped_items) => {
+std::unordered_map<int, int> calculateEquipmentGeosets(const std::unordered_map<int, uint32_t>& equipped_items) {
 	// track values per char_geoset, grouped by slot for priority resolution
-	const char_geoset_to_slot_values = new Map();
+	struct SlotValue {
+		int slot_id;
+		int value;
+	};
+	std::unordered_map<int, std::vector<SlotValue>> char_geoset_to_slot_values;
 
-	for (const [slot_id_str, item_id] of Object.entries(equipped_items)) {
-		const slot_id = parseInt(slot_id_str);
-		const mapping = SLOT_GEOSET_MAPPING[slot_id];
-
-		if (!mapping)
+	for (const auto& [slot_id, item_id] : equipped_items) {
+		auto mapping_it = SLOT_GEOSET_MAPPING.find(slot_id);
+		if (mapping_it == SLOT_GEOSET_MAPPING.end())
 			continue;
 
-		const geoset_data = get_item_geoset_data(item_id);
+		const GeosetData* geoset_data = getItemGeosetData(item_id);
 		if (!geoset_data)
 			continue;
 
-		for (const entry of mapping) {
-			const group_value = geoset_data.geosetGroup[entry.group_index] || 0;
-			const char_geoset = entry.char_geoset;
+		for (const auto& entry : mapping_it->second) {
+			int group_value = (entry.group_index < static_cast<int>(geoset_data->geosetGroup.size()))
+				? geoset_data->geosetGroup[entry.group_index] : 0;
 
 			// calculate the value to use (WMV uses 1 + geosetGroup[n] for most)
-			let value;
+			int value;
 			if (entry.special_feet) {
 				// CG_FEET special handling per WoWItem.cpp:
 				// if geosetGroup[1] == 0, use 2
 				// if geosetGroup[1] > 0, use geosetGroup[1]
-				value = group_value === 0 ? 2 : group_value;
+				value = group_value == 0 ? 2 : group_value;
 			} else {
 				value = 1 + group_value;
 			}
 
-			if (!char_geoset_to_slot_values.has(char_geoset))
-				char_geoset_to_slot_values.set(char_geoset, []);
-
-			char_geoset_to_slot_values.get(char_geoset).push({ slot_id, value });
+			char_geoset_to_slot_values[entry.char_geoset].push_back({slot_id, value});
 		}
 	}
 
 	// resolve priorities and build final result
-	const result = new Map();
+	std::unordered_map<int, int> result;
 
-	for (const [char_geoset, slot_values] of char_geoset_to_slot_values) {
-		const priority_order = GEOSET_PRIORITY[char_geoset];
+	for (const auto& [char_geoset, slot_values] : char_geoset_to_slot_values) {
+		auto priority_it = GEOSET_PRIORITY.find(char_geoset);
 
-		if (priority_order) {
-			for (const priority_slot of priority_order) {
-				const entry = slot_values.find(sv => sv.slot_id === priority_slot);
-				if (entry) {
-					result.set(char_geoset, entry.value);
+		if (priority_it != GEOSET_PRIORITY.end()) {
+			for (int priority_slot : priority_it->second) {
+				auto entry_it = std::find_if(slot_values.begin(), slot_values.end(),
+					[priority_slot](const SlotValue& sv) { return sv.slot_id == priority_slot; });
+				if (entry_it != slot_values.end()) {
+					result[char_geoset] = entry_it->value;
 					break;
 				}
 			}
-		} else if (slot_values.length > 0) {
-			result.set(char_geoset, slot_values[0].value);
+		} else if (!slot_values.empty()) {
+			result[char_geoset] = slot_values[0].value;
 		}
 	}
 
 	return result;
-};
+}
 
 /**
  * Get geoset groups that should be hidden when a helmet is equipped.
- * @param {number} item_id - The helmet item ID
- * @param {number} race_id - Character's race ID
- * @param {number} gender_index - 0 for male, 1 for female
- * @returns {number[]} Array of CG enum values to hide
  */
-const get_helmet_hide_geosets = (item_id, race_id, gender_index) => {
-	const geoset_data = get_item_geoset_data(item_id);
-	if (!geoset_data?.helmetGeosetVis)
-		return [];
+std::vector<int> getHelmetHideGeosets(uint32_t item_id, uint32_t race_id, int gender_index) {
+	const GeosetData* geoset_data = getItemGeosetData(item_id);
+	if (!geoset_data || geoset_data->helmetGeosetVis.empty())
+		return {};
 
-	const vis_id = geoset_data.helmetGeosetVis[gender_index];
-	if (!vis_id)
-		return [];
+	if (gender_index < 0 || gender_index >= static_cast<int>(geoset_data->helmetGeosetVis.size()))
+		return {};
 
-	const race_map = helmet_hide_map.get(vis_id);
-	if (!race_map)
-		return [];
+	int vis_id = geoset_data->helmetGeosetVis[gender_index];
+	if (vis_id == 0)
+		return {};
 
-	return race_map.get(race_id) || [];
-};
+	auto vis_it = helmet_hide_map.find(static_cast<uint32_t>(vis_id));
+	if (vis_it == helmet_hide_map.end())
+		return {};
+
+	auto race_it = vis_it->second.find(race_id);
+	if (race_it != vis_it->second.end())
+		return race_it->second;
+	return {};
+}
 
 /**
- * Get the set of char_geosets (CG enum values) that are affected by equipped items.
- * Only includes geosets for items that have display data (excludes hidden items).
- * @param {Object} equipped_items - Map of slot_id -> item_id
- * @returns {Set<number>}
+ * Get the set of char_geosets affected by equipped items.
  */
-const get_affected_char_geosets = (equipped_items) => {
-	const affected = new Set();
+std::unordered_set<int> getAffectedCharGeosets(const std::unordered_map<int, uint32_t>& equipped_items) {
+	std::unordered_set<int> affected;
 
-	for (const [slot_id_str, item_id] of Object.entries(equipped_items)) {
-		const slot_id = parseInt(slot_id_str);
-		const mapping = SLOT_GEOSET_MAPPING[slot_id];
-
-		if (!mapping)
+	for (const auto& [slot_id, item_id] : equipped_items) {
+		auto mapping_it = SLOT_GEOSET_MAPPING.find(slot_id);
+		if (mapping_it == SLOT_GEOSET_MAPPING.end())
 			continue;
 
 		// skip items without display data (hidden items)
-		const geoset_data = get_item_geoset_data(item_id);
+		const GeosetData* geoset_data = getItemGeosetData(item_id);
 		if (!geoset_data)
 			continue;
 
-		for (const entry of mapping)
-			affected.add(entry.char_geoset);
+		for (const auto& entry : mapping_it->second)
+			affected.insert(entry.char_geoset);
 	}
 
 	return affected;
-};
+}
 
 /**
  * Get geoset data directly by ItemDisplayInfoID.
- * @param {number} display_id
- * @returns {{geosetGroup: number[], helmetGeosetVis: number[]}|null}
  */
-const get_geoset_data_by_display_id = (display_id) => {
-	return display_to_geosets.get(display_id) || null;
-};
+const GeosetData* getGeosetDataByDisplayId(uint32_t display_id) {
+	auto it = display_to_geosets.find(display_id);
+	if (it != display_to_geosets.end())
+		return &it->second;
+	return nullptr;
+}
 
 /**
  * Calculate equipment geosets from a Map<slot_id, display_id> (display-ID-based).
- * @param {Map<number, number>} slot_display_map
- * @returns {Map<number, number>}
  */
-const calculate_equipment_geosets_by_display = (slot_display_map) => {
-	const char_geoset_to_slot_values = new Map();
+std::unordered_map<int, int> calculateEquipmentGeosetsByDisplay(const std::unordered_map<int, uint32_t>& slot_display_map) {
+	struct SlotValue {
+		int slot_id;
+		int value;
+	};
+	std::unordered_map<int, std::vector<SlotValue>> char_geoset_to_slot_values;
 
-	for (const [slot_id, display_id] of slot_display_map) {
-		const mapping = SLOT_GEOSET_MAPPING[slot_id];
-		if (!mapping)
+	for (const auto& [slot_id, display_id] : slot_display_map) {
+		auto mapping_it = SLOT_GEOSET_MAPPING.find(slot_id);
+		if (mapping_it == SLOT_GEOSET_MAPPING.end())
 			continue;
 
-		const geoset_data = display_to_geosets.get(display_id);
-		if (!geoset_data)
+		auto geo_it = display_to_geosets.find(display_id);
+		if (geo_it == display_to_geosets.end())
 			continue;
 
-		for (const entry of mapping) {
-			const group_value = geoset_data.geosetGroup[entry.group_index] || 0;
-			const char_geoset = entry.char_geoset;
+		const GeosetData& geoset_data = geo_it->second;
 
-			let value;
+		for (const auto& entry : mapping_it->second) {
+			int group_value = (entry.group_index < static_cast<int>(geoset_data.geosetGroup.size()))
+				? geoset_data.geosetGroup[entry.group_index] : 0;
+
+			int value;
 			if (entry.special_feet)
-				value = group_value === 0 ? 2 : group_value;
+				value = group_value == 0 ? 2 : group_value;
 			else
 				value = 1 + group_value;
 
-			if (!char_geoset_to_slot_values.has(char_geoset))
-				char_geoset_to_slot_values.set(char_geoset, []);
-
-			char_geoset_to_slot_values.get(char_geoset).push({ slot_id, value });
+			char_geoset_to_slot_values[entry.char_geoset].push_back({slot_id, value});
 		}
 	}
 
-	const result = new Map();
+	std::unordered_map<int, int> result;
 
-	for (const [char_geoset, slot_values] of char_geoset_to_slot_values) {
-		const priority_order = GEOSET_PRIORITY[char_geoset];
+	for (const auto& [char_geoset, slot_values] : char_geoset_to_slot_values) {
+		auto priority_it = GEOSET_PRIORITY.find(char_geoset);
 
-		if (priority_order) {
-			for (const priority_slot of priority_order) {
-				const entry = slot_values.find(sv => sv.slot_id === priority_slot);
-				if (entry) {
-					result.set(char_geoset, entry.value);
+		if (priority_it != GEOSET_PRIORITY.end()) {
+			for (int priority_slot : priority_it->second) {
+				auto entry_it = std::find_if(slot_values.begin(), slot_values.end(),
+					[priority_slot](const SlotValue& sv) { return sv.slot_id == priority_slot; });
+				if (entry_it != slot_values.end()) {
+					result[char_geoset] = entry_it->value;
 					break;
 				}
 			}
-		} else if (slot_values.length > 0) {
-			result.set(char_geoset, slot_values[0].value);
+		} else if (!slot_values.empty()) {
+			result[char_geoset] = slot_values[0].value;
 		}
 	}
 
 	return result;
-};
+}
 
 /**
  * Get affected char geosets from a Map<slot_id, display_id> (display-ID-based).
- * @param {Map<number, number>} slot_display_map
- * @returns {Set<number>}
  */
-const get_affected_char_geosets_by_display = (slot_display_map) => {
-	const affected = new Set();
+std::unordered_set<int> getAffectedCharGeosetsByDisplay(const std::unordered_map<int, uint32_t>& slot_display_map) {
+	std::unordered_set<int> affected;
 
-	for (const [slot_id, display_id] of slot_display_map) {
-		const mapping = SLOT_GEOSET_MAPPING[slot_id];
-		if (!mapping)
+	for (const auto& [slot_id, display_id] : slot_display_map) {
+		auto mapping_it = SLOT_GEOSET_MAPPING.find(slot_id);
+		if (mapping_it == SLOT_GEOSET_MAPPING.end())
 			continue;
 
-		const geoset_data = display_to_geosets.get(display_id);
-		if (!geoset_data)
+		auto geo_it = display_to_geosets.find(display_id);
+		if (geo_it == display_to_geosets.end())
 			continue;
 
-		for (const entry of mapping)
-			affected.add(entry.char_geoset);
+		for (const auto& entry : mapping_it->second)
+			affected.insert(entry.char_geoset);
 	}
 
 	return affected;
-};
+}
 
 /**
  * Get helmet hide geosets directly by display ID.
- * @param {number} display_id
- * @param {number} race_id
- * @param {number} gender_index
- * @returns {number[]}
  */
-const get_helmet_hide_geosets_by_display_id = (display_id, race_id, gender_index) => {
-	const geoset_data = display_to_geosets.get(display_id);
-	if (!geoset_data?.helmetGeosetVis)
-		return [];
+std::vector<int> getHelmetHideGeosetsByDisplayId(uint32_t display_id, uint32_t race_id, int gender_index) {
+	auto geo_it = display_to_geosets.find(display_id);
+	if (geo_it == display_to_geosets.end() || geo_it->second.helmetGeosetVis.empty())
+		return {};
 
-	const vis_id = geoset_data.helmetGeosetVis[gender_index];
-	if (!vis_id)
-		return [];
+	if (gender_index < 0 || gender_index >= static_cast<int>(geo_it->second.helmetGeosetVis.size()))
+		return {};
 
-	const race_map = helmet_hide_map.get(vis_id);
-	if (!race_map)
-		return [];
+	int vis_id = geo_it->second.helmetGeosetVis[gender_index];
+	if (vis_id == 0)
+		return {};
 
-	return race_map.get(race_id) || [];
-};
+	auto vis_it = helmet_hide_map.find(static_cast<uint32_t>(vis_id));
+	if (vis_it == helmet_hide_map.end())
+		return {};
 
-module.exports = {
-	initialize,
-	ensureInitialized: ensure_initialized,
-	getItemGeosetData: get_item_geoset_data,
-	getDisplayId: get_display_id,
-	calculateEquipmentGeosets: calculate_equipment_geosets,
-	getAffectedCharGeosets: get_affected_char_geosets,
-	getHelmetHideGeosets: get_helmet_hide_geosets,
-	getGeosetDataByDisplayId: get_geoset_data_by_display_id,
-	calculateEquipmentGeosetsByDisplay: calculate_equipment_geosets_by_display,
-	getAffectedCharGeosetsByDisplay: get_affected_char_geosets_by_display,
-	getHelmetHideGeosetsByDisplayId: get_helmet_hide_geosets_by_display_id,
-	SLOT_GEOSET_MAPPING,
-	GEOSET_PRIORITY,
-	CG
-};
+	auto race_it = vis_it->second.find(race_id);
+	if (race_it != vis_it->second.end())
+		return race_it->second;
+	return {};
+}
+
+} // namespace db::caches::DBItemGeosets
