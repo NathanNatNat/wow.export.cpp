@@ -4,130 +4,196 @@
 	License: MIT
  */
 
-const log = require('../../log');
-const db2 = require('../../casc/db2');
+#include "DBGuildTabard.h"
+
+#include "../../log.h"
+#include "../../casc/db2.h"
+#include "../WDCReader.h"
+
+#include <format>
+#include <unordered_set>
+
+namespace db::caches::DBGuildTabard {
+
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
+}
+
+static int fieldToInt(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<int>(*p);
+	return 0;
+}
 
 // item_id -> tier
-const GUILD_TABARD_ITEM_IDS = { 5976: 0, 69209: 1, 69210: 2 };
+const std::unordered_map<uint32_t, int> GUILD_TABARD_ITEM_IDS = { {5976, 0}, {69209, 1}, {69210, 2} };
 
 // tier-component-color -> FileDataID
-const background_map = new Map();
+static std::unordered_map<std::string, uint32_t> background_map;
 
 // tier-component-borderID-color -> FileDataID
-const border_map = new Map();
+static std::unordered_map<std::string, uint32_t> border_map;
 
 // component-emblemID-color -> FileDataID
-const emblem_map = new Map();
+static std::unordered_map<std::string, uint32_t> emblem_map;
 
 // color_id -> { r, g, b }
-const background_colors = new Map();
-const border_colors = new Map();
-const emblem_colors = new Map();
+static std::unordered_map<uint32_t, ColorRGB> background_colors_map;
+static std::unordered_map<uint32_t, ColorRGB> border_colors_map;
+static std::unordered_map<uint32_t, ColorRGB> emblem_colors_map;
 
-let background_color_count = 0;
-let border_style_counts = [0, 0, 0]; // per tier
-let border_color_count = 0;
-let emblem_design_count = 0;
-let emblem_color_count = 0;
+static int background_color_count = 0;
+static int border_style_counts[3] = {0, 0, 0}; // per tier
+static int border_color_count = 0;
+static int emblem_design_count = 0;
+static int emblem_color_count = 0;
 
-let is_initialized = false;
-let init_promise = null;
+static bool is_initialized = false;
 
-const initialize = async () => {
+void initialize() {
 	if (is_initialized)
 		return;
 
-	if (init_promise)
-		return init_promise;
+	logging::write("Loading guild tabard data...");
 
-	init_promise = (async () => {
-		log.write('Loading guild tabard data...');
+	std::unordered_set<int> bg_colors;
+	for (const auto& [_id, row] : casc::db2::preloadTable("GuildTabardBackground").getAllRows()) {
+		(void)_id;
+		int tier = fieldToInt(row.at("Tier"));
+		int component = fieldToInt(row.at("Component"));
+		int color = fieldToInt(row.at("Color"));
+		uint32_t fdid = fieldToUint32(row.at("FileDataID"));
+		background_map[std::format("{}-{}-{}", tier, component, color)] = fdid;
+		bg_colors.insert(color);
+	}
+	background_color_count = static_cast<int>(bg_colors.size());
 
-		const bg_colors = new Set();
-		for (const row of (await db2.GuildTabardBackground.getAllRows()).values()) {
-			background_map.set(row.Tier + '-' + row.Component + '-' + row.Color, row.FileDataID);
-			bg_colors.add(row.Color);
-		}
-		background_color_count = bg_colors.size;
+	std::unordered_set<int> border_styles[3];
+	std::unordered_set<int> border_color_ids;
+	for (const auto& [_id, row] : casc::db2::preloadTable("GuildTabardBorder").getAllRows()) {
+		(void)_id;
+		int tier = fieldToInt(row.at("Tier"));
+		int component = fieldToInt(row.at("Component"));
+		int borderID = fieldToInt(row.at("BorderID"));
+		int color = fieldToInt(row.at("Color"));
+		uint32_t fdid = fieldToUint32(row.at("FileDataID"));
+		border_map[std::format("{}-{}-{}-{}", tier, component, borderID, color)] = fdid;
+		if (tier >= 0 && tier < 3)
+			border_styles[tier].insert(borderID);
+		border_color_ids.insert(color);
+	}
+	for (int i = 0; i < 3; i++)
+		border_style_counts[i] = static_cast<int>(border_styles[i].size());
+	border_color_count = static_cast<int>(border_color_ids.size());
 
-		const border_styles = [new Set(), new Set(), new Set()];
-		const border_color_ids = new Set();
-		for (const row of (await db2.GuildTabardBorder.getAllRows()).values()) {
-			border_map.set(row.Tier + '-' + row.Component + '-' + row.BorderID + '-' + row.Color, row.FileDataID);
-			if (border_styles[row.Tier])
-				border_styles[row.Tier].add(row.BorderID);
-			border_color_ids.add(row.Color);
-		}
-		border_style_counts = border_styles.map(s => s.size);
-		border_color_count = border_color_ids.size;
+	std::unordered_set<int> emblem_designs;
+	std::unordered_set<int> emblem_color_ids;
+	for (const auto& [_id, row] : casc::db2::preloadTable("GuildTabardEmblem").getAllRows()) {
+		(void)_id;
+		int component = fieldToInt(row.at("Component"));
+		int emblemID = fieldToInt(row.at("EmblemID"));
+		int color = fieldToInt(row.at("Color"));
+		uint32_t fdid = fieldToUint32(row.at("FileDataID"));
+		emblem_map[std::format("{}-{}-{}", component, emblemID, color)] = fdid;
+		emblem_designs.insert(emblemID);
+		emblem_color_ids.insert(color);
+	}
+	emblem_design_count = static_cast<int>(emblem_designs.size());
+	emblem_color_count = static_cast<int>(emblem_color_ids.size());
 
-		const emblem_designs = new Set();
-		const emblem_color_ids = new Set();
-		for (const row of (await db2.GuildTabardEmblem.getAllRows()).values()) {
-			emblem_map.set(row.Component + '-' + row.EmblemID + '-' + row.Color, row.FileDataID);
-			emblem_designs.add(row.EmblemID);
-			emblem_color_ids.add(row.Color);
-		}
-		emblem_design_count = emblem_designs.size;
-		emblem_color_count = emblem_color_ids.size;
+	// load actual RGB color values
+	for (const auto& [id, row] : casc::db2::preloadTable("GuildColorBackground").getAllRows())
+		background_colors_map[id] = { fieldToUint32(row.at("Red")), fieldToUint32(row.at("Green")), fieldToUint32(row.at("Blue")) };
 
-		// load actual RGB color values
-		for (const [id, row] of (await db2.GuildColorBackground.getAllRows()).entries())
-			background_colors.set(id, { r: row.Red, g: row.Green, b: row.Blue });
+	for (const auto& [id, row] : casc::db2::preloadTable("GuildColorBorder").getAllRows())
+		border_colors_map[id] = { fieldToUint32(row.at("Red")), fieldToUint32(row.at("Green")), fieldToUint32(row.at("Blue")) };
 
-		for (const [id, row] of (await db2.GuildColorBorder.getAllRows()).entries())
-			border_colors.set(id, { r: row.Red, g: row.Green, b: row.Blue });
+	for (const auto& [id, row] : casc::db2::preloadTable("GuildColorEmblem").getAllRows())
+		emblem_colors_map[id] = { fieldToUint32(row.at("Red")), fieldToUint32(row.at("Green")), fieldToUint32(row.at("Blue")) };
 
-		for (const [id, row] of (await db2.GuildColorEmblem.getAllRows()).entries())
-			emblem_colors.set(id, { r: row.Red, g: row.Green, b: row.Blue });
+	logging::write(std::format("Loaded guild tabard data: {} backgrounds, {} borders, {} emblems", background_map.size(), border_map.size(), emblem_map.size()));
+	is_initialized = true;
+}
 
-		log.write('Loaded guild tabard data: %d backgrounds, %d borders, %d emblems', background_map.size, border_map.size, emblem_map.size);
-		is_initialized = true;
-		init_promise = null;
-	})();
-
-	return init_promise;
-};
-
-const ensure_initialized = async () => {
+void ensureInitialized() {
 	if (!is_initialized)
-		await initialize();
-};
+		initialize();
+}
 
-const is_guild_tabard = (item_id) => {
-	return item_id in GUILD_TABARD_ITEM_IDS;
-};
+bool isGuildTabard(uint32_t item_id) {
+	return GUILD_TABARD_ITEM_IDS.contains(item_id);
+}
 
-const get_tabard_tier = (item_id) => {
-	return GUILD_TABARD_ITEM_IDS[item_id] ?? -1;
-};
+int getTabardTier(uint32_t item_id) {
+	auto it = GUILD_TABARD_ITEM_IDS.find(item_id);
+	if (it != GUILD_TABARD_ITEM_IDS.end())
+		return it->second;
+	return -1;
+}
 
-const get_background_fdid = (tier, component, color) => {
-	return background_map.get(tier + '-' + component + '-' + color) ?? 0;
-};
+uint32_t getBackgroundFDID(int tier, int component, int color) {
+	auto it = background_map.find(std::format("{}-{}-{}", tier, component, color));
+	if (it != background_map.end())
+		return it->second;
+	return 0;
+}
 
-const get_border_fdid = (tier, component, border_id, color) => {
-	return border_map.get(tier + '-' + component + '-' + border_id + '-' + color) ?? 0;
-};
+uint32_t getBorderFDID(int tier, int component, int border_id, int color) {
+	auto it = border_map.find(std::format("{}-{}-{}-{}", tier, component, border_id, color));
+	if (it != border_map.end())
+		return it->second;
+	return 0;
+}
 
-const get_emblem_fdid = (component, emblem_id, color) => {
-	return emblem_map.get(component + '-' + emblem_id + '-' + color) ?? 0;
-};
+uint32_t getEmblemFDID(int component, int emblem_id, int color) {
+	auto it = emblem_map.find(std::format("{}-{}-{}", component, emblem_id, color));
+	if (it != emblem_map.end())
+		return it->second;
+	return 0;
+}
 
-module.exports = {
-	initialize,
-	ensureInitialized: ensure_initialized,
-	isGuildTabard: is_guild_tabard,
-	getTabardTier: get_tabard_tier,
-	getBackgroundFDID: get_background_fdid,
-	getBorderFDID: get_border_fdid,
-	getEmblemFDID: get_emblem_fdid,
-	getBackgroundColorCount: () => background_color_count,
-	getBorderStyleCount: (tier) => border_style_counts[tier] ?? 0,
-	getBorderColorCount: () => border_color_count,
-	getEmblemDesignCount: () => emblem_design_count,
-	getEmblemColorCount: () => emblem_color_count,
-	getBackgroundColors: () => background_colors,
-	getBorderColors: () => border_colors,
-	getEmblemColors: () => emblem_colors
-};
+int getBackgroundColorCount() {
+	return background_color_count;
+}
+
+int getBorderStyleCount(int tier) {
+	if (tier >= 0 && tier < 3)
+		return border_style_counts[tier];
+	return 0;
+}
+
+int getBorderColorCount() {
+	return border_color_count;
+}
+
+int getEmblemDesignCount() {
+	return emblem_design_count;
+}
+
+int getEmblemColorCount() {
+	return emblem_color_count;
+}
+
+const std::unordered_map<uint32_t, ColorRGB>& getBackgroundColors() {
+	return background_colors_map;
+}
+
+const std::unordered_map<uint32_t, ColorRGB>& getBorderColors() {
+	return border_colors_map;
+}
+
+const std::unordered_map<uint32_t, ColorRGB>& getEmblemColors() {
+	return emblem_colors_map;
+}
+
+} // namespace db::caches::DBGuildTabard

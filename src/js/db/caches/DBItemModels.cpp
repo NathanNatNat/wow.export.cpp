@@ -4,253 +4,273 @@
 	License: MIT
  */
 
-const log = require('../../log');
-const db2 = require('../../casc/db2');
-const DBModelFileData = require('./DBModelFileData');
-const DBTextureFileData = require('./DBTextureFileData');
-const DBComponentModelFileData = require('./DBComponentModelFileData');
+#include "DBItemModels.h"
+
+#include "../../log.h"
+#include "../../casc/db2.h"
+#include "../WDCReader.h"
+
+#include "DBModelFileData.h"
+#include "DBTextureFileData.h"
+#include "DBComponentModelFileData.h"
+
+#include <format>
+#include <unordered_map>
+#include <algorithm>
+
+namespace db::caches::DBItemModels {
+
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
+}
+
+static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
+	std::vector<uint32_t> result;
+	if (auto* p = std::get_if<std::vector<int64_t>>(&val)) {
+		result.reserve(p->size());
+		for (auto v : *p)
+			result.push_back(static_cast<uint32_t>(v));
+	} else if (auto* p = std::get_if<std::vector<uint64_t>>(&val)) {
+		result.reserve(p->size());
+		for (auto v : *p)
+			result.push_back(static_cast<uint32_t>(v));
+	}
+	return result;
+}
+
+static std::vector<int> fieldToIntVec(const db::FieldValue& val) {
+	std::vector<int> result;
+	if (auto* p = std::get_if<std::vector<int64_t>>(&val)) {
+		result.reserve(p->size());
+		for (auto v : *p)
+			result.push_back(static_cast<int>(v));
+	} else if (auto* p = std::get_if<std::vector<uint64_t>>(&val)) {
+		result.reserve(p->size());
+		for (auto v : *p)
+			result.push_back(static_cast<int>(v));
+	}
+	return result;
+}
 
 // maps ItemID -> ItemDisplayInfoID
-const item_to_display_id = new Map();
+static std::unordered_map<uint32_t, uint32_t> item_to_display_id;
 
-// maps ItemDisplayInfoID -> { modelOptions: [[fdid, ...], ...], textures: [fdid, ...], geosetGroup: [...], attachmentGeosetGroup: [...] }
-const display_to_data = new Map();
+// maps ItemDisplayInfoID -> internal display data
+struct InternalDisplayData {
+	std::vector<std::vector<uint32_t>> modelOptions;
+	std::vector<uint32_t> textures;
+	std::vector<int> geosetGroup;
+	std::vector<int> attachmentGeosetGroup;
+};
+static std::unordered_map<uint32_t, InternalDisplayData> display_to_data;
 
-let is_initialized = false;
-let init_promise = null;
+static bool is_initialized = false;
 
-const initialize = async () => {
+// Helper: resolve models from internal data with optional race/gender filtering
+static ItemDisplayData resolveDisplayData(uint32_t display_id, const InternalDisplayData& data, int race_id, int gender_index) {
+	ItemDisplayData result;
+	result.ID = display_id;
+	result.textures = data.textures;
+	result.geosetGroup = data.geosetGroup;
+	result.attachmentGeosetGroup = data.attachmentGeosetGroup;
+
+	// check if this is a shoulder-type item (2 model options with identical content)
+	bool is_shoulder_style = false;
+	if (data.modelOptions.size() == 2 &&
+		!data.modelOptions[0].empty() &&
+		!data.modelOptions[1].empty() &&
+		data.modelOptions[0].size() == data.modelOptions[1].size()) {
+		is_shoulder_style = std::equal(data.modelOptions[0].begin(), data.modelOptions[0].end(),
+			data.modelOptions[1].begin());
+	}
+
+	if (is_shoulder_style && race_id >= 0 && gender_index >= 0) {
+		// for shoulders, select two models with different PositionIndex values
+		const auto& options = data.modelOptions[0];
+		auto candidates = DBComponentModelFileData::getModelsForRaceGenderByPosition(
+			options, static_cast<uint32_t>(race_id), static_cast<uint32_t>(gender_index));
+
+		if (candidates.left)
+			result.models.push_back(*candidates.left);
+
+		if (candidates.right)
+			result.models.push_back(*candidates.right);
+	} else {
+		// standard logic for non-shoulder items
+		for (const auto& options : data.modelOptions) {
+			if (options.empty())
+				continue;
+
+			if (race_id >= 0 && gender_index >= 0) {
+				auto best = DBComponentModelFileData::getModelForRaceGender(
+					options, static_cast<uint32_t>(race_id), static_cast<uint32_t>(gender_index));
+				if (best)
+					result.models.push_back(*best);
+			} else {
+				result.models.push_back(options[0]);
+			}
+		}
+	}
+
+	return result;
+}
+
+void initialize() {
 	if (is_initialized)
 		return;
 
-	if (init_promise)
-		return init_promise;
+	logging::write("Loading item models...");
 
-	init_promise = (async () => {
-		log.write('Loading item models...');
+	DBModelFileData::initializeModelFileData();
+	DBTextureFileData::ensureInitialized();
+	DBComponentModelFileData::initialize();
 
-		await DBModelFileData.initializeModelFileData();
-		await DBTextureFileData.ensureInitialized();
-		await DBComponentModelFileData.initialize();
+	// build item -> appearance -> display chain
+	std::unordered_map<uint32_t, uint32_t> appearance_map;
+	for (const auto& [_id, row] : casc::db2::preloadTable("ItemModifiedAppearance").getAllRows()) {
+		(void)_id;
+		uint32_t itemID = fieldToUint32(row.at("ItemID"));
+		uint32_t appearanceID = fieldToUint32(row.at("ItemAppearanceID"));
+		appearance_map[itemID] = appearanceID;
+	}
 
-		// build item -> appearance -> display chain
-		const appearance_map = new Map();
-		for (const row of (await db2.ItemModifiedAppearance.getAllRows()).values())
-			appearance_map.set(row.ItemID, row.ItemAppearanceID);
+	std::unordered_map<uint32_t, uint32_t> appearance_to_display;
+	for (const auto& [id, row] : casc::db2::preloadTable("ItemAppearance").getAllRows()) {
+		uint32_t displayID = fieldToUint32(row.at("ItemDisplayInfoID"));
+		appearance_to_display[id] = displayID;
+	}
 
-		const appearance_to_display = new Map();
-		for (const [id, row] of await db2.ItemAppearance.getAllRows())
-			appearance_to_display.set(id, row.ItemDisplayInfoID);
+	// map item id to display id
+	for (const auto& [item_id, appearance_id] : appearance_map) {
+		auto it = appearance_to_display.find(appearance_id);
+		if (it != appearance_to_display.end() && it->second != 0)
+			item_to_display_id[item_id] = it->second;
+	}
 
-		// map item id to display id
-		for (const [item_id, appearance_id] of appearance_map) {
-			const display_id = appearance_to_display.get(appearance_id);
-			if (display_id !== undefined && display_id !== 0)
-				item_to_display_id.set(item_id, display_id);
+	// load model and texture file data IDs from ItemDisplayInfo
+	for (const auto& [display_id, row] : casc::db2::preloadTable("ItemDisplayInfo").getAllRows()) {
+		auto allModelResIDs = fieldToUint32Vec(row.at("ModelResourcesID"));
+		std::vector<uint32_t> model_res_ids;
+		for (auto e : allModelResIDs) {
+			if (e > 0)
+				model_res_ids.push_back(e);
+		}
+		if (model_res_ids.empty())
+			continue;
+
+		// store ALL file data IDs per model resource (filter by race/gender at query time)
+		std::vector<std::vector<uint32_t>> model_options;
+		for (uint32_t model_res_id : model_res_ids) {
+			const auto* file_data_ids = DBModelFileData::getModelFileDataID(model_res_id);
+			if (file_data_ids && !file_data_ids->empty())
+				model_options.push_back(*file_data_ids);
+			else
+				model_options.push_back({});
 		}
 
-		// load model and texture file data IDs from ItemDisplayInfo
-		for (const [display_id, row] of await db2.ItemDisplayInfo.getAllRows()) {
-			const model_res_ids = row.ModelResourcesID.filter(e => e > 0);
-			if (model_res_ids.length === 0)
+		if (std::all_of(model_options.begin(), model_options.end(),
+			[](const std::vector<uint32_t>& arr) { return arr.empty(); }))
+			continue;
+
+		// get texture file data IDs from material resources
+		auto allMatResIDs = fieldToUint32Vec(row.at("ModelMaterialResourcesID"));
+		std::vector<uint32_t> texture_file_data_ids;
+		for (uint32_t mat_res_id : allMatResIDs) {
+			if (mat_res_id == 0)
 				continue;
-
-			// store ALL file data IDs per model resource (filter by race/gender at query time)
-			const model_options = [];
-			for (const model_res_id of model_res_ids) {
-				const file_data_ids = DBModelFileData.getModelFileDataID(model_res_id);
-				if (file_data_ids && file_data_ids.length > 0)
-					model_options.push(file_data_ids);
-				else
-					model_options.push([]);
-			}
-
-			if (model_options.every(arr => arr.length === 0))
-				continue;
-
-			// get texture file data IDs from material resources
-			const mat_res_ids = row.ModelMaterialResourcesID.filter(e => e > 0);
-			const texture_file_data_ids = [];
-			for (const mat_res_id of mat_res_ids) {
-				const tex_fdids = DBTextureFileData.getTextureFDIDsByMatID(mat_res_id);
-				if (tex_fdids && tex_fdids.length > 0)
-					texture_file_data_ids.push(tex_fdids[0]);
-			}
-
-			// geoset groups for character model and attachment/collection models
-			const geoset_group = row.GeosetGroup || [];
-			const attachment_geoset_group = row.AttachmentGeosetGroup || [];
-
-			display_to_data.set(display_id, {
-				modelOptions: model_options,
-				textures: texture_file_data_ids,
-				geosetGroup: geoset_group,
-				attachmentGeosetGroup: attachment_geoset_group
-			});
+			const auto* tex_fdids = DBTextureFileData::getTextureFDIDsByMatID(mat_res_id);
+			if (tex_fdids && !tex_fdids->empty())
+				texture_file_data_ids.push_back((*tex_fdids)[0]);
 		}
 
-		log.write('Loaded models for %d item displays', display_to_data.size);
-		is_initialized = true;
-		init_promise = null;
-	})();
+		// geoset groups for character model and attachment/collection models
+		auto geoGrpIt = row.find("GeosetGroup");
+		auto attachGeoGrpIt = row.find("AttachmentGeosetGroup");
 
-	return init_promise;
-};
+		InternalDisplayData data;
+		data.modelOptions = std::move(model_options);
+		data.textures = std::move(texture_file_data_ids);
+		data.geosetGroup = (geoGrpIt != row.end()) ? fieldToIntVec(geoGrpIt->second) : std::vector<int>{};
+		data.attachmentGeosetGroup = (attachGeoGrpIt != row.end()) ? fieldToIntVec(attachGeoGrpIt->second) : std::vector<int>{};
 
-const ensure_initialized = async () => {
+		display_to_data[display_id] = std::move(data);
+	}
+
+	logging::write(std::format("Loaded models for {} item displays", display_to_data.size()));
+	is_initialized = true;
+}
+
+void ensureInitialized() {
 	if (!is_initialized)
-		await initialize();
-};
+		initialize();
+}
 
 /**
  * Get model file data IDs for an item (first option per model resource).
- * @param {number} item_id
- * @returns {Array<number>|null}
  */
-const get_item_models = (item_id) => {
-	const display_id = item_to_display_id.get(item_id);
-	if (display_id === undefined)
-		return null;
+const std::vector<uint32_t>* getItemModels(uint32_t item_id) {
+	auto disp_it = item_to_display_id.find(item_id);
+	if (disp_it == item_to_display_id.end())
+		return nullptr;
 
-	const data = display_to_data.get(display_id);
-	if (!data?.modelOptions)
-		return null;
+	auto data_it = display_to_data.find(disp_it->second);
+	if (data_it == display_to_data.end())
+		return nullptr;
 
-	// return first option for each model resource
-	const models = data.modelOptions.map(opts => opts[0]).filter(Boolean);
-	return models.length > 0 ? models : null;
-};
+	// Build and cache the first-option models
+	// We use a static thread_local to avoid repeated allocation
+	thread_local std::vector<uint32_t> temp_models;
+	temp_models.clear();
+	for (const auto& opts : data_it->second.modelOptions) {
+		if (!opts.empty())
+			temp_models.push_back(opts[0]);
+	}
+
+	if (temp_models.empty())
+		return nullptr;
+	return &temp_models;
+}
 
 /**
  * Get display data for an item (models and textures).
- * Filters models by race/gender if provided.
- * @param {number} item_id
- * @param {number} [race_id] - character race ID for filtering
- * @param {number} [gender_index] - 0=male, 1=female for filtering
- * @returns {{ID: number, textures: number[], models: number[], geosetGroup: number[], attachmentGeosetGroup: number[]}|null}
  */
-const get_item_display = (item_id, race_id, gender_index) => {
-	const display_id = item_to_display_id.get(item_id);
-	if (display_id === undefined)
-		return null;
+std::optional<ItemDisplayData> getItemDisplay(uint32_t item_id, int race_id, int gender_index) {
+	auto disp_it = item_to_display_id.find(item_id);
+	if (disp_it == item_to_display_id.end())
+		return std::nullopt;
 
-	const data = display_to_data.get(display_id);
-	if (!data)
-		return null;
+	auto data_it = display_to_data.find(disp_it->second);
+	if (data_it == display_to_data.end())
+		return std::nullopt;
 
-	// filter models by race/gender
-	const models = [];
-
-	// check if this is a shoulder-type item (2 model options with identical content)
-	// shoulders share the same model pool but use PositionIndex to distinguish left/right
-	const is_shoulder_style = data.modelOptions.length === 2 &&
-		data.modelOptions[0].length > 0 &&
-		data.modelOptions[1].length > 0 &&
-		data.modelOptions[0].length === data.modelOptions[1].length &&
-		data.modelOptions[0].every((v, i) => v === data.modelOptions[1][i]);
-
-	if (is_shoulder_style && race_id !== undefined && gender_index !== undefined) {
-		// for shoulders, select two models with different PositionIndex values
-		const options = data.modelOptions[0];
-		const candidates = DBComponentModelFileData.getModelsForRaceGenderByPosition(options, race_id, gender_index);
-
-		if (candidates.left)
-			models.push(candidates.left);
-
-		if (candidates.right)
-			models.push(candidates.right);
-	} else {
-		// standard logic for non-shoulder items
-		for (const options of data.modelOptions) {
-			if (options.length === 0)
-				continue;
-
-			if (race_id !== undefined && gender_index !== undefined) {
-				const best = DBComponentModelFileData.getModelForRaceGender(options, race_id, gender_index);
-				if (best)
-					models.push(best);
-			} else {
-				models.push(options[0]);
-			}
-		}
-	}
-
-	return {
-		ID: display_id,
-		models: models,
-		textures: data.textures,
-		geosetGroup: data.geosetGroup,
-		attachmentGeosetGroup: data.attachmentGeosetGroup
-	};
-};
+	return resolveDisplayData(disp_it->second, data_it->second, race_id, gender_index);
+}
 
 /**
  * Get ItemDisplayInfoID for an item.
- * @param {number} item_id
- * @returns {number|undefined}
  */
-const get_display_id = (item_id) => {
-	return item_to_display_id.get(item_id);
-};
+std::optional<uint32_t> getDisplayId(uint32_t item_id) {
+	auto it = item_to_display_id.find(item_id);
+	if (it != item_to_display_id.end())
+		return it->second;
+	return std::nullopt;
+}
 
 /**
  * Get display data directly by ItemDisplayInfoID (skips item->display lookup).
- * @param {number} display_id
- * @param {number} [race_id]
- * @param {number} [gender_index]
- * @returns {{ID: number, textures: number[], models: number[], geosetGroup: number[], attachmentGeosetGroup: number[]}|null}
  */
-const get_display_data = (display_id, race_id, gender_index) => {
-	const data = display_to_data.get(display_id);
-	if (!data)
-		return null;
+std::optional<ItemDisplayData> getDisplayData(uint32_t display_id, int race_id, int gender_index) {
+	auto data_it = display_to_data.find(display_id);
+	if (data_it == display_to_data.end())
+		return std::nullopt;
 
-	const models = [];
+	return resolveDisplayData(display_id, data_it->second, race_id, gender_index);
+}
 
-	const is_shoulder_style = data.modelOptions.length === 2 &&
-		data.modelOptions[0].length > 0 &&
-		data.modelOptions[1].length > 0 &&
-		data.modelOptions[0].length === data.modelOptions[1].length &&
-		data.modelOptions[0].every((v, i) => v === data.modelOptions[1][i]);
-
-	if (is_shoulder_style && race_id !== undefined && gender_index !== undefined) {
-		const options = data.modelOptions[0];
-		const candidates = DBComponentModelFileData.getModelsForRaceGenderByPosition(options, race_id, gender_index);
-
-		if (candidates.left)
-			models.push(candidates.left);
-
-		if (candidates.right)
-			models.push(candidates.right);
-	} else {
-		for (const options of data.modelOptions) {
-			if (options.length === 0)
-				continue;
-
-			if (race_id !== undefined && gender_index !== undefined) {
-				const best = DBComponentModelFileData.getModelForRaceGender(options, race_id, gender_index);
-				if (best)
-					models.push(best);
-			} else {
-				models.push(options[0]);
-			}
-		}
-	}
-
-	return {
-		ID: display_id,
-		models,
-		textures: data.textures,
-		geosetGroup: data.geosetGroup,
-		attachmentGeosetGroup: data.attachmentGeosetGroup
-	};
-};
-
-module.exports = {
-	initialize,
-	ensureInitialized: ensure_initialized,
-	getItemModels: get_item_models,
-	getItemDisplay: get_item_display,
-	getDisplayId: get_display_id,
-	getDisplayData: get_display_data
-};
+} // namespace db::caches::DBItemModels

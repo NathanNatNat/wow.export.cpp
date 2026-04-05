@@ -4,64 +4,106 @@
 	License: MIT
  */
 
-const log = require('../../log');
-const db2 = require('../../casc/db2');
-const DBModelFileData = require('./DBModelFileData');
-const DBTextureFileData = require('./DBTextureFileData');
+#include "DBItemDisplays.h"
 
-const itemDisplays = new Map();
-let initialized = false;
+#include "../../log.h"
+#include "../../casc/db2.h"
+#include "../WDCReader.h"
+
+#include "DBModelFileData.h"
+#include "DBTextureFileData.h"
+
+#include <format>
+#include <unordered_map>
+
+namespace db::caches::DBItemDisplays {
+
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
+}
+
+static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
+	std::vector<uint32_t> result;
+	if (auto* p = std::get_if<std::vector<int64_t>>(&val)) {
+		result.reserve(p->size());
+		for (auto v : *p)
+			result.push_back(static_cast<uint32_t>(v));
+	} else if (auto* p = std::get_if<std::vector<uint64_t>>(&val)) {
+		result.reserve(p->size());
+		for (auto v : *p)
+			result.push_back(static_cast<uint32_t>(v));
+	}
+	return result;
+}
+
+static std::unordered_map<uint32_t, std::vector<ItemDisplay>> itemDisplays;
+static bool initialized = false;
 
 /**
  * Initialize item displays from ItemDisplayInfo.db2
  */
-const initializeItemDisplays = async () => {
+void initializeItemDisplays() {
 	if (initialized)
 		return;
 
-	await DBTextureFileData.ensureInitialized();
+	DBTextureFileData::ensureInitialized();
 
-	log.write('Loading item textures...');
+	logging::write("Loading item textures...");
 
 	// Using the texture mapping, map all model fileDataIDs to used textures.
-	for (const [itemDisplayInfoID, itemDisplayInfoRow] of await db2.ItemDisplayInfo.getAllRows()) {
-		const modelResIDs = itemDisplayInfoRow.ModelResourcesID.filter(e => e > 0);
-		if (modelResIDs.length == 0)
+	for (const auto& [itemDisplayInfoID, itemDisplayInfoRow] : casc::db2::preloadTable("ItemDisplayInfo").getAllRows()) {
+		auto allModelResIDs = fieldToUint32Vec(itemDisplayInfoRow.at("ModelResourcesID"));
+		std::vector<uint32_t> modelResIDs;
+		for (auto e : allModelResIDs) {
+			if (e > 0)
+				modelResIDs.push_back(e);
+		}
+		if (modelResIDs.empty())
 			continue;
 
-		const matResIDs = itemDisplayInfoRow.ModelMaterialResourcesID.filter(e => e > 0);
-		if (matResIDs.length == 0)
+		auto allMatResIDs = fieldToUint32Vec(itemDisplayInfoRow.at("ModelMaterialResourcesID"));
+		std::vector<uint32_t> matResIDs;
+		for (auto e : allMatResIDs) {
+			if (e > 0)
+				matResIDs.push_back(e);
+		}
+		if (matResIDs.empty())
 			continue;
 
-		const modelFileDataIDs = DBModelFileData.getModelFileDataID(modelResIDs[0]);
-		const textureFileDataIDs = DBTextureFileData.getTextureFDIDsByMatID(matResIDs[0]);
+		const auto* modelFileDataIDs = DBModelFileData::getModelFileDataID(modelResIDs[0]);
+		const auto* textureFileDataIDs = DBTextureFileData::getTextureFDIDsByMatID(matResIDs[0]);
 
-		if (modelFileDataIDs !== undefined && textureFileDataIDs !== undefined) {
-			for (const modelFileDataID of modelFileDataIDs) {
-				const display = { ID: itemDisplayInfoID, textures: textureFileDataIDs};
+		if (modelFileDataIDs != nullptr && textureFileDataIDs != nullptr) {
+			for (uint32_t modelFileDataID : *modelFileDataIDs) {
+				ItemDisplay display;
+				display.ID = itemDisplayInfoID;
+				display.textures = *textureFileDataIDs;
 
-				if (itemDisplays.has(modelFileDataID))
-					itemDisplays.get(modelFileDataID).push(display);
-				else
-					itemDisplays.set(modelFileDataID, [display]);
+				itemDisplays[modelFileDataID].push_back(std::move(display));
 			}
 		}
 	}
 
-	log.write('Loaded textures for %d items', itemDisplays.size);
+	logging::write(std::format("Loaded textures for {} items", itemDisplays.size()));
 	initialized = true;
-};
+}
 
 /**
  * Gets item skins from a given file data ID.
- * @param {number} fileDataID 
- * @returns {string|undefined}
+ * @param fileDataID File data ID.
+ * @returns Pointer to vector of displays, or nullptr if not found.
  */
-const getItemDisplaysByFileDataID = (fileDataID) => {
-	return itemDisplays.get(fileDataID);
-};
+const std::vector<ItemDisplay>* getItemDisplaysByFileDataID(uint32_t fileDataID) {
+	auto it = itemDisplays.find(fileDataID);
+	if (it != itemDisplays.end())
+		return &it->second;
+	return nullptr;
+}
 
-module.exports = {
-	initializeItemDisplays,
-	getItemDisplaysByFileDataID
-};
+} // namespace db::caches::DBItemDisplays
