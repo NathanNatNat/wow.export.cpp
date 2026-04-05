@@ -3,76 +3,121 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const log = require('../../log');
-const db2 = require('../../casc/db2');
 
-const decorItems = new Map();
-let isInitialized = false;
+#include "DBDecor.h"
+
+#include "../../log.h"
+#include "../../casc/db2.h"
+#include "../WDCReader.h"
+
+#include <format>
+
+namespace db::caches::DBDecor {
+
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
+}
+
+static std::string fieldToString(const db::FieldValue& val) {
+	if (auto* p = std::get_if<std::string>(&val))
+		return *p;
+	return "";
+}
+
+// JS: const decorItems = new Map();
+static std::unordered_map<uint32_t, DecorItem> decorItems;
+// JS: let isInitialized = false;
+static bool isInitialized = false;
 
 /**
  * Initialize house decor data from HouseDecor DB2.
  */
-const initializeDecorData = async () => {
+void initializeDecorData() {
 	if (isInitialized)
 		return;
 
-	log.write('Loading house decor data...');
+	logging::write("Loading house decor data...");
 
-	for (const [id, row] of await db2.HouseDecor.getAllRows()) {
-		const model_file_id = row.ModelFileDataID;
-		if (model_file_id === 0)
+	auto allRows = casc::db2::preloadTable("HouseDecor").getAllRows();
+	for (const auto& [id, row] : allRows) {
+		uint32_t model_file_id = fieldToUint32(row.at("ModelFileDataID"));
+		if (model_file_id == 0)
 			continue;
 
-		decorItems.set(id, {
-			id,
-			name: row.Name_lang || `Decor ${id}`,
-			modelFileDataID: model_file_id,
-			thumbnailFileDataID: row.ThumbnailFileDataID || 0,
-			itemID: row.ItemID || 0,
-			gameObjectID: row.GameObjectID || 0,
-			type: row.Type || 0,
-			modelType: row.ModelType || 0
-		});
+		DecorItem item;
+		item.id = id;
+
+		// JS: name: row.Name_lang || `Decor ${id}`
+		std::string name = fieldToString(row.at("Name_lang"));
+		item.name = name.empty() ? std::format("Decor {}", id) : std::move(name);
+
+		item.modelFileDataID = model_file_id;
+
+		// JS: thumbnailFileDataID: row.ThumbnailFileDataID || 0
+		auto thumbIt = row.find("ThumbnailFileDataID");
+		item.thumbnailFileDataID = (thumbIt != row.end()) ? fieldToUint32(thumbIt->second) : 0;
+
+		// JS: itemID: row.ItemID || 0
+		auto itemIdIt = row.find("ItemID");
+		item.itemID = (itemIdIt != row.end()) ? fieldToUint32(itemIdIt->second) : 0;
+
+		// JS: gameObjectID: row.GameObjectID || 0
+		auto goIt = row.find("GameObjectID");
+		item.gameObjectID = (goIt != row.end()) ? fieldToUint32(goIt->second) : 0;
+
+		// JS: type: row.Type || 0
+		auto typeIt = row.find("Type");
+		item.type = (typeIt != row.end()) ? fieldToUint32(typeIt->second) : 0;
+
+		// JS: modelType: row.ModelType || 0
+		auto mtIt = row.find("ModelType");
+		item.modelType = (mtIt != row.end()) ? fieldToUint32(mtIt->second) : 0;
+
+		decorItems.emplace(id, std::move(item));
 	}
 
-	log.write('Loaded %d house decor items', decorItems.size);
+	logging::write(std::format("Loaded {} house decor items", decorItems.size()));
 	isInitialized = true;
-};
+}
 
 /**
  * Get all decor items.
- * @returns {Map}
+ * @returns Reference to the decor items map.
  */
-const getAllDecorItems = () => {
+const std::unordered_map<uint32_t, DecorItem>& getAllDecorItems() {
 	return decorItems;
-};
+}
 
 /**
  * Get a decor item by ID.
- * @param {number} id
- * @returns {object|undefined}
+ * @param id Decor item ID.
+ * @returns Pointer to DecorItem, or nullptr if not found.
  */
-const getDecorItemByID = (id) => {
-	return decorItems.get(id);
-};
+const DecorItem* getDecorItemByID(uint32_t id) {
+	auto it = decorItems.find(id);
+	if (it != decorItems.end())
+		return &it->second;
+	return nullptr;
+}
 
 /**
  * Get a decor item by model file data ID.
- * @param {number} fileDataID
- * @returns {object|undefined}
+ * @param fileDataID Model file data ID.
+ * @returns Pointer to DecorItem, or nullptr if not found.
  */
-const getDecorItemByModelFileDataID = (fileDataID) => {
-	for (const item of decorItems.values()) {
-		if (item.modelFileDataID === fileDataID)
-			return item;
+const DecorItem* getDecorItemByModelFileDataID(uint32_t fileDataID) {
+	for (const auto& [_id, item] : decorItems) {
+		(void)_id;
+		if (item.modelFileDataID == fileDataID)
+			return &item;
 	}
+	return nullptr;
+}
 
-	return undefined;
-};
-
-module.exports = {
-	initializeDecorData,
-	getAllDecorItems,
-	getDecorItemByID,
-	getDecorItemByModelFileDataID
-};
+} // namespace db::caches::DBDecor

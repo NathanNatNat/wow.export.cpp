@@ -1,123 +1,129 @@
 /*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
-	License: MIT
+wow.export (https://github.com/Kruithne/wow.export)
+Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
+License: MIT
 */
 
-const log = require('../../log');
-const db2 = require('../../casc/db2');
+#include "DBComponentTextureFileData.h"
 
-const file_data_to_info = new Map();
+#include "../../log.h"
+#include "../../casc/db2.h"
+#include "../WDCReader.h"
 
-let is_initialized = false;
-let init_promise = null;
+#include <format>
+#include <unordered_map>
 
-const GENDER_ANY = 2;
+namespace db::caches::DBComponentTextureFileData {
 
-const initialize = async () => {
-	if (is_initialized)
-		return;
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+if (auto* p = std::get_if<int64_t>(&val))
+return static_cast<uint32_t>(*p);
+if (auto* p = std::get_if<uint64_t>(&val))
+return static_cast<uint32_t>(*p);
+if (auto* p = std::get_if<float>(&val))
+return static_cast<uint32_t>(*p);
+return 0;
+}
 
-	if (init_promise)
-		return init_promise;
+// JS: const GENDER_ANY = 2;
+static constexpr uint32_t GENDER_ANY = 2;
 
-	init_promise = (async () => {
-		log.write('Loading ComponentTextureFileData...');
+// JS: const file_data_to_info = new Map();
+static std::unordered_map<uint32_t, ComponentTextureInfo> file_data_to_info;
 
-		for (const [id, row] of await db2.ComponentTextureFileData.getAllRows()) {
-			file_data_to_info.set(id, {
-				raceID: row.RaceID,
-				genderIndex: row.GenderIndex,
-				classID: row.ClassID
-			});
-		}
+// JS: let is_initialized = false;
+static bool is_initialized = false;
+// JS: let init_promise = null;
+static bool is_initializing = false;
 
-		log.write('Loaded ComponentTextureFileData for %d textures', file_data_to_info.size);
-		is_initialized = true;
-		init_promise = null;
-	})();
+// JS: const initialize = async () => { ... }
+void initialize() {
+if (is_initialized)
+return;
 
-	return init_promise;
-};
+if (is_initializing)
+return;
 
-/**
- * Filter a list of FileDataIDs to find the best match for race/gender
- * @param {number[]} file_data_ids - list of candidate FileDataIDs
- * @param {number} race_id - character race ID
- * @param {number} gender_index - 0=male, 1=female
- * @param {number} [fallback_race_id] - optional fallback race
- * @returns {number|null} - best matching FileDataID or null
- */
-const getTextureForRaceGender = (file_data_ids, race_id, gender_index, fallback_race_id = 0) => {
-	if (!file_data_ids || file_data_ids.length === 0)
-		return null;
+is_initializing = true;
 
-	// if only one option, return it
-	if (file_data_ids.length === 1)
-		return file_data_ids[0];
+logging::write("Loading ComponentTextureFileData...");
 
-	// try exact race + gender match
-	for (const fdid of file_data_ids) {
-		const info = file_data_to_info.get(fdid);
-		if (info && info.raceID === race_id && info.genderIndex === gender_index)
-			return fdid;
-	}
+// JS: for (const [id, row] of await db2.ComponentTextureFileData.getAllRows())
+auto allRows = casc::db2::preloadTable("ComponentTextureFileData").getAllRows();
+for (const auto& [id, row] : allRows) {
+ComponentTextureInfo info;
+info.raceID = fieldToUint32(row.at("RaceID"));
+info.genderIndex = fieldToUint32(row.at("GenderIndex"));
+info.classID = fieldToUint32(row.at("ClassID"));
+file_data_to_info.emplace(id, info);
+}
 
-	// try race + any gender
-	for (const fdid of file_data_ids) {
-		const info = file_data_to_info.get(fdid);
-		if (info && info.raceID === race_id && info.genderIndex === GENDER_ANY)
-			return fdid;
-	}
+logging::write(std::format("Loaded ComponentTextureFileData for {} textures", file_data_to_info.size()));
+is_initialized = true;
+is_initializing = false;
+}
 
-	// try fallback race if provided
-	if (fallback_race_id > 0) {
-		for (const fdid of file_data_ids) {
-			const info = file_data_to_info.get(fdid);
-			if (info && info.raceID === fallback_race_id && (info.genderIndex === gender_index || info.genderIndex === GENDER_ANY))
-				return fdid;
-		}
-	}
+// JS: const getTextureForRaceGender = (file_data_ids, race_id, gender_index, fallback_race_id = 0) => { ... }
+std::optional<uint32_t> getTextureForRaceGender(const std::vector<uint32_t>& file_data_ids, uint32_t race_id, uint32_t gender_index, uint32_t fallback_race_id) {
+if (file_data_ids.empty())
+return std::nullopt;
 
-	// try race=0 (any race) with specific gender
-	for (const fdid of file_data_ids) {
-		const info = file_data_to_info.get(fdid);
-		if (info && info.raceID === 0 && info.genderIndex === gender_index)
-			return fdid;
-	}
+// if only one option, return it
+if (file_data_ids.size() == 1)
+return file_data_ids[0];
 
-	// try race=0 (any race)
-	for (const fdid of file_data_ids) {
-		const info = file_data_to_info.get(fdid);
-		if (info && info.raceID === 0)
-			return fdid;
-	}
+// try exact race + gender match
+for (const auto fdid : file_data_ids) {
+auto it = file_data_to_info.find(fdid);
+if (it != file_data_to_info.end() && it->second.raceID == race_id && it->second.genderIndex == gender_index)
+return fdid;
+}
 
-	// fallback to first
-	return file_data_ids[0];
-};
+// try race + any gender
+for (const auto fdid : file_data_ids) {
+auto it = file_data_to_info.find(fdid);
+if (it != file_data_to_info.end() && it->second.raceID == race_id && it->second.genderIndex == GENDER_ANY)
+return fdid;
+}
 
-/**
- * Check if a FileDataID has ComponentTextureFileData entry
- * @param {number} file_data_id
- * @returns {boolean}
- */
-const hasEntry = (file_data_id) => {
-	return file_data_to_info.has(file_data_id);
-};
+// try fallback race if provided
+if (fallback_race_id > 0) {
+for (const auto fdid : file_data_ids) {
+auto it = file_data_to_info.find(fdid);
+if (it != file_data_to_info.end() && it->second.raceID == fallback_race_id && (it->second.genderIndex == gender_index || it->second.genderIndex == GENDER_ANY))
+return fdid;
+}
+}
 
-/**
- * Get info for a FileDataID
- * @param {number} file_data_id
- * @returns {object|null}
- */
-const getInfo = (file_data_id) => {
-	return file_data_to_info.get(file_data_id) || null;
-};
+// try race=0 (any race) with specific gender
+for (const auto fdid : file_data_ids) {
+auto it = file_data_to_info.find(fdid);
+if (it != file_data_to_info.end() && it->second.raceID == 0 && it->second.genderIndex == gender_index)
+return fdid;
+}
 
-module.exports = {
-	initialize,
-	getTextureForRaceGender,
-	hasEntry,
-	getInfo
-};
+// try race=0 (any race)
+for (const auto fdid : file_data_ids) {
+auto it = file_data_to_info.find(fdid);
+if (it != file_data_to_info.end() && it->second.raceID == 0)
+return fdid;
+}
+
+// fallback to first
+return file_data_ids[0];
+}
+
+// JS: const hasEntry = (file_data_id) => file_data_to_info.has(file_data_id);
+bool hasEntry(uint32_t file_data_id) {
+return file_data_to_info.contains(file_data_id);
+}
+
+// JS: const getInfo = (file_data_id) => file_data_to_info.get(file_data_id) || null;
+const ComponentTextureInfo* getInfo(uint32_t file_data_id) {
+auto it = file_data_to_info.find(file_data_id);
+if (it != file_data_to_info.end())
+return &it->second;
+return nullptr;
+}
+
+} // namespace db::caches::DBComponentTextureFileData

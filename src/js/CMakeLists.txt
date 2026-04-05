@@ -54,4 +54,14 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/casc/casc-source-local.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wow/ItemSlot.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wow/EquipmentSlots.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBModelFileData.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBTextureFileData.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBComponentModelFileData.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBComponentTextureFileData.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBCreatures.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBCreatureList.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBCreatureDisplayExtra.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBCreaturesLegacy.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBDecor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBDecorCategories.cpp
 )
