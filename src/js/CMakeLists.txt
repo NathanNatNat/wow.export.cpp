@@ -47,4 +47,6 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/db/DBDParser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/WDCReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/DBCReader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/casc/db2.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/casc/listfile.cpp
 )

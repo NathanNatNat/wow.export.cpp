@@ -3,93 +3,75 @@
 	Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
 	License: MIT
  */
-const WDCReader = require('../db/WDCReader');
+#include "db2.h"
+#include "../db/WDCReader.h"
+#include "../buffer.h"
 
-const cache = new Map();
+#include <unordered_map>
+#include <memory>
+#include <string>
 
-const preload_proxy = new Proxy({}, {
-	get(target, table_name) {
-		if (typeof table_name !== 'string')
-			return undefined;
+namespace casc {
+namespace db2 {
 
-		return async () => {
-			const file_path = `DBFilesClient/${table_name}.db2`;
+// JS: const cache = new Map();
+static std::unordered_map<std::string, std::unique_ptr<db::WDCReader>> cache;
 
-			if (cache.has(table_name)) {
-				const existing = cache.get(table_name);
-				if (!existing.isLoaded)
-					await existing.parse();
-				existing.preload();
-				return existing;
-			}
+// JS: const create_wrapper = (reader) => { ... }
+// In JS, create_wrapper returns a Proxy that intercepts property/method access
+// to auto-parse the reader on first use. In C++, callers are expected to call
+// parse() explicitly or use preloadTable(). The wrapper concept is not needed
+// because C++ doesn't have dynamic property access like JS Proxies.
 
-			const reader = new WDCReader(file_path);
-			await reader.parse();
-			reader.preload();
+// JS: db2_proxy get handler — creates reader on first access
+db::WDCReader& getTable(const std::string& table_name) {
+	auto it = cache.find(table_name);
+	if (it != cache.end())
+		return *it->second;
 
-			const wrapper = create_wrapper(reader);
-			cache.set(table_name, wrapper);
-			return wrapper;
-		};
+	// JS: const file_path = `DBFilesClient/${table_name}.db2`;
+	const std::string file_path = "DBFilesClient/" + table_name + ".db2";
+
+	// JS: const reader = new WDCReader(file_path);
+	auto reader = std::make_unique<db::WDCReader>(file_path);
+
+	auto& ref = *reader;
+	cache.emplace(table_name, std::move(reader));
+	return ref;
+}
+
+// JS: preload_proxy get handler — parses and preloads on access
+db::WDCReader& preloadTable(const std::string& table_name) {
+	auto it = cache.find(table_name);
+
+	if (it != cache.end()) {
+		// JS: if (!existing.isLoaded) await existing.parse();
+		if (!it->second->isLoaded)
+			it->second->parse();
+
+		// JS: existing.preload();
+		it->second->preload();
+		return *it->second;
 	}
-});
 
-const create_wrapper = (reader) => {
-	let parse_promise = null;
+	// JS: const file_path = `DBFilesClient/${table_name}.db2`;
+	const std::string file_path = "DBFilesClient/" + table_name + ".db2";
 
-	return new Proxy(reader, {
-		get(reader_target, prop) {
-			const value = reader_target[prop];
+	// JS: const reader = new WDCReader(file_path);
+	auto reader = std::make_unique<db::WDCReader>(file_path);
 
-			if (typeof value === 'function') {
-				// getRelationRows requires preload() to have been called
-				if (prop === 'getRelationRows') {
-					return function(...args) {
-						if (!reader_target.isLoaded)
-							throw new Error('Table must be loaded before calling getRelationRows. Use db2.preload.' + reader_target.fileName.split('/').pop().replace('.db2', '') + '() first.');
+	// JS: await reader.parse(); reader.preload();
+	reader->parse();
+	reader->preload();
 
-						if (reader_target.rows === null)
-							throw new Error('Table must be preloaded before calling getRelationRows. Use db2.preload.' + reader_target.fileName.split('/').pop().replace('.db2', '') + '() first.');
+	auto& ref = *reader;
+	cache.emplace(table_name, std::move(reader));
+	return ref;
+}
 
-						return value.apply(reader_target, args);
-					};
-				}
+void clearCache() {
+	cache.clear();
+}
 
-				return async function(...args) {
-					if (!reader_target.isLoaded) {
-						if (parse_promise === null)
-							parse_promise = reader_target.parse();
-
-						await parse_promise;
-					}
-
-					return value.apply(reader_target, args);
-				};
-			}
-
-			return value;
-		}
-	});
-};
-
-const db2_proxy = new Proxy({ preload: preload_proxy }, {
-	get(target, table_name) {
-		if (table_name === 'preload')
-			return preload_proxy;
-
-		if (typeof table_name !== 'string')
-			return undefined;
-
-		if (cache.has(table_name))
-			return cache.get(table_name);
-
-		const file_path = `DBFilesClient/${table_name}.db2`;
-		const reader = new WDCReader(file_path);
-		const wrapper = create_wrapper(reader);
-
-		cache.set(table_name, wrapper);
-		return wrapper;
-	}
-});
-
-module.exports = db2_proxy;
+} // namespace db2
+} // namespace casc
