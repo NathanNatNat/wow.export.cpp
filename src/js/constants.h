@@ -188,8 +188,8 @@ inline constexpr std::array<std::string_view, 20> NAV_BUTTON_ORDER = {{
 }};
 
 // ── Context menu item order (module names or static option IDs) ──
-inline constexpr std::array<std::string_view, 11> CONTEXT_MENU_ORDER = {{
-	"tab_changelog",
+inline constexpr std::array<std::string_view, 9> CONTEXT_MENU_ORDER = {{
+	// "tab_changelog", // Removed: module deleted
 	"runtime-log",
 	"tab_raw",
 	"tab_install",
@@ -198,8 +198,8 @@ inline constexpr std::array<std::string_view, 11> CONTEXT_MENU_ORDER = {{
 	"reload-shaders",
 	"reload-style",
 	"reload-active",
-	"reload-all",
-	"tab_help"
+	"reload-all"
+	// "tab_help" // Removed: module deleted
 }};
 
 // ── Font preview quotes ──────────────────────────────────────────

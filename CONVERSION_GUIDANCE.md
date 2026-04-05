@@ -346,17 +346,13 @@ Self-contained subsystem for legacy WoW.
 | `src/js/components/map-viewer.cpp` | 1113 🔴 | core, constants |
 | `src/js/components/model-viewer-gl.cpp` | 516 | core, GLContext, CameraControlsGL, CharacterCameraControlsGL, GridRenderer, ShadowPlaneRenderer, EquipmentSlots |
 
-### Tier 22 — App Modules/Tabs (31 files)
+### Tier 22 — App Modules/Tabs (27 files)
 The main application screens. These depend on nearly everything above.
 
 | File | Lines | Local Dependencies |
 |------|------:|-------------------|
 | `src/js/modules/tab_home.cpp` | 30 | _(none)_ |
 | `src/js/modules/legacy_tab_home.cpp` | 30 | _(none)_ |
-| `src/js/modules/module_test_a.cpp` | 34 | _(none)_ |
-| `src/js/modules/module_test_b.cpp` | 43 | _(none)_ |
-| `src/js/modules/tab_changelog.cpp` | 53 | log |
-| `src/js/modules/tab_help.cpp` | 174 | log |
 | `src/js/modules/font_helpers.cpp` | 139 | constants, blob |
 | `src/js/modules/tab_install.cpp` | 229 | log, export-helper, generics, listfile |
 | `src/js/modules/tab_raw.cpp` | 208 | log, export-helper, generics, constants, listfile, listbox-context |

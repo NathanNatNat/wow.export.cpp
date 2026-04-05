@@ -23,8 +23,8 @@ const COMPONENTS = {
 };
 
 const MODULES = {
-	module_test_a: require('./modules/module_test_a'),
-	module_test_b: require('./modules/module_test_b'),
+	// module_test_a: require('./modules/module_test_a'), // Removed: module deleted
+	// module_test_b: require('./modules/module_test_b'), // Removed: module deleted
 	source_select: require('./modules/screen_source_select'),
 	settings: require('./modules/screen_settings'),
 	tab_home: require('./modules/tab_home'),
@@ -44,8 +44,8 @@ const MODULES = {
 	tab_item_sets: require('./modules/tab_item_sets'),
 	tab_characters: require('./modules/tab_characters'),
 	tab_textures: require('./modules/tab_textures'),
-	tab_help: require('./modules/tab_help'),
-	tab_changelog: require('./modules/tab_changelog'),
+	// tab_help: require('./modules/tab_help'), // Removed: module deleted
+	// tab_changelog: require('./modules/tab_changelog'), // Removed: module deleted
 	legacy_tab_home: require('./modules/legacy_tab_home'),
 	legacy_tab_audio: require('./modules/legacy_tab_audio'),
 	legacy_tab_textures: require('./modules/legacy_tab_textures'),
