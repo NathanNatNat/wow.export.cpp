@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 47 / 184 files converted
+**Progress:** 49 / 184 files converted
 
 ---
 
@@ -95,8 +95,8 @@
 
 ## Tier 10 — WoW Data Definitions (2 files)
 
-- [ ] `src/js/wow/ItemSlot.cpp` (47 lines)
-- [ ] `src/js/wow/EquipmentSlots.cpp` (184 lines)
+- [x] `src/js/wow/ItemSlot.cpp` (47 lines)
+- [x] `src/js/wow/EquipmentSlots.cpp` (184 lines)
 
 ## Tier 11 — DB Caches (18 files)
 

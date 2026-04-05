@@ -52,4 +52,6 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/casc/casc-source.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/casc/casc-source-remote.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/casc/casc-source-local.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/wow/ItemSlot.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/wow/EquipmentSlots.cpp
 )
