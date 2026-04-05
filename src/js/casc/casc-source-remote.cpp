@@ -164,7 +164,7 @@ BLTEReader CASCRemote::getFileAsBLTE(uint32_t fileDataID, bool partialDecrypt,
 		logging::write(std::format("Loading remote CASC file {} ({})", fileDataID, listfile::getByID(fileDataID)));
 
 	const std::string encodingKey = !contentKey.empty() ? CASC::getEncodingKeyForContentKey(contentKey) : CASC::getFile(fileDataID);
-	auto cachedData = cache->getFile(encodingKey, std::string(constants::CACHE::DIR_DATA()));
+	auto cachedData = cache->getFile(encodingKey, constants::CACHE::DIR_DATA().string());
 
 	BufferWrapper data;
 	if (!cachedData.has_value()) {
@@ -184,7 +184,7 @@ BLTEReader CASCRemote::getFileAsBLTE(uint32_t fileDataID, bool partialDecrypt,
 				throw std::runtime_error("No remote unarchived/archive indexed for encoding key: " + encodingKey);
 		}
 
-		cache->storeFile(encodingKey, data, std::string(constants::CACHE::DIR_DATA()));
+		cache->storeFile(encodingKey, data, constants::CACHE::DIR_DATA().string());
 	} else {
 		data = std::move(cachedData.value());
 		if (!suppressLog)
@@ -500,12 +500,12 @@ void CASCRemote::loadServerConfig() {
 void CASCRemote::parseArchiveIndex(const std::string& key) {
 	const std::string fileName = key + ".index";
 
-	auto cachedData = cache->getFile(fileName, std::string(constants::CACHE::DIR_INDEXES()));
+	auto cachedData = cache->getFile(fileName, constants::CACHE::DIR_INDEXES().string());
 	BufferWrapper data;
 	if (!cachedData.has_value()) {
 		const std::string cdnKey = formatCDNKey(key) + ".index";
 		data = getDataFile(cdnKey);
-		cache->storeFile(fileName, data, std::string(constants::CACHE::DIR_INDEXES()));
+		cache->storeFile(fileName, data, constants::CACHE::DIR_INDEXES().string());
 	} else {
 		data = std::move(cachedData.value());
 	}
@@ -593,10 +593,10 @@ std::string CASCRemote::formatCDNKey(const std::string& key) {
  */
 std::string CASCRemote::_ensureFileInCache(const std::string& encodingKey, uint32_t fileDataID, bool suppressLog) {
 	const std::string cacheFileName = encodingKey + ".data";
-	const auto cachedPath = cache->getFilePath(cacheFileName, std::string(constants::CACHE::DIR_DATA()));
+	const auto cachedPath = cache->getFilePath(cacheFileName, constants::CACHE::DIR_DATA().string());
 
 	// check if already in cache
-	auto cached = cache->getFile(cacheFileName, std::string(constants::CACHE::DIR_DATA()));
+	auto cached = cache->getFile(cacheFileName, constants::CACHE::DIR_DATA().string());
 	if (cached.has_value())
 		return cachedPath.string();
 
@@ -616,7 +616,7 @@ std::string CASCRemote::_ensureFileInCache(const std::string& encodingKey, uint3
 
 	// write to cache
 	BufferWrapper blteWrapper = std::move(static_cast<BufferWrapper&>(blte));
-	cache->storeFile(cacheFileName, blteWrapper, std::string(constants::CACHE::DIR_DATA()));
+	cache->storeFile(cacheFileName, blteWrapper, constants::CACHE::DIR_DATA().string());
 
 	return cachedPath.string();
 }

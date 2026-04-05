@@ -468,7 +468,7 @@ BufferWrapper CASCLocal::getDataFileWithRemoteFallback(const std::string& key, b
 	} catch (const std::exception& e) {
 		// Attempt 2: Load from cache from previous fallback.
 		logging::write("Local data file " + key + " does not exist, falling back to cache...");
-		auto cached = cache->getFile(key, std::string(constants::CACHE::DIR_DATA()));
+		auto cached = cache->getFile(key, constants::CACHE::DIR_DATA().string());
 		if (cached.has_value())
 			return std::move(cached.value());
 
@@ -489,7 +489,7 @@ BufferWrapper CASCLocal::getDataFileWithRemoteFallback(const std::string& key, b
 			data = remote->getDataFile(remote->formatCDNKey(key));
 		}
 
-		cache->storeFile(key, data, std::string(constants::CACHE::DIR_DATA()));
+		cache->storeFile(key, data, constants::CACHE::DIR_DATA().string());
 		return data;
 	}
 }
@@ -570,10 +570,10 @@ std::string CASCLocal::formatCDNKey(const std::string& key) {
  */
 std::string CASCLocal::_ensureFileInCache(const std::string& encodingKey, uint32_t fileDataID, bool suppressLog) {
 	const std::string cacheFileName = encodingKey + ".data";
-	const auto cachedPath = cache->getFilePath(cacheFileName, std::string(constants::CACHE::DIR_DATA()));
+	const auto cachedPath = cache->getFilePath(cacheFileName, constants::CACHE::DIR_DATA().string());
 
 	// check if already in cache
-	auto cached = cache->getFile(cacheFileName, std::string(constants::CACHE::DIR_DATA()));
+	auto cached = cache->getFile(cacheFileName, constants::CACHE::DIR_DATA().string());
 	if (cached.has_value())
 		return cachedPath.string();
 
@@ -587,7 +587,7 @@ std::string CASCLocal::_ensureFileInCache(const std::string& encodingKey, uint32
 
 	// write to cache
 	BufferWrapper blteWrapper = std::move(static_cast<BufferWrapper&>(blte));
-	cache->storeFile(cacheFileName, blteWrapper, std::string(constants::CACHE::DIR_DATA()));
+	cache->storeFile(cacheFileName, blteWrapper, constants::CACHE::DIR_DATA().string());
 
 	return cachedPath.string();
 }
