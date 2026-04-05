@@ -4,44 +4,57 @@
 	License: MIT
  */
 
-const ITEM_SLOTS = {
-	0: 'Non-equippable',
-	1: 'Head',
-	2: 'Neck',
-	3: 'Shoulder',
-	4: 'Shirt',
-	5: 'Chest',
-	6: 'Waist',
-	7: 'Legs',
-	8: 'Feet',
-	9: 'Wrist',
-	10: 'Hands',
-	11: 'Finger',
-	12: 'Trinket',
-	13: 'One-hand',
-	14: 'Off-hand',
-	15: 'Ranged',
-	16: 'Back',
-	17: 'Two-hand',
-	18: 'Bag',
-	19: 'Tabard',
-	20: 'Chest',
-	21: 'Main-hand',
-	22: 'Off-hand',
-	23: 'Off-hand',
-	24: 'Ammo',
-	25: 'Thrown',
-	26: 'Ranged',
-	27: 'Quiver',
-	28: 'Relic'
+#include "ItemSlot.h"
+
+#include <array>
+#include <string_view>
+
+namespace wow {
+
+namespace {
+
+constexpr std::array<std::string_view, 29> ITEM_SLOTS = {
+	"Non-equippable", // 0
+	"Head",           // 1
+	"Neck",           // 2
+	"Shoulder",       // 3
+	"Shirt",          // 4
+	"Chest",          // 5
+	"Waist",          // 6
+	"Legs",           // 7
+	"Feet",           // 8
+	"Wrist",          // 9
+	"Hands",          // 10
+	"Finger",         // 11
+	"Trinket",        // 12
+	"One-hand",       // 13
+	"Off-hand",       // 14
+	"Ranged",         // 15
+	"Back",           // 16
+	"Two-hand",       // 17
+	"Bag",            // 18
+	"Tabard",         // 19
+	"Chest",          // 20
+	"Main-hand",      // 21
+	"Off-hand",       // 22
+	"Off-hand",       // 23
+	"Ammo",           // 24
+	"Thrown",         // 25
+	"Ranged",         // 26
+	"Quiver",         // 27
+	"Relic"           // 28
 };
+
+} // anonymous namespace
 
 /**
  * Get the label for an item slot based on the ID.
- * @param {number} id 
+ * @param id 
  */
-const getSlotName = (id) => {
-	return ITEM_SLOTS[id] ?? 'Unknown';
-};
+std::string_view getSlotName(int id) {
+	if (id >= 0 && id < static_cast<int>(ITEM_SLOTS.size()))
+		return ITEM_SLOTS[id];
+	return "Unknown";
+}
 
-module.exports = { getSlotName };
+} // namespace wow
