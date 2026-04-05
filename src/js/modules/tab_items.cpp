@@ -1,7 +1,7 @@
 const log = require('../log');
 const listfile = require('../casc/listfile');
 const MultiMap = require('../MultiMap');
-const ExternalLinks = require('../external-links');
+// const ExternalLinks = require('../external-links'); // Removed: external-links module deleted
 
 const DBModelFileData = require('../db/caches/DBModelFileData');
 const DBTextureFileData = require('../db/caches/DBTextureFileData');
@@ -319,8 +319,9 @@ module.exports = {
 			this.$core.view.copyToClipboard(value);
 		},
 
+		// Removed: view_on_wowhead() — external-links module deleted
 		view_on_wowhead(item_id) {
-			ExternalLinks.wowHead_viewItem(item_id);
+			return;
 		},
 
 		toggle_checklist_item(item) {

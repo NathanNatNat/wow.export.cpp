@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 42 / 188 files converted
+**Progress:** 42 / 184 files converted
 
 ---
 
@@ -47,10 +47,9 @@
 - [x] `src/js/config.cpp` (117 lines)
 - [x] `src/js/tiled-png-writer.cpp` (142 lines)
 
-## Tier 3 — Misc Utilities (3 files)
+## Tier 3 — Misc Utilities (2 files)
 
 - [x] `src/js/gpu-info.cpp` (363 lines)
-- [x] `src/js/external-links.cpp` (44 lines)
 - [x] `src/js/icon-render.cpp` (108 lines)
 
 ## Tier 4 — CASC Crypto & Low-Level (5 files)
@@ -234,14 +233,10 @@
 - [ ] `src/js/components/map-viewer.cpp` (1113 lines) 🔴
 - [ ] `src/js/components/model-viewer-gl.cpp` (516 lines)
 
-## Tier 22 — App Modules/Tabs (31 files)
+## Tier 22 — App Modules/Tabs (27 files)
 
 - [ ] `src/js/modules/tab_home.cpp` (30 lines)
 - [ ] `src/js/modules/legacy_tab_home.cpp` (30 lines)
-- [ ] `src/js/modules/module_test_a.cpp` (34 lines)
-- [ ] `src/js/modules/module_test_b.cpp` (43 lines)
-- [ ] `src/js/modules/tab_changelog.cpp` (53 lines)
-- [ ] `src/js/modules/tab_help.cpp` (174 lines)
 - [ ] `src/js/modules/font_helpers.cpp` (139 lines)
 - [ ] `src/js/modules/tab_install.cpp` (229 lines)
 - [ ] `src/js/modules/tab_raw.cpp` (208 lines)
@@ -268,11 +263,8 @@
 - [ ] `src/js/modules/screen_settings.cpp` (463 lines)
 - [ ] `src/js/modules/screen_source_select.cpp` (342 lines)
 
-## Tier 23 — Top-Level Glue (6 files)
+## Tier 23 — Top-Level Glue (3 files)
 
-- [ ] `src/js/wowhead.cpp` (245 lines)
-- [ ] `src/js/wmv.cpp` (177 lines)
-- [ ] `src/js/updater.cpp` (168 lines)
 - [ ] `src/js/workers/cache-collector.cpp` (431 lines)
 - [ ] `src/js/modules.cpp` (414 lines)
 - [ ] `src/app.cpp` (713 lines) — **Entry point, convert last**
