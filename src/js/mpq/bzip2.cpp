@@ -2,11 +2,20 @@
 	wow.export (https://github.com/Kruithne/wow.export)
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
-*/
+ */
 
 // ref: https://en.wikipedia.org/wiki/Bzip2
 
-const R_NUMS = [
+#include "bzip2.h"
+
+#include <array>
+#include <algorithm>
+#include <stdexcept>
+#include <format>
+
+namespace mpq {
+
+static constexpr std::array<int, 512> R_NUMS = {{
 	619, 720, 127, 481, 931, 816, 813, 233, 566, 247, 985, 724, 205, 454, 863, 491,
 	741, 242, 949, 214, 733, 859, 335, 708, 621, 574, 73, 654, 730, 472, 419, 436,
 	278, 496, 867, 210, 399, 680, 480, 51, 878, 465, 811, 169, 869, 675, 611, 697,
@@ -39,20 +48,20 @@ const R_NUMS = [
 	986, 403, 106, 366, 905, 644, 372, 567, 466, 434, 645, 210, 389, 550, 919, 135,
 	780, 773, 635, 389, 707, 100, 626, 958, 165, 504, 920, 176, 193, 713, 857, 265,
 	203, 50, 668, 108, 645, 990, 626, 197, 510, 357, 358, 850, 858, 364, 936, 638
-];
+}};
 
-const BASE_BLOCK_SIZE = 100000;
-const MAX_ALPHA_SIZE = 258;
-const MAX_CODE_LEN = 23;
-const RUNA = 0;
-const RUNB = 1;
-const N_GROUPS = 6;
-const G_SIZE = 50;
-const N_ITERS = 4;
-const MAX_SELECTORS = 2 + Math.floor(900000 / G_SIZE);
-const NUM_OVERSHOOT_BYTES = 20;
+static constexpr int BASE_BLOCK_SIZE = 100000;
+static constexpr int MAX_ALPHA_SIZE = 258;
+static constexpr int MAX_CODE_LEN = 23;
+static constexpr int RUNA = 0;
+static constexpr int RUNB = 1;
+static constexpr int N_GROUPS = 6;
+static constexpr int G_SIZE = 50;
+// static constexpr int N_ITERS = 4;
+static constexpr int MAX_SELECTORS = 2 + (900000 / G_SIZE);
+// static constexpr int NUM_OVERSHOOT_BYTES = 20;
 
-const CRC32_TABLE = [
+static constexpr std::array<uint32_t, 256> CRC32_TABLE = {{
 	0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475005,
 	0x2608edb8, 0x22c9f00f, 0x2f8ad6d6, 0x2b4bcb61, 0x350c9b64, 0x31cd86d3, 0x3c8ea00a, 0x384fbdbd,
 	0x4c11db70, 0x48d0c6c7, 0x4593e01e, 0x4152fda9, 0x5f15adac, 0x5bd4b01b, 0x569796c2, 0x52568b75,
@@ -85,375 +94,351 @@ const CRC32_TABLE = [
 	0xe3a1cbc1, 0xe760d676, 0xea23f0af, 0xeee2ed18, 0xf0a5bd1d, 0xf464a0aa, 0xf9278673, 0xfde69bc4,
 	0x89b8fd09, 0x8d79e0be, 0x803ac667, 0x84fbdbd0, 0x9abc8bd5, 0x9e7d9662, 0x933eb0bb, 0x97ffad0c,
 	0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668, 0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
-];
+}};
 
-const START_BLOCK_STATE = 1;
-const RAND_PART_A_STATE = 2;
-const RAND_PART_B_STATE = 3;
-const RAND_PART_C_STATE = 4;
-const NO_RAND_PART_A_STATE = 5;
-const NO_RAND_PART_B_STATE = 6;
-const NO_RAND_PART_C_STATE = 7;
+static constexpr int START_BLOCK_STATE = 1;
+static constexpr int RAND_PART_A_STATE = 2;
+static constexpr int RAND_PART_B_STATE = 3;
+static constexpr int RAND_PART_C_STATE = 4;
+static constexpr int NO_RAND_PART_A_STATE = 5;
+static constexpr int NO_RAND_PART_B_STATE = 6;
+static constexpr int NO_RAND_PART_C_STATE = 7;
 
 class StrangeCRC {
+public:
+	StrangeCRC() : globalCrc(0xFFFFFFFF) {}
 
-	constructor() {
-		this.globalCrc = -1;
-		this.reset();
+	void reset() {
+		globalCrc = 0xFFFFFFFF;
 	}
 
-	reset() {
-		this.globalCrc = -1;
+	uint32_t value() const {
+		return ~globalCrc;
 	}
 
-	get value() {
-		return ~this.globalCrc >>> 0;
-	}
-
-	update(value) {
-		let index = (this.globalCrc >> 24) ^ value;
+	void update(int value) {
+		int index = (static_cast<int>(globalCrc >> 24)) ^ value;
 		if (index < 0)
 			index = 256 + index;
 
-		this.globalCrc = ((this.globalCrc << 8) ^ CRC32_TABLE[index]) | 0;
+		globalCrc = (globalCrc << 8) ^ CRC32_TABLE[index];
 	}
 
-	updateBuffer(buf, off = 0, len = buf.length) {
-		for (let i = 0; i < len; i++)
-			this.update(buf[off + i]);
+	void updateBuffer(const uint8_t* buf, int off, int len) {
+		for (int i = 0; i < len; i++)
+			update(buf[off + i]);
 	}
-}
 
-class BZip2Exception extends Error {
-	constructor(message) {
-		super(message);
-		this.name = 'BZip2Exception';
-	}
-}
+private:
+	uint32_t globalCrc;
+};
+
+class BZip2Exception : public std::runtime_error {
+public:
+	explicit BZip2Exception(const std::string& message)
+		: std::runtime_error(message) {}
+};
 
 class BufferInputStream {
+public:
+	explicit BufferInputStream(std::span<const uint8_t> data)
+		: data_(data), position_(0) {}
 
-	constructor(data) {
-		this.data = data;
-		this.position = 0;
-	}
-
-	readByte() {
-		if (this.position >= this.data.length)
+	int readByte() {
+		if (position_ >= data_.size())
 			return -1;
 
-		return this.data[this.position++];
+		return data_[position_++];
 	}
 
-	get length() {
-		return this.data.length;
+	size_t length() const {
+		return data_.size();
 	}
 
-	get currentPosition() {
-		return this.position;
+	size_t currentPosition() const {
+		return position_;
 	}
-}
+
+private:
+	std::span<const uint8_t> data_;
+	size_t position_;
+};
 
 class BZip2InputStream {
+public:
+	explicit BZip2InputStream(BufferInputStream& stream)
+		: last(0), origPtr(0), blockSize100k(0), blockRandomised(false),
+		  bsBuff(0), bsLive(0),
+		  nInUse(0),
+		  baseStream(stream), streamEnd(false),
+		  currentChar(-1), currentState(START_BLOCK_STATE),
+		  storedBlockCRC(0), storedCombinedCRC(0),
+		  computedBlockCRC(0), computedCombinedCRC(0),
+		  count(0), chPrev(0), ch2(0), tPos(0),
+		  rNToGo(0), rTPos(0), i2(0), j2(0), z(0)
+	{
+		inUse.fill(false);
+		seqToUnseq.fill(0);
+		unseqToSeq.fill(0);
+		selector.fill(0);
+		selectorMtf.fill(0);
+		unzftab.fill(0);
+		minLens.fill(0);
 
-	constructor(stream) {
-		this.last = 0;
-		this.origPtr = 0;
-		this.blockSize100k = 0;
-		this.blockRandomised = false;
-
-		this.bsBuff = 0;
-		this.bsLive = 0;
-
-		this.mCrc = new StrangeCRC();
-
-		this.inUse = new Array(256).fill(false);
-		this.nInUse = 0;
-		this.seqToUnseq = new Uint8Array(256);
-		this.unseqToSeq = new Uint8Array(256);
-
-		this.selector = new Uint8Array(MAX_SELECTORS);
-		this.selectorMtf = new Uint8Array(MAX_SELECTORS);
-
-		this.tt = null;
-		this.ll8 = null;
-
-		this.unzftab = new Int32Array(256);
-		this.limit = [];
-		this.baseArray = [];
-		this.perm = [];
-		this.minLens = new Int32Array(N_GROUPS);
-
-		this.baseStream = stream;
-		this.streamEnd = false;
-
-		this.currentChar = -1;
-		this.currentState = START_BLOCK_STATE;
-
-		this.storedBlockCRC = 0;
-		this.storedCombinedCRC = 0;
-		this.computedBlockCRC = 0;
-		this.computedCombinedCRC = 0;
-
-		this.count = 0;
-		this.chPrev = 0;
-		this.ch2 = 0;
-		this.tPos = 0;
-		this.rNToGo = 0;
-		this.rTPos = 0;
-		this.i2 = 0;
-		this.j2 = 0;
-		this.z = 0;
-
-		for (let i = 0; i < N_GROUPS; i++) {
-			this.limit[i] = new Int32Array(MAX_ALPHA_SIZE);
-			this.baseArray[i] = new Int32Array(MAX_ALPHA_SIZE);
-			this.perm[i] = new Int32Array(MAX_ALPHA_SIZE);
+		for (int i = 0; i < N_GROUPS; i++) {
+			limit[i].fill(0);
+			baseArray[i].fill(0);
+			perm[i].fill(0);
 		}
 
-		this.initialize();
-		this.initBlock();
-		this.setupBlock();
+		initialize();
+		initBlock();
+		setupBlock();
 	}
 
-	readByte() {
-		if (this.streamEnd)
+	int readByte() {
+		if (streamEnd)
 			return -1;
 
-		const current_char = this.currentChar;
+		const int current_char = currentChar;
 
-		switch (this.currentState) {
+		switch (currentState) {
 			case RAND_PART_B_STATE:
-				this.setupRandPartB();
+				setupRandPartB();
 				break;
 
 			case RAND_PART_C_STATE:
-				this.setupRandPartC();
+				setupRandPartC();
 				break;
 
 			case NO_RAND_PART_B_STATE:
-				this.setupNoRandPartB();
+				setupNoRandPartB();
 				break;
 
 			case NO_RAND_PART_C_STATE:
-				this.setupNoRandPartC();
+				setupNoRandPartC();
 				break;
 		}
 
 		return current_char;
 	}
 
-	read(buffer, offset, count) {
-		for (let i = 0; i < count; i++) {
-			const byte = this.readByte();
-			if (byte === -1)
+	int read(uint8_t* buffer, int offset, int count) {
+		for (int i = 0; i < count; i++) {
+			const int byte = readByte();
+			if (byte == -1)
 				return i;
 
-			buffer[offset + i] = byte;
+			buffer[offset + i] = static_cast<uint8_t>(byte);
 		}
 		return count;
 	}
 
-	initialize() {
-		const c1 = this.bsGetUChar();
-		const c2 = this.bsGetUChar();
-		const c3 = this.bsGetUChar();
-		const c4 = this.bsGetUChar();
+private:
+	void initialize() {
+		const int c1 = bsGetUChar();
+		const int c2 = bsGetUChar();
+		const int c3 = bsGetUChar();
+		const int c4 = bsGetUChar();
 
-		if (c1 !== 'B'.charCodeAt(0) || c2 !== 'Z'.charCodeAt(0) || c3 !== 'h'.charCodeAt(0) || c4 < '1'.charCodeAt(0) || c4 > '9'.charCodeAt(0)) {
-			this.streamEnd = true;
-			throw new BZip2Exception('invalid BZip2 header');
+		if (c1 != 'B' || c2 != 'Z' || c3 != 'h' || c4 < '1' || c4 > '9') {
+			streamEnd = true;
+			throw BZip2Exception("invalid BZip2 header");
 		}
 
-		this.setDecompressStructureSizes(c4 - 0x30);
-		this.computedCombinedCRC = 0;
+		setDecompressStructureSizes(c4 - 0x30);
+		computedCombinedCRC = 0;
 	}
 
-	initBlock() {
-		const c1 = this.bsGetUChar();
-		const c2 = this.bsGetUChar();
-		const c3 = this.bsGetUChar();
-		const c4 = this.bsGetUChar();
-		const c5 = this.bsGetUChar();
-		const c6 = this.bsGetUChar();
+	void initBlock() {
+		const int c1 = bsGetUChar();
+		const int c2 = bsGetUChar();
+		const int c3 = bsGetUChar();
+		const int c4 = bsGetUChar();
+		const int c5 = bsGetUChar();
+		const int c6 = bsGetUChar();
 
 		// check for end-of-stream marker (0x177245385090)
-		if (c1 === 0x17 && c2 === 0x72 && c3 === 0x45 && c4 === 0x38 && c5 === 0x50 && c6 === 0x90) {
-			this.complete();
+		if (c1 == 0x17 && c2 == 0x72 && c3 == 0x45 && c4 == 0x38 && c5 == 0x50 && c6 == 0x90) {
+			complete();
 			return;
 		}
 
 		// check for block marker (0x314159265359)
-		if (c1 !== 0x31 || c2 !== 0x41 || c3 !== 0x59 || c4 !== 0x26 || c5 !== 0x53 || c6 !== 0x59)
-			throw new BZip2Exception('Bad BZip2 block header');
+		if (c1 != 0x31 || c2 != 0x41 || c3 != 0x59 || c4 != 0x26 || c5 != 0x53 || c6 != 0x59)
+			throw BZip2Exception("Bad BZip2 block header");
 
-		this.storedBlockCRC = this.bsGetInt32();
-		this.blockRandomised = this.bsR(1) === 1;
+		storedBlockCRC = static_cast<uint32_t>(bsGetInt32());
+		blockRandomised = bsR(1) == 1;
 
-		this.getAndMoveToFrontDecode();
+		getAndMoveToFrontDecode();
 
-		this.mCrc.reset();
-		this.currentState = START_BLOCK_STATE;
+		mCrc.reset();
+		currentState = START_BLOCK_STATE;
 	}
 
-	endBlock() {
-		this.computedBlockCRC = this.mCrc.value;
+	void endBlock() {
+		computedBlockCRC = mCrc.value();
 
-		const stored_crc = this.storedBlockCRC >>> 0;
-		const computed_crc = this.computedBlockCRC >>> 0;
+		const uint32_t stored_crc = storedBlockCRC;
+		const uint32_t computed_crc = computedBlockCRC;
 
-		if (stored_crc !== computed_crc)
-			throw new BZip2Exception(`BZip2 CRC error. Expected: 0x${stored_crc.toString(16)}, Got: 0x${computed_crc.toString(16)}`);
+		if (stored_crc != computed_crc)
+			throw BZip2Exception(std::format("BZip2 CRC error. Expected: 0x{:x}, Got: 0x{:x}", stored_crc, computed_crc));
 
-		this.computedCombinedCRC = (((this.computedCombinedCRC << 1) | (this.computedCombinedCRC >>> 31)) ^ this.computedBlockCRC) >>> 0;
+		computedCombinedCRC = ((computedCombinedCRC << 1) | (computedCombinedCRC >> 31)) ^ computedBlockCRC;
 	}
 
-	complete() {
-		this.storedCombinedCRC = this.bsGetInt32();
+	void complete() {
+		storedCombinedCRC = static_cast<uint32_t>(bsGetInt32());
 
 		// Convert both to unsigned 32-bit for comparison
-		const stored_crc = this.storedCombinedCRC >>> 0;
-		const computed_crc = this.computedCombinedCRC >>> 0;
+		const uint32_t stored_crc = storedCombinedCRC;
+		const uint32_t computed_crc = computedCombinedCRC;
 
-		if (stored_crc !== computed_crc)
-			throw new BZip2Exception(`BZip2 combined CRC error. Expected: 0x${stored_crc.toString(16)}, Got: 0x${computed_crc.toString(16)}`);
+		if (stored_crc != computed_crc)
+			throw BZip2Exception(std::format("BZip2 combined CRC error. Expected: 0x{:x}, Got: 0x{:x}", stored_crc, computed_crc));
 
-		this.streamEnd = true;
+		streamEnd = true;
 	}
 
-	setDecompressStructureSizes(newSize100k) {
+	void setDecompressStructureSizes(int newSize100k) {
 		if (newSize100k < 0 || newSize100k > 9)
-			throw new BZip2Exception('Invalid block size');
+			throw BZip2Exception("Invalid block size");
 
-		this.blockSize100k = newSize100k;
+		blockSize100k = newSize100k;
 
-		if (newSize100k === 0)
+		if (newSize100k == 0)
 			return;
 
-		const length = BASE_BLOCK_SIZE * newSize100k;
-		this.ll8 = new Uint8Array(length);
-		this.tt = new Int32Array(length);
+		const int length = BASE_BLOCK_SIZE * newSize100k;
+		ll8.resize(length, 0);
+		tt.resize(length, 0);
 	}
 
-	fillBuffer() {
-		const byte = this.baseStream.readByte();
-		if (byte === -1)
-			throw new BZip2Exception('Unexpected end of BZip2 stream');
+	void fillBuffer() {
+		const int byte = baseStream.readByte();
+		if (byte == -1)
+			throw BZip2Exception("Unexpected end of BZip2 stream");
 
-		this.bsBuff = (this.bsBuff << 8) | (byte & 0xFF);
-		this.bsLive += 8;
+		bsBuff = (bsBuff << 8) | (byte & 0xFF);
+		bsLive += 8;
 	}
 
-	bsR(n) {
-		while (this.bsLive < n)
-			this.fillBuffer();
+	int bsR(int n) {
+		while (bsLive < n)
+			fillBuffer();
 
-		const result = (this.bsBuff >> (this.bsLive - n)) & ((1 << n) - 1);
-		this.bsLive -= n;
+		const int result = (bsBuff >> (bsLive - n)) & ((1 << n) - 1);
+		bsLive -= n;
 		return result;
 	}
 
-	bsGetUChar() {
-		return this.bsR(8);
+	int bsGetUChar() {
+		return bsR(8);
 	}
 
-	bsGetInt32() {
-		return (((((0 << 8 | this.bsR(8)) << 8 | this.bsR(8)) << 8 | this.bsR(8)) << 8 | this.bsR(8)) | 0);
+	int32_t bsGetInt32() {
+		return static_cast<int32_t>(
+			(((((0 << 8 | bsR(8)) << 8 | bsR(8)) << 8 | bsR(8)) << 8 | bsR(8)))
+		);
 	}
 
-	bsGetIntVS(numBits) {
-		return this.bsR(numBits);
+	int bsGetIntVS(int numBits) {
+		return bsR(numBits);
 	}
 
-	hbCreateDecodeTables(limit, base, perm, length, minLen, maxLen, alphaSize) {
-		let pp = 0;
+	void hbCreateDecodeTables(std::array<int32_t, MAX_ALPHA_SIZE>& limit,
+							  std::array<int32_t, MAX_ALPHA_SIZE>& base,
+							  std::array<int32_t, MAX_ALPHA_SIZE>& perm_arr,
+							  const std::array<int, MAX_ALPHA_SIZE>& length,
+							  int minLen, int maxLen, int alphaSize) {
+		int pp = 0;
 
-		for (let i = minLen; i <= maxLen; i++) {
-			for (let j = 0; j < alphaSize; j++) {
-				if (length[j] === i) {
-					perm[pp] = j;
+		for (int i = minLen; i <= maxLen; i++) {
+			for (int j = 0; j < alphaSize; j++) {
+				if (length[j] == i) {
+					perm_arr[pp] = j;
 					pp++;
 				}
 			}
 		}
 
-		for (let i = 0; i < MAX_CODE_LEN; i++)
+		for (int i = 0; i < MAX_CODE_LEN; i++)
 			base[i] = 0;
 
-		for (let i = 0; i < alphaSize; i++)
+		for (int i = 0; i < alphaSize; i++)
 			base[length[i] + 1]++;
 
-		for (let i = 1; i < MAX_CODE_LEN; i++)
+		for (int i = 1; i < MAX_CODE_LEN; i++)
 			base[i] += base[i - 1];
 
-		for (let i = 0; i < MAX_CODE_LEN; i++)
+		for (int i = 0; i < MAX_CODE_LEN; i++)
 			limit[i] = 0;
 
-		let vec = 0;
-		for (let i = minLen; i <= maxLen; i++) {
-			const nb = base[i + 1] - base[i];
+		int vec = 0;
+		for (int i = minLen; i <= maxLen; i++) {
+			const int nb = base[i + 1] - base[i];
 			vec += nb;
 			limit[i] = vec - 1;
 			vec <<= 1;
 		}
 
-		for (let i = minLen + 1; i <= maxLen; i++)
+		for (int i = minLen + 1; i <= maxLen; i++)
 			base[i] = ((limit[i - 1] + 1) << 1) - base[i];
 	}
 
-	recvDecodingTables() {
-		const len = [];
-		for (let i = 0; i < N_GROUPS; i++)
-			len[i] = new Array(MAX_ALPHA_SIZE);
+	void recvDecodingTables() {
+		std::array<std::array<int, MAX_ALPHA_SIZE>, N_GROUPS> len{};
 
-		const in_use_16 = new Array(16).fill(false);
-		for (let i = 0; i < 16; i++)
-			in_use_16[i] = this.bsR(1) === 1;
+		std::array<bool, 16> in_use_16{};
+		for (int i = 0; i < 16; i++)
+			in_use_16[i] = bsR(1) == 1;
 
-		for (let i = 0; i < 16; i++) {
+		for (int i = 0; i < 16; i++) {
 			if (in_use_16[i]) {
-				for (let j = 0; j < 16; j++)
-					this.inUse[i * 16 + j] = this.bsR(1) === 1;
+				for (int j = 0; j < 16; j++)
+					inUse[i * 16 + j] = bsR(1) == 1;
 			} else {
-				for (let j = 0; j < 16; j++)
-					this.inUse[i * 16 + j] = false;
+				for (int j = 0; j < 16; j++)
+					inUse[i * 16 + j] = false;
 			}
 		}
 
-		this.makeMaps();
-		const alpha_size = this.nInUse + 2;
+		makeMaps();
+		const int alpha_size = nInUse + 2;
 
-		const n_groups = this.bsR(3);
-		const n_selectors = this.bsR(15);
+		const int n_groups = bsR(3);
+		const int n_selectors = bsR(15);
 
-		for (let i = 0; i < n_selectors; i++) {
-			let j = 0;
-			while (this.bsR(1) === 1)
+		for (int i = 0; i < n_selectors; i++) {
+			int j = 0;
+			while (bsR(1) == 1)
 				j++;
 
-			this.selectorMtf[i] = j;
+			selectorMtf[i] = static_cast<uint8_t>(j);
 		}
 
 		// undo mtf
-		const pos = new Uint8Array(N_GROUPS);
-		for (let i = 0; i < n_groups; i++)
-			pos[i] = i;
+		std::array<uint8_t, N_GROUPS> pos{};
+		for (int i = 0; i < n_groups; i++)
+			pos[i] = static_cast<uint8_t>(i);
 
-		for (let i = 0; i < n_selectors; i++) {
-			const v = this.selectorMtf[i];
-			const tmp = pos[v];
-			for (let j = v; j > 0; j--)
+		for (int i = 0; i < n_selectors; i++) {
+			const int v = selectorMtf[i];
+			const uint8_t tmp = pos[v];
+			for (int j = v; j > 0; j--)
 				pos[j] = pos[j - 1];
 
 			pos[0] = tmp;
-			this.selector[i] = tmp;
+			selector[i] = tmp;
 		}
 
-		for (let t = 0; t < n_groups; t++) {
-			let curr = this.bsR(5);
-			for (let i = 0; i < alpha_size; i++) {
-				while (this.bsR(1) === 1) {
-					if (this.bsR(1) === 0) {
+		for (int t = 0; t < n_groups; t++) {
+			int curr = bsR(5);
+			for (int i = 0; i < alpha_size; i++) {
+				while (bsR(1) == 1) {
+					if (bsR(1) == 0) {
 						curr++;
 					} else {
 						curr--;
@@ -463,381 +448,408 @@ class BZip2InputStream {
 			}
 		}
 
-		for (let t = 0; t < n_groups; t++) {
-			let min_len = 32;
-			let max_len = 0;
+		for (int t = 0; t < n_groups; t++) {
+			int min_len = 32;
+			int max_len = 0;
 
-			for (let i = 0; i < alpha_size; i++) {
-				max_len = Math.max(max_len, len[t][i]);
-				min_len = Math.min(min_len, len[t][i]);
+			for (int i = 0; i < alpha_size; i++) {
+				max_len = std::max(max_len, len[t][i]);
+				min_len = std::min(min_len, len[t][i]);
 			}
 
-			this.hbCreateDecodeTables(this.limit[t], this.baseArray[t], this.perm[t], len[t], min_len, max_len, alpha_size);
-			this.minLens[t] = min_len;
+			hbCreateDecodeTables(limit[t], baseArray[t], perm[t], len[t], min_len, max_len, alpha_size);
+			minLens[t] = min_len;
 		}
 	}
 
-	makeMaps() {
-		this.nInUse = 0;
-		for (let i = 0; i < 256; i++) {
-			if (this.inUse[i]) {
-				this.seqToUnseq[this.nInUse] = i;
-				this.unseqToSeq[i] = this.nInUse;
-				this.nInUse++;
+	void makeMaps() {
+		nInUse = 0;
+		for (int i = 0; i < 256; i++) {
+			if (inUse[i]) {
+				seqToUnseq[nInUse] = static_cast<uint8_t>(i);
+				unseqToSeq[i] = static_cast<uint8_t>(nInUse);
+				nInUse++;
 			}
 		}
 	}
 
-	getAndMoveToFrontDecode() {
-		const yy = new Uint8Array(256);
-		const block_size = BASE_BLOCK_SIZE * this.blockSize100k;
+	void getAndMoveToFrontDecode() {
+		std::array<uint8_t, 256> yy{};
+		const int block_size = BASE_BLOCK_SIZE * blockSize100k;
 
-		this.origPtr = this.bsGetIntVS(24);
-		this.recvDecodingTables();
+		origPtr = bsGetIntVS(24);
+		recvDecodingTables();
 
-		const EOB = this.nInUse + 1;
-		let group_no = -1;
-		let group_pos = 0;
+		const int EOB = nInUse + 1;
+		int group_no = -1;
+		int group_pos = 0;
 
 		// unzftab
-		for (let i = 0; i <= 255; i++)
-			this.unzftab[i] = 0;
+		for (int i = 0; i <= 255; i++)
+			unzftab[i] = 0;
 
 		// yy (MTF list)
-		for (let i = 0; i <= 255; i++)
-			yy[i] = i;
+		for (int i = 0; i <= 255; i++)
+			yy[i] = static_cast<uint8_t>(i);
 
-		this.last = -1;
+		last = -1;
 
-		if (group_pos === 0) {
+		if (group_pos == 0) {
 			group_no++;
 			group_pos = G_SIZE;
 		}
 
 		group_pos--;
 
-		const zt = this.selector[group_no];
-		let zn = this.minLens[zt];
-		let zvec = this.bsR(zn);
+		const int zt = selector[group_no];
+		int zn = minLens[zt];
+		int zvec = bsR(zn);
 
-		while (zvec > this.limit[zt][zn]) {
+		while (zvec > limit[zt][zn]) {
 			if (zn > 20)
-				throw new BZip2Exception('huffman code length exceeds maximum');
+				throw BZip2Exception("huffman code length exceeds maximum");
 
 			zn++;
-			while (this.bsLive < 1)
-				this.fillBuffer();
+			while (bsLive < 1)
+				fillBuffer();
 
-			const zj = (this.bsBuff >> (this.bsLive - 1)) & 1;
-			this.bsLive--;
+			const int zj = (bsBuff >> (bsLive - 1)) & 1;
+			bsLive--;
 			zvec = (zvec << 1) | zj;
 		}
 
-		if (zvec - this.baseArray[zt][zn] < 0 || zvec - this.baseArray[zt][zn] >= MAX_ALPHA_SIZE)
-			throw new BZip2Exception('huffman decode error');
+		if (zvec - baseArray[zt][zn] < 0 || zvec - baseArray[zt][zn] >= MAX_ALPHA_SIZE)
+			throw BZip2Exception("huffman decode error");
 
-		let next_sym = this.perm[zt][zvec - this.baseArray[zt][zn]];
+		int next_sym = perm[zt][zvec - baseArray[zt][zn]];
 
-		while (next_sym !== EOB) {
-			if (next_sym === RUNA || next_sym === RUNB) {
-				let es = -1;
-				let N = 1;
+		while (next_sym != EOB) {
+			if (next_sym == RUNA || next_sym == RUNB) {
+				int es = -1;
+				int N = 1;
 
 				do {
-					if (next_sym === RUNA) {
+					if (next_sym == RUNA) {
 						es += N;
-					} else if (next_sym === RUNB) {
+					} else if (next_sym == RUNB) {
 						es += 2 * N;
 					}
 
 					N <<= 1;
 
-					if (group_pos === 0) {
+					if (group_pos == 0) {
 						group_no++;
 						group_pos = G_SIZE;
 					}
 
 					group_pos--;
 
-					const zt = this.selector[group_no];
-					let zn = this.minLens[zt];
-					let zvec = this.bsR(zn);
+					const int zt2 = selector[group_no];
+					int zn2 = minLens[zt2];
+					int zvec2 = bsR(zn2);
 
-					while (zvec > this.limit[zt][zn]) {
-						zn++;
-						while (this.bsLive < 1)
-							this.fillBuffer();
+					while (zvec2 > limit[zt2][zn2]) {
+						zn2++;
+						while (bsLive < 1)
+							fillBuffer();
 
-						const zj = (this.bsBuff >> (this.bsLive - 1)) & 1;
-						this.bsLive--;
-						zvec = (zvec << 1) | zj;
+						const int zj2 = (bsBuff >> (bsLive - 1)) & 1;
+						bsLive--;
+						zvec2 = (zvec2 << 1) | zj2;
 					}
 
-					next_sym = this.perm[zt][zvec - this.baseArray[zt][zn]];
-				} while (next_sym === RUNA || next_sym === RUNB);
+					next_sym = perm[zt2][zvec2 - baseArray[zt2][zn2]];
+				} while (next_sym == RUNA || next_sym == RUNB);
 
 				es++;
-				const ch = this.seqToUnseq[yy[0]];
-				this.unzftab[ch] += es;
+				const uint8_t ch = seqToUnseq[yy[0]];
+				unzftab[ch] += es;
 
-				for (let i = 0; i < es; i++) {
-					this.last++;
-					this.ll8[this.last] = ch;
+				for (int i = 0; i < es; i++) {
+					last++;
+					ll8[last] = ch;
 				}
 
-				if (this.last >= block_size)
-					throw new BZip2Exception('block overrun');
+				if (last >= block_size)
+					throw BZip2Exception("block overrun");
 			} else {
 				// reg symbol
-				this.last++;
-				if (this.last >= block_size)
-					throw new BZip2Exception('block overrun');
+				last++;
+				if (last >= block_size)
+					throw BZip2Exception("block overrun");
 
-				const tmp = yy[next_sym - 1];
-				this.unzftab[this.seqToUnseq[tmp]]++;
-				this.ll8[this.last] = this.seqToUnseq[tmp];
+				const uint8_t tmp = yy[next_sym - 1];
+				unzftab[seqToUnseq[tmp]]++;
+				ll8[last] = seqToUnseq[tmp];
 
 				// move to front
-				for (let j = next_sym - 1; j > 0; j--)
+				for (int j = next_sym - 1; j > 0; j--)
 					yy[j] = yy[j - 1];
 
 				yy[0] = tmp;
 
-				if (group_pos === 0) {
+				if (group_pos == 0) {
 					group_no++;
 					group_pos = G_SIZE;
 				}
 
 				group_pos--;
 
-				const zt = this.selector[group_no];
-				let zn = this.minLens[zt];
-				let zvec = this.bsR(zn);
+				const int zt3 = selector[group_no];
+				int zn3 = minLens[zt3];
+				int zvec3 = bsR(zn3);
 
-				while (zvec > this.limit[zt][zn]) {
-					zn++;
-					while (this.bsLive < 1)
-						this.fillBuffer();
+				while (zvec3 > limit[zt3][zn3]) {
+					zn3++;
+					while (bsLive < 1)
+						fillBuffer();
 
-					const zj = (this.bsBuff >> (this.bsLive - 1)) & 1;
-					this.bsLive--;
-					zvec = (zvec << 1) | zj;
+					const int zj3 = (bsBuff >> (bsLive - 1)) & 1;
+					bsLive--;
+					zvec3 = (zvec3 << 1) | zj3;
 				}
 
-				next_sym = this.perm[zt][zvec - this.baseArray[zt][zn]];
+				next_sym = perm[zt3][zvec3 - baseArray[zt3][zn3]];
 			}
 		}
 	}
 
-	setupBlock() {
-		if (this.ll8 === null || this.tt === null)
-			throw new BZip2Exception('block not initialized');
+	void setupBlock() {
+		if (ll8.empty() || tt.empty())
+			throw BZip2Exception("block not initialized");
 
 		// Build inverse BWT pointer array
-		const cftab = new Int32Array(257);
+		std::array<int32_t, 257> cftab{};
 		cftab[0] = 0;
 
-		for (let i = 1; i <= 256; i++)
-			cftab[i] = this.unzftab[i - 1];
+		for (int i = 1; i <= 256; i++)
+			cftab[i] = unzftab[i - 1];
 
-		for (let i = 1; i <= 256; i++)
+		for (int i = 1; i <= 256; i++)
 			cftab[i] += cftab[i - 1];
 
-		for (let i = 0; i <= this.last; i++) {
-			const ch = this.ll8[i];
-			this.tt[cftab[ch]] = i;
+		for (int i = 0; i <= last; i++) {
+			const uint8_t ch = ll8[i];
+			tt[cftab[ch]] = i;
 			cftab[ch]++;
 		}
 
-		this.tPos = this.tt[this.origPtr];
-		this.count = 0;
-		this.i2 = 0;
-		this.ch2 = 256;
+		tPos = tt[origPtr];
+		count = 0;
+		i2 = 0;
+		ch2 = 256;
 
-		if (this.blockRandomised) {
-			this.rNToGo = 0;
-			this.rTPos = 0;
-			this.setupRandPartA();
+		if (blockRandomised) {
+			rNToGo = 0;
+			rTPos = 0;
+			setupRandPartA();
 		} else {
-			this.setupNoRandPartA();
+			setupNoRandPartA();
 		}
 	}
 
-	setupRandPartA() {
-		if (this.i2 <= this.last) {
-			this.chPrev = this.ch2;
-			this.ch2 = this.ll8[this.tPos];
-			this.tPos = this.tt[this.tPos];
+	void setupRandPartA() {
+		if (i2 <= last) {
+			chPrev = ch2;
+			ch2 = ll8[tPos];
+			tPos = tt[tPos];
 
-			if (this.rNToGo === 0) {
-				this.rNToGo = R_NUMS[this.rTPos];
-				this.rTPos++;
-				if (this.rTPos === 512)
-					this.rTPos = 0;
+			if (rNToGo == 0) {
+				rNToGo = R_NUMS[rTPos];
+				rTPos++;
+				if (rTPos == 512)
+					rTPos = 0;
 			}
-			this.rNToGo--;
-			this.ch2 ^= (this.rNToGo === 1) ? 1 : 0;
+			rNToGo--;
+			ch2 ^= (rNToGo == 1) ? 1 : 0;
 
-			this.i2++;
-			this.currentChar = this.ch2;
-			this.currentState = RAND_PART_B_STATE;
-			this.mCrc.update(this.ch2);
+			i2++;
+			currentChar = ch2;
+			currentState = RAND_PART_B_STATE;
+			mCrc.update(ch2);
 		} else {
-			this.endBlock();
-			this.initBlock();
-			this.setupBlock();
+			endBlock();
+			initBlock();
+			setupBlock();
 		}
 	}
 
-	setupRandPartB() {
-		if (this.ch2 !== this.chPrev) {
-			this.currentState = RAND_PART_A_STATE;
-			this.count = 1;
-			this.setupRandPartA();
+	void setupRandPartB() {
+		if (ch2 != chPrev) {
+			currentState = RAND_PART_A_STATE;
+			count = 1;
+			setupRandPartA();
 		} else {
-			this.count++;
-			if (this.count >= 4) {
-				this.z = this.ll8[this.tPos];
-				this.tPos = this.tt[this.tPos];
+			count++;
+			if (count >= 4) {
+				z = ll8[tPos];
+				tPos = tt[tPos];
 
-				if (this.rNToGo === 0) {
-					this.rNToGo = R_NUMS[this.rTPos];
-					this.rTPos++;
-					if (this.rTPos === 512)
-						this.rTPos = 0;
+				if (rNToGo == 0) {
+					rNToGo = R_NUMS[rTPos];
+					rTPos++;
+					if (rTPos == 512)
+						rTPos = 0;
 				}
-				this.rNToGo--;
-				this.z ^= (this.rNToGo === 1) ? 1 : 0;
+				rNToGo--;
+				z ^= (rNToGo == 1) ? 1 : 0;
 
-				this.j2 = 0;
-				this.currentState = RAND_PART_C_STATE;
-				this.setupRandPartC();
+				j2 = 0;
+				currentState = RAND_PART_C_STATE;
+				setupRandPartC();
 			} else {
-				this.currentState = RAND_PART_A_STATE;
-				this.setupRandPartA();
+				currentState = RAND_PART_A_STATE;
+				setupRandPartA();
 			}
 		}
 	}
 
-	setupRandPartC() {
-		if (this.j2 < this.z) {
-			this.currentChar = this.ch2;
-			this.mCrc.update(this.ch2);
-			this.j2++;
+	void setupRandPartC() {
+		if (j2 < z) {
+			currentChar = ch2;
+			mCrc.update(ch2);
+			j2++;
 		} else {
-			this.currentState = RAND_PART_A_STATE;
-			this.i2++;
-			this.count = 0;
-			this.setupRandPartA();
+			currentState = RAND_PART_A_STATE;
+			i2++;
+			count = 0;
+			setupRandPartA();
 		}
 	}
 
-	setupNoRandPartA() {
-		if (this.i2 <= this.last) {
-			this.chPrev = this.ch2;
-			this.ch2 = this.ll8[this.tPos];
-			this.tPos = this.tt[this.tPos];
-			this.i2++;
+	void setupNoRandPartA() {
+		if (i2 <= last) {
+			chPrev = ch2;
+			ch2 = ll8[tPos];
+			tPos = tt[tPos];
+			i2++;
 
-			this.currentChar = this.ch2;
-			this.currentState = NO_RAND_PART_B_STATE;
-			this.mCrc.update(this.ch2);
+			currentChar = ch2;
+			currentState = NO_RAND_PART_B_STATE;
+			mCrc.update(ch2);
 		} else {
-			this.endBlock();
-			this.initBlock();
-			this.setupBlock();
+			endBlock();
+			initBlock();
+			setupBlock();
 		}
 	}
 
-	setupNoRandPartB() {
-		if (this.ch2 !== this.chPrev) {
-			this.currentState = NO_RAND_PART_A_STATE;
-			this.count = 1;
-			this.setupNoRandPartA();
+	void setupNoRandPartB() {
+		if (ch2 != chPrev) {
+			currentState = NO_RAND_PART_A_STATE;
+			count = 1;
+			setupNoRandPartA();
 		} else {
-			this.count++;
-			if (this.count >= 4) {
-				this.z = this.ll8[this.tPos];
-				this.tPos = this.tt[this.tPos];
-				this.currentState = NO_RAND_PART_C_STATE;
-				this.j2 = 0;
-				this.setupNoRandPartC();
+			count++;
+			if (count >= 4) {
+				z = ll8[tPos];
+				tPos = tt[tPos];
+				currentState = NO_RAND_PART_C_STATE;
+				j2 = 0;
+				setupNoRandPartC();
 			} else {
-				this.currentState = NO_RAND_PART_A_STATE;
-				this.setupNoRandPartA();
+				currentState = NO_RAND_PART_A_STATE;
+				setupNoRandPartA();
 			}
 		}
 	}
 
-	setupNoRandPartC() {
-		if (this.j2 < this.z) {
-			this.currentChar = this.ch2;
-			this.mCrc.update(this.ch2);
-			this.j2++;
+	void setupNoRandPartC() {
+		if (j2 < z) {
+			currentChar = ch2;
+			mCrc.update(ch2);
+			j2++;
 		} else {
-			this.currentState = NO_RAND_PART_A_STATE;
-			this.i2++;
-			this.count = 0;
-			this.setupNoRandPartA();
+			currentState = NO_RAND_PART_A_STATE;
+			i2++;
+			count = 0;
+			setupNoRandPartA();
 		}
 	}
-}
 
-function bzip2_decompress(compressed_data, expected_length) {
-	const input_stream = new BufferInputStream(compressed_data);
-	const decompressor = new BZip2InputStream(input_stream);
+	int last;
+	int origPtr;
+	int blockSize100k;
+	bool blockRandomised;
 
-	const output_chunks = [];
-	let total_length = 0;
+	int bsBuff;
+	int bsLive;
 
-	const chunk_size = expected_length ? Math.min(expected_length, 65536) : 65536;
+	StrangeCRC mCrc;
+
+	std::array<bool, 256> inUse;
+	int nInUse;
+	std::array<uint8_t, 256> seqToUnseq;
+	std::array<uint8_t, 256> unseqToSeq;
+
+	std::array<uint8_t, MAX_SELECTORS> selector;
+	std::array<uint8_t, MAX_SELECTORS> selectorMtf;
+
+	std::vector<int32_t> tt;
+	std::vector<uint8_t> ll8;
+
+	std::array<int32_t, 256> unzftab;
+	std::array<std::array<int32_t, MAX_ALPHA_SIZE>, N_GROUPS> limit;
+	std::array<std::array<int32_t, MAX_ALPHA_SIZE>, N_GROUPS> baseArray;
+	std::array<std::array<int32_t, MAX_ALPHA_SIZE>, N_GROUPS> perm;
+	std::array<int32_t, N_GROUPS> minLens;
+
+	BufferInputStream& baseStream;
+	bool streamEnd;
+
+	int currentChar;
+	int currentState;
+
+	uint32_t storedBlockCRC;
+	uint32_t storedCombinedCRC;
+	uint32_t computedBlockCRC;
+	uint32_t computedCombinedCRC;
+
+	int count;
+	int chPrev;
+	int ch2;
+	int tPos;
+	int rNToGo;
+	int rTPos;
+	int i2;
+	int j2;
+	int z;
+};
+
+std::vector<uint8_t> bzip2_decompress(std::span<const uint8_t> compressed_data, size_t expected_length) {
+	BufferInputStream input_stream(compressed_data);
+	BZip2InputStream decompressor(input_stream);
+
+	std::vector<uint8_t> output_chunks;
+	size_t total_length = 0;
+
+	const size_t chunk_size = expected_length > 0 ? std::min(expected_length, static_cast<size_t>(65536)) : 65536;
 
 	while (true) {
-		const chunk = new Uint8Array(chunk_size);
-		let bytes_read = 0;
+		std::vector<uint8_t> chunk(chunk_size, 0);
+		size_t bytes_read = 0;
 
 		// Read into chunk
-		for (let i = 0; i < chunk_size; i++) {
-			const byte = decompressor.readByte();
-			if (byte === -1)
+		for (size_t i = 0; i < chunk_size; i++) {
+			const int byte = decompressor.readByte();
+			if (byte == -1)
 				break;
 
-			chunk[i] = byte;
+			chunk[i] = static_cast<uint8_t>(byte);
 			bytes_read++;
 		}
 
-		if (bytes_read === 0)
+		if (bytes_read == 0)
 			break;
 
-		if (bytes_read === chunk_size) {
-			output_chunks.push(chunk);
-		} else {
-			output_chunks.push(chunk.slice(0, bytes_read));
-		}
-
+		output_chunks.insert(output_chunks.end(), chunk.begin(), chunk.begin() + static_cast<ptrdiff_t>(bytes_read));
 		total_length += bytes_read;
 
 		if (bytes_read < chunk_size)
 			break;
 	}
 
-	if (output_chunks.length === 0)
-		return new Uint8Array(0);
-
-	if (output_chunks.length === 1)
-		return output_chunks[0];
-
-	const result = new Uint8Array(total_length);
-	let offset = 0;
-
-	for (const chunk of output_chunks) {
-		result.set(chunk, offset);
-		offset += chunk.length;
-	}
-
-	return result;
+	return output_chunks;
 }
 
-module.exports = {
-	bzip2_decompress
-};
+} // namespace mpq
