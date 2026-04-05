@@ -1,8 +1,9 @@
-module.exports = {
-	None: 0,
-	Bitpacked: 1,
-	CommonData: 2,
-	BitpackedIndexed: 3,
-	BitpackedIndexedArray: 4,
-	BitpackedSigned: 5
-};
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
+	License: MIT
+ */
+#include "CompressionType.h"
+
+// CompressionType is fully defined as an enum in the header.
+// This .cpp exists to match the original JS file structure.

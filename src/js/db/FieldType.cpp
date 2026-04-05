@@ -1,14 +1,9 @@
-module.exports = {
-	String: Symbol('dbFieldString'),
-	Int8: Symbol('dbFieldInt8'),
-	UInt8: Symbol('dbFieldUInt8'),
-	Int16: Symbol('dbFieldInt16'),
-	UInt16: Symbol('dbFieldUInt16'),
-	Int32: Symbol('dbFieldInt32'),
-	UInt32: Symbol('dbFieldUInt32'),
-	Int64: Symbol('dbFieldInt64'),
-	UInt64: Symbol('dbFieldUInt64'),
-	Float: Symbol('dbFieldFloat'),
-	Relation: Symbol('dbFieldRelation'),
-	NonInlineID: Symbol('dbFieldNonInlineID')
-};
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
+	License: MIT
+ */
+#include "FieldType.h"
+
+// FieldType is fully defined as an enum class in the header.
+// This .cpp exists to match the original JS file structure.

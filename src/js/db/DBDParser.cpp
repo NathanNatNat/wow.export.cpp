@@ -4,346 +4,386 @@
 	License: MIT
  */
 
+#include "DBDParser.h"
+#include "../buffer.h"
+
+#include <regex>
+#include <stdexcept>
+#include <algorithm>
+#include <charconv>
+
+namespace db {
+
 /**
  * Pattern to match column definitions in a DBD document.
- * @type {RegExp}
  */
-const PATTERN_COLUMN = /^(int|float|locstring|string)(<[^:]+::[^>]+>)?\s([^\s]+)/;
+static const std::regex PATTERN_COLUMN(R"(^(int|float|locstring|string)(<[^:]+::[^>]+>)?\s([^\s]+))");
 
 /**
  * Pattern to match build identifiers in a DBD document.
- * @type {RegExp}
  */
-const PATTERN_BUILD = /^BUILD\s(.*)/;
+static const std::regex PATTERN_BUILD(R"(^BUILD\s(.*))");
 
 /**
  * Pattern to match build range identifiers in a DBD document.
- * @type {RegExp}
  */
-const PATTERN_BUILD_RANGE = /([^-]+)-(.*)/;
+static const std::regex PATTERN_BUILD_RANGE(R"(([^-]+)-(.*))");
 
 /**
  * Pattern to match comment entries in a DBD document.
  * Note: Comment data is not captured since it is discarded in parsing.
- * @type {RegExp}
  */
-const PATTERN_COMMENT = /^COMMENT\s/;
+static const std::regex PATTERN_COMMENT(R"(^COMMENT\s)");
 
 /**
  * Pattern to match layout hash identifiers in a DBD document.
- * @type {RegExp}
  */
-const PATTERN_LAYOUT = /^LAYOUT\s(.*)/;
+static const std::regex PATTERN_LAYOUT(R"(^LAYOUT\s(.*))");
 
 /**
  * Pattern to match a field entry in a DBD document.
- * @type {RegExp}
  */
-const PATTERN_FIELD = /^(\$([^$]+)\$)?([^<[]+)(<(u|)(\d+)>)?(\[(\d+)\])?$/;
+static const std::regex PATTERN_FIELD(R"(^(\$([^$]+)\$)?([^<\[]+)(<(u|)(\d+)>)?(\[(\d+)\])?$)");
 
 /**
  * Pattern to match the components of a build ID.
- * @type {RegExp}
  */
-const PATTERN_BUILD_ID = /(\d+).(\d+).(\d+).(\d+)/;
+static const std::regex PATTERN_BUILD_ID(R"((\d+).(\d+).(\d+).(\d+))");
 
 /**
  * Parse a build ID into components.
- * @param {string} buildID 
- * @returns {object}
+ * @param buildID Build ID string
+ * @returns BuildID struct
  */
-const parseBuildID = (buildID) => {
-	const parts = buildID.match(PATTERN_BUILD_ID);
-	const entry = { major: 0, minor: 0, patch: 0, rev: 0 };
+BuildID parseBuildID(const std::string& buildID) {
+	std::smatch parts;
+	BuildID entry;
 
-	if (parts !== null) {
-		entry.major = parseInt(parts[1]);
-		entry.minor = parseInt(parts[2]);
-		entry.patch = parseInt(parts[3]);
-		entry.rev = parseInt(parts[4]);
+	if (std::regex_search(buildID, parts, PATTERN_BUILD_ID)) {
+		entry.major = std::stoi(parts[1].str());
+		entry.minor = std::stoi(parts[2].str());
+		entry.patch = std::stoi(parts[3].str());
+		entry.rev   = std::stoi(parts[4].str());
 	}
 
 	return entry;
-};
+}
 
 /**
  * Returns true if the provided build falls within the provided range.
- * @param {string} build 
- * @param {string} min 
- * @param {string} max 
- * @returns {boolean}
+ * @param build Build ID string
+ * @param min Range minimum build ID string
+ * @param max Range maximum build ID string
+ * @returns true if build is in range
  */
-const isBuildInRange = (build, min, max) => {
-	build = parseBuildID(build);
-	min = parseBuildID(min);
-	max = parseBuildID(max);
+bool isBuildInRange(const std::string& build, const std::string& min, const std::string& max) {
+	BuildID buildParsed = parseBuildID(build);
+	BuildID minParsed   = parseBuildID(min);
+	BuildID maxParsed   = parseBuildID(max);
 
-	if (build.major < min.major || build.major > max.major)
+	if (buildParsed.major < minParsed.major || buildParsed.major > maxParsed.major)
 		return false;
 
-	if (build.minor < min.minor || build.minor > max.minor)
+	if (buildParsed.minor < minParsed.minor || buildParsed.minor > maxParsed.minor)
 		return false;
 
-	if (build.patch < min.patch || build.patch > max.patch)
+	if (buildParsed.patch < minParsed.patch || buildParsed.patch > maxParsed.patch)
 		return false;
 
-	if (build.rev < min.rev || build.rev > max.rev)
+	if (buildParsed.rev < minParsed.rev || buildParsed.rev > maxParsed.rev)
 		return false;
 
 	return true;
-};
-
-class DBDField {
-	/**
-	 * Construct a new DBDField instance.
-	 * @param {string} fieldName
-	 * @param {string} fieldType
-	 */
-	constructor(fieldName, fieldType) {
-		this.type = fieldType;
-		this.name = fieldName;
-
-		this.isSigned = true;
-		this.isID = false;
-		this.isInline = true;
-		this.isRelation = false;
-		this.arrayLength = -1;
-		this.size = -1;
-	}
 }
 
-class DBDEntry {
-	/**
-	 * Construct a new DBDEntry instance.
-	 */
-	constructor() {
-		this.builds = new Set();
-		this.buildRanges = new Set();
-		this.layoutHashes = new Set();
-		this.fields = new Set();
-	}
+// ── DBDField ──────────────────────────────────────────────────────────────────
 
-	/**
-	 * Add a build to this DBD entry.
-	 * @param {string} min 
-	 * @param {string} max 
-	 */
-	addBuild(min, max) {
-		if (max !== undefined)
-			this.buildRanges.add({ min, max });
-		else
-			this.builds.add(min);
-	}
-	
-	/**
-	 * Add a layout hash to this DBD entry.
-	 * @param {string[]} hashes
-	 */
-	addLayoutHashes(...hashes) {
-		for (const hash of hashes)
-			this.layoutHashes.add(hash);
-	}
-
-	/**
-	 * Add a field to this DBD entry.
-	 * @param {DBDField} field 
-	 */
-	addField(field) {
-		this.fields.add(field);
-	}
-
-	/**
-	 * Check if this entry is valid for the provided buildID or layout hash.
-	 * @param {string} buildID 
-	 * @param {string} layoutHash 
-	 * @returns {boolean}
-	 */
-	isValidFor(buildID, layoutHash) {
-		// Layout hash takes priority, being the quickest to check.
-		if (this.layoutHashes.has(layoutHash))
-			return true;
-
-		// Check for a single build ID.
-		if (this.builds.has(buildID))
-			return true;
-
-		// Fallback to checking build ranges.
-		for (const range of this.buildRanges) {
-			if (isBuildInRange(buildID, range.min, range.max))
-				return true;
-		}
-
-		return false;
-	}
+DBDField::DBDField(const std::string& fieldName, const std::string& fieldType)
+	: type(fieldType)
+	, name(fieldName)
+	, isSigned(true)
+	, isID(false)
+	, isInline(true)
+	, isRelation(false)
+	, arrayLength(-1)
+	, size(-1)
+{
 }
 
-class DBDParser {
-	/**
-	 * Construct a new DBDParser instance.
-	 * @param {BufferReader} data 
-	 */
-	constructor(data) {
-		this.entries = new Set();
-		this.columns = new Map();
+// ── DBDEntry ──────────────────────────────────────────────────────────────────
 
-		this.parse(data);
+DBDEntry::DBDEntry() = default;
+
+/**
+ * Add a build to this DBD entry.
+ * @param min Minimum build (or exact build if max is empty)
+ * @param max Maximum build for a range (empty for exact builds)
+ */
+void DBDEntry::addBuild(const std::string& min, const std::string& max) {
+	if (!max.empty())
+		buildRanges.push_back({ min, max });
+	else
+		builds.insert(min);
+}
+
+/**
+ * Add layout hashes to this DBD entry.
+ * @param hashes Vector of layout hash strings
+ */
+void DBDEntry::addLayoutHashes(const std::vector<std::string>& hashes) {
+	for (const auto& hash : hashes)
+		layoutHashes.insert(hash);
+}
+
+/**
+ * Add a field to this DBD entry.
+ * @param field The DBDField to add
+ */
+void DBDEntry::addField(const DBDField& field) {
+	fields.push_back(field);
+}
+
+/**
+ * Check if this entry is valid for the provided buildID or layout hash.
+ * @param buildID Build ID string
+ * @param layoutHash Layout hash string
+ * @returns true if valid
+ */
+bool DBDEntry::isValidFor(const std::string& buildID, const std::string& layoutHash) const {
+	// Layout hash takes priority, being the quickest to check.
+	if (layoutHashes.count(layoutHash))
+		return true;
+
+	// Check for a single build ID.
+	if (builds.count(buildID))
+		return true;
+
+	// Fallback to checking build ranges.
+	for (const auto& range : buildRanges) {
+		if (isBuildInRange(buildID, range.min, range.max))
+			return true;
 	}
 
-	/**
-	 * Get a DBD structure for the provided buildID and layoutHash.
-	 * @param {string} buildID 
-	 * @param {string} layoutHash 
-	 * @returns {?DBDEntry}
-	 */
-	getStructure(buildID, layoutHash) {
-		for (const entry of this.entries) {
-			if (entry.isValidFor(buildID, layoutHash))
-				return entry;
-		}
+	return false;
+}
 
-		return null;
+// ── DBDParser ─────────────────────────────────────────────────────────────────
+
+/**
+ * Construct a new DBDParser instance.
+ * @param data BufferWrapper containing the DBD document
+ */
+DBDParser::DBDParser(BufferWrapper& data) {
+	parse(data);
+}
+
+/**
+ * Get a DBD structure for the provided buildID and layoutHash.
+ * @param buildID Build ID string
+ * @param layoutHash Layout hash string
+ * @returns Pointer to matching DBDEntry, or nullptr
+ */
+const DBDEntry* DBDParser::getStructure(const std::string& buildID, const std::string& layoutHash) const {
+	for (const auto& entry : entries) {
+		if (entry.isValidFor(buildID, layoutHash))
+			return &entry;
 	}
 
-	/**
-	 * Parse the contents of a DBD document.
-	* @param {BufferReader} data 
-	 */
-	parse(data) {
-		const lines = data.readLines();
+	return nullptr;
+}
 
-		// Separate the file into chunks separated by empty lines.
-		let chunk = [];
-		for (const line of lines) {
-			if (line.trim().length > 0) {
-				chunk.push(line);
-			} else {
-				this.parseChunk(chunk);
-				chunk = [];
-			}
-		}
+/**
+ * Parse the contents of a DBD document.
+ * @param data BufferWrapper containing the DBD document
+ */
+void DBDParser::parse(BufferWrapper& data) {
+	std::vector<std::string> lines = data.readLines();
 
-		// Ensure last chunk is accounted for.
-		if (chunk.length > 0)
-			this.parseChunk(chunk);
-		
-		if (this.columns.size === 0)
-			throw new Error('Invalid DBD: No columns defined.');
-	}
+	// Separate the file into chunks separated by empty lines.
+	std::vector<std::string> chunk;
+	for (const auto& line : lines) {
+		// Trim the line to check for emptiness.
+		std::string trimmed = line;
+		trimmed.erase(0, trimmed.find_first_not_of(" \t\r\n"));
+		trimmed.erase(trimmed.find_last_not_of(" \t\r\n") + 1);
 
-	/**
-	 * Parse a chunk from this DBD document.
-	 * @param {string[]} chunk 
-	 */
-	parseChunk(chunk) {
-		if (chunk[0] === 'COLUMNS') {
-			this.parseColumnChunk(chunk);
+		if (!trimmed.empty()) {
+			chunk.push_back(line);
 		} else {
-			const entry = new DBDEntry();
-			for (const line of chunk) {
-				// Build IDs.
-				const buildMatch = line.match(PATTERN_BUILD);
-				if (buildMatch !== null) {
-					// BUILD 1.7.0.4671-1.8.0.4714
-					// BUILD 0.9.1.3810
-					// BUILD 1.13.6.36231, 1.13.6.36310
-					const builds = buildMatch[1].split(',');
-					for (const build of builds) {
-						const buildRange = build.match(PATTERN_BUILD_RANGE);
-						if (buildRange !== null)
-							entry.addBuild(buildRange[1], buildRange[2]);
-						else
-							entry.addBuild(build.trim());
-					}
-
-					continue;
-				}
-
-				// Skip comments.
-				const commentMatch = line.match(PATTERN_COMMENT);
-				if (commentMatch !== null)
-					continue;
-
-				// Layout hashes.
-				const layoutMatch = line.match(PATTERN_LAYOUT);
-				if (layoutMatch !== null) {
-					// LAYOUT 0E84A21C, 35353535
-					entry.addLayoutHashes(...(layoutMatch[1].split(',').map(e => e.trim())));
-					continue;
-				}
-
-				const fieldMatch = line.match(PATTERN_FIELD);
-				if (fieldMatch !== null) {
-					const fieldName = fieldMatch[3]
-					const fieldType = this.columns.get(fieldName);
-
-					if (fieldType === undefined)
-						throw new Error('Invalid DBD: No field type defined for ' + fieldName);
-
-					const field = new DBDField(fieldName, fieldType);
-
-					// Parse annotations, (eg 'id,noninline,relation').
-					if (fieldMatch[2] !== undefined) {
-						const annotations = fieldMatch[2].split(',');
-						if (annotations.includes('id'))
-							field.isID = true;
-
-						if (annotations.includes('noninline'))
-							field.isInline = false;
-
-						if (annotations.includes('relation'))
-							field.isRelation = true;
-					}
-
-					// Parse signedness, either 'u' or undefined.
-					if (fieldMatch[5]?.length > 0)
-						field.isSigned = false;
-
-					// Parse data size (eg '32').
-					if (fieldMatch[6] !== undefined) {
-						const dataSize = parseInt(fieldMatch[6]);
-						if (!isNaN(dataSize))
-							field.size = dataSize;
-					}
-
-					// Parse array size (eg '2').
-					if (fieldMatch[8] !== undefined) {
-						const arrayLength = parseInt(fieldMatch[8]);
-						if (!isNaN(arrayLength))
-							field.arrayLength = arrayLength;
-					}
-
-					entry.addField(field);
-				}
-			}
-
-			this.entries.add(entry);
+			parseChunk(chunk);
+			chunk.clear();
 		}
 	}
 
-	/**
-	 * Parse the column definition of a DBD document.
-	 * @param {string[]} chunk 
-	 */
-	parseColumnChunk(chunk) {
-		if (chunk === undefined)
-			throw new Error('Invalid DBD: Missing column definitions.');
+	// Ensure last chunk is accounted for.
+	if (!chunk.empty())
+		parseChunk(chunk);
 
-		// Remove the COLUMNS header.
-		chunk.shift();
+	if (columns.empty())
+		throw std::runtime_error("Invalid DBD: No columns defined.");
+}
 
-		for (const entry of chunk) {
-			const match = entry.match(PATTERN_COLUMN);
-			if (match !== null) {
-				const columnType = match[1]; // int|float|locstring|string
-				//const columnForeignKey = match[2]; // <TableName::ColumnName> or undefined
-				const columnName = match[3].replace('?', ''); // Field_6_0_1_18179_000?
+/**
+ * Parse a chunk from this DBD document.
+ * @param chunk Lines of the chunk
+ */
+void DBDParser::parseChunk(std::vector<std::string>& chunk) {
+	if (chunk.empty())
+		return;
 
-				// TODO: Support foreign key support.
+	if (chunk[0] == "COLUMNS") {
+		parseColumnChunk(chunk);
+	} else {
+		DBDEntry entry;
+		for (const auto& line : chunk) {
+			// Build IDs.
+			std::smatch buildMatch;
+			if (std::regex_search(line, buildMatch, PATTERN_BUILD)) {
+				// BUILD 1.7.0.4671-1.8.0.4714
+				// BUILD 0.9.1.3810
+				// BUILD 1.13.6.36231, 1.13.6.36310
+				const std::string& buildList = buildMatch[1].str();
 
-				this.columns.set(columnName, columnType);
+				// Split by comma.
+				std::vector<std::string> builds;
+				size_t start = 0;
+				size_t pos = 0;
+				while ((pos = buildList.find(',', start)) != std::string::npos) {
+					builds.push_back(buildList.substr(start, pos - start));
+					start = pos + 1;
+				}
+				builds.push_back(buildList.substr(start));
+
+				for (const auto& build : builds) {
+					std::smatch buildRange;
+					// Trim whitespace.
+					std::string trimmedBuild = build;
+					trimmedBuild.erase(0, trimmedBuild.find_first_not_of(" \t"));
+					trimmedBuild.erase(trimmedBuild.find_last_not_of(" \t") + 1);
+
+					if (std::regex_search(trimmedBuild, buildRange, PATTERN_BUILD_RANGE))
+						entry.addBuild(buildRange[1].str(), buildRange[2].str());
+					else
+						entry.addBuild(trimmedBuild);
+				}
+
+				continue;
 			}
+
+			// Skip comments.
+			if (std::regex_search(line, PATTERN_COMMENT))
+				continue;
+
+			// Layout hashes.
+			std::smatch layoutMatch;
+			if (std::regex_search(line, layoutMatch, PATTERN_LAYOUT)) {
+				// LAYOUT 0E84A21C, 35353535
+				const std::string& hashList = layoutMatch[1].str();
+
+				// Split by comma and trim.
+				std::vector<std::string> hashes;
+				size_t start = 0;
+				size_t pos = 0;
+				while ((pos = hashList.find(',', start)) != std::string::npos) {
+					std::string h = hashList.substr(start, pos - start);
+					h.erase(0, h.find_first_not_of(" \t"));
+					h.erase(h.find_last_not_of(" \t") + 1);
+					hashes.push_back(h);
+					start = pos + 1;
+				}
+				std::string h = hashList.substr(start);
+				h.erase(0, h.find_first_not_of(" \t"));
+				h.erase(h.find_last_not_of(" \t") + 1);
+				hashes.push_back(h);
+
+				entry.addLayoutHashes(hashes);
+				continue;
+			}
+
+			std::smatch fieldMatch;
+			if (std::regex_search(line, fieldMatch, PATTERN_FIELD)) {
+				const std::string fieldName = fieldMatch[3].str();
+				auto it = columns.find(fieldName);
+
+				if (it == columns.end())
+					throw std::runtime_error("Invalid DBD: No field type defined for " + fieldName);
+
+				const std::string& fieldType = it->second;
+				DBDField field(fieldName, fieldType);
+
+				// Parse annotations, (eg 'id,noninline,relation').
+				if (fieldMatch[2].matched) {
+					const std::string annotations = fieldMatch[2].str();
+
+					if (annotations.find("id") != std::string::npos)
+						field.isID = true;
+
+					if (annotations.find("noninline") != std::string::npos)
+						field.isInline = false;
+
+					if (annotations.find("relation") != std::string::npos)
+						field.isRelation = true;
+				}
+
+				// Parse signedness, either 'u' or undefined.
+				if (fieldMatch[5].matched && !fieldMatch[5].str().empty())
+					field.isSigned = false;
+
+				// Parse data size (eg '32').
+				if (fieldMatch[6].matched) {
+					try {
+						int dataSize = std::stoi(fieldMatch[6].str());
+						field.size = dataSize;
+					} catch (...) {
+						// isNaN equivalent — ignore parse failures.
+					}
+				}
+
+				// Parse array size (eg '2').
+				if (fieldMatch[8].matched) {
+					try {
+						int arrayLength = std::stoi(fieldMatch[8].str());
+						field.arrayLength = arrayLength;
+					} catch (...) {
+						// isNaN equivalent — ignore parse failures.
+					}
+				}
+
+				entry.addField(field);
+			}
+		}
+
+		entries.push_back(std::move(entry));
+	}
+}
+
+/**
+ * Parse the column definition of a DBD document.
+ * @param chunk Lines of the column chunk
+ */
+void DBDParser::parseColumnChunk(std::vector<std::string>& chunk) {
+	if (chunk.empty())
+		throw std::runtime_error("Invalid DBD: Missing column definitions.");
+
+	// Remove the COLUMNS header (equivalent to chunk.shift()).
+	chunk.erase(chunk.begin());
+
+	for (const auto& entry : chunk) {
+		std::smatch match;
+		if (std::regex_search(entry, match, PATTERN_COLUMN)) {
+			const std::string columnType = match[1].str(); // int|float|locstring|string
+			//const std::string columnForeignKey = match[2].str(); // <TableName::ColumnName> or empty
+			std::string columnName = match[3].str(); // Field_6_0_1_18179_000?
+
+			// Remove trailing '?' character.
+			if (!columnName.empty() && columnName.back() == '?')
+				columnName.pop_back();
+
+			// TODO: Support foreign key support.
+
+			columns[columnName] = columnType;
 		}
 	}
 }
 
-module.exports = DBDParser;
+} // namespace db
