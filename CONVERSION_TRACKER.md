@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 79 / 184 files converted
+**Progress:** 80 / 184 files converted
 
 ---
 
@@ -139,7 +139,7 @@
 
 ## Tier 14 — 3D Shaders & Data Mappings (8 files)
 
-- [ ] `src/js/3D/AnimMapper.cpp` (1798 lines) 🔴
+- [x] `src/js/3D/AnimMapper.cpp` (1798 lines) 🔴
 - [ ] `src/js/3D/BoneMapper.cpp` (431 lines)
 - [ ] `src/js/3D/GeosetMapper.cpp` (86 lines)
 - [ ] `src/js/3D/WMOShaderMapper.cpp` (94 lines)

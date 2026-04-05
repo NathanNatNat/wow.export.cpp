@@ -76,4 +76,5 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/gl/UniformBuffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/gl/VertexArray.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/gl/ShaderProgram.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/AnimMapper.cpp
 )

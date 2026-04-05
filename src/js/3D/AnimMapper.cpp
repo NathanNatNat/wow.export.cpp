@@ -4,8 +4,13 @@
 	License: MIT
  */
 
+#include "AnimMapper.h"
+
+#include <array>
+#include <string_view>
+
 // Retrieved from https://github.com/Marlamin/wow.tools.local/blob/main/wwwroot/js/anims.js, index-based, no need for number
-const ANIM_NAMES = [
+static constexpr std::array<std::string_view, 1776> ANIM_NAMES = {{
 	"Stand",
 	"Death",
 	"Spell",
@@ -1781,19 +1786,17 @@ const ANIM_NAMES = [
 	"WAShovelLoop",
 	"FlyWAShovelLoop",
 	"EmoteTalkFrustrated",
-	"FlyEmoteTalkFrustrated",
-];
+	"FlyEmoteTalkFrustrated"
+}};
 
 /**
  * Get the label for an animation.
- * @param {number} anim_id  - The animation ID.
- * @returns {string} The animation name.
+ * @param anim_id  - The animation ID.
+ * @returns The animation name.
  */
-const get_anim_name = (anim_id) => {
-	if (anim_id in ANIM_NAMES)
-		return ANIM_NAMES[anim_id];
-	
-	return 'UnknownAnim_' + anim_id;
-}
+std::string get_anim_name(int anim_id) {
+	if (anim_id >= 0 && static_cast<size_t>(anim_id) < ANIM_NAMES.size())
+		return std::string(ANIM_NAMES[anim_id]);
 
-module.exports = { get_anim_name };
+	return "UnknownAnim_" + std::to_string(anim_id);
+}
