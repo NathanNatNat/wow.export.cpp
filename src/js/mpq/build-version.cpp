@@ -6,6 +6,7 @@
 
 #include "build-version.h"
 
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <cstdint>

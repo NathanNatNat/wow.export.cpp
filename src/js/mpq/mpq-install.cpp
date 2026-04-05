@@ -123,11 +123,13 @@ std::vector<std::string> MPQInstall::getAllFiles() const {
 		const auto* hash_entry = archive->getHashTableEntry(data.original_filename);
 
 		if (hash_entry) {
-			const auto& block_entry = archive->blockTable[hash_entry->blockTableIndex];
+			if (hash_entry->blockTableIndex < archive->blockTable.size()) {
+				const auto& block_entry = archive->blockTable[hash_entry->blockTableIndex];
 
-			// Skip files marked as deleted
-			if (block_entry.flags & MPQ_FILE_DELETE_MARKER)
-				continue;
+				// Skip files marked as deleted
+				if (block_entry.flags & MPQ_FILE_DELETE_MARKER)
+					continue;
+			}
 		}
 
 		results.push_back(data.mpq_name + "\\" + filename);
