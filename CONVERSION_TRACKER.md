@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 40 / 188 files converted
+**Progress:** 41 / 188 files converted
 
 ---
 
@@ -80,7 +80,7 @@
 - [x] `src/js/db/CompressionType.cpp` (7 lines)
 - [x] `src/js/db/FieldType.cpp` (13 lines)
 - [x] `src/js/db/DBDParser.cpp` (348 lines)
-- [ ] `src/js/db/WDCReader.cpp` (909 lines) 🔴
+- [x] `src/js/db/WDCReader.cpp` (909 lines) 🔴
 - [ ] `src/js/db/DBCReader.cpp` (426 lines)
 
 ## Tier 8 — CASC db2 + Listfile (2 files)
