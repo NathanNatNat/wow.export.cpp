@@ -636,4 +636,7 @@ template void batchWork<std::pair<uint32_t, std::string>>(std::string_view,
 	const std::vector<std::pair<uint32_t, std::string>>&,
 	const std::function<void(const std::pair<uint32_t, std::string>&, size_t)>&, size_t);
 
+template void queue<std::string>(const std::vector<std::string>&,
+	const std::function<void(const std::string&)>&, size_t);
+
 } // namespace generics

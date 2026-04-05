@@ -3,515 +3,635 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const path = require('path');
-const fsp = require('fs').promises;
-const util = require('util');
-const log = require('../log');
-const constants = require('../constants');
-const CASC = require('./casc-source');
-const VersionConfig = require('./version-config');
-const CDNConfig = require('./cdn-config');
-const BufferWrapper = require('../buffer');
-const BuildCache = require('./build-cache');
-const BLTEReader = require('./blte-reader').BLTEReader;
-const BLTEStreamReader = require('./blte-stream-reader');
-const listfile = require('./listfile');
-const core = require('../core');
-const generics = require('../generics');
-const CASCRemote = require('./casc-source-remote');
-const cdnResolver = require('./cdn-resolver');
+#include "casc-source-local.h"
+#include "../log.h"
+#include "../constants.h"
+#include "casc-source.h"
+#include "version-config.h"
+#include "cdn-config.h"
+#include "../buffer.h"
+#include "build-cache.h"
+#include "blte-reader.h"
+#include "blte-stream-reader.h"
+#include "listfile.h"
+#include "../core.h"
+#include "../generics.h"
+#include "casc-source-remote.h"
+#include "cdn-resolver.h"
 
-class CASCLocal extends CASC {
-	/**
-	 * Create a new CASC source using a local installation.
-	 * @param {string} dir Installation path.
-	 */
-	constructor(dir) {
-		super(false);
+#include <stdexcept>
+#include <string>
+#include <format>
+#include <regex>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
 
-		this.dir = dir;
-		this.dataDir = path.join(dir, constants.BUILD.DATA_DIR);
-		this.storageDir = path.join(this.dataDir, 'data');
+namespace fs = std::filesystem;
 
-		this.localIndexes = new Map();
-	}
+namespace casc {
 
-	/**
-	 * Initialize local CASC source.
-	 */
-	async init() {
-		log.write('Initializing local CASC installation: %s', this.dir);
+CASCLocal::CASCLocal(const std::string& dir)
+	: CASC(false), dir(dir)
+{
+	dataDir = fs::path(dir) / std::string(constants::BUILD::DATA_DIR);
+	storageDir = dataDir / "data";
+}
 
-		const buildInfo = path.join(this.dir, constants.BUILD.MANIFEST);
-		const config = VersionConfig(await fsp.readFile(buildInfo, 'utf8'));
+/**
+ * Initialize local CASC source.
+ */
+void CASCLocal::init() {
+	logging::write("Initializing local CASC installation: " + dir);
 
-		// Filter known products.
-		this.builds = config.filter(entry => constants.PRODUCTS.some(e => e.product === entry.Product));
+	const auto buildInfo = fs::path(dir) / std::string(constants::BUILD::MANIFEST);
 
-		log.write('%o', this.builds);
-	}
+	// Read build info file.
+	std::ifstream ifs(buildInfo);
+	if (!ifs.is_open())
+		throw std::runtime_error("Failed to open build info: " + buildInfo.string());
 
-	/**
-	 * Obtain a file by it's fileDataID.
-	 * @param {number} fileDataID
-	 * @param {boolean} [partialDecryption=false]
-	 * @param {boolean} [suppressLog=false]
-	 * @param {boolean} [supportFallback=true]
-	 * @param {boolean} [forceFallback=false]
-	 * @param {string} [contentKey=null]
-	 */
-	async getFile(fileDataID, partialDecryption = false, suppressLog = false, supportFallback = true, forceFallback = false, contentKey = null) {
-		if (!suppressLog)
-			log.write('Loading local CASC file %d (%s)', fileDataID, listfile.getByID(fileDataID));
+	std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+	auto config = parseVersionConfig(content);
 
-		const encodingKey = contentKey !== null ? super.getEncodingKeyForContentKey(contentKey) : await super.getFile(fileDataID);
-		const data = supportFallback ? await this.getDataFileWithRemoteFallback(encodingKey, forceFallback) : await this.getDataFile(encodingKey);
-		return new BLTEReader(data, encodingKey, partialDecryption);
-	}
+	// Filter known products.
+	builds.clear();
+	for (auto& entry : config) {
+		if (!entry.count("Product"))
+			continue;
 
-	/**
-	 * Get a streaming reader for a file by its fileDataID.
-	 * @param {number} fileDataID
-	 * @param {boolean} [partialDecrypt=false]
-	 * @param {boolean} [suppressLog=false]
-	 * @param {boolean} [supportFallback=true]
-	 * @param {boolean} [forceFallback=false]
-	 * @param {string} [contentKey=null]
-	 * @returns {BLTEStreamReader}
-	 */
-	async getFileStream(fileDataID, partialDecrypt = false, suppressLog = false, supportFallback = true, forceFallback = false, contentKey = null) {
-		if (!suppressLog)
-			log.write('Creating stream for local CASC file %d (%s)', fileDataID, listfile.getByID(fileDataID));
-
-		// if fallback forced or not supported, use remote streaming
-		if (forceFallback || !supportFallback) {
-			if (!this.remote)
-				await this.initializeRemoteCASC();
-
-			return await this.remote.getFileStream(fileDataID, partialDecrypt, suppressLog, contentKey);
+		const std::string& product = entry["Product"];
+		bool known = false;
+		for (const auto& p : constants::PRODUCTS) {
+			if (p.product == product) {
+				known = true;
+				break;
+			}
 		}
+		if (known)
+			builds.push_back(entry);
+	}
 
-		const encodingKey = contentKey !== null ? super.getEncodingKeyForContentKey(contentKey) : await super.getFile(fileDataID);
-		const entry = this.localIndexes.get(encodingKey.substring(0, 18));
+	logging::write("Local builds found: " + std::to_string(builds.size()));
+}
 
-		if (!entry) {
-			// file doesn't exist locally, fallback to remote
-			if (!supportFallback)
-				throw new Error('file does not exist in local data: ' + encodingKey);
+/**
+ * Obtain a file by it's fileDataID.
+ * @param fileDataID
+ * @param partialDecryption
+ * @param suppressLog
+ * @param supportFallback
+ * @param forceFallback
+ * @param contentKey
+ */
+BLTEReader CASCLocal::getFileAsBLTE(uint32_t fileDataID, bool partialDecryption,
+	bool suppressLog, bool supportFallback, bool forceFallback, const std::string& contentKey)
+{
+	if (!suppressLog)
+		logging::write(std::format("Loading local CASC file {} ({})", fileDataID, listfile::getByID(fileDataID)));
 
-			if (!this.remote)
-				await this.initializeRemoteCASC();
+	const std::string encodingKey = !contentKey.empty() ? CASC::getEncodingKeyForContentKey(contentKey) : CASC::getFile(fileDataID);
+	BufferWrapper data = supportFallback ? getDataFileWithRemoteFallback(encodingKey, forceFallback) : getDataFile(encodingKey);
+	return BLTEReader(std::move(data), encodingKey, partialDecryption);
+}
 
-			return await this.remote.getFileStream(fileDataID, partialDecrypt, suppressLog, contentKey);
-		}
+/**
+ * Get a streaming reader for a file by its fileDataID.
+ * @param fileDataID
+ * @param partialDecrypt
+ * @param suppressLog
+ * @param supportFallback
+ * @param forceFallback
+ * @param contentKey
+ * @returns BLTEStreamReader
+ */
+BLTEStreamReader CASCLocal::getFileStream(uint32_t fileDataID, bool partialDecrypt,
+	bool suppressLog, bool supportFallback, bool forceFallback, const std::string& contentKey)
+{
+	if (!suppressLog)
+		logging::write(std::format("Creating stream for local CASC file {} ({})", fileDataID, listfile::getByID(fileDataID)));
 
-		// read blte header from local file
-		const headerData = await generics.readFile(
-			this.formatDataPath(entry.index),
-			entry.offset + 0x1e,
-			Math.min(4096, entry.size - 0x1e)
+	// if fallback forced or not supported, use remote streaming
+	if (forceFallback || !supportFallback) {
+		if (!remote)
+			initializeRemoteCASC();
+
+		return remote->getFileStream(fileDataID, partialDecrypt, suppressLog, contentKey);
+	}
+
+	const std::string encodingKey = !contentKey.empty() ? CASC::getEncodingKeyForContentKey(contentKey) : CASC::getFile(fileDataID);
+	auto entryIt = localIndexes.find(encodingKey.substr(0, 18));
+
+	if (entryIt == localIndexes.end()) {
+		// file doesn't exist locally, fallback to remote
+		if (!supportFallback)
+			throw std::runtime_error("file does not exist in local data: " + encodingKey);
+
+		if (!remote)
+			initializeRemoteCASC();
+
+		return remote->getFileStream(fileDataID, partialDecrypt, suppressLog, contentKey);
+	}
+
+	const auto& entry = entryIt->second;
+
+	// read blte header from local file
+	BufferWrapper headerData = generics::readFile(
+		formatDataPath(entry.index),
+		entry.offset + 0x1e,
+		std::min(4096, entry.size - 0x1e)
+	);
+
+	// check if valid blte
+	if (!BLTEReader::check(headerData)) {
+		if (!supportFallback)
+			throw std::runtime_error("local data file is not a valid BLTE");
+
+		if (!remote)
+			initializeRemoteCASC();
+
+		return remote->getFileStream(fileDataID, partialDecrypt, suppressLog, contentKey);
+	}
+
+	auto metadata = BLTEReader::parseBLTEHeader(headerData, encodingKey, false);
+
+	// create block fetcher function for local files
+	const int32_t entryIndex = entry.index;
+	const int32_t entryOffset = entry.offset;
+
+	auto blockFetcher = [this, metadata, entryIndex, entryOffset](size_t blockIndex) -> BufferWrapper {
+		const auto& block = metadata.blocks[blockIndex];
+		const int64_t blockOffset = static_cast<int64_t>(metadata.dataStart) + block.fileOffset;
+
+		return generics::readFile(
+			this->formatDataPath(entryIndex),
+			entryOffset + 0x1e + blockOffset,
+			block.CompSize
 		);
+	};
 
-		// check if valid blte
-		if (!BLTEReader.check(headerData)) {
-			if (!supportFallback)
-				throw new Error('local data file is not a valid BLTE');
+	return BLTEStreamReader(encodingKey, metadata, blockFetcher, partialDecrypt);
+}
 
-			if (!this.remote)
-				await this.initializeRemoteCASC();
+/**
+ * Returns a list of available products in the installation.
+ * Format example: "PTR: World of Warcraft 8.3.0.32272"
+ */
+std::vector<ProductEntry> CASCLocal::getProductList() {
+	std::vector<ProductEntry> products;
+	for (size_t i = 0; i < builds.size(); i++) {
+		const auto& entry = builds[i];
 
-			return await this.remote.getFileStream(fileDataID, partialDecrypt, suppressLog, contentKey);
-		}
+		auto productIt = entry.find("Product");
+		auto versionIt = entry.find("Version");
+		auto branchIt = entry.find("Branch");
+		if (productIt == entry.end() || versionIt == entry.end())
+			continue;
 
-		const metadata = BLTEReader.parseBLTEHeader(headerData, encodingKey, false);
-
-		// create block fetcher function for local files
-		const blockFetcher = async (blockIndex) => {
-			const block = metadata.blocks[blockIndex];
-			const blockOffset = metadata.dataStart + block.fileOffset;
-
-			return await generics.readFile(
-				this.formatDataPath(entry.index),
-				entry.offset + 0x1e + blockOffset,
-				block.CompSize
-			);
-		};
-
-		return new BLTEStreamReader(encodingKey, metadata, blockFetcher, partialDecrypt);
-	}
-
-	/**
-	 * Returns a list of available products in the installation.
-	 * Format example: "PTR: World of Warcraft 8.3.0.32272"
-	 */
-	getProductList() {
-		const products = [];
-		for (let i = 0; i < this.builds.length; i++) {
-			const entry = this.builds[i];
-			const product = constants.PRODUCTS.find(e => e.product === entry.Product);
-			const label = util.format('%s (%s) %s', product.title, entry.Branch.toUpperCase(), entry.Version);
-			const versionMatch = entry.Version.match(/^(\d+)\./);
-			const expansionId = versionMatch ? Math.min(parseInt(versionMatch[1]) - 1, 12) : 0;
-			products.push({ label, expansionId, buildIndex: i });
-		}
-
-		return products;
-	}
-
-	/**
-	 * Load the CASC interface with the given build.
-	 * @param {number} buildIndex
-	 */
-	async load(buildIndex) {
-		this.build = this.builds[buildIndex];
-		log.write('Loading local CASC build: %o', this.build);
-
-		this.cache = new BuildCache(this.build.BuildKey);
-		await this.cache.init();
-
-		core.showLoadingScreen(8);
-
-		await this.loadConfigs();
-		await this.loadIndexes();
-		await this.loadEncoding();
-		await this.loadRoot();
-
-		core.view.casc = this;
-
-		await this.prepareListfile();
-		await this.prepareDBDManifest();
-		await this.loadListfile(this.build.BuildKey);
-
-		core.hideLoadingScreen();
-	}
-
-	/**
-	 * Load the BuildConfig from the installation directory.
-	 */
-	async loadConfigs() {
-		// Load and parse configs from disk with CDN fallback.
-		await core.progressLoadingScreen('Fetching build configurations');
-
-		if (await generics.fileExists("fakebuildconfig")) {
-			this.buildConfig = CDNConfig(await fsp.readFile("fakebuildconfig", 'utf8'));
-			log.write("WARNING: Using fake build config. No support given for weird stuff happening.");
-
-			// Reconstruct version from the fake config's build name.
-			// This is used for e.g. DBD version selection so needs to be correct.
-			const splitName = this.buildConfig.buildName.split("patch");
-			const buildNumber = splitName[0].replace("WOW-", "");
-			const splitPatch = splitName[1].split("_");
-			
-			this.build.Version = splitPatch[0] + "." + buildNumber;
-		} else {
-			this.buildConfig = await this.getConfigFileWithRemoteFallback(this.build.BuildKey);
-		}
-		
-		this.cdnConfig = await this.getConfigFileWithRemoteFallback(this.build.CDNKey);
-
-		log.write('BuildConfig: %o', this.buildConfig);
-		log.write('CDNConfig: %o', this.cdnConfig);
-	}
-
-	/**
-	 * Get config from disk with CDN fallback
-	 */
-	async getConfigFileWithRemoteFallback(key) {
-		const configPath = this.formatConfigPath(key);
-		if (!await generics.fileExists(configPath)) {
-			log.write('Local config file %s does not exist, falling back to CDN...', key);
-			if (!this.remote)
-				await this.initializeRemoteCASC();
-
-			const cdnHosts = await cdnResolver.getRankedHosts(core.view.selectedCDNRegion.tag, this.remote.serverConfig);
-			return this.remote.getCDNConfig(key, cdnHosts);
-		} else {
-			return CDNConfig(await fsp.readFile(configPath, 'utf8'));
-		}
-	}
-
-	/**
-	 * Load and parse storage indexes from the local installation.
-	 */
-	async loadIndexes() {
-		log.timeLog();
-		await core.progressLoadingScreen('Loading indexes');
-
-		let indexCount = 0;
-
-		const entries = await fsp.readdir(this.storageDir, { withFileTypes: true });
-		for (const entry of entries) {
-			if (entry.isFile() && entry.name.endsWith('.idx')) {
-				await this.parseIndex(path.join(this.storageDir, entry.name));
-				indexCount++;
-			}
-		}
-
-		log.timeEnd('Loaded %d entries from %d journal indexes', this.localIndexes.size, indexCount);
-	}
-
-	/**
-	 * Parse a local installation journal index for entries.
-	 * @param {string} file Path to the index.
-	 */
-	async parseIndex(file) {
-		const entries = this.localIndexes;
-		const index = await BufferWrapper.readFile(file);
-
-		const headerHashSize = index.readInt32LE();
-		index.move(4); // headerHash uint32
-		index.move(headerHashSize); // headerHash byte[headerHashSize]
-
-		index.seek((8 + headerHashSize + 0x0F) & 0xFFFFFFF0); // Next 0x10 boundary.
-
-		const dataLength = index.readInt32LE();
-		index.move(4);
-
-		const nBlocks = dataLength / 18;
-		for (let i = 0; i < nBlocks; i++) {
-			const key = index.readHexString(9);
-			if (entries.has(key)) {
-				index.move(1 + 4 + 4); // idxHigh + idxLow + size
-				continue;
-			}
-
-			const idxHigh = index.readUInt8();
-			const idxLow = index.readInt32BE();
-
-			entries.set(key, {
-				index: (idxHigh << 2 | ((idxLow & 0xC0000000) >>> 30)),
-				offset: idxLow & 0x3FFFFFFF,
-				size: index.readInt32LE()
-			});
-		}
-	}
-
-	/**
-	 * Load and parse encoding from the local installation.
-	 */
-	async loadEncoding() {
-		// Parse encoding file.
-		log.timeLog();
-		const encKeys = this.buildConfig.encoding.split(' ');
-
-		await core.progressLoadingScreen('Loading encoding table');
-		const encRaw = await this.getDataFileWithRemoteFallback(encKeys[1]);
-		await this.parseEncodingFile(encRaw, encKeys[1]);
-		log.timeEnd('Parsed encoding table (%d entries)', this.encodingKeys.size);
-	}
-
-	/**
-	 * Load and parse root table from local installation.
-	 */
-	async loadRoot() {
-		// Get root key from encoding table.
-		const rootKey = this.encodingKeys.get(this.buildConfig.root);
-		if (rootKey === undefined)
-			throw new Error('No encoding entry found for root key');
-
-		// Parse root file.
-		log.timeLog();
-		await core.progressLoadingScreen('Loading root file');
-		const root = await this.getDataFileWithRemoteFallback(rootKey);
-		const rootEntryCount = await this.parseRootFile(root, rootKey);
-		log.timeEnd('Parsed root file (%d entries, %d types)', rootEntryCount, this.rootTypes.length);
-	}
-
-	/**
-	 * Initialize a remote CASC instance to download missing
-	 * files needed during local initialization.
-	 */
-	async initializeRemoteCASC() {
-		const remote = new CASCRemote(core.view.selectedCDNRegion.tag);
-		await remote.init();
-
-		const buildIndex = remote.builds.findIndex(build => build.Product === this.build.Product);
-		await remote.preload(buildIndex, this.cache);
-
-		this.remote = remote;
-	}
-
-	/**
-	 * Obtain a data file from the local archives.
-	 * If not stored locally, file will be downloaded from a CDN.
-	 * @param {string} key 
-	 * @param {boolean} [forceFallback=false]
-	 */
-	async getDataFileWithRemoteFallback(key, forceFallback = false) {
-		try {
-			// If forceFallback is true, we have corrupt local data.
-			if (forceFallback)
-				throw new Error('Local data is corrupted, forceFallback set.');
-
-			// Attempt 1: Extract from local archives.
-			const local = await this.getDataFile(key);
-
-			if (!BLTEReader.check(local))
-				throw new Error('Local data file is not a valid BLTE');
-
-			return local;
-		} catch (e) {
-			// Attempt 2: Load from cache from previous fallback.
-			log.write('Local data file %s does not exist, falling back to cache...', key);
-			const cached = await this.cache.getFile(key, constants.CACHE.DIR_DATA);
-			if (cached !== null)
-				return cached;
-
-			// Attempt 3: Download from CDN.
-			log.write('Local data file %s not cached, falling back to CDN...', key);
-			if (!this.remote)
-				await this.initializeRemoteCASC();
-
-			const archive = this.remote.archives.get(key);
-			let data;
-			if (archive !== undefined) {
-				// Archive exists for key, attempt partial remote download.
-				log.write('Local data file %s has archive, attempt partial download...', key);
-				data = await this.remote.getDataFilePartial(this.remote.formatCDNKey(archive.key), archive.offset, archive.size);
-			} else {
-				// No archive for this file, attempt direct download.
-				log.write('Local data file %s has no archive, attempting direct download...', key);
-				data = await this.remote.getDataFile(this.remote.formatCDNKey(key));
-			}
-
-			this.cache.storeFile(key, data, constants.CACHE.DIR_DATA);
-			return data;
-		}
-	}
-
-	/**
-	 * Obtain a data file from the local archives.
-	 * @param {string} key
-	 */
-	async getDataFile(key) {
-		const entry = this.localIndexes.get(key.substring(0, 18));
-		if (!entry)
-			throw new Error('Requested file does not exist in local data: ' + key);
-
-		const data = await generics.readFile(this.formatDataPath(entry.index), entry.offset + 0x1E, entry.size - 0x1E);
-
-		let isZeroed = true;
-		for (let i = 0, n = data.remainingBytes; i < n; i++) {
-			if (data.readUInt8() !== 0x0) {
-				isZeroed = false;
+		// Find matching product definition.
+		std::string_view title;
+		for (const auto& p : constants::PRODUCTS) {
+			if (p.product == productIt->second) {
+				title = p.title;
 				break;
 			}
 		}
 
-		if (isZeroed)
-			throw new Error('Requested data file is empty or missing: ' + key);
-
-		data.seek(0);
-		return data;
-	}
-
-	/**
-	 * Format a local path to a data archive.
-	 * 67 -> <install>/Data/data/data.067
-	 * @param {number} id 
-	 */
-	formatDataPath(id) {
-		return path.join(this.dataDir, 'data', 'data.' + id.toString().padStart(3, '0'));
-	}
-
-	/**
-	 * Format a local path to an archive index from the key.
-	 * 0b45bd2721fd6c86dac2176cbdb7fc5b -> <install>/Data/indices/0b45bd2721fd6c86dac2176cbdb7fc5b.index
-	 * @param {string} key 
-	 */
-	formatIndexPath(key) {
-		return path.join(this.dataDir, 'indices', key + '.index');
-	}
-
-	/**
-	 * Format a local path to a config file from the key.
-	 * 0af716e8eca5aeff0a3965d37e934ffa -> <install>/Data/config/0a/f7/0af716e8eca5aeff0a3965d37e934ffa
-	 * @param {string} key 
-	 */
-	formatConfigPath(key) {
-		return path.join(this.dataDir, 'config', this.formatCDNKey(key));
-	}
-
-	/**
-	 * Format a CDN key for use in local file reading.
-	 * Path separators used by this method are platform specific.
-	 * 49299eae4e3a195953764bb4adb3c91f -> 49\29\49299eae4e3a195953764bb4adb3c91f
-	 * @param {string} key 
-	 */
-	formatCDNKey(key) {
-		return path.join(key.substring(0, 2), key.substring(2, 4), key);
-	}
-
-	/**
-	 * ensure file is in cache (unwrapped from BLTE) and return path.
-	 * @param {string} encodingKey
-	 * @param {number} fileDataID
-	 * @param {boolean} suppressLog
-	 * @returns {string} path to cached file
-	 */
-	async _ensureFileInCache(encodingKey, fileDataID, suppressLog) {
-		const cacheFileName = encodingKey + '.data';
-		const cachedPath = this.cache.getFilePath(cacheFileName, constants.CACHE.DIR_DATA);
-
-		// check if already in cache
-		const cached = await this.cache.getFile(cacheFileName, constants.CACHE.DIR_DATA);
-		if (cached !== null)
-			return cachedPath;
-
-		// retrieve and unwrap from BLTE
-		if (!suppressLog)
-			log.write('caching file %d (%s) for mmap', fileDataID, listfile.getByID(fileDataID));
-
-		const data = await this.getDataFileWithRemoteFallback(encodingKey);
-		const blte = new BLTEReader(data, encodingKey, true);
-		blte.processAllBlocks();
-
-		// write to cache
-		await this.cache.storeFile(cacheFileName, blte, constants.CACHE.DIR_DATA);
-
-		return cachedPath;
-	}
-
-	/**
-	 * Get encoding info for a file by fileDataID for CDN streaming.
-	 * Returns { enc: string, arc?: { key: string, ofs: number, len: number } }
-	 * Initializes remote CASC if needed to get archive info for the server.
-	 * @param {number} fileDataID
-	 * @returns {Promise<{enc: string, arc?: {key: string, ofs: number, len: number}}|null>}
-	 */
-	async getFileEncodingInfo(fileDataID) {
-		try {
-			const encodingKey = await super.getFile(fileDataID);
-
-			// initialize remote if not already done
-			if (!this.remote)
-				await this.initializeRemoteCASC();
-
-			const archive = this.remote.archives.get(encodingKey);
-			if (archive !== undefined)
-				return { enc: encodingKey, arc: { key: archive.key, ofs: archive.offset, len: archive.size } };
-
-			return { enc: encodingKey };
-		} catch {
-			return null;
+		std::string branchStr;
+		if (branchIt != entry.end()) {
+			branchStr = branchIt->second;
+			// Convert to uppercase.
+			for (auto& c : branchStr)
+				c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 		}
+
+		const std::string label = std::format("{} ({}) {}", title, branchStr, versionIt->second);
+
+		// Extract expansion ID from version string.
+		std::regex versionRegex("^(\\d+)\\.");
+		std::smatch match;
+		const std::string& version = versionIt->second;
+		int expansionId = 0;
+		if (std::regex_search(version, match, versionRegex))
+			expansionId = std::min(std::stoi(match[1].str()) - 1, 12);
+
+		products.push_back({ label, expansionId, static_cast<int>(i) });
 	}
 
-	/**
-	* Get the current build ID.
-	* @returns {string}
-	*/
-	getBuildName() {
-		return this.build.Version;
+	return products;
+}
+
+/**
+ * Load the CASC interface with the given build.
+ * @param buildIndex
+ */
+void CASCLocal::load(int buildIndex) {
+	build = builds[buildIndex];
+	logging::write("Loading local CASC build");
+
+	ownedCache = std::make_unique<BuildCache>(build["BuildKey"]);
+	ownedCache->init();
+	cache = ownedCache.get();
+
+	core::showLoadingScreen(8);
+
+	loadConfigs();
+	loadIndexes();
+	loadEncoding();
+	loadRoot();
+
+	// core.view.casc = this;
+	// In C++, the caller is responsible for setting core::view->casc.
+
+	prepareListfile();
+	prepareDBDManifest();
+	loadListfile(build["BuildKey"]);
+
+	core::hideLoadingScreen();
+}
+
+/**
+ * Load the BuildConfig from the installation directory.
+ */
+void CASCLocal::loadConfigs() {
+	// Load and parse configs from disk with CDN fallback.
+	core::progressLoadingScreen("Fetching build configurations");
+
+	if (generics::fileExists("fakebuildconfig")) {
+		std::ifstream ifs("fakebuildconfig");
+		std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+		buildConfig = parseCDNConfig(content);
+		logging::write("WARNING: Using fake build config. No support given for weird stuff happening.");
+
+		// Reconstruct version from the fake config's build name.
+		// This is used for e.g. DBD version selection so needs to be correct.
+		if (buildConfig.count("buildName")) {
+			const std::string& buildName = buildConfig["buildName"];
+			auto patchPos = buildName.find("patch");
+			if (patchPos != std::string::npos) {
+				std::string buildNumber = buildName.substr(0, patchPos);
+				// Remove "WOW-" prefix
+				auto wowPos = buildNumber.find("WOW-");
+				if (wowPos != std::string::npos)
+					buildNumber = buildNumber.substr(wowPos + 4);
+
+				std::string patchPart = buildName.substr(patchPos + 5); // skip "patch"
+				auto underscorePos = patchPart.find('_');
+				if (underscorePos != std::string::npos)
+					patchPart = patchPart.substr(0, underscorePos);
+
+				build["Version"] = patchPart + "." + buildNumber;
+			}
+		}
+	} else {
+		buildConfig = getConfigFileWithRemoteFallback(build["BuildKey"]);
 	}
 
-	/**
-	 * Returns the build configuration key.
-	 * @returns {string}
-	 */
-	getBuildKey() {
-		return this.build.BuildKey;
+	cdnConfig = getConfigFileWithRemoteFallback(build["CDNKey"]);
+
+	logging::write("BuildConfig loaded");
+	logging::write("CDNConfig loaded");
+}
+
+/**
+ * Get config from disk with CDN fallback
+ */
+std::unordered_map<std::string, std::string> CASCLocal::getConfigFileWithRemoteFallback(const std::string& key) {
+	const std::string configPath = formatConfigPath(key);
+	if (!generics::fileExists(configPath)) {
+		logging::write("Local config file " + key + " does not exist, falling back to CDN...");
+		if (!remote)
+			initializeRemoteCASC();
+
+		const auto& selectedRegion = core::view->selectedCDNRegion;
+		std::string regionTag;
+		if (selectedRegion.contains("tag"))
+			regionTag = selectedRegion["tag"].get<std::string>();
+		else
+			regionTag = std::string(constants::PATCH::DEFAULT_REGION);
+
+		auto cdnHosts = cdn_resolver::getRankedHosts(regionTag, remote->serverConfig);
+		return remote->getCDNConfig(key, cdnHosts);
+	} else {
+		std::ifstream ifs(configPath);
+		std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+		return parseCDNConfig(content);
 	}
 }
 
-module.exports = CASCLocal;
+/**
+ * Load and parse storage indexes from the local installation.
+ */
+void CASCLocal::loadIndexes() {
+	logging::timeLog();
+	core::progressLoadingScreen("Loading indexes");
+
+	int indexCount = 0;
+
+	for (const auto& entry : fs::directory_iterator(storageDir)) {
+		if (entry.is_regular_file() && entry.path().extension() == ".idx") {
+			parseIndex(entry.path());
+			indexCount++;
+		}
+	}
+
+	logging::timeEnd(std::format("Loaded {} entries from {} journal indexes", localIndexes.size(), indexCount));
+}
+
+/**
+ * Parse a local installation journal index for entries.
+ * @param file Path to the index.
+ */
+void CASCLocal::parseIndex(const fs::path& file) {
+	BufferWrapper index = BufferWrapper::readFile(file);
+
+	const int32_t headerHashSize = index.readInt32LE();
+	index.move(4); // headerHash uint32
+	index.move(headerHashSize); // headerHash byte[headerHashSize]
+
+	index.seek((8 + headerHashSize + 0x0F) & 0xFFFFFFF0); // Next 0x10 boundary.
+
+	const int32_t dataLength = index.readInt32LE();
+	index.move(4);
+
+	const int32_t nBlocks = dataLength / 18;
+	for (int32_t i = 0; i < nBlocks; i++) {
+		const std::string key = index.readHexString(9);
+		if (localIndexes.count(key)) {
+			index.move(1 + 4 + 4); // idxHigh + idxLow + size
+			continue;
+		}
+
+		const uint8_t idxHigh = index.readUInt8();
+		const int32_t idxLow = index.readInt32BE();
+
+		localIndexes[key] = {
+			static_cast<int32_t>((idxHigh << 2) | ((static_cast<uint32_t>(idxLow) & 0xC0000000) >> 30)),
+			idxLow & 0x3FFFFFFF,
+			index.readInt32LE()
+		};
+	}
+}
+
+/**
+ * Load and parse encoding from the local installation.
+ */
+void CASCLocal::loadEncoding() {
+	// Parse encoding file.
+	logging::timeLog();
+
+	// Split encoding keys by space.
+	const std::string& encStr = buildConfig["encoding"];
+	std::string encKey;
+	{
+		auto spacePos = encStr.find(' ');
+		if (spacePos != std::string::npos)
+			encKey = encStr.substr(spacePos + 1);
+		else
+			encKey = encStr;
+	}
+
+	core::progressLoadingScreen("Loading encoding table");
+	BufferWrapper encRaw = getDataFileWithRemoteFallback(encKey);
+	parseEncodingFile(std::move(encRaw), encKey);
+	logging::timeEnd("Parsed encoding table (" + std::to_string(encodingKeys.size()) + " entries)");
+}
+
+/**
+ * Load and parse root table from local installation.
+ */
+void CASCLocal::loadRoot() {
+	// Get root key from encoding table.
+	auto rootKeyIt = encodingKeys.find(buildConfig["root"]);
+	if (rootKeyIt == encodingKeys.end())
+		throw std::runtime_error("No encoding entry found for root key");
+
+	const std::string& rootKey = rootKeyIt->second;
+
+	// Parse root file.
+	logging::timeLog();
+	core::progressLoadingScreen("Loading root file");
+	BufferWrapper rootData = getDataFileWithRemoteFallback(rootKey);
+	const size_t rootEntryCount = parseRootFile(std::move(rootData), rootKey);
+	logging::timeEnd(std::format("Parsed root file ({} entries, {} types)", rootEntryCount, rootTypes.size()));
+}
+
+/**
+ * Initialize a remote CASC instance to download missing
+ * files needed during local initialization.
+ */
+void CASCLocal::initializeRemoteCASC() {
+	const auto& selectedRegion = core::view->selectedCDNRegion;
+	std::string regionTag;
+	if (selectedRegion.contains("tag"))
+		regionTag = selectedRegion["tag"].get<std::string>();
+	else
+		regionTag = std::string(constants::PATCH::DEFAULT_REGION);
+
+	remote = std::make_unique<CASCRemote>(regionTag);
+	remote->init();
+
+	// Find matching build index.
+	int buildIndex = -1;
+	const std::string& product = build["Product"];
+	for (size_t i = 0; i < remote->builds.size(); i++) {
+		if (remote->builds[i].count("Product") && remote->builds[i]["Product"] == product) {
+			buildIndex = static_cast<int>(i);
+			break;
+		}
+	}
+
+	if (buildIndex >= 0)
+		remote->preload(buildIndex, cache);
+}
+
+/**
+ * Obtain a data file from the local archives.
+ * If not stored locally, file will be downloaded from a CDN.
+ * @param key
+ * @param forceFallback
+ */
+BufferWrapper CASCLocal::getDataFileWithRemoteFallback(const std::string& key, bool forceFallback) {
+	try {
+		// If forceFallback is true, we have corrupt local data.
+		if (forceFallback)
+			throw std::runtime_error("Local data is corrupted, forceFallback set.");
+
+		// Attempt 1: Extract from local archives.
+		BufferWrapper local = getDataFile(key);
+
+		if (!BLTEReader::check(local))
+			throw std::runtime_error("Local data file is not a valid BLTE");
+
+		return local;
+	} catch (const std::exception& e) {
+		// Attempt 2: Load from cache from previous fallback.
+		logging::write("Local data file " + key + " does not exist, falling back to cache...");
+		auto cached = cache->getFile(key, constants::CACHE::DIR_DATA().string());
+		if (cached.has_value())
+			return std::move(cached.value());
+
+		// Attempt 3: Download from CDN.
+		logging::write("Local data file " + key + " not cached, falling back to CDN...");
+		if (!remote)
+			initializeRemoteCASC();
+
+		auto archIt = remote->archives.find(key);
+		BufferWrapper data;
+		if (archIt != remote->archives.end()) {
+			// Archive exists for key, attempt partial remote download.
+			logging::write("Local data file " + key + " has archive, attempt partial download...");
+			data = remote->getDataFilePartial(remote->formatCDNKey(archIt->second.key), archIt->second.offset, archIt->second.size);
+		} else {
+			// No archive for this file, attempt direct download.
+			logging::write("Local data file " + key + " has no archive, attempting direct download...");
+			data = remote->getDataFile(remote->formatCDNKey(key));
+		}
+
+		cache->storeFile(key, data, constants::CACHE::DIR_DATA().string());
+		return data;
+	}
+}
+
+/**
+ * Obtain a data file from the local archives.
+ * @param key
+ */
+BufferWrapper CASCLocal::getDataFile(const std::string& key) {
+	auto entryIt = localIndexes.find(key.substr(0, 18));
+	if (entryIt == localIndexes.end())
+		throw std::runtime_error("Requested file does not exist in local data: " + key);
+
+	const auto& entry = entryIt->second;
+	BufferWrapper data = generics::readFile(formatDataPath(entry.index), entry.offset + 0x1E, entry.size - 0x1E);
+
+	bool isZeroed = true;
+	const size_t remaining = data.remainingBytes();
+	for (size_t i = 0; i < remaining; i++) {
+		if (data.readUInt8() != 0x0) {
+			isZeroed = false;
+			break;
+		}
+	}
+
+	if (isZeroed)
+		throw std::runtime_error("Requested data file is empty or missing: " + key);
+
+	data.seek(0);
+	return data;
+}
+
+/**
+ * Format a local path to a data archive.
+ * 67 -> <install>/Data/data/data.067
+ * @param id
+ */
+std::string CASCLocal::formatDataPath(int32_t id) {
+	std::ostringstream oss;
+	oss << std::setfill('0') << std::setw(3) << id;
+	return (dataDir / "data" / ("data." + oss.str())).string();
+}
+
+/**
+ * Format a local path to an archive index from the key.
+ * 0b45bd2721fd6c86dac2176cbdb7fc5b -> <install>/Data/indices/0b45bd2721fd6c86dac2176cbdb7fc5b.index
+ * @param key
+ */
+std::string CASCLocal::formatIndexPath(const std::string& key) {
+	return (dataDir / "indices" / (key + ".index")).string();
+}
+
+/**
+ * Format a local path to a config file from the key.
+ * 0af716e8eca5aeff0a3965d37e934ffa -> <install>/Data/config/0a/f7/0af716e8eca5aeff0a3965d37e934ffa
+ * @param key
+ */
+std::string CASCLocal::formatConfigPath(const std::string& key) {
+	return (dataDir / "config" / formatCDNKey(key)).string();
+}
+
+/**
+ * Format a CDN key for use in local file reading.
+ * Path separators used by this method are platform specific.
+ * 49299eae4e3a195953764bb4adb3c91f -> 49/29/49299eae4e3a195953764bb4adb3c91f (or 49\29\... on Windows)
+ * @param key
+ */
+std::string CASCLocal::formatCDNKey(const std::string& key) {
+	return (fs::path(key.substr(0, 2)) / key.substr(2, 2) / key).string();
+}
+
+/**
+ * ensure file is in cache (unwrapped from BLTE) and return path.
+ * @param encodingKey
+ * @param fileDataID
+ * @param suppressLog
+ * @returns path to cached file
+ */
+std::string CASCLocal::_ensureFileInCache(const std::string& encodingKey, uint32_t fileDataID, bool suppressLog) {
+	const std::string cacheFileName = encodingKey + ".data";
+	const auto cachedPath = cache->getFilePath(cacheFileName, constants::CACHE::DIR_DATA().string());
+
+	// check if already in cache
+	auto cached = cache->getFile(cacheFileName, constants::CACHE::DIR_DATA().string());
+	if (cached.has_value())
+		return cachedPath.string();
+
+	// retrieve and unwrap from BLTE
+	if (!suppressLog)
+		logging::write(std::format("caching file {} ({}) for mmap", fileDataID, listfile::getByID(fileDataID)));
+
+	BufferWrapper data = getDataFileWithRemoteFallback(encodingKey);
+	BLTEReader blte(std::move(data), encodingKey, true);
+	blte.processAllBlocks();
+
+	// write to cache
+	BufferWrapper blteWrapper = std::move(static_cast<BufferWrapper&>(blte));
+	cache->storeFile(cacheFileName, blteWrapper, constants::CACHE::DIR_DATA().string());
+
+	return cachedPath.string();
+}
+
+/**
+ * Get encoding info for a file by fileDataID for CDN streaming.
+ * Returns FileEncodingInfo or std::nullopt.
+ * Initializes remote CASC if needed to get archive info for the server.
+ * @param fileDataID
+ */
+std::optional<FileEncodingInfo> CASCLocal::getFileEncodingInfo(uint32_t fileDataID) {
+	try {
+		const std::string encodingKey = CASC::getFile(fileDataID);
+
+		// initialize remote if not already done
+		if (!remote)
+			initializeRemoteCASC();
+
+		auto archIt = remote->archives.find(encodingKey);
+		if (archIt != remote->archives.end())
+			return FileEncodingInfo{ encodingKey, ArchiveInfo{ archIt->second.key, archIt->second.offset, archIt->second.size } };
+
+		return FileEncodingInfo{ encodingKey, std::nullopt };
+	} catch (...) {
+		return std::nullopt;
+	}
+}
+
+/**
+ * Get the current build ID.
+ * @returns build name string
+ */
+std::string CASCLocal::getBuildName() {
+	auto it = build.find("Version");
+	return (it != build.end()) ? it->second : "";
+}
+
+/**
+ * Returns the build configuration key.
+ * @returns build key string
+ */
+std::string CASCLocal::getBuildKey() {
+	auto it = build.find("BuildKey");
+	return (it != build.end()) ? it->second : "";
+}
+
+} // namespace casc
