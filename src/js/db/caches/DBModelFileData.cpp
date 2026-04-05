@@ -13,7 +13,7 @@
 #include <format>
 #include <unordered_map>
 
-namespace db::caches {
+namespace db::caches::DBModelFileData {
 
 static uint32_t fieldToUint32(const db::FieldValue& val) {
 	if (auto* p = std::get_if<int64_t>(&val))
@@ -78,4 +78,4 @@ const std::unordered_set<uint32_t>& getFileDataIDs() {
 	return fileDataIDs;
 }
 
-} // namespace db::caches
+} // namespace db::caches::DBModelFileData

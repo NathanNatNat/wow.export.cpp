@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 49 / 184 files converted
+**Progress:** 59 / 184 files converted
 
 ---
 
@@ -100,16 +100,16 @@
 
 ## Tier 11 — DB Caches (18 files)
 
-- [ ] `src/js/db/caches/DBModelFileData.cpp` (58 lines)
-- [ ] `src/js/db/caches/DBTextureFileData.cpp` (67 lines)
-- [ ] `src/js/db/caches/DBComponentModelFileData.cpp` (174 lines)
-- [ ] `src/js/db/caches/DBComponentTextureFileData.cpp` (123 lines)
-- [ ] `src/js/db/caches/DBCreatures.cpp` (99 lines)
-- [ ] `src/js/db/caches/DBCreatureList.cpp` (57 lines)
-- [ ] `src/js/db/caches/DBCreatureDisplayExtra.cpp` (63 lines)
-- [ ] `src/js/db/caches/DBCreaturesLegacy.cpp` (146 lines)
-- [ ] `src/js/db/caches/DBDecor.cpp` (78 lines)
-- [ ] `src/js/db/caches/DBDecorCategories.cpp` (62 lines)
+- [x] `src/js/db/caches/DBModelFileData.cpp` (58 lines)
+- [x] `src/js/db/caches/DBTextureFileData.cpp` (67 lines)
+- [x] `src/js/db/caches/DBComponentModelFileData.cpp` (174 lines)
+- [x] `src/js/db/caches/DBComponentTextureFileData.cpp` (123 lines)
+- [x] `src/js/db/caches/DBCreatures.cpp` (99 lines)
+- [x] `src/js/db/caches/DBCreatureList.cpp` (57 lines)
+- [x] `src/js/db/caches/DBCreatureDisplayExtra.cpp` (63 lines)
+- [x] `src/js/db/caches/DBCreaturesLegacy.cpp` (146 lines)
+- [x] `src/js/db/caches/DBDecor.cpp` (78 lines)
+- [x] `src/js/db/caches/DBDecorCategories.cpp` (62 lines)
 - [ ] `src/js/db/caches/DBGuildTabard.cpp` (133 lines)
 - [ ] `src/js/db/caches/DBItemGeosets.cpp` (487 lines)
 - [ ] `src/js/db/caches/DBNpcEquipment.cpp` (76 lines)

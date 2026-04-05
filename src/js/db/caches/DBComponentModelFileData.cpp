@@ -4,171 +4,180 @@
 	License: MIT
 */
 
-const log = require('../../log');
-const db2 = require('../../casc/db2');
+#include "DBComponentModelFileData.h"
 
-// maps FileDataID -> { raceID, genderIndex, classID, positionIndex }
-const file_data_to_info = new Map();
+#include "../../log.h"
+#include "../../casc/db2.h"
+#include "../WDCReader.h"
 
-let is_initialized = false;
-let init_promise = null;
+#include <format>
+#include <unordered_map>
+#include <mutex>
 
-const GENDER_ANY = 2;
+namespace db::caches::DBComponentModelFileData {
 
-const initialize = async () => {
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
+}
+
+// JS: const GENDER_ANY = 2;
+static constexpr uint32_t GENDER_ANY = 2;
+
+// JS: const file_data_to_info = new Map();
+static std::unordered_map<uint32_t, ComponentModelInfo> file_data_to_info;
+
+// JS: let is_initialized = false;
+static bool is_initialized = false;
+// JS: let init_promise = null;
+static bool is_initializing = false;
+
+// JS: const initialize = async () => { ... }
+void initialize() {
 	if (is_initialized)
 		return;
 
-	if (init_promise)
-		return init_promise;
+	if (is_initializing)
+		return;
 
-	init_promise = (async () => {
-		log.write('Loading ComponentModelFileData...');
+	is_initializing = true;
 
-		for (const [id, row] of await db2.ComponentModelFileData.getAllRows()) {
-			file_data_to_info.set(id, {
-				raceID: row.RaceID,
-				genderIndex: row.GenderIndex,
-				classID: row.ClassID,
-				positionIndex: row.PositionIndex
-			});
-		}
+	logging::write("Loading ComponentModelFileData...");
 
-		log.write('Loaded ComponentModelFileData for %d models', file_data_to_info.size);
-		is_initialized = true;
-		init_promise = null;
-	})();
+	// JS: for (const [id, row] of await db2.ComponentModelFileData.getAllRows())
+	auto allRows = casc::db2::preloadTable("ComponentModelFileData").getAllRows();
+	for (const auto& [id, row] : allRows) {
+		ComponentModelInfo info;
+		info.raceID = fieldToUint32(row.at("RaceID"));
+		info.genderIndex = fieldToUint32(row.at("GenderIndex"));
+		info.classID = fieldToUint32(row.at("ClassID"));
+		info.positionIndex = fieldToUint32(row.at("PositionIndex"));
+		file_data_to_info.emplace(id, info);
+	}
 
-	return init_promise;
-};
+	logging::write(std::format("Loaded ComponentModelFileData for {} models", file_data_to_info.size()));
+	is_initialized = true;
+	is_initializing = false;
+}
 
-/**
- * Filter a list of FileDataIDs to find the best match for race/gender
- * @param {number[]} file_data_ids - list of candidate FileDataIDs
- * @param {number} race_id - character race ID
- * @param {number} gender_index - 0=male, 1=female
- * @param {number} [fallback_race_id] - optional fallback race
- * @returns {number|null} - best matching FileDataID or null
- */
-const getModelForRaceGender = (file_data_ids, race_id, gender_index, fallback_race_id = 0) => {
-	if (!file_data_ids || file_data_ids.length === 0)
-		return null;
+// JS: const getModelForRaceGender = (file_data_ids, race_id, gender_index, fallback_race_id = 0) => { ... }
+std::optional<uint32_t> getModelForRaceGender(const std::vector<uint32_t>& file_data_ids, uint32_t race_id, uint32_t gender_index, uint32_t fallback_race_id) {
+	if (file_data_ids.empty())
+		return std::nullopt;
 
 	// if only one option, return it
-	if (file_data_ids.length === 1)
+	if (file_data_ids.size() == 1)
 		return file_data_ids[0];
 
 	// try exact race + gender match
-	for (const fdid of file_data_ids) {
-		const info = file_data_to_info.get(fdid);
-		if (info && info.raceID === race_id && info.genderIndex === gender_index)
+	for (const auto fdid : file_data_ids) {
+		auto it = file_data_to_info.find(fdid);
+		if (it != file_data_to_info.end() && it->second.raceID == race_id && it->second.genderIndex == gender_index)
 			return fdid;
 	}
 
 	// try race + any gender
-	for (const fdid of file_data_ids) {
-		const info = file_data_to_info.get(fdid);
-		if (info && info.raceID === race_id && info.genderIndex === GENDER_ANY)
+	for (const auto fdid : file_data_ids) {
+		auto it = file_data_to_info.find(fdid);
+		if (it != file_data_to_info.end() && it->second.raceID == race_id && it->second.genderIndex == GENDER_ANY)
 			return fdid;
 	}
 
 	// try fallback race if provided
 	if (fallback_race_id > 0) {
-		for (const fdid of file_data_ids) {
-			const info = file_data_to_info.get(fdid);
-			if (info && info.raceID === fallback_race_id && (info.genderIndex === gender_index || info.genderIndex === GENDER_ANY))
+		for (const auto fdid : file_data_ids) {
+			auto it = file_data_to_info.find(fdid);
+			if (it != file_data_to_info.end() && it->second.raceID == fallback_race_id && (it->second.genderIndex == gender_index || it->second.genderIndex == GENDER_ANY))
 				return fdid;
 		}
 	}
 
 	// try race=0 (any race)
-	for (const fdid of file_data_ids) {
-		const info = file_data_to_info.get(fdid);
-		if (info && info.raceID === 0)
+	for (const auto fdid : file_data_ids) {
+		auto it = file_data_to_info.find(fdid);
+		if (it != file_data_to_info.end() && it->second.raceID == 0)
 			return fdid;
 	}
 
 	// fallback to first
 	return file_data_ids[0];
-};
+}
 
-/**
- * Get two models for left/right shoulders based on PositionIndex.
- * Filters by race/gender and returns models with PositionIndex 0 (left) and 1 (right).
- * @param {number[]} file_data_ids - list of candidate FileDataIDs
- * @param {number} race_id - character race ID
- * @param {number} gender_index - 0=male, 1=female
- * @returns {{left: number|null, right: number|null}}
- */
-const getModelsForRaceGenderByPosition = (file_data_ids, race_id, gender_index) => {
-	const result = { left: null, right: null };
+// JS: const getModelsForRaceGenderByPosition = (file_data_ids, race_id, gender_index) => { ... }
+PositionResult getModelsForRaceGenderByPosition(const std::vector<uint32_t>& file_data_ids, uint32_t race_id, uint32_t gender_index) {
+	PositionResult result;
 
-	if (!file_data_ids || file_data_ids.length === 0)
+	if (file_data_ids.empty())
 		return result;
 
 	// group candidates by positionIndex, filtering by race/gender
-	const by_position = { 0: [], 1: [] };
+	struct Candidate {
+		uint32_t fdid;
+		const ComponentModelInfo* info;
+	};
 
-	for (const fdid of file_data_ids) {
-		const info = file_data_to_info.get(fdid);
-		if (!info || (info.positionIndex !== 0 && info.positionIndex !== 1))
+	std::vector<Candidate> by_position_0;
+	std::vector<Candidate> by_position_1;
+
+	for (const auto fdid : file_data_ids) {
+		auto it = file_data_to_info.find(fdid);
+		if (it == file_data_to_info.end() || (it->second.positionIndex != 0 && it->second.positionIndex != 1))
 			continue;
 
-		by_position[info.positionIndex].push({ fdid, info });
+		if (it->second.positionIndex == 0)
+			by_position_0.push_back({fdid, &it->second});
+		else
+			by_position_1.push_back({fdid, &it->second});
 	}
 
 	// helper to find best match from a list of candidates
-	const find_best = (candidates) => {
+	auto find_best = [race_id, gender_index](const std::vector<Candidate>& candidates) -> std::optional<uint32_t> {
 		// exact race + gender
-		for (const c of candidates) {
-			if (c.info.raceID === race_id && c.info.genderIndex === gender_index)
+		for (const auto& c : candidates) {
+			if (c.info->raceID == race_id && c.info->genderIndex == gender_index)
 				return c.fdid;
 		}
 
 		// race + any gender
-		for (const c of candidates) {
-			if (c.info.raceID === race_id && c.info.genderIndex === GENDER_ANY)
+		for (const auto& c : candidates) {
+			if (c.info->raceID == race_id && c.info->genderIndex == GENDER_ANY)
 				return c.fdid;
 		}
 
 		// any race
-		for (const c of candidates) {
-			if (c.info.raceID === 0)
+		for (const auto& c : candidates) {
+			if (c.info->raceID == 0)
 				return c.fdid;
 		}
 
 		// fallback to first
-		return candidates.length > 0 ? candidates[0].fdid : null;
+		if (!candidates.empty())
+			return candidates[0].fdid;
+		return std::nullopt;
 	};
 
-	result.left = find_best(by_position[0]);
-	result.right = find_best(by_position[1]);
+	result.left = find_best(by_position_0);
+	result.right = find_best(by_position_1);
 
 	return result;
-};
+}
 
-/**
- * Check if a FileDataID has ComponentModelFileData entry
- * @param {number} file_data_id
- * @returns {boolean}
- */
-const hasEntry = (file_data_id) => {
-	return file_data_to_info.has(file_data_id);
-};
+// JS: const hasEntry = (file_data_id) => file_data_to_info.has(file_data_id);
+bool hasEntry(uint32_t file_data_id) {
+	return file_data_to_info.contains(file_data_id);
+}
 
-/**
- * Get info for a FileDataID
- * @param {number} file_data_id
- * @returns {object|null}
- */
-const getInfo = (file_data_id) => {
-	return file_data_to_info.get(file_data_id) || null;
-};
+// JS: const getInfo = (file_data_id) => file_data_to_info.get(file_data_id) || null;
+const ComponentModelInfo* getInfo(uint32_t file_data_id) {
+	auto it = file_data_to_info.find(file_data_id);
+	if (it != file_data_to_info.end())
+		return &it->second;
+	return nullptr;
+}
 
-module.exports = {
-	initialize,
-	getModelForRaceGender,
-	getModelsForRaceGenderByPosition,
-	hasEntry,
-	getInfo
-};
+} // namespace db::caches::DBComponentModelFileData

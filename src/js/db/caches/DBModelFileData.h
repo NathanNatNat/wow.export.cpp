@@ -9,7 +9,7 @@
 #include <vector>
 #include <unordered_set>
 
-namespace db::caches {
+namespace db::caches::DBModelFileData {
 
 /**
  * Initialize model file data from ModelFileData.db2
@@ -29,4 +29,4 @@ const std::vector<uint32_t>* getModelFileDataID(uint32_t modelResID);
  */
 const std::unordered_set<uint32_t>& getFileDataIDs();
 
-} // namespace db::caches
+} // namespace db::caches::DBModelFileData

@@ -13,23 +13,8 @@
 #include "../mmap.h"
 #include "../hashing/xxhash64.h"
 
-// Forward declarations for DB caches (not yet converted — Tier 11)
-// These stubs allow compilation; real implementations will be
-// provided when DBTextureFileData and DBModelFileData are converted.
-namespace db_caches {
-	void ensureTextureFileDataInitialized();
-	std::unordered_set<uint32_t> getTextureFileDataIDs();
-	void ensureModelFileDataInitialized();
-	std::unordered_set<uint32_t> getModelFileDataIDs();
-}
-
-// Stub implementations (remove when Tier 11 is converted)
-namespace db_caches {
-	void ensureTextureFileDataInitialized() {}
-	std::unordered_set<uint32_t> getTextureFileDataIDs() { return {}; }
-	void ensureModelFileDataInitialized() {}
-	std::unordered_set<uint32_t> getModelFileDataIDs() { return {}; }
-}
+#include "../db/caches/DBTextureFileData.h"
+#include "../db/caches/DBModelFileData.h"
 
 #include <filesystem>
 #include <fstream>
@@ -790,8 +775,8 @@ static size_t loadIDTable(const std::unordered_set<uint32_t>& ids, const std::st
 
 // JS: const loadUnknownTextures = async () => { ... }
 size_t loadUnknownTextures() {
-	db_caches::ensureTextureFileDataInitialized();
-	auto ids = db_caches::getTextureFileDataIDs();
+	db::caches::DBTextureFileData::ensureInitialized();
+	const auto& ids = db::caches::DBTextureFileData::getFileDataIDs();
 	size_t unkBlp = loadIDTable(ids, ".blp");
 	logging::write(std::format("Added {} unknown BLP textures from TextureFileData to listfile", unkBlp));
 	return unkBlp;
@@ -799,7 +784,8 @@ size_t loadUnknownTextures() {
 
 // JS: const loadUnknownModels = async () => { ... }
 size_t loadUnknownModels() {
-	auto ids = db_caches::getModelFileDataIDs();
+	db::caches::DBModelFileData::initializeModelFileData();
+	const auto& ids = db::caches::DBModelFileData::getFileDataIDs();
 	size_t unkM2 = loadIDTable(ids, ".m2");
 	logging::write(std::format("Added {} unknown M2 models from ModelFileData to listfile", unkM2));
 	return unkM2;
