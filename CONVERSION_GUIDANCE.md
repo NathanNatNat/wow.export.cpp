@@ -72,6 +72,7 @@ This means:
 - Every edge case and error path is handled
 - The C++ version compiles and behaves identically to the JS original
 - No stubs, no TODOs, no placeholder implementations
+- **Dead code in the JS source MUST also be converted** — if a function, method, constant, or code path exists in the JS file but is currently unused/unreachable, it must still be ported to C++. It may be used in the future, and omitting it would create a hidden gap in functionality
 
 **If any part of a file is incomplete, it stays at `[~]` (in progress). No exceptions.**
 
