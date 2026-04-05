@@ -2,7 +2,7 @@ const util = require('util');
 const constants = require('../constants');
 const generics = require('../generics');
 const log = require('../log');
-const ExternalLinks = require('../external-links');
+// const ExternalLinks = require('../external-links'); // Removed: external-links module deleted
 const InstallType = require('../install-type');
 
 const CASCLocal = require('../casc/casc-source-local');
@@ -133,7 +133,7 @@ module.exports = {
 				log.write('Failed to load CASC: %o', e);
 				this.$core.setToast('error', 'Unable to initialize CASC. Try repairing your game installation, or seek support.', {
 					'View Log': () => log.openRuntimeLog(),
-					'Visit Support Discord': () => ExternalLinks.open('::DISCORD')
+					// 'Visit Support Discord': () => ExternalLinks.open('::DISCORD') // Removed: external-links module deleted
 				}, -1);
 				this.$modules.source_select.setActive();
 			}
