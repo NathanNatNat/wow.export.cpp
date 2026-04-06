@@ -41,6 +41,15 @@ All dependencies should be git submodules integrated via CMake where possible.
 - The C++ conversion should use the same code layout as the JS original (same function order, same logical grouping, same structure) — except where the JS-to-C++ paradigm shift makes this physically impossible (see "Systemic Translations" below).
 - Always do a thorough comparison against the original JS source when making changes or reviewing code.
 
+### Conversion-Added Comments
+- Any TODO, FIXME, stub, placeholder, or "not yet wired" comment **added during the conversion** (not present in the original JS) must use the `TODO(conversion):` prefix.
+- This distinguishes conversion-related work items from pre-existing TODOs in the original JavaScript source.
+- Pre-existing JS TODOs/comments must be preserved exactly as they are, without adding the prefix.
+- Examples:
+  - `// TODO(conversion): CASC file loading will be wired when UI integration is complete.`
+  - `// TODO(conversion): textureRibbon is not yet converted; stubbed where referenced.`
+  - `// TODO(conversion): In ImGui, this is a no-op since ImGui redraws every frame.`
+
 ### Function & Method Naming
 - **Function and method names in C++ must match the original JS names exactly.** Keep the same naming as the JS source, regardless of style. Examples:
   - JS `getFileHash()` → C++ `getFileHash()`

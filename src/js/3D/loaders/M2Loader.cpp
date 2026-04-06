@@ -109,7 +109,7 @@ continue;
 
 logging::write(std::format("Loading .anim file for animation: {} ({}) - {}", entry.animID, get_anim_name(entry.animID), entry.subAnimID));
 
-// TODO: CASC file loading will be wired when UI integration is complete.
+// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 logging::write(std::format("Cannot load .anim file (CASC not wired): fileDataID={}", fileDataID));
 }
 }
@@ -157,7 +157,7 @@ return false;
 
 logging::write(std::format("Loading .anim file for animation: {} ({}) - {}", entry.animID, get_anim_name(entry.animID), entry.subAnimID));
 
-// TODO: CASC file loading will be wired when UI integration is complete.
+// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 logging::write(std::format("Cannot load .anim file (CASC not wired): fileDataID={}", fileDataID));
 return false;
 }

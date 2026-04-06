@@ -324,7 +324,7 @@ bool SKELLoader::loadAnimsForIndex(uint32_t animation_index) {
 
 		logging::write(std::format("lazy load .anim for {} ({}) sub={} fileDataID={}", entry.animID, get_anim_name(entry.animID), entry.subAnimID, fileDataID));
 
-		// TODO: CASC file loading will be wired when UI integration is complete.
+		// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 		// The JS does: const loader = new ANIMLoader(await core.view.casc.getFile(fileDataID));
 		// For now, throw since we can't load without CASC:
 		throw std::runtime_error("SKEL .anim loading requires CASC - not yet wired in C++ UI");
@@ -423,7 +423,7 @@ void SKELLoader::loadAnims(bool load_all) {
 
 				logging::write(std::format("Loading .anim file for animation: {} ({}) - {}", entry.animID, get_anim_name(entry.animID), entry.subAnimID));
 
-				// TODO: CASC file loading will be wired when UI integration is complete.
+				// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 				// The JS does: const loader = new ANIMLoader(await core.view.casc.getFile(fileDataID));
 				// For now, log and continue:
 				logging::write(std::format("Cannot load .anim file (CASC not wired): fileDataID={}", fileDataID));

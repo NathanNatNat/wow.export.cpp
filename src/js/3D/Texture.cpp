@@ -28,7 +28,7 @@ void Texture::setFileName(const std::string& fileName) {
 std::optional<BufferWrapper> Texture::getTextureFile() {
 	if (this->fileDataID > 0) {
 		if (!this->data.has_value()) {
-			// TODO: core.view.casc.getFile(this->fileDataID)
+			// TODO(conversion): core.view.casc.getFile(this->fileDataID)
 			// This requires the CASC instance from AppState.
 			// Will be wired when the rendering pipeline is connected.
 		}

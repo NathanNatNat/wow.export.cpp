@@ -75,6 +75,11 @@ This means:
 - **Dead code in the JS source MUST also be converted** — if a function, method, constant, or code path exists in the JS file but is currently unused/unreachable, it must still be ported to C++. It may be used in the future, and omitting it would create a hidden gap in functionality
 - **Commented-out code in the JS source MUST also be converted** — if there is commented-out code in the original JS file, convert it to its C++ equivalent but keep it commented out. Do not delete commented-out code. It was commented out for a reason (e.g., debugging, future use, or historical reference) and the C++ version should preserve it in translated form
 - **Original JS comments MUST be preserved** — all comments from the original JS source (doc comments, inline comments, section headers, TODOs, NOTEs, etc.) must be kept in the C++ conversion. You may add new C++ comments where helpful, but the originals must remain. Do not replace, rewrite, or remove existing comments — only supplement them
+- **Conversion-added comments MUST use the `TODO(conversion):` prefix** — any TODO, FIXME, stub, placeholder, or "not yet wired" comment that is added during the conversion process (i.e. does NOT exist in the original JS source) must be prefixed with `TODO(conversion):`. This clearly separates conversion-related work items from pre-existing TODOs in the original JS. Examples:
+  - `// TODO(conversion): CASC file loading will be wired when UI integration is complete.`
+  - `// TODO(conversion): textureRibbon is not yet converted; stubbed where referenced.`
+  - `// TODO(conversion): In ImGui, this is a no-op since ImGui redraws every frame.`
+  - Pre-existing JS TODOs (e.g. `// TODO: DXT(1/3/5) support`) should be kept as-is without the prefix
 
 **If any part of a file is incomplete, it stays at `[~]` (in progress). No exceptions.**
 
