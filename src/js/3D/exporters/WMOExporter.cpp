@@ -1689,3 +1689,14 @@ void WMOExporter::exportRaw(const std::filesystem::path& out, casc::ExportHelper
 void WMOExporter::clearCache() {
 	doodadCache.clear();
 }
+
+void WMOExporter::loadWMO() {
+	wmo->load();
+}
+
+std::vector<std::string> WMOExporter::getDoodadSetNames() const {
+	std::vector<std::string> names;
+	for (const auto& s : wmo->doodadSets)
+		names.push_back(s.name);
+	return names;
+}

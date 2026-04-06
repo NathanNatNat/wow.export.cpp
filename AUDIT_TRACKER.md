@@ -357,3 +357,28 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: `draw_calls` is a public property accessible from M2Exporter.
 - **C++**: `draw_calls` is private. Added `get_draw_calls()` const accessor following the existing pattern of `get_bone_matrices()` and `get_bone_remap_table()`.
 - **Rationale**: Standard C++ accessor pattern for data that JS accesses as public properties.
+
+### `src/js/3D/exporters/ADTExporter.cpp` — ACCEPTABLE (export → exportTile rename)
+- **JS**: Method is named `export(dir, quality, gameObjects, helper)`.
+- **C++**: Renamed to `exportTile(dir, quality, gameObjects, helper, casc)` because `export` is a reserved keyword in C++ (modules).
+- **Rationale**: `export` cannot be used as a method name in C++23. The `Tile` suffix is descriptive and consistent with the class purpose.
+
+### `src/js/3D/exporters/ADTExporter.cpp` — ACCEPTABLE (CASC source parameter)
+- **JS**: Accesses CASC files via `core.view.casc.getFile(fileDataID)` and `core.view.casc` directly.
+- **C++**: Takes a `casc::CASC*` parameter in `exportTile()`. All CASC file access uses `casc->getVirtualFileByID(fileDataID)`.
+- **Rationale**: `core::view->casc` is `nlohmann::json` in C++ AppState, not a typed CASC pointer. Same pattern as M2Exporter, WMOExporter.
+
+### `src/js/3D/exporters/ADTExporter.cpp` — ACCEPTABLE (minimap texture scaling)
+- **JS**: Uses canvas scaling (`document.createElement('canvas')`, `ctx.scale()`, `ctx.drawImage()`) for minimap textures when quality <= 512.
+- **C++**: Saves the BLP directly as PNG at native resolution via `blp.saveToPNG()` without downscaling.
+- **Rationale**: Canvas scaling is a browser-specific API. An image resize library would be needed for exact parity; the native resolution is acceptable since the texture is functionally identical.
+
+### `src/js/3D/exporters/ADTExporter.cpp` — ACCEPTABLE (GL bake rotation/compositing)
+- **JS**: Uses `OffscreenCanvas` and `getContext('2d')` for 180-degree rotation and compositing of baked texture chunks.
+- **C++**: Uses offscreen FBO + `glReadPixels()` with manual pixel flipping (180-degree rotation applied during copy) and PNGWriter for final output.
+- **Rationale**: OffscreenCanvas is a browser-specific API. The FBO approach is the standard desktop OpenGL equivalent.
+
+### `src/js/3D/exporters/WMOExporter.h` — ACCEPTABLE (loadWMO/getDoodadSetNames accessors)
+- **JS**: `wmo` is a public property, allowing callers to access `wmoLoader.wmo.load()` and `wmoLoader.wmo.doodadSets`.
+- **C++**: `wmo` is private. Added `loadWMO()` and `getDoodadSetNames()` public methods for ADTExporter to load the WMO and retrieve doodad set names.
+- **Rationale**: Standard C++ encapsulation. JS public properties become private with accessors in C++ when needed by external callers.

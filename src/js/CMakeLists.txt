@@ -130,4 +130,5 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/exporters/M3Exporter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/exporters/WMOLegacyExporter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/exporters/WMOExporter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/exporters/ADTExporter.cpp
 )

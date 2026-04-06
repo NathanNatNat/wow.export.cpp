@@ -150,6 +150,19 @@ public:
 	 */
 	static void clearCache();
 
+	/**
+	 * Load the WMO data. Must be called before export methods.
+	 * Exposes WMO loading for callers that need access to doodad set names.
+	 */
+	void loadWMO();
+
+	/**
+	 * Get the doodad set names from the loaded WMO.
+	 * Must call loadWMO() first.
+	 * @returns Vector of doodad set name strings.
+	 */
+	std::vector<std::string> getDoodadSetNames() const;
+
 private:
 	BufferWrapper data;
 	std::unique_ptr<WMOLoader> wmo;
