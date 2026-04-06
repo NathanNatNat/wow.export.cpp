@@ -1,5 +1,8 @@
 # wow.export (C++ Conversion)
 
+![Windows MSVC Debug](https://github.com/NathanNatNat/wow.export.cpp/actions/workflows/ci.yml/badge.svg?branch=main&event=push&job=windows)
+![Linux GCC Debug](https://github.com/NathanNatNat/wow.export.cpp/actions/workflows/ci.yml/badge.svg?branch=main&event=push&job=linux)
+
 This project is a **personal project for experimenting and learning** and a **C++ conversion** of [**wow.export**](https://github.com/Kruithne/wow.export), the number one export toolkit for World of Warcraft. The original project was written in JavaScript/NW.js. This fork rewrites it in modern C++ (C++23) using native libraries instead of a browser-based runtime.
 
 This is an independent effort and is not affiliated with or endorsed by the original wow.export project.
