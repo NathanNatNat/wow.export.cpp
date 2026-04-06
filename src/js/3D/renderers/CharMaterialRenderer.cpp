@@ -31,6 +31,11 @@ static const float UV_BUFFER_DATA[] = {
 CharMaterialRenderer::CharMaterialRenderer(int textureLayer, int width, int height)
 	: width_(width), height_(height)
 {
+	// VAO is required in OpenGL 4.6 core profile (no default VAO exists).
+	// WebGL 1.0 (JS) has a default vertex array — this is the C++ equivalent.
+	glGenVertexArrays(1, &vao_);
+	glBindVertexArray(vao_);
+
 	// Create FBO for offscreen rendering (replaces JS canvas + WebGL context)
 	glGenFramebuffers(1, &fbo_);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
@@ -169,6 +174,17 @@ void CharMaterialRenderer::setTextureTarget(
 void CharMaterialRenderer::dispose() {
 	unbindAllTextures();
 
+	// Delete all loaded layer textures.
+	// JS relies on WEBGL_lose_context to destroy the entire context and all
+	// associated resources; in desktop GL we must free them explicitly.
+	for (auto& target : textureTargets) {
+		if (target.textureID) {
+			glDeleteTextures(1, &target.textureID);
+			target.textureID = 0;
+		}
+	}
+	textureTargets.clear();
+
 	if (glShaderProg) {
 		glDeleteProgram(glShaderProg);
 		glShaderProg = 0;
@@ -190,6 +206,11 @@ void CharMaterialRenderer::dispose() {
 	if (fbo_) {
 		glDeleteFramebuffers(1, &fbo_);
 		fbo_ = 0;
+	}
+
+	if (vao_) {
+		glDeleteVertexArrays(1, &vao_);
+		vao_ = 0;
 	}
 }
 
@@ -346,10 +367,13 @@ void CharMaterialRenderer::update() {
 	if (!fbo_)
 		return;
 
-	// Save current framebuffer binding, then bind our FBO
+	// Save current framebuffer and VAO bindings, then bind ours
 	GLint prevFBO = 0;
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+	GLint prevVAO = 0;
+	glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prevVAO);
+
+	glBindVertexArray(vao_);
 
 	clearCanvas();
 
@@ -465,10 +489,19 @@ void CharMaterialRenderer::update() {
 			glBindTexture(GL_TEXTURE_2D, canvasTexture);
 
 			if (layer.material.Width == layer.section.Width && layer.material.Height == layer.section.Height) {
-				// Just copy the canvas (read from FBO and upload)
+				// Just copy the canvas (read from FBO and upload).
+				// JS uses texImage2D(canvas) which implicitly Y-flips the image
+				// (canvas is top-down, textures are bottom-up). glReadPixels
+				// returns bottom-up data, so we must flip to match JS behavior.
 				std::vector<uint8_t> canvasPixels(width_ * height_ * 4);
 				glReadPixels(0, 0, width_, height_, GL_RGBA, GL_UNSIGNED_BYTE, canvasPixels.data());
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width_, height_, 0, GL_RGBA, GL_UNSIGNED_BYTE, canvasPixels.data());
+
+				std::vector<uint8_t> flippedCanvas(width_ * height_ * 4);
+				const int rowBytes = width_ * 4;
+				for (int y = 0; y < height_; y++)
+					std::memcpy(&flippedCanvas[(height_ - y - 1) * rowBytes], &canvasPixels[y * rowBytes], rowBytes);
+
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width_, height_, 0, GL_RGBA, GL_UNSIGNED_BYTE, flippedCanvas.data());
 			} else {
 				// Get pixels of relevant section
 				std::vector<uint8_t> pixelBuffer(layer.section.Width * layer.section.Height * 4);
@@ -492,16 +525,26 @@ void CharMaterialRenderer::update() {
 			
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 			glUniform1i(baseTextureLocation, 1);
-		}
 
-		// Draw
-		glDrawArrays(GL_TRIANGLES, 0, 6);
+			// Draw
+			glDrawArrays(GL_TRIANGLES, 0, 6);
+
+			// Clean up canvasTexture — JS relies on WebGL GC / loseContext;
+			// in desktop GL we must delete explicitly.
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glDeleteTextures(1, &canvasTexture);
+		} else {
+			// Draw
+			glDrawArrays(GL_TRIANGLES, 0, 6);
+		}
 
 		// Clean up per-layer buffers
 		glDeleteBuffers(1, &vBuffer);
 		glDeleteBuffers(1, &uvBuffer);
 	}
 
-	// Restore previous framebuffer
+	// Restore previous framebuffer and VAO
 	glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFBO));
+	glBindVertexArray(static_cast<GLuint>(prevVAO));
 }

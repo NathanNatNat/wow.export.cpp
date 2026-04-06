@@ -169,6 +169,9 @@ private:
 	GLuint fbo_texture_ = 0;
 	GLuint fbo_depth_ = 0;
 
+	// VAO — required in OpenGL 4.6 core profile (WebGL 1.0 has default VAO)
+	GLuint vao_ = 0;
+
 	// Shader program (manually compiled, not via Shaders module —
 	// matches JS which uses raw WebGL, not the ShaderProgram wrapper)
 	GLuint glShaderProg = 0;
