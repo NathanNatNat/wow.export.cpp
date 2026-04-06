@@ -3,470 +3,510 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const core = require('../../core');
-const listfile = require('../../casc/listfile');
 
-const LoaderGenerics = require('./LoaderGenerics');
+#include "WMOLoader.h"
+#include "LoaderGenerics.h"
+#include "../../buffer.h"
+#include "../../casc/listfile.h"
 
-class WMOLoader {
-	/**
-	 * Construct a new WMOLoader instance.
-	 * @param {BufferWrapper} data 
-	 * @param {number|string} fileID File name or fileDataID
-	 * @param {boolean} [renderingOnly=false]
-	 */
-	constructor(data, fileID, renderingOnly = false) {
-		this.data = data;
-		this.loaded = false;
-		this.renderingOnly = renderingOnly;
+#include <algorithm>
+#include <format>
+#include <stdexcept>
 
-		if (fileID !== undefined) {
-			if (typeof fileID === 'string') {
-				this.fileDataID = listfile.getByFilename(fileID);
-				this.fileName = fileID;
-			} else {
-				this.fileDataID = fileID;
-				this.fileName = listfile.getByID(fileID);
-			}
-		}
-	}
+// Chunk IDs
+static constexpr uint32_t CHUNK_MVER = 0x4D564552;
+static constexpr uint32_t CHUNK_MOHD = 0x4D4F4844;
+static constexpr uint32_t CHUNK_MOTX = 0x4D4F5458;
+static constexpr uint32_t CHUNK_MFOG = 0x4D464F47;
+static constexpr uint32_t CHUNK_MOMT = 0x4D4F4D54;
+static constexpr uint32_t CHUNK_MOPV = 0x4D4F5056;
+static constexpr uint32_t CHUNK_MOPT = 0x4D4F5054;
+static constexpr uint32_t CHUNK_MOPR = 0x4D4F5052;
+static constexpr uint32_t CHUNK_MOGN = 0x4D4F474E;
+static constexpr uint32_t CHUNK_MOGI = 0x4D4F4749;
+static constexpr uint32_t CHUNK_MODS = 0x4D4F4453;
+static constexpr uint32_t CHUNK_MODI = 0x4D4F4449;
+static constexpr uint32_t CHUNK_MODN = 0x4D4F444E;
+static constexpr uint32_t CHUNK_MODD = 0x4D4F4444;
+static constexpr uint32_t CHUNK_GFID = 0x47464944;
+static constexpr uint32_t CHUNK_MLIQ = 0x4D4C4951;
+static constexpr uint32_t CHUNK_MOCV = 0x4D4F4356;
+static constexpr uint32_t CHUNK_MDAL = 0x4D44414C;
+static constexpr uint32_t CHUNK_MOGP = 0x4D4F4750;
+static constexpr uint32_t CHUNK_MOVI = 0x4D4F5649;
+static constexpr uint32_t CHUNK_MOVT = 0x4D4F5654;
+static constexpr uint32_t CHUNK_MOTV = 0x4D4F5456;
+static constexpr uint32_t CHUNK_MONR = 0x4D4F4E52;
+static constexpr uint32_t CHUNK_MOBA = 0x4D4F4241;
+static constexpr uint32_t CHUNK_MOPY = 0x4D4F5059;
+static constexpr uint32_t CHUNK_MOC2 = 0x4D4F4332;
 
-	/**
-	 * Load the WMO object.
-	 */
-	async load() {
-		// Prevent duplicate loading.
-		if (this.loaded)
-			return;
+/**
+ * Optional chunks that are not required for rendering.
+ */
+static constexpr uint32_t WMO_OPTIONAL_CHUNKS[] = {
+	CHUNK_MLIQ,  // MLIQ (Liquid)
+	CHUNK_MFOG,  // MFOG (Fog)
+	CHUNK_MOPV,  // MOPV (Portal Vertices)
+	CHUNK_MOPR,  // MOPR (Map Object Portal References)
+	CHUNK_MOPT,  // MOPT (Portal Triangles)
+	CHUNK_MOCV,  // MOCV (Vertex Colors)
+	CHUNK_MDAL,  // MDAL (Ambient Color)
+};
 
-		while (this.data.remainingBytes > 0) {
-			const chunkID = this.data.readUInt32LE();
-			const chunkSize = this.data.readUInt32LE();
-			const nextChunkPos = this.data.offset + chunkSize;
+bool WMOLoader::isOptionalChunk(uint32_t chunkID) {
+	for (auto id : WMO_OPTIONAL_CHUNKS)
+		if (id == chunkID)
+			return true;
+	return false;
+}
 
-			const handler = WMOChunkHandlers[chunkID];
-			if (handler && (!this.renderingOnly || !WMOOptionalChunks.includes(chunkID)))
-				handler.call(this, this.data, chunkSize);
-	
-			// Ensure that we start at the next chunk exactly.
-			this.data.seek(nextChunkPos);
-		}
-
-		// Mark this instance as loaded.
-		this.loaded = true;
-		this.data = undefined;
-	}
-
-	/**
-	 * Get a group from this WMO.
-	 * @param {number} index 
-	 */
-	async getGroup(index) {
-		if (!this.groups)
-			throw new Error('Attempted to obtain group from a root WMO.');
-
-		const casc = core.view.casc;
-
-		let group = this.groups[index];
-		if (group)
-			return group;
-
-		let data;
-		if (this.groupIDs)
-			data = await casc.getFile(this.groupIDs[index]);
-		else
-			data = await casc.getFileByName(this.fileName.replace('.wmo', '_' + index.toString().padStart(3, '0') + '.wmo'));
-
-		group = this.groups[index] = new WMOLoader(data, undefined, this.renderingOnly);
-		await group.load();
-
-		return group;
+/**
+ * Construct a new WMOLoader instance with numeric fileDataID.
+ */
+WMOLoader::WMOLoader(BufferWrapper& data, uint32_t fileID, bool renderingOnly)
+	: loaded(false), renderingOnly(renderingOnly), data(&data) {
+	if (fileID != 0) {
+		this->fileDataID = fileID;
+		this->fileName = casc::listfile::getByID(fileID);
 	}
 }
 
 /**
- * Optional chunks that are not required for rendering.
- * @type {Array<number>}
+ * Construct a new WMOLoader instance with string fileName.
  */
-const WMOOptionalChunks = [
-	0x4D4C4951, // MLIQ (Liquid)
-	0x4D464F47, // MFOG (Fog)
-	0x4D4F5056, // MOPV (Portal Vertices)
-	0x4D4F5052, // MOPR (Map Object Portal References)
-	0x4D4F5054, // MOPT (Portal Triangles)
-	0x4D4F4356, // MOCV (Vertex Colors)
-	0x4D44414C, // MDAL (Ambient Color)
-];
+WMOLoader::WMOLoader(BufferWrapper& data, const std::string& fileName, bool renderingOnly)
+	: loaded(false), renderingOnly(renderingOnly), data(&data) {
+	this->fileName = fileName;
+	auto id = casc::listfile::getByFilename(fileName);
+	if (id.has_value())
+		this->fileDataID = id.value();
+}
 
-const WMOChunkHandlers = {
-	// MVER (Version) [WMO Root, WMO Group]
-	0x4D564552: function(data) {
-		this.version = data.readUInt32LE();
-		if (this.version !== 17)
-			throw new Error('Unsupported WMO version: %d', this.version);
-	},
+/**
+ * Load the WMO object.
+ */
+void WMOLoader::load() {
+	// Prevent duplicate loading.
+	if (this->loaded)
+		return;
 
-	// MOHD (Header) [WMO Root]
-	0x4D4F4844: function(data) {
-		this.materialCount = data.readUInt32LE();
-		this.groupCount = data.readUInt32LE();
-		this.portalCount = data.readUInt32LE();
-		this.lightCount = data.readUInt32LE();
-		this.modelCount = data.readUInt32LE();
-		this.doodadCount = data.readUInt32LE();
-		this.setCount = data.readUInt32LE();
-		this.ambientColor = data.readUInt32LE();
-		this.wmoID = data.readUInt32LE();
-		this.boundingBox1 = data.readFloatLE(3);
-		this.boundingBox2 = data.readFloatLE(3);
-		this.flags = data.readUInt16LE();
-		this.lodCount = data.readUInt16LE();
+	while (this->data->remainingBytes() > 0) {
+		const uint32_t chunkID = this->data->readUInt32LE();
+		const uint32_t chunkSize = this->data->readUInt32LE();
+		const size_t nextChunkPos = this->data->offset() + chunkSize;
 
-		this.groups = new Array(this.groupCount);
-	},
+		if (!this->renderingOnly || !isOptionalChunk(chunkID))
+			handleChunk(chunkID, *this->data, chunkSize);
 
+		// Ensure that we start at the next chunk exactly.
+		this->data->seek(nextChunkPos);
+	}
 
-	// MOTX (Textures) [Classic, WMO Root]
-	0x4D4F5458: function(data, chunkSize) {
-		this.textureNames = LoaderGenerics.ReadStringBlock(data, chunkSize);
-	},
+	// Mark this instance as loaded.
+	this->loaded = true;
+	this->data = nullptr;
+}
 
-	// MFOG (Fog) [WMO Root]
-	0x4D464F47: function(data, chunkSize) {
-		const count = chunkSize / 48;
-		const fogs = this.fogs = new Array(count);
+/**
+ * Get a group from this WMO.
+ */
+WMOLoader& WMOLoader::getGroup(uint32_t index) {
+	if (this->groups.empty())
+		throw std::runtime_error("Attempted to obtain group from a root WMO.");
 
-		for (let i = 0; i < count; i++) {
-			fogs[i] = {
-				flags: data.readUInt32LE(),
-				position: data.readFloatLE(3),
-				radiusSmall: data.readFloatLE(),
-				radiusLarge: data.readFloatLE(),
-				fog: {
-					end: data.readFloatLE(),
-					startScalar: data.readFloatLE(),
-					color: data.readUInt32LE()
-				},
-				underwaterFog: {
-					end: data.readFloatLE(),
-					startScalar: data.readFloatLE(),
-					color: data.readUInt32LE()
-				}
-			};
-		}
-	},
+	if (index < this->groups.size() && this->groups[index] != nullptr)
+		return *this->groups[index];
 
-	// MOMT (Materials) [WMO Root]
-	0x4D4F4D54: function(data, chunkSize) {
-		const count = chunkSize / 64;
-		const materials = this.materials = new Array(count);
+	// TODO: CASC file loading will be wired in when UI integration is complete.
+	// For now, this mirrors the JS structure.
+	throw std::runtime_error("Group loading requires CASC - not yet wired in C++ UI");
+}
 
-		for (let i = 0; i < count; i++) {
-			materials[i] = {
-				flags: data.readUInt32LE(),
-				shader: data.readUInt32LE(),
-				blendMode: data.readUInt32LE(),
-				texture1: data.readUInt32LE(),
-				color1: data.readUInt32LE(),
-				color1b: data.readUInt32LE(),
-				texture2: data.readUInt32LE(),
-				color2: data.readUInt32LE(),
-				groupType: data.readUInt32LE(),
-				texture3: data.readUInt32LE(),
-				color3: data.readUInt32LE(),
-				flags3: data.readUInt32LE(),
-				runtimeData: data.readUInt32LE(4)
-			};
-		}
-	},
+void WMOLoader::handleChunk(uint32_t chunkID, BufferWrapper& data, uint32_t chunkSize) {
+	switch (chunkID) {
+		case CHUNK_MVER: parse_MVER(data); break;
+		case CHUNK_MOHD: parse_MOHD(data); break;
+		case CHUNK_MOTX: parse_MOTX(data, chunkSize); break;
+		case CHUNK_MFOG: parse_MFOG(data, chunkSize); break;
+		case CHUNK_MOMT: parse_MOMT(data, chunkSize); break;
+		case CHUNK_MOPV: parse_MOPV(data, chunkSize); break;
+		case CHUNK_MOPT: parse_MOPT(data); break;
+		case CHUNK_MOPR: parse_MOPR(data, chunkSize); break;
+		case CHUNK_MOGN: parse_MOGN(data, chunkSize); break;
+		case CHUNK_MOGI: parse_MOGI(data, chunkSize); break;
+		case CHUNK_MODS: parse_MODS(data, chunkSize); break;
+		case CHUNK_MODI: parse_MODI(data, chunkSize); break;
+		case CHUNK_MODN: parse_MODN(data, chunkSize); break;
+		case CHUNK_MODD: parse_MODD(data, chunkSize); break;
+		case CHUNK_GFID: parse_GFID(data, chunkSize); break;
+		case CHUNK_MLIQ: parse_MLIQ(data); break;
+		case CHUNK_MOCV: parse_MOCV(data, chunkSize); break;
+		case CHUNK_MDAL: parse_MDAL(data); break;
+		case CHUNK_MOGP: parse_MOGP(data, chunkSize); break;
+		case CHUNK_MOVI: parse_MOVI(data, chunkSize); break;
+		case CHUNK_MOVT: parse_MOVT(data, chunkSize); break;
+		case CHUNK_MOTV: parse_MOTV(data, chunkSize); break;
+		case CHUNK_MONR: parse_MONR(data, chunkSize); break;
+		case CHUNK_MOBA: parse_MOBA(data, chunkSize); break;
+		case CHUNK_MOPY: parse_MOPY(data, chunkSize); break;
+		case CHUNK_MOC2: parse_MOC2(data, chunkSize); break;
+		default: break;
+	}
+}
 
-	// MOPV (Portal Vertices) [WMO Root]
-	0x4D4F5056: function(data, chunkSize) {
-		const vertexCount = chunkSize / (3 * 4);
-		this.portalVertices = new Array(vertexCount);
-		for (let i = 0; i < vertexCount; i++)
-			this.portalVertices[i] = data.readFloatLE(3)
-	},
+// MVER (Version) [WMO Root, WMO Group]
+void WMOLoader::parse_MVER(BufferWrapper& data) {
+	this->version = data.readUInt32LE();
+	if (this->version != 17)
+		throw std::runtime_error(std::format("Unsupported WMO version: {}", this->version));
+}
 
-	// MOPT (Portal Triangles) [WMO Root]
-	0x4D4F5054: function(data) {
-		this.portalInfo = new Array(this.portalCount);
-		for (let i = 0; i < this.portalCount; i++) {
-			this.portalInfo[i] = {
-				startVertex: data.readUInt16LE(),
-				count: data.readUInt16LE(),
-				plane: data.readFloatLE(4)
-			}
-		}
-	},
+// MOHD (Header) [WMO Root]
+void WMOLoader::parse_MOHD(BufferWrapper& data) {
+	this->materialCount = data.readUInt32LE();
+	this->groupCount = data.readUInt32LE();
+	this->portalCount = data.readUInt32LE();
+	this->lightCount = data.readUInt32LE();
+	this->modelCount = data.readUInt32LE();
+	this->doodadCount = data.readUInt32LE();
+	this->setCount = data.readUInt32LE();
+	this->ambientColor = data.readUInt32LE();
+	this->wmoID = data.readUInt32LE();
+	this->boundingBox1 = data.readFloatLE(3);
+	this->boundingBox2 = data.readFloatLE(3);
+	this->flags = data.readUInt16LE();
+	this->lodCount = data.readUInt16LE();
 
-	// MOPR (Map Object Portal References) [WMO Root]
-	0x4D4F5052: function(data, chunkSize) {
-		const entryCount = chunkSize / 8;
-		this.mopr = new  Array(entryCount);
+	this->groups.resize(this->groupCount, nullptr);
+}
 
-		for (let i = 0; i < entryCount; i++) {
-			this.mopr[i] = {
-				portalIndex: data.readUInt16LE(),
-				groupIndex: data.readUInt16LE(),
-				side: data.readInt16LE()
-			}
+// MOTX (Textures) [Classic, WMO Root]
+void WMOLoader::parse_MOTX(BufferWrapper& data, uint32_t chunkSize) {
+	this->textureNames = ReadStringBlock(data, chunkSize);
+}
 
-			data.move(4); // Filler
-		}
-	},
+// MFOG (Fog) [WMO Root]
+void WMOLoader::parse_MFOG(BufferWrapper& data, uint32_t chunkSize) {
+	const uint32_t count = chunkSize / 48;
+	this->fogs.resize(count);
 
-	// MOGN (Group Names) [WMO Root]
-	0x4D4F474E: function(data, chunkSize) {
-		this.groupNames = LoaderGenerics.ReadStringBlock(data, chunkSize);
-	},
+	for (uint32_t i = 0; i < count; i++) {
+		WMOFog& fog = this->fogs[i];
+		fog.flags = data.readUInt32LE();
+		fog.position = data.readFloatLE(3);
+		fog.radiusSmall = data.readFloatLE();
+		fog.radiusLarge = data.readFloatLE();
+		fog.fog.end = data.readFloatLE();
+		fog.fog.startScalar = data.readFloatLE();
+		fog.fog.color = data.readUInt32LE();
+		fog.underwaterFog.end = data.readFloatLE();
+		fog.underwaterFog.startScalar = data.readFloatLE();
+		fog.underwaterFog.color = data.readUInt32LE();
+	}
+}
 
-	// MOGI (Group Info) [WMO Root]
-	0x4D4F4749: function(data, chunkSize) {
-		const count = chunkSize / 32;
-		const groupInfo = this.groupInfo = new Array(count);
+// MOMT (Materials) [WMO Root]
+void WMOLoader::parse_MOMT(BufferWrapper& data, uint32_t chunkSize) {
+	const uint32_t count = chunkSize / 64;
+	this->materials.resize(count);
 
-		for (let i = 0; i < count; i++) {
-			groupInfo[i] = {
-				flags: data.readUInt32LE(),
-				boundingBox1: data.readFloatLE(3),
-				boundingBox2: data.readFloatLE(3),
-				nameIndex: data.readInt32LE()
-			};
-		}
-	},
+	for (uint32_t i = 0; i < count; i++) {
+		WMOMaterial& mat = this->materials[i];
+		mat.flags = data.readUInt32LE();
+		mat.shader = data.readUInt32LE();
+		mat.blendMode = data.readUInt32LE();
+		mat.texture1 = data.readUInt32LE();
+		mat.color1 = data.readUInt32LE();
+		mat.color1b = data.readUInt32LE();
+		mat.texture2 = data.readUInt32LE();
+		mat.color2 = data.readUInt32LE();
+		mat.groupType = data.readUInt32LE();
+		mat.texture3 = data.readUInt32LE();
+		mat.color3 = data.readUInt32LE();
+		mat.flags3 = data.readUInt32LE();
+		mat.runtimeData = data.readUInt32LE(4);
+	}
+}
 
-	// MODS (Doodad Sets) [WMO Root]
-	0x4D4F4453: function(data, chunkSize) {
-		const count = chunkSize / 32;
-		const doodadSets = this.doodadSets = new Array(count);
+// MOPV (Portal Vertices) [WMO Root]
+void WMOLoader::parse_MOPV(BufferWrapper& data, uint32_t chunkSize) {
+	const uint32_t vertexCount = chunkSize / (3 * 4);
+	this->portalVertices.resize(vertexCount);
+	for (uint32_t i = 0; i < vertexCount; i++)
+		this->portalVertices[i] = data.readFloatLE(3);
+}
 
-		for (let i = 0; i < count; i++) {
-			doodadSets[i] = {
-				name: data.readString(20).replace(/\0/g, ''),
-				firstInstanceIndex: data.readUInt32LE(),
-				doodadCount: data.readUInt32LE(),
-				unused: data.readUInt32LE()
-			};
-		}
-	},
+// MOPT (Portal Triangles) [WMO Root]
+void WMOLoader::parse_MOPT(BufferWrapper& data) {
+	this->portalInfo.resize(this->portalCount);
+	for (uint32_t i = 0; i < this->portalCount; i++) {
+		WMOPortalInfo& info = this->portalInfo[i];
+		info.startVertex = data.readUInt16LE();
+		info.count = data.readUInt16LE();
+		info.plane = data.readFloatLE(4);
+	}
+}
 
-	// MODI (Doodad IDs) [WMO Root]
-	0x4D4F4449: function(data, chunkSize) {
-		this.fileDataIDs = data.readUInt32LE(chunkSize / 4);
-	},
+// MOPR (Map Object Portal References) [WMO Root]
+void WMOLoader::parse_MOPR(BufferWrapper& data, uint32_t chunkSize) {
+	const uint32_t entryCount = chunkSize / 8;
+	this->mopr.resize(entryCount);
 
-	// MODN (Doodad Names) [WMO Root]
-	0x4D4F444E: function(data, chunkSize) {
-		this.doodadNames = LoaderGenerics.ReadStringBlock(data, chunkSize);
+	for (uint32_t i = 0; i < entryCount; i++) {
+		WMOPortalRef& ref = this->mopr[i];
+		ref.portalIndex = data.readUInt16LE();
+		ref.groupIndex = data.readUInt16LE();
+		ref.side = data.readInt16LE();
+		data.move(4); // Filler
+	}
+}
 
-		// Doodads are still reference as MDX in Classic doodad names, replace them with m2.
-		for (const [ofs, file] of Object.entries(this.doodadNames))
-			this.doodadNames[ofs] = file.toLowerCase().replace('.mdx', '.m2');
-	},
+// MOGN (Group Names) [WMO Root]
+void WMOLoader::parse_MOGN(BufferWrapper& data, uint32_t chunkSize) {
+	this->groupNames = ReadStringBlock(data, chunkSize);
+}
 
-	// MODD (Doodad Definitions) [WMO Root]
-	0x4D4F4444: function(data, chunkSize) {
-		const count = chunkSize / 40;
-		const doodads = this.doodads = new Array(count);
+// MOGI (Group Info) [WMO Root]
+void WMOLoader::parse_MOGI(BufferWrapper& data, uint32_t chunkSize) {
+	const uint32_t count = chunkSize / 32;
+	this->groupInfo.resize(count);
 
-		for (let i = 0; i < count; i++) {
-			doodads[i] = {
-				offset: data.readUInt24LE(),
-				flags: data.readUInt8(),
-				position: data.readFloatLE(3),
-				rotation: data.readFloatLE(4),
-				scale: data.readFloatLE(),
-				color: data.readUInt8(4)
-			};
-		}
-	},
+	for (uint32_t i = 0; i < count; i++) {
+		WMOGroupInfo& info = this->groupInfo[i];
+		info.flags = data.readUInt32LE();
+		info.boundingBox1 = data.readFloatLE(3);
+		info.boundingBox2 = data.readFloatLE(3);
+		info.nameIndex = data.readInt32LE();
+	}
+}
 
-	// GFID (Group file Data IDs) [WMO Root]
-	0x47464944: function(data, chunkSize) {
-		this.groupIDs = data.readUInt32LE(chunkSize / 4);
-	},
+// MODS (Doodad Sets) [WMO Root]
+void WMOLoader::parse_MODS(BufferWrapper& data, uint32_t chunkSize) {
+	const uint32_t count = chunkSize / 32;
+	this->doodadSets.resize(count);
 
-	// MLIQ (Liquid Data) [WMO Group]
-	0x4D4C4951: function(data) {
-		// See https://wowdev.wiki/WMO#MLIQ_chunk for using this raw data.
-		const liquidVertsX = data.readUInt32LE();
-		const liquidVertsY = data.readUInt32LE();
+	for (uint32_t i = 0; i < count; i++) {
+		WMODoodadSet& set = this->doodadSets[i];
+		std::string raw = data.readString(20);
+		// Remove null characters
+		raw.erase(std::remove(raw.begin(), raw.end(), '\0'), raw.end());
+		set.name = raw;
+		set.firstInstanceIndex = data.readUInt32LE();
+		set.doodadCount = data.readUInt32LE();
+		set.unused = data.readUInt32LE();
+	}
+}
 
-		const liquidTilesX = data.readUInt32LE();
-		const liquidTilesY = data.readUInt32LE();
+// MODI (Doodad IDs) [WMO Root]
+void WMOLoader::parse_MODI(BufferWrapper& data, uint32_t chunkSize) {
+	this->fileDataIDs = data.readUInt32LE(chunkSize / 4);
+}
 
-		const liquidCorner = data.readFloatLE(3);
-		const liquidMaterialID = data.readUInt16LE();
+// MODN (Doodad Names) [WMO Root]
+void WMOLoader::parse_MODN(BufferWrapper& data, uint32_t chunkSize) {
+	this->doodadNames = ReadStringBlock(data, chunkSize);
 
-		const vertCount = liquidVertsX * liquidVertsY;
-		const liquidVertices = new Array(vertCount);
+	// Doodads are still reference as MDX in Classic doodad names, replace them with m2.
+	for (auto& [ofs, file] : this->doodadNames) {
+		// toLowerCase
+		std::transform(file.begin(), file.end(), file.begin(),
+			[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		// replace .mdx with .m2
+		auto pos = file.find(".mdx");
+		if (pos != std::string::npos)
+			file.replace(pos, 4, ".m2");
+	}
+}
 
-		for (let i = 0; i < vertCount; i++) {
-			// For water (SMOWVert) the data is structured as follows:
-			// uint8_t flow1;
-			// uint8_t flow2;
-			// uint8_t flow1Pct;
-			// uint8_t filler;
+// MODD (Doodad Definitions) [WMO Root]
+void WMOLoader::parse_MODD(BufferWrapper& data, uint32_t chunkSize) {
+	const uint32_t count = chunkSize / 40;
+	this->doodads.resize(count);
 
-			// For magma (SMOMVert) the data is structured as follows:
-			// int16_t s;
-			// int16_t t;
+	for (uint32_t i = 0; i < count; i++) {
+		WMODoodad& d = this->doodads[i];
+		d.offset = data.readUInt24LE();
+		d.flags = data.readUInt8();
+		d.position = data.readFloatLE(3);
+		d.rotation = data.readFloatLE(4);
+		d.scale = data.readFloatLE();
+		d.color = data.readUInt8(4);
+	}
+}
 
-			liquidVertices[i] = {
-				data: data.readUInt32LE(),
-				height: data.readFloatLE()
-			};
-		}
+// GFID (Group file Data IDs) [WMO Root]
+void WMOLoader::parse_GFID(BufferWrapper& data, uint32_t chunkSize) {
+	this->groupIDs = data.readUInt32LE(chunkSize / 4);
+}
 
-		const tileCount = liquidTilesX * liquidTilesY;
-		const liquidTiles = new Array(tileCount);
+// MLIQ (Liquid Data) [WMO Group]
+void WMOLoader::parse_MLIQ(BufferWrapper& data) {
+	// See https://wowdev.wiki/WMO#MLIQ_chunk for using this raw data.
+	const uint32_t liquidVertsX = data.readUInt32LE();
+	const uint32_t liquidVertsY = data.readUInt32LE();
 
-		for (let i = 0; i < tileCount; i++)
-			liquidTiles[i] = data.readUInt8();
+	const uint32_t liquidTilesX = data.readUInt32LE();
+	const uint32_t liquidTilesY = data.readUInt32LE();
 
-		this.liquid = {
-			vertX: liquidVertsX,
-			vertY: liquidVertsY,
-			tileX: liquidTilesX,
-			tileY: liquidTilesY,
-			vertices: liquidVertices,
-			tiles: liquidTiles,
-			corner: liquidCorner,
-			materialID: liquidMaterialID
-		};
-	},
+	auto liquidCorner = data.readFloatLE(3);
+	const uint16_t liquidMaterialID = data.readUInt16LE();
 
-	// MOCV (Vertex Colouring) [WMO Group]
-	// TODO: If MOGP flag 0x1000000	is set, this chunk can appear twice similar to MOTV.
-	0x4D4F4356: function(data, chunkSize) {
-		if (!this.vertexColours)
-			this.vertexColours = [];
+	const uint32_t vertCount = liquidVertsX * liquidVertsY;
+	std::vector<WMOLiquidVertex> liquidVertices(vertCount);
 
-		this.vertexColours.push(data.readUInt8(chunkSize));
-	},
+	for (uint32_t i = 0; i < vertCount; i++) {
+		// For water (SMOWVert) the data is structured as follows:
+		// uint8_t flow1;
+		// uint8_t flow2;
+		// uint8_t flow1Pct;
+		// uint8_t filler;
 
-	// MDAL (Ambient Color) [WMO Group]
-	0x4D44414C: function(data) {
-		this.ambientColor = data.readUInt32LE();
-	},
+		// For magma (SMOMVert) the data is structured as follows:
+		// int16_t s;
+		// int16_t t;
 
-	// MOGP (Group Header) [WMO Group]
-	0x4D4F4750: function(data, chunkSize) {
-		const endOfs = data.offset + chunkSize;
+		liquidVertices[i].data = data.readUInt32LE();
+		liquidVertices[i].height = data.readFloatLE();
+	}
 
-		this.nameOfs = data.readUInt32LE();
-		this.descOfs = data.readUInt32LE();
+	const uint32_t tileCount = liquidTilesX * liquidTilesY;
+	std::vector<uint8_t> liquidTiles(tileCount);
 
-		this.flags = data.readUInt32LE();
-		this.boundingBox1 = data.readFloatLE(3);
-		this.boundingBox2 = data.readFloatLE(3);
+	for (uint32_t i = 0; i < tileCount; i++)
+		liquidTiles[i] = data.readUInt8();
 
-		this.ofsPortals = data.readUInt16LE();
-		this.numPortals = data.readUInt16LE();
+	this->liquid.vertX = liquidVertsX;
+	this->liquid.vertY = liquidVertsY;
+	this->liquid.tileX = liquidTilesX;
+	this->liquid.tileY = liquidTilesY;
+	this->liquid.vertices = std::move(liquidVertices);
+	this->liquid.tiles = std::move(liquidTiles);
+	this->liquid.corner = std::move(liquidCorner);
+	this->liquid.materialID = liquidMaterialID;
+	this->hasLiquid = true;
+}
 
-		this.numBatchesA = data.readUInt16LE();
-		this.numBatchesB = data.readUInt16LE();
-		this.numBatchesC = data.readUInt32LE();
+// MOCV (Vertex Colouring) [WMO Group]
+// TODO: If MOGP flag 0x1000000 is set, this chunk can appear twice similar to MOTV.
+void WMOLoader::parse_MOCV(BufferWrapper& data, uint32_t chunkSize) {
+	this->vertexColours.push_back(data.readUInt8(chunkSize));
+}
 
-		data.move(4); // Unused.
+// MDAL (Ambient Color) [WMO Group]
+void WMOLoader::parse_MDAL(BufferWrapper& data) {
+	this->ambientColor = data.readUInt32LE();
+}
 
-		this.liquidType = data.readUInt32LE();
-		this.groupID = data.readUInt32LE();
-		
-		data.move(8); // Unknown.
+// MOGP (Group Header) [WMO Group]
+void WMOLoader::parse_MOGP(BufferWrapper& data, uint32_t chunkSize) {
+	const size_t endOfs = data.offset() + chunkSize;
 
-		// Read sub-chunks.
-		while (data.offset < endOfs) {
-			const chunkID = data.readUInt32LE();
-			const chunkSize = data.readUInt32LE();
-			const nextChunkPos = data.offset + chunkSize;
+	this->nameOfs = data.readUInt32LE();
+	this->descOfs = data.readUInt32LE();
 
-			const handler = WMOChunkHandlers[chunkID];
-			if (handler)
-				handler.call(this, data, chunkSize);
-	
-			// Ensure that we start at the next chunk exactly.
-			data.seek(nextChunkPos);
-		}
-	},
+	this->groupFlags = data.readUInt32LE();
+	this->boundingBox1 = data.readFloatLE(3);
+	this->boundingBox2 = data.readFloatLE(3);
 
-	// MOVI (indices) [WMO Group]
-	0x4D4F5649: function(data, chunkSize) {
-		this.indices = data.readUInt16LE(chunkSize / 2);
-	},
+	this->ofsPortals = data.readUInt16LE();
+	this->numPortals = data.readUInt16LE();
 
-	// MOVT (vertices) [WMO Group]
-	0x4D4F5654: function(data, chunkSize) {
-		const count = chunkSize / 4;
-		const vertices = this.vertices = new Array(count);
+	this->numBatchesA = data.readUInt16LE();
+	this->numBatchesB = data.readUInt16LE();
+	this->numBatchesC = data.readUInt32LE();
 
-		for (let i = 0; i < count; i += 3) {
-			vertices[i] = data.readFloatLE();
-			vertices[i + 2] = data.readFloatLE() * -1;
-			vertices[i + 1] = data.readFloatLE();
-		}
-	},
+	data.move(4); // Unused.
 
-	// MOTV (UVs) [WMO Group]
-	0x4D4F5456: function(data, chunkSize) {
-		if (!this.uvs)
-			this.uvs = [];
-		
-		const count = chunkSize / 4;
-		const uvs = new Array(count);
-		for (let i = 0; i < count; i += 2) {
-			uvs[i] = data.readFloatLE();
-			uvs[i + 1] = (data.readFloatLE() - 1) * -1;
-		}
+	this->liquidType = data.readUInt32LE();
+	this->groupID = data.readUInt32LE();
 
-		this.uvs.push(uvs);
-	},
+	data.move(8); // Unknown.
 
-	// MONR (Normals) [WMO Group]
-	0x4D4F4E52: function(data, chunkSize) {
-		const count = chunkSize / 4;
-		const normals = this.normals = new Array(count);
+	// Read sub-chunks.
+	while (data.offset() < endOfs) {
+		const uint32_t subChunkID = data.readUInt32LE();
+		const uint32_t subChunkSize = data.readUInt32LE();
+		const size_t nextChunkPos = data.offset() + subChunkSize;
 
-		for (let i = 0; i < count; i += 3) {
-			normals[i] = data.readFloatLE();
-			normals[i + 2] = data.readFloatLE() * -1;
-			normals[i + 1] = data.readFloatLE();
-		}
-	},
+		handleChunk(subChunkID, data, subChunkSize);
 
-	// MOBA (Render Batches) [WMO Group]
-	0x4D4F4241: function(data, chunkSize) {
-		const count = chunkSize / 24;
-		const batches = this.renderBatches = new Array(count);
+		// Ensure that we start at the next chunk exactly.
+		data.seek(nextChunkPos);
+	}
+}
 
-		for (let i = 0; i < count; i++) {
-			batches[i] = {
-				possibleBox1: data.readUInt16LE(3),
-				possibleBox2: data.readUInt16LE(3),
-				firstFace: data.readUInt32LE(),
-				numFaces: data.readUInt16LE(),
-				firstVertex: data.readUInt16LE(),
-				lastVertex: data.readUInt16LE(),
-				flags: data.readUInt8(),
-				materialID: data.readUInt8()
-			};
-		}
-	},
+// MOVI (indices) [WMO Group]
+void WMOLoader::parse_MOVI(BufferWrapper& data, uint32_t chunkSize) {
+	this->indices = data.readUInt16LE(chunkSize / 2);
+}
 
-	// MOPY (Material Info) [WMO Group]
-	0x4D4F5059: function(data, chunkSize) {
-		const count = chunkSize / 2;
-		const materialInfo = this.materialInfo = new Array(count);
+// MOVT (vertices) [WMO Group]
+void WMOLoader::parse_MOVT(BufferWrapper& data, uint32_t chunkSize) {
+	const uint32_t count = chunkSize / 4;
+	this->vertices.resize(count);
 
-		for (let i = 0; i < count; i++)
-			materialInfo[i] = { flags: data.readUInt8(), materialID: data.readUInt8() };
-	},
+	for (uint32_t i = 0; i < count; i += 3) {
+		this->vertices[i] = data.readFloatLE();
+		this->vertices[i + 2] = data.readFloatLE() * -1;
+		this->vertices[i + 1] = data.readFloatLE();
+	}
+}
 
-	// MOC2 (Colors 2) [WMO Group]
-	0x4D4F4332: function(data, chunkSize) {
-		this.colors2 = data.readUInt8(chunkSize)
-	},
-};
+// MOTV (UVs) [WMO Group]
+void WMOLoader::parse_MOTV(BufferWrapper& data, uint32_t chunkSize) {
+	const uint32_t count = chunkSize / 4;
+	std::vector<float> uv(count);
+	for (uint32_t i = 0; i < count; i += 2) {
+		uv[i] = data.readFloatLE();
+		uv[i + 1] = (data.readFloatLE() - 1) * -1;
+	}
 
-module.exports = WMOLoader;
+	this->uvs.push_back(std::move(uv));
+}
+
+// MONR (Normals) [WMO Group]
+void WMOLoader::parse_MONR(BufferWrapper& data, uint32_t chunkSize) {
+	const uint32_t count = chunkSize / 4;
+	this->normals.resize(count);
+
+	for (uint32_t i = 0; i < count; i += 3) {
+		this->normals[i] = data.readFloatLE();
+		this->normals[i + 2] = data.readFloatLE() * -1;
+		this->normals[i + 1] = data.readFloatLE();
+	}
+}
+
+// MOBA (Render Batches) [WMO Group]
+void WMOLoader::parse_MOBA(BufferWrapper& data, uint32_t chunkSize) {
+	const uint32_t count = chunkSize / 24;
+	this->renderBatches.resize(count);
+
+	for (uint32_t i = 0; i < count; i++) {
+		WMORenderBatch& batch = this->renderBatches[i];
+		batch.possibleBox1 = data.readUInt16LE(3);
+		batch.possibleBox2 = data.readUInt16LE(3);
+		batch.firstFace = data.readUInt32LE();
+		batch.numFaces = data.readUInt16LE();
+		batch.firstVertex = data.readUInt16LE();
+		batch.lastVertex = data.readUInt16LE();
+		batch.flags = data.readUInt8();
+		batch.materialID = data.readUInt8();
+	}
+}
+
+// MOPY (Material Info) [WMO Group]
+void WMOLoader::parse_MOPY(BufferWrapper& data, uint32_t chunkSize) {
+	const uint32_t count = chunkSize / 2;
+	this->materialInfo.resize(count);
+
+	for (uint32_t i = 0; i < count; i++) {
+		this->materialInfo[i].flags = data.readUInt8();
+		this->materialInfo[i].materialID = data.readUInt8();
+	}
+}
+
+// MOC2 (Colors 2) [WMO Group]
+void WMOLoader::parse_MOC2(BufferWrapper& data, uint32_t chunkSize) {
+	this->colors2 = data.readUInt8(chunkSize);
+}

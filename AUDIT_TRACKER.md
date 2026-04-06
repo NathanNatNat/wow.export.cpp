@@ -277,3 +277,28 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: `ReadBufferAsFormat()` returns a single untyped array for both float formats (`1F32`, `2F32`, etc.) and integer formats (`1U16`). `async` methods (`parseChunk_M3DT`, `parseSubChunk_VSTR`, etc.) return Promises but don't actually perform async work.
 - **C++**: `ReadBufferAsFormat()` returns `std::vector<float>` for float formats. Separate `ReadBufferAsFormatU16()` returns `std::vector<uint16_t>` for `1U16` format. All methods are synchronous (no async/await equivalent needed since they don't perform actual async I/O). `stringBlock` is stored as a `BufferWrapper*` pointer to heap-allocated copy.
 - **Rationale**: C++ requires separate return types for float vs. integer data (no untyped arrays). JS async markers are removed since the operations are synchronous. The string block ownership is managed explicitly.
+
+### `src/js/3D/loaders/M2Generics.h` — ACCEPTABLE (Default Constructor)
+- **JS**: M2Track objects are always constructed with all fields via the constructor.
+- **C++**: Added a default constructor `M2Track()` initializing `globalSeq=0` and `interpolation=0` with empty vectors. Required because structs containing M2Track members (M2Bone, SKELBone, M2Attachment, etc.) need to be default-constructible for `std::vector::resize()`.
+- **Rationale**: C++ requires default constructibility for value types stored in vectors when using `resize()`. The default values (0, empty) are safe sentinel values that indicate an uninitialized track.
+
+### `src/js/3D/loaders/WMOLoader.cpp` — ACCEPTABLE (Structural)
+- **JS**: Uses a handler dispatch object (`WMOChunkHandlers`) mapping chunk IDs to handler functions. `getGroup()` is async and loads group data from CASC on demand. Constructor accepts either string or number `fileID`.
+- **C++**: Chunk dispatch uses a switch statement calling named member functions. `getGroup()` is synchronous and currently throws when group loading is needed (CASC integration not yet wired). Two constructor overloads handle string vs. numeric fileID.
+- **Rationale**: C++ cannot use JS's dynamic dispatch pattern. Switch statements provide equivalent dispatch. CASC file loading will be wired when UI integration is complete.
+
+### `src/js/3D/loaders/WMOLegacyLoader.cpp` — ACCEPTABLE (Structural)
+- **JS**: Extends `WMOLoader` patterns for legacy (alpha/pre-vanilla) WMO files. Uses handler dispatch objects. `getGroup()` is async and loads groups from MPQ.
+- **C++**: Same structural approach as WMOLoader C++ conversion. Uses switch dispatch. MOPR entry padding is 2 bytes (matching JS `data.move(2)`) vs. WMOLoader's 4-byte padding. Group loading deferred until MPQ integration.
+- **Rationale**: Legacy format differences (alpha MOMO wrapper, alpha MOHD format, etc.) are faithfully ported. MPQ integration will be wired when UI is complete.
+
+### `src/js/3D/loaders/SKELLoader.cpp` — ACCEPTABLE (Structural)
+- **JS**: `loadAnimsForIndex()` and `loadAnims()` are async, loading .anim files from CASC. `animFiles` is a JS `Map`.
+- **C++**: Methods are synchronous. CASC file loading is deferred (logs warning or throws when needed). `animFiles` is `std::map<uint32_t, BufferWrapper*>`. SKB1/SKA1 parsing deferred until after SKS1 (same as JS).
+- **Rationale**: CASC integration not yet available in C++ UI. The deferred parse order for SKB1/SKA1 matches the JS logic exactly.
+
+### `src/js/3D/loaders/M2Loader.cpp` — ACCEPTABLE (Structural)
+- **JS**: `load()`, `loadAnims()`, `loadAnimsForIndex()` are async, loading .anim files from CASC. `getSkin()` is async and loads skin data from CASC. `animFiles` is a JS `Map`. Constructor takes `data` as a parameter.
+- **C++**: All methods are synchronous. CASC .anim file loading is deferred (logs warning instead of loading). `getSkin()` calls `skin.load()` synchronously. `animFiles` is `std::map<uint32_t, BufferWrapper*>`. `read_m2_track` takes `M2Sequence` vector built from animations (matching JS `this.animations` which has `.flags` property).
+- **Rationale**: CASC integration deferred until UI is wired. The `M2Sequence` vector construction from `M2Animation` objects faithfully maps the JS pattern where `this.animations` (with `.flags` field) is passed directly to `read_m2_track`.
