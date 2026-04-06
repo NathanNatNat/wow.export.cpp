@@ -73,6 +73,29 @@ void MDXLoader::load() {
 		data.seek(nextChunkPos);
 	}
 
+	// Build the nodes lookup from final containers (pointers are now stable).
+	// In JS this was done incrementally in _read_node, but in C++ the objects
+	// are moved into their vectors after _read_node returns, so we must
+	// register them after all parsing is complete.
+	this->nodes.clear();
+	auto registerNode = [this](MDXNode& node) {
+		if (node.objectId.has_value()) {
+			uint32_t objId = static_cast<uint32_t>(node.objectId.value());
+			if (objId >= this->nodes.size())
+				this->nodes.resize(objId + 1, nullptr);
+			this->nodes[objId] = &node;
+		}
+	};
+	for (auto& bone : this->bones) registerNode(bone);
+	for (auto& helper : this->helpers) registerNode(helper);
+	for (auto& attachment : this->attachments) registerNode(attachment);
+	for (auto& event : this->eventObjects) registerNode(event);
+	for (auto& shape : this->hitTestShapes) registerNode(shape);
+	for (auto& emitter : this->particleEmitters) registerNode(emitter);
+	for (auto& emitter : this->particleEmitters2) registerNode(emitter);
+	for (auto& light : this->lights) registerNode(light);
+	for (auto& emitter : this->ribbonEmitters) registerNode(emitter);
+
 	// assign pivot points to nodes
 	for (size_t i = 0; i < this->nodes.size(); i++) {
 		if (this->nodes[i] && this->nodes[i]->objectId.has_value()) {
@@ -209,12 +232,6 @@ void MDXLoader::_read_node(MDXNode& node) {
 		}
 	}
 
-	if (node.objectId.has_value()) {
-		uint32_t objId = static_cast<uint32_t>(node.objectId.value());
-		if (objId >= this->nodes.size())
-			this->nodes.resize(objId + 1, nullptr);
-		this->nodes[objId] = &node;
-	}
 }
 
 // -----------------------------------------------------------------------
