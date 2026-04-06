@@ -120,4 +120,5 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/renderers/CharMaterialRenderer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/renderers/M2LegacyRendererGL.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/renderers/MDXRendererGL.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/renderers/M2RendererGL.cpp
 )
