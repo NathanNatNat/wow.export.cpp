@@ -4,10 +4,13 @@
 	License: MIT
 */
 
-const ShaderProgram = require('../gl/ShaderProgram');
+#include "ShadowPlaneRenderer.h"
+#include "../gl/GLContext.h"
+#include "../gl/ShaderProgram.h"
 
-const SHADOW_VERT_SHADER = `#version 300 es
-precision highp float;
+#include <vector>
+
+static const char* SHADOW_VERT_SHADER = R"(#version 460 core
 
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec2 a_uv;
@@ -21,10 +24,9 @@ void main() {
 	gl_Position = u_projection_matrix * u_view_matrix * vec4(a_position, 1.0);
 	v_uv = a_uv;
 }
-`;
+)";
 
-const SHADOW_FRAG_SHADER = `#version 300 es
-precision highp float;
+static const char* SHADOW_FRAG_SHADER = R"(#version 460 core
 
 in vec2 v_uv;
 out vec4 frag_color;
@@ -37,130 +39,108 @@ void main() {
 	float alpha = smoothstep(1.0, 0.0, dist / (u_shadow_radius / 10.0));
 	frag_color = vec4(0.0, 0.0, 0.0, alpha * 0.6);
 }
-`;
+)";
 
-class ShadowPlaneRenderer {
-	/**
-	 * @param {GLContext} gl_context
-	 * @param {number} size - size of the shadow plane
-	 */
-	constructor(gl_context, size = 2) {
-		this.ctx = gl_context;
-		this.gl = gl_context.gl;
-		this.size = size;
-		this.shadow_radius = 8.0;
-		this.visible = true;
-
-		this.shader = null;
-		this.vao = null;
-		this.vertex_buffer = null;
-		this.index_buffer = null;
-
-		this._init();
-	}
-
-	_init() {
-		this._create_shader();
-		this._create_geometry();
-	}
-
-	_create_shader() {
-		this.shader = new ShaderProgram(this.ctx, SHADOW_VERT_SHADER, SHADOW_FRAG_SHADER);
-	}
-
-	_create_geometry() {
-		const gl = this.gl;
-		const half = this.size / 2;
-
-		// quad vertices: position (xyz) + uv (st)
-		const vertices = new Float32Array([
-			-half, 0, -half, 0, 0,
-			 half, 0, -half, 1, 0,
-			 half, 0,  half, 1, 1,
-			-half, 0,  half, 0, 1
-		]);
-
-		const indices = new Uint16Array([
-			0, 1, 2,
-			0, 2, 3
-		]);
-
-		// create VAO
-		this.vao = gl.createVertexArray();
-		gl.bindVertexArray(this.vao);
-
-		// vertex buffer
-		this.vertex_buffer = gl.createBuffer();
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertex_buffer);
-		gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-
-		// index buffer
-		this.index_buffer = gl.createBuffer();
-		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.index_buffer);
-		gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
-
-		// position attribute (location 0)
-		gl.enableVertexAttribArray(0);
-		gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 20, 0);
-
-		// uv attribute (location 1)
-		gl.enableVertexAttribArray(1);
-		gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 20, 12);
-
-		gl.bindVertexArray(null);
-	}
-
-	/**
-	 * @param {Float32Array} view_matrix
-	 * @param {Float32Array} projection_matrix
-	 */
-	render(view_matrix, projection_matrix) {
-		if (!this.visible || !this.shader || !this.shader.is_valid())
-			return;
-
-		const gl = this.gl;
-
-		// enable blending for transparency
-		gl.enable(gl.BLEND);
-		gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-		gl.depthMask(false);
-
-		this.shader.use();
-		this.shader.set_uniform_mat4('u_view_matrix', false, view_matrix);
-		this.shader.set_uniform_mat4('u_projection_matrix', false, projection_matrix);
-		this.shader.set_uniform_1f('u_shadow_radius', this.shadow_radius);
-
-		this.ctx.bind_vao(this.vao);
-		gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-
-		// restore state
-		gl.depthMask(true);
-		gl.disable(gl.BLEND);
-	}
-
-	dispose() {
-		const gl = this.gl;
-
-		if (this.vao) {
-			gl.deleteVertexArray(this.vao);
-			this.vao = null;
-		}
-
-		if (this.vertex_buffer) {
-			gl.deleteBuffer(this.vertex_buffer);
-			this.vertex_buffer = null;
-		}
-
-		if (this.index_buffer) {
-			gl.deleteBuffer(this.index_buffer);
-			this.index_buffer = null;
-		}
-
-		if (this.shader) {
-			this.shader.dispose();
-			this.shader = null;
-		}
-	}
+ShadowPlaneRenderer::ShadowPlaneRenderer(gl::GLContext& gl_context, float size)
+	: ctx(gl_context), size(size)
+{
+	_init();
 }
 
-module.exports = ShadowPlaneRenderer;
+void ShadowPlaneRenderer::_init() {
+	_create_shader();
+	_create_geometry();
+}
+
+void ShadowPlaneRenderer::_create_shader() {
+	shader = std::make_unique<gl::ShaderProgram>(ctx, SHADOW_VERT_SHADER, SHADOW_FRAG_SHADER);
+}
+
+void ShadowPlaneRenderer::_create_geometry() {
+	const float half = size / 2.0f;
+
+	// quad vertices: position (xyz) + uv (st)
+	const float vertices[] = {
+		-half, 0.0f, -half, 0.0f, 0.0f,
+		 half, 0.0f, -half, 1.0f, 0.0f,
+		 half, 0.0f,  half, 1.0f, 1.0f,
+		-half, 0.0f,  half, 0.0f, 1.0f
+	};
+
+	const uint16_t indices[] = {
+		0, 1, 2,
+		0, 2, 3
+	};
+
+	// create VAO
+	glGenVertexArrays(1, &vao);
+	glBindVertexArray(vao);
+
+	// vertex buffer
+	glGenBuffers(1, &vertex_buffer);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+	// index buffer
+	glGenBuffers(1, &index_buffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+	// position attribute (location 0)
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 20, reinterpret_cast<void*>(0));
+
+	// uv attribute (location 1)
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 20, reinterpret_cast<void*>(12));
+
+	glBindVertexArray(0);
+}
+
+/**
+ * @param view_matrix
+ * @param projection_matrix
+ */
+void ShadowPlaneRenderer::render(const float* view_matrix, const float* projection_matrix) {
+	if (!visible || !shader || !shader->is_valid())
+		return;
+
+	// enable blending for transparency
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDepthMask(GL_FALSE);
+
+	shader->use();
+	shader->set_uniform_mat4("u_view_matrix", false, view_matrix);
+	shader->set_uniform_mat4("u_projection_matrix", false, projection_matrix);
+	shader->set_uniform_1f("u_shadow_radius", shadow_radius);
+
+	ctx.bind_vao(vao);
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr);
+
+	// restore state
+	glDepthMask(GL_TRUE);
+	glDisable(GL_BLEND);
+}
+
+void ShadowPlaneRenderer::dispose() {
+	if (vao) {
+		glDeleteVertexArrays(1, &vao);
+		vao = 0;
+	}
+
+	if (vertex_buffer) {
+		glDeleteBuffers(1, &vertex_buffer);
+		vertex_buffer = 0;
+	}
+
+	if (index_buffer) {
+		glDeleteBuffers(1, &index_buffer);
+		index_buffer = 0;
+	}
+
+	if (shader) {
+		shader->dispose();
+		shader.reset();
+	}
+}
