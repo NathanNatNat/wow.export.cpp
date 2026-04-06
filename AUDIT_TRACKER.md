@@ -257,3 +257,23 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: Uses a dynamic `MDXChunkHandlers` object mapping string keywords to handler functions via `handler.call(this, size)`. Geoset parsers are added as prototype methods. All data is stored as dynamic JS objects with arbitrary properties.
 - **C++**: Chunk dispatch uses if-else chain on string keywords calling named `parse_XXX()` member functions. Geoset parsers are regular member functions. Data is stored in typed structs: `MDXNode`, `MDXBone`, `MDXGeoset`, `MDXParticleEmitter2`, etc. JS `-1` sentinel values mapped to `std::optional<int32_t>`. JS `null` properties mapped to `std::optional`. Nodes tracked via `std::vector<MDXNode*>` (raw pointers into owning vectors — valid for lifetime of loader).
 - **Rationale**: C++ requires static typing and cannot use JS's dynamic property assignment. Typed structs with optional fields preserve the same data model. The if-else dispatch is equivalent to the JS object-key lookup since chunk keywords are known at compile time.
+
+### `src/js/3D/Texture.h` — ACCEPTABLE
+- **JS**: `Texture` class does not declare a `fileName` property — it is dynamically assigned in `M2LegacyLoader._parse_textures()` via `texture.fileName = fileName` for type-0 textures that use embedded filename strings.
+- **C++**: Added `std::string fileName` as a public member of the `Texture` class, since C++ does not support dynamic property assignment on objects.
+- **Rationale**: JavaScript allows dynamic property assignment on any object. In C++, all members must be declared in the class definition. The `fileName` property is used by M2LegacyLoader, M2LegacyExporter, M2LegacyRendererGL, and other modules. Adding it as a public member preserves the same data model.
+
+### `src/js/3D/loaders/M2LegacyLoader.cpp` — ACCEPTABLE (Structural)
+- **JS**: Uses a single `M2Track` class with `timestamps`, `values`, and optional `ranges` properties. For pre-WotLK, `timestamps` and `values` are flat arrays; for WotLK, they are arrays of arrays. Data types dispatched via string (`'uint32'`, `'float3'`, `'compquat'`, etc.) in `_read_data_type()`. `_convert_bone_coords()` accesses values as JS arrays with implicit `.length` and bracket indexing.
+- **C++**: `LegacyM2Track` struct has separate `flatTimestamps`/`flatValues` (pre-WotLK) and `nestedTimestamps`/`nestedValues` (WotLK) to avoid variant-of-variant complexity. Data types use `LegacyDataType` enum class. `LegacyTrackValue` is `std::variant<uint8_t, uint32_t, int16_t, std::vector<float>, std::vector<uint32_t>>`. Coordinate conversion uses `std::get<std::vector<float>>()`.
+- **Rationale**: C++ requires static typing — separate flat/nested arrays are cleaner than a variant containing either. The enum replaces runtime string dispatch. All functionality is preserved: same read logic, same coordinate conversion, same track structure.
+
+### `src/js/3D/loaders/ADTLoader.cpp` — ACCEPTABLE (Structural)
+- **JS**: Uses handler dispatch objects (`ADTChunkHandlers`, `ADTObjChunkHandlers`, `ADTTexChunkHandlers`, etc.) mapping chunk IDs to handler functions. Handlers are called with `.call(this, data, chunkSize)`. Sub-chunk handlers are called with `.call(chunk, data, ...)`.
+- **C++**: Chunk dispatch uses switch statements on chunk IDs calling named member functions. Sub-chunk handlers are static member functions taking the chunk struct by reference. WDT flags for MCAL decompression accessed via `WDTLoader*` pointer instead of JS `root.flags`.
+- **Rationale**: C++ cannot use JS's dynamic dispatch pattern (object keys mapped to functions). Switch statements provide equivalent dispatch. Static member functions for sub-chunk handlers match the JS pattern where handlers are called with `chunk` as `this`.
+
+### `src/js/3D/loaders/M3Loader.cpp` — ACCEPTABLE (Structural)
+- **JS**: `ReadBufferAsFormat()` returns a single untyped array for both float formats (`1F32`, `2F32`, etc.) and integer formats (`1U16`). `async` methods (`parseChunk_M3DT`, `parseSubChunk_VSTR`, etc.) return Promises but don't actually perform async work.
+- **C++**: `ReadBufferAsFormat()` returns `std::vector<float>` for float formats. Separate `ReadBufferAsFormatU16()` returns `std::vector<uint16_t>` for `1U16` format. All methods are synchronous (no async/await equivalent needed since they don't perform actual async I/O). `stringBlock` is stored as a `BufferWrapper*` pointer to heap-allocated copy.
+- **Rationale**: C++ requires separate return types for float vs. integer data (no untyped arrays). JS async markers are removed since the operations are synchronous. The string block ownership is managed explicitly.
