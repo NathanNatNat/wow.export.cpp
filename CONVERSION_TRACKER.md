@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 109 / 184 files converted
+**Progress:** 110 / 184 files converted
 
 ---
 
@@ -178,7 +178,7 @@
 - [x] `src/js/3D/writers/SQLWriter.cpp` (233 lines)
 - [x] `src/js/3D/writers/STLWriter.cpp` (252 lines)
 - [x] `src/js/3D/writers/GLBWriter.cpp` (75 lines)
-- [ ] `src/js/3D/writers/GLTFWriter.cpp` (1506 lines) 🔴
+- [x] `src/js/3D/writers/GLTFWriter.cpp` (1506 lines) 🔴
 
 ## Tier 18 — 3D Renderers (9 files)
 

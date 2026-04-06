@@ -114,4 +114,5 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/SQLWriter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/STLWriter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/GLBWriter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/GLTFWriter.cpp
 )
