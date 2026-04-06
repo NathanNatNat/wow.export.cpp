@@ -136,7 +136,7 @@ struct LegacyM2SubMesh {
 	uint16_t level = 0;
 	uint16_t vertexStart = 0;
 	uint16_t vertexCount = 0;
-	uint16_t triangleStart = 0;
+	uint32_t triangleStart = 0;
 	uint16_t triangleCount = 0;
 	uint16_t boneCount = 0;
 	uint16_t boneStart = 0;

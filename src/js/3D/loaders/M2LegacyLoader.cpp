@@ -447,7 +447,7 @@ void M2LegacyLoader::_parse_views_inline(uint32_t ofs) {
 				sm.sortRadius = data.readFloatLE();
 			}
 
-			sm.triangleStart += static_cast<uint16_t>(sm.level << 16);
+			sm.triangleStart += sm.level << 16;
 		}
 
 		// read texture units
