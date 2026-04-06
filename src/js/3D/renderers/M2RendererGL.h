@@ -258,6 +258,10 @@ public:
 	gl::ShaderProgram* shader = nullptr;
 	int syncID = -1;
 
+	// Public accessors for JS-exposed bone data
+	const std::vector<float>& get_bone_matrices() const { return bone_matrices; }
+	const std::vector<int16_t>& get_bone_remap_table() const { return bone_remap_table; }
+
 private:
 	BufferWrapper* data_ptr;
 	gl::GLContext& ctx;

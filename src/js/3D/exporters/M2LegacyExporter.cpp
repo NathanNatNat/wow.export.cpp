@@ -3,405 +3,521 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
 */
+#include "M2LegacyExporter.h"
 
-const core = require('../../core');
-const log = require('../../log');
-const path = require('path');
-const generics = require('../../generics');
+#include "../../core.h"
+#include "../../log.h"
+#include "../../generics.h"
+#include "../../buffer.h"
+#include "../../casc/export-helper.h"
+#include "../../casc/blp.h"
+#include "../loaders/M2LegacyLoader.h"
+#include "../Texture.h"
+#include "../writers/JSONWriter.h"
+#include "../writers/OBJWriter.h"
+#include "../writers/MTLWriter.h"
+#include "../writers/STLWriter.h"
+#include "../GeosetMapper.h"
+#include "../../mpq/mpq.h"
 
-const M2LegacyLoader = require('../loaders/M2LegacyLoader');
-const ExportHelper = require('../../casc/export-helper');
-const JSONWriter = require('../writers/JSONWriter');
-const OBJWriter = require('../writers/OBJWriter');
-const MTLWriter = require('../writers/MTLWriter');
-const STLWriter = require('../writers/STLWriter');
-const BLPFile = require('../../casc/blp');
-const BufferWrapper = require('../../buffer');
-const GeosetMapper = require('../GeosetMapper');
+#include <filesystem>
+#include <format>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <algorithm>
 
-class M2LegacyExporter {
-	constructor(data, filePath, mpq) {
-		this.data = data;
-		this.filePath = filePath;
-		this.mpq = mpq;
-		this.m2 = null;
-		this.skinTextures = null;
-	}
+namespace fs = std::filesystem;
 
-	setSkinTextures(textures) {
-		this.skinTextures = textures;
-	}
+M2LegacyExporter::M2LegacyExporter(BufferWrapper& data, const std::string& filePath, mpq::MPQArchive* mpq)
+	: data(data)
+	, filePath(filePath)
+	, mpq(mpq)
+	, m2(nullptr)
+{
+}
 
-	setGeosetMask(mask) {
-		this.geosetMask = mask;
-	}
+void M2LegacyExporter::setSkinTextures(std::vector<std::string> textures) {
+	skinTextures = std::move(textures);
+}
 
-	async exportTextures(outDir, mtl = null, helper) {
-		const config = core.view.config;
-		const mpq = this.mpq;
+void M2LegacyExporter::setGeosetMask(std::vector<GeosetMaskEntry> mask) {
+	geosetMask = std::move(mask);
+}
 
-		const validTextures = new Map();
+std::unordered_map<std::string, M2LegacyExporter::TextureInfo> M2LegacyExporter::exportTextures(
+	const fs::path& outDir,
+	MTLWriter* mtl,
+	casc::ExportHelper* helper)
+{
+	const auto& config = core::view->config;
+	std::unordered_map<std::string, TextureInfo> validTextures;
 
-		if (!config.modelsExportTextures)
+	if (!config.value("modelsExportTextures", false))
+		return validTextures;
+
+	m2->load();
+
+	const bool useAlpha = config.value("modelsExportAlpha", false);
+	const bool usePosix = config.value("pathFormat", std::string("")) == "posix";
+
+	std::unordered_set<std::string> exportedTextures;
+
+	for (size_t i = 0; i < m2->textures.size(); i++) {
+		if (helper && helper->isCancelled())
 			return validTextures;
 
-		await this.m2.load();
+		const Texture& texture = m2->textures[i];
+		const uint32_t textureType = m2->textureTypes[i];
 
-		const useAlpha = config.modelsExportAlpha;
-		const usePosix = config.pathFormat === 'posix';
+		std::string texturePath = texture.fileName;
 
-		const exportedTextures = new Set();
+		// check for variant/skin textures
+		if (textureType > 0 && skinTextures) {
+			if (textureType >= 11 && textureType < 14)
+				texturePath = (*skinTextures)[textureType - 11];
+			else if (textureType > 1 && textureType < 5)
+				texturePath = (*skinTextures)[textureType - 2];
+		}
 
-		for (let i = 0; i < this.m2.textures.length; i++) {
-			if (helper?.isCancelled?.())
-				return validTextures;
+		if (texturePath.empty())
+			continue;
 
-			const texture = this.m2.textures[i];
-			const textureType = this.m2.textureTypes[i];
+		std::string texLower = texturePath;
+		std::transform(texLower.begin(), texLower.end(), texLower.begin(), ::tolower);
 
-			let texturePath = texture.fileName;
+		if (exportedTextures.count(texLower))
+			continue;
 
-			// check for variant/skin textures
-			if (textureType > 0 && this.skinTextures) {
+		exportedTextures.insert(texLower);
+
+		try {
+			auto textureData = mpq->extractFile(texturePath);
+			if (!textureData) {
+				logging::write(std::format("Texture not found in MPQ: {}", texturePath));
+				continue;
+			}
+
+			std::string texFile = fs::path(texturePath).filename().string();
+			texFile = casc::ExportHelper::replaceExtension(texFile, ".png");
+
+			// legacy mpq exports always use flat textures alongside model for compatibility
+			fs::path texPath = outDir / texFile;
+
+			std::string matName = "mat_" + fs::path(texLower).stem().string();
+			if (config.value("removePathSpaces", false)) {
+				matName.erase(std::remove_if(matName.begin(), matName.end(),
+					[](char c) { return std::isspace(static_cast<unsigned char>(c)); }), matName.end());
+			}
+
+			const bool fileExisted = generics::fileExists(texPath);
+
+			if (config.value("overwriteFiles", true) || !fileExisted) {
+				BufferWrapper buf = BufferWrapper::from(std::span<const uint8_t>(textureData->data(), textureData->size()));
+				casc::BLPImage blp(std::move(buf));
+				blp.saveToPNG(texPath, useAlpha ? 0b1111 : 0b0111);
+
+				logging::write(std::format("Exported legacy M2 texture: {}", texPath.string()));
+			} else {
+				logging::write(std::format("Skipping M2 texture export {} (file exists, overwrite disabled)", texPath.string()));
+			}
+
+			std::string texFileStr = texFile;
+			if (usePosix)
+				texFileStr = casc::ExportHelper::win32ToPosix(texFileStr);
+
+			if (mtl)
+				mtl->addMaterial(matName, texFileStr);
+
+			validTextures[texLower] = { texFileStr, texPath, matName };
+		} catch (const std::exception& e) {
+			logging::write(std::format("Failed to export texture {} for M2: {}", texturePath, e.what()));
+		}
+	}
+
+	return validTextures;
+}
+
+void M2LegacyExporter::exportAsOBJ(const fs::path& out, casc::ExportHelper* helper, std::vector<FileManifestEntry>* fileManifest) {
+	const auto& config = core::view->config;
+
+	m2 = std::make_unique<M2LegacyLoader>(data);
+	m2->load();
+
+	LegacyM2Skin& skin = m2->getSkin(0);
+
+	const fs::path mtlPath = casc::ExportHelper::replaceExtension(out.string(), ".mtl");
+	OBJWriter obj(out);
+	MTLWriter mtl(mtlPath);
+
+	const fs::path outDir = out.parent_path();
+	const std::string modelName = out.stem().string();
+	obj.setName(modelName);
+
+	logging::write(std::format("Exporting legacy M2 model {} as OBJ: {}", modelName, out.string()));
+
+	obj.setVertArray(m2->vertices);
+	obj.setNormalArray(m2->normals);
+	obj.addUVArray(m2->uv);
+
+	if (config.value("modelsExportUV2", false))
+		obj.addUVArray(m2->uv2);
+
+	if (helper)
+		helper->setCurrentTaskName(modelName + " textures");
+
+	const auto validTextures = exportTextures(outDir, &mtl, helper);
+
+	if (fileManifest) {
+		for (const auto& [texPath, texInfo] : validTextures)
+			fileManifest->push_back({ "PNG", texInfo.matPath });
+	}
+
+	if (helper && helper->isCancelled())
+		return;
+
+	// export mesh data
+	for (size_t mI = 0, mC = skin.subMeshes.size(); mI < mC; mI++) {
+		if (geosetMask && (mI >= geosetMask->size() || !(*geosetMask)[mI].checked))
+			continue;
+
+		const LegacyM2SubMesh& mesh = skin.subMeshes[mI];
+		std::vector<uint32_t> verts(mesh.triangleCount);
+
+		for (uint16_t vI = 0; vI < mesh.triangleCount; vI++)
+			verts[vI] = skin.indices[skin.triangles[mesh.triangleStart + vI]];
+
+		std::string matName;
+		const LegacyM2TextureUnit* texUnit = nullptr;
+		for (const auto& tu : skin.textureUnits) {
+			if (tu.skinSectionIndex == static_cast<uint16_t>(mI)) {
+				texUnit = &tu;
+				break;
+			}
+		}
+
+		if (texUnit) {
+			const uint16_t texIndex = m2->textureCombos[texUnit->textureComboIndex];
+			const Texture& texture = m2->textures[texIndex];
+			const uint32_t textureType = m2->textureTypes[texIndex];
+
+			// resolve texture path same as exportTextures
+			std::string texturePath = texture.fileName;
+			if (textureType > 0 && skinTextures) {
 				if (textureType >= 11 && textureType < 14)
-					texturePath = this.skinTextures[textureType - 11];
+					texturePath = (*skinTextures)[textureType - 11];
 				else if (textureType > 1 && textureType < 5)
-					texturePath = this.skinTextures[textureType - 2];
+					texturePath = (*skinTextures)[textureType - 2];
 			}
 
-			if (!texturePath || texturePath.length === 0)
-				continue;
+			if (!texturePath.empty()) {
+				std::string texLower = texturePath;
+				std::transform(texLower.begin(), texLower.end(), texLower.begin(), ::tolower);
+				auto it = validTextures.find(texLower);
+				if (it != validTextures.end())
+					matName = it->second.matName;
+			}
+		}
 
-			if (exportedTextures.has(texturePath.toLowerCase()))
-				continue;
+		obj.addMesh(geoset_mapper::getGeosetName(static_cast<int>(mI), mesh.submeshID), verts, matName);
+	}
 
-			exportedTextures.add(texturePath.toLowerCase());
+	if (!mtl.isEmpty())
+		obj.setMaterialLibrary(mtlPath.filename().string());
 
-			try {
-				const textureData = mpq.getFile(texturePath);
-				if (!textureData) {
-					log.write('Texture not found in MPQ: %s', texturePath);
-					continue;
-				}
+	obj.write(config.value("overwriteFiles", true));
+	if (fileManifest)
+		fileManifest->push_back({ "OBJ", out });
 
-				let texFile = path.basename(texturePath);
-				texFile = ExportHelper.replaceExtension(texFile, '.png');
+	mtl.write(config.value("overwriteFiles", true));
+	if (fileManifest)
+		fileManifest->push_back({ "MTL", mtlPath });
 
-				let texPath;
-				// legacy mpq exports always use flat textures alongside model for compatibility
-				texPath = path.join(outDir, texFile);
+	if (config.value("exportM2Meta", false)) {
+		if (helper)
+			helper->clearCurrentTask();
+		if (helper)
+			helper->setCurrentTaskName(modelName + ", writing meta data");
 
-				let matName = 'mat_' + path.basename(texturePath.toLowerCase(), '.blp');
-				if (config.removePathSpaces)
-					matName = matName.replace(/\s/g, '');
+		const fs::path jsonPath = casc::ExportHelper::replaceExtension(out.string(), ".json");
+		JSONWriter json(jsonPath);
 
-				const fileExisted = await generics.fileExists(texPath);
+		// clone submesh array with enabled property
+		nlohmann::json subMeshesJson = nlohmann::json::array();
+		for (size_t i = 0; i < skin.subMeshes.size(); i++) {
+			const bool subMeshEnabled = !geosetMask || (i < geosetMask->size() && (*geosetMask)[i].checked);
+			const LegacyM2SubMesh& sm = skin.subMeshes[i];
+			nlohmann::json smObj;
+			smObj["enabled"]          = subMeshEnabled;
+			smObj["submeshID"]        = sm.submeshID;
+			smObj["level"]            = sm.level;
+			smObj["vertexStart"]      = sm.vertexStart;
+			smObj["vertexCount"]      = sm.vertexCount;
+			smObj["triangleStart"]    = sm.triangleStart;
+			smObj["triangleCount"]    = sm.triangleCount;
+			smObj["boneCount"]        = sm.boneCount;
+			smObj["boneStart"]        = sm.boneStart;
+			smObj["boneInfluences"]   = sm.boneInfluences;
+			smObj["centerBoneIndex"]  = sm.centerBoneIndex;
+			smObj["centerPosition"]   = sm.centerPosition;
+			subMeshesJson.push_back(std::move(smObj));
+		}
 
-				if (config.overwriteFiles || !fileExisted) {
-					const buf = new BufferWrapper(Buffer.from(textureData));
-					const blp = new BLPFile(buf);
-					await blp.saveToPNG(texPath, useAlpha ? 0b1111 : 0b0111);
+		// clone textures array with expanded info
+		nlohmann::json texturesJson = nlohmann::json::array();
+		for (size_t i = 0; i < m2->textures.size(); i++) {
+			const Texture& texture = m2->textures[i];
+			const uint32_t textureType = m2->textureTypes[i];
 
-					log.write('Exported legacy M2 texture: %s', texPath);
+			// resolve texture path same as exportTextures
+			std::string texturePath = texture.fileName;
+			if (textureType > 0 && skinTextures) {
+				if (textureType >= 11 && textureType < 14)
+					texturePath = (*skinTextures)[textureType - 11];
+				else if (textureType > 1 && textureType < 5)
+					texturePath = (*skinTextures)[textureType - 2];
+			}
+
+			nlohmann::json texEntry;
+			texEntry["fileName"] = texturePath;
+			texEntry["type"] = textureType;
+
+			if (!texturePath.empty()) {
+				std::string texLower = texturePath;
+				std::transform(texLower.begin(), texLower.end(), texLower.begin(), ::tolower);
+				auto it = validTextures.find(texLower);
+				if (it != validTextures.end()) {
+					texEntry["fileNameExternal"] = it->second.matPathRelative;
+					texEntry["mtlName"] = it->second.matName;
 				} else {
-					log.write('Skipping M2 texture export %s (file exists, overwrite disabled)', texPath);
+					texEntry["fileNameExternal"] = nullptr;
+					texEntry["mtlName"] = nullptr;
 				}
-
-				if (usePosix)
-					texFile = ExportHelper.win32ToPosix(texFile);
-
-				mtl?.addMaterial(matName, texFile);
-				validTextures.set(texturePath.toLowerCase(), { matPathRelative: texFile, matPath: texPath, matName });
-			} catch (e) {
-				log.write('Failed to export texture %s for M2: %s', texturePath, e.message);
+			} else {
+				texEntry["fileNameExternal"] = nullptr;
+				texEntry["mtlName"] = nullptr;
 			}
+
+			texturesJson.push_back(std::move(texEntry));
 		}
 
-		return validTextures;
-	}
-
-	async exportAsOBJ(out, helper, fileManifest) {
-		const config = core.view.config;
-
-		this.m2 = new M2LegacyLoader(this.data);
-		await this.m2.load();
-
-		const skin = await this.m2.getSkin(0);
-
-		const obj = new OBJWriter(out);
-		const mtl = new MTLWriter(ExportHelper.replaceExtension(out, '.mtl'));
-
-		const outDir = path.dirname(out);
-		const modelName = path.basename(out, '.obj');
-		obj.setName(modelName);
-
-		log.write('Exporting legacy M2 model %s as OBJ: %s', modelName, out);
-
-		obj.setVertArray(this.m2.vertices);
-		obj.setNormalArray(this.m2.normals);
-		obj.addUVArray(this.m2.uv);
-
-		if (config.modelsExportUV2)
-			obj.addUVArray(this.m2.uv2);
-
-		helper?.setCurrentTaskName?.(modelName + ' textures');
-		const validTextures = await this.exportTextures(outDir, mtl, helper);
-
-		for (const [texPath, texInfo] of validTextures)
-			fileManifest?.push({ type: 'PNG', file: texInfo.matPath });
-
-		if (helper?.isCancelled?.())
-			return;
-
-		// export mesh data
-		for (let mI = 0, mC = skin.subMeshes.length; mI < mC; mI++) {
-			if (this.geosetMask && !this.geosetMask[mI]?.checked)
-				continue;
-
-			const mesh = skin.subMeshes[mI];
-			const verts = new Array(mesh.triangleCount);
-
-			for (let vI = 0; vI < mesh.triangleCount; vI++)
-				verts[vI] = skin.indices[skin.triangles[mesh.triangleStart + vI]];
-
-			let matName;
-			const texUnit = skin.textureUnits.find(tex => tex.skinSectionIndex === mI);
-			if (texUnit) {
-				const texIndex = this.m2.textureCombos[texUnit.textureComboIndex];
-				const texture = this.m2.textures[texIndex];
-				const textureType = this.m2.textureTypes[texIndex];
-
-				// resolve texture path same as exportTextures
-				let texturePath = texture?.fileName;
-				if (textureType > 0 && this.skinTextures) {
-					if (textureType >= 11 && textureType < 14)
-						texturePath = this.skinTextures[textureType - 11];
-					else if (textureType > 1 && textureType < 5)
-						texturePath = this.skinTextures[textureType - 2];
-				}
-
-				if (texturePath && validTextures.has(texturePath.toLowerCase()))
-					matName = validTextures.get(texturePath.toLowerCase()).matName;
-			}
-
-			obj.addMesh(GeosetMapper.getGeosetName(mI, mesh.submeshID), verts, matName);
+		// textureUnits for skin
+		nlohmann::json textureUnitsJson = nlohmann::json::array();
+		for (const auto& tu : skin.textureUnits) {
+			nlohmann::json tuObj;
+			tuObj["flags"]                      = tu.flags;
+			tuObj["priority"]                   = tu.priority;
+			tuObj["shaderID"]                   = tu.shaderID;
+			tuObj["skinSectionIndex"]           = tu.skinSectionIndex;
+			tuObj["flags2"]                     = tu.flags2;
+			tuObj["colorIndex"]                 = tu.colorIndex;
+			tuObj["materialIndex"]              = tu.materialIndex;
+			tuObj["materialLayer"]              = tu.materialLayer;
+			tuObj["textureCount"]               = tu.textureCount;
+			tuObj["textureComboIndex"]          = tu.textureComboIndex;
+			tuObj["textureCoordComboIndex"]     = tu.textureCoordComboIndex;
+			tuObj["textureWeightComboIndex"]    = tu.textureWeightComboIndex;
+			tuObj["textureTransformComboIndex"] = tu.textureTransformComboIndex;
+			textureUnitsJson.push_back(std::move(tuObj));
 		}
 
-		if (!mtl.isEmpty)
-			obj.setMaterialLibrary(path.basename(mtl.out));
-
-		await obj.write(config.overwriteFiles);
-		fileManifest?.push({ type: 'OBJ', file: obj.out });
-
-		await mtl.write(config.overwriteFiles);
-		fileManifest?.push({ type: 'MTL', file: mtl.out });
-
-		if (config.exportM2Meta) {
-			helper?.clearCurrentTask?.();
-			helper?.setCurrentTaskName?.(modelName + ', writing meta data');
-
-			const json = new JSONWriter(ExportHelper.replaceExtension(out, '.json'));
-
-			// clone submesh array with enabled property
-			const subMeshes = Array(skin.subMeshes.length);
-			for (let i = 0, n = subMeshes.length; i < n; i++) {
-				const subMeshEnabled = !this.geosetMask || this.geosetMask[i]?.checked;
-				subMeshes[i] = Object.assign({ enabled: subMeshEnabled }, skin.subMeshes[i]);
-			}
-
-			// clone textures array with expanded info
-			const textures = new Array(this.m2.textures.length);
-			for (let i = 0, n = textures.length; i < n; i++) {
-				const texture = this.m2.textures[i];
-				const textureType = this.m2.textureTypes[i];
-
-				// resolve texture path same as exportTextures
-				let texturePath = texture.fileName;
-				if (textureType > 0 && this.skinTextures) {
-					if (textureType >= 11 && textureType < 14)
-						texturePath = this.skinTextures[textureType - 11];
-					else if (textureType > 1 && textureType < 5)
-						texturePath = this.skinTextures[textureType - 2];
-				}
-
-				const textureEntry = validTextures.get(texturePath?.toLowerCase());
-
-				textures[i] = {
-					fileName: texturePath,
-					fileNameExternal: textureEntry?.matPathRelative,
-					mtlName: textureEntry?.matName,
-					type: textureType
-				};
-			}
-
-			json.addProperty('fileType', 'm2');
-			json.addProperty('filePath', this.filePath);
-			json.addProperty('internalName', this.m2.name);
-			json.addProperty('version', this.m2.version);
-			json.addProperty('flags', this.m2.flags);
-			json.addProperty('textures', textures);
-			json.addProperty('textureTypes', this.m2.textureTypes);
-			json.addProperty('materials', this.m2.materials);
-			json.addProperty('textureCombos', this.m2.textureCombos);
-			json.addProperty('transparencyLookup', this.m2.transparencyLookup);
-			json.addProperty('textureTransformsLookup', this.m2.textureTransformsLookup);
-			json.addProperty('boundingBox', this.m2.boundingBox);
-			json.addProperty('boundingSphereRadius', this.m2.boundingSphereRadius);
-			json.addProperty('collisionBox', this.m2.collisionBox);
-			json.addProperty('collisionSphereRadius', this.m2.collisionSphereRadius);
-			json.addProperty('skin', {
-				subMeshes: subMeshes,
-				textureUnits: skin.textureUnits
-			});
-
-			await json.write(config.overwriteFiles);
-			fileManifest?.push({ type: 'META', file: json.out });
-		}
-	}
-
-	async exportAsSTL(out, helper, fileManifest) {
-		const config = core.view.config;
-
-		this.m2 = new M2LegacyLoader(this.data);
-		await this.m2.load();
-
-		const skin = await this.m2.getSkin(0);
-
-		const stl = new STLWriter(out);
-		const modelName = path.basename(out, '.stl');
-		stl.setName(modelName);
-
-		log.write('Exporting legacy M2 model %s as STL: %s', modelName, out);
-
-		stl.setVertArray(this.m2.vertices);
-		stl.setNormalArray(this.m2.normals);
-
-		if (helper?.isCancelled?.())
-			return;
-
-		for (let mI = 0, mC = skin.subMeshes.length; mI < mC; mI++) {
-			if (this.geosetMask && !this.geosetMask[mI]?.checked)
-				continue;
-
-			const mesh = skin.subMeshes[mI];
-			const verts = new Array(mesh.triangleCount);
-
-			for (let vI = 0; vI < mesh.triangleCount; vI++)
-				verts[vI] = skin.indices[skin.triangles[mesh.triangleStart + vI]];
-
-			stl.addMesh(GeosetMapper.getGeosetName(mI, mesh.submeshID), verts);
+		// materials
+		nlohmann::json materialsJson = nlohmann::json::array();
+		for (const auto& mat : m2->materials) {
+			nlohmann::json matObj;
+			matObj["flags"] = mat.flags;
+			matObj["blendingMode"] = mat.blendingMode;
+			materialsJson.push_back(std::move(matObj));
 		}
 
-		await stl.write(config.overwriteFiles);
-		fileManifest?.push({ type: 'STL', file: stl.out });
-	}
+		// bounding box
+		nlohmann::json boundingBoxJson;
+		boundingBoxJson["min"] = m2->boundingBox.min;
+		boundingBoxJson["max"] = m2->boundingBox.max;
 
-	async exportRaw(out, helper, fileManifest) {
-		const config = core.view.config;
-		const mpq = this.mpq;
-		const outDir = path.dirname(out);
+		nlohmann::json collisionBoxJson;
+		collisionBoxJson["min"] = m2->collisionBox.min;
+		collisionBoxJson["max"] = m2->collisionBox.max;
 
-		const manifestFile = ExportHelper.replaceExtension(out, '.manifest.json');
-		const manifest = new JSONWriter(manifestFile);
+		json.addProperty("fileType", "m2");
+		json.addProperty("filePath", filePath);
+		json.addProperty("internalName", m2->name);
+		json.addProperty("version", m2->version);
+		json.addProperty("flags", m2->flags);
+		json.addProperty("textures", texturesJson);
+		json.addProperty("textureTypes", m2->textureTypes);
+		json.addProperty("materials", materialsJson);
+		json.addProperty("textureCombos", m2->textureCombos);
+		json.addProperty("transparencyLookup", m2->transparencyLookup);
+		json.addProperty("textureTransformsLookup", m2->textureTransformsLookup);
+		json.addProperty("boundingBox", boundingBoxJson);
+		json.addProperty("boundingSphereRadius", m2->boundingSphereRadius);
+		json.addProperty("collisionBox", collisionBoxJson);
+		json.addProperty("collisionSphereRadius", m2->collisionSphereRadius);
+		json.addProperty("skin", nlohmann::json{
+			{ "subMeshes", subMeshesJson },
+			{ "textureUnits", textureUnitsJson }
+		});
 
-		manifest.addProperty('filePath', this.filePath);
-
-		// write main m2 file
-		await this.data.writeToFile(out);
-		fileManifest?.push({ type: 'M2', file: out });
-
-		log.write('Exported legacy M2: %s', out);
-
-		// export textures if enabled
-		if (config.modelsExportTextures) {
-			this.m2 = new M2LegacyLoader(this.data);
-			await this.m2.load();
-
-			const texturesManifest = [];
-			const exportedTextures = new Set();
-
-			// export embedded textures (type 0 with fileName)
-			for (const texture of this.m2.textures) {
-				if (!texture.fileName)
-					continue;
-
-				const texturePath = texture.fileName;
-
-				// skip duplicates
-				if (exportedTextures.has(texturePath.toLowerCase()))
-					continue;
-
-				exportedTextures.add(texturePath.toLowerCase());
-
-				try {
-					const textureData = mpq.getFile(texturePath);
-					if (!textureData) {
-						log.write('Texture not found in MPQ: %s', texturePath);
-						continue;
-					}
-
-					let texOut;
-					if (config.enableSharedTextures)
-						texOut = ExportHelper.getExportPath(texturePath);
-					else
-						texOut = path.join(outDir, path.basename(texturePath));
-
-					const buf = new BufferWrapper(Buffer.from(textureData));
-					await buf.writeToFile(texOut);
-
-					texturesManifest.push({ file: path.relative(outDir, texOut), path: texturePath, type: 'embedded' });
-					fileManifest?.push({ type: 'BLP', file: texOut });
-
-					log.write('Exported legacy M2 texture: %s', texOut);
-				} catch (e) {
-					log.write('Failed to export texture %s: %s', texturePath, e.message);
-				}
-			}
-
-			// export skin/variant textures (creature skins, etc)
-			if (this.skinTextures && this.skinTextures.length > 0) {
-				for (const texturePath of this.skinTextures) {
-					if (!texturePath)
-						continue;
-
-					// skip duplicates
-					if (exportedTextures.has(texturePath.toLowerCase()))
-						continue;
-
-					exportedTextures.add(texturePath.toLowerCase());
-
-					try {
-						const textureData = mpq.getFile(texturePath);
-						if (!textureData) {
-							log.write('Skin texture not found in MPQ: %s', texturePath);
-							continue;
-						}
-
-						let texOut;
-						if (config.enableSharedTextures)
-							texOut = ExportHelper.getExportPath(texturePath);
-						else
-							texOut = path.join(outDir, path.basename(texturePath));
-
-						const buf = new BufferWrapper(Buffer.from(textureData));
-						await buf.writeToFile(texOut);
-
-						texturesManifest.push({ file: path.relative(outDir, texOut), path: texturePath, type: 'skin' });
-						fileManifest?.push({ type: 'BLP', file: texOut });
-
-						log.write('Exported legacy M2 skin texture: %s', texOut);
-					} catch (e) {
-						log.write('Failed to export skin texture %s: %s', texturePath, e.message);
-					}
-				}
-			}
-
-			manifest.addProperty('textures', texturesManifest);
-		}
-
-		await manifest.write();
-		fileManifest?.push({ type: 'MANIFEST', file: manifestFile });
+		json.write(config.value("overwriteFiles", true));
+		if (fileManifest)
+			fileManifest->push_back({ "META", jsonPath });
 	}
 }
 
-module.exports = M2LegacyExporter;
+void M2LegacyExporter::exportAsSTL(const fs::path& out, casc::ExportHelper* helper, std::vector<FileManifestEntry>* fileManifest) {
+	const auto& config = core::view->config;
+
+	m2 = std::make_unique<M2LegacyLoader>(data);
+	m2->load();
+
+	LegacyM2Skin& skin = m2->getSkin(0);
+
+	STLWriter stl(out);
+	const std::string modelName = out.stem().string();
+	stl.setName(modelName);
+
+	logging::write(std::format("Exporting legacy M2 model {} as STL: {}", modelName, out.string()));
+
+	stl.setVertArray(m2->vertices);
+	stl.setNormalArray(m2->normals);
+
+	if (helper && helper->isCancelled())
+		return;
+
+	for (size_t mI = 0, mC = skin.subMeshes.size(); mI < mC; mI++) {
+		if (geosetMask && (mI >= geosetMask->size() || !(*geosetMask)[mI].checked))
+			continue;
+
+		const LegacyM2SubMesh& mesh = skin.subMeshes[mI];
+		std::vector<uint32_t> verts(mesh.triangleCount);
+
+		for (uint16_t vI = 0; vI < mesh.triangleCount; vI++)
+			verts[vI] = skin.indices[skin.triangles[mesh.triangleStart + vI]];
+
+		stl.addMesh(geoset_mapper::getGeosetName(static_cast<int>(mI), mesh.submeshID), verts);
+	}
+
+	stl.write(config.value("overwriteFiles", true));
+	if (fileManifest)
+		fileManifest->push_back({ "STL", out });
+}
+
+void M2LegacyExporter::exportRaw(const fs::path& out, casc::ExportHelper* helper, std::vector<FileManifestEntry>* fileManifest) {
+	const auto& config = core::view->config;
+	const fs::path outDir = out.parent_path();
+
+	const fs::path manifestFile = casc::ExportHelper::replaceExtension(out.string(), ".manifest.json");
+	JSONWriter manifest(manifestFile);
+
+	manifest.addProperty("filePath", filePath);
+
+	// write main m2 file
+	data.writeToFile(out);
+	if (fileManifest)
+		fileManifest->push_back({ "M2", out });
+
+	logging::write(std::format("Exported legacy M2: {}", out.string()));
+
+	// export textures if enabled
+	if (config.value("modelsExportTextures", false)) {
+		m2 = std::make_unique<M2LegacyLoader>(data);
+		m2->load();
+
+		nlohmann::json texturesManifest = nlohmann::json::array();
+		std::unordered_set<std::string> exportedTextures;
+
+		// export embedded textures (type 0 with fileName)
+		for (const auto& texture : m2->textures) {
+			if (texture.fileName.empty())
+				continue;
+
+			const std::string& texturePath = texture.fileName;
+
+			std::string texLower = texturePath;
+			std::transform(texLower.begin(), texLower.end(), texLower.begin(), ::tolower);
+
+			// skip duplicates
+			if (exportedTextures.count(texLower))
+				continue;
+
+			exportedTextures.insert(texLower);
+
+			try {
+				auto textureData = mpq->extractFile(texturePath);
+				if (!textureData) {
+					logging::write(std::format("Texture not found in MPQ: {}", texturePath));
+					continue;
+				}
+
+				fs::path texOut;
+				if (config.value("enableSharedTextures", false))
+					texOut = casc::ExportHelper::getExportPath(texturePath);
+				else
+					texOut = outDir / fs::path(texturePath).filename();
+
+				BufferWrapper buf = BufferWrapper::from(std::span<const uint8_t>(textureData->data(), textureData->size()));
+				buf.writeToFile(texOut);
+
+				const std::string relPath = fs::relative(texOut, outDir).string();
+				texturesManifest.push_back({ { "file", relPath }, { "path", texturePath }, { "type", "embedded" } });
+				if (fileManifest)
+					fileManifest->push_back({ "BLP", texOut });
+
+				logging::write(std::format("Exported legacy M2 texture: {}", texOut.string()));
+			} catch (const std::exception& e) {
+				logging::write(std::format("Failed to export texture {}: {}", texturePath, e.what()));
+			}
+		}
+
+		// export skin/variant textures (creature skins, etc)
+		if (skinTextures && !skinTextures->empty()) {
+			for (const auto& texturePath : *skinTextures) {
+				if (texturePath.empty())
+					continue;
+
+				std::string texLower = texturePath;
+				std::transform(texLower.begin(), texLower.end(), texLower.begin(), ::tolower);
+
+				// skip duplicates
+				if (exportedTextures.count(texLower))
+					continue;
+
+				exportedTextures.insert(texLower);
+
+				try {
+					auto textureData = mpq->extractFile(texturePath);
+					if (!textureData) {
+						logging::write(std::format("Skin texture not found in MPQ: {}", texturePath));
+						continue;
+					}
+
+					fs::path texOut;
+					if (config.value("enableSharedTextures", false))
+						texOut = casc::ExportHelper::getExportPath(texturePath);
+					else
+						texOut = outDir / fs::path(texturePath).filename();
+
+					BufferWrapper buf = BufferWrapper::from(std::span<const uint8_t>(textureData->data(), textureData->size()));
+					buf.writeToFile(texOut);
+
+					const std::string relPath = fs::relative(texOut, outDir).string();
+					texturesManifest.push_back({ { "file", relPath }, { "path", texturePath }, { "type", "skin" } });
+					if (fileManifest)
+						fileManifest->push_back({ "BLP", texOut });
+
+					logging::write(std::format("Exported legacy M2 skin texture: {}", texOut.string()));
+				} catch (const std::exception& e) {
+					logging::write(std::format("Failed to export skin texture {}: {}", texturePath, e.what()));
+				}
+			}
+		}
+
+		manifest.addProperty("textures", texturesManifest);
+	}
+
+	manifest.write();
+	if (fileManifest)
+		fileManifest->push_back({ "MANIFEST", manifestFile });
+}
