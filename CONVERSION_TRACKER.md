@@ -222,7 +222,6 @@
 - [ ] `src/js/components/data-table.cpp` (1020 lines) 🔴
 - [ ] `src/js/components/file-field.cpp` (46 lines)
 - [ ] `src/js/components/listboxb.cpp` (284 lines)
-- [ ] `src/js/components/markdown-content.cpp` (255 lines)
 - [ ] `src/js/components/menu-button.cpp` (81 lines)
 - [ ] `src/js/components/resize-layer.cpp` (25 lines)
 - [ ] `src/js/components/slider.cpp` (98 lines)

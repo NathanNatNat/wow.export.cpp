@@ -335,7 +335,6 @@ Self-contained subsystem for legacy WoW.
 | `src/js/components/data-table.cpp` | 1020 🔴 | _(none)_ |
 | `src/js/components/file-field.cpp` | 46 | _(none)_ |
 | `src/js/components/listboxb.cpp` | 284 | _(none)_ |
-| `src/js/components/markdown-content.cpp` | 255 | _(none)_ |
 | `src/js/components/menu-button.cpp` | 81 | _(none)_ |
 | `src/js/components/resize-layer.cpp` | 25 | _(none)_ |
 | `src/js/components/slider.cpp` | 98 | _(none)_ |

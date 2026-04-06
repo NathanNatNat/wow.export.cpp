@@ -18,8 +18,7 @@ const COMPONENTS = {
 	MapViewer: require('./components/map-viewer'),
 	DataTable: require('./components/data-table'),
 	ResizeLayer: require('./components/resize-layer'),
-	ContextMenu: require('./components/context-menu'),
-	MarkdownContent: require('./components/markdown-content')
+	ContextMenu: require('./components/context-menu')
 };
 
 const MODULES = {
@@ -72,8 +71,7 @@ const COMPONENT_PATH_MAP = {
 	MapViewer: 'map-viewer',
 	DataTable: 'data-table',
 	ResizeLayer: 'resize-layer',
-	ContextMenu: 'context-menu',
-	MarkdownContent: 'markdown-content'
+	ContextMenu: 'context-menu'
 };
 
 let component_cache = {};
