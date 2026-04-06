@@ -85,14 +85,27 @@ logging::write(std::format("Exporting M3 model {} as {}: {}", model_name, format
 
 gltf.setVerticesArray(m3->vertices);
 gltf.setNormalArray(m3->normals);
-gltf.addUVArray(m3->uv);
+// gltf.setBoneWeightArray(m3->boneWeights);
+// gltf.setBoneIndexArray(m3->boneIndices)
 
-for (size_t mI = 0, mC = m3->geosets.size(); mI < mC; mI++) {
-// Skip geosets that are not enabled.
-if (!geosetMask.empty() && (mI >= geosetMask.size() || !geosetMask[mI].checked))
+gltf.addUVArray(m3->uv);
+if (core::view->config.value("modelsExportUV2", false) && !m3->uv1.empty())
+gltf.addUVArray(m3->uv1);
+
+const auto outDir = out.parent_path();
+auto textureMap = exportTextures(outDir, false, nullptr, helper, true);
+// TODO(conversion): GLTFWriter::setTextureMap takes map<uint32_t, GLTFTextureEntry>,
+// but M3Exporter::exportTextures returns map<uint32_t, string>. Currently exportTextures
+// is a stub returning empty map, so this is a no-op until textures are implemented.
+
+const int index = 0;
+for (size_t lodIndex = 0; lodIndex < m3->lodLevels.size(); lodIndex++) {
+if (static_cast<int>(lodIndex) != index)
 continue;
 
-const auto& geoset = m3->geosets[mI];
+for (size_t geosetIndex = m3->geosetCountPerLOD * lodIndex;
+     geosetIndex < (m3->geosetCountPerLOD * (lodIndex + 1)); geosetIndex++) {
+const auto& geoset = m3->geosets[geosetIndex];
 
 // Read geoset name from the string block
 std::string geosetName;
@@ -101,14 +114,14 @@ m3->stringBlock->seek(geoset.nameCharStart);
 geosetName = m3->stringBlock->readString(geoset.nameCharCount);
 }
 
-if (geosetName.empty())
-geosetName = std::to_string(mI);
+logging::write(std::format("Exporting geoset {} ({})", geosetIndex, geosetName));
 
 std::vector<uint32_t> indices(geoset.indexCount);
 for (uint32_t iI = 0; iI < geoset.indexCount; iI++)
 indices[iI] = m3->indices[geoset.indexStart + iI];
 
 gltf.addMesh(geosetName, indices, "");
+}
 }
 
 gltf.write(core::view->config.value("overwriteFiles", true), format);
@@ -141,21 +154,29 @@ obj.setVertArray(m3->vertices);
 obj.setNormalArray(m3->normals);
 obj.addUVArray(m3->uv);
 
+if (core::view->config.value("modelsExportUV2", false) && !m3->uv1.empty())
+obj.addUVArray(m3->uv1);
+
 // Textures
 const auto outDir = out.parent_path();
-exportTextures(outDir, false, &mtl, helper);
+auto validTextures = exportTextures(outDir, false, &mtl, helper);
+// TODO(conversion): fileManifest texture entries will be added once exportTextures is implemented
+// JS: for (const [texFileDataID, texInfo] of validTextures)
+//     fileManifest?.push({ type: 'PNG', fileDataID: texFileDataID, file: texInfo.matPath });
 
 // Abort if the export has been cancelled.
 if (helper && helper->isCancelled())
 return;
 
 // Faces
-for (size_t mI = 0, mC = m3->geosets.size(); mI < mC; mI++) {
-// Skip geosets that are not enabled.
-if (!geosetMask.empty() && (mI >= geosetMask.size() || !geosetMask[mI].checked))
+const int index = 0;
+for (size_t lodIndex = 0; lodIndex < m3->lodLevels.size(); lodIndex++) {
+if (static_cast<int>(lodIndex) != index)
 continue;
 
-const auto& geoset = m3->geosets[mI];
+for (size_t geosetIndex = m3->geosetCountPerLOD * lodIndex;
+     geosetIndex < (m3->geosetCountPerLOD * (lodIndex + 1)); geosetIndex++) {
+const auto& geoset = m3->geosets[geosetIndex];
 
 // Read geoset name from the string block
 std::string geosetName;
@@ -164,14 +185,14 @@ m3->stringBlock->seek(geoset.nameCharStart);
 geosetName = m3->stringBlock->readString(geoset.nameCharCount);
 }
 
-if (geosetName.empty())
-geosetName = std::to_string(mI);
+logging::write(std::format("Exporting geoset {} ({})", geosetIndex, geosetName));
 
 std::vector<uint32_t> indices(geoset.indexCount);
 for (uint32_t iI = 0; iI < geoset.indexCount; iI++)
 indices[iI] = m3->indices[geoset.indexStart + iI];
 
 obj.addMesh(geosetName, indices, "");
+}
 }
 
 if (!mtl.isEmpty())
@@ -184,6 +205,16 @@ fileManifest->push_back({ "OBJ", fileDataID, out });
 mtl.write(config.value("overwriteFiles", true));
 if (fileManifest)
 fileManifest->push_back({ "MTL", fileDataID, std::filesystem::path(mtlPath) });
+
+if (exportCollision) {
+// const phys = new OBJWriter(ExportHelper.replaceExtension(out, '.phys.obj'));
+// phys.setVertArray(this.m2.collisionPositions);
+// phys.setNormalArray(this.m2.collisionNormals);
+// phys.addMesh('Collision', this.m2.collisionIndices);
+
+// await phys.write(config.overwriteFiles);
+// fileManifest?.push({ type: 'PHYS_OBJ', fileDataID: this.fileDataID, file: phys.out });
+}
 }
 
 /**
@@ -214,12 +245,14 @@ if (helper && helper->isCancelled())
 return;
 
 // faces
-for (size_t mI = 0, mC = m3->geosets.size(); mI < mC; mI++) {
-// skip geosets that are not enabled
-if (!geosetMask.empty() && (mI >= geosetMask.size() || !geosetMask[mI].checked))
+const int index = 0;
+for (size_t lodIndex = 0; lodIndex < m3->lodLevels.size(); lodIndex++) {
+if (static_cast<int>(lodIndex) != index)
 continue;
 
-const auto& geoset = m3->geosets[mI];
+for (size_t geosetIndex = m3->geosetCountPerLOD * lodIndex;
+     geosetIndex < (m3->geosetCountPerLOD * (lodIndex + 1)); geosetIndex++) {
+const auto& geoset = m3->geosets[geosetIndex];
 
 // Read geoset name from the string block
 std::string geosetName;
@@ -228,14 +261,14 @@ m3->stringBlock->seek(geoset.nameCharStart);
 geosetName = m3->stringBlock->readString(geoset.nameCharCount);
 }
 
-if (geosetName.empty())
-geosetName = std::to_string(mI);
+logging::write(std::format("Exporting geoset {} ({})", geosetIndex, geosetName));
 
 std::vector<uint32_t> indices(geoset.indexCount);
 for (uint32_t iI = 0; iI < geoset.indexCount; iI++)
 indices[iI] = m3->indices[geoset.indexStart + iI];
 
 stl.addMesh(geosetName, indices);
+}
 }
 
 stl.write(config.value("overwriteFiles", true));
@@ -253,8 +286,22 @@ fileManifest->push_back({ "STL", fileDataID, out });
 void M3Exporter::exportRaw(const std::filesystem::path& out, casc::ExportHelper* helper,
 std::vector<M3ExportFileManifest>* fileManifest)
 {
+const auto& config = core::view->config;
+
+const auto manifestFile = casc::ExportHelper::replaceExtension(out.string(), ".manifest.json");
+JSONWriter manifest(manifestFile);
+
+manifest.addProperty("fileDataID", fileDataID);
+
 // Write the M3 file with no conversion.
 data.writeToFile(out);
 if (fileManifest)
 fileManifest->push_back({ "M3", fileDataID, out });
+
+// Only load M2 data if we need to export related files.
+if (config.value("modelsExportSkin", false) || config.value("modelsExportSkel", false) ||
+config.value("modelsExportBone", false) || config.value("modelsExportAnim", false))
+m3->load();
+
+manifest.write();
 }
