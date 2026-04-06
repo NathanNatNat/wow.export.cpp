@@ -4,60 +4,75 @@
 	License: MIT
  */
 
-const log = require('../log');
+#include "ShaderMapper.h"
+#include "../log.h"
 
-const SHADER_ARRAY = [
-	{ "PS": "Combiners_Opaque_Mod2xNA_Alpha",           "VS": "Diffuse_T1_Env",         "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Opaque_AddAlpha",                "VS": "Diffuse_T1_Env",         "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Opaque_AddAlpha_Alpha",          "VS": "Diffuse_T1_Env",         "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Opaque_Mod2xNA_Alpha_Add",       "VS": "Diffuse_T1_Env_T1",      "HS": "T1_T2_T3", "DS": "T1_T2_T3"  },
-	{ "PS": "Combiners_Mod_AddAlpha",                   "VS": "Diffuse_T1_Env",         "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Opaque_AddAlpha",                "VS": "Diffuse_T1_T1",          "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Mod_AddAlpha",                   "VS": "Diffuse_T1_T1",          "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Mod_AddAlpha_Alpha",             "VS": "Diffuse_T1_Env",         "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Opaque_Alpha_Alpha",             "VS": "Diffuse_T1_Env",         "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Opaque_Mod2xNA_Alpha_3s",        "VS": "Diffuse_T1_Env_T1",      "HS": "T1_T2_T3", "DS": "T1_T2_T3"  },
-	{ "PS": "Combiners_Opaque_AddAlpha_Wgt",            "VS": "Diffuse_T1_T1",          "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Mod_Add_Alpha",                  "VS": "Diffuse_T1_Env",         "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Opaque_ModNA_Alpha",             "VS": "Diffuse_T1_Env",         "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Mod_AddAlpha_Wgt",               "VS": "Diffuse_T1_Env",         "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Mod_AddAlpha_Wgt",               "VS": "Diffuse_T1_T1",          "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Opaque_AddAlpha_Wgt",            "VS": "Diffuse_T1_T2",          "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Opaque_Mod_Add_Wgt",             "VS": "Diffuse_T1_Env",         "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Opaque_Mod2xNA_Alpha_UnshAlpha", "VS": "Diffuse_T1_Env_T1",      "HS": "T1_T2_T3", "DS": "T1_T2_T3"  },
-	{ "PS": "Combiners_Mod_Dual_Crossfade",             "VS": "Diffuse_T1",             "HS": "T1",       "DS": "T1"        },
-	{ "PS": "Combiners_Mod_Depth",                      "VS": "Diffuse_EdgeFade_T1",    "HS": "T1",       "DS": "T1"        },
-	{ "PS": "Combiners_Opaque_Mod2xNA_Alpha_Alpha",     "VS": "Diffuse_T1_Env_T2",      "HS": "T1_T2_T3", "DS": "T1_T2_T3"  },
-	{ "PS": "Combiners_Mod_Mod",                        "VS": "Diffuse_EdgeFade_T1_T2", "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Mod_Masked_Dual_Crossfade",      "VS": "Diffuse_T1_T2",          "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Opaque_Alpha",                   "VS": "Diffuse_T1_T1",          "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Opaque_Mod2xNA_Alpha_UnshAlpha", "VS": "Diffuse_T1_Env_T2",      "HS": "T1_T2_T3", "DS": "T1_T2_T3"  },
-	{ "PS": "Combiners_Mod_Depth",                      "VS": "Diffuse_EdgeFade_Env",   "HS": "T1",       "DS": "T1"        },
-	{ "PS": "Guild",                                    "VS": "Diffuse_T1_T2_T1",       "HS": "T1_T2_T3", "DS": "T1_T2"     },
-	{ "PS": "Guild_NoBorder",                           "VS": "Diffuse_T1_T2",          "HS": "T1_T2",    "DS": "T1_T2_T3"  },
-	{ "PS": "Guild_Opaque",                             "VS": "Diffuse_T1_T2_T1",       "HS": "T1_T2_T3", "DS": "T1_T2"     },
-	{ "PS": "Illum",                                    "VS": "Diffuse_T1_T1",          "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Mod_Mod_Mod_Const",              "VS": "Diffuse_T1_T2_T3",       "HS": "T1_T2_T3", "DS": "T1_T2_T3"  },
-	{ "PS": "Combiners_Mod_Mod_Mod_Const",              "VS": "Color_T1_T2_T3",         "HS": "T1_T2_T3", "DS": "T1_T2_T3"  },
-	{ "PS": "Combiners_Opaque",                         "VS": "Diffuse_T1",             "HS": "T1",       "DS": "T1"        },
-	{ "PS": "Combiners_Mod_Mod2x",                      "VS": "Diffuse_EdgeFade_T1_T2", "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Mod",                            "VS": "Diffuse_EdgeFade_T1",    "HS": "T1_T2",    "DS": "T1_T2"     },
-	{ "PS": "Combiners_Mod_Mod",                        "VS": "Diffuse_EdgeFade_T1_T2", "HS": "T1_T2",    "DS": "T1_T2"     },
-];
+#include <array>
+#include <string>
+#include <string_view>
+#include <optional>
+
+namespace shader_mapper {
+
+struct ShaderEntry {
+	std::string_view PS;
+	std::string_view VS;
+	std::string_view HS;
+	std::string_view DS;
+};
+
+static constexpr std::array<ShaderEntry, 36> SHADER_ARRAY = {{
+	{"Combiners_Opaque_Mod2xNA_Alpha",           "Diffuse_T1_Env",         "T1_T2",    "T1_T2"    },
+	{"Combiners_Opaque_AddAlpha",                "Diffuse_T1_Env",         "T1_T2",    "T1_T2"    },
+	{"Combiners_Opaque_AddAlpha_Alpha",          "Diffuse_T1_Env",         "T1_T2",    "T1_T2"    },
+	{"Combiners_Opaque_Mod2xNA_Alpha_Add",       "Diffuse_T1_Env_T1",      "T1_T2_T3", "T1_T2_T3" },
+	{"Combiners_Mod_AddAlpha",                   "Diffuse_T1_Env",         "T1_T2",    "T1_T2"    },
+	{"Combiners_Opaque_AddAlpha",                "Diffuse_T1_T1",          "T1_T2",    "T1_T2"    },
+	{"Combiners_Mod_AddAlpha",                   "Diffuse_T1_T1",          "T1_T2",    "T1_T2"    },
+	{"Combiners_Mod_AddAlpha_Alpha",             "Diffuse_T1_Env",         "T1_T2",    "T1_T2"    },
+	{"Combiners_Opaque_Alpha_Alpha",             "Diffuse_T1_Env",         "T1_T2",    "T1_T2"    },
+	{"Combiners_Opaque_Mod2xNA_Alpha_3s",        "Diffuse_T1_Env_T1",      "T1_T2_T3", "T1_T2_T3" },
+	{"Combiners_Opaque_AddAlpha_Wgt",            "Diffuse_T1_T1",          "T1_T2",    "T1_T2"    },
+	{"Combiners_Mod_Add_Alpha",                  "Diffuse_T1_Env",         "T1_T2",    "T1_T2"    },
+	{"Combiners_Opaque_ModNA_Alpha",             "Diffuse_T1_Env",         "T1_T2",    "T1_T2"    },
+	{"Combiners_Mod_AddAlpha_Wgt",               "Diffuse_T1_Env",         "T1_T2",    "T1_T2"    },
+	{"Combiners_Mod_AddAlpha_Wgt",               "Diffuse_T1_T1",          "T1_T2",    "T1_T2"    },
+	{"Combiners_Opaque_AddAlpha_Wgt",            "Diffuse_T1_T2",          "T1_T2",    "T1_T2"    },
+	{"Combiners_Opaque_Mod_Add_Wgt",             "Diffuse_T1_Env",         "T1_T2",    "T1_T2"    },
+	{"Combiners_Opaque_Mod2xNA_Alpha_UnshAlpha", "Diffuse_T1_Env_T1",      "T1_T2_T3", "T1_T2_T3" },
+	{"Combiners_Mod_Dual_Crossfade",             "Diffuse_T1",             "T1",       "T1"       },
+	{"Combiners_Mod_Depth",                      "Diffuse_EdgeFade_T1",    "T1",       "T1"       },
+	{"Combiners_Opaque_Mod2xNA_Alpha_Alpha",     "Diffuse_T1_Env_T2",      "T1_T2_T3", "T1_T2_T3" },
+	{"Combiners_Mod_Mod",                        "Diffuse_EdgeFade_T1_T2", "T1_T2",    "T1_T2"    },
+	{"Combiners_Mod_Masked_Dual_Crossfade",      "Diffuse_T1_T2",          "T1_T2",    "T1_T2"    },
+	{"Combiners_Opaque_Alpha",                   "Diffuse_T1_T1",          "T1_T2",    "T1_T2"    },
+	{"Combiners_Opaque_Mod2xNA_Alpha_UnshAlpha", "Diffuse_T1_Env_T2",      "T1_T2_T3", "T1_T2_T3" },
+	{"Combiners_Mod_Depth",                      "Diffuse_EdgeFade_Env",   "T1",       "T1"       },
+	{"Guild",                                    "Diffuse_T1_T2_T1",       "T1_T2_T3", "T1_T2"    },
+	{"Guild_NoBorder",                           "Diffuse_T1_T2",          "T1_T2",    "T1_T2_T3" },
+	{"Guild_Opaque",                             "Diffuse_T1_T2_T1",       "T1_T2_T3", "T1_T2"    },
+	{"Illum",                                    "Diffuse_T1_T1",          "T1_T2",    "T1_T2"    },
+	{"Combiners_Mod_Mod_Mod_Const",              "Diffuse_T1_T2_T3",       "T1_T2_T3", "T1_T2_T3" },
+	{"Combiners_Mod_Mod_Mod_Const",              "Color_T1_T2_T3",         "T1_T2_T3", "T1_T2_T3" },
+	{"Combiners_Opaque",                         "Diffuse_T1",             "T1",       "T1"       },
+	{"Combiners_Mod_Mod2x",                      "Diffuse_EdgeFade_T1_T2", "T1_T2",    "T1_T2"    },
+	{"Combiners_Mod",                            "Diffuse_EdgeFade_T1",    "T1_T2",    "T1_T2"    },
+	{"Combiners_Mod_Mod",                        "Diffuse_EdgeFade_T1_T2", "T1_T2",    "T1_T2"    },
+}};
 
 
 /**
  * Gets Vertex shader name from shader ID
  */
-const getVertexShader = (textureCount, shaderID) => {
+std::optional<std::string> getVertexShader(int textureCount, int shaderID) {
 	if (shaderID < 0) {
-		const vertexShaderId = shaderID & 0x7FFF;
-		if (vertexShaderId >= SHADER_ARRAY.length) {
-			log.write("Unknown vertex shader ID: " + vertexShaderId);
-			return null;
+		const int vertexShaderId = shaderID & 0x7FFF;
+		if (vertexShaderId >= static_cast<int>(SHADER_ARRAY.size())) {
+			logging::write("Unknown vertex shader ID: " + std::to_string(vertexShaderId));
+			return std::nullopt;
 		}
 
-		return SHADER_ARRAY[vertexShaderId].VS;
+		return std::string(SHADER_ARRAY[vertexShaderId].VS);
 	}
 	else {
 		if (textureCount == 1) {
@@ -73,7 +88,7 @@ const getVertexShader = (textureCount, shaderID) => {
 			if (shaderID & 0x80) {
 				if (shaderID & 0x8)
 					return "Diffuse_Env_Env";
-				else 
+				else
 					return "Diffuse_Env_T1";
 			} else {
 				if (shaderID & 0x8) {
@@ -87,26 +102,26 @@ const getVertexShader = (textureCount, shaderID) => {
 			}
 		}
 	}
-};
+}
 
 /**
  * Gets Pixel shader name from shader ID
  */
-const getPixelShader = (textureCount, shaderID) => {
+std::optional<std::string> getPixelShader(int textureCount, int shaderID) {
 	if (shaderID & 0x8000) {
-		const pixelShaderID = shaderID & 0x7FFF;
-		if (pixelShaderID >= SHADER_ARRAY.length) {
-			log.write("Unknown pixel shader ID: " + pixelShaderID);
-			return null;
+		const int pixelShaderID = shaderID & 0x7FFF;
+		if (pixelShaderID >= static_cast<int>(SHADER_ARRAY.size())) {
+			logging::write("Unknown pixel shader ID: " + std::to_string(pixelShaderID));
+			return std::nullopt;
 		}
 
-		return SHADER_ARRAY[pixelShaderID].PS;
+		return std::string(SHADER_ARRAY[pixelShaderID].PS);
 	}
 	else if (textureCount == 1)
 	{
 		return (shaderID & 0x70) ? "Combiners_Mod" : "Combiners_Opaque";
 	}
-	else 
+	else
 	{
 		if (shaderID & 0x70) {
 			switch (shaderID & 7) {
@@ -138,20 +153,20 @@ const getPixelShader = (textureCount, shaderID) => {
 			}
 		}
 	}
-};
+}
 
 /**
  * Gets Hull shader name from shader ID
  */
-const getHullShader = (textureCount, shaderID) => {
+std::optional<std::string> getHullShader(int textureCount, int shaderID) {
 	if (shaderID & 0x8000) {
-		const hullShaderID = shaderID & 0x7FFF;
-		if (hullShaderID >= SHADER_ARRAY.length) {
-			log.write("Unknown hull shader ID: " + hullShaderID);
-			return null;
+		const int hullShaderID = shaderID & 0x7FFF;
+		if (hullShaderID >= static_cast<int>(SHADER_ARRAY.size())) {
+			logging::write("Unknown hull shader ID: " + std::to_string(hullShaderID));
+			return std::nullopt;
 		}
 
-		return SHADER_ARRAY[hullShaderID].HS;
+		return std::string(SHADER_ARRAY[hullShaderID].HS);
 	} else {
 		if (textureCount == 1)
 			return "T1";
@@ -163,15 +178,15 @@ const getHullShader = (textureCount, shaderID) => {
 /**
  * Gets Domain shader name from shader ID
  */
-const getDomainShader = (textureCount, shaderID) => {
+std::optional<std::string> getDomainShader(int textureCount, int shaderID) {
 	if (shaderID & 0x8000) {
-		const domainShaderID = shaderID & 0x7FFF;
-		if (domainShaderID >= SHADER_ARRAY.length) {
-			log.write("Unknown domain shader ID: " + domainShaderID);
-			return null;
+		const int domainShaderID = shaderID & 0x7FFF;
+		if (domainShaderID >= static_cast<int>(SHADER_ARRAY.size())) {
+			logging::write("Unknown domain shader ID: " + std::to_string(domainShaderID));
+			return std::nullopt;
 		}
 
-		return SHADER_ARRAY[domainShaderID].DS;
+		return std::string(SHADER_ARRAY[domainShaderID].DS);
 	} else {
 		if (textureCount == 1)
 			return "T1";
@@ -179,6 +194,5 @@ const getDomainShader = (textureCount, shaderID) => {
 			return "T1_T2";
 	}
 }
-	
 
-module.exports = { getVertexShader, getPixelShader, getHullShader, getDomainShader };
+} // namespace shader_mapper

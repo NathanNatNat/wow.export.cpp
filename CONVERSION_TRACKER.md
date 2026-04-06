@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 80 / 184 files converted
+**Progress:** 89 / 184 files converted
 
 ---
 
@@ -140,18 +140,18 @@
 ## Tier 14 — 3D Shaders & Data Mappings (8 files)
 
 - [x] `src/js/3D/AnimMapper.cpp` (1798 lines) 🔴
-- [ ] `src/js/3D/BoneMapper.cpp` (431 lines)
-- [ ] `src/js/3D/GeosetMapper.cpp` (86 lines)
-- [ ] `src/js/3D/WMOShaderMapper.cpp` (94 lines)
-- [ ] `src/js/3D/ShaderMapper.cpp` (183 lines)
-- [ ] `src/js/3D/Shaders.cpp` (154 lines)
-- [ ] `src/js/3D/Texture.cpp` (43 lines)
-- [ ] `src/js/3D/Skin.cpp` (102 lines)
+- [x] `src/js/3D/BoneMapper.cpp` (431 lines)
+- [x] `src/js/3D/GeosetMapper.cpp` (86 lines)
+- [x] `src/js/3D/WMOShaderMapper.cpp` (94 lines)
+- [x] `src/js/3D/ShaderMapper.cpp` (183 lines)
+- [x] `src/js/3D/Shaders.cpp` (154 lines)
+- [x] `src/js/3D/Texture.cpp` (43 lines)
+- [x] `src/js/3D/Skin.cpp` (102 lines)
 
 ## Tier 15 — 3D Cameras (2 files)
 
-- [ ] `src/js/3D/camera/CameraControlsGL.cpp` (429 lines)
-- [ ] `src/js/3D/camera/CharacterCameraControlsGL.cpp` (178 lines)
+- [x] `src/js/3D/camera/CameraControlsGL.cpp` (429 lines)
+- [x] `src/js/3D/camera/CharacterCameraControlsGL.cpp` (178 lines)
 
 ## Tier 16 — 3D Loaders (13 files)
 

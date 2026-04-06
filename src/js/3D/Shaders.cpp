@@ -4,151 +4,172 @@
 	License: MIT
 */
 
-const fs = require('fs');
-const path = require('path');
-const constants = require('../constants');
-const log = require('../log');
-const ShaderProgram = require('./gl/ShaderProgram');
+#include "Shaders.h"
+#include "../constants.h"
+#include "../log.h"
+#include "gl/ShaderProgram.h"
 
-const SHADER_MANIFEST = {
-	m2: { vert: 'm2.vertex.shader', frag: 'm2.fragment.shader' },
-	wmo: { vert: 'wmo.vertex.shader', frag: 'wmo.fragment.shader' },
-	adt: { vert: 'adt.vertex.shader', frag: 'adt.fragment.shader' },
-	adt_old: { vert: 'adt.vertex.shader', frag: 'adt.fragment.old.shader' },
-	char: { vert: 'char.vertex.shader', frag: 'char.fragment.shader' }
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+
+namespace shaders {
+
+static const std::unordered_map<std::string, ShaderManifestEntry> SHADER_MANIFEST = {
+	{"m2",       {"m2.vertex.shader",   "m2.fragment.shader"}},
+	{"wmo",      {"wmo.vertex.shader",  "wmo.fragment.shader"}},
+	{"adt",      {"adt.vertex.shader",  "adt.fragment.shader"}},
+	{"adt_old",  {"adt.vertex.shader",  "adt.fragment.old.shader"}},
+	{"char",     {"char.vertex.shader", "char.fragment.shader"}}
 };
 
 // cached shader source text
-const source_cache = new Map();
+static std::unordered_map<std::string, ShaderSource> source_cache;
 
 // active shader programs grouped by shader name
-// Map<name, Set<ShaderProgram>>
-const active_programs = new Map();
+// Map<name, Set<ShaderProgram*>>
+static std::unordered_map<std::string, std::unordered_set<gl::ShaderProgram*>> active_programs;
 
 /**
  * Load shader source from disk (cached)
- * @param {string} name
- * @returns {{ vert: string, frag: string }}
+ * @param name
+ * @returns ShaderSource with vert and frag source text
  */
-function get_source(name) {
-	if (source_cache.has(name))
-		return source_cache.get(name);
+const ShaderSource& get_source(const std::string& name) {
+	auto it = source_cache.find(name);
+	if (it != source_cache.end())
+		return it->second;
 
-	const manifest = SHADER_MANIFEST[name];
-	if (!manifest)
-		throw new Error(`Unknown shader: ${name}`);
+	auto manifest_it = SHADER_MANIFEST.find(name);
+	if (manifest_it == SHADER_MANIFEST.end())
+		throw std::runtime_error("Unknown shader: " + name);
 
-	const shader_path = constants.SHADER_PATH;
-	const vert = fs.readFileSync(path.join(shader_path, manifest.vert), 'utf8');
-	const frag = fs.readFileSync(path.join(shader_path, manifest.frag), 'utf8');
+	const auto& manifest = manifest_it->second;
+	const auto shader_path = constants::SHADER_PATH();
 
-	const sources = { vert, frag };
-	source_cache.set(name, sources);
-	return sources;
+	auto read_file = [](const std::filesystem::path& path) -> std::string {
+		std::ifstream file(path, std::ios::in);
+		if (!file.is_open())
+			throw std::runtime_error("Failed to open shader file: " + path.string());
+		std::ostringstream ss;
+		ss << file.rdbuf();
+		return ss.str();
+	};
+
+	ShaderSource sources;
+	sources.vert = read_file(shader_path / manifest.vert);
+	sources.frag = read_file(shader_path / manifest.frag);
+
+	auto [insert_it, inserted] = source_cache.emplace(name, std::move(sources));
+	return insert_it->second;
 }
 
 /**
  * Create and register a shader program
- * @param {GLContext} ctx
- * @param {string} name
- * @returns {ShaderProgram}
+ * @param ctx
+ * @param name
+ * @returns Pointer to a ShaderProgram
  */
-function create_program(ctx, name) {
-	const sources = get_source(name);
-	const program = new ShaderProgram(ctx, sources.vert, sources.frag);
+gl::ShaderProgram* create_program(gl::GLContext& ctx, const std::string& name) {
+	// Wire up the unregister callback on first use
+	if (!gl::ShaderProgram::_unregister_fn) {
+		gl::ShaderProgram::_unregister_fn = [](gl::ShaderProgram* p) {
+			shaders::unregister(p);
+		};
+	}
 
-	if (!program.is_valid())
-		throw new Error(`Failed to compile shader: ${name}`);
+	const auto& sources = get_source(name);
+	auto* program = new gl::ShaderProgram(ctx, sources.vert, sources.frag);
+
+	if (!program->is_valid())
+		throw std::runtime_error("Failed to compile shader: " + name);
 
 	// track for hot-reload
-	program._shader_name = name;
+	program->_shader_name = name;
 
-	if (!active_programs.has(name))
-		active_programs.set(name, new Set());
-
-	active_programs.get(name).add(program);
+	active_programs[name].insert(program);
 
 	return program;
 }
 
 /**
  * Unregister a shader program (call on dispose)
- * @param {ShaderProgram} program
+ * @param program
  */
-function unregister(program) {
-	const name = program._shader_name;
-	if (!name)
+void unregister(gl::ShaderProgram* program) {
+	if (!program)
 		return;
 
-	const programs = active_programs.get(name);
-	if (programs)
-		programs.delete(program);
+	const auto& name = program->_shader_name;
+	if (name.empty())
+		return;
+
+	auto it = active_programs.find(name);
+	if (it != active_programs.end())
+		it->second.erase(program);
 }
 
 /**
  * Reload all shaders from disk
  */
-function reload_all() {
-	log.write('Reloading all shaders...');
+void reload_all() {
+	logging::write("Reloading all shaders...");
 
 	// clear source cache to force re-read from disk
 	source_cache.clear();
 
-	let success_count = 0;
-	let fail_count = 0;
+	size_t success_count = 0;
+	size_t fail_count = 0;
 
-	for (const [name, programs] of active_programs) {
-		if (programs.size === 0)
+	for (auto& [name, programs] : active_programs) {
+		if (programs.empty())
 			continue;
 
 		try {
-			const sources = get_source(name);
+			const auto& sources = get_source(name);
 
-			for (const program of programs) {
-				if (program.recompile(sources.vert, sources.frag)) {
+			for (auto* program : programs) {
+				if (program->recompile(sources.vert, sources.frag)) {
 					success_count++;
 				} else {
 					fail_count++;
-					log.write(`Failed to recompile shader program: ${name}`);
+					logging::write("Failed to recompile shader program: " + name);
 				}
 			}
-		} catch (e) {
-			fail_count += programs.size;
-			log.write(`Failed to reload shader source: ${name} - ${e.message}`);
+		} catch (const std::exception& e) {
+			fail_count += programs.size();
+			logging::write("Failed to reload shader source: " + name + " - " + e.what());
 		}
 	}
 
-	log.write(`Shader reload complete: ${success_count} succeeded, ${fail_count} failed`);
+	logging::write("Shader reload complete: " + std::to_string(success_count) +
+	               " succeeded, " + std::to_string(fail_count) + " failed");
 }
 
 /**
  * Get count of active programs for a shader
- * @param {string} name
- * @returns {number}
+ * @param name
+ * @returns number of active programs
  */
-function get_program_count(name) {
-	const programs = active_programs.get(name);
-	return programs ? programs.size : 0;
+size_t get_program_count(const std::string& name) {
+	auto it = active_programs.find(name);
+	return it != active_programs.end() ? it->second.size() : 0;
 }
 
 /**
  * Get total count of all active programs
- * @returns {number}
+ * @returns total number of active programs
  */
-function get_total_program_count() {
-	let count = 0;
-	for (const programs of active_programs.values())
-		count += programs.size;
+size_t get_total_program_count() {
+	size_t count = 0;
+	for (const auto& [name, programs] : active_programs)
+		count += programs.size();
 
 	return count;
 }
 
-module.exports = {
-	SHADER_MANIFEST,
-	get_source,
-	create_program,
-	unregister,
-	reload_all,
-	get_program_count,
-	get_total_program_count
-};
+} // namespace shaders
