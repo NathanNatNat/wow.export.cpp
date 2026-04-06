@@ -312,3 +312,28 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: Animation channel `target.node` always uses `nodeIndex + 1`, even when `modelsExportWithBonePrefix` is false. This is a bug in the original JS — when prefixes are disabled, `nodeIndex + 1` points to the wrong node (the next bone instead of the current one).
 - **C++**: Uses `actual_node_idx` which correctly resolves to `nodeIndex + 1` when prefixes are enabled and `nodeIndex` when disabled, matching the skin joint logic.
 - **Rationale**: This is a bugfix over the original JS. The skin joints already use conditional logic (`nodeIndex + 1` with prefix, `nodeIndex` without), and animation channels should use the same node index. Using `actual_node_idx` ensures consistency.
+
+### `src/js/3D/renderers/CharMaterialRenderer.cpp` — ACCEPTABLE (Canvas → FBO)
+- **JS**: Creates a hidden HTML `<canvas>` element with a WebGL context for offscreen texture compositing. Uses `document.createElement('canvas')`, `canvas.getContext('webgl')`, and the `char-texture-overlay` module to manage canvas visibility in the DOM.
+- **C++**: Uses an OpenGL FBO (framebuffer object) with color and depth attachments for offscreen rendering. The `char-texture-overlay` DOM management is not needed since there is no HTML DOM — the FBO is self-contained.
+- **Rationale**: There is no HTML DOM or canvas API in the C++ desktop build. An FBO is the standard OpenGL equivalent of an offscreen canvas. The rendering output (pixel data, PNG export) is functionally identical.
+
+### `src/js/3D/renderers/CharMaterialRenderer.cpp` — ACCEPTABLE (CASC source access)
+- **JS**: Accesses CASC files via `core.view.casc.getFile(fileDataID)` which is a dynamically typed reference to the active CASC source instance.
+- **C++**: Uses a `casc::CASC*` member (`casc_source_`) set by the caller via `setCASCSource()` before texture loading. The pointer is set by the character module when creating the renderer.
+- **Rationale**: `core::view->casc` is `nlohmann::json` in the current AppState and cannot hold a typed pointer. The `setCASCSource()` pattern allows callers to provide the active CASC instance explicitly, matching the JS behavior when the calling module is converted.
+
+### `src/js/3D/renderers/CharMaterialRenderer.cpp` — ACCEPTABLE (setTextureTarget signature)
+- **JS**: `setTextureTarget()` takes JS objects (chrCustomizationMaterial, charComponentTextureSection, chrModelMaterial, chrModelTextureLayer) with dynamic property access.
+- **C++**: Takes individual typed parameters (ints, uint32_t) instead of JS objects since the calling module will extract fields before calling.
+- **Rationale**: C++ does not have dynamic property access on objects. The individual parameters faithfully represent each field used from the JS objects. The `CharTextureTarget` struct stores all the same data.
+
+### `src/js/3D/renderers/GridRenderer.cpp` — ACCEPTABLE (Shader version)
+- **JS**: Uses `#version 300 es` (WebGL 2.0 / OpenGL ES 3.0) shaders.
+- **C++**: Uses `#version 460 core` (OpenGL 4.6 core profile) shaders.
+- **Rationale**: The C++ build targets desktop OpenGL 4.6 core profile, not WebGL/ES. The shader logic is identical; only the version declaration differs.
+
+### `src/js/3D/renderers/ShadowPlaneRenderer.cpp` — ACCEPTABLE (Shader version)
+- **JS**: Uses `#version 300 es` (WebGL 2.0 / OpenGL ES 3.0) shaders.
+- **C++**: Uses `#version 460 core` (OpenGL 4.6 core profile) shaders.
+- **Rationale**: Same as GridRenderer — desktop OpenGL 4.6 core profile target.

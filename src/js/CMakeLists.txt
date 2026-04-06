@@ -115,4 +115,7 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/STLWriter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/GLBWriter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/GLTFWriter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/renderers/GridRenderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/renderers/ShadowPlaneRenderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/renderers/CharMaterialRenderer.cpp
 )
