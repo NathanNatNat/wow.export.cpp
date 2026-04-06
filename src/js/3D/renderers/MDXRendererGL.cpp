@@ -395,11 +395,13 @@ void MDXRendererGL::_build_geometry() {
 		std::vector<uint8_t> boneIndices(vertCount * 4, 0);
 		std::vector<uint8_t> boneWeights(vertCount * 4, 0);
 
+		const std::vector<int32_t> default_bone_group{0};
+
 		for (size_t i = 0; i < vertCount; i++) {
 			const uint8_t groupIdx = (i < geoset.vertexGroup.size()) ? geoset.vertexGroup[i] : 0;
 			const std::vector<int32_t>& group = (groupIdx < geoset.groups.size())
 				? geoset.groups[groupIdx]
-				: std::vector<int32_t>{0};
+				: default_bone_group;
 
 			// assign up to 4 bones per vertex with equal weight
 			const size_t boneCount = std::min(group.size(), static_cast<size_t>(4));
