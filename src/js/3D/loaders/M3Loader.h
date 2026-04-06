@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -102,7 +103,7 @@ private:
 	BufferWrapper& data;
 
 	// Owned string block data
-	BufferWrapper* ownedStringBlock = nullptr;
+	std::unique_ptr<BufferWrapper> ownedStringBlock;
 
 	void parseChunk_M3DT(uint32_t chunkSize);
 	void parseChunk_MES3(uint32_t chunkSize);

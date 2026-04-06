@@ -275,8 +275,8 @@ std::vector<uint16_t> M3Loader::ReadBufferAsFormatU16(const std::string& format,
  * @param chunkSize Size of the sub-chunk.
  */
 void M3Loader::parseSubChunk_VSTR(uint32_t chunkSize) {
-	this->ownedStringBlock = new BufferWrapper(this->data.readBuffer(chunkSize, false));
-	this->stringBlock = this->ownedStringBlock;
+	this->ownedStringBlock = std::make_unique<BufferWrapper>(this->data.readBuffer(chunkSize, false));
+	this->stringBlock = this->ownedStringBlock.get();
 }
 
 /**
