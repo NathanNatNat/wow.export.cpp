@@ -253,6 +253,10 @@ public:
 	void _dispose_skin();
 	void dispose();
 
+	// Accessors for private bone data (JS accesses these as public properties)
+	const std::vector<float>& get_bone_matrices() const { return bone_matrices; }
+	const std::vector<int16_t>& get_bone_remap_table() const { return bone_remap_table; }
+
 	// Public state (matches JS properties)
 	std::unique_ptr<M2Loader> m2;
 	gl::ShaderProgram* shader = nullptr;
