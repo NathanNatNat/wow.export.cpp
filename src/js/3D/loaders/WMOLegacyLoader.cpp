@@ -40,6 +40,7 @@ static constexpr uint32_t CHUNK_MOBA = 0x4D4F4241;
 static constexpr uint32_t CHUNK_MOPY = 0x4D4F5059;
 static constexpr uint32_t CHUNK_MOC2 = 0x4D4F4332;
 static constexpr uint32_t CHUNK_MOMO = 0x4F4D4F4D;
+static constexpr uint32_t CHUNK_MOGP_ALPHA = 0x5047474D; // alpha-format MOGP identifier
 
 static constexpr uint32_t LEGACY_OPTIONAL_CHUNKS[] = {
 	CHUNK_MLIQ,  // MLIQ (Liquid)
@@ -116,7 +117,7 @@ void WMOLegacyLoader::_load_alpha_format() {
 
 				d.seek(subNextPos);
 			}
-		} else if (chunkID == CHUNK_MOGP) {
+		} else if (chunkID == CHUNK_MOGP_ALPHA) {
 			// alpha has group data inline after MOMO
 			_parse_alpha_group(d, chunkSize);
 		}
