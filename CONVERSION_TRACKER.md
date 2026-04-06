@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 102 / 184 files converted
+**Progress:** 109 / 184 files converted
 
 ---
 
@@ -171,13 +171,13 @@
 
 ## Tier 17 — 3D Writers (8 files)
 
-- [ ] `src/js/3D/writers/CSVWriter.cpp` (85 lines)
-- [ ] `src/js/3D/writers/JSONWriter.cpp` (47 lines)
-- [ ] `src/js/3D/writers/MTLWriter.cpp` (70 lines)
-- [ ] `src/js/3D/writers/OBJWriter.cpp` (227 lines)
-- [ ] `src/js/3D/writers/SQLWriter.cpp` (233 lines)
-- [ ] `src/js/3D/writers/STLWriter.cpp` (252 lines)
-- [ ] `src/js/3D/writers/GLBWriter.cpp` (75 lines)
+- [x] `src/js/3D/writers/CSVWriter.cpp` (85 lines)
+- [x] `src/js/3D/writers/JSONWriter.cpp` (47 lines)
+- [x] `src/js/3D/writers/MTLWriter.cpp` (70 lines)
+- [x] `src/js/3D/writers/OBJWriter.cpp` (227 lines)
+- [x] `src/js/3D/writers/SQLWriter.cpp` (233 lines)
+- [x] `src/js/3D/writers/STLWriter.cpp` (252 lines)
+- [x] `src/js/3D/writers/GLBWriter.cpp` (75 lines)
 - [ ] `src/js/3D/writers/GLTFWriter.cpp` (1506 lines) 🔴
 
 ## Tier 18 — 3D Renderers (9 files)

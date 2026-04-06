@@ -3,69 +3,47 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const path = require('path');
-const generics = require('../../generics');
-const FileWriter = require('../../file-writer');
-const core = require('../../core');
+#include "MTLWriter.h"
+#include "../../generics.h"
+#include "../../file-writer.h"
+#include "../../core.h"
 
-class MTLWriter {
-	/**
-	 * Construct a new MTLWriter instance.
-	 * @param {string} out 
-	 */
-	constructor(out) {
-		this.out = out;
-		this.materials = [];
-	}
+MTLWriter::MTLWriter(const std::filesystem::path& out)
+	: out(out) {}
 
-	/**
-	 * Add a material to this material library.
-	 * @param {string} name 
-	 * @param {string} file 
-	 */
-	addMaterial(name, file) {
-		this.materials.push({ name, file });
-	}
-
-	/**
-	 * Returns true if this material library is empty.
-	 */
-	get isEmpty() {
-		return this.materials.length === 0;
-	}
-
-	/**
-	 * Write the material library to disk.
-	 * @param {boolean} overwrite
-	 */
-	async write(overwrite = true) {
-		// Don't bother writing an empty material library.
-		if (this.isEmpty)
-			return;
-
-		// If overwriting is disabled, check file existence.
-		if (!overwrite && await generics.fileExists(this.out))
-			return;
-
-		const mtlDir = path.dirname(this.out);
-		await generics.createDirectory(mtlDir);
-
-		const useAbsolute = core.view.config.enableAbsoluteMTLPaths;
-		const writer = new FileWriter(this.out);
-
-		for (const material of this.materials) {
-			await writer.writeLine('newmtl ' + material.name);
-			await writer.writeLine('illum 1');
-
-			let materialFile = material.file;
-			if (useAbsolute)
-				materialFile = path.resolve(mtlDir, materialFile);
-
-			await writer.writeLine('map_Kd ' + materialFile);
-		}
-
-		writer.close();
-	}
+void MTLWriter::addMaterial(const std::string& name, const std::string& file) {
+	materials.push_back({ name, file });
 }
 
-module.exports = MTLWriter;
+bool MTLWriter::isEmpty() const {
+	return materials.empty();
+}
+
+void MTLWriter::write(bool overwrite) {
+	// Don't bother writing an empty material library.
+	if (isEmpty())
+		return;
+
+	// If overwriting is disabled, check file existence.
+	if (!overwrite && generics::fileExists(out))
+		return;
+
+	const auto mtlDir = out.parent_path();
+	generics::createDirectory(mtlDir);
+
+	const bool useAbsolute = core::view->config.value("enableAbsoluteMTLPaths", false);
+	FileWriter writer(out);
+
+	for (const auto& material : materials) {
+		writer.writeLine("newmtl " + material.name);
+		writer.writeLine("illum 1");
+
+		std::string materialFile = material.file;
+		if (useAbsolute)
+			materialFile = std::filesystem::weakly_canonical(mtlDir / materialFile).string();
+
+		writer.writeLine("map_Kd " + materialFile);
+	}
+
+	writer.close();
+}

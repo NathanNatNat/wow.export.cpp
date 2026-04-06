@@ -3,73 +3,55 @@
 	Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
 	License: MIT
  */
-const BufferWrapper = require('../../buffer');
+#include "GLBWriter.h"
+#include "../../buffer.h"
 
-// glb magic number: 'glTF' in ascii
-const GLB_MAGIC = 0x46546C67;
-const GLB_VERSION = 2;
+#include <span>
 
-// chunk types
-const CHUNK_TYPE_JSON = 0x4E4F534A;
-const CHUNK_TYPE_BIN = 0x004E4942;
+GLBWriter::GLBWriter(const std::string& json_string, BufferWrapper& bin_buffer)
+	: json_string(json_string), bin_buffer(bin_buffer) {}
 
-class GLBWriter {
-	/**
-	 * construct glb writer with json and binary data
-	 * @param {string} json_string
-	 * @param {BufferWrapper} bin_buffer
-	 */
-	constructor(json_string, bin_buffer) {
-		this.json_string = json_string;
-		this.bin_buffer = bin_buffer;
-	}
+BufferWrapper GLBWriter::pack() {
+	const auto& json_bytes = reinterpret_cast<const uint8_t*>(json_string.data());
+	const size_t json_len = json_string.size();
 
-	/**
-	 * pack json and binary data into glb container
-	 * @returns {BufferWrapper}
-	 */
-	pack() {
-		const json_buffer = Buffer.from(this.json_string, 'utf8');
+	// calculate padding for json chunk (must be 4-byte aligned, padded with spaces 0x20)
+	const size_t json_padding = (4 - (json_len % 4)) % 4;
+	const size_t json_chunk_length = json_len + json_padding;
 
-		// calculate padding for json chunk (must be 4-byte aligned, padded with spaces 0x20)
-		const json_padding = (4 - (json_buffer.length % 4)) % 4;
-		const json_chunk_length = json_buffer.length + json_padding;
+	// calculate padding for bin chunk (must be 4-byte aligned, padded with zeros)
+	const size_t bin_len = bin_buffer.byteLength();
+	const size_t bin_padding = (4 - (bin_len % 4)) % 4;
+	const size_t bin_chunk_length = bin_len + bin_padding;
 
-		// calculate padding for bin chunk (must be 4-byte aligned, padded with zeros)
-		const bin_padding = (4 - (this.bin_buffer.byteLength % 4)) % 4;
-		const bin_chunk_length = this.bin_buffer.byteLength + bin_padding;
+	// calculate total file length
+	// 12 bytes header + 8 bytes json chunk header + json data + 8 bytes bin chunk header + bin data
+	const size_t total_length = 12 + 8 + json_chunk_length + 8 + bin_chunk_length;
 
-		// calculate total file length
-		// 12 bytes header + 8 bytes json chunk header + json data + 8 bytes bin chunk header + bin data
-		const total_length = 12 + 8 + json_chunk_length + 8 + bin_chunk_length;
+	BufferWrapper glb = BufferWrapper::alloc(total_length, true);
 
-		const glb = BufferWrapper.alloc(total_length, true);
+	// write glb header
+	glb.writeUInt32LE(GLB_MAGIC);
+	glb.writeUInt32LE(GLB_VERSION);
+	glb.writeUInt32LE(static_cast<uint32_t>(total_length));
 
-		// write glb header
-		glb.writeUInt32LE(GLB_MAGIC);
-		glb.writeUInt32LE(GLB_VERSION);
-		glb.writeUInt32LE(total_length);
+	// write json chunk
+	glb.writeUInt32LE(static_cast<uint32_t>(json_chunk_length));
+	glb.writeUInt32LE(CHUNK_TYPE_JSON);
+	glb.writeBuffer(std::span<const uint8_t>(json_bytes, json_len));
 
-		// write json chunk
-		glb.writeUInt32LE(json_chunk_length);
-		glb.writeUInt32LE(CHUNK_TYPE_JSON);
-		glb.writeBuffer(json_buffer);
+	// pad json chunk with spaces
+	for (size_t i = 0; i < json_padding; i++)
+		glb.writeUInt8(0x20);
 
-		// pad json chunk with spaces
-		for (let i = 0; i < json_padding; i++)
-			glb.writeUInt8(0x20);
+	// write bin chunk
+	glb.writeUInt32LE(static_cast<uint32_t>(bin_chunk_length));
+	glb.writeUInt32LE(CHUNK_TYPE_BIN);
+	glb.writeBuffer(std::span<const uint8_t>(bin_buffer.raw().data(), bin_len));
 
-		// write bin chunk
-		glb.writeUInt32LE(bin_chunk_length);
-		glb.writeUInt32LE(CHUNK_TYPE_BIN);
-		glb.writeBuffer(this.bin_buffer.raw);
+	// pad bin chunk with zeros
+	for (size_t i = 0; i < bin_padding; i++)
+		glb.writeUInt8(0x00);
 
-		// pad bin chunk with zeros
-		for (let i = 0; i < bin_padding; i++)
-			glb.writeUInt8(0x00);
-
-		return glb;
-	}
+	return glb;
 }
-
-module.exports = GLBWriter;

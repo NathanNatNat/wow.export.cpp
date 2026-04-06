@@ -107,4 +107,11 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/WMOLegacyLoader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/SKELLoader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/M2Loader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/CSVWriter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/JSONWriter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/MTLWriter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/OBJWriter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/SQLWriter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/STLWriter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/writers/GLBWriter.cpp
 )
