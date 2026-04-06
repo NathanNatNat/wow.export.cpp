@@ -302,3 +302,13 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: `load()`, `loadAnims()`, `loadAnimsForIndex()` are async, loading .anim files from CASC. `getSkin()` is async and loads skin data from CASC. `animFiles` is a JS `Map`. Constructor takes `data` as a parameter.
 - **C++**: All methods are synchronous. CASC .anim file loading is deferred (logs warning instead of loading). `getSkin()` calls `skin.load()` synchronously. `animFiles` is `std::map<uint32_t, BufferWrapper*>`. `read_m2_track` takes `M2Sequence` vector built from animations (matching JS `this.animations` which has `.flags` property).
 - **Rationale**: CASC integration deferred until UI is wired. The `M2Sequence` vector construction from `M2Animation` objects faithfully maps the JS pattern where `this.animations` (with `.flags` field) is passed directly to `read_m2_track`.
+
+### `src/js/3D/writers/GLTFWriter.cpp` — ACCEPTABLE (Generator string)
+- **JS**: Generator field uses `util.format('wow.export v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid)` with NW.js runtime manifest values for product flavour and build GUID.
+- **C++**: Generator reads `selectedFlavour` and `selectedGuid` from `core::view->config` JSON with empty-string defaults. Flavour and GUID are appended to the version string only when present.
+- **Rationale**: NW.js `nw.App.manifest` is a browser-specific API. The C++ equivalent stores these values in the config JSON at runtime when a CASC source is selected. The generator string format matches the JS output when both values are populated.
+
+### `src/js/3D/writers/GLTFWriter.cpp` — ACCEPTABLE (Animation channel node fix)
+- **JS**: Animation channel `target.node` always uses `nodeIndex + 1`, even when `modelsExportWithBonePrefix` is false. This is a bug in the original JS — when prefixes are disabled, `nodeIndex + 1` points to the wrong node (the next bone instead of the current one).
+- **C++**: Uses `actual_node_idx` which correctly resolves to `nodeIndex + 1` when prefixes are enabled and `nodeIndex` when disabled, matching the skin joint logic.
+- **Rationale**: This is a bugfix over the original JS. The skin joints already use conditional logic (`nodeIndex + 1` with prefix, `nodeIndex` without), and animation channels should use the same node index. Using `actual_node_idx` ensures consistency.

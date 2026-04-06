@@ -198,7 +198,13 @@ return;
 if (!overwrite && format == "gltf" && generics::fileExists(outBIN))
 return;
 
-const std::string generator = std::string("wow.export v") + std::string(constants::VERSION);
+// JS: util.format('wow.export v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid)
+// flavour and guid are runtime values set when a CASC source is selected.
+const std::string flavour = core::view->config.value("selectedFlavour", std::string(""));
+const std::string guid = core::view->config.value("selectedGuid", std::string(""));
+const std::string generator = std::string("wow.export v") + std::string(constants::VERSION)
+	+ (flavour.empty() ? "" : " " + flavour)
+	+ (guid.empty() ? "" : " [" + guid + "]");
 nlohmann::json root = {
 {"asset", {
 {"version", "2.0"},
@@ -629,7 +635,7 @@ root["accessors"].back()["count"] = static_cast<int>(bone.translation.values[i].
 root["animations"][i]["channels"].push_back({
 {"sampler", static_cast<int>(root["animations"][i]["samplers"].size() - 1)},
 {"target", {
-{"node", static_cast<int>(nodeIndex + 1)},
+{"node", static_cast<int>(actual_node_idx)},
 {"path", "translation"}
 }}
 });
@@ -751,7 +757,7 @@ root["accessors"].back()["count"] = static_cast<int>(bone.rotation.values[i].siz
 root["animations"][i]["channels"].push_back({
 {"sampler", static_cast<int>(root["animations"][i]["samplers"].size() - 1)},
 {"target", {
-{"node", static_cast<int>(nodeIndex + 1)},
+{"node", static_cast<int>(actual_node_idx)},
 {"path", "rotation"}
 }}
 });
@@ -870,7 +876,7 @@ root["accessors"].back()["count"] = static_cast<int>(bone.scale.values[i].size()
 root["animations"][i]["channels"].push_back({
 {"sampler", static_cast<int>(root["animations"][i]["samplers"].size() - 1)},
 {"target", {
-{"node", static_cast<int>(nodeIndex + 1)},
+{"node", static_cast<int>(actual_node_idx)},
 {"path", "scale"}
 }}
 });
@@ -1457,7 +1463,6 @@ bv_name.starts_with("SCALE_")) {
 // extract animation name from bufferView name
 // name format: TYPE_SUBTYPE_boneIdx_animIdx (e.g. TRANS_TIMESTAMPS_0_1 or TRANS_VALUES_0_1)
 size_t last_underscore = bv_name.rfind('_');
-size_t second_last = bv_name.rfind('_', last_underscore - 1);
 const int anim_idx = std::stoi(bv_name.substr(last_underscore + 1));
 const std::string animName = std::to_string(animations[anim_idx].id) + "-" + std::to_string(animations[anim_idx].variationIndex);
 
