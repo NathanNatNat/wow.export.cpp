@@ -128,4 +128,5 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/exporters/M2LegacyExporter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/exporters/M2Exporter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/exporters/M3Exporter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/exporters/WMOLegacyExporter.cpp
 )
