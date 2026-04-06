@@ -1470,9 +1470,11 @@ shader->set_uniform_mat4("u_projection_matrix", false, projection_matrix);
 shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
 shader->set_uniform_3f("u_view_up", 0, 1, 0);
 
-// JS: performance.now() * 0.001
+// JS: performance.now() * 0.001 — seconds since page load (starts near 0)
+// C++ equivalent: use time since process start so u_time starts near 0 like JS
+static const auto s_render_start = std::chrono::steady_clock::now();
 auto now = std::chrono::steady_clock::now();
-float time_sec = std::chrono::duration<float>(now.time_since_epoch()).count();
+float time_sec = std::chrono::duration<float>(now - s_render_start).count();
 shader->set_uniform_1f("u_time", time_sec);
 
 // bone matrices
