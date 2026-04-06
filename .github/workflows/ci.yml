@@ -10,10 +10,10 @@ permissions:
   contents: read
 
 jobs:
-  # Windows x64 - Self-hosted (MSVC + Ninja)
-  windows-self-hosted:
-    name: Windows MSVC Debug (self-hosted)
-    runs-on: [self-hosted, Windows, X64]
+  # Windows x64 - GitHub-hosted (MSVC + Ninja)
+  windows:
+    name: Windows MSVC Debug
+    runs-on: windows-latest
 
     steps:
       - name: Checkout (with submodules)
@@ -34,3 +34,28 @@ jobs:
 
       - name: "Build (preset: windows-debug)"
         run: cmake --build --preset windows-debug --parallel
+
+  # Linux x64 - GitHub-hosted (GCC + Ninja)
+  linux:
+    name: Linux GCC Debug
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libwayland-dev libxkbcommon-dev libgl1-mesa-dev
+
+      - name: Ensure Jinja2 is installed
+        run: python3 -m pip install --quiet jinja2
+
+      - name: "Configure (preset: linux-gcc-debug)"
+        run: cmake --preset linux-gcc-debug
+
+      - name: "Build (preset: linux-debug)"
+        run: cmake --build --preset linux-debug --parallel
