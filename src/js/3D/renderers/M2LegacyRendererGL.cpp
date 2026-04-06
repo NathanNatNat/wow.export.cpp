@@ -303,24 +303,29 @@ void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& textu
 
 				try {
 					// JS: const data = mpq.getFile(texture_path);
-					// MPQ file access — attempt to load creature skin texture
-					auto file_data = m2->textures[i].getTextureFile();
-					if (file_data.has_value()) {
-						casc::BLPImage blp(std::move(file_data.value()));
-						auto gl_tex = std::make_unique<gl::GLTexture>(ctx);
-						gl::BLPTextureFlags blp_flags;
-						blp_flags.flags = m2->textures[i].flags;
-						gl_tex->set_blp(blp, blp_flags);
-						textures[static_cast<int>(i)] = std::move(gl_tex);
+					// NOTE: The JS loads a NEW file by `texture_path` from the MPQ archive,
+					// replacing the existing texture with the creature skin file.
+					// This requires MPQ archive access (core.view.mpq) which is not yet wired.
+					// When MPQ integration is available, load BufferWrapper from
+					// mpq->getFile(texture_path) and create a BLPImage from that data.
+					// For now, this function is a no-op until MPQ is integrated.
+					(void)texture_path;
 
-						// update texture ribbon
-						if (useRibbon) {
-							// JS: textureRibbon.setSlotFileLegacy(i, texture_path, this.syncID);
-							// JS: textureRibbon.setSlotSrc(i, blp.getDataURL(0b0111), this.syncID);
-						}
-
-						logging::write(std::format("Applied creature skin texture {}: {}", static_cast<int>(i), texture_path));
-					}
+					// TODO(mpq): Uncomment and wire when MPQ integration is available:
+					// auto file_data = mpq->getFile(texture_path);
+					// if (file_data) {
+					//     casc::BLPImage blp(BufferWrapper::from(file_data.value()));
+					//     auto gl_tex = std::make_unique<gl::GLTexture>(ctx);
+					//     gl::BLPTextureFlags blp_flags;
+					//     blp_flags.flags = m2->textures[i].flags;
+					//     gl_tex->set_blp(blp, blp_flags);
+					//     textures[static_cast<int>(i)] = std::move(gl_tex);
+					//     if (useRibbon) {
+					//         textureRibbon.setSlotFileLegacy(i, texture_path, syncID);
+					//         textureRibbon.setSlotSrc(i, blp.getDataURL(0b0111), syncID);
+					//     }
+					//     logging::write(std::format("Applied creature skin texture {}: {}", static_cast<int>(i), texture_path));
+					// }
 				} catch (const std::exception& e) {
 					logging::write(std::format("Failed to apply creature skin texture {}: {}", texture_path, e.what()));
 				}
