@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 119 / 184 files converted
+**Progress:** 121 / 184 files converted
 
 ---
 
@@ -194,8 +194,8 @@
 
 ## Tier 19 — 3D Exporters (7 files)
 
-- [ ] `src/js/3D/exporters/CharacterExporter.cpp` (349 lines)
-- [ ] `src/js/3D/exporters/M2LegacyExporter.cpp` (407 lines)
+- [x] `src/js/3D/exporters/CharacterExporter.cpp` (349 lines)
+- [x] `src/js/3D/exporters/M2LegacyExporter.cpp` (407 lines)
 - [ ] `src/js/3D/exporters/M2Exporter.cpp` (1215 lines) 🔴
 - [ ] `src/js/3D/exporters/M3Exporter.cpp` (257 lines)
 - [ ] `src/js/3D/exporters/WMOLegacyExporter.cpp` (590 lines)
