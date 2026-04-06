@@ -1,105 +1,115 @@
-class M2Track {
-	/**
-	 * Construct a new M2Track instance.
-	 * @param {number} globalSeq
-	 * @param {number} interpolation
-	 * @param {Array} timestamps
-	 * @param {Array} values
-	 * @param {Array} timestampOffsets - array of {count, offset} per animation
-	 * @param {Array} valueOffsets - array of {count, offset} per animation
-	 */
-	constructor(globalSeq, interpolation, timestamps, values, timestampOffsets = null, valueOffsets = null) {
-		this.globalSeq = globalSeq;
-		this.interpolation = interpolation;
-		this.timestamps = timestamps;
-		this.values = values;
-		this.timestampOffsets = timestampOffsets;
-		this.valueOffsets = valueOffsets;
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
+
+#include "M2Generics.h"
+#include "../../buffer.h"
+
+#include <stdexcept>
+#include <string>
+
+M2Track::M2Track(uint16_t globalSeq, uint16_t interpolation,
+                 std::vector<std::vector<M2Value>> timestamps,
+                 std::vector<std::vector<M2Value>> values,
+                 std::vector<M2ArrayOffset> timestampOffsets,
+                 std::vector<M2ArrayOffset> valueOffsets)
+	: globalSeq(globalSeq),
+	  interpolation(interpolation),
+	  timestamps(std::move(timestamps)),
+	  values(std::move(values)),
+	  timestampOffsets(std::move(timestampOffsets)),
+	  valueOffsets(std::move(valueOffsets)) {
+}
+
+/**
+ * Read a single M2 value element from a BufferWrapper.
+ */
+static M2Value read_value(BufferWrapper& buf, M2DataType dataType) {
+	switch (dataType) {
+		case M2DataType::uint32:
+			return buf.readUInt32LE();
+		case M2DataType::int16:
+			return buf.readInt16LE();
+		case M2DataType::float3:
+			return buf.readFloatLE(3);
+		case M2DataType::float4:
+			return buf.readFloatLE(4);
+		case M2DataType::compquat: {
+			auto raw = buf.readUInt16LE(4);
+			std::vector<float> result(4);
+			for (int k = 0; k < 4; k++)
+				result[k] = (static_cast<float>(raw[k]) - 32767.0f) / 32768.0f;
+			return result;
+		}
+		case M2DataType::uint8:
+			return buf.readUInt8();
+		default:
+			throw std::runtime_error("Unknown data type");
+	}
+}
+
+/**
+ * Get the byte size of a single element for a given data type.
+ */
+static uint32_t value_size(M2DataType dataType) {
+	switch (dataType) {
+		case M2DataType::uint32:  return 4;
+		case M2DataType::int16:   return 2;
+		case M2DataType::float3:  return 12;
+		case M2DataType::float4:  return 16;
+		case M2DataType::compquat: return 8;
+		case M2DataType::uint8:   return 1;
+		default: return 0;
 	}
 }
 
 // See https://wowdev.wiki/M2#Standard_animation_block
-function read_m2_array_array(data, ofs, dataType, useAnims = false, animFiles = new Map(), storeOffsets = false, sequences = null) {
-	const arrCount = data.readUInt32LE();
-	const arrOfs = data.readUInt32LE();
+static std::vector<std::vector<M2Value>> read_m2_array_array_internal(
+	BufferWrapper& data, uint32_t ofs, M2DataType dataType,
+	bool useAnims,
+	std::map<uint32_t, BufferWrapper*>& animFiles,
+	bool storeOffsets,
+	const std::vector<M2Sequence>* sequences,
+	std::vector<M2ArrayOffset>* outOffsets)
+{
+	const uint32_t arrCount = data.readUInt32LE();
+	const uint32_t arrOfs = data.readUInt32LE();
 
-	const base = data.offset;
+	const size_t base = data.offset();
 	data.seek(ofs + arrOfs);
 
-	const arr = Array(arrCount);
-	const offsets = storeOffsets ? Array(arrCount) : null;
+	std::vector<std::vector<M2Value>> arr(arrCount);
+	if (storeOffsets && outOffsets)
+		outOffsets->resize(arrCount);
 
-	for (let i = 0; i < arrCount; i++) {
-		const subArrCount = data.readUInt32LE();
-		const subArrOfs = data.readUInt32LE();
-		const subBase = data.offset;
+	for (uint32_t i = 0; i < arrCount; i++) {
+		const uint32_t subArrCount = data.readUInt32LE();
+		const uint32_t subArrOfs = data.readUInt32LE();
+		const size_t subBase = data.offset();
 
-		if (storeOffsets)
-			offsets[i] = { count: subArrCount, offset: subArrOfs };
+		if (storeOffsets && outOffsets)
+			(*outOffsets)[i] = { subArrCount, subArrOfs };
 
 		// data lives in external .anim file, skip reading from M2 buffer
-		if (sequences && i < sequences.length && (sequences[i].flags & 0x20) === 0) {
-			arr[i] = [];
+		if (sequences && i < sequences->size() && ((*sequences)[i].flags & 0x20) == 0) {
+			arr[i] = {};
 			data.seek(subBase);
 			continue;
 		}
 
 		data.seek(ofs + subArrOfs);
 
-		arr[i] = Array(subArrCount);
-		for (let j = 0; j < subArrCount; j++) {
-			if (useAnims && animFiles.has(i)) {
-				switch (dataType) {
-					case 'uint32':
-						animFiles.get(i).seek(subArrOfs + (j * 4));
-						arr[i][j] = animFiles.get(i).readUInt32LE();
-						break;
-					case 'int16':
-						animFiles.get(i).seek(subArrOfs + (j * 2));
-						arr[i][j] = animFiles.get(i).readInt16LE();
-						break;
-					case 'float3':
-						animFiles.get(i).seek(subArrOfs + (j * 12));
-						arr[i][j] = animFiles.get(i).readFloatLE(3);
-						break;
-					case 'float4':
-						animFiles.get(i).seek(subArrOfs + (j * 16));
-						arr[i][j] = animFiles.get(i).readFloatLE(4);
-						break;
-					case 'compquat':
-						animFiles.get(i).seek(subArrOfs + (j * 8));
-						arr[i][j] = animFiles.get(i).readUInt16LE(4).map(e => (e - 32767) / 32768);
-						break;
-					case 'uint8':
-						animFiles.get(i).seek(subArrOfs + j);
-						arr[i][j] = animFiles.get(i).readUInt8();
-						break;
-					default:
-						throw new Error(`Unhandled data type: ${dataType}`);
-				}
+		arr[i].resize(subArrCount);
+		for (uint32_t j = 0; j < subArrCount; j++) {
+			if (useAnims && animFiles.count(i)) {
+				auto* animBuf = animFiles[i];
+				const uint32_t elemSize = value_size(dataType);
+				animBuf->seek(subArrOfs + (j * elemSize));
+				arr[i][j] = read_value(*animBuf, dataType);
 			} else {
-				switch (dataType) {
-					case 'uint32':
-						arr[i][j] = data.readUInt32LE();
-						break;
-					case 'int16':
-						arr[i][j] = data.readInt16LE();
-						break;
-					case 'float3':
-						arr[i][j] = data.readFloatLE(3);
-						break;
-					case 'float4':
-						arr[i][j] = data.readFloatLE(4);
-						break;
-					case 'compquat':
-						arr[i][j] = data.readUInt16LE(4).map(e => (e - 32767) / 32768);
-						break;
-					case 'uint8':
-						arr[i][j] = data.readUInt8();
-						break;
-					default:
-						throw new Error(`Unknown data type: ${dataType}`);
-				}
+				arr[i][j] = read_value(data, dataType);
 			}
 		}
 
@@ -107,111 +117,117 @@ function read_m2_array_array(data, ofs, dataType, useAnims = false, animFiles = 
 	}
 
 	data.seek(base);
-
-	if (storeOffsets)
-		return { arr, offsets };
-
 	return arr;
 }
 
 // See https://wowdev.wiki/M2#Standard_animation_block
-function read_m2_track(data, ofs, dataType, useAnims = false, animFiles = new Map(), storeOffsets = false, sequences = null) {
-	const interpolation = data.readUInt16LE();
-	const globalSeq = data.readUInt16LE();
+std::vector<std::vector<M2Value>> read_m2_array_array(
+	BufferWrapper& data, uint32_t ofs, M2DataType dataType,
+	bool useAnims,
+	std::map<uint32_t, BufferWrapper*> animFiles,
+	bool storeOffsets,
+	const std::vector<M2Sequence>* sequences)
+{
+	return read_m2_array_array_internal(data, ofs, dataType, useAnims, animFiles, storeOffsets, sequences, nullptr);
+}
 
-	let timestamps, values;
-	let timestampOffsets = null, valueOffsets = null;
+M2ArrayArrayResult read_m2_array_array_with_offsets(
+	BufferWrapper& data, uint32_t ofs, M2DataType dataType,
+	bool useAnims,
+	std::map<uint32_t, BufferWrapper*> animFiles,
+	const std::vector<M2Sequence>* sequences)
+{
+	M2ArrayArrayResult result;
+	result.arr = read_m2_array_array_internal(data, ofs, dataType, useAnims, animFiles, true, sequences, &result.offsets);
+	return result;
+}
+
+// See https://wowdev.wiki/M2#Standard_animation_block
+M2Track read_m2_track(
+	BufferWrapper& data, uint32_t ofs, M2DataType dataType,
+	bool useAnims,
+	std::map<uint32_t, BufferWrapper*> animFiles,
+	bool storeOffsets,
+	const std::vector<M2Sequence>* sequences)
+{
+	const uint16_t interpolation = data.readUInt16LE();
+	const uint16_t globalSeq = data.readUInt16LE();
+
+	std::vector<std::vector<M2Value>> timestamps;
+	std::vector<std::vector<M2Value>> values;
+	std::vector<M2ArrayOffset> timestampOffsets;
+	std::vector<M2ArrayOffset> valueOffsets;
 
 	if (useAnims) {
-		timestamps = read_m2_array_array(data, ofs, 'uint32', useAnims, animFiles, false, sequences);
+		timestamps = read_m2_array_array(data, ofs, M2DataType::uint32, useAnims, animFiles, false, sequences);
 		values = read_m2_array_array(data, ofs, dataType, useAnims, animFiles, false, sequences);
 	} else if (storeOffsets) {
-		const tsResult = read_m2_array_array(data, ofs, 'uint32', false, animFiles, true, sequences);
-		timestamps = tsResult.arr;
-		timestampOffsets = tsResult.offsets;
+		auto tsResult = read_m2_array_array_with_offsets(data, ofs, M2DataType::uint32, false, {}, sequences);
+		timestamps = std::move(tsResult.arr);
+		timestampOffsets = std::move(tsResult.offsets);
 
-		const valResult = read_m2_array_array(data, ofs, dataType, false, animFiles, true, sequences);
-		values = valResult.arr;
-		valueOffsets = valResult.offsets;
+		auto valResult = read_m2_array_array_with_offsets(data, ofs, dataType, false, {}, sequences);
+		values = std::move(valResult.arr);
+		valueOffsets = std::move(valResult.offsets);
 	} else {
-		timestamps = read_m2_array_array(data, ofs, 'uint32', false, new Map(), false, sequences);
-		values = read_m2_array_array(data, ofs, dataType, false, new Map(), false, sequences);
+		std::map<uint32_t, BufferWrapper*> emptyMap;
+		timestamps = read_m2_array_array(data, ofs, M2DataType::uint32, false, std::move(emptyMap), false, sequences);
+		std::map<uint32_t, BufferWrapper*> emptyMap2;
+		values = read_m2_array_array(data, ofs, dataType, false, std::move(emptyMap2), false, sequences);
 	}
 
-	return new M2Track(globalSeq, interpolation, timestamps, values, timestampOffsets, valueOffsets);
+	return M2Track(globalSeq, interpolation,
+	               std::move(timestamps), std::move(values),
+	               std::move(timestampOffsets), std::move(valueOffsets));
 }
 
 /**
  * Patch a single animation slot in a track using external .anim data.
- * @param {M2Track} track
- * @param {number} animIndex
- * @param {BufferWrapper} animBuffer
- * @param {string} valueType
+ * @param track
+ * @param animIndex
+ * @param animBuffer
+ * @param valueType
  */
-function patch_track_animation(track, animIndex, animBuffer, valueType) {
-	if (!track.timestampOffsets || !track.valueOffsets)
+void patch_track_animation(M2Track& track, uint32_t animIndex,
+                           BufferWrapper& animBuffer, M2DataType valueType)
+{
+	if (track.timestampOffsets.empty() || track.valueOffsets.empty())
 		return;
 
-	if (animIndex >= track.timestampOffsets.length)
+	if (animIndex >= track.timestampOffsets.size())
 		return;
 
-	const tsInfo = track.timestampOffsets[animIndex];
-	const valInfo = track.valueOffsets[animIndex];
+	const auto& tsInfo = track.timestampOffsets[animIndex];
+	const auto& valInfo = track.valueOffsets[animIndex];
 
 	// bounds check: ensure offsets fit within the .anim buffer
-	const VALUE_SIZES = { uint32: 4, int16: 2, float3: 12, float4: 16, compquat: 8, uint8: 1 };
-	const valElemSize = VALUE_SIZES[valueType] ?? 0;
-	const tsEnd = tsInfo.offset + tsInfo.count * 4;
-	const valEnd = valInfo.offset + valInfo.count * valElemSize;
+	const uint32_t valElemSize = value_size(valueType);
+	const uint32_t tsEnd = tsInfo.offset + tsInfo.count * 4;
+	const uint32_t valEnd = valInfo.offset + valInfo.count * valElemSize;
 
-	if (tsEnd > animBuffer.byteLength || valEnd > animBuffer.byteLength)
+	if (tsEnd > animBuffer.byteLength() || valEnd > animBuffer.byteLength())
 		return;
 
 	// read timestamps from .anim buffer
-	const timestamps = Array(tsInfo.count);
-	for (let j = 0; j < tsInfo.count; j++) {
+	std::vector<M2Value> timestamps(tsInfo.count);
+	for (uint32_t j = 0; j < tsInfo.count; j++) {
 		animBuffer.seek(tsInfo.offset + (j * 4));
 		timestamps[j] = animBuffer.readUInt32LE();
 	}
-	track.timestamps[animIndex] = timestamps;
+	track.timestamps[animIndex] = std::move(timestamps);
 
 	// read values from .anim buffer
-	const values = Array(valInfo.count);
-	for (let j = 0; j < valInfo.count; j++) {
-		switch (valueType) {
-			case 'float3':
-				animBuffer.seek(valInfo.offset + (j * 12));
-				values[j] = animBuffer.readFloatLE(3);
-				break;
-			case 'compquat':
-				animBuffer.seek(valInfo.offset + (j * 8));
-				values[j] = animBuffer.readUInt16LE(4).map(e => (e - 32767) / 32768);
-				break;
-			case 'float4':
-				animBuffer.seek(valInfo.offset + (j * 16));
-				values[j] = animBuffer.readFloatLE(4);
-				break;
-			case 'int16':
-				animBuffer.seek(valInfo.offset + (j * 2));
-				values[j] = animBuffer.readInt16LE();
-				break;
-			case 'uint32':
-				animBuffer.seek(valInfo.offset + (j * 4));
-				values[j] = animBuffer.readUInt32LE();
-				break;
-			case 'uint8':
-				animBuffer.seek(valInfo.offset + j);
-				values[j] = animBuffer.readUInt8();
-				break;
-		}
+	std::vector<M2Value> values(valInfo.count);
+	for (uint32_t j = 0; j < valInfo.count; j++) {
+		const uint32_t elemSize = value_size(valueType);
+		animBuffer.seek(valInfo.offset + (j * elemSize));
+		values[j] = read_value(animBuffer, valueType);
 	}
 
-	track.values[animIndex] = values;
+	track.values[animIndex] = std::move(values);
 }
 
 // See https://wowdev.wiki/Common_Types#CAaBox
-function read_caa_bb(data) {
-	return { min: data.readFloatLE(3), max: data.readFloatLE(3) };
+CAaBB read_caa_bb(BufferWrapper& data) {
+	return { data.readFloatLE(3), data.readFloatLE(3) };
 }
-
-module.exports = { M2Track, read_m2_array_array, read_m2_track, read_caa_bb, patch_track_animation }
