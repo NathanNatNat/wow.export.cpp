@@ -434,13 +434,16 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 	} else {
 		auto wdtFile = casc->getVirtualFileByName(prefix + ".wdt");
 
+		// Write the raw WDT file before moving data into the cache entry.
+		if (isRawExport)
+			wdtFile.writeToFile(dir / (mapDir + ".wdt"));
+
 		auto entry = std::make_unique<WDTCacheEntry>(std::move(wdtFile));
 		entry->loader->load();
 		wdt = entry->loader.get();
 		wdtCache[mapDir] = std::move(entry);
 
 		if (isRawExport) {
-			wdtFile.writeToFile(dir / (mapDir + ".wdt"));
 
 			if (wdt->lgtFileDataID > 0) {
 				auto lgtFile = casc->getVirtualFileByID(wdt->lgtFileDataID);
@@ -1498,7 +1501,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 							if (model.Rotation.size() >= 4) {
 								rotX = model.Rotation[0]; rotY = model.Rotation[1]; rotZ = model.Rotation[2]; rotW = model.Rotation[3];
 							}
-							scaleFactor = model.scale;
+							scaleFactor = model.scale / 1024.0f;
 							modelId = model.uniqueId;
 						} else {
 							if (model.position.size() >= 3) {
@@ -1730,6 +1733,20 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				inst["yOffset"] = instance.yOffset;
 				inst["width"] = instance.width;
 				inst["height"] = instance.height;
+				inst["offsetExistsBitmap"] = instance.offsetExistsBitmap;
+				inst["offsetVertexData"] = instance.offsetVertexData;
+				inst["bitmap"] = instance.bitmap;
+
+				// Serialize vertexData sub-object.
+				nlohmann::json vd;
+				vd["height"] = instance.vertexData.height;
+				vd["depth"] = instance.vertexData.depth;
+				nlohmann::json uvArr = nlohmann::json::array();
+				for (const auto& uv : instance.vertexData.uv)
+					uvArr.push_back({ uv.x, uv.y });
+				vd["uv"] = uvArr;
+				inst["vertexData"] = vd;
+
 				inst["worldPosition"] = { worldX, worldY, worldZ };
 				inst["terrainChunkPosition"] = { chunkX2, chunkY2, chunkZ2 };
 
@@ -1737,7 +1754,10 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 			}
 
 			enhancedChunk["instances"] = enhancedInstances;
-			enhancedChunk["attributes"] = nlohmann::json::object(); // Simplified from full LiquidAttributes
+			nlohmann::json attrs;
+			attrs["fishable"] = chunk.attributes.fishable;
+			attrs["deep"] = chunk.attributes.deep;
+			enhancedChunk["attributes"] = attrs;
 			enhancedLiquidChunks.push_back(enhancedChunk);
 		}
 
@@ -1792,14 +1812,13 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				if (config.value("exportFoliageMeta", false) && foliageEffectCache.find(layer.effectID) == foliageEffectCache.end()) {
 					foliageJSON = std::make_unique<JSONWriter>(foliageDir / (std::to_string(layer.effectID) + ".json"));
 
-					// Serialize groundEffectTexture data record as JSON.
-					nlohmann::json recordJson;
+					// Serialize groundEffectTexture data record fields at root level.
+					// JS: foliageJSON.data = groundEffectTexture (spread all fields at root).
 					for (const auto& [key, val] : *groundEffectTexture) {
 						std::visit([&](const auto& v) {
-							recordJson[key] = v;
+							foliageJSON->addProperty(key, v);
 						}, val);
 					}
-					foliageJSON->addProperty("data", recordJson);
 
 					foliageEffectCache.insert(layer.effectID);
 				}
