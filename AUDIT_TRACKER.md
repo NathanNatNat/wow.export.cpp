@@ -284,9 +284,9 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **Rationale**: C++ requires default constructibility for value types stored in vectors when using `resize()`. The default values (0, empty) are safe sentinel values that indicate an uninitialized track.
 
 ### `src/js/3D/loaders/WMOLoader.cpp` — ACCEPTABLE (Structural)
-- **JS**: Uses a handler dispatch object (`WMOChunkHandlers`) mapping chunk IDs to handler functions. `getGroup()` is async and loads group data from CASC on demand. Constructor accepts either string or number `fileID`.
-- **C++**: Chunk dispatch uses a switch statement calling named member functions. `getGroup()` is synchronous and currently throws when group loading is needed (CASC integration not yet wired). Two constructor overloads handle string vs. numeric fileID.
-- **Rationale**: C++ cannot use JS's dynamic dispatch pattern. Switch statements provide equivalent dispatch. CASC file loading will be wired when UI integration is complete.
+- **JS**: Uses a handler dispatch object (`WMOChunkHandlers`) mapping chunk IDs to handler functions. `getGroup()` is async and loads group data from CASC on demand. Constructor accepts either string or number `fileID`. MOGP handler writes `this.flags` as uint32, overwriting the MOHD uint16 `this.flags` (works in JS due to dynamic typing).
+- **C++**: Chunk dispatch uses a switch statement calling named member functions. `getGroup()` is synchronous and currently throws when group loading is needed (CASC integration not yet wired). Two constructor overloads handle string vs. numeric fileID. MOGP's `this.flags` (uint32) is renamed to `groupFlags` to avoid type conflict with MOHD's `flags` (uint16).
+- **Rationale**: C++ cannot use JS's dynamic dispatch pattern. Switch statements provide equivalent dispatch. CASC file loading will be wired when UI integration is complete. The `groupFlags` rename is necessary because C++ uses static typing — a single member cannot be both uint16 and uint32. In practice, root WMOs use `flags` (MOHD) and group WMOs use `groupFlags` (MOGP), so they never conflict.
 
 ### `src/js/3D/loaders/WMOLegacyLoader.cpp` — ACCEPTABLE (Structural)
 - **JS**: Extends `WMOLoader` patterns for legacy (alpha/pre-vanilla) WMO files. Uses handler dispatch objects. `getGroup()` is async and loads groups from MPQ.
