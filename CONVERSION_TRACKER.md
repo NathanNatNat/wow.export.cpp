@@ -185,7 +185,7 @@
 - [x] `src/js/3D/renderers/GridRenderer.cpp` (152 lines)
 - [x] `src/js/3D/renderers/ShadowPlaneRenderer.cpp` (166 lines)
 - [x] `src/js/3D/renderers/CharMaterialRenderer.cpp` (421 lines)
-- [x] `src/js/3D/renderers/M2LegacyRendererGL.cpp` (1055 lines) 🟢
+- [x] `src/js/3D/renderers/M2LegacyRendererGL.cpp` (1055 lines)
 - [x] `src/js/3D/renderers/MDXRendererGL.cpp` (808 lines) 🔴
 - [ ] `src/js/3D/renderers/M2RendererGL.cpp` (1650 lines) 🔴
 - [ ] `src/js/3D/renderers/M3RendererGL.cpp` (309 lines)
