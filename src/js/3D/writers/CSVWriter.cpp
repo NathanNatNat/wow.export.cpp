@@ -3,84 +3,84 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const generics = require('../../generics');
-const path = require('path');
-const FileWriter = require('../../file-writer');
+#include "CSVWriter.h"
+#include "../../generics.h"
+#include "../../file-writer.h"
 
-class CSVWriter {
-	/**
-	 * Construct a new CSVWriter instance.
-	 * @param {string} out 
-	 */
-	constructor(out) {
-		this.out = out;
-		this.fields = [];
-		this.rows = [];
-	}
+#include <algorithm>
 
-	/**
-	 * Add fields to this CSV.
-	 * @param  {...string} fields 
-	 */
-	addField(...fields) {
-		this.fields.push(...fields);
-	}
+CSVWriter::CSVWriter(const std::filesystem::path& out)
+	: out(out) {}
 
-	/**
-	 * Add a row to this CSV.
-	 * @param {object} row
-	 */
-	addRow(row) {
-		this.rows.push(row);
-	}
-
-	/**
-	 * Escape a CSV field value if it contains special characters.
-	 * @param {*} value - The value to escape
-	 * @returns {string} - The escaped value
-	 */
-	escapeCSVField(value) {
-		if (value === null || value === undefined)
-			return '';
-		
-		const str = value.toString();
-		if (str.includes(';') || str.includes('"') || str.includes('\n'))
-			return '"' + str.replace(/"/g, '""') + '"';
-		
-		return str;
-	}
-
-	/**
-	 * Write the CSV to disk.
-	 * @param {boolean} overwrite
-	 */
-	async write(overwrite = true) {
-		// Don't bother writing an empty CSV file.
-		if (this.rows.length === 0)
-			return;
-
-		// If overwriting is disabled, check file existence.
-		if (!overwrite && await generics.fileExists(this.out))
-			return;
-
-		await generics.createDirectory(path.dirname(this.out));
-		const writer = new FileWriter(this.out);
-
-		// Write header.
-		await writer.writeLine(this.fields.map(field => this.escapeCSVField(field)).join(';'));
-
-		// Write rows.
-		const nFields = this.fields.length;
-		for (const row of this.rows) {
-			const rowOut = new Array(nFields);
-			for (let i = 0; i < nFields; i++)
-				rowOut[i] = this.escapeCSVField(row[this.fields[i]]);
-
-			await writer.writeLine(rowOut.join(';'));
-		}
-
-		writer.close();
-	}
+void CSVWriter::addField(const std::string& field) {
+	fields.push_back(field);
 }
 
-module.exports = CSVWriter;
+void CSVWriter::addField(const std::vector<std::string>& fields) {
+	this->fields.insert(this->fields.end(), fields.begin(), fields.end());
+}
+
+void CSVWriter::addRow(const std::unordered_map<std::string, std::string>& row) {
+	rows.push_back(row);
+}
+
+std::string CSVWriter::escapeCSVField(const std::string& value) const {
+	if (value.empty())
+		return "";
+
+	if (value.find(';') != std::string::npos ||
+		value.find('"') != std::string::npos ||
+		value.find('\n') != std::string::npos) {
+		// Escape double quotes by doubling them
+		std::string escaped;
+		escaped.reserve(value.size() + 2);
+		escaped += '"';
+		for (char c : value) {
+			if (c == '"')
+				escaped += "\"\"";
+			else
+				escaped += c;
+		}
+		escaped += '"';
+		return escaped;
+	}
+
+	return value;
+}
+
+void CSVWriter::write(bool overwrite) {
+	// Don't bother writing an empty CSV file.
+	if (rows.empty())
+		return;
+
+	// If overwriting is disabled, check file existence.
+	if (!overwrite && generics::fileExists(out))
+		return;
+
+	generics::createDirectory(out.parent_path());
+	FileWriter writer(out);
+
+	// Write header.
+	std::string header;
+	for (size_t i = 0; i < fields.size(); i++) {
+		if (i > 0)
+			header += ';';
+		header += escapeCSVField(fields[i]);
+	}
+	writer.writeLine(header);
+
+	// Write rows.
+	const size_t nFields = fields.size();
+	for (const auto& row : rows) {
+		std::string rowOut;
+		for (size_t i = 0; i < nFields; i++) {
+			if (i > 0)
+				rowOut += ';';
+			auto it = row.find(fields[i]);
+			rowOut += escapeCSVField(it != row.end() ? it->second : "");
+		}
+		writer.writeLine(rowOut);
+	}
+
+	writer.close();
+}

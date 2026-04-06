@@ -3,226 +3,159 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const path = require('path');
-const constants = require('../../constants');
-const generics = require('../../generics');
-const FileWriter = require('../../file-writer');
+#include "OBJWriter.h"
+#include "../../constants.h"
+#include "../../generics.h"
+#include "../../file-writer.h"
 
-class OBJWriter {
-	/**
-	 * Construct a new OBJWriter instance.
-	 * @param {string} out Output path to write to.
-	 */
-	constructor(out) {
-		this.out = out;
+#include <unordered_map>
+#include <unordered_set>
+#include <string>
 
-		this.verts = [];
-		this.normals = [];
-		this.uvs = [];
+OBJWriter::OBJWriter(const std::filesystem::path& out)
+	: out(out), name("Mesh"), vertex_offset(0) {}
 
-		this.meshes = [];
-		this.name = 'Mesh';
+void OBJWriter::setMaterialLibrary(const std::string& name) {
+	mtl = name;
+}
 
-		// track vertex offsets for appending additional models
-		this.vertex_offset = 0;
-	}
-	
-	/**
-	 * Set the name of the material library.
-	 * @param {string} name 
-	 */
-	setMaterialLibrary(name) {
-		this.mtl = name;
-	}
+void OBJWriter::setName(const std::string& name) {
+	this->name = name;
+}
 
-	/**
-	 * Set the name of this model.
-	 * @param {string} name 
-	 */
-	setName(name) {
-		this.name = name;
-	}
+void OBJWriter::setVertArray(const std::vector<float>& verts) {
+	this->verts = verts;
+}
 
-	/**
-	 * Set the vertex array for this writer.
-	 * @param {Array} verts 
-	 */
-	setVertArray(verts) {
-		this.verts = verts;
-	}
+void OBJWriter::setNormalArray(const std::vector<float>& normals) {
+	this->normals = normals;
+}
 
-	/**
-	 * Set the normals array for this writer.
-	 * @param {Array} normals 
-	 */
-	setNormalArray(normals) {
-		this.normals = normals;
-	}
+void OBJWriter::addUVArray(const std::vector<float>& uv) {
+	uvs.push_back(uv);
+}
 
-	/**
-	 * Add a UV array for this writer.
-	 * @param {Array} uv 
-	 */
-	addUVArray(uv) {
-		this.uvs.push(uv);
-	}
+void OBJWriter::addMesh(const std::string& name, const std::vector<uint32_t>& triangles, const std::string& matName) {
+	meshes.push_back({ name, triangles, matName, vertex_offset });
+}
 
-	/**
-	 * Add a mesh to this writer.
-	 * @param {string} name
-	 * @param {Array} triangles
-	 * @param {string} matName
-	 */
-	addMesh(name, triangles, matName) {
-		this.meshes.push({ name, triangles, matName, vertexOffset: this.vertex_offset });
-	}
+void OBJWriter::appendGeometry(const std::vector<float>& verts, const std::vector<float>& normals, const std::vector<std::vector<float>>& uvArrays) {
+	// calculate current vertex count before appending
+	const size_t current_vertex_count = this->verts.size() / 3;
+	vertex_offset = current_vertex_count;
 
-	/**
-	 * Append additional geometry from another model.
-	 * Call this after setting base model data and adding its meshes.
-	 * @param {Float32Array|Array} verts - vertex array (x,y,z triplets)
-	 * @param {Float32Array|Array} normals - normal array (x,y,z triplets)
-	 * @param {Array<Float32Array|Array>} uvArrays - array of UV arrays
-	 */
-	appendGeometry(verts, normals, uvArrays) {
-		// calculate current vertex count before appending
-		const current_vertex_count = this.verts.length / 3;
-		this.vertex_offset = current_vertex_count;
+	// append vertices
+	if (!verts.empty())
+		this->verts.insert(this->verts.end(), verts.begin(), verts.end());
 
-		// append vertices
-		if (verts) {
-			if (Array.isArray(this.verts))
-				this.verts = [...this.verts, ...verts];
-			else
-				this.verts = Float32Array.from([...this.verts, ...verts]);
-		}
+	// append normals
+	if (!normals.empty())
+		this->normals.insert(this->normals.end(), normals.begin(), normals.end());
 
-		// append normals
-		if (normals) {
-			if (Array.isArray(this.normals))
-				this.normals = [...this.normals, ...normals];
-			else
-				this.normals = Float32Array.from([...this.normals, ...normals]);
-		}
+	// append uvs (match layer count)
+	for (size_t i = 0; i < uvArrays.size(); i++) {
+		if (i >= uvs.size())
+			uvs.emplace_back();
 
-		// append uvs (match layer count)
-		if (uvArrays) {
-			for (let i = 0; i < uvArrays.length; i++) {
-				if (i >= this.uvs.length)
-					this.uvs.push([]);
-
-				const uv = uvArrays[i];
-				if (uv) {
-					if (Array.isArray(this.uvs[i]))
-						this.uvs[i] = [...this.uvs[i], ...uv];
-					else
-						this.uvs[i] = Float32Array.from([...this.uvs[i], ...uv]);
-				}
-			}
-		}
-	}
-
-	/**
-	 * Write the OBJ file (and associated MTLs).
-	 * @param {boolean} overwrite
-	 */
-	async write(overwrite = true) {
-		// If overwriting is disabled, check file existence.
-		if (!overwrite && await generics.fileExists(this.out))
-			return;
-
-		await generics.createDirectory(path.dirname(this.out));
-		const writer = new FileWriter(this.out);
-
-		// Write header.
-		await writer.writeLine('# Exported using wow.export v' + constants.VERSION);
-		await writer.writeLine('o ' + this.name);
-
-		// Link material library.
-		if (this.mtl)
-			await writer.writeLine('mtllib ' + this.mtl);
-
-		// collect used indices (accounting for vertex offsets from appended geometry)
-		const usedIndices = new Set();
-		this.meshes.forEach(mesh => {
-			const offset = mesh.vertexOffset || 0;
-			mesh.triangles.forEach(index => usedIndices.add(index + offset));
-		});
-
-		const vertMap = new Map();
-		const normalMap = new Map();
-		const uvMap = new Map();
-
-		// Write verts.
-		const verts = this.verts;
-		for (let i = 0, j = 0, u = 0, n = verts.length; i < n; j++, i+= 3) {
-			if (usedIndices.has(j)) {
-				vertMap.set(j, u++);
-				await writer.writeLine('v ' + verts[i] + ' ' + verts[i + 1] + ' ' + verts[i + 2]);
-			}
-		}
-
-		// Write normals.
-		const normals = this.normals;
-		for (let i = 0, j = 0, u = 0, n = normals.length; i < n; j++, i += 3) {
-			if (usedIndices.has(j)) {
-				normalMap.set(j, u++);
-				await writer.writeLine('vn ' + normals[i] + ' ' + normals[i + 1] + ' ' + normals[i + 2]);
-			}
-		}
-
-		// Write UVs
-		const layerCount = this.uvs.length;
-		const hasUV = layerCount > 0;
-		if (hasUV) {
-			for (let uvIndex = 0; uvIndex < layerCount; uvIndex++) {
-				const uv = this.uvs[uvIndex];
-
-				let prefix = 'vt';
-
-				// Use non-standard properties (vt2, vt3, etc) for additional UV layers.
-				if (uvIndex > 0)
-					prefix += (uvIndex + 1);
-
-				for (let i = 0, j = 0, u = 0, n = uv.length; i < n; j++, i += 2) {
-					if (usedIndices.has(j)) {
-						// Build the index reference using just the first layer
-						// since it will be identical for all other layers.
-						if (uvIndex === 0)
-							uvMap.set(j, u++);
-
-						await writer.writeLine(prefix + ' ' + uv[i] + ' ' + uv[i + 1]);
-					}
-				}
-			}
-		}
-
-		// Write meshes.
-		for (const mesh of this.meshes) {
-			await writer.writeLine('g ' + mesh.name);
-			await writer.writeLine('s 1');
-
-			if (mesh.matName)
-				await writer.writeLine('usemtl ' + mesh.matName);
-
-			const triangles = mesh.triangles;
-			const offset = mesh.vertexOffset || 0;
-
-			for (let i = 0, n = triangles.length; i < n; i += 3) {
-				const idxA = triangles[i] + offset;
-				const idxB = triangles[i + 1] + offset;
-				const idxC = triangles[i + 2] + offset;
-
-				const pointA = (vertMap.get(idxA) + 1) + '/' + (hasUV ? uvMap.get(idxA) + 1 : '') + '/' + (normalMap.get(idxA) + 1);
-				const pointB = (vertMap.get(idxB) + 1) + '/' + (hasUV ? uvMap.get(idxB) + 1 : '') + '/' + (normalMap.get(idxB) + 1);
-				const pointC = (vertMap.get(idxC) + 1) + '/' + (hasUV ? uvMap.get(idxC) + 1 : '') + '/' + (normalMap.get(idxC) + 1);
-
-				await writer.writeLine('f ' + pointA + ' ' + pointB + ' ' + pointC);
-			}
-		}
-
-		writer.close();
+		const auto& uv = uvArrays[i];
+		if (!uv.empty())
+			uvs[i].insert(uvs[i].end(), uv.begin(), uv.end());
 	}
 }
 
-module.exports = OBJWriter;
+void OBJWriter::write(bool overwrite) {
+	// If overwriting is disabled, check file existence.
+	if (!overwrite && generics::fileExists(out))
+		return;
+
+	generics::createDirectory(out.parent_path());
+	FileWriter writer(out);
+
+	// Write header.
+	writer.writeLine("# Exported using wow.export v" + std::string(constants::VERSION));
+	writer.writeLine("o " + name);
+
+	// Link material library.
+	if (!mtl.empty())
+		writer.writeLine("mtllib " + mtl);
+
+	// collect used indices (accounting for vertex offsets from appended geometry)
+	std::unordered_set<size_t> usedIndices;
+	for (const auto& mesh : meshes) {
+		const size_t offset = mesh.vertexOffset;
+		for (uint32_t index : mesh.triangles)
+			usedIndices.insert(static_cast<size_t>(index) + offset);
+	}
+
+	std::unordered_map<size_t, size_t> vertMap;
+	std::unordered_map<size_t, size_t> normalMap;
+	std::unordered_map<size_t, size_t> uvMap;
+
+	// Write verts.
+	for (size_t i = 0, j = 0, u = 0, n = verts.size(); i < n; j++, i += 3) {
+		if (usedIndices.count(j)) {
+			vertMap[j] = u++;
+			writer.writeLine("v " + std::to_string(verts[i]) + " " + std::to_string(verts[i + 1]) + " " + std::to_string(verts[i + 2]));
+		}
+	}
+
+	// Write normals.
+	for (size_t i = 0, j = 0, u = 0, n = normals.size(); i < n; j++, i += 3) {
+		if (usedIndices.count(j)) {
+			normalMap[j] = u++;
+			writer.writeLine("vn " + std::to_string(normals[i]) + " " + std::to_string(normals[i + 1]) + " " + std::to_string(normals[i + 2]));
+		}
+	}
+
+	// Write UVs
+	const size_t layerCount = uvs.size();
+	const bool hasUV = layerCount > 0;
+	if (hasUV) {
+		for (size_t uvIndex = 0; uvIndex < layerCount; uvIndex++) {
+			const auto& uv = uvs[uvIndex];
+
+			std::string prefix = "vt";
+
+			// Use non-standard properties (vt2, vt3, etc) for additional UV layers.
+			if (uvIndex > 0)
+				prefix += std::to_string(uvIndex + 1);
+
+			for (size_t i = 0, j = 0, u = 0, n = uv.size(); i < n; j++, i += 2) {
+				if (usedIndices.count(j)) {
+					// Build the index reference using just the first layer
+					// since it will be identical for all other layers.
+					if (uvIndex == 0)
+						uvMap[j] = u++;
+
+					writer.writeLine(prefix + " " + std::to_string(uv[i]) + " " + std::to_string(uv[i + 1]));
+				}
+			}
+		}
+	}
+
+	// Write meshes.
+	for (const auto& mesh : meshes) {
+		writer.writeLine("g " + mesh.name);
+		writer.writeLine("s 1");
+
+		if (!mesh.matName.empty())
+			writer.writeLine("usemtl " + mesh.matName);
+
+		const auto& triangles = mesh.triangles;
+		const size_t offset = mesh.vertexOffset;
+
+		for (size_t i = 0, n = triangles.size(); i < n; i += 3) {
+			const size_t idxA = static_cast<size_t>(triangles[i]) + offset;
+			const size_t idxB = static_cast<size_t>(triangles[i + 1]) + offset;
+			const size_t idxC = static_cast<size_t>(triangles[i + 2]) + offset;
+
+			const std::string pointA = std::to_string(vertMap[idxA] + 1) + "/" + (hasUV ? std::to_string(uvMap[idxA] + 1) : "") + "/" + std::to_string(normalMap[idxA] + 1);
+			const std::string pointB = std::to_string(vertMap[idxB] + 1) + "/" + (hasUV ? std::to_string(uvMap[idxB] + 1) : "") + "/" + std::to_string(normalMap[idxB] + 1);
+			const std::string pointC = std::to_string(vertMap[idxC] + 1) + "/" + (hasUV ? std::to_string(uvMap[idxC] + 1) : "") + "/" + std::to_string(normalMap[idxC] + 1);
+
+			writer.writeLine("f " + pointA + " " + pointB + " " + pointC);
+		}
+	}
+
+	writer.close();
+}

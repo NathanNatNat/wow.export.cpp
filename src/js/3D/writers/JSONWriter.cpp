@@ -3,46 +3,26 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const generics = require('../../generics');
-const path = require('path');
-const FileWriter = require('../../file-writer');
+#include "JSONWriter.h"
+#include "../../generics.h"
+#include "../../file-writer.h"
 
-class JSONWriter {
-	/**
-	 * Construct a new JSONWriter instance.
-	 * @param {string} out 
-	 */
-	constructor(out) {
-		this.out = out;
-		this.data = {};
-	}
+JSONWriter::JSONWriter(const std::filesystem::path& out)
+	: out(out), data(nlohmann::json::object()) {}
 
-	/**
-	 * Add a property to this JSON.
-	 * @param {string} name 
-	 * @param {object} data 
-	 */
-	addProperty(name, data) {
-		this.data[name] = data;
-	}
-
-	/**
-	 * Write the JSON to disk.
-	 * @param {boolean} overwrite
-	 */
-	async write(overwrite = true) {
-		// If overwriting is disabled, check file existence.
-		if (!overwrite && await generics.fileExists(this.out))
-			return;
-
-		await generics.createDirectory(path.dirname(this.out));
-		const writer = new FileWriter(this.out);
-		await writer.writeLine(JSON.stringify(this.data, (key, value) => {
-			// Handle serialization of BigInt, as JS will not handle it as per spec (TC39)
-			return typeof value === 'bigint' ? value.toString() : value
-		}, '\t'));
-		writer.close();
-	}
+void JSONWriter::addProperty(const std::string& name, const nlohmann::json& data) {
+	this->data[name] = data;
 }
 
-module.exports = JSONWriter;
+void JSONWriter::write(bool overwrite) {
+	// If overwriting is disabled, check file existence.
+	if (!overwrite && generics::fileExists(out))
+		return;
+
+	generics::createDirectory(out.parent_path());
+	FileWriter writer(out);
+	// nlohmann::json handles all types natively including large integers;
+	// no special BigInt serialization needed as in JS.
+	writer.writeLine(data.dump(1, '\t'));
+	writer.close();
+}
