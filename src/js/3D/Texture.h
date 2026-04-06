@@ -33,6 +33,7 @@ public:
 
 	uint32_t flags;
 	uint32_t fileDataID;
+	std::string fileName;
 
 private:
 	std::optional<BufferWrapper> data;
