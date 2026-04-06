@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 116 / 184 files converted
+**Progress:** 119 / 184 files converted
 
 ---
 
@@ -188,9 +188,9 @@
 - [x] `src/js/3D/renderers/M2LegacyRendererGL.cpp` (1055 lines)
 - [x] `src/js/3D/renderers/MDXRendererGL.cpp` (808 lines) 🔴
 - [x] `src/js/3D/renderers/M2RendererGL.cpp` (1650 lines) 🔴
-- [ ] `src/js/3D/renderers/M3RendererGL.cpp` (309 lines)
-- [ ] `src/js/3D/renderers/WMOLegacyRendererGL.cpp` (554 lines)
-- [ ] `src/js/3D/renderers/WMORendererGL.cpp` (677 lines)
+- [x] `src/js/3D/renderers/M3RendererGL.cpp` (309 lines)
+- [x] `src/js/3D/renderers/WMOLegacyRendererGL.cpp` (554 lines)
+- [x] `src/js/3D/renderers/WMORendererGL.cpp` (677 lines)
 
 ## Tier 19 — 3D Exporters (7 files)
 
