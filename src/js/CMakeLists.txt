@@ -94,4 +94,8 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/Skin.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/camera/CameraControlsGL.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/camera/CharacterCameraControlsGL.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/LoaderGenerics.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/M2Generics.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/ANIMLoader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/BONELoader.cpp
 )
