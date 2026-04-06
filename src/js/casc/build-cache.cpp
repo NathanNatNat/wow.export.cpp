@@ -184,7 +184,7 @@ void registerBuildCacheEvents() {
 			core::view->cacheSize = 0;
 			logging::write("Purge complete, awaiting mandatory restart.");
 
-			// Restart action: emit event since restartApplication() is not yet available.
+			// TODO(conversion): Restart action: emit event since restartApplication() is not yet available.
 			nlohmann::json restartOptions = nlohmann::json::object();
 			restartOptions["Restart"] = "restart-application";
 			core::setToast("success", "Cache has been successfully cleared, a restart is required.", restartOptions, -1, false);

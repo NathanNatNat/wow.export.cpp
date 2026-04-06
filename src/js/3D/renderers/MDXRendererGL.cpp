@@ -12,7 +12,7 @@
 #include "../../casc/blp.h"
 #include "../Shaders.h"
 
-// textureRibbon is not yet converted; stubbed where referenced.
+// TODO(conversion): textureRibbon is not yet converted; stubbed where referenced.
 // const textureRibbon = require('../../ui/texture-ribbon');
 
 #include <algorithm>
@@ -243,10 +243,10 @@ void MDXRendererGL::_create_default_texture() {
 void MDXRendererGL::_load_textures() {
 	auto& tex_list = mdx->textures;
 	// JS: const mpq = core.view.mpq;
-	// MPQ archive access not yet wired; texture loading from MPQ is stubbed.
+	// TODO(conversion): MPQ archive access not yet wired; texture loading from MPQ is stubbed.
 
 	if (useRibbon)
-		syncID = -1; // JS: textureRibbon.reset(); — texture ribbon not yet converted
+		syncID = -1; // TODO(conversion): JS: textureRibbon.reset(); — texture ribbon not yet converted
 
 	for (size_t i = 0, n = tex_list.size(); i < n; i++) {
 		auto& texture = tex_list[i];
@@ -260,11 +260,11 @@ void MDXRendererGL::_load_textures() {
 			try {
 				// JS: const data = mpq.getFile(fileName);
 				// MPQ file access — get texture file data from MPQ archive
-				// NOTE: When MPQ integration is available, load BufferWrapper from
+				// TODO(conversion): When MPQ integration is available, load BufferWrapper from
 				// mpq->getFile(fileName) and create a BLPImage from that data.
 				// For now, this function is a no-op until MPQ is integrated.
 
-				// TODO(mpq): Uncomment and wire when MPQ integration is available:
+				// TODO(conversion): Uncomment and wire when MPQ integration is available:
 				// auto file_data = mpq->getFile(fileName);
 				// if (file_data) {
 				//     casc::BLPImage blp(BufferWrapper::from(file_data.value()));
@@ -928,7 +928,7 @@ std::optional<MDXRendererGL::BoundingBoxResult> MDXRendererGL::getBoundingBox() 
 
 void MDXRendererGL::dispose() {
 	// JS: this.geosetWatcher?.(); this.wireframeWatcher?.();
-	// Vue watchers → no-op in C++ (no reactive system)
+	// TODO(conversion): Vue watchers → no-op in C++ (no reactive system)
 
 	for (auto& vao : vaos)
 		vao->dispose();

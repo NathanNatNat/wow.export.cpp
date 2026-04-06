@@ -24,7 +24,7 @@ Skin::Skin(uint32_t fileDataID)
 
 void Skin::load() {
 	try {
-		// TODO: Replace with actual CASC file loading when rendering pipeline is connected.
+		// TODO(conversion): Replace with actual CASC file loading when rendering pipeline is connected.
 		// auto data = core.view.casc.getFile(this->fileDataID);
 		// For now, throw to indicate this needs wiring.
 		throw std::runtime_error("CASC file loading not yet wired");

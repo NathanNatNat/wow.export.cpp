@@ -403,10 +403,10 @@ void createDirectory(const std::filesystem::path& dir) {
 
 /**
  * Returns after a redraw.
- * In C++ (ImGui), this is a no-op since ImGui redraws every frame.
+ * TODO(conversion): In C++ (ImGui), this is a no-op since ImGui redraws every frame.
  */
 void redraw() {
-	// In ImGui, the main loop redraws every frame.
+	// TODO(conversion): In ImGui, the main loop redraws every frame.
 	// This is a no-op placeholder for JS compatibility.
 }
 

@@ -13,7 +13,7 @@
 #include "../GeosetMapper.h"
 #include "../Shaders.h"
 
-// textureRibbon is not yet converted; stubbed where referenced.
+// TODO(conversion): textureRibbon is not yet converted; stubbed where referenced.
 // const textureRibbon = require('../../ui/texture-ribbon');
 
 #include <algorithm>
@@ -243,10 +243,10 @@ void M2LegacyRendererGL::_create_default_texture() {
 void M2LegacyRendererGL::_load_textures() {
 	auto& tex_list = m2->textures;
 	// JS: const mpq = core.view.mpq;
-	// MPQ archive access not yet wired; texture loading from MPQ is stubbed.
+	// TODO(conversion): MPQ archive access not yet wired; texture loading from MPQ is stubbed.
 
 	if (useRibbon)
-		syncID = -1; // JS: textureRibbon.reset(); — texture ribbon not yet converted
+		syncID = -1; // TODO(conversion): JS: textureRibbon.reset(); — texture ribbon not yet converted
 
 	for (size_t i = 0, n = tex_list.size(); i < n; i++) {
 		auto& texture = tex_list[i];
@@ -303,7 +303,7 @@ void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& textu
 
 				try {
 					// JS: const data = mpq.getFile(texture_path);
-					// NOTE: The JS loads a NEW file by `texture_path` from the MPQ archive,
+					// TODO(conversion): The JS loads a NEW file by `texture_path` from the MPQ archive,
 					// replacing the existing texture with the creature skin file.
 					// This requires MPQ archive access (core.view.mpq) which is not yet wired.
 					// When MPQ integration is available, load BufferWrapper from
@@ -311,7 +311,7 @@ void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& textu
 					// For now, this function is a no-op until MPQ is integrated.
 					(void)texture_path;
 
-					// TODO(mpq): Uncomment and wire when MPQ integration is available:
+					// TODO(conversion): Uncomment and wire when MPQ integration is available:
 					// auto file_data = mpq->getFile(texture_path);
 					// if (file_data) {
 					//     casc::BLPImage blp(BufferWrapper::from(file_data.value()));

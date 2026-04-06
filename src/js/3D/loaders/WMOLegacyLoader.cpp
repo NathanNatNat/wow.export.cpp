@@ -170,7 +170,7 @@ WMOLegacyLoader& WMOLegacyLoader::getGroup(uint32_t index) {
 		throw std::runtime_error("Alpha inline group parsing not yet implemented");
 	}
 
-	// TODO: MPQ file loading will be wired in when UI integration is complete.
+	// TODO(conversion): MPQ file loading will be wired in when UI integration is complete.
 	throw std::runtime_error("Group loading requires MPQ - not yet wired in C++ UI");
 }
 

@@ -118,7 +118,7 @@ WMOLoader& WMOLoader::getGroup(uint32_t index) {
 	if (index < this->groups.size() && this->groups[index] != nullptr)
 		return *this->groups[index];
 
-	// TODO: CASC file loading will be wired in when UI integration is complete.
+	// TODO(conversion): CASC file loading will be wired in when UI integration is complete.
 	// For now, this mirrors the JS structure.
 	throw std::runtime_error("Group loading requires CASC - not yet wired in C++ UI");
 }
