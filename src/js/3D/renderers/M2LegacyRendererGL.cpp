@@ -4,41 +4,37 @@
 	License: MIT
 */
 
-const core = require('../../core');
-const log = require('../../log');
+#include "M2LegacyRendererGL.h"
 
-const BLPFile = require('../../casc/blp');
-const M2LegacyLoader = require('../loaders/M2LegacyLoader');
-const GeosetMapper = require('../GeosetMapper');
-const Shaders = require('../Shaders');
+#include "../../core.h"
+#include "../../log.h"
 
-const VertexArray = require('../gl/VertexArray');
-const GLTexture = require('../gl/GLTexture');
+#include "../../casc/blp.h"
+#include "../GeosetMapper.h"
+#include "../Shaders.h"
 
-const textureRibbon = require('../../ui/texture-ribbon');
+// textureRibbon is not yet converted; stubbed where referenced.
+// const textureRibbon = require('../../ui/texture-ribbon');
 
-// m2 version constants
-const M2_VER_WOTLK = 264;
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstring>
+#include <format>
+#include <functional>
+#include <optional>
 
-// identity matrix
-const IDENTITY_MAT4 = new Float32Array([
-	1, 0, 0, 0,
-	0, 1, 0, 0,
-	0, 0, 1, 0,
-	0, 0, 0, 1
-]);
+// -----------------------------------------------------------------------
+// Free-function math helpers (matching JS module-level functions exactly)
+// -----------------------------------------------------------------------
 
-// legacy shaders are simpler - map to basic shader ids
-const LEGACY_VERTEX_SHADER = 0; // Diffuse_T1
-const LEGACY_PIXEL_SHADER = 0;  // Combiners_Opaque
+static void mat4_multiply(float* out, const float* a, const float* b) {
+	const float a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+	const float a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+	const float a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+	const float a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
 
-function mat4_multiply(out, a, b) {
-	const a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
-	const a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
-	const a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
-	const a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
-
-	let b0 = b[0], b1 = b[1], b2 = b[2], b3 = b[3];
+	float b0 = b[0], b1 = b[1], b2 = b[2], b3 = b[3];
 	out[0] = b0 * a00 + b1 * a10 + b2 * a20 + b3 * a30;
 	out[1] = b0 * a01 + b1 * a11 + b2 * a21 + b3 * a31;
 	out[2] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
@@ -63,18 +59,18 @@ function mat4_multiply(out, a, b) {
 	out[15] = b0 * a03 + b1 * a13 + b2 * a23 + b3 * a33;
 }
 
-function mat4_from_translation(out, x, y, z) {
+static void mat4_from_translation(float* out, float x, float y, float z) {
 	out[0] = 1; out[1] = 0; out[2] = 0; out[3] = 0;
 	out[4] = 0; out[5] = 1; out[6] = 0; out[7] = 0;
 	out[8] = 0; out[9] = 0; out[10] = 1; out[11] = 0;
 	out[12] = x; out[13] = y; out[14] = z; out[15] = 1;
 }
 
-function mat4_from_quat(out, x, y, z, w) {
-	const x2 = x + x, y2 = y + y, z2 = z + z;
-	const xx = x * x2, xy = x * y2, xz = x * z2;
-	const yy = y * y2, yz = y * z2, zz = z * z2;
-	const wx = w * x2, wy = w * y2, wz = w * z2;
+static void mat4_from_quat(float* out, float x, float y, float z, float w) {
+	const float x2 = x + x, y2 = y + y, z2 = z + z;
+	const float xx = x * x2, xy = x * y2, xz = x * z2;
+	const float yy = y * y2, yz = y * z2, zz = z * z2;
+	const float wx = w * x2, wy = w * y2, wz = w * z2;
 
 	out[0] = 1 - (yy + zz);
 	out[1] = xy + wz;
@@ -97,35 +93,35 @@ function mat4_from_quat(out, x, y, z, w) {
 	out[15] = 1;
 }
 
-function mat4_from_scale(out, x, y, z) {
+static void mat4_from_scale(float* out, float x, float y, float z) {
 	out[0] = x; out[1] = 0; out[2] = 0; out[3] = 0;
 	out[4] = 0; out[5] = y; out[6] = 0; out[7] = 0;
 	out[8] = 0; out[9] = 0; out[10] = z; out[11] = 0;
 	out[12] = 0; out[13] = 0; out[14] = 0; out[15] = 1;
 }
 
-function mat4_copy(out, src) {
-	out.set(src);
+static void mat4_copy(float* out, const float* src) {
+	std::memcpy(out, src, 16 * sizeof(float));
 }
 
-function lerp(a, b, t) {
+static float lerp(float a, float b, float t) {
 	return a + (b - a) * t;
 }
 
-function quat_slerp(out, ax, ay, az, aw, bx, by, bz, bw, t) {
-	let cosom = ax * bx + ay * by + az * bz + aw * bw;
+static void quat_slerp(float* out, float ax, float ay, float az, float aw, float bx, float by, float bz, float bw, float t) {
+	float cosom = ax * bx + ay * by + az * bz + aw * bw;
 
 	if (cosom < 0) {
 		cosom = -cosom;
 		bx = -bx; by = -by; bz = -bz; bw = -bw;
 	}
 
-	let scale0, scale1;
-	if (1 - cosom > 0.000001) {
-		const omega = Math.acos(cosom);
-		const sinom = Math.sin(omega);
-		scale0 = Math.sin((1 - t) * omega) / sinom;
-		scale1 = Math.sin(t * omega) / sinom;
+	float scale0, scale1;
+	if (1 - cosom > 0.000001f) {
+		const float omega = std::acos(cosom);
+		const float sinom = std::sin(omega);
+		scale0 = std::sin((1 - t) * omega) / sinom;
+		scale1 = std::sin(t * omega) / sinom;
 	} else {
 		scale0 = 1 - t;
 		scale1 = t;
@@ -137,919 +133,1165 @@ function quat_slerp(out, ax, ay, az, aw, bx, by, bz, bw, t) {
 	out[3] = scale0 * aw + scale1 * bw;
 }
 
-class M2LegacyRendererGL {
-	constructor(data, gl_context, reactive = false, useRibbon = true) {
-		this.data = data;
-		this.ctx = gl_context;
-		this.gl = gl_context.gl;
-		this.reactive = reactive;
-		this.useRibbon = useRibbon;
+// -----------------------------------------------------------------------
+// Helper to extract a float from a LegacyTrackValue (used by sampling)
+// -----------------------------------------------------------------------
+static float track_value_to_float(const LegacyTrackValue& v) {
+	if (auto* val = std::get_if<uint8_t>(&v))
+		return static_cast<float>(*val);
+	if (auto* val = std::get_if<uint32_t>(&v))
+		return static_cast<float>(*val);
+	if (auto* val = std::get_if<int16_t>(&v))
+		return static_cast<float>(*val);
+	return 0.0f;
+}
 
-		this.m2 = null;
-		this.syncID = -1;
+static const std::vector<float>& track_value_to_vec(const LegacyTrackValue& v) {
+	static const std::vector<float> empty;
+	if (auto* val = std::get_if<std::vector<float>>(&v))
+		return *val;
+	return empty;
+}
 
-		// rendering state
-		this.vaos = [];
-		this.textures = new Map();
-		this.default_texture = null;
-		this.buffers = [];
-		this.draw_calls = [];
+// -----------------------------------------------------------------------
+// Constructor
+// -----------------------------------------------------------------------
 
-		// animation state
-		this.bones = null;
-		this.bone_matrices = null;
-		this.current_animation = null;
-		this.animation_time = 0;
-		this.animation_paused = false;
+M2LegacyRendererGL::M2LegacyRendererGL(BufferWrapper& data, gl::GLContext& gl_context, bool reactive, bool useRibbon)
+	: data_ptr(&data)
+	, ctx(gl_context)
+	, reactive(reactive)
+	, useRibbon(useRibbon)
+{
+	m2 = nullptr;
+	syncID = -1;
 
-		// reactive state
-		this.geosetKey = 'modelViewerGeosets';
-		this.geosetArray = null;
+	// rendering state
+	// vaos, textures, default_texture, buffers, draw_calls: default constructed
 
-		// transforms
-		this.model_matrix = new Float32Array(IDENTITY_MAT4);
-		this.position = [0, 0, 0];
-		this.rotation = [0, 0, 0];
-		this.scale = [1, 1, 1];
+	// animation state
+	bones = nullptr;
+	// bone_matrices: default constructed
+	current_animation = -1; // null equivalent
+	animation_time = 0;
+	animation_paused = false;
 
-		// material data
-		this.material_props = new Map();
-	}
+	// reactive state
+	geosetKey = "modelViewerGeosets";
+	// geosetArray: default constructed
 
-	static load_shaders(ctx) {
-		return Shaders.create_program(ctx, 'm2');
-	}
+	// transforms
+	std::copy(IDENTITY_MAT4.begin(), IDENTITY_MAT4.end(), model_matrix.begin());
+	position = {0, 0, 0};
+	rotation = {0, 0, 0};
+	scale_val = {1, 1, 1};
 
-	async load() {
-		this.m2 = new M2LegacyLoader(this.data);
-		await this.m2.load();
+	// material data
+	// material_props: default constructed
+}
 
-		this.shader = M2LegacyRendererGL.load_shaders(this.ctx);
+// -----------------------------------------------------------------------
+// static load_shaders
+// -----------------------------------------------------------------------
 
-		this._create_default_texture();
-		await this._load_textures();
+gl::ShaderProgram* M2LegacyRendererGL::load_shaders(gl::GLContext& ctx) {
+	return shaders::create_program(ctx, "m2");
+}
 
-		if (this.m2.vertices.length > 0) {
-			await this.loadSkin(0);
+// -----------------------------------------------------------------------
+// load
+// -----------------------------------------------------------------------
 
-			if (this.reactive) {
-				this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true });
-				this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true });
-			}
+void M2LegacyRendererGL::load() {
+	m2 = std::make_unique<M2LegacyLoader>(*data_ptr);
+	m2->load();
+
+	shader = M2LegacyRendererGL::load_shaders(ctx);
+
+	_create_default_texture();
+	_load_textures();
+
+	if (!m2->vertices.empty()) {
+		loadSkin(0);
+
+		if (reactive) {
+			// JS: this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true });
+			// JS: this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true });
+			// Vue watchers → no-op in immediate mode; updateGeosets() called manually.
 		}
-
-		this.data = undefined;
 	}
 
-	_create_default_texture() {
-		const pixels = new Uint8Array([87, 175, 226, 255]);
-		this.default_texture = new GLTexture(this.ctx);
-		this.default_texture.set_rgba(pixels, 1, 1, { has_alpha: false });
-	}
+	data_ptr = nullptr;
+}
 
-	async _load_textures() {
-		const textures = this.m2.textures;
-		const mpq = core.view.mpq;
+// -----------------------------------------------------------------------
+// _create_default_texture
+// -----------------------------------------------------------------------
 
-		if (this.useRibbon)
-			this.syncID = textureRibbon.reset();
+void M2LegacyRendererGL::_create_default_texture() {
+	const uint8_t pixels[4] = {87, 175, 226, 255};
+	default_texture = std::make_unique<gl::GLTexture>(ctx);
+	gl::TextureOptions opts;
+	opts.has_alpha = false;
+	default_texture->set_rgba(pixels, 1, 1, opts);
+}
 
-		for (let i = 0, n = textures.length; i < n; i++) {
-			const texture = textures[i];
-			const ribbonSlot = this.useRibbon ? textureRibbon.addSlot() : null;
+// -----------------------------------------------------------------------
+// _load_textures
+// -----------------------------------------------------------------------
 
-			// legacy textures use fileName property set by loader
-			const fileName = texture.fileName;
+void M2LegacyRendererGL::_load_textures() {
+	auto& tex_list = m2->textures;
+	// JS: const mpq = core.view.mpq;
+	// MPQ archive access not yet wired; texture loading from MPQ is stubbed.
 
-			if (fileName && fileName.length > 0) {
-				if (ribbonSlot !== null)
-					textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID);
+	if (useRibbon)
+		syncID = -1; // JS: textureRibbon.reset(); — texture ribbon not yet converted
 
-				try {
-					const data = mpq.getFile(fileName);
+	for (size_t i = 0, n = tex_list.size(); i < n; i++) {
+		auto& texture = tex_list[i];
+		// JS: const ribbonSlot = this.useRibbon ? textureRibbon.addSlot() : null;
 
-					if (data) {
-						const BufferWrapper = require('../../buffer');
-						const blp = new BLPFile(new BufferWrapper(Buffer.from(data)));
-						const gl_tex = new GLTexture(this.ctx);
-						gl_tex.set_blp(blp, { flags: texture.flags });
-						this.textures.set(i, gl_tex);
+		// legacy textures use fileName property set by loader
+		const std::string& fileName = texture.fileName;
 
-						if (ribbonSlot !== null)
-							textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
-					}
-				} catch (e) {
-					log.write('Failed to load legacy texture %s: %s', fileName, e.message);
+		if (!fileName.empty()) {
+			// JS: if (ribbonSlot !== null) textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID);
+
+			try {
+				// JS: const data = mpq.getFile(fileName);
+				// MPQ file access — get texture file data
+				auto file_data = texture.getTextureFile();
+
+				if (file_data.has_value()) {
+					casc::BLPImage blp(std::move(file_data.value()));
+					auto gl_tex = std::make_unique<gl::GLTexture>(ctx);
+					gl::BLPTextureFlags blp_flags;
+					blp_flags.flags = texture.flags;
+					gl_tex->set_blp(blp, blp_flags);
+					textures[static_cast<int>(i)] = std::move(gl_tex);
+
+					// JS: if (ribbonSlot !== null) textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
 				}
+			} catch (const std::exception& e) {
+				logging::write(std::format("Failed to load legacy texture {}: {}", fileName, e.what()));
 			}
-		}
-	}
-
-	/**
-	 * Apply creature skin textures (replaceable textures from CreatureDisplayInfo)
-	 * @param {string[]} texture_paths - Array of texture file paths
-	 */
-	async applyCreatureSkin(texture_paths) {
-		const mpq = core.view.mpq;
-		const textureTypes = this.m2.textureTypes;
-
-		// creature skins map to textureType 11, 12, 13 (Monster1, Monster2, Monster3)
-		const MONSTER_TEX_START = 11;
-
-		for (let i = 0; i < textureTypes.length; i++) {
-			const textureType = textureTypes[i];
-
-			// check if this is a monster replaceable texture slot
-			if (textureType >= MONSTER_TEX_START && textureType < MONSTER_TEX_START + 3) {
-				const skin_index = textureType - MONSTER_TEX_START;
-
-				if (skin_index < texture_paths.length) {
-					const texture_path = texture_paths[skin_index];
-
-					try {
-						const data = mpq.getFile(texture_path);
-						if (data) {
-							const BufferWrapper = require('../../buffer');
-							const blp = new BLPFile(new BufferWrapper(Buffer.from(data)));
-							const gl_tex = new GLTexture(this.ctx);
-							gl_tex.set_blp(blp, { flags: this.m2.textures[i].flags });
-							this.textures.set(i, gl_tex);
-
-							// update texture ribbon
-							if (this.useRibbon) {
-								textureRibbon.setSlotFileLegacy(i, texture_path, this.syncID);
-								textureRibbon.setSlotSrc(i, blp.getDataURL(0b0111), this.syncID);
-							}
-
-							log.write('Applied creature skin texture %d: %s', i, texture_path);
-						}
-					} catch (e) {
-						log.write('Failed to apply creature skin texture %s: %s', texture_path, e.message);
-					}
-				}
-			}
-		}
-	}
-
-	async loadSkin(index) {
-		this._dispose_skin();
-
-		const m2 = this.m2;
-		const skin = await m2.getSkin(index);
-		const gl = this.gl;
-
-		this._create_skeleton();
-
-		// build interleaved vertex buffer
-		// format: position(3f) + normal(3f) + bone_idx(4ub) + bone_weight(4ub) + uv(2f) = 40 bytes
-		const vertex_count = m2.vertices.length / 3;
-		const stride = 40;
-		const vertex_data = new ArrayBuffer(vertex_count * stride);
-		const vertex_view = new DataView(vertex_data);
-
-		for (let i = 0; i < vertex_count; i++) {
-			const offset = i * stride;
-			const v_idx = i * 3;
-			const uv_idx = i * 2;
-			const bone_idx = i * 4;
-
-			// position
-			vertex_view.setFloat32(offset + 0, m2.vertices[v_idx], true);
-			vertex_view.setFloat32(offset + 4, m2.vertices[v_idx + 1], true);
-			vertex_view.setFloat32(offset + 8, m2.vertices[v_idx + 2], true);
-
-			// normal
-			vertex_view.setFloat32(offset + 12, m2.normals[v_idx], true);
-			vertex_view.setFloat32(offset + 16, m2.normals[v_idx + 1], true);
-			vertex_view.setFloat32(offset + 20, m2.normals[v_idx + 2], true);
-
-			// bone indices
-			vertex_view.setUint8(offset + 24, m2.boneIndices[bone_idx]);
-			vertex_view.setUint8(offset + 25, m2.boneIndices[bone_idx + 1]);
-			vertex_view.setUint8(offset + 26, m2.boneIndices[bone_idx + 2]);
-			vertex_view.setUint8(offset + 27, m2.boneIndices[bone_idx + 3]);
-
-			// bone weights
-			vertex_view.setUint8(offset + 28, m2.boneWeights[bone_idx]);
-			vertex_view.setUint8(offset + 29, m2.boneWeights[bone_idx + 1]);
-			vertex_view.setUint8(offset + 30, m2.boneWeights[bone_idx + 2]);
-			vertex_view.setUint8(offset + 31, m2.boneWeights[bone_idx + 3]);
-
-			// texcoord
-			vertex_view.setFloat32(offset + 32, m2.uv[uv_idx], true);
-			vertex_view.setFloat32(offset + 36, m2.uv[uv_idx + 1], true);
-		}
-
-		// map triangle indices
-		const index_data = new Uint16Array(skin.triangles.length);
-		for (let i = 0; i < skin.triangles.length; i++)
-			index_data[i] = skin.indices[skin.triangles[i]];
-
-		// create VAO
-		const vao = new VertexArray(this.ctx);
-		vao.bind();
-
-		const vbo = gl.createBuffer();
-		gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-		gl.bufferData(gl.ARRAY_BUFFER, vertex_data, gl.STATIC_DRAW);
-		this.buffers.push(vbo);
-		vao.vbo = vbo;
-
-		const ebo = gl.createBuffer();
-		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
-		gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, index_data, gl.STATIC_DRAW);
-		this.buffers.push(ebo);
-		vao.ebo = ebo;
-
-		vao.setup_m2_vertex_format();
-		this.vaos.push(vao);
-
-		if (this.reactive)
-			this.geosetArray = new Array(skin.subMeshes.length);
-
-		// build draw calls per submesh
-		this.draw_calls = [];
-
-		for (let i = 0; i < skin.subMeshes.length; i++) {
-			const submesh = skin.subMeshes[i];
-			const tex_unit = skin.textureUnits.find(tu => tu.skinSectionIndex === i);
-
-			let tex_indices = [null, null, null, null];
-			let vertex_shader = LEGACY_VERTEX_SHADER;
-			let pixel_shader = LEGACY_PIXEL_SHADER;
-			let blend_mode = 0;
-			let flags = 0;
-			let texture_count = 1;
-
-			if (tex_unit) {
-				texture_count = tex_unit.textureCount;
-
-				for (let j = 0; j < Math.min(texture_count, 4); j++) {
-					const combo_idx = tex_unit.textureComboIndex + j;
-					if (combo_idx < m2.textureCombos.length)
-						tex_indices[j] = m2.textureCombos[combo_idx];
-				}
-
-				const mat = m2.materials[tex_unit.materialIndex];
-				if (mat) {
-					blend_mode = mat.blendingMode;
-					flags = mat.flags;
-					this.material_props.set(tex_indices[0], { blendMode: blend_mode, flags: flags });
-
-					// use Combiners_Mod (1) for alpha-using blend modes
-					if (blend_mode > 0)
-						pixel_shader = 1;
-				}
-			}
-
-			const draw_call = {
-				vao: vao,
-				start: submesh.triangleStart,
-				count: submesh.triangleCount,
-				tex_indices: tex_indices,
-				texture_count: texture_count,
-				vertex_shader: vertex_shader,
-				pixel_shader: pixel_shader,
-				blend_mode: blend_mode,
-				flags: flags,
-				visible: true
-			};
-
-			this.draw_calls.push(draw_call);
-
-			if (this.reactive) {
-				let is_default = (submesh.submeshID === 0 || submesh.submeshID.toString().endsWith('01') || submesh.submeshID.toString().startsWith('32'));
-				if (submesh.submeshID.toString().startsWith('17') || submesh.submeshID.toString().startsWith('35'))
-					is_default = false;
-
-				this.geosetArray[i] = { label: 'Geoset ' + i, checked: is_default, id: submesh.submeshID };
-				draw_call.visible = is_default;
-			}
-		}
-
-		if (this.reactive) {
-			core.view[this.geosetKey] = this.geosetArray;
-			GeosetMapper.map(this.geosetArray);
-		}
-
-		this.updateGeosets();
-	}
-
-	_create_skeleton() {
-		const m2 = this.m2;
-		const bone_data = m2.bones;
-
-		if (!bone_data || bone_data.length === 0) {
-			this.bones = null;
-			this.bone_matrices = new Float32Array(16);
-			return;
-		}
-
-		this.bones = bone_data;
-		this.bone_matrices = new Float32Array(bone_data.length * 16);
-
-		for (let i = 0; i < bone_data.length; i++)
-			this.bone_matrices.set(IDENTITY_MAT4, i * 16);
-	}
-
-	async playAnimation(index) {
-		this.current_animation = index;
-		this.animation_time = 0;
-	}
-
-	stopAnimation() {
-		this.animation_time = 0;
-		this.animation_paused = false;
-
-		// calculate bone matrices using animation 0 (stand) at time 0 for rest pose
-		if (this.bones) {
-			this.current_animation = 0;
-			this._update_bone_matrices();
-			this.current_animation = null;
-		}
-	}
-
-	updateAnimation(delta_time) {
-		if (this.current_animation === null || !this.bones)
-			return;
-
-		const anim = this.m2.animations?.[this.current_animation];
-		if (!anim)
-			return;
-
-		if (!this.animation_paused)
-			this.animation_time += delta_time;
-
-		const duration_sec = anim.duration / 1000;
-		if (duration_sec > 0)
-			this.animation_time = this.animation_time % duration_sec;
-
-		this._update_bone_matrices();
-	}
-
-	get_animation_duration() {
-		if (this.current_animation === null)
-			return 0;
-
-		const anim = this.m2.animations?.[this.current_animation];
-		return anim ? anim.duration / 1000 : 0;
-	}
-
-	get_animation_frame_count() {
-		const duration = this.get_animation_duration();
-		return Math.max(1, Math.floor(duration * 60));
-	}
-
-	get_animation_frame() {
-		const duration = this.get_animation_duration();
-		if (duration <= 0)
-			return 0;
-
-		return Math.floor((this.animation_time / duration) * this.get_animation_frame_count());
-	}
-
-	set_animation_frame(frame) {
-		const frame_count = this.get_animation_frame_count();
-		if (frame_count <= 0)
-			return;
-
-		const duration = this.get_animation_duration();
-		this.animation_time = (frame / frame_count) * duration;
-		this._update_bone_matrices();
-	}
-
-	set_animation_paused(paused) {
-		this.animation_paused = paused;
-	}
-
-	step_animation_frame(delta) {
-		const frame = this.get_animation_frame();
-		const frame_count = this.get_animation_frame_count();
-		let new_frame = frame + delta;
-
-		if (new_frame < 0)
-			new_frame = frame_count - 1;
-		else if (new_frame >= frame_count)
-			new_frame = 0;
-
-		this.set_animation_frame(new_frame);
-	}
-
-	_update_bone_matrices() {
-		const time_ms = this.animation_time * 1000;
-		const bones = this.bones;
-		const bone_count = bones.length;
-		const anim_idx = this.current_animation;
-		const m2 = this.m2;
-
-		// for legacy single-timeline, get animation time range
-		let anim_start = 0;
-		let anim_end = 0;
-		if (m2.version < M2_VER_WOTLK && m2.animations[anim_idx]) {
-			anim_start = m2.animations[anim_idx].startTimestamp;
-			anim_end = m2.animations[anim_idx].endTimestamp;
-		}
-
-		const local_mat = new Float32Array(16);
-		const trans_mat = new Float32Array(16);
-		const rot_mat = new Float32Array(16);
-		const scale_mat = new Float32Array(16);
-		const pivot_mat = new Float32Array(16);
-		const neg_pivot_mat = new Float32Array(16);
-		const temp_result = new Float32Array(16);
-
-		const calculated = new Array(bone_count).fill(false);
-
-		const calc_bone = (idx) => {
-			if (calculated[idx])
-				return;
-
-			const bone = bones[idx];
-			const parent_idx = bone.parentBone;
-
-			if (parent_idx >= 0 && parent_idx < bone_count)
-				calc_bone(parent_idx);
-
-			const pivot = bone.pivot;
-			const px = pivot[0], py = pivot[1], pz = pivot[2];
-
-			// check for animation data
-			let has_trans, has_rot, has_scale, has_scale_fallback = false;
-
-			if (m2.version < M2_VER_WOTLK) {
-				// legacy single-timeline
-				has_trans = bone.translation?.values?.length > 0;
-				has_rot = bone.rotation?.values?.length > 0;
-				has_scale = bone.scale?.values?.length > 0;
-			} else {
-				// per-animation timeline
-				has_trans = bone.translation?.timestamps?.[anim_idx]?.length > 0;
-				has_rot = bone.rotation?.timestamps?.[anim_idx]?.length > 0;
-				has_scale = bone.scale?.timestamps?.[anim_idx]?.length > 0;
-				has_scale_fallback = !has_scale && anim_idx !== 0 && bone.scale?.timestamps?.[0]?.length > 0;
-			}
-
-			const has_animation = has_trans || has_rot || has_scale || has_scale_fallback;
-
-			mat4_copy(local_mat, IDENTITY_MAT4);
-
-			if (has_animation) {
-				mat4_from_translation(pivot_mat, px, py, pz);
-				mat4_multiply(temp_result, local_mat, pivot_mat);
-				mat4_copy(local_mat, temp_result);
-
-				if (has_trans) {
-					let tx, ty, tz;
-					if (m2.version < M2_VER_WOTLK) {
-						[tx, ty, tz] = this._sample_legacy_vec3(bone.translation, time_ms, anim_start, anim_end);
-					} else {
-						const ts = bone.translation.timestamps[anim_idx];
-						const vals = bone.translation.values[anim_idx];
-						[tx, ty, tz] = this._sample_vec3(ts, vals, time_ms);
-					}
-
-					mat4_from_translation(trans_mat, tx, ty, tz);
-					mat4_multiply(temp_result, local_mat, trans_mat);
-					mat4_copy(local_mat, temp_result);
-				}
-
-				if (has_rot) {
-					let qx, qy, qz, qw;
-					if (m2.version < M2_VER_WOTLK) {
-						[qx, qy, qz, qw] = this._sample_legacy_quat(bone.rotation, time_ms, anim_start, anim_end);
-					} else {
-						const ts = bone.rotation.timestamps[anim_idx];
-						const vals = bone.rotation.values[anim_idx];
-						[qx, qy, qz, qw] = this._sample_quat(ts, vals, time_ms);
-					}
-
-					mat4_from_quat(rot_mat, qx, qy, qz, qw);
-					mat4_multiply(temp_result, local_mat, rot_mat);
-					mat4_copy(local_mat, temp_result);
-				}
-
-				// apply scale (fallback to animation 0 if current animation lacks scale data)
-				if (has_scale || has_scale_fallback) {
-					let sx, sy, sz;
-					if (m2.version < M2_VER_WOTLK) {
-						[sx, sy, sz] = this._sample_legacy_vec3(bone.scale, time_ms, anim_start, anim_end, [1, 1, 1]);
-					} else {
-						const scale_anim_idx = has_scale ? anim_idx : 0;
-						const ts = bone.scale.timestamps[scale_anim_idx];
-						const vals = bone.scale.values[scale_anim_idx];
-						const scale_time = has_scale ? time_ms : 0;
-						[sx, sy, sz] = this._sample_vec3(ts, vals, scale_time, [1, 1, 1]);
-					}
-
-					mat4_from_scale(scale_mat, sx, sy, sz);
-					mat4_multiply(temp_result, local_mat, scale_mat);
-					mat4_copy(local_mat, temp_result);
-				}
-
-				mat4_from_translation(neg_pivot_mat, -px, -py, -pz);
-				mat4_multiply(temp_result, local_mat, neg_pivot_mat);
-				mat4_copy(local_mat, temp_result);
-			}
-
-			const offset = idx * 16;
-			if (parent_idx >= 0 && parent_idx < bone_count) {
-				const parent_offset = parent_idx * 16;
-				const parent_mat = this.bone_matrices.subarray(parent_offset, parent_offset + 16);
-				mat4_multiply(this.bone_matrices.subarray(offset, offset + 16), parent_mat, local_mat);
-			} else {
-				this.bone_matrices.set(local_mat, offset);
-			}
-
-			calculated[idx] = true;
-		};
-
-		for (let i = 0; i < bone_count; i++)
-			calc_bone(i);
-	}
-
-	// legacy single-timeline sampling: uses ranges array to find keyframes within animation bounds
-	_sample_legacy_vec3(track, time_ms, anim_start, anim_end, default_value = [0, 0, 0]) {
-		const timestamps = track.timestamps;
-		const values = track.values;
-		const ranges = track.ranges;
-
-		if (!timestamps || timestamps.length === 0)
-			return default_value;
-
-		// absolute time in global timeline
-		const abs_time = anim_start + time_ms;
-
-		// find keyframes within this animation's range
-		let start_idx = 0;
-		let end_idx = timestamps.length - 1;
-
-		// use ranges if available to narrow search
-		if (ranges && ranges.length > 0) {
-			// ranges contains [start, end] pairs for each animation
-			// but in legacy format, all animations share single timeline
-			// find relevant range by searching
-		}
-
-		// find keyframes
-		if (timestamps.length === 1 || abs_time <= timestamps[0]) {
-			const v = values[0];
-			return [v[0], v[1], v[2]];
-		}
-
-		if (abs_time >= timestamps[timestamps.length - 1]) {
-			const v = values[values.length - 1];
-			return [v[0], v[1], v[2]];
-		}
-
-		let frame = 0;
-		for (let i = 0; i < timestamps.length - 1; i++) {
-			if (abs_time >= timestamps[i] && abs_time < timestamps[i + 1]) {
-				frame = i;
-				break;
-			}
-		}
-
-		const t0 = timestamps[frame];
-		const t1 = timestamps[frame + 1];
-		const alpha = (abs_time - t0) / (t1 - t0);
-
-		const v0 = values[frame];
-		const v1 = values[frame + 1];
-
-		return [
-			lerp(v0[0], v1[0], alpha),
-			lerp(v0[1], v1[1], alpha),
-			lerp(v0[2], v1[2], alpha)
-		];
-	}
-
-	_sample_legacy_quat(track, time_ms, anim_start, anim_end) {
-		const timestamps = track.timestamps;
-		const values = track.values;
-
-		if (!timestamps || timestamps.length === 0)
-			return [0, 0, 0, 1];
-
-		const abs_time = anim_start + time_ms;
-
-		if (timestamps.length === 1 || abs_time <= timestamps[0]) {
-			const v = values[0];
-			return [v[0], v[1], v[2], v[3]];
-		}
-
-		if (abs_time >= timestamps[timestamps.length - 1]) {
-			const v = values[values.length - 1];
-			return [v[0], v[1], v[2], v[3]];
-		}
-
-		let frame = 0;
-		for (let i = 0; i < timestamps.length - 1; i++) {
-			if (abs_time >= timestamps[i] && abs_time < timestamps[i + 1]) {
-				frame = i;
-				break;
-			}
-		}
-
-		const t0 = timestamps[frame];
-		const t1 = timestamps[frame + 1];
-		const alpha = (abs_time - t0) / (t1 - t0);
-
-		const q0 = values[frame];
-		const q1 = values[frame + 1];
-
-		const out = [0, 0, 0, 1];
-		quat_slerp(out, q0[0], q0[1], q0[2], q0[3], q1[0], q1[1], q1[2], q1[3], alpha);
-		return out;
-	}
-
-	// per-animation timeline sampling (wotlk)
-	_sample_vec3(timestamps, values, time_ms, default_value = [0, 0, 0]) {
-		if (!timestamps || timestamps.length === 0)
-			return default_value;
-
-		if (timestamps.length === 1 || time_ms <= timestamps[0]) {
-			const v = values[0];
-			return [v[0], v[1], v[2]];
-		}
-
-		if (time_ms >= timestamps[timestamps.length - 1]) {
-			const v = values[values.length - 1];
-			return [v[0], v[1], v[2]];
-		}
-
-		let frame = 0;
-		for (let i = 0; i < timestamps.length - 1; i++) {
-			if (time_ms >= timestamps[i] && time_ms < timestamps[i + 1]) {
-				frame = i;
-				break;
-			}
-		}
-
-		const t0 = timestamps[frame];
-		const t1 = timestamps[frame + 1];
-		const alpha = (time_ms - t0) / (t1 - t0);
-
-		const v0 = values[frame];
-		const v1 = values[frame + 1];
-
-		return [
-			lerp(v0[0], v1[0], alpha),
-			lerp(v0[1], v1[1], alpha),
-			lerp(v0[2], v1[2], alpha)
-		];
-	}
-
-	_sample_quat(timestamps, values, time_ms) {
-		if (!timestamps || timestamps.length === 0)
-			return [0, 0, 0, 1];
-
-		if (timestamps.length === 1 || time_ms <= timestamps[0]) {
-			const v = values[0];
-			return [v[0], v[1], v[2], v[3]];
-		}
-
-		if (time_ms >= timestamps[timestamps.length - 1]) {
-			const v = values[values.length - 1];
-			return [v[0], v[1], v[2], v[3]];
-		}
-
-		let frame = 0;
-		for (let i = 0; i < timestamps.length - 1; i++) {
-			if (time_ms >= timestamps[i] && time_ms < timestamps[i + 1]) {
-				frame = i;
-				break;
-			}
-		}
-
-		const t0 = timestamps[frame];
-		const t1 = timestamps[frame + 1];
-		const alpha = (time_ms - t0) / (t1 - t0);
-
-		const q0 = values[frame];
-		const q1 = values[frame + 1];
-
-		const out = [0, 0, 0, 1];
-		quat_slerp(out, q0[0], q0[1], q0[2], q0[3], q1[0], q1[1], q1[2], q1[3], alpha);
-		return out;
-	}
-
-	updateGeosets() {
-		if (!this.reactive || !this.geosetArray || !this.draw_calls)
-			return;
-
-		for (let i = 0; i < this.draw_calls.length && i < this.geosetArray.length; i++)
-			this.draw_calls[i].visible = this.geosetArray[i].checked;
-	}
-
-	setTransform(position, rotation, scale) {
-		this.position = position;
-		this.rotation = rotation;
-		this.scale = scale;
-		this._update_model_matrix();
-	}
-
-	setTransformQuat(position, quat, scale) {
-		const [px, py, pz] = position;
-		const [qx, qy, qz, qw] = quat;
-		const [sx, sy, sz] = scale;
-
-		const x2 = qx + qx, y2 = qy + qy, z2 = qz + qz;
-		const xx = qx * x2, xy = qx * y2, xz = qx * z2;
-		const yy = qy * y2, yz = qy * z2, zz = qz * z2;
-		const wx = qw * x2, wy = qw * y2, wz = qw * z2;
-
-		const m = this.model_matrix;
-		m[0] = (1 - (yy + zz)) * sx;
-		m[1] = (xy + wz) * sx;
-		m[2] = (xz - wy) * sx;
-		m[3] = 0;
-		m[4] = (xy - wz) * sy;
-		m[5] = (1 - (xx + zz)) * sy;
-		m[6] = (yz + wx) * sy;
-		m[7] = 0;
-		m[8] = (xz + wy) * sz;
-		m[9] = (yz - wx) * sz;
-		m[10] = (1 - (xx + yy)) * sz;
-		m[11] = 0;
-		m[12] = px;
-		m[13] = py;
-		m[14] = pz;
-		m[15] = 1;
-	}
-
-	_update_model_matrix() {
-		const m = this.model_matrix;
-		const [px, py, pz] = this.position;
-		const [rx, ry, rz] = this.rotation;
-		const [sx, sy, sz] = this.scale;
-
-		const cx = Math.cos(rx), sinx = Math.sin(rx);
-		const cy = Math.cos(ry), siny = Math.sin(ry);
-		const cz = Math.cos(rz), sinz = Math.sin(rz);
-
-		m[0] = cy * cz * sx;
-		m[1] = cy * sinz * sx;
-		m[2] = -siny * sx;
-		m[3] = 0;
-
-		m[4] = (sinx * siny * cz - cx * sinz) * sy;
-		m[5] = (sinx * siny * sinz + cx * cz) * sy;
-		m[6] = sinx * cy * sy;
-		m[7] = 0;
-
-		m[8] = (cx * siny * cz + sinx * sinz) * sz;
-		m[9] = (cx * siny * sinz - sinx * cz) * sz;
-		m[10] = cx * cy * sz;
-		m[11] = 0;
-
-		m[12] = px;
-		m[13] = py;
-		m[14] = pz;
-		m[15] = 1;
-	}
-
-	render(view_matrix, projection_matrix) {
-		if (!this.shader || this.draw_calls.length === 0)
-			return;
-
-		const gl = this.gl;
-		const ctx = this.ctx;
-		const shader = this.shader;
-		const wireframe = core.view.config.modelViewerWireframe;
-
-		shader.use();
-
-		shader.set_uniform_mat4('u_view_matrix', false, view_matrix);
-		shader.set_uniform_mat4('u_projection_matrix', false, projection_matrix);
-		shader.set_uniform_mat4('u_model_matrix', false, this.model_matrix);
-		shader.set_uniform_3f('u_view_up', 0, 1, 0);
-		shader.set_uniform_1f('u_time', performance.now() * 0.001);
-
-		// bone skinning disabled for legacy models until animation system is fixed
-		shader.set_uniform_1i('u_bone_count', 0);
-
-		shader.set_uniform_1i('u_has_tex_matrix1', 0);
-		shader.set_uniform_1i('u_has_tex_matrix2', 0);
-		shader.set_uniform_mat4('u_tex_matrix1', false, IDENTITY_MAT4);
-		shader.set_uniform_mat4('u_tex_matrix2', false, IDENTITY_MAT4);
-
-		const lx = 3, ly = -0.7, lz = -2;
-		const light_view_x = view_matrix[0] * lx + view_matrix[4] * ly + view_matrix[8] * lz;
-		const light_view_y = view_matrix[1] * lx + view_matrix[5] * ly + view_matrix[9] * lz;
-		const light_view_z = view_matrix[2] * lx + view_matrix[6] * ly + view_matrix[10] * lz;
-
-		shader.set_uniform_1i('u_apply_lighting', 1);
-		shader.set_uniform_3f('u_ambient_color', 0.5, 0.5, 0.5);
-		shader.set_uniform_3f('u_diffuse_color', 0.7, 0.7, 0.7);
-		shader.set_uniform_3f('u_light_dir', light_view_x, light_view_y, light_view_z);
-
-		shader.set_uniform_1i('u_wireframe', wireframe ? 1 : 0);
-		shader.set_uniform_4f('u_wireframe_color', 1, 1, 1, 1);
-
-		shader.set_uniform_1f('u_alpha_test', 0.501960814);
-
-		shader.set_uniform_1i('u_texture1', 0);
-		shader.set_uniform_1i('u_texture2', 1);
-		shader.set_uniform_1i('u_texture3', 2);
-		shader.set_uniform_1i('u_texture4', 3);
-
-		shader.set_uniform_3f('u_tex_sample_alpha', 1, 1, 1);
-
-		const sorted_calls = [...this.draw_calls].sort((a, b) => {
-			const a_opaque = a.blend_mode === 0 || a.blend_mode === 1;
-			const b_opaque = b.blend_mode === 0 || b.blend_mode === 1;
-			if (a_opaque !== b_opaque)
-				return a_opaque ? -1 : 1;
-
-			return 0;
-		});
-
-		for (const dc of sorted_calls) {
-			if (!dc.visible)
-				continue;
-
-			shader.set_uniform_1i('u_vertex_shader', dc.vertex_shader);
-			shader.set_uniform_1i('u_pixel_shader', dc.pixel_shader);
-			shader.set_uniform_1i('u_blend_mode', dc.blend_mode);
-
-			shader.set_uniform_4f('u_mesh_color', 1, 1, 1, 1);
-
-			ctx.apply_blend_mode(dc.blend_mode);
-
-			if (dc.flags & 0x04) {
-				ctx.set_cull_face(false);
-			} else {
-				ctx.set_cull_face(true);
-				ctx.set_cull_mode(gl.BACK);
-			}
-
-			if (dc.flags & 0x08)
-				ctx.set_depth_test(false);
-			else
-				ctx.set_depth_test(true);
-
-			for (let t = 0; t < 4; t++) {
-				const tex_idx = dc.tex_indices[t];
-				const texture = (tex_idx !== null) ? (this.textures.get(tex_idx) || this.default_texture) : this.default_texture;
-				texture.bind(t);
-			}
-
-			dc.vao.bind();
-			gl.drawElements(
-				wireframe ? gl.LINES : gl.TRIANGLES,
-				dc.count,
-				gl.UNSIGNED_SHORT,
-				dc.start * 2
-			);
-		}
-
-		ctx.set_blend(false);
-		ctx.set_depth_test(true);
-		ctx.set_depth_write(true);
-		ctx.set_cull_face(false);
-	}
-
-	getBoundingBox() {
-		if (!this.m2 || !this.m2.boundingBox)
-			return null;
-
-		const src_min = this.m2.boundingBox.min;
-		const src_max = this.m2.boundingBox.max;
-
-		return {
-			min: [src_min[0], src_min[2], -src_max[1]],
-			max: [src_max[0], src_max[2], -src_min[1]]
-		};
-	}
-
-	_dispose_skin() {
-		for (const vao of this.vaos)
-			vao.dispose();
-
-		this.vaos = [];
-		this.buffers = [];
-		this.draw_calls = [];
-
-		if (this.geosetArray)
-			this.geosetArray.splice(0);
-	}
-
-	dispose() {
-		this.geosetWatcher?.();
-		this.wireframeWatcher?.();
-
-		this._dispose_skin();
-
-		for (const tex of this.textures.values())
-			tex.dispose();
-
-		this.textures.clear();
-
-		if (this.default_texture) {
-			this.default_texture.dispose();
-			this.default_texture = null;
 		}
 	}
 }
 
-module.exports = M2LegacyRendererGL;
+// -----------------------------------------------------------------------
+// applyCreatureSkin
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& texture_paths) {
+	// JS: const mpq = core.view.mpq;
+	const auto& textureTypes = m2->textureTypes;
+
+	// creature skins map to textureType 11, 12, 13 (Monster1, Monster2, Monster3)
+	const uint32_t MONSTER_TEX_START = 11;
+
+	for (size_t i = 0; i < textureTypes.size(); i++) {
+		const uint32_t textureType = textureTypes[i];
+
+		// check if this is a monster replaceable texture slot
+		if (textureType >= MONSTER_TEX_START && textureType < MONSTER_TEX_START + 3) {
+			const uint32_t skin_index = textureType - MONSTER_TEX_START;
+
+			if (skin_index < texture_paths.size()) {
+				const std::string& texture_path = texture_paths[skin_index];
+
+				try {
+					// JS: const data = mpq.getFile(texture_path);
+					// NOTE: The JS loads a NEW file by `texture_path` from the MPQ archive,
+					// replacing the existing texture with the creature skin file.
+					// This requires MPQ archive access (core.view.mpq) which is not yet wired.
+					// When MPQ integration is available, load BufferWrapper from
+					// mpq->getFile(texture_path) and create a BLPImage from that data.
+					// For now, this function is a no-op until MPQ is integrated.
+					(void)texture_path;
+
+					// TODO(mpq): Uncomment and wire when MPQ integration is available:
+					// auto file_data = mpq->getFile(texture_path);
+					// if (file_data) {
+					//     casc::BLPImage blp(BufferWrapper::from(file_data.value()));
+					//     auto gl_tex = std::make_unique<gl::GLTexture>(ctx);
+					//     gl::BLPTextureFlags blp_flags;
+					//     blp_flags.flags = m2->textures[i].flags;
+					//     gl_tex->set_blp(blp, blp_flags);
+					//     textures[static_cast<int>(i)] = std::move(gl_tex);
+					//     if (useRibbon) {
+					//         textureRibbon.setSlotFileLegacy(i, texture_path, syncID);
+					//         textureRibbon.setSlotSrc(i, blp.getDataURL(0b0111), syncID);
+					//     }
+					//     logging::write(std::format("Applied creature skin texture {}: {}", static_cast<int>(i), texture_path));
+					// }
+				} catch (const std::exception& e) {
+					logging::write(std::format("Failed to apply creature skin texture {}: {}", texture_path, e.what()));
+				}
+			}
+		}
+	}
+}
+
+// -----------------------------------------------------------------------
+// loadSkin
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::loadSkin(int index) {
+	_dispose_skin();
+
+	auto& skin = m2->getSkin(index);
+
+	_create_skeleton();
+
+	// build interleaved vertex buffer
+	// format: position(3f) + normal(3f) + bone_idx(4ub) + bone_weight(4ub) + uv(2f) = 40 bytes
+	const size_t vertex_count = m2->vertices.size() / 3;
+	const size_t stride = 40;
+	std::vector<uint8_t> vertex_data(vertex_count * stride);
+
+	for (size_t i = 0; i < vertex_count; i++) {
+		const size_t offset = i * stride;
+		const size_t v_idx = i * 3;
+		const size_t uv_idx = i * 2;
+		const size_t bone_idx = i * 4;
+
+		// position
+		std::memcpy(&vertex_data[offset + 0], &m2->vertices[v_idx], sizeof(float));
+		std::memcpy(&vertex_data[offset + 4], &m2->vertices[v_idx + 1], sizeof(float));
+		std::memcpy(&vertex_data[offset + 8], &m2->vertices[v_idx + 2], sizeof(float));
+
+		// normal
+		std::memcpy(&vertex_data[offset + 12], &m2->normals[v_idx], sizeof(float));
+		std::memcpy(&vertex_data[offset + 16], &m2->normals[v_idx + 1], sizeof(float));
+		std::memcpy(&vertex_data[offset + 20], &m2->normals[v_idx + 2], sizeof(float));
+
+		// bone indices
+		vertex_data[offset + 24] = m2->boneIndices[bone_idx];
+		vertex_data[offset + 25] = m2->boneIndices[bone_idx + 1];
+		vertex_data[offset + 26] = m2->boneIndices[bone_idx + 2];
+		vertex_data[offset + 27] = m2->boneIndices[bone_idx + 3];
+
+		// bone weights
+		vertex_data[offset + 28] = m2->boneWeights[bone_idx];
+		vertex_data[offset + 29] = m2->boneWeights[bone_idx + 1];
+		vertex_data[offset + 30] = m2->boneWeights[bone_idx + 2];
+		vertex_data[offset + 31] = m2->boneWeights[bone_idx + 3];
+
+		// texcoord
+		std::memcpy(&vertex_data[offset + 32], &m2->uv[uv_idx], sizeof(float));
+		std::memcpy(&vertex_data[offset + 36], &m2->uv[uv_idx + 1], sizeof(float));
+	}
+
+	// map triangle indices
+	std::vector<uint16_t> index_data(skin.triangles.size());
+	for (size_t i = 0; i < skin.triangles.size(); i++)
+		index_data[i] = skin.indices[skin.triangles[i]];
+
+	// create VAO
+	auto vao = std::make_unique<gl::VertexArray>(ctx);
+	vao->bind();
+
+	GLuint vbo;
+	glGenBuffers(1, &vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertex_data.size()), vertex_data.data(), GL_STATIC_DRAW);
+	this->buffers.push_back(vbo);
+	vao->vbo = vbo;
+
+	GLuint ebo;
+	glGenBuffers(1, &ebo);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(index_data.size() * sizeof(uint16_t)), index_data.data(), GL_STATIC_DRAW);
+	this->buffers.push_back(ebo);
+	vao->ebo = ebo;
+
+	vao->setup_m2_vertex_format();
+
+	gl::VertexArray* vao_raw = vao.get();
+	vaos.push_back(std::move(vao));
+
+	if (reactive)
+		geosetArray.resize(skin.subMeshes.size());
+
+	// build draw calls per submesh
+	draw_calls.clear();
+
+	for (size_t i = 0; i < skin.subMeshes.size(); i++) {
+		const auto& submesh = skin.subMeshes[i];
+
+		// find texture unit matching this submesh
+		const LegacyM2TextureUnit* tex_unit = nullptr;
+		for (const auto& tu : skin.textureUnits) {
+			if (tu.skinSectionIndex == static_cast<uint16_t>(i)) {
+				tex_unit = &tu;
+				break;
+			}
+		}
+
+		std::array<int, 4> tex_indices = { -1, -1, -1, -1 };
+		int vertex_shader = LEGACY_VERTEX_SHADER;
+		int pixel_shader = LEGACY_PIXEL_SHADER;
+		int blend_mode = 0;
+		uint16_t flags = 0;
+		uint16_t texture_count = 1;
+
+		if (tex_unit) {
+			texture_count = tex_unit->textureCount;
+
+			for (uint16_t j = 0; j < std::min(texture_count, static_cast<uint16_t>(4)); j++) {
+				const uint16_t combo_idx = tex_unit->textureComboIndex + j;
+				if (combo_idx < m2->textureCombos.size())
+					tex_indices[j] = static_cast<int>(m2->textureCombos[combo_idx]);
+			}
+
+			if (tex_unit->materialIndex < m2->materials.size()) {
+				const auto& mat = m2->materials[tex_unit->materialIndex];
+				blend_mode = mat.blendingMode;
+				flags = mat.flags;
+				material_props[tex_indices[0]] = { blend_mode, flags };
+
+				// use Combiners_Mod (1) for alpha-using blend modes
+				if (blend_mode > 0)
+					pixel_shader = 1;
+			}
+		}
+
+		M2LegacyDrawCall draw_call;
+		draw_call.vao = vao_raw;
+		draw_call.start = submesh.triangleStart;
+		draw_call.count = submesh.triangleCount;
+		draw_call.tex_indices = tex_indices;
+		draw_call.texture_count = texture_count;
+		draw_call.vertex_shader = vertex_shader;
+		draw_call.pixel_shader = pixel_shader;
+		draw_call.blend_mode = blend_mode;
+		draw_call.flags = flags;
+		draw_call.visible = true;
+
+		if (reactive) {
+			const std::string id_str = std::to_string(submesh.submeshID);
+			bool is_default = (submesh.submeshID == 0 ||
+				(id_str.size() >= 2 && id_str.substr(id_str.size() - 2) == "01") ||
+				(id_str.size() >= 2 && id_str.substr(0, 2) == "32"));
+			if ((id_str.size() >= 2 && id_str.substr(0, 2) == "17") ||
+				(id_str.size() >= 2 && id_str.substr(0, 2) == "35"))
+				is_default = false;
+
+			M2LegacyGeosetEntry entry;
+			entry.label = "Geoset " + std::to_string(i);
+			entry.checked = is_default;
+			entry.id = submesh.submeshID;
+			geosetArray[i] = entry;
+			draw_call.visible = is_default;
+		}
+
+		draw_calls.push_back(draw_call);
+	}
+
+	if (reactive) {
+		// JS: core.view[this.geosetKey] = this.geosetArray;
+		auto& geosets = core::view->modelViewerGeosets;
+		geosets.clear();
+		for (const auto& entry : geosetArray) {
+			nlohmann::json j;
+			j["label"] = entry.label;
+			j["checked"] = entry.checked;
+			j["id"] = entry.id;
+			geosets.push_back(j);
+		}
+
+		// JS: GeosetMapper.map(this.geosetArray);
+		std::vector<geoset_mapper::Geoset> mapper_geosets;
+		for (const auto& entry : geosetArray) {
+			geoset_mapper::Geoset g;
+			g.id = entry.id;
+			g.label = entry.label;
+			mapper_geosets.push_back(g);
+		}
+		geoset_mapper::map(mapper_geosets);
+
+		// update labels back
+		for (size_t i = 0; i < mapper_geosets.size() && i < geosetArray.size(); i++) {
+			geosetArray[i].label = mapper_geosets[i].label;
+		}
+
+		// update core state labels too
+		for (size_t i = 0; i < mapper_geosets.size() && i < geosets.size(); i++) {
+			geosets[i]["label"] = mapper_geosets[i].label;
+		}
+	}
+
+	updateGeosets();
+}
+
+// -----------------------------------------------------------------------
+// _create_skeleton
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::_create_skeleton() {
+	auto& bone_data = m2->bones;
+
+	if (bone_data.empty()) {
+		bones = nullptr;
+		bone_matrices.assign(16, 0.0f);
+		std::copy(IDENTITY_MAT4.begin(), IDENTITY_MAT4.end(), bone_matrices.begin());
+		return;
+	}
+
+	bones = &bone_data;
+	bone_matrices.resize(bone_data.size() * 16);
+
+	for (size_t i = 0; i < bone_data.size(); i++)
+		std::copy(IDENTITY_MAT4.begin(), IDENTITY_MAT4.end(), bone_matrices.begin() + static_cast<ptrdiff_t>(i * 16));
+}
+
+// -----------------------------------------------------------------------
+// playAnimation
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::playAnimation(int index) {
+	current_animation = index;
+	animation_time = 0;
+}
+
+// -----------------------------------------------------------------------
+// stopAnimation
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::stopAnimation() {
+	animation_time = 0;
+	animation_paused = false;
+
+	// calculate bone matrices using animation 0 (stand) at time 0 for rest pose
+	if (bones) {
+		current_animation = 0;
+		_update_bone_matrices();
+		current_animation = -1; // null
+	}
+}
+
+// -----------------------------------------------------------------------
+// updateAnimation
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::updateAnimation(float delta_time) {
+	if (current_animation < 0 || !bones)
+		return;
+
+	if (static_cast<size_t>(current_animation) >= m2->animations.size())
+		return;
+
+	const auto& anim = m2->animations[current_animation];
+
+	if (!animation_paused)
+		animation_time += delta_time;
+
+	const float duration_sec = static_cast<float>(anim.duration) / 1000.0f;
+	if (duration_sec > 0)
+		animation_time = std::fmod(animation_time, duration_sec);
+
+	_update_bone_matrices();
+}
+
+// -----------------------------------------------------------------------
+// get_animation_duration
+// -----------------------------------------------------------------------
+
+float M2LegacyRendererGL::get_animation_duration() {
+	if (current_animation < 0)
+		return 0;
+
+	if (static_cast<size_t>(current_animation) >= m2->animations.size())
+		return 0;
+
+	const auto& anim = m2->animations[current_animation];
+	return static_cast<float>(anim.duration) / 1000.0f;
+}
+
+// -----------------------------------------------------------------------
+// get_animation_frame_count
+// -----------------------------------------------------------------------
+
+int M2LegacyRendererGL::get_animation_frame_count() {
+	const float duration = get_animation_duration();
+	return std::max(1, static_cast<int>(std::floor(duration * 60)));
+}
+
+// -----------------------------------------------------------------------
+// get_animation_frame
+// -----------------------------------------------------------------------
+
+int M2LegacyRendererGL::get_animation_frame() {
+	const float duration = get_animation_duration();
+	if (duration <= 0)
+		return 0;
+
+	return static_cast<int>(std::floor((animation_time / duration) * static_cast<float>(get_animation_frame_count())));
+}
+
+// -----------------------------------------------------------------------
+// set_animation_frame
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::set_animation_frame(int frame) {
+	const int frame_count = get_animation_frame_count();
+	if (frame_count <= 0)
+		return;
+
+	const float duration = get_animation_duration();
+	animation_time = (static_cast<float>(frame) / static_cast<float>(frame_count)) * duration;
+	_update_bone_matrices();
+}
+
+// -----------------------------------------------------------------------
+// set_animation_paused
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::set_animation_paused(bool paused) {
+	animation_paused = paused;
+}
+
+// -----------------------------------------------------------------------
+// step_animation_frame
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::step_animation_frame(int delta) {
+	const int frame = get_animation_frame();
+	const int frame_count = get_animation_frame_count();
+	int new_frame = frame + delta;
+
+	if (new_frame < 0)
+		new_frame = frame_count - 1;
+	else if (new_frame >= frame_count)
+		new_frame = 0;
+
+	set_animation_frame(new_frame);
+}
+
+// -----------------------------------------------------------------------
+// _update_bone_matrices
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::_update_bone_matrices() {
+	const float time_ms = animation_time * 1000.0f;
+	const auto& bone_list = *bones;
+	const size_t bone_count = bone_list.size();
+	const int anim_idx = current_animation;
+
+	// for legacy single-timeline, get animation time range
+	uint32_t anim_start = 0;
+	uint32_t anim_end = 0;
+	if (m2->version < M2_LEGACY_VER_WOTLK && anim_idx >= 0 && static_cast<size_t>(anim_idx) < m2->animations.size()) {
+		anim_start = m2->animations[anim_idx].startTimestamp;
+		anim_end = m2->animations[anim_idx].endTimestamp;
+	}
+
+	float local_mat[16];
+	float trans_mat[16];
+	float rot_mat[16];
+	float scale_mat[16];
+	float pivot_mat[16];
+	float neg_pivot_mat[16];
+	float temp_result[16];
+
+	std::vector<bool> calculated(bone_count, false);
+
+	// Recursive bone calculation (using a lambda with capture for recursion)
+	std::function<void(size_t)> calc_bone = [&](size_t idx) {
+		if (calculated[idx])
+			return;
+
+		const auto& bone = bone_list[idx];
+		const int16_t parent_idx = bone.parentBone;
+
+		if (parent_idx >= 0 && static_cast<size_t>(parent_idx) < bone_count)
+			calc_bone(static_cast<size_t>(parent_idx));
+
+		const auto& pivot = bone.pivot;
+		const float px = pivot[0], py = pivot[1], pz = pivot[2];
+
+		// check for animation data
+		bool has_trans = false, has_rot = false, has_scale = false, has_scale_fallback = false;
+
+		if (m2->version < M2_LEGACY_VER_WOTLK) {
+			// legacy single-timeline
+			has_trans = !bone.translation.flatValues.empty();
+			has_rot = !bone.rotation.flatValues.empty();
+			has_scale = !bone.scale.flatValues.empty();
+		} else {
+			// per-animation timeline
+			if (anim_idx >= 0) {
+				has_trans = static_cast<size_t>(anim_idx) < bone.translation.nestedTimestamps.size() &&
+					!bone.translation.nestedTimestamps[anim_idx].empty();
+				has_rot = static_cast<size_t>(anim_idx) < bone.rotation.nestedTimestamps.size() &&
+					!bone.rotation.nestedTimestamps[anim_idx].empty();
+				has_scale = static_cast<size_t>(anim_idx) < bone.scale.nestedTimestamps.size() &&
+					!bone.scale.nestedTimestamps[anim_idx].empty();
+				has_scale_fallback = !has_scale && anim_idx != 0 &&
+					!bone.scale.nestedTimestamps.empty() &&
+					!bone.scale.nestedTimestamps[0].empty();
+			}
+		}
+
+		const bool has_animation = has_trans || has_rot || has_scale || has_scale_fallback;
+
+		mat4_copy(local_mat, IDENTITY_MAT4.data());
+
+		if (has_animation) {
+			mat4_from_translation(pivot_mat, px, py, pz);
+			mat4_multiply(temp_result, local_mat, pivot_mat);
+			mat4_copy(local_mat, temp_result);
+
+			if (has_trans) {
+				float tx, ty, tz;
+				if (m2->version < M2_LEGACY_VER_WOTLK) {
+					auto result = _sample_legacy_vec3(bone.translation, time_ms, anim_start, anim_end);
+					tx = result[0]; ty = result[1]; tz = result[2];
+				} else {
+					const auto& ts = bone.translation.nestedTimestamps[anim_idx];
+					const auto& vals = bone.translation.nestedValues[anim_idx];
+					auto result = _sample_vec3(ts, vals, time_ms);
+					tx = result[0]; ty = result[1]; tz = result[2];
+				}
+
+				mat4_from_translation(trans_mat, tx, ty, tz);
+				mat4_multiply(temp_result, local_mat, trans_mat);
+				mat4_copy(local_mat, temp_result);
+			}
+
+			if (has_rot) {
+				float qx, qy, qz, qw;
+				if (m2->version < M2_LEGACY_VER_WOTLK) {
+					auto result = _sample_legacy_quat(bone.rotation, time_ms, anim_start, anim_end);
+					qx = result[0]; qy = result[1]; qz = result[2]; qw = result[3];
+				} else {
+					const auto& ts = bone.rotation.nestedTimestamps[anim_idx];
+					const auto& vals = bone.rotation.nestedValues[anim_idx];
+					auto result = _sample_quat(ts, vals, time_ms);
+					qx = result[0]; qy = result[1]; qz = result[2]; qw = result[3];
+				}
+
+				mat4_from_quat(rot_mat, qx, qy, qz, qw);
+				mat4_multiply(temp_result, local_mat, rot_mat);
+				mat4_copy(local_mat, temp_result);
+			}
+
+			// apply scale (fallback to animation 0 if current animation lacks scale data)
+			if (has_scale || has_scale_fallback) {
+				float sx, sy, sz;
+				if (m2->version < M2_LEGACY_VER_WOTLK) {
+					auto result = _sample_legacy_vec3(bone.scale, time_ms, anim_start, anim_end, {1, 1, 1});
+					sx = result[0]; sy = result[1]; sz = result[2];
+				} else {
+					const int scale_anim_idx = has_scale ? anim_idx : 0;
+					const auto& ts = bone.scale.nestedTimestamps[scale_anim_idx];
+					const auto& vals = bone.scale.nestedValues[scale_anim_idx];
+					const float scale_time = has_scale ? time_ms : 0;
+					auto result = _sample_vec3(ts, vals, scale_time, {1, 1, 1});
+					sx = result[0]; sy = result[1]; sz = result[2];
+				}
+
+				mat4_from_scale(scale_mat, sx, sy, sz);
+				mat4_multiply(temp_result, local_mat, scale_mat);
+				mat4_copy(local_mat, temp_result);
+			}
+
+			mat4_from_translation(neg_pivot_mat, -px, -py, -pz);
+			mat4_multiply(temp_result, local_mat, neg_pivot_mat);
+			mat4_copy(local_mat, temp_result);
+		}
+
+		const size_t offset = idx * 16;
+		if (parent_idx >= 0 && static_cast<size_t>(parent_idx) < bone_count) {
+			const size_t parent_offset = static_cast<size_t>(parent_idx) * 16;
+			mat4_multiply(&bone_matrices[offset], &bone_matrices[parent_offset], local_mat);
+		} else {
+			std::copy(local_mat, local_mat + 16, bone_matrices.begin() + static_cast<ptrdiff_t>(offset));
+		}
+
+		calculated[idx] = true;
+	};
+
+	for (size_t i = 0; i < bone_count; i++)
+		calc_bone(i);
+}
+
+// -----------------------------------------------------------------------
+// _sample_legacy_vec3
+// legacy single-timeline sampling: uses ranges array to find keyframes within animation bounds
+// -----------------------------------------------------------------------
+
+std::array<float, 3> M2LegacyRendererGL::_sample_legacy_vec3(const LegacyM2Track& track, float time_ms, uint32_t anim_start, uint32_t anim_end, const std::array<float, 3>& default_value) {
+	const auto& timestamps = track.flatTimestamps;
+	const auto& values = track.flatValues;
+	const auto& ranges = track.ranges;
+
+	if (timestamps.empty())
+		return default_value;
+
+	// absolute time in global timeline
+	const float abs_time = static_cast<float>(anim_start) + time_ms;
+
+	// find keyframes within this animation's range
+	// size_t start_idx = 0;
+	// size_t end_idx = timestamps.size() - 1;
+
+	// use ranges if available to narrow search
+	if (!ranges.empty()) {
+		// ranges contains [start, end] pairs for each animation
+		// but in legacy format, all animations share single timeline
+		// find relevant range by searching
+	}
+
+	// find keyframes
+	if (timestamps.size() == 1 || abs_time <= track_value_to_float(timestamps[0])) {
+		const auto& v = track_value_to_vec(values[0]);
+		if (v.size() >= 3)
+			return {v[0], v[1], v[2]};
+		return default_value;
+	}
+
+	if (abs_time >= track_value_to_float(timestamps[timestamps.size() - 1])) {
+		const auto& v = track_value_to_vec(values[values.size() - 1]);
+		if (v.size() >= 3)
+			return {v[0], v[1], v[2]};
+		return default_value;
+	}
+
+	size_t frame = 0;
+	for (size_t i = 0; i < timestamps.size() - 1; i++) {
+		if (abs_time >= track_value_to_float(timestamps[i]) && abs_time < track_value_to_float(timestamps[i + 1])) {
+			frame = i;
+			break;
+		}
+	}
+
+	const float t0 = track_value_to_float(timestamps[frame]);
+	const float t1 = track_value_to_float(timestamps[frame + 1]);
+	const float alpha = (abs_time - t0) / (t1 - t0);
+
+	const auto& v0 = track_value_to_vec(values[frame]);
+	const auto& v1 = track_value_to_vec(values[frame + 1]);
+
+	if (v0.size() >= 3 && v1.size() >= 3) {
+		return {
+			lerp(v0[0], v1[0], alpha),
+			lerp(v0[1], v1[1], alpha),
+			lerp(v0[2], v1[2], alpha)
+		};
+	}
+
+	return default_value;
+}
+
+// -----------------------------------------------------------------------
+// _sample_legacy_quat
+// -----------------------------------------------------------------------
+
+std::array<float, 4> M2LegacyRendererGL::_sample_legacy_quat(const LegacyM2Track& track, float time_ms, uint32_t anim_start, uint32_t anim_end) {
+	const auto& timestamps = track.flatTimestamps;
+	const auto& values = track.flatValues;
+
+	if (timestamps.empty())
+		return {0, 0, 0, 1};
+
+	const float abs_time = static_cast<float>(anim_start) + time_ms;
+
+	if (timestamps.size() == 1 || abs_time <= track_value_to_float(timestamps[0])) {
+		const auto& v = track_value_to_vec(values[0]);
+		if (v.size() >= 4)
+			return {v[0], v[1], v[2], v[3]};
+		return {0, 0, 0, 1};
+	}
+
+	if (abs_time >= track_value_to_float(timestamps[timestamps.size() - 1])) {
+		const auto& v = track_value_to_vec(values[values.size() - 1]);
+		if (v.size() >= 4)
+			return {v[0], v[1], v[2], v[3]};
+		return {0, 0, 0, 1};
+	}
+
+	size_t frame = 0;
+	for (size_t i = 0; i < timestamps.size() - 1; i++) {
+		if (abs_time >= track_value_to_float(timestamps[i]) && abs_time < track_value_to_float(timestamps[i + 1])) {
+			frame = i;
+			break;
+		}
+	}
+
+	const float t0 = track_value_to_float(timestamps[frame]);
+	const float t1 = track_value_to_float(timestamps[frame + 1]);
+	const float alpha = (abs_time - t0) / (t1 - t0);
+
+	const auto& q0 = track_value_to_vec(values[frame]);
+	const auto& q1 = track_value_to_vec(values[frame + 1]);
+
+	if (q0.size() >= 4 && q1.size() >= 4) {
+		std::array<float, 4> out = {0, 0, 0, 1};
+		quat_slerp(out.data(), q0[0], q0[1], q0[2], q0[3], q1[0], q1[1], q1[2], q1[3], alpha);
+		return out;
+	}
+
+	return {0, 0, 0, 1};
+}
+
+// -----------------------------------------------------------------------
+// _sample_vec3
+// per-animation timeline sampling (wotlk)
+// -----------------------------------------------------------------------
+
+std::array<float, 3> M2LegacyRendererGL::_sample_vec3(const std::vector<LegacyTrackValue>& timestamps, const std::vector<LegacyTrackValue>& values, float time_ms, const std::array<float, 3>& default_value) {
+	if (timestamps.empty())
+		return default_value;
+
+	if (timestamps.size() == 1 || time_ms <= track_value_to_float(timestamps[0])) {
+		const auto& v = track_value_to_vec(values[0]);
+		if (v.size() >= 3)
+			return {v[0], v[1], v[2]};
+		return default_value;
+	}
+
+	if (time_ms >= track_value_to_float(timestamps[timestamps.size() - 1])) {
+		const auto& v = track_value_to_vec(values[values.size() - 1]);
+		if (v.size() >= 3)
+			return {v[0], v[1], v[2]};
+		return default_value;
+	}
+
+	size_t frame = 0;
+	for (size_t i = 0; i < timestamps.size() - 1; i++) {
+		if (time_ms >= track_value_to_float(timestamps[i]) && time_ms < track_value_to_float(timestamps[i + 1])) {
+			frame = i;
+			break;
+		}
+	}
+
+	const float t0 = track_value_to_float(timestamps[frame]);
+	const float t1 = track_value_to_float(timestamps[frame + 1]);
+	const float alpha = (time_ms - t0) / (t1 - t0);
+
+	const auto& v0 = track_value_to_vec(values[frame]);
+	const auto& v1 = track_value_to_vec(values[frame + 1]);
+
+	if (v0.size() >= 3 && v1.size() >= 3) {
+		return {
+			lerp(v0[0], v1[0], alpha),
+			lerp(v0[1], v1[1], alpha),
+			lerp(v0[2], v1[2], alpha)
+		};
+	}
+
+	return default_value;
+}
+
+// -----------------------------------------------------------------------
+// _sample_quat
+// -----------------------------------------------------------------------
+
+std::array<float, 4> M2LegacyRendererGL::_sample_quat(const std::vector<LegacyTrackValue>& timestamps, const std::vector<LegacyTrackValue>& values, float time_ms) {
+	if (timestamps.empty())
+		return {0, 0, 0, 1};
+
+	if (timestamps.size() == 1 || time_ms <= track_value_to_float(timestamps[0])) {
+		const auto& v = track_value_to_vec(values[0]);
+		if (v.size() >= 4)
+			return {v[0], v[1], v[2], v[3]};
+		return {0, 0, 0, 1};
+	}
+
+	if (time_ms >= track_value_to_float(timestamps[timestamps.size() - 1])) {
+		const auto& v = track_value_to_vec(values[values.size() - 1]);
+		if (v.size() >= 4)
+			return {v[0], v[1], v[2], v[3]};
+		return {0, 0, 0, 1};
+	}
+
+	size_t frame = 0;
+	for (size_t i = 0; i < timestamps.size() - 1; i++) {
+		if (time_ms >= track_value_to_float(timestamps[i]) && time_ms < track_value_to_float(timestamps[i + 1])) {
+			frame = i;
+			break;
+		}
+	}
+
+	const float t0 = track_value_to_float(timestamps[frame]);
+	const float t1 = track_value_to_float(timestamps[frame + 1]);
+	const float alpha = (time_ms - t0) / (t1 - t0);
+
+	const auto& q0 = track_value_to_vec(values[frame]);
+	const auto& q1 = track_value_to_vec(values[frame + 1]);
+
+	if (q0.size() >= 4 && q1.size() >= 4) {
+		std::array<float, 4> out = {0, 0, 0, 1};
+		quat_slerp(out.data(), q0[0], q0[1], q0[2], q0[3], q1[0], q1[1], q1[2], q1[3], alpha);
+		return out;
+	}
+
+	return {0, 0, 0, 1};
+}
+
+// -----------------------------------------------------------------------
+// updateGeosets
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::updateGeosets() {
+	if (!reactive || geosetArray.empty() || draw_calls.empty())
+		return;
+
+	for (size_t i = 0; i < draw_calls.size() && i < geosetArray.size(); i++)
+		draw_calls[i].visible = geosetArray[i].checked;
+}
+
+// -----------------------------------------------------------------------
+// setTransform
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::setTransform(const std::array<float, 3>& position, const std::array<float, 3>& rotation, const std::array<float, 3>& scale) {
+	this->position = position;
+	this->rotation = rotation;
+	this->scale_val = scale;
+	_update_model_matrix();
+}
+
+// -----------------------------------------------------------------------
+// setTransformQuat
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::setTransformQuat(const std::array<float, 3>& position, const std::array<float, 4>& quat, const std::array<float, 3>& scale) {
+	const float px = position[0], py = position[1], pz = position[2];
+	const float qx = quat[0], qy = quat[1], qz = quat[2], qw = quat[3];
+	const float sx = scale[0], sy = scale[1], sz = scale[2];
+
+	const float x2 = qx + qx, y2 = qy + qy, z2 = qz + qz;
+	const float xx = qx * x2, xy = qx * y2, xz = qx * z2;
+	const float yy = qy * y2, yz = qy * z2, zz = qz * z2;
+	const float wx = qw * x2, wy = qw * y2, wz = qw * z2;
+
+	auto& m = model_matrix;
+	m[0] = (1 - (yy + zz)) * sx;
+	m[1] = (xy + wz) * sx;
+	m[2] = (xz - wy) * sx;
+	m[3] = 0;
+	m[4] = (xy - wz) * sy;
+	m[5] = (1 - (xx + zz)) * sy;
+	m[6] = (yz + wx) * sy;
+	m[7] = 0;
+	m[8] = (xz + wy) * sz;
+	m[9] = (yz - wx) * sz;
+	m[10] = (1 - (xx + yy)) * sz;
+	m[11] = 0;
+	m[12] = px;
+	m[13] = py;
+	m[14] = pz;
+	m[15] = 1;
+}
+
+// -----------------------------------------------------------------------
+// _update_model_matrix
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::_update_model_matrix() {
+	auto& m = model_matrix;
+	const float px = position[0], py = position[1], pz = position[2];
+	const float rx = rotation[0], ry = rotation[1], rz = rotation[2];
+	const float sx = scale_val[0], sy = scale_val[1], sz = scale_val[2];
+
+	const float cx = std::cos(rx), sinx = std::sin(rx);
+	const float cy = std::cos(ry), siny = std::sin(ry);
+	const float cz = std::cos(rz), sinz = std::sin(rz);
+
+	m[0] = cy * cz * sx;
+	m[1] = cy * sinz * sx;
+	m[2] = -siny * sx;
+	m[3] = 0;
+
+	m[4] = (sinx * siny * cz - cx * sinz) * sy;
+	m[5] = (sinx * siny * sinz + cx * cz) * sy;
+	m[6] = sinx * cy * sy;
+	m[7] = 0;
+
+	m[8] = (cx * siny * cz + sinx * sinz) * sz;
+	m[9] = (cx * siny * sinz - sinx * cz) * sz;
+	m[10] = cx * cy * sz;
+	m[11] = 0;
+
+	m[12] = px;
+	m[13] = py;
+	m[14] = pz;
+	m[15] = 1;
+}
+
+// -----------------------------------------------------------------------
+// render
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::render(const float* view_matrix, const float* projection_matrix) {
+	if (!shader || draw_calls.empty())
+		return;
+
+	const bool wireframe = core::view->config.value("modelViewerWireframe", false);
+
+	shader->use();
+
+	shader->set_uniform_mat4("u_view_matrix", false, view_matrix);
+	shader->set_uniform_mat4("u_projection_matrix", false, projection_matrix);
+	shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
+	shader->set_uniform_3f("u_view_up", 0, 1, 0);
+
+	// JS: performance.now() * 0.001
+	auto now = std::chrono::steady_clock::now();
+	float time_sec = std::chrono::duration<float>(now.time_since_epoch()).count();
+	shader->set_uniform_1f("u_time", time_sec);
+
+	// bone skinning disabled for legacy models until animation system is fixed
+	shader->set_uniform_1i("u_bone_count", 0);
+
+	shader->set_uniform_1i("u_has_tex_matrix1", 0);
+	shader->set_uniform_1i("u_has_tex_matrix2", 0);
+	shader->set_uniform_mat4("u_tex_matrix1", false, IDENTITY_MAT4.data());
+	shader->set_uniform_mat4("u_tex_matrix2", false, IDENTITY_MAT4.data());
+
+	const float lx = 3, ly = -0.7f, lz = -2;
+	const float light_view_x = view_matrix[0] * lx + view_matrix[4] * ly + view_matrix[8] * lz;
+	const float light_view_y = view_matrix[1] * lx + view_matrix[5] * ly + view_matrix[9] * lz;
+	const float light_view_z = view_matrix[2] * lx + view_matrix[6] * ly + view_matrix[10] * lz;
+
+	shader->set_uniform_1i("u_apply_lighting", 1);
+	shader->set_uniform_3f("u_ambient_color", 0.5f, 0.5f, 0.5f);
+	shader->set_uniform_3f("u_diffuse_color", 0.7f, 0.7f, 0.7f);
+	shader->set_uniform_3f("u_light_dir", light_view_x, light_view_y, light_view_z);
+
+	shader->set_uniform_1i("u_wireframe", wireframe ? 1 : 0);
+	shader->set_uniform_4f("u_wireframe_color", 1, 1, 1, 1);
+
+	shader->set_uniform_1f("u_alpha_test", 0.501960814f);
+
+	shader->set_uniform_1i("u_texture1", 0);
+	shader->set_uniform_1i("u_texture2", 1);
+	shader->set_uniform_1i("u_texture3", 2);
+	shader->set_uniform_1i("u_texture4", 3);
+
+	shader->set_uniform_3f("u_tex_sample_alpha", 1, 1, 1);
+
+	// sort draw calls: opaque first, then transparent
+	std::vector<const M2LegacyDrawCall*> sorted_calls;
+	sorted_calls.reserve(draw_calls.size());
+	for (const auto& dc : draw_calls)
+		sorted_calls.push_back(&dc);
+
+	std::stable_sort(sorted_calls.begin(), sorted_calls.end(), [](const M2LegacyDrawCall* a, const M2LegacyDrawCall* b) {
+		const bool a_opaque = a->blend_mode == 0 || a->blend_mode == 1;
+		const bool b_opaque = b->blend_mode == 0 || b->blend_mode == 1;
+		if (a_opaque != b_opaque)
+			return a_opaque;
+
+		return false;
+	});
+
+	for (const auto* dc : sorted_calls) {
+		if (!dc->visible)
+			continue;
+
+		shader->set_uniform_1i("u_vertex_shader", dc->vertex_shader);
+		shader->set_uniform_1i("u_pixel_shader", dc->pixel_shader);
+		shader->set_uniform_1i("u_blend_mode", dc->blend_mode);
+
+		shader->set_uniform_4f("u_mesh_color", 1, 1, 1, 1);
+
+		ctx.apply_blend_mode(dc->blend_mode);
+
+		if (dc->flags & 0x04) {
+			ctx.set_cull_face(false);
+		} else {
+			ctx.set_cull_face(true);
+			ctx.set_cull_mode(GL_BACK);
+		}
+
+		if (dc->flags & 0x08)
+			ctx.set_depth_test(false);
+		else
+			ctx.set_depth_test(true);
+
+		for (int t = 0; t < 4; t++) {
+			const int tex_idx = dc->tex_indices[t];
+			gl::GLTexture* texture = nullptr;
+			if (tex_idx >= 0) {
+				auto it = textures.find(tex_idx);
+				texture = (it != textures.end()) ? it->second.get() : default_texture.get();
+			} else {
+				texture = default_texture.get();
+			}
+			if (texture)
+				texture->bind(t);
+		}
+
+		dc->vao->bind();
+		glDrawElements(
+			wireframe ? GL_LINES : GL_TRIANGLES,
+			dc->count,
+			GL_UNSIGNED_SHORT,
+			reinterpret_cast<void*>(static_cast<uintptr_t>(dc->start * 2))
+		);
+	}
+
+	ctx.set_blend(false);
+	ctx.set_depth_test(true);
+	ctx.set_depth_write(true);
+	ctx.set_cull_face(false);
+}
+
+// -----------------------------------------------------------------------
+// getBoundingBox
+// -----------------------------------------------------------------------
+
+std::optional<M2LegacyRendererGL::BoundingBoxResult> M2LegacyRendererGL::getBoundingBox() {
+	if (!m2 || m2->boundingBox.min.empty())
+		return std::nullopt;
+
+	const auto& src_min = m2->boundingBox.min;
+	const auto& src_max = m2->boundingBox.max;
+
+	BoundingBoxResult result;
+	result.min = {src_min[0], src_min[2], -src_max[1]};
+	result.max = {src_max[0], src_max[2], -src_min[1]};
+	return result;
+}
+
+// -----------------------------------------------------------------------
+// _dispose_skin
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::_dispose_skin() {
+	for (auto& vao : vaos)
+		vao->dispose();
+
+	vaos.clear();
+	buffers.clear();
+	draw_calls.clear();
+
+	if (!geosetArray.empty())
+		geosetArray.clear();
+}
+
+// -----------------------------------------------------------------------
+// dispose
+// -----------------------------------------------------------------------
+
+void M2LegacyRendererGL::dispose() {
+	// JS: this.geosetWatcher?.(); this.wireframeWatcher?.();
+	// Vue watchers — no-op in C++ (no reactive system)
+
+	_dispose_skin();
+
+	for (auto& [key, tex] : textures)
+		tex->dispose();
+
+	textures.clear();
+
+	if (default_texture) {
+		default_texture->dispose();
+		default_texture.reset();
+	}
+}
