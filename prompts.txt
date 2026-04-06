@@ -1,9 +1,0 @@
-Convert this/these file/files from JavaScript to true C++.
-Read CONVERSION_GUIDANCE.md for rules.
-100% completion required. Update
-CONVERSION_TRACKER.md when done.
-
-
-
-Double check file/files are 100% converted with no mistakes and nothing missing.
-Then check CI to verify the MSCV build.
