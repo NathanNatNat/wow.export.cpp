@@ -4,454 +4,433 @@
 	License: MIT
  */
 
-const CHUNK_SKB1 = 0x31424B53;
-const CHUNK_SKPD = 0x44504B53;
-const CHUNK_SKS1 = 0x31534B53;
-const CHUNK_SKA1 = 0x31414B53; // attachments
-const CHUNK_AFID = 0x44494641;
-const CHUNK_BFID = 0x44494642;
+#include "SKELLoader.h"
+#include "M2Generics.h"
+#include "ANIMLoader.h"
+#include "../AnimMapper.h"
+#include "../../buffer.h"
+#include "../../log.h"
 
-const M2Generics = require('./M2Generics');
-const BufferWrapper = require('../../buffer');
-const AnimMapper = require('../AnimMapper');
-const log = require('../../log');
-const ANIMLoader = require('./ANIMLoader');
-const core = require('../../core');
+#include <format>
+#include <stdexcept>
 
 // See: https://wowdev.wiki/M2/.skel
-class SKELLoader {
-	/**
-	 * Construct a new SKELLoader instance.
-	 * @param {BufferWrapper} data 
-	 */
-	constructor(data) {
-		this.data = data;
-		this.isLoaded = false;
-		this.animFiles = new Map();
+SKELLoader::SKELLoader(BufferWrapper& data)
+	: isLoaded(false), data(data) {
+}
+
+/**
+ * Load the skeleton file.
+ */
+void SKELLoader::load() {
+	// Prevent multiple loading of the same file.
+	if (this->isLoaded == true)
+		return;
+
+	// defer SKB1/SKA1 parsing until after SKS1 so this->animations is available
+	int64_t skb1Ofs = -1;
+	int64_t ska1Ofs = -1;
+
+	while (this->data.remainingBytes() > 0) {
+		const uint32_t chunkID = this->data.readUInt32LE();
+		const uint32_t chunkSize = this->data.readUInt32LE();
+		const size_t nextChunkPos = this->data.offset() + chunkSize;
+
+		switch (chunkID) {
+			case CHUNK_SKB1: skb1Ofs = static_cast<int64_t>(this->data.offset()); break;
+			case CHUNK_SKA1: ska1Ofs = static_cast<int64_t>(this->data.offset()); break;
+			case CHUNK_SKPD: this->parse_chunk_skpd(); break;
+			case CHUNK_SKS1: this->parse_chunk_sks1(); break;
+			case CHUNK_AFID: this->parse_chunk_afid(chunkSize); break;
+			case CHUNK_BFID: this->parse_chunk_bfid(chunkSize); break;
+		}
+
+		this->data.seek(nextChunkPos);
 	}
 
-	/**
-	 * Load the skeleton file.
-	 */
-	async load() {
-		// Prevent multiple loading of the same file.
-		if (this.isLoaded === true)
-			return;
+	// parse bones/attachments after animations are available
+	if (skb1Ofs >= 0) {
+		this->data.seek(static_cast<size_t>(skb1Ofs));
+		this->parse_chunk_skb1();
+	}
 
-		// defer SKB1/SKA1 parsing until after SKS1 so this.animations is available
-		let skb1Ofs = -1;
-		let ska1Ofs = -1;
+	if (ska1Ofs >= 0) {
+		this->data.seek(static_cast<size_t>(ska1Ofs));
+		this->parse_chunk_ska1();
+	}
 
-		while (this.data.remainingBytes > 0) {
-			const chunkID = this.data.readUInt32LE();
-			const chunkSize = this.data.readUInt32LE();
-			const nextChunkPos = this.data.offset + chunkSize;
+	this->isLoaded = true;
+}
 
-			switch (chunkID) {
-				case CHUNK_SKB1: skb1Ofs = this.data.offset; break;
-				case CHUNK_SKA1: ska1Ofs = this.data.offset; break;
-				case CHUNK_SKPD: this.parse_chunk_skpd(); break;
-				case CHUNK_SKS1: this.parse_chunk_sks1(); break;
-				case CHUNK_AFID: this.parse_chunk_afid(chunkSize); break;
-				case CHUNK_BFID: this.parse_chunk_bfid(chunkSize); break;
+void SKELLoader::parse_chunk_skpd() {
+	this->data.move(8); // _0x00[8]
+	this->parent_skel_file_id = this->data.readUInt32LE();
+	this->data.move(4); // _0x0c[4]
+}
+
+void SKELLoader::parse_chunk_skb1() {
+	auto& d = this->data;
+	const size_t chunk_ofs = d.offset();
+	this->boneOffset = d.offset();
+
+	const uint32_t bone_count = d.readUInt32LE();
+	const uint32_t bone_ofs = d.readUInt32LE();
+
+	const size_t base_ofs = d.offset();
+	d.seek(chunk_ofs + bone_ofs);
+
+	// Build M2Sequence vector from animations for read_m2_track
+	std::vector<M2Sequence> sequences(this->animations.size());
+	for (size_t i = 0; i < this->animations.size(); i++)
+		sequences[i] = { this->animations[i].flags };
+
+	// store offsets for lazy .anim patching
+	this->bones.resize(bone_count);
+	for (uint32_t i = 0; i < bone_count; i++) {
+		SKELBone bone;
+		bone.boneID = d.readInt32LE();
+		bone.flags = d.readUInt32LE();
+		bone.parentBone = d.readInt16LE();
+		bone.subMeshID = d.readUInt16LE();
+		bone.boneNameCRC = d.readUInt32LE();
+		bone.translation = read_m2_track(d, static_cast<uint32_t>(chunk_ofs), M2DataType::float3, false, this->animFiles, true, &sequences);
+		bone.rotation = read_m2_track(d, static_cast<uint32_t>(chunk_ofs), M2DataType::compquat, false, this->animFiles, true, &sequences);
+		bone.scale = read_m2_track(d, static_cast<uint32_t>(chunk_ofs), M2DataType::float3, false, this->animFiles, true, &sequences);
+		bone.pivot = d.readFloatLE(3);
+
+		// Convert bone transformations coordinate system.
+		auto& translations = bone.translation.values;
+		auto& rotations = bone.rotation.values;
+		auto& scale = bone.scale.values;
+		auto& pivot = bone.pivot;
+
+		for (size_t ai = 0; ai < translations.size(); ai++) {
+			for (size_t j = 0; j < translations[ai].size(); j++) {
+				auto& v = std::get<std::vector<float>>(translations[ai][j]);
+				const float dx = v[0];
+				const float dy = v[1];
+				const float dz = v[2];
+				v[0] = dx;
+				v[2] = dy * -1;
+				v[1] = dz;
 			}
-
-			this.data.seek(nextChunkPos);
 		}
 
-		// parse bones/attachments after animations are available
-		if (skb1Ofs >= 0) {
-			this.data.seek(skb1Ofs);
-			this.parse_chunk_skb1();
-		}
-
-		if (ska1Ofs >= 0) {
-			this.data.seek(ska1Ofs);
-			this.parse_chunk_ska1();
-		}
-
-		this.isLoaded = true;
-	}
-
-	parse_chunk_skpd() {
-		this.data.move(8) // _0x00[8]
-		this.parent_skel_file_id = this.data.readUInt32LE();
-		this.data.move(4) // _0x0c[4]
-	}
-
-	parse_chunk_skb1() {
-		const data = this.data;
-		const chunk_ofs = data.offset;
-		this.boneOffset = data.offset;
-
-		const bone_count = data.readUInt32LE();
-		const bone_ofs = data.readUInt32LE();
-
-		const base_ofs = data.offset;
-		data.seek(chunk_ofs + bone_ofs);
-
-		// store offsets for lazy .anim patching
-		const bones = this.bones = Array(bone_count);
-		for (let i = 0; i < bone_count; i++) {
-			const bone = {
-				boneID: data.readInt32LE(),
-				flags: data.readUInt32LE(),
-				parentBone: data.readInt16LE(),
-				subMeshID: data.readUInt16LE(),
-				boneNameCRC: data.readUInt32LE(),
-				translation: M2Generics.read_m2_track(data, chunk_ofs, 'float3', false, this.animFiles, true, this.animations),
-				rotation: M2Generics.read_m2_track(data, chunk_ofs, 'compquat', false, this.animFiles, true, this.animations),
-				scale: M2Generics.read_m2_track(data, chunk_ofs, 'float3', false, this.animFiles, true, this.animations),
-				pivot: data.readFloatLE(3)
-			};
-
-			// Convert bone transformations coordinate system.
-			const translations = bone.translation.values;
-			const rotations = bone.rotation.values;
-			const scale = bone.scale.values;
-			const pivot = bone.pivot;
-
-			for (let i = 0; i < translations.length; i++) {
-				for (let j = 0; j < translations[i].length; j++) {
-					const dx = translations[i][j][0];
-					const dy = translations[i][j][1];
-					const dz = translations[i][j][2];
-
-					translations[i][j][0] = dx;
-					translations[i][j][2] = dy * -1;
-					translations[i][j][1] = dz;
-				}
+		for (size_t ai = 0; ai < rotations.size(); ai++) {
+			for (size_t j = 0; j < rotations[ai].size(); j++) {
+				auto& v = std::get<std::vector<float>>(rotations[ai][j]);
+				const float dx = v[0];
+				const float dy = v[1];
+				const float dz = v[2];
+				const float dw = v[3];
+				v[0] = dx;
+				v[2] = dy * -1;
+				v[1] = dz;
+				v[3] = dw;
 			}
+		}
 
-			for (let i = 0; i < rotations.length; i++) {
-				for (let j = 0; j < rotations[i].length; j++) {
-					const dx = rotations[i][j][0];
-					const dy = rotations[i][j][1];
-					const dz = rotations[i][j][2];
-					const dw = rotations[i][j][3];
-
-					rotations[i][j][0] = dx;
-					rotations[i][j][2] = dy * -1;
-					rotations[i][j][1] = dz;
-					rotations[i][j][3] = dw;
-				}
+		for (size_t ai = 0; ai < scale.size(); ai++) {
+			for (size_t j = 0; j < scale[ai].size(); j++) {
+				auto& v = std::get<std::vector<float>>(scale[ai][j]);
+				const float dx = v[0];
+				const float dy = v[1];
+				const float dz = v[2];
+				v[0] = dx;
+				v[2] = dy;
+				v[1] = dz;
 			}
-
-			for (let i = 0; i < scale.length; i++) {
-				for (let j = 0; j < scale[i].length; j++) {
-					const dx = scale[i][j][0];
-					const dy = scale[i][j][1];
-					const dz = scale[i][j][2];
-
-					scale[i][j][0] = dx;
-					scale[i][j][2] = dy;
-					scale[i][j][1] = dz;
-				}
-			}
-
-			{
-				const pivotX = pivot[0];
-				const pivotY = pivot[1];
-				const pivotZ = pivot[2];
-				pivot[0] = pivotX;
-				pivot[2] = pivotY * -1;
-				pivot[1] = pivotZ;
-			}
-
-			bones[i] = bone;
 		}
 
-		data.seek(base_ofs);
-	}
-
-	parse_chunk_sks1() {
-		// Global loops
-		const chunk_ofs = this.data.offset;
-
-		const globalLoopCount = this.data.readUInt32LE();
-		const globalLoopOfs = this.data.readUInt32LE();
-		
-		let prevPos = this.data.offset;
-		this.data.seek(globalLoopOfs + chunk_ofs);
-
-		this.globalLoops = this.data.readInt16LE(globalLoopCount);
-
-		this.data.seek(prevPos);
-
-		// Sequences
-		const animationCount = this.data.readUInt32LE();
-		const animationOfs = this.data.readUInt32LE();
-
-		prevPos = this.data.offset;
-		this.data.seek(animationOfs + chunk_ofs);
-
-		const animations = this.animations = new Array(animationCount);
-		for (let i = 0; i < animationCount; i++) {
-			animations[i] = {
-				id: this.data.readUInt16LE(),
-				variationIndex: this.data.readUInt16LE(),
-				duration: this.data.readUInt32LE(),
-				movespeed: this.data.readFloatLE(),
-				flags: this.data.readUInt32LE(),
-				frequency: this.data.readInt16LE(),
-				padding: this.data.readUInt16LE(),
-				replayMin: this.data.readUInt32LE(),
-				replayMax: this.data.readUInt32LE(),
-				blendTimeIn: this.data.readUInt16LE(),
-				blendTimeOut: this.data.readUInt16LE(),
-				boxPosMin: this.data.readFloatLE(3),
-				boxPosMax: this.data.readFloatLE(3),
-				boxRadius: this.data.readFloatLE(),
-				variationNext: this.data.readInt16LE(),
-				aliasNext: this.data.readUInt16LE()
-			};
+		{
+			const float pivotX = pivot[0];
+			const float pivotY = pivot[1];
+			const float pivotZ = pivot[2];
+			pivot[0] = pivotX;
+			pivot[2] = pivotY * -1;
+			pivot[1] = pivotZ;
 		}
 
-		this.data.seek(prevPos);
-
-		// Sequence lookups
-		const animationLookupCount = this.data.readUInt32LE();
-		const animationLookupOfs = this.data.readUInt32LE();
-
-		prevPos = this.data.offset;
-		this.data.seek(animationLookupOfs + chunk_ofs);
-
-		this.animationLookup = this.data.readInt16LE(animationLookupCount);
-
-		this.data.seek(prevPos);
-
-		// Unused spot (for now)
-		this.data.move(8);
+		this->bones[i] = std::move(bone);
 	}
 
-	/**
-	 * Parse SKA1 chunk for attachments.
-	 */
-	parse_chunk_ska1() {
-		const chunk_ofs = this.data.offset;
+	d.seek(base_ofs);
+}
 
-		// attachments array
-		const attachmentCount = this.data.readUInt32LE();
-		const attachmentOfs = this.data.readUInt32LE();
+void SKELLoader::parse_chunk_sks1() {
+	// Global loops
+	const size_t chunk_ofs = this->data.offset();
 
-		// attachment lookup array
-		const attachmentLookupCount = this.data.readUInt32LE();
-		const attachmentLookupOfs = this.data.readUInt32LE();
+	const uint32_t globalLoopCount = this->data.readUInt32LE();
+	const uint32_t globalLoopOfs = this->data.readUInt32LE();
 
-		// parse attachments
-		let prevPos = this.data.offset;
-		this.data.seek(attachmentOfs + chunk_ofs);
+	size_t prevPos = this->data.offset();
+	this->data.seek(globalLoopOfs + chunk_ofs);
 
-		this.attachments = new Array(attachmentCount);
-		for (let i = 0; i < attachmentCount; i++) {
-			this.attachments[i] = {
-				id: this.data.readUInt32LE(),
-				bone: this.data.readUInt16LE(),
-				unknown: this.data.readUInt16LE(),
-				position: this.data.readFloatLE(3),
-				animateAttached: M2Generics.read_m2_track(this.data, chunk_ofs, 'uint8', false, new Map(), false, this.animations)
-			};
-		}
+	this->globalLoops = this->data.readInt16LE(globalLoopCount);
 
-		this.data.seek(prevPos);
+	this->data.seek(prevPos);
 
-		// parse attachment lookup
-		prevPos = this.data.offset;
-		this.data.seek(attachmentLookupOfs + chunk_ofs);
+	// Sequences
+	const uint32_t animationCount = this->data.readUInt32LE();
+	const uint32_t animationOfs = this->data.readUInt32LE();
 
-		this.attachmentLookup = this.data.readInt16LE(attachmentLookupCount);
+	prevPos = this->data.offset();
+	this->data.seek(animationOfs + chunk_ofs);
 
-		this.data.seek(prevPos);
+	this->animations.resize(animationCount);
+	for (uint32_t i = 0; i < animationCount; i++) {
+		SKELAnimation& anim = this->animations[i];
+		anim.id = this->data.readUInt16LE();
+		anim.variationIndex = this->data.readUInt16LE();
+		anim.duration = this->data.readUInt32LE();
+		anim.movespeed = this->data.readFloatLE();
+		anim.flags = this->data.readUInt32LE();
+		anim.frequency = this->data.readInt16LE();
+		anim.padding = this->data.readUInt16LE();
+		anim.replayMin = this->data.readUInt32LE();
+		anim.replayMax = this->data.readUInt32LE();
+		anim.blendTimeIn = this->data.readUInt16LE();
+		anim.blendTimeOut = this->data.readUInt16LE();
+		anim.boxPosMin = this->data.readFloatLE(3);
+		anim.boxPosMax = this->data.readFloatLE(3);
+		anim.boxRadius = this->data.readFloatLE();
+		anim.variationNext = this->data.readInt16LE();
+		anim.aliasNext = this->data.readUInt16LE();
 	}
 
-	/**
-	 * Get attachment by attachment ID (e.g., 11 for helmet).
-	 * @param {number} attachmentId
-	 * @returns {object|null}
-	 */
-	getAttachmentById(attachmentId) {
-		if (!this.attachmentLookup || attachmentId >= this.attachmentLookup.length)
-			return null;
+	this->data.seek(prevPos);
 
-		const index = this.attachmentLookup[attachmentId];
-		if (index < 0 || index >= this.attachments.length)
-			return null;
+	// Sequence lookups
+	const uint32_t animationLookupCount = this->data.readUInt32LE();
+	const uint32_t animationLookupOfs = this->data.readUInt32LE();
 
-		return this.attachments[index];
+	prevPos = this->data.offset();
+	this->data.seek(animationLookupOfs + chunk_ofs);
+
+	this->animationLookup = this->data.readInt16LE(animationLookupCount);
+
+	this->data.seek(prevPos);
+
+	// Unused spot (for now)
+	this->data.move(8);
+}
+
+/**
+ * Parse SKA1 chunk for attachments.
+ */
+void SKELLoader::parse_chunk_ska1() {
+	const size_t chunk_ofs = this->data.offset();
+
+	// attachments array
+	const uint32_t attachmentCount = this->data.readUInt32LE();
+	const uint32_t attachmentOfs = this->data.readUInt32LE();
+
+	// attachment lookup array
+	const uint32_t attachmentLookupCount = this->data.readUInt32LE();
+	const uint32_t attachmentLookupOfs = this->data.readUInt32LE();
+
+	// Build sequences for read_m2_track
+	std::vector<M2Sequence> sequences(this->animations.size());
+	for (size_t i = 0; i < this->animations.size(); i++)
+		sequences[i] = { this->animations[i].flags };
+
+	// parse attachments
+	size_t prevPos = this->data.offset();
+	this->data.seek(attachmentOfs + chunk_ofs);
+
+	this->attachments.resize(attachmentCount);
+	for (uint32_t i = 0; i < attachmentCount; i++) {
+		SKELAttachment& att = this->attachments[i];
+		att.id = this->data.readUInt32LE();
+		att.bone = this->data.readUInt16LE();
+		att.unknown = this->data.readUInt16LE();
+		att.position = this->data.readFloatLE(3);
+		std::map<uint32_t, BufferWrapper*> emptyAnimFiles;
+		att.animateAttached = read_m2_track(this->data, static_cast<uint32_t>(chunk_ofs), M2DataType::uint8, false, emptyAnimFiles, false, &sequences);
 	}
 
-	/**
-	 * Parse AFID chunk for .anim file data IDs.
-	 * @param {number} chunkSize
-	 */
-	parse_chunk_afid(chunkSize) {
-		const entryCount = chunkSize / 8;
-		const entries = this.animFileIDs = new Array(entryCount);
+	this->data.seek(prevPos);
 
-		for (let i = 0; i < entryCount; i++) {
-			entries[i] = {
-				animID: this.data.readUInt16LE(),
-				subAnimID: this.data.readUInt16LE(),
-				fileDataID: this.data.readUInt32LE()
-			};
-		}
+	// parse attachment lookup
+	prevPos = this->data.offset();
+	this->data.seek(attachmentLookupOfs + chunk_ofs);
+
+	this->attachmentLookup = this->data.readInt16LE(attachmentLookupCount);
+
+	this->data.seek(prevPos);
+}
+
+/**
+ * Get attachment by attachment ID (e.g., 11 for helmet).
+ */
+const SKELAttachment* SKELLoader::getAttachmentById(uint32_t attachmentId) const {
+	if (this->attachmentLookup.empty() || attachmentId >= this->attachmentLookup.size())
+		return nullptr;
+
+	const int16_t index = this->attachmentLookup[attachmentId];
+	if (index < 0 || static_cast<size_t>(index) >= this->attachments.size())
+		return nullptr;
+
+	return &this->attachments[static_cast<size_t>(index)];
+}
+
+/**
+ * Parse AFID chunk for .anim file data IDs.
+ */
+void SKELLoader::parse_chunk_afid(uint32_t chunkSize) {
+	const uint32_t entryCount = chunkSize / 8;
+	this->animFileIDs.resize(entryCount);
+
+	for (uint32_t i = 0; i < entryCount; i++) {
+		SKELAnimFileEntry& entry = this->animFileIDs[i];
+		entry.animID = this->data.readUInt16LE();
+		entry.subAnimID = this->data.readUInt16LE();
+		entry.fileDataID = this->data.readUInt32LE();
+	}
+}
+
+/**
+ * Parse BFID chunk for .bone file data IDs.
+ */
+void SKELLoader::parse_chunk_bfid(uint32_t chunkSize) {
+	this->boneFileIDs = this->data.readUInt32LE(chunkSize / 4);
+}
+
+bool SKELLoader::loadAnimsForIndex(uint32_t animation_index) {
+	if (this->animFiles.count(animation_index))
+		return true;
+
+	if (animation_index >= this->animations.size())
+		return false;
+
+	SKELAnimation* animation = &this->animations[animation_index];
+
+	if ((animation->flags & 0x40) == 0x40) {
+		while ((animation->flags & 0x40) == 0x40)
+			animation = &this->animations[animation->aliasNext];
 	}
 
-	/**
-	 * Parse BFID chunk for .bone file data IDs.
-	 * @param {number} chunkSize
-	 */
-	parse_chunk_bfid(chunkSize) {
-		this.boneFileIDs = this.data.readUInt32LE(chunkSize / 4);
-	}
+	if (this->animFileIDs.empty())
+		return false;
 
-	async loadAnimsForIndex(animation_index) {
-		if (this.animFiles.has(animation_index))
-			return true;
+	for (const auto& entry : this->animFileIDs) {
+		if (entry.animID != animation->id || entry.subAnimID != animation->variationIndex)
+			continue;
 
-		let animation = this.animations[animation_index];
-
-		if ((animation.flags & 0x40) === 0x40) {
-			while ((animation.flags & 0x40) === 0x40)
-				animation = this.animations[animation.aliasNext];
-		}
-
-		if (!this.animFileIDs)
+		const uint32_t fileDataID = entry.fileDataID;
+		if (fileDataID == 0)
 			return false;
 
-		for (const entry of this.animFileIDs) {
-			if (entry.animID !== animation.id || entry.subAnimID !== animation.variationIndex)
-				continue;
+		logging::write(std::format("lazy load .anim for {} ({}) sub={} fileDataID={}", entry.animID, get_anim_name(entry.animID), entry.subAnimID, fileDataID));
 
-			const fileDataID = entry.fileDataID;
-			if (fileDataID === 0)
-				return false;
-
-			log.write('lazy load .anim for %d (%s) sub=%d fileDataID=%d', entry.animID, AnimMapper.get_anim_name(entry.animID), entry.subAnimID, fileDataID);
-
-			const loader = new ANIMLoader(await core.view.casc.getFile(fileDataID));
-			await loader.load(true);
-
-			if (loader.skeletonBoneData !== undefined)
-				this.animFiles.set(animation_index, BufferWrapper.from(loader.skeletonBoneData));
-			else
-				this.animFiles.set(animation_index, BufferWrapper.from(loader.animData));
-
-			// patch animation data into existing bones
-			this._patch_bone_animation(animation_index);
-
-			return true;
-		}
-
-		return false;
+		// TODO: CASC file loading will be wired when UI integration is complete.
+		// The JS does: const loader = new ANIMLoader(await core.view.casc.getFile(fileDataID));
+		// For now, throw since we can't load without CASC:
+		throw std::runtime_error("SKEL .anim loading requires CASC - not yet wired in C++ UI");
 	}
 
-	/**
-	 * Patch bone animation data for a specific animation index.
-	 * @param {number} animIndex
-	 */
-	_patch_bone_animation(animIndex) {
-		const animBuffer = this.animFiles.get(animIndex);
-		if (!animBuffer || !this.bones)
-			return;
+	return false;
+}
 
-		for (const bone of this.bones) {
-			M2Generics.patch_track_animation(bone.translation, animIndex, animBuffer, 'float3');
-			M2Generics.patch_track_animation(bone.rotation, animIndex, animBuffer, 'compquat');
-			M2Generics.patch_track_animation(bone.scale, animIndex, animBuffer, 'float3');
+/**
+ * Patch bone animation data for a specific animation index.
+ */
+void SKELLoader::_patch_bone_animation(uint32_t animIndex) {
+	auto it = this->animFiles.find(animIndex);
+	if (it == this->animFiles.end() || !it->second || this->bones.empty())
+		return;
 
-			// apply coordinate system conversion to patched data
-			const translations = bone.translation.values[animIndex];
-			if (translations) {
-				for (let j = 0; j < translations.length; j++) {
-					const dx = translations[j][0];
-					const dy = translations[j][1];
-					const dz = translations[j][2];
+	BufferWrapper& animBuffer = *it->second;
 
-					translations[j][0] = dx;
-					translations[j][2] = dy * -1;
-					translations[j][1] = dz;
-				}
-			}
+	for (auto& bone : this->bones) {
+		patch_track_animation(bone.translation, animIndex, animBuffer, M2DataType::float3);
+		patch_track_animation(bone.rotation, animIndex, animBuffer, M2DataType::compquat);
+		patch_track_animation(bone.scale, animIndex, animBuffer, M2DataType::float3);
 
-			const rotations = bone.rotation.values[animIndex];
-			if (rotations) {
-				for (let j = 0; j < rotations.length; j++) {
-					const dx = rotations[j][0];
-					const dy = rotations[j][1];
-					const dz = rotations[j][2];
-					const dw = rotations[j][3];
-
-					rotations[j][0] = dx;
-					rotations[j][2] = dy * -1;
-					rotations[j][1] = dz;
-					rotations[j][3] = dw;
-				}
-			}
-
-			const scale = bone.scale.values[animIndex];
-			if (scale) {
-				for (let j = 0; j < scale.length; j++) {
-					const dx = scale[j][0];
-					const dy = scale[j][1];
-					const dz = scale[j][2];
-
-					scale[j][0] = dx;
-					scale[j][2] = dy;
-					scale[j][1] = dz;
-				}
+		// apply coordinate system conversion to patched data
+		if (animIndex < bone.translation.values.size()) {
+			auto& translations = bone.translation.values[animIndex];
+			for (size_t j = 0; j < translations.size(); j++) {
+				auto& v = std::get<std::vector<float>>(translations[j]);
+				const float dx = v[0];
+				const float dy = v[1];
+				const float dz = v[2];
+				v[0] = dx;
+				v[2] = dy * -1;
+				v[1] = dz;
 			}
 		}
-	}
 
-	async loadAnims(load_all = true) {
-		if (!load_all)
-			return;
-
-		for (let i = 0; i < this.animations.length; i++) {
-			let animation = this.animations[i];
-
-			// if animation is an alias, resolve it
-			if ((animation.flags & 0x40) === 0x40) {
-				while ((animation.flags & 0x40) === 0x40)
-					animation = this.animations[animation.aliasNext];
+		if (animIndex < bone.rotation.values.size()) {
+			auto& rotations = bone.rotation.values[animIndex];
+			for (size_t j = 0; j < rotations.size(); j++) {
+				auto& v = std::get<std::vector<float>>(rotations[j]);
+				const float dx = v[0];
+				const float dy = v[1];
+				const float dz = v[2];
+				const float dw = v[3];
+				v[0] = dx;
+				v[2] = dy * -1;
+				v[1] = dz;
+				v[3] = dw;
 			}
+		}
 
-			if ((animation.flags & 0x20) === 0x20) {
-				log.write('Skipping .anim loading for ' + AnimMapper.get_anim_name(animation.id) + ' because it should be in SKEL');
-				continue;
+		if (animIndex < bone.scale.values.size()) {
+			auto& scaleVals = bone.scale.values[animIndex];
+			for (size_t j = 0; j < scaleVals.size(); j++) {
+				auto& v = std::get<std::vector<float>>(scaleVals[j]);
+				const float dx = v[0];
+				const float dy = v[1];
+				const float dz = v[2];
+				v[0] = dx;
+				v[2] = dy;
+				v[1] = dz;
 			}
-
-			for (const entry of this.animFileIDs) {
-				if (entry.animID !== animation.id || entry.subAnimID !== animation.variationIndex)
-					continue;
-
-				const fileDataID = entry.fileDataID;
-				if (!this.animFiles.has(i)) {
-					if (fileDataID === 0) {
-						log.write('Skipping .anim loading for ' + AnimMapper.get_anim_name(entry.animID) + ' because it has no fileDataID');
-						continue;
-					}
-
-					log.write('Loading .anim file for animation: ' + entry.animID + ' (' + AnimMapper.get_anim_name(entry.animID) + ') - ' + entry.subAnimID);
-
-					const loader = new ANIMLoader(await core.view.casc.getFile(fileDataID));
-					await loader.load(true);
-
-					if (loader.skeletonBoneData !== undefined)
-						this.animFiles.set(i, BufferWrapper.from(loader.skeletonBoneData));
-					else
-						this.animFiles.set(i, BufferWrapper.from(loader.animData));
-
-					// patch this animation into bones
-					this._patch_bone_animation(i);
-				}
-			}
-
-			if (!this.animFiles.has(i))
-				log.write('Failed to load .anim file for animation: ' + animation.id + ' (' + AnimMapper.get_anim_name(animation.id) + ') - ' + animation.variationIndex);
 		}
 	}
 }
 
-module.exports = SKELLoader;
+void SKELLoader::loadAnims(bool load_all) {
+	if (!load_all)
+		return;
+
+	for (size_t i = 0; i < this->animations.size(); i++) {
+		SKELAnimation* animation = &this->animations[i];
+
+		// if animation is an alias, resolve it
+		if ((animation->flags & 0x40) == 0x40) {
+			while ((animation->flags & 0x40) == 0x40)
+				animation = &this->animations[animation->aliasNext];
+		}
+
+		if ((animation->flags & 0x20) == 0x20) {
+			logging::write("Skipping .anim loading for " + get_anim_name(animation->id) + " because it should be in SKEL");
+			continue;
+		}
+
+		for (const auto& entry : this->animFileIDs) {
+			if (entry.animID != animation->id || entry.subAnimID != animation->variationIndex)
+				continue;
+
+			const uint32_t fileDataID = entry.fileDataID;
+			if (!this->animFiles.count(static_cast<uint32_t>(i))) {
+				if (fileDataID == 0) {
+					logging::write("Skipping .anim loading for " + get_anim_name(entry.animID) + " because it has no fileDataID");
+					continue;
+				}
+
+				logging::write(std::format("Loading .anim file for animation: {} ({}) - {}", entry.animID, get_anim_name(entry.animID), entry.subAnimID));
+
+				// TODO: CASC file loading will be wired when UI integration is complete.
+				// The JS does: const loader = new ANIMLoader(await core.view.casc.getFile(fileDataID));
+				// For now, log and continue:
+				logging::write(std::format("Cannot load .anim file (CASC not wired): fileDataID={}", fileDataID));
+			}
+		}
+
+		if (!this->animFiles.count(static_cast<uint32_t>(i)))
+			logging::write("Failed to load .anim file for animation: " + std::to_string(animation->id) + " (" + get_anim_name(animation->id) + ") - " + std::to_string(animation->variationIndex));
+	}
+}

@@ -61,6 +61,11 @@ struct M2Sequence {
 class M2Track {
 public:
 	/**
+	 * Default constructor — empty track.
+	 */
+	M2Track() : globalSeq(0), interpolation(0) {}
+
+	/**
 	 * Construct a new M2Track instance.
 	 * @param globalSeq
 	 * @param interpolation

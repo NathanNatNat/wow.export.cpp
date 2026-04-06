@@ -103,4 +103,8 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/ADTLoader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/M2LegacyLoader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/M3Loader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/WMOLoader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/WMOLegacyLoader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/SKELLoader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/3D/loaders/M2Loader.cpp
 )

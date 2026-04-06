@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 98 / 184 files converted
+**Progress:** 102 / 184 files converted
 
 ---
 
@@ -164,10 +164,10 @@
 - [x] `src/js/3D/loaders/ADTLoader.cpp` (557 lines)
 - [x] `src/js/3D/loaders/M2LegacyLoader.cpp` (834 lines) 🔴
 - [x] `src/js/3D/loaders/M3Loader.cpp` (343 lines)
-- [ ] `src/js/3D/loaders/WMOLoader.cpp` (471 lines)
-- [ ] `src/js/3D/loaders/WMOLegacyLoader.cpp` (569 lines)
-- [ ] `src/js/3D/loaders/SKELLoader.cpp` (456 lines)
-- [ ] `src/js/3D/loaders/M2Loader.cpp` (888 lines) 🔴
+- [x] `src/js/3D/loaders/WMOLoader.cpp` (471 lines)
+- [x] `src/js/3D/loaders/WMOLegacyLoader.cpp` (569 lines)
+- [x] `src/js/3D/loaders/SKELLoader.cpp` (456 lines)
+- [x] `src/js/3D/loaders/M2Loader.cpp` (888 lines) 🔴
 
 ## Tier 17 — 3D Writers (8 files)
 
