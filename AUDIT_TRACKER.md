@@ -337,3 +337,23 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: Uses `#version 300 es` (WebGL 2.0 / OpenGL ES 3.0) shaders.
 - **C++**: Uses `#version 460 core` (OpenGL 4.6 core profile) shaders.
 - **Rationale**: Same as GridRenderer — desktop OpenGL 4.6 core profile target.
+
+### `src/js/3D/exporters/M2Exporter.cpp` — ACCEPTABLE (CASC source parameter)
+- **JS**: Accesses CASC files via `core.view.casc.getFile(fileDataID)` and `core.view.casc` directly.
+- **C++**: Takes a `casc::CASC*` parameter in the constructor. All CASC file access uses `casc->getVirtualFileByID(fileDataID)`.
+- **Rationale**: `core::view->casc` is `nlohmann::json` in C++ AppState. The CASC pointer must be passed explicitly by the caller. This is the same pattern used by M2RendererGL, CharMaterialRenderer, and M2LegacyExporter (with MPQ).
+
+### `src/js/3D/exporters/M2Exporter.cpp` — ACCEPTABLE (addURITexture API change)
+- **JS**: `addURITexture(out, dataURI)` accepts a name string and a base64 data URI string. The data URI is decoded via `BufferWrapper.fromBase64()` during export.
+- **C++**: `addURITexture(textureType, pngData)` accepts a `uint32_t` texture type ID and a `BufferWrapper` containing pre-decoded PNG data.
+- **Rationale**: Data URIs are a browser-specific concept. In C++, the canvas compositing (CharMaterialRenderer) produces raw PNG data directly. Accepting pre-decoded data avoids unnecessary base64 encode/decode roundtrips.
+
+### `src/js/3D/exporters/M2Exporter.cpp` — ACCEPTABLE (texture map key types)
+- **JS**: The texture map uses mixed-type keys (numbers for fileDataIDs, strings like "data-5" for data textures) in a single `Map` object.
+- **C++**: Uses `std::map<std::string, M2TextureExportInfo>` with string keys for all entries (numeric IDs converted via `std::to_string()`). GLTF writer integration converts numeric keys back to `uint32_t` for the `GLTFWriter::setTextureMap()` API.
+- **Rationale**: C++ std::map requires homogeneous key types. String keys handle both numeric and "data-N" prefixed keys uniformly.
+
+### `src/js/3D/renderers/M2RendererGL.h` — ACCEPTABLE (get_draw_calls accessor)
+- **JS**: `draw_calls` is a public property accessible from M2Exporter.
+- **C++**: `draw_calls` is private. Added `get_draw_calls()` const accessor following the existing pattern of `get_bone_matrices()` and `get_bone_remap_table()`.
+- **Rationale**: Standard C++ accessor pattern for data that JS accesses as public properties.
