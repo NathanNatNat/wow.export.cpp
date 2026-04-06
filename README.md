@@ -1,6 +1,8 @@
 # wow.export (C++ Conversion)
 
-This project is a **C++ conversion** of [**wow.export**](https://github.com/Kruithne/wow.export), the number one export toolkit for World of Warcraft. The original project was written in JavaScript/NW.js. This fork rewrites it in modern C++ (C++23) using native libraries such as Dear ImGui, GLFW, and OpenGL.
+This project is a **personal project** and a **C++ conversion** of [**wow.export**](https://github.com/Kruithne/wow.export), the number one export toolkit for World of Warcraft. The original project was written in JavaScript/NW.js. This fork rewrites it in modern C++ (C++23) using native libraries instead of a browser-based runtime.
+
+This is an independent effort and is not affiliated with or endorsed by the original wow.export project.
 
 ## Credits
 
@@ -14,6 +16,37 @@ This project would not exist without their work. Please see the full list of con
 ## License
 
 This project is licensed under the **MIT License**, the same license as the original wow.export. See [LICENSE](LICENSE) for the full text.
+
+## Dependencies
+
+The C++ conversion is built upon the following libraries (all included as git submodules):
+
+| Library | Purpose |
+|---------|---------|
+| [GLFW](https://github.com/glfw/glfw) | Windowing and input |
+| [Dear ImGui](https://github.com/ocornut/imgui) (docking branch) | User interface (replaces Vue.js) |
+| [GLAD2](https://github.com/Dav1dde/glad) | OpenGL 4.6 core profile loader |
+| [GLM](https://github.com/g-truc/glm) | Mathematics (vectors, matrices, etc.) |
+| [nlohmann/json](https://github.com/nlohmann/json) | JSON parsing and serialization |
+| [spdlog](https://github.com/gabime/spdlog) | Logging (bundles fmt) |
+| [cpp-httplib](https://github.com/yhirose/cpp-httplib) | HTTP client for CDN access |
+| [zlib](https://github.com/madler/zlib) | Compression/decompression |
+| [stb](https://github.com/nothings/stb) | Image loading and writing (stb_image, stb_image_write) |
+| [libwebp](https://github.com/webmproject/libwebp) | WebP image encoding/decoding |
+| [nanosvg](https://github.com/memononen/nanosvg) | SVG parsing and rasterization |
+| [miniaudio](https://github.com/mackron/miniaudio) | Audio playback |
+| [pugixml](https://github.com/zeux/pugixml) | XML parsing |
+
+Additional standard library features used: `std::jthread`, `std::async`, `std::filesystem`, `std::format`.
+
+### Platforms
+
+- **Windows x64** — MSVC (Visual Studio)
+- **Linux x64** — GCC
+
+### Language Standard
+
+- C++23
 
 ## Features
 
@@ -32,34 +65,3 @@ All features from the original wow.export are being ported, including:
 - In-game text, interface, and script viewing
 - Font file preview and export
 
-## Building
-
-### Prerequisites
-
-- **CMake** ≥ 3.20
-- **MSVC** (Windows, via latest Visual Studio) or **GCC** (Linux)
-- **Python 3** with `jinja2` (`pip install jinja2`) — required at build time for GLAD2 OpenGL loader generation
-- All library dependencies are git submodules under `extern/`
-
-### Windows (MSVC)
-
-```powershell
-git submodule update --init --recursive
-pip install jinja2
-cmake --preset windows-msvc-debug
-cmake --build out/build/windows-msvc-debug
-```
-
-### Linux (GCC)
-
-```bash
-# Install system packages for GLFW/X11/OpenGL
-sudo apt-get install -y libgl-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
-
-git submodule update --init --recursive
-pip install jinja2
-cmake --preset linux-gcc-debug
-cmake --build out/build/linux-gcc-debug
-```
-
-Build presets are available for Debug, Release, and RelWithDebInfo on both platforms. See [CMakePresets.json](CMakePresets.json) for details.
