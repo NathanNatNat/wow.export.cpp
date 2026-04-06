@@ -256,6 +256,7 @@ public:
 	// Accessors for private bone data (JS accesses these as public properties)
 	const std::vector<float>& get_bone_matrices() const { return bone_matrices; }
 	const std::vector<int16_t>& get_bone_remap_table() const { return bone_remap_table; }
+	const std::vector<M2DrawCall>& get_draw_calls() const { return draw_calls; }
 
 	// Public state (matches JS properties)
 	std::unique_ptr<M2Loader> m2;

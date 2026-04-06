@@ -1,258 +1,260 @@
 /*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
-	License: MIT
+wow.export (https://github.com/Kruithne/wow.export)
+Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
+License: MIT
  */
-const core = require('../../core');
-const log = require('../../log');
-const path = require('path');
-const generics = require('../../generics');
-const listfile = require('../../casc/listfile');
 
-const BLPFile = require('../../casc/blp');
-const M3Loader= require('../loaders/M3Loader');
-const SKELLoader = require('../loaders/SKELLoader');
-const OBJWriter = require('../writers/OBJWriter');
-const MTLWriter = require('../writers/MTLWriter');
-const STLWriter = require('../writers/STLWriter');
-const JSONWriter = require('../writers/JSONWriter');
-const GLTFWriter = require('../writers/GLTFWriter');
-const GeosetMapper = require('../GeosetMapper');
-const ExportHelper = require('../../casc/export-helper');
-const BufferWrapper = require('../../buffer');
+#include "M3Exporter.h"
 
-class M3Exporter {
-	/**
-	 * Construct a new M3Exporter instance.
-	 * @param {BufferWrapper}
-	 * @param {Array} variantTextures
-	 * @param {number} fileDataID
-	 */
-	constructor(data, variantTextures, fileDataID) {
-		this.m3 = new M3Loader(data);
-		this.fileDataID = fileDataID;
-		this.variantTextures = variantTextures;
-		this.dataTextures = new Map();
-	}
+#include <algorithm>
+#include <format>
+#include <string>
 
-	/**
-	 * Set the mask array used for geoset control.
-	 * @param {Array} mask 
-	 */
-	setGeosetMask(mask) {
-		this.geosetMask = mask;
-	}
+#include "../../core.h"
+#include "../../log.h"
+#include "../../generics.h"
+#include "../../buffer.h"
+#include "../../casc/export-helper.h"
+#include "../loaders/M3Loader.h"
+#include "../writers/OBJWriter.h"
+#include "../writers/MTLWriter.h"
+#include "../writers/STLWriter.h"
+#include "../writers/GLTFWriter.h"
+#include "../writers/JSONWriter.h"
 
-	/**
-	 * Export additional texture from canvas
-	 */
-	async addURITexture(out, dataURI) {
-		this.dataTextures.set(out, dataURI);
-	}
-
-	/**
-	 * Export the textures for this M2 model.
-	 * @param {string} out 
-	 * @param {boolean} raw
-	 * @param {MTLWriter} mtl
-	 * @param {ExportHelper} helper
-	 * @param {boolean} [fullTexPaths=false]
-	 * @returns {Map<number, string>}
-	 */
-	async exportTextures(out, raw = false, mtl = null, helper, fullTexPaths = false) {
-		const validTextures = new Map();
-		return validTextures;
-	}
-
-	async exportAsGLTF(out, helper, format = 'gltf') {
-		const ext = format === 'glb' ? '.glb' : '.gltf';
-		const outGLTF = ExportHelper.replaceExtension(out, ext);
-		const outDir = path.dirname(out);
-
-		// Skip export if file exists and overwriting is disabled.
-		if (!core.view.config.overwriteFiles && await generics.fileExists(outGLTF))
-			return log.write('Skipping %s export of %s (already exists, overwrite disabled)', format.toUpperCase(), outGLTF);
-
-		await this.m3.load();
-
-		const model_name = path.basename(outGLTF, ext);
-		const gltf = new GLTFWriter(out, model_name);
-		log.write('Exporting M3 model %s as %s: %s', model_name, format.toUpperCase(), outGLTF);
-
-		gltf.setVerticesArray(this.m3.vertices);
-		gltf.setNormalArray(this.m3.normals);
-		// gltf.setBoneWeightArray(this.m3.boneWeights);
-		// gltf.setBoneIndexArray(this.m3.boneIndices)
-
-		gltf.addUVArray(this.m3.uv);
-		if (core.view.config.modelsExportUV2 && this.m3.uv1 !== undefined)
-			gltf.addUVArray(this.m3.uv1);
-
-		const textureMap = await this.exportTextures(outDir, false, null, helper, true);
-		gltf.setTextureMap(textureMap);
-
-		const index = 0;
-		for (let lodIndex = 0; lodIndex < this.m3.lodLevels.length; lodIndex++) {
-			if (lodIndex != index)
-				continue;
-
-			for (let geosetIndex = this.m3.geosetCountPerLOD * lodIndex; geosetIndex < (this.m3.geosetCountPerLOD * (lodIndex + 1)); geosetIndex++) {
-				const geoset = this.m3.geosets[geosetIndex];
-				const geosetName = this.m3.stringBlock.slice(geoset.nameCharStart, geoset.nameCharStart + geoset.nameCharCount);
-				log.write("Exporting geoset " + geosetIndex + " (" + geosetName + ")");
-
-				gltf.addMesh(geosetName, this.m3.indices.slice(geoset.indexStart, geoset.indexStart + geoset.indexCount), "");
-			}
-		}
-
-		await gltf.write(core.view.config.overwriteFiles, format);
-	}
-
-	/**
-	 * Export the M3 model as a WaveFront OBJ.
-	 * @param {string} out
-	 * @param {boolean} exportCollision
-	 * @param {ExportHelper} helper
-	 * @param {Array} fileManifest
-	 */
-	async exportAsOBJ(out, exportCollision = false, helper, fileManifest) {
-		await this.m3.load();
-
-		const config = core.view.config;
-		//const exportMeta = core.view.config.exportM2Meta;
-		//const exportBones = core.view.config.exportM2Bones;
-
-		const obj = new OBJWriter(out);
-		const mtl = new MTLWriter(ExportHelper.replaceExtension(out, '.mtl'));
-
-		const outDir = path.dirname(out);
-
-		// Use internal M3 name or fallback to the OBJ file name.
-		const model_name = path.basename(out, '.obj');
-		obj.setName(model_name);
-
-		log.write('Exporting M3 model %s as OBJ: %s', model_name, out);
-
-		// Verts, normals, UVs
-		obj.setVertArray(this.m3.vertices);
-		obj.setNormalArray(this.m3.normals);
-		obj.addUVArray(this.m3.uv);
-
-		if (core.view.config.modelsExportUV2 && this.m3.uv1 !== undefined)
-			obj.addUVArray(this.m3.uv1);
-
-		// Textures
-		const validTextures = await this.exportTextures(outDir, false, mtl, helper);
-		for (const [texFileDataID, texInfo] of validTextures)
-			fileManifest?.push({ type: 'PNG', fileDataID: texFileDataID, file: texInfo.matPath });
-
-		// Abort if the export has been cancelled.
-		if (helper.isCancelled())
-			return;
-
-		const index = 0;
-		for (let lodIndex = 0; lodIndex < this.m3.lodLevels.length; lodIndex++) {
-			if (lodIndex != index)
-				continue;
-
-			for (let geosetIndex = this.m3.geosetCountPerLOD * lodIndex; geosetIndex < (this.m3.geosetCountPerLOD * (lodIndex + 1)); geosetIndex++) {
-				const geoset = this.m3.geosets[geosetIndex];
-				const geosetName = this.m3.stringBlock.slice(geoset.nameCharStart, geoset.nameCharStart + geoset.nameCharCount);
-				log.write("Exporting geoset " + geosetIndex + " (" + geosetName + ")");
-
-				obj.addMesh(geosetName, this.m3.indices.slice(geoset.indexStart, geoset.indexStart + geoset.indexCount), "");
-			}
-		}
-
-		if (!mtl.isEmpty)
-			obj.setMaterialLibrary(path.basename(mtl.out));
-
-		await obj.write(config.overwriteFiles);
-		fileManifest?.push({ type: 'OBJ', fileDataID: this.fileDataID, file: obj.out });
-
-		await mtl.write(config.overwriteFiles);
-		fileManifest?.push({ type: 'MTL', fileDataID: this.fileDataID, file: mtl.out });
-
-		if (exportCollision) {
-			// const phys = new OBJWriter(ExportHelper.replaceExtension(out, '.phys.obj'));
-			// phys.setVertArray(this.m2.collisionPositions);
-			// phys.setNormalArray(this.m2.collisionNormals);
-			// phys.addMesh('Collision', this.m2.collisionIndices);
-
-			// await phys.write(config.overwriteFiles);
-			// fileManifest?.push({ type: 'PHYS_OBJ', fileDataID: this.fileDataID, file: phys.out });
-		}
-	}
-
-	/**
-	 * Export the M3 model as an STL file.
-	 * @param {string} out
-	 * @param {boolean} exportCollision
-	 * @param {ExportHelper} helper
-	 * @param {Array} fileManifest
-	 */
-	async exportAsSTL(out, exportCollision = false, helper, fileManifest) {
-		await this.m3.load();
-
-		const config = core.view.config;
-
-		const stl = new STLWriter(out);
-		const model_name = path.basename(out, '.stl');
-		stl.setName(model_name);
-
-		log.write('Exporting M3 model %s as STL: %s', model_name, out);
-
-		// verts, normals
-		stl.setVertArray(this.m3.vertices);
-		stl.setNormalArray(this.m3.normals);
-
-		// abort if the export has been cancelled
-		if (helper.isCancelled())
-			return;
-
-		const index = 0;
-		for (let lodIndex = 0; lodIndex < this.m3.lodLevels.length; lodIndex++) {
-			if (lodIndex != index)
-				continue;
-
-			for (let geosetIndex = this.m3.geosetCountPerLOD * lodIndex; geosetIndex < (this.m3.geosetCountPerLOD * (lodIndex + 1)); geosetIndex++) {
-				const geoset = this.m3.geosets[geosetIndex];
-				const geosetName = this.m3.stringBlock.slice(geoset.nameCharStart, geoset.nameCharStart + geoset.nameCharCount);
-				log.write('Exporting geoset ' + geosetIndex + ' (' + geosetName + ')');
-
-				stl.addMesh(geosetName, this.m3.indices.slice(geoset.indexStart, geoset.indexStart + geoset.indexCount));
-			}
-		}
-
-		await stl.write(config.overwriteFiles);
-		fileManifest?.push({ type: 'STL', fileDataID: this.fileDataID, file: stl.out });
-	}
-
-	/**
-	 * Export the model as a raw M3 file, including related files
-	 * such as textures, bones, animations, etc.
-	 * @param {string} out 
-	 * @param {ExportHelper} helper 
-	 * @param {Array} [fileManifest]
-	 */
-	async exportRaw(out, helper, fileManifest) {
-		const config = core.view.config;
-
-		const manifestFile = ExportHelper.replaceExtension(out, '.manifest.json');
-		const manifest = new JSONWriter(manifestFile);
-
-		manifest.addProperty('fileDataID', this.fileDataID);
-
-		// Write the M3 file with no conversion.
-		await this.m3.data.writeToFile(out);
-		fileManifest?.push({ type: 'M3', fileDataID: this.fileDataID, file: out });
-
-		// Only load M2 data if we need to export related files.
-		if (config.modelsExportSkin || config.modelsExportSkel || config.modelsExportBone || config.modelsExportAnim)
-			await this.m3.load();
-
-		await manifest.write();
-	}
+M3Exporter::M3Exporter(BufferWrapper data, std::vector<uint32_t> variantTextures, uint32_t fileDataID)
+: data(std::move(data))
+, fileDataID(fileDataID)
+, variantTextures(std::move(variantTextures))
+{
+m3 = std::make_unique<M3Loader>(this->data);
 }
 
-module.exports = M3Exporter;
+/**
+ * Set the mask array used for geoset control.
+ * @param mask
+ */
+void M3Exporter::setGeosetMask(std::vector<M3ExportGeosetMask> mask) {
+geosetMask = std::move(mask);
+}
+
+/**
+ * Export additional texture from canvas
+ */
+void M3Exporter::addURITexture(const std::string& out, BufferWrapper pngData) {
+dataTextures.emplace(out, std::move(pngData));
+}
+
+/**
+ * Export the textures for this M2 model.
+ * @param out
+ * @param raw
+ * @param mtl
+ * @param helper
+ * @param fullTexPaths
+ * @returns Texture map
+ */
+std::map<uint32_t, std::string> M3Exporter::exportTextures(const std::filesystem::path& out, bool raw,
+MTLWriter* mtl, casc::ExportHelper* helper, bool fullTexPaths)
+{
+const std::map<uint32_t, std::string> validTextures;
+return validTextures;
+}
+
+void M3Exporter::exportAsGLTF(const std::filesystem::path& out, casc::ExportHelper* helper, const std::string& format) {
+const std::string ext = format == "glb" ? ".glb" : ".gltf";
+const auto outGLTF = casc::ExportHelper::replaceExtension(out.string(), ext);
+
+// Skip export if file exists and overwriting is disabled.
+if (!core::view->config.value("overwriteFiles", true) && generics::fileExists(outGLTF)) {
+std::string formatUpper = format;
+std::transform(formatUpper.begin(), formatUpper.end(), formatUpper.begin(), ::toupper);
+logging::write(std::format("Skipping {} export of {} (already exists, overwrite disabled)", formatUpper, outGLTF));
+return;
+}
+
+m3->load();
+
+const auto model_name = std::filesystem::path(outGLTF).stem().string();
+GLTFWriter gltf(out, model_name);
+{
+std::string formatUpper = format;
+std::transform(formatUpper.begin(), formatUpper.end(), formatUpper.begin(), ::toupper);
+logging::write(std::format("Exporting M3 model {} as {}: {}", model_name, formatUpper, outGLTF));
+}
+
+gltf.setVerticesArray(m3->vertices);
+gltf.setNormalArray(m3->normals);
+gltf.addUVArray(m3->uv);
+
+for (size_t mI = 0, mC = m3->geosets.size(); mI < mC; mI++) {
+// Skip geosets that are not enabled.
+if (!geosetMask.empty() && (mI >= geosetMask.size() || !geosetMask[mI].checked))
+continue;
+
+const auto& geoset = m3->geosets[mI];
+
+// Read geoset name from the string block
+std::string geosetName;
+if (m3->stringBlock && geoset.nameCharCount > 0) {
+m3->stringBlock->seek(geoset.nameCharStart);
+geosetName = m3->stringBlock->readString(geoset.nameCharCount);
+}
+
+if (geosetName.empty())
+geosetName = std::to_string(mI);
+
+std::vector<uint32_t> indices(geoset.indexCount);
+for (uint32_t iI = 0; iI < geoset.indexCount; iI++)
+indices[iI] = m3->indices[geoset.indexStart + iI];
+
+gltf.addMesh(geosetName, indices, "");
+}
+
+gltf.write(core::view->config.value("overwriteFiles", true), format);
+}
+
+/**
+ * Export the M3 model as a WaveFront OBJ.
+ * @param out
+ * @param exportCollision
+ * @param helper
+ * @param fileManifest
+ */
+void M3Exporter::exportAsOBJ(const std::filesystem::path& out, bool exportCollision,
+casc::ExportHelper* helper, std::vector<M3ExportFileManifest>* fileManifest)
+{
+m3->load();
+
+const auto& config = core::view->config;
+
+OBJWriter obj(out);
+auto mtlPath = casc::ExportHelper::replaceExtension(out.string(), ".mtl");
+MTLWriter mtl(mtlPath);
+
+const auto model_name = out.stem().string();
+obj.setName(model_name);
+
+logging::write(std::format("Exporting M3 model {} as OBJ: {}", model_name, out.string()));
+
+obj.setVertArray(m3->vertices);
+obj.setNormalArray(m3->normals);
+obj.addUVArray(m3->uv);
+
+// Textures
+const auto outDir = out.parent_path();
+exportTextures(outDir, false, &mtl, helper);
+
+// Abort if the export has been cancelled.
+if (helper && helper->isCancelled())
+return;
+
+// Faces
+for (size_t mI = 0, mC = m3->geosets.size(); mI < mC; mI++) {
+// Skip geosets that are not enabled.
+if (!geosetMask.empty() && (mI >= geosetMask.size() || !geosetMask[mI].checked))
+continue;
+
+const auto& geoset = m3->geosets[mI];
+
+// Read geoset name from the string block
+std::string geosetName;
+if (m3->stringBlock && geoset.nameCharCount > 0) {
+m3->stringBlock->seek(geoset.nameCharStart);
+geosetName = m3->stringBlock->readString(geoset.nameCharCount);
+}
+
+if (geosetName.empty())
+geosetName = std::to_string(mI);
+
+std::vector<uint32_t> indices(geoset.indexCount);
+for (uint32_t iI = 0; iI < geoset.indexCount; iI++)
+indices[iI] = m3->indices[geoset.indexStart + iI];
+
+obj.addMesh(geosetName, indices, "");
+}
+
+if (!mtl.isEmpty())
+obj.setMaterialLibrary(std::filesystem::path(mtlPath).filename().string());
+
+obj.write(config.value("overwriteFiles", true));
+if (fileManifest)
+fileManifest->push_back({ "OBJ", fileDataID, out });
+
+mtl.write(config.value("overwriteFiles", true));
+if (fileManifest)
+fileManifest->push_back({ "MTL", fileDataID, std::filesystem::path(mtlPath) });
+}
+
+/**
+ * Export the M3 model as an STL file.
+ * @param out
+ * @param exportCollision
+ * @param helper
+ * @param fileManifest
+ */
+void M3Exporter::exportAsSTL(const std::filesystem::path& out, bool exportCollision,
+casc::ExportHelper* helper, std::vector<M3ExportFileManifest>* fileManifest)
+{
+m3->load();
+
+const auto& config = core::view->config;
+
+STLWriter stl(out);
+const auto model_name = out.stem().string();
+stl.setName(model_name);
+
+logging::write(std::format("Exporting M3 model {} as STL: {}", model_name, out.string()));
+
+stl.setVertArray(m3->vertices);
+stl.setNormalArray(m3->normals);
+
+// abort if the export has been cancelled
+if (helper && helper->isCancelled())
+return;
+
+// faces
+for (size_t mI = 0, mC = m3->geosets.size(); mI < mC; mI++) {
+// skip geosets that are not enabled
+if (!geosetMask.empty() && (mI >= geosetMask.size() || !geosetMask[mI].checked))
+continue;
+
+const auto& geoset = m3->geosets[mI];
+
+// Read geoset name from the string block
+std::string geosetName;
+if (m3->stringBlock && geoset.nameCharCount > 0) {
+m3->stringBlock->seek(geoset.nameCharStart);
+geosetName = m3->stringBlock->readString(geoset.nameCharCount);
+}
+
+if (geosetName.empty())
+geosetName = std::to_string(mI);
+
+std::vector<uint32_t> indices(geoset.indexCount);
+for (uint32_t iI = 0; iI < geoset.indexCount; iI++)
+indices[iI] = m3->indices[geoset.indexStart + iI];
+
+stl.addMesh(geosetName, indices);
+}
+
+stl.write(config.value("overwriteFiles", true));
+if (fileManifest)
+fileManifest->push_back({ "STL", fileDataID, out });
+}
+
+/**
+ * Export the model as a raw M3 file, including related files
+ * such as textures, bones, animations, etc.
+ * @param out
+ * @param helper
+ * @param fileManifest
+ */
+void M3Exporter::exportRaw(const std::filesystem::path& out, casc::ExportHelper* helper,
+std::vector<M3ExportFileManifest>* fileManifest)
+{
+// Write the M3 file with no conversion.
+data.writeToFile(out);
+if (fileManifest)
+fileManifest->push_back({ "M3", fileDataID, out });
+}
