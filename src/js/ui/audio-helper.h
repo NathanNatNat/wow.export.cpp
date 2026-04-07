@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <vector>
 #include <functional>
-#include <mutex>
 
 // Forward declare miniaudio types to avoid exposing the header.
 struct ma_engine;

@@ -4,6 +4,12 @@
 	License: MIT
 */
 
+// NOMINMAX must be defined before miniaudio includes <windows.h> on MSVC,
+// otherwise the min/max macros conflict with std::min / std::max.
+#ifdef _WIN32
+#define NOMINMAX
+#endif
+
 #define MINIAUDIO_IMPLEMENTATION
 #include <miniaudio.h>
 #undef MINIAUDIO_IMPLEMENTATION
