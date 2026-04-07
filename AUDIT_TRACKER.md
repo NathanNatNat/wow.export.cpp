@@ -402,3 +402,23 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: Uses `nw.Clipboard.get().set()` for clipboard and `nw.Shell.openItem()` for file explorer. `handle_context_menu` takes a `data` object with `data.selection`.
 - **C++**: Uses `ImGui::SetClipboardText()` for clipboard and `ShellExecuteW`/`xdg-open` for file explorer. `handle_context_menu` takes `selection` vector directly (not a wrapper object). `get_export_directory` returns empty string instead of `null`. Namespace: `listbox_context`.
 - **Rationale**: NW.js APIs are desktop-browser-only. ImGui provides cross-platform clipboard. Platform-specific shell commands match the pattern established in `core.cpp`.
+
+### `src/js/ui/model-viewer-utils.cpp` — ACCEPTABLE (systemic translations)
+- **JS**: `MODEL_TYPE_M2/M3/WMO` are Symbols; `create_renderer()` returns a duck-typed renderer; `create_view_state()` returns a JS proxy; `export_preview()` uses `canvas.toDataURL()` + `nw.Clipboard.get().set()`; `extract_animations()` uses duck-typed `renderer.skelLoader || renderer.m2`; `AnimMapper.get_anim_name()` is called as a module method.
+- **C++**: `ModelType` is a `enum class`; `RendererResult` struct holds typed `unique_ptr` renderers; `ViewStateProxy` holds raw pointers to AppState fields; `export_preview()` uses `glReadPixels()` + `ImGui::SetClipboardText()`; `extract_animations()` uses typed `getSkelLoader()` accessor; `get_anim_name()` is a free function. UV overlay encoded as base64 PNG data URL (via PNGWriter) to match AppState `std::string` field type. Namespace: `model_viewer_utils`.
+- **Rationale**: All JS-to-C++ systemic translations (Symbols→enum, JS proxy→raw-pointer struct, Canvas→GL, nw.js→platform APIs, duck typing→explicit typed accessors). `uv_drawer::generateUVLayerPixels` returns pixels not a data URL; callee encodes to PNG data URL to maintain AppState string contract.
+
+### `src/js/ui/character-appearance.cpp` — ACCEPTABLE (CharMaterialRenderer init pattern)
+- **JS**: `new CharTextureCompositer(...)` creates and immediately initializes the compositor.
+- **C++**: `CharMaterialRenderer` requires explicit `init()` call after construction (matches existing C++ CharMaterialRenderer API). `apply_customization_textures` renderer parameter is `[[maybe_unused]]` — kept for API parity with JS source.
+- **Rationale**: C++ RAII pattern for GPU resource initialization. The JS equivalent was implicit initialization in the constructor (which doesn't exist in C++ since the GL context may not be ready at construction time).
+
+### `src/js/ui/data-exporter.cpp` — ACCEPTABLE (MPQ DBC raw export via ofstream)
+- **JS**: `await fs.writeFile(exportPath, buf)` writes the DBC buffer from MPQ.
+- **C++**: Uses `std::ofstream` in binary mode to write `std::vector<uint8_t>` raw bytes, then creates parent directories via `std::filesystem::create_directories`. Same semantics as the JS, just explicit.
+- **Rationale**: Node.js `fs` → C++ `<fstream>` / `<filesystem>` standard translation.
+
+### `src/js/ui/texture-exporter.cpp` — ACCEPTABLE (local file extension detection)
+- **JS**: Uses `path.extname(fileName).toLowerCase()` to detect `.png`/`.jpg`.
+- **C++**: Uses `fileName.substr(fileName.size() - 4)` comparison against `".png"`, `".jpg"`, `".PNG"`, `".JPG"` (no path library call needed for 4-char extensions). Same logic, platform-agnostic.
+- **Rationale**: Node.js `path.extname` → inline substring comparison. Functionally identical for these fixed extensions.
