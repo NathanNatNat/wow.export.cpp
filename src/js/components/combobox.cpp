@@ -45,7 +45,8 @@ static std::vector<const nlohmann::json*> filteredSource(const std::string& curr
  * Select an option from the dropdown.
  * Equivalent to the JS selectOption() method.
  */
-static void selectOption(const nlohmann::json* option, ComboBoxState& state,
+static void selectOption(const nlohmann::json* option, const nlohmann::json& currentValue,
+                          ComboBoxState& state,
                           const std::function<void(const nlohmann::json&)>& onChange) {
 	if (!option) {
 		state.currentText = "";
@@ -56,18 +57,21 @@ static void selectOption(const nlohmann::json* option, ComboBoxState& state,
 	state.currentText = option->value("label", std::string(""));
 	state.isActive = false;
 
-	onChange(*option);
+	if (!currentValue.contains("value") || !option->contains("value") ||
+	    currentValue["value"] != (*option)["value"])
+		onChange(*option);
 }
 
 /**
  * Equivalent to the JS onEnter() method.
  */
-static void onEnter(ComboBoxState& state, const std::vector<nlohmann::json>& source,
+static void onEnter(ComboBoxState& state, const nlohmann::json& currentValue,
+                     const std::vector<nlohmann::json>& source,
                      int maxheight, const std::function<void(const nlohmann::json&)>& onChange) {
 	state.isActive = false;
 	auto matches = filteredSource(state.currentText, source, maxheight);
 	if (!matches.empty()) {
-		selectOption(matches[0], state, onChange);
+		selectOption(matches[0], currentValue, state, onChange);
 	} else {
 		state.currentText = "";
 		onChange(nlohmann::json(nullptr));
@@ -92,10 +96,12 @@ static void watchValue(const nlohmann::json& value, const std::vector<nlohmann::
 					break;
 				}
 			}
-			if (found)
+			if (found) {
 				state.currentText = found->value("label", std::string(""));
-			else
+				state.isActive = false;
+			} else {
 				state.currentText = "";
+			}
 		} else {
 			state.currentText = "";
 		}
@@ -150,7 +156,7 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 
 	// Handle Enter key.
 	if (ImGui::IsItemActive() && ImGui::IsKeyPressed(ImGuiKey_Enter)) {
-		onEnter(state, source, maxheight, onChange);
+		onEnter(state, value, source, maxheight, onChange);
 	}
 
 	inputActive = ImGui::IsItemActive();
@@ -172,7 +178,7 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 			for (const auto* item : matches) {
 				const std::string label = item->value("label", std::string(""));
 				if (ImGui::Selectable(label.c_str())) {
-					selectOption(item, state, onChange);
+					selectOption(item, value, state, onChange);
 				}
 			}
 
