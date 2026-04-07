@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 150 / 184 files converted
+**Progress:** 157 / 184 files converted
 
 ---
 
@@ -234,13 +234,13 @@
 
 ## Tier 22 — App Modules/Tabs (27 files)
 
-- [ ] `src/js/modules/tab_home.cpp` (30 lines)
-- [ ] `src/js/modules/legacy_tab_home.cpp` (30 lines)
-- [ ] `src/js/modules/font_helpers.cpp` (139 lines)
-- [ ] `src/js/modules/tab_install.cpp` (229 lines)
-- [ ] `src/js/modules/tab_raw.cpp` (208 lines)
-- [ ] `src/js/modules/tab_text.cpp` (145 lines)
-- [ ] `src/js/modules/tab_fonts.cpp` (168 lines)
+- [x] `src/js/modules/tab_home.cpp` (30 lines)
+- [x] `src/js/modules/legacy_tab_home.cpp` (30 lines)
+- [x] `src/js/modules/font_helpers.cpp` (139 lines)
+- [x] `src/js/modules/tab_install.cpp` (229 lines)
+- [x] `src/js/modules/tab_raw.cpp` (208 lines)
+- [x] `src/js/modules/tab_text.cpp` (145 lines)
+- [x] `src/js/modules/tab_fonts.cpp` (168 lines)
 - [ ] `src/js/modules/tab_audio.cpp` (334 lines)
 - [ ] `src/js/modules/tab_data.cpp` (379 lines)
 - [ ] `src/js/modules/tab_textures.cpp` (471 lines)

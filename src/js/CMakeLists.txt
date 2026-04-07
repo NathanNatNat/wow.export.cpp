@@ -155,4 +155,11 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/components/itemlistbox.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/map-viewer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/model-viewer-gl.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_home.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/legacy_tab_home.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/font_helpers.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_install.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_raw.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_text.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_fonts.cpp
 )
