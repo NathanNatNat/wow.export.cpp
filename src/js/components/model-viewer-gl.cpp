@@ -3,163 +3,170 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
 */
+#include "model-viewer-gl.h"
 
-const core = require('../core');
-const GLContext = require('../3D/gl/GLContext');
-const CameraControlsGL = require('../3D/camera/CameraControlsGL');
-const CharacterCameraControlsGL = require('../3D/camera/CharacterCameraControlsGL');
-const GridRenderer = require('../3D/renderers/GridRenderer');
-const ShadowPlaneRenderer = require('../3D/renderers/ShadowPlaneRenderer');
-const { ATTACHMENT_ID } = require('../wow/EquipmentSlots');
+#include <imgui.h>
+#include <cmath>
+#include <cstdlib>
+#include <algorithm>
+#include <numbers>
+#include <regex>
+#include <spdlog/spdlog.h>
 
-const parse_hex_color = (hex) => {
-	const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-	if (!result)
-		return [0, 0, 0];
+#include "../core.h"
+#include "../3D/gl/GLContext.h"
+#include "../3D/renderers/GridRenderer.h"
+#include "../3D/renderers/ShadowPlaneRenderer.h"
+#include "../3D/renderers/M2RendererGL.h"
+#include "../wow/EquipmentSlots.h"
 
-	return [
-		parseInt(result[1], 16) / 255,
-		parseInt(result[2], 16) / 255,
-		parseInt(result[3], 16) / 255
-	];
-};
+namespace model_viewer_gl {
 
-// general model camera fit constants
-const CAMERA_FIT_DIAGONAL_ANGLE = 45;
-const CAMERA_FIT_DISTANCE_MULTIPLIER = 2;
-const CAMERA_FIT_ELEVATION_FACTOR = 0.3;
-const CAMERA_FIT_CENTER_OFFSET_Y = -0.5;
+// ─── parse_hex_color ────────────────────────────────────────────
+
+std::array<float, 3> parse_hex_color(const std::string& hex) {
+	// JS: const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+	static const std::regex hex_regex("^#?([a-fA-F\\d]{2})([a-fA-F\\d]{2})([a-fA-F\\d]{2})$");
+	std::smatch result;
+	if (!std::regex_match(hex, result, hex_regex))
+		return {0, 0, 0};
+
+	return {
+		static_cast<float>(std::stoi(result[1].str(), nullptr, 16)) / 255.0f,
+		static_cast<float>(std::stoi(result[2].str(), nullptr, 16)) / 255.0f,
+		static_cast<float>(std::stoi(result[3].str(), nullptr, 16)) / 255.0f
+	};
+}
+
+// ─── PerspectiveCamera ─────────────────────────────────────────
 
 // simple perspective camera implementation
-class PerspectiveCamera {
-	constructor(fov, aspect, near, far) {
-		this.fov = fov;
-		this.aspect = aspect;
-		this.near = near;
-		this.far = far;
+PerspectiveCamera::PerspectiveCamera(float fov, float aspect, float near_val, float far_val)
+	: fov(fov), aspect(aspect), near_plane(near_val), far_plane(far_val) {
+	position = {0, 0, 5};
+	target = {0, 0, 0};
+	up = {0, 1, 0};
 
-		this.position = [0, 0, 5];
-		this.target = [0, 0, 0];
-		this.up = [0, 1, 0];
+	view_matrix.fill(0);
+	projection_matrix.fill(0);
 
-		this.view_matrix = new Float32Array(16);
-		this.projection_matrix = new Float32Array(16);
-
-		this.update_projection();
-		this.update_view();
-	}
-
-	update_projection() {
-		const f = 1.0 / Math.tan(this.fov * 0.5 * Math.PI / 180);
-		const nf = 1 / (this.near - this.far);
-
-		this.projection_matrix[0] = f / this.aspect;
-		this.projection_matrix[1] = 0;
-		this.projection_matrix[2] = 0;
-		this.projection_matrix[3] = 0;
-		this.projection_matrix[4] = 0;
-		this.projection_matrix[5] = f;
-		this.projection_matrix[6] = 0;
-		this.projection_matrix[7] = 0;
-		this.projection_matrix[8] = 0;
-		this.projection_matrix[9] = 0;
-		this.projection_matrix[10] = (this.far + this.near) * nf;
-		this.projection_matrix[11] = -1;
-		this.projection_matrix[12] = 0;
-		this.projection_matrix[13] = 0;
-		this.projection_matrix[14] = 2 * this.far * this.near * nf;
-		this.projection_matrix[15] = 0;
-	}
-
-	update_view() {
-		const px = this.position[0], py = this.position[1], pz = this.position[2];
-		const tx = this.target[0], ty = this.target[1], tz = this.target[2];
-		const ux = this.up[0], uy = this.up[1], uz = this.up[2];
-
-		// forward
-		let fx = px - tx, fy = py - ty, fz = pz - tz;
-		let fl = Math.sqrt(fx * fx + fy * fy + fz * fz);
-		if (fl > 0) { fx /= fl; fy /= fl; fz /= fl; }
-
-		// right = up x forward
-		let rx = uy * fz - uz * fy;
-		let ry = uz * fx - ux * fz;
-		let rz = ux * fy - uy * fx;
-		let rl = Math.sqrt(rx * rx + ry * ry + rz * rz);
-		if (rl > 0) { rx /= rl; ry /= rl; rz /= rl; }
-
-		// up = forward x right
-		const nux = fy * rz - fz * ry;
-		const nuy = fz * rx - fx * rz;
-		const nuz = fx * ry - fy * rx;
-
-		this.view_matrix[0] = rx;
-		this.view_matrix[1] = nux;
-		this.view_matrix[2] = fx;
-		this.view_matrix[3] = 0;
-		this.view_matrix[4] = ry;
-		this.view_matrix[5] = nuy;
-		this.view_matrix[6] = fy;
-		this.view_matrix[7] = 0;
-		this.view_matrix[8] = rz;
-		this.view_matrix[9] = nuz;
-		this.view_matrix[10] = fz;
-		this.view_matrix[11] = 0;
-		this.view_matrix[12] = -(rx * px + ry * py + rz * pz);
-		this.view_matrix[13] = -(nux * px + nuy * py + nuz * pz);
-		this.view_matrix[14] = -(fx * px + fy * py + fz * pz);
-		this.view_matrix[15] = 1;
-	}
-
-	lookAt(x, y, z) {
-		this.target[0] = x;
-		this.target[1] = y;
-		this.target[2] = z;
-		this.update_view();
-	}
-
-	setPosition(x, y, z) {
-		this.position[0] = x;
-		this.position[1] = y;
-		this.position[2] = z;
-		this.update_view();
-	}
+	update_projection();
+	update_view();
 }
+
+void PerspectiveCamera::update_projection() {
+	const float f = 1.0f / std::tan(fov * 0.5f * std::numbers::pi_v<float> / 180.0f);
+	const float nf = 1.0f / (near_plane - far_plane);
+
+	projection_matrix[0] = f / aspect;
+	projection_matrix[1] = 0;
+	projection_matrix[2] = 0;
+	projection_matrix[3] = 0;
+	projection_matrix[4] = 0;
+	projection_matrix[5] = f;
+	projection_matrix[6] = 0;
+	projection_matrix[7] = 0;
+	projection_matrix[8] = 0;
+	projection_matrix[9] = 0;
+	projection_matrix[10] = (far_plane + near_plane) * nf;
+	projection_matrix[11] = -1;
+	projection_matrix[12] = 0;
+	projection_matrix[13] = 0;
+	projection_matrix[14] = 2 * far_plane * near_plane * nf;
+	projection_matrix[15] = 0;
+}
+
+void PerspectiveCamera::update_view() {
+	const float px = position[0], py = position[1], pz = position[2];
+	const float tx = target[0], ty = target[1], tz = target[2];
+	const float ux = up[0], uy = up[1], uz = up[2];
+
+	// forward
+	float fx = px - tx, fy = py - ty, fz = pz - tz;
+	float fl = std::sqrt(fx * fx + fy * fy + fz * fz);
+	if (fl > 0) { fx /= fl; fy /= fl; fz /= fl; }
+
+	// right = up x forward
+	float rx = uy * fz - uz * fy;
+	float ry = uz * fx - ux * fz;
+	float rz = ux * fy - uy * fx;
+	float rl = std::sqrt(rx * rx + ry * ry + rz * rz);
+	if (rl > 0) { rx /= rl; ry /= rl; rz /= rl; }
+
+	// up = forward x right
+	const float nux = fy * rz - fz * ry;
+	const float nuy = fz * rx - fx * rz;
+	const float nuz = fx * ry - fy * rx;
+
+	view_matrix[0] = rx;
+	view_matrix[1] = nux;
+	view_matrix[2] = fx;
+	view_matrix[3] = 0;
+	view_matrix[4] = ry;
+	view_matrix[5] = nuy;
+	view_matrix[6] = fy;
+	view_matrix[7] = 0;
+	view_matrix[8] = rz;
+	view_matrix[9] = nuz;
+	view_matrix[10] = fz;
+	view_matrix[11] = 0;
+	view_matrix[12] = -(rx * px + ry * py + rz * pz);
+	view_matrix[13] = -(nux * px + nuy * py + nuz * pz);
+	view_matrix[14] = -(fx * px + fy * py + fz * pz);
+	view_matrix[15] = 1;
+}
+
+void PerspectiveCamera::lookAt(float x, float y, float z) {
+	target[0] = x;
+	target[1] = y;
+	target[2] = z;
+	update_view();
+}
+
+void PerspectiveCamera::setPosition(float x, float y, float z) {
+	position[0] = x;
+	position[1] = y;
+	position[2] = z;
+	update_view();
+}
+
+// ─── Camera Fitting ─────────────────────────────────────────────
 
 /**
  * Fit camera to bounding box using diagonal view approach
- * @param {{ min: number[], max: number[] }} bounding_box
- * @param {PerspectiveCamera} camera
- * @param {CameraControlsGL} controls
+ * @param bounding_box
+ * @param camera
+ * @param controls
  */
-function fit_camera_to_bounding_box(bounding_box, camera, controls) {
+void fit_camera_to_bounding_box(const BoundingBox* bounding_box, PerspectiveCamera& camera,
+                                CameraControlsGL* controls) {
 	if (!bounding_box)
 		return;
 
-	const min = bounding_box.min;
-	const max = bounding_box.max;
+	const auto& min = bounding_box->min;
+	const auto& max = bounding_box->max;
 
 	// calculate center with offset
-	const center_x = (min[0] + max[0]) / 2;
-	const center_y = (min[1] + max[1]) / 2 + CAMERA_FIT_CENTER_OFFSET_Y;
-	const center_z = (min[2] + max[2]) / 2;
+	const float center_x = (min[0] + max[0]) / 2.0f;
+	const float center_y = (min[1] + max[1]) / 2.0f + CAMERA_FIT_CENTER_OFFSET_Y;
+	const float center_z = (min[2] + max[2]) / 2.0f;
 
 	// calculate dimensions and max dimension
-	const size_x = max[0] - min[0];
-	const size_y = max[1] - min[1];
-	const size_z = max[2] - min[2];
-	const max_dimension = Math.max(size_x, size_y, size_z);
+	const float size_x = max[0] - min[0];
+	const float size_y = max[1] - min[1];
+	const float size_z = max[2] - min[2];
+	const float max_dimension = std::max({size_x, size_y, size_z});
 
 	// calculate required distance based on camera FOV and object size
-	const fov_radians = camera.fov * (Math.PI / 180);
-	const distance = (max_dimension / 2) / Math.tan(fov_radians / 2) * CAMERA_FIT_DISTANCE_MULTIPLIER;
+	const float fov_radians = camera.fov * (std::numbers::pi_v<float> / 180.0f);
+	const float distance = (max_dimension / 2.0f) / std::tan(fov_radians / 2.0f) * CAMERA_FIT_DISTANCE_MULTIPLIER;
 
 	// calculate camera position at diagonal angle with elevation
-	const angle_rad = CAMERA_FIT_DIAGONAL_ANGLE * (Math.PI / 180);
+	const float angle_rad = CAMERA_FIT_DIAGONAL_ANGLE * (std::numbers::pi_v<float> / 180.0f);
 
-	const offset_x = distance * Math.sin(angle_rad);
-	const offset_y = distance * CAMERA_FIT_ELEVATION_FACTOR;
-	const offset_z = distance * Math.cos(angle_rad);
+	const float offset_x = distance * std::sin(angle_rad);
+	const float offset_y = distance * CAMERA_FIT_ELEVATION_FACTOR;
+	const float offset_z = distance * std::cos(angle_rad);
 
 	// position camera
 	camera.position[0] = center_x + offset_x;
@@ -169,348 +176,696 @@ function fit_camera_to_bounding_box(bounding_box, camera, controls) {
 
 	// update controls target
 	if (controls) {
-		controls.target[0] = center_x;
-		controls.target[1] = center_y;
-		controls.target[2] = center_z;
+		controls->target[0] = center_x;
+		controls->target[1] = center_y;
+		controls->target[2] = center_z;
 
-		controls.max_distance = distance * 3;
-		controls.update();
+		controls->max_distance = distance * 3;
+		controls->update();
 	}
 }
 
 /**
  * Fit camera for character view - fixed position tuned for humanoid models
- * @param {PerspectiveCamera} camera
- * @param {CameraControlsGL|CharacterCameraControlsGL} controls
+ * @param bounding_box
+ * @param camera
+ * @param orbit_controls
+ * @param char_controls
  */
-function fit_camera_for_character(bounding_box, camera, controls) {
+void fit_camera_for_character(const BoundingBox* /*bounding_box*/, PerspectiveCamera& camera,
+                              CameraControlsGL* orbit_controls,
+                              CharacterCameraControlsGL* char_controls) {
 	camera.position[0] = 0;
-	camera.position[1] = 1.609;
-	camera.position[2] = 2.347;
+	camera.position[1] = 1.609f;
+	camera.position[2] = 2.347f;
 
-	const target_x = 0;
-	const target_y = 1.247;
-	const target_z = 0.537;
+	const float target_x = 0;
+	const float target_y = 1.247f;
+	const float target_z = 0.537f;
 
 	camera.lookAt(target_x, target_y, target_z);
 
-	if (controls) {
-		controls.target[0] = target_x;
-		controls.target[1] = target_y;
-		controls.target[2] = target_z;
+	if (orbit_controls) {
+		orbit_controls->target[0] = target_x;
+		orbit_controls->target[1] = target_y;
+		orbit_controls->target[2] = target_z;
 
-		if (controls.update)
-			controls.update();
+		orbit_controls->update();
+	}
+
+	if (char_controls) {
+		char_controls->target[0] = target_x;
+		char_controls->target[1] = target_y;
+		char_controls->target[2] = target_z;
+
+		char_controls->update();
 	}
 }
 
-module.exports = {
-	props: ['context'],
+// ─── FBO Management ─────────────────────────────────────────────
 
-	methods: {
-		render: function() {
-			if (!this.isRendering)
-				return;
+// TODO(conversion): In JS, a canvas element and WebGL2 context are created.
+// In C++/ImGui, we render to an offscreen FBO and display the color texture
+// via ImGui::Image. These helpers manage FBO lifecycle.
 
-			const currentTime = performance.now() * 0.001;
-			if (this.lastTime === undefined)
-				this.lastTime = currentTime;
+static void create_fbo(State& state, int width, int height) {
+	// Clean up existing FBO
+	if (state.fbo != 0) {
+		glDeleteFramebuffers(1, &state.fbo);
+		glDeleteTextures(1, &state.color_texture);
+		glDeleteRenderbuffers(1, &state.depth_rbo);
+	}
 
-			const deltaTime = currentTime - this.lastTime;
-			this.lastTime = currentTime;
+	// Create color texture
+	glGenTextures(1, &state.color_texture);
+	glBindTexture(GL_TEXTURE_2D, state.color_texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-			// update animation
-			const activeRenderer = this.context.getActiveRenderer?.();
-			if (activeRenderer && activeRenderer.updateAnimation) {
-				activeRenderer.updateAnimation(deltaTime);
+	// Create depth/stencil renderbuffer
+	glGenRenderbuffers(1, &state.depth_rbo);
+	glBindRenderbuffer(GL_RENDERBUFFER, state.depth_rbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
 
-				// update frame counter in view (throttled to ~15fps for UI updates)
-				if (activeRenderer.get_animation_frame && !activeRenderer.animation_paused) {
-					this.frameUpdateCounter = (this.frameUpdateCounter || 0) + 1;
-					if (this.frameUpdateCounter >= 4) {
-						this.frameUpdateCounter = 0;
-						const frame_key = this.context.useCharacterControls ? 'chrModelViewerAnimFrame' : 'modelViewerAnimFrame';
-						core.view[frame_key] = activeRenderer.get_animation_frame();
-					}
-				}
-			}
+	// Create FBO
+	glGenFramebuffers(1, &state.fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, state.fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, state.color_texture, 0);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, state.depth_rbo);
 
-			// apply model rotation if speed is non-zero (non-character mode)
-			const rotation_speed = core.view.modelViewerRotationSpeed;
-			if (rotation_speed !== 0 && activeRenderer && activeRenderer.setTransform && !this.use_character_controls) {
-				this.model_rotation_y += rotation_speed * deltaTime;
-				activeRenderer.setTransform(
-					[0, 0, 0],
-					[0, this.model_rotation_y, 0],
-					[1, 1, 1]
-				);
-			}
+	// Verify completeness
+	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+		spdlog::error("model-viewer-gl: FBO not complete, status={}", status);
+	}
 
-			// update controls
-			this.controls.update();
+	// Unbind
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-			// clear with appropriate background
-			const is_chr = this.context.useCharacterControls;
-			const show_bg = is_chr ? core.view.config.chrShowBackground : core.view.config.modelViewerShowBackground;
-			const bg_color = is_chr ? core.view.config.chrBackgroundColor : core.view.config.modelViewerBackgroundColor;
+	state.fbo_width = width;
+	state.fbo_height = height;
+}
 
-			if (show_bg) {
-				const [r, g, b] = parse_hex_color(bg_color);
-				this.gl_context.set_clear_color(r, g, b, 1);
-			} else {
-				this.gl_context.set_clear_color(0, 0, 0, 0);
-			}
-			this.gl_context.clear(true, true);
+static void destroy_fbo(State& state) {
+	if (state.fbo != 0) {
+		glDeleteFramebuffers(1, &state.fbo);
+		glDeleteTextures(1, &state.color_texture);
+		glDeleteRenderbuffers(1, &state.depth_rbo);
+		state.fbo = 0;
+		state.color_texture = 0;
+		state.depth_rbo = 0;
+		state.fbo_width = 0;
+		state.fbo_height = 0;
+	}
+}
 
-			// render shadow plane (before model, for character mode)
-			if (this.shadow_renderer && this.shadow_renderer.visible)
-				this.shadow_renderer.render(this.camera.view_matrix, this.camera.projection_matrix);
+// ─── Camera Adapter Sync ────────────────────────────────────────
 
-			// render grid (not in character mode)
-			if (core.view.config.modelViewerShowGrid && this.grid_renderer && !this.context.useCharacterControls)
-				this.grid_renderer.render(this.camera.view_matrix, this.camera.projection_matrix);
+// Sync PerspectiveCamera position → CameraGL adapter (before orbit controls update)
+static void sync_camera_to_gl(State& state) {
+	state.camera_gl.position = state.camera.position;
+	state.camera_gl.up = state.camera.up;
+	state.camera_gl.fov = state.camera.fov;
+}
 
-			// render equipment models at attachment points (character mode only)
-			const equipment_renderers = this.context.getEquipmentRenderers?.();
+// Sync PerspectiveCamera position → CharacterCameraGL adapter (before char controls update)
+static void sync_camera_to_char_gl(State& state) {
+	state.char_camera_gl.position = state.camera.position;
+}
 
-			// determine hand grip state based on equipped weapons
-			if (activeRenderer && equipment_renderers && activeRenderer.setHandGrip) {
-				let close_right = false;
-				let close_left = false;
+// Set up the CameraGL adapter lookAt callback to sync back to PerspectiveCamera
+static void setup_camera_gl_callbacks(State& state) {
+	state.camera_gl.lookAt = [&state](float x, float y, float z) {
+		// Controls modified camera_gl.position, sync it back to PerspectiveCamera
+		state.camera.position = state.camera_gl.position;
+		state.camera.lookAt(x, y, z);
+	};
 
-				// check main-hand (slot 16) and off-hand (slot 17)
-				const mainhand = equipment_renderers.get(16);
-				const offhand = equipment_renderers.get(17);
+	state.char_camera_gl.lookAt = [&state](float x, float y, float z) {
+		// Controls modified char_camera_gl.position, sync it back
+		state.camera.position = state.char_camera_gl.position;
+		state.camera.lookAt(x, y, z);
+	};
 
-				if (mainhand?.renderers?.length > 0) {
-					// bows use left-hand attachment despite being main-hand items
-					const uses_left_hand = mainhand.renderers.some(r => r.attachment_id === ATTACHMENT_ID.HAND_LEFT);
-					if (uses_left_hand)
-						close_left = true;
-					else
-						close_right = true;
-				}
+	state.char_camera_gl.update_view = [&state]() {
+		state.camera.update_view();
+	};
+}
 
-				if (offhand?.renderers?.length > 0) {
-					// shields don't require grip (attached to wrist)
-					const has_shield = offhand.renderers.some(r => r.attachment_id === ATTACHMENT_ID.SHIELD);
-					if (!has_shield)
-						close_left = true;
-				}
+// ─── Input Handling ─────────────────────────────────────────────
 
-				activeRenderer.setHandGrip(close_right, close_left);
-			}
+// TODO(conversion): In JS, event listeners are bound to the canvas/document for
+// mouse and keyboard events. In C++/ImGui, we query ImGui::GetIO() and forward
+// events to the camera controls. This handles the equivalent of:
+//   canvas.addEventListener('mousedown', ...)
+//   document.addEventListener('mousemove', ...)
+//   document.addEventListener('mouseup', ...)
+//   canvas.addEventListener('wheel', ...)
+//   document.addEventListener('keydown', ...)
+static void handle_input(State& state) {
+	if (!ImGui::IsItemHovered())
+		return;
 
-			// render model
-			if (activeRenderer && activeRenderer.render)
-				activeRenderer.render(this.camera.view_matrix, this.camera.projection_matrix);
+	ImGuiIO& io = ImGui::GetIO();
 
-			if (equipment_renderers && activeRenderer) {
-				const char_bone_matrices = activeRenderer.bone_matrices;
-				const char_model_matrix = activeRenderer.model_matrix;
+	// Mouse position relative to widget
+	ImVec2 widget_pos = ImGui::GetItemRectMin();
+	int mouse_x = static_cast<int>(io.MousePos.x - widget_pos.x);
+	int mouse_y = static_cast<int>(io.MousePos.y - widget_pos.y);
 
-				for (const slot_entry of equipment_renderers.values()) {
-					if (!slot_entry?.renderers)
-						continue;
-
-					for (const { renderer, attachment_id, is_collection_style } of slot_entry.renderers) {
-						if (!renderer?.render)
-							continue;
-
-						// collection-style models (e.g. backpacks) need bone matrix remapping
-						if (is_collection_style) {
-							if (char_bone_matrices && renderer.applyExternalBoneMatrices)
-								renderer.applyExternalBoneMatrices(char_bone_matrices);
-
-							if (char_model_matrix)
-								renderer.setTransformMatrix(char_model_matrix);
-						} else if (attachment_id !== undefined) {
-							// regular attachment models use attachment transform
-							const attach_transform = activeRenderer.getAttachmentTransform?.(attachment_id);
-							if (attach_transform)
-								renderer.setTransformMatrix(attach_transform);
-						}
-
-						renderer.render(this.camera.view_matrix, this.camera.projection_matrix);
-					}
-				}
-			}
-
-			// render collection models with remapped bone matrices
-			const collection_renderers = this.context.getCollectionRenderers?.();
-			if (collection_renderers && activeRenderer) {
-				const char_bone_matrices = activeRenderer.bone_matrices;
-				const char_model_matrix = activeRenderer.model_matrix;
-
-				for (const slot_entry of collection_renderers.values()) {
-					if (!slot_entry?.renderers)
-						continue;
-
-					for (const renderer of slot_entry.renderers) {
-						if (!renderer?.render)
-							continue;
-
-						// apply remapped bone matrices for proper rigging
-						if (char_bone_matrices && renderer.applyExternalBoneMatrices)
-							renderer.applyExternalBoneMatrices(char_bone_matrices);
-
-						// use character's model transform (rotation from controls)
-						if (char_model_matrix)
-							renderer.setTransformMatrix(char_model_matrix);
-
-						renderer.render(this.camera.view_matrix, this.camera.projection_matrix);
-					}
-				}
-			}
-
-			requestAnimationFrame(() => this.render());
-		},
-
-		recreate_controls: function() {
-			if (this.controls) {
-				this.controls.dispose();
-				this.controls = null;
-			}
-
-			const use_3d_camera = this.context.useCharacterControls ? core.view.config.chrUse3DCamera : true;
-
-			if (this.context.useCharacterControls && !use_3d_camera) {
-				this.controls = new CharacterCameraControlsGL(this.camera, this.canvas);
-				this.controls.on_model_rotate = (rotation_y) => {
-					const active_renderer = this.context.getActiveRenderer?.();
-					if (active_renderer && active_renderer.setTransform)
-						active_renderer.setTransform([0, 0, 0], [0, rotation_y, 0], [1, 1, 1]);
-				};
-
-				// initial 90 degree clockwise rotation
-				this.controls.model_rotation_y = -Math.PI / 2;
-				this.controls.on_model_rotate(this.controls.model_rotation_y);
-
-				this.use_character_controls = true;
-			} else {
-				this.controls = new CameraControlsGL(this.camera, this.canvas);
-				this.use_character_controls = false;
-			}
-
-			this.context.controls = this.controls;
-		},
-
-		update_shadow_visibility: function() {
-			if (!this.shadow_renderer)
-				return;
-
-			const should_show = this.context.useCharacterControls &&
-				core.view.config.chrRenderShadow &&
-				!core.view.chrModelLoading;
-
-			this.shadow_renderer.visible = should_show;
-		},
-
-		fit_camera: function() {
-			const active_renderer = this.context.getActiveRenderer?.();
-			if (!active_renderer || !active_renderer.getBoundingBox)
-				return;
-
-			const bounding_box = active_renderer.getBoundingBox();
-			if (!bounding_box)
-				return;
-
-			if (this.context.useCharacterControls)
-				fit_camera_for_character(bounding_box, this.camera, this.controls);
-			else
-				fit_camera_to_bounding_box(bounding_box, this.camera, this.controls);
+	// Mouse wheel
+	if (io.MouseWheel != 0.0f) {
+		if (state.use_character_controls && state.char_controls) {
+			state.char_controls->on_mouse_wheel(-io.MouseWheel * 100.0f);
+		} else if (state.orbit_controls) {
+			state.orbit_controls->on_mouse_wheel(-io.MouseWheel * 100.0f);
 		}
-	},
+	}
 
-	mounted: function() {
-		const container = this.$el;
+	// Mouse down
+	for (int btn = 0; btn < 3; btn++) {
+		if (ImGui::IsMouseClicked(btn)) {
+			if (state.use_character_controls && state.char_controls) {
+				state.char_controls->on_mouse_down(btn, mouse_x, mouse_y);
+			} else if (state.orbit_controls) {
+				state.orbit_controls->on_mouse_down(btn, mouse_x, mouse_y,
+					io.KeyCtrl, io.KeySuper, io.KeyShift);
+			}
+		}
+	}
 
-		// create canvas
-		const canvas = document.createElement('canvas');
-		canvas.className = 'gl-canvas';
-		container.appendChild(canvas);
-		this.canvas = canvas;
+	// Key down
+	if (state.orbit_controls && !state.use_character_controls) {
+		// Forward relevant key presses
+		for (int key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_NamedKey_END; key++) {
+			if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(key))) {
+				state.orbit_controls->on_key_down(key, io.KeyShift, io.KeyAlt);
+			}
+		}
+	}
 
-		// create GL context
-		this.gl_context = new GLContext(canvas, {
-			antialias: true,
-			alpha: true,
-			preserveDrawingBuffer: true
-		});
+	// Mouse move (always forward, regardless of hover, since panning may extend outside)
+	if (io.MouseDelta.x != 0 || io.MouseDelta.y != 0) {
+		if (state.use_character_controls && state.char_controls) {
+			state.char_controls->on_mouse_move(mouse_x, mouse_y);
+		} else if (state.orbit_controls) {
+			state.orbit_controls->on_mouse_move(mouse_x, mouse_y);
+		}
+	}
 
-		// store context for renderers
-		this.context.gl_context = this.gl_context;
+	// Mouse up
+	for (int btn = 0; btn < 3; btn++) {
+		if (ImGui::IsMouseReleased(btn)) {
+			if (state.use_character_controls && state.char_controls) {
+				state.char_controls->on_mouse_up(btn);
+			} else if (state.orbit_controls) {
+				state.orbit_controls->on_mouse_up();
+			}
+		}
+	}
+}
 
-		// create camera
-		this.camera = new PerspectiveCamera(70, 1, 0.01, 2000);
+// ─── Render Scene ───────────────────────────────────────────────
 
-		// model rotation
-		this.model_rotation_y = 0;
-		this.use_character_controls = false;
+/**
+ * Render the 3D scene to the FBO.
+ * JS equivalent: the render() method of the Vue component.
+ */
+static void render_scene(State& state, Context& context) {
+	if (!state.isRendering || !state.gl_context)
+		return;
 
-		// create controls
-		this.recreate_controls();
+	// Calculate delta time
+	// JS: const currentTime = performance.now() * 0.001;
+	float currentTime = static_cast<float>(ImGui::GetTime());
+	if (state.lastTime < 0)
+		state.lastTime = currentTime;
 
-		// expose fit_camera on context
-		this.context.fitCamera = () => this.fit_camera();
+	const float deltaTime = currentTime - state.lastTime;
+	state.lastTime = currentTime;
 
-		// create grid renderer
-		this.grid_renderer = new GridRenderer(this.gl_context, 100, 100);
+	// update animation
+	// JS: const activeRenderer = this.context.getActiveRenderer?.();
+	M2RendererGL* activeRenderer = context.getActiveRenderer ? context.getActiveRenderer() : nullptr;
 
-		// create shadow renderer (for character mode)
-		this.shadow_renderer = new ShadowPlaneRenderer(this.gl_context, 2);
-		this.shadow_renderer.visible = false;
-		this.update_shadow_visibility();
+	if (activeRenderer) {
+		activeRenderer->updateAnimation(deltaTime);
 
-		// watchers for character mode
-		this.watchers = [];
+		// update frame counter in view (throttled to ~15fps for UI updates)
+		if (!activeRenderer->is_animation_paused()) {
+			state.frameUpdateCounter = (state.frameUpdateCounter) + 1;
+			if (state.frameUpdateCounter >= 4) {
+				state.frameUpdateCounter = 0;
+				const std::string frame_key = context.useCharacterControls ? "chrModelViewerAnimFrame" : "modelViewerAnimFrame";
+				if (context.useCharacterControls) {
+					core::view->chrModelViewerAnimFrame = activeRenderer->get_animation_frame();
+				} else {
+					core::view->modelViewerAnimFrame = activeRenderer->get_animation_frame();
+				}
+			}
+		}
+	}
 
-		if (this.context.useCharacterControls) {
-			this.watchers.push(
-				core.view.$watch('config.chrUse3DCamera', () => this.recreate_controls()),
-				core.view.$watch('config.chrRenderShadow', () => this.update_shadow_visibility()),
-				core.view.$watch('chrModelLoading', () => this.update_shadow_visibility())
+	// apply model rotation if speed is non-zero (non-character mode)
+	const double rotation_speed = core::view->modelViewerRotationSpeed;
+	if (rotation_speed != 0 && !state.use_character_controls) {
+		state.model_rotation_y += static_cast<float>(rotation_speed) * deltaTime;
+		if (activeRenderer) {
+			activeRenderer->setTransform(
+				{0, 0, 0},
+				{0, state.model_rotation_y, 0},
+				{1, 1, 1}
+			);
+		} else if (context.setActiveModelTransform) {
+			context.setActiveModelTransform(
+				{0, 0, 0},
+				{0, state.model_rotation_y, 0},
+				{1, 1, 1}
 			);
 		}
+	}
 
-		// resize handler
-		this.onResize = () => {
-			const rect = container.getBoundingClientRect();
-			const width = rect.width;
-			const height = rect.height;
+	// update controls
+	if (state.use_character_controls && state.char_controls) {
+		sync_camera_to_char_gl(state);
+		state.char_controls->update();
+	} else if (state.orbit_controls) {
+		sync_camera_to_gl(state);
+		state.orbit_controls->update();
+	}
 
-			canvas.width = width * window.devicePixelRatio;
-			canvas.height = height * window.devicePixelRatio;
-			canvas.style.width = width + 'px';
-			canvas.style.height = height + 'px';
+	// Bind FBO for 3D rendering
+	glBindFramebuffer(GL_FRAMEBUFFER, state.fbo);
+	state.gl_context->set_viewport(state.fbo_width, state.fbo_height);
 
-			this.gl_context.set_viewport(canvas.width, canvas.height);
+	// clear with appropriate background
+	const bool is_chr = context.useCharacterControls;
+	const bool show_bg = is_chr
+		? core::view->config.value("chrShowBackground", false)
+		: core::view->config.value("modelViewerShowBackground", false);
+	const std::string bg_color = is_chr
+		? core::view->config.value("chrBackgroundColor", std::string("#343a40"))
+		: core::view->config.value("modelViewerBackgroundColor", std::string("#343a40"));
 
-			this.camera.aspect = width / height;
-			this.camera.update_projection();
+	if (show_bg) {
+		const auto [r, g, b] = parse_hex_color(bg_color);
+		state.gl_context->set_clear_color(r, g, b, 1);
+	} else {
+		state.gl_context->set_clear_color(0, 0, 0, 0);
+	}
+	state.gl_context->clear(true, true);
+
+	const float* view_mat = state.camera.view_matrix.data();
+	const float* proj_mat = state.camera.projection_matrix.data();
+
+	// render shadow plane (before model, for character mode)
+	if (state.shadow_renderer && state.shadow_renderer->visible)
+		state.shadow_renderer->render(view_mat, proj_mat);
+
+	// render grid (not in character mode)
+	if (core::view->config.value("modelViewerShowGrid", true) && state.grid_renderer && !context.useCharacterControls)
+		state.grid_renderer->render(view_mat, proj_mat);
+
+	// render equipment models at attachment points (character mode only)
+	auto* equipment_renderers = context.getEquipmentRenderers ? context.getEquipmentRenderers() : nullptr;
+
+	// determine hand grip state based on equipped weapons
+	if (activeRenderer && equipment_renderers) {
+		bool close_right = false;
+		bool close_left = false;
+
+		// check main-hand (slot 16) and off-hand (slot 17)
+		auto mainhand_it = equipment_renderers->find(16);
+		auto offhand_it = equipment_renderers->find(17);
+
+		if (mainhand_it != equipment_renderers->end() && !mainhand_it->second.renderers.empty()) {
+			const auto& mainhand = mainhand_it->second;
+			// bows use left-hand attachment despite being main-hand items
+			bool uses_left_hand = false;
+			for (const auto& r : mainhand.renderers) {
+				if (r.attachment_id == wow::ATTACHMENT_ID::HAND_LEFT) {
+					uses_left_hand = true;
+					break;
+				}
+			}
+			if (uses_left_hand)
+				close_left = true;
+			else
+				close_right = true;
+		}
+
+		if (offhand_it != equipment_renderers->end() && !offhand_it->second.renderers.empty()) {
+			const auto& offhand = offhand_it->second;
+			// shields don't require grip (attached to wrist)
+			bool has_shield = false;
+			for (const auto& r : offhand.renderers) {
+				if (r.attachment_id == wow::ATTACHMENT_ID::SHIELD) {
+					has_shield = true;
+					break;
+				}
+			}
+			if (!has_shield)
+				close_left = true;
+		}
+
+		activeRenderer->setHandGrip(close_right, close_left);
+	}
+
+	// render model
+	if (activeRenderer) {
+		activeRenderer->render(view_mat, proj_mat);
+	} else if (context.renderActiveModel) {
+		context.renderActiveModel(view_mat, proj_mat);
+	}
+
+	if (equipment_renderers && activeRenderer) {
+		const auto& char_bone_matrices = activeRenderer->get_bone_matrices();
+		const float* char_model_matrix = activeRenderer->get_model_matrix();
+
+		for (auto& [slot_id, slot_entry] : *equipment_renderers) {
+			if (slot_entry.renderers.empty())
+				continue;
+
+			for (const auto& entry : slot_entry.renderers) {
+				if (!entry.renderer)
+					continue;
+
+				// collection-style models (e.g. backpacks) need bone matrix remapping
+				if (entry.is_collection_style) {
+					if (!char_bone_matrices.empty())
+						entry.renderer->applyExternalBoneMatrices(char_bone_matrices.data(), char_bone_matrices.size() / 16);
+
+					if (char_model_matrix)
+						entry.renderer->setTransformMatrix(char_model_matrix);
+				} else if (entry.attachment_id >= 0) {
+					// regular attachment models use attachment transform
+					auto attach_transform = activeRenderer->getAttachmentTransform(static_cast<uint32_t>(entry.attachment_id));
+					if (attach_transform)
+						entry.renderer->setTransformMatrix(attach_transform->data());
+				}
+
+				entry.renderer->render(view_mat, proj_mat);
+			}
+		}
+	}
+
+	// render collection models with remapped bone matrices
+	auto* collection_renderers = context.getCollectionRenderers ? context.getCollectionRenderers() : nullptr;
+	if (collection_renderers && activeRenderer) {
+		const auto& char_bone_matrices = activeRenderer->get_bone_matrices();
+		const float* char_model_matrix = activeRenderer->get_model_matrix();
+
+		for (auto& [slot_id, slot_entry] : *collection_renderers) {
+			if (slot_entry.renderers.empty())
+				continue;
+
+			for (auto* renderer : slot_entry.renderers) {
+				if (!renderer)
+					continue;
+
+				// apply remapped bone matrices for proper rigging
+				if (!char_bone_matrices.empty())
+					renderer->applyExternalBoneMatrices(char_bone_matrices.data(), char_bone_matrices.size() / 16);
+
+				// use character's model transform (rotation from controls)
+				if (char_model_matrix)
+					renderer->setTransformMatrix(char_model_matrix);
+
+				renderer->render(view_mat, proj_mat);
+			}
+		}
+	}
+
+	// Unbind FBO
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+// ─── Methods ────────────────────────────────────────────────────
+
+void recreate_controls(State& state, Context& context) {
+	// Dispose existing controls
+	if (state.orbit_controls) {
+		state.orbit_controls->dispose();
+		state.orbit_controls.reset();
+	}
+	if (state.char_controls) {
+		state.char_controls->dispose();
+		state.char_controls.reset();
+	}
+
+	const bool use_3d_camera = context.useCharacterControls
+		? core::view->config.value("chrUse3DCamera", true)
+		: true;
+
+	if (context.useCharacterControls && !use_3d_camera) {
+		// Character camera controls
+		sync_camera_to_char_gl(state);
+		state.char_controls = std::make_unique<CharacterCameraControlsGL>(state.char_camera_gl, state.char_dom_element);
+
+		state.char_controls->on_model_rotate = [&state, &context](float rotation_y) {
+			M2RendererGL* active_renderer = context.getActiveRenderer ? context.getActiveRenderer() : nullptr;
+			if (active_renderer)
+				active_renderer->setTransform({0, 0, 0}, {0, rotation_y, 0}, {1, 1, 1});
 		};
 
-		this.onResize();
-		window.addEventListener('resize', this.onResize);
+		// initial 90 degree clockwise rotation
+		state.char_controls->model_rotation_y = -std::numbers::pi_v<float> / 2.0f;
+		state.char_controls->on_model_rotate(state.char_controls->model_rotation_y);
 
-		// start render loop
-		this.isRendering = true;
-		this.render();
-	},
+		state.use_character_controls = true;
 
-	beforeUnmount: function() {
-		this.isRendering = false;
-		this.controls.dispose();
-		this.grid_renderer.dispose();
-		this.shadow_renderer?.dispose();
-		this.gl_context.dispose();
-		window.removeEventListener('resize', this.onResize);
+		// Update context outputs
+		context.controls_character = state.char_controls.get();
+		context.controls_orbit = nullptr;
+	} else {
+		// Orbit camera controls
+		sync_camera_to_gl(state);
+		state.orbit_controls = std::make_unique<CameraControlsGL>(state.camera_gl, state.dom_element);
 
-		for (const watcher of this.watchers)
-			watcher();
+		state.use_character_controls = false;
 
-		this.watchers = [];
-	},
+		// Update context outputs
+		context.controls_orbit = state.orbit_controls.get();
+		context.controls_character = nullptr;
+	}
+}
 
-	template: `<div class="image ui-model-viewer"></div>`
-};
+void update_shadow_visibility(State& state, const Context& context) {
+	if (!state.shadow_renderer)
+		return;
+
+	const bool should_show = context.useCharacterControls &&
+		core::view->config.value("chrRenderShadow", false) &&
+		!core::view->chrModelLoading;
+
+	state.shadow_renderer->visible = should_show;
+}
+
+void fit_camera(State& state, Context& context) {
+	M2RendererGL* active_renderer = context.getActiveRenderer ? context.getActiveRenderer() : nullptr;
+	if (!active_renderer)
+		return;
+
+	auto bounding_box_result = active_renderer->getBoundingBox();
+	if (!bounding_box_result)
+		return;
+
+	BoundingBox bounding_box = { bounding_box_result->min, bounding_box_result->max };
+
+	if (context.useCharacterControls) {
+		fit_camera_for_character(&bounding_box, state.camera,
+			state.orbit_controls.get(),
+			state.char_controls.get());
+	} else {
+		fit_camera_to_bounding_box(&bounding_box, state.camera, state.orbit_controls.get());
+	}
+}
+
+// ─── Init / Dispose / RenderWidget ──────────────────────────────
+
+void init(State& state, Context& context) {
+	// JS: this.gl_context = new GLContext(canvas, { antialias: true, alpha: true, preserveDrawingBuffer: true });
+	state.gl_context = std::make_unique<gl::GLContext>();
+
+	// store context for renderers
+	// JS: this.context.gl_context = this.gl_context;
+	context.gl_context = state.gl_context.get();
+
+	// create camera (already default-constructed in State)
+	// JS: this.camera = new PerspectiveCamera(70, 1, 0.01, 2000);
+	// (State default-initializes camera with these values)
+
+	// model rotation
+	// JS: this.model_rotation_y = 0; this.use_character_controls = false;
+	state.model_rotation_y = 0;
+	state.use_character_controls = false;
+
+	// Set up camera adapter callbacks
+	setup_camera_gl_callbacks(state);
+
+	// create controls
+	// JS: this.recreate_controls();
+	recreate_controls(state, context);
+
+	// expose fit_camera on context
+	// JS: this.context.fitCamera = () => this.fit_camera();
+	context.fitCamera = [&state, &context]() { fit_camera(state, context); };
+
+	// create grid renderer
+	// JS: this.grid_renderer = new GridRenderer(this.gl_context, 100, 100);
+	state.grid_renderer = std::make_unique<GridRenderer>(*state.gl_context, 100.0f, 100);
+
+	// create shadow renderer (for character mode)
+	// JS: this.shadow_renderer = new ShadowPlaneRenderer(this.gl_context, 2);
+	state.shadow_renderer = std::make_unique<ShadowPlaneRenderer>(*state.gl_context, 2.0f);
+	state.shadow_renderer->visible = false;
+	update_shadow_visibility(state, context);
+
+	// watchers for character mode
+	// JS: core.view.$watch('config.chrUse3DCamera', () => this.recreate_controls())
+	//     core.view.$watch('config.chrRenderShadow', () => this.update_shadow_visibility())
+	//     core.view.$watch('chrModelLoading', () => this.update_shadow_visibility())
+	// TODO(conversion): In ImGui, watchers are replaced by change-detection logic
+	// in renderWidget. The prev_* fields in State track previous values.
+	if (context.useCharacterControls) {
+		state.prev_chrUse3DCamera = core::view->config.value("chrUse3DCamera", true);
+		state.prev_chrRenderShadow = core::view->config.value("chrRenderShadow", false);
+		state.prev_chrModelLoading = core::view->chrModelLoading;
+	}
+
+	// start render loop
+	// JS: this.isRendering = true; this.render();
+	// TODO(conversion): In ImGui, the render loop is driven by the main loop.
+	// isRendering controls whether render_scene() executes.
+	state.isRendering = true;
+
+	state.initialized = true;
+}
+
+void dispose(State& state) {
+	// JS: this.isRendering = false;
+	state.isRendering = false;
+
+	// JS: this.controls.dispose();
+	if (state.orbit_controls) {
+		state.orbit_controls->dispose();
+		state.orbit_controls.reset();
+	}
+	if (state.char_controls) {
+		state.char_controls->dispose();
+		state.char_controls.reset();
+	}
+
+	// JS: this.grid_renderer.dispose();
+	if (state.grid_renderer) {
+		state.grid_renderer->dispose();
+		state.grid_renderer.reset();
+	}
+
+	// JS: this.shadow_renderer?.dispose();
+	if (state.shadow_renderer) {
+		state.shadow_renderer->dispose();
+		state.shadow_renderer.reset();
+	}
+
+	// JS: this.gl_context.dispose();
+	if (state.gl_context) {
+		state.gl_context->dispose();
+		state.gl_context.reset();
+	}
+
+	// JS: window.removeEventListener('resize', this.onResize);
+	// TODO(conversion): In ImGui, resize is handled per-frame via layout. No listener to remove.
+
+	// JS: for (const watcher of this.watchers) watcher();
+	// TODO(conversion): In ImGui, watchers are change-detection in renderWidget. No cleanup needed.
+
+	// Destroy FBO
+	destroy_fbo(state);
+
+	state.initialized = false;
+}
+
+void renderWidget(const char* id, State& state, Context& context) {
+	ImGui::PushID(id);
+
+	// JS template: <div class="image ui-model-viewer"></div>
+	ImVec2 avail = ImGui::GetContentRegionAvail();
+	int width = static_cast<int>(avail.x);
+	int height = static_cast<int>(avail.y);
+
+	if (width <= 0 || height <= 0) {
+		ImGui::PopID();
+		return;
+	}
+
+	// Initialize if needed
+	if (!state.initialized) {
+		init(state, context);
+	}
+
+	// resize handler
+	// JS: this.onResize = () => { ... canvas.width = width * devicePixelRatio; ... }
+	// TODO(conversion): In ImGui, we use the available content region size directly.
+	// No devicePixelRatio scaling is needed since ImGui handles DPI internally.
+	if (state.fbo_width != width || state.fbo_height != height) {
+		create_fbo(state, width, height);
+
+		state.gl_context->set_viewport(width, height);
+
+		state.camera.aspect = static_cast<float>(width) / static_cast<float>(height);
+		state.camera.update_projection();
+
+		// Update dom element dimensions for controls
+		state.dom_element.clientWidth = width;
+		state.dom_element.clientHeight = height;
+		state.char_dom_element.clientWidth = width;
+		state.char_dom_element.clientHeight = height;
+	}
+
+	// Watcher change detection (character mode only)
+	// JS: core.view.$watch('config.chrUse3DCamera', () => this.recreate_controls())
+	//     core.view.$watch('config.chrRenderShadow', () => this.update_shadow_visibility())
+	//     core.view.$watch('chrModelLoading', () => this.update_shadow_visibility())
+	if (context.useCharacterControls) {
+		bool cur_chrUse3DCamera = core::view->config.value("chrUse3DCamera", true);
+		bool cur_chrRenderShadow = core::view->config.value("chrRenderShadow", false);
+		bool cur_chrModelLoading = core::view->chrModelLoading;
+
+		if (cur_chrUse3DCamera != state.prev_chrUse3DCamera) {
+			state.prev_chrUse3DCamera = cur_chrUse3DCamera;
+			recreate_controls(state, context);
+		}
+
+		if (cur_chrRenderShadow != state.prev_chrRenderShadow) {
+			state.prev_chrRenderShadow = cur_chrRenderShadow;
+			update_shadow_visibility(state, context);
+		}
+
+		if (cur_chrModelLoading != state.prev_chrModelLoading) {
+			state.prev_chrModelLoading = cur_chrModelLoading;
+			update_shadow_visibility(state, context);
+		}
+	}
+
+	// Render 3D scene to FBO
+	render_scene(state, context);
+
+	// Display FBO as ImGui image (UV flipped for OpenGL → ImGui coordinate convention)
+	ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(state.color_texture)),
+	             ImVec2(static_cast<float>(width), static_cast<float>(height)),
+	             ImVec2(0, 1), ImVec2(1, 0));
+
+	// Handle input (mouse/keyboard → camera controls)
+	handle_input(state);
+
+	// JS: requestAnimationFrame(() => this.render());
+	// TODO(conversion): In ImGui, the render loop is driven by the main loop.
+	// renderWidget is called each frame by the parent tab, which is equivalent
+	// to requestAnimationFrame in the JS version.
+
+	ImGui::PopID();
+}
+
+} // namespace model_viewer_gl

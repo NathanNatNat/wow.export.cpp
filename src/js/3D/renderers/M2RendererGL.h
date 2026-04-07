@@ -258,6 +258,12 @@ public:
 	const std::vector<int16_t>& get_bone_remap_table() const { return bone_remap_table; }
 	const std::vector<M2DrawCall>& get_draw_calls() const { return draw_calls; }
 
+	// Accessor for model_matrix (JS: renderer.model_matrix public property)
+	const float* get_model_matrix() const { return model_matrix.data(); }
+
+	// Accessor for animation_paused (JS: renderer.animation_paused public property)
+	bool is_animation_paused() const { return animation_paused; }
+
 	// Accessor for skelLoader (JS: renderer.skelLoader public property)
 	const SKELLoader* getSkelLoader() const { return skelLoader.get(); }
 
