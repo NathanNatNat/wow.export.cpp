@@ -167,4 +167,5 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_textures.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_zones.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_videos.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_decor.cpp
 )
