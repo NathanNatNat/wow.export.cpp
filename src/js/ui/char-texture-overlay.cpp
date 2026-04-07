@@ -3,119 +3,113 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const core = require('../core');
 
-let $overlay;
-let $buttons;
+#include "char-texture-overlay.h"
+#include "../core.h"
 
-const layers = [];
-let active_layer = null;
+#include <algorithm>
 
-function get_element() {
-	if (!$overlay || !$overlay.isConnected) {
-		$overlay = document.getElementById('chr-texture-preview');
-		$buttons = document.getElementById('chr-overlay-btn');
-	}
+namespace char_texture_overlay {
 
-	return $overlay;
+static std::vector<uint32_t> layers;
+static uint32_t active_layer = 0;
+
+// JS equivalent: update_button_visibility()
+// TODO(conversion): In ImGui, button visibility is handled inline during
+// rendering (layers.size() > 1 check), so this is a no-op.
+static void update_button_visibility() {
+	// In the JS version, this toggles display of overlay navigation buttons.
+	// In ImGui, the caller checks getLayerCount() > 1 to decide whether to
+	// show next/prev buttons.
 }
 
-function update_button_visibility() {
-	if (!$buttons)
-		return;
+void add(uint32_t textureID) {
+	layers.push_back(textureID);
 
-	if (layers.length > 1)
-		$buttons.style.display = 'flex';
-	else
-		$buttons.style.display = 'none';
-}
-
-function add(canvas) {
-	layers.push(canvas);
-
-	if (active_layer === null) {
-		active_layer = canvas;
-		const element = get_element();
-		if (element)
-			element.appendChild(canvas);
+	if (active_layer == 0) {
+		active_layer = textureID;
+		// JS: element.appendChild(canvas) — in ImGui, rendering uses getActiveLayer().
 	}
 
 	update_button_visibility();
 }
 
-function remove(canvas) {
-	layers.splice(layers.indexOf(canvas), 1);
+void remove(uint32_t textureID) {
+	auto it = std::find(layers.begin(), layers.end(), textureID);
+	if (it != layers.end())
+		layers.erase(it);
 
-	if (canvas === active_layer) {
-		const element = get_element();
-		if (element && canvas.parentNode === element)
-			element.removeChild(canvas);
+	if (textureID == active_layer) {
+		// JS: element.removeChild(canvas)
+		active_layer = 0;
 
-		active_layer = null;
-
-		if (layers.length > 0)
-			active_layer = layers[layers.length - 1];
+		if (!layers.empty())
+			active_layer = layers.back();
 	}
 
 	update_button_visibility();
 }
 
-function ensure_active_layer_attached() {
-	process.nextTick(() => {
-		if (active_layer !== null) {
-			const element = get_element();
-			if (element && active_layer.parentNode !== element)
-				element.appendChild(active_layer);
-		}
-	});
+void ensureActiveLayerAttached() {
+	// TODO(conversion): In ImGui, this is a no-op since ImGui redraws every frame.
+	// The JS version uses process.nextTick() to re-attach a canvas to the DOM
+	// after a tab switch. ImGui doesn't need this because getActiveLayer() is
+	// read fresh each frame.
 }
 
 // legacy event for non-module usage
-core.events.on('screen-tab-characters', ensure_active_layer_attached);
+// JS: core.events.on('screen-tab-characters', ensure_active_layer_attached);
 
-core.events.on('click-chr-next-overlay', () => {
+void nextOverlay() {
+	if (layers.empty() || active_layer == 0)
+		return;
+
 	// Move to the next (or first) layer.
-	const index = layers.indexOf(active_layer);
-	const next = layers[(index + 1) % layers.length];
+	auto it = std::find(layers.begin(), layers.end(), active_layer);
+	if (it == layers.end())
+		return;
 
-	if (next) {
-		const element = get_element();
-		if (!element)
-			return;
+	size_t index = static_cast<size_t>(std::distance(layers.begin(), it));
+	size_t next_index = (index + 1) % layers.size();
 
-		if (active_layer.parentNode === element)
-			element.removeChild(active_layer);
+	active_layer = layers[next_index];
+}
 
-		element.appendChild(next);
-		active_layer = next;
-	}
-});
+void prevOverlay() {
+	if (layers.empty() || active_layer == 0)
+		return;
 
-core.events.on('click-chr-prev-overlay', () => {
 	// Move to the previous (or last) layer.
-	const index = layers.indexOf(active_layer);
-	const next = layers[(index - 1 + layers.length) % layers.length];
+	auto it = std::find(layers.begin(), layers.end(), active_layer);
+	if (it == layers.end())
+		return;
 
-	if (next) {
-		const element = get_element();
-		if (!element)
-			return;
+	size_t index = static_cast<size_t>(std::distance(layers.begin(), it));
+	size_t prev_index = (index - 1 + layers.size()) % layers.size();
 
-		if (active_layer.parentNode === element)
-			element.removeChild(active_layer);
+	active_layer = layers[prev_index];
+}
 
-		element.appendChild(next);
-		active_layer = next;
-	}
-});
-
-function get_active_layer() {
+uint32_t getActiveLayer() {
 	return active_layer;
 }
 
-module.exports = {
-	add,
-	remove,
-	ensureActiveLayerAttached: ensure_active_layer_attached,
-	getActiveLayer: get_active_layer
-};
+size_t getLayerCount() {
+	return layers.size();
+}
+
+void initEvents() {
+	core::events.on("screen-tab-characters", []() {
+		ensureActiveLayerAttached();
+	});
+
+	core::events.on("click-chr-next-overlay", []() {
+		nextOverlay();
+	});
+
+	core::events.on("click-chr-prev-overlay", []() {
+		prevOverlay();
+	});
+}
+
+} // namespace char_texture_overlay

@@ -4,56 +4,84 @@
 	License: MIT
  */
 
-/**
- * Generate a data URL for UV layer preview.
- * Creates a canvas with white lines representing UV coordinates overlaid on transparent background.
- * @param {Float32Array} uvCoords - UV coordinates array (pairs of u,v values 0-1)
- * @param {number} textureWidth - Width of the texture
- * @param {number} textureHeight - Height of the texture
- * @param {Uint16Array} indices - Triangle indices for the mesh
- * @returns {string} Data URL for the UV layer preview
- */
-const generateUVLayerDataURL = (uvCoords, textureWidth, textureHeight, indices) => {
-	const canvas = document.createElement('canvas');
-	canvas.width = textureWidth;
-	canvas.height = textureHeight;
-	
-	const ctx = canvas.getContext('2d');
-	
-	ctx.strokeStyle = '#ffffff';
-	ctx.lineWidth = 0.5;
-	ctx.globalAlpha = 1.0;
-	
-	ctx.beginPath();
-	
-	for (let i = 0; i < indices.length; i += 3) {
-		const idx1 = indices[i] * 2;
-		const idx2 = indices[i + 1] * 2;
-		const idx3 = indices[i + 2] * 2;
-		
-		const u1 = uvCoords[idx1] * textureWidth;
-		const v1 = (1 - uvCoords[idx1 + 1]) * textureHeight; // Flip V coordinate
-		const u2 = uvCoords[idx2] * textureWidth;
-		const v2 = (1 - uvCoords[idx2 + 1]) * textureHeight;
-		const u3 = uvCoords[idx3] * textureWidth;
-		const v3 = (1 - uvCoords[idx3 + 1]) * textureHeight;
-		
-		ctx.moveTo(u1, v1);
-		ctx.lineTo(u2, v2);
-		ctx.lineTo(u3, v3);
-		ctx.lineTo(u1, v1);
-	}
-	
-	ctx.stroke();
-	
-	const dataURL = canvas.toDataURL('image/png');
-	
-	canvas.width = 0;
-	canvas.height = 0;
-	
-	return dataURL;
-};
+#include "uv-drawer.h"
 
-module.exports = {
-	generateUVLayerDataURL
-};
+#include <cmath>
+#include <algorithm>
+
+namespace uv_drawer {
+
+/**
+ * Draw a single-pixel-wide line between two points using Bresenham's algorithm.
+ * Plots white (RGBA 255,255,255,255) onto a transparent background.
+ */
+static void drawLine(std::vector<uint8_t>& pixels, int width, int height,
+                     int x0, int y0, int x1, int y1) {
+	int dx = std::abs(x1 - x0);
+	int dy = -std::abs(y1 - y0);
+	int sx = x0 < x1 ? 1 : -1;
+	int sy = y0 < y1 ? 1 : -1;
+	int err = dx + dy;
+
+	while (true) {
+		if (x0 >= 0 && x0 < width && y0 >= 0 && y0 < height) {
+			const int offset = (y0 * width + x0) * 4;
+			pixels[offset + 0] = 255; // R
+			pixels[offset + 1] = 255; // G
+			pixels[offset + 2] = 255; // B
+			pixels[offset + 3] = 255; // A
+		}
+
+		if (x0 == x1 && y0 == y1)
+			break;
+
+		int e2 = 2 * err;
+		if (e2 >= dy) {
+			err += dy;
+			x0 += sx;
+		}
+		if (e2 <= dx) {
+			err += dx;
+			y0 += sy;
+		}
+	}
+}
+
+/**
+ * Generate an RGBA pixel buffer containing UV wireframe lines.
+ * White lines on a transparent background, matching the JS behavior.
+ *
+ * JS equivalent: generateUVLayerDataURL(uvCoords, textureWidth, textureHeight, indices)
+ */
+std::vector<uint8_t> generateUVLayerPixels(
+	const std::vector<float>& uvCoords,
+	int textureWidth,
+	int textureHeight,
+	const std::vector<uint16_t>& indices)
+{
+	// Allocate RGBA buffer initialized to transparent black.
+	std::vector<uint8_t> pixels(static_cast<size_t>(textureWidth) * textureHeight * 4, 0);
+
+	for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+		const int idx1 = indices[i] * 2;
+		const int idx2 = indices[i + 1] * 2;
+		const int idx3 = indices[i + 2] * 2;
+
+		// Convert UV (0-1) to pixel coordinates, flipping V.
+		const int u1 = static_cast<int>(uvCoords[idx1] * textureWidth);
+		const int v1 = static_cast<int>((1.0f - uvCoords[idx1 + 1]) * textureHeight); // Flip V coordinate
+		const int u2 = static_cast<int>(uvCoords[idx2] * textureWidth);
+		const int v2 = static_cast<int>((1.0f - uvCoords[idx2 + 1]) * textureHeight);
+		const int u3 = static_cast<int>(uvCoords[idx3] * textureWidth);
+		const int v3 = static_cast<int>((1.0f - uvCoords[idx3 + 1]) * textureHeight);
+
+		// Draw triangle edges.
+		drawLine(pixels, textureWidth, textureHeight, u1, v1, u2, v2);
+		drawLine(pixels, textureWidth, textureHeight, u2, v2, u3, v3);
+		drawLine(pixels, textureWidth, textureHeight, u3, v3, u1, v1);
+	}
+
+	return pixels;
+}
+
+} // namespace uv_drawer

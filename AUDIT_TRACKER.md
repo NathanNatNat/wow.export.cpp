@@ -382,3 +382,23 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: `wmo` is a public property, allowing callers to access `wmoLoader.wmo.load()` and `wmoLoader.wmo.doodadSets`.
 - **C++**: `wmo` is private. Added `loadWMO()` and `getDoodadSetNames()` public methods for ADTExporter to load the WMO and retrieve doodad set names.
 - **Rationale**: Standard C++ encapsulation. JS public properties become private with accessors in C++ when needed by external callers.
+
+### `src/js/ui/audio-helper.cpp` — ACCEPTABLE (Web Audio API → miniaudio)
+- **JS**: Uses Web Audio API (`AudioContext`, `AudioBufferSourceNode`, `GainNode`, `decodeAudioData`). `load()` is async, `AUDIO_TYPE_*` are Symbols.
+- **C++**: Uses miniaudio (`ma_engine`, `ma_sound`, `ma_decoder`). `load()` is synchronous (decodes on demand). `AUDIO_TYPE_*` become `AudioType` enum. `detectFileType` takes raw `uint8_t*` instead of BufferWrapper. The `onended` callback requires polling via `ma_sound_at_end()` + `get_position()` rather than a direct callback.
+- **Rationale**: Web Audio API is browser-only. miniaudio is the designated audio library per project dependencies. The polling-based ended detection is inherent to miniaudio's pull-based architecture.
+
+### `src/js/ui/uv-drawer.cpp` — ACCEPTABLE (Canvas 2D → CPU rasterization)
+- **JS**: Uses HTML5 Canvas 2D API to draw UV wireframe lines and returns a PNG data URL via `canvas.toDataURL()`. Function named `generateUVLayerDataURL`.
+- **C++**: Uses Bresenham line rasterization to generate RGBA pixel buffer. Function named `generateUVLayerPixels` (returns `std::vector<uint8_t>` instead of data URL string). Placed in `uv_drawer` namespace.
+- **Rationale**: Canvas 2D API is browser-only. The pixel buffer can be uploaded as a GL texture or encoded to PNG by the caller. The name change reflects the return type change (pixels vs data URL).
+
+### `src/js/ui/char-texture-overlay.cpp` — ACCEPTABLE (DOM management → texture ID tracking)
+- **JS**: Manages DOM canvas elements as overlay layers, appending/removing from a parent DOM element. Uses `process.nextTick()` for deferred attachment.
+- **C++**: Manages OpenGL texture IDs (`uint32_t`) instead of DOM elements. `get_element()` and `update_button_visibility()` are no-ops since ImGui renders every frame. Added `nextOverlay()`, `prevOverlay()`, `getLayerCount()`, `initEvents()` as public API (the JS equivalents were anonymous event handler closures). Namespace: `char_texture_overlay`.
+- **Rationale**: DOM manipulation is browser-only. ImGui immediate-mode rendering reads `getActiveLayer()` each frame, eliminating the need for DOM attachment. The event handlers are exposed as named functions for testability.
+
+### `src/js/ui/listbox-context.cpp` — ACCEPTABLE (nw.js APIs → ImGui/platform)
+- **JS**: Uses `nw.Clipboard.get().set()` for clipboard and `nw.Shell.openItem()` for file explorer. `handle_context_menu` takes a `data` object with `data.selection`.
+- **C++**: Uses `ImGui::SetClipboardText()` for clipboard and `ShellExecuteW`/`xdg-open` for file explorer. `handle_context_menu` takes `selection` vector directly (not a wrapper object). `get_export_directory` returns empty string instead of `null`. Namespace: `listbox_context`.
+- **Rationale**: NW.js APIs are desktop-browser-only. ImGui provides cross-platform clipboard. Platform-specific shell commands match the pattern established in `core.cpp`.

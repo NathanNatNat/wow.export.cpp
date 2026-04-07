@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 126 / 184 files converted
+**Progress:** 131 / 184 files converted
 
 ---
 
@@ -204,11 +204,11 @@
 
 ## Tier 20 — UI Helpers (9 files)
 
-- [ ] `src/js/ui/audio-helper.cpp` (178 lines)
-- [ ] `src/js/ui/uv-drawer.cpp` (58 lines)
-- [ ] `src/js/ui/char-texture-overlay.cpp` (120 lines)
-- [ ] `src/js/ui/texture-ribbon.cpp` (109 lines)
-- [ ] `src/js/ui/listbox-context.cpp` (177 lines)
+- [x] `src/js/ui/audio-helper.cpp` (178 lines)
+- [x] `src/js/ui/uv-drawer.cpp` (58 lines)
+- [x] `src/js/ui/char-texture-overlay.cpp` (120 lines)
+- [x] `src/js/ui/texture-ribbon.cpp` (109 lines)
+- [x] `src/js/ui/listbox-context.cpp` (177 lines)
 - [ ] `src/js/ui/data-exporter.cpp` (255 lines)
 - [ ] `src/js/ui/texture-exporter.cpp` (194 lines)
 - [ ] `src/js/ui/character-appearance.cpp` (205 lines)

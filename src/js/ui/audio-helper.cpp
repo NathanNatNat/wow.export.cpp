@@ -4,175 +4,273 @@
 	License: MIT
 */
 
-class AudioPlayer {
-	constructor() {
-		this.context = null;
-		this.gain = null;
-		this.buffer = null;
-		this.source = null;
+#define MINIAUDIO_IMPLEMENTATION
+#include <miniaudio.h>
+#undef MINIAUDIO_IMPLEMENTATION
 
-		this.is_playing = false;
-		this.start_time = 0;
-		this.start_offset = 0;
+#include "audio-helper.h"
 
-		this.loop = false;
-		this.on_ended = null;
+#include <algorithm>
+#include <cstring>
+#include <cmath>
+
+// -----------------------------------------------------------------------
+// detectFileType — detect audio format from raw bytes.
+// JS equivalent: detectFileType(data)
+// -----------------------------------------------------------------------
+
+AudioType detectFileType(const uint8_t* data, size_t size) {
+	// OGG: starts with "OggS"
+	if (size >= 4 && std::memcmp(data, "OggS", 4) == 0)
+		return AudioType::OGG;
+
+	// MP3: starts with "ID3" or common sync bytes 0xFFFB / 0xFFF3 / 0xFFF2
+	if (size >= 3 && std::memcmp(data, "ID3", 3) == 0)
+		return AudioType::MP3;
+
+	if (size >= 2) {
+		if ((data[0] == 0xFF && data[1] == 0xFB) ||
+		    (data[0] == 0xFF && data[1] == 0xF3) ||
+		    (data[0] == 0xFF && data[1] == 0xF2))
+			return AudioType::MP3;
 	}
 
-	init() {
-		if (this.context)
-			return;
+	return AudioType::Unknown;
+}
 
-		this.context = new (window.AudioContext || window.webkitAudioContext)();
-		this.gain = this.context.createGain();
-		this.gain.connect(this.context.destination);
+// -----------------------------------------------------------------------
+// AudioPlayer
+// -----------------------------------------------------------------------
+
+AudioPlayer::AudioPlayer() = default;
+
+AudioPlayer::~AudioPlayer() {
+	destroy();
+}
+
+AudioPlayer::AudioPlayer(AudioPlayer&& other) noexcept
+	: engine(other.engine),
+	  sound(other.sound),
+	  decoder(other.decoder),
+	  audio_data(std::move(other.audio_data)),
+	  start_offset(other.start_offset),
+	  loop(other.loop),
+	  volume(other.volume),
+	  duration_cache(other.duration_cache),
+	  is_playing(other.is_playing),
+	  on_ended(std::move(other.on_ended))
+{
+	other.engine = nullptr;
+	other.sound = nullptr;
+	other.decoder = nullptr;
+	other.is_playing = false;
+}
+
+AudioPlayer& AudioPlayer::operator=(AudioPlayer&& other) noexcept {
+	if (this != &other) {
+		destroy();
+		engine = other.engine;
+		sound = other.sound;
+		decoder = other.decoder;
+		audio_data = std::move(other.audio_data);
+		start_offset = other.start_offset;
+		loop = other.loop;
+		volume = other.volume;
+		duration_cache = other.duration_cache;
+		is_playing = other.is_playing;
+		on_ended = std::move(other.on_ended);
+
+		other.engine = nullptr;
+		other.sound = nullptr;
+		other.decoder = nullptr;
+		other.is_playing = false;
 	}
+	return *this;
+}
 
-	async load(array_buffer) {
-		this.stop();
-		this.buffer = await this.context.decodeAudioData(array_buffer);
-		return this.buffer;
-	}
+void AudioPlayer::init() {
+	if (engine)
+		return;
 
-	unload() {
-		this.stop();
-		this.buffer = null;
-		this.start_offset = 0;
-	}
-
-	play(from_offset) {
-		if (!this.buffer)
-			return;
-
-		this.stop_source();
-
-		if (from_offset !== undefined)
-			this.start_offset = Math.max(0, Math.min(from_offset, this.buffer.duration));
-
-		this.source = this.context.createBufferSource();
-		this.source.buffer = this.buffer;
-		this.source.loop = this.loop;
-		this.source.connect(this.gain);
-
-		this.source.onended = () => {
-			// only handle natural completion (not stopped programmatically)
-			if (this.is_playing && !this.loop) {
-				this.is_playing = false;
-				this.start_offset = 0;
-				this.source = null;
-
-				if (this.on_ended)
-					this.on_ended();
-			}
-		};
-
-		this.source.start(0, this.start_offset);
-		this.start_time = this.context.currentTime;
-		this.is_playing = true;
-	}
-
-	pause() {
-		if (!this.is_playing)
-			return;
-
-		this.start_offset = this.get_position();
-		this.stop_source();
-		this.is_playing = false;
-	}
-
-	stop() {
-		this.stop_source();
-		this.is_playing = false;
-		this.start_offset = 0;
-	}
-
-	stop_source() {
-		if (this.source) {
-			try {
-				this.source.onended = null;
-				this.source.stop();
-				this.source.disconnect();
-			} catch (e) {
-				// ignore errors during cleanup
-			}
-
-			this.source = null;
-		}
-	}
-
-	seek(position) {
-		if (!this.buffer)
-			return;
-
-		const clamped = Math.max(0, Math.min(position, this.buffer.duration));
-
-		if (this.is_playing)
-			this.play(clamped);
-		else
-			this.start_offset = clamped;
-	}
-
-	get_position() {
-		if (!this.buffer)
-			return 0;
-
-		if (this.is_playing) {
-			const elapsed = this.context.currentTime - this.start_time;
-			const position = this.start_offset + elapsed;
-
-			if (this.loop)
-				return position % this.buffer.duration;
-
-			return Math.min(position, this.buffer.duration);
-		}
-
-		return this.start_offset;
-	}
-
-	get_duration() {
-		return this.buffer?.duration ?? 0;
-	}
-
-	set_volume(value) {
-		if (this.gain)
-			this.gain.gain.value = value;
-	}
-
-	set_loop(enabled) {
-		this.loop = enabled;
-
-		if (this.source)
-			this.source.loop = enabled;
-	}
-
-	destroy() {
-		this.unload();
-
-		if (this.context) {
-			this.context.close();
-			this.context = null;
-			this.gain = null;
-		}
+	engine = new ma_engine();
+	ma_engine_config config = ma_engine_config_init();
+	if (ma_engine_init(&config, engine) != MA_SUCCESS) {
+		delete engine;
+		engine = nullptr;
 	}
 }
 
-const AUDIO_TYPE_UNKNOWN = Symbol('AudioTypeUnk');
-const AUDIO_TYPE_OGG = Symbol('AudioTypeOgg');
-const AUDIO_TYPE_MP3 = Symbol('AudioTypeMP3');
+void AudioPlayer::load(const std::vector<uint8_t>& data) {
+	stop();
 
-const detectFileType = (data) => {
-	if (data.startsWith('OggS'))
-		return AUDIO_TYPE_OGG;
-	else if (data.startsWith(['ID3', '\xFF\xFB', '\xFF\xF3', '\xFF\xF2']))
-		return AUDIO_TYPE_MP3;
+	// Keep a copy of the data so the decoder can read from it.
+	audio_data = data;
+	duration_cache = 0.0;
 
-	return AUDIO_TYPE_UNKNOWN;
-};
+	// Create a decoder to determine duration.
+	ma_decoder_config decoderConfig = ma_decoder_config_init_default();
+	ma_decoder tempDecoder;
+	if (ma_decoder_init_memory(audio_data.data(), audio_data.size(), &decoderConfig, &tempDecoder) == MA_SUCCESS) {
+		ma_uint64 frameCount = 0;
+		ma_decoder_get_length_in_pcm_frames(&tempDecoder, &frameCount);
+		if (frameCount > 0 && tempDecoder.outputSampleRate > 0)
+			duration_cache = static_cast<double>(frameCount) / static_cast<double>(tempDecoder.outputSampleRate);
+		ma_decoder_uninit(&tempDecoder);
+	}
+}
 
-module.exports = {
-	AudioPlayer,
-	AUDIO_TYPE_UNKNOWN,
-	AUDIO_TYPE_OGG,
-	AUDIO_TYPE_MP3,
-	detectFileType
-};
+void AudioPlayer::unload() {
+	stop();
+	audio_data.clear();
+	start_offset = 0;
+	duration_cache = 0.0;
+}
+
+void AudioPlayer::play(double from_offset) {
+	if (audio_data.empty() || !engine)
+		return;
+
+	stop_source();
+
+	if (from_offset >= 0.0)
+		start_offset = std::max(0.0, std::min(from_offset, duration_cache));
+
+	// Create decoder from memory.
+	decoder = new ma_decoder();
+	ma_decoder_config decoderConfig = ma_decoder_config_init_default();
+	if (ma_decoder_init_memory(audio_data.data(), audio_data.size(), &decoderConfig, decoder) != MA_SUCCESS) {
+		delete decoder;
+		decoder = nullptr;
+		return;
+	}
+
+	// Seek to offset if needed.
+	if (start_offset > 0.0 && decoder->outputSampleRate > 0) {
+		ma_uint64 offsetFrames = static_cast<ma_uint64>(start_offset * decoder->outputSampleRate);
+		ma_decoder_seek_to_pcm_frame(decoder, offsetFrames);
+	}
+
+	// Create sound from decoder (data source).
+	sound = new ma_sound();
+	if (ma_sound_init_from_data_source(engine, decoder, 0, nullptr, sound) != MA_SUCCESS) {
+		ma_decoder_uninit(decoder);
+		delete decoder;
+		decoder = nullptr;
+		delete sound;
+		sound = nullptr;
+		return;
+	}
+
+	ma_sound_set_looping(sound, loop ? MA_TRUE : MA_FALSE);
+	ma_sound_set_volume(sound, volume);
+
+	// TODO(conversion): miniaudio does not have a direct per-sound "onended"
+	// callback in the same way as Web Audio API. The on_ended callback will
+	// need to be polled from the main loop by checking is_playing +
+	// ma_sound_at_end(). The AudioPlayer consumer must call get_position()
+	// periodically and handle the ended state.
+
+	ma_sound_start(sound);
+	is_playing = true;
+}
+
+void AudioPlayer::pause() {
+	if (!is_playing)
+		return;
+
+	start_offset = get_position();
+	stop_source();
+	is_playing = false;
+}
+
+void AudioPlayer::stop() {
+	stop_source();
+	is_playing = false;
+	start_offset = 0;
+}
+
+void AudioPlayer::stop_source() {
+	if (sound) {
+		// ignore errors during cleanup
+		ma_sound_stop(sound);
+		ma_sound_uninit(sound);
+		delete sound;
+		sound = nullptr;
+	}
+
+	if (decoder) {
+		ma_decoder_uninit(decoder);
+		delete decoder;
+		decoder = nullptr;
+	}
+}
+
+void AudioPlayer::seek(double position) {
+	if (audio_data.empty())
+		return;
+
+	const double clamped = std::max(0.0, std::min(position, duration_cache));
+
+	if (is_playing)
+		play(clamped);
+	else
+		start_offset = clamped;
+}
+
+double AudioPlayer::get_position() {
+	if (audio_data.empty())
+		return 0;
+
+	if (is_playing && sound) {
+		float cursor = 0.0f;
+		ma_sound_get_cursor_in_seconds(sound, &cursor);
+		double position = start_offset + static_cast<double>(cursor);
+
+		// Check for natural end of playback.
+		if (ma_sound_at_end(sound) && !loop) {
+			is_playing = false;
+			start_offset = 0;
+			stop_source();
+
+			if (on_ended)
+				on_ended();
+
+			return 0;
+		}
+
+		if (loop && duration_cache > 0.0)
+			return std::fmod(position, duration_cache);
+
+		return std::min(position, duration_cache);
+	}
+
+	return start_offset;
+}
+
+double AudioPlayer::get_duration() {
+	return duration_cache;
+}
+
+void AudioPlayer::set_volume(float value) {
+	volume = value;
+
+	if (sound)
+		ma_sound_set_volume(sound, value);
+}
+
+void AudioPlayer::set_loop(bool enabled) {
+	loop = enabled;
+
+	if (sound)
+		ma_sound_set_looping(sound, enabled ? MA_TRUE : MA_FALSE);
+}
+
+void AudioPlayer::destroy() {
+	unload();
+
+	if (engine) {
+		ma_engine_uninit(engine);
+		delete engine;
+		engine = nullptr;
+	}
+}
