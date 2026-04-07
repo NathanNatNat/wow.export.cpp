@@ -9,9 +9,7 @@
 #include <cmath>
 #include <algorithm>
 #include <regex>
-#include <numeric>
 #include <cctype>
-#include <format>
 
 namespace data_table {
 

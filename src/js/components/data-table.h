@@ -9,7 +9,6 @@
 #include <vector>
 #include <functional>
 #include <unordered_map>
-#include <nlohmann/json.hpp>
 
 /**
  * Data table component (ImGui immediate-mode equivalent).
