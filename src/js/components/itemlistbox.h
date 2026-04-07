@@ -15,11 +15,15 @@
  *
  * JS equivalent: Vue component with props: ['items', 'filter', 'selection', 'single',
  * 'keyinput', 'regex', 'includefilecount', 'unittype'],
- * emits: ['update:selection', 'equip'].
+ * emits: ['update:selection', 'equip', 'options'].
  *
  * A listbox for item entries with icon rendering, quality coloring,
  * equip/options buttons, virtual scrolling, custom scrollbar drag,
  * single/multi-select, and keyboard navigation.
+ *
+ * Selection model: The JS source stores item object references in the selection
+ * array. The C++ equivalent stores item IDs (ItemEntry::id) which provide
+ * the same stable identity semantics across filter changes.
  */
 namespace itemlistbox {
 
@@ -44,7 +48,7 @@ struct ItemListboxState {
 	float scrollRel = 0.0f;
 	bool isScrolling = false;
 	int slotCount = 1;
-	int lastSelectItem = -1;  // Index into filtered items; -1 = null
+	int lastSelectItem = -1;  // Item ID of last selected item; -1 = null (JS: lastSelectItem object)
 
 	// Mouse drag tracking (equivalent to JS instance vars set in startMouse).
 	float scrollStartY = 0.0f;
@@ -57,13 +61,14 @@ struct ItemListboxState {
  * @param id                   Unique ImGui ID string for this widget instance.
  * @param items                Array of item entries displayed in the list.
  * @param filter               Current text filter value (empty for no filter).
- * @param selection            Currently selected item indices (into filteredItems array).
+ * @param selection            Currently selected item IDs (ItemEntry::id values).
+ *                             JS equivalent: array of item object references.
  * @param single               If true, only one entry can be selected.
  * @param keyinput             If true, listbox registers for keyboard input.
  * @param regex                If true, filter is treated as a regular expression.
  * @param unittype             Unit name for file counter (empty to hide counter).
  * @param state                Persistent state across frames.
- * @param onSelectionChanged   Callback when selection changes; receives new selection indices.
+ * @param onSelectionChanged   Callback when selection changes; receives new selected item IDs.
  * @param onEquip              Callback when "Equip" button is clicked; receives the item.
  * @param onOptions            Callback when "Options" button is clicked; receives the item.
  */

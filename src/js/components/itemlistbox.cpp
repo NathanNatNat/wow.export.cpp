@@ -27,7 +27,7 @@ namespace itemlistbox {
  * unittype: Unit name for what the listbox contains. Used with includefilecount.
  */
 // props: ['items', 'filter', 'selection', 'single', 'keyinput', 'regex', 'includefilecount', 'unittype']
-// emits: ['update:selection', 'equip']
+// emits: ['update:selection', 'equip', 'options']
 
 /**
  * Reactive instance data.
@@ -137,19 +137,33 @@ static void wheelMouse(float wheelDelta, float containerHeight, float scrollerHe
 }
 
 /**
- * Helper: check if an index is in the selection vector.
+ * Helper: check if an item ID is in the selection vector.
+ * JS equivalent: this.selection.includes(item) — uses object identity.
  */
-static bool isSelected(const std::vector<int>& selection, int index) {
-	return std::find(selection.begin(), selection.end(), index) != selection.end();
+static bool isSelected(const std::vector<int>& selection, int itemId) {
+	return std::find(selection.begin(), selection.end(), itemId) != selection.end();
 }
 
 /**
- * Helper: find position of an index in the selection vector, or -1.
+ * Helper: find position of an item ID in the selection vector, or -1.
+ * JS equivalent: this.selection.indexOf(item) — uses object identity.
  */
-static int selectionIndexOf(const std::vector<int>& selection, int index) {
-	auto it = std::find(selection.begin(), selection.end(), index);
+static int selectionIndexOf(const std::vector<int>& selection, int itemId) {
+	auto it = std::find(selection.begin(), selection.end(), itemId);
 	if (it != selection.end())
 		return static_cast<int>(std::distance(selection.begin(), it));
+	return -1;
+}
+
+/**
+ * Helper: find the index of an item with a given ID in the items vector, or -1.
+ * JS equivalent: this.filteredItems.indexOf(item) — finds position by identity.
+ */
+static int indexOfItemById(const std::vector<ItemEntry>& items, int itemId) {
+	for (size_t i = 0; i < items.size(); ++i) {
+		if (items[i].id == itemId)
+			return static_cast<int>(i);
+	}
 	return -1;
 }
 
@@ -212,27 +226,24 @@ static std::vector<ItemEntry> computeFilteredItems(const std::vector<ItemEntry>&
 		}
 	}
 
-	// Prune selection: remap indices from items to filteredItems.
-	// In the JS version, selection stores item object references.
-	// In C++, selection stores indices into the filtered items array.
-	// We need to check if selected items (by index into original items) are still present.
+	// Prune selection: remove any selected item IDs that are no longer in the filtered result.
+	// JS equivalent: this.selection.filter(item => res.includes(item))
+	// In JS, selection stores item objects and checks by reference identity.
+	// In C++, selection stores item IDs and checks by ID equality.
 	bool hasChanges = false;
 	std::vector<int> newSelection;
-	for (int idx : selection) {
-		if (idx >= 0 && idx < static_cast<int>(items.size())) {
-			// Check if this original item is in the filtered result.
-			bool found = false;
-			for (size_t fi = 0; fi < res.size(); ++fi) {
-				if (res[fi].id == items[static_cast<size_t>(idx)].id) {
-					found = true;
-					break;
-				}
+	for (int selectedId : selection) {
+		bool found = false;
+		for (const auto& entry : res) {
+			if (entry.id == selectedId) {
+				found = true;
+				break;
 			}
-			if (found) {
-				newSelection.push_back(idx);
-			} else {
-				hasChanges = true;
-			}
+		}
+		if (found) {
+			newSelection.push_back(selectedId);
+		} else {
+			hasChanges = true;
 		}
 	}
 
@@ -259,17 +270,22 @@ static void handleKey(const std::vector<ItemEntry>& filteredItems, const std::ve
 		return;
 
 	// User hasn't selected anything in the listbox yet.
+	// JS: if (!this.lastSelectItem) return; — checks null
 	if (state.lastSelectItem < 0)
 		return;
 
 	if (ImGui::IsKeyPressed(ImGuiKey_C) && io.KeyCtrl) {
 		// Copy selection to clipboard.
+		// JS: nw.Clipboard.get().set(this.selection.map(e => e.displayName).join('\n'), 'text');
 		std::string clipText;
-		for (size_t i = 0; i < selection.size(); ++i) {
-			if (i > 0) clipText += '\n';
-			const int idx = selection[i];
-			if (idx >= 0 && idx < static_cast<int>(filteredItems.size()))
+		bool first = true;
+		for (int selectedId : selection) {
+			int idx = indexOfItemById(filteredItems, selectedId);
+			if (idx >= 0) {
+				if (!first) clipText += '\n';
 				clipText += filteredItems[static_cast<size_t>(idx)].displayName;
+				first = false;
+			}
 		}
 		ImGui::SetClipboardText(clipText.c_str());
 	} else {
@@ -280,8 +296,13 @@ static void handleKey(const std::vector<ItemEntry>& filteredItems, const std::ve
 			const int delta = isArrowUp ? -1 : 1;
 
 			// Move/expand selection one.
-			const int lastSelectIndex = state.lastSelectItem;
+			// JS: const lastSelectIndex = this.filteredItems.indexOf(this.lastSelectItem);
+			const int lastSelectIndex = indexOfItemById(filteredItems, state.lastSelectItem);
+			if (lastSelectIndex < 0)
+				return;
+
 			const int nextIndex = lastSelectIndex + delta;
+			// JS: const next = this.filteredItems[nextIndex]; if (next) { ... }
 			if (nextIndex >= 0 && nextIndex < static_cast<int>(filteredItems.size())) {
 				const int currentScrollIdx = scrollIndex(filteredItems, state);
 				const int lastViewIndex = isArrowUp ? currentScrollIdx : currentScrollIdx + state.slotCount;
@@ -297,11 +318,15 @@ static void handleKey(const std::vector<ItemEntry>& filteredItems, const std::ve
 
 				std::vector<int> newSelection = selection;
 
+				// JS: if (!e.shiftKey || this.single) newSelection.splice(0);
 				if (!io.KeyShift || single)
 					newSelection.clear();
 
-				newSelection.push_back(nextIndex);
-				state.lastSelectItem = nextIndex;
+				// JS: newSelection.push(next); — pushes item object
+				// C++: push item ID
+				const int nextItemId = filteredItems[static_cast<size_t>(nextIndex)].id;
+				newSelection.push_back(nextItemId);
+				state.lastSelectItem = nextItemId;
 
 				if (onSelectionChanged)
 					onSelectionChanged(newSelection);
@@ -320,47 +345,59 @@ static void selectItem(int itemIndex, bool ctrlKey, bool shiftKey,
                          const std::vector<int>& selection,
                          bool single, ItemListboxState& state,
                          const std::function<void(const std::vector<int>&)>& onSelectionChanged) {
-	const int checkIndex = selectionIndexOf(selection, itemIndex);
+	const int itemId = filteredItems[static_cast<size_t>(itemIndex)].id;
+	const int checkIndex = selectionIndexOf(selection, itemId);
 	std::vector<int> newSelection = selection;
 
 	if (single) {
 		// Listbox is in single-entry mode, replace selection.
+		// JS: if (checkIndex === -1) { newSelection.splice(0); newSelection.push(item); }
 		if (checkIndex == -1) {
 			newSelection.clear();
-			newSelection.push_back(itemIndex);
+			newSelection.push_back(itemId);
 		}
 
-		state.lastSelectItem = itemIndex;
+		// JS: this.lastSelectItem = item;
+		state.lastSelectItem = itemId;
 	} else {
 		if (ctrlKey) {
 			// Ctrl-key held, so allow multiple selections.
 			if (checkIndex > -1)
 				newSelection.erase(newSelection.begin() + checkIndex);
 			else
-				newSelection.push_back(itemIndex);
+				newSelection.push_back(itemId);
 		} else if (shiftKey) {
 			// Shift-key held, select a range.
-			if (state.lastSelectItem >= 0 && state.lastSelectItem != itemIndex) {
-				const int lastSelectIndex = state.lastSelectItem;
+			// JS: if (this.lastSelectItem && this.lastSelectItem !== item)
+			if (state.lastSelectItem >= 0 && state.lastSelectItem != itemId) {
+				// JS: const lastSelectIndex = this.filteredItems.indexOf(this.lastSelectItem);
+				const int lastSelectIndex = indexOfItemById(filteredItems, state.lastSelectItem);
 				const int thisSelectIndex = itemIndex;
 
-				const int rangeLen = std::abs(lastSelectIndex - thisSelectIndex);
-				const int lowest = std::min(lastSelectIndex, thisSelectIndex);
+				if (lastSelectIndex >= 0) {
+					const int rangeLen = std::abs(lastSelectIndex - thisSelectIndex);
+					const int lowest = std::min(lastSelectIndex, thisSelectIndex);
 
-				for (int i = lowest; i <= lowest + rangeLen; ++i) {
-					if (!isSelected(newSelection, i))
-						newSelection.push_back(i);
+					// JS: const range = this.filteredItems.slice(lowest, lowest + delta + 1);
+					// JS: for (const select of range) { if (newSelection.indexOf(select) === -1) newSelection.push(select); }
+					for (int i = lowest; i <= lowest + rangeLen; ++i) {
+						const int rangeItemId = filteredItems[static_cast<size_t>(i)].id;
+						if (!isSelected(newSelection, rangeItemId))
+							newSelection.push_back(rangeItemId);
+					}
 				}
 			}
 		} else if (checkIndex == -1 || (checkIndex > -1 && static_cast<int>(newSelection.size()) > 1)) {
 			// Normal click, replace entire selection.
 			newSelection.clear();
-			newSelection.push_back(itemIndex);
+			newSelection.push_back(itemId);
 		}
 
-		state.lastSelectItem = itemIndex;
+		// JS: this.lastSelectItem = item;
+		state.lastSelectItem = itemId;
 	}
 
+	// JS: this.$emit('update:selection', newSelection);
 	if (onSelectionChanged)
 		onSelectionChanged(newSelection);
 }
@@ -497,7 +534,7 @@ void render(const char* id,
 	// </div>
 	for (int i = startIdx; i < endIdx; ++i) {
 		const ItemEntry& item = filteredItems[static_cast<size_t>(i)];
-		const bool itemSelected = isSelected(selection, i);
+		const bool itemSelected = isSelected(selection, item.id);
 
 		// watch: displayItems — load icons for visible items.
 		icon_render::loadIcon(item.icon);

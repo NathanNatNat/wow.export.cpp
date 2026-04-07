@@ -422,3 +422,28 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: Uses `path.extname(fileName).toLowerCase()` to detect `.png`/`.jpg`.
 - **C++**: Uses `fileName.substr(fileName.size() - 4)` comparison against `".png"`, `".jpg"`, `".PNG"`, `".JPG"` (no path library call needed for 4-char extensions). Same logic, platform-agnostic.
 - **Rationale**: Node.js `path.extname` → inline substring comparison. Functionally identical for these fixed extensions.
+
+### `src/js/components/itemlistbox.cpp` — ACCEPTABLE (selection stores item IDs instead of object references)
+- **JS**: The `selection` array stores item object references. Identity is checked via `===` (reference equality). `lastSelectItem` is an item object or `null`.
+- **C++**: The `selection` vector stores item IDs (`ItemEntry::id` values). Identity is checked by ID equality. `lastSelectItem` is an item ID or `-1` (null equivalent).
+- **Rationale**: C++ has no JS-style object identity. Item IDs provide the same stable identity semantics across filter changes, matching the JS behavior where selected objects persist even when the filtered list changes.
+
+### `src/js/components/itemlistbox.cpp` — ACCEPTABLE (recalculateBounds division-by-zero guard)
+- **JS**: `this.scrollRel = this.scroll / max;` — can produce `NaN`/`Infinity` when `max` is 0.
+- **C++**: `state.scrollRel = (max > 0.0f) ? (state.scroll / max) : 0.0f;` — safely defaults to 0.
+- **Rationale**: Prevents undefined floating-point behavior in C++. The JS version silently produces `NaN` which propagates but doesn't crash; the C++ version explicitly handles the edge case.
+
+### `src/js/components/itemlistbox.cpp` — ACCEPTABLE (`includefilecount` prop omitted)
+- **JS**: Declares `includefilecount` in props array but never uses it in the template or methods (the template uses `v-if="unittype"` instead).
+- **C++**: The `render()` function does not accept an `includefilecount` parameter.
+- **Rationale**: The prop is dead code in the JS source. Omitting it avoids unused parameters.
+
+### `src/js/components/itemlistbox.cpp` — ACCEPTABLE (`options` emit captured as callback)
+- **JS**: The template uses `$emit('options', item)` but the `emits` array only declares `['update:selection', 'equip']`. This is an undeclared emit in the Vue source.
+- **C++**: The `render()` function accepts an `onOptions` callback parameter, making the emit explicit.
+- **Rationale**: Captures the actual behavior of the JS template. The C++ version is more correct by making the callback explicit rather than relying on undeclared emits.
+
+### `src/js/components/itemlistbox.cpp` — ACCEPTABLE (`paste` listener dead code not ported)
+- **JS**: `beforeUnmount` calls `document.removeEventListener('paste', this.onPaste)`, but `onPaste` is never registered in `mounted()`.
+- **C++**: Not implemented.
+- **Rationale**: Dead code in JS source. No `paste` handler is ever registered, so removing it is a no-op.
