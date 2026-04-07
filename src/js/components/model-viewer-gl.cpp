@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <algorithm>
+#include <numbers>
 #include <regex>
 #include <spdlog/spdlog.h>
 
@@ -54,7 +55,7 @@ PerspectiveCamera::PerspectiveCamera(float fov, float aspect, float near_val, fl
 }
 
 void PerspectiveCamera::update_projection() {
-	const float f = 1.0f / std::tan(fov * 0.5f * static_cast<float>(M_PI) / 180.0f);
+	const float f = 1.0f / std::tan(fov * 0.5f * std::numbers::pi_v<float> / 180.0f);
 	const float nf = 1.0f / (near_plane - far_plane);
 
 	projection_matrix[0] = f / aspect;
@@ -157,11 +158,11 @@ void fit_camera_to_bounding_box(const BoundingBox* bounding_box, PerspectiveCame
 	const float max_dimension = std::max({size_x, size_y, size_z});
 
 	// calculate required distance based on camera FOV and object size
-	const float fov_radians = camera.fov * (static_cast<float>(M_PI) / 180.0f);
+	const float fov_radians = camera.fov * (std::numbers::pi_v<float> / 180.0f);
 	const float distance = (max_dimension / 2.0f) / std::tan(fov_radians / 2.0f) * CAMERA_FIT_DISTANCE_MULTIPLIER;
 
 	// calculate camera position at diagonal angle with elevation
-	const float angle_rad = CAMERA_FIT_DIAGONAL_ANGLE * (static_cast<float>(M_PI) / 180.0f);
+	const float angle_rad = CAMERA_FIT_DIAGONAL_ANGLE * (std::numbers::pi_v<float> / 180.0f);
 
 	const float offset_x = distance * std::sin(angle_rad);
 	const float offset_y = distance * CAMERA_FIT_ELEVATION_FACTOR;
@@ -629,7 +630,7 @@ void recreate_controls(State& state, Context& context) {
 		};
 
 		// initial 90 degree clockwise rotation
-		state.char_controls->model_rotation_y = -static_cast<float>(M_PI) / 2.0f;
+		state.char_controls->model_rotation_y = -std::numbers::pi_v<float> / 2.0f;
 		state.char_controls->on_model_rotate(state.char_controls->model_rotation_y);
 
 		state.use_character_controls = true;
