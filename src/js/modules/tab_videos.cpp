@@ -21,6 +21,7 @@
 #include <cstring>
 #include <format>
 #include <filesystem>
+#include <fstream>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -346,48 +347,59 @@ static void stream_video(const std::string& file_name) {
 			});
 
 			// JS: poll_timer = setTimeout(async () => { ... }, constants.KINO.POLL_INTERVAL);
-			// TODO(conversion): Polling implemented as a synchronous retry loop.
-			// In a real async implementation, this would be deferred to a background thread.
+			// JS uses recursive setTimeout for indefinite polling; C++ uses a loop.
+			// TODO(conversion): Polling is synchronous here. In a real async implementation,
+			// this would be deferred to a background thread.
 			poll_active = true;
 
-			// Sleep for poll interval, then retry
-			std::this_thread::sleep_for(std::chrono::milliseconds(constants::KINO::POLL_INTERVAL));
+			bool poll_done = false;
+			while (!poll_done && !poll_cancelled) {
+				// Sleep for poll interval, then retry
+				std::this_thread::sleep_for(std::chrono::milliseconds(constants::KINO::POLL_INTERVAL));
 
-			if (poll_cancelled) {
-				core::events.off("toast-cancelled", cancel_listener_id);
-				return;
-			}
-
-			try {
-				auto [poll_status, poll_data] = kino_post(payload);
-				core::events.off("toast-cancelled", cancel_listener_id);
-
-				if (poll_cancelled)
+				if (poll_cancelled) {
+					core::events.off("toast-cancelled", cancel_listener_id);
 					return;
-
-				if (poll_status == 200) {
-					if (poll_data.contains("url") && poll_data["url"].is_string()) {
-						std::string video_url = poll_data["url"].get<std::string>();
-						logging::write(std::format("received video url: {}", video_url));
-						core::hideToast();
-						play_streaming_video(video_url, subtitle);
-					} else {
-						throw std::runtime_error("server returned 200 but no url");
-					}
-				} else if (poll_status == 202) {
-					// Still processing — in JS this recurses via setTimeout; here we just report.
-					core::setToast("progress", "Video is still being processed, please wait...", nullptr, -1, true);
-				} else {
-					throw std::runtime_error(std::format("server returned {}", poll_status));
 				}
-			} catch (const std::exception& e) {
-				core::events.off("toast-cancelled", cancel_listener_id);
-				if (!poll_cancelled) {
-					logging::write(std::format("poll request failed: {}", e.what()));
-					core::setToast("error", std::string("Failed to check video status: ") + e.what(), nullptr, -1);
-					// TODO(conversion): 'view log' toast action will be wired when toast action callbacks are integrated.
-					is_streaming = false;
-					core::view->videoPlayerState = false;
+
+				try {
+					auto [poll_status, poll_data] = kino_post(payload);
+
+					if (poll_cancelled) {
+						core::events.off("toast-cancelled", cancel_listener_id);
+						return;
+					}
+
+					if (poll_status == 200) {
+						if (poll_data.contains("url") && poll_data["url"].is_string()) {
+							std::string video_url = poll_data["url"].get<std::string>();
+							logging::write(std::format("received video url: {}", video_url));
+							core::events.off("toast-cancelled", cancel_listener_id);
+							core::hideToast();
+							play_streaming_video(video_url, subtitle);
+							poll_done = true;
+						} else {
+							core::events.off("toast-cancelled", cancel_listener_id);
+							throw std::runtime_error("server returned 200 but no url");
+						}
+					} else if (poll_status == 202) {
+						// Still processing — loop continues (matches JS recursive setTimeout).
+						logging::write(std::format("video still processing, polling again in {}ms",
+							constants::KINO::POLL_INTERVAL));
+					} else {
+						core::events.off("toast-cancelled", cancel_listener_id);
+						throw std::runtime_error(std::format("server returned {}", poll_status));
+					}
+				} catch (const std::exception& e) {
+					core::events.off("toast-cancelled", cancel_listener_id);
+					if (!poll_cancelled) {
+						logging::write(std::format("poll request failed: {}", e.what()));
+						core::setToast("error", std::string("Failed to check video status: ") + e.what(), nullptr, -1);
+						// TODO(conversion): 'view log' toast action will be wired when toast action callbacks are integrated.
+						is_streaming = false;
+						core::view->videoPlayerState = false;
+					}
+					poll_done = true;
 				}
 			}
 
