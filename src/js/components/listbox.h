@@ -39,10 +39,13 @@ enum class CopyMode {
 /**
  * Context menu event data.
  * JS equivalent: { item, selection, event } emitted via 'contextmenu'.
+ * mousePos replaces the JS MouseEvent for context menu positioning.
  */
 struct ContextMenuEvent {
 	std::string item;
 	std::vector<std::string> selection;
+	float mousePosX = 0.0f;
+	float mousePosY = 0.0f;
 };
 
 /**
@@ -67,11 +70,6 @@ struct ListboxState {
 
 	// Previous filter value for debounce change detection.
 	std::string prevFilter;
-
-	// Cached filtered items to avoid recomputing every frame when nothing changes.
-	std::vector<std::string> cachedFilteredItems;
-	std::string cachedFilterKey;       // Combined key for cache invalidation.
-	size_t cachedItemsSize = 0;
 
 	// Whether the component has been initialized (first frame).
 	bool initialized = false;
@@ -119,5 +117,14 @@ void render(const char* id,
             ListboxState& state,
             const std::function<void(const std::vector<std::string>&)>& onSelectionChanged,
             const std::function<void(const ContextMenuEvent&)>& onContextMenu);
+
+/**
+ * Save the scroll position for a listbox state.
+ * Equivalent to the JS beforeUnmount scroll position save.
+ * Callers should invoke this before discarding a ListboxState when persistscrollkey is set.
+ */
+void saveState(const ListboxState& state,
+               const std::string& persistscrollkey,
+               const std::vector<std::string>& filteredItems);
 
 } // namespace listbox

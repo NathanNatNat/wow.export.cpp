@@ -455,7 +455,8 @@ static void handleContextMenu(const std::string& item,
                                 const std::vector<std::string>& selection,
                                 bool disable, ListboxState& state,
                                 const std::function<void(const std::vector<std::string>&)>& onSelectionChanged,
-                                const std::function<void(const ContextMenuEvent&)>& onContextMenu) {
+                                const std::function<void(const ContextMenuEvent&)>& onContextMenu,
+                                float mousePosX, float mousePosY) {
 	if (disable)
 		return;
 
@@ -473,6 +474,8 @@ static void handleContextMenu(const std::string& item,
 		ContextMenuEvent evt;
 		evt.item = item;
 		evt.selection = isSelected(selection, item) ? selection : std::vector<std::string>{item};
+		evt.mousePosX = mousePosX;
+		evt.mousePosY = mousePosY;
 		onContextMenu(evt);
 	}
 }
@@ -747,7 +750,9 @@ void render(const char* id,
 
 		// Context menu on right-click.
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-			handleContextMenu(item, selection, disable, state, onSelectionChanged, onContextMenu);
+			const ImVec2 mousePos = ImGui::GetMousePos();
+			handleContextMenu(item, selection, disable, state, onSelectionChanged, onContextMenu,
+			                  mousePos.x, mousePos.y);
 		}
 
 		ImGui::PopID();
@@ -804,6 +809,14 @@ void render(const char* id,
 	}
 
 	ImGui::PopID();
+}
+
+void saveState(const ListboxState& state,
+               const std::string& persistscrollkey,
+               const std::vector<std::string>& filteredItems) {
+	// Equivalent to JS beforeUnmount: save final scroll position.
+	if (!persistscrollkey.empty())
+		core::saveScrollPosition(persistscrollkey, static_cast<double>(state.scrollRel), scrollIndex(filteredItems, state));
 }
 
 } // namespace listbox
