@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 161 / 184 files converted
+**Progress:** 162 / 184 files converted
 
 ---
 
@@ -245,7 +245,7 @@
 - [x] `src/js/modules/tab_data.cpp` (379 lines)
 - [x] `src/js/modules/tab_textures.cpp` (471 lines)
 - [x] `src/js/modules/tab_zones.cpp` (549 lines)
-- [ ] `src/js/modules/tab_videos.cpp` (858 lines) 🔴
+- [x] `src/js/modules/tab_videos.cpp` (858 lines) 🔴
 - [ ] `src/js/modules/tab_items.cpp` (348 lines)
 - [ ] `src/js/modules/tab_item_sets.cpp` (119 lines)
 - [ ] `src/js/modules/tab_decor.cpp` (612 lines)
