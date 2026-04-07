@@ -3,175 +3,249 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-module.exports = {
-	/**
-	 * items: Item entries displayed in the list.
-	 */
-	props: ['items'],
+#include "checkboxlist.h"
 
-	/**
-	 * Reactive instance data.
-	 */
-	data: function() {
-		return {
-			scroll: 0,
-			scrollRel: 0,
-			isScrolling: false,
-			slotCount: 1
+#include <imgui.h>
+#include <cmath>
+#include <algorithm>
+
+namespace checkboxlist {
+
+/**
+ * items: Item entries displayed in the list.
+ */
+// props: ['items']
+
+/**
+ * Reactive instance data.
+ */
+// data: scroll, scrollRel, isScrolling, slotCount — stored in CheckboxListState
+
+/**
+ * Invoked when the component is mounted.
+ * Used to register global listeners and resize observer.
+ */
+// TODO(conversion): In ImGui, global mouse listeners and ResizeObserver are not needed.
+// ImGui provides mouse state via ImGui::GetIO() and resizing is handled by layout each frame.
+
+/**
+ * Invoked when the component is destroyed.
+ * Used to unregister global mouse listeners and resize observer.
+ */
+// TODO(conversion): No explicit unmount needed in ImGui immediate mode.
+
+/**
+ * Offset of the scroll widget in pixels.
+ * Between 0 and the height of the component.
+ */
+static float scrollOffset(const CheckboxListState& state) {
+	return state.scroll;
+}
+
+/**
+ * Index which array reading should start at, based on the current
+ * relative scroll and the overall item count. Value is dynamically
+ * capped based on slot count to prevent empty slots appearing.
+ */
+static int scrollIndex(const std::vector<nlohmann::json>& items, const CheckboxListState& state) {
+	return static_cast<int>(std::round((static_cast<float>(items.size()) - static_cast<float>(state.slotCount)) * state.scrollRel));
+}
+
+/**
+ * Weight (0-1) of a single item.
+ */
+static float itemWeight(const std::vector<nlohmann::json>& items) {
+	if (items.empty())
+		return 0.0f;
+	return 1.0f / static_cast<float>(items.size());
+}
+
+/**
+ * Invoked by a ResizeObserver when the main component node
+ * is resized due to layout changes.
+ */
+static void resize(float containerHeight, float scrollerHeight, CheckboxListState& state) {
+	state.scroll = (containerHeight - scrollerHeight) * state.scrollRel;
+	state.slotCount = static_cast<int>(std::floor(containerHeight / 26.0f));
+}
+
+/**
+ * Restricts the scroll offset to prevent overflowing and
+ * calculates the relative (0-1) offset based on the scroll.
+ */
+static void recalculateBounds(float containerHeight, float scrollerHeight, CheckboxListState& state) {
+	const float max = containerHeight - scrollerHeight;
+	state.scroll = std::min(max, std::max(0.0f, state.scroll));
+	state.scrollRel = (max > 0.0f) ? (state.scroll / max) : 0.0f;
+}
+
+/**
+ * Invoked when a mouse-down event is captured on the scroll widget.
+ * @param {MouseEvent} e
+ */
+static void startMouse(float mouseY, CheckboxListState& state) {
+	state.scrollStartY = mouseY;
+	state.scrollStart = state.scroll;
+	state.isScrolling = true;
+}
+
+/**
+ * Invoked when a mouse-move event is captured globally.
+ * @param {MouseEvent} e
+ */
+static void moveMouse(float mouseY, float containerHeight, float scrollerHeight, CheckboxListState& state) {
+	if (state.isScrolling) {
+		state.scroll = state.scrollStart + (mouseY - state.scrollStartY);
+		recalculateBounds(containerHeight, scrollerHeight, state);
+	}
+}
+
+/**
+ * Invoked when a mouse-up event is captured globally.
+ */
+static void stopMouse(CheckboxListState& state) {
+	state.isScrolling = false;
+}
+
+/**
+ * Invoked when a mouse-wheel event is captured on the component node.
+ * @param {WheelEvent} e
+ */
+static void wheelMouse(float wheelDelta, float containerHeight, float scrollerHeight, float itemHeight,
+                        const std::vector<nlohmann::json>& items, CheckboxListState& state) {
+	const float weight = containerHeight - scrollerHeight;
+
+	if (itemHeight > 0.0f) {
+		const int scrollCount = static_cast<int>(std::floor(containerHeight / itemHeight));
+		const float direction = wheelDelta > 0.0f ? 1.0f : -1.0f;
+		state.scroll += ((static_cast<float>(scrollCount) * itemWeight(items)) * weight) * direction;
+		recalculateBounds(containerHeight, scrollerHeight, state);
+	}
+}
+
+/**
+ * Propagate entry clicks to the child checkbox.
+ * @param {MouseEvent} event
+ */
+// TODO(conversion): In ImGui, click propagation to checkbox is built into the rendering
+// loop below — clicking the row toggles the checkbox directly.
+
+/**
+ * HTML mark-up to render for this component.
+ */
+// template: converted to ImGui immediate-mode rendering below.
+
+void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListState& state) {
+	ImGui::PushID(id);
+
+	// Get the available content region as the container dimensions.
+	const ImVec2 availSize = ImGui::GetContentRegionAvail();
+	const float containerHeight = availSize.y;
+
+	// The scroller thumb height is proportional to visible vs total items.
+	const float itemHeight = 26.0f;
+	const int totalItems = static_cast<int>(items.size());
+	const float scrollerHeight = (totalItems > 0)
+		? std::max(20.0f, containerHeight * (static_cast<float>(state.slotCount) / static_cast<float>(totalItems)))
+		: containerHeight;
+
+	// Equivalent of resize() — recalculate slot count and scroll each frame.
+	resize(containerHeight, scrollerHeight, state);
+
+	// Compute display range.
+	const int idx = scrollIndex(items, state);
+	const int startIdx = std::max(0, idx);
+	const int endIdx = std::min(totalItems, startIdx + state.slotCount);
+
+	// Begin a child region to contain the list.
+	ImGui::BeginChild("##checkboxlist_container", availSize, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+	// Handle mouse wheel on the container.
+	if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None)) {
+		const float wheel = ImGui::GetIO().MouseWheel;
+		if (wheel != 0.0f) {
+			wheelMouse(-wheel, containerHeight, scrollerHeight, itemHeight, items, state);
 		}
-	},
+	}
 
-	/**
-	 * Invoked when the component is mounted.
-	 * Used to register global listeners and resize observer.
-	 */
-	mounted: function() {
-		this.onMouseMove = e => this.moveMouse(e);
-		this.onMouseUp = e => this.stopMouse(e);
-
-		document.addEventListener('mousemove', this.onMouseMove);
-		document.addEventListener('mouseup', this.onMouseUp);
-
-		// Register observer for layout changes.
-		this.observer = new ResizeObserver(() => this.resize());
-		this.observer.observe(this.$el);
-	},
-
-	/**
-	 * Invoked when the component is destroyed.
-	 * Used to unregister global mouse listeners and resize observer.
-	 */
-	beforeUnmount: function() {
-		// Unregister global mouse/keyboard listeners.
-		document.removeEventListener('mousemove', this.onMouseMove);
-		document.removeEventListener('mouseup', this.onMouseUp);
-
-		// Disconnect resize observer.
-		this.observer.disconnect();
-	},
-
-	computed: {
-		/**
-		 * Offset of the scroll widget in pixels.
-		 * Between 0 and the height of the component.
-		 */
-		scrollOffset: function() {
-			return (this.scroll) + 'px';
-		},
-
-		/**
-		 * Index which array reading should start at, based on the current
-		 * relative scroll and the overall item count. Value is dynamically
-		 * capped based on slot count to prevent empty slots appearing.
-		 */
-		scrollIndex: function() {
-			return Math.round((this.items.length - this.slotCount) * this.scrollRel);
-		},
-
-		/**
-		 * Dynamic array of items which should be displayed from the underlying
-		 * data array. Reactively updates based on scroll and data.
-		 */
-		displayItems: function() {
-			return this.items.slice(this.scrollIndex, this.scrollIndex + this.slotCount);
-		},
-
-		/**
-		 * Weight (0-1) of a single item.
-		 */
-		itemWeight: function() {
-			return 1 / this.items.length;
+	// Handle global mouse move/up for scrollbar dragging.
+	const ImGuiIO& io = ImGui::GetIO();
+	if (state.isScrolling) {
+		moveMouse(io.MousePos.y, containerHeight, scrollerHeight, state);
+		if (!io.MouseDown[0]) {
+			stopMouse(state);
 		}
-	},
+	}
 
-	methods: {
-		/**
-		 * Invoked by a ResizeObserver when the main component node
-		 * is resized due to layout changes.
-		 */
-		resize: function() {
-			this.scroll = (this.$el.clientHeight - (this.$refs.scroller.clientHeight)) * this.scrollRel;
-			this.slotCount = Math.floor(this.$el.clientHeight / 26);
-			
-		},
+	// Draw the scrollbar on the right side.
+	{
+		const ImVec2 winPos = ImGui::GetWindowPos();
+		const float scrollbarWidth = 8.0f;
+		const float scrollbarX = winPos.x + availSize.x - scrollbarWidth;
+		const float thumbY = winPos.y + scrollOffset(state);
 
-		/**
-		 * Restricts the scroll offset to prevent overflowing and
-		 * calculates the relative (0-1) offset based on the scroll.
-		 */
-		recalculateBounds: function() {
-			const max = this.$el.clientHeight - (this.$refs.scroller.clientHeight);
-			this.scroll = Math.min(max, Math.max(0, this.scroll));
-			this.scrollRel = this.scroll / max;
-		},
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-		/**
-		 * Invoked when a mouse-down event is captured on the scroll widget.
-		 * @param {MouseEvent} e 
-		 */
-		startMouse: function(e) {
-			this.scrollStartY = e.clientY;
-			this.scrollStart = this.scroll;
-			this.isScrolling = true;
-		},
+		// Scroller thumb.
+		const ImVec2 thumbMin(scrollbarX, thumbY);
+		const ImVec2 thumbMax(scrollbarX + scrollbarWidth, thumbY + scrollerHeight);
 
-		/**
-		 * Invoked when a mouse-move event is captured globally.
-		 * @param {MouseEvent} e 
-		 */
-		moveMouse: function(e) {
-			if (this.isScrolling) {
-				this.scroll = this.scrollStart + (e.clientY - this.scrollStartY);
-				this.recalculateBounds();
-			}
-		},
+		// Determine if mouse is over the thumb for hover effect.
+		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
+		const ImU32 thumbColor = thumbHovered
+			? IM_COL32(255, 255, 255, 180)
+			: IM_COL32(255, 255, 255, 80);
 
-		/**
-		 * Invoked when a mouse-up event is captured globally.
-		 */
-		stopMouse: function() {
-			this.isScrolling = false;
-		},
+		drawList->AddRectFilled(thumbMin, thumbMax, thumbColor, 4.0f);
 
-		/**
-		 * Invoked when a mouse-wheel event is captured on the component node.
-		 * @param {WheelEvent} e
-		 */
-		wheelMouse: function(e) {
-			const weight = this.$el.clientHeight - (this.$refs.scroller.clientHeight);
-			const child = this.$el.querySelector('.item');
-
-			if (child !== null) {
-				const scrollCount = Math.floor(this.$el.clientHeight / child.clientHeight);
-				const direction = e.deltaY > 0 ? 1 : -1;
-				this.scroll += ((scrollCount * this.itemWeight) * weight) * direction;
-				this.recalculateBounds();
-			}
-		},
-
-		/**
-		 * Propagate entry clicks to the child checkbox.
-		 * @param {MouseEvent} event 
-		 */
-		propagateClick: function(event) {
-			let target = event.target;
-			if (!target.matches('input')) {
-				if (target.matches('span'))
-					target = target.parentNode;
-
-				target.querySelector('input').click();
-			}
+		// Handle mouse-down on the scroller thumb.
+		if (ImGui::IsMouseHoveringRect(thumbMin, thumbMax) && ImGui::IsMouseClicked(0)) {
+			startMouse(io.MousePos.y, state);
 		}
-	},
+	}
 
-	/**
-	 * HTML mark-up to render for this component.
-	 */
-	template: `<div class="ui-checkboxlist" @wheel="wheelMouse">
-		<div class="scroller" ref="scroller" @mousedown="startMouse" :class="{ using: isScrolling }" :style="{ top: scrollOffset }"><div></div></div>
-		<div v-for="(item, i) in displayItems" class="item" @click="propagateClick($event)" :class="{ selected: item.checked }">
-			<input type="checkbox" v-model="item.checked"/>
-			<span>{{ item.label }}</span>
-		</div>
-	</div>`
-};
+	// Render visible items.
+	// <div v-for="(item, i) in displayItems" class="item" @click="propagateClick($event)" :class="{ selected: item.checked }">
+	//     <input type="checkbox" v-model="item.checked"/>
+	//     <span>{{ item.label }}</span>
+	// </div>
+	for (int i = startIdx; i < endIdx; ++i) {
+		auto& item = items[static_cast<size_t>(i)];
+		bool checked = item.value("checked", false);
+		const std::string label = item.value("label", std::string(""));
+
+		// Alternate row background (nth-child(even) effect).
+		if ((i - startIdx) % 2 == 1) {
+			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
+			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, IM_COL32(255, 255, 255, 8));
+		}
+
+		// Selected highlight (class "selected" when item.checked).
+		if (checked) {
+			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
+			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, IM_COL32(34, 181, 73, 40));
+		}
+
+		ImGui::PushID(i);
+
+		// Checkbox + label — clicking anywhere on the row toggles the checkbox.
+		if (ImGui::Checkbox(("##cb" + std::to_string(i)).c_str(), &checked)) {
+			item["checked"] = checked;
+		}
+		ImGui::SameLine();
+		// Clicking the label text also toggles the checkbox (propagateClick equivalent).
+		if (ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_None, ImVec2(availSize.x - 30.0f, 0.0f))) {
+			checked = !checked;
+			item["checked"] = checked;
+		}
+
+		ImGui::PopID();
+	}
+
+	ImGui::EndChild();
+	ImGui::PopID();
+}
+
+} // namespace checkboxlist
