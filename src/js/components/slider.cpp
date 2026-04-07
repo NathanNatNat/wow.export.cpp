@@ -3,97 +3,157 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-module.exports = {
-	/**
-	 * value: Slider value between 0 and 1.
-	 */
-	props: ['modelValue'],
-	emits: ['update:modelValue'],
+#include "slider.h"
 
-	data: function() {
-		return {
-			isScrolling: false, // True if the slider is being dragged.
-		}
-	},
+#include <imgui.h>
+#include <algorithm>
+#include <cmath>
 
-	/**
-	 * Invoked when the component is mounted.
-	 * Used to register global mouse listeners.
-	 */
-	mounted: function() {
-		this.onMouseMove = e => this.moveMouse(e);
-		this.onMouseUp = e => this.stopMouse(e);
+namespace slider {
 
-		document.addEventListener('mousemove', this.onMouseMove);
-		document.addEventListener('mouseup', this.onMouseUp);
-	},
+/**
+ * value: Slider value between 0 and 1.
+ */
+// props: ['modelValue']
+// emits: ['update:modelValue']
 
-	/**
-	 * Invoked when the component is destroyed.
-	 * Used to unregister global mouse listeners.
-	 */
-	beforeUnmount: function() {
-		// Unregister global mouse listeners.
-		document.removeEventListener('mousemove', this.onMouseMove);
-		document.removeEventListener('mouseup', this.onMouseUp);
-	},
+// data: isScrolling — stored in SliderState
 
-	methods: {
-		/**
-		 * Set the current value of this slider.
-		 * @param {number} value 
-		 */
-		setValue: function(value) {
-			this.$emit('update:modelValue', Math.min(1, Math.max(0, value)));
-		},
+/**
+ * Invoked when the component is mounted.
+ * Used to register global mouse listeners.
+ */
+// TODO(conversion): In ImGui, global mouse listeners are not needed.
+// ImGui provides mouse state via ImGui::GetIO() each frame.
 
-		/**
-		 * Invoked when a mouse-down event is captured on the slider handle.
-		 * @param {MouseEvent} e 
-		 */
-		startMouse: function(e) {
-			this.scrollStartX = e.clientX
-			this.scrollStart = this.modelValue;
-			this.isScrolling = true;
-		},
+/**
+ * Invoked when the component is destroyed.
+ * Used to unregister global mouse listeners.
+ */
+// TODO(conversion): No explicit unmount needed in ImGui immediate mode.
 
-		/**
-		 * Invoked when a mouse-move event is captured globally.
-		 * @param {MouseEvent} e 
-		 */
-		moveMouse: function(e) {
-			if (this.isScrolling) {
-				const max = this.$el.clientWidth;
-				const delta = e.clientX - this.scrollStartX;
-				this.setValue(this.scrollStart + (delta / max));
-			}
-		},
+/**
+ * Set the current value of this slider.
+ * @param {number} value
+ */
+static float setValue(float value) {
+	return std::min(1.0f, std::max(0.0f, value));
+}
 
-		/**
-		 * Invoked when a mouse-up event is captured globally.
-		 */
-		stopMouse: function() {
-			this.isScrolling = false;
-		},
+/**
+ * Invoked when a mouse-down event is captured on the slider handle.
+ * @param {MouseEvent} e
+ */
+static void startMouse(float mouseX, float currentValue, SliderState& state) {
+	state.scrollStartX = mouseX;
+	state.scrollStart = currentValue;
+	state.isScrolling = true;
+}
 
-		/**
-		 * Invoked when the user clicks somewhere on the slider.
-		 * @param {MouseEvent} e 
-		 */
-		handleClick: function(e) {
-			// Don't handle click events on the draggable handle.
-			if (e.target === this.$refs.handle)
-				return;
+/**
+ * Invoked when a mouse-move event is captured globally.
+ * @param {MouseEvent} e
+ */
+static float moveMouse(float mouseX, float containerWidth, SliderState& state) {
+	if (state.isScrolling) {
+		const float delta = mouseX - state.scrollStartX;
+		return setValue(state.scrollStart + (delta / containerWidth));
+	}
+	return -1.0f; // No change
+}
 
-			this.setValue(e.offsetX / this.$el.clientWidth);
-		}
-	},
+/**
+ * Invoked when a mouse-up event is captured globally.
+ */
+static void stopMouse(SliderState& state) {
+	state.isScrolling = false;
+}
 
-	/**
-	 * HTML mark-up to render for this component.
-	 */
-	template: `<div class="ui-slider" @click="handleClick">
-		<div class="fill" :style="{ width: (modelValue * 100) + '%' }"></div>
-		<div class="handle" ref="handle" @mousedown="startMouse" :style="{ left: (modelValue * 100) + '%' }"></div>
-	</div>`
-};
+/**
+ * Invoked when the user clicks somewhere on the slider.
+ * @param {MouseEvent} e
+ */
+static float handleClick(float clickOffsetX, float containerWidth) {
+	return setValue(clickOffsetX / containerWidth);
+}
+
+/**
+ * HTML mark-up to render for this component.
+ */
+// template: converted to ImGui immediate-mode rendering below.
+
+void render(const char* id, float value, SliderState& state,
+            const std::function<void(float)>& onChange) {
+	ImGui::PushID(id);
+
+	const ImVec2 availSize = ImGui::GetContentRegionAvail();
+	const float sliderHeight = 20.0f;
+	const float sliderWidth = availSize.x;
+	const float handleWidth = 10.0f;
+
+	// Begin a child region for the slider.
+	ImGui::BeginChild("##slider_container", ImVec2(sliderWidth, sliderHeight), ImGuiChildFlags_None,
+	                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+	const ImVec2 winPos = ImGui::GetWindowPos();
+	const ImVec2 winSize = ImGui::GetWindowSize();
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+	const ImGuiIO& io = ImGui::GetIO();
+
+	// Handle global mouse move/up for handle dragging.
+	if (state.isScrolling) {
+		const float newValue = moveMouse(io.MousePos.x, sliderWidth, state);
+		if (newValue >= 0.0f && onChange)
+			onChange(newValue);
+		if (!io.MouseDown[0])
+			stopMouse(state);
+	}
+
+	// <div class="ui-slider" @click="handleClick">
+	// Track background.
+	const ImVec2 trackMin(winPos.x, winPos.y + sliderHeight * 0.3f);
+	const ImVec2 trackMax(winPos.x + sliderWidth, winPos.y + sliderHeight * 0.7f);
+	drawList->AddRectFilled(trackMin, trackMax, IM_COL32(80, 80, 80, 255), 3.0f);
+
+	// <div class="fill" :style="{ width: (modelValue * 100) + '%' }"></div>
+	// Fill bar.
+	const float fillWidth = sliderWidth * value;
+	if (fillWidth > 0.0f) {
+		const ImVec2 fillMin(winPos.x, winPos.y + sliderHeight * 0.3f);
+		const ImVec2 fillMax(winPos.x + fillWidth, winPos.y + sliderHeight * 0.7f);
+		drawList->AddRectFilled(fillMin, fillMax, IM_COL32(34, 181, 73, 255), 3.0f);
+	}
+
+	// <div class="handle" ref="handle" @mousedown="startMouse" :style="{ left: (modelValue * 100) + '%' }"></div>
+	// Handle.
+	const float handleX = winPos.x + fillWidth - handleWidth * 0.5f;
+	const ImVec2 handleMin(handleX, winPos.y);
+	const ImVec2 handleMax(handleX + handleWidth, winPos.y + sliderHeight);
+	const bool handleHovered = ImGui::IsMouseHoveringRect(handleMin, handleMax) || state.isScrolling;
+	const ImU32 handleColor = handleHovered
+		? IM_COL32(255, 255, 255, 220)
+		: IM_COL32(200, 200, 200, 200);
+	drawList->AddRectFilled(handleMin, handleMax, handleColor, 3.0f);
+
+	// Handle mouse-down on the handle.
+	if (ImGui::IsMouseHoveringRect(handleMin, handleMax) && ImGui::IsMouseClicked(0)) {
+		startMouse(io.MousePos.x, value, state);
+	}
+
+	// Click on the track (not the handle) — jump to position.
+	// Don't handle click events on the draggable handle.
+	if (!state.isScrolling && !ImGui::IsMouseHoveringRect(handleMin, handleMax) &&
+	    ImGui::IsMouseHoveringRect(ImVec2(winPos.x, winPos.y), ImVec2(winPos.x + sliderWidth, winPos.y + sliderHeight)) &&
+	    ImGui::IsMouseClicked(0)) {
+		const float clickOffsetX = io.MousePos.x - winPos.x;
+		const float newValue = handleClick(clickOffsetX, sliderWidth);
+		if (onChange)
+			onChange(newValue);
+	}
+
+	ImGui::EndChild();
+	ImGui::PopID();
+}
+
+} // namespace slider
