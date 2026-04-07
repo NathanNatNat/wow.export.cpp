@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 131 / 184 files converted
+**Progress:** 135 / 184 files converted
 
 ---
 
@@ -209,10 +209,10 @@
 - [x] `src/js/ui/char-texture-overlay.cpp` (120 lines)
 - [x] `src/js/ui/texture-ribbon.cpp` (109 lines)
 - [x] `src/js/ui/listbox-context.cpp` (177 lines)
-- [ ] `src/js/ui/data-exporter.cpp` (255 lines)
-- [ ] `src/js/ui/texture-exporter.cpp` (194 lines)
-- [ ] `src/js/ui/character-appearance.cpp` (205 lines)
-- [ ] `src/js/ui/model-viewer-utils.cpp` (549 lines)
+- [x] `src/js/ui/data-exporter.cpp` (255 lines)
+- [x] `src/js/ui/texture-exporter.cpp` (194 lines)
+- [x] `src/js/ui/character-appearance.cpp` (205 lines)
+- [x] `src/js/ui/model-viewer-utils.cpp` (549 lines)
 
 ## Tier 21 — Vue Components → ImGui Widgets (16 files)
 

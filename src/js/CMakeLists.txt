@@ -136,4 +136,8 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/char-texture-overlay.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/texture-ribbon.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/listbox-context.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/data-exporter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/texture-exporter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/character-appearance.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/model-viewer-utils.cpp
 )

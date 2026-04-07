@@ -3,193 +3,252 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const core = require('../core');
-const log = require('../log');
-const util = require('util');
-const generics = require('../generics');
-const listfile = require('../casc/listfile');
-const BLPFile = require('../casc/blp');
-const BufferWrapper = require('../buffer');
-const ExportHelper = require('../casc/export-helper');
-const JSONWriter = require('../3D/writers/JSONWriter');
-const webp = require('webp-wasm');
+#include "texture-exporter.h"
+
+#include <format>
+#include <filesystem>
+
+#include <imgui.h>
+
+#include "../core.h"
+#include "../log.h"
+#include "../generics.h"
+#include "../buffer.h"
+#include "../casc/blp.h"
+#include "../casc/listfile.h"
+#include "../casc/export-helper.h"
+#include "../casc/casc-source.h"
+#include "../mpq/mpq-install.h"
+#include "../file-writer.h"
+#include "../3D/writers/JSONWriter.h"
+
+namespace texture_exporter {
+
+namespace fs = std::filesystem;
 
 /**
  * Retrieve the fileDataID and fileName for a given fileDataID or fileName.
- * @param {number|string} input
- * @returns {object}
+ * @param input nlohmann::json value — either a number (fileDataID) or a string.
+ * @returns FileInfoPair with fileName and optional fileDataID.
  */
-const getFileInfoPair = (input) => {
-	let fileName;
-	let fileDataID;
+FileInfoPair getFileInfoPair(const nlohmann::json& input) {
+	FileInfoPair pair;
 
-	if (typeof input === 'number') {
-		fileDataID = input;
-		fileName = listfile.getByID(fileDataID) ?? listfile.formatUnknownFile(fileDataID, '.blp');
+	if (input.is_number()) {
+		pair.fileDataID = input.get<uint32_t>();
+		std::string name = casc::listfile::getByID(pair.fileDataID.value());
+		pair.fileName = name.empty()
+			? casc::listfile::formatUnknownFile(pair.fileDataID.value(), ".blp")
+			: name;
 	} else {
-		fileName = listfile.stripFileEntry(input);
-		fileDataID = listfile.getByFilename(fileName);
+		pair.fileName = casc::listfile::stripFileEntry(input.get<std::string>());
+		pair.fileDataID = casc::listfile::getByFilename(pair.fileName);
 	}
 
-	return { fileName, fileDataID };
-};
+	return pair;
+}
 
 /**
- * Export BLP metadata to a JSON file.
- * @param {BLPFile} blp - The BLP file instance
- * @param {string} exportPath - The export path of the image file
- * @param {boolean} overwriteFiles - Whether to overwrite existing files
- * @param {object} manifest - The export manifest object
- * @param {number} fileDataID - The file data ID
+ * Export BLP metadata to a JSON file alongside the texture.
+ * @param blp          The BLP image instance.
+ * @param exportPath   Export path of the image file.
+ * @param overwrite    Whether to overwrite existing files.
+ * @param manifest     Export manifest accumulator (succeeded array).
+ * @param fileDataID   The file data ID.
  */
-const exportBLPMetadata = async (blp, exportPath, overwriteFiles, manifest, fileDataID) => {
-	const jsonOut = ExportHelper.replaceExtension(exportPath, '.json');
-	const json = new JSONWriter(jsonOut);
-	json.addProperty('encoding', blp.encoding);
-	json.addProperty('alphaDepth', blp.alphaDepth);
-	json.addProperty('alphaEncoding', blp.alphaEncoding);
-	json.addProperty('mipmaps', blp.containsMipmaps);
-	json.addProperty('width', blp.width);
-	json.addProperty('height', blp.height);
-	json.addProperty('mipmapCount', blp.mapCount);
-	json.addProperty('mipmapSizes', blp.mapSizes);
+static void exportBLPMetadata(casc::BLPImage& blp, const std::string& exportPath,
+	bool overwrite, nlohmann::json& manifest, std::optional<uint32_t> fileDataID)
+{
+	const std::string jsonOut = casc::ExportHelper::replaceExtension(exportPath, ".json");
+	JSONWriter json(jsonOut);
+	json.addProperty("encoding", blp.encoding);
+	json.addProperty("alphaDepth", blp.alphaDepth);
+	json.addProperty("alphaEncoding", blp.alphaEncoding);
+	json.addProperty("mipmaps", blp.containsMipmaps);
+	json.addProperty("width", blp.width);
+	json.addProperty("height", blp.height);
+	json.addProperty("mipmapCount", blp.mapCount);
+	json.addProperty("mipmapSizes", blp.mapSizes);
 
-	await json.write(overwriteFiles);
-	manifest.succeeded.push({ type: 'META', fileDataID, file: jsonOut });
-};
+	json.write(overwrite);
+	nlohmann::json entry = {{"type", "META"}, {"file", jsonOut}};
+	if (fileDataID) entry["fileDataID"] = *fileDataID;
+	manifest["succeeded"].push_back(std::move(entry));
+}
 
 /**
  * Export texture files to the configured format.
- * @param {Array} files - Array of fileDataIDs or file paths
- * @param {boolean} isLocal - Whether files are local
- * @param {number} exportID - Export ID for tracking
- * @param {boolean} isMPQ - Whether files are from MPQ archives
+ * @param files    Array of fileDataIDs (json::number) or file paths (json::string).
+ * @param casc     CASC source (may be nullptr if mpq or isLocal).
+ * @param mpq      MPQ install (non-null implies isMPQ mode).
+ * @param isLocal  If true, files are local filesystem paths.
+ * @param exportID Export ID for tracking.
  */
-const exportFiles = async (files, isLocal = false, exportID = -1, isMPQ = false) => {
-	const format = core.view.config.exportTextureFormat;
+void exportFiles(
+	const std::vector<nlohmann::json>& files,
+	casc::CASC* casc,
+	mpq::MPQInstall* mpq,
+	bool isLocal,
+	int exportID)
+{
+	const bool isMPQ = (mpq != nullptr);
+	const std::string format = core::view->config.value("exportTextureFormat", std::string("PNG"));
 
-	if (format === 'CLIPBOARD') {
-		const { fileName, fileDataID } = getFileInfoPair(files[0]);
+	if (format == "CLIPBOARD") {
+		const auto [fileName, fileDataID] = getFileInfoPair(files[0]);
 
-		let data;
+		BufferWrapper data;
 		if (isMPQ) {
-			const raw_data = core.view.mpq.getFile(fileName);
-			const buffer = Buffer.from(raw_data);
-			data = new BufferWrapper(buffer);
-		} else {
-			data = await (isLocal ? BufferWrapper.readFile(fileName) : core.view.casc.getFile(fileDataID));
+			auto raw_data = mpq->getFile(fileName);
+			if (raw_data)
+				data = BufferWrapper(std::move(*raw_data));
+		} else if (isLocal) {
+			data = BufferWrapper::readFile(fs::path(fileName));
+		} else if (casc && fileDataID) {
+			data = casc->getVirtualFileByID(*fileDataID);
 		}
 
-		const blp = new BLPFile(data);
-		const png = blp.toPNG(core.view.config.exportChannelMask);
+		const uint8_t mask = static_cast<uint8_t>(core::view->config.value("exportChannelMask", 0b1111));
+		casc::BLPImage blp(std::move(data));
+		const BufferWrapper png = blp.toPNG(mask);
 
-		const clipboard = nw.Clipboard.get();
-		clipboard.set(png.toBase64(), 'png', true);
+		// JS: clipboard.set(png.toBase64(), 'png', true)
+		// C++: ImGui text clipboard with base64 PNG data
+		ImGui::SetClipboardText(png.toBase64().c_str());
 
-		log.write('Copied texture to clipboard (%s)', fileName);
-		core.setToast('success', util.format('Selected texture %s has been copied to the clipboard', fileName), null, -1, true);
-
+		logging::write(std::format("Copied texture to clipboard ({})", fileName));
+		core::setToast("success",
+			std::format("Selected texture {} has been copied to the clipboard", fileName),
+			nullptr, -1, true);
 		return;
 	}
 
-	const helper = new ExportHelper(files.length, 'texture');
+	casc::ExportHelper helper(static_cast<int>(files.size()), "texture");
 	helper.start();
 
-	const exportPaths = core.openLastExportStream();
+	FileWriter exportPaths = core::openLastExportStream();
 
-	const overwriteFiles = isLocal || core.view.config.overwriteFiles;
-	const exportMeta = core.view.config.exportBLPMeta;
+	const bool overwriteFiles = isLocal || core::view->config.value("overwriteFiles", true);
+	const bool exportMeta = core::view->config.value("exportBLPMeta", false);
 
-	const manifest = { type: 'TEXTURES', exportID, succeeded: [], failed: [] };
+	nlohmann::json manifest = {
+		{"type", "TEXTURES"},
+		{"exportID", exportID},
+		{"succeeded", nlohmann::json::array()},
+		{"failed", nlohmann::json::array()}
+	};
 
-	for (let fileEntry of files) {
+	for (const auto& fileEntry : files) {
 		// Abort if the export has been cancelled.
 		if (helper.isCancelled())
 			return;
-			
-		const { fileName, fileDataID } = getFileInfoPair(fileEntry);
-		
+
+		const auto [fileName, fileDataID] = getFileInfoPair(fileEntry);
+
+		std::string markFileName = fileName;
+
 		try {
-			let exportFileName = fileName;
-			
+			std::string exportFileName = fileName;
+
 			// Use fileDataID as filename if exportNamedFiles is disabled
-			if (!isLocal && !core.view.config.exportNamedFiles) {
-				const ext = fileName.toLowerCase().endsWith('.blp') ? '.blp' : '.png';
-				const dir = require('path').dirname(fileName);
-				const fileDataIDName = fileDataID + ext;
-				exportFileName = dir === '.' ? fileDataIDName : require('path').join(dir, fileDataIDName);
-			}
-			
-			let exportPath = isLocal ? fileName : ExportHelper.getExportPath(exportFileName);
-			let markFileName = exportFileName;
-			if (format === 'WEBP') {
-				exportPath = ExportHelper.replaceExtension(exportPath, '.webp');
-				markFileName = ExportHelper.replaceExtension(exportFileName, '.webp');
-			} else if (format !== 'BLP') {
-				exportPath = ExportHelper.replaceExtension(exportPath, '.png');
-				markFileName = ExportHelper.replaceExtension(exportFileName, '.png');
+			if (!isLocal && !core::view->config.value("exportNamedFiles", true) && fileDataID) {
+				const std::string ext = (fileName.size() >= 4 &&
+					(fileName.substr(fileName.size() - 4) == ".blp" || fileName.substr(fileName.size() - 4) == ".BLP"))
+					? ".blp" : ".png";
+				const fs::path namePath(fileName);
+				const std::string fileDataIDName = std::to_string(*fileDataID) + ext;
+				const fs::path dir = namePath.parent_path();
+				exportFileName = dir.empty() || dir == fs::path(".")
+					? fileDataIDName
+					: (dir / fileDataIDName).string();
 			}
 
-			if (overwriteFiles || !await generics.fileExists(exportPath)) {
-				let data;
+			std::string exportPath = isLocal ? fileName : casc::ExportHelper::getExportPath(exportFileName);
+			markFileName = exportFileName;
+
+			if (format == "WEBP") {
+				exportPath = casc::ExportHelper::replaceExtension(exportPath, ".webp");
+				markFileName = casc::ExportHelper::replaceExtension(exportFileName, ".webp");
+			} else if (format != "BLP") {
+				exportPath = casc::ExportHelper::replaceExtension(exportPath, ".png");
+				markFileName = casc::ExportHelper::replaceExtension(exportFileName, ".png");
+			}
+
+			if (overwriteFiles || !generics::fileExists(exportPath)) {
+				BufferWrapper data;
 				if (isMPQ) {
-					const raw_data = core.view.mpq.getFile(fileName);
-					const buffer = Buffer.from(raw_data);
-					data = new BufferWrapper(buffer);
-				} else {
-					data = await (isLocal ? BufferWrapper.readFile(fileName) : core.view.casc.getFile(fileDataID));
+					auto raw_data = mpq->getFile(fileName);
+					if (raw_data)
+						data = BufferWrapper(std::move(*raw_data));
+				} else if (isLocal) {
+					data = BufferWrapper::readFile(fs::path(fileName));
+				} else if (casc && fileDataID) {
+					data = casc->getVirtualFileByID(*fileDataID);
 				}
 
-				const file_ext = fileName.slice(fileName.lastIndexOf('.')).toLowerCase();
+				// Determine file extension
+				const std::string file_ext = fileName.size() >= 4
+					? fileName.substr(fileName.size() - 4)
+					: "";
+				const bool is_png = (file_ext == ".png" || file_ext == ".PNG");
+				const bool is_jpg = (file_ext == ".jpg" || file_ext == ".JPG");
 
-				if (file_ext === '.png' || file_ext === '.jpg') {
-					// raw export for png/jpg (no blp conversion)
-					await data.writeToFile(exportPath);
-					await exportPaths?.writeLine(file_ext.slice(1).toUpperCase() + ':' + exportPath);
-				} else if (format === 'BLP') {
-					// export as raw file with no conversion
-					await data.writeToFile(exportPath);
-					await exportPaths?.writeLine('BLP:' + exportPath);
-				} else if (format === 'WEBP') {
-					// export as webp
-					const blp = new BLPFile(data);
-					await blp.saveToWebP(exportPath, core.view.config.exportChannelMask, 0, core.view.config.exportWebPQuality);
-					await exportPaths?.writeLine('WEBP:' + exportPath);
+				if (is_png || is_jpg) {
+					// Raw export for png/jpg (no BLP conversion)
+					data.writeToFile(fs::path(exportPath));
+					const std::string tag = is_png ? "PNG" : "JPG";
+					exportPaths.writeLine(tag + ":" + exportPath);
+				} else if (format == "BLP") {
+					// Export as raw BLP file with no conversion
+					data.writeToFile(fs::path(exportPath));
+					exportPaths.writeLine("BLP:" + exportPath);
+				} else if (format == "WEBP") {
+					// Export as WebP
+					const uint8_t mask = static_cast<uint8_t>(core::view->config.value("exportChannelMask", 0b1111));
+					const int quality = core::view->config.value("exportWebPQuality", 90);
+					casc::BLPImage blp(std::move(data));
+					blp.saveToWebP(fs::path(exportPath), mask, 0, quality);
+					exportPaths.writeLine("WEBP:" + exportPath);
 
 					if (exportMeta)
-						await exportBLPMetadata(blp, exportPath, overwriteFiles, manifest, fileDataID);
+						exportBLPMetadata(blp, exportPath, overwriteFiles, manifest, fileDataID);
 				} else {
-					// export as png
-					const blp = new BLPFile(data);
-					await blp.saveToPNG(exportPath, core.view.config.exportChannelMask);
-					await exportPaths?.writeLine('PNG:' + exportPath);
+					// Export as PNG
+					const uint8_t mask = static_cast<uint8_t>(core::view->config.value("exportChannelMask", 0b1111));
+					casc::BLPImage blp(std::move(data));
+					blp.saveToPNG(fs::path(exportPath), mask);
+					exportPaths.writeLine("PNG:" + exportPath);
 
 					if (exportMeta)
-						await exportBLPMetadata(blp, exportPath, overwriteFiles, manifest, fileDataID);
+						exportBLPMetadata(blp, exportPath, overwriteFiles, manifest, fileDataID);
 				}
 			} else {
-				log.write('Skipping export of %s (file exists, overwrite disabled)', exportPath);
+				logging::write(std::format("Skipping export of {} (file exists, overwrite disabled)", exportPath));
 			}
 
 			helper.mark(markFileName, true);
-			manifest.succeeded.push({ type: format, fileDataID, file: exportPath });
-		} catch (e) {
-			helper.mark(markFileName, false, e.message, e.stack);
-			manifest.failed.push({ type: format, fileDataID });
+			nlohmann::json entry = {{"type", format}, {"file", exportPath}};
+			if (fileDataID) entry["fileDataID"] = *fileDataID;
+			manifest["succeeded"].push_back(std::move(entry));
+		} catch (const std::exception& e) {
+			helper.mark(markFileName, false, e.what());
+			nlohmann::json entry = {{"type", format}};
+			if (fileDataID) entry["fileDataID"] = *fileDataID;
+			manifest["failed"].push_back(std::move(entry));
 		}
 	}
 
-	exportPaths?.close();
-
+	exportPaths.close();
 	helper.finish();
-};
+}
 
 /**
  * Export a single texture by fileDataID.
- * @param {number} fileDataID - The fileDataID of the texture to export
+ * @param fileDataID The file data ID of the texture to export.
+ * @param casc       CASC source.
  */
-const exportSingleTexture = async (fileDataID) => {
-	await exportFiles([fileDataID], false);
-};
+void exportSingleTexture(uint32_t fileDataID, casc::CASC* casc) {
+	exportFiles({nlohmann::json(fileDataID)}, casc, nullptr, false);
+}
 
-module.exports = { exportFiles, exportSingleTexture, getFileInfoPair };
+} // namespace texture_exporter

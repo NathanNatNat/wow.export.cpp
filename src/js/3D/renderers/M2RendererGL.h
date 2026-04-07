@@ -258,6 +258,9 @@ public:
 	const std::vector<int16_t>& get_bone_remap_table() const { return bone_remap_table; }
 	const std::vector<M2DrawCall>& get_draw_calls() const { return draw_calls; }
 
+	// Accessor for skelLoader (JS: renderer.skelLoader public property)
+	const SKELLoader* getSkelLoader() const { return skelLoader.get(); }
+
 	// Public state (matches JS properties)
 	std::unique_ptr<M2Loader> m2;
 	gl::ShaderProgram* shader = nullptr;
