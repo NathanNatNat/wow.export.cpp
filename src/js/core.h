@@ -357,6 +357,7 @@ struct AppState {
 	std::string overrideModelName;
 	std::vector<nlohmann::json> overrideTextureList;
 	std::string overrideTextureName;
+	std::string pendingItemSlotFilter;             // Pending item slot filter from character tab.
 	std::vector<nlohmann::json> mapViewerMaps;
 	std::vector<nlohmann::json> zoneViewerZones;
 	std::vector<nlohmann::json> zonePhases;
