@@ -96,7 +96,6 @@ void render(const char* id, float value, SliderState& state,
 	                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 	const ImVec2 winPos = ImGui::GetWindowPos();
-	const ImVec2 winSize = ImGui::GetWindowSize();
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 
 	const ImGuiIO& io = ImGui::GetIO();
