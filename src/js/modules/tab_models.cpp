@@ -700,8 +700,8 @@ void export_files(const std::vector<nlohmann::json>& files, bool is_local, int e
 			// JS: if (file_name === undefined) { ... }
 			if (file_name.empty()) {
 				// TODO(conversion): model type detection requires loaded data
-				// auto model_type = model_viewer_utils::detect_model_type(data);
-				// file_name = casc::listfile::formatUnknownFile(file_data_id, model_viewer_utils::get_model_extension(model_type));
+				// auto detected_type = model_viewer_utils::detect_model_type(data);
+				// file_name = casc::listfile::formatUnknownFile(file_data_id, model_viewer_utils::get_model_extension(detected_type));
 				file_name = casc::listfile::formatUnknownFile(file_data_id);
 			}
 
@@ -1090,7 +1090,7 @@ void render() {
 				if (anim_methods) anim_methods->step_animation(1);
 			if (!anim_paused) ImGui::EndDisabled();
 
-			// JS: <div class="anim-scrubber">
+			// JS: <div class="anim-scrubber" @mousedown="start_scrub" @mouseup="end_scrub">
 			//         <input type="range" min="0" :max="animFrameCount - 1" :value="animFrame" @input="seek_animation($event.target.value)" />
 			//         <div class="anim-frame-display">{{ animFrame }}</div>
 			ImGui::SameLine();
@@ -1099,6 +1099,13 @@ void render() {
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 80.0f);
 			if (ImGui::SliderInt("##ModelAnimFrame", &frame, 0, frame_max)) {
 				if (anim_methods) anim_methods->seek_animation(frame);
+			}
+			// JS: start_scrub() pauses animation while dragging, end_scrub() resumes.
+			if (ImGui::IsItemActivated()) {
+				if (anim_methods) anim_methods->start_scrub();
+			}
+			if (ImGui::IsItemDeactivatedAfterEdit()) {
+				if (anim_methods) anim_methods->end_scrub();
 			}
 			ImGui::SameLine();
 			ImGui::Text("%d", view.modelViewerAnimFrame);
