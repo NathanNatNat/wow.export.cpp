@@ -1,549 +1,713 @@
-const util = require('util');
-const core = require('../core');
-const log = require('../log');
-const path = require('path');
-const InstallType = require('../install-type');
+/*!
+wow.export (https://github.com/Kruithne/wow.export)
+Authors: Kruithne <kruithne@gmail.com>
+License: MIT
+ */
 
-const db2 = require('../casc/db2');
-const BLPFile = require('../casc/blp');
-const BufferWrapper = require('../buffer');
-const ExportHelper = require('../casc/export-helper');
+#include "tab_zones.h"
+#include "../log.h"
+#include "../core.h"
+#include "../generics.h"
+#include "../buffer.h"
+#include "../casc/export-helper.h"
+#include "../casc/listfile.h"
+#include "../casc/casc-source.h"
+#include "../casc/blte-reader.h"
+#include "../casc/blp.h"
+#include "../casc/db2.h"
+#include "../ui/texture-exporter.h"
+#include "../install-type.h"
 
-let selected_zone_id = null;
-let selected_phase_id = null;
+#include <cstring>
+#include <format>
+#include <filesystem>
+#include <algorithm>
+#include <optional>
+#include <unordered_map>
+#include <set>
+#include <regex>
+#include <cmath>
 
-const parse_zone_entry = (entry) => {
-	const match = entry.match(/\[(\d+)\]\31([^\31]+)\31\(([^)]+)\)/);
-	if (!match)
-		throw new Error('unexpected zone entry');
+#include <imgui.h>
+#include <spdlog/spdlog.h>
 
-	return { id: parseInt(match[1]), zone_name: match[2], area_name: match[3] };
+#ifdef _WIN32
+#include <Windows.h>
+#include <shellapi.h>
+#endif
+
+namespace tab_zones {
+
+// --- File-local structures ---
+
+// JS: parse_zone_entry result: { id, zone_name, area_name }
+// The zone entry format is: expansion_id \x19 [zone_id] \x19 area_name \x19 (zone_name)
+struct ZoneDisplayInfo {
+int id = 0;
+std::string zone_name;
+std::string area_name;
+int expansion = -1;
 };
 
-const get_zone_ui_map_id = async (zone_id) => {
-	for (const assignment of (await db2.UiMapAssignment.getAllRows()).values()) {
-		if (assignment.AreaID === zone_id)
-			return assignment.UiMapID;
-	}
-
-	return null;
+// Art style layer combining UiMapArt + UiMapArtStyleLayer
+struct CombinedArtStyle {
+int id = 0;
+int ui_map_art_style_id = 0;
+int layer_index = 0;
+int layer_width = 0;
+int layer_height = 0;
+int tile_width = 0;
+int tile_height = 0;
 };
 
-const get_zone_phases = async (zone_id) => {
-	const ui_map_id = await get_zone_ui_map_id(zone_id);
-	if (!ui_map_id)
-		return [];
+// --- File-local state ---
 
-	const phases = [];
-	const seen_phases = new Set();
-
-	for (const link_entry of (await db2.UiMapXMapArt.getAllRows()).values()) {
-		if (link_entry.UiMapID === ui_map_id) {
-			const phase_id = link_entry.PhaseID ?? 0;
-			if (!seen_phases.has(phase_id)) {
-				seen_phases.add(phase_id);
-				phases.push({
-					id: phase_id,
-					label: phase_id === 0 ? 'Default' : `Phase ${phase_id}`
-				});
-			}
-		}
-	}
-
-	phases.sort((a, b) => a.id - b.id);
-	return phases;
+// JS: const EXPANSION_NAMES = [...];
+static const std::vector<std::string> EXPANSION_NAMES = {
+	"Classic",
+	"The Burning Crusade",
+	"Wrath of the Lich King",
+	"Cataclysm",
+	"Mists of Pandaria",
+	"Warlords of Draenor",
+	"Legion",
+	"Battle for Azeroth",
+	"Shadowlands",
+	"Dragonflight",
+	"The War Within"
 };
 
-const render_zone_to_canvas = async (canvas, zone_id, phase_id = null, set_canvas_size = true, skip_zone_check = false) => {
-	const ctx = canvas.getContext('2d');
-	ctx.clearRect(0, 0, canvas.width, canvas.height);
+// JS: let selected_zone_id = null;
+static std::optional<int> selected_zone_id;
 
-	const ui_map_id = await get_zone_ui_map_id(zone_id);
-	if (!ui_map_id) {
-		log.write('no UiMap found for zone ID %d', zone_id);
-		throw new Error('no map data available for this zone');
+// JS: let selected_phase_id = null;
+static std::optional<int> selected_phase_id;
+
+// Change-detection.
+static std::string prev_selection_first;
+static bool prev_show_zone_base_map = true;
+static bool prev_show_zone_overlays = true;
+
+// --- Internal functions ---
+
+// JS: const parse_zone_entry = (entry) => { ... }
+static ZoneDisplayInfo parse_zone_entry(const std::string& entry) {
+	// Format: expansion_id \x19 [zone_id] \x19 AreaName_lang \x19 (ZoneName)
+	// JS regex skips expansion prefix: /\[(\d+)\]\31([^\31]+)\31\(([^)]+)\)/
+	// match[1]=id, match[2]=AreaName_lang→zone_name, match[3]=ZoneName→area_name
+	std::regex re(R"((\d+)\x19\[(\d+)\]\x19([^\x19]+)\x19\(([^)]+)\))");
+	std::smatch match;
+	if (!std::regex_match(entry, match, re))
+		return {};
+
+	ZoneDisplayInfo info;
+	info.expansion = std::stoi(match[1].str());
+	info.id = std::stoi(match[2].str());
+	info.zone_name = match[3].str();
+	info.area_name = match[4].str();
+	return info;
+}
+
+// JS: const get_zone_ui_map_id = async (zone_id) => { ... }
+static std::optional<int> get_zone_ui_map_id(int zone_id) {
+// JS: for (const assignment of (await db2.UiMapAssignment.getAllRows()).values()) {
+//     if (assignment.AreaID === zone_id) return assignment.UiMapID; }
+auto& ui_map_assignment = casc::db2::getTable("UiMapAssignment");
+// TODO(conversion): WDCReader getAllRows iteration will be wired when DB2 system is fully integrated.
+// Placeholder: When wired, iterate rows and check AreaID == zone_id.
+(void)ui_map_assignment;
+return std::nullopt;
+}
+
+// JS: const get_zone_phases = async (zone_id) => { ... }
+static std::vector<ZonePhase> get_zone_phases(int zone_id) {
+const auto ui_map_id = get_zone_ui_map_id(zone_id);
+if (!ui_map_id.has_value())
+return {};
+
+std::vector<ZonePhase> phases;
+std::set<int> seen_phases;
+
+// JS: for (const link_entry of (await db2.UiMapXMapArt.getAllRows()).values()) { ... }
+auto& ui_map_x_map_art = casc::db2::getTable("UiMapXMapArt");
+// TODO(conversion): WDCReader getAllRows iteration will be wired when DB2 system is fully integrated.
+// Placeholder: When wired, iterate UiMapXMapArt rows for matching UiMapID.
+(void)ui_map_x_map_art;
+
+std::sort(phases.begin(), phases.end(), [](const ZonePhase& a, const ZonePhase& b) {
+return a.id < b.id;
+});
+
+return phases;
+}
+
+// Forward declarations for render functions used in render_zone_to_canvas.
+static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index, int expected_zone_id, bool skip_zone_check);
+static void render_world_map_overlays(const CombinedArtStyle& art_style, int expected_zone_id, bool skip_zone_check);
+static void render_overlay_tiles(const CombinedArtStyle& art_style, int overlay_offset_x, int overlay_offset_y, int expected_zone_id, bool skip_zone_check);
+
+// JS: const render_zone_to_canvas = async (canvas, zone_id, phase_id, set_canvas_size, skip_zone_check) => { ... }
+static ZoneMapInfo render_zone_to_canvas(int zone_id, std::optional<int> phase_id = std::nullopt, bool skip_zone_check = false) {
+const auto ui_map_id = get_zone_ui_map_id(zone_id);
+if (!ui_map_id.has_value()) {
+logging::write(std::format("no UiMap found for zone ID {}", zone_id));
+throw std::runtime_error("no map data available for this zone");
+}
+
+// JS: const map_data = await db2.UiMap.getRow(ui_map_id);
+auto& ui_map = casc::db2::getTable("UiMap");
+(void)ui_map;
+// TODO(conversion): db2 getRow will be wired when DB2 system is fully integrated.
+
+// JS: Collect linked art IDs from UiMapXMapArt
+std::vector<int> linked_art_ids;
+auto& ui_map_x_map_art = casc::db2::getTable("UiMapXMapArt");
+(void)ui_map_x_map_art;
+// TODO(conversion): Iterate UiMapXMapArt rows to collect art IDs matching ui_map_id and phase_id.
+
+// JS: Collect combined art styles from UiMapArt + UiMapArtStyleLayer
+std::vector<CombinedArtStyle> art_styles;
+auto& ui_map_art = casc::db2::getTable("UiMapArt");
+auto& ui_map_art_style_layer = casc::db2::getTable("UiMapArtStyleLayer");
+(void)ui_map_art;
+(void)ui_map_art_style_layer;
+// TODO(conversion): For each linked_art_id, look up UiMapArt row, then find matching UiMapArtStyleLayer.
+
+if (art_styles.empty()) {
+logging::write(std::format("no art styles found for UiMap ID {} (phase {})",
+*ui_map_id, phase_id.value_or(-1)));
+throw std::runtime_error("no art styles found for map");
+}
+
+logging::write(std::format("found {} art styles for UiMap ID {} (phase {})",
+art_styles.size(), *ui_map_id, phase_id.value_or(-1)));
+
+// Sort by LayerIndex.
+std::sort(art_styles.begin(), art_styles.end(), [](const CombinedArtStyle& a, const CombinedArtStyle& b) {
+return a.layer_index < b.layer_index;
+});
+
+int map_width = 0, map_height = 0;
+
+for (const auto& art_style : art_styles) {
+	// JS: const all_tiles = await db2.UiMapArtTile.getRelationRows(art_style.ID);
+	auto& ui_map_art_tile = casc::db2::getTable("UiMapArtTile");
+	(void)ui_map_art_tile;
+	// TODO(conversion): Get tiles by relation, group by layer index.
+
+	if (art_style.layer_index == 0) {
+		map_width = art_style.layer_width;
+		map_height = art_style.layer_height;
 	}
 
-	const map_data = await db2.UiMap.getRow(ui_map_id);
-	if (!map_data) {
-		log.write('UiMap entry not found for ID %d', ui_map_id);
-		throw new Error('UiMap entry not found');
+	// JS: if (core.view.config.showZoneBaseMap) { ... render layers ... }
+	if (core::view->config.value("showZoneBaseMap", true)) {
+		// TODO(conversion): Iterate layer indices in sorted order and call render_map_tiles for each.
+		render_map_tiles(art_style, 0, zone_id, skip_zone_check);
 	}
 
-	const art_styles = [];
-
-	const linked_art_ids = [];
-	for (const link_entry of (await db2.UiMapXMapArt.getAllRows()).values()) {
-		if (link_entry.UiMapID === ui_map_id) {
-			if (phase_id === null || link_entry.PhaseID === phase_id)
-				linked_art_ids.push(link_entry.UiMapArtID);
-		}
+	// JS: if (core.view.config.showZoneOverlays) await render_world_map_overlays(ctx, art_style, zone_id, skip_zone_check);
+	if (core::view->config.value("showZoneOverlays", true)) {
+		render_world_map_overlays(art_style, zone_id, skip_zone_check);
 	}
+}
 
-	for (const art_id of linked_art_ids) {
-		const art_entry = await db2.UiMapArt.getRow(art_id);
-		if (art_entry) {
-			let style_layer;
+logging::write(std::format("successfully rendered zone map for zone ID {} (UiMap ID {})",
+zone_id, *ui_map_id));
 
-			for (const art_style_layer of (await db2.UiMapArtStyleLayer.getAllRows()).values()) {
-				if (art_style_layer.UiMapArtStyleID === art_entry.UiMapArtStyleID)
-					style_layer = art_style_layer;
-			}
+return { map_width, map_height, *ui_map_id };
+}
 
-			if (style_layer) {
-				const combined_style = {
-					...art_entry,
-					LayerIndex: style_layer.LayerIndex,
-					LayerWidth: style_layer.LayerWidth,
-					LayerHeight: style_layer.LayerHeight,
-					TileWidth: style_layer.TileWidth,
-					TileHeight: style_layer.TileHeight
-				};
-				art_styles.push(combined_style);
-			} else {
-				log.write('no style layer found for UiMapArtStyleID %d', art_entry.UiMapArtStyleID);
-			}
-		}
-	}
-
-	if (art_styles.length === 0) {
-		log.write('no art styles found for UiMap ID %d (phase %s)', ui_map_id, phase_id);
-		throw new Error('no art styles found for map');
-	}
-
-	log.write('found %d art styles for UiMap ID %d (phase %s)', art_styles.length, ui_map_id, phase_id);
-	art_styles.sort((a, b) => (a.LayerIndex || 0) - (b.LayerIndex || 0));
-
-	let map_width = 0, map_height = 0;
-
-	for (const art_style of art_styles) {
-		const all_tiles = await db2.UiMapArtTile.getRelationRows(art_style.ID);
-		if (all_tiles.length === 0) {
-			log.write('no tiles found for UiMapArt ID %d', art_style.ID);
-			continue;
-		}
-
-		const tiles_by_layer = all_tiles.reduce((layers, tile) => {
-			const layer_index = tile.LayerIndex || 0;
-			if (!layers[layer_index])
-				layers[layer_index] = [];
-
-			layers[layer_index].push(tile);
-			return layers;
-		}, {});
-
-		if (art_style.LayerIndex === 0) {
-			map_width = art_style.LayerWidth;
-			map_height = art_style.LayerHeight;
-			if (set_canvas_size) {
-				canvas.width = map_width;
-				canvas.height = map_height;
-			}
-		}
-
-		if (core.view.config.showZoneBaseMap) {
-			const layer_indices = Object.keys(tiles_by_layer).sort((a, b) => parseInt(a) - parseInt(b));
-			for (const layer_index of layer_indices) {
-				const layer_tiles = tiles_by_layer[layer_index];
-				const layer_num = parseInt(layer_index);
-
-				log.write('rendering layer %d with %d tiles', layer_num, layer_tiles.length);
-				await render_map_tiles(ctx, layer_tiles, art_style, layer_num, zone_id, skip_zone_check);
-			}
-		}
-
-		if (core.view.config.showZoneOverlays)
-			await render_world_map_overlays(ctx, art_style, zone_id, skip_zone_check);
-	}
-
-	log.write('successfully rendered zone map for zone ID %d (UiMap ID %d)', zone_id, ui_map_id);
-
-	return {
-		width: map_width,
-		height: map_height,
-		ui_map_id: ui_map_id
-	};
+// Tile render result for Promise.all equivalent tracking.
+struct TileRenderResult {
+	bool success = false;
+	bool skipped = false;
+	std::string error;
 };
 
-const render_map_tiles = async (ctx, tiles, art_style, layer_index = 0, expected_zone_id, skip_zone_check = false) => {
-	tiles.sort((a, b) => {
-		if (a.RowIndex !== b.RowIndex)
-			return a.RowIndex - b.RowIndex;
+// JS: const render_map_tiles = async (ctx, tiles, art_style, layer_index, expected_zone_id, skip_zone_check) => { ... }
+static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index, int expected_zone_id, bool skip_zone_check = false) {
+	// TODO(conversion): When CASC integration is available, this function will:
+	// 1. Get tiles from UiMapArtTile for the given art_style, filtered by layer_index.
+	// 2. Sort tiles by RowIndex, then ColIndex.
+	// 3. For each tile:
+	//    a. Compute pixel position: pixel_x = ColIndex * TileWidth, pixel_y = RowIndex * TileHeight
+	//    b. Apply offsets: final_x = pixel_x + OffsetX, final_y = pixel_y + OffsetY
+	//    c. Load BLP from CASC via tile.FileDataID
+	//    d. Check if zone changed (!skip_zone_check && selected_zone_id != expected_zone_id) → skip
+	//    e. Composite the BLP tile pixels onto the output texture at (final_x, final_y)
+	// 4. Log render results (successful/total).
 
-		return a.ColIndex - b.ColIndex;
-	});
+	// JS: tiles.sort((a, b) => { if (a.RowIndex !== b.RowIndex) return a.RowIndex - b.RowIndex; return a.ColIndex - b.ColIndex; });
+	// JS: const tile_promises = tiles.map(async (tile) => { ... });
+	// JS: const results = await Promise.all(tile_promises);
+	// JS: const successful = results.filter(r => r.success).length;
+	// JS: log.write('rendered %d/%d tiles successfully', successful, tiles.length);
 
-	const tile_promises = tiles.map(async (tile) => {
-		try {
-			const pixel_x = tile.ColIndex * art_style.TileWidth;
-			const pixel_y = tile.RowIndex * art_style.TileHeight;
+	(void)art_style;
+	(void)layer_index;
+	(void)expected_zone_id;
+	(void)skip_zone_check;
+}
 
-			const final_x = pixel_x + (tile.OffsetX || 0);
-			const final_y = pixel_y + (tile.OffsetY || 0);
+// JS: const render_world_map_overlays = async (ctx, art_style, expected_zone_id, skip_zone_check) => { ... }
+static void render_world_map_overlays(const CombinedArtStyle& art_style, int expected_zone_id, bool skip_zone_check = false) {
+	// TODO(conversion): When CASC integration is available, this function will:
+	// 1. Get WorldMapOverlay relation rows for the given art_style.ID
+	// 2. For each overlay:
+	//    a. Get WorldMapOverlayTile relation rows for the overlay.ID
+	//    b. Log: "rendering WorldMapOverlay ID %d with %d tiles at offset (%d,%d)"
+	//    c. Call render_overlay_tiles with the tiles, overlay, and art_style
 
-			log.write('rendering tile FileDataID %d at position (%d,%d) -> (%d,%d) [Layer %d]',
-				tile.FileDataID, tile.ColIndex, tile.RowIndex, final_x, final_y, layer_index);
+	// JS: const overlays = await db2.WorldMapOverlay.getRelationRows(art_style.ID);
+	// JS: for (const overlay of overlays) { ... await render_overlay_tiles(...); }
 
-			const data = await core.view.casc.getFile(tile.FileDataID);
-			const blp = new BLPFile(data);
+	auto& world_map_overlay = casc::db2::getTable("WorldMapOverlay");
+	(void)world_map_overlay;
+	(void)art_style;
+	(void)expected_zone_id;
+	(void)skip_zone_check;
+}
 
-			if (!skip_zone_check && selected_zone_id !== expected_zone_id) {
-				log.write('skipping tile render - zone changed from %d to %d', expected_zone_id, selected_zone_id);
-				return { success: false, tile: tile, skipped: true };
-			}
+// JS: const render_overlay_tiles = async (ctx, tiles, overlay, art_style, expected_zone_id, skip_zone_check) => { ... }
+static void render_overlay_tiles(const CombinedArtStyle& art_style, int overlay_offset_x, int overlay_offset_y, int expected_zone_id, bool skip_zone_check = false) {
+	// TODO(conversion): When CASC integration is available, this function will:
+	// 1. Sort tiles by RowIndex, then ColIndex.
+	// 2. For each tile:
+	//    a. Compute position: base_x = overlay.OffsetX + ColIndex * TileWidth, base_y = overlay.OffsetY + RowIndex * TileHeight
+	//    b. Load BLP from CASC via tile.FileDataID
+	//    c. Check if zone changed or overlays disabled → skip
+	//    d. Composite the BLP tile pixels onto the output texture at (base_x, base_y)
+	// 3. Log render results (successful/total).
 
-			const tile_canvas = blp.toCanvas(0b1111);
-			ctx.drawImage(tile_canvas, final_x, final_y);
+	// JS: tiles.sort((a, b) => { if (a.RowIndex !== b.RowIndex) return a.RowIndex - b.RowIndex; return a.ColIndex - b.ColIndex; });
+	// JS: const tile_promises = tiles.map(async (tile) => { ... });
+	// JS: const results = await Promise.all(tile_promises);
 
-			return { success: true, tile: tile };
-		} catch (e) {
-			log.write('failed to render tile FileDataID %d: %s', tile.FileDataID, e.message);
-			return { success: false, tile: tile, error: e.message };
-		}
-	});
+	(void)art_style;
+	(void)overlay_offset_x;
+	(void)overlay_offset_y;
+	(void)expected_zone_id;
+	(void)skip_zone_check;
+}
 
-	const results = await Promise.all(tile_promises);
-	const successful = results.filter(r => r.success).length;
-	log.write('rendered %d/%d tiles successfully', successful, tiles.length);
+// JS: const load_zone_map = async (zone_id, phase_id) => { ... }
+static void load_zone_map(int zone_id, std::optional<int> phase_id = std::nullopt) {
+try {
+const auto result = render_zone_to_canvas(zone_id, phase_id);
+// JS: canvas rendering is done in render_zone_to_canvas.
+// TODO(conversion): The resulting composite texture will be stored for ImGui::Image display.
+(void)result;
+} catch (const std::exception& e) {
+logging::write(std::format("failed to render zone map: {}", e.what()));
+core::setToast("error", std::format("Failed to load map data: {}", e.what()));
+}
+}
+
+// --- Public API ---
+
+void registerTab() {
+// JS: this.registerNavButton('Zones', 'mountain-castle.svg', InstallType.CASC);
+// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+}
+
+void mounted() {
+auto& view = *core::view;
+
+// JS: await this.initialize();
+core::showLoadingScreen(3);
+
+core::progressLoadingScreen("Loading map tiles...");
+casc::db2::preloadTable("UiMapArtTile");
+
+core::progressLoadingScreen("Loading map overlays...");
+casc::db2::preloadTable("WorldMapOverlay");
+casc::db2::preloadTable("WorldMapOverlayTile");
+
+core::progressLoadingScreen("Loading zone data...");
+
+// JS: const expansion_map = new Map();
+// JS: for (const [id, entry] of await db2.Map.getAllRows())
+//         expansion_map.set(id, entry.ExpansionID);
+std::unordered_map<int, int> expansion_map;
+auto& map_table = casc::db2::getTable("Map");
+// TODO(conversion): WDCReader getAllRows iteration will be wired when DB2 system is fully integrated.
+(void)map_table;
+
+logging::write(std::format("loaded {} maps for expansion mapping", expansion_map.size()));
+
+// JS: const available_zones = new Set();
+// JS: for (const entry of (await db2.UiMapAssignment.getAllRows()).values())
+//         available_zones.add(entry.AreaID);
+std::set<int> available_zones;
+auto& ui_map_assignment = casc::db2::getTable("UiMapAssignment");
+// TODO(conversion): WDCReader getAllRows iteration will be wired when DB2 system is fully integrated.
+(void)ui_map_assignment;
+
+logging::write(std::format("loaded {} zones from UiMapAssignment", available_zones.size()));
+
+// JS: const table = db2.AreaTable;
+// JS: for (const [id, entry] of await table.getAllRows()) { ... }
+auto& area_table = casc::db2::getTable("AreaTable");
+(void)area_table;
+
+std::vector<std::string> zone_entries;
+// TODO(conversion): When wired, iterate AreaTable rows:
+// for (const auto& [id, row] : area_table.getAllRows()) {
+//     if (!available_zones.contains(id)) continue;
+//     int expansion_id = expansion_map.count(row.ContinentID) ? expansion_map[row.ContinentID] : 0;
+//     zone_entries.push_back(std::format("{}\x19[{}]\x19{}\x19({})",
+//         expansion_id, id, row.AreaName_lang, row.ZoneName));
+// }
+
+view.zoneViewerZones.clear();
+for (const auto& entry : zone_entries)
+view.zoneViewerZones.push_back(entry);
+
+logging::write(std::format("loaded {} zones from AreaTable", zone_entries.size()));
+
+core::hideLoadingScreen();
+
+// Store initial config values for change-detection.
+prev_show_zone_base_map = view.config.value("showZoneBaseMap", true);
+prev_show_zone_overlays = view.config.value("showZoneOverlays", true);
+}
+
+void render() {
+auto& view = *core::view;
+
+// --- Change-detection for selection (equivalent to watch on selectionZones) ---
+if (!view.selectionZones.empty()) {
+const std::string first = view.selectionZones[0].get<std::string>();
+if (view.isBusy == 0 && !first.empty() && first != prev_selection_first) {
+const auto zone = parse_zone_entry(first);
+if (zone.id > 0 && (!selected_zone_id.has_value() || *selected_zone_id != zone.id)) {
+selected_zone_id = zone.id;
+logging::write(std::format("selected zone: {} ({})", zone.zone_name, zone.id));
+
+const auto phases = get_zone_phases(zone.id);
+
+view.zonePhases.clear();
+for (const auto& phase : phases) {
+nlohmann::json p;
+p["id"] = phase.id;
+p["label"] = phase.label;
+view.zonePhases.push_back(std::move(p));
+}
+
+if (!phases.empty()) {
+selected_phase_id = phases[0].id;
+view.zonePhaseSelection = phases[0].id;
+} else {
+selected_phase_id = std::nullopt;
+view.zonePhaseSelection = nullptr;
+}
+
+load_zone_map(zone.id, selected_phase_id);
+}
+
+prev_selection_first = first;
+}
+}
+
+// --- Change-detection for zonePhaseSelection ---
+if (!view.zonePhaseSelection.is_null() && view.zonePhaseSelection.is_number()) {
+int new_phase = view.zonePhaseSelection.get<int>();
+if (selected_zone_id.has_value() && view.isBusy == 0 &&
+(!selected_phase_id.has_value() || *selected_phase_id != new_phase)) {
+selected_phase_id = new_phase;
+logging::write(std::format("zone phase changed to {}, reloading zone {}",
+new_phase, *selected_zone_id));
+load_zone_map(*selected_zone_id, selected_phase_id);
+}
+}
+
+// --- Change-detection for config.showZoneBaseMap ---
+const bool current_show_base_map = view.config.value("showZoneBaseMap", true);
+if (current_show_base_map != prev_show_zone_base_map) {
+if (selected_zone_id.has_value() && view.isBusy == 0) {
+logging::write(std::format("zone base map setting changed, reloading zone {}",
+*selected_zone_id));
+load_zone_map(*selected_zone_id, selected_phase_id);
+}
+prev_show_zone_base_map = current_show_base_map;
+}
+
+// --- Change-detection for config.showZoneOverlays ---
+const bool current_show_overlays = view.config.value("showZoneOverlays", true);
+if (current_show_overlays != prev_show_zone_overlays) {
+if (selected_zone_id.has_value() && view.isBusy == 0) {
+logging::write(std::format("zone overlay setting changed, reloading zone {}",
+*selected_zone_id));
+load_zone_map(*selected_zone_id, selected_phase_id);
+}
+prev_show_zone_overlays = current_show_overlays;
+}
+
+// --- Template rendering ---
+
+// Expansion filter buttons.
+// JS: <div class="expansion-buttons">
+//     <button class="expansion-button show-all" ...>
+//     <button v-for="expansion in $core.view.constants.EXPANSIONS" ...>
+if (ImGui::SmallButton("All"))
+view.selectedZoneExpansionFilter = -1;
+ImGui::SameLine();
+
+// TODO(conversion): Expansion icons are background-image CSS vars in JS; here we use text buttons.
+// When icon font or texture icons are available, replace with icon buttons.
+for (int i = 0; i < static_cast<int>(EXPANSION_NAMES.size()); i++) {
+const bool selected = (view.selectedZoneExpansionFilter == i);
+if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+if (ImGui::SmallButton(std::format("E{}", i).c_str()))
+view.selectedZoneExpansionFilter = i;
+if (selected) ImGui::PopStyleColor();
+ImGui::SameLine();
+}
+ImGui::NewLine();
+
+// Zone listbox.
+// JS: <component :is="$components.ListboxZones" ... >
+ImGui::BeginChild("zones-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.4f, -ImGui::GetFrameHeightWithSpacing() * 3), ImGuiChildFlags_Borders);
+// TODO(conversion): ListboxZones component rendering will be wired when integration is complete.
+ImGui::Text("Zones: %zu", view.zoneViewerZones.size());
+ImGui::EndChild();
+
+// Context menu.
+// JS: <ContextMenu :node="contextMenus.nodeZone" ...>
+//   copy_zone_names, copy_area_names, copy_zone_ids, copy_zone_export_path, open_zone_export_directory
+// TODO(conversion): ContextMenu component rendering will be wired when integration is complete.
+
+// Filter.
+// JS: <div class="filter">
+if (view.config.value("regexFilters", false))
+ImGui::TextUnformatted("Regex Enabled");
+
+char filter_buf[256] = {};
+std::strncpy(filter_buf, view.userInputFilterZones.c_str(), sizeof(filter_buf) - 1);
+if (ImGui::InputText("##FilterZones", filter_buf, sizeof(filter_buf)))
+view.userInputFilterZones = filter_buf;
+
+ImGui::SameLine();
+
+// Right panel: export controls + zone preview.
+ImGui::BeginGroup();
+
+// Export controls.
+// JS: <div class="zone-export-controls">
+bool show_base_map = view.config.value("showZoneBaseMap", true);
+if (ImGui::Checkbox("Show Base Map", &show_base_map))
+view.config["showZoneBaseMap"] = show_base_map;
+
+ImGui::SameLine();
+
+bool show_overlays = view.config.value("showZoneOverlays", true);
+if (ImGui::Checkbox("Show Overlays", &show_overlays))
+view.config["showZoneOverlays"] = show_overlays;
+
+ImGui::SameLine();
+
+const bool busy = view.isBusy > 0;
+const bool no_selection = view.selectionZones.empty();
+if (busy || no_selection) ImGui::BeginDisabled();
+if (ImGui::Button("Export Map"))
+export_zone_map();
+if (busy || no_selection) ImGui::EndDisabled();
+
+// Phase dropdown.
+// JS: <select v-model="$core.view.zonePhaseSelection">
+if (view.zonePhases.size() > 1) {
+std::string current_label = "Default";
+if (view.zonePhaseSelection.is_number()) {
+int current_id = view.zonePhaseSelection.get<int>();
+for (const auto& phase : view.zonePhases) {
+if (phase.value("id", -99) == current_id) {
+current_label = phase.value("label", std::string("Unknown"));
+break;
+}
+}
+}
+
+if (ImGui::BeginCombo("Phase", current_label.c_str())) {
+for (const auto& phase : view.zonePhases) {
+const std::string label = phase.value("label", std::string("Unknown"));
+const int phase_id = phase.value("id", -99);
+const bool is_selected = view.zonePhaseSelection.is_number() &&
+view.zonePhaseSelection.get<int>() == phase_id;
+if (ImGui::Selectable(label.c_str(), is_selected))
+view.zonePhaseSelection = phase_id;
+if (is_selected)
+ImGui::SetItemDefaultFocus();
+}
+ImGui::EndCombo();
+}
+}
+
+// Zone map preview (canvas).
+// JS: <div class="zone-viewer-container preview-container">
+//     <canvas id="zone-canvas"></canvas>
+ImGui::BeginChild("zone-canvas-area", ImVec2(0, 0), ImGuiChildFlags_Borders);
+// TODO(conversion): Zone map preview will be rendered as an ImGui::Image when GL texture compositing is integrated.
+// The JS version renders BLP tiles onto an HTML canvas; the C++ version will composite onto an offscreen FBO.
+ImGui::TextUnformatted("Select a zone to preview its map");
+ImGui::EndChild();
+
+ImGui::EndGroup();
+}
+
+// --- Context menu methods ---
+
+// JS: methods.handle_zone_context(data)
+// TODO(conversion): Context menu handling will be wired when ContextMenu component is integrated.
+// The methods below implement the clipboard operations identically to JS.
+
+// JS: methods.copy_zone_names(selection)
+static void copy_zone_names(const std::vector<std::string>& selection) {
+std::string result;
+for (const auto& entry : selection) {
+const auto zone = parse_zone_entry(entry);
+if (zone.id > 0) {
+if (!result.empty())
+result += '\n';
+result += zone.zone_name;
+}
+}
+ImGui::SetClipboardText(result.c_str());
+}
+
+// JS: methods.copy_area_names(selection)
+static void copy_area_names(const std::vector<std::string>& selection) {
+std::string result;
+for (const auto& entry : selection) {
+const auto zone = parse_zone_entry(entry);
+if (zone.id > 0) {
+if (!result.empty())
+result += '\n';
+result += zone.area_name;
+}
+}
+ImGui::SetClipboardText(result.c_str());
+}
+
+// JS: methods.copy_zone_ids(selection)
+static void copy_zone_ids(const std::vector<std::string>& selection) {
+std::string result;
+for (const auto& entry : selection) {
+const auto zone = parse_zone_entry(entry);
+if (zone.id > 0) {
+if (!result.empty())
+result += '\n';
+result += std::to_string(zone.id);
+}
+}
+ImGui::SetClipboardText(result.c_str());
+}
+
+// JS: methods.copy_zone_export_path()
+static void copy_zone_export_path() {
+const std::string dir = casc::ExportHelper::getExportPath("zones");
+ImGui::SetClipboardText(dir.c_str());
+}
+
+// JS: methods.open_zone_export_directory()
+static void open_zone_export_directory() {
+	const std::string dir = casc::ExportHelper::getExportPath("zones");
+#ifdef _WIN32
+	const std::wstring wpath(dir.begin(), dir.end());
+	ShellExecuteW(nullptr, L"open", wpath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#else
+	std::string cmd = "xdg-open \"" + dir + "\" &";
+	std::system(cmd.c_str());
+#endif
+}
+
+void export_zone_map() {
+auto& view = *core::view;
+const auto& user_selection = view.selectionZones;
+if (user_selection.empty()) {
+core::setToast("info", "You didn't select any zones to export; you should do that first.");
+return;
+}
+
+casc::ExportHelper helper(static_cast<int>(user_selection.size()), "zone");
+helper.start();
+
+const std::string format = view.config.value("exportTextureFormat", std::string("PNG"));
+const std::string ext = format == "WEBP" ? ".webp" : ".png";
+const std::string mime_type = format == "WEBP" ? "image/webp" : "image/png";
+
+for (const auto& zone_entry : user_selection) {
+if (helper.isCancelled())
+return;
+
+try {
+const auto zone = parse_zone_entry(zone_entry.get<std::string>());
+
+logging::write(std::format("exporting zone map: {} ({}) phase {}",
+zone.zone_name, zone.id, selected_phase_id.value_or(-1)));
+
+const auto map_info = render_zone_to_canvas(zone.id, selected_phase_id, true);
+
+if (map_info.width == 0 || map_info.height == 0) {
+logging::write(std::format("no map data available for zone {}, skipping", zone.id));
+helper.mark(std::format("Zone_{}", zone.id), false, "No map data available");
+continue;
+}
+
+// JS: Sanitize names for filenames.
+auto sanitize = [](const std::string& s) -> std::string {
+std::string result;
+for (char c : s) {
+if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == ' ')
+result += c;
+}
+// Replace whitespace runs with underscore.
+std::string final_result;
+bool last_was_space = false;
+for (char c : result) {
+if (c == ' ') {
+if (!last_was_space)
+final_result += '_';
+last_was_space = true;
+} else {
+final_result += c;
+last_was_space = false;
+}
+}
+return final_result;
 };
 
-const render_world_map_overlays = async (ctx, art_style, expected_zone_id, skip_zone_check = false) => {
-	const overlays = await db2.WorldMapOverlay.getRelationRows(art_style.ID);
-	if (overlays.length === 0) {
-		log.write('no WorldMapOverlay entries found for UiMapArt ID %d', art_style.ID);
-		return;
-	}
+const std::string normalized_zone_name = sanitize(zone.zone_name);
+const std::string normalized_area_name = sanitize(zone.area_name);
+const std::string phase_suffix = (selected_phase_id.has_value() && *selected_phase_id != 0)
+? std::format("_Phase{}", *selected_phase_id) : "";
 
-	for (const overlay of overlays) {
-		const overlay_tiles = await db2.WorldMapOverlayTile.getRelationRows(overlay.ID);
-		if (overlay_tiles.length === 0) {
-			log.write('no tiles found for WorldMapOverlay ID %d', overlay.ID);
-			continue;
-		}
+namespace fs = std::filesystem;
+const std::string filename = std::format("Zone_{}_{}_{}{}{}",
+zone.id, normalized_zone_name, normalized_area_name, phase_suffix, ext);
+const std::string export_path = casc::ExportHelper::getExportPath(
+(fs::path("zones") / filename).string());
 
-		log.write('rendering WorldMapOverlay ID %d with %d tiles at offset (%d,%d)',
-			overlay.ID, overlay_tiles.length, overlay.OffsetX, overlay.OffsetY);
+logging::write(std::format("exporting zone map at full resolution ({}x{}): {}",
+map_info.width, map_info.height, filename));
 
-		await render_overlay_tiles(ctx, overlay_tiles, overlay, art_style, expected_zone_id, skip_zone_check);
-	}
-};
+// JS: const buf = await BufferWrapper.fromCanvas(export_canvas, mime_type, quality);
+// JS: await buf.writeToFile(export_path);
+// TODO(conversion): BufferWrapper fromCanvas equivalent (PNG/WebP encoding) will be wired.
+// Parameters: composite texture (map_info.width x map_info.height), mime_type, exportWebPQuality.
+(void)mime_type;
 
-const render_overlay_tiles = async (ctx, tiles, overlay, art_style, expected_zone_id, skip_zone_check = false) => {
-	tiles.sort((a, b) => {
-		if (a.RowIndex !== b.RowIndex)
-			return a.RowIndex - b.RowIndex;
+helper.mark((fs::path("zones") / filename).string(), true);
 
-		return a.ColIndex - b.ColIndex;
-	});
+logging::write(std::format("successfully exported zone map to: {}", export_path));
+} catch (const std::exception& e) {
+logging::write(std::format("failed to export zone map: {}", e.what()));
+helper.mark(zone_entry.get<std::string>(), false, e.what());
+}
+}
 
-	const tile_promises = tiles.map(async (tile) => {
-		try {
-			const base_x = overlay.OffsetX + (tile.ColIndex * art_style.TileWidth);
-			const base_y = overlay.OffsetY + (tile.RowIndex * art_style.TileHeight);
+helper.finish();
+}
 
-			log.write('rendering overlay tile FileDataID %d at position (%d,%d) -> (%d,%d)',
-				tile.FileDataID, tile.ColIndex, tile.RowIndex, base_x, base_y);
 
-			const data = await core.view.casc.getFile(tile.FileDataID);
-			const blp = new BLPFile(data);
-
-			if (!skip_zone_check && selected_zone_id !== expected_zone_id) {
-				log.write('skipping overlay tile render - zone changed from %d to %d', expected_zone_id, selected_zone_id);
-				return { success: false, tile: tile, skipped: true };
-			}
-
-			if (!skip_zone_check && !core.view.config.showZoneOverlays) {
-				log.write('skipping overlay tile render - overlays disabled while loading');
-				return { success: false, tile: tile, skipped: true };
-			}
-
-			const tile_canvas = blp.toCanvas(0b1111);
-			ctx.drawImage(tile_canvas, base_x, base_y);
-
-			return { success: true, tile: tile };
-		} catch (e) {
-			log.write('failed to render overlay tile FileDataID %d: %s', tile.FileDataID, e.message);
-			return { success: false, tile: tile, error: e.message };
-		}
-	});
-
-	const results = await Promise.all(tile_promises);
-	const successful = results.filter(r => r.success).length;
-	log.write('rendered %d/%d overlay tiles successfully', successful, tiles.length);
-};
-
-const load_zone_map = async (zone_id, phase_id = null) => {
-	const canvas = document.getElementById('zone-canvas');
-	if (!canvas) {
-		log.write('zone canvas not found');
-		return;
-	}
-
-	try {
-		await render_zone_to_canvas(canvas, zone_id, phase_id, true);
-	} catch (e) {
-		log.write('failed to render zone map: %s', e.message);
-		core.setToast('error', 'Failed to load map data: ' + e.message);
-	}
-};
-
-module.exports = {
-	register() {
-		this.registerNavButton('Zones', 'mountain-castle.svg', InstallType.CASC);
-	},
-
-	template: `
-		<div class="tab list-tab" id="tab-zones">
-			<div class="zone-placeholder">
-				<div class="expansion-buttons">
-					<button class="expansion-button show-all"
-							title="Show All"
-							:class="{ active: $core.view.selectedZoneExpansionFilter === -1 }"
-							@click="$core.view.selectedZoneExpansionFilter = -1">
-					</button>
-					<button v-for="expansion in $core.view.constants.EXPANSIONS"
-							:key="expansion.id"
-							class="expansion-button"
-							:title="expansion.name"
-							:class="{ active: $core.view.selectedZoneExpansionFilter === expansion.id }"
-							@click="$core.view.selectedZoneExpansionFilter = expansion.id"
-							:style="'background-image: var(--expansion-icon-' + expansion.id + ')'">
-					</button>
-				</div>
-			</div>
-			<div class="list-container">
-				<component :is="$components.ListboxZones" id="listbox-zones" class="listbox-icons" v-model:selection="$core.view.selectionZones" :items="$core.view.zoneViewerZones" :filter="$core.view.userInputFilterZones" :expansion-filter="$core.view.selectedZoneExpansionFilter" :keyinput="true" :regex="$core.view.config.regexFilters" :copymode="$core.view.config.copyMode" :pasteselection="$core.view.config.pasteSelection" :copytrimwhitespace="$core.view.config.removePathSpacesCopy" :includefilecount="true" unittype="zone" persistscrollkey="zones" @contextmenu="handle_zone_context"></component>
-				<component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeZone" v-slot:default="context" @close="$core.view.contextMenus.nodeZone = null">
-					<span @click.self="copy_zone_names(context.node.selection)">Copy zone name{{ context.node.count > 1 ? 's' : '' }}</span>
-					<span @click.self="copy_area_names(context.node.selection)">Copy area name{{ context.node.count > 1 ? 's' : '' }}</span>
-					<span @click.self="copy_zone_ids(context.node.selection)">Copy zone ID{{ context.node.count > 1 ? 's' : '' }}</span>
-					<span @click.self="copy_zone_export_path()">Copy export path</span>
-					<span @click.self="open_zone_export_directory()">Open export directory</span>
-				</component>
-			</div>
-			<div class="filter">
-				<div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
-				<input type="text" v-model="$core.view.userInputFilterZones" placeholder="Filter zones..."/>
-			</div>
-			<div class="zone-export-controls">
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.config.showZoneBaseMap"/>
-					<span>Show Base Map</span>
-				</label>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.config.showZoneOverlays"/>
-					<span>Show Overlays</span>
-				</label>
-				<input type="button" value="Export Map" @click="export_zone_map" :class="{ disabled: $core.view.isBusy || !$core.view.selectionZones || $core.view.selectionZones.length === 0 }"/>
-			</div>
-			<div class="zone-viewer-container preview-container">
-				<div class="preview-background">
-					<div v-if="$core.view.zonePhases && $core.view.zonePhases.length > 1" class="preview-dropdown-overlay">
-						<select v-model="$core.view.zonePhaseSelection">
-							<option v-for="phase in $core.view.zonePhases" :key="phase.id" :value="phase.id">
-								{{ phase.label }}
-							</option>
-						</select>
-					</div>
-					<canvas id="zone-canvas"></canvas>
-				</div>
-			</div>
-		</div>
-	`,
-
-	methods: {
-		handle_zone_context(data) {
-			this.$core.view.contextMenus.nodeZone = {
-				selection: data.selection,
-				count: data.selection.length
-			};
-		},
-
-		copy_zone_names(selection) {
-			const names = selection.map(entry => {
-				const zone = parse_zone_entry(entry);
-				return zone.zone_name;
-			});
-			nw.Clipboard.get().set(names.join('\n'), 'text');
-		},
-
-		copy_area_names(selection) {
-			const names = selection.map(entry => {
-				const zone = parse_zone_entry(entry);
-				return zone.area_name;
-			});
-			nw.Clipboard.get().set(names.join('\n'), 'text');
-		},
-
-		copy_zone_ids(selection) {
-			const ids = selection.map(entry => {
-				const zone = parse_zone_entry(entry);
-				return zone.id;
-			});
-			nw.Clipboard.get().set(ids.join('\n'), 'text');
-		},
-
-		copy_zone_export_path() {
-			const dir = ExportHelper.getExportPath('zones');
-			nw.Clipboard.get().set(dir, 'text');
-		},
-
-		open_zone_export_directory() {
-			const dir = ExportHelper.getExportPath('zones');
-			nw.Shell.openItem(dir);
-		},
-
-		async initialize() {
-			this.$core.showLoadingScreen(3);
-
-			await this.$core.progressLoadingScreen('Loading map tiles...');
-			await db2.preload.UiMapArtTile();
-
-			await this.$core.progressLoadingScreen('Loading map overlays...');
-			await db2.preload.WorldMapOverlay();
-			await db2.preload.WorldMapOverlayTile();
-
-			await this.$core.progressLoadingScreen('Loading zone data...');
-
-			const expansion_map = new Map();
-			for (const [id, entry] of await db2.Map.getAllRows())
-				expansion_map.set(id, entry.ExpansionID);
-
-			log.write('loaded %d maps for expansion mapping', expansion_map.size);
-
-			const available_zones = new Set();
-			for (const entry of (await db2.UiMapAssignment.getAllRows()).values())
-				available_zones.add(entry.AreaID);
-
-			log.write('loaded %d zones from UiMapAssignment', available_zones.size);
-
-			const table = db2.AreaTable;
-
-			const zones = [];
-			for (const [id, entry] of await table.getAllRows()) {
-				const expansion_id = expansion_map.get(entry.ContinentID) || 0;
-
-				if (!available_zones.has(id))
-					continue;
-
-				zones.push(
-					util.format('%d\x19[%d]\x19%s\x19(%s)',
-					expansion_id, id, entry.AreaName_lang, entry.ZoneName)
-				);
-			}
-
-			this.$core.view.zoneViewerZones = zones;
-			log.write('loaded %d zones from AreaTable', zones.length);
-
-			this.$core.hideLoadingScreen();
-		},
-
-		async export_zone_map() {
-			const user_selection = this.$core.view.selectionZones;
-			if (!user_selection || user_selection.length === 0) {
-				this.$core.setToast('info', 'You didn\'t select any zones to export; you should do that first.');
-				return;
-			}
-
-			const helper = new ExportHelper(user_selection.length, 'zone');
-			helper.start();
-
-			const format = this.$core.view.config.exportTextureFormat;
-			const ext = format === 'WEBP' ? '.webp' : '.png';
-			const mime_type = format === 'WEBP' ? 'image/webp' : 'image/png';
-
-			for (const zone_entry of user_selection) {
-				if (helper.isCancelled())
-					return;
-
-				try {
-					const zone = parse_zone_entry(zone_entry);
-					const export_canvas = document.createElement('canvas');
-					const phase_id = selected_phase_id;
-
-					log.write('exporting zone map: %s (%d) phase %s', zone.zone_name, zone.id, phase_id);
-
-					const map_info = await render_zone_to_canvas(export_canvas, zone.id, phase_id, true, true);
-
-					if (map_info.width === 0 || map_info.height === 0) {
-						log.write('no map data available for zone %d, skipping', zone.id);
-						helper.mark(`Zone_${zone.id}`, false, 'No map data available');
-						continue;
-					}
-
-					const normalized_zone_name = zone.zone_name.replace(/[^a-zA-Z0-9_\-\s]/g, '').replace(/\s+/g, '_');
-					const normalized_area_name = zone.area_name.replace(/[^a-zA-Z0-9_\-\s]/g, '').replace(/\s+/g, '_');
-
-					const phase_suffix = phase_id !== null && phase_id !== 0 ? `_Phase${phase_id}` : '';
-					const filename = `Zone_${zone.id}_${normalized_zone_name}_${normalized_area_name}${phase_suffix}${ext}`;
-					const export_path = ExportHelper.getExportPath(path.join('zones', filename));
-
-					log.write('exporting zone map at full resolution (%dx%d): %s', map_info.width, map_info.height, filename);
-
-					const buf = await BufferWrapper.fromCanvas(export_canvas, mime_type, this.$core.view.config.exportWebPQuality);
-					await buf.writeToFile(export_path);
-
-					helper.mark(path.join('zones', filename), true);
-
-					log.write('successfully exported zone map to: %s', export_path);
-				} catch (e) {
-					log.write('failed to export zone map: %s', e.message);
-					helper.mark(zone_entry, false, e.message, e.stack);
-				}
-			}
-
-			helper.finish();
-		}
-	},
-
-	async mounted() {
-		this.$core.view.$watch('selectionZones', async selection => {
-			const first = selection[0];
-
-			if (!this.$core.view.isBusy && first) {
-				const zone = parse_zone_entry(first);
-				if (selected_zone_id !== zone.id) {
-					selected_zone_id = zone.id;
-					log.write('selected zone: %s (%d)', zone.zone_name, zone.id);
-
-					const phases = await get_zone_phases(zone.id);
-					this.$core.view.zonePhases = phases;
-
-					if (phases.length > 0) {
-						selected_phase_id = phases[0].id;
-						this.$core.view.zonePhaseSelection = phases[0].id;
-					} else {
-						selected_phase_id = null;
-						this.$core.view.zonePhaseSelection = null;
-					}
-
-					await load_zone_map(zone.id, selected_phase_id);
-				}
-			}
-		});
-
-		this.$core.view.$watch('zonePhaseSelection', async (new_value, old_value) => {
-			if (new_value !== old_value && selected_zone_id && !this.$core.view.isBusy) {
-				selected_phase_id = new_value;
-				log.write('zone phase changed to %s, reloading zone %d', new_value, selected_zone_id);
-				await load_zone_map(selected_zone_id, selected_phase_id);
-			}
-		});
-
-		this.$core.view.$watch('config.showZoneBaseMap', async (new_value, old_value) => {
-			if (new_value !== old_value && selected_zone_id && !this.$core.view.isBusy) {
-				log.write('zone base map setting changed, reloading zone %d', selected_zone_id);
-				await load_zone_map(selected_zone_id, selected_phase_id);
-			}
-		});
-
-		this.$core.view.$watch('config.showZoneOverlays', async (new_value, old_value) => {
-			if (new_value !== old_value && selected_zone_id && !this.$core.view.isBusy) {
-				log.write('zone overlay setting changed, reloading zone %d', selected_zone_id);
-				await load_zone_map(selected_zone_id, selected_phase_id);
-			}
-		});
-
-		await this.initialize();
-	}
-};
+} // namespace tab_zones

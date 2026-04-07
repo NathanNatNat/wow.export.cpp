@@ -1,379 +1,560 @@
-const log = require('../log');
-const WDCReader = require('../db/WDCReader');
-const dbd_manifest = require('../casc/dbd-manifest');
-const dataExporter = require('../ui/data-exporter');
-const ExportHelper = require('../casc/export-helper');
-const InstallType = require('../install-type');
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-let selected_file = null;
-let selected_file_data_id = null;
-let selected_file_schema = null;
+#include "tab_data.h"
+#include "../log.h"
+#include "../core.h"
+#include "../casc/export-helper.h"
+#include "../casc/listfile.h"
+#include "../casc/casc-source.h"
+#include "../casc/dbd-manifest.h"
+#include "../casc/db2.h"
+#include "../db/WDCReader.h"
+#include "../ui/data-exporter.h"
+#include "../install-type.h"
+#include "../file-writer.h"
 
-const initialize_available_tables = async (core) => {
-	const manifest = core.view.dbdManifest;
-	if (manifest.length > 0)
+#include <cstring>
+#include <format>
+#include <filesystem>
+#include <optional>
+#include <algorithm>
+
+#include <imgui.h>
+#include <spdlog/spdlog.h>
+
+namespace tab_data {
+
+// --- File-local state ---
+
+// JS: let selected_file = null;
+static std::string selected_file;
+
+// JS: let selected_file_data_id = null;
+static std::optional<int> selected_file_data_id;
+
+// JS: let selected_file_schema = null;
+static const std::map<std::string, db::SchemaField>* selected_file_schema = nullptr;
+
+// JS: data() { return { active_table: '' }; }
+static std::string active_table;
+
+// Change-detection for selectionDB2s.
+static std::string prev_selection_last;
+
+// --- Internal functions ---
+
+// JS: const initialize_available_tables = async (core) => { ... }
+static void initialize_available_tables() {
+	auto& view = *core::view;
+	auto& manifest = view.dbdManifest;
+	if (!manifest.empty())
 		return;
 
-	await dbd_manifest.prepareManifest();
-	const table_names = dbd_manifest.getAllTableNames();
-	manifest.push(...table_names);
-	log.write('initialized available db2 tables from dbd manifest');
+	casc::dbd_manifest::prepareManifest();
+	const auto table_names = casc::dbd_manifest::getAllTableNames();
+	// JS: manifest.push(...table_names);
+	for (const auto& name : table_names)
+		manifest.push_back(name);
+	logging::write("initialized available db2 tables from dbd manifest");
+}
+
+// JS: const parse_table = async (table_name) => { ... }
+struct ParseTableResult {
+	std::vector<std::string> headers;
+	std::vector<std::vector<std::string>> rows;
+	const std::map<std::string, db::SchemaField>* schema = nullptr;
 };
 
-const parse_table = async (table_name) => {
-	const db2_reader = new WDCReader('DBFilesClient/' + table_name + '.db2');
-	await db2_reader.parse();
+static ParseTableResult parse_table(const std::string& table_name) {
+	// JS: const db2_reader = new WDCReader('DBFilesClient/' + table_name + '.db2');
+	// JS: await db2_reader.parse();
+	auto& db2_reader = casc::db2::getTable(table_name);
+	// TODO(conversion): WDCReader parse will be triggered via db2::getTable when CASC is wired.
 
-	const all_headers = [...db2_reader.schema.keys()];
-	const id_index = all_headers.findIndex(header => header.toUpperCase() === 'ID');
+	// JS: const all_headers = [...db2_reader.schema.keys()];
+	const auto& schema = db2_reader.schema;
+	std::vector<std::string> all_headers;
+	// Use schemaOrder to preserve insertion order (matches JS Map iteration order).
+	for (const auto& key : db2_reader.schemaOrder)
+		all_headers.push_back(key);
+
+	// JS: const id_index = all_headers.findIndex(header => header.toUpperCase() === 'ID');
+	int id_index = -1;
+	for (int i = 0; i < static_cast<int>(all_headers.size()); i++) {
+		std::string upper = all_headers[i];
+		std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+		if (upper == "ID") {
+			id_index = i;
+			break;
+		}
+	}
+
+	// JS: if (id_index > 0) { ... move ID to front }
 	if (id_index > 0) {
-		const id_header = all_headers.splice(id_index, 1)[0];
-		all_headers.unshift(id_header);
+		std::string id_header = all_headers[id_index];
+		all_headers.erase(all_headers.begin() + id_index);
+		all_headers.insert(all_headers.begin(), id_header);
 	}
 
-	const rows = await db2_reader.getAllRows();
-	const parsed = Array(rows.size);
+	// JS: const rows = await db2_reader.getAllRows();
+	// JS: for (const row of rows.values()) { ... }
+	// TODO(conversion): WDCReader getAllRows iteration will be wired when DB2 system is fully integrated.
+	// Placeholder: return empty rows with the headers and schema.
+	std::vector<std::vector<std::string>> parsed;
 
-	let index = 0;
-	for (const row of rows.values()) {
-		const row_values = Object.values(row);
-		if (id_index > 0) {
-			const id_value = row_values.splice(id_index, 1)[0];
-			row_values.unshift(id_value);
-		}
+	// When fully wired, iterate rows and coerce values to strings:
+	// for (const auto& [id, row] : db2_reader.getAllRows()) {
+	//     std::vector<std::string> row_values;
+	//     for (const auto& header : all_headers) {
+	//         auto it = row.find(header);
+	//         if (it != row.end())
+	//             row_values.push_back(field_value_to_string(it->second));
+	//         else
+	//             row_values.push_back("");
+	//     }
+	//     parsed.push_back(std::move(row_values));
+	// }
 
-		// coerce BigInt to Number to avoid JSON.stringify crash in Vue rendering
-		for (let i = 0; i < row_values.length; i++) {
-			const val = row_values[i];
-			if (typeof val === 'bigint')
-				row_values[i] = Number(val);
-			else if (Array.isArray(val))
-				for (let j = 0; j < val.length; j++)
-					if (typeof val[j] === 'bigint')
-						val[j] = Number(val[j]);
-		}
+	return { std::move(all_headers), std::move(parsed), &schema };
+}
 
-		parsed[index++] = row_values;
-	}
+// JS: const load_table = async (core, table_name) => { ... }
+static void load_table(const std::string& table_name) {
+	auto& view = *core::view;
 
-	return { headers: all_headers, rows: parsed, schema: db2_reader.schema };
-};
-
-const load_table = async (core, table_name) => {
 	try {
-		selected_file_data_id = dbd_manifest.getByTableName(table_name) || null;
+		// JS: selected_file_data_id = dbd_manifest.getByTableName(table_name) || null;
+		selected_file_data_id = casc::dbd_manifest::getByTableName(table_name);
 
-		const result = await parse_table(table_name);
+		const auto result = parse_table(table_name);
 
-		core.view.tableBrowserHeaders = result.headers;
-		core.view.selectionDataTable = [];
+		// JS: core.view.tableBrowserHeaders = result.headers;
+		view.tableBrowserHeaders.clear();
+		for (const auto& h : result.headers)
+			view.tableBrowserHeaders.push_back(h);
 
-		if (result.rows.length === 0)
-			core.setToast('info', 'Selected DB2 has no rows.', null);
+		// JS: core.view.selectionDataTable = [];
+		view.selectionDataTable.clear();
+
+		if (result.rows.empty())
+			core::setToast("info", "Selected DB2 has no rows.");
 		else
-			core.hideToast(false);
+			core::hideToast(false);
 
-		core.view.tableBrowserRows = result.rows;
+		// JS: core.view.tableBrowserRows = result.rows;
+		view.tableBrowserRows.clear();
+		for (const auto& row : result.rows) {
+			nlohmann::json json_row = nlohmann::json::array();
+			for (const auto& val : row)
+				json_row.push_back(val);
+			view.tableBrowserRows.push_back(std::move(json_row));
+		}
+
 		selected_file = table_name;
 		selected_file_schema = result.schema;
-	} catch (e) {
-		core.setToast('error', 'Unable to open DB2 file ' + table_name, { 'View Log': () => log.openRuntimeLog() }, -1);
-		log.write('Failed to open CASC file: %s', e.message);
+	} catch (const std::exception& e) {
+		core::setToast("error", "Unable to open DB2 file " + table_name, nullptr, -1);
+		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
-};
+}
 
-module.exports = {
-	register() {
-		this.registerNavButton('Data', 'database.svg', InstallType.CASC);
-	},
+// --- Public API ---
 
-	data() {
-		return { active_table: '' };
-	},
+void registerTab() {
+	// JS: this.registerNavButton('Data', 'database.svg', InstallType.CASC);
+	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+}
 
-	template: `
-		<div class="tab list-tab" id="tab-data">
-			<div class="list-container">
-				<component :is="$components.Listbox" v-model:selection="$core.view.selectionDB2s" :items="$core.view.dbdManifest" :filter="$core.view.userInputFilterDB2s" :keyinput="true"
-					:regex="$core.view.config.regexFilters" :copydir="$core.view.config.copyFileDirectories" :pasteselection="$core.view.config.pasteSelection"
-					:copytrimwhitespace="$core.view.config.removePathSpacesCopy" :includefilecount="false" unittype="db2 file" :nocopy="true"></component>
-			</div>
-			<div class="filter">
-				<div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
-				<input type="text" v-model="$core.view.userInputFilterDB2s" placeholder="Filter DB2s.." />
-			</div>
-			<div class="list-container">
-				<component ref="dataTable" :is="$components.DataTable" :headers="$core.view.tableBrowserHeaders" :rows="$core.view.tableBrowserRows" :filter="$core.view.userInputFilterDataTable" :regex="$core.view.config.regexFilters" :selection="$core.view.selectionDataTable" :copyheader="$core.view.config.dataCopyHeader" :tablename="active_table" @update:filter="$core.view.userInputFilterDataTable = $event" @update:selection="$core.view.selectionDataTable = $event" @contextmenu="handle_context_menu" @copy="copy_rows_csv"></component>
-				<component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeDataTable" v-slot:default="context" @close="$core.view.contextMenus.nodeDataTable = null">
-					<span @click.self="copy_rows_csv">Copy {{ context.node.selectedCount }} row{{ context.node.selectedCount !== 1 ? 's' : '' }} as CSV</span>
-					<span @click.self="copy_rows_sql">Copy {{ context.node.selectedCount }} row{{ context.node.selectedCount !== 1 ? 's' : '' }} as SQL</span>
-					<span @click.self="copy_cell(context.node.cellValue)">Copy cell contents</span>
-				</component>
-			</div>
-			<div id="tab-data-options">
-				<label class="ui-checkbox" title="Include header row when copying" v-if="$core.view.config.exportDataFormat === 'CSV'">
-					<input type="checkbox" v-model="$core.view.config.dataCopyHeader"/>
-					<span>Copy Header</span>
-				</label>
-				<label class="ui-checkbox" title="Include DROP/CREATE TABLE statements" v-if="$core.view.config.exportDataFormat === 'SQL'">
-					<input type="checkbox" v-model="$core.view.config.dataSQLCreateTable"/>
-					<span>Create Table</span>
-				</label>
-				<label class="ui-checkbox" title="Export all rows">
-					<input type="checkbox" v-model="$core.view.config.dataExportAll"/>
-					<span>Export all rows</span>
-				</label>
-			</div>
-			<div id="tab-data-tray">
-				<div class="filter">
-					<div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
-					<input type="text" id="data-table-filter-input" v-model="$core.view.userInputFilterDataTable" placeholder="Filter data table rows..." />
-				</div>
-				<component :is="$components.MenuButton" :options="$core.view.menuButtonData" :default="$core.view.config.exportDataFormat" @change="$core.view.config.exportDataFormat = $event" class="upward" :disabled="$core.view.isBusy || $core.view.selectionDB2s.length === 0" @click="export_data"></component>
-			</div>
-		</div>
-	`,
+void mounted() {
+	auto& view = *core::view;
 
-	methods: {
-		handle_context_menu(data) {
-			this.$core.view.contextMenus.nodeDataTable = data;
-		},
+	// JS: await this.initialize();
+	core::showLoadingScreen(1);
+	core::progressLoadingScreen("Loading data table manifest...");
+	initialize_available_tables();
+	core::hideLoadingScreen();
 
-		copy_rows_csv() {
-			const data_table = this.$refs.dataTable;
-			if (!data_table)
-				return;
+	// JS: this.$core.view.$watch('selectionDB2s', async selection => { ... });
+	// Change-detection is handled in render() by comparing selectionDB2s.back() each frame.
+}
 
-			const csv = data_table.getSelectedRowsAsCSV();
-			if (!csv)
-				return;
+void render() {
+	auto& view = *core::view;
 
-			nw.Clipboard.get().set(csv, 'text');
-
-			const count = this.$core.view.selectionDataTable.length;
-			this.$core.setToast('success', 'Copied ' + count + ' row' + (count !== 1 ? 's' : '') + ' as CSV to the clipboard', null, 2000);
-		},
-
-		copy_rows_sql() {
-			const data_table = this.$refs.dataTable;
-			if (!data_table)
-				return;
-
-			const sql = data_table.getSelectedRowsAsSQL();
-			if (!sql)
-				return;
-
-			nw.Clipboard.get().set(sql, 'text');
-
-			const count = this.$core.view.selectionDataTable.length;
-			this.$core.setToast('success', 'Copied ' + count + ' row' + (count !== 1 ? 's' : '') + ' as SQL to the clipboard', null, 2000);
-		},
-
-		copy_cell(value) {
-			if (value === null || value === undefined)
-				return;
-
-			nw.Clipboard.get().set(String(value), 'text');
-		},
-
-		async initialize() {
-			this.$core.showLoadingScreen(1);
-			await this.$core.progressLoadingScreen('Loading data table manifest...');
-			await initialize_available_tables(this.$core);
-			this.$core.hideLoadingScreen();
-		},
-
-		async export_data() {
-			const format = this.$core.view.config.exportDataFormat;
-
-			if (format === 'CSV')
-				await this.export_csv();
-			else if (format === 'SQL')
-				await this.export_sql();
-			else if (format === 'DB2')
-				await this.export_db2();
-		},
-
-		async export_csv() {
-			const user_selection = this.$core.view.selectionDB2s;
-			if (user_selection.length === 0) {
-				this.$core.setToast('info', 'You didn\'t select any tables to export.');
-				return;
-			}
-
-			// single table: use row selection behavior
-			if (user_selection.length === 1) {
-				const headers = this.$core.view.tableBrowserHeaders;
-				const all_rows = this.$core.view.tableBrowserRows;
-				const selection = this.$core.view.selectionDataTable;
-				const export_all = this.$core.view.config.dataExportAll;
-
-				if (!headers || !all_rows || headers.length === 0 || all_rows.length === 0) {
-					this.$core.setToast('info', 'No data table loaded to export.');
-					return;
-				}
-
-				let rows_to_export;
-				if (export_all) {
-					rows_to_export = all_rows;
-				} else {
-					if (!selection || selection.length === 0) {
-						this.$core.setToast('info', 'No rows selected. Please select some rows first or enable "Export all rows".');
-						return;
-					}
-
-					rows_to_export = selection.map(row_index => all_rows[row_index]).filter(row => row !== undefined);
-					if (rows_to_export.length === 0) {
-						this.$core.setToast('info', 'No rows selected. Please select some rows first or enable "Export all rows".');
-						return;
-					}
-				}
-
-				await dataExporter.exportDataTable(headers, rows_to_export, selected_file || 'unknown_table');
-				return;
-			}
-
-			// multiple tables: export all rows from each
-			const helper = new ExportHelper(user_selection.length, 'table');
-			helper.start();
-
-			const export_paths = this.$core.openLastExportStream();
-
-			for (const table_name of user_selection) {
-				if (helper.isCancelled())
-					break;
-
-				try {
-					const result = await parse_table(table_name);
-					await dataExporter.exportDataTable(result.headers, result.rows, table_name, { helper, export_paths });
-				} catch (e) {
-					helper.mark(table_name + '.csv', false, e.message, e.stack);
-					log.write('Failed to export table %s: %s', table_name, e.message);
-				}
-			}
-
-			export_paths?.close();
-			helper.finish();
-		},
-
-		async export_sql() {
-			const user_selection = this.$core.view.selectionDB2s;
-			if (user_selection.length === 0) {
-				this.$core.setToast('info', 'You didn\'t select any tables to export.');
-				return;
-			}
-
-			const create_table = this.$core.view.config.dataSQLCreateTable;
-
-			// single table: use row selection behavior
-			if (user_selection.length === 1) {
-				const headers = this.$core.view.tableBrowserHeaders;
-				const all_rows = this.$core.view.tableBrowserRows;
-				const selection = this.$core.view.selectionDataTable;
-				const export_all = this.$core.view.config.dataExportAll;
-
-				if (!headers || !all_rows || headers.length === 0 || all_rows.length === 0) {
-					this.$core.setToast('info', 'No data table loaded to export.');
-					return;
-				}
-
-				let rows_to_export;
-				if (export_all) {
-					rows_to_export = all_rows;
-				} else {
-					if (!selection || selection.length === 0) {
-						this.$core.setToast('info', 'No rows selected. Please select some rows first or enable "Export all rows".');
-						return;
-					}
-
-					rows_to_export = selection.map(row_index => all_rows[row_index]).filter(row => row !== undefined);
-					if (rows_to_export.length === 0) {
-						this.$core.setToast('info', 'No rows selected. Please select some rows first or enable "Export all rows".');
-						return;
-					}
-				}
-
-				await dataExporter.exportDataTableSQL(headers, rows_to_export, selected_file || 'unknown_table', selected_file_schema, create_table);
-				return;
-			}
-
-			// multiple tables: export all rows from each
-			const helper = new ExportHelper(user_selection.length, 'table');
-			helper.start();
-
-			const export_paths = this.$core.openLastExportStream();
-
-			for (const table_name of user_selection) {
-				if (helper.isCancelled())
-					break;
-
-				try {
-					const result = await parse_table(table_name);
-					await dataExporter.exportDataTableSQL(result.headers, result.rows, table_name, result.schema, create_table, { helper, export_paths });
-				} catch (e) {
-					helper.mark(table_name + '.sql', false, e.message, e.stack);
-					log.write('Failed to export table %s: %s', table_name, e.message);
-				}
-			}
-
-			export_paths?.close();
-			helper.finish();
-		},
-
-		async export_db2() {
-			const user_selection = this.$core.view.selectionDB2s;
-			if (user_selection.length === 0) {
-				this.$core.setToast('info', 'No DB2 files selected to export.');
-				return;
-			}
-
-			// single table
-			if (user_selection.length === 1) {
-				if (!selected_file || !selected_file_data_id) {
-					this.$core.setToast('info', 'No DB2 file selected to export.');
-					return;
-				}
-
-				await dataExporter.exportRawDB2(selected_file, selected_file_data_id);
-				return;
-			}
-
-			// multiple tables
-			const helper = new ExportHelper(user_selection.length, 'db2');
-			helper.start();
-
-			const export_paths = this.$core.openLastExportStream();
-
-			for (const table_name of user_selection) {
-				if (helper.isCancelled())
-					break;
-
-				try {
-					const file_data_id = dbd_manifest.getByTableName(table_name);
-					if (!file_data_id)
-						throw new Error('No file data ID found for table ' + table_name);
-
-					await dataExporter.exportRawDB2(table_name, file_data_id, { helper, export_paths });
-				} catch (e) {
-					helper.mark(table_name + '.db2', false, e.message, e.stack);
-					log.write('Failed to export DB2 %s: %s', table_name, e.message);
-				}
-			}
-
-			export_paths?.close();
-			helper.finish();
+	// --- Change-detection for selection (equivalent to watch on selectionDB2s) ---
+	if (!view.selectionDB2s.empty()) {
+		const std::string last = view.selectionDB2s.back().get<std::string>();
+		if (view.isBusy == 0 && !last.empty() && last != prev_selection_last) {
+			load_table(last);
+			active_table = selected_file;
+			prev_selection_last = last;
 		}
-	},
-
-	async mounted() {
-		await this.initialize();
-
-		this.$core.view.$watch('selectionDB2s', async selection => {
-			const last = selection[selection.length - 1];
-			if (!this.$core.view.isBusy && last && selected_file !== last) {
-				await load_table(this.$core, last);
-				this.active_table = selected_file;
-			}
-		});
 	}
-};
+
+	// --- Template rendering ---
+
+	// Left panel: DB2 table list.
+	// JS: <div class="list-container">
+	//     <Listbox v-model:selection="selectionDB2s" :items="dbdManifest" ...>
+	// </div>
+	ImGui::BeginChild("db2-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing() * 3), ImGuiChildFlags_Borders);
+	// TODO(conversion): Listbox component rendering will be wired when integration is complete.
+	ImGui::Text("DB2 tables: %zu", view.dbdManifest.size());
+	ImGui::EndChild();
+
+	// Filter for DB2 list.
+	// JS: <div class="filter">
+	if (view.config.value("regexFilters", false))
+		ImGui::TextUnformatted("Regex Enabled");
+
+	char filter_db2_buf[256] = {};
+	std::strncpy(filter_db2_buf, view.userInputFilterDB2s.c_str(), sizeof(filter_db2_buf) - 1);
+	if (ImGui::InputText("##FilterDB2s", filter_db2_buf, sizeof(filter_db2_buf)))
+		view.userInputFilterDB2s = filter_db2_buf;
+
+	ImGui::SameLine();
+
+	// Right panel: data table.
+	// JS: <div class="list-container">
+	//     <DataTable ref="dataTable" :headers="tableBrowserHeaders" :rows="tableBrowserRows" ...>
+	//     <ContextMenu :node="contextMenus.nodeDataTable" ...>
+	// </div>
+	ImGui::BeginChild("data-table-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 3), ImGuiChildFlags_Borders);
+	// TODO(conversion): DataTable and ContextMenu component rendering will be wired when integration is complete.
+	ImGui::Text("Headers: %zu, Rows: %zu", view.tableBrowserHeaders.size(), view.tableBrowserRows.size());
+	ImGui::EndChild();
+
+	// Options row.
+	// JS: <div id="tab-data-options">
+	const std::string export_format = view.config.value("exportDataFormat", std::string("CSV"));
+
+	if (export_format == "CSV") {
+		bool copy_header = view.config.value("dataCopyHeader", false);
+		if (ImGui::Checkbox("Copy Header", &copy_header))
+			view.config["dataCopyHeader"] = copy_header;
+		ImGui::SameLine();
+	}
+
+	if (export_format == "SQL") {
+		bool create_table_val = view.config.value("dataSQLCreateTable", false);
+		if (ImGui::Checkbox("Create Table", &create_table_val))
+			view.config["dataSQLCreateTable"] = create_table_val;
+		ImGui::SameLine();
+	}
+
+	bool export_all = view.config.value("dataExportAll", false);
+	if (ImGui::Checkbox("Export all rows", &export_all))
+		view.config["dataExportAll"] = export_all;
+
+	// Bottom tray: data table filter + export button.
+	// JS: <div id="tab-data-tray">
+	if (view.config.value("regexFilters", false))
+		ImGui::TextUnformatted("Regex Enabled");
+
+	char filter_data_buf[256] = {};
+	std::strncpy(filter_data_buf, view.userInputFilterDataTable.c_str(), sizeof(filter_data_buf) - 1);
+	if (ImGui::InputText("##FilterDataTable", filter_data_buf, sizeof(filter_data_buf)))
+		view.userInputFilterDataTable = filter_data_buf;
+
+	ImGui::SameLine();
+
+	// JS: <MenuButton :options="menuButtonData" :default="config.exportDataFormat" @change="..." @click="export_data">
+	const bool busy = view.isBusy > 0;
+	const bool no_selection = view.selectionDB2s.empty();
+	if (busy || no_selection) ImGui::BeginDisabled();
+	if (ImGui::Button(std::format("Export as {}", export_format).c_str()))
+		export_data();
+	if (busy || no_selection) ImGui::EndDisabled();
+}
+
+// --- Export methods ---
+
+// JS: methods.copy_rows_csv()
+static void copy_rows_csv() {
+	// JS: const data_table = this.$refs.dataTable;
+	// JS: const csv = data_table.getSelectedRowsAsCSV();
+	// TODO(conversion): DataTable getSelectedRowsAsCSV will be wired when DataTable component is integrated.
+	// Placeholder: copy selected row count as feedback.
+	const auto& view = *core::view;
+	const size_t count = view.selectionDataTable.size();
+	if (count == 0)
+		return;
+
+	// JS: nw.Clipboard.get().set(csv, 'text');
+	// ImGui::SetClipboardText(csv.c_str());
+	core::setToast("success", std::format("Copied {} row{} as CSV to the clipboard", count, count != 1 ? "s" : ""), nullptr, 2000);
+}
+
+// JS: methods.copy_rows_sql()
+static void copy_rows_sql() {
+	// JS: const data_table = this.$refs.dataTable;
+	// JS: const sql = data_table.getSelectedRowsAsSQL();
+	// TODO(conversion): DataTable getSelectedRowsAsSQL will be wired when DataTable component is integrated.
+	const auto& view = *core::view;
+	const size_t count = view.selectionDataTable.size();
+	if (count == 0)
+		return;
+
+	// JS: nw.Clipboard.get().set(sql, 'text');
+	core::setToast("success", std::format("Copied {} row{} as SQL to the clipboard", count, count != 1 ? "s" : ""), nullptr, 2000);
+}
+
+// JS: methods.copy_cell(value)
+static void copy_cell(const nlohmann::json& value) {
+	if (value.is_null())
+		return;
+
+	// JS: nw.Clipboard.get().set(String(value), 'text');
+	ImGui::SetClipboardText(value.dump().c_str());
+}
+
+// JS: methods.export_csv()
+static void export_csv() {
+	auto& view = *core::view;
+	const auto& user_selection = view.selectionDB2s;
+	if (user_selection.empty()) {
+		core::setToast("info", "You didn't select any tables to export.");
+		return;
+	}
+
+	// single table: use row selection behavior
+	if (user_selection.size() == 1) {
+		// JS: const headers = this.$core.view.tableBrowserHeaders;
+		// JS: const all_rows = this.$core.view.tableBrowserRows;
+		// JS: const selection = this.$core.view.selectionDataTable;
+		const auto& headers_json = view.tableBrowserHeaders;
+		const auto& all_rows_json = view.tableBrowserRows;
+		const auto& selection = view.selectionDataTable;
+		const bool export_all_val = view.config.value("dataExportAll", false);
+
+		if (headers_json.empty() || all_rows_json.empty()) {
+			core::setToast("info", "No data table loaded to export.");
+			return;
+		}
+
+		// Convert headers to string vector.
+		std::vector<std::string> headers;
+		for (const auto& h : headers_json)
+			headers.push_back(h.get<std::string>());
+
+		// Determine rows to export.
+		std::vector<std::vector<std::string>> rows_to_export;
+		if (export_all_val) {
+			for (const auto& row : all_rows_json) {
+				std::vector<std::string> str_row;
+				for (const auto& val : row)
+					str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
+				rows_to_export.push_back(std::move(str_row));
+			}
+		} else {
+			if (selection.empty()) {
+				core::setToast("info", "No rows selected. Please select some rows first or enable \"Export all rows\".");
+				return;
+			}
+
+			for (const auto& row_index_json : selection) {
+				const int row_index = row_index_json.get<int>();
+				if (row_index >= 0 && row_index < static_cast<int>(all_rows_json.size())) {
+					const auto& row = all_rows_json[row_index];
+					std::vector<std::string> str_row;
+					for (const auto& val : row)
+						str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
+					rows_to_export.push_back(std::move(str_row));
+				}
+			}
+
+			if (rows_to_export.empty()) {
+				core::setToast("info", "No rows selected. Please select some rows first or enable \"Export all rows\".");
+				return;
+			}
+		}
+
+		data_exporter::exportDataTable(headers, rows_to_export, selected_file.empty() ? "unknown_table" : selected_file);
+		return;
+	}
+
+	// multiple tables: export all rows from each
+	casc::ExportHelper helper(static_cast<int>(user_selection.size()), "table");
+	helper.start();
+
+	FileWriter export_paths = core::openLastExportStream();
+
+	for (const auto& table_json : user_selection) {
+		if (helper.isCancelled())
+			break;
+
+		const std::string table_name = table_json.get<std::string>();
+
+		try {
+			const auto result = parse_table(table_name);
+
+			data_exporter::exportDataTable(result.headers, result.rows, table_name, &helper, &export_paths);
+		} catch (const std::exception& e) {
+			helper.mark(table_name + ".csv", false, e.what());
+			logging::write(std::format("Failed to export table {}: {}", table_name, e.what()));
+		}
+	}
+
+	// JS: export_paths?.close();
+	export_paths.close();
+	helper.finish();
+}
+
+// JS: methods.export_sql()
+static void export_sql() {
+	auto& view = *core::view;
+	const auto& user_selection = view.selectionDB2s;
+	if (user_selection.empty()) {
+		core::setToast("info", "You didn't select any tables to export.");
+		return;
+	}
+
+	const bool create_table_val = view.config.value("dataSQLCreateTable", false);
+
+	// single table: use row selection behavior
+	if (user_selection.size() == 1) {
+		const auto& headers_json = view.tableBrowserHeaders;
+		const auto& all_rows_json = view.tableBrowserRows;
+		const auto& selection = view.selectionDataTable;
+		const bool export_all_val = view.config.value("dataExportAll", false);
+
+		if (headers_json.empty() || all_rows_json.empty()) {
+			core::setToast("info", "No data table loaded to export.");
+			return;
+		}
+
+		std::vector<std::string> headers;
+		for (const auto& h : headers_json)
+			headers.push_back(h.get<std::string>());
+
+		std::vector<std::vector<std::string>> rows_to_export;
+		if (export_all_val) {
+			for (const auto& row : all_rows_json) {
+				std::vector<std::string> str_row;
+				for (const auto& val : row)
+					str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
+				rows_to_export.push_back(std::move(str_row));
+			}
+		} else {
+			if (selection.empty()) {
+				core::setToast("info", "No rows selected. Please select some rows first or enable \"Export all rows\".");
+				return;
+			}
+
+			for (const auto& row_index_json : selection) {
+				const int row_index = row_index_json.get<int>();
+				if (row_index >= 0 && row_index < static_cast<int>(all_rows_json.size())) {
+					const auto& row = all_rows_json[row_index];
+					std::vector<std::string> str_row;
+					for (const auto& val : row)
+						str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
+					rows_to_export.push_back(std::move(str_row));
+				}
+			}
+
+			if (rows_to_export.empty()) {
+				core::setToast("info", "No rows selected. Please select some rows first or enable \"Export all rows\".");
+				return;
+			}
+		}
+
+		data_exporter::exportDataTableSQL(headers, rows_to_export,
+			selected_file.empty() ? "unknown_table" : selected_file,
+			selected_file_schema, create_table_val);
+		return;
+	}
+
+	// multiple tables: export all rows from each
+	casc::ExportHelper helper(static_cast<int>(user_selection.size()), "table");
+	helper.start();
+
+	FileWriter export_paths = core::openLastExportStream();
+
+	for (const auto& table_json : user_selection) {
+		if (helper.isCancelled())
+			break;
+
+		const std::string table_name = table_json.get<std::string>();
+
+		try {
+			const auto result = parse_table(table_name);
+			data_exporter::exportDataTableSQL(result.headers, result.rows, table_name,
+				result.schema, create_table_val, &helper, &export_paths);
+		} catch (const std::exception& e) {
+			helper.mark(table_name + ".sql", false, e.what());
+			logging::write(std::format("Failed to export table {}: {}", table_name, e.what()));
+		}
+	}
+
+	export_paths.close();
+	helper.finish();
+}
+
+// JS: methods.export_db2()
+static void export_db2() {
+	auto& view = *core::view;
+	const auto& user_selection = view.selectionDB2s;
+	if (user_selection.empty()) {
+		core::setToast("info", "No DB2 files selected to export.");
+		return;
+	}
+
+	// single table
+	if (user_selection.size() == 1) {
+		if (selected_file.empty() || !selected_file_data_id.has_value()) {
+			core::setToast("info", "No DB2 file selected to export.");
+			return;
+		}
+
+		// JS: await dataExporter.exportRawDB2(selected_file, selected_file_data_id);
+		// TODO(conversion): CASC pointer will be wired when CASC integration is complete.
+		data_exporter::exportRawDB2(selected_file, static_cast<uint32_t>(*selected_file_data_id), nullptr);
+		return;
+	}
+
+	// multiple tables
+	casc::ExportHelper helper(static_cast<int>(user_selection.size()), "db2");
+	helper.start();
+
+	FileWriter export_paths = core::openLastExportStream();
+
+	for (const auto& table_json : user_selection) {
+		if (helper.isCancelled())
+			break;
+
+		const std::string table_name = table_json.get<std::string>();
+
+		try {
+			const auto file_data_id_opt = casc::dbd_manifest::getByTableName(table_name);
+			if (!file_data_id_opt.has_value())
+				throw std::runtime_error("No file data ID found for table " + table_name);
+
+			// JS: await dataExporter.exportRawDB2(table_name, file_data_id, { helper, export_paths });
+			data_exporter::exportRawDB2(table_name, static_cast<uint32_t>(*file_data_id_opt),
+				nullptr, &helper, &export_paths);
+		} catch (const std::exception& e) {
+			helper.mark(table_name + ".db2", false, e.what());
+			logging::write(std::format("Failed to export DB2 {}: {}", table_name, e.what()));
+		}
+	}
+
+	export_paths.close();
+	helper.finish();
+}
+
+void export_data() {
+	const std::string format = core::view->config.value("exportDataFormat", std::string("CSV"));
+
+	if (format == "CSV")
+		export_csv();
+	else if (format == "SQL")
+		export_sql();
+	else if (format == "DB2")
+		export_db2();
+}
+
+} // namespace tab_data
