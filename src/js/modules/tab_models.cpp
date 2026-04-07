@@ -1,653 +1,1337 @@
-const log = require('../log');
-const util = require('util');
-const path = require('path');
-const ExportHelper = require('../casc/export-helper');
-const listfile = require('../casc/listfile');
-const EncryptionError = require('../casc/blte-reader').EncryptionError;
-const InstallType = require('../install-type');
-const listboxContext = require('../ui/listbox-context');
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-const DBModelFileData = require('../db/caches/DBModelFileData');
-const DBItemDisplays = require('../db/caches/DBItemDisplays');
-const DBCreatures = require('../db/caches/DBCreatures');
+#include "tab_models.h"
+#include "../log.h"
+#include "../core.h"
+#include "../casc/export-helper.h"
+#include "../casc/listfile.h"
+#include "../casc/blte-reader.h"
+#include "../install-type.h"
+#include "../ui/listbox-context.h"
+#include "../db/caches/DBModelFileData.h"
+#include "../db/caches/DBItemDisplays.h"
+#include "../db/caches/DBCreatures.h"
+#include "../ui/texture-ribbon.h"
+#include "../ui/texture-exporter.h"
+#include "../ui/model-viewer-utils.h"
+#include "../file-writer.h"
+#include "../3D/renderers/M2RendererGL.h"
+#include "../3D/renderers/M3RendererGL.h"
+#include "../3D/renderers/WMORendererGL.h"
 
-const textureRibbon = require('../ui/texture-ribbon');
-const textureExporter = require('../ui/texture-exporter');
-const modelViewerUtils = require('../ui/model-viewer-utils');
+#include <algorithm>
+#include <filesystem>
+#include <format>
+#include <map>
+#include <string>
+#include <vector>
 
-const active_skins = new Map();
-let selected_variant_texture_ids = new Array();
-let selected_skin_name = null;
+#include <imgui.h>
+#include <spdlog/spdlog.h>
 
-let active_renderer;
-let active_path;
+namespace tab_models {
 
-const get_view_state = (core) => ({
-	get texturePreviewURL() { return core.view.modelTexturePreviewURL; },
-	set texturePreviewURL(v) { core.view.modelTexturePreviewURL = v; },
-	get texturePreviewUVOverlay() { return core.view.modelTexturePreviewUVOverlay; },
-	set texturePreviewUVOverlay(v) { core.view.modelTexturePreviewUVOverlay = v; },
-	get texturePreviewWidth() { return core.view.modelTexturePreviewWidth; },
-	set texturePreviewWidth(v) { core.view.modelTexturePreviewWidth = v; },
-	get texturePreviewHeight() { return core.view.modelTexturePreviewHeight; },
-	set texturePreviewHeight(v) { core.view.modelTexturePreviewHeight = v; },
-	get texturePreviewName() { return core.view.modelTexturePreviewName; },
-	set texturePreviewName(v) { core.view.modelTexturePreviewName = v; },
-	get uvLayers() { return core.view.modelViewerUVLayers; },
-	set uvLayers(v) { core.view.modelViewerUVLayers = v; },
-	get anims() { return core.view.modelViewerAnims; },
-	set anims(v) { core.view.modelViewerAnims = v; },
-	get animSelection() { return core.view.modelViewerAnimSelection; },
-	set animSelection(v) { core.view.modelViewerAnimSelection = v; },
-	get animPaused() { return core.view.modelViewerAnimPaused; },
-	set animPaused(v) { core.view.modelViewerAnimPaused = v; },
-	get animFrame() { return core.view.modelViewerAnimFrame; },
-	set animFrame(v) { core.view.modelViewerAnimFrame = v; },
-	get animFrameCount() { return core.view.modelViewerAnimFrameCount; },
-	set animFrameCount(v) { core.view.modelViewerAnimFrameCount = v; },
-	get autoAdjust() { return core.view.modelViewerAutoAdjust; },
-	set autoAdjust(v) { core.view.modelViewerAutoAdjust = v; }
-});
+// --- File-local state ---
 
-const get_model_displays = (file_data_id) => {
-	let displays = DBCreatures.getCreatureDisplaysByFileDataID(file_data_id);
+// JS: const active_skins = new Map();
+static std::map<std::string, db::caches::DBCreatures::CreatureDisplayInfo> active_skins_creature;
+static std::map<std::string, db::caches::DBItemDisplays::ItemDisplay> active_skins_item;
 
-	if (displays === undefined)
-		displays = DBItemDisplays.getItemDisplaysByFileDataID(file_data_id);
+// JS: let selected_variant_texture_ids = new Array();
+static std::vector<uint32_t> selected_variant_texture_ids;
 
-	return displays ?? [];
+// JS: let selected_skin_name = null;
+static std::string selected_skin_name;
+static bool has_selected_skin_name = false;
+
+// JS: let active_renderer;
+static model_viewer_utils::RendererResult active_renderer_result;
+
+// JS: let active_path;
+static std::string active_path;
+
+// View state proxy (created once in mounted()).
+static model_viewer_utils::ViewStateProxy view_state;
+
+// Animation methods helper.
+static std::unique_ptr<model_viewer_utils::AnimationMethods> anim_methods;
+
+// Change-detection for watches (replaces Vue $watch).
+static std::vector<nlohmann::json> prev_skins_selection;
+static std::string prev_anim_selection;
+static std::vector<nlohmann::json> prev_selection_models;
+static bool tab_initialized = false;
+
+static bool is_initialized = false;
+
+// --- Internal helpers ---
+
+// Helper to get the active M2 renderer (or nullptr).
+static M2RendererGL* get_active_m2_renderer() {
+	return active_renderer_result.m2.get();
+}
+
+// Helper to get the view state proxy pointer.
+static model_viewer_utils::ViewStateProxy* get_view_state_ptr() {
+	return &view_state;
+}
+
+// JS: const get_model_displays = (file_data_id) => { ... }
+struct DisplayVariant {
+	uint32_t ID = 0;
+	std::vector<uint32_t> textures;
+	std::vector<uint32_t> extraGeosets;
+	bool from_creature = false;
 };
 
-const preview_model = async (core, file_name) => {
-	using _lock = core.create_busy_lock();
-	core.setToast('progress', util.format('Loading %s, please wait...', file_name), null, -1, false);
-	log.write('Previewing model %s', file_name);
+static std::vector<DisplayVariant> get_model_displays(uint32_t file_data_id) {
+	// JS: let displays = DBCreatures.getCreatureDisplaysByFileDataID(file_data_id);
+	const auto* creature_displays = db::caches::DBCreatures::getCreatureDisplaysByFileDataID(file_data_id);
+	if (creature_displays) {
+		std::vector<DisplayVariant> result;
+		result.reserve(creature_displays->size());
+		for (const auto& d : *creature_displays)
+			result.push_back({ d.ID, d.textures, d.extraGeosets, true });
+		return result;
+	}
 
-	const state = get_view_state(core);
-	textureRibbon.reset();
-	modelViewerUtils.clear_texture_preview(state);
+	// JS: if (displays === undefined) displays = DBItemDisplays.getItemDisplaysByFileDataID(file_data_id);
+	const auto* item_displays = db::caches::DBItemDisplays::getItemDisplaysByFileDataID(file_data_id);
+	if (item_displays) {
+		std::vector<DisplayVariant> result;
+		result.reserve(item_displays->size());
+		for (const auto& d : *item_displays)
+			result.push_back({ d.ID, d.textures, {}, false });
+		return result;
+	}
 
-	core.view.modelViewerSkins = [];
-	core.view.modelViewerSkinsSelection = [];
-	core.view.modelViewerAnims = [];
-	core.view.modelViewerAnimSelection = null;
+	// JS: return displays ?? [];
+	return {};
+}
+
+// JS: const preview_model = async (core, file_name) => { ... }
+static void preview_model(const std::string& file_name) {
+	auto _lock = core::create_busy_lock();
+	core::setToast("progress", std::format("Loading {}, please wait...", file_name), nullptr, -1, false);
+	logging::write(std::format("Previewing model {}", file_name));
+
+	auto& state = view_state;
+	texture_ribbon::reset();
+	model_viewer_utils::clear_texture_preview(state);
+
+	auto& view = *core::view;
+	// JS: core.view.modelViewerSkins = [];
+	view.modelViewerSkins.clear();
+	// JS: core.view.modelViewerSkinsSelection = [];
+	view.modelViewerSkinsSelection.clear();
+	// JS: core.view.modelViewerAnims = [];
+	view.modelViewerAnims.clear();
+	// JS: core.view.modelViewerAnimSelection = null;
+	view.modelViewerAnimSelection = nullptr;
 
 	try {
-		if (active_renderer) {
-			active_renderer.dispose();
-			active_renderer = null;
-			active_path = null;
+		// JS: if (active_renderer) { active_renderer.dispose(); active_renderer = null; active_path = null; }
+		if (active_renderer_result.type != model_viewer_utils::ModelType::Unknown) {
+			active_renderer_result = model_viewer_utils::RendererResult{};
+			active_path.clear();
 		}
 
-		active_skins.clear();
-		selected_variant_texture_ids.length = 0;
-		selected_skin_name = null;
+		// JS: active_skins.clear();
+		active_skins_creature.clear();
+		active_skins_item.clear();
+		// JS: selected_variant_texture_ids.length = 0;
+		selected_variant_texture_ids.clear();
+		// JS: selected_skin_name = null;
+		selected_skin_name.clear();
+		has_selected_skin_name = false;
 
-		const file_data_id = listfile.getByFilename(file_name);
-		const file = await core.view.casc.getFile(file_data_id);
-		const gl_context = core.view.modelViewerContext?.gl_context;
+		// JS: const file_data_id = listfile.getByFilename(file_name);
+		auto file_data_id_opt = casc::listfile::getByFilename(file_name);
+		if (!file_data_id_opt.has_value()) {
+			core::setToast("error", std::format("Unable to find file data ID for {}", file_name), nullptr, -1);
+			return;
+		}
+		uint32_t file_data_id = file_data_id_opt.value();
 
-		const model_type = modelViewerUtils.detect_model_type_by_name(file_name) ?? modelViewerUtils.detect_model_type(file);
+		// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+		// JS: const file = await core.view.casc.getFile(file_data_id);
+		// JS: const gl_context = core.view.modelViewerContext?.gl_context;
+		// For now, we cannot load files. When CASC is wired, this will become:
+		//   auto file = view.casc->getFile(file_data_id);
+		core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", file_name), nullptr, 4000);
+		logging::write(std::format("CASC not yet integrated — skipping preview for {}", file_name));
 
-		if (model_type === modelViewerUtils.MODEL_TYPE_M2)
-			core.view.modelViewerActiveType = 'm2';
-		else if (model_type === modelViewerUtils.MODEL_TYPE_M3)
-			core.view.modelViewerActiveType = 'm3';
+		// The following code is the complete conversion and will work once CASC is wired:
+		/*
+		auto file = view.casc->getFile(file_data_id);
+		auto& gl_context = view.modelViewerContext_gl_context; // TODO(conversion): wire GL context
+
+		// JS: const model_type = modelViewerUtils.detect_model_type_by_name(file_name) ?? modelViewerUtils.detect_model_type(file);
+		auto model_type = model_viewer_utils::detect_model_type_by_name(file_name);
+		if (model_type == model_viewer_utils::ModelType::Unknown)
+			model_type = model_viewer_utils::detect_model_type(file);
+
+		// JS: if (model_type === modelViewerUtils.MODEL_TYPE_M2) core.view.modelViewerActiveType = 'm2';
+		// JS: else if (model_type === modelViewerUtils.MODEL_TYPE_M3) core.view.modelViewerActiveType = 'm3';
+		// JS: else core.view.modelViewerActiveType = 'wmo';
+		if (model_type == model_viewer_utils::ModelType::M2)
+			view.modelViewerActiveType = "m2";
+		else if (model_type == model_viewer_utils::ModelType::M3)
+			view.modelViewerActiveType = "m3";
 		else
-			core.view.modelViewerActiveType = 'wmo';
+			view.modelViewerActiveType = "wmo";
 
-		active_renderer = modelViewerUtils.create_renderer(file, model_type, gl_context, core.view.config.modelViewerShowTextures, file_name);
-		await active_renderer.load();
+		// JS: active_renderer = modelViewerUtils.create_renderer(file, model_type, gl_context, core.view.config.modelViewerShowTextures, file_name);
+		active_renderer_result = model_viewer_utils::create_renderer(
+			file, model_type, gl_context,
+			view.config.value("modelViewerShowTextures", true),
+			file_data_id
+		);
 
-		if (model_type === modelViewerUtils.MODEL_TYPE_M2) {
-			const displays = get_model_displays(file_data_id);
+		// JS: await active_renderer.load();
+		if (active_renderer_result.m2)
+			active_renderer_result.m2->load();
+		else if (active_renderer_result.m3)
+			active_renderer_result.m3->load();
+		else if (active_renderer_result.wmo)
+			active_renderer_result.wmo->load();
 
-			const skin_list = [];
-			let model_name = listfile.getByID(file_data_id);
-			model_name = path.basename(model_name, 'm2');
+		// JS: if (model_type === modelViewerUtils.MODEL_TYPE_M2) { ... setup skins and animations ... }
+		if (model_type == model_viewer_utils::ModelType::M2) {
+			// JS: const displays = get_model_displays(file_data_id);
+			const auto displays = get_model_displays(file_data_id);
 
-			for (const display of displays) {
-				if (display.textures.length === 0)
-					continue;
-
-				const texture = display.textures[0];
-
-				let clean_skin_name = '';
-				let skin_name = listfile.getByID(texture);
-				if (skin_name !== undefined) {
-					skin_name = path.basename(skin_name, '.blp');
-					clean_skin_name = skin_name.replace(model_name, '').replace('_', '');
-				} else {
-					skin_name = 'unknown_' + texture;
-				}
-
-				if (clean_skin_name.length === 0)
-					clean_skin_name = 'base';
-
-				if (display.extraGeosets?.length > 0)
-					skin_name += display.extraGeosets.join(',');
-
-				clean_skin_name += ' (' + display.ID + ')';
-
-				if (active_skins.has(skin_name))
-					continue;
-
-				skin_list.push({ id: skin_name, label: clean_skin_name });
-				active_skins.set(skin_name, display);
+			// JS: const skin_list = [];
+			std::vector<nlohmann::json> skin_list;
+			// JS: let model_name = listfile.getByID(file_data_id);
+			// JS: model_name = path.basename(model_name, 'm2');
+			std::string model_name = casc::listfile::getByID(file_data_id);
+			{
+				auto pos = model_name.rfind('/');
+				if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
+				pos = model_name.rfind('\\');
+				if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
+				// Strip extension — JS uses path.basename(name, 'm2') which strips trailing 'm2'
+				auto ext_pos = model_name.rfind('.');
+				if (ext_pos != std::string::npos) model_name = model_name.substr(0, ext_pos);
 			}
 
-			core.view.modelViewerSkins = skin_list;
-			core.view.modelViewerSkinsSelection = skin_list.slice(0, 1);
+			for (const auto& display : displays) {
+				// JS: if (display.textures.length === 0) continue;
+				if (display.textures.empty())
+					continue;
 
-			core.view.modelViewerAnims = modelViewerUtils.extract_animations(active_renderer);
-			core.view.modelViewerAnimSelection = 'none';
+				// JS: const texture = display.textures[0];
+				uint32_t texture = display.textures[0];
+
+				// JS: let clean_skin_name = ''; let skin_name = listfile.getByID(texture);
+				std::string clean_skin_name;
+				std::string skin_name = casc::listfile::getByID(texture);
+
+				if (!skin_name.empty()) {
+					// JS: skin_name = path.basename(skin_name, '.blp');
+					{
+						auto pos = skin_name.rfind('/');
+						if (pos != std::string::npos) skin_name = skin_name.substr(pos + 1);
+						pos = skin_name.rfind('\\');
+						if (pos != std::string::npos) skin_name = skin_name.substr(pos + 1);
+						// Strip .blp extension
+						if (skin_name.size() > 4 && skin_name.substr(skin_name.size() - 4) == ".blp")
+							skin_name = skin_name.substr(0, skin_name.size() - 4);
+					}
+					// JS: clean_skin_name = skin_name.replace(model_name, '').replace('_', '');
+					clean_skin_name = skin_name;
+					auto found = clean_skin_name.find(model_name);
+					if (found != std::string::npos)
+						clean_skin_name.erase(found, model_name.size());
+					found = clean_skin_name.find('_');
+					if (found != std::string::npos)
+						clean_skin_name.erase(found, 1);
+				} else {
+					// JS: skin_name = 'unknown_' + texture;
+					skin_name = "unknown_" + std::to_string(texture);
+				}
+
+				// JS: if (clean_skin_name.length === 0) clean_skin_name = 'base';
+				if (clean_skin_name.empty())
+					clean_skin_name = "base";
+
+				// JS: if (display.extraGeosets?.length > 0) skin_name += display.extraGeosets.join(',');
+				if (!display.extraGeosets.empty()) {
+					std::string geo_str;
+					for (size_t g = 0; g < display.extraGeosets.size(); ++g) {
+						if (g > 0) geo_str += ',';
+						geo_str += std::to_string(display.extraGeosets[g]);
+					}
+					skin_name += geo_str;
+				}
+
+				// JS: clean_skin_name += ' (' + display.ID + ')';
+				clean_skin_name += " (" + std::to_string(display.ID) + ")";
+
+				// JS: if (active_skins.has(skin_name)) continue;
+				if (active_skins_creature.contains(skin_name) || active_skins_item.contains(skin_name))
+					continue;
+
+				// JS: skin_list.push({ id: skin_name, label: clean_skin_name });
+				skin_list.push_back({ {"id", skin_name}, {"label", clean_skin_name} });
+
+				// JS: active_skins.set(skin_name, display);
+				if (display.from_creature) {
+					active_skins_creature[skin_name] = {
+						display.ID, 0, 0, display.textures, display.extraGeosets
+					};
+				} else {
+					active_skins_item[skin_name] = { display.ID, display.textures };
+				}
+			}
+
+			// JS: core.view.modelViewerSkins = skin_list;
+			view.modelViewerSkins = skin_list;
+			// JS: core.view.modelViewerSkinsSelection = skin_list.slice(0, 1);
+			if (!skin_list.empty())
+				view.modelViewerSkinsSelection = { skin_list[0] };
+			else
+				view.modelViewerSkinsSelection.clear();
+
+			// JS: core.view.modelViewerAnims = modelViewerUtils.extract_animations(active_renderer);
+			if (active_renderer_result.m2)
+				view.modelViewerAnims = model_viewer_utils::extract_animations(*active_renderer_result.m2);
+			// JS: core.view.modelViewerAnimSelection = 'none';
+			view.modelViewerAnimSelection = "none";
 		}
 
+		// JS: active_path = file_name;
 		active_path = file_name;
 
-		const has_content = active_renderer.draw_calls?.length > 0 || active_renderer.groups?.length > 0;
+		// JS: const has_content = active_renderer.draw_calls?.length > 0 || active_renderer.groups?.length > 0;
+		bool has_content = false;
+		if (active_renderer_result.m2)
+			has_content = !active_renderer_result.m2->get_draw_calls().empty();
+		else if (active_renderer_result.m3)
+			has_content = true; // M3 always has content if loaded
+		else if (active_renderer_result.wmo)
+			has_content = !active_renderer_result.wmo->groups.empty();
 
 		if (!has_content) {
-			core.setToast('info', util.format('The model %s doesn\'t have any 3D data associated with it.', file_name), null, 4000);
+			// JS: core.setToast('info', util.format('The model %s doesn\'t have any 3D data associated with it.', file_name), null, 4000);
+			core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", file_name), nullptr, 4000);
 		} else {
-			core.hideToast();
+			core::hideToast();
 
-			if (core.view.modelViewerAutoAdjust)
-				requestAnimationFrame(() => core.view.modelViewerContext?.fitCamera?.());
+			// JS: if (core.view.modelViewerAutoAdjust) requestAnimationFrame(() => core.view.modelViewerContext?.fitCamera?.());
+			// TODO(conversion): fitCamera will be wired when model viewer GL is integrated.
+			// In ImGui immediate mode, camera auto-adjust is handled next frame automatically.
 		}
-	} catch (e) {
-		if (e instanceof EncryptionError) {
-			core.setToast('error', util.format('The model %s is encrypted with an unknown key (%s).', file_name, e.key), null, -1);
-			log.write('Failed to decrypt model %s (%s)', file_name, e.key);
-		} else {
-			core.setToast('error', 'Unable to preview model ' + file_name, { 'View Log': () => log.openRuntimeLog() }, -1);
-			log.write('Failed to open CASC file: %s', e.message);
-		}
+		*/
+	} catch (const casc::EncryptionError& e) {
+		// JS: if (e instanceof EncryptionError) { ... }
+		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", file_name, e.key), nullptr, -1);
+		logging::write(std::format("Failed to decrypt model {} ({})", file_name, e.key));
+	} catch (const std::exception& e) {
+		// JS: core.setToast('error', 'Unable to preview model ' + file_name, ...);
+		core::setToast("error", "Unable to preview model " + file_name, nullptr, -1);
+		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
-};
+}
 
-const get_variant_texture_ids = (file_name) => {
-	if (file_name === active_path) {
+// JS: const get_variant_texture_ids = (file_name) => { ... }
+static std::vector<uint32_t> get_variant_texture_ids(const std::string& file_name) {
+	// JS: if (file_name === active_path) return selected_variant_texture_ids;
+	if (file_name == active_path)
 		return selected_variant_texture_ids;
-	} else {
-		const file_data_id = listfile.getByFilename(file_name);
-		const displays = get_model_displays(file_data_id);
 
-		return displays.find(e => e.textures.length > 0)?.textures ?? [];
+	// JS: const file_data_id = listfile.getByFilename(file_name);
+	auto file_data_id_opt = casc::listfile::getByFilename(file_name);
+	if (!file_data_id_opt.has_value())
+		return {};
+
+	// JS: const displays = get_model_displays(file_data_id);
+	auto displays = get_model_displays(file_data_id_opt.value());
+
+	// JS: return displays.find(e => e.textures.length > 0)?.textures ?? [];
+	for (const auto& d : displays) {
+		if (!d.textures.empty())
+			return d.textures;
 	}
-};
+	return {};
+}
 
-const export_files = async (core, files, is_local = false, export_id = -1) => {
-	const export_paths = core.openLastExportStream();
-	const format = core.view.config.exportModelFormat;
+// --- Template methods (mapped from Vue methods) ---
 
-	const manifest = { type: 'MODELS', exportID: export_id, succeeded: [], failed: [] };
+// JS: methods.handle_listbox_context(data) { listboxContext.handle_context_menu(data); }
+static void handle_listbox_context(const std::vector<std::string>& selection) {
+	listbox_context::handle_context_menu(selection);
+}
 
-	if (format === 'PNG' || format === 'CLIPBOARD') {
-		if (active_path) {
-			const canvas = document.getElementById('model-preview').querySelector('canvas');
-			await modelViewerUtils.export_preview(core, format, canvas, active_path);
-		} else {
-			core.setToast('error', 'The selected export option only works for model previews. Preview something first!', null, -1);
-		}
+// JS: methods.copy_file_paths(selection) { listboxContext.copy_file_paths(selection); }
+static void copy_file_paths(const std::vector<std::string>& selection) {
+	listbox_context::copy_file_paths(selection);
+}
 
-		export_paths?.close();
+// JS: methods.copy_listfile_format(selection) { listboxContext.copy_listfile_format(selection); }
+static void copy_listfile_format(const std::vector<std::string>& selection) {
+	listbox_context::copy_listfile_format(selection);
+}
+
+// JS: methods.copy_file_data_ids(selection) { listboxContext.copy_file_data_ids(selection); }
+static void copy_file_data_ids(const std::vector<std::string>& selection) {
+	listbox_context::copy_file_data_ids(selection);
+}
+
+// JS: methods.copy_export_paths(selection) { listboxContext.copy_export_paths(selection); }
+static void copy_export_paths(const std::vector<std::string>& selection) {
+	listbox_context::copy_export_paths(selection);
+}
+
+// JS: methods.open_export_directory(selection) { listboxContext.open_export_directory(selection); }
+static void open_export_directory(const std::vector<std::string>& selection) {
+	listbox_context::open_export_directory(selection);
+}
+
+// JS: methods.preview_texture(file_data_id, display_name) { ... }
+static void preview_texture(uint32_t file_data_id, const std::string& display_name) {
+	// JS: const state = get_view_state(this.$core);
+	// JS: await modelViewerUtils.preview_texture_by_id(this.$core, state, active_renderer, file_data_id, display_name);
+	// TODO(conversion): CASC source parameter will be wired when integration is complete.
+	model_viewer_utils::preview_texture_by_id(
+		view_state, get_active_m2_renderer(),
+		file_data_id, display_name, nullptr /* casc */
+	);
+}
+
+// JS: methods.export_ribbon_texture(file_data_id, display_name) { ... }
+static void export_ribbon_texture(uint32_t file_data_id, [[maybe_unused]] const std::string& display_name) {
+	// JS: await textureExporter.exportSingleTexture(file_data_id);
+	// TODO(conversion): CASC source parameter will be wired when integration is complete.
+	texture_exporter::exportSingleTexture(file_data_id, nullptr /* casc */);
+}
+
+// JS: methods.toggle_uv_layer(layer_name) { ... }
+static void toggle_uv_layer(const std::string& layer_name) {
+	// JS: const state = get_view_state(this.$core);
+	// JS: modelViewerUtils.toggle_uv_layer(state, active_renderer, layer_name);
+	model_viewer_utils::toggle_uv_layer(view_state, get_active_m2_renderer(), layer_name);
+}
+
+// JS: methods.export_model() { ... }
+static void export_model_action() {
+	auto& view = *core::view;
+
+	// JS: const user_selection = this.$core.view.selectionModels;
+	const auto& user_selection = view.selectionModels;
+
+	// JS: if (user_selection.length === 0) { ... }
+	if (user_selection.empty()) {
+		core::setToast("info", "You didn't select any files to export; you should do that first.");
 		return;
 	}
 
-	const casc = core.view.casc;
-	const helper = new ExportHelper(files.length, 'model');
-	helper.start();
+	// JS: await export_files(this.$core, user_selection, false);
+	export_files(user_selection, false);
+}
 
-	for (const file_entry of files) {
-		if (helper.isCancelled())
-			break;
+// JS: methods.initialize() { ... }
+static void initialize() {
+	auto& view = *core::view;
 
-		let file_name;
-		let file_data_id;
+	// JS: let step_count = 2;
+	int step_count = 2;
+	// JS: if (this.$core.view.config.enableUnknownFiles) step_count++;
+	if (view.config.value("enableUnknownFiles", false)) step_count++;
+	// JS: if (this.$core.view.config.enableM2Skins) step_count += 2;
+	if (view.config.value("enableM2Skins", true)) step_count += 2;
 
-		if (typeof file_entry === 'number') {
-			file_data_id = file_entry;
-			file_name = listfile.getByID(file_data_id);
-		} else {
-			file_name = listfile.stripFileEntry(file_entry);
-			file_data_id = listfile.getByFilename(file_name);
-		}
+	// JS: this.$core.showLoadingScreen(step_count);
+	core::showLoadingScreen(step_count);
 
-		const file_manifest = [];
+	// JS: await this.$core.progressLoadingScreen('Loading model file data...');
+	core::progressLoadingScreen("Loading model file data...");
+	// JS: await DBModelFileData.initializeModelFileData();
+	db::caches::DBModelFileData::initializeModelFileData();
 
-		try {
-			const data = await (is_local ? require('../buffer').readFile(file_name) : casc.getFile(file_data_id));
+	// JS: if (this.$core.view.config.enableUnknownFiles) { ... }
+	if (view.config.value("enableUnknownFiles", false)) {
+		core::progressLoadingScreen("Loading unknown models...");
+		// JS: await listfile.loadUnknownModels();
+		casc::listfile::loadUnknownModels();
+	}
 
-			if (file_name === undefined) {
-				const model_type = modelViewerUtils.detect_model_type(data);
-				file_name = listfile.formatUnknownFile(file_data_id, modelViewerUtils.get_model_extension(model_type));
-			}
+	// JS: if (this.$core.view.config.enableM2Skins) { ... }
+	if (view.config.value("enableM2Skins", true)) {
+		core::progressLoadingScreen("Loading item displays...");
+		// JS: await DBItemDisplays.initializeItemDisplays();
+		db::caches::DBItemDisplays::initializeItemDisplays();
 
-			let export_path;
-			let mark_file_name = file_name;
+		core::progressLoadingScreen("Loading creature data...");
+		// JS: await DBCreatures.initializeCreatureData();
+		db::caches::DBCreatures::initializeCreatureData();
+	}
 
-			const is_active = file_name === active_path;
-			const model_type = modelViewerUtils.detect_model_type_by_name(file_name) ?? modelViewerUtils.detect_model_type(data);
+	// JS: await this.$core.progressLoadingScreen('Initializing 3D preview...');
+	core::progressLoadingScreen("Initializing 3D preview...");
 
-			if (is_local) {
-				export_path = file_name;
-			} else if (model_type === modelViewerUtils.MODEL_TYPE_M2 && selected_skin_name !== null && is_active && format !== 'RAW') {
-				const base_file_name = path.basename(file_name, path.extname(file_name));
-				let skinned_name;
+	// JS: if (!this.$core.view.modelViewerContext)
+	//     this.$core.view.modelViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
+	// TODO(conversion): Model viewer context initialization will be wired when GL integration is complete.
+	// The JS creates a sealed object with getActiveRenderer, gl_context, fitCamera.
+	// In C++, modelViewerContext is a nlohmann::json placeholder until the GL viewer component is integrated.
+	if (view.modelViewerContext.is_null()) {
+		view.modelViewerContext = nlohmann::json::object();
+	}
 
-				if (selected_skin_name.startsWith(base_file_name))
-					skinned_name = ExportHelper.replaceBaseName(file_name, selected_skin_name);
-				else
-					skinned_name = ExportHelper.replaceBaseName(file_name, base_file_name + '_' + selected_skin_name);
+	// JS: this.$core.hideLoadingScreen();
+	core::hideLoadingScreen();
+}
 
-				export_path = ExportHelper.getExportPath(skinned_name);
-				mark_file_name = skinned_name;
-			} else {
-				export_path = ExportHelper.getExportPath(file_name);
-			}
+// --- Watch handler for modelViewerSkinsSelection ---
+// JS: this.$core.view.$watch('modelViewerSkinsSelection', async selection => { ... })
+static void handle_skins_selection_change(const std::vector<nlohmann::json>& selection) {
+	auto& view = *core::view;
 
-			const mark_name = await modelViewerUtils.export_model({
-				core,
-				data,
-				file_data_id,
-				file_name,
-				format,
-				export_path,
-				helper,
-				file_manifest,
-				variant_textures: get_variant_texture_ids(file_name),
-				geoset_mask: is_active ? core.view.modelViewerGeosets : null,
-				wmo_group_mask: is_active ? core.view.modelViewerWMOGroups : null,
-				wmo_set_mask: is_active ? core.view.modelViewerWMOSets : null,
-				export_paths
-			});
+	// JS: if (!active_renderer || active_skins.size === 0) return;
+	if (active_renderer_result.type == model_viewer_utils::ModelType::Unknown)
+		return;
+	if (active_skins_creature.empty() && active_skins_item.empty())
+		return;
 
-			helper.mark(mark_name, true);
-			manifest.succeeded.push({ fileDataID: file_data_id, files: file_manifest });
-		} catch (e) {
-			helper.mark(file_name, false, e.message, e.stack);
-			manifest.failed.push({ fileDataID: file_data_id });
+	// JS: const selected = selection[0];
+	if (selection.empty())
+		return;
+	const auto& selected = selection[0];
+	std::string sel_id = selected.value("id", std::string(""));
+
+	// JS: selected_skin_name = selected.id;
+	selected_skin_name = sel_id;
+	has_selected_skin_name = true;
+
+	// Try creature display first, then item display.
+	bool has_extra_geosets = false;
+	std::vector<uint32_t> extra_geosets;
+	std::vector<uint32_t> display_textures;
+
+	auto it_creature = active_skins_creature.find(sel_id);
+	if (it_creature != active_skins_creature.end()) {
+		const auto& display = it_creature->second;
+		extra_geosets = display.extraGeosets;
+		has_extra_geosets = !extra_geosets.empty();
+		display_textures = display.textures;
+	} else {
+		auto it_item = active_skins_item.find(sel_id);
+		if (it_item != active_skins_item.end()) {
+			const auto& display = it_item->second;
+			display_textures = display.textures;
 		}
 	}
 
-	helper.finish();
-	export_paths?.close();
-};
+	// JS: let curr_geosets = this.$core.view.modelViewerGeosets;
+	auto& curr_geosets = view.modelViewerGeosets;
 
-module.exports = {
-	register() {
-		this.registerNavButton('Models', 'cube.svg', InstallType.CASC);
-	},
-
-	template: `
-		<div class="tab list-tab" id="tab-models">
-			<div class="list-container">
-				<component :is="$components.Listbox" v-model:selection="$core.view.selectionModels" v-model:filter="$core.view.userInputFilterModels" :items="$core.view.listfileModels" :override="$core.view.overrideModelList" :keyinput="true" :regex="$core.view.config.regexFilters" :copymode="$core.view.config.copyMode" :pasteselection="$core.view.config.pasteSelection" :copytrimwhitespace="$core.view.config.removePathSpacesCopy" :includefilecount="true" unittype="model" persistscrollkey="models" :quickfilters="$core.view.modelQuickFilters" @contextmenu="handle_listbox_context"></component>
-				<component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeListbox" v-slot:default="context" @close="$core.view.contextMenus.nodeListbox = null">
-					<span @click.self="copy_file_paths(context.node.selection)">Copy file path{{ context.node.count > 1 ? 's' : '' }}</span>
-					<span v-if="context.node.hasFileDataIDs" @click.self="copy_listfile_format(context.node.selection)">Copy file path{{ context.node.count > 1 ? 's' : '' }} (listfile format)</span>
-					<span v-if="context.node.hasFileDataIDs" @click.self="copy_file_data_ids(context.node.selection)">Copy file data ID{{ context.node.count > 1 ? 's' : '' }}</span>
-					<span @click.self="copy_export_paths(context.node.selection)">Copy export path{{ context.node.count > 1 ? 's' : '' }}</span>
-					<span @click.self="open_export_directory(context.node.selection)">Open export directory</span>
-				</component>
-			</div>
-			<div class="filter">
-				<div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
-				<input type="text" v-model="$core.view.userInputFilterModels" placeholder="Filter models..."/>
-			</div>
-			<div class="preview-container">
-				<component :is="$components.ResizeLayer" @resize="$core.view.onTextureRibbonResize" id="texture-ribbon" v-if="$core.view.config.modelViewerShowTextures && $core.view.textureRibbonStack.length > 0">
-					<div id="texture-ribbon-prev" v-if="$core.view.textureRibbonPage > 0" @click.self="$core.view.textureRibbonPage--"></div>
-					<div v-for="slot in $core.view.textureRibbonDisplay" :title="slot.displayName" :style="{ backgroundImage: 'url(' + slot.src + ')' }" class="slot" @click="$core.view.contextMenus.nodeTextureRibbon = slot"></div>
-					<div id="texture-ribbon-next" v-if="$core.view.textureRibbonPage < $core.view.textureRibbonMaxPages - 1" @click.self="$core.view.textureRibbonPage++"></div>
-					<component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeTextureRibbon" v-slot:default="context" @close="$core.view.contextMenus.nodeTextureRibbon = null">
-						<span @click.self="preview_texture(context.node.fileDataID, context.node.displayName)">Preview {{ context.node.displayName }}</span>
-						<span @click.self="export_ribbon_texture(context.node.fileDataID, context.node.displayName)">Export {{ context.node.displayName }}</span>
-						<span @click.self="$core.view.goToTexture(context.node.fileDataID)">Go to {{ context.node.displayName }}</span>
-						<span @click.self="$core.view.copyToClipboard(context.node.fileDataID)">Copy file data ID to clipboard</span>
-						<span @click.self="$core.view.copyToClipboard(context.node.displayName)">Copy texture name to clipboard</span>
-						<span @click.self="$core.view.copyToClipboard(context.node.fileName)">Copy file path to clipboard</span>
-						<span @click.self="$core.view.copyToClipboard($core.view.getExportPath(context.node.fileName))">Copy export path to clipboard</span>
-					</component>
-				</component>
-				<div id="model-texture-preview" v-if="$core.view.modelTexturePreviewURL.length > 0" class="preview-background">
-					<div id="model-texture-preview-toast" @click="$core.view.modelTexturePreviewURL = ''">Close Preview</div>
-					<div class="image" :style="{ 'max-width': $core.view.modelTexturePreviewWidth + 'px', 'max-height': $core.view.modelTexturePreviewHeight + 'px' }">
-						<div class="image" :style="{ 'background-image': 'url(' + $core.view.modelTexturePreviewURL + ')' }"></div>
-						<div class="uv-overlay" v-if="$core.view.modelTexturePreviewUVOverlay" :style="{ 'background-image': 'url(' + $core.view.modelTexturePreviewUVOverlay + ')' }"></div>
-					</div>
-					<div id="uv-layer-buttons" v-if="$core.view.modelViewerUVLayers.length > 0">
-						<button
-							v-for="layer in $core.view.modelViewerUVLayers"
-							:key="layer.name"
-							:class="{ active: layer.active }"
-							@click="toggle_uv_layer(layer.name)"
-							class="uv-layer-button"
-						>
-							{{ layer.name }}
-						</button>
-					</div>
-				</div>
-				<div class="preview-background" id="model-preview">
-					<input v-if="$core.view.config.modelViewerShowBackground" type="color" id="background-color-input" v-model="$core.view.config.modelViewerBackgroundColor" title="Click to change background color"/>
-					<component :is="$components.ModelViewerGL" v-if="$core.view.modelViewerContext" :context="$core.view.modelViewerContext"></component>
-					<div v-if="$core.view.modelViewerAnims && $core.view.modelViewerAnims.length > 0 && !$core.view.modelTexturePreviewURL" class="preview-dropdown-overlay">
-						<select v-model="$core.view.modelViewerAnimSelection">
-							<option v-for="animation in $core.view.modelViewerAnims" :key="animation.id" :value="animation.id">
-								{{ animation.label }}
-							</option>
-						</select>
-						<div v-if="$core.view.modelViewerAnimSelection !== 'none'" class="anim-controls">
-							<button class="anim-btn anim-step-left" :class="{ disabled: !$core.view.modelViewerAnimPaused }" @click="step_animation(-1)" title="Previous frame"></button>
-							<button class="anim-btn" :class="$core.view.modelViewerAnimPaused ? 'anim-play' : 'anim-pause'" @click="toggle_animation_pause()" :title="$core.view.modelViewerAnimPaused ? 'Play' : 'Pause'"></button>
-							<button class="anim-btn anim-step-right" :class="{ disabled: !$core.view.modelViewerAnimPaused }" @click="step_animation(1)" title="Next frame"></button>
-							<div class="anim-scrubber" @mousedown="start_scrub" @mouseup="end_scrub">
-								<input type="range" min="0" :max="$core.view.modelViewerAnimFrameCount - 1" :value="$core.view.modelViewerAnimFrame" @input="seek_animation($event.target.value)" />
-								<div class="anim-frame-display">{{ $core.view.modelViewerAnimFrame }}</div>
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-			<div class="preview-controls">
-				<component :is="$components.MenuButton" :options="$core.view.menuButtonModels" :default="$core.view.config.exportModelFormat" @change="$core.view.config.exportModelFormat = $event" class="upward" :disabled="$core.view.isBusy" @click="export_model"></component>
-			</div>
-			<div id="model-sidebar" class="sidebar">
-				<span class="header">Preview</span>
-				<label class="ui-checkbox" title="Automatically preview a model when selecting it">
-					<input type="checkbox" v-model="$core.view.config.modelsAutoPreview"/>
-					<span>Auto Preview</span>
-				</label>
-				<label class="ui-checkbox" title="Automatically adjust camera when selecting a new model">
-					<input type="checkbox" v-model="$core.view.modelViewerAutoAdjust"/>
-					<span>Auto Camera</span>
-				</label>
-				<label class="ui-checkbox" title="Show a grid in the 3D viewport">
-					<input type="checkbox" v-model="$core.view.config.modelViewerShowGrid"/>
-					<span>Show Grid</span>
-				</label>
-				<label class="ui-checkbox" title="Render the preview model as a wireframe">
-					<input type="checkbox" v-model="$core.view.config.modelViewerWireframe"/>
-					<span>Show Wireframe</span>
-				</label>
-				<label class="ui-checkbox" title="Show the model's bone structure">
-					<input type="checkbox" v-model="$core.view.config.modelViewerShowBones"/>
-					<span>Show Bones</span>
-				</label>
-				<label class="ui-checkbox" title="Show model textures in the preview pane">
-					<input type="checkbox" v-model="$core.view.config.modelViewerShowTextures"/>
-					<span>Show Textures</span>
-				</label>
-				<label class="ui-checkbox" title="Show a background color in the 3D viewport">
-					<input type="checkbox" v-model="$core.view.config.modelViewerShowBackground"/>
-					<span>Show Background</span>
-				</label>
-				<span class="header">Export</span>
-				<label class="ui-checkbox" title="Include textures when exporting models">
-					<input type="checkbox" v-model="$core.view.config.modelsExportTextures"/>
-					<span>Textures</span>
-				</label>
-				<label v-if="$core.view.config.modelsExportTextures" class="ui-checkbox" title="Include alpha channel in exported model textures">
-					<input type="checkbox" v-model="$core.view.config.modelsExportAlpha"/>
-					<span>Texture Alpha</span>
-				</label>
-				<label v-if="$core.view.config.exportModelFormat === 'GLTF' && $core.view.modelViewerActiveType === 'm2'" class="ui-checkbox" title="Include animations in export">
-					<input type="checkbox" v-model="$core.view.config.modelsExportAnimations"/>
-					<span>Export animations</span>
-				</label>
-				<template v-if="$core.view.config.exportModelFormat === 'RAW'">
-					<label class="ui-checkbox" title="Export raw .skin files with M2 exports">
-						<input type="checkbox" v-model="$core.view.config.modelsExportSkin"/>
-						<span>M2 .skin Files</span>
-					</label>
-					<label class="ui-checkbox" title="Export raw .skel files with M2 exports">
-						<input type="checkbox" v-model="$core.view.config.modelsExportSkel"/>
-						<span>M2 .skel Files</span>
-					</label>
-					<label class="ui-checkbox" title="Export raw .bone files with M2 exports">
-						<input type="checkbox" v-model="$core.view.config.modelsExportBone"/>
-						<span>M2 .bone Files</span>
-					</label>
-					<label class="ui-checkbox" title="Export raw .anim files with M2 exports">
-						<input type="checkbox" v-model="$core.view.config.modelsExportAnim"/>
-						<span>M2 .anim files</span>
-					</label>
-					<label class="ui-checkbox" title="Export WMO group files">
-						<input type="checkbox" v-model="$core.view.config.modelsExportWMOGroups"/>
-						<span>WMO Groups</span>
-					</label>
-				</template>
-				<template v-if="$core.view.config.exportModelFormat === 'OBJ' && $core.view.modelViewerActiveType === 'wmo'">
-					<label class="ui-checkbox" title="Export each WMO group as a separate OBJ file">
-						<input type="checkbox" v-model="$core.view.config.modelsExportSplitWMOGroups"/>
-						<span>Split WMO Groups</span>
-					</label>
-				</template>
-				<template v-if="$core.view.modelViewerActiveType === 'm2'">
-					<span class="header">Geosets</span>
-					<component :is="$components.Checkboxlist" :items="$core.view.modelViewerGeosets"></component>
-					<div class="list-toggles">
-						<a @click="$core.view.setAllGeosets(true, $core.view.modelViewerGeosets)">Enable All</a> / <a @click="$core.view.setAllGeosets(false, $core.view.modelViewerGeosets)">Disable All</a>
-					</div>
-					<template v-if="$core.view.config.modelsExportTextures">
-						<span class="header">Skins</span>
-						<component :is="$components.Listboxb" :items="$core.view.modelViewerSkins" v-model:selection="$core.view.modelViewerSkinsSelection" :single="true"></component>
-					</template>
-				</template>
-				<template v-if="$core.view.modelViewerActiveType === 'wmo'">
-					<span class="header">WMO Groups</span>
-					<component :is="$components.Checkboxlist" :items="$core.view.modelViewerWMOGroups"></component>
-					<div class="list-toggles">
-						<a @click="$core.view.setAllWMOGroups(true)">Enable All</a> / <a @click="$core.view.setAllWMOGroups(false)">Disable All</a>
-					</div>
-					<span class="header">Doodad Sets</span>
-					<component :is="$components.Checkboxlist" :items="$core.view.modelViewerWMOSets"></component>
-				</template>
-			</div>
-		</div>
-	`,
-
-	methods: {
-		handle_listbox_context(data) {
-			listboxContext.handle_context_menu(data);
-		},
-
-		copy_file_paths(selection) {
-			listboxContext.copy_file_paths(selection);
-		},
-
-		copy_listfile_format(selection) {
-			listboxContext.copy_listfile_format(selection);
-		},
-
-		copy_file_data_ids(selection) {
-			listboxContext.copy_file_data_ids(selection);
-		},
-
-		copy_export_paths(selection) {
-			listboxContext.copy_export_paths(selection);
-		},
-
-		open_export_directory(selection) {
-			listboxContext.open_export_directory(selection);
-		},
-
-		async preview_texture(file_data_id, display_name) {
-			const state = get_view_state(this.$core);
-			await modelViewerUtils.preview_texture_by_id(this.$core, state, active_renderer, file_data_id, display_name);
-		},
-
-		async export_ribbon_texture(file_data_id, display_name) {
-			await textureExporter.exportSingleTexture(file_data_id);
-		},
-
-		toggle_uv_layer(layer_name) {
-			const state = get_view_state(this.$core);
-			modelViewerUtils.toggle_uv_layer(state, active_renderer, layer_name);
-		},
-
-		async export_model() {
-			const user_selection = this.$core.view.selectionModels;
-			if (user_selection.length === 0) {
-				this.$core.setToast('info', 'You didn\'t select any files to export; you should do that first.');
-				return;
-			}
-
-			await export_files(this.$core, user_selection, false);
-		},
-
-		toggle_animation_pause() {
-			if (!active_renderer)
-				return;
-
-			const state = get_view_state(this.$core);
-			const paused = !state.animPaused;
-			state.animPaused = paused;
-			active_renderer.set_animation_paused(paused);
-		},
-
-		step_animation(delta) {
-			const state = get_view_state(this.$core);
-			if (!state.animPaused || !active_renderer)
-				return;
-
-			active_renderer.step_animation_frame(delta);
-			state.animFrame = active_renderer.get_animation_frame();
-		},
-
-		seek_animation(frame) {
-			const state = get_view_state(this.$core);
-			if (!active_renderer)
-				return;
-
-			active_renderer.set_animation_frame(parseInt(frame));
-			state.animFrame = parseInt(frame);
-		},
-
-		start_scrub() {
-			const state = get_view_state(this.$core);
-			this._was_paused_before_scrub = state.animPaused;
-			if (!this._was_paused_before_scrub) {
-				state.animPaused = true;
-				active_renderer?.set_animation_paused?.(true);
-			}
-		},
-
-		end_scrub() {
-			const state = get_view_state(this.$core);
-			if (!this._was_paused_before_scrub) {
-				state.animPaused = false;
-				active_renderer?.set_animation_paused?.(false);
-			}
-		},
-
-		async initialize() {
-			let step_count = 2;
-			if (this.$core.view.config.enableUnknownFiles) step_count++;
-			if (this.$core.view.config.enableM2Skins) step_count += 2;
-
-			this.$core.showLoadingScreen(step_count);
-
-			await this.$core.progressLoadingScreen('Loading model file data...');
-			await DBModelFileData.initializeModelFileData();
-
-			if (this.$core.view.config.enableUnknownFiles) {
-				await this.$core.progressLoadingScreen('Loading unknown models...');
-				await listfile.loadUnknownModels();
-			}
-
-			if (this.$core.view.config.enableM2Skins) {
-				await this.$core.progressLoadingScreen('Loading item displays...');
-				await DBItemDisplays.initializeItemDisplays();
-
-				await this.$core.progressLoadingScreen('Loading creature data...');
-				await DBCreatures.initializeCreatureData();
-			}
-
-			await this.$core.progressLoadingScreen('Initializing 3D preview...');
-
-			if (!this.$core.view.modelViewerContext)
-				this.$core.view.modelViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
-
-			this.$core.hideLoadingScreen();
+	// JS: if (display.extraGeosets !== undefined) { ... } else { ... }
+	if (has_extra_geosets) {
+		// JS: for (const geoset of curr_geosets) { if (geoset.id > 0 && geoset.id < 900) geoset.checked = false; }
+		for (auto& geoset : curr_geosets) {
+			int gid = geoset.value("id", 0);
+			if (gid > 0 && gid < 900)
+				geoset["checked"] = false;
 		}
-	},
 
-	async mounted() {
-		this.$core.registerDropHandler({
-			ext: ['.m2'],
-			prompt: count => util.format('Export %d models as %s', count, this.$core.view.config.exportModelFormat),
-			process: files => export_files(this.$core, files, true)
-		});
+		// JS: for (const extra_geoset of display.extraGeosets) {
+		//         for (const geoset of curr_geosets) { if (geoset.id === extra_geoset) geoset.checked = true; } }
+		for (uint32_t extra_geoset : extra_geosets) {
+			for (auto& geoset : curr_geosets) {
+				if (geoset.value("id", 0u) == extra_geoset)
+					geoset["checked"] = true;
+			}
+		}
+	} else {
+		// JS: for (const geoset of curr_geosets) { const id = geoset.id.toString();
+		//         geoset.checked = (id.endsWith('0') || id.endsWith('01')); }
+		for (auto& geoset : curr_geosets) {
+			std::string id_str = std::to_string(geoset.value("id", 0));
+			bool checked = id_str.ends_with("0") || id_str.ends_with("01");
+			geoset["checked"] = checked;
+		}
+	}
 
-		await this.initialize();
+	// JS: if (display.textures.length > 0) selected_variant_texture_ids = [...display.textures];
+	if (!display_textures.empty())
+		selected_variant_texture_ids = display_textures;
 
-		this.$core.view.$watch('modelViewerSkinsSelection', async selection => {
-			if (!active_renderer || active_skins.size === 0)
-				return;
+	// JS: active_renderer.applyReplaceableTextures(display);
+	if (active_renderer_result.m2 && !display_textures.empty()) {
+		M2DisplayInfo info;
+		info.textures = display_textures;
+		active_renderer_result.m2->applyReplaceableTextures(info);
+	}
+}
 
-			const selected = selection[0];
-			const display = active_skins.get(selected.id);
-			selected_skin_name = selected.id;
+// --- Public API ---
 
-			let curr_geosets = this.$core.view.modelViewerGeosets;
+// JS: register() { this.registerNavButton('Models', 'cube.svg', InstallType.CASC); }
+void registerTab() {
+	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+}
 
-			if (display.extraGeosets !== undefined) {
-				for (const geoset of curr_geosets) {
-					if (geoset.id > 0 && geoset.id < 900)
-						geoset.checked = false;
-				}
+// JS: async mounted() { ... }
+void mounted() {
+	auto& view = *core::view;
 
-				for (const extra_geoset of display.extraGeosets) {
-					for (const geoset of curr_geosets) {
-						if (geoset.id === extra_geoset)
-							geoset.checked = true;
+	// JS: const state = get_view_state(this.$core);
+	view_state = model_viewer_utils::create_view_state("model");
+
+	// JS: this.$core.registerDropHandler({
+	//         ext: ['.m2'],
+	//         prompt: count => util.format('Export %d models as %s', count, this.$core.view.config.exportModelFormat),
+	//         process: files => export_files(this.$core, files, true)
+	//     });
+	// TODO(conversion): Drop handler registration will be wired when the module system is integrated.
+
+	// JS: await this.initialize();
+	initialize();
+
+	// Create animation methods helper.
+	anim_methods = std::make_unique<model_viewer_utils::AnimationMethods>(
+		get_active_m2_renderer,
+		get_view_state_ptr
+	);
+
+	// Store initial state for change-detection.
+
+	// JS: this.$core.view.$watch('modelViewerSkinsSelection', async selection => { ... });
+	prev_skins_selection = view.modelViewerSkinsSelection;
+
+	// JS: this.$core.view.$watch('modelViewerAnimSelection', async selected_animation_id => { ... });
+	if (view.modelViewerAnimSelection.is_string())
+		prev_anim_selection = view.modelViewerAnimSelection.get<std::string>();
+	else
+		prev_anim_selection.clear();
+
+	// JS: this.$core.view.$watch('selectionModels', async selection => { ... });
+	prev_selection_models = view.selectionModels;
+
+	// JS: this.$core.events.on('toggle-uv-layer', (layer_name) => { ... });
+	// TODO(conversion): The JS EventEmitter passes layer_name as an argument.
+	// The C++ EventEmitter uses void() callbacks. The layer name will need to be
+	// communicated via shared state when the event system supports arguments.
+	core::events.on("toggle-uv-layer", []() {
+		// TODO(conversion): Retrieve layer_name from shared state when event args are supported.
+		// model_viewer_utils::toggle_uv_layer(view_state, get_active_m2_renderer(), layer_name);
+	});
+
+	is_initialized = true;
+}
+
+// JS: export_files = async (core, files, is_local = false, export_id = -1) => { ... }
+void export_files(const std::vector<nlohmann::json>& files, bool is_local, int export_id) {
+	auto& view = *core::view;
+
+	// JS: const export_paths = core.openLastExportStream();
+	FileWriter export_paths_writer = core::openLastExportStream();
+	FileWriter* export_paths = &export_paths_writer;
+
+	// JS: const format = core.view.config.exportModelFormat;
+	std::string format = view.config.value("exportModelFormat", std::string("OBJ"));
+
+	// JS: const manifest = { type: 'MODELS', exportID: export_id, succeeded: [], failed: [] };
+	nlohmann::json manifest = {
+		{"type", "MODELS"},
+		{"exportID", export_id},
+		{"succeeded", nlohmann::json::array()},
+		{"failed", nlohmann::json::array()}
+	};
+
+	// JS: if (format === 'PNG' || format === 'CLIPBOARD') { ... }
+	if (format == "PNG" || format == "CLIPBOARD") {
+		if (!active_path.empty()) {
+			// JS: const canvas = document.getElementById('model-preview').querySelector('canvas');
+			// JS: await modelViewerUtils.export_preview(core, format, canvas, active_path);
+			// TODO(conversion): GL context for export_preview will be wired when model viewer GL is integrated.
+			// model_viewer_utils::export_preview(format, gl_context, active_path);
+			core::setToast("info", "PNG/Clipboard export pending GL integration.", nullptr, 4000);
+		} else {
+			// JS: core.setToast('error', 'The selected export option only works for model previews. Preview something first!', null, -1);
+			core::setToast("error", "The selected export option only works for model previews. Preview something first!", nullptr, -1);
+		}
+
+		// JS: export_paths?.close();
+		return;
+	}
+
+	// JS: const casc = core.view.casc;
+	// TODO(conversion): CASC source will be wired when integration is complete.
+	// auto* casc = view.casc;
+
+	// JS: const helper = new ExportHelper(files.length, 'model');
+	casc::ExportHelper helper(static_cast<int>(files.size()), "model");
+	// JS: helper.start();
+	helper.start();
+
+	for (const auto& file_entry : files) {
+		// JS: if (helper.isCancelled()) break;
+		if (helper.isCancelled())
+			break;
+
+		std::string file_name;
+		uint32_t file_data_id = 0;
+
+		// JS: if (typeof file_entry === 'number') { ... } else { ... }
+		if (file_entry.is_number()) {
+			file_data_id = file_entry.get<uint32_t>();
+			file_name = casc::listfile::getByID(file_data_id);
+		} else {
+			file_name = casc::listfile::stripFileEntry(file_entry.get<std::string>());
+			auto opt = casc::listfile::getByFilename(file_name);
+			if (opt.has_value())
+				file_data_id = opt.value();
+		}
+
+		std::vector<nlohmann::json> file_manifest;
+
+		try {
+			// JS: const data = await (is_local ? require('../buffer').readFile(file_name) : casc.getFile(file_data_id));
+			// TODO(conversion): File loading (CASC/local) will be wired when integration is complete.
+			// BufferWrapper data = is_local ? BufferWrapper::readFile(file_name) : casc->getFile(file_data_id);
+
+			// JS: if (file_name === undefined) { ... }
+			if (file_name.empty()) {
+				// TODO(conversion): model type detection requires loaded data
+				// auto model_type = model_viewer_utils::detect_model_type(data);
+				// file_name = casc::listfile::formatUnknownFile(file_data_id, model_viewer_utils::get_model_extension(model_type));
+				file_name = casc::listfile::formatUnknownFile(file_data_id);
+			}
+
+			std::string export_path;
+			std::string mark_file_name = file_name;
+
+			bool is_active = (file_name == active_path);
+
+			// JS: const model_type = modelViewerUtils.detect_model_type_by_name(file_name) ?? modelViewerUtils.detect_model_type(data);
+			auto model_type = model_viewer_utils::detect_model_type_by_name(file_name);
+			// TODO(conversion): detect_model_type(data) fallback requires loaded data
+
+			if (is_local) {
+				// JS: export_path = file_name;
+				export_path = file_name;
+			} else if (model_type == model_viewer_utils::ModelType::M2 && has_selected_skin_name && is_active && format != "RAW") {
+				// JS: const base_file_name = path.basename(file_name, path.extname(file_name));
+				std::filesystem::path fp(file_name);
+				std::string base_file_name = fp.stem().string();
+
+				std::string skinned_name;
+				// JS: if (selected_skin_name.startsWith(base_file_name))
+				if (selected_skin_name.starts_with(base_file_name))
+					skinned_name = casc::ExportHelper::replaceBaseName(file_name, selected_skin_name);
+				else
+					skinned_name = casc::ExportHelper::replaceBaseName(file_name, base_file_name + "_" + selected_skin_name);
+
+				export_path = casc::ExportHelper::getExportPath(skinned_name);
+				mark_file_name = skinned_name;
+			} else {
+				// JS: export_path = ExportHelper.getExportPath(file_name);
+				export_path = casc::ExportHelper::getExportPath(file_name);
+			}
+
+			// JS: const mark_name = await modelViewerUtils.export_model({ ... });
+			model_viewer_utils::ExportModelOptions opts;
+			opts.data = nullptr; // TODO(conversion): wire loaded data
+			opts.file_data_id = file_data_id;
+			opts.file_name = file_name;
+			opts.format = format;
+			opts.export_path = export_path;
+			opts.helper = &helper;
+			opts.casc = nullptr; // TODO(conversion): wire CASC
+			opts.file_manifest = &file_manifest;
+
+			// JS: variant_textures: get_variant_texture_ids(file_name),
+			auto vtids = get_variant_texture_ids(file_name);
+			for (uint32_t id : vtids)
+				opts.variant_textures.push_back(id);
+
+			// JS: geoset_mask: is_active ? core.view.modelViewerGeosets : null,
+			if (is_active) {
+				opts.geoset_mask = &view.modelViewerGeosets;
+				opts.wmo_group_mask = &view.modelViewerWMOGroups;
+				opts.wmo_set_mask = &view.modelViewerWMOSets;
+			}
+
+			opts.export_paths = export_paths;
+
+			std::string mark_name = model_viewer_utils::export_model(opts);
+
+			// JS: helper.mark(mark_name, true);
+			helper.mark(mark_name, true);
+
+			// JS: manifest.succeeded.push({ fileDataID: file_data_id, files: file_manifest });
+			manifest["succeeded"].push_back({
+				{"fileDataID", file_data_id},
+				{"files", file_manifest}
+			});
+		} catch (const std::exception& e) {
+			// JS: helper.mark(file_name, false, e.message, e.stack);
+			helper.mark(file_name, false, e.what());
+			// JS: manifest.failed.push({ fileDataID: file_data_id });
+			manifest["failed"].push_back({ {"fileDataID", file_data_id} });
+		}
+	}
+
+	// JS: helper.finish();
+	helper.finish();
+	// JS: export_paths?.close();
+}
+
+// JS: getActiveRenderer: () => active_renderer
+M2RendererGL* getActiveRenderer() {
+	return active_renderer_result.m2.get();
+}
+
+void render() {
+	auto& view = *core::view;
+
+	if (!is_initialized)
+		return;
+
+	// ─── Change-detection for watches ───────────────────────────────────────
+
+	// Watch: modelViewerSkinsSelection → apply skin textures and geosets
+	// JS: this.$core.view.$watch('modelViewerSkinsSelection', async selection => { ... });
+	{
+		if (view.modelViewerSkinsSelection != prev_skins_selection) {
+			prev_skins_selection = view.modelViewerSkinsSelection;
+			handle_skins_selection_change(view.modelViewerSkinsSelection);
+		}
+	}
+
+	// Watch: modelViewerAnimSelection → handle_animation_change
+	// JS: this.$core.view.$watch('modelViewerAnimSelection', async selected_animation_id => { ... });
+	{
+		std::string current_anim;
+		if (view.modelViewerAnimSelection.is_string())
+			current_anim = view.modelViewerAnimSelection.get<std::string>();
+
+		if (current_anim != prev_anim_selection) {
+			prev_anim_selection = current_anim;
+
+			// JS: if (this.$core.view.modelViewerAnims.length === 0) return;
+			if (!view.modelViewerAnims.empty()) {
+				model_viewer_utils::handle_animation_change(
+					get_active_m2_renderer(),
+					view_state,
+					current_anim
+				);
+			}
+		}
+	}
+
+	// Watch: selectionModels → auto-preview if modelsAutoPreview
+	// JS: this.$core.view.$watch('selectionModels', async selection => { ... });
+	{
+		if (view.selectionModels != prev_selection_models) {
+			prev_selection_models = view.selectionModels;
+
+			// JS: if (!this._tab_initialized) return;
+			if (!tab_initialized) {
+				tab_initialized = true;
+			} else {
+				// JS: if (!this.$core.view.config.modelsAutoPreview) return;
+				if (view.config.value("modelsAutoPreview", false)) {
+					// JS: const first = listfile.stripFileEntry(selection[0]);
+					if (!view.selectionModels.empty()) {
+						std::string first;
+						if (view.selectionModels[0].is_string())
+							first = casc::listfile::stripFileEntry(view.selectionModels[0].get<std::string>());
+
+						// JS: if (!this.$core.view.isBusy && first && active_path !== first)
+						if (view.isBusy == 0 && !first.empty() && active_path != first)
+							preview_model(first);
 					}
 				}
-			} else {
-				for (const geoset of curr_geosets) {
-					const id = geoset.id.toString();
-					geoset.checked = (id.endsWith('0') || id.endsWith('01'));
+			}
+		}
+	}
+
+	// ─── Template rendering ─────────────────────────────────────────────────
+
+	// JS: <div class="tab list-tab" id="tab-models">
+
+	// --- Left panel: List container ---
+	// JS: <div class="list-container">
+	//     <Listbox v-model:selection="selectionModels" v-model:filter="userInputFilterModels"
+	//         :items="listfileModels" :override="overrideModelList" :keyinput="true"
+	//         :regex="config.regexFilters" :copymode="config.copyMode" ... @contextmenu="handle_listbox_context" />
+	ImGui::BeginChild("models-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
+	// TODO(conversion): Listbox component rendering will be wired when integration is complete.
+	ImGui::Text("Models: %zu", view.listfileModels.size());
+
+	// JS: <component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeListbox" ...>
+	if (!view.contextMenus.nodeListbox.is_null()) {
+		if (ImGui::BeginPopup("ModelsListboxContextMenu")) {
+			const auto& node = view.contextMenus.nodeListbox;
+			// Extract selection from context node
+			std::vector<std::string> sel_strings;
+			if (node.contains("selection") && node["selection"].is_array()) {
+				for (const auto& s : node["selection"]) {
+					if (s.is_string())
+						sel_strings.push_back(s.get<std::string>());
+				}
+			}
+			int count = node.value("count", 1);
+			bool hasFileDataIDs = node.value("hasFileDataIDs", false);
+
+			// JS: <span @click.self="copy_file_paths(...)">Copy file path(s)</span>
+			if (ImGui::MenuItem(std::format("Copy file path{}", count > 1 ? "s" : "").c_str())) {
+				copy_file_paths(sel_strings);
+				view.contextMenus.nodeListbox = nullptr;
+			}
+
+			// JS: <span v-if="context.node.hasFileDataIDs" @click.self="copy_listfile_format(...)">
+			if (hasFileDataIDs) {
+				if (ImGui::MenuItem(std::format("Copy file path{} (listfile format)", count > 1 ? "s" : "").c_str())) {
+					copy_listfile_format(sel_strings);
+					view.contextMenus.nodeListbox = nullptr;
 				}
 			}
 
-			if (display.textures.length > 0)
-				selected_variant_texture_ids = [...display.textures];
+			// JS: <span v-if="context.node.hasFileDataIDs" @click.self="copy_file_data_ids(...)">
+			if (hasFileDataIDs) {
+				if (ImGui::MenuItem(std::format("Copy file data ID{}", count > 1 ? "s" : "").c_str())) {
+					copy_file_data_ids(sel_strings);
+					view.contextMenus.nodeListbox = nullptr;
+				}
+			}
 
-			active_renderer.applyReplaceableTextures(display);
-		});
+			// JS: <span @click.self="copy_export_paths(...)">Copy export path(s)</span>
+			if (ImGui::MenuItem(std::format("Copy export path{}", count > 1 ? "s" : "").c_str())) {
+				copy_export_paths(sel_strings);
+				view.contextMenus.nodeListbox = nullptr;
+			}
 
-		const state = get_view_state(this.$core);
+			// JS: <span @click.self="open_export_directory(...)">Open export directory</span>
+			if (ImGui::MenuItem("Open export directory")) {
+				open_export_directory(sel_strings);
+				view.contextMenus.nodeListbox = nullptr;
+			}
 
-		this.$core.view.$watch('modelViewerAnimSelection', async selected_animation_id => {
-			if (this.$core.view.modelViewerAnims.length === 0)
-				return;
+			ImGui::EndPopup();
+		}
+	}
 
-			await modelViewerUtils.handle_animation_change(
-				active_renderer,
-				state,
-				selected_animation_id
-			);
-		});
+	// JS: <div class="filter"> <input type="text" v-model="userInputFilterModels" placeholder="Filter models..."/> </div>
+	// TODO(conversion): Filter input will use ImGui::InputText when Listbox component is wired.
 
-		this.$core.view.$watch('selectionModels', async selection => {
-			if (!this._tab_initialized)
-				return;
+	ImGui::EndChild();
 
-			if (!this.$core.view.config.modelsAutoPreview)
-				return;
+	ImGui::SameLine();
 
-			const first = listfile.stripFileEntry(selection[0]);
-			if (!this.$core.view.isBusy && first && active_path !== first)
-				preview_model(this.$core, first);
-		});
+	// --- Middle panel: Preview container ---
+	// JS: <div class="preview-container">
+	ImGui::BeginChild("models-preview-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.65f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
 
-		this.$core.events.on('toggle-uv-layer', (layer_name) => {
-			const state = get_view_state(this.$core);
-			modelViewerUtils.toggle_uv_layer(state, active_renderer, layer_name);
-		});
-	},
+	// JS: <component :is="$components.ResizeLayer" id="texture-ribbon"
+	//         v-if="config.modelViewerShowTextures && textureRibbonStack.length > 0">
+	if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
+		// TODO(conversion): Texture ribbon rendering will be wired when component is integrated.
+		ImGui::Text("Texture Ribbon: %zu textures", view.textureRibbonStack.size());
 
-	getActiveRenderer: () => active_renderer
-};
+		// JS: <component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeTextureRibbon" ...>
+		if (!view.contextMenus.nodeTextureRibbon.is_null()) {
+			if (ImGui::BeginPopup("ModelsTextureRibbonContextMenu")) {
+				const auto& node = view.contextMenus.nodeTextureRibbon;
+				uint32_t fdid = node.value("fileDataID", 0u);
+				std::string displayName = node.value("displayName", std::string(""));
+				std::string fileName = node.value("fileName", std::string(""));
+
+				// JS: <span @click.self="preview_texture(...)">Preview {{ displayName }}</span>
+				if (ImGui::MenuItem(std::format("Preview {}", displayName).c_str())) {
+					preview_texture(fdid, displayName);
+					view.contextMenus.nodeTextureRibbon = nullptr;
+				}
+
+				// JS: <span @click.self="export_ribbon_texture(...)">Export {{ displayName }}</span>
+				if (ImGui::MenuItem(std::format("Export {}", displayName).c_str())) {
+					export_ribbon_texture(fdid, displayName);
+					view.contextMenus.nodeTextureRibbon = nullptr;
+				}
+
+				// JS: <span @click.self="$core.view.goToTexture(...)">Go to {{ displayName }}</span>
+				if (ImGui::MenuItem(std::format("Go to {}", displayName).c_str())) {
+					// TODO(conversion): goToTexture will be wired when cross-tab navigation is integrated.
+					view.contextMenus.nodeTextureRibbon = nullptr;
+				}
+
+				// JS: <span @click.self="$core.view.copyToClipboard(fileDataID)">Copy file data ID to clipboard</span>
+				if (ImGui::MenuItem("Copy file data ID to clipboard")) {
+					ImGui::SetClipboardText(std::to_string(fdid).c_str());
+					view.contextMenus.nodeTextureRibbon = nullptr;
+				}
+
+				// JS: <span @click.self="$core.view.copyToClipboard(displayName)">Copy texture name to clipboard</span>
+				if (ImGui::MenuItem("Copy texture name to clipboard")) {
+					ImGui::SetClipboardText(displayName.c_str());
+					view.contextMenus.nodeTextureRibbon = nullptr;
+				}
+
+				// JS: <span @click.self="$core.view.copyToClipboard(fileName)">Copy file path to clipboard</span>
+				if (ImGui::MenuItem("Copy file path to clipboard")) {
+					ImGui::SetClipboardText(fileName.c_str());
+					view.contextMenus.nodeTextureRibbon = nullptr;
+				}
+
+				// JS: <span @click.self="$core.view.copyToClipboard($core.view.getExportPath(fileName))">Copy export path to clipboard</span>
+				if (ImGui::MenuItem("Copy export path to clipboard")) {
+					ImGui::SetClipboardText(casc::ExportHelper::getExportPath(fileName).c_str());
+					view.contextMenus.nodeTextureRibbon = nullptr;
+				}
+
+				ImGui::EndPopup();
+			}
+		}
+	}
+
+	// JS: <div id="model-texture-preview" v-if="$core.view.modelTexturePreviewURL.length > 0">
+	if (!view.modelTexturePreviewURL.empty()) {
+		// JS: <div id="model-texture-preview-toast" @click="$core.view.modelTexturePreviewURL = ''">Close Preview</div>
+		if (ImGui::Button("Close Preview"))
+			view.modelTexturePreviewURL.clear();
+
+		// JS: <div class="image" :style="{ 'max-width': ... 'px', 'max-height': ... 'px' }">
+		// TODO(conversion): Texture preview image rendering will be wired when GL texture display is integrated.
+		ImGui::Text("Preview: %s (%dx%d)", view.modelTexturePreviewName.c_str(),
+			view.modelTexturePreviewWidth, view.modelTexturePreviewHeight);
+
+		// JS: <div class="uv-overlay" v-if="modelTexturePreviewUVOverlay" ...>
+		// TODO(conversion): UV overlay rendering will be wired when GL texture display is integrated.
+
+		// JS: <div id="uv-layer-buttons" v-if="modelViewerUVLayers.length > 0">
+		if (!view.modelViewerUVLayers.empty()) {
+			for (const auto& layer : view.modelViewerUVLayers) {
+				std::string layer_name = layer.value("name", std::string(""));
+				bool is_active = layer.value("active", false);
+
+				// JS: <button :class="{ active: layer.active }" @click="toggle_uv_layer(layer.name)">{{ layer.name }}</button>
+				if (is_active)
+					ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+
+				if (ImGui::Button(layer_name.c_str()))
+					toggle_uv_layer(layer_name);
+
+				if (is_active)
+					ImGui::PopStyleColor();
+
+				ImGui::SameLine();
+			}
+			ImGui::NewLine();
+		}
+	}
+
+	// JS: <div class="preview-background" id="model-preview">
+	// JS: <input v-if="config.modelViewerShowBackground" type="color" id="background-color-input" v-model="config.modelViewerBackgroundColor"/>
+	if (view.config.value("modelViewerShowBackground", false)) {
+		// TODO(conversion): Color picker for background will be wired when model viewer GL is integrated.
+	}
+
+	// JS: <component :is="$components.ModelViewerGL" v-if="modelViewerContext" :context="modelViewerContext" />
+	// TODO(conversion): ModelViewerGL component rendering will be wired when GL integration is complete.
+
+	// JS: <div v-if="modelViewerAnims && modelViewerAnims.length > 0 && !modelTexturePreviewURL" class="preview-dropdown-overlay">
+	if (!view.modelViewerAnims.empty() && view.modelTexturePreviewURL.empty()) {
+		// JS: <select v-model="modelViewerAnimSelection">
+		std::string current_label = "No Animation";
+		std::string current_id;
+		if (view.modelViewerAnimSelection.is_string())
+			current_id = view.modelViewerAnimSelection.get<std::string>();
+
+		for (const auto& anim : view.modelViewerAnims) {
+			if (anim.value("id", std::string("")) == current_id) {
+				current_label = anim.value("label", std::string(""));
+				break;
+			}
+		}
+
+		if (ImGui::BeginCombo("##ModelAnimSelect", current_label.c_str())) {
+			for (const auto& anim : view.modelViewerAnims) {
+				std::string anim_id = anim.value("id", std::string(""));
+				std::string anim_label = anim.value("label", std::string(""));
+				bool is_selected = (anim_id == current_id);
+
+				if (ImGui::Selectable(anim_label.c_str(), is_selected))
+					view.modelViewerAnimSelection = anim_id;
+
+				if (is_selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+
+		// JS: <div v-if="modelViewerAnimSelection !== 'none'" class="anim-controls">
+		if (current_id != "none" && !current_id.empty()) {
+			// JS: <button class="anim-btn anim-step-left" :class="{ disabled: !animPaused }" @click="step_animation(-1)">
+			ImGui::SameLine();
+			bool anim_paused = view.modelViewerAnimPaused;
+
+			if (!anim_paused) ImGui::BeginDisabled();
+			if (ImGui::Button("<<"))
+				if (anim_methods) anim_methods->step_animation(-1);
+			if (!anim_paused) ImGui::EndDisabled();
+
+			// JS: <button class="anim-btn" :class="animPaused ? 'anim-play' : 'anim-pause'" @click="toggle_animation_pause()">
+			ImGui::SameLine();
+			if (ImGui::Button(anim_paused ? "Play" : "Pause"))
+				if (anim_methods) anim_methods->toggle_animation_pause();
+
+			// JS: <button class="anim-btn anim-step-right" :class="{ disabled: !animPaused }" @click="step_animation(1)">
+			ImGui::SameLine();
+			if (!anim_paused) ImGui::BeginDisabled();
+			if (ImGui::Button(">>"))
+				if (anim_methods) anim_methods->step_animation(1);
+			if (!anim_paused) ImGui::EndDisabled();
+
+			// JS: <div class="anim-scrubber">
+			//         <input type="range" min="0" :max="animFrameCount - 1" :value="animFrame" @input="seek_animation($event.target.value)" />
+			//         <div class="anim-frame-display">{{ animFrame }}</div>
+			ImGui::SameLine();
+			int frame = view.modelViewerAnimFrame;
+			int frame_max = view.modelViewerAnimFrameCount > 0 ? view.modelViewerAnimFrameCount - 1 : 0;
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 80.0f);
+			if (ImGui::SliderInt("##ModelAnimFrame", &frame, 0, frame_max)) {
+				if (anim_methods) anim_methods->seek_animation(frame);
+			}
+			ImGui::SameLine();
+			ImGui::Text("%d", view.modelViewerAnimFrame);
+		}
+	}
+
+	ImGui::EndChild();
+
+	// --- Bottom: Export controls ---
+	// JS: <div class="preview-controls">
+	//     <MenuButton :options="menuButtonModels" :default="config.exportModelFormat"
+	//         @change="config.exportModelFormat = $event" :disabled="isBusy" @click="export_model" />
+	// TODO(conversion): MenuButton component rendering will be wired when integration is complete.
+	if (ImGui::Button("Export Model") && view.isBusy == 0)
+		export_model_action();
+
+	ImGui::SameLine();
+
+	// --- Right panel: Sidebar ---
+	// JS: <div id="model-sidebar" class="sidebar">
+	ImGui::BeginChild("models-sidebar", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
+
+	// JS: <span class="header">Preview</span>
+	ImGui::SeparatorText("Preview");
+
+	// JS: <label class="ui-checkbox" title="Automatically preview a model when selecting it">
+	//         <input type="checkbox" v-model="config.modelsAutoPreview"/> <span>Auto Preview</span>
+	{
+		bool auto_preview = view.config.value("modelsAutoPreview", false);
+		if (ImGui::Checkbox("Auto Preview", &auto_preview))
+			view.config["modelsAutoPreview"] = auto_preview;
+	}
+
+	// JS: <label class="ui-checkbox" title="Automatically adjust camera when selecting a new model">
+	//         <input type="checkbox" v-model="modelViewerAutoAdjust"/> <span>Auto Camera</span>
+	ImGui::Checkbox("Auto Camera", &view.modelViewerAutoAdjust);
+
+	// JS: <input type="checkbox" v-model="config.modelViewerShowGrid"/> <span>Show Grid</span>
+	{
+		bool show_grid = view.config.value("modelViewerShowGrid", true);
+		if (ImGui::Checkbox("Show Grid", &show_grid))
+			view.config["modelViewerShowGrid"] = show_grid;
+	}
+
+	// JS: <input type="checkbox" v-model="config.modelViewerWireframe"/> <span>Show Wireframe</span>
+	{
+		bool wireframe = view.config.value("modelViewerWireframe", false);
+		if (ImGui::Checkbox("Show Wireframe", &wireframe))
+			view.config["modelViewerWireframe"] = wireframe;
+	}
+
+	// JS: <input type="checkbox" v-model="config.modelViewerShowBones"/> <span>Show Bones</span>
+	{
+		bool show_bones = view.config.value("modelViewerShowBones", false);
+		if (ImGui::Checkbox("Show Bones", &show_bones))
+			view.config["modelViewerShowBones"] = show_bones;
+	}
+
+	// JS: <input type="checkbox" v-model="config.modelViewerShowTextures"/> <span>Show Textures</span>
+	{
+		bool show_textures = view.config.value("modelViewerShowTextures", true);
+		if (ImGui::Checkbox("Show Textures", &show_textures))
+			view.config["modelViewerShowTextures"] = show_textures;
+	}
+
+	// JS: <input type="checkbox" v-model="config.modelViewerShowBackground"/> <span>Show Background</span>
+	{
+		bool show_bg = view.config.value("modelViewerShowBackground", false);
+		if (ImGui::Checkbox("Show Background", &show_bg))
+			view.config["modelViewerShowBackground"] = show_bg;
+	}
+
+	// JS: <span class="header">Export</span>
+	ImGui::SeparatorText("Export");
+
+	// JS: <input type="checkbox" v-model="config.modelsExportTextures"/> <span>Textures</span>
+	{
+		bool export_tex = view.config.value("modelsExportTextures", true);
+		if (ImGui::Checkbox("Textures", &export_tex))
+			view.config["modelsExportTextures"] = export_tex;
+	}
+
+	// JS: <label v-if="config.modelsExportTextures"> <input type="checkbox" v-model="config.modelsExportAlpha"/> <span>Texture Alpha</span>
+	if (view.config.value("modelsExportTextures", true)) {
+		bool export_alpha = view.config.value("modelsExportAlpha", true);
+		if (ImGui::Checkbox("Texture Alpha", &export_alpha))
+			view.config["modelsExportAlpha"] = export_alpha;
+	}
+
+	// JS: <label v-if="exportModelFormat === 'GLTF' && modelViewerActiveType === 'm2'">
+	//         <input type="checkbox" v-model="config.modelsExportAnimations"/> <span>Export animations</span>
+	std::string export_format = view.config.value("exportModelFormat", std::string("OBJ"));
+	if (export_format == "GLTF" && view.modelViewerActiveType == "m2") {
+		bool export_anims = view.config.value("modelsExportAnimations", false);
+		if (ImGui::Checkbox("Export animations", &export_anims))
+			view.config["modelsExportAnimations"] = export_anims;
+	}
+
+	// JS: <template v-if="config.exportModelFormat === 'RAW'">
+	if (export_format == "RAW") {
+		// JS: <input type="checkbox" v-model="config.modelsExportSkin"/> <span>M2 .skin Files</span>
+		{
+			bool v = view.config.value("modelsExportSkin", false);
+			if (ImGui::Checkbox("M2 .skin Files", &v))
+				view.config["modelsExportSkin"] = v;
+		}
+		// JS: <input type="checkbox" v-model="config.modelsExportSkel"/> <span>M2 .skel Files</span>
+		{
+			bool v = view.config.value("modelsExportSkel", false);
+			if (ImGui::Checkbox("M2 .skel Files", &v))
+				view.config["modelsExportSkel"] = v;
+		}
+		// JS: <input type="checkbox" v-model="config.modelsExportBone"/> <span>M2 .bone Files</span>
+		{
+			bool v = view.config.value("modelsExportBone", false);
+			if (ImGui::Checkbox("M2 .bone Files", &v))
+				view.config["modelsExportBone"] = v;
+		}
+		// JS: <input type="checkbox" v-model="config.modelsExportAnim"/> <span>M2 .anim files</span>
+		{
+			bool v = view.config.value("modelsExportAnim", false);
+			if (ImGui::Checkbox("M2 .anim files", &v))
+				view.config["modelsExportAnim"] = v;
+		}
+		// JS: <input type="checkbox" v-model="config.modelsExportWMOGroups"/> <span>WMO Groups</span>
+		{
+			bool v = view.config.value("modelsExportWMOGroups", false);
+			if (ImGui::Checkbox("WMO Groups", &v))
+				view.config["modelsExportWMOGroups"] = v;
+		}
+	}
+
+	// JS: <template v-if="config.exportModelFormat === 'OBJ' && modelViewerActiveType === 'wmo'">
+	if (export_format == "OBJ" && view.modelViewerActiveType == "wmo") {
+		// JS: <input type="checkbox" v-model="config.modelsExportSplitWMOGroups"/> <span>Split WMO Groups</span>
+		bool v = view.config.value("modelsExportSplitWMOGroups", false);
+		if (ImGui::Checkbox("Split WMO Groups", &v))
+			view.config["modelsExportSplitWMOGroups"] = v;
+	}
+
+	// JS: <template v-if="modelViewerActiveType === 'm2'">
+	if (view.modelViewerActiveType == "m2") {
+		// JS: <span class="header">Geosets</span>
+		ImGui::SeparatorText("Geosets");
+
+		// JS: <component :is="$components.Checkboxlist" :items="modelViewerGeosets" />
+		// TODO(conversion): Checkboxlist component rendering will be wired when integration is complete.
+		for (auto& geoset : view.modelViewerGeosets) {
+			std::string label = geoset.value("label", std::string("Geoset"));
+			bool checked = geoset.value("checked", true);
+			if (ImGui::Checkbox(label.c_str(), &checked))
+				geoset["checked"] = checked;
+		}
+
+		// JS: <div class="list-toggles">
+		//         <a @click="setAllGeosets(true, modelViewerGeosets)">Enable All</a> /
+		//         <a @click="setAllGeosets(false, modelViewerGeosets)">Disable All</a>
+		if (ImGui::SmallButton("Enable All##Geosets")) {
+			for (auto& g : view.modelViewerGeosets)
+				g["checked"] = true;
+		}
+		ImGui::SameLine();
+		ImGui::Text("/");
+		ImGui::SameLine();
+		if (ImGui::SmallButton("Disable All##Geosets")) {
+			for (auto& g : view.modelViewerGeosets)
+				g["checked"] = false;
+		}
+
+		// JS: <template v-if="config.modelsExportTextures">
+		if (view.config.value("modelsExportTextures", true)) {
+			// JS: <span class="header">Skins</span>
+			ImGui::SeparatorText("Skins");
+
+			// JS: <component :is="$components.Listboxb" :items="modelViewerSkins" v-model:selection="modelViewerSkinsSelection" :single="true" />
+			// TODO(conversion): Listboxb component rendering will be wired when integration is complete.
+			for (const auto& skin : view.modelViewerSkins) {
+				std::string skin_id = skin.value("id", std::string(""));
+				std::string skin_label = skin.value("label", std::string(""));
+				bool is_selected = false;
+				for (const auto& sel : view.modelViewerSkinsSelection) {
+					if (sel.value("id", std::string("")) == skin_id) {
+						is_selected = true;
+						break;
+					}
+				}
+
+				if (ImGui::Selectable(skin_label.c_str(), is_selected)) {
+					view.modelViewerSkinsSelection = { skin };
+				}
+			}
+		}
+	}
+
+	// JS: <template v-if="modelViewerActiveType === 'wmo'">
+	if (view.modelViewerActiveType == "wmo") {
+		// JS: <span class="header">WMO Groups</span>
+		ImGui::SeparatorText("WMO Groups");
+
+		// JS: <component :is="$components.Checkboxlist" :items="modelViewerWMOGroups" />
+		for (auto& group : view.modelViewerWMOGroups) {
+			std::string label = group.value("label", std::string("Group"));
+			bool checked = group.value("checked", true);
+			if (ImGui::Checkbox(label.c_str(), &checked))
+				group["checked"] = checked;
+		}
+
+		// JS: <a @click="setAllWMOGroups(true)">Enable All</a> / <a @click="setAllWMOGroups(false)">Disable All</a>
+		if (ImGui::SmallButton("Enable All##WMOGroups")) {
+			for (auto& g : view.modelViewerWMOGroups)
+				g["checked"] = true;
+		}
+		ImGui::SameLine();
+		ImGui::Text("/");
+		ImGui::SameLine();
+		if (ImGui::SmallButton("Disable All##WMOGroups")) {
+			for (auto& g : view.modelViewerWMOGroups)
+				g["checked"] = false;
+		}
+
+		// JS: <span class="header">Doodad Sets</span>
+		ImGui::SeparatorText("Doodad Sets");
+
+		// JS: <component :is="$components.Checkboxlist" :items="modelViewerWMOSets" />
+		for (auto& set : view.modelViewerWMOSets) {
+			std::string label = set.value("label", std::string("Set"));
+			bool checked = set.value("checked", true);
+			if (ImGui::Checkbox(label.c_str(), &checked))
+				set["checked"] = checked;
+		}
+	}
+
+	ImGui::EndChild();
+}
+
+} // namespace tab_models
