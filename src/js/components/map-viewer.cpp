@@ -876,11 +876,11 @@ void handleMouseMove(MapViewerState& state, float clientX, float clientY,
 /**
  * Invoked on mouseup events captured on the document.
  */
-void handleMouseUp(MapViewerState& state, int gridSize,
+void handleMouseUp(MapViewerState& state, int tileSize_prop, int gridSize,
                    const std::vector<int>& mask, std::vector<int>& selection,
                    bool selectable, const SelectionChangedCallback& onSelectionChanged) {
 	if (state.isBoxSelecting) {
-		finalizeBoxSelection(state, 0, gridSize, mask, selection, onSelectionChanged);
+		finalizeBoxSelection(state, tileSize_prop, gridSize, mask, selection, onSelectionChanged);
 		state.isBoxSelecting = false;
 		state.boxSelectStart.reset();
 		state.boxSelectEnd.reset();
@@ -1223,7 +1223,7 @@ void renderWidget(const char* id,
 	// handleMouseUp (document-level)
 	if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
 		if (state.isPanning || state.isSelecting || state.isBoxSelecting) {
-			handleMouseUp(state, gridSize, mask, selection, selectable, onSelectionChanged);
+			handleMouseUp(state, tileSize_prop, gridSize, mask, selection, selectable, onSelectionChanged);
 		}
 	}
 

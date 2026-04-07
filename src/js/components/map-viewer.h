@@ -292,7 +292,7 @@ void handleMouseMove(MapViewerState& state, float clientX, float clientY,
 /**
  * Invoked on mouseup events captured on the document.
  */
-void handleMouseUp(MapViewerState& state, int gridSize,
+void handleMouseUp(MapViewerState& state, int tileSize_prop, int gridSize,
                    const std::vector<int>& mask, std::vector<int>& selection,
                    bool selectable, const SelectionChangedCallback& onSelectionChanged);
 
