@@ -149,4 +149,8 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/components/menu-button.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/resize-layer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/slider.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/components/listbox.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/components/listbox-maps.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/components/listbox-zones.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/components/itemlistbox.cpp
 )

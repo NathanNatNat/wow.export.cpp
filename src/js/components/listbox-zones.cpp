@@ -3,94 +3,106 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
+#include "listbox-zones.h"
 
-const listboxComponent = require('./listbox');
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <regex>
+#include <functional>
 
-module.exports = {
-	/**
-	 * Extends the base listbox component with expansion filtering for zones.
-	 * 
-	 * Additional props:
-	 * expansionFilter: Reactive value for filtering by expansion ID (-1 for all, 0+ for specific expansion)
-	 */
-	props: [...listboxComponent.props, 'expansionFilter'],
-	emits: listboxComponent.emits,
+namespace listbox_zones {
 
-	data: listboxComponent.data,
+/**
+ * Extends the base listbox component with expansion filtering for zones.
+ *
+ * Additional props:
+ * expansionFilter: Reactive value for filtering by expansion ID (-1 for all, 0+ for specific expansion)
+ */
+// props: [...listboxComponent.props, 'expansionFilter']
+// emits: listboxComponent.emits
 
-	mounted: listboxComponent.mounted,
-	beforeUnmount: listboxComponent.beforeUnmount,
+// data: same as listboxComponent.data — stored in ListboxZonesState.base
 
-	watch: {
-		...listboxComponent.watch,
-		
-		expansionFilter: function() {
-			this.scroll = 0;
-			this.scrollRel = 0;
-			this.recalculateBounds();
+// mounted: same as listboxComponent.mounted
+// beforeUnmount: same as listboxComponent.beforeUnmount
+
+// watch: expansionFilter — resets scroll on change (handled below)
+// All other watches inherited from listboxComponent.watch
+
+// computed: scrollOffset, scrollIndex, itemList, displayItems, itemWeight — inherited from listboxComponent
+
+/**
+ * Reactively filtered version of the underlying data array.
+ * Applies both text filtering and expansion filtering.
+ *
+ * This overrides listboxComponent.computed.filteredItems to add
+ * expansion-based filtering before the text filter.
+ */
+// NOTE: The expansion filtering is integrated into the render() call below
+// by pre-filtering items before passing to the base listbox render.
+
+static std::vector<std::string> filterByExpansion(const std::vector<std::string>& items, int expansionFilter) {
+	if (expansionFilter == -1)
+		return items;
+
+	std::vector<std::string> filtered;
+	for (const auto& item : items) {
+		// Extract expansion ID from the zone entry format.
+		// Items are formatted as: "ExpansionID\x19[ZoneID]\x19ZoneName\x19(AreaName)"
+		const auto sepPos = item.find('\x19');
+		if (sepPos != std::string::npos) {
+			try {
+				const int expansionId = std::stoi(item.substr(0, sepPos));
+				if (expansionId == expansionFilter)
+					filtered.push_back(item);
+			} catch (...) {
+				// Parse failed, skip item.
+			}
 		}
-	},
+	}
+	return filtered;
+}
 
-	computed: {
-		scrollOffset: listboxComponent.computed.scrollOffset,
-		scrollIndex: listboxComponent.computed.scrollIndex,
-		itemList: listboxComponent.computed.itemList,
+// methods: inherited from listboxComponent.methods
+// template: inherited from listboxComponent.template
 
-		/**
-		 * Reactively filtered version of the underlying data array.
-		 * Applies both text filtering and expansion filtering.
-		 */
-		filteredItems: function() {
-			let res = this.itemList;
+void render(const char* id,
+            const std::vector<std::string>& items,
+            const std::string& filter,
+            const std::vector<std::string>& selection,
+            bool single,
+            bool keyinput,
+            bool regex,
+            listbox::CopyMode copymode,
+            bool pasteselection,
+            bool copytrimwhitespace,
+            const std::string& unittype,
+            const std::vector<std::string>* overrideItems,
+            bool disable,
+            const std::string& persistscrollkey,
+            const std::vector<std::string>& quickfilters,
+            bool nocopy,
+            int expansionFilter,
+            ListboxZonesState& state,
+            const std::function<void(const std::vector<std::string>&)>& onSelectionChanged,
+            const std::function<void(const listbox::ContextMenuEvent&)>& onContextMenu) {
 
-			// First apply expansion filtering if set
-			if (this.expansionFilter !== undefined && this.expansionFilter !== -1) {
-				res = res.filter(item => {
-					// Extract expansion ID from the zone entry format
-					const parts = item.split('\x19');
-					if (parts.length >= 1) {
-						const expansionId = parseInt(parts[0]);
-						return expansionId === this.expansionFilter;
-					}
-					return false;
-				});
-			}
+	// watch: expansionFilter — reset scroll on change.
+	if (expansionFilter != state.prevExpansionFilter) {
+		state.prevExpansionFilter = expansionFilter;
+		state.base.scroll = 0.0f;
+		state.base.scrollRel = 0.0f;
+	}
 
-			if (this.debouncedFilter) {
-				if (this.regex) {
-					try {
-						const filter = new RegExp(this.debouncedFilter.trim(), 'i');
-						res = res.filter(e => e.match(filter));
-					} catch (e) {
-						// Regular expression did not compile, skip filtering.
-					}
-				} else {
-					const filter = this.debouncedFilter.trim().toLowerCase();
-					if (filter.length > 0)
-						res = res.filter(e => e.toLowerCase().includes(filter));
-				}
-			}
+	// Pre-filter items by expansion before passing to base listbox.
+	const std::vector<std::string> expansionFiltered = filterByExpansion(items, expansionFilter);
 
-			let hasChanges = false;
-			const newSelection = this.selection.filter((item) => {
-				const includes = res.includes(item);
+	// Delegate to the base listbox render with expansion-filtered items.
+	listbox::render(id, expansionFiltered, filter, selection, single, keyinput, regex,
+	                copymode, pasteselection, copytrimwhitespace, unittype, overrideItems,
+	                disable, persistscrollkey, quickfilters, nocopy, state.base,
+	                onSelectionChanged, onContextMenu);
+}
 
-				if (!includes)
-					hasChanges = true;
-
-				return includes;
-			});
-
-			if (hasChanges)
-				this.$emit('update:selection', newSelection);
-
-			return res;
-		},
-
-		displayItems: listboxComponent.computed.displayItems,
-		itemWeight: listboxComponent.computed.itemWeight
-	},
-
-	methods: listboxComponent.methods,
-	template: listboxComponent.template
-};
+} // namespace listbox_zones

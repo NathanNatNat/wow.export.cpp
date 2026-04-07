@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 144 / 184 files converted
+**Progress:** 148 / 184 files converted
 
 ---
 
@@ -225,10 +225,10 @@
 - [x] `src/js/components/menu-button.cpp` (81 lines)
 - [x] `src/js/components/resize-layer.cpp` (25 lines)
 - [x] `src/js/components/slider.cpp` (98 lines)
-- [ ] `src/js/components/listbox.cpp` (516 lines)
-- [ ] `src/js/components/listbox-maps.cpp` (95 lines)
-- [ ] `src/js/components/listbox-zones.cpp` (95 lines)
-- [ ] `src/js/components/itemlistbox.cpp` (342 lines)
+- [x] `src/js/components/listbox.cpp` (516 lines)
+- [x] `src/js/components/listbox-maps.cpp` (95 lines)
+- [x] `src/js/components/listbox-zones.cpp` (95 lines)
+- [x] `src/js/components/itemlistbox.cpp` (342 lines)
 - [ ] `src/js/components/map-viewer.cpp` (1113 lines) 🔴
 - [ ] `src/js/components/model-viewer-gl.cpp` (516 lines)
 
