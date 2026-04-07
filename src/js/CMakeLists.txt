@@ -131,4 +131,9 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/exporters/WMOLegacyExporter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/exporters/WMOExporter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/3D/exporters/ADTExporter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/audio-helper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/uv-drawer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/char-texture-overlay.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/texture-ribbon.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/listbox-context.cpp
 )
