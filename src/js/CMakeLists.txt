@@ -140,4 +140,7 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/texture-exporter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/character-appearance.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/model-viewer-utils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/components/checkboxlist.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/components/combobox.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/components/context-menu.cpp
 )
