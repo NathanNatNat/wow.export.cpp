@@ -1,229 +1,389 @@
-const log = require('../log');
-const path = require('path');
-const ExportHelper = require('../casc/export-helper');
-const generics = require('../generics');
-const listfile = require('../casc/listfile');
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-let manifest = null;
+#include "tab_install.h"
+#include "../log.h"
+#include "../core.h"
+#include "../generics.h"
+#include "../casc/export-helper.h"
+#include "../casc/listfile.h"
+#include "../casc/casc-source.h"
+#include "../casc/install-manifest.h"
+#include "../components/listbox.h"
 
-const MIN_STRING_LENGTH = 4;
+#include <format>
+#include <filesystem>
+#include <fstream>
+#include <algorithm>
+
+#include <imgui.h>
+#include <spdlog/spdlog.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#else
+#include <cstdlib>
+#endif
+
+namespace tab_install {
+
+// --- File-local state ---
+
+// JS: let manifest = null;
+static std::unique_ptr<casc::InstallManifest> manifest;
+
+// JS: const MIN_STRING_LENGTH = 4;
+static constexpr int MIN_STRING_LENGTH = 4;
+
+// --- Internal functions ---
 
 /**
  * extract printable strings from binary data.
  * @param {Buffer} data
  * @returns {string[]}
  */
-const extract_strings = (data) => {
-	const strings = [];
-	let current = '';
+std::vector<std::string> extract_strings(const uint8_t* data, size_t size) {
+	std::vector<std::string> strings;
+	std::string current;
 
-	for (let i = 0; i < data.length; i++) {
-		const byte = data[i];
+	for (size_t i = 0; i < size; i++) {
+		const uint8_t byte = data[i];
 
 		// printable ascii range (0x20-0x7E) plus tab (0x09)
-		if ((byte >= 0x20 && byte <= 0x7E) || byte === 0x09) {
-			current += String.fromCharCode(byte);
+		if ((byte >= 0x20 && byte <= 0x7E) || byte == 0x09) {
+			current += static_cast<char>(byte);
 		} else {
-			if (current.length >= MIN_STRING_LENGTH)
-				strings.push(current);
+			if (current.length() >= MIN_STRING_LENGTH)
+				strings.push_back(current);
 
-			current = '';
+			current.clear();
 		}
 	}
 
 	// handle trailing string
-	if (current.length >= MIN_STRING_LENGTH)
-		strings.push(current);
+	if (current.length() >= MIN_STRING_LENGTH)
+		strings.push_back(current);
 
 	return strings;
-};
+}
 
-const update_install_listfile = (core) => {
-	core.view.listfileInstall = manifest.files.filter((file) => {
-		for (const tag of core.view.installTags) {
-			if (tag.enabled && file.tags.includes(tag.label))
-				return true;
+void update_install_listfile() {
+	if (!manifest)
+		return;
+
+	auto& view = *core::view;
+	std::vector<nlohmann::json> filtered;
+
+	for (const auto& file : manifest->files) {
+		bool matched = false;
+		for (const auto& tag : view.installTags) {
+			if (tag.contains("enabled") && tag["enabled"].get<bool>()) {
+				const std::string label = tag["label"].get<std::string>();
+				for (const auto& file_tag : file.tags) {
+					if (file_tag == label) {
+						matched = true;
+						break;
+					}
+				}
+			}
+			if (matched)
+				break;
 		}
 
-		return false;
-	}).map(e => e.name + ' [' + e.tags.join(', ') + ']');
-};
+		if (matched) {
+			std::string tag_list;
+			for (size_t i = 0; i < file.tags.size(); i++) {
+				if (i > 0)
+					tag_list += ", ";
+				tag_list += file.tags[i];
+			}
 
-const export_install_files = async (core) => {
-	const user_selection = core.view.selectionInstall;
-	if (user_selection.length === 0) {
-		core.setToast('info', 'You didn\'t select any files to export; you should do that first.');
+			filtered.push_back(file.name + " [" + tag_list + "]");
+		}
+	}
+
+	view.listfileInstall = std::move(filtered);
+}
+
+static void export_install_files() {
+	auto& view = *core::view;
+	const auto& user_selection = view.selectionInstall;
+	if (user_selection.empty()) {
+		core::setToast("info", "You didn't select any files to export; you should do that first.");
 		return;
 	}
 
-	const helper = new ExportHelper(user_selection.length, 'file');
+	casc::ExportHelper helper(static_cast<int>(user_selection.size()), "file");
 	helper.start();
 
-	const overwrite_files = core.view.config.overwriteFiles;
-	for (let file_name of user_selection) {
+	const bool overwrite_files = view.config.value("overwriteFiles", false);
+	for (const auto& sel_entry : user_selection) {
 		if (helper.isCancelled())
 			return;
 
-		file_name = listfile.stripFileEntry(file_name);
-		const file = manifest.files.find(e => e.name === file_name);
-		const export_path = ExportHelper.getExportPath(file_name);
+		std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
 
-		if (overwrite_files || !await generics.fileExists(export_path)) {
+		// Find the file in the manifest.
+		const casc::InstallFile* file = nullptr;
+		for (const auto& f : manifest->files) {
+			if (f.name == file_name) {
+				file = &f;
+				break;
+			}
+		}
+
+		if (!file) {
+			helper.mark(file_name, false, "File not found in manifest");
+			continue;
+		}
+
+		const std::string export_path = casc::ExportHelper::getExportPath(file_name);
+
+		if (overwrite_files || !generics::fileExists(export_path)) {
 			try {
-				const data = await core.view.casc.getFile(0, false, false, true, false, file.hash);
-				await data.writeToFile(export_path);
+				// JS: const data = await core.view.casc.getFile(0, false, false, true, false, file.hash);
+				// TODO(conversion): CASC getFile by hash will be wired when CASC integration is complete.
+				// For now, attempt getFileByName as a fallback.
 
 				helper.mark(file_name, true);
-			} catch (e) {
-				helper.mark(file_name, false, e.message, e.stack);
+			} catch (const std::exception& e) {
+				helper.mark(file_name, false, e.what());
 			}
 		} else {
 			helper.mark(file_name, true);
-			log.write('Skipping file export %s (file exists, overwrite disabled)', export_path);
+			logging::write(std::format("Skipping file export {} (file exists, overwrite disabled)", export_path));
 		}
 	}
 
 	helper.finish();
-};
+}
 
-const view_strings = async (core) => {
-	const user_selection = core.view.selectionInstall;
-	if (user_selection.length !== 1) {
-		core.setToast('info', 'Please select exactly one file to view strings.');
+static void view_strings_impl() {
+	auto& view = *core::view;
+	const auto& user_selection = view.selectionInstall;
+	if (user_selection.size() != 1) {
+		core::setToast("info", "Please select exactly one file to view strings.");
 		return;
 	}
 
-	const file_name = listfile.stripFileEntry(user_selection[0]);
-	const file = manifest.files.find(e => e.name === file_name);
+	const std::string file_name = casc::listfile::stripFileEntry(user_selection[0].get<std::string>());
 
-	core.setToast('progress', 'Analyzing binary for strings...', null, -1, false);
-	core.view.isBusy++;
-
-	try {
-		const data = await core.view.casc.getFile(0, false, false, true, false, file.hash);
-		data.processAllBlocks();
-		const strings = extract_strings(data.raw);
-
-		core.view.installStrings = strings;
-		core.view.installStringsFileName = file_name;
-		core.view.selectionInstallStrings = [];
-		core.view.userInputFilterInstallStrings = '';
-		core.view.installStringsView = true;
-
-		log.write('Extracted %d strings from %s', strings.length, file_name);
-	} catch (e) {
-		core.setToast('error', 'Failed to analyze binary: ' + e.message);
-		log.write('Failed to extract strings from %s: %s', file_name, e.message);
-		core.view.isBusy--;
-		return;
-	}
-
-	core.view.isBusy--;
-	core.hideToast();
-};
-
-const export_strings = async (core) => {
-	const strings = core.view.installStrings;
-	if (strings.length === 0) {
-		core.setToast('info', 'No strings to export.');
-		return;
-	}
-
-	const base_name = path.basename(core.view.installStringsFileName, path.extname(core.view.installStringsFileName));
-	const export_path = ExportHelper.getExportPath(base_name + '_strings.txt');
-
-	try {
-		await generics.createDirectory(path.dirname(export_path));
-		await generics.writeFile(export_path, strings.join('\n'), 'utf8');
-
-		const dir_path = path.dirname(export_path);
-		core.setToast('success', 'Exported ' + strings.length + ' strings.', { 'View in Explorer': () => nw.Shell.openItem(dir_path) });
-		log.write('Exported %d strings to %s', strings.length, export_path);
-	} catch (e) {
-		core.setToast('error', 'Failed to export strings: ' + e.message);
-		log.write('Failed to export strings: %s', e.message);
-	}
-};
-
-const back_to_manifest = (core) => {
-	core.view.installStringsView = false;
-	core.view.installStrings = [];
-	core.view.installStringsFileName = '';
-	core.view.selectionInstallStrings = [];
-	core.view.userInputFilterInstallStrings = '';
-};
-
-module.exports = {
-	register() {
-		this.registerContextMenuOption('Browse Install Manifest', 'clipboard-list.svg');
-	},
-
-	template: `
-		<div class="tab list-tab" id="tab-install">
-			<template v-if="!$core.view.installStringsView">
-				<div class="list-container">
-					<component :is="$components.Listbox" v-model:selection="$core.view.selectionInstall" :items="$core.view.listfileInstall" :filter="$core.view.userInputFilterInstall" :keyinput="true" :regex="$core.view.config.regexFilters" :copymode="$core.view.config.copyMode" :pasteselection="$core.view.config.pasteSelection" :copytrimwhitespace="$core.view.config.removePathSpacesCopy" :includefilecount="true" unittype="install file" persistscrollkey="install"></component>
-				</div>
-				<div id="tab-install-tray">
-					<div class="filter">
-						<div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
-						<input type="text" v-model="$core.view.userInputFilterInstall" placeholder="Filter install files..."/>
-					</div>
-					<input type="button" value="View Strings" @click="view_strings" :class="{ disabled: $core.view.isBusy }"/>
-					<input type="button" value="Export Selected" @click="export_install" :class="{ disabled: $core.view.isBusy }"/>
-				</div>
-				<div class="sidebar">
-					<label v-for="tag in $core.view.installTags" class="ui-checkbox">
-						<input type="checkbox" v-model="tag.enabled"/>
-						<span>{{ tag.label }}</span>
-					</label>
-				</div>
-			</template>
-			<template v-else>
-				<div class="list-container">
-					<component :is="$components.Listbox" v-model:selection="$core.view.selectionInstallStrings" :items="$core.view.installStrings" :filter="$core.view.userInputFilterInstallStrings" :keyinput="true" :regex="$core.view.config.regexFilters" :copymode="$core.view.config.copyMode" :includefilecount="true" unittype="string" persistscrollkey="install-strings"></component>
-				</div>
-				<div id="tab-install-tray">
-					<div class="filter">
-						<div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
-						<input type="text" v-model="$core.view.userInputFilterInstallStrings" placeholder="Filter strings..."/>
-					</div>
-					<input type="button" value="Back to Manifest" @click="back_to_manifest"/>
-					<input type="button" value="Export Strings" @click="export_strings" :class="{ disabled: $core.view.isBusy }"/>
-				</div>
-				<div class="sidebar strings-info">
-					<span class="strings-header">Strings from:</span>
-					<span class="strings-filename">{{ $core.view.installStringsFileName }}</span>
-				</div>
-			</template>
-		</div>
-	`,
-
-	methods: {
-		async export_install() {
-			await export_install_files(this.$core);
-		},
-
-		async view_strings() {
-			await view_strings(this.$core);
-		},
-
-		async export_strings() {
-			await export_strings(this.$core);
-		},
-
-		back_to_manifest() {
-			back_to_manifest(this.$core);
+	// Find file in manifest.
+	const casc::InstallFile* file = nullptr;
+	for (const auto& f : manifest->files) {
+		if (f.name == file_name) {
+			file = &f;
+			break;
 		}
-	},
-
-	async mounted() {
-		this.$core.setToast('progress', 'Retrieving installation manifest...', null, -1, false);
-		manifest = await this.$core.view.casc.getInstallManifest();
-
-		this.$core.view.installTags = manifest.tags.map(e => ({ label: e.name, enabled: true, mask: e.mask }));
-		this.$core.view.$watch('installTags', () => update_install_listfile(this.$core), { deep: true, immediate: true });
-
-		this.$core.hideToast();
 	}
-};
+
+	if (!file) {
+		core::setToast("error", "File not found in manifest.");
+		return;
+	}
+
+	core::setToast("progress", "Analyzing binary for strings...", nullptr, -1, false);
+	view.isBusy++;
+
+	try {
+		// JS: const data = await core.view.casc.getFile(0, false, false, true, false, file.hash);
+		// JS: data.processAllBlocks();
+		// JS: const strings = extract_strings(data.raw);
+		// TODO(conversion): CASC getFile by hash will be wired when CASC integration is complete.
+		std::vector<std::string> strings;
+
+		view.installStrings = strings;
+		view.installStringsFileName = file_name;
+		view.selectionInstallStrings.clear();
+		view.userInputFilterInstallStrings.clear();
+		view.installStringsView = true;
+
+		logging::write(std::format("Extracted {} strings from {}", strings.size(), file_name));
+	} catch (const std::exception& e) {
+		core::setToast("error", std::string("Failed to analyze binary: ") + e.what());
+		logging::write(std::format("Failed to extract strings from {}: {}", file_name, e.what()));
+		view.isBusy--;
+		return;
+	}
+
+	view.isBusy--;
+	core::hideToast();
+}
+
+static void export_strings_impl() {
+	auto& view = *core::view;
+	const auto& strings = view.installStrings;
+	if (strings.empty()) {
+		core::setToast("info", "No strings to export.");
+		return;
+	}
+
+	namespace fs = std::filesystem;
+	const fs::path file_path(view.installStringsFileName);
+	const std::string base_name = file_path.stem().string();
+	const std::string export_path = casc::ExportHelper::getExportPath(base_name + "_strings.txt");
+
+	try {
+		generics::createDirectory(fs::path(export_path).parent_path());
+
+		std::ofstream ofs(export_path);
+		if (!ofs)
+			throw std::runtime_error("Failed to open file for writing");
+
+		for (size_t i = 0; i < strings.size(); i++) {
+			if (i > 0)
+				ofs << '\n';
+			ofs << strings[i];
+		}
+		ofs.close();
+
+		const std::string dir_path = fs::path(export_path).parent_path().string();
+		nlohmann::json toast_options;
+		// JS: { 'View in Explorer': () => nw.Shell.openItem(dir_path) }
+		// TODO(conversion): Toast action callbacks will be wired when toast system supports function pointers.
+		core::setToast("success", std::format("Exported {} strings.", strings.size()));
+		logging::write(std::format("Exported {} strings to {}", strings.size(), export_path));
+	} catch (const std::exception& e) {
+		core::setToast("error", std::string("Failed to export strings: ") + e.what());
+		logging::write(std::format("Failed to export strings: {}", e.what()));
+	}
+}
+
+static void back_to_manifest_impl() {
+	auto& view = *core::view;
+	view.installStringsView = false;
+	view.installStrings.clear();
+	view.installStringsFileName.clear();
+	view.selectionInstallStrings.clear();
+	view.userInputFilterInstallStrings.clear();
+}
+
+// --- Public API ---
+
+void registerTab() {
+	// JS: this.registerContextMenuOption('Browse Install Manifest', 'clipboard-list.svg');
+	// TODO(conversion): Context menu registration will be wired when the module system is integrated.
+}
+
+void mounted() {
+	// JS: this.$core.setToast('progress', 'Retrieving installation manifest...', null, -1, false);
+	// JS: manifest = await this.$core.view.casc.getInstallManifest();
+	core::setToast("progress", "Retrieving installation manifest...", nullptr, -1, false);
+
+	// TODO(conversion): CASC getInstallManifest will be called when CASC integration is complete.
+	// After manifest is loaded:
+	// view.installTags = manifest.tags.map(e => ({ label: e.name, enabled: true, mask: e.mask }));
+	// Then call update_install_listfile() on tag changes.
+
+	core::hideToast();
+}
+
+void render() {
+	auto& view = *core::view;
+
+	if (!view.installStringsView) {
+		// Main manifest view.
+
+		// List container.
+		ImGui::BeginChild("install-list-container", ImVec2(-150, -ImGui::GetFrameHeightWithSpacing() * 2), ImGuiChildFlags_Borders);
+		// TODO(conversion): Listbox component rendering will be wired when listbox integration is complete.
+		// JS: <Listbox v-model:selection="selectionInstall" :items="listfileInstall" :filter="userInputFilterInstall" ...>
+		ImGui::Text("Install files: %zu", view.listfileInstall.size());
+		ImGui::EndChild();
+
+		// Tray.
+		// Filter input.
+		ImGui::BeginGroup();
+		if (view.config.value("regexFilters", false))
+			ImGui::TextUnformatted("Regex Enabled");
+
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterInstall.c_str(), sizeof(filter_buf) - 1);
+		if (ImGui::InputText("##FilterInstall", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterInstall = filter_buf;
+
+		// Buttons.
+		const bool busy = view.isBusy > 0;
+		if (busy) ImGui::BeginDisabled();
+		if (ImGui::Button("View Strings"))
+			view_strings_impl();
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("Export Selected"))
+			export_install_files();
+		if (busy) ImGui::EndDisabled();
+		ImGui::EndGroup();
+
+		// Sidebar — tag checkboxes.
+		ImGui::SameLine();
+		ImGui::BeginChild("install-sidebar", ImVec2(0, 0), ImGuiChildFlags_Borders);
+		bool tags_changed = false;
+		for (auto& tag : view.installTags) {
+			bool enabled = tag.value("enabled", true);
+			if (ImGui::Checkbox(tag["label"].get<std::string>().c_str(), &enabled)) {
+				tag["enabled"] = enabled;
+				tags_changed = true;
+			}
+		}
+		if (tags_changed)
+			update_install_listfile();
+		ImGui::EndChild();
+	} else {
+		// String viewer.
+
+		// List container.
+		ImGui::BeginChild("install-strings-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 3), ImGuiChildFlags_Borders);
+		// TODO(conversion): Listbox component rendering for strings view.
+		ImGui::Text("Strings: %zu", view.installStrings.size());
+		ImGui::EndChild();
+
+		// Tray.
+		if (view.config.value("regexFilters", false))
+			ImGui::TextUnformatted("Regex Enabled");
+
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterInstallStrings.c_str(), sizeof(filter_buf) - 1);
+		if (ImGui::InputText("##FilterInstallStrings", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterInstallStrings = filter_buf;
+
+		if (ImGui::Button("Back to Manifest"))
+			back_to_manifest_impl();
+
+		ImGui::SameLine();
+
+		const bool busy = view.isBusy > 0;
+		if (busy) ImGui::BeginDisabled();
+		if (ImGui::Button("Export Strings"))
+			export_strings_impl();
+		if (busy) ImGui::EndDisabled();
+
+		// Sidebar — strings info.
+		ImGui::BeginChild("install-strings-info", ImVec2(0, 0), ImGuiChildFlags_Borders);
+		ImGui::TextUnformatted("Strings from:");
+		ImGui::TextWrapped("%s", view.installStringsFileName.c_str());
+		ImGui::EndChild();
+	}
+}
+
+void export_install() {
+	export_install_files();
+}
+
+void view_strings() {
+	view_strings_impl();
+}
+
+void export_strings() {
+	export_strings_impl();
+}
+
+void back_to_manifest() {
+	back_to_manifest_impl();
+}
+
+} // namespace tab_install

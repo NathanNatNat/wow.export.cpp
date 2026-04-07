@@ -447,3 +447,13 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: `beforeUnmount` calls `document.removeEventListener('paste', this.onPaste)`, but `onPaste` is never registered in `mounted()`.
 - **C++**: Not implemented.
 - **Rationale**: Dead code in JS source. No `paste` handler is ever registered, so removing it is a no-op.
+
+### `src/js/modules/tab_home.cpp` — ACCEPTABLE (render body stripped to blank placeholder)
+- **JS**: `render()` displays `whatsNewHTML` content and three help buttons (Discord, GitHub, Patreon) with `data-external` links.
+- **C++**: `render()` is an empty function body. `navigate()` is preserved as-is.
+- **Rationale**: Content intentionally removed per project direction — the home tab is a blank placeholder for now. Tab navigation buttons and the `navigate()` method are kept intact.
+
+### `src/js/modules/legacy_tab_home.cpp` — ACCEPTABLE (render body stripped to blank placeholder)
+- **JS**: `render()` displays `whatsNewHTML` content and three help buttons (Discord, GitHub, Patreon) with `data-external` links. Identical to `tab_home` but with "legacy-tab-home" CSS ID.
+- **C++**: `render()` is an empty function body. `navigate()` is preserved as-is.
+- **Rationale**: Content intentionally removed per project direction — the legacy home tab is a blank placeholder for now. Tab navigation buttons and the `navigate()` method are kept intact.

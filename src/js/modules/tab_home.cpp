@@ -1,29 +1,24 @@
-module.exports = {
-	template: `
-		<div class="tab" id="tab-home">
-			<div id="home-changes">
-				<div v-html="$core.view.whatsNewHTML"></div>
-			</div>
-			<div id="home-help-buttons">
-				<div data-external="::DISCORD">
-					<b>Stuck? Need Help?</b>
-					<span>Join our Discord community for support!</span>
-				</div>
-				<div data-external="::GITHUB">
-					<b>Gnomish Heritage?</b>
-					<span>wow.export is open-source, tinkerers are welcome!</span>
-				</div>
-				<div data-external="::PATREON">
-					<b>Support Us!</b>
-					<span>Support development of wow.export through Patreon!</span>
-				</div>
-			</div>
-		</div>
-	`,
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-	methods: {
-		navigate(module_name) {
-			this.$modules[module_name].setActive();
-		}
-	}
-};
+#include "tab_home.h"
+
+namespace tab_home {
+
+/**
+ * Render the home tab widget using ImGui.
+ * Currently a blank placeholder — content will be added later.
+ */
+void render() {
+	// TODO(conversion): Home tab content stripped; will be re-added when UI is finalized.
+}
+
+void navigate(const char* /*module_name*/) {
+	// JS: this.$modules[module_name].setActive();
+	// TODO(conversion): Module activation will be wired when the module system is integrated.
+}
+
+} // namespace tab_home

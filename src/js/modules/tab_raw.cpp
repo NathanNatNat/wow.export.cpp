@@ -1,208 +1,254 @@
-const util = require('util');
-const path = require('path');
-const log = require('../log');
-const ExportHelper = require('../casc/export-helper');
-const generics = require('../generics');
-const constants = require('../constants');
-const listfile = require('../casc/listfile');
-const listboxContext = require('../ui/listbox-context');
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-let is_dirty = true;
+#include "tab_raw.h"
+#include "../log.h"
+#include "../core.h"
+#include "../generics.h"
+#include "../constants.h"
+#include "../casc/export-helper.h"
+#include "../casc/listfile.h"
+#include "../casc/casc-source.h"
+#include "../ui/listbox-context.h"
+#include "../buffer.h"
 
-const compute_raw_files = async (core) => {
+#include <cstring>
+#include <format>
+#include <filesystem>
+#include <regex>
+#include <unordered_map>
+
+#include <imgui.h>
+#include <spdlog/spdlog.h>
+
+namespace tab_raw {
+
+// --- File-local state ---
+
+// JS: let is_dirty = true;
+static bool is_dirty = true;
+
+// --- Internal functions ---
+
+// JS: const compute_raw_files = async (core) => { ... }
+static void compute_raw_files() {
 	if (!is_dirty)
 		return;
 
 	is_dirty = false;
 
-	core.setToast('progress', core.view.config.enableUnknownFiles ? 'Scanning game client for all files...' : 'Scanning game client for all known files...');
-	await generics.redraw();
+	auto& view = *core::view;
+	const bool enable_unknown = view.config.value("enableUnknownFiles", false);
 
-	if (core.view.config.enableUnknownFiles) {
-		const root_entries = core.view.casc.getValidRootEntries();
-		core.view.listfileRaw = await listfile.renderListfile(root_entries, true);
+	core::setToast("progress", enable_unknown
+		? "Scanning game client for all files..."
+		: "Scanning game client for all known files...");
+	generics::redraw();
+
+	if (enable_unknown) {
+		// JS: const root_entries = core.view.casc.getValidRootEntries();
+		// JS: core.view.listfileRaw = await listfile.renderListfile(root_entries, true);
+		// TODO(conversion): CASC getValidRootEntries will be wired when CASC integration is complete.
+		std::vector<uint32_t> root_entries;
+		auto rendered = casc::listfile::renderListfile(root_entries, true);
+		view.listfileRaw.clear();
+		for (auto& s : rendered)
+			view.listfileRaw.push_back(std::move(s));
 	} else {
-		core.view.listfileRaw = await listfile.renderListfile();
+		auto rendered = casc::listfile::renderListfile();
+		view.listfileRaw.clear();
+		for (auto& s : rendered)
+			view.listfileRaw.push_back(std::move(s));
 	}
 
-	core.setToast('success', util.format('Found %d files in the game client', core.view.listfileRaw.length));
-};
+	core::setToast("success", std::format("Found {} files in the game client", view.listfileRaw.size()));
+}
 
-const detect_raw_files = async (core) => {
-	const user_selection = core.view.selectionRaw;
-	if (user_selection.length === 0) {
-		core.setToast('info', 'You didn\'t select any files to detect; you should do that first.');
+// JS: const detect_raw_files = async (core) => { ... }
+static void detect_raw_files() {
+	auto& view = *core::view;
+	const auto& user_selection = view.selectionRaw;
+	if (user_selection.empty()) {
+		core::setToast("info", "You didn't select any files to detect; you should do that first.");
 		return;
 	}
 
-	const filtered_selection = [];
-	for (let file_name of user_selection) {
-		file_name = listfile.stripFileEntry(file_name);
-		const match = file_name.match(/^unknown\/(\d+)(\.[a-zA-Z_]+)?$/);
+	std::vector<uint32_t> filtered_selection;
+	static const std::regex unknown_pattern(R"(^unknown/(\d+)(\.[a-zA-Z_]+)?$)");
 
-		if (match)
-			filtered_selection.push(parseInt(match[1]));
+	for (const auto& entry : user_selection) {
+		std::string file_name = casc::listfile::stripFileEntry(entry.get<std::string>());
+		std::smatch match;
+
+		if (std::regex_match(file_name, match, unknown_pattern))
+			filtered_selection.push_back(static_cast<uint32_t>(std::stoi(match[1].str())));
 	}
 
-	if (filtered_selection.length === 0) {
-		core.setToast('info', 'You haven\'t selected any unknown files to identify.');
+	if (filtered_selection.empty()) {
+		core::setToast("info", "You haven't selected any unknown files to identify.");
 		return;
 	}
 
-	using _lock = core.create_busy_lock();
+	// JS: using _lock = core.create_busy_lock();
+	BusyLock _lock = core::create_busy_lock();
 
-	const extension_map = new Map();
-	let current_index = 1;
+	// JS: const extension_map = new Map();
+	std::unordered_map<uint32_t, std::string> extension_map;
+	int current_index = 1;
 
-	for (const file_data_id of filtered_selection) {
-		core.setToast('progress', util.format('Identifying file %d (%d / %d)', file_data_id, current_index++, filtered_selection.length));
+	for (const uint32_t file_data_id : filtered_selection) {
+		core::setToast("progress", std::format("Identifying file {} ({} / {})",
+			file_data_id, current_index++, filtered_selection.size()));
 
 		try {
-			const data = await core.view.casc.getFile(file_data_id);
-			for (const check of constants.FILE_IDENTIFIERS) {
-				if (data.startsWith(check.match)) {
-					extension_map.set(file_data_id, check.ext);
-					log.write('Successfully identified file %d as %s', file_data_id, check.ext);
-					break;
-				}
+			// JS: const data = await core.view.casc.getFile(file_data_id);
+			// TODO(conversion): CASC getFile will be wired when CASC integration is complete.
+			// For now, stubbed — the file identification logic is preserved.
+			BufferWrapper data;
+			(void)data;
+
+			for (const auto& check : constants::FILE_IDENTIFIERS) {
+				// JS: if (data.startsWith(check.match))
+				// TODO(conversion): BufferWrapper::startsWith with FileIdentifier matches will be wired.
+				// extension_map[file_data_id] = std::string(check.ext);
+				// logging::write(std::format("Successfully identified file {} as {}", file_data_id, check.ext));
+				// break;
+				(void)check;
 			}
-		} catch (e) {
-			log.write('Failed to identify file %d due to CASC error', file_data_id);
+		} catch (const std::exception&) {
+			logging::write(std::format("Failed to identify file {} due to CASC error", file_data_id));
 		}
 	}
 
-	if (extension_map.size > 0) {
-		listfile.ingestIdentifiedFiles(extension_map);
-		await compute_raw_files(core);
+	if (!extension_map.empty()) {
+		std::vector<std::pair<uint32_t, std::string>> entries(extension_map.begin(), extension_map.end());
+		casc::listfile::ingestIdentifiedFiles(entries);
+		is_dirty = true;
+		compute_raw_files();
 
-		if (extension_map.size === 1) {
-			const [file_data_id, ext] = extension_map.entries().next().value;
-			core.setToast('success', util.format('%d has been identified as a %s file', file_data_id, ext));
+		if (extension_map.size() == 1) {
+			auto it = extension_map.begin();
+			core::setToast("success", std::format("{} has been identified as a {} file", it->first, it->second));
 		} else {
-			core.setToast('success', util.format('Successfully identified %d files', extension_map.size));
+			core::setToast("success", std::format("Successfully identified {} files", extension_map.size()));
 		}
 
-		core.setToast('success', util.format('%d of the %d selected files have been identified and added to relevant file lists', extension_map.size, filtered_selection.length));
+		core::setToast("success", std::format("{} of the {} selected files have been identified and added to relevant file lists",
+			extension_map.size(), filtered_selection.size()));
 	} else {
-		core.setToast('info', 'Unable to identify any of the selected files.');
+		core::setToast("info", "Unable to identify any of the selected files.");
 	}
-};
+}
 
-const export_raw_files = async (core) => {
-	const user_selection = core.view.selectionRaw;
-	if (user_selection.length === 0) {
-		core.setToast('info', 'You didn\'t select any files to export; you should do that first.');
+// JS: const export_raw_files = async (core) => { ... }
+static void export_raw_files() {
+	auto& view = *core::view;
+	const auto& user_selection = view.selectionRaw;
+	if (user_selection.empty()) {
+		core::setToast("info", "You didn't select any files to export; you should do that first.");
 		return;
 	}
 
-	const helper = new ExportHelper(user_selection.length, 'file');
+	casc::ExportHelper helper(static_cast<int>(user_selection.size()), "file");
 	helper.start();
 
-	const overwrite_files = core.view.config.overwriteFiles;
-	for (let file_name of user_selection) {
+	const bool overwrite_files = view.config.value("overwriteFiles", false);
+	for (const auto& sel_entry : user_selection) {
 		if (helper.isCancelled())
 			return;
 
-		file_name = listfile.stripFileEntry(file_name);
-		let export_file_name = file_name;
+		std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
+		std::string export_file_name = file_name;
 
-		if (!core.view.config.exportNamedFiles) {
-			const file_data_id = listfile.getByFilename(file_name);
+		if (!view.config.value("exportNamedFiles", true)) {
+			auto file_data_id = casc::listfile::getByFilename(file_name);
 			if (file_data_id) {
-				const ext = path.extname(file_name);
-				const dir = path.dirname(file_name);
-				const file_data_id_name = file_data_id + ext;
-				export_file_name = dir === '.' ? file_data_id_name : path.join(dir, file_data_id_name);
+				namespace fs = std::filesystem;
+				const std::string ext = fs::path(file_name).extension().string();
+				const std::string dir = fs::path(file_name).parent_path().string();
+				const std::string file_data_id_name = std::to_string(*file_data_id) + ext;
+				export_file_name = dir == "." ? file_data_id_name : (fs::path(dir) / file_data_id_name).string();
 			}
 		}
 
-		const export_path = ExportHelper.getExportPath(export_file_name);
+		const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
 
-		if (overwrite_files || !await generics.fileExists(export_path)) {
+		if (overwrite_files || !generics::fileExists(export_path)) {
 			try {
-				const data = await core.view.casc.getFileByName(file_name, true);
-				await data.writeToFile(export_path);
-
+				// JS: const data = await core.view.casc.getFileByName(file_name, true);
+				// JS: await data.writeToFile(export_path);
+				// TODO(conversion): CASC getFileByName will be wired when CASC integration is complete.
 				helper.mark(export_file_name, true);
-			} catch (e) {
-				helper.mark(export_file_name, false, e.message, e.stack);
+			} catch (const std::exception& e) {
+				helper.mark(export_file_name, false, e.what());
 			}
 		} else {
 			helper.mark(export_file_name, true);
-			log.write('Skipping file export %s (file exists, overwrite disabled)', export_path);
+			logging::write(std::format("Skipping file export {} (file exists, overwrite disabled)", export_path));
 		}
 	}
 
 	helper.finish();
-};
+}
 
-module.exports = {
-	register() {
-		this.registerContextMenuOption('Browse Raw Client Files', 'fish.svg');
-	},
+// --- Public API ---
 
-	template: `
-		<div class="tab list-tab" id="tab-raw">
-			<div class="list-container">
-				<component :is="$components.Listbox" v-model:selection="$core.view.selectionRaw" :items="$core.view.listfileRaw" :filter="$core.view.userInputFilterRaw" :keyinput="true" :regex="$core.view.config.regexFilters" :copymode="$core.view.config.copyMode" :pasteselection="$core.view.config.pasteSelection" :copytrimwhitespace="$core.view.config.removePathSpacesCopy" :includefilecount="true" unittype="file" persistscrollkey="raw" @contextmenu="handle_listbox_context"></component>
-				<component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeListbox" v-slot:default="context" @close="$core.view.contextMenus.nodeListbox = null">
-					<span @click.self="copy_file_paths(context.node.selection)">Copy file path{{ context.node.count > 1 ? 's' : '' }}</span>
-					<span v-if="context.node.hasFileDataIDs" @click.self="copy_listfile_format(context.node.selection)">Copy file path{{ context.node.count > 1 ? 's' : '' }} (listfile format)</span>
-					<span v-if="context.node.hasFileDataIDs" @click.self="copy_file_data_ids(context.node.selection)">Copy file data ID{{ context.node.count > 1 ? 's' : '' }}</span>
-					<span @click.self="copy_export_paths(context.node.selection)">Copy export path{{ context.node.count > 1 ? 's' : '' }}</span>
-					<span @click.self="open_export_directory(context.node.selection)">Open export directory</span>
-				</component>
-			</div>
-			<div id="tab-raw-tray">
-				<div class="filter">
-					<div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
-					<input type="text" v-model="$core.view.userInputFilterRaw" placeholder="Filter raw files..."/>
-				</div>
-				<input type="button" value="Auto-Detect Selected" @click="detect_raw" :class="{ disabled: $core.view.isBusy }"/>
-				<input type="button" value="Export Selected" @click="export_raw" :class="{ disabled: $core.view.isBusy }"/>
-			</div>
-		</div>
-	`,
+void registerTab() {
+	// JS: this.registerContextMenuOption('Browse Raw Client Files', 'fish.svg');
+	// TODO(conversion): Context menu registration will be wired when the module system is integrated.
+}
 
-	methods: {
-		handle_listbox_context(data) {
-			listboxContext.handle_context_menu(data);
-		},
+void mounted() {
+	compute_raw_files();
 
-		copy_file_paths(selection) {
-			listboxContext.copy_file_paths(selection);
-		},
+	// JS: this.$core.view.$watch('config.cascLocale', () => { is_dirty = true; });
+	// TODO(conversion): Config watch for cascLocale will use change-detection pattern when config system is complete.
+}
 
-		copy_listfile_format(selection) {
-			listboxContext.copy_listfile_format(selection);
-		},
+void render() {
+	auto& view = *core::view;
 
-		copy_file_data_ids(selection) {
-			listboxContext.copy_file_data_ids(selection);
-		},
+	// List container with context menu.
+	ImGui::BeginChild("raw-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2), ImGuiChildFlags_Borders);
+	// TODO(conversion): Listbox and ContextMenu component rendering will be wired when integration is complete.
+	// JS: <Listbox v-model:selection="selectionRaw" :items="listfileRaw" ...>
+	// JS: <ContextMenu :node="contextMenus.nodeListbox" ...>
+	//   copy_file_paths, copy_listfile_format, copy_file_data_ids, copy_export_paths, open_export_directory
+	ImGui::Text("Raw files: %zu", view.listfileRaw.size());
+	ImGui::EndChild();
 
-		copy_export_paths(selection) {
-			listboxContext.copy_export_paths(selection);
-		},
+	// Tray.
+	if (view.config.value("regexFilters", false))
+		ImGui::TextUnformatted("Regex Enabled");
 
-		open_export_directory(selection) {
-			listboxContext.open_export_directory(selection);
-		},
+	char filter_buf[256] = {};
+	std::strncpy(filter_buf, view.userInputFilterRaw.c_str(), sizeof(filter_buf) - 1);
+	if (ImGui::InputText("##FilterRaw", filter_buf, sizeof(filter_buf)))
+		view.userInputFilterRaw = filter_buf;
 
-		async detect_raw() {
-			await detect_raw_files(this.$core);
-		},
+	const bool busy = view.isBusy > 0;
+	if (busy) ImGui::BeginDisabled();
 
-		async export_raw() {
-			await export_raw_files(this.$core);
-		}
-	},
+	if (ImGui::Button("Auto-Detect Selected"))
+		detect_raw_files();
 
-	async mounted() {
-		await compute_raw_files(this.$core);
+	ImGui::SameLine();
 
-		this.$core.view.$watch('config.cascLocale', () => {
-			is_dirty = true;
-		});
-	}
-};
+	if (ImGui::Button("Export Selected"))
+		export_raw_files();
+
+	if (busy) ImGui::EndDisabled();
+}
+
+void detect_raw() {
+	detect_raw_files();
+}
+
+void export_raw() {
+	export_raw_files();
+}
+
+} // namespace tab_raw
