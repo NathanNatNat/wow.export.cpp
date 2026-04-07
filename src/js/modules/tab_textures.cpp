@@ -73,9 +73,45 @@ static uint32_t selected_file_data_id = 0;
 // Change-detection for selection and config watches.
 static uint32_t prev_selected_file_data_id = 0;
 static uint8_t prev_export_channel_mask = 0xFF;
+static bool prev_export_texture_alpha = false;
 static bool prev_show_texture_atlas = false;
 
 // --- Internal functions ---
+
+// JS: const update_texture_atlas_overlay = (core) => { ... }
+static void update_texture_atlas_overlay() {
+	auto atlas_it = texture_atlas_map.find(selected_file_data_id);
+	if (atlas_it != texture_atlas_map.end()) {
+		auto entry_it = texture_atlas_entries.find(atlas_it->second);
+		if (entry_it != texture_atlas_entries.end()) {
+			const auto& entry = entry_it->second;
+			core::view->textureAtlasOverlayWidth = entry.width;
+			core::view->textureAtlasOverlayHeight = entry.height;
+
+			nlohmann::json render_regions = nlohmann::json::array();
+			for (const int id : entry.regions) {
+				auto region_it = texture_atlas_regions.find(id);
+				if (region_it != texture_atlas_regions.end()) {
+					const auto& region = region_it->second;
+					nlohmann::json r;
+					r["id"] = id;
+					r["name"] = region.name;
+					r["width"] = std::format("{}%", (static_cast<float>(region.width) / entry.width) * 100);
+					r["height"] = std::format("{}%", (static_cast<float>(region.height) / entry.height) * 100);
+					r["top"] = std::format("{}%", (static_cast<float>(region.top) / entry.height) * 100);
+					r["left"] = std::format("{}%", (static_cast<float>(region.left) / entry.width) * 100);
+					render_regions.push_back(std::move(r));
+				}
+			}
+
+			core::view->textureAtlasOverlayRegions.clear();
+			for (auto& r : render_regions)
+				core::view->textureAtlasOverlayRegions.push_back(std::move(r));
+		}
+	} else {
+		core::view->textureAtlasOverlayRegions.clear();
+	}
+}
 
 // JS: const preview_texture_by_id = async (core, file_data_id, texture = null) => { ... }
 static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string& texture_name) {
@@ -124,45 +160,16 @@ static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string&
 		selected_file_data_id = file_data_id;
 
 		// JS: update_texture_atlas_overlay(core);
-		// Atlas overlay update.
-		auto atlas_it = texture_atlas_map.find(selected_file_data_id);
-		if (atlas_it != texture_atlas_map.end()) {
-			auto entry_it = texture_atlas_entries.find(atlas_it->second);
-			if (entry_it != texture_atlas_entries.end()) {
-				const auto& entry = entry_it->second;
-				core::view->textureAtlasOverlayWidth = entry.width;
-				core::view->textureAtlasOverlayHeight = entry.height;
-
-				nlohmann::json render_regions = nlohmann::json::array();
-				for (const int id : entry.regions) {
-					auto region_it = texture_atlas_regions.find(id);
-					if (region_it != texture_atlas_regions.end()) {
-						const auto& region = region_it->second;
-						nlohmann::json r;
-						r["id"] = id;
-						r["name"] = region.name;
-						r["width"] = std::format("{}%", (static_cast<float>(region.width) / entry.width) * 100);
-						r["height"] = std::format("{}%", (static_cast<float>(region.height) / entry.height) * 100);
-						r["top"] = std::format("{}%", (static_cast<float>(region.top) / entry.height) * 100);
-						r["left"] = std::format("{}%", (static_cast<float>(region.left) / entry.width) * 100);
-						render_regions.push_back(std::move(r));
-					}
-				}
-
-				core::view->textureAtlasOverlayRegions.clear();
-				for (auto& r : render_regions)
-					core::view->textureAtlasOverlayRegions.push_back(std::move(r));
-			}
-		} else {
-			core::view->textureAtlasOverlayRegions.clear();
-		}
+		update_texture_atlas_overlay();
 
 		core::hideToast();
 	} catch (const casc::EncryptionError& e) {
 		core::setToast("error", std::format("The texture {} is encrypted with an unknown key ({}).", texture, e.key), nullptr, -1);
 		logging::write(std::format("Failed to decrypt texture {} ({})", texture, e.key));
 	} catch (const std::exception& e) {
+		// JS: core.setToast('error', 'Unable to preview texture ' + texture, { 'View Log': () => log.openRuntimeLog() }, -1);
 		core::setToast("error", "Unable to preview texture " + texture, nullptr, -1);
+		// TODO(conversion): 'View Log' toast action will be wired when toast action callbacks are integrated.
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 }
@@ -248,6 +255,8 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 	std::string export_file_name = file_name;
 	const std::string format = core::view->config.value("exportTextureFormat", std::string("PNG"));
 	const std::string ext = format == "WEBP" ? ".webp" : ".png";
+	const std::string mime_type = format == "WEBP" ? "image/webp" : "image/png";
+	const float quality = core::view->config.value("exportWebPQuality", 0.9f);
 
 	try {
 		// JS: const data = await core.view.casc.getFile(file_data_id);
@@ -291,7 +300,9 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 			// JS: const buf = await BufferWrapper.fromCanvas(save_canvas, mime_type, quality);
 			// JS: await buf.writeToFile(export_path);
 			// TODO(conversion): BufferWrapper::fromCanvas equivalent (PNG/WebP encoding from raw RGBA) will be wired.
-			// For now the export pipeline is preserved structurally.
+			// Parameters: cropped data (region.width x region.height RGBA), mime_type, quality.
+			(void)mime_type;
+			(void)quality;
 
 			helper.mark(export_file_name, true);
 		}
@@ -359,6 +370,7 @@ void mounted() {
 
 	// Store initial config values for change-detection.
 	prev_export_channel_mask = static_cast<uint8_t>(view.config.value("exportChannelMask", 0b1111));
+	prev_export_texture_alpha = view.config.value("exportTextureAlpha", false);
 	prev_show_texture_atlas = view.config.value("showTextureAtlas", false);
 
 	// JS: this.$core.registerDropHandler({ ext: ['.blp'], ... });
@@ -380,6 +392,13 @@ void render() {
 	// --- Change-detection for config watches ---
 
 	// JS: this.$core.view.$watch('config.exportTextureAlpha', () => { ... });
+	const bool current_export_alpha = view.config.value("exportTextureAlpha", false);
+	if (current_export_alpha != prev_export_texture_alpha) {
+		if (view.isBusy == 0 && selected_file_data_id > 0)
+			preview_texture_by_id_impl(selected_file_data_id, "");
+		prev_export_texture_alpha = current_export_alpha;
+	}
+
 	// JS: this.$core.view.$watch('config.exportChannelMask', () => { ... });
 	const uint8_t current_channel_mask = static_cast<uint8_t>(view.config.value("exportChannelMask", 0b1111));
 	if (current_channel_mask != prev_export_channel_mask) {
@@ -392,9 +411,8 @@ void render() {
 	const bool current_show_atlas = view.config.value("showTextureAtlas", false);
 	if (current_show_atlas != prev_show_texture_atlas) {
 		reload_texture_atlas_data();
-		// Refresh atlas overlay on currently previewed texture.
-		if (selected_file_data_id > 0)
-			preview_texture_by_id_impl(selected_file_data_id, "");
+		// JS: update_texture_atlas_overlay(core) — just update overlay data, don't reload the full texture.
+		update_texture_atlas_overlay();
 		prev_show_texture_atlas = current_show_atlas;
 	}
 

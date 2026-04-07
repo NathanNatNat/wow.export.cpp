@@ -115,7 +115,9 @@ static bool load_track() {
 		logging::write(std::format("Failed to decrypt audio file {} ({})", selected_file, e.key));
 		return false;
 	} catch (const std::exception& e) {
+		// JS: core.setToast('error', 'Unable to preview audio ' + selected_file, { 'View Log': () => log.openRuntimeLog() }, -1);
 		core::setToast("error", "Unable to preview audio " + selected_file, nullptr, -1);
+		// TODO(conversion): 'View Log' toast action will be wired when toast action callbacks are integrated.
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 		return false;
 	}
@@ -136,6 +138,8 @@ static void unload_track() {
 
 // JS: const play_track = async (core) => { ... }
 static void play_track() {
+	// JS: if (!player.buffer) { ... }
+	// In C++, AudioPlayer has no public 'buffer' field; get_duration() returns 0 when no audio loaded.
 	if (player.get_duration() <= 0) {
 		if (selected_file.empty()) {
 			core::setToast("info", "You need to select an audio track first!", nullptr, -1, true);
@@ -176,17 +180,18 @@ static void export_sounds() {
 		if (helper.isCancelled())
 			return;
 
-		std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
-
 		// JS: let export_data;
-		// TODO(conversion): CASC file retrieval will be wired when CASC integration is complete.
+		bool has_export_data = false;
+		std::vector<uint8_t> export_data;
+
+		std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
 
 		if (file_name.ends_with(".unk_sound")) {
 			// JS: export_data = await core.view.casc.getFileByName(file_name);
-			// JS: const file_type = detectFileType(export_data);
 			// TODO(conversion): CASC getFileByName will be wired when CASC integration is complete.
-			// Stub: detect file type from empty data
-			std::vector<uint8_t> export_data;
+			has_export_data = true;
+
+			// JS: const file_type = detectFileType(export_data);
 			const AudioType file_type = detectFileType(export_data.data(), export_data.size());
 
 			if (file_type == AudioType::OGG)
@@ -213,8 +218,12 @@ static void export_sounds() {
 			if (overwrite_files || !generics::fileExists(export_path)) {
 				// JS: if (!export_data)
 				//     export_data = await core.view.casc.getFileByName(file_name);
+				if (!has_export_data) {
+					// TODO(conversion): CASC getFileByName will be wired when CASC integration is complete.
+				}
+
 				// JS: await export_data.writeToFile(export_path);
-				// TODO(conversion): CASC getFileByName + writeToFile will be wired when CASC integration is complete.
+				// TODO(conversion): writeToFile will be wired when CASC integration is complete.
 			} else {
 				logging::write(std::format("Skipping audio export {} (file exists, overwrite disabled)", export_path));
 			}

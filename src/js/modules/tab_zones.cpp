@@ -92,18 +92,20 @@ static bool prev_show_zone_overlays = true;
 
 // JS: const parse_zone_entry = (entry) => { ... }
 static ZoneDisplayInfo parse_zone_entry(const std::string& entry) {
-// Format: expansion_id \x19 [zone_id] \x19 area_name \x19 (zone_name)
-std::regex re(R"((\d+)\x19\[(\d+)\]\x19([^\x19]+)\x19\(([^)]+)\))");
-std::smatch match;
-if (!std::regex_match(entry, match, re))
-return {};
+	// Format: expansion_id \x19 [zone_id] \x19 AreaName_lang \x19 (ZoneName)
+	// JS regex skips expansion prefix: /\[(\d+)\]\31([^\31]+)\31\(([^)]+)\)/
+	// match[1]=id, match[2]=AreaName_lang→zone_name, match[3]=ZoneName→area_name
+	std::regex re(R"((\d+)\x19\[(\d+)\]\x19([^\x19]+)\x19\(([^)]+)\))");
+	std::smatch match;
+	if (!std::regex_match(entry, match, re))
+		return {};
 
-ZoneDisplayInfo info;
-info.expansion = std::stoi(match[1].str());
-info.id = std::stoi(match[2].str());
-info.area_name = match[3].str();
-info.zone_name = match[4].str();
-return info;
+	ZoneDisplayInfo info;
+	info.expansion = std::stoi(match[1].str());
+	info.id = std::stoi(match[2].str());
+	info.zone_name = match[3].str();
+	info.area_name = match[4].str();
+	return info;
 }
 
 // JS: const get_zone_ui_map_id = async (zone_id) => { ... }
@@ -138,6 +140,11 @@ return a.id < b.id;
 
 return phases;
 }
+
+// Forward declarations for render functions used in render_zone_to_canvas.
+static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index, int expected_zone_id, bool skip_zone_check);
+static void render_world_map_overlays(const CombinedArtStyle& art_style, int expected_zone_id, bool skip_zone_check);
+static void render_overlay_tiles(const CombinedArtStyle& art_style, int overlay_offset_x, int overlay_offset_y, int expected_zone_id, bool skip_zone_check);
 
 // JS: const render_zone_to_canvas = async (canvas, zone_id, phase_id, set_canvas_size, skip_zone_check) => { ... }
 static ZoneMapInfo render_zone_to_canvas(int zone_id, std::optional<int> phase_id = std::nullopt, bool skip_zone_check = false) {
@@ -183,25 +190,26 @@ return a.layer_index < b.layer_index;
 int map_width = 0, map_height = 0;
 
 for (const auto& art_style : art_styles) {
-// JS: const all_tiles = await db2.UiMapArtTile.getRelationRows(art_style.ID);
-auto& ui_map_art_tile = casc::db2::getTable("UiMapArtTile");
-(void)ui_map_art_tile;
-// TODO(conversion): Get tiles by relation, group by layer, render each tile from CASC.
+	// JS: const all_tiles = await db2.UiMapArtTile.getRelationRows(art_style.ID);
+	auto& ui_map_art_tile = casc::db2::getTable("UiMapArtTile");
+	(void)ui_map_art_tile;
+	// TODO(conversion): Get tiles by relation, group by layer index.
 
-if (art_style.layer_index == 0) {
-map_width = art_style.layer_width;
-map_height = art_style.layer_height;
-}
+	if (art_style.layer_index == 0) {
+		map_width = art_style.layer_width;
+		map_height = art_style.layer_height;
+	}
 
-// JS: render base map tiles if config.showZoneBaseMap
-if (core::view->config.value("showZoneBaseMap", true)) {
-// TODO(conversion): render_map_tiles equivalent — load BLP tiles from CASC, composite onto texture.
-}
+	// JS: if (core.view.config.showZoneBaseMap) { ... render layers ... }
+	if (core::view->config.value("showZoneBaseMap", true)) {
+		// TODO(conversion): Iterate layer indices in sorted order and call render_map_tiles for each.
+		render_map_tiles(art_style, 0, zone_id, skip_zone_check);
+	}
 
-// JS: render overlays if config.showZoneOverlays
-if (core::view->config.value("showZoneOverlays", true)) {
-// TODO(conversion): render_world_map_overlays equivalent — load WorldMapOverlay + tiles.
-}
+	// JS: if (core.view.config.showZoneOverlays) await render_world_map_overlays(ctx, art_style, zone_id, skip_zone_check);
+	if (core::view->config.value("showZoneOverlays", true)) {
+		render_world_map_overlays(art_style, zone_id, skip_zone_check);
+	}
 }
 
 logging::write(std::format("successfully rendered zone map for zone ID {} (UiMap ID {})",
@@ -210,16 +218,78 @@ zone_id, *ui_map_id));
 return { map_width, map_height, *ui_map_id };
 }
 
+// Tile render result for Promise.all equivalent tracking.
+struct TileRenderResult {
+	bool success = false;
+	bool skipped = false;
+	std::string error;
+};
+
 // JS: const render_map_tiles = async (ctx, tiles, art_style, layer_index, expected_zone_id, skip_zone_check) => { ... }
-// TODO(conversion): render_map_tiles will be implemented when GL texture compositing is available.
-// It sorts tiles by RowIndex/ColIndex, computes pixel positions, loads BLP from CASC, and draws to canvas.
+static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index, int expected_zone_id, bool skip_zone_check = false) {
+	// TODO(conversion): When CASC integration is available, this function will:
+	// 1. Get tiles from UiMapArtTile for the given art_style, filtered by layer_index.
+	// 2. Sort tiles by RowIndex, then ColIndex.
+	// 3. For each tile:
+	//    a. Compute pixel position: pixel_x = ColIndex * TileWidth, pixel_y = RowIndex * TileHeight
+	//    b. Apply offsets: final_x = pixel_x + OffsetX, final_y = pixel_y + OffsetY
+	//    c. Load BLP from CASC via tile.FileDataID
+	//    d. Check if zone changed (!skip_zone_check && selected_zone_id != expected_zone_id) → skip
+	//    e. Composite the BLP tile pixels onto the output texture at (final_x, final_y)
+	// 4. Log render results (successful/total).
+
+	// JS: tiles.sort((a, b) => { if (a.RowIndex !== b.RowIndex) return a.RowIndex - b.RowIndex; return a.ColIndex - b.ColIndex; });
+	// JS: const tile_promises = tiles.map(async (tile) => { ... });
+	// JS: const results = await Promise.all(tile_promises);
+	// JS: const successful = results.filter(r => r.success).length;
+	// JS: log.write('rendered %d/%d tiles successfully', successful, tiles.length);
+
+	(void)art_style;
+	(void)layer_index;
+	(void)expected_zone_id;
+	(void)skip_zone_check;
+}
 
 // JS: const render_world_map_overlays = async (ctx, art_style, expected_zone_id, skip_zone_check) => { ... }
-// TODO(conversion): render_world_map_overlays will be implemented when GL texture compositing is available.
-// It queries WorldMapOverlay + WorldMapOverlayTile DB2 tables and renders overlay tiles at offset positions.
+static void render_world_map_overlays(const CombinedArtStyle& art_style, int expected_zone_id, bool skip_zone_check = false) {
+	// TODO(conversion): When CASC integration is available, this function will:
+	// 1. Get WorldMapOverlay relation rows for the given art_style.ID
+	// 2. For each overlay:
+	//    a. Get WorldMapOverlayTile relation rows for the overlay.ID
+	//    b. Log: "rendering WorldMapOverlay ID %d with %d tiles at offset (%d,%d)"
+	//    c. Call render_overlay_tiles with the tiles, overlay, and art_style
+
+	// JS: const overlays = await db2.WorldMapOverlay.getRelationRows(art_style.ID);
+	// JS: for (const overlay of overlays) { ... await render_overlay_tiles(...); }
+
+	auto& world_map_overlay = casc::db2::getTable("WorldMapOverlay");
+	(void)world_map_overlay;
+	(void)art_style;
+	(void)expected_zone_id;
+	(void)skip_zone_check;
+}
 
 // JS: const render_overlay_tiles = async (ctx, tiles, overlay, art_style, expected_zone_id, skip_zone_check) => { ... }
-// TODO(conversion): render_overlay_tiles will be implemented when GL texture compositing is available.
+static void render_overlay_tiles(const CombinedArtStyle& art_style, int overlay_offset_x, int overlay_offset_y, int expected_zone_id, bool skip_zone_check = false) {
+	// TODO(conversion): When CASC integration is available, this function will:
+	// 1. Sort tiles by RowIndex, then ColIndex.
+	// 2. For each tile:
+	//    a. Compute position: base_x = overlay.OffsetX + ColIndex * TileWidth, base_y = overlay.OffsetY + RowIndex * TileHeight
+	//    b. Load BLP from CASC via tile.FileDataID
+	//    c. Check if zone changed or overlays disabled → skip
+	//    d. Composite the BLP tile pixels onto the output texture at (base_x, base_y)
+	// 3. Log render results (successful/total).
+
+	// JS: tiles.sort((a, b) => { if (a.RowIndex !== b.RowIndex) return a.RowIndex - b.RowIndex; return a.ColIndex - b.ColIndex; });
+	// JS: const tile_promises = tiles.map(async (tile) => { ... });
+	// JS: const results = await Promise.all(tile_promises);
+
+	(void)art_style;
+	(void)overlay_offset_x;
+	(void)overlay_offset_y;
+	(void)expected_zone_id;
+	(void)skip_zone_check;
+}
 
 // JS: const load_zone_map = async (zone_id, phase_id) => { ... }
 static void load_zone_map(int zone_id, std::optional<int> phase_id = std::nullopt) {
@@ -564,6 +634,7 @@ helper.start();
 
 const std::string format = view.config.value("exportTextureFormat", std::string("PNG"));
 const std::string ext = format == "WEBP" ? ".webp" : ".png";
+const std::string mime_type = format == "WEBP" ? "image/webp" : "image/png";
 
 for (const auto& zone_entry : user_selection) {
 if (helper.isCancelled())
@@ -623,6 +694,8 @@ map_info.width, map_info.height, filename));
 // JS: const buf = await BufferWrapper.fromCanvas(export_canvas, mime_type, quality);
 // JS: await buf.writeToFile(export_path);
 // TODO(conversion): BufferWrapper fromCanvas equivalent (PNG/WebP encoding) will be wired.
+// Parameters: composite texture (map_info.width x map_info.height), mime_type, exportWebPQuality.
+(void)mime_type;
 
 helper.mark((fs::path("zones") / filename).string(), true);
 
