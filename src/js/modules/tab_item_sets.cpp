@@ -1,119 +1,334 @@
-const log = require('../log');
-const db2 = require('../casc/db2');
-const DBItems = require('../db/caches/DBItems');
-const InstallType = require('../install-type');
-const { get_slot_name } = require('../wow/EquipmentSlots');
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-class ItemSet {
-	constructor(id, name, item_ids, first_item) {
-		this.id = id;
-		this.name = name;
-		this.item_ids = item_ids;
-		this.icon = first_item?.icon ?? 0;
-		this.quality = first_item?.quality ?? 0;
-	}
+#include "tab_item_sets.h"
+#include "../log.h"
+#include "../core.h"
+#include "../casc/db2.h"
+#include "../db/caches/DBItems.h"
+#include "../db/WDCReader.h"
+#include "../wow/EquipmentSlots.h"
+#include "../install-type.h"
 
-	get displayName() {
-		return this.name + ' (' + this.id + ')';
+#include <cstring>
+#include <algorithm>
+#include <format>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include <imgui.h>
+#include <spdlog/spdlog.h>
+
+namespace tab_item_sets {
+
+// --- File-local structures ---
+
+// JS: class ItemSet { constructor(id, name, item_ids, first_item) { ... } }
+struct ItemSet {
+	uint32_t id = 0;
+	std::string name;
+	std::vector<uint32_t> item_ids;
+	uint32_t icon = 0;
+	int quality = 0;
+
+	// JS: get displayName() { return this.name + ' (' + this.id + ')'; }
+	std::string displayName() const {
+		return std::format("{} ({})", name, id);
 	}
+};
+
+// --- File-local helpers ---
+
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
 }
 
-let item_sets = [];
+static std::string fieldToString(const db::FieldValue& val) {
+	if (auto* p = std::get_if<std::string>(&val))
+		return *p;
+	return "";
+}
 
-const initialize_item_sets = async (core) => {
-	item_sets.length = 0;
+static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
+	if (auto* p = std::get_if<std::vector<int64_t>>(&val)) {
+		std::vector<uint32_t> result;
+		result.reserve(p->size());
+		for (int64_t v : *p)
+			result.push_back(static_cast<uint32_t>(v));
+		return result;
+	}
+	if (auto* p = std::get_if<std::vector<uint64_t>>(&val)) {
+		std::vector<uint32_t> result;
+		result.reserve(p->size());
+		for (uint64_t v : *p)
+			result.push_back(static_cast<uint32_t>(v));
+		return result;
+	}
+	return {};
+}
 
-	await core.progressLoadingScreen('Loading item data...');
-	await DBItems.ensureInitialized();
+// --- File-local state ---
 
-	await core.progressLoadingScreen('Loading item appearance data...');
-	const appearance_map = new Map();
-	for (const row of (await db2.ItemModifiedAppearance.getAllRows()).values())
-		appearance_map.set(row.ItemID, row.ItemAppearanceID);
+// JS: let item_sets = [];
+static std::vector<ItemSet> item_sets;
 
-	await core.progressLoadingScreen('Loading item sets...');
-	const item_set_rows = await db2.ItemSet.getAllRows();
+static bool is_initialized = false;
 
-	for (const [set_id, set_row] of item_set_rows) {
-		const item_ids = set_row.ItemID.filter(id => id !== 0);
+// --- Internal functions ---
 
-		if (item_ids.length === 0)
+// JS: const initialize_item_sets = async (core) => { ... }
+static void initialize_item_sets() {
+	item_sets.clear();
+
+	// JS: await core.progressLoadingScreen('Loading item data...');
+	// JS: await DBItems.ensureInitialized();
+	core::progressLoadingScreen("Loading item data...");
+	db::caches::DBItems::ensureInitialized();
+
+	// JS: await core.progressLoadingScreen('Loading item appearance data...');
+	// JS: const appearance_map = new Map();
+	// JS: for (const row of (await db2.ItemModifiedAppearance.getAllRows()).values())
+	//         appearance_map.set(row.ItemID, row.ItemAppearanceID);
+	core::progressLoadingScreen("Loading item appearance data...");
+	std::unordered_map<uint32_t, uint32_t> appearance_map;
+	for (const auto& [_id, row] : casc::db2::preloadTable("ItemModifiedAppearance").getAllRows()) {
+		uint32_t itemID = fieldToUint32(row.at("ItemID"));
+		uint32_t itemAppearanceID = fieldToUint32(row.at("ItemAppearanceID"));
+		appearance_map[itemID] = itemAppearanceID;
+	}
+
+	// JS: await core.progressLoadingScreen('Loading item sets...');
+	// JS: const item_set_rows = await db2.ItemSet.getAllRows();
+	core::progressLoadingScreen("Loading item sets...");
+	auto& item_appearance_table = casc::db2::preloadTable("ItemAppearance");
+	const auto& item_set_rows = casc::db2::preloadTable("ItemSet").getAllRows();
+
+	for (const auto& [set_id, set_row] : item_set_rows) {
+		// JS: const item_ids = set_row.ItemID.filter(id => id !== 0);
+		auto item_id_it = set_row.find("ItemID");
+		if (item_id_it == set_row.end())
+			continue;
+
+		std::vector<uint32_t> item_ids_raw = fieldToUint32Vec(item_id_it->second);
+		std::vector<uint32_t> item_ids;
+		for (uint32_t id : item_ids_raw) {
+			if (id != 0)
+				item_ids.push_back(id);
+		}
+
+		// JS: if (item_ids.length === 0) continue;
+		if (item_ids.empty())
 			continue;
 
 		// get first item for icon/quality
-		let first_item = null;
-		for (const item_id of item_ids) {
-			const item = DBItems.getItemById(item_id);
+		// JS: let first_item = null;
+		uint32_t first_icon = 0;
+		int first_quality = 0;
+		bool found_first = false;
+
+		for (const uint32_t item_id : item_ids) {
+			// JS: const item = DBItems.getItemById(item_id);
+			const auto* item = db::caches::DBItems::getItemById(item_id);
 			if (item) {
-				const appearance_id = appearance_map.get(item_id);
-				const appearance_row = await db2.ItemAppearance.getRow(appearance_id);
+				// JS: const appearance_id = appearance_map.get(item_id);
+				auto app_it = appearance_map.find(item_id);
+				uint32_t icon = 0;
 
-				first_item = {
-					icon: appearance_row?.DefaultIconFileDataID ?? 0,
-					quality: item.quality
-				};
+				if (app_it != appearance_map.end()) {
+					// JS: const appearance_row = await db2.ItemAppearance.getRow(appearance_id);
+					auto appearance_row = item_appearance_table.getRow(app_it->second);
 
-				if (first_item.icon !== 0)
+					// JS: first_item = { icon: appearance_row?.DefaultIconFileDataID ?? 0, quality: item.quality };
+					if (appearance_row.has_value()) {
+						auto iconIt = appearance_row->find("DefaultIconFileDataID");
+						icon = (iconIt != appearance_row->end()) ? fieldToUint32(iconIt->second) : 0;
+					}
+				}
+
+				first_icon = icon;
+				first_quality = item->quality;
+				found_first = true;
+
+				// JS: if (first_item.icon !== 0) break;
+				if (first_icon != 0)
 					break;
 			}
 		}
 
-		item_sets.push(Object.freeze(new ItemSet(set_id, set_row.Name_lang, item_ids, first_item)));
+		// JS: item_sets.push(Object.freeze(new ItemSet(set_id, set_row.Name_lang, item_ids, first_item)));
+		ItemSet new_set;
+		new_set.id = set_id;
+
+		auto name_it = set_row.find("Name_lang");
+		new_set.name = (name_it != set_row.end()) ? fieldToString(name_it->second) : "";
+
+		new_set.item_ids = std::move(item_ids);
+		new_set.icon = found_first ? first_icon : 0;
+		new_set.quality = found_first ? first_quality : 0;
+
+		item_sets.push_back(std::move(new_set));
 	}
 
-	log.write('Loaded %d item sets', item_sets.length);
-};
+	// JS: log.write('Loaded %d item sets', item_sets.length);
+	logging::write(std::format("Loaded {} item sets", item_sets.size()));
+}
 
-const apply_filter = (core) => {
-	core.view.listfileItemSets = item_sets;
-};
+// JS: const apply_filter = (core) => { core.view.listfileItemSets = item_sets; };
+static void apply_filter() {
+	auto& view = *core::view;
+	view.listfileItemSets.clear();
 
-module.exports = {
-	register() {
-		this.registerNavButton('Item Sets', 'armour.svg', InstallType.CASC);
-	},
+	for (const auto& set : item_sets) {
+		nlohmann::json j;
+		j["id"] = set.id;
+		j["name"] = set.name;
+		j["displayName"] = set.displayName();
+		j["icon"] = set.icon;
+		j["quality"] = set.quality;
 
-	template: `
-		<div class="tab" id="tab-item-sets">
-			<div class="list-container list-container-full">
-				<component :is="$components.Itemlistbox" id="listbox-item-sets" v-model:selection="$core.view.selectionItemSets" :items="$core.view.listfileItemSets" :filter="$core.view.userInputFilterItemSets" :keyinput="true" :includefilecount="true" unittype="set" @equip="equip_set"></component>
-			</div>
-			<div class="filter">
-				<div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
-				<input type="text" v-model="$core.view.userInputFilterItemSets" placeholder="Filter item sets..."/>
-			</div>
-		</div>
-	`,
+		// Store item_ids as JSON array for equip_set to use.
+		j["item_ids"] = nlohmann::json::array();
+		for (uint32_t id : set.item_ids)
+			j["item_ids"].push_back(id);
 
-	methods: {
-		async initialize() {
-			this.$core.showLoadingScreen(3);
-			await initialize_item_sets(this.$core);
-			this.$core.hideLoadingScreen();
-			apply_filter(this.$core);
-		},
+		view.listfileItemSets.push_back(std::move(j));
+	}
+}
 
-		equip_set(set) {
-			let equipped_count = 0;
+// JS: methods.equip_set(set)
+static void equip_set(const nlohmann::json& set) {
+	int equipped_count = 0;
+	std::string set_name = set.value("name", std::string("Unknown"));
 
-			for (const item_id of set.item_ids) {
-				const slot_id = DBItems.getItemSlotId(item_id);
-				if (slot_id) {
-					this.$core.view.chrEquippedItems[slot_id] = item_id;
-					equipped_count++;
+	// JS: for (const item_id of set.item_ids) { ... }
+	if (!set.contains("item_ids") || !set["item_ids"].is_array())
+		return;
+
+	auto& view = *core::view;
+
+	for (const auto& id_val : set["item_ids"]) {
+		uint32_t item_id = id_val.get<uint32_t>();
+
+		// JS: const slot_id = DBItems.getItemSlotId(item_id);
+		auto slot_id_opt = db::caches::DBItems::getItemSlotId(item_id);
+
+		// JS: if (slot_id) { this.$core.view.chrEquippedItems[slot_id] = item_id; equipped_count++; }
+		if (slot_id_opt.has_value()) {
+			view.chrEquippedItems[std::to_string(slot_id_opt.value())] = item_id;
+			equipped_count++;
+		}
+	}
+
+	// JS: if (equipped_count > 0) { ... } else { ... }
+	if (equipped_count > 0) {
+		// JS: this.$core.view.chrEquippedItems = { ...this.$core.view.chrEquippedItems };
+		// In C++ the JSON object is already mutated in place; no spread needed.
+		core::setToast("success", std::format("Equipped {} items from {}.", equipped_count, set_name), nullptr, 2000);
+	} else {
+		core::setToast("info", "No equippable items in this set.", nullptr, 2000);
+	}
+}
+
+// --- Public API ---
+
+// JS: register() { this.registerNavButton('Item Sets', 'armour.svg', InstallType.CASC); }
+void registerTab() {
+	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+}
+
+// JS: async mounted() { await this.initialize(); }
+void mounted() {
+	// JS: this.$core.showLoadingScreen(3);
+	core::showLoadingScreen(3);
+
+	// JS: await initialize_item_sets(this.$core);
+	initialize_item_sets();
+
+	// JS: this.$core.hideLoadingScreen();
+	core::hideLoadingScreen();
+
+	// JS: apply_filter(this.$core);
+	apply_filter();
+
+	is_initialized = true;
+}
+
+void render() {
+	auto& view = *core::view;
+
+	if (!is_initialized)
+		return;
+
+	// --- Template rendering ---
+
+	// JS: <div class="tab" id="tab-item-sets">
+	//     <div class="list-container list-container-full">
+	//         <Itemlistbox id="listbox-item-sets" v-model:selection="$core.view.selectionItemSets"
+	//          :items="$core.view.listfileItemSets" :filter="$core.view.userInputFilterItemSets"
+	//          :keyinput="true" :includefilecount="true" unittype="set" @equip="equip_set">
+	ImGui::BeginChild("item-sets-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
+
+	// TODO(conversion): Itemlistbox component rendering will be wired when integration is complete.
+	// For now, render a simple selectable list with equip action.
+	ImGui::Text("Item Sets: %zu", view.listfileItemSets.size());
+
+	if (ImGui::BeginChild("item-sets-scroll", ImVec2(0, 0))) {
+		for (size_t i = 0; i < view.listfileItemSets.size(); ++i) {
+			const auto& item = view.listfileItemSets[i];
+			std::string display = item.value("displayName", std::string("Unknown"));
+
+			// Apply user filter
+			if (!view.userInputFilterItemSets.empty()) {
+				std::string lower_display = display;
+				std::string lower_filter = view.userInputFilterItemSets;
+				std::transform(lower_display.begin(), lower_display.end(), lower_display.begin(), ::tolower);
+				std::transform(lower_filter.begin(), lower_filter.end(), lower_filter.begin(), ::tolower);
+				if (lower_display.find(lower_filter) == std::string::npos)
+					continue;
+			}
+
+			bool selected = false;
+			for (const auto& sel : view.selectionItemSets) {
+				if (sel.value("id", 0u) == item.value("id", 0u)) {
+					selected = true;
+					break;
 				}
 			}
 
-			if (equipped_count > 0) {
-				this.$core.view.chrEquippedItems = { ...this.$core.view.chrEquippedItems };
-				this.$core.setToast('success', `Equipped ${equipped_count} items from ${set.name}.`, null, 2000);
-			} else {
-				this.$core.setToast('info', 'No equippable items in this set.', null, 2000);
+			if (ImGui::Selectable(display.c_str(), selected)) {
+				view.selectionItemSets.clear();
+				view.selectionItemSets.push_back(item);
 			}
-		}
-	},
 
-	async mounted() {
-		await this.initialize();
+			// JS: @equip="equip_set" — double-click to equip
+			if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0))
+				equip_set(item);
+		}
 	}
-};
+	ImGui::EndChild(); // item-sets-scroll
+
+	ImGui::EndChild(); // item-sets-list-container
+
+	// JS: <div class="filter">
+	//     <div class="regex-info" v-if="$core.view.config.regexFilters" ...>Regex Enabled</div>
+	//     <input type="text" v-model="$core.view.userInputFilterItemSets" placeholder="Filter item sets..."/>
+	if (view.config.value("regexFilters", false))
+		ImGui::TextUnformatted("Regex Enabled");
+
+	char filter_buf[256] = {};
+	std::strncpy(filter_buf, view.userInputFilterItemSets.c_str(), sizeof(filter_buf) - 1);
+	if (ImGui::InputText("##FilterItemSets", filter_buf, sizeof(filter_buf)))
+		view.userInputFilterItemSets = filter_buf;
+}
+
+} // namespace tab_item_sets
