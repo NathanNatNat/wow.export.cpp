@@ -309,11 +309,11 @@ Core infrastructure that most other phases depend on.
 - [x] Wire `cascLocale` config watch with change-detection pattern — `src/js/modules/tab_raw.cpp` (1 TODO)
 
 ### 1.6 App Lifecycle
-- [ ] Implement `restartApplication()` — `src/js/casc/build-cache.cpp` (1 TODO)
-- [ ] Implement taskbar progress bar (Windows `ITaskbarList3`, Linux no-op) — `src/app.cpp` (1 TODO)
-- [ ] Wire cache collection background worker — `src/js/modules/screen_source_select.cpp` (1 TODO)
-- [ ] Wire CDN ping async integration — `src/js/modules/screen_source_select.cpp` (1 TODO)
-- [ ] Populate home tab content — `src/js/modules/tab_home.cpp`, `legacy_tab_home.cpp` (2 TODOs)
+- [x] Implement `restartApplication()` — `src/js/casc/build-cache.cpp` (1 TODO)
+- [x] Implement taskbar progress bar (Windows `ITaskbarList3`, Linux no-op) — `src/app.cpp` (1 TODO)
+- [x] Wire cache collection background worker — `src/js/modules/screen_source_select.cpp` (1 TODO)
+- [x] Wire CDN ping async integration — `src/js/modules/screen_source_select.cpp` (1 TODO)
+- [x] Populate home tab content — `src/js/modules/tab_home.cpp`, `legacy_tab_home.cpp` (2 TODOs)
 
 ---
 

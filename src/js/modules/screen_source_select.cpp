@@ -16,12 +16,17 @@
 #include "../casc/cdn-resolver.h"
 #include "../mpq/mpq-install.h"
 #include "../components/file-field.h"
+#include "../workers/cache-collector.h"
 
+#include <atomic>
 #include <cstring>
 #include <format>
 #include <algorithm>
 #include <future>
+#include <limits>
 #include <memory>
+#include <mutex>
+#include <random>
 #include <thread>
 
 #include <imgui.h>
@@ -42,7 +47,45 @@ static SourceType active_source_type = SourceType::None;
 
 // JS: let local_selector = null;
 // JS: let legacy_selector = null;
-// TODO(conversion): In ImGui, file selectors are triggered via file_field::openDirectoryDialog().
+// In ImGui, file selectors are triggered via file_field::openDirectoryDialog().
+
+// Background thread for cache collection (replaces JS Worker).
+static std::unique_ptr<std::jthread> cache_worker_thread;
+
+// CDN ping results collected by the background thread.
+struct CdnPingResult {
+	size_t index;     // region index in cdnRegions array
+	int64_t delay;    // ping delay in ms, or -1 on failure
+};
+
+static std::mutex cdn_ping_mutex;
+static std::vector<CdnPingResult> cdn_ping_results;
+static std::atomic<bool> cdn_pings_complete{false};
+static std::unique_ptr<std::jthread> cdn_ping_thread;
+
+/**
+ * Generate a random UUID v4 string.
+ * JS equivalent: crypto.randomUUID()
+ */
+static std::string generate_uuid() {
+	thread_local std::random_device rd;
+	thread_local std::mt19937_64 gen(rd());
+	std::uniform_int_distribution<uint64_t> dist;
+
+	uint64_t a = dist(gen);
+	uint64_t b = dist(gen);
+
+	// Set UUID version 4 bits.
+	a = (a & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;
+	b = (b & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;
+
+	return std::format("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+		static_cast<uint32_t>(a >> 32),
+		static_cast<uint16_t>((a >> 16) & 0xFFFF),
+		static_cast<uint16_t>(a & 0xFFFF),
+		static_cast<uint16_t>(b >> 48),
+		b & 0x0000FFFFFFFFFFFFULL);
+}
 
 // --- Internal functions ---
 
@@ -112,10 +155,33 @@ void load_install(int index) {
 
 			// JS: if (casc_source instanceof CASCLocal && this.$core.view.config.allowCacheCollection) { ... }
 			// JS: Worker for cache-collector.
-			// TODO(conversion): Cache collection worker will be wired when background worker system is integrated.
-			// The JS code creates a Worker thread for cache collection with workerData:
-			//   install_path, machine_id, submit_url, finalize_url, user_agent, state_path.
-			// In C++ this would use std::jthread with equivalent parameters.
+			if (core::view->config.value("allowCacheCollection", false)) {
+				if (!core::view->config.contains("machineId") || !core::view->config["machineId"].is_string()
+					|| core::view->config["machineId"].get<std::string>().empty()) {
+					core::view->config["machineId"] = generate_uuid();
+				}
+
+				cache_collector::WorkerConfig wconfig;
+				wconfig.install_path = casc_local_source->dir;
+				wconfig.machine_id = core::view->config["machineId"].get<std::string>();
+				wconfig.submit_url = std::string(constants::CACHE::SUBMIT_URL);
+				wconfig.finalize_url = std::string(constants::CACHE::FINALIZE_URL);
+				wconfig.user_agent = constants::USER_AGENT();
+				wconfig.state_path = constants::CACHE::STATE_FILE();
+
+				// Stop any previous cache worker.
+				cache_worker_thread.reset();
+
+				cache_worker_thread = std::make_unique<std::jthread>([cfg = std::move(wconfig)]() {
+					try {
+						cache_collector::collect(cfg, [](const std::string& msg) {
+							logging::write(std::format("cache-collector: {}", msg));
+						});
+					} catch (const std::exception& err) {
+						logging::write(std::format("cache-collector error: {}", err.what()));
+					}
+				});
+			}
 
 			core::view->installType = install_type::CASC;
 			// JS: this.$modules.tab_home.setActive();
@@ -290,10 +356,40 @@ static void init_cdn_pings() {
 
 	// Ping all regions asynchronously.
 	// JS: Promise.all(pings).then(() => { ... auto-select fastest region ... });
-	// TODO(conversion): CDN ping will be wired when async tasks/main-loop integration is complete.
-	// For each region, call generics::ping(cdn_url) in a background thread,
-	// update node["delay"] with the result, and refresh core::view->cdnRegions.
-	// After all pings, if !lockCDNRegion, select the fastest region.
+	// Background thread pings all regions, stores results via mutex.
+	// Results are applied to core::view from the main thread in render().
+	{
+		std::lock_guard<std::mutex> lock(cdn_ping_mutex);
+		cdn_ping_results.clear();
+	}
+	cdn_pings_complete.store(false);
+
+	// Build a list of (index, url) pairs to ping — captured by value for thread safety.
+	struct PingTarget { size_t index; std::string url; };
+	std::vector<PingTarget> targets;
+	for (size_t i = 0; i < regions.size(); i++)
+		targets.push_back({i, regions[i]["url"].get<std::string>()});
+
+	cdn_ping_thread = std::make_unique<std::jthread>([targets = std::move(targets)]() {
+		std::vector<CdnPingResult> results;
+		for (const auto& target : targets) {
+			int64_t delay = -1;
+			try {
+				delay = generics::ping(target.url);
+			} catch (const std::exception& e) {
+				logging::write(std::format("Failed ping to {}: {}", target.url, e.what()));
+			}
+			results.push_back({target.index, delay});
+
+			// Push intermediate results so the UI can update progressively.
+			{
+				std::lock_guard<std::mutex> lock(cdn_ping_mutex);
+				cdn_ping_results = results;
+			}
+		}
+
+		cdn_pings_complete.store(true);
+	});
 }
 
 // JS: methods.click_source_local()
@@ -403,7 +499,7 @@ void mounted() {
 		core::view->config["recentLegacy"] = nlohmann::json::array();
 
 	// JS: create file selectors
-	// TODO(conversion): In ImGui, file selectors are triggered via file_field::openDirectoryDialog()
+	// In ImGui, file selectors are triggered via file_field::openDirectoryDialog()
 	// instead of NW.js <input type="file" nwdirectory>.
 
 	// init cdn pings.
@@ -411,6 +507,45 @@ void mounted() {
 }
 
 void render() {
+	// Apply CDN ping results from the background thread (main-thread only).
+	{
+		std::lock_guard<std::mutex> lock(cdn_ping_mutex);
+		if (!cdn_ping_results.empty()) {
+			auto& regions = core::view->cdnRegions;
+			for (const auto& result : cdn_ping_results) {
+				if (result.index < regions.size())
+					regions[result.index]["delay"] = result.delay;
+			}
+			cdn_ping_results.clear();
+		}
+	}
+
+	// After all pings complete, auto-select the fastest region if not locked.
+	if (cdn_pings_complete.exchange(false)) {
+		if (!core::view->lockCDNRegion) {
+			auto& regions = core::view->cdnRegions;
+			int64_t best_delay = std::numeric_limits<int64_t>::max();
+			const nlohmann::json* best_region = nullptr;
+
+			for (const auto& region : regions) {
+				if (!region.contains("delay") || region["delay"].is_null() || !region["delay"].is_number())
+					continue;
+				int64_t delay = region["delay"].get<int64_t>();
+				if (delay < 0)
+					continue;
+				if (delay < best_delay) {
+					best_delay = delay;
+					best_region = &region;
+				}
+			}
+
+			if (best_region) {
+				core::view->selectedCDNRegion = *best_region;
+				casc::cdn_resolver::startPreResolution((*best_region)["tag"].get<std::string>());
+			}
+		}
+	}
+
 	// --- Template rendering ---
 	// JS: <div id="source-select" v-if="!$core.view.sourceSelectShowBuildSelect">
 	if (!core::view->sourceSelectShowBuildSelect) {
