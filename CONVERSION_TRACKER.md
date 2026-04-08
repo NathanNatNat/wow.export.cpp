@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 179 / 184 files converted
+**Progress:** 178 / 179 files converted
 
 ---
 
@@ -214,7 +214,7 @@
 - [x] `src/js/ui/character-appearance.cpp` (205 lines)
 - [x] `src/js/ui/model-viewer-utils.cpp` (549 lines)
 
-## Tier 21 — Vue Components → ImGui Widgets (16 files)
+## Tier 21 — Vue Components → ImGui Widgets (15 files)
 
 - [x] `src/js/components/checkboxlist.cpp` (176 lines)
 - [x] `src/js/components/combobox.cpp` (94 lines)

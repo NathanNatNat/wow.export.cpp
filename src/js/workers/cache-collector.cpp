@@ -28,6 +28,9 @@
 // For now, we use a simple implementation placeholder that will be wired
 // to a proper crypto library.
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <wincrypt.h>
 #else
