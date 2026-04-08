@@ -197,8 +197,7 @@ target_include_directories(miniaudio INTERFACE extern/miniaudio)
 #  Main executable
 # ════════════════════════════════════════════════════════════════
 
-# Temporary entry point — will be replaced by the converted src/app.cpp
-add_executable(wow_export src/main.cpp)
+add_executable(wow_export src/app.cpp)
 
 target_include_directories(wow_export PRIVATE
     ${CMAKE_SOURCE_DIR}/src

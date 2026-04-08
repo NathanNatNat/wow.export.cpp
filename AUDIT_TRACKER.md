@@ -457,3 +457,13 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: `render()` displays `whatsNewHTML` content and three help buttons (Discord, GitHub, Patreon) with `data-external` links. Identical to `tab_home` but with "legacy-tab-home" CSS ID.
 - **C++**: `render()` is an empty function body. `navigate()` is preserved as-is.
 - **Rationale**: Content intentionally removed per project direction — the legacy home tab is a blank placeholder for now. Tab navigation buttons and the `navigate()` method are kept intact.
+
+### `src/app.cpp` — ACCEPTABLE (entry point restructured for GLFW/ImGui)
+- **JS**: NW.js entry point that creates a Vue.js app with reactive data, computed properties, watchers, and methods. Uses `window`/`document` DOM APIs, `nw.Window.get()`, `os` module for system info, `process.on()` for crash handlers, drag/drop via DOM events, `chrome.runtime.reload()` for restart, and Vue's `$watch` for state change detection.
+- **C++**: `main()` function using GLFW window + OpenGL 4.6 (GLAD2) + Dear ImGui. Vue app state → `AppState` struct (via `core::makeNewView()`). Vue methods → `namespace app` static functions. Vue computed properties → static functions called on demand. Vue watchers → frame-by-frame change detection in `checkWatchers()`. DOM drag/drop → GLFW `glfwSetDropCallback`. OS info → platform-specific APIs (`/proc/cpuinfo`, Windows registry, `sysconf`). Crash screen → ImGui overlay window. Cache size watcher → timer-based file write with `checkCacheSizeUpdate()`.
+- **Rationale**: The JS entry point is entirely browser/NW.js-specific. Every aspect (DOM, Vue reactivity, NW.js APIs, process handlers) must be replaced with C++ equivalents. The ImGui immediate-mode main loop replaces Vue's reactive rendering. `whats-new.html` loading removed per project direction (home page is now a blank placeholder).
+
+### `src/app.cpp` — ACCEPTABLE (whats-new.html loading removed)
+- **JS**: Loads `whats-new.html` from disk and assigns to `core.view.whatsNewHTML` for display on the home tab.
+- **C++**: Code commented out with original JS preserved in comments.
+- **Rationale**: Home page is a blank placeholder — `whats-new.html` is no longer used per project direction.
