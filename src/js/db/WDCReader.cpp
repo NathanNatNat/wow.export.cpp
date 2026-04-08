@@ -14,6 +14,7 @@
 #include "../constants.h"
 #include "../buffer.h"
 #include "../casc/export-helper.h"
+#include "../casc/casc-source.h"
 
 #include <cstdint>
 #include <cassert>
@@ -262,9 +263,9 @@ std::vector<DataRecord> WDCReader::getRelationRows(uint32_t foreignKeyValue) {
  * @param layoutHash The layout hash string.
  */
 void WDCReader::loadSchema(const std::string& layoutHash) {
-	// casc is stored as JSON in core::view; access it for build info and cache
-	const auto& casc = core::view->casc;
-	const std::string buildID = casc.value("buildName", "");
+	// Access the active CASC source for build info.
+	auto* casc = core::view->casc;
+	const std::string buildID = casc ? casc->getBuildName() : "";
 
 	std::filesystem::path fileBaseName = std::filesystem::path(fileName).stem();
 	const std::string tableName = casc::ExportHelper::replaceExtension(fileBaseName.string());

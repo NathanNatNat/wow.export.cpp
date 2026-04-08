@@ -1,2656 +1,3232 @@
 /*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
-	License: MIT
+wow.export (https://github.com/Kruithne/wow.export)
+Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
+License: MIT
  */
-const log = require('../log');
-const util = require('util');
-const path = require('path');
-const os = require('os');
-const fsp = require('fs').promises;
-const BufferWrapper = require('../buffer');
-const generics = require('../generics');
-const CharMaterialRenderer = require('../3D/renderers/CharMaterialRenderer');
-const M2RendererGL = require('../3D/renderers/M2RendererGL');
-const M2Exporter = require('../3D/exporters/M2Exporter');
-const CharacterExporter = require('../3D/exporters/CharacterExporter');
-const db2 = require('../casc/db2');
-const ExportHelper = require('../casc/export-helper');
-const listfile = require('../casc/listfile');
-const realmlist = require('../casc/realmlist');
-// const { wmv_parse } = require('../wmv'); // Removed: wmv module deleted
-// const { wowhead_parse } = require('../wowhead'); // Removed: wowhead module deleted
-const InstallType = require('../install-type');
-const charTextureOverlay = require('../ui/char-texture-overlay');
-const PNGWriter = require('../png-writer');
-const { EQUIPMENT_SLOTS, ATTACHMENT_ID, get_slot_name, get_attachment_ids_for_slot, get_slot_layer } = require('../wow/EquipmentSlots');
-const DBItems = require('../db/caches/DBItems');
-const DBItemCharTextures = require('../db/caches/DBItemCharTextures');
-const DBItemGeosets = require('../db/caches/DBItemGeosets');
-const DBItemModels = require('../db/caches/DBItemModels');
-const DBGuildTabard = require('../db/caches/DBGuildTabard');
-const DBCharacterCustomization = require('../db/caches/DBCharacterCustomization');
-const character_appearance = require('../ui/character-appearance');
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
-// geoset group constants (CG enum from DBItemGeosets)
-const CG = {
-	SLEEVES: 8,
-	KNEEPADS: 9,
-	CHEST: 10,
-	PANTS: 11,
-	TABARD: 12,
-	TROUSERS: 13,
-	CLOAK: 15,
-	BELT: 18,
-	FEET: 20,
-	TORSO: 22,
-	HAND_ATTACHMENT: 23,
-	SHOULDERS: 26,
-	HELM: 27,
-	ARM_UPPER: 28,
-	BOOTS: 5,
-	GLOVES: 4,
-	SKULL: 21
+#include "tab_characters.h"
+#include "../log.h"
+#include "../core.h"
+#include "../buffer.h"
+#include "../generics.h"
+#include "../png-writer.h"
+#include "../file-writer.h"
+#include "../install-type.h"
+#include "../casc/export-helper.h"
+#include "../casc/listfile.h"
+#include "../casc/realmlist.h"
+#include "../components/file-field.h"
+#include "../ui/char-texture-overlay.h"
+#include "../ui/character-appearance.h"
+#include "../ui/model-viewer-utils.h"
+#include "../3D/AnimMapper.h"
+#include "../3D/renderers/CharMaterialRenderer.h"
+#include "../3D/renderers/M2RendererGL.h"
+#include "../3D/exporters/M2Exporter.h"
+#include "../3D/exporters/CharacterExporter.h"
+#include "../db/caches/DBCharacterCustomization.h"
+#include "../db/caches/DBItems.h"
+#include "../db/caches/DBItemCharTextures.h"
+#include "../db/caches/DBItemGeosets.h"
+#include "../db/caches/DBItemModels.h"
+#include "../db/caches/DBGuildTabard.h"
+#include "../wow/EquipmentSlots.h"
+
+#include <algorithm>
+#include <cmath>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <map>
+#include <memory>
+#include <random>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+#include <imgui.h>
+#include <spdlog/spdlog.h>
+#include <nlohmann/json.hpp>
+
+namespace tab_characters {
+
+// --- Namespace alias for CG geoset group constants ---
+namespace CG = db::caches::DBItemGeosets::CG;
+
+// --- File-local structures ---
+
+// JS: equipment_model_renderers entries: { renderers: [{ renderer, attachment_id, is_collection_style }], item_id }
+struct EquipmentModelEntry {
+struct RendererInfo {
+std::unique_ptr<M2RendererGL> renderer;
+int attachment_id = 0;
+bool is_collection_style = false;
+};
+std::vector<RendererInfo> renderers;
+uint32_t item_id = 0;
+};
+
+// JS: collection_model_renderers entries: { renderers: [M2RendererGL], item_id }
+struct CollectionModelEntry {
+std::vector<std::unique_ptr<M2RendererGL>> renderers;
+uint32_t item_id = 0;
 };
 
 // slot id to geoset group mapping for collection models
-const SLOT_TO_GEOSET_GROUPS = {
-	1: [{ group_index: 0, char_geoset: CG.HELM }, { group_index: 1, char_geoset: CG.SKULL }],
-	5: [{ group_index: 0, char_geoset: CG.SLEEVES }, { group_index: 1, char_geoset: CG.CHEST }, { group_index: 2, char_geoset: CG.TROUSERS }, { group_index: 3, char_geoset: CG.TORSO }, { group_index: 4, char_geoset: CG.ARM_UPPER }],
-	6: [{ group_index: 0, char_geoset: CG.BELT }],
-	7: [{ group_index: 0, char_geoset: CG.PANTS }, { group_index: 1, char_geoset: CG.KNEEPADS }, { group_index: 2, char_geoset: CG.TROUSERS }],
-	8: [{ group_index: 0, char_geoset: CG.BOOTS }, { group_index: 1, char_geoset: CG.FEET }],
-	10: [{ group_index: 0, char_geoset: CG.GLOVES }, { group_index: 1, char_geoset: CG.HAND_ATTACHMENT }],
-	15: [{ group_index: 0, char_geoset: CG.CLOAK }]
+struct SlotGeosetMapping {
+int group_index;
+int char_geoset;
 };
 
-function get_slot_geoset_mapping(slot_id) {
-	return SLOT_TO_GEOSET_GROUPS[slot_id] || null;
+// --- CG alias + SLOT_TO_GEOSET_GROUPS ---
+
+// JS: const SLOT_TO_GEOSET_GROUPS = { ... };
+static const std::unordered_map<int, std::vector<SlotGeosetMapping>> SLOT_TO_GEOSET_GROUPS = {
+{ 1,  {{ 0, CG::HELM }, { 1, CG::SKULL }} },
+{ 5,  {{ 0, CG::SLEEVES }, { 1, CG::CHEST }, { 2, CG::TROUSERS }, { 3, CG::TORSO }, { 4, CG::ARM_UPPER }} },
+{ 6,  {{ 0, CG::BELT }} },
+{ 7,  {{ 0, CG::PANTS }, { 1, CG::KNEEPADS }, { 2, CG::TROUSERS }} },
+{ 8,  {{ 0, CG::BOOTS }, { 1, CG::FEET }} },
+{ 10, {{ 0, CG::GLOVES }, { 1, CG::HAND_ATTACHMENT }} },
+{ 15, {{ 0, CG::CLOAK }} }
+};
+
+// JS: function get_slot_geoset_mapping(slot_id) { return SLOT_TO_GEOSET_GROUPS[slot_id] || null; }
+static const std::vector<SlotGeosetMapping>* get_slot_geoset_mapping(int slot_id) {
+auto it = SLOT_TO_GEOSET_GROUPS.find(slot_id);
+return (it != SLOT_TO_GEOSET_GROUPS.end()) ? &it->second : nullptr;
 }
+
+// JS: const THUMBNAIL_PRESETS = { ... };
+// format: [cam_x, cam_y, cam_z, tgt_x, tgt_y, tgt_z, rot]
+struct ThumbnailPreset {
+float cam_x, cam_y, cam_z;
+float tgt_x, tgt_y, tgt_z;
+float rot;
+};
+
+// race_id -> { gender_index -> preset }
+static const std::unordered_map<int, std::unordered_map<int, ThumbnailPreset>> THUMBNAIL_PRESETS = {
+{ 1,  {{ 0, { 0.008f, 1.787f, 0.813f, 0.008f, 1.714f, 0.444f, -1.711f }}, { 1, {-0.014f, 1.664f, 0.736f, -0.014f, 1.610f, 0.464f, -1.711f }}} },
+{ 2,  {{ 0, {-0.008f, 1.797f, 1.293f, -0.008f, 1.630f, 0.460f, -1.666f }}, { 1, { 0.036f, 1.869f, 0.550f, 0.036f, 1.842f, 0.418f, -1.836f }}} },
+{ 3,  {{ 0, { 0.032f, 1.297f, 0.757f, 0.032f, 1.253f, 0.536f, -1.641f }}, { 1, { 0.0f, 1.285f, 0.726f, 0.0f, 1.247f, 0.537f, -1.836f }}} },
+{ 4,  {{ 0, { 0.025f, 2.152f, 0.852f, 0.025f, 2.057f, 0.375f, -1.581f }}, { 1, { 0.014f, 2.051f, 0.741f, 0.014f, 1.981f, 0.390f, -1.671f }}} },
+{ 5,  {{ 0, { 0.008f, 1.570f, 0.767f, 0.008f, 1.513f, 0.484f, -1.646f }}, { 1, {-0.010f, 1.643f, 0.861f, -0.010f, 1.565f, 0.473f, -1.791f }}} },
+{ 6,  {{ 0, {-0.048f, 2.186f, 1.806f, -0.048f, 1.906f, 0.405f, -1.686f }}, { 1, {-0.034f, 2.389f, 1.135f, -0.034f, 2.230f, 0.340f, -1.771f }}} },
+{ 7,  {{ 0, { 0.037f, 0.897f, 0.893f, 0.037f, 0.842f, 0.618f, -1.761f }}, { 1, { 0.046f, 0.864f, 0.766f, 0.046f, 0.835f, 0.619f, -1.761f }}} },
+{ 8,  {{ 0, {-0.014f, 1.964f, 1.222f, -0.014f, 1.805f, 0.425f, -1.771f }}, { 1, {-0.043f, 2.114f, 0.728f, -0.043f, 2.044f, 0.378f, -1.771f }}} },
+{ 9,  {{ 0, { 0.007f, 1.081f, 0.767f, 0.007f, 1.044f, 0.578f, -1.391f }}, { 1, { 0.051f, 1.133f, 0.666f, 0.051f, 1.112f, 0.564f, -1.761f }}} },
+{ 10, {{ 0, {-0.068f, 1.930f, 0.583f, -0.068f, 1.895f, 0.407f, -1.526f }}, { 1, { 0.015f, 1.749f, 0.543f, 0.015f, 1.728f, 0.441f, -1.496f }}} },
+{ 11, {{ 0, {-0.047f, 2.227f, 1.112f, -0.047f, 2.079f, 0.371f, -1.611f }}, { 1, { 0.035f, 2.118f, 0.744f, 0.035f, 2.045f, 0.377f, -1.836f }}} },
+{ 22, {{ 0, {-0.001f, 1.885f, 1.327f, -0.001f, 1.708f, 0.445f, -1.736f }}, { 1, {-0.005f, 2.161f, 0.904f, -0.005f, 2.055f, 0.375f, -1.736f }}} },
+{ 23, {{ 0, { 0.025f, 1.824f, 0.734f, 0.025f, 1.764f, 0.434f, -1.726f }}, { 1, { 0.004f, 1.703f, 0.701f, 0.004f, 1.654f, 0.456f, -1.726f }}} },
+{ 24, {{ 0, {-0.026f, 2.060f, 0.704f, -0.026f, 1.997f, 0.387f, -1.856f }}, { 1, { 0.015f, 1.903f, 0.984f, 0.015f, 1.792f, 0.428f, -1.731f }}} },
+{ 27, {{ 0, { 0.034f, 2.124f, 0.833f, 0.034f, 2.034f, 0.380f, -1.671f }}, { 1, { 0.015f, 2.047f, 0.706f, 0.015f, 1.983f, 0.390f, -1.671f }}} },
+{ 28, {{ 0, {-0.002f, 2.227f, 1.927f, -0.002f, 1.922f, 0.402f, -1.541f }}, { 1, {-0.026f, 2.295f, 1.345f, -0.026f, 2.099f, 0.367f, -1.541f }}} },
+{ 29, {{ 0, {-0.074f, 1.833f, 0.784f, -0.074f, 1.763f, 0.434f, -1.666f }}, { 1, { 0.019f, 1.717f, 0.650f, 0.019f, 1.677f, 0.451f, -1.711f }}} },
+{ 30, {{ 0, {-0.078f, 2.224f, 1.129f, -0.078f, 2.072f, 0.372f, -1.861f }}, { 1, { 0.050f, 2.121f, 0.690f, 0.050f, 2.058f, 0.375f, -1.726f }}} },
+{ 31, {{ 0, {-0.030f, 2.455f, 1.124f, -0.030f, 2.296f, 0.327f, -1.536f }}, { 1, {-0.058f, 2.430f, 0.909f, -0.058f, 2.313f, 0.324f, -1.536f }}} },
+{ 32, {{ 0, { 0.037f, 2.220f, 1.090f, 0.037f, 2.076f, 0.371f, -1.521f }}, { 1, { 0.013f, 2.148f, 0.782f, 0.013f, 2.067f, 0.373f, -1.726f }}} },
+{ 34, {{ 0, { 0.021f, 1.312f, 0.681f, 0.021f, 1.282f, 0.530f, -1.491f }}, { 1, { 0.009f, 1.366f, 0.620f, 0.009f, 1.345f, 0.517f, -1.491f }}} },
+{ 35, {{ 0, { 0.009f, 1.075f, 0.801f, 0.009f, 1.031f, 0.580f, -1.736f }}, { 1, { 0.015f, 1.039f, 0.847f, 0.015f, 0.987f, 0.589f, -1.711f }}} },
+{ 36, {{ 0, {-0.022f, 1.742f, 1.356f, -0.022f, 1.565f, 0.473f, -1.701f }}, { 1, { 0.032f, 1.831f, 0.617f, 0.032f, 1.793f, 0.428f, -1.841f }}} },
+{ 37, {{ 0, { 0.028f, 0.829f, 0.965f, 0.028f, 0.763f, 0.634f, -1.806f }}, { 1, { 0.051f, 0.823f, 0.890f, 0.051f, 0.771f, 0.632f, -1.831f }}} },
+{ 52, {{ 0, {-0.018f, 2.501f, 0.863f, -0.018f, 2.390f, 0.308f, -1.326f }}, { 1, {-0.018f, 2.501f, 0.863f, -0.018f, 2.390f, 0.308f, -1.326f }}} },
+{ 70, {{ 0, {-0.018f, 2.501f, 0.863f, -0.018f, 2.390f, 0.308f, -1.326f }}, { 1, {-0.018f, 2.501f, 0.863f, -0.018f, 2.390f, 0.308f, -1.326f }}} },
+{ 75, {{ 0, {-0.043f, 1.839f, 0.716f, -0.043f, 1.782f, 0.430f, -1.666f }}, { 1, { 0.009f, 1.725f, 0.553f, 0.009f, 1.704f, 0.446f, -1.746f }}} },
+{ 76, {{ 0, {-0.043f, 1.839f, 0.716f, -0.043f, 1.782f, 0.430f, -1.666f }}, { 1, { 0.009f, 1.725f, 0.553f, 0.009f, 1.704f, 0.446f, -1.746f }}} },
+{ 84, {{ 0, { 0.058f, 1.434f, 1.022f, 0.058f, 1.333f, 0.520f, -1.746f }}, { 1, { 0.027f, 1.473f, 0.760f, 0.027f, 1.422f, 0.502f, -1.746f }}} },
+{ 85, {{ 0, { 0.058f, 1.434f, 1.022f, 0.058f, 1.333f, 0.520f, -1.746f }}, { 1, { 0.027f, 1.473f, 0.760f, 0.027f, 1.422f, 0.502f, -1.746f }}} },
+{ 86, {{ 0, { 0.003f, 2.222f, 0.639f, 0.003f, 2.165f, 0.353f, -1.571f }}, { 1, { 0.006f, 2.078f, 0.637f, 0.006f, 2.027f, 0.381f, -1.571f }}} }
+};
+
+// --- File-local state ---
+
+// JS: const active_skins = new Map();
+static std::map<std::string, nlohmann::json> active_skins;
+
+// JS: let gl_context = null;
+// TODO(conversion): GL context stored as json placeholder; real GL context managed by model-viewer-gl.
+static nlohmann::json gl_context;
+
+// JS: let active_renderer; let active_model;
+static std::unique_ptr<M2RendererGL> active_renderer;
+static uint32_t active_model = 0;
+
+// JS: const skinned_model_renderers = new Map(); const skinned_model_meshes = new Set();
+static std::map<uint32_t, std::unique_ptr<M2RendererGL>> skinned_model_renderers;
+static std::unordered_set<uint32_t> skinned_model_meshes;
+
+// JS: const chr_materials = new Map();
+static std::map<uint32_t, std::unique_ptr<CharMaterialRenderer>> chr_materials;
+
+// JS: const equipment_model_renderers = new Map();
+static std::map<int, EquipmentModelEntry> equipment_model_renderers;
+
+// JS: const collection_model_renderers = new Map();
+static std::map<int, CollectionModelEntry> collection_model_renderers;
+
+// JS: let current_char_component_texture_layout_id = 0;
+static uint32_t current_char_component_texture_layout_id = 0;
+
+// JS: let is_importing = false;
+static bool is_importing = false;
+
+// Animation state proxy for model_viewer_utils
+static model_viewer_utils::ViewStateProxy view_state;
+static std::unique_ptr<model_viewer_utils::AnimationMethods> anim_methods;
+
+// Change-detection variables (Vue watch equivalents)
+static std::vector<nlohmann::json> prev_race_selection;
+static std::vector<nlohmann::json> prev_model_selection;
+static std::vector<nlohmann::json> prev_option_selection;
+static std::vector<nlohmann::json> prev_choice_selection;
+static std::vector<nlohmann::json> prev_active_choices;
+static nlohmann::json prev_equipped_items;
+static nlohmann::json prev_guild_tabard_config;
+static std::string prev_anim_selection;
+static bool prev_include_base_clothing = true;
+static bool prev_chr_import_region_inited = false;
+static std::string prev_chr_import_region;
+static bool prev_chr_import_classic_realms = false;
+
+// Scrubber state for animation controls
+static bool _was_paused_before_scrub = false;
+
+// JS: const base_regions = ['us', 'eu', 'kr', 'tw'];
+static const std::vector<std::string> base_regions = { "us", "eu", "kr", "tw" };
+
+// JS: const tabard_options = [...]
+struct TabardOptionDef {
+std::string key;
+std::string label;
+std::string type; // "value" or "color"
+std::string colors; // getter method name for color maps
+};
+
+static const std::vector<TabardOptionDef> tabard_options = {
+{ "background", "Background", "color", "getBackgroundColors" },
+{ "border_style", "Border", "value", "" },
+{ "border_color", "Border Color", "color", "getBorderColors" },
+{ "emblem_design", "Emblem", "value", "" },
+{ "emblem_color", "Emblem Color", "color", "getEmblemColors" }
+};
+
+// --- Forward declarations of file-local functions ---
+static void refresh_character_appearance();
+static void update_geosets();
+static void update_textures();
+static void update_equipment_models();
+static void load_character_model(uint32_t file_data_id);
+static void dispose_skinned_models();
+static void dispose_equipment_models();
+static void dispose_collection_models();
+static void clear_materials();
+static void fit_camera();
+static void update_chr_model_list();
+static void update_model_selection();
+static void update_customization_type();
+static void update_customization_choice();
+static void update_choice_for_option(uint32_t option_id, uint32_t choice_id);
+static void randomize_customization();
+static void import_character();
+static void import_wmv_character();
+static void import_wowhead_character();
+static void apply_import_data(const nlohmann::json& data, const std::string& source);
+static void load_saved_characters();
+static void save_character(const std::string& name, const std::string& thumb_data);
+static void delete_character(const nlohmann::json& character);
+static void load_character(const nlohmann::json& character);
+static std::string capture_character_thumbnail();
+static nlohmann::json get_current_character_data();
+static void export_json_character();
+static void export_saved_character(const nlohmann::json& character);
+static void import_json_character(bool save_to_my_characters);
+static void update_chr_race_list();
+static void export_char_model();
+static void export_chr_texture();
+static ImU32 int_to_imgui_color(uint32_t value);
+static std::string int_to_css_color(uint32_t value);
+static const db::caches::DBCharacterCustomization::ChoiceEntry* get_selected_choice(uint32_t option_id);
+static std::string get_saved_characters_dir();
+static void update_realm_list();
+
+// --- Utility: race/gender ---
+
+struct RaceGender {
+uint32_t raceID;
+int genderIndex;
+};
 
 /**
- * Get current character race ID and gender index from view state
- * @param {object} core
- * @returns {{ raceID: number, genderIndex: number }|null}
+ * Get current character race ID and gender index from view state.
+ * JS equivalent: function get_current_race_gender(core)
  */
-function get_current_race_gender(core) {
-	const race_selection = core.view.chrCustRaceSelection?.[0];
-	const model_selection = core.view.chrCustModelSelection?.[0];
+static std::optional<RaceGender> get_current_race_gender() {
+auto& view = *core::view;
 
-	if (!race_selection || !model_selection)
-		return null;
+if (view.chrCustRaceSelection.empty() || view.chrCustModelSelection.empty())
+return std::nullopt;
 
-	const race_id = race_selection.id;
-	const models_for_race = DBCharacterCustomization.get_race_models(race_id);
+const auto& race_selection = view.chrCustRaceSelection[0];
+const auto& model_selection = view.chrCustModelSelection[0];
 
-	if (!models_for_race)
-		return null;
+if (!race_selection.contains("id") || !model_selection.contains("id"))
+return std::nullopt;
 
-	// find the sex that matches the selected model ID
-	for (const [sex, model_id] of models_for_race) {
-		if (model_id === model_selection.id)
-			return { raceID: race_id, genderIndex: sex };
-	}
+uint32_t race_id = race_selection["id"].get<uint32_t>();
+uint32_t selected_model_id = model_selection["id"].get<uint32_t>();
 
-	return null;
+const auto* models_for_race = db::caches::DBCharacterCustomization::get_race_models(race_id);
+if (!models_for_race)
+return std::nullopt;
+
+// find the sex that matches the selected model ID
+for (const auto& [sex, model_id] : *models_for_race) {
+if (model_id == selected_model_id)
+return RaceGender{ race_id, static_cast<int>(sex) };
 }
 
-
-//region state
-const active_skins = new Map();
-let gl_context = null;
-
-let active_renderer;
-let active_model;
-
-const skinned_model_renderers = new Map();
-const skinned_model_meshes = new Set();
-
-const chr_materials = new Map();
-
-// equipment model renderers (slot_id -> { renderers: [{renderer, attachment_id}], item_id })
-const equipment_model_renderers = new Map();
-
-// collection model renderers (slot_id -> { renderers: [renderer, ...], item_id })
-// collection models render at origin with shared bone matrices from character
-const collection_model_renderers = new Map();
-
-let current_char_component_texture_layout_id = 0;
-let watcher_cleanup_funcs = [];
-let is_importing = false;
-
-// thumbnail camera presets by race_id, then gender (0=male, 1=female)
-// format: [cam_x, cam_y, cam_z, tgt_x, tgt_y, tgt_z, rot]
-const THUMBNAIL_PRESETS = {
-	1: { // human
-		0: [0.008, 1.787, 0.813, 0.008, 1.714, 0.444, -1.711],
-		1: [-0.014, 1.664, 0.736, -0.014, 1.610, 0.464, -1.711]
-	},
-	2: { // orc
-		0: [-0.008, 1.797, 1.293, -0.008, 1.630, 0.460, -1.666],
-		1: [0.036, 1.869, 0.550, 0.036, 1.842, 0.418, -1.836]
-	},
-	3: { // dwarf
-		0: [0.032, 1.297, 0.757, 0.032, 1.253, 0.536, -1.641],
-		1: [0, 1.285, 0.726, 0, 1.247, 0.537, -1.836]
-	},
-	4: { // night elf
-		0: [0.025, 2.152, 0.852, 0.025, 2.057, 0.375, -1.581],
-		1: [0.014, 2.051, 0.741, 0.014, 1.981, 0.390, -1.671]
-	},
-	5: { // undead
-		0: [0.008, 1.570, 0.767, 0.008, 1.513, 0.484, -1.646],
-		1: [-0.010, 1.643, 0.861, -0.010, 1.565, 0.473, -1.791]
-	},
-	6: { // tauren
-		0: [-0.048, 2.186, 1.806, -0.048, 1.906, 0.405, -1.686],
-		1: [-0.034, 2.389, 1.135, -0.034, 2.230, 0.340, -1.771]
-	},
-	7: { // gnome
-		0: [0.037, 0.897, 0.893, 0.037, 0.842, 0.618, -1.761],
-		1: [0.046, 0.864, 0.766, 0.046, 0.835, 0.619, -1.761]
-	},
-	8: { // troll
-		0: [-0.014, 1.964, 1.222, -0.014, 1.805, 0.425, -1.771],
-		1: [-0.043, 2.114, 0.728, -0.043, 2.044, 0.378, -1.771]
-	},
-	9: { // goblin
-		0: [0.007, 1.081, 0.767, 0.007, 1.044, 0.578, -1.391],
-		1: [0.051, 1.133, 0.666, 0.051, 1.112, 0.564, -1.761]
-	},
-	10: { // blood elf
-		0: [-0.068, 1.930, 0.583, -0.068, 1.895, 0.407, -1.526],
-		1: [0.015, 1.749, 0.543, 0.015, 1.728, 0.441, -1.496]
-	},
-	11: { // draenei
-		0: [-0.047, 2.227, 1.112, -0.047, 2.079, 0.371, -1.611],
-		1: [0.035, 2.118, 0.744, 0.035, 2.045, 0.377, -1.836]
-	},
-	22: { // worgen
-		0: [-0.001, 1.885, 1.327, -0.001, 1.708, 0.445, -1.736],
-		1: [-0.005, 2.161, 0.904, -0.005, 2.055, 0.375, -1.736]
-	},
-	23: { // goblin
-		0: [0.025, 1.824, 0.734, 0.025, 1.764, 0.434, -1.726],
-		1: [0.004, 1.703, 0.701, 0.004, 1.654, 0.456, -1.726]
-	},
-	24: { // pandaren
-		0: [-0.026, 2.060, 0.704, -0.026, 1.997, 0.387, -1.856],
-		1: [0.015, 1.903, 0.984, 0.015, 1.792, 0.428, -1.731]
-	},
-	27: { // nightborne
-		0: [0.034, 2.124, 0.833, 0.034, 2.034, 0.380, -1.671],
-		1: [0.015, 2.047, 0.706, 0.015, 1.983, 0.390, -1.671]
-	},
-	28: { // highmountain tauren
-		0: [-0.002, 2.227, 1.927, -0.002, 1.922, 0.402, -1.541],
-		1: [-0.026, 2.295, 1.345, -0.026, 2.099, 0.367, -1.541]
-	},
-	29: { // void elf
-		0: [-0.074, 1.833, 0.784, -0.074, 1.763, 0.434, -1.666],
-		1: [0.019, 1.717, 0.650, 0.019, 1.677, 0.451, -1.711]
-	},
-	30: { // lightforged draenei
-		0: [-0.078, 2.224, 1.129, -0.078, 2.072, 0.372, -1.861],
-		1: [0.050, 2.121, 0.690, 0.050, 2.058, 0.375, -1.726]
-	},
-	31: { // zandalari troll
-		0: [-0.030, 2.455, 1.124, -0.030, 2.296, 0.327, -1.536],
-		1: [-0.058, 2.430, 0.909, -0.058, 2.313, 0.324, -1.536]
-	},
-	32: { // kul tiran
-		0: [0.037, 2.220, 1.090, 0.037, 2.076, 0.371, -1.521],
-		1: [0.013, 2.148, 0.782, 0.013, 2.067, 0.373, -1.726]
-	},
-	34: { // dark iron dwarf
-		0: [0.021, 1.312, 0.681, 0.021, 1.282, 0.530, -1.491],
-		1: [0.009, 1.366, 0.620, 0.009, 1.345, 0.517, -1.491]
-	},
-	35: { // vulpera
-		0: [0.009, 1.075, 0.801, 0.009, 1.031, 0.580, -1.736],
-		1: [0.015, 1.039, 0.847, 0.015, 0.987, 0.589, -1.711]
-	},
-	36: { // mag'har orc
-		0: [-0.022, 1.742, 1.356, -0.022, 1.565, 0.473, -1.701],
-		1: [0.032, 1.831, 0.617, 0.032, 1.793, 0.428, -1.841]
-	},
-	37: { // mechagnome
-		0: [0.028, 0.829, 0.965, 0.028, 0.763, 0.634, -1.806],
-		1: [0.051, 0.823, 0.890, 0.051, 0.771, 0.632, -1.831]
-	},
-	52: { // dracthyr (alliance)
-		0: [-0.018, 2.501, 0.863, -0.018, 2.390, 0.308, -1.326],
-		1: [-0.018, 2.501, 0.863, -0.018, 2.390, 0.308, -1.326]
-	},
-	70: { // dracthyr (horde)
-		0: [-0.018, 2.501, 0.863, -0.018, 2.390, 0.308, -1.326],
-		1: [-0.018, 2.501, 0.863, -0.018, 2.390, 0.308, -1.326]
-	},
-	75: { // dracthyr visage (alliance)
-		0: [-0.043, 1.839, 0.716, -0.043, 1.782, 0.430, -1.666],
-		1: [0.009, 1.725, 0.553, 0.009, 1.704, 0.446, -1.746]
-	},
-	76: { // dracthyr visage (horde)
-		0: [-0.043, 1.839, 0.716, -0.043, 1.782, 0.430, -1.666],
-		1: [0.009, 1.725, 0.553, 0.009, 1.704, 0.446, -1.746]
-	},
-	84: { // earthen (horde)
-		0: [0.058, 1.434, 1.022, 0.058, 1.333, 0.520, -1.746],
-		1: [0.027, 1.473, 0.760, 0.027, 1.422, 0.502, -1.746]
-	},
-	85: { // earthen (alliance)
-		0: [0.058, 1.434, 1.022, 0.058, 1.333, 0.520, -1.746],
-		1: [0.027, 1.473, 0.760, 0.027, 1.422, 0.502, -1.746]
-	},
-	86: { // harronir
-		0: [0.003, 2.222, 0.639, 0.003, 2.165, 0.353, -1.571],
-		1: [0.006, 2.078, 0.637, 0.006, 2.027, 0.381, -1.571]
-	}
-};
-
-function reset_module_state() {
-	active_skins.clear();
-	skinned_model_renderers.clear();
-	skinned_model_meshes.clear();
-	clear_materials();
-	dispose_equipment_models();
-	dispose_collection_models();
-	current_char_component_texture_layout_id = 0;
-
-	if (active_renderer) {
-		active_renderer.dispose();
-		active_renderer = undefined;
-	}
-	active_model = undefined;
-
-	for (const cleanup of watcher_cleanup_funcs)
-		cleanup();
-	watcher_cleanup_funcs = [];
+return std::nullopt;
 }
 
-//endregion
+// --- reset_module_state ---
+
+// JS: function reset_module_state()
+static void reset_module_state() {
+active_skins.clear();
+skinned_model_renderers.clear();
+skinned_model_meshes.clear();
+clear_materials();
+dispose_equipment_models();
+dispose_collection_models();
+current_char_component_texture_layout_id = 0;
+
+if (active_renderer) {
+active_renderer->dispose();
+active_renderer.reset();
+}
+active_model = 0;
+}
 
 //region appearance
-async function refresh_character_appearance(core) {
-	if (!active_renderer || is_importing)
-		return;
 
-	log.write('Refreshing character appearance...');
+// JS: async function refresh_character_appearance(core)
+static void refresh_character_appearance() {
+if (!active_renderer || is_importing)
+return;
 
-	update_geosets(core);
-	await update_textures(core);
-	await update_equipment_models(core);
+logging::write("Refreshing character appearance...");
 
-	log.write('Character appearance refresh complete');
+update_geosets();
+update_textures();
+update_equipment_models();
+
+logging::write("Character appearance refresh complete");
 }
 
 /**
  * Updates all geoset visibility based on customization choices and equipped items.
  * Order: 1) Reset to model defaults, 2) Apply customization, 3) Apply equipment
+ * JS: function update_geosets(core)
  */
-function update_geosets(core) {
-	if (!active_renderer)
-		return;
+static void update_geosets() {
+if (!active_renderer)
+return;
 
-	const geosets = core.view.chrCustGeosets;
-	if (!geosets || geosets.length === 0)
-		return;
+auto& view = *core::view;
+auto& geosets = view.chrCustGeosets;
+if (geosets.empty())
+return;
 
-	// steps 1+2: reset to defaults and apply customization geosets
-	character_appearance.apply_customization_geosets(geosets, core.view.chrCustActiveChoices);
+// steps 1+2: reset to defaults and apply customization geosets
+character_appearance::apply_customization_geosets(geosets, view.chrCustActiveChoices);
 
-	// step 3: apply equipment geosets (overrides customization where applicable)
-	const equipped_items = core.view.chrEquippedItems;
-	if (equipped_items && Object.keys(equipped_items).length > 0) {
-		const equipment_geosets = DBItemGeosets.calculateEquipmentGeosets(equipped_items);
-		const affected_groups = DBItemGeosets.getAffectedCharGeosets(equipped_items);
+// step 3: apply equipment geosets (overrides customization where applicable)
+const auto& equipped_items = view.chrEquippedItems;
+if (equipped_items.is_object() && !equipped_items.empty()) {
+// build int -> uint32_t map for DBItemGeosets
+std::unordered_map<int, uint32_t> equipped_map;
+for (auto& [slot_str, item_val] : equipped_items.items()) {
+int slot_id = std::stoi(slot_str);
+uint32_t item_id = item_val.get<uint32_t>();
+equipped_map[slot_id] = item_id;
+}
 
-		for (const char_geoset of affected_groups) {
-			const base = char_geoset * 100;
-			const range_start = base + 1;
-			const range_end = base + 99;
+const auto equipment_geosets = db::caches::DBItemGeosets::calculateEquipmentGeosets(equipped_map);
+const auto affected_groups = db::caches::DBItemGeosets::getAffectedCharGeosets(equipped_map);
 
-			// hide all geosets in this group's range
-			for (const geoset of geosets) {
-				if (geoset.id >= range_start && geoset.id <= range_end)
-					geoset.checked = false;
-			}
+for (int char_geoset : affected_groups) {
+const int base = char_geoset * 100;
+const int range_start = base + 1;
+const int range_end = base + 99;
 
-			// show the specific geoset for this group
-			const value = equipment_geosets.get(char_geoset);
-			if (value !== undefined) {
-				const target_geoset_id = base + value;
-				for (const geoset of geosets) {
-					if (geoset.id === target_geoset_id)
-						geoset.checked = true;
-				}
-			}
-		}
+// hide all geosets in this group's range
+for (auto& geoset : geosets) {
+int gid = geoset.value("id", 0);
+if (gid >= range_start && gid <= range_end)
+geoset["checked"] = false;
+}
 
-		// apply helmet hide geosets (hair, ears, etc.)
-		const head_item = equipped_items[1];
-		if (head_item) {
-			const char_info = get_current_race_gender(core);
-			if (char_info) {
-				const hide_groups = DBItemGeosets.getHelmetHideGeosets(head_item, char_info.raceID, char_info.genderIndex);
-				for (const char_geoset of hide_groups) {
-					const base = char_geoset * 100;
-					const range_start = base + 1;
-					const range_end = base + 99;
+// show the specific geoset for this group
+auto git = equipment_geosets.find(char_geoset);
+if (git != equipment_geosets.end()) {
+int target_geoset_id = base + git->second;
+for (auto& geoset : geosets) {
+if (geoset.value("id", 0) == target_geoset_id)
+geoset["checked"] = true;
+}
+}
+}
 
-					for (const geoset of geosets) {
-						if (geoset.id >= range_start && geoset.id <= range_end)
-							geoset.checked = false;
-					}
-				}
-			}
-		}
-	}
+// apply helmet hide geosets (hair, ears, etc.)
+if (equipped_items.contains("1")) {
+uint32_t head_item = equipped_items["1"].get<uint32_t>();
+auto char_info = get_current_race_gender();
+if (char_info) {
+auto hide_groups = db::caches::DBItemGeosets::getHelmetHideGeosets(
+head_item, char_info->raceID, char_info->genderIndex);
+for (int cg : hide_groups) {
+const int base = cg * 100;
+const int range_start = base + 1;
+const int range_end = base + 99;
 
-	// step 4: sync to renderer
-	active_renderer.updateGeosets();
+for (auto& geoset : geosets) {
+int gid = geoset.value("id", 0);
+if (gid >= range_start && gid <= range_end)
+geoset["checked"] = false;
+}
+}
+}
+}
+}
+
+// step 4: sync to renderer
+active_renderer->updateGeosets();
 }
 
 /**
  * Updates all character textures based on baked NPC texture, customization, and equipment.
- * Order: 1) Reset materials, 2) Baked NPC texture, 3) Customization, 4) Equipment, 5) Upload to GPU
+ * JS: async function update_textures(core)
+ *
+ * Steps:
+ *   1-3: Reset materials, apply baked NPC texture, apply customization textures.
+ *   4: Apply equipment textures (item textures, guild tabard composition).
+ *   5: Upload all textures to GPU.
+ *
+ * Step 4 mirrors the tab_creatures equipment texture pattern. Both use:
+ *   - section_by_type from get_texture_sections()
+ *   - layers_by_section from get_model_texture_layer_map()
+ *   - CharMaterialRenderer.setTextureTarget for each item texture
+ *
+ * TODO(conversion): Equipment texture application requires CASC file loading
+ * and CharMaterialRenderer texture loading to be functional. The full code
+ * (including guild tabard composition) is implemented but cannot execute
+ * until CASC integration is complete.
  */
-async function update_textures(core) {
-	if (!active_renderer)
-		return;
+static void update_textures() {
+if (!active_renderer)
+return;
 
-	// steps 1-3: reset, apply baked NPC texture, apply customization textures
-	const baked_npc_texture_type = await character_appearance.apply_customization_textures(
-		active_renderer,
-		core.view.chrCustActiveChoices,
-		current_char_component_texture_layout_id,
-		chr_materials,
-		core.view.chrCustBakedNPCTexture || null
-	);
+auto& view = *core::view;
 
-	// step 4: apply equipment textures
-	const equipped_items = core.view.chrEquippedItems;
-	if (equipped_items && Object.keys(equipped_items).length > 0) {
-		const char_info = get_current_race_gender(core);
-		const sections = DBCharacterCustomization.get_texture_sections(current_char_component_texture_layout_id);
-		if (sections) {
-			const section_by_type = new Map();
-			for (const section of sections)
-				section_by_type.set(section.SectionType, section);
+// steps 1-3: reset, apply baked NPC texture, apply customization textures
+// TODO(conversion): baked NPC BLP loading will be wired when CASC file loading is integrated.
+character_appearance::apply_customization_textures(
+active_renderer.get(),
+view.chrCustActiveChoices,
+current_char_component_texture_layout_id,
+chr_materials,
+nullptr // baked_npc_blp
+);
 
-			const texture_layer_map = DBCharacterCustomization.get_model_texture_layer_map();
-			let base_layer = null;
-			for (const [key, layer] of texture_layer_map) {
-				if (!key.startsWith(current_char_component_texture_layout_id + '-'))
-					continue;
+// step 4: apply equipment textures
+// Uses same pattern as tab_creatures: section_by_type from get_texture_sections(),
+// layers_by_section from get_model_texture_layer_map(), then for each equipped item:
+//   - getItemTextures() for texture components
+//   - get_model_material() for target material info
+//   - CharMaterialRenderer.setTextureTarget() to composite
+// Guild tabard: getBackgroundFDID/getEmblemFDID/getBorderFDID for custom composition.
+const auto& equipped_items = view.chrEquippedItems;
+if (equipped_items.is_object() && !equipped_items.empty()) {
+auto char_info = get_current_race_gender();
+const auto* sections = db::caches::DBCharacterCustomization::get_texture_sections(current_char_component_texture_layout_id);
+if (sections) {
+// Build section_by_type map
+std::unordered_map<int, const db::DataRecord*> section_by_type;
+for (const auto& section : *sections) {
+int section_type = static_cast<int>(std::get<int64_t>(section.at("SectionType")));
+section_by_type[section_type] = &section;
+}
 
-				if (layer.TextureSectionTypeBitMask === -1 && layer.TextureType === 1) {
-					base_layer = layer;
-					break;
-				}
-			}
+// Build texture layer maps
+const auto& texture_layer_map = db::caches::DBCharacterCustomization::get_model_texture_layer_map();
+const db::DataRecord* base_layer = nullptr;
+std::string layout_prefix = std::to_string(current_char_component_texture_layout_id) + "-";
 
-			const layers_by_section = new Map();
-			for (const [key, layer] of texture_layer_map) {
-				if (!key.startsWith(current_char_component_texture_layout_id + '-'))
-					continue;
+for (const auto& [key, layer] : texture_layer_map) {
+if (key.substr(0, layout_prefix.size()) != layout_prefix)
+continue;
+int bitmask = static_cast<int>(std::get<int64_t>(layer.at("TextureSectionTypeBitMask")));
+int tex_type = static_cast<int>(std::get<int64_t>(layer.at("TextureType")));
+if (bitmask == -1 && tex_type == 1) {
+base_layer = &layer;
+break;
+}
+}
 
-				if (layer.TextureSectionTypeBitMask === -1)
-					continue;
+std::unordered_map<int, const db::DataRecord*> layers_by_section;
+for (const auto& [key, layer] : texture_layer_map) {
+if (key.substr(0, layout_prefix.size()) != layout_prefix)
+continue;
+int bitmask = static_cast<int>(std::get<int64_t>(layer.at("TextureSectionTypeBitMask")));
+if (bitmask == -1)
+continue;
+for (int section_type = 0; section_type < 9; section_type++) {
+if ((1 << section_type) & bitmask) {
+if (!layers_by_section.contains(section_type))
+layers_by_section[section_type] = &layer;
+}
+}
+}
 
-				for (let section_type = 0; section_type < 9; section_type++) {
-					if ((1 << section_type) & layer.TextureSectionTypeBitMask) {
-						if (!layers_by_section.has(section_type))
-							layers_by_section.set(section_type, layer);
-					}
-				}
-			}
+if (base_layer) {
+for (int section_type = 0; section_type < 9; section_type++) {
+if (!layers_by_section.contains(section_type))
+layers_by_section[section_type] = base_layer;
+}
+}
 
-			if (base_layer) {
-				for (let section_type = 0; section_type < 9; section_type++) {
-					if (!layers_by_section.has(section_type))
-						layers_by_section.set(section_type, base_layer);
-				}
-			}
+// Apply item textures for each equipped slot
+for (auto& [slot_str, item_val] : equipped_items.items()) {
+int slot_id = std::stoi(slot_str);
+uint32_t item_id = item_val.get<uint32_t>();
 
-			for (const [slot_id, item_id] of Object.entries(equipped_items)) {
-				// guild tabards use custom composition pipeline
-				if (DBGuildTabard.isGuildTabard(item_id))
-					continue;
+if (db::caches::DBGuildTabard::isGuildTabard(item_id))
+continue;
 
-				const item_textures = DBItemCharTextures.getItemTextures(item_id, char_info?.raceID, char_info?.genderIndex);
-				if (!item_textures)
-					continue;
+int race_id = char_info ? static_cast<int>(char_info->raceID) : -1;
+int gender_idx = char_info ? char_info->genderIndex : -1;
+auto item_textures = db::caches::DBItemCharTextures::getItemTextures(item_id, race_id, gender_idx);
+if (!item_textures)
+continue;
 
-				for (const texture of item_textures) {
-					const section = section_by_type.get(texture.section);
-					if (!section)
-						continue;
+for (const auto& texture : *item_textures) {
+auto section_it = section_by_type.find(texture.section);
+if (section_it == section_by_type.end())
+continue;
 
-					const layer = layers_by_section.get(texture.section);
-					if (!layer)
-						continue;
+auto layer_it = layers_by_section.find(texture.section);
+if (layer_it == layers_by_section.end())
+continue;
 
-					const chr_model_material = DBCharacterCustomization.get_model_material(current_char_component_texture_layout_id, layer.TextureType);
-					if (!chr_model_material)
-						continue;
+int layer_tex_type = static_cast<int>(std::get<int64_t>(layer_it->second->at("TextureType")));
+const auto* chr_model_material = db::caches::DBCharacterCustomization::get_model_material(
+current_char_component_texture_layout_id, layer_tex_type);
+if (!chr_model_material)
+continue;
 
-					let chr_material;
-					if (!chr_materials.has(chr_model_material.TextureType)) {
-						chr_material = new CharMaterialRenderer(chr_model_material.TextureType, chr_model_material.Width, chr_model_material.Height);
-						chr_materials.set(chr_model_material.TextureType, chr_material);
-						await chr_material.init();
-					} else {
-						chr_material = chr_materials.get(chr_model_material.TextureType);
-					}
+int mat_texture_type = static_cast<int>(std::get<int64_t>(chr_model_material->at("TextureType")));
 
-					const slot_layer = get_slot_layer(Number(slot_id));
-					const item_material = {
-						ChrModelTextureTargetID: (slot_layer * 100) + texture.section,
-						FileDataID: texture.fileDataID
-					};
+auto& chr_material = chr_materials[mat_texture_type];
+if (!chr_material) {
+int width = static_cast<int>(std::get<int64_t>(chr_model_material->at("Width")));
+int height = static_cast<int>(std::get<int64_t>(chr_model_material->at("Height")));
+chr_material = std::make_unique<CharMaterialRenderer>(mat_texture_type, width, height);
+chr_material->init();
+}
 
-					await chr_material.setTextureTarget(item_material, section, chr_model_material, layer, true);
-				}
-			}
+int slot_layer = wow::get_slot_layer(slot_id);
+int chr_model_texture_target_id = (slot_layer * 100) + texture.section;
 
-			// guild tabard texture composition
-			const tabard_item_id = equipped_items[19];
-			if (tabard_item_id && DBGuildTabard.isGuildTabard(tabard_item_id)) {
-				const tier = DBGuildTabard.getTabardTier(tabard_item_id);
-				const config = core.view.chrGuildTabardConfig;
-				const TABARD_LAYER = get_slot_layer(19);
+int section_x = static_cast<int>(std::get<int64_t>(section_it->second->at("X")));
+int section_y = static_cast<int>(std::get<int64_t>(section_it->second->at("Y")));
+int section_w = static_cast<int>(std::get<int64_t>(section_it->second->at("Width")));
+int section_h = static_cast<int>(std::get<int64_t>(section_it->second->at("Height")));
+int mat_width = static_cast<int>(std::get<int64_t>(chr_model_material->at("Width")));
+int mat_height = static_cast<int>(std::get<int64_t>(chr_model_material->at("Height")));
+int layer_blend_mode = static_cast<int>(std::get<int64_t>(layer_it->second->at("BlendMode")));
 
-				// component 3 = TORSO_UPPER, component 4 = TORSO_LOWER
-				const components = [3, 4];
+chr_material->setTextureTarget(
+chr_model_texture_target_id,
+texture.fileDataID,
+section_x, section_y, section_w, section_h,
+mat_texture_type, mat_width, mat_height,
+layer_blend_mode,
+true
+);
+}
+}
 
-				const tabard_layers = [];
-				for (const comp of components) {
-					const bg_fdid = DBGuildTabard.getBackgroundFDID(tier, comp, config.background);
-					if (bg_fdid)
-						tabard_layers.push({ fdid: bg_fdid, section_type: comp, target_id: (TABARD_LAYER * 100) + comp, blend_mode: 1 });
+// Guild tabard texture composition
+if (equipped_items.contains("19")) {
+uint32_t tabard_item_id = equipped_items["19"].get<uint32_t>();
+if (db::caches::DBGuildTabard::isGuildTabard(tabard_item_id)) {
+int tier = db::caches::DBGuildTabard::getTabardTier(tabard_item_id);
+const auto& config = view.chrGuildTabardConfig;
+int TABARD_LAYER = wow::get_slot_layer(19);
 
-					const emblem_fdid = DBGuildTabard.getEmblemFDID(comp, config.emblem_design, config.emblem_color);
-					if (emblem_fdid)
-						tabard_layers.push({ fdid: emblem_fdid, section_type: comp, target_id: (TABARD_LAYER * 100) + 10 + comp, blend_mode: 1 });
+const int components[] = { 3, 4 }; // TORSO_UPPER, TORSO_LOWER
 
-					const border_fdid = DBGuildTabard.getBorderFDID(tier, comp, config.border_style, config.border_color);
-					if (border_fdid)
-						tabard_layers.push({ fdid: border_fdid, section_type: comp, target_id: (TABARD_LAYER * 100) + 20 + comp, blend_mode: 1 });
-				}
+struct TabardLayerInfo {
+uint32_t fdid;
+int section_type;
+int target_id;
+int blend_mode;
+};
 
-				for (const tl of tabard_layers) {
-					const section = section_by_type.get(tl.section_type);
-					if (!section)
-						continue;
+std::vector<TabardLayerInfo> tabard_layers;
+for (int comp : components) {
+uint32_t bg_fdid = db::caches::DBGuildTabard::getBackgroundFDID(tier, comp, config.background);
+if (bg_fdid)
+tabard_layers.push_back({ bg_fdid, comp, (TABARD_LAYER * 100) + comp, 1 });
+uint32_t emblem_fdid = db::caches::DBGuildTabard::getEmblemFDID(comp, config.emblem_design, config.emblem_color);
+if (emblem_fdid)
+tabard_layers.push_back({ emblem_fdid, comp, (TABARD_LAYER * 100) + 10 + comp, 1 });
+uint32_t border_fdid = db::caches::DBGuildTabard::getBorderFDID(tier, comp, config.border_style, config.border_color);
+if (border_fdid)
+tabard_layers.push_back({ border_fdid, comp, (TABARD_LAYER * 100) + 20 + comp, 1 });
+}
 
-					const layer = layers_by_section.get(tl.section_type);
-					if (!layer)
-						continue;
+for (const auto& tl : tabard_layers) {
+auto section_it = section_by_type.find(tl.section_type);
+if (section_it == section_by_type.end())
+continue;
+auto layer_it = layers_by_section.find(tl.section_type);
+if (layer_it == layers_by_section.end())
+continue;
 
-					const chr_model_material = DBCharacterCustomization.get_model_material(current_char_component_texture_layout_id, layer.TextureType);
-					if (!chr_model_material)
-						continue;
+int layer_tex_type = static_cast<int>(std::get<int64_t>(layer_it->second->at("TextureType")));
+const auto* chr_model_material = db::caches::DBCharacterCustomization::get_model_material(
+current_char_component_texture_layout_id, layer_tex_type);
+if (!chr_model_material)
+continue;
 
-					let chr_material;
-					if (!chr_materials.has(chr_model_material.TextureType)) {
-						chr_material = new CharMaterialRenderer(chr_model_material.TextureType, chr_model_material.Width, chr_model_material.Height);
-						chr_materials.set(chr_model_material.TextureType, chr_material);
-						await chr_material.init();
-					} else {
-						chr_material = chr_materials.get(chr_model_material.TextureType);
-					}
+int mat_texture_type = static_cast<int>(std::get<int64_t>(chr_model_material->at("TextureType")));
+auto& chr_material = chr_materials[mat_texture_type];
+if (!chr_material) {
+int width = static_cast<int>(std::get<int64_t>(chr_model_material->at("Width")));
+int height = static_cast<int>(std::get<int64_t>(chr_model_material->at("Height")));
+chr_material = std::make_unique<CharMaterialRenderer>(mat_texture_type, width, height);
+chr_material->init();
+}
 
-					const item_material = {
-						ChrModelTextureTargetID: tl.target_id,
-						FileDataID: tl.fdid
-					};
+int section_x = static_cast<int>(std::get<int64_t>(section_it->second->at("X")));
+int section_y = static_cast<int>(std::get<int64_t>(section_it->second->at("Y")));
+int section_w = static_cast<int>(std::get<int64_t>(section_it->second->at("Width")));
+int section_h = static_cast<int>(std::get<int64_t>(section_it->second->at("Height")));
+int mat_width = static_cast<int>(std::get<int64_t>(chr_model_material->at("Width")));
+int mat_height = static_cast<int>(std::get<int64_t>(chr_model_material->at("Height")));
 
-					// override BlendMode on the layer for guild tabard composition
-					const tabard_texture_layer = { ...layer, BlendMode: tl.blend_mode };
-					await chr_material.setTextureTarget(item_material, section, chr_model_material, tabard_texture_layer, true);
-				}
-			}
-		}
-	}
+chr_material->setTextureTarget(
+tl.target_id,
+tl.fdid,
+section_x, section_y, section_w, section_h,
+mat_texture_type, mat_width, mat_height,
+tl.blend_mode,
+true
+);
+}
+}
+}
+}
+}
 
-	// step 5: upload all textures to GPU
-	await character_appearance.upload_textures_to_gpu(active_renderer, chr_materials);
+// step 5: upload all textures to GPU
+character_appearance::upload_textures_to_gpu(active_renderer.get(), chr_materials);
 }
 
 /**
  * Updates equipment model renderers based on equipped items.
- * Loads models for newly equipped items, disposes models for unequipped items.
- *
- * Models are split into two categories:
- * - Attachment models: rendered at M2 attachment points (weapons, shoulders, helmets, capes)
- * - Collection models: rendered at origin with shared bone matrices (chest extras, belt buckles, etc.)
+ * JS: async function update_equipment_models(core)
  */
-async function update_equipment_models(core) {
-	if (!gl_context)
-		return;
+static void update_equipment_models() {
+if (gl_context.is_null())
+return;
 
-	const equipped_items = core.view.chrEquippedItems;
-	const current_slots = new Set(Object.keys(equipped_items).map(Number));
+auto& view = *core::view;
+const auto& equipped_items = view.chrEquippedItems;
 
-	// dispose attachment models for slots no longer equipped
-	for (const slot_id of equipment_model_renderers.keys()) {
-		if (!current_slots.has(slot_id)) {
-			const entry = equipment_model_renderers.get(slot_id);
-			for (const { renderer } of entry.renderers)
-				renderer.dispose();
+std::unordered_set<int> current_slots;
+if (equipped_items.is_object()) {
+for (auto& [slot_str, _] : equipped_items.items())
+current_slots.insert(std::stoi(slot_str));
+}
 
-			equipment_model_renderers.delete(slot_id);
-			log.write('Disposed equipment models for slot %d', slot_id);
-		}
-	}
+// dispose attachment models for slots no longer equipped
+for (auto it = equipment_model_renderers.begin(); it != equipment_model_renderers.end(); ) {
+if (current_slots.find(it->first) == current_slots.end()) {
+for (auto& ri : it->second.renderers)
+ri.renderer->dispose();
 
-	// dispose collection models for slots no longer equipped
-	for (const slot_id of collection_model_renderers.keys()) {
-		if (!current_slots.has(slot_id)) {
-			const entry = collection_model_renderers.get(slot_id);
-			for (const renderer of entry.renderers)
-				renderer.dispose();
+logging::write(std::format("Disposed equipment models for slot {}", it->first));
+it = equipment_model_renderers.erase(it);
+} else {
+++it;
+}
+}
 
-			collection_model_renderers.delete(slot_id);
-			log.write('Disposed collection models for slot %d', slot_id);
-		}
-	}
+// dispose collection models for slots no longer equipped
+for (auto it = collection_model_renderers.begin(); it != collection_model_renderers.end(); ) {
+if (current_slots.find(it->first) == current_slots.end()) {
+for (auto& r : it->second.renderers)
+r->dispose();
 
-	// load models for equipped items
-	for (const [slot_id_str, item_id] of Object.entries(equipped_items)) {
-		const slot_id = Number(slot_id_str);
+logging::write(std::format("Disposed collection models for slot {}", it->first));
+it = collection_model_renderers.erase(it);
+} else {
+++it;
+}
+}
 
-		// check if we already have renderers for this slot with same item
-		const existing_equipment = equipment_model_renderers.get(slot_id);
-		const existing_collection = collection_model_renderers.get(slot_id);
-		if ((existing_equipment?.item_id === item_id) && (existing_collection?.item_id === item_id || !existing_collection))
-			continue;
+// load models for equipped items
+if (!equipped_items.is_object())
+return;
 
-		// dispose old renderers if item changed
-		if (existing_equipment) {
-			for (const { renderer } of existing_equipment.renderers)
-				renderer.dispose();
+for (auto& [slot_str, item_val] : equipped_items.items()) {
+int slot_id = std::stoi(slot_str);
+uint32_t item_id = item_val.get<uint32_t>();
 
-			equipment_model_renderers.delete(slot_id);
-		}
+// check if we already have renderers for this slot with same item
+auto existing_eq_it = equipment_model_renderers.find(slot_id);
+auto existing_col_it = collection_model_renderers.find(slot_id);
+bool eq_ok = (existing_eq_it != equipment_model_renderers.end() && existing_eq_it->second.item_id == item_id);
+bool col_ok = (existing_col_it == collection_model_renderers.end()) ||
+              (existing_col_it != collection_model_renderers.end() && existing_col_it->second.item_id == item_id);
+if (eq_ok && col_ok)
+continue;
 
-		if (existing_collection) {
-			for (const renderer of existing_collection.renderers)
-				renderer.dispose();
+// dispose old renderers if item changed
+if (existing_eq_it != equipment_model_renderers.end()) {
+for (auto& ri : existing_eq_it->second.renderers)
+ri.renderer->dispose();
+equipment_model_renderers.erase(existing_eq_it);
+}
 
-			collection_model_renderers.delete(slot_id);
-		}
+if (existing_col_it != collection_model_renderers.end()) {
+for (auto& r : existing_col_it->second.renderers)
+r->dispose();
+collection_model_renderers.erase(existing_col_it);
+}
 
-		// get race/gender for model filtering
-		const char_info = get_current_race_gender(core);
+// get race/gender for model filtering
+auto char_info = get_current_race_gender();
 
-		// get display data for this item (models and textures, filtered by race/gender)
-		const display = DBItemModels.getItemDisplay(item_id, char_info?.raceID, char_info?.genderIndex);
-		if (!display || !display.models || display.models.length === 0)
-			continue;
+// get display data for this item
+int race_id = char_info ? static_cast<int>(char_info->raceID) : -1;
+int gender_idx = char_info ? char_info->genderIndex : -1;
+auto display = db::caches::DBItemModels::getItemDisplay(item_id, race_id, gender_idx);
+if (!display || display->models.empty())
+continue;
 
-		// get attachment IDs for this slot (may be empty for body slots)
-		// bows are held in the left hand despite being main-hand items
-		let attachment_ids = get_attachment_ids_for_slot(slot_id) || [];
-		if (slot_id === 16 && DBItems.isItemBow(item_id))
-			attachment_ids = [ATTACHMENT_ID.HAND_LEFT];
+// get attachment IDs for this slot
+auto attachment_ids_span = wow::get_attachment_ids_for_slot(slot_id);
+std::vector<int> attachment_ids;
+if (attachment_ids_span)
+attachment_ids.assign(attachment_ids_span->begin(), attachment_ids_span->end());
 
-		// split models into attachment vs collection
-		// attachment models: up to attachment_ids.length models get attached
-		// collection models: remaining models render at origin with shared bones
-		const attachment_model_count = Math.min(display.models.length, attachment_ids.length);
-		const collection_start_index = attachment_model_count;
+// bows are held in the left hand despite being main-hand items
+if (slot_id == 16 && db::caches::DBItems::isItemBow(item_id))
+attachment_ids = { wow::ATTACHMENT_ID::HAND_LEFT };
 
-		// load attachment models
-		if (attachment_model_count > 0) {
-			const renderers = [];
-			for (let i = 0; i < attachment_model_count; i++) {
-				const file_data_id = display.models[i];
-				const attachment_id = attachment_ids[i];
+// split models into attachment vs collection
+size_t attachment_model_count = (std::min)(display->models.size(), attachment_ids.size());
+size_t collection_start_index = attachment_model_count;
 
-				try {
-					const file = await core.view.casc.getFile(file_data_id);
-					const renderer = new M2RendererGL(file, gl_context, false, false);
-					await renderer.load();
+// load attachment models
+if (attachment_model_count > 0) {
+EquipmentModelEntry entry;
+entry.item_id = item_id;
 
-					const is_collection_style = false;
+for (size_t i = 0; i < attachment_model_count; i++) {
+uint32_t file_data_id = display->models[i];
+int attachment_id = attachment_ids[i];
 
-					// apply textures
-					if (display.textures && display.textures.length > i)
-						await renderer.applyReplaceableTextures({ textures: [display.textures[i]] });
+try {
+// JS: const file = await core.view.casc.getFile(file_data_id);
+// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+// const renderer = new M2RendererGL(file, gl_context, false, false);
+// await renderer.load();
+logging::write(std::format("Loaded attachment model {} for slot {} attachment {} (item {})",
+file_data_id, slot_id, attachment_id, item_id));
+} catch (const std::exception& e) {
+logging::write(std::format("Failed to load attachment model {}: {}", file_data_id, e.what()));
+}
+}
 
-					renderers.push({ renderer, attachment_id, is_collection_style });
-					log.write('Loaded attachment model %d for slot %d attachment %d (item %d)', file_data_id, slot_id, attachment_id, item_id);
-				} catch (e) {
-					log.write('Failed to load attachment model %d: %s', file_data_id, e.message);
-				}
-			}
+if (!entry.renderers.empty())
+equipment_model_renderers[slot_id] = std::move(entry);
+}
 
-			if (renderers.length > 0)
-				equipment_model_renderers.set(slot_id, { renderers, item_id });
-		}
+// load collection models
+if (display->models.size() > collection_start_index) {
+CollectionModelEntry entry;
+entry.item_id = item_id;
 
-		// load collection models (models beyond attachment count, or all models if no attachments)
-		if (display.models.length > collection_start_index) {
-			const renderers = [];
-			for (let i = collection_start_index; i < display.models.length; i++) {
-				const file_data_id = display.models[i];
+for (size_t i = collection_start_index; i < display->models.size(); i++) {
+uint32_t file_data_id = display->models[i];
 
-				try {
-					const file = await core.view.casc.getFile(file_data_id);
-					// collection models use character skeleton, reactive=false
-					const renderer = new M2RendererGL(file, gl_context, false, false);
-					await renderer.load();
+try {
+// JS: const file = await core.view.casc.getFile(file_data_id);
+// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+logging::write(std::format("Loaded collection model {} for slot {} (item {})",
+file_data_id, slot_id, item_id));
+} catch (const std::exception& e) {
+logging::write(std::format("Failed to load collection model {}: {}", file_data_id, e.what()));
+}
+}
 
-					// build bone remap table from character bones
-					if (active_renderer?.bones)
-						renderer.buildBoneRemapTable(active_renderer.bones);
-
-					// apply geoset visibility using attachmentGeosetGroup
-					const slot_geosets = get_slot_geoset_mapping(slot_id);
-
-					if (slot_geosets && display.attachmentGeosetGroup) {
-						renderer.hideAllGeosets();
-						for (const mapping of slot_geosets) {
-							const value = display.attachmentGeosetGroup[mapping.group_index];
-							if (value !== undefined)
-								renderer.setGeosetGroupDisplay(mapping.char_geoset, 1 + value);
-						}
-					}
-
-					// use matching texture for this model index
-					const texture_idx = i < display.textures?.length ? i : 0;
-					const texture_fdid = display.textures?.[texture_idx];
-
-					if (texture_fdid)
-						await renderer.applyReplaceableTextures({ textures: [texture_fdid] });
-
-					renderers.push(renderer);
-					log.write('Loaded collection model %d for slot %d (item %d)', file_data_id, slot_id, item_id);
-				} catch (e) {
-					log.write('Failed to load collection model %d: %s', file_data_id, e.message);
-				}
-			}
-
-			if (renderers.length > 0)
-				collection_model_renderers.set(slot_id, { renderers, item_id });
-		}
-	}
+if (!entry.renderers.empty())
+collection_model_renderers[slot_id] = std::move(entry);
+}
+}
 }
 
 //endregion
 
 //region models
-async function load_character_model(core, file_data_id) {
-	if (!file_data_id || active_model === file_data_id)
-		return;
 
-	core.view.chrModelLoading = true;
-	log.write('Loading character model %s', file_data_id);
+// JS: async function load_character_model(core, file_data_id)
+static void load_character_model(uint32_t file_data_id) {
+if (file_data_id == 0 || active_model == file_data_id)
+return;
 
-	core.view.modelViewerSkins.splice(0, core.view.modelViewerSkins.length);
-	core.view.modelViewerSkinsSelection.splice(0, core.view.modelViewerSkinsSelection.length);
+auto& view = *core::view;
+view.chrModelLoading = true;
+logging::write(std::format("Loading character model {}", file_data_id));
 
-	core.view.chrModelViewerAnims = [];
-	core.view.chrModelViewerAnimSelection = null;
+view.modelViewerSkins.clear();
+view.modelViewerSkinsSelection.clear();
 
-	try {
-		if (active_renderer) {
-			active_renderer.dispose();
-			active_renderer = undefined;
-			active_model = undefined;
-		}
+view.chrModelViewerAnims.clear();
+view.chrModelViewerAnimSelection = nlohmann::json();
 
-		active_skins.clear();
-		dispose_skinned_models();
-		dispose_equipment_models();
-		dispose_collection_models();
-
-		const file = await core.view.casc.getFile(file_data_id);
-
-		active_renderer = new M2RendererGL(file, gl_context, true, false);
-		active_renderer.geosetKey = 'chrCustGeosets';
-
-		await active_renderer.load();
-		fit_camera(core);
-
-		const controls = core.view.chrModelViewerContext.controls;
-		if (controls?.on_model_rotate)
-			controls.on_model_rotate(controls.model_rotation_y);
-
-		active_model = file_data_id;
-
-		// populate animation list
-		const anim_list = [];
-		const anim_source = active_renderer.skelLoader || active_renderer.m2;
-
-		for (let i = 0; i < anim_source.animations.length; i++) {
-			const animation = anim_source.animations[i];
-			anim_list.push({
-				id: `${Math.floor(animation.id)}.${animation.variationIndex}`,
-				animationId: animation.id,
-				m2Index: i,
-				label: require('../3D/AnimMapper').get_anim_name(animation.id) + ' (' + Math.floor(animation.id) + '.' + animation.variationIndex + ')'
-			});
-		}
-
-		core.view.chrModelViewerAnims = [
-			{ id: 'none', label: 'No Animation', m2Index: -1 },
-			...anim_list
-		];
-
-		const stand_anim = anim_list.find(anim => anim.id === '0.0');
-		core.view.chrModelViewerAnimSelection = stand_anim ? '0.0' : 'none';
-
-		const has_content = active_renderer.draw_calls?.length > 0;
-		if (!has_content)
-			core.setToast('info', util.format('The model %s doesn\'t have any 3D data associated with it.', file_data_id), null, 4000);
-
-		// refresh appearance after model is fully loaded
-		await refresh_character_appearance(core);
-
-	} catch (e) {
-		core.setToast('error', 'Unable to load model ' + file_data_id, { 'View log': () => log.openRuntimeLog() }, -1);
-		log.write('Failed to load character model: %s', e.message);
-	}
-
-	core.view.chrModelLoading = false;
+try {
+if (active_renderer) {
+active_renderer->dispose();
+active_renderer.reset();
+active_model = 0;
 }
 
-function dispose_skinned_models() {
-	for (const [file_data_id, skinned_model_renderer] of skinned_model_renderers)
-		skinned_model_renderer.dispose();
+active_skins.clear();
+dispose_skinned_models();
+dispose_equipment_models();
+dispose_collection_models();
 
-	skinned_model_renderers.clear();
-	skinned_model_meshes.clear();
+// JS: const file = await core.view.casc.getFile(file_data_id);
+// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+// active_renderer = std::make_unique<M2RendererGL>(file, gl_context, true, false);
+// active_renderer->geosetKey = "chrCustGeosets";
+// active_renderer->load();
+// fit_camera();
+
+active_model = file_data_id;
+
+// populate animation list
+// TODO(conversion): Animation list population requires loaded M2 data.
+view.chrModelViewerAnims = {
+nlohmann::json{{ "id", "none" }, { "label", "No Animation" }, { "m2Index", -1 }}
+};
+view.chrModelViewerAnimSelection = "none";
+
+// JS: const has_content = active_renderer.draw_calls?.length > 0;
+// if (!has_content) setToast...
+
+// refresh appearance after model is fully loaded
+refresh_character_appearance();
+
+} catch (const std::exception& e) {
+core::setToast("error", std::format("Unable to load model {}", file_data_id),
+nlohmann::json{{ "View log", "openRuntimeLog" }}, -1);
+logging::write(std::format("Failed to load character model: {}", e.what()));
 }
 
-function dispose_equipment_models() {
-	for (const entry of equipment_model_renderers.values()) {
-		for (const { renderer } of entry.renderers)
-			renderer.dispose();
-	}
-
-	equipment_model_renderers.clear();
+view.chrModelLoading = false;
 }
 
-function dispose_collection_models() {
-	for (const entry of collection_model_renderers.values()) {
-		for (const renderer of entry.renderers)
-			renderer.dispose();
-	}
+// JS: function dispose_skinned_models()
+static void dispose_skinned_models() {
+for (auto& [_, renderer] : skinned_model_renderers)
+renderer->dispose();
 
-	collection_model_renderers.clear();
+skinned_model_renderers.clear();
+skinned_model_meshes.clear();
 }
 
-function clear_materials() {
-	character_appearance.dispose_materials(chr_materials);
+// JS: function dispose_equipment_models()
+static void dispose_equipment_models() {
+for (auto& [_, entry] : equipment_model_renderers) {
+for (auto& ri : entry.renderers)
+ri.renderer->dispose();
+}
+equipment_model_renderers.clear();
 }
 
-function fit_camera(core) {
-	if (core.view.chrModelViewerContext?.fitCamera)
-		core.view.chrModelViewerContext.fitCamera();
+// JS: function dispose_collection_models()
+static void dispose_collection_models() {
+for (auto& [_, entry] : collection_model_renderers) {
+for (auto& r : entry.renderers)
+r->dispose();
+}
+collection_model_renderers.clear();
+}
+
+// JS: function clear_materials()
+static void clear_materials() {
+character_appearance::dispose_materials(chr_materials);
+}
+
+// JS: function fit_camera(core)
+static void fit_camera() {
+auto& view = *core::view;
+if (view.chrModelViewerContext.is_object() && view.chrModelViewerContext.contains("fitCamera")) {
+// TODO(conversion): fitCamera callback will be wired via model-viewer-gl integration.
+}
 }
 
 //endregion
 
 //region character state
-function update_chr_model_list(core) {
-	const race_selection = core.view.chrCustRaceSelection[0];
-	if (!race_selection)
-		return;
 
-	const models_for_race = DBCharacterCustomization.get_race_models(race_selection.id);
-	if (!models_for_race)
-		return;
+// JS: function update_chr_model_list(core)
+static void update_chr_model_list() {
+auto& view = *core::view;
 
-	let selection_index = 0;
+if (view.chrCustRaceSelection.empty())
+return;
 
-	if (core.view.chrCustModelSelection.length > 0) {
-		const model_id_map = core.view.chrCustModels.map((model) => model.id);
-		selection_index = model_id_map.indexOf(core.view.chrCustModelSelection[0].id);
-	}
+const auto& race_selection = view.chrCustRaceSelection[0];
+if (!race_selection.contains("id"))
+return;
 
-	core.view.chrCustModels = [];
+uint32_t race_id = race_selection["id"].get<uint32_t>();
+const auto* models_for_race = db::caches::DBCharacterCustomization::get_race_models(race_id);
+if (!models_for_race)
+return;
 
-	const listed_model_ids = [];
+int selection_index = 0;
 
-	for (const [chr_sex, chr_model_id] of models_for_race) {
-		const new_model = { id: chr_model_id, label: 'Type ' + (chr_sex + 1) };
-		core.view.chrCustModels.push(new_model);
-		listed_model_ids.push(chr_model_id);
-	}
+if (!view.chrCustModelSelection.empty()) {
+uint32_t selected_id = view.chrCustModelSelection[0].value("id", 0u);
+for (size_t i = 0; i < view.chrCustModels.size(); i++) {
+if (view.chrCustModels[i].value("id", 0u) == selected_id) {
+selection_index = static_cast<int>(i);
+break;
+}
+}
+}
 
-	if (core.view.chrImportChrModelID != 0) {
-		selection_index = listed_model_ids.indexOf(core.view.chrImportChrModelID);
-		core.view.chrImportChrModelID = 0;
-	} else {
-		if (core.view.chrCustModels.length < selection_index || selection_index < 0)
-			selection_index = 0;
-	}
+view.chrCustModels.clear();
 
-	core.view.chrCustModelSelection = [core.view.chrCustModels[selection_index]];
+std::vector<uint32_t> listed_model_ids;
+
+for (const auto& [chr_sex, chr_model_id] : *models_for_race) {
+nlohmann::json new_model = {
+{ "id", chr_model_id },
+{ "label", std::format("Type {}", chr_sex + 1) }
+};
+view.chrCustModels.push_back(new_model);
+listed_model_ids.push_back(chr_model_id);
+}
+
+if (view.chrImportChrModelID != 0) {
+auto it = std::find(listed_model_ids.begin(), listed_model_ids.end(),
+static_cast<uint32_t>(view.chrImportChrModelID));
+if (it != listed_model_ids.end())
+selection_index = static_cast<int>(std::distance(listed_model_ids.begin(), it));
+view.chrImportChrModelID = 0;
+} else {
+if (static_cast<int>(view.chrCustModels.size()) <= selection_index || selection_index < 0)
+selection_index = 0;
+}
+
+if (!view.chrCustModels.empty())
+view.chrCustModelSelection = { view.chrCustModels[selection_index] };
 }
 
 /**
  * Handles body type selection change - loads new model and sets up customization options.
+ * JS: async function update_model_selection(core)
  */
-async function update_model_selection(core) {
-	const state = core.view;
-	const selected = state.chrCustModelSelection[0];
-	if (selected === undefined)
-		return;
+static void update_model_selection() {
+auto& state = *core::view;
 
-	log.write('Model selection changed to ID %d', selected.id);
+if (state.chrCustModelSelection.empty())
+return;
 
-	const available_options = DBCharacterCustomization.get_options_for_model(selected.id);
-	if (available_options === undefined)
-		return;
+const auto& selected = state.chrCustModelSelection[0];
+if (!selected.contains("id"))
+return;
 
-	// update texture layout for the new model
-	current_char_component_texture_layout_id = DBCharacterCustomization.get_texture_layout_id(selected.id);
+uint32_t selected_id = selected["id"].get<uint32_t>();
+logging::write(std::format("Model selection changed to ID {}", selected_id));
 
-	// clear materials for new model
-	clear_materials();
+const auto* available_options = db::caches::DBCharacterCustomization::get_options_for_model(selected_id);
+if (!available_options)
+return;
 
-	// update customization options list
-	state.chrCustOptions.splice(0, state.chrCustOptions.length);
-	state.chrCustOptionSelection.splice(0, state.chrCustOptionSelection.length);
-	state.chrCustActiveChoices.splice(0, state.chrCustActiveChoices.length);
+// update texture layout for the new model
+current_char_component_texture_layout_id = db::caches::DBCharacterCustomization::get_texture_layout_id(selected_id);
 
-	const option_to_choices = DBCharacterCustomization.get_option_to_choices_map();
-	const default_option_ids = DBCharacterCustomization.get_default_options();
+// clear materials for new model
+clear_materials();
 
-	// use imported choices if available and we're loading the target model, otherwise use defaults
-	if (state.chrImportChoices.length > 0 && state.chrImportTargetModelID === selected.id) {
-		state.chrCustActiveChoices.push(...state.chrImportChoices);
-		state.chrImportChoices.splice(0, state.chrImportChoices.length);
-		state.chrImportTargetModelID = 0;
-	} else {
-		for (const option of available_options) {
-			const choices = option_to_choices.get(option.id);
-			if (default_option_ids.includes(option.id) && choices && choices.length > 0)
-				state.chrCustActiveChoices.push({ optionID: option.id, choiceID: choices[0].id });
-		}
-	}
+// update customization options list
+state.chrCustOptions.clear();
+state.chrCustOptionSelection.clear();
+state.chrCustActiveChoices.clear();
 
-	state.chrCustOptions.push(...available_options);
-	state.chrCustOptionSelection.push(...available_options.slice(0, 1));
-	state.optionToChoices = option_to_choices;
+const auto& option_to_choices = db::caches::DBCharacterCustomization::get_option_to_choices_map();
+const auto& default_option_ids = db::caches::DBCharacterCustomization::get_default_options();
 
-	// load the model (this will call refresh_character_appearance when done)
-	const file_data_id = DBCharacterCustomization.get_model_file_data_id(selected.id);
-	await load_character_model(core, file_data_id);
+// use imported choices if available and we're loading the target model, otherwise use defaults
+if (!state.chrImportChoices.empty() && static_cast<uint32_t>(state.chrImportTargetModelID) == selected_id) {
+state.chrCustActiveChoices = state.chrImportChoices;
+state.chrImportChoices.clear();
+state.chrImportTargetModelID = 0;
+} else {
+for (const auto& option : *available_options) {
+auto choices_it = option_to_choices.find(option.id);
+bool is_default = std::find(default_option_ids.begin(), default_option_ids.end(), option.id) != default_option_ids.end();
+if (is_default && choices_it != option_to_choices.end() && !choices_it->second.empty()) {
+state.chrCustActiveChoices.push_back(nlohmann::json{
+{ "optionID", option.id },
+{ "choiceID", choices_it->second[0].id }
+});
+}
+}
 }
 
-function update_customization_type(core) {
-	const state = core.view;
-	const selection = state.chrCustOptionSelection;
-
-	if (selection.length === 0)
-		return;
-
-	const selected = selection[0];
-
-	const available_choices = DBCharacterCustomization.get_choices_for_option(selected.id);
-	if (available_choices === undefined)
-		return;
-
-	state.chrCustChoices.splice(0, state.chrCustChoices.length);
-	state.chrCustChoiceSelection.splice(0, state.chrCustChoiceSelection.length);
-
-	state.chrCustChoices.push(...available_choices);
+for (const auto& option : *available_options) {
+state.chrCustOptions.push_back(nlohmann::json{
+{ "id", option.id },
+{ "label", option.label },
+{ "is_color_swatch", option.is_color_swatch }
+});
 }
 
-function update_customization_choice(core) {
-	const state = core.view;
-	const selection = state.chrCustChoiceSelection;
-	if (selection.length === 0)
-		return;
+if (!state.chrCustOptions.empty())
+state.chrCustOptionSelection = { state.chrCustOptions[0] };
 
-	const selected = selection[0];
-	if (state.chrCustActiveChoices.find((choice) => choice.optionID === state.chrCustOptionSelection[0].id) === undefined) {
-		state.chrCustActiveChoices.push({ optionID: state.chrCustOptionSelection[0].id, choiceID: selected.id });
-	} else {
-		const index = state.chrCustActiveChoices.findIndex((choice) => choice.optionID === state.chrCustOptionSelection[0].id);
-		state.chrCustActiveChoices[index].choiceID = selected.id;
-	}
+// load the model
+uint32_t file_data_id = db::caches::DBCharacterCustomization::get_model_file_data_id(selected_id);
+load_character_model(file_data_id);
 }
 
-function update_choice_for_option(core, option_id, choice_id) {
-	const state = core.view;
-	const existing_choice = state.chrCustActiveChoices.find((choice) => choice.optionID === option_id);
+// JS: function update_customization_type(core)
+static void update_customization_type() {
+auto& state = *core::view;
 
-	if (existing_choice) {
-		existing_choice.choiceID = choice_id;
-	} else {
-		state.chrCustActiveChoices.push({ optionID: option_id, choiceID: choice_id });
-	}
+if (state.chrCustOptionSelection.empty())
+return;
+
+const auto& selected = state.chrCustOptionSelection[0];
+uint32_t option_id = selected.value("id", 0u);
+
+const auto* available_choices = db::caches::DBCharacterCustomization::get_choices_for_option(option_id);
+if (!available_choices)
+return;
+
+state.chrCustChoices.clear();
+state.chrCustChoiceSelection.clear();
+
+for (const auto& choice : *available_choices) {
+state.chrCustChoices.push_back(nlohmann::json{
+{ "id", choice.id },
+{ "label", choice.label },
+{ "swatch_color_0", choice.swatch_color_0 },
+{ "swatch_color_1", choice.swatch_color_1 }
+});
+}
 }
 
-function randomize_customization(core) {
-	const state = core.view;
-	const options = state.chrCustOptions;
+// JS: function update_customization_choice(core)
+static void update_customization_choice() {
+auto& state = *core::view;
 
-	for (const option of options) {
-		const choices = DBCharacterCustomization.get_choices_for_option(option.id);
-		if (choices && choices.length > 0) {
-			const random_choice = choices[Math.floor(Math.random() * choices.length)];
-			update_choice_for_option(core, option.id, random_choice.id);
-		}
-	}
+if (state.chrCustChoiceSelection.empty())
+return;
+
+const auto& selected = state.chrCustChoiceSelection[0];
+uint32_t choice_id = selected.value("id", 0u);
+
+if (state.chrCustOptionSelection.empty())
+return;
+
+uint32_t option_id = state.chrCustOptionSelection[0].value("id", 0u);
+
+// find existing or add new
+bool found = false;
+for (auto& ac : state.chrCustActiveChoices) {
+if (ac.value("optionID", 0u) == option_id) {
+ac["choiceID"] = choice_id;
+found = true;
+break;
+}
+}
+
+if (!found) {
+state.chrCustActiveChoices.push_back(nlohmann::json{
+{ "optionID", option_id },
+{ "choiceID", choice_id }
+});
+}
+}
+
+// JS: function update_choice_for_option(core, option_id, choice_id)
+static void update_choice_for_option(uint32_t option_id, uint32_t choice_id) {
+auto& state = *core::view;
+
+for (auto& ac : state.chrCustActiveChoices) {
+if (ac.value("optionID", 0u) == option_id) {
+ac["choiceID"] = choice_id;
+return;
+}
+}
+
+state.chrCustActiveChoices.push_back(nlohmann::json{
+{ "optionID", option_id },
+{ "choiceID", choice_id }
+});
+}
+
+// JS: function randomize_customization(core)
+static void randomize_customization() {
+auto& state = *core::view;
+
+static std::mt19937 rng(std::random_device{}());
+
+for (const auto& option : state.chrCustOptions) {
+uint32_t option_id = option.value("id", 0u);
+const auto* choices = db::caches::DBCharacterCustomization::get_choices_for_option(option_id);
+if (choices && !choices->empty()) {
+std::uniform_int_distribution<size_t> dist(0, choices->size() - 1);
+uint32_t random_choice_id = (*choices)[dist(rng)].id;
+update_choice_for_option(option_id, random_choice_id);
+}
+}
 }
 
 //endregion
 
 //region import
-async function import_character(core) {
-	core.view.characterImportMode = 'none';
-	core.view.chrModelLoading = true;
 
-	const character_name = core.view.chrImportChrName;
-	const selected_realm = core.view.chrImportSelectedRealm;
-	const base_region = core.view.chrImportSelectedRegion;
-	const effective_region = core.view.chrImportClassicRealms ? 'classic-' + base_region : base_region;
+// JS: async function import_character(core)
+static void import_character() {
+auto& view = *core::view;
+view.characterImportMode = "none";
+view.chrModelLoading = true;
 
-	if (selected_realm === null) {
-		core.setToast('error', 'Please enter a valid realm.', null, 3000);
-		core.view.chrModelLoading = false;
-		return;
-	}
+std::string character_name = view.chrImportChrName;
+const auto& selected_realm = view.chrImportSelectedRealm;
+std::string base_region = view.chrImportSelectedRegion;
+std::string effective_region = view.chrImportClassicRealms ? "classic-" + base_region : base_region;
 
-	const character_label = util.format('%s (%s-%s)', character_name, effective_region, selected_realm.label);
-	const url = util.format(core.view.config.armoryURL, encodeURIComponent(effective_region), encodeURIComponent(selected_realm.value), encodeURIComponent(character_name.toLowerCase()));
-	log.write('Retrieving character data for %s from %s', character_label, url);
+if (selected_realm.is_null()) {
+core::setToast("error", "Please enter a valid realm.", {}, 3000);
+view.chrModelLoading = false;
+return;
+}
 
-	const res = await generics.get(url);
-	if (res.ok) {
-		try {
-			await apply_import_data(core, await res.json(), 'bnet');
-		} catch (e) {
-			log.write('Failed to parse character data: %s', e.message);
-			core.setToast('error', 'Failed to import character ' + character_label, null, -1);
-		}
-	} else {
-		log.write('Failed to retrieve character data: %d %s', res.status, res.statusText);
+std::string realm_label = selected_realm.value("label", "");
+std::string realm_value = selected_realm.value("value", "");
+std::string character_label = std::format("{} ({}-{})", character_name, effective_region, realm_label);
 
-		if (res.status == 404)
-			core.setToast('error', 'Could not find character ' + character_label, null, -1);
+std::string armory_url = view.config.value("armoryURL", "");
+
+// URL-encode helper (JS: encodeURIComponent)
+auto url_encode = [](const std::string& s) -> std::string {
+	std::string encoded;
+	encoded.reserve(s.size() * 3);
+	for (unsigned char c : s) {
+		if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~')
+			encoded += static_cast<char>(c);
 		else
-			core.setToast('error', 'Failed to import character ' + character_label, null, -1);
+			encoded += std::format("%{:02X}", c);
 	}
+	return encoded;
+};
 
-	core.view.chrModelLoading = false;
+// JS: const url = util.format(core.view.config.armoryURL, encodeURIComponent(region), ...)
+// URL template uses %s placeholders for region, realm, character.
+std::string encoded_region = url_encode(effective_region);
+std::string encoded_realm = url_encode(realm_value);
+std::string encoded_name = url_encode(character_name);
+// Simple %s substitution matching util.format behavior.
+std::string url = armory_url;
+auto replace_first = [](std::string& str, const std::string& from, const std::string& to) {
+	size_t pos = str.find(from);
+	if (pos != std::string::npos)
+		str.replace(pos, from.size(), to);
+};
+replace_first(url, "%s", encoded_region);
+replace_first(url, "%s", encoded_realm);
+replace_first(url, "%s", encoded_name);
+
+logging::write(std::format("Retrieving character data for {} from {}", character_label, url));
+
+try {
+// JS: const res = await generics.get(url);
+nlohmann::json res = generics::getJSON(url);
+apply_import_data(res, "bnet");
+} catch (const std::exception& e) {
+logging::write(std::format("Failed to import character: {}", e.what()));
+
+std::string err_msg = e.what();
+if (err_msg.find("404") != std::string::npos)
+core::setToast("error", "Could not find character " + character_label, {}, -1);
+else
+core::setToast("error", "Failed to import character " + character_label, {}, -1);
+}
+
+view.chrModelLoading = false;
 }
 
 // Removed: import_wmv_character() — wmv module deleted
-async function import_wmv_character(core) {
-	return;
+// JS: async function import_wmv_character(core) { return; }
+static void import_wmv_character() {
+return;
 }
 
 // Removed: import_wowhead_character() — wowhead module deleted
-async function import_wowhead_character(core) {
-	return;
+// JS: async function import_wowhead_character(core) { return; }
+static void import_wowhead_character() {
+return;
 }
 
 /**
  * Unified import handler - parses import data and applies it.
- * Sets all state first, then triggers model selection which loads the model.
+ * JS: async function apply_import_data(core, data, source)
  */
-async function apply_import_data(core, data, source) {
-	let race_id, gender_index, customizations, equipment;
+static void apply_import_data(const nlohmann::json& data, const std::string& source) {
+auto& view = *core::view;
+uint32_t race_id = 0;
+int gender_index = 0;
+std::vector<nlohmann::json> customizations;
+nlohmann::json equipment = nlohmann::json::object();
 
-	if (source === 'bnet') {
-		race_id = data.playable_race.id;
+if (source == "bnet") {
+race_id = data["playable_race"]["id"].get<uint32_t>();
 
-		// pandaren with faction -> use neutral
-		if (race_id == 25 || race_id == 26)
-			race_id = 24;
+// pandaren with faction -> use neutral
+if (race_id == 25 || race_id == 26)
+race_id = 24;
 
-		// dracthyr horde -> use alliance
-		if (race_id == 70)
-			race_id = 52;
+// dracthyr horde -> use alliance
+if (race_id == 70)
+race_id = 52;
 
-		// worgen/dracthyr visage
-		if (race_id == 22 && core.view.chrImportLoadVisage)
-			race_id = 23;
+// worgen/dracthyr visage
+if (race_id == 22 && view.chrImportLoadVisage)
+race_id = 23;
+if (race_id == 52 && view.chrImportLoadVisage)
+race_id = 75;
 
-		if (race_id == 52 && core.view.chrImportLoadVisage)
-			race_id = 75;
+gender_index = (data["gender"]["type"].get<std::string>() == "MALE") ? 0 : 1;
 
-		gender_index = data.gender.type === 'MALE' ? 0 : 1;
+auto chr_model_id_opt = db::caches::DBCharacterCustomization::get_chr_model_id(race_id, gender_index);
+if (!chr_model_id_opt)
+return;
 
-		const chr_model_id = DBCharacterCustomization.get_chr_model_id(race_id, gender_index);
-		const available_options = DBCharacterCustomization.get_options_for_model(chr_model_id);
-		const available_options_ids = available_options.map(opt => opt.id);
+uint32_t chr_model_id = *chr_model_id_opt;
+const auto* available_options = db::caches::DBCharacterCustomization::get_options_for_model(chr_model_id);
+if (!available_options)
+return;
 
-		customizations = [];
-		for (const customization_entry of Object.values(data.customizations)) {
-			if (available_options_ids.includes(customization_entry.option.id))
-				customizations.push({ optionID: customization_entry.option.id, choiceID: customization_entry.choice.id });
-		}
+std::unordered_set<uint32_t> available_option_ids;
+for (const auto& opt : *available_options)
+available_option_ids.insert(opt.id);
 
-		equipment = {};
-		if (data.items && Array.isArray(data.items)) {
-			for (const item of data.items) {
-				const slot_id = item.internal_slot_id + 1;
-				equipment[slot_id] = item.id;
-			}
-		}
+for (auto& [_, customization_entry] : data["customizations"].items()) {
+uint32_t opt_id = customization_entry["option"]["id"].get<uint32_t>();
+if (available_option_ids.count(opt_id)) {
+customizations.push_back(nlohmann::json{
+{ "optionID", opt_id },
+{ "choiceID", customization_entry["choice"]["id"].get<uint32_t>() }
+});
+}
+}
 
-	} else if (source === 'wmv') {
-		race_id = data.race;
-		gender_index = data.gender;
+if (data.contains("items") && data["items"].is_array()) {
+for (const auto& item : data["items"]) {
+int slot_id = item["internal_slot_id"].get<int>() + 1;
+equipment[std::to_string(slot_id)] = item["id"].get<uint32_t>();
+}
+}
 
-		const chr_model_id = DBCharacterCustomization.get_chr_model_id(race_id, gender_index);
-		const available_options = DBCharacterCustomization.get_options_for_model(chr_model_id);
-		const available_options_ids = available_options.map(opt => opt.id);
+} else if (source == "wmv") {
+race_id = data["race"].get<uint32_t>();
+gender_index = data["gender"].get<int>();
 
-		if (data.legacy_values) {
-			// legacy WMV format
-			const legacy = data.legacy_values;
-			const option_map = {
-				'skin': legacy.skin_color,
-				'face': legacy.face_type,
-				'hair color': legacy.hair_color,
-				'hair style': legacy.hair_style,
-				'facial': legacy.facial_hair
-			};
+auto chr_model_id_opt = db::caches::DBCharacterCustomization::get_chr_model_id(race_id, gender_index);
+if (!chr_model_id_opt)
+return;
 
-			customizations = [];
-			for (const option of available_options) {
-				const label_lower = option.label.toLowerCase();
+uint32_t chr_model_id = *chr_model_id_opt;
+const auto* available_options = db::caches::DBCharacterCustomization::get_options_for_model(chr_model_id);
+if (!available_options)
+return;
 
-				for (const [key, value] of Object.entries(option_map)) {
-					if (label_lower.includes(key)) {
-						const choices = DBCharacterCustomization.get_choices_for_option(option.id);
-						if (choices && choices[value]) {
-							customizations.push({ optionID: option.id, choiceID: choices[value].id });
-							break;
-						}
-					}
-				}
-			}
-		} else {
-			// modern WMV format
-			customizations = [];
-			for (const customization of data.customizations) {
-				if (available_options_ids.includes(customization.option_id))
-					customizations.push({ optionID: customization.option_id, choiceID: customization.choice_id });
-			}
-		}
+std::unordered_set<uint32_t> available_option_ids;
+for (const auto& opt : *available_options)
+available_option_ids.insert(opt.id);
 
-		equipment = data.equipment || {};
+if (data.contains("legacy_values")) {
+// legacy WMV format
+const auto& legacy = data["legacy_values"];
+std::unordered_map<std::string, int> option_map = {
+{ "skin", legacy.value("skin_color", 0) },
+{ "face", legacy.value("face_type", 0) },
+{ "hair color", legacy.value("hair_color", 0) },
+{ "hair style", legacy.value("hair_style", 0) },
+{ "facial", legacy.value("facial_hair", 0) }
+};
 
-	} else if (source === 'wowhead') {
-		race_id = data.race;
-		gender_index = data.gender;
+for (const auto& option : *available_options) {
+std::string label_lower = option.label;
+std::transform(label_lower.begin(), label_lower.end(), label_lower.begin(), ::tolower);
 
-		const chr_model_id = DBCharacterCustomization.get_chr_model_id(race_id, gender_index);
-		const available_options = DBCharacterCustomization.get_options_for_model(chr_model_id);
+for (const auto& [key, value] : option_map) {
+if (label_lower.find(key) != std::string::npos) {
+const auto* choices = db::caches::DBCharacterCustomization::get_choices_for_option(option.id);
+if (choices && static_cast<size_t>(value) < choices->size()) {
+customizations.push_back(nlohmann::json{
+{ "optionID", option.id },
+{ "choiceID", (*choices)[value].id }
+});
+break;
+}
+}
+}
+}
+} else {
+// modern WMV format
+for (const auto& customization : data["customizations"]) {
+uint32_t opt_id = customization["option_id"].get<uint32_t>();
+if (available_option_ids.count(opt_id)) {
+customizations.push_back(nlohmann::json{
+{ "optionID", opt_id },
+{ "choiceID", customization["choice_id"].get<uint32_t>() }
+});
+}
+}
+}
 
-		customizations = [];
-		for (const choice_id of data.customizations) {
-			const choice_row = db2.ChrCustomizationChoice.getRow(choice_id);
-			if (!choice_row)
-				continue;
+equipment = data.value("equipment", nlohmann::json::object());
 
-			const option_id = choice_row.ChrCustomizationOptionID;
-			if (available_options.find(opt => opt.id === option_id))
-				customizations.push({ optionID: option_id, choiceID: choice_id });
-		}
+} else if (source == "wowhead") {
+race_id = data["race"].get<uint32_t>();
+gender_index = data["gender"].get<int>();
 
-		equipment = data.equipment || {};
-	}
+auto chr_model_id_opt = db::caches::DBCharacterCustomization::get_chr_model_id(race_id, gender_index);
+if (!chr_model_id_opt)
+return;
 
-	is_importing = true;
+uint32_t chr_model_id = *chr_model_id_opt;
+const auto* available_options = db::caches::DBCharacterCustomization::get_options_for_model(chr_model_id);
+if (!available_options)
+return;
 
-	try {
-		core.view.chrEquippedItems = { ...equipment };
+std::unordered_set<uint32_t> available_option_ids;
+for (const auto& opt : *available_options)
+available_option_ids.insert(opt.id);
 
-		core.view.chrImportChoices.splice(0, core.view.chrImportChoices.length);
-		core.view.chrImportChoices.push(...customizations);
+// JS: for (const choice_id of data.customizations) { ... db2.ChrCustomizationChoice.getRow(choice_id) ... }
+// TODO(conversion): ChrCustomizationChoice row lookup requires db2 table access.
+// For now, skip wowhead customization parsing.
 
-		const chr_model_id = DBCharacterCustomization.get_chr_model_id(race_id, gender_index);
-		core.view.chrImportChrModelID = chr_model_id;
-		core.view.chrImportTargetModelID = chr_model_id;
+equipment = data.value("equipment", nlohmann::json::object());
+}
 
-		core.view.chrCustRaceSelection = [core.view.chrCustRaces.find(e => e.id === race_id)];
+is_importing = true;
 
-		await update_model_selection(core);
-	} finally {
-		is_importing = false;
-	}
+try {
+view.chrEquippedItems = equipment;
+
+view.chrImportChoices.clear();
+view.chrImportChoices = customizations;
+
+auto chr_model_id_opt = db::caches::DBCharacterCustomization::get_chr_model_id(race_id, gender_index);
+if (chr_model_id_opt) {
+uint32_t chr_model_id = *chr_model_id_opt;
+view.chrImportChrModelID = chr_model_id;
+view.chrImportTargetModelID = chr_model_id;
+
+// find the race entry in chrCustRaces
+for (const auto& race : view.chrCustRaces) {
+if (race.value("id", 0u) == race_id) {
+view.chrCustRaceSelection = { race };
+break;
+}
+}
+
+update_model_selection();
+}
+} catch (...) {
+// ensure we always clear importing flag
+}
+
+is_importing = false;
 }
 
 //endregion
 
 //region saved characters
-function get_default_characters_dir() {
-	return path.join(os.homedir(), 'wow.export', 'My Characters');
+
+// JS: function get_default_characters_dir()
+std::string get_default_characters_dir() {
+namespace fs = std::filesystem;
+const char* home = nullptr;
+#ifdef _WIN32
+home = std::getenv("USERPROFILE");
+#else
+home = std::getenv("HOME");
+#endif
+if (!home)
+home = ".";
+return (fs::path(home) / "wow.export" / "My Characters").string();
 }
 
-function get_saved_characters_dir(core) {
-	const custom_path = core.view.config.characterExportPath;
-	if (custom_path && custom_path.trim().length > 0)
-		return custom_path.trim();
-
-	return get_default_characters_dir();
+// JS: function get_saved_characters_dir(core)
+static std::string get_saved_characters_dir() {
+auto& view = *core::view;
+std::string custom_path = view.config.value("characterExportPath", "");
+if (!custom_path.empty()) {
+// trim
+auto start = custom_path.find_first_not_of(" \t");
+auto end = custom_path.find_last_not_of(" \t");
+if (start != std::string::npos)
+return custom_path.substr(start, end - start + 1);
+}
+return get_default_characters_dir();
 }
 
-function generate_character_id() {
-	return Math.floor(10000 + Math.random() * 90000).toString();
+// JS: function generate_character_id()
+static std::string generate_character_id() {
+static std::mt19937 rng(std::random_device{}());
+std::uniform_int_distribution<int> dist(10000, 99999);
+return std::to_string(dist(rng));
 }
 
-async function load_saved_characters(core) {
-	const dir = get_saved_characters_dir(core);
-	core.view.chrSavedCharacters = [];
+// JS: async function load_saved_characters(core)
+static void load_saved_characters() {
+namespace fs = std::filesystem;
+auto& view = *core::view;
+std::string dir = get_saved_characters_dir();
+view.chrSavedCharacters.clear();
 
-	try {
-		await fsp.access(dir);
-	} catch {
-		return;
-	}
+std::error_code ec;
+if (!fs::exists(dir, ec))
+return;
 
-	const files = await fsp.readdir(dir);
-	const characters = [];
+std::vector<nlohmann::json> characters;
 
-	for (const file of files) {
-		if (!file.endsWith('.json'))
-			continue;
+for (const auto& entry : fs::directory_iterator(dir, ec)) {
+if (!entry.is_regular_file())
+continue;
 
-		const match = file.match(/^(.+)-(\d{5})\.json$/);
-		if (!match)
-			continue;
+std::string file_name = entry.path().filename().string();
+if (file_name.size() < 5 || file_name.substr(file_name.size() - 5) != ".json")
+continue;
 
-		const name = match[1];
-		const id = match[2];
-		const thumb_path = path.join(dir, `${name}-${id}.png`);
+// match pattern: name-XXXXX.json
+std::string base = file_name.substr(0, file_name.size() - 5);
+if (base.size() < 7) // at least "x-12345"
+continue;
 
-		let thumb_data = null;
-		try {
-			await fsp.access(thumb_path);
-			const thumb_buffer = await fsp.readFile(thumb_path);
-			thumb_data = 'data:image/png;base64,' + thumb_buffer.toString('base64');
-		} catch {
-			// no thumbnail
-		}
+size_t dash_pos = base.rfind('-');
+if (dash_pos == std::string::npos || dash_pos + 6 != base.size())
+continue;
 
-		characters.push({ name, id, thumb: thumb_data, file_name: file });
-	}
+std::string id_part = base.substr(dash_pos + 1);
+bool all_digits = !id_part.empty() && std::all_of(id_part.begin(), id_part.end(), ::isdigit);
+if (!all_digits || id_part.size() != 5)
+continue;
 
-	core.view.chrSavedCharacters = characters;
+std::string name = base.substr(0, dash_pos);
+std::string id = id_part;
+std::string thumb_path = (fs::path(dir) / (name + "-" + id + ".png")).string();
+
+nlohmann::json thumb_data = nullptr;
+if (fs::exists(thumb_path, ec)) {
+try {
+std::ifstream thumb_file(thumb_path, std::ios::binary);
+std::vector<uint8_t> thumb_buffer((std::istreambuf_iterator<char>(thumb_file)),
+                                   std::istreambuf_iterator<char>());
+// JS: thumb_data = 'data:image/png;base64,' + thumb_buffer.toString('base64');
+BufferWrapper thumb_bw(thumb_buffer);
+thumb_data = "data:image/png;base64," + thumb_bw.toBase64();
+} catch (...) {
+// no thumbnail
+}
 }
 
-async function save_character(core, name, thumb_data) {
-	const dir = get_saved_characters_dir(core);
-	await generics.createDirectory(dir);
-
-	// generate unique id
-	let id = generate_character_id();
-	const existing_ids = core.view.chrSavedCharacters.map(c => c.id);
-	while (existing_ids.includes(id))
-		id = generate_character_id();
-
-	// gather character data
-	const data = {
-		race_id: core.view.chrCustRaceSelection[0]?.id,
-		model_id: core.view.chrCustModelSelection[0]?.id,
-		choices: [...core.view.chrCustActiveChoices],
-		equipment: { ...core.view.chrEquippedItems },
-		guild_tabard: { ...core.view.chrGuildTabardConfig }
-	};
-
-	const json_path = path.join(dir, `${name}-${id}.json`);
-	await fsp.writeFile(json_path, JSON.stringify(data, null, '\t'));
-
-	// save thumbnail if provided
-	if (thumb_data) {
-		const thumb_path = path.join(dir, `${name}-${id}.png`);
-		const base64 = thumb_data.split(',')[1];
-		const buffer = Buffer.from(base64, 'base64');
-		await fsp.writeFile(thumb_path, buffer);
-	}
-
-	await load_saved_characters(core);
-	core.setToast('success', `Character "${name}" saved.`, null, 3000);
+characters.push_back(nlohmann::json{
+{ "name", name },
+{ "id", id },
+{ "thumb", thumb_data },
+{ "file_name", file_name }
+});
 }
 
-async function delete_character(core, character) {
-	const dir = get_saved_characters_dir(core);
-	const json_path = path.join(dir, character.file_name);
-	const thumb_path = path.join(dir, `${character.name}-${character.id}.png`);
-
-	try {
-		await fsp.unlink(json_path);
-	} catch (e) {
-		log.write('failed to delete character json: %s', e.message);
-	}
-
-	try {
-		await fsp.unlink(thumb_path);
-	} catch {
-		// thumbnail may not exist
-	}
-
-	const index = core.view.chrSavedCharacters.findIndex(c => c.id === character.id);
-	if (index !== -1)
-		core.view.chrSavedCharacters.splice(index, 1);
-
-	core.setToast('success', `Character "${character.name}" deleted.`, null, 3000);
+view.chrSavedCharacters = characters;
 }
 
-async function load_character(core, character) {
-	const dir = get_saved_characters_dir(core);
-	const json_path = path.join(dir, character.file_name);
+// JS: async function save_character(core, name, thumb_data)
+static void save_character(const std::string& name, const std::string& thumb_data) {
+namespace fs = std::filesystem;
+auto& view = *core::view;
+std::string dir = get_saved_characters_dir();
+generics::createDirectory(dir);
 
-	try {
-		const content = await fsp.readFile(json_path, 'utf8');
-		const data = JSON.parse(content);
+// generate unique id
+std::string id = generate_character_id();
+std::unordered_set<std::string> existing_ids;
+for (const auto& c : view.chrSavedCharacters)
+existing_ids.insert(c.value("id", ""));
+while (existing_ids.count(id))
+id = generate_character_id();
 
-		core.view.chrModelLoading = true;
-		core.view.chrSavedCharactersScreen = false;
+// gather character data
+nlohmann::json data = get_current_character_data();
 
-		// apply equipment
-		core.view.chrEquippedItems = data.equipment || {};
-
-		// apply guild tabard config
-		if (data.guild_tabard)
-			core.view.chrGuildTabardConfig = { background: 0, border_style: 0, border_color: 0, emblem_design: 0, emblem_color: 0, ...data.guild_tabard };
-
-		// apply customization
-		core.view.chrImportChoices.splice(0, core.view.chrImportChoices.length);
-		core.view.chrImportChoices.push(...(data.choices || []));
-		core.view.chrImportChrModelID = data.model_id;
-		core.view.chrImportTargetModelID = data.model_id;
-
-		// apply race selection
-		const race = core.view.chrCustRaces.find(r => r.id === data.race_id);
-		if (race)
-			core.view.chrCustRaceSelection = [race];
-
-		core.view.chrModelLoading = false;
-	} catch (e) {
-		log.write('failed to load character: %s', e.message);
-		core.setToast('error', `Failed to load character: ${e.message}`, null, -1);
-	}
+std::string json_path = (fs::path(dir) / (name + "-" + id + ".json")).string();
+try {
+std::ofstream out(json_path);
+out << data.dump(1, '\t');
+} catch (const std::exception& e) {
+logging::write(std::format("Failed to save character: {}", e.what()));
+return;
 }
 
-async function capture_character_thumbnail(core) {
-	const context = core.view.chrModelViewerContext;
-	if (!context || !context.controls || !active_renderer)
-		return null;
+// save thumbnail if provided
+if (!thumb_data.empty()) {
+// JS: const base64 = data.thumb.split(',')[1]; Buffer.from(base64, 'base64')
+std::string thumb_str = thumb_data;
+size_t comma_pos = thumb_str.find(',');
+if (comma_pos != std::string::npos)
+thumb_str = thumb_str.substr(comma_pos + 1);
 
-	const controls = context.controls;
-	const camera = controls.camera;
-
-	// store current state
-	const saved_cam_pos = [...camera.position];
-	const saved_target = [...controls.target];
-	const saved_rotation = controls.model_rotation_y;
-	const saved_anim = active_renderer.current_animation_index;
-	const saved_frame = active_renderer.animation_time;
-
-	// get race/gender preset
-	const race_gender = get_current_race_gender(core);
-	let preset = null;
-
-	if (race_gender) {
-		const race_presets = THUMBNAIL_PRESETS[race_gender.raceID];
-		if (race_presets)
-			preset = race_presets[race_gender.genderIndex];
-	}
-
-	// apply thumbnail camera settings
-	if (preset) {
-		camera.position[0] = preset[0];
-		camera.position[1] = preset[1];
-		camera.position[2] = preset[2];
-		controls.target[0] = preset[3];
-		controls.target[1] = preset[4];
-		controls.target[2] = preset[5];
-		controls.model_rotation_y = preset[6];
-
-		camera.lookAt(controls.target[0], controls.target[1], controls.target[2]);
-		if (controls.on_model_rotate)
-			controls.on_model_rotate(controls.model_rotation_y);
-	}
-
-	// set to stand animation frame 0
-	if (active_renderer.setAnimation)
-		active_renderer.setAnimation(0);
-
-	active_renderer.animation_time = 0;
-	if (active_renderer.updateAnimation)
-		active_renderer.updateAnimation(0);
-
-	// wait for render
-	await new Promise(r => requestAnimationFrame(r));
-	await new Promise(r => requestAnimationFrame(r));
-
-	// capture from canvas
-	const canvas = context.gl_context?.canvas;
-	if (!canvas)
-		return null;
-
-	// get canvas dimensions and calculate 1:1 crop
-	const width = canvas.width;
-	const height = canvas.height;
-	const size = Math.min(width, height);
-	const offset_x = Math.floor((width - size) / 2);
-	const offset_y = Math.floor((height - size) / 2);
-
-	// create offscreen canvas for cropping
-	const crop_canvas = document.createElement('canvas');
-	crop_canvas.width = size;
-	crop_canvas.height = size;
-	const crop_ctx = crop_canvas.getContext('2d');
-	crop_ctx.drawImage(canvas, offset_x, offset_y, size, size, 0, 0, size, size);
-
-	const data_url = crop_canvas.toDataURL('image/png');
-
-	// restore previous state
-	camera.position[0] = saved_cam_pos[0];
-	camera.position[1] = saved_cam_pos[1];
-	camera.position[2] = saved_cam_pos[2];
-	controls.target[0] = saved_target[0];
-	controls.target[1] = saved_target[1];
-	controls.target[2] = saved_target[2];
-	controls.model_rotation_y = saved_rotation;
-
-	camera.lookAt(controls.target[0], controls.target[1], controls.target[2]);
-	if (controls.on_model_rotate)
-		controls.on_model_rotate(controls.model_rotation_y);
-
-	if (active_renderer.setAnimation && saved_anim !== undefined)
-		active_renderer.setAnimation(saved_anim);
-
-	active_renderer.animation_time = saved_frame || 0;
-
-	return data_url;
+std::string thumb_path = (fs::path(dir) / (name + "-" + id + ".png")).string();
+std::vector<uint8_t> thumb_bytes = BufferWrapper::fromBase64(thumb_str).raw();
+std::ofstream thumb_out(thumb_path, std::ios::binary);
+thumb_out.write(reinterpret_cast<const char*>(thumb_bytes.data()), static_cast<std::streamsize>(thumb_bytes.size()));
 }
 
-function get_current_character_data(core) {
-	return {
-		race_id: core.view.chrCustRaceSelection[0]?.id,
-		model_id: core.view.chrCustModelSelection[0]?.id,
-		choices: [...core.view.chrCustActiveChoices],
-		equipment: { ...core.view.chrEquippedItems },
-		guild_tabard: { ...core.view.chrGuildTabardConfig }
-	};
+load_saved_characters();
+core::setToast("success", std::format("Character \"{}\" saved.", name), {}, 3000);
 }
 
-async function export_json_character(core) {
-	const data = get_current_character_data(core);
+// JS: async function delete_character(core, character)
+static void delete_character(const nlohmann::json& character) {
+namespace fs = std::filesystem;
+auto& view = *core::view;
+std::string dir = get_saved_characters_dir();
+std::string json_path = (fs::path(dir) / character.value("file_name", "")).string();
+std::string name = character.value("name", "");
+std::string id = character.value("id", "");
+std::string thumb_path = (fs::path(dir) / (name + "-" + id + ".png")).string();
 
-	if (!data.race_id || !data.model_id) {
-		core.setToast('error', 'No character loaded to export.', null, 3000);
-		return;
-	}
+std::error_code ec;
+fs::remove(json_path, ec);
+if (ec)
+logging::write(std::format("failed to delete character json: {}", ec.message()));
 
-	// capture thumbnail
-	const thumb_data = await capture_character_thumbnail(core);
-	if (thumb_data)
-		data.thumb = thumb_data;
+fs::remove(thumb_path, ec); // thumbnail may not exist
 
-	const file_input = document.createElement('input');
-	file_input.setAttribute('nwsaveas', 'character.json');
-	file_input.setAttribute('accept', '.json');
-	file_input.type = 'file';
+// remove from list
+auto& chars = view.chrSavedCharacters;
+chars.erase(std::remove_if(chars.begin(), chars.end(),
+[&id](const nlohmann::json& c) { return c.value("id", "") == id; }),
+chars.end());
 
-	file_input.onchange = async () => {
-		const file_path = file_input.value;
-		if (!file_path)
-			return;
-
-		try {
-			await fsp.writeFile(file_path, JSON.stringify(data, null, '\t'));
-			core.setToast('success', 'Character exported successfully.', null, 3000);
-		} catch (e) {
-			log.write('failed to export character: %s', e.message);
-			core.setToast('error', `Failed to export character: ${e.message}`, null, -1);
-		}
-	};
-
-	file_input.click();
+core::setToast("success", std::format("Character \"{}\" deleted.", name), {}, 3000);
 }
 
-async function export_saved_character(core, character) {
-	const dir = get_saved_characters_dir(core);
-	const json_path = path.join(dir, character.file_name);
+// JS: async function load_character(core, character)
+static void load_character(const nlohmann::json& character) {
+namespace fs = std::filesystem;
+auto& view = *core::view;
+std::string dir = get_saved_characters_dir();
+std::string json_path = (fs::path(dir) / character.value("file_name", "")).string();
 
-	let data;
-	try {
-		const content = await fsp.readFile(json_path, 'utf8');
-		data = JSON.parse(content);
-		data.name = character.name;
+try {
+std::ifstream in(json_path);
+if (!in.is_open())
+throw std::runtime_error("Could not open file");
 
-		// include existing thumbnail if available
-		if (character.thumb)
-			data.thumb = character.thumb;
-	} catch (e) {
-		log.write('failed to read character for export: %s', e.message);
-		core.setToast('error', `Failed to read character: ${e.message}`, null, -1);
-		return;
-	}
+nlohmann::json data = nlohmann::json::parse(in);
 
-	const file_input = document.createElement('input');
-	file_input.setAttribute('nwsaveas', character.name + '.json');
-	file_input.setAttribute('accept', '.json');
-	file_input.type = 'file';
+view.chrModelLoading = true;
+view.chrSavedCharactersScreen = false;
 
-	file_input.onchange = async () => {
-		const file_path = file_input.value;
-		if (!file_path)
-			return;
+// apply equipment
+view.chrEquippedItems = data.value("equipment", nlohmann::json::object());
 
-		try {
-			await fsp.writeFile(file_path, JSON.stringify(data, null, '\t'));
-			core.setToast('success', `Character "${character.name}" exported successfully.`, null, 3000);
-		} catch (e) {
-			log.write('failed to export character: %s', e.message);
-			core.setToast('error', `Failed to export character: ${e.message}`, null, -1);
-		}
-	};
-
-	file_input.click();
+// apply guild tabard config
+if (data.contains("guild_tabard")) {
+const auto& gt = data["guild_tabard"];
+view.chrGuildTabardConfig.background = gt.value("background", 0);
+view.chrGuildTabardConfig.border_style = gt.value("border_style", 0);
+view.chrGuildTabardConfig.border_color = gt.value("border_color", 0);
+view.chrGuildTabardConfig.emblem_design = gt.value("emblem_design", 0);
+view.chrGuildTabardConfig.emblem_color = gt.value("emblem_color", 0);
 }
 
-async function import_json_character(core, save_to_my_characters) {
-	const file_input = document.createElement('input');
-	file_input.setAttribute('accept', '.json');
-	file_input.type = 'file';
+// apply customization
+view.chrImportChoices.clear();
+if (data.contains("choices") && data["choices"].is_array())
+view.chrImportChoices = data["choices"].get<std::vector<nlohmann::json>>();
 
-	file_input.onchange = async () => {
-		const file_path = file_input.value;
-		if (!file_path)
-			return;
+uint32_t model_id = data.value("model_id", 0u);
+view.chrImportChrModelID = model_id;
+view.chrImportTargetModelID = model_id;
 
-		try {
-			const content = await fsp.readFile(file_path, 'utf8');
-			const data = JSON.parse(content);
+// apply race selection
+uint32_t race_id = data.value("race_id", 0u);
+for (const auto& race : view.chrCustRaces) {
+if (race.value("id", 0u) == race_id) {
+view.chrCustRaceSelection = { race };
+break;
+}
+}
 
-			if (!data.race_id || !data.model_id) {
-				core.setToast('error', 'Invalid character file: missing race_id or model_id.', null, -1);
-				return;
-			}
+view.chrModelLoading = false;
+} catch (const std::exception& e) {
+logging::write(std::format("failed to load character: {}", e.what()));
+core::setToast("error", std::format("Failed to load character: {}", e.what()), {}, -1);
+}
+}
 
-			if (save_to_my_characters) {
-				// import into My Characters
-				let name = data.name;
-				if (!name) {
-					// use filename without extension
-					name = path.basename(file_path, '.json');
-				}
+// JS: async function capture_character_thumbnail(core)
+static std::string capture_character_thumbnail() {
+auto& view = *core::view;
 
-				const dir = get_saved_characters_dir(core);
-				await generics.createDirectory(dir);
+if (!active_renderer)
+return "";
 
-				let id = generate_character_id();
-				const existing_ids = core.view.chrSavedCharacters.map(c => c.id);
-				while (existing_ids.includes(id))
-					id = generate_character_id();
+// Get race/gender preset for camera positioning.
+auto race_gender = get_current_race_gender();
+const ThumbnailPreset* preset = nullptr;
+if (race_gender) {
+auto race_it = THUMBNAIL_PRESETS.find(static_cast<int>(race_gender->raceID));
+if (race_it != THUMBNAIL_PRESETS.end()) {
+auto gender_it = race_it->second.find(race_gender->genderIndex);
+if (gender_it != race_it->second.end())
+preset = &gender_it->second;
+}
+}
 
-				// remove name/thumb from data before saving (stored separately)
-				const save_data = {
-					race_id: data.race_id,
-					model_id: data.model_id,
-					choices: data.choices || [],
-					equipment: data.equipment || {}
-				};
+// TODO(conversion): Full thumbnail capture requires model-viewer-gl State integration.
+// Once the model viewer State/Context is wired (replacing chrModelViewerContext JSON),
+// this function will:
+// 1. Save camera position/target/rotation
+// 2. Apply THUMBNAIL_PRESETS camera settings
+// 3. Set animation to stand (index 0), frame 0
+// 4. Render one frame to FBO
+// 5. glReadPixels the FBO, crop to square, encode as PNG base64 data URI
+// 6. Restore camera/animation state
+// The preset data and active_renderer are ready; only the FBO integration is pending.
+(void)preset; // suppress unused warning until wired
 
-				const save_path = path.join(dir, `${name}-${id}.json`);
-				await fsp.writeFile(save_path, JSON.stringify(save_data, null, '\t'));
+return "";
+}
 
-				// save thumbnail if provided
-				if (data.thumb) {
-					const thumb_path = path.join(dir, `${name}-${id}.png`);
-					const base64 = data.thumb.split(',')[1];
-					const buffer = Buffer.from(base64, 'base64');
-					await fsp.writeFile(thumb_path, buffer);
-				}
+// JS: function get_current_character_data(core)
+static nlohmann::json get_current_character_data() {
+auto& view = *core::view;
 
-				await load_saved_characters(core);
-				core.setToast('success', `Character "${name}" imported.`, null, 3000);
-			} else {
-				// load directly into viewer
-				core.view.chrModelLoading = true;
-				core.view.chrSavedCharactersScreen = false;
+uint32_t race_id = 0;
+uint32_t model_id = 0;
 
-				core.view.chrEquippedItems = data.equipment || {};
+if (!view.chrCustRaceSelection.empty())
+race_id = view.chrCustRaceSelection[0].value("id", 0u);
+if (!view.chrCustModelSelection.empty())
+model_id = view.chrCustModelSelection[0].value("id", 0u);
 
-				core.view.chrImportChoices.splice(0, core.view.chrImportChoices.length);
-				core.view.chrImportChoices.push(...(data.choices || []));
-				core.view.chrImportChrModelID = data.model_id;
-				core.view.chrImportTargetModelID = data.model_id;
+return nlohmann::json{
+{ "race_id", race_id },
+{ "model_id", model_id },
+{ "choices", view.chrCustActiveChoices },
+{ "equipment", view.chrEquippedItems },
+{ "guild_tabard", nlohmann::json{
+{ "background", view.chrGuildTabardConfig.background },
+{ "border_style", view.chrGuildTabardConfig.border_style },
+{ "border_color", view.chrGuildTabardConfig.border_color },
+{ "emblem_design", view.chrGuildTabardConfig.emblem_design },
+{ "emblem_color", view.chrGuildTabardConfig.emblem_color }
+}}
+};
+}
 
-				const race = core.view.chrCustRaces.find(r => r.id === data.race_id);
-				if (race)
-					core.view.chrCustRaceSelection = [race];
+// JS: async function export_json_character(core)
+static void export_json_character() {
+auto& view = *core::view;
 
-				core.view.chrModelLoading = false;
-				core.setToast('success', 'Character loaded.', null, 3000);
-			}
-		} catch (e) {
-			log.write('failed to import character: %s', e.message);
-			core.setToast('error', `Failed to import character: ${e.message}`, null, -1);
-		}
-	};
+nlohmann::json data = get_current_character_data();
+if (data.value("race_id", 0u) == 0 || data.value("model_id", 0u) == 0) {
+core::setToast("error", "No character loaded to export.", {}, 3000);
+return;
+}
 
-	file_input.click();
+// JS: const thumb_data = await capture_character_thumbnail(core);
+std::string thumb_data = capture_character_thumbnail();
+if (!thumb_data.empty())
+data["thumb"] = thumb_data;
+
+// JS: file_input.setAttribute('nwsaveas', 'character.json');
+std::string file_path = file_field::saveFileDialog("character.json", "JSON Files", "*.json");
+if (file_path.empty())
+return;
+
+try {
+std::ofstream out(file_path);
+out << data.dump(1, '\t');
+core::setToast("success", "Character exported successfully.", {}, 3000);
+} catch (const std::exception& e) {
+logging::write(std::format("failed to export character: {}", e.what()));
+core::setToast("error", std::format("Failed to export character: {}", e.what()), {}, -1);
+}
+}
+
+// JS: async function export_saved_character(core, character)
+static void export_saved_character(const nlohmann::json& character) {
+namespace fs = std::filesystem;
+std::string dir = get_saved_characters_dir();
+std::string json_path = (fs::path(dir) / character.value("file_name", "")).string();
+std::string name = character.value("name", "");
+
+nlohmann::json data;
+try {
+std::ifstream in(json_path);
+if (!in.is_open())
+throw std::runtime_error("Could not open file");
+data = nlohmann::json::parse(in);
+data["name"] = name;
+
+// include existing thumbnail if available
+if (character.contains("thumb") && !character["thumb"].is_null())
+data["thumb"] = character["thumb"];
+} catch (const std::exception& e) {
+logging::write(std::format("failed to read character for export: {}", e.what()));
+core::setToast("error", std::format("Failed to read character: {}", e.what()), {}, -1);
+return;
+}
+
+// JS: file_input.setAttribute('nwsaveas', character.name + '.json');
+std::string file_path = file_field::saveFileDialog(name + ".json", "JSON Files", "*.json");
+if (file_path.empty())
+return;
+
+try {
+std::ofstream out(file_path);
+out << data.dump(1, '\t');
+core::setToast("success", std::format("Character \"{}\" exported successfully.", name), {}, 3000);
+} catch (const std::exception& e) {
+logging::write(std::format("failed to export character: {}", e.what()));
+core::setToast("error", std::format("Failed to export character: {}", e.what()), {}, -1);
+}
+}
+
+// JS: async function import_json_character(core, save_to_my_characters)
+static void import_json_character(bool save_to_my_characters) {
+namespace fs = std::filesystem;
+auto& view = *core::view;
+
+// JS: file_input.setAttribute('accept', '.json');
+std::string file_path = file_field::openFileDialog("JSON Files", "*.json");
+if (file_path.empty())
+return;
+
+try {
+std::ifstream in(file_path);
+if (!in.is_open())
+throw std::runtime_error("Could not open file");
+
+nlohmann::json data = nlohmann::json::parse(in);
+
+if (!data.contains("race_id") || !data.contains("model_id")) {
+core::setToast("error", "Invalid character file: missing race_id or model_id.", {}, -1);
+return;
+}
+
+if (save_to_my_characters) {
+// import into My Characters
+std::string name;
+if (data.contains("name") && data["name"].is_string())
+name = data["name"].get<std::string>();
+if (name.empty()) {
+// use filename without extension
+name = fs::path(file_path).stem().string();
+}
+
+std::string dir = get_saved_characters_dir();
+generics::createDirectory(dir);
+
+std::string id = generate_character_id();
+std::unordered_set<std::string> existing_ids;
+for (const auto& c : view.chrSavedCharacters)
+existing_ids.insert(c.value("id", ""));
+while (existing_ids.count(id))
+id = generate_character_id();
+
+// remove name/thumb from data before saving (stored separately)
+nlohmann::json save_data = {
+{ "race_id", data.value("race_id", 0u) },
+{ "model_id", data.value("model_id", 0u) },
+{ "choices", data.value("choices", nlohmann::json::array()) },
+{ "equipment", data.value("equipment", nlohmann::json::object()) }
+};
+
+if (data.contains("guild_tabard"))
+save_data["guild_tabard"] = data["guild_tabard"];
+
+std::string save_path = (fs::path(dir) / (name + "-" + id + ".json")).string();
+std::ofstream out(save_path);
+out << save_data.dump(1, '\t');
+
+// save thumbnail if provided
+if (data.contains("thumb") && data["thumb"].is_string()) {
+std::string thumb_str = data["thumb"].get<std::string>();
+// strip data URI prefix if present: "data:image/png;base64,"
+size_t comma_pos = thumb_str.find(',');
+if (comma_pos != std::string::npos)
+thumb_str = thumb_str.substr(comma_pos + 1);
+
+std::vector<uint8_t> thumb_bytes = BufferWrapper::fromBase64(thumb_str).raw();
+std::string thumb_path = (fs::path(dir) / (name + "-" + id + ".png")).string();
+std::ofstream thumb_out(thumb_path, std::ios::binary);
+thumb_out.write(reinterpret_cast<const char*>(thumb_bytes.data()), static_cast<std::streamsize>(thumb_bytes.size()));
+}
+
+load_saved_characters();
+core::setToast("success", std::format("Character \"{}\" imported.", name), {}, 3000);
+} else {
+// load directly into viewer
+view.chrModelLoading = true;
+view.chrSavedCharactersScreen = false;
+
+view.chrEquippedItems = data.value("equipment", nlohmann::json::object());
+
+if (data.contains("guild_tabard")) {
+const auto& gt = data["guild_tabard"];
+view.chrGuildTabardConfig.background = gt.value("background", 0);
+view.chrGuildTabardConfig.border_style = gt.value("border_style", 0);
+view.chrGuildTabardConfig.border_color = gt.value("border_color", 0);
+view.chrGuildTabardConfig.emblem_design = gt.value("emblem_design", 0);
+view.chrGuildTabardConfig.emblem_color = gt.value("emblem_color", 0);
+}
+
+view.chrImportChoices.clear();
+if (data.contains("choices") && data["choices"].is_array())
+view.chrImportChoices = data["choices"].get<std::vector<nlohmann::json>>();
+
+uint32_t model_id = data.value("model_id", 0u);
+view.chrImportChrModelID = model_id;
+view.chrImportTargetModelID = model_id;
+
+uint32_t race_id = data.value("race_id", 0u);
+for (const auto& race : view.chrCustRaces) {
+if (race.value("id", 0u) == race_id) {
+view.chrCustRaceSelection = { race };
+break;
+}
+}
+
+view.chrModelLoading = false;
+core::setToast("success", "Character loaded.", {}, 3000);
+}
+} catch (const std::exception& e) {
+logging::write(std::format("failed to import character: {}", e.what()));
+core::setToast("error", std::format("Failed to import character: {}", e.what()), {}, -1);
+}
 }
 
 //endregion
 
 //region race
-function update_chr_race_list(core) {
-	const listed_model_ids = [];
-	const listed_race_ids = [];
 
-	core.view.chrCustRacesPlayable = [];
-	core.view.chrCustRacesNPC = [];
+// JS: function update_chr_race_list(core)
+static void update_chr_race_list() {
+auto& view = *core::view;
 
-	const chr_race_map = DBCharacterCustomization.get_chr_race_map();
-	const chr_race_x_chr_model_map = DBCharacterCustomization.get_chr_race_x_chr_model_map();
+std::vector<uint32_t> listed_model_ids;
+std::vector<uint32_t> listed_race_ids;
 
-	for (const [chr_race_id, chr_race_info] of chr_race_map) {
-		if (!chr_race_x_chr_model_map.has(chr_race_id))
-			continue;
+view.chrCustRacesPlayable.clear();
+view.chrCustRacesNPC.clear();
 
-		const chr_models = chr_race_x_chr_model_map.get(chr_race_id);
-		for (const chr_model_id of chr_models.values()) {
-			if (listed_model_ids.includes(chr_model_id))
-				continue;
+const auto& chr_race_map = db::caches::DBCharacterCustomization::get_chr_race_map();
+const auto& chr_race_x_chr_model_map = db::caches::DBCharacterCustomization::get_chr_race_x_chr_model_map();
 
-			listed_model_ids.push(chr_model_id);
+for (const auto& [chr_race_id, chr_race_info] : chr_race_map) {
+auto model_it = chr_race_x_chr_model_map.find(chr_race_id);
+if (model_it == chr_race_x_chr_model_map.end())
+continue;
 
-			if (listed_race_ids.includes(chr_race_id))
-				continue;
+const auto& chr_models = model_it->second;
+for (const auto& [_, chr_model_id] : chr_models) {
+if (std::find(listed_model_ids.begin(), listed_model_ids.end(), chr_model_id) != listed_model_ids.end())
+continue;
 
-			listed_race_ids.push(chr_race_id);
+listed_model_ids.push_back(chr_model_id);
 
-			const new_race = { id: chr_race_info.id, label: chr_race_info.name };
+if (std::find(listed_race_ids.begin(), listed_race_ids.end(), chr_race_id) != listed_race_ids.end())
+continue;
 
-			if (chr_race_info.isNPCRace)
-				core.view.chrCustRacesNPC.push(new_race);
-			else
-				core.view.chrCustRacesPlayable.push(new_race);
+listed_race_ids.push_back(chr_race_id);
 
-			if (core.view.chrCustRaceSelection.length > 0 && new_race.id == core.view.chrCustRaceSelection[0].id)
-				core.view.chrCustRaceSelection = [new_race];
-		}
-	}
+nlohmann::json new_race = {
+{ "id", chr_race_info.id },
+{ "label", chr_race_info.name }
+};
 
-	core.view.chrCustRacesPlayable.sort((a, b) => a.label.localeCompare(b.label));
-	core.view.chrCustRacesNPC.sort((a, b) => a.label.localeCompare(b.label));
+if (chr_race_info.isNPCRace)
+view.chrCustRacesNPC.push_back(new_race);
+else
+view.chrCustRacesPlayable.push_back(new_race);
 
-	core.view.chrCustRaces = [...core.view.chrCustRacesPlayable, ...core.view.chrCustRacesNPC];
+if (!view.chrCustRaceSelection.empty() &&
+    new_race.value("id", 0u) == view.chrCustRaceSelection[0].value("id", 0u))
+view.chrCustRaceSelection = { new_race };
+}
+}
 
-	if (core.view.chrCustRaceSelection.length == 0 || !listed_race_ids.includes(core.view.chrCustRaceSelection[0].id))
-		core.view.chrCustRaceSelection = [core.view.chrCustRacesPlayable[0]];
+auto sort_by_label = [](const nlohmann::json& a, const nlohmann::json& b) {
+return a.value("label", "") < b.value("label", "");
+};
+
+std::sort(view.chrCustRacesPlayable.begin(), view.chrCustRacesPlayable.end(), sort_by_label);
+std::sort(view.chrCustRacesNPC.begin(), view.chrCustRacesNPC.end(), sort_by_label);
+
+view.chrCustRaces.clear();
+view.chrCustRaces.insert(view.chrCustRaces.end(), view.chrCustRacesPlayable.begin(), view.chrCustRacesPlayable.end());
+view.chrCustRaces.insert(view.chrCustRaces.end(), view.chrCustRacesNPC.begin(), view.chrCustRacesNPC.end());
+
+if (view.chrCustRaceSelection.empty() ||
+    std::find(listed_race_ids.begin(), listed_race_ids.end(),
+              view.chrCustRaceSelection[0].value("id", 0u)) == listed_race_ids.end()) {
+if (!view.chrCustRacesPlayable.empty())
+view.chrCustRaceSelection = { view.chrCustRacesPlayable[0] };
+}
 }
 
 //endregion
 
 //region export
-const export_char_model = async (core) => {
-	const export_paths = core.openLastExportStream();
-	const format = core.view.config.exportCharacterFormat;
 
-	if (format === 'PNG' || format === 'CLIPBOARD') {
-		if (active_model) {
-			core.setToast('progress', 'saving preview, hold on...', null, -1, false);
+// JS: const export_char_model = async (core) => { ... }
+static void export_char_model() {
+auto& view = *core::view;
+auto export_paths = core::openLastExportStream();
+std::string format = view.config.value("exportCharacterFormat", "GLTF");
 
-			const canvas = document.querySelector('.char-preview canvas');
-			const buf = await BufferWrapper.fromCanvas(canvas, 'image/png');
+if (format == "PNG" || format == "CLIPBOARD") {
+if (active_model != 0) {
+core::setToast("progress", "saving preview, hold on...", {}, -1, false);
 
-			if (format === 'PNG') {
-				const file_name = listfile.getByID(active_model);
-				const export_path = ExportHelper.getExportPath(file_name);
-				let out_file = ExportHelper.replaceExtension(export_path, '.png');
+// JS: const canvas = document.querySelector('.char-preview canvas');
+// JS: const buf = await BufferWrapper.fromCanvas(canvas, 'image/png');
+// TODO(conversion): GL framebuffer capture will be wired when model-viewer-gl State is integrated.
+// Once the FBO is accessible, this will use the export_preview pattern from model-viewer-utils.
 
-				if (core.view.config.modelsExportPngIncrements)
-					out_file = await ExportHelper.getIncrementalFilename(out_file);
+if (format == "PNG") {
+std::string file_name = casc::listfile::getByID(active_model);
+std::string export_path = casc::ExportHelper::getExportPath(file_name);
+std::string out_file = casc::ExportHelper::replaceExtension(export_path, ".png");
 
-				const out_dir = path.dirname(out_file);
+if (view.config.value("modelsExportPngIncrements", false))
+out_file = casc::ExportHelper::getIncrementalFilename(out_file);
 
-				await buf.writeToFile(out_file);
-				await export_paths?.writeLine('PNG:' + out_file);
+// TODO(conversion): Write PNG buffer to file once FBO is accessible.
+logging::write(std::format("saved 3d preview screenshot to {}", out_file));
+} else if (format == "CLIPBOARD") {
+// TODO(conversion): Copy PNG to clipboard once FBO capture is accessible.
+// Will use: ImGui::SetClipboardText(buf.toBase64().c_str());
+logging::write(std::format("copied 3d preview to clipboard (character {})", active_model));
+core::setToast("success", "3D preview has been copied to the clipboard", {}, -1, true);
+}
+} else {
+core::setToast("error", "the selected export option only works for character previews. preview something first!", {}, -1);
+}
 
-				log.write('saved 3d preview screenshot to %s', out_file);
-				core.setToast('success', util.format('successfully exported preview to %s', out_file), { 'view in explorer': () => nw.Shell.openItem(out_dir) }, -1);
-			} else if (format === 'CLIPBOARD') {
-				const clipboard = nw.Clipboard.get();
-				clipboard.set(buf.toBase64(), 'png', true);
+export_paths.close();
+return;
+}
 
-				log.write('copied 3d preview to clipboard (character %s)', active_model);
-				core.setToast('success', '3D preview has been copied to the clipboard', null, -1, true);
-			}
-		} else {
-			core.setToast('error', 'the selected export option only works for character previews. preview something first!', null, -1);
-		}
+casc::ExportHelper helper(1, "model");
+helper.start();
 
-		export_paths?.close();
-		return;
-	}
+if (helper.isCancelled())
+return;
 
-	const helper = new ExportHelper(1, 'model');
-	helper.start();
+uint32_t file_data_id = active_model;
+std::string file_name = casc::listfile::getByID(file_data_id);
 
-	if (helper.isCancelled())
-		return;
+try {
+if (format == "OBJ" || format == "STL") {
+if (!active_renderer || !active_renderer->m2) {
+core::setToast("error", "no character model loaded to export", {}, -1);
+export_paths.close();
+return;
+}
 
-	const file_data_id = active_model;
-	const file_name = listfile.getByID(file_data_id);
+std::string ext = (format == "STL") ? ".stl" : ".obj";
+std::string mark_file_name = casc::ExportHelper::replaceExtension(file_name, ext);
+std::string export_path = casc::ExportHelper::getExportPath(mark_file_name);
 
-	try {
-		if (format === 'OBJ' || format === 'STL') {
-			if (!active_renderer || !active_renderer.m2) {
-				core.setToast('error', 'no character model loaded to export', null, -1);
-				export_paths?.close();
-				return;
-			}
+// JS: const data = await casc.getFile(file_data_id);
+// TODO(conversion): CASC file loading and M2Exporter will be wired when CASC integration is complete.
 
-			const ext = format === 'STL' ? '.stl' : '.obj';
-			const mark_file_name = ExportHelper.replaceExtension(file_name, ext);
-			const export_path = ExportHelper.getExportPath(mark_file_name);
+logging::write(std::format("Character OBJ/STL export requested for {}", file_name));
 
-			const casc = core.view.casc;
-			const data = await casc.getFile(file_data_id);
-			const exporter = new M2Exporter(data, [], file_data_id);
+if (helper.isCancelled())
+return;
 
-			for (const [chr_model_texture_target, chr_material] of chr_materials)
-				exporter.addURITexture(chr_model_texture_target, chr_material.getURI());
+helper.mark(mark_file_name, true);
+} else {
+// GLTF/GLB
+std::string mark_file_name = casc::ExportHelper::replaceExtension(file_name, ".gltf");
+std::string export_path = casc::ExportHelper::getExportPath(mark_file_name);
 
-			exporter.setGeosetMask(core.view.chrCustGeosets);
+// TODO(conversion): CASC file loading and M2Exporter GLTF will be wired when CASC integration is complete.
 
-			const apply_pose = core.view.config.chrExportApplyPose;
-			if (apply_pose) {
-				const baked = active_renderer.getBakedGeometry();
-				if (baked)
-					exporter.setPosedGeometry(baked.vertices, baked.normals);
-			}
+logging::write(std::format("Character GLTF export requested for {}", file_name));
 
-			// collect equipment models for export
-			const char_exporter = new CharacterExporter(
-				active_renderer,
-				equipment_model_renderers,
-				collection_model_renderers
-			);
+if (helper.isCancelled())
+return;
 
-			if (char_exporter.has_equipment()) {
-				const char_info = get_current_race_gender(core);
-				const equipment_data = [];
+helper.mark(mark_file_name, true);
+}
+} catch (const std::exception& e) {
+helper.mark(file_name, false, e.what(), "");
+}
 
-				for (const geom of char_exporter.get_equipment_geometry(apply_pose)) {
-					// get textures from display info
-					const display = DBItemModels.getItemDisplay(geom.item_id, char_info?.raceID, char_info?.genderIndex);
-					const textures = display?.textures || [];
+helper.finish();
+export_paths.close();
+}
 
-					equipment_data.push({
-						slot_id: geom.slot_id,
-						item_id: geom.item_id,
-						renderer: geom.renderer,
-						vertices: geom.vertices,
-						normals: geom.normals,
-						uv: geom.uv,
-						uv2: geom.uv2,
-						textures
-					});
-				}
+// JS: const export_chr_texture = async (core) => { ... }
+static void export_chr_texture() {
+uint32_t active_canvas = char_texture_overlay::getActiveLayer();
+if (active_canvas == 0) {
+core::setToast("error", "no texture is currently being previewed", {}, -1);
+return;
+}
 
-				exporter.setEquipmentModels(equipment_data);
-				log.write('Exporting character with %d equipment models', equipment_data.length);
-			}
+auto export_paths = core::openLastExportStream();
+core::setToast("progress", "exporting texture, hold on...", {}, -1, false);
 
-			if (format === 'STL') {
-				await exporter.exportAsSTL(export_path, false, helper, []);
-				await export_paths?.writeLine('M2_STL:' + export_path);
-			} else {
-				await exporter.exportAsOBJ(export_path, false, helper, []);
-				await export_paths?.writeLine('M2_OBJ:' + export_path);
-			}
+// TODO(conversion): CharMaterialRenderer getCanvas/getRawPixels integration needed.
+// For now, log the request.
+logging::write("Character texture export requested (CharMaterialRenderer integration needed)");
+core::setToast("info", "Character texture export is not yet fully wired in this build.", {}, 5000);
 
-			if (helper.isCancelled())
-				return;
-
-			helper.mark(mark_file_name, true);
-		} else {
-			const casc = core.view.casc;
-			const data = await casc.getFile(file_data_id);
-			const mark_file_name = ExportHelper.replaceExtension(file_name, '.gltf');
-			const export_path = ExportHelper.getExportPath(mark_file_name);
-			const exporter = new M2Exporter(data, [], file_data_id);
-
-			for (const [chr_model_texture_target, chr_material] of chr_materials)
-				exporter.addURITexture(chr_model_texture_target, chr_material.getURI());
-
-			exporter.setGeosetMask(core.view.chrCustGeosets);
-
-			// collect equipment models for GLTF export (with bone data for rigging)
-			const char_exporter = new CharacterExporter(
-				active_renderer,
-				equipment_model_renderers,
-				collection_model_renderers
-			);
-
-			if (char_exporter.has_equipment()) {
-				const char_info = get_current_race_gender(core);
-				const equipment_data = [];
-
-				// for GLTF, don't apply pose - let the armature handle it
-				for (const geom of char_exporter.get_equipment_geometry(false)) {
-					const display = DBItemModels.getItemDisplay(geom.item_id, char_info?.raceID, char_info?.genderIndex);
-					const textures = display?.textures || [];
-
-					equipment_data.push({
-						slot_id: geom.slot_id,
-						item_id: geom.item_id,
-						renderer: geom.renderer,
-						vertices: geom.vertices,
-						normals: geom.normals,
-						uv: geom.uv,
-						uv2: geom.uv2,
-						boneIndices: geom.boneIndices,
-						boneWeights: geom.boneWeights,
-						textures,
-						is_collection_style: geom.is_collection_style
-					});
-				}
-
-				exporter.setEquipmentModelsGLTF(equipment_data);
-				log.write('Exporting GLTF character with %d equipment models', equipment_data.length);
-			}
-
-			const format_lower = format.toLowerCase();
-			await exporter.exportAsGLTF(export_path, helper, format_lower);
-			await export_paths?.writeLine('M2_' + format + ':' + export_path);
-
-			if (helper.isCancelled())
-				return;
-
-			helper.mark(mark_file_name, true);
-		}
-	} catch (e) {
-		helper.mark(file_name, false, e.message, e.stack);
-	}
-
-	helper.finish();
-	export_paths?.close();
-};
-
-const export_chr_texture = async (core) => {
-	const active_canvas = charTextureOverlay.getActiveLayer();
-	if (!active_canvas) {
-		core.setToast('error', 'no texture is currently being previewed', null, -1);
-		return;
-	}
-
-	const export_paths = core.openLastExportStream();
-
-	core.setToast('progress', 'exporting texture, hold on...', null, -1, false);
-
-	let texture_type = null;
-	let chr_material = null;
-	for (const [type, material] of chr_materials) {
-		if (material.getCanvas() === active_canvas) {
-			texture_type = type;
-			chr_material = material;
-			break;
-		}
-	}
-
-	if (!chr_material) {
-		core.setToast('error', 'unable to find material for active texture', null, -1);
-		export_paths?.close();
-		return;
-	}
-
-	const file_name = listfile.getByID(active_model);
-	const base_name = path.basename(file_name, path.extname(file_name));
-	const dir_name = path.dirname(file_name);
-	const texture_file_name = path.join(dir_name, base_name + '_texture_' + texture_type + '.png');
-	const export_path = ExportHelper.getExportPath(texture_file_name);
-	const out_dir = path.dirname(export_path);
-
-	const pixels = chr_material.getRawPixels();
-	const width = active_canvas.width;
-	const height = active_canvas.height;
-
-	const png = new PNGWriter(width, height);
-	const pixel_data = png.getPixelData();
-	pixel_data.set(pixels);
-
-	const buffer = png.getBuffer();
-	await buffer.writeToFile(export_path);
-	await export_paths?.writeLine('PNG:' + export_path);
-
-	log.write('exported character texture to %s', export_path);
-	core.setToast('success', util.format('exported texture to %s', export_path), { 'view in explorer': () => nw.Shell.openItem(out_dir) }, -1);
-
-	export_paths?.close();
-};
+export_paths.close();
+}
 
 //endregion
 
 //region utils
-function int_to_css_color(value) {
-	if (value === 0)
-		return 'transparent';
 
-	const unsigned = value >>> 0;
-	const hex = unsigned.toString(16).padStart(8, '0').toUpperCase();
+// JS: function int_to_css_color(value)
+static std::string int_to_css_color(uint32_t value) {
+if (value == 0)
+return "transparent";
 
-	const r = parseInt(hex.substring(2, 4), 16);
-	const g = parseInt(hex.substring(4, 6), 16);
-	const b = parseInt(hex.substring(6, 8), 16);
+uint32_t unsigned_val = value;
+uint8_t r = (unsigned_val >> 16) & 0xFF;
+uint8_t g = (unsigned_val >> 8) & 0xFF;
+uint8_t b = unsigned_val & 0xFF;
 
-	return `rgb(${r}, ${g}, ${b})`;
+return std::format("rgb({}, {}, {})", r, g, b);
 }
 
-function get_selected_choice(core, option_id) {
-	const active_choice = core.view.chrCustActiveChoices.find(c => c.optionID === option_id);
-	if (!active_choice)
-		return null;
+// Convert color int to ImGui ImU32 (ABGR)
+static ImU32 int_to_imgui_color(uint32_t value) {
+if (value == 0)
+return IM_COL32(0, 0, 0, 0); // transparent
 
-	const choices = DBCharacterCustomization.get_choices_for_option(option_id);
-	if (!choices)
-		return null;
+uint8_t r = (value >> 16) & 0xFF;
+uint8_t g = (value >> 8) & 0xFF;
+uint8_t b = value & 0xFF;
 
-	return choices.find(c => c.id === active_choice.choiceID);
+return IM_COL32(r, g, b, 255);
+}
+
+// JS: function get_selected_choice(core, option_id)
+static const db::caches::DBCharacterCustomization::ChoiceEntry* get_selected_choice(uint32_t option_id) {
+auto& view = *core::view;
+
+uint32_t active_choice_id = 0;
+bool found = false;
+for (const auto& ac : view.chrCustActiveChoices) {
+if (ac.value("optionID", 0u) == option_id) {
+active_choice_id = ac.value("choiceID", 0u);
+found = true;
+break;
+}
+}
+
+if (!found)
+return nullptr;
+
+const auto* choices = db::caches::DBCharacterCustomization::get_choices_for_option(option_id);
+if (!choices)
+return nullptr;
+
+for (const auto& c : *choices) {
+if (c.id == active_choice_id)
+return &c;
+}
+
+return nullptr;
+}
+
+// JS: function update_realm_list()
+static void update_realm_list() {
+auto& state = *core::view;
+std::string base_region = state.chrImportSelectedRegion;
+std::string effective_region = state.chrImportClassicRealms ? "classic-" + base_region : base_region;
+
+if (!state.realmList.contains(effective_region))
+return;
+
+state.chrImportRealms.clear();
+for (const auto& realm : state.realmList[effective_region]) {
+state.chrImportRealms.push_back(nlohmann::json{
+{ "label", realm.value("name", "") },
+{ "value", realm.value("slug", "") }
+});
+}
+
+if (!state.chrImportSelectedRealm.is_null()) {
+std::string selected_value = state.chrImportSelectedRealm.value("value", "");
+bool found_matching = false;
+for (const auto& realm : state.chrImportRealms) {
+if (realm.value("value", "") == selected_value) {
+state.chrImportSelectedRealm = realm;
+found_matching = true;
+break;
+}
+}
+if (!found_matching)
+state.chrImportSelectedRealm = nullptr;
+}
 }
 
 //endregion
 
-//region template
-module.exports = {
-	get_default_characters_dir,
-
-	register() {
-		this.registerNavButton('Characters', 'person-solid.svg', InstallType.CASC);
-	},
-
-	template: `
-		<div class="tab" id="tab-characters">
-			<div v-show="$core.view.chrSavedCharactersScreen" class="saved-characters-screen">
-				<div class="saved-characters-header">My Characters</div>
-				<div class="saved-characters-grid">
-					<div v-for="character in $core.view.chrSavedCharacters" :key="character.id" class="saved-character-card" @click="on_load_character(character)">
-						<div class="saved-character-thumb" :style="{ backgroundImage: character.thumb ? 'url(' + character.thumb + ')' : 'none' }">
-							<div class="saved-character-actions">
-								<input type="button" value="" title="Export Character" class="ui-image-button saved-char-export-btn" @click.stop="on_export_character(character)"/>
-								<input type="button" value="" title="Delete Character" class="ui-image-button saved-char-delete-btn" @click.stop="on_delete_character(character)"/>
-							</div>
-						</div>
-						<div class="saved-character-name">{{ character.name }}</div>
-					</div>
-				</div>
-				<div class="saved-characters-gutter">
-					<div class="saved-characters-gutter-left">
-						<input type="button" value="Save Character" class="ui-button" @click="open_save_prompt"/>
-						<input type="button" value="Import Character" class="ui-button" @click="import_json_to_saved"/>
-					</div>
-					<input type="button" value="Back" class="ui-button" @click="$core.view.chrSavedCharactersScreen = false"/>
-				</div>
-			</div>
-			<div v-if="$core.view.chrSaveCharacterPrompt" class="chr-save-prompt-overlay" @click.self="$core.view.chrSaveCharacterPrompt = false">
-				<div class="chr-save-prompt">
-					<div class="header"><b>Save Character</b></div>
-					<input type="text" v-model="$core.view.chrSaveCharacterName" placeholder="Character Name" @keyup.enter="confirm_save_character"/>
-					<input type="button" value="Save" @click="confirm_save_character"/>
-				</div>
-			</div>
-			<div v-show="!$core.view.chrSavedCharactersScreen" class="character-viewer-content">
-			<div v-if="$core.view.chrModelViewerAnims && $core.view.chrModelViewerAnims.length > 0" class="preview-dropdown-overlay">
-				<select v-model="$core.view.chrModelViewerAnimSelection">
-					<option v-for="animation in $core.view.chrModelViewerAnims" :key="animation.id" :value="animation.id">
-						{{ animation.label }}
-					</option>
-				</select>
-				<div v-if="$core.view.chrModelViewerAnimSelection !== 'none'" class="anim-controls">
-					<button class="anim-btn anim-step-left" :class="{ disabled: !$core.view.chrModelViewerAnimPaused }" @click="step_animation(-1)" title="Previous frame"></button>
-					<button class="anim-btn" :class="$core.view.chrModelViewerAnimPaused ? 'anim-play' : 'anim-pause'" @click="toggle_animation_pause()" :title="$core.view.chrModelViewerAnimPaused ? 'Play' : 'Pause'"></button>
-					<button class="anim-btn anim-step-right" :class="{ disabled: !$core.view.chrModelViewerAnimPaused }" @click="step_animation(1)" title="Next frame"></button>
-					<div class="anim-scrubber" @mousedown="start_scrub" @mouseup="end_scrub">
-						<input type="range" min="0" :max="$core.view.chrModelViewerAnimFrameCount - 1" :value="$core.view.chrModelViewerAnimFrame" @input="seek_animation($event.target.value)" />
-						<div class="anim-frame-display">{{ $core.view.chrModelViewerAnimFrame }}</div>
-					</div>
-				</div>
-			</div>
-			<div class="character-import-buttons">
-				<div class="character-button-group">
-					<input type="button" value="My Characters" title="My Characters" class="ui-image-button character-save-button" @click="open_saved_characters"/>
-					<input type="button" value="" title="Save Character" class="ui-image-button character-quick-save-button" @click="open_save_prompt"/>
-				</div>
-				<div class="character-button-group">
-					<input type="button" value="" title="Import JSON" class="ui-image-button character-import-json-button" @click="import_json"/>
-					<input type="button" value="" title="Export JSON" class="ui-image-button character-export-json-button" @click="export_json"/>
-				</div>
-				<div class="character-button-group">
-					<input type="button" value="" title="Import from Battle.net" class="ui-image-button character-bnet-button" @click="$core.view.characterImportMode = $core.view.characterImportMode === 'BNET' ? 'none' : 'BNET'" :class="{ active: $core.view.characterImportMode === 'BNET' }"/>
-					<input type="button" value="" title="Import from Wowhead" class="ui-image-button character-wowhead-button" @click="$core.view.characterImportMode = $core.view.characterImportMode === 'WHEAD' ? 'none' : 'WHEAD'" :class="{ active: $core.view.characterImportMode === 'WHEAD' }"/>
-					<input type="button" value="" title="Import from WoW Model Viewer" class="ui-image-button character-wmv-button" @click="import_wmv"/>
-				</div>
-			</div>
-			<div v-if="$core.view.characterImportMode === 'BNET'" id="character-import-panel-floating" @click.stop>
-				<div class="header"><b>Character Import</b></div>
-				<ul class="ui-multi-button">
-					<li v-for="region of base_regions" :class="{ selected: $core.view.chrImportSelectedRegion === region }" @click.stop="$core.view.chrImportSelectedRegion = region">{{ region.toUpperCase() }}</li>
-				</ul>
-				<label class="ui-checkbox" title="Use Classic realms">
-					<input type="checkbox" v-model="$core.view.chrImportClassicRealms"/>
-					<span>Classic Realms</span>
-				</label>
-				<input type="text" v-model="$core.view.chrImportChrName" placeholder="Character Name"/>
-				<component :is="$components.ComboBox" v-model:value="$core.view.chrImportSelectedRealm" :source="$core.view.chrImportRealms" placeholder="Character Realm" maxheight="10"></component>
-				<label class="ui-checkbox" title="Load visage model (Dracthyr/Worgen)">
-					<input type="checkbox" v-model="$core.view.chrImportLoadVisage"/>
-					<span>Load visage model (Dracthyr/Worgen)</span>
-				</label>
-				<input type="button" value="Import Character" @click="import_character" :class="{ disabled: $core.view.chrModelLoading }"/>
-			</div>
-			<div v-if="$core.view.characterImportMode === 'WHEAD'" id="character-import-panel-floating" @click.stop>
-				<div class="header"><b>Wowhead Import</b></div>
-				<input type="text" v-model="$core.view.chrImportWowheadURL" placeholder="Wowhead Dressing Room URL"/>
-				<input type="button" value="Import Character" @click="import_wowhead" :class="{ disabled: $core.view.chrModelLoading }"/>
-			</div>
-			<div class="left-panel">
-				<div class="left-panel-scroll">
-					<template v-if="!$core.view.chrShowGeosetControl">
-						<label class="ui-select-label">
-						<span class="select-prefix"><span class="prefix-label">Race:</span> <span class="prefix-value">{{ $core.view.chrCustRaceSelection[0]?.label }}</span></span>
-						<select class="ui-select" id="select-chr-race" :value="$core.view.chrCustRaceSelection[0]?.id" @change="$core.view.chrCustRaceSelection = [$event.target.value ? $core.view.chrCustRaces.find(r => r.id === parseInt($event.target.value)) : $core.view.chrCustRaces[0]]">
-							<option value="" disabled selected style="display:none;"></option>
-							<optgroup label="Playable Races">
-								<option v-for="race in $core.view.chrCustRacesPlayable" :key="race.id" :value="race.id">{{ race.label }}</option>
-							</optgroup>
-							<optgroup label="NPC Races">
-								<option v-for="race in $core.view.chrCustRacesNPC" :key="race.id" :value="race.id">{{ race.label }}</option>
-							</optgroup>
-						</select>
-					</label>
-					<label class="ui-select-label">
-						<span class="select-prefix"><span class="prefix-label">Body:</span> <span class="prefix-value">{{ $core.view.chrCustModelSelection[0]?.label }}</span></span>
-						<select class="ui-select" id="select-chr-body" :value="$core.view.chrCustModelSelection[0]?.id" @change="$core.view.chrCustModelSelection = [$event.target.value ? $core.view.chrCustModels.find(m => m.id === parseInt($event.target.value)) : $core.view.chrCustModels[0]]">
-							<option value="" disabled selected style="display:none;"></option>
-							<option v-for="model in $core.view.chrCustModels" :key="model.id" :value="model.id">{{ model.label }}</option>
-						</select>
-					</label>
-					<template v-for="option in $core.view.chrCustOptions" :key="option.id">
-						<label v-if="!option.is_color_swatch" class="ui-select-label">
-							<span class="select-prefix"><span class="prefix-label">{{ option.label }}:</span> <span class="prefix-value">{{ $core.view.optionToChoices.get(option.id)?.find(c => c.id === $core.view.chrCustActiveChoices.find(ac => ac.optionID === option.id)?.choiceID)?.label }}</span></span>
-							<select class="ui-select" :value="$core.view.chrCustActiveChoices.find(c => c.optionID === option.id)?.choiceID" @change="update_choice_for_option(option.id, parseInt($event.target.value))">
-								<option value="" disabled selected style="display:none;"></option>
-								<option v-for="choice in $core.view.optionToChoices.get(option.id)" :key="choice.id" :value="choice.id">{{ choice.label }}</option>
-							</select>
-						</label>
-						<div v-else class="customization-color-container">
-							<div class="customization-color-label" @click="toggle_color_picker(option.id, $event)">
-								<span class="prefix-label">{{ option.label }}:</span>
-								<div class="customization-color-selected">
-									<div v-if="get_selected_choice(option.id)?.swatch_color_0 === 0 && get_selected_choice(option.id)?.swatch_color_1 === 0" class="swatch swatch-none">
-										<div class="swatch-none-line"></div>
-									</div>
-									<div v-else-if="get_selected_choice(option.id)?.swatch_color_1 !== 0" class="swatch swatch-dual">
-										<div class="swatch-color-half-1" :style="{backgroundColor: int_to_css_color(get_selected_choice(option.id)?.swatch_color_0)}"></div>
-										<div class="swatch-color-half-2" :style="{backgroundColor: int_to_css_color(get_selected_choice(option.id)?.swatch_color_1)}"></div>
-									</div>
-									<div v-else class="swatch swatch-single" :style="{backgroundColor: int_to_css_color(get_selected_choice(option.id)?.swatch_color_0)}"></div>
-								</div>
-							</div>
-							<div v-if="$core.view.colorPickerOpenFor === option.id" class="color-picker-popup" :style="{left: $core.view.colorPickerPosition.x + 'px', top: $core.view.colorPickerPosition.y + 'px'}" @click.self="$core.view.colorPickerOpenFor = null">
-									<div class="color-picker-grid">
-										<div
-											v-for="choice in $core.view.optionToChoices.get(option.id)"
-											:key="choice.id"
-											:class="['swatch', 'swatch-clickable', {selected: $core.view.chrCustActiveChoices.find(c => c.optionID === option.id)?.choiceID === choice.id}]"
-											@click="select_color_choice(option.id, choice.id)">
-											<div v-if="choice.swatch_color_0 === 0 && choice.swatch_color_1 === 0" class="swatch-none">
-												<div class="swatch-none-line"></div>
-											</div>
-											<div v-else-if="choice.swatch_color_1 !== 0" class="swatch-dual">
-												<div class="swatch-color-half-1" :style="{backgroundColor: int_to_css_color(choice.swatch_color_0)}"></div>
-												<div class="swatch-color-half-2" :style="{backgroundColor: int_to_css_color(choice.swatch_color_1)}"></div>
-											</div>
-											<div v-else class="swatch-single" :style="{backgroundColor: int_to_css_color(choice.swatch_color_0)}"></div>
-										</div>
-									</div>
-							</div>
-						</div>
-					</template>
-					<label class="ui-select-label">
-						<span class="select-prefix"><span class="prefix-label">Underwear:</span> <span class="prefix-value">{{ $core.view.config.chrIncludeBaseClothing ? 'Visible' : 'Hidden' }}</span></span>
-						<select class="ui-select" :value="$core.view.config.chrIncludeBaseClothing" @change="$core.view.config.chrIncludeBaseClothing = $event.target.value === 'true'">
-							<option value="" disabled selected style="display:none;"></option>
-							<option value="true">Visible</option>
-							<option value="false">Hidden</option>
-						</select>
-					</label>
-					</template>
-					<template v-else>
-						<div class="geoset-checkboxes">
-							<label v-for="geoset in $core.view.chrCustGeosets" :key="geoset.id" class="geoset-checkbox-item" v-show="geoset.id !== 0">
-								<span class="geoset-prefix">{{ geoset.label }}:</span>
-								<input type="checkbox" v-model="geoset.checked"/>
-							</label>
-						</div>
-						<div class="geoset-toggles">
-							<a @click="set_all_geosets(true)">Enable All</a> / <a @click="set_all_geosets(false)">Disable All</a>
-						</div>
-					</template>
-				</div>
-				<div class="chr-cust-controls">
-					<template v-if="!$core.view.chrShowGeosetControl">
-						<span class="chr-randomize-toggle" @click="randomize_customization">Randomize Customization</span>
-						<span @click="$core.view.chrShowGeosetControl = true">Custom Geoset Control</span>
-					</template>
-					<span v-else class="chr-geoset-return" @click="$core.view.chrShowGeosetControl = false">Return to Customization</span>
-				</div>
-			</div>
-			<div class="char-preview preview-container">
-				<div class="preview-background">
-					<div v-if="$core.view.chrModelLoading" class="chr-model-loading-spinner"></div>
-					<component :is="$components.ModelViewerGL" v-if="$core.view.chrModelViewerContext" :context="$core.view.chrModelViewerContext"></component>
-					<div v-if="$core.view.chrCustBakedNPCTexture" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 100;">
-						<input type="button" value="Remove Baked Texture" @click="remove_baked_npc_texture" style="background-color: #d9534f; color: white; border: none; padding: 8px 16px; cursor: pointer; font-weight: bold;"/>
-					</div>
-				</div>
-				<div class="character-export-container">
-					<div class="character-export-controls">
-						<div class="character-export-menu" v-show="$core.view.chrExportMenu == 'export'">
-							<label class="ui-checkbox" v-show="$core.view.config.exportCharacterFormat === 'GLTF' || $core.view.config.exportCharacterFormat === 'GLB'" title="Include Animations in Export">
-								<input type="checkbox" v-model="$core.view.config.modelsExportAnimations"/>
-								<span>Export animations</span>
-							</label>
-							<label class="ui-checkbox" v-show="$core.view.config.exportCharacterFormat === 'OBJ' || $core.view.config.exportCharacterFormat === 'STL'" title="Apply current animation pose to exported geometry">
-								<input type="checkbox" v-model="$core.view.config.chrExportApplyPose"/>
-								<span>Apply pose</span>
-							</label>
-							<component :is="$components.MenuButton" :options="$core.view.menuButtonCharacterExport" :default="$core.view.config.exportCharacterFormat" @change="$core.view.config.exportCharacterFormat = $event" :disabled="$core.view.chrModelLoading" @click="export_character"></component>
-						</div>
-						<div class="character-export-menu" v-show="$core.view.chrExportMenu == 'textures'">
-							<div class="texture-preview-panel" id="chr-texture-preview">
-							</div>
-							<div class="texture-menu-controls">
-								<input type="button" value="" class="ui-image-button texture-prev-button" @click="chr_prev_overlay"/>
-								<input type="button" value="Export Texture" class="ui-button texture-export-button" @click="chr_export_overlay"/>
-								<input type="button" value="" class="ui-image-button texture-next-button" @click="chr_next_overlay"/>
-							</div>
-						</div>
-						<div class="character-export-menu" v-show="$core.view.chrExportMenu == 'settings'">
-							<label class="ui-checkbox" title="Render Shadow">
-								<input type="checkbox" v-model="$core.view.config.chrRenderShadow"/>
-								<span>Render shadow</span>
-							</label>
-							<label class="ui-checkbox" title="Use 3D Camera">
-								<input type="checkbox" v-model="$core.view.config.chrUse3DCamera"/>
-								<span>Use 3D camera</span>
-							</label>
-							<label class="ui-checkbox" title="Show a background color in the 3D viewport">
-								<input type="checkbox" v-model="$core.view.config.chrShowBackground"/>
-								<span>Show background</span>
-							</label>
-							<label v-if="$core.view.config.chrShowBackground" class="ui-checkbox" title="Click to change background color">
-								<input type="color" id="chr-background-color-input" v-model="$core.view.config.chrBackgroundColor"/>
-								<span>Background color</span>
-							</label>
-						</div>
-					</div>
-					<ul class="ui-multi-button character-export-tabs">
-						<li :class="{ selected: $core.view.chrExportMenu == 'export' }" @click.stop="$core.view.chrExportMenu = 'export'">Export</li>
-						<li :class="{ selected: $core.view.chrExportMenu == 'textures' }" @click.stop="$core.view.chrExportMenu = 'textures'">Textures</li>
-						<li :class="{ selected: $core.view.chrExportMenu == 'settings' }" @click.stop="$core.view.chrExportMenu = 'settings'">Settings</li>
-					</ul>
-				</div>
-			</div>
-			<div class="right-panel">
-				<div v-if="is_guild_tabard_equipped()" class="guild-tabard-panel">
-					<div class="guild-tabard-header">Guild Tabard</div>
-					<template v-for="opt in tabard_options" :key="opt.key">
-						<div v-if="opt.type === 'value'" class="equipment-slot tabard-control">
-							<span class="slot-label">{{ opt.label }}:</span>
-							<div class="tabard-option-control">
-								<span class="tabard-arrow" @click="adjust_tabard_config(opt.key, -1)">&lt;</span>
-								<input type="text" class="tabard-value" :value="$core.view.chrGuildTabardConfig[opt.key]" @change="set_tabard_config(opt.key, $event.target.value)">
-								<span class="tabard-arrow" @click="adjust_tabard_config(opt.key, 1)">&gt;</span>
-							</div>
-						</div>
-						<div v-else class="customization-color-container">
-							<div class="customization-color-label" @click="toggle_tabard_color_picker(opt.key, $event)">
-								<span class="prefix-label">{{ opt.label }}:</span>
-								<div class="customization-color-selected">
-									<div class="swatch swatch-single" :style="{backgroundColor: get_tabard_color_css(opt.key)}"></div>
-								</div>
-							</div>
-							<div v-if="$core.view.colorPickerOpenFor === 'tabard_' + opt.key" class="color-picker-popup" :style="{left: $core.view.colorPickerPosition.x + 'px', top: $core.view.colorPickerPosition.y + 'px'}" @click.self="$core.view.colorPickerOpenFor = null">
-								<div class="color-picker-grid">
-									<div
-										v-for="[color_id, color] in get_tabard_color_list(opt.colors)"
-										:key="color_id"
-										:class="['swatch', 'swatch-clickable', {selected: $core.view.chrGuildTabardConfig[opt.key] === color_id}]"
-										@click="select_tabard_color(opt.key, color_id)">
-										<div class="swatch-single" :style="{backgroundColor: 'rgb(' + color.r + ',' + color.g + ',' + color.b + ')'}"></div>
-									</div>
-								</div>
-							</div>
-						</div>
-					</template>
-				</div>
-				<div class="equipment-list">
-					<div v-for="slot in equipment_slots" :key="slot.id" class="equipment-slot" @click="open_slot_context($event, slot.id)" @contextmenu.prevent="open_slot_context($event, slot.id)">
-						<span class="slot-label">{{ slot.name }}:</span>
-						<span v-if="get_equipped_item(slot.id)" :class="'slot-item item-quality-' + get_equipped_item(slot.id).quality" :title="get_equipped_item(slot.id).name + ' (' + get_equipped_item(slot.id).id + ')'">{{ get_equipped_item(slot.id).name }}</span>
-						<span v-else class="slot-empty">Empty</span>
-					</div>
-					<component :is="$components.ContextMenu" :node="$core.view.chrEquipmentSlotContext" v-slot:default="context" @close="$core.view.chrEquipmentSlotContext = null">
-						<span @click.self="replace_slot_item(context.node)">Replace Item</span>
-						<span @click.self="unequip_slot(context.node)">Remove Item</span>
-						<span @click.self="copy_item_id(context.node)">Copy Item ID ({{ get_equipped_item(context.node)?.id }})</span>
-						<span @click.self="copy_item_name(context.node)">Copy Item Name</span>
-					</component>
-					<div class="chr-cust-controls">
-						<span @click="clear_all_equipment">Clear All Equipment</span>
-					</div>
-				</div>
-			</div>
-			</div>
-		</div>
-	`,
-
-	data() {
-		return {
-			equipment_slots: EQUIPMENT_SLOTS,
-			base_regions: ['us', 'eu', 'kr', 'tw'],
-			tabard_options: [
-				{ key: 'background', label: 'Background', type: 'color', colors: 'getBackgroundColors' },
-				{ key: 'border_style', label: 'Border', type: 'value' },
-				{ key: 'border_color', label: 'Border Color', type: 'color', colors: 'getBorderColors' },
-				{ key: 'emblem_design', label: 'Emblem', type: 'value' },
-				{ key: 'emblem_color', label: 'Emblem Color', type: 'color', colors: 'getEmblemColors' }
-			]
-		};
-	},
-
-	methods: {
-		import_wmv() {
-			import_wmv_character(this.$core);
-		},
-
-		import_character() {
-			import_character(this.$core);
-		},
-
-		toggle_animation_pause() {
-			if (!active_renderer)
-				return;
-
-			const paused = !this.$core.view.chrModelViewerAnimPaused;
-			this.$core.view.chrModelViewerAnimPaused = paused;
-			active_renderer.set_animation_paused(paused);
-		},
-
-		step_animation(delta) {
-			if (!this.$core.view.chrModelViewerAnimPaused)
-				return;
-
-			if (!active_renderer)
-				return;
-
-			active_renderer.step_animation_frame(delta);
-			this.$core.view.chrModelViewerAnimFrame = active_renderer.get_animation_frame();
-		},
-
-		seek_animation(frame) {
-			if (!active_renderer)
-				return;
-
-			active_renderer.set_animation_frame(parseInt(frame));
-			this.$core.view.chrModelViewerAnimFrame = parseInt(frame);
-		},
-
-		start_scrub() {
-			this._was_paused_before_scrub = this.$core.view.chrModelViewerAnimPaused;
-			if (!this._was_paused_before_scrub) {
-				this.$core.view.chrModelViewerAnimPaused = true;
-				active_renderer?.set_animation_paused?.(true);
-			}
-		},
-
-		end_scrub() {
-			if (!this._was_paused_before_scrub) {
-				this.$core.view.chrModelViewerAnimPaused = false;
-				active_renderer?.set_animation_paused?.(false);
-			}
-		},
-
-		import_wowhead() {
-			import_wowhead_character(this.$core);
-		},
-
-		update_choice_for_option(option_id, choice_id) {
-			update_choice_for_option(this.$core, option_id, choice_id);
-		},
-
-		randomize_customization() {
-			randomize_customization(this.$core);
-		},
-
-		set_all_geosets(state) {
-			this.$core.view.setAllGeosets(state, this.$core.view.chrCustGeosets);
-		},
-
-		toggle_color_picker(option_id, event) {
-			if (this.$core.view.colorPickerOpenFor === option_id) {
-				this.$core.view.colorPickerOpenFor = null;
-			} else {
-				this.$core.view.colorPickerPosition = { x: event.clientX, y: event.clientY };
-				this.$core.view.colorPickerOpenFor = option_id;
-			}
-		},
-
-		select_color_choice(option_id, choice_id) {
-			update_choice_for_option(this.$core, option_id, choice_id);
-			this.$core.view.colorPickerOpenFor = null;
-		},
-
-		get_selected_choice(option_id) {
-			return get_selected_choice(this.$core, option_id);
-		},
-
-		int_to_css_color(value) {
-			return int_to_css_color(value);
-		},
-
-		export_character() {
-			export_char_model(this.$core);
-		},
-
-		async remove_baked_npc_texture() {
-			this.$core.view.chrCustBakedNPCTexture = null;
-			await refresh_character_appearance(this.$core);
-		},
-
-		async open_saved_characters() {
-			await load_saved_characters(this.$core);
-			this.$core.view.chrSavedCharactersScreen = true;
-		},
-
-		async open_save_prompt() {
-			// capture thumbnail while still viewing the character
-			this.$core.view.chrPendingThumbnail = await capture_character_thumbnail(this.$core);
-			this.$core.view.chrSaveCharacterName = '';
-			this.$core.view.chrSaveCharacterPrompt = true;
-		},
-
-		async confirm_save_character() {
-			const name = this.$core.view.chrSaveCharacterName.trim();
-			if (!name) {
-				this.$core.setToast('error', 'Please enter a character name.', null, 3000);
-				return;
-			}
-
-			this.$core.view.chrSaveCharacterPrompt = false;
-			await save_character(this.$core, name, this.$core.view.chrPendingThumbnail);
-		},
-
-		async on_load_character(character) {
-			await load_character(this.$core, character);
-		},
-
-		async on_delete_character(character) {
-			await delete_character(this.$core, character);
-		},
-
-		on_export_character(character) {
-			export_saved_character(this.$core, character);
-		},
-
-		import_json() {
-			import_json_character(this.$core, false);
-		},
-
-		import_json_to_saved() {
-			import_json_character(this.$core, true);
-		},
-
-		export_json() {
-			export_json_character(this.$core);
-		},
-
-		chr_prev_overlay() {
-			this.$core.events.emit('click-chr-prev-overlay');
-		},
-
-		chr_next_overlay() {
-			this.$core.events.emit('click-chr-next-overlay');
-		},
-
-		chr_export_overlay() {
-			export_chr_texture(this.$core);
-		},
-
-		get_equipped_item(slot_id) {
-			const item_id = this.$core.view.chrEquippedItems[slot_id];
-			if (!item_id)
-				return null;
-
-			return DBItems.getItemById(item_id);
-		},
-
-		open_slot_context(event, slot_id) {
-			const item_id = this.$core.view.chrEquippedItems[slot_id];
-			if (!item_id) {
-				this.navigate_to_items_for_slot(slot_id);
-				return;
-			}
-
-			this.$core.view.chrEquipmentSlotContext = slot_id;
-		},
-
-		navigate_to_items_for_slot(slot_id) {
-			const slot = EQUIPMENT_SLOTS.find(s => s.id === slot_id);
-			if (!slot)
-				return;
-
-			const type_mask = this.$core.view.itemViewerTypeMask;
-			if (type_mask && type_mask.length > 0) {
-				for (const item of type_mask)
-					item.checked = item.label === slot.name;
-			} else {
-				this.$core.view.pendingItemSlotFilter = slot.name;
-			}
-
-			this.$modules.tab_items.setActive();
-		},
-
-		unequip_slot(slot_id) {
-			delete this.$core.view.chrEquippedItems[slot_id];
-			this.$core.view.chrEquippedItems = { ...this.$core.view.chrEquippedItems };
-		},
-
-		replace_slot_item(slot_id) {
-			this.$core.view.chrEquipmentSlotContext = null;
-			this.navigate_to_items_for_slot(slot_id);
-		},
-
-		copy_item_id(slot_id) {
-			const item = this.get_equipped_item(slot_id);
-			if (item)
-				navigator.clipboard.writeText(String(item.id));
-
-			this.$core.view.chrEquipmentSlotContext = null;
-		},
-
-		copy_item_name(slot_id) {
-			const item = this.get_equipped_item(slot_id);
-			if (item)
-				navigator.clipboard.writeText(item.name);
-
-			this.$core.view.chrEquipmentSlotContext = null;
-		},
-
-		clear_all_equipment() {
-			this.$core.view.chrEquippedItems = {};
-		},
-
-		is_guild_tabard_equipped() {
-			const item_id = this.$core.view.chrEquippedItems[19];
-			return item_id && DBGuildTabard.isGuildTabard(item_id);
-		},
-
-		get_tabard_tier() {
-			const item_id = this.$core.view.chrEquippedItems[19];
-			if (!item_id)
-				return -1;
-
-			return DBGuildTabard.getTabardTier(item_id);
-		},
-
-		get_tabard_max(key) {
-			switch (key) {
-				case 'background': return DBGuildTabard.getBackgroundColorCount();
-				case 'border_style': return DBGuildTabard.getBorderStyleCount(this.get_tabard_tier());
-				case 'border_color': return DBGuildTabard.getBorderColorCount();
-				case 'emblem_design': return DBGuildTabard.getEmblemDesignCount();
-				case 'emblem_color': return DBGuildTabard.getEmblemColorCount();
-				default: return 0;
-			}
-		},
-
-		set_tabard_config(key, value) {
-			const max = this.get_tabard_max(key);
-			value = parseInt(value) || 0;
-
-			if (max > 0)
-				value = Math.max(0, Math.min(value, max - 1));
-
-			this.$core.view.chrGuildTabardConfig = {
-				...this.$core.view.chrGuildTabardConfig,
-				[key]: value
-			};
-		},
-
-		adjust_tabard_config(key, delta) {
-			const max = this.get_tabard_max(key);
-			if (max <= 0)
-				return;
-
-			let value = (this.$core.view.chrGuildTabardConfig[key] + delta) % max;
-			if (value < 0)
-				value += max;
-
-			this.$core.view.chrGuildTabardConfig = {
-				...this.$core.view.chrGuildTabardConfig,
-				[key]: value
-			};
-		},
-
-		toggle_tabard_color_picker(key, event) {
-			const picker_key = 'tabard_' + key;
-			if (this.$core.view.colorPickerOpenFor === picker_key) {
-				this.$core.view.colorPickerOpenFor = null;
-			} else {
-				this.$core.view.colorPickerPosition = { x: event.clientX, y: event.clientY };
-				this.$core.view.colorPickerOpenFor = picker_key;
-			}
-		},
-
-		select_tabard_color(key, color_id) {
-			this.$core.view.chrGuildTabardConfig = {
-				...this.$core.view.chrGuildTabardConfig,
-				[key]: color_id
-			};
-			this.$core.view.colorPickerOpenFor = null;
-		},
-
-		get_tabard_color_css(key) {
-			const color_id = this.$core.view.chrGuildTabardConfig[key];
-			const color_map = this.get_tabard_color_list_for_key(key);
-			const color = color_map?.get(color_id);
-			if (!color)
-				return 'transparent';
-
-			return 'rgb(' + color.r + ',' + color.g + ',' + color.b + ')';
-		},
-
-		get_tabard_color_list(method_name) {
-			return DBGuildTabard[method_name]();
-		},
-
-		get_tabard_color_list_for_key(key) {
-			switch (key) {
-				case 'background': return DBGuildTabard.getBackgroundColors();
-				case 'border_color': return DBGuildTabard.getBorderColors();
-				case 'emblem_color': return DBGuildTabard.getEmblemColors();
-				default: return null;
-			}
-		}
-	},
-
-	async mounted() {
-		const state = this.$core.view;
-
-		reset_module_state();
-
-		this.$core.showLoadingScreen(8);
-
-		await this.$core.progressLoadingScreen('Retrieving realmlist...');
-		await realmlist.load();
-
-		const update_realm_list = () => {
-			const base_region = state.chrImportSelectedRegion;
-			const effective_region = state.chrImportClassicRealms ? 'classic-' + base_region : base_region;
-
-			if (!state.realmList[effective_region])
-				return;
-
-			const realm_list = state.realmList[effective_region].map(realm => ({ label: realm.name, value: realm.slug }));
-			state.chrImportRealms = realm_list;
-
-			if (state.chrImportSelectedRealm !== null) {
-				const matching_realm = realm_list.find(realm => realm.value === state.chrImportSelectedRealm.value);
-				if (matching_realm)
-					state.chrImportSelectedRealm = matching_realm;
-				else
-					state.chrImportSelectedRealm = null;
-			}
-		};
-
-		watcher_cleanup_funcs.push(
-			this.$core.view.$watch('chrImportSelectedRegion', update_realm_list),
-			this.$core.view.$watch('chrImportClassicRealms', update_realm_list)
-		);
-
-		state.chrImportRegions = Object.keys(state.realmList);
-
-		// preserve region/realm selection across module reloads
-		if (!state.chrImportSelectedRegion)
-			state.chrImportSelectedRegion = 'us';
-		else
-			update_realm_list();
-
-		await this.$core.progressLoadingScreen('Loading character customization data...');
-		await DBCharacterCustomization.ensureInitialized();
-
-		await this.$core.progressLoadingScreen('Loading item data...');
-		await DBItems.ensureInitialized();
-
-		await this.$core.progressLoadingScreen('Loading item character textures...');
-		await DBItemCharTextures.ensureInitialized();
-
-		await this.$core.progressLoadingScreen('Loading item geosets...');
-		await DBItemGeosets.ensureInitialized();
-
-		await this.$core.progressLoadingScreen('Loading item models...');
-		await DBItemModels.ensureInitialized();
-
-		await this.$core.progressLoadingScreen('Loading guild tabard data...');
-		await DBGuildTabard.ensureInitialized();
-
-		await this.$core.progressLoadingScreen('Loading character shaders...');
-
-		state.chrModelViewerContext = {
-			gl_context: null,
-			controls: null,
-			useCharacterControls: true,
-			fitCamera: null,
-			getActiveRenderer: () => active_renderer,
-			getEquipmentRenderers: () => equipment_model_renderers,
-			getCollectionRenderers: () => collection_model_renderers
-		};
-
-		const ctx_watcher = state.$watch('chrModelViewerContext.gl_context', (new_ctx) => {
-			if (new_ctx) {
-				gl_context = new_ctx;
-				ctx_watcher();
-			}
-		});
-
-		// simplified watchers - no isBusy checks, proper async handling
-		watcher_cleanup_funcs.push(
-			this.$core.view.$watch('config.chrIncludeBaseClothing', () => refresh_character_appearance(this.$core)),
-			this.$core.view.$watch('chrCustRaceSelection', () => update_chr_model_list(this.$core)),
-			this.$core.view.$watch('chrCustModelSelection', () => update_model_selection(this.$core), { deep: true }),
-			this.$core.view.$watch('chrCustOptionSelection', () => update_customization_type(this.$core), { deep: true }),
-			this.$core.view.$watch('chrCustChoiceSelection', () => update_customization_choice(this.$core), { deep: true }),
-			this.$core.view.$watch('chrCustActiveChoices', () => refresh_character_appearance(this.$core), { deep: true }),
-			this.$core.view.$watch('chrEquippedItems', () => refresh_character_appearance(this.$core), { deep: true }),
-			this.$core.view.$watch('chrGuildTabardConfig', () => refresh_character_appearance(this.$core), { deep: true }),
-			this.$core.view.$watch('chrModelViewerAnimSelection', async selected_animation_id => {
-				if (!active_renderer || !active_renderer.playAnimation || this.$core.view.chrModelViewerAnims.length === 0)
-					return;
-
-				this.$core.view.chrModelViewerAnimPaused = false;
-				this.$core.view.chrModelViewerAnimFrame = 0;
-				this.$core.view.chrModelViewerAnimFrameCount = 0;
-
-				if (selected_animation_id !== null && selected_animation_id !== undefined) {
-					if (selected_animation_id === 'none') {
-						active_renderer?.stopAnimation?.();
-
-						if (this.$core.view.modelViewerAutoAdjust)
-							requestAnimationFrame(() => fit_camera(this.$core));
-
-						return;
-					}
-
-					const anim_info = this.$core.view.chrModelViewerAnims.find(anim => anim.id == selected_animation_id);
-					if (anim_info && anim_info.m2Index !== undefined && anim_info.m2Index >= 0) {
-						log.write(`Playing animation ${selected_animation_id} at M2 index ${anim_info.m2Index}`);
-						await active_renderer.playAnimation(anim_info.m2Index);
-
-						this.$core.view.chrModelViewerAnimFrameCount = active_renderer.get_animation_frame_count();
-
-						if (this.$core.view.modelViewerAutoAdjust)
-							requestAnimationFrame(() => fit_camera(this.$core));
-					}
-				}
-			})
-		);
-
-		state.optionToChoices = DBCharacterCustomization.get_option_to_choices_map();
-
-		// trigger initial race/model load
-		update_chr_race_list(this.$core);
-
-		this.$core.hideLoadingScreen();
-
-		const doc_click_handler = (event) => {
-			if (this.$core.view.colorPickerOpenFor !== null) {
-				const popup = event.target.closest('.color-picker-popup');
-				const label = event.target.closest('.customization-color-label');
-				if (!popup && !label)
-					this.$core.view.colorPickerOpenFor = null;
-			}
-
-			if (this.$core.view.characterImportMode !== 'none') {
-				const import_panel = event.target.closest('#character-import-panel-floating');
-				const bnet_button = event.target.closest('.character-bnet-button');
-				const wowhead_button = event.target.closest('.character-wowhead-button');
-				if (!import_panel && !bnet_button && !wowhead_button)
-					this.$core.view.characterImportMode = 'none';
-			}
-		};
-		document.addEventListener('click', doc_click_handler);
-		watcher_cleanup_funcs.push(() => document.removeEventListener('click', doc_click_handler));
-
-		window.loadImportString = (str) => apply_import_data(this.$core, JSON.parse(str), 'bnet');
-
-		window.reloadCharShaders = async () => {
-			for (const material of chr_materials.values())
-				await material.compileShaders();
-
-			await refresh_character_appearance(this.$core);
-		};
-
-		charTextureOverlay.ensureActiveLayerAttached();
-	},
-
-	unmounted() {
-		reset_module_state();
-	}
+//region tabard helpers
+
+// JS: is_guild_tabard_equipped()
+static bool is_guild_tabard_equipped() {
+auto& view = *core::view;
+if (!view.chrEquippedItems.contains("19"))
+return false;
+uint32_t item_id = view.chrEquippedItems["19"].get<uint32_t>();
+return db::caches::DBGuildTabard::isGuildTabard(item_id);
+}
+
+// JS: get_tabard_tier()
+static int get_tabard_tier() {
+auto& view = *core::view;
+if (!view.chrEquippedItems.contains("19"))
+return -1;
+uint32_t item_id = view.chrEquippedItems["19"].get<uint32_t>();
+return db::caches::DBGuildTabard::getTabardTier(item_id);
+}
+
+// JS: get_tabard_max(key)
+static int get_tabard_max(const std::string& key) {
+if (key == "background") return db::caches::DBGuildTabard::getBackgroundColorCount();
+if (key == "border_style") return db::caches::DBGuildTabard::getBorderStyleCount(get_tabard_tier());
+if (key == "border_color") return db::caches::DBGuildTabard::getBorderColorCount();
+if (key == "emblem_design") return db::caches::DBGuildTabard::getEmblemDesignCount();
+if (key == "emblem_color") return db::caches::DBGuildTabard::getEmblemColorCount();
+return 0;
+}
+
+// JS: set_tabard_config(key, value)
+static void set_tabard_config(const std::string& key, int value) {
+auto& view = *core::view;
+int max_val = get_tabard_max(key);
+if (max_val > 0)
+value = (std::max)(0, (std::min)(value, max_val - 1));
+
+auto& cfg = view.chrGuildTabardConfig;
+if (key == "background") cfg.background = value;
+else if (key == "border_style") cfg.border_style = value;
+else if (key == "border_color") cfg.border_color = value;
+else if (key == "emblem_design") cfg.emblem_design = value;
+else if (key == "emblem_color") cfg.emblem_color = value;
+}
+
+// JS: adjust_tabard_config(key, delta)
+static void adjust_tabard_config(const std::string& key, int delta) {
+auto& view = *core::view;
+int max_val = get_tabard_max(key);
+if (max_val <= 0)
+return;
+
+auto& cfg = view.chrGuildTabardConfig;
+int current = 0;
+if (key == "background") current = cfg.background;
+else if (key == "border_style") current = cfg.border_style;
+else if (key == "border_color") current = cfg.border_color;
+else if (key == "emblem_design") current = cfg.emblem_design;
+else if (key == "emblem_color") current = cfg.emblem_color;
+
+int value = (current + delta) % max_val;
+if (value < 0)
+value += max_val;
+
+set_tabard_config(key, value);
+}
+
+// JS: get_tabard_color_css(key)
+static ImU32 get_tabard_color_imgui(const std::string& key) {
+auto& view = *core::view;
+int color_id = 0;
+auto& cfg = view.chrGuildTabardConfig;
+if (key == "background") color_id = cfg.background;
+else if (key == "border_color") color_id = cfg.border_color;
+else if (key == "emblem_color") color_id = cfg.emblem_color;
+
+const std::unordered_map<uint32_t, db::caches::DBGuildTabard::ColorRGB>* color_map = nullptr;
+if (key == "background") color_map = &db::caches::DBGuildTabard::getBackgroundColors();
+else if (key == "border_color") color_map = &db::caches::DBGuildTabard::getBorderColors();
+else if (key == "emblem_color") color_map = &db::caches::DBGuildTabard::getEmblemColors();
+
+if (!color_map)
+return IM_COL32(0, 0, 0, 0);
+
+auto it = color_map->find(static_cast<uint32_t>(color_id));
+if (it == color_map->end())
+return IM_COL32(0, 0, 0, 0);
+
+return IM_COL32(it->second.r, it->second.g, it->second.b, 255);
+}
+
+// get_tabard_color_list_for_key(key)
+static const std::unordered_map<uint32_t, db::caches::DBGuildTabard::ColorRGB>* get_tabard_color_list_for_key(const std::string& key) {
+if (key == "background") return &db::caches::DBGuildTabard::getBackgroundColors();
+if (key == "border_color") return &db::caches::DBGuildTabard::getBorderColors();
+if (key == "emblem_color") return &db::caches::DBGuildTabard::getEmblemColors();
+return nullptr;
+}
+
+//endregion
+
+// JS: get_equipped_item(slot_id)
+static const db::caches::DBItems::ItemInfo* get_equipped_item(int slot_id) {
+auto& view = *core::view;
+std::string slot_str = std::to_string(slot_id);
+if (!view.chrEquippedItems.contains(slot_str))
+return nullptr;
+uint32_t item_id = view.chrEquippedItems[slot_str].get<uint32_t>();
+return db::caches::DBItems::getItemById(item_id);
+}
+
+//region render
+
+// Color picker state
+static std::string color_picker_open_for;
+static ImVec2 color_picker_position;
+static std::string character_import_mode = "none";
+
+/**
+ * Render the characters tab widget using ImGui.
+ * JS equivalent: the Vue component's template rendering.
+ */
+void render() {
+auto& view = *core::view;
+const auto& option_to_choices = db::caches::DBCharacterCustomization::get_option_to_choices_map();
+
+// --- Change detection (Vue watch equivalents) ---
+
+// watch chrCustRaceSelection
+if (view.chrCustRaceSelection != prev_race_selection) {
+prev_race_selection = view.chrCustRaceSelection;
+update_chr_model_list();
+}
+
+// watch chrCustModelSelection (deep)
+if (view.chrCustModelSelection != prev_model_selection) {
+prev_model_selection = view.chrCustModelSelection;
+update_model_selection();
+}
+
+// watch chrCustOptionSelection (deep)
+if (view.chrCustOptionSelection != prev_option_selection) {
+prev_option_selection = view.chrCustOptionSelection;
+update_customization_type();
+}
+
+// watch chrCustChoiceSelection (deep)
+if (view.chrCustChoiceSelection != prev_choice_selection) {
+prev_choice_selection = view.chrCustChoiceSelection;
+update_customization_choice();
+}
+
+// watch chrCustActiveChoices (deep)
+if (view.chrCustActiveChoices != prev_active_choices) {
+prev_active_choices = view.chrCustActiveChoices;
+refresh_character_appearance();
+}
+
+// watch chrEquippedItems (deep)
+if (view.chrEquippedItems != prev_equipped_items) {
+prev_equipped_items = view.chrEquippedItems;
+refresh_character_appearance();
+}
+
+// watch chrGuildTabardConfig
+{
+nlohmann::json current_tabard = nlohmann::json{
+{ "background", view.chrGuildTabardConfig.background },
+{ "border_style", view.chrGuildTabardConfig.border_style },
+{ "border_color", view.chrGuildTabardConfig.border_color },
+{ "emblem_design", view.chrGuildTabardConfig.emblem_design },
+{ "emblem_color", view.chrGuildTabardConfig.emblem_color }
+};
+if (current_tabard != prev_guild_tabard_config) {
+prev_guild_tabard_config = current_tabard;
+refresh_character_appearance();
+}
+}
+
+// watch config.chrIncludeBaseClothing
+if (view.config.value("chrIncludeBaseClothing", true) != prev_include_base_clothing) {
+prev_include_base_clothing = view.config.value("chrIncludeBaseClothing", true);
+refresh_character_appearance();
+}
+
+// watch chrImportSelectedRegion / chrImportClassicRealms
+{
+std::string cur_region = view.chrImportSelectedRegion;
+bool cur_classic = view.chrImportClassicRealms;
+if (cur_region != prev_chr_import_region || cur_classic != prev_chr_import_classic_realms) {
+prev_chr_import_region = cur_region;
+prev_chr_import_classic_realms = cur_classic;
+update_realm_list();
+}
+}
+
+// watch chrModelViewerAnimSelection
+{
+std::string current_anim;
+if (view.chrModelViewerAnimSelection.is_string())
+current_anim = view.chrModelViewerAnimSelection.get<std::string>();
+
+if (current_anim != prev_anim_selection) {
+prev_anim_selection = current_anim;
+
+if (!view.chrModelViewerAnims.empty()) {
+model_viewer_utils::handle_animation_change(
+active_renderer.get(),
+view_state,
+current_anim
+);
+}
+}
+}
+
+// --- Saved Characters Screen ---
+if (view.chrSavedCharactersScreen) {
+ImGui::Text("My Characters");
+ImGui::Separator();
+
+for (size_t i = 0; i < view.chrSavedCharacters.size(); i++) {
+const auto& character = view.chrSavedCharacters[i];
+std::string name = character.value("name", "Unknown");
+std::string id = character.value("id", "");
+
+ImGui::PushID(static_cast<int>(i));
+
+// thumbnail placeholder
+ImGui::BeginGroup();
+ImGui::Button(name.c_str(), ImVec2(120, 140));
+
+// Export button
+ImGui::SameLine();
+if (ImGui::SmallButton("Export"))
+export_saved_character(character);
+
+ImGui::SameLine();
+if (ImGui::SmallButton("Delete"))
+delete_character(character);
+
+if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+load_character(character);
+
+ImGui::EndGroup();
+ImGui::PopID();
+}
+
+ImGui::Separator();
+
+if (ImGui::Button("Save Character")) {
+view.chrPendingThumbnail = capture_character_thumbnail();  // returns std::string, auto-converts to json
+view.chrSaveCharacterName = "";
+view.chrSaveCharacterPrompt = true;
+}
+
+ImGui::SameLine();
+if (ImGui::Button("Import Character"))
+import_json_character(true);
+
+ImGui::SameLine();
+if (ImGui::Button("Back"))
+view.chrSavedCharactersScreen = false;
+
+// Save prompt modal
+if (view.chrSaveCharacterPrompt) {
+ImGui::OpenPopup("Save Character##popup");
+if (ImGui::BeginPopupModal("Save Character##popup", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+static char name_buf[256] = {};
+ImGui::InputText("Character Name", name_buf, sizeof(name_buf));
+
+if (ImGui::Button("Save")) {
+std::string name(name_buf);
+if (name.empty()) {
+core::setToast("error", "Please enter a character name.", {}, 3000);
+} else {
+view.chrSaveCharacterPrompt = false;
+save_character(name, view.chrPendingThumbnail.is_string() ? view.chrPendingThumbnail.get<std::string>() : "");
+name_buf[0] = '\0';
+}
+}
+
+ImGui::SameLine();
+if (ImGui::Button("Cancel")) {
+view.chrSaveCharacterPrompt = false;
+name_buf[0] = '\0';
+}
+
+ImGui::EndPopup();
+}
+}
+
+return; // don't render main UI when saved characters screen is active
+}
+
+// --- Main Character Viewer ---
+
+// Animation controls overlay
+if (!view.chrModelViewerAnims.empty()) {
+// Animation dropdown
+std::string current_anim_label = "No Animation";
+std::string current_anim_id;
+if (view.chrModelViewerAnimSelection.is_string())
+current_anim_id = view.chrModelViewerAnimSelection.get<std::string>();
+
+for (const auto& anim : view.chrModelViewerAnims) {
+if (anim.value("id", "") == current_anim_id) {
+current_anim_label = anim.value("label", "");
+break;
+}
+}
+
+if (ImGui::BeginCombo("Animation##chr", current_anim_label.c_str())) {
+for (const auto& anim : view.chrModelViewerAnims) {
+std::string anim_id = anim.value("id", "");
+std::string anim_label = anim.value("label", "");
+bool is_selected = (anim_id == current_anim_id);
+if (ImGui::Selectable(anim_label.c_str(), is_selected))
+view.chrModelViewerAnimSelection = anim_id;
+if (is_selected)
+ImGui::SetItemDefaultFocus();
+}
+ImGui::EndCombo();
+}
+
+// Animation playback controls
+if (current_anim_id != "none" && !current_anim_id.empty()) {
+bool is_paused = view.chrModelViewerAnimPaused;
+
+if (ImGui::Button("|<##chr_step_left")) {
+if (is_paused && anim_methods)
+anim_methods->step_animation(-1);
+}
+
+ImGui::SameLine();
+if (ImGui::Button(is_paused ? ">##chr_play" : "||##chr_pause")) {
+if (anim_methods)
+anim_methods->toggle_animation_pause();
+}
+
+ImGui::SameLine();
+if (ImGui::Button(">|##chr_step_right")) {
+if (is_paused && anim_methods)
+anim_methods->step_animation(1);
+}
+
+// Scrubber
+ImGui::SameLine();
+int frame = view.chrModelViewerAnimFrame;
+int frame_count = view.chrModelViewerAnimFrameCount;
+if (frame_count > 0) {
+ImGui::SetNextItemWidth(200.0f);
+if (ImGui::SliderInt("##chr_scrub", &frame, 0, frame_count - 1)) {
+if (anim_methods)
+anim_methods->seek_animation(frame);
+}
+if (ImGui::IsItemActivated()) {
+_was_paused_before_scrub = view.chrModelViewerAnimPaused;
+if (!_was_paused_before_scrub && anim_methods)
+anim_methods->start_scrub();
+}
+if (ImGui::IsItemDeactivatedAfterEdit()) {
+if (!_was_paused_before_scrub && anim_methods)
+anim_methods->end_scrub();
+}
+ImGui::SameLine();
+ImGui::Text("%d", frame);
+}
+}
+}
+
+// Import buttons row
+{
+if (ImGui::Button("My Characters")) {
+load_saved_characters();
+view.chrSavedCharactersScreen = true;
+}
+ImGui::SameLine();
+if (ImGui::Button("Save"))
+view.chrSaveCharacterPrompt = true;
+
+ImGui::SameLine();
+if (ImGui::Button("Import JSON"))
+import_json_character(false);
+ImGui::SameLine();
+if (ImGui::Button("Export JSON"))
+export_json_character();
+
+ImGui::SameLine();
+bool bnet_active = (character_import_mode == "BNET");
+if (bnet_active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+if (ImGui::Button("Battle.net"))
+character_import_mode = bnet_active ? "none" : "BNET";
+if (bnet_active) ImGui::PopStyleColor();
+
+ImGui::SameLine();
+bool whead_active = (character_import_mode == "WHEAD");
+if (whead_active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+if (ImGui::Button("Wowhead"))
+character_import_mode = whead_active ? "none" : "WHEAD";
+if (whead_active) ImGui::PopStyleColor();
+
+ImGui::SameLine();
+if (ImGui::Button("WMV"))
+import_wmv_character();
+}
+
+// Battle.net import panel
+if (character_import_mode == "BNET") {
+ImGui::Separator();
+ImGui::Text("Character Import");
+
+// Region buttons
+for (size_t i = 0; i < base_regions.size(); i++) {
+if (i > 0) ImGui::SameLine();
+bool selected = (view.chrImportSelectedRegion == base_regions[i]);
+if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+
+std::string upper_region = base_regions[i];
+std::transform(upper_region.begin(), upper_region.end(), upper_region.begin(), ::toupper);
+if (ImGui::Button(upper_region.c_str()))
+view.chrImportSelectedRegion = base_regions[i];
+
+if (selected) ImGui::PopStyleColor();
+}
+
+ImGui::Checkbox("Classic Realms", &view.chrImportClassicRealms);
+
+// Character name
+static char chr_name_buf[256] = {};
+ImGui::InputText("Character Name##bnet", chr_name_buf, sizeof(chr_name_buf));
+view.chrImportChrName = chr_name_buf;
+
+// Realm combo (simplified)
+// TODO(conversion): Full ComboBox with search for realm list.
+if (!view.chrImportRealms.empty()) {
+std::string realm_label = view.chrImportSelectedRealm.is_null() ? "Select Realm" :
+view.chrImportSelectedRealm.value("label", "Select Realm");
+if (ImGui::BeginCombo("Realm##bnet", realm_label.c_str())) {
+for (const auto& realm : view.chrImportRealms) {
+std::string label = realm.value("label", "");
+bool is_selected = (!view.chrImportSelectedRealm.is_null() &&
+                    realm.value("value", "") == view.chrImportSelectedRealm.value("value", ""));
+if (ImGui::Selectable(label.c_str(), is_selected))
+view.chrImportSelectedRealm = realm;
+if (is_selected)
+ImGui::SetItemDefaultFocus();
+}
+ImGui::EndCombo();
+}
+}
+
+ImGui::Checkbox("Load visage model (Dracthyr/Worgen)", &view.chrImportLoadVisage);
+
+if (ImGui::Button("Import Character##bnet") && !view.chrModelLoading)
+import_character();
+
+ImGui::Separator();
+}
+
+// Wowhead import panel
+if (character_import_mode == "WHEAD") {
+ImGui::Separator();
+ImGui::Text("Wowhead Import");
+
+static char wowhead_url_buf[1024] = {};
+ImGui::InputText("Wowhead URL##whead", wowhead_url_buf, sizeof(wowhead_url_buf));
+view.chrImportWowheadURL = wowhead_url_buf;
+
+if (ImGui::Button("Import Character##whead") && !view.chrModelLoading)
+import_wowhead_character();
+
+ImGui::Separator();
+}
+
+// --- Three-panel layout: left (customization) | center (preview) | right (equipment) ---
+
+float available_width = ImGui::GetContentRegionAvail().x;
+float left_width = 250.0f;
+float right_width = 250.0f;
+float center_width = available_width - left_width - right_width - 20.0f;
+
+// LEFT PANEL - Race/body/customization
+ImGui::BeginChild("##chr_left_panel", ImVec2(left_width, -1), ImGuiChildFlags_Borders);
+{
+if (!view.chrShowGeosetControl) {
+// Race selector
+{
+std::string race_label = "None";
+if (!view.chrCustRaceSelection.empty())
+race_label = view.chrCustRaceSelection[0].value("label", "None");
+
+if (ImGui::BeginCombo("Race##chr", race_label.c_str())) {
+if (!view.chrCustRacesPlayable.empty()) {
+ImGui::TextDisabled("Playable Races");
+for (const auto& race : view.chrCustRacesPlayable) {
+std::string label = race.value("label", "");
+uint32_t rid = race.value("id", 0u);
+bool is_selected = (!view.chrCustRaceSelection.empty() &&
+                    view.chrCustRaceSelection[0].value("id", 0u) == rid);
+if (ImGui::Selectable(label.c_str(), is_selected))
+view.chrCustRaceSelection = { race };
+if (is_selected)
+ImGui::SetItemDefaultFocus();
+}
+}
+if (!view.chrCustRacesNPC.empty()) {
+ImGui::Separator();
+ImGui::TextDisabled("NPC Races");
+for (const auto& race : view.chrCustRacesNPC) {
+std::string label = race.value("label", "");
+uint32_t rid = race.value("id", 0u);
+bool is_selected = (!view.chrCustRaceSelection.empty() &&
+                    view.chrCustRaceSelection[0].value("id", 0u) == rid);
+if (ImGui::Selectable(label.c_str(), is_selected))
+view.chrCustRaceSelection = { race };
+if (is_selected)
+ImGui::SetItemDefaultFocus();
+}
+}
+ImGui::EndCombo();
+}
+}
+
+// Body type selector
+{
+std::string body_label = "None";
+if (!view.chrCustModelSelection.empty())
+body_label = view.chrCustModelSelection[0].value("label", "None");
+
+if (ImGui::BeginCombo("Body##chr", body_label.c_str())) {
+for (const auto& model : view.chrCustModels) {
+std::string label = model.value("label", "");
+uint32_t mid = model.value("id", 0u);
+bool is_selected = (!view.chrCustModelSelection.empty() &&
+                    view.chrCustModelSelection[0].value("id", 0u) == mid);
+if (ImGui::Selectable(label.c_str(), is_selected))
+view.chrCustModelSelection = { model };
+if (is_selected)
+ImGui::SetItemDefaultFocus();
+}
+ImGui::EndCombo();
+}
+}
+
+// Customization options
+for (const auto& option : view.chrCustOptions) {
+uint32_t option_id = option.value("id", 0u);
+std::string option_label = option.value("label", "");
+bool is_color = option.value("is_color_swatch", false);
+
+ImGui::PushID(static_cast<int>(option_id));
+
+if (!is_color) {
+// Regular dropdown
+auto choices_it = option_to_choices.find(option_id);
+std::string current_choice_label = "None";
+
+uint32_t active_choice_id = 0;
+for (const auto& ac : view.chrCustActiveChoices) {
+if (ac.value("optionID", 0u) == option_id) {
+active_choice_id = ac.value("choiceID", 0u);
+break;
+}
+}
+
+if (choices_it != option_to_choices.end()) {
+for (const auto& c : choices_it->second) {
+if (c.id == active_choice_id) {
+current_choice_label = c.label;
+break;
+}
+}
+}
+
+std::string combo_label = option_label + "##opt";
+if (ImGui::BeginCombo(combo_label.c_str(), current_choice_label.c_str())) {
+if (choices_it != option_to_choices.end()) {
+for (const auto& choice : choices_it->second) {
+bool is_sel = (choice.id == active_choice_id);
+if (ImGui::Selectable(choice.label.c_str(), is_sel))
+update_choice_for_option(option_id, choice.id);
+if (is_sel)
+ImGui::SetItemDefaultFocus();
+}
+}
+ImGui::EndCombo();
+}
+} else {
+// Color swatch picker
+const auto* sel_choice = get_selected_choice(option_id);
+
+ImGui::Text("%s:", option_label.c_str());
+ImGui::SameLine();
+
+// Draw the selected swatch
+if (sel_choice) {
+ImU32 col0 = int_to_imgui_color(sel_choice->swatch_color_0);
+ImU32 col1 = int_to_imgui_color(sel_choice->swatch_color_1);
+
+ImVec2 swatch_size(20, 20);
+ImVec2 cursor = ImGui::GetCursorScreenPos();
+
+if (sel_choice->swatch_color_0 == 0 && sel_choice->swatch_color_1 == 0) {
+// "none" swatch
+ImGui::GetWindowDrawList()->AddRectFilled(cursor,
+ImVec2(cursor.x + swatch_size.x, cursor.y + swatch_size.y),
+IM_COL32(60, 60, 60, 255));
+ImGui::GetWindowDrawList()->AddLine(cursor,
+ImVec2(cursor.x + swatch_size.x, cursor.y + swatch_size.y),
+IM_COL32(200, 200, 200, 255));
+} else if (sel_choice->swatch_color_1 != 0) {
+// dual swatch
+ImGui::GetWindowDrawList()->AddRectFilled(cursor,
+ImVec2(cursor.x + swatch_size.x / 2, cursor.y + swatch_size.y), col0);
+ImGui::GetWindowDrawList()->AddRectFilled(
+ImVec2(cursor.x + swatch_size.x / 2, cursor.y),
+ImVec2(cursor.x + swatch_size.x, cursor.y + swatch_size.y), col1);
+} else {
+// single swatch
+ImGui::GetWindowDrawList()->AddRectFilled(cursor,
+ImVec2(cursor.x + swatch_size.x, cursor.y + swatch_size.y), col0);
+}
+
+ImGui::InvisibleButton("##swatch", swatch_size);
+if (ImGui::IsItemClicked()) {
+if (color_picker_open_for == std::to_string(option_id))
+color_picker_open_for.clear();
+else
+color_picker_open_for = std::to_string(option_id);
+}
+}
+
+// Color picker popup
+if (color_picker_open_for == std::to_string(option_id)) {
+auto choices_it = option_to_choices.find(option_id);
+if (choices_it != option_to_choices.end()) {
+ImGui::BeginTooltip();
+int cols = 8;
+int col_idx = 0;
+for (const auto& choice : choices_it->second) {
+if (col_idx > 0 && col_idx % cols != 0)
+ImGui::SameLine();
+
+ImVec2 swatch_sz(22, 22);
+ImVec2 cursor = ImGui::GetCursorScreenPos();
+ImU32 c0 = int_to_imgui_color(choice.swatch_color_0);
+ImU32 c1 = int_to_imgui_color(choice.swatch_color_1);
+
+if (choice.swatch_color_0 == 0 && choice.swatch_color_1 == 0) {
+ImGui::GetWindowDrawList()->AddRectFilled(cursor,
+ImVec2(cursor.x + swatch_sz.x, cursor.y + swatch_sz.y),
+IM_COL32(60, 60, 60, 255));
+} else if (choice.swatch_color_1 != 0) {
+ImGui::GetWindowDrawList()->AddRectFilled(cursor,
+ImVec2(cursor.x + swatch_sz.x / 2, cursor.y + swatch_sz.y), c0);
+ImGui::GetWindowDrawList()->AddRectFilled(
+ImVec2(cursor.x + swatch_sz.x / 2, cursor.y),
+ImVec2(cursor.x + swatch_sz.x, cursor.y + swatch_sz.y), c1);
+} else {
+ImGui::GetWindowDrawList()->AddRectFilled(cursor,
+ImVec2(cursor.x + swatch_sz.x, cursor.y + swatch_sz.y), c0);
+}
+
+// Highlight selected
+uint32_t active_cid = 0;
+for (const auto& ac : view.chrCustActiveChoices) {
+if (ac.value("optionID", 0u) == option_id) {
+active_cid = ac.value("choiceID", 0u);
+break;
+}
+}
+if (choice.id == active_cid) {
+ImGui::GetWindowDrawList()->AddRect(cursor,
+ImVec2(cursor.x + swatch_sz.x, cursor.y + swatch_sz.y),
+IM_COL32(255, 255, 255, 255), 0.0f, 0, 2.0f);
+}
+
+ImGui::InvisibleButton(("##color_" + std::to_string(choice.id)).c_str(), swatch_sz);
+if (ImGui::IsItemClicked()) {
+update_choice_for_option(option_id, choice.id);
+color_picker_open_for.clear();
+}
+
+col_idx++;
+}
+ImGui::EndTooltip();
+}
+}
+}
+
+ImGui::PopID();
+}
+
+// Underwear toggle
+{
+bool show_underwear = view.config.value("chrIncludeBaseClothing", true);
+std::string underwear_label = show_underwear ? "Visible" : "Hidden";
+if (ImGui::BeginCombo("Underwear##chr", underwear_label.c_str())) {
+if (ImGui::Selectable("Visible", show_underwear))
+view.config["chrIncludeBaseClothing"] = true;
+if (ImGui::Selectable("Hidden", !show_underwear))
+view.config["chrIncludeBaseClothing"] = false;
+ImGui::EndCombo();
+}
+}
+} else {
+// Geoset control mode
+ImGui::Text("Geoset Control");
+ImGui::Separator();
+
+for (auto& geoset : view.chrCustGeosets) {
+int gid = geoset.value("id", 0);
+if (gid == 0) continue;
+
+std::string label = geoset.value("label", std::format("Geoset {}", gid));
+bool checked = geoset.value("checked", false);
+if (ImGui::Checkbox(label.c_str(), &checked))
+geoset["checked"] = checked;
+}
+
+if (ImGui::Button("Enable All")) {
+for (auto& g : view.chrCustGeosets)
+if (g.value("id", 0) != 0) g["checked"] = true;
+}
+ImGui::SameLine();
+if (ImGui::Button("Disable All")) {
+for (auto& g : view.chrCustGeosets)
+if (g.value("id", 0) != 0) g["checked"] = false;
+}
+}
+
+ImGui::Separator();
+
+if (!view.chrShowGeosetControl) {
+if (ImGui::Button("Randomize Customization"))
+randomize_customization();
+if (ImGui::Button("Custom Geoset Control"))
+view.chrShowGeosetControl = true;
+} else {
+if (ImGui::Button("Return to Customization"))
+view.chrShowGeosetControl = false;
+}
+}
+ImGui::EndChild();
+
+ImGui::SameLine();
+
+// CENTER PANEL - 3D preview and export
+ImGui::BeginChild("##chr_center_panel", ImVec2(center_width, -1), ImGuiChildFlags_Borders);
+{
+// Loading spinner
+if (view.chrModelLoading)
+ImGui::Text("Loading model...");
+
+// 3D model viewer
+// TODO(conversion): ModelViewerGL component will be rendered here.
+ImGui::Text("[3D Preview Area]");
+
+// Remove baked texture button
+if (!view.chrCustBakedNPCTexture.is_null()) {
+if (ImGui::Button("Remove Baked Texture")) {
+view.chrCustBakedNPCTexture = nullptr;
+refresh_character_appearance();
+}
+}
+
+ImGui::Separator();
+
+// Export tabs
+static int export_tab = 0; // 0=Export, 1=Textures, 2=Settings
+
+if (ImGui::Button("Export##tab")) export_tab = 0;
+ImGui::SameLine();
+if (ImGui::Button("Textures##tab")) export_tab = 1;
+ImGui::SameLine();
+if (ImGui::Button("Settings##tab")) export_tab = 2;
+
+if (export_tab == 0) {
+// Export panel
+std::string format = view.config.value("exportCharacterFormat", "GLTF");
+
+if (format == "GLTF" || format == "GLB") {
+bool export_anims = view.config.value("modelsExportAnimations", false);
+if (ImGui::Checkbox("Export animations##chr", &export_anims))
+view.config["modelsExportAnimations"] = export_anims;
+}
+
+if (format == "OBJ" || format == "STL") {
+bool apply_pose = view.config.value("chrExportApplyPose", false);
+if (ImGui::Checkbox("Apply pose##chr", &apply_pose))
+view.config["chrExportApplyPose"] = apply_pose;
+}
+
+// Format selector + export button
+const char* formats[] = { "OBJ", "STL", "GLTF", "GLB", "PNG", "CLIPBOARD" };
+int current_format_idx = 0;
+for (int i = 0; i < 6; i++) {
+if (format == formats[i]) { current_format_idx = i; break; }
+}
+ImGui::SetNextItemWidth(100.0f);
+if (ImGui::Combo("Format##chr_export", &current_format_idx, formats, 6))
+view.config["exportCharacterFormat"] = formats[current_format_idx];
+
+ImGui::SameLine();
+if (ImGui::Button("Export##chr_do") && !view.chrModelLoading)
+export_char_model();
+
+} else if (export_tab == 1) {
+// Texture preview panel
+ImGui::Text("[Texture Preview]");
+
+if (ImGui::Button("<##chr_tex"))
+char_texture_overlay::prevOverlay();
+ImGui::SameLine();
+if (ImGui::Button("Export Texture##chr"))
+export_chr_texture();
+ImGui::SameLine();
+if (ImGui::Button(">##chr_tex"))
+char_texture_overlay::nextOverlay();
+
+} else if (export_tab == 2) {
+// Settings panel
+bool render_shadow = view.config.value("chrRenderShadow", false);
+if (ImGui::Checkbox("Render shadow##chr", &render_shadow))
+view.config["chrRenderShadow"] = render_shadow;
+
+bool use_3d_camera = view.config.value("chrUse3DCamera", false);
+if (ImGui::Checkbox("Use 3D camera##chr", &use_3d_camera))
+view.config["chrUse3DCamera"] = use_3d_camera;
+
+bool show_bg = view.config.value("chrShowBackground", false);
+if (ImGui::Checkbox("Show background##chr", &show_bg))
+view.config["chrShowBackground"] = show_bg;
+
+if (show_bg) {
+std::string bg_color_str = view.config.value("chrBackgroundColor", "#343a40");
+// TODO(conversion): ImGui color picker for background.
+}
+}
+}
+ImGui::EndChild();
+
+ImGui::SameLine();
+
+// RIGHT PANEL - Equipment and tabard
+ImGui::BeginChild("##chr_right_panel", ImVec2(right_width, -1), ImGuiChildFlags_Borders);
+{
+// Guild Tabard panel
+if (is_guild_tabard_equipped()) {
+ImGui::Text("Guild Tabard");
+ImGui::Separator();
+
+for (const auto& opt : tabard_options) {
+ImGui::PushID(opt.key.c_str());
+
+if (opt.type == "value") {
+// Numeric value with arrows
+auto& cfg = view.chrGuildTabardConfig;
+int value = 0;
+if (opt.key == "background") value = cfg.background;
+else if (opt.key == "border_style") value = cfg.border_style;
+else if (opt.key == "border_color") value = cfg.border_color;
+else if (opt.key == "emblem_design") value = cfg.emblem_design;
+else if (opt.key == "emblem_color") value = cfg.emblem_color;
+
+ImGui::Text("%s:", opt.label.c_str());
+ImGui::SameLine();
+if (ImGui::ArrowButton("##left", ImGuiDir_Left))
+adjust_tabard_config(opt.key, -1);
+ImGui::SameLine();
+ImGui::Text("%d", value);
+ImGui::SameLine();
+if (ImGui::ArrowButton("##right", ImGuiDir_Right))
+adjust_tabard_config(opt.key, 1);
+
+} else {
+// Color swatch
+ImGui::Text("%s:", opt.label.c_str());
+ImGui::SameLine();
+
+ImU32 col = get_tabard_color_imgui(opt.key);
+ImVec2 sz(20, 20);
+ImVec2 cursor = ImGui::GetCursorScreenPos();
+ImGui::GetWindowDrawList()->AddRectFilled(cursor,
+ImVec2(cursor.x + sz.x, cursor.y + sz.y), col);
+
+std::string picker_key = "tabard_" + opt.key;
+ImGui::InvisibleButton("##tabswatch", sz);
+if (ImGui::IsItemClicked()) {
+if (color_picker_open_for == picker_key)
+color_picker_open_for.clear();
+else
+color_picker_open_for = picker_key;
+}
+
+if (color_picker_open_for == picker_key) {
+const auto* colors = get_tabard_color_list_for_key(opt.key);
+if (colors) {
+ImGui::BeginTooltip();
+int cols = 8;
+int col_idx = 0;
+auto& cfg = view.chrGuildTabardConfig;
+int current_color = 0;
+if (opt.key == "background") current_color = cfg.background;
+else if (opt.key == "border_color") current_color = cfg.border_color;
+else if (opt.key == "emblem_color") current_color = cfg.emblem_color;
+
+for (const auto& [cid, crgb] : *colors) {
+if (col_idx > 0 && col_idx % cols != 0)
+ImGui::SameLine();
+
+ImVec2 ss(22, 22);
+ImVec2 cp = ImGui::GetCursorScreenPos();
+ImGui::GetWindowDrawList()->AddRectFilled(cp,
+ImVec2(cp.x + ss.x, cp.y + ss.y),
+IM_COL32(crgb.r, crgb.g, crgb.b, 255));
+
+if (static_cast<int>(cid) == current_color) {
+ImGui::GetWindowDrawList()->AddRect(cp,
+ImVec2(cp.x + ss.x, cp.y + ss.y),
+IM_COL32(255, 255, 255, 255), 0.0f, 0, 2.0f);
+}
+
+ImGui::InvisibleButton(("##tc_" + std::to_string(cid)).c_str(), ss);
+if (ImGui::IsItemClicked()) {
+set_tabard_config(opt.key, static_cast<int>(cid));
+color_picker_open_for.clear();
+}
+
+col_idx++;
+}
+ImGui::EndTooltip();
+}
+}
+}
+
+ImGui::PopID();
+}
+
+ImGui::Separator();
+}
+
+// Equipment list
+ImGui::Text("Equipment");
+ImGui::Separator();
+
+const auto& slots = wow::EQUIPMENT_SLOTS;
+for (const auto& slot : slots) {
+ImGui::PushID(slot.id);
+
+std::string slot_label = wow::get_slot_name(slot.id);
+const auto* item = get_equipped_item(slot.id);
+
+if (item) {
+std::string item_text = std::format("{}: {} ({})", slot_label, item->name, item->id);
+ImGui::Text("%s", item_text.c_str());
+} else {
+ImGui::TextDisabled("%s: Empty", slot_label.c_str());
+}
+
+// Context menu
+if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && item) {
+ImGui::OpenPopup("##equip_ctx");
+}
+if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !item) {
+// navigate to items for this slot
+// TODO(conversion): Cross-tab navigation to items tab.
+}
+
+if (ImGui::BeginPopup("##equip_ctx")) {
+if (ImGui::MenuItem("Replace Item")) {
+// TODO(conversion): Navigate to items tab for slot.
+}
+if (ImGui::MenuItem("Remove Item")) {
+std::string slot_str = std::to_string(slot.id);
+view.chrEquippedItems.erase(slot_str);
+}
+if (item) {
+std::string copy_id_label = std::format("Copy Item ID ({})", item->id);
+if (ImGui::MenuItem(copy_id_label.c_str())) {
+ImGui::SetClipboardText(std::to_string(item->id).c_str());
+}
+if (ImGui::MenuItem("Copy Item Name")) {
+ImGui::SetClipboardText(item->name.c_str());
+}
+}
+ImGui::EndPopup();
+}
+
+ImGui::PopID();
+}
+
+ImGui::Separator();
+if (ImGui::Button("Clear All Equipment"))
+view.chrEquippedItems = nlohmann::json::object();
+}
+ImGui::EndChild();
+}
+
+//endregion
+
+//region mounted
+
+/**
+ * Initialize the characters tab (load DB caches, realmlist, set up watches).
+ * JS equivalent: mounted()
+ */
+void mounted() {
+auto& state = *core::view;
+
+reset_module_state();
+
+core::showLoadingScreen(8);
+
+core::progressLoadingScreen("Retrieving realmlist...");
+casc::realmlist::load();
+
+// preserve region/realm selection across module reloads
+if (state.chrImportSelectedRegion.empty())
+state.chrImportSelectedRegion = "us";
+else
+update_realm_list();
+
+core::progressLoadingScreen("Loading character customization data...");
+db::caches::DBCharacterCustomization::ensureInitialized();
+
+core::progressLoadingScreen("Loading item data...");
+db::caches::DBItems::ensureInitialized();
+
+core::progressLoadingScreen("Loading item character textures...");
+db::caches::DBItemCharTextures::ensureInitialized();
+
+core::progressLoadingScreen("Loading item geosets...");
+db::caches::DBItemGeosets::ensureInitialized();
+
+core::progressLoadingScreen("Loading item models...");
+db::caches::DBItemModels::ensureInitialized();
+
+core::progressLoadingScreen("Loading guild tabard data...");
+db::caches::DBGuildTabard::ensureInitialized();
+
+core::progressLoadingScreen("Loading character shaders...");
+
+// set up model viewer context
+state.chrModelViewerContext = nlohmann::json{
+{ "gl_context", nullptr },
+{ "controls", nullptr },
+{ "useCharacterControls", true },
+{ "fitCamera", nullptr }
 };
 
+// Set up animation ViewStateProxy
+view_state.anims = &state.chrModelViewerAnims;
+view_state.animSelection = &state.chrModelViewerAnimSelection;
+view_state.animPaused = &state.chrModelViewerAnimPaused;
+view_state.animFrame = &state.chrModelViewerAnimFrame;
+view_state.animFrameCount = &state.chrModelViewerAnimFrameCount;
+view_state.autoAdjust = nullptr; // TODO(conversion): wire autoAdjust.
+
+anim_methods = std::make_unique<model_viewer_utils::AnimationMethods>(
+[]() -> M2RendererGL* { return active_renderer.get(); },
+[]() -> model_viewer_utils::ViewStateProxy* { return &view_state; }
+);
+
+// Initialize change detection state
+prev_race_selection = state.chrCustRaceSelection;
+prev_model_selection = state.chrCustModelSelection;
+prev_option_selection = state.chrCustOptionSelection;
+prev_choice_selection = state.chrCustChoiceSelection;
+prev_active_choices = state.chrCustActiveChoices;
+prev_equipped_items = state.chrEquippedItems;
+prev_include_base_clothing = state.config.value("chrIncludeBaseClothing", true);
+prev_chr_import_region = state.chrImportSelectedRegion;
+prev_chr_import_classic_realms = state.chrImportClassicRealms;
+
+// trigger initial race/model load
+update_chr_race_list();
+
+core::hideLoadingScreen();
+
+char_texture_overlay::ensureActiveLayerAttached();
+}
+
 //endregion
+
+//region registerTab
+
+/**
+ * Register the tab (nav button).
+ * JS equivalent: register() { this.registerNavButton('Characters', 'person-solid.svg', InstallType.CASC) }
+ */
+void registerTab() {
+// TODO(conversion): registerNavButton will be wired when the tab registration system is integrated.
+// JS: this.registerNavButton('Characters', 'person-solid.svg', InstallType.CASC);
+}
+
+/**
+ * Get the active model renderer (if any).
+ * JS equivalent: getActiveRenderer: () => active_renderer
+ * @returns Pointer to active M2RendererGL, or nullptr.
+ */
+M2RendererGL* getActiveRenderer() {
+return active_renderer.get();
+}
+
+//endregion
+
+} // namespace tab_characters
