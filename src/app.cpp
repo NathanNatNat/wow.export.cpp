@@ -10,8 +10,6 @@
 #endif
 #include <windows.h>
 #include <shobjidl.h>
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
 #else
 #include <unistd.h>
 #endif
@@ -30,6 +28,10 @@
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
+#ifdef _WIN32
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#endif
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
