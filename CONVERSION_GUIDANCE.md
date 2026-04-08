@@ -429,12 +429,13 @@ These files aren't `.cpp` but will need to be handled during or after conversion
 
 | File | Notes |
 |------|-------|
-| `src/app.css` | Main stylesheet — will need C++ UI equivalent (ImGui theming, etc.) |
-| `src/default_config.jsonc` | Default config — keep as embedded resource or parse at runtime |
-| `src/shaders/*.shader` (9 files) | GLSL shaders — keep as-is, load from files or embed as string literals |
-| `src/fonts/` (3 files) | Font files — embed or load at runtime |
-| `src/images/` | UI images/icons — embed or load at runtime |
-| `src/fa-icons/` | SVG icons — embed or load at runtime |
+| `data/app.css` | Main stylesheet — reference for C++ UI equivalent (ImGui theming, etc.) |
+| `data/default_config.jsonc` | Default config — parsed at runtime from `data/` directory |
+| `data/shaders/*.shader` (9 files) | GLSL shaders — loaded from `data/shaders/` at runtime |
+| `data/fonts/` (3 files) | Font files — loaded from `data/fonts/` at runtime |
+| `data/images/` | UI images/icons — loaded from `data/images/` at runtime |
+| `data/fa-icons/` | SVG nav icons — loaded from `data/fa-icons/` at runtime |
+| `data/icons/` | Application icons (ico/png) — loaded from `data/icons/` |
 
 ---
 
