@@ -5,6 +5,7 @@
  */
 
 #include "tab_models.h"
+#include "tab_textures.h"
 #include "../log.h"
 #include "../core.h"
 #include "../casc/export-helper.h"
@@ -968,7 +969,7 @@ void render() {
 
 				// JS: <span @click.self="$core.view.goToTexture(...)">Go to {{ displayName }}</span>
 				if (ImGui::MenuItem(std::format("Go to {}", displayName).c_str())) {
-					// TODO(conversion): goToTexture will be wired when cross-tab navigation is integrated.
+					tab_textures::goToTexture(fdid);
 					view.contextMenus.nodeTextureRibbon = nullptr;
 				}
 

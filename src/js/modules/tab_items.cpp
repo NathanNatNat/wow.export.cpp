@@ -178,8 +178,7 @@ static bool is_initialized = false;
 
 // JS: const view_item_models = (core, modules, item) => { ... }
 static void view_item_models(const Item& item) {
-	// TODO(conversion): tab_models::setActive() cross-tab navigation is not yet wired.
-	// modules.tab_models.setActive();
+	modules::set_active("tab_models");
 
 	std::set<std::string> list;
 
@@ -210,8 +209,7 @@ static void view_item_models(const Item& item) {
 
 // JS: const view_item_textures = async (core, modules, item) => { ... }
 static void view_item_textures(const Item& item) {
-	// TODO(conversion): tab_textures::setActive() cross-tab navigation is not yet wired.
-	// modules.tab_textures.setActive();
+	modules::set_active("tab_textures");
 	db::caches::DBTextureFileData::ensureInitialized();
 
 	std::set<std::string> list;

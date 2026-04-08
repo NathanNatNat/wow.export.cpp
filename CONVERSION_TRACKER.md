@@ -300,10 +300,10 @@ Core infrastructure that most other phases depend on.
 - [x] Wire drop handler registration — `src/js/modules/tab_models.cpp`, `tab_textures.cpp`
 
 ### 1.4 Cross-Tab Navigation
-- [ ] Wire `tab_textures::setActive()` cross-tab navigation — `src/js/modules/tab_textures.cpp` (1 TODO)
-- [ ] Wire `tab_models::setActive()` cross-tab navigation — `src/js/modules/tab_models.cpp` (1 TODO)
-- [ ] Wire `goToTexture` cross-tab navigation — `src/js/modules/tab_textures.cpp` (1 TODO)
-- [ ] Wire "Navigate to items tab" for equipment slots — `src/js/modules/tab_characters.cpp` (1 TODO)
+- [x] Wire `tab_textures::setActive()` cross-tab navigation — `src/js/modules/tab_items.cpp` (1 TODO)
+- [x] Wire `tab_models::setActive()` cross-tab navigation — `src/js/modules/tab_items.cpp` (1 TODO)
+- [x] Wire `goToTexture` cross-tab navigation — `src/js/modules/tab_models.cpp` (1 TODO)
+- [x] Wire "Navigate to items tab" for equipment slots — `src/js/modules/tab_characters.cpp` (1 TODO)
 
 ### 1.5 Config Change Detection
 - [ ] Wire `cascLocale` config watch with change-detection pattern — `src/js/modules/tab_raw.cpp` (1 TODO)

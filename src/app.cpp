@@ -628,28 +628,6 @@ static void onTextureRibbonResize(int width) {
 }
 
 /**
- * Switches to the textures tab and filters for the given file.
- * @param {number} fileDataID
- */
-static void goToTexture(uint32_t fileDataID) {
-	auto* view = core::view;
-	modules::setActive("tab_textures");
-
-	// Directly preview the requested file, even if it's not in the listfile.
-	tab_textures::previewTextureByID(fileDataID);
-
-	// Since we're doing a direct preview, we need to reset the users current
-	// selection, so if they hit export, they get the expected result.
-	view->selectionTextures.clear();
-
-	// If the user has fileDataIDs shown, filter by that.
-	if (view->config.contains("regexFilters") && view->config["regexFilters"].get<bool>())
-		view->userInputFilterTextures = "\\[" + std::to_string(fileDataID) + "\\]";
-	else
-		view->userInputFilterTextures = "[" + std::to_string(fileDataID) + "]";
-}
-
-/**
  * Copy given data as text to the system clipboard.
  * @param {string} data
  */
