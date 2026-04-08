@@ -764,7 +764,7 @@ void handleKeyPress(MapViewerState& state, int gridSize,
 	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A)) {
 		// Without a WDT mask, we can't reliably select everything.
 		if (mask.empty()) {
-			core::setToast("error", "Unable to perform Select All operation on this map (Missing WDT)", nullptr, -1);
+			core::setToast("error", "Unable to perform Select All operation on this map (Missing WDT)", {}, -1);
 			return;
 		}
 

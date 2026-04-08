@@ -248,7 +248,7 @@ void preview_texture_by_id(ViewStateProxy& state, M2RendererGL* renderer,
 		texture = casc::listfile::formatUnknownFile(file_data_id);
 
 	auto _lock = core::create_busy_lock();
-	core::setToast("progress", std::format("Loading {}, please wait...", texture), nullptr, -1, false);
+	core::setToast("progress", std::format("Loading {}, please wait...", texture), {}, -1, false);
 	logging::write(std::format("Previewing texture file {}", texture));
 
 	try {
@@ -266,12 +266,12 @@ void preview_texture_by_id(ViewStateProxy& state, M2RendererGL* renderer,
 	} catch (const casc::EncryptionError& e) {
 		core::setToast("error",
 			std::format("The texture {} is encrypted with an unknown key ({}).", texture, e.key),
-			nullptr, -1);
+			{}, -1);
 		logging::write(std::format("Failed to decrypt texture {} ({})", texture, e.key));
 	} catch (const std::exception& e) {
 		core::setToast("error",
 			"Unable to preview texture " + texture,
-			nlohmann::json{{"View Log", ""}}, -1);
+			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 }
@@ -385,7 +385,7 @@ void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
 bool export_preview(const std::string& format, gl::GLContext& ctx,
 	const std::string& export_name, const std::string& export_subdir)
 {
-	core::setToast("progress", "Saving preview, hold on...", nullptr, -1, false);
+	core::setToast("progress", "Saving preview, hold on...", {}, -1, false);
 
 	// Capture current OpenGL framebuffer
 	const int width  = ctx.viewport_width;
@@ -427,14 +427,14 @@ bool export_preview(const std::string& format, gl::GLContext& ctx,
 		logging::write(std::format("Saved 3D preview screenshot to {}", out_file));
 		core::setToast("success",
 			std::format("Successfully exported preview to {}", out_file),
-			nlohmann::json{{"View in Explorer", out_dir}}, -1);
+			{ {"View in Explorer", [out_dir]() { core::openInExplorer(out_dir); }} }, -1);
 	} else if (format == "CLIPBOARD") {
 		// JS: clipboard.set(buf.toBase64(), 'png', true)
 		// C++: ImGui text clipboard with base64 PNG data
 		ImGui::SetClipboardText(buf.toBase64().c_str());
 
 		logging::write(std::format("Copied 3D preview to clipboard ({})", export_name));
-		core::setToast("success", "3D preview has been copied to the clipboard", nullptr, -1, true);
+		core::setToast("success", "3D preview has been copied to the clipboard", {}, -1, true);
 	}
 
 	return true;

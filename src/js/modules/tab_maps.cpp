@@ -532,7 +532,7 @@ auto dir = casc::ExportHelper::getExportPath(
 (std::filesystem::path("maps") / map.dir).string());
 
 #ifdef _WIN32
-ShellExecuteW(nullptr, L"open", std::filesystem::path(dir).wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+ShellExecuteW(nullptr, L"open", std::filesystem::path(dir).wstring().c_str(), {}, nullptr, SW_SHOWNORMAL);
 #else
 std::string cmd = "xdg-open \"" + dir + "\" &";
 (void)std::system(cmd.c_str());
@@ -760,7 +760,7 @@ int export_quality = view.config.value("exportMapQuality", 512);
 
 // JS: if (export_tiles.length === 0) return this.$core.setToast('error', ...);
 if (export_tiles.empty()) {
-core::setToast("error", "You haven't selected any tiles; hold shift and click on a map tile to select it.", nullptr, -1);
+core::setToast("error", "You haven't selected any tiles; hold shift and click on a map tile to select it.", {}, -1);
 return;
 }
 
@@ -833,7 +833,7 @@ auto& view = *core::view;
 const auto& export_tiles = view.mapViewerSelection;
 
 if (export_tiles.empty()) {
-core::setToast("error", "You haven't selected any tiles; hold shift and click on a map tile to select it.", nullptr, -1);
+core::setToast("error", "You haven't selected any tiles; hold shift and click on a map tile to select it.", {}, -1);
 return;
 }
 
@@ -878,7 +878,7 @@ auto& view = *core::view;
 const auto& export_tiles = view.mapViewerSelection;
 
 if (export_tiles.empty()) {
-core::setToast("error", "You haven't selected any tiles; hold shift and click on a map tile to select it.", nullptr, -1);
+core::setToast("error", "You haven't selected any tiles; hold shift and click on a map tile to select it.", {}, -1);
 return;
 }
 
@@ -1011,7 +1011,7 @@ const auto& export_tiles = view.mapViewerSelection;
 int export_resolution = view.config.value("heightmapResolution", 256);
 
 if (export_tiles.empty()) {
-core::setToast("error", "You haven't selected any tiles; hold shift and click on a map tile to select it.", nullptr, -1);
+core::setToast("error", "You haven't selected any tiles; hold shift and click on a map tile to select it.", {}, -1);
 return;
 }
 
@@ -1020,7 +1020,7 @@ if (export_resolution == -1)
 export_resolution = view.config.value("heightmapCustomResolution", 256);
 
 if (export_resolution <= 0) {
-core::setToast("error", "Invalid heightmap resolution selected.", nullptr, -1);
+core::setToast("error", "Invalid heightmap resolution selected.", {}, -1);
 return;
 }
 
@@ -1033,7 +1033,7 @@ const std::string dir = casc::ExportHelper::getExportPath(
 auto export_paths = core::openLastExportStream();
 
 // JS: this.$core.setToast('progress', 'Calculating height range across all tiles...', null, -1, false);
-core::setToast("progress", "Calculating height range across all tiles...", nullptr, -1, false);
+core::setToast("progress", "Calculating height range across all tiles...", {}, -1, false);
 float global_min_height = (std::numeric_limits<float>::infinity)();
 float global_max_height = -(std::numeric_limits<float>::infinity)();
 
@@ -1071,7 +1071,7 @@ logging::write(std::format("failed to extract height data from tile {}: {}", til
 if (global_min_height == (std::numeric_limits<float>::infinity)() ||
 global_max_height == -(std::numeric_limits<float>::infinity)()) {
 core::hideToast();
-core::setToast("error", "No valid height data found in selected tiles", nullptr, -1);
+core::setToast("error", "No valid height data found in selected tiles", {}, -1);
 return;
 }
 

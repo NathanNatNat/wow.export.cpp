@@ -157,7 +157,7 @@ static void load_table(const std::string& table_name) {
 		selected_file = table_name;
 		selected_file_schema = result.schema;
 	} catch (const std::exception& e) {
-		core::setToast("error", "Unable to open DB2 file " + table_name, nullptr, -1);
+		core::setToast("error", "Unable to open DB2 file " + table_name, {}, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 }
@@ -286,7 +286,7 @@ static void copy_rows_csv() {
 
 	// JS: nw.Clipboard.get().set(csv, 'text');
 	// ImGui::SetClipboardText(csv.c_str());
-	core::setToast("success", std::format("Copied {} row{} as CSV to the clipboard", count, count != 1 ? "s" : ""), nullptr, 2000);
+	core::setToast("success", std::format("Copied {} row{} as CSV to the clipboard", count, count != 1 ? "s" : ""), {}, 2000);
 }
 
 // JS: methods.copy_rows_sql()
@@ -300,7 +300,7 @@ static void copy_rows_sql() {
 		return;
 
 	// JS: nw.Clipboard.get().set(sql, 'text');
-	core::setToast("success", std::format("Copied {} row{} as SQL to the clipboard", count, count != 1 ? "s" : ""), nullptr, 2000);
+	core::setToast("success", std::format("Copied {} row{} as SQL to the clipboard", count, count != 1 ? "s" : ""), {}, 2000);
 }
 
 // JS: methods.copy_cell(value)

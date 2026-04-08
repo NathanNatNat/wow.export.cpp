@@ -171,7 +171,7 @@ void registerBuildCacheEvents() {
 	// Invoked when the user requests a cache purge.
 	core::events.on("click-cache-clear", []() {
 		auto _lock = core::create_busy_lock();
-		core::setToast("progress", "Clearing cache, please wait...", nullptr, -1, false);
+		core::setToast("progress", "Clearing cache, please wait...", {}, -1, false);
 		logging::write(std::format("Manual cache purge requested by user! (Cache size: {})", generics::filesize(static_cast<double>(core::view->cacheSize))));
 
 		try {
@@ -184,15 +184,14 @@ void registerBuildCacheEvents() {
 			core::view->cacheSize = 0;
 			logging::write("Purge complete, awaiting mandatory restart.");
 
-			// TODO(conversion): Restart action: emit event since restartApplication() is not yet available.
-			nlohmann::json restartOptions = nlohmann::json::object();
-			restartOptions["Restart"] = "restart-application";
-			core::setToast("success", "Cache has been successfully cleared, a restart is required.", restartOptions, -1, false);
+			// JS: { 'Restart': () => restartApplication() }
+			core::setToast("success", "Cache has been successfully cleared, a restart is required.",
+				{ {"Restart", []() { std::exit(0); }} }, -1, false);
 
 			core::events.emit("cache-cleared");
 		} catch (const std::exception& e) {
 			logging::write(std::format("Error clearing cache: {}", e.what()));
-			core::setToast("error", std::format("Failed to clear cache: {}", e.what()), nullptr, -1, false);
+			core::setToast("error", std::format("Failed to clear cache: {}", e.what()), {}, -1, false);
 		}
 	});
 

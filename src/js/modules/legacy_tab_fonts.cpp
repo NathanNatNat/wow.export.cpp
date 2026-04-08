@@ -294,13 +294,14 @@ void export_fonts() {
 		namespace fs = std::filesystem;
 		// JS: const dir = path.dirname(last_export_path);
 		// JS: const toast_opt = { 'View in Explorer': () => nw.Shell.openItem(dir) };
-		// TODO(conversion): 'View in Explorer' toast action will be wired when platform shell integration is complete.
+		const std::string dir = fs::path(last_export_path).parent_path().string();
+		std::vector<ToastAction> toast_opt = { {"View in Explorer", [dir]() { core::openInExplorer(dir); }} };
 
 		if (selected.size() > 1)
-			core::setToast("success", std::format("Successfully exported {} fonts.", exported), nullptr, -1);
+			core::setToast("success", std::format("Successfully exported {} fonts.", exported), toast_opt, -1);
 		else
 			core::setToast("success", std::format("Successfully exported {}.",
-				fs::path(last_export_path).filename().string()), nullptr, -1);
+				fs::path(last_export_path).filename().string()), toast_opt, -1);
 	}
 }
 

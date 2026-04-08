@@ -85,7 +85,7 @@ static bool load_track() {
 		return false;
 
 	BusyLock _lock = core::create_busy_lock();
-	core::setToast("progress", std::format("Loading {}, please wait...", selected_file), nullptr, -1, false);
+	core::setToast("progress", std::format("Loading {}, please wait...", selected_file), {}, -1, false);
 	logging::write(std::format("Previewing sound file {}", selected_file));
 
 	try {
@@ -111,13 +111,13 @@ static bool load_track() {
 		core::hideToast();
 		return true;
 	} catch (const casc::EncryptionError& e) {
-		core::setToast("error", std::format("The audio file {} is encrypted with an unknown key ({}).", selected_file, e.key), nullptr, -1);
+		core::setToast("error", std::format("The audio file {} is encrypted with an unknown key ({}).", selected_file, e.key), {}, -1);
 		logging::write(std::format("Failed to decrypt audio file {} ({})", selected_file, e.key));
 		return false;
 	} catch (const std::exception& e) {
 		// JS: core.setToast('error', 'Unable to preview audio ' + selected_file, { 'View Log': () => log.openRuntimeLog() }, -1);
-		core::setToast("error", "Unable to preview audio " + selected_file, nullptr, -1);
-		// TODO(conversion): 'View Log' toast action will be wired when toast action callbacks are integrated.
+		core::setToast("error", "Unable to preview audio " + selected_file,
+			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 		return false;
 	}
@@ -142,7 +142,7 @@ static void play_track() {
 	// In C++, AudioPlayer has no public 'buffer' field; get_duration() returns 0 when no audio loaded.
 	if (player.get_duration() <= 0) {
 		if (selected_file.empty()) {
-			core::setToast("info", "You need to select an audio track first!", nullptr, -1, true);
+			core::setToast("info", "You need to select an audio track first!", {}, -1, true);
 			return;
 		}
 

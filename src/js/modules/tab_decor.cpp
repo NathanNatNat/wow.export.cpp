@@ -114,7 +114,7 @@ static model_viewer_utils::ViewStateProxy* get_view_state_ptr() {
 // JS: const preview_decor = async (core, decor_item) => { ... }
 static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 	auto _lock = core::create_busy_lock();
-	core::setToast("progress", std::format("Loading {}, please wait...", decor_item.name), nullptr, -1, false);
+	core::setToast("progress", std::format("Loading {}, please wait...", decor_item.name), {}, -1, false);
 	logging::write(std::format("Previewing decor {} (FileDataID: {})", decor_item.name, decor_item.modelFileDataID));
 
 	auto& state = view_state;
@@ -141,7 +141,7 @@ static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 		//   auto file = casc->getFile(file_data_id);
 		//   auto model_type = model_viewer_utils::detect_model_type(file);
 		// Stub: set toast and return early.
-		core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", decor_item.name), nullptr, 4000);
+		core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", decor_item.name), {}, 4000);
 		logging::write(std::format("CASC not yet integrated — skipping preview for {}", decor_item.name));
 
 		// The following code is the complete conversion and will work once CASC is wired:
@@ -194,7 +194,7 @@ static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 		bool has_content = true;
 
 		if (!has_content) {
-			core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", decor_item.name), nullptr, 4000);
+			core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", decor_item.name), {}, 4000);
 		} else {
 			core::hideToast();
 
@@ -206,10 +206,10 @@ static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 		}
 		*/
 	} catch (const casc::EncryptionError& e) {
-		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", decor_item.name, e.key), nullptr, -1);
+		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", decor_item.name, e.key), {}, -1);
 		logging::write(std::format("Failed to decrypt model {} ({})", decor_item.name, e.key));
 	} catch (const std::exception& e) {
-		core::setToast("error", "Unable to preview model " + decor_item.name, nullptr, -1);
+		core::setToast("error", "Unable to preview model " + decor_item.name, {}, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 }
@@ -237,9 +237,9 @@ static void export_files(const std::vector<const db::caches::DBDecor::DecorItem*
 			// JS: await modelViewerUtils.export_preview(core, format, canvas, export_name, 'decor');
 			// TODO(conversion): GL context needed for export_preview; will be wired when renderer is integrated.
 			// model_viewer_utils::export_preview(format, gl_context, export_name, "decor");
-			core::setToast("info", "Preview export not yet wired.", nullptr, 2000);
+			core::setToast("info", "Preview export not yet wired.", {}, 2000);
 		} else {
-			core::setToast("error", "The selected export option only works for model previews. Preview something first!", nullptr, -1);
+			core::setToast("error", "The selected export option only works for model previews. Preview something first!", {}, -1);
 		}
 
 		// JS: export_paths?.close();

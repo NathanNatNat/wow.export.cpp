@@ -233,9 +233,9 @@ static void equip_set(const nlohmann::json& set) {
 	if (equipped_count > 0) {
 		// JS: this.$core.view.chrEquippedItems = { ...this.$core.view.chrEquippedItems };
 		// In C++ the JSON object is already mutated in place; no spread needed.
-		core::setToast("success", std::format("Equipped {} items from {}.", equipped_count, set_name), nullptr, 2000);
+		core::setToast("success", std::format("Equipped {} items from {}.", equipped_count, set_name), {}, 2000);
 	} else {
-		core::setToast("info", "No equippable items in this set.", nullptr, 2000);
+		core::setToast("info", "No equippable items in this set.", {}, 2000);
 	}
 }
 

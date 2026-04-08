@@ -58,10 +58,10 @@ void render() {
 				selected_file = first;
 				prev_selection_first = first;
 			} catch (const casc::EncryptionError& e) {
-				core::setToast("error", std::format("The text file {} is encrypted with an unknown key ({}).", first, e.key), nullptr, -1);
+				core::setToast("error", std::format("The text file {} is encrypted with an unknown key ({}).", first, e.key), {}, -1);
 				logging::write(std::format("Failed to decrypt texture {} ({})", first, e.key));
 			} catch (const std::exception& e) {
-				core::setToast("error", "Unable to preview text file " + first, nullptr, -1);
+				core::setToast("error", "Unable to preview text file " + first, {}, -1);
 				logging::write(std::format("Failed to open CASC file: {}", e.what()));
 			}
 		}
@@ -116,7 +116,7 @@ void copy_text() {
 	// JS: const clipboard = nw.Clipboard.get();
 	// JS: clipboard.set(this.$core.view.textViewerSelectedText, 'text');
 	ImGui::SetClipboardText(core::view->textViewerSelectedText.c_str());
-	core::setToast("success", std::format("Copied contents of {} to the clipboard.", selected_file), nullptr, -1, true);
+	core::setToast("success", std::format("Copied contents of {} to the clipboard.", selected_file), {}, -1, true);
 }
 
 void export_text() {

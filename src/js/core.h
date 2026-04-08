@@ -122,10 +122,18 @@ private:
 /**
  * Toast notification data.
  */
+/**
+ * A single toast action button (label + callback).
+ */
+struct ToastAction {
+	std::string label;
+	std::function<void()> callback;
+};
+
 struct Toast {
 	std::string type;      // 'error', 'info', 'success', 'progress'
 	std::string message;
-	nlohmann::json options;
+	std::vector<ToastAction> actions; // Action buttons with callbacks.
 	bool closable = true;
 };
 
@@ -555,12 +563,12 @@ void hideLoadingScreen();
  * Display a toast message.
  * @param toastType 'error', 'info', 'success', 'progress'
  * @param message   Toast message text.
- * @param options   Optional JSON options.
+ * @param actions   Optional action buttons (label + callback pairs).
  * @param ttl       Time in milliseconds before removing the toast (-1 = persistent).
  * @param closable  If true, toast can manually be closed.
  */
 void setToast(const std::string& toastType, const std::string& message,
-              const nlohmann::json& options = nullptr, int ttl = 10000, bool closable = true);
+              const std::vector<ToastAction>& actions = {}, int ttl = 10000, bool closable = true);
 
 /**
  * Hide the currently active toast prompt.
@@ -572,6 +580,13 @@ void hideToast(bool userCancel = false);
  * Open user-configured export directory with OS default.
  */
 void openExportDirectory();
+
+/**
+ * Open a file or directory with the OS default application/explorer.
+ * C++ equivalent of nw.Shell.openItem(path).
+ * @param path Path to open.
+ */
+void openInExplorer(const std::string& path);
 
 /**
  * Register a handler for file drops.

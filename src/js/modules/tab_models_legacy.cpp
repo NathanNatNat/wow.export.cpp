@@ -95,7 +95,7 @@ static void dispose_active_renderer() {
 // JS: const preview_model = async (core, file_name) => { ... }
 static void preview_model(const std::string& file_name) {
 	auto _lock = core::create_busy_lock();
-	core::setToast("progress", std::format("Loading {}, please wait...", file_name), nullptr, -1, false);
+	core::setToast("progress", std::format("Loading {}, please wait...", file_name), {}, -1, false);
 	logging::write(std::format("Previewing legacy model {}", file_name));
 
 	texture_ribbon::reset();
@@ -127,7 +127,7 @@ static void preview_model(const std::string& file_name) {
 		// JS: const file_data = mpq.getFile(file_name);
 		// JS: if (!file_data) throw new Error('File not found in MPQ: ' + file_name);
 		// TODO(conversion): MPQ file loading will be wired when integration is complete.
-		core::setToast("info", std::format("MPQ integration pending — cannot preview {} yet.", file_name), nullptr, 4000);
+		core::setToast("info", std::format("MPQ integration pending — cannot preview {} yet.", file_name), {}, 4000);
 		logging::write(std::format("MPQ not yet integrated — skipping preview for {}", file_name));
 
 		// The following code is the complete conversion and will work once MPQ is wired:
@@ -309,7 +309,7 @@ static void preview_model(const std::string& file_name) {
 
 		if (!has_content) {
 			// JS: core.setToast('info', util.format('The model %s doesn\'t have any 3D data associated with it.', file_name), null, 4000);
-			core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", file_name), nullptr, 4000);
+			core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", file_name), {}, 4000);
 		} else {
 			core::hideToast();
 
@@ -319,7 +319,7 @@ static void preview_model(const std::string& file_name) {
 		*/
 	} catch (const std::exception& e) {
 		// JS: core.setToast('error', 'Unable to preview model ' + file_name, ...);
-		core::setToast("error", "Unable to preview model " + file_name, nullptr, -1);
+		core::setToast("error", "Unable to preview model " + file_name, {}, -1);
 		logging::write(std::format("Failed to load legacy model: {}", e.what()));
 	}
 }
@@ -568,7 +568,7 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 	if (format == "PNG" || format == "CLIPBOARD") {
 		if (!active_path.empty()) {
 			// JS: core.setToast('progress', 'Saving preview, hold on...', null, -1, false);
-			core::setToast("progress", "Saving preview, hold on...", nullptr, -1, false);
+			core::setToast("progress", "Saving preview, hold on...", {}, -1, false);
 
 			// JS: const canvas = document.getElementById('legacy-model-preview').querySelector('canvas');
 			// JS: const buf = await BufferWrapper.fromCanvas(canvas, 'image/png');
@@ -596,17 +596,17 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 
 				logging::write(std::format("Saved legacy 3D preview screenshot to {}", out_file));
 				// JS: core.setToast('success', util.format('Successfully exported preview to %s', out_file), ...);
-				core::setToast("success", std::format("Successfully exported preview to {}", out_file), nullptr, -1);
+				core::setToast("success", std::format("Successfully exported preview to {}", out_file), {}, -1);
 			} else if (format == "CLIPBOARD") {
 				// JS: const clipboard = nw.Clipboard.get(); clipboard.set(buf.toBase64(), 'png', true);
 				// TODO(conversion): Clipboard PNG copy will be wired when GL integration is complete.
 
 				logging::write(std::format("Copied legacy 3D preview to clipboard ({})", active_path));
-				core::setToast("success", "3D preview has been copied to the clipboard", nullptr, -1, true);
+				core::setToast("success", "3D preview has been copied to the clipboard", {}, -1, true);
 			}
 		} else {
 			// JS: core.setToast('error', 'The selected export option only works for model previews. Preview something first!', null, -1);
-			core::setToast("error", "The selected export option only works for model previews. Preview something first!", nullptr, -1);
+			core::setToast("error", "The selected export option only works for model previews. Preview something first!", {}, -1);
 		}
 	} else if (format == "OBJ" || format == "STL" || format == "RAW") {
 		// JS: const mpq = core.view.mpq;
@@ -731,7 +731,7 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 		helper.finish();
 	} else {
 		// JS: core.setToast('error', 'Export format not yet implemented for legacy models: ' + format, null, -1);
-		core::setToast("error", "Export format not yet implemented for legacy models: " + format, nullptr, -1);
+		core::setToast("error", "Export format not yet implemented for legacy models: " + format, {}, -1);
 	}
 
 	// JS: export_paths?.close();

@@ -491,7 +491,7 @@ static void equip_item(const nlohmann::json& item_json) {
 
 	auto slot_id_opt = db::caches::DBItems::getItemSlotId(item_id);
 	if (!slot_id_opt.has_value()) {
-		core::setToast("info", "This item cannot be equipped.", nullptr, 2000);
+		core::setToast("info", "This item cannot be equipped.", {}, 2000);
 		return;
 	}
 
@@ -506,7 +506,7 @@ static void equip_item(const nlohmann::json& item_json) {
 	std::string slot_name = slot_name_opt.has_value() ? std::string(slot_name_opt.value()) : "Unknown";
 
 	// JS: this.$core.setToast('success', `Equipped ${item.name} to ${slot_name} slot.`, null, 2000);
-	core::setToast("success", std::format("Equipped {} to {} slot.", item_name, slot_name), nullptr, 2000);
+	core::setToast("success", std::format("Equipped {} to {} slot.", item_name, slot_name), {}, 2000);
 }
 
 // --- Public API ---

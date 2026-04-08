@@ -289,9 +289,9 @@ Core infrastructure that most other phases depend on.
 - [x] Add typed parameter support to the event emitter so callbacks receive proper arguments (e.g. `layer_name`) — `src/app.cpp`, `src/js/3D/renderers/WMOLegacyRendererGL.cpp`, `src/js/3D/renderers/WMORendererGL.cpp` (5 TODOs)
 
 ### 1.2 Toast Action Callbacks
-- [ ] Extend `core::setToast()` to accept `std::function` callbacks for button actions instead of `nlohmann::json` — `src/js/modules/screen_settings.cpp` (6), `src/js/modules/tab_install.cpp` (1), `src/js/modules.cpp` (1) (8 TODOs)
-- [ ] Wire "View Log" toast actions — `src/js/modules/tab_audio.cpp`, `tab_textures.cpp`, `legacy_tab_audio.cpp`, `legacy_tab_data.cpp`, `tab_videos.cpp` (6 TODOs)
-- [ ] Wire "View in Explorer" toast actions — `src/js/modules/legacy_tab_files.cpp`, `legacy_tab_fonts.cpp` (2 TODOs)
+- [x] Extend `core::setToast()` to accept `std::function` callbacks for button actions instead of `nlohmann::json` — `src/js/modules/screen_settings.cpp` (6), `src/js/modules/tab_install.cpp` (1), `src/js/modules.cpp` (1) (8 TODOs)
+- [x] Wire "View Log" toast actions — `src/js/modules/tab_audio.cpp`, `tab_textures.cpp`, `legacy_tab_audio.cpp`, `legacy_tab_data.cpp`, `tab_videos.cpp` (6 TODOs)
+- [x] Wire "View in Explorer" toast actions — `src/js/modules/legacy_tab_files.cpp`, `legacy_tab_fonts.cpp` (2 TODOs)
 
 ### 1.3 Module System Wiring
 - [ ] Wire nav button registration across all 17 tab modules — each tab's `registerNavButton` call in `src/js/modules/*.cpp` (17 TODOs)

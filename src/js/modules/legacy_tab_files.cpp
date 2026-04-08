@@ -97,13 +97,13 @@ static void export_files() {
 			namespace fs = std::filesystem;
 			const std::string dir = fs::path(last_export_path).parent_path().string();
 			// JS: const toast_opt = { 'View in Explorer': () => nw.Shell.openItem(dir) };
-			// TODO(conversion): 'View in Explorer' toast action will be wired when platform shell integration is complete.
+			std::vector<ToastAction> toast_opt = { {"View in Explorer", [dir]() { core::openInExplorer(dir); }} };
 
 			if (selection.size() > 1)
-				core::setToast("success", std::format("Successfully exported {} files.", selection.size()), nullptr, -1);
+				core::setToast("success", std::format("Successfully exported {} files.", selection.size()), toast_opt, -1);
 			else
 				core::setToast("success", std::format("Successfully exported {}.",
-					fs::path(last_export_path).filename().string()), nullptr, -1);
+					fs::path(last_export_path).filename().string()), toast_opt, -1);
 		}
 	} catch (const std::exception& e) {
 		logging::write(std::format("failed to export legacy files: {}", e.what()));

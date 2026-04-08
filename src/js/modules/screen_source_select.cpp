@@ -128,10 +128,9 @@ void load_install(int index) {
 		}
 	} catch (const std::exception& e) {
 		logging::write(std::format("Failed to load CASC: {}", e.what()));
-		nlohmann::json toast_options;
-		toast_options["View Log"] = true;
 		// JS: 'Visit Support Discord': () => ExternalLinks.open('::DISCORD') // Removed: external-links module deleted
-		core::setToast("error", "Unable to initialize CASC. Try repairing your game installation, or seek support.", toast_options, -1);
+		core::setToast("error", "Unable to initialize CASC. Try repairing your game installation, or seek support.",
+			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		// JS: this.$modules.source_select.setActive();
 		// TODO(conversion): Module activation will be wired when the module system is integrated.
 	}
@@ -176,7 +175,7 @@ void open_local_install(const std::string& install_path, const std::string& prod
 			core::view->sourceSelectShowBuildSelect = true;
 		}
 	} catch (const std::exception& e) {
-		core::setToast("error", std::format("It looks like {} is not a valid World of Warcraft installation.", install_path), nullptr, -1);
+		core::setToast("error", std::format("It looks like {} is not a valid World of Warcraft installation.", install_path), {}, -1);
 		logging::write(std::format("Failed to initialize local CASC source: {}", e.what()));
 
 		// Remove matching entries from recent list.
@@ -240,7 +239,7 @@ void open_legacy_install(const std::string& install_path) {
 		core::hideLoadingScreen();
 	} catch (const std::exception& e) {
 		core::hideLoadingScreen();
-		core::setToast("error", std::format("Failed to load legacy installation from {}", install_path), nullptr, -1);
+		core::setToast("error", std::format("Failed to load legacy installation from {}", install_path), {}, -1);
 		logging::write(std::format("Failed to initialize legacy MPQ source: {}", e.what()));
 
 		auto& recent_legacy = core::view->config["recentLegacy"];
@@ -347,7 +346,7 @@ static void click_source_remote() {
 	} catch (const std::exception& e) {
 		std::string upper_tag = tag;
 		std::transform(upper_tag.begin(), upper_tag.end(), upper_tag.begin(), ::toupper);
-		core::setToast("error", std::format("There was an error connecting to Blizzard's {} CDN, try another region!", upper_tag), nullptr, -1);
+		core::setToast("error", std::format("There was an error connecting to Blizzard's {} CDN, try another region!", upper_tag), {}, -1);
 		logging::write(std::format("Failed to initialize remote CASC source: {}", e.what()));
 	}
 }

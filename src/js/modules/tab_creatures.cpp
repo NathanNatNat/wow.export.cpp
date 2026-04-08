@@ -839,7 +839,7 @@ static void refresh_creature_equipment() {
 // JS: const preview_creature = async (core, creature) => { ... }
 static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& creature) {
 	auto _lock = core::create_busy_lock();
-	core::setToast("progress", std::format("Loading {}, please wait...", creature.name), nullptr, -1, false);
+	core::setToast("progress", std::format("Loading {}, please wait...", creature.name), {}, -1, false);
 	logging::write(std::format("Previewing creature {} (ID: {})", creature.name, creature.id));
 
 	auto& state = view_state;
@@ -885,21 +885,21 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			// JS: const extra = DBCreatureDisplayExtra.get_extra(display_info.extendedDisplayInfoID);
 			const auto* extra = db::caches::DBCreatureDisplayExtra::get_extra(display_info->extendedDisplayInfoID);
 			if (!extra) {
-				core::setToast("error", std::format("No extended display info found for creature {}.", creature.name), nullptr, -1);
+				core::setToast("error", std::format("No extended display info found for creature {}.", creature.name), {}, -1);
 				return;
 			}
 
 			// JS: const chr_model_id = DBCharacterCustomization.get_chr_model_id(extra.DisplayRaceID, extra.DisplaySexID);
 			auto chr_model_id = db::caches::DBCharacterCustomization::get_chr_model_id(extra->DisplayRaceID, extra->DisplaySexID);
 			if (!chr_model_id.has_value()) {
-				core::setToast("error", std::format("No character model found for creature {} (race {}, sex {}).", creature.name, extra->DisplayRaceID, extra->DisplaySexID), nullptr, -1);
+				core::setToast("error", std::format("No character model found for creature {} (race {}, sex {}).", creature.name, extra->DisplayRaceID, extra->DisplaySexID), {}, -1);
 				return;
 			}
 
 			// JS: const file_data_id = DBCharacterCustomization.get_model_file_data_id(chr_model_id);
 			uint32_t file_data_id = db::caches::DBCharacterCustomization::get_model_file_data_id(chr_model_id.value());
 			if (file_data_id == 0) {
-				core::setToast("error", std::format("No model file found for creature {}.", creature.name), nullptr, -1);
+				core::setToast("error", std::format("No model file found for creature {}.", creature.name), {}, -1);
 				return;
 			}
 
@@ -914,7 +914,7 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			// JS: active_renderer.geosetKey = 'creatureViewerGeosets';
 			// JS: await active_renderer.load();
 			// TODO(conversion): M2RendererGL instantiation requires CASC data + GL context.
-			core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", creature.name), nullptr, 4000);
+			core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", creature.name), {}, 4000);
 			logging::write(std::format("CASC not yet integrated — skipping character preview for {}", creature.name));
 
 			// The following code is the complete conversion and will work once CASC is wired:
@@ -1007,14 +1007,14 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			// JS: const file_data_id = DBCreatures.getFileDataIDByDisplayID(creature.displayID);
 			uint32_t file_data_id = db::caches::DBCreatures::getFileDataIDByDisplayID(creature.displayID);
 			if (file_data_id == 0) {
-				core::setToast("error", std::format("No model data found for creature {}.", creature.name), nullptr, -1);
+				core::setToast("error", std::format("No model data found for creature {}.", creature.name), {}, -1);
 				return;
 			}
 
 			// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 			// JS: const file = await core.view.casc.getFile(file_data_id);
 			// JS: const gl_context = core.view.creatureViewerContext?.gl_context;
-			core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", creature.name), nullptr, 4000);
+			core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", creature.name), {}, 4000);
 			logging::write(std::format("CASC not yet integrated — skipping preview for {}", creature.name));
 
 			// The following code is the complete conversion and will work once CASC is wired:
@@ -1164,7 +1164,7 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			bool has_content = true; // TODO(conversion): Check draw_calls/groups when renderer is wired.
 
 			if (!has_content) {
-				core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", creature.name), nullptr, 4000);
+				core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", creature.name), {}, 4000);
 			} else {
 				core::hideToast();
 
@@ -1178,11 +1178,11 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 		}
 	} catch (const casc::EncryptionError& e) {
 		// JS: core.setToast('error', util.format('The model %s is encrypted with an unknown key (%s).', creature.name, e.key), null, -1);
-		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", creature.name, e.key), nullptr, -1);
+		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", creature.name, e.key), {}, -1);
 		logging::write(std::format("Failed to decrypt model {} ({})", creature.name, e.key));
 	} catch (const std::exception& e) {
 		// JS: core.setToast('error', 'Unable to preview creature ' + creature.name, ...);
-		core::setToast("error", "Unable to preview creature " + creature.name, nullptr, -1);
+		core::setToast("error", "Unable to preview creature " + creature.name, {}, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 }
@@ -1209,9 +1209,9 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 			// JS: await modelViewerUtils.export_preview(core, format, canvas, export_name, 'creatures');
 			// TODO(conversion): GL context needed for export_preview; will be wired when renderer is integrated.
 			// model_viewer_utils::export_preview(format, gl_context, export_name, "creatures");
-			core::setToast("info", "Preview export not yet wired.", nullptr, 2000);
+			core::setToast("info", "Preview export not yet wired.", {}, 2000);
 		} else {
-			core::setToast("error", "The selected export option only works for model previews. Preview something first!", nullptr, -1);
+			core::setToast("error", "The selected export option only works for model previews. Preview something first!", {}, -1);
 		}
 
 		// JS: export_paths?.close();

@@ -186,7 +186,7 @@ static void view_strings_impl() {
 		return;
 	}
 
-	core::setToast("progress", "Analyzing binary for strings...", nullptr, -1, false);
+	core::setToast("progress", "Analyzing binary for strings...", {}, -1, false);
 	view.isBusy++;
 
 	try {
@@ -242,10 +242,9 @@ static void export_strings_impl() {
 		ofs.close();
 
 		const std::string dir_path = fs::path(export_path).parent_path().string();
-		nlohmann::json toast_options;
 		// JS: { 'View in Explorer': () => nw.Shell.openItem(dir_path) }
-		// TODO(conversion): Toast action callbacks will be wired when toast system supports function pointers.
-		core::setToast("success", std::format("Exported {} strings.", strings.size()));
+		core::setToast("success", std::format("Exported {} strings.", strings.size()),
+			{ {"View in Explorer", [dir_path]() { core::openInExplorer(dir_path); }} });
 		logging::write(std::format("Exported {} strings to {}", strings.size(), export_path));
 	} catch (const std::exception& e) {
 		core::setToast("error", std::string("Failed to export strings: ") + e.what());
@@ -272,7 +271,7 @@ void registerTab() {
 void mounted() {
 	// JS: this.$core.setToast('progress', 'Retrieving installation manifest...', null, -1, false);
 	// JS: manifest = await this.$core.view.casc.getInstallManifest();
-	core::setToast("progress", "Retrieving installation manifest...", nullptr, -1, false);
+	core::setToast("progress", "Retrieving installation manifest...", {}, -1, false);
 
 	// TODO(conversion): CASC getInstallManifest will be called when CASC integration is complete.
 	// After manifest is loaded:

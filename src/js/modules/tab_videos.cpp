@@ -333,7 +333,7 @@ static void stream_video(const std::string& file_name) {
 			logging::write(std::format("video is queued for processing, polling in {}ms",
 				constants::KINO::POLL_INTERVAL));
 
-			core::setToast("progress", "Video is being processed, please wait...", nullptr, -1, true);
+			core::setToast("progress", "Video is being processed, please wait...", {}, -1, true);
 
 			// listen for toast cancellation
 			// JS: const cancel_handler = () => { ... };
@@ -394,8 +394,8 @@ static void stream_video(const std::string& file_name) {
 					core::events.off("toast-cancelled", cancel_listener_id);
 					if (!poll_cancelled) {
 						logging::write(std::format("poll request failed: {}", e.what()));
-						core::setToast("error", std::string("Failed to check video status: ") + e.what(), nullptr, -1);
-						// TODO(conversion): 'view log' toast action will be wired when toast action callbacks are integrated.
+						core::setToast("error", std::string("Failed to check video status: ") + e.what(),
+							{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 						is_streaming = false;
 						core::view->videoPlayerState = false;
 					}
@@ -413,8 +413,8 @@ static void stream_video(const std::string& file_name) {
 		core::view->videoPlayerState = false;
 
 		logging::write(std::format("failed to stream video {}: {}", file_name, e.what()));
-		core::setToast("error", std::string("Failed to stream video: ") + e.what(), nullptr, -1);
-		// TODO(conversion): 'view log' toast action will be wired when toast action callbacks are integrated.
+		core::setToast("error", std::string("Failed to stream video: ") + e.what(),
+			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 	}
 }
 
@@ -563,7 +563,7 @@ static void trigger_kino_processing() {
 			return;
 
 		const std::string msg = std::format("Processing videos: {}/{} ({} errors)", processed, total, errors);
-		core::setToast("progress", msg, nullptr, -1, true);
+		core::setToast("progress", msg, {}, -1, true);
 	};
 
 	// JS: const cancel_processing = () => { ... };

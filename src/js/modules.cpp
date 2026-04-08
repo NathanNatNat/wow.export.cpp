@@ -220,10 +220,8 @@ static void wrap_module(ModuleDef& mod) {
 				core::hideLoadingScreen();
 				logging::write(std::format("Failed to initialize {} tab: {}", display_label, error.what()));
 				core::setToast("error", std::format("Failed to initialize {} tab. Check the log for details.", display_label),
-				               nlohmann::json({{"View Log", nullptr}}), -1);
-				// TODO(conversion): JS calls this.$core.setToast with action callback {
-				//   'View Log': () => log.openRuntimeLog()
-				// }. nlohmann::json cannot hold lambdas; using nullptr as placeholder.
+				               { {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
+				// JS: { 'View Log': () => log.openRuntimeLog() }
 				go_to_landing();
 			}
 
