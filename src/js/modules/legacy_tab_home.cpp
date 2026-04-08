@@ -5,6 +5,7 @@
  */
 
 #include "legacy_tab_home.h"
+#include "../modules.h"
 
 namespace legacy_tab_home {
 
@@ -16,9 +17,9 @@ void render() {
 	// TODO(conversion): Legacy home tab content stripped; will be re-added when UI is finalized.
 }
 
-void navigate(const char* /*module_name*/) {
+void navigate(const char* module_name) {
 	// JS: this.$modules[module_name].setActive();
-	// TODO(conversion): Module activation will be wired when the module system is integrated.
+	modules::set_active(module_name);
 }
 
 } // namespace legacy_tab_home

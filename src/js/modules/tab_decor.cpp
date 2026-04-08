@@ -11,6 +11,7 @@
 #include "../casc/listfile.h"
 #include "../casc/blte-reader.h"
 #include "../install-type.h"
+#include "../modules.h"
 #include "../ui/listbox-context.h"
 #include "../db/caches/DBDecor.h"
 #include "../db/caches/DBModelFileData.h"
@@ -647,7 +648,8 @@ static void toggle_category_group(CategoryGroup& group) {
 
 // JS: register() { this.registerNavButton('Decor', 'house.svg', InstallType.CASC); }
 void registerTab() {
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	// JS: this.registerNavButton('Decor', 'house.svg', InstallType.CASC);
+	modules::register_nav_button("tab_decor", "Decor", "house.svg", install_type::CASC);
 }
 
 // JS: async mounted() { await this.initialize(); ... }

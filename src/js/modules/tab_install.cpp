@@ -5,6 +5,7 @@
  */
 
 #include "tab_install.h"
+#include "../modules.h"
 #include "../log.h"
 #include "../core.h"
 #include "../generics.h"
@@ -265,7 +266,8 @@ static void back_to_manifest_impl() {
 
 void registerTab() {
 	// JS: this.registerContextMenuOption('Browse Install Manifest', 'clipboard-list.svg');
-	// TODO(conversion): Context menu registration will be wired when the module system is integrated.
+	modules::register_context_menu_option("tab_install", "Browse Install Manifest", "clipboard-list.svg",
+		[]() { modules::set_active("tab_install"); });
 }
 
 void mounted() {

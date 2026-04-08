@@ -13,6 +13,7 @@
 #include "../ui/audio-helper.h"
 #include "../ui/listbox-context.h"
 #include "../install-type.h"
+#include "../modules.h"
 #include "../mpq/mpq-install.h"
 
 #include <cstring>
@@ -294,7 +295,7 @@ static std::string format_time(double seconds) {
 
 void registerTab() {
 	// JS: this.registerNavButton('Audio', 'music.svg', InstallType.MPQ);
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	modules::register_nav_button("legacy_tab_audio", "Audio", "music.svg", install_type::MPQ);
 }
 
 void mounted() {

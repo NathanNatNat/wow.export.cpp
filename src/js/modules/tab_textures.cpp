@@ -18,6 +18,7 @@
 #include "../ui/texture-exporter.h"
 #include "../ui/listbox-context.h"
 #include "../install-type.h"
+#include "../modules.h"
 
 #include <cstring>
 #include <format>
@@ -333,7 +334,7 @@ static bool is_baked_npc_texture() {
 
 void registerTab() {
 	// JS: this.registerNavButton('Textures', 'image.svg', InstallType.CASC);
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	modules::register_nav_button("tab_textures", "Textures", "image.svg", install_type::CASC);
 }
 
 void mounted() {
@@ -379,9 +380,11 @@ void mounted() {
 		[&view]() -> std::string {
 			return std::format("Export textures as {}", view.config.value("exportTextureFormat", std::string("PNG")));
 		},
-		[](const std::string& files_str) {
+		[](const std::string& file) {
 			// JS: process: files => textureExporter.exportFiles(files, true)
-			// TODO(conversion): Drop handler processing will be wired when drop support is integrated.
+			nlohmann::json entry;
+			entry["fileName"] = file;
+			texture_exporter::exportFiles({entry}, core::view->casc, nullptr, true);
 		}
 	});
 }

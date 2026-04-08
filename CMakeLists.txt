@@ -236,5 +236,58 @@ elseif(UNIX)
     target_link_libraries(wow_export PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
 endif()
 
+# ── Copy runtime resources to the build output directory ───────
+# The application locates resources relative to the executable directory
+# under a "data" subdirectory (constants::DATA_DIR = <exe_dir>/data).
+# After every build, mirror the project's data/ tree next to the binary.
+add_custom_command(TARGET wow_export POST_BUILD
+    # data/shaders/  →  <exe_dir>/data/shaders/
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:wow_export>/data/shaders"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/data/shaders"
+        "$<TARGET_FILE_DIR:wow_export>/data/shaders"
+
+    # data/fa-icons/  →  <exe_dir>/data/fa-icons/
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:wow_export>/data/fa-icons"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/data/fa-icons"
+        "$<TARGET_FILE_DIR:wow_export>/data/fa-icons"
+
+    # data/images/  →  <exe_dir>/data/images/
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:wow_export>/data/images"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/data/images"
+        "$<TARGET_FILE_DIR:wow_export>/data/images"
+
+    # data/fonts/  →  <exe_dir>/data/fonts/
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:wow_export>/data/fonts"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/data/fonts"
+        "$<TARGET_FILE_DIR:wow_export>/data/fonts"
+
+    # data/icons/  →  <exe_dir>/data/icons/
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:wow_export>/data/icons"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/data/icons"
+        "$<TARGET_FILE_DIR:wow_export>/data/icons"
+
+    # data/default_config.jsonc  →  <exe_dir>/data/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/data/default_config.jsonc"
+        "$<TARGET_FILE_DIR:wow_export>/data/default_config.jsonc"
+
+    # data/app.css  →  <exe_dir>/data/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/data/app.css"
+        "$<TARGET_FILE_DIR:wow_export>/data/app.css"
+
+    COMMENT "Copying runtime resources to data/ directory"
+)
+
 # ── Converted source files (added incrementally) ───────────────
 add_subdirectory(src/js)

@@ -17,6 +17,7 @@
 #include "../casc/db2.h"
 #include "../ui/listbox-context.h"
 #include "../install-type.h"
+#include "../modules.h"
 
 #include <cstring>
 #include <format>
@@ -914,7 +915,7 @@ static void export_subtitles() {
 
 // JS: register() { this.registerNavButton('Videos', 'film.svg', InstallType.CASC); }
 void registerTab() {
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	modules::register_nav_button("tab_videos", "Videos", "film.svg", install_type::CASC);
 }
 
 // JS: async mounted() { ... }

@@ -16,6 +16,7 @@ License: MIT
 #include "../png-writer.h"
 #include "../file-writer.h"
 #include "../install-type.h"
+#include "../modules.h"
 #include "../casc/export-helper.h"
 #include "../casc/listfile.h"
 #include "../casc/realmlist.h"
@@ -3215,8 +3216,8 @@ char_texture_overlay::ensureActiveLayerAttached();
  * JS equivalent: register() { this.registerNavButton('Characters', 'person-solid.svg', InstallType.CASC) }
  */
 void registerTab() {
-// TODO(conversion): registerNavButton will be wired when the tab registration system is integrated.
 // JS: this.registerNavButton('Characters', 'person-solid.svg', InstallType.CASC);
+modules::register_nav_button("tab_characters", "Characters", "person-solid.svg", install_type::CASC);
 }
 
 /**

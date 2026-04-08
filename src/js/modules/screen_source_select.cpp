@@ -10,6 +10,7 @@
 #include "../constants.h"
 #include "../generics.h"
 #include "../install-type.h"
+#include "../modules.h"
 #include "../casc/casc-source-local.h"
 #include "../casc/casc-source-remote.h"
 #include "../casc/cdn-resolver.h"
@@ -118,13 +119,13 @@ void load_install(int index) {
 
 			core::view->installType = install_type::CASC;
 			// JS: this.$modules.tab_home.setActive();
-			// TODO(conversion): Module activation will be wired when the module system is integrated.
+			modules::set_active("tab_home");
 		} else if (active_source_type == SourceType::Remote && casc_remote_source) {
 			casc_remote_source->load(index);
 
 			core::view->installType = install_type::CASC;
 			// JS: this.$modules.tab_home.setActive();
-			// TODO(conversion): Module activation will be wired when the module system is integrated.
+			modules::set_active("tab_home");
 		}
 	} catch (const std::exception& e) {
 		logging::write(std::format("Failed to load CASC: {}", e.what()));
@@ -132,7 +133,7 @@ void load_install(int index) {
 		core::setToast("error", "Unable to initialize CASC. Try repairing your game installation, or seek support.",
 			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		// JS: this.$modules.source_select.setActive();
-		// TODO(conversion): Module activation will be wired when the module system is integrated.
+		modules::set_active("source_select");
 	}
 }
 
@@ -235,7 +236,7 @@ void open_legacy_install(const std::string& install_path) {
 
 		core::view->installType = install_type::MPQ;
 		// JS: this.$modules.legacy_tab_home.setActive();
-		// TODO(conversion): Module activation will be wired when the module system is integrated.
+		modules::set_active("legacy_tab_home");
 		core::hideLoadingScreen();
 	} catch (const std::exception& e) {
 		core::hideLoadingScreen();
@@ -251,7 +252,7 @@ void open_legacy_install(const std::string& install_path) {
 		}
 
 		// JS: this.$modules.source_select.setActive();
-		// TODO(conversion): Module activation will be wired when the module system is integrated.
+		modules::set_active("source_select");
 	}
 }
 

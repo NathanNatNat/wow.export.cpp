@@ -15,6 +15,7 @@
 #include "../db/WDCReader.h"
 #include "../ui/data-exporter.h"
 #include "../install-type.h"
+#include "../modules.h"
 #include "../file-writer.h"
 
 #include <cstring>
@@ -166,7 +167,7 @@ static void load_table(const std::string& table_name) {
 
 void registerTab() {
 	// JS: this.registerNavButton('Data', 'database.svg', InstallType.CASC);
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	modules::register_nav_button("tab_data", "Data", "database.svg", install_type::CASC);
 }
 
 void mounted() {

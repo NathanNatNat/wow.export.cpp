@@ -5,6 +5,7 @@
  */
 
 #include "tab_raw.h"
+#include "../modules.h"
 #include "../log.h"
 #include "../core.h"
 #include "../generics.h"
@@ -198,7 +199,8 @@ static void export_raw_files() {
 
 void registerTab() {
 	// JS: this.registerContextMenuOption('Browse Raw Client Files', 'fish.svg');
-	// TODO(conversion): Context menu registration will be wired when the module system is integrated.
+	modules::register_context_menu_option("tab_raw", "Browse Raw Client Files", "fish.svg",
+		[]() { modules::set_active("tab_raw"); });
 }
 
 void mounted() {

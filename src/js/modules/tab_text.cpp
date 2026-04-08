@@ -14,6 +14,7 @@
 #include "../casc/blte-reader.h"
 #include "../ui/listbox-context.h"
 #include "../install-type.h"
+#include "../modules.h"
 
 #include <cstring>
 #include <format>
@@ -36,7 +37,7 @@ static std::string prev_selection_first;
 
 void registerTab() {
 	// JS: this.registerNavButton('Text', 'file-lines.svg', InstallType.CASC);
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	modules::register_nav_button("tab_text", "Text", "file-lines.svg", install_type::CASC);
 }
 
 void mounted() {

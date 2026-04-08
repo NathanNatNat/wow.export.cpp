@@ -5,6 +5,7 @@
  */
 
 #include "screen_settings.h"
+#include "../modules.h"
 #include "tab_characters.h"
 #include "../log.h"
 #include "../core.h"
@@ -89,15 +90,15 @@ static std::string selected_locale_key() {
 // JS: methods.go_home()
 static void go_home() {
 	// JS: this.$modules.go_to_landing();
-	// TODO(conversion): Module activation will be wired when the module system is integrated.
+	modules::go_to_landing();
 }
 
 // --- Public functions ---
 
 // JS: register() { this.registerContextMenuOption('Manage Settings', 'gear.svg'); }
 void registerScreen() {
-	// TODO(conversion): Module registration will be wired when the module system is integrated.
-	// modules::registerContextMenuOption("Manage Settings", "gear.svg");
+	modules::registerContextMenuOption("settings", "Manage Settings", "gear.svg",
+		[]() { modules::set_active("settings"); });
 }
 
 // JS: mounted()

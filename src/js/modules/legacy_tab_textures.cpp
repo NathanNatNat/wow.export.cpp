@@ -12,6 +12,7 @@
 #include "../ui/texture-exporter.h"
 #include "../ui/listbox-context.h"
 #include "../install-type.h"
+#include "../modules.h"
 #include "../mpq/mpq-install.h"
 
 #include <cstring>
@@ -167,8 +168,8 @@ static void load_texture_list() {
 
 // JS: register() { this.registerNavButton('Textures', 'image.svg', InstallType.MPQ); }
 void registerTab() {
-	// TODO(conversion): Module registration will be wired when the module system is integrated.
-	// modules::registerNavButton("Textures", "image.svg", install_type::MPQ);
+	// JS: this.registerNavButton('Textures', 'image.svg', InstallType.MPQ);
+	modules::register_nav_button("legacy_tab_textures", "Textures", "image.svg", install_type::MPQ);
 }
 
 // JS: mounted()
