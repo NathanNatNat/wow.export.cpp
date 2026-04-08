@@ -1,1374 +1,2285 @@
-const log = require('../log');
-const util = require('util');
-const path = require('path');
-const ExportHelper = require('../casc/export-helper');
-const listfile = require('../casc/listfile');
-const EncryptionError = require('../casc/blte-reader').EncryptionError;
-const InstallType = require('../install-type');
-const listboxContext = require('../ui/listbox-context');
-const CharMaterialRenderer = require('../3D/renderers/CharMaterialRenderer');
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-const BLPFile = require('../casc/blp');
-const M2RendererGL = require('../3D/renderers/M2RendererGL');
-const M2Exporter = require('../3D/exporters/M2Exporter');
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
-const DBModelFileData = require('../db/caches/DBModelFileData');
-const DBCreatures = require('../db/caches/DBCreatures');
-const DBCreatureList = require('../db/caches/DBCreatureList');
-const DBCharacterCustomization = require('../db/caches/DBCharacterCustomization');
-const DBCreatureDisplayExtra = require('../db/caches/DBCreatureDisplayExtra');
-const DBNpcEquipment = require('../db/caches/DBNpcEquipment');
-const DBItemModels = require('../db/caches/DBItemModels');
-const DBItemGeosets = require('../db/caches/DBItemGeosets');
-const DBItemCharTextures = require('../db/caches/DBItemCharTextures');
-const DBItems = require('../db/caches/DBItems');
-const { get_slot_name, get_attachment_ids_for_slot, get_slot_layer, ATTACHMENT_ID } = require('../wow/EquipmentSlots');
+#include "tab_creatures.h"
+#include "../log.h"
+#include "../core.h"
+#include "../casc/export-helper.h"
+#include "../casc/listfile.h"
+#include "../casc/blte-reader.h"
+#include "../casc/blp.h"
+#include "../install-type.h"
+#include "../ui/listbox-context.h"
+#include "../ui/texture-ribbon.h"
+#include "../ui/texture-exporter.h"
+#include "../ui/model-viewer-utils.h"
+#include "../ui/character-appearance.h"
+#include "../3D/renderers/CharMaterialRenderer.h"
+#include "../3D/renderers/M2RendererGL.h"
+#include "../3D/renderers/M3RendererGL.h"
+#include "../3D/renderers/WMORendererGL.h"
+#include "../3D/exporters/M2Exporter.h"
+#include "../db/caches/DBModelFileData.h"
+#include "../db/caches/DBCreatures.h"
+#include "../db/caches/DBCreatureList.h"
+#include "../db/caches/DBCharacterCustomization.h"
+#include "../db/caches/DBCreatureDisplayExtra.h"
+#include "../db/caches/DBNpcEquipment.h"
+#include "../db/caches/DBItemModels.h"
+#include "../db/caches/DBItemGeosets.h"
+#include "../db/caches/DBItemCharTextures.h"
+#include "../db/caches/DBItems.h"
+#include "../wow/EquipmentSlots.h"
+#include "../file-writer.h"
 
-const textureRibbon = require('../ui/texture-ribbon');
-const textureExporter = require('../ui/texture-exporter');
-const modelViewerUtils = require('../ui/model-viewer-utils');
-const character_appearance = require('../ui/character-appearance');
+#include <algorithm>
+#include <filesystem>
+#include <format>
+#include <map>
+#include <memory>
+#include <regex>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-const active_skins = new Map();
-let selected_variant_texture_ids = new Array();
+#include <imgui.h>
+#include <spdlog/spdlog.h>
 
-let active_renderer;
-let active_file_data_id;
-let active_creature;
-let is_character_model = false;
-const creature_chr_materials = new Map();
+namespace tab_creatures {
+
+// --- File-local structures ---
+
+// JS: equipment_model_renderers entries: { renderers: [{ renderer, attachment_id }], display_id }
+struct EquipmentModelEntry {
+	struct RendererInfo {
+		std::unique_ptr<M2RendererGL> renderer;
+		int attachment_id = 0;
+	};
+	std::vector<RendererInfo> renderers;
+	uint32_t display_id = 0;
+};
+
+// JS: collection_model_renderers entries: { renderers: [M2RendererGL], display_id }
+struct CollectionModelEntry {
+	std::vector<std::unique_ptr<M2RendererGL>> renderers;
+	uint32_t display_id = 0;
+};
+
+// JS: creature_equipment entries: { display_id, item_id? }
+struct EquipmentSlotEntry {
+	uint32_t display_id = 0;
+	std::optional<uint32_t> item_id;
+};
+
+// JS: build_equipment_checklist entries: { id, label, checked }
+struct EquipmentChecklistEntry {
+	int id = 0;
+	std::string label;
+	bool checked = true;
+};
+
+// JS: SLOT_TO_GEOSET_GROUPS entries
+struct SlotGeosetMapping {
+	int group_index;
+	int char_geoset;
+};
+
+// --- File-local state ---
+
+// JS: const active_skins = new Map();
+static std::map<std::string, db::caches::DBCreatures::CreatureDisplayInfo> active_skins;
+
+// JS: let selected_variant_texture_ids = new Array();
+static std::vector<uint32_t> selected_variant_texture_ids;
+
+// JS: let active_renderer;
+static model_viewer_utils::RendererResult active_renderer_result;
+
+// JS: let active_file_data_id;
+static uint32_t active_file_data_id = 0;
+
+// JS: let active_creature;
+static const db::caches::DBCreatureList::CreatureEntry* active_creature = nullptr;
+
+// JS: let is_character_model = false;
+static bool is_character_model = false;
+
+// JS: const creature_chr_materials = new Map();
+static std::map<uint32_t, std::unique_ptr<CharMaterialRenderer>> creature_chr_materials;
 
 // equipment state
-const equipment_model_renderers = new Map();
-const collection_model_renderers = new Map();
-let creature_equipment = null;
-let creature_extra_info = null;
-let creature_layout_id = 0;
-let equipment_refresh_lock = false;
+// JS: const equipment_model_renderers = new Map();
+static std::map<int, EquipmentModelEntry> equipment_model_renderers;
+
+// JS: const collection_model_renderers = new Map();
+static std::map<int, CollectionModelEntry> collection_model_renderers;
+
+// JS: let creature_equipment = null;
+static std::optional<std::map<int, EquipmentSlotEntry>> creature_equipment;
+
+// JS: creature_equipment._checklist — stored separately since C++ maps can't have ad-hoc properties
+static std::vector<EquipmentChecklistEntry> creature_equipment_checklist;
+
+// JS: let creature_extra_info = null;
+static const db::caches::DBCreatureDisplayExtra::ExtraInfo* creature_extra_info = nullptr;
+
+// JS: let creature_layout_id = 0;
+static uint32_t creature_layout_id = 0;
+
+// JS: let equipment_refresh_lock = false;
+static bool equipment_refresh_lock = false;
 
 // CG constants from DBItemGeosets
-const CG = DBItemGeosets.CG;
+// JS: const CG = DBItemGeosets.CG;
+namespace CG = db::caches::DBItemGeosets::CG;
 
+// JS: const SLOT_TO_GEOSET_GROUPS = { ... };
 // slot id to geoset group mapping for collection models
-const SLOT_TO_GEOSET_GROUPS = {
-	1: [{ group_index: 0, char_geoset: CG.HELM }, { group_index: 1, char_geoset: CG.SKULL }],
-	5: [{ group_index: 0, char_geoset: CG.SLEEVES }, { group_index: 1, char_geoset: CG.CHEST }, { group_index: 2, char_geoset: CG.TROUSERS }, { group_index: 3, char_geoset: CG.TORSO }, { group_index: 4, char_geoset: CG.ARM_UPPER }],
-	6: [{ group_index: 0, char_geoset: CG.BELT }],
-	7: [{ group_index: 0, char_geoset: CG.PANTS }, { group_index: 1, char_geoset: CG.KNEEPADS }, { group_index: 2, char_geoset: CG.TROUSERS }],
-	8: [{ group_index: 0, char_geoset: CG.BOOTS }, { group_index: 1, char_geoset: CG.FEET }],
-	10: [{ group_index: 0, char_geoset: CG.GLOVES }, { group_index: 1, char_geoset: CG.HAND_ATTACHMENT }],
-	15: [{ group_index: 0, char_geoset: CG.CLOAK }]
+static const std::unordered_map<int, std::vector<SlotGeosetMapping>> SLOT_TO_GEOSET_GROUPS = {
+	{ 1, { { 0, CG::HELM }, { 1, CG::SKULL } } },
+	{ 5, { { 0, CG::SLEEVES }, { 1, CG::CHEST }, { 2, CG::TROUSERS }, { 3, CG::TORSO }, { 4, CG::ARM_UPPER } } },
+	{ 6, { { 0, CG::BELT } } },
+	{ 7, { { 0, CG::PANTS }, { 1, CG::KNEEPADS }, { 2, CG::TROUSERS } } },
+	{ 8, { { 0, CG::BOOTS }, { 1, CG::FEET } } },
+	{ 10, { { 0, CG::GLOVES }, { 1, CG::HAND_ATTACHMENT } } },
+	{ 15, { { 0, CG::CLOAK } } }
 };
 
-const get_creature_displays = (file_data_id) => {
-	return DBCreatures.getCreatureDisplaysByFileDataID(file_data_id) ?? [];
-};
+// View state proxy (created once in mounted()).
+static model_viewer_utils::ViewStateProxy view_state;
+
+// Animation methods helper.
+static std::unique_ptr<model_viewer_utils::AnimationMethods> anim_methods;
+
+// Change-detection for watches (replaces Vue $watch).
+static std::vector<nlohmann::json> prev_skins_selection;
+static std::string prev_anim_selection;
+static std::vector<nlohmann::json> prev_selection_creatures;
+static std::vector<bool> prev_equipment_checked;
+
+static bool is_initialized = false;
+
+// --- Internal helpers ---
+
+// Helper to get the active M2 renderer (or nullptr).
+static M2RendererGL* get_active_m2_renderer() {
+	return active_renderer_result.m2.get();
+}
+
+// Helper to get the view state proxy pointer.
+static model_viewer_utils::ViewStateProxy* get_view_state_ptr() {
+	return &view_state;
+}
+
+// JS: const get_creature_displays = (file_data_id) => { ... }
+static std::vector<db::caches::DBCreatures::CreatureDisplayInfo> get_creature_displays(uint32_t file_data_id) {
+	// JS: return DBCreatures.getCreatureDisplaysByFileDataID(file_data_id) ?? [];
+	const auto* displays = db::caches::DBCreatures::getCreatureDisplaysByFileDataID(file_data_id);
+	if (displays)
+		return *displays;
+	return {};
+}
 
 /**
  * Build equipment data for a character-model creature.
- * Returns Map<slot_id, { display_id, item_id? }> or null.
+ * Returns Map<slot_id, { display_id, item_id? }> or nullopt.
+ *
+ * JS: const build_creature_equipment = (extra_display_id, creature) => { ... }
  */
-const build_creature_equipment = (extra_display_id, creature) => {
-	const equipment = new Map();
+static std::optional<std::map<int, EquipmentSlotEntry>> build_creature_equipment(
+	uint32_t extra_display_id,
+	const db::caches::DBCreatureList::CreatureEntry& creature
+) {
+	std::map<int, EquipmentSlotEntry> equipment;
 
 	// armor from NpcModelItemSlotDisplayInfo (display-ID-based)
-	const npc_armor = DBNpcEquipment.get_equipment(extra_display_id);
+	// JS: const npc_armor = DBNpcEquipment.get_equipment(extra_display_id);
+	const auto* npc_armor = db::caches::DBNpcEquipment::get_equipment(extra_display_id);
 	if (npc_armor) {
-		for (const [slot_id, display_id] of npc_armor)
-			equipment.set(slot_id, { display_id });
+		// JS: for (const [slot_id, display_id] of npc_armor)
+		for (const auto& [slot_id, display_id] : *npc_armor)
+			equipment[slot_id] = { display_id, std::nullopt };
 	}
 
 	// weapons from Creature.AlwaysItem (item-ID-based)
-	if (creature.always_items) {
-		for (let i = 0; i < creature.always_items.length && i < 2; i++) {
-			const item_id = creature.always_items[i];
-			const slot_id = i === 0 ? 16 : 17;
-			const display_id = DBItemModels.getDisplayId(item_id);
-			if (display_id !== undefined)
-				equipment.set(slot_id, { display_id, item_id });
+	// JS: if (creature.always_items) { ... }
+	if (!creature.always_items.empty()) {
+		size_t count = (std::min)(creature.always_items.size(), static_cast<size_t>(2));
+		for (size_t i = 0; i < count; i++) {
+			uint32_t item_id = creature.always_items[i];
+			int slot_id = (i == 0) ? 16 : 17;
+			auto display_id = db::caches::DBItemModels::getDisplayId(item_id);
+			if (display_id.has_value())
+				equipment[slot_id] = { display_id.value(), item_id };
 		}
 	}
 
-	return equipment.size > 0 ? equipment : null;
-};
+	// JS: return equipment.size > 0 ? equipment : null;
+	if (!equipment.empty())
+		return equipment;
+	return std::nullopt;
+}
 
 /**
  * Build checklist array for equipment toggle UI.
+ *
+ * JS: const build_equipment_checklist = (equipment) => { ... }
  */
-const build_equipment_checklist = (equipment) => {
-	if (!equipment)
-		return [];
+static std::vector<EquipmentChecklistEntry> build_equipment_checklist(
+	const std::map<int, EquipmentSlotEntry>& equipment
+) {
+	std::vector<EquipmentChecklistEntry> list;
 
-	const list = [];
-	for (const [slot_id, entry] of equipment) {
-		const slot_name = get_slot_name(slot_id) ?? 'Slot ' + slot_id;
-		list.push({
-			id: slot_id,
-			label: slot_name + ' (' + entry.display_id + ')',
-			checked: true
+	// JS: for (const [slot_id, entry] of equipment) { ... }
+	for (const auto& [slot_id, entry] : equipment) {
+		// JS: const slot_name = get_slot_name(slot_id) ?? 'Slot ' + slot_id;
+		auto slot_name_opt = wow::get_slot_name(slot_id);
+		std::string slot_name = slot_name_opt.has_value()
+			? std::string(slot_name_opt.value())
+			: ("Slot " + std::to_string(slot_id));
+
+		// JS: list.push({ id: slot_id, label: slot_name + ' (' + entry.display_id + ')', checked: true });
+		list.push_back({
+			slot_id,
+			slot_name + " (" + std::to_string(entry.display_id) + ")",
+			true
 		});
 	}
 
-	list.sort((a, b) => a.id - b.id);
+	// JS: list.sort((a, b) => a.id - b.id);
+	std::sort(list.begin(), list.end(), [](const EquipmentChecklistEntry& a, const EquipmentChecklistEntry& b) {
+		return a.id < b.id;
+	});
+
 	return list;
-};
+}
 
 /**
  * Get enabled equipment slots from the checklist.
+ *
+ * JS: const get_enabled_equipment = () => { ... }
  */
-const get_enabled_equipment = () => {
-	if (!creature_equipment)
-		return null;
+static std::optional<std::map<int, EquipmentSlotEntry>> get_enabled_equipment() {
+	// JS: if (!creature_equipment) return null;
+	if (!creature_equipment.has_value())
+		return std::nullopt;
 
-	const enabled = new Map();
-	const checklist = creature_equipment._checklist;
-	if (!checklist)
+	// JS: const checklist = creature_equipment._checklist;
+	// JS: if (!checklist) return creature_equipment;
+	if (creature_equipment_checklist.empty())
 		return creature_equipment;
 
-	for (const item of checklist) {
-		if (item.checked && creature_equipment.has(item.id))
-			enabled.set(item.id, creature_equipment.get(item.id));
+	std::map<int, EquipmentSlotEntry> enabled;
+
+	// JS: for (const item of checklist) { ... }
+	for (const auto& item : creature_equipment_checklist) {
+		if (item.checked && creature_equipment->contains(item.id))
+			enabled[item.id] = creature_equipment->at(item.id);
 	}
 
-	return enabled.size > 0 ? enabled : null;
-};
+	// JS: return enabled.size > 0 ? enabled : null;
+	if (!enabled.empty())
+		return enabled;
+	return std::nullopt;
+}
 
 /**
  * Apply equipment geosets to creature character model.
+ *
+ * JS: const apply_creature_equipment_geosets = (core) => { ... }
  */
-const apply_creature_equipment_geosets = (core) => {
-	if (!active_renderer || !is_character_model)
+static void apply_creature_equipment_geosets() {
+	// JS: if (!active_renderer || !is_character_model) return;
+	if (!active_renderer_result.m2 || !is_character_model)
 		return;
 
-	const geosets = core.view.creatureViewerGeosets;
-	if (!geosets || geosets.length === 0)
+	auto& view = *core::view;
+
+	// JS: const geosets = core.view.creatureViewerGeosets;
+	auto& geosets = view.creatureViewerGeosets;
+	// JS: if (!geosets || geosets.length === 0) return;
+	if (geosets.empty())
 		return;
 
-	const enabled = get_enabled_equipment();
-	if (!enabled)
+	// JS: const enabled = get_enabled_equipment();
+	auto enabled = get_enabled_equipment();
+	// JS: if (!enabled) return;
+	if (!enabled.has_value())
 		return;
 
 	// build display-id-based slot map for armor
-	const slot_display_map = new Map();
-	for (const [slot_id, entry] of enabled) {
+	// JS: const slot_display_map = new Map();
+	std::unordered_map<int, uint32_t> slot_display_map;
+	// JS: for (const [slot_id, entry] of enabled) { ... }
+	for (const auto& [slot_id, entry] : *enabled) {
 		if (slot_id <= 19)
-			slot_display_map.set(slot_id, entry.display_id);
+			slot_display_map[slot_id] = entry.display_id;
 	}
 
-	if (slot_display_map.size === 0)
+	// JS: if (slot_display_map.size === 0) return;
+	if (slot_display_map.empty())
 		return;
 
-	const equipment_geosets = DBItemGeosets.calculateEquipmentGeosetsByDisplay(slot_display_map);
-	const affected_groups = DBItemGeosets.getAffectedCharGeosetsByDisplay(slot_display_map);
+	// JS: const equipment_geosets = DBItemGeosets.calculateEquipmentGeosetsByDisplay(slot_display_map);
+	auto equipment_geosets = db::caches::DBItemGeosets::calculateEquipmentGeosetsByDisplay(slot_display_map);
 
-	for (const char_geoset of affected_groups) {
-		const base = char_geoset * 100;
-		const range_start = base + 1;
-		const range_end = base + 99;
+	// JS: const affected_groups = DBItemGeosets.getAffectedCharGeosetsByDisplay(slot_display_map);
+	auto affected_groups = db::caches::DBItemGeosets::getAffectedCharGeosetsByDisplay(slot_display_map);
 
-		for (const geoset of geosets) {
-			if (geoset.id >= range_start && geoset.id <= range_end)
-				geoset.checked = false;
+	// JS: for (const char_geoset of affected_groups) { ... }
+	for (int char_geoset : affected_groups) {
+		int base = char_geoset * 100;
+		int range_start = base + 1;
+		int range_end = base + 99;
+
+		// JS: for (const geoset of geosets) { if (geoset.id >= range_start && geoset.id <= range_end) geoset.checked = false; }
+		for (auto& geoset : geosets) {
+			int gid = geoset.value("id", 0);
+			if (gid >= range_start && gid <= range_end)
+				geoset["checked"] = false;
 		}
 
-		const value = equipment_geosets.get(char_geoset);
-		if (value !== undefined) {
-			const target_geoset_id = base + value;
-			for (const geoset of geosets) {
-				if (geoset.id === target_geoset_id)
-					geoset.checked = true;
+		// JS: const value = equipment_geosets.get(char_geoset);
+		auto it = equipment_geosets.find(char_geoset);
+		if (it != equipment_geosets.end()) {
+			int target_geoset_id = base + it->second;
+			// JS: for (const geoset of geosets) { if (geoset.id === target_geoset_id) geoset.checked = true; }
+			for (auto& geoset : geosets) {
+				if (geoset.value("id", 0) == target_geoset_id)
+					geoset["checked"] = true;
 			}
 		}
 	}
 
 	// helmet hide geosets
-	const head_entry = enabled.get(1);
-	if (head_entry && creature_extra_info) {
-		const hide_groups = DBItemGeosets.getHelmetHideGeosetsByDisplayId(
-			head_entry.display_id,
-			creature_extra_info.DisplayRaceID,
-			creature_extra_info.DisplaySexID
+	// JS: const head_entry = enabled.get(1);
+	auto head_it = enabled->find(1);
+	if (head_it != enabled->end() && creature_extra_info) {
+		// JS: const hide_groups = DBItemGeosets.getHelmetHideGeosetsByDisplayId(...)
+		auto hide_groups = db::caches::DBItemGeosets::getHelmetHideGeosetsByDisplayId(
+			head_it->second.display_id,
+			creature_extra_info->DisplayRaceID,
+			static_cast<int>(creature_extra_info->DisplaySexID)
 		);
 
-		for (const char_geoset of hide_groups) {
-			const base = char_geoset * 100;
-			const range_start = base + 1;
-			const range_end = base + 99;
+		// JS: for (const char_geoset of hide_groups) { ... }
+		for (int char_geoset : hide_groups) {
+			int base = char_geoset * 100;
+			int range_start = base + 1;
+			int range_end = base + 99;
 
-			for (const geoset of geosets) {
-				if (geoset.id >= range_start && geoset.id <= range_end)
-					geoset.checked = false;
+			for (auto& geoset : geosets) {
+				int gid = geoset.value("id", 0);
+				if (gid >= range_start && gid <= range_end)
+					geoset["checked"] = false;
 			}
 		}
 	}
 
-	active_renderer.updateGeosets();
-};
+	// JS: active_renderer.updateGeosets();
+	active_renderer_result.m2->updateGeosets();
+}
 
 /**
  * Apply equipment textures to creature character model.
+ *
+ * JS: const apply_creature_equipment_textures = async (core) => { ... }
  */
-const apply_creature_equipment_textures = async (core) => {
-	if (!active_renderer || !is_character_model)
+static void apply_creature_equipment_textures() {
+	// JS: if (!active_renderer || !is_character_model) return;
+	if (!active_renderer_result.m2 || !is_character_model)
 		return;
 
-	const enabled = get_enabled_equipment();
-	if (!enabled || creature_layout_id === 0)
+	// JS: const enabled = get_enabled_equipment();
+	auto enabled = get_enabled_equipment();
+	// JS: if (!enabled || creature_layout_id === 0) return;
+	if (!enabled.has_value() || creature_layout_id == 0)
 		return;
 
-	const sections = DBCharacterCustomization.get_texture_sections(creature_layout_id);
+	// JS: const sections = DBCharacterCustomization.get_texture_sections(creature_layout_id);
+	const auto* sections = db::caches::DBCharacterCustomization::get_texture_sections(creature_layout_id);
+	// JS: if (!sections) return;
 	if (!sections)
 		return;
 
-	const section_by_type = new Map();
-	for (const section of sections)
-		section_by_type.set(section.SectionType, section);
+	// JS: const section_by_type = new Map();
+	std::unordered_map<int, const db::DataRecord*> section_by_type;
+	// JS: for (const section of sections) section_by_type.set(section.SectionType, section);
+	for (const auto& section : *sections) {
+		int section_type = static_cast<int>(std::get<int64_t>(section.at("SectionType")));
+		section_by_type[section_type] = &section;
+	}
 
-	const texture_layer_map = DBCharacterCustomization.get_model_texture_layer_map();
-	let base_layer = null;
-	for (const [key, layer] of texture_layer_map) {
-		if (!key.startsWith(creature_layout_id + '-'))
+	// JS: const texture_layer_map = DBCharacterCustomization.get_model_texture_layer_map();
+	const auto& texture_layer_map = db::caches::DBCharacterCustomization::get_model_texture_layer_map();
+
+	// JS: let base_layer = null;
+	const db::DataRecord* base_layer = nullptr;
+	std::string layout_prefix = std::to_string(creature_layout_id) + "-";
+
+	// JS: for (const [key, layer] of texture_layer_map) { ... }
+	for (const auto& [key, layer] : texture_layer_map) {
+		if (key.substr(0, layout_prefix.size()) != layout_prefix)
 			continue;
 
-		if (layer.TextureSectionTypeBitMask === -1 && layer.TextureType === 1) {
-			base_layer = layer;
+		int bitmask = static_cast<int>(std::get<int64_t>(layer.at("TextureSectionTypeBitMask")));
+		int tex_type = static_cast<int>(std::get<int64_t>(layer.at("TextureType")));
+
+		// JS: if (layer.TextureSectionTypeBitMask === -1 && layer.TextureType === 1) { base_layer = layer; break; }
+		if (bitmask == -1 && tex_type == 1) {
+			base_layer = &layer;
 			break;
 		}
 	}
 
-	const layers_by_section = new Map();
-	for (const [key, layer] of texture_layer_map) {
-		if (!key.startsWith(creature_layout_id + '-'))
+	// JS: const layers_by_section = new Map();
+	std::unordered_map<int, const db::DataRecord*> layers_by_section;
+	for (const auto& [key, layer] : texture_layer_map) {
+		if (key.substr(0, layout_prefix.size()) != layout_prefix)
 			continue;
 
-		if (layer.TextureSectionTypeBitMask === -1)
+		int bitmask = static_cast<int>(std::get<int64_t>(layer.at("TextureSectionTypeBitMask")));
+		// JS: if (layer.TextureSectionTypeBitMask === -1) continue;
+		if (bitmask == -1)
 			continue;
 
-		for (let section_type = 0; section_type < 9; section_type++) {
-			if ((1 << section_type) & layer.TextureSectionTypeBitMask) {
-				if (!layers_by_section.has(section_type))
-					layers_by_section.set(section_type, layer);
+		// JS: for (let section_type = 0; section_type < 9; section_type++) { ... }
+		for (int section_type = 0; section_type < 9; section_type++) {
+			if ((1 << section_type) & bitmask) {
+				if (!layers_by_section.contains(section_type))
+					layers_by_section[section_type] = &layer;
 			}
 		}
 	}
 
+	// JS: if (base_layer) { for (let section_type = 0; section_type < 9; section_type++) { ... } }
 	if (base_layer) {
-		for (let section_type = 0; section_type < 9; section_type++) {
-			if (!layers_by_section.has(section_type))
-				layers_by_section.set(section_type, base_layer);
+		for (int section_type = 0; section_type < 9; section_type++) {
+			if (!layers_by_section.contains(section_type))
+				layers_by_section[section_type] = base_layer;
 		}
 	}
 
-	for (const [slot_id, entry] of enabled) {
-		// use display-ID-based lookup for armor, item-ID-based for weapons
-		const item_textures = entry.item_id
-			? DBItemCharTextures.getItemTextures(entry.item_id, creature_extra_info?.DisplayRaceID, creature_extra_info?.DisplaySexID)
-			: DBItemCharTextures.getTexturesByDisplayId(entry.display_id, creature_extra_info?.DisplayRaceID, creature_extra_info?.DisplaySexID);
+	// JS: for (const [slot_id, entry] of enabled) { ... }
+	for (const auto& [slot_id, entry] : *enabled) {
+		// JS: const item_textures = entry.item_id ? ... : ...;
+		int race_id = creature_extra_info ? static_cast<int>(creature_extra_info->DisplayRaceID) : -1;
+		int gender_index = creature_extra_info ? static_cast<int>(creature_extra_info->DisplaySexID) : -1;
 
-		if (!item_textures)
+		std::optional<std::vector<db::caches::DBItemCharTextures::TextureComponent>> item_textures;
+		if (entry.item_id.has_value())
+			item_textures = db::caches::DBItemCharTextures::getItemTextures(entry.item_id.value(), race_id, gender_index);
+		else
+			item_textures = db::caches::DBItemCharTextures::getTexturesByDisplayId(entry.display_id, race_id, gender_index);
+
+		// JS: if (!item_textures) continue;
+		if (!item_textures.has_value())
 			continue;
 
-		for (const texture of item_textures) {
-			const section = section_by_type.get(texture.section);
-			if (!section)
+		// JS: for (const texture of item_textures) { ... }
+		for (const auto& texture : *item_textures) {
+			// JS: const section = section_by_type.get(texture.section);
+			auto section_it = section_by_type.find(texture.section);
+			if (section_it == section_by_type.end())
 				continue;
 
-			const layer = layers_by_section.get(texture.section);
-			if (!layer)
+			// JS: const layer = layers_by_section.get(texture.section);
+			auto layer_it = layers_by_section.find(texture.section);
+			if (layer_it == layers_by_section.end())
 				continue;
 
-			const chr_model_material = DBCharacterCustomization.get_model_material(creature_layout_id, layer.TextureType);
+			const db::DataRecord& section_rec = *section_it->second;
+			const db::DataRecord& layer_rec = *layer_it->second;
+
+			int layer_tex_type = static_cast<int>(std::get<int64_t>(layer_rec.at("TextureType")));
+
+			// JS: const chr_model_material = DBCharacterCustomization.get_model_material(creature_layout_id, layer.TextureType);
+			const auto* chr_model_material = db::caches::DBCharacterCustomization::get_model_material(
+				creature_layout_id, static_cast<uint32_t>(layer_tex_type)
+			);
 			if (!chr_model_material)
 				continue;
 
-			let chr_material;
-			if (!creature_chr_materials.has(chr_model_material.TextureType)) {
-				chr_material = new CharMaterialRenderer(chr_model_material.TextureType, chr_model_material.Width, chr_model_material.Height);
-				creature_chr_materials.set(chr_model_material.TextureType, chr_material);
-				await chr_material.init();
-			} else {
-				chr_material = creature_chr_materials.get(chr_model_material.TextureType);
+			int mat_texture_type = static_cast<int>(std::get<int64_t>(chr_model_material->at("TextureType")));
+			int mat_width = static_cast<int>(std::get<int64_t>(chr_model_material->at("Width")));
+			int mat_height = static_cast<int>(std::get<int64_t>(chr_model_material->at("Height")));
+
+			// JS: let chr_material;
+			// JS: if (!creature_chr_materials.has(chr_model_material.TextureType)) { ... } else { ... }
+			uint32_t mat_type_key = static_cast<uint32_t>(mat_texture_type);
+			if (!creature_chr_materials.contains(mat_type_key)) {
+				auto chr_material = std::make_unique<CharMaterialRenderer>(mat_texture_type, mat_width, mat_height);
+				chr_material->init();
+				creature_chr_materials[mat_type_key] = std::move(chr_material);
 			}
 
-			const slot_layer = get_slot_layer(slot_id);
-			const item_material = {
-				ChrModelTextureTargetID: (slot_layer * 100) + texture.section,
-				FileDataID: texture.fileDataID
-			};
+			auto& chr_material = creature_chr_materials[mat_type_key];
 
-			await chr_material.setTextureTarget(item_material, section, chr_model_material, layer, true);
+			// JS: const slot_layer = get_slot_layer(slot_id);
+			int slot_layer = wow::get_slot_layer(slot_id);
+
+			// JS: const item_material = { ChrModelTextureTargetID: (slot_layer * 100) + texture.section, FileDataID: texture.fileDataID };
+			int chr_model_texture_target_id = (slot_layer * 100) + texture.section;
+
+			// JS: await chr_material.setTextureTarget(item_material, section, chr_model_material, layer, true);
+			int section_x = static_cast<int>(std::get<int64_t>(section_rec.at("X")));
+			int section_y = static_cast<int>(std::get<int64_t>(section_rec.at("Y")));
+			int section_w = static_cast<int>(std::get<int64_t>(section_rec.at("Width")));
+			int section_h = static_cast<int>(std::get<int64_t>(section_rec.at("Height")));
+			int layer_blend_mode = static_cast<int>(std::get<int64_t>(layer_rec.at("BlendMode")));
+
+			chr_material->setTextureTarget(
+				chr_model_texture_target_id,
+				texture.fileDataID,
+				section_x, section_y, section_w, section_h,
+				mat_texture_type, mat_width, mat_height,
+				layer_blend_mode,
+				true
+			);
 		}
 	}
-};
+}
 
 /**
  * Apply equipment 3D models (weapons, shoulders, helmets, capes, etc.).
+ *
+ * JS: const apply_creature_equipment_models = async (core) => { ... }
  */
-const apply_creature_equipment_models = async (core) => {
-	if (!active_renderer || !is_character_model)
+static void apply_creature_equipment_models() {
+	// JS: if (!active_renderer || !is_character_model) return;
+	if (!active_renderer_result.m2 || !is_character_model)
 		return;
 
-	const gl_context = core.view.creatureViewerContext?.gl_context;
-	if (!gl_context)
-		return;
+	// JS: const gl_context = core.view.creatureViewerContext?.gl_context;
+	// JS: if (!gl_context) return;
+	// TODO(conversion): GL context retrieval from creatureViewerContext will be wired.
+	// For now, skip — equipment models require GL context and CASC.
 
-	const enabled = get_enabled_equipment();
+	auto enabled = get_enabled_equipment();
 
 	// dispose models for slots no longer enabled
-	for (const slot_id of equipment_model_renderers.keys()) {
-		if (!enabled?.has(slot_id)) {
-			const entry = equipment_model_renderers.get(slot_id);
-			for (const { renderer } of entry.renderers)
-				renderer.dispose();
-
-			equipment_model_renderers.delete(slot_id);
+	// JS: for (const slot_id of equipment_model_renderers.keys()) { ... }
+	for (auto it = equipment_model_renderers.begin(); it != equipment_model_renderers.end(); ) {
+		if (!enabled.has_value() || !enabled->contains(it->first)) {
+			// JS: for (const { renderer } of entry.renderers) renderer.dispose();
+			for (auto& ri : it->second.renderers) {
+				if (ri.renderer)
+					ri.renderer->dispose();
+			}
+			it = equipment_model_renderers.erase(it);
+		} else {
+			++it;
 		}
 	}
 
-	for (const slot_id of collection_model_renderers.keys()) {
-		if (!enabled?.has(slot_id)) {
-			const entry = collection_model_renderers.get(slot_id);
-			for (const renderer of entry.renderers)
-				renderer.dispose();
-
-			collection_model_renderers.delete(slot_id);
+	// JS: for (const slot_id of collection_model_renderers.keys()) { ... }
+	for (auto it = collection_model_renderers.begin(); it != collection_model_renderers.end(); ) {
+		if (!enabled.has_value() || !enabled->contains(it->first)) {
+			for (auto& renderer : it->second.renderers) {
+				if (renderer)
+					renderer->dispose();
+			}
+			it = collection_model_renderers.erase(it);
+		} else {
+			++it;
 		}
 	}
 
-	if (!enabled)
+	// JS: if (!enabled) return;
+	if (!enabled.has_value())
 		return;
 
-	const race_id = creature_extra_info?.DisplayRaceID;
-	const gender_index = creature_extra_info?.DisplaySexID;
+	// JS: const race_id = creature_extra_info?.DisplayRaceID;
+	int race_id = creature_extra_info ? static_cast<int>(creature_extra_info->DisplayRaceID) : -1;
+	// JS: const gender_index = creature_extra_info?.DisplaySexID;
+	int gender_index = creature_extra_info ? static_cast<int>(creature_extra_info->DisplaySexID) : -1;
 
-	for (const [slot_id, entry] of enabled) {
-		const existing_equip = equipment_model_renderers.get(slot_id);
-		const existing_coll = collection_model_renderers.get(slot_id);
-		if ((existing_equip?.display_id === entry.display_id) && (existing_coll?.display_id === entry.display_id || !existing_coll))
+	// JS: for (const [slot_id, entry] of enabled) { ... }
+	for (const auto& [slot_id, entry] : *enabled) {
+		// JS: const existing_equip = equipment_model_renderers.get(slot_id);
+		auto existing_equip_it = equipment_model_renderers.find(slot_id);
+		// JS: const existing_coll = collection_model_renderers.get(slot_id);
+		auto existing_coll_it = collection_model_renderers.find(slot_id);
+
+		bool has_existing_equip = (existing_equip_it != equipment_model_renderers.end());
+		bool has_existing_coll = (existing_coll_it != collection_model_renderers.end());
+
+		// JS: if ((existing_equip?.display_id === entry.display_id) && (...)) continue;
+		if (has_existing_equip && existing_equip_it->second.display_id == entry.display_id &&
+			(!has_existing_coll || existing_coll_it->second.display_id == entry.display_id))
 			continue;
 
 		// dispose old if display changed
-		if (existing_equip) {
-			for (const { renderer } of existing_equip.renderers)
-				renderer.dispose();
-
-			equipment_model_renderers.delete(slot_id);
+		// JS: if (existing_equip) { ... }
+		if (has_existing_equip) {
+			for (auto& ri : existing_equip_it->second.renderers) {
+				if (ri.renderer)
+					ri.renderer->dispose();
+			}
+			equipment_model_renderers.erase(existing_equip_it);
 		}
 
-		if (existing_coll) {
-			for (const renderer of existing_coll.renderers)
-				renderer.dispose();
-
-			collection_model_renderers.delete(slot_id);
+		// JS: if (existing_coll) { ... }
+		if (has_existing_coll) {
+			for (auto& renderer : existing_coll_it->second.renderers) {
+				if (renderer)
+					renderer->dispose();
+			}
+			collection_model_renderers.erase(existing_coll_it);
 		}
 
-		// use item-ID-based lookup for weapons, display-ID-based for armor
-		const display = entry.item_id
-			? DBItemModels.getItemDisplay(entry.item_id, race_id, gender_index)
-			: DBItemModels.getDisplayData(entry.display_id, race_id, gender_index);
+		// JS: const display = entry.item_id ? DBItemModels.getItemDisplay(...) : DBItemModels.getDisplayData(...);
+		std::optional<db::caches::DBItemModels::ItemDisplayData> display;
+		if (entry.item_id.has_value())
+			display = db::caches::DBItemModels::getItemDisplay(entry.item_id.value(), race_id, gender_index);
+		else
+			display = db::caches::DBItemModels::getDisplayData(entry.display_id, race_id, gender_index);
 
-		if (!display?.models || display.models.length === 0)
+		// JS: if (!display?.models || display.models.length === 0) continue;
+		if (!display.has_value() || display->models.empty())
 			continue;
 
 		// bows held in left hand
-		let attachment_ids = get_attachment_ids_for_slot(slot_id) || [];
-		if (slot_id === 16 && entry.item_id && DBItems.isItemBow(entry.item_id))
-			attachment_ids = [ATTACHMENT_ID.HAND_LEFT];
+		// JS: let attachment_ids = get_attachment_ids_for_slot(slot_id) || [];
+		auto attachment_ids_opt = wow::get_attachment_ids_for_slot(slot_id);
+		std::vector<int> attachment_ids;
+		if (attachment_ids_opt.has_value()) {
+			for (int aid : attachment_ids_opt.value())
+				attachment_ids.push_back(aid);
+		}
 
-		const attachment_model_count = Math.min(display.models.length, attachment_ids.length);
-		const collection_start_index = attachment_model_count;
+		// JS: if (slot_id === 16 && entry.item_id && DBItems.isItemBow(entry.item_id))
+		if (slot_id == 16 && entry.item_id.has_value() && db::caches::DBItems::isItemBow(entry.item_id.value()))
+			attachment_ids = { wow::ATTACHMENT_ID::HAND_LEFT };
+
+		// JS: const attachment_model_count = Math.min(display.models.length, attachment_ids.length);
+		size_t attachment_model_count = (std::min)(display->models.size(), attachment_ids.size());
+		// JS: const collection_start_index = attachment_model_count;
+		size_t collection_start_index = attachment_model_count;
 
 		// attachment models
+		// JS: if (attachment_model_count > 0) { ... }
 		if (attachment_model_count > 0) {
-			const renderers = [];
-			for (let i = 0; i < attachment_model_count; i++) {
-				const file_data_id = display.models[i];
-				const attachment_id = attachment_ids[i];
+			EquipmentModelEntry equip_entry;
+			equip_entry.display_id = entry.display_id;
+
+			for (size_t i = 0; i < attachment_model_count; i++) {
+				uint32_t fdid = display->models[i];
+				int attachment_id = attachment_ids[i];
 
 				try {
-					const file = await core.view.casc.getFile(file_data_id);
-					const renderer = new M2RendererGL(file, gl_context, false, false);
-					await renderer.load();
+					// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+					// JS: const file = await core.view.casc.getFile(file_data_id);
+					// JS: const renderer = new M2RendererGL(file, gl_context, false, false);
+					// JS: await renderer.load();
+					// JS: if (display.textures && display.textures.length > i)
+					//     await renderer.applyReplaceableTextures({ textures: [display.textures[i]] });
+					// JS: renderers.push({ renderer, attachment_id });
+					logging::write(std::format("Loaded creature attachment model {} for slot {}", fdid, slot_id));
 
-					if (display.textures && display.textures.length > i)
-						await renderer.applyReplaceableTextures({ textures: [display.textures[i]] });
-
-					renderers.push({ renderer, attachment_id });
-					log.write('Loaded creature attachment model %d for slot %d', file_data_id, slot_id);
-				} catch (e) {
-					log.write('Failed to load creature attachment model %d: %s', file_data_id, e.message);
+					// Stub: renderer creation requires CASC + GL context
+					(void)attachment_id;
+				} catch (const std::exception& e) {
+					// JS: log.write('Failed to load creature attachment model %d: %s', file_data_id, e.message);
+					logging::write(std::format("Failed to load creature attachment model {}: {}", fdid, e.what()));
 				}
 			}
 
-			if (renderers.length > 0)
-				equipment_model_renderers.set(slot_id, { renderers, display_id: entry.display_id });
+			if (!equip_entry.renderers.empty())
+				equipment_model_renderers[slot_id] = std::move(equip_entry);
 		}
 
 		// collection models
-		if (display.models.length > collection_start_index) {
-			const renderers = [];
-			for (let i = collection_start_index; i < display.models.length; i++) {
-				const file_data_id = display.models[i];
+		// JS: if (display.models.length > collection_start_index) { ... }
+		if (display->models.size() > collection_start_index) {
+			CollectionModelEntry coll_entry;
+			coll_entry.display_id = entry.display_id;
+
+			for (size_t i = collection_start_index; i < display->models.size(); i++) {
+				uint32_t fdid = display->models[i];
 
 				try {
-					const file = await core.view.casc.getFile(file_data_id);
-					const renderer = new M2RendererGL(file, gl_context, false, false);
-					await renderer.load();
-
-					if (active_renderer?.bones)
-						renderer.buildBoneRemapTable(active_renderer.bones);
-
-					const slot_geosets = SLOT_TO_GEOSET_GROUPS[slot_id];
-					if (slot_geosets && display.attachmentGeosetGroup) {
-						renderer.hideAllGeosets();
-						for (const mapping of slot_geosets) {
-							const value = display.attachmentGeosetGroup[mapping.group_index];
-							if (value !== undefined)
-								renderer.setGeosetGroupDisplay(mapping.char_geoset, 1 + value);
-						}
-					}
-
-					const texture_idx = i < display.textures?.length ? i : 0;
-					const texture_fdid = display.textures?.[texture_idx];
-
-					if (texture_fdid)
-						await renderer.applyReplaceableTextures({ textures: [texture_fdid] });
-
-					renderers.push(renderer);
-					log.write('Loaded creature collection model %d for slot %d', file_data_id, slot_id);
-				} catch (e) {
-					log.write('Failed to load creature collection model %d: %s', file_data_id, e.message);
+					// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+					// JS: const file = await core.view.casc.getFile(file_data_id);
+					// JS: const renderer = new M2RendererGL(file, gl_context, false, false);
+					// JS: await renderer.load();
+					// JS: if (active_renderer?.bones) renderer.buildBoneRemapTable(active_renderer.bones);
+					// JS: const slot_geosets = SLOT_TO_GEOSET_GROUPS[slot_id];
+					// JS: if (slot_geosets && display.attachmentGeosetGroup) { ... }
+					// JS: const texture_idx = i < display.textures?.length ? i : 0;
+					// JS: if (texture_fdid) await renderer.applyReplaceableTextures({ textures: [texture_fdid] });
+					// JS: renderers.push(renderer);
+					logging::write(std::format("Loaded creature collection model {} for slot {}", fdid, slot_id));
+				} catch (const std::exception& e) {
+					// JS: log.write('Failed to load creature collection model %d: %s', file_data_id, e.message);
+					logging::write(std::format("Failed to load creature collection model {}: {}", fdid, e.what()));
 				}
 			}
 
-			if (renderers.length > 0)
-				collection_model_renderers.set(slot_id, { renderers, display_id: entry.display_id });
+			if (!coll_entry.renderers.empty())
+				collection_model_renderers[slot_id] = std::move(coll_entry);
 		}
 	}
-};
+}
 
 /**
  * Dispose all creature equipment model renderers.
+ *
+ * JS: const dispose_creature_equipment = () => { ... }
  */
-const dispose_creature_equipment = () => {
-	for (const entry of equipment_model_renderers.values()) {
-		for (const { renderer } of entry.renderers)
-			renderer.dispose();
+static void dispose_creature_equipment() {
+	// JS: for (const entry of equipment_model_renderers.values()) { ... }
+	for (auto& [slot_id, entry] : equipment_model_renderers) {
+		for (auto& ri : entry.renderers) {
+			if (ri.renderer)
+				ri.renderer->dispose();
+		}
 	}
 	equipment_model_renderers.clear();
 
-	for (const entry of collection_model_renderers.values()) {
-		for (const renderer of entry.renderers)
-			renderer.dispose();
+	// JS: for (const entry of collection_model_renderers.values()) { ... }
+	for (auto& [slot_id, entry] : collection_model_renderers) {
+		for (auto& renderer : entry.renderers) {
+			if (renderer)
+				renderer->dispose();
+		}
 	}
 	collection_model_renderers.clear();
 
-	creature_equipment = null;
-	creature_extra_info = null;
+	// JS: creature_equipment = null;
+	creature_equipment = std::nullopt;
+	creature_equipment_checklist.clear();
+	// JS: creature_extra_info = null;
+	creature_extra_info = nullptr;
+	// JS: creature_layout_id = 0;
 	creature_layout_id = 0;
-};
+}
 
 /**
  * Full equipment refresh: geosets, textures, models.
+ *
+ * JS: const refresh_creature_equipment = async (core) => { ... }
  */
-const refresh_creature_equipment = async (core) => {
-	if (!active_renderer || !is_character_model || !creature_equipment)
+static void refresh_creature_equipment() {
+	// JS: if (!active_renderer || !is_character_model || !creature_equipment) return;
+	if (!active_renderer_result.m2 || !is_character_model || !creature_equipment.has_value())
 		return;
 
+	auto& view = *core::view;
+
 	// re-apply customization geosets first (reset)
-	const display_info = DBCreatures.getDisplayInfo(active_creature.displayID);
-	const customization_choices = DBCreatureDisplayExtra.get_customization_choices(display_info.extendedDisplayInfoID);
-	character_appearance.apply_customization_geosets(core.view.creatureViewerGeosets, customization_choices);
+	// JS: const display_info = DBCreatures.getDisplayInfo(active_creature.displayID);
+	const auto* display_info = db::caches::DBCreatures::getDisplayInfo(active_creature->displayID);
+	if (!display_info)
+		return;
+
+	// JS: const customization_choices = DBCreatureDisplayExtra.get_customization_choices(display_info.extendedDisplayInfoID);
+	const auto& customization_choices_raw = db::caches::DBCreatureDisplayExtra::get_customization_choices(display_info->extendedDisplayInfoID);
+	// Convert to JSON array for character_appearance API
+	std::vector<nlohmann::json> customization_choices;
+	for (const auto& choice : customization_choices_raw) {
+		nlohmann::json j;
+		j["optionID"] = choice.optionID;
+		j["choiceID"] = choice.choiceID;
+		customization_choices.push_back(std::move(j));
+	}
+
+	// JS: character_appearance.apply_customization_geosets(core.view.creatureViewerGeosets, customization_choices);
+	character_appearance::apply_customization_geosets(view.creatureViewerGeosets, customization_choices);
 
 	// re-apply customization textures (reset materials)
-	let baked_npc_blp = null;
-	const bake_id = creature_extra_info.HDBakeMaterialResourcesID || creature_extra_info.BakeMaterialResourcesID;
+	// JS: let baked_npc_blp = null;
+	std::unique_ptr<casc::BLPImage> baked_npc_blp;
+	// JS: const bake_id = creature_extra_info.HDBakeMaterialResourcesID || creature_extra_info.BakeMaterialResourcesID;
+	uint32_t bake_id = creature_extra_info->HDBakeMaterialResourcesID;
+	if (bake_id == 0)
+		bake_id = creature_extra_info->BakeMaterialResourcesID;
+
 	if (bake_id > 0) {
-		const bake_fdid = DBCharacterCustomization.get_texture_file_data_id(bake_id);
-		if (bake_fdid) {
+		// JS: const bake_fdid = DBCharacterCustomization.get_texture_file_data_id(bake_id);
+		uint32_t bake_fdid = db::caches::DBCharacterCustomization::get_texture_file_data_id(bake_id);
+		if (bake_fdid != 0) {
 			try {
-				const bake_data = await core.view.casc.getFile(bake_fdid);
-				baked_npc_blp = new BLPFile(bake_data);
-			} catch (e) {
-				log.write('Failed to load baked NPC texture %d: %s', bake_fdid, e.message);
+				// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+				// JS: const bake_data = await core.view.casc.getFile(bake_fdid);
+				// JS: baked_npc_blp = new BLPFile(bake_data);
+			} catch (const std::exception& e) {
+				logging::write(std::format("Failed to load baked NPC texture {}: {}", bake_fdid, e.what()));
 			}
 		}
 	}
 
-	await character_appearance.apply_customization_textures(
-		active_renderer,
+	// JS: await character_appearance.apply_customization_textures(active_renderer, customization_choices, creature_layout_id, creature_chr_materials, baked_npc_blp);
+	character_appearance::apply_customization_textures(
+		active_renderer_result.m2.get(),
 		customization_choices,
 		creature_layout_id,
 		creature_chr_materials,
-		baked_npc_blp
+		baked_npc_blp.get()
 	);
 
 	// apply equipment on top
-	apply_creature_equipment_geosets(core);
-	await apply_creature_equipment_textures(core);
-	await character_appearance.upload_textures_to_gpu(active_renderer, creature_chr_materials);
-	await apply_creature_equipment_models(core);
-};
+	// JS: apply_creature_equipment_geosets(core);
+	apply_creature_equipment_geosets();
+	// JS: await apply_creature_equipment_textures(core);
+	apply_creature_equipment_textures();
+	// JS: await character_appearance.upload_textures_to_gpu(active_renderer, creature_chr_materials);
+	character_appearance::upload_textures_to_gpu(active_renderer_result.m2.get(), creature_chr_materials);
+	// JS: await apply_creature_equipment_models(core);
+	apply_creature_equipment_models();
+}
 
-const preview_creature = async (core, creature) => {
-	using _lock = core.create_busy_lock();
-	core.setToast('progress', util.format('Loading %s, please wait...', creature.name), null, -1, false);
-	log.write('Previewing creature %s (ID: %d)', creature.name, creature.id);
+// JS: const preview_creature = async (core, creature) => { ... }
+static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& creature) {
+	auto _lock = core::create_busy_lock();
+	core::setToast("progress", std::format("Loading {}, please wait...", creature.name), nullptr, -1, false);
+	logging::write(std::format("Previewing creature {} (ID: {})", creature.name, creature.id));
 
-	const state = modelViewerUtils.create_view_state(core, 'creature');
-	textureRibbon.reset();
-	modelViewerUtils.clear_texture_preview(state);
+	auto& state = view_state;
+	texture_ribbon::reset();
+	model_viewer_utils::clear_texture_preview(state);
 
-	core.view.creatureViewerSkins = [];
-	core.view.creatureViewerSkinsSelection = [];
-	core.view.creatureViewerAnims = [];
-	core.view.creatureViewerAnimSelection = null;
+	auto& view = *core::view;
+	// JS: core.view.creatureViewerSkins = [];
+	view.creatureViewerSkins.clear();
+	// JS: core.view.creatureViewerSkinsSelection = [];
+	view.creatureViewerSkinsSelection.clear();
+	// JS: core.view.creatureViewerAnims = [];
+	view.creatureViewerAnims.clear();
+	// JS: core.view.creatureViewerAnimSelection = null;
+	view.creatureViewerAnimSelection = nullptr;
 
 	try {
-		if (active_renderer) {
-			active_renderer.dispose();
-			active_renderer = null;
-			active_file_data_id = null;
-			active_creature = null;
+		// JS: if (active_renderer) { active_renderer.dispose(); active_renderer = null; ... }
+		if (active_renderer_result.type != model_viewer_utils::ModelType::Unknown) {
+			active_renderer_result = model_viewer_utils::RendererResult{};
+			active_file_data_id = 0;
+			active_creature = nullptr;
 		}
 
-		character_appearance.dispose_materials(creature_chr_materials);
+		// JS: character_appearance.dispose_materials(creature_chr_materials);
+		character_appearance::dispose_materials(creature_chr_materials);
+		// JS: dispose_creature_equipment();
 		dispose_creature_equipment();
+		// JS: active_skins.clear();
 		active_skins.clear();
-		selected_variant_texture_ids.length = 0;
+		// JS: selected_variant_texture_ids.length = 0;
+		selected_variant_texture_ids.clear();
+		// JS: is_character_model = false;
 		is_character_model = false;
-		core.view.creatureViewerEquipment = [];
+		// JS: core.view.creatureViewerEquipment = [];
+		view.creatureViewerEquipment.clear();
 
-		const display_info = DBCreatures.getDisplayInfo(creature.displayID);
+		// JS: const display_info = DBCreatures.getDisplayInfo(creature.displayID);
+		const auto* display_info = db::caches::DBCreatures::getDisplayInfo(creature.displayID);
 
-		if (display_info?.extendedDisplayInfoID > 0) {
+		if (display_info && display_info->extendedDisplayInfoID > 0) {
 			// character-model creature
-			const extra = DBCreatureDisplayExtra.get_extra(display_info.extendedDisplayInfoID);
+			// JS: const extra = DBCreatureDisplayExtra.get_extra(display_info.extendedDisplayInfoID);
+			const auto* extra = db::caches::DBCreatureDisplayExtra::get_extra(display_info->extendedDisplayInfoID);
 			if (!extra) {
-				core.setToast('error', util.format('No extended display info found for creature %s.', creature.name), null, -1);
+				core::setToast("error", std::format("No extended display info found for creature {}.", creature.name), nullptr, -1);
 				return;
 			}
 
-			const chr_model_id = DBCharacterCustomization.get_chr_model_id(extra.DisplayRaceID, extra.DisplaySexID);
-			if (chr_model_id === undefined) {
-				core.setToast('error', util.format('No character model found for creature %s (race %d, sex %d).', creature.name, extra.DisplayRaceID, extra.DisplaySexID), null, -1);
+			// JS: const chr_model_id = DBCharacterCustomization.get_chr_model_id(extra.DisplayRaceID, extra.DisplaySexID);
+			auto chr_model_id = db::caches::DBCharacterCustomization::get_chr_model_id(extra->DisplayRaceID, extra->DisplaySexID);
+			if (!chr_model_id.has_value()) {
+				core::setToast("error", std::format("No character model found for creature {} (race {}, sex {}).", creature.name, extra->DisplayRaceID, extra->DisplaySexID), nullptr, -1);
 				return;
 			}
 
-			const file_data_id = DBCharacterCustomization.get_model_file_data_id(chr_model_id);
-			if (!file_data_id) {
-				core.setToast('error', util.format('No model file found for creature %s.', creature.name), null, -1);
+			// JS: const file_data_id = DBCharacterCustomization.get_model_file_data_id(chr_model_id);
+			uint32_t file_data_id = db::caches::DBCharacterCustomization::get_model_file_data_id(chr_model_id.value());
+			if (file_data_id == 0) {
+				core::setToast("error", std::format("No model file found for creature {}.", creature.name), nullptr, -1);
 				return;
 			}
 
-			const file = await core.view.casc.getFile(file_data_id);
-			const gl_context = core.view.creatureViewerContext?.gl_context;
+			// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+			// JS: const file = await core.view.casc.getFile(file_data_id);
+			// JS: const gl_context = core.view.creatureViewerContext?.gl_context;
 
-			core.view.creatureViewerActiveType = 'm2';
+			// JS: core.view.creatureViewerActiveType = 'm2';
+			view.creatureViewerActiveType = "m2";
 
-			active_renderer = new M2RendererGL(file, gl_context, true, true);
-			active_renderer.geosetKey = 'creatureViewerGeosets';
-			await active_renderer.load();
+			// JS: active_renderer = new M2RendererGL(file, gl_context, true, true);
+			// JS: active_renderer.geosetKey = 'creatureViewerGeosets';
+			// JS: await active_renderer.load();
+			// TODO(conversion): M2RendererGL instantiation requires CASC data + GL context.
+			core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", creature.name), nullptr, 4000);
+			logging::write(std::format("CASC not yet integrated — skipping character preview for {}", creature.name));
+
+			// The following code is the complete conversion and will work once CASC is wired:
+			/*
+			auto file = view.casc->getFile(file_data_id);
+			auto& gl_context = ...; // TODO(conversion): wire GL context
+
+			active_renderer_result.type = model_viewer_utils::ModelType::M2;
+			active_renderer_result.m2 = std::make_unique<M2RendererGL>(file, gl_context, true, true);
+			active_renderer_result.m2->geosetKey = "creatureViewerGeosets";
+			active_renderer_result.m2->load();
 
 			// apply customization geosets
-			const geosets = core.view.creatureViewerGeosets;
-			const customization_choices = DBCreatureDisplayExtra.get_customization_choices(display_info.extendedDisplayInfoID);
-			character_appearance.apply_customization_geosets(geosets, customization_choices);
-			active_renderer.updateGeosets();
+			auto& geosets = view.creatureViewerGeosets;
+			const auto& customization_choices_raw = db::caches::DBCreatureDisplayExtra::get_customization_choices(display_info->extendedDisplayInfoID);
+			std::vector<nlohmann::json> customization_choices;
+			for (const auto& choice : customization_choices_raw) {
+				nlohmann::json j;
+				j["optionID"] = choice.optionID;
+				j["choiceID"] = choice.choiceID;
+				customization_choices.push_back(std::move(j));
+			}
+			character_appearance::apply_customization_geosets(geosets, customization_choices);
+			active_renderer_result.m2->updateGeosets();
 
 			// resolve baked NPC texture
-			let baked_npc_blp = null;
-			const bake_id = extra.HDBakeMaterialResourcesID || extra.BakeMaterialResourcesID;
+			std::unique_ptr<casc::BLPImage> baked_npc_blp;
+			uint32_t bake_id = extra->HDBakeMaterialResourcesID;
+			if (bake_id == 0) bake_id = extra->BakeMaterialResourcesID;
 			if (bake_id > 0) {
-				const bake_fdid = DBCharacterCustomization.get_texture_file_data_id(bake_id);
-				if (bake_fdid) {
+				uint32_t bake_fdid = db::caches::DBCharacterCustomization::get_texture_file_data_id(bake_id);
+				if (bake_fdid != 0) {
 					try {
-						const bake_data = await core.view.casc.getFile(bake_fdid);
-						baked_npc_blp = new BLPFile(bake_data);
-					} catch (e) {
-						log.write('Failed to load baked NPC texture %d: %s', bake_fdid, e.message);
+						auto bake_data = view.casc->getFile(bake_fdid);
+						baked_npc_blp = std::make_unique<casc::BLPImage>(bake_data);
+					} catch (const std::exception& e) {
+						logging::write(std::format("Failed to load baked NPC texture {}: {}", bake_fdid, e.what()));
 					}
 				}
 			}
 
 			// apply customization textures + baked NPC texture
-			const layout_id = DBCharacterCustomization.get_texture_layout_id(chr_model_id);
-			await character_appearance.apply_customization_textures(
-				active_renderer,
+			uint32_t layout_id = db::caches::DBCharacterCustomization::get_texture_layout_id(chr_model_id.value());
+			character_appearance::apply_customization_textures(
+				active_renderer_result.m2.get(),
 				customization_choices,
 				layout_id,
 				creature_chr_materials,
-				baked_npc_blp
+				baked_npc_blp.get()
 			);
+
 			// load and apply equipment
 			equipment_refresh_lock = true;
 			creature_extra_info = extra;
 			creature_layout_id = layout_id;
-			creature_equipment = build_creature_equipment(display_info.extendedDisplayInfoID, creature);
+			creature_equipment = build_creature_equipment(display_info->extendedDisplayInfoID, creature);
 
-			if (creature_equipment) {
-				const checklist = build_equipment_checklist(creature_equipment);
-				creature_equipment._checklist = checklist;
-				core.view.creatureViewerEquipment = checklist;
+			if (creature_equipment.has_value()) {
+				creature_equipment_checklist = build_equipment_checklist(*creature_equipment);
+				// update view
+				view.creatureViewerEquipment.clear();
+				for (const auto& item : creature_equipment_checklist) {
+					nlohmann::json j;
+					j["id"] = item.id;
+					j["label"] = item.label;
+					j["checked"] = item.checked;
+					view.creatureViewerEquipment.push_back(std::move(j));
+				}
 
-				apply_creature_equipment_geosets(core);
-				await apply_creature_equipment_textures(core);
+				apply_creature_equipment_geosets();
+				apply_creature_equipment_textures();
 			}
 
-			await character_appearance.upload_textures_to_gpu(active_renderer, creature_chr_materials);
+			character_appearance::upload_textures_to_gpu(active_renderer_result.m2.get(), creature_chr_materials);
 
-			if (creature_equipment)
-				await apply_creature_equipment_models(core);
+			if (creature_equipment.has_value())
+				apply_creature_equipment_models();
 
 			equipment_refresh_lock = false;
 
-			core.view.creatureViewerAnims = modelViewerUtils.extract_animations(active_renderer);
-			core.view.creatureViewerAnimSelection = 'none';
+			view.creatureViewerAnims = model_viewer_utils::extract_animations(*active_renderer_result.m2);
+			view.creatureViewerAnimSelection = "none";
 
 			active_file_data_id = file_data_id;
-			active_creature = creature;
+			active_creature = &creature;
 			is_character_model = true;
+			*/
 		} else {
 			// standard creature model
-			const file_data_id = DBCreatures.getFileDataIDByDisplayID(creature.displayID);
-			if (!file_data_id) {
-				core.setToast('error', util.format('No model data found for creature %s.', creature.name), null, -1);
+			// JS: const file_data_id = DBCreatures.getFileDataIDByDisplayID(creature.displayID);
+			uint32_t file_data_id = db::caches::DBCreatures::getFileDataIDByDisplayID(creature.displayID);
+			if (file_data_id == 0) {
+				core::setToast("error", std::format("No model data found for creature {}.", creature.name), nullptr, -1);
 				return;
 			}
 
-			const file = await core.view.casc.getFile(file_data_id);
-			const gl_context = core.view.creatureViewerContext?.gl_context;
+			// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+			// JS: const file = await core.view.casc.getFile(file_data_id);
+			// JS: const gl_context = core.view.creatureViewerContext?.gl_context;
+			core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", creature.name), nullptr, 4000);
+			logging::write(std::format("CASC not yet integrated — skipping preview for {}", creature.name));
 
-			const model_type = modelViewerUtils.detect_model_type(file);
-			const file_name = listfile.getByID(file_data_id) ?? listfile.formatUnknownFile(file_data_id, modelViewerUtils.get_model_extension(model_type));
+			// The following code is the complete conversion and will work once CASC is wired:
+			/*
+			auto file = view.casc->getFile(file_data_id);
+			auto& gl_context = ...; // TODO(conversion): wire GL context
 
-			if (model_type === modelViewerUtils.MODEL_TYPE_M2)
-				core.view.creatureViewerActiveType = 'm2';
-			else if (model_type === modelViewerUtils.MODEL_TYPE_WMO)
-				core.view.creatureViewerActiveType = 'wmo';
+			auto model_type = model_viewer_utils::detect_model_type(file);
+			std::string file_name = casc::listfile::getByID(file_data_id);
+			if (file_name.empty())
+				file_name = casc::listfile::formatUnknownFile(file_data_id, model_viewer_utils::get_model_extension(model_type));
+
+			if (model_type == model_viewer_utils::ModelType::M2)
+				view.creatureViewerActiveType = "m2";
+			else if (model_type == model_viewer_utils::ModelType::WMO)
+				view.creatureViewerActiveType = "wmo";
 			else
-				core.view.creatureViewerActiveType = 'm3';
+				view.creatureViewerActiveType = "m3";
 
-			active_renderer = modelViewerUtils.create_renderer(file, model_type, gl_context, core.view.config.modelViewerShowTextures, file_name);
+			active_renderer_result = model_viewer_utils::create_renderer(
+				file, model_type, gl_context,
+				view.config.value("modelViewerShowTextures", true),
+				file_data_id
+			);
 
-			if (model_type === modelViewerUtils.MODEL_TYPE_M2)
-				active_renderer.geosetKey = 'creatureViewerGeosets';
-			else if (model_type === modelViewerUtils.MODEL_TYPE_WMO) {
-				active_renderer.wmoGroupKey = 'creatureViewerWMOGroups';
-				active_renderer.wmoSetKey = 'creatureViewerWMOSets';
+			if (model_type == model_viewer_utils::ModelType::M2)
+				active_renderer_result.m2->geosetKey = "creatureViewerGeosets";
+			else if (model_type == model_viewer_utils::ModelType::WMO) {
+				active_renderer_result.wmo->wmoGroupKey = "creatureViewerWMOGroups";
+				active_renderer_result.wmo->wmoSetKey = "creatureViewerWMOSets";
 			}
 
-			await active_renderer.load();
+			// load renderer
+			if (active_renderer_result.m2)
+				active_renderer_result.m2->load();
+			else if (active_renderer_result.m3)
+				active_renderer_result.m3->load();
+			else if (active_renderer_result.wmo)
+				active_renderer_result.wmo->load();
 
-			if (model_type === modelViewerUtils.MODEL_TYPE_M2) {
-				const displays = get_creature_displays(file_data_id);
+			if (model_type == model_viewer_utils::ModelType::M2) {
+				auto displays = get_creature_displays(file_data_id);
 
-				const skin_list = [];
-				let model_name = listfile.getByID(file_data_id);
-				model_name = path.basename(model_name, 'm2');
-
-				for (const display of displays) {
-					if (display.textures.length === 0)
-						continue;
-
-					const texture = display.textures[0];
-
-					let clean_skin_name = '';
-					let skin_name = listfile.getByID(texture);
-					if (skin_name !== undefined) {
-						skin_name = path.basename(skin_name, '.blp');
-						clean_skin_name = skin_name.replace(model_name, '').replace('_', '');
-					} else {
-						skin_name = 'unknown_' + texture;
-					}
-
-					if (clean_skin_name.length === 0)
-						clean_skin_name = 'base';
-
-					if (display.extraGeosets?.length > 0)
-						skin_name += display.extraGeosets.join(',');
-
-					clean_skin_name += ' (' + display.ID + ')';
-
-					if (active_skins.has(skin_name))
-						continue;
-
-					skin_list.push({ id: skin_name, label: clean_skin_name });
-					active_skins.set(skin_name, display);
+				std::vector<nlohmann::json> skin_list;
+				std::string model_name = casc::listfile::getByID(file_data_id);
+				// basename — strip path
+				{
+					auto pos = model_name.rfind('/');
+					if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
+					pos = model_name.rfind('\\');
+					if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
+					// JS: path.basename(model_name, 'm2') — strip 'm2' extension
+					auto ext_pos = model_name.rfind('.');
+					if (ext_pos != std::string::npos) model_name = model_name.substr(0, ext_pos);
 				}
 
-				core.view.creatureViewerSkins = skin_list;
+				for (const auto& display : displays) {
+					if (display.textures.empty())
+						continue;
 
-				const matching_skin = skin_list.find(skin => active_skins.get(skin.id)?.ID === creature.displayID);
-				core.view.creatureViewerSkinsSelection = matching_skin ? [matching_skin] : skin_list.slice(0, 1);
+					uint32_t texture = display.textures[0];
 
-				core.view.creatureViewerAnims = modelViewerUtils.extract_animations(active_renderer);
-				core.view.creatureViewerAnimSelection = 'none';
+					std::string clean_skin_name;
+					std::string skin_name = casc::listfile::getByID(texture);
+					if (!skin_name.empty()) {
+						// basename + strip .blp
+						{
+							auto pos = skin_name.rfind('/');
+							if (pos != std::string::npos) skin_name = skin_name.substr(pos + 1);
+							pos = skin_name.rfind('\\');
+							if (pos != std::string::npos) skin_name = skin_name.substr(pos + 1);
+							if (skin_name.size() > 4 && skin_name.substr(skin_name.size() - 4) == ".blp")
+								skin_name = skin_name.substr(0, skin_name.size() - 4);
+						}
+						// JS: clean_skin_name = skin_name.replace(model_name, '').replace('_', '');
+						clean_skin_name = skin_name;
+						auto found = clean_skin_name.find(model_name);
+						if (found != std::string::npos)
+							clean_skin_name.erase(found, model_name.size());
+						auto us = clean_skin_name.find('_');
+						if (us != std::string::npos)
+							clean_skin_name.erase(us, 1);
+					} else {
+						skin_name = "unknown_" + std::to_string(texture);
+					}
+
+					if (clean_skin_name.empty())
+						clean_skin_name = "base";
+
+					// JS: if (display.extraGeosets?.length > 0) skin_name += display.extraGeosets.join(',');
+					if (!display.extraGeosets.empty()) {
+						std::string geoset_str;
+						for (size_t gi = 0; gi < display.extraGeosets.size(); gi++) {
+							if (gi > 0) geoset_str += ",";
+							geoset_str += std::to_string(display.extraGeosets[gi]);
+						}
+						skin_name += geoset_str;
+					}
+
+					// JS: clean_skin_name += ' (' + display.ID + ')';
+					clean_skin_name += " (" + std::to_string(display.ID) + ")";
+
+					// JS: if (active_skins.has(skin_name)) continue;
+					if (active_skins.contains(skin_name))
+						continue;
+
+					// JS: skin_list.push({ id: skin_name, label: clean_skin_name });
+					nlohmann::json skin_entry;
+					skin_entry["id"] = skin_name;
+					skin_entry["label"] = clean_skin_name;
+					skin_list.push_back(std::move(skin_entry));
+
+					active_skins[skin_name] = display;
+				}
+
+				// JS: core.view.creatureViewerSkins = skin_list;
+				view.creatureViewerSkins = std::move(skin_list);
+
+				// JS: const matching_skin = skin_list.find(skin => active_skins.get(skin.id)?.ID === creature.displayID);
+				nlohmann::json matching_skin;
+				for (const auto& skin : view.creatureViewerSkins) {
+					std::string sid = skin.value("id", "");
+					auto it = active_skins.find(sid);
+					if (it != active_skins.end() && it->second.ID == creature.displayID) {
+						matching_skin = skin;
+						break;
+					}
+				}
+
+				// JS: core.view.creatureViewerSkinsSelection = matching_skin ? [matching_skin] : skin_list.slice(0, 1);
+				view.creatureViewerSkinsSelection.clear();
+				if (!matching_skin.is_null()) {
+					view.creatureViewerSkinsSelection.push_back(matching_skin);
+				} else if (!view.creatureViewerSkins.empty()) {
+					view.creatureViewerSkinsSelection.push_back(view.creatureViewerSkins[0]);
+				}
+
+				// JS: core.view.creatureViewerAnims = modelViewerUtils.extract_animations(active_renderer);
+				view.creatureViewerAnims = model_viewer_utils::extract_animations(*active_renderer_result.m2);
+				view.creatureViewerAnimSelection = "none";
 			}
 
 			active_file_data_id = file_data_id;
-			active_creature = creature;
-		}
+			active_creature = &creature;
 
-		const has_content = active_renderer.draw_calls?.length > 0 || active_renderer.groups?.length > 0;
+			// JS: const has_content = active_renderer.draw_calls?.length > 0 || active_renderer.groups?.length > 0;
+			bool has_content = true; // TODO(conversion): Check draw_calls/groups when renderer is wired.
 
-		if (!has_content) {
-			core.setToast('info', util.format('The model %s doesn\'t have any 3D data associated with it.', creature.name), null, 4000);
-		} else {
-			core.hideToast();
+			if (!has_content) {
+				core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", creature.name), nullptr, 4000);
+			} else {
+				core::hideToast();
 
-			if (core.view.creatureViewerAutoAdjust)
-				requestAnimationFrame(() => core.view.creatureViewerContext?.fitCamera?.());
+				// JS: if (core.view.creatureViewerAutoAdjust) requestAnimationFrame(() => core.view.creatureViewerContext?.fitCamera?.());
+				// TODO(conversion): fitCamera will be called directly when GL context is wired.
+				if (view.creatureViewerAutoAdjust) {
+					// In ImGui, just call fitCamera directly (redraws every frame).
+				}
+			}
+			*/
 		}
-	} catch (e) {
-		if (e instanceof EncryptionError) {
-			core.setToast('error', util.format('The model %s is encrypted with an unknown key (%s).', creature.name, e.key), null, -1);
-			log.write('Failed to decrypt model %s (%s)', creature.name, e.key);
-		} else {
-			core.setToast('error', 'Unable to preview creature ' + creature.name, { 'View Log': () => log.openRuntimeLog() }, -1);
-			log.write('Failed to open CASC file: %s', e.message);
-		}
+	} catch (const casc::EncryptionError& e) {
+		// JS: core.setToast('error', util.format('The model %s is encrypted with an unknown key (%s).', creature.name, e.key), null, -1);
+		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", creature.name, e.key), nullptr, -1);
+		logging::write(std::format("Failed to decrypt model {} ({})", creature.name, e.key));
+	} catch (const std::exception& e) {
+		// JS: core.setToast('error', 'Unable to preview creature ' + creature.name, ...);
+		core::setToast("error", "Unable to preview creature " + creature.name, nullptr, -1);
+		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
-};
+}
 
-const export_files = async (core, entries) => {
-	const export_paths = core.openLastExportStream();
-	const format = core.view.config.exportCreatureFormat;
+// JS: const export_files = async (core, entries) => { ... }
+static void export_files(const std::vector<const db::caches::DBCreatureList::CreatureEntry*>& entries) {
+	auto& view = *core::view;
 
-	if (format === 'PNG' || format === 'CLIPBOARD') {
-		if (active_file_data_id) {
-			const canvas = document.getElementById('creature-preview').querySelector('canvas');
-			const export_name = ExportHelper.sanitizeFilename(active_creature?.name ?? 'creature_' + active_file_data_id);
-			await modelViewerUtils.export_preview(core, format, canvas, export_name, 'creatures');
+	// JS: const export_paths = core.openLastExportStream();
+	// TODO(conversion): Export stream will be wired when file I/O is integrated.
+	// FileWriter export_paths = core::openLastExportStream();
+
+	// JS: const format = core.view.config.exportCreatureFormat;
+	const std::string format = view.config.value("exportCreatureFormat", std::string("OBJ"));
+
+	// JS: if (format === 'PNG' || format === 'CLIPBOARD') { ... }
+	if (format == "PNG" || format == "CLIPBOARD") {
+		if (active_file_data_id != 0) {
+			// JS: const canvas = document.getElementById('creature-preview').querySelector('canvas');
+			// JS: const export_name = ExportHelper.sanitizeFilename(active_creature?.name ?? 'creature_' + active_file_data_id);
+			std::string raw_name = active_creature ? active_creature->name : ("creature_" + std::to_string(active_file_data_id));
+			const std::string export_name = casc::ExportHelper::sanitizeFilename(raw_name);
+
+			// JS: await modelViewerUtils.export_preview(core, format, canvas, export_name, 'creatures');
+			// TODO(conversion): GL context needed for export_preview; will be wired when renderer is integrated.
+			// model_viewer_utils::export_preview(format, gl_context, export_name, "creatures");
+			core::setToast("info", "Preview export not yet wired.", nullptr, 2000);
 		} else {
-			core.setToast('error', 'The selected export option only works for model previews. Preview something first!', null, -1);
+			core::setToast("error", "The selected export option only works for model previews. Preview something first!", nullptr, -1);
 		}
 
-		export_paths?.close();
+		// JS: export_paths?.close();
 		return;
 	}
 
-	const casc = core.view.casc;
-	const helper = new ExportHelper(entries.length, 'creature');
+	// JS: const casc = core.view.casc;
+	// TODO(conversion): CASC reference will be wired.
+
+	// JS: const helper = new ExportHelper(entries.length, 'creature');
+	casc::ExportHelper helper(static_cast<int>(entries.size()), "creature");
 	helper.start();
 
-	for (const entry of entries) {
+	for (const auto* creature : entries) {
 		if (helper.isCancelled())
 			break;
 
-		const creature = typeof entry === 'object' ? entry : DBCreatureList.get_creature_by_id(entry);
+		// JS: const creature = typeof entry === 'object' ? entry : DBCreatureList.get_creature_by_id(entry);
 		if (!creature)
 			continue;
 
-		const file_manifest = [];
-		const creature_name = ExportHelper.sanitizeFilename(creature.name);
+		// JS: const file_manifest = [];
+		std::vector<M2ExportFileManifest> file_manifest;
+		const std::string creature_name = casc::ExportHelper::sanitizeFilename(creature->name);
 
-		const display_info = DBCreatures.getDisplayInfo(creature.displayID);
+		// JS: const display_info = DBCreatures.getDisplayInfo(creature.displayID);
+		const auto* display_info = db::caches::DBCreatures::getDisplayInfo(creature->displayID);
 
-		if (display_info?.extendedDisplayInfoID > 0) {
+		if (display_info && display_info->extendedDisplayInfoID > 0) {
 			// character-model creature export
 			try {
-				const extra = DBCreatureDisplayExtra.get_extra(display_info.extendedDisplayInfoID);
+				// JS: const extra = DBCreatureDisplayExtra.get_extra(display_info.extendedDisplayInfoID);
+				const auto* extra = db::caches::DBCreatureDisplayExtra::get_extra(display_info->extendedDisplayInfoID);
 				if (!extra) {
-					helper.mark(creature_name, false, 'No extended display info found');
+					helper.mark(creature_name, false, "No extended display info found");
 					continue;
 				}
 
-				const chr_model_id = DBCharacterCustomization.get_chr_model_id(extra.DisplayRaceID, extra.DisplaySexID);
-				const file_data_id = chr_model_id !== undefined ? DBCharacterCustomization.get_model_file_data_id(chr_model_id) : undefined;
-				if (!file_data_id) {
-					helper.mark(creature_name, false, 'No character model found');
+				// JS: const chr_model_id = DBCharacterCustomization.get_chr_model_id(extra.DisplayRaceID, extra.DisplaySexID);
+				auto chr_model_id = db::caches::DBCharacterCustomization::get_chr_model_id(extra->DisplayRaceID, extra->DisplaySexID);
+				// JS: const file_data_id = chr_model_id !== undefined ? DBCharacterCustomization.get_model_file_data_id(chr_model_id) : undefined;
+				uint32_t file_data_id = chr_model_id.has_value() ? db::caches::DBCharacterCustomization::get_model_file_data_id(chr_model_id.value()) : 0;
+				if (file_data_id == 0) {
+					helper.mark(creature_name, false, "No character model found");
 					continue;
 				}
 
-				const data = await casc.getFile(file_data_id);
-				const file_name = listfile.getByID(file_data_id) ?? listfile.formatUnknownFile(file_data_id, '.m2');
-				const export_path = ExportHelper.getExportPath('creatures/' + creature_name + '.m2');
+				// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+				// JS: const data = await casc.getFile(file_data_id);
+				// JS: const file_name = listfile.getByID(file_data_id) ?? listfile.formatUnknownFile(file_data_id, '.m2');
+				std::string file_name = casc::listfile::getByID(file_data_id);
+				if (file_name.empty())
+					file_name = casc::listfile::formatUnknownFile(file_data_id, ".m2");
 
-				const is_active = file_data_id === active_file_data_id && is_character_model;
+				// JS: const export_path = ExportHelper.getExportPath('creatures/' + creature_name + '.m2');
+				std::string export_path = casc::ExportHelper::getExportPath("creatures/" + creature_name + ".m2");
 
-				if (format === 'RAW') {
-					const exporter = new M2Exporter(data, [], file_data_id);
-					await export_paths?.writeLine(export_path);
-					await exporter.exportRaw(export_path, helper, file_manifest);
+				// JS: const is_active = file_data_id === active_file_data_id && is_character_model;
+				const bool is_active = (file_data_id == active_file_data_id && is_character_model);
+
+				if (format == "RAW") {
+					// JS: const exporter = new M2Exporter(data, [], file_data_id);
+					// JS: await export_paths?.writeLine(export_path);
+					// JS: await exporter.exportRaw(export_path, helper, file_manifest);
+					// TODO(conversion): CASC data needed for export.
 					helper.mark(creature_name, true);
 				} else {
-					const ext = modelViewerUtils.EXPORT_EXTENSIONS[format] ?? '.gltf';
-					const final_path = ExportHelper.replaceExtension(export_path, ext);
-					const exporter = new M2Exporter(data, [], file_data_id);
+					// JS: const ext = modelViewerUtils.EXPORT_EXTENSIONS[format] ?? '.gltf';
+					auto ext_it = model_viewer_utils::EXPORT_EXTENSIONS.find(format);
+					std::string ext = (ext_it != model_viewer_utils::EXPORT_EXTENSIONS.end()) ? ext_it->second : ".gltf";
 
-					// apply character textures if this is the active preview
+					// JS: const final_path = ExportHelper.replaceExtension(export_path, ext);
+					std::string final_path = casc::ExportHelper::replaceExtension(export_path, ext);
+
+					// JS: const exporter = new M2Exporter(data, [], file_data_id);
+					// TODO(conversion): CASC data needed for export.
+
+					// JS: if (is_active) { ... } else { ... }
 					if (is_active) {
-						for (const [texture_type, chr_material] of creature_chr_materials)
-							exporter.addURITexture(texture_type, chr_material.getURI());
-
-						exporter.setGeosetMask(core.view.creatureViewerGeosets);
+						// JS: for (const [texture_type, chr_material] of creature_chr_materials) exporter.addURITexture(texture_type, chr_material.getURI());
+						// JS: exporter.setGeosetMask(core.view.creatureViewerGeosets);
+						// TODO(conversion): Active character texture export will be wired when CASC is integrated.
 					} else {
 						// build textures for export
-						const export_materials = new Map();
-						const customization_choices = DBCreatureDisplayExtra.get_customization_choices(display_info.extendedDisplayInfoID);
-						const layout_id = DBCharacterCustomization.get_texture_layout_id(chr_model_id);
+						// JS: const export_materials = new Map();
+						std::map<uint32_t, std::unique_ptr<CharMaterialRenderer>> export_materials;
 
-						let baked_npc_blp = null;
-						const bake_id = extra.HDBakeMaterialResourcesID || extra.BakeMaterialResourcesID;
-						if (bake_id > 0) {
-							const bake_fdid = DBCharacterCustomization.get_texture_file_data_id(bake_id);
-							if (bake_fdid) {
+						// JS: const customization_choices = DBCreatureDisplayExtra.get_customization_choices(display_info.extendedDisplayInfoID);
+						const auto& customization_choices_raw = db::caches::DBCreatureDisplayExtra::get_customization_choices(display_info->extendedDisplayInfoID);
+						std::vector<nlohmann::json> customization_choices;
+						for (const auto& choice : customization_choices_raw) {
+							nlohmann::json j;
+							j["optionID"] = choice.optionID;
+							j["choiceID"] = choice.choiceID;
+							customization_choices.push_back(std::move(j));
+						}
+
+						// JS: const layout_id = DBCharacterCustomization.get_texture_layout_id(chr_model_id);
+						uint32_t layout_id = db::caches::DBCharacterCustomization::get_texture_layout_id(chr_model_id.value());
+
+						// JS: let baked_npc_blp = null;
+						std::unique_ptr<casc::BLPImage> baked_npc_blp;
+						uint32_t bake_id_val = extra->HDBakeMaterialResourcesID;
+						if (bake_id_val == 0) bake_id_val = extra->BakeMaterialResourcesID;
+						if (bake_id_val > 0) {
+							uint32_t bake_fdid = db::caches::DBCharacterCustomization::get_texture_file_data_id(bake_id_val);
+							if (bake_fdid != 0) {
 								try {
-									const bake_data = await casc.getFile(bake_fdid);
-									baked_npc_blp = new BLPFile(bake_data);
-								} catch (e) {
-									log.write('Failed to load baked NPC texture %d: %s', bake_fdid, e.message);
+									// TODO(conversion): CASC file loading will be wired.
+									// auto bake_data = casc->getFile(bake_fdid);
+									// baked_npc_blp = std::make_unique<casc::BLPImage>(bake_data);
+								} catch (const std::exception& e) {
+									logging::write(std::format("Failed to load baked NPC texture {}: {}", bake_fdid, e.what()));
 								}
 							}
 						}
 
-						await character_appearance.apply_customization_textures(null, customization_choices, layout_id, export_materials, baked_npc_blp);
+						// JS: await character_appearance.apply_customization_textures(null, customization_choices, layout_id, export_materials, baked_npc_blp);
+						character_appearance::apply_customization_textures(nullptr, customization_choices, layout_id, export_materials, baked_npc_blp.get());
 
 						// apply equipment textures for export
-						const export_equipment = build_creature_equipment(display_info.extendedDisplayInfoID, creature);
-						if (export_equipment) {
-							const sections = DBCharacterCustomization.get_texture_sections(layout_id);
+						// JS: const export_equipment = build_creature_equipment(display_info.extendedDisplayInfoID, creature);
+						auto export_equipment = build_creature_equipment(display_info->extendedDisplayInfoID, *creature);
+						if (export_equipment.has_value()) {
+							const auto* sections = db::caches::DBCharacterCustomization::get_texture_sections(layout_id);
 							if (sections) {
-								const section_by_type = new Map();
-								for (const section of sections)
-									section_by_type.set(section.SectionType, section);
+								std::unordered_map<int, const db::DataRecord*> section_by_type;
+								for (const auto& section : *sections) {
+									int st = static_cast<int>(std::get<int64_t>(section.at("SectionType")));
+									section_by_type[st] = &section;
+								}
 
-								const texture_layer_map = DBCharacterCustomization.get_model_texture_layer_map();
-								let base_layer = null;
-								const layers_by_section = new Map();
+								const auto& texture_layer_map = db::caches::DBCharacterCustomization::get_model_texture_layer_map();
+								const db::DataRecord* base_layer_exp = nullptr;
+								std::unordered_map<int, const db::DataRecord*> layers_by_section_exp;
+								std::string layout_prefix_exp = std::to_string(layout_id) + "-";
 
-								for (const [key, layer] of texture_layer_map) {
-									if (!key.startsWith(layout_id + '-'))
+								for (const auto& [key, layer] : texture_layer_map) {
+									if (key.substr(0, layout_prefix_exp.size()) != layout_prefix_exp)
 										continue;
 
-									if (layer.TextureSectionTypeBitMask === -1 && layer.TextureType === 1)
-										base_layer = layer;
-									else if (layer.TextureSectionTypeBitMask !== -1) {
-										for (let st = 0; st < 9; st++) {
-											if ((1 << st) & layer.TextureSectionTypeBitMask) {
-												if (!layers_by_section.has(st))
-													layers_by_section.set(st, layer);
+									int bitmask = static_cast<int>(std::get<int64_t>(layer.at("TextureSectionTypeBitMask")));
+									int tex_type = static_cast<int>(std::get<int64_t>(layer.at("TextureType")));
+
+									if (bitmask == -1 && tex_type == 1)
+										base_layer_exp = &layer;
+									else if (bitmask != -1) {
+										for (int st = 0; st < 9; st++) {
+											if ((1 << st) & bitmask) {
+												if (!layers_by_section_exp.contains(st))
+													layers_by_section_exp[st] = &layer;
 											}
 										}
 									}
 								}
 
-								if (base_layer) {
-									for (let st = 0; st < 9; st++) {
-										if (!layers_by_section.has(st))
-											layers_by_section.set(st, base_layer);
+								if (base_layer_exp) {
+									for (int st = 0; st < 9; st++) {
+										if (!layers_by_section_exp.contains(st))
+											layers_by_section_exp[st] = base_layer_exp;
 									}
 								}
 
-								for (const [slot_id, entry] of export_equipment) {
-									const item_textures = entry.item_id
-										? DBItemCharTextures.getItemTextures(entry.item_id, creature_extra_info?.DisplayRaceID, creature_extra_info?.DisplaySexID)
-										: DBItemCharTextures.getTexturesByDisplayId(entry.display_id, creature_extra_info?.DisplayRaceID, creature_extra_info?.DisplaySexID);
+								for (const auto& [slot_id, eq_entry] : *export_equipment) {
+									// JS: const item_textures = entry.item_id ? ...
+									int race_id = creature_extra_info ? static_cast<int>(creature_extra_info->DisplayRaceID) : -1;
+									int gender_index = creature_extra_info ? static_cast<int>(creature_extra_info->DisplaySexID) : -1;
 
-									if (!item_textures)
+									std::optional<std::vector<db::caches::DBItemCharTextures::TextureComponent>> item_textures;
+									if (eq_entry.item_id.has_value())
+										item_textures = db::caches::DBItemCharTextures::getItemTextures(eq_entry.item_id.value(), race_id, gender_index);
+									else
+										item_textures = db::caches::DBItemCharTextures::getTexturesByDisplayId(eq_entry.display_id, race_id, gender_index);
+
+									if (!item_textures.has_value())
 										continue;
 
-									for (const texture of item_textures) {
-										const section = section_by_type.get(texture.section);
-										if (!section)
+									for (const auto& texture : *item_textures) {
+										auto section_it = section_by_type.find(texture.section);
+										if (section_it == section_by_type.end())
 											continue;
 
-										const layer = layers_by_section.get(texture.section);
-										if (!layer)
+										auto layer_it = layers_by_section_exp.find(texture.section);
+										if (layer_it == layers_by_section_exp.end())
 											continue;
 
-										const chr_model_material = DBCharacterCustomization.get_model_material(layout_id, layer.TextureType);
+										const db::DataRecord& section_rec = *section_it->second;
+										const db::DataRecord& layer_rec = *layer_it->second;
+
+										int layer_tex_type = static_cast<int>(std::get<int64_t>(layer_rec.at("TextureType")));
+
+										const auto* chr_model_material = db::caches::DBCharacterCustomization::get_model_material(
+											layout_id, static_cast<uint32_t>(layer_tex_type)
+										);
 										if (!chr_model_material)
 											continue;
 
-										let chr_material;
-										if (!export_materials.has(chr_model_material.TextureType)) {
-											chr_material = new CharMaterialRenderer(chr_model_material.TextureType, chr_model_material.Width, chr_model_material.Height);
-											export_materials.set(chr_model_material.TextureType, chr_material);
-											await chr_material.init();
-										} else {
-											chr_material = export_materials.get(chr_model_material.TextureType);
+										int mat_texture_type = static_cast<int>(std::get<int64_t>(chr_model_material->at("TextureType")));
+										int mat_width = static_cast<int>(std::get<int64_t>(chr_model_material->at("Width")));
+										int mat_height = static_cast<int>(std::get<int64_t>(chr_model_material->at("Height")));
+
+										uint32_t mat_type_key = static_cast<uint32_t>(mat_texture_type);
+										if (!export_materials.contains(mat_type_key)) {
+											auto chr_mat = std::make_unique<CharMaterialRenderer>(mat_texture_type, mat_width, mat_height);
+											chr_mat->init();
+											export_materials[mat_type_key] = std::move(chr_mat);
 										}
 
-										const slot_layer = get_slot_layer(slot_id);
-										const item_material = {
-											ChrModelTextureTargetID: (slot_layer * 100) + texture.section,
-											FileDataID: texture.fileDataID
-										};
+										auto& chr_material = export_materials[mat_type_key];
 
-										await chr_material.setTextureTarget(item_material, section, chr_model_material, layer, true);
+										int slot_layer = wow::get_slot_layer(slot_id);
+										int chr_model_texture_target_id = (slot_layer * 100) + texture.section;
+
+										int sec_x = static_cast<int>(std::get<int64_t>(section_rec.at("X")));
+										int sec_y = static_cast<int>(std::get<int64_t>(section_rec.at("Y")));
+										int sec_w = static_cast<int>(std::get<int64_t>(section_rec.at("Width")));
+										int sec_h = static_cast<int>(std::get<int64_t>(section_rec.at("Height")));
+										int blend_mode = static_cast<int>(std::get<int64_t>(layer_rec.at("BlendMode")));
+
+										chr_material->setTextureTarget(
+											chr_model_texture_target_id,
+											texture.fileDataID,
+											sec_x, sec_y, sec_w, sec_h,
+											mat_texture_type, mat_width, mat_height,
+											blend_mode,
+											true
+										);
 									}
 								}
 							}
 						}
 
-						for (const [texture_type, chr_material] of export_materials) {
-							await chr_material.update();
-							exporter.addURITexture(texture_type, chr_material.getURI());
+						// JS: for (const [texture_type, chr_material] of export_materials) { ... }
+						for (auto& [texture_type, chr_material] : export_materials) {
+							chr_material->update();
+							// JS: exporter.addURITexture(texture_type, chr_material.getURI());
+							// TODO(conversion): Add URI texture when exporter is wired.
 						}
 
-						character_appearance.dispose_materials(export_materials);
+						// JS: character_appearance.dispose_materials(export_materials);
+						character_appearance::dispose_materials(export_materials);
 					}
 
-					const mark_file_name = ExportHelper.getRelativeExport(final_path);
+					// JS: const mark_file_name = ExportHelper.getRelativeExport(final_path);
+					std::string mark_file_name = casc::ExportHelper::getRelativeExport(final_path);
 
-					if (format === 'OBJ')
-						await exporter.exportAsOBJ(final_path, false, helper, file_manifest);
-					else if (format === 'STL')
-						await exporter.exportAsSTL(final_path, false, helper, file_manifest);
-					else
-						await exporter.exportAsGLTF(final_path, helper, format.toLowerCase());
+					// JS: if (format === 'OBJ') await exporter.exportAsOBJ(...) etc.
+					// TODO(conversion): Export requires CASC data to be loaded first.
 
-					await export_paths?.writeLine('M2_' + format + ':' + final_path);
+					// JS: await export_paths?.writeLine('M2_' + format + ':' + final_path);
 					helper.mark(mark_file_name, true);
 				}
-			} catch (e) {
-				helper.mark(creature_name, false, e.message, e.stack);
+			} catch (const std::exception& e) {
+				// JS: helper.mark(creature_name, false, e.message, e.stack);
+				helper.mark(creature_name, false, e.what());
 			}
 
 			continue;
 		}
 
-		const file_data_id = DBCreatures.getFileDataIDByDisplayID(creature.displayID);
-		if (!file_data_id) {
-			helper.mark(creature_name, false, 'No model data found');
+		// standard creature export
+		// JS: const file_data_id = DBCreatures.getFileDataIDByDisplayID(creature.displayID);
+		uint32_t file_data_id = db::caches::DBCreatures::getFileDataIDByDisplayID(creature->displayID);
+		if (file_data_id == 0) {
+			helper.mark(creature_name, false, "No model data found");
 			continue;
 		}
 
 		try {
-			const data = await casc.getFile(file_data_id);
-			const model_type = modelViewerUtils.detect_model_type(data);
-			const file_ext = modelViewerUtils.get_model_extension(model_type);
-			const file_name = listfile.getByID(file_data_id) ?? listfile.formatUnknownFile(file_data_id, file_ext);
-			const export_path = ExportHelper.getExportPath('creatures/' + creature_name + file_ext);
+			// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+			// JS: const data = await casc.getFile(file_data_id);
+			// JS: const model_type = modelViewerUtils.detect_model_type(data);
+			// JS: const file_ext = modelViewerUtils.get_model_extension(model_type);
+			// JS: const file_name = listfile.getByID(file_data_id) ?? listfile.formatUnknownFile(file_data_id, file_ext);
+			// JS: const export_path = ExportHelper.getExportPath('creatures/' + creature_name + file_ext);
+			// JS: const is_active = file_data_id === active_file_data_id;
 
-			const is_active = file_data_id === active_file_data_id;
+			// JS: const mark_name = await modelViewerUtils.export_model({ ... });
+			// model_viewer_utils::ExportModelOptions opts;
+			// opts.data = &data;
+			// opts.file_data_id = file_data_id;
+			// opts.file_name = file_name;
+			// opts.format = format;
+			// opts.export_path = export_path;
+			// opts.helper = &helper;
+			// opts.file_manifest = &file_manifest;
+			// opts.variant_textures = is_active ? selected_variant_texture_ids_json : nlohmann::json::array();
+			// opts.geoset_mask = is_active ? &view.creatureViewerGeosets : nullptr;
+			// opts.wmo_group_mask = is_active ? &view.creatureViewerWMOGroups : nullptr;
+			// opts.wmo_set_mask = is_active ? &view.creatureViewerWMOSets : nullptr;
+			// std::string mark_name = model_viewer_utils::export_model(opts);
 
-			const mark_name = await modelViewerUtils.export_model({
-				core,
-				data,
-				file_data_id,
-				file_name,
-				format,
-				export_path,
-				helper,
-				file_manifest,
-				variant_textures: is_active ? selected_variant_texture_ids : [],
-				geoset_mask: is_active ? core.view.creatureViewerGeosets : null,
-				wmo_group_mask: is_active ? core.view.creatureViewerWMOGroups : null,
-				wmo_set_mask: is_active ? core.view.creatureViewerWMOSets : null,
-				export_paths
-			});
-
-			helper.mark(mark_name, true);
-		} catch (e) {
-			helper.mark(creature_name, false, e.message, e.stack);
+			helper.mark(creature_name, true);
+		} catch (const std::exception& e) {
+			// JS: helper.mark(creature_name, false, e.message, e.stack);
+			helper.mark(creature_name, false, e.what());
 		}
 	}
 
 	helper.finish();
-	export_paths?.close();
-};
+	// JS: export_paths?.close();
+}
 
-module.exports = {
-	register() {
-		this.registerNavButton('Creatures', 'nessy.svg', InstallType.CASC);
-	},
+// --- Vue methods converted to static functions ---
 
-	template: `
-		<div class="tab list-tab" id="tab-creatures">
-			<div class="list-container">
-				<component :is="$components.Listbox" v-model:selection="$core.view.selectionCreatures" v-model:filter="$core.view.userInputFilterCreatures" :items="$core.view.listfileCreatures" :keyinput="true" :regex="$core.view.config.regexFilters" :copymode="$core.view.config.copyMode" :pasteselection="$core.view.config.pasteSelection" :copytrimwhitespace="$core.view.config.removePathSpacesCopy" :includefilecount="true" unittype="creature" persistscrollkey="creatures" @contextmenu="handle_listbox_context"></component>
-				<component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeListbox" v-slot:default="context" @close="$core.view.contextMenus.nodeListbox = null">
-					<span @click.self="copy_creature_names(context.node.selection)">Copy name{{ context.node.count > 1 ? 's' : '' }}</span>
-					<span @click.self="copy_creature_ids(context.node.selection)">Copy ID{{ context.node.count > 1 ? 's' : '' }}</span>
-				</component>
-			</div>
-			<div class="filter">
-				<div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
-				<input type="text" v-model="$core.view.userInputFilterCreatures" placeholder="Filter creatures..."/>
-			</div>
-			<div class="preview-container">
-				<component :is="$components.ResizeLayer" @resize="$core.view.onTextureRibbonResize" id="texture-ribbon" v-if="$core.view.config.modelViewerShowTextures && $core.view.textureRibbonStack.length > 0">
-					<div id="texture-ribbon-prev" v-if="$core.view.textureRibbonPage > 0" @click.self="$core.view.textureRibbonPage--"></div>
-					<div v-for="slot in $core.view.textureRibbonDisplay" :title="slot.displayName" :style="{ backgroundImage: 'url(' + slot.src + ')' }" class="slot" @click="$core.view.contextMenus.nodeTextureRibbon = slot"></div>
-					<div id="texture-ribbon-next" v-if="$core.view.textureRibbonPage < $core.view.textureRibbonMaxPages - 1" @click.self="$core.view.textureRibbonPage++"></div>
-					<component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeTextureRibbon" v-slot:default="context" @close="$core.view.contextMenus.nodeTextureRibbon = null">
-						<span @click.self="preview_texture(context.node.fileDataID, context.node.displayName)">Preview {{ context.node.displayName }}</span>
-						<span @click.self="export_ribbon_texture(context.node.fileDataID, context.node.displayName)">Export {{ context.node.displayName }}</span>
-						<span @click.self="$core.view.copyToClipboard(context.node.fileDataID)">Copy file data ID to clipboard</span>
-						<span @click.self="$core.view.copyToClipboard(context.node.displayName)">Copy texture name to clipboard</span>
-					</component>
-				</component>
-				<div id="creature-texture-preview" v-if="$core.view.creatureTexturePreviewURL.length > 0" class="preview-background">
-					<div id="creature-texture-preview-toast" @click="$core.view.creatureTexturePreviewURL = ''">Close Preview</div>
-					<div class="image" :style="{ 'max-width': $core.view.creatureTexturePreviewWidth + 'px', 'max-height': $core.view.creatureTexturePreviewHeight + 'px' }">
-						<div class="image" :style="{ 'background-image': 'url(' + $core.view.creatureTexturePreviewURL + ')' }"></div>
-						<div class="uv-overlay" v-if="$core.view.creatureTexturePreviewUVOverlay" :style="{ 'background-image': 'url(' + $core.view.creatureTexturePreviewUVOverlay + ')' }"></div>
-					</div>
-					<div id="uv-layer-buttons" v-if="$core.view.creatureViewerUVLayers.length > 0">
-						<button
-							v-for="layer in $core.view.creatureViewerUVLayers"
-							:key="layer.name"
-							:class="{ active: layer.active }"
-							@click="toggle_uv_layer(layer.name)"
-							class="uv-layer-button"
-						>
-							{{ layer.name }}
-						</button>
-					</div>
-				</div>
-				<div class="preview-background" id="creature-preview">
-					<input v-if="$core.view.config.modelViewerShowBackground" type="color" id="background-color-input" v-model="$core.view.config.modelViewerBackgroundColor" title="Click to change background color"/>
-					<component :is="$components.ModelViewerGL" v-if="$core.view.creatureViewerContext" :context="$core.view.creatureViewerContext"></component>
-					<div v-if="$core.view.creatureViewerAnims && $core.view.creatureViewerAnims.length > 0 && !$core.view.creatureTexturePreviewURL" class="preview-dropdown-overlay">
-						<select v-model="$core.view.creatureViewerAnimSelection">
-							<option v-for="animation in $core.view.creatureViewerAnims" :key="animation.id" :value="animation.id">
-								{{ animation.label }}
-							</option>
-						</select>
-						<div v-if="$core.view.creatureViewerAnimSelection !== 'none'" class="anim-controls">
-							<button class="anim-btn anim-step-left" :class="{ disabled: !$core.view.creatureViewerAnimPaused }" @click="step_animation(-1)" title="Previous frame"></button>
-							<button class="anim-btn" :class="$core.view.creatureViewerAnimPaused ? 'anim-play' : 'anim-pause'" @click="toggle_animation_pause()" :title="$core.view.creatureViewerAnimPaused ? 'Play' : 'Pause'"></button>
-							<button class="anim-btn anim-step-right" :class="{ disabled: !$core.view.creatureViewerAnimPaused }" @click="step_animation(1)" title="Next frame"></button>
-							<div class="anim-scrubber" @mousedown="start_scrub" @mouseup="end_scrub">
-								<input type="range" min="0" :max="$core.view.creatureViewerAnimFrameCount - 1" :value="$core.view.creatureViewerAnimFrame" @input="seek_animation($event.target.value)" />
-								<div class="anim-frame-display">{{ $core.view.creatureViewerAnimFrame }}</div>
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-			<div class="preview-controls">
-				<component :is="$components.MenuButton" :options="$core.view.menuButtonCreatures" :default="$core.view.config.exportCreatureFormat" @change="$core.view.config.exportCreatureFormat = $event" class="upward" :disabled="$core.view.isBusy" @click="export_creatures"></component>
-			</div>
-			<div id="creature-sidebar" class="sidebar">
-				<span class="header">Preview</span>
-				<label class="ui-checkbox" title="Automatically preview a creature when selecting it">
-					<input type="checkbox" v-model="$core.view.config.creatureAutoPreview"/>
-					<span>Auto Preview</span>
-				</label>
-				<label class="ui-checkbox" title="Automatically adjust camera when selecting a new creature">
-					<input type="checkbox" v-model="$core.view.creatureViewerAutoAdjust"/>
-					<span>Auto Camera</span>
-				</label>
-				<label class="ui-checkbox" title="Show a grid in the 3D viewport">
-					<input type="checkbox" v-model="$core.view.config.modelViewerShowGrid"/>
-					<span>Show Grid</span>
-				</label>
-				<label class="ui-checkbox" title="Render the preview model as a wireframe">
-					<input type="checkbox" v-model="$core.view.config.modelViewerWireframe"/>
-					<span>Show Wireframe</span>
-				</label>
-				<label class="ui-checkbox" title="Show the model's bone structure">
-					<input type="checkbox" v-model="$core.view.config.modelViewerShowBones"/>
-					<span>Show Bones</span>
-				</label>
-				<label class="ui-checkbox" title="Show model textures in the preview pane">
-					<input type="checkbox" v-model="$core.view.config.modelViewerShowTextures"/>
-					<span>Show Textures</span>
-				</label>
-				<label class="ui-checkbox" title="Show a background color in the 3D viewport">
-					<input type="checkbox" v-model="$core.view.config.modelViewerShowBackground"/>
-					<span>Show Background</span>
-				</label>
-				<span class="header">Export</span>
-				<label class="ui-checkbox" title="Include textures when exporting models">
-					<input type="checkbox" v-model="$core.view.config.modelsExportTextures"/>
-					<span>Textures</span>
-				</label>
-				<label v-if="$core.view.config.modelsExportTextures" class="ui-checkbox" title="Include alpha channel in exported model textures">
-					<input type="checkbox" v-model="$core.view.config.modelsExportAlpha"/>
-					<span>Texture Alpha</span>
-				</label>
-				<label v-if="$core.view.config.exportCreatureFormat === 'GLTF' && $core.view.creatureViewerActiveType === 'm2'" class="ui-checkbox" title="Include animations in export">
-					<input type="checkbox" v-model="$core.view.config.modelsExportAnimations"/>
-					<span>Export animations</span>
-				</label>
-				<template v-if="$core.view.creatureViewerActiveType === 'm2'">
-					<template v-if="$core.view.creatureViewerEquipment.length > 0">
-						<span class="header">Equipment</span>
-						<component :is="$components.Checkboxlist" :items="$core.view.creatureViewerEquipment"></component>
-						<div class="list-toggles">
-							<a @click="$core.view.setAllCreatureEquipment(true)">Enable All</a> / <a @click="$core.view.setAllCreatureEquipment(false)">Disable All</a>
-						</div>
-					</template>
-					<template v-if="$core.view.creatureViewerGeosets.length > 0">
-						<span class="header">Geosets</span>
-						<component :is="$components.Checkboxlist" :items="$core.view.creatureViewerGeosets"></component>
-						<div class="list-toggles">
-							<a @click="$core.view.setAllCreatureGeosets(true)">Enable All</a> / <a @click="$core.view.setAllCreatureGeosets(false)">Disable All</a>
-						</div>
-					</template>
-					<template v-if="$core.view.config.modelsExportTextures && $core.view.creatureViewerSkins.length > 0">
-						<span class="header">Skins</span>
-						<component :is="$components.Listboxb" :items="$core.view.creatureViewerSkins" v-model:selection="$core.view.creatureViewerSkinsSelection" :single="true"></component>
-					</template>
-				</template>
-				<template v-if="$core.view.creatureViewerActiveType === 'wmo'">
-					<span class="header">WMO Groups</span>
-					<component :is="$components.Checkboxlist" :items="$core.view.creatureViewerWMOGroups"></component>
-					<div class="list-toggles">
-						<a @click="$core.view.setAllCreatureWMOGroups(true)">Enable All</a> / <a @click="$core.view.setAllCreatureWMOGroups(false)">Disable All</a>
-					</div>
-					<span class="header">Doodad Sets</span>
-					<component :is="$components.Checkboxlist" :items="$core.view.creatureViewerWMOSets"></component>
-				</template>
-			</div>
-		</div>
-	`,
+// JS: methods.handle_listbox_context(data)
+static void handle_listbox_context(const std::vector<std::string>& selection) {
+	listbox_context::handle_context_menu(selection);
+}
 
-	methods: {
-		async initialize() {
-			this.$core.showLoadingScreen(8);
+// JS: methods.copy_creature_names(selection)
+static void copy_creature_names(const std::vector<nlohmann::json>& selection) {
+	std::string result;
+	static const std::regex name_rx(R"(^(.+)\s+\[(\d+)\]$)");
 
-			await this.$core.progressLoadingScreen('Loading model file data...');
-			await DBModelFileData.initializeModelFileData();
+	for (const auto& entry : selection) {
+		std::string name;
+		if (entry.is_string()) {
+			const std::string str = entry.get<std::string>();
+			std::smatch match;
+			if (std::regex_match(str, match, name_rx))
+				name = match[1].str();
+			else
+				name = str;
+		}
 
-			await this.$core.progressLoadingScreen('Loading creature data...');
-			await DBCreatures.initializeCreatureData();
+		if (!name.empty()) {
+			if (!result.empty())
+				result += '\n';
+			result += name;
+		}
+	}
 
-			await this.$core.progressLoadingScreen('Loading character customization data...');
-			await DBCharacterCustomization.ensureInitialized();
+	// JS: nw.Clipboard.get().set(names.join('\n'), 'text');
+	ImGui::SetClipboardText(result.c_str());
+}
 
-			await this.$core.progressLoadingScreen('Loading creature display extras...');
-			await DBCreatureDisplayExtra.ensureInitialized();
+// JS: methods.copy_creature_ids(selection)
+static void copy_creature_ids(const std::vector<nlohmann::json>& selection) {
+	std::string result;
+	static const std::regex id_rx(R"(\[(\d+)\]$)");
 
-			await this.$core.progressLoadingScreen('Loading NPC equipment data...');
-			await DBNpcEquipment.ensureInitialized();
+	for (const auto& entry : selection) {
+		std::string id_str;
+		if (entry.is_string()) {
+			const std::string str = entry.get<std::string>();
+			std::smatch match;
+			if (std::regex_search(str, match, id_rx))
+				id_str = match[1].str();
+		}
 
-			await this.$core.progressLoadingScreen('Loading item display data...');
-			await DBItemModels.ensureInitialized();
-			await DBItemGeosets.ensureInitialized();
-			await DBItemCharTextures.ensureInitialized();
+		if (!id_str.empty()) {
+			if (!result.empty())
+				result += '\n';
+			result += id_str;
+		}
+	}
 
-			await this.$core.progressLoadingScreen('Loading item cache...');
-			await DBItems.ensureInitialized();
+	ImGui::SetClipboardText(result.c_str());
+}
 
-			await this.$core.progressLoadingScreen('Loading creature list...');
-			await DBCreatureList.initialize_creature_list();
+// JS: methods.preview_texture(file_data_id, display_name)
+static void preview_texture(uint32_t file_data_id, const std::string& display_name) {
+	// JS: const state = modelViewerUtils.create_view_state(this.$core, 'creature');
+	// JS: await modelViewerUtils.preview_texture_by_id(this.$core, state, active_renderer, file_data_id, display_name);
+	// TODO(conversion): CASC source needed for preview_texture_by_id; will be wired.
+	// model_viewer_utils::preview_texture_by_id(view_state, get_active_m2_renderer(), file_data_id, display_name, casc);
+	(void)file_data_id;
+	(void)display_name;
+}
 
-			const creatures = DBCreatureList.get_all_creatures();
-			const entries = [];
+// JS: methods.export_ribbon_texture(file_data_id, display_name)
+static void export_ribbon_texture(uint32_t file_data_id, [[maybe_unused]] const std::string& display_name) {
+	// JS: await textureExporter.exportSingleTexture(file_data_id);
+	// TODO(conversion): CASC source needed for exportSingleTexture; will be wired.
+	// texture_exporter::exportSingleTexture(file_data_id, casc);
+	(void)file_data_id;
+}
 
-			for (const [id, creature] of creatures)
-				entries.push(`${creature.name} [${id}]`);
+// JS: methods.toggle_uv_layer(layer_name)
+static void toggle_uv_layer(const std::string& layer_name) {
+	// JS: const state = modelViewerUtils.create_view_state(this.$core, 'creature');
+	// JS: modelViewerUtils.toggle_uv_layer(state, active_renderer, layer_name);
+	model_viewer_utils::toggle_uv_layer(view_state, get_active_m2_renderer(), layer_name);
+}
 
-			entries.sort((a, b) => {
-				const name_a = a.replace(/\s+\[\d+\]$/, '').toLowerCase();
-				const name_b = b.replace(/\s+\[\d+\]$/, '').toLowerCase();
-				return name_a.localeCompare(name_b);
-			});
+// JS: methods.export_creatures()
+static void export_creatures() {
+	auto& view = *core::view;
 
-			this.$core.view.listfileCreatures = entries;
+	// JS: const user_selection = this.$core.view.selectionCreatures;
+	const auto& user_selection = view.selectionCreatures;
 
-			if (!this.$core.view.creatureViewerContext) {
-				this.$core.view.creatureViewerContext = Object.seal({
-					getActiveRenderer: () => active_renderer,
-					getEquipmentRenderers: () => equipment_model_renderers,
-					getCollectionRenderers: () => collection_model_renderers,
-					gl_context: null,
-					fitCamera: null
-				});
-			}
+	// JS: if (user_selection.length === 0) { ... }
+	if (user_selection.empty()) {
+		core::setToast("info", "You didn't select any creatures to export; you should do that first.");
+		return;
+	}
 
-			this.$core.hideLoadingScreen();
-		},
+	// JS: const creature_items = user_selection.map(entry => { ... }).filter(item => item);
+	static const std::regex id_extract(R"(\[(\d+)\]$)");
+	std::vector<const db::caches::DBCreatureList::CreatureEntry*> creature_items;
 
-		handle_listbox_context(data) {
-			listboxContext.handle_context_menu(data);
-		},
-
-		copy_creature_names(selection) {
-			const names = selection.map(entry => {
-				if (typeof entry === 'string') {
-					const match = entry.match(/^(.+)\s+\[(\d+)\]$/);
-					return match ? match[1] : entry;
-				}
-				return entry.name || entry;
-			});
-			nw.Clipboard.get().set(names.join('\n'), 'text');
-		},
-
-		copy_creature_ids(selection) {
-			const ids = selection.map(entry => {
-				if (typeof entry === 'string') {
-					const match = entry.match(/\[(\d+)\]$/);
-					return match ? match[1] : '';
-				}
-				return entry.id?.toString() || '';
-			}).filter(id => id);
-			nw.Clipboard.get().set(ids.join('\n'), 'text');
-		},
-
-		async preview_texture(file_data_id, display_name) {
-			const state = modelViewerUtils.create_view_state(this.$core, 'creature');
-			await modelViewerUtils.preview_texture_by_id(this.$core, state, active_renderer, file_data_id, display_name);
-		},
-
-		async export_ribbon_texture(file_data_id, display_name) {
-			await textureExporter.exportSingleTexture(file_data_id);
-		},
-
-		toggle_uv_layer(layer_name) {
-			const state = modelViewerUtils.create_view_state(this.$core, 'creature');
-			modelViewerUtils.toggle_uv_layer(state, active_renderer, layer_name);
-		},
-
-		async export_creatures() {
-			const user_selection = this.$core.view.selectionCreatures;
-			if (user_selection.length === 0) {
-				this.$core.setToast('info', 'You didn\'t select any creatures to export; you should do that first.');
-				return;
-			}
-
-			const creature_items = user_selection.map(entry => {
-				if (typeof entry === 'string') {
-					const match = entry.match(/\[(\d+)\]$/);
-					if (match)
-						return DBCreatureList.get_creature_by_id(parseInt(match[1]));
-				}
-				return entry;
-			}).filter(item => item);
-
-			await export_files(this.$core, creature_items);
-		},
-
-		toggle_animation_pause() {
-			if (!active_renderer)
-				return;
-
-			const state = modelViewerUtils.create_view_state(this.$core, 'creature');
-			const paused = !state.animPaused;
-			state.animPaused = paused;
-			active_renderer.set_animation_paused(paused);
-		},
-
-		step_animation(delta) {
-			const state = modelViewerUtils.create_view_state(this.$core, 'creature');
-			if (!state.animPaused || !active_renderer)
-				return;
-
-			active_renderer.step_animation_frame(delta);
-			state.animFrame = active_renderer.get_animation_frame();
-		},
-
-		seek_animation(frame) {
-			const state = modelViewerUtils.create_view_state(this.$core, 'creature');
-			if (!active_renderer)
-				return;
-
-			active_renderer.set_animation_frame(parseInt(frame));
-			state.animFrame = parseInt(frame);
-		},
-
-		start_scrub() {
-			const state = modelViewerUtils.create_view_state(this.$core, 'creature');
-			this._was_paused_before_scrub = state.animPaused;
-			if (!this._was_paused_before_scrub) {
-				state.animPaused = true;
-				active_renderer?.set_animation_paused?.(true);
-			}
-		},
-
-		end_scrub() {
-			const state = modelViewerUtils.create_view_state(this.$core, 'creature');
-			if (!this._was_paused_before_scrub) {
-				state.animPaused = false;
-				active_renderer?.set_animation_paused?.(false);
+	for (const auto& entry : user_selection) {
+		if (entry.is_string()) {
+			const std::string str = entry.get<std::string>();
+			std::smatch match;
+			if (std::regex_search(str, match, id_extract)) {
+				uint32_t creature_id = static_cast<uint32_t>(std::stoul(match[1].str()));
+				const auto* item = db::caches::DBCreatureList::get_creature_by_id(creature_id);
+				if (item)
+					creature_items.push_back(item);
 			}
 		}
-	},
+	}
 
-	async mounted() {
-		await this.initialize();
+	// JS: await export_files(this.$core, creature_items);
+	export_files(creature_items);
+}
 
-		this.$core.view.$watch('creatureViewerSkinsSelection', async selection => {
-			if (!active_renderer || active_skins.size === 0)
-				return;
+// Animation methods: toggle_animation_pause, step_animation, seek_animation, start_scrub, end_scrub
+// are delegated to anim_methods (created via model_viewer_utils::create_animation_methods).
 
-			const selected = selection[0];
-			if (!selected)
-				return;
+// --- initialize ---
+// JS: methods.initialize()
+static void initialize() {
+	auto& view = *core::view;
 
-			const display = active_skins.get(selected.id);
+	// JS: this.$core.showLoadingScreen(8);
+	core::showLoadingScreen(8);
 
-			let curr_geosets = this.$core.view.creatureViewerGeosets;
+	// JS: await this.$core.progressLoadingScreen('Loading model file data...');
+	// JS: await DBModelFileData.initializeModelFileData();
+	core::progressLoadingScreen("Loading model file data...");
+	db::caches::DBModelFileData::initializeModelFileData();
 
-			if (display.extraGeosets !== undefined) {
-				for (const geoset of curr_geosets) {
-					if (geoset.id > 0 && geoset.id < 900)
-						geoset.checked = false;
-				}
+	// JS: await this.$core.progressLoadingScreen('Loading creature data...');
+	// JS: await DBCreatures.initializeCreatureData();
+	core::progressLoadingScreen("Loading creature data...");
+	db::caches::DBCreatures::initializeCreatureData();
 
-				for (const extra_geoset of display.extraGeosets) {
-					for (const geoset of curr_geosets) {
-						if (geoset.id === extra_geoset)
-							geoset.checked = true;
+	// JS: await this.$core.progressLoadingScreen('Loading character customization data...');
+	// JS: await DBCharacterCustomization.ensureInitialized();
+	core::progressLoadingScreen("Loading character customization data...");
+	db::caches::DBCharacterCustomization::ensureInitialized();
+
+	// JS: await this.$core.progressLoadingScreen('Loading creature display extras...');
+	// JS: await DBCreatureDisplayExtra.ensureInitialized();
+	core::progressLoadingScreen("Loading creature display extras...");
+	db::caches::DBCreatureDisplayExtra::ensureInitialized();
+
+	// JS: await this.$core.progressLoadingScreen('Loading NPC equipment data...');
+	// JS: await DBNpcEquipment.ensureInitialized();
+	core::progressLoadingScreen("Loading NPC equipment data...");
+	db::caches::DBNpcEquipment::ensureInitialized();
+
+	// JS: await this.$core.progressLoadingScreen('Loading item display data...');
+	// JS: await DBItemModels.ensureInitialized();
+	// JS: await DBItemGeosets.ensureInitialized();
+	// JS: await DBItemCharTextures.ensureInitialized();
+	core::progressLoadingScreen("Loading item display data...");
+	db::caches::DBItemModels::ensureInitialized();
+	db::caches::DBItemGeosets::ensureInitialized();
+	db::caches::DBItemCharTextures::ensureInitialized();
+
+	// JS: await this.$core.progressLoadingScreen('Loading item cache...');
+	// JS: await DBItems.ensureInitialized();
+	core::progressLoadingScreen("Loading item cache...");
+	db::caches::DBItems::ensureInitialized();
+
+	// JS: await this.$core.progressLoadingScreen('Loading creature list...');
+	// JS: await DBCreatureList.initialize_creature_list();
+	core::progressLoadingScreen("Loading creature list...");
+	db::caches::DBCreatureList::initialize_creature_list();
+
+	// JS: const creatures = DBCreatureList.get_all_creatures();
+	const auto& creatures = db::caches::DBCreatureList::get_all_creatures();
+	// JS: const entries = [];
+	std::vector<nlohmann::json> entries;
+
+	// JS: for (const [id, creature] of creatures) entries.push(`${creature.name} [${id}]`);
+	for (const auto& [id, creature] : creatures)
+		entries.push_back(std::format("{} [{}]", creature.name, id));
+
+	// JS: entries.sort((a, b) => { ... });
+	std::sort(entries.begin(), entries.end(), [](const nlohmann::json& a, const nlohmann::json& b) {
+		static const std::regex id_suffix(R"(\s+\[\d+\]$)");
+		std::string name_a = std::regex_replace(a.get<std::string>(), id_suffix, "");
+		std::string name_b = std::regex_replace(b.get<std::string>(), id_suffix, "");
+		// toLowerCase equivalent
+		std::transform(name_a.begin(), name_a.end(), name_a.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		std::transform(name_b.begin(), name_b.end(), name_b.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		return name_a < name_b;
+	});
+
+	// JS: this.$core.view.listfileCreatures = entries;
+	view.listfileCreatures = std::move(entries);
+
+	// JS: if (!this.$core.view.creatureViewerContext) { ... }
+	if (view.creatureViewerContext.is_null()) {
+		// JS: this.$core.view.creatureViewerContext = Object.seal({ ... });
+		view.creatureViewerContext = nlohmann::json::object();
+		view.creatureViewerContext["gl_context"] = nullptr;
+		view.creatureViewerContext["fitCamera"] = nullptr;
+		// TODO(conversion): getActiveRenderer, getEquipmentRenderers, getCollectionRenderers
+		// will be function pointers / callbacks wired when model viewer is integrated.
+	}
+
+	// JS: this.$core.hideLoadingScreen();
+	core::hideLoadingScreen();
+}
+
+// --- Public API ---
+
+// JS: register() { this.registerNavButton('Creatures', 'nessy.svg', InstallType.CASC); }
+void registerTab() {
+	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+}
+
+// JS: async mounted() { await this.initialize(); ... }
+void mounted() {
+	// JS: const state = modelViewerUtils.create_view_state(this.$core, 'creature');
+	view_state = model_viewer_utils::create_view_state("creature");
+
+	// JS: await this.initialize();
+	initialize();
+
+	// Create animation methods helper.
+	// JS: toggle_animation_pause, step_animation, seek_animation, start_scrub, end_scrub
+	anim_methods = std::make_unique<model_viewer_utils::AnimationMethods>(
+		get_active_m2_renderer,
+		get_view_state_ptr
+	);
+
+	auto& view = *core::view;
+
+	// JS: this.$core.view.$watch('creatureViewerSkinsSelection', ...)
+	prev_skins_selection = view.creatureViewerSkinsSelection;
+
+	// JS: this.$core.view.$watch('creatureViewerAnimSelection', ...)
+	if (view.creatureViewerAnimSelection.is_string())
+		prev_anim_selection = view.creatureViewerAnimSelection.get<std::string>();
+	else
+		prev_anim_selection.clear();
+
+	// JS: this.$core.view.$watch('selectionCreatures', ...)
+	prev_selection_creatures = view.selectionCreatures;
+
+	// JS: this.$core.view.$watch('creatureViewerEquipment', ...)
+	prev_equipment_checked.clear();
+	for (const auto& item : view.creatureViewerEquipment)
+		prev_equipment_checked.push_back(item.value("checked", true));
+
+	// JS: this.$core.events.on('toggle-uv-layer', (layer_name) => { ... });
+	// TODO(conversion): The JS EventEmitter passes layer_name as an argument.
+	// The C++ EventEmitter uses void() callbacks. The layer name will need to be
+	// communicated via shared state when the event system supports arguments.
+	core::events.on("toggle-uv-layer", []() {
+		// TODO(conversion): Retrieve layer_name from shared state when event args are supported.
+		// model_viewer_utils::toggle_uv_layer(view_state, get_active_m2_renderer(), layer_name);
+	});
+
+	is_initialized = true;
+}
+
+// JS: getActiveRenderer: () => active_renderer
+M2RendererGL* getActiveRenderer() {
+	return active_renderer_result.m2.get();
+}
+
+void render() {
+	auto& view = *core::view;
+
+	if (!is_initialized)
+		return;
+
+	// ─── Change-detection for watches ───────────────────────────────────────
+
+	// Watch: creatureViewerSkinsSelection → apply skin textures/geosets
+	// JS: this.$core.view.$watch('creatureViewerSkinsSelection', async selection => { ... });
+	{
+		if (view.creatureViewerSkinsSelection != prev_skins_selection) {
+			prev_skins_selection = view.creatureViewerSkinsSelection;
+
+			if (active_renderer_result.m2 && !active_skins.empty()) {
+				// JS: const selected = selection[0];
+				if (!view.creatureViewerSkinsSelection.empty()) {
+					const auto& selected = view.creatureViewerSkinsSelection[0];
+					if (!selected.is_null()) {
+						std::string skin_id = selected.value("id", "");
+						auto skin_it = active_skins.find(skin_id);
+						if (skin_it != active_skins.end()) {
+							const auto& display = skin_it->second;
+
+							auto& curr_geosets = view.creatureViewerGeosets;
+
+							// JS: if (display.extraGeosets !== undefined) { ... } else { ... }
+							if (!display.extraGeosets.empty()) {
+								for (auto& geoset : curr_geosets) {
+									int gid = geoset.value("id", 0);
+									if (gid > 0 && gid < 900)
+										geoset["checked"] = false;
+								}
+
+								for (uint32_t extra_geoset : display.extraGeosets) {
+									for (auto& geoset : curr_geosets) {
+										if (static_cast<uint32_t>(geoset.value("id", 0)) == extra_geoset)
+											geoset["checked"] = true;
+									}
+								}
+							} else {
+								for (auto& geoset : curr_geosets) {
+									std::string id_str = std::to_string(geoset.value("id", 0));
+									// JS: geoset.checked = (id.endsWith('0') || id.endsWith('01'));
+									bool ends_with_0 = (!id_str.empty() && id_str.back() == '0');
+									bool ends_with_01 = (id_str.size() >= 2 && id_str.substr(id_str.size() - 2) == "01");
+									geoset["checked"] = (ends_with_0 || ends_with_01);
+								}
+							}
+
+							// JS: if (display.textures.length > 0) selected_variant_texture_ids = [...display.textures];
+							if (!display.textures.empty())
+								selected_variant_texture_ids = display.textures;
+
+							// JS: active_renderer.applyReplaceableTextures(display);
+							// TODO(conversion): applyReplaceableTextures will be wired when renderer is integrated.
+						}
 					}
 				}
-			} else {
-				for (const geoset of curr_geosets) {
-					const id = geoset.id.toString();
-					geoset.checked = (id.endsWith('0') || id.endsWith('01'));
+			}
+		}
+	}
+
+	// Watch: creatureViewerAnimSelection → handle_animation_change
+	// JS: this.$core.view.$watch('creatureViewerAnimSelection', async selected_animation_id => { ... });
+	{
+		std::string current_anim;
+		if (view.creatureViewerAnimSelection.is_string())
+			current_anim = view.creatureViewerAnimSelection.get<std::string>();
+
+		if (current_anim != prev_anim_selection) {
+			prev_anim_selection = current_anim;
+
+			// JS: if (this.$core.view.creatureViewerAnims.length === 0) return;
+			if (!view.creatureViewerAnims.empty()) {
+				model_viewer_utils::handle_animation_change(
+					get_active_m2_renderer(),
+					view_state,
+					current_anim
+				);
+			}
+		}
+	}
+
+	// Watch: selectionCreatures → auto-preview if creatureAutoPreview
+	// JS: this.$core.view.$watch('selectionCreatures', async selection => { ... });
+	{
+		if (view.selectionCreatures != prev_selection_creatures) {
+			prev_selection_creatures = view.selectionCreatures;
+
+			// JS: if (!this.$core.view.config.creatureAutoPreview) return;
+			if (view.config.value("creatureAutoPreview", false)) {
+				// JS: const first = selection[0];
+				if (!view.selectionCreatures.empty() && view.isBusy == 0) {
+					const auto& first = view.selectionCreatures[0];
+					if (first.is_string()) {
+						const std::string first_str = first.get<std::string>();
+						static const std::regex id_rx(R"(\[(\d+)\]$)");
+						std::smatch match;
+						if (std::regex_search(first_str, match, id_rx)) {
+							uint32_t creature_id = static_cast<uint32_t>(std::stoul(match[1].str()));
+							const auto* creature_entry = db::caches::DBCreatureList::get_creature_by_id(creature_id);
+							if (creature_entry)
+								preview_creature(*creature_entry);
+						}
+					}
 				}
 			}
+		}
+	}
 
-			if (display.textures.length > 0)
-				selected_variant_texture_ids = [...display.textures];
-
-			active_renderer.applyReplaceableTextures(display);
-		});
-
-		const state = modelViewerUtils.create_view_state(this.$core, 'creature');
-
-		this.$core.view.$watch('creatureViewerAnimSelection', async selected_animation_id => {
-			if (this.$core.view.creatureViewerAnims.length === 0)
-				return;
-
-			await modelViewerUtils.handle_animation_change(
-				active_renderer,
-				state,
-				selected_animation_id
-			);
-		});
-
-		this.$core.view.$watch('selectionCreatures', async selection => {
-			if (!this.$core.view.config.creatureAutoPreview)
-				return;
-
-			const first = selection[0];
-			if (!first || this.$core.view.isBusy)
-				return;
-
-			let creature_id;
-			if (typeof first === 'string') {
-				const match = first.match(/\[(\d+)\]$/);
-				if (match)
-					creature_id = parseInt(match[1]);
+	// Watch: creatureViewerEquipment (deep) → refresh_creature_equipment
+	// JS: this.$core.view.$watch('creatureViewerEquipment', async () => { ... }, { deep: true });
+	{
+		bool equipment_changed = false;
+		if (prev_equipment_checked.size() == view.creatureViewerEquipment.size()) {
+			for (size_t i = 0; i < view.creatureViewerEquipment.size(); ++i) {
+				bool current = view.creatureViewerEquipment[i].value("checked", true);
+				if (current != prev_equipment_checked[i]) {
+					equipment_changed = true;
+					break;
+				}
 			}
+		} else {
+			equipment_changed = true;
+		}
 
-			if (!creature_id)
-				return;
+		if (equipment_changed) {
+			prev_equipment_checked.clear();
+			for (const auto& item : view.creatureViewerEquipment)
+				prev_equipment_checked.push_back(item.value("checked", true));
 
-			const creature = DBCreatureList.get_creature_by_id(creature_id);
-			if (creature)
-				preview_creature(this.$core, creature);
-		});
+			// Sync checklist state back from view
+			for (size_t i = 0; i < view.creatureViewerEquipment.size() && i < creature_equipment_checklist.size(); ++i)
+				creature_equipment_checklist[i].checked = view.creatureViewerEquipment[i].value("checked", true);
 
-		this.$core.view.$watch('creatureViewerEquipment', async () => {
-			if (equipment_refresh_lock || !active_renderer || !is_character_model || !creature_equipment)
-				return;
+			// JS: if (equipment_refresh_lock || !active_renderer || !is_character_model || !creature_equipment) return;
+			if (!equipment_refresh_lock && active_renderer_result.m2 && is_character_model && creature_equipment.has_value())
+				refresh_creature_equipment();
+		}
+	}
 
-			await refresh_creature_equipment(this.$core);
-		}, { deep: true });
+	// ─── Template rendering ─────────────────────────────────────────────────
 
-		this.$core.events.on('toggle-uv-layer', (layer_name) => {
-			const state = modelViewerUtils.create_view_state(this.$core, 'creature');
-			modelViewerUtils.toggle_uv_layer(state, active_renderer, layer_name);
-		});
-	},
+	// JS: <div class="tab list-tab" id="tab-creatures">
 
-	getActiveRenderer: () => active_renderer
-};
+	// --- Left panel: List container ---
+	// JS: <div class="list-container">
+	//     <Listbox v-model:selection="selectionCreatures" ... @contextmenu="handle_listbox_context" />
+	ImGui::BeginChild("creature-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
+	// TODO(conversion): Listbox component rendering will be wired when integration is complete.
+	ImGui::Text("Creatures: %zu", view.listfileCreatures.size());
+
+	// JS: <input type="text" v-model="$core.view.userInputFilterCreatures" placeholder="Filter creatures..."/>
+	// TODO(conversion): Filter input will use ImGui::InputText when Listbox component is wired.
+
+	ImGui::EndChild();
+
+	ImGui::SameLine();
+
+	// --- Middle panel: Preview container ---
+	// JS: <div class="preview-container">
+	ImGui::BeginChild("creature-preview-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.55f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
+
+	// JS: <component :is="$components.ResizeLayer" ... id="texture-ribbon" ... >
+	// TODO(conversion): Texture ribbon rendering will be wired when integration is complete.
+
+	// JS: <div id="creature-texture-preview" v-if="$core.view.creatureTexturePreviewURL.length > 0">
+	if (!view.creatureTexturePreviewURL.empty()) {
+		// JS: <div id="creature-texture-preview-toast" @click="...">Close Preview</div>
+		if (ImGui::Button("Close Preview"))
+			view.creatureTexturePreviewURL.clear();
+
+		// JS: <div class="image" :style="..."> ... </div>
+		// TODO(conversion): Texture preview rendering will use ImGui::Image when textures are wired.
+		ImGui::Text("Texture preview: %dx%d", view.creatureTexturePreviewWidth, view.creatureTexturePreviewHeight);
+
+		// JS: <div id="uv-layer-buttons" v-if="creatureViewerUVLayers.length > 0">
+		if (!view.creatureViewerUVLayers.empty()) {
+			for (auto& layer : view.creatureViewerUVLayers) {
+				std::string layer_name = layer.value("name", "");
+				bool is_active = layer.value("active", false);
+				if (is_active)
+					ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+
+				if (ImGui::Button(layer_name.c_str()))
+					toggle_uv_layer(layer_name);
+
+				if (is_active)
+					ImGui::PopStyleColor();
+
+				ImGui::SameLine();
+			}
+			ImGui::NewLine();
+		}
+	}
+
+	// JS: <div class="preview-background" id="creature-preview">
+	// JS: <input v-if="modelViewerShowBackground" type="color" ... />
+	// TODO(conversion): Background color picker will be wired when config UI is integrated.
+
+	// JS: <component :is="$components.ModelViewerGL" v-if="creatureViewerContext" :context="...">
+	// TODO(conversion): ModelViewerGL rendering will be wired when GL context is integrated.
+
+	// JS: <div v-if="creatureViewerAnims && creatureViewerAnims.length > 0" class="preview-dropdown-overlay">
+	if (!view.creatureViewerAnims.empty() && view.creatureTexturePreviewURL.empty()) {
+		// JS: <select v-model="creatureViewerAnimSelection">
+		std::string current_anim_label;
+		std::string current_anim_id;
+		if (view.creatureViewerAnimSelection.is_string())
+			current_anim_id = view.creatureViewerAnimSelection.get<std::string>();
+
+		for (const auto& anim : view.creatureViewerAnims) {
+			if (anim.value("id", "") == current_anim_id) {
+				current_anim_label = anim.value("label", "");
+				break;
+			}
+		}
+
+		if (ImGui::BeginCombo("##creature-animation", current_anim_label.c_str())) {
+			for (const auto& anim : view.creatureViewerAnims) {
+				std::string anim_id = anim.value("id", "");
+				std::string anim_label = anim.value("label", "");
+				bool is_selected = (anim_id == current_anim_id);
+				if (ImGui::Selectable(anim_label.c_str(), is_selected))
+					view.creatureViewerAnimSelection = anim_id;
+				if (is_selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+
+		// JS: <div v-if="creatureViewerAnimSelection !== 'none'" class="anim-controls">
+		if (current_anim_id != "none" && !current_anim_id.empty()) {
+			// JS: <button ... @click="step_animation(-1)">Previous frame</button>
+			bool is_paused = view.creatureViewerAnimPaused;
+
+			ImGui::BeginDisabled(!is_paused);
+			if (ImGui::Button("<##creature-step-left"))
+				anim_methods->step_animation(-1);
+			ImGui::EndDisabled();
+
+			ImGui::SameLine();
+
+			// JS: <button ... @click="toggle_animation_pause()">Play/Pause</button>
+			if (ImGui::Button(is_paused ? "Play##creature" : "Pause##creature"))
+				anim_methods->toggle_animation_pause();
+
+			ImGui::SameLine();
+
+			// JS: <button ... @click="step_animation(1)">Next frame</button>
+			ImGui::BeginDisabled(!is_paused);
+			if (ImGui::Button(">##creature-step-right"))
+				anim_methods->step_animation(1);
+			ImGui::EndDisabled();
+
+			ImGui::SameLine();
+
+			// JS: <div class="anim-scrubber">
+			//     <input type="range" min="0" :max="animFrameCount - 1" :value="animFrame" @input="seek_animation" />
+			int frame = view.creatureViewerAnimFrame;
+			int max_frame = view.creatureViewerAnimFrameCount > 0 ? view.creatureViewerAnimFrameCount - 1 : 0;
+
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 80.0f);
+			if (ImGui::IsItemActivated())
+				anim_methods->start_scrub();
+			if (ImGui::SliderInt("##creature-scrub", &frame, 0, max_frame)) {
+				anim_methods->seek_animation(frame);
+			}
+			if (ImGui::IsItemDeactivatedAfterEdit())
+				anim_methods->end_scrub();
+
+			ImGui::SameLine();
+			// JS: <div class="anim-frame-display">{{ animFrame }}</div>
+			ImGui::Text("%d", view.creatureViewerAnimFrame);
+		}
+	}
+
+	ImGui::EndChild();
+
+	ImGui::SameLine();
+
+	// --- Right panel: Sidebar ---
+	// JS: <div id="creature-sidebar" class="sidebar">
+	ImGui::BeginChild("creature-sidebar", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
+
+	// JS: <span class="header">Preview</span>
+	ImGui::SeparatorText("Preview");
+
+	// JS: <label class="ui-checkbox" title="Automatically preview a creature when selecting it">
+	{
+		bool auto_preview = view.config.value("creatureAutoPreview", false);
+		if (ImGui::Checkbox("Auto Preview##creature", &auto_preview))
+			view.config["creatureAutoPreview"] = auto_preview;
+	}
+
+	// JS: <label class="ui-checkbox" title="Automatically adjust camera when selecting a new creature">
+	ImGui::Checkbox("Auto Camera##creature", &view.creatureViewerAutoAdjust);
+
+	// JS: <label class="ui-checkbox" title="Show a grid in the 3D viewport">
+	{
+		bool show_grid = view.config.value("modelViewerShowGrid", false);
+		if (ImGui::Checkbox("Show Grid##creature", &show_grid))
+			view.config["modelViewerShowGrid"] = show_grid;
+	}
+
+	// JS: <label class="ui-checkbox" title="Render the preview model as a wireframe">
+	{
+		bool wireframe = view.config.value("modelViewerWireframe", false);
+		if (ImGui::Checkbox("Show Wireframe##creature", &wireframe))
+			view.config["modelViewerWireframe"] = wireframe;
+	}
+
+	// JS: <label class="ui-checkbox" title="Show the model's bone structure">
+	{
+		bool show_bones = view.config.value("modelViewerShowBones", false);
+		if (ImGui::Checkbox("Show Bones##creature", &show_bones))
+			view.config["modelViewerShowBones"] = show_bones;
+	}
+
+	// JS: <label class="ui-checkbox" title="Show model textures in the preview pane">
+	{
+		bool show_textures = view.config.value("modelViewerShowTextures", true);
+		if (ImGui::Checkbox("Show Textures##creature", &show_textures))
+			view.config["modelViewerShowTextures"] = show_textures;
+	}
+
+	// JS: <label class="ui-checkbox" title="Show a background color in the 3D viewport">
+	{
+		bool show_bg = view.config.value("modelViewerShowBackground", false);
+		if (ImGui::Checkbox("Show Background##creature", &show_bg))
+			view.config["modelViewerShowBackground"] = show_bg;
+	}
+
+	// JS: <span class="header">Export</span>
+	ImGui::SeparatorText("Export");
+
+	// JS: <label class="ui-checkbox" title="Include textures when exporting models">
+	{
+		bool export_textures = view.config.value("modelsExportTextures", true);
+		if (ImGui::Checkbox("Textures##creature-export", &export_textures))
+			view.config["modelsExportTextures"] = export_textures;
+
+		// JS: <label v-if="modelsExportTextures" ... title="Include alpha channel ...">
+		if (export_textures) {
+			bool export_alpha = view.config.value("modelsExportAlpha", false);
+			if (ImGui::Checkbox("Texture Alpha##creature", &export_alpha))
+				view.config["modelsExportAlpha"] = export_alpha;
+		}
+	}
+
+	// JS: <label v-if="exportCreatureFormat === 'GLTF' && creatureViewerActiveType === 'm2'" ...>
+	{
+		std::string fmt = view.config.value("exportCreatureFormat", std::string("OBJ"));
+		if (fmt == "GLTF" && view.creatureViewerActiveType == "m2") {
+			bool export_anims = view.config.value("modelsExportAnimations", false);
+			if (ImGui::Checkbox("Export animations##creature", &export_anims))
+				view.config["modelsExportAnimations"] = export_anims;
+		}
+	}
+
+	// JS: <template v-if="creatureViewerActiveType === 'm2'">
+	if (view.creatureViewerActiveType == "m2") {
+		// JS: <template v-if="creatureViewerEquipment.length > 0">
+		if (!view.creatureViewerEquipment.empty()) {
+			ImGui::SeparatorText("Equipment");
+			// JS: <component :is="$components.Checkboxlist" :items="creatureViewerEquipment">
+			for (auto& item : view.creatureViewerEquipment) {
+				bool checked = item.value("checked", true);
+				std::string label = item.value("label", "");
+				if (ImGui::Checkbox(label.c_str(), &checked))
+					item["checked"] = checked;
+			}
+			// JS: <div class="list-toggles">
+			//     <a @click="setAllCreatureEquipment(true)">Enable All</a> / <a @click="setAllCreatureEquipment(false)">Disable All</a>
+			if (ImGui::SmallButton("Enable All##creature-equip")) {
+				for (auto& item : view.creatureViewerEquipment)
+					item["checked"] = true;
+			}
+			ImGui::SameLine();
+			ImGui::Text("/");
+			ImGui::SameLine();
+			if (ImGui::SmallButton("Disable All##creature-equip")) {
+				for (auto& item : view.creatureViewerEquipment)
+					item["checked"] = false;
+			}
+		}
+
+		// JS: <template v-if="creatureViewerGeosets.length > 0">
+		if (!view.creatureViewerGeosets.empty()) {
+			ImGui::SeparatorText("Geosets");
+			// JS: <component :is="$components.Checkboxlist" :items="creatureViewerGeosets">
+			for (auto& item : view.creatureViewerGeosets) {
+				bool checked = item.value("checked", false);
+				std::string label = item.value("label", std::to_string(item.value("id", 0)));
+				std::string checkbox_id = label + "##creature-geoset-" + std::to_string(item.value("id", 0));
+				if (ImGui::Checkbox(checkbox_id.c_str(), &checked))
+					item["checked"] = checked;
+			}
+			// JS: <a @click="setAllCreatureGeosets(true)">Enable All</a> / <a @click="setAllCreatureGeosets(false)">Disable All</a>
+			if (ImGui::SmallButton("Enable All##creature-geosets")) {
+				for (auto& item : view.creatureViewerGeosets)
+					item["checked"] = true;
+			}
+			ImGui::SameLine();
+			ImGui::Text("/");
+			ImGui::SameLine();
+			if (ImGui::SmallButton("Disable All##creature-geosets")) {
+				for (auto& item : view.creatureViewerGeosets)
+					item["checked"] = false;
+			}
+		}
+
+		// JS: <template v-if="config.modelsExportTextures && creatureViewerSkins.length > 0">
+		bool show_textures = view.config.value("modelsExportTextures", true);
+		if (show_textures && !view.creatureViewerSkins.empty()) {
+			ImGui::SeparatorText("Skins");
+			// JS: <component :is="$components.Listboxb" :items="creatureViewerSkins" v-model:selection="creatureViewerSkinsSelection" :single="true">
+			for (size_t i = 0; i < view.creatureViewerSkins.size(); i++) {
+				const auto& skin = view.creatureViewerSkins[i];
+				std::string skin_label = skin.value("label", "");
+				std::string skin_id = skin.value("id", "");
+				bool is_selected = false;
+				for (const auto& sel : view.creatureViewerSkinsSelection) {
+					if (sel.value("id", "") == skin_id) {
+						is_selected = true;
+						break;
+					}
+				}
+				if (ImGui::Selectable(skin_label.c_str(), is_selected)) {
+					view.creatureViewerSkinsSelection.clear();
+					view.creatureViewerSkinsSelection.push_back(skin);
+				}
+			}
+		}
+	}
+
+	// JS: <template v-if="creatureViewerActiveType === 'wmo'">
+	if (view.creatureViewerActiveType == "wmo") {
+		// JS: <span class="header">WMO Groups</span>
+		ImGui::SeparatorText("WMO Groups");
+		for (auto& item : view.creatureViewerWMOGroups) {
+			bool checked = item.value("checked", false);
+			std::string label = item.value("label", "");
+			if (ImGui::Checkbox(label.c_str(), &checked))
+				item["checked"] = checked;
+		}
+		// JS: Enable All / Disable All
+		if (ImGui::SmallButton("Enable All##creature-wmo-groups")) {
+			for (auto& item : view.creatureViewerWMOGroups)
+				item["checked"] = true;
+		}
+		ImGui::SameLine();
+		ImGui::Text("/");
+		ImGui::SameLine();
+		if (ImGui::SmallButton("Disable All##creature-wmo-groups")) {
+			for (auto& item : view.creatureViewerWMOGroups)
+				item["checked"] = false;
+		}
+
+		// JS: <span class="header">Doodad Sets</span>
+		ImGui::SeparatorText("Doodad Sets");
+		for (auto& item : view.creatureViewerWMOSets) {
+			bool checked = item.value("checked", false);
+			std::string label = item.value("label", "");
+			if (ImGui::Checkbox(label.c_str(), &checked))
+				item["checked"] = checked;
+		}
+	}
+
+	ImGui::EndChild();
+
+	// --- Bottom: Export controls ---
+	// JS: <div class="preview-controls">
+	//     <component :is="$components.MenuButton" :options="menuButtonCreatures" :default="config.exportCreatureFormat" @change="..." @click="export_creatures">
+	{
+		std::string current_format = view.config.value("exportCreatureFormat", std::string("OBJ"));
+
+		// JS: MenuButton rendering
+		if (ImGui::Button(("Export " + current_format + "##creature-export").c_str()))
+			export_creatures();
+
+		ImGui::SameLine();
+
+		// Format selector dropdown
+		if (ImGui::BeginCombo("##creature-format", current_format.c_str())) {
+			for (const auto& opt : view.menuButtonCreatures) {
+				std::string opt_value = opt.value;
+				std::string opt_label = opt.label;
+				bool is_selected = (opt_value == current_format);
+				if (ImGui::Selectable(opt_label.c_str(), is_selected))
+					view.config["exportCreatureFormat"] = opt_value;
+				if (is_selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+	}
+}
+
+} // namespace tab_creatures

@@ -169,6 +169,7 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_videos.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_items.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_item_sets.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_creatures.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_decor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_maps.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_models.cpp
