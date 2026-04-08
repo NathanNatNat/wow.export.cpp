@@ -296,7 +296,7 @@ auto fid_it = fid_row->find("FileDataID");
 if (fid_it != fid_row->end()) {
 // JS: row.FileDataID = fid_row.FileDataID;
 uint32_t file_data_id = fieldToUint32(fid_it->second);
-row["FileDataID"] = file_data_id;
+row["FileDataID"] = static_cast<unsigned long>(file_data_id);
 
 auto owner_it = row.find("OwnerID");
 if (owner_it != row.end()) {
@@ -409,7 +409,7 @@ try {
 // JS: const root_fid = listfile.getByFilename(tile_prefix + '.adt');
 auto root_fid = casc::listfile::getByFilename(tile_prefix + ".adt");
 if (!root_fid) {
-log::write("cannot find fileDataID for %s.adt", tile_prefix.c_str());
+logging::write(std::format("cannot find fileDataID for {}.adt", tile_prefix));
 return std::nullopt;
 }
 
@@ -425,7 +425,7 @@ return std::nullopt;
 return std::nullopt;
 
 } catch (const std::exception& e) {
-log::write("error extracting height data from tile %s: %s", tile_prefix.c_str(), e.what());
+logging::write(std::format("error extracting height data from tile {}: {}", tile_prefix, e.what()));
 return std::nullopt;
 }
 }
@@ -567,7 +567,7 @@ file_data_id = placement.id;
 // The full algorithm is preserved in the JS source backup.
 (void)file_data_id;
 } catch (const std::exception& e) {
-log::write("failed to setup WMO minimap: %s", e.what());
+logging::write(std::format("failed to setup WMO minimap: {}", e.what()));
 current_wmo_minimap = std::nullopt;
 }
 }
@@ -597,7 +597,7 @@ core::view->mapViewerGridSize = nullptr;
 core::view->mapViewerSelection.clear();
 
 const std::string wdt_path = std::format("world/maps/{}/{}.wdt", map_dir_lower, map_dir_lower);
-log::write("loading map preview for %s (%d)", map_dir_lower.c_str(), mapID);
+logging::write(std::format("loading map preview for {} ({})", map_dir_lower, mapID));
 
 // TODO(conversion): CASC file loading will be wired when CASC integration is complete.
 // JS: const data = await this.$core.view.casc.getFileByName(wdt_path);
@@ -698,8 +698,8 @@ int canvas_width = minimap_data.canvas_width;
 int canvas_height = minimap_data.canvas_height;
 int output_tile_size = minimap_data.output_tile_size;
 
-log::write("WMO minimap export: %d tile positions, %dx%d pixels",
-static_cast<int>(tiles_by_coord.size()), canvas_width, canvas_height);
+logging::write(std::format("WMO minimap export: {} tile positions, {}x{} pixels",
+tiles_by_coord.size(), canvas_width, canvas_height));
 
 TiledPNGWriter writer(canvas_width, canvas_height, output_tile_size);
 
@@ -719,7 +719,7 @@ export_paths.writeLine("png:" + out_path);
 export_paths.close();
 
 helper.mark(relative_path, true);
-log::write("WMO minimap exported: %s", out_path.c_str());
+logging::write(std::format("WMO minimap exported: {}", out_path));
 
 } catch (const std::exception& e) {
 helper.mark("WMO minimap", false, e.what());
@@ -919,14 +919,14 @@ if (first_tile.empty())
 throw std::runtime_error("unable to load first tile to determine tile size");
 
 int tile_size = 512;
-log::write("detected tile size: %dx%d pixels", tile_size, tile_size);
+logging::write(std::format("detected tile size: {}x{} pixels", tile_size, tile_size));
 
 int tiles_wide = (max_x - min_x) + 1;
 int tiles_high = (max_y - min_y) + 1;
 int final_width = tiles_wide * tile_size;
 int final_height = tiles_high * tile_size;
 
-log::write("PNG canvas %dx%d pixels (%d x %d tiles)", final_width, final_height, tiles_wide, tiles_high);
+logging::write(std::format("PNG canvas {}x{} pixels ({} x {} tiles)", final_width, final_height, tiles_wide, tiles_high));
 
 TiledPNGWriter writer(final_width, final_height, tile_size);
 
@@ -946,10 +946,10 @@ img_data.width = tile_size;
 img_data.height = tile_size;
 writer.addTile(rel_x, rel_y, std::move(img_data));
 
-log::write("added tile %d,%d at position %d,%d", tile_coord.x, tile_coord.y, rel_x, rel_y);
+logging::write(std::format("added tile {},{} at position {},{}", tile_coord.x, tile_coord.y, rel_x, rel_y));
 helper.mark(std::format("Tile {} {}", tile_coord.x, tile_coord.y), true);
 } else {
-log::write("failed to load tile %d,%d, leaving gap", tile_coord.x, tile_coord.y);
+logging::write(std::format("failed to load tile {},{}, leaving gap", tile_coord.x, tile_coord.y));
 helper.mark(std::format("Tile {} {}", tile_coord.x, tile_coord.y), false, "Tile not available");
 }
 }
@@ -981,7 +981,7 @@ const std::string out_path = casc::ExportHelper::getExportPath(
 writer.write(out_path);
 
 auto stats = writer.getStats();
-log::write("map export complete: %s (%d tiles)", out_path.c_str(), static_cast<int>(stats.totalTiles));
+logging::write(std::format("map export complete: {} ({} tiles)", out_path, stats.totalTiles));
 
 auto export_paths = core::openLastExportStream();
 export_paths.writeLine("png:" + out_path);
@@ -991,7 +991,7 @@ helper.mark((std::filesystem::path("maps") / selected_map_dir / filename).string
 
 } catch (const std::exception& e) {
 helper.mark("PNG export", false, e.what());
-log::write("PNG export failed: %s", e.what());
+logging::write(std::format("PNG export failed: {}", e.what()));
 }
 
 helper.finish();
@@ -1056,10 +1056,10 @@ tile_max = height;
 global_min_height = std::min(global_min_height, tile_min);
 global_max_height = std::max(global_max_height, tile_max);
 
-log::write("tile %d: height range [%f, %f]", tile_index, tile_min, tile_max);
+logging::write(std::format("tile {}: height range [{}, {}]", tile_index, tile_min, tile_max));
 }
 } catch (const std::exception& e) {
-log::write("failed to extract height data from tile %d: %s", tile_index, e.what());
+logging::write(std::format("failed to extract height data from tile {}: {}", tile_index, e.what()));
 }
 }
 
@@ -1071,7 +1071,7 @@ return;
 }
 
 float height_range = global_max_height - global_min_height;
-log::write("global height range: [%f, %f] (range: %f)", global_min_height, global_max_height, height_range);
+logging::write(std::format("global height range: [{}, {}] (range: {})", global_min_height, global_max_height, height_range));
 
 core::hideToast();
 
@@ -1164,11 +1164,11 @@ writer.write(out_path);
 export_paths.writeLine("png:" + out_path);
 
 helper.mark((std::filesystem::path("maps") / selected_map_dir / "heightmaps" / filename).string(), true);
-log::write("exported heightmap: %s", out_path.c_str());
+logging::write(std::format("exported heightmap: {}", out_path));
 
 } catch (const std::exception& e) {
 helper.mark(filename, false, e.what());
-log::write("failed to export heightmap for tile %d: %s", tile_index, e.what());
+logging::write(std::format("failed to export heightmap for tile {}: {}", tile_index, e.what()));
 }
 }
 
@@ -1214,7 +1214,7 @@ uint32_t wmo_id = fieldToUint32(wmoid_it->second);
 wmo_minimap_textures[wmo_id].push_back(row);
 }
 
-log::write("loaded %d WMO minimap entries", static_cast<int>(wmo_minimap_textures.size()));
+logging::write(std::format("loaded {} WMO minimap entries", wmo_minimap_textures.size()));
 
 // JS: await this.$core.progressLoadingScreen('Loading maps...');
 core::progressLoadingScreen("Loading maps...");
