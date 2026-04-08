@@ -122,7 +122,7 @@ void init() {
 	// Compute derived paths.
 	s_runtime_log = s_log_dir / "runtime.log";
 	s_last_export = s_data_dir / "last_export";
-	s_shader_path = s_install_path / "src" / "shaders";
+	s_shader_path = s_data_dir / "shaders";
 
 	s_cache_dir = s_data_dir / "cache";
 	s_cache_size = s_cache_dir / "cachesize";
@@ -136,7 +136,7 @@ void init() {
 	s_cache_realmlist = s_data_dir / "realmlist.json";
 	s_cache_state_file = s_data_dir / "cache_state.json";
 
-	s_config_default_path = s_install_path / "src" / "default_config.jsonc";
+	s_config_default_path = s_data_dir / "default_config.jsonc";
 	s_config_user_path = s_data_dir / "config.json";
 
 	s_update_directory = s_install_path / ".update";
