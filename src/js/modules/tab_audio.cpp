@@ -94,8 +94,12 @@ static bool load_track() {
 		//     file_data = await core.view.casc.getFile(selected_file_data_id);
 		// else
 		//     file_data = await core.view.casc.getFileByName(selected_file);
-		// TODO(conversion): CASC getFile/getFileByName will be wired when CASC integration is complete.
-		std::vector<uint8_t> audio_data;
+		BufferWrapper file_data_buf;
+		if (selected_file_data_id.has_value())
+			file_data_buf = core::view->casc->getVirtualFileByID(selected_file_data_id.value());
+		else
+			file_data_buf = core::view->casc->getVirtualFileByName(selected_file);
+		const auto& audio_data = file_data_buf.raw();
 
 		if (selected_file.ends_with(".unk_sound")) {
 			const AudioType file_type = detectFileType(audio_data.data(), audio_data.size());
@@ -189,7 +193,8 @@ static void export_sounds() {
 
 		if (file_name.ends_with(".unk_sound")) {
 			// JS: export_data = await core.view.casc.getFileByName(file_name);
-			// TODO(conversion): CASC getFileByName will be wired when CASC integration is complete.
+			BufferWrapper export_buf = core::view->casc->getVirtualFileByName(file_name);
+			export_data = std::move(export_buf.raw());
 			has_export_data = true;
 
 			// JS: const file_type = detectFileType(export_data);
@@ -220,11 +225,13 @@ static void export_sounds() {
 				// JS: if (!export_data)
 				//     export_data = await core.view.casc.getFileByName(file_name);
 				if (!has_export_data) {
-					// TODO(conversion): CASC getFileByName will be wired when CASC integration is complete.
+					BufferWrapper export_buf = core::view->casc->getVirtualFileByName(file_name);
+					export_data = std::move(export_buf.raw());
 				}
 
 				// JS: await export_data.writeToFile(export_path);
-				// TODO(conversion): writeToFile will be wired when CASC integration is complete.
+				BufferWrapper out_buf(std::move(export_data));
+				out_buf.writeToFile(export_path);
 			} else {
 				logging::write(std::format("Skipping audio export {} (file exists, overwrite disabled)", export_path));
 			}

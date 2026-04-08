@@ -512,8 +512,7 @@ static void export_db2() {
 		}
 
 		// JS: await dataExporter.exportRawDB2(selected_file, selected_file_data_id);
-		// TODO(conversion): CASC pointer will be wired when CASC integration is complete.
-		data_exporter::exportRawDB2(selected_file, static_cast<uint32_t>(*selected_file_data_id), nullptr);
+		data_exporter::exportRawDB2(selected_file, static_cast<uint32_t>(*selected_file_data_id), core::view->casc);
 		return;
 	}
 

@@ -56,8 +56,7 @@ static void compute_raw_files() {
 	if (enable_unknown) {
 		// JS: const root_entries = core.view.casc.getValidRootEntries();
 		// JS: core.view.listfileRaw = await listfile.renderListfile(root_entries, true);
-		// TODO(conversion): CASC getValidRootEntries will be wired when CASC integration is complete.
-		std::vector<uint32_t> root_entries;
+		std::vector<uint32_t> root_entries = core::view->casc->getValidRootEntries();
 		auto rendered = casc::listfile::renderListfile(root_entries, true);
 		view.listfileRaw.clear();
 		for (auto& s : rendered)
@@ -110,18 +109,16 @@ static void detect_raw_files() {
 
 		try {
 			// JS: const data = await core.view.casc.getFile(file_data_id);
-			// TODO(conversion): CASC getFile will be wired when CASC integration is complete.
-			// For now, stubbed — the file identification logic is preserved.
-			BufferWrapper data;
-			(void)data;
+			BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
 
 			for (const auto& check : constants::FILE_IDENTIFIERS) {
 				// JS: if (data.startsWith(check.match))
-				// TODO(conversion): BufferWrapper::startsWith with FileIdentifier matches will be wired.
-				// extension_map[file_data_id] = std::string(check.ext);
-				// logging::write(std::format("Successfully identified file {} as {}", file_data_id, check.ext));
-				// break;
-				(void)check;
+				std::vector<std::string_view> patterns(check.matches.begin(), check.matches.begin() + std::min(static_cast<size_t>(check.match_count), check.matches.size()));
+				if (data.startsWith(patterns)) {
+					extension_map[file_data_id] = std::string(check.ext);
+					logging::write(std::format("Successfully identified file {} as {}", file_data_id, check.ext));
+					break;
+				}
 			}
 		} catch (const std::exception&) {
 			logging::write(std::format("Failed to identify file {} due to CASC error", file_data_id));
@@ -185,7 +182,8 @@ static void export_raw_files() {
 			try {
 				// JS: const data = await core.view.casc.getFileByName(file_name, true);
 				// JS: await data.writeToFile(export_path);
-				// TODO(conversion): CASC getFileByName will be wired when CASC integration is complete.
+				BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
+				data.writeToFile(export_path);
 				helper.mark(export_file_name, true);
 			} catch (const std::exception& e) {
 				helper.mark(export_file_name, false, e.what());

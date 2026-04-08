@@ -55,7 +55,8 @@ void render() {
 			try {
 				// JS: const file = await this.$core.view.casc.getFileByName(first);
 				// JS: this.$core.view.textViewerSelectedText = file.readString(undefined, 'utf8');
-				// TODO(conversion): CASC getFileByName will be wired when CASC integration is complete.
+				BufferWrapper file = core::view->casc->getVirtualFileByName(first);
+				core::view->textViewerSelectedText = file.readString();
 				selected_file = first;
 				prev_selection_first = first;
 			} catch (const casc::EncryptionError& e) {
@@ -155,7 +156,8 @@ void export_text() {
 			if (overwrite_files || !generics::fileExists(export_path)) {
 				// JS: const data = await this.$core.view.casc.getFileByName(file_name);
 				// JS: await data.writeToFile(export_path);
-				// TODO(conversion): CASC getFileByName will be wired when CASC integration is complete.
+				BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
+				data.writeToFile(export_path);
 			} else {
 				logging::write(std::format("Skipping text export {} (file exists, overwrite disabled)", export_path));
 			}
