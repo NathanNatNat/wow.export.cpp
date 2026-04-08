@@ -9,6 +9,7 @@
 #include "../core.h"
 #include "../casc/export-helper.h"
 #include "../casc/listfile.h"
+#include "../casc/casc-source.h"
 #include "../casc/blte-reader.h"
 #include "../install-type.h"
 #include "../modules.h"
@@ -136,18 +137,14 @@ static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 
 		const uint32_t file_data_id = decor_item.modelFileDataID;
 
-		// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 		// JS: const file = await core.view.casc.getFile(file_data_id);
-		// For now, we cannot load files. When CASC is wired, this will become:
-		//   auto file = casc->getFile(file_data_id);
-		//   auto model_type = model_viewer_utils::detect_model_type(file);
-		// Stub: set toast and return early.
-		core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", decor_item.name), {}, 4000);
-		logging::write(std::format("CASC not yet integrated — skipping preview for {}", decor_item.name));
+		BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
 
-		// The following code is the complete conversion and will work once CASC is wired:
+		// TODO(conversion): GL context and renderer integration still pending; file loaded but not yet consumed.
+		(void)file;
+
+		// The following code is the complete conversion and will work once GL context is wired:
 		/*
-		auto file = casc->getFile(file_data_id);
 		// JS: const gl_context = core.view.decorViewerContext?.gl_context;
 		// TODO(conversion): GL context retrieval from decorViewerContext will be wired.
 
@@ -248,7 +245,7 @@ static void export_files(const std::vector<const db::caches::DBDecor::DecorItem*
 	}
 
 	// JS: const casc = core.view.casc;
-	// TODO(conversion): CASC reference will be wired.
+	casc::CASC* casc = core::view->casc;
 
 	// JS: const helper = new ExportHelper(entries.length, 'decor');
 	casc::ExportHelper helper(static_cast<int>(entries.size()), "decor");
@@ -268,19 +265,19 @@ static void export_files(const std::vector<const db::caches::DBDecor::DecorItem*
 		const std::string decor_name = casc::ExportHelper::sanitizeFilename(decor_item->name);
 
 		try {
-			// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 			// JS: const data = await casc.getFile(file_data_id);
-			// auto data = casc->getFile(file_data_id);
-			// auto model_type = model_viewer_utils::detect_model_type(data);
-			// auto file_ext = model_viewer_utils::get_model_extension(model_type);
+			BufferWrapper data = casc->getVirtualFileByID(file_data_id);
+			// JS: const model_type = modelViewerUtils.detect_model_type(data);
+			auto model_type = model_viewer_utils::detect_model_type(data);
+			auto file_ext = model_viewer_utils::get_model_extension(model_type);
 
 			// JS: const file_name = listfile.getByID(file_data_id) ?? listfile.formatUnknownFile(file_data_id, file_ext);
-			// std::string file_name = casc::listfile::getByID(file_data_id);
-			// if (file_name.empty())
-			//     file_name = casc::listfile::formatUnknownFile(file_data_id, file_ext);
+			std::string file_name = casc::listfile::getByID(file_data_id);
+			if (file_name.empty())
+			    file_name = casc::listfile::formatUnknownFile(file_data_id, file_ext);
 
 			// JS: const export_path = ExportHelper.getExportPath('decor/' + decor_name + file_ext);
-			// std::string export_path = casc::ExportHelper::getExportPath("decor/" + decor_name + file_ext);
+			std::string export_path = casc::ExportHelper::getExportPath("decor/" + decor_name + file_ext);
 
 			// JS: const is_active = file_data_id === active_file_data_id;
 			const bool is_active = (file_data_id == active_file_data_id);
@@ -300,6 +297,10 @@ static void export_files(const std::vector<const db::caches::DBDecor::DecorItem*
 			// std::string mark_name = model_viewer_utils::export_model(opts);
 			// helper.mark(mark_name, true);
 
+			(void)data;
+			(void)model_type;
+			(void)file_name;
+			(void)export_path;
 			(void)is_active;
 			helper.mark(decor_name, true);
 		} catch (const std::exception& e) {
@@ -385,7 +386,7 @@ static void initialize() {
 	// JS: for (const [id, item] of decor_items) { ... }
 	for (const auto& [id, item] : decor_items) {
 		// JS: if (!this.$core.view.casc.fileExists(item.modelFileDataID)) continue;
-		// TODO(conversion): CASC fileExists check will be wired when CASC is integrated.
+		if (!core::view->casc->fileExists(item.modelFileDataID)) continue;
 
 		all_decor_entries.push_back({
 			std::format("{} [{}]", item.name, id),
@@ -566,18 +567,13 @@ static void copy_file_data_ids(const std::vector<nlohmann::json>& selection) {
 static void preview_texture(uint32_t file_data_id, const std::string& display_name) {
 	// JS: const state = get_view_state(this.$core);
 	// JS: await modelViewerUtils.preview_texture_by_id(this.$core, state, active_renderer, file_data_id, display_name);
-	// TODO(conversion): CASC source needed for preview_texture_by_id; will be wired.
-	// model_viewer_utils::preview_texture_by_id(view_state, get_active_m2_renderer(), file_data_id, display_name, casc);
-	(void)file_data_id;
-	(void)display_name;
+	model_viewer_utils::preview_texture_by_id(view_state, get_active_m2_renderer(), file_data_id, display_name, core::view->casc);
 }
 
 // JS: methods.export_ribbon_texture(file_data_id, display_name)
 static void export_ribbon_texture(uint32_t file_data_id, [[maybe_unused]] const std::string& display_name) {
 	// JS: await textureExporter.exportSingleTexture(file_data_id);
-	// TODO(conversion): CASC source needed for exportSingleTexture; will be wired.
-	// texture_exporter::exportSingleTexture(file_data_id, casc);
-	(void)file_data_id;
+	texture_exporter::exportSingleTexture(file_data_id, core::view->casc);
 }
 
 // JS: methods.toggle_uv_layer(layer_name)
