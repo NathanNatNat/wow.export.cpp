@@ -36,11 +36,13 @@ static std::string get_font_id(const std::string& file_name) {
 	// JS: for (let i = 0; i < file_name.length; i++)
 	// JS:     hash = ((hash << 5) - hash + file_name.charCodeAt(i)) | 0;
 	// JS: return 'font_legacy_' + Math.abs(hash);
-	int32_t hash = 0;
+	// Use uint32_t for the computation to avoid signed overflow UB,
+	// then cast to int32_t at the end to match JS `| 0` (ToInt32) semantics.
+	uint32_t hash = 0;
 	for (char c : file_name)
-		hash = ((hash << 5) - hash + static_cast<unsigned char>(c));
+		hash = (hash << 5) - hash + static_cast<unsigned char>(c);
 
-	return "font_legacy_" + std::to_string(std::abs(hash));
+	return "font_legacy_" + std::to_string(std::abs(static_cast<int32_t>(hash)));
 }
 
 // JS: const load_font = async (core, file_name) => { ... }

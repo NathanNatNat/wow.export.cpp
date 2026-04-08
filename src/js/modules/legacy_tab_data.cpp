@@ -35,7 +35,8 @@ static std::string selected_file;
 static std::string selected_file_path;
 
 // JS: let selected_file_schema = null;
-static const std::map<std::string, db::DBCSchemaField>* selected_file_schema = nullptr;
+// Stored as a copy (not a pointer) because the DBCReader is a local variable in load_table().
+static std::map<std::string, db::DBCSchemaField> selected_file_schema;
 
 // JS: let dbc_listfile = [];
 static std::vector<std::string> dbc_listfile;
@@ -239,7 +240,7 @@ static void load_table(const std::string& table_name) {
 
 		selected_file = table_name;
 		selected_file_path = full_path;
-		selected_file_schema = &dbc_reader.schema;
+		selected_file_schema = dbc_reader.schema;
 	} catch (const std::exception& e) {
 		// JS: core.setToast('error', 'Unable to open DBC file ' + table_name, { 'View Log': () => log.openRuntimeLog() }, -1);
 		core::setToast("error", "Unable to open DBC file " + table_name, nullptr, -1);
