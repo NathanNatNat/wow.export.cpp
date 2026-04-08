@@ -43,7 +43,7 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: "Configure (preset: windows-msvc-debug)"
-        run: cmake --preset windows-msvc-debug -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+        run: cmake --preset windows-msvc-debug -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_C_FLAGS_DEBUG="/Z7 /Od /RTC1" -DCMAKE_CXX_FLAGS_DEBUG="/Z7 /Od /RTC1"
 
       - name: "Build (preset: windows-debug)"
         run: cmake --build --preset windows-debug --parallel
