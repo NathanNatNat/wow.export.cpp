@@ -239,21 +239,28 @@ endif()
 # ── Copy runtime resources to the build output directory ───────
 # The application locates resources relative to the executable directory
 # under a "data" subdirectory (constants::DATA_DIR = <exe_dir>/data).
-# After every build, mirror the required resource tree there.
+# After every build, mirror the project's data/ tree next to the binary.
 add_custom_command(TARGET wow_export POST_BUILD
-    # src/shaders/*.shader  →  <exe_dir>/data/shaders/
+    # data/shaders/*.shader  →  <exe_dir>/data/shaders/
     COMMAND ${CMAKE_COMMAND} -E make_directory
         "$<TARGET_FILE_DIR:wow_export>/data/shaders"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/src/shaders"
+        "${CMAKE_SOURCE_DIR}/data/shaders"
         "$<TARGET_FILE_DIR:wow_export>/data/shaders"
 
-    # src/default_config.jsonc  →  <exe_dir>/data/
+    # data/fa-icons/*.svg  →  <exe_dir>/data/fa-icons/
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:wow_export>/data/fa-icons"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/data/fa-icons"
+        "$<TARGET_FILE_DIR:wow_export>/data/fa-icons"
+
+    # data/default_config.jsonc  →  <exe_dir>/data/
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/src/default_config.jsonc"
+        "${CMAKE_SOURCE_DIR}/data/default_config.jsonc"
         "$<TARGET_FILE_DIR:wow_export>/data/default_config.jsonc"
 
-    COMMENT "Copying runtime resources (shaders, default config) to data/ directory"
+    COMMENT "Copying runtime resources (shaders, icons, default config) to data/ directory"
 )
 
 # ── Converted source files (added incrementally) ───────────────
