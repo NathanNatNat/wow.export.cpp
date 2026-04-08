@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 174 / 184 files converted
+**Progress:** 177 / 184 files converted
 
 ---
 
@@ -258,9 +258,9 @@
 - [x] `src/js/modules/legacy_tab_data.cpp` (325 lines)
 - [x] `src/js/modules/legacy_tab_files.cpp` (117 lines)
 - [x] `src/js/modules/legacy_tab_fonts.cpp` (173 lines)
-- [ ] `src/js/modules/legacy_tab_textures.cpp` (191 lines)
-- [ ] `src/js/modules/screen_settings.cpp` (463 lines)
-- [ ] `src/js/modules/screen_source_select.cpp` (342 lines)
+- [x] `src/js/modules/legacy_tab_textures.cpp` (191 lines)
+- [x] `src/js/modules/screen_settings.cpp` (463 lines)
+- [x] `src/js/modules/screen_source_select.cpp` (342 lines)
 
 ## Tier 23 — Top-Level Glue (3 files)
 

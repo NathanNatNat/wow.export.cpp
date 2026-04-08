@@ -1,463 +1,395 @@
-const generics = require('../generics');
-const constants = require('../constants');
-const tactKeys = require('../casc/tact-keys');
-const tab_characters = require('./tab_characters');
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-let default_config = null;
+#include "screen_settings.h"
+#include "tab_characters.h"
+#include "../log.h"
+#include "../core.h"
+#include "../generics.h"
+#include "../constants.h"
+#include "../casc/tact-keys.h"
+#include "../casc/locale-flags.h"
+#include "../components/file-field.h"
 
-const load_default_config = async () => {
-	if (default_config === null)
-		default_config = await generics.readJSON(constants.CONFIG.DEFAULT_PATH, true) || {};
+#include <cstring>
+#include <format>
+#include <optional>
+#include <regex>
 
-	return default_config;
-};
+#include <imgui.h>
+#include <spdlog/spdlog.h>
+#include <nlohmann/json.hpp>
 
-module.exports = {
-	register() {
-		this.registerContextMenuOption('Manage Settings', 'gear.svg');
-	},
+namespace screen_settings {
 
-	template: `
-		<div id="config-wrapper">
-		<div id="config" :class="{ toastgap: $core.view.toast !== null }">
-			<div>
-				<h1>Export Directory</h1>
-				<p>Local directory where files will be exported to.</p>
-				<p v-if="is_edit_export_path_concerning" class="concern">Warning: Using an export path with spaces may lead to problems in most 3D programs.</p>
-				<component :is="$components.FileField" v-model="$core.view.configEdit.exportDirectory" :class="{ concern: is_edit_export_path_concerning }"></component>
-			</div>
-			<div>
-				<h1>Character Save Directory</h1>
-				<p>Local directory where saved characters are stored. Leave empty to use the default location.</p>
-				<component :is="$components.FileField" v-model="$core.view.configEdit.characterExportPath" :placeholder="default_character_path"></component>
-			</div>
-			<div>
-				<h1>Scroll Speed</h1>
-				<p>How many lines at a time you scroll down in the results view (leave at 0 for default scroll amount)</p>
-				<input type="number" v-model.number="$core.view.configEdit.scrollSpeed"/>
-			</div>
-			<div>
-				<h1>Display File Lists in Numerical Order (FileDataID)</h1>
-				<p>If enabled, all file lists will be ordered numerically by file ID, otherwise alphabetically by filename.</p>
-				<label class="ui-checkbox">
-				<input type="checkbox" v-model="$core.view.configEdit.listfileSortByID"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Find Unknown Files (Requires Restart)</h1>
-				<p>If enabled, wow.export will use various methods to locate unknown files.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.enableUnknownFiles"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Load Model Skins (Requires Restart)</h1>
-				<p>If enabled, wow.export will parse creature and item skins from data tables for M2 models.</p>
-				<p>Disabling this will reduce memory usage and improve loading, but will disable M2 skin functionality.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.enableM2Skins"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Include Bone Prefixes</h1>
-				<p>If enabled, wow.export will Include _p Bone prefixes in model skeleton/armature.</p>
-				<p>Disabling this will break backwards compatibility with previous glTF model and animation exports.</p>
-				<label class="ui-checkbox" title="">
-					<input type="checkbox" v-model="$core.view.configEdit.modelsExportWithBonePrefix"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Enable Shared Textures (Recommended)</h1>
-				<p>If enabled, exported textures will be exported to their own path rather than with their parent.</p>
-				<p>This dramatically reduces disk space used by not duplicating textures.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.enableSharedTextures"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Enable Shared Children (Recommended)</h1>
-				<p>If enabled, exported models on a WMO/ADT will be exported to their own path rather than with their parent.</p>
-				<p>This dramatically reduces disk space used by not duplicating models.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.enableSharedChildren"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Strip Whitespace From Export Paths</h1>
-				<p>If enabled, whitespace will be removed from exported paths.</p>
-				<p>Enable this option if your 3D software does not support whitespace in paths.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.removePathSpaces"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Strip Whitespace From Copied Paths</h1>
-				<p>If enabled, file paths copied from a listbox (CTRL + C) will have whitespace stripped.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.removePathSpacesCopy"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Path Separator Format</h1>
-				<p>Sets the path separator format used in exported files.</p>
-				<ul class="ui-multi-button" id="export-meta-multi">
-					<li :class="{ selected: $core.view.configEdit.pathFormat == 'win32' }" @click.stop="$core.view.configEdit.pathFormat = 'win32'">Windows</li>
-					<li :class="{ selected: $core.view.configEdit.pathFormat == 'posix' }" @click.stop="$core.view.configEdit.pathFormat = 'posix'">POSIX</li>
-				</ul>
-			</div>
-			<div>
-				<h1>Use Absolute MTL Texture Paths</h1>
-				<p>If enabled, MTL files will contain absolute textures paths rather than relative ones.</p>
-				<p>This will cause issues when sharing exported models between computers.</p>
-				<p>Enable this option if you are having issues importing OBJ models with Shared Textures enabled.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.enableAbsoluteMTLPaths"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Use Absolute glTF Texture Paths</h1>
-				<p>If enabled, glTF files will contain absolute textures paths rather than relative ones.</p>
-				<p>This will cause issues when sharing exported models between computers.</p>
-				<p>Enable this option if you are having issues importing glTF models with Shared Textures enabled.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.enableAbsoluteGLTFPaths"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Use Absolute Model Placement Paths</h1>
-				<p>If enabled, paths inside model placement files (CSV) will contain absolute paths rather than relative ones.</p>
-				<p>This will cause issues when sharing exported models between computers.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.enableAbsoluteCSVPaths"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>CASC Locale</h1>
-				<p>Which locale to use for file reading. This only affects game files.</p>
-				<p>This should match the locale of your client when using local installations.</p>
-				<div style="width: 150px">
-					<component :is="$components.MenuButton" class="spaced" :dropdown="true" :options="available_locale_keys" :default="selected_locale_key" @change="$core.view.configEdit.cascLocale = $core.view.availableLocale.flags[$event]"></component>
-				</div>
-			</div>
-			<div>
-				<h1>WebP Quality</h1>
-				<p>Quality setting for WebP exports. Range is 1-100 (100 is lossless)</p>
-				<input type="number" min="1" max="100" v-model.number="$core.view.configEdit.exportWebPQuality"/>
-			</div>
-			<div>
-				<h1>Export Model Collision</h1>
-				<p>If enabled, M2 models exported as OBJ will also have their collision exported into a .phys.obj file.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.modelsExportCollision"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Export Additional UV Layers</h1>
-				<p>If enabled, additional UV layers will be exported for M2/WMO models, included as non-standard properties (vt2, vt3, etc) in OBJ files.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.modelsExportUV2"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Export Meta Data</h1>
-				<p>If enabled, verbose data will be exported for enabled formats into relative .json files.</p>
-				<ul class="ui-multi-button" id="export-meta-multi">
-					<li :class="{ selected: $core.view.configEdit.exportM2Meta }" @click.stop="$core.view.configEdit.exportM2Meta = !$core.view.configEdit.exportM2Meta">M2</li>
-					<li :class="{ selected: $core.view.configEdit.exportWMOMeta }" @click.stop="$core.view.configEdit.exportWMOMeta = !$core.view.configEdit.exportWMOMeta">WMO</li>
-					<li :class="{ selected: $core.view.configEdit.exportBLPMeta }" @click.stop="$core.view.configEdit.exportBLPMeta = !$core.view.configEdit.exportBLPMeta">BLP</li>
-					<li :class="{ selected: $core.view.configEdit.exportFoliageMeta }" @click.stop="$core.view.configEdit.exportFoliageMeta = !$core.view.configEdit.exportFoliageMeta">Foliage</li>
-				</ul>
-			</div>
-			<div>
-				<h1>Export M2 Bone Data</h1>
-				<p>If enabled, bone data will be exported in a relative _bones.json file.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.exportM2Bones"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Always Overwrite Existing Files (Recommended)</h1>
-				<p>When exporting, files will always be written to disk even if they exist.</p>
-				<p>Disabling this can speed up exporting, but may lead to issues between versions.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.overwriteFiles"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Name Exported Files</h1>
-				<p>When enabled, files are exported using their listfile names (e.g., "ability_stealth.png").</p>
-				<p>When disabled, files are exported using their fileDataID numbers (e.g., "12345.png").</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.exportNamedFiles"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Prevent 3D Preview Overwrites</h1>
-				<p>If enabled, 3D preview exports will add increments to prevent overwriting existing files.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.modelsExportPngIncrements"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Regular Expression Filtering (Advanced)</h1>
-				<p>Allows use of regular expressions in filtering lists.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.regexFilters"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Copy Mode</h1>
-				<p>By default, using CTRL + C on a file list will copy the full entry to your clipboard.</p>
-				<p>Setting this to Directory will instead only copy the directory of the given entry.</p>
-				<p>Setting this to FileDataID will instead only copy the FID of the entry (must have FIDs enabled).</p>
-				<ul class="ui-multi-button" id="export-copy-multi">
-					<li :class="{ selected: $core.view.configEdit.copyMode == 'FULL' }" @click.stop="$core.view.configEdit.copyMode = 'FULL'">Full</li>
-					<li :class="{ selected: $core.view.configEdit.copyMode == 'DIR' }" @click.stop="$core.view.configEdit.copyMode = 'DIR'">Directory</li>
-					<li :class="{ selected: $core.view.configEdit.copyMode == 'FID' }" @click.stop="$core.view.configEdit.copyMode = 'FID'">FileDataID</li>
-				</ul>
-			</div>
-			<div>
-				<h1>Paste Selection</h1>
-				<p>If enabled, using CTRL + V on the model list will attempt to select filenames you paste.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.pasteSelection"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Split Large Terrain Maps (Recommended)</h1>
-				<p>If enabled, exporting baked terrain above 8k will be split into smaller files rather than one large file.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.splitLargeTerrainBakes"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Split Alpha Maps</h1>
-				<p>If enabled, terrain alpha maps will be exported as individual images for each ADT chunk.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.splitAlphaMaps"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Show unknown items</h1>
-				<p>When enabled, wow.export will list all items in the items tab, even those without a name.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.itemViewerShowAll"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Cache Expiry</h1>
-				<p>After how many days of inactivity is cached data deleted. Setting to zero disables cache clean-up (not recommended).</p>
-				<input type="number" v-model.number="$core.view.configEdit.cacheExpiry"/>
-			</div>
-			<div>
-				<h1>CDN Fallback Hosts</h1>
-				<p>Comma-separated list of additional CDN hostnames to try when official CDN servers are unavailable or slow.</p>
-				<p>These are pinged alongside official servers and used based on speed and availability.</p>
-				<p><input type="text" class="long" v-model.trim="$core.view.configEdit.cdnFallbackHosts"/></p>
-			</div>
-			<div>
-				<h1>Manually Clear Cache (Requires Restart)</h1>
-				<p>While housekeeping on the cache is mostly automatic, sometimes clearing manually can resolve issues.</p>
-				<input type="button" class="spaced" :value="'Clear Cache (' + cache_size_formatted + ')'" @click="handle_cache_clear" :class="{ disabled: $core.view.isBusy }"/>
-			</div>
-			<div>
-				<h1>Encryption Keys</h1>
-				<p>Remote URL used to update keys for encrypted files.</p>
-				<p>Primary <input type="text" class="long" v-model.trim="$core.view.configEdit.tactKeysURL"/></p>
-				<p>Fallback <input type="text" class="long" v-model.trim="$core.view.configEdit.tactKeysFallbackURL"/></p>
-			</div>
-			<div>
-				<h1>Add Encryption Key</h1>
-				<p>Manually add a BLTE encryption key.</p>
-				<input type="text" width="140" v-model.trim="$core.view.userInputTactKeyName" maxlength="16" placeholder="e.g 8F4098E2470FE0C8"/>
-				<input type="text" width="280" v-model.trim="$core.view.userInputTactKey" maxlength="32" placeholder="e.g AA718D1F1A23078D49AD0C606A72F3D5"/>
-				<input type="button" value="Add" @click="handle_tact_key"/>
-			</div>
-			<div>
-				<h1>Realm List Source</h1>
-				<p>Remote URL used for retrieving the realm list. (Must use same format)</p>
-				<p><input type="text" class="long" v-model.trim="$core.view.configEdit.realmListURL"/></p>
-			</div>
-			<div>
-				<h1>Character Appearance API Endpoint</h1>
-				<p>Remote URL used for retrieving data from the Battle.net Character Appearance API. (Must use same format)</p>
-				<p><input type="text" class="long" v-model.trim="$core.view.configEdit.armoryURL"/></p>
-			</div>
-			<div>
-				<h1>Use Binary Listfile Format (Requires Restart)</h1>
-				<p>If enabled, wow.export will use the optimized binary listfile format instead of the legacy CSV format.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.enableBinaryListfile"/>
-					<span>Enable</span>
-				</label>
-			</div>
-			<div>
-				<h1>Listfile Binary Source</h1>
-				<p>Remote URL used for downloading the optimized binary listfile format. (Must use same format)</p>
-				<p><input type="text" class="long" v-model.trim="$core.view.configEdit.listfileBinarySource"/></p>
-			</div>
-			<div>
-				<h1>Listfile Source (Legacy)</h1>
-				<p>Remote URL or local path used for updating the CASC listfile. (Must use same format)</p>
-				<p>Primary <input type="text" class="long" v-model.trim="$core.view.configEdit.listfileURL"/></p>
-				<p>Fallback <input type="text" class="long" v-model.trim="$core.view.configEdit.listfileFallbackURL" /></p>
-			</div>
-			<div>
-				<h1>Listfile Update Frequency</h1>
-				<p>How often (in days) the listfile is updated. Set to zero to always re-download the listfile.</p>
-				<input type="number" v-model.number="$core.view.configEdit.listfileCacheRefresh"/>
-			</div>
-			<div>
-				<h1>Data Table Definition Repository</h1>
-				<p>Remote URL used to update DBD definitions. (Must use same format)</p>
-				<p>Primary <input type="text" class="long" v-model.trim="$core.view.configEdit.dbdURL"/></p>
-				<p>Fallback <input type="text" class="long" v-model.trim="$core.view.configEdit.dbdFallbackURL" /></p>
-			</div>
-			<div>
-				<h1>DBD Manifest Repository</h1>
-				<p>Remote URL used to obtain DBD manifest information. (Must use same format)</p>
-				<p>Primary <input type="text" class="long" v-model.trim="$core.view.configEdit.dbdFilenameURL"/></p>
-				<p>Fallback <input type="text" class="long" v-model.trim="$core.view.configEdit.dbdFilenameFallbackURL" /></p>
-			</div>
-			<div>
-				<h1>Allow Cache Collection</h1>
-				<p>If enabled, wow.export will anonymously collect cache data from your client for community usage.</p>
-				<label class="ui-checkbox">
-					<input type="checkbox" v-model="$core.view.configEdit.allowCacheCollection"/>
-					<span>Enable</span>
-				</label>
-			</div>
-		</div>
-		<div id="config-buttons">
-			<input type="button" value="Discard" :class="{ disabled: $core.view.isBusy }" @click="handle_discard"/>
-			<input type="button" value="Apply" :class="{ disabled: $core.view.isBusy }" @click="handle_apply"/>
-			<input type="button" id="config-reset" value="Reset to Defaults" :class="{ disabled: $core.view.isBusy }" @click="handle_reset"/>
-		</div>
-		</div>
-	`,
+// --- File-local state ---
 
-	data() {
-		return {
-			default_config: null
-		};
-	},
+// JS: let default_config = null;
+static std::optional<nlohmann::json> default_config;
 
-	computed: {
-		is_edit_export_path_concerning() {
-			return !!this.$core.view.configEdit?.exportDirectory?.match(/\s/g);
-		},
+// FileField widget states for directory pickers.
+static file_field::FileFieldState export_dir_state;
+static file_field::FileFieldState char_save_dir_state;
 
-		default_character_path() {
-			return tab_characters.get_default_characters_dir();
-		},
+// --- Internal functions ---
 
-		cache_size_formatted() {
-			return generics.filesize(this.$core.view.cacheSize);
-		},
-
-		available_locale_keys() {
-			return Object.keys(this.$core.view.availableLocale.flags).map(e => { return { value: e }});
-		},
-
-		selected_locale_key() {
-			for (const [key, flag] of Object.entries(this.$core.view.availableLocale.flags)) {
-				if (flag === this.$core.view.config.cascLocale)
-					return key;
-			}
-
-			return 'unUN';
-		}
-	},
-
-	methods: {
-		handle_cache_clear(event) {
-			if (!event.target.classList.contains('disabled'))
-				this.$core.events.emit('click-cache-clear');
-		},
-
-		handle_tact_key() {
-			if (tactKeys.addKey(this.$core.view.userInputTactKeyName, this.$core.view.userInputTactKey))
-				this.$core.setToast('success', 'Successfully added decryption key.');
-			else
-				this.$core.setToast('error', 'Invalid encryption key.', null, -1);
-		},
-
-		go_home() {
-			this.$modules.go_to_landing();
-		},
-
-		handle_discard() {
-			if (this.$core.view.isBusy)
-				return;
-
-			this.go_home();
-		},
-
-		async handle_apply() {
-			if (this.$core.view.isBusy)
-				return;
-
-			const cfg = this.$core.view.configEdit;
-			const defaults = await load_default_config();
-
-			if (cfg.exportDirectory.length === 0)
-				return this.$core.setToast('error', 'A valid export directory must be provided', null, -1);
-
-			if (cfg.realmListURL.length === 0 || !cfg.realmListURL.startsWith('http'))
-				return this.$core.setToast('error', 'A valid realm list URL or path is required.', { 'Use Default': () => cfg.realmListURL = defaults.realmListURL }, -1);
-
-			if (cfg.listfileURL.length === 0)
-				return this.$core.setToast('error', 'A valid listfile URL or path is required.', { 'Use Default': () => cfg.listfileURL = defaults.listfileURL }, -1);
-
-			if (cfg.armoryURL.length === 0 || !cfg.armoryURL.startsWith('http'))
-				return this.$core.setToast('error', 'A valid URL is required for the Character Appearance API.', { 'Use Default': () => cfg.armoryURL = defaults.armoryURL }, -1);
-
-			if (cfg.tactKeysURL.length === 0 || !cfg.tactKeysURL.startsWith('http'))
-				return this.$core.setToast('error', 'A valid URL is required for encryption key updates.', { 'Use Default': () => cfg.tactKeysURL = defaults.tactKeysURL }, -1);
-
-			if (cfg.dbdURL.length === 0 || !cfg.dbdURL.startsWith('http'))
-				return this.$core.setToast('error', 'A valid URL is required for DBD updates.', { 'Use Default': () => cfg.dbdURL = defaults.dbdURL }, -1);
-
-			if (cfg.dbdFilenameURL.length === 0 || !cfg.dbdFilenameURL.startsWith('http'))
-				return this.$core.setToast('error', 'A valid URL is required for DBD manfiest.', { 'Use Default': () => cfg.dbdFilenameURL = defaults.dbdFilenameURL }, -1);
-
-			this.$core.view.config = cfg;
-			this.go_home();
-			this.$core.setToast('success', 'Changes to your configuration have been saved!');
-		},
-
-		async handle_reset() {
-			if (this.$core.view.isBusy)
-				return;
-
-			const defaults = await load_default_config();
-			this.$core.view.configEdit = JSON.parse(JSON.stringify(defaults));
-		}
-	},
-
-	mounted() {
-		this.$core.view.configEdit = Object.assign({}, this.$core.view.config);
+// JS: const load_default_config = async () => { ... }
+static nlohmann::json load_default_config() {
+	if (!default_config.has_value()) {
+		auto result = generics::readJSON(constants::CONFIG::DEFAULT_PATH(), true);
+		default_config = result.value_or(nlohmann::json::object());
 	}
-};
+
+	return default_config.value();
+}
+
+// JS: computed: is_edit_export_path_concerning()
+static bool is_edit_export_path_concerning() {
+	const auto& cfg = core::view->configEdit;
+	if (!cfg.contains("exportDirectory"))
+		return false;
+
+	const std::string& path = cfg["exportDirectory"].get_ref<const std::string&>();
+	return path.find(' ') != std::string::npos ||
+		   path.find('\t') != std::string::npos;
+}
+
+// JS: computed: default_character_path()
+static std::string default_character_path() {
+	return tab_characters::get_default_characters_dir();
+}
+
+// JS: computed: cache_size_formatted()
+static std::string cache_size_formatted() {
+	return generics::filesize(static_cast<double>(core::view->cacheSize));
+}
+
+// JS: computed: available_locale_keys()
+// Returns the locale ID strings from locale_flags::entries.
+static std::vector<std::string> available_locale_keys() {
+	std::vector<std::string> keys;
+	for (const auto& entry : casc::locale_flags::entries)
+		keys.emplace_back(entry.id);
+	return keys;
+}
+
+// JS: computed: selected_locale_key()
+static std::string selected_locale_key() {
+	uint32_t current_locale = core::view->config.value("cascLocale", static_cast<uint32_t>(casc::locale_flags::enUS));
+	for (const auto& entry : casc::locale_flags::entries) {
+		if (entry.flag == current_locale)
+			return std::string(entry.id);
+	}
+	return "unUN";
+}
+
+// JS: methods.go_home()
+static void go_home() {
+	// JS: this.$modules.go_to_landing();
+	// TODO(conversion): Module activation will be wired when the module system is integrated.
+}
+
+// --- Public functions ---
+
+// JS: register() { this.registerContextMenuOption('Manage Settings', 'gear.svg'); }
+void registerScreen() {
+	// TODO(conversion): Module registration will be wired when the module system is integrated.
+	// modules::registerContextMenuOption("Manage Settings", "gear.svg");
+}
+
+// JS: mounted()
+void mounted() {
+	// JS: this.$core.view.configEdit = Object.assign({}, this.$core.view.config);
+	core::view->configEdit = core::view->config;
+
+	// Reset FileField states.
+	export_dir_state = file_field::FileFieldState{};
+	char_save_dir_state = file_field::FileFieldState{};
+}
+
+void render() {
+	// --- Template rendering ---
+	// JS: <div id="config-wrapper">
+	// JS: <div id="config" :class="{ toastgap: $core.view.toast !== null }">
+	// TODO(conversion): Full ImGui rendering will be implemented when UI integration is complete.
+
+	// JS: Export Directory
+	// <h1>Export Directory</h1>
+	// <p>Local directory where files will be exported to.</p>
+	// <p v-if="is_edit_export_path_concerning" class="concern">Warning: Using an export path with spaces...</p>
+	// <FileField v-model="$core.view.configEdit.exportDirectory" :class="{ concern: is_edit_export_path_concerning }">
+
+	// JS: Character Save Directory
+	// <h1>Character Save Directory</h1>
+	// <p>Local directory where saved characters are stored. Leave empty to use the default location.</p>
+	// <FileField v-model="$core.view.configEdit.characterExportPath" :placeholder="default_character_path">
+
+	// JS: Scroll Speed
+	// <h1>Scroll Speed</h1>
+	// <input type="number" v-model.number="$core.view.configEdit.scrollSpeed"/>
+
+	// JS: Display File Lists in Numerical Order (FileDataID)
+	// <input type="checkbox" v-model="$core.view.configEdit.listfileSortByID"/>
+
+	// JS: Find Unknown Files (Requires Restart)
+	// <input type="checkbox" v-model="$core.view.configEdit.enableUnknownFiles"/>
+
+	// JS: Load Model Skins (Requires Restart)
+	// <input type="checkbox" v-model="$core.view.configEdit.enableM2Skins"/>
+
+	// JS: Include Bone Prefixes
+	// <input type="checkbox" v-model="$core.view.configEdit.modelsExportWithBonePrefix"/>
+
+	// JS: Enable Shared Textures (Recommended)
+	// <input type="checkbox" v-model="$core.view.configEdit.enableSharedTextures"/>
+
+	// JS: Enable Shared Children (Recommended)
+	// <input type="checkbox" v-model="$core.view.configEdit.enableSharedChildren"/>
+
+	// JS: Strip Whitespace From Export Paths
+	// <input type="checkbox" v-model="$core.view.configEdit.removePathSpaces"/>
+
+	// JS: Strip Whitespace From Copied Paths
+	// <input type="checkbox" v-model="$core.view.configEdit.removePathSpacesCopy"/>
+
+	// JS: Path Separator Format
+	// <li :class="{ selected: configEdit.pathFormat == 'win32' }" @click="configEdit.pathFormat = 'win32'">Windows</li>
+	// <li :class="{ selected: configEdit.pathFormat == 'posix' }" @click="configEdit.pathFormat = 'posix'">POSIX</li>
+
+	// JS: Use Absolute MTL Texture Paths
+	// <input type="checkbox" v-model="$core.view.configEdit.enableAbsoluteMTLPaths"/>
+
+	// JS: Use Absolute glTF Texture Paths
+	// <input type="checkbox" v-model="$core.view.configEdit.enableAbsoluteGLTFPaths"/>
+
+	// JS: Use Absolute Model Placement Paths
+	// <input type="checkbox" v-model="$core.view.configEdit.enableAbsoluteCSVPaths"/>
+
+	// JS: CASC Locale
+	// <MenuButton :dropdown="true" :options="available_locale_keys" :default="selected_locale_key"
+	//   @change="$core.view.configEdit.cascLocale = $core.view.availableLocale.flags[$event]">
+
+	// JS: WebP Quality
+	// <input type="number" min="1" max="100" v-model.number="$core.view.configEdit.exportWebPQuality"/>
+
+	// JS: Export Model Collision
+	// <input type="checkbox" v-model="$core.view.configEdit.modelsExportCollision"/>
+
+	// JS: Export Additional UV Layers
+	// <input type="checkbox" v-model="$core.view.configEdit.modelsExportUV2"/>
+
+	// JS: Export Meta Data
+	// Multi-button for M2, WMO, BLP, Foliage meta toggles
+
+	// JS: Export M2 Bone Data
+	// <input type="checkbox" v-model="$core.view.configEdit.exportM2Bones"/>
+
+	// JS: Always Overwrite Existing Files (Recommended)
+	// <input type="checkbox" v-model="$core.view.configEdit.overwriteFiles"/>
+
+	// JS: Name Exported Files
+	// <input type="checkbox" v-model="$core.view.configEdit.exportNamedFiles"/>
+
+	// JS: Prevent 3D Preview Overwrites
+	// <input type="checkbox" v-model="$core.view.configEdit.modelsExportPngIncrements"/>
+
+	// JS: Regular Expression Filtering (Advanced)
+	// <input type="checkbox" v-model="$core.view.configEdit.regexFilters"/>
+
+	// JS: Copy Mode
+	// Multi-button: Full / Directory / FileDataID
+
+	// JS: Paste Selection
+	// <input type="checkbox" v-model="$core.view.configEdit.pasteSelection"/>
+
+	// JS: Split Large Terrain Maps (Recommended)
+	// <input type="checkbox" v-model="$core.view.configEdit.splitLargeTerrainBakes"/>
+
+	// JS: Split Alpha Maps
+	// <input type="checkbox" v-model="$core.view.configEdit.splitAlphaMaps"/>
+
+	// JS: Show unknown items
+	// <input type="checkbox" v-model="$core.view.configEdit.itemViewerShowAll"/>
+
+	// JS: Cache Expiry
+	// <input type="number" v-model.number="$core.view.configEdit.cacheExpiry"/>
+
+	// JS: CDN Fallback Hosts
+	// <input type="text" class="long" v-model.trim="$core.view.configEdit.cdnFallbackHosts"/>
+
+	// JS: Manually Clear Cache (Requires Restart)
+	// <input type="button" :value="'Clear Cache (' + cache_size_formatted + ')'" @click="handle_cache_clear">
+
+	// JS: Encryption Keys
+	// Primary <input type="text" class="long" v-model.trim="$core.view.configEdit.tactKeysURL"/>
+	// Fallback <input type="text" class="long" v-model.trim="$core.view.configEdit.tactKeysFallbackURL"/>
+
+	// JS: Add Encryption Key
+	// <input type="text" v-model.trim="$core.view.userInputTactKeyName" maxlength="16"/>
+	// <input type="text" v-model.trim="$core.view.userInputTactKey" maxlength="32"/>
+	// <input type="button" value="Add" @click="handle_tact_key"/>
+
+	// JS: Realm List Source
+	// <input type="text" class="long" v-model.trim="$core.view.configEdit.realmListURL"/>
+
+	// JS: Character Appearance API Endpoint
+	// <input type="text" class="long" v-model.trim="$core.view.configEdit.armoryURL"/>
+
+	// JS: Use Binary Listfile Format (Requires Restart)
+	// <input type="checkbox" v-model="$core.view.configEdit.enableBinaryListfile"/>
+
+	// JS: Listfile Binary Source
+	// <input type="text" class="long" v-model.trim="$core.view.configEdit.listfileBinarySource"/>
+
+	// JS: Listfile Source (Legacy)
+	// Primary <input type="text" class="long" v-model.trim="$core.view.configEdit.listfileURL"/>
+	// Fallback <input type="text" class="long" v-model.trim="$core.view.configEdit.listfileFallbackURL"/>
+
+	// JS: Listfile Update Frequency
+	// <input type="number" v-model.number="$core.view.configEdit.listfileCacheRefresh"/>
+
+	// JS: Data Table Definition Repository
+	// Primary <input type="text" class="long" v-model.trim="$core.view.configEdit.dbdURL"/>
+	// Fallback <input type="text" class="long" v-model.trim="$core.view.configEdit.dbdFallbackURL"/>
+
+	// JS: DBD Manifest Repository
+	// Primary <input type="text" class="long" v-model.trim="$core.view.configEdit.dbdFilenameURL"/>
+	// Fallback <input type="text" class="long" v-model.trim="$core.view.configEdit.dbdFilenameFallbackURL"/>
+
+	// JS: Allow Cache Collection
+	// <input type="checkbox" v-model="$core.view.configEdit.allowCacheCollection"/>
+
+	// JS: <div id="config-buttons">
+	//   <input type="button" value="Discard" @click="handle_discard"/>
+	//   <input type="button" value="Apply" @click="handle_apply"/>
+	//   <input type="button" id="config-reset" value="Reset to Defaults" @click="handle_reset"/>
+}
+
+// JS: methods.handle_cache_clear(event)
+static void handle_cache_clear() {
+	// JS: if (!event.target.classList.contains('disabled'))
+	//     this.$core.events.emit('click-cache-clear');
+	if (!core::view->isBusy)
+		core::events.emit("click-cache-clear");
+}
+
+// JS: methods.handle_tact_key()
+static void handle_tact_key() {
+	if (casc::tact_keys::addKey(core::view->userInputTactKeyName, core::view->userInputTactKey))
+		core::setToast("success", "Successfully added decryption key.");
+	else
+		core::setToast("error", "Invalid encryption key.", nullptr, -1);
+}
+
+// JS: methods.handle_discard()
+void handle_discard() {
+	if (core::view->isBusy)
+		return;
+
+	go_home();
+}
+
+// JS: methods.handle_apply()
+void handle_apply() {
+	if (core::view->isBusy)
+		return;
+
+	auto& cfg = core::view->configEdit;
+	nlohmann::json defaults = load_default_config();
+
+	// JS: if (cfg.exportDirectory.length === 0)
+	if (!cfg.contains("exportDirectory") || cfg["exportDirectory"].get<std::string>().empty()) {
+		core::setToast("error", "A valid export directory must be provided", nullptr, -1);
+		return;
+	}
+
+	// JS: if (cfg.realmListURL.length === 0 || !cfg.realmListURL.startsWith('http'))
+	{
+		std::string val = cfg.value("realmListURL", std::string{});
+		if (val.empty() || val.substr(0, 4) != "http") {
+			// JS: { 'Use Default': () => cfg.realmListURL = defaults.realmListURL }
+			// TODO(conversion): Toast action callbacks will be wired when toast button system is integrated.
+			core::setToast("error", "A valid realm list URL or path is required.", nullptr, -1);
+			return;
+		}
+	}
+
+	// JS: if (cfg.listfileURL.length === 0)
+	{
+		std::string val = cfg.value("listfileURL", std::string{});
+		if (val.empty()) {
+			// JS: { 'Use Default': () => cfg.listfileURL = defaults.listfileURL }
+			// TODO(conversion): Toast action callbacks will be wired when toast button system is integrated.
+			core::setToast("error", "A valid listfile URL or path is required.", nullptr, -1);
+			return;
+		}
+	}
+
+	// JS: if (cfg.armoryURL.length === 0 || !cfg.armoryURL.startsWith('http'))
+	{
+		std::string val = cfg.value("armoryURL", std::string{});
+		if (val.empty() || val.substr(0, 4) != "http") {
+			// JS: { 'Use Default': () => cfg.armoryURL = defaults.armoryURL }
+			// TODO(conversion): Toast action callbacks will be wired when toast button system is integrated.
+			core::setToast("error", "A valid URL is required for the Character Appearance API.", nullptr, -1);
+			return;
+		}
+	}
+
+	// JS: if (cfg.tactKeysURL.length === 0 || !cfg.tactKeysURL.startsWith('http'))
+	{
+		std::string val = cfg.value("tactKeysURL", std::string{});
+		if (val.empty() || val.substr(0, 4) != "http") {
+			// JS: { 'Use Default': () => cfg.tactKeysURL = defaults.tactKeysURL }
+			// TODO(conversion): Toast action callbacks will be wired when toast button system is integrated.
+			core::setToast("error", "A valid URL is required for encryption key updates.", nullptr, -1);
+			return;
+		}
+	}
+
+	// JS: if (cfg.dbdURL.length === 0 || !cfg.dbdURL.startsWith('http'))
+	{
+		std::string val = cfg.value("dbdURL", std::string{});
+		if (val.empty() || val.substr(0, 4) != "http") {
+			// JS: { 'Use Default': () => cfg.dbdURL = defaults.dbdURL }
+			// TODO(conversion): Toast action callbacks will be wired when toast button system is integrated.
+			core::setToast("error", "A valid URL is required for DBD updates.", nullptr, -1);
+			return;
+		}
+	}
+
+	// JS: if (cfg.dbdFilenameURL.length === 0 || !cfg.dbdFilenameURL.startsWith('http'))
+	{
+		std::string val = cfg.value("dbdFilenameURL", std::string{});
+		if (val.empty() || val.substr(0, 4) != "http") {
+			// JS: { 'Use Default': () => cfg.dbdFilenameURL = defaults.dbdFilenameURL }
+			// TODO(conversion): Toast action callbacks will be wired when toast button system is integrated.
+			core::setToast("error", "A valid URL is required for DBD manifest.", nullptr, -1);
+			return;
+		}
+	}
+
+	// JS: this.$core.view.config = cfg;
+	core::view->config = cfg;
+
+	go_home();
+
+	// JS: this.$core.setToast('success', 'Changes to your configuration have been saved!');
+	core::setToast("success", "Changes to your configuration have been saved!");
+}
+
+// JS: methods.handle_reset()
+void handle_reset() {
+	if (core::view->isBusy)
+		return;
+
+	// JS: const defaults = await load_default_config();
+	// JS: this.$core.view.configEdit = JSON.parse(JSON.stringify(defaults));
+	nlohmann::json defaults = load_default_config();
+	core::view->configEdit = nlohmann::json::parse(defaults.dump());
+}
+
+} // namespace screen_settings

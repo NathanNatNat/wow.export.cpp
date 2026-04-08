@@ -3072,7 +3072,8 @@ const auto& slots = wow::EQUIPMENT_SLOTS;
 for (const auto& slot : slots) {
 ImGui::PushID(slot.id);
 
-std::string slot_label = wow::get_slot_name(slot.id);
+auto slot_name_opt = wow::get_slot_name(slot.id);
+std::string slot_label = slot_name_opt.has_value() ? std::string(slot_name_opt.value()) : std::format("Slot {}", slot.id);
 const auto* item = get_equipped_item(slot.id);
 
 if (item) {
