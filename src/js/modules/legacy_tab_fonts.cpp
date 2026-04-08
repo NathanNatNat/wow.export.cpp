@@ -10,6 +10,7 @@
 #include "../core.h"
 #include "../ui/listbox-context.h"
 #include "../install-type.h"
+#include "../modules.h"
 #include "../mpq/mpq-install.h"
 
 #include <cstring>
@@ -113,7 +114,7 @@ static void load_font_list() {
 
 void registerTab() {
 	// JS: this.registerNavButton('Fonts', 'font.svg', InstallType.MPQ);
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	modules::register_nav_button("legacy_tab_fonts", "Fonts", "font.svg", install_type::MPQ);
 }
 
 void mounted() {

@@ -11,6 +11,7 @@
 #include "../casc/listfile.h"
 #include "../casc/blte-reader.h"
 #include "../install-type.h"
+#include "../modules.h"
 #include "../ui/listbox-context.h"
 #include "../db/caches/DBModelFileData.h"
 #include "../db/caches/DBItemDisplays.h"
@@ -574,7 +575,8 @@ static void handle_skins_selection_change(const std::vector<nlohmann::json>& sel
 
 // JS: register() { this.registerNavButton('Models', 'cube.svg', InstallType.CASC); }
 void registerTab() {
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	// JS: this.registerNavButton('Models', 'cube.svg', InstallType.CASC);
+	modules::register_nav_button("tab_models", "Models", "cube.svg", install_type::CASC);
 }
 
 // JS: async mounted() { ... }
@@ -589,7 +591,17 @@ void mounted() {
 	//         prompt: count => util.format('Export %d models as %s', count, this.$core.view.config.exportModelFormat),
 	//         process: files => export_files(this.$core, files, true)
 	//     });
-	// TODO(conversion): Drop handler registration will be wired when the module system is integrated.
+	core::registerDropHandler({
+		{".m2"},
+		[]() -> std::string {
+			return std::format("Export models as {}", core::view->config.value("exportModelFormat", std::string("OBJ")));
+		},
+		[](const std::string& file) {
+			nlohmann::json entry;
+			entry["fileName"] = file;
+			export_files({entry}, true);
+		}
+	});
 
 	// JS: await this.initialize();
 	initialize();

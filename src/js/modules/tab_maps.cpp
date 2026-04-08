@@ -13,6 +13,7 @@ License: MIT
 #include "../core.h"
 #include "../constants.h"
 #include "../install-type.h"
+#include "../modules.h"
 #include "../casc/listfile.h"
 #include "../casc/db2.h"
 #include "../casc/blp.h"
@@ -1187,8 +1188,8 @@ helper.finish();
  * JS: register() { this.registerNavButton('Maps', 'map.svg', InstallType.CASC); }
  */
 void registerTab() {
-// TODO(conversion): registerNavButton is handled by the module system in modules.cpp.
-// This function is called to register the tab with InstallType::CASC.
+// JS: this.registerNavButton('Maps', 'map.svg', InstallType.CASC);
+modules::register_nav_button("tab_maps", "Maps", "map.svg", install_type::CASC);
 }
 
 /**

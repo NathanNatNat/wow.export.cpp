@@ -11,6 +11,7 @@
 #include "../db/DBCReader.h"
 #include "../ui/data-exporter.h"
 #include "../install-type.h"
+#include "../modules.h"
 #include "../casc/export-helper.h"
 #include "../mpq/mpq-install.h"
 
@@ -262,7 +263,7 @@ static std::string get_build_version() {
 
 void registerTab() {
 	// JS: this.registerNavButton('Data', 'database.svg', InstallType.MPQ);
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	modules::register_nav_button("legacy_tab_data", "Data", "database.svg", install_type::MPQ);
 }
 
 void mounted() {

@@ -14,6 +14,7 @@
 #include "../casc/casc-source.h"
 #include "../ui/listbox-context.h"
 #include "../install-type.h"
+#include "../modules.h"
 
 #include <cstring>
 #include <format>
@@ -82,7 +83,7 @@ static std::string prev_selection_first;
 
 void registerTab() {
 	// JS: this.registerNavButton('Fonts', 'font.svg', InstallType.CASC);
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	modules::register_nav_button("tab_fonts", "Fonts", "font.svg", install_type::CASC);
 }
 
 void mounted() {

@@ -16,6 +16,7 @@
 #include "../casc/blte-reader.h"
 #include "../casc/blp.h"
 #include "../install-type.h"
+#include "../modules.h"
 #include "../ui/listbox-context.h"
 #include "../ui/texture-ribbon.h"
 #include "../ui/texture-exporter.h"
@@ -1728,7 +1729,7 @@ static void initialize() {
 
 // JS: register() { this.registerNavButton('Creatures', 'nessy.svg', InstallType.CASC); }
 void registerTab() {
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	modules::register_nav_button("tab_creatures", "Creatures", "nessy.svg", install_type::CASC);
 }
 
 // JS: async mounted() { await this.initialize(); ... }

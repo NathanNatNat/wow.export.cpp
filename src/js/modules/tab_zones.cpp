@@ -17,6 +17,7 @@ License: MIT
 #include "../casc/db2.h"
 #include "../ui/texture-exporter.h"
 #include "../install-type.h"
+#include "../modules.h"
 
 #include <cstring>
 #include <format>
@@ -308,7 +309,7 @@ core::setToast("error", std::format("Failed to load map data: {}", e.what()));
 
 void registerTab() {
 // JS: this.registerNavButton('Zones', 'mountain-castle.svg', InstallType.CASC);
-// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+modules::register_nav_button("tab_zones", "Zones", "mountain-castle.svg", install_type::CASC);
 }
 
 void mounted() {

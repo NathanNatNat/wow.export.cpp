@@ -12,6 +12,7 @@
 #include "../db/WDCReader.h"
 #include "../wow/EquipmentSlots.h"
 #include "../install-type.h"
+#include "../modules.h"
 
 #include <cstring>
 #include <algorithm>
@@ -243,7 +244,7 @@ static void equip_set(const nlohmann::json& set) {
 
 // JS: register() { this.registerNavButton('Item Sets', 'armour.svg', InstallType.CASC); }
 void registerTab() {
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	modules::register_nav_button("tab_item_sets", "Item Sets", "armour.svg", install_type::CASC);
 }
 
 // JS: async mounted() { await this.initialize(); }

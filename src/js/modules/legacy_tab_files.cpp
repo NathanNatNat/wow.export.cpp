@@ -9,6 +9,7 @@
 #include "../core.h"
 #include "../ui/listbox-context.h"
 #include "../install-type.h"
+#include "../modules.h"
 #include "../mpq/mpq-install.h"
 
 #include <cstring>
@@ -115,7 +116,7 @@ static void export_files() {
 
 void registerTab() {
 	// JS: this.registerNavButton('Files', 'file-lines.svg', InstallType.MPQ);
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	modules::register_nav_button("legacy_tab_files", "Files", "file-lines.svg", install_type::MPQ);
 }
 
 void mounted() {

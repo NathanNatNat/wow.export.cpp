@@ -294,10 +294,10 @@ Core infrastructure that most other phases depend on.
 - [x] Wire "View in Explorer" toast actions — `src/js/modules/legacy_tab_files.cpp`, `legacy_tab_fonts.cpp` (2 TODOs)
 
 ### 1.3 Module System Wiring
-- [ ] Wire nav button registration across all 17 tab modules — each tab's `registerNavButton` call in `src/js/modules/*.cpp` (17 TODOs)
-- [ ] Wire module activation (`setActive`/`deactivate`) — `src/js/modules/*.cpp` (8 TODOs)
-- [ ] Wire context menu registration — `src/js/modules/tab_creatures.cpp`, `tab_characters.cpp` (2 TODOs)
-- [ ] Wire drop handler registration — `src/js/modules/tab_models.cpp`, `tab_textures.cpp` (2 TODOs)
+- [x] Wire nav button registration across all 20 tab modules — each tab's `registerNavButton` call in `src/js/modules/*.cpp`
+- [x] Wire module activation (`setActive`/`deactivate`) — `src/js/modules/*.cpp` (tab_home, legacy_tab_home, screen_settings, tab_items, screen_source_select)
+- [x] Wire context menu registration — `src/js/modules/tab_raw.cpp`, `tab_install.cpp`, `screen_settings.cpp`
+- [x] Wire drop handler registration — `src/js/modules/tab_models.cpp`, `tab_textures.cpp`
 
 ### 1.4 Cross-Tab Navigation
 - [ ] Wire `tab_textures::setActive()` cross-tab navigation — `src/js/modules/tab_textures.cpp` (1 TODO)

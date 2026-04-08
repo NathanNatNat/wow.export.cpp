@@ -17,6 +17,7 @@
 #include "../wow/ItemSlot.h"
 #include "../wow/EquipmentSlots.h"
 #include "../install-type.h"
+#include "../modules.h"
 // const ExternalLinks = require('../external-links'); // Removed: external-links module deleted
 
 #include <cstring>
@@ -513,7 +514,7 @@ static void equip_item(const nlohmann::json& item_json) {
 
 // JS: register() { this.registerNavButton('Items', 'sword.svg', InstallType.CASC); }
 void registerTab() {
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	modules::register_nav_button("tab_items", "Items", "sword.svg", install_type::CASC);
 }
 
 // JS: async mounted() { await this.initialize(); }
@@ -609,7 +610,7 @@ void mounted() {
 }
 
 void setActive() {
-	// TODO(conversion): Tab activation mechanism will be wired when the module system is integrated.
+	modules::set_active("tab_items");
 }
 
 void render() {

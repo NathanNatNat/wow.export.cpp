@@ -10,6 +10,7 @@
 #include "../buffer.h"
 #include "../casc/export-helper.h"
 #include "../install-type.h"
+#include "../modules.h"
 #include "../ui/listbox-context.h"
 #include "../constants.h"
 #include "../3D/renderers/M2LegacyRendererGL.h"
@@ -453,7 +454,8 @@ static void end_scrub() {
 
 // JS: register() { this.registerNavButton('Models', 'cube.svg', InstallType.MPQ); }
 void registerTab() {
-	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+	// JS: this.registerNavButton('Models', 'cube.svg', InstallType.MPQ);
+	modules::register_nav_button("tab_models_legacy", "Models", "cube.svg", install_type::MPQ);
 }
 
 // JS: async mounted() { ... }
