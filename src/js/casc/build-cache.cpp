@@ -11,6 +11,7 @@
 #include "../core.h"
 #include "../buffer.h"
 #include "../mmap.h"
+#include "../../app.h"
 
 #include <nlohmann/json.hpp>
 #include <filesystem>
@@ -186,7 +187,7 @@ void registerBuildCacheEvents() {
 
 			// JS: { 'Restart': () => restartApplication() }
 			core::setToast("success", "Cache has been successfully cleared, a restart is required.",
-				{ {"Restart", []() { std::exit(0); }} }, -1, false);
+				{ {"Restart", []() { app::restartApplication(); }} }, -1, false);
 
 			core::events.emit("cache-cleared");
 		} catch (const std::exception& e) {

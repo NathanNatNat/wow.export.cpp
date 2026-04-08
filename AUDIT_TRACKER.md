@@ -195,7 +195,7 @@ These are NOT deviations — they are inherent structural translations from JS t
 
 ### `src/js/casc/build-cache.cpp` — ACCEPTABLE
 - **JS**: Module IIFE loads cache integrity at import time. `core.events.once('cache-integrity-ready', res)` for async readiness. `using _lock = core.create_busy_lock()` (TC39 proposal). `fsp.rm(dir, { recursive: true, force: true })`. `core.view.restartApplication()` for restart.
-- **C++**: `initBuildCacheSystem()` replaces IIFE (must be called at startup). `cacheIntegrityLoaded` flag guards `getFile()`/`storeFile()` to reject or initialize when integrity is not yet loaded. `auto _lock = core::create_busy_lock()` (RAII). `fs::remove_all()` replaces `fsp.rm`. Restart action emits event instead of calling `restartApplication()` (not yet available).
+- **C++**: `initBuildCacheSystem()` replaces IIFE (must be called at startup). `cacheIntegrityLoaded` flag guards `getFile()`/`storeFile()` to reject or initialize when integrity is not yet loaded. `auto _lock = core::create_busy_lock()` (RAII). `fs::remove_all()` replaces `fsp.rm`. Restart action calls `app::restartApplication()` which re-execs the current binary.
 - **Rationale**: Explicit init function is more predictable than IIFE in C++. The `cacheIntegrityLoaded` check preserves the JS safety guarantee that integrity is available before use. RAII lock is the C++ equivalent of TC39 `using` proposal.
 
 ### `src/js/db/WDCReader.cpp` — ACCEPTABLE
@@ -448,19 +448,19 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **C++**: Not implemented.
 - **Rationale**: Dead code in JS source. No `paste` handler is ever registered, so removing it is a no-op.
 
-### `src/js/modules/tab_home.cpp` — ACCEPTABLE (render body stripped to blank placeholder)
-- **JS**: `render()` displays `whatsNewHTML` content and three help buttons (Discord, GitHub, Patreon) with `data-external` links.
-- **C++**: `render()` is an empty function body. `navigate()` is preserved as-is.
-- **Rationale**: Content intentionally removed per project direction — the home tab is a blank placeholder for now. Tab navigation buttons and the `navigate()` method are kept intact.
+### `src/js/modules/tab_home.cpp` — ACCEPTABLE (ExternalLinks removed)
+- **JS**: `render()` displays `whatsNewHTML` content and three help buttons (Discord, GitHub, Patreon) with `data-external` links that open external URLs via `ExternalLinks.open()`.
+- **C++**: `render()` displays `whatsNewHTML` via `ImGui::TextWrapped` and renders three help buttons with descriptive text. Button click handlers are empty because ExternalLinks module was deleted.
+- **Rationale**: The `ExternalLinks` module was removed from the project. Help buttons render with their labels and descriptions but do not open URLs.
 
-### `src/js/modules/legacy_tab_home.cpp` — ACCEPTABLE (render body stripped to blank placeholder)
+### `src/js/modules/legacy_tab_home.cpp` — ACCEPTABLE (ExternalLinks removed)
 - **JS**: `render()` displays `whatsNewHTML` content and three help buttons (Discord, GitHub, Patreon) with `data-external` links. Identical to `tab_home` but with "legacy-tab-home" CSS ID.
-- **C++**: `render()` is an empty function body. `navigate()` is preserved as-is.
-- **Rationale**: Content intentionally removed per project direction — the legacy home tab is a blank placeholder for now. Tab navigation buttons and the `navigate()` method are kept intact.
+- **C++**: `render()` displays `whatsNewHTML` via `ImGui::TextWrapped` and renders three help buttons with descriptive text. Button click handlers are empty because ExternalLinks module was deleted.
+- **Rationale**: The `ExternalLinks` module was removed from the project. Help buttons render with their labels and descriptions but do not open URLs.
 
 ### `src/app.cpp` — ACCEPTABLE (entry point restructured for GLFW/ImGui)
 - **JS**: NW.js entry point that creates a Vue.js app with reactive data, computed properties, watchers, and methods. Uses `window`/`document` DOM APIs, `nw.Window.get()`, `os` module for system info, `process.on()` for crash handlers, drag/drop via DOM events, `chrome.runtime.reload()` for restart, and Vue's `$watch` for state change detection.
-- **C++**: `main()` function using GLFW window + OpenGL 4.6 (GLAD2) + Dear ImGui. Vue app state → `AppState` struct (via `core::makeNewView()`). Vue methods → `namespace app` static functions. Vue computed properties → static functions called on demand. Vue watchers → frame-by-frame change detection in `checkWatchers()`. DOM drag/drop → GLFW `glfwSetDropCallback`. OS info → platform-specific APIs (`/proc/cpuinfo`, Windows registry, `sysconf`). Crash screen → ImGui overlay window. Cache size watcher → timer-based file write with `checkCacheSizeUpdate()`.
+- **C++**: `main()` function using GLFW window + OpenGL 4.6 (GLAD2) + Dear ImGui. Vue app state → `AppState` struct (via `core::makeNewView()`). Vue methods → `namespace app` static functions. Vue computed properties → static functions called on demand. Vue watchers → frame-by-frame change detection in `checkWatchers()`. DOM drag/drop → GLFW `glfwSetDropCallback`. OS info → platform-specific APIs (`/proc/cpuinfo`, Windows registry, `sysconf`). Crash screen → ImGui overlay window. Cache size watcher → timer-based file write with `checkCacheSizeUpdate()`. Taskbar progress → Windows `ITaskbarList3` COM interface, Linux no-op. Restart → re-exec via `CreateProcessW`/`execl`.
 - **Rationale**: The JS entry point is entirely browser/NW.js-specific. Every aspect (DOM, Vue reactivity, NW.js APIs, process handlers) must be replaced with C++ equivalents. The ImGui immediate-mode main loop replaces Vue's reactive rendering. `whats-new.html` loading removed per project direction (home page is now a blank placeholder).
 
 ### `src/app.cpp` — ACCEPTABLE (whats-new.html loading removed)

@@ -9,6 +9,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <shobjidl.h>
 #else
 #include <unistd.h>
 #endif
@@ -27,6 +28,10 @@
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
+#ifdef _WIN32
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#endif
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
@@ -611,12 +616,33 @@ static void hideToast(bool userCancel = false) {
 
 /**
  * Restart the application.
+ * JS equivalent: chrome.runtime.reload() — reloads the NW.js app.
+ * C++ equivalent: re-exec the current process binary.
  */
-static void restartApplication() {
-	// TODO(conversion): In NW.js, chrome.runtime.reload() reloads the app.
-	// In C++, there is no built-in restart mechanism. This would need to
-	// re-exec the process or simply exit and let the user relaunch.
+void restartApplication() {
+#ifdef _WIN32
+	wchar_t exe_path[MAX_PATH];
+	DWORD len = GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
+	if (len > 0 && len < MAX_PATH) {
+		STARTUPINFOW si{};
+		si.cb = sizeof(si);
+		PROCESS_INFORMATION pi{};
+		if (CreateProcessW(exe_path, GetCommandLineW(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
+			CloseHandle(pi.hThread);
+			CloseHandle(pi.hProcess);
+		}
+	}
 	std::exit(0);
+#else
+	char exe_path[PATH_MAX];
+	ssize_t path_len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+	if (path_len > 0) {
+		exe_path[path_len] = '\0';
+		execl(exe_path, exe_path, nullptr);
+	}
+	// execl only returns on error — fall through to exit.
+	std::exit(0);
+#endif
 }
 
 /**
@@ -707,6 +733,37 @@ static double prevLoadPct = -1;
 static void* prevCasc = nullptr;
 static nlohmann::json prevActiveModule;
 
+#ifdef _WIN32
+static ITaskbarList3* s_taskbar = nullptr;
+static bool s_com_initialized = false;
+
+static void initTaskbarProgress() {
+	if (SUCCEEDED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED))) {
+		s_com_initialized = true;
+		CoCreateInstance(CLSID_TaskbarList, nullptr, CLSCTX_INPROC_SERVER,
+			IID_ITaskbarList3, reinterpret_cast<void**>(&s_taskbar));
+		if (s_taskbar)
+			s_taskbar->HrInit();
+	}
+}
+
+static void setTaskbarProgress(GLFWwindow* window, double val) {
+	if (!s_taskbar)
+		return;
+
+	HWND hwnd = glfwGetWin32Window(window);
+	if (!hwnd)
+		return;
+
+	if (val < 0 || val >= 1.0) {
+		s_taskbar->SetProgressState(hwnd, TBPF_NOPROGRESS);
+	} else {
+		s_taskbar->SetProgressState(hwnd, TBPF_NORMAL);
+		s_taskbar->SetProgressValue(hwnd, static_cast<ULONGLONG>(val * 10000), 10000);
+	}
+}
+#endif
+
 static void checkWatchers(GLFWwindow* window) {
 	if (!core::view)
 		return;
@@ -717,10 +774,13 @@ static void checkWatchers(GLFWwindow* window) {
 	 */
 	if (core::view->loadPct != prevLoadPct) {
 		prevLoadPct = core::view->loadPct;
-		// TODO(conversion): In NW.js, win.setProgressBar(val) sets taskbar progress.
-		// GLFW does not have a native taskbar progress API. On Windows, this could
-		// be done via ITaskbarList3 COM interface. Stubbed for now.
+		// JS: win.setProgressBar(val) sets taskbar progress.
+#ifdef _WIN32
+		setTaskbarProgress(window, prevLoadPct);
+#else
+		// Linux: no standard taskbar progress API; no-op.
 		(void)window;
+#endif
 	}
 
 	/**
@@ -788,6 +848,11 @@ int main(int argc, char* argv[]) {
 
 	glfwMakeContextCurrent(window);
 	glfwSwapInterval(1); // VSync
+
+#ifdef _WIN32
+	// Initialize Windows taskbar progress (ITaskbarList3).
+	initTaskbarProgress();
+#endif
 
 	// Load OpenGL function pointers via GLAD2.
 	if (!gladLoadGL(glfwGetProcAddress)) {
@@ -985,6 +1050,15 @@ int main(int argc, char* argv[]) {
 	}
 
 	// ── Cleanup ──────────────────────────────────────────────────
+
+#ifdef _WIN32
+	if (s_taskbar) {
+		s_taskbar->Release();
+		s_taskbar = nullptr;
+	}
+	if (s_com_initialized)
+		CoUninitialize();
+#endif
 
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
