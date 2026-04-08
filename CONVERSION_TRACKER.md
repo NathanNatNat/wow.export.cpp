@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 170 / 184 files converted
+**Progress:** 174 / 184 files converted
 
 ---
 
@@ -254,10 +254,10 @@
 - [x] `src/js/modules/tab_maps.cpp` (1147 lines) 🟢
 - [x] `src/js/modules/tab_creatures.cpp` (1374 lines) ✅
 - [x] `src/js/modules/tab_characters.cpp` (2656 lines JS → 3008 lines C++) ✅
-- [ ] `src/js/modules/legacy_tab_audio.cpp` (318 lines)
-- [ ] `src/js/modules/legacy_tab_data.cpp` (325 lines)
-- [ ] `src/js/modules/legacy_tab_files.cpp` (117 lines)
-- [ ] `src/js/modules/legacy_tab_fonts.cpp` (173 lines)
+- [x] `src/js/modules/legacy_tab_audio.cpp` (318 lines)
+- [x] `src/js/modules/legacy_tab_data.cpp` (325 lines)
+- [x] `src/js/modules/legacy_tab_files.cpp` (117 lines)
+- [x] `src/js/modules/legacy_tab_fonts.cpp` (173 lines)
 - [ ] `src/js/modules/legacy_tab_textures.cpp` (191 lines)
 - [ ] `src/js/modules/screen_settings.cpp` (463 lines)
 - [ ] `src/js/modules/screen_source_select.cpp` (342 lines)
