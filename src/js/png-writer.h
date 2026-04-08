@@ -44,11 +44,12 @@ public:
 	 */
 	void write(const std::filesystem::path& file);
 
-private:
 	uint32_t width;
 	uint32_t height;
 	uint32_t bytesPerPixel;
 	uint8_t bitDepth;
 	uint8_t colorType;
+
+private:
 	std::vector<uint8_t> data;
 };
