@@ -98,7 +98,18 @@ void WMOLegacyRendererGL::load() {
 	// JS: this.groupWatcher = view.$watch('modelViewerWMOGroups', ...);
 	// JS: this.setWatcher   = view.$watch('modelViewerWMOSets',   ...);
 	// JS: this.wireframeWatcher = view.$watch('config.modelViewerWireframe', ...);
-	// TODO(conversion): Vue watchers are not available in C++; updateGroups/updateSets must be called externally.
+	// C++: Change detection replaces Vue watchers; checked states are compared each frame in render().
+	{
+		const auto& gv = core::view->modelViewerWMOGroups;
+		prev_group_checked.resize(gv.size());
+		for (size_t i = 0; i < gv.size(); i++)
+			prev_group_checked[i] = gv[i].value("checked", true);
+
+		const auto& sv = core::view->modelViewerWMOSets;
+		prev_set_checked.resize(sv.size());
+		for (size_t i = 0; i < sv.size(); i++)
+			prev_set_checked[i] = sv[i].value("checked", false);
+	}
 
 	data_ptr = nullptr;
 }
@@ -481,6 +492,43 @@ void WMOLegacyRendererGL::render(const float* view_matrix, const float* projecti
 	if (!shader)
 		return;
 
+	// ─── Change detection (replaces Vue deep watchers) ─────────────────
+	{
+		const auto& gv = core::view->modelViewerWMOGroups;
+		bool groups_changed = gv.size() != prev_group_checked.size();
+		if (!groups_changed) {
+			for (size_t i = 0; i < gv.size(); i++) {
+				if (gv[i].value("checked", true) != prev_group_checked[i]) {
+					groups_changed = true;
+					break;
+				}
+			}
+		}
+		if (groups_changed) {
+			updateGroups();
+			prev_group_checked.resize(gv.size());
+			for (size_t i = 0; i < gv.size(); i++)
+				prev_group_checked[i] = gv[i].value("checked", true);
+		}
+
+		const auto& sv = core::view->modelViewerWMOSets;
+		bool sets_changed = sv.size() != prev_set_checked.size();
+		if (!sets_changed) {
+			for (size_t i = 0; i < sv.size(); i++) {
+				if (sv[i].value("checked", false) != prev_set_checked[i]) {
+					sets_changed = true;
+					break;
+				}
+			}
+		}
+		if (sets_changed) {
+			updateSets();
+			prev_set_checked.resize(sv.size());
+			for (size_t i = 0; i < sv.size(); i++)
+				prev_set_checked[i] = sv[i].value("checked", false);
+		}
+	}
+
 	const bool wireframe = core::view->config.value("modelViewerWireframe", false);
 
 	shader->use();
@@ -606,7 +654,9 @@ std::optional<WMOLegacyRendererGL::BoundingBoxResult> WMOLegacyRendererGL::getBo
 
 void WMOLegacyRendererGL::dispose() {
 	// JS: this.groupWatcher?.(); this.setWatcher?.(); this.wireframeWatcher?.();
-	// TODO(conversion): Vue watchers are not available in C++; nothing to unregister.
+	// C++: Change detection is inline in render(); no listener handles to unregister.
+	prev_group_checked.clear();
+	prev_set_checked.clear();
 
 	for (auto& group : groups)
 		group.vao->dispose();

@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <functional>
 #include <any>
+#include <variant>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -36,6 +37,7 @@ namespace casc {
 class EventEmitter {
 public:
 	using Callback = std::function<void()>;
+	using ArgCallback = std::function<void(const std::any&)>;
 
 	/**
 	 * Set the maximum number of listeners per event.
@@ -43,7 +45,7 @@ public:
 	void setMaxListeners(int max);
 
 	/**
-	 * Register an event listener.
+	 * Register an event listener (no arguments).
 	 * @param event Event name.
 	 * @param callback Callback to invoke.
 	 * @returns Listener ID for removal.
@@ -51,13 +53,30 @@ public:
 	size_t on(const std::string& event, Callback callback);
 
 	/**
-	 * Register an event listener that fires only once.
+	 * Register an event listener that receives a typed argument.
+	 * @param event Event name.
+	 * @param callback Callback to invoke with the emitted argument.
+	 * @returns Listener ID for removal.
+	 */
+	size_t on(const std::string& event, ArgCallback callback);
+
+	/**
+	 * Register an event listener that fires only once (no arguments).
 	 * The listener is automatically removed after the first invocation.
 	 * @param event Event name.
 	 * @param callback Callback to invoke.
 	 * @returns Listener ID for removal.
 	 */
 	size_t once(const std::string& event, Callback callback);
+
+	/**
+	 * Register an event listener that fires only once and receives a typed argument.
+	 * The listener is automatically removed after the first invocation.
+	 * @param event Event name.
+	 * @param callback Callback to invoke with the emitted argument.
+	 * @returns Listener ID for removal.
+	 */
+	size_t once(const std::string& event, ArgCallback callback);
 
 	/**
 	 * Remove an event listener by ID.
@@ -67,10 +86,18 @@ public:
 	void off(const std::string& event, size_t id);
 
 	/**
-	 * Emit an event, invoking all registered listeners.
+	 * Emit an event, invoking all registered listeners (no arguments).
 	 * @param event Event name.
 	 */
 	void emit(const std::string& event);
+
+	/**
+	 * Emit an event with a typed argument, invoking all registered listeners.
+	 * ArgCallback listeners receive the argument; Callback listeners ignore it.
+	 * @param event Event name.
+	 * @param arg Argument to pass to ArgCallback listeners.
+	 */
+	void emit(const std::string& event, const std::any& arg);
 
 	/**
 	 * Remove all listeners for an event.
@@ -81,8 +108,11 @@ public:
 private:
 	struct Listener {
 		size_t id;
-		Callback callback;
+		std::variant<Callback, ArgCallback> callback;
 	};
+
+	size_t addListener(const std::string& event, std::variant<Callback, ArgCallback> cb);
+	void emitImpl(const std::string& event, const std::any* arg);
 
 	int maxListeners = 666;
 	size_t nextId = 0;

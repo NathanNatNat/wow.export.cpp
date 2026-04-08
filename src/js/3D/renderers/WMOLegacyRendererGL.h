@@ -129,6 +129,10 @@ private:
 	std::vector<nlohmann::json> groupArray;
 	std::vector<nlohmann::json> setArray;
 
+	// change detection for Vue watcher replacement
+	std::vector<bool> prev_group_checked;
+	std::vector<bool> prev_set_checked;
+
 	// transforms
 	std::array<float, 16> model_matrix;
 	std::array<float, 3> position_ = {0, 0, 0};

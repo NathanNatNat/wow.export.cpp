@@ -454,10 +454,9 @@ static void setAllCreatureWMOGroups(bool state) {
  * Toggle UV layer for the main model viewer.
  * @param {string} layerName
  */
-static void toggleUVLayer(const std::string& /*layerName*/) {
-	// TODO(conversion): Event emitter does not support typed parameters yet.
+static void toggleUVLayer(const std::string& layerName) {
 	// In JS: core.events.emit('toggle-uv-layer', layerName);
-	core::events.emit("toggle-uv-layer");
+	core::events.emit("toggle-uv-layer", layerName);
 }
 
 /**

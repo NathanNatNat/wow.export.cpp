@@ -286,7 +286,7 @@
 Core infrastructure that most other phases depend on.
 
 ### 1.1 Event Emitter Typed Parameters
-- [ ] Add typed parameter support to the event emitter so callbacks receive proper arguments (e.g. `layer_name`) — `src/app.cpp`, `src/js/3D/renderers/WMOLegacyRendererGL.cpp`, `src/js/3D/renderers/WMORendererGL.cpp` (5 TODOs)
+- [x] Add typed parameter support to the event emitter so callbacks receive proper arguments (e.g. `layer_name`) — `src/app.cpp`, `src/js/3D/renderers/WMOLegacyRendererGL.cpp`, `src/js/3D/renderers/WMORendererGL.cpp` (5 TODOs)
 
 ### 1.2 Toast Action Callbacks
 - [ ] Extend `core::setToast()` to accept `std::function` callbacks for button actions instead of `nlohmann::json` — `src/js/modules/screen_settings.cpp` (6), `src/js/modules/tab_install.cpp` (1), `src/js/modules.cpp` (1) (8 TODOs)

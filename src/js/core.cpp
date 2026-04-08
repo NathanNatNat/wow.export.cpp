@@ -33,18 +33,35 @@ void EventEmitter::setMaxListeners(int max) {
 	maxListeners = max;
 }
 
-size_t EventEmitter::on(const std::string& event, Callback callback) {
+size_t EventEmitter::addListener(const std::string& event, std::variant<Callback, ArgCallback> cb) {
 	size_t id = nextId++;
-	listeners[event].push_back({ id, std::move(callback) });
+	listeners[event].push_back({ id, std::move(cb) });
 	return id;
+}
+
+size_t EventEmitter::on(const std::string& event, Callback callback) {
+	return addListener(event, std::move(callback));
+}
+
+size_t EventEmitter::on(const std::string& event, ArgCallback callback) {
+	return addListener(event, std::move(callback));
 }
 
 size_t EventEmitter::once(const std::string& event, Callback callback) {
 	auto idPtr = std::make_shared<size_t>(0);
-	*idPtr = on(event, [this, event, idPtr, cb = std::move(callback)]() {
+	*idPtr = on(event, Callback([this, event, idPtr, cb = std::move(callback)]() {
 		off(event, *idPtr);
 		cb();
-	});
+	}));
+	return *idPtr;
+}
+
+size_t EventEmitter::once(const std::string& event, ArgCallback callback) {
+	auto idPtr = std::make_shared<size_t>(0);
+	*idPtr = on(event, ArgCallback([this, event, idPtr, cb = std::move(callback)](const std::any& arg) {
+		off(event, *idPtr);
+		cb(arg);
+	}));
 	return *idPtr;
 }
 
@@ -60,15 +77,31 @@ void EventEmitter::off(const std::string& event, size_t id) {
 	);
 }
 
-void EventEmitter::emit(const std::string& event) {
+void EventEmitter::emitImpl(const std::string& event, const std::any* arg) {
 	auto it = listeners.find(event);
 	if (it == listeners.end())
 		return;
 
 	// Copy the vector in case listeners modify it during iteration.
 	auto callbacks = it->second;
-	for (const auto& listener : callbacks)
-		listener.callback();
+	for (const auto& listener : callbacks) {
+		std::visit([arg](const auto& cb) {
+			using T = std::decay_t<decltype(cb)>;
+			if constexpr (std::is_same_v<T, Callback>) {
+				cb();
+			} else {
+				cb(arg ? *arg : std::any{});
+			}
+		}, listener.callback);
+	}
+}
+
+void EventEmitter::emit(const std::string& event) {
+	emitImpl(event, nullptr);
+}
+
+void EventEmitter::emit(const std::string& event, const std::any& arg) {
+	emitImpl(event, &arg);
 }
 
 void EventEmitter::removeAllListeners(const std::string& event) {
