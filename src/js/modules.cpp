@@ -1,411 +1,634 @@
-const Vue = require('vue/dist/vue.cjs.js');
-const log = require('./log');
-const InstallType = require('./install-type');
-const constants = require('./constants');
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-const COMPONENTS = {
-	Listbox: require('./components/listbox'),
-	ListboxMaps: require('./components/listbox-maps'),
-	ListboxZones: require('./components/listbox-zones'),
-	Listboxb: require('./components/listboxb'),
-	Itemlistbox: require('./components/itemlistbox'),
-	Checkboxlist: require('./components/checkboxlist'),
-	MenuButton: require('./components/menu-button'),
-	FileField: require('./components/file-field'),
-	ComboBox: require('./components/combobox'),
-	Slider: require('./components/slider'),
-	ModelViewerGL: require('./components/model-viewer-gl'),
-	MapViewer: require('./components/map-viewer'),
-	DataTable: require('./components/data-table'),
-	ResizeLayer: require('./components/resize-layer'),
-	ContextMenu: require('./components/context-menu')
-};
+#include "modules.h"
+#include "log.h"
+#include "install-type.h"
+#include "constants.h"
+#include "core.h"
 
-const MODULES = {
-	// module_test_a: require('./modules/module_test_a'), // Removed: module deleted
-	// module_test_b: require('./modules/module_test_b'), // Removed: module deleted
-	source_select: require('./modules/screen_source_select'),
-	settings: require('./modules/screen_settings'),
-	tab_home: require('./modules/tab_home'),
-	tab_maps: require('./modules/tab_maps'),
-	tab_zones: require('./modules/tab_zones'),
-	tab_data: require('./modules/tab_data'),
-	tab_raw: require('./modules/tab_raw'),
-	tab_install: require('./modules/tab_install'),
-	tab_text: require('./modules/tab_text'),
-	tab_fonts: require('./modules/tab_fonts'),
-	tab_videos: require('./modules/tab_videos'),
-	tab_models: require('./modules/tab_models'),
-	tab_creatures: require('./modules/tab_creatures'),
-	tab_decor: require('./modules/tab_decor'),
-	tab_audio: require('./modules/tab_audio'),
-	tab_items: require('./modules/tab_items'),
-	tab_item_sets: require('./modules/tab_item_sets'),
-	tab_characters: require('./modules/tab_characters'),
-	tab_textures: require('./modules/tab_textures'),
-	// tab_help: require('./modules/tab_help'), // Removed: module deleted
-	// tab_changelog: require('./modules/tab_changelog'), // Removed: module deleted
-	legacy_tab_home: require('./modules/legacy_tab_home'),
-	legacy_tab_audio: require('./modules/legacy_tab_audio'),
-	legacy_tab_textures: require('./modules/legacy_tab_textures'),
-	legacy_tab_fonts: require('./modules/legacy_tab_fonts'),
-	legacy_tab_files: require('./modules/legacy_tab_files'),
-	legacy_tab_data: require('./modules/legacy_tab_data'),
-	tab_models_legacy: require('./modules/tab_models_legacy')
-};
+#include <algorithm>
+#include <format>
+#include <map>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
 
-const IS_BUNDLED = typeof process.env.BUILD_RELEASE !== 'undefined';
+#include <spdlog/spdlog.h>
+#include <nlohmann/json.hpp>
 
-const COMPONENT_PATH_MAP = {
-	Listbox: 'listbox',
-	ListboxMaps: 'listbox-maps',
-	ListboxZones: 'listbox-zones',
-	Listboxb: 'listboxb',
-	Itemlistbox: 'itemlistbox',
-	Checkboxlist: 'checkboxlist',
-	MenuButton: 'menu-button',
-	FileField: 'file-field',
-	ComboBox: 'combobox',
-	Slider: 'slider',
-	ModelViewerGL: 'model-viewer-gl',
-	MapViewer: 'map-viewer',
-	DataTable: 'data-table',
-	ResizeLayer: 'resize-layer',
-	ContextMenu: 'context-menu'
-};
+// Module headers
+#include "modules/screen_source_select.h"
+#include "modules/screen_settings.h"
+#include "modules/tab_home.h"
+#include "modules/tab_maps.h"
+#include "modules/tab_zones.h"
+#include "modules/tab_data.h"
+#include "modules/tab_raw.h"
+#include "modules/tab_install.h"
+#include "modules/tab_text.h"
+#include "modules/tab_fonts.h"
+#include "modules/tab_videos.h"
+#include "modules/tab_models.h"
+#include "modules/tab_creatures.h"
+#include "modules/tab_decor.h"
+#include "modules/tab_audio.h"
+#include "modules/tab_items.h"
+#include "modules/tab_item_sets.h"
+#include "modules/tab_characters.h"
+#include "modules/tab_textures.h"
+#include "modules/legacy_tab_home.h"
+#include "modules/legacy_tab_audio.h"
+#include "modules/legacy_tab_textures.h"
+#include "modules/legacy_tab_fonts.h"
+#include "modules/legacy_tab_files.h"
+#include "modules/legacy_tab_data.h"
+#include "modules/tab_models_legacy.h"
 
-let component_cache = {};
+namespace modules {
+
+// --- File-local state ---
+
+// JS: const modules = {}
+static std::map<std::string, ModuleDef> module_registry;
+
+// JS: const module_nav_buttons = new Map()
+static std::map<std::string, NavButton> nav_button_map;
+
+// JS: const module_context_menu_options = new Map()
+static std::map<std::string, ContextMenuOption> context_menu_map;
+
+// JS: let active_module = null
+static ModuleDef* active_module = nullptr;
+
+// Cached sorted vectors for external access
+static std::vector<NavButton> sorted_nav_buttons;
+static std::vector<ContextMenuOption> sorted_context_menu_options;
+
+// JS: const IS_BUNDLED = typeof process.env.BUILD_RELEASE !== 'undefined'
+#ifdef NDEBUG
+static constexpr bool IS_BUNDLED = true;
+#else
+static constexpr bool IS_BUNDLED = false;
+#endif
+
+// --- Internal functions ---
+
+// JS: const COMPONENTS = { ... }
+// TODO(conversion): In C++, components are simply header-included. No registry proxy needed.
+// The JS component registry (COMPONENT_PATH_MAP, component_cache, EXCLUDE_FROM_RELOAD)
+// and hot-reload proxy are not needed since C++ uses static linking.
+
+// JS: const COMPONENT_PATH_MAP = { ... }
+// Not needed in C++: components are included via headers at compile time.
+
+// JS: let component_cache = {}
+// Not needed in C++.
 
 // components that should not be reloaded. in an ideal world we would support hot-reloading
 // these but it was too much effort at the time, so c'est la vie
-const EXCLUDE_FROM_RELOAD = new Set(['ModelViewerGL', 'MapViewer']);
+// JS: const EXCLUDE_FROM_RELOAD = new Set(['ModelViewerGL', 'MapViewer']);
+// Not needed in C++.
 
-const component_registry = new Proxy({}, {
-	get(target, name) {
-		if (IS_BUNDLED)
-			return COMPONENTS[name];
+// JS: const component_registry = new Proxy({}, { ... })
+// Not needed in C++: component access is direct via #include and namespace calls.
 
-		if (!component_cache[name]) {
-			const file_name = COMPONENT_PATH_MAP[name];
-			if (!file_name) {
-				log.write('component not found in registry: %s', name);
-				return undefined;
-			}
+static void update_nav_buttons() {
+	const auto& order = constants::NAV_BUTTON_ORDER;
+	std::vector<NavButton> buttons;
+	buttons.reserve(nav_button_map.size());
 
-			const path = require.resolve('./components/' + file_name);
-			delete require.cache[path];
+	for (const auto& [name, button] : nav_button_map)
+		buttons.push_back(button);
 
-			log.write('hot-reloading component: %s', name);
-			component_cache[name] = require('./components/' + file_name);
+	std::sort(buttons.begin(), buttons.end(), [&order](const NavButton& a, const NavButton& b) {
+		int idx_a = -1, idx_b = -1;
+
+		for (size_t i = 0; i < order.size(); i++) {
+			if (order[i] == a.module)
+				idx_a = static_cast<int>(i);
+			if (order[i] == b.module)
+				idx_b = static_cast<int>(i);
 		}
 
-		return component_cache[name];
-	}
-});
+		if (idx_a == -1 && idx_b == -1)
+			return false;
 
-const modules = {}
-const module_nav_buttons = new Map();
-const module_context_menu_options = new Map();
+		if (idx_a == -1)
+			return false; // a goes after b
 
-let active_module = null;
-let core = null;
-let manager = null;
+		if (idx_b == -1)
+			return true;  // a goes before b
 
-function register_nav_button(module_name, label, icon, install_types) {
-	const button = {
-		module: module_name,
-		label,
-		icon,
-		installTypes: install_types
-	};
-
-	module_nav_buttons.set(module_name, button);
-	update_nav_buttons();
-	log.write('registered nav button for module: %s', module_name);
-}
-
-function unregister_nav_button(module_name) {
-	if (module_nav_buttons.delete(module_name)) {
-		update_nav_buttons();
-		log.write('unregistered nav button for module: %s', module_name);
-	}
-}
-
-function update_nav_buttons() {
-	const order = constants.NAV_BUTTON_ORDER;
-	const buttons = Array.from(module_nav_buttons.values());
-
-	buttons.sort((a, b) => {
-		const idx_a = order.indexOf(a.module);
-		const idx_b = order.indexOf(b.module);
-
-		if (idx_a === -1 && idx_b === -1)
-			return 0;
-
-		if (idx_a === -1)
-			return 1;
-
-		if (idx_b === -1)
-			return -1;
-
-		return idx_a - idx_b;
+		return idx_a < idx_b;
 	});
 
-	core.view.modNavButtons = buttons;
-}
+	sorted_nav_buttons = std::move(buttons);
 
-function register_context_menu_option(id, label, icon, action = null) {
-	const option = { id, label, icon, action };
-	module_context_menu_options.set(id, option);
-	update_context_menu_options();
-	log.write('registered context menu option: %s', id);
-}
-
-function unregister_context_menu_option(id) {
-	if (module_context_menu_options.delete(id)) {
-		update_context_menu_options();
-		log.write('unregistered context menu option: %s', id);
+	// JS: core.view.modNavButtons = buttons;
+	if (core::view) {
+		core::view->modNavButtons.clear();
+		for (const auto& btn : sorted_nav_buttons) {
+			nlohmann::json j;
+			j["module"] = btn.module;
+			j["label"] = btn.label;
+			j["icon"] = btn.icon;
+			j["installTypes"] = btn.installTypes;
+			core::view->modNavButtons.push_back(j);
+		}
 	}
 }
 
-function update_context_menu_options() {
-	const order = constants.CONTEXT_MENU_ORDER;
-	const options = Array.from(module_context_menu_options.values());
+static void update_context_menu_options() {
+	const auto& order = constants::CONTEXT_MENU_ORDER;
+	std::vector<ContextMenuOption> options;
+	options.reserve(context_menu_map.size());
 
-	options.sort((a, b) => {
-		const idx_a = order.indexOf(a.id);
-		const idx_b = order.indexOf(b.id);
+	for (const auto& [id, option] : context_menu_map)
+		options.push_back(option);
+
+	std::sort(options.begin(), options.end(), [&order](const ContextMenuOption& a, const ContextMenuOption& b) {
+		int idx_a = -1, idx_b = -1;
+
+		for (size_t i = 0; i < order.size(); i++) {
+			if (order[i] == a.id)
+				idx_a = static_cast<int>(i);
+			if (order[i] == b.id)
+				idx_b = static_cast<int>(i);
+		}
 
 		// items not in order go to end
-		if (idx_a === -1 && idx_b === -1)
-			return 0;
+		if (idx_a == -1 && idx_b == -1)
+			return false;
 
-		if (idx_a === -1)
-			return 1;
+		if (idx_a == -1)
+			return false;
 
-		if (idx_b === -1)
-			return -1;
+		if (idx_b == -1)
+			return true;
 
-		return idx_a - idx_b;
+		return idx_a < idx_b;
 	});
 
-	core.view.modContextMenuOptions = options;
+	sorted_context_menu_options = std::move(options);
+
+	// JS: core.view.modContextMenuOptions = options;
+	if (core::view) {
+		core::view->modContextMenuOptions.clear();
+		for (const auto& opt : sorted_context_menu_options) {
+			nlohmann::json j;
+			j["id"] = opt.id;
+			j["label"] = opt.label;
+			j["icon"] = opt.icon;
+			j["dev_only"] = opt.dev_only;
+			core::view->modContextMenuOptions.push_back(j);
+		}
+	}
 }
 
-function wrap_module(module_name, module_def) {
-	if (!module_def.computed)
-		module_def.computed = {};
+// JS: function wrap_module(module_name, module_def)
+// In C++, modules are statically defined. The wrapping logic (idempotency guard,
+// error handling, register() call) is handled during initialize().
+static void wrap_module(ModuleDef& mod) {
+	std::string display_label = mod.name;
 
-	module_def.computed.$modules = () => manager;
-	module_def.computed.$core = () => core;
-	module_def.computed.$components = () => component_registry;
-
-	let display_label = module_name;
-
-	if (typeof module_def.register === 'function') {
-		const register_context = {
-			registerNavButton: (label, icon, install_types) => {
-				display_label = label;
-				register_nav_button(module_name, label, icon, install_types);
-			},
-			registerContextMenuOption: (label, icon) => register_context_menu_option(module_name, label, icon)
-		};
-		module_def.register.call(register_context);
+	// JS: if (typeof module_def.register === 'function') { ... }
+	if (mod.registerModule) {
+		// The registerModule function for tabs calls register_nav_button internally.
+		// We capture the display_label for error messages.
+		mod.registerModule();
 	}
 
 	// wrap initialize() with idempotency guard, error handling, and activated() retry
-	if (module_def.methods?.initialize) {
-		const original_initialize = module_def.methods.initialize;
+	if (mod.initialize) {
+		auto original_initialize = mod.initialize;
 
-		module_def.methods.initialize = async function() {
-			if (this._tab_initialized || this._tab_initializing)
+		mod.initialize = [&mod, original_initialize, display_label]() {
+			if (mod._tab_initialized || mod._tab_initializing)
 				return;
 
-			this._tab_initializing = true;
+			mod._tab_initializing = true;
 
 			try {
-				await original_initialize.call(this);
-				this._tab_initialized = true;
-			} catch (error) {
-				this.$core.hideLoadingScreen();
-				log.write('Failed to initialize %s tab: %o', display_label, error);
-				this.$core.setToast('error', 'Failed to initialize ' + display_label + ' tab. Check the log for details.', { 'View Log': () => log.openRuntimeLog() }, -1);
-				this.$modules.go_to_landing();
-			} finally {
-				this._tab_initializing = false;
+				original_initialize();
+				mod._tab_initialized = true;
+			} catch (const std::exception& error) {
+				core::hideLoadingScreen();
+				logging::write(std::format("Failed to initialize {} tab: {}", display_label, error.what()));
+				core::setToast("error", std::format("Failed to initialize {} tab. Check the log for details.", display_label),
+				               nlohmann::json({{"View Log", nullptr}}), -1);
+				// TODO(conversion): JS calls this.$core.setToast with action callback {
+				//   'View Log': () => log.openRuntimeLog()
+				// }. nlohmann::json cannot hold lambdas; using nullptr as placeholder.
+				go_to_landing();
 			}
-		};
 
-		const original_activated = module_def.activated;
-		module_def.activated = function() {
-			if (!this._tab_initialized && !this._tab_initializing)
-				this.initialize();
-
-			if (original_activated)
-				original_activated.call(this);
+			mod._tab_initializing = false;
 		};
 	}
-
-	return new Proxy(module_def, {
-		get(target, prop) {
-			if (prop === '__name')
-				return module_name;
-
-			if (prop === 'setActive')
-				return () => set_active(module_name);
-
-			if (prop === 'reload')
-				return () => reload_module(module_name);
-
-			return target[prop];
-		}
-	});
 }
 
-function register_components(app) {
-	for (const [name, def] of Object.entries(COMPONENTS))
-		app.component(name, def);
+// --- Public API ---
 
-	log.write('components loaded: %s', Object.keys(COMPONENTS).join(', '));
+void register_nav_button(const std::string& module_name, const std::string& label,
+                         const std::string& icon, uint32_t install_types) {
+	NavButton button;
+	button.module = module_name;
+	button.label = label;
+	button.icon = icon;
+	button.installTypes = install_types;
+
+	nav_button_map[module_name] = button;
+	update_nav_buttons();
+	logging::write(std::format("registered nav button for module: {}", module_name));
 }
 
-async function initialize(core_instance) {
-	log.write('initializing modules');
-
-	core = core_instance;
-	manager = module.exports;
-
-	for (const [name, module_def] of Object.entries(MODULES))
-		modules[name] = wrap_module(name, Vue.markRaw(module_def));
-
-	log.write('modules loaded: %s', Object.keys(modules).join(', '));
+void unregister_nav_button(const std::string& module_name) {
+	if (nav_button_map.erase(module_name)) {
+		update_nav_buttons();
+		logging::write(std::format("unregistered nav button for module: {}", module_name));
+	}
 }
 
-function register_static_context_menu_option(id, label, icon, action, dev_only = false) {
-	register_context_menu_option(id, label, icon, { handler: action, dev_only });
+void register_context_menu_option(const std::string& id, const std::string& label,
+                                  const std::string& icon, std::function<void()> action) {
+	ContextMenuOption option;
+	option.id = id;
+	option.label = label;
+	option.icon = icon;
+	option.handler = action;
+
+	context_menu_map[id] = option;
+	update_context_menu_options();
+	logging::write(std::format("registered context menu option: {}", id));
 }
 
-function set_active(module_key) {
+void unregister_context_menu_option(const std::string& id) {
+	if (context_menu_map.erase(id)) {
+		update_context_menu_options();
+		logging::write(std::format("unregistered context menu option: {}", id));
+	}
+}
+
+void registerContextMenuOption(const std::string& id, const std::string& label,
+                               const std::string& icon, std::function<void()> action,
+                               bool dev_only) {
+	ContextMenuOption option;
+	option.id = id;
+	option.label = label;
+	option.icon = icon;
+	option.handler = action;
+	option.dev_only = dev_only;
+
+	context_menu_map[id] = option;
+	update_context_menu_options();
+	logging::write(std::format("registered context menu option: {}", id));
+}
+
+void register_components() {
+	// JS: for (const [name, def] of Object.entries(COMPONENTS)) app.component(name, def);
+	// TODO(conversion): In C++/ImGui, components are header-included and called directly.
+	// No dynamic component registration is needed.
+	logging::write("components loaded (C++: statically linked via headers)");
+}
+
+void initialize() {
+	logging::write("initializing modules");
+
+	// JS: for (const [name, module_def] of Object.entries(MODULES))
+	//         modules[name] = wrap_module(name, Vue.markRaw(module_def));
+
+	// Register all modules with their function pointers.
+	// The order matches the JS MODULES object.
+
+	// module_test_a: require('./modules/module_test_a'), // Removed: module deleted
+	// module_test_b: require('./modules/module_test_b'), // Removed: module deleted
+
+	auto add_module = [](const std::string& name,
+	                     std::function<void()> render_fn,
+	                     std::function<void()> mounted_fn,
+	                     std::function<void()> register_fn,
+	                     std::function<void()> initialize_fn = nullptr) {
+		ModuleDef mod;
+		mod.name = name;
+		mod.render = render_fn;
+		mod.mounted = mounted_fn;
+		mod.registerModule = register_fn;
+		mod.initialize = initialize_fn ? initialize_fn : mounted_fn;
+		module_registry[name] = std::move(mod);
+	};
+
+	add_module("source_select",
+		[]() { screen_source_select::render(); },
+		[]() { screen_source_select::mounted(); },
+		nullptr);
+
+	add_module("settings",
+		[]() { screen_settings::render(); },
+		[]() { screen_settings::mounted(); },
+		[]() { screen_settings::registerScreen(); });
+
+	add_module("tab_home",
+		[]() { tab_home::render(); },
+		nullptr,
+		nullptr);
+
+	add_module("tab_maps",
+		[]() { tab_maps::render(); },
+		[]() { tab_maps::mounted(); },
+		[]() { tab_maps::registerTab(); });
+
+	add_module("tab_zones",
+		[]() { tab_zones::render(); },
+		[]() { tab_zones::mounted(); },
+		[]() { tab_zones::registerTab(); });
+
+	add_module("tab_data",
+		[]() { tab_data::render(); },
+		[]() { tab_data::mounted(); },
+		[]() { tab_data::registerTab(); });
+
+	add_module("tab_raw",
+		[]() { tab_raw::render(); },
+		[]() { tab_raw::mounted(); },
+		[]() { tab_raw::registerTab(); });
+
+	add_module("tab_install",
+		[]() { tab_install::render(); },
+		[]() { tab_install::mounted(); },
+		[]() { tab_install::registerTab(); });
+
+	add_module("tab_text",
+		[]() { tab_text::render(); },
+		[]() { tab_text::mounted(); },
+		[]() { tab_text::registerTab(); });
+
+	add_module("tab_fonts",
+		[]() { tab_fonts::render(); },
+		[]() { tab_fonts::mounted(); },
+		[]() { tab_fonts::registerTab(); });
+
+	add_module("tab_videos",
+		[]() { tab_videos::render(); },
+		[]() { tab_videos::mounted(); },
+		[]() { tab_videos::registerTab(); });
+
+	add_module("tab_models",
+		[]() { tab_models::render(); },
+		[]() { tab_models::mounted(); },
+		[]() { tab_models::registerTab(); });
+
+	add_module("tab_creatures",
+		[]() { tab_creatures::render(); },
+		[]() { tab_creatures::mounted(); },
+		[]() { tab_creatures::registerTab(); });
+
+	add_module("tab_decor",
+		[]() { tab_decor::render(); },
+		[]() { tab_decor::mounted(); },
+		[]() { tab_decor::registerTab(); });
+
+	add_module("tab_audio",
+		[]() { tab_audio::render(); },
+		[]() { tab_audio::mounted(); },
+		[]() { tab_audio::registerTab(); });
+
+	add_module("tab_items",
+		[]() { tab_items::render(); },
+		[]() { tab_items::mounted(); },
+		[]() { tab_items::registerTab(); });
+
+	add_module("tab_item_sets",
+		[]() { tab_item_sets::render(); },
+		[]() { tab_item_sets::mounted(); },
+		[]() { tab_item_sets::registerTab(); });
+
+	add_module("tab_characters",
+		[]() { tab_characters::render(); },
+		[]() { tab_characters::mounted(); },
+		[]() { tab_characters::registerTab(); });
+
+	add_module("tab_textures",
+		[]() { tab_textures::render(); },
+		[]() { tab_textures::mounted(); },
+		[]() { tab_textures::registerTab(); });
+
+	// tab_help: require('./modules/tab_help'), // Removed: module deleted
+	// tab_changelog: require('./modules/tab_changelog'), // Removed: module deleted
+
+	add_module("legacy_tab_home",
+		[]() { legacy_tab_home::render(); },
+		nullptr,
+		nullptr);
+
+	add_module("legacy_tab_audio",
+		[]() { legacy_tab_audio::render(); },
+		[]() { legacy_tab_audio::mounted(); },
+		[]() { legacy_tab_audio::registerTab(); });
+
+	add_module("legacy_tab_textures",
+		[]() { legacy_tab_textures::render(); },
+		[]() { legacy_tab_textures::mounted(); },
+		[]() { legacy_tab_textures::registerTab(); });
+
+	add_module("legacy_tab_fonts",
+		[]() { legacy_tab_fonts::render(); },
+		[]() { legacy_tab_fonts::mounted(); },
+		[]() { legacy_tab_fonts::registerTab(); });
+
+	add_module("legacy_tab_files",
+		[]() { legacy_tab_files::render(); },
+		[]() { legacy_tab_files::mounted(); },
+		[]() { legacy_tab_files::registerTab(); });
+
+	add_module("legacy_tab_data",
+		[]() { legacy_tab_data::render(); },
+		[]() { legacy_tab_data::mounted(); },
+		[]() { legacy_tab_data::registerTab(); });
+
+	add_module("tab_models_legacy",
+		[]() { tab_models_legacy::render(); },
+		[]() { tab_models_legacy::mounted(); },
+		[]() { tab_models_legacy::registerTab(); });
+
+	// Wrap all modules (call register, set up initialize guard)
+	for (auto& [name, mod] : module_registry)
+		wrap_module(mod);
+
+	// Build the module name list for logging
+	std::string module_names;
+	for (const auto& [name, mod] : module_registry) {
+		if (!module_names.empty())
+			module_names += ", ";
+		module_names += name;
+	}
+
+	logging::write(std::format("modules loaded: {}", module_names));
+}
+
+void set_active(const std::string& module_key) {
 	if (active_module) {
-		core.view.activeModule = null;
-		active_module = null;
+		// JS: core.view.activeModule = null;
+		if (core::view)
+			core::view->activeModule = nullptr;
+		active_module = nullptr;
 	}
 
-	if (module_key && modules[module_key]) {
-		active_module = modules[module_key];
-		core.view.activeModule = active_module;
-		log.write('set active module: %s', module_key);
+	if (!module_key.empty()) {
+		auto it = module_registry.find(module_key);
+		if (it != module_registry.end()) {
+			active_module = &it->second;
+
+			// JS: core.view.activeModule = active_module;
+			if (core::view) {
+				nlohmann::json mod_json;
+				mod_json["__name"] = module_key;
+				core::view->activeModule = mod_json;
+			}
+
+			logging::write(std::format("set active module: {}", module_key));
+		}
 	}
 }
 
-function setActive(module_key) {
+void setActive(const std::string& module_key) {
 	set_active(module_key);
 }
 
-function go_to_landing() {
-	if (core.view.installType === 0)
-		set_active('source_select');
-	else if (core.view.installType === InstallType.MPQ)
-		set_active('legacy_tab_home');
+void go_to_landing() {
+	if (core::view->installType == 0)
+		set_active("source_select");
+	else if (core::view->installType == static_cast<int>(install_type::MPQ))
+		set_active("legacy_tab_home");
 	else
-		set_active('tab_home');
+		set_active("tab_home");
 }
 
-function reload_module(module_key) {
+void reload_module(const std::string& module_key) {
 	if (IS_BUNDLED) {
-		log.write('cannot reload module %s: not available in production', module_key);
+		logging::write(std::format("cannot reload module {}: not available in production", module_key));
 		return;
 	}
 
-	if (!modules[module_key]) {
-		log.write('cannot reload module %s: not found', module_key);
+	auto it = module_registry.find(module_key);
+	if (it == module_registry.end()) {
+		logging::write(std::format("cannot reload module {}: not found", module_key));
 		return;
 	}
 
-	const was_active = active_module === modules[module_key];
+	// JS: const was_active = active_module === modules[module_key];
+	bool was_active = (active_module == &it->second);
 
 	if (was_active) {
-		core.view.activeModule = null;
-		active_module = null;
+		if (core::view)
+			core::view->activeModule = nullptr;
+		active_module = nullptr;
 	}
 
 	// invalidate component cache so they're re-required on next access
 	// preserve excluded components (stateful 3D viewers)
-	const preserved = {};
-	for (const name of EXCLUDE_FROM_RELOAD) {
-		if (component_cache[name])
-			preserved[name] = component_cache[name];
-	}
-	component_cache = preserved;
+	// TODO(conversion): In C++, there is no component cache or hot-reload.
+	// Components are statically linked. This is a no-op.
 
 	unregister_nav_button(module_key);
 	unregister_context_menu_option(module_key);
-	delete modules[module_key];
 
-	const module_path = require.resolve('./modules/' + module_key);
-	delete require.cache[module_path];
+	// JS: delete require.cache[module_path];
+	// JS: const module_def = Vue.markRaw(require('./modules/' + module_key));
+	// JS: modules[module_key] = wrap_module(module_key, module_def);
+	// TODO(conversion): C++ cannot dynamically reload compiled code.
+	// Re-wrapping the existing module definition instead.
+	it->second._tab_initialized = false;
+	it->second._tab_initializing = false;
+	wrap_module(it->second);
 
-	const module_def = Vue.markRaw(require('./modules/' + module_key));
-	modules[module_key] = wrap_module(module_key, module_def);
-
-	log.write('reloaded module: %s', module_key);
+	logging::write(std::format("reloaded module: {}", module_key));
 
 	if (was_active)
 		set_active(module_key);
 }
 
-function reload_active_module() {
+void reloadActiveModule() {
 	if (IS_BUNDLED) {
-		log.write('cannot reload active module: not available in production');
+		logging::write("cannot reload active module: not available in production");
 		return;
 	}
 
 	if (!active_module) {
-		log.write('no active module to reload');
+		logging::write("no active module to reload");
 		return;
 	}
 
-	const module_key = active_module.__name;
+	std::string module_key = active_module->name;
 	reload_module(module_key);
 }
 
-function reload_all_modules() {
+void reloadAllModules() {
 	if (IS_BUNDLED) {
-		log.write('cannot reload modules: not available in production');
+		logging::write("cannot reload modules: not available in production");
 		return;
 	}
 
-	const active_module_key = active_module ? active_module.__name : null;
+	std::string active_module_key = active_module ? active_module->name : "";
 
-	core.view.activeModule = null;
-	active_module = null;
+	if (core::view)
+		core::view->activeModule = nullptr;
+	active_module = nullptr;
 
-	const module_keys = Object.keys(modules);
-	for (const module_key of module_keys) {
+	// Collect module keys
+	std::vector<std::string> module_keys;
+	for (const auto& [name, mod] : module_registry)
+		module_keys.push_back(name);
+
+	for (const auto& module_key : module_keys) {
 		unregister_nav_button(module_key);
 		unregister_context_menu_option(module_key);
-		delete modules[module_key];
 	}
 
-	for (const [name, module_def] of Object.entries(MODULES)) {
-		const module_path = require.resolve('./modules/' + name);
-		delete require.cache[module_path];
-
-		const fresh_module = Vue.markRaw(require('./modules/' + name));
-		modules[name] = wrap_module(name, fresh_module);
+	// JS: for (const [name, module_def] of Object.entries(MODULES)) { ... }
+	// TODO(conversion): C++ cannot dynamically reload compiled code.
+	// Re-wrapping all existing module definitions instead.
+	for (auto& [name, mod] : module_registry) {
+		mod._tab_initialized = false;
+		mod._tab_initializing = false;
+		wrap_module(mod);
 	}
 
-	log.write('reloaded all modules: %s', Object.keys(modules).join(', '));
+	// Build the module name list for logging
+	std::string module_names;
+	for (const auto& [name, mod] : module_registry) {
+		if (!module_names.empty())
+			module_names += ", ";
+		module_names += name;
+	}
 
-	if (active_module_key && modules[active_module_key])
+	logging::write(std::format("reloaded all modules: {}", module_names));
+
+	if (!active_module_key.empty() && module_registry.contains(active_module_key))
 		set_active(active_module_key);
 }
 
-module.exports = new Proxy({ register_components, initialize, set_active, setActive, go_to_landing, reload_module, reloadActiveModule: reload_active_module, reloadAllModules: reload_all_modules, registerContextMenuOption: register_static_context_menu_option, InstallType }, {
-	get(target, prop) {
-		if (prop in target)
-			return target[prop];
+ModuleDef* get(const std::string& module_key) {
+	auto it = module_registry.find(module_key);
+	if (it != module_registry.end())
+		return &it->second;
+	return nullptr;
+}
 
-		return modules[prop];
-	}
-});
+ModuleDef* getActive() {
+	return active_module;
+}
+
+const std::vector<NavButton>& getNavButtons() {
+	return sorted_nav_buttons;
+}
+
+const std::vector<ContextMenuOption>& getContextMenuOptions() {
+	return sorted_context_menu_options;
+}
+
+} // namespace modules

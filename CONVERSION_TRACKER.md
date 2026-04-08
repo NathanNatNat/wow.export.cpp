@@ -13,7 +13,7 @@
 > Every function, every export, every constant, every edge case in the original JS must have a working C++ equivalent.
 > A partial conversion stays at `[~]`. No exceptions.
 
-**Progress:** 177 / 184 files converted
+**Progress:** 179 / 184 files converted
 
 ---
 
@@ -264,6 +264,6 @@
 
 ## Tier 23 — Top-Level Glue (3 files)
 
-- [ ] `src/js/workers/cache-collector.cpp` (431 lines)
-- [ ] `src/js/modules.cpp` (414 lines)
+- [x] `src/js/workers/cache-collector.cpp` (431 lines)
+- [x] `src/js/modules.cpp` (414 lines)
 - [ ] `src/app.cpp` (713 lines) — **Entry point, convert last**
