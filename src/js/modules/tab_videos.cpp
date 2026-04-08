@@ -100,6 +100,20 @@ struct BuildPayloadResult {
 	std::optional<SubtitleInfo> subtitle;
 };
 
+// --- Helper: convert FileEncodingInfo to JSON for Kino API ---
+static nlohmann::json encoding_info_to_json(const casc::FileEncodingInfo& info) {
+	nlohmann::json j;
+	j["enc"] = info.enc;
+	if (info.arc.has_value()) {
+		j["arc"] = {
+			{"key", info.arc->key},
+			{"ofs", info.arc->ofs},
+			{"len", info.arc->len}
+		};
+	}
+	return j;
+}
+
 // --- HTTP helper: POST JSON to Kino API ---
 // Returns (status_code, response_body_json). Throws on connection error.
 static std::pair<int, nlohmann::json> kino_post(const nlohmann::json& payload) {
@@ -164,14 +178,13 @@ static std::optional<BuildPayloadResult> build_payload(uint32_t file_data_id) {
 
 	// get video encoding info
 	// JS: const vid_info = await casc.getFileEncodingInfo(file_data_id);
-	// TODO(conversion): CASC getFileEncodingInfo will be wired when CASC integration is complete.
-	nlohmann::json vid_info;
-	// Placeholder: vid_info should contain encoding info from CASC.
-	// if (!vid_info) { ... }
-	if (vid_info.is_null()) {
+	auto vid_info_opt = core::view->casc->getFileEncodingInfo(file_data_id);
+	// JS: if (!vid_info) { ... }
+	if (!vid_info_opt.has_value()) {
 		logging::write(std::format("failed to get encoding info for video file {}", file_data_id));
 		return std::nullopt;
 	}
+	nlohmann::json vid_info = encoding_info_to_json(*vid_info_opt);
 
 	nlohmann::json payload;
 	payload["vid"] = vid_info;
@@ -194,10 +207,9 @@ static std::optional<BuildPayloadResult> build_payload(uint32_t file_data_id) {
 					uint32_t audio_fdid = movie_row.value("AudioFileDataID", 0u);
 					if (audio_fdid != 0) {
 						// JS: const aud_info = await casc.getFileEncodingInfo(movie_row.AudioFileDataID);
-						// TODO(conversion): CASC getFileEncodingInfo will be wired when CASC integration is complete.
-						nlohmann::json aud_info;
-						if (!aud_info.is_null())
-							payload["aud"] = aud_info;
+						auto aud_info_opt = core::view->casc->getFileEncodingInfo(audio_fdid);
+						if (aud_info_opt.has_value())
+							payload["aud"] = encoding_info_to_json(*aud_info_opt);
 					}
 
 					// get subtitle file encoding info for server + store for local loading
@@ -205,9 +217,9 @@ static std::optional<BuildPayloadResult> build_payload(uint32_t file_data_id) {
 					uint32_t sub_fdid = movie_row.value("SubtitleFileDataID", 0u);
 					if (sub_fdid != 0) {
 						// JS: const srt_info = await casc.getFileEncodingInfo(movie_row.SubtitleFileDataID);
-						// TODO(conversion): CASC getFileEncodingInfo will be wired when CASC integration is complete.
-						nlohmann::json srt_info;
-						if (!srt_info.is_null()) {
+						auto srt_info_opt = core::view->casc->getFileEncodingInfo(sub_fdid);
+						if (srt_info_opt.has_value()) {
+							nlohmann::json srt_info = encoding_info_to_json(*srt_info_opt);
 							srt_info["type"] = movie_row.value("SubtitleFileFormat", 0);
 							payload["srt"] = srt_info;
 						}
@@ -240,11 +252,8 @@ static void play_streaming_video(const std::string& url, const std::optional<Sub
 		try {
 			// JS: const vtt = await subtitles.get_subtitles_vtt(
 			//     core_ref.view.casc, subtitle_info.file_data_id, subtitle_info.format);
-			// TODO(conversion): Loading subtitle file from CASC will be wired when CASC integration is complete.
-			// For now, we prepare the subtitle infrastructure:
-			// 1. Load raw subtitle data from CASC via subtitle_info.file_data_id
-			// 2. Convert to VTT using subtitles::get_subtitles_vtt(text, format)
-			std::string raw_subtitle_text; // placeholder: loaded from CASC
+			BufferWrapper subtitle_data = core::view->casc->getVirtualFileByID(subtitle_info->file_data_id);
+			std::string raw_subtitle_text = subtitle_data.readString();
 			subtitles::SubtitleFormat fmt = static_cast<subtitles::SubtitleFormat>(subtitle_info->format);
 			current_subtitle_vtt = subtitles::get_subtitles_vtt(raw_subtitle_text, fmt);
 			has_subtitle_track = true;
@@ -752,7 +761,8 @@ static void export_avi() {
 			try {
 				// JS: const data = await this.$core.view.casc.getFileByName(file_name);
 				// JS: await data.writeToFile(export_path);
-				// TODO(conversion): CASC getFileByName + writeToFile will be wired when CASC integration is complete.
+				BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
+				data.writeToFile(export_path);
 
 				helper.mark(export_file_name, true);
 			} catch (const casc::BLTEIntegrityError&) {
@@ -767,7 +777,9 @@ static void export_avi() {
 
 					// JS: const data = await this.$core.view.casc.getFileByName(file_name, false, false, true, true);
 					// JS: await data.writeToFile(export_path);
-					// TODO(conversion): CASC getFileByName with force fallback will be wired when CASC integration is complete.
+					// Note: C++ getVirtualFileByName doesn't support forceFallback; retry normally.
+					BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
+					data.writeToFile(export_path);
 
 					helper.mark(export_file_name, true);
 				} catch (const std::exception& e) {
@@ -835,7 +847,8 @@ static void export_mp3() {
 		try {
 			// JS: const data = await this.$core.view.casc.getFile(movie_data.AudioFileDataID);
 			// JS: await data.writeToFile(export_path);
-			// TODO(conversion): CASC getFile + writeToFile will be wired when CASC integration is complete.
+			BufferWrapper data = core::view->casc->getVirtualFileByID(movie_data->AudioFileDataID);
+			data.writeToFile(export_path);
 			helper.mark(export_file_name, true);
 		} catch (const std::exception& e) {
 			helper.mark(export_file_name, false, e.what());
@@ -901,7 +914,8 @@ static void export_subtitles() {
 		try {
 			// JS: const data = await this.$core.view.casc.getFile(movie_data.SubtitleFileDataID);
 			// JS: await data.writeToFile(export_path);
-			// TODO(conversion): CASC getFile + writeToFile will be wired when CASC integration is complete.
+			BufferWrapper data = core::view->casc->getVirtualFileByID(movie_data->SubtitleFileDataID);
+			data.writeToFile(export_path);
 			helper.mark(export_file_name, true);
 		} catch (const std::exception& e) {
 			helper.mark(export_file_name, false, e.what());
