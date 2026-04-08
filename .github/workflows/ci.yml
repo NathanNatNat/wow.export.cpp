@@ -9,14 +9,14 @@ on:
 permissions:
   contents: read
 
-env:
-  SCCACHE_GHA_ENABLED: "true"
-
 jobs:
   # Windows x64 — GitHub-hosted (MSVC + Ninja)
   windows:
     name: Windows MSVC Debug
     runs-on: windows-latest
+
+    env:
+      SCCACHE_DIR: D:\a\sccache
 
     steps:
       - name: Checkout (with submodules)
@@ -41,6 +41,14 @@ jobs:
 
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Restore sccache cache
+        uses: actions/cache@v4
+        with:
+          path: D:\a\sccache
+          key: sccache-msvc-debug-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json') }}
+          restore-keys: |
+            sccache-msvc-debug-
 
       - name: "Configure (preset: windows-msvc-debug)"
         run: cmake --preset windows-msvc-debug -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_C_FLAGS_DEBUG="/Z7 /Od /RTC1" -DCMAKE_CXX_FLAGS_DEBUG="/Z7 /Od /RTC1"
