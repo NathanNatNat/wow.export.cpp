@@ -15,6 +15,7 @@
 #include "../casc/listfile.h"
 #include "../casc/blte-reader.h"
 #include "../casc/blp.h"
+#include "../casc/casc-source.h"
 #include "../install-type.h"
 #include "../modules.h"
 #include "../ui/listbox-context.h"
@@ -676,8 +677,8 @@ static void apply_creature_equipment_models() {
 				int attachment_id = attachment_ids[i];
 
 				try {
-					// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 					// JS: const file = await core.view.casc.getFile(file_data_id);
+					BufferWrapper file = core::view->casc->getVirtualFileByID(fdid);
 					// JS: const renderer = new M2RendererGL(file, gl_context, false, false);
 					// JS: await renderer.load();
 					// JS: if (display.textures && display.textures.length > i)
@@ -685,7 +686,8 @@ static void apply_creature_equipment_models() {
 					// JS: renderers.push({ renderer, attachment_id });
 					logging::write(std::format("Loaded creature attachment model {} for slot {}", fdid, slot_id));
 
-					// Stub: renderer creation requires CASC + GL context
+					// TODO(conversion): M2RendererGL instantiation requires GL context; will be wired when renderer is integrated.
+					(void)file;
 					(void)attachment_id;
 				} catch (const std::exception& e) {
 					// JS: log.write('Failed to load creature attachment model %d: %s', file_data_id, e.message);
@@ -707,8 +709,8 @@ static void apply_creature_equipment_models() {
 				uint32_t fdid = display->models[i];
 
 				try {
-					// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 					// JS: const file = await core.view.casc.getFile(file_data_id);
+					BufferWrapper file = core::view->casc->getVirtualFileByID(fdid);
 					// JS: const renderer = new M2RendererGL(file, gl_context, false, false);
 					// JS: await renderer.load();
 					// JS: if (active_renderer?.bones) renderer.buildBoneRemapTable(active_renderer.bones);
@@ -718,6 +720,8 @@ static void apply_creature_equipment_models() {
 					// JS: if (texture_fdid) await renderer.applyReplaceableTextures({ textures: [texture_fdid] });
 					// JS: renderers.push(renderer);
 					logging::write(std::format("Loaded creature collection model {} for slot {}", fdid, slot_id));
+					// TODO(conversion): M2RendererGL instantiation requires GL context; will be wired when renderer is integrated.
+					(void)file;
 				} catch (const std::exception& e) {
 					// JS: log.write('Failed to load creature collection model %d: %s', file_data_id, e.message);
 					logging::write(std::format("Failed to load creature collection model {}: {}", fdid, e.what()));
@@ -808,9 +812,10 @@ static void refresh_creature_equipment() {
 		uint32_t bake_fdid = db::caches::DBCharacterCustomization::get_texture_file_data_id(bake_id);
 		if (bake_fdid != 0) {
 			try {
-				// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 				// JS: const bake_data = await core.view.casc.getFile(bake_fdid);
 				// JS: baked_npc_blp = new BLPFile(bake_data);
+				BufferWrapper bake_data = core::view->casc->getVirtualFileByID(bake_fdid);
+				baked_npc_blp = std::make_unique<casc::BLPImage>(bake_data);
 			} catch (const std::exception& e) {
 				logging::write(std::format("Failed to load baked NPC texture {}: {}", bake_fdid, e.what()));
 			}
@@ -904,8 +909,8 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 				return;
 			}
 
-			// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 			// JS: const file = await core.view.casc.getFile(file_data_id);
+			BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
 			// JS: const gl_context = core.view.creatureViewerContext?.gl_context;
 
 			// JS: core.view.creatureViewerActiveType = 'm2';
@@ -914,9 +919,10 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			// JS: active_renderer = new M2RendererGL(file, gl_context, true, true);
 			// JS: active_renderer.geosetKey = 'creatureViewerGeosets';
 			// JS: await active_renderer.load();
-			// TODO(conversion): M2RendererGL instantiation requires CASC data + GL context.
+			// TODO(conversion): M2RendererGL instantiation requires GL context; will be wired when renderer is integrated.
 			core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", creature.name), {}, 4000);
-			logging::write(std::format("CASC not yet integrated — skipping character preview for {}", creature.name));
+			logging::write(std::format("Renderer not yet integrated — skipping character preview for {}", creature.name));
+			(void)file;
 
 			// The following code is the complete conversion and will work once CASC is wired:
 			/*
@@ -1012,11 +1018,13 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 				return;
 			}
 
-			// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 			// JS: const file = await core.view.casc.getFile(file_data_id);
+			BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
 			// JS: const gl_context = core.view.creatureViewerContext?.gl_context;
-			core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", creature.name), {}, 4000);
-			logging::write(std::format("CASC not yet integrated — skipping preview for {}", creature.name));
+			// TODO(conversion): M2RendererGL/WMORendererGL/M3RendererGL instantiation requires GL context; will be wired when renderer is integrated.
+			core::setToast("info", std::format("Renderer not yet integrated — cannot preview {} yet.", creature.name), {}, 4000);
+			logging::write(std::format("Renderer not yet integrated — skipping preview for {}", creature.name));
+			(void)file;
 
 			// The following code is the complete conversion and will work once CASC is wired:
 			/*
@@ -1193,8 +1201,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 	auto& view = *core::view;
 
 	// JS: const export_paths = core.openLastExportStream();
-	// TODO(conversion): Export stream will be wired when file I/O is integrated.
-	// FileWriter export_paths = core::openLastExportStream();
+	auto export_paths = core::openLastExportStream();
 
 	// JS: const format = core.view.config.exportCreatureFormat;
 	const std::string format = view.config.value("exportCreatureFormat", std::string("OBJ"));
@@ -1220,7 +1227,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 	}
 
 	// JS: const casc = core.view.casc;
-	// TODO(conversion): CASC reference will be wired.
+	casc::CASC* casc = core::view->casc;
 
 	// JS: const helper = new ExportHelper(entries.length, 'creature');
 	casc::ExportHelper helper(static_cast<int>(entries.size()), "creature");
@@ -1260,8 +1267,8 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 					continue;
 				}
 
-				// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 				// JS: const data = await casc.getFile(file_data_id);
+				BufferWrapper data = casc->getVirtualFileByID(file_data_id);
 				// JS: const file_name = listfile.getByID(file_data_id) ?? listfile.formatUnknownFile(file_data_id, '.m2');
 				std::string file_name = casc::listfile::getByID(file_data_id);
 				if (file_name.empty())
@@ -1275,9 +1282,10 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 
 				if (format == "RAW") {
 					// JS: const exporter = new M2Exporter(data, [], file_data_id);
+					M2Exporter exporter(std::move(data), {}, file_data_id, casc);
 					// JS: await export_paths?.writeLine(export_path);
 					// JS: await exporter.exportRaw(export_path, helper, file_manifest);
-					// TODO(conversion): CASC data needed for export.
+					exporter.exportRaw(export_path, &helper, &file_manifest);
 					helper.mark(creature_name, true);
 				} else {
 					// JS: const ext = modelViewerUtils.EXPORT_EXTENSIONS[format] ?? '.gltf';
@@ -1288,13 +1296,13 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 					std::string final_path = casc::ExportHelper::replaceExtension(export_path, ext);
 
 					// JS: const exporter = new M2Exporter(data, [], file_data_id);
-					// TODO(conversion): CASC data needed for export.
+					M2Exporter exporter(std::move(data), {}, file_data_id, casc);
 
 					// JS: if (is_active) { ... } else { ... }
 					if (is_active) {
 						// JS: for (const [texture_type, chr_material] of creature_chr_materials) exporter.addURITexture(texture_type, chr_material.getURI());
 						// JS: exporter.setGeosetMask(core.view.creatureViewerGeosets);
-						// TODO(conversion): Active character texture export will be wired when CASC is integrated.
+						// TODO(conversion): Active character texture addURITexture will be wired when CharMaterialRenderer.getURI() is integrated.
 					} else {
 						// build textures for export
 						// JS: const export_materials = new Map();
@@ -1321,9 +1329,10 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 							uint32_t bake_fdid = db::caches::DBCharacterCustomization::get_texture_file_data_id(bake_id_val);
 							if (bake_fdid != 0) {
 								try {
-									// TODO(conversion): CASC file loading will be wired.
-									// auto bake_data = casc->getFile(bake_fdid);
-									// baked_npc_blp = std::make_unique<casc::BLPImage>(bake_data);
+									// JS: auto bake_data = casc->getFile(bake_fdid);
+									// JS: baked_npc_blp = new BLPFile(bake_data);
+									BufferWrapper bake_data = casc->getVirtualFileByID(bake_fdid);
+									baked_npc_blp = std::make_unique<casc::BLPImage>(bake_data);
 								} catch (const std::exception& e) {
 									logging::write(std::format("Failed to load baked NPC texture {}: {}", bake_fdid, e.what()));
 								}
@@ -1449,7 +1458,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 						for (auto& [texture_type, chr_material] : export_materials) {
 							chr_material->update();
 							// JS: exporter.addURITexture(texture_type, chr_material.getURI());
-							// TODO(conversion): Add URI texture when exporter is wired.
+							// TODO(conversion): addURITexture requires CharMaterialRenderer.getURI() to return PNG BufferWrapper; will be wired when renderer is integrated.
 						}
 
 						// JS: character_appearance.dispose_materials(export_materials);
@@ -1459,8 +1468,12 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 					// JS: const mark_file_name = ExportHelper.getRelativeExport(final_path);
 					std::string mark_file_name = casc::ExportHelper::getRelativeExport(final_path);
 
-					// JS: if (format === 'OBJ') await exporter.exportAsOBJ(...) etc.
-					// TODO(conversion): Export requires CASC data to be loaded first.
+					// JS: if (format === 'OBJ') await exporter.exportAsOBJ(...)
+					if (format == "OBJ" || format == "STL") {
+						exporter.exportAsOBJ(final_path, (format == "STL"), &helper, &file_manifest);
+					} else {
+						exporter.exportAsGLTF(final_path, &helper, format);
+					}
 
 					// JS: await export_paths?.writeLine('M2_' + format + ':' + final_path);
 					helper.mark(mark_file_name, true);
@@ -1482,28 +1495,40 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 		}
 
 		try {
-			// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 			// JS: const data = await casc.getFile(file_data_id);
+			BufferWrapper data = casc->getVirtualFileByID(file_data_id);
 			// JS: const model_type = modelViewerUtils.detect_model_type(data);
+			auto model_type = model_viewer_utils::detect_model_type(data);
 			// JS: const file_ext = modelViewerUtils.get_model_extension(model_type);
+			std::string file_ext = model_viewer_utils::get_model_extension(model_type);
 			// JS: const file_name = listfile.getByID(file_data_id) ?? listfile.formatUnknownFile(file_data_id, file_ext);
+			std::string file_name = casc::listfile::getByID(file_data_id);
+			if (file_name.empty())
+				file_name = casc::listfile::formatUnknownFile(file_data_id, file_ext);
 			// JS: const export_path = ExportHelper.getExportPath('creatures/' + creature_name + file_ext);
+			std::string export_path = casc::ExportHelper::getExportPath("creatures/" + creature_name + file_ext);
 			// JS: const is_active = file_data_id === active_file_data_id;
+			const bool is_active = (file_data_id == active_file_data_id);
 
 			// JS: const mark_name = await modelViewerUtils.export_model({ ... });
-			// model_viewer_utils::ExportModelOptions opts;
-			// opts.data = &data;
-			// opts.file_data_id = file_data_id;
-			// opts.file_name = file_name;
-			// opts.format = format;
-			// opts.export_path = export_path;
-			// opts.helper = &helper;
-			// opts.file_manifest = &file_manifest;
-			// opts.variant_textures = is_active ? selected_variant_texture_ids_json : nlohmann::json::array();
-			// opts.geoset_mask = is_active ? &view.creatureViewerGeosets : nullptr;
-			// opts.wmo_group_mask = is_active ? &view.creatureViewerWMOGroups : nullptr;
-			// opts.wmo_set_mask = is_active ? &view.creatureViewerWMOSets : nullptr;
-			// std::string mark_name = model_viewer_utils::export_model(opts);
+			model_viewer_utils::ExportModelOptions opts;
+			opts.data = &data;
+			opts.file_data_id = file_data_id;
+			opts.file_name = file_name;
+			opts.format = format;
+			opts.export_path = export_path;
+			opts.helper = &helper;
+			opts.casc = casc;
+			nlohmann::json variant_textures_json = nlohmann::json::array();
+			if (is_active) {
+				for (uint32_t tid : selected_variant_texture_ids)
+					variant_textures_json.push_back(tid);
+			}
+			opts.variant_textures = variant_textures_json;
+			opts.geoset_mask = is_active ? &view.creatureViewerGeosets : nullptr;
+			opts.wmo_group_mask = is_active ? &view.creatureViewerWMOGroups : nullptr;
+			opts.wmo_set_mask = is_active ? &view.creatureViewerWMOSets : nullptr;
+			std::string mark_name = model_viewer_utils::export_model(opts);
 
 			helper.mark(creature_name, true);
 		} catch (const std::exception& e) {
@@ -1514,6 +1539,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 
 	helper.finish();
 	// JS: export_paths?.close();
+	export_paths.close();
 }
 
 // --- Vue methods converted to static functions ---
@@ -1578,18 +1604,13 @@ static void copy_creature_ids(const std::vector<nlohmann::json>& selection) {
 static void preview_texture(uint32_t file_data_id, const std::string& display_name) {
 	// JS: const state = modelViewerUtils.create_view_state(this.$core, 'creature');
 	// JS: await modelViewerUtils.preview_texture_by_id(this.$core, state, active_renderer, file_data_id, display_name);
-	// TODO(conversion): CASC source needed for preview_texture_by_id; will be wired.
-	// model_viewer_utils::preview_texture_by_id(view_state, get_active_m2_renderer(), file_data_id, display_name, casc);
-	(void)file_data_id;
-	(void)display_name;
+	model_viewer_utils::preview_texture_by_id(view_state, get_active_m2_renderer(), file_data_id, display_name, core::view->casc);
 }
 
 // JS: methods.export_ribbon_texture(file_data_id, display_name)
 static void export_ribbon_texture(uint32_t file_data_id, [[maybe_unused]] const std::string& display_name) {
 	// JS: await textureExporter.exportSingleTexture(file_data_id);
-	// TODO(conversion): CASC source needed for exportSingleTexture; will be wired.
-	// texture_exporter::exportSingleTexture(file_data_id, casc);
-	(void)file_data_id;
+	texture_exporter::exportSingleTexture(file_data_id, core::view->casc);
 }
 
 // JS: methods.toggle_uv_layer(layer_name)

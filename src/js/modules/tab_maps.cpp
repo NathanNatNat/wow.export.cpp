@@ -944,7 +944,7 @@ ADTExporter adt(selected_map_id.value_or(0), selected_map_dir, static_cast<uint3
 try {
 // JS: const out = await adt.export(dir, 0, undefined, helper);
 auto out = adt.exportTile(dir, 0, nullptr, &helper, core::view->casc);
-export_paths.writeLine(out.type + ":" + out.path);
+export_paths.writeLine(out.type + ":" + out.path.string());
 helper.mark(mark_path, true);
 } catch (const std::exception& e) {
 helper.mark(mark_path, false, e.what());
