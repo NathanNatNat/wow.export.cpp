@@ -277,7 +277,7 @@
 > source marks a connection point. They are organized below by integration area, following
 > the project priority order: **core systems → data layer → rendering → UI → export**.
 >
-> **~470 TODO(conversion) comments** across **65 files** are covered below.
+> **~442 TODO(conversion) comments** across **63 files** are covered below.
 
 ---
 
@@ -430,7 +430,7 @@ Wire OpenGL context, model viewer, texture display, and renderer integration.
 - [ ] Wire color picker for model viewer background — `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp` (3 TODOs)
 
 ### 5.9 WMO Renderer Change Detection
-- [ ] Wire Vue watcher equivalents (`updateGroups`/`updateSets`) — `WMORendererGL.cpp`, `WMOLegacyRendererGL.cpp` (4 TODOs)
+- [x] Wire Vue watcher equivalents (`updateGroups`/`updateSets`) — `WMORendererGL.cpp`, `WMOLegacyRendererGL.cpp` (4 TODOs)
 
 ---
 

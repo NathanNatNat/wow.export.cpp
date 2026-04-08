@@ -125,7 +125,7 @@ Depend only on Tier 0 files and Node built-ins.
 | `src/js/config.cpp` | 117 | constants, generics, core, log |
 | `src/js/tiled-png-writer.cpp` | 142 | buffer, png-writer |
 
-### Tier 3 — Misc Utilities (3 files)
+### Tier 3 — Misc Utilities (2 files)
 
 | File | Lines | Local Dependencies |
 |------|------:|-------------------|
@@ -330,7 +330,7 @@ Self-contained subsystem for legacy WoW.
 | `src/js/ui/character-appearance.cpp` | 205 | CharMaterialRenderer, DBCharacterCustomization |
 | `src/js/ui/model-viewer-utils.cpp` | 549 | log, buffer, export-helper, listfile, constants, blte-reader, blp, M2RendererGL, M3RendererGL, M2Exporter, M3Exporter, WMORendererGL, WMOExporter, texture-ribbon, uv-drawer, AnimMapper |
 
-### Tier 21 — Vue Components (16 files)
+### Tier 21 — Vue Components (15 files)
 
 | File | Lines | Local Dependencies |
 |------|------:|-------------------|
@@ -401,7 +401,7 @@ Module registration, integrations, and entry point. Convert LAST.
 | 0 | Zero-dep primitives | 11 | ~1,170 |
 | 1 | Core foundation | 7 | ~2,346 |
 | 2 | App core & event system | 3 | ~820 |
-| 3 | Misc utilities | 3 | ~515 |
+| 3 | Misc utilities | 2 | ~471 |
 | 4–5 | CASC crypto & readers | 8 | ~1,899 |
 | 6 | CASC mid-level | 5 | ~922 |
 | 7 | DB schema & readers | 5 | ~1,703 |
@@ -416,10 +416,10 @@ Module registration, integrations, and entry point. Convert LAST.
 | 18 | 3D renderers | 9 | ~5,792 |
 | 19 | 3D exporters | 7 | ~5,706 |
 | 20 | UI helpers | 9 | ~1,845 |
-| 21 | Vue components | 16 | ~4,819 |
-| 22 | App modules/tabs | 31 | ~12,410 |
-| 23 | Top-level glue | 6 | ~2,148 |
-| **Total** | | **188** | **~63,685** |
+| 21 | Vue components | 15 | ~4,559 |
+| 22 | App modules/tabs | 27 | ~13,019 |
+| 23 | Top-level glue | 3 | ~1,558 |
+| **Total** | | **179** | **~63,400** |
 
 ---
 
