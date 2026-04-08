@@ -682,13 +682,10 @@ void mounted() {
 	prev_selection_decor = view.selectionDecor;
 
 	// JS: this.$core.events.on('toggle-uv-layer', (layer_name) => { ... });
-	// TODO(conversion): The JS EventEmitter passes layer_name as an argument.
-	// The C++ EventEmitter uses void() callbacks. The layer name will need to be
-	// communicated via shared state when the event system supports arguments.
-	core::events.on("toggle-uv-layer", []() {
-		// TODO(conversion): Retrieve layer_name from shared state when event args are supported.
-		// model_viewer_utils::toggle_uv_layer(view_state, get_active_m2_renderer(), layer_name);
-	});
+	core::events.on("toggle-uv-layer", EventEmitter::ArgCallback([](const std::any& arg) {
+		const auto& layer_name = std::any_cast<const std::string&>(arg);
+		model_viewer_utils::toggle_uv_layer(view_state, get_active_m2_renderer(), layer_name);
+	}));
 
 	is_initialized = true;
 }
