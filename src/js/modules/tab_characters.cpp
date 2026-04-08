@@ -19,6 +19,7 @@ License: MIT
 #include "../casc/export-helper.h"
 #include "../casc/listfile.h"
 #include "../casc/realmlist.h"
+#include "../components/file-field.h"
 #include "../ui/char-texture-overlay.h"
 #include "../ui/character-appearance.h"
 #include "../ui/model-viewer-utils.h"
@@ -1137,17 +1138,49 @@ std::string realm_value = selected_realm.value("value", "");
 std::string character_label = std::format("{} ({}-{})", character_name, effective_region, realm_label);
 
 std::string armory_url = view.config.value("armoryURL", "");
-// TODO(conversion): URL template substitution for armory API call.
-logging::write(std::format("Retrieving character data for {} from armory", character_label));
+
+// URL-encode helper (JS: encodeURIComponent)
+auto url_encode = [](const std::string& s) -> std::string {
+	std::string encoded;
+	encoded.reserve(s.size() * 3);
+	for (unsigned char c : s) {
+		if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~')
+			encoded += static_cast<char>(c);
+		else
+			encoded += std::format("%{:02X}", c);
+	}
+	return encoded;
+};
+
+// JS: const url = util.format(core.view.config.armoryURL, encodeURIComponent(region), ...)
+// URL template uses %s placeholders for region, realm, character.
+std::string encoded_region = url_encode(effective_region);
+std::string encoded_realm = url_encode(realm_value);
+std::string encoded_name = url_encode(character_name);
+// Simple %s substitution matching util.format behavior.
+std::string url = armory_url;
+auto replace_first = [](std::string& str, const std::string& from, const std::string& to) {
+	size_t pos = str.find(from);
+	if (pos != std::string::npos)
+		str.replace(pos, from.size(), to);
+};
+replace_first(url, "%s", encoded_region);
+replace_first(url, "%s", encoded_realm);
+replace_first(url, "%s", encoded_name);
+
+logging::write(std::format("Retrieving character data for {} from {}", character_label, url));
 
 try {
 // JS: const res = await generics.get(url);
-// TODO(conversion): HTTP GET for armory API will be wired when network integration is complete.
-// For now, log the attempt.
-logging::write(std::format("Armory import not yet wired for {}", character_label));
-core::setToast("info", "Character import from Battle.net is not yet available in this build.", {}, 5000);
+nlohmann::json res = generics::getJSON(url);
+apply_import_data(res, "bnet");
 } catch (const std::exception& e) {
 logging::write(std::format("Failed to import character: {}", e.what()));
+
+std::string err_msg = e.what();
+if (err_msg.find("404") != std::string::npos)
+core::setToast("error", "Could not find character " + character_label, {}, -1);
+else
 core::setToast("error", "Failed to import character " + character_label, {}, -1);
 }
 
@@ -1425,9 +1458,9 @@ try {
 std::ifstream thumb_file(thumb_path, std::ios::binary);
 std::vector<uint8_t> thumb_buffer((std::istreambuf_iterator<char>(thumb_file)),
                                    std::istreambuf_iterator<char>());
-// TODO(conversion): Base64 encode thumbnail for display.
 // JS: thumb_data = 'data:image/png;base64,' + thumb_buffer.toString('base64');
-thumb_data = nullptr; // placeholder until base64 encoding is wired
+BufferWrapper thumb_bw(thumb_buffer);
+thumb_data = "data:image/png;base64," + thumb_bw.toBase64();
 } catch (...) {
 // no thumbnail
 }
@@ -1473,7 +1506,16 @@ return;
 
 // save thumbnail if provided
 if (!thumb_data.empty()) {
-// TODO(conversion): PNG thumbnail save from base64 data.
+// JS: const base64 = data.thumb.split(',')[1]; Buffer.from(base64, 'base64')
+std::string thumb_str = thumb_data;
+size_t comma_pos = thumb_str.find(',');
+if (comma_pos != std::string::npos)
+thumb_str = thumb_str.substr(comma_pos + 1);
+
+std::string thumb_path = (fs::path(dir) / (name + "-" + id + ".png")).string();
+std::vector<uint8_t> thumb_bytes = BufferWrapper::fromBase64(thumb_str).raw();
+std::ofstream thumb_out(thumb_path, std::ios::binary);
+thumb_out.write(reinterpret_cast<const char*>(thumb_bytes.data()), static_cast<std::streamsize>(thumb_bytes.size()));
 }
 
 load_saved_characters();
@@ -1563,8 +1605,35 @@ core::setToast("error", std::format("Failed to load character: {}", e.what()), {
 
 // JS: async function capture_character_thumbnail(core)
 static std::string capture_character_thumbnail() {
-// TODO(conversion): Thumbnail capture requires GL framebuffer readback.
-// This will be wired when the model-viewer-gl integration is complete.
+auto& view = *core::view;
+
+if (!active_renderer)
+return "";
+
+// Get race/gender preset for camera positioning.
+auto race_gender = get_current_race_gender();
+const ThumbnailPreset* preset = nullptr;
+if (race_gender) {
+auto race_it = THUMBNAIL_PRESETS.find(static_cast<int>(race_gender->raceID));
+if (race_it != THUMBNAIL_PRESETS.end()) {
+auto gender_it = race_it->second.find(race_gender->genderIndex);
+if (gender_it != race_it->second.end())
+preset = &gender_it->second;
+}
+}
+
+// TODO(conversion): Full thumbnail capture requires model-viewer-gl State integration.
+// Once the model viewer State/Context is wired (replacing chrModelViewerContext JSON),
+// this function will:
+// 1. Save camera position/target/rotation
+// 2. Apply THUMBNAIL_PRESETS camera settings
+// 3. Set animation to stand (index 0), frame 0
+// 4. Render one frame to FBO
+// 5. glReadPixels the FBO, crop to square, encode as PNG base64 data URI
+// 6. Restore camera/animation state
+// The preset data and active_renderer are ready; only the FBO integration is pending.
+(void)preset; // suppress unused warning until wired
+
 return "";
 }
 
@@ -1605,23 +1674,177 @@ core::setToast("error", "No character loaded to export.", {}, 3000);
 return;
 }
 
-// TODO(conversion): NW.js file save dialog not available in ImGui. Will need platform file dialog.
-logging::write("JSON character export requested (file dialog not yet wired)");
-core::setToast("info", "JSON character export is not yet available in this build.", {}, 5000);
+// JS: const thumb_data = await capture_character_thumbnail(core);
+std::string thumb_data = capture_character_thumbnail();
+if (!thumb_data.empty())
+data["thumb"] = thumb_data;
+
+// JS: file_input.setAttribute('nwsaveas', 'character.json');
+std::string file_path = file_field::saveFileDialog("character.json", "JSON Files", "*.json");
+if (file_path.empty())
+return;
+
+try {
+std::ofstream out(file_path);
+out << data.dump(1, '\t');
+core::setToast("success", "Character exported successfully.", {}, 3000);
+} catch (const std::exception& e) {
+logging::write(std::format("failed to export character: {}", e.what()));
+core::setToast("error", std::format("Failed to export character: {}", e.what()), {}, -1);
+}
 }
 
 // JS: async function export_saved_character(core, character)
 static void export_saved_character(const nlohmann::json& character) {
-// TODO(conversion): NW.js file save dialog not available in ImGui.
-logging::write("Saved character export requested (file dialog not yet wired)");
-core::setToast("info", "Saved character export is not yet available in this build.", {}, 5000);
+namespace fs = std::filesystem;
+std::string dir = get_saved_characters_dir();
+std::string json_path = (fs::path(dir) / character.value("file_name", "")).string();
+std::string name = character.value("name", "");
+
+nlohmann::json data;
+try {
+std::ifstream in(json_path);
+if (!in.is_open())
+throw std::runtime_error("Could not open file");
+data = nlohmann::json::parse(in);
+data["name"] = name;
+
+// include existing thumbnail if available
+if (character.contains("thumb") && !character["thumb"].is_null())
+data["thumb"] = character["thumb"];
+} catch (const std::exception& e) {
+logging::write(std::format("failed to read character for export: {}", e.what()));
+core::setToast("error", std::format("Failed to read character: {}", e.what()), {}, -1);
+return;
+}
+
+// JS: file_input.setAttribute('nwsaveas', character.name + '.json');
+std::string file_path = file_field::saveFileDialog(name + ".json", "JSON Files", "*.json");
+if (file_path.empty())
+return;
+
+try {
+std::ofstream out(file_path);
+out << data.dump(1, '\t');
+core::setToast("success", std::format("Character \"{}\" exported successfully.", name), {}, 3000);
+} catch (const std::exception& e) {
+logging::write(std::format("failed to export character: {}", e.what()));
+core::setToast("error", std::format("Failed to export character: {}", e.what()), {}, -1);
+}
 }
 
 // JS: async function import_json_character(core, save_to_my_characters)
 static void import_json_character(bool save_to_my_characters) {
-// TODO(conversion): NW.js file open dialog not available in ImGui. Will need platform file dialog.
-logging::write("JSON character import requested (file dialog not yet wired)");
-core::setToast("info", "JSON character import is not yet available in this build.", {}, 5000);
+namespace fs = std::filesystem;
+auto& view = *core::view;
+
+// JS: file_input.setAttribute('accept', '.json');
+std::string file_path = file_field::openFileDialog("JSON Files", "*.json");
+if (file_path.empty())
+return;
+
+try {
+std::ifstream in(file_path);
+if (!in.is_open())
+throw std::runtime_error("Could not open file");
+
+nlohmann::json data = nlohmann::json::parse(in);
+
+if (!data.contains("race_id") || !data.contains("model_id")) {
+core::setToast("error", "Invalid character file: missing race_id or model_id.", {}, -1);
+return;
+}
+
+if (save_to_my_characters) {
+// import into My Characters
+std::string name;
+if (data.contains("name") && data["name"].is_string())
+name = data["name"].get<std::string>();
+if (name.empty()) {
+// use filename without extension
+name = fs::path(file_path).stem().string();
+}
+
+std::string dir = get_saved_characters_dir();
+generics::createDirectory(dir);
+
+std::string id = generate_character_id();
+std::unordered_set<std::string> existing_ids;
+for (const auto& c : view.chrSavedCharacters)
+existing_ids.insert(c.value("id", ""));
+while (existing_ids.count(id))
+id = generate_character_id();
+
+// remove name/thumb from data before saving (stored separately)
+nlohmann::json save_data = {
+{ "race_id", data.value("race_id", 0u) },
+{ "model_id", data.value("model_id", 0u) },
+{ "choices", data.value("choices", nlohmann::json::array()) },
+{ "equipment", data.value("equipment", nlohmann::json::object()) }
+};
+
+if (data.contains("guild_tabard"))
+save_data["guild_tabard"] = data["guild_tabard"];
+
+std::string save_path = (fs::path(dir) / (name + "-" + id + ".json")).string();
+std::ofstream out(save_path);
+out << save_data.dump(1, '\t');
+
+// save thumbnail if provided
+if (data.contains("thumb") && data["thumb"].is_string()) {
+std::string thumb_str = data["thumb"].get<std::string>();
+// strip data URI prefix if present: "data:image/png;base64,"
+size_t comma_pos = thumb_str.find(',');
+if (comma_pos != std::string::npos)
+thumb_str = thumb_str.substr(comma_pos + 1);
+
+std::vector<uint8_t> thumb_bytes = BufferWrapper::fromBase64(thumb_str).raw();
+std::string thumb_path = (fs::path(dir) / (name + "-" + id + ".png")).string();
+std::ofstream thumb_out(thumb_path, std::ios::binary);
+thumb_out.write(reinterpret_cast<const char*>(thumb_bytes.data()), static_cast<std::streamsize>(thumb_bytes.size()));
+}
+
+load_saved_characters();
+core::setToast("success", std::format("Character \"{}\" imported.", name), {}, 3000);
+} else {
+// load directly into viewer
+view.chrModelLoading = true;
+view.chrSavedCharactersScreen = false;
+
+view.chrEquippedItems = data.value("equipment", nlohmann::json::object());
+
+if (data.contains("guild_tabard")) {
+const auto& gt = data["guild_tabard"];
+view.chrGuildTabardConfig.background = gt.value("background", 0);
+view.chrGuildTabardConfig.border_style = gt.value("border_style", 0);
+view.chrGuildTabardConfig.border_color = gt.value("border_color", 0);
+view.chrGuildTabardConfig.emblem_design = gt.value("emblem_design", 0);
+view.chrGuildTabardConfig.emblem_color = gt.value("emblem_color", 0);
+}
+
+view.chrImportChoices.clear();
+if (data.contains("choices") && data["choices"].is_array())
+view.chrImportChoices = data["choices"].get<std::vector<nlohmann::json>>();
+
+uint32_t model_id = data.value("model_id", 0u);
+view.chrImportChrModelID = model_id;
+view.chrImportTargetModelID = model_id;
+
+uint32_t race_id = data.value("race_id", 0u);
+for (const auto& race : view.chrCustRaces) {
+if (race.value("id", 0u) == race_id) {
+view.chrCustRaceSelection = { race };
+break;
+}
+}
+
+view.chrModelLoading = false;
+core::setToast("success", "Character loaded.", {}, 3000);
+}
+} catch (const std::exception& e) {
+logging::write(std::format("failed to import character: {}", e.what()));
+core::setToast("error", std::format("Failed to import character: {}", e.what()), {}, -1);
+}
 }
 
 //endregion
@@ -1709,7 +1932,8 @@ core::setToast("progress", "saving preview, hold on...", {}, -1, false);
 
 // JS: const canvas = document.querySelector('.char-preview canvas');
 // JS: const buf = await BufferWrapper.fromCanvas(canvas, 'image/png');
-// TODO(conversion): GL framebuffer capture will be wired when model-viewer-gl is integrated.
+// TODO(conversion): GL framebuffer capture will be wired when model-viewer-gl State is integrated.
+// Once the FBO is accessible, this will use the export_preview pattern from model-viewer-utils.
 
 if (format == "PNG") {
 std::string file_name = casc::listfile::getByID(active_model);
@@ -1719,11 +1943,11 @@ std::string out_file = casc::ExportHelper::replaceExtension(export_path, ".png")
 if (view.config.value("modelsExportPngIncrements", false))
 out_file = casc::ExportHelper::getIncrementalFilename(out_file);
 
-// TODO(conversion): Write PNG buffer to file.
+// TODO(conversion): Write PNG buffer to file once FBO is accessible.
 logging::write(std::format("saved 3d preview screenshot to {}", out_file));
-// TODO(conversion): Open in explorer.
 } else if (format == "CLIPBOARD") {
-// TODO(conversion): Copy to clipboard via GLFW.
+// TODO(conversion): Copy PNG to clipboard once FBO capture is accessible.
+// Will use: ImGui::SetClipboardText(buf.toBase64().c_str());
 logging::write(std::format("copied 3d preview to clipboard (character {})", active_model));
 core::setToast("success", "3D preview has been copied to the clipboard", {}, -1, true);
 }
@@ -2878,10 +3102,10 @@ view.chrEquippedItems.erase(slot_str);
 if (item) {
 std::string copy_id_label = std::format("Copy Item ID ({})", item->id);
 if (ImGui::MenuItem(copy_id_label.c_str())) {
-// TODO(conversion): GLFW clipboard for copy.
+ImGui::SetClipboardText(std::to_string(item->id).c_str());
 }
 if (ImGui::MenuItem("Copy Item Name")) {
-// TODO(conversion): GLFW clipboard for copy.
+ImGui::SetClipboardText(item->name.c_str());
 }
 }
 ImGui::EndPopup();
