@@ -11,6 +11,7 @@
 #include "../casc/export-helper.h"
 #include "../casc/listfile.h"
 #include "../casc/blte-reader.h"
+#include "../casc/casc-source.h"
 #include "../install-type.h"
 #include "../modules.h"
 #include "../ui/listbox-context.h"
@@ -159,18 +160,12 @@ static void preview_model(const std::string& file_name) {
 		}
 		uint32_t file_data_id = file_data_id_opt.value();
 
-		// TODO(conversion): CASC file loading will be wired when UI integration is complete.
 		// JS: const file = await core.view.casc.getFile(file_data_id);
-		// JS: const gl_context = core.view.modelViewerContext?.gl_context;
-		// For now, we cannot load files. When CASC is wired, this will become:
-		//   auto file = view.casc->getFile(file_data_id);
-		core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", file_name), {}, 4000);
-		logging::write(std::format("CASC not yet integrated — skipping preview for {}", file_name));
+		BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
 
-		// The following code is the complete conversion and will work once CASC is wired:
-		/*
-		auto file = view.casc->getFile(file_data_id);
-		auto& gl_context = view.modelViewerContext_gl_context; // TODO(conversion): wire GL context
+		// JS: const gl_context = core.view.modelViewerContext?.gl_context;
+		// TODO(conversion): GL context will be wired when model viewer GL is integrated.
+		// auto& gl_context = view.modelViewerContext_gl_context;
 
 		// JS: const model_type = modelViewerUtils.detect_model_type_by_name(file_name) ?? modelViewerUtils.detect_model_type(file);
 		auto model_type = model_viewer_utils::detect_model_type_by_name(file_name);
@@ -188,13 +183,17 @@ static void preview_model(const std::string& file_name) {
 			view.modelViewerActiveType = "wmo";
 
 		// JS: active_renderer = modelViewerUtils.create_renderer(file, model_type, gl_context, core.view.config.modelViewerShowTextures, file_name);
+		// TODO(conversion): create_renderer requires GL context, will be wired when model viewer GL is integrated.
+		/*
 		active_renderer_result = model_viewer_utils::create_renderer(
 			file, model_type, gl_context,
 			view.config.value("modelViewerShowTextures", true),
 			file_data_id
 		);
+		*/
 
 		// JS: await active_renderer.load();
+		/*
 		if (active_renderer_result.m2)
 			active_renderer_result.m2->load();
 		else if (active_renderer_result.m3)
@@ -399,18 +398,16 @@ static void open_export_directory(const std::vector<std::string>& selection) {
 static void preview_texture(uint32_t file_data_id, const std::string& display_name) {
 	// JS: const state = get_view_state(this.$core);
 	// JS: await modelViewerUtils.preview_texture_by_id(this.$core, state, active_renderer, file_data_id, display_name);
-	// TODO(conversion): CASC source parameter will be wired when integration is complete.
 	model_viewer_utils::preview_texture_by_id(
 		view_state, get_active_m2_renderer(),
-		file_data_id, display_name, nullptr /* casc */
+		file_data_id, display_name, core::view->casc
 	);
 }
 
 // JS: methods.export_ribbon_texture(file_data_id, display_name) { ... }
 static void export_ribbon_texture(uint32_t file_data_id, [[maybe_unused]] const std::string& display_name) {
 	// JS: await textureExporter.exportSingleTexture(file_data_id);
-	// TODO(conversion): CASC source parameter will be wired when integration is complete.
-	texture_exporter::exportSingleTexture(file_data_id, nullptr /* casc */);
+	texture_exporter::exportSingleTexture(file_data_id, core::view->casc);
 }
 
 // JS: methods.toggle_uv_layer(layer_name) { ... }
@@ -673,8 +670,8 @@ void export_files(const std::vector<nlohmann::json>& files, bool is_local, int e
 	}
 
 	// JS: const casc = core.view.casc;
-	// TODO(conversion): CASC source will be wired when integration is complete.
-	// auto* casc = view.casc;
+	// JS: const casc = core.view.casc;
+	auto* casc = view.casc;
 
 	// JS: const helper = new ExportHelper(files.length, 'model');
 	casc::ExportHelper helper(static_cast<int>(files.size()), "model");
@@ -704,15 +701,12 @@ void export_files(const std::vector<nlohmann::json>& files, bool is_local, int e
 
 		try {
 			// JS: const data = await (is_local ? require('../buffer').readFile(file_name) : casc.getFile(file_data_id));
-			// TODO(conversion): File loading (CASC/local) will be wired when integration is complete.
-			// BufferWrapper data = is_local ? BufferWrapper::readFile(file_name) : casc->getFile(file_data_id);
+			BufferWrapper data = is_local ? BufferWrapper::readFile(file_name) : casc->getVirtualFileByID(file_data_id);
 
 			// JS: if (file_name === undefined) { ... }
 			if (file_name.empty()) {
-				// TODO(conversion): model type detection requires loaded data
-				// auto detected_type = model_viewer_utils::detect_model_type(data);
-				// file_name = casc::listfile::formatUnknownFile(file_data_id, model_viewer_utils::get_model_extension(detected_type));
-				file_name = casc::listfile::formatUnknownFile(file_data_id);
+				auto detected_type = model_viewer_utils::detect_model_type(data);
+				file_name = casc::listfile::formatUnknownFile(file_data_id, model_viewer_utils::get_model_extension(detected_type));
 			}
 
 			std::string export_path;
@@ -722,7 +716,8 @@ void export_files(const std::vector<nlohmann::json>& files, bool is_local, int e
 
 			// JS: const model_type = modelViewerUtils.detect_model_type_by_name(file_name) ?? modelViewerUtils.detect_model_type(data);
 			auto model_type = model_viewer_utils::detect_model_type_by_name(file_name);
-			// TODO(conversion): detect_model_type(data) fallback requires loaded data
+			if (model_type == model_viewer_utils::ModelType::Unknown)
+				model_type = model_viewer_utils::detect_model_type(data);
 
 			if (is_local) {
 				// JS: export_path = file_name;
@@ -748,13 +743,13 @@ void export_files(const std::vector<nlohmann::json>& files, bool is_local, int e
 
 			// JS: const mark_name = await modelViewerUtils.export_model({ ... });
 			model_viewer_utils::ExportModelOptions opts;
-			opts.data = nullptr; // TODO(conversion): wire loaded data
+			opts.data = &data;
 			opts.file_data_id = file_data_id;
 			opts.file_name = file_name;
 			opts.format = format;
 			opts.export_path = export_path;
 			opts.helper = &helper;
-			opts.casc = nullptr; // TODO(conversion): wire CASC
+			opts.casc = casc;
 			opts.file_manifest = &file_manifest;
 
 			// JS: variant_textures: get_variant_texture_ids(file_name),

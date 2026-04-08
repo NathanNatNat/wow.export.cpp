@@ -53,11 +53,8 @@ static void* load_font(const std::string& file_name) {
 		// JS: const data = await core.view.casc.getFileByName(file_name);
 		// JS: data.processAllBlocks();
 		// JS: const url = await inject_font_face(font_id, data.raw, log);
-		// TODO(conversion): CASC getFileByName will be wired when CASC integration is complete.
-		// For now, the font loading pipeline is preserved but stub-wired.
-
-		// Placeholder: when CASC is available, get file data and call:
-		// void* font = font_helpers::inject_font_face(font_id, data_ptr, data_size);
+		BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
+		// TODO(conversion): inject_font_face will load font data into ImGui when font system is wired.
 		void* font = nullptr;
 
 		if (font) {
@@ -237,7 +234,8 @@ void export_fonts() {
 			if (overwrite_files || !generics::fileExists(export_path)) {
 				// JS: const data = await this.$core.view.casc.getFileByName(file_name);
 				// JS: await data.writeToFile(export_path);
-				// TODO(conversion): CASC getFileByName will be wired when CASC integration is complete.
+				BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
+				data.writeToFile(export_path);
 			} else {
 				logging::write(std::format("Skipping font export {} (file exists, overwrite disabled)", export_path));
 			}

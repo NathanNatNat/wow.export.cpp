@@ -18,6 +18,8 @@ License: MIT
 #include "../file-writer.h"
 #include "../install-type.h"
 #include "../modules.h"
+#include "../casc/blp.h"
+#include "../casc/casc-source.h"
 #include "../casc/export-helper.h"
 #include "../casc/listfile.h"
 #include "../casc/realmlist.h"
@@ -426,10 +428,8 @@ active_renderer->updateGeosets();
  *   - layers_by_section from get_model_texture_layer_map()
  *   - CharMaterialRenderer.setTextureTarget for each item texture
  *
- * TODO(conversion): Equipment texture application requires CASC file loading
- * and CharMaterialRenderer texture loading to be functional. The full code
- * (including guild tabard composition) is implemented but cannot execute
- * until CASC integration is complete.
+ * CASC file loading is now wired. CharMaterialRenderer texture compositing
+ * and GPU upload are a later rendering phase.
  */
 static void update_textures() {
 if (!active_renderer)
@@ -438,13 +438,26 @@ return;
 auto& view = *core::view;
 
 // steps 1-3: reset, apply baked NPC texture, apply customization textures
-// TODO(conversion): baked NPC BLP loading will be wired when CASC file loading is integrated.
+// JS: if (core.view.chrCustBakedNPCTexture) baked_npc_blp = core.view.chrCustBakedNPCTexture;
+std::unique_ptr<casc::BLPImage> baked_npc_blp;
+if (!view.chrCustBakedNPCTexture.is_null() && view.chrCustBakedNPCTexture.is_number_unsigned()) {
+	uint32_t bake_fdid = view.chrCustBakedNPCTexture.get<uint32_t>();
+	if (bake_fdid != 0) {
+		try {
+			BufferWrapper bake_data = core::view->casc->getVirtualFileByID(bake_fdid);
+			baked_npc_blp = std::make_unique<casc::BLPImage>(bake_data);
+		} catch (const std::exception& e) {
+			logging::write(std::format("Failed to load baked NPC texture {}: {}", bake_fdid, e.what()));
+		}
+	}
+}
+
 character_appearance::apply_customization_textures(
 active_renderer.get(),
 view.chrCustActiveChoices,
 current_char_component_texture_layout_id,
 chr_materials,
-nullptr // baked_npc_blp
+baked_npc_blp.get()
 );
 
 // step 4: apply equipment textures
@@ -751,7 +764,8 @@ int attachment_id = attachment_ids[i];
 
 try {
 // JS: const file = await core.view.casc.getFile(file_data_id);
-// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
+// TODO(conversion): M2RendererGL creation will be wired when renderer integration is complete.
 // const renderer = new M2RendererGL(file, gl_context, false, false);
 // await renderer.load();
 logging::write(std::format("Loaded attachment model {} for slot {} attachment {} (item {})",
@@ -775,7 +789,7 @@ uint32_t file_data_id = display->models[i];
 
 try {
 // JS: const file = await core.view.casc.getFile(file_data_id);
-// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
 logging::write(std::format("Loaded collection model {} for slot {} (item {})",
 file_data_id, slot_id, item_id));
 } catch (const std::exception& e) {
@@ -821,7 +835,8 @@ dispose_equipment_models();
 dispose_collection_models();
 
 // JS: const file = await core.view.casc.getFile(file_data_id);
-// TODO(conversion): CASC file loading will be wired when UI integration is complete.
+BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
+// TODO(conversion): M2RendererGL creation will be wired when renderer integration is complete.
 // active_renderer = std::make_unique<M2RendererGL>(file, gl_context, true, false);
 // active_renderer->geosetKey = "chrCustGeosets";
 // active_renderer->load();
@@ -1983,7 +1998,9 @@ std::string mark_file_name = casc::ExportHelper::replaceExtension(file_name, ext
 std::string export_path = casc::ExportHelper::getExportPath(mark_file_name);
 
 // JS: const data = await casc.getFile(file_data_id);
-// TODO(conversion): CASC file loading and M2Exporter will be wired when CASC integration is complete.
+BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
+// TODO(conversion): M2Exporter instantiation and exportAsOBJ/exportAsSTL will be wired when renderer integration is complete.
+// M2Exporter exporter(data, {}, file_data_id, core::view->casc);
 
 logging::write(std::format("Character OBJ/STL export requested for {}", file_name));
 
@@ -1996,7 +2013,10 @@ helper.mark(mark_file_name, true);
 std::string mark_file_name = casc::ExportHelper::replaceExtension(file_name, ".gltf");
 std::string export_path = casc::ExportHelper::getExportPath(mark_file_name);
 
-// TODO(conversion): CASC file loading and M2Exporter GLTF will be wired when CASC integration is complete.
+// JS: const data = await casc.getFile(file_data_id);
+BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
+// TODO(conversion): M2Exporter instantiation and exportAsGLTF will be wired when renderer integration is complete.
+// M2Exporter exporter(data, {}, file_data_id, core::view->casc);
 
 logging::write(std::format("Character GLTF export requested for {}", file_name));
 

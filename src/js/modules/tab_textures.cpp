@@ -130,8 +130,7 @@ static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string&
 	try {
 		// JS: const file = await core.view.casc.getFile(file_data_id);
 		// JS: const blp = new BLPFile(file);
-		// TODO(conversion): CASC getFile will be wired when CASC integration is complete.
-		BufferWrapper file_data;
+		BufferWrapper file_data = core::view->casc->getVirtualFileByID(file_data_id);
 		casc::BLPImage blp(file_data);
 
 		// JS: core.view.texturePreviewURL = blp.getDataURL(core.view.config.exportChannelMask);
@@ -262,8 +261,7 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 	try {
 		// JS: const data = await core.view.casc.getFile(file_data_id);
 		// JS: const blp = new BLPFile(data);
-		// TODO(conversion): CASC getFile will be wired when CASC integration is complete.
-		BufferWrapper file_data_buf;
+		BufferWrapper file_data_buf = core::view->casc->getVirtualFileByID(file_data_id);
 		casc::BLPImage blp(file_data_buf);
 
 		// JS: const canvas = blp.toCanvas();
@@ -552,8 +550,10 @@ void render() {
 				if (file_data_id_opt.has_value()) {
 					// JS: const file = await this.$core.view.casc.getFile(file_data_id);
 					// JS: const blp = new BLPFile(file);
-					// TODO(conversion): CASC getFile will be wired when CASC integration is complete.
-					// view.chrCustBakedNPCTexture = blp;
+					BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id_opt.value());
+					casc::BLPImage blp(file);
+					// JS: view.chrCustBakedNPCTexture = blp;
+					// TODO(conversion): chrCustBakedNPCTexture assignment needs BLP storage in view state.
 					core::setToast("success", "baked npc texture applied to character", {}, 3000);
 					logging::write(std::format("applied baked npc texture {} to character", first));
 				}

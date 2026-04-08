@@ -196,20 +196,13 @@ const std::string padded_x = std::format("{:02d}", x);
 const std::string padded_y = std::format("{:02d}", y);
 const std::string tile_path = std::format("world/minimaps/{}/map{}_{}.blp", selected_map_dir, padded_x, padded_y);
 
-// TODO(conversion): CASC file loading will be wired when CASC integration is complete.
 // JS: const data = await core.view.casc.getFileByName(tile_path, false, true);
-// JS: const blp = new BLPFile(data);
-// JS: const canvas = blp.toCanvas(0b0111);
-// JS: scaled canvas and return ctx.getImageData(0, 0, size, size);
-// When CASC is wired, this becomes:
-/*
-auto data = core::view->casc_ptr->getFileByName(tile_path, false, true);
-BufferWrapper buf(std::vector<uint8_t>(data.begin(), data.end()));
-casc::BLPImage blp(buf);
+BufferWrapper data = core::view->casc->getVirtualFileByName(tile_path, true);
+casc::BLPImage blp(data);
 auto rgba = blp.toUInt8Array(0, 0b0111);
 
-uint32_t blp_width = blp.scaledWidth_;
-uint32_t blp_height = blp.scaledHeight_;
+uint32_t blp_width = blp.width;
+uint32_t blp_height = blp.height;
 
 if (static_cast<int>(blp_width) == size && static_cast<int>(blp_height) == size)
 return rgba;
@@ -233,8 +226,6 @@ scaled[dst_idx + 3] = rgba[src_idx + 3];
 }
 
 return scaled;
-*/
-return {};
 } catch (...) {
 return {};
 }
@@ -258,11 +249,46 @@ try {
 std::vector<uint8_t> composite(size * size * 4, 0);
 float output_scale = static_cast<float>(size) / static_cast<float>(current_wmo_minimap->output_tile_size);
 
-// TODO(conversion): CASC file loading will be wired when CASC integration is complete.
 // JS: for (const tile of tile_list) { const data = await core.view.casc.getFile(tile.fileDataID); ... }
-// When CASC is wired, each tile's BLP data will be loaded, decoded, and alpha-composited
-// onto the composite buffer using the same blending logic as load_map_tile above.
-(void)output_scale;
+const auto& tile_list = it->second;
+for (const auto& tile : tile_list) {
+BufferWrapper data = core::view->casc->getVirtualFileByID(tile.fileDataID, true);
+casc::BLPImage blp(data);
+auto rgba = blp.toUInt8Array(0, 0b1111);
+
+uint32_t blp_w = blp.width;
+uint32_t blp_h = blp.height;
+
+// Alpha-composite tile onto the output buffer
+for (int py = 0; py < size; py++) {
+for (int px = 0; px < size; px++) {
+int src_x = (std::min)(static_cast<int>(px * output_scale), static_cast<int>(blp_w) - 1);
+int src_y = (std::min)(static_cast<int>(py * output_scale), static_cast<int>(blp_h) - 1);
+int src_idx = (src_y * blp_w + src_x) * 4;
+int dst_idx = (py * size + px) * 4;
+
+uint8_t src_a = rgba[src_idx + 3];
+if (src_a == 0)
+continue;
+
+if (src_a == 255) {
+composite[dst_idx + 0] = rgba[src_idx + 0];
+composite[dst_idx + 1] = rgba[src_idx + 1];
+composite[dst_idx + 2] = rgba[src_idx + 2];
+composite[dst_idx + 3] = 255;
+} else {
+uint8_t dst_a = composite[dst_idx + 3];
+uint8_t out_a = src_a + dst_a * (255 - src_a) / 255;
+if (out_a > 0) {
+composite[dst_idx + 0] = static_cast<uint8_t>((rgba[src_idx + 0] * src_a + composite[dst_idx + 0] * dst_a * (255 - src_a) / 255) / out_a);
+composite[dst_idx + 1] = static_cast<uint8_t>((rgba[src_idx + 1] * src_a + composite[dst_idx + 1] * dst_a * (255 - src_a) / 255) / out_a);
+composite[dst_idx + 2] = static_cast<uint8_t>((rgba[src_idx + 2] * src_a + composite[dst_idx + 2] * dst_a * (255 - src_a) / 255) / out_a);
+}
+composite[dst_idx + 3] = out_a;
+}
+}
+}
+}
 
 return composite;
 } catch (...) {
@@ -419,15 +445,15 @@ logging::write(std::format("cannot find fileDataID for {}.adt", tile_prefix));
 return std::nullopt;
 }
 
-// TODO(conversion): CASC file loading will be wired when CASC integration is complete.
 // JS: const root_file = await core.view.casc.getFile(root_fid);
+BufferWrapper root_file = core::view->casc->getVirtualFileByID(*root_fid);
 // JS: const root_adt = new ADTLoader(root_file);
 // JS: root_adt.loadRoot();
-// When CASC is wired, the ADTLoader will load the root file and
-// iterate over all chunks to extract height data using sample_chunk_height.
+// TODO(conversion): ADTLoader processing will be wired when ADTLoader is fully converted.
 // The height values are stored in a resolution x resolution grid with
 // a 90-degree CW rotation: heights[height_idx] where
 // height_idx = (resolution - 1 - px) * resolution + py.
+(void)root_file;
 return std::nullopt;
 
 } catch (const std::exception& e) {
@@ -563,15 +589,15 @@ return;
 file_data_id = placement.id;
 }
 
-// TODO(conversion): CASC file loading will be wired when CASC integration is complete.
 // JS: const wmo_data = await this.$core.view.casc.getFile(file_data_id);
+BufferWrapper wmo_data = core::view->casc->getVirtualFileByID(file_data_id);
 // JS: const wmo = new WMOLoader(wmo_data, file_data_id);
 // JS: await wmo.load();
-// When CASC is wired, this will load the WMO, find minimap textures by wmoID,
+// TODO(conversion): WMOLoader processing will be wired when WMOLoader integration is complete.
+// When wired, this will load the WMO, find minimap textures by wmoID,
 // compute group bounding boxes, position tiles absolutely, bin into a grid,
 // and populate current_wmo_minimap with mask/tiles_by_coord/grid_size.
-// The full algorithm is preserved in the JS source backup.
-(void)file_data_id;
+(void)wmo_data;
 } catch (const std::exception& e) {
 logging::write(std::format("failed to setup WMO minimap: {}", e.what()));
 current_wmo_minimap = std::nullopt;
@@ -605,13 +631,15 @@ core::view->mapViewerSelection.clear();
 const std::string wdt_path = std::format("world/maps/{}/{}.wdt", map_dir_lower, map_dir_lower);
 logging::write(std::format("loading map preview for {} ({})", map_dir_lower, mapID));
 
-// TODO(conversion): CASC file loading will be wired when CASC integration is complete.
 // JS: const data = await this.$core.view.casc.getFileByName(wdt_path);
+BufferWrapper wdt_data = core::view->casc->getVirtualFileByName(wdt_path);
 // JS: const wdt = selected_wdt = new WDTLoader(data);
 // JS: wdt.load();
-// When CASC is wired, the WDT will be loaded and checked for terrain/WMO.
+// TODO(conversion): WDTLoader processing will be wired when WDTLoader is fully converted.
+// When wired, the WDT will be loaded and checked for terrain/WMO.
 // If no terrain but has WMO, setup_wmo_minimap is called.
 // Otherwise terrain minimap loader is used.
+selected_wdt_data = std::move(wdt_data);
 
 // Fallback until CASC is wired:
 core::view->mapViewerTileLoader = "terrain";
@@ -659,13 +687,16 @@ file_name = !name.empty() ? name : ("unknown_" + std::to_string(file_data_id) + 
 const std::string mark_file_name = casc::ExportHelper::replaceExtension(file_name, ".obj");
 const std::string export_path = casc::ExportHelper::getExportPath(mark_file_name);
 
-// TODO(conversion): CASC file loading will be wired when CASC integration is complete.
 // JS: const data = await this.$core.view.casc.getFile(file_data_id);
+BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
 // JS: const wmo = new WMOExporter(data, file_data_id);
+WMOExporter wmo(std::move(data), file_data_id, core::view->casc);
 // JS: wmo.setDoodadSetMask({ [placement.doodadSetIndex]: { checked: true } });
+std::vector<WMOExportDoodadSetMask> doodad_mask(placement.doodadSetIndex + 1);
+doodad_mask[placement.doodadSetIndex].checked = true;
+wmo.setDoodadSetMask(std::move(doodad_mask));
 // JS: await wmo.exportAsOBJ(export_path, helper);
-(void)export_path;
-(void)file_data_id;
+wmo.exportAsOBJ(export_path, &helper, nullptr);
 
 if (helper.isCancelled())
 return;
@@ -709,9 +740,52 @@ tiles_by_coord.size(), canvas_width, canvas_height));
 
 TiledPNGWriter writer(canvas_width, canvas_height, output_tile_size);
 
-// TODO(conversion): CASC file loading will be wired when CASC integration is complete.
 // JS: for (const [key, tile_list] of tiles_by_coord) { ... casc.getFile, BLPFile, canvas compositing ... }
-// When CASC is wired, tile compositing + writer.addTile will be performed here.
+for (const auto& [coord_key, tile_list] : tiles_by_coord) {
+	// Parse coord key "x,y"
+	auto comma = coord_key.find(',');
+	if (comma == std::string::npos) continue;
+	int tx = std::stoi(coord_key.substr(0, comma));
+	int ty = std::stoi(coord_key.substr(comma + 1));
+
+	// Composite all tiles at this position
+	std::vector<uint8_t> composite(output_tile_size * output_tile_size * 4, 0);
+	for (const auto& tile : tile_list) {
+		try {
+			BufferWrapper tile_data = core::view->casc->getVirtualFileByID(tile.fileDataID, true);
+			casc::BLPImage blp(tile_data);
+			auto rgba = blp.toUInt8Array(0, 0b1111);
+			uint32_t tw = blp.width;
+			uint32_t th = blp.height;
+
+			for (int py = 0; py < output_tile_size; py++) {
+				for (int px = 0; px < output_tile_size; px++) {
+					int src_x = (std::min)(static_cast<int>(px * tw / output_tile_size), static_cast<int>(tw) - 1);
+					int src_y = (std::min)(static_cast<int>(py * th / output_tile_size), static_cast<int>(th) - 1);
+					int src_idx = (src_y * tw + src_x) * 4;
+					int dst_idx = (py * output_tile_size + px) * 4;
+					uint8_t a = rgba[src_idx + 3];
+					if (a == 0) continue;
+					if (a == 255) {
+						composite[dst_idx + 0] = rgba[src_idx + 0];
+						composite[dst_idx + 1] = rgba[src_idx + 1];
+						composite[dst_idx + 2] = rgba[src_idx + 2];
+						composite[dst_idx + 3] = 255;
+					} else {
+						float af = a / 255.0f;
+						composite[dst_idx + 0] = static_cast<uint8_t>(composite[dst_idx + 0] * (1 - af) + rgba[src_idx + 0] * af);
+						composite[dst_idx + 1] = static_cast<uint8_t>(composite[dst_idx + 1] * (1 - af) + rgba[src_idx + 1] * af);
+						composite[dst_idx + 2] = static_cast<uint8_t>(composite[dst_idx + 2] * (1 - af) + rgba[src_idx + 2] * af);
+						composite[dst_idx + 3] = (std::max)(composite[dst_idx + 3], a);
+					}
+				}
+			}
+		} catch (...) {}
+	}
+
+	writer.addTile(static_cast<uint32_t>(tx), static_cast<uint32_t>(ty),
+		TiledPNGWriter::ImageData{ std::move(composite), static_cast<uint32_t>(output_tile_size), static_cast<uint32_t>(output_tile_size) });
+}
 
 const std::string filename = selected_map_dir + "_wmo_minimap.png";
 const std::string relative_path = (std::filesystem::path("maps") / selected_map_dir / filename).string();
@@ -810,11 +884,22 @@ return posX > start_x && posX < end_x && posY > start_y && posY < end_y;
 }
 
 try {
-// TODO(conversion): CASC integration needed for ADTExporter.exportTile.
 // JS: const out = await adt.export(dir, export_quality, game_objects, helper);
 // JS: await export_paths?.writeLine(out.type + ':' + out.path);
-(void)adt;
-(void)export_quality;
+// Convert tab_maps::ADTGameObject to ::ADTGameObject for ADTExporter API
+std::vector<::ADTGameObject> export_game_objects;
+for (const auto& go : game_objects_vec) {
+	::ADTGameObject ego;
+	ego.FileDataID = go.FileDataID;
+	ego.Position = go.Position;
+	ego.Rotation = go.Rotation;
+	ego.scale = go.scale;
+	export_game_objects.push_back(std::move(ego));
+}
+auto out = adt.exportTile(dir, export_quality,
+	export_game_objects.empty() ? nullptr : &export_game_objects,
+	&helper, core::view->casc);
+export_paths.writeLine(out.type + ":" + out.path.string());
 helper.mark(mark_path, true);
 } catch (const std::exception& e) {
 helper.mark(mark_path, false, e.what());
@@ -857,9 +942,9 @@ break;
 ADTExporter adt(selected_map_id.value_or(0), selected_map_dir, static_cast<uint32_t>(index));
 
 try {
-// TODO(conversion): CASC integration needed for ADTExporter.exportTile.
 // JS: const out = await adt.export(dir, 0, undefined, helper);
-(void)adt;
+auto out = adt.exportTile(dir, 0, nullptr, &helper, core::view->casc);
+export_paths.writeLine(out.type + ":" + out.path.string());
 helper.mark(mark_path, true);
 } catch (const std::exception& e) {
 helper.mark(mark_path, false, e.what());

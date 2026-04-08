@@ -147,8 +147,10 @@ static void export_install_files() {
 		if (overwrite_files || !generics::fileExists(export_path)) {
 			try {
 				// JS: const data = await core.view.casc.getFile(0, false, false, true, false, file.hash);
-				// TODO(conversion): CASC getFile by hash will be wired when CASC integration is complete.
-				// For now, attempt getFileByName as a fallback.
+				std::string enc_key = core::view->casc->getEncodingKeyForContentKey(file->hash);
+				std::string cached_path = core::view->casc->_ensureFileInCache(enc_key, 0, false);
+				BufferWrapper data = BufferWrapper::readFile(cached_path);
+				data.writeToFile(export_path);
 
 				helper.mark(file_name, true);
 			} catch (const std::exception& e) {
@@ -194,8 +196,11 @@ static void view_strings_impl() {
 		// JS: const data = await core.view.casc.getFile(0, false, false, true, false, file.hash);
 		// JS: data.processAllBlocks();
 		// JS: const strings = extract_strings(data.raw);
-		// TODO(conversion): CASC getFile by hash will be wired when CASC integration is complete.
-		std::vector<std::string> strings;
+		std::string enc_key = core::view->casc->getEncodingKeyForContentKey(file->hash);
+		std::string cached_path = core::view->casc->_ensureFileInCache(enc_key, 0, false);
+		BufferWrapper data = BufferWrapper::readFile(cached_path);
+		const auto& raw = data.raw();
+		std::vector<std::string> strings = extract_strings(raw.data(), raw.size());
 
 		view.installStrings = strings;
 		view.installStringsFileName = file_name;
@@ -275,11 +280,20 @@ void mounted() {
 	// JS: manifest = await this.$core.view.casc.getInstallManifest();
 	core::setToast("progress", "Retrieving installation manifest...", {}, -1, false);
 
-	// TODO(conversion): CASC getInstallManifest will be called when CASC integration is complete.
-	// After manifest is loaded:
-	// view.installTags = manifest.tags.map(e => ({ label: e.name, enabled: true, mask: e.mask }));
-	// Then call update_install_listfile() on tag changes.
+	auto inst = core::view->casc->getInstallManifest();
+	manifest = std::make_unique<casc::InstallManifest>(std::move(inst));
 
+	auto& view = *core::view;
+	view.installTags.clear();
+	for (const auto& tag : manifest->tags) {
+		nlohmann::json tag_entry;
+		tag_entry["label"] = tag.name;
+		tag_entry["enabled"] = true;
+		tag_entry["mask"] = tag.mask;
+		view.installTags.push_back(std::move(tag_entry));
+	}
+
+	update_install_listfile();
 	core::hideToast();
 }
 

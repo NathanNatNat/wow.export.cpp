@@ -15,6 +15,7 @@ License: MIT
 #include "../casc/blte-reader.h"
 #include "../casc/blp.h"
 #include "../casc/db2.h"
+#include "../db/WDCReader.h"
 #include "../ui/texture-exporter.h"
 #include "../install-type.h"
 #include "../modules.h"
@@ -145,7 +146,7 @@ return phases;
 // Forward declarations for render functions used in render_zone_to_canvas.
 static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index, int expected_zone_id, bool skip_zone_check);
 static void render_world_map_overlays(const CombinedArtStyle& art_style, int expected_zone_id, bool skip_zone_check);
-static void render_overlay_tiles(const CombinedArtStyle& art_style, int overlay_offset_x, int overlay_offset_y, int expected_zone_id, bool skip_zone_check);
+static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const CombinedArtStyle& art_style, int overlay_offset_x, int overlay_offset_y, int expected_zone_id, bool skip_zone_check);
 
 // JS: const render_zone_to_canvas = async (canvas, zone_id, phase_id, set_canvas_size, skip_zone_check) => { ... }
 static ZoneMapInfo render_zone_to_canvas(int zone_id, std::optional<int> phase_id = std::nullopt, bool skip_zone_check = false) {
@@ -228,68 +229,177 @@ struct TileRenderResult {
 
 // JS: const render_map_tiles = async (ctx, tiles, art_style, layer_index, expected_zone_id, skip_zone_check) => { ... }
 static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index, int expected_zone_id, bool skip_zone_check = false) {
-	// TODO(conversion): When CASC integration is available, this function will:
 	// 1. Get tiles from UiMapArtTile for the given art_style, filtered by layer_index.
+	auto& ui_map_art_tile = casc::db2::getTable("UiMapArtTile");
+	auto all_tiles = ui_map_art_tile.getRelationRows(art_style.id);
+
+	// Filter tiles by LayerIndex
+	std::vector<db::DataRecord> tiles;
+	for (const auto& tile : all_tiles) {
+		auto layer_it = tile.find("LayerIndex");
+		if (layer_it != tile.end()) {
+			int tile_layer = std::visit([](const auto& v) -> int {
+				using T = std::decay_t<decltype(v)>;
+				if constexpr (std::is_arithmetic_v<T>) return static_cast<int>(v);
+				return 0;
+			}, layer_it->second);
+			if (tile_layer == layer_index)
+				tiles.push_back(tile);
+		}
+	}
+
 	// 2. Sort tiles by RowIndex, then ColIndex.
-	// 3. For each tile:
-	//    a. Compute pixel position: pixel_x = ColIndex * TileWidth, pixel_y = RowIndex * TileHeight
-	//    b. Apply offsets: final_x = pixel_x + OffsetX, final_y = pixel_y + OffsetY
-	//    c. Load BLP from CASC via tile.FileDataID
-	//    d. Check if zone changed (!skip_zone_check && selected_zone_id != expected_zone_id) → skip
-	//    e. Composite the BLP tile pixels onto the output texture at (final_x, final_y)
-	// 4. Log render results (successful/total).
+	std::sort(tiles.begin(), tiles.end(), [](const db::DataRecord& a, const db::DataRecord& b) {
+		auto get_int = [](const db::DataRecord& r, const std::string& key) -> int {
+			auto it = r.find(key);
+			if (it == r.end()) return 0;
+			return std::visit([](const auto& v) -> int {
+				using T = std::decay_t<decltype(v)>;
+				if constexpr (std::is_arithmetic_v<T>) return static_cast<int>(v);
+				return 0;
+			}, it->second);
+		};
+		int ra = get_int(a, "RowIndex"), rb = get_int(b, "RowIndex");
+		if (ra != rb) return ra < rb;
+		return get_int(a, "ColIndex") < get_int(b, "ColIndex");
+	});
 
-	// JS: tiles.sort((a, b) => { if (a.RowIndex !== b.RowIndex) return a.RowIndex - b.RowIndex; return a.ColIndex - b.ColIndex; });
-	// JS: const tile_promises = tiles.map(async (tile) => { ... });
-	// JS: const results = await Promise.all(tile_promises);
-	// JS: const successful = results.filter(r => r.success).length;
-	// JS: log.write('rendered %d/%d tiles successfully', successful, tiles.length);
+	// 3. For each tile, load BLP from CASC and composite
+	int successful = 0;
+	for (const auto& tile : tiles) {
+		// Check if zone changed
+		if (!skip_zone_check && selected_zone_id.has_value() && *selected_zone_id != expected_zone_id)
+			break;
 
-	(void)art_style;
-	(void)layer_index;
-	(void)expected_zone_id;
-	(void)skip_zone_check;
+		auto get_field_int = [&](const std::string& key) -> int {
+			auto it = tile.find(key);
+			if (it == tile.end()) return 0;
+			return std::visit([](const auto& v) -> int {
+				using T = std::decay_t<decltype(v)>;
+				if constexpr (std::is_arithmetic_v<T>) return static_cast<int>(v);
+				return 0;
+			}, it->second);
+		};
+
+		int col = get_field_int("ColIndex");
+		int row = get_field_int("RowIndex");
+		uint32_t file_data_id = static_cast<uint32_t>(get_field_int("FileDataID"));
+
+		if (file_data_id == 0) continue;
+
+		int pixel_x = col * art_style.tile_width;
+		int pixel_y = row * art_style.tile_height;
+
+		try {
+			// c. Load BLP from CASC via tile.FileDataID
+			BufferWrapper blp_data = core::view->casc->getVirtualFileByID(file_data_id, true);
+			casc::BLPImage blp(blp_data);
+			// TODO(conversion): Composite BLP tile pixels onto zone map texture at (pixel_x, pixel_y) when GL texture compositing is integrated.
+			(void)pixel_x;
+			(void)pixel_y;
+			(void)blp;
+			successful++;
+		} catch (const std::exception& e) {
+			logging::write(std::format("Failed to load zone tile {}: {}", file_data_id, e.what()));
+		}
+	}
+
+	logging::write(std::format("rendered {}/{} tiles successfully", successful, tiles.size()));
 }
 
 // JS: const render_world_map_overlays = async (ctx, art_style, expected_zone_id, skip_zone_check) => { ... }
 static void render_world_map_overlays(const CombinedArtStyle& art_style, int expected_zone_id, bool skip_zone_check = false) {
-	// TODO(conversion): When CASC integration is available, this function will:
 	// 1. Get WorldMapOverlay relation rows for the given art_style.ID
-	// 2. For each overlay:
-	//    a. Get WorldMapOverlayTile relation rows for the overlay.ID
-	//    b. Log: "rendering WorldMapOverlay ID %d with %d tiles at offset (%d,%d)"
-	//    c. Call render_overlay_tiles with the tiles, overlay, and art_style
-
 	// JS: const overlays = await db2.WorldMapOverlay.getRelationRows(art_style.ID);
-	// JS: for (const overlay of overlays) { ... await render_overlay_tiles(...); }
-
 	auto& world_map_overlay = casc::db2::getTable("WorldMapOverlay");
-	(void)world_map_overlay;
-	(void)art_style;
-	(void)expected_zone_id;
-	(void)skip_zone_check;
+	auto overlays = world_map_overlay.getRelationRows(art_style.id);
+
+	auto get_field_int = [](const db::DataRecord& r, const std::string& key) -> int {
+		auto it = r.find(key);
+		if (it == r.end()) return 0;
+		return std::visit([](const auto& v) -> int {
+			using T = std::decay_t<decltype(v)>;
+			if constexpr (std::is_arithmetic_v<T>) return static_cast<int>(v);
+			return 0;
+		}, it->second);
+	};
+
+	// 2. For each overlay, get tiles and call render_overlay_tiles
+	for (const auto& overlay : overlays) {
+		int overlay_id = get_field_int(overlay, "ID");
+		int offset_x = get_field_int(overlay, "OffsetX");
+		int offset_y = get_field_int(overlay, "OffsetY");
+
+		// JS: const tiles = await db2.WorldMapOverlayTile.getRelationRows(overlay.ID);
+		auto& world_map_overlay_tile = casc::db2::getTable("WorldMapOverlayTile");
+		auto overlay_tiles = world_map_overlay_tile.getRelationRows(overlay_id);
+
+		logging::write(std::format("rendering WorldMapOverlay ID {} with {} tiles at offset ({},{})",
+			overlay_id, overlay_tiles.size(), offset_x, offset_y));
+
+		// JS: await render_overlay_tiles(ctx, tiles, overlay, art_style, expected_zone_id, skip_zone_check);
+		render_overlay_tiles(overlay_tiles, art_style, offset_x, offset_y, expected_zone_id, skip_zone_check);
+	}
 }
 
 // JS: const render_overlay_tiles = async (ctx, tiles, overlay, art_style, expected_zone_id, skip_zone_check) => { ... }
-static void render_overlay_tiles(const CombinedArtStyle& art_style, int overlay_offset_x, int overlay_offset_y, int expected_zone_id, bool skip_zone_check = false) {
-	// TODO(conversion): When CASC integration is available, this function will:
+static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const CombinedArtStyle& art_style, int overlay_offset_x, int overlay_offset_y, int expected_zone_id, bool skip_zone_check = false) {
+	// Check if zone changed or overlays disabled
+	if (!skip_zone_check && selected_zone_id.has_value() && *selected_zone_id != expected_zone_id)
+		return;
+
+	if (!core::view->config.value("showZoneOverlays", true))
+		return;
+
 	// 1. Sort tiles by RowIndex, then ColIndex.
-	// 2. For each tile:
-	//    a. Compute position: base_x = overlay.OffsetX + ColIndex * TileWidth, base_y = overlay.OffsetY + RowIndex * TileHeight
-	//    b. Load BLP from CASC via tile.FileDataID
-	//    c. Check if zone changed or overlays disabled → skip
-	//    d. Composite the BLP tile pixels onto the output texture at (base_x, base_y)
-	// 3. Log render results (successful/total).
+	std::vector<db::DataRecord> sorted_tiles(tiles.begin(), tiles.end());
 
-	// JS: tiles.sort((a, b) => { if (a.RowIndex !== b.RowIndex) return a.RowIndex - b.RowIndex; return a.ColIndex - b.ColIndex; });
-	// JS: const tile_promises = tiles.map(async (tile) => { ... });
-	// JS: const results = await Promise.all(tile_promises);
+	auto get_field_int = [](const db::DataRecord& r, const std::string& key) -> int {
+		auto it = r.find(key);
+		if (it == r.end()) return 0;
+		return std::visit([](const auto& v) -> int {
+			using T = std::decay_t<decltype(v)>;
+			if constexpr (std::is_arithmetic_v<T>) return static_cast<int>(v);
+			return 0;
+		}, it->second);
+	};
 
-	(void)art_style;
-	(void)overlay_offset_x;
-	(void)overlay_offset_y;
-	(void)expected_zone_id;
-	(void)skip_zone_check;
+	std::sort(sorted_tiles.begin(), sorted_tiles.end(), [&](const db::DataRecord& a, const db::DataRecord& b) {
+		int ra = get_field_int(a, "RowIndex"), rb = get_field_int(b, "RowIndex");
+		if (ra != rb) return ra < rb;
+		return get_field_int(a, "ColIndex") < get_field_int(b, "ColIndex");
+	});
+
+	// 2. For each tile, load BLP from CASC
+	int successful = 0;
+	for (const auto& tile : sorted_tiles) {
+		if (!skip_zone_check && selected_zone_id.has_value() && *selected_zone_id != expected_zone_id)
+			break;
+
+		int col = get_field_int(tile, "ColIndex");
+		int row = get_field_int(tile, "RowIndex");
+		uint32_t file_data_id = static_cast<uint32_t>(get_field_int(tile, "FileDataID"));
+
+		if (file_data_id == 0) continue;
+
+		int base_x = overlay_offset_x + col * art_style.tile_width;
+		int base_y = overlay_offset_y + row * art_style.tile_height;
+
+		try {
+			// b. Load BLP from CASC via tile.FileDataID
+			BufferWrapper blp_data = core::view->casc->getVirtualFileByID(file_data_id, true);
+			casc::BLPImage blp(blp_data);
+			// TODO(conversion): Composite overlay BLP tile pixels onto zone map texture at (base_x, base_y) when GL texture compositing is integrated.
+			(void)base_x;
+			(void)base_y;
+			(void)blp;
+			successful++;
+		} catch (const std::exception& e) {
+			logging::write(std::format("Failed to load overlay tile {}: {}", file_data_id, e.what()));
+		}
+	}
+
+	logging::write(std::format("rendered {}/{} overlay tiles successfully", successful, sorted_tiles.size()));
 }
 
 // JS: const load_zone_map = async (zone_id, phase_id) => { ... }
