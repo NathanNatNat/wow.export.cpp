@@ -9,6 +9,7 @@ License: MIT
 #endif
 
 #include "tab_characters.h"
+#include "tab_items.h"
 #include "../log.h"
 #include "../core.h"
 #include "../buffer.h"
@@ -3090,12 +3091,12 @@ ImGui::OpenPopup("##equip_ctx");
 }
 if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !item) {
 // navigate to items for this slot
-// TODO(conversion): Cross-tab navigation to items tab.
+tab_items::setActive();
 }
 
 if (ImGui::BeginPopup("##equip_ctx")) {
 if (ImGui::MenuItem("Replace Item")) {
-// TODO(conversion): Navigate to items tab for slot.
+tab_items::setActive();
 }
 if (ImGui::MenuItem("Remove Item")) {
 std::string slot_str = std::to_string(slot.id);

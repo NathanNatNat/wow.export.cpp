@@ -63,4 +63,11 @@ void export_textures();
  */
 void export_atlas_regions();
 
+/**
+ * Switch to the textures tab and preview a texture by file data ID.
+ * JS equivalent: $core.view.goToTexture(fileDataID)
+ * @param fileDataID  File data ID of the texture to navigate to.
+ */
+void goToTexture(uint32_t fileDataID);
+
 } // namespace tab_textures
