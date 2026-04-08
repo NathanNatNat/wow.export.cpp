@@ -1,117 +1,164 @@
-const path = require('path');
-const fsp = require('fs').promises;
-const log = require('../log');
-const listboxContext = require('../ui/listbox-context');
-const InstallType = require('../install-type');
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-let files_loaded = false;
+#include "legacy_tab_files.h"
+#include "../log.h"
+#include "../core.h"
+#include "../ui/listbox-context.h"
+#include "../install-type.h"
+#include "../mpq/mpq-install.h"
 
-const load_files = async (core) => {
-	if (files_loaded || core.view.isBusy)
+#include <cstring>
+#include <format>
+#include <filesystem>
+#include <fstream>
+
+#include <imgui.h>
+#include <spdlog/spdlog.h>
+
+namespace legacy_tab_files {
+
+// --- File-local state ---
+
+// JS: let files_loaded = false;
+static bool files_loaded = false;
+
+// --- Internal functions ---
+
+// JS: const load_files = async (core) => { ... }
+static void load_files() {
+	auto& view = *core::view;
+	if (files_loaded || view.isBusy > 0)
 		return;
 
-	using _lock = core.create_busy_lock();
+	BusyLock _lock = core::create_busy_lock();
 
 	try {
-		const files = core.view.mpq.getAllFiles();
-		core.view.listfileRaw = files;
+		// JS: const files = core.view.mpq.getAllFiles();
+		// JS: core.view.listfileRaw = files;
+		// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
+		// mpq::MPQInstall* mpq = core::view->mpq;
+		// if (!mpq) return;
+		// auto files = mpq->getAllFiles();
+		// for (auto& f : files) view.listfileRaw.push_back(std::move(f));
+
 		files_loaded = true;
-	} catch (e) {
-		log.write('failed to load legacy files: %o', e);
+	} catch (const std::exception& e) {
+		logging::write(std::format("failed to load legacy files: {}", e.what()));
 	}
-};
+}
 
-const export_files = async (core) => {
-	const selection = core.view.selectionRaw;
-	if (selection.length === 0)
+// JS: const export_files = async (core) => { ... }
+static void export_files() {
+	auto& view = *core::view;
+	const auto& selection = view.selectionRaw;
+	if (selection.empty())
 		return;
 
-	using _lock = core.create_busy_lock();
+	BusyLock _lock = core::create_busy_lock();
 
 	try {
-		const export_dir = core.view.config.exportDirectory;
-		let last_export_path = null;
+		const std::string export_dir = view.config.value("exportDirectory", std::string(""));
+		std::string last_export_path;
 
-		for (const display_path of selection) {
-			const data = core.view.mpq.getFile(display_path);
+		for (const auto& sel_entry : selection) {
+			const std::string display_path = sel_entry.get<std::string>();
+
+			// JS: const data = core.view.mpq.getFile(display_path);
+			// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
+			// mpq::MPQInstall* mpq = core::view->mpq;
+			// auto data = mpq ? mpq->getFile(display_path) : std::nullopt;
+			std::optional<std::vector<uint8_t>> data = std::nullopt;
+
 			if (!data) {
-				log.write('failed to read file: %s', display_path);
+				logging::write(std::format("failed to read file: {}", display_path));
 				continue;
 			}
 
-			const output_path = path.join(export_dir, display_path);
-			const output_dir = path.dirname(output_path);
+			// JS: const output_path = path.join(export_dir, display_path);
+			namespace fs = std::filesystem;
+			const fs::path output_path = fs::path(export_dir) / display_path;
+			const fs::path output_dir = output_path.parent_path();
 
-			await fsp.mkdir(output_dir, { recursive: true });
-			await fsp.writeFile(output_path, new Uint8Array(data));
+			// JS: await fsp.mkdir(output_dir, { recursive: true });
+			fs::create_directories(output_dir);
+			// JS: await fsp.writeFile(output_path, new Uint8Array(data));
+			std::ofstream ofs(output_path, std::ios::binary);
+			ofs.write(reinterpret_cast<const char*>(data->data()), static_cast<std::streamsize>(data->size()));
 
-			last_export_path = output_path;
-			log.write('exported: %s', display_path);
+			last_export_path = output_path.string();
+			logging::write(std::format("exported: {}", display_path));
 		}
 
-		if (last_export_path) {
-			const dir = path.dirname(last_export_path);
-			const toast_opt = { 'View in Explorer': () => nw.Shell.openItem(dir) };
+		if (!last_export_path.empty()) {
+			namespace fs = std::filesystem;
+			const std::string dir = fs::path(last_export_path).parent_path().string();
+			// JS: const toast_opt = { 'View in Explorer': () => nw.Shell.openItem(dir) };
+			// TODO(conversion): 'View in Explorer' toast action will be wired when platform shell integration is complete.
 
-			if (selection.length > 1)
-				core.setToast('success', `Successfully exported ${selection.length} files.`, toast_opt, -1);
+			if (selection.size() > 1)
+				core::setToast("success", std::format("Successfully exported {} files.", selection.size()), nullptr, -1);
 			else
-				core.setToast('success', `Successfully exported ${path.basename(last_export_path)}.`, toast_opt, -1);
+				core::setToast("success", std::format("Successfully exported {}.",
+					fs::path(last_export_path).filename().string()), nullptr, -1);
 		}
-	} catch (e) {
-		log.write('failed to export legacy files: %o', e);
-		core.setToast('error', 'Failed to export files');
+	} catch (const std::exception& e) {
+		logging::write(std::format("failed to export legacy files: {}", e.what()));
+		core::setToast("error", "Failed to export files");
 	}
-};
+}
 
-module.exports = {
-	register() {
-		this.registerNavButton('Files', 'file-lines.svg', InstallType.MPQ);
-	},
+// --- Public API ---
 
-	template: `
-		<div class="tab list-tab" id="legacy-tab-files">
-			<div class="list-container">
-				<component :is="$components.Listbox" v-model:selection="$core.view.selectionRaw" :items="$core.view.listfileRaw" :filter="$core.view.userInputFilterRaw" :keyinput="true" :regex="$core.view.config.regexFilters" :copymode="$core.view.config.copyMode" :pasteselection="$core.view.config.pasteSelection" :copytrimwhitespace="$core.view.config.removePathSpacesCopy" :includefilecount="true" unittype="file" persistscrollkey="legacy-files" @contextmenu="handle_listbox_context"></component>
-				<component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeListbox" v-slot:default="context" @close="$core.view.contextMenus.nodeListbox = null">
-					<span @click.self="copy_file_paths(context.node.selection)">Copy file path{{ context.node.count > 1 ? 's' : '' }}</span>
-					<span @click.self="copy_export_paths(context.node.selection)">Copy export path{{ context.node.count > 1 ? 's' : '' }}</span>
-					<span @click.self="open_export_directory(context.node.selection)">Open export directory</span>
-				</component>
-			</div>
-			<div id="tab-legacy-files-tray">
-				<div class="filter">
-					<div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
-					<input type="text" v-model="$core.view.userInputFilterRaw" placeholder="Filter files..."/>
-				</div>
-				<input type="button" value="Export Selected" @click="export_selected" :class="{ disabled: $core.view.isBusy || $core.view.selectionRaw.length === 0 }"/>
-			</div>
-		</div>
-	`,
+void registerTab() {
+	// JS: this.registerNavButton('Files', 'file-lines.svg', InstallType.MPQ);
+	// TODO(conversion): Nav button registration will be wired when the module system is integrated.
+}
 
-	methods: {
-		handle_listbox_context(data) {
-			listboxContext.handle_context_menu(data, true);
-		},
+void mounted() {
+	// JS: await load_files(this.$core);
+	load_files();
+}
 
-		copy_file_paths(selection) {
-			listboxContext.copy_file_paths(selection);
-		},
+void render() {
+	auto& view = *core::view;
 
-		copy_export_paths(selection) {
-			listboxContext.copy_export_paths(selection);
-		},
+	// List container with context menu.
+	// JS: <div class="list-container">
+	//     <Listbox v-model:selection="selectionRaw" :items="listfileRaw" :filter="userInputFilterRaw" ...>
+	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
+	//       copy_file_paths, copy_export_paths, open_export_directory
+	ImGui::BeginChild("legacy-files-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2), ImGuiChildFlags_Borders);
+	// TODO(conversion): Listbox and ContextMenu component rendering will be wired when integration is complete.
+	ImGui::Text("Files: %zu", view.listfileRaw.size());
+	ImGui::EndChild();
 
-		open_export_directory(selection) {
-			listboxContext.open_export_directory(selection);
-		},
+	// Tray.
+	// JS: <div id="tab-legacy-files-tray">
+	if (view.config.value("regexFilters", false))
+		ImGui::TextUnformatted("Regex Enabled");
 
-		async export_selected() {
-			await export_files(this.$core);
-		}
-	},
+	char filter_buf[256] = {};
+	std::strncpy(filter_buf, view.userInputFilterRaw.c_str(), sizeof(filter_buf) - 1);
+	if (ImGui::InputText("##FilterFiles", filter_buf, sizeof(filter_buf)))
+		view.userInputFilterRaw = filter_buf;
 
-	async mounted() {
-		await load_files(this.$core);
-	}
-};
+	ImGui::SameLine();
+
+	// JS: <input type="button" value="Export Selected" @click="export_selected" :class="{ disabled: isBusy || selectionRaw.length === 0 }"/>
+	const bool disabled = view.isBusy > 0 || view.selectionRaw.empty();
+	if (disabled) ImGui::BeginDisabled();
+	if (ImGui::Button("Export Selected"))
+		export_selected();
+	if (disabled) ImGui::EndDisabled();
+}
+
+void export_selected() {
+	// JS: await export_files(this.$core);
+	export_files();
+}
+
+} // namespace legacy_tab_files

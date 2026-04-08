@@ -157,6 +157,10 @@ target_sources(wow_export PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/components/model-viewer-gl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_home.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/legacy_tab_home.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/legacy_tab_audio.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/legacy_tab_data.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/legacy_tab_files.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/legacy_tab_fonts.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/font_helpers.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_install.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_raw.cpp
