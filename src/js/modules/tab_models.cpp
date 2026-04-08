@@ -116,7 +116,7 @@ static std::vector<DisplayVariant> get_model_displays(uint32_t file_data_id) {
 // JS: const preview_model = async (core, file_name) => { ... }
 static void preview_model(const std::string& file_name) {
 	auto _lock = core::create_busy_lock();
-	core::setToast("progress", std::format("Loading {}, please wait...", file_name), nullptr, -1, false);
+	core::setToast("progress", std::format("Loading {}, please wait...", file_name), {}, -1, false);
 	logging::write(std::format("Previewing model {}", file_name));
 
 	auto& state = view_state;
@@ -152,7 +152,7 @@ static void preview_model(const std::string& file_name) {
 		// JS: const file_data_id = listfile.getByFilename(file_name);
 		auto file_data_id_opt = casc::listfile::getByFilename(file_name);
 		if (!file_data_id_opt.has_value()) {
-			core::setToast("error", std::format("Unable to find file data ID for {}", file_name), nullptr, -1);
+			core::setToast("error", std::format("Unable to find file data ID for {}", file_name), {}, -1);
 			return;
 		}
 		uint32_t file_data_id = file_data_id_opt.value();
@@ -162,7 +162,7 @@ static void preview_model(const std::string& file_name) {
 		// JS: const gl_context = core.view.modelViewerContext?.gl_context;
 		// For now, we cannot load files. When CASC is wired, this will become:
 		//   auto file = view.casc->getFile(file_data_id);
-		core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", file_name), nullptr, 4000);
+		core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", file_name), {}, 4000);
 		logging::write(std::format("CASC not yet integrated — skipping preview for {}", file_name));
 
 		// The following code is the complete conversion and will work once CASC is wired:
@@ -319,7 +319,7 @@ static void preview_model(const std::string& file_name) {
 
 		if (!has_content) {
 			// JS: core.setToast('info', util.format('The model %s doesn\'t have any 3D data associated with it.', file_name), null, 4000);
-			core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", file_name), nullptr, 4000);
+			core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", file_name), {}, 4000);
 		} else {
 			core::hideToast();
 
@@ -330,11 +330,11 @@ static void preview_model(const std::string& file_name) {
 		*/
 	} catch (const casc::EncryptionError& e) {
 		// JS: if (e instanceof EncryptionError) { ... }
-		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", file_name, e.key), nullptr, -1);
+		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", file_name, e.key), {}, -1);
 		logging::write(std::format("Failed to decrypt model {} ({})", file_name, e.key));
 	} catch (const std::exception& e) {
 		// JS: core.setToast('error', 'Unable to preview model ' + file_name, ...);
-		core::setToast("error", "Unable to preview model " + file_name, nullptr, -1);
+		core::setToast("error", "Unable to preview model " + file_name, {}, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 }
@@ -649,10 +649,10 @@ void export_files(const std::vector<nlohmann::json>& files, bool is_local, int e
 			// JS: await modelViewerUtils.export_preview(core, format, canvas, active_path);
 			// TODO(conversion): GL context for export_preview will be wired when model viewer GL is integrated.
 			// model_viewer_utils::export_preview(format, gl_context, active_path);
-			core::setToast("info", "PNG/Clipboard export pending GL integration.", nullptr, 4000);
+			core::setToast("info", "PNG/Clipboard export pending GL integration.", {}, 4000);
 		} else {
 			// JS: core.setToast('error', 'The selected export option only works for model previews. Preview something first!', null, -1);
-			core::setToast("error", "The selected export option only works for model previews. Preview something first!", nullptr, -1);
+			core::setToast("error", "The selected export option only works for model previews. Preview something first!", {}, -1);
 		}
 
 		// JS: export_paths?.close();

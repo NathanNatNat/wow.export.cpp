@@ -110,7 +110,7 @@ static void load_table(const std::string& table_name) {
 		// JS: const full_path = dbc_path_map.get(table_name);
 		auto it = dbc_path_map.find(table_name);
 		if (it == dbc_path_map.end()) {
-			core::setToast("error", std::format("Unable to find DBC file: {}", table_name), nullptr, -1);
+			core::setToast("error", std::format("Unable to find DBC file: {}", table_name), {}, -1);
 			return;
 		}
 		const std::string& full_path = it->second;
@@ -121,7 +121,7 @@ static void load_table(const std::string& table_name) {
 		std::optional<std::vector<uint8_t>> raw_data = std::nullopt;
 
 		if (!raw_data) {
-			core::setToast("error", std::format("Unable to load DBC file: {}", full_path), nullptr, -1);
+			core::setToast("error", std::format("Unable to load DBC file: {}", full_path), {}, -1);
 			return;
 		}
 
@@ -243,8 +243,8 @@ static void load_table(const std::string& table_name) {
 		selected_file_schema = dbc_reader.schema;
 	} catch (const std::exception& e) {
 		// JS: core.setToast('error', 'Unable to open DBC file ' + table_name, { 'View Log': () => log.openRuntimeLog() }, -1);
-		core::setToast("error", "Unable to open DBC file " + table_name, nullptr, -1);
-		// TODO(conversion): 'View Log' toast action will be wired when toast action callbacks are integrated.
+		core::setToast("error", "Unable to open DBC file " + table_name,
+			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open DBC file: {}", e.what()));
 	}
 }
@@ -394,7 +394,7 @@ static void copy_rows_csv() {
 
 	// JS: nw.Clipboard.get().set(csv, 'text');
 	// ImGui::SetClipboardText(csv.c_str());
-	core::setToast("success", std::format("Copied {} row{} as CSV to the clipboard", count, count != 1 ? "s" : ""), nullptr, 2000);
+	core::setToast("success", std::format("Copied {} row{} as CSV to the clipboard", count, count != 1 ? "s" : ""), {}, 2000);
 }
 
 // JS: methods.copy_rows_sql()
@@ -408,7 +408,7 @@ static void copy_rows_sql() {
 		return;
 
 	// JS: nw.Clipboard.get().set(sql, 'text');
-	core::setToast("success", std::format("Copied {} row{} as SQL to the clipboard", count, count != 1 ? "s" : ""), nullptr, 2000);
+	core::setToast("success", std::format("Copied {} row{} as SQL to the clipboard", count, count != 1 ? "s" : ""), {}, 2000);
 }
 
 // JS: methods.copy_cell(value)

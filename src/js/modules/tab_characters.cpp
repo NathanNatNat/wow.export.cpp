@@ -842,7 +842,7 @@ refresh_character_appearance();
 
 } catch (const std::exception& e) {
 core::setToast("error", std::format("Unable to load model {}", file_data_id),
-nlohmann::json{{ "View log", "openRuntimeLog" }}, -1);
+{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 logging::write(std::format("Failed to load character model: {}", e.what()));
 }
 

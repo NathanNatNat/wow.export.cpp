@@ -24,7 +24,7 @@ namespace fs = std::filesystem;
 
 namespace casc {
 
-const nlohmann::json ExportHelper::TOAST_OPT_LOG = { {"View Log", true} };
+const std::vector<ToastAction> ExportHelper::TOAST_OPT_LOG = { {"View Log", []() { logging::openRuntimeLog(); }} };
 //const nlohmann::json TOAST_OPT_DIR = { {"Open Export Directory", true} };
 
 /**
@@ -168,7 +168,7 @@ void ExportHelper::start() {
 
 	core::events.once("toast-cancelled", [this]() {
 		if (!isFinished) {
-			core::setToast("progress", "Cancelling export, hold on...", nullptr, -1, false);
+			core::setToast("progress", "Cancelling export, hold on...", {}, -1, false);
 			core::view->exportCancelled = true;
 		}
 	});
@@ -202,12 +202,12 @@ void ExportHelper::finish(bool includeDirLink) {
 	if (succeeded == count) {
 		// Everything succeeded.
 		const std::string lastExportPath = ExportHelper::getExportPath(fs::path(lastItem).parent_path().string());
-		nlohmann::json toastOpt = { {"View in Explorer", lastExportPath} };
+		std::vector<ToastAction> toastOpt = { {"View in Explorer", [lastExportPath]() { core::openInExplorer(lastExportPath); }} };
 
 		if (count > 1)
-			core::setToast("success", std::format("Successfully exported {} {}.", count, unitFormatted()), includeDirLink ? toastOpt : nullptr, -1);
+			core::setToast("success", std::format("Successfully exported {} {}.", count, unitFormatted()), includeDirLink ? toastOpt : std::vector<ToastAction>{}, -1);
 		else
-			core::setToast("success", std::format("Successfully exported {}.", lastItem), includeDirLink ? toastOpt : nullptr, -1);
+			core::setToast("success", std::format("Successfully exported {}.", lastItem), includeDirLink ? toastOpt : std::vector<ToastAction>{}, -1);
 	} else if (succeeded > 0) {
 		// Partial success, not everything exported.
 		const bool cancelled = core::view->exportCancelled;
@@ -215,11 +215,11 @@ void ExportHelper::finish(bool includeDirLink) {
 			cancelled ? "cancelled, " : "complete, but",
 			failed(), unitFormatted(),
 			cancelled ? "didn't" : "failed to"),
-			cancelled ? nullptr : TOAST_OPT_LOG);
+			cancelled ? std::vector<ToastAction>{} : TOAST_OPT_LOG);
 	} else {
 		// Everything failed.
 		if (core::view->exportCancelled)
-			core::setToast("info", "Export was cancelled by the user.", nullptr);
+			core::setToast("info", "Export was cancelled by the user.");
 		else
 			core::setToast("error", std::format("Unable to export {}.", unitFormatted()), TOAST_OPT_LOG, -1);
 	}
@@ -279,7 +279,7 @@ void ExportHelper::updateCurrentTask() {
 		exportProgress += ")";
 	}
 
-	core::setToast("progress", exportProgress, nullptr, -1, true);
+	core::setToast("progress", exportProgress, {}, -1, true);
 }
 
 /**

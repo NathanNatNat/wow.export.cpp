@@ -7,7 +7,9 @@
 
 #include <string>
 #include <optional>
+#include <vector>
 #include <nlohmann/json.hpp>
+#include "../core.h"
 
 namespace casc {
 
@@ -18,7 +20,7 @@ namespace casc {
 class ExportHelper {
 public:
 	/// Toast option constant for viewing the log.
-	static const nlohmann::json TOAST_OPT_LOG;
+	static const std::vector<ToastAction> TOAST_OPT_LOG;
 
 	// --- Static utility methods ---
 

@@ -123,7 +123,7 @@ static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string&
 	}
 
 	BusyLock _lock = core::create_busy_lock();
-	core::setToast("progress", std::format("Loading {}, please wait...", texture), nullptr, -1, false);
+	core::setToast("progress", std::format("Loading {}, please wait...", texture), {}, -1, false);
 	logging::write(std::format("Previewing texture file {}", texture));
 
 	try {
@@ -164,12 +164,12 @@ static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string&
 
 		core::hideToast();
 	} catch (const casc::EncryptionError& e) {
-		core::setToast("error", std::format("The texture {} is encrypted with an unknown key ({}).", texture, e.key), nullptr, -1);
+		core::setToast("error", std::format("The texture {} is encrypted with an unknown key ({}).", texture, e.key), {}, -1);
 		logging::write(std::format("Failed to decrypt texture {} ({})", texture, e.key));
 	} catch (const std::exception& e) {
 		// JS: core.setToast('error', 'Unable to preview texture ' + texture, { 'View Log': () => log.openRuntimeLog() }, -1);
-		core::setToast("error", "Unable to preview texture " + texture, nullptr, -1);
-		// TODO(conversion): 'View Log' toast action will be wired when toast action callbacks are integrated.
+		core::setToast("error", "Unable to preview texture " + texture,
+			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 }
@@ -541,7 +541,7 @@ void render() {
 		if (ImGui::Button("Apply to Character")) {
 			// JS: methods.apply_baked_npc_texture()
 			BusyLock _lock = core::create_busy_lock();
-			core::setToast("progress", "loading baked npc texture...", nullptr, -1, false);
+			core::setToast("progress", "loading baked npc texture...", {}, -1, false);
 
 			try {
 				const std::string first = casc::listfile::stripFileEntry(view.selectionTextures[0].get<std::string>());
@@ -551,11 +551,11 @@ void render() {
 					// JS: const blp = new BLPFile(file);
 					// TODO(conversion): CASC getFile will be wired when CASC integration is complete.
 					// view.chrCustBakedNPCTexture = blp;
-					core::setToast("success", "baked npc texture applied to character", nullptr, 3000);
+					core::setToast("success", "baked npc texture applied to character", {}, 3000);
 					logging::write(std::format("applied baked npc texture {} to character", first));
 				}
 			} catch (const std::exception& e) {
-				core::setToast("error", "failed to load baked npc texture", nullptr, -1);
+				core::setToast("error", "failed to load baked npc texture", {}, -1);
 				logging::write(std::format("failed to load baked npc texture: {}", e.what()));
 			}
 		}

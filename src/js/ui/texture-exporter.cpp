@@ -119,7 +119,7 @@ void exportFiles(
 		logging::write(std::format("Copied texture to clipboard ({})", fileName));
 		core::setToast("success",
 			std::format("Selected texture {} has been copied to the clipboard", fileName),
-			nullptr, -1, true);
+			{}, -1, true);
 		return;
 	}
 

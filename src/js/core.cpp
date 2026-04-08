@@ -350,11 +350,11 @@ void hideToast(bool userCancel) {
  * Display a toast message.
  */
 void setToast(const std::string& toastType, const std::string& message,
-              const nlohmann::json& options, int ttl, bool closable) {
+              const std::vector<ToastAction>& actions, int ttl, bool closable) {
 	Toast toast;
 	toast.type = toastType;
 	toast.message = message;
-	toast.options = options;
+	toast.actions = actions;
 	toast.closable = closable;
 	view->toast = toast;
 
@@ -373,11 +373,19 @@ void setToast(const std::string& toastType, const std::string& message,
  */
 void openExportDirectory() {
 	const std::string exportDir = view->config.value("exportDirectory", "");
+	openInExplorer(exportDir);
+}
+
+/**
+ * Open a file or directory with the OS default application/explorer.
+ * C++ equivalent of nw.Shell.openItem(path).
+ */
+void openInExplorer(const std::string& path) {
 #ifdef _WIN32
-	const std::wstring wpath(exportDir.begin(), exportDir.end());
+	const std::wstring wpath(path.begin(), path.end());
 	ShellExecuteW(nullptr, L"open", wpath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #else
-	std::string cmd = "xdg-open \"" + exportDir + "\" &";
+	std::string cmd = "xdg-open \"" + path + "\" &";
 	std::system(cmd.c_str());
 #endif
 }

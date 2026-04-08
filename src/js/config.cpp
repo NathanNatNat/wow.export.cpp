@@ -89,7 +89,7 @@ void load() {
 			logging::write("Failed to load user config due to restricted permissions (EPERM)");
 			core::setToast("info",
 				"Restricted permissions detected. Restart wow.export using \"Run as Administrator\".",
-				nullptr, -1, true);
+				{}, -1, true);
 		} else {
 			throw;
 		}

@@ -100,9 +100,8 @@ static void preview_texture(const std::string& filename) {
 		selected_file = filename;
 	} catch (const std::exception& e) {
 		logging::write(std::format("failed to preview legacy texture {}: {}", filename, e.what()));
-		nlohmann::json toast_opts;
-		toast_opts["view log"] = true;
-		core::setToast("error", "unable to preview texture " + filename, toast_opts, -1);
+		core::setToast("error", "unable to preview texture " + filename,
+			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 	}
 }
 

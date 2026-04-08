@@ -439,7 +439,7 @@ void WMORendererGL::loadDoodadSet(uint32_t index) {
 	auto _lock = core::create_busy_lock();
 	core::setToast("progress",
 		std::format("Loading doodad set {} ({} doodads)...", set.name, set.doodadCount),
-		nullptr, -1, false);
+		{}, -1, false);
 
 	const uint32_t firstIndex = set.firstInstanceIndex;
 	const uint32_t count = set.doodadCount;

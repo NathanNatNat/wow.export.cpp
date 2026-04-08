@@ -281,7 +281,7 @@ static void handle_tact_key() {
 	if (casc::tact_keys::addKey(core::view->userInputTactKeyName, core::view->userInputTactKey))
 		core::setToast("success", "Successfully added decryption key.");
 	else
-		core::setToast("error", "Invalid encryption key.", nullptr, -1);
+		core::setToast("error", "Invalid encryption key.", {}, -1);
 }
 
 // JS: methods.handle_discard()
@@ -302,7 +302,7 @@ void handle_apply() {
 
 	// JS: if (cfg.exportDirectory.length === 0)
 	if (!cfg.contains("exportDirectory") || cfg["exportDirectory"].get<std::string>().empty()) {
-		core::setToast("error", "A valid export directory must be provided", nullptr, -1);
+		core::setToast("error", "A valid export directory must be provided", {}, -1);
 		return;
 	}
 
@@ -311,8 +311,8 @@ void handle_apply() {
 		std::string val = cfg.value("realmListURL", std::string{});
 		if (val.empty() || val.substr(0, 4) != "http") {
 			// JS: { 'Use Default': () => cfg.realmListURL = defaults.realmListURL }
-			// TODO(conversion): Toast action callbacks will be wired when toast button system is integrated.
-			core::setToast("error", "A valid realm list URL or path is required.", nullptr, -1);
+			core::setToast("error", "A valid realm list URL or path is required.",
+				{ {"Use Default", [&cfg, defaults]() { cfg["realmListURL"] = defaults["realmListURL"]; }} }, -1);
 			return;
 		}
 	}
@@ -322,8 +322,8 @@ void handle_apply() {
 		std::string val = cfg.value("listfileURL", std::string{});
 		if (val.empty()) {
 			// JS: { 'Use Default': () => cfg.listfileURL = defaults.listfileURL }
-			// TODO(conversion): Toast action callbacks will be wired when toast button system is integrated.
-			core::setToast("error", "A valid listfile URL or path is required.", nullptr, -1);
+			core::setToast("error", "A valid listfile URL or path is required.",
+				{ {"Use Default", [&cfg, defaults]() { cfg["listfileURL"] = defaults["listfileURL"]; }} }, -1);
 			return;
 		}
 	}
@@ -333,8 +333,8 @@ void handle_apply() {
 		std::string val = cfg.value("armoryURL", std::string{});
 		if (val.empty() || val.substr(0, 4) != "http") {
 			// JS: { 'Use Default': () => cfg.armoryURL = defaults.armoryURL }
-			// TODO(conversion): Toast action callbacks will be wired when toast button system is integrated.
-			core::setToast("error", "A valid URL is required for the Character Appearance API.", nullptr, -1);
+			core::setToast("error", "A valid URL is required for the Character Appearance API.",
+				{ {"Use Default", [&cfg, defaults]() { cfg["armoryURL"] = defaults["armoryURL"]; }} }, -1);
 			return;
 		}
 	}
@@ -344,8 +344,8 @@ void handle_apply() {
 		std::string val = cfg.value("tactKeysURL", std::string{});
 		if (val.empty() || val.substr(0, 4) != "http") {
 			// JS: { 'Use Default': () => cfg.tactKeysURL = defaults.tactKeysURL }
-			// TODO(conversion): Toast action callbacks will be wired when toast button system is integrated.
-			core::setToast("error", "A valid URL is required for encryption key updates.", nullptr, -1);
+			core::setToast("error", "A valid URL is required for encryption key updates.",
+				{ {"Use Default", [&cfg, defaults]() { cfg["tactKeysURL"] = defaults["tactKeysURL"]; }} }, -1);
 			return;
 		}
 	}
@@ -355,8 +355,8 @@ void handle_apply() {
 		std::string val = cfg.value("dbdURL", std::string{});
 		if (val.empty() || val.substr(0, 4) != "http") {
 			// JS: { 'Use Default': () => cfg.dbdURL = defaults.dbdURL }
-			// TODO(conversion): Toast action callbacks will be wired when toast button system is integrated.
-			core::setToast("error", "A valid URL is required for DBD updates.", nullptr, -1);
+			core::setToast("error", "A valid URL is required for DBD updates.",
+				{ {"Use Default", [&cfg, defaults]() { cfg["dbdURL"] = defaults["dbdURL"]; }} }, -1);
 			return;
 		}
 	}
@@ -366,8 +366,8 @@ void handle_apply() {
 		std::string val = cfg.value("dbdFilenameURL", std::string{});
 		if (val.empty() || val.substr(0, 4) != "http") {
 			// JS: { 'Use Default': () => cfg.dbdFilenameURL = defaults.dbdFilenameURL }
-			// TODO(conversion): Toast action callbacks will be wired when toast button system is integrated.
-			core::setToast("error", "A valid URL is required for DBD manifest.", nullptr, -1);
+			core::setToast("error", "A valid URL is required for DBD manifest.",
+				{ {"Use Default", [&cfg, defaults]() { cfg["dbdFilenameURL"] = defaults["dbdFilenameURL"]; }} }, -1);
 			return;
 		}
 	}
