@@ -4,6 +4,10 @@ Authors: Kruithne <kruithne@gmail.com>
 License: MIT
  */
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "tab_maps.h"
 #include "../log.h"
 #include "../core.h"
@@ -216,8 +220,8 @@ float scale_y = static_cast<float>(blp_height) / static_cast<float>(size);
 
 for (int py = 0; py < size; py++) {
 for (int px = 0; px < size; px++) {
-int src_x = std::min(static_cast<int>(px * scale_x), static_cast<int>(blp_width) - 1);
-int src_y = std::min(static_cast<int>(py * scale_y), static_cast<int>(blp_height) - 1);
+int src_x = (std::min)(static_cast<int>(px * scale_x), static_cast<int>(blp_width) - 1);
+int src_y = (std::min)(static_cast<int>(py * scale_y), static_cast<int>(blp_height) - 1);
 int src_idx = (src_y * blp_width + src_x) * 4;
 int dst_idx = (py * size + px) * 4;
 scaled[dst_idx + 0] = rgba[src_idx + 0];
@@ -296,7 +300,7 @@ auto fid_it = fid_row->find("FileDataID");
 if (fid_it != fid_row->end()) {
 // JS: row.FileDataID = fid_row.FileDataID;
 uint32_t file_data_id = fieldToUint32(fid_it->second);
-row["FileDataID"] = static_cast<unsigned long>(file_data_id);
+row["FileDataID"] = static_cast<uint64_t>(file_data_id);
 
 auto owner_it = row.find("OwnerID");
 if (owner_it != row.end()) {
@@ -344,25 +348,26 @@ return result;
  * @param localY
  * @returns interpolated height
  */
+// JS: const get_vert_idx = (x, y) => { ... }
+// Extracted as a static helper to avoid MSVC lambda capture issues.
+static int get_vert_idx(int x, int y) {
+int index = 0;
+for (int row = 0; row < y * 2; row++)
+index += (row % 2) ? 8 : 9;
+
+bool is_short = !!((y * 2) % 2);
+index += is_short ? (std::min)(x, 7) : (std::min)(x, 8);
+return index;
+}
+
 static float sample_chunk_height(const ADTChunk& chunk, float localX, float localY) {
 float vx = localX * 8.0f;
 float vy = localY * 8.0f;
 
 int x0 = static_cast<int>(std::floor(vx));
 int y0 = static_cast<int>(std::floor(vy));
-int x1 = std::min(8, x0 + 1);
-int y1 = std::min(8, y0 + 1);
-
-// JS: const get_vert_idx = (x, y) => { ... }
-auto get_vert_idx = [](int x, int y) -> int {
-int index = 0;
-for (int row = 0; row < y * 2; row++)
-index += (row % 2) ? 8 : 9;
-
-bool is_short = !!((y * 2) % 2);
-index += is_short ? std::min(x, 7) : std::min(x, 8);
-return index;
-};
+int x1 = (std::min)(8, x0 + 1);
+int y1 = (std::min)(8, y0 + 1);
 
 float base_z = (chunk.position.size() > 2) ? chunk.position[2] : 0.0f;
 
@@ -901,16 +906,16 @@ tc.y = index % constants::GAME::MAP_SIZE;
 tile_coords.push_back(tc);
 }
 
-int min_x = std::numeric_limits<int>::max();
-int max_x = std::numeric_limits<int>::min();
-int min_y = std::numeric_limits<int>::max();
-int max_y = std::numeric_limits<int>::min();
+int min_x = (std::numeric_limits<int>::max)();
+int max_x = (std::numeric_limits<int>::min)();
+int min_y = (std::numeric_limits<int>::max)();
+int max_y = (std::numeric_limits<int>::min)();
 
 for (const auto& t : tile_coords) {
-min_x = std::min(min_x, t.x);
-max_x = std::max(max_x, t.x);
-min_y = std::min(min_y, t.y);
-max_y = std::max(max_y, t.y);
+min_x = (std::min)(min_x, t.x);
+max_x = (std::max)(max_x, t.x);
+min_y = (std::min)(min_y, t.y);
+max_y = (std::max)(max_y, t.y);
 }
 
 // JS: const first_tile = await load_map_tile(tile_coords[0].x, tile_coords[0].y, 512);
@@ -1029,8 +1034,8 @@ auto export_paths = core::openLastExportStream();
 
 // JS: this.$core.setToast('progress', 'Calculating height range across all tiles...', null, -1, false);
 core::setToast("progress", "Calculating height range across all tiles...", nullptr, -1, false);
-float global_min_height = std::numeric_limits<float>::infinity();
-float global_max_height = -std::numeric_limits<float>::infinity();
+float global_min_height = (std::numeric_limits<float>::infinity)();
+float global_max_height = -(std::numeric_limits<float>::infinity)();
 
 // First pass: determine global height range
 for (size_t i = 0; i < tile_indices.size(); i++) {
@@ -1042,8 +1047,8 @@ try {
 auto height_data = extract_height_data_from_tile(selected_map_dir, tile_x, tile_y, export_resolution);
 
 if (height_data && !height_data->heights.empty()) {
-float tile_min = std::numeric_limits<float>::infinity();
-float tile_max = -std::numeric_limits<float>::infinity();
+float tile_min = (std::numeric_limits<float>::infinity)();
+float tile_max = -(std::numeric_limits<float>::infinity)();
 
 for (size_t j = 0; j < height_data->heights.size(); j++) {
 float height = height_data->heights[j];
@@ -1053,8 +1058,8 @@ if (height > tile_max)
 tile_max = height;
 }
 
-global_min_height = std::min(global_min_height, tile_min);
-global_max_height = std::max(global_max_height, tile_max);
+global_min_height = (std::min)(global_min_height, tile_min);
+global_max_height = (std::max)(global_max_height, tile_max);
 
 logging::write(std::format("tile {}: height range [{}, {}]", tile_index, tile_min, tile_max));
 }
@@ -1063,8 +1068,8 @@ logging::write(std::format("failed to extract height data from tile {}: {}", til
 }
 }
 
-if (global_min_height == std::numeric_limits<float>::infinity() ||
-global_max_height == -std::numeric_limits<float>::infinity()) {
+if (global_min_height == (std::numeric_limits<float>::infinity)() ||
+global_max_height == -(std::numeric_limits<float>::infinity)()) {
 core::hideToast();
 core::setToast("error", "No valid height data found in selected tiles", nullptr, -1);
 return;
