@@ -9,8 +9,11 @@ on:
 permissions:
   contents: read
 
+env:
+  SCCACHE_GHA_ENABLED: "true"
+
 jobs:
-  # Windows x64 - GitHub-hosted (MSVC + Ninja)
+  # Windows x64 — GitHub-hosted (MSVC + Ninja)
   windows:
     name: Windows MSVC Debug
     runs-on: windows-latest
@@ -20,11 +23,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 1
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+          cache: pip
 
       - name: Set up MSVC x64 environment
         uses: ilammy/msvc-dev-cmd@v1
@@ -34,9 +39,55 @@ jobs:
       - name: Ensure Jinja2 is installed
         run: pip install --quiet jinja2
 
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
       - name: "Configure (preset: windows-msvc-debug)"
-        run: cmake --preset windows-msvc-debug
+        run: cmake --preset windows-msvc-debug -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
       - name: "Build (preset: windows-debug)"
         run: cmake --build --preset windows-debug --parallel
-        
+
+      - name: Show sccache stats
+        if: always()
+        run: sccache --show-stats
+
+  # Linux x64 — GitHub-hosted (GCC + Ninja)
+  linux:
+    name: Linux GCC Debug
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libwayland-dev libxkbcommon-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          cache: pip
+
+      - name: Ensure Jinja2 is installed
+        run: pip install --quiet jinja2
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: "Configure (preset: linux-gcc-debug)"
+        run: cmake --preset linux-gcc-debug -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+
+      - name: "Build (preset: linux-debug)"
+        run: cmake --build --preset linux-debug --parallel
+
+      - name: Show sccache stats
+        if: always()
+        run: sccache --show-stats
+
