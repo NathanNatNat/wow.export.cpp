@@ -13,6 +13,7 @@
 #include "../casc/export-helper.h"
 #include "../casc/listfile.h"
 #include "../casc/casc-source.h"
+#include "../casc/locale-flags.h"
 #include "../ui/listbox-context.h"
 #include "../buffer.h"
 
@@ -31,6 +32,9 @@ namespace tab_raw {
 
 // JS: let is_dirty = true;
 static bool is_dirty = true;
+
+// Change-detection for config watches.
+static uint32_t prev_cascLocale = 0;
 
 // --- Internal functions ---
 
@@ -207,11 +211,21 @@ void mounted() {
 	compute_raw_files();
 
 	// JS: this.$core.view.$watch('config.cascLocale', () => { is_dirty = true; });
-	// TODO(conversion): Config watch for cascLocale will use change-detection pattern when config system is complete.
+	// Store initial config value for change-detection in render().
+	prev_cascLocale = core::view->config.value("cascLocale", static_cast<uint32_t>(casc::locale_flags::enUS));
 }
 
 void render() {
 	auto& view = *core::view;
+
+	// --- Change-detection for cascLocale config (equivalent to watch on config.cascLocale) ---
+	// JS: this.$core.view.$watch('config.cascLocale', () => { is_dirty = true; });
+	const uint32_t current_cascLocale = view.config.value("cascLocale", static_cast<uint32_t>(casc::locale_flags::enUS));
+	if (current_cascLocale != prev_cascLocale) {
+		is_dirty = true;
+		prev_cascLocale = current_cascLocale;
+		compute_raw_files();
+	}
 
 	// List container with context menu.
 	ImGui::BeginChild("raw-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2), ImGuiChildFlags_Borders);
