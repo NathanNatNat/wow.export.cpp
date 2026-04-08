@@ -22,8 +22,11 @@
 #include "file-writer.h"
 
 // Forward declarations
-namespace casc::locale_flags {
-	struct LocaleEntry;
+namespace casc {
+	class CASC;
+	namespace locale_flags {
+		struct LocaleEntry;
+	}
 }
 
 /**
@@ -191,7 +194,7 @@ struct AppState {
 	nlohmann::json availableLocalBuilds;         // Local builds to display during source select.
 	nlohmann::json availableRemoteBuilds;        // Remote builds to display during source select.
 	bool sourceSelectShowBuildSelect = false;    // Controls whether build select is shown.
-	nlohmann::json casc;                         // Active CASC instance.
+	casc::CASC* casc = nullptr;                  // Active CASC instance.
 	int64_t cacheSize = 0;                       // Active size of the user cache.
 	std::string userInputTactKey;                // Value of manual tact key field.
 	std::string userInputTactKeyName;            // Value of manual tact key name field.

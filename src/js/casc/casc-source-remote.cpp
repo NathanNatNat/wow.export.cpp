@@ -345,8 +345,7 @@ void CASCRemote::load(int buildIndex) {
 	loadEncoding();
 	loadRoot();
 
-	// core.view.casc = this;
-	// In C++, the caller is responsible for setting core::view->casc.
+	core::view->casc = this;
 
 	prepareListfile();
 	prepareDBDManifest();
