@@ -379,6 +379,8 @@ struct AppState {
 	int chrModelViewerAnimFrame = 0;
 	int chrModelViewerAnimFrameCount = 0;
 	std::vector<nlohmann::json> chrCustRaces;
+	std::vector<nlohmann::json> chrCustRacesPlayable;
+	std::vector<nlohmann::json> chrCustRacesNPC;
 	std::vector<nlohmann::json> chrCustRaceSelection;
 	std::vector<nlohmann::json> chrCustModels;
 	std::vector<nlohmann::json> chrCustModelSelection;
