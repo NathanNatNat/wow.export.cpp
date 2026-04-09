@@ -11,6 +11,7 @@ License: MIT
 #include "../../casc/listfile.h"
 #include "../../casc/casc-source.h"
 #include "../../png-writer.h"
+#include "../../ui/char-texture-overlay.h"
 #include "../Shaders.h"
 
 #include <spdlog/spdlog.h>
@@ -59,6 +60,10 @@ CharMaterialRenderer::CharMaterialRenderer(int textureLayer, int width, int heig
 		logging::write(std::format("Failed to create FBO for CharMaterialRenderer layer {} (status: {})", textureLayer, static_cast<int>(status)));
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	// JS: overlay.add(canvas) — register the FBO texture as a layer in the
+	// character texture overlay so the user can cycle through them.
+	char_texture_overlay::add(fbo_texture_);
 }
 
 /**
@@ -191,6 +196,10 @@ void CharMaterialRenderer::dispose() {
 	}
 
 	clearCanvas();
+
+	// JS: overlay.remove(this.glCanvas) — unregister from overlay before
+	// destroying the FBO resources.
+	char_texture_overlay::remove(fbo_texture_);
 
 	// Delete FBO resources (replaces JS overlay.remove + WEBGL_lose_context)
 	if (fbo_texture_) {

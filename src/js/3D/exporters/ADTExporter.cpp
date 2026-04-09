@@ -85,7 +85,7 @@ static bool hasLoadedFoliage = false;
 static db::WDCReader* dbTextures = nullptr;
 static db::WDCReader* dbDoodads = nullptr;
 
-// TODO(conversion): GL texture baking (loadTexture, bindAlphaLayer, unbindAllTextures,
+// GL texture baking (loadTexture, bindAlphaLayer, unbindAllTextures,
 // build_texture_array, clearCanvas, compileShaders) uses raw OpenGL via GLAD2, replacing
 // WebGL2 calls. The offscreen FBO approach follows CharMaterialRenderer's pattern.
 static GLuint glShaderProg = 0;
@@ -1059,8 +1059,10 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				const bool hasHeightTexturing = (wdt->flags & 0x80) == 0x80;
 				const fs::path tileOutPath = dir / ("tex_" + tileID + ".png");
 
-				// TODO(conversion): GL bake composite buffer. JS uses OffscreenCanvas for compositing.
-				// In C++ we use an offscreen FBO + PNGWriter for the final output.
+				// GL bake composite buffer — uses std::vector<uint8_t> in place of the JS
+				// OffscreenCanvas.  Each chunk is rendered to the FBO, read back with
+				// readFBOPixels, rotated 180° and blitted into compositeBuffer, then the
+				// completed composite is written as PNG via PNGWriter.
 				std::vector<uint8_t> compositeBuffer;
 				int compositeSize = 0;
 				if (!isSplittingTextures) {

@@ -2127,10 +2127,59 @@ return;
 auto export_paths = core::openLastExportStream();
 core::setToast("progress", "exporting texture, hold on...", {}, -1, false);
 
-// TODO(conversion): CharMaterialRenderer getCanvas/getRawPixels integration needed.
-// For now, log the request.
-logging::write("Character texture export requested (CharMaterialRenderer integration needed)");
-core::setToast("info", "Character texture export is not yet fully wired in this build.", {}, 5000);
+// JS: for (const [type, material] of chr_materials) {
+//       if (material.getCanvas() === active_canvas) { ... }
+uint32_t texture_type = 0;
+CharMaterialRenderer* chr_material = nullptr;
+for (auto& [type, material] : chr_materials) {
+	if (material && material->getCanvas() == active_canvas) {
+		texture_type = type;
+		chr_material = material.get();
+		break;
+	}
+}
+
+if (!chr_material) {
+	core::setToast("error", "unable to find material for active texture", {}, -1);
+	export_paths.close();
+	return;
+}
+
+// JS: const file_name = listfile.getByID(active_model);
+std::string file_name = casc::listfile::getByID(active_model);
+namespace fs = std::filesystem;
+fs::path p(file_name);
+std::string base_name = p.stem().string();
+std::string dir_name = p.parent_path().string();
+
+// JS: const texture_file_name = path.join(dir_name, base_name + '_texture_' + texture_type + '.png');
+std::string texture_file_name = (fs::path(dir_name) / (base_name + "_texture_" + std::to_string(texture_type) + ".png")).string();
+std::string export_path = casc::ExportHelper::getExportPath(texture_file_name);
+std::string out_dir = fs::path(export_path).parent_path().string();
+
+// Ensure the output directory exists.
+generics::createDirectory(out_dir);
+
+// JS: const pixels = chr_material.getRawPixels();
+auto pixels = chr_material->getRawPixels();
+int width = chr_material->getWidth();
+int height = chr_material->getHeight();
+
+// JS: const png = new PNGWriter(width, height); ... pixel_data.set(pixels);
+PNGWriter png(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+auto& pixel_data = png.getPixelData();
+std::memcpy(pixel_data.data(), pixels.data(), pixels.size());
+
+// JS: await buffer.writeToFile(export_path);
+BufferWrapper buffer = png.getBuffer();
+buffer.writeToFile(export_path);
+
+// JS: await export_paths?.writeLine('PNG:' + export_path);
+export_paths.writeLine("PNG:" + export_path);
+
+logging::write(std::format("exported character texture to {}", export_path));
+core::setToast("success", std::format("exported texture to {}", export_path),
+	{ {"view in explorer", [out_dir]() { core::openInExplorer(out_dir); }} }, -1);
 
 export_paths.close();
 }

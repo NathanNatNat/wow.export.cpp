@@ -422,8 +422,8 @@ MPQ source (Phase 3.1, done) and legacy loaders (Phase 3.2, pending).
 - [x] Wire texture ribbon rendering in tab modules — `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp`, `tab_creatures.cpp` (4 TODOs)
 
 ### 4.8 CharMaterialRenderer
-- [ ] Wire `getCanvas` / `getRawPixels` integration — `tab_characters.cpp` (1 TODO)
-- [ ] Wire GL bake composite buffer (OffscreenCanvas equivalent) — `ADTExporter.cpp` (1 TODO)
+- [x] Wire `getCanvas` / `getRawPixels` integration — `tab_characters.cpp` (1 TODO)
+- [x] Wire GL bake composite buffer (OffscreenCanvas equivalent) — `ADTExporter.cpp` (1 TODO)
 
 ### 4.9 Background Color Picker
 - [ ] Wire color picker for model viewer background — `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp` (3 TODOs)
