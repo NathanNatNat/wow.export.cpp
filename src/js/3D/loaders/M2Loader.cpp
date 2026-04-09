@@ -12,6 +12,8 @@ License: MIT
 #include "../Skin.h"
 #include "../../buffer.h"
 #include "../../constants.h"
+#include "../../core.h"
+#include "../../casc/casc-source.h"
 #include "../../log.h"
 
 #include <format>
@@ -109,8 +111,20 @@ continue;
 
 logging::write(std::format("Loading .anim file for animation: {} ({}) - {}", entry.animID, get_anim_name(entry.animID), entry.subAnimID));
 
-// TODO(conversion): CASC file loading will be wired when UI integration is complete.
-logging::write(std::format("Cannot load .anim file (CASC not wired): fileDataID={}", fileDataID));
+try {
+BufferWrapper animData = core::view->casc->getVirtualFileByID(fileDataID);
+auto ownedBuf = std::make_unique<BufferWrapper>(std::move(animData));
+BufferWrapper* bufPtr = ownedBuf.get();
+this->ownedAnimBuffers.push_back(std::move(ownedBuf));
+
+auto loader = std::make_unique<ANIMLoader>(*bufPtr);
+loader->load();
+// ANIMLoader stores raw data in animData/skeletonAttachmentData/skeletonBoneData vectors.
+// Store the BufferWrapper pointer for patch_track_animation() access.
+this->animFiles[static_cast<uint32_t>(i)] = bufPtr;
+} catch (const std::exception& e) {
+logging::write(std::format("Failed to load .anim file (fileDataID={}): {}", fileDataID, e.what()));
+}
 }
 }
 
@@ -157,9 +171,20 @@ return false;
 
 logging::write(std::format("Loading .anim file for animation: {} ({}) - {}", entry.animID, get_anim_name(entry.animID), entry.subAnimID));
 
-// TODO(conversion): CASC file loading will be wired when UI integration is complete.
-logging::write(std::format("Cannot load .anim file (CASC not wired): fileDataID={}", fileDataID));
+try {
+BufferWrapper animData = core::view->casc->getVirtualFileByID(fileDataID);
+auto ownedBuf = std::make_unique<BufferWrapper>(std::move(animData));
+BufferWrapper* bufPtr = ownedBuf.get();
+this->ownedAnimBuffers.push_back(std::move(ownedBuf));
+
+auto loader = std::make_unique<ANIMLoader>(*bufPtr);
+loader->load();
+this->animFiles[animationIndex] = bufPtr;
+return true;
+} catch (const std::exception& e) {
+logging::write(std::format("Failed to load .anim file (fileDataID={}): {}", fileDataID, e.what()));
 return false;
+}
 }
 
 logging::write("No .anim file found for animation: " + std::to_string(animation->id) + " (" + get_anim_name(animation->id) + ") - " + std::to_string(animation->variationIndex));

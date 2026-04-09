@@ -338,11 +338,11 @@ Wire `casc->getFile()`, `getFileByName()`, and related calls across all modules.
 - [x] `tab_zones.cpp` — CASC integration for zone map loading (3 TODOs)
 
 ### 2.2 CASC File Access in Loaders & Renderers
-- [ ] `M2Loader.cpp` — CASC file loading for sub-resources (2 TODOs)
-- [ ] `SKELLoader.cpp` — CASC file loading for skeleton data (2 TODOs)
-- [ ] `WMOLoader.cpp` — CASC file loading for WMO groups (1 TODO)
-- [ ] `Skin.cpp` — CASC file loading for skin sections (1 TODO)
-- [ ] `Texture.cpp` — `casc.getFile(fileDataID)` (1 TODO)
+- [x] `M2Loader.cpp` — CASC file loading for sub-resources (2 TODOs)
+- [x] `SKELLoader.cpp` — CASC file loading for skeleton data (2 TODOs)
+- [x] `WMOLoader.cpp` — CASC file loading for WMO groups (1 TODO)
+- [x] `Skin.cpp` — CASC file loading for skin sections (1 TODO)
+- [x] `Texture.cpp` — `casc.getFile(fileDataID)` (1 TODO)
 
 ### 2.3 CASC in DB Layer
 - [ ] `WDCReader.cpp` — Wire CASC interface for DB2 table loading (1 TODO)
