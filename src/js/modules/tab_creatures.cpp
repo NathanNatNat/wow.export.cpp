@@ -173,6 +173,34 @@ static bool is_initialized = false;
 static model_viewer_gl::State viewer_state;
 static model_viewer_gl::Context viewer_context;
 
+// Adapter maps for model-viewer-gl equipment/collection renderer callbacks.
+// These hold non-owning pointers into equipment_model_renderers/collection_model_renderers.
+static std::unordered_map<int, model_viewer_gl::EquipmentSlotRenderers> equip_adapter_map;
+static std::unordered_map<int, model_viewer_gl::CollectionSlotRenderers> coll_adapter_map;
+
+// Rebuild adapter maps from owned equipment/collection renderer storage.
+static void rebuild_renderer_adapter_maps() {
+	equip_adapter_map.clear();
+	for (auto& [slot_id, entry] : equipment_model_renderers) {
+		model_viewer_gl::EquipmentSlotRenderers slot;
+		for (auto& ri : entry.renderers) {
+			model_viewer_gl::EquipmentRendererEntry e;
+			e.renderer = ri.renderer.get();
+			e.attachment_id = ri.attachment_id;
+			e.is_collection_style = false;
+			slot.renderers.push_back(e);
+		}
+		equip_adapter_map[slot_id] = std::move(slot);
+	}
+	coll_adapter_map.clear();
+	for (auto& [slot_id, entry] : collection_model_renderers) {
+		model_viewer_gl::CollectionSlotRenderers slot;
+		for (auto& renderer : entry.renderers)
+			slot.renderers.push_back(renderer.get());
+		coll_adapter_map[slot_id] = std::move(slot);
+	}
+}
+
 // --- Internal helpers ---
 
 // Helper to get the active M2 renderer (or nullptr).
@@ -566,8 +594,8 @@ static void apply_creature_equipment_models() {
 
 	// JS: const gl_context = core.view.creatureViewerContext?.gl_context;
 	// JS: if (!gl_context) return;
-	// TODO(conversion): GL context retrieval from creatureViewerContext will be wired.
-	// For now, skip — equipment models require GL context and CASC.
+	gl::GLContext* gl_ctx = viewer_context.gl_context;
+	if (!gl_ctx) return;
 
 	auto enabled = get_enabled_equipment();
 
@@ -685,15 +713,22 @@ static void apply_creature_equipment_models() {
 					// JS: const file = await core.view.casc.getFile(file_data_id);
 					BufferWrapper file = core::view->casc->getVirtualFileByID(fdid);
 					// JS: const renderer = new M2RendererGL(file, gl_context, false, false);
+					auto renderer = std::make_unique<M2RendererGL>(file, *gl_ctx, false, false);
 					// JS: await renderer.load();
+					renderer->load();
 					// JS: if (display.textures && display.textures.length > i)
 					//     await renderer.applyReplaceableTextures({ textures: [display.textures[i]] });
+					if (!display->textures.empty() && display->textures.size() > i) {
+						M2DisplayInfo disp_info;
+						disp_info.textures = { display->textures[i] };
+						renderer->applyReplaceableTextures(disp_info);
+					}
 					// JS: renderers.push({ renderer, attachment_id });
+					EquipmentModelEntry::RendererInfo ri;
+					ri.renderer = std::move(renderer);
+					ri.attachment_id = attachment_id;
+					equip_entry.renderers.push_back(std::move(ri));
 					logging::write(std::format("Loaded creature attachment model {} for slot {}", fdid, slot_id));
-
-					// TODO(conversion): M2RendererGL instantiation requires GL context; will be wired when renderer is integrated.
-					(void)file;
-					(void)attachment_id;
 				} catch (const std::exception& e) {
 					// JS: log.write('Failed to load creature attachment model %d: %s', file_data_id, e.message);
 					logging::write(std::format("Failed to load creature attachment model {}: {}", fdid, e.what()));
@@ -717,16 +752,34 @@ static void apply_creature_equipment_models() {
 					// JS: const file = await core.view.casc.getFile(file_data_id);
 					BufferWrapper file = core::view->casc->getVirtualFileByID(fdid);
 					// JS: const renderer = new M2RendererGL(file, gl_context, false, false);
+					auto renderer = std::make_unique<M2RendererGL>(file, *gl_ctx, false, false);
 					// JS: await renderer.load();
+					renderer->load();
 					// JS: if (active_renderer?.bones) renderer.buildBoneRemapTable(active_renderer.bones);
+					if (active_renderer_result.m2 && active_renderer_result.m2->get_bones_m2())
+						renderer->buildBoneRemapTable(*active_renderer_result.m2->get_bones_m2());
 					// JS: const slot_geosets = SLOT_TO_GEOSET_GROUPS[slot_id];
 					// JS: if (slot_geosets && display.attachmentGeosetGroup) { ... }
+					auto sgit = SLOT_TO_GEOSET_GROUPS.find(slot_id);
+					if (sgit != SLOT_TO_GEOSET_GROUPS.end() && !display->attachmentGeosetGroup.empty()) {
+						size_t coll_idx = i - collection_start_index;
+						if (coll_idx < display->attachmentGeosetGroup.size()) {
+							int geo_group_val = display->attachmentGeosetGroup[coll_idx];
+							for (const auto& mapping : sgit->second)
+								renderer->setGeosetGroupDisplay(mapping.group_index, 1 + geo_group_val);
+						}
+					}
 					// JS: const texture_idx = i < display.textures?.length ? i : 0;
+					size_t texture_idx = (i < display->textures.size()) ? i : 0;
 					// JS: if (texture_fdid) await renderer.applyReplaceableTextures({ textures: [texture_fdid] });
+					if (texture_idx < display->textures.size() && display->textures[texture_idx] != 0) {
+						M2DisplayInfo disp_info;
+						disp_info.textures = { display->textures[texture_idx] };
+						renderer->applyReplaceableTextures(disp_info);
+					}
 					// JS: renderers.push(renderer);
+					coll_entry.renderers.push_back(std::move(renderer));
 					logging::write(std::format("Loaded creature collection model {} for slot {}", fdid, slot_id));
-					// TODO(conversion): M2RendererGL instantiation requires GL context; will be wired when renderer is integrated.
-					(void)file;
 				} catch (const std::exception& e) {
 					// JS: log.write('Failed to load creature collection model %d: %s', file_data_id, e.message);
 					logging::write(std::format("Failed to load creature collection model {}: {}", fdid, e.what()));
@@ -921,22 +974,19 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			// JS: core.view.creatureViewerActiveType = 'm2';
 			view.creatureViewerActiveType = "m2";
 
+			// JS: const gl_context = core.view.creatureViewerContext?.gl_context;
+			gl::GLContext* gl_ctx = viewer_context.gl_context;
+			if (!gl_ctx) {
+				core::setToast("error", "GL context not available — model viewer not initialized.", {}, -1);
+				return;
+			}
+
 			// JS: active_renderer = new M2RendererGL(file, gl_context, true, true);
 			// JS: active_renderer.geosetKey = 'creatureViewerGeosets';
 			// JS: await active_renderer.load();
-			// TODO(conversion): M2RendererGL instantiation requires GL context; will be wired when renderer is integrated.
-			core::setToast("info", std::format("CASC integration pending — cannot preview {} yet.", creature.name), {}, 4000);
-			logging::write(std::format("Renderer not yet integrated — skipping character preview for {}", creature.name));
-			(void)file;
-
-			// The following code is the complete conversion and will work once CASC is wired:
-			/*
-			auto file = view.casc->getFile(file_data_id);
-			auto& gl_context = ...; // TODO(conversion): wire GL context
-
 			active_renderer_result.type = model_viewer_utils::ModelType::M2;
-			active_renderer_result.m2 = std::make_unique<M2RendererGL>(file, gl_context, true, true);
-			active_renderer_result.m2->geosetKey = "creatureViewerGeosets";
+			active_renderer_result.m2 = std::make_unique<M2RendererGL>(file, *gl_ctx, true, true);
+			active_renderer_result.m2->setGeosetKey("creatureViewerGeosets");
 			active_renderer_result.m2->load();
 
 			// apply customization geosets
@@ -960,7 +1010,7 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 				uint32_t bake_fdid = db::caches::DBCharacterCustomization::get_texture_file_data_id(bake_id);
 				if (bake_fdid != 0) {
 					try {
-						auto bake_data = view.casc->getFile(bake_fdid);
+						BufferWrapper bake_data = view.casc->getVirtualFileByID(bake_fdid);
 						baked_npc_blp = std::make_unique<casc::BLPImage>(bake_data);
 					} catch (const std::exception& e) {
 						logging::write(std::format("Failed to load baked NPC texture {}: {}", bake_fdid, e.what()));
@@ -1013,7 +1063,6 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			active_file_data_id = file_data_id;
 			active_creature = &creature;
 			is_character_model = true;
-			*/
 		} else {
 			// standard creature model
 			// JS: const file_data_id = DBCreatures.getFileDataIDByDisplayID(creature.displayID);
@@ -1026,15 +1075,11 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			// JS: const file = await core.view.casc.getFile(file_data_id);
 			BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
 			// JS: const gl_context = core.view.creatureViewerContext?.gl_context;
-			// TODO(conversion): M2RendererGL/WMORendererGL/M3RendererGL instantiation requires GL context; will be wired when renderer is integrated.
-			core::setToast("info", std::format("Renderer not yet integrated — cannot preview {} yet.", creature.name), {}, 4000);
-			logging::write(std::format("Renderer not yet integrated — skipping preview for {}", creature.name));
-			(void)file;
-
-			// The following code is the complete conversion and will work once CASC is wired:
-			/*
-			auto file = view.casc->getFile(file_data_id);
-			auto& gl_context = ...; // TODO(conversion): wire GL context
+			gl::GLContext* gl_ctx = viewer_context.gl_context;
+			if (!gl_ctx) {
+				core::setToast("error", "GL context not available — model viewer not initialized.", {}, -1);
+				return;
+			}
 
 			auto model_type = model_viewer_utils::detect_model_type(file);
 			std::string file_name = casc::listfile::getByID(file_data_id);
@@ -1049,16 +1094,16 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 				view.creatureViewerActiveType = "m3";
 
 			active_renderer_result = model_viewer_utils::create_renderer(
-				file, model_type, gl_context,
+				file, model_type, *gl_ctx,
 				view.config.value("modelViewerShowTextures", true),
 				file_data_id
 			);
 
 			if (model_type == model_viewer_utils::ModelType::M2)
-				active_renderer_result.m2->geosetKey = "creatureViewerGeosets";
+				active_renderer_result.m2->setGeosetKey("creatureViewerGeosets");
 			else if (model_type == model_viewer_utils::ModelType::WMO) {
-				active_renderer_result.wmo->wmoGroupKey = "creatureViewerWMOGroups";
-				active_renderer_result.wmo->wmoSetKey = "creatureViewerWMOSets";
+				active_renderer_result.wmo->setWmoGroupKey("creatureViewerWMOGroups");
+				active_renderer_result.wmo->setWmoSetKey("creatureViewerWMOSets");
 			}
 
 			// load renderer
@@ -1175,7 +1220,13 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			active_creature = &creature;
 
 			// JS: const has_content = active_renderer.draw_calls?.length > 0 || active_renderer.groups?.length > 0;
-			bool has_content = true; // TODO(conversion): Check draw_calls/groups when renderer is wired.
+			bool has_content = false;
+			if (active_renderer_result.m2)
+				has_content = !active_renderer_result.m2->get_draw_calls().empty();
+			else if (active_renderer_result.m3)
+				has_content = !active_renderer_result.m3->get_draw_calls().empty();
+			else if (active_renderer_result.wmo)
+				has_content = !active_renderer_result.wmo->get_groups().empty();
 
 			if (!has_content) {
 				core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", creature.name), {}, 4000);
@@ -1183,12 +1234,9 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 				core::hideToast();
 
 				// JS: if (core.view.creatureViewerAutoAdjust) requestAnimationFrame(() => core.view.creatureViewerContext?.fitCamera?.());
-				// TODO(conversion): fitCamera will be called directly when GL context is wired.
-				if (view.creatureViewerAutoAdjust) {
-					// In ImGui, just call fitCamera directly (redraws every frame).
-				}
+				if (view.creatureViewerAutoAdjust && viewer_context.fitCamera)
+					viewer_context.fitCamera();
 			}
-			*/
 		}
 	} catch (const casc::EncryptionError& e) {
 		// JS: core.setToast('error', util.format('The model %s is encrypted with an unknown key (%s).', creature.name, e.key), null, -1);
@@ -1758,6 +1806,15 @@ static void initialize() {
 			if (active_renderer_result.wmo)
 				active_renderer_result.wmo->setTransform(pos, rot, scale);
 		};
+		viewer_context.useCharacterControls = true;
+		viewer_context.getEquipmentRenderers = []() -> std::unordered_map<int, model_viewer_gl::EquipmentSlotRenderers>* {
+			rebuild_renderer_adapter_maps();
+			return equip_adapter_map.empty() ? nullptr : &equip_adapter_map;
+		};
+		viewer_context.getCollectionRenderers = []() -> std::unordered_map<int, model_viewer_gl::CollectionSlotRenderers>* {
+			rebuild_renderer_adapter_maps();
+			return coll_adapter_map.empty() ? nullptr : &coll_adapter_map;
+		};
 	}
 
 	// JS: this.$core.hideLoadingScreen();
@@ -1874,7 +1931,11 @@ void render() {
 								selected_variant_texture_ids = display.textures;
 
 							// JS: active_renderer.applyReplaceableTextures(display);
-							// TODO(conversion): applyReplaceableTextures will be wired when renderer is integrated.
+							if (active_renderer_result.m2) {
+								M2DisplayInfo disp_info;
+								disp_info.textures = display.textures;
+								active_renderer_result.m2->applyReplaceableTextures(disp_info);
+							}
 						}
 					}
 				}

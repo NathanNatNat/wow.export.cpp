@@ -141,6 +141,18 @@ public:
 
 	void dispose();
 
+	/**
+	 * Get the list of rendered groups (for has_content checks).
+	 * JS equivalent: active_renderer.groups (public in JS)
+	 */
+	const std::vector<WMOGroup>& get_groups() const { return groups; }
+
+	// Accessor/mutator for wmoGroupKey and wmoSetKey (JS: public properties)
+	void setWmoGroupKey(const std::string& key) { wmoGroupKey = key; }
+	const std::string& getWmoGroupKey() const { return wmoGroupKey; }
+	void setWmoSetKey(const std::string& key) { wmoSetKey = key; }
+	const std::string& getWmoSetKey() const { return wmoSetKey; }
+
 	// Public state (matches JS properties)
 	std::unique_ptr<WMOLoader> wmo;
 	gl::ShaderProgram* shader = nullptr;

@@ -145,13 +145,12 @@ static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 		// JS: const file = await core.view.casc.getFile(file_data_id);
 		BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
 
-		// TODO(conversion): GL context and renderer integration still pending; file loaded but not yet consumed.
-		(void)file;
-
-		// The following code is the complete conversion and will work once GL context is wired:
-		/*
 		// JS: const gl_context = core.view.decorViewerContext?.gl_context;
-		// TODO(conversion): GL context retrieval from decorViewerContext will be wired.
+		gl::GLContext* gl_ctx = viewer_context.gl_context;
+		if (!gl_ctx) {
+			core::setToast("error", "GL context not available — model viewer not initialized.", {}, -1);
+			return;
+		}
 
 		// JS: const model_type = modelViewerUtils.detect_model_type(file);
 		auto model_type = model_viewer_utils::detect_model_type(file);
@@ -171,16 +170,26 @@ static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 
 		// JS: active_renderer = modelViewerUtils.create_renderer(file, model_type, gl_context, ...)
 		active_renderer_result = model_viewer_utils::create_renderer(
-			file, model_type, gl_context,
+			file, model_type, *gl_ctx,
 			view.config.value("modelViewerShowTextures", true),
 			file_data_id
 		);
 
 		// JS: if (model_type === modelViewerUtils.MODEL_TYPE_M2) active_renderer.geosetKey = 'decorViewerGeosets';
-		// TODO(conversion): geosetKey/wmoGroupKey/wmoSetKey will be wired when renderer is integrated.
+		if (model_type == model_viewer_utils::ModelType::M2 && active_renderer_result.m2)
+			active_renderer_result.m2->setGeosetKey("decorViewerGeosets");
+		else if (model_type == model_viewer_utils::ModelType::WMO && active_renderer_result.wmo) {
+			active_renderer_result.wmo->setWmoGroupKey("decorViewerWMOGroups");
+			active_renderer_result.wmo->setWmoSetKey("decorViewerWMOSets");
+		}
 
 		// JS: await active_renderer.load();
-		// TODO(conversion): Renderer load() will be called when renderer is integrated.
+		if (active_renderer_result.m2)
+			active_renderer_result.m2->load();
+		else if (active_renderer_result.m3)
+			active_renderer_result.m3->load();
+		else if (active_renderer_result.wmo)
+			active_renderer_result.wmo->load();
 
 		// JS: if (model_type === modelViewerUtils.MODEL_TYPE_M2) core.view.decorViewerAnims = ...
 		if (model_type == model_viewer_utils::ModelType::M2 && active_renderer_result.m2)
@@ -193,8 +202,13 @@ static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 		active_decor_item = &decor_item;
 
 		// JS: const has_content = active_renderer.draw_calls?.length > 0 || active_renderer.groups?.length > 0;
-		// TODO(conversion): has_content check will be wired when renderer is integrated.
-		bool has_content = true;
+		bool has_content = false;
+		if (active_renderer_result.m2)
+			has_content = !active_renderer_result.m2->get_draw_calls().empty();
+		else if (active_renderer_result.m3)
+			has_content = !active_renderer_result.m3->get_draw_calls().empty();
+		else if (active_renderer_result.wmo)
+			has_content = !active_renderer_result.wmo->get_groups().empty();
 
 		if (!has_content) {
 			core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", decor_item.name), {}, 4000);
@@ -202,12 +216,9 @@ static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 			core::hideToast();
 
 			// JS: if (core.view.decorViewerAutoAdjust) requestAnimationFrame(() => core.view.decorViewerContext?.fitCamera?.());
-			// TODO(conversion): fitCamera will be called directly when GL context is wired.
-			if (view.decorViewerAutoAdjust) {
-				// In ImGui, just call fitCamera directly (redraws every frame).
-			}
+			if (view.decorViewerAutoAdjust && viewer_context.fitCamera)
+				viewer_context.fitCamera();
 		}
-		*/
 	} catch (const casc::EncryptionError& e) {
 		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", decor_item.name, e.key), {}, -1);
 		logging::write(std::format("Failed to decrypt model {} ({})", decor_item.name, e.key));

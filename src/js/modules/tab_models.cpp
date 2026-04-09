@@ -169,8 +169,11 @@ static void preview_model(const std::string& file_name) {
 		BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
 
 		// JS: const gl_context = core.view.modelViewerContext?.gl_context;
-		// TODO(conversion): GL context will be wired when model viewer GL is integrated.
-		// auto& gl_context = view.modelViewerContext_gl_context;
+		gl::GLContext* gl_ctx = viewer_context.gl_context;
+		if (!gl_ctx) {
+			core::setToast("error", "GL context not available — model viewer not initialized.", {}, -1);
+			return;
+		}
 
 		// JS: const model_type = modelViewerUtils.detect_model_type_by_name(file_name) ?? modelViewerUtils.detect_model_type(file);
 		auto model_type = model_viewer_utils::detect_model_type_by_name(file_name);
@@ -188,17 +191,13 @@ static void preview_model(const std::string& file_name) {
 			view.modelViewerActiveType = "wmo";
 
 		// JS: active_renderer = modelViewerUtils.create_renderer(file, model_type, gl_context, core.view.config.modelViewerShowTextures, file_name);
-		// TODO(conversion): create_renderer requires GL context, will be wired when model viewer GL is integrated.
-		/*
 		active_renderer_result = model_viewer_utils::create_renderer(
-			file, model_type, gl_context,
+			file, model_type, *gl_ctx,
 			view.config.value("modelViewerShowTextures", true),
 			file_data_id
 		);
-		*/
 
 		// JS: await active_renderer.load();
-		/*
 		if (active_renderer_result.m2)
 			active_renderer_result.m2->load();
 		else if (active_renderer_result.m3)
@@ -321,7 +320,7 @@ static void preview_model(const std::string& file_name) {
 		else if (active_renderer_result.m3)
 			has_content = true; // M3 always has content if loaded
 		else if (active_renderer_result.wmo)
-			has_content = !active_renderer_result.wmo->groups.empty();
+			has_content = !active_renderer_result.wmo->get_groups().empty();
 
 		if (!has_content) {
 			// JS: core.setToast('info', util.format('The model %s doesn\'t have any 3D data associated with it.', file_name), null, 4000);
@@ -330,10 +329,9 @@ static void preview_model(const std::string& file_name) {
 			core::hideToast();
 
 			// JS: if (core.view.modelViewerAutoAdjust) requestAnimationFrame(() => core.view.modelViewerContext?.fitCamera?.());
-			// TODO(conversion): fitCamera will be wired when model viewer GL is integrated.
-			// In ImGui immediate mode, camera auto-adjust is handled next frame automatically.
+			if (viewer_context.fitCamera)
+				viewer_context.fitCamera();
 		}
-		*/
 	} catch (const casc::EncryptionError& e) {
 		// JS: if (e instanceof EncryptionError) { ... }
 		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", file_name, e.key), {}, -1);

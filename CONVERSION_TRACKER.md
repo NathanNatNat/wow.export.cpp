@@ -396,11 +396,11 @@ MPQ source (Phase 3.1, done) and legacy loaders (Phase 3.2, pending).
 - [x] Wire ModelViewerGL rendering calls in tab modules — `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp`, `tab_creatures.cpp`, `tab_characters.cpp` (6 TODOs)
 
 ### 4.3 GL Context & Renderer Wiring
-- [ ] Wire GL context retrieval — `tab_creatures.cpp` (creatureViewerContext), `tab_decor.cpp` (decorViewerContext), `tab_models_legacy.cpp` (legacyModelViewerContext) (3 TODOs)
-- [ ] Wire renderer instantiation (M2RendererGL, WMORendererGL, etc.) — `tab_creatures.cpp`, `tab_models.cpp` (4 TODOs)
-- [ ] Wire renderer load(), draw_calls/groups, has_content, geosetKey/wmoGroupKey/wmoSetKey — `tab_decor.cpp` (4 TODOs)
-- [ ] Wire `applyReplaceableTextures` — `tab_creatures.cpp` (1 TODO)
-- [ ] Wire `getActiveRenderer`, `getEquipmentRenderers`, `getCollectionRenderers` — `tab_creatures.cpp` (1 TODO)
+- [x] Wire GL context retrieval — `tab_creatures.cpp` (creatureViewerContext), `tab_decor.cpp` (decorViewerContext), `tab_models_legacy.cpp` (legacyModelViewerContext) (3 TODOs)
+- [x] Wire renderer instantiation (M2RendererGL, WMORendererGL, etc.) — `tab_creatures.cpp`, `tab_models.cpp` (4 TODOs)
+- [x] Wire renderer load(), draw_calls/groups, has_content, geosetKey/wmoGroupKey/wmoSetKey — `tab_decor.cpp` (4 TODOs)
+- [x] Wire `applyReplaceableTextures` — `tab_creatures.cpp` (1 TODO)
+- [x] Wire `getActiveRenderer`, `getEquipmentRenderers`, `getCollectionRenderers` — `tab_creatures.cpp` (1 TODO)
 
 ### 4.4 Camera Fitting
 - [ ] Wire `fitCamera` calls — `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp`, `tab_creatures.cpp`, `tab_characters.cpp` (7 TODOs)
