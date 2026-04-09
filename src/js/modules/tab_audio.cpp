@@ -18,6 +18,8 @@
 #include "../ui/listbox-context.h"
 #include "../install-type.h"
 #include "../modules.h"
+#include "../components/listbox.h"
+#include "../components/context-menu.h"
 
 #include <cstring>
 #include <format>
@@ -50,6 +52,8 @@ static AudioPlayer player;
 static float prev_sound_player_volume = -1.0f;
 static bool prev_sound_player_loop = false;
 static std::string prev_selection_first;
+static listbox::ListboxState listbox_state;
+static context_menu::ContextMenuState context_menu_state;
 
 // --- Internal functions ---
 
@@ -379,8 +383,80 @@ void render() {
 	//     <Listbox v-model:selection="selectionSounds" :items="listfileSounds" ...>
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	ImGui::BeginChild("sounds-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 5), ImGuiChildFlags_Borders);
-	// TODO(conversion): Listbox and ContextMenu component rendering will be wired when integration is complete.
-	ImGui::Text("Sound files: %zu", view.listfileSounds.size());
+	{
+		// Convert JSON items/selection to string vectors.
+		std::vector<std::string> items_str;
+		items_str.reserve(view.listfileSounds.size());
+		for (const auto& item : view.listfileSounds)
+			items_str.push_back(item.get<std::string>());
+
+		std::vector<std::string> selection_str;
+		for (const auto& s : view.selectionSounds)
+			selection_str.push_back(s.get<std::string>());
+
+		listbox::CopyMode copy_mode = listbox::CopyMode::Default;
+		{
+			std::string cm = view.config.value("copyMode", std::string("Default"));
+			if (cm == "DIR") copy_mode = listbox::CopyMode::DIR;
+			else if (cm == "FID") copy_mode = listbox::CopyMode::FID;
+		}
+
+		listbox::render(
+			"listbox-sounds",
+			items_str,
+			view.userInputFilterSounds,
+			selection_str,
+			false,   // single
+			true,    // keyinput
+			view.config.value("regexFilters", false),
+			copy_mode,
+			view.config.value("pasteSelection", false),
+			view.config.value("removePathSpacesCopy", false),
+			"sound", // unittype
+			nullptr, // overrideItems
+			false,   // disable
+			"sounds", // persistscrollkey
+			{},      // quickfilters
+			false,   // nocopy
+			listbox_state,
+			[&](const std::vector<std::string>& new_sel) {
+				view.selectionSounds.clear();
+				for (const auto& s : new_sel)
+					view.selectionSounds.push_back(s);
+			},
+			[](const listbox::ContextMenuEvent& ev) {
+				listbox_context::handle_context_menu(ev.selection);
+			}
+		);
+
+		// Context menu for generic listbox.
+		context_menu::render(
+			"ctx-sounds",
+			view.contextMenus.nodeListbox,
+			context_menu_state,
+			[&]() { view.contextMenus.nodeListbox = nullptr; },
+			[](const nlohmann::json& node) {
+				std::vector<std::string> sel;
+				if (node.contains("selection") && node["selection"].is_array())
+					for (const auto& s : node["selection"])
+						sel.push_back(s.get<std::string>());
+				int count = node.value("count", 0);
+				std::string plural = count > 1 ? "s" : "";
+				bool hasFileDataIDs = node.value("hasFileDataIDs", false);
+
+				if (ImGui::Selectable(std::format("Copy file path{}", plural).c_str()))
+					listbox_context::copy_file_paths(sel);
+				if (hasFileDataIDs && ImGui::Selectable(std::format("Copy file path{} (listfile format)", plural).c_str()))
+					listbox_context::copy_listfile_format(sel);
+				if (hasFileDataIDs && ImGui::Selectable(std::format("Copy file data ID{}", plural).c_str()))
+					listbox_context::copy_file_data_ids(sel);
+				if (ImGui::Selectable(std::format("Copy export path{}", plural).c_str()))
+					listbox_context::copy_export_paths(sel);
+				if (ImGui::Selectable("Open export directory"))
+					listbox_context::open_export_directory(sel);
+			}
+		);
+	}
 	ImGui::EndChild();
 
 	// Filter.

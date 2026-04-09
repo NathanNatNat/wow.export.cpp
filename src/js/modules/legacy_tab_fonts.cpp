@@ -9,6 +9,8 @@
 #include "../log.h"
 #include "../core.h"
 #include "../ui/listbox-context.h"
+#include "../components/listbox.h"
+#include "../components/context-menu.h"
 #include "../install-type.h"
 #include "../modules.h"
 #include "../mpq/mpq-install.h"
@@ -30,6 +32,8 @@ namespace legacy_tab_fonts {
 
 // JS: const loaded_fonts = new Map();
 static std::unordered_map<std::string, void*> loaded_fonts;
+static listbox::ListboxState listbox_state;
+static context_menu::ContextMenuState context_menu_state;
 
 // JS: const get_font_id = (file_name) => { ... }
 static std::string get_font_id(const std::string& file_name) {
@@ -167,8 +171,80 @@ void render() {
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	//       copy_file_paths, copy_export_paths, open_export_directory
 	ImGui::BeginChild("legacy-fonts-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.4f, 0), ImGuiChildFlags_Borders);
-	// TODO(conversion): Listbox and ContextMenu component rendering will be wired when integration is complete.
-	ImGui::Text("Font files: %zu", view.listfileFonts.size());
+	{
+		// Convert JSON items/selection to string vectors.
+		std::vector<std::string> items_str;
+		items_str.reserve(view.listfileFonts.size());
+		for (const auto& item : view.listfileFonts)
+			items_str.push_back(item.get<std::string>());
+
+		std::vector<std::string> selection_str;
+		for (const auto& s : view.selectionFonts)
+			selection_str.push_back(s.get<std::string>());
+
+		listbox::CopyMode copy_mode = listbox::CopyMode::Default;
+		{
+			std::string cm = view.config.value("copyMode", std::string("Default"));
+			if (cm == "DIR") copy_mode = listbox::CopyMode::DIR;
+			else if (cm == "FID") copy_mode = listbox::CopyMode::FID;
+		}
+
+		listbox::render(
+			"listbox-legacy-fonts",
+			items_str,
+			view.userInputFilterFonts,
+			selection_str,
+			false,   // single
+			true,    // keyinput
+			view.config.value("regexFilters", false),
+			copy_mode,
+			view.config.value("pasteSelection", false),
+			view.config.value("removePathSpacesCopy", false),
+			"font",  // unittype
+			nullptr, // overrideItems
+			false,   // disable
+			"legacy-fonts", // persistscrollkey
+			{},      // quickfilters
+			false,   // nocopy
+			listbox_state,
+			[&](const std::vector<std::string>& new_sel) {
+				view.selectionFonts.clear();
+				for (const auto& s : new_sel)
+					view.selectionFonts.push_back(s);
+			},
+			[](const listbox::ContextMenuEvent& ev) {
+				listbox_context::handle_context_menu(ev.selection, true);
+			}
+		);
+
+		// Context menu for generic listbox.
+		context_menu::render(
+			"ctx-legacy-fonts",
+			view.contextMenus.nodeListbox,
+			context_menu_state,
+			[&]() { view.contextMenus.nodeListbox = nullptr; },
+			[](const nlohmann::json& node) {
+				std::vector<std::string> sel;
+				if (node.contains("selection") && node["selection"].is_array())
+					for (const auto& s : node["selection"])
+						sel.push_back(s.get<std::string>());
+				int count = node.value("count", 0);
+				std::string plural = count > 1 ? "s" : "";
+				bool hasFileDataIDs = node.value("hasFileDataIDs", false);
+
+				if (ImGui::Selectable(std::format("Copy file path{}", plural).c_str()))
+					listbox_context::copy_file_paths(sel);
+				if (hasFileDataIDs && ImGui::Selectable(std::format("Copy file path{} (listfile format)", plural).c_str()))
+					listbox_context::copy_listfile_format(sel);
+				if (hasFileDataIDs && ImGui::Selectable(std::format("Copy file data ID{}", plural).c_str()))
+					listbox_context::copy_file_data_ids(sel);
+				if (ImGui::Selectable(std::format("Copy export path{}", plural).c_str()))
+					listbox_context::copy_export_paths(sel);
+				if (ImGui::Selectable("Open export directory"))
+					listbox_context::open_export_directory(sel);
+			}
+		);
+	}
 	ImGui::EndChild();
 
 	ImGui::SameLine();
