@@ -37,6 +37,13 @@ static file_field::FileFieldState export_dir_state;
 static file_field::FileFieldState char_save_dir_state;
 static menu_button::MenuButtonState locale_menu_state;
 
+// --- Forward declarations ---
+static void handle_cache_clear();
+static void handle_tact_key();
+void handle_discard();
+void handle_apply();
+void handle_reset();
+
 // --- Internal functions ---
 
 // JS: const load_default_config = async () => { ... }
@@ -129,9 +136,8 @@ void render() {
 		ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Warning: Using an export path with spaces may cause issues in some applications.");
 	{
 		std::string export_dir = cfg.value("exportDirectory", std::string(""));
-		file_field::render("##ExportDir", export_dir, "", export_dir_state);
-		if (export_dir != cfg.value("exportDirectory", std::string("")))
-			cfg["exportDirectory"] = export_dir;
+		file_field::render("##ExportDir", export_dir, "", export_dir_state,
+			[&](const std::string& new_path) { cfg["exportDirectory"] = new_path; });
 	}
 
 	// JS: Character Save Directory
@@ -139,9 +145,8 @@ void render() {
 	ImGui::TextWrapped("Local directory where saved characters are stored. Leave empty to use the default location.");
 	{
 		std::string char_dir = cfg.value("characterExportPath", std::string(""));
-		file_field::render("##CharSaveDir", char_dir, default_character_path().c_str(), char_save_dir_state);
-		if (char_dir != cfg.value("characterExportPath", std::string("")))
-			cfg["characterExportPath"] = char_dir;
+		file_field::render("##CharSaveDir", char_dir, default_character_path().c_str(), char_save_dir_state,
+			[&](const std::string& new_path) { cfg["characterExportPath"] = new_path; });
 	}
 
 	// JS: Scroll Speed

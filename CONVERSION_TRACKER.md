@@ -448,32 +448,32 @@ The legacy model tab depends on MPQ renderers (Phase 4.1) and loaders
 - [x] Wire standalone ContextMenu in `tab_items.cpp`, `tab_zones.cpp` (3 TODOs)
 
 ### 5.3 DataTable
-- [ ] Wire DataTable rendering in `tab_data.cpp`, `legacy_tab_data.cpp` (2 TODOs)
-- [ ] Wire `getSelectedRowsAsCSV` / `getSelectedRowsAsSQL` — `tab_data.cpp`, `legacy_tab_data.cpp` (4 TODOs)
+- [x] Wire DataTable rendering in `tab_data.cpp`, `legacy_tab_data.cpp` (2 TODOs)
+- [x] Wire `getSelectedRowsAsCSV` / `getSelectedRowsAsSQL` — `tab_data.cpp`, `legacy_tab_data.cpp` (4 TODOs)
 
 ### 5.4 Listboxb
-- [ ] Wire Listboxb rendering in `tab_models.cpp`, `tab_models_legacy.cpp` (2 TODOs)
+- [x] Wire Listboxb rendering in `tab_models.cpp`, `tab_models_legacy.cpp` (2 TODOs)
 
 ### 5.5 ItemListbox
-- [ ] Wire ItemListbox rendering in `tab_items.cpp`, `tab_item_sets.cpp` (2 TODOs)
+- [x] Wire ItemListbox rendering in `tab_items.cpp`, `tab_item_sets.cpp` (2 TODOs)
 
 ### 5.6 ListboxZones
-- [ ] Wire ListboxZones rendering in `tab_zones.cpp` (1 TODO)
+- [x] Wire ListboxZones rendering in `tab_zones.cpp` (1 TODO)
 
 ### 5.7 CheckboxList
-- [ ] Wire CheckboxList rendering in `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp` (3 TODOs)
+- [x] Wire CheckboxList rendering in `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp` (3 TODOs)
 
 ### 5.8 MenuButton
-- [ ] Wire MenuButton rendering in `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp` (3 TODOs)
+- [x] Wire MenuButton rendering in `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp` (3 TODOs)
 
 ### 5.9 Filter Input
-- [ ] Wire `ImGui::InputText` filter in `tab_creatures.cpp`, `tab_decor.cpp`, `tab_models.cpp`, `tab_models_legacy.cpp` (4 TODOs)
+- [x] Wire `ImGui::InputText` filter in `tab_creatures.cpp`, `tab_decor.cpp`, `tab_models.cpp`, `tab_models_legacy.cpp` (4 TODOs)
 
 ### 5.10 Full ImGui Rendering
-- [ ] Complete full ImGui rendering for `screen_source_select.cpp`, `screen_settings.cpp`, `legacy_tab_textures.cpp` (4 TODOs)
+- [x] Complete full ImGui rendering for `screen_source_select.cpp`, `screen_settings.cpp`, `legacy_tab_textures.cpp` (4 TODOs)
 
 ### 5.11 ComboBox
-- [ ] Wire full ComboBox with search for realm list — `tab_characters.cpp` (1 TODO)
+- [x] Wire full ComboBox with search for realm list — `tab_characters.cpp` (1 TODO)
 
 ---
 
