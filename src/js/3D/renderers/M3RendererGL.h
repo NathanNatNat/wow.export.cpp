@@ -60,6 +60,9 @@ public:
 	void _dispose_geometry();
 	void dispose();
 
+	// Accessor for draw_calls (JS: public property)
+	const std::vector<M3DrawCall>& get_draw_calls() const { return draw_calls; }
+
 	// Public state (matches JS properties)
 	std::unique_ptr<M3Loader> m3;
 	gl::ShaderProgram* shader = nullptr;

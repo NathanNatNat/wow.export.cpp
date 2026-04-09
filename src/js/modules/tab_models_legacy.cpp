@@ -155,27 +155,29 @@ static void preview_model(const std::string& file_name) {
 		std::transform(file_name_lower.begin(), file_name_lower.end(), file_name_lower.begin(), ::tolower);
 
 		// JS: const gl_context = core.view.legacyModelViewerContext?.gl_context;
-		// TODO(conversion): GL context retrieval from legacyModelViewerContext will be wired.
+		gl::GLContext* gl_ctx = viewer_context.gl_context;
+		if (!gl_ctx)
+			throw std::runtime_error("GL context not available — model viewer not initialized.");
 
 		if (magic == MAGIC_MDLX) {
 			// JS: core.view.legacyModelViewerActiveType = 'mdx';
 			view.legacyModelViewerActiveType = "mdx";
 			// JS: active_renderer = new MDXRendererGL(data, gl_context, true, core.view.config.modelViewerShowTextures);
-			active_renderer_mdx = std::make_unique<MDXRendererGL>(data, gl_context, true,
+			active_renderer_mdx = std::make_unique<MDXRendererGL>(data, *gl_ctx, true,
 				view.config.value("modelViewerShowTextures", true));
 			active_renderer_type = LegacyModelType::MDX;
 		} else if (magic == MAGIC_MD20) {
 			// JS: core.view.legacyModelViewerActiveType = 'm2';
 			view.legacyModelViewerActiveType = "m2";
 			// JS: active_renderer = new M2LegacyRendererGL(data, gl_context, true, core.view.config.modelViewerShowTextures);
-			active_renderer_m2 = std::make_unique<M2LegacyRendererGL>(data, gl_context, true,
+			active_renderer_m2 = std::make_unique<M2LegacyRendererGL>(data, *gl_ctx, true,
 				view.config.value("modelViewerShowTextures", true));
 			active_renderer_type = LegacyModelType::M2;
 		} else if (file_name_lower.ends_with(".wmo")) {
 			// JS: core.view.legacyModelViewerActiveType = 'wmo';
 			view.legacyModelViewerActiveType = "wmo";
 			// JS: active_renderer = new WMOLegacyRendererGL(data, file_name, gl_context, core.view.config.modelViewerShowTextures);
-			active_renderer_wmo = std::make_unique<WMOLegacyRendererGL>(data, 0, gl_context,
+			active_renderer_wmo = std::make_unique<WMOLegacyRendererGL>(data, 0, *gl_ctx,
 				view.config.value("modelViewerShowTextures", true));
 			active_renderer_type = LegacyModelType::WMO;
 		} else {

@@ -267,6 +267,13 @@ public:
 	// Accessor for skelLoader (JS: renderer.skelLoader public property)
 	const SKELLoader* getSkelLoader() const { return skelLoader.get(); }
 
+	// Accessor/mutator for geosetKey (JS: public property)
+	void setGeosetKey(const std::string& key) { geosetKey = key; }
+	const std::string& getGeosetKey() const { return geosetKey; }
+
+	// Accessor for bone data (JS: renderer.bones public property)
+	const std::vector<M2Bone>* get_bones_m2() const { return bones_m2; }
+
 	// Public state (matches JS properties)
 	std::unique_ptr<M2Loader> m2;
 	gl::ShaderProgram* shader = nullptr;
