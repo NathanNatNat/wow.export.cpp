@@ -1220,7 +1220,6 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			active_creature = &creature;
 
 			// JS: const has_content = active_renderer.draw_calls?.length > 0 || active_renderer.groups?.length > 0;
-			// JS: const has_content = active_renderer.draw_calls?.length > 0 || active_renderer.groups?.length > 0;
 			bool has_content = false;
 			if (active_renderer_result.m2)
 				has_content = !active_renderer_result.m2->get_draw_calls().empty();

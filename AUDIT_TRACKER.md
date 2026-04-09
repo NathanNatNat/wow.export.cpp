@@ -358,6 +358,21 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **C++**: `draw_calls` is private. Added `get_draw_calls()` const accessor following the existing pattern of `get_bone_matrices()` and `get_bone_remap_table()`.
 - **Rationale**: Standard C++ accessor pattern for data that JS accesses as public properties.
 
+### `src/js/3D/renderers/M2RendererGL.h` — ACCEPTABLE (setGeosetKey / get_bones_m2 accessors)
+- **JS**: `geosetKey` and `bones` are public properties on the M2RendererGL class.
+- **C++**: Both are private. Added `setGeosetKey()` / `getGeosetKey()` mutator/accessor and `get_bones_m2()` const accessor.
+- **Rationale**: Standard C++ accessor pattern. `geosetKey` is set by tab modules to control which view array stores geoset data. `bones` is read by collection model code for `buildBoneRemapTable()`.
+
+### `src/js/3D/renderers/WMORendererGL.h` — ACCEPTABLE (get_groups / setWmoGroupKey / setWmoSetKey accessors)
+- **JS**: `groups`, `wmoGroupKey`, `wmoSetKey` are public properties on the WMORendererGL class.
+- **C++**: All are private. Added `get_groups()` const accessor and `setWmoGroupKey()` / `setWmoSetKey()` mutators.
+- **Rationale**: Standard C++ accessor pattern for data that JS accesses as public properties. `groups` is used for has_content checks, keys are set by tab modules to control which view arrays store WMO group/set data.
+
+### `src/js/3D/renderers/M3RendererGL.h` — ACCEPTABLE (get_draw_calls accessor)
+- **JS**: `draw_calls` is a public property on the M3RendererGL class.
+- **C++**: `draw_calls` is private. Added `get_draw_calls()` const accessor.
+- **Rationale**: Standard C++ accessor pattern for data that JS accesses as public properties. Used for has_content checks in tab modules.
+
 ### `src/js/3D/exporters/ADTExporter.cpp` — ACCEPTABLE (export → exportTile rename)
 - **JS**: Method is named `export(dir, quality, gameObjects, helper)`.
 - **C++**: Renamed to `exportTile(dir, quality, gameObjects, helper, casc)` because `export` is a reserved keyword in C++ (modules).
