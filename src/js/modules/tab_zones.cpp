@@ -85,9 +85,9 @@ static void composite_blp_tile(casc::BLPImage& blp, int dest_x, int dest_y, int 
 			} else if (sa > 0) {
 				const float a = sa / 255.0f;
 				const float inv_a = 1.0f - a;
-				pixels[dst_idx]     = static_cast<uint8_t>(tile_pixels[src_idx]     * a + pixels[dst_idx]     * inv_a);
-				pixels[dst_idx + 1] = static_cast<uint8_t>(tile_pixels[src_idx + 1] * a + pixels[dst_idx + 1] * inv_a);
-				pixels[dst_idx + 2] = static_cast<uint8_t>(tile_pixels[src_idx + 2] * a + pixels[dst_idx + 2] * inv_a);
+				pixels[dst_idx]     = static_cast<uint8_t>(std::min(tile_pixels[src_idx]     * a + pixels[dst_idx]     * inv_a, 255.0f));
+				pixels[dst_idx + 1] = static_cast<uint8_t>(std::min(tile_pixels[src_idx + 1] * a + pixels[dst_idx + 1] * inv_a, 255.0f));
+				pixels[dst_idx + 2] = static_cast<uint8_t>(std::min(tile_pixels[src_idx + 2] * a + pixels[dst_idx + 2] * inv_a, 255.0f));
 				pixels[dst_idx + 3] = std::max(pixels[dst_idx + 3], sa);
 			}
 		}
