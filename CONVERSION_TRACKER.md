@@ -345,7 +345,7 @@ Wire `casc->getFile()`, `getFileByName()`, and related calls across all modules.
 - [x] `Texture.cpp` — `casc.getFile(fileDataID)` (1 TODO)
 
 ### 2.3 CASC in DB Layer
-- [ ] `WDCReader.cpp` — Wire CASC interface for DB2 table loading (1 TODO)
+- [x] `WDCReader.cpp` — Wire CASC interface for DB2 table loading (1 TODO)
 
 ---
 
