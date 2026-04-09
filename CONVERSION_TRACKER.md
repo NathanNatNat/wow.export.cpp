@@ -443,9 +443,9 @@ The legacy model tab depends on MPQ renderers (Phase 4.1) and loaders
 - [x] `tab_models_legacy.cpp` — MPQ source, creature data, file loading (6 TODOs)
 
 ### 5.2 Listbox & ContextMenu
-- [ ] Wire in `tab_audio.cpp`, `tab_raw.cpp`, `tab_text.cpp`, `tab_fonts.cpp`, `tab_textures.cpp`, `tab_videos.cpp`, `legacy_tab_audio.cpp`, `legacy_tab_files.cpp`, `legacy_tab_fonts.cpp` (9 TODOs)
-- [ ] Wire standalone Listbox in `tab_data.cpp`, `legacy_tab_data.cpp`, `tab_creatures.cpp`, `tab_decor.cpp`, `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_install.cpp` (8 TODOs)
-- [ ] Wire standalone ContextMenu in `tab_items.cpp`, `tab_zones.cpp` (3 TODOs)
+- [x] Wire in `tab_audio.cpp`, `tab_raw.cpp`, `tab_text.cpp`, `tab_fonts.cpp`, `tab_textures.cpp`, `tab_videos.cpp`, `legacy_tab_audio.cpp`, `legacy_tab_files.cpp`, `legacy_tab_fonts.cpp` (9 TODOs)
+- [x] Wire standalone Listbox in `tab_data.cpp`, `legacy_tab_data.cpp`, `tab_creatures.cpp`, `tab_decor.cpp`, `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_install.cpp` (8 TODOs)
+- [x] Wire standalone ContextMenu in `tab_items.cpp`, `tab_zones.cpp` (3 TODOs)
 
 ### 5.3 DataTable
 - [ ] Wire DataTable rendering in `tab_data.cpp`, `legacy_tab_data.cpp` (2 TODOs)
