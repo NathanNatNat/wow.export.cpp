@@ -31,14 +31,71 @@ License: MIT
 #include <cmath>
 
 #include <imgui.h>
+#include <glad/gl.h>
 #include <spdlog/spdlog.h>
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <Windows.h>
 #include <shellapi.h>
 #endif
 
 namespace tab_zones {
+
+// Upload RGBA pixel data to an OpenGL texture, returning the texture ID.
+// Deletes the previous texture if old_tex != 0.
+static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t old_tex = 0) {
+	if (old_tex != 0) {
+		GLuint old_gl = static_cast<GLuint>(old_tex);
+		glDeleteTextures(1, &old_gl);
+	}
+	GLuint tex = 0;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	return static_cast<uint32_t>(tex);
+}
+
+// Composite BLP tile RGBA pixels onto the zone map pixel buffer at (dest_x, dest_y).
+static void composite_blp_tile(casc::BLPImage& blp, int dest_x, int dest_y, int map_w, int map_h,
+	std::vector<uint8_t>& pixels) {
+	std::vector<uint8_t> tile_pixels = blp.toUInt8Array();
+	const int tw = static_cast<int>(blp.width);
+	const int th = static_cast<int>(blp.height);
+
+	for (int y = 0; y < th; ++y) {
+		const int dy = dest_y + y;
+		if (dy < 0 || dy >= map_h) continue;
+		for (int x = 0; x < tw; ++x) {
+			const int dx = dest_x + x;
+			if (dx < 0 || dx >= map_w) continue;
+			const size_t src_idx = (static_cast<size_t>(y) * tw + x) * 4;
+			const size_t dst_idx = (static_cast<size_t>(dy) * map_w + dx) * 4;
+			// Simple alpha-over compositing.
+			const uint8_t sa = tile_pixels[src_idx + 3];
+			if (sa == 255) {
+				pixels[dst_idx]     = tile_pixels[src_idx];
+				pixels[dst_idx + 1] = tile_pixels[src_idx + 1];
+				pixels[dst_idx + 2] = tile_pixels[src_idx + 2];
+				pixels[dst_idx + 3] = 255;
+			} else if (sa > 0) {
+				const float a = sa / 255.0f;
+				const float inv_a = 1.0f - a;
+				pixels[dst_idx]     = static_cast<uint8_t>(std::min(tile_pixels[src_idx]     * a + pixels[dst_idx]     * inv_a, 255.0f));
+				pixels[dst_idx + 1] = static_cast<uint8_t>(std::min(tile_pixels[src_idx + 1] * a + pixels[dst_idx + 1] * inv_a, 255.0f));
+				pixels[dst_idx + 2] = static_cast<uint8_t>(std::min(tile_pixels[src_idx + 2] * a + pixels[dst_idx + 2] * inv_a, 255.0f));
+				pixels[dst_idx + 3] = std::max(pixels[dst_idx + 3], sa);
+			}
+		}
+	}
+}
 
 // Helper to extract uint32_t from a FieldValue.
 static uint32_t fieldToUint32(const db::FieldValue& val) {
@@ -311,6 +368,11 @@ for (const auto& art_style : art_styles) {
 	if (art_style.layer_index == 0) {
 		map_width = art_style.layer_width;
 		map_height = art_style.layer_height;
+
+		// Allocate pixel buffer for the zone map composite.
+		core::view->zoneMapWidth = map_width;
+		core::view->zoneMapHeight = map_height;
+		core::view->zoneMapPixels.assign(static_cast<size_t>(map_width) * map_height * 4, 0);
 	}
 
 	// JS: if (core.view.config.showZoneBaseMap) { ... render layers ... }
@@ -404,10 +466,10 @@ static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index,
 			// c. Load BLP from CASC via tile.FileDataID
 			BufferWrapper blp_data = core::view->casc->getVirtualFileByID(file_data_id, true);
 			casc::BLPImage blp(blp_data);
-			// TODO(conversion): Composite BLP tile pixels onto zone map texture at (pixel_x, pixel_y) when GL texture compositing is integrated.
-			(void)pixel_x;
-			(void)pixel_y;
-			(void)blp;
+			// Composite BLP tile pixels onto zone map texture at (pixel_x, pixel_y).
+			composite_blp_tile(blp, pixel_x, pixel_y,
+				core::view->zoneMapWidth, core::view->zoneMapHeight,
+				core::view->zoneMapPixels);
 			successful++;
 		} catch (const std::exception& e) {
 			logging::write(std::format("Failed to load zone tile {}: {}", file_data_id, e.what()));
@@ -499,10 +561,10 @@ static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const
 			// b. Load BLP from CASC via tile.FileDataID
 			BufferWrapper blp_data = core::view->casc->getVirtualFileByID(file_data_id, true);
 			casc::BLPImage blp(blp_data);
-			// TODO(conversion): Composite overlay BLP tile pixels onto zone map texture at (base_x, base_y) when GL texture compositing is integrated.
-			(void)base_x;
-			(void)base_y;
-			(void)blp;
+			// Composite overlay BLP tile pixels onto zone map texture at (base_x, base_y).
+			composite_blp_tile(blp, base_x, base_y,
+				core::view->zoneMapWidth, core::view->zoneMapHeight,
+				core::view->zoneMapPixels);
 			successful++;
 		} catch (const std::exception& e) {
 			logging::write(std::format("Failed to load overlay tile {}: {}", file_data_id, e.what()));
@@ -516,9 +578,13 @@ static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const
 static void load_zone_map(int zone_id, std::optional<int> phase_id = std::nullopt) {
 try {
 const auto result = render_zone_to_canvas(zone_id, phase_id);
-// JS: canvas rendering is done in render_zone_to_canvas.
-// TODO(conversion): The resulting composite texture will be stored for ImGui::Image display.
-(void)result;
+// Upload the composited pixel buffer to a GL texture for ImGui::Image display.
+if (!core::view->zoneMapPixels.empty() && core::view->zoneMapWidth > 0 && core::view->zoneMapHeight > 0) {
+	core::view->zoneMapTexID = upload_rgba_to_gl(
+		core::view->zoneMapPixels.data(),
+		core::view->zoneMapWidth, core::view->zoneMapHeight,
+		core::view->zoneMapTexID);
+}
 } catch (const std::exception& e) {
 logging::write(std::format("failed to render zone map: {}", e.what()));
 core::setToast("error", std::format("Failed to load map data: {}", e.what()));
@@ -791,9 +857,17 @@ ImGui::EndCombo();
 // JS: <div class="zone-viewer-container preview-container">
 //     <canvas id="zone-canvas"></canvas>
 ImGui::BeginChild("zone-canvas-area", ImVec2(0, 0), ImGuiChildFlags_Borders);
-// TODO(conversion): Zone map preview will be rendered as an ImGui::Image when GL texture compositing is integrated.
-// The JS version renders BLP tiles onto an HTML canvas; the C++ version will composite onto an offscreen FBO.
-ImGui::TextUnformatted("Select a zone to preview its map");
+if (view.zoneMapTexID != 0 && view.zoneMapWidth > 0 && view.zoneMapHeight > 0) {
+	// Fit zone map into available area while preserving aspect ratio.
+	const ImVec2 avail = ImGui::GetContentRegionAvail();
+	const float tex_w = static_cast<float>(view.zoneMapWidth);
+	const float tex_h = static_cast<float>(view.zoneMapHeight);
+	const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
+	const ImVec2 img_size(tex_w * scale, tex_h * scale);
+	ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.zoneMapTexID)), img_size);
+} else {
+	ImGui::TextUnformatted("Select a zone to preview its map");
+}
 ImGui::EndChild();
 
 ImGui::EndGroup();

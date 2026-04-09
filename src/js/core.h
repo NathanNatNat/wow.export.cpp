@@ -364,6 +364,8 @@ struct AppState {
 	int creatureTexturePreviewWidth = 256;
 	int creatureTexturePreviewHeight = 256;
 	std::string creatureTexturePreviewName;
+	uint32_t creatureTexturePreviewTexID = 0;
+	uint32_t creatureTexturePreviewUVTexID = 0;
 	nlohmann::json decorViewerContext;
 	std::string decorViewerActiveType = "none";
 	std::vector<nlohmann::json> decorViewerGeosets;
@@ -381,6 +383,8 @@ struct AppState {
 	int decorTexturePreviewWidth = 256;
 	int decorTexturePreviewHeight = 256;
 	std::string decorTexturePreviewName;
+	uint32_t decorTexturePreviewTexID = 0;
+	uint32_t decorTexturePreviewUVTexID = 0;
 	std::vector<nlohmann::json> legacyModelViewerSkins;
 	std::vector<nlohmann::json> legacyModelViewerSkinsSelection;
 	std::string legacyModelTexturePreviewURL;
@@ -398,10 +402,13 @@ struct AppState {
 	std::string modelTexturePreviewName;
 	std::string modelTexturePreviewUVOverlay;
 	std::vector<nlohmann::json> modelViewerUVLayers;
+	uint32_t modelTexturePreviewTexID = 0;
+	uint32_t modelTexturePreviewUVTexID = 0;
 	int texturePreviewWidth = 256;
 	int texturePreviewHeight = 256;
 	std::string texturePreviewURL;
 	std::string texturePreviewInfo;
+	uint32_t texturePreviewTexID = 0;
 	std::vector<nlohmann::json> overrideModelList;
 	std::string overrideModelName;
 	std::vector<nlohmann::json> overrideTextureList;
@@ -412,6 +419,10 @@ struct AppState {
 	std::vector<nlohmann::json> zonePhases;
 	nlohmann::json zonePhaseSelection;
 	int selectedZoneExpansionFilter = -1;
+	uint32_t zoneMapTexID = 0;
+	int zoneMapWidth = 0;
+	int zoneMapHeight = 0;
+	std::vector<uint8_t> zoneMapPixels;
 	bool mapViewerHasWorldModel = false;
 	bool mapViewerIsWMOMinimap = false;
 	nlohmann::json mapViewerTileLoader;

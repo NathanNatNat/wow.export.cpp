@@ -1034,12 +1034,25 @@ void render() {
 			view.modelTexturePreviewURL.clear();
 
 		// JS: <div class="image" :style="{ 'max-width': ... 'px', 'max-height': ... 'px' }">
-		// TODO(conversion): Texture preview image rendering will be wired when GL texture display is integrated.
-		ImGui::Text("Preview: %s (%dx%d)", view.modelTexturePreviewName.c_str(),
-			view.modelTexturePreviewWidth, view.modelTexturePreviewHeight);
+		if (view.modelTexturePreviewTexID != 0) {
+			const ImVec2 avail = ImGui::GetContentRegionAvail();
+			const float tex_w = static_cast<float>(view.modelTexturePreviewWidth);
+			const float tex_h = static_cast<float>(view.modelTexturePreviewHeight);
+			const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
+			const ImVec2 img_size(tex_w * scale, tex_h * scale);
 
-		// JS: <div class="uv-overlay" v-if="modelTexturePreviewUVOverlay" ...>
-		// TODO(conversion): UV overlay rendering will be wired when GL texture display is integrated.
+			const ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.modelTexturePreviewTexID)), img_size);
+
+			// JS: <div class="uv-overlay" v-if="modelTexturePreviewUVOverlay" ...>
+			if (view.modelTexturePreviewUVTexID != 0 && !view.modelTexturePreviewUVOverlay.empty()) {
+				ImGui::SetCursorScreenPos(cursor_pos);
+				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.modelTexturePreviewUVTexID)), img_size);
+			}
+		} else {
+			ImGui::Text("Preview: %s (%dx%d)", view.modelTexturePreviewName.c_str(),
+				view.modelTexturePreviewWidth, view.modelTexturePreviewHeight);
+		}
 
 		// JS: <div id="uv-layer-buttons" v-if="modelViewerUVLayers.length > 0">
 		if (!view.modelViewerUVLayers.empty()) {

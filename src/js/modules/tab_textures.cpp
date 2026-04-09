@@ -29,6 +29,7 @@
 #include <optional>
 
 #include <imgui.h>
+#include <glad/gl.h>
 #include <spdlog/spdlog.h>
 
 namespace tab_textures {
@@ -107,6 +108,25 @@ static uint8_t prev_export_channel_mask = 0xFF;
 static bool prev_export_texture_alpha = false;
 static bool prev_show_texture_atlas = false;
 
+// Upload RGBA pixel data to an OpenGL texture, returning the texture ID.
+// Deletes the previous texture if old_tex != 0.
+static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t old_tex = 0) {
+	if (old_tex != 0) {
+		GLuint old_gl = static_cast<GLuint>(old_tex);
+		glDeleteTextures(1, &old_gl);
+	}
+	GLuint tex = 0;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	return static_cast<uint32_t>(tex);
+}
+
 // --- Internal functions ---
 
 // JS: const update_texture_atlas_overlay = (core) => { ... }
@@ -168,6 +188,12 @@ static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string&
 		core::view->texturePreviewURL = blp.getDataURL(channel_mask);
 		core::view->texturePreviewWidth = static_cast<int>(blp.width);
 		core::view->texturePreviewHeight = static_cast<int>(blp.height);
+
+		// Upload BLP as GL texture for ImGui::Image display.
+		std::vector<uint8_t> pixels = blp.toUInt8Array(0, channel_mask);
+		core::view->texturePreviewTexID = upload_rgba_to_gl(
+			pixels.data(), static_cast<int>(blp.width), static_cast<int>(blp.height),
+			core::view->texturePreviewTexID);
 
 		std::string info;
 		switch (blp.encoding) {
@@ -577,21 +603,51 @@ void render() {
 	// Texture preview area.
 	ImGui::BeginChild("texture-preview-area", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
 
-	// Atlas overlay regions.
-	// JS: <div id="atlas-overlay" v-if="$core.view.config.showTextureAtlas">
-	if (view.config.value("showTextureAtlas", false) && !view.textureAtlasOverlayRegions.empty()) {
-		// TODO(conversion): Atlas region rendering as ImGui overlay rectangles will be wired
-		// when the texture preview is rendered as an OpenGL texture. For now, show region names.
-		for (const auto& region : view.textureAtlasOverlayRegions) {
-			if (region.contains("name"))
-				ImGui::TextUnformatted(region["name"].get<std::string>().c_str());
-		}
-	}
-
 	// JS: <div class="image" :style="{ 'background-image': 'url(' + texturePreviewURL + ')' }">
-	// TODO(conversion): Texture preview will be rendered as an ImGui::Image when GL texture loading is integrated.
-	if (!view.texturePreviewURL.empty())
+	if (view.texturePreviewTexID != 0) {
+		// Fit the texture into the available area while preserving aspect ratio.
+		const ImVec2 avail = ImGui::GetContentRegionAvail();
+		const float tex_w = static_cast<float>(view.texturePreviewWidth);
+		const float tex_h = static_cast<float>(view.texturePreviewHeight);
+		const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
+		const ImVec2 img_size(tex_w * scale, tex_h * scale);
+
+		const ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+		ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.texturePreviewTexID)), img_size);
+
+		// Atlas overlay regions drawn on top of the texture image.
+		// JS: <div id="atlas-overlay" v-if="$core.view.config.showTextureAtlas">
+		if (view.config.value("showTextureAtlas", false) && !view.textureAtlasOverlayRegions.empty()) {
+			ImDrawList* draw_list = ImGui::GetWindowDrawList();
+			for (const auto& region : view.textureAtlasOverlayRegions) {
+				if (!region.contains("name"))
+					continue;
+
+				// Region positions are stored as percentage strings (e.g. "25.5%").
+				auto parse_pct = [](const nlohmann::json& j, const std::string& key) -> float {
+					if (!j.contains(key)) return 0.0f;
+					const std::string s = j[key].get<std::string>();
+					return std::stof(s) / 100.0f;
+				};
+
+				const float pct_left   = parse_pct(region, "left");
+				const float pct_top    = parse_pct(region, "top");
+				const float pct_width  = parse_pct(region, "width");
+				const float pct_height = parse_pct(region, "height");
+
+				const ImVec2 rect_min(cursor_pos.x + pct_left * img_size.x,
+				                      cursor_pos.y + pct_top  * img_size.y);
+				const ImVec2 rect_max(rect_min.x + pct_width  * img_size.x,
+				                      rect_min.y + pct_height * img_size.y);
+
+				draw_list->AddRect(rect_min, rect_max, IM_COL32(255, 255, 0, 200), 0.0f, 0, 1.0f);
+				const std::string name = region["name"].get<std::string>();
+				draw_list->AddText(ImVec2(rect_min.x + 2, rect_min.y + 1), IM_COL32(255, 255, 0, 255), name.c_str());
+			}
+		}
+	} else if (!view.texturePreviewURL.empty()) {
 		ImGui::Text("[Texture Preview: %dx%d]", view.texturePreviewWidth, view.texturePreviewHeight);
+	}
 
 	ImGui::EndChild();
 
@@ -618,10 +674,9 @@ void render() {
 				if (file_data_id_opt.has_value()) {
 					// JS: const file = await this.$core.view.casc.getFile(file_data_id);
 					// JS: const blp = new BLPFile(file);
-					BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id_opt.value());
-					casc::BLPImage blp(file);
 					// JS: view.chrCustBakedNPCTexture = blp;
-					// TODO(conversion): chrCustBakedNPCTexture assignment needs BLP storage in view state.
+					// In C++, store the file data ID so tab_characters can load the BLP on demand.
+					core::view->chrCustBakedNPCTexture = file_data_id_opt.value();
 					core::setToast("success", "baked npc texture applied to character", {}, 3000);
 					logging::write(std::format("applied baked npc texture {} to character", first));
 				}

@@ -888,9 +888,26 @@ void render() {
 		if (ImGui::Button("Close Preview"))
 			view.decorTexturePreviewURL.clear();
 
-		// TODO(conversion): Texture preview image rendering will be wired when GL texture display is integrated.
-		ImGui::Text("Preview: %s (%dx%d)", view.decorTexturePreviewName.c_str(),
-			view.decorTexturePreviewWidth, view.decorTexturePreviewHeight);
+		// Texture preview image rendering via ImGui::Image.
+		if (view.decorTexturePreviewTexID != 0) {
+			const ImVec2 avail = ImGui::GetContentRegionAvail();
+			const float tex_w = static_cast<float>(view.decorTexturePreviewWidth);
+			const float tex_h = static_cast<float>(view.decorTexturePreviewHeight);
+			const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
+			const ImVec2 img_size(tex_w * scale, tex_h * scale);
+
+			const ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.decorTexturePreviewTexID)), img_size);
+
+			// UV overlay on top of texture preview.
+			if (view.decorTexturePreviewUVTexID != 0 && !view.decorTexturePreviewUVOverlay.empty()) {
+				ImGui::SetCursorScreenPos(cursor_pos);
+				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.decorTexturePreviewUVTexID)), img_size);
+			}
+		} else {
+			ImGui::Text("Preview: %s (%dx%d)", view.decorTexturePreviewName.c_str(),
+				view.decorTexturePreviewWidth, view.decorTexturePreviewHeight);
+		}
 
 		// JS: <div id="uv-layer-buttons" v-if="$core.view.decorViewerUVLayers.length > 0">
 		if (!view.decorViewerUVLayers.empty()) {
