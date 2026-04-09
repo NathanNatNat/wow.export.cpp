@@ -10,6 +10,7 @@
 #include "../../log.h"
 
 #include "../../casc/blp.h"
+#include "../../mpq/mpq-install.h"
 #include "../Shaders.h"
 
 // TODO(conversion): textureRibbon is not yet converted; stubbed where referenced.
@@ -243,7 +244,7 @@ void MDXRendererGL::_create_default_texture() {
 void MDXRendererGL::_load_textures() {
 	auto& tex_list = mdx->textures;
 	// JS: const mpq = core.view.mpq;
-	// TODO(conversion): MPQ archive access not yet wired; texture loading from MPQ is stubbed.
+	mpq::MPQInstall* mpq = core::view->mpq.get();
 
 	if (useRibbon)
 		syncID = -1; // TODO(conversion): JS: textureRibbon.reset(); — texture ribbon not yet converted
@@ -260,32 +261,29 @@ void MDXRendererGL::_load_textures() {
 			try {
 				// JS: const data = mpq.getFile(fileName);
 				// MPQ file access — get texture file data from MPQ archive
-				// TODO(conversion): When MPQ integration is available, load BufferWrapper from
-				// mpq->getFile(fileName) and create a BLPImage from that data.
-				// For now, this function is a no-op until MPQ is integrated.
+				if (!mpq)
+					continue;
 
-				// TODO(conversion): Uncomment and wire when MPQ integration is available:
-				// auto file_data = mpq->getFile(fileName);
-				// if (file_data) {
-				//     casc::BLPImage blp(BufferWrapper::from(file_data.value()));
-				//     auto gl_tex = std::make_unique<gl::GLTexture>(ctx);
-				//
-				//     const GLenum wrap_s = (texture.flags & 1) ? GL_REPEAT : GL_CLAMP_TO_EDGE;
-				//     const GLenum wrap_t = (texture.flags & 2) ? GL_REPEAT : GL_CLAMP_TO_EDGE;
-				//
-				//     auto pixels = blp.toUInt8Array(0, 0b1111);
-				//     gl::TextureOptions opts;
-				//     opts.wrap_s = wrap_s;
-				//     opts.wrap_t = wrap_t;
-				//     opts.has_alpha = blp.alphaDepth > 0;
-				//     opts.generate_mipmaps = true;
-				//     gl_tex->set_rgba(pixels.data(), blp.width, blp.height, opts);
-				//
-				//     textures[static_cast<int>(i)] = std::move(gl_tex);
-				//
-				//     // JS: if (ribbonSlot !== null) textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
-				// }
-				(void)fileName;
+				auto file_data = mpq->getFile(fileName);
+				if (file_data.has_value()) {
+					casc::BLPImage blp(BufferWrapper(std::move(file_data.value())));
+					auto gl_tex = std::make_unique<gl::GLTexture>(ctx);
+
+					const GLenum wrap_s = (texture.flags & 1) ? GL_REPEAT : GL_CLAMP_TO_EDGE;
+					const GLenum wrap_t = (texture.flags & 2) ? GL_REPEAT : GL_CLAMP_TO_EDGE;
+
+					auto pixels = blp.toUInt8Array(0, 0b1111);
+					gl::TextureOptions opts;
+					opts.wrap_s = wrap_s;
+					opts.wrap_t = wrap_t;
+					opts.has_alpha = blp.alphaDepth > 0;
+					opts.generate_mipmaps = true;
+					gl_tex->set_rgba(pixels.data(), blp.width, blp.height, opts);
+
+					textures[static_cast<int>(i)] = std::move(gl_tex);
+
+					// JS: if (ribbonSlot !== null) textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
+				}
 			} catch (const std::exception& e) {
 				logging::write(std::format("Failed to load MDX texture {}: {}", fileName, e.what()));
 			}

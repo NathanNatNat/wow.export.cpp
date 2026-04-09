@@ -10,6 +10,7 @@
 #include "../../log.h"
 
 #include "../../casc/blp.h"
+#include "../../mpq/mpq-install.h"
 #include "../GeosetMapper.h"
 #include "../Shaders.h"
 
@@ -243,7 +244,7 @@ void M2LegacyRendererGL::_create_default_texture() {
 void M2LegacyRendererGL::_load_textures() {
 	auto& tex_list = m2->textures;
 	// JS: const mpq = core.view.mpq;
-	// TODO(conversion): MPQ archive access not yet wired; texture loading from MPQ is stubbed.
+	mpq::MPQInstall* mpq = core::view->mpq.get();
 
 	if (useRibbon)
 		syncID = -1; // TODO(conversion): JS: textureRibbon.reset(); — texture ribbon not yet converted
@@ -261,7 +262,14 @@ void M2LegacyRendererGL::_load_textures() {
 			try {
 				// JS: const data = mpq.getFile(fileName);
 				// MPQ file access — get texture file data
-				auto file_data = texture.getTextureFile();
+				std::optional<BufferWrapper> file_data;
+				if (mpq) {
+					auto raw = mpq->getFile(fileName);
+					if (raw.has_value())
+						file_data = BufferWrapper(std::move(raw.value()));
+				} else {
+					file_data = texture.getTextureFile();
+				}
 
 				if (file_data.has_value()) {
 					casc::BLPImage blp(std::move(file_data.value()));
@@ -286,6 +294,7 @@ void M2LegacyRendererGL::_load_textures() {
 
 void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& texture_paths) {
 	// JS: const mpq = core.view.mpq;
+	mpq::MPQInstall* mpq = core::view->mpq.get();
 	const auto& textureTypes = m2->textureTypes;
 
 	// creature skins map to textureType 11, 12, 13 (Monster1, Monster2, Monster3)
@@ -303,29 +312,23 @@ void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& textu
 
 				try {
 					// JS: const data = mpq.getFile(texture_path);
-					// TODO(conversion): The JS loads a NEW file by `texture_path` from the MPQ archive,
-					// replacing the existing texture with the creature skin file.
-					// This requires MPQ archive access (core.view.mpq) which is not yet wired.
-					// When MPQ integration is available, load BufferWrapper from
-					// mpq->getFile(texture_path) and create a BLPImage from that data.
-					// For now, this function is a no-op until MPQ is integrated.
-					(void)texture_path;
+					if (!mpq)
+						continue;
 
-					// TODO(conversion): Uncomment and wire when MPQ integration is available:
-					// auto file_data = mpq->getFile(texture_path);
-					// if (file_data) {
-					//     casc::BLPImage blp(BufferWrapper::from(file_data.value()));
-					//     auto gl_tex = std::make_unique<gl::GLTexture>(ctx);
-					//     gl::BLPTextureFlags blp_flags;
-					//     blp_flags.flags = m2->textures[i].flags;
-					//     gl_tex->set_blp(blp, blp_flags);
-					//     textures[static_cast<int>(i)] = std::move(gl_tex);
-					//     if (useRibbon) {
-					//         textureRibbon.setSlotFileLegacy(i, texture_path, syncID);
-					//         textureRibbon.setSlotSrc(i, blp.getDataURL(0b0111), syncID);
-					//     }
-					//     logging::write(std::format("Applied creature skin texture {}: {}", static_cast<int>(i), texture_path));
-					// }
+					auto file_data = mpq->getFile(texture_path);
+					if (file_data.has_value()) {
+						casc::BLPImage blp(BufferWrapper(std::move(file_data.value())));
+						auto gl_tex = std::make_unique<gl::GLTexture>(ctx);
+						gl::BLPTextureFlags blp_flags;
+						blp_flags.flags = m2->textures[i].flags;
+						gl_tex->set_blp(blp, blp_flags);
+						textures[static_cast<int>(i)] = std::move(gl_tex);
+
+						// JS: if (this.useRibbon) { textureRibbon.setSlotFile(...); textureRibbon.setSlotSrc(...); }
+						// TODO(conversion): textureRibbon is not yet converted; stubbed where referenced.
+
+						logging::write(std::format("Applied creature skin texture {}: {}", static_cast<int>(i), texture_path));
+					}
 				} catch (const std::exception& e) {
 					logging::write(std::format("Failed to apply creature skin texture {}: {}", texture_path, e.what()));
 				}
