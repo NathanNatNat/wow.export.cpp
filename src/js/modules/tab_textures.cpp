@@ -33,6 +33,35 @@
 
 namespace tab_textures {
 
+// Helper to extract uint32_t from a FieldValue.
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
+}
+
+// Helper to extract int from a FieldValue.
+static int fieldToInt(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<int>(*p);
+	return 0;
+}
+
+// Helper to extract std::string from a FieldValue.
+static std::string fieldToString(const db::FieldValue& val) {
+	if (auto* p = std::get_if<std::string>(&val))
+		return *p;
+	return "";
+}
+
 // --- Atlas data structures ---
 
 struct AtlasRegion {
@@ -192,28 +221,16 @@ static void load_texture_atlas_data() {
 		for (const auto& [id, row] : ui_texture_atlas.getAllRows()) {
 			uint32_t file_data_id = 0;
 			auto fdid_it = row.find("FileDataID");
-			if (fdid_it != row.end()) {
-				if (auto* p = std::get_if<int64_t>(&fdid_it->second))
-					file_data_id = static_cast<uint32_t>(*p);
-				else if (auto* p = std::get_if<uint64_t>(&fdid_it->second))
-					file_data_id = static_cast<uint32_t>(*p);
-			}
+			if (fdid_it != row.end())
+				file_data_id = fieldToUint32(fdid_it->second);
 
 			int atlas_width = 0, atlas_height = 0;
 			auto aw_it = row.find("AtlasWidth");
-			if (aw_it != row.end()) {
-				if (auto* p = std::get_if<int64_t>(&aw_it->second))
-					atlas_width = static_cast<int>(*p);
-				else if (auto* p = std::get_if<uint64_t>(&aw_it->second))
-					atlas_width = static_cast<int>(*p);
-			}
+			if (aw_it != row.end())
+				atlas_width = fieldToInt(aw_it->second);
 			auto ah_it = row.find("AtlasHeight");
-			if (ah_it != row.end()) {
-				if (auto* p = std::get_if<int64_t>(&ah_it->second))
-					atlas_height = static_cast<int>(*p);
-				else if (auto* p = std::get_if<uint64_t>(&ah_it->second))
-					atlas_height = static_cast<int>(*p);
-			}
+			if (ah_it != row.end())
+				atlas_height = fieldToInt(ah_it->second);
 
 			texture_atlas_map[file_data_id] = static_cast<int>(id);
 			texture_atlas_entries[static_cast<int>(id)] = { atlas_width, atlas_height, {} };
@@ -222,12 +239,8 @@ static void load_texture_atlas_data() {
 		for (const auto& [id, row] : ui_texture_atlas_member.getAllRows()) {
 			int atlas_id = 0;
 			auto atlas_it = row.find("UiTextureAtlasID");
-			if (atlas_it != row.end()) {
-				if (auto* p = std::get_if<int64_t>(&atlas_it->second))
-					atlas_id = static_cast<int>(*p);
-				else if (auto* p = std::get_if<uint64_t>(&atlas_it->second))
-					atlas_id = static_cast<int>(*p);
-			}
+			if (atlas_it != row.end())
+				atlas_id = fieldToInt(atlas_it->second);
 
 			auto entry_it = texture_atlas_entries.find(atlas_id);
 			if (entry_it != texture_atlas_entries.end()) {
@@ -237,30 +250,20 @@ static void load_texture_atlas_data() {
 				int width = 0, height = 0, left = 0, top = 0;
 
 				auto cn_it = row.find("CommittedName");
-				if (cn_it != row.end()) {
-					if (auto* p = std::get_if<std::string>(&cn_it->second))
-						committed_name = *p;
-				}
+				if (cn_it != row.end())
+					committed_name = fieldToString(cn_it->second);
 				auto w_it = row.find("Width");
-				if (w_it != row.end()) {
-					if (auto* p = std::get_if<int64_t>(&w_it->second)) width = static_cast<int>(*p);
-					else if (auto* p = std::get_if<uint64_t>(&w_it->second)) width = static_cast<int>(*p);
-				}
+				if (w_it != row.end())
+					width = fieldToInt(w_it->second);
 				auto h_it = row.find("Height");
-				if (h_it != row.end()) {
-					if (auto* p = std::get_if<int64_t>(&h_it->second)) height = static_cast<int>(*p);
-					else if (auto* p = std::get_if<uint64_t>(&h_it->second)) height = static_cast<int>(*p);
-				}
+				if (h_it != row.end())
+					height = fieldToInt(h_it->second);
 				auto cl_it = row.find("CommittedLeft");
-				if (cl_it != row.end()) {
-					if (auto* p = std::get_if<int64_t>(&cl_it->second)) left = static_cast<int>(*p);
-					else if (auto* p = std::get_if<uint64_t>(&cl_it->second)) left = static_cast<int>(*p);
-				}
+				if (cl_it != row.end())
+					left = fieldToInt(cl_it->second);
 				auto ct_it = row.find("CommittedTop");
-				if (ct_it != row.end()) {
-					if (auto* p = std::get_if<int64_t>(&ct_it->second)) top = static_cast<int>(*p);
-					else if (auto* p = std::get_if<uint64_t>(&ct_it->second)) top = static_cast<int>(*p);
-				}
+				if (ct_it != row.end())
+					top = fieldToInt(ct_it->second);
 
 				texture_atlas_regions[static_cast<int>(id)] = { committed_name, width, height, left, top };
 			}
