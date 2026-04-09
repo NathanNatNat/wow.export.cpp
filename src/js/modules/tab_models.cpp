@@ -1118,7 +1118,13 @@ void render() {
 	// JS: <div class="preview-background" id="model-preview">
 	// JS: <input v-if="config.modelViewerShowBackground" type="color" id="background-color-input" v-model="config.modelViewerBackgroundColor"/>
 	if (view.config.value("modelViewerShowBackground", false)) {
-		// TODO(conversion): Color picker for background will be wired when model viewer GL is integrated.
+		// JS: <input type="color" id="background-color-input" v-model="config.modelViewerBackgroundColor"/>
+		std::string hex_str = view.config.value("modelViewerBackgroundColor", std::string("#343a40"));
+		auto [cr, cg, cb] = model_viewer_gl::parse_hex_color(hex_str);
+		float color[3] = {cr, cg, cb};
+		if (ImGui::ColorEdit3("##bg_color_models", color, ImGuiColorEditFlags_NoInputs))
+			view.config["modelViewerBackgroundColor"] = std::format("#{:02x}{:02x}{:02x}",
+				static_cast<int>(color[0] * 255.0f), static_cast<int>(color[1] * 255.0f), static_cast<int>(color[2] * 255.0f));
 	}
 
 	// JS: <component :is="$components.ModelViewerGL" v-if="modelViewerContext" :context="modelViewerContext" />
