@@ -370,13 +370,13 @@ and UI tabs depend on. DB2 wiring is pure data-layer plumbing.
 
 Wire `WDCReader::getAllRows()`, `db2::getTable()`, `db2::getRow()`.
 
-- [ ] `tab_zones.cpp` — getAllRows for UiMap, AreaTable, UiMapXMapArt, UiMapArt, UiMapArtStyleLayer iteration (6 TODOs)
-- [ ] `tab_videos.cpp` — getAllRows for MovieVariation, Movie.getRow (4 TODOs)
-- [ ] `tab_data.cpp` — getAllRows iteration, db2::getTable trigger (2 TODOs)
-- [ ] `tab_audio.cpp` — getAllRows for SoundKitEntry (2 TODOs)
-- [ ] `tab_textures.cpp` — UiTextureAtlas/UiTextureAtlasMember iteration (1 TODO)
-- [ ] `tab_characters.cpp` — ChrCustomizationChoice row lookup (1 TODO)
-- [ ] `legacy_tab_data.cpp` — Schema type conversion for DBC export (1 TODO)
+- [x] `tab_zones.cpp` — getAllRows for UiMap, AreaTable, UiMapXMapArt, UiMapArt, UiMapArtStyleLayer iteration (6 TODOs)
+- [x] `tab_videos.cpp` — getAllRows for MovieVariation, Movie.getRow (4 TODOs)
+- [x] `tab_data.cpp` — getAllRows iteration, db2::getTable trigger (2 TODOs)
+- [x] `tab_audio.cpp` — getAllRows for SoundKitEntry (2 TODOs)
+- [x] `tab_textures.cpp` — UiTextureAtlas/UiTextureAtlasMember iteration (1 TODO)
+- [x] `tab_characters.cpp` — ChrCustomizationChoice row lookup (1 TODO)
+- [x] `legacy_tab_data.cpp` — Schema type conversion for DBC export (1 TODO)
 
 ---
 

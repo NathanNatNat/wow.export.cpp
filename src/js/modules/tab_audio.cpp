@@ -13,6 +13,7 @@
 #include "../casc/casc-source.h"
 #include "../casc/blte-reader.h"
 #include "../casc/db2.h"
+#include "../db/WDCReader.h"
 #include "../ui/audio-helper.h"
 #include "../ui/listbox-context.h"
 #include "../install-type.h"
@@ -291,24 +292,33 @@ void mounted() {
 
 		int unknown_count = 0;
 		// JS: for (const entry of (await db2.SoundKitEntry.getAllRows()).values()) { ... }
-		// TODO(conversion): DB2 SoundKitEntry iteration will be wired when DB2 system is fully integrated.
 		auto& sound_kit_entry = casc::db2::getTable("SoundKitEntry");
-		// TODO(conversion): WDCReader::getAllRows and iteration will be wired when full DB2 support is available.
-		// Placeholder: iterate all rows and add unknown entries.
-		// for (const auto& [id, row] : sound_kit_entry.getAllRows()) {
-		//     auto file_data_id = row.at("FileDataID");
-		//     if (!casc::listfile::existsByID(file_data_id)) {
-		//         const std::string file_name = "unknown/" + std::to_string(file_data_id) + ".unk_sound";
-		//         std::vector<std::string> listfile_vec;
-		//         // Convert nlohmann::json vector to string vector for addEntry
-		//         casc::listfile::addEntry(file_data_id, file_name, &listfile_vec);
-		//         for (auto& s : listfile_vec)
-		//             view.listfileSounds.push_back(s);
-		//         unknown_count++;
-		//     }
-		// }
-		(void)sound_kit_entry;
-		(void)unknown_count;
+		if (!sound_kit_entry.isLoaded)
+			sound_kit_entry.parse();
+
+		for (const auto& [id, row] : sound_kit_entry.getAllRows()) {
+			auto it = row.find("FileDataID");
+			if (it == row.end())
+				continue;
+
+			uint32_t file_data_id = 0;
+			if (auto* p = std::get_if<int64_t>(&it->second))
+				file_data_id = static_cast<uint32_t>(*p);
+			else if (auto* p = std::get_if<uint64_t>(&it->second))
+				file_data_id = static_cast<uint32_t>(*p);
+
+			if (file_data_id == 0)
+				continue;
+
+			if (!casc::listfile::existsByID(file_data_id)) {
+				const std::string file_name = "unknown/" + std::to_string(file_data_id) + ".unk_sound";
+				std::vector<std::string> listfile_vec;
+				casc::listfile::addEntry(file_data_id, file_name, &listfile_vec);
+				for (auto& s : listfile_vec)
+					view.listfileSounds.push_back(std::move(s));
+				unknown_count++;
+			}
+		}
 
 		logging::write(std::format("Added {} unknown sound files from SoundKitEntry to listfile", unknown_count));
 		core::hideLoadingScreen();

@@ -15,6 +15,7 @@
 #include "../casc/casc-source.h"
 #include "../casc/blte-reader.h"
 #include "../casc/db2.h"
+#include "../db/WDCReader.h"
 #include "../ui/listbox-context.h"
 #include "../install-type.h"
 #include "../modules.h"
@@ -37,6 +38,28 @@
 #include <httplib.h>
 
 namespace tab_videos {
+
+// Helper to extract uint32_t from a FieldValue.
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
+}
+
+// Helper to extract int from a FieldValue.
+static int fieldToInt(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<int>(*p);
+	return 0;
+}
 
 // --- File-local state ---
 
@@ -197,14 +220,18 @@ static std::optional<BuildPayloadResult> build_payload(uint32_t file_data_id) {
 			uint32_t movie_id = it->second;
 			try {
 				// JS: const movie_row = await db2.Movie.getRow(movie_id);
-				// TODO(conversion): DB2 Movie.getRow will be wired when DB2 system is fully integrated.
 				auto& movie_table = casc::db2::getTable("Movie");
-				(void)movie_table;
-				nlohmann::json movie_row; // placeholder
-				if (!movie_row.is_null()) {
+				if (!movie_table.isLoaded)
+					movie_table.parse();
+				auto movie_row_opt = movie_table.getRow(movie_id);
+				if (movie_row_opt.has_value()) {
+					const auto& movie_row = *movie_row_opt;
 					// get audio file encoding info
 					// JS: if (movie_row.AudioFileDataID && movie_row.AudioFileDataID !== 0) { ... }
-					uint32_t audio_fdid = movie_row.value("AudioFileDataID", 0u);
+					uint32_t audio_fdid = 0;
+					auto aud_it = movie_row.find("AudioFileDataID");
+					if (aud_it != movie_row.end())
+						audio_fdid = fieldToUint32(aud_it->second);
 					if (audio_fdid != 0) {
 						// JS: const aud_info = await casc.getFileEncodingInfo(movie_row.AudioFileDataID);
 						auto aud_info_opt = core::view->casc->getFileEncodingInfo(audio_fdid);
@@ -214,19 +241,26 @@ static std::optional<BuildPayloadResult> build_payload(uint32_t file_data_id) {
 
 					// get subtitle file encoding info for server + store for local loading
 					// JS: if (movie_row.SubtitleFileDataID && movie_row.SubtitleFileDataID !== 0) { ... }
-					uint32_t sub_fdid = movie_row.value("SubtitleFileDataID", 0u);
+					uint32_t sub_fdid = 0;
+					auto sub_it = movie_row.find("SubtitleFileDataID");
+					if (sub_it != movie_row.end())
+						sub_fdid = fieldToUint32(sub_it->second);
+					int sub_format = 0;
+					auto fmt_it = movie_row.find("SubtitleFileFormat");
+					if (fmt_it != movie_row.end())
+						sub_format = fieldToInt(fmt_it->second);
 					if (sub_fdid != 0) {
 						// JS: const srt_info = await casc.getFileEncodingInfo(movie_row.SubtitleFileDataID);
 						auto srt_info_opt = core::view->casc->getFileEncodingInfo(sub_fdid);
 						if (srt_info_opt.has_value()) {
 							nlohmann::json srt_info = encoding_info_to_json(*srt_info_opt);
-							srt_info["type"] = movie_row.value("SubtitleFileFormat", 0);
+							srt_info["type"] = sub_format;
 							payload["srt"] = srt_info;
 						}
 
 						subtitle_info = SubtitleInfo{
 							sub_fdid,
-							movie_row.value("SubtitleFileFormat", 0)
+							sub_format
 						};
 					}
 				}
@@ -432,7 +466,6 @@ static void stream_video(const std::string& file_name) {
 static void load_video_listfile() {
 	logging::write("loading MovieVariation table...");
 	// JS: const movie_variation = await db2.preload.MovieVariation();
-	// TODO(conversion): DB2 MovieVariation preload will be wired when DB2 system is fully integrated.
 	auto& movie_variation = casc::db2::preloadTable("MovieVariation");
 
 	movie_variation_map.emplace();
@@ -441,21 +474,23 @@ static void load_video_listfile() {
 
 	// JS: const rows = await movie_variation.getAllRows();
 	// JS: for (const [id, row] of rows) { ... }
-	// TODO(conversion): WDCReader::getAllRows iteration will be wired when full DB2 support is available.
-	// Placeholder: iterate all rows and build mapping.
-	// for (const auto& [id, row] : movie_variation.getAllRows()) {
-	//     uint32_t fdid = row.at("FileDataID");
-	//     uint32_t mid = row.at("MovieID");
-	//     if (fdid && mid) {
-	//         movie_variation_map->emplace(fdid, mid);
-	//         if (!seen_ids.contains(fdid)) {
-	//             seen_ids.insert(fdid);
-	//             file_data_ids_vec.push_back(fdid);
-	//         }
-	//     }
-	// }
-	(void)movie_variation;
-	(void)seen_ids;
+	for (const auto& [id, row] : movie_variation.getAllRows()) {
+		uint32_t fdid = 0;
+		uint32_t mid = 0;
+		auto fdid_it = row.find("FileDataID");
+		if (fdid_it != row.end())
+			fdid = fieldToUint32(fdid_it->second);
+		auto mid_it = row.find("MovieID");
+		if (mid_it != row.end())
+			mid = fieldToUint32(mid_it->second);
+		if (fdid != 0 && mid != 0) {
+			movie_variation_map->emplace(fdid, mid);
+			if (!seen_ids.contains(fdid)) {
+				seen_ids.insert(fdid);
+				file_data_ids_vec.push_back(fdid);
+			}
+		}
+	}
 
 	video_file_data_ids = std::move(file_data_ids_vec);
 
@@ -509,17 +544,33 @@ static std::optional<MovieData> get_movie_data(uint32_t file_data_id) {
 
 	try {
 		// JS: const movie_row = await db2.Movie.getRow(movie_id);
-		// TODO(conversion): DB2 Movie.getRow will be wired when DB2 system is fully integrated.
 		auto& movie_table = casc::db2::getTable("Movie");
-		(void)movie_table;
-		nlohmann::json movie_row; // placeholder
-		if (movie_row.is_null())
+		if (!movie_table.isLoaded)
+			movie_table.parse();
+		auto movie_row_opt = movie_table.getRow(movie_id);
+		if (!movie_row_opt.has_value())
 			return std::nullopt;
 
+		const auto& movie_row = *movie_row_opt;
+		uint32_t audio_fdid = 0;
+		auto aud_it = movie_row.find("AudioFileDataID");
+		if (aud_it != movie_row.end())
+			audio_fdid = fieldToUint32(aud_it->second);
+
+		uint32_t sub_fdid = 0;
+		auto sub_it = movie_row.find("SubtitleFileDataID");
+		if (sub_it != movie_row.end())
+			sub_fdid = fieldToUint32(sub_it->second);
+
+		int sub_format = 0;
+		auto fmt_it = movie_row.find("SubtitleFileFormat");
+		if (fmt_it != movie_row.end())
+			sub_format = fieldToInt(fmt_it->second);
+
 		return MovieData{
-			static_cast<uint32_t>(movie_row.value("AudioFileDataID", 0)),
-			static_cast<uint32_t>(movie_row.value("SubtitleFileDataID", 0)),
-			movie_row.value("SubtitleFileFormat", 0)
+			audio_fdid,
+			sub_fdid,
+			sub_format
 		};
 	} catch (const std::exception& e) {
 		logging::write(std::format("failed to get movie data for fdid {}: {}", file_data_id, e.what()));

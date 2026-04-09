@@ -15,6 +15,7 @@
 #include "../casc/blte-reader.h"
 #include "../casc/blp.h"
 #include "../casc/db2.h"
+#include "../db/WDCReader.h"
 #include "../ui/texture-exporter.h"
 #include "../ui/listbox-context.h"
 #include "../install-type.h"
@@ -31,6 +32,35 @@
 #include <spdlog/spdlog.h>
 
 namespace tab_textures {
+
+// Helper to extract uint32_t from a FieldValue.
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
+}
+
+// Helper to extract int from a FieldValue.
+static int fieldToInt(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<int>(*p);
+	return 0;
+}
+
+// Helper to extract std::string from a FieldValue.
+static std::string fieldToString(const db::FieldValue& val) {
+	if (auto* p = std::get_if<std::string>(&val))
+		return *p;
+	return "";
+}
 
 // --- Atlas data structures ---
 
@@ -181,25 +211,63 @@ static void load_texture_atlas_data() {
 		core::progressLoadingScreen("Parsing texture atlases...");
 
 		// JS: for (const [id, row] of await db2.UiTextureAtlas.getAllRows()) { ... }
-		// TODO(conversion): DB2 UiTextureAtlas/UiTextureAtlasMember iteration will be wired when DB2 is fully integrated.
 		auto& ui_texture_atlas = casc::db2::getTable("UiTextureAtlas");
 		auto& ui_texture_atlas_member = casc::db2::getTable("UiTextureAtlasMember");
-		(void)ui_texture_atlas;
-		(void)ui_texture_atlas_member;
+		if (!ui_texture_atlas.isLoaded)
+			ui_texture_atlas.parse();
+		if (!ui_texture_atlas_member.isLoaded)
+			ui_texture_atlas_member.parse();
 
-		// Placeholder: when wired, iterate:
-		// for (const auto& [id, row] : ui_texture_atlas.getAllRows()) {
-		//     texture_atlas_map[row.at("FileDataID")] = id;
-		//     texture_atlas_entries[id] = { row.at("AtlasWidth"), row.at("AtlasHeight"), {} };
-		// }
-		// for (const auto& [id, row] : ui_texture_atlas_member.getAllRows()) {
-		//     auto it = texture_atlas_entries.find(row.at("UiTextureAtlasID"));
-		//     if (it != texture_atlas_entries.end()) {
-		//         it->second.regions.push_back(id);
-		//         texture_atlas_regions[id] = { row.at("CommittedName"), row.at("Width"),
-		//             row.at("Height"), row.at("CommittedLeft"), row.at("CommittedTop") };
-		//     }
-		// }
+		for (const auto& [id, row] : ui_texture_atlas.getAllRows()) {
+			uint32_t file_data_id = 0;
+			auto fdid_it = row.find("FileDataID");
+			if (fdid_it != row.end())
+				file_data_id = fieldToUint32(fdid_it->second);
+
+			int atlas_width = 0, atlas_height = 0;
+			auto aw_it = row.find("AtlasWidth");
+			if (aw_it != row.end())
+				atlas_width = fieldToInt(aw_it->second);
+			auto ah_it = row.find("AtlasHeight");
+			if (ah_it != row.end())
+				atlas_height = fieldToInt(ah_it->second);
+
+			texture_atlas_map[file_data_id] = static_cast<int>(id);
+			texture_atlas_entries[static_cast<int>(id)] = { atlas_width, atlas_height, {} };
+		}
+
+		for (const auto& [id, row] : ui_texture_atlas_member.getAllRows()) {
+			int atlas_id = 0;
+			auto atlas_it = row.find("UiTextureAtlasID");
+			if (atlas_it != row.end())
+				atlas_id = fieldToInt(atlas_it->second);
+
+			auto entry_it = texture_atlas_entries.find(atlas_id);
+			if (entry_it != texture_atlas_entries.end()) {
+				entry_it->second.regions.push_back(static_cast<int>(id));
+
+				std::string committed_name;
+				int width = 0, height = 0, left = 0, top = 0;
+
+				auto cn_it = row.find("CommittedName");
+				if (cn_it != row.end())
+					committed_name = fieldToString(cn_it->second);
+				auto w_it = row.find("Width");
+				if (w_it != row.end())
+					width = fieldToInt(w_it->second);
+				auto h_it = row.find("Height");
+				if (h_it != row.end())
+					height = fieldToInt(h_it->second);
+				auto cl_it = row.find("CommittedLeft");
+				if (cl_it != row.end())
+					left = fieldToInt(cl_it->second);
+				auto ct_it = row.find("CommittedTop");
+				if (ct_it != row.end())
+					top = fieldToInt(ct_it->second);
+
+				texture_atlas_regions[static_cast<int>(id)] = { committed_name, width, height, left, top };
+			}
+		}
 
 		logging::write(std::format("Loaded {} texture atlases with {} regions",
 			texture_atlas_entries.size(), texture_atlas_regions.size()));

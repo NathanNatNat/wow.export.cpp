@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <optional>
 #include <algorithm>
+#include <variant>
 
 #include <imgui.h>
 #include <spdlog/spdlog.h>
@@ -63,6 +64,52 @@ static void initialize_available_tables() {
 	logging::write("initialized available db2 tables from dbd manifest");
 }
 
+// Helper to convert a FieldValue to a display string.
+static std::string field_value_to_string(const db::FieldValue& val) {
+	return std::visit([](const auto& v) -> std::string {
+		using T = std::decay_t<decltype(v)>;
+		if constexpr (std::is_same_v<T, int64_t>)
+			return std::to_string(v);
+		else if constexpr (std::is_same_v<T, uint64_t>)
+			return std::to_string(v);
+		else if constexpr (std::is_same_v<T, float>)
+			return std::to_string(v);
+		else if constexpr (std::is_same_v<T, std::string>)
+			return v;
+		else if constexpr (std::is_same_v<T, std::vector<int64_t>>) {
+			std::string result = "[";
+			for (size_t i = 0; i < v.size(); i++) {
+				if (i > 0) result += ", ";
+				result += std::to_string(v[i]);
+			}
+			return result + "]";
+		} else if constexpr (std::is_same_v<T, std::vector<uint64_t>>) {
+			std::string result = "[";
+			for (size_t i = 0; i < v.size(); i++) {
+				if (i > 0) result += ", ";
+				result += std::to_string(v[i]);
+			}
+			return result + "]";
+		} else if constexpr (std::is_same_v<T, std::vector<float>>) {
+			std::string result = "[";
+			for (size_t i = 0; i < v.size(); i++) {
+				if (i > 0) result += ", ";
+				result += std::to_string(v[i]);
+			}
+			return result + "]";
+		} else if constexpr (std::is_same_v<T, std::vector<std::string>>) {
+			std::string result = "[";
+			for (size_t i = 0; i < v.size(); i++) {
+				if (i > 0) result += ", ";
+				result += v[i];
+			}
+			return result + "]";
+		} else {
+			return "";
+		}
+	}, val);
+}
+
 // JS: const parse_table = async (table_name) => { ... }
 struct ParseTableResult {
 	std::vector<std::string> headers;
@@ -74,7 +121,8 @@ static ParseTableResult parse_table(const std::string& table_name) {
 	// JS: const db2_reader = new WDCReader('DBFilesClient/' + table_name + '.db2');
 	// JS: await db2_reader.parse();
 	auto& db2_reader = casc::db2::getTable(table_name);
-	// TODO(conversion): WDCReader parse will be triggered via db2::getTable when CASC is wired.
+	if (!db2_reader.isLoaded)
+		db2_reader.parse();
 
 	// JS: const all_headers = [...db2_reader.schema.keys()];
 	const auto& schema = db2_reader.schema;
@@ -103,22 +151,19 @@ static ParseTableResult parse_table(const std::string& table_name) {
 
 	// JS: const rows = await db2_reader.getAllRows();
 	// JS: for (const row of rows.values()) { ... }
-	// TODO(conversion): WDCReader getAllRows iteration will be wired when DB2 system is fully integrated.
-	// Placeholder: return empty rows with the headers and schema.
 	std::vector<std::vector<std::string>> parsed;
 
-	// When fully wired, iterate rows and coerce values to strings:
-	// for (const auto& [id, row] : db2_reader.getAllRows()) {
-	//     std::vector<std::string> row_values;
-	//     for (const auto& header : all_headers) {
-	//         auto it = row.find(header);
-	//         if (it != row.end())
-	//             row_values.push_back(field_value_to_string(it->second));
-	//         else
-	//             row_values.push_back("");
-	//     }
-	//     parsed.push_back(std::move(row_values));
-	// }
+	for (const auto& [id, row] : db2_reader.getAllRows()) {
+		std::vector<std::string> row_values;
+		for (const auto& header : all_headers) {
+			auto it = row.find(header);
+			if (it != row.end())
+				row_values.push_back(field_value_to_string(it->second));
+			else
+				row_values.push_back("");
+		}
+		parsed.push_back(std::move(row_values));
+	}
 
 	return { std::move(all_headers), std::move(parsed), &schema };
 }
