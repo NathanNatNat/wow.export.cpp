@@ -15,6 +15,7 @@
 #include "../install-type.h"
 #include "../modules.h"
 #include "../ui/listbox-context.h"
+#include "../components/listbox.h"
 #include "../db/caches/DBModelFileData.h"
 #include "../db/caches/DBItemDisplays.h"
 #include "../db/caches/DBCreatures.h"
@@ -72,6 +73,8 @@ static std::vector<nlohmann::json> prev_selection_models;
 static bool tab_initialized = false;
 
 static bool is_initialized = false;
+
+static listbox::ListboxState listbox_models_state;
 
 // Model viewer GL state/context (replaces Vue <ModelViewerGL :context="modelViewerContext"/>).
 static model_viewer_gl::State viewer_state;
@@ -900,8 +903,59 @@ void render() {
 	//         :items="listfileModels" :override="overrideModelList" :keyinput="true"
 	//         :regex="config.regexFilters" :copymode="config.copyMode" ... @contextmenu="handle_listbox_context" />
 	ImGui::BeginChild("models-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-	// TODO(conversion): Listbox component rendering will be wired when integration is complete.
-	ImGui::Text("Models: %zu", view.listfileModels.size());
+	{
+		std::vector<std::string> items_str;
+		items_str.reserve(view.listfileModels.size());
+		for (const auto& item : view.listfileModels)
+			items_str.push_back(item.get<std::string>());
+
+		std::vector<std::string> selection_str;
+		for (const auto& s : view.selectionModels)
+			selection_str.push_back(s.get<std::string>());
+
+		listbox::CopyMode copy_mode = listbox::CopyMode::Default;
+		{
+			std::string cm = view.config.value("copyMode", std::string("Default"));
+			if (cm == "DIR") copy_mode = listbox::CopyMode::DIR;
+			else if (cm == "FID") copy_mode = listbox::CopyMode::FID;
+		}
+
+		// Convert override list.
+		std::vector<std::string> override_str;
+		if (!view.overrideModelList.empty()) {
+			override_str.reserve(view.overrideModelList.size());
+			for (const auto& item : view.overrideModelList)
+				override_str.push_back(item.get<std::string>());
+		}
+
+		listbox::render(
+			"listbox-models",
+			items_str,
+			view.userInputFilterModels,
+			selection_str,
+			false,    // single
+			true,     // keyinput
+			view.config.value("regexFilters", false),
+			copy_mode,
+			view.config.value("pasteSelection", false),
+			view.config.value("removePathSpacesCopy", false),
+			"model",  // unittype
+			view.overrideModelList.empty() ? nullptr : &override_str,
+			false,    // disable
+			"models", // persistscrollkey
+			{},       // quickfilters
+			false,    // nocopy
+			listbox_models_state,
+			[&](const std::vector<std::string>& new_sel) {
+				view.selectionModels.clear();
+				for (const auto& s : new_sel)
+					view.selectionModels.push_back(s);
+			},
+			[](const listbox::ContextMenuEvent& ev) {
+				handle_listbox_context(ev.selection);
+			}
+		);
+	}
 
 	// JS: <component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeListbox" ...>
 	if (!view.contextMenus.nodeListbox.is_null()) {

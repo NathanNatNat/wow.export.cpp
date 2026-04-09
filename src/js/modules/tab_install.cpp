@@ -40,6 +40,9 @@ static std::unique_ptr<casc::InstallManifest> manifest;
 // JS: const MIN_STRING_LENGTH = 4;
 static constexpr int MIN_STRING_LENGTH = 4;
 
+static listbox::ListboxState listbox_install_state;
+static listbox::ListboxState listbox_install_strings_state;
+
 // --- Internal functions ---
 
 /**
@@ -305,9 +308,42 @@ void render() {
 
 		// List container.
 		ImGui::BeginChild("install-list-container", ImVec2(-150, -ImGui::GetFrameHeightWithSpacing() * 2), ImGuiChildFlags_Borders);
-		// TODO(conversion): Listbox component rendering will be wired when listbox integration is complete.
-		// JS: <Listbox v-model:selection="selectionInstall" :items="listfileInstall" :filter="userInputFilterInstall" ...>
-		ImGui::Text("Install files: %zu", view.listfileInstall.size());
+		{
+			std::vector<std::string> items_str;
+			items_str.reserve(view.listfileInstall.size());
+			for (const auto& item : view.listfileInstall)
+				items_str.push_back(item.get<std::string>());
+
+			std::vector<std::string> selection_str;
+			for (const auto& s : view.selectionInstall)
+				selection_str.push_back(s.get<std::string>());
+
+			listbox::render(
+				"listbox-install",
+				items_str,
+				view.userInputFilterInstall,
+				selection_str,
+				false,    // single
+				true,     // keyinput
+				view.config.value("regexFilters", false),
+				listbox::CopyMode::Default,
+				false,    // pasteselection
+				false,    // copytrimwhitespace
+				"file",   // unittype
+				nullptr,  // overrideItems
+				false,    // disable
+				"install", // persistscrollkey
+				{},       // quickfilters
+				false,    // nocopy
+				listbox_install_state,
+				[&](const std::vector<std::string>& new_sel) {
+					view.selectionInstall.clear();
+					for (const auto& s : new_sel)
+						view.selectionInstall.push_back(s);
+				},
+				nullptr  // no context menu
+			);
+		}
 		ImGui::EndChild();
 
 		// Tray.
@@ -353,8 +389,37 @@ void render() {
 
 		// List container.
 		ImGui::BeginChild("install-strings-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 3), ImGuiChildFlags_Borders);
-		// TODO(conversion): Listbox component rendering for strings view.
-		ImGui::Text("Strings: %zu", view.installStrings.size());
+		{
+			std::vector<std::string> selection_str;
+			for (const auto& s : view.selectionInstallStrings)
+				selection_str.push_back(s.get<std::string>());
+
+			listbox::render(
+				"listbox-install-strings",
+				view.installStrings,
+				view.userInputFilterInstallStrings,
+				selection_str,
+				false,    // single
+				true,     // keyinput
+				view.config.value("regexFilters", false),
+				listbox::CopyMode::Default,
+				false,    // pasteselection
+				false,    // copytrimwhitespace
+				"string", // unittype
+				nullptr,  // overrideItems
+				false,    // disable
+				"install-strings", // persistscrollkey
+				{},       // quickfilters
+				true,     // nocopy
+				listbox_install_strings_state,
+				[&](const std::vector<std::string>& new_sel) {
+					view.selectionInstallStrings.clear();
+					for (const auto& s : new_sel)
+						view.selectionInstallStrings.push_back(s);
+				},
+				nullptr  // no context menu
+			);
+		}
 		ImGui::EndChild();
 
 		// Tray.

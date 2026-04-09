@@ -13,6 +13,7 @@
 #include "../install-type.h"
 #include "../modules.h"
 #include "../casc/export-helper.h"
+#include "../components/listbox.h"
 #include "../mpq/mpq-install.h"
 
 #include <cstring>
@@ -53,6 +54,8 @@ static std::vector<std::string> local_dbc_listfile;
 
 // Change-detection for selectionDB2s.
 static std::string prev_selection_first;
+
+static listbox::ListboxState listbox_dbc_state;
 
 // --- Internal functions ---
 
@@ -298,8 +301,37 @@ void render() {
 	//     <Listbox v-model:selection="selectionDB2s" :items="dbcListfile" :filter="userInputFilterDB2s" ...>
 	// </div>
 	ImGui::BeginChild("dbc-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing() * 3), ImGuiChildFlags_Borders);
-	// TODO(conversion): Listbox component rendering will be wired when integration is complete.
-	ImGui::Text("DBC tables: %zu", local_dbc_listfile.size());
+	{
+		std::vector<std::string> selection_str;
+		for (const auto& s : view.selectionDB2s)
+			selection_str.push_back(s.get<std::string>());
+
+		listbox::render(
+			"listbox-dbc",
+			local_dbc_listfile,
+			view.userInputFilterDB2s,
+			selection_str,
+			true,    // single
+			true,    // keyinput
+			view.config.value("regexFilters", false),
+			listbox::CopyMode::Default,
+			false,   // pasteselection
+			false,   // copytrimwhitespace
+			"table", // unittype
+			nullptr, // overrideItems
+			false,   // disable
+			"dbc",   // persistscrollkey
+			{},      // quickfilters
+			false,   // nocopy
+			listbox_dbc_state,
+			[&](const std::vector<std::string>& new_sel) {
+				view.selectionDB2s.clear();
+				for (const auto& s : new_sel)
+					view.selectionDB2s.push_back(s);
+			},
+			nullptr  // no context menu
+		);
+	}
 	ImGui::EndChild();
 
 	// Filter for DBC list.

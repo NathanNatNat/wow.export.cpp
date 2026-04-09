@@ -14,6 +14,7 @@
 #include "../install-type.h"
 #include "../modules.h"
 #include "../ui/listbox-context.h"
+#include "../components/listbox.h"
 #include "../db/caches/DBDecor.h"
 #include "../db/caches/DBModelFileData.h"
 #include "../db/caches/DBDecorCategories.h"
@@ -98,6 +99,8 @@ static model_viewer_utils::ViewStateProxy view_state;
 static std::unique_ptr<model_viewer_utils::AnimationMethods> anim_methods;
 
 static bool is_initialized = false;
+
+static listbox::ListboxState listbox_decor_state;
 
 // Model viewer GL state/context (replaces Vue <ModelViewerGL :context="decorViewerContext"/>).
 static model_viewer_gl::State viewer_state;
@@ -828,8 +831,51 @@ void render() {
 	//     <Listbox v-model:selection="selectionDecor" v-model:filter="userInputFilterDecor"
 	//         :items="listfileDecor" ... @contextmenu="handle_listbox_context" />
 	ImGui::BeginChild("decor-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-	// TODO(conversion): Listbox component rendering will be wired when integration is complete.
-	ImGui::Text("Decor items: %zu", view.listfileDecor.size());
+	{
+		std::vector<std::string> items_str;
+		items_str.reserve(view.listfileDecor.size());
+		for (const auto& item : view.listfileDecor)
+			items_str.push_back(item.get<std::string>());
+
+		std::vector<std::string> selection_str;
+		for (const auto& s : view.selectionDecor)
+			selection_str.push_back(s.get<std::string>());
+
+		listbox::CopyMode copy_mode = listbox::CopyMode::Default;
+		{
+			std::string cm = view.config.value("copyMode", std::string("Default"));
+			if (cm == "DIR") copy_mode = listbox::CopyMode::DIR;
+			else if (cm == "FID") copy_mode = listbox::CopyMode::FID;
+		}
+
+		listbox::render(
+			"listbox-decor",
+			items_str,
+			view.userInputFilterDecor,
+			selection_str,
+			false,    // single
+			true,     // keyinput
+			view.config.value("regexFilters", false),
+			copy_mode,
+			view.config.value("pasteSelection", false),
+			view.config.value("removePathSpacesCopy", false),
+			"decor item", // unittype
+			nullptr,  // overrideItems
+			false,    // disable
+			"decor",  // persistscrollkey
+			{},       // quickfilters
+			false,    // nocopy
+			listbox_decor_state,
+			[&](const std::vector<std::string>& new_sel) {
+				view.selectionDecor.clear();
+				for (const auto& s : new_sel)
+					view.selectionDecor.push_back(s);
+			},
+			[](const listbox::ContextMenuEvent& ev) {
+				handle_listbox_context(ev.selection);
+			}
+		);
+	}
 
 	// JS: <input type="text" v-model="$core.view.userInputFilterDecor" placeholder="Filter decor..."/>
 	// TODO(conversion): Filter input will use ImGui::InputText when Listbox component is wired.

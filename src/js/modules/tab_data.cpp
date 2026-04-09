@@ -17,6 +17,7 @@
 #include "../install-type.h"
 #include "../modules.h"
 #include "../file-writer.h"
+#include "../components/listbox.h"
 
 #include <cstring>
 #include <format>
@@ -46,6 +47,8 @@ static std::string active_table;
 
 // Change-detection for selectionDB2s.
 static std::string prev_selection_last;
+
+static listbox::ListboxState listbox_db2_state;
 
 // --- Internal functions ---
 
@@ -248,8 +251,42 @@ void render() {
 	//     <Listbox v-model:selection="selectionDB2s" :items="dbdManifest" ...>
 	// </div>
 	ImGui::BeginChild("db2-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing() * 3), ImGuiChildFlags_Borders);
-	// TODO(conversion): Listbox component rendering will be wired when integration is complete.
-	ImGui::Text("DB2 tables: %zu", view.dbdManifest.size());
+	{
+		std::vector<std::string> items_str;
+		items_str.reserve(view.dbdManifest.size());
+		for (const auto& item : view.dbdManifest)
+			items_str.push_back(item.get<std::string>());
+
+		std::vector<std::string> selection_str;
+		for (const auto& s : view.selectionDB2s)
+			selection_str.push_back(s.get<std::string>());
+
+		listbox::render(
+			"listbox-db2",
+			items_str,
+			view.userInputFilterDB2s,
+			selection_str,
+			true,    // single
+			true,    // keyinput
+			view.config.value("regexFilters", false),
+			listbox::CopyMode::Default,
+			false,   // pasteselection
+			false,   // copytrimwhitespace
+			"table", // unittype
+			nullptr, // overrideItems
+			false,   // disable
+			"db2",   // persistscrollkey
+			{},      // quickfilters
+			false,   // nocopy
+			listbox_db2_state,
+			[&](const std::vector<std::string>& new_sel) {
+				view.selectionDB2s.clear();
+				for (const auto& s : new_sel)
+					view.selectionDB2s.push_back(s);
+			},
+			nullptr  // no context menu
+		);
+	}
 	ImGui::EndChild();
 
 	// Filter for DB2 list.
