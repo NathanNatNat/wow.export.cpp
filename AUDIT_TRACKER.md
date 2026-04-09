@@ -482,3 +482,13 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: Loads `whats-new.html` from disk and assigns to `core.view.whatsNewHTML` for display on the home tab.
 - **C++**: Code commented out with original JS preserved in comments.
 - **Rationale**: Home page is a blank placeholder — `whats-new.html` is no longer used per project direction.
+
+### `src/js/components/model-viewer-gl.h` — ACCEPTABLE (`render_one_frame` added)
+- **JS**: The Vue component's `render()` method is internal and called each animation frame. External code (e.g. thumbnail capture) triggers rendering by being on the same event loop.
+- **C++**: Added `render_one_frame(State&, Context&)` public function that forwards to the internal `render_scene()`. Used by `capture_character_thumbnail()` to render a single frame with modified camera/animation state.
+- **Rationale**: In C++, `render_scene` is file-local (`static`). External callers (e.g. thumbnail capture in `tab_characters.cpp`) need a public entry point to trigger one-shot rendering to the FBO. The JS equivalent is implicit (the canvas renders on requestAnimationFrame), but C++ requires an explicit call.
+
+### `src/js/3D/renderers/M2RendererGL.h` — ACCEPTABLE (`get_current_animation` accessor added)
+- **JS**: `renderer.current_animation` is a public property accessed directly.
+- **C++**: `current_animation` is a private member. Added `get_current_animation()` const accessor to expose it.
+- **Rationale**: C++ encapsulation requires an accessor for the private field. Needed by `capture_character_thumbnail()` to save and restore the current animation index.

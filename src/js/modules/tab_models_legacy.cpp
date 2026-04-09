@@ -19,6 +19,7 @@
 #include "../3D/exporters/M2LegacyExporter.h"
 #include "../3D/exporters/WMOLegacyExporter.h"
 #include "../ui/texture-ribbon.h"
+#include "../ui/model-viewer-utils.h"
 #include "../3D/AnimMapper.h"
 #include "../db/caches/DBCreaturesLegacy.h"
 #include "../file-writer.h"
@@ -612,42 +613,14 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 	// JS: if (format === 'PNG' || format === 'CLIPBOARD') { ... }
 	if (format == "PNG" || format == "CLIPBOARD") {
 		if (!active_path.empty()) {
-			// JS: core.setToast('progress', 'Saving preview, hold on...', null, -1, false);
-			core::setToast("progress", "Saving preview, hold on...", {}, -1, false);
-
 			// JS: const canvas = document.getElementById('legacy-model-preview').querySelector('canvas');
 			// JS: const buf = await BufferWrapper.fromCanvas(canvas, 'image/png');
-			// TODO(conversion): GL framebuffer capture will be wired when model viewer GL is integrated.
-
-			if (format == "PNG") {
-				// JS: const export_path = ExportHelper.getExportPath(active_path);
-				std::string export_path = casc::ExportHelper::getExportPath(active_path);
-				// JS: let out_file = ExportHelper.replaceExtension(export_path, '.png');
-				std::string out_file = casc::ExportHelper::replaceExtension(export_path, ".png");
-
-				// JS: if (core.view.config.modelsExportPngIncrements) out_file = await ExportHelper.getIncrementalFilename(out_file);
-				if (view.config.value("modelsExportPngIncrements", false))
-					out_file = casc::ExportHelper::getIncrementalFilename(out_file);
-
-				// JS: const out_dir = path.dirname(out_file);
-				std::string out_dir = std::filesystem::path(out_file).parent_path().string();
-
-				// JS: await buf.writeToFile(out_file);
-				// TODO(conversion): PNG write from framebuffer will be wired when GL is integrated.
-
-				// JS: await export_paths?.writeLine('PNG:' + out_file);
-				if (export_paths)
-					export_paths->writeLine("PNG:" + out_file);
-
-				logging::write(std::format("Saved legacy 3D preview screenshot to {}", out_file));
-				// JS: core.setToast('success', util.format('Successfully exported preview to %s', out_file), ...);
-				core::setToast("success", std::format("Successfully exported preview to {}", out_file), {}, -1);
-			} else if (format == "CLIPBOARD") {
-				// JS: const clipboard = nw.Clipboard.get(); clipboard.set(buf.toBase64(), 'png', true);
-				// TODO(conversion): Clipboard PNG copy will be wired when GL integration is complete.
-
-				logging::write(std::format("Copied legacy 3D preview to clipboard ({})", active_path));
-				core::setToast("success", "3D preview has been copied to the clipboard", {}, -1, true);
+			gl::GLContext* gl_ctx = viewer_context.gl_context;
+			if (gl_ctx && viewer_state.fbo != 0) {
+				// Bind the model viewer FBO so export_preview can read its pixels
+				glBindFramebuffer(GL_FRAMEBUFFER, viewer_state.fbo);
+				model_viewer_utils::export_preview(format, *gl_ctx, active_path);
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			}
 		} else {
 			// JS: core.setToast('error', 'The selected export option only works for model previews. Preview something first!', null, -1);

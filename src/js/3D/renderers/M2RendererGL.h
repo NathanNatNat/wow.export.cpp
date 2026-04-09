@@ -264,6 +264,9 @@ public:
 	// Accessor for animation_paused (JS: renderer.animation_paused public property)
 	bool is_animation_paused() const { return animation_paused; }
 
+	// Accessor for current_animation (JS: renderer.current_animation public property)
+	int get_current_animation() const { return current_animation; }
+
 	// Accessor for skelLoader (JS: renderer.skelLoader public property)
 	const SKELLoader* getSkelLoader() const { return skelLoader.get(); }
 

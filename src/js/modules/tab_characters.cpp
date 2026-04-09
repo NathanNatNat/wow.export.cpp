@@ -45,6 +45,7 @@ License: MIT
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -1671,19 +1672,82 @@ preset = &gender_it->second;
 }
 }
 
-// TODO(conversion): Full thumbnail capture requires model-viewer-gl State integration.
-// Once the model viewer State/Context is wired (replacing chrModelViewerContext JSON),
-// this function will:
-// 1. Save camera position/target/rotation
-// 2. Apply THUMBNAIL_PRESETS camera settings
-// 3. Set animation to stand (index 0), frame 0
-// 4. Render one frame to FBO
-// 5. glReadPixels the FBO, crop to square, encode as PNG base64 data URI
-// 6. Restore camera/animation state
-// The preset data and active_renderer are ready; only the FBO integration is pending.
-(void)preset; // suppress unused warning until wired
-
+gl::GLContext* gl_ctx = viewer_context.gl_context;
+if (!gl_ctx || viewer_state.fbo == 0)
 return "";
+
+auto saved_position = viewer_state.camera.position;
+auto saved_target = viewer_state.camera.target;
+float saved_rotation = viewer_state.model_rotation_y;
+int saved_animation = active_renderer->get_current_animation();
+int saved_frame = active_renderer->get_animation_frame();
+bool saved_paused = active_renderer->is_animation_paused();
+
+if (preset) {
+viewer_state.camera.setPosition(preset->cam_x, preset->cam_y, preset->cam_z);
+viewer_state.camera.lookAt(preset->tgt_x, preset->tgt_y, preset->tgt_z);
+viewer_state.model_rotation_y = preset->rot;
+active_renderer->setTransform(
+{0, 0, 0},
+{0, preset->rot, 0},
+{1, 1, 1}
+);
+}
+
+active_renderer->playAnimation(0);
+active_renderer->set_animation_frame(0);
+active_renderer->set_animation_paused(true);
+
+viewer_state.camera.update_view();
+viewer_state.camera.update_projection();
+
+model_viewer_gl::render_one_frame(viewer_state, viewer_context);
+
+const int width = viewer_state.fbo_width;
+const int height = viewer_state.fbo_height;
+
+std::vector<uint8_t> pixels(static_cast<size_t>(width * height * 4));
+glBindFramebuffer(GL_FRAMEBUFFER, viewer_state.fbo);
+glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+const int row_stride = width * 4;
+for (int y = 0; y < height / 2; y++) {
+uint8_t* top = pixels.data() + y * row_stride;
+uint8_t* bottom = pixels.data() + (height - 1 - y) * row_stride;
+std::swap_ranges(top, top + row_stride, bottom);
+}
+
+const int size = std::min(width, height);
+const int x_offset = (width - size) / 2;
+const int y_offset = (height - size) / 2;
+
+PNGWriter png_writer(static_cast<uint32_t>(size), static_cast<uint32_t>(size));
+auto& cropped = png_writer.getPixelData();
+cropped.resize(static_cast<size_t>(size * size * 4));
+for (int y = 0; y < size; y++) {
+const uint8_t* src_row = pixels.data() + (y + y_offset) * row_stride + x_offset * 4;
+uint8_t* dst_row = cropped.data() + y * size * 4;
+std::memcpy(dst_row, src_row, static_cast<size_t>(size * 4));
+}
+
+BufferWrapper buf = png_writer.getBuffer();
+std::string data_uri = "data:image/png;base64," + buf.toBase64();
+
+viewer_state.camera.position = saved_position;
+viewer_state.camera.target = saved_target;
+viewer_state.camera.update_view();
+viewer_state.model_rotation_y = saved_rotation;
+active_renderer->setTransform(
+{0, 0, 0},
+{0, saved_rotation, 0},
+{1, 1, 1}
+);
+active_renderer->playAnimation(saved_animation);
+active_renderer->set_animation_frame(saved_frame);
+active_renderer->set_animation_paused(saved_paused);
+
+return data_uri;
 }
 
 // JS: function get_current_character_data(core)
@@ -1977,28 +2041,15 @@ std::string format = view.config.value("exportCharacterFormat", "GLTF");
 
 if (format == "PNG" || format == "CLIPBOARD") {
 if (active_model != 0) {
-core::setToast("progress", "saving preview, hold on...", {}, -1, false);
-
 // JS: const canvas = document.querySelector('.char-preview canvas');
 // JS: const buf = await BufferWrapper.fromCanvas(canvas, 'image/png');
-// TODO(conversion): GL framebuffer capture will be wired when model-viewer-gl State is integrated.
-// Once the FBO is accessible, this will use the export_preview pattern from model-viewer-utils.
-
-if (format == "PNG") {
+gl::GLContext* gl_ctx = viewer_context.gl_context;
+if (gl_ctx && viewer_state.fbo != 0) {
 std::string file_name = casc::listfile::getByID(active_model);
-std::string export_path = casc::ExportHelper::getExportPath(file_name);
-std::string out_file = casc::ExportHelper::replaceExtension(export_path, ".png");
-
-if (view.config.value("modelsExportPngIncrements", false))
-out_file = casc::ExportHelper::getIncrementalFilename(out_file);
-
-// TODO(conversion): Write PNG buffer to file once FBO is accessible.
-logging::write(std::format("saved 3d preview screenshot to {}", out_file));
-} else if (format == "CLIPBOARD") {
-// TODO(conversion): Copy PNG to clipboard once FBO capture is accessible.
-// Will use: ImGui::SetClipboardText(buf.toBase64().c_str());
-logging::write(std::format("copied 3d preview to clipboard (character {})", active_model));
-core::setToast("success", "3D preview has been copied to the clipboard", {}, -1, true);
+// Bind the model viewer FBO so export_preview can read its pixels
+glBindFramebuffer(GL_FRAMEBUFFER, viewer_state.fbo);
+model_viewer_utils::export_preview(format, *gl_ctx, file_name);
+glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 } else {
 core::setToast("error", "the selected export option only works for character previews. preview something first!", {}, -1);

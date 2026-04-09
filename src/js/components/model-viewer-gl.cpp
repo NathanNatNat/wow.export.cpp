@@ -879,4 +879,8 @@ void renderWidget(const char* id, State& state, Context& context) {
 	ImGui::PopID();
 }
 
+void render_one_frame(State& state, Context& context) {
+	render_scene(state, context);
+}
+
 } // namespace model_viewer_gl
