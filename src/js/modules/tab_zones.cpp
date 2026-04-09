@@ -19,6 +19,7 @@ License: MIT
 #include "../ui/texture-exporter.h"
 #include "../install-type.h"
 #include "../modules.h"
+#include "../components/context-menu.h"
 
 #include <cstring>
 #include <format>
@@ -175,6 +176,7 @@ static std::optional<int> selected_phase_id;
 static std::string prev_selection_first;
 static bool prev_show_zone_base_map = true;
 static bool prev_show_zone_overlays = true;
+static context_menu::ContextMenuState context_menu_zone_state;
 
 // --- Internal functions ---
 
@@ -683,6 +685,13 @@ prev_show_zone_base_map = view.config.value("showZoneBaseMap", true);
 prev_show_zone_overlays = view.config.value("showZoneOverlays", true);
 }
 
+// Forward declarations for context menu methods (defined after render()).
+static void copy_zone_names(const std::vector<std::string>& selection);
+static void copy_area_names(const std::vector<std::string>& selection);
+static void copy_zone_ids(const std::vector<std::string>& selection);
+static void copy_zone_export_path();
+static void open_zone_export_directory();
+
 void render() {
 auto& view = *core::view;
 
@@ -786,7 +795,31 @@ ImGui::EndChild();
 // Context menu.
 // JS: <ContextMenu :node="contextMenus.nodeZone" ...>
 //   copy_zone_names, copy_area_names, copy_zone_ids, copy_zone_export_path, open_zone_export_directory
-// TODO(conversion): ContextMenu component rendering will be wired when integration is complete.
+context_menu::render(
+	"ctx-zone",
+	view.contextMenus.nodeZone,
+	context_menu_zone_state,
+	[&]() { view.contextMenus.nodeZone = nullptr; },
+	[](const nlohmann::json& node) {
+		std::vector<std::string> sel;
+		if (node.contains("selection") && node["selection"].is_array())
+			for (const auto& s : node["selection"])
+				sel.push_back(s.get<std::string>());
+		int count = node.value("count", 0);
+		std::string plural = count > 1 ? "s" : "";
+
+		if (ImGui::Selectable(std::format("Copy zone name{}", plural).c_str()))
+			copy_zone_names(sel);
+		if (ImGui::Selectable(std::format("Copy area name{}", plural).c_str()))
+			copy_area_names(sel);
+		if (ImGui::Selectable(std::format("Copy zone ID{}", plural).c_str()))
+			copy_zone_ids(sel);
+		if (ImGui::Selectable("Copy export path"))
+			copy_zone_export_path();
+		if (ImGui::Selectable("Open export directory"))
+			open_zone_export_directory();
+	}
+);
 
 // Filter.
 // JS: <div class="filter">
@@ -876,7 +909,12 @@ ImGui::EndGroup();
 // --- Context menu methods ---
 
 // JS: methods.handle_zone_context(data)
-// TODO(conversion): Context menu handling will be wired when ContextMenu component is integrated.
+static void handle_zone_context(const std::vector<std::string>& selection) {
+	nlohmann::json node;
+	node["selection"] = selection;
+	node["count"] = static_cast<int>(selection.size());
+	core::view->contextMenus.nodeZone = std::move(node);
+}
 // The methods below implement the clipboard operations identically to JS.
 
 // JS: methods.copy_zone_names(selection)

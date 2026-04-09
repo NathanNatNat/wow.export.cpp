@@ -18,6 +18,7 @@
 #include "../wow/EquipmentSlots.h"
 #include "../install-type.h"
 #include "../modules.h"
+#include "../components/context-menu.h"
 // const ExternalLinks = require('../external-links'); // Removed: external-links module deleted
 
 #include <cstring>
@@ -173,6 +174,7 @@ static std::vector<bool> prev_type_mask_checked;
 static std::vector<bool> prev_quality_mask_checked;
 
 static bool is_initialized = false;
+static context_menu::ContextMenuState context_menu_item_state;
 
 // --- Internal functions ---
 
@@ -766,12 +768,12 @@ void render() {
 	//     <span @click.self="copy_to_clipboard(context.node.name)">Copy item name to clipboard</span>
 	//     <span @click.self="copy_to_clipboard(context.node.id)">Copy item ID to clipboard</span>
 	//     <span @click.self="view_on_wowhead(context.node.id)">View item on Wowhead (web)</span>
-	// TODO(conversion): ContextMenu component rendering will be wired when integration is complete.
-	// For now, implement as an ImGui popup context menu.
-	if (!view.contextMenus.nodeItem.is_null()) {
-		const auto& node = view.contextMenus.nodeItem;
-
-		if (ImGui::BeginPopup("ItemContextMenu")) {
+	context_menu::render(
+		"ctx-item",
+		view.contextMenus.nodeItem,
+		context_menu_item_state,
+		[&]() { view.contextMenus.nodeItem = nullptr; },
+		[&](const nlohmann::json& node) {
 			int model_count = node.value("modelCount", 0);
 			int texture_count = node.value("textureCount", 0);
 			uint32_t node_id = node.value("id", 0u);
@@ -779,45 +781,35 @@ void render() {
 
 			// JS: <span v-if="context.node.modelCount > 0" ...>View related models</span>
 			if (model_count > 0) {
-				if (ImGui::MenuItem(std::format("View related models ({})", model_count).c_str())) {
+				if (ImGui::Selectable(std::format("View related models ({})", model_count).c_str())) {
 					const Item* item = find_item_by_id(node_id);
 					if (item)
 						view_item_models(*item);
-					view.contextMenus.nodeItem = nullptr;
 				}
 			}
 
 			// JS: <span v-if="context.node.textureCount > 0" ...>View related textures</span>
 			if (texture_count > 0) {
-				if (ImGui::MenuItem(std::format("View related textures ({})", texture_count).c_str())) {
+				if (ImGui::Selectable(std::format("View related textures ({})", texture_count).c_str())) {
 					const Item* item = find_item_by_id(node_id);
 					if (item)
 						view_item_textures(*item);
-					view.contextMenus.nodeItem = nullptr;
 				}
 			}
 
 			// JS: <span @click.self="copy_to_clipboard(context.node.name)">Copy item name to clipboard</span>
-			if (ImGui::MenuItem("Copy item name to clipboard")) {
+			if (ImGui::Selectable("Copy item name to clipboard"))
 				copy_to_clipboard(node_name);
-				view.contextMenus.nodeItem = nullptr;
-			}
 
 			// JS: <span @click.self="copy_to_clipboard(context.node.id)">Copy item ID to clipboard</span>
-			if (ImGui::MenuItem("Copy item ID to clipboard")) {
+			if (ImGui::Selectable("Copy item ID to clipboard"))
 				copy_to_clipboard(std::to_string(node_id));
-				view.contextMenus.nodeItem = nullptr;
-			}
 
 			// JS: <span @click.self="view_on_wowhead(context.node.id)">View item on Wowhead (web)</span>
-			if (ImGui::MenuItem("View item on Wowhead (web)")) {
+			if (ImGui::Selectable("View item on Wowhead (web)"))
 				view_on_wowhead(node_id);
-				view.contextMenus.nodeItem = nullptr;
-			}
-
-			ImGui::EndPopup();
 		}
-	}
+	);
 }
 
 } // namespace tab_items
