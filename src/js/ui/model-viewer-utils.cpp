@@ -162,12 +162,46 @@ std::string get_model_extension(ModelType model_type) {
 }
 
 /**
+ * Upload RGBA pixel data to an OpenGL texture, returning the texture ID.
+ * Deletes the previous texture if old_tex != 0.
+ */
+static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t old_tex = 0) {
+	if (old_tex != 0) {
+		GLuint old_gl = static_cast<GLuint>(old_tex);
+		glDeleteTextures(1, &old_gl);
+	}
+	GLuint tex = 0;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	return static_cast<uint32_t>(tex);
+}
+
+/**
+ * Delete an OpenGL texture and reset the ID to 0.
+ */
+static void delete_gl_texture(uint32_t& tex_id) {
+	if (tex_id != 0) {
+		GLuint gl_tex = static_cast<GLuint>(tex_id);
+		glDeleteTextures(1, &gl_tex);
+		tex_id = 0;
+	}
+}
+
+/**
  * Clear texture preview state (URL, UV overlay, UV layers).
  */
 void clear_texture_preview(ViewStateProxy& state) {
 	if (state.texturePreviewURL)       *state.texturePreviewURL       = "";
 	if (state.texturePreviewUVOverlay) *state.texturePreviewUVOverlay = "";
 	if (state.uvLayers)                *state.uvLayers                = {};
+	if (state.texturePreviewTexID)     delete_gl_texture(*state.texturePreviewTexID);
+	if (state.texturePreviewUVTexID)   delete_gl_texture(*state.texturePreviewUVTexID);
 }
 
 /**
@@ -213,10 +247,14 @@ void toggle_uv_layer(ViewStateProxy& state, M2RendererGL* renderer, const std::s
 	if (layer_name == "UV Off" || (*it).value("data", nlohmann::json(nullptr)).is_null()) {
 		if (state.texturePreviewUVOverlay)
 			*state.texturePreviewUVOverlay = "";
+		if (state.texturePreviewUVTexID)
+			delete_gl_texture(*state.texturePreviewUVTexID);
 	} else if (renderer && state.texturePreviewUVOverlay) {
 		const auto uv_layer_data = renderer->getUVLayers();
 		if (!uv_layer_data.indices) {
 			*state.texturePreviewUVOverlay = "";
+			if (state.texturePreviewUVTexID)
+				delete_gl_texture(*state.texturePreviewUVTexID);
 			return;
 		}
 
@@ -228,6 +266,12 @@ void toggle_uv_layer(ViewStateProxy& state, M2RendererGL* renderer, const std::s
 
 		const std::vector<uint8_t> pixels = uv_drawer::generateUVLayerPixels(
 			layer_data, tw, th, *uv_layer_data.indices);
+
+		// Upload UV overlay pixels to GL texture for ImGui::Image display.
+		if (state.texturePreviewUVTexID) {
+			*state.texturePreviewUVTexID = upload_rgba_to_gl(
+				pixels.data(), tw, th, *state.texturePreviewUVTexID);
+		}
 
 		// Encode as PNG data URL for UI display
 		PNGWriter png_writer(static_cast<uint32_t>(tw), static_cast<uint32_t>(th));
@@ -260,6 +304,14 @@ void preview_texture_by_id(ViewStateProxy& state, M2RendererGL* renderer,
 		if (state.texturePreviewWidth)     *state.texturePreviewWidth  = static_cast<int>(blp.width);
 		if (state.texturePreviewHeight)    *state.texturePreviewHeight = static_cast<int>(blp.height);
 		if (state.texturePreviewName)      *state.texturePreviewName   = name;
+
+		// Upload BLP as GL texture for ImGui::Image display.
+		if (state.texturePreviewTexID) {
+			std::vector<uint8_t> pixels = blp.toUInt8Array(0, mask);
+			*state.texturePreviewTexID = upload_rgba_to_gl(
+				pixels.data(), static_cast<int>(blp.width), static_cast<int>(blp.height),
+				*state.texturePreviewTexID);
+		}
 
 		initialize_uv_layers(state, renderer);
 		core::hideToast();
@@ -679,6 +731,8 @@ ViewStateProxy create_view_state(const std::string& prefix) {
 		proxy.texturePreviewWidth    = &s->modelTexturePreviewWidth;
 		proxy.texturePreviewHeight   = &s->modelTexturePreviewHeight;
 		proxy.texturePreviewName     = &s->modelTexturePreviewName;
+		proxy.texturePreviewTexID    = &s->modelTexturePreviewTexID;
+		proxy.texturePreviewUVTexID  = &s->modelTexturePreviewUVTexID;
 		proxy.uvLayers               = &s->modelViewerUVLayers;
 		proxy.anims                  = &s->modelViewerAnims;
 		proxy.animSelection          = &s->modelViewerAnimSelection;
@@ -692,6 +746,8 @@ ViewStateProxy create_view_state(const std::string& prefix) {
 		proxy.texturePreviewWidth    = &s->decorTexturePreviewWidth;
 		proxy.texturePreviewHeight   = &s->decorTexturePreviewHeight;
 		proxy.texturePreviewName     = &s->decorTexturePreviewName;
+		proxy.texturePreviewTexID    = &s->decorTexturePreviewTexID;
+		proxy.texturePreviewUVTexID  = &s->decorTexturePreviewUVTexID;
 		proxy.uvLayers               = &s->decorViewerUVLayers;
 		proxy.anims                  = &s->decorViewerAnims;
 		proxy.animSelection          = &s->decorViewerAnimSelection;
@@ -705,6 +761,8 @@ ViewStateProxy create_view_state(const std::string& prefix) {
 		proxy.texturePreviewWidth    = &s->creatureTexturePreviewWidth;
 		proxy.texturePreviewHeight   = &s->creatureTexturePreviewHeight;
 		proxy.texturePreviewName     = &s->creatureTexturePreviewName;
+		proxy.texturePreviewTexID    = &s->creatureTexturePreviewTexID;
+		proxy.texturePreviewUVTexID  = &s->creatureTexturePreviewUVTexID;
 		proxy.uvLayers               = &s->creatureViewerUVLayers;
 		proxy.anims                  = &s->creatureViewerAnims;
 		proxy.animSelection          = &s->creatureViewerAnimSelection;

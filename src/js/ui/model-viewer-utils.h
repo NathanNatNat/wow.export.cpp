@@ -76,6 +76,8 @@ struct ViewStateProxy {
 	int*                      texturePreviewWidth  = nullptr;
 	int*                      texturePreviewHeight = nullptr;
 	std::string*              texturePreviewName   = nullptr;
+	uint32_t*                 texturePreviewTexID  = nullptr;
+	uint32_t*                 texturePreviewUVTexID = nullptr;
 	std::vector<nlohmann::json>*  uvLayers         = nullptr;
 	std::vector<nlohmann::json>*  anims            = nullptr;
 	nlohmann::json*           animSelection        = nullptr;

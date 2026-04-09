@@ -406,10 +406,10 @@ MPQ source (Phase 3.1, done) and legacy loaders (Phase 3.2, pending).
 - [x] Wire `fitCamera` calls — `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp`, `tab_creatures.cpp`, `tab_characters.cpp` (7 TODOs)
 
 ### 4.5 Texture Display
-- [ ] Wire texture preview as `ImGui::Image` — `tab_textures.cpp`, `tab_decor.cpp`, `tab_models.cpp` (3 TODOs)
-- [ ] Wire zone map preview as `ImGui::Image` — `tab_zones.cpp` (1 TODO)
-- [ ] Wire UV overlay rendering — `tab_models.cpp` (1 TODO)
-- [ ] Wire atlas region rendering as ImGui overlay — `tab_zones.cpp` (1 TODO)
+- [x] Wire texture preview as `ImGui::Image` — `tab_textures.cpp`, `tab_decor.cpp`, `tab_models.cpp` (3 TODOs)
+- [x] Wire zone map preview as `ImGui::Image` — `tab_zones.cpp` (1 TODO)
+- [x] Wire UV overlay rendering — `tab_models.cpp` (1 TODO)
+- [x] Wire atlas region rendering as ImGui overlay — `tab_textures.cpp` (1 TODO)
 
 ### 4.6 Framebuffer Capture
 - [ ] Wire GL framebuffer capture for screenshots — `tab_characters.cpp`, `tab_models_legacy.cpp` (2 TODOs)
