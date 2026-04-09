@@ -13,8 +13,6 @@
 
 #include <algorithm>
 #include <format>
-#include <iomanip>
-#include <sstream>
 #include <stdexcept>
 
 // Chunk IDs
@@ -182,15 +180,13 @@ WMOLegacyLoader& WMOLegacyLoader::getGroup(uint32_t index) {
 	std::string groupPath;
 	if (!this->fileName.empty()) {
 		std::string base = this->fileName;
-		// Case-insensitive search for .wmo extension
-		std::string baseLower = base;
-		std::transform(baseLower.begin(), baseLower.end(), baseLower.begin(),
-			[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-		auto wmoPos = baseLower.rfind(".wmo");
-		if (wmoPos != std::string::npos) {
-			std::ostringstream oss;
-			oss << std::setfill('0') << std::setw(3) << index;
-			groupPath = base.substr(0, wmoPos) + "_" + oss.str() + ".wmo";
+		// Case-insensitive search for .wmo extension (check last 4 chars)
+		if (base.size() >= 4) {
+			std::string ext = base.substr(base.size() - 4);
+			std::transform(ext.begin(), ext.end(), ext.begin(),
+				[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			if (ext == ".wmo")
+				groupPath = base.substr(0, base.size() - 4) + "_" + std::format("{:03}", index) + ".wmo";
 		}
 	}
 
