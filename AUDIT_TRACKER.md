@@ -492,3 +492,23 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: `renderer.current_animation` is a public property accessed directly.
 - **C++**: `current_animation` is a private member. Added `get_current_animation()` const accessor to expose it.
 - **Rationale**: C++ encapsulation requires an accessor for the private field. Needed by `capture_character_thumbnail()` to save and restore the current animation index.
+
+### `src/js/3D/renderers/M2LegacyRendererGL.h` — ACCEPTABLE (`get_draw_calls` accessor added)
+- **JS**: `renderer.draw_calls` is a public property accessed directly.
+- **C++**: `draw_calls` is a private member. Added `get_draw_calls()` const accessor.
+- **Rationale**: Standard C++ accessor for data that JS accesses as a public property. Needed by `tab_models_legacy.cpp` to check whether the model has renderable content.
+
+### `src/js/3D/renderers/MDXRendererGL.h` — ACCEPTABLE (`get_draw_calls` accessor added)
+- **JS**: `renderer.draw_calls` is a public property accessed directly.
+- **C++**: `draw_calls` is a private member. Added `get_draw_calls()` const accessor.
+- **Rationale**: Standard C++ accessor for data that JS accesses as a public property. Needed by `tab_models_legacy.cpp` to check whether the model has renderable content.
+
+### `src/js/3D/renderers/WMOLegacyRendererGL.h` — ACCEPTABLE (`get_groups` accessor added)
+- **JS**: `renderer.groups` is a public property accessed directly.
+- **C++**: `groups` is a private member. Added `get_groups()` const accessor.
+- **Rationale**: Standard C++ accessor for data that JS accesses as a public property. Needed by `tab_models_legacy.cpp` to check whether the WMO model has renderable group content.
+
+### `src/js/3D/exporters/WMOLegacyExporter.h` / `M2LegacyExporter.h` — ACCEPTABLE (`MPQInstall*` instead of `MPQArchive*`)
+- **JS**: Both exporters receive the MPQ install object (`mpq`) and call `mpq.getFile(path)` to load textures, group files, and doodad data.
+- **C++**: Changed constructor parameter from `mpq::MPQArchive*` to `mpq::MPQInstall*` and internal calls from `extractFile()` to `getFile()`.
+- **Rationale**: The JS `mpq` is the install-level object that searches across all archives. Using `MPQInstall::getFile()` matches the JS semantics. `MPQArchive::extractFile()` only searches a single archive, which would miss files in other MPQ archives.

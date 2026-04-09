@@ -136,6 +136,9 @@ public:
 	void _dispose_skin();
 	void dispose();
 
+	// C++ accessors for JS public properties.
+	const std::vector<M2LegacyDrawCall>& get_draw_calls() const { return draw_calls; }
+
 	// Public state (matches JS properties)
 	std::unique_ptr<M2LegacyLoader> m2;
 	gl::ShaderProgram* shader = nullptr;

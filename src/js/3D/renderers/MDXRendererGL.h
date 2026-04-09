@@ -103,6 +103,9 @@ public:
 
 	void dispose();
 
+	// C++ accessors for JS public properties.
+	const std::vector<MDXDrawCall>& get_draw_calls() const { return draw_calls; }
+
 	// Public state (matches JS properties)
 	std::unique_ptr<MDXLoader> mdx;
 	gl::ShaderProgram* shader = nullptr;

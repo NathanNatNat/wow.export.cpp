@@ -19,7 +19,7 @@
 #include "../../buffer.h"
 #include "../../casc/blp.h"
 #include "../../casc/export-helper.h"
-#include "../../mpq/mpq.h"
+#include "../../mpq/mpq-install.h"
 #include "../loaders/M2LegacyLoader.h"
 #include "../Texture.h"
 #include "../writers/JSONWriter.h"
@@ -61,7 +61,7 @@ std::string resolveTexturePath(const std::string& fileName, uint32_t textureType
 
 } // anonymous namespace
 
-M2LegacyExporter::M2LegacyExporter(BufferWrapper data, const std::string& filePath, mpq::MPQArchive* mpq)
+M2LegacyExporter::M2LegacyExporter(BufferWrapper data, const std::string& filePath, mpq::MPQInstall* mpq)
 	: data(std::move(data))
 	, filePath(filePath)
 	, mpq(mpq)
@@ -114,7 +114,7 @@ std::map<std::string, TextureExportInfo> M2LegacyExporter::exportTextures(
 		exportedTextures.insert(lowerTexPath);
 
 		try {
-			auto textureData = mpq->extractFile(texturePath);
+			auto textureData = mpq->getFile(texturePath);
 			if (!textureData) {
 				logging::write(std::format("Texture not found in MPQ: {}", texturePath));
 				continue;
@@ -453,7 +453,7 @@ void M2LegacyExporter::exportRaw(
 			exportedTextures.insert(lowerTexPath);
 
 			try {
-				auto textureData = mpq->extractFile(texturePath);
+				auto textureData = mpq->getFile(texturePath);
 				if (!textureData) {
 					logging::write(std::format("Texture not found in MPQ: {}", texturePath));
 					continue;
@@ -496,7 +496,7 @@ void M2LegacyExporter::exportRaw(
 				exportedTextures.insert(lowerTexPath);
 
 				try {
-					auto textureData = mpq->extractFile(texturePath);
+					auto textureData = mpq->getFile(texturePath);
 					if (!textureData) {
 						logging::write(std::format("Skin texture not found in MPQ: {}", texturePath));
 						continue;

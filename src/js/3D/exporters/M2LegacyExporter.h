@@ -23,7 +23,7 @@ namespace casc {
 }
 
 namespace mpq {
-	class MPQArchive;
+	class MPQInstall;
 }
 
 /**
@@ -52,7 +52,7 @@ struct TextureExportInfo {
 
 class M2LegacyExporter {
 public:
-	M2LegacyExporter(BufferWrapper data, const std::string& filePath, mpq::MPQArchive* mpq);
+	M2LegacyExporter(BufferWrapper data, const std::string& filePath, mpq::MPQInstall* mpq);
 
 	void setSkinTextures(const std::vector<std::string>& textures);
 	void setGeosetMask(const std::vector<GeosetMaskEntry>& mask);
@@ -84,7 +84,7 @@ public:
 private:
 	BufferWrapper data;
 	std::string filePath;
-	mpq::MPQArchive* mpq;
+	mpq::MPQInstall* mpq;
 	std::unique_ptr<M2LegacyLoader> m2;
 	std::vector<std::string> skinTextures;
 	std::vector<GeosetMaskEntry> geosetMask;
