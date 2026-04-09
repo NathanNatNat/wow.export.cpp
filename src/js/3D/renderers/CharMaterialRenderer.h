@@ -88,6 +88,14 @@ public:
 	std::vector<uint8_t> getRawPixels();
 
 	/**
+	 * Get canvas.
+	 * JS equivalent: returns the HTML canvas element. In C++ returns the FBO
+	 * color-attachment texture ID, which serves as the layer identity in
+	 * char_texture_overlay.
+	 */
+	GLuint getCanvas() const { return fbo_texture_; }
+
+	/**
 	 * Get URI from raw pixels, avoiding canvas alpha premultiplication.
 	 */
 	std::string getURI();
