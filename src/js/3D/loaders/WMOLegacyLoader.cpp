@@ -7,9 +7,12 @@
 #include "WMOLegacyLoader.h"
 #include "LoaderGenerics.h"
 #include "../../buffer.h"
+#include "../../core.h"
 #include "../../casc/listfile.h"
+#include "../../mpq/mpq-install.h"
 
 #include <algorithm>
+#include <format>
 #include <stdexcept>
 
 // Chunk IDs
@@ -170,8 +173,44 @@ WMOLegacyLoader& WMOLegacyLoader::getGroup(uint32_t index) {
 		throw std::runtime_error("Alpha inline group parsing not yet implemented");
 	}
 
-	// TODO(conversion): MPQ file loading will be wired in when UI integration is complete.
-	throw std::runtime_error("Group loading requires MPQ - not yet wired in C++ UI");
+	if (!core::view || !core::view->mpq)
+		throw std::runtime_error("MPQ install not available for group loading");
+
+	// Construct group file path: rootname_NNN.wmo
+	std::string groupPath;
+	if (!this->fileName.empty()) {
+		std::string base = this->fileName;
+		// Case-insensitive search for .wmo extension (check last 4 chars)
+		if (base.size() >= 4) {
+			std::string ext = base.substr(base.size() - 4);
+			std::transform(ext.begin(), ext.end(), ext.begin(),
+				[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			if (ext == ".wmo")
+				groupPath = base.substr(0, base.size() - 4) + "_" + std::format("{:03}", index) + ".wmo";
+		}
+	}
+
+	if (groupPath.empty())
+		throw std::runtime_error("Cannot determine group filename for group " + std::to_string(index));
+
+	auto fileData = core::view->mpq->getFile(groupPath);
+	if (!fileData.has_value())
+		throw std::runtime_error("WMO group file not found in MPQ: " + groupPath);
+
+	auto ownedBuf = std::make_unique<BufferWrapper>(std::move(fileData.value()));
+	auto group = std::make_unique<WMOLegacyLoader>(*ownedBuf, groupPath, this->renderingOnly);
+	group->load();
+
+	// Ensure groups vector is large enough
+	if (this->groups.size() <= index)
+		this->groups.resize(index + 1, nullptr);
+
+	WMOLegacyLoader* groupPtr = group.get();
+	this->groups[index] = groupPtr;
+	this->ownedGroupBuffers.push_back(std::move(ownedBuf));
+	this->ownedGroups.push_back(std::move(group));
+
+	return *groupPtr;
 }
 
 void WMOLegacyLoader::handleChunk(uint32_t chunkID, BufferWrapper& data, uint32_t chunkSize) {

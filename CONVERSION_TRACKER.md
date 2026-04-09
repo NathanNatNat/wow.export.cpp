@@ -364,7 +364,7 @@ and UI tabs depend on. DB2 wiring is pure data-layer plumbing.
 - [x] `screen_source_select.cpp` — MPQ loadInstall, source wiring (2 TODOs)
 
 ### 3.2 MPQ in Legacy Loaders
-- [ ] `WMOLegacyLoader.cpp` — MPQ file loading for WMO groups (1 TODO)
+- [x] `WMOLegacyLoader.cpp` — MPQ file loading for WMO groups (1 TODO)
 
 ### 3.3 DB2 System Integration
 
