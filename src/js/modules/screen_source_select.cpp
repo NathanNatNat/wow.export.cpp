@@ -550,15 +550,87 @@ void render() {
 		// JS: <div id="source-local" @click="click_source_local">
 		//   Source icon, title "Open Local Installation (Recommended)",
 		//   subtitle, recent local link
-		// TODO(conversion): Full ImGui rendering will be implemented when UI integration is complete.
+		ImGui::BeginChild("##source-select-panel", ImVec2(0, 0));
+
+		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::Spacing();
+
+		// Local Installation panel.
+		if (ImGui::Button("Open Local Installation (Recommended)##local", ImVec2(-1, 40)))
+			click_source_local();
+		ImGui::TextWrapped("Select the root directory of a World of Warcraft installation on your computer.");
+
+		// Recent local installs.
+		if (core::view->config.contains("recentLocal") && core::view->config["recentLocal"].is_array()) {
+			for (const auto& entry : core::view->config["recentLocal"]) {
+				std::string label = entry.value("product", std::string("Unknown"));
+				std::string path = entry.value("path", std::string(""));
+				std::string btn_text = std::format("{} ({})", label, path);
+				if (ImGui::SmallButton(btn_text.c_str()))
+					click_source_local_recent(entry);
+			}
+		}
+
+		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::Spacing();
 
 		// JS: <div id="source-remote" @click="click_source_remote">
 		//   Source icon, title "Use Battle.net CDN",
 		//   subtitle, CDN region selector with context menu
+		if (ImGui::Button("Use Battle.net CDN##remote", ImVec2(-1, 40)))
+			click_source_remote();
+		ImGui::TextWrapped("Stream data directly from Blizzard's CDN servers.");
+
+		// CDN region selector.
+		if (!core::view->cdnRegions.empty()) {
+			std::string current_label = "Select Region";
+			if (!core::view->selectedCDNRegion.is_null())
+				current_label = core::view->selectedCDNRegion.value("name", std::string("Select Region"));
+
+			if (ImGui::BeginCombo("CDN Region", current_label.c_str())) {
+				for (auto& region : core::view->cdnRegions) {
+					std::string name = region.value("name", std::string("Unknown"));
+					int64_t delay = region.value("delay", static_cast<int64_t>(-1));
+					std::string delay_str = delay >= 0 ? std::format("{}ms", delay) : "...";
+					std::string item_label = std::format("{} ({})", name, delay_str);
+
+					bool is_selected = (!core::view->selectedCDNRegion.is_null() &&
+						region.value("tag", std::string("")) == core::view->selectedCDNRegion.value("tag", std::string("")));
+
+					if (ImGui::Selectable(item_label.c_str(), is_selected))
+						set_selected_cdn(region);
+					if (is_selected)
+						ImGui::SetItemDefaultFocus();
+				}
+				ImGui::EndCombo();
+			}
+		}
+
+		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::Spacing();
 
 		// JS: <div id="source-legacy" @click="click_source_legacy">
 		//   Source icon, title "Open Legacy Installation",
 		//   subtitle, recent legacy link
+		if (ImGui::Button("Open Legacy Installation##legacy", ImVec2(-1, 40)))
+			click_source_legacy();
+		ImGui::TextWrapped("Select the root directory of a classic (pre-CASC) World of Warcraft installation.");
+
+		// Recent legacy installs.
+		if (core::view->config.contains("recentLegacy") && core::view->config["recentLegacy"].is_array()) {
+			for (const auto& entry : core::view->config["recentLegacy"]) {
+				std::string label = entry.value("product", std::string("Unknown"));
+				std::string path = entry.value("path", std::string(""));
+				std::string btn_text = std::format("{} ({})", label, path);
+				if (ImGui::SmallButton(btn_text.c_str()))
+					click_source_legacy_recent(entry);
+			}
+		}
+
+		ImGui::EndChild();
 	} else {
 		// JS: <div id="build-select">
 		//   <div class="build-select-content">
@@ -567,7 +639,28 @@ void render() {
 		//       For each build in availableLocalBuilds || availableRemoteBuilds:
 		//         expansion-icon button with build.label
 		//     <span @click="click_return_to_source_select" class="link">Return to Installations</span>
-		// TODO(conversion): Full ImGui rendering will be implemented when UI integration is complete.
+		ImGui::BeginChild("##build-select-panel", ImVec2(0, 0));
+
+		ImGui::SeparatorText("Select Build");
+
+		const auto& builds = !core::view->availableLocalBuilds.is_null()
+			? core::view->availableLocalBuilds
+			: core::view->availableRemoteBuilds;
+
+		if (!builds.is_null() && builds.is_array()) {
+			for (size_t i = 0; i < builds.size(); ++i) {
+				const auto& build = builds[i];
+				std::string label = build.value("label", std::format("Build {}", i));
+				if (ImGui::Button(label.c_str(), ImVec2(-1, 30)))
+					click_source_build(static_cast<int>(i));
+			}
+		}
+
+		ImGui::Spacing();
+		if (ImGui::SmallButton("Return to Installations"))
+			click_return_to_source_select();
+
+		ImGui::EndChild();
 	}
 }
 

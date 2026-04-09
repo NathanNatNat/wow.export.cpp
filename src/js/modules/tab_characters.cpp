@@ -24,6 +24,7 @@ License: MIT
 #include "../casc/listfile.h"
 #include "../casc/realmlist.h"
 #include "../components/file-field.h"
+#include "../components/combobox.h"
 #include "../ui/char-texture-overlay.h"
 #include "../ui/character-appearance.h"
 #include "../ui/model-viewer-utils.h"
