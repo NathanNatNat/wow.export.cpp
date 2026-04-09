@@ -17,6 +17,8 @@
 #include "../casc/db2.h"
 #include "../db/WDCReader.h"
 #include "../ui/listbox-context.h"
+#include "../components/listbox.h"
+#include "../components/context-menu.h"
 #include "../install-type.h"
 #include "../modules.h"
 
@@ -100,6 +102,8 @@ static bool kino_processing_cancelled = false;
 // Change-detection for selection and config watches.
 static std::string prev_selection_first;
 static bool prev_video_player_show_subtitles = false;
+static listbox::ListboxState listbox_state;
+static context_menu::ContextMenuState context_menu_state;
 
 // --- Subtitle info struct ---
 
@@ -1050,8 +1054,80 @@ void render() {
 	//     </ContextMenu>
 	// </div>
 	ImGui::BeginChild("videos-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.4f, 0), ImGuiChildFlags_Borders);
-	// TODO(conversion): Listbox and ContextMenu component rendering will be wired when integration is complete.
-	ImGui::Text("Video files: %zu", view.listfileVideos.size());
+	{
+		// Convert JSON items/selection to string vectors.
+		std::vector<std::string> items_str;
+		items_str.reserve(view.listfileVideos.size());
+		for (const auto& item : view.listfileVideos)
+			items_str.push_back(item.get<std::string>());
+
+		std::vector<std::string> selection_str;
+		for (const auto& s : view.selectionVideos)
+			selection_str.push_back(s.get<std::string>());
+
+		listbox::CopyMode copy_mode = listbox::CopyMode::Default;
+		{
+			std::string cm = view.config.value("copyMode", std::string("Default"));
+			if (cm == "DIR") copy_mode = listbox::CopyMode::DIR;
+			else if (cm == "FID") copy_mode = listbox::CopyMode::FID;
+		}
+
+		listbox::render(
+			"listbox-videos",
+			items_str,
+			view.userInputFilterVideos,
+			selection_str,
+			false,   // single
+			true,    // keyinput
+			view.config.value("regexFilters", false),
+			copy_mode,
+			view.config.value("pasteSelection", false),
+			view.config.value("removePathSpacesCopy", false),
+			"video", // unittype
+			nullptr, // overrideItems
+			false,   // disable
+			"videos", // persistscrollkey
+			{},      // quickfilters
+			false,   // nocopy
+			listbox_state,
+			[&](const std::vector<std::string>& new_sel) {
+				view.selectionVideos.clear();
+				for (const auto& s : new_sel)
+					view.selectionVideos.push_back(s);
+			},
+			[](const listbox::ContextMenuEvent& ev) {
+				listbox_context::handle_context_menu(ev.selection);
+			}
+		);
+
+		// Context menu for generic listbox.
+		context_menu::render(
+			"ctx-videos",
+			view.contextMenus.nodeListbox,
+			context_menu_state,
+			[&]() { view.contextMenus.nodeListbox = nullptr; },
+			[](const nlohmann::json& node) {
+				std::vector<std::string> sel;
+				if (node.contains("selection") && node["selection"].is_array())
+					for (const auto& s : node["selection"])
+						sel.push_back(s.get<std::string>());
+				int count = node.value("count", 0);
+				std::string plural = count > 1 ? "s" : "";
+				bool hasFileDataIDs = node.value("hasFileDataIDs", false);
+
+				if (ImGui::Selectable(std::format("Copy file path{}", plural).c_str()))
+					listbox_context::copy_file_paths(sel);
+				if (hasFileDataIDs && ImGui::Selectable(std::format("Copy file path{} (listfile format)", plural).c_str()))
+					listbox_context::copy_listfile_format(sel);
+				if (hasFileDataIDs && ImGui::Selectable(std::format("Copy file data ID{}", plural).c_str()))
+					listbox_context::copy_file_data_ids(sel);
+				if (ImGui::Selectable(std::format("Copy export path{}", plural).c_str()))
+					listbox_context::copy_export_paths(sel);
+				if (ImGui::Selectable("Open export directory"))
+					listbox_context::open_export_directory(sel);
+			}
+		);
+	}
 	ImGui::EndChild();
 
 	ImGui::SameLine();
