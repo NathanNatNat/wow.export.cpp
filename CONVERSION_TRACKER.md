@@ -349,9 +349,11 @@ Wire `casc->getFile()`, `getFileByName()`, and related calls across all modules.
 
 ---
 
-## Phase 3 — MPQ Legacy Integration
+## Phase 3 — MPQ & DB2 Data Layer
 
-Wire `MPQInstall` file access across legacy modules and renderers.
+Wire `MPQInstall` file access, legacy loaders, and DB2 table access.
+Loaders belong here because they are the data-loading layer that renderers
+and UI tabs depend on. DB2 wiring is pure data-layer plumbing.
 
 ### 3.1 MPQ Source in Legacy Tab Modules
 - [x] `legacy_tab_audio.cpp` — MPQ source, listfileSounds (5 TODOs)
@@ -361,20 +363,10 @@ Wire `MPQInstall` file access across legacy modules and renderers.
 - [x] `legacy_tab_textures.cpp` — MPQ source, BLP/PNG preview (5 TODOs)
 - [x] `screen_source_select.cpp` — MPQ loadInstall, source wiring (2 TODOs)
 
-### 3.2 MPQ in Legacy Renderers
-- [ ] `M2LegacyRendererGL.cpp` — MPQ texture loading (3 TODOs)
-- [ ] `MDXRendererGL.cpp` — MPQ texture loading (3 TODOs)
-- [ ] `WMOLegacyRendererGL.cpp` — MPQ texture + doodad loading (4 TODOs)
-
-### 3.3 MPQ in Legacy Loaders
+### 3.2 MPQ in Legacy Loaders
 - [ ] `WMOLegacyLoader.cpp` — MPQ file loading for WMO groups (1 TODO)
 
-### 3.4 MPQ in Legacy Model Tab
-- [ ] `tab_models_legacy.cpp` — MPQ source, creature data, file loading (6 TODOs)
-
----
-
-## Phase 4 — DB2 System Integration
+### 3.3 DB2 System Integration
 
 Wire `WDCReader::getAllRows()`, `db2::getTable()`, `db2::getRow()`.
 
@@ -388,92 +380,104 @@ Wire `WDCReader::getAllRows()`, `db2::getTable()`, `db2::getRow()`.
 
 ---
 
-## Phase 5 — GL/Rendering Pipeline
+## Phase 4 — GL/Rendering Pipeline
 
-Wire OpenGL context, model viewer, texture display, and renderer integration.
+Wire OpenGL context, model viewer, texture display, renderer integration,
+and MPQ texture loading in legacy renderers. Legacy renderers depend on
+MPQ source (Phase 3.1, done) and legacy loaders (Phase 3.2, pending).
 
-### 5.1 ModelViewerGL Component
+### 4.1 MPQ in Legacy Renderers
+- [ ] `M2LegacyRendererGL.cpp` — MPQ texture loading (3 TODOs)
+- [ ] `MDXRendererGL.cpp` — MPQ texture loading (3 TODOs)
+- [ ] `WMOLegacyRendererGL.cpp` — MPQ texture + doodad loading (4 TODOs)
+
+### 4.2 ModelViewerGL Component
 - [ ] Wire GL context creation and management in `model-viewer-gl.cpp` — canvas/WebGL2 equivalent via GLFW+GLAD (3 TODOs in .cpp/.h)
 - [ ] Wire ModelViewerGL rendering calls in tab modules — `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp`, `tab_creatures.cpp`, `tab_characters.cpp` (6 TODOs)
 
-### 5.2 GL Context & Renderer Wiring
+### 4.3 GL Context & Renderer Wiring
 - [ ] Wire GL context retrieval — `tab_creatures.cpp` (creatureViewerContext), `tab_decor.cpp` (decorViewerContext), `tab_models_legacy.cpp` (legacyModelViewerContext) (3 TODOs)
 - [ ] Wire renderer instantiation (M2RendererGL, WMORendererGL, etc.) — `tab_creatures.cpp`, `tab_models.cpp` (4 TODOs)
 - [ ] Wire renderer load(), draw_calls/groups, has_content, geosetKey/wmoGroupKey/wmoSetKey — `tab_decor.cpp` (4 TODOs)
 - [ ] Wire `applyReplaceableTextures` — `tab_creatures.cpp` (1 TODO)
 - [ ] Wire `getActiveRenderer`, `getEquipmentRenderers`, `getCollectionRenderers` — `tab_creatures.cpp` (1 TODO)
 
-### 5.3 Camera Fitting
+### 4.4 Camera Fitting
 - [ ] Wire `fitCamera` calls — `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp`, `tab_creatures.cpp`, `tab_characters.cpp` (7 TODOs)
 
-### 5.4 Texture Display
+### 4.5 Texture Display
 - [ ] Wire texture preview as `ImGui::Image` — `tab_textures.cpp`, `tab_decor.cpp`, `tab_models.cpp` (3 TODOs)
 - [ ] Wire zone map preview as `ImGui::Image` — `tab_zones.cpp` (1 TODO)
 - [ ] Wire UV overlay rendering — `tab_models.cpp` (1 TODO)
 - [ ] Wire atlas region rendering as ImGui overlay — `tab_zones.cpp` (1 TODO)
 
-### 5.5 Framebuffer Capture
+### 4.6 Framebuffer Capture
 - [ ] Wire GL framebuffer capture for screenshots — `tab_characters.cpp`, `tab_models_legacy.cpp` (2 TODOs)
 - [ ] Wire full thumbnail capture — `tab_characters.cpp` (1 TODO)
 - [ ] Wire PNG write from framebuffer — `tab_models_legacy.cpp` (1 TODO)
 - [ ] Wire clipboard PNG copy from FBO — `tab_characters.cpp`, `tab_models_legacy.cpp` (2 TODOs)
 
-### 5.6 TextureRibbon Integration
+### 4.7 TextureRibbon Integration
 - [ ] Wire `textureRibbon.reset()` / `addSlot` / `setSlotFile` / `setSlotSrc` in renderers — `M2RendererGL.cpp` (4), `M2LegacyRendererGL.cpp` (2), `M3RendererGL.cpp` (1), `MDXRendererGL.cpp` (2), `WMORendererGL.cpp` (4), `WMOLegacyRendererGL.cpp` (3) (16 TODOs)
 - [ ] Wire texture ribbon rendering in tab modules — `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp`, `tab_creatures.cpp` (4 TODOs)
 
-### 5.7 CharMaterialRenderer
+### 4.8 CharMaterialRenderer
 - [ ] Wire `getCanvas` / `getRawPixels` integration — `tab_characters.cpp` (1 TODO)
 - [ ] Wire GL bake composite buffer (OffscreenCanvas equivalent) — `ADTExporter.cpp` (1 TODO)
 
-### 5.8 Background Color Picker
+### 4.9 Background Color Picker
 - [ ] Wire color picker for model viewer background — `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp` (3 TODOs)
 
-### 5.9 WMO Renderer Change Detection
+### 4.10 WMO Renderer Change Detection
 - [x] Wire Vue watcher equivalents (`updateGroups`/`updateSets`) — `WMORendererGL.cpp`, `WMOLegacyRendererGL.cpp` (4 TODOs)
 
 ---
 
-## Phase 6 — UI Component Wiring
+## Phase 5 — UI Component Wiring
 
 Wire ImGui widget components into the tab modules that use them.
+The legacy model tab depends on MPQ renderers (Phase 4.1) and loaders
+(Phase 3.2), so it belongs here in the UI phase.
 
-### 6.1 Listbox & ContextMenu
+### 5.1 MPQ in Legacy Model Tab
+- [ ] `tab_models_legacy.cpp` — MPQ source, creature data, file loading (6 TODOs)
+
+### 5.2 Listbox & ContextMenu
 - [ ] Wire in `tab_audio.cpp`, `tab_raw.cpp`, `tab_text.cpp`, `tab_fonts.cpp`, `tab_textures.cpp`, `tab_videos.cpp`, `legacy_tab_audio.cpp`, `legacy_tab_files.cpp`, `legacy_tab_fonts.cpp` (9 TODOs)
 - [ ] Wire standalone Listbox in `tab_data.cpp`, `legacy_tab_data.cpp`, `tab_creatures.cpp`, `tab_decor.cpp`, `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_install.cpp` (8 TODOs)
 - [ ] Wire standalone ContextMenu in `tab_items.cpp`, `tab_zones.cpp` (3 TODOs)
 
-### 6.2 DataTable
+### 5.3 DataTable
 - [ ] Wire DataTable rendering in `tab_data.cpp`, `legacy_tab_data.cpp` (2 TODOs)
 - [ ] Wire `getSelectedRowsAsCSV` / `getSelectedRowsAsSQL` — `tab_data.cpp`, `legacy_tab_data.cpp` (4 TODOs)
 
-### 6.3 Listboxb
+### 5.4 Listboxb
 - [ ] Wire Listboxb rendering in `tab_models.cpp`, `tab_models_legacy.cpp` (2 TODOs)
 
-### 6.4 ItemListbox
+### 5.5 ItemListbox
 - [ ] Wire ItemListbox rendering in `tab_items.cpp`, `tab_item_sets.cpp` (2 TODOs)
 
-### 6.5 ListboxZones
+### 5.6 ListboxZones
 - [ ] Wire ListboxZones rendering in `tab_zones.cpp` (1 TODO)
 
-### 6.6 CheckboxList
+### 5.7 CheckboxList
 - [ ] Wire CheckboxList rendering in `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp` (3 TODOs)
 
-### 6.7 MenuButton
+### 5.8 MenuButton
 - [ ] Wire MenuButton rendering in `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp` (3 TODOs)
 
-### 6.8 Filter Input
+### 5.9 Filter Input
 - [ ] Wire `ImGui::InputText` filter in `tab_creatures.cpp`, `tab_decor.cpp`, `tab_models.cpp`, `tab_models_legacy.cpp` (4 TODOs)
 
-### 6.9 Full ImGui Rendering
+### 5.10 Full ImGui Rendering
 - [ ] Complete full ImGui rendering for `screen_source_select.cpp`, `screen_settings.cpp`, `legacy_tab_textures.cpp` (4 TODOs)
 
-### 6.10 ComboBox
+### 5.11 ComboBox
 - [ ] Wire full ComboBox with search for realm list — `tab_characters.cpp` (1 TODO)
 
 ---
 
-## Phase 7 — Export Pipeline
+## Phase 6 — Export Pipeline
 
 Wire file export, texture encoding, and data export operations.
 
@@ -493,7 +497,7 @@ Wire file export, texture encoding, and data export operations.
 
 ---
 
-## Phase 8 — Media/Video Integration
+## Phase 7 — Media/Video Integration
 
 Wire video playback, Kino streaming, and audio callbacks.
 
@@ -509,17 +513,17 @@ Wire video playback, Kino streaming, and audio callbacks.
 
 ---
 
-## Phase 9 — Platform & Misc Integration
+## Phase 8 — Platform & Misc Integration
 
 Platform-specific features and cleanup.
 
-### 9.1 Crypto
+### 8.1 Crypto
 - [ ] Replace FNV-1a / minimal MD5 with proper MD5/SHA256 (OpenSSL or similar) — `tab_maps.cpp` (1), `cache-collector.cpp` (3 TODOs)
 
-### 9.2 Platform APIs
+### 8.2 Platform APIs
 - [ ] Implement app reload (F5) equivalent — `src/app.cpp` (2 TODOs)
 
-### 9.3 Map Viewer Internals
+### 8.3 Map Viewer Internals
 - [ ] Wire double-buffer / overlay canvas equivalent in `map-viewer.cpp` — canvas operations, tile loading, overlay drawing (12 TODOs in .cpp, 2 in .h)
 - [ ] Implement dashed line rendering for map grid — `map-viewer.cpp` (1 TODO)
 
