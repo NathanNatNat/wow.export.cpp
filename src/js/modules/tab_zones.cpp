@@ -807,7 +807,7 @@ ImGui::BeginChild("zones-list-container", ImVec2(ImGui::GetContentRegionAvail().
 		false,   // single
 		true,    // keyinput
 		view.config.value("regexFilters", false),
-		listbox::CopyMode::Full,
+		listbox::CopyMode::Default,
 		false,   // pasteselection
 		false,   // copytrimwhitespace
 		"zone",  // unittype

@@ -63,6 +63,11 @@ static data_table::DataTableState legacy_data_table_state;
 static context_menu::ContextMenuState legacy_data_table_ctx_state;
 static menu_button::MenuButtonState legacy_menu_button_data_state;
 
+// --- Forward declarations ---
+static void copy_rows_csv();
+static void copy_rows_sql();
+static void copy_cell(const std::string& value);
+
 // --- Internal functions ---
 
 // JS: const initialize_dbc_listfile = async (core) => { ... }

@@ -14,6 +14,7 @@
 #include "../casc/tact-keys.h"
 #include "../casc/locale-flags.h"
 #include "../components/file-field.h"
+#include "../components/menu-button.h"
 
 #include <cstring>
 #include <format>
@@ -34,6 +35,7 @@ static std::optional<nlohmann::json> default_config;
 // FileField widget states for directory pickers.
 static file_field::FileFieldState export_dir_state;
 static file_field::FileFieldState char_save_dir_state;
+static menu_button::MenuButtonState locale_menu_state;
 
 // --- Internal functions ---
 
@@ -112,161 +114,458 @@ void mounted() {
 }
 
 void render() {
+	auto& view = *core::view;
+	auto& cfg = view.configEdit;
+
 	// --- Template rendering ---
 	// JS: <div id="config-wrapper">
 	// JS: <div id="config" :class="{ toastgap: $core.view.toast !== null }">
-	// TODO(conversion): Full ImGui rendering will be implemented when UI integration is complete.
+	ImGui::BeginChild("##config-scroll", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2));
 
 	// JS: Export Directory
-	// <h1>Export Directory</h1>
-	// <p>Local directory where files will be exported to.</p>
-	// <p v-if="is_edit_export_path_concerning" class="concern">Warning: Using an export path with spaces...</p>
-	// <FileField v-model="$core.view.configEdit.exportDirectory" :class="{ concern: is_edit_export_path_concerning }">
+	ImGui::SeparatorText("Export Directory");
+	ImGui::TextWrapped("Local directory where files will be exported to.");
+	if (is_edit_export_path_concerning())
+		ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Warning: Using an export path with spaces may cause issues in some applications.");
+	{
+		std::string export_dir = cfg.value("exportDirectory", std::string(""));
+		file_field::render("##ExportDir", export_dir, "", export_dir_state);
+		if (export_dir != cfg.value("exportDirectory", std::string("")))
+			cfg["exportDirectory"] = export_dir;
+	}
 
 	// JS: Character Save Directory
-	// <h1>Character Save Directory</h1>
-	// <p>Local directory where saved characters are stored. Leave empty to use the default location.</p>
-	// <FileField v-model="$core.view.configEdit.characterExportPath" :placeholder="default_character_path">
+	ImGui::SeparatorText("Character Save Directory");
+	ImGui::TextWrapped("Local directory where saved characters are stored. Leave empty to use the default location.");
+	{
+		std::string char_dir = cfg.value("characterExportPath", std::string(""));
+		file_field::render("##CharSaveDir", char_dir, default_character_path().c_str(), char_save_dir_state);
+		if (char_dir != cfg.value("characterExportPath", std::string("")))
+			cfg["characterExportPath"] = char_dir;
+	}
 
 	// JS: Scroll Speed
-	// <h1>Scroll Speed</h1>
-	// <input type="number" v-model.number="$core.view.configEdit.scrollSpeed"/>
+	ImGui::SeparatorText("Scroll Speed");
+	{
+		int scroll_speed = cfg.value("scrollSpeed", 2);
+		if (ImGui::InputInt("##ScrollSpeed", &scroll_speed))
+			cfg["scrollSpeed"] = scroll_speed;
+	}
 
 	// JS: Display File Lists in Numerical Order (FileDataID)
-	// <input type="checkbox" v-model="$core.view.configEdit.listfileSortByID"/>
+	{
+		bool val = cfg.value("listfileSortByID", false);
+		if (ImGui::Checkbox("Display File Lists in Numerical Order (FileDataID)", &val))
+			cfg["listfileSortByID"] = val;
+	}
 
 	// JS: Find Unknown Files (Requires Restart)
-	// <input type="checkbox" v-model="$core.view.configEdit.enableUnknownFiles"/>
+	{
+		bool val = cfg.value("enableUnknownFiles", false);
+		if (ImGui::Checkbox("Find Unknown Files (Requires Restart)", &val))
+			cfg["enableUnknownFiles"] = val;
+	}
 
 	// JS: Load Model Skins (Requires Restart)
-	// <input type="checkbox" v-model="$core.view.configEdit.enableM2Skins"/>
+	{
+		bool val = cfg.value("enableM2Skins", true);
+		if (ImGui::Checkbox("Load Model Skins (Requires Restart)", &val))
+			cfg["enableM2Skins"] = val;
+	}
 
 	// JS: Include Bone Prefixes
-	// <input type="checkbox" v-model="$core.view.configEdit.modelsExportWithBonePrefix"/>
+	{
+		bool val = cfg.value("modelsExportWithBonePrefix", false);
+		if (ImGui::Checkbox("Include Bone Prefixes", &val))
+			cfg["modelsExportWithBonePrefix"] = val;
+	}
 
 	// JS: Enable Shared Textures (Recommended)
-	// <input type="checkbox" v-model="$core.view.configEdit.enableSharedTextures"/>
+	{
+		bool val = cfg.value("enableSharedTextures", true);
+		if (ImGui::Checkbox("Enable Shared Textures (Recommended)", &val))
+			cfg["enableSharedTextures"] = val;
+	}
 
 	// JS: Enable Shared Children (Recommended)
-	// <input type="checkbox" v-model="$core.view.configEdit.enableSharedChildren"/>
+	{
+		bool val = cfg.value("enableSharedChildren", true);
+		if (ImGui::Checkbox("Enable Shared Children (Recommended)", &val))
+			cfg["enableSharedChildren"] = val;
+	}
 
 	// JS: Strip Whitespace From Export Paths
-	// <input type="checkbox" v-model="$core.view.configEdit.removePathSpaces"/>
+	{
+		bool val = cfg.value("removePathSpaces", false);
+		if (ImGui::Checkbox("Strip Whitespace From Export Paths", &val))
+			cfg["removePathSpaces"] = val;
+	}
 
 	// JS: Strip Whitespace From Copied Paths
-	// <input type="checkbox" v-model="$core.view.configEdit.removePathSpacesCopy"/>
+	{
+		bool val = cfg.value("removePathSpacesCopy", false);
+		if (ImGui::Checkbox("Strip Whitespace From Copied Paths", &val))
+			cfg["removePathSpacesCopy"] = val;
+	}
 
 	// JS: Path Separator Format
-	// <li :class="{ selected: configEdit.pathFormat == 'win32' }" @click="configEdit.pathFormat = 'win32'">Windows</li>
-	// <li :class="{ selected: configEdit.pathFormat == 'posix' }" @click="configEdit.pathFormat = 'posix'">POSIX</li>
+	ImGui::SeparatorText("Path Separator Format");
+	{
+		std::string path_fmt = cfg.value("pathFormat", std::string("win32"));
+		bool is_win = (path_fmt == "win32");
+		bool is_posix = (path_fmt == "posix");
+		if (ImGui::RadioButton("Windows", is_win))
+			cfg["pathFormat"] = "win32";
+		ImGui::SameLine();
+		if (ImGui::RadioButton("POSIX", is_posix))
+			cfg["pathFormat"] = "posix";
+	}
 
 	// JS: Use Absolute MTL Texture Paths
-	// <input type="checkbox" v-model="$core.view.configEdit.enableAbsoluteMTLPaths"/>
+	{
+		bool val = cfg.value("enableAbsoluteMTLPaths", false);
+		if (ImGui::Checkbox("Use Absolute MTL Texture Paths", &val))
+			cfg["enableAbsoluteMTLPaths"] = val;
+	}
 
 	// JS: Use Absolute glTF Texture Paths
-	// <input type="checkbox" v-model="$core.view.configEdit.enableAbsoluteGLTFPaths"/>
+	{
+		bool val = cfg.value("enableAbsoluteGLTFPaths", false);
+		if (ImGui::Checkbox("Use Absolute glTF Texture Paths", &val))
+			cfg["enableAbsoluteGLTFPaths"] = val;
+	}
 
 	// JS: Use Absolute Model Placement Paths
-	// <input type="checkbox" v-model="$core.view.configEdit.enableAbsoluteCSVPaths"/>
+	{
+		bool val = cfg.value("enableAbsoluteCSVPaths", false);
+		if (ImGui::Checkbox("Use Absolute Model Placement Paths", &val))
+			cfg["enableAbsoluteCSVPaths"] = val;
+	}
 
 	// JS: CASC Locale
-	// <MenuButton :dropdown="true" :options="available_locale_keys" :default="selected_locale_key"
-	//   @change="$core.view.configEdit.cascLocale = $core.view.availableLocale.flags[$event]">
+	ImGui::SeparatorText("CASC Locale");
+	{
+		auto keys = available_locale_keys();
+		std::string current_key = selected_locale_key();
+
+		std::vector<menu_button::MenuOption> locale_options;
+		for (const auto& key : keys) {
+			auto name = casc::locale_flags::getName(key);
+			locale_options.push_back({ std::string(name), key });
+		}
+
+		menu_button::render("##LocaleMenuButton", locale_options,
+			current_key, false, true, locale_menu_state,
+			[&](const std::string& val) {
+				uint32_t flag = casc::locale_flags::getFlag(val);
+				cfg["cascLocale"] = flag;
+			},
+			nullptr);
+	}
 
 	// JS: WebP Quality
-	// <input type="number" min="1" max="100" v-model.number="$core.view.configEdit.exportWebPQuality"/>
+	ImGui::SeparatorText("WebP Quality");
+	{
+		int val = cfg.value("exportWebPQuality", 75);
+		if (ImGui::SliderInt("##WebPQuality", &val, 1, 100))
+			cfg["exportWebPQuality"] = val;
+	}
 
 	// JS: Export Model Collision
-	// <input type="checkbox" v-model="$core.view.configEdit.modelsExportCollision"/>
+	{
+		bool val = cfg.value("modelsExportCollision", false);
+		if (ImGui::Checkbox("Export Model Collision", &val))
+			cfg["modelsExportCollision"] = val;
+	}
 
 	// JS: Export Additional UV Layers
-	// <input type="checkbox" v-model="$core.view.configEdit.modelsExportUV2"/>
+	{
+		bool val = cfg.value("modelsExportUV2", false);
+		if (ImGui::Checkbox("Export Additional UV Layers", &val))
+			cfg["modelsExportUV2"] = val;
+	}
 
 	// JS: Export Meta Data
-	// Multi-button for M2, WMO, BLP, Foliage meta toggles
+	ImGui::SeparatorText("Export Meta Data");
+	{
+		bool m2_meta = cfg.value("exportM2Meta", false);
+		if (ImGui::Checkbox("M2 Meta##meta", &m2_meta))
+			cfg["exportM2Meta"] = m2_meta;
+		ImGui::SameLine();
+		bool wmo_meta = cfg.value("exportWMOMeta", false);
+		if (ImGui::Checkbox("WMO Meta##meta", &wmo_meta))
+			cfg["exportWMOMeta"] = wmo_meta;
+		ImGui::SameLine();
+		bool blp_meta = cfg.value("exportBLPMeta", false);
+		if (ImGui::Checkbox("BLP Meta##meta", &blp_meta))
+			cfg["exportBLPMeta"] = blp_meta;
+		ImGui::SameLine();
+		bool foliage_meta = cfg.value("exportFoliageMeta", false);
+		if (ImGui::Checkbox("Foliage Meta##meta", &foliage_meta))
+			cfg["exportFoliageMeta"] = foliage_meta;
+	}
 
 	// JS: Export M2 Bone Data
-	// <input type="checkbox" v-model="$core.view.configEdit.exportM2Bones"/>
+	{
+		bool val = cfg.value("exportM2Bones", false);
+		if (ImGui::Checkbox("Export M2 Bone Data", &val))
+			cfg["exportM2Bones"] = val;
+	}
 
 	// JS: Always Overwrite Existing Files (Recommended)
-	// <input type="checkbox" v-model="$core.view.configEdit.overwriteFiles"/>
+	{
+		bool val = cfg.value("overwriteFiles", true);
+		if (ImGui::Checkbox("Always Overwrite Existing Files (Recommended)", &val))
+			cfg["overwriteFiles"] = val;
+	}
 
 	// JS: Name Exported Files
-	// <input type="checkbox" v-model="$core.view.configEdit.exportNamedFiles"/>
+	{
+		bool val = cfg.value("exportNamedFiles", false);
+		if (ImGui::Checkbox("Name Exported Files", &val))
+			cfg["exportNamedFiles"] = val;
+	}
 
 	// JS: Prevent 3D Preview Overwrites
-	// <input type="checkbox" v-model="$core.view.configEdit.modelsExportPngIncrements"/>
+	{
+		bool val = cfg.value("modelsExportPngIncrements", false);
+		if (ImGui::Checkbox("Prevent 3D Preview Overwrites", &val))
+			cfg["modelsExportPngIncrements"] = val;
+	}
 
 	// JS: Regular Expression Filtering (Advanced)
-	// <input type="checkbox" v-model="$core.view.configEdit.regexFilters"/>
+	{
+		bool val = cfg.value("regexFilters", false);
+		if (ImGui::Checkbox("Regular Expression Filtering (Advanced)", &val))
+			cfg["regexFilters"] = val;
+	}
 
 	// JS: Copy Mode
-	// Multi-button: Full / Directory / FileDataID
+	ImGui::SeparatorText("Copy Mode");
+	{
+		std::string copy_mode = cfg.value("copyMode", std::string("FULL"));
+		if (ImGui::RadioButton("Full##copymode", copy_mode == "FULL"))
+			cfg["copyMode"] = "FULL";
+		ImGui::SameLine();
+		if (ImGui::RadioButton("Directory##copymode", copy_mode == "DIR"))
+			cfg["copyMode"] = "DIR";
+		ImGui::SameLine();
+		if (ImGui::RadioButton("FileDataID##copymode", copy_mode == "FID"))
+			cfg["copyMode"] = "FID";
+	}
 
 	// JS: Paste Selection
-	// <input type="checkbox" v-model="$core.view.configEdit.pasteSelection"/>
+	{
+		bool val = cfg.value("pasteSelection", false);
+		if (ImGui::Checkbox("Paste Selection", &val))
+			cfg["pasteSelection"] = val;
+	}
 
 	// JS: Split Large Terrain Maps (Recommended)
-	// <input type="checkbox" v-model="$core.view.configEdit.splitLargeTerrainBakes"/>
+	{
+		bool val = cfg.value("splitLargeTerrainBakes", true);
+		if (ImGui::Checkbox("Split Large Terrain Maps (Recommended)", &val))
+			cfg["splitLargeTerrainBakes"] = val;
+	}
 
 	// JS: Split Alpha Maps
-	// <input type="checkbox" v-model="$core.view.configEdit.splitAlphaMaps"/>
+	{
+		bool val = cfg.value("splitAlphaMaps", false);
+		if (ImGui::Checkbox("Split Alpha Maps", &val))
+			cfg["splitAlphaMaps"] = val;
+	}
 
 	// JS: Show unknown items
-	// <input type="checkbox" v-model="$core.view.configEdit.itemViewerShowAll"/>
+	{
+		bool val = cfg.value("itemViewerShowAll", false);
+		if (ImGui::Checkbox("Show Unknown Items", &val))
+			cfg["itemViewerShowAll"] = val;
+	}
 
 	// JS: Cache Expiry
-	// <input type="number" v-model.number="$core.view.configEdit.cacheExpiry"/>
+	ImGui::SeparatorText("Cache Expiry (hours)");
+	{
+		int val = cfg.value("cacheExpiry", 168);
+		if (ImGui::InputInt("##CacheExpiry", &val))
+			cfg["cacheExpiry"] = val;
+	}
 
 	// JS: CDN Fallback Hosts
-	// <input type="text" class="long" v-model.trim="$core.view.configEdit.cdnFallbackHosts"/>
+	ImGui::SeparatorText("CDN Fallback Hosts");
+	{
+		static char cdn_buf[1024] = {};
+		std::string current = cfg.value("cdnFallbackHosts", std::string(""));
+		std::strncpy(cdn_buf, current.c_str(), sizeof(cdn_buf) - 1);
+		if (ImGui::InputText("##CDNFallbackHosts", cdn_buf, sizeof(cdn_buf)))
+			cfg["cdnFallbackHosts"] = std::string(cdn_buf);
+	}
 
 	// JS: Manually Clear Cache (Requires Restart)
-	// <input type="button" :value="'Clear Cache (' + cache_size_formatted + ')'" @click="handle_cache_clear">
+	{
+		std::string btn_label = std::format("Clear Cache ({})", cache_size_formatted());
+		if (ImGui::Button(btn_label.c_str()))
+			handle_cache_clear();
+	}
 
 	// JS: Encryption Keys
-	// Primary <input type="text" class="long" v-model.trim="$core.view.configEdit.tactKeysURL"/>
-	// Fallback <input type="text" class="long" v-model.trim="$core.view.configEdit.tactKeysFallbackURL"/>
+	ImGui::SeparatorText("Encryption Keys");
+	ImGui::Text("Primary TACT Keys URL");
+	{
+		static char tact_url_buf[1024] = {};
+		std::string current = cfg.value("tactKeysURL", std::string(""));
+		std::strncpy(tact_url_buf, current.c_str(), sizeof(tact_url_buf) - 1);
+		if (ImGui::InputText("##TactKeysURL", tact_url_buf, sizeof(tact_url_buf)))
+			cfg["tactKeysURL"] = std::string(tact_url_buf);
+	}
+	ImGui::Text("Fallback TACT Keys URL");
+	{
+		static char tact_fallback_buf[1024] = {};
+		std::string current = cfg.value("tactKeysFallbackURL", std::string(""));
+		std::strncpy(tact_fallback_buf, current.c_str(), sizeof(tact_fallback_buf) - 1);
+		if (ImGui::InputText("##TactKeysFallbackURL", tact_fallback_buf, sizeof(tact_fallback_buf)))
+			cfg["tactKeysFallbackURL"] = std::string(tact_fallback_buf);
+	}
 
 	// JS: Add Encryption Key
-	// <input type="text" v-model.trim="$core.view.userInputTactKeyName" maxlength="16"/>
-	// <input type="text" v-model.trim="$core.view.userInputTactKey" maxlength="32"/>
-	// <input type="button" value="Add" @click="handle_tact_key"/>
+	ImGui::Text("Add Encryption Key");
+	{
+		static char key_name_buf[32] = {};
+		static char key_val_buf[64] = {};
+		ImGui::InputText("Key Name (16 hex)##addkey", key_name_buf, sizeof(key_name_buf));
+		ImGui::InputText("Key Value (32 hex)##addkey", key_val_buf, sizeof(key_val_buf));
+		if (ImGui::Button("Add##tactkey")) {
+			view.userInputTactKeyName = key_name_buf;
+			view.userInputTactKey = key_val_buf;
+			handle_tact_key();
+			key_name_buf[0] = '\0';
+			key_val_buf[0] = '\0';
+		}
+	}
 
 	// JS: Realm List Source
-	// <input type="text" class="long" v-model.trim="$core.view.configEdit.realmListURL"/>
+	ImGui::SeparatorText("Realm List Source");
+	{
+		static char realm_buf[1024] = {};
+		std::string current = cfg.value("realmListURL", std::string(""));
+		std::strncpy(realm_buf, current.c_str(), sizeof(realm_buf) - 1);
+		if (ImGui::InputText("##RealmListURL", realm_buf, sizeof(realm_buf)))
+			cfg["realmListURL"] = std::string(realm_buf);
+	}
 
 	// JS: Character Appearance API Endpoint
-	// <input type="text" class="long" v-model.trim="$core.view.configEdit.armoryURL"/>
+	ImGui::SeparatorText("Character Appearance API Endpoint");
+	{
+		static char armory_buf[1024] = {};
+		std::string current = cfg.value("armoryURL", std::string(""));
+		std::strncpy(armory_buf, current.c_str(), sizeof(armory_buf) - 1);
+		if (ImGui::InputText("##ArmoryURL", armory_buf, sizeof(armory_buf)))
+			cfg["armoryURL"] = std::string(armory_buf);
+	}
 
 	// JS: Use Binary Listfile Format (Requires Restart)
-	// <input type="checkbox" v-model="$core.view.configEdit.enableBinaryListfile"/>
+	{
+		bool val = cfg.value("enableBinaryListfile", true);
+		if (ImGui::Checkbox("Use Binary Listfile Format (Requires Restart)", &val))
+			cfg["enableBinaryListfile"] = val;
+	}
 
 	// JS: Listfile Binary Source
-	// <input type="text" class="long" v-model.trim="$core.view.configEdit.listfileBinarySource"/>
+	ImGui::SeparatorText("Listfile Binary Source");
+	{
+		static char listfile_bin_buf[1024] = {};
+		std::string current = cfg.value("listfileBinarySource", std::string(""));
+		std::strncpy(listfile_bin_buf, current.c_str(), sizeof(listfile_bin_buf) - 1);
+		if (ImGui::InputText("##ListfileBinSrc", listfile_bin_buf, sizeof(listfile_bin_buf)))
+			cfg["listfileBinarySource"] = std::string(listfile_bin_buf);
+	}
 
 	// JS: Listfile Source (Legacy)
-	// Primary <input type="text" class="long" v-model.trim="$core.view.configEdit.listfileURL"/>
-	// Fallback <input type="text" class="long" v-model.trim="$core.view.configEdit.listfileFallbackURL"/>
+	ImGui::SeparatorText("Listfile Source");
+	ImGui::Text("Primary");
+	{
+		static char listfile_buf[1024] = {};
+		std::string current = cfg.value("listfileURL", std::string(""));
+		std::strncpy(listfile_buf, current.c_str(), sizeof(listfile_buf) - 1);
+		if (ImGui::InputText("##ListfileURL", listfile_buf, sizeof(listfile_buf)))
+			cfg["listfileURL"] = std::string(listfile_buf);
+	}
+	ImGui::Text("Fallback");
+	{
+		static char listfile_fb_buf[1024] = {};
+		std::string current = cfg.value("listfileFallbackURL", std::string(""));
+		std::strncpy(listfile_fb_buf, current.c_str(), sizeof(listfile_fb_buf) - 1);
+		if (ImGui::InputText("##ListfileFallbackURL", listfile_fb_buf, sizeof(listfile_fb_buf)))
+			cfg["listfileFallbackURL"] = std::string(listfile_fb_buf);
+	}
 
 	// JS: Listfile Update Frequency
-	// <input type="number" v-model.number="$core.view.configEdit.listfileCacheRefresh"/>
+	ImGui::SeparatorText("Listfile Update Frequency (hours)");
+	{
+		int val = cfg.value("listfileCacheRefresh", 168);
+		if (ImGui::InputInt("##ListfileCacheRefresh", &val))
+			cfg["listfileCacheRefresh"] = val;
+	}
 
 	// JS: Data Table Definition Repository
-	// Primary <input type="text" class="long" v-model.trim="$core.view.configEdit.dbdURL"/>
-	// Fallback <input type="text" class="long" v-model.trim="$core.view.configEdit.dbdFallbackURL"/>
+	ImGui::SeparatorText("Data Table Definition Repository");
+	ImGui::Text("Primary");
+	{
+		static char dbd_buf[1024] = {};
+		std::string current = cfg.value("dbdURL", std::string(""));
+		std::strncpy(dbd_buf, current.c_str(), sizeof(dbd_buf) - 1);
+		if (ImGui::InputText("##DBDURL", dbd_buf, sizeof(dbd_buf)))
+			cfg["dbdURL"] = std::string(dbd_buf);
+	}
+	ImGui::Text("Fallback");
+	{
+		static char dbd_fb_buf[1024] = {};
+		std::string current = cfg.value("dbdFallbackURL", std::string(""));
+		std::strncpy(dbd_fb_buf, current.c_str(), sizeof(dbd_fb_buf) - 1);
+		if (ImGui::InputText("##DBDFallbackURL", dbd_fb_buf, sizeof(dbd_fb_buf)))
+			cfg["dbdFallbackURL"] = std::string(dbd_fb_buf);
+	}
 
 	// JS: DBD Manifest Repository
-	// Primary <input type="text" class="long" v-model.trim="$core.view.configEdit.dbdFilenameURL"/>
-	// Fallback <input type="text" class="long" v-model.trim="$core.view.configEdit.dbdFilenameFallbackURL"/>
+	ImGui::SeparatorText("DBD Manifest Repository");
+	ImGui::Text("Primary");
+	{
+		static char dbdf_buf[1024] = {};
+		std::string current = cfg.value("dbdFilenameURL", std::string(""));
+		std::strncpy(dbdf_buf, current.c_str(), sizeof(dbdf_buf) - 1);
+		if (ImGui::InputText("##DBDFilenameURL", dbdf_buf, sizeof(dbdf_buf)))
+			cfg["dbdFilenameURL"] = std::string(dbdf_buf);
+	}
+	ImGui::Text("Fallback");
+	{
+		static char dbdf_fb_buf[1024] = {};
+		std::string current = cfg.value("dbdFilenameFallbackURL", std::string(""));
+		std::strncpy(dbdf_fb_buf, current.c_str(), sizeof(dbdf_fb_buf) - 1);
+		if (ImGui::InputText("##DBDFilenameFallbackURL", dbdf_fb_buf, sizeof(dbdf_fb_buf)))
+			cfg["dbdFilenameFallbackURL"] = std::string(dbdf_fb_buf);
+	}
 
 	// JS: Allow Cache Collection
-	// <input type="checkbox" v-model="$core.view.configEdit.allowCacheCollection"/>
+	{
+		bool val = cfg.value("allowCacheCollection", false);
+		if (ImGui::Checkbox("Allow Cache Collection", &val))
+			cfg["allowCacheCollection"] = val;
+	}
+
+	ImGui::EndChild(); // config-scroll
 
 	// JS: <div id="config-buttons">
 	//   <input type="button" value="Discard" @click="handle_discard"/>
 	//   <input type="button" value="Apply" @click="handle_apply"/>
 	//   <input type="button" id="config-reset" value="Reset to Defaults" @click="handle_reset"/>
+	ImGui::Separator();
+	if (ImGui::Button("Discard"))
+		handle_discard();
+	ImGui::SameLine();
+	if (ImGui::Button("Apply"))
+		handle_apply();
+	ImGui::SameLine();
+	if (ImGui::Button("Reset to Defaults"))
+		handle_reset();
 }
 
 // JS: methods.handle_cache_clear(event)

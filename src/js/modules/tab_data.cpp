@@ -56,6 +56,11 @@ static data_table::DataTableState data_table_state;
 static context_menu::ContextMenuState data_table_ctx_state;
 static menu_button::MenuButtonState menu_button_data_state;
 
+// --- Forward declarations ---
+static void copy_rows_csv();
+static void copy_rows_sql();
+static void copy_cell(const nlohmann::json& value);
+
 // --- Internal functions ---
 
 // JS: const initialize_available_tables = async (core) => { ... }
