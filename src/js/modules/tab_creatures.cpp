@@ -40,6 +40,7 @@
 #include "../db/caches/DBItems.h"
 #include "../wow/EquipmentSlots.h"
 #include "../file-writer.h"
+#include "../components/model-viewer-gl.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -167,6 +168,10 @@ static std::vector<nlohmann::json> prev_selection_creatures;
 static std::vector<bool> prev_equipment_checked;
 
 static bool is_initialized = false;
+
+// Model viewer GL state/context (replaces Vue <ModelViewerGL :context="creatureViewerContext"/>).
+static model_viewer_gl::State viewer_state;
+static model_viewer_gl::Context viewer_context;
 
 // --- Internal helpers ---
 
@@ -1736,10 +1741,23 @@ static void initialize() {
 	if (view.creatureViewerContext.is_null()) {
 		// JS: this.$core.view.creatureViewerContext = Object.seal({ ... });
 		view.creatureViewerContext = nlohmann::json::object();
-		view.creatureViewerContext["gl_context"] = nullptr;
-		view.creatureViewerContext["fitCamera"] = nullptr;
-		// TODO(conversion): getActiveRenderer, getEquipmentRenderers, getCollectionRenderers
-		// will be function pointers / callbacks wired when model viewer is integrated.
+
+		// Wire model viewer context callbacks.
+		viewer_context.getActiveRenderer = []() -> M2RendererGL* {
+			return get_active_m2_renderer();
+		};
+		viewer_context.renderActiveModel = [](const float* view_mat, const float* proj_mat) {
+			if (active_renderer_result.m3)
+				active_renderer_result.m3->render(view_mat, proj_mat);
+			else if (active_renderer_result.wmo)
+				active_renderer_result.wmo->render(view_mat, proj_mat);
+		};
+		viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
+		                                            const std::array<float, 3>& rot,
+		                                            const std::array<float, 3>& scale) {
+			if (active_renderer_result.wmo)
+				active_renderer_result.wmo->setTransform(pos, rot, scale);
+		};
 	}
 
 	// JS: this.$core.hideLoadingScreen();
@@ -2003,7 +2021,9 @@ void render() {
 	// TODO(conversion): Background color picker will be wired when config UI is integrated.
 
 	// JS: <component :is="$components.ModelViewerGL" v-if="creatureViewerContext" :context="...">
-	// TODO(conversion): ModelViewerGL rendering will be wired when GL context is integrated.
+	if (!view.creatureViewerContext.is_null()) {
+		model_viewer_gl::renderWidget("##creature_viewer", viewer_state, viewer_context);
+	}
 
 	// JS: <div v-if="creatureViewerAnims && creatureViewerAnims.length > 0" class="preview-dropdown-overlay">
 	if (!view.creatureViewerAnims.empty() && view.creatureTexturePreviewURL.empty()) {

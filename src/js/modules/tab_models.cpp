@@ -22,6 +22,7 @@
 #include "../ui/texture-exporter.h"
 #include "../ui/model-viewer-utils.h"
 #include "../file-writer.h"
+#include "../components/model-viewer-gl.h"
 #include "../3D/renderers/M2RendererGL.h"
 #include "../3D/renderers/M3RendererGL.h"
 #include "../3D/renderers/WMORendererGL.h"
@@ -70,6 +71,10 @@ static std::vector<nlohmann::json> prev_selection_models;
 static bool tab_initialized = false;
 
 static bool is_initialized = false;
+
+// Model viewer GL state/context (replaces Vue <ModelViewerGL :context="modelViewerContext"/>).
+static model_viewer_gl::State viewer_state;
+static model_viewer_gl::Context viewer_context;
 
 // --- Internal helpers ---
 
@@ -476,11 +481,25 @@ static void initialize() {
 
 	// JS: if (!this.$core.view.modelViewerContext)
 	//     this.$core.view.modelViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
-	// TODO(conversion): Model viewer context initialization will be wired when GL integration is complete.
-	// The JS creates a sealed object with getActiveRenderer, gl_context, fitCamera.
-	// In C++, modelViewerContext is a nlohmann::json placeholder until the GL viewer component is integrated.
 	if (view.modelViewerContext.is_null()) {
 		view.modelViewerContext = nlohmann::json::object();
+
+		// Wire model viewer context callbacks.
+		viewer_context.getActiveRenderer = []() -> M2RendererGL* {
+			return get_active_m2_renderer();
+		};
+		viewer_context.renderActiveModel = [](const float* view_mat, const float* proj_mat) {
+			if (active_renderer_result.m3)
+				active_renderer_result.m3->render(view_mat, proj_mat);
+			else if (active_renderer_result.wmo)
+				active_renderer_result.wmo->render(view_mat, proj_mat);
+		};
+		viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
+		                                            const std::array<float, 3>& rot,
+		                                            const std::array<float, 3>& scale) {
+			if (active_renderer_result.wmo)
+				active_renderer_result.wmo->setTransform(pos, rot, scale);
+		};
 	}
 
 	// JS: this.$core.hideLoadingScreen();
@@ -1040,7 +1059,9 @@ void render() {
 	}
 
 	// JS: <component :is="$components.ModelViewerGL" v-if="modelViewerContext" :context="modelViewerContext" />
-	// TODO(conversion): ModelViewerGL component rendering will be wired when GL integration is complete.
+	if (!view.modelViewerContext.is_null()) {
+		model_viewer_gl::renderWidget("##model_viewer", viewer_state, viewer_context);
+	}
 
 	// JS: <div v-if="modelViewerAnims && modelViewerAnims.length > 0 && !modelTexturePreviewURL" class="preview-dropdown-overlay">
 	if (!view.modelViewerAnims.empty() && view.modelTexturePreviewURL.empty()) {

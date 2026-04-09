@@ -21,6 +21,7 @@
 #include "../ui/texture-exporter.h"
 #include "../ui/model-viewer-utils.h"
 #include "../file-writer.h"
+#include "../components/model-viewer-gl.h"
 #include "../3D/renderers/M2RendererGL.h"
 #include "../3D/renderers/M3RendererGL.h"
 #include "../3D/renderers/WMORendererGL.h"
@@ -96,6 +97,10 @@ static model_viewer_utils::ViewStateProxy view_state;
 static std::unique_ptr<model_viewer_utils::AnimationMethods> anim_methods;
 
 static bool is_initialized = false;
+
+// Model viewer GL state/context (replaces Vue <ModelViewerGL :context="decorViewerContext"/>).
+static model_viewer_gl::State viewer_state;
+static model_viewer_gl::Context viewer_context;
 
 // --- Internal helpers ---
 
@@ -496,7 +501,23 @@ static void initialize() {
 	//     this.$core.view.decorViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
 	if (view.decorViewerContext.is_null()) {
 		view.decorViewerContext = nlohmann::json::object();
-		// TODO(conversion): GL context and fitCamera will be wired when the model viewer GL component is integrated.
+
+		// Wire model viewer context callbacks.
+		viewer_context.getActiveRenderer = []() -> M2RendererGL* {
+			return get_active_m2_renderer();
+		};
+		viewer_context.renderActiveModel = [](const float* view_mat, const float* proj_mat) {
+			if (active_renderer_result.m3)
+				active_renderer_result.m3->render(view_mat, proj_mat);
+			else if (active_renderer_result.wmo)
+				active_renderer_result.wmo->render(view_mat, proj_mat);
+		};
+		viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
+		                                            const std::array<float, 3>& rot,
+		                                            const std::array<float, 3>& scale) {
+			if (active_renderer_result.wmo)
+				active_renderer_result.wmo->setTransform(pos, rot, scale);
+		};
 	}
 
 	// JS: this.$core.hideLoadingScreen();
@@ -876,7 +897,9 @@ void render() {
 	}
 
 	// JS: <component :is="$components.ModelViewerGL" v-if="$core.view.decorViewerContext" :context="$core.view.decorViewerContext" />
-	// TODO(conversion): ModelViewerGL component rendering will be wired when GL integration is complete.
+	if (!view.decorViewerContext.is_null()) {
+		model_viewer_gl::renderWidget("##decor_viewer", viewer_state, viewer_context);
+	}
 
 	// JS: <div v-if="decorViewerAnims && decorViewerAnims.length > 0 && !decorTexturePreviewURL" class="preview-dropdown-overlay">
 	if (!view.decorViewerAnims.empty() && view.decorTexturePreviewURL.empty()) {

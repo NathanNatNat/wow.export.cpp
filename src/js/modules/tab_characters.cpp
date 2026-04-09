@@ -27,6 +27,7 @@ License: MIT
 #include "../ui/char-texture-overlay.h"
 #include "../ui/character-appearance.h"
 #include "../ui/model-viewer-utils.h"
+#include "../components/model-viewer-gl.h"
 #include "../3D/AnimMapper.h"
 #include "../3D/renderers/CharMaterialRenderer.h"
 #include "../3D/renderers/M2RendererGL.h"
@@ -157,8 +158,7 @@ static const std::unordered_map<int, std::unordered_map<int, ThumbnailPreset>> T
 static std::map<std::string, nlohmann::json> active_skins;
 
 // JS: let gl_context = null;
-// TODO(conversion): GL context stored as json placeholder; real GL context managed by model-viewer-gl.
-static nlohmann::json gl_context;
+// GL context is managed by model_viewer_gl::State; use viewer_context.gl_context to access it.
 
 // JS: let active_renderer; let active_model;
 static std::unique_ptr<M2RendererGL> active_renderer;
@@ -203,6 +203,10 @@ static bool prev_chr_import_classic_realms = false;
 
 // Scrubber state for animation controls
 static bool _was_paused_before_scrub = false;
+
+// Model viewer GL state/context (replaces Vue <ModelViewerGL :context="chrModelViewerContext"/>).
+static model_viewer_gl::State viewer_state;
+static model_viewer_gl::Context viewer_context;
 
 // JS: const base_regions = ['us', 'eu', 'kr', 'tw'];
 static const std::vector<std::string> base_regions = { "us", "eu", "kr", "tw" };
@@ -663,7 +667,7 @@ character_appearance::upload_textures_to_gpu(active_renderer.get(), chr_material
  * JS: async function update_equipment_models(core)
  */
 static void update_equipment_models() {
-if (gl_context.is_null())
+if (viewer_context.gl_context == nullptr)
 return;
 
 auto& view = *core::view;
@@ -903,8 +907,8 @@ character_appearance::dispose_materials(chr_materials);
 // JS: function fit_camera(core)
 static void fit_camera() {
 auto& view = *core::view;
-if (view.chrModelViewerContext.is_object() && view.chrModelViewerContext.contains("fitCamera")) {
-// TODO(conversion): fitCamera callback will be wired via model-viewer-gl integration.
+if (view.chrModelViewerContext.is_object() && viewer_context.fitCamera) {
+	viewer_context.fitCamera();
 }
 }
 
@@ -2928,8 +2932,9 @@ if (view.chrModelLoading)
 ImGui::Text("Loading model...");
 
 // 3D model viewer
-// TODO(conversion): ModelViewerGL component will be rendered here.
-ImGui::Text("[3D Preview Area]");
+if (view.chrModelViewerContext.is_object()) {
+model_viewer_gl::renderWidget("##chr_model_viewer", viewer_state, viewer_context);
+}
 
 // Remove baked texture button
 if (!view.chrCustBakedNPCTexture.is_null()) {
@@ -3223,6 +3228,12 @@ state.chrModelViewerContext = nlohmann::json{
 { "controls", nullptr },
 { "useCharacterControls", true },
 { "fitCamera", nullptr }
+};
+
+// Wire model viewer context callbacks (character mode).
+viewer_context.useCharacterControls = true;
+viewer_context.getActiveRenderer = []() -> M2RendererGL* {
+	return active_renderer.get();
 };
 
 // Set up animation ViewStateProxy

@@ -18,12 +18,12 @@
 
 #include "../3D/camera/CameraControlsGL.h"
 #include "../3D/camera/CharacterCameraControlsGL.h"
+#include "../3D/gl/GLContext.h"
+#include "../3D/renderers/GridRenderer.h"
+#include "../3D/renderers/ShadowPlaneRenderer.h"
 
 // Forward declarations
-namespace gl { class GLContext; }
 class M2RendererGL;
-class GridRenderer;
-class ShadowPlaneRenderer;
 
 /**
  * Model viewer GL component (ImGui immediate-mode equivalent).

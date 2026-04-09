@@ -23,6 +23,7 @@
 #include "../db/caches/DBCreaturesLegacy.h"
 #include "../file-writer.h"
 #include "../mpq/mpq-install.h"
+#include "../components/model-viewer-gl.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -77,6 +78,10 @@ static std::vector<nlohmann::json> prev_skins_selection;
 static bool _was_paused_before_scrub = false;
 
 static bool is_initialized = false;
+
+// Model viewer GL state/context (replaces Vue <ModelViewerGL :context="legacyModelViewerContext"/>).
+static model_viewer_gl::State viewer_state;
+static model_viewer_gl::Context viewer_context;
 
 // --- Internal helpers ---
 
@@ -520,6 +525,28 @@ void mounted() {
 		//     this.$core.view.legacyModelViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
 		if (view.legacyModelViewerContext.is_null()) {
 			view.legacyModelViewerContext = nlohmann::json::object();
+
+			// Wire model viewer context callbacks.
+			// Legacy renderers are not M2RendererGL; getActiveRenderer returns nullptr.
+			// renderActiveModel handles all legacy renderer types.
+			viewer_context.renderActiveModel = [](const float* view_mat, const float* proj_mat) {
+				if (active_renderer_m2)
+					active_renderer_m2->render(view_mat, proj_mat);
+				else if (active_renderer_mdx)
+					active_renderer_mdx->render(view_mat, proj_mat);
+				else if (active_renderer_wmo)
+					active_renderer_wmo->render(view_mat, proj_mat);
+			};
+			viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
+			                                            const std::array<float, 3>& rot,
+			                                            const std::array<float, 3>& scale) {
+				if (active_renderer_m2)
+					active_renderer_m2->setTransform(pos, rot, scale);
+				else if (active_renderer_mdx)
+					active_renderer_mdx->setTransform(pos, rot, scale);
+				else if (active_renderer_wmo)
+					active_renderer_wmo->setTransform(pos, rot, scale);
+			};
 		}
 
 		// JS: this.$core.hideLoadingScreen();
@@ -929,7 +956,9 @@ void render() {
 	}
 
 	// JS: <component :is="$components.ModelViewerGL" v-if="legacyModelViewerContext" :context="legacyModelViewerContext" />
-	// TODO(conversion): ModelViewerGL component rendering will be wired when GL integration is complete.
+	if (!view.legacyModelViewerContext.is_null()) {
+		model_viewer_gl::renderWidget("##legacy_model_viewer", viewer_state, viewer_context);
+	}
 
 	// JS: <!-- legacy animation support disabled - needs fixing
 	//     <div v-if="legacyModelViewerAnims && legacyModelViewerAnims.length > 0" class="preview-dropdown-overlay"> ... -->
