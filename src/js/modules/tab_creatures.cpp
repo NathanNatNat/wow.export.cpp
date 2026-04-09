@@ -2094,7 +2094,12 @@ void render() {
 	}
 
 	// JS: <input type="text" v-model="$core.view.userInputFilterCreatures" placeholder="Filter creatures..."/>
-	// TODO(conversion): Filter input will use ImGui::InputText when Listbox component is wired.
+	{
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterCreatures.c_str(), sizeof(filter_buf) - 1);
+		if (ImGui::InputText("##FilterCreatures", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterCreatures = filter_buf;
+	}
 
 	ImGui::EndChild();
 

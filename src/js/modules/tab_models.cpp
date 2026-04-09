@@ -27,6 +27,9 @@
 #include "../3D/renderers/M2RendererGL.h"
 #include "../3D/renderers/M3RendererGL.h"
 #include "../3D/renderers/WMORendererGL.h"
+#include "../components/checkboxlist.h"
+#include "../components/listboxb.h"
+#include "../components/menu-button.h"
 
 #include <algorithm>
 #include <cmath>
@@ -75,6 +78,12 @@ static bool tab_initialized = false;
 static bool is_initialized = false;
 
 static listbox::ListboxState listbox_models_state;
+
+// Component states for CheckboxList, ListboxB, and MenuButton.
+static checkboxlist::CheckboxListState checkboxlist_geosets_state;
+static checkboxlist::CheckboxListState checkboxlist_wmo_groups_state;
+static listboxb::ListboxBState listboxb_skins_state;
+static menu_button::MenuButtonState menu_button_models_state;
 
 // Model viewer GL state/context (replaces Vue <ModelViewerGL :context="modelViewerContext"/>).
 static model_viewer_gl::State viewer_state;
@@ -1011,7 +1020,12 @@ void render() {
 	}
 
 	// JS: <div class="filter"> <input type="text" v-model="userInputFilterModels" placeholder="Filter models..."/> </div>
-	// TODO(conversion): Filter input will use ImGui::InputText when Listbox component is wired.
+	{
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterModels.c_str(), sizeof(filter_buf) - 1);
+		if (ImGui::InputText("##FilterModels", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterModels = filter_buf;
+	}
 
 	ImGui::EndChild();
 
@@ -1267,9 +1281,16 @@ void render() {
 	// JS: <div class="preview-controls">
 	//     <MenuButton :options="menuButtonModels" :default="config.exportModelFormat"
 	//         @change="config.exportModelFormat = $event" :disabled="isBusy" @click="export_model" />
-	// TODO(conversion): MenuButton component rendering will be wired when integration is complete.
-	if (ImGui::Button("Export Model") && view.isBusy == 0)
-		export_model_action();
+	{
+		std::vector<menu_button::MenuOption> mb_options;
+		for (const auto& opt : view.menuButtonModels)
+			mb_options.push_back({ opt.label, opt.value });
+		menu_button::render("##MenuButtonModels", mb_options,
+			view.config.value("exportModelFormat", std::string("OBJ")),
+			view.isBusy > 0, false, menu_button_models_state,
+			[&](const std::string& val) { view.config["exportModelFormat"] = val; },
+			[&]() { export_model_action(); });
+	}
 
 	ImGui::SameLine();
 
@@ -1401,13 +1422,7 @@ void render() {
 		ImGui::SeparatorText("Geosets");
 
 		// JS: <component :is="$components.Checkboxlist" :items="modelViewerGeosets" />
-		// TODO(conversion): Checkboxlist component rendering will be wired when integration is complete.
-		for (auto& geoset : view.modelViewerGeosets) {
-			std::string label = geoset.value("label", std::string("Geoset"));
-			bool checked = geoset.value("checked", true);
-			if (ImGui::Checkbox(label.c_str(), &checked))
-				geoset["checked"] = checked;
-		}
+		checkboxlist::render("##ModelGeosets", view.modelViewerGeosets, checkboxlist_geosets_state);
 
 		// JS: <div class="list-toggles">
 		//         <a @click="setAllGeosets(true, modelViewerGeosets)">Enable All</a> /
@@ -1430,21 +1445,34 @@ void render() {
 			ImGui::SeparatorText("Skins");
 
 			// JS: <component :is="$components.Listboxb" :items="modelViewerSkins" v-model:selection="modelViewerSkinsSelection" :single="true" />
-			// TODO(conversion): Listboxb component rendering will be wired when integration is complete.
-			for (const auto& skin : view.modelViewerSkins) {
-				std::string skin_id = skin.value("id", std::string(""));
-				std::string skin_label = skin.value("label", std::string(""));
-				bool is_selected = false;
+			{
+				// Convert json skins to ListboxBItem array.
+				std::vector<listboxb::ListboxBItem> skin_items;
+				skin_items.reserve(view.modelViewerSkins.size());
+				for (const auto& skin : view.modelViewerSkins)
+					skin_items.push_back({ skin.value("label", std::string("")) });
+
+				// Build selection indices from modelViewerSkinsSelection.
+				std::vector<int> sel_indices;
 				for (const auto& sel : view.modelViewerSkinsSelection) {
-					if (sel.value("id", std::string("")) == skin_id) {
-						is_selected = true;
-						break;
+					std::string sel_id = sel.value("id", std::string(""));
+					for (size_t i = 0; i < view.modelViewerSkins.size(); ++i) {
+						if (view.modelViewerSkins[i].value("id", std::string("")) == sel_id) {
+							sel_indices.push_back(static_cast<int>(i));
+							break;
+						}
 					}
 				}
 
-				if (ImGui::Selectable(skin_label.c_str(), is_selected)) {
-					view.modelViewerSkinsSelection = { skin };
-				}
+				listboxb::render("##ModelSkins", skin_items, sel_indices, true, true, false,
+					listboxb_skins_state,
+					[&](const std::vector<int>& new_sel) {
+						view.modelViewerSkinsSelection.clear();
+						for (int idx : new_sel) {
+							if (idx >= 0 && idx < static_cast<int>(view.modelViewerSkins.size()))
+								view.modelViewerSkinsSelection.push_back(view.modelViewerSkins[idx]);
+						}
+					});
 			}
 		}
 	}
