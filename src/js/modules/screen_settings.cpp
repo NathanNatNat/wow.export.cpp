@@ -44,6 +44,47 @@ void handle_discard();
 void handle_apply();
 void handle_reset();
 
+/**
+ * Helper for config-bound text inputs.
+ * Uses a static buffer + prev-value tracker to avoid overwriting user input each frame.
+ * Only syncs the buffer from config when the config value changes externally.
+ */
+struct ConfigTextState {
+	char buf[1024] = {};
+	std::string prev;
+	bool initialized = false;
+};
+
+static bool configTextInput(const char* id, ConfigTextState& state, nlohmann::json& cfg, const char* key) {
+	std::string current = cfg.value(key, std::string(""));
+	if (!state.initialized || current != state.prev) {
+		std::strncpy(state.buf, current.c_str(), sizeof(state.buf) - 1);
+		state.buf[sizeof(state.buf) - 1] = '\0';
+		state.prev = current;
+		state.initialized = true;
+	}
+	if (ImGui::InputText(id, state.buf, sizeof(state.buf))) {
+		cfg[key] = std::string(state.buf);
+		state.prev = std::string(state.buf);
+		return true;
+	}
+	return false;
+}
+
+// Config text states for each text input in settings.
+static ConfigTextState cdn_fallback_state;
+static ConfigTextState tact_url_state;
+static ConfigTextState tact_fallback_url_state;
+static ConfigTextState realm_url_state;
+static ConfigTextState armory_url_state;
+static ConfigTextState listfile_bin_state;
+static ConfigTextState listfile_url_state;
+static ConfigTextState listfile_fb_url_state;
+static ConfigTextState dbd_url_state;
+static ConfigTextState dbd_fb_url_state;
+static ConfigTextState dbdf_url_state;
+static ConfigTextState dbdf_fb_url_state;
+
 // --- Internal functions ---
 
 // JS: const load_default_config = async () => { ... }
@@ -397,13 +438,7 @@ void render() {
 
 	// JS: CDN Fallback Hosts
 	ImGui::SeparatorText("CDN Fallback Hosts");
-	{
-		static char cdn_buf[1024] = {};
-		std::string current = cfg.value("cdnFallbackHosts", std::string(""));
-		std::strncpy(cdn_buf, current.c_str(), sizeof(cdn_buf) - 1);
-		if (ImGui::InputText("##CDNFallbackHosts", cdn_buf, sizeof(cdn_buf)))
-			cfg["cdnFallbackHosts"] = std::string(cdn_buf);
-	}
+	configTextInput("##CDNFallbackHosts", cdn_fallback_state, cfg, "cdnFallbackHosts");
 
 	// JS: Manually Clear Cache (Requires Restart)
 	{
@@ -415,21 +450,9 @@ void render() {
 	// JS: Encryption Keys
 	ImGui::SeparatorText("Encryption Keys");
 	ImGui::Text("Primary TACT Keys URL");
-	{
-		static char tact_url_buf[1024] = {};
-		std::string current = cfg.value("tactKeysURL", std::string(""));
-		std::strncpy(tact_url_buf, current.c_str(), sizeof(tact_url_buf) - 1);
-		if (ImGui::InputText("##TactKeysURL", tact_url_buf, sizeof(tact_url_buf)))
-			cfg["tactKeysURL"] = std::string(tact_url_buf);
-	}
+	configTextInput("##TactKeysURL", tact_url_state, cfg, "tactKeysURL");
 	ImGui::Text("Fallback TACT Keys URL");
-	{
-		static char tact_fallback_buf[1024] = {};
-		std::string current = cfg.value("tactKeysFallbackURL", std::string(""));
-		std::strncpy(tact_fallback_buf, current.c_str(), sizeof(tact_fallback_buf) - 1);
-		if (ImGui::InputText("##TactKeysFallbackURL", tact_fallback_buf, sizeof(tact_fallback_buf)))
-			cfg["tactKeysFallbackURL"] = std::string(tact_fallback_buf);
-	}
+	configTextInput("##TactKeysFallbackURL", tact_fallback_url_state, cfg, "tactKeysFallbackURL");
 
 	// JS: Add Encryption Key
 	ImGui::Text("Add Encryption Key");
@@ -449,23 +472,11 @@ void render() {
 
 	// JS: Realm List Source
 	ImGui::SeparatorText("Realm List Source");
-	{
-		static char realm_buf[1024] = {};
-		std::string current = cfg.value("realmListURL", std::string(""));
-		std::strncpy(realm_buf, current.c_str(), sizeof(realm_buf) - 1);
-		if (ImGui::InputText("##RealmListURL", realm_buf, sizeof(realm_buf)))
-			cfg["realmListURL"] = std::string(realm_buf);
-	}
+	configTextInput("##RealmListURL", realm_url_state, cfg, "realmListURL");
 
 	// JS: Character Appearance API Endpoint
 	ImGui::SeparatorText("Character Appearance API Endpoint");
-	{
-		static char armory_buf[1024] = {};
-		std::string current = cfg.value("armoryURL", std::string(""));
-		std::strncpy(armory_buf, current.c_str(), sizeof(armory_buf) - 1);
-		if (ImGui::InputText("##ArmoryURL", armory_buf, sizeof(armory_buf)))
-			cfg["armoryURL"] = std::string(armory_buf);
-	}
+	configTextInput("##ArmoryURL", armory_url_state, cfg, "armoryURL");
 
 	// JS: Use Binary Listfile Format (Requires Restart)
 	{
@@ -476,32 +487,14 @@ void render() {
 
 	// JS: Listfile Binary Source
 	ImGui::SeparatorText("Listfile Binary Source");
-	{
-		static char listfile_bin_buf[1024] = {};
-		std::string current = cfg.value("listfileBinarySource", std::string(""));
-		std::strncpy(listfile_bin_buf, current.c_str(), sizeof(listfile_bin_buf) - 1);
-		if (ImGui::InputText("##ListfileBinSrc", listfile_bin_buf, sizeof(listfile_bin_buf)))
-			cfg["listfileBinarySource"] = std::string(listfile_bin_buf);
-	}
+	configTextInput("##ListfileBinSrc", listfile_bin_state, cfg, "listfileBinarySource");
 
 	// JS: Listfile Source (Legacy)
 	ImGui::SeparatorText("Listfile Source");
 	ImGui::Text("Primary");
-	{
-		static char listfile_buf[1024] = {};
-		std::string current = cfg.value("listfileURL", std::string(""));
-		std::strncpy(listfile_buf, current.c_str(), sizeof(listfile_buf) - 1);
-		if (ImGui::InputText("##ListfileURL", listfile_buf, sizeof(listfile_buf)))
-			cfg["listfileURL"] = std::string(listfile_buf);
-	}
+	configTextInput("##ListfileURL", listfile_url_state, cfg, "listfileURL");
 	ImGui::Text("Fallback");
-	{
-		static char listfile_fb_buf[1024] = {};
-		std::string current = cfg.value("listfileFallbackURL", std::string(""));
-		std::strncpy(listfile_fb_buf, current.c_str(), sizeof(listfile_fb_buf) - 1);
-		if (ImGui::InputText("##ListfileFallbackURL", listfile_fb_buf, sizeof(listfile_fb_buf)))
-			cfg["listfileFallbackURL"] = std::string(listfile_fb_buf);
-	}
+	configTextInput("##ListfileFallbackURL", listfile_fb_url_state, cfg, "listfileFallbackURL");
 
 	// JS: Listfile Update Frequency
 	ImGui::SeparatorText("Listfile Update Frequency (hours)");
@@ -514,40 +507,16 @@ void render() {
 	// JS: Data Table Definition Repository
 	ImGui::SeparatorText("Data Table Definition Repository");
 	ImGui::Text("Primary");
-	{
-		static char dbd_buf[1024] = {};
-		std::string current = cfg.value("dbdURL", std::string(""));
-		std::strncpy(dbd_buf, current.c_str(), sizeof(dbd_buf) - 1);
-		if (ImGui::InputText("##DBDURL", dbd_buf, sizeof(dbd_buf)))
-			cfg["dbdURL"] = std::string(dbd_buf);
-	}
+	configTextInput("##DBDURL", dbd_url_state, cfg, "dbdURL");
 	ImGui::Text("Fallback");
-	{
-		static char dbd_fb_buf[1024] = {};
-		std::string current = cfg.value("dbdFallbackURL", std::string(""));
-		std::strncpy(dbd_fb_buf, current.c_str(), sizeof(dbd_fb_buf) - 1);
-		if (ImGui::InputText("##DBDFallbackURL", dbd_fb_buf, sizeof(dbd_fb_buf)))
-			cfg["dbdFallbackURL"] = std::string(dbd_fb_buf);
-	}
+	configTextInput("##DBDFallbackURL", dbd_fb_url_state, cfg, "dbdFallbackURL");
 
 	// JS: DBD Manifest Repository
 	ImGui::SeparatorText("DBD Manifest Repository");
 	ImGui::Text("Primary");
-	{
-		static char dbdf_buf[1024] = {};
-		std::string current = cfg.value("dbdFilenameURL", std::string(""));
-		std::strncpy(dbdf_buf, current.c_str(), sizeof(dbdf_buf) - 1);
-		if (ImGui::InputText("##DBDFilenameURL", dbdf_buf, sizeof(dbdf_buf)))
-			cfg["dbdFilenameURL"] = std::string(dbdf_buf);
-	}
+	configTextInput("##DBDFilenameURL", dbdf_url_state, cfg, "dbdFilenameURL");
 	ImGui::Text("Fallback");
-	{
-		static char dbdf_fb_buf[1024] = {};
-		std::string current = cfg.value("dbdFilenameFallbackURL", std::string(""));
-		std::strncpy(dbdf_fb_buf, current.c_str(), sizeof(dbdf_fb_buf) - 1);
-		if (ImGui::InputText("##DBDFilenameFallbackURL", dbdf_fb_buf, sizeof(dbdf_fb_buf)))
-			cfg["dbdFilenameFallbackURL"] = std::string(dbdf_fb_buf);
-	}
+	configTextInput("##DBDFilenameFallbackURL", dbdf_fb_url_state, cfg, "dbdFilenameFallbackURL");
 
 	// JS: Allow Cache Collection
 	{
