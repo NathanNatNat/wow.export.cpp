@@ -43,9 +43,7 @@ static void load_files() {
 		mpq::MPQInstall* mpq = core::view->mpq.get();
 		if (!mpq) return;
 		auto files = mpq->getAllFiles();
-		view.listfileRaw.clear();
-		view.listfileRaw.reserve(files.size());
-		for (auto& f : files) view.listfileRaw.push_back(std::move(f));
+		view.listfileRaw.assign(std::make_move_iterator(files.begin()), std::make_move_iterator(files.end()));
 
 		files_loaded = true;
 	} catch (const std::exception& e) {

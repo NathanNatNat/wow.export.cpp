@@ -101,9 +101,7 @@ static void load_font_list() {
 		mpq::MPQInstall* mpq = core::view->mpq.get();
 		if (!mpq) return;
 		auto ttf_files = mpq->getFilesByExtension(".ttf");
-		view.listfileFonts.clear();
-		view.listfileFonts.reserve(ttf_files.size());
-		for (auto& f : ttf_files) view.listfileFonts.push_back(std::move(f));
+		view.listfileFonts.assign(std::make_move_iterator(ttf_files.begin()), std::make_move_iterator(ttf_files.end()));
 	} catch (const std::exception& e) {
 		logging::write(std::format("failed to load legacy fonts: {}", e.what()));
 	}
