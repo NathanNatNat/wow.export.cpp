@@ -426,7 +426,7 @@ MPQ source (Phase 3.1, done) and legacy loaders (Phase 3.2, pending).
 - [x] Wire GL bake composite buffer (OffscreenCanvas equivalent) — `ADTExporter.cpp` (1 TODO)
 
 ### 4.9 Background Color Picker
-- [ ] Wire color picker for model viewer background — `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp` (3 TODOs)
+- [x] Wire color picker for model viewer background — `tab_models.cpp`, `tab_models_legacy.cpp`, `tab_decor.cpp` (3 TODOs)
 
 ### 4.10 WMO Renderer Change Detection
 - [x] Wire Vue watcher equivalents (`updateGroups`/`updateSets`) — `WMORendererGL.cpp`, `WMOLegacyRendererGL.cpp` (4 TODOs)

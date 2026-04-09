@@ -3112,8 +3112,13 @@ if (ImGui::Checkbox("Show background##chr", &show_bg))
 view.config["chrShowBackground"] = show_bg;
 
 if (show_bg) {
-std::string bg_color_str = view.config.value("chrBackgroundColor", "#343a40");
-// TODO(conversion): ImGui color picker for background.
+// JS: <input type="color" v-model="config.chrBackgroundColor"/>
+std::string bg_color_str = view.config.value("chrBackgroundColor", std::string("#343a40"));
+auto [cr, cg, cb] = model_viewer_gl::parse_hex_color(bg_color_str);
+float color[3] = {cr, cg, cb};
+if (ImGui::ColorEdit3("##bg_color_chr", color, ImGuiColorEditFlags_NoInputs))
+	view.config["chrBackgroundColor"] = std::format("#{:02x}{:02x}{:02x}",
+		static_cast<int>(color[0] * 255.0f), static_cast<int>(color[1] * 255.0f), static_cast<int>(color[2] * 255.0f));
 }
 }
 }
