@@ -19,6 +19,7 @@
 #include "casc/locale-flags.h"
 #include "constants.h"
 #include "log.h"
+#include "mpq/mpq-install.h"
 
 #include <algorithm>
 #include <chrono>
@@ -26,6 +27,11 @@
 #include <format>
 #include <memory>
 #include <thread>
+
+// ─── AppState ────────────────────────────────────────────────────
+
+// Out-of-line destructor: unique_ptr<mpq::MPQInstall> requires complete type.
+AppState::~AppState() = default;
 
 // ─── EventEmitter ────────────────────────────────────────────────
 

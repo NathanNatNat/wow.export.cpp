@@ -50,20 +50,19 @@ static void preview_texture(const std::string& filename) {
 
 	try {
 		// JS: const data = core.view.mpq.getFile(filename);
-		// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-		// mpq::MPQInstall* mpq = core::view->mpq;
-		// auto data = mpq ? mpq->getFile(filename) : std::nullopt;
-		// if (!data) {
-		//     logging::write(std::format("failed to load texture: {}", filename));
-		//     return;
-		// }
+		mpq::MPQInstall* mpq = core::view->mpq.get();
+		auto data = mpq ? mpq->getFile(filename) : std::nullopt;
+		if (!data) {
+			logging::write(std::format("failed to load texture: {}", filename));
+			return;
+		}
 
 		if (ext == ".blp") {
 			// JS: const buffer = Buffer.from(data);
 			// JS: const wrapped = new BufferWrapper(buffer);
 			// JS: const blp = new BLPFile(wrapped);
-			// TODO(conversion): BLP preview will be wired when MPQ file loading is integrated.
-			// BufferWrapper wrapped(std::move(*data));
+			BufferWrapper wrapped(std::move(*data));
+			// TODO(conversion): BLP preview will be rendered when GL texture display is integrated.
 			// BLPImage blp(std::move(wrapped));
 
 			// JS: core.view.texturePreviewURL = blp.getDataURL(core.view.config.exportChannelMask);
@@ -84,16 +83,12 @@ static void preview_texture(const std::string& filename) {
 			// JS: const base64 = buffer.toString('base64');
 			// JS: const mime_type = ext === '.png' ? 'image/png' : 'image/jpeg';
 			// JS: const data_url = `data:${mime_type};base64,${base64}`;
-			// TODO(conversion): PNG/JPG preview will be wired when MPQ file loading is integrated.
-			// BufferWrapper wrapped(std::move(*data));
-			// std::string base64 = wrapped.toBase64();
-			// std::string mime_type = (ext == ".png") ? "image/png" : "image/jpeg";
-			// std::string data_url = std::format("data:{};base64,{}", mime_type, base64);
+			// TODO(conversion): PNG/JPG preview rendering will use stb_image + GL texture display.
+			(void)data; // MPQ data is available; rendering wired in Phase 5.
 
 			// JS: const img = new Image();
 			// JS: img.onload = () => { core.view.texturePreviewWidth = img.width; ... };
 			// JS: img.src = data_url;
-			// TODO(conversion): Image dimension detection from raw data will use stb_image.
 
 			// JS: core.view.texturePreviewURL = data_url;
 		}
@@ -123,14 +118,14 @@ static void refresh_blp_preview() {
 
 	try {
 		// JS: const data = core.view.mpq.getFile(selected_file);
-		// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-		// mpq::MPQInstall* mpq = core::view->mpq;
-		// auto data = mpq ? mpq->getFile(selected_file) : std::nullopt;
-		// if (data) {
-		//     BufferWrapper wrapped(std::move(*data));
-		//     BLPImage blp(std::move(wrapped));
-		//     core::view->texturePreviewURL = blp.getDataURL(core::view->config.value("exportChannelMask", 0b1111));
-		// }
+		mpq::MPQInstall* mpq = core::view->mpq.get();
+		auto data = mpq ? mpq->getFile(selected_file) : std::nullopt;
+		if (data) {
+			BufferWrapper wrapped(std::move(*data));
+			// TODO(conversion): BLP re-render with updated channel mask will be wired in Phase 5.
+			// BLPImage blp(std::move(wrapped));
+			// core::view->texturePreviewURL = blp.getDataURL(core::view->config.value("exportChannelMask", 0b1111));
+		}
 	} catch (const std::exception& e) {
 		logging::write(std::format("failed to refresh preview for {}: {}", selected_file, e.what()));
 	}
@@ -146,18 +141,17 @@ static void load_texture_list() {
 			// JS: const png_files = core.view.mpq.getFilesByExtension('.png');
 			// JS: const jpg_files = core.view.mpq.getFilesByExtension('.jpg');
 			// JS: core.view.listfileTextures = [...blp_files, ...png_files, ...jpg_files];
-			// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-			// mpq::MPQInstall* mpq = core::view->mpq;
-			// if (!mpq) return;
-			// auto blp_files = mpq->getFilesByExtension(".blp");
-			// auto png_files = mpq->getFilesByExtension(".png");
-			// auto jpg_files = mpq->getFilesByExtension(".jpg");
-			// std::vector<nlohmann::json> all_files;
-			// all_files.reserve(blp_files.size() + png_files.size() + jpg_files.size());
-			// for (auto& f : blp_files) all_files.push_back(std::move(f));
-			// for (auto& f : png_files) all_files.push_back(std::move(f));
-			// for (auto& f : jpg_files) all_files.push_back(std::move(f));
-			// core::view->listfileTextures = std::move(all_files);
+			mpq::MPQInstall* mpq = core::view->mpq.get();
+			if (!mpq) return;
+			auto blp_files = mpq->getFilesByExtension(".blp");
+			auto png_files = mpq->getFilesByExtension(".png");
+			auto jpg_files = mpq->getFilesByExtension(".jpg");
+			std::vector<nlohmann::json> all_files;
+			all_files.reserve(blp_files.size() + png_files.size() + jpg_files.size());
+			for (auto& f : blp_files) all_files.push_back(std::move(f));
+			for (auto& f : png_files) all_files.push_back(std::move(f));
+			for (auto& f : jpg_files) all_files.push_back(std::move(f));
+			core::view->listfileTextures = std::move(all_files);
 		} catch (const std::exception& e) {
 			logging::write(std::format("failed to load legacy textures: {}", e.what()));
 		}
@@ -255,8 +249,7 @@ void export_textures() {
 	// JS: await textureExporter.exportFiles(selected, false, -1, true);
 	// C++ signature: exportFiles(files, casc, mpq, isLocal, exportID)
 	// For legacy MPQ textures: casc=nullptr, mpq=source, isLocal=true
-	// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-	texture_exporter::exportFiles(selected, nullptr, nullptr, true, -1);
+	texture_exporter::exportFiles(selected, nullptr, core::view->mpq.get(), true, -1);
 }
 
 } // namespace legacy_tab_textures

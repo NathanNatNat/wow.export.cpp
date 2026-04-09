@@ -29,6 +29,9 @@ namespace casc {
 		struct LocaleEntry;
 	}
 }
+namespace mpq {
+	class MPQInstall;
+}
 
 /**
  * EventEmitter — C++ equivalent of Node.js EventEmitter.
@@ -212,6 +215,10 @@ struct DropHandler {
  * automatically on the next frame — no "reactivity" system needed.
  */
 struct AppState {
+	~AppState();                                 // Defined in core.cpp (needs complete mpq::MPQInstall).
+	AppState() = default;
+	AppState(AppState&&) = default;
+	AppState& operator=(AppState&&) = default;
 	int installType = 0;                         // Active install type (MPQ or CASC).
 	int isBusy = 0;                              // To prevent race-conditions with multiple tasks.
 #ifdef NDEBUG
@@ -233,6 +240,7 @@ struct AppState {
 	nlohmann::json availableRemoteBuilds;        // Remote builds to display during source select.
 	bool sourceSelectShowBuildSelect = false;    // Controls whether build select is shown.
 	casc::CASC* casc = nullptr;                  // Active CASC instance.
+	std::unique_ptr<mpq::MPQInstall> mpq;        // Active MPQ install instance.
 	int64_t cacheSize = 0;                       // Active size of the user cache.
 	std::string userInputTactKey;                // Value of manual tact key field.
 	std::string userInputTactKeyName;            // Value of manual tact key name field.
