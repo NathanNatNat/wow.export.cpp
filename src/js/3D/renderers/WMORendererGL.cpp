@@ -18,8 +18,7 @@
 #include "../Texture.h"
 #include "../Shaders.h"
 
-// TODO(conversion): textureRibbon is not yet converted; stubbed where referenced.
-// const textureRibbon = require('../../ui/texture-ribbon');
+#include "../../ui/texture-ribbon.h"
 
 #include <algorithm>
 #include <cmath>
@@ -139,7 +138,8 @@ void WMORendererGL::_load_textures() {
 	const auto& materials = wmo->materials;
 
 	// JS: if (this.useRibbon) this.syncID = textureRibbon.reset();
-	// TODO(conversion): textureRibbon.reset() is not yet wired.
+	if (useRibbon)
+		syncID = texture_ribbon::reset();
 
 	const bool isClassic = !wmo->textureNames.empty();
 
@@ -201,7 +201,11 @@ void WMORendererGL::_load_textures() {
 				continue;
 
 			// JS: const ribbonSlot = this.useRibbon ? textureRibbon.addSlot() : null;
-			// TODO(conversion): textureRibbon.addSlot/setSlotFile/setSlotSrc not yet wired.
+			int ribbonSlot = useRibbon ? texture_ribbon::addSlot() : -1;
+
+			// JS: if (ribbonSlot !== null) textureRibbon.setSlotFile(ribbonSlot, textureFileDataID, this.syncID);
+			if (ribbonSlot >= 0)
+				texture_ribbon::setSlotFile(ribbonSlot, textureFileDataID, syncID);
 
 			try {
 				Texture texture(material.flags, textureFileDataID);
@@ -225,7 +229,8 @@ void WMORendererGL::_load_textures() {
 				textures[textureFileDataID] = std::move(gl_tex);
 
 				// JS: if (ribbonSlot !== null) textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
-				// TODO(conversion): textureRibbon.setSlotSrc not yet wired.
+				if (ribbonSlot >= 0)
+					texture_ribbon::setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), syncID);
 			} catch (const std::exception& e) {
 				logging::write(std::format("Failed to load WMO texture {}: {}", textureFileDataID, e.what()));
 			}

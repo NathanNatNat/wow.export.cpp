@@ -14,8 +14,7 @@
 #include "../GeosetMapper.h"
 #include "../Shaders.h"
 
-// TODO(conversion): textureRibbon is not yet converted; stubbed where referenced.
-// const textureRibbon = require('../../ui/texture-ribbon');
+#include "../../ui/texture-ribbon.h"
 
 #include <algorithm>
 #include <chrono>
@@ -247,17 +246,20 @@ void M2LegacyRendererGL::_load_textures() {
 	mpq::MPQInstall* mpq = core::view->mpq.get();
 
 	if (useRibbon)
-		syncID = -1; // TODO(conversion): JS: textureRibbon.reset(); — texture ribbon not yet converted
+		syncID = texture_ribbon::reset();
 
 	for (size_t i = 0, n = tex_list.size(); i < n; i++) {
 		auto& texture = tex_list[i];
 		// JS: const ribbonSlot = this.useRibbon ? textureRibbon.addSlot() : null;
+		int ribbonSlot = useRibbon ? texture_ribbon::addSlot() : -1;
 
 		// legacy textures use fileName property set by loader
 		const std::string& fileName = texture.fileName;
 
 		if (!fileName.empty()) {
 			// JS: if (ribbonSlot !== null) textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID);
+			if (ribbonSlot >= 0)
+				texture_ribbon::setSlotFileLegacy(ribbonSlot, fileName, syncID);
 
 			try {
 				// JS: const data = mpq.getFile(fileName);
@@ -280,6 +282,8 @@ void M2LegacyRendererGL::_load_textures() {
 					textures[static_cast<int>(i)] = std::move(gl_tex);
 
 					// JS: if (ribbonSlot !== null) textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
+					if (ribbonSlot >= 0)
+						texture_ribbon::setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), syncID);
 				}
 			} catch (const std::exception& e) {
 				logging::write(std::format("Failed to load legacy texture {}: {}", fileName, e.what()));
@@ -325,7 +329,10 @@ void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& textu
 						textures[static_cast<int>(i)] = std::move(gl_tex);
 
 						// JS: if (this.useRibbon) { textureRibbon.setSlotFile(...); textureRibbon.setSlotSrc(...); }
-						// TODO(conversion): textureRibbon is not yet converted; stubbed where referenced.
+						if (useRibbon) {
+							texture_ribbon::setSlotFileLegacy(static_cast<int>(i), texture_path, syncID);
+							texture_ribbon::setSlotSrc(static_cast<int>(i), blp.getDataURL(0b0111), syncID);
+						}
 
 						logging::write(std::format("Applied creature skin texture {}: {}", static_cast<int>(i), texture_path));
 					}
