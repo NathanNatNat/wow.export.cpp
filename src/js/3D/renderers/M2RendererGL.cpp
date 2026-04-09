@@ -16,8 +16,7 @@ License: MIT
 #include "../ShaderMapper.h"
 #include "../Shaders.h"
 
-// TODO(conversion): textureRibbon is not yet converted; stubbed where referenced.
-// const textureRibbon = require('../../ui/texture-ribbon');
+#include "../../ui/texture-ribbon.h"
 
 #include <algorithm>
 #include <chrono>
@@ -525,14 +524,17 @@ void M2RendererGL::_load_textures() {
 auto& tex_list = m2->textures;
 
 if (useRibbon)
-syncID = -1; // TODO(conversion): JS: this.syncID = textureRibbon.reset(); — texture ribbon not yet converted
+syncID = texture_ribbon::reset();
 
 for (size_t i = 0, n = tex_list.size(); i < n; i++) {
 auto& texture = tex_list[i];
 // JS: const ribbonSlot = this.useRibbon ? textureRibbon.addSlot() : null;
+int ribbonSlot = useRibbon ? texture_ribbon::addSlot() : -1;
 
 if (texture.fileDataID > 0) {
 // JS: if (ribbonSlot !== null) textureRibbon.setSlotFile(ribbonSlot, texture.fileDataID, this.syncID);
+if (ribbonSlot >= 0)
+texture_ribbon::setSlotFile(ribbonSlot, texture.fileDataID, syncID);
 
 try {
 // JS: const data = await texture.getTextureFile();
@@ -546,7 +548,8 @@ gl_tex->set_blp(blp, blp_flags);
 textures[static_cast<int>(i)] = std::move(gl_tex);
 
 // JS: if (ribbonSlot !== null) textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
-// TODO(conversion): textureRibbon not yet converted
+if (ribbonSlot >= 0)
+texture_ribbon::setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), syncID);
 }
 } catch (const std::exception& e) {
 logging::write(std::format("Failed to load texture {}: {}", texture.fileDataID, e.what()));
@@ -1624,7 +1627,10 @@ it->second->dispose();
 textures[static_cast<int>(i)] = std::move(gl_tex);
 
 // JS: if (this.useRibbon) { textureRibbon.setSlotFile(i, fileDataID, this.syncID); ... }
-// TODO(conversion): textureRibbon not yet converted
+if (useRibbon) {
+texture_ribbon::setSlotFile(static_cast<int>(i), fileDataID, syncID);
+texture_ribbon::setSlotSrc(static_cast<int>(i), blp.getDataURL(0b0111), syncID);
+}
 } catch (const std::exception& e) {
 logging::write(std::format("Failed to override texture: {}", e.what()));
 }

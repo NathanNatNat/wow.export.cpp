@@ -10,8 +10,7 @@
 #include "../Shaders.h"
 #include "../../buffer.h"
 
-// TODO(conversion): textureRibbon is not yet converted; stubbed where referenced.
-// const textureRibbon = require('../../ui/texture-ribbon');
+#include "../../ui/texture-ribbon.h"
 
 #include <algorithm>
 #include <chrono>

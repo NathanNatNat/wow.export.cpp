@@ -15,8 +15,7 @@
 #include "../../mpq/mpq-install.h"
 #include "../Shaders.h"
 
-// TODO(conversion): textureRibbon is not yet converted; stubbed where referenced.
-// const textureRibbon = require('../../ui/texture-ribbon');
+#include "../../ui/texture-ribbon.h"
 
 #include <algorithm>
 #include <cmath>
@@ -135,7 +134,8 @@ void WMOLegacyRendererGL::_load_textures() {
 	const auto& materials = wmo->materials;
 
 	// JS: if (this.useRibbon) this.syncID = textureRibbon.reset();
-	// TODO(conversion): textureRibbon.reset() is not yet wired.
+	if (useRibbon)
+		syncID = texture_ribbon::reset();
 
 	// legacy wmos use texture names directly from MOTX
 	const auto& textureNames = wmo->textureNames;
@@ -167,7 +167,11 @@ void WMOLegacyRendererGL::_load_textures() {
 				continue;
 
 			// JS: const ribbonSlot = this.useRibbon ? textureRibbon.addSlot() : null;
-			// TODO(conversion): textureRibbon.addSlot/setSlotFile/setSlotSrc not yet wired.
+			int ribbonSlot = useRibbon ? texture_ribbon::addSlot() : -1;
+
+			// JS: if (ribbonSlot !== null) textureRibbon.setSlotFile(ribbonSlot, textureName, this.syncID);
+			if (ribbonSlot >= 0)
+				texture_ribbon::setSlotFileLegacy(ribbonSlot, textureName, syncID);
 
 			try {
 				// JS: const data = mpq.getFile(textureName);
@@ -184,6 +188,8 @@ void WMOLegacyRendererGL::_load_textures() {
 					textures[textureName] = std::move(gl_tex);
 
 					// JS: if (ribbonSlot !== null) textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
+					if (ribbonSlot >= 0)
+						texture_ribbon::setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), syncID);
 				}
 			} catch (const std::exception& e) {
 				logging::write(std::format("Failed to load legacy WMO texture {}: {}", textureName, e.what()));

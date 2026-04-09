@@ -27,6 +27,7 @@
 #include "../components/model-viewer-gl.h"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <format>
 #include <map>
@@ -933,8 +934,42 @@ void render() {
 	// JS: <component :is="$components.ResizeLayer" id="texture-ribbon"
 	//         v-if="config.modelViewerShowTextures && textureRibbonStack.length > 0">
 	if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
-		// TODO(conversion): Texture ribbon rendering will be wired when component is integrated.
-		ImGui::Text("Texture Ribbon: %zu textures", view.textureRibbonStack.size());
+		// Texture ribbon slot rendering with pagination (no context menu for legacy)
+		float ribbon_width = ImGui::GetContentRegionAvail().x;
+		texture_ribbon::onResize(static_cast<int>(ribbon_width));
+
+		int maxPages = (view.textureRibbonSlotCount > 0)
+			? static_cast<int>(std::ceil(static_cast<double>(view.textureRibbonStack.size()) / view.textureRibbonSlotCount))
+			: 0;
+
+		// Prev button
+		if (view.textureRibbonPage > 0) {
+			if (ImGui::SmallButton("<##ribbon_prev"))
+				view.textureRibbonPage--;
+			ImGui::SameLine();
+		}
+
+		// Visible slots
+		int startIndex = view.textureRibbonPage * view.textureRibbonSlotCount;
+		int endIndex = (std::min)(startIndex + view.textureRibbonSlotCount, static_cast<int>(view.textureRibbonStack.size()));
+
+		for (int si = startIndex; si < endIndex; si++) {
+			auto& slot = view.textureRibbonStack[si];
+			std::string slotDisplayName = slot.value("displayName", std::string(""));
+
+			ImGui::PushID(si);
+			ImGui::Button(slotDisplayName.c_str(), ImVec2(64, 0));
+			ImGui::PopID();
+			ImGui::SameLine();
+		}
+
+		// Next button
+		if (view.textureRibbonPage < maxPages - 1) {
+			if (ImGui::SmallButton(">##ribbon_next"))
+				view.textureRibbonPage++;
+		} else {
+			ImGui::NewLine();
+		}
 		// Note: Legacy texture ribbon does NOT have a context menu (unlike modern models tab).
 	}
 

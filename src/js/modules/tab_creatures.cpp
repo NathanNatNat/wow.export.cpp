@@ -43,6 +43,7 @@
 #include "../components/model-viewer-gl.h"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <format>
 #include <map>
@@ -2058,7 +2059,83 @@ void render() {
 	ImGui::BeginChild("creature-preview-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.55f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
 
 	// JS: <component :is="$components.ResizeLayer" ... id="texture-ribbon" ... >
-	// TODO(conversion): Texture ribbon rendering will be wired when integration is complete.
+	if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
+		// Texture ribbon slot rendering with pagination
+		float ribbon_width = ImGui::GetContentRegionAvail().x;
+		texture_ribbon::onResize(static_cast<int>(ribbon_width));
+
+		int maxPages = (view.textureRibbonSlotCount > 0)
+			? static_cast<int>(std::ceil(static_cast<double>(view.textureRibbonStack.size()) / view.textureRibbonSlotCount))
+			: 0;
+
+		// Prev button
+		if (view.textureRibbonPage > 0) {
+			if (ImGui::SmallButton("<##ribbon_prev"))
+				view.textureRibbonPage--;
+			ImGui::SameLine();
+		}
+
+		// Visible slots
+		int startIndex = view.textureRibbonPage * view.textureRibbonSlotCount;
+		int endIndex = (std::min)(startIndex + view.textureRibbonSlotCount, static_cast<int>(view.textureRibbonStack.size()));
+
+		for (int si = startIndex; si < endIndex; si++) {
+			auto& slot = view.textureRibbonStack[si];
+			std::string slotDisplayName = slot.value("displayName", std::string(""));
+
+			ImGui::PushID(si);
+			ImGui::Button(slotDisplayName.c_str(), ImVec2(64, 0));
+			if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+				view.contextMenus.nodeTextureRibbon = slot;
+				ImGui::OpenPopup("CreatureTextureRibbonContextMenu");
+			}
+			ImGui::PopID();
+			ImGui::SameLine();
+		}
+
+		// Next button
+		if (view.textureRibbonPage < maxPages - 1) {
+			if (ImGui::SmallButton(">##ribbon_next"))
+				view.textureRibbonPage++;
+		} else {
+			ImGui::NewLine();
+		}
+
+		// JS: <component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeTextureRibbon" ...>
+		if (!view.contextMenus.nodeTextureRibbon.is_null()) {
+			if (ImGui::BeginPopup("CreatureTextureRibbonContextMenu")) {
+				const auto& node = view.contextMenus.nodeTextureRibbon;
+				uint32_t fdid = node.value("fileDataID", 0u);
+				std::string ctxDisplayName = node.value("displayName", std::string(""));
+
+				// JS: <span @click.self="preview_texture(...)">Preview {{ displayName }}</span>
+				if (ImGui::MenuItem(std::format("Preview {}", ctxDisplayName).c_str())) {
+					preview_texture(fdid, ctxDisplayName);
+					view.contextMenus.nodeTextureRibbon = nullptr;
+				}
+
+				// JS: <span @click.self="export_ribbon_texture(...)">Export {{ displayName }}</span>
+				if (ImGui::MenuItem(std::format("Export {}", ctxDisplayName).c_str())) {
+					export_ribbon_texture(fdid, ctxDisplayName);
+					view.contextMenus.nodeTextureRibbon = nullptr;
+				}
+
+				// JS: <span @click.self="$core.view.copyToClipboard(fileDataID)">Copy file data ID to clipboard</span>
+				if (ImGui::MenuItem("Copy file data ID to clipboard")) {
+					ImGui::SetClipboardText(std::to_string(fdid).c_str());
+					view.contextMenus.nodeTextureRibbon = nullptr;
+				}
+
+				// JS: <span @click.self="$core.view.copyToClipboard(displayName)">Copy texture name to clipboard</span>
+				if (ImGui::MenuItem("Copy texture name to clipboard")) {
+					ImGui::SetClipboardText(ctxDisplayName.c_str());
+					view.contextMenus.nodeTextureRibbon = nullptr;
+				}
+
+				ImGui::EndPopup();
+			}
+		}
+	}
 
 	// JS: <div id="creature-texture-preview" v-if="$core.view.creatureTexturePreviewURL.length > 0">
 	if (!view.creatureTexturePreviewURL.empty()) {
