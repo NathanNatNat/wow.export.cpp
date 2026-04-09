@@ -412,10 +412,10 @@ MPQ source (Phase 3.1, done) and legacy loaders (Phase 3.2, pending).
 - [x] Wire atlas region rendering as ImGui overlay — `tab_textures.cpp` (1 TODO)
 
 ### 4.6 Framebuffer Capture
-- [ ] Wire GL framebuffer capture for screenshots — `tab_characters.cpp`, `tab_models_legacy.cpp` (2 TODOs)
-- [ ] Wire full thumbnail capture — `tab_characters.cpp` (1 TODO)
-- [ ] Wire PNG write from framebuffer — `tab_models_legacy.cpp` (1 TODO)
-- [ ] Wire clipboard PNG copy from FBO — `tab_characters.cpp`, `tab_models_legacy.cpp` (2 TODOs)
+- [x] Wire GL framebuffer capture for screenshots — `tab_characters.cpp`, `tab_models_legacy.cpp` (2 TODOs)
+- [x] Wire full thumbnail capture — `tab_characters.cpp` (1 TODO)
+- [x] Wire PNG write from framebuffer — `tab_models_legacy.cpp` (1 TODO)
+- [x] Wire clipboard PNG copy from FBO — `tab_characters.cpp`, `tab_models_legacy.cpp` (2 TODOs)
 
 ### 4.7 TextureRibbon Integration
 - [ ] Wire `textureRibbon.reset()` / `addSlot` / `setSlotFile` / `setSlotSrc` in renderers — `M2RendererGL.cpp` (4), `M2LegacyRendererGL.cpp` (2), `M3RendererGL.cpp` (1), `MDXRendererGL.cpp` (2), `WMORendererGL.cpp` (4), `WMOLegacyRendererGL.cpp` (3) (16 TODOs)

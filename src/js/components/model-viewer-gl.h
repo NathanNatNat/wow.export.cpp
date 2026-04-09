@@ -275,6 +275,13 @@ void renderWidget(const char* id, State& state, Context& context);
  */
 void dispose(State& state);
 
+/**
+ * Render one frame to the offscreen FBO without ImGui widget logic.
+ * Used by thumbnail capture and similar scenarios that need to render
+ * with modified camera/animation state outside the normal renderWidget flow.
+ */
+void render_one_frame(State& state, Context& context);
+
 // ─── Methods (matching JS component methods) ────────────────────
 
 /**
