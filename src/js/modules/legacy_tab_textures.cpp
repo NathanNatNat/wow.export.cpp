@@ -40,6 +40,9 @@ static listbox::ListboxState legacy_tex_listbox_state;
 static context_menu::ContextMenuState legacy_tex_ctx_state;
 static menu_button::MenuButtonState legacy_tex_menu_state;
 
+// --- Forward declarations ---
+static void handle_listbox_context(const nlohmann::json& data);
+
 // --- Internal functions ---
 
 // JS: const preview_texture = async (core, filename) => { ... }

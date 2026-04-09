@@ -210,6 +210,9 @@ static bool _was_paused_before_scrub = false;
 static model_viewer_gl::State viewer_state;
 static model_viewer_gl::Context viewer_context;
 
+// ComboBox state for realm selector.
+static combobox::ComboBoxState realm_combobox_state;
+
 // JS: const base_regions = ['us', 'eu', 'kr', 'tw'];
 static const std::vector<std::string> base_regions = { "us", "eu", "kr", "tw" };
 
@@ -2709,23 +2712,14 @@ static char chr_name_buf[256] = {};
 ImGui::InputText("Character Name##bnet", chr_name_buf, sizeof(chr_name_buf));
 view.chrImportChrName = chr_name_buf;
 
-// Realm combo (simplified)
-// TODO(conversion): Full ComboBox with search for realm list.
+// Realm combo
+// JS: <ComboBox :value="chrImportSelectedRealm" :source="chrImportRealms" placeholder="Select Realm" :maxheight="10" @update:value="...">
 if (!view.chrImportRealms.empty()) {
-std::string realm_label = view.chrImportSelectedRealm.is_null() ? "Select Realm" :
-view.chrImportSelectedRealm.value("label", "Select Realm");
-if (ImGui::BeginCombo("Realm##bnet", realm_label.c_str())) {
-for (const auto& realm : view.chrImportRealms) {
-std::string label = realm.value("label", "");
-bool is_selected = (!view.chrImportSelectedRealm.is_null() &&
-                    realm.value("value", "") == view.chrImportSelectedRealm.value("value", ""));
-if (ImGui::Selectable(label.c_str(), is_selected))
-view.chrImportSelectedRealm = realm;
-if (is_selected)
-ImGui::SetItemDefaultFocus();
-}
-ImGui::EndCombo();
-}
+combobox::render("##RealmCombo", view.chrImportSelectedRealm, view.chrImportRealms,
+	"Select Realm", 10, realm_combobox_state,
+	[&](const nlohmann::json& new_val) {
+		view.chrImportSelectedRealm = new_val;
+	});
 }
 
 ImGui::Checkbox("Load visage model (Dracthyr/Worgen)", &view.chrImportLoadVisage);
