@@ -26,6 +26,9 @@
 #include "../file-writer.h"
 #include "../mpq/mpq-install.h"
 #include "../components/model-viewer-gl.h"
+#include "../components/checkboxlist.h"
+#include "../components/listboxb.h"
+#include "../components/menu-button.h"
 
 #include <algorithm>
 #include <cmath>
@@ -83,6 +86,11 @@ static bool _was_paused_before_scrub = false;
 static bool is_initialized = false;
 
 static listbox::ListboxState listbox_legacy_models_state;
+
+// Component states for CheckboxList, ListboxB, and MenuButton.
+static checkboxlist::CheckboxListState checkboxlist_legacy_geosets_state;
+static listboxb::ListboxBState listboxb_legacy_skins_state;
+static menu_button::MenuButtonState menu_button_legacy_models_state;
 
 // Model viewer GL state/context (replaces Vue <ModelViewerGL :context="legacyModelViewerContext"/>).
 static model_viewer_gl::State viewer_state;
@@ -973,7 +981,12 @@ void render() {
 	}
 
 	// JS: <div class="filter"> <input type="text" v-model="userInputFilterLegacyModels" placeholder="Filter models..."/> </div>
-	// TODO(conversion): Filter input will use ImGui::InputText when Listbox component is wired.
+	{
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterLegacyModels.c_str(), sizeof(filter_buf) - 1);
+		if (ImGui::InputText("##FilterLegacyModels", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterLegacyModels = filter_buf;
+	}
 
 	ImGui::EndChild();
 
@@ -1059,9 +1072,16 @@ void render() {
 	// JS: <div class="preview-controls">
 	//     <MenuButton :options="menuButtonLegacyModels" :default="config.exportLegacyModelFormat"
 	//         @change="config.exportLegacyModelFormat = $event" :disabled="isBusy" @click="export_model" />
-	// TODO(conversion): MenuButton component rendering will be wired when integration is complete.
-	if (ImGui::Button("Export Model##Legacy") && view.isBusy == 0)
-		export_model_action();
+	{
+		std::vector<menu_button::MenuOption> mb_options;
+		for (const auto& opt : view.menuButtonLegacyModels)
+			mb_options.push_back({ opt.label, opt.value });
+		menu_button::render("##MenuButtonLegacyModels", mb_options,
+			view.config.value("exportLegacyModelFormat", std::string("OBJ")),
+			view.isBusy > 0, false, menu_button_legacy_models_state,
+			[&](const std::string& val) { view.config["exportLegacyModelFormat"] = val; },
+			[&]() { export_model_action(); });
+	}
 
 	ImGui::SameLine();
 
@@ -1116,21 +1136,34 @@ void render() {
 		ImGui::SeparatorText("Skins");
 
 		// JS: <component :is="$components.Listboxb" :items="legacyModelViewerSkins" v-model:selection="legacyModelViewerSkinsSelection" :single="true" />
-		// TODO(conversion): Listboxb component rendering will be wired when integration is complete.
-		for (const auto& skin : view.legacyModelViewerSkins) {
-			std::string skin_id = skin.value("id", std::string(""));
-			std::string skin_label = skin.value("label", std::string(""));
-			bool is_selected = false;
+		{
+			// Convert json skins to ListboxBItem array.
+			std::vector<listboxb::ListboxBItem> skin_items;
+			skin_items.reserve(view.legacyModelViewerSkins.size());
+			for (const auto& skin : view.legacyModelViewerSkins)
+				skin_items.push_back({ skin.value("label", std::string("")) });
+
+			// Build selection indices from legacyModelViewerSkinsSelection.
+			std::vector<int> sel_indices;
 			for (const auto& sel : view.legacyModelViewerSkinsSelection) {
-				if (sel.value("id", std::string("")) == skin_id) {
-					is_selected = true;
-					break;
+				std::string sel_id = sel.value("id", std::string(""));
+				for (size_t i = 0; i < view.legacyModelViewerSkins.size(); ++i) {
+					if (view.legacyModelViewerSkins[i].value("id", std::string("")) == sel_id) {
+						sel_indices.push_back(static_cast<int>(i));
+						break;
+					}
 				}
 			}
 
-			if (ImGui::Selectable(skin_label.c_str(), is_selected)) {
-				view.legacyModelViewerSkinsSelection = { skin };
-			}
+			listboxb::render("##LegacyModelSkins", skin_items, sel_indices, true, true, false,
+				listboxb_legacy_skins_state,
+				[&](const std::vector<int>& new_sel) {
+					view.legacyModelViewerSkinsSelection.clear();
+					for (int idx : new_sel) {
+						if (idx >= 0 && idx < static_cast<int>(view.legacyModelViewerSkins.size()))
+							view.legacyModelViewerSkinsSelection.push_back(view.legacyModelViewerSkins[idx]);
+					}
+				});
 		}
 	}
 
@@ -1140,13 +1173,7 @@ void render() {
 		ImGui::SeparatorText("Geosets");
 
 		// JS: <component :is="$components.Checkboxlist" :items="modelViewerGeosets" />
-		// TODO(conversion): Checkboxlist component rendering will be wired when integration is complete.
-		for (auto& geoset : view.modelViewerGeosets) {
-			std::string label = geoset.value("label", std::string("Geoset"));
-			bool checked = geoset.value("checked", true);
-			if (ImGui::Checkbox(label.c_str(), &checked))
-				geoset["checked"] = checked;
-		}
+		checkboxlist::render("##LegacyGeosets", view.modelViewerGeosets, checkboxlist_legacy_geosets_state);
 
 		// JS: <a @click="setAllGeosets(true, modelViewerGeosets)">Enable All</a> / <a @click="setAllGeosets(false, modelViewerGeosets)">Disable All</a>
 		if (ImGui::SmallButton("Enable All##LegacyGeosets")) {

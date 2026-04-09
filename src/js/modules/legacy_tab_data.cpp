@@ -14,6 +14,9 @@
 #include "../modules.h"
 #include "../casc/export-helper.h"
 #include "../components/listbox.h"
+#include "../components/data-table.h"
+#include "../components/context-menu.h"
+#include "../components/menu-button.h"
 #include "../mpq/mpq-install.h"
 
 #include <cstring>
@@ -56,6 +59,9 @@ static std::vector<std::string> local_dbc_listfile;
 static std::string prev_selection_first;
 
 static listbox::ListboxState listbox_dbc_state;
+static data_table::DataTableState legacy_data_table_state;
+static context_menu::ContextMenuState legacy_data_table_ctx_state;
+static menu_button::MenuButtonState legacy_menu_button_data_state;
 
 // --- Internal functions ---
 
@@ -353,8 +359,65 @@ void render() {
 	//       copy_rows_csv, copy_rows_sql, copy_cell
 	// </div>
 	ImGui::BeginChild("data-table-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 3), ImGuiChildFlags_Borders);
-	// TODO(conversion): DataTable and ContextMenu component rendering will be wired when integration is complete.
-	ImGui::Text("Headers: %zu, Rows: %zu", view.tableBrowserHeaders.size(), view.tableBrowserRows.size());
+	{
+		// Convert json headers to string array.
+		std::vector<std::string> headers_str;
+		for (const auto& h : view.tableBrowserHeaders)
+			headers_str.push_back(h.get<std::string>());
+
+		// Convert json rows to string 2D array.
+		std::vector<std::vector<std::string>> rows_str;
+		for (const auto& row : view.tableBrowserRows) {
+			std::vector<std::string> str_row;
+			for (const auto& val : row)
+				str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
+			rows_str.push_back(std::move(str_row));
+		}
+
+		// Convert selection indices from json to int array.
+		std::vector<int> sel_indices;
+		for (const auto& s : view.selectionDataTable)
+			sel_indices.push_back(s.get<int>());
+
+		data_table::render("##LegacyDataTable", headers_str, rows_str,
+			view.userInputFilterDataTable,
+			view.config.value("regexFilters", false),
+			sel_indices,
+			view.config.value("dataCopyHeader", false),
+			selected_file.empty() ? "unknown_table" : selected_file,
+			legacy_data_table_state,
+			[&](const std::vector<int>& new_sel) {
+				view.selectionDataTable.clear();
+				for (int idx : new_sel)
+					view.selectionDataTable.push_back(idx);
+			},
+			[&](const data_table::ContextMenuEvent& ev) {
+				nlohmann::json node;
+				node["rowIndex"] = ev.rowIndex;
+				node["columnIndex"] = ev.columnIndex;
+				node["cellValue"] = ev.cellValue;
+				node["selectedCount"] = ev.selectedCount;
+				view.contextMenus.nodeDataTable = node;
+			},
+			[&]() { copy_rows_csv(); },
+			nullptr);
+
+		// Context menu for data table.
+		if (!view.contextMenus.nodeDataTable.is_null()) {
+			if (ImGui::BeginPopupContextItem("##LegacyDataTableContextMenu")) {
+				if (ImGui::MenuItem("Copy selected rows as CSV"))
+					copy_rows_csv();
+				if (ImGui::MenuItem("Copy selected rows as SQL"))
+					copy_rows_sql();
+				if (view.contextMenus.nodeDataTable.contains("cellValue")) {
+					std::string cell_val = view.contextMenus.nodeDataTable["cellValue"].get<std::string>();
+					if (ImGui::MenuItem(std::format("Copy cell: {}", cell_val.substr(0, 30)).c_str()))
+						copy_cell(cell_val);
+				}
+				ImGui::EndPopup();
+			}
+		}
+	}
 	ImGui::EndChild();
 
 	// Options row.
@@ -395,12 +458,19 @@ void render() {
 	ImGui::SameLine();
 
 	// JS: <MenuButton :options="menuButtonDataLegacy" :default="config.exportDataFormat" @change="..." @click="export_data">
-	const bool busy = view.isBusy > 0;
-	const bool no_headers = view.tableBrowserHeaders.empty();
-	if (busy || no_headers) ImGui::BeginDisabled();
-	if (ImGui::Button(std::format("Export as {}", export_format).c_str()))
-		export_data();
-	if (busy || no_headers) ImGui::EndDisabled();
+	{
+		// Legacy data only supports CSV export.
+		static const std::vector<menu_button::MenuOption> legacy_data_opts = {
+			{ "Export as CSV", "CSV" }
+		};
+		const bool busy = view.isBusy > 0;
+		const bool no_headers = view.tableBrowserHeaders.empty();
+		menu_button::render("##MenuButtonDataLegacy", legacy_data_opts,
+			view.config.value("exportDataFormat", std::string("CSV")),
+			busy || no_headers, false, legacy_menu_button_data_state,
+			[&](const std::string& val) { view.config["exportDataFormat"] = val; },
+			[&]() { export_data(); });
+	}
 }
 
 // --- Copy methods (context menu) ---
@@ -409,14 +479,35 @@ void render() {
 static void copy_rows_csv() {
 	// JS: const data_table = this.$refs.dataTable;
 	// JS: const csv = data_table.getSelectedRowsAsCSV();
-	// TODO(conversion): DataTable getSelectedRowsAsCSV will be wired when DataTable component is integrated.
 	const auto& view = *core::view;
 	const size_t count = view.selectionDataTable.size();
 	if (count == 0)
 		return;
 
+	// Convert headers to string vector.
+	std::vector<std::string> headers;
+	for (const auto& h : view.tableBrowserHeaders)
+		headers.push_back(h.get<std::string>());
+
+	// Convert all rows to string 2D array.
+	std::vector<std::vector<std::string>> sorted_rows;
+	for (const auto& row : view.tableBrowserRows) {
+		std::vector<std::string> str_row;
+		for (const auto& val : row)
+			str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
+		sorted_rows.push_back(std::move(str_row));
+	}
+
+	// Convert selection to int indices.
+	std::vector<int> sel_indices;
+	for (const auto& s : view.selectionDataTable)
+		sel_indices.push_back(s.get<int>());
+
+	std::string csv = data_table::getSelectedRowsAsCSV(headers, sorted_rows, sel_indices,
+		view.config.value("dataCopyHeader", false));
+
 	// JS: nw.Clipboard.get().set(csv, 'text');
-	// ImGui::SetClipboardText(csv.c_str());
+	ImGui::SetClipboardText(csv.c_str());
 	core::setToast("success", std::format("Copied {} row{} as CSV to the clipboard", count, count != 1 ? "s" : ""), {}, 2000);
 }
 
@@ -424,13 +515,35 @@ static void copy_rows_csv() {
 static void copy_rows_sql() {
 	// JS: const data_table = this.$refs.dataTable;
 	// JS: const sql = data_table.getSelectedRowsAsSQL();
-	// TODO(conversion): DataTable getSelectedRowsAsSQL will be wired when DataTable component is integrated.
 	const auto& view = *core::view;
 	const size_t count = view.selectionDataTable.size();
 	if (count == 0)
 		return;
 
+	// Convert headers to string vector.
+	std::vector<std::string> headers;
+	for (const auto& h : view.tableBrowserHeaders)
+		headers.push_back(h.get<std::string>());
+
+	// Convert all rows to string 2D array.
+	std::vector<std::vector<std::string>> sorted_rows;
+	for (const auto& row : view.tableBrowserRows) {
+		std::vector<std::string> str_row;
+		for (const auto& val : row)
+			str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
+		sorted_rows.push_back(std::move(str_row));
+	}
+
+	// Convert selection to int indices.
+	std::vector<int> sel_indices;
+	for (const auto& s : view.selectionDataTable)
+		sel_indices.push_back(s.get<int>());
+
+	std::string sql = data_table::getSelectedRowsAsSQL(headers, sorted_rows, sel_indices,
+		selected_file.empty() ? "unknown_table" : selected_file);
+
 	// JS: nw.Clipboard.get().set(sql, 'text');
+	ImGui::SetClipboardText(sql.c_str());
 	core::setToast("success", std::format("Copied {} row{} as SQL to the clipboard", count, count != 1 ? "s" : ""), {}, 2000);
 }
 

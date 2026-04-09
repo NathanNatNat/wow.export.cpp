@@ -19,6 +19,7 @@
 #include "../install-type.h"
 #include "../modules.h"
 #include "../components/context-menu.h"
+#include "../components/itemlistbox.h"
 // const ExternalLinks = require('../external-links'); // Removed: external-links module deleted
 
 #include <cstring>
@@ -175,6 +176,7 @@ static std::vector<bool> prev_quality_mask_checked;
 
 static bool is_initialized = false;
 static context_menu::ContextMenuState context_menu_item_state;
+static itemlistbox::ItemListboxState itemlistbox_items_state;
 
 // --- Internal functions ---
 
@@ -667,8 +669,60 @@ void render() {
 	// JS: <div class="list-container">
 	//     <Itemlistbox id="listbox-items" ... @options="contextMenus.nodeItem = $event" @equip="equip_item">
 	ImGui::BeginChild("items-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.5f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-	// TODO(conversion): Itemlistbox component rendering will be wired when integration is complete.
-	ImGui::Text("Items: %zu", view.listfileItems.size());
+	{
+		// Convert json items to ItemEntry array.
+		std::vector<itemlistbox::ItemEntry> item_entries;
+		item_entries.reserve(view.listfileItems.size());
+		for (const auto& j : view.listfileItems) {
+			itemlistbox::ItemEntry entry;
+			entry.id = j.value("id", 0);
+			entry.name = j.value("name", std::string(""));
+			entry.displayName = j.value("displayName", std::string(""));
+			entry.icon = j.value("icon", 0u);
+			entry.quality = j.value("quality", 0);
+			item_entries.push_back(std::move(entry));
+		}
+
+		// Build selection as item IDs.
+		std::vector<int> sel_ids;
+		for (const auto& sel : view.selectionItems)
+			sel_ids.push_back(sel.value("id", 0));
+
+		itemlistbox::render("##ItemListbox", item_entries,
+			view.userInputFilterItems, sel_ids, false, true,
+			view.config.value("regexFilters", false),
+			"item",
+			itemlistbox_items_state,
+			[&](const std::vector<int>& new_sel) {
+				view.selectionItems.clear();
+				for (int id : new_sel) {
+					for (const auto& j : view.listfileItems) {
+						if (j.value("id", 0) == id) {
+							view.selectionItems.push_back(j);
+							break;
+						}
+					}
+				}
+			},
+			[&](const itemlistbox::ItemEntry& item) {
+				// @equip — find matching json and call equip_item
+				for (const auto& j : view.listfileItems) {
+					if (j.value("id", 0) == item.id) {
+						equip_item(j);
+						break;
+					}
+				}
+			},
+			[&](const itemlistbox::ItemEntry& item) {
+				// @options — set context menu node
+				for (const auto& j : view.listfileItems) {
+					if (j.value("id", 0) == item.id) {
+						view.contextMenus.nodeItem = j;
+						break;
+					}
+				}
+			});
+	}
 	ImGui::EndChild();
 
 	ImGui::SameLine();

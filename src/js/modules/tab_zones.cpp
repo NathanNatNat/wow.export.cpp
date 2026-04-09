@@ -20,6 +20,7 @@ License: MIT
 #include "../install-type.h"
 #include "../modules.h"
 #include "../components/context-menu.h"
+#include "../components/listbox-zones.h"
 
 #include <cstring>
 #include <format>
@@ -177,6 +178,7 @@ static std::string prev_selection_first;
 static bool prev_show_zone_base_map = true;
 static bool prev_show_zone_overlays = true;
 static context_menu::ContextMenuState context_menu_zone_state;
+static listbox_zones::ListboxZonesState listbox_zones_state;
 
 // --- Internal functions ---
 
@@ -788,8 +790,46 @@ ImGui::NewLine();
 // Zone listbox.
 // JS: <component :is="$components.ListboxZones" ... >
 ImGui::BeginChild("zones-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.4f, -ImGui::GetFrameHeightWithSpacing() * 3), ImGuiChildFlags_Borders);
-// TODO(conversion): ListboxZones component rendering will be wired when integration is complete.
-ImGui::Text("Zones: %zu", view.zoneViewerZones.size());
+{
+	// Convert json items to string array.
+	std::vector<std::string> zone_strings;
+	zone_strings.reserve(view.zoneViewerZones.size());
+	for (const auto& z : view.zoneViewerZones)
+		zone_strings.push_back(z.get<std::string>());
+
+	// Build selection as string array.
+	std::vector<std::string> sel_strings;
+	for (const auto& s : view.selectionZones)
+		sel_strings.push_back(s.get<std::string>());
+
+	listbox_zones::render("##ZoneListbox", zone_strings,
+		view.userInputFilterZones, sel_strings,
+		false,   // single
+		true,    // keyinput
+		view.config.value("regexFilters", false),
+		listbox::CopyMode::Full,
+		false,   // pasteselection
+		false,   // copytrimwhitespace
+		"zone",  // unittype
+		nullptr, // overrideItems
+		false,   // disable
+		"zones", // persistscrollkey
+		{},      // quickfilters
+		false,   // nocopy
+		view.selectedZoneExpansionFilter,
+		listbox_zones_state,
+		[&](const std::vector<std::string>& new_sel) {
+			view.selectionZones.clear();
+			for (const auto& s : new_sel)
+				view.selectionZones.push_back(s);
+		},
+		[&](const listbox::ContextMenuEvent& ev) {
+			nlohmann::json node;
+			node["selection"] = ev.selection;
+			node["count"] = static_cast<int>(ev.selection.size());
+			view.contextMenus.nodeZone = node;
+		});
+}
 ImGui::EndChild();
 
 // Context menu.

@@ -13,6 +13,7 @@
 #include "../wow/EquipmentSlots.h"
 #include "../install-type.h"
 #include "../modules.h"
+#include "../components/itemlistbox.h"
 
 #include <cstring>
 #include <algorithm>
@@ -84,6 +85,7 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 static std::vector<ItemSet> item_sets;
 
 static bool is_initialized = false;
+static itemlistbox::ItemListboxState itemlistbox_item_sets_state;
 
 // --- Internal functions ---
 
@@ -279,44 +281,52 @@ void render() {
 	//          :keyinput="true" :includefilecount="true" unittype="set" @equip="equip_set">
 	ImGui::BeginChild("item-sets-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
 
-	// TODO(conversion): Itemlistbox component rendering will be wired when integration is complete.
-	// For now, render a simple selectable list with equip action.
-	ImGui::Text("Item Sets: %zu", view.listfileItemSets.size());
-
-	if (ImGui::BeginChild("item-sets-scroll", ImVec2(0, 0))) {
-		for (size_t i = 0; i < view.listfileItemSets.size(); ++i) {
-			const auto& item = view.listfileItemSets[i];
-			std::string display = item.value("displayName", std::string("Unknown"));
-
-			// Apply user filter
-			if (!view.userInputFilterItemSets.empty()) {
-				std::string lower_display = display;
-				std::string lower_filter = view.userInputFilterItemSets;
-				std::transform(lower_display.begin(), lower_display.end(), lower_display.begin(), ::tolower);
-				std::transform(lower_filter.begin(), lower_filter.end(), lower_filter.begin(), ::tolower);
-				if (lower_display.find(lower_filter) == std::string::npos)
-					continue;
-			}
-
-			bool selected = false;
-			for (const auto& sel : view.selectionItemSets) {
-				if (sel.value("id", 0u) == item.value("id", 0u)) {
-					selected = true;
-					break;
-				}
-			}
-
-			if (ImGui::Selectable(display.c_str(), selected)) {
-				view.selectionItemSets.clear();
-				view.selectionItemSets.push_back(item);
-			}
-
-			// JS: @equip="equip_set" — double-click to equip
-			if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0))
-				equip_set(item);
+	{
+		// Convert json items to ItemEntry array.
+		std::vector<itemlistbox::ItemEntry> item_entries;
+		item_entries.reserve(view.listfileItemSets.size());
+		for (const auto& j : view.listfileItemSets) {
+			itemlistbox::ItemEntry entry;
+			entry.id = j.value("id", 0);
+			entry.name = j.value("name", std::string(""));
+			entry.displayName = j.value("displayName", std::string(""));
+			entry.icon = j.value("icon", 0u);
+			entry.quality = j.value("quality", 0);
+			item_entries.push_back(std::move(entry));
 		}
+
+		// Build selection as item IDs.
+		std::vector<int> sel_ids;
+		for (const auto& sel : view.selectionItemSets)
+			sel_ids.push_back(sel.value("id", 0));
+
+		itemlistbox::render("##ItemSetListbox", item_entries,
+			view.userInputFilterItemSets, sel_ids, false, true,
+			view.config.value("regexFilters", false),
+			"set",
+			itemlistbox_item_sets_state,
+			[&](const std::vector<int>& new_sel) {
+				view.selectionItemSets.clear();
+				for (int id : new_sel) {
+					for (const auto& j : view.listfileItemSets) {
+						if (j.value("id", 0) == id) {
+							view.selectionItemSets.push_back(j);
+							break;
+						}
+					}
+				}
+			},
+			[&](const itemlistbox::ItemEntry& item) {
+				// @equip — find matching json and call equip_set
+				for (const auto& j : view.listfileItemSets) {
+					if (j.value("id", 0) == item.id) {
+						equip_set(j);
+						break;
+					}
+				}
+			},
+			nullptr);  // no @options callback for item sets
 	}
-	ImGui::EndChild(); // item-sets-scroll
 
 	ImGui::EndChild(); // item-sets-list-container
 

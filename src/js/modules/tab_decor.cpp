@@ -26,6 +26,8 @@
 #include "../3D/renderers/M2RendererGL.h"
 #include "../3D/renderers/M3RendererGL.h"
 #include "../3D/renderers/WMORendererGL.h"
+#include "../components/checkboxlist.h"
+#include "../components/menu-button.h"
 
 #include <algorithm>
 #include <cmath>
@@ -101,6 +103,12 @@ static std::unique_ptr<model_viewer_utils::AnimationMethods> anim_methods;
 static bool is_initialized = false;
 
 static listbox::ListboxState listbox_decor_state;
+
+// Component states for CheckboxList and MenuButton.
+static checkboxlist::CheckboxListState checkboxlist_decor_geosets_state;
+static checkboxlist::CheckboxListState checkboxlist_decor_wmo_groups_state;
+static checkboxlist::CheckboxListState checkboxlist_decor_wmo_sets_state;
+static menu_button::MenuButtonState menu_button_decor_state;
 
 // Model viewer GL state/context (replaces Vue <ModelViewerGL :context="decorViewerContext"/>).
 static model_viewer_gl::State viewer_state;
@@ -878,7 +886,12 @@ void render() {
 	}
 
 	// JS: <input type="text" v-model="$core.view.userInputFilterDecor" placeholder="Filter decor..."/>
-	// TODO(conversion): Filter input will use ImGui::InputText when Listbox component is wired.
+	{
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterDecor.c_str(), sizeof(filter_buf) - 1);
+		if (ImGui::InputText("##FilterDecor", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterDecor = filter_buf;
+	}
 
 	ImGui::EndChild();
 
@@ -1109,11 +1122,16 @@ void render() {
 	// JS: <div class="preview-controls">
 	//     <MenuButton :options="menuButtonDecor" :default="config.exportDecorFormat" ... @click="export_decor"/>
 	// </div>
-	// TODO(conversion): MenuButton component rendering will be wired when integration is complete.
-	ImGui::BeginDisabled(view.isBusy > 0);
-	if (ImGui::Button("Export##decor"))
-		export_decor();
-	ImGui::EndDisabled();
+	{
+		std::vector<menu_button::MenuOption> mb_options;
+		for (const auto& opt : view.menuButtonDecor)
+			mb_options.push_back({ opt.label, opt.value });
+		menu_button::render("##MenuButtonDecor", mb_options,
+			view.config.value("exportDecorFormat", std::string("OBJ")),
+			view.isBusy > 0, false, menu_button_decor_state,
+			[&](const std::string& val) { view.config["exportDecorFormat"] = val; },
+			[&]() { export_decor(); });
+	}
 
 	ImGui::EndChild(); // decor-preview-container
 
@@ -1247,13 +1265,7 @@ void render() {
 	if (view.decorViewerActiveType == "m2") {
 		ImGui::SeparatorText("Geosets");
 
-		// TODO(conversion): Checkboxlist component rendering will be wired when integration is complete.
-		for (auto& geoset : view.decorViewerGeosets) {
-			std::string label = geoset.value("label", std::string("Geoset"));
-			bool checked = geoset.value("checked", true);
-			if (ImGui::Checkbox(label.c_str(), &checked))
-				geoset["checked"] = checked;
-		}
+		checkboxlist::render("##DecorGeosets", view.decorViewerGeosets, checkboxlist_decor_geosets_state);
 
 		// JS: <a @click="setAllDecorGeosets(true)">Enable All</a> / <a @click="setAllDecorGeosets(false)">Disable All</a>
 		if (ImGui::SmallButton("Enable All##decor-geo")) {
