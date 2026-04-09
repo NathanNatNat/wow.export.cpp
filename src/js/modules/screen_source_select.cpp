@@ -260,14 +260,12 @@ void open_legacy_install(const std::string& install_path) {
 
 	try {
 		// JS: this.$core.view.mpq = new MPQInstall(install_path);
-		// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-		// core::view->mpq = std::make_unique<mpq::MPQInstall>(install_path);
+		core::view->mpq = std::make_unique<mpq::MPQInstall>(install_path);
 
 		core::showLoadingScreen(2, "Loading Legacy Installation");
 
 		// JS: await this.$core.view.mpq.loadInstall();
-		// TODO(conversion): MPQ loadInstall will be wired when AppState.mpq is integrated.
-		// core::view->mpq->loadInstall();
+		core::view->mpq->loadInstall();
 
 		auto& recent_legacy = core::view->config["recentLegacy"];
 		if (!recent_legacy.is_array())

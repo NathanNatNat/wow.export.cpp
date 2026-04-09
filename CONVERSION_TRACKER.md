@@ -354,12 +354,12 @@ Wire `casc->getFile()`, `getFileByName()`, and related calls across all modules.
 Wire `MPQInstall` file access across legacy modules and renderers.
 
 ### 3.1 MPQ Source in Legacy Tab Modules
-- [ ] `legacy_tab_audio.cpp` — MPQ source, listfileSounds (5 TODOs)
-- [ ] `legacy_tab_data.cpp` — MPQ source, file scanning, build_id (6 TODOs)
-- [ ] `legacy_tab_files.cpp` — MPQ source (2 TODOs)
-- [ ] `legacy_tab_fonts.cpp` — MPQ source (3 TODOs)
-- [ ] `legacy_tab_textures.cpp` — MPQ source, BLP/PNG preview (5 TODOs)
-- [ ] `screen_source_select.cpp` — MPQ loadInstall, source wiring (2 TODOs)
+- [x] `legacy_tab_audio.cpp` — MPQ source, listfileSounds (5 TODOs)
+- [x] `legacy_tab_data.cpp` — MPQ source, file scanning, build_id (6 TODOs)
+- [x] `legacy_tab_files.cpp` — MPQ source (2 TODOs)
+- [x] `legacy_tab_fonts.cpp` — MPQ source (3 TODOs)
+- [x] `legacy_tab_textures.cpp` — MPQ source, BLP/PNG preview (5 TODOs)
+- [x] `screen_source_select.cpp` — MPQ loadInstall, source wiring (2 TODOs)
 
 ### 3.2 MPQ in Legacy Renderers
 - [ ] `M2LegacyRendererGL.cpp` — MPQ texture loading (3 TODOs)

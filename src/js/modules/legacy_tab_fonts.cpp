@@ -56,10 +56,8 @@ static void* load_font(const std::string& file_name) {
 
 	try {
 		// JS: const data = core.view.mpq.getFile(file_name);
-		// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-		// mpq::MPQInstall* mpq = core::view->mpq;
-		// auto data = mpq ? mpq->getFile(file_name) : std::nullopt;
-		std::optional<std::vector<uint8_t>> data = std::nullopt;
+		mpq::MPQInstall* mpq = core::view->mpq.get();
+		std::optional<std::vector<uint8_t>> data = mpq ? mpq->getFile(file_name) : std::nullopt;
 
 		if (!data) {
 			logging::write(std::format("failed to load legacy font: {}", file_name));
@@ -100,11 +98,12 @@ static void load_font_list() {
 
 	try {
 		// JS: core.view.listfileFonts = core.view.mpq.getFilesByExtension('.ttf');
-		// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-		// mpq::MPQInstall* mpq = core::view->mpq;
-		// if (!mpq) return;
-		// auto ttf_files = mpq->getFilesByExtension(".ttf");
-		// for (auto& f : ttf_files) view.listfileFonts.push_back(std::move(f));
+		mpq::MPQInstall* mpq = core::view->mpq.get();
+		if (!mpq) return;
+		auto ttf_files = mpq->getFilesByExtension(".ttf");
+		view.listfileFonts.clear();
+		view.listfileFonts.reserve(ttf_files.size());
+		for (auto& f : ttf_files) view.listfileFonts.push_back(std::move(f));
 	} catch (const std::exception& e) {
 		logging::write(std::format("failed to load legacy fonts: {}", e.what()));
 	}
@@ -266,10 +265,8 @@ void export_fonts() {
 			const fs::path export_path = fs::path(export_dir) / file_name;
 
 			// JS: const data = this.$core.view.mpq.getFile(file_name);
-			// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-			// mpq::MPQInstall* mpq = core::view->mpq;
-			// auto data = mpq ? mpq->getFile(file_name) : std::nullopt;
-			std::optional<std::vector<uint8_t>> data = std::nullopt;
+			mpq::MPQInstall* mpq = core::view->mpq.get();
+			std::optional<std::vector<uint8_t>> data = mpq ? mpq->getFile(file_name) : std::nullopt;
 
 			if (data) {
 				// JS: await fsp.mkdir(path.dirname(export_path), { recursive: true });

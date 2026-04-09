@@ -62,14 +62,11 @@ static void initialize_dbc_listfile() {
 		return;
 
 	// JS: const mpq = core.view.mpq;
-	// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-	// mpq::MPQInstall* mpq = core::view->mpq;
-	// if (!mpq) return;
+	mpq::MPQInstall* mpq = core::view->mpq.get();
+	if (!mpq) return;
 
 	// JS: const all_dbc_files = mpq.getFilesByExtension(DBC_EXTENSION);
-	// TODO(conversion): MPQ file scanning will be wired when integration is complete.
-	// auto all_dbc_files = mpq->getFilesByExtension(DBC_EXTENSION);
-	std::vector<std::string> all_dbc_files;
+	auto all_dbc_files = mpq->getFilesByExtension(DBC_EXTENSION);
 
 	dbc_path_map.clear();
 	std::set<std::string> table_names;
@@ -105,8 +102,7 @@ static void load_table(const std::string& table_name) {
 
 	try {
 		// JS: const mpq = core.view.mpq;
-		// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-		// mpq::MPQInstall* mpq = core::view->mpq;
+		mpq::MPQInstall* mpq = core::view->mpq.get();
 
 		// JS: const full_path = dbc_path_map.get(table_name);
 		auto it = dbc_path_map.find(table_name);
@@ -117,9 +113,7 @@ static void load_table(const std::string& table_name) {
 		const std::string& full_path = it->second;
 
 		// JS: let raw_data = mpq.getFile(full_path);
-		// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-		// auto raw_data = mpq ? mpq->getFile(full_path) : std::nullopt;
-		std::optional<std::vector<uint8_t>> raw_data = std::nullopt;
+		auto raw_data = mpq ? mpq->getFile(full_path) : std::nullopt;
 
 		if (!raw_data) {
 			core::setToast("error", std::format("Unable to load DBC file: {}", full_path), {}, -1);
@@ -131,9 +125,7 @@ static void load_table(const std::string& table_name) {
 
 		// JS: const build_id = get_build_version(core);
 		// JS: return core.view.mpq?.build_id ?? '1.12.1.5875';
-		// TODO(conversion): MPQ source will provide build_id when wired.
-		// std::string build_id = mpq ? mpq->build_id : "1.12.1.5875";
-		std::string build_id = "1.12.1.5875";
+		std::string build_id = mpq ? mpq->build_id : "1.12.1.5875";
 
 		// JS: const dbc_reader = new DBCReader(table_name + '.dbc', build_id);
 		db::DBCReader dbc_reader(table_name + ".dbc", build_id);
@@ -253,10 +245,8 @@ static void load_table(const std::string& table_name) {
 // JS: const get_build_version = (core) => { ... }
 static std::string get_build_version() {
 	// JS: return core.view.mpq?.build_id ?? '1.12.1.5875';
-	// TODO(conversion): MPQ source will provide build_id when wired.
-	// mpq::MPQInstall* mpq = core::view->mpq;
-	// return mpq ? mpq->build_id : "1.12.1.5875";
-	return "1.12.1.5875";
+	mpq::MPQInstall* mpq = core::view->mpq.get();
+	return mpq ? mpq->build_id : "1.12.1.5875";
 }
 
 // --- Public API ---
@@ -545,9 +535,8 @@ static void export_dbc() {
 	}
 
 	// JS: await dataExporter.exportRawDBC(selected_file, selected_file_path, this.$core.view.mpq);
-	// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-	// mpq::MPQInstall* mpq = core::view->mpq;
-	data_exporter::exportRawDBC(selected_file, selected_file_path, nullptr);
+	mpq::MPQInstall* mpq = core::view->mpq.get();
+	data_exporter::exportRawDBC(selected_file, selected_file_path, mpq);
 }
 
 void export_data() {

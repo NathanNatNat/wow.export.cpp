@@ -40,11 +40,12 @@ static void load_files() {
 	try {
 		// JS: const files = core.view.mpq.getAllFiles();
 		// JS: core.view.listfileRaw = files;
-		// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-		// mpq::MPQInstall* mpq = core::view->mpq;
-		// if (!mpq) return;
-		// auto files = mpq->getAllFiles();
-		// for (auto& f : files) view.listfileRaw.push_back(std::move(f));
+		mpq::MPQInstall* mpq = core::view->mpq.get();
+		if (!mpq) return;
+		auto files = mpq->getAllFiles();
+		view.listfileRaw.clear();
+		view.listfileRaw.reserve(files.size());
+		for (auto& f : files) view.listfileRaw.push_back(std::move(f));
 
 		files_loaded = true;
 	} catch (const std::exception& e) {
@@ -69,10 +70,8 @@ static void export_files() {
 			const std::string display_path = sel_entry.get<std::string>();
 
 			// JS: const data = core.view.mpq.getFile(display_path);
-			// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-			// mpq::MPQInstall* mpq = core::view->mpq;
-			// auto data = mpq ? mpq->getFile(display_path) : std::nullopt;
-			std::optional<std::vector<uint8_t>> data = std::nullopt;
+			mpq::MPQInstall* mpq = core::view->mpq.get();
+			std::optional<std::vector<uint8_t>> data = mpq ? mpq->getFile(display_path) : std::nullopt;
 
 			if (!data) {
 				logging::write(std::format("failed to read file: {}", display_path));

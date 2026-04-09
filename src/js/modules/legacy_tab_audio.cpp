@@ -83,10 +83,8 @@ static bool load_track() {
 
 	try {
 		// JS: const raw_data = core.view.mpq.getFile(selected_file);
-		// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-		// mpq::MPQInstall* mpq = core::view->mpq;
-		// auto raw_data = mpq ? mpq->getFile(selected_file) : std::nullopt;
-		std::optional<std::vector<uint8_t>> raw_data = std::nullopt;
+		mpq::MPQInstall* mpq = core::view->mpq.get();
+		std::optional<std::vector<uint8_t>> raw_data = mpq ? mpq->getFile(selected_file) : std::nullopt;
 
 		if (!raw_data) {
 			logging::write(std::format("Failed to load audio: {}", selected_file));
@@ -186,20 +184,20 @@ static void load_sound_list() {
 		// JS: const wav_files = core.view.mpq.getFilesByExtension('.wav');
 		// JS: const mp3_files = core.view.mpq.getFilesByExtension('.mp3');
 		// JS: const wav__files = core.view.mpq.getFilesByExtension('.wav_');
-		// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-		// mpq::MPQInstall* mpq = core::view->mpq;
-		// if (!mpq) return;
-		// auto ogg_files = mpq->getFilesByExtension(".ogg");
-		// auto wav_files = mpq->getFilesByExtension(".wav");
-		// auto mp3_files = mpq->getFilesByExtension(".mp3");
-		// auto wav__files = mpq->getFilesByExtension(".wav_");
+		mpq::MPQInstall* mpq = core::view->mpq.get();
+		if (!mpq) return;
+		auto ogg_files = mpq->getFilesByExtension(".ogg");
+		auto wav_files = mpq->getFilesByExtension(".wav");
+		auto mp3_files = mpq->getFilesByExtension(".mp3");
+		auto wav__files = mpq->getFilesByExtension(".wav_");
 
 		// JS: core.view.listfileSounds = [...ogg_files, ...wav_files, ...mp3_files, ...wav__files];
-		// TODO(conversion): Populate listfileSounds when MPQ is wired.
-		// for (auto& f : ogg_files) view.listfileSounds.push_back(std::move(f));
-		// for (auto& f : wav_files) view.listfileSounds.push_back(std::move(f));
-		// for (auto& f : mp3_files) view.listfileSounds.push_back(std::move(f));
-		// for (auto& f : wav__files) view.listfileSounds.push_back(std::move(f));
+		view.listfileSounds.clear();
+		view.listfileSounds.reserve(ogg_files.size() + wav_files.size() + mp3_files.size() + wav__files.size());
+		for (auto& f : ogg_files) view.listfileSounds.push_back(std::move(f));
+		for (auto& f : wav_files) view.listfileSounds.push_back(std::move(f));
+		for (auto& f : mp3_files) view.listfileSounds.push_back(std::move(f));
+		for (auto& f : wav__files) view.listfileSounds.push_back(std::move(f));
 	} catch (const std::exception& e) {
 		logging::write(std::format("failed to load legacy sounds: {}", e.what()));
 	}
@@ -217,6 +215,7 @@ static void export_sounds() {
 	casc::ExportHelper helper(static_cast<int>(user_selection.size()), "sound files");
 	helper.start();
 
+	mpq::MPQInstall* mpq = core::view->mpq.get();
 	const bool overwrite_files = view.config.value("overwriteFiles", false);
 	for (const auto& sel_entry : user_selection) {
 		if (helper.isCancelled())
@@ -236,10 +235,7 @@ static void export_sounds() {
 				export_file_name = file_name.substr(0, file_name.size() - 1);
 			} else {
 				// JS: const raw_data = core.view.mpq.getFile(file_name);
-				// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-				// mpq::MPQInstall* mpq = core::view->mpq;
-				// auto raw_data = mpq ? mpq->getFile(file_name) : std::nullopt;
-				std::optional<std::vector<uint8_t>> raw_data = std::nullopt;
+				std::optional<std::vector<uint8_t>> raw_data = mpq ? mpq->getFile(file_name) : std::nullopt;
 
 				if (raw_data) {
 					// JS: const file_type = detectFileType(wrapped);
@@ -256,9 +252,7 @@ static void export_sounds() {
 			const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
 			if (overwrite_files || !generics::fileExists(export_path)) {
 				// JS: const raw_data = core.view.mpq.getFile(file_name);
-				// TODO(conversion): MPQ source will be wired when AppState.mpq is integrated.
-				// auto raw_data2 = mpq ? mpq->getFile(file_name) : std::nullopt;
-				std::optional<std::vector<uint8_t>> raw_data2 = std::nullopt;
+				auto raw_data2 = mpq ? mpq->getFile(file_name) : std::nullopt;
 				if (!raw_data2)
 					throw std::runtime_error("Failed to read file from MPQ");
 
