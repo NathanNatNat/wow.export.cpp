@@ -387,9 +387,9 @@ and MPQ texture loading in legacy renderers. Legacy renderers depend on
 MPQ source (Phase 3.1, done) and legacy loaders (Phase 3.2, pending).
 
 ### 4.1 MPQ in Legacy Renderers
-- [ ] `M2LegacyRendererGL.cpp` — MPQ texture loading (3 TODOs)
-- [ ] `MDXRendererGL.cpp` — MPQ texture loading (3 TODOs)
-- [ ] `WMOLegacyRendererGL.cpp` — MPQ texture + doodad loading (4 TODOs)
+- [x] `M2LegacyRendererGL.cpp` — MPQ texture loading (3 TODOs)
+- [x] `MDXRendererGL.cpp` — MPQ texture loading (3 TODOs)
+- [x] `WMOLegacyRendererGL.cpp` — MPQ texture + doodad loading (4 TODOs)
 
 ### 4.2 ModelViewerGL Component
 - [ ] Wire GL context creation and management in `model-viewer-gl.cpp` — canvas/WebGL2 equivalent via GLFW+GLAD (3 TODOs in .cpp/.h)

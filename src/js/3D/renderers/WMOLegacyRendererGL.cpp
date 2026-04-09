@@ -12,6 +12,7 @@
 #include "../../buffer.h"
 
 #include "../../casc/blp.h"
+#include "../../mpq/mpq-install.h"
 #include "../Shaders.h"
 
 // TODO(conversion): textureRibbon is not yet converted; stubbed where referenced.
@@ -140,7 +141,7 @@ void WMOLegacyRendererGL::_load_textures() {
 	const auto& textureNames = wmo->textureNames;
 
 	// JS: const mpq = core.view.mpq;
-	// TODO(conversion): MPQ archive access not yet wired; texture loading from MPQ is stubbed.
+	mpq::MPQInstall* mpq = core::view->mpq.get();
 
 	for (size_t i = 0; i < materials.size(); i++) {
 		const auto& material = materials[i];
@@ -168,12 +169,25 @@ void WMOLegacyRendererGL::_load_textures() {
 			// JS: const ribbonSlot = this.useRibbon ? textureRibbon.addSlot() : null;
 			// TODO(conversion): textureRibbon.addSlot/setSlotFile/setSlotSrc not yet wired.
 
-			// JS: const data = mpq.getFile(textureName);
-			// TODO(conversion): MPQ file access not yet wired; skipping texture load.
-			// When MPQ integration is available:
-			//   auto file_data = mpq->getFile(textureName);
-			//   casc::BLPImage blp(BufferWrapper::from(file_data));
-			//   ... create GLTexture from blp ...
+			try {
+				// JS: const data = mpq.getFile(textureName);
+				if (!mpq)
+					continue;
+
+				auto file_data = mpq->getFile(textureName);
+				if (file_data.has_value()) {
+					casc::BLPImage blp(BufferWrapper(std::move(file_data.value())));
+					auto gl_tex = std::make_unique<gl::GLTexture>(ctx);
+					gl::BLPTextureFlags blp_flags;
+					blp_flags.flags = material.flags;
+					gl_tex->set_blp(blp, blp_flags);
+					textures[textureName] = std::move(gl_tex);
+
+					// JS: if (ribbonSlot !== null) textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
+				}
+			} catch (const std::exception& e) {
+				logging::write(std::format("Failed to load legacy WMO texture {}: {}", textureName, e.what()));
+			}
 		}
 	}
 }
@@ -334,9 +348,7 @@ void WMOLegacyRendererGL::loadDoodadSet(uint32_t index) {
 	WMOLegacyDoodadSet doodadSetData;
 
 	// JS: const mpq = core.view.mpq;
-	// TODO(conversion): MPQ archive access not yet wired; doodad loading from MPQ is stubbed.
-	// When MPQ integration is available:
-	//   for each doodad: load from mpq->getFile(doodadName), check MD20 magic, create M2LegacyRendererGL
+	mpq::MPQInstall* mpq = core::view->mpq.get();
 
 	for (uint32_t i = 0; i < count; i++) {
 		if (firstIndex + i >= wmo->doodads.size())
@@ -361,18 +373,20 @@ void WMOLegacyRendererGL::loadDoodadSet(uint32_t index) {
 				renderer = rendIt->second.get();
 			} else {
 				// JS: const fileData = mpq.getFile(doodadName);
-				// TODO(conversion): MPQ file access not yet wired; skipping doodad load.
-				// When MPQ integration is available:
-				//   auto fileData = mpq->getFile(doodadName);
-				//   auto data = BufferWrapper(...);
-				//   uint32_t magic = data.readUInt32LE();
-				//   data.seek(0);
-				//   if (magic == 0x3032444D) { // 'MD20'
-				//       auto r = std::make_unique<M2LegacyRendererGL>(data, ctx, false, false);
-				//       r->load();
-				//       renderer = r.get();
-				//       m2_renderers[doodadName] = std::move(r);
-				//   }
+				if (mpq) {
+					auto fileData = mpq->getFile(doodadName);
+					if (fileData.has_value()) {
+						auto data = BufferWrapper(std::move(fileData.value()));
+						uint32_t magic = data.readUInt32LE();
+						data.seek(0);
+						if (magic == 0x3032444D) { // 'MD20'
+							auto r = std::make_unique<M2LegacyRendererGL>(data, ctx, false, false);
+							r->load();
+							renderer = r.get();
+							m2_renderers[doodadName] = std::move(r);
+						}
+					}
+				}
 			}
 
 			if (renderer) {
