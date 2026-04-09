@@ -103,6 +103,9 @@ public:
 
 	void dispose();
 
+	// C++ accessors for JS public properties.
+	const std::vector<WMOLegacyGroup>& get_groups() const { return groups; }
+
 	// Public state (matches JS properties)
 	std::unique_ptr<WMOLegacyLoader> wmo;
 	gl::ShaderProgram* shader = nullptr;

@@ -440,7 +440,7 @@ The legacy model tab depends on MPQ renderers (Phase 4.1) and loaders
 (Phase 3.2), so it belongs here in the UI phase.
 
 ### 5.1 MPQ in Legacy Model Tab
-- [ ] `tab_models_legacy.cpp` — MPQ source, creature data, file loading (6 TODOs)
+- [x] `tab_models_legacy.cpp` — MPQ source, creature data, file loading (6 TODOs)
 
 ### 5.2 Listbox & ContextMenu
 - [ ] Wire in `tab_audio.cpp`, `tab_raw.cpp`, `tab_text.cpp`, `tab_fonts.cpp`, `tab_textures.cpp`, `tab_videos.cpp`, `legacy_tab_audio.cpp`, `legacy_tab_files.cpp`, `legacy_tab_fonts.cpp` (9 TODOs)
@@ -493,7 +493,7 @@ Wire file export, texture encoding, and data export operations.
 - [ ] Wire animation list population from loaded M2 data — `tab_characters.cpp` (1 TODO)
 - [ ] Wire `detect_model_type(data)` fallback — `tab_models.cpp` (1 TODO)
 - [ ] Wire loaded data for model preview — `tab_models.cpp` (1 TODO)
-- [ ] Wire group/set mask conversion from JSON to typed vectors — `tab_models_legacy.cpp` (1 TODO)
+- [x] Wire group/set mask conversion from JSON to typed vectors — `tab_models_legacy.cpp` (1 TODO)
 
 ---
 

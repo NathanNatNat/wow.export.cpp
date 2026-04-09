@@ -129,17 +129,10 @@ static void preview_model(const std::string& file_name) {
 		}
 
 		// JS: const mpq = core.view.mpq;
-		// TODO(conversion): MPQ source will be wired when integration is complete.
-		// mpq::MPQInstall* mpq = view.mpq;
+		mpq::MPQInstall* mpq = view.mpq.get();
 
 		// JS: const file_data = mpq.getFile(file_name);
 		// JS: if (!file_data) throw new Error('File not found in MPQ: ' + file_name);
-		// TODO(conversion): MPQ file loading will be wired when integration is complete.
-		core::setToast("info", std::format("MPQ integration pending — cannot preview {} yet.", file_name), {}, 4000);
-		logging::write(std::format("MPQ not yet integrated — skipping preview for {}", file_name));
-
-		// The following code is the complete conversion and will work once MPQ is wired:
-		/*
 		auto file_data_opt = mpq->getFile(file_name);
 		if (!file_data_opt.has_value())
 			throw std::runtime_error("File not found in MPQ: " + file_name);
@@ -311,11 +304,11 @@ static void preview_model(const std::string& file_name) {
 		// JS: const has_content = active_renderer.draw_calls?.length > 0 || active_renderer.groups?.length > 0;
 		bool has_content = false;
 		if (active_renderer_m2)
-			has_content = !active_renderer_m2->draw_calls.empty();
+			has_content = !active_renderer_m2->get_draw_calls().empty();
 		else if (active_renderer_mdx)
-			has_content = !active_renderer_mdx->draw_calls.empty();
+			has_content = !active_renderer_mdx->get_draw_calls().empty();
 		else if (active_renderer_wmo)
-			has_content = !active_renderer_wmo->groups.empty();
+			has_content = !active_renderer_wmo->get_groups().empty();
 
 		if (!has_content) {
 			// JS: core.setToast('info', util.format('The model %s doesn\'t have any 3D data associated with it.', file_name), null, 4000);
@@ -327,7 +320,6 @@ static void preview_model(const std::string& file_name) {
 			if (view.legacyModelViewerAutoAdjust && viewer_context.fitCamera)
 				viewer_context.fitCamera();
 		}
-		*/
 	} catch (const std::exception& e) {
 		// JS: core.setToast('error', 'Unable to preview model ' + file_name, ...);
 		core::setToast("error", "Unable to preview model " + file_name, {}, -1);
@@ -481,12 +473,11 @@ void mounted() {
 
 		// JS: const mpq = this.$core.view.mpq;
 		// JS: const all_files = mpq.getAllFiles();
-		// TODO(conversion): MPQ source will be wired when integration is complete.
-		// const auto all_files = mpq->getAllFiles();
+		mpq::MPQInstall* mpq = view.mpq.get();
+		const auto all_files = mpq->getAllFiles();
 
 		// JS: const model_files = all_files.filter(f => { ... });
 		// Filters: .m2, .mdx, .wmo (excluding WMO group files via LISTFILE_MODEL_FILTER)
-		/*
 		std::vector<std::string> model_files;
 		for (const auto& f : all_files) {
 			std::string lower = f;
@@ -506,14 +497,11 @@ void mounted() {
 		view.listfileLegacyModels.clear();
 		for (const auto& f : model_files)
 			view.listfileLegacyModels.push_back(f);
-		*/
 
 		// JS: await this.$core.progressLoadingScreen('Loading creature skin data...');
 		core::progressLoadingScreen("Loading creature skin data...");
 
 		// JS: await DBCreaturesLegacy.initializeCreatureData(mpq, mpq.build_id);
-		// TODO(conversion): MPQ creature data loading will be wired when integration is complete.
-		/*
 		db::caches::DBCreaturesLegacy::initializeCreatureData(
 			[mpq](const std::string& path) -> std::vector<uint8_t> {
 				auto data = mpq->getFile(path);
@@ -521,7 +509,6 @@ void mounted() {
 			},
 			mpq->build_id
 		);
-		*/
 
 		// JS: await this.$core.progressLoadingScreen('Initializing 3D preview...');
 		core::progressLoadingScreen("Initializing 3D preview...");
@@ -629,7 +616,7 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 		}
 	} else if (format == "OBJ" || format == "STL" || format == "RAW") {
 		// JS: const mpq = core.view.mpq;
-		// TODO(conversion): MPQ source will be wired when integration is complete.
+		mpq::MPQInstall* mpq = view.mpq.get();
 
 		// JS: const helper = new ExportHelper(files.length, 'model');
 		casc::ExportHelper helper(static_cast<int>(files.size()), "model");
@@ -651,15 +638,11 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 			else
 				continue;
 
-			std::vector<nlohmann::json> file_manifest;
+			std::vector<FileManifestEntry> file_manifest;
 
 			try {
 				// JS: const file_data = mpq.getFile(file_name);
 				// JS: if (!file_data) throw new Error('File not found in MPQ');
-				// TODO(conversion): MPQ file loading will be wired when integration is complete.
-				throw std::runtime_error("MPQ integration pending");
-
-				/*
 				auto file_data_opt = mpq->getFile(file_name);
 				if (!file_data_opt.has_value())
 					throw std::runtime_error("File not found in MPQ");
@@ -676,13 +659,30 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 
 				if (file_name_lower.ends_with(".wmo")) {
 					// JS: const exporter = new WMOLegacyExporter(data, file_name, mpq);
-					WMOLegacyExporter exporter(std::move(data), file_name, mpq_archive);
+					WMOLegacyExporter exporter(std::move(data), file_name, mpq);
 
 					// JS: if (file_name === active_path) { exporter.setGroupMask(...); exporter.setDoodadSetMask(...); }
 					if (file_name == active_path) {
-						// TODO(conversion): Group/set mask conversion from JSON to typed vectors
-						// exporter.setGroupMask(view.modelViewerWMOGroups);
-						// exporter.setDoodadSetMask(view.modelViewerWMOSets);
+						// Convert JSON group/set masks to typed vectors.
+						{
+							std::vector<WMOGroupMaskEntry> group_mask;
+							for (const auto& entry : view.modelViewerWMOGroups) {
+								WMOGroupMaskEntry e;
+								e.checked = entry.value("checked", false);
+								e.groupIndex = entry.value("groupIndex", 0u);
+								group_mask.push_back(e);
+							}
+							exporter.setGroupMask(group_mask);
+						}
+						{
+							std::vector<WMODoodadSetMaskEntry> set_mask;
+							for (const auto& entry : view.modelViewerWMOSets) {
+								WMODoodadSetMaskEntry e;
+								e.checked = entry.value("checked", false);
+								set_mask.push_back(e);
+							}
+							exporter.setDoodadSetMask(set_mask);
+						}
 					}
 
 					if (format == "OBJ") {
@@ -699,7 +699,7 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 					}
 				} else if (file_name_lower.ends_with(".m2")) {
 					// JS: const exporter = new M2LegacyExporter(data, file_name, mpq);
-					M2LegacyExporter exporter(std::move(data), file_name, mpq_archive);
+					M2LegacyExporter exporter(std::move(data), file_name, mpq);
 
 					// JS: if (file_name === active_path) { ... }
 					if (file_name == active_path) {
@@ -712,7 +712,16 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 								exporter.setSkinTextures(it->second.textures);
 						}
 
-						// exporter.setGeosetMask(view.modelViewerGeosets);
+						// Convert JSON geoset mask to typed vector.
+						{
+							std::vector<GeosetMaskEntry> geo_mask;
+							for (const auto& entry : view.modelViewerGeosets) {
+								GeosetMaskEntry e;
+								e.checked = entry.value("checked", false);
+								geo_mask.push_back(e);
+							}
+							exporter.setGeosetMask(geo_mask);
+						}
 					}
 
 					if (format == "OBJ") {
@@ -731,14 +740,18 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 					// JS: // mdx or unknown - just export raw file
 					// JS: await data.writeToFile(export_path);
 					data.writeToFile(export_path);
-					file_manifest.push_back({ {"type", "RAW"}, {"file", export_path} });
+					file_manifest.push_back({ "RAW", export_path });
 					if (export_paths) export_paths->writeLine("RAW:" + export_path);
 				}
-				*/
 
 				// JS: helper.mark(file_name, true);
 				helper.mark(file_name, true);
-				manifest["succeeded"].push_back({ {"file", file_name}, {"files", file_manifest} });
+
+				// Convert FileManifestEntry vector to JSON for the manifest.
+				nlohmann::json files_json = nlohmann::json::array();
+				for (const auto& entry : file_manifest)
+					files_json.push_back({ {"type", entry.type}, {"file", entry.file.string()} });
+				manifest["succeeded"].push_back({ {"file", file_name}, {"files", files_json} });
 			} catch (const std::exception& e) {
 				// JS: helper.mark(file_name, false, e.message, e.stack);
 				helper.mark(file_name, false, e.what());

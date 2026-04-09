@@ -23,7 +23,7 @@ namespace casc {
 }
 
 namespace mpq {
-	class MPQArchive;
+	class MPQInstall;
 }
 
 struct FileManifestEntry;
@@ -62,7 +62,7 @@ struct WMOTextureExportResult {
 
 class WMOLegacyExporter {
 public:
-	WMOLegacyExporter(BufferWrapper data, const std::string& filePath, mpq::MPQArchive* mpq);
+	WMOLegacyExporter(BufferWrapper data, const std::string& filePath, mpq::MPQInstall* mpq);
 
 	void setGroupMask(const std::vector<WMOGroupMaskEntry>& mask);
 	void setDoodadSetMask(const std::vector<WMODoodadSetMaskEntry>& mask);
@@ -96,7 +96,7 @@ public:
 private:
 	BufferWrapper data;
 	std::string filePath;
-	mpq::MPQArchive* mpq;
+	mpq::MPQInstall* mpq;
 	std::unique_ptr<WMOLegacyLoader> wmo;
 	std::vector<WMOGroupMaskEntry> groupMask;
 	std::vector<WMODoodadSetMaskEntry> doodadSetMask;

@@ -23,7 +23,7 @@
 #include "../../buffer.h"
 #include "../../casc/blp.h"
 #include "../../casc/export-helper.h"
-#include "../../mpq/mpq.h"
+#include "../../mpq/mpq-install.h"
 #include "../loaders/M2LegacyLoader.h"
 #include "../loaders/WMOLegacyLoader.h"
 #include "../Texture.h"
@@ -46,7 +46,7 @@ std::string toLower(const std::string& s) {
 
 } // anonymous namespace
 
-WMOLegacyExporter::WMOLegacyExporter(BufferWrapper data, const std::string& filePath, mpq::MPQArchive* mpq)
+WMOLegacyExporter::WMOLegacyExporter(BufferWrapper data, const std::string& filePath, mpq::MPQInstall* mpq)
 	: data(std::move(data))
 	, filePath(filePath)
 	, mpq(mpq)
@@ -114,7 +114,7 @@ WMOTextureExportResult WMOLegacyExporter::exportTextures(
 			const std::string& texturePath = texNameIt->second;
 
 			try {
-				auto textureData = mpq->extractFile(texturePath);
+				auto textureData = mpq->getFile(texturePath);
 				if (!textureData) {
 					logging::write(std::format("Texture not found in MPQ: {}", texturePath));
 					continue;
@@ -364,7 +364,7 @@ void WMOLegacyExporter::exportAsOBJ(
 						m2Path = casc::ExportHelper::replaceFile(out.string(), objFileName);
 
 					if (doodadCache.find(toLower(fileName)) == doodadCache.end()) {
-						auto m2Data = mpq->extractFile(fileName);
+						auto m2Data = mpq->getFile(fileName);
 						if (m2Data) {
 							auto buf = BufferWrapper::from(std::span<const uint8_t>(m2Data.value()));
 							M2LegacyExporter m2Export(std::move(buf), prefixedFileName, mpq);
@@ -660,7 +660,7 @@ void WMOLegacyExporter::exportRaw(
 			exportedTextures.insert(toLower(texturePath));
 
 			try {
-				auto textureData = mpq->extractFile(texturePath);
+				auto textureData = mpq->getFile(texturePath);
 				if (!textureData) {
 					logging::write(std::format("Texture not found in MPQ: {}", texturePath));
 					continue;
@@ -708,7 +708,7 @@ void WMOLegacyExporter::exportRaw(
 				groupFileName = groupFileName.substr(0, wmoPos) + "_" + oss.str() + ".wmo";
 
 			try {
-				auto groupData = mpq->extractFile(groupFileName);
+				auto groupData = mpq->getFile(groupFileName);
 				if (!groupData) {
 					logging::write(std::format("WMO group file not found: {}", groupFileName));
 					continue;
