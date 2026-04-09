@@ -520,11 +520,17 @@ static void export_sql() {
 	const bool create_table = view.config.value("dataSQLCreateTable", false);
 
 	// JS: await dataExporter.exportDataTableSQL(headers, rows_to_export, selected_file || 'unknown_table', selected_file_schema, create_table);
-	// Note: JS uses DBC schema (map<string, DBCSchemaField>), data_exporter expects map<string, SchemaField>.
-	// TODO(conversion): Schema type conversion will be wired when data-exporter DBC support is complete.
+	// Convert DBC schema (map<string, DBCSchemaField>) to WDC schema (map<string, SchemaField>).
+	std::map<std::string, db::SchemaField> converted_schema;
+	for (const auto& [name, field] : selected_file_schema) {
+		if (field.array_length > 0)
+			converted_schema[name] = std::pair<db::FieldType, int>(field.type, field.array_length);
+		else
+			converted_schema[name] = field.type;
+	}
 	data_exporter::exportDataTableSQL(headers, rows_to_export,
 		selected_file.empty() ? "unknown_table" : selected_file,
-		nullptr, create_table);
+		&converted_schema, create_table);
 }
 
 // JS: methods.export_dbc()

@@ -38,6 +38,8 @@ License: MIT
 #include "../db/caches/DBItemGeosets.h"
 #include "../db/caches/DBItemModels.h"
 #include "../db/caches/DBGuildTabard.h"
+#include "../casc/db2.h"
+#include "../db/WDCReader.h"
 #include "../wow/EquipmentSlots.h"
 
 #include <algorithm>
@@ -1354,8 +1356,35 @@ for (const auto& opt : *available_options)
 available_option_ids.insert(opt.id);
 
 // JS: for (const choice_id of data.customizations) { ... db2.ChrCustomizationChoice.getRow(choice_id) ... }
-// TODO(conversion): ChrCustomizationChoice row lookup requires db2 table access.
-// For now, skip wowhead customization parsing.
+auto& chr_choice_table = casc::db2::getTable("ChrCustomizationChoice");
+if (!chr_choice_table.isLoaded)
+	chr_choice_table.parse();
+
+if (data.contains("customizations") && data["customizations"].is_array()) {
+	for (const auto& choice_id_json : data["customizations"]) {
+		uint32_t choice_id = choice_id_json.get<uint32_t>();
+		auto choice_row_opt = chr_choice_table.getRow(choice_id);
+		if (!choice_row_opt.has_value())
+			continue;
+
+		const auto& choice_row = *choice_row_opt;
+		uint32_t option_id = 0;
+		auto opt_it = choice_row.find("ChrCustomizationOptionID");
+		if (opt_it != choice_row.end()) {
+			if (auto* p = std::get_if<int64_t>(&opt_it->second))
+				option_id = static_cast<uint32_t>(*p);
+			else if (auto* p = std::get_if<uint64_t>(&opt_it->second))
+				option_id = static_cast<uint32_t>(*p);
+		}
+
+		if (available_option_ids.count(option_id)) {
+			customizations.push_back(nlohmann::json{
+				{ "optionID", option_id },
+				{ "choiceID", choice_id }
+			});
+		}
+	}
+}
 
 equipment = data.value("equipment", nlohmann::json::object());
 }

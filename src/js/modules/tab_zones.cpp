@@ -40,6 +40,35 @@ License: MIT
 
 namespace tab_zones {
 
+// Helper to extract uint32_t from a FieldValue.
+static uint32_t fieldToUint32(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
+	return 0;
+}
+
+// Helper to extract int from a FieldValue.
+static int fieldToInt(const db::FieldValue& val) {
+	if (auto* p = std::get_if<int64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return static_cast<int>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<int>(*p);
+	return 0;
+}
+
+// Helper to extract std::string from a FieldValue.
+static std::string fieldToString(const db::FieldValue& val) {
+	if (auto* p = std::get_if<std::string>(&val))
+		return *p;
+	return "";
+}
+
 // --- File-local structures ---
 
 // JS: parse_zone_entry result: { id, zone_name, area_name }
@@ -115,9 +144,17 @@ static std::optional<int> get_zone_ui_map_id(int zone_id) {
 // JS: for (const assignment of (await db2.UiMapAssignment.getAllRows()).values()) {
 //     if (assignment.AreaID === zone_id) return assignment.UiMapID; }
 auto& ui_map_assignment = casc::db2::getTable("UiMapAssignment");
-// TODO(conversion): WDCReader getAllRows iteration will be wired when DB2 system is fully integrated.
-// Placeholder: When wired, iterate rows and check AreaID == zone_id.
-(void)ui_map_assignment;
+if (!ui_map_assignment.isLoaded)
+	ui_map_assignment.parse();
+
+for (const auto& [id, row] : ui_map_assignment.getAllRows()) {
+	auto area_it = row.find("AreaID");
+	if (area_it != row.end() && fieldToInt(area_it->second) == zone_id) {
+		auto uimap_it = row.find("UiMapID");
+		if (uimap_it != row.end())
+			return fieldToInt(uimap_it->second);
+	}
+}
 return std::nullopt;
 }
 
@@ -132,9 +169,23 @@ std::set<int> seen_phases;
 
 // JS: for (const link_entry of (await db2.UiMapXMapArt.getAllRows()).values()) { ... }
 auto& ui_map_x_map_art = casc::db2::getTable("UiMapXMapArt");
-// TODO(conversion): WDCReader getAllRows iteration will be wired when DB2 system is fully integrated.
-// Placeholder: When wired, iterate UiMapXMapArt rows for matching UiMapID.
-(void)ui_map_x_map_art;
+if (!ui_map_x_map_art.isLoaded)
+	ui_map_x_map_art.parse();
+
+for (const auto& [id, row] : ui_map_x_map_art.getAllRows()) {
+	auto uimap_it = row.find("UiMapID");
+	if (uimap_it == row.end() || fieldToInt(uimap_it->second) != *ui_map_id)
+		continue;
+
+	auto phase_it = row.find("PhaseID");
+	int phase_id = (phase_it != row.end()) ? fieldToInt(phase_it->second) : 0;
+
+	if (!seen_phases.contains(phase_id)) {
+		seen_phases.insert(phase_id);
+		std::string label = (phase_id == 0) ? "Default" : std::format("Phase {}", phase_id);
+		phases.push_back(ZonePhase{ phase_id, std::move(label) });
+	}
+}
 
 std::sort(phases.begin(), phases.end(), [](const ZonePhase& a, const ZonePhase& b) {
 return a.id < b.id;
@@ -158,22 +209,84 @@ throw std::runtime_error("no map data available for this zone");
 
 // JS: const map_data = await db2.UiMap.getRow(ui_map_id);
 auto& ui_map = casc::db2::getTable("UiMap");
-(void)ui_map;
-// TODO(conversion): db2 getRow will be wired when DB2 system is fully integrated.
+if (!ui_map.isLoaded)
+	ui_map.parse();
+auto ui_map_row_opt = ui_map.getRow(static_cast<uint32_t>(*ui_map_id));
+// map_data is used for context/logging in JS; the key data comes from UiMapXMapArt and UiMapArt.
+(void)ui_map_row_opt;
 
 // JS: Collect linked art IDs from UiMapXMapArt
 std::vector<int> linked_art_ids;
 auto& ui_map_x_map_art = casc::db2::getTable("UiMapXMapArt");
-(void)ui_map_x_map_art;
-// TODO(conversion): Iterate UiMapXMapArt rows to collect art IDs matching ui_map_id and phase_id.
+if (!ui_map_x_map_art.isLoaded)
+	ui_map_x_map_art.parse();
+
+for (const auto& [id, row] : ui_map_x_map_art.getAllRows()) {
+	auto uimap_it = row.find("UiMapID");
+	if (uimap_it == row.end() || fieldToInt(uimap_it->second) != *ui_map_id)
+		continue;
+
+	auto phase_it = row.find("PhaseID");
+	int row_phase = (phase_it != row.end()) ? fieldToInt(phase_it->second) : 0;
+
+	// If phase_id is specified, only include matching phases; otherwise include phase 0 (default).
+	if (phase_id.has_value()) {
+		if (row_phase != *phase_id)
+			continue;
+	} else {
+		if (row_phase != 0)
+			continue;
+	}
+
+	auto art_it = row.find("UiMapArtID");
+	if (art_it != row.end())
+		linked_art_ids.push_back(fieldToInt(art_it->second));
+}
 
 // JS: Collect combined art styles from UiMapArt + UiMapArtStyleLayer
 std::vector<CombinedArtStyle> art_styles;
 auto& ui_map_art = casc::db2::getTable("UiMapArt");
 auto& ui_map_art_style_layer = casc::db2::getTable("UiMapArtStyleLayer");
-(void)ui_map_art;
-(void)ui_map_art_style_layer;
-// TODO(conversion): For each linked_art_id, look up UiMapArt row, then find matching UiMapArtStyleLayer.
+if (!ui_map_art.isLoaded)
+	ui_map_art.parse();
+if (!ui_map_art_style_layer.isLoaded)
+	ui_map_art_style_layer.parse();
+
+for (int linked_art_id : linked_art_ids) {
+	auto art_row_opt = ui_map_art.getRow(static_cast<uint32_t>(linked_art_id));
+	if (!art_row_opt.has_value())
+		continue;
+
+	// Find matching UiMapArtStyleLayer rows for this art ID.
+	for (const auto& [layer_id, layer_row] : ui_map_art_style_layer.getAllRows()) {
+		auto art_ref_it = layer_row.find("UiMapArtID");
+		if (art_ref_it == layer_row.end() || fieldToInt(art_ref_it->second) != linked_art_id)
+			continue;
+
+		CombinedArtStyle style;
+		style.id = static_cast<int>(layer_id);
+		auto sid_it = layer_row.find("UiMapArtStyleID");
+		if (sid_it != layer_row.end())
+			style.ui_map_art_style_id = fieldToInt(sid_it->second);
+		auto li_it = layer_row.find("LayerIndex");
+		if (li_it != layer_row.end())
+			style.layer_index = fieldToInt(li_it->second);
+		auto lw_it = layer_row.find("LayerWidth");
+		if (lw_it != layer_row.end())
+			style.layer_width = fieldToInt(lw_it->second);
+		auto lh_it = layer_row.find("LayerHeight");
+		if (lh_it != layer_row.end())
+			style.layer_height = fieldToInt(lh_it->second);
+		auto tw_it = layer_row.find("TileWidth");
+		if (tw_it != layer_row.end())
+			style.tile_width = fieldToInt(tw_it->second);
+		auto th_it = layer_row.find("TileHeight");
+		if (th_it != layer_row.end())
+			style.tile_height = fieldToInt(th_it->second);
+
+		art_styles.push_back(style);
+	}
+}
 
 if (art_styles.empty()) {
 logging::write(std::format("no art styles found for UiMap ID {} (phase {})",
@@ -193,9 +306,7 @@ int map_width = 0, map_height = 0;
 
 for (const auto& art_style : art_styles) {
 	// JS: const all_tiles = await db2.UiMapArtTile.getRelationRows(art_style.ID);
-	auto& ui_map_art_tile = casc::db2::getTable("UiMapArtTile");
-	(void)ui_map_art_tile;
-	// TODO(conversion): Get tiles by relation, group by layer index.
+	// UiMapArtTile is preloaded during initialize(); getRelationRows is called inside render_map_tiles.
 
 	if (art_style.layer_index == 0) {
 		map_width = art_style.layer_width;
@@ -204,8 +315,7 @@ for (const auto& art_style : art_styles) {
 
 	// JS: if (core.view.config.showZoneBaseMap) { ... render layers ... }
 	if (core::view->config.value("showZoneBaseMap", true)) {
-		// TODO(conversion): Iterate layer indices in sorted order and call render_map_tiles for each.
-		render_map_tiles(art_style, 0, zone_id, skip_zone_check);
+		render_map_tiles(art_style, art_style.layer_index, zone_id, skip_zone_check);
 	}
 
 	// JS: if (core.view.config.showZoneOverlays) await render_world_map_overlays(ctx, art_style, zone_id, skip_zone_check);
@@ -442,8 +552,14 @@ core::progressLoadingScreen("Loading zone data...");
 //         expansion_map.set(id, entry.ExpansionID);
 std::unordered_map<int, int> expansion_map;
 auto& map_table = casc::db2::getTable("Map");
-// TODO(conversion): WDCReader getAllRows iteration will be wired when DB2 system is fully integrated.
-(void)map_table;
+if (!map_table.isLoaded)
+	map_table.parse();
+
+for (const auto& [id, row] : map_table.getAllRows()) {
+	auto exp_it = row.find("ExpansionID");
+	if (exp_it != row.end())
+		expansion_map[static_cast<int>(id)] = fieldToInt(exp_it->second);
+}
 
 logging::write(std::format("loaded {} maps for expansion mapping", expansion_map.size()));
 
@@ -452,24 +568,41 @@ logging::write(std::format("loaded {} maps for expansion mapping", expansion_map
 //         available_zones.add(entry.AreaID);
 std::set<int> available_zones;
 auto& ui_map_assignment = casc::db2::getTable("UiMapAssignment");
-// TODO(conversion): WDCReader getAllRows iteration will be wired when DB2 system is fully integrated.
-(void)ui_map_assignment;
+if (!ui_map_assignment.isLoaded)
+	ui_map_assignment.parse();
+
+for (const auto& [id, row] : ui_map_assignment.getAllRows()) {
+	auto area_it = row.find("AreaID");
+	if (area_it != row.end())
+		available_zones.insert(fieldToInt(area_it->second));
+}
 
 logging::write(std::format("loaded {} zones from UiMapAssignment", available_zones.size()));
 
 // JS: const table = db2.AreaTable;
 // JS: for (const [id, entry] of await table.getAllRows()) { ... }
 auto& area_table = casc::db2::getTable("AreaTable");
-(void)area_table;
+if (!area_table.isLoaded)
+	area_table.parse();
 
 std::vector<std::string> zone_entries;
-// TODO(conversion): When wired, iterate AreaTable rows:
-// for (const auto& [id, row] : area_table.getAllRows()) {
-//     if (!available_zones.contains(id)) continue;
-//     int expansion_id = expansion_map.count(row.ContinentID) ? expansion_map[row.ContinentID] : 0;
-//     zone_entries.push_back(std::format("{}\x19[{}]\x19{}\x19({})",
-//         expansion_id, id, row.AreaName_lang, row.ZoneName));
-// }
+for (const auto& [id, row] : area_table.getAllRows()) {
+	if (!available_zones.contains(static_cast<int>(id)))
+		continue;
+
+	auto cont_it = row.find("ContinentID");
+	int continent_id = (cont_it != row.end()) ? fieldToInt(cont_it->second) : 0;
+	int expansion_id = expansion_map.count(continent_id) ? expansion_map[continent_id] : 0;
+
+	auto name_it = row.find("AreaName_lang");
+	std::string area_name = (name_it != row.end()) ? fieldToString(name_it->second) : "";
+
+	auto zone_it = row.find("ZoneName");
+	std::string zone_name = (zone_it != row.end()) ? fieldToString(zone_it->second) : "";
+
+	zone_entries.push_back(std::format("{}\x19[{}]\x19{}\x19({})",
+		expansion_id, id, area_name, zone_name));
+}
 
 view.zoneViewerZones.clear();
 for (const auto& entry : zone_entries)
