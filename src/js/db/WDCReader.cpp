@@ -358,8 +358,8 @@ void WDCReader::parse() {
 	logging::write("Loading DB file " + fileName + " from CASC");
 
 	// In JS: const data = await core.view.casc.getVirtualFileByName(this.fileName, false);
-	// TODO(conversion): The CASC system is not yet fully wired. This will use the CASC interface
-	// once available. For now, we assume data is loaded externally and passed via the data pointer.
+	dataOwner = std::make_unique<BufferWrapper>(core::view->casc->getVirtualFileByName(fileName, false));
+	data = dataOwner.get();
 	auto& dataRef = *data;
 
 	// store reference for lazy-loading
