@@ -19,6 +19,7 @@
 #include "../install-type.h"
 #include "../modules.h"
 #include "../ui/listbox-context.h"
+#include "../components/listbox.h"
 #include "../ui/texture-ribbon.h"
 #include "../ui/texture-exporter.h"
 #include "../ui/model-viewer-utils.h"
@@ -169,6 +170,8 @@ static std::vector<nlohmann::json> prev_selection_creatures;
 static std::vector<bool> prev_equipment_checked;
 
 static bool is_initialized = false;
+
+static listbox::ListboxState listbox_creatures_state;
 
 // Model viewer GL state/context (replaces Vue <ModelViewerGL :context="creatureViewerContext"/>).
 static model_viewer_gl::State viewer_state;
@@ -2044,8 +2047,51 @@ void render() {
 	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionCreatures" ... @contextmenu="handle_listbox_context" />
 	ImGui::BeginChild("creature-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-	// TODO(conversion): Listbox component rendering will be wired when integration is complete.
-	ImGui::Text("Creatures: %zu", view.listfileCreatures.size());
+	{
+		std::vector<std::string> items_str;
+		items_str.reserve(view.listfileCreatures.size());
+		for (const auto& item : view.listfileCreatures)
+			items_str.push_back(item.get<std::string>());
+
+		std::vector<std::string> selection_str;
+		for (const auto& s : view.selectionCreatures)
+			selection_str.push_back(s.get<std::string>());
+
+		listbox::CopyMode copy_mode = listbox::CopyMode::Default;
+		{
+			std::string cm = view.config.value("copyMode", std::string("Default"));
+			if (cm == "DIR") copy_mode = listbox::CopyMode::DIR;
+			else if (cm == "FID") copy_mode = listbox::CopyMode::FID;
+		}
+
+		listbox::render(
+			"listbox-creatures",
+			items_str,
+			view.userInputFilterCreatures,
+			selection_str,
+			false,      // single
+			true,       // keyinput
+			view.config.value("regexFilters", false),
+			copy_mode,
+			view.config.value("pasteSelection", false),
+			view.config.value("removePathSpacesCopy", false),
+			"creature", // unittype
+			nullptr,    // overrideItems
+			false,      // disable
+			"creatures", // persistscrollkey
+			{},         // quickfilters
+			false,      // nocopy
+			listbox_creatures_state,
+			[&](const std::vector<std::string>& new_sel) {
+				view.selectionCreatures.clear();
+				for (const auto& s : new_sel)
+					view.selectionCreatures.push_back(s);
+			},
+			[](const listbox::ContextMenuEvent& ev) {
+				handle_listbox_context(ev.selection);
+			}
+		);
+	}
 
 	// JS: <input type="text" v-model="$core.view.userInputFilterCreatures" placeholder="Filter creatures..."/>
 	// TODO(conversion): Filter input will use ImGui::InputText when Listbox component is wired.

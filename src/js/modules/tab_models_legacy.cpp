@@ -12,6 +12,7 @@
 #include "../install-type.h"
 #include "../modules.h"
 #include "../ui/listbox-context.h"
+#include "../components/listbox.h"
 #include "../constants.h"
 #include "../3D/renderers/M2LegacyRendererGL.h"
 #include "../3D/renderers/WMOLegacyRendererGL.h"
@@ -80,6 +81,8 @@ static std::vector<nlohmann::json> prev_skins_selection;
 static bool _was_paused_before_scrub = false;
 
 static bool is_initialized = false;
+
+static listbox::ListboxState listbox_legacy_models_state;
 
 // Model viewer GL state/context (replaces Vue <ModelViewerGL :context="legacyModelViewerContext"/>).
 static model_viewer_gl::State viewer_state;
@@ -895,8 +898,44 @@ void render() {
 	//         :items="listfileLegacyModels" :keyinput="true" :regex="config.regexFilters" ...
 	//         @contextmenu="handle_listbox_context" />
 	ImGui::BeginChild("legacy-models-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-	// TODO(conversion): Listbox component rendering will be wired when integration is complete.
-	ImGui::Text("Legacy Models: %zu", view.listfileLegacyModels.size());
+	{
+		std::vector<std::string> items_str;
+		items_str.reserve(view.listfileLegacyModels.size());
+		for (const auto& item : view.listfileLegacyModels)
+			items_str.push_back(item.get<std::string>());
+
+		std::vector<std::string> selection_str;
+		for (const auto& s : view.selectionLegacyModels)
+			selection_str.push_back(s.get<std::string>());
+
+		listbox::render(
+			"listbox-legacy-models",
+			items_str,
+			view.userInputFilterLegacyModels,
+			selection_str,
+			false,    // single
+			true,     // keyinput
+			view.config.value("regexFilters", false),
+			listbox::CopyMode::Default,
+			false,    // pasteselection
+			false,    // copytrimwhitespace
+			"model",  // unittype
+			nullptr,  // overrideItems
+			false,    // disable
+			"legacy-models", // persistscrollkey
+			{},       // quickfilters
+			false,    // nocopy
+			listbox_legacy_models_state,
+			[&](const std::vector<std::string>& new_sel) {
+				view.selectionLegacyModels.clear();
+				for (const auto& s : new_sel)
+					view.selectionLegacyModels.push_back(s);
+			},
+			[](const listbox::ContextMenuEvent& ev) {
+				handle_listbox_context(ev.selection);
+			}
+		);
+	}
 
 	// JS: <component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeListbox" ...>
 	if (!view.contextMenus.nodeListbox.is_null()) {
