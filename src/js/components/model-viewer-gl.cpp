@@ -663,15 +663,26 @@ void update_shadow_visibility(State& state, const Context& context) {
 }
 
 void fit_camera(State& state, Context& context) {
-	M2RendererGL* active_renderer = context.getActiveRenderer ? context.getActiveRenderer() : nullptr;
-	if (!active_renderer)
-		return;
+	std::optional<BoundingBox> bb;
 
-	auto bounding_box_result = active_renderer->getBoundingBox();
-	if (!bounding_box_result)
-		return;
+	// Try the generic bounding box provider first (covers all renderer types).
+	if (context.getActiveBoundingBox)
+		bb = context.getActiveBoundingBox();
 
-	BoundingBox bounding_box = { bounding_box_result->min, bounding_box_result->max };
+	// Fallback: get bounding box from M2 renderer directly.
+	if (!bb) {
+		M2RendererGL* active_renderer = context.getActiveRenderer ? context.getActiveRenderer() : nullptr;
+		if (!active_renderer)
+			return;
+
+		auto m2_bb = active_renderer->getBoundingBox();
+		if (!m2_bb)
+			return;
+
+		bb = BoundingBox{ m2_bb->min, m2_bb->max };
+	}
+
+	BoundingBox bounding_box = *bb;
 
 	if (context.useCharacterControls) {
 		fit_camera_for_character(&bounding_box, state.camera,

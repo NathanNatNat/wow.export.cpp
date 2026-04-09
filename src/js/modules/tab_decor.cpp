@@ -524,10 +524,23 @@ static void initialize() {
 				active_renderer_result.wmo->render(view_mat, proj_mat);
 		};
 		viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
-		                                            const std::array<float, 3>& rot,
-		                                            const std::array<float, 3>& scale) {
+													const std::array<float, 3>& rot,
+													const std::array<float, 3>& scale) {
 			if (active_renderer_result.wmo)
 				active_renderer_result.wmo->setTransform(pos, rot, scale);
+		};
+		viewer_context.getActiveBoundingBox = []() -> std::optional<model_viewer_gl::BoundingBox> {
+			if (active_renderer_result.m2) {
+				auto bb = active_renderer_result.m2->getBoundingBox();
+				if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+			} else if (active_renderer_result.m3) {
+				auto bb = active_renderer_result.m3->getBoundingBox();
+				if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+			} else if (active_renderer_result.wmo) {
+				auto bb = active_renderer_result.wmo->getBoundingBox();
+				if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+			}
+			return std::nullopt;
 		};
 	}
 

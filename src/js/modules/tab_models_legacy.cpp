@@ -322,7 +322,8 @@ static void preview_model(const std::string& file_name) {
 			core::hideToast();
 
 			// JS: if (core.view.legacyModelViewerAutoAdjust) requestAnimationFrame(() => core.view.legacyModelViewerContext?.fitCamera?.());
-			// TODO(conversion): fitCamera will be wired when model viewer GL is integrated.
+			if (view.legacyModelViewerAutoAdjust && viewer_context.fitCamera)
+				viewer_context.fitCamera();
 		}
 		*/
 	} catch (const std::exception& e) {
@@ -540,14 +541,27 @@ void mounted() {
 					active_renderer_wmo->render(view_mat, proj_mat);
 			};
 			viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
-			                                            const std::array<float, 3>& rot,
-			                                            const std::array<float, 3>& scale) {
+														const std::array<float, 3>& rot,
+														const std::array<float, 3>& scale) {
 				if (active_renderer_m2)
 					active_renderer_m2->setTransform(pos, rot, scale);
 				else if (active_renderer_mdx)
 					active_renderer_mdx->setTransform(pos, rot, scale);
 				else if (active_renderer_wmo)
 					active_renderer_wmo->setTransform(pos, rot, scale);
+			};
+			viewer_context.getActiveBoundingBox = []() -> std::optional<model_viewer_gl::BoundingBox> {
+				if (active_renderer_m2) {
+					auto bb = active_renderer_m2->getBoundingBox();
+					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+				} else if (active_renderer_mdx) {
+					auto bb = active_renderer_mdx->getBoundingBox();
+					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+				} else if (active_renderer_wmo) {
+					auto bb = active_renderer_wmo->getBoundingBox();
+					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+				}
+				return std::nullopt;
 			};
 		}
 

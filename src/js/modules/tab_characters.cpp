@@ -906,10 +906,9 @@ character_appearance::dispose_materials(chr_materials);
 
 // JS: function fit_camera(core)
 static void fit_camera() {
-auto& view = *core::view;
-if (view.chrModelViewerContext.is_object() && viewer_context.fitCamera) {
-	viewer_context.fitCamera();
-}
+	if (viewer_context.fitCamera) {
+		viewer_context.fitCamera();
+	}
 }
 
 //endregion
@@ -3242,7 +3241,7 @@ view_state.animSelection = &state.chrModelViewerAnimSelection;
 view_state.animPaused = &state.chrModelViewerAnimPaused;
 view_state.animFrame = &state.chrModelViewerAnimFrame;
 view_state.animFrameCount = &state.chrModelViewerAnimFrameCount;
-view_state.autoAdjust = nullptr; // TODO(conversion): wire autoAdjust.
+view_state.autoAdjust = nullptr; // Characters don't have an auto-adjust toggle in the JS source.
 
 anim_methods = std::make_unique<model_viewer_utils::AnimationMethods>(
 []() -> M2RendererGL* { return active_renderer.get(); },

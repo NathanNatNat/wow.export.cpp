@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -158,6 +159,11 @@ struct Context {
 	// Active M2 renderer (for animation, equipment, bones, etc.)
 	// Returns nullptr if no M2 is active or no renderer at all.
 	std::function<M2RendererGL*()> getActiveRenderer;
+
+	// Bounding box provider for the active model of any type (M2/M3/WMO/Legacy).
+	// Returns the bounding box or nullopt if no model is loaded.
+	// Used by fit_camera when the active renderer may not be M2RendererGL.
+	std::function<std::optional<BoundingBox>()> getActiveBoundingBox;
 
 	// Generic render callback for active model of any type (M2/M3/WMO).
 	// If getActiveRenderer returns non-null, this may be redundant (M2 render is called directly).
