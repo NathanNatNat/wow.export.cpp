@@ -7,6 +7,8 @@
 #include "WMOLoader.h"
 #include "LoaderGenerics.h"
 #include "../../buffer.h"
+#include "../../core.h"
+#include "../../casc/casc-source.h"
 #include "../../casc/listfile.h"
 
 #include <algorithm>
@@ -118,9 +120,25 @@ WMOLoader& WMOLoader::getGroup(uint32_t index) {
 	if (index < this->groups.size() && this->groups[index] != nullptr)
 		return *this->groups[index];
 
-	// TODO(conversion): CASC file loading will be wired in when UI integration is complete.
-	// For now, this mirrors the JS structure.
-	throw std::runtime_error("Group loading requires CASC - not yet wired in C++ UI");
+	if (index >= this->groupIDs.size())
+		throw std::runtime_error("Group index out of range: " + std::to_string(index));
+
+	const uint32_t groupFileID = this->groupIDs[index];
+	BufferWrapper groupData = core::view->casc->getVirtualFileByID(groupFileID);
+	auto ownedBuf = std::make_unique<BufferWrapper>(std::move(groupData));
+	auto group = std::make_unique<WMOLoader>(*ownedBuf, groupFileID, this->renderingOnly);
+	group->load();
+
+	// Ensure groups vector is large enough
+	if (this->groups.size() <= index)
+		this->groups.resize(index + 1, nullptr);
+
+	WMOLoader* groupPtr = group.get();
+	this->groups[index] = groupPtr;
+	this->ownedGroupBuffers.push_back(std::move(ownedBuf));
+	this->ownedGroups.push_back(std::move(group));
+
+	return *groupPtr;
 }
 
 void WMOLoader::handleChunk(uint32_t chunkID, BufferWrapper& data, uint32_t chunkSize) {

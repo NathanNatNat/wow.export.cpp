@@ -7,6 +7,7 @@
 #include "Skin.h"
 #include "../casc/listfile.h"
 #include "../core.h"
+#include "../casc/casc-source.h"
 #include "../buffer.h"
 
 #include <cstdint>
@@ -24,15 +25,7 @@ Skin::Skin(uint32_t fileDataID)
 
 void Skin::load() {
 	try {
-		// TODO(conversion): Replace with actual CASC file loading when rendering pipeline is connected.
-		// auto data = core.view.casc.getFile(this->fileDataID);
-		// For now, throw to indicate this needs wiring.
-		throw std::runtime_error("CASC file loading not yet wired");
-
-		// The following code is the complete implementation that will be active
-		// once the CASC getFile call above is wired:
-		/*
-		BufferWrapper data = ...; // from CASC
+		BufferWrapper data = core::view->casc->getVirtualFileByID(this->fileDataID);
 
 		const uint32_t magic = data.readUInt32LE();
 		if (magic != MAGIC_SKIN)
@@ -115,7 +108,6 @@ void Skin::load() {
 		}
 
 		this->isLoaded = true;
-		*/
 	} catch (const std::exception& e) {
 		throw std::runtime_error(
 			std::format("Unable to load skin fileDataID {}: {}", this->fileDataID, e.what()));

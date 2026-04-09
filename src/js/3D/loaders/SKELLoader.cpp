@@ -9,6 +9,8 @@
 #include "ANIMLoader.h"
 #include "../AnimMapper.h"
 #include "../../buffer.h"
+#include "../../core.h"
+#include "../../casc/casc-source.h"
 #include "../../log.h"
 
 #include <format>
@@ -324,10 +326,20 @@ bool SKELLoader::loadAnimsForIndex(uint32_t animation_index) {
 
 		logging::write(std::format("lazy load .anim for {} ({}) sub={} fileDataID={}", entry.animID, get_anim_name(entry.animID), entry.subAnimID, fileDataID));
 
-		// TODO(conversion): CASC file loading will be wired when UI integration is complete.
-		// The JS does: const loader = new ANIMLoader(await core.view.casc.getFile(fileDataID));
-		// For now, throw since we can't load without CASC:
-		throw std::runtime_error("SKEL .anim loading requires CASC - not yet wired in C++ UI");
+		try {
+			BufferWrapper animData = core::view->casc->getVirtualFileByID(fileDataID);
+			auto ownedBuf = std::make_unique<BufferWrapper>(std::move(animData));
+			BufferWrapper* bufPtr = ownedBuf.get();
+			this->ownedAnimBuffers.push_back(std::move(ownedBuf));
+
+			auto loader = std::make_unique<ANIMLoader>(*bufPtr);
+			loader->load();
+			this->animFiles[animation_index] = bufPtr;
+			return true;
+		} catch (const std::exception& e) {
+			logging::write(std::format("Failed to load .anim file (fileDataID={}): {}", fileDataID, e.what()));
+			return false;
+		}
 	}
 
 	return false;
@@ -423,10 +435,18 @@ void SKELLoader::loadAnims(bool load_all) {
 
 				logging::write(std::format("Loading .anim file for animation: {} ({}) - {}", entry.animID, get_anim_name(entry.animID), entry.subAnimID));
 
-				// TODO(conversion): CASC file loading will be wired when UI integration is complete.
-				// The JS does: const loader = new ANIMLoader(await core.view.casc.getFile(fileDataID));
-				// For now, log and continue:
-				logging::write(std::format("Cannot load .anim file (CASC not wired): fileDataID={}", fileDataID));
+				try {
+					BufferWrapper animData = core::view->casc->getVirtualFileByID(fileDataID);
+					auto ownedBuf = std::make_unique<BufferWrapper>(std::move(animData));
+					BufferWrapper* bufPtr = ownedBuf.get();
+					this->ownedAnimBuffers.push_back(std::move(ownedBuf));
+
+					auto loader = std::make_unique<ANIMLoader>(*bufPtr);
+					loader->load();
+					this->animFiles[static_cast<uint32_t>(i)] = bufPtr;
+				} catch (const std::exception& e) {
+					logging::write(std::format("Failed to load .anim file (fileDataID={}): {}", fileDataID, e.what()));
+				}
 			}
 		}
 

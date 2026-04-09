@@ -7,6 +7,7 @@
 #include "Texture.h"
 #include "../casc/listfile.h"
 #include "../core.h"
+#include "../casc/casc-source.h"
 
 Texture::Texture(uint32_t flags, uint32_t fileDataID)
 	: flags(flags), fileDataID(fileDataID) {
@@ -28,9 +29,7 @@ void Texture::setFileName(const std::string& fileName) {
 std::optional<BufferWrapper> Texture::getTextureFile() {
 	if (this->fileDataID > 0) {
 		if (!this->data.has_value()) {
-			// TODO(conversion): core.view.casc.getFile(this->fileDataID)
-			// This requires the CASC instance from AppState.
-			// Will be wired when the rendering pipeline is connected.
+			this->data = core::view->casc->getVirtualFileByID(this->fileDataID);
 		}
 
 		return this->data;
