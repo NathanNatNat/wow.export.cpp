@@ -1413,8 +1413,8 @@ void loadFonts() {
 		s_fontIcon = regularFont;
 	}
 
-	// Build the atlas so fonts are ready for rendering.
-	io.Fonts->Build();
+	// With new ImGui backends (RendererHasTextures), the atlas is built
+	// automatically on the first frame — no manual Build() call needed.
 }
 
 ImFont* getBoldFont() {

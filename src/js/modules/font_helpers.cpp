@@ -129,8 +129,8 @@ void* inject_font_face(const std::string& /*font_id*/, const uint8_t* data, size
 		return nullptr;
 	}
 
-	// Rebuild the font atlas.
-	io.Fonts->Build();
+	// With new ImGui backends (RendererHasTextures), the atlas rebuilds
+	// automatically when new fonts are added — no manual Build() needed.
 
 	return font;
 }
