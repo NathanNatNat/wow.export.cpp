@@ -394,8 +394,7 @@ static void toggle_animation_pause() {
 	if (active_renderer_m2)
 		active_renderer_m2->set_animation_paused(paused);
 	else if (active_renderer_mdx) {
-		// MDX renderer may not support pausing; optional call pattern
-		// active_renderer_mdx->set_animation_paused(paused); // TODO(conversion): verify MDX pause support
+		active_renderer_mdx->set_animation_paused(paused);
 	}
 }
 

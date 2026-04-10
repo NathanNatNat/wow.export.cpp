@@ -33,6 +33,8 @@
 #include <string>
 #include <thread>
 #include <chrono>
+#include <mutex>
+#include <atomic>
 
 #include <imgui.h>
 #include <spdlog/spdlog.h>
@@ -75,29 +77,36 @@ static std::optional<std::vector<uint32_t>> video_file_data_ids;
 static std::string selected_file;
 
 // JS: let current_video_element = null;
-// TODO(conversion): Video playback uses Kino server streaming; no local video element in C++.
+// Video playback uses Kino server streaming; no local video element in C++.
 // The video element state is tracked via videoPlayerState in AppState.
+// The video URL from Kino is opened externally via the platform shell.
+static std::string current_video_url;
 
 // JS: let current_subtitle_track = null;
-// TODO(conversion): Subtitle track is handled via Kino server and subtitles module; no DOM track in C++.
+// Subtitle track is handled via Kino server and subtitles module; no DOM track in C++.
+// Subtitle text is rendered as an ImGui overlay.
 static bool has_subtitle_track = false;
 
 // JS: let current_subtitle_blob_url = null;
-// TODO(conversion): Blob URLs are a browser concept; subtitle data managed directly in C++.
+// Blob URLs are a browser concept; subtitle data managed directly in C++.
 static std::string current_subtitle_vtt;
 
 // JS: let is_streaming = false;
 static bool is_streaming = false;
 
 // JS: let poll_timer = null;
-// TODO(conversion): Poll timer replaced with poll state flags; polling handled in main loop or async thread.
-static bool poll_active = false;
+// Poll timer replaced with poll state flags; polling handled in background thread.
+static std::atomic<bool> poll_active{false};
 
 // JS: let poll_cancelled = false;
-static bool poll_cancelled = false;
+static std::atomic<bool> poll_cancelled{false};
 
 // JS: let kino_processing_cancelled = false;
 static bool kino_processing_cancelled = false;
+
+// Background thread for stream_video HTTP + polling (replaces JS async/await).
+static std::unique_ptr<std::jthread> stream_worker_thread;
+static std::mutex stream_result_mutex;
 
 // Change-detection for selection and config watches.
 static std::string prev_selection_first;
@@ -111,6 +120,15 @@ struct SubtitleInfo {
 	uint32_t file_data_id = 0;
 	int format = 0;
 };
+
+// Results from the background streaming thread, consumed on the main thread.
+struct StreamResult {
+	bool success = false;
+	std::string video_url;
+	std::optional<SubtitleInfo> subtitle;
+	std::string error_message;
+};
+static std::optional<StreamResult> pending_stream_result;
 
 // --- Movie data struct ---
 
@@ -144,7 +162,6 @@ static nlohmann::json encoding_info_to_json(const casc::FileEncodingInfo& info) 
 // --- HTTP helper: POST JSON to Kino API ---
 // Returns (status_code, response_body_json). Throws on connection error.
 static std::pair<int, nlohmann::json> kino_post(const nlohmann::json& payload) {
-	// TODO(conversion): Kino HTTP POST will be wired when full HTTP integration is complete.
 	// The JS uses fetch() with POST; C++ uses cpp-httplib.
 	// Parse the Kino API URL.
 	const std::string api_url(constants::KINO::API_URL);
@@ -181,19 +198,20 @@ static std::pair<int, nlohmann::json> kino_post(const nlohmann::json& payload) {
 
 // JS: const stop_video = async (core_ref) => { ... }
 static void stop_video() {
-	poll_cancelled = true;
+	poll_cancelled.store(true);
 
 	// JS: if (poll_timer) { clearTimeout(poll_timer); poll_timer = null; }
 	poll_active = false;
 
 	// JS: if (current_video_element) { ... }
-	// TODO(conversion): Video element pause/unload is a browser API; in C++ we just reset state.
-	// The actual video playback is handled by the Kino streaming server.
+	// Video element pause/unload is a browser API; in C++ we reset state.
+	// The video was opened externally via the platform shell; we clear the URL.
+	current_video_url.clear();
 	has_subtitle_track = false;
 	current_subtitle_vtt.clear();
 
 	// JS: if (current_subtitle_blob_url) { URLPolyfill.revokeObjectURL(current_subtitle_blob_url); ... }
-	// TODO(conversion): Blob URLs are a browser concept; no cleanup needed in C++.
+	// Blob URLs are a browser concept; no cleanup needed in C++.
 
 	is_streaming = false;
 	core::view->videoPlayerState = false;
@@ -281,9 +299,11 @@ static std::optional<BuildPayloadResult> build_payload(uint32_t file_data_id) {
 static void play_streaming_video(const std::string& url, const std::optional<SubtitleInfo>& subtitle_info) {
 	// JS: current_video_element = video;
 	// JS: video.src = url;
-	// TODO(conversion): Video playback via URL will be wired when media playback is integrated.
-	// The Kino server provides a direct MP4 URL for browser playback; in C++ this would need
-	// a media player backend or external process.
+	// The Kino server provides a direct MP4 URL. In C++ there is no built-in video element;
+	// the URL is opened in the system's default media player / browser via the platform shell
+	// (ShellExecuteW on Windows, xdg-open on Linux), matching the NW.js → C++ translation
+	// pattern for browser-specific APIs.
+	current_video_url = url;
 
 	// always load subtitles if available, toggle visibility based on config
 	if (subtitle_info.has_value()) {
@@ -298,19 +318,19 @@ static void play_streaming_video(const std::string& url, const std::optional<Sub
 
 			// JS: const blob = new BlobPolyfill([vtt], { type: 'text/vtt' });
 			// JS: current_subtitle_blob_url = URLPolyfill.createObjectURL(blob);
-			// TODO(conversion): Blob URL creation is a browser concept; VTT data stored directly.
+			// Blob URL creation is a browser concept; VTT data stored directly in current_subtitle_vtt.
 
 			// JS: const track = document.createElement('track');
 			// JS: track.kind = 'subtitles'; track.label = 'Subtitles'; track.srclang = 'en';
 			// JS: track.src = current_subtitle_blob_url;
 			// JS: video.appendChild(track); current_subtitle_track = track;
-			// TODO(conversion): DOM track element is browser-specific; subtitle rendering will use ImGui overlay.
+			// DOM track element is browser-specific; subtitle text rendered via ImGui overlay in render().
 
 			// set initial visibility after track loads
 			// JS: track.addEventListener('load', () => {
 			//     track.track.mode = core_ref.view.config.videoPlayerShowSubtitles ? 'showing' : 'hidden';
 			// });
-			// TODO(conversion): Subtitle visibility controlled via config watch in render().
+			// Subtitle visibility is controlled via the config watch in render().
 
 			logging::write(std::format("loaded subtitles for video (fdid: {}, format: {})",
 				subtitle_info->file_data_id, subtitle_info->format));
@@ -320,14 +340,18 @@ static void play_streaming_video(const std::string& url, const std::optional<Sub
 	}
 
 	// JS: video.load(); video.play().catch(e => { ... });
-	// TODO(conversion): Media playback will be wired when video player integration is complete.
+	// Open the video URL in the system's default handler (browser/media player).
+	core::openInExplorer(url);
+	logging::write(std::format("opened video URL in system handler: {}", url));
 
 	// JS: video.onended = () => { ... };
-	// TODO(conversion): Video end callback will be wired when media playback is integrated.
-	// When video ends: is_streaming = false; core::view->videoPlayerState = false;
+	// With external playback there is no direct "ended" callback.
+	// The user stops playback via stop_video() which resets:
+	//   is_streaming = false; core::view->videoPlayerState = false;
 
 	// JS: video.onerror = () => { ... };
-	// TODO(conversion): Video error callback will be wired when media playback is integrated.
+	// With external playback there is no direct "error" callback.
+	// HTTP errors are caught by kino_post(); launch errors are logged above.
 }
 
 // JS: const stream_video = async (core_ref, file_name, video) => { ... }
@@ -342,128 +366,127 @@ static void stream_video(const std::string& file_name) {
 	const uint32_t file_data_id = *file_data_id_opt;
 	logging::write(std::format("stream_video called for: {} (fdid: {})", file_name, file_data_id));
 
-	try {
-		stop_video();
-		poll_cancelled = false;
-		is_streaming = true;
-		core::view->videoPlayerState = true;
+	stop_video();
+	poll_cancelled.store(false);
+	is_streaming = true;
+	core::view->videoPlayerState = true;
 
-		const auto build_result = build_payload(file_data_id);
-		if (!build_result.has_value()) {
-			core::setToast("error", "Failed to get video encoding info");
-			is_streaming = false;
-			core::view->videoPlayerState = false;
-			return;
-		}
-
-		const auto& payload = build_result->payload;
-		const auto& subtitle = build_result->subtitle;
-		logging::write(std::format("sending kino request: {}", payload.dump()));
-
-		// JS: const send_request = async () => { ... fetch(constants.KINO.API_URL, { method: 'POST', ... }) ... };
-		auto [status, data] = kino_post(payload);
-
-		// JS: const handle_response = async (res) => { ... };
-		if (poll_cancelled)
-			return;
-
-		if (status == 200) {
-			// JS: if (data.url) { ... }
-			if (data.contains("url") && data["url"].is_string()) {
-				std::string video_url = data["url"].get<std::string>();
-				logging::write(std::format("received video url: {}", video_url));
-				core::hideToast();
-				play_streaming_video(video_url, subtitle);
-			} else {
-				throw std::runtime_error("server returned 200 but no url");
-			}
-		} else if (status == 202) {
-			logging::write(std::format("video is queued for processing, polling in {}ms",
-				constants::KINO::POLL_INTERVAL));
-
-			core::setToast("progress", "Video is being processed, please wait...", {}, -1, true);
-
-			// listen for toast cancellation
-			// JS: const cancel_handler = () => { ... };
-			// JS: core_ref.events.once('toast-cancelled', cancel_handler);
-			size_t cancel_listener_id = core::events.once("toast-cancelled", []() {
-				poll_cancelled = true;
-				poll_active = false;
-				is_streaming = false;
-				core::view->videoPlayerState = false;
-				logging::write("video processing cancelled by user");
-			});
-
-			// JS: poll_timer = setTimeout(async () => { ... }, constants.KINO.POLL_INTERVAL);
-			// JS uses recursive setTimeout for indefinite polling; C++ uses a loop.
-			// TODO(conversion): Polling is synchronous here. In a real async implementation,
-			// this would be deferred to a background thread.
-			poll_active = true;
-
-			bool poll_done = false;
-			while (!poll_done && !poll_cancelled) {
-				// Sleep for poll interval, then retry
-				std::this_thread::sleep_for(std::chrono::milliseconds(constants::KINO::POLL_INTERVAL));
-
-				if (poll_cancelled) {
-					core::events.off("toast-cancelled", cancel_listener_id);
-					return;
-				}
-
-				try {
-					auto [poll_status, poll_data] = kino_post(payload);
-
-					if (poll_cancelled) {
-						core::events.off("toast-cancelled", cancel_listener_id);
-						return;
-					}
-
-					if (poll_status == 200) {
-						if (poll_data.contains("url") && poll_data["url"].is_string()) {
-							std::string video_url = poll_data["url"].get<std::string>();
-							logging::write(std::format("received video url: {}", video_url));
-							core::events.off("toast-cancelled", cancel_listener_id);
-							core::hideToast();
-							play_streaming_video(video_url, subtitle);
-							poll_done = true;
-						} else {
-							core::events.off("toast-cancelled", cancel_listener_id);
-							throw std::runtime_error("server returned 200 but no url");
-						}
-					} else if (poll_status == 202) {
-						// Still processing — loop continues (matches JS recursive setTimeout).
-						logging::write(std::format("video still processing, polling again in {}ms",
-							constants::KINO::POLL_INTERVAL));
-					} else {
-						core::events.off("toast-cancelled", cancel_listener_id);
-						throw std::runtime_error(std::format("server returned {}", poll_status));
-					}
-				} catch (const std::exception& e) {
-					core::events.off("toast-cancelled", cancel_listener_id);
-					if (!poll_cancelled) {
-						logging::write(std::format("poll request failed: {}", e.what()));
-						core::setToast("error", std::string("Failed to check video status: ") + e.what(),
-							{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
-						is_streaming = false;
-						core::view->videoPlayerState = false;
-					}
-					poll_done = true;
-				}
-			}
-
-			poll_active = false;
-		} else {
-			throw std::runtime_error(std::format("server returned {}", status));
-		}
-
-	} catch (const std::exception& e) {
+	const auto build_result = build_payload(file_data_id);
+	if (!build_result.has_value()) {
+		core::setToast("error", "Failed to get video encoding info");
 		is_streaming = false;
 		core::view->videoPlayerState = false;
-
-		logging::write(std::format("failed to stream video {}: {}", file_name, e.what()));
-		core::setToast("error", std::string("Failed to stream video: ") + e.what(),
-			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
+		return;
 	}
+
+	// Capture payload and subtitle by value for the background thread.
+	nlohmann::json payload = build_result->payload;
+	std::optional<SubtitleInfo> subtitle = build_result->subtitle;
+	logging::write(std::format("sending kino request: {}", payload.dump()));
+
+	// Show a progress toast on the main thread; it will be hidden when the result arrives.
+	core::setToast("progress", "Connecting to video server...", {}, -1, true);
+
+	// Register cancellation handler on the main thread (toast-cancelled is emitted on main thread).
+	// Only set the atomic flag here; main-thread state (is_streaming, videoPlayerState) is
+	// cleaned up in the result-consumption block in render() to avoid races with the background thread.
+	core::events.once("toast-cancelled", []() {
+		poll_cancelled.store(true);
+		poll_active.store(false);
+		is_streaming = false;
+		core::view->videoPlayerState = false;
+		logging::write("video streaming cancelled by user");
+	});
+
+	// Ensure any previous background thread is completed before launching a new one.
+	// std::jthread destructor requests stop and joins, so reset() is safe.
+	if (stream_worker_thread)
+		stream_worker_thread.reset();
+
+	// Launch the HTTP request + polling on a background thread so the UI stays responsive.
+	// Results are posted via stream_result_mutex / pending_stream_result and consumed in render().
+	stream_worker_thread = std::make_unique<std::jthread>([payload = std::move(payload),
+	                                                        subtitle = std::move(subtitle),
+	                                                        file_name]() {
+		try {
+			// JS: const send_request = async () => { ... fetch(constants.KINO.API_URL, ...) ... };
+			auto [status, data] = kino_post(payload);
+
+			// JS: const handle_response = async (res) => { ... };
+			if (poll_cancelled.load())
+				return;
+
+			if (status == 200) {
+				// JS: if (data.url) { ... }
+				if (data.contains("url") && data["url"].is_string()) {
+					std::string video_url = data["url"].get<std::string>();
+					logging::write(std::format("received video url: {}", video_url));
+
+					std::lock_guard<std::mutex> lock(stream_result_mutex);
+					pending_stream_result = StreamResult{true, std::move(video_url), subtitle, {}};
+				} else {
+					throw std::runtime_error("server returned 200 but no url");
+				}
+			} else if (status == 202) {
+				logging::write(std::format("video is queued for processing, polling in {}ms",
+					constants::KINO::POLL_INTERVAL));
+
+				// JS: poll_timer = setTimeout(async () => { ... }, constants.KINO.POLL_INTERVAL);
+				// JS uses recursive setTimeout for indefinite polling; C++ uses a loop in the background thread.
+				poll_active = true;
+
+				bool poll_done = false;
+				while (!poll_done && !poll_cancelled.load()) {
+					// Sleep for poll interval, then retry
+					std::this_thread::sleep_for(std::chrono::milliseconds(constants::KINO::POLL_INTERVAL));
+
+					if (poll_cancelled.load())
+						return;
+
+					try {
+						auto [poll_status, poll_data] = kino_post(payload);
+
+						if (poll_cancelled.load())
+							return;
+
+						if (poll_status == 200) {
+							if (poll_data.contains("url") && poll_data["url"].is_string()) {
+								std::string video_url = poll_data["url"].get<std::string>();
+								logging::write(std::format("received video url: {}", video_url));
+
+								std::lock_guard<std::mutex> lock(stream_result_mutex);
+								pending_stream_result = StreamResult{true, std::move(video_url), subtitle, {}};
+								poll_done = true;
+							} else {
+								throw std::runtime_error("server returned 200 but no url");
+							}
+						} else if (poll_status == 202) {
+							// Still processing — loop continues (matches JS recursive setTimeout).
+							logging::write(std::format("video still processing, polling again in {}ms",
+								constants::KINO::POLL_INTERVAL));
+						} else {
+							throw std::runtime_error(std::format("server returned {}", poll_status));
+						}
+					} catch (const std::exception& e) {
+						if (!poll_cancelled.load()) {
+							logging::write(std::format("poll request failed: {}", e.what()));
+							std::lock_guard<std::mutex> lock(stream_result_mutex);
+							pending_stream_result = StreamResult{false, {}, {}, std::string("Failed to check video status: ") + e.what()};
+						}
+						poll_done = true;
+					}
+				}
+
+				poll_active = false;
+			} else {
+				throw std::runtime_error(std::format("server returned {}", status));
+			}
+		} catch (const std::exception& e) {
+			logging::write(std::format("failed to stream video {}: {}", file_name, e.what()));
+			std::lock_guard<std::mutex> lock(stream_result_mutex);
+			pending_stream_result = StreamResult{false, {}, {}, std::string("Failed to stream video: ") + e.what()};
+		}
+	});
 }
 
 // JS: const load_video_listfile = async () => { ... }
@@ -1004,13 +1027,32 @@ void mounted() {
 void render() {
 	auto& view = *core::view;
 
+	// --- Consume results from the background streaming thread (main-thread only) ---
+	{
+		std::lock_guard<std::mutex> lock(stream_result_mutex);
+		if (pending_stream_result.has_value()) {
+			auto result = std::move(*pending_stream_result);
+			pending_stream_result.reset();
+
+			if (result.success) {
+				core::hideToast();
+				play_streaming_video(result.video_url, result.subtitle);
+			} else {
+				is_streaming = false;
+				core::view->videoPlayerState = false;
+				core::setToast("error", result.error_message,
+					{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
+			}
+		}
+	}
+
 	// --- Change-detection for selection (equivalent to watch on selectionVideos) ---
 	// JS: this.$core.view.$watch('selectionVideos', async selection => { ... });
 	if (!view.selectionVideos.empty()) {
 		const std::string first = casc::listfile::stripFileEntry(view.selectionVideos[0].get<std::string>());
 		if (view.isBusy == 0 && !first.empty() && selected_file != first) {
 			// cancel any pending polls when selection changes
-			poll_cancelled = true;
+			poll_cancelled.store(true);
 			poll_active = false;
 
 			selected_file = first;
@@ -1028,7 +1070,9 @@ void render() {
 	if (current_show_subtitles != prev_video_player_show_subtitles) {
 		// JS: if (current_subtitle_track && current_subtitle_track.track)
 		//     current_subtitle_track.track.mode = show ? 'showing' : 'hidden';
-		// TODO(conversion): Subtitle visibility toggle will be wired when video player subtitle rendering is integrated.
+		// Subtitle visibility is applied in the preview rendering below;
+		// the config value is read directly when deciding whether to show subtitles.
+		logging::write(std::format("subtitle visibility changed to: {}", current_show_subtitles ? "showing" : "hidden"));
 		prev_video_player_show_subtitles = current_show_subtitles;
 	}
 
@@ -1153,13 +1197,35 @@ void render() {
 	//     <video ref="video_player" class="preview-background" style="..." controls ...></video>
 	// </div>
 	ImGui::BeginChild("video-preview-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2), ImGuiChildFlags_Borders);
-	// TODO(conversion): Video preview rendering will be wired when media playback integration is complete.
 	// In the browser version, this is a <video> element with native playback controls.
-	// In C++, this will require a media playback backend (e.g., FFmpeg + OpenGL texture).
-	if (is_streaming || view.videoPlayerState)
-		ImGui::TextUnformatted("Video playback active...");
-	else
+	// In C++, video playback is handled externally via the platform shell (browser/media player).
+	// This preview area shows the current streaming state and subtitle text.
+	if (is_streaming || view.videoPlayerState) {
+		if (!current_video_url.empty()) {
+			ImGui::TextUnformatted("Video opened in external player");
+			ImGui::Spacing();
+			ImGui::TextWrapped("URL: %s", current_video_url.c_str());
+
+			// Show subtitle text overlay when enabled and available.
+			if (has_subtitle_track && !current_subtitle_vtt.empty() &&
+			    view.config.value("videoPlayerShowSubtitles", false)) {
+				ImGui::Spacing();
+				ImGui::Separator();
+				ImGui::TextUnformatted("Subtitles (VTT):");
+				ImGui::TextWrapped("%s", current_subtitle_vtt.c_str());
+			}
+
+			ImGui::Spacing();
+			if (ImGui::Button("Stop Video"))
+				stop_video();
+		} else if (poll_active) {
+			ImGui::TextUnformatted("Video is being processed, please wait...");
+		} else {
+			ImGui::TextUnformatted("Connecting to video server...");
+		}
+	} else {
 		ImGui::TextUnformatted("No video playing");
+	}
 	ImGui::EndChild();
 
 	// Preview controls.

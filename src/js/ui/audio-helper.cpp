@@ -170,11 +170,9 @@ void AudioPlayer::play(double from_offset) {
 	ma_sound_set_looping(sound, loop ? MA_TRUE : MA_FALSE);
 	ma_sound_set_volume(sound, volume);
 
-	// TODO(conversion): miniaudio does not have a direct per-sound "onended"
-	// callback in the same way as Web Audio API. The on_ended callback will
-	// need to be polled from the main loop by checking is_playing +
-	// ma_sound_at_end(). The AudioPlayer consumer must call get_position()
-	// periodically and handle the ended state.
+	// miniaudio does not have a direct per-sound "onended" callback like Web Audio API.
+	// The on_ended callback is fired from get_position() which polls ma_sound_at_end().
+	// Consumers must call get_position() periodically for end-of-playback detection.
 
 	ma_sound_start(sound);
 	is_playing = true;
