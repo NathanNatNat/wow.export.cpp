@@ -430,6 +430,7 @@ These files aren't `.cpp` but will need to be handled during or after conversion
 | File | Notes |
 |------|-------|
 | `data/app.css` | Main stylesheet — reference for C++ UI equivalent (ImGui theming, etc.) |
+| [`UI_REFERENCE.md`](UI_REFERENCE.md) | **Reference screenshots** of the original JS app — always compare against these when making UI changes |
 | `data/default_config.jsonc` | Default config — parsed at runtime from `data/` directory |
 | `data/shaders/*.shader` (9 files) | GLSL shaders — loaded from `data/shaders/` at runtime |
 | `data/fonts/` (3 files) | Font files — loaded from `data/fonts/` at runtime |
