@@ -5,8 +5,10 @@
  */
 #pragma once
 
+#include <filesystem>
 #include <string>
 #include <imgui.h>
+#include <glad/gl.h>
 
 /**
  * Application-level functions (app.cpp).
@@ -287,5 +289,17 @@ inline constexpr ImWchar ICON_FA_MAX = 0xF8FF;
  * Returns nullptr if the icon has no FA mapping (custom icon).
  */
 const char* getIconForFilename(const std::string& svg_filename);
+
+/**
+ * Load an SVG file and rasterize it into an OpenGL texture at the given size.
+ * Returns the GL texture ID (0 on failure).
+ */
+GLuint loadSvgTexture(const std::filesystem::path& path, int size);
+
+/**
+ * Load a PNG/JPEG image from disk into an OpenGL texture.
+ * Returns the GL texture ID (0 on failure).
+ */
+GLuint loadImageTexture(const std::filesystem::path& path, int* out_w = nullptr, int* out_h = nullptr);
 
 } // namespace app::theme

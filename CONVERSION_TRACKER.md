@@ -681,17 +681,17 @@ and "last opened" links.
 └─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
 ```
 
-- [ ] Center the three source cards vertically and horizontally in the content area (flexbox equivalent)
-- [ ] Each card: 700px wide, min-height 120px, 3px dashed border in `--font-faded` (#6c757d), border-radius 15px, padding 30px, gap 30px between icon and content
-- [ ] Card hover: border color changes to `--font-highlight` (#ffffff)
-- [ ] Source icon: 80×80px (shrink to 50×50 on small windows), loaded from `data/images/wow_logo.svg`, `import_battlenet.svg`, `mpq.svg`
-- [ ] Title text: 22px bold, `--font-highlight` (#ffffff) color
-- [ ] Subtitle text: 16px, opacity 0.7
-- [ ] "Last opened" link: 15px text below subtitle showing recent install path (clickable to open directly)
-- [ ] CDN region selector: inline text with clickable region name showing a context menu (not an ImGui::Combo dropdown)
-- [ ] Remove the current `ImGui::Separator()` dividers between sections
-- [ ] Remove the current `ImGui::BeginChild("##source-select-panel")` flat panel layout
-- [ ] Responsive: at window height < 800px, reduce card padding to 15px 20px, gap to 15px, icon to 50×50, title to 18px, subtitle to 14px
+- [x] Center the three source cards vertically and horizontally in the content area (flexbox equivalent)
+- [x] Each card: 700px wide, min-height 120px, 3px dashed border in `--font-faded` (#6c757d), border-radius 15px, padding 30px, gap 30px between icon and content
+- [x] Card hover: border color changes to `--font-highlight` (#ffffff)
+- [x] Source icon: 80×80px (shrink to 50×50 on small windows), loaded from `data/images/wow_logo.svg`, `import_battlenet.svg`, `mpq.svg`
+- [x] Title text: 22px bold, `--font-highlight` (#ffffff) color
+- [x] Subtitle text: 16px, opacity 0.7
+- [x] "Last opened" link: 15px text below subtitle showing recent install path (clickable to open directly)
+- [x] CDN region selector: inline text with clickable region name showing a context menu (not an ImGui::Combo dropdown)
+- [x] Remove the current `ImGui::Separator()` dividers between sections
+- [x] Remove the current `ImGui::BeginChild("##source-select-panel")` flat panel layout
+- [x] Responsive: at window height < 800px, reduce card padding to 15px 20px, gap to 15px, icon to 50×50, title to 18px, subtitle to 14px
 
 ### 9.8 Build Select Screen Layout
 
