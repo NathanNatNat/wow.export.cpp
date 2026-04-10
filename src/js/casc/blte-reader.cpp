@@ -132,6 +132,16 @@ BLTEReader::BLTEReader(BufferWrapper buf, const std::string& hash, bool partialD
 
 // --- BLTEReader instance methods ---
 
+void BLTEReader::_checkBounds(size_t length) {
+	BufferWrapper::_checkBounds(length);
+
+	const size_t pos = offset() + length;
+	while (pos > blockWriteIndex) {
+		if (_processBlock() == false)
+			return;
+	}
+}
+
 void BLTEReader::processAllBlocks() {
 	while (blockIndex < blocks.size())
 		_processBlock();

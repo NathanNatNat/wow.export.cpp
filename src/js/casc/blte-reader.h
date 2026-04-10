@@ -88,6 +88,15 @@ public:
 	 */
 	const std::string& getDataURL();
 
+protected:
+	/**
+	 * Override _checkBounds to lazily decompress BLTE blocks on demand.
+	 * Matches the original JS behaviour where reads automatically trigger
+	 * block decompression as needed.
+	 * @param length Number of bytes required.
+	 */
+	void _checkBounds(size_t length) override;
+
 private:
 	/**
 	 * Process the next BLTE block.
