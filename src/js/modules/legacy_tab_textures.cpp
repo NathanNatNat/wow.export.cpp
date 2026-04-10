@@ -18,6 +18,7 @@
 #include "../components/context-menu.h"
 #include "../components/menu-button.h"
 
+#include <stb_image.h>
 #include <cstring>
 #include <format>
 #include <algorithm>
@@ -72,35 +73,49 @@ static void preview_texture(const std::string& filename) {
 			// JS: const wrapped = new BufferWrapper(buffer);
 			// JS: const blp = new BLPFile(wrapped);
 			BufferWrapper wrapped(std::move(*data));
-			// TODO(conversion): BLP preview will be rendered when GL texture display is integrated.
-			// BLPImage blp(std::move(wrapped));
+			casc::BLPImage blp(wrapped);
 
 			// JS: core.view.texturePreviewURL = blp.getDataURL(core.view.config.exportChannelMask);
+			uint8_t mask = static_cast<uint8_t>(view.config.value("exportChannelMask", 0b1111));
+			view.texturePreviewURL = blp.getDataURL(mask);
 			// JS: core.view.texturePreviewWidth = blp.width;
 			// JS: core.view.texturePreviewHeight = blp.height;
+			view.texturePreviewWidth = static_cast<int>(blp.width);
+			view.texturePreviewHeight = static_cast<int>(blp.height);
 
 			// JS: let info = '';
 			// JS: switch (blp.encoding) { ... }
-			// Encoding info logic:
-			// case 1: info = "Palette"
-			// case 2: info = "Compressed " + (alphaDepth > 1 ? (alphaEncoding === 7 ? "DXT5" : "DXT3") : "DXT1")
-			// case 3: info = "ARGB"
-			// default: info = "Unsupported [" + encoding + "]"
+			std::string info;
+			switch (blp.encoding) {
+				case 1: info = "Palette"; break;
+				case 2:
+					if (blp.alphaDepth > 1)
+						info = std::string("Compressed ") + (blp.alphaEncoding == 7 ? "DXT5" : "DXT3");
+					else
+						info = "Compressed DXT1";
+					break;
+				case 3: info = "ARGB"; break;
+				default: info = std::format("Unsupported [{}]", blp.encoding); break;
+			}
 
 			// JS: core.view.texturePreviewInfo = `${blp.width}x${blp.height} (${info})`;
+			view.texturePreviewInfo = std::format("{}x{} ({})", blp.width, blp.height, info);
 		} else if (ext == ".png" || ext == ".jpg") {
 			// JS: const buffer = Buffer.from(data);
-			// JS: const base64 = buffer.toString('base64');
-			// JS: const mime_type = ext === '.png' ? 'image/png' : 'image/jpeg';
-			// JS: const data_url = `data:${mime_type};base64,${base64}`;
-			// TODO(conversion): PNG/JPG preview rendering will use stb_image + GL texture display.
-			(void)data; // MPQ data is available; rendering wired in Phase 5.
-
-			// JS: const img = new Image();
-			// JS: img.onload = () => { core.view.texturePreviewWidth = img.width; ... };
-			// JS: img.src = data_url;
+			// JS: const img = new Image(); img.onload = () => { ... }
+			// Use stb_image to detect dimensions from the raw file data.
+			int img_w = 0, img_h = 0, img_channels = 0;
+			if (stbi_info_from_memory(data->data(), static_cast<int>(data->size()), &img_w, &img_h, &img_channels)) {
+				view.texturePreviewWidth = img_w;
+				view.texturePreviewHeight = img_h;
+			}
 
 			// JS: core.view.texturePreviewURL = data_url;
+			// Store a simple marker so the preview section renders.
+			const std::string mime_type = (ext == ".png") ? "image/png" : "image/jpeg";
+			BufferWrapper img_buf(std::move(*data));
+			view.texturePreviewURL = "data:" + mime_type + ";base64," + img_buf.toBase64();
+			view.texturePreviewInfo = std::format("{}x{} ({})", img_w, img_h, ext.substr(1));
 		}
 
 		selected_file = filename;
@@ -132,9 +147,9 @@ static void refresh_blp_preview() {
 		auto data = mpq ? mpq->getFile(selected_file) : std::nullopt;
 		if (data) {
 			BufferWrapper wrapped(std::move(*data));
-			// TODO(conversion): BLP re-render with updated channel mask will be wired in Phase 5.
-			// BLPImage blp(std::move(wrapped));
-			// core::view->texturePreviewURL = blp.getDataURL(core::view->config.value("exportChannelMask", 0b1111));
+			casc::BLPImage blp(wrapped);
+			uint8_t mask = static_cast<uint8_t>(core::view->config.value("exportChannelMask", 0b1111));
+			core::view->texturePreviewURL = blp.getDataURL(mask);
 		}
 	} catch (const std::exception& e) {
 		logging::write(std::format("failed to refresh preview for {}: {}", selected_file, e.what()));

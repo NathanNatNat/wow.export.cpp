@@ -700,9 +700,12 @@ void export_files(const std::vector<nlohmann::json>& files, bool is_local, int e
 		if (!active_path.empty()) {
 			// JS: const canvas = document.getElementById('model-preview').querySelector('canvas');
 			// JS: await modelViewerUtils.export_preview(core, format, canvas, active_path);
-			// TODO(conversion): GL context for export_preview will be wired when model viewer GL is integrated.
-			// model_viewer_utils::export_preview(format, gl_context, active_path);
-			core::setToast("info", "PNG/Clipboard export pending GL integration.", {}, 4000);
+			gl::GLContext* gl_ctx = viewer_context.gl_context;
+			if (gl_ctx && viewer_state.fbo != 0) {
+				glBindFramebuffer(GL_FRAMEBUFFER, viewer_state.fbo);
+				model_viewer_utils::export_preview(format, *gl_ctx, active_path);
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			}
 		} else {
 			// JS: core.setToast('error', 'The selected export option only works for model previews. Preview something first!', null, -1);
 			core::setToast("error", "The selected export option only works for model previews. Preview something first!", {}, -1);

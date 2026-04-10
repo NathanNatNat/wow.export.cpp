@@ -246,8 +246,7 @@ static void export_files(const std::vector<const db::caches::DBDecor::DecorItem*
 	auto& view = *core::view;
 
 	// JS: const export_paths = core.openLastExportStream();
-	// TODO(conversion): Export stream will be wired when file I/O is integrated.
-	// FileWriter export_paths = core::openLastExportStream();
+	auto export_paths = core::openLastExportStream();
 
 	// JS: const format = core.view.config.exportDecorFormat;
 	const std::string format = view.config.value("exportDecorFormat", std::string("OBJ"));
@@ -261,15 +260,18 @@ static void export_files(const std::vector<const db::caches::DBDecor::DecorItem*
 			const std::string export_name = casc::ExportHelper::sanitizeFilename(raw_name);
 
 			// JS: await modelViewerUtils.export_preview(core, format, canvas, export_name, 'decor');
-			// TODO(conversion): GL context needed for export_preview; will be wired when renderer is integrated.
-			// model_viewer_utils::export_preview(format, gl_context, export_name, "decor");
-			core::setToast("info", "Preview export not yet wired.", {}, 2000);
+			gl::GLContext* gl_ctx = viewer_context.gl_context;
+			if (gl_ctx && viewer_state.fbo != 0) {
+				glBindFramebuffer(GL_FRAMEBUFFER, viewer_state.fbo);
+				model_viewer_utils::export_preview(format, *gl_ctx, export_name, "decor");
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			}
 		} else {
 			core::setToast("error", "The selected export option only works for model previews. Preview something first!", {}, -1);
 		}
 
 		// JS: export_paths?.close();
-		return;
+		export_paths.close();
 	}
 
 	// JS: const casc = core.view.casc;
@@ -338,6 +340,7 @@ static void export_files(const std::vector<const db::caches::DBDecor::DecorItem*
 
 	helper.finish();
 	// JS: export_paths?.close();
+	export_paths.close();
 }
 
 // --- apply_filters ---
