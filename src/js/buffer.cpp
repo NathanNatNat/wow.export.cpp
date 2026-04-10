@@ -1106,7 +1106,7 @@ return BufferWrapper(zlib_deflate(_buf.data(), _buf.size()));
 // Private
 // =====================================================================
 
-void BufferWrapper::_checkBounds(size_t length) const {
+void BufferWrapper::_checkBounds(size_t length) {
 if (remainingBytes() < length)
 throw std::runtime_error("Buffer operation out-of-bounds: " +
 std::to_string(length) + " > " + std::to_string(remainingBytes()));

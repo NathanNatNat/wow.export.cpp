@@ -91,7 +91,7 @@ public:
 	/** Copy assignment. */
 	BufferWrapper& operator=(const BufferWrapper& other) = default;
 
-	~BufferWrapper();
+	virtual ~BufferWrapper();
 
 	// -----------------------------------------------------------------------
 	// Property getters (JS `get` accessors)
@@ -447,13 +447,16 @@ public:
 	 */
 	BufferWrapper deflate() const;
 
-private:
+protected:
 	/**
 	 * Check a given length does not exceed remaining capacity.
+	 * Virtual so that BLTEReader can override to lazily decompress blocks
+	 * on demand (matching the original JS behaviour).
 	 * @param length Number of bytes required.
 	 */
-	void _checkBounds(size_t length) const;
+	virtual void _checkBounds(size_t length);
 
+private:
 	size_t _ofs = 0;
 	std::vector<uint8_t> _buf;
 	void* _mmap = nullptr;

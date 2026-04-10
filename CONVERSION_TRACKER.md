@@ -1075,10 +1075,17 @@ converted — verify the wiring is complete at runtime.
 
 ### 11.1 BLTEReader Missing Lazy Block Processing (Root Cause)
 
-The original JS `BLTEReader` overrides `_checkBounds(length)` on `BufferWrapper`
-to **lazily decompress BLTE blocks on demand** whenever a read extends beyond
-already-decompressed data. This is the mechanism that makes `new BLTEReader(data, hash)`
-immediately usable for reading — blocks are auto-decompressed as needed by reads.
+**✅ RESOLVED** — Option 1 implemented: `_checkBounds` is now `protected virtual`
+in `BufferWrapper` and overridden in `BLTEReader` to lazily decompress BLTE blocks
+on demand, exactly matching the original JS behaviour.
+
+Changes made:
+- `buffer.h`: `_checkBounds` moved from `private` to `protected virtual` (non-const,
+  since the BLTEReader override mutates state). Destructor made `virtual`.
+- `buffer.cpp`: `_checkBounds` signature updated to match (removed `const`).
+- `blte-reader.h`: Added `_checkBounds` override declaration in `protected` section.
+- `blte-reader.cpp`: Added `_checkBounds` override that calls `super._checkBounds(length)`,
+  then lazily processes blocks while `offset + length > blockWriteIndex`.
 
 **JS (`blte-reader.js`, lines 311-321 at commit 8d2e6a8e):**
 ```js
@@ -1092,39 +1099,20 @@ _checkBounds(length) {
 }
 ```
 
-The C++ conversion does NOT have this override. `_checkBounds()` is `private`
-(non-virtual) in `BufferWrapper`, so the BLTEReader cannot intercept reads.
-The C++ BLTEReader allocates a zeroed output buffer in the constructor but
-never decompresses blocks into it unless `processAllBlocks()` is explicitly
-called. Reads from the BLTEReader therefore return zeros.
-
-**Fix options (pick one):**
-
-1. **Make `_checkBounds` virtual** in `BufferWrapper` and override in `BLTEReader`
-   to match the JS lazy-processing behavior exactly. This preserves the memory
-   and performance benefits of lazy loading (significant for large BLTE files
-   where only partial content is accessed, e.g., streaming). Requires changing
-   `BufferWrapper`'s design — `_checkBounds` must become `protected virtual`.
-   No other `BufferWrapper` subclasses exist, so the impact is limited.
-2. **Add explicit `processAllBlocks()` calls** at every site that creates a
-   `BLTEReader` and then reads from it (see §11.2 below). Simpler to implement
-   but eliminates lazy loading — all blocks are decompressed upfront even if
-   only partial data is needed. This could be significant for large files.
-
-- [ ] Implement lazy block processing in BLTEReader (option 1 or 2)
+- [x] Implement lazy block processing in BLTEReader (option 1 — virtual `_checkBounds`)
 
 ### 11.2 Call Sites Missing `processAllBlocks()`
 
-These call sites create a `BLTEReader` and then immediately read from it
-**without** calling `processAllBlocks()`. In JS, the `_checkBounds` override
-handles this transparently. In C++, reads return zeros from the uninitialized
-output buffer.
+**✅ RESOLVED** — With option 1 (virtual `_checkBounds` override in BLTEReader),
+all call sites are automatically handled. The lazy block processing triggers
+transparently on every read, matching the original JS behaviour. No explicit
+`processAllBlocks()` calls are needed at these sites.
 
-| Call Site | File | Line | Impact |
+| Call Site | File | Line | Status |
 |-----------|------|------|--------|
-| `parseEncodingFile()` | `casc-source.cpp` | 494 | 🔴 Crashes with "Invalid encoding magic: 0" — **reported failure** |
-| `parseRootFile()` | `casc-source.cpp` | 377 | 🔴 Crashes when executed — reads root magic from zeroed buffer |
-| `getInstallManifest()` | `casc-source.cpp` | 115 | 🔴 Crashes when executed — InstallManifest reads from zeroed buffer |
+| `parseEncodingFile()` | `casc-source.cpp` | 494 | ✅ Fixed by lazy `_checkBounds` |
+| `parseRootFile()` | `casc-source.cpp` | 377 | ✅ Fixed by lazy `_checkBounds` |
+| `getInstallManifest()` | `casc-source.cpp` | 115 | ✅ Fixed by lazy `_checkBounds` |
 
 **Call sites that already call `processAllBlocks()` (no fix needed):**
 
@@ -1142,14 +1130,13 @@ output buffer.
 | `getFileAsBLTE()` | `casc-source-local.cpp` | 96 |
 | `getFileAsBLTE()` | `casc-source-remote.cpp` | 194 |
 
-For these returned BLTEReaders, if option 1 (virtual `_checkBounds`) is chosen,
-no changes are needed — lazy processing handles it. If option 2 is chosen,
-every **caller** of `getFileAsBLTE()` must call `processAllBlocks()` before reading.
+With option 1, these are handled transparently — callers can read directly
+from the returned BLTEReader and blocks will decompress lazily on demand.
 
-- [ ] Fix `parseEncodingFile()` — add `processAllBlocks()` or rely on virtual `_checkBounds`
-- [ ] Fix `parseRootFile()` — add `processAllBlocks()` or rely on virtual `_checkBounds`
-- [ ] Fix `getInstallManifest()` — add `processAllBlocks()` or rely on virtual `_checkBounds`
-- [ ] Audit all callers of `getFileAsBLTE()` to ensure they handle block processing
+- [x] Fix `parseEncodingFile()` — relies on virtual `_checkBounds` (lazy processing)
+- [x] Fix `parseRootFile()` — relies on virtual `_checkBounds` (lazy processing)
+- [x] Fix `getInstallManifest()` — relies on virtual `_checkBounds` (lazy processing)
+- [x] Audit all callers of `getFileAsBLTE()` — handled transparently by virtual `_checkBounds`
 
 ### 11.3 Historical Context
 
