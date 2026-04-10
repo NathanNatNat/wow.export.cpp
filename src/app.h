@@ -139,8 +139,8 @@ inline constexpr ImU32 SLIDER_TRACK_U32  = IM_COL32(80, 80, 80, 255);
 inline constexpr ImU32 SLIDER_THUMB_U32        = IM_COL32(200, 200, 200, 200);
 inline constexpr ImU32 SLIDER_THUMB_ACTIVE_U32 = IM_COL32(255, 255, 255, 220);
 
-// Field border (subtle white outline for combobox/file-field)
-inline constexpr ImU32 FIELD_BORDER_U32  = IM_COL32(255, 255, 255, 100);
+// Field placeholder text (subtle white for empty input fields)
+inline constexpr ImU32 FIELD_PLACEHOLDER_U32 = IM_COL32(255, 255, 255, 100);
 
 // Dash selection line color (map-viewer)
 inline constexpr ImU32 DASH_COLOR_U32    = IM_COL32(255, 255, 255, 230);

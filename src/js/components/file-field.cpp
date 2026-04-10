@@ -350,7 +350,7 @@ void render(const char* id, const std::string& modelValue, const char* placehold
 		const ImVec2 textPos = ImGui::GetItemRectMin();
 		ImGui::GetWindowDrawList()->AddText(
 			ImVec2(textPos.x + 4.0f, textPos.y + 2.0f),
-			app::theme::FIELD_BORDER_U32,
+			app::theme::FIELD_PLACEHOLDER_U32,
 			placeholder
 		);
 	}
