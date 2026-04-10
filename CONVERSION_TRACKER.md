@@ -597,12 +597,11 @@ after a CASC/MPQ source is loaded (not on the source-select screen).
 ### 9.3 ImGui Theme from app.css
 
 The original app uses `data/app.css` with **231 CSS variables** for colors, spacing,
-borders, and rounding. The C++ app currently calls only `ImGui::StyleColorsDark()` (the
-generic ImGui default). A centralized theme system must map the CSS variables to
-`ImGuiStyle` colors and settings.
+borders, and rounding. The C++ app now has a centralized `app::theme` namespace (in
+`app.h` / `app.cpp`) that maps all CSS variables to `ImGuiStyle` colors and settings.
 
-- [ ] Create a centralized theme struct/function mapping all CSS color variables to `ImGuiStyle::Colors[]`
-- [ ] Key color mappings:
+- [x] Create a centralized theme struct/function mapping all CSS color variables to `ImGuiStyle::Colors[]`
+- [x] Key color mappings:
   - `--background` (#343a40) → `ImGuiCol_WindowBg`, `glClearColor`
   - `--background-dark` (#2c3136) → `ImGuiCol_MenuBarBg`, header/footer background
   - `--background-alt` (#3c4147) → `ImGuiCol_ChildBg` for alternate panels
@@ -616,13 +615,13 @@ generic ImGui default). A centralized theme system must map the CSS variables to
   - `--form-button-disabled` (#696969) → disabled button color
   - `--nav-option-selected` (#22b549) → active tab highlight
   - `--toast-error` (#dc9090), `--toast-success` (#a6dc90), `--toast-info` (#90bcdc), `--toast-progress` (#dcba90) → toast bar colors
-- [ ] Map CSS spacing/rounding/border variables to `ImGuiStyle` padding/rounding values:
+- [x] Map CSS spacing/rounding/border variables to `ImGuiStyle` padding/rounding values:
   - Button padding: 9px 13px, border-radius 5px
   - Scrollbar width: 8px, thumb border-radius 5px
   - Window rounding: 0 (the app uses sharp corners)
-- [ ] Replace hardcoded `IM_COL32(...)` values scattered in components (e.g. `data-table.cpp`) with theme references
-- [ ] Replace the no-op `reloadStylesheet()` in `app.cpp` with actual theme application
-- [ ] Set `glClearColor` from `--background` CSS variable (`#343a40`) — currently hardcoded at `app.cpp:1045` but needs theme reference
+- [x] Replace hardcoded `IM_COL32(...)` values scattered in components (e.g. `data-table.cpp`) with theme references
+- [x] Replace the no-op `reloadStylesheet()` in `app.cpp` with actual theme application
+- [x] Set `glClearColor` from `--background` CSS variable (`#343a40`) — now uses `app::theme::BG_CLEAR_*` constants
 
 ### 9.4 Custom Font Loading
 

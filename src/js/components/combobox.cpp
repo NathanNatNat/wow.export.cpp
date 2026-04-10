@@ -6,6 +6,7 @@
 #include "combobox.h"
 
 #include <imgui.h>
+#include "../../app.h"
 #include <algorithm>
 #include <cctype>
 
@@ -144,7 +145,7 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 		const ImVec2 textPos = ImGui::GetItemRectMin();
 		ImGui::GetWindowDrawList()->AddText(
 			ImVec2(textPos.x + 4.0f, textPos.y + 2.0f),
-			IM_COL32(255, 255, 255, 100),
+			app::theme::FIELD_PLACEHOLDER_U32,
 			placeholder
 		);
 	}

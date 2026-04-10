@@ -6,6 +6,7 @@
 #include "file-field.h"
 
 #include <imgui.h>
+#include "../../app.h"
 #include <string>
 
 #ifdef _WIN32
@@ -349,7 +350,7 @@ void render(const char* id, const std::string& modelValue, const char* placehold
 		const ImVec2 textPos = ImGui::GetItemRectMin();
 		ImGui::GetWindowDrawList()->AddText(
 			ImVec2(textPos.x + 4.0f, textPos.y + 2.0f),
-			IM_COL32(255, 255, 255, 100),
+			app::theme::FIELD_PLACEHOLDER_U32,
 			placeholder
 		);
 	}

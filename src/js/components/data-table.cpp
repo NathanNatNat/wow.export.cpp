@@ -6,6 +6,7 @@
 #include "data-table.h"
 
 #include <imgui.h>
+#include "../../app.h"
 #include <cmath>
 #include <algorithm>
 #include <regex>
@@ -1024,7 +1025,7 @@ void render(const char* id,
 		drawList->AddRectFilled(
 			ImVec2(winPos.x, headerStartY),
 			ImVec2(winPos.x + containerWidth, headerStartY + headerHeight),
-			IM_COL32(52, 58, 64, 255) // --background equivalent
+			app::theme::BG_U32
 		);
 
 		float colX = headerStartX;
@@ -1039,7 +1040,7 @@ void render(const char* id,
 				drawList->AddRect(
 					ImVec2(colX, headerStartY),
 					ImVec2(colX + colWidth, headerStartY + headerHeight),
-					IM_COL32(73, 80, 87, 255) // --border color
+					app::theme::BORDER_U32
 				);
 
 				// Header text (CSS: padding: 10px)
@@ -1049,7 +1050,7 @@ void render(const char* id,
 
 				ImVec2 textPos(colX + textPadding, headerStartY + (headerHeight - ImGui::GetTextLineHeight()) / 2.0f);
 				drawList->PushClipRect(ImVec2(colX + 1.0f, headerStartY), ImVec2(colX + colWidth - iconAreaWidth, headerStartY + headerHeight), true);
-				drawList->AddText(textPos, IM_COL32(255, 255, 255, 204), headers[static_cast<size_t>(i)].c_str());
+				drawList->AddText(textPos, app::theme::FONT_PRIMARY_U32, headers[static_cast<size_t>(i)].c_str());
 				drawList->PopClipRect();
 
 				// ── Header icons (filter + sort) ────────────────────
@@ -1068,7 +1069,7 @@ void render(const char* id,
 
 				// Render filter icon (funnel shape)
 				bool filterHovered = ImGui::IsMouseHoveringRect(filterIconMin, filterIconMax);
-				ImU32 filterColor = filterHovered ? IM_COL32(255, 255, 255, 255) : IM_COL32(255, 255, 255, 128);
+				ImU32 filterColor = filterHovered ? app::theme::FONT_HIGHLIGHT_U32 : app::theme::ICON_DEFAULT_U32;
 				// Simple funnel icon
 				float fx = filterIconMin.x, fy = filterIconMin.y;
 				drawList->AddTriangleFilled(
@@ -1090,7 +1091,7 @@ void render(const char* id,
 				// Render sort icon
 				const char* sortIconName = getSortIconName(i, state);
 				bool sortHovered = ImGui::IsMouseHoveringRect(sortIconMin, sortIconMax);
-				ImU32 sortColor = sortHovered ? IM_COL32(255, 255, 255, 255) : IM_COL32(255, 255, 255, 128);
+				ImU32 sortColor = sortHovered ? app::theme::FONT_HIGHLIGHT_U32 : app::theme::ICON_DEFAULT_U32;
 
 				float sx = sortIconMin.x;
 				float sy = sortIconMin.y;
@@ -1214,11 +1215,11 @@ void render(const char* id,
 			ImU32 rowBg;
 			if (isSelected) {
 				// CSS: .ui-datatable table tr.selected { background: var(--font-alt) !important }
-				rowBg = IM_COL32(100, 100, 100, 255);
+				rowBg = app::theme::TABLE_ROW_HOVER_U32;
 			} else if (displayRow % 2 == 1) {
-				rowBg = IM_COL32(40, 44, 48, 255); // --background-alt
+				rowBg = app::theme::BG_ALT_U32;
 			} else {
-				rowBg = IM_COL32(33, 37, 41, 255); // --background-dark
+				rowBg = app::theme::BG_DARK_U32;
 			}
 
 			ImVec2 rowMin(winPos.x, rowY);
@@ -1228,7 +1229,7 @@ void render(const char* id,
 			// Row hover effect
 			// CSS: .ui-datatable table tbody tr:hover { background: var(--font-alt) }
 			if (!isSelected && ImGui::IsMouseHoveringRect(rowMin, rowMax)) {
-				drawList->AddRectFilled(rowMin, rowMax, IM_COL32(100, 100, 100, 100));
+				drawList->AddRectFilled(rowMin, rowMax, app::theme::TABLE_ROW_SELECTED_U32);
 			}
 
 			// Row click handling
@@ -1272,7 +1273,7 @@ void render(const char* id,
 					ImVec2 textPos(cellX + cellPadding, rowY + (rowHeight - ImGui::GetTextLineHeight()) / 2.0f);
 
 					drawList->PushClipRect(ImVec2(cellX, rowY), ImVec2(cellX + cw, rowY + rowHeight), true);
-					drawList->AddText(textPos, IM_COL32(255, 255, 255, 204), row[static_cast<size_t>(c)].c_str());
+					drawList->AddText(textPos, app::theme::FONT_PRIMARY_U32, row[static_cast<size_t>(c)].c_str());
 					drawList->PopClipRect();
 				}
 
@@ -1300,8 +1301,8 @@ void render(const char* id,
 		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
 		// CSS: .scroller > div { background: var(--font-primary) } / .scroller:hover > div { background: var(--font-highlight) }
 		const ImU32 thumbColor = thumbHovered
-			? IM_COL32(255, 255, 255, 255) // --font-highlight
-			: IM_COL32(255, 255, 255, 204); // --font-primary
+			? app::theme::FONT_HIGHLIGHT_U32
+			: app::theme::FONT_PRIMARY_U32;
 
 		// CSS: opacity: 0.7
 		const ImU32 thumbColorWithOpacity = (thumbColor & 0x00FFFFFF) | (static_cast<ImU32>(static_cast<float>((thumbColor >> 24) & 0xFF) * 0.7f) << 24);
@@ -1331,8 +1332,8 @@ void render(const char* id,
 
 		const bool hThumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isHorizontalScrolling;
 		const ImU32 hThumbColor = hThumbHovered
-			? IM_COL32(255, 255, 255, 255)
-			: IM_COL32(255, 255, 255, 204);
+			? app::theme::FONT_HIGHLIGHT_U32
+			: app::theme::FONT_PRIMARY_U32;
 
 		const ImU32 hThumbColorWithOpacity = (hThumbColor & 0x00FFFFFF) | (static_cast<ImU32>(static_cast<float>((hThumbColor >> 24) & 0xFF) * 0.7f) << 24);
 

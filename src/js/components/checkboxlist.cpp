@@ -6,6 +6,7 @@
 #include "checkboxlist.h"
 
 #include <imgui.h>
+#include "../../app.h"
 #include <cmath>
 #include <algorithm>
 
@@ -193,8 +194,8 @@ void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListStat
 		// Determine if mouse is over the thumb for hover effect.
 		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
 		const ImU32 thumbColor = thumbHovered
-			? IM_COL32(255, 255, 255, 180)
-			: IM_COL32(255, 255, 255, 80);
+			? app::theme::TEXT_ACTIVE_U32
+			: app::theme::TEXT_IDLE_U32;
 
 		drawList->AddRectFilled(thumbMin, thumbMax, thumbColor, 4.0f);
 
@@ -218,14 +219,14 @@ void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListStat
 		if ((i - startIdx) % 2 == 1) {
 			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
 			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
-			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, IM_COL32(255, 255, 255, 8));
+			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::ROW_HOVER_U32);
 		}
 
 		// Selected highlight (class "selected" when item.checked).
 		if (checked) {
 			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
 			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
-			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, IM_COL32(34, 181, 73, 40));
+			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::ROW_SELECTED_U32);
 		}
 
 		ImGui::PushID(i);

@@ -6,6 +6,7 @@
 #include "slider.h"
 
 #include <imgui.h>
+#include "../../app.h"
 #include <algorithm>
 #include <cmath>
 
@@ -113,7 +114,7 @@ void render(const char* id, float value, SliderState& state,
 	// Track background.
 	const ImVec2 trackMin(winPos.x, winPos.y + sliderHeight * 0.3f);
 	const ImVec2 trackMax(winPos.x + sliderWidth, winPos.y + sliderHeight * 0.7f);
-	drawList->AddRectFilled(trackMin, trackMax, IM_COL32(80, 80, 80, 255), 3.0f);
+	drawList->AddRectFilled(trackMin, trackMax, app::theme::SLIDER_TRACK_U32, 3.0f);
 
 	// <div class="fill" :style="{ width: (modelValue * 100) + '%' }"></div>
 	// Fill bar.
@@ -121,7 +122,7 @@ void render(const char* id, float value, SliderState& state,
 	if (fillWidth > 0.0f) {
 		const ImVec2 fillMin(winPos.x, winPos.y + sliderHeight * 0.3f);
 		const ImVec2 fillMax(winPos.x + fillWidth, winPos.y + sliderHeight * 0.7f);
-		drawList->AddRectFilled(fillMin, fillMax, IM_COL32(34, 181, 73, 255), 3.0f);
+		drawList->AddRectFilled(fillMin, fillMax, app::theme::BUTTON_BASE_U32, 3.0f);
 	}
 
 	// <div class="handle" ref="handle" @mousedown="startMouse" :style="{ left: (modelValue * 100) + '%' }"></div>
@@ -131,8 +132,8 @@ void render(const char* id, float value, SliderState& state,
 	const ImVec2 handleMax(handleX + handleWidth, winPos.y + sliderHeight);
 	const bool handleHovered = ImGui::IsMouseHoveringRect(handleMin, handleMax) || state.isScrolling;
 	const ImU32 handleColor = handleHovered
-		? IM_COL32(255, 255, 255, 220)
-		: IM_COL32(200, 200, 200, 200);
+		? app::theme::SLIDER_THUMB_ACTIVE_U32
+		: app::theme::SLIDER_THUMB_U32;
 	drawList->AddRectFilled(handleMin, handleMax, handleColor, 3.0f);
 
 	// Handle mouse-down on the handle.
