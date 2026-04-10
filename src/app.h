@@ -182,10 +182,36 @@ inline constexpr float DEFAULT_FONT_SIZE = 16.0f;
  * Load custom fonts (Selawik regular, Selawik bold, Gambler) into
  * the ImGui font atlas from data/fonts/*.ttf.
  *
+ * Fonts are loaded at DEFAULT_FONT_SIZE * dpiScale so that they render
+ * crisply on high-DPI displays. The caller is responsible for setting
+ * ImGui::GetIO().FontGlobalScale = 1.0f / dpiScale so that logical
+ * sizes remain unchanged.
+ *
  * Must be called after ImGui::CreateContext() and before the first frame.
  * Sets the Selawik regular font as the default.
+ *
+ * @param dpiScale  The display content scale from GLFW (1.0 on standard
+ *                  displays, 2.0 on Retina/200% scaling, etc.).
  */
-void loadFonts();
+void loadFonts(float dpiScale = 1.0f);
+
+/**
+ * Rebuild the font atlas for a new DPI scale factor.
+ *
+ * Clears the existing atlas, reloads all fonts at the new scale, and
+ * re-creates the OpenGL font texture. Call this when the window's
+ * content scale changes (e.g. moved to a monitor with different DPI).
+ *
+ * @param dpiScale  The new display content scale from GLFW.
+ */
+void rebuildFontsForScale(float dpiScale);
+
+/**
+ * Return the current DPI scale factor that fonts were loaded at.
+ * This is the value most recently passed to loadFonts() or
+ * rebuildFontsForScale().
+ */
+float getDpiScale();
 
 /**
  * Return the bold font (Selawik Bold). Falls back to the default font

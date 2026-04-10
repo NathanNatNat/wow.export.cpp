@@ -649,9 +649,9 @@ render via the nanosvg SVG texture fallback.
 
 ### 9.6 DPI / High-DPI Scaling
 
-- [ ] Implement proper high-DPI scaling via `ImGui::GetIO().FontGlobalScale` and GLFW framebuffer scale
-- [ ] Rebuild font atlas at appropriate sizes for the display scale factor
-- [ ] Match JS scaling logic: scale down when window < 1120×700, never scale up above 1.0
+- [x] Implement proper high-DPI scaling via `ImGui::GetIO().FontGlobalScale` and GLFW framebuffer scale
+- [x] Rebuild font atlas at appropriate sizes for the display scale factor
+- [x] Match JS scaling logic: scale down when window < 1120×700, never scale up above 1.0
 
 ### 9.7 Source Select Screen Layout
 

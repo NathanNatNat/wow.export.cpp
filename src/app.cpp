@@ -1240,6 +1240,13 @@ static std::vector<nlohmann::json> textureRibbonDisplay() {
 
 } // namespace app
 
+// Clamp a raw DPI scale value to a sane range and replace invalid/zero values.
+static constexpr float DPI_SCALE_EPSILON = 0.01f;  // tolerance for DPI change detection
+static float clampDpiScale(float raw) {
+	if (raw <= 0.0f) raw = 1.0f;
+	return (std::max)(0.5f, (std::min)(raw, 4.0f));
+}
+
 // ── Centralized ImGui theme from app.css ─────────────────────────
 
 namespace app::theme {
@@ -1363,12 +1370,22 @@ void applyTheme() {
 static ImFont* s_fontBold    = nullptr;
 static ImFont* s_fontGambler = nullptr;
 static ImFont* s_fontIcon    = nullptr;
+static float   s_dpiScale    = 1.0f;   // current DPI scale fonts are built at
 
 // Font Awesome glyph range (static storage, must persist while font is alive).
 static const ImWchar s_iconRanges[] = { ICON_FA_MIN, ICON_FA_MAX, 0 };
 
-void loadFonts() {
+void loadFonts(float dpiScale) {
 	ImGuiIO& io = ImGui::GetIO();
+
+	dpiScale = clampDpiScale(dpiScale);
+	s_dpiScale = dpiScale;
+
+	// Scale font pixel sizes by DPI so glyphs are rasterized at native
+	// resolution. FontGlobalScale is set to 1/dpiScale by the caller so
+	// logical sizes remain the same as on a 1× display.
+	const float scaledDefault = DEFAULT_FONT_SIZE * dpiScale;
+	const float scaledIcon    = 48.0f * dpiScale;
 
 	std::filesystem::path fontsDir = constants::DATA_DIR() / "fonts";
 	std::string regularPath = (fontsDir / "selawk.ttf").string();
@@ -1377,7 +1394,7 @@ void loadFonts() {
 	std::string iconPath    = (fontsDir / "fa-solid-900.ttf").string();
 
 	// Load Selawik regular as the default font (16px matches CSS body default).
-	ImFont* regularFont = io.Fonts->AddFontFromFileTTF(regularPath.c_str(), DEFAULT_FONT_SIZE);
+	ImFont* regularFont = io.Fonts->AddFontFromFileTTF(regularPath.c_str(), scaledDefault);
 	if (!regularFont) {
 		// Fallback: use ImGui's built-in font if the TTF file is not found.
 		regularFont = io.Fonts->AddFontDefault();
@@ -1388,27 +1405,27 @@ void loadFonts() {
 	{
 		ImFontConfig iconCfg;
 		iconCfg.MergeMode = true;
-		iconCfg.GlyphMinAdvanceX = DEFAULT_FONT_SIZE; // Make icons monospaced
-		io.Fonts->AddFontFromFileTTF(iconPath.c_str(), DEFAULT_FONT_SIZE, &iconCfg, s_iconRanges);
+		iconCfg.GlyphMinAdvanceX = scaledDefault; // Make icons monospaced
+		io.Fonts->AddFontFromFileTTF(iconPath.c_str(), scaledDefault, &iconCfg, s_iconRanges);
 	}
 
 	// Load Selawik bold for use with ImGui::PushFont() where JS uses font-weight: bold.
-	s_fontBold = io.Fonts->AddFontFromFileTTF(boldPath.c_str(), DEFAULT_FONT_SIZE);
+	s_fontBold = io.Fonts->AddFontFromFileTTF(boldPath.c_str(), scaledDefault);
 	if (!s_fontBold) {
 		// Fallback to the regular/default font.
 		s_fontBold = regularFont;
 	}
 
 	// Load Gambler font (defined in app.css @font-face but not actively referenced in selectors).
-	s_fontGambler = io.Fonts->AddFontFromFileTTF(gamblerPath.c_str(), DEFAULT_FONT_SIZE);
+	s_fontGambler = io.Fonts->AddFontFromFileTTF(gamblerPath.c_str(), scaledDefault);
 	if (!s_fontGambler) {
 		s_fontGambler = regularFont;
 	}
 
 	// Load a standalone icon font at a larger size for nav icons and header buttons.
 	// This is used with CalcTextSizeA/AddText to render icons at various sizes.
-	// We load at 48px (larger than any display size) so downscaling stays sharp.
-	s_fontIcon = io.Fonts->AddFontFromFileTTF(iconPath.c_str(), 48.0f, nullptr, s_iconRanges);
+	// We load at 48px * dpiScale (larger than any display size) so downscaling stays sharp.
+	s_fontIcon = io.Fonts->AddFontFromFileTTF(iconPath.c_str(), scaledIcon, nullptr, s_iconRanges);
 	if (!s_fontIcon) {
 		s_fontIcon = regularFont;
 	}
@@ -1427,6 +1444,26 @@ ImFont* getGamblerFont() {
 
 ImFont* getIconFont() {
 	return s_fontIcon ? s_fontIcon : ImGui::GetFont();
+}
+
+void rebuildFontsForScale(float dpiScale) {
+	ImGuiIO& io = ImGui::GetIO();
+
+	// Clear the existing atlas and font pointers.
+	io.Fonts->Clear();
+	s_fontBold    = nullptr;
+	s_fontGambler = nullptr;
+	s_fontIcon    = nullptr;
+
+	// Reload all fonts at the new DPI scale.
+	loadFonts(dpiScale);
+
+	// The backend supports ImGuiBackendFlags_RendererHasTextures, so the
+	// font atlas GPU texture is rebuilt automatically on the next frame.
+}
+
+float getDpiScale() {
+	return s_dpiScale;
 }
 
 // ── SVG filename → Font Awesome codepoint mapping ────────────────
@@ -1642,9 +1679,21 @@ int main(int argc, char* argv[]) {
 	// Apply the app.css theme to ImGui (replaces StyleColorsDark).
 	app::theme::applyTheme();
 
+	// Query the initial display content scale for high-DPI support.
+	// On standard displays this is 1.0; on Retina / 200% displays it is 2.0.
+	// We use glfwGetWindowContentScale directly here because the ImGui GLFW
+	// backend is not yet initialized at this point.
+	float initialDpiScale;
+	{
+		float xscale = 1.0f, yscale = 1.0f;
+		glfwGetWindowContentScale(window, &xscale, &yscale);
+		initialDpiScale = clampDpiScale(xscale);
+	}
+
 	// Load custom fonts (Selawik regular/bold, Gambler) from data/fonts/.
+	// Fonts are rasterized at DEFAULT_FONT_SIZE * dpiScale for crisp rendering.
 	// Must be done after CreateContext and before the first NewFrame.
-	app::theme::loadFonts();
+	app::theme::loadFonts(initialDpiScale);
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -1665,10 +1714,10 @@ int main(int argc, char* argv[]) {
 
 	modules::register_components();
 
-	// dynamic interface scaling for smaller displays
-	// TODO(conversion): In ImGui, scaling is handled via ImGui::GetIO().FontGlobalScale
-	// and framebuffer DPI. The JS version scales a DOM container; the equivalent
-	// in ImGui is adjusting the global font scale based on window size.
+	// Dynamic interface scaling thresholds matching the original JS logic.
+	// The JS version scales a CSS transform on the app container:
+	//   scale = min(window.innerWidth / 1120, window.innerHeight / 700, 1.0)
+	// In ImGui the equivalent is adjusting FontGlobalScale each frame.
 	constexpr int SCALE_THRESHOLD_W = 1120;
 	constexpr int SCALE_THRESHOLD_H = 700;
 
@@ -1772,14 +1821,35 @@ int main(int argc, char* argv[]) {
 			}
 		}
 
-		// dynamic interface scaling for smaller displays
+		// ── High-DPI + small-window scaling ─────────────────────────
+		// 1) If the display DPI scale changed (e.g. window moved to a
+		//    different monitor), rebuild the font atlas at the new scale.
+		// 2) Compute a window-size scale factor that shrinks the UI when
+		//    the window is smaller than 1120×700 but never exceeds 1.0.
+		// 3) Combine both: FontGlobalScale = windowScale / dpiScale.
+		//    The division by dpiScale compensates for the fonts being
+		//    rasterized at dpiScale× so that logical sizes stay correct.
 		{
+			float dpiScale = clampDpiScale(
+				ImGui_ImplGlfw_GetContentScaleForWindow(window));
+
+			// Rebuild fonts when DPI changes (moving between monitors).
+			if (std::abs(dpiScale - app::theme::getDpiScale()) > DPI_SCALE_EPSILON) {
+				app::theme::rebuildFontsForScale(dpiScale);
+			}
+
+			// Window-size scale: scale down when smaller than thresholds, never up.
 			int win_w, win_h;
 			glfwGetWindowSize(window, &win_w, &win_h);
 			float scale_w = win_w < SCALE_THRESHOLD_W ? static_cast<float>(win_w) / SCALE_THRESHOLD_W : 1.0f;
 			float scale_h = win_h < SCALE_THRESHOLD_H ? static_cast<float>(win_h) / SCALE_THRESHOLD_H : 1.0f;
-			float scale = (std::min)(scale_w, scale_h);
-			io.FontGlobalScale = scale;
+			float windowScale = (std::min)(scale_w, scale_h);
+
+			// FontGlobalScale = windowScale / dpiScale.
+			// Fonts are rasterized at baseSize * dpiScale; dividing by
+			// dpiScale brings them back to logical baseSize, then
+			// windowScale applies the small-window shrink.
+			io.FontGlobalScale = windowScale / dpiScale;
 		}
 
 		// Check watchers (loadPct, casc, activeModule)
