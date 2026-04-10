@@ -141,6 +141,7 @@ The following structural translations are inherent to the JS→C++ paradigm shif
 
 ## UI Styling
 - The C++ ImGui app must visually match the original app. Use app.css as the definitive style reference.
+- **Reference screenshots** of the original JS app are in [`UI_REFERENCE.md`](../UI_REFERENCE.md). Always compare against these screenshots when making UI changes to ensure visual fidelity.
 - Map CSS variables (colors, fonts, shadows) to ImGui style settings:
   - `--background: #343a40` → `ImGuiStyle::Colors[ImGuiCol_WindowBg]`
   - `--font-primary: #ffffffcc` → `ImGuiStyle::Colors[ImGuiCol_Text]`
