@@ -9,6 +9,7 @@ License: MIT
 #include "../core.h"
 #include "../generics.h"
 #include "../buffer.h"
+#include "../png-writer.h"
 #include "../casc/export-helper.h"
 #include "../casc/listfile.h"
 #include "../casc/casc-source.h"
@@ -21,6 +22,8 @@ License: MIT
 #include "../modules.h"
 #include "../components/context-menu.h"
 #include "../components/listbox-zones.h"
+
+#include <webp/encode.h>
 
 #include <cstring>
 #include <format>
@@ -1089,9 +1092,36 @@ map_info.width, map_info.height, filename));
 
 // JS: const buf = await BufferWrapper.fromCanvas(export_canvas, mime_type, quality);
 // JS: await buf.writeToFile(export_path);
-// TODO(conversion): BufferWrapper fromCanvas equivalent (PNG/WebP encoding) will be wired.
-// Parameters: composite texture (map_info.width x map_info.height), mime_type, exportWebPQuality.
-(void)mime_type;
+generics::createDirectory(fs::path(export_path).parent_path());
+const auto& pixels = view.zoneMapPixels;
+
+if (mime_type == "image/webp") {
+	const float webp_quality_val = view.config.value("exportWebPQuality", 0.9f);
+	int webp_quality = static_cast<int>(webp_quality_val * 100.0f);
+	uint8_t* output = nullptr;
+	size_t outputSize = 0;
+	if (webp_quality >= 100) {
+		outputSize = WebPEncodeLosslessRGBA(
+			pixels.data(), map_info.width, map_info.height,
+			map_info.width * 4, &output);
+	} else {
+		outputSize = WebPEncodeRGBA(
+			pixels.data(), map_info.width, map_info.height,
+			map_info.width * 4, static_cast<float>(webp_quality), &output);
+	}
+	if (outputSize > 0 && output) {
+		BufferWrapper webpBuf = BufferWrapper::from(std::span<const uint8_t>(output, outputSize));
+		WebPFree(output);
+		webpBuf.writeToFile(export_path);
+	} else {
+		if (output) WebPFree(output);
+		throw std::runtime_error("WebP encoding failed for zone map");
+	}
+} else {
+	PNGWriter png(static_cast<uint32_t>(map_info.width), static_cast<uint32_t>(map_info.height));
+	std::memcpy(png.getPixelData().data(), pixels.data(), pixels.size());
+	png.write(export_path);
+}
 
 helper.mark((fs::path("zones") / filename).string(), true);
 

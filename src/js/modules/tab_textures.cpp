@@ -9,6 +9,7 @@
 #include "../core.h"
 #include "../generics.h"
 #include "../buffer.h"
+#include "../png-writer.h"
 #include "../casc/export-helper.h"
 #include "../casc/listfile.h"
 #include "../casc/casc-source.h"
@@ -22,6 +23,8 @@
 #include "../components/context-menu.h"
 #include "../install-type.h"
 #include "../modules.h"
+
+#include <webp/encode.h>
 
 #include <cstring>
 #include <format>
@@ -396,10 +399,34 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 
 			// JS: const buf = await BufferWrapper.fromCanvas(save_canvas, mime_type, quality);
 			// JS: await buf.writeToFile(export_path);
-			// TODO(conversion): BufferWrapper::fromCanvas equivalent (PNG/WebP encoding from raw RGBA) will be wired.
-			// Parameters: cropped data (region.width x region.height RGBA), mime_type, quality.
-			(void)mime_type;
-			(void)quality;
+			if (mime_type == "image/webp") {
+				uint8_t* output = nullptr;
+				size_t outputSize = 0;
+				int webp_quality = static_cast<int>(quality * 100.0f);
+				if (webp_quality >= 100) {
+					outputSize = WebPEncodeLosslessRGBA(
+						cropped.data(), region.width, region.height,
+						region.width * 4, &output);
+				} else {
+					outputSize = WebPEncodeRGBA(
+						cropped.data(), region.width, region.height,
+						region.width * 4, static_cast<float>(webp_quality), &output);
+				}
+				if (outputSize > 0 && output) {
+					BufferWrapper webpBuf = BufferWrapper::from(std::span<const uint8_t>(output, outputSize));
+					WebPFree(output);
+					generics::createDirectory(std::filesystem::path(export_path).parent_path());
+					webpBuf.writeToFile(export_path);
+				} else {
+					if (output) WebPFree(output);
+					throw std::runtime_error("WebP encoding failed");
+				}
+			} else {
+				PNGWriter png(static_cast<uint32_t>(region.width), static_cast<uint32_t>(region.height));
+				std::memcpy(png.getPixelData().data(), cropped.data(), cropped.size());
+				generics::createDirectory(std::filesystem::path(export_path).parent_path());
+				png.write(export_path);
+			}
 
 			helper.mark(export_file_name, true);
 		}

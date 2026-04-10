@@ -1272,9 +1272,12 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 			const std::string export_name = casc::ExportHelper::sanitizeFilename(raw_name);
 
 			// JS: await modelViewerUtils.export_preview(core, format, canvas, export_name, 'creatures');
-			// TODO(conversion): GL context needed for export_preview; will be wired when renderer is integrated.
-			// model_viewer_utils::export_preview(format, gl_context, export_name, "creatures");
-			core::setToast("info", "Preview export not yet wired.", {}, 2000);
+			gl::GLContext* gl_ctx = viewer_context.gl_context;
+			if (gl_ctx && viewer_state.fbo != 0) {
+				glBindFramebuffer(GL_FRAMEBUFFER, viewer_state.fbo);
+				model_viewer_utils::export_preview(format, *gl_ctx, export_name, "creatures");
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			}
 		} else {
 			core::setToast("error", "The selected export option only works for model previews. Preview something first!", {}, -1);
 		}
