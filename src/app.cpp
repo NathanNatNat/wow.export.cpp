@@ -334,12 +334,10 @@ static void renderAppShell() {
 
 		// "wow.export" text at 25px bold
 		ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - 25.0f) * 0.5f));
-		// Push a larger font size by scaling — ImGui doesn't have per-call font size,
-		// so we use the current font scaled.
+		// Push bold font at 25px (CSS: #logo span { font-size: 25px; font-weight: 700; })
 		{
-			float orig_scale = ImGui::GetFont()->Scale;
-			ImGui::GetFont()->Scale = 25.0f / ImGui::GetFontSize();
-			ImGui::PushFont(ImGui::GetFont());
+			ImFont* bold = app::theme::getBoldFont();
+			ImGui::PushFont(bold, 25.0f);
 			ImGui::TextUnformatted("wow.export");
 			if (ImGui::IsItemClicked()) {
 				if (core::view) {
@@ -349,7 +347,6 @@ static void renderAppShell() {
 						modules::setActive("tab_home");
 				}
 			}
-			ImGui::GetFont()->Scale = orig_scale;
 			ImGui::PopFont();
 		}
 		cursor_x = ImGui::GetItemRectMax().x - vp_pos.x + 10.0f;
@@ -1341,6 +1338,55 @@ void applyTheme() {
 	style.PopupBorderSize   = 1.0f;
 }
 
+// ── Custom font loading ──────────────────────────────────────────
+// Loads Selawik (regular + bold) and Gambler TTF fonts from data/fonts/.
+// CSS: body { font-family: "Selawik", sans-serif; } — default 16px.
+// @font-face { font-family: "Selawik"; font-weight: bold; src: url("fonts/selawkb.woff2"); }
+// @font-face { font-family: "Gambler"; src: url("fonts/gmblr.woff2"); }
+
+static ImFont* s_fontBold    = nullptr;
+static ImFont* s_fontGambler = nullptr;
+
+void loadFonts() {
+	ImGuiIO& io = ImGui::GetIO();
+
+	std::filesystem::path fontsDir = constants::DATA_DIR() / "fonts";
+	std::string regularPath = (fontsDir / "selawk.ttf").string();
+	std::string boldPath    = (fontsDir / "selawkb.ttf").string();
+	std::string gamblerPath = (fontsDir / "gmblr.ttf").string();
+
+	// Load Selawik regular as the default font (16px matches CSS body default).
+	ImFont* regularFont = io.Fonts->AddFontFromFileTTF(regularPath.c_str(), DEFAULT_FONT_SIZE);
+	if (!regularFont) {
+		// Fallback: use ImGui's built-in font if the TTF file is not found.
+		regularFont = io.Fonts->AddFontDefault();
+	}
+
+	// Load Selawik bold for use with ImGui::PushFont() where JS uses font-weight: bold.
+	s_fontBold = io.Fonts->AddFontFromFileTTF(boldPath.c_str(), DEFAULT_FONT_SIZE);
+	if (!s_fontBold) {
+		// Fallback to the regular/default font.
+		s_fontBold = regularFont;
+	}
+
+	// Load Gambler font (defined in app.css @font-face but not actively referenced in selectors).
+	s_fontGambler = io.Fonts->AddFontFromFileTTF(gamblerPath.c_str(), DEFAULT_FONT_SIZE);
+	if (!s_fontGambler) {
+		s_fontGambler = regularFont;
+	}
+
+	// Build the atlas so fonts are ready for rendering.
+	io.Fonts->Build();
+}
+
+ImFont* getBoldFont() {
+	return s_fontBold ? s_fontBold : ImGui::GetFont();
+}
+
+ImFont* getGamblerFont() {
+	return s_fontGambler ? s_fontGambler : ImGui::GetFont();
+}
+
 } // namespace app::theme
 
 // ── Watch equivalents (change detection in the main loop) ────────
@@ -1495,6 +1541,10 @@ int main(int argc, char* argv[]) {
 
 	// Apply the app.css theme to ImGui (replaces StyleColorsDark).
 	app::theme::applyTheme();
+
+	// Load custom fonts (Selawik regular/bold, Gambler) from data/fonts/.
+	// Must be done after CreateContext and before the first NewFrame.
+	app::theme::loadFonts();
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplGlfw_InitForOpenGL(window, true);

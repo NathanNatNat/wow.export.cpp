@@ -625,15 +625,14 @@ borders, and rounding. The C++ app now has a centralized `app::theme` namespace 
 
 ### 9.4 Custom Font Loading
 
-The original app uses Selawik (regular + bold) and Gambler fonts. The C++ app uses
-the ImGui default font. Font files exist in `data/fonts/` but are WOFF2 format —
-ImGui requires TTF/OTF.
+The original app uses Selawik (regular + bold) and Gambler fonts. TTF versions have
+been converted from the WOFF2 sources and are loaded into ImGui at startup.
 
-- [ ] Convert or source TTF versions of Selawik (`selawk.woff2`, `selawkb.woff2`) and Gambler (`gmblr.woff2`)
-- [ ] Load fonts into ImGui via `ImGui::GetIO().Fonts->AddFontFromFileTTF()`
-- [ ] Set primary font (Selawik regular) as the default ImGui font
-- [ ] Load bold font (Selawik bold) and use `ImGui::PushFont()` where the JS app uses `font-weight: bold`
-- [ ] Set default font size to match CSS `body` (the original uses the browser default ~16px, Selawik)
+- [x] Convert or source TTF versions of Selawik (`selawk.woff2`, `selawkb.woff2`) and Gambler (`gmblr.woff2`)
+- [x] Load fonts into ImGui via `ImGui::GetIO().Fonts->AddFontFromFileTTF()`
+- [x] Set primary font (Selawik regular) as the default ImGui font
+- [x] Load bold font (Selawik bold) and use `ImGui::PushFont()` where the JS app uses `font-weight: bold`
+- [x] Set default font size to match CSS `body` (the original uses the browser default ~16px, Selawik)
 
 ### 9.5 Font Awesome Icon Font
 
