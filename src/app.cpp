@@ -36,10 +36,18 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#include <stb_image.h>
+
+#define NANOSVG_IMPLEMENTATION
+#include <nanosvg.h>
+#define NANOSVGRAST_IMPLEMENTATION
+#include <nanosvgrast.h>
+
 #include "js/constants.h"
 #include "js/generics.h"
 // const updater = require('./js/updater'); // Removed: updater module deleted
 #include "js/core.h"
+#include "js/install-type.h"
 #include "js/casc/listfile.h"
 #include "js/casc/dbd-manifest.h"
 #include "js/casc/cdn-resolver.h"
@@ -78,6 +86,132 @@ static bool isCrashed = false;
 static std::string crashErrorCode;
 static std::string crashErrorText;
 static std::string crashLogDump;
+
+// ── App shell texture state (header logo + SVG icons) ────────────
+
+static GLuint s_logoTexture = 0;
+static int s_logoWidth = 0;
+static int s_logoHeight = 0;
+
+static GLuint s_helpIconTexture = 0;
+static GLuint s_hamburgerIconTexture = 0;
+
+/**
+ * Load a PNG/JPEG image from disk into an OpenGL texture.
+ * Returns the GL texture ID (0 on failure).
+ */
+static GLuint loadImageTexture(const std::filesystem::path& path, int* out_w = nullptr, int* out_h = nullptr) {
+	int w = 0, h = 0, channels = 0;
+	unsigned char* pixels = stbi_load(path.string().c_str(), &w, &h, &channels, 4);
+	if (!pixels)
+		return 0;
+
+	GLuint tex = 0;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	stbi_image_free(pixels);
+
+	if (out_w) *out_w = w;
+	if (out_h) *out_h = h;
+	return tex;
+}
+
+/**
+ * Load an SVG file and rasterize it into an OpenGL texture at the given size.
+ * Returns the GL texture ID (0 on failure).
+ */
+static GLuint loadSvgTexture(const std::filesystem::path& path, int size) {
+	NSVGimage* image = nsvgParseFromFile(path.string().c_str(), "px", 96.0f);
+	if (!image)
+		return 0;
+
+	NSVGrasterizer* rast = nsvgCreateRasterizer();
+	if (!rast) {
+		nsvgDelete(image);
+		return 0;
+	}
+
+	float scale = static_cast<float>(size) / (std::max)(image->width, image->height);
+	int w = static_cast<int>(image->width * scale);
+	int h = static_cast<int>(image->height * scale);
+	if (w <= 0 || h <= 0) {
+		nsvgDeleteRasterizer(rast);
+		nsvgDelete(image);
+		return 0;
+	}
+
+	std::vector<unsigned char> pixels(static_cast<size_t>(w) * h * 4, 0);
+	nsvgRasterize(rast, image, 0, 0, scale, pixels.data(), w, h, w * 4);
+
+	GLuint tex = 0;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	nsvgDeleteRasterizer(rast);
+	nsvgDelete(image);
+	return tex;
+}
+
+/**
+ * Initialize app shell textures (logo + icons).
+ * Called once after OpenGL context is ready.
+ */
+static void initAppShellTextures() {
+	std::filesystem::path dataDir = constants::DATA_DIR();
+
+	// Load logo.png (32px display size, but load at full resolution)
+	s_logoTexture = loadImageTexture(dataDir / "images" / "logo.png", &s_logoWidth, &s_logoHeight);
+	if (!s_logoTexture)
+		logging::write("warning: failed to load logo.png for header");
+
+	// Load SVG icons at 20px for the header buttons
+	s_helpIconTexture = loadSvgTexture(dataDir / "fa-icons" / "help.svg", 40);
+	if (!s_helpIconTexture)
+		logging::write("warning: failed to load help.svg for header");
+
+	s_hamburgerIconTexture = loadSvgTexture(dataDir / "fa-icons" / "line-columns.svg", 40);
+	if (!s_hamburgerIconTexture)
+		logging::write("warning: failed to load line-columns.svg for header");
+}
+
+/**
+ * Cleanup app shell textures.
+ */
+static void destroyAppShellTextures() {
+	if (s_logoTexture) { glDeleteTextures(1, &s_logoTexture); s_logoTexture = 0; }
+	if (s_helpIconTexture) { glDeleteTextures(1, &s_helpIconTexture); s_helpIconTexture = 0; }
+	if (s_hamburgerIconTexture) { glDeleteTextures(1, &s_hamburgerIconTexture); s_hamburgerIconTexture = 0; }
+}
+
+// Nav icon texture cache (loaded on demand)
+static std::unordered_map<std::string, GLuint> s_navIconTextures;
+
+/**
+ * Get or load a nav icon SVG texture by filename.
+ */
+static GLuint getNavIconTexture(const std::string& icon_filename) {
+	auto it = s_navIconTextures.find(icon_filename);
+	if (it != s_navIconTextures.end())
+		return it->second;
+
+	std::filesystem::path path = constants::DATA_DIR() / "fa-icons" / icon_filename;
+	GLuint tex = loadSvgTexture(path, 44);
+	s_navIconTextures[icon_filename] = tex;
+	return tex;
+}
 
 static void crash(const std::string& errorCode, const std::string& errorText) {
 	// Prevent a never-ending cycle of depression.
@@ -137,7 +271,348 @@ static void renderCrashScreen() {
 	ImGui::End();
 }
 
-// ── Platform-specific helpers for diagnostic logging ─────────────
+// ── App shell rendering (header / content / footer) ──────────────
+// JS equivalent: The Vue template in index.html that defines the
+// #container with grid-template-rows: 53px 1fr 73px.
+
+// App shell layout constants from app.css
+static constexpr float HEADER_HEIGHT = 53.0f;  // grid-template-rows: 53px
+static constexpr float FOOTER_HEIGHT = 73.0f;  // grid-template-rows: 73px
+static constexpr float NAV_ICON_WIDTH = 45.0f;  // #nav .option .nav-icon width
+static constexpr float NAV_ICON_HEIGHT = 52.0f; // #nav .option .nav-icon height
+
+// CSS color constants
+static constexpr ImVec4 COLOR_BG_DARK    = ImVec4(0.173f, 0.192f, 0.212f, 1.0f); // #2c3136
+static constexpr ImVec4 COLOR_BORDER     = ImVec4(0.424f, 0.459f, 0.490f, 1.0f); // #6c757d
+static constexpr ImVec4 COLOR_FONT_FADED = ImVec4(0.424f, 0.459f, 0.490f, 1.0f); // #6c757d
+static constexpr ImVec4 COLOR_NAV_ACTIVE = ImVec4(0.133f, 0.710f, 0.286f, 1.0f); // #22b549
+
+static void renderAppShell() {
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	const ImVec2 vp_pos = viewport->WorkPos;
+	const ImVec2 vp_size = viewport->WorkSize;
+
+	// ── Header (53px) ───────────────────────────────────────────
+	{
+		ImGui::SetNextWindowPos(vp_pos);
+		ImGui::SetNextWindowSize(ImVec2(vp_size.x, HEADER_HEIGHT));
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, COLOR_BG_DARK);
+		ImGui::PushStyleColor(ImGuiCol_Border, COLOR_BORDER);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+		ImGui::Begin("##AppHeader", nullptr,
+			ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+			ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
+			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
+			ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing);
+
+		ImDrawList* draw = ImGui::GetWindowDrawList();
+		// Draw 1px bottom border (border-bottom: 1px solid --border)
+		draw->AddLine(
+			ImVec2(vp_pos.x, vp_pos.y + HEADER_HEIGHT - 1.0f),
+			ImVec2(vp_pos.x + vp_size.x, vp_pos.y + HEADER_HEIGHT - 1.0f),
+			ImGui::ColorConvertFloat4ToU32(COLOR_BORDER), 1.0f);
+
+		// ── Logo (#logo): 15px left margin, 32px image, then "wow.export" text ──
+		float cursor_x = 15.0f;
+		ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - 32.0f) * 0.5f));
+		if (s_logoTexture) {
+			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(s_logoTexture)),
+				ImVec2(32.0f, 32.0f));
+			if (ImGui::IsItemClicked()) {
+				// JS: @click="setActiveModule(installType === 1 ? 'legacy_tab_home' : 'tab_home')"
+				if (core::view) {
+					if (core::view->installType == static_cast<int>(install_type::MPQ))
+						modules::setActive("legacy_tab_home");
+					else
+						modules::setActive("tab_home");
+				}
+			}
+			cursor_x += 32.0f + 8.0f; // 32px image + 8px padding (CSS: padding: 0 0 3px 40px — 40px includes 32px icon + 8px gap)
+		}
+
+		// "wow.export" text at 25px bold
+		ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - 25.0f) * 0.5f));
+		// Push a larger font size by scaling — ImGui doesn't have per-call font size,
+		// so we use the current font scaled.
+		{
+			float orig_scale = ImGui::GetFont()->Scale;
+			ImGui::GetFont()->Scale = 25.0f / ImGui::GetFontSize();
+			ImGui::PushFont(ImGui::GetFont());
+			ImGui::TextUnformatted("wow.export");
+			if (ImGui::IsItemClicked()) {
+				if (core::view) {
+					if (core::view->installType == static_cast<int>(install_type::MPQ))
+						modules::setActive("legacy_tab_home");
+					else
+						modules::setActive("tab_home");
+				}
+			}
+			ImGui::GetFont()->Scale = orig_scale;
+			ImGui::PopFont();
+		}
+		cursor_x = ImGui::GetItemRectMax().x - vp_pos.x + 10.0f;
+
+		// ── Navigation icons (#nav) ─────────────────────────────
+		// JS: <div id="nav" v-if="!isLoading">
+		if (core::view && !core::view->isLoading) {
+			// Render nav buttons filtered by installType
+			// JS: <template v-for="btn in modNavButtons">
+			//       <div v-if="btn.installTypes & installType" ...>
+			const auto& navButtons = modules::getNavButtons();
+			for (const auto& btn : navButtons) {
+				if (!(btn.installTypes & static_cast<uint32_t>(core::view->installType)))
+					continue;
+
+				bool is_active = false;
+				if (core::view->activeModule.is_object() &&
+					core::view->activeModule.contains("__name") &&
+					core::view->activeModule["__name"].get<std::string>() == btn.module) {
+					is_active = true;
+				}
+
+				ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - NAV_ICON_HEIGHT) * 0.5f));
+
+				// Load icon texture on demand
+				GLuint icon_tex = getNavIconTexture(btn.icon);
+				if (icon_tex) {
+					// Tint: active = green (#22b549), default = white, hover = bright
+					ImVec4 tint = ImVec4(1, 1, 1, 0.8f);
+					if (is_active)
+						tint = COLOR_NAV_ACTIVE;
+
+					ImGui::PushID(btn.module.c_str());
+
+					ImGui::ImageWithBg(static_cast<ImTextureID>(static_cast<uintptr_t>(icon_tex)),
+						ImVec2(NAV_ICON_WIDTH, NAV_ICON_HEIGHT - 8.0f),
+						ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), tint);
+
+					bool hovered = ImGui::IsItemHovered();
+
+					if (ImGui::IsItemClicked())
+						modules::setActive(btn.module);
+
+					// Tooltip label on hover
+					// JS: <span class="nav-label">{{ btn.label }}</span> shown on hover
+					if (hovered) {
+						ImGui::BeginTooltip();
+						ImGui::TextUnformatted(btn.label.c_str());
+						ImGui::EndTooltip();
+					}
+
+					ImGui::PopID();
+				}
+
+				cursor_x += NAV_ICON_WIDTH;
+			}
+
+			// ── Right-side icons (help + hamburger menu) ────────
+			// These are positioned from the right edge of the header.
+			// JS: #nav-help { margin-left: auto; margin-right: 10px; }
+			// JS: #nav-extra { margin-right: 15px; }
+
+			float right_x = vp_size.x;
+
+			// Hamburger menu icon (rightmost, 15px right margin)
+			// JS: #nav-extra { width: 20px; height: 20px; margin-right: 15px; }
+			if (!core::view->isBusy) {
+				right_x -= 15.0f + 20.0f;
+				ImGui::SetCursorPos(ImVec2(right_x, (HEADER_HEIGHT - 20.0f) * 0.5f));
+				if (s_hamburgerIconTexture) {
+					ImGui::PushID("##nav-extra");
+					ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(s_hamburgerIconTexture)),
+						ImVec2(20.0f, 20.0f));
+					if (ImGui::IsItemClicked())
+						core::view->contextMenus.stateNavExtra = !core::view->contextMenus.stateNavExtra;
+					ImGui::PopID();
+				}
+
+				// Context menu for hamburger button
+				// JS: <context-menu @close="contextMenus.stateNavExtra = false" :node="contextMenus.stateNavExtra" id="menu-extra">
+				if (core::view->contextMenus.stateNavExtra) {
+					ImGui::SetNextWindowPos(ImVec2(vp_pos.x + right_x, vp_pos.y + HEADER_HEIGHT));
+					if (ImGui::Begin("##MenuExtra", nullptr,
+						ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+						ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize |
+						ImGuiWindowFlags_NoFocusOnAppearing)) {
+
+						ImGui::PushStyleColor(ImGuiCol_WindowBg, COLOR_BG_DARK);
+
+						const auto& contextOpts = modules::getContextMenuOptions();
+						for (const auto& opt : contextOpts) {
+							// JS: v-if="!opt.action?.dev_only || isDev"
+							if (opt.dev_only && !(core::view->isDev))
+								continue;
+
+							if (ImGui::MenuItem(opt.label.c_str())) {
+								core::view->contextMenus.stateNavExtra = false;
+								if (opt.handler)
+									opt.handler();
+								else
+									modules::setActive(opt.id);
+							}
+						}
+
+						ImGui::PopStyleColor();
+					}
+					ImGui::End();
+
+					// Close context menu when clicking outside
+					if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) && ImGui::IsMouseClicked(0))
+						core::view->contextMenus.stateNavExtra = false;
+				}
+
+				// Help icon (left of hamburger, 10px right margin)
+				// JS: #nav-help { margin-left: auto; margin-right: 10px; }
+				right_x -= 10.0f + 20.0f;
+				ImGui::SetCursorPos(ImVec2(right_x, (HEADER_HEIGHT - 20.0f) * 0.5f));
+				if (s_helpIconTexture) {
+					ImGui::PushID("##nav-help");
+					ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(s_helpIconTexture)),
+						ImVec2(20.0f, 20.0f));
+					// JS: @click="setActiveModule('tab_help')" — tab_help is removed in C++ version
+					// The help icon currently has no action since tab_help was deleted.
+					if (ImGui::IsItemHovered()) {
+						ImGui::BeginTooltip();
+						ImGui::TextUnformatted("Help");
+						ImGui::EndTooltip();
+					}
+					ImGui::PopID();
+				}
+			}
+		}
+
+		ImGui::End();
+		ImGui::PopStyleVar(2);
+		ImGui::PopStyleColor(2);
+	}
+
+	// ── Footer (73px) ───────────────────────────────────────────
+	{
+		float footer_y = vp_pos.y + vp_size.y - FOOTER_HEIGHT;
+		ImGui::SetNextWindowPos(ImVec2(vp_pos.x, footer_y));
+		ImGui::SetNextWindowSize(ImVec2(vp_size.x, FOOTER_HEIGHT));
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, COLOR_BG_DARK);
+		ImGui::PushStyleColor(ImGuiCol_Border, COLOR_BORDER);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+		ImGui::Begin("##AppFooter", nullptr,
+			ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+			ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
+			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
+			ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing);
+
+		ImDrawList* draw = ImGui::GetWindowDrawList();
+		// Draw 1px top border (border-top: 1px solid --border)
+		draw->AddLine(
+			ImVec2(vp_pos.x, footer_y),
+			ImVec2(vp_pos.x + vp_size.x, footer_y),
+			ImGui::ColorConvertFloat4ToU32(COLOR_BORDER), 1.0f);
+
+		// JS: <span id="footer-links">
+		//       <a data-external="::WEBSITE">Website</a> -
+		//       <a data-external="::DISCORD">Discord</a> -
+		//       <a data-external="::PATREON">Patreon</a> -
+		//       <a data-external="::GITHUB">GitHub</a>
+		//     </span>
+		// Footer content: centered text (flex column, align-items: center, justify-content: center)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, COLOR_FONT_FADED);
+
+			// Links line — render each link as a clickable item
+			// JS: data-external="::WEBSITE" etc. → opens via nw.Shell.openExternal()
+			struct FooterLink {
+				const char* label;
+				const char* url;
+			};
+			static constexpr FooterLink links[] = {
+				{ "Website", "https://www.kruithne.net/wow.export/" },
+				{ "Discord", "https://discord.gg/kC3EzAYBtf" },
+				{ "Patreon", "https://patreon.com/Kruithne" },
+				{ "GitHub", "https://github.com/Kruithne/wow.export" }
+			};
+
+			// Calculate total width of links line for centering
+			float total_w = 0;
+			for (int i = 0; i < 4; i++) {
+				total_w += ImGui::CalcTextSize(links[i].label).x;
+				if (i < 3)
+					total_w += ImGui::CalcTextSize(" - ").x;
+			}
+
+			float line_h = ImGui::CalcTextSize("A").y;
+			float links_y = (FOOTER_HEIGHT - line_h * 2 - 4.0f) * 0.5f;
+			float start_x = (vp_size.x - total_w) * 0.5f;
+			ImGui::SetCursorPos(ImVec2(start_x, links_y));
+
+			for (int i = 0; i < 4; i++) {
+				if (i > 0) {
+					ImGui::SameLine(0, 0);
+					ImGui::TextUnformatted(" - ");
+					ImGui::SameLine(0, 0);
+				}
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.341f, 0.686f, 0.886f, 1.0f)); // --font-alt: #57afe2
+				ImGui::TextUnformatted(links[i].label);
+				ImGui::PopStyleColor();
+				if (ImGui::IsItemHovered())
+					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+				if (ImGui::IsItemClicked())
+					core::openInExplorer(links[i].url);
+				ImGui::SameLine(0, 0);
+			}
+			// End the SameLine sequence
+			ImGui::NewLine();
+
+			// JS: <span id="footer-copyright">
+			//       World of Warcraft and related trademarks are registered trademarks of
+			//       Blizzard Entertainment whom this application is not affiliated with.
+			//     </span>
+			const char* copyright_text = "World of Warcraft and related trademarks are registered trademarks of Blizzard Entertainment whom this application is not affiliated with.";
+			ImVec2 copy_size = ImGui::CalcTextSize(copyright_text);
+			ImGui::SetCursorPos(ImVec2((vp_size.x - copy_size.x) * 0.5f, links_y + line_h + 4.0f));
+			ImGui::TextUnformatted(copyright_text);
+
+			ImGui::PopStyleColor();
+		}
+
+		ImGui::End();
+		ImGui::PopStyleVar(2);
+		ImGui::PopStyleColor(2);
+	}
+
+	// ── Content area (between header and footer) ────────────────
+	{
+		float content_y = vp_pos.y + HEADER_HEIGHT;
+		float content_h = vp_size.y - HEADER_HEIGHT - FOOTER_HEIGHT;
+		if (content_h < 0) content_h = 0;
+
+		ImGui::SetNextWindowPos(ImVec2(vp_pos.x, content_y));
+		ImGui::SetNextWindowSize(ImVec2(vp_size.x, content_h));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+		ImGui::Begin("##AppContent", nullptr,
+			ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+			ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
+			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
+			ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing);
+
+		// Render the active module inside the content area
+		// JS: <div id="module-container" v-if="activeModule">
+		//       <keep-alive><component :is="activeModule"></component></keep-alive>
+		//     </div>
+		modules::ModuleDef* active = modules::getActive();
+		if (active && active->render) {
+			try {
+				active->render();
+			} catch (const std::exception& e) {
+				crash("ERR_RENDER", e.what());
+			}
+		}
+
+		ImGui::End();
+		ImGui::PopStyleVar(2);
+	}
+}
 
 static std::string getPlatformName() {
 #ifdef _WIN32
@@ -884,6 +1359,9 @@ int main(int argc, char* argv[]) {
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 460");
 
+	// Load app shell textures (logo, SVG icons) now that OpenGL is ready.
+	initAppShellTextures();
+
 	// ── Application state initialization ─────────────────────────
 
 	// Initialize Vue equivalent: create AppState and assign to core::view.
@@ -1028,10 +1506,9 @@ int main(int argc, char* argv[]) {
 			if (isCrashed) {
 				renderCrashScreen();
 			} else {
-				// Render the active module
-				modules::ModuleDef* active = modules::getActive();
-				if (active && active->render)
-					active->render();
+				// Render the app shell (header / content / footer) with the active
+				// module rendered inside the content area.
+				renderAppShell();
 			}
 		} catch (const std::exception& e) {
 			crash("ERR_RENDER", e.what());
@@ -1050,6 +1527,13 @@ int main(int argc, char* argv[]) {
 	}
 
 	// ── Cleanup ──────────────────────────────────────────────────
+
+	// Release app shell OpenGL textures before context teardown.
+	destroyAppShellTextures();
+	for (auto& [name, tex] : s_navIconTextures) {
+		if (tex) glDeleteTextures(1, &tex);
+	}
+	s_navIconTextures.clear();
 
 #ifdef _WIN32
 	if (s_taskbar) {
