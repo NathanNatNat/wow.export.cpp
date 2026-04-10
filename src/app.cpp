@@ -371,33 +371,56 @@ static void renderAppShell() {
 					is_active = true;
 				}
 
-				ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - NAV_ICON_HEIGHT) * 0.5f));
-
 				// Load icon texture on demand
 				GLuint icon_tex = getNavIconTexture(btn.icon);
 				if (icon_tex) {
-					// Tint: active = green (#22b549), default = white, hover = bright
+					ImGui::PushID(btn.module.c_str());
+
+					// Use InvisibleButton for hit testing, then draw image with correct tint.
+					ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - NAV_ICON_HEIGHT) * 0.5f));
+					ImGui::InvisibleButton("##nav", ImVec2(NAV_ICON_WIDTH, NAV_ICON_HEIGHT));
+					bool hovered = ImGui::IsItemHovered();
+					bool clicked = ImGui::IsItemClicked();
+
+					// Tint: active = green (#22b549), hover = brightness(2), default = dim white
 					ImVec4 tint = ImVec4(1, 1, 1, 0.8f);
 					if (is_active)
 						tint = COLOR_NAV_ACTIVE;
+					else if (hovered)
+						tint = ImVec4(1, 1, 1, 1.0f); // Full opacity on hover (JS: brightness(2) on white SVG)
 
-					ImGui::PushID(btn.module.c_str());
+					// Draw the icon image over the invisible button area
+					ImVec2 icon_size(NAV_ICON_WIDTH, NAV_ICON_HEIGHT - 8.0f);
+					ImVec2 btn_min = ImGui::GetItemRectMin();
+					// Center the icon vertically within the button area
+					ImVec2 icon_min(btn_min.x, btn_min.y + (NAV_ICON_HEIGHT - icon_size.y) * 0.5f);
+					ImVec2 icon_max(icon_min.x + icon_size.x, icon_min.y + icon_size.y);
+					ImGui::GetWindowDrawList()->AddImage(
+						static_cast<ImTextureID>(static_cast<uintptr_t>(icon_tex)),
+						icon_min, icon_max, ImVec2(0, 0), ImVec2(1, 1),
+						ImGui::ColorConvertFloat4ToU32(tint));
 
-					ImGui::ImageWithBg(static_cast<ImTextureID>(static_cast<uintptr_t>(icon_tex)),
-						ImVec2(NAV_ICON_WIDTH, NAV_ICON_HEIGHT - 8.0f),
-						ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), tint);
-
-					bool hovered = ImGui::IsItemHovered();
-
-					if (ImGui::IsItemClicked())
+					if (clicked)
 						modules::setActive(btn.module);
 
-					// Tooltip label on hover
-					// JS: <span class="nav-label">{{ btn.label }}</span> shown on hover
+					// Tooltip label on hover: white text on dark background, to the right of the icon
+					// JS: .nav-label { position: absolute; left: 100%; color: var(--font-primary);
+					//      background: var(--background-dark); height: 52px; }
 					if (hovered) {
+						ImVec2 tooltip_pos(ImGui::GetItemRectMax().x + 8.0f, btn_min.y);
+						ImGui::SetNextWindowPos(tooltip_pos);
+						ImGui::PushStyleColor(ImGuiCol_PopupBg, COLOR_BG_DARK);
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.8f)); // --font-primary: #ffffffcc
+						ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 0.0f));
+						ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 						ImGui::BeginTooltip();
+						// Vertically center text within 52px height
+						float text_h = ImGui::GetTextLineHeight();
+						ImGui::SetCursorPosY((NAV_ICON_HEIGHT - text_h) * 0.5f);
 						ImGui::TextUnformatted(btn.label.c_str());
 						ImGui::EndTooltip();
+						ImGui::PopStyleVar(2);
+						ImGui::PopStyleColor(2);
 					}
 
 					ImGui::PopID();

@@ -586,13 +586,13 @@ The original app has a horizontal row of nav icons in the header (`#nav`). Each 
 and highlights green (`--nav-option-selected`: #22b549) when active. Nav icons only appear
 after a CASC/MPQ source is loaded (not on the source-select screen).
 
-- [ ] Render nav icon buttons horizontally in the header from `core::view->modNavButtons` (filtered by install type)
-- [ ] Each nav icon: 45×52px, centered SVG background, clickable to switch tabs
-- [ ] Active tab icon: green tint filter (`--nav-option-selected`: #22b549)
-- [ ] Hover effect: brightness(2) filter on the icon
-- [ ] Tooltip label on hover: appears to the right of the icon, white text on `--background-dark` background
-- [ ] Hide nav bar when on source-select screen (no CASC/MPQ loaded)
-- [ ] Nav icons only show for the current install type (CASC vs MPQ shows different sets)
+- [x] Render nav icon buttons horizontally in the header from `core::view->modNavButtons` (filtered by install type)
+- [x] Each nav icon: 45×52px, centered SVG background, clickable to switch tabs
+- [x] Active tab icon: green tint filter (`--nav-option-selected`: #22b549)
+- [x] Hover effect: brightness(2) filter on the icon
+- [x] Tooltip label on hover: appears to the right of the icon, white text on `--background-dark` background
+- [x] Hide nav bar when on source-select screen (no CASC/MPQ loaded)
+- [x] Nav icons only show for the current install type (CASC vs MPQ shows different sets)
 
 ### 9.3 ImGui Theme from app.css
 
