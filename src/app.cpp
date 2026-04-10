@@ -24,6 +24,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include <glad/gl.h>
@@ -93,9 +94,6 @@ static std::string crashLogDump;
 static GLuint s_logoTexture = 0;
 static int s_logoWidth = 0;
 static int s_logoHeight = 0;
-
-static GLuint s_helpIconTexture = 0;
-static GLuint s_hamburgerIconTexture = 0;
 
 /**
  * Load a PNG/JPEG image from disk into an OpenGL texture.
@@ -167,7 +165,7 @@ static GLuint loadSvgTexture(const std::filesystem::path& path, int size) {
 }
 
 /**
- * Initialize app shell textures (logo + icons).
+ * Initialize app shell textures (logo).
  * Called once after OpenGL context is ready.
  */
 static void initAppShellTextures() {
@@ -177,15 +175,7 @@ static void initAppShellTextures() {
 	s_logoTexture = loadImageTexture(dataDir / "images" / "logo.png", &s_logoWidth, &s_logoHeight);
 	if (!s_logoTexture)
 		logging::write("warning: failed to load logo.png for header");
-
-	// Load SVG icons at 20px for the header buttons
-	s_helpIconTexture = loadSvgTexture(dataDir / "fa-icons" / "help.svg", 40);
-	if (!s_helpIconTexture)
-		logging::write("warning: failed to load help.svg for header");
-
-	s_hamburgerIconTexture = loadSvgTexture(dataDir / "fa-icons" / "line-columns.svg", 40);
-	if (!s_hamburgerIconTexture)
-		logging::write("warning: failed to load line-columns.svg for header");
+	// Header icons (help, hamburger) now rendered via Font Awesome icon font.
 }
 
 /**
@@ -193,8 +183,6 @@ static void initAppShellTextures() {
  */
 static void destroyAppShellTextures() {
 	if (s_logoTexture) { glDeleteTextures(1, &s_logoTexture); s_logoTexture = 0; }
-	if (s_helpIconTexture) { glDeleteTextures(1, &s_helpIconTexture); s_helpIconTexture = 0; }
-	if (s_hamburgerIconTexture) { glDeleteTextures(1, &s_hamburgerIconTexture); s_hamburgerIconTexture = 0; }
 }
 
 // Nav icon texture cache (loaded on demand)
@@ -369,60 +357,72 @@ static void renderAppShell() {
 					is_active = true;
 				}
 
-				// Load icon texture on demand
-				GLuint icon_tex = getNavIconTexture(btn.icon);
-				if (icon_tex) {
-					ImGui::PushID(btn.module.c_str());
+				ImGui::PushID(btn.module.c_str());
 
-					// Use InvisibleButton for hit testing, then draw image with correct tint.
-					ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - NAV_ICON_HEIGHT) * 0.5f));
-					ImGui::InvisibleButton("##nav", ImVec2(NAV_ICON_WIDTH, NAV_ICON_HEIGHT));
-					bool hovered = ImGui::IsItemHovered();
-					bool clicked = ImGui::IsItemClicked();
+				// Use InvisibleButton for hit testing, then draw icon with correct tint.
+				ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - NAV_ICON_HEIGHT) * 0.5f));
+				ImGui::InvisibleButton("##nav", ImVec2(NAV_ICON_WIDTH, NAV_ICON_HEIGHT));
+				bool hovered = ImGui::IsItemHovered();
+				bool clicked = ImGui::IsItemClicked();
 
-					// Tint: active = green (#22b549), hover = brightness(2), default = dim white
-					ImVec4 tint = ImVec4(1, 1, 1, 0.8f);
-					if (is_active)
-						tint = COLOR_NAV_ACTIVE;
-					else if (hovered)
-						tint = ImVec4(1, 1, 1, 1.0f); // Full opacity on hover (JS: brightness(2) on white SVG)
+				// Tint: active = green (#22b549), hover = brightness(2), default = dim white
+				ImU32 tint_u32;
+				if (is_active)
+					tint_u32 = ImGui::ColorConvertFloat4ToU32(COLOR_NAV_ACTIVE);
+				else if (hovered)
+					tint_u32 = IM_COL32(255, 255, 255, 255); // Full opacity on hover
+				else
+					tint_u32 = IM_COL32(255, 255, 255, 204); // 0.8 alpha default
 
-					// Draw the icon image over the invisible button area
-					ImVec2 icon_size(NAV_ICON_WIDTH, NAV_ICON_HEIGHT - 8.0f);
+				// Try icon font first, fall back to SVG texture for custom icons
+				const char* icon_glyph = app::theme::getIconForFilename(btn.icon);
+				if (icon_glyph) {
+					// Render icon using Font Awesome icon font
 					ImVec2 btn_min = ImGui::GetItemRectMin();
-					// Center the icon vertically within the button area
-					ImVec2 icon_min(btn_min.x, btn_min.y + (NAV_ICON_HEIGHT - icon_size.y) * 0.5f);
-					ImVec2 icon_max(icon_min.x + icon_size.x, icon_min.y + icon_size.y);
-					ImGui::GetWindowDrawList()->AddImage(
-						static_cast<ImTextureID>(static_cast<uintptr_t>(icon_tex)),
-						icon_min, icon_max, ImVec2(0, 0), ImVec2(1, 1),
-						ImGui::ColorConvertFloat4ToU32(tint));
-
-					if (clicked)
-						modules::setActive(btn.module);
-
-					// Tooltip label on hover: white text on dark background, to the right of the icon
-					// JS: .nav-label { position: absolute; left: 100%; color: var(--font-primary);
-					//      background: var(--background-dark); height: 52px; }
-					if (hovered) {
-						ImVec2 tooltip_pos(ImGui::GetItemRectMax().x + 8.0f, btn_min.y);
-						ImGui::SetNextWindowPos(tooltip_pos);
-						ImGui::PushStyleColor(ImGuiCol_PopupBg, COLOR_BG_DARK);
-						ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_PRIMARY);
-						ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 0.0f));
-						ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-						ImGui::BeginTooltip();
-						// Vertically center text within 52px height
-						float text_h = ImGui::GetTextLineHeight();
-						ImGui::SetCursorPosY((NAV_ICON_HEIGHT - text_h) * 0.5f);
-						ImGui::TextUnformatted(btn.label.c_str());
-						ImGui::EndTooltip();
-						ImGui::PopStyleVar(2);
-						ImGui::PopStyleColor(2);
+					float icon_font_size = NAV_ICON_HEIGHT - 16.0f; // ~36px icon within 52px button
+					ImFont* icon_font = app::theme::getIconFont();
+					ImVec2 text_size = icon_font->CalcTextSizeA(icon_font_size, FLT_MAX, 0.0f, icon_glyph);
+					ImVec2 icon_pos(btn_min.x + (NAV_ICON_WIDTH - text_size.x) * 0.5f,
+					                btn_min.y + (NAV_ICON_HEIGHT - text_size.y) * 0.5f);
+					ImGui::GetWindowDrawList()->AddText(icon_font, icon_font_size, icon_pos, tint_u32, icon_glyph);
+				} else {
+					// Fallback: render custom icon via SVG texture
+					GLuint icon_tex = getNavIconTexture(btn.icon);
+					if (icon_tex) {
+						ImVec2 icon_size(NAV_ICON_WIDTH, NAV_ICON_HEIGHT - 8.0f);
+						ImVec2 btn_min = ImGui::GetItemRectMin();
+						ImVec2 icon_min(btn_min.x, btn_min.y + (NAV_ICON_HEIGHT - icon_size.y) * 0.5f);
+						ImVec2 icon_max(icon_min.x + icon_size.x, icon_min.y + icon_size.y);
+						ImGui::GetWindowDrawList()->AddImage(
+							static_cast<ImTextureID>(static_cast<uintptr_t>(icon_tex)),
+							icon_min, icon_max, ImVec2(0, 0), ImVec2(1, 1), tint_u32);
 					}
-
-					ImGui::PopID();
 				}
+
+				if (clicked)
+					modules::setActive(btn.module);
+
+				// Tooltip label on hover: white text on dark background, to the right of the icon
+				// JS: .nav-label { position: absolute; left: 100%; color: var(--font-primary);
+				//      background: var(--background-dark); height: 52px; }
+				if (hovered) {
+					ImVec2 tooltip_pos(ImGui::GetItemRectMax().x + 8.0f, ImGui::GetItemRectMin().y);
+					ImGui::SetNextWindowPos(tooltip_pos);
+					ImGui::PushStyleColor(ImGuiCol_PopupBg, COLOR_BG_DARK);
+					ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_PRIMARY);
+					ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 0.0f));
+					ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+					ImGui::BeginTooltip();
+					// Vertically center text within 52px height
+					float text_h = ImGui::GetTextLineHeight();
+					ImGui::SetCursorPosY((NAV_ICON_HEIGHT - text_h) * 0.5f);
+					ImGui::TextUnformatted(btn.label.c_str());
+					ImGui::EndTooltip();
+					ImGui::PopStyleVar(2);
+					ImGui::PopStyleColor(2);
+				}
+
+				ImGui::PopID();
 
 				cursor_x += NAV_ICON_WIDTH;
 			}
@@ -439,12 +439,20 @@ static void renderAppShell() {
 			if (!core::view->isBusy) {
 				right_x -= 15.0f + 20.0f;
 				ImGui::SetCursorPos(ImVec2(right_x, (HEADER_HEIGHT - 20.0f) * 0.5f));
-				if (s_hamburgerIconTexture) {
+				{
 					ImGui::PushID("##nav-extra");
-					ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(s_hamburgerIconTexture)),
-						ImVec2(20.0f, 20.0f));
+					ImGui::InvisibleButton("##hamburger", ImVec2(20.0f, 20.0f));
 					if (ImGui::IsItemClicked())
 						core::view->contextMenus.stateNavExtra = !core::view->contextMenus.stateNavExtra;
+					// Render hamburger icon using Font Awesome icon font
+					ImFont* icon_font = app::theme::getIconFont();
+					float icon_size = 18.0f;
+					ImVec2 btn_min = ImGui::GetItemRectMin();
+					ImVec2 text_sz = icon_font->CalcTextSizeA(icon_size, FLT_MAX, 0.0f, ICON_FA_BARS);
+					ImVec2 icon_pos(btn_min.x + (20.0f - text_sz.x) * 0.5f,
+					                btn_min.y + (20.0f - text_sz.y) * 0.5f);
+					ImGui::GetWindowDrawList()->AddText(icon_font, icon_size, icon_pos,
+						app::theme::FONT_PRIMARY_U32, ICON_FA_BARS);
 					ImGui::PopID();
 				}
 
@@ -487,10 +495,18 @@ static void renderAppShell() {
 				// JS: #nav-help { margin-left: auto; margin-right: 10px; }
 				right_x -= 10.0f + 20.0f;
 				ImGui::SetCursorPos(ImVec2(right_x, (HEADER_HEIGHT - 20.0f) * 0.5f));
-				if (s_helpIconTexture) {
+				{
 					ImGui::PushID("##nav-help");
-					ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(s_helpIconTexture)),
-						ImVec2(20.0f, 20.0f));
+					ImGui::InvisibleButton("##help", ImVec2(20.0f, 20.0f));
+					// Render help icon using Font Awesome icon font
+					ImFont* icon_font = app::theme::getIconFont();
+					float icon_size = 18.0f;
+					ImVec2 btn_min = ImGui::GetItemRectMin();
+					ImVec2 text_sz = icon_font->CalcTextSizeA(icon_size, FLT_MAX, 0.0f, ICON_FA_CIRCLE_QUESTION);
+					ImVec2 icon_pos(btn_min.x + (20.0f - text_sz.x) * 0.5f,
+					                btn_min.y + (20.0f - text_sz.y) * 0.5f);
+					ImGui::GetWindowDrawList()->AddText(icon_font, icon_size, icon_pos,
+						app::theme::FONT_PRIMARY_U32, ICON_FA_CIRCLE_QUESTION);
 					// JS: @click="setActiveModule('tab_help')" — tab_help is removed in C++ version
 					// The help icon currently has no action since tab_help was deleted.
 					if (ImGui::IsItemHovered()) {
@@ -1339,13 +1355,17 @@ void applyTheme() {
 }
 
 // ── Custom font loading ──────────────────────────────────────────
-// Loads Selawik (regular + bold) and Gambler TTF fonts from data/fonts/.
+// Loads Selawik (regular + bold), Gambler, and Font Awesome icon fonts from data/fonts/.
 // CSS: body { font-family: "Selawik", sans-serif; } — default 16px.
 // @font-face { font-family: "Selawik"; font-weight: bold; src: url("fonts/selawkb.woff2"); }
 // @font-face { font-family: "Gambler"; src: url("fonts/gmblr.woff2"); }
 
 static ImFont* s_fontBold    = nullptr;
 static ImFont* s_fontGambler = nullptr;
+static ImFont* s_fontIcon    = nullptr;
+
+// Font Awesome glyph range (static storage, must persist while font is alive).
+static const ImWchar s_iconRanges[] = { ICON_FA_MIN, ICON_FA_MAX, 0 };
 
 void loadFonts() {
 	ImGuiIO& io = ImGui::GetIO();
@@ -1354,12 +1374,22 @@ void loadFonts() {
 	std::string regularPath = (fontsDir / "selawk.ttf").string();
 	std::string boldPath    = (fontsDir / "selawkb.ttf").string();
 	std::string gamblerPath = (fontsDir / "gmblr.ttf").string();
+	std::string iconPath    = (fontsDir / "fa-solid-900.ttf").string();
 
 	// Load Selawik regular as the default font (16px matches CSS body default).
 	ImFont* regularFont = io.Fonts->AddFontFromFileTTF(regularPath.c_str(), DEFAULT_FONT_SIZE);
 	if (!regularFont) {
 		// Fallback: use ImGui's built-in font if the TTF file is not found.
 		regularFont = io.Fonts->AddFontDefault();
+	}
+
+	// Merge Font Awesome icon font into the default (Selawik regular) font.
+	// This lets us use icon codepoints inline with regular text.
+	{
+		ImFontConfig iconCfg;
+		iconCfg.MergeMode = true;
+		iconCfg.GlyphMinAdvanceX = DEFAULT_FONT_SIZE; // Make icons monospaced
+		io.Fonts->AddFontFromFileTTF(iconPath.c_str(), DEFAULT_FONT_SIZE, &iconCfg, s_iconRanges);
 	}
 
 	// Load Selawik bold for use with ImGui::PushFont() where JS uses font-weight: bold.
@@ -1375,6 +1405,14 @@ void loadFonts() {
 		s_fontGambler = regularFont;
 	}
 
+	// Load a standalone icon font at a larger size for nav icons and header buttons.
+	// This is used with CalcTextSizeA/AddText to render icons at various sizes.
+	// We load at 48px (larger than any display size) so downscaling stays sharp.
+	s_fontIcon = io.Fonts->AddFontFromFileTTF(iconPath.c_str(), 48.0f, nullptr, s_iconRanges);
+	if (!s_fontIcon) {
+		s_fontIcon = regularFont;
+	}
+
 	// Build the atlas so fonts are ready for rendering.
 	io.Fonts->Build();
 }
@@ -1385,6 +1423,68 @@ ImFont* getBoldFont() {
 
 ImFont* getGamblerFont() {
 	return s_fontGambler ? s_fontGambler : ImGui::GetFont();
+}
+
+ImFont* getIconFont() {
+	return s_fontIcon ? s_fontIcon : ImGui::GetFont();
+}
+
+// ── SVG filename → Font Awesome codepoint mapping ────────────────
+// Maps SVG icon filenames used by nav buttons and context menus to their
+// corresponding Font Awesome 6 Solid UTF-8 codepoints.
+// Custom icons (armour, sword, nessy, mountain-castle) have no FA mapping
+// and will continue to render via the SVG texture pipeline.
+
+static const std::unordered_map<std::string, const char*> s_iconMapping = {
+	{ "arrow-left.svg",                ICON_FA_ARROW_LEFT },
+	{ "arrow-right.svg",               ICON_FA_ARROW_RIGHT },
+	{ "arrow-rotate-left.svg",         ICON_FA_ARROW_ROTATE_LEFT },
+	{ "ban.svg",                       ICON_FA_BAN },
+	{ "bug.svg",                       ICON_FA_BUG },
+	{ "caret-down.svg",                ICON_FA_CARET_DOWN },
+	{ "check.svg",                     ICON_FA_CHECK },
+	{ "circle-info.svg",               ICON_FA_CIRCLE_INFO },
+	{ "clipboard-list.svg",            ICON_FA_CLIPBOARD_LIST },
+	{ "copy.svg",                      ICON_FA_COPY },
+	{ "cube.svg",                      ICON_FA_CUBE },
+	{ "database.svg",                  ICON_FA_DATABASE },
+	{ "export.svg",                    ICON_FA_FILE_EXPORT },
+	{ "file-lines.svg",                ICON_FA_FILE_LINES },
+	{ "film.svg",                      ICON_FA_FILM },
+	{ "fish.svg",                      ICON_FA_FISH },
+	{ "font.svg",                      ICON_FA_FONT },
+	{ "gear.svg",                      ICON_FA_GEAR },
+	{ "help.svg",                      ICON_FA_CIRCLE_QUESTION },
+	{ "house.svg",                     ICON_FA_HOUSE },
+	{ "image.svg",                     ICON_FA_IMAGE },
+	{ "import.svg",                    ICON_FA_FILE_IMPORT },
+	{ "line-columns.svg",              ICON_FA_BARS },
+	{ "list.svg",                      ICON_FA_LIST },
+	{ "map.svg",                       ICON_FA_MAP },
+	{ "music.svg",                     ICON_FA_MUSIC },
+	{ "palette.svg",                   ICON_FA_PALETTE },
+	{ "pause.svg",                     ICON_FA_PAUSE },
+	{ "person-solid.svg",              ICON_FA_PERSON },
+	{ "play.svg",                      ICON_FA_PLAY },
+	{ "save.svg",                      ICON_FA_FLOPPY_DISK },
+	{ "search.svg",                    ICON_FA_MAGNIFYING_GLASS },
+	{ "sort.svg",                      ICON_FA_SORT },
+	{ "sort_down.svg",                 ICON_FA_SORT_DOWN },
+	{ "sort_up.svg",                   ICON_FA_SORT_UP },
+	{ "timeline.svg",                  ICON_FA_TIMELINE },
+	{ "timer.svg",                     ICON_FA_STOPWATCH },
+	{ "trash.svg",                     ICON_FA_TRASH },
+	{ "triangle-exclamation.svg",      ICON_FA_TRIANGLE_EXCLAMATION },
+	{ "triangle-exclamation-white.svg", ICON_FA_TRIANGLE_EXCLAMATION },
+	{ "volume.svg",                    ICON_FA_VOLUME_HIGH },
+	{ "xmark.svg",                     ICON_FA_XMARK },
+};
+
+const char* getIconForFilename(const std::string& svg_filename) {
+	auto it = s_iconMapping.find(svg_filename);
+	if (it != s_iconMapping.end())
+		return it->second;
+	return nullptr;
 }
 
 } // namespace app::theme

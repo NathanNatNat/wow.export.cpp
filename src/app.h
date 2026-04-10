@@ -5,6 +5,7 @@
  */
 #pragma once
 
+#include <string>
 #include <imgui.h>
 
 /**
@@ -197,5 +198,68 @@ ImFont* getBoldFont();
  * if the Gambler font failed to load.
  */
 ImFont* getGamblerFont();
+
+/**
+ * Return the Font Awesome icon font. Falls back to the default font
+ * if the icon font failed to load.
+ */
+ImFont* getIconFont();
+
+// ── Font Awesome 6 Free Solid icon codepoints ───────────────────
+// Glyph range for merging into the default font (covers all FA6 Solid glyphs).
+inline constexpr ImWchar ICON_FA_MIN = 0xE005;
+inline constexpr ImWchar ICON_FA_MAX = 0xF8FF;
+
+// Individual icon codepoints used in the app, as UTF-8 string literals.
+// clang-format off
+#define ICON_FA_ARROW_LEFT           "\xef\x81\xa0"  // U+F060
+#define ICON_FA_ARROW_RIGHT          "\xef\x81\xa1"  // U+F061
+#define ICON_FA_ARROW_ROTATE_LEFT    "\xef\x83\xa2"  // U+F0E2
+#define ICON_FA_BAN                  "\xef\x81\x9e"  // U+F05E
+#define ICON_FA_BARS                 "\xef\x83\x89"  // U+F0C9 (line-columns / hamburger)
+#define ICON_FA_BUG                  "\xef\x86\x88"  // U+F188
+#define ICON_FA_CARET_DOWN           "\xef\x83\x97"  // U+F0D7
+#define ICON_FA_CHECK                "\xef\x80\x8c"  // U+F00C
+#define ICON_FA_CIRCLE_INFO          "\xef\x81\x9a"  // U+F05A
+#define ICON_FA_CIRCLE_QUESTION      "\xef\x81\x99"  // U+F059 (help)
+#define ICON_FA_CLIPBOARD_LIST       "\xef\x91\xad"  // U+F46D
+#define ICON_FA_COPY                 "\xef\x83\x85"  // U+F0C5
+#define ICON_FA_CUBE                 "\xef\x86\xb2"  // U+F1B2
+#define ICON_FA_DATABASE             "\xef\x87\x80"  // U+F1C0
+#define ICON_FA_FILE_EXPORT          "\xef\x95\xae"  // U+F56E (export)
+#define ICON_FA_FILE_IMPORT          "\xef\x95\xaf"  // U+F56F (import)
+#define ICON_FA_FILE_LINES           "\xef\x85\x9c"  // U+F15C
+#define ICON_FA_FILM                 "\xef\x80\x88"  // U+F008
+#define ICON_FA_FISH                 "\xef\x95\xb8"  // U+F578
+#define ICON_FA_FLOPPY_DISK          "\xef\x83\x87"  // U+F0C7 (save)
+#define ICON_FA_FONT                 "\xef\x80\xb1"  // U+F031
+#define ICON_FA_GEAR                 "\xef\x80\x93"  // U+F013
+#define ICON_FA_HOUSE                "\xef\x80\x95"  // U+F015
+#define ICON_FA_IMAGE                "\xef\x80\xbe"  // U+F03E
+#define ICON_FA_LIST                 "\xef\x80\xba"  // U+F03A
+#define ICON_FA_MAGNIFYING_GLASS     "\xef\x80\x82"  // U+F002 (search)
+#define ICON_FA_MAP                  "\xef\x89\xb9"  // U+F279
+#define ICON_FA_MUSIC                "\xef\x80\x81"  // U+F001
+#define ICON_FA_PALETTE              "\xef\x94\xbf"  // U+F53F
+#define ICON_FA_PAUSE                "\xef\x81\x8c"  // U+F04C
+#define ICON_FA_PERSON               "\xef\x86\x83"  // U+F183 (person-solid)
+#define ICON_FA_PLAY                 "\xef\x81\x8b"  // U+F04B
+#define ICON_FA_SORT                 "\xef\x83\x9c"  // U+F0DC
+#define ICON_FA_SORT_DOWN            "\xef\x83\x9d"  // U+F0DD
+#define ICON_FA_SORT_UP              "\xef\x83\x9e"  // U+F0DE
+#define ICON_FA_STOPWATCH            "\xef\x8b\xb2"  // U+F2F2 (timer)
+#define ICON_FA_TIMELINE             "\xee\x8a\x9c"  // U+E29C
+#define ICON_FA_TRASH                "\xef\x87\xb8"  // U+F1F8
+#define ICON_FA_TRIANGLE_EXCLAMATION "\xef\x81\xb1"  // U+F071
+#define ICON_FA_VOLUME_HIGH          "\xef\x80\xa8"  // U+F028
+#define ICON_FA_XMARK                "\xef\x80\x8d"  // U+F00D
+// clang-format on
+
+/**
+ * Look up the Font Awesome icon codepoint (UTF-8 string) for a given
+ * SVG icon filename (e.g. "gear.svg" → ICON_FA_GEAR).
+ * Returns nullptr if the icon has no FA mapping (custom icon).
+ */
+const char* getIconForFilename(const std::string& svg_filename);
 
 } // namespace app::theme
