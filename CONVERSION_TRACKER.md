@@ -725,11 +725,11 @@ The loading screen currently uses `core::showLoadingScreen()` / `core::hideLoadi
 but the visual rendering is unknown. The original is a full-screen overlay (z-index 9999)
 with centered content: spinning gear icon, title text, progress bar.
 
-- [ ] Render loading screen as a full-window overlay on top of all other content
-- [ ] Background: `--background` (#343a40) solid, with `loading.gif` at 0.2 opacity behind
-- [ ] Centered content: spinning gear icon (100×100px, 6s rotation), title (25px), progress text (20px)
-- [ ] Progress bar: 400px wide, 15px tall, `--border` border, `--progress-bar` gradient fill (linear-gradient 180deg #57afe2 → #35759a)
-- [ ] Progress bar fill width = `core::view->loadPct * 100%`
+- [x] Render loading screen as a full-window overlay on top of all other content
+- [x] Background: `--background` (#343a40) solid, with `loading.gif` at 0.2 opacity behind
+- [x] Centered content: spinning gear icon (100×100px, 6s rotation), title (25px), progress text (20px)
+- [x] Progress bar: 400px wide, 15px tall, `--border` border, `--progress-bar` gradient fill (linear-gradient 180deg #57afe2 → #35759a)
+- [x] Progress bar fill width = `core::view->loadPct * 100%`
 
 ### 9.11 Logo Background Watermark
 
@@ -747,7 +747,7 @@ the **main render loop** (`app.cpp:1027-1035`) only calls `active->render()`. Th
 | UI Element | State Variable | Setter Function | Status |
 |---|---|---|---|
 | Toast notification bar | `core::view->toast` | `core::setToast()` / `core::hideToast()` | State-only, **never drawn** |
-| Loading screen overlay | `core::view->isLoading`, `loadPct`, `loadingTitle`, `loadingProgress` | `core::showLoadingScreen()` / `core::hideLoadingScreen()` | State-only, **never drawn** |
+| Loading screen overlay | `core::view->isLoading`, `loadPct`, `loadingTitle`, `loadingProgress` | `core::showLoadingScreen()` / `core::hideLoadingScreen()` | **Rendered** in `renderAppShell()` |
 | Navigation buttons | `core::view->modNavButtons` | `modules::register_nav_button()` | Registered by all tabs, **never drawn** |
 | Context menu (extra) | `core::view->modContextMenuOptions` | `modules::registerContextMenuOption()` | Registered in `app.cpp`, **never drawn** |
 | Context menus (various) | `core::view->contextMenus.*` | Various setters | State-only, **never drawn** |
@@ -758,7 +758,7 @@ All tabs **do** call `register_nav_button()` in their `registerTab()` function, 
 the data infrastructure is correct — the rendering is what's missing.
 
 - [ ] Add toast rendering to the main render loop (check `core::view->toast.has_value()` every frame)
-- [ ] Add loading screen overlay rendering to the main render loop (check `core::view->isLoading` every frame)
+- [x] Add loading screen overlay rendering to the main render loop (check `core::view->isLoading` every frame)
 - [ ] Add nav button rendering in the header (iterate `core::view->modNavButtons`, filter by install type)
 - [ ] Add context menu rendering for the hamburger/extra menu (iterate `core::view->modContextMenuOptions`)
 - [ ] Add file drop prompt rendering (check `core::view->fileDropPrompt`)

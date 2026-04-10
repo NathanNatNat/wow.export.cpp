@@ -158,6 +158,13 @@ inline constexpr ImU32 DASH_COLOR_U32    = IM_COL32(255, 255, 255, 230);
 inline constexpr ImU32 TABLE_ROW_HOVER_U32    = IM_COL32(100, 100, 100, 255);
 inline constexpr ImU32 TABLE_ROW_SELECTED_U32 = IM_COL32(100, 100, 100, 100);
 
+// --progress-bar gradient: linear-gradient(180deg, #57afe2, #35759a)
+inline constexpr ImU32 PROGRESS_BAR_TOP_U32    = IM_COL32(87, 175, 226, 255);  // #57afe2
+inline constexpr ImU32 PROGRESS_BAR_BOTTOM_U32 = IM_COL32(53, 117, 154, 255);  // #35759a
+
+// Loading bar background: rgba(0, 0, 0, 0.22)
+inline constexpr ImU32 LOADING_BAR_BG_U32 = IM_COL32(0, 0, 0, 56);
+
 // ── glClearColor components for --background: #343a40 ────────────
 inline constexpr float BG_CLEAR_R = 0.204f;
 inline constexpr float BG_CLEAR_G = 0.227f;
