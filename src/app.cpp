@@ -21,6 +21,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <numbers>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -94,6 +95,17 @@ static std::string crashLogDump;
 static GLuint s_logoTexture = 0;
 static int s_logoWidth = 0;
 static int s_logoHeight = 0;
+
+// Loading screen textures (loading.gif / loading-xmas.gif first frame, gear.svg)
+static GLuint s_loadingBgTexture = 0;
+static int s_loadingBgWidth = 0;
+static int s_loadingBgHeight = 0;
+static GLuint s_loadingXmasBgTexture = 0;
+static int s_loadingXmasBgWidth = 0;
+static int s_loadingXmasBgHeight = 0;
+static GLuint s_gearTexture = 0;
+static int s_gearTexWidth = 0;
+static int s_gearTexHeight = 0;
 
 /**
  * Load a PNG/JPEG image from disk into an OpenGL texture.
@@ -176,6 +188,26 @@ static void initAppShellTextures() {
 	if (!s_logoTexture)
 		logging::write("warning: failed to load logo.png for header");
 	// Header icons (help, hamburger) now rendered via Font Awesome icon font.
+
+	// Loading screen background images (first frame of GIF via stb_image)
+	s_loadingBgTexture = loadImageTexture(dataDir / "images" / "loading.gif",
+	                                      &s_loadingBgWidth, &s_loadingBgHeight);
+	if (!s_loadingBgTexture)
+		logging::write("warning: failed to load loading.gif for loading screen");
+
+	s_loadingXmasBgTexture = loadImageTexture(dataDir / "images" / "loading-xmas.gif",
+	                                          &s_loadingXmasBgWidth, &s_loadingXmasBgHeight);
+	if (!s_loadingXmasBgTexture)
+		logging::write("warning: failed to load loading-xmas.gif for loading screen");
+
+	// Gear icon SVG for loading screen spinner (100px render)
+	s_gearTexture = loadSvgTexture(dataDir / "fa-icons" / "gear.svg", 100);
+	if (s_gearTexture) {
+		s_gearTexWidth = 100;
+		s_gearTexHeight = 100;
+	} else {
+		logging::write("warning: failed to load gear.svg for loading screen");
+	}
 }
 
 /**
@@ -183,6 +215,9 @@ static void initAppShellTextures() {
  */
 static void destroyAppShellTextures() {
 	if (s_logoTexture) { glDeleteTextures(1, &s_logoTexture); s_logoTexture = 0; }
+	if (s_loadingBgTexture) { glDeleteTextures(1, &s_loadingBgTexture); s_loadingBgTexture = 0; }
+	if (s_loadingXmasBgTexture) { glDeleteTextures(1, &s_loadingXmasBgTexture); s_loadingXmasBgTexture = 0; }
+	if (s_gearTexture) { glDeleteTextures(1, &s_gearTexture); s_gearTexture = 0; }
 }
 
 // Nav icon texture cache (loaded on demand)
@@ -777,6 +812,145 @@ static void renderAppShell() {
 		}
 
 		ImGui::End();
+		ImGui::PopStyleVar(2);
+	}
+
+	// ── Loading screen overlay (z-index 9999 in JS) ────────────────
+	// JS: <div id="loading" v-if="isLoading">
+	//       <div id="loading-background" :class="{ xmas: isXmas }"></div>
+	//       <div id="loading-icon"></div>
+	//       <span id="loading-title">{{ loadingTitle }}</span>
+	//       <span id="loading-progress">{{ loadingProgress }}</span>
+	//       <div id="loading-bar"><div :style="{ width: (loadPct * 100) + '%' }"></div></div>
+	//     </div>
+	if (core::view && core::view->isLoading) {
+		ImGui::SetNextWindowPos(vp_pos);
+		ImGui::SetNextWindowSize(vp_size);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, app::theme::BG);
+		ImGui::Begin("##LoadingOverlay", nullptr,
+			ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+			ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
+			ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+			ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
+
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+
+		// Background image at 0.2 opacity (CSS: opacity: 0.2; background-size: cover)
+		GLuint bg_tex = core::view->isXmas ? s_loadingXmasBgTexture : s_loadingBgTexture;
+		if (bg_tex) {
+			ImVec2 uv0(0, 0), uv1(1, 1);
+			ImU32 tint = IM_COL32(255, 255, 255, 51); // 0.2 * 255 ≈ 51
+			dl->AddImage(
+				static_cast<ImTextureID>(static_cast<uintptr_t>(bg_tex)),
+				vp_pos, ImVec2(vp_pos.x + vp_size.x, vp_pos.y + vp_size.y),
+				uv0, uv1, tint);
+		}
+
+		// Centered content: gear icon, title, progress text, progress bar
+		float center_x = vp_pos.x + vp_size.x * 0.5f;
+		float center_y = vp_pos.y + vp_size.y * 0.5f;
+
+		// Calculate total content height for vertical centering:
+		// gear(100) + margin(10) + title(25) + progress(20) + margin(15) + bar(15)
+		constexpr float GEAR_SIZE = 100.0f;
+		constexpr float GEAR_MARGIN_BOTTOM = 10.0f;
+		constexpr float TITLE_FONT_SIZE = 25.0f;
+		constexpr float PROGRESS_FONT_SIZE = 20.0f;
+		constexpr float BAR_MARGIN_TOP = 15.0f;
+		constexpr float BAR_WIDTH = 400.0f;
+		constexpr float BAR_HEIGHT = 15.0f;
+
+		float total_h = GEAR_SIZE + GEAR_MARGIN_BOTTOM + TITLE_FONT_SIZE + PROGRESS_FONT_SIZE + BAR_MARGIN_TOP + BAR_HEIGHT;
+		float start_y = center_y - total_h * 0.5f;
+
+		// Spinning gear icon (CSS: animation: update-cog-spin 6s infinite linear)
+		float gear_x = center_x - GEAR_SIZE * 0.5f;
+		float gear_y = start_y;
+		if (s_gearTexture) {
+			// Compute rotation angle: 360° in 6 seconds, linear
+			float time_s = static_cast<float>(ImGui::GetTime());
+			float angle_rad = std::fmod(time_s, 6.0f) / 6.0f * 2.0f * std::numbers::pi_v<float>;
+
+			// Rotate four corners of the gear image around its center
+			ImVec2 gear_center(gear_x + GEAR_SIZE * 0.5f, gear_y + GEAR_SIZE * 0.5f);
+			float cos_a = std::cos(angle_rad);
+			float sin_a = std::sin(angle_rad);
+			float half = GEAR_SIZE * 0.5f;
+
+			// Corners relative to center: TL, TR, BR, BL
+			ImVec2 corners[4];
+			float offsets[4][2] = { {-half, -half}, {half, -half}, {half, half}, {-half, half} };
+			for (int i = 0; i < 4; i++) {
+				float rx = offsets[i][0] * cos_a - offsets[i][1] * sin_a;
+				float ry = offsets[i][0] * sin_a + offsets[i][1] * cos_a;
+				corners[i] = ImVec2(gear_center.x + rx, gear_center.y + ry);
+			}
+			ImVec2 uvs[4] = { {0,0}, {1,0}, {1,1}, {0,1} };
+			dl->AddImageQuad(
+				static_cast<ImTextureID>(static_cast<uintptr_t>(s_gearTexture)),
+				corners[0], corners[1], corners[2], corners[3],
+				uvs[0], uvs[1], uvs[2], uvs[3],
+				IM_COL32(255, 255, 255, 255));
+		}
+
+		// Title text (CSS: #loading-title { font-size: 25px; })
+		float text_y = gear_y + GEAR_SIZE + GEAR_MARGIN_BOTTOM;
+		{
+			ImFont* bold = app::theme::getBoldFont();
+			ImVec2 title_size = bold->CalcTextSizeA(TITLE_FONT_SIZE, FLT_MAX, 0.0f,
+				core::view->loadingTitle.c_str());
+			ImVec2 title_pos(center_x - title_size.x * 0.5f, text_y);
+			dl->AddText(bold, TITLE_FONT_SIZE, title_pos,
+				app::theme::FONT_PRIMARY_U32, core::view->loadingTitle.c_str());
+			text_y += title_size.y;
+		}
+
+		// Progress text (CSS: #loading-progress { font-size: 20px; })
+		{
+			ImFont* font = ImGui::GetFont();
+			ImVec2 prog_size = font->CalcTextSizeA(PROGRESS_FONT_SIZE, FLT_MAX, 0.0f,
+				core::view->loadingProgress.c_str());
+			ImVec2 prog_pos(center_x - prog_size.x * 0.5f, text_y);
+			dl->AddText(font, PROGRESS_FONT_SIZE, prog_pos,
+				app::theme::FONT_PRIMARY_U32, core::view->loadingProgress.c_str());
+			text_y += prog_size.y;
+		}
+
+		// Progress bar (CSS: #loading-bar { width: 400px; height: 15px; border: 1px solid var(--border) })
+		if (core::view->loadPct >= 0.0) {
+			float bar_x = center_x - BAR_WIDTH * 0.5f;
+			float bar_y = text_y + BAR_MARGIN_TOP;
+
+			// Bar background (CSS: background: rgba(0, 0, 0, 0.22))
+			dl->AddRectFilled(
+				ImVec2(bar_x, bar_y),
+				ImVec2(bar_x + BAR_WIDTH, bar_y + BAR_HEIGHT),
+				app::theme::LOADING_BAR_BG_U32);
+
+			// Bar border (CSS: border: 1px solid var(--border))
+			dl->AddRect(
+				ImVec2(bar_x, bar_y),
+				ImVec2(bar_x + BAR_WIDTH, bar_y + BAR_HEIGHT),
+				app::theme::BORDER_U32, 0.0f, 0, 1.0f);
+
+			// Bar fill (CSS: background: var(--progress-bar) = linear-gradient(180deg, #57afe2, #35759a))
+			float fill_w = static_cast<float>(std::clamp(core::view->loadPct, 0.0, 1.0) * BAR_WIDTH);
+			if (fill_w > 0.0f) {
+				// Vertical gradient: top color → bottom color
+				dl->AddRectFilledMultiColor(
+					ImVec2(bar_x, bar_y),
+					ImVec2(bar_x + fill_w, bar_y + BAR_HEIGHT),
+					app::theme::PROGRESS_BAR_TOP_U32,     // top-left
+					app::theme::PROGRESS_BAR_TOP_U32,     // top-right
+					app::theme::PROGRESS_BAR_BOTTOM_U32,  // bottom-right
+					app::theme::PROGRESS_BAR_BOTTOM_U32); // bottom-left
+			}
+		}
+
+		ImGui::End();
+		ImGui::PopStyleColor();
 		ImGui::PopStyleVar(2);
 	}
 }
