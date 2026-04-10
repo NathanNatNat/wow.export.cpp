@@ -699,12 +699,12 @@ The build select screen (shown after clicking "Use Battle.net CDN" or local with
 multiple builds) currently renders as flat `ImGui::Button` rows. The original uses
 centered dashed-border cards with expansion icons.
 
-- [ ] Center the build select panel vertically and horizontally
-- [ ] Title: "Select Build" at 28px bold, `--font-highlight` color, margin-bottom 10px
-- [ ] Each build button: 450px min-width, transparent background, 3px dashed border in `--font-faded`, border-radius 10px, 15px padding, 16px text, left-aligned, expansion icon (32px) on the left
-- [ ] Build button hover: border color → `--nav-option-selected` (#22b549), text → green, subtle green background tint
-- [ ] "Return to Installations" link: 16px, `--font-alt` (#57afe2) color, below the build list
-- [ ] Each build button should show the expansion icon from `data/images/expansion/icon_*.webp` (mapped by `expansionId`)
+- [x] Center the build select panel vertically and horizontally
+- [x] Title: "Select Build" at 28px bold, `--font-highlight` color, margin-bottom 10px
+- [x] Each build button: 450px min-width, transparent background, 3px dashed border in `--font-faded`, border-radius 10px, 15px padding, 16px text, left-aligned, expansion icon (32px) on the left
+- [x] Build button hover: border color → `--nav-option-selected` (#22b549), text → green, subtle green background tint
+- [x] "Return to Installations" link: 16px, `--font-alt` (#57afe2) color, below the build list
+- [x] Each build button should show the expansion icon from `data/images/expansion/icon_*.webp` (mapped by `expansionId`)
 
 ### 9.9 Toast Notification Bar
 

@@ -31,11 +31,13 @@
 #include <thread>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
+#include <webp/decode.h>
 
 namespace screen_source_select {
 
@@ -53,6 +55,86 @@ static void ensureSourceTextures() {
 	s_texWowLogo   = app::theme::loadSvgTexture(imgDir / "wow_logo.svg", 160);
 	s_texBattlenet = app::theme::loadSvgTexture(imgDir / "import_battlenet.svg", 160);
 	s_texMpq       = app::theme::loadSvgTexture(imgDir / "mpq.svg", 160);
+}
+
+// --- Expansion icon textures (lazy-loaded from WebP) ---
+// JS: CSS var(--expansion-icon-N) mapped via expansion-icon-bg-N class
+// Maps expansionId (0..12) to icon_*.webp filenames.
+static constexpr std::array<const char*, 13> EXPANSION_ICON_FILES = {{
+	"icon_classic.webp",
+	"icon_tbc.webp",
+	"icon_wotlk.webp",
+	"icon_cata.webp",
+	"icon_mop.webp",
+	"icon_wod.webp",
+	"icon_legion.webp",
+	"icon_bfa.webp",
+	"icon_slands.webp",
+	"icon_df.webp",
+	"icon_tww.webp",
+	"icon_midnight.webp",
+	"icon_tlt.webp",
+}};
+
+static std::unordered_map<int, GLuint> s_expansionIconTextures;
+
+/**
+ * Load a WebP image from disk into an OpenGL texture.
+ * Returns the GL texture ID (0 on failure).
+ */
+static GLuint loadWebpTexture(const std::filesystem::path& path) {
+	// Read file into memory.
+	std::ifstream file(path, std::ios::binary | std::ios::ate);
+	if (!file.is_open())
+		return 0;
+
+	auto fileSize = file.tellg();
+	if (fileSize <= 0)
+		return 0;
+
+	std::vector<uint8_t> fileData(static_cast<size_t>(fileSize));
+	file.seekg(0);
+	file.read(reinterpret_cast<char*>(fileData.data()), fileSize);
+	file.close();
+
+	// Decode WebP to RGBA.
+	int w = 0, h = 0;
+	uint8_t* pixels = WebPDecodeRGBA(fileData.data(), fileData.size(), &w, &h);
+	if (!pixels)
+		return 0;
+
+	GLuint tex = 0;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	WebPFree(pixels);
+	return tex;
+}
+
+/**
+ * Get or load an expansion icon texture by expansion ID.
+ * JS: CSS background-image var(--expansion-icon-N) with expansion-icon-bg-N class.
+ */
+static GLuint getExpansionIconTexture(int expansionId) {
+	if (expansionId < 0 || expansionId >= static_cast<int>(EXPANSION_ICON_FILES.size()))
+		return 0;
+
+	auto it = s_expansionIconTextures.find(expansionId);
+	if (it != s_expansionIconTextures.end())
+		return it->second;
+
+	std::filesystem::path path = constants::DATA_DIR() / "images" / "expansion" / EXPANSION_ICON_FILES[static_cast<size_t>(expansionId)];
+	GLuint tex = loadWebpTexture(path);
+	s_expansionIconTextures[expansionId] = tex;
+	if (!tex)
+		logging::write(std::format("warning: failed to load expansion icon for expansion {}: {}", expansionId, path.string()));
+	return tex;
 }
 
 // --- File-local state ---
@@ -968,9 +1050,21 @@ void render() {
 					drawDashedRoundedRect(draw, btn_min, btn_max, app::theme::FONT_FADED_U32, btn_border_radius, border_thick, 8.0f, 6.0f);
 				}
 
-				// Build label text.
+				// Expansion icon (32px, at 10px from left, vertically centered).
+				// JS: CSS background-image var(--expansion-icon-N), background-position: 10px center, background-size: 32px.
+				int expansionId = build.value("expansionId", 0);
+				GLuint iconTex = getExpansionIconTexture(expansionId);
+				if (iconTex) {
+					float icon_size = 32.0f;
+					float icon_x = btn_min.x + 10.0f;
+					float icon_y = btn_min.y + (btn_height - icon_size) * 0.5f;
+					draw->AddImage(ImTextureRef(static_cast<ImTextureID>(iconTex)),
+						ImVec2(icon_x, icon_y), ImVec2(icon_x + icon_size, icon_y + icon_size));
+				}
+
+				// Build label text (padding: 15px 15px 15px 50px in CSS).
 				ImU32 text_color = btn_hovered ? app::theme::NAV_SELECTED_U32 : app::theme::FONT_HIGHLIGHT_U32;
-				float text_x_off = btn_min.x + 50.0f; // leave space for expansion icon
+				float text_x_off = btn_min.x + 50.0f;
 				float text_y_off = btn_min.y + (btn_height - 16.0f) * 0.5f;
 				draw->AddText(ImGui::GetFont(), 16.0f, ImVec2(text_x_off, text_y_off), text_color, label.c_str());
 
