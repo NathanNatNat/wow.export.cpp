@@ -973,6 +973,61 @@ static void renderAppShell() {
 		ImGui::PopStyleColor();
 		ImGui::PopStyleVar(2);
 	}
+
+	// ── File drop overlay (z-index 500 in JS) ─────────────────────
+	// JS: <div id="drop-overlay" v-if="!!fileDropPrompt">
+	//       <div id="drop-overlay-icon"></div>
+	//       <div id="drop-overlay-text">» {{ fileDropPrompt }} «</div>
+	//     </div>
+	if (core::view && core::view->fileDropPrompt.is_string()) {
+		std::string prompt_text = core::view->fileDropPrompt.get<std::string>();
+		if (!prompt_text.empty()) {
+			ImGui::SetNextWindowPos(vp_pos);
+			ImGui::SetNextWindowSize(vp_size);
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+			ImGui::PushStyleColor(ImGuiCol_WindowBg, app::theme::BG_TRANS);
+			ImGui::Begin("##DropOverlay", nullptr,
+				ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+				ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
+				ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+				ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
+
+			ImDrawList* dl = ImGui::GetWindowDrawList();
+			float center_x = vp_pos.x + vp_size.x * 0.5f;
+			float center_y = vp_pos.y + vp_size.y * 0.5f;
+
+			// CSS: #drop-overlay-icon { width: 100px; height: 100px; margin-bottom: 20px;
+			//        background-image: url(./fa-icons/copy.svg) }
+			constexpr float ICON_SIZE = 100.0f;
+			constexpr float ICON_MARGIN_BOTTOM = 20.0f;
+			constexpr float TEXT_FONT_SIZE = 25.0f; // CSS: font-size: 25px
+
+			// Calculate total height for vertical centering: icon(100) + margin(20) + text
+			ImFont* font = ImGui::GetFont();
+			// JS: » {{ fileDropPrompt }} «
+			std::string formatted = std::string("\xc2\xbb ") + prompt_text + " \xc2\xab";
+			ImVec2 text_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, formatted.c_str());
+			float total_h = ICON_SIZE + ICON_MARGIN_BOTTOM + text_size.y;
+			float start_y = center_y - total_h * 0.5f;
+
+			// Render copy icon using Font Awesome icon font
+			ImFont* icon_font = app::theme::getIconFont();
+			if (icon_font) {
+				ImVec2 icon_text_size = icon_font->CalcTextSizeA(ICON_SIZE, FLT_MAX, 0.0f, ICON_FA_COPY);
+				ImVec2 icon_pos(center_x - icon_text_size.x * 0.5f, start_y);
+				dl->AddText(icon_font, ICON_SIZE, icon_pos, app::theme::FONT_PRIMARY_U32, ICON_FA_COPY);
+			}
+
+			// Render prompt text: » {prompt} «
+			ImVec2 text_pos(center_x - text_size.x * 0.5f, start_y + ICON_SIZE + ICON_MARGIN_BOTTOM);
+			dl->AddText(font, TEXT_FONT_SIZE, text_pos, app::theme::FONT_PRIMARY_U32, formatted.c_str());
+
+			ImGui::End();
+			ImGui::PopStyleColor();
+			ImGui::PopStyleVar(2);
+		}
+	}
 }
 
 static std::string getPlatformName() {
@@ -1102,7 +1157,12 @@ static void glfw_drop_callback(GLFWwindow* /*window*/, int count, const char** p
 	if (!core::view)
 		return;
 
+	// JS: window.ondrop = e => { core.view.fileDropPrompt = null; ... }
 	core::view->fileDropPrompt = nullptr;
+
+	// JS: isBusy check — don't process drops while busy
+	if (core::view->isBusy)
+		return;
 
 	const DropHandler* handler = core::getDropHandler(paths[0]);
 	if (handler) {
@@ -1130,6 +1190,10 @@ static void glfw_drop_callback(GLFWwindow* /*window*/, int count, const char** p
 
 		if (!include.empty() && handler->process)
 			handler->process(include[0]);
+	} else {
+		// JS: ondragenter sets fileDropPrompt = 'That file cannot be converted.'
+		// GLFW has no dragenter/dragleave, so show a toast instead.
+		core::setToast("error", "That file cannot be converted.", {}, 3000);
 	}
 }
 
