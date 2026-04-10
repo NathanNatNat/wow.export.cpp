@@ -25,7 +25,7 @@ Shown after choosing a source — lists available game builds to explore.
 
 ## Loading Screen
 
-Displayed while the selected build is being loaded (CASC parsing, listfile download, etc.).
+Displayed whenever the app is loading resources — opening a CASC/legacy source, loading tab data (models, textures, maps, creatures, characters, items, audio, videos, etc.), and exporting. Any operation that calls `showLoadingScreen()` shows this overlay with a progress bar.
 
 ![Loading Screen](https://github.com/user-attachments/assets/af551c6f-a3af-44ad-9fa1-c3b15108cf9d)
 
