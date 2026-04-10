@@ -36,3 +36,43 @@ Displayed whenever the app is loading resources — opening a CASC/legacy source
 The main landing screen after a build has been loaded, showing navigation options for the various content tabs.
 
 ![Home Screen](https://github.com/user-attachments/assets/150151e0-4012-4a59-a46c-3e2df60f9fd6)
+
+---
+
+## Models Tab — Nothing Loaded
+
+The models tab after data has loaded, showing the file list, empty 3D preview area, and Preview/Export controls on the right.
+
+![Models Tab — Nothing Loaded](https://github.com/user-attachments/assets/52168fdb-bb8c-43ad-922e-42f7ff1b62fd)
+
+---
+
+## Models Tab — M2 Model Loaded
+
+An M2 model selected and previewed. M3 models render with the same layout.
+
+![Models Tab — M2 Model Loaded](https://github.com/user-attachments/assets/3cfbcd92-78e5-4e64-ba42-bd6e19f9631d)
+
+---
+
+## Models Tab — WMO Model Loaded
+
+A WMO model selected and previewed.
+
+![Models Tab — WMO Model Loaded](https://github.com/user-attachments/assets/dfc64133-f177-453a-98ce-1ac21cc0fb9d)
+
+---
+
+## Textures Tab
+
+The textures tab with file list, texture preview, and export controls.
+
+![Textures Tab](https://github.com/user-attachments/assets/580cb305-db6a-4bf9-b2d9-a940e7bb635a)
+
+---
+
+## Textures Tab — Atlas Regions Enabled
+
+The textures tab with the "Atlas Regions" option enabled, showing region overlays on the texture preview.
+
+![Textures Tab — Atlas Regions](https://github.com/user-attachments/assets/e0bc21de-e8dd-4651-9a19-a4ee4078f809)
