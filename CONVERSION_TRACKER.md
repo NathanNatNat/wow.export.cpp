@@ -568,16 +568,16 @@ surrounding shell.
 └─────────────────────────────────────┘
 ```
 
-- [ ] Create an app shell rendering function in `app.cpp` that draws header, content, and footer regions every frame
-- [ ] Render the **header** as a fixed-height (53px) bar at the top with `--background-dark` (#2c3136) background and a 1px `--border` (#6c757d) bottom border
-- [ ] Render the **logo** in the header: `logo.png` (32px) left-aligned with "wow.export" text at 25px bold, 15px left margin
-- [ ] Render the **navigation icons** in the header after the logo (see 9.2)
-- [ ] Render the **hamburger menu** icon (`line-columns.svg`, 20px) at the right side of the header with a context menu for settings/restart/log
-- [ ] Render the **help icon** (`help.svg`, 20px) at the right side of the header, left of the hamburger menu
-- [ ] Render the **footer** as a fixed-height (73px) bar at the bottom with `--background-dark` (#2c3136) background and a 1px `--border` (#6c757d) top border
-- [ ] Footer content: centered text showing version and copyright in `--font-faded` (#6c757d) color
-- [ ] Render the **content area** between header and footer, filling available space
-- [ ] Render the active module **inside** the content area, not as the entire window
+- [x] Create an app shell rendering function in `app.cpp` that draws header, content, and footer regions every frame
+- [x] Render the **header** as a fixed-height (53px) bar at the top with `--background-dark` (#2c3136) background and a 1px `--border` (#6c757d) bottom border
+- [x] Render the **logo** in the header: `logo.png` (32px) left-aligned with "wow.export" text at 25px bold, 15px left margin
+- [x] Render the **navigation icons** in the header after the logo (see 9.2)
+- [x] Render the **hamburger menu** icon (`line-columns.svg`, 20px) at the right side of the header with a context menu for settings/restart/log
+- [x] Render the **help icon** (`help.svg`, 20px) at the right side of the header, left of the hamburger menu
+- [x] Render the **footer** as a fixed-height (73px) bar at the bottom with `--background-dark` (#2c3136) background and a 1px `--border` (#6c757d) top border
+- [x] Footer content: centered text showing version and copyright in `--font-faded` (#6c757d) color
+- [x] Render the **content area** between header and footer, filling available space
+- [x] Render the active module **inside** the content area, not as the entire window
 
 ### 9.2 Navigation Bar (Tab Icons in Header)
 

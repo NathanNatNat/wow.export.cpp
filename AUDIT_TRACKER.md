@@ -527,3 +527,8 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: Video playback uses a `<video>` HTML element with native browser playback controls, streaming from the Kino server URL.
 - **C++**: No built-in video decoder library is available. Video URL is opened in the system's default handler (browser/media player) via `core::openInExplorer()` (`ShellExecuteW` on Windows, `xdg-open` on Linux). The preview area displays streaming state and subtitle text via ImGui.
 - **Rationale**: The project's dependency list has no video playback library (FFmpeg etc.). Opening the URL externally follows the same NW.js → C++ translation pattern used for other browser APIs (`nw.Shell.openItem` → `ShellExecuteW`/`xdg-open`). All state management, Kino HTTP POST, polling, subtitle loading, and error handling are fully wired.
+
+### `src/app.cpp` — ACCEPTABLE (help icon non-functional, `tab_help` removed)
+- **JS**: `#nav-help` icon navigates to `tab_help` module via `@click="setActiveModule('tab_help')"`.
+- **C++**: The `tab_help` module was deleted from the project. The help icon is rendered in the header (matching the original layout) but has no click action.
+- **Rationale**: The `tab_help` module does not exist in the C++ port. Rendering the icon preserves the visual layout fidelity; adding a click handler would require creating a new module that doesn't exist in the current conversion scope.
