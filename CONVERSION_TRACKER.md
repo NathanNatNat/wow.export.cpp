@@ -539,3 +539,116 @@ at any time but are not blocking.
 
 Files with informational no-ops: `generics.cpp`, `modules.cpp`, `components/*.cpp`,
 `app.cpp`, `map-viewer.cpp`, `model-viewer-gl.cpp`, `file-field.cpp`, `tab_videos.cpp`.
+
+---
+
+## Remaining Work — Visual Fidelity & Polish
+
+> The conversion compiles and all integration phases are complete. The items below are
+> **not** file conversions or integration wiring — they are **polish and fidelity** tasks
+> required to make the C++ app look and behave identically to the original JS app.
+> Priority order: **theme/styling → fonts → export gaps → CI/testing**.
+
+### 9.1 ImGui Theme from app.css
+
+The original app uses `data/app.css` with **231 CSS variables** for colors, spacing,
+borders, and rounding. The C++ app currently calls only `ImGui::StyleColorsDark()` (the
+generic ImGui default). A centralized theme system must map the CSS variables to
+`ImGuiStyle` colors and settings.
+
+- [ ] Create a centralized theme struct/function mapping all CSS color variables to `ImGuiStyle::Colors[]`
+- [ ] Map CSS spacing/rounding/border variables to `ImGuiStyle` padding/rounding values
+- [ ] Replace hardcoded `IM_COL32(...)` values scattered in components (e.g. `data-table.cpp`) with theme references
+- [ ] Replace the no-op `reloadStylesheet()` in `app.cpp` with actual theme application
+- [ ] Set `glClearColor` from `--background` CSS variable (`#343a40`)
+
+### 9.2 Custom Font Loading
+
+The original app uses Selawik (regular + bold) and Gambler fonts. The C++ app uses
+the ImGui default font. Font files exist in `data/fonts/` but are WOFF2 format —
+ImGui requires TTF/OTF.
+
+- [ ] Convert or source TTF versions of Selawik (`selawk.woff2`, `selawkb.woff2`) and Gambler (`gmblr.woff2`)
+- [ ] Load fonts into ImGui via `ImGui::GetIO().Fonts->AddFontFromFileTTF()`
+- [ ] Set primary font (Selawik regular) as the default ImGui font
+- [ ] Load bold font (Selawik bold) and use `ImGui::PushFont()` where the JS app uses `font-weight: bold`
+
+### 9.3 Font Awesome Icon Font
+
+The original app uses Font Awesome icons inline in text and buttons. The C++ app
+has 49 SVG icons in `data/fa-icons/` rendered via nanosvg, but not as an ImGui icon font.
+
+- [ ] Obtain Font Awesome TTF/OTF (e.g. `fa-solid-900.ttf`)
+- [ ] Load as an ImGui icon font merged into the default font range
+- [ ] Replace nanosvg icon rendering with ImGui icon font codepoints where appropriate
+
+### 9.4 DPI / High-DPI Scaling
+
+- [ ] Implement proper high-DPI scaling via `ImGui::GetIO().FontGlobalScale` and GLFW framebuffer scale
+- [ ] Rebuild font atlas at appropriate sizes for the display scale factor
+
+### 9.5 M3 Texture Export (Conversion Gap)
+
+`M3Exporter::exportTextures()` returns an empty map — this is a **conversion gap**
+(the original JS had this working). The related `TODO(conversion)` comments are in
+`M3Exporter.cpp`.
+
+- [ ] Implement `M3Exporter::exportTextures()` to extract and export M3 model textures
+- [ ] Wire `fileManifest` texture entries in `M3Exporter.cpp` (line ~163)
+
+### 9.6 Font Preview in tab_fonts
+
+`inject_font_face` in `tab_fonts.cpp` needs to load font data into ImGui's font
+system for live preview.
+
+- [ ] Implement `inject_font_face` to dynamically load font data into ImGui for preview rendering
+
+### 9.7 Loader Wiring Verification (tab_maps)
+
+Three `TODO(conversion)` comments in `tab_maps.cpp` note that ADTLoader, WMOLoader,
+and WDTLoader processing "will be wired when fully converted." The loaders are
+converted — verify the wiring is complete at runtime.
+
+- [ ] Verify ADTLoader integration in `tab_maps.cpp` works at runtime
+- [ ] Verify WMOLoader integration in `tab_maps.cpp` works at runtime
+- [ ] Verify WDTLoader integration in `tab_maps.cpp` works at runtime
+
+---
+
+## Remaining Work — CI & Testing
+
+### 10.1 Linux CI Job
+
+The CI workflow (`.github/workflows/ci.yml`) only has a Windows MSVC job. The Linux
+GCC job referenced in README badges does not exist.
+
+- [ ] Add Linux GCC job to `ci.yml`
+
+### 10.2 Test Infrastructure
+
+There are currently zero test files and no test framework integrated.
+
+- [ ] Evaluate and integrate a test framework (e.g. Catch2, Google Test)
+- [ ] Add smoke tests for core systems (BufferWrapper, config, CASC parsing)
+- [ ] Add CI step to run tests
+
+---
+
+## Pre-Existing JS Limitations (Not Conversion Gaps)
+
+> These limitations existed in the **original JavaScript** source and are **not**
+> regressions introduced by the C++ conversion. They do NOT need to be fixed to
+> achieve parity with the original app. Documented here for reference only.
+
+| Issue | File | Original JS Status |
+|-------|------|--------------------|
+| ADPCM Stereo compression (0x80) not supported | `mpq/mpq.cpp` | Never implemented |
+| ADPCM Mono compression (0x40) not supported | `mpq/mpq.cpp` | Never implemented |
+| ASCII/text PKWare compression not supported | `mpq/pkware.cpp` | Never implemented |
+| Alpha inline WMO group parsing not implemented | `3D/loaders/WMOLegacyLoader.cpp` | Never implemented |
+| External skin loading for legacy WotLK M2 | `3D/loaders/M2LegacyLoader.cpp` | Never implemented |
+| M3 chunk skipping (M3DT, M3SI, M3CL, M3VR) | `3D/loaders/M3Loader.cpp` | Skipped in JS too |
+| WDC4 new chunk reading incomplete | `db/WDCReader.cpp` | Same TODO in JS |
+| DBD foreign key support missing | `db/DBDParser.cpp` | Same TODO in JS |
+| WMO GLTF doodad export not supported | `3D/exporters/WMOExporter.cpp` | Same limitation in JS |
+| DBTextureFileData only supports UsageType 0 | `db/caches/DBTextureFileData.cpp` | Same limitation in JS |
