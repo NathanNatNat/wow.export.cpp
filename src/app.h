@@ -173,4 +173,29 @@ inline constexpr ImVec2 BUTTON_PADDING    = ImVec2(13.0f, 9.0f); // input[type=b
  */
 void applyTheme();
 
+// ── Font size from CSS ───────────────────────────────────────────
+// body { font-family: "Selawik", sans-serif; } — browser default is 16px.
+inline constexpr float DEFAULT_FONT_SIZE = 16.0f;
+
+/**
+ * Load custom fonts (Selawik regular, Selawik bold, Gambler) into
+ * the ImGui font atlas from data/fonts/*.ttf.
+ *
+ * Must be called after ImGui::CreateContext() and before the first frame.
+ * Sets the Selawik regular font as the default.
+ */
+void loadFonts();
+
+/**
+ * Return the bold font (Selawik Bold). Falls back to the default font
+ * if the bold font failed to load.
+ */
+ImFont* getBoldFont();
+
+/**
+ * Return the Gambler font. Falls back to the default font
+ * if the Gambler font failed to load.
+ */
+ImFont* getGamblerFont();
+
 } // namespace app::theme

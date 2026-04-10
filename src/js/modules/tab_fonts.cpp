@@ -58,8 +58,7 @@ static void* load_font(const std::string& file_name) {
 		// JS: data.processAllBlocks();
 		// JS: const url = await inject_font_face(font_id, data.raw, log);
 		BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
-		// TODO(conversion): inject_font_face will load font data into ImGui when font system is wired.
-		void* font = nullptr;
+		void* font = font_helpers::inject_font_face(font_id, data.raw().data(), data.byteLength());
 
 		if (font) {
 			loaded_fonts[font_id] = font;
