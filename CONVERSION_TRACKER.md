@@ -518,14 +518,14 @@ Wire video playback, Kino streaming, and audio callbacks.
 Platform-specific features and cleanup.
 
 ### 8.1 Crypto
-- [ ] Replace FNV-1a / minimal MD5 with proper MD5/SHA256 (OpenSSL or similar) — `tab_maps.cpp` (1), `cache-collector.cpp` (3 TODOs)
+- [x] Replace FNV-1a / minimal MD5 with proper MD5/SHA256 — `tab_maps.cpp` (1), `cache-collector.cpp` (3 TODOs)
 
 ### 8.2 Platform APIs
-- [ ] Implement app reload (F5) equivalent — `src/app.cpp` (2 TODOs)
+- [x] Implement app reload (F5) equivalent — `src/app.cpp`
 
 ### 8.3 Map Viewer Internals
-- [ ] Wire double-buffer / overlay canvas equivalent in `map-viewer.cpp` — canvas operations, tile loading, overlay drawing (12 TODOs in .cpp, 2 in .h)
-- [ ] Implement dashed line rendering for map grid — `map-viewer.cpp` (1 TODO)
+- [x] Wire double-buffer / overlay canvas equivalent in `map-viewer.cpp` — canvas operations, tile loading, overlay drawing (12 TODOs in .cpp, 2 in .h)
+- [x] Implement dashed line rendering for map grid — `map-viewer.cpp` (1 TODO)
 
 ---
 

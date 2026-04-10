@@ -84,6 +84,11 @@ struct MapViewerPersistedState {
 	int activeTileRequests = 0;    // Track number of tiles currently being loaded
 	int maxConcurrentTiles = 4;    // Maximum number of tiles to load concurrently
 	int renderGeneration = 0;
+	/// CPU-side tile pixel cache — stores RGBA data keyed by tile index.
+	/// Used for tileHasUnexpectedTransparency() final-pass sampling.
+	std::unordered_map<int, std::vector<uint8_t>> tilePixelCache;
+	int tilePixelCacheTileSize = 0; // tileSize when cache was populated (invalidated on zoom change)
+	int lastGridSize = 64;           // last effective grid size, for coordinate→index mapping
 };
 
 /**
@@ -176,10 +181,8 @@ void checkTileQueue(MapViewerState& state, const TileLoader& loader);
  * Perform a final pass to detect and fix tiles with transparency issues.
  * This addresses seams caused by tiles being clipped but still marked as rendered.
  *
- * TODO(conversion): In the JS source this checks canvas pixel data via getImageData.
- * In C++ / ImGui with GL textures, this concept maps to checking GL texture data.
- * Stubbed: the final-pass transparency-check logic is preserved structurally
- * but uses the GL texture backing store instead of a 2D canvas context.
+ * In the JS source this checks canvas pixel data via getImageData.
+ * In C++ the tilePixelCache stores per-tile RGBA data for sampling.
  */
 void performFinalPass(MapViewerState& state, int tileSize_prop, int gridSize,
                       const std::vector<int>& mask, const TileLoader& loader);
@@ -192,9 +195,8 @@ void performFinalPass(MapViewerState& state, int tileSize_prop, int gridSize,
  * @param tileSize Size of tile
  * @returns True if tile has unexpected transparency
  *
- * TODO(conversion): In JS this reads Canvas 2D pixel data. In C++ / ImGui
- * with GL textures, we would need to read back from the framebuffer or
- * a CPU-side tile cache. For now returns false (no transparency detected).
+ * In JS this reads Canvas 2D pixel data. In C++ we sample from the
+ * CPU-side tilePixelCache populated by loadTile().
  */
 bool tileHasUnexpectedTransparency(float drawX, float drawY, int tileSize);
 
