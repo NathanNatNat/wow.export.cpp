@@ -310,7 +310,7 @@ try {
 std::string texFile = "data-" + std::to_string(textureName) + ".png";
 auto texPath = out / texFile;
 const std::string matName = "mat_" + std::to_string(textureName);
-// TODO(conversion): In JS, dataTexture is a base64 data URI that gets decoded via
+// In JS, dataTexture is a base64 data URI that gets decoded via
 // BufferWrapper.fromBase64(). In C++, addURITexture stores pre-decoded PNG data directly.
 auto dataCopy = dataTexture;
 
@@ -746,10 +746,8 @@ auto fileData = casc->getVirtualFileByID(texFileDataID);
 casc::BLPImage blp(fileData);
 auto png_buffer = blp.toPNG(config.value("modelsExportAlpha", false) ? 0b1111 : 0b0111);
 
-// TODO(conversion): In JS, gltf.texture_buffers is accessed directly as a public property.
-// In C++, GLTFWriter's texture_buffers is private. Equipment GLB textures are handled
-// via the initial setTextureBuffers call for the main model. Equipment textures in GLB
-// mode will be exported as files instead.
+// JS: gltf.texture_buffers[texFileDataID] = png_buffer;
+gltf.addTextureBuffer(texFileDataID, std::move(png_buffer));
 } else if (config.value("overwriteFiles", true) || !generics::fileExists(texPath)) {
 auto fileData = casc->getVirtualFileByID(texFileDataID);
 casc::BLPImage blp(fileData);

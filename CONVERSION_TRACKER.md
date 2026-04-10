@@ -481,18 +481,18 @@ The legacy model tab depends on MPQ renderers (Phase 4.1) and loaders
 
 Wire file export, texture encoding, and data export operations.
 
-- [ ] Wire export stream (file I/O) — `tab_creatures.cpp`, `tab_decor.cpp` (2 TODOs)
-- [ ] Wire `BufferWrapper::fromCanvas` equivalent (PNG/WebP encoding from raw RGBA) — `tab_textures.cpp`, `tab_zones.cpp` (2 TODOs)
-- [ ] Wire `BufferWrapper::startsWith` with FileIdentifier matches — `tab_textures.cpp` (1 TODO)
-- [ ] Wire `GLTFWriter::setTextureMap` typed parameter — `M2Exporter.cpp` (1 TODO)
-- [ ] Wire `fileManifest` texture entries for `exportTextures` — `ADTExporter.cpp` (1 TODO)
-- [ ] Wire canvas rotation/scaling for ADT minimap output — `ADTExporter.cpp` (2 TODOs)
-- [ ] Wire image dimension detection via `stb_image` — `legacy_tab_textures.cpp` (1 TODO)
-- [ ] Wire data exporter DBC schema type conversion — `legacy_tab_data.cpp` (1 TODO)
-- [ ] Wire `autoAdjust` for model export — `tab_characters.cpp` (1 TODO)
-- [ ] Wire animation list population from loaded M2 data — `tab_characters.cpp` (1 TODO)
-- [ ] Wire `detect_model_type(data)` fallback — `tab_models.cpp` (1 TODO)
-- [ ] Wire loaded data for model preview — `tab_models.cpp` (1 TODO)
+- [x] Wire export stream (file I/O) — `tab_creatures.cpp`, `tab_decor.cpp` (2 TODOs)
+- [x] Wire `BufferWrapper::fromCanvas` equivalent (PNG/WebP encoding from raw RGBA) — `tab_textures.cpp`, `tab_zones.cpp` (2 TODOs)
+- [x] Wire `BufferWrapper::startsWith` with FileIdentifier matches — `tab_textures.cpp` (1 TODO)
+- [x] Wire `GLTFWriter::setTextureMap` typed parameter — `M2Exporter.cpp` (1 TODO)
+- [x] Wire `fileManifest` texture entries for `exportTextures` — `ADTExporter.cpp` (1 TODO)
+- [x] Wire canvas rotation/scaling for ADT minimap output — `ADTExporter.cpp` (2 TODOs)
+- [x] Wire image dimension detection via `stb_image` — `legacy_tab_textures.cpp` (1 TODO)
+- [x] Wire data exporter DBC schema type conversion — `legacy_tab_data.cpp` (1 TODO)
+- [x] Wire `autoAdjust` for model export — `tab_characters.cpp` (1 TODO)
+- [x] Wire animation list population from loaded M2 data — `tab_characters.cpp` (1 TODO)
+- [x] Wire `detect_model_type(data)` fallback — `tab_models.cpp` (1 TODO)
+- [x] Wire loaded data for model preview — `tab_models.cpp` (1 TODO)
 - [x] Wire group/set mask conversion from JSON to typed vectors — `tab_models_legacy.cpp` (1 TODO)
 
 ---
