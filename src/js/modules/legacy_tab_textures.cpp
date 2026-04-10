@@ -18,6 +18,7 @@
 #include "../components/context-menu.h"
 #include "../components/menu-button.h"
 
+#include <glad/gl.h>
 #include <stb_image.h>
 #include <cstring>
 #include <format>
@@ -27,6 +28,24 @@
 #include <spdlog/spdlog.h>
 
 namespace legacy_tab_textures {
+
+// Upload RGBA pixel data to an OpenGL texture, returning the texture ID.
+static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t old_tex = 0) {
+	if (old_tex != 0) {
+		GLuint old_gl = static_cast<GLuint>(old_tex);
+		glDeleteTextures(1, &old_gl);
+	}
+	GLuint tex = 0;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	return static_cast<uint32_t>(tex);
+}
 
 // --- File-local state ---
 
@@ -48,6 +67,7 @@ static void handle_listbox_context(const nlohmann::json& data);
 
 // JS: const preview_texture = async (core, filename) => { ... }
 static void preview_texture(const std::string& filename) {
+	auto& view = *core::view;
 	// Get extension.
 	auto dot_pos = filename.rfind('.');
 	std::string ext;
@@ -100,22 +120,30 @@ static void preview_texture(const std::string& filename) {
 
 			// JS: core.view.texturePreviewInfo = `${blp.width}x${blp.height} (${info})`;
 			view.texturePreviewInfo = std::format("{}x{} ({})", blp.width, blp.height, info);
+
+			// Upload BLP as GL texture for ImGui::Image display.
+			std::vector<uint8_t> pixels = blp.toUInt8Array(0, mask);
+			view.texturePreviewTexID = upload_rgba_to_gl(
+				pixels.data(), static_cast<int>(blp.width), static_cast<int>(blp.height),
+				view.texturePreviewTexID);
 		} else if (ext == ".png" || ext == ".jpg") {
 			// JS: const buffer = Buffer.from(data);
 			// JS: const img = new Image(); img.onload = () => { ... }
-			// Use stb_image to detect dimensions from the raw file data.
+			// Use stb_image to decode and detect dimensions.
 			int img_w = 0, img_h = 0, img_channels = 0;
-			if (stbi_info_from_memory(data->data(), static_cast<int>(data->size()), &img_w, &img_h, &img_channels)) {
+			unsigned char* pixels = stbi_load_from_memory(
+				data->data(), static_cast<int>(data->size()),
+				&img_w, &img_h, &img_channels, 4);
+			if (pixels) {
 				view.texturePreviewWidth = img_w;
 				view.texturePreviewHeight = img_h;
-			}
+				view.texturePreviewTexID = upload_rgba_to_gl(
+					pixels, img_w, img_h, view.texturePreviewTexID);
+				stbi_image_free(pixels);
 
-			// JS: core.view.texturePreviewURL = data_url;
-			// Store a simple marker so the preview section renders.
-			const std::string mime_type = (ext == ".png") ? "image/png" : "image/jpeg";
-			BufferWrapper img_buf(std::move(*data));
-			view.texturePreviewURL = "data:" + mime_type + ";base64," + img_buf.toBase64();
-			view.texturePreviewInfo = std::format("{}x{} ({})", img_w, img_h, ext.substr(1));
+				view.texturePreviewURL = "loaded";
+				view.texturePreviewInfo = std::format("{}x{} ({})", img_w, img_h, ext.substr(1));
+			}
 		}
 
 		selected_file = filename;
@@ -150,6 +178,12 @@ static void refresh_blp_preview() {
 			casc::BLPImage blp(wrapped);
 			uint8_t mask = static_cast<uint8_t>(core::view->config.value("exportChannelMask", 0b1111));
 			core::view->texturePreviewURL = blp.getDataURL(mask);
+
+			// Re-upload GL texture with updated channel mask.
+			std::vector<uint8_t> pixels = blp.toUInt8Array(0, mask);
+			core::view->texturePreviewTexID = upload_rgba_to_gl(
+				pixels.data(), static_cast<int>(blp.width), static_cast<int>(blp.height),
+				core::view->texturePreviewTexID);
 		}
 	} catch (const std::exception& e) {
 		logging::write(std::format("failed to refresh preview for {}: {}", selected_file, e.what()));
@@ -322,8 +356,16 @@ void render() {
 		}
 
 		// Texture preview image display.
-		if (!view.texturePreviewURL.empty()) {
-			// TODO(conversion): GL texture display from texturePreviewURL will be wired when renderer is integrated.
+		if (view.texturePreviewTexID != 0) {
+			const ImVec2 avail = ImGui::GetContentRegionAvail();
+			const float tex_w = static_cast<float>(view.texturePreviewWidth);
+			const float tex_h = static_cast<float>(view.texturePreviewHeight);
+			if (tex_w > 0 && tex_h > 0) {
+				const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
+				const ImVec2 img_size(tex_w * scale, tex_h * scale);
+				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.texturePreviewTexID)), img_size);
+			}
+		} else if (!view.texturePreviewURL.empty()) {
 			ImGui::TextWrapped("Texture loaded: %dx%d", view.texturePreviewWidth, view.texturePreviewHeight);
 		}
 	}
