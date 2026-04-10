@@ -92,6 +92,14 @@ public:
 	void setTextureBuffers(const std::map<uint32_t, BufferWrapper>& texture_buffers);
 
 	/**
+	 * Add a single texture buffer for embedding in GLB.
+	 * C++ accessor: JS accesses gltf.texture_buffers directly as a public property.
+	 * @param fileDataID Texture file data ID
+	 * @param buffer PNG data buffer
+	 */
+	void addTextureBuffer(uint32_t fileDataID, BufferWrapper buffer);
+
+	/**
 	 * Set the bones array for this writer.
 	 * @param bones Bone data
 	 */

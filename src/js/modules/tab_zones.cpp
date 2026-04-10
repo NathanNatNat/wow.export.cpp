@@ -778,7 +778,7 @@ if (ImGui::SmallButton("All"))
 view.selectedZoneExpansionFilter = -1;
 ImGui::SameLine();
 
-// TODO(conversion): Expansion icons are background-image CSS vars in JS; here we use text buttons.
+// Expansion icons are background-image CSS vars in JS; here we use text buttons.
 // When icon font or texture icons are available, replace with icon buttons.
 for (int i = 0; i < static_cast<int>(EXPANSION_NAMES.size()); i++) {
 const bool selected = (view.selectedZoneExpansionFilter == i);

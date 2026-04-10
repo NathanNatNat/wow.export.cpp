@@ -41,6 +41,7 @@
 #include "../db/caches/DBItems.h"
 #include "../wow/EquipmentSlots.h"
 #include "../file-writer.h"
+#include "../png-writer.h"
 #include "../components/model-viewer-gl.h"
 
 #include <algorithm>
@@ -1361,8 +1362,20 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 					// JS: if (is_active) { ... } else { ... }
 					if (is_active) {
 						// JS: for (const [texture_type, chr_material] of creature_chr_materials) exporter.addURITexture(texture_type, chr_material.getURI());
+						for (auto& [texture_type, chr_material] : creature_chr_materials) {
+							auto pixels = chr_material->getRawPixels();
+							PNGWriter png(static_cast<uint32_t>(chr_material->getWidth()), static_cast<uint32_t>(chr_material->getHeight()));
+							auto& pd = png.getPixelData();
+							std::memcpy(pd.data(), pixels.data(), pixels.size());
+							exporter.addURITexture(texture_type, png.getBuffer());
+						}
+
 						// JS: exporter.setGeosetMask(core.view.creatureViewerGeosets);
-						// TODO(conversion): Active character texture addURITexture will be wired when CharMaterialRenderer.getURI() is integrated.
+						std::vector<M2ExportGeosetMask> mask;
+						for (const auto& g : view.creatureViewerGeosets) {
+							mask.push_back({g.value("checked", false)});
+						}
+						exporter.setGeosetMask(std::move(mask));
 					} else {
 						// build textures for export
 						// JS: const export_materials = new Map();
@@ -1518,7 +1531,11 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 						for (auto& [texture_type, chr_material] : export_materials) {
 							chr_material->update();
 							// JS: exporter.addURITexture(texture_type, chr_material.getURI());
-							// TODO(conversion): addURITexture requires CharMaterialRenderer.getURI() to return PNG BufferWrapper; will be wired when renderer is integrated.
+							auto pixels = chr_material->getRawPixels();
+							PNGWriter png(static_cast<uint32_t>(chr_material->getWidth()), static_cast<uint32_t>(chr_material->getHeight()));
+							auto& pd = png.getPixelData();
+							std::memcpy(pd.data(), pixels.data(), pixels.size());
+							exporter.addURITexture(texture_type, png.getBuffer());
 						}
 
 						// JS: character_appearance.dispose_materials(export_materials);
@@ -2198,8 +2215,24 @@ void render() {
 			view.creatureTexturePreviewURL.clear();
 
 		// JS: <div class="image" :style="..."> ... </div>
-		// TODO(conversion): Texture preview rendering will use ImGui::Image when textures are wired.
-		ImGui::Text("Texture preview: %dx%d", view.creatureTexturePreviewWidth, view.creatureTexturePreviewHeight);
+		if (view.creatureTexturePreviewTexID != 0) {
+			const ImVec2 avail = ImGui::GetContentRegionAvail();
+			const float tex_w = static_cast<float>(view.creatureTexturePreviewWidth);
+			const float tex_h = static_cast<float>(view.creatureTexturePreviewHeight);
+			const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
+			const ImVec2 img_size(tex_w * scale, tex_h * scale);
+
+			const ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.creatureTexturePreviewTexID)), img_size);
+
+			// JS: <div class="uv-overlay" v-if="creatureTexturePreviewUVOverlay" ...>
+			if (view.creatureTexturePreviewUVTexID != 0 && !view.creatureTexturePreviewUVOverlay.empty()) {
+				ImGui::SetCursorScreenPos(cursor_pos);
+				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.creatureTexturePreviewUVTexID)), img_size);
+			}
+		} else {
+			ImGui::Text("Texture preview: %dx%d", view.creatureTexturePreviewWidth, view.creatureTexturePreviewHeight);
+		}
 
 		// JS: <div id="uv-layer-buttons" v-if="creatureViewerUVLayers.length > 0">
 		if (!view.creatureViewerUVLayers.empty()) {

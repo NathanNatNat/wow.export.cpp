@@ -7,6 +7,9 @@
 
 #include <glad/gl.h>
 
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include <stb_image_resize2.h>
+
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -1047,11 +1050,25 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 					auto data = casc->getVirtualFileByName(tilePath, true);
 					casc::BLPImage blp(std::move(data));
 
-					// TODO(conversion): JS uses canvas scaling for minimap textures.
-					// In C++ we save the BLP directly as PNG at its native resolution;
-					// if the quality is lower than the BLP resolution, downscaling would
-					// need an image resize library. For now, save at native resolution.
-					blp.saveToPNG(tileOutPath, 0b0111);
+					// JS: canvas scaling draws the BLP at target quality resolution.
+					// C++: decode BLP to RGBA, resize with stb_image_resize2, then write as PNG.
+					auto raw_pixels = blp.toUInt8Array(0, 0b0111);
+					const int src_w = static_cast<int>(blp.width);
+					const int src_h = static_cast<int>(blp.height);
+
+					if (src_w != quality || src_h != quality) {
+						std::vector<uint8_t> resized(quality * quality * 4);
+						stbir_resize_uint8_linear(
+							raw_pixels.data(), src_w, src_h, src_w * 4,
+							resized.data(), quality, quality, quality * 4,
+							STBIR_RGBA);
+						PNGWriter png(static_cast<uint32_t>(quality), static_cast<uint32_t>(quality));
+						auto& pd = png.getPixelData();
+						std::memcpy(pd.data(), resized.data(), resized.size());
+						png.write(tileOutPath);
+					} else {
+						blp.saveToPNG(tileOutPath, 0b0111);
+					}
 				} else {
 					logging::write(std::format("Skipping ADT bake of {} (file exists, overwrite disabled)", tileOutPath.string()));
 				}
@@ -1073,7 +1090,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				if (isSplittingTextures || config.value("overwriteFiles", true) || !generics::fileExists(tileOutPath)) {
 					// Create new GL context and compile shaders.
 					if (!glInitialized) {
-						// TODO(conversion): Assumes a GL context is already current (set up by the main app).
+						// Assumes a GL context is already current (set up by the main app).
 						compileShaders(!hasHeightTexturing);
 						glInitialized = true;
 					}
@@ -1318,7 +1335,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 
 							glDeleteBuffers(1, &indexBuffer);
 
-							// TODO(conversion): JS uses canvas rotation (180 degrees) for output.
+							// JS uses canvas rotation (180 degrees) for output.
 							// In C++ we read the FBO pixels directly; the 180-degree rotation is
 							// applied by flipping the pixel data during the copy.
 							auto fboPixels = readFBOPixels(tileSize, tileSize);

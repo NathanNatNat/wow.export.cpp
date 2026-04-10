@@ -512,3 +512,8 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: Both exporters receive the MPQ install object (`mpq`) and call `mpq.getFile(path)` to load textures, group files, and doodad data.
 - **C++**: Changed constructor parameter from `mpq::MPQArchive*` to `mpq::MPQInstall*` and internal calls from `extractFile()` to `getFile()`.
 - **Rationale**: The JS `mpq` is the install-level object that searches across all archives. Using `MPQInstall::getFile()` matches the JS semantics. `MPQArchive::extractFile()` only searches a single archive, which would miss files in other MPQ archives.
+
+### `src/js/3D/writers/GLTFWriter.h` — ACCEPTABLE (`addTextureBuffer` accessor added)
+- **JS**: Equipment GLTF export code accesses `gltf.texture_buffers[fileDataID]` directly as a public property.
+- **C++**: `texture_buffers` is a private member. Added `addTextureBuffer(uint32_t, BufferWrapper)` method as a C++ accessor.
+- **Rationale**: C++ accessor for a member that JS accesses as a public property. Enables equipment GLB texture embedding without exposing the internal map.

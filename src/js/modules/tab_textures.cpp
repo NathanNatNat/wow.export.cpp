@@ -105,7 +105,7 @@ static bool has_loaded_unknown_textures = false;
 static uint32_t selected_file_data_id = 0;
 
 // JS: let resize_observer = null;
-// TODO(conversion): In ImGui, resize observation is implicit (immediate mode).
+// In ImGui, resize observation is implicit (immediate mode).
 
 // Change-detection for selection and config watches.
 static uint32_t prev_selected_file_data_id = 0;
@@ -326,11 +326,11 @@ static void reload_texture_atlas_data() {
 }
 
 // JS: const update_texture_atlas_overlay_scaling = (core) => { ... }
-// TODO(conversion): In ImGui, atlas overlay scaling is handled by the rendering code using available region size.
+// In ImGui, atlas overlay scaling is handled by the rendering code using available region size.
 // The JS version manipulates DOM element styles; in ImGui this is implicit.
 
 // JS: const attach_overlay_listener = (core) => { ... }
-// TODO(conversion): In ImGui, no ResizeObserver needed; immediate-mode handles this per frame.
+// In ImGui, no ResizeObserver needed; immediate-mode handles this per frame.
 
 // JS: const update_texture_atlas_overlay = (core) => { ... }
 // This is inlined into preview_texture_by_id_impl above.
@@ -490,7 +490,7 @@ void mounted() {
 	}
 
 	// JS: attach_overlay_listener(this.$core);
-	// TODO(conversion): In ImGui, overlay listeners are not needed (immediate mode).
+	// In ImGui, overlay listeners are not needed (immediate mode).
 
 	// Store initial config values for change-detection.
 	prev_export_channel_mask = static_cast<uint8_t>(view.config.value("exportChannelMask", 0b1111));

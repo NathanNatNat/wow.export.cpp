@@ -101,6 +101,15 @@ this->texture_buffers = texture_buffers;
 }
 
 /**
+ * Add a single texture buffer for embedding in GLB.
+ * @param fileDataID
+ * @param buffer
+ */
+void GLTFWriter::addTextureBuffer(uint32_t fileDataID, BufferWrapper buffer) {
+texture_buffers.emplace(fileDataID, std::move(buffer));
+}
+
+/**
  * Set the bones array for this writer.
  * @param bones
  */
