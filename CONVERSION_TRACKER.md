@@ -637,11 +637,15 @@ been converted from the WOFF2 sources and are loaded into ImGui at startup.
 ### 9.5 Font Awesome Icon Font
 
 The original app uses Font Awesome icons inline in text and buttons. The C++ app
-has 49 SVG icons in `data/fa-icons/` rendered via nanosvg, but not as an ImGui icon font.
+now loads Font Awesome 6 Free Solid (`fa-solid-900.ttf`) as an ImGui icon font,
+merged into the default font range. Nav buttons, header icons (help, hamburger),
+and context menu icons render via icon font codepoints. Custom icons (armour,
+sword, nessy, mountain-castle) that have no Font Awesome mapping continue to
+render via the nanosvg SVG texture fallback.
 
-- [ ] Obtain Font Awesome TTF/OTF (e.g. `fa-solid-900.ttf`)
-- [ ] Load as an ImGui icon font merged into the default font range
-- [ ] Replace nanosvg icon rendering with ImGui icon font codepoints where appropriate
+- [x] Obtain Font Awesome TTF/OTF (e.g. `fa-solid-900.ttf`)
+- [x] Load as an ImGui icon font merged into the default font range
+- [x] Replace nanosvg icon rendering with ImGui icon font codepoints where appropriate
 
 ### 9.6 DPI / High-DPI Scaling
 
