@@ -708,16 +708,16 @@ centered dashed-border cards with expansion icons.
 
 ### 9.9 Toast Notification Bar
 
-The toast bar currently uses ImGui's native toast/notification approach. The original is a
-30px-tall bar at the top of the content area (not the header) with colored backgrounds,
-an icon, message text, clickable action links, and a close button.
+The toast bar renders as a 30px-tall bar at the top of the content area with colored
+backgrounds, an icon, message text, clickable action links, and a close button.
+Rendered via ImGui draw list calls in renderAppShell() (app.cpp).
 
-- [ ] Render toast as a 30px-tall bar at the top of the content area (below the header, above the module)
-- [ ] Background color based on toast type: error (#dc9090), success (#a6dc90), info (#90bcdc), progress (#dcba90)
-- [ ] Text color: `--font-toast` (black)
-- [ ] Icon: 15px SVG on the left (triangle-exclamation for error, check for success, circle-info for info, timer for progress)
-- [ ] Action links: `--font-toast-link` (#0300bf), underlined, clickable, 0 5px margins
-- [ ] Close button: xmark.svg icon at the right edge, 30px wide
+- [x] Render toast as a 30px-tall bar at the top of the content area (below the header, above the module)
+- [x] Background color based on toast type: error (#dc9090), success (#a6dc90), info (#90bcdc), progress (#dcba90)
+- [x] Text color: `--font-toast` (black)
+- [x] Icon: 15px Font Awesome icon on the left (triangle-exclamation for error, check for success, circle-info for info, stopwatch for progress)
+- [x] Action links: `--font-toast-link` (#0300bf), underlined, clickable, 0 5px margins
+- [x] Close button: xmark icon at the right edge, 30px wide
 
 ### 9.10 Loading Screen Overlay
 

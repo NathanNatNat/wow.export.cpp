@@ -267,6 +267,7 @@ static void renderCrashScreen() {
 // App shell layout constants from app.css
 static constexpr float HEADER_HEIGHT = 53.0f;  // grid-template-rows: 53px
 static constexpr float FOOTER_HEIGHT = 73.0f;  // grid-template-rows: 73px
+static constexpr float TOAST_HEIGHT   = 30.0f;  // #toast height
 static constexpr float NAV_ICON_WIDTH = 45.0f;  // #nav .option .nav-icon width
 static constexpr float NAV_ICON_HEIGHT = 52.0f; // #nav .option .nav-icon height
 
@@ -275,6 +276,27 @@ static constexpr ImVec4 COLOR_BG_DARK    = app::theme::BG_DARK;
 static constexpr ImVec4 COLOR_BORDER     = app::theme::BORDER;
 static constexpr ImVec4 COLOR_FONT_FADED = app::theme::FONT_FADED;
 static constexpr ImVec4 COLOR_NAV_ACTIVE = app::theme::NAV_SELECTED;
+
+/**
+ * Invoked when a toast option is clicked.
+ * The tag is passed to our global event emitter.
+ * @param {string} tag
+ */
+static void handleToastOptionClick(const std::function<void()>& func) {
+	if (core::view)
+		core::view->toast.reset();
+
+	if (func)
+		func();
+}
+
+/**
+ * Hide the toast bar.
+ * @param {boolean} userCancel
+ */
+static void hideToast(bool userCancel = false) {
+	core::hideToast(userCancel);
+}
 
 static void renderAppShell() {
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -632,6 +654,114 @@ static void renderAppShell() {
 			ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
 			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
 			ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing);
+
+		// ── Toast notification bar ──────────────────────────────────
+		// JS: <div id="toast" v-if="toast" :class="toast.type">
+		//       {{ toast.message }}
+		//       <span v-for="action in toast.actions" @click="handleToastOptionClick(action)">{{ action.label }}</span>
+		//       <div class="close" v-if="toast.closable" @click="hideToast(true)"></div>
+		//     </div>
+		float toast_h = 0.0f;
+		if (core::view && core::view->toast.has_value()) {
+			const auto& toast = core::view->toast.value();
+			toast_h = TOAST_HEIGHT;
+
+			// Determine background color and icon based on toast type
+			ImU32 bg_color = app::theme::TOAST_INFO_U32;
+			const char* icon_glyph = ICON_FA_CIRCLE_INFO;
+			if (toast.type == "error") {
+				bg_color = app::theme::TOAST_ERROR_U32;
+				icon_glyph = ICON_FA_TRIANGLE_EXCLAMATION;
+			} else if (toast.type == "success") {
+				bg_color = app::theme::TOAST_SUCCESS_U32;
+				icon_glyph = ICON_FA_CHECK;
+			} else if (toast.type == "progress") {
+				bg_color = app::theme::TOAST_PROGRESS_U32;
+				icon_glyph = ICON_FA_STOPWATCH;
+			}
+
+			// Draw the toast bar background (full width, 30px tall)
+			ImVec2 toast_min = ImGui::GetCursorScreenPos();
+			ImVec2 toast_max(toast_min.x + vp_size.x, toast_min.y + TOAST_HEIGHT);
+			ImDrawList* dl = ImGui::GetWindowDrawList();
+			dl->AddRectFilled(toast_min, toast_max, bg_color);
+
+			// Icon: 15px, positioned at 10px from left, vertically centered
+			// CSS: background-size: 15px; background-position: 10px center
+			constexpr float ICON_SIZE = 15.0f;
+			constexpr float ICON_LEFT = 10.0f;
+			ImFont* icon_font = app::theme::getIconFont();
+			ImVec2 icon_text_size = icon_font->CalcTextSizeA(ICON_SIZE, FLT_MAX, 0.0f, icon_glyph);
+			ImVec2 icon_pos(toast_min.x + ICON_LEFT,
+			                toast_min.y + (TOAST_HEIGHT - icon_text_size.y) * 0.5f);
+			dl->AddText(icon_font, ICON_SIZE, icon_pos, app::theme::FONT_TOAST_U32, icon_glyph);
+
+			// Message text: starts at padding-left: 30px
+			// CSS: font-size: 15px; color: var(--font-toast)
+			constexpr float TEXT_LEFT = 30.0f;
+			constexpr float TEXT_FONT_SIZE = 15.0f;
+			ImFont* font = ImGui::GetFont();
+			ImVec2 msg_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, toast.message.c_str());
+			ImVec2 msg_pos(toast_min.x + TEXT_LEFT,
+			               toast_min.y + (TOAST_HEIGHT - msg_size.y) * 0.5f);
+			dl->AddText(font, TEXT_FONT_SIZE, msg_pos, app::theme::FONT_TOAST_U32, toast.message.c_str());
+
+			// Action links
+			// CSS: margin: 0 5px; color: var(--font-toast-link); text-decoration: underline
+			float action_x = msg_pos.x + msg_size.x;
+			for (size_t i = 0; i < toast.actions.size(); ++i) {
+				const auto& action = toast.actions[i];
+				action_x += 5.0f; // left margin
+				ImVec2 act_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, action.label.c_str());
+				ImVec2 act_pos(action_x, toast_min.y + (TOAST_HEIGHT - act_size.y) * 0.5f);
+
+				// Invisible button for click detection
+				ImGui::SetCursorScreenPos(act_pos);
+				std::string act_id = "##toast_action_" + std::to_string(i);
+				ImGui::InvisibleButton(act_id.c_str(), act_size);
+				if (ImGui::IsItemClicked()) {
+					handleToastOptionClick(action.callback);
+				}
+				if (ImGui::IsItemHovered())
+					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+				// Draw text and underline
+				dl->AddText(font, TEXT_FONT_SIZE, act_pos, app::theme::FONT_TOAST_LINK_U32, action.label.c_str());
+				dl->AddLine(ImVec2(act_pos.x, act_pos.y + act_size.y),
+				            ImVec2(act_pos.x + act_size.x, act_pos.y + act_size.y),
+				            app::theme::FONT_TOAST_LINK_U32, 1.0f);
+
+				action_x += act_size.x + 5.0f; // right margin
+			}
+
+			// Close button: xmark icon at the right edge
+			// CSS: margin-left: auto; width: 30px; height: 100%
+			if (toast.closable) {
+				constexpr float CLOSE_WIDTH = 30.0f;
+				constexpr float CLOSE_ICON_SIZE = 10.0f;
+				ImVec2 close_pos(toast_max.x - CLOSE_WIDTH,
+				                 toast_min.y);
+				ImGui::SetCursorScreenPos(close_pos);
+				ImGui::InvisibleButton("##toast_close", ImVec2(CLOSE_WIDTH, TOAST_HEIGHT));
+				if (ImGui::IsItemClicked()) {
+					hideToast(true);
+				}
+				if (ImGui::IsItemHovered())
+					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+				// Draw xmark icon centered in the close area
+				const char* close_glyph = ICON_FA_XMARK;
+				ImVec2 close_icon_size = icon_font->CalcTextSizeA(CLOSE_ICON_SIZE, FLT_MAX, 0.0f, close_glyph);
+				ImVec2 close_icon_pos(
+					close_pos.x + (CLOSE_WIDTH - close_icon_size.x) * 0.5f,
+					close_pos.y + (TOAST_HEIGHT - close_icon_size.y) * 0.5f);
+				dl->AddText(icon_font, CLOSE_ICON_SIZE, close_icon_pos,
+				            app::theme::FONT_TOAST_U32, close_glyph);
+			}
+
+			// Advance cursor past the toast bar
+			ImGui::SetCursorScreenPos(ImVec2(toast_min.x, toast_max.y));
+		}
 
 		// Render the active module inside the content area
 		// JS: <div id="module-container" v-if="activeModule">
@@ -1054,19 +1184,6 @@ static void handleContextMenuClick(const modules::ContextMenuOption& opt) {
 }
 
 /**
- * Invoked when a toast option is clicked.
- * The tag is passed to our global event emitter.
- * @param {string} tag
- */
-static void handleToastOptionClick(const std::function<void()>& func) {
-	if (core::view)
-		core::view->toast.reset();
-
-	if (func)
-		func();
-}
-
-/**
  * Invoked when a user cancels a model override filter.
  */
 static void removeOverrideModels() {
@@ -1117,14 +1234,6 @@ static void click(const std::string& tag) {
  */
 static void emit(const std::string& tag) {
 	core::events.emit(tag);
-}
-
-/**
- * Hide the toast bar.
- * @param {boolean} userCancel
- */
-static void hideToast(bool userCancel = false) {
-	core::hideToast(userCancel);
 }
 
 /**

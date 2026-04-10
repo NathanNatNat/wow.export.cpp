@@ -112,6 +112,12 @@ inline constexpr ImU32  TOAST_INFO_U32 = IM_COL32(144, 188, 220, 255);
 inline constexpr ImVec4 TOAST_PROGRESS     = ImVec4(0.863f, 0.729f, 0.565f, 1.0f);
 inline constexpr ImU32  TOAST_PROGRESS_U32 = IM_COL32(220, 186, 144, 255);
 
+// --font-toast: black
+inline constexpr ImU32 FONT_TOAST_U32 = IM_COL32(0, 0, 0, 255);
+
+// --font-toast-link: #0300bf
+inline constexpr ImU32 FONT_TOAST_LINK_U32 = IM_COL32(3, 0, 191, 255);
+
 // --trans-check-a: #303030  (transparency checkerboard dark)
 inline constexpr ImU32 TRANS_CHECK_A_U32 = IM_COL32(48, 48, 48, 255);
 
