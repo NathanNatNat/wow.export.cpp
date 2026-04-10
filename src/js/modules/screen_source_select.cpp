@@ -17,6 +17,7 @@
 #include "../mpq/mpq-install.h"
 #include "../components/file-field.h"
 #include "../workers/cache-collector.h"
+#include "../../app.h"
 
 #include <atomic>
 #include <cstring>
@@ -28,12 +29,31 @@
 #include <mutex>
 #include <random>
 #include <thread>
+#include <cmath>
+#include <filesystem>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 
 namespace screen_source_select {
+
+// --- Source icon SVG textures (lazy-loaded) ---
+static GLuint s_texWowLogo = 0;
+static GLuint s_texBattlenet = 0;
+static GLuint s_texMpq = 0;
+static bool s_texturesLoaded = false;
+
+static void ensureSourceTextures() {
+	if (s_texturesLoaded) return;
+	s_texturesLoaded = true;
+	std::filesystem::path imgDir = constants::DATA_DIR() / "images";
+	// Load at 160px so we have crisp icons at both 80px and 50px display sizes.
+	s_texWowLogo   = app::theme::loadSvgTexture(imgDir / "wow_logo.svg", 160);
+	s_texBattlenet = app::theme::loadSvgTexture(imgDir / "import_battlenet.svg", 160);
+	s_texMpq       = app::theme::loadSvgTexture(imgDir / "mpq.svg", 160);
+}
 
 // --- File-local state ---
 
@@ -483,6 +503,58 @@ static void click_return_to_source_select() {
 
 // --- Public functions ---
 
+/**
+ * Draw a dashed rounded rectangle outline using line segments.
+ * Approximates a CSS "border: 3px dashed" with border-radius by walking
+ * the rectangle perimeter with dash/gap segments.
+ */
+static void drawDashedRoundedRect(ImDrawList* draw, ImVec2 p_min, ImVec2 p_max, ImU32 color, float rounding, float thickness, float dash_len, float gap_len) {
+	// Generate the path for a rounded rectangle, then walk it with dashes.
+	// ImGui's PathRect + PathStroke draws solid; we manually segment.
+
+	// Build polyline points for the rounded rect using ImGui's path API.
+	draw->PathClear();
+	draw->PathRect(p_min, p_max, rounding, 0);
+	// Retrieve the path points, copy them, then clear.
+	std::vector<ImVec2> pts(draw->_Path.Data, draw->_Path.Data + draw->_Path.Size);
+	draw->PathClear();
+
+	if (pts.size() < 2) return;
+
+	// Walk the polyline with dash/gap
+	float accumulated = 0.0f;
+	bool drawing = true; // start with a dash
+	for (size_t i = 0; i < pts.size(); ++i) {
+		size_t next = (i + 1) % pts.size();
+		ImVec2 a = pts[i];
+		ImVec2 b = pts[next];
+		float dx = b.x - a.x;
+		float dy = b.y - a.y;
+		float seg_len = std::sqrt(dx * dx + dy * dy);
+		if (seg_len < 0.001f) continue;
+
+		float seg_offset = 0.0f;
+		while (seg_offset < seg_len) {
+			float remain = drawing ? (dash_len - accumulated) : (gap_len - accumulated);
+			float advance = std::min(remain, seg_len - seg_offset);
+			if (drawing) {
+				float t0 = seg_offset / seg_len;
+				float t1 = (seg_offset + advance) / seg_len;
+				ImVec2 from(a.x + dx * t0, a.y + dy * t0);
+				ImVec2 to(a.x + dx * t1, a.y + dy * t1);
+				draw->AddLine(from, to, color, thickness);
+			}
+			accumulated += advance;
+			seg_offset += advance;
+			float target = drawing ? dash_len : gap_len;
+			if (accumulated >= target - 0.01f) {
+				drawing = !drawing;
+				accumulated = 0.0f;
+			}
+		}
+	}
+}
+
 // JS: mounted()
 void mounted() {
 	// init recent local/legacy arrays if needed.
@@ -544,123 +616,386 @@ void render() {
 		}
 	}
 
+	// Ensure source icon textures are loaded.
+	ensureSourceTextures();
+
+	// --- Responsiveness: determine layout parameters based on window height ---
+	ImVec2 content_size = ImGui::GetContentRegionAvail();
+	float win_height = ImGui::GetWindowHeight();
+	bool compact = (win_height < 800.0f);
+
+	float card_width    = 700.0f;
+	float card_min_h    = compact ? 60.0f : 120.0f;
+	float card_padding  = compact ? 15.0f : 30.0f;
+	float card_pad_x    = compact ? 20.0f : 30.0f;
+	float card_gap      = compact ? 15.0f : 30.0f;
+	float icon_size     = compact ? 50.0f : 80.0f;
+	float title_size    = compact ? 18.0f : 22.0f;
+	float subtitle_size = compact ? 14.0f : 16.0f;
+	float link_size     = compact ? 13.0f : 15.0f;
+	float content_gap   = compact ? 4.0f : 8.0f;
+	float border_radius = 15.0f;
+	float border_thick  = 3.0f;
+
+	ImFont* bold_font = app::theme::getBoldFont();
+	ImDrawList* draw = ImGui::GetWindowDrawList();
+
 	// --- Template rendering ---
 	// JS: <div id="source-select" v-if="!$core.view.sourceSelectShowBuildSelect">
 	if (!core::view->sourceSelectShowBuildSelect) {
-		// JS: <div id="source-local" @click="click_source_local">
-		//   Source icon, title "Open Local Installation (Recommended)",
-		//   subtitle, recent local link
-		ImGui::BeginChild("##source-select-panel", ImVec2(0, 0));
+		// Count number of cards (always 3: local, remote, legacy).
+		const int num_cards = 3;
 
-		ImGui::Spacing();
-		ImGui::Separator();
-		ImGui::Spacing();
+		// Pre-calculate card heights for centering.
+		// We'll compute each card's actual height based on content.
+		struct CardInfo {
+			GLuint icon_tex;
+			const char* title;
+			const char* subtitle;
+			std::string link_text;
+			bool has_link;
+			int card_id; // 0=local, 1=remote, 2=legacy
+		};
 
-		// Local Installation panel.
-		if (ImGui::Button("Open Local Installation (Recommended)##local", ImVec2(-1, 40)))
-			click_source_local();
-		ImGui::TextWrapped("Select the root directory of a World of Warcraft installation on your computer.");
+		// Prepare card data
+		CardInfo cards[3];
 
-		// Recent local installs.
-		if (core::view->config.contains("recentLocal") && core::view->config["recentLocal"].is_array()) {
-			for (const auto& entry : core::view->config["recentLocal"]) {
-				std::string label = entry.value("product", std::string("Unknown"));
-				std::string path = entry.value("path", std::string(""));
-				std::string btn_text = std::format("{} ({})", label, path);
-				if (ImGui::SmallButton(btn_text.c_str()))
-					click_source_local_recent(entry);
-			}
+		// Local
+		cards[0].icon_tex = s_texWowLogo;
+		cards[0].title = "Open Local Installation (Recommended)";
+		cards[0].subtitle = "Explore a locally installed World of Warcraft installation on your machine";
+		cards[0].has_link = false;
+		cards[0].card_id = 0;
+		if (core::view->config.contains("recentLocal") && core::view->config["recentLocal"].is_array()
+			&& !core::view->config["recentLocal"].empty()) {
+			const auto& recent = core::view->config["recentLocal"][0];
+			std::string path = recent.value("path", std::string(""));
+			std::string product = recent.value("product", std::string(""));
+			std::string tag = get_product_tag(product);
+			cards[0].link_text = std::format("Last Opened: {} ({})", path, tag);
+			cards[0].has_link = true;
 		}
 
-		ImGui::Spacing();
-		ImGui::Separator();
-		ImGui::Spacing();
+		// Remote
+		cards[1].icon_tex = s_texBattlenet;
+		cards[1].title = "Use Battle.net CDN";
+		cards[1].subtitle = "Explore available builds without installation directly from the Battle.net servers";
+		cards[1].has_link = false;
+		cards[1].card_id = 1;
 
-		// JS: <div id="source-remote" @click="click_source_remote">
-		//   Source icon, title "Use Battle.net CDN",
-		//   subtitle, CDN region selector with context menu
-		if (ImGui::Button("Use Battle.net CDN##remote", ImVec2(-1, 40)))
-			click_source_remote();
-		ImGui::TextWrapped("Stream data directly from Blizzard's CDN servers.");
+		// Legacy
+		cards[2].icon_tex = s_texMpq;
+		cards[2].title = "Open Legacy Installation";
+		cards[2].subtitle = "Explore a legacy MPQ-based installation on your machine";
+		cards[2].has_link = false;
+		cards[2].card_id = 2;
+		if (core::view->config.contains("recentLegacy") && core::view->config["recentLegacy"].is_array()
+			&& !core::view->config["recentLegacy"].empty()) {
+			const auto& recent = core::view->config["recentLegacy"][0];
+			std::string path = recent.value("path", std::string(""));
+			cards[2].link_text = std::format("Last Opened: {}", path);
+			cards[2].has_link = true;
+		}
 
-		// CDN region selector.
-		if (!core::view->cdnRegions.empty()) {
-			std::string current_label = "Select Region";
-			if (!core::view->selectedCDNRegion.is_null())
-				current_label = core::view->selectedCDNRegion.value("name", std::string("Select Region"));
+		// Calculate card heights.
+		auto calcCardHeight = [&](const CardInfo& card) -> float {
+			float text_width = card_width - card_pad_x * 2 - icon_size - card_gap;
+			if (text_width < 100.0f) text_width = 100.0f;
 
-			if (ImGui::BeginCombo("CDN Region", current_label.c_str())) {
-				for (auto& region : core::view->cdnRegions) {
-					std::string name = region.value("name", std::string("Unknown"));
-					int64_t delay = region.value("delay", static_cast<int64_t>(-1));
-					std::string delay_str = delay >= 0 ? std::format("{}ms", delay) : "...";
-					std::string item_label = std::format("{} ({})", name, delay_str);
+			float h = card_padding * 2; // top + bottom padding
+			h += title_size;           // title line
+			h += content_gap;
 
-					bool is_selected = (!core::view->selectedCDNRegion.is_null() &&
-						region.value("tag", std::string("")) == core::view->selectedCDNRegion.value("tag", std::string("")));
+			// Subtitle: may wrap
+			ImVec2 subtitle_sz = ImGui::CalcTextSize(card.subtitle, nullptr, false, text_width);
+			h += subtitle_sz.y;
 
-					if (ImGui::Selectable(item_label.c_str(), is_selected))
-						set_selected_cdn(region);
-					if (is_selected)
-						ImGui::SetItemDefaultFocus();
+			// Link or CDN region line
+			if (card.has_link || card.card_id == 1) {
+				h += 5.0f; // margin-top
+				h += link_size;
+			}
+
+			return std::max(h, card_min_h);
+		};
+
+		float total_height = 0.0f;
+		float card_heights[3];
+		for (int i = 0; i < num_cards; ++i) {
+			card_heights[i] = calcCardHeight(cards[i]);
+			total_height += card_heights[i];
+		}
+		total_height += card_gap * (num_cards - 1); // gaps between cards
+
+		// Center vertically.
+		float start_y = ImGui::GetCursorPosY() + (content_size.y - total_height) * 0.5f;
+		if (start_y < ImGui::GetCursorPosY()) start_y = ImGui::GetCursorPosY();
+
+		// Center horizontally.
+		float start_x = ImGui::GetCursorPosX() + (content_size.x - card_width) * 0.5f;
+		if (start_x < ImGui::GetCursorPosX()) start_x = ImGui::GetCursorPosX();
+
+		float cur_y = start_y;
+
+		for (int ci = 0; ci < num_cards; ++ci) {
+			const auto& card = cards[ci];
+			float card_h = card_heights[ci];
+
+			// Position an invisible button covering the card area for click detection.
+			ImGui::SetCursorPos(ImVec2(start_x, cur_y));
+			std::string btn_id = std::format("##source_card_{}", ci);
+			bool clicked = ImGui::InvisibleButton(btn_id.c_str(), ImVec2(card_width, card_h));
+			bool hovered = ImGui::IsItemHovered();
+
+			// Get absolute screen coordinates for drawing.
+			ImVec2 card_min = ImGui::GetItemRectMin();
+			ImVec2 card_max = ImGui::GetItemRectMax();
+
+			// Draw dashed border.
+			ImU32 border_color = hovered ? app::theme::FONT_HIGHLIGHT_U32 : app::theme::FONT_FADED_U32;
+			drawDashedRoundedRect(draw, card_min, card_max, border_color, border_radius, border_thick, 8.0f, 6.0f);
+
+			// Draw icon.
+			float icon_y = card_min.y + (card_h - icon_size) * 0.5f;
+			float icon_x = card_min.x + card_pad_x;
+			if (card.icon_tex) {
+				draw->AddImage(ImTextureRef(static_cast<ImTextureID>(card.icon_tex)),
+					ImVec2(icon_x, icon_y),
+					ImVec2(icon_x + icon_size, icon_y + icon_size));
+			}
+
+			// Draw text content.
+			float text_x = icon_x + icon_size + card_gap;
+			float text_width = card_max.x - card_pad_x - text_x;
+			if (text_width < 50.0f) text_width = 50.0f;
+			float text_y = card_min.y + card_padding;
+
+			// Title (bold, highlight color).
+			draw->AddText(bold_font, title_size, ImVec2(text_x, text_y), app::theme::FONT_HIGHLIGHT_U32, card.title);
+			text_y += title_size + content_gap;
+
+			// Subtitle (opacity 0.7).
+			ImU32 subtitle_color = IM_COL32(255, 255, 255, 179); // #ffffffb3 (0.7 opacity)
+			{
+				const char* text_begin = card.subtitle;
+				const char* text_end = text_begin + strlen(text_begin);
+				ImFont* font = ImGui::GetFont();
+				float font_size = subtitle_size;
+				float wrap_width = text_width;
+
+				// Use AddText with wrapping by computing line breaks manually.
+				const char* s = text_begin;
+				while (s < text_end) {
+					const char* line_end = font->CalcWordWrapPositionA(font_size / font->LegacySize, s, text_end, wrap_width);
+					if (line_end == s) line_end = s + 1; // Prevent infinite loop
+					draw->AddText(font, font_size, ImVec2(text_x, text_y), subtitle_color, s, line_end);
+					ImVec2 line_sz = font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, s, line_end);
+					text_y += line_sz.y;
+					s = line_end;
+					// Skip leading whitespace on next line.
+					while (s < text_end && (*s == ' ' || *s == '\n')) s++;
 				}
-				ImGui::EndCombo();
 			}
-		}
 
-		ImGui::Spacing();
-		ImGui::Separator();
-		ImGui::Spacing();
+			// Link text or CDN region (card-specific).
+			if (card.card_id == 0 && card.has_link) {
+				// "Last Opened: path (tag)" — clickable link
+				text_y += 5.0f;
+				std::string label_prefix = "Last Opened: ";
+				ImVec2 prefix_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, label_prefix.c_str());
+				draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), subtitle_color, label_prefix.c_str());
 
-		// JS: <div id="source-legacy" @click="click_source_legacy">
-		//   Source icon, title "Open Legacy Installation",
-		//   subtitle, recent legacy link
-		if (ImGui::Button("Open Legacy Installation##legacy", ImVec2(-1, 40)))
-			click_source_legacy();
-		ImGui::TextWrapped("Select the root directory of a classic (pre-CASC) World of Warcraft installation.");
+				// Clickable link part.
+				std::string link_part = card.link_text.substr(label_prefix.size());
+				ImVec2 link_pos(text_x + prefix_sz.x, text_y);
+				ImVec2 link_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, link_part.c_str());
 
-		// Recent legacy installs.
-		if (core::view->config.contains("recentLegacy") && core::view->config["recentLegacy"].is_array()) {
-			for (const auto& entry : core::view->config["recentLegacy"]) {
-				std::string label = entry.value("product", std::string("Unknown"));
-				std::string path = entry.value("path", std::string(""));
-				std::string btn_text = std::format("{} ({})", label, path);
-				if (ImGui::SmallButton(btn_text.c_str()))
-					click_source_legacy_recent(entry);
+				// Create an invisible button over the link text.
+				ImGui::SetCursorScreenPos(link_pos);
+				std::string link_id = std::format("##recent_local_link_{}", ci);
+				if (ImGui::InvisibleButton(link_id.c_str(), link_sz)) {
+					if (core::view->config.contains("recentLocal") && core::view->config["recentLocal"].is_array()
+						&& !core::view->config["recentLocal"].empty()) {
+						click_source_local_recent(core::view->config["recentLocal"][0]);
+					}
+				}
+				bool link_hovered = ImGui::IsItemHovered();
+				ImU32 link_color = link_hovered ? app::theme::FONT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
+				draw->AddText(ImGui::GetFont(), link_size, link_pos, link_color, link_part.c_str());
+			} else if (card.card_id == 1) {
+				// CDN region: "Region: NAME (Change)" with context menu.
+				// JS: Region: {{ $core.view.selectedCDNRegion.name }} (Change)
+				text_y += 5.0f;
+				if (!core::view->selectedCDNRegion.is_null()) {
+					std::string region_label = std::format("Region: {} ", core::view->selectedCDNRegion.value("name", std::string("...")));
+					ImVec2 region_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, region_label.c_str());
+					draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), subtitle_color, region_label.c_str());
+
+					// "(Change)" link
+					const char* change_text = "(Change)";
+					ImVec2 change_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, change_text);
+					ImVec2 change_pos(text_x + region_sz.x, text_y);
+
+					ImGui::SetCursorScreenPos(change_pos);
+					if (ImGui::InvisibleButton("##cdn_change_link", change_sz)) {
+						ImGui::OpenPopup("##cdn_region_menu");
+					}
+					bool change_hovered = ImGui::IsItemHovered();
+					ImU32 change_color = change_hovered ? app::theme::FONT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
+					draw->AddText(ImGui::GetFont(), link_size, change_pos, change_color, change_text);
+				}
+
+				// CDN region context menu popup.
+				if (ImGui::BeginPopup("##cdn_region_menu")) {
+					for (auto& region : core::view->cdnRegions) {
+						std::string name = region.value("name", std::string("Unknown"));
+						int64_t delay = region.value("delay", static_cast<int64_t>(-1));
+						std::string delay_str;
+						if (!region["delay"].is_null())
+							delay_str = delay >= 0 ? std::format(" {}ms", delay) : " N/A";
+						else
+							delay_str = "";
+						std::string item_label = std::format("{}{}", name, delay_str);
+
+						if (ImGui::MenuItem(item_label.c_str())) {
+							set_selected_cdn(region);
+						}
+					}
+					ImGui::EndPopup();
+				}
+			} else if (card.card_id == 2 && card.has_link) {
+				// Legacy "Last Opened: path" — clickable link
+				text_y += 5.0f;
+				std::string label_prefix = "Last Opened: ";
+				ImVec2 prefix_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, label_prefix.c_str());
+				draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), subtitle_color, label_prefix.c_str());
+
+				std::string link_part = card.link_text.substr(label_prefix.size());
+				ImVec2 link_pos(text_x + prefix_sz.x, text_y);
+				ImVec2 link_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, link_part.c_str());
+
+				ImGui::SetCursorScreenPos(link_pos);
+				std::string link_id = std::format("##recent_legacy_link_{}", ci);
+				if (ImGui::InvisibleButton(link_id.c_str(), link_sz)) {
+					if (core::view->config.contains("recentLegacy") && core::view->config["recentLegacy"].is_array()
+						&& !core::view->config["recentLegacy"].empty()) {
+						click_source_legacy_recent(core::view->config["recentLegacy"][0]);
+					}
+				}
+				bool link_hovered_l = ImGui::IsItemHovered();
+				ImU32 link_color_l = link_hovered_l ? app::theme::FONT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
+				draw->AddText(ImGui::GetFont(), link_size, link_pos, link_color_l, link_part.c_str());
 			}
-		}
 
-		ImGui::EndChild();
+			// Handle card click (only if not clicking a sub-element link).
+			if (clicked) {
+				switch (card.card_id) {
+					case 0: click_source_local(); break;
+					case 1: click_source_remote(); break;
+					case 2: click_source_legacy(); break;
+				}
+			}
+
+			cur_y += card_h + card_gap;
+		}
 	} else {
 		// JS: <div id="build-select">
 		//   <div class="build-select-content">
 		//     <div class="build-select-title">Select Build</div>
 		//     <div class="build-select-buttons">
-		//       For each build in availableLocalBuilds || availableRemoteBuilds:
-		//         expansion-icon button with build.label
+		//       For each build: expansion-icon button with build.label
 		//     <span @click="click_return_to_source_select" class="link">Return to Installations</span>
-		ImGui::BeginChild("##build-select-panel", ImVec2(0, 0));
-
-		ImGui::SeparatorText("Select Build");
 
 		const auto& builds = !core::view->availableLocalBuilds.is_null()
 			? core::view->availableLocalBuilds
 			: core::view->availableRemoteBuilds;
 
+		int build_count = 0;
+		if (!builds.is_null() && builds.is_array())
+			build_count = static_cast<int>(builds.size());
+
+		// Layout: centered vertically and horizontally.
+		float btn_min_width = 450.0f;
+		float btn_height = 50.0f;
+		float btn_gap = 10.0f;
+		float title_h = 28.0f;
+		float title_mb = 10.0f;
+		float return_mt = 10.0f;
+		float return_h = 16.0f;
+		float btn_border_radius = 10.0f;
+
+		float total_h = title_h + title_mb + build_count * btn_height + (build_count > 0 ? (build_count - 1) * btn_gap : 0) + return_mt + return_h;
+		float start_y = ImGui::GetCursorPosY() + (content_size.y - total_h) * 0.5f;
+		if (start_y < ImGui::GetCursorPosY()) start_y = ImGui::GetCursorPosY();
+		float start_x = ImGui::GetCursorPosX() + (content_size.x - btn_min_width) * 0.5f;
+		if (start_x < ImGui::GetCursorPosX()) start_x = ImGui::GetCursorPosX();
+
+		float cur_y = start_y;
+
+		// Title: "Select Build"
+		ImGui::SetCursorPos(ImVec2(start_x, cur_y));
+		ImGui::Dummy(ImVec2(btn_min_width, title_h));
+		{
+			const char* title_text = "Select Build";
+			ImVec2 title_sz = bold_font->CalcTextSizeA(title_h, FLT_MAX, 0.0f, title_text);
+			ImVec2 rect_min = ImGui::GetItemRectMin();
+			float title_cx = rect_min.x + (btn_min_width - title_sz.x) * 0.5f;
+			draw->AddText(bold_font, title_h, ImVec2(title_cx, rect_min.y), app::theme::FONT_HIGHLIGHT_U32, title_text);
+		}
+		cur_y += title_h + title_mb;
+
+		// Build buttons.
 		if (!builds.is_null() && builds.is_array()) {
 			for (size_t i = 0; i < builds.size(); ++i) {
 				const auto& build = builds[i];
 				std::string label = build.value("label", std::format("Build {}", i));
-				if (ImGui::Button(label.c_str(), ImVec2(-1, 30)))
-					click_source_build(static_cast<int>(i));
+				int buildIndex = build.value("buildIndex", static_cast<int>(i));
+
+				ImGui::SetCursorPos(ImVec2(start_x, cur_y));
+				std::string btn_id = std::format("##build_btn_{}", i);
+				bool btn_clicked = ImGui::InvisibleButton(btn_id.c_str(), ImVec2(btn_min_width, btn_height));
+				bool btn_hovered = ImGui::IsItemHovered();
+
+				ImVec2 btn_min = ImGui::GetItemRectMin();
+				ImVec2 btn_max = ImGui::GetItemRectMax();
+
+				// Border and hover effect.
+				if (btn_hovered) {
+					// Green tinted background.
+					draw->AddRectFilled(btn_min, btn_max, IM_COL32(34, 181, 73, 25), btn_border_radius);
+					drawDashedRoundedRect(draw, btn_min, btn_max, app::theme::NAV_SELECTED_U32, btn_border_radius, border_thick, 8.0f, 6.0f);
+				} else {
+					drawDashedRoundedRect(draw, btn_min, btn_max, app::theme::FONT_FADED_U32, btn_border_radius, border_thick, 8.0f, 6.0f);
+				}
+
+				// Build label text.
+				ImU32 text_color = btn_hovered ? app::theme::NAV_SELECTED_U32 : app::theme::FONT_HIGHLIGHT_U32;
+				float text_x_off = btn_min.x + 50.0f; // leave space for expansion icon
+				float text_y_off = btn_min.y + (btn_height - 16.0f) * 0.5f;
+				draw->AddText(ImGui::GetFont(), 16.0f, ImVec2(text_x_off, text_y_off), text_color, label.c_str());
+
+				if (btn_clicked && !core::view->isBusy)
+					click_source_build(buildIndex);
+
+				cur_y += btn_height + btn_gap;
 			}
 		}
 
-		ImGui::Spacing();
-		if (ImGui::SmallButton("Return to Installations"))
-			click_return_to_source_select();
+		// "Return to Installations" link.
+		cur_y += return_mt;
+		{
+			const char* return_text = "Return to Installations";
+			ImVec2 return_sz = ImGui::GetFont()->CalcTextSizeA(return_h, FLT_MAX, 0.0f, return_text);
+			float return_cx = start_x + (btn_min_width - return_sz.x) * 0.5f;
 
-		ImGui::EndChild();
+			ImGui::SetCursorPos(ImVec2(return_cx, cur_y));
+			if (ImGui::InvisibleButton("##return_to_source", return_sz)) {
+				click_return_to_source_select();
+			}
+			bool return_hovered = ImGui::IsItemHovered();
+			ImU32 return_color = return_hovered ? app::theme::FONT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
+			draw->AddText(ImGui::GetFont(), return_h, ImGui::GetItemRectMin(), return_color, return_text);
+		}
 	}
 }
 

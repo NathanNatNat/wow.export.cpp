@@ -1524,6 +1524,14 @@ const char* getIconForFilename(const std::string& svg_filename) {
 	return nullptr;
 }
 
+GLuint loadSvgTexture(const std::filesystem::path& path, int size) {
+	return ::loadSvgTexture(path, size);
+}
+
+GLuint loadImageTexture(const std::filesystem::path& path, int* out_w, int* out_h) {
+	return ::loadImageTexture(path, out_w, out_h);
+}
+
 } // namespace app::theme
 
 // ── Watch equivalents (change detection in the main loop) ────────
