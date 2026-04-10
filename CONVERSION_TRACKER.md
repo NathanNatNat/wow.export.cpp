@@ -736,7 +736,7 @@ with centered content: spinning gear icon, title text, progress bar.
 The original app has a subtle watermark of `logo.png` centered behind the content
 at 5% opacity (CSS `#logo-background`). This is visible on all screens.
 
-- [ ] Render `logo.png` as a centered background watermark at 5% opacity behind the content area
+- [x] Render `logo.png` as a centered background watermark at 5% opacity behind the content area
 
 ### 9.12 Orphaned UI State (Data Exists, Never Rendered)
 

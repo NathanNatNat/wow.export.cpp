@@ -690,6 +690,26 @@ static void renderAppShell() {
 			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
 			ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing);
 
+		// ── Logo background watermark (CSS: #logo-background) ──────
+		// JS: <div id="logo-background"></div>
+		// CSS: position: absolute; top:0; left:0; bottom:0; right:0;
+		//      background: url(./images/logo.png) no-repeat center center;
+		//      opacity: 0.05; z-index: -5;
+		if (s_logoTexture) {
+			float logo_w = static_cast<float>(s_logoWidth);
+			float logo_h = static_cast<float>(s_logoHeight);
+			ImVec2 content_min(vp_pos.x, content_y);
+			ImVec2 logo_min(
+				content_min.x + (vp_size.x - logo_w) * 0.5f,
+				content_min.y + (content_h - logo_h) * 0.5f);
+			ImVec2 logo_max(logo_min.x + logo_w, logo_min.y + logo_h);
+			// 5% opacity (0.05 * 255 ≈ 13)
+			ImU32 watermark_tint = IM_COL32(255, 255, 255, 13);
+			ImGui::GetWindowDrawList()->AddImage(
+				static_cast<ImTextureID>(static_cast<uintptr_t>(s_logoTexture)),
+				logo_min, logo_max, ImVec2(0, 0), ImVec2(1, 1), watermark_tint);
+		}
+
 		// ── Toast notification bar ──────────────────────────────────
 		// JS: <div id="toast" v-if="toast" :class="toast.type">
 		//       {{ toast.message }}
