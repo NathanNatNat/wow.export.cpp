@@ -776,9 +776,14 @@ int attachment_id = attachment_ids[i];
 try {
 // JS: const file = await core.view.casc.getFile(file_data_id);
 BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
-// TODO(conversion): M2RendererGL creation will be wired when renderer integration is complete.
-// const renderer = new M2RendererGL(file, gl_context, false, false);
-// await renderer.load();
+// JS: const renderer = new M2RendererGL(file, gl_context, false, false);
+// JS: await renderer.load();
+auto renderer = std::make_unique<M2RendererGL>(file, *viewer_context.gl_context, false, false);
+renderer->load();
+EquipmentModelEntry::RendererInfo ri;
+ri.renderer = std::move(renderer);
+ri.attachment_id = attachment_id;
+entry.renderers.push_back(std::move(ri));
 logging::write(std::format("Loaded attachment model {} for slot {} attachment {} (item {})",
 file_data_id, slot_id, attachment_id, item_id));
 } catch (const std::exception& e) {
@@ -801,6 +806,13 @@ uint32_t file_data_id = display->models[i];
 try {
 // JS: const file = await core.view.casc.getFile(file_data_id);
 BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
+// JS: const renderer = new M2RendererGL(file, gl_context, false, false);
+auto renderer = std::make_unique<M2RendererGL>(file, *viewer_context.gl_context, false, false);
+renderer->load();
+// JS: if (active_renderer?.bones) renderer.buildBoneRemapTable(active_renderer.bones);
+if (active_renderer && active_renderer->get_bones_m2())
+renderer->buildBoneRemapTable(*active_renderer->get_bones_m2());
+entry.renderers.push_back(std::move(renderer));
 logging::write(std::format("Loaded collection model {} for slot {} (item {})",
 file_data_id, slot_id, item_id));
 } catch (const std::exception& e) {
@@ -847,23 +859,31 @@ dispose_collection_models();
 
 // JS: const file = await core.view.casc.getFile(file_data_id);
 BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
-// TODO(conversion): M2RendererGL creation will be wired when renderer integration is complete.
-// active_renderer = std::make_unique<M2RendererGL>(file, gl_context, true, false);
-// active_renderer->geosetKey = "chrCustGeosets";
-// active_renderer->load();
-// fit_camera();
+// JS: active_renderer = new M2RendererGL(file, gl_context, true, false);
+// JS: active_renderer.geosetKey = 'chrCustGeosets';
+// JS: await active_renderer.load();
+gl::GLContext* gl_ctx = viewer_context.gl_context;
+if (!gl_ctx) {
+logging::write("Cannot load character model: GL context not available");
+view.chrModelLoading = false;
+return;
+}
+active_renderer = std::make_unique<M2RendererGL>(file, *gl_ctx, true, false);
+active_renderer->setGeosetKey("chrCustGeosets");
+active_renderer->load();
+fit_camera();
 
 active_model = file_data_id;
 
 // populate animation list
-// TODO(conversion): Animation list population requires loaded M2 data.
-view.chrModelViewerAnims = {
-nlohmann::json{{ "id", "none" }, { "label", "No Animation" }, { "m2Index", -1 }}
-};
+view.chrModelViewerAnims = model_viewer_utils::extract_animations(*active_renderer);
 view.chrModelViewerAnimSelection = "none";
 
 // JS: const has_content = active_renderer.draw_calls?.length > 0;
-// if (!has_content) setToast...
+const bool has_content = !active_renderer->get_draw_calls().empty();
+if (!has_content) {
+core::setToast("info", "This model has no visible geometry.", {}, 4000);
+}
 
 // refresh appearance after model is fully loaded
 refresh_character_appearance();
@@ -2086,10 +2106,15 @@ std::string export_path = casc::ExportHelper::getExportPath(mark_file_name);
 
 // JS: const data = await casc.getFile(file_data_id);
 BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
-// TODO(conversion): M2Exporter instantiation and exportAsOBJ/exportAsSTL will be wired when renderer integration is complete.
-// M2Exporter exporter(data, {}, file_data_id, core::view->casc);
+M2Exporter exporter(std::move(data), {}, file_data_id, core::view->casc);
 
-logging::write(std::format("Character OBJ/STL export requested for {}", file_name));
+if (format == "STL") {
+exporter.exportAsSTL(export_path, false, &helper, nullptr);
+} else {
+exporter.exportAsOBJ(export_path, false, &helper, nullptr);
+}
+
+logging::write(std::format("Character OBJ/STL export completed for {}", file_name));
 
 if (helper.isCancelled())
 return;
@@ -2102,10 +2127,10 @@ std::string export_path = casc::ExportHelper::getExportPath(mark_file_name);
 
 // JS: const data = await casc.getFile(file_data_id);
 BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
-// TODO(conversion): M2Exporter instantiation and exportAsGLTF will be wired when renderer integration is complete.
-// M2Exporter exporter(data, {}, file_data_id, core::view->casc);
+M2Exporter exporter(std::move(data), {}, file_data_id, core::view->casc);
+exporter.exportAsGLTF(export_path, &helper, format);
 
-logging::write(std::format("Character GLTF export requested for {}", file_name));
+logging::write(std::format("Character GLTF export completed for {}", file_name));
 
 if (helper.isCancelled())
 return;
