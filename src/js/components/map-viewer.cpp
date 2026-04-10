@@ -6,6 +6,7 @@
 #include "map-viewer.h"
 
 #include <imgui.h>
+#include "../../app.h"
 #include <cmath>
 #include <algorithm>
 #include <format>
@@ -691,7 +692,7 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 				drawList->AddRectFilled(
 					ImVec2(screenX, screenY),
 					ImVec2(screenX + static_cast<float>(tileSize), screenY + static_cast<float>(tileSize)),
-					IM_COL32(159, 241, 161, 128));
+					(app::theme::FONT_ALT_HIGHLIGHT_U32 & 0x00FFFFFFu) | 0x80000000u); // --font-alt-highlight at 50% alpha
 			}
 
 			// Draw box selection preview highlight
@@ -700,14 +701,14 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 				drawList->AddRectFilled(
 					ImVec2(screenX, screenY),
 					ImVec2(screenX + static_cast<float>(tileSize), screenY + static_cast<float>(tileSize)),
-					IM_COL32(87, 175, 226, 128));
+					(app::theme::FONT_ALT_U32 & 0x00FFFFFFu) | 0x80000000u); // --font-alt at 50% alpha
 			} else if (!state.isBoxSelectMode && state.hoverTile == index) {
 				// Draw the hover overlay only when not in box select mode
 				// overlayCtx.fillStyle = 'rgba(87, 175, 226, 0.5)';
 				drawList->AddRectFilled(
 					ImVec2(screenX, screenY),
 					ImVec2(screenX + static_cast<float>(tileSize), screenY + static_cast<float>(tileSize)),
-					IM_COL32(87, 175, 226, 128));
+					(app::theme::FONT_ALT_U32 & 0x00FFFFFFu) | 0x80000000u); // --font-alt at 50% alpha
 			}
 		}
 	}
@@ -737,7 +738,7 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 		// overlayCtx.strokeRect(rectX, rectY, rectW, rectH);
 		// overlayCtx.setLineDash([]);
 		// Dashed line rendering: draw individual dash segments along each edge.
-		const ImU32 dashColor = IM_COL32(255, 255, 255, 230);
+		const ImU32 dashColor = app::theme::DASH_COLOR_U32;
 		const float dashLen = 5.0f;
 		const float gapLen = 5.0f;
 		const float thickness = 2.0f;
@@ -1202,7 +1203,7 @@ void renderWidget(const char* id,
 	ImGui::SameLine();
 	// <span :class="{ active: isBoxSelectMode }">Box Select: B</span>
 	if (state.isBoxSelectMode) {
-		ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(34, 181, 73, 255)); // active highlight
+		ImGui::PushStyleColor(ImGuiCol_Text, app::theme::NAV_SELECTED); // active highlight
 		ImGui::TextUnformatted("Box Select: B");
 		ImGui::PopStyleColor();
 	} else {

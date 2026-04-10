@@ -43,6 +43,7 @@
 #define NANOSVGRAST_IMPLEMENTATION
 #include <nanosvgrast.h>
 
+#include "app.h"
 #include "js/constants.h"
 #include "js/generics.h"
 // const updater = require('./js/updater'); // Removed: updater module deleted
@@ -281,11 +282,11 @@ static constexpr float FOOTER_HEIGHT = 73.0f;  // grid-template-rows: 73px
 static constexpr float NAV_ICON_WIDTH = 45.0f;  // #nav .option .nav-icon width
 static constexpr float NAV_ICON_HEIGHT = 52.0f; // #nav .option .nav-icon height
 
-// CSS color constants
-static constexpr ImVec4 COLOR_BG_DARK    = ImVec4(0.173f, 0.192f, 0.212f, 1.0f); // #2c3136
-static constexpr ImVec4 COLOR_BORDER     = ImVec4(0.424f, 0.459f, 0.490f, 1.0f); // #6c757d
-static constexpr ImVec4 COLOR_FONT_FADED = ImVec4(0.424f, 0.459f, 0.490f, 1.0f); // #6c757d
-static constexpr ImVec4 COLOR_NAV_ACTIVE = ImVec4(0.133f, 0.710f, 0.286f, 1.0f); // #22b549
+// CSS color constants — aliases to centralized theme (app.h / app::theme)
+static constexpr ImVec4 COLOR_BG_DARK    = app::theme::BG_DARK;
+static constexpr ImVec4 COLOR_BORDER     = app::theme::BORDER;
+static constexpr ImVec4 COLOR_FONT_FADED = app::theme::FONT_FADED;
+static constexpr ImVec4 COLOR_NAV_ACTIVE = app::theme::NAV_SELECTED;
 
 static void renderAppShell() {
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -410,7 +411,7 @@ static void renderAppShell() {
 						ImVec2 tooltip_pos(ImGui::GetItemRectMax().x + 8.0f, btn_min.y);
 						ImGui::SetNextWindowPos(tooltip_pos);
 						ImGui::PushStyleColor(ImGuiCol_PopupBg, COLOR_BG_DARK);
-						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.8f)); // --font-primary: #ffffffcc
+						ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_PRIMARY);
 						ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 0.0f));
 						ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 						ImGui::BeginTooltip();
@@ -574,7 +575,7 @@ static void renderAppShell() {
 					ImGui::TextUnformatted(" - ");
 					ImGui::SameLine(0, 0);
 				}
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.341f, 0.686f, 0.886f, 1.0f)); // --font-alt: #57afe2
+				ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_ALT);
 				ImGui::TextUnformatted(links[i].label);
 				ImGui::PopStyleColor();
 				if (ImGui::IsItemHovered())
@@ -867,10 +868,11 @@ static void openRuntimeLog() {
 
 /**
  * Reloads all stylesheets in the document.
+ * JS equivalent: reloads <link> tags. C++ equivalent: re-applies the
+ * ImGui theme derived from app.css.
  */
 static void reloadStylesheet() {
-	// TODO(conversion): In ImGui, there are no CSS stylesheets. This is a no-op.
-	// The JS version reloads <link> tags; ImGui styling is done via ImGuiStyle.
+	app::theme::applyTheme();
 }
 
 /**
@@ -1225,6 +1227,122 @@ static std::vector<nlohmann::json> textureRibbonDisplay() {
 
 } // namespace app
 
+// ── Centralized ImGui theme from app.css ─────────────────────────
+
+namespace app::theme {
+
+void applyTheme() {
+	ImGuiStyle& style = ImGui::GetStyle();
+
+	// ── Colors ───────────────────────────────────────────────────
+	ImVec4* colors = style.Colors;
+
+	// Window backgrounds
+	colors[ImGuiCol_WindowBg]  = BG;          // --background
+	colors[ImGuiCol_ChildBg]   = BG_ALT;      // --background-alt
+	colors[ImGuiCol_PopupBg]   = BG_DARK;     // --background-dark
+	colors[ImGuiCol_MenuBarBg] = BG_DARK;     // --background-dark
+
+	// Borders
+	colors[ImGuiCol_Border]       = BORDER;   // --border
+	colors[ImGuiCol_BorderShadow] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+
+	// Text
+	colors[ImGuiCol_Text]         = FONT_PRIMARY;   // --font-primary: #ffffffcc
+	colors[ImGuiCol_TextDisabled] = FONT_FADED;     // --font-faded: #6c757d
+
+	// Frame (input fields, checkboxes, sliders)
+	colors[ImGuiCol_FrameBg]        = BG_ALT;
+	colors[ImGuiCol_FrameBgHovered] = ImVec4(BG_ALT.x * 1.2f, BG_ALT.y * 1.2f, BG_ALT.z * 1.2f, 1.0f);
+	colors[ImGuiCol_FrameBgActive]  = ImVec4(BG_ALT.x * 1.4f, BG_ALT.y * 1.4f, BG_ALT.z * 1.4f, 1.0f);
+
+	// Title bar
+	colors[ImGuiCol_TitleBg]          = BG_DARK;
+	colors[ImGuiCol_TitleBgActive]    = BG_DARK;
+	colors[ImGuiCol_TitleBgCollapsed] = BG_DARK;
+
+	// Scrollbar
+	colors[ImGuiCol_ScrollbarBg]          = ImVec4(0.0f, 0.0f, 0.0f, 0.0f); // transparent track
+	colors[ImGuiCol_ScrollbarGrab]        = BORDER;         // --border
+	colors[ImGuiCol_ScrollbarGrabHovered] = FONT_HIGHLIGHT; // --font-highlight (white on hover)
+	colors[ImGuiCol_ScrollbarGrabActive]  = FONT_HIGHLIGHT;
+
+	// Buttons (CSS: --form-button-base / --form-button-hover)
+	colors[ImGuiCol_Button]        = BUTTON_BASE;    // --form-button-base: #22b549
+	colors[ImGuiCol_ButtonHovered] = BUTTON_HOVER;   // --form-button-hover: #2665d2
+	colors[ImGuiCol_ButtonActive]  = BUTTON_HOVER;
+
+	// Headers (collapsible headers, selectable highlights)
+	colors[ImGuiCol_Header]        = ImVec4(BUTTON_BASE.x, BUTTON_BASE.y, BUTTON_BASE.z, 0.3f);
+	colors[ImGuiCol_HeaderHovered] = ImVec4(BUTTON_BASE.x, BUTTON_BASE.y, BUTTON_BASE.z, 0.5f);
+	colors[ImGuiCol_HeaderActive]  = ImVec4(BUTTON_BASE.x, BUTTON_BASE.y, BUTTON_BASE.z, 0.7f);
+
+	// Separator
+	colors[ImGuiCol_Separator]        = BORDER;
+	colors[ImGuiCol_SeparatorHovered] = FONT_ALT;
+	colors[ImGuiCol_SeparatorActive]  = FONT_ALT;
+
+	// Resize grip
+	colors[ImGuiCol_ResizeGrip]        = ImVec4(BORDER.x, BORDER.y, BORDER.z, 0.5f);
+	colors[ImGuiCol_ResizeGripHovered] = FONT_ALT;
+	colors[ImGuiCol_ResizeGripActive]  = FONT_ALT;
+
+	// Tabs
+	colors[ImGuiCol_Tab]                = BG_DARK;
+	colors[ImGuiCol_TabHovered]         = BUTTON_BASE;
+	colors[ImGuiCol_TabSelected]        = BUTTON_BASE;     // --nav-option-selected
+	colors[ImGuiCol_TabSelectedOverline]= NAV_SELECTED;
+	colors[ImGuiCol_TabDimmed]          = BG_DARK;
+	colors[ImGuiCol_TabDimmedSelected]  = BG_ALT;
+
+	// Check mark
+	colors[ImGuiCol_CheckMark] = BUTTON_BASE; // green check
+
+	// Slider grab
+	colors[ImGuiCol_SliderGrab]       = BUTTON_BASE;
+	colors[ImGuiCol_SliderGrabActive] = FONT_HIGHLIGHT;
+
+	// Table
+	colors[ImGuiCol_TableHeaderBg]     = BG_DARK;
+	colors[ImGuiCol_TableBorderStrong] = BORDER;
+	colors[ImGuiCol_TableBorderLight]  = ImVec4(BORDER.x, BORDER.y, BORDER.z, 0.5f);
+	colors[ImGuiCol_TableRowBg]        = BG;
+	colors[ImGuiCol_TableRowBgAlt]     = BG_DARK;
+
+	// Nav highlight
+	colors[ImGuiCol_NavHighlight] = BUTTON_BASE;
+
+	// Text selection
+	colors[ImGuiCol_TextSelectedBg] = ImVec4(FONT_ALT.x, FONT_ALT.y, FONT_ALT.z, 0.35f);
+
+	// Drag-drop target
+	colors[ImGuiCol_DragDropTarget] = FONT_ALT;
+
+	// ── Rounding / sizing ────────────────────────────────────────
+	style.WindowRounding    = WINDOW_ROUNDING;  // 0 — sharp corners
+	style.FrameRounding     = FRAME_ROUNDING;   // 5px input border-radius
+	style.GrabRounding      = FRAME_ROUNDING;
+	style.PopupRounding     = POPUP_ROUNDING;   // 0 — sharp popup corners
+	style.ScrollbarRounding = SCROLLBAR_ROUNDING; // 5px thumb rounding
+	style.TabRounding       = 0.0f;             // sharp tab edges like CSS
+	style.ChildRounding     = 0.0f;
+
+	style.ScrollbarSize     = SCROLLBAR_SIZE;   // 8px width
+	style.FramePadding      = ImVec2(6.0f, 4.0f);
+	style.ItemSpacing       = ImVec2(8.0f, 6.0f);
+	style.WindowPadding     = ImVec2(8.0f, 8.0f);
+
+	// Button-specific padding is applied via PushStyleVar where needed,
+	// since ImGui does not have a dedicated button padding style variable.
+	// The CSS value is 9px 13px (vertical, horizontal) — see BUTTON_PADDING.
+
+	style.WindowBorderSize  = 1.0f;
+	style.FrameBorderSize   = 0.0f;
+	style.PopupBorderSize   = 1.0f;
+}
+
+} // namespace app::theme
+
 // ── Watch equivalents (change detection in the main loop) ────────
 
 static double prevLoadPct = -1;
@@ -1375,8 +1493,8 @@ int main(int argc, char* argv[]) {
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-	// Setup Dear ImGui style (will be refined to match app.css)
-	ImGui::StyleColorsDark();
+	// Apply the app.css theme to ImGui (replaces StyleColorsDark).
+	app::theme::applyTheme();
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -1542,7 +1660,7 @@ int main(int argc, char* argv[]) {
 		int display_w, display_h;
 		glfwGetFramebufferSize(window, &display_w, &display_h);
 		glViewport(0, 0, display_w, display_h);
-		glClearColor(0.204f, 0.227f, 0.251f, 1.0f); // --background: #343a40
+		glClearColor(app::theme::BG_CLEAR_R, app::theme::BG_CLEAR_G, app::theme::BG_CLEAR_B, app::theme::BG_CLEAR_A);
 		glClear(GL_COLOR_BUFFER_BIT);
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
