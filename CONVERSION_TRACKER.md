@@ -1065,6 +1065,101 @@ converted — verify the wiring is complete at runtime.
 
 ---
 
+## CASC Pipeline — Critical Runtime Failures
+
+> **Identified 2026-04-10.** The CASC loading pipeline crashes at runtime with
+> `"Invalid encoding magic: 0"` during local installation loading. Root cause
+> analysis against the original JavaScript source follows.
+
+### 11.1 BLTEReader Missing Lazy Block Processing (Root Cause)
+
+The original JS `BLTEReader` overrides `_checkBounds(length)` on `BufferWrapper`
+to **lazily decompress BLTE blocks on demand** whenever a read extends beyond
+already-decompressed data. This is the mechanism that makes `new BLTEReader(data, hash)`
+immediately usable for reading — blocks are auto-decompressed as needed by reads.
+
+**JS (`blte-reader.js`, lines 311-321 at commit 8d2e6a8e):**
+```js
+_checkBounds(length) {
+    super._checkBounds(length);
+    const pos = this.offset + length;
+    while (pos > this.blockWriteIndex) {
+        if (this._processBlock() === false)
+            return;
+    }
+}
+```
+
+The C++ conversion does NOT have this override. `_checkBounds()` is `private`
+(non-virtual) in `BufferWrapper`, so the BLTEReader cannot intercept reads.
+The C++ BLTEReader allocates a zeroed output buffer in the constructor but
+never decompresses blocks into it unless `processAllBlocks()` is explicitly
+called. Reads from the BLTEReader therefore return zeros.
+
+**Fix options (pick one):**
+
+1. **Make `_checkBounds` virtual** in `BufferWrapper` and override in `BLTEReader`
+   to match the JS lazy-processing behavior exactly. This preserves the memory
+   and performance benefits of lazy loading (significant for large BLTE files
+   where only partial content is accessed, e.g., streaming). Requires changing
+   `BufferWrapper`'s design — `_checkBounds` must become `protected virtual`.
+   No other `BufferWrapper` subclasses exist, so the impact is limited.
+2. **Add explicit `processAllBlocks()` calls** at every site that creates a
+   `BLTEReader` and then reads from it (see §11.2 below). Simpler to implement
+   but eliminates lazy loading — all blocks are decompressed upfront even if
+   only partial data is needed. This could be significant for large files.
+
+- [ ] Implement lazy block processing in BLTEReader (option 1 or 2)
+
+### 11.2 Call Sites Missing `processAllBlocks()`
+
+These call sites create a `BLTEReader` and then immediately read from it
+**without** calling `processAllBlocks()`. In JS, the `_checkBounds` override
+handles this transparently. In C++, reads return zeros from the uninitialized
+output buffer.
+
+| Call Site | File | Line | Impact |
+|-----------|------|------|--------|
+| `parseEncodingFile()` | `casc-source.cpp` | 494 | 🔴 Crashes with "Invalid encoding magic: 0" — **reported failure** |
+| `parseRootFile()` | `casc-source.cpp` | 377 | 🔴 Crashes when executed — reads root magic from zeroed buffer |
+| `getInstallManifest()` | `casc-source.cpp` | 115 | 🔴 Crashes when executed — InstallManifest reads from zeroed buffer |
+
+**Call sites that already call `processAllBlocks()` (no fix needed):**
+
+| Call Site | File | Line |
+|-----------|------|------|
+| `_ensureFileInCache()` | `casc-source-local.cpp` | 585 |
+| `_ensureFileInCache()` | `casc-source-remote.cpp` | 614 |
+| `writeToFile()` | `blte-reader.cpp` | 268 |
+| `getDataURL()` | `blte-reader.cpp` | 273 |
+
+**Call sites that return a BLTEReader to callers (caller's responsibility):**
+
+| Call Site | File | Line |
+|-----------|------|------|
+| `getFileAsBLTE()` | `casc-source-local.cpp` | 96 |
+| `getFileAsBLTE()` | `casc-source-remote.cpp` | 194 |
+
+For these returned BLTEReaders, if option 1 (virtual `_checkBounds`) is chosen,
+no changes are needed — lazy processing handles it. If option 2 is chosen,
+every **caller** of `getFileAsBLTE()` must call `processAllBlocks()` before reading.
+
+- [ ] Fix `parseEncodingFile()` — add `processAllBlocks()` or rely on virtual `_checkBounds`
+- [ ] Fix `parseRootFile()` — add `processAllBlocks()` or rely on virtual `_checkBounds`
+- [ ] Fix `getInstallManifest()` — add `processAllBlocks()` or rely on virtual `_checkBounds`
+- [ ] Audit all callers of `getFileAsBLTE()` to ensure they handle block processing
+
+### 11.3 Historical Context
+
+The auto-processing was originally in the BLTEReader constructor (commit `2f4cac91`,
+`this._processBlock()` at end of constructor). It was removed in commit `4f7f28b0`
+("Skip auto-processing of first BLTE block") and replaced by the `_checkBounds()`
+override pattern (commit `55bca20d` and surrounding commits). The C++ conversion
+was based on the version that had the `_checkBounds()` override, but that override
+was not ported.
+
+---
+
 ## Remaining Work — CI & Testing
 
 ### 10.1 Linux CI Job
