@@ -23,10 +23,9 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
-// TODO(conversion): JS uses Node.js crypto for MD5/SHA256 hashing.
-// C++ uses OpenSSL via cpp-httplib's dependency or a standalone hash library.
-// For now, we use a simple implementation placeholder that will be wired
-// to a proper crypto library.
+// JS uses Node.js crypto for MD5/SHA256 hashing.
+// C++ uses self-contained RFC 1321 (MD5) and FIPS 180-4 (SHA-256) implementations
+// below (md5_impl / sha256_impl namespaces). No external dependency required.
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -34,8 +33,7 @@
 #include <windows.h>
 #include <wincrypt.h>
 #else
-// On Linux, use openssl if available, otherwise stub.
-// TODO(conversion): Wire to OpenSSL or a lightweight hash library.
+// Linux: platform-independent md5_impl/sha256_impl used for all hashing.
 #endif
 
 namespace cache_collector {
@@ -131,13 +129,10 @@ static std::string random_hex(size_t num_bytes) {
 	return to_hex(bytes);
 }
 
-// ── Helper: simple MD5 hash ────────────────────────────────────────
-// TODO(conversion): This uses a minimal MD5 implementation. Should be replaced
-// with OpenSSL or a proper crypto library for production use.
-// For now, we compute a hash by reading the file in chunks and using
-// a platform hash function or a bundled MD5 implementation.
+// ── Helper: MD5 hash (RFC 1321) ────────────────────────────────────
+// Self-contained implementation matching JS crypto.createHash('md5').
 
-// Minimal MD5 implementation for file hashing.
+// MD5 implementation for file hashing.
 namespace md5_impl {
 
 struct MD5Context {

@@ -53,12 +53,127 @@ License: MIT
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 
+#include <cstring>
+
 #ifdef _WIN32
 #include <Windows.h>
 #include <shellapi.h>
 #endif
 
 namespace tab_maps {
+
+// ── MD5 helper (matches JS crypto.createHash('md5')) ────────────────────
+// Same RFC 1321 implementation used in cache-collector.cpp.
+namespace md5_detail {
+
+struct MD5Context {
+	uint32_t state[4];
+	uint64_t count;
+	uint8_t buffer[64];
+};
+
+static constexpr uint32_t S[64] = {
+	7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,
+	5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,
+	4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23,
+	6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21
+};
+
+static constexpr uint32_t K[64] = {
+	0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee,
+	0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
+	0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be,
+	0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821,
+	0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa,
+	0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
+	0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed,
+	0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a,
+	0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c,
+	0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70,
+	0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05,
+	0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
+	0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039,
+	0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
+	0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
+	0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391
+};
+
+static uint32_t left_rotate(uint32_t x, uint32_t c) {
+	return (x << c) | (x >> (32 - c));
+}
+
+static void md5_transform(uint32_t state[4], const uint8_t block[64]) {
+	uint32_t a = state[0], b = state[1], c = state[2], d = state[3];
+	uint32_t M[16];
+	for (int i = 0; i < 16; i++)
+		M[i] = static_cast<uint32_t>(block[i * 4]) |
+		       (static_cast<uint32_t>(block[i * 4 + 1]) << 8) |
+		       (static_cast<uint32_t>(block[i * 4 + 2]) << 16) |
+		       (static_cast<uint32_t>(block[i * 4 + 3]) << 24);
+	for (uint32_t i = 0; i < 64; i++) {
+		uint32_t f, g;
+		if (i < 16) { f = (b & c) | (~b & d); g = i; }
+		else if (i < 32) { f = (d & b) | (~d & c); g = (5 * i + 1) % 16; }
+		else if (i < 48) { f = b ^ c ^ d; g = (3 * i + 5) % 16; }
+		else { f = c ^ (b | ~d); g = (7 * i) % 16; }
+		uint32_t temp = d; d = c; c = b;
+		b = b + left_rotate(a + f + K[i] + M[g], S[i]); a = temp;
+	}
+	state[0] += a; state[1] += b; state[2] += c; state[3] += d;
+}
+
+static void md5_init(MD5Context& ctx) {
+	ctx.state[0] = 0x67452301; ctx.state[1] = 0xefcdab89;
+	ctx.state[2] = 0x98badcfe; ctx.state[3] = 0x10325476;
+	ctx.count = 0; std::memset(ctx.buffer, 0, sizeof(ctx.buffer));
+}
+
+static void md5_update(MD5Context& ctx, const uint8_t* data, size_t len) {
+	size_t index = static_cast<size_t>(ctx.count % 64);
+	ctx.count += len;
+	size_t i = 0;
+	if (index) {
+		size_t part_len = 64 - index;
+		if (len >= part_len) {
+			std::memcpy(ctx.buffer + index, data, part_len);
+			md5_transform(ctx.state, ctx.buffer); i = part_len;
+		} else { std::memcpy(ctx.buffer + index, data, len); return; }
+	}
+	for (; i + 63 < len; i += 64) md5_transform(ctx.state, data + i);
+	if (i < len) std::memcpy(ctx.buffer, data + i, len - i);
+}
+
+static std::string md5_final_hex(MD5Context& ctx) {
+	uint8_t padding[64] = { 0x80 };
+	uint64_t bits = ctx.count * 8;
+	size_t index = static_cast<size_t>(ctx.count % 64);
+	size_t pad_len = (index < 56) ? (56 - index) : (120 - index);
+	md5_update(ctx, padding, pad_len);
+	uint8_t bits_buf[8];
+	for (int i = 0; i < 8; i++) bits_buf[i] = static_cast<uint8_t>(bits >> (i * 8));
+	md5_update(ctx, bits_buf, 8);
+	static constexpr char hex_chars[] = "0123456789abcdef";
+	std::string result;
+	result.reserve(32);
+	for (int i = 0; i < 4; i++) {
+		for (int j = 0; j < 4; j++) {
+			uint8_t byte = static_cast<uint8_t>(ctx.state[i] >> (j * 8));
+			result.push_back(hex_chars[(byte >> 4) & 0x0F]);
+			result.push_back(hex_chars[byte & 0x0F]);
+		}
+	}
+	return result;
+}
+
+} // namespace md5_detail
+
+/// Compute MD5 hex digest of a string. Matches JS crypto.createHash('md5').update(str).digest('hex').
+static std::string md5_hex(const std::string& input) {
+	md5_detail::MD5Context ctx;
+	md5_detail::md5_init(ctx);
+	md5_detail::md5_update(ctx, reinterpret_cast<const uint8_t*>(input.data()), input.size());
+	return md5_detail::md5_final_hex(ctx);
+}
 
 // --- Constants ---
 
@@ -1047,7 +1162,6 @@ helper.mark(std::format("Tile {} {}", tile_coord.x, tile_coord.y), false, "Tile 
 
 // JS: const sorted_tiles = [...export_tiles].sort((a, b) => a - b);
 // JS: const tile_hash = crypto.createHash('md5').update(sorted_tiles.join(',')).digest('hex').substring(0, 8);
-// TODO(conversion): Using FNV-1a hash instead of MD5 (crypto module not available in C++ standard lib).
 auto sorted_tiles = tile_indices;
 std::sort(sorted_tiles.begin(), sorted_tiles.end());
 
@@ -1057,13 +1171,8 @@ if (i > 0) tiles_str += ',';
 tiles_str += std::to_string(sorted_tiles[i]);
 }
 
-// FNV-1a hash as substitute for MD5
-uint32_t hash = 0x811c9dc5u;
-for (char c : tiles_str) {
-hash ^= static_cast<uint8_t>(c);
-hash *= 0x01000193u;
-}
-std::string tile_hash = std::format("{:08x}", hash);
+// MD5 hash matching JS crypto.createHash('md5')
+std::string tile_hash = md5_hex(tiles_str).substr(0, 8);
 
 const std::string filename = selected_map_dir + "_" + tile_hash + ".png";
 const std::string out_path = casc::ExportHelper::getExportPath(

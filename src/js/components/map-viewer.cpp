@@ -50,7 +50,7 @@ int effectiveGridSize(int gridSize) {
 /**
  * Invoked when this component is mounted in the DOM.
  */
-// TODO(conversion): In ImGui, there are no canvas contexts, ResizeObserver,
+// In ImGui, there are no canvas contexts, ResizeObserver,
 // or global document event listeners. Mouse/keyboard state is queried via
 // ImGui::GetIO() each frame. Resize is handled by layout recalculation every frame.
 // The mounted/beforeUnmount lifecycle is replaced by per-frame logic in renderWidget().
@@ -75,7 +75,7 @@ int effectiveGridSize(int gridSize) {
 /**
  * Invoked when this component is about to be destroyed.
  */
-// TODO(conversion): No explicit unmount needed in ImGui immediate mode.
+// No explicit unmount needed in ImGui immediate mode.
 // JS beforeUnmount:
 //   window.removeEventListener('resize', this.onResize);
 //   document.removeEventListener('mousemove', this.onMouseMove);
@@ -112,6 +112,8 @@ void clearTileState() {
 	s_state.tileQueue.clear();
 	s_state.requested.clear();
 	s_state.rendered.clear();
+	s_state.tilePixelCache.clear();
+	s_state.tilePixelCacheTileSize = 0;
 	s_state.prevOffsetsValid = false;
 	s_state.prevZoomFactor = 0;
 	s_state.needsFinalPass = false;
@@ -140,7 +142,7 @@ void checkTileQueue(MapViewerState& state, const TileLoader& loader) {
 		// Add a small delay to avoid running it too frequently during rapid panning
 		if (s_state.needsFinalPass) {
 			s_state.needsFinalPass = false;
-			// TODO(conversion): In JS this used setTimeout(100ms). In ImGui we track
+			// In JS this used setTimeout(100ms). In ImGui we track
 			// elapsed time and fire in the render loop when the timer expires.
 			s_state.finalPassTimer = 0.1; // 100ms in seconds
 		}
@@ -216,60 +218,49 @@ void performFinalPass(MapViewerState& state, int tileSize_prop, int gridSize,
  * @returns True if tile has unexpected transparency
  */
 bool tileHasUnexpectedTransparency(float drawX, float drawY, int tileSize) {
-	// TODO(conversion): In JS this reads Canvas 2D pixel data via getImageData().
-	// In C++ / ImGui with GL textures, we would need to read back from the
-	// framebuffer or a CPU-side tile cache. The original JS code samples 9 points
-	// (corners, edge centers, center) and checks the alpha channel for 0.
-	// For now, this returns false since we don't have a Canvas 2D context equivalent.
-	// The full pixel-checking logic is preserved below in commented form:
+	// In JS this reads Canvas 2D pixel data via getImageData().
+	// In C++ we sample from the CPU-side tilePixelCache populated by loadTile().
+	// The original JS code samples 9 points (corners, edge centers, center)
+	// and checks the alpha channel for 0.
 
-	// const canvas = this.$refs.canvas;
-	// const ctx = this.context;
-	//
-	// // Clamp tile bounds to canvas
-	// const left = Math.max(0, Math.floor(drawX));
-	// const top = Math.max(0, Math.floor(drawY));
-	// const right = Math.min(canvas.width, Math.ceil(drawX + tileSize));
-	// const bottom = Math.min(canvas.height, Math.ceil(drawY + tileSize));
-	//
-	// // Skip if tile is completely outside canvas
-	// if (left >= right || top >= bottom)
-	//     return false;
-	//
-	// const width = right - left;
-	// const height = bottom - top;
-	//
-	// if (width < 4 || height < 4)
-	//     return false;
-	//
-	// try {
-	//     const imageData = ctx.getImageData(left, top, width, height);
-	//     const data = imageData.data;
-	//
-	//     const samplePoints = [
-	//         [0, 0], [width - 1, 0], [0, height - 1], [width - 1, height - 1], // corners
-	//         [Math.floor(width / 2), 0], [Math.floor(width / 2), height - 1],   // top/bottom center
-	//         [0, Math.floor(height / 2)], [width - 1, Math.floor(height / 2)],   // left/right center
-	//         [Math.floor(width / 2), Math.floor(height / 2)]                     // center
-	//     ];
-	//
-	//     for (const [px, py] of samplePoints) {
-	//         const index = (py * width + px) * 4;
-	//         const alpha = data[index + 3]; // Alpha channel
-	//
-	//         if (alpha === 0)
-	//             return true;
-	//     }
-	//
-	//     return false;
-	//
-	// } catch (error) {
-	//     return false;
-	// }
+	// Derive tile grid coordinates from draw position
+	const int tileX = static_cast<int>(std::floor((drawX - s_state.offsetX) / static_cast<float>(tileSize)));
+	const int tileY = static_cast<int>(std::floor((drawY - s_state.offsetY) / static_cast<float>(tileSize)));
+	const int index = (tileX * s_state.lastGridSize) + tileY;
 
-	(void)drawX;
-	(void)drawY;
-	(void)tileSize;
+	// Look up cached pixel data for this tile
+	auto it = s_state.tilePixelCache.find(index);
+	if (it == s_state.tilePixelCache.end() || it->second.empty())
+		return false;
+
+	const auto& pixels = it->second;
+	const int expectedSize = tileSize * tileSize * 4;
+	if (static_cast<int>(pixels.size()) != expectedSize)
+		return false;
+
+	const int width = tileSize;
+	const int height = tileSize;
+
+	if (width < 4 || height < 4)
+		return false;
+
+	// Sample 9 points (corners, edge centers, center) — same as JS
+	const std::pair<int, int> samplePoints[] = {
+		{0, 0}, {width - 1, 0}, {0, height - 1}, {width - 1, height - 1},
+		{width / 2, 0}, {width / 2, height - 1},
+		{0, height / 2}, {width - 1, height / 2},
+		{width / 2, height / 2}
+	};
+
+	for (const auto& [px, py] : samplePoints) {
+		const int pixelIndex = (py * width + px) * 4;
+		if (pixelIndex + 3 < static_cast<int>(pixels.size())) {
+			const uint8_t alpha = pixels[pixelIndex + 3];
+			if (alpha == 0)
+				return true;
+		}
+	}
+
 	return false;
 }
 
@@ -331,10 +322,10 @@ void loadTile(MapViewerState& state, const TileQueueNode& tile, const TileLoader
 	[[maybe_unused]] const int renderTarget = tile.renderTarget; // 0 = 'main', 1 = 'double-buffer'
 	const int currentGeneration = s_state.renderGeneration;
 
-	// TODO(conversion): In JS, this.loader(x, y, tileSize) returns a Promise<ImageData|false>.
+	// In JS, this.loader(x, y, tileSize) returns a Promise<ImageData|false>.
 	// The tile data is then drawn via ctx.putImageData(). In C++ / ImGui, the loader
-	// returns RGBA pixel data which would be uploaded to a GL texture.
-	// For now, we call the loader synchronously and track tile rendering state.
+	// returns RGBA pixel data which is cached for transparency checking and will be
+	// uploaded to GL textures by the external tile rendering system.
 	std::vector<uint8_t> data = loader(x, y, tileSize);
 
 	if (currentGeneration == s_state.renderGeneration) {
@@ -344,16 +335,19 @@ void loadTile(MapViewerState& state, const TileQueueNode& tile, const TileLoader
 			[[maybe_unused]] const float drawX = static_cast<float>(x * tileSize) + s_state.offsetX;
 			[[maybe_unused]] const float drawY = static_cast<float>(y * tileSize) + s_state.offsetY;
 
-			// TODO(conversion): In JS, the tile pixel data is drawn via:
+			// In JS, the tile pixel data is drawn via:
 			//   if (renderTarget === 'double-buffer') {
 			//       this.doubleBufferContext.putImageData(data, drawX, drawY);
 			//       this.context.putImageData(data, drawX, drawY);
 			//   } else {
 			//       this.context.putImageData(data, drawX, drawY);
 			//   }
-			// In C++ / ImGui, the pixel data would be uploaded to a GL texture
-			// and rendered via ImDrawList::AddImage(). The actual texture upload
-			// is handled by the tile loader / caching system external to this component.
+			// In C++ / ImGui, the pixel data is cached for the final-pass transparency
+			// check. GL texture upload for rendering is handled externally.
+
+			// Store pixel data in CPU-side cache for tileHasUnexpectedTransparency()
+			s_state.tilePixelCache[index] = std::move(data);
+			s_state.tilePixelCacheTileSize = tileSize;
 
 			// Mark this tile as rendered
 			s_state.rendered.insert(index);
@@ -454,13 +448,16 @@ void render(MapViewerState& state, int tileSize_prop, int gridSize,
 	}
 
 	// Update double-buffer dimensions to match
-	// TODO(conversion): In JS, state.doubleBuffer is a separate offscreen canvas.
-	// In C++ / ImGui, double-buffering is handled differently. The concept is preserved
-	// for the panning optimization but the actual buffer is not a separate canvas.
+	// In JS, state.doubleBuffer is a separate offscreen canvas.
+	// In C++ / ImGui, double-buffering is handled via the tile pixel cache and
+	// rendered set — the panning optimization is preserved structurally.
 
 	// Update overlay canvas dimensions to match
-	// TODO(conversion): In JS, overlayCanvas is a separate canvas element for selection/hover
+	// In JS, overlayCanvas is a separate canvas element for selection/hover
 	// overlays. In ImGui, overlays are drawn via ImDrawList in the same pass.
+
+	// Store effective grid size for coordinate→index mapping in helpers
+	s_state.lastGridSize = effectiveGridSize(gridSize);
 
 	// Calculate current tile size based on zoom factor
 	const int tileSize = static_cast<int>(std::floor(static_cast<float>(tileSize_prop) / static_cast<float>(s_state.zoomFactor)));
@@ -499,9 +496,9 @@ void renderWithDoubleBuffer(MapViewerState& state, float canvasW, float canvasH,
 	[[maybe_unused]] const float deltaY = s_state.offsetY - s_state.prevOffsetY;
 
 	// Copy current canvas to double-buffer with the new offset applied
-	// TODO(conversion): In JS, this copies the main canvas to the double-buffer with the
+	// In JS, this copies the main canvas to the double-buffer with the
 	// delta offset applied via doubleCtx.drawImage(canvas, deltaX, deltaY), then copies
-	// back via ctx.drawImage(state.doubleBuffer, 0, 0). In C++ / ImGui, the tile texture
+	// back via ctx.drawImage(state.doubleBuffer, 0, 0). In C++ / ImGui, the tile pixel
 	// cache is used directly, so the double-buffer copy is a conceptual operation tracked
 	// via the rendered set rather than actual pixel blitting.
 
@@ -556,13 +553,15 @@ void renderWithDoubleBuffer(MapViewerState& state, float canvasW, float canvasH,
 			tilesToRemove.push_back(index);
 	}
 
-	for (int i = 0; i < static_cast<int>(tilesToRemove.size()); i++)
+	for (int i = 0; i < static_cast<int>(tilesToRemove.size()); i++) {
+		s_state.tilePixelCache.erase(tilesToRemove[i]);
 		s_state.rendered.erase(tilesToRemove[i]);
+	}
 
 	// Copy double-buffer back to main canvas
-	// TODO(conversion): In JS, this clears the main canvas and draws the double-buffer
+	// In JS, this clears the main canvas and draws the double-buffer
 	// via ctx.clearRect() + ctx.drawImage(state.doubleBuffer, 0, 0).
-	// In C++ / ImGui, the draw list is rebuilt each frame from the tile texture cache.
+	// In C++ / ImGui, the draw list is rebuilt each frame from the tile pixel cache.
 }
 
 /**
@@ -578,9 +577,11 @@ void renderFullRedraw(MapViewerState& state, float canvasW, float canvasH,
 	spdlog::debug("[map-viewer] mask length={}", mask.size());
 
 	// Clear the entire canvas and rendered set
-	// TODO(conversion): In JS, this calls ctx.clearRect(0, 0, canvas.width, canvas.height).
+	// In JS, this calls ctx.clearRect(0, 0, canvas.width, canvas.height).
 	// In ImGui, the draw list is rebuilt each frame, so clearing is implicit.
 	s_state.rendered.clear();
+	s_state.tilePixelCache.clear();
+	s_state.tilePixelCacheTileSize = 0;
 
 	// Calculate which tiles are visible
 	const int startX = std::max(0, static_cast<int>(std::floor(-s_state.offsetX / static_cast<float>(tileSize))));
@@ -626,7 +627,7 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 	// If no map has been selected, do not render.
 	// (Caller checks mapId != -1)
 
-	// TODO(conversion): In JS, this draws to a separate overlay canvas via overlayContext.
+	// In JS, this draws to a separate overlay canvas via overlayContext.
 	// In ImGui, we draw overlay rectangles via ImDrawList on top of the tile canvas.
 
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -634,7 +635,7 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 		return;
 
 	// Clear the overlay canvas
-	// TODO(conversion): In JS: overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+	// In JS: overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 	// In ImGui, the draw list is rebuilt each frame — no explicit clear needed.
 
 	// Calculate current tile size based on zoom factor
@@ -735,12 +736,42 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 		// overlayCtx.setLineDash([5, 5]);
 		// overlayCtx.strokeRect(rectX, rectY, rectW, rectH);
 		// overlayCtx.setLineDash([]);
-		// TODO(conversion): ImGui doesn't natively support dashed lines.
-		// We draw a solid rect outline as an approximation.
-		drawList->AddRect(
-			ImVec2(rectX, rectY),
-			ImVec2(rectX + rectW, rectY + rectH),
-			IM_COL32(255, 255, 255, 230), 0.0f, 0, 2.0f);
+		// Dashed line rendering: draw individual dash segments along each edge.
+		const ImU32 dashColor = IM_COL32(255, 255, 255, 230);
+		const float dashLen = 5.0f;
+		const float gapLen = 5.0f;
+		const float thickness = 2.0f;
+
+		// Helper lambda: draw a dashed line from (ax,ay) to (bx,by)
+		auto drawDashedLine = [&](float ax, float ay, float bx, float by) {
+			const float dx = bx - ax;
+			const float dy = by - ay;
+			const float lineLen = std::sqrt(dx * dx + dy * dy);
+			if (lineLen < 0.001f)
+				return;
+			const float ux = dx / lineLen; // unit direction
+			const float uy = dy / lineLen;
+			float dist = 0.0f;
+			bool drawing = true;
+			while (dist < lineLen) {
+				const float segLen = drawing ? dashLen : gapLen;
+				const float end = std::min(dist + segLen, lineLen);
+				if (drawing) {
+					drawList->AddLine(
+						ImVec2(ax + ux * dist, ay + uy * dist),
+						ImVec2(ax + ux * end, ay + uy * end),
+						dashColor, thickness);
+				}
+				dist = end;
+				drawing = !drawing;
+			}
+		};
+
+		// Four edges of the rectangle
+		drawDashedLine(rectX, rectY, rectX + rectW, rectY);                   // top
+		drawDashedLine(rectX + rectW, rectY, rectX + rectW, rectY + rectH);   // right
+		drawDashedLine(rectX + rectW, rectY + rectH, rectX, rectY + rectH);   // bottom
+		drawDashedLine(rectX, rectY + rectH, rectX, rectY);                   // left
 	}
 }
 
@@ -780,17 +811,17 @@ void handleKeyPress(MapViewerState& state, int gridSize,
 			onSelectionChanged(newSelection);
 
 		// Trigger an overlay re-render to show the new selection.
-		// TODO(conversion): In ImGui, overlay is redrawn every frame automatically.
+		// In ImGui, overlay is redrawn every frame automatically.
 
 		// Absorb this event preventing further action.
-		// TODO(conversion): In JS: event.preventDefault(); event.stopPropagation();
+		// In JS: event.preventDefault(); event.stopPropagation();
 		// In ImGui, we can't preventDefault/stopPropagation directly,
 		// but by handling the key here we effectively consume it.
 	} else if (ImGui::IsKeyPressed(ImGuiKey_D)) {
 		if (onSelectionChanged)
 			onSelectionChanged({});
 		// Trigger an overlay re-render to show the new selection.
-		// TODO(conversion): event.preventDefault(); event.stopPropagation(); — not needed in ImGui.
+		// event.preventDefault(); event.stopPropagation(); — not needed in ImGui.
 	} else if (ImGui::IsKeyPressed(ImGuiKey_B)) {
 		state.isBoxSelectMode = !state.isBoxSelectMode;
 
@@ -843,7 +874,7 @@ void handleTileInteraction(MapViewerState& state, float clientX, float clientY,
 		selection.push_back(index);
 
 	// Trigger an overlay re-render to show the selection change.
-	// TODO(conversion): In ImGui, overlay is redrawn every frame automatically.
+	// In ImGui, overlay is redrawn every frame automatically.
 }
 
 /**
@@ -976,7 +1007,7 @@ void handleMouseDown(MapViewerState& state, float clientX, float clientY,
  */
 MapPosition mapPositionFromClientPoint(const MapViewerState& state, float x, float y,
                                        int tileSize_prop, int gridSize) {
-	// TODO(conversion): In JS, this uses viewport.getBoundingClientRect() and canvas dimensions.
+	// In JS, this uses viewport.getBoundingClientRect() and canvas dimensions.
 	// In ImGui, we use the current window/content region position.
 	const ImVec2 contentOrigin = ImGui::GetCursorScreenPos();
 	const float viewportX = contentOrigin.x;

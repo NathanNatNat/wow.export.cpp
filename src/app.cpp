@@ -997,9 +997,9 @@ int main(int argc, char* argv[]) {
 		// Debugging reloader.
 		if (!BUILD_RELEASE) {
 			if (glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS) {
-				// TODO(conversion): In NW.js, F5 reloads the app via chrome.runtime.reload().
-				// In C++, hot-reload is not directly supported. This could trigger
-				// a shader reload as the closest equivalent.
+				// In NW.js, F5 reloads the app via chrome.runtime.reload().
+				// C++ equivalent: re-exec the current process binary.
+				app::restartApplication();
 			}
 		}
 
