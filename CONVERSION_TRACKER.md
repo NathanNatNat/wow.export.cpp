@@ -1099,11 +1099,15 @@ called. Reads from the BLTEReader therefore return zeros.
 **Fix options (pick one):**
 
 1. **Make `_checkBounds` virtual** in `BufferWrapper` and override in `BLTEReader`
-   to match the JS lazy-processing behavior exactly.
+   to match the JS lazy-processing behavior exactly. This preserves the memory
+   and performance benefits of lazy loading (significant for large BLTE files
+   where only partial content is accessed, e.g., streaming). Requires changing
+   `BufferWrapper`'s design — `_checkBounds` must become `protected virtual`.
+   No other `BufferWrapper` subclasses exist, so the impact is limited.
 2. **Add explicit `processAllBlocks()` calls** at every site that creates a
-   `BLTEReader` and then reads from it (see §11.2 below). This is simpler but
-   loses the lazy-loading optimization (all blocks decompressed upfront even if
-   only partial data is needed).
+   `BLTEReader` and then reads from it (see §11.2 below). Simpler to implement
+   but eliminates lazy loading — all blocks are decompressed upfront even if
+   only partial data is needed. This could be significant for large files.
 
 - [ ] Implement lazy block processing in BLTEReader (option 1 or 2)
 
@@ -1117,8 +1121,8 @@ output buffer.
 | Call Site | File | Line | Impact |
 |-----------|------|------|--------|
 | `parseEncodingFile()` | `casc-source.cpp` | 494 | 🔴 Crashes with "Invalid encoding magic: 0" — **reported failure** |
-| `parseRootFile()` | `casc-source.cpp` | 377 | 🔴 Will crash after encoding is fixed (root magic check) |
-| `getInstallManifest()` | `casc-source.cpp` | 115 | 🔴 Will crash when install manifest is read |
+| `parseRootFile()` | `casc-source.cpp` | 377 | 🔴 Crashes when executed — reads root magic from zeroed buffer |
+| `getInstallManifest()` | `casc-source.cpp` | 115 | 🔴 Crashes when executed — InstallManifest reads from zeroed buffer |
 
 **Call sites that already call `processAllBlocks()` (no fix needed):**
 
