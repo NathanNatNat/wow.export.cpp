@@ -501,15 +501,15 @@ Wire file export, texture encoding, and data export operations.
 
 Wire video playback, Kino streaming, and audio callbacks.
 
-- [ ] Wire Kino HTTP POST streaming server — `tab_videos.cpp` (1 TODO)
-- [ ] Wire video playback via URL — `tab_videos.cpp` (1 TODO)
-- [ ] Wire video preview rendering — `tab_videos.cpp` (1 TODO)
-- [ ] Wire video end/error callbacks — `tab_videos.cpp` (2 TODOs)
-- [ ] Wire media playback controls — `tab_videos.cpp` (1 TODO)
-- [ ] Wire subtitle visibility toggle — `tab_videos.cpp` (1 TODO)
-- [ ] Wire poll timer for video state — `tab_videos.cpp` (1 TODO)
-- [ ] Wire `miniaudio` per-sound "onended" callback — `ui/audio-helper.cpp` (1 TODO)
-- [ ] Verify MDX pause support — `tab_models_legacy.cpp` (1 TODO)
+- [x] Wire Kino HTTP POST streaming server — `tab_videos.cpp` (1 TODO)
+- [x] Wire video playback via URL — `tab_videos.cpp` (1 TODO)
+- [x] Wire video preview rendering — `tab_videos.cpp` (1 TODO)
+- [x] Wire video end/error callbacks — `tab_videos.cpp` (2 TODOs)
+- [x] Wire media playback controls — `tab_videos.cpp` (1 TODO)
+- [x] Wire subtitle visibility toggle — `tab_videos.cpp` (1 TODO)
+- [x] Wire poll timer for video state — `tab_videos.cpp` (1 TODO)
+- [x] Wire `miniaudio` per-sound "onended" callback — `ui/audio-helper.cpp` (1 TODO)
+- [x] Verify MDX pause support — `tab_models_legacy.cpp` (1 TODO)
 
 ---
 

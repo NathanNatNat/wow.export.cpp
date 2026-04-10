@@ -106,6 +106,9 @@ public:
 	// C++ accessors for JS public properties.
 	const std::vector<MDXDrawCall>& get_draw_calls() const { return draw_calls; }
 
+	// Animation pause control — matches the JS optional-call pattern (renderer.set_animation_paused?.(paused)).
+	void set_animation_paused(bool paused) { animation_paused = paused; }
+
 	// Public state (matches JS properties)
 	std::unique_ptr<MDXLoader> mdx;
 	gl::ShaderProgram* shader = nullptr;

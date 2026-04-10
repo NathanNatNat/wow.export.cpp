@@ -517,3 +517,13 @@ These are NOT deviations — they are inherent structural translations from JS t
 - **JS**: Equipment GLTF export code accesses `gltf.texture_buffers[fileDataID]` directly as a public property.
 - **C++**: `texture_buffers` is a private member. Added `addTextureBuffer(uint32_t, BufferWrapper)` method as a C++ accessor.
 - **Rationale**: C++ accessor for a member that JS accesses as a public property. Enables equipment GLB texture embedding without exposing the internal map.
+
+### `src/js/3D/renderers/MDXRendererGL.h` — ACCEPTABLE (`set_animation_paused` accessor added)
+- **JS**: `renderer.set_animation_paused?.(paused)` uses optional chaining on what is effectively a public property setter.
+- **C++**: `animation_paused` is a private member. Added `set_animation_paused(bool)` inline setter.
+- **Rationale**: Standard C++ accessor for data that JS accesses via optional-call pattern. Needed by `tab_models_legacy.cpp` to toggle MDX animation pause.
+
+### `src/js/modules/tab_videos.cpp` — ACCEPTABLE (external video playback)
+- **JS**: Video playback uses a `<video>` HTML element with native browser playback controls, streaming from the Kino server URL.
+- **C++**: No built-in video decoder library is available. Video URL is opened in the system's default handler (browser/media player) via `core::openInExplorer()` (`ShellExecuteW` on Windows, `xdg-open` on Linux). The preview area displays streaming state and subtitle text via ImGui.
+- **Rationale**: The project's dependency list has no video playback library (FFmpeg etc.). Opening the URL externally follows the same NW.js → C++ translation pattern used for other browser APIs (`nw.Shell.openItem` → `ShellExecuteW`/`xdg-open`). All state management, Kino HTTP POST, polling, subtitle loading, and error handling are fully wired.
