@@ -838,16 +838,16 @@ M2 Model Loaded and Creatures Tab screenshots.
 Several tabs show placeholder content when no item is selected. The screenshots
 confirm these empty states are visible and need corresponding rendering.
 
-- [ ] Models tab: empty 3D preview area with instructional message (e.g., "Select a model from the listbox")
-- [ ] Textures tab: empty preview area when no texture is selected
-- [ ] Audio tab: empty player area when no sound file is selected
-- [ ] Videos tab: empty player area when no video is selected
-- [ ] Characters tab: default 3D view with no character loaded
-- [ ] Maps tab: empty map viewer when no map is selected
-- [ ] Zones tab: empty zone viewer when no zone is selected
-- [ ] Data tab: empty data table when no DB2/DBC file is selected
-- [ ] Text tab: empty preview area when no text file is selected
-- [ ] Fonts tab: empty font preview when no font is selected
+- [x] Models tab: empty 3D preview area with instructional message (e.g., "Select a model from the listbox")
+- [x] Textures tab: empty preview area when no texture is selected
+- [x] Audio tab: empty player area when no sound file is selected
+- [x] Videos tab: empty player area when no video is selected
+- [x] Characters tab: default 3D view with no character loaded
+- [x] Maps tab: empty map viewer when no map is selected
+- [x] Zones tab: empty zone viewer when no zone is selected
+- [x] Data tab: empty data table when no DB2/DBC file is selected
+- [x] Text tab: empty preview area when no text file is selected
+- [x] Fonts tab: empty font preview when no font is selected
 
 ### 9.18 Scrollbar Styling
 
