@@ -542,6 +542,85 @@ Files with informational no-ops: `generics.cpp`, `modules.cpp`, `components/*.cp
 
 ---
 
+## ⚠️ Loading Performance — MUST FIX
+
+> **The C++ app's loading is significantly slower than the original JS app.**
+> This section documents the root causes and required fixes. These are NOT
+> acceptable deviations — the JS async patterns exist for real functional
+> reasons and the C++ port must preserve equivalent behavior.
+>
+> See AUDIT_TRACKER.md "Performance-Critical Deviations" section for detailed
+> analysis of each issue.
+
+### 10.1 Main Thread Blocking (Critical)
+
+The entire CASC loading pipeline (`load()` in `casc-source-local.cpp` / `casc-source-remote.cpp`)
+runs synchronously on the main thread. In the JS app, `load()` is `async` and yields
+between each step, allowing the browser to render progress updates. In C++, the loading
+screen progress bar is set up but **never actually rendered** because the main thread
+is blocked.
+
+**Affected call chain:**
+```
+screen_source_select::load_install()          ← main thread, synchronous
+  └─ CASCLocal::load()                        ← synchronous
+       ├─ loadConfigs()                        ← file I/O, possible HTTP
+       ├─ loadIndexes()                        ← iterates all .idx files
+       ├─ loadEncoding()                       ← downloads + decompresses + parses encoding
+       ├─ loadRoot()                           ← downloads + decompresses + parses root
+       ├─ prepareListfile()                    ← downloads listfile from CDN
+       ├─ prepareDBDManifest()                 ← downloads DBD manifest
+       └─ loadListfile()                       ← parses millions of listfile entries
+```
+
+All of this runs without a single ImGui frame being rendered.
+
+- [ ] Move `load()` to a background thread (`std::jthread`)
+- [ ] Post progress updates to main thread via thread-safe queue
+- [ ] Main thread continues rendering ImGui frames (loading screen with progress bar)
+- [ ] Synchronize CASC result back to main thread when loading completes
+
+### 10.2 `batchWork()` Does Not Yield (Critical)
+
+The JS `batchWork()` uses `MessageChannel` to yield to the event loop between batches.
+The C++ version processes all batches in a tight loop with no yielding.
+
+For listfile parsing (~3-5 million entries at 1000 per batch = 3000-5000 batches),
+this means the UI is frozen for the entire parsing duration.
+
+- [ ] If loading is on background thread: call `core::progressLoadingScreen()` between batches
+- [ ] If loading is on main thread: yield between batches to allow ImGui frame rendering
+- [ ] Add actual progress percentage updates during batch processing
+
+### 10.3 Sequential Remote Product Fetching (High)
+
+The JS `CASCRemote::init()` uses `Promise.allSettled()` for parallel product config fetches.
+The C++ version sequentially fetches each product's version config.
+
+With ~10 products, this is ~10x slower than the JS version.
+
+- [ ] Use `std::async` / `std::future` to fetch all product configs in parallel
+- [ ] Collect results after all futures complete (matching `Promise.allSettled` semantics)
+
+### 10.4 `generics::redraw()` No-Op (Medium)
+
+The JS `redraw()` uses `requestAnimationFrame` to force a UI repaint.
+The C++ `redraw()` is a no-op. The rationale "ImGui redraws every frame" is incorrect
+in the loading context — when the main thread is blocked, no frames are rendered.
+
+- [ ] If loading moves to background thread: no fix needed (main loop keeps rendering)
+- [ ] If loading stays on main thread: implement as a mini render pass (poll events, render, swap)
+
+### 10.5 `generics::queue()` Reference Safety (Medium)
+
+The `queue()` function captures loop variables by reference in async lambdas.
+This may cause data races when items are invalidated by iterator advancement.
+
+- [ ] Audit lambda captures in `queue()` for correctness
+- [ ] Capture items by value instead of by reference
+
+---
+
 ## Remaining Work — Visual Fidelity & Polish
 
 > The conversion compiles and all integration phases are complete. The app shell
