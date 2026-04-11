@@ -1080,26 +1080,15 @@ void render() {
 	// --- Template rendering ---
 
 	// JS: <div class="tab list-tab" id="tab-video">
+	if (app::layout::BeginTab("tab-video")) {
 
-	// List container with context menu.
+	auto regions = app::layout::CalcListTabRegions(false);
+
+	// --- Left panel: List container (row 1, col 1) ---
 	// JS: <div class="list-container">
-	//     <Listbox v-model:selection="selectionVideos" :items="listfileVideos"
-	//         :filter="userInputFilterVideos" :keyinput="true"
-	//         :regex="config.regexFilters" :copymode="config.copyMode"
-	//         :pasteselection="config.pasteSelection"
-	//         :copytrimwhitespace="config.removePathSpacesCopy"
-	//         :includefilecount="true" unittype="video"
-	//         persistscrollkey="videos" @contextmenu="handle_listbox_context">
+	//     <Listbox v-model:selection="selectionVideos" :items="listfileVideos" ...>
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
-	//         <span @click.self="copy_file_paths(...)">Copy file path(s)</span>
-	//         <span v-if="hasFileDataIDs" @click.self="copy_listfile_format(...)">Copy file path(s) (listfile format)</span>
-	//         <span v-if="hasFileDataIDs" @click.self="copy_file_data_ids(...)">Copy file data ID(s)</span>
-	//         <span @click.self="copy_export_paths(...)">Copy export path(s)</span>
-	//         <span @click.self="open_export_directory(...)">Open export directory</span>
-	//     </ContextMenu>
-	// </div>
-	ImGui::BeginChild("videos-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.4f, 0), ImGuiChildFlags_Borders);
-	{
+	if (app::layout::BeginListContainer("videos-list-container", regions)) {
 		// Convert JSON items/selection to string vectors.
 		std::vector<std::string> items_str;
 		items_str.reserve(view.listfileVideos.size());
@@ -1173,63 +1162,65 @@ void render() {
 			}
 		);
 	}
-	ImGui::EndChild();
+	app::layout::EndListContainer();
 
-	ImGui::SameLine();
-
-	// Right side — filter, preview, controls.
-	ImGui::BeginGroup();
-
-	// Filter.
+	// --- Filter bar (row 2, col 1) ---
 	// JS: <div class="filter">
 	//     <div class="regex-info" v-if="config.regexFilters" ...>Regex Enabled</div>
 	//     <input type="text" v-model="userInputFilterVideos" placeholder="Filter videos..."/>
 	// </div>
-	if (view.config.value("regexFilters", false))
-		ImGui::TextUnformatted("Regex Enabled");
+	if (app::layout::BeginFilterBar("videos-filter", regions)) {
+		if (view.config.value("regexFilters", false)) {
+			ImGui::TextUnformatted("Regex Enabled");
+			ImGui::SameLine();
+		}
 
-	char filter_buf[256] = {};
-	std::strncpy(filter_buf, view.userInputFilterVideos.c_str(), sizeof(filter_buf) - 1);
-	if (ImGui::InputText("##FilterVideos", filter_buf, sizeof(filter_buf)))
-		view.userInputFilterVideos = filter_buf;
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterVideos.c_str(), sizeof(filter_buf) - 1);
+		if (ImGui::InputText("##FilterVideos", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterVideos = filter_buf;
+	}
+	app::layout::EndFilterBar();
 
-	// Preview container.
+	// --- Right panel: Preview container (row 1, col 2) ---
 	// JS: <div class="preview-container">
 	//     <video ref="video_player" class="preview-background" style="..." controls ...></video>
 	// </div>
-	ImGui::BeginChild("video-preview-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2), ImGuiChildFlags_Borders);
-	// In the browser version, this is a <video> element with native playback controls.
-	// In C++, video playback is handled externally via the platform shell (browser/media player).
-	// This preview area shows the current streaming state and subtitle text.
-	if (is_streaming || view.videoPlayerState) {
-		if (!current_video_url.empty()) {
-			ImGui::TextUnformatted("Video opened in external player");
-			ImGui::Spacing();
-			ImGui::TextWrapped("URL: %s", current_video_url.c_str());
-
-			// Show subtitle text overlay when enabled and available.
-			if (has_subtitle_track && !current_subtitle_vtt.empty() &&
-			    view.config.value("videoPlayerShowSubtitles", false)) {
+	if (app::layout::BeginPreviewContainer("video-preview-container", regions)) {
+		// In the browser version, this is a <video> element with native playback controls.
+		// In C++, video playback is handled externally via the platform shell (browser/media player).
+		// This preview area shows the current streaming state and subtitle text.
+		if (is_streaming || view.videoPlayerState) {
+			if (!current_video_url.empty()) {
+				ImGui::TextUnformatted("Video opened in external player");
 				ImGui::Spacing();
-				ImGui::Separator();
-				ImGui::TextUnformatted("Subtitles (VTT):");
-				ImGui::TextWrapped("%s", current_subtitle_vtt.c_str());
+				ImGui::TextWrapped("URL: %s", current_video_url.c_str());
+
+				// Show subtitle text overlay when enabled and available.
+				if (has_subtitle_track && !current_subtitle_vtt.empty() &&
+				    view.config.value("videoPlayerShowSubtitles", false)) {
+					ImGui::Spacing();
+					ImGui::Separator();
+					ImGui::TextUnformatted("Subtitles (VTT):");
+					ImGui::TextWrapped("%s", current_subtitle_vtt.c_str());
+				}
+
+				ImGui::Spacing();
+				if (ImGui::Button("Stop Video"))
+					stop_video();
+			} else if (poll_active) {
+				ImGui::TextUnformatted("Video is being processed, please wait...");
+			} else {
+				ImGui::TextUnformatted("Connecting to video server...");
 			}
-
-			ImGui::Spacing();
-			if (ImGui::Button("Stop Video"))
-				stop_video();
-		} else if (poll_active) {
-			ImGui::TextUnformatted("Video is being processed, please wait...");
 		} else {
-			ImGui::TextUnformatted("Connecting to video server...");
+			ImGui::TextUnformatted("No video playing");
 		}
-	} else {
-		ImGui::TextUnformatted("No video playing");
 	}
-	ImGui::EndChild();
+	app::layout::EndPreviewContainer();
 
-	// Preview controls.
+	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
 	// JS: <div class="preview-controls">
 	//     <label class="ui-checkbox">
 	//         <input type="checkbox" v-model="config.videoPlayerAutoPlay"/>
@@ -1244,29 +1235,33 @@ void render() {
 	//         @change="config.exportVideoFormat = $event" :disabled="isBusy"
 	//         @click="export_selected">
 	// </div>
-	bool autoplay_val = view.config.value("videoPlayerAutoPlay", false);
-	if (ImGui::Checkbox("Autoplay", &autoplay_val))
-		view.config["videoPlayerAutoPlay"] = autoplay_val;
+	if (app::layout::BeginPreviewControls("videos-preview-controls", regions)) {
+		bool autoplay_val = view.config.value("videoPlayerAutoPlay", false);
+		if (ImGui::Checkbox("Autoplay", &autoplay_val))
+			view.config["videoPlayerAutoPlay"] = autoplay_val;
 
-	ImGui::SameLine();
+		ImGui::SameLine();
 
-	bool show_subs = view.config.value("videoPlayerShowSubtitles", false);
-	if (ImGui::Checkbox("Show Subtitles", &show_subs))
-		view.config["videoPlayerShowSubtitles"] = show_subs;
+		bool show_subs = view.config.value("videoPlayerShowSubtitles", false);
+		if (ImGui::Checkbox("Show Subtitles", &show_subs))
+			view.config["videoPlayerShowSubtitles"] = show_subs;
 
-	ImGui::SameLine();
+		ImGui::SameLine();
 
-	// Spacer (tray)
-	ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x - 200.0f, 0));
-	ImGui::SameLine();
+		// Spacer (tray)
+		ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x - 200.0f, 0));
+		ImGui::SameLine();
 
-	const bool busy = view.isBusy > 0;
-	if (busy) app::theme::BeginDisabledButton();
-	if (ImGui::Button("Export Selected"))
-		export_selected();
-	if (busy) app::theme::EndDisabledButton();
+		const bool busy = view.isBusy > 0;
+		if (busy) app::theme::BeginDisabledButton();
+		if (ImGui::Button("Export Selected"))
+			export_selected();
+		if (busy) app::theme::EndDisabledButton();
+	}
+	app::layout::EndPreviewControls();
 
-	ImGui::EndGroup();
+	} // if BeginTab
+	app::layout::EndTab();
 }
 
 // JS: methods.preview_video()
