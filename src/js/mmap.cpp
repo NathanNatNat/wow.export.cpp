@@ -247,6 +247,8 @@ void release_virtual_files() {
 		size_t count = virtual_files.size();
 		virtual_files.clear();
 		logging::write(std::format("released {} memory-mapped files", count));
+	} catch (const std::exception& e) {
+		logging::write(std::format("error during virtual file cleanup: {}", e.what()));
 	} catch (...) {
 		logging::write("error during virtual file cleanup");
 	}
