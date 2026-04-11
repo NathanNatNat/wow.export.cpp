@@ -29,6 +29,7 @@
 #include "../components/checkboxlist.h"
 #include "../components/listboxb.h"
 #include "../components/menu-button.h"
+#include "../../app.h"
 
 #include <algorithm>
 #include <cmath>
@@ -898,335 +899,335 @@ void render() {
 	// ─── Template rendering ─────────────────────────────────────────────────
 
 	// JS: <div class="tab list-tab" id="tab-models-legacy">
+	if (app::layout::BeginTab("tab-models-legacy")) {
+		auto regions = app::layout::CalcListTabRegions(true);
 
-	// --- Left panel: List container ---
-	// JS: <div class="list-container">
-	//     <Listbox v-model:selection="selectionLegacyModels" v-model:filter="userInputFilterLegacyModels"
-	//         :items="listfileLegacyModels" :keyinput="true" :regex="config.regexFilters" ...
-	//         @contextmenu="handle_listbox_context" />
-	ImGui::BeginChild("legacy-models-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-	{
-		std::vector<std::string> items_str;
-		items_str.reserve(view.listfileLegacyModels.size());
-		for (const auto& item : view.listfileLegacyModels)
-			items_str.push_back(item.get<std::string>());
+		// --- Left panel: List container (row 1, col 1) ---
+		// JS: <div class="list-container">
+		//     <Listbox v-model:selection="selectionLegacyModels" v-model:filter="userInputFilterLegacyModels"
+		//         :items="listfileLegacyModels" :keyinput="true" :regex="config.regexFilters" ...
+		//         @contextmenu="handle_listbox_context" />
+		if (app::layout::BeginListContainer("legacy-models-list-container", regions)) {
+			std::vector<std::string> items_str;
+			items_str.reserve(view.listfileLegacyModels.size());
+			for (const auto& item : view.listfileLegacyModels)
+				items_str.push_back(item.get<std::string>());
 
-		std::vector<std::string> selection_str;
-		for (const auto& s : view.selectionLegacyModels)
-			selection_str.push_back(s.get<std::string>());
+			std::vector<std::string> selection_str;
+			for (const auto& s : view.selectionLegacyModels)
+				selection_str.push_back(s.get<std::string>());
 
-		listbox::render(
-			"listbox-legacy-models",
-			items_str,
-			view.userInputFilterLegacyModels,
-			selection_str,
-			false,    // single
-			true,     // keyinput
-			view.config.value("regexFilters", false),
-			listbox::CopyMode::Default,
-			false,    // pasteselection
-			false,    // copytrimwhitespace
-			"model",  // unittype
-			nullptr,  // overrideItems
-			false,    // disable
-			"legacy-models", // persistscrollkey
-			{},       // quickfilters
-			false,    // nocopy
-			listbox_legacy_models_state,
-			[&](const std::vector<std::string>& new_sel) {
-				view.selectionLegacyModels.clear();
-				for (const auto& s : new_sel)
-					view.selectionLegacyModels.push_back(s);
-			},
-			[](const listbox::ContextMenuEvent& ev) {
-				handle_listbox_context(ev.selection);
-			}
-		);
-	}
+			listbox::render(
+				"listbox-legacy-models",
+				items_str,
+				view.userInputFilterLegacyModels,
+				selection_str,
+				false,    // single
+				true,     // keyinput
+				view.config.value("regexFilters", false),
+				listbox::CopyMode::Default,
+				false,    // pasteselection
+				false,    // copytrimwhitespace
+				"model",  // unittype
+				nullptr,  // overrideItems
+				false,    // disable
+				"legacy-models", // persistscrollkey
+				{},       // quickfilters
+				false,    // nocopy
+				listbox_legacy_models_state,
+				[&](const std::vector<std::string>& new_sel) {
+					view.selectionLegacyModels.clear();
+					for (const auto& s : new_sel)
+						view.selectionLegacyModels.push_back(s);
+				},
+				[](const listbox::ContextMenuEvent& ev) {
+					handle_listbox_context(ev.selection);
+				}
+			);
 
-	// JS: <component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeListbox" ...>
-	if (!view.contextMenus.nodeListbox.is_null()) {
-		if (ImGui::BeginPopup("LegacyModelsListboxContextMenu")) {
-			const auto& node = view.contextMenus.nodeListbox;
-			std::vector<std::string> sel_strings;
-			if (node.contains("selection") && node["selection"].is_array()) {
-				for (const auto& s : node["selection"]) {
-					if (s.is_string())
-						sel_strings.push_back(s.get<std::string>());
+			// JS: <component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeListbox" ...>
+			if (!view.contextMenus.nodeListbox.is_null()) {
+				if (ImGui::BeginPopup("LegacyModelsListboxContextMenu")) {
+					const auto& node = view.contextMenus.nodeListbox;
+					std::vector<std::string> sel_strings;
+					if (node.contains("selection") && node["selection"].is_array()) {
+						for (const auto& s : node["selection"]) {
+							if (s.is_string())
+								sel_strings.push_back(s.get<std::string>());
+						}
+					}
+					int count = node.value("count", 1);
+
+					// JS: <span @click.self="copy_file_paths(...)">Copy file path(s)</span>
+					if (ImGui::MenuItem(std::format("Copy file path{}", count > 1 ? "s" : "").c_str())) {
+						copy_file_paths(sel_strings);
+						view.contextMenus.nodeListbox = nullptr;
+					}
+
+					// JS: <span @click.self="copy_export_paths(...)">Copy export path(s)</span>
+					if (ImGui::MenuItem(std::format("Copy export path{}", count > 1 ? "s" : "").c_str())) {
+						copy_export_paths(sel_strings);
+						view.contextMenus.nodeListbox = nullptr;
+					}
+
+					// JS: <span @click.self="open_export_directory(...)">Open export directory</span>
+					if (ImGui::MenuItem("Open export directory")) {
+						open_export_directory(sel_strings);
+						view.contextMenus.nodeListbox = nullptr;
+					}
+
+					ImGui::EndPopup();
 				}
 			}
-			int count = node.value("count", 1);
+		}
+		app::layout::EndListContainer();
 
-			// JS: <span @click.self="copy_file_paths(...)">Copy file path(s)</span>
-			if (ImGui::MenuItem(std::format("Copy file path{}", count > 1 ? "s" : "").c_str())) {
-				copy_file_paths(sel_strings);
-				view.contextMenus.nodeListbox = nullptr;
+		// --- Filter bar (row 2, col 1) ---
+		// JS: <div class="filter"> <input type="text" v-model="userInputFilterLegacyModels" placeholder="Filter models..."/> </div>
+		if (app::layout::BeginFilterBar("legacy-models-filter", regions)) {
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+			char filter_buf[256] = {};
+			std::strncpy(filter_buf, view.userInputFilterLegacyModels.c_str(), sizeof(filter_buf) - 1);
+			if (ImGui::InputText("##FilterLegacyModels", filter_buf, sizeof(filter_buf)))
+				view.userInputFilterLegacyModels = filter_buf;
+		}
+		app::layout::EndFilterBar();
+
+		// --- Middle panel: Preview container (row 1, col 2) ---
+		// JS: <div class="preview-container">
+		if (app::layout::BeginPreviewContainer("legacy-models-preview-container", regions)) {
+			// JS: <component :is="$components.ResizeLayer" id="texture-ribbon"
+			//         v-if="config.modelViewerShowTextures && textureRibbonStack.length > 0">
+			if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
+				// Texture ribbon slot rendering with pagination (no context menu for legacy)
+				float ribbon_width = ImGui::GetContentRegionAvail().x;
+				texture_ribbon::onResize(static_cast<int>(ribbon_width));
+
+				int maxPages = (view.textureRibbonSlotCount > 0)
+					? static_cast<int>(std::ceil(static_cast<double>(view.textureRibbonStack.size()) / view.textureRibbonSlotCount))
+					: 0;
+
+				// Prev button
+				if (view.textureRibbonPage > 0) {
+					if (ImGui::SmallButton("<##ribbon_prev"))
+						view.textureRibbonPage--;
+					ImGui::SameLine();
+				}
+
+				// Visible slots
+				int startIndex = view.textureRibbonPage * view.textureRibbonSlotCount;
+				int endIndex = (std::min)(startIndex + view.textureRibbonSlotCount, static_cast<int>(view.textureRibbonStack.size()));
+
+				for (int si = startIndex; si < endIndex; si++) {
+					auto& slot = view.textureRibbonStack[si];
+					std::string slotDisplayName = slot.value("displayName", std::string(""));
+
+					ImGui::PushID(si);
+					ImGui::Button(slotDisplayName.c_str(), ImVec2(64, 0));
+					ImGui::PopID();
+					ImGui::SameLine();
+				}
+
+				// Next button
+				if (view.textureRibbonPage < maxPages - 1) {
+					if (ImGui::SmallButton(">##ribbon_next"))
+						view.textureRibbonPage++;
+				} else {
+					ImGui::NewLine();
+				}
+				// Note: Legacy texture ribbon does NOT have a context menu (unlike modern models tab).
 			}
 
-			// JS: <span @click.self="copy_export_paths(...)">Copy export path(s)</span>
-			if (ImGui::MenuItem(std::format("Copy export path{}", count > 1 ? "s" : "").c_str())) {
-				copy_export_paths(sel_strings);
-				view.contextMenus.nodeListbox = nullptr;
+			// JS: <div class="preview-background" id="legacy-model-preview">
+			// JS: <input v-if="config.modelViewerShowBackground" type="color" id="background-color-input" v-model="config.modelViewerBackgroundColor"/>
+			if (view.config.value("modelViewerShowBackground", false)) {
+				// JS: <input type="color" id="background-color-input" v-model="config.modelViewerBackgroundColor"/>
+				std::string hex_str = view.config.value("modelViewerBackgroundColor", std::string("#343a40"));
+				auto [cr, cg, cb] = model_viewer_gl::parse_hex_color(hex_str);
+				float color[3] = {cr, cg, cb};
+				if (ImGui::ColorEdit3("##bg_color_legacy_models", color, ImGuiColorEditFlags_NoInputs))
+					view.config["modelViewerBackgroundColor"] = std::format("#{:02x}{:02x}{:02x}",
+						static_cast<int>(color[0] * 255.0f), static_cast<int>(color[1] * 255.0f), static_cast<int>(color[2] * 255.0f));
 			}
 
-			// JS: <span @click.self="open_export_directory(...)">Open export directory</span>
-			if (ImGui::MenuItem("Open export directory")) {
-				open_export_directory(sel_strings);
-				view.contextMenus.nodeListbox = nullptr;
+			// JS: <component :is="$components.ModelViewerGL" v-if="legacyModelViewerContext" :context="legacyModelViewerContext" />
+			if (!view.legacyModelViewerContext.is_null()) {
+				model_viewer_gl::renderWidget("##legacy_model_viewer", viewer_state, viewer_context);
 			}
 
-			ImGui::EndPopup();
+			// JS: <!-- legacy animation support disabled - needs fixing
+			//     <div v-if="legacyModelViewerAnims && legacyModelViewerAnims.length > 0" class="preview-dropdown-overlay"> ... -->
+			// NOTE: The original JS has this block COMMENTED OUT (disabled). We preserve it commented out.
+			// The animation controls exist in the code but are not rendered in the template.
+			/*
+			if (!view.legacyModelViewerAnims.empty()) {
+				// Animation dropdown and controls — disabled in original JS.
+				// See the commented-out template block in the original source.
+			}
+			*/
 		}
-	}
+		app::layout::EndPreviewContainer();
 
-	// JS: <div class="filter"> <input type="text" v-model="userInputFilterLegacyModels" placeholder="Filter models..."/> </div>
-	{
-		char filter_buf[256] = {};
-		std::strncpy(filter_buf, view.userInputFilterLegacyModels.c_str(), sizeof(filter_buf) - 1);
-		if (ImGui::InputText("##FilterLegacyModels", filter_buf, sizeof(filter_buf)))
-			view.userInputFilterLegacyModels = filter_buf;
-	}
-
-	ImGui::EndChild();
-
-	ImGui::SameLine();
-
-	// --- Middle panel: Preview container ---
-	// JS: <div class="preview-container">
-	ImGui::BeginChild("legacy-models-preview-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.65f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-
-	// JS: <component :is="$components.ResizeLayer" id="texture-ribbon"
-	//         v-if="config.modelViewerShowTextures && textureRibbonStack.length > 0">
-	if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
-		// Texture ribbon slot rendering with pagination (no context menu for legacy)
-		float ribbon_width = ImGui::GetContentRegionAvail().x;
-		texture_ribbon::onResize(static_cast<int>(ribbon_width));
-
-		int maxPages = (view.textureRibbonSlotCount > 0)
-			? static_cast<int>(std::ceil(static_cast<double>(view.textureRibbonStack.size()) / view.textureRibbonSlotCount))
-			: 0;
-
-		// Prev button
-		if (view.textureRibbonPage > 0) {
-			if (ImGui::SmallButton("<##ribbon_prev"))
-				view.textureRibbonPage--;
-			ImGui::SameLine();
+		// --- Bottom: Export controls (row 2, col 2) ---
+		// JS: <div class="preview-controls">
+		//     <MenuButton :options="menuButtonLegacyModels" :default="config.exportLegacyModelFormat"
+		//         @change="config.exportLegacyModelFormat = $event" :disabled="isBusy" @click="export_model" />
+		if (app::layout::BeginPreviewControls("legacy-models-preview-controls", regions)) {
+			std::vector<menu_button::MenuOption> mb_options;
+			for (const auto& opt : view.menuButtonLegacyModels)
+				mb_options.push_back({ opt.label, opt.value });
+			menu_button::render("##MenuButtonLegacyModels", mb_options,
+				view.config.value("exportLegacyModelFormat", std::string("OBJ")),
+				view.isBusy > 0, false, menu_button_legacy_models_state,
+				[&](const std::string& val) { view.config["exportLegacyModelFormat"] = val; },
+				[&]() { export_model_action(); });
 		}
+		app::layout::EndPreviewControls();
 
-		// Visible slots
-		int startIndex = view.textureRibbonPage * view.textureRibbonSlotCount;
-		int endIndex = (std::min)(startIndex + view.textureRibbonSlotCount, static_cast<int>(view.textureRibbonStack.size()));
+		// --- Right panel: Sidebar (col 3, spanning both rows) ---
+		// JS: <div id="model-sidebar" class="sidebar">
+		if (app::layout::BeginSidebar("legacy-models-sidebar", regions)) {
+			// JS: <span class="header">Preview</span>
+			ImGui::SeparatorText("Preview");
 
-		for (int si = startIndex; si < endIndex; si++) {
-			auto& slot = view.textureRibbonStack[si];
-			std::string slotDisplayName = slot.value("displayName", std::string(""));
+			// JS: <input type="checkbox" v-model="config.legacyModelsAutoPreview"/> <span>Auto Preview</span>
+			{
+				bool auto_preview = view.config.value("legacyModelsAutoPreview", false);
+				if (ImGui::Checkbox("Auto Preview##Legacy", &auto_preview))
+					view.config["legacyModelsAutoPreview"] = auto_preview;
+			}
 
-			ImGui::PushID(si);
-			ImGui::Button(slotDisplayName.c_str(), ImVec2(64, 0));
-			ImGui::PopID();
-			ImGui::SameLine();
-		}
+			// JS: <input type="checkbox" v-model="legacyModelViewerAutoAdjust"/> <span>Auto Camera</span>
+			ImGui::Checkbox("Auto Camera##Legacy", &view.legacyModelViewerAutoAdjust);
 
-		// Next button
-		if (view.textureRibbonPage < maxPages - 1) {
-			if (ImGui::SmallButton(">##ribbon_next"))
-				view.textureRibbonPage++;
-		} else {
-			ImGui::NewLine();
-		}
-		// Note: Legacy texture ribbon does NOT have a context menu (unlike modern models tab).
-	}
+			// JS: <input type="checkbox" v-model="config.modelViewerShowGrid"/> <span>Show Grid</span>
+			{
+				bool show_grid = view.config.value("modelViewerShowGrid", true);
+				if (ImGui::Checkbox("Show Grid##Legacy", &show_grid))
+					view.config["modelViewerShowGrid"] = show_grid;
+			}
 
-	// JS: <div class="preview-background" id="legacy-model-preview">
-	// JS: <input v-if="config.modelViewerShowBackground" type="color" id="background-color-input" v-model="config.modelViewerBackgroundColor"/>
-	if (view.config.value("modelViewerShowBackground", false)) {
-		// JS: <input type="color" id="background-color-input" v-model="config.modelViewerBackgroundColor"/>
-		std::string hex_str = view.config.value("modelViewerBackgroundColor", std::string("#343a40"));
-		auto [cr, cg, cb] = model_viewer_gl::parse_hex_color(hex_str);
-		float color[3] = {cr, cg, cb};
-		if (ImGui::ColorEdit3("##bg_color_legacy_models", color, ImGuiColorEditFlags_NoInputs))
-			view.config["modelViewerBackgroundColor"] = std::format("#{:02x}{:02x}{:02x}",
-				static_cast<int>(color[0] * 255.0f), static_cast<int>(color[1] * 255.0f), static_cast<int>(color[2] * 255.0f));
-	}
+			// JS: <input type="checkbox" v-model="config.modelViewerWireframe"/> <span>Show Wireframe</span>
+			{
+				bool wireframe = view.config.value("modelViewerWireframe", false);
+				if (ImGui::Checkbox("Show Wireframe##Legacy", &wireframe))
+					view.config["modelViewerWireframe"] = wireframe;
+			}
 
-	// JS: <component :is="$components.ModelViewerGL" v-if="legacyModelViewerContext" :context="legacyModelViewerContext" />
-	if (!view.legacyModelViewerContext.is_null()) {
-		model_viewer_gl::renderWidget("##legacy_model_viewer", viewer_state, viewer_context);
-	}
+			// JS: <input type="checkbox" v-model="config.modelViewerShowTextures"/> <span>Show Textures</span>
+			{
+				bool show_textures = view.config.value("modelViewerShowTextures", true);
+				if (ImGui::Checkbox("Show Textures##Legacy", &show_textures))
+					view.config["modelViewerShowTextures"] = show_textures;
+			}
 
-	// JS: <!-- legacy animation support disabled - needs fixing
-	//     <div v-if="legacyModelViewerAnims && legacyModelViewerAnims.length > 0" class="preview-dropdown-overlay"> ... -->
-	// NOTE: The original JS has this block COMMENTED OUT (disabled). We preserve it commented out.
-	// The animation controls exist in the code but are not rendered in the template.
-	/*
-	if (!view.legacyModelViewerAnims.empty()) {
-		// Animation dropdown and controls — disabled in original JS.
-		// See the commented-out template block in the original source.
-	}
-	*/
+			// JS: <input type="checkbox" v-model="config.modelViewerShowBackground"/> <span>Show Background</span>
+			{
+				bool show_bg = view.config.value("modelViewerShowBackground", false);
+				if (ImGui::Checkbox("Show Background##Legacy", &show_bg))
+					view.config["modelViewerShowBackground"] = show_bg;
+			}
 
-	ImGui::EndChild();
+			// JS: <template v-if="legacyModelViewerActiveType === 'm2' && legacyModelViewerSkins && legacyModelViewerSkins.length > 0">
+			if (view.legacyModelViewerActiveType == "m2" && !view.legacyModelViewerSkins.empty()) {
+				// JS: <span class="header">Skins</span>
+				ImGui::SeparatorText("Skins");
 
-	// --- Bottom: Export controls ---
-	// JS: <div class="preview-controls">
-	//     <MenuButton :options="menuButtonLegacyModels" :default="config.exportLegacyModelFormat"
-	//         @change="config.exportLegacyModelFormat = $event" :disabled="isBusy" @click="export_model" />
-	{
-		std::vector<menu_button::MenuOption> mb_options;
-		for (const auto& opt : view.menuButtonLegacyModels)
-			mb_options.push_back({ opt.label, opt.value });
-		menu_button::render("##MenuButtonLegacyModels", mb_options,
-			view.config.value("exportLegacyModelFormat", std::string("OBJ")),
-			view.isBusy > 0, false, menu_button_legacy_models_state,
-			[&](const std::string& val) { view.config["exportLegacyModelFormat"] = val; },
-			[&]() { export_model_action(); });
-	}
+				// JS: <component :is="$components.Listboxb" :items="legacyModelViewerSkins" v-model:selection="legacyModelViewerSkinsSelection" :single="true" />
+				{
+					// Convert json skins to ListboxBItem array.
+					std::vector<listboxb::ListboxBItem> skin_items;
+					skin_items.reserve(view.legacyModelViewerSkins.size());
+					for (const auto& skin : view.legacyModelViewerSkins)
+						skin_items.push_back({ skin.value("label", std::string("")) });
 
-	ImGui::SameLine();
-
-	// --- Right panel: Sidebar ---
-	// JS: <div id="model-sidebar" class="sidebar">
-	ImGui::BeginChild("legacy-models-sidebar", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-
-	// JS: <span class="header">Preview</span>
-	ImGui::SeparatorText("Preview");
-
-	// JS: <input type="checkbox" v-model="config.legacyModelsAutoPreview"/> <span>Auto Preview</span>
-	{
-		bool auto_preview = view.config.value("legacyModelsAutoPreview", false);
-		if (ImGui::Checkbox("Auto Preview##Legacy", &auto_preview))
-			view.config["legacyModelsAutoPreview"] = auto_preview;
-	}
-
-	// JS: <input type="checkbox" v-model="legacyModelViewerAutoAdjust"/> <span>Auto Camera</span>
-	ImGui::Checkbox("Auto Camera##Legacy", &view.legacyModelViewerAutoAdjust);
-
-	// JS: <input type="checkbox" v-model="config.modelViewerShowGrid"/> <span>Show Grid</span>
-	{
-		bool show_grid = view.config.value("modelViewerShowGrid", true);
-		if (ImGui::Checkbox("Show Grid##Legacy", &show_grid))
-			view.config["modelViewerShowGrid"] = show_grid;
-	}
-
-	// JS: <input type="checkbox" v-model="config.modelViewerWireframe"/> <span>Show Wireframe</span>
-	{
-		bool wireframe = view.config.value("modelViewerWireframe", false);
-		if (ImGui::Checkbox("Show Wireframe##Legacy", &wireframe))
-			view.config["modelViewerWireframe"] = wireframe;
-	}
-
-	// JS: <input type="checkbox" v-model="config.modelViewerShowTextures"/> <span>Show Textures</span>
-	{
-		bool show_textures = view.config.value("modelViewerShowTextures", true);
-		if (ImGui::Checkbox("Show Textures##Legacy", &show_textures))
-			view.config["modelViewerShowTextures"] = show_textures;
-	}
-
-	// JS: <input type="checkbox" v-model="config.modelViewerShowBackground"/> <span>Show Background</span>
-	{
-		bool show_bg = view.config.value("modelViewerShowBackground", false);
-		if (ImGui::Checkbox("Show Background##Legacy", &show_bg))
-			view.config["modelViewerShowBackground"] = show_bg;
-	}
-
-	// JS: <template v-if="legacyModelViewerActiveType === 'm2' && legacyModelViewerSkins && legacyModelViewerSkins.length > 0">
-	if (view.legacyModelViewerActiveType == "m2" && !view.legacyModelViewerSkins.empty()) {
-		// JS: <span class="header">Skins</span>
-		ImGui::SeparatorText("Skins");
-
-		// JS: <component :is="$components.Listboxb" :items="legacyModelViewerSkins" v-model:selection="legacyModelViewerSkinsSelection" :single="true" />
-		{
-			// Convert json skins to ListboxBItem array.
-			std::vector<listboxb::ListboxBItem> skin_items;
-			skin_items.reserve(view.legacyModelViewerSkins.size());
-			for (const auto& skin : view.legacyModelViewerSkins)
-				skin_items.push_back({ skin.value("label", std::string("")) });
-
-			// Build selection indices from legacyModelViewerSkinsSelection.
-			std::vector<int> sel_indices;
-			for (const auto& sel : view.legacyModelViewerSkinsSelection) {
-				std::string sel_id = sel.value("id", std::string(""));
-				for (size_t i = 0; i < view.legacyModelViewerSkins.size(); ++i) {
-					if (view.legacyModelViewerSkins[i].value("id", std::string("")) == sel_id) {
-						sel_indices.push_back(static_cast<int>(i));
-						break;
+					// Build selection indices from legacyModelViewerSkinsSelection.
+					std::vector<int> sel_indices;
+					for (const auto& sel : view.legacyModelViewerSkinsSelection) {
+						std::string sel_id = sel.value("id", std::string(""));
+						for (size_t i = 0; i < view.legacyModelViewerSkins.size(); ++i) {
+							if (view.legacyModelViewerSkins[i].value("id", std::string("")) == sel_id) {
+								sel_indices.push_back(static_cast<int>(i));
+								break;
+							}
+						}
 					}
+
+					listboxb::render("##LegacyModelSkins", skin_items, sel_indices, true, true, false,
+						listboxb_legacy_skins_state,
+						[&](const std::vector<int>& new_sel) {
+							view.legacyModelViewerSkinsSelection.clear();
+							for (int idx : new_sel) {
+								if (idx >= 0 && idx < static_cast<int>(view.legacyModelViewerSkins.size()))
+									view.legacyModelViewerSkinsSelection.push_back(view.legacyModelViewerSkins[idx]);
+							}
+						});
 				}
 			}
 
-			listboxb::render("##LegacyModelSkins", skin_items, sel_indices, true, true, false,
-				listboxb_legacy_skins_state,
-				[&](const std::vector<int>& new_sel) {
-					view.legacyModelViewerSkinsSelection.clear();
-					for (int idx : new_sel) {
-						if (idx >= 0 && idx < static_cast<int>(view.legacyModelViewerSkins.size()))
-							view.legacyModelViewerSkinsSelection.push_back(view.legacyModelViewerSkins[idx]);
-					}
-				});
+			// JS: <template v-if="legacyModelViewerActiveType === 'm2' || legacyModelViewerActiveType === 'mdx'">
+			if (view.legacyModelViewerActiveType == "m2" || view.legacyModelViewerActiveType == "mdx") {
+				// JS: <span class="header">Geosets</span>
+				ImGui::SeparatorText("Geosets");
+
+				// JS: <component :is="$components.Checkboxlist" :items="modelViewerGeosets" />
+				checkboxlist::render("##LegacyGeosets", view.modelViewerGeosets, checkboxlist_legacy_geosets_state);
+
+				// JS: <a @click="setAllGeosets(true, modelViewerGeosets)">Enable All</a> / <a @click="setAllGeosets(false, modelViewerGeosets)">Disable All</a>
+				if (ImGui::SmallButton("Enable All##LegacyGeosets")) {
+					for (auto& g : view.modelViewerGeosets)
+						g["checked"] = true;
+				}
+				ImGui::SameLine();
+				ImGui::Text("/");
+				ImGui::SameLine();
+				if (ImGui::SmallButton("Disable All##LegacyGeosets")) {
+					for (auto& g : view.modelViewerGeosets)
+						g["checked"] = false;
+				}
+			}
+
+			// JS: <template v-if="legacyModelViewerActiveType === 'wmo'">
+			if (view.legacyModelViewerActiveType == "wmo") {
+				// JS: <span class="header">WMO Groups</span>
+				ImGui::SeparatorText("WMO Groups");
+
+				// JS: <component :is="$components.Checkboxlist" :items="modelViewerWMOGroups" />
+				for (auto& group : view.modelViewerWMOGroups) {
+					std::string label = group.value("label", std::string("Group"));
+					bool checked = group.value("checked", true);
+					if (ImGui::Checkbox(label.c_str(), &checked))
+						group["checked"] = checked;
+				}
+
+				// JS: <a @click="setAllWMOGroups(true)">Enable All</a> / <a @click="setAllWMOGroups(false)">Disable All</a>
+				if (ImGui::SmallButton("Enable All##LegacyWMOGroups")) {
+					for (auto& g : view.modelViewerWMOGroups)
+						g["checked"] = true;
+				}
+				ImGui::SameLine();
+				ImGui::Text("/");
+				ImGui::SameLine();
+				if (ImGui::SmallButton("Disable All##LegacyWMOGroups")) {
+					for (auto& g : view.modelViewerWMOGroups)
+						g["checked"] = false;
+				}
+
+				// JS: <span class="header">Doodad Sets</span>
+				ImGui::SeparatorText("Doodad Sets");
+
+				// JS: <component :is="$components.Checkboxlist" :items="modelViewerWMOSets" />
+				for (auto& set : view.modelViewerWMOSets) {
+					std::string label = set.value("label", std::string("Set"));
+					bool checked = set.value("checked", true);
+					if (ImGui::Checkbox(label.c_str(), &checked))
+						set["checked"] = checked;
+				}
+			}
 		}
+		app::layout::EndSidebar();
 	}
-
-	// JS: <template v-if="legacyModelViewerActiveType === 'm2' || legacyModelViewerActiveType === 'mdx'">
-	if (view.legacyModelViewerActiveType == "m2" || view.legacyModelViewerActiveType == "mdx") {
-		// JS: <span class="header">Geosets</span>
-		ImGui::SeparatorText("Geosets");
-
-		// JS: <component :is="$components.Checkboxlist" :items="modelViewerGeosets" />
-		checkboxlist::render("##LegacyGeosets", view.modelViewerGeosets, checkboxlist_legacy_geosets_state);
-
-		// JS: <a @click="setAllGeosets(true, modelViewerGeosets)">Enable All</a> / <a @click="setAllGeosets(false, modelViewerGeosets)">Disable All</a>
-		if (ImGui::SmallButton("Enable All##LegacyGeosets")) {
-			for (auto& g : view.modelViewerGeosets)
-				g["checked"] = true;
-		}
-		ImGui::SameLine();
-		ImGui::Text("/");
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Disable All##LegacyGeosets")) {
-			for (auto& g : view.modelViewerGeosets)
-				g["checked"] = false;
-		}
-	}
-
-	// JS: <template v-if="legacyModelViewerActiveType === 'wmo'">
-	if (view.legacyModelViewerActiveType == "wmo") {
-		// JS: <span class="header">WMO Groups</span>
-		ImGui::SeparatorText("WMO Groups");
-
-		// JS: <component :is="$components.Checkboxlist" :items="modelViewerWMOGroups" />
-		for (auto& group : view.modelViewerWMOGroups) {
-			std::string label = group.value("label", std::string("Group"));
-			bool checked = group.value("checked", true);
-			if (ImGui::Checkbox(label.c_str(), &checked))
-				group["checked"] = checked;
-		}
-
-		// JS: <a @click="setAllWMOGroups(true)">Enable All</a> / <a @click="setAllWMOGroups(false)">Disable All</a>
-		if (ImGui::SmallButton("Enable All##LegacyWMOGroups")) {
-			for (auto& g : view.modelViewerWMOGroups)
-				g["checked"] = true;
-		}
-		ImGui::SameLine();
-		ImGui::Text("/");
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Disable All##LegacyWMOGroups")) {
-			for (auto& g : view.modelViewerWMOGroups)
-				g["checked"] = false;
-		}
-
-		// JS: <span class="header">Doodad Sets</span>
-		ImGui::SeparatorText("Doodad Sets");
-
-		// JS: <component :is="$components.Checkboxlist" :items="modelViewerWMOSets" />
-		for (auto& set : view.modelViewerWMOSets) {
-			std::string label = set.value("label", std::string("Set"));
-			bool checked = set.value("checked", true);
-			if (ImGui::Checkbox(label.c_str(), &checked))
-				set["checked"] = checked;
-		}
-	}
-
-	ImGui::EndChild();
+	app::layout::EndTab();
 }
 
 } // namespace tab_models_legacy

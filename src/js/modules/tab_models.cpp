@@ -30,6 +30,7 @@
 #include "../components/checkboxlist.h"
 #include "../components/listboxb.h"
 #include "../components/menu-button.h"
+#include "../../app.h"
 
 #include <algorithm>
 #include <cmath>
@@ -908,617 +909,617 @@ void render() {
 	// ─── Template rendering ─────────────────────────────────────────────────
 
 	// JS: <div class="tab list-tab" id="tab-models">
-
-	// --- Left panel: List container ---
-	// JS: <div class="list-container">
-	//     <Listbox v-model:selection="selectionModels" v-model:filter="userInputFilterModels"
-	//         :items="listfileModels" :override="overrideModelList" :keyinput="true"
-	//         :regex="config.regexFilters" :copymode="config.copyMode" ... @contextmenu="handle_listbox_context" />
-	ImGui::BeginChild("models-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-	{
-		std::vector<std::string> items_str;
-		items_str.reserve(view.listfileModels.size());
-		for (const auto& item : view.listfileModels)
-			items_str.push_back(item.get<std::string>());
-
-		std::vector<std::string> selection_str;
-		for (const auto& s : view.selectionModels)
-			selection_str.push_back(s.get<std::string>());
-
-		listbox::CopyMode copy_mode = listbox::CopyMode::Default;
-		{
-			std::string cm = view.config.value("copyMode", std::string("Default"));
-			if (cm == "DIR") copy_mode = listbox::CopyMode::DIR;
-			else if (cm == "FID") copy_mode = listbox::CopyMode::FID;
-		}
-
-		// Convert override list.
-		std::vector<std::string> override_str;
-		if (!view.overrideModelList.empty()) {
-			override_str.reserve(view.overrideModelList.size());
-			for (const auto& item : view.overrideModelList)
-				override_str.push_back(item.get<std::string>());
-		}
-
-		listbox::render(
-			"listbox-models",
-			items_str,
-			view.userInputFilterModels,
-			selection_str,
-			false,    // single
-			true,     // keyinput
-			view.config.value("regexFilters", false),
-			copy_mode,
-			view.config.value("pasteSelection", false),
-			view.config.value("removePathSpacesCopy", false),
-			"model",  // unittype
-			view.overrideModelList.empty() ? nullptr : &override_str,
-			false,    // disable
-			"models", // persistscrollkey
-			{},       // quickfilters
-			false,    // nocopy
-			listbox_models_state,
-			[&](const std::vector<std::string>& new_sel) {
-				view.selectionModels.clear();
-				for (const auto& s : new_sel)
-					view.selectionModels.push_back(s);
-			},
-			[](const listbox::ContextMenuEvent& ev) {
-				handle_listbox_context(ev.selection);
-			}
-		);
-	}
-
-	// JS: <component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeListbox" ...>
-	if (!view.contextMenus.nodeListbox.is_null()) {
-		if (ImGui::BeginPopup("ModelsListboxContextMenu")) {
-			const auto& node = view.contextMenus.nodeListbox;
-			// Extract selection from context node
-			std::vector<std::string> sel_strings;
-			if (node.contains("selection") && node["selection"].is_array()) {
-				for (const auto& s : node["selection"]) {
-					if (s.is_string())
-						sel_strings.push_back(s.get<std::string>());
-				}
-			}
-			int count = node.value("count", 1);
-			bool hasFileDataIDs = node.value("hasFileDataIDs", false);
-
-			// JS: <span @click.self="copy_file_paths(...)">Copy file path(s)</span>
-			if (ImGui::MenuItem(std::format("Copy file path{}", count > 1 ? "s" : "").c_str())) {
-				copy_file_paths(sel_strings);
-				view.contextMenus.nodeListbox = nullptr;
-			}
-
-			// JS: <span v-if="context.node.hasFileDataIDs" @click.self="copy_listfile_format(...)">
-			if (hasFileDataIDs) {
-				if (ImGui::MenuItem(std::format("Copy file path{} (listfile format)", count > 1 ? "s" : "").c_str())) {
-					copy_listfile_format(sel_strings);
-					view.contextMenus.nodeListbox = nullptr;
-				}
-			}
-
-			// JS: <span v-if="context.node.hasFileDataIDs" @click.self="copy_file_data_ids(...)">
-			if (hasFileDataIDs) {
-				if (ImGui::MenuItem(std::format("Copy file data ID{}", count > 1 ? "s" : "").c_str())) {
-					copy_file_data_ids(sel_strings);
-					view.contextMenus.nodeListbox = nullptr;
-				}
-			}
-
-			// JS: <span @click.self="copy_export_paths(...)">Copy export path(s)</span>
-			if (ImGui::MenuItem(std::format("Copy export path{}", count > 1 ? "s" : "").c_str())) {
-				copy_export_paths(sel_strings);
-				view.contextMenus.nodeListbox = nullptr;
-			}
-
-			// JS: <span @click.self="open_export_directory(...)">Open export directory</span>
-			if (ImGui::MenuItem("Open export directory")) {
-				open_export_directory(sel_strings);
-				view.contextMenus.nodeListbox = nullptr;
-			}
-
-			ImGui::EndPopup();
-		}
-	}
-
-	// JS: <div class="filter"> <input type="text" v-model="userInputFilterModels" placeholder="Filter models..."/> </div>
-	{
-		char filter_buf[256] = {};
-		std::strncpy(filter_buf, view.userInputFilterModels.c_str(), sizeof(filter_buf) - 1);
-		if (ImGui::InputText("##FilterModels", filter_buf, sizeof(filter_buf)))
-			view.userInputFilterModels = filter_buf;
-	}
-
-	ImGui::EndChild();
-
-	ImGui::SameLine();
-
-	// --- Middle panel: Preview container ---
-	// JS: <div class="preview-container">
-	ImGui::BeginChild("models-preview-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.65f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-
-	// JS: <component :is="$components.ResizeLayer" id="texture-ribbon"
-	//         v-if="config.modelViewerShowTextures && textureRibbonStack.length > 0">
-	if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
-		// Texture ribbon slot rendering with pagination
-		float ribbon_width = ImGui::GetContentRegionAvail().x;
-		texture_ribbon::onResize(static_cast<int>(ribbon_width));
-
-		int maxPages = (view.textureRibbonSlotCount > 0)
-			? static_cast<int>(std::ceil(static_cast<double>(view.textureRibbonStack.size()) / view.textureRibbonSlotCount))
-			: 0;
-
-		// Prev button
-		if (view.textureRibbonPage > 0) {
-			if (ImGui::SmallButton("<##ribbon_prev"))
-				view.textureRibbonPage--;
-			ImGui::SameLine();
-		}
-
-		// Visible slots
-		int startIndex = view.textureRibbonPage * view.textureRibbonSlotCount;
-		int endIndex = (std::min)(startIndex + view.textureRibbonSlotCount, static_cast<int>(view.textureRibbonStack.size()));
-
-		for (int si = startIndex; si < endIndex; si++) {
-			auto& slot = view.textureRibbonStack[si];
-			std::string slotDisplayName = slot.value("displayName", std::string(""));
-
-			ImGui::PushID(si);
-			ImGui::Button(slotDisplayName.c_str(), ImVec2(64, 0));
-			if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-				view.contextMenus.nodeTextureRibbon = slot;
-				ImGui::OpenPopup("ModelsTextureRibbonContextMenu");
-			}
-			ImGui::PopID();
-			ImGui::SameLine();
-		}
-
-		// Next button
-		if (view.textureRibbonPage < maxPages - 1) {
-			if (ImGui::SmallButton(">##ribbon_next"))
-				view.textureRibbonPage++;
-		} else {
-			ImGui::NewLine();
-		}
-
-		// JS: <component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeTextureRibbon" ...>
-		if (!view.contextMenus.nodeTextureRibbon.is_null()) {
-			if (ImGui::BeginPopup("ModelsTextureRibbonContextMenu")) {
-				const auto& node = view.contextMenus.nodeTextureRibbon;
-				uint32_t fdid = node.value("fileDataID", 0u);
-				std::string displayName = node.value("displayName", std::string(""));
-				std::string fileName = node.value("fileName", std::string(""));
-
-				// JS: <span @click.self="preview_texture(...)">Preview {{ displayName }}</span>
-				if (ImGui::MenuItem(std::format("Preview {}", displayName).c_str())) {
-					preview_texture(fdid, displayName);
-					view.contextMenus.nodeTextureRibbon = nullptr;
-				}
-
-				// JS: <span @click.self="export_ribbon_texture(...)">Export {{ displayName }}</span>
-				if (ImGui::MenuItem(std::format("Export {}", displayName).c_str())) {
-					export_ribbon_texture(fdid, displayName);
-					view.contextMenus.nodeTextureRibbon = nullptr;
-				}
-
-				// JS: <span @click.self="$core.view.goToTexture(...)">Go to {{ displayName }}</span>
-				if (ImGui::MenuItem(std::format("Go to {}", displayName).c_str())) {
-					tab_textures::goToTexture(fdid);
-					view.contextMenus.nodeTextureRibbon = nullptr;
-				}
-
-				// JS: <span @click.self="$core.view.copyToClipboard(fileDataID)">Copy file data ID to clipboard</span>
-				if (ImGui::MenuItem("Copy file data ID to clipboard")) {
-					ImGui::SetClipboardText(std::to_string(fdid).c_str());
-					view.contextMenus.nodeTextureRibbon = nullptr;
-				}
-
-				// JS: <span @click.self="$core.view.copyToClipboard(displayName)">Copy texture name to clipboard</span>
-				if (ImGui::MenuItem("Copy texture name to clipboard")) {
-					ImGui::SetClipboardText(displayName.c_str());
-					view.contextMenus.nodeTextureRibbon = nullptr;
-				}
-
-				// JS: <span @click.self="$core.view.copyToClipboard(fileName)">Copy file path to clipboard</span>
-				if (ImGui::MenuItem("Copy file path to clipboard")) {
-					ImGui::SetClipboardText(fileName.c_str());
-					view.contextMenus.nodeTextureRibbon = nullptr;
-				}
-
-				// JS: <span @click.self="$core.view.copyToClipboard($core.view.getExportPath(fileName))">Copy export path to clipboard</span>
-				if (ImGui::MenuItem("Copy export path to clipboard")) {
-					ImGui::SetClipboardText(casc::ExportHelper::getExportPath(fileName).c_str());
-					view.contextMenus.nodeTextureRibbon = nullptr;
-				}
-
-				ImGui::EndPopup();
-			}
-		}
-	}
-
-	// JS: <div id="model-texture-preview" v-if="$core.view.modelTexturePreviewURL.length > 0">
-	if (!view.modelTexturePreviewURL.empty()) {
-		// JS: <div id="model-texture-preview-toast" @click="$core.view.modelTexturePreviewURL = ''">Close Preview</div>
-		if (ImGui::Button("Close Preview"))
-			view.modelTexturePreviewURL.clear();
-
-		// JS: <div class="image" :style="{ 'max-width': ... 'px', 'max-height': ... 'px' }">
-		if (view.modelTexturePreviewTexID != 0) {
-			const ImVec2 avail = ImGui::GetContentRegionAvail();
-			const float tex_w = static_cast<float>(view.modelTexturePreviewWidth);
-			const float tex_h = static_cast<float>(view.modelTexturePreviewHeight);
-			const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
-			const ImVec2 img_size(tex_w * scale, tex_h * scale);
-
-			const ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
-			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.modelTexturePreviewTexID)), img_size);
-
-			// JS: <div class="uv-overlay" v-if="modelTexturePreviewUVOverlay" ...>
-			if (view.modelTexturePreviewUVTexID != 0 && !view.modelTexturePreviewUVOverlay.empty()) {
-				ImGui::SetCursorScreenPos(cursor_pos);
-				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.modelTexturePreviewUVTexID)), img_size);
-			}
-		} else {
-			ImGui::Text("Preview: %s (%dx%d)", view.modelTexturePreviewName.c_str(),
-				view.modelTexturePreviewWidth, view.modelTexturePreviewHeight);
-		}
-
-		// JS: <div id="uv-layer-buttons" v-if="modelViewerUVLayers.length > 0">
-		if (!view.modelViewerUVLayers.empty()) {
-			for (const auto& layer : view.modelViewerUVLayers) {
-				std::string layer_name = layer.value("name", std::string(""));
-				bool is_active = layer.value("active", false);
-
-				// JS: <button :class="{ active: layer.active }" @click="toggle_uv_layer(layer.name)">{{ layer.name }}</button>
-				if (is_active)
-					ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-
-				if (ImGui::Button(layer_name.c_str()))
-					toggle_uv_layer(layer_name);
-
-				if (is_active)
-					ImGui::PopStyleColor();
-
-				ImGui::SameLine();
-			}
-			ImGui::NewLine();
-		}
-	}
-
-	// JS: <div class="preview-background" id="model-preview">
-	// JS: <input v-if="config.modelViewerShowBackground" type="color" id="background-color-input" v-model="config.modelViewerBackgroundColor"/>
-	if (view.config.value("modelViewerShowBackground", false)) {
-		// JS: <input type="color" id="background-color-input" v-model="config.modelViewerBackgroundColor"/>
-		std::string hex_str = view.config.value("modelViewerBackgroundColor", std::string("#343a40"));
-		auto [cr, cg, cb] = model_viewer_gl::parse_hex_color(hex_str);
-		float color[3] = {cr, cg, cb};
-		if (ImGui::ColorEdit3("##bg_color_models", color, ImGuiColorEditFlags_NoInputs))
-			view.config["modelViewerBackgroundColor"] = std::format("#{:02x}{:02x}{:02x}",
-				static_cast<int>(color[0] * 255.0f), static_cast<int>(color[1] * 255.0f), static_cast<int>(color[2] * 255.0f));
-	}
-
-	// JS: <component :is="$components.ModelViewerGL" v-if="modelViewerContext" :context="modelViewerContext" />
-	if (!view.modelViewerContext.is_null()) {
-		model_viewer_gl::renderWidget("##model_viewer", viewer_state, viewer_context);
-	}
-
-	// JS: <div v-if="modelViewerAnims && modelViewerAnims.length > 0 && !modelTexturePreviewURL" class="preview-dropdown-overlay">
-	if (!view.modelViewerAnims.empty() && view.modelTexturePreviewURL.empty()) {
-		// JS: <select v-model="modelViewerAnimSelection">
-		std::string current_label = "No Animation";
-		std::string current_id;
-		if (view.modelViewerAnimSelection.is_string())
-			current_id = view.modelViewerAnimSelection.get<std::string>();
-
-		for (const auto& anim : view.modelViewerAnims) {
-			if (anim.value("id", std::string("")) == current_id) {
-				current_label = anim.value("label", std::string(""));
-				break;
-			}
-		}
-
-		if (ImGui::BeginCombo("##ModelAnimSelect", current_label.c_str())) {
-			for (const auto& anim : view.modelViewerAnims) {
-				std::string anim_id = anim.value("id", std::string(""));
-				std::string anim_label = anim.value("label", std::string(""));
-				bool is_selected = (anim_id == current_id);
-
-				if (ImGui::Selectable(anim_label.c_str(), is_selected))
-					view.modelViewerAnimSelection = anim_id;
-
-				if (is_selected)
-					ImGui::SetItemDefaultFocus();
-			}
-			ImGui::EndCombo();
-		}
-
-		// JS: <div v-if="modelViewerAnimSelection !== 'none'" class="anim-controls">
-		if (current_id != "none" && !current_id.empty()) {
-			// JS: <button class="anim-btn anim-step-left" :class="{ disabled: !animPaused }" @click="step_animation(-1)">
-			ImGui::SameLine();
-			bool anim_paused = view.modelViewerAnimPaused;
-
-			if (!anim_paused) ImGui::BeginDisabled();
-			if (ImGui::Button("<<"))
-				if (anim_methods) anim_methods->step_animation(-1);
-			if (!anim_paused) ImGui::EndDisabled();
-
-			// JS: <button class="anim-btn" :class="animPaused ? 'anim-play' : 'anim-pause'" @click="toggle_animation_pause()">
-			ImGui::SameLine();
-			if (ImGui::Button(anim_paused ? "Play" : "Pause"))
-				if (anim_methods) anim_methods->toggle_animation_pause();
-
-			// JS: <button class="anim-btn anim-step-right" :class="{ disabled: !animPaused }" @click="step_animation(1)">
-			ImGui::SameLine();
-			if (!anim_paused) ImGui::BeginDisabled();
-			if (ImGui::Button(">>"))
-				if (anim_methods) anim_methods->step_animation(1);
-			if (!anim_paused) ImGui::EndDisabled();
-
-			// JS: <div class="anim-scrubber" @mousedown="start_scrub" @mouseup="end_scrub">
-			//         <input type="range" min="0" :max="animFrameCount - 1" :value="animFrame" @input="seek_animation($event.target.value)" />
-			//         <div class="anim-frame-display">{{ animFrame }}</div>
-			ImGui::SameLine();
-			int frame = view.modelViewerAnimFrame;
-			int frame_max = view.modelViewerAnimFrameCount > 0 ? view.modelViewerAnimFrameCount - 1 : 0;
-			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 80.0f);
-			if (ImGui::SliderInt("##ModelAnimFrame", &frame, 0, frame_max)) {
-				if (anim_methods) anim_methods->seek_animation(frame);
-			}
-			// JS: start_scrub() pauses animation while dragging, end_scrub() resumes.
-			if (ImGui::IsItemActivated()) {
-				if (anim_methods) anim_methods->start_scrub();
-			}
-			if (ImGui::IsItemDeactivatedAfterEdit()) {
-				if (anim_methods) anim_methods->end_scrub();
-			}
-			ImGui::SameLine();
-			ImGui::Text("%d", view.modelViewerAnimFrame);
-		}
-	}
-
-	ImGui::EndChild();
-
-	// --- Bottom: Export controls ---
-	// JS: <div class="preview-controls">
-	//     <MenuButton :options="menuButtonModels" :default="config.exportModelFormat"
-	//         @change="config.exportModelFormat = $event" :disabled="isBusy" @click="export_model" />
-	{
-		std::vector<menu_button::MenuOption> mb_options;
-		for (const auto& opt : view.menuButtonModels)
-			mb_options.push_back({ opt.label, opt.value });
-		menu_button::render("##MenuButtonModels", mb_options,
-			view.config.value("exportModelFormat", std::string("OBJ")),
-			view.isBusy > 0, false, menu_button_models_state,
-			[&](const std::string& val) { view.config["exportModelFormat"] = val; },
-			[&]() { export_model_action(); });
-	}
-
-	ImGui::SameLine();
-
-	// --- Right panel: Sidebar ---
-	// JS: <div id="model-sidebar" class="sidebar">
-	ImGui::BeginChild("models-sidebar", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-
-	// JS: <span class="header">Preview</span>
-	ImGui::SeparatorText("Preview");
-
-	// JS: <label class="ui-checkbox" title="Automatically preview a model when selecting it">
-	//         <input type="checkbox" v-model="config.modelsAutoPreview"/> <span>Auto Preview</span>
-	{
-		bool auto_preview = view.config.value("modelsAutoPreview", false);
-		if (ImGui::Checkbox("Auto Preview", &auto_preview))
-			view.config["modelsAutoPreview"] = auto_preview;
-	}
-
-	// JS: <label class="ui-checkbox" title="Automatically adjust camera when selecting a new model">
-	//         <input type="checkbox" v-model="modelViewerAutoAdjust"/> <span>Auto Camera</span>
-	ImGui::Checkbox("Auto Camera", &view.modelViewerAutoAdjust);
-
-	// JS: <input type="checkbox" v-model="config.modelViewerShowGrid"/> <span>Show Grid</span>
-	{
-		bool show_grid = view.config.value("modelViewerShowGrid", true);
-		if (ImGui::Checkbox("Show Grid", &show_grid))
-			view.config["modelViewerShowGrid"] = show_grid;
-	}
-
-	// JS: <input type="checkbox" v-model="config.modelViewerWireframe"/> <span>Show Wireframe</span>
-	{
-		bool wireframe = view.config.value("modelViewerWireframe", false);
-		if (ImGui::Checkbox("Show Wireframe", &wireframe))
-			view.config["modelViewerWireframe"] = wireframe;
-	}
-
-	// JS: <input type="checkbox" v-model="config.modelViewerShowBones"/> <span>Show Bones</span>
-	{
-		bool show_bones = view.config.value("modelViewerShowBones", false);
-		if (ImGui::Checkbox("Show Bones", &show_bones))
-			view.config["modelViewerShowBones"] = show_bones;
-	}
-
-	// JS: <input type="checkbox" v-model="config.modelViewerShowTextures"/> <span>Show Textures</span>
-	{
-		bool show_textures = view.config.value("modelViewerShowTextures", true);
-		if (ImGui::Checkbox("Show Textures", &show_textures))
-			view.config["modelViewerShowTextures"] = show_textures;
-	}
-
-	// JS: <input type="checkbox" v-model="config.modelViewerShowBackground"/> <span>Show Background</span>
-	{
-		bool show_bg = view.config.value("modelViewerShowBackground", false);
-		if (ImGui::Checkbox("Show Background", &show_bg))
-			view.config["modelViewerShowBackground"] = show_bg;
-	}
-
-	// JS: <span class="header">Export</span>
-	ImGui::SeparatorText("Export");
-
-	// JS: <input type="checkbox" v-model="config.modelsExportTextures"/> <span>Textures</span>
-	{
-		bool export_tex = view.config.value("modelsExportTextures", true);
-		if (ImGui::Checkbox("Textures", &export_tex))
-			view.config["modelsExportTextures"] = export_tex;
-	}
-
-	// JS: <label v-if="config.modelsExportTextures"> <input type="checkbox" v-model="config.modelsExportAlpha"/> <span>Texture Alpha</span>
-	if (view.config.value("modelsExportTextures", true)) {
-		bool export_alpha = view.config.value("modelsExportAlpha", true);
-		if (ImGui::Checkbox("Texture Alpha", &export_alpha))
-			view.config["modelsExportAlpha"] = export_alpha;
-	}
-
-	// JS: <label v-if="exportModelFormat === 'GLTF' && modelViewerActiveType === 'm2'">
-	//         <input type="checkbox" v-model="config.modelsExportAnimations"/> <span>Export animations</span>
-	std::string export_format = view.config.value("exportModelFormat", std::string("OBJ"));
-	if (export_format == "GLTF" && view.modelViewerActiveType == "m2") {
-		bool export_anims = view.config.value("modelsExportAnimations", false);
-		if (ImGui::Checkbox("Export animations", &export_anims))
-			view.config["modelsExportAnimations"] = export_anims;
-	}
-
-	// JS: <template v-if="config.exportModelFormat === 'RAW'">
-	if (export_format == "RAW") {
-		// JS: <input type="checkbox" v-model="config.modelsExportSkin"/> <span>M2 .skin Files</span>
-		{
-			bool v = view.config.value("modelsExportSkin", false);
-			if (ImGui::Checkbox("M2 .skin Files", &v))
-				view.config["modelsExportSkin"] = v;
-		}
-		// JS: <input type="checkbox" v-model="config.modelsExportSkel"/> <span>M2 .skel Files</span>
-		{
-			bool v = view.config.value("modelsExportSkel", false);
-			if (ImGui::Checkbox("M2 .skel Files", &v))
-				view.config["modelsExportSkel"] = v;
-		}
-		// JS: <input type="checkbox" v-model="config.modelsExportBone"/> <span>M2 .bone Files</span>
-		{
-			bool v = view.config.value("modelsExportBone", false);
-			if (ImGui::Checkbox("M2 .bone Files", &v))
-				view.config["modelsExportBone"] = v;
-		}
-		// JS: <input type="checkbox" v-model="config.modelsExportAnim"/> <span>M2 .anim files</span>
-		{
-			bool v = view.config.value("modelsExportAnim", false);
-			if (ImGui::Checkbox("M2 .anim files", &v))
-				view.config["modelsExportAnim"] = v;
-		}
-		// JS: <input type="checkbox" v-model="config.modelsExportWMOGroups"/> <span>WMO Groups</span>
-		{
-			bool v = view.config.value("modelsExportWMOGroups", false);
-			if (ImGui::Checkbox("WMO Groups", &v))
-				view.config["modelsExportWMOGroups"] = v;
-		}
-	}
-
-	// JS: <template v-if="config.exportModelFormat === 'OBJ' && modelViewerActiveType === 'wmo'">
-	if (export_format == "OBJ" && view.modelViewerActiveType == "wmo") {
-		// JS: <input type="checkbox" v-model="config.modelsExportSplitWMOGroups"/> <span>Split WMO Groups</span>
-		bool v = view.config.value("modelsExportSplitWMOGroups", false);
-		if (ImGui::Checkbox("Split WMO Groups", &v))
-			view.config["modelsExportSplitWMOGroups"] = v;
-	}
-
-	// JS: <template v-if="modelViewerActiveType === 'm2'">
-	if (view.modelViewerActiveType == "m2") {
-		// JS: <span class="header">Geosets</span>
-		ImGui::SeparatorText("Geosets");
-
-		// JS: <component :is="$components.Checkboxlist" :items="modelViewerGeosets" />
-		checkboxlist::render("##ModelGeosets", view.modelViewerGeosets, checkboxlist_geosets_state);
-
-		// JS: <div class="list-toggles">
-		//         <a @click="setAllGeosets(true, modelViewerGeosets)">Enable All</a> /
-		//         <a @click="setAllGeosets(false, modelViewerGeosets)">Disable All</a>
-		if (ImGui::SmallButton("Enable All##Geosets")) {
-			for (auto& g : view.modelViewerGeosets)
-				g["checked"] = true;
-		}
-		ImGui::SameLine();
-		ImGui::Text("/");
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Disable All##Geosets")) {
-			for (auto& g : view.modelViewerGeosets)
-				g["checked"] = false;
-		}
-
-		// JS: <template v-if="config.modelsExportTextures">
-		if (view.config.value("modelsExportTextures", true)) {
-			// JS: <span class="header">Skins</span>
-			ImGui::SeparatorText("Skins");
-
-			// JS: <component :is="$components.Listboxb" :items="modelViewerSkins" v-model:selection="modelViewerSkinsSelection" :single="true" />
+	if (app::layout::BeginTab("tab-models")) {
+		auto regions = app::layout::CalcListTabRegions(true);
+
+		// --- Left panel: List container (row 1, col 1) ---
+		// JS: <div class="list-container">
+		//     <Listbox v-model:selection="selectionModels" v-model:filter="userInputFilterModels"
+		//         :items="listfileModels" :override="overrideModelList" :keyinput="true"
+		//         :regex="config.regexFilters" :copymode="config.copyMode" ... @contextmenu="handle_listbox_context" />
+		if (app::layout::BeginListContainer("models-list-container", regions)) {
+			std::vector<std::string> items_str;
+			items_str.reserve(view.listfileModels.size());
+			for (const auto& item : view.listfileModels)
+				items_str.push_back(item.get<std::string>());
+
+			std::vector<std::string> selection_str;
+			for (const auto& s : view.selectionModels)
+				selection_str.push_back(s.get<std::string>());
+
+			listbox::CopyMode copy_mode = listbox::CopyMode::Default;
 			{
-				// Convert json skins to ListboxBItem array.
-				std::vector<listboxb::ListboxBItem> skin_items;
-				skin_items.reserve(view.modelViewerSkins.size());
-				for (const auto& skin : view.modelViewerSkins)
-					skin_items.push_back({ skin.value("label", std::string("")) });
+				std::string cm = view.config.value("copyMode", std::string("Default"));
+				if (cm == "DIR") copy_mode = listbox::CopyMode::DIR;
+				else if (cm == "FID") copy_mode = listbox::CopyMode::FID;
+			}
 
-				// Build selection indices from modelViewerSkinsSelection.
-				std::vector<int> sel_indices;
-				for (const auto& sel : view.modelViewerSkinsSelection) {
-					std::string sel_id = sel.value("id", std::string(""));
-					for (size_t i = 0; i < view.modelViewerSkins.size(); ++i) {
-						if (view.modelViewerSkins[i].value("id", std::string("")) == sel_id) {
-							sel_indices.push_back(static_cast<int>(i));
-							break;
+			// Convert override list.
+			std::vector<std::string> override_str;
+			if (!view.overrideModelList.empty()) {
+				override_str.reserve(view.overrideModelList.size());
+				for (const auto& item : view.overrideModelList)
+					override_str.push_back(item.get<std::string>());
+			}
+
+			listbox::render(
+				"listbox-models",
+				items_str,
+				view.userInputFilterModels,
+				selection_str,
+				false,    // single
+				true,     // keyinput
+				view.config.value("regexFilters", false),
+				copy_mode,
+				view.config.value("pasteSelection", false),
+				view.config.value("removePathSpacesCopy", false),
+				"model",  // unittype
+				view.overrideModelList.empty() ? nullptr : &override_str,
+				false,    // disable
+				"models", // persistscrollkey
+				{},       // quickfilters
+				false,    // nocopy
+				listbox_models_state,
+				[&](const std::vector<std::string>& new_sel) {
+					view.selectionModels.clear();
+					for (const auto& s : new_sel)
+						view.selectionModels.push_back(s);
+				},
+				[](const listbox::ContextMenuEvent& ev) {
+					handle_listbox_context(ev.selection);
+				}
+			);
+
+			// JS: <component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeListbox" ...>
+			if (!view.contextMenus.nodeListbox.is_null()) {
+				if (ImGui::BeginPopup("ModelsListboxContextMenu")) {
+					const auto& node = view.contextMenus.nodeListbox;
+					// Extract selection from context node
+					std::vector<std::string> sel_strings;
+					if (node.contains("selection") && node["selection"].is_array()) {
+						for (const auto& s : node["selection"]) {
+							if (s.is_string())
+								sel_strings.push_back(s.get<std::string>());
 						}
+					}
+					int count = node.value("count", 1);
+					bool hasFileDataIDs = node.value("hasFileDataIDs", false);
+
+					// JS: <span @click.self="copy_file_paths(...)">Copy file path(s)</span>
+					if (ImGui::MenuItem(std::format("Copy file path{}", count > 1 ? "s" : "").c_str())) {
+						copy_file_paths(sel_strings);
+						view.contextMenus.nodeListbox = nullptr;
+					}
+
+					// JS: <span v-if="context.node.hasFileDataIDs" @click.self="copy_listfile_format(...)">
+					if (hasFileDataIDs) {
+						if (ImGui::MenuItem(std::format("Copy file path{} (listfile format)", count > 1 ? "s" : "").c_str())) {
+							copy_listfile_format(sel_strings);
+							view.contextMenus.nodeListbox = nullptr;
+						}
+					}
+
+					// JS: <span v-if="context.node.hasFileDataIDs" @click.self="copy_file_data_ids(...)">
+					if (hasFileDataIDs) {
+						if (ImGui::MenuItem(std::format("Copy file data ID{}", count > 1 ? "s" : "").c_str())) {
+							copy_file_data_ids(sel_strings);
+							view.contextMenus.nodeListbox = nullptr;
+						}
+					}
+
+					// JS: <span @click.self="copy_export_paths(...)">Copy export path(s)</span>
+					if (ImGui::MenuItem(std::format("Copy export path{}", count > 1 ? "s" : "").c_str())) {
+						copy_export_paths(sel_strings);
+						view.contextMenus.nodeListbox = nullptr;
+					}
+
+					// JS: <span @click.self="open_export_directory(...)">Open export directory</span>
+					if (ImGui::MenuItem("Open export directory")) {
+						open_export_directory(sel_strings);
+						view.contextMenus.nodeListbox = nullptr;
+					}
+
+					ImGui::EndPopup();
+				}
+			}
+		}
+		app::layout::EndListContainer();
+
+		// --- Filter bar (row 2, col 1) ---
+		// JS: <div class="filter"> <input type="text" v-model="userInputFilterModels" placeholder="Filter models..."/> </div>
+		if (app::layout::BeginFilterBar("models-filter", regions)) {
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+			char filter_buf[256] = {};
+			std::strncpy(filter_buf, view.userInputFilterModels.c_str(), sizeof(filter_buf) - 1);
+			if (ImGui::InputText("##FilterModels", filter_buf, sizeof(filter_buf)))
+				view.userInputFilterModels = filter_buf;
+		}
+		app::layout::EndFilterBar();
+
+		// --- Middle panel: Preview container (row 1, col 2) ---
+		// JS: <div class="preview-container">
+		if (app::layout::BeginPreviewContainer("models-preview-container", regions)) {
+			// JS: <component :is="$components.ResizeLayer" id="texture-ribbon"
+			//         v-if="config.modelViewerShowTextures && textureRibbonStack.length > 0">
+			if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
+				// Texture ribbon slot rendering with pagination
+				float ribbon_width = ImGui::GetContentRegionAvail().x;
+				texture_ribbon::onResize(static_cast<int>(ribbon_width));
+
+				int maxPages = (view.textureRibbonSlotCount > 0)
+					? static_cast<int>(std::ceil(static_cast<double>(view.textureRibbonStack.size()) / view.textureRibbonSlotCount))
+					: 0;
+
+				// Prev button
+				if (view.textureRibbonPage > 0) {
+					if (ImGui::SmallButton("<##ribbon_prev"))
+						view.textureRibbonPage--;
+					ImGui::SameLine();
+				}
+
+				// Visible slots
+				int startIndex = view.textureRibbonPage * view.textureRibbonSlotCount;
+				int endIndex = (std::min)(startIndex + view.textureRibbonSlotCount, static_cast<int>(view.textureRibbonStack.size()));
+
+				for (int si = startIndex; si < endIndex; si++) {
+					auto& slot = view.textureRibbonStack[si];
+					std::string slotDisplayName = slot.value("displayName", std::string(""));
+
+					ImGui::PushID(si);
+					ImGui::Button(slotDisplayName.c_str(), ImVec2(64, 0));
+					if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+						view.contextMenus.nodeTextureRibbon = slot;
+						ImGui::OpenPopup("ModelsTextureRibbonContextMenu");
+					}
+					ImGui::PopID();
+					ImGui::SameLine();
+				}
+
+				// Next button
+				if (view.textureRibbonPage < maxPages - 1) {
+					if (ImGui::SmallButton(">##ribbon_next"))
+						view.textureRibbonPage++;
+				} else {
+					ImGui::NewLine();
+				}
+
+				// JS: <component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeTextureRibbon" ...>
+				if (!view.contextMenus.nodeTextureRibbon.is_null()) {
+					if (ImGui::BeginPopup("ModelsTextureRibbonContextMenu")) {
+						const auto& node = view.contextMenus.nodeTextureRibbon;
+						uint32_t fdid = node.value("fileDataID", 0u);
+						std::string displayName = node.value("displayName", std::string(""));
+						std::string fileName = node.value("fileName", std::string(""));
+
+						// JS: <span @click.self="preview_texture(...)">Preview {{ displayName }}</span>
+						if (ImGui::MenuItem(std::format("Preview {}", displayName).c_str())) {
+							preview_texture(fdid, displayName);
+							view.contextMenus.nodeTextureRibbon = nullptr;
+						}
+
+						// JS: <span @click.self="export_ribbon_texture(...)">Export {{ displayName }}</span>
+						if (ImGui::MenuItem(std::format("Export {}", displayName).c_str())) {
+							export_ribbon_texture(fdid, displayName);
+							view.contextMenus.nodeTextureRibbon = nullptr;
+						}
+
+						// JS: <span @click.self="$core.view.goToTexture(...)">Go to {{ displayName }}</span>
+						if (ImGui::MenuItem(std::format("Go to {}", displayName).c_str())) {
+							tab_textures::goToTexture(fdid);
+							view.contextMenus.nodeTextureRibbon = nullptr;
+						}
+
+						// JS: <span @click.self="$core.view.copyToClipboard(fileDataID)">Copy file data ID to clipboard</span>
+						if (ImGui::MenuItem("Copy file data ID to clipboard")) {
+							ImGui::SetClipboardText(std::to_string(fdid).c_str());
+							view.contextMenus.nodeTextureRibbon = nullptr;
+						}
+
+						// JS: <span @click.self="$core.view.copyToClipboard(displayName)">Copy texture name to clipboard</span>
+						if (ImGui::MenuItem("Copy texture name to clipboard")) {
+							ImGui::SetClipboardText(displayName.c_str());
+							view.contextMenus.nodeTextureRibbon = nullptr;
+						}
+
+						// JS: <span @click.self="$core.view.copyToClipboard(fileName)">Copy file path to clipboard</span>
+						if (ImGui::MenuItem("Copy file path to clipboard")) {
+							ImGui::SetClipboardText(fileName.c_str());
+							view.contextMenus.nodeTextureRibbon = nullptr;
+						}
+
+						// JS: <span @click.self="$core.view.copyToClipboard($core.view.getExportPath(fileName))">Copy export path to clipboard</span>
+						if (ImGui::MenuItem("Copy export path to clipboard")) {
+							ImGui::SetClipboardText(casc::ExportHelper::getExportPath(fileName).c_str());
+							view.contextMenus.nodeTextureRibbon = nullptr;
+						}
+
+						ImGui::EndPopup();
+					}
+				}
+			}
+
+			// JS: <div id="model-texture-preview" v-if="$core.view.modelTexturePreviewURL.length > 0">
+			if (!view.modelTexturePreviewURL.empty()) {
+				// JS: <div id="model-texture-preview-toast" @click="$core.view.modelTexturePreviewURL = ''">Close Preview</div>
+				if (ImGui::Button("Close Preview"))
+					view.modelTexturePreviewURL.clear();
+
+				// JS: <div class="image" :style="{ 'max-width': ... 'px', 'max-height': ... 'px' }">
+				if (view.modelTexturePreviewTexID != 0) {
+					const ImVec2 avail = ImGui::GetContentRegionAvail();
+					const float tex_w = static_cast<float>(view.modelTexturePreviewWidth);
+					const float tex_h = static_cast<float>(view.modelTexturePreviewHeight);
+					const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
+					const ImVec2 img_size(tex_w * scale, tex_h * scale);
+
+					const ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+					ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.modelTexturePreviewTexID)), img_size);
+
+					// JS: <div class="uv-overlay" v-if="modelTexturePreviewUVOverlay" ...>
+					if (view.modelTexturePreviewUVTexID != 0 && !view.modelTexturePreviewUVOverlay.empty()) {
+						ImGui::SetCursorScreenPos(cursor_pos);
+						ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.modelTexturePreviewUVTexID)), img_size);
+					}
+				} else {
+					ImGui::Text("Preview: %s (%dx%d)", view.modelTexturePreviewName.c_str(),
+						view.modelTexturePreviewWidth, view.modelTexturePreviewHeight);
+				}
+
+				// JS: <div id="uv-layer-buttons" v-if="modelViewerUVLayers.length > 0">
+				if (!view.modelViewerUVLayers.empty()) {
+					for (const auto& layer : view.modelViewerUVLayers) {
+						std::string layer_name = layer.value("name", std::string(""));
+						bool is_active = layer.value("active", false);
+
+						// JS: <button :class="{ active: layer.active }" @click="toggle_uv_layer(layer.name)">{{ layer.name }}</button>
+						if (is_active)
+							ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+
+						if (ImGui::Button(layer_name.c_str()))
+							toggle_uv_layer(layer_name);
+
+						if (is_active)
+							ImGui::PopStyleColor();
+
+						ImGui::SameLine();
+					}
+					ImGui::NewLine();
+				}
+			}
+
+			// JS: <div class="preview-background" id="model-preview">
+			// JS: <input v-if="config.modelViewerShowBackground" type="color" id="background-color-input" v-model="config.modelViewerBackgroundColor"/>
+			if (view.config.value("modelViewerShowBackground", false)) {
+				// JS: <input type="color" id="background-color-input" v-model="config.modelViewerBackgroundColor"/>
+				std::string hex_str = view.config.value("modelViewerBackgroundColor", std::string("#343a40"));
+				auto [cr, cg, cb] = model_viewer_gl::parse_hex_color(hex_str);
+				float color[3] = {cr, cg, cb};
+				if (ImGui::ColorEdit3("##bg_color_models", color, ImGuiColorEditFlags_NoInputs))
+					view.config["modelViewerBackgroundColor"] = std::format("#{:02x}{:02x}{:02x}",
+						static_cast<int>(color[0] * 255.0f), static_cast<int>(color[1] * 255.0f), static_cast<int>(color[2] * 255.0f));
+			}
+
+			// JS: <component :is="$components.ModelViewerGL" v-if="modelViewerContext" :context="modelViewerContext" />
+			if (!view.modelViewerContext.is_null()) {
+				model_viewer_gl::renderWidget("##model_viewer", viewer_state, viewer_context);
+			}
+
+			// JS: <div v-if="modelViewerAnims && modelViewerAnims.length > 0 && !modelTexturePreviewURL" class="preview-dropdown-overlay">
+			if (!view.modelViewerAnims.empty() && view.modelTexturePreviewURL.empty()) {
+				// JS: <select v-model="modelViewerAnimSelection">
+				std::string current_label = "No Animation";
+				std::string current_id;
+				if (view.modelViewerAnimSelection.is_string())
+					current_id = view.modelViewerAnimSelection.get<std::string>();
+
+				for (const auto& anim : view.modelViewerAnims) {
+					if (anim.value("id", std::string("")) == current_id) {
+						current_label = anim.value("label", std::string(""));
+						break;
 					}
 				}
 
-				listboxb::render("##ModelSkins", skin_items, sel_indices, true, true, false,
-					listboxb_skins_state,
-					[&](const std::vector<int>& new_sel) {
-						view.modelViewerSkinsSelection.clear();
-						for (int idx : new_sel) {
-							if (idx >= 0 && idx < static_cast<int>(view.modelViewerSkins.size()))
-								view.modelViewerSkinsSelection.push_back(view.modelViewerSkins[idx]);
-						}
-					});
+				if (ImGui::BeginCombo("##ModelAnimSelect", current_label.c_str())) {
+					for (const auto& anim : view.modelViewerAnims) {
+						std::string anim_id = anim.value("id", std::string(""));
+						std::string anim_label = anim.value("label", std::string(""));
+						bool is_selected = (anim_id == current_id);
+
+						if (ImGui::Selectable(anim_label.c_str(), is_selected))
+							view.modelViewerAnimSelection = anim_id;
+
+						if (is_selected)
+							ImGui::SetItemDefaultFocus();
+					}
+					ImGui::EndCombo();
+				}
+
+				// JS: <div v-if="modelViewerAnimSelection !== 'none'" class="anim-controls">
+				if (current_id != "none" && !current_id.empty()) {
+					// JS: <button class="anim-btn anim-step-left" :class="{ disabled: !animPaused }" @click="step_animation(-1)">
+					ImGui::SameLine();
+					bool anim_paused = view.modelViewerAnimPaused;
+
+					if (!anim_paused) ImGui::BeginDisabled();
+					if (ImGui::Button("<<"))
+						if (anim_methods) anim_methods->step_animation(-1);
+					if (!anim_paused) ImGui::EndDisabled();
+
+					// JS: <button class="anim-btn" :class="animPaused ? 'anim-play' : 'anim-pause'" @click="toggle_animation_pause()">
+					ImGui::SameLine();
+					if (ImGui::Button(anim_paused ? "Play" : "Pause"))
+						if (anim_methods) anim_methods->toggle_animation_pause();
+
+					// JS: <button class="anim-btn anim-step-right" :class="{ disabled: !animPaused }" @click="step_animation(1)">
+					ImGui::SameLine();
+					if (!anim_paused) ImGui::BeginDisabled();
+					if (ImGui::Button(">>"))
+						if (anim_methods) anim_methods->step_animation(1);
+					if (!anim_paused) ImGui::EndDisabled();
+
+					// JS: <div class="anim-scrubber" @mousedown="start_scrub" @mouseup="end_scrub">
+					//         <input type="range" min="0" :max="animFrameCount - 1" :value="animFrame" @input="seek_animation($event.target.value)" />
+					//         <div class="anim-frame-display">{{ animFrame }}</div>
+					ImGui::SameLine();
+					int frame = view.modelViewerAnimFrame;
+					int frame_max = view.modelViewerAnimFrameCount > 0 ? view.modelViewerAnimFrameCount - 1 : 0;
+					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 80.0f);
+					if (ImGui::SliderInt("##ModelAnimFrame", &frame, 0, frame_max)) {
+						if (anim_methods) anim_methods->seek_animation(frame);
+					}
+					// JS: start_scrub() pauses animation while dragging, end_scrub() resumes.
+					if (ImGui::IsItemActivated()) {
+						if (anim_methods) anim_methods->start_scrub();
+					}
+					if (ImGui::IsItemDeactivatedAfterEdit()) {
+						if (anim_methods) anim_methods->end_scrub();
+					}
+					ImGui::SameLine();
+					ImGui::Text("%d", view.modelViewerAnimFrame);
+				}
 			}
 		}
+		app::layout::EndPreviewContainer();
+
+		// --- Bottom: Export controls (row 2, col 2) ---
+		// JS: <div class="preview-controls">
+		//     <MenuButton :options="menuButtonModels" :default="config.exportModelFormat"
+		//         @change="config.exportModelFormat = $event" :disabled="isBusy" @click="export_model" />
+		if (app::layout::BeginPreviewControls("models-preview-controls", regions)) {
+			std::vector<menu_button::MenuOption> mb_options;
+			for (const auto& opt : view.menuButtonModels)
+				mb_options.push_back({ opt.label, opt.value });
+			menu_button::render("##MenuButtonModels", mb_options,
+				view.config.value("exportModelFormat", std::string("OBJ")),
+				view.isBusy > 0, false, menu_button_models_state,
+				[&](const std::string& val) { view.config["exportModelFormat"] = val; },
+				[&]() { export_model_action(); });
+		}
+		app::layout::EndPreviewControls();
+
+		// --- Right panel: Sidebar (col 3, spanning both rows) ---
+		// JS: <div id="model-sidebar" class="sidebar">
+		if (app::layout::BeginSidebar("models-sidebar", regions)) {
+			// JS: <span class="header">Preview</span>
+			ImGui::SeparatorText("Preview");
+
+			// JS: <label class="ui-checkbox" title="Automatically preview a model when selecting it">
+			//         <input type="checkbox" v-model="config.modelsAutoPreview"/> <span>Auto Preview</span>
+			{
+				bool auto_preview = view.config.value("modelsAutoPreview", false);
+				if (ImGui::Checkbox("Auto Preview", &auto_preview))
+					view.config["modelsAutoPreview"] = auto_preview;
+			}
+
+			// JS: <label class="ui-checkbox" title="Automatically adjust camera when selecting a new model">
+			//         <input type="checkbox" v-model="modelViewerAutoAdjust"/> <span>Auto Camera</span>
+			ImGui::Checkbox("Auto Camera", &view.modelViewerAutoAdjust);
+
+			// JS: <input type="checkbox" v-model="config.modelViewerShowGrid"/> <span>Show Grid</span>
+			{
+				bool show_grid = view.config.value("modelViewerShowGrid", true);
+				if (ImGui::Checkbox("Show Grid", &show_grid))
+					view.config["modelViewerShowGrid"] = show_grid;
+			}
+
+			// JS: <input type="checkbox" v-model="config.modelViewerWireframe"/> <span>Show Wireframe</span>
+			{
+				bool wireframe = view.config.value("modelViewerWireframe", false);
+				if (ImGui::Checkbox("Show Wireframe", &wireframe))
+					view.config["modelViewerWireframe"] = wireframe;
+			}
+
+			// JS: <input type="checkbox" v-model="config.modelViewerShowBones"/> <span>Show Bones</span>
+			{
+				bool show_bones = view.config.value("modelViewerShowBones", false);
+				if (ImGui::Checkbox("Show Bones", &show_bones))
+					view.config["modelViewerShowBones"] = show_bones;
+			}
+
+			// JS: <input type="checkbox" v-model="config.modelViewerShowTextures"/> <span>Show Textures</span>
+			{
+				bool show_textures = view.config.value("modelViewerShowTextures", true);
+				if (ImGui::Checkbox("Show Textures", &show_textures))
+					view.config["modelViewerShowTextures"] = show_textures;
+			}
+
+			// JS: <input type="checkbox" v-model="config.modelViewerShowBackground"/> <span>Show Background</span>
+			{
+				bool show_bg = view.config.value("modelViewerShowBackground", false);
+				if (ImGui::Checkbox("Show Background", &show_bg))
+					view.config["modelViewerShowBackground"] = show_bg;
+			}
+
+			// JS: <span class="header">Export</span>
+			ImGui::SeparatorText("Export");
+
+			// JS: <input type="checkbox" v-model="config.modelsExportTextures"/> <span>Textures</span>
+			{
+				bool export_tex = view.config.value("modelsExportTextures", true);
+				if (ImGui::Checkbox("Textures", &export_tex))
+					view.config["modelsExportTextures"] = export_tex;
+			}
+
+			// JS: <label v-if="config.modelsExportTextures"> <input type="checkbox" v-model="config.modelsExportAlpha"/> <span>Texture Alpha</span>
+			if (view.config.value("modelsExportTextures", true)) {
+				bool export_alpha = view.config.value("modelsExportAlpha", true);
+				if (ImGui::Checkbox("Texture Alpha", &export_alpha))
+					view.config["modelsExportAlpha"] = export_alpha;
+			}
+
+			// JS: <label v-if="exportModelFormat === 'GLTF' && modelViewerActiveType === 'm2'">
+			//         <input type="checkbox" v-model="config.modelsExportAnimations"/> <span>Export animations</span>
+			std::string export_format = view.config.value("exportModelFormat", std::string("OBJ"));
+			if (export_format == "GLTF" && view.modelViewerActiveType == "m2") {
+				bool export_anims = view.config.value("modelsExportAnimations", false);
+				if (ImGui::Checkbox("Export animations", &export_anims))
+					view.config["modelsExportAnimations"] = export_anims;
+			}
+
+			// JS: <template v-if="config.exportModelFormat === 'RAW'">
+			if (export_format == "RAW") {
+				// JS: <input type="checkbox" v-model="config.modelsExportSkin"/> <span>M2 .skin Files</span>
+				{
+					bool v = view.config.value("modelsExportSkin", false);
+					if (ImGui::Checkbox("M2 .skin Files", &v))
+						view.config["modelsExportSkin"] = v;
+				}
+				// JS: <input type="checkbox" v-model="config.modelsExportSkel"/> <span>M2 .skel Files</span>
+				{
+					bool v = view.config.value("modelsExportSkel", false);
+					if (ImGui::Checkbox("M2 .skel Files", &v))
+						view.config["modelsExportSkel"] = v;
+				}
+				// JS: <input type="checkbox" v-model="config.modelsExportBone"/> <span>M2 .bone Files</span>
+				{
+					bool v = view.config.value("modelsExportBone", false);
+					if (ImGui::Checkbox("M2 .bone Files", &v))
+						view.config["modelsExportBone"] = v;
+				}
+				// JS: <input type="checkbox" v-model="config.modelsExportAnim"/> <span>M2 .anim files</span>
+				{
+					bool v = view.config.value("modelsExportAnim", false);
+					if (ImGui::Checkbox("M2 .anim files", &v))
+						view.config["modelsExportAnim"] = v;
+				}
+				// JS: <input type="checkbox" v-model="config.modelsExportWMOGroups"/> <span>WMO Groups</span>
+				{
+					bool v = view.config.value("modelsExportWMOGroups", false);
+					if (ImGui::Checkbox("WMO Groups", &v))
+						view.config["modelsExportWMOGroups"] = v;
+				}
+			}
+
+			// JS: <template v-if="config.exportModelFormat === 'OBJ' && modelViewerActiveType === 'wmo'">
+			if (export_format == "OBJ" && view.modelViewerActiveType == "wmo") {
+				// JS: <input type="checkbox" v-model="config.modelsExportSplitWMOGroups"/> <span>Split WMO Groups</span>
+				bool v = view.config.value("modelsExportSplitWMOGroups", false);
+				if (ImGui::Checkbox("Split WMO Groups", &v))
+					view.config["modelsExportSplitWMOGroups"] = v;
+			}
+
+			// JS: <template v-if="modelViewerActiveType === 'm2'">
+			if (view.modelViewerActiveType == "m2") {
+				// JS: <span class="header">Geosets</span>
+				ImGui::SeparatorText("Geosets");
+
+				// JS: <component :is="$components.Checkboxlist" :items="modelViewerGeosets" />
+				checkboxlist::render("##ModelGeosets", view.modelViewerGeosets, checkboxlist_geosets_state);
+
+				// JS: <div class="list-toggles">
+				//         <a @click="setAllGeosets(true, modelViewerGeosets)">Enable All</a> /
+				//         <a @click="setAllGeosets(false, modelViewerGeosets)">Disable All</a>
+				if (ImGui::SmallButton("Enable All##Geosets")) {
+					for (auto& g : view.modelViewerGeosets)
+						g["checked"] = true;
+				}
+				ImGui::SameLine();
+				ImGui::Text("/");
+				ImGui::SameLine();
+				if (ImGui::SmallButton("Disable All##Geosets")) {
+					for (auto& g : view.modelViewerGeosets)
+						g["checked"] = false;
+				}
+
+				// JS: <template v-if="config.modelsExportTextures">
+				if (view.config.value("modelsExportTextures", true)) {
+					// JS: <span class="header">Skins</span>
+					ImGui::SeparatorText("Skins");
+
+					// JS: <component :is="$components.Listboxb" :items="modelViewerSkins" v-model:selection="modelViewerSkinsSelection" :single="true" />
+					{
+						// Convert json skins to ListboxBItem array.
+						std::vector<listboxb::ListboxBItem> skin_items;
+						skin_items.reserve(view.modelViewerSkins.size());
+						for (const auto& skin : view.modelViewerSkins)
+							skin_items.push_back({ skin.value("label", std::string("")) });
+
+						// Build selection indices from modelViewerSkinsSelection.
+						std::vector<int> sel_indices;
+						for (const auto& sel : view.modelViewerSkinsSelection) {
+							std::string sel_id = sel.value("id", std::string(""));
+							for (size_t i = 0; i < view.modelViewerSkins.size(); ++i) {
+								if (view.modelViewerSkins[i].value("id", std::string("")) == sel_id) {
+									sel_indices.push_back(static_cast<int>(i));
+									break;
+								}
+							}
+						}
+
+						listboxb::render("##ModelSkins", skin_items, sel_indices, true, true, false,
+							listboxb_skins_state,
+							[&](const std::vector<int>& new_sel) {
+								view.modelViewerSkinsSelection.clear();
+								for (int idx : new_sel) {
+									if (idx >= 0 && idx < static_cast<int>(view.modelViewerSkins.size()))
+										view.modelViewerSkinsSelection.push_back(view.modelViewerSkins[idx]);
+								}
+							});
+					}
+				}
+			}
+
+			// JS: <template v-if="modelViewerActiveType === 'wmo'">
+			if (view.modelViewerActiveType == "wmo") {
+				// JS: <span class="header">WMO Groups</span>
+				ImGui::SeparatorText("WMO Groups");
+
+				// JS: <component :is="$components.Checkboxlist" :items="modelViewerWMOGroups" />
+				for (auto& group : view.modelViewerWMOGroups) {
+					std::string label = group.value("label", std::string("Group"));
+					bool checked = group.value("checked", true);
+					if (ImGui::Checkbox(label.c_str(), &checked))
+						group["checked"] = checked;
+				}
+
+				// JS: <a @click="setAllWMOGroups(true)">Enable All</a> / <a @click="setAllWMOGroups(false)">Disable All</a>
+				if (ImGui::SmallButton("Enable All##WMOGroups")) {
+					for (auto& g : view.modelViewerWMOGroups)
+						g["checked"] = true;
+				}
+				ImGui::SameLine();
+				ImGui::Text("/");
+				ImGui::SameLine();
+				if (ImGui::SmallButton("Disable All##WMOGroups")) {
+					for (auto& g : view.modelViewerWMOGroups)
+						g["checked"] = false;
+				}
+
+				// JS: <span class="header">Doodad Sets</span>
+				ImGui::SeparatorText("Doodad Sets");
+
+				// JS: <component :is="$components.Checkboxlist" :items="modelViewerWMOSets" />
+				for (auto& set : view.modelViewerWMOSets) {
+					std::string label = set.value("label", std::string("Set"));
+					bool checked = set.value("checked", true);
+					if (ImGui::Checkbox(label.c_str(), &checked))
+						set["checked"] = checked;
+				}
+			}
+		}
+		app::layout::EndSidebar();
 	}
-
-	// JS: <template v-if="modelViewerActiveType === 'wmo'">
-	if (view.modelViewerActiveType == "wmo") {
-		// JS: <span class="header">WMO Groups</span>
-		ImGui::SeparatorText("WMO Groups");
-
-		// JS: <component :is="$components.Checkboxlist" :items="modelViewerWMOGroups" />
-		for (auto& group : view.modelViewerWMOGroups) {
-			std::string label = group.value("label", std::string("Group"));
-			bool checked = group.value("checked", true);
-			if (ImGui::Checkbox(label.c_str(), &checked))
-				group["checked"] = checked;
-		}
-
-		// JS: <a @click="setAllWMOGroups(true)">Enable All</a> / <a @click="setAllWMOGroups(false)">Disable All</a>
-		if (ImGui::SmallButton("Enable All##WMOGroups")) {
-			for (auto& g : view.modelViewerWMOGroups)
-				g["checked"] = true;
-		}
-		ImGui::SameLine();
-		ImGui::Text("/");
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Disable All##WMOGroups")) {
-			for (auto& g : view.modelViewerWMOGroups)
-				g["checked"] = false;
-		}
-
-		// JS: <span class="header">Doodad Sets</span>
-		ImGui::SeparatorText("Doodad Sets");
-
-		// JS: <component :is="$components.Checkboxlist" :items="modelViewerWMOSets" />
-		for (auto& set : view.modelViewerWMOSets) {
-			std::string label = set.value("label", std::string("Set"));
-			bool checked = set.value("checked", true);
-			if (ImGui::Checkbox(label.c_str(), &checked))
-				set["checked"] = checked;
-		}
-	}
-
-	ImGui::EndChild();
+	app::layout::EndTab();
 }
 
 } // namespace tab_models
