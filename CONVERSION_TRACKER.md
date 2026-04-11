@@ -576,7 +576,7 @@ surrounding shell.
 - [x] Render the **help icon** (`help.svg`, 20px) at the right side of the header, left of the hamburger menu
 - [x] Render the **footer** as a fixed-height (73px) bar at the bottom with `--background-dark` (#2c3136) background and a 1px `--border` (#6c757d) top border
 - [x] Footer content: centered text showing version and copyright in `--font-faded` (#6c757d) color
-- [ ] Footer external links: add missing "Issues" link (https://github.com/Kruithne/wow.export/issues) — original JS has 5 links (Website, Discord, Patreon, GitHub, Issues), C++ only renders 4
+- [ ] Footer external links: the original JS `external-links.js` defines 5 links (Website, Discord, Patreon, GitHub, Issues) but the C++ footer in `app.cpp` only renders 4 — add the missing "Issues" link (https://github.com/Kruithne/wow.export/issues)
 - [x] Render the **content area** between header and footer, filling available space
 - [x] Render the active module **inside** the content area, not as the entire window
 
