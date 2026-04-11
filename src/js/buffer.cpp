@@ -306,6 +306,127 @@ digest[j * 4 + k] = static_cast<uint8_t>(state[j] >> (k * 8));
 return base64_encode(digest, 16);
 }
 
+// ─── SHA1 implementation (RFC 3174) ─────────────────────────────────
+
+inline uint32_t sha1_left_rotate(uint32_t x, uint32_t n) {
+	return (x << n) | (x >> (32 - n));
+}
+
+void sha1_transform(uint32_t state[5], const uint8_t block[64]) {
+	uint32_t w[80];
+
+	for (int i = 0; i < 16; i++) {
+		w[i] = (static_cast<uint32_t>(block[i * 4]) << 24) |
+			   (static_cast<uint32_t>(block[i * 4 + 1]) << 16) |
+			   (static_cast<uint32_t>(block[i * 4 + 2]) << 8) |
+			    static_cast<uint32_t>(block[i * 4 + 3]);
+	}
+
+	for (int i = 16; i < 80; i++)
+		w[i] = sha1_left_rotate(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
+
+	uint32_t a = state[0], b = state[1], c = state[2], d = state[3], e = state[4];
+
+	for (int i = 0; i < 80; i++) {
+		uint32_t f, k;
+		if (i < 20) {
+			f = (b & c) | (~b & d);
+			k = 0x5A827999;
+		} else if (i < 40) {
+			f = b ^ c ^ d;
+			k = 0x6ED9EBA1;
+		} else if (i < 60) {
+			f = (b & c) | (b & d) | (c & d);
+			k = 0x8F1BBCDC;
+		} else {
+			f = b ^ c ^ d;
+			k = 0xCA62C1D6;
+		}
+
+		uint32_t temp = sha1_left_rotate(a, 5) + f + e + k + w[i];
+		e = d;
+		d = c;
+		c = sha1_left_rotate(b, 30);
+		b = a;
+		a = temp;
+	}
+
+	state[0] += a;
+	state[1] += b;
+	state[2] += c;
+	state[3] += d;
+	state[4] += e;
+}
+
+void sha1_compute(const uint8_t* data, size_t len, uint32_t state[5]) {
+	state[0] = 0x67452301;
+	state[1] = 0xEFCDAB89;
+	state[2] = 0x98BADCFE;
+	state[3] = 0x10325476;
+	state[4] = 0xC3D2E1F0;
+
+	size_t i = 0;
+	for (; i + 64 <= len; i += 64)
+		sha1_transform(state, data + i);
+
+	uint8_t block[64];
+	size_t remaining = len - i;
+	std::memcpy(block, data + i, remaining);
+	block[remaining] = 0x80;
+
+	if (remaining >= 56) {
+		std::memset(block + remaining + 1, 0, 63 - remaining);
+		sha1_transform(state, block);
+		std::memset(block, 0, 56);
+	} else {
+		std::memset(block + remaining + 1, 0, 55 - remaining);
+	}
+
+	// SHA1 uses big-endian bit length
+	uint64_t bits = static_cast<uint64_t>(len) * 8;
+	block[56] = static_cast<uint8_t>(bits >> 56);
+	block[57] = static_cast<uint8_t>(bits >> 48);
+	block[58] = static_cast<uint8_t>(bits >> 40);
+	block[59] = static_cast<uint8_t>(bits >> 32);
+	block[60] = static_cast<uint8_t>(bits >> 24);
+	block[61] = static_cast<uint8_t>(bits >> 16);
+	block[62] = static_cast<uint8_t>(bits >> 8);
+	block[63] = static_cast<uint8_t>(bits);
+
+	sha1_transform(state, block);
+}
+
+std::string sha1_hex(const uint8_t* data, size_t len) {
+	uint32_t state[5];
+	sha1_compute(data, len, state);
+
+	constexpr char hex_chars[] = "0123456789abcdef";
+	std::string result;
+	result.reserve(40);
+	for (int j = 0; j < 5; j++) {
+		for (int k = 3; k >= 0; k--) {
+			uint8_t byte = static_cast<uint8_t>(state[j] >> (k * 8));
+			result += hex_chars[byte >> 4];
+			result += hex_chars[byte & 0xf];
+		}
+	}
+	return result;
+}
+
+std::string sha1_base64(const uint8_t* data, size_t len) {
+	uint32_t state[5];
+	sha1_compute(data, len, state);
+
+	uint8_t digest[20];
+	for (int j = 0; j < 5; j++) {
+		digest[j * 4]     = static_cast<uint8_t>(state[j] >> 24);
+		digest[j * 4 + 1] = static_cast<uint8_t>(state[j] >> 16);
+		digest[j * 4 + 2] = static_cast<uint8_t>(state[j] >> 8);
+		digest[j * 4 + 3] = static_cast<uint8_t>(state[j]);
+	}
+	return base64_encode(digest, 20);
+}
+
 // ─── zlib helpers ───────────────────────────────────────────────────
 
 std::vector<uint8_t> zlib_inflate(const uint8_t* data, size_t len) {
@@ -1062,15 +1183,20 @@ _buf = std::move(buf);
 }
 
 std::string BufferWrapper::calculateHash(std::string_view hash, std::string_view encoding) {
-if (hash != "md5")
-throw std::runtime_error("calculateHash: unsupported hash algorithm '" + std::string(hash) + "' (only md5 supported)");
+if (hash != "md5" && hash != "sha1")
+throw std::runtime_error("calculateHash: unsupported hash algorithm '" + std::string(hash) + "' (only md5, sha1 supported)");
 
-if (encoding == "hex")
+if (encoding == "hex") {
+if (hash == "sha1")
+return sha1_hex(_buf.data(), _buf.size());
 return md5_hex(_buf.data(), _buf.size());
-else if (encoding == "base64")
+} else if (encoding == "base64") {
+if (hash == "sha1")
+return sha1_base64(_buf.data(), _buf.size());
 return md5_base64(_buf.data(), _buf.size());
-else
+} else {
 throw std::runtime_error("calculateHash: unsupported encoding '" + std::string(encoding) + "' (only hex, base64 supported)");
+}
 }
 
 bool BufferWrapper::isZeroed() const {
