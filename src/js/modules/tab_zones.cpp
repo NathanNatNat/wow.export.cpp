@@ -7,6 +7,7 @@ License: MIT
 #include "tab_zones.h"
 #include "../log.h"
 #include "../core.h"
+#include "../constants.h"
 #include "../generics.h"
 #include "../buffer.h"
 #include "../png-writer.h"
@@ -771,30 +772,47 @@ prev_show_zone_overlays = current_show_overlays;
 
 // --- Template rendering ---
 
-// Expansion filter buttons.
+// CSS: #tab-zones.tab.list-tab { grid-template-columns: 1.5fr 2fr; grid-template-rows: auto 1fr 60px; }
+if (app::layout::BeginTab("tab-zones")) {
+
+const ImVec2 tabAvail = ImGui::GetContentRegionAvail();
+const ImVec2 tabOrigin = ImGui::GetCursorPos();
+
+// --- Row 1: Expansion filter buttons (auto height) ---
 // JS: <div class="expansion-buttons">
 //     <button class="expansion-button show-all" ...>
 //     <button v-for="expansion in $core.view.constants.EXPANSIONS" ...>
-if (ImGui::SmallButton("All"))
-view.selectedZoneExpansionFilter = -1;
-ImGui::SameLine();
-
-// Expansion icons are background-image CSS vars in JS; here we use text buttons.
-// When icon font or texture icons are available, replace with icon buttons.
-for (int i = 0; i < static_cast<int>(EXPANSION_NAMES.size()); i++) {
-const bool selected = (view.selectedZoneExpansionFilter == i);
-if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-if (ImGui::SmallButton(std::format("E{}", i).c_str()))
-view.selectedZoneExpansionFilter = i;
-if (selected) ImGui::PopStyleColor();
-ImGui::SameLine();
-}
-ImGui::NewLine();
-
-// Zone listbox.
-// JS: <component :is="$components.ListboxZones" ... >
-ImGui::BeginChild("zones-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.4f, -ImGui::GetFrameHeightWithSpacing() * 3), ImGuiChildFlags_Borders);
 {
+	ImGui::SetCursorPos(tabOrigin);
+	app::theme::renderExpansionFilterButtons(
+		view.selectedZoneExpansionFilter,
+		static_cast<int>(constants::EXPANSIONS.size()));
+}
+float expansionRowH = ImGui::GetCursorPosY() - tabOrigin.y;
+
+// Calculate remaining space for the list-tab grid (rows 2 + 3).
+constexpr float FILTER_BAR_H = app::layout::FILTER_BAR_HEIGHT; // 60px
+const float contentH = tabAvail.y - expansionRowH;
+
+// CSS: grid-template-columns: 1.5fr 2fr → ratio = 1.5 / (1.5 + 2.0) ≈ 0.4286
+constexpr float COL_RATIO = 1.5f / 3.5f;
+const float gridW = tabAvail.x;
+const float leftColW = gridW * COL_RATIO;
+const float rightColW = gridW - leftColW;
+const float topRowH = contentH - FILTER_BAR_H;
+
+const float rowYStart = tabOrigin.y + expansionRowH;
+
+// --- Left panel: Zone listbox (row 2, col 1) ---
+// JS: <component :is="$components.ListboxZones" ... >
+// CSS: .list-container { margin: 20px 10px 0 20px }
+{
+	ImGui::SetCursorPos(ImVec2(tabOrigin.x + app::layout::LIST_MARGIN_LEFT,
+	                           rowYStart + app::layout::LIST_MARGIN_TOP));
+	ImGui::BeginChild("zones-list-container",
+		ImVec2(leftColW - app::layout::LIST_MARGIN_LEFT - app::layout::LIST_MARGIN_RIGHT,
+		       topRowH - app::layout::LIST_MARGIN_TOP));
+
 	// Convert json items to string array.
 	std::vector<std::string> zone_strings;
 	zone_strings.reserve(view.zoneViewerZones.size());
@@ -833,12 +851,12 @@ ImGui::BeginChild("zones-list-container", ImVec2(ImGui::GetContentRegionAvail().
 			node["count"] = static_cast<int>(ev.selection.size());
 			view.contextMenus.nodeZone = node;
 		});
+
+	ImGui::EndChild(); // zones-list-container
 }
-ImGui::EndChild();
 
 // Context menu.
 // JS: <ContextMenu :node="contextMenus.nodeZone" ...>
-//   copy_zone_names, copy_area_names, copy_zone_ids, copy_zone_export_path, open_zone_export_directory
 context_menu::render(
 	"ctx-zone",
 	view.contextMenus.nodeZone,
@@ -865,89 +883,127 @@ context_menu::render(
 	}
 );
 
-// Filter.
-// JS: <div class="filter">
-if (view.config.value("regexFilters", false))
-ImGui::TextUnformatted("Regex Enabled");
-
-char filter_buf[256] = {};
-std::strncpy(filter_buf, view.userInputFilterZones.c_str(), sizeof(filter_buf) - 1);
-if (ImGui::InputText("##FilterZones", filter_buf, sizeof(filter_buf)))
-view.userInputFilterZones = filter_buf;
-
-ImGui::SameLine();
-
-// Right panel: export controls + zone preview.
-ImGui::BeginGroup();
-
-// Export controls.
-// JS: <div class="zone-export-controls">
-bool show_base_map = view.config.value("showZoneBaseMap", true);
-if (ImGui::Checkbox("Show Base Map", &show_base_map))
-view.config["showZoneBaseMap"] = show_base_map;
-
-ImGui::SameLine();
-
-bool show_overlays = view.config.value("showZoneOverlays", true);
-if (ImGui::Checkbox("Show Overlays", &show_overlays))
-view.config["showZoneOverlays"] = show_overlays;
-
-ImGui::SameLine();
-
-const bool busy = view.isBusy > 0;
-const bool no_selection = view.selectionZones.empty();
-if (busy || no_selection) app::theme::BeginDisabledButton();
-if (ImGui::Button("Export Map"))
-export_zone_map();
-if (busy || no_selection) app::theme::EndDisabledButton();
-
-// Phase dropdown.
-// JS: <select v-model="$core.view.zonePhaseSelection">
-if (view.zonePhases.size() > 1) {
-std::string current_label = "Default";
-if (view.zonePhaseSelection.is_number()) {
-int current_id = view.zonePhaseSelection.get<int>();
-for (const auto& phase : view.zonePhases) {
-if (phase.value("id", -99) == current_id) {
-current_label = phase.value("label", std::string("Unknown"));
-break;
-}
-}
-}
-
-if (ImGui::BeginCombo("Phase", current_label.c_str())) {
-for (const auto& phase : view.zonePhases) {
-const std::string label = phase.value("label", std::string("Unknown"));
-const int phase_id = phase.value("id", -99);
-const bool is_selected = view.zonePhaseSelection.is_number() &&
-view.zonePhaseSelection.get<int>() == phase_id;
-if (ImGui::Selectable(label.c_str(), is_selected))
-view.zonePhaseSelection = phase_id;
-if (is_selected)
-ImGui::SetItemDefaultFocus();
-}
-ImGui::EndCombo();
-}
-}
-
-// Zone map preview (canvas).
+// --- Right panel: Zone map preview (row 1 spanning to row 2, col 2) ---
 // JS: <div class="zone-viewer-container preview-container">
 //     <canvas id="zone-canvas"></canvas>
-ImGui::BeginChild("zone-canvas-area", ImVec2(0, 0), ImGuiChildFlags_Borders);
-if (view.zoneMapTexID != 0 && view.zoneMapWidth > 0 && view.zoneMapHeight > 0) {
-	// Fit zone map into available area while preserving aspect ratio.
-	const ImVec2 avail = ImGui::GetContentRegionAvail();
-	const float tex_w = static_cast<float>(view.zoneMapWidth);
-	const float tex_h = static_cast<float>(view.zoneMapHeight);
-	const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
-	const ImVec2 img_size(tex_w * scale, tex_h * scale);
-	ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.zoneMapTexID)), img_size);
-} else {
-	ImGui::TextUnformatted("Select a zone to preview its map");
-}
-ImGui::EndChild();
+// CSS: .preview-container { margin: 20px 20px 0 10px; }
+{
+	ImGui::SetCursorPos(ImVec2(tabOrigin.x + leftColW + app::layout::PREVIEW_MARGIN_LEFT,
+	                           tabOrigin.y + app::layout::PREVIEW_MARGIN_TOP));
+	ImGui::BeginChild("zone-canvas-area",
+		ImVec2(rightColW - app::layout::PREVIEW_MARGIN_LEFT - app::layout::PREVIEW_MARGIN_RIGHT,
+		       tabAvail.y - FILTER_BAR_H - app::layout::PREVIEW_MARGIN_TOP),
+		ImGuiChildFlags_Borders);
 
-ImGui::EndGroup();
+	if (view.zoneMapTexID != 0 && view.zoneMapWidth > 0 && view.zoneMapHeight > 0) {
+		// Fit zone map into available area while preserving aspect ratio.
+		const ImVec2 avail = ImGui::GetContentRegionAvail();
+		const float tex_w = static_cast<float>(view.zoneMapWidth);
+		const float tex_h = static_cast<float>(view.zoneMapHeight);
+		const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
+		const ImVec2 img_size(tex_w * scale, tex_h * scale);
+		ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.zoneMapTexID)), img_size);
+	} else {
+		ImGui::TextUnformatted("Select a zone to preview its map");
+	}
+
+	ImGui::EndChild(); // zone-canvas-area
+}
+
+// --- Filter bar (row 3, col 1) ---
+// JS: <div class="filter">
+{
+	ImGui::SetCursorPos(ImVec2(tabOrigin.x, rowYStart + topRowH));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f, 0.0f));
+	ImGui::BeginChild("zones-filter", ImVec2(leftColW, FILTER_BAR_H), ImGuiChildFlags_None,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	{
+		float padY = (FILTER_BAR_H - ImGui::GetFrameHeight()) * 0.5f;
+		if (padY > 0.0f) ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
+
+		if (view.config.value("regexFilters", false)) {
+			ImGui::TextUnformatted("Regex Enabled");
+			ImGui::SameLine();
+		}
+
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterZones.c_str(), sizeof(filter_buf) - 1);
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		if (ImGui::InputText("##FilterZones", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterZones = filter_buf;
+	}
+	ImGui::EndChild();
+	ImGui::PopStyleVar();
+}
+
+// --- Preview controls (row 3, col 2) ---
+// JS: <div class="zone-export-controls">
+//     <label>Show Base Map <input type="checkbox"...></label>
+//     <label>Show Overlays <input type="checkbox"...></label>
+//     <MenuButton ...>Export Map</MenuButton>
+//     <select v-model="zonePhaseSelection">...</select>
+{
+	ImGui::SetCursorPos(ImVec2(tabOrigin.x + leftColW, rowYStart + topRowH));
+	ImGui::BeginChild("zones-preview-controls", ImVec2(rightColW, FILTER_BAR_H), ImGuiChildFlags_None,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	{
+		float padY = (FILTER_BAR_H - ImGui::GetFrameHeight()) * 0.5f;
+		if (padY > 0.0f) ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
+
+		bool show_base_map = view.config.value("showZoneBaseMap", true);
+		if (ImGui::Checkbox("Show Base Map", &show_base_map))
+			view.config["showZoneBaseMap"] = show_base_map;
+
+		ImGui::SameLine();
+
+		bool show_overlays = view.config.value("showZoneOverlays", true);
+		if (ImGui::Checkbox("Show Overlays", &show_overlays))
+			view.config["showZoneOverlays"] = show_overlays;
+
+		ImGui::SameLine();
+
+		const bool busy = view.isBusy > 0;
+		const bool no_selection = view.selectionZones.empty();
+		if (busy || no_selection) app::theme::BeginDisabledButton();
+		if (ImGui::Button("Export Map"))
+			export_zone_map();
+		if (busy || no_selection) app::theme::EndDisabledButton();
+
+		// Phase dropdown.
+		// JS: <select v-model="$core.view.zonePhaseSelection">
+		if (view.zonePhases.size() > 1) {
+			ImGui::SameLine();
+			std::string current_label = "Default";
+			if (view.zonePhaseSelection.is_number()) {
+				int current_id = view.zonePhaseSelection.get<int>();
+				for (const auto& phase : view.zonePhases) {
+					if (phase.value("id", -99) == current_id) {
+						current_label = phase.value("label", std::string("Unknown"));
+						break;
+					}
+				}
+			}
+
+			if (ImGui::BeginCombo("Phase", current_label.c_str())) {
+				for (const auto& phase : view.zonePhases) {
+					const std::string label = phase.value("label", std::string("Unknown"));
+					const int phase_id = phase.value("id", -99);
+					const bool is_selected = view.zonePhaseSelection.is_number() &&
+						view.zonePhaseSelection.get<int>() == phase_id;
+					if (ImGui::Selectable(label.c_str(), is_selected))
+						view.zonePhaseSelection = phase_id;
+					if (is_selected)
+						ImGui::SetItemDefaultFocus();
+				}
+				ImGui::EndCombo();
+			}
+		}
+	}
+	ImGui::EndChild();
+}
+
+} // if BeginTab
+app::layout::EndTab();
 }
 
 // --- Context menu methods ---

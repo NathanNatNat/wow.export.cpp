@@ -3016,10 +3016,14 @@ if (ImGui::Checkbox(label.c_str(), &checked))
 geoset["checked"] = checked;
 }
 
+// JS: <div class="geoset-toggles">
+//     <a @click="set_all_geosets(true)">Enable All</a> / <a @click="set_all_geosets(false)">Disable All</a>
 if (ImGui::Button("Enable All")) {
 for (auto& g : view.chrCustGeosets)
 if (g.value("id", 0) != 0) g["checked"] = true;
 }
+ImGui::SameLine();
+ImGui::TextUnformatted("/");
 ImGui::SameLine();
 if (ImGui::Button("Disable All")) {
 for (auto& g : view.chrCustGeosets)

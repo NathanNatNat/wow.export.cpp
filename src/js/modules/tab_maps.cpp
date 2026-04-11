@@ -1508,361 +1508,415 @@ load_map(map.id, map.dir);
 
 // --- UI Layout ---
 // JS: <div class="tab list-tab" id="tab-maps">
+// CSS: #tab-maps { grid-template-rows: auto 1fr 60px; }
+if (app::layout::BeginTab("tab-maps")) {
 
-ImGui::PushID("tab-maps");
+const ImVec2 tabAvail = ImGui::GetContentRegionAvail();
+const ImVec2 tabOrigin = ImGui::GetCursorPos();
 
-// --- Expansion filter buttons ---
+// --- Row 1: Expansion filter buttons (auto height) ---
 // JS: <div class="expansion-buttons"> ... </div>
+// CSS: .expansion-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; justify-content: center; }
 {
-ImGui::BeginGroup();
-
-// "Show All" button
-bool all_active = (view.selectedExpansionFilter == -1);
-if (all_active)
-ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.133f, 0.71f, 0.286f, 1.0f));
-if (ImGui::Button("All##exp_all"))
-view.selectedExpansionFilter = -1;
-if (all_active)
-ImGui::PopStyleColor();
-
-// Per-expansion buttons
-for (const auto& exp : constants::EXPANSIONS) {
-ImGui::SameLine();
-bool active = (view.selectedExpansionFilter == exp.id);
-if (active)
-ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.133f, 0.71f, 0.286f, 1.0f));
-if (ImGui::Button(std::format("{}##exp_{}", exp.shortName, exp.id).c_str()))
-view.selectedExpansionFilter = exp.id;
-if (active)
-ImGui::PopStyleColor();
+	ImGui::SetCursorPos(tabOrigin);
+	app::theme::renderExpansionFilterButtons(
+		view.selectedExpansionFilter,
+		static_cast<int>(constants::EXPANSIONS.size()));
 }
+float expansionRowH = ImGui::GetCursorPosY() - tabOrigin.y;
 
-ImGui::EndGroup();
-}
+// Calculate remaining space for the list-tab grid (rows 2 + 3).
+constexpr float FILTER_BAR_H = app::layout::FILTER_BAR_HEIGHT; // 60px
+const float contentH = tabAvail.y - expansionRowH;
 
-// --- Map list + filter + context menu ---
+// --- Calculate grid regions manually for the remaining space ---
+// CSS: grid-template-columns: 1fr 1fr auto (with sidebar)
+// CSS: grid-template-rows: 1fr 60px (within the remaining space)
+constexpr float SIDEBAR_W = app::layout::SIDEBAR_WIDTH;
+const float gridW = tabAvail.x - SIDEBAR_W;
+const float leftColW = gridW * 0.5f;
+const float rightColW = gridW - leftColW;
+const float topRowH = contentH - FILTER_BAR_H;
+
+const float rowYStart = tabOrigin.y + expansionRowH;
+
+// --- Left panel: Map list container (row 2, col 1) ---
+// JS: <div class="list-container">
+// CSS: .list-container { margin: 20px 10px 0 20px }
+// CSS: #tab-maps .list-container { grid-column: 1; grid-row: 2; }
 {
-// Convert JSON items to string vector for listbox
-std::vector<std::string> map_items;
-map_items.reserve(view.mapViewerMaps.size());
-for (const auto& item : view.mapViewerMaps)
-map_items.push_back(item.get<std::string>());
+	ImGui::SetCursorPos(ImVec2(tabOrigin.x + app::layout::LIST_MARGIN_LEFT,
+	                           rowYStart + app::layout::LIST_MARGIN_TOP));
+	ImGui::BeginChild("maps-list-container",
+		ImVec2(leftColW - app::layout::LIST_MARGIN_LEFT - app::layout::LIST_MARGIN_RIGHT,
+		       topRowH - app::layout::LIST_MARGIN_TOP));
 
-// Convert JSON selection to string vector
-std::vector<std::string> selection_strs;
-for (const auto& s : view.selectionMaps)
-selection_strs.push_back(s.get<std::string>());
+	// Convert JSON items to string vector for listbox
+	std::vector<std::string> map_items;
+	map_items.reserve(view.mapViewerMaps.size());
+	for (const auto& item : view.mapViewerMaps)
+		map_items.push_back(item.get<std::string>());
 
-// Determine copy mode
-listbox::CopyMode copy_mode = listbox::CopyMode::Default;
-std::string copy_mode_str = view.config.value("copyMode", "Default");
-if (copy_mode_str == "DIR") copy_mode = listbox::CopyMode::DIR;
-else if (copy_mode_str == "FID") copy_mode = listbox::CopyMode::FID;
+	// Convert JSON selection to string vector
+	std::vector<std::string> selection_strs;
+	for (const auto& s : view.selectionMaps)
+		selection_strs.push_back(s.get<std::string>());
 
-listbox_maps::render(
-"listbox-maps",
-map_items,
-view.userInputFilterMaps,
-selection_strs,
-true,   // single
-true,   // keyinput
-view.config.value("regexFilters", false),
-copy_mode,
-view.config.value("pasteSelection", false),
-view.config.value("removePathSpacesCopy", false),
-"map",  // unittype
-nullptr, // overrideItems
-false,   // disable
-"maps",  // persistscrollkey
-{},      // quickfilters
-false,   // nocopy
-view.selectedExpansionFilter,
-listbox_state,
-[&](const std::vector<std::string>& new_sel) {
-view.selectionMaps.clear();
-for (const auto& s : new_sel)
-view.selectionMaps.push_back(s);
-},
-[](const listbox::ContextMenuEvent& ev) {
-handle_map_context(ev);
+	// Determine copy mode
+	listbox::CopyMode copy_mode = listbox::CopyMode::Default;
+	std::string copy_mode_str = view.config.value("copyMode", "Default");
+	if (copy_mode_str == "DIR") copy_mode = listbox::CopyMode::DIR;
+	else if (copy_mode_str == "FID") copy_mode = listbox::CopyMode::FID;
+
+	listbox_maps::render(
+		"listbox-maps",
+		map_items,
+		view.userInputFilterMaps,
+		selection_strs,
+		true,   // single
+		true,   // keyinput
+		view.config.value("regexFilters", false),
+		copy_mode,
+		view.config.value("pasteSelection", false),
+		view.config.value("removePathSpacesCopy", false),
+		"map",  // unittype
+		nullptr, // overrideItems
+		false,   // disable
+		"maps",  // persistscrollkey
+		{},      // quickfilters
+		false,   // nocopy
+		view.selectedExpansionFilter,
+		listbox_state,
+		[&](const std::vector<std::string>& new_sel) {
+			view.selectionMaps.clear();
+			for (const auto& s : new_sel)
+				view.selectionMaps.push_back(s);
+		},
+		[](const listbox::ContextMenuEvent& ev) {
+			handle_map_context(ev);
+		}
+	);
+
+	ImGui::EndChild(); // maps-list-container
 }
-);
+
+// --- Right panel: Map Viewer (row 1 spanning to row 2, col 2) ---
+// CSS: #tab-maps .ui-map-viewer { grid-column: 2; grid-row: 1 / span 2; }
+{
+	ImGui::SetCursorPos(ImVec2(tabOrigin.x + leftColW + app::layout::PREVIEW_MARGIN_LEFT,
+	                           tabOrigin.y + app::layout::PREVIEW_MARGIN_TOP));
+	ImGui::BeginChild("maps-preview-container",
+		ImVec2(rightColW - app::layout::PREVIEW_MARGIN_LEFT - app::layout::PREVIEW_MARGIN_RIGHT,
+		       tabAvail.y - FILTER_BAR_H - app::layout::PREVIEW_MARGIN_TOP));
+
+	auto tile_loader = [](int x, int y, int size) -> std::vector<uint8_t> {
+		std::string loader_type = "terrain";
+		if (core::view->mapViewerTileLoader.is_string())
+			loader_type = core::view->mapViewerTileLoader.get<std::string>();
+
+		if (loader_type == "wmo_minimap")
+			return load_wmo_minimap_tile(x, y, size);
+		else
+			return load_map_tile(x, y, size);
+	};
+
+	// Convert mapViewerChunkMask (JSON) to std::vector<int>
+	std::vector<int> mask;
+	if (view.mapViewerChunkMask.is_array()) {
+		for (const auto& v : view.mapViewerChunkMask)
+			mask.push_back(v.get<int>());
+	}
+
+	// Convert mapViewerSelection to std::vector<int>
+	std::vector<int> selection;
+	for (const auto& v : view.mapViewerSelection)
+		selection.push_back(v.get<int>());
+
+	int map_id = view.mapViewerSelectedMap.is_number() ? view.mapViewerSelectedMap.get<int>() : -1;
+	int grid_size = view.mapViewerGridSize.is_number() ? view.mapViewerGridSize.get<int>() : 0;
+	bool selectable = !view.mapViewerIsWMOMinimap;
+
+	map_viewer::renderWidget(
+		"map-viewer",
+		map_viewer_state,
+		tile_loader,
+		512,   // tileSize
+		map_id,
+		12,    // zoom
+		mask,
+		selection,
+		selectable,
+		grid_size,
+		[&](const std::vector<int>& new_sel) {
+			view.mapViewerSelection.clear();
+			for (int idx : new_sel)
+				view.mapViewerSelection.push_back(idx);
+		}
+	);
+
+	ImGui::EndChild(); // maps-preview-container
+}
+
+// --- Filter bar (row 3, col 1) ---
+// CSS: #tab-maps .filter { grid-column: 1; grid-row: 3; }
+{
+	ImGui::SetCursorPos(ImVec2(tabOrigin.x, rowYStart + topRowH));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f, 0.0f));
+	ImGui::BeginChild("maps-filter", ImVec2(leftColW, FILTER_BAR_H), ImGuiChildFlags_None,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	{
+		float padY = (FILTER_BAR_H - ImGui::GetFrameHeight()) * 0.5f;
+		if (padY > 0.0f) ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
+
+		bool regex_enabled = view.config.value("regexFilters", false);
+		if (regex_enabled) {
+			ImGui::TextDisabled("Regex Enabled");
+			ImGui::SameLine();
+		}
+
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterMaps.c_str(), sizeof(filter_buf) - 1);
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		if (ImGui::InputText("##filter-maps", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterMaps = filter_buf;
+	}
+	ImGui::EndChild();
+	ImGui::PopStyleVar();
+}
 
 // Context menu
-const auto& node = view.contextMenus.nodeMap;
-context_menu::render(
-"ctx-maps",
-node,
-context_menu_state,
-[&]() { view.contextMenus.nodeMap = nullptr; },
-[&](const nlohmann::json& ctx_node) {
-std::vector<std::string> ctx_selection;
-if (ctx_node.contains("selection") && ctx_node["selection"].is_array()) {
-for (const auto& s : ctx_node["selection"])
-ctx_selection.push_back(s.get<std::string>());
-}
-int count = ctx_node.value("count", 0);
-std::string plural = count > 1 ? "s" : "";
-
-if (ImGui::Selectable(std::format("Copy map name{}", plural).c_str()))
-copy_map_names(ctx_selection);
-if (ImGui::Selectable(std::format("Copy internal name{}", plural).c_str()))
-copy_map_internal_names(ctx_selection);
-if (ImGui::Selectable(std::format("Copy map ID{}", plural).c_str()))
-copy_map_ids(ctx_selection);
-if (ImGui::Selectable(std::format("Copy export path{}", plural).c_str()))
-copy_map_export_paths(ctx_selection);
-if (ImGui::Selectable("Open export directory"))
-open_map_export_directory(ctx_selection);
-}
-);
-
-// Filter input
 {
-bool regex_enabled = view.config.value("regexFilters", false);
-if (regex_enabled)
-ImGui::TextDisabled("Regex Enabled");
+	const auto& node = view.contextMenus.nodeMap;
+	context_menu::render(
+		"ctx-maps",
+		node,
+		context_menu_state,
+		[&]() { view.contextMenus.nodeMap = nullptr; },
+		[&](const nlohmann::json& ctx_node) {
+			std::vector<std::string> ctx_selection;
+			if (ctx_node.contains("selection") && ctx_node["selection"].is_array()) {
+				for (const auto& s : ctx_node["selection"])
+					ctx_selection.push_back(s.get<std::string>());
+			}
+			int count = ctx_node.value("count", 0);
+			std::string plural = count > 1 ? "s" : "";
 
-char filter_buf[256] = {};
-std::strncpy(filter_buf, view.userInputFilterMaps.c_str(), sizeof(filter_buf) - 1);
-if (ImGui::InputText("##filter-maps", filter_buf, sizeof(filter_buf)))
-view.userInputFilterMaps = filter_buf;
-}
+			if (ImGui::Selectable(std::format("Copy map name{}", plural).c_str()))
+				copy_map_names(ctx_selection);
+			if (ImGui::Selectable(std::format("Copy internal name{}", plural).c_str()))
+				copy_map_internal_names(ctx_selection);
+			if (ImGui::Selectable(std::format("Copy map ID{}", plural).c_str()))
+				copy_map_ids(ctx_selection);
+			if (ImGui::Selectable(std::format("Copy export path{}", plural).c_str()))
+				copy_map_export_paths(ctx_selection);
+			if (ImGui::Selectable("Open export directory"))
+				open_map_export_directory(ctx_selection);
+		}
+	);
 }
 
-// --- Map Viewer ---
+// --- Preview controls (row 3, col 2) ---
+// CSS: #tab-maps .spaced-preview-controls { grid-column: 2; grid-row: 3; }
 {
-auto tile_loader = [](int x, int y, int size) -> std::vector<uint8_t> {
-std::string loader_type = "terrain";
-if (core::view->mapViewerTileLoader.is_string())
-loader_type = core::view->mapViewerTileLoader.get<std::string>();
+	ImGui::SetCursorPos(ImVec2(tabOrigin.x + leftColW, rowYStart + topRowH));
+	ImGui::BeginChild("maps-preview-controls", ImVec2(rightColW, FILTER_BAR_H), ImGuiChildFlags_None,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	{
+		float padY = (FILTER_BAR_H - ImGui::GetFrameHeight()) * 0.5f;
+		if (padY > 0.0f) ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
 
-if (loader_type == "wmo_minimap")
-return load_wmo_minimap_tile(x, y, size);
-else
-return load_map_tile(x, y, size);
-};
+		if (view.mapViewerHasWorldModel) {
+			bool disabled = view.isBusy;
+			if (disabled) app::theme::BeginDisabledButton();
+			if (ImGui::Button("Export Global WMO"))
+				export_map_wmo();
+			ImGui::SameLine();
+			if (ImGui::Button("Export WMO Minimap"))
+				export_map_wmo_minimap();
+			if (disabled) app::theme::EndDisabledButton();
+			ImGui::SameLine();
+		}
 
-// Convert mapViewerChunkMask (JSON) to std::vector<int>
-std::vector<int> mask;
-if (view.mapViewerChunkMask.is_array()) {
-for (const auto& v : view.mapViewerChunkMask)
-mask.push_back(v.get<int>());
+		if (!view.mapViewerIsWMOMinimap) {
+			std::vector<menu_button::MenuOption> export_options;
+			for (const auto& opt : view.menuButtonMapExport)
+				export_options.push_back({opt.label, opt.value});
+
+			std::string default_format = view.config.value("exportMapFormat", "OBJ");
+			bool export_disabled = view.isBusy || view.mapViewerSelection.empty();
+
+			if (export_disabled) app::theme::BeginDisabledButton();
+			menu_button::render(
+				"map-export-btn",
+				export_options,
+				default_format,
+				false,
+				false,
+				menu_button_export_state,
+				[&](const std::string& val) {
+					view.config["exportMapFormat"] = val;
+				},
+				[]() {
+					export_map();
+				}
+			);
+			if (export_disabled) app::theme::EndDisabledButton();
+		}
+	}
+	ImGui::EndChild();
 }
 
-// Convert mapViewerSelection to std::vector<int>
-std::vector<int> selection;
-for (const auto& v : view.mapViewerSelection)
-selection.push_back(v.get<int>());
-
-int map_id = view.mapViewerSelectedMap.is_number() ? view.mapViewerSelectedMap.get<int>() : -1;
-int grid_size = view.mapViewerGridSize.is_number() ? view.mapViewerGridSize.get<int>() : 0;
-bool selectable = !view.mapViewerIsWMOMinimap;
-
-map_viewer::renderWidget(
-"map-viewer",
-map_viewer_state,
-tile_loader,
-512,   // tileSize
-map_id,
-12,    // zoom
-mask,
-selection,
-selectable,
-grid_size,
-[&](const std::vector<int>& new_sel) {
-view.mapViewerSelection.clear();
-for (int idx : new_sel)
-view.mapViewerSelection.push_back(idx);
-}
-);
-}
-
-// --- Export buttons ---
+// --- Sidebar (col 3, spanning all rows) ---
+// CSS: #tab-maps .sidebar { grid-row: 1/span 3; }
 {
-if (view.mapViewerHasWorldModel) {
-bool disabled = view.isBusy;
-if (disabled) app::theme::BeginDisabledButton();
-if (ImGui::Button("Export Global WMO"))
-export_map_wmo();
-ImGui::SameLine();
-if (ImGui::Button("Export WMO Minimap"))
-export_map_wmo_minimap();
-if (disabled) app::theme::EndDisabledButton();
+	ImGui::SetCursorPos(ImVec2(tabOrigin.x + gridW,
+	                           tabOrigin.y + app::layout::SIDEBAR_MARGIN_TOP));
+	ImGui::BeginChild("maps-sidebar",
+		ImVec2(SIDEBAR_W - app::layout::SIDEBAR_PADDING_RIGHT,
+		       tabAvail.y - app::layout::SIDEBAR_MARGIN_TOP));
+
+	ImGui::SeparatorText("Export Options");
+
+	bool maps_include_wmo = view.config.value("mapsIncludeWMO", true);
+	if (ImGui::Checkbox("Export WMO##maps_wmo", &maps_include_wmo))
+		view.config["mapsIncludeWMO"] = maps_include_wmo;
+	if (ImGui::IsItemHovered()) ImGui::SetTooltip("Include WMO objects (large objects such as buildings)");
+
+	if (maps_include_wmo) {
+		bool maps_include_wmo_sets = view.config.value("mapsIncludeWMOSets", true);
+		if (ImGui::Checkbox("Export WMO Sets##maps_wmo_sets", &maps_include_wmo_sets))
+			view.config["mapsIncludeWMOSets"] = maps_include_wmo_sets;
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Include objects inside WMOs (interior decorations)");
+	}
+
+	bool maps_include_m2 = view.config.value("mapsIncludeM2", true);
+	if (ImGui::Checkbox("Export M2##maps_m2", &maps_include_m2))
+		view.config["mapsIncludeM2"] = maps_include_m2;
+	if (ImGui::IsItemHovered()) ImGui::SetTooltip("Export M2 objects on this tile (smaller objects such as trees)");
+
+	bool maps_include_foliage = view.config.value("mapsIncludeFoliage", false);
+	if (ImGui::Checkbox("Export Foliage##maps_foliage", &maps_include_foliage))
+		view.config["mapsIncludeFoliage"] = maps_include_foliage;
+	if (ImGui::IsItemHovered()) ImGui::SetTooltip("Export foliage used on this tile (grass, etc)");
+
+	bool maps_export_raw = view.config.value("mapsExportRaw", false);
+
+	if (!maps_export_raw) {
+		bool maps_include_liquid = view.config.value("mapsIncludeLiquid", true);
+		if (ImGui::Checkbox("Export Liquids##maps_liquid", &maps_include_liquid))
+			view.config["mapsIncludeLiquid"] = maps_include_liquid;
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Export raw liquid data (water, lava, etc)");
+	}
+
+	bool maps_include_game_objects = view.config.value("mapsIncludeGameObjects", false);
+	if (ImGui::Checkbox("Export G-Objects##maps_gobjects", &maps_include_game_objects))
+		view.config["mapsIncludeGameObjects"] = maps_include_game_objects;
+	if (ImGui::IsItemHovered()) ImGui::SetTooltip("Export client-side interactable objects (signs, banners, etc)");
+
+	if (!maps_export_raw) {
+		bool maps_include_holes = view.config.value("mapsIncludeHoles", true);
+		if (ImGui::Checkbox("Include Holes##maps_holes", &maps_include_holes))
+			view.config["mapsIncludeHoles"] = maps_include_holes;
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Include terrain holes for WMOs");
+	}
+
+	ImGui::SeparatorText("Model Textures");
+
+	bool models_export_textures = view.config.value("modelsExportTextures", true);
+	if (ImGui::Checkbox("Textures##maps_textures", &models_export_textures))
+		view.config["modelsExportTextures"] = models_export_textures;
+	if (ImGui::IsItemHovered()) ImGui::SetTooltip("Include textures when exporting models");
+
+	if (models_export_textures) {
+		bool models_export_alpha = view.config.value("modelsExportAlpha", true);
+		if (ImGui::Checkbox("Texture Alpha##maps_alpha", &models_export_alpha))
+			view.config["modelsExportAlpha"] = models_export_alpha;
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Include alpha channel in exported model textures");
+	}
+
+	if (!maps_export_raw) {
+		ImGui::SeparatorText("Terrain Texture Quality");
+
+		// Texture quality dropdown
+		std::vector<menu_button::MenuOption> quality_options;
+		for (const auto& opt : view.menuButtonTextureQuality)
+			quality_options.push_back({opt.label, std::to_string(opt.value)});
+
+		std::string default_quality = std::to_string(view.config.value("exportMapQuality", 512));
+
+		menu_button::render(
+			"map-quality-btn",
+			quality_options,
+			default_quality,
+			false,
+			true,
+			menu_button_quality_state,
+			[&](const std::string& val) {
+				view.config["exportMapQuality"] = std::stoi(val);
+			},
+			nullptr
+		);
+
+		ImGui::SeparatorText("Heightmaps");
+
+		// Heightmap resolution dropdown
+		std::vector<menu_button::MenuOption> hm_res_options;
+		for (const auto& opt : view.menuButtonHeightmapResolution)
+			hm_res_options.push_back({opt.label, std::to_string(opt.value)});
+
+		std::string default_hm_res = std::to_string(view.config.value("heightmapResolution", 256));
+
+		menu_button::render(
+			"hm-resolution-btn",
+			hm_res_options,
+			default_hm_res,
+			false,
+			true,
+			menu_button_heightmap_res_state,
+			[&](const std::string& val) {
+				view.config["heightmapResolution"] = std::stoi(val);
+			},
+			nullptr
+		);
+
+		// Heightmap bit depth dropdown
+		std::vector<menu_button::MenuOption> hm_depth_options;
+		for (const auto& opt : view.menuButtonHeightmapBitDepth)
+			hm_depth_options.push_back({opt.label, std::to_string(opt.value)});
+
+		std::string default_hm_depth = std::to_string(view.config.value("heightmapBitDepth", 8));
+
+		ImGui::Spacing();
+		menu_button::render(
+			"hm-bitdepth-btn",
+			hm_depth_options,
+			default_hm_depth,
+			false,
+			true,
+			menu_button_heightmap_depth_state,
+			[&](const std::string& val) {
+				view.config["heightmapBitDepth"] = std::stoi(val);
+			},
+			nullptr
+		);
+
+		// Custom resolution input
+		if (view.config.value("heightmapResolution", 256) == -1) {
+			ImGui::Spacing();
+			ImGui::Text("Heightmap Resolution");
+			int custom_res = view.config.value("heightmapCustomResolution", 256);
+			if (ImGui::InputInt("##hm_custom_res", &custom_res, 1, 10)) {
+				if (custom_res < 1) custom_res = 1;
+				view.config["heightmapCustomResolution"] = custom_res;
+			}
+		}
+	}
+
+	ImGui::EndChild(); // maps-sidebar
 }
 
-if (!view.mapViewerIsWMOMinimap) {
-std::vector<menu_button::MenuOption> export_options;
-for (const auto& opt : view.menuButtonMapExport)
-export_options.push_back({opt.label, opt.value});
-
-std::string default_format = view.config.value("exportMapFormat", "OBJ");
-bool export_disabled = view.isBusy || view.mapViewerSelection.empty();
-
-if (export_disabled) app::theme::BeginDisabledButton();
-menu_button::render(
-"map-export-btn",
-export_options,
-default_format,
-false,
-false,
-menu_button_export_state,
-[&](const std::string& val) {
-view.config["exportMapFormat"] = val;
-},
-[]() {
-export_map();
-}
-);
-if (export_disabled) app::theme::EndDisabledButton();
-}
-}
-
-// --- Sidebar ---
-{
-ImGui::Separator();
-ImGui::Text("Export Options");
-
-bool maps_include_wmo = view.config.value("mapsIncludeWMO", true);
-if (ImGui::Checkbox("Export WMO##maps_wmo", &maps_include_wmo))
-view.config["mapsIncludeWMO"] = maps_include_wmo;
-if (ImGui::IsItemHovered()) ImGui::SetTooltip("Include WMO objects (large objects such as buildings)");
-
-if (maps_include_wmo) {
-bool maps_include_wmo_sets = view.config.value("mapsIncludeWMOSets", true);
-if (ImGui::Checkbox("Export WMO Sets##maps_wmo_sets", &maps_include_wmo_sets))
-view.config["mapsIncludeWMOSets"] = maps_include_wmo_sets;
-if (ImGui::IsItemHovered()) ImGui::SetTooltip("Include objects inside WMOs (interior decorations)");
-}
-
-bool maps_include_m2 = view.config.value("mapsIncludeM2", true);
-if (ImGui::Checkbox("Export M2##maps_m2", &maps_include_m2))
-view.config["mapsIncludeM2"] = maps_include_m2;
-if (ImGui::IsItemHovered()) ImGui::SetTooltip("Export M2 objects on this tile (smaller objects such as trees)");
-
-bool maps_include_foliage = view.config.value("mapsIncludeFoliage", false);
-if (ImGui::Checkbox("Export Foliage##maps_foliage", &maps_include_foliage))
-view.config["mapsIncludeFoliage"] = maps_include_foliage;
-if (ImGui::IsItemHovered()) ImGui::SetTooltip("Export foliage used on this tile (grass, etc)");
-
-bool maps_export_raw = view.config.value("mapsExportRaw", false);
-
-if (!maps_export_raw) {
-bool maps_include_liquid = view.config.value("mapsIncludeLiquid", true);
-if (ImGui::Checkbox("Export Liquids##maps_liquid", &maps_include_liquid))
-view.config["mapsIncludeLiquid"] = maps_include_liquid;
-if (ImGui::IsItemHovered()) ImGui::SetTooltip("Export raw liquid data (water, lava, etc)");
-}
-
-bool maps_include_game_objects = view.config.value("mapsIncludeGameObjects", false);
-if (ImGui::Checkbox("Export G-Objects##maps_gobjects", &maps_include_game_objects))
-view.config["mapsIncludeGameObjects"] = maps_include_game_objects;
-if (ImGui::IsItemHovered()) ImGui::SetTooltip("Export client-side interactable objects (signs, banners, etc)");
-
-if (!maps_export_raw) {
-bool maps_include_holes = view.config.value("mapsIncludeHoles", true);
-if (ImGui::Checkbox("Include Holes##maps_holes", &maps_include_holes))
-view.config["mapsIncludeHoles"] = maps_include_holes;
-if (ImGui::IsItemHovered()) ImGui::SetTooltip("Include terrain holes for WMOs");
-}
-
-ImGui::Separator();
-ImGui::Text("Model Textures");
-
-bool models_export_textures = view.config.value("modelsExportTextures", true);
-if (ImGui::Checkbox("Textures##maps_textures", &models_export_textures))
-view.config["modelsExportTextures"] = models_export_textures;
-if (ImGui::IsItemHovered()) ImGui::SetTooltip("Include textures when exporting models");
-
-if (models_export_textures) {
-bool models_export_alpha = view.config.value("modelsExportAlpha", true);
-if (ImGui::Checkbox("Texture Alpha##maps_alpha", &models_export_alpha))
-view.config["modelsExportAlpha"] = models_export_alpha;
-if (ImGui::IsItemHovered()) ImGui::SetTooltip("Include alpha channel in exported model textures");
-}
-
-if (!maps_export_raw) {
-ImGui::Separator();
-ImGui::Text("Terrain Texture Quality");
-
-// Texture quality dropdown
-std::vector<menu_button::MenuOption> quality_options;
-for (const auto& opt : view.menuButtonTextureQuality)
-quality_options.push_back({opt.label, std::to_string(opt.value)});
-
-std::string default_quality = std::to_string(view.config.value("exportMapQuality", 512));
-
-menu_button::render(
-"map-quality-btn",
-quality_options,
-default_quality,
-false,
-true,
-menu_button_quality_state,
-[&](const std::string& val) {
-view.config["exportMapQuality"] = std::stoi(val);
-},
-nullptr
-);
-
-ImGui::Separator();
-ImGui::Text("Heightmaps");
-
-// Heightmap resolution dropdown
-std::vector<menu_button::MenuOption> hm_res_options;
-for (const auto& opt : view.menuButtonHeightmapResolution)
-hm_res_options.push_back({opt.label, std::to_string(opt.value)});
-
-std::string default_hm_res = std::to_string(view.config.value("heightmapResolution", 256));
-
-menu_button::render(
-"hm-resolution-btn",
-hm_res_options,
-default_hm_res,
-false,
-true,
-menu_button_heightmap_res_state,
-[&](const std::string& val) {
-view.config["heightmapResolution"] = std::stoi(val);
-},
-nullptr
-);
-
-// Heightmap bit depth dropdown
-std::vector<menu_button::MenuOption> hm_depth_options;
-for (const auto& opt : view.menuButtonHeightmapBitDepth)
-hm_depth_options.push_back({opt.label, std::to_string(opt.value)});
-
-std::string default_hm_depth = std::to_string(view.config.value("heightmapBitDepth", 8));
-
-ImGui::Spacing();
-menu_button::render(
-"hm-bitdepth-btn",
-hm_depth_options,
-default_hm_depth,
-false,
-true,
-menu_button_heightmap_depth_state,
-[&](const std::string& val) {
-view.config["heightmapBitDepth"] = std::stoi(val);
-},
-nullptr
-);
-
-// Custom resolution input
-if (view.config.value("heightmapResolution", 256) == -1) {
-ImGui::Spacing();
-ImGui::Text("Heightmap Resolution");
-int custom_res = view.config.value("heightmapCustomResolution", 256);
-if (ImGui::InputInt("##hm_custom_res", &custom_res, 1, 10)) {
-if (custom_res < 1) custom_res = 1;
-view.config["heightmapCustomResolution"] = custom_res;
-}
-}
-}
-}
-
-ImGui::PopID();
+} // if BeginTab
+app::layout::EndTab();
 }
 
 } // namespace tab_maps

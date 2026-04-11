@@ -39,6 +39,7 @@
 #include <imgui_impl_opengl3.h>
 
 #include <stb_image.h>
+#include <webp/decode.h>
 
 #define NANOSVG_IMPLEMENTATION
 #include <nanosvg.h>
@@ -1900,6 +1901,152 @@ GLuint loadSvgTexture(const std::filesystem::path& path, int size) {
 
 GLuint loadImageTexture(const std::filesystem::path& path, int* out_w, int* out_h) {
 	return ::loadImageTexture(path, out_w, out_h);
+}
+
+GLuint loadWebPTexture(const std::filesystem::path& path, int* out_w, int* out_h) {
+	std::ifstream file(path, std::ios::binary | std::ios::ate);
+	if (!file.is_open())
+		return 0;
+
+	auto fileSize = file.tellg();
+	if (fileSize <= 0)
+		return 0;
+
+	std::vector<uint8_t> fileData(static_cast<size_t>(fileSize));
+	file.seekg(0);
+	file.read(reinterpret_cast<char*>(fileData.data()), fileSize);
+	file.close();
+
+	int w = 0, h = 0;
+	uint8_t* pixels = WebPDecodeRGBA(fileData.data(), fileData.size(), &w, &h);
+	if (!pixels)
+		return 0;
+
+	GLuint tex = 0;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	WebPFree(pixels);
+
+	if (out_w) *out_w = w;
+	if (out_h) *out_h = h;
+	return tex;
+}
+
+// ── Expansion icon textures ──────────────────────────────────────
+
+// Expansion ID → icon filename mapping.
+static const char* s_expansionIconFiles[] = {
+	"icon_classic.webp",   // 0: Classic
+	"icon_tbc.webp",       // 1: TBC
+	"icon_wotlk.webp",     // 2: WotLK
+	"icon_cata.webp",      // 3: Cataclysm
+	"icon_mop.webp",       // 4: MoP
+	"icon_wod.webp",       // 5: WoD
+	"icon_legion.webp",    // 6: Legion
+	"icon_bfa.webp",       // 7: BfA
+	"icon_slands.webp",    // 8: Shadowlands
+	"icon_df.webp",        // 9: Dragonflight
+	"icon_tww.webp",       // 10: TWW
+	"icon_midnight.webp",  // 11: Midnight
+	"icon_tlt.webp",       // 12: TLT
+};
+static constexpr int s_expansionIconCount = static_cast<int>(std::size(s_expansionIconFiles));
+static GLuint s_expansionIconTextures[13] = {};
+static bool s_expansionIconsLoaded = false;
+
+static void loadExpansionIcons() {
+	if (s_expansionIconsLoaded)
+		return;
+	s_expansionIconsLoaded = true;
+
+	std::filesystem::path iconDir = constants::DATA_DIR() / "images" / "expansion";
+	for (int i = 0; i < s_expansionIconCount; ++i) {
+		s_expansionIconTextures[i] = loadWebPTexture(iconDir / s_expansionIconFiles[i]);
+	}
+}
+
+GLuint getExpansionIconTexture(int expansionId) {
+	loadExpansionIcons();
+	if (expansionId < 0 || expansionId >= s_expansionIconCount)
+		return 0;
+	return s_expansionIconTextures[expansionId];
+}
+
+void renderExpansionFilterButtons(int& selectedFilter, int expansionCount) {
+	loadExpansionIcons();
+
+	// CSS: .expansion-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; justify-content: center; }
+	// CSS: .expansion-button { width: 30px; height: 30px; background: rgb(0 0 0 / 28%); border: 0; border-radius: 3px; }
+	constexpr float BTN_SIZE = 30.0f;
+	constexpr float GAP = 8.0f;
+
+	const ImU32 normalBg   = IM_COL32(0, 0, 0, 71);   // rgb(0 0 0 / 28%)
+	const ImU32 activeBg   = IM_COL32(0, 0, 0, 204);   // rgba(0,0,0,0.8)
+	const ImU32 hoveredBg  = IM_COL32(0, 0, 0, 204);
+
+	ImGui::Dummy(ImVec2(0, 10.0f)); // margin-top: 10px
+
+	// Center the row: total width = (count+1) * BTN_SIZE + count * GAP
+	int totalBtns = 1 + expansionCount; // "All" + per-expansion
+	float totalWidth = totalBtns * BTN_SIZE + (totalBtns - 1) * GAP;
+	float indent = (ImGui::GetContentRegionAvail().x - totalWidth) * 0.5f;
+	if (indent > 0.0f)
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indent);
+
+	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(GAP, 0));
+
+	// "Show All" button — uses a ban/slash icon.
+	// CSS: .expansion-button.show-all { background-image: url('fa-icons/ban.svg'); background-size: 30%; }
+	{
+		bool isActive = (selectedFilter == -1);
+		ImU32 bg = isActive ? activeBg : normalBg;
+		ImGui::PushStyleColor(ImGuiCol_Button,        ImGui::ColorConvertU32ToFloat4(bg));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImGui::ColorConvertU32ToFloat4(hoveredBg));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImGui::ColorConvertU32ToFloat4(activeBg));
+
+		if (ImGui::Button(ICON_FA_BAN "##exp_all_icon", ImVec2(BTN_SIZE, BTN_SIZE)))
+			selectedFilter = -1;
+
+		ImGui::PopStyleColor(3);
+	}
+
+	// Per-expansion buttons
+	for (int i = 0; i < expansionCount; ++i) {
+		ImGui::SameLine();
+		bool isActive = (selectedFilter == i);
+		ImU32 bg = isActive ? activeBg : normalBg;
+		ImGui::PushStyleColor(ImGuiCol_Button,        ImGui::ColorConvertU32ToFloat4(bg));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImGui::ColorConvertU32ToFloat4(hoveredBg));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImGui::ColorConvertU32ToFloat4(activeBg));
+
+		GLuint tex = getExpansionIconTexture(i);
+		if (tex != 0) {
+			ImGui::PushID(i);
+			// CSS: background-size: 24px on a 30px button → 3px padding each side
+			if (ImGui::ImageButton("##exp", static_cast<ImTextureID>(static_cast<uintptr_t>(tex)),
+			                       ImVec2(24.0f, 24.0f))) {
+				selectedFilter = i;
+			}
+			ImGui::PopID();
+		} else {
+			// Fallback text button if icon texture failed to load.
+			if (ImGui::Button(std::format("E{}##exp_{}", i, i).c_str(), ImVec2(BTN_SIZE, BTN_SIZE)))
+				selectedFilter = i;
+		}
+
+		ImGui::PopStyleColor(3);
+	}
+
+	ImGui::PopStyleVar(3);
 }
 
 } // namespace app::theme
