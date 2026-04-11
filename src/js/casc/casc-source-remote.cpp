@@ -23,6 +23,7 @@
 #include <regex>
 #include <algorithm>
 #include <numeric>
+#include <future>
 
 namespace casc {
 
@@ -45,28 +46,29 @@ void CASCRemote::init() {
 
 	builds.clear();
 
-	// Collect version configs for all products.
+	// Collect version configs for all products in parallel.
 	// JS: const promises = constants.PRODUCTS.map(p => this.getVersionConfig(p.product));
 	// JS: const results = await Promise.allSettled(promises);
-	// In C++, we try each product sequentially and catch failures.
+	using ConfigResult = std::vector<std::unordered_map<std::string, std::string>>;
+	std::vector<std::future<ConfigResult>> futures;
+	futures.reserve(constants::PRODUCTS.size());
 
-	// Iterate through successful requests and extract product config for our region.
-	for (const auto& p : constants::PRODUCTS) {
+	for (const auto& p : constants::PRODUCTS)
+		futures.push_back(std::async(std::launch::async, [this, product = std::string(p.product)]() {
+			return getVersionConfig(product);
+		}));
+
+	// Collect results after all futures complete (matching Promise.allSettled semantics).
+	for (auto& fut : futures) {
 		try {
-			auto config = getVersionConfig(std::string(p.product));
+			auto config = fut.get();
 
 			// JS: result.value.find(e => e.Region === this.region)
 			// .find() returns undefined if no match — we push empty map as equivalent.
-			bool regionFound = false;
-			for (auto& entry : config) {
-				if (entry.count("Region") && entry["Region"] == region) {
-					builds.push_back(entry);
-					regionFound = true;
-					break;
-				}
-			}
-			if (!regionFound)
-				builds.push_back({}); // equivalent to JS undefined from .find()
+			auto it = std::find_if(config.begin(), config.end(), [this](const auto& entry) {
+				return entry.count("Region") && entry.at("Region") == region;
+			});
+			builds.push_back(it != config.end() ? *it : std::unordered_map<std::string, std::string>{});
 		} catch (const std::exception& e) {
 			// JS Promise.allSettled: rejected promises are NOT pushed to builds.
 			// Only fulfilled results contribute to the builds array.
