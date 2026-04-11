@@ -746,22 +746,22 @@ the **main render loop** (`app.cpp:1027-1035`) only calls `active->render()`. Th
 
 | UI Element | State Variable | Setter Function | Status |
 |---|---|---|---|
-| Toast notification bar | `core::view->toast` | `core::setToast()` / `core::hideToast()` | State-only, **never drawn** |
+| Toast notification bar | `core::view->toast` | `core::setToast()` / `core::hideToast()` | **Rendered** in `renderAppShell()` |
 | Loading screen overlay | `core::view->isLoading`, `loadPct`, `loadingTitle`, `loadingProgress` | `core::showLoadingScreen()` / `core::hideLoadingScreen()` | **Rendered** in `renderAppShell()` |
-| Navigation buttons | `core::view->modNavButtons` | `modules::register_nav_button()` | Registered by all tabs, **never drawn** |
-| Context menu (extra) | `core::view->modContextMenuOptions` | `modules::registerContextMenuOption()` | Registered in `app.cpp`, **never drawn** |
-| Context menus (various) | `core::view->contextMenus.*` | Various setters | State-only, **never drawn** |
-| File drop prompt | `core::view->fileDropPrompt` | `glfw_drop_callback()` | State-only, **never drawn** |
+| Navigation buttons | `core::view->modNavButtons` | `modules::register_nav_button()` | **Rendered** in `renderAppShell()` header |
+| Context menu (extra) | `core::view->modContextMenuOptions` | `modules::registerContextMenuOption()` | **Rendered** in `renderAppShell()` header |
+| Context menus (various) | `core::view->contextMenus.*` | Various setters | Per-component context menus, rendered by individual components |
+| File drop prompt | `core::view->fileDropPrompt` | `glfw_drop_callback()` | **Rendered** as overlay in `renderAppShell()`; GLFW lacks drag-enter/leave so unhandled drops use toast |
 
 All tabs **do** call `register_nav_button()` in their `registerTab()` function, and
-`app.cpp` registers context menu options for settings/restart/log/shaders. This means
-the data infrastructure is correct — the rendering is what's missing.
+`app.cpp` registers context menu options for settings/restart/log/shaders. All rendering
+is now wired in `renderAppShell()`.
 
-- [ ] Add toast rendering to the main render loop (check `core::view->toast.has_value()` every frame)
+- [x] Add toast rendering to the main render loop (check `core::view->toast.has_value()` every frame)
 - [x] Add loading screen overlay rendering to the main render loop (check `core::view->isLoading` every frame)
-- [ ] Add nav button rendering in the header (iterate `core::view->modNavButtons`, filter by install type)
-- [ ] Add context menu rendering for the hamburger/extra menu (iterate `core::view->modContextMenuOptions`)
-- [ ] Add file drop prompt rendering (check `core::view->fileDropPrompt`)
+- [x] Add nav button rendering in the header (iterate `core::view->modNavButtons`, filter by install type)
+- [x] Add context menu rendering for the hamburger/extra menu (iterate `core::view->modContextMenuOptions`)
+- [x] Add file drop prompt rendering (check `core::view->fileDropPrompt`)
 
 ### 9.13 Tab Layout Patterns (Base Framework)
 

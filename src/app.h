@@ -40,6 +40,10 @@ namespace app::theme {
 inline constexpr ImVec4 BG          = ImVec4(0.204f, 0.227f, 0.251f, 1.0f);
 inline constexpr ImU32  BG_U32      = IM_COL32(52, 58, 64, 255);
 
+// --background-trans: #343a40b3 (~70% opacity)
+inline constexpr ImVec4 BG_TRANS    = ImVec4(0.204f, 0.227f, 0.251f, 0.702f);
+inline constexpr ImU32  BG_TRANS_U32 = IM_COL32(52, 58, 64, 179);
+
 // --background-dark: #2c3136
 inline constexpr ImVec4 BG_DARK     = ImVec4(0.173f, 0.192f, 0.212f, 1.0f);
 inline constexpr ImU32  BG_DARK_U32 = IM_COL32(44, 49, 54, 255);
