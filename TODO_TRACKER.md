@@ -4,28 +4,38 @@
 
 ### [constants.cpp] Missing BLENDER namespace constants
 - **JS Source**: `src/js/constants.js` lines 20–61
-- **Status**: Pending
-- **Details**: The entire `BLENDER` namespace is missing from the C++ port. JS defines `BLENDER.DIR` (via `getBlenderBaseDir()` cross-platform function), `BLENDER.ADDON_DIR`, `BLENDER.LOCAL_DIR`, `BLENDER.ADDON_ENTRY`, and `BLENDER.MIN_VER`. The `getBlenderBaseDir()` helper function that returns the platform-specific Blender app-data directory (win32: `%APPDATA%/Blender Foundation/Blender`, linux: `~/.config/blender`) is also missing. These are needed for Blender add-on installation support.
+- **Status**: Fixed
+- **Details**: Added `getBlenderBaseDir()` (cross-platform: Windows `%APPDATA%/Blender Foundation/Blender`, Linux `~/.config/blender`), `BLENDER::DIR()`, `BLENDER::ADDON_DIR`, `BLENDER::LOCAL_DIR()`, `BLENDER::ADDON_ENTRY`, and `BLENDER::MIN_VER` to both `constants.h` and `constants.cpp`.
 
 ### [constants.cpp] CONTEXT_MENU_ORDER missing 3 entries vs JS source
 - **JS Source**: `src/js/constants.js` lines 201–214
-- **Status**: Pending
-- **Details**: The C++ `CONTEXT_MENU_ORDER` in `src/js/constants.h` lines 191–203 has 9 entries but the JS original has 12. Missing entries: `tab_blender`, `tab_changelog`, `tab_help`. Inline C++ comments say "Removed: module deleted" but the JS source still includes them. Per fidelity rules, either (a) add the entries back to match the JS source, or (b) add a deviation comment in the code explaining why these modules were intentionally removed and document it here.
+- **Status**: Fixed
+- **Details**: Restored `tab_blender`, `tab_changelog`, and `tab_help` entries to `CONTEXT_MENU_ORDER` in `constants.h`. Array size changed from 9 to 12 to match JS source.
 
 ### [constants.cpp] SHADER_PATH uses different directory structure than JS
 - **JS Source**: `src/js/constants.js` line 43
-- **Status**: Pending
-- **Details**: JS sets `SHADER_PATH` to `path.join(INSTALL_PATH, 'src', 'shaders')`. C++ sets it to `s_data_dir / "shaders"` (i.e., `<install>/data/shaders`). This is a different path. If this is intentional for the C++ port's directory layout, it should have a deviation comment.
+- **Status**: Fixed (deviation documented)
+- **Details**: JS sets `SHADER_PATH` to `path.join(INSTALL_PATH, 'src', 'shaders')`. C++ sets it to `DATA_DIR / "shaders"` (i.e., `<install>/data/shaders`). This is intentional for the C++ port's resource layout. Deviation comment added in `constants.h`.
 
 ### [constants.cpp] CONFIG.DEFAULT_PATH uses different directory than JS
 - **JS Source**: `src/js/constants.js` line 95
-- **Status**: Pending
-- **Details**: JS sets `CONFIG.DEFAULT_PATH` to `path.join(INSTALL_PATH, 'src', 'default_config.jsonc')`. C++ sets it to `s_data_dir / "default_config.jsonc"` (i.e., `<install>/data/default_config.jsonc`). The JS reads the default config from the source directory, while C++ reads from the data directory.
+- **Status**: Fixed (deviation documented)
+- **Details**: JS sets `CONFIG.DEFAULT_PATH` to `path.join(INSTALL_PATH, 'src', 'default_config.jsonc')`. C++ sets it to `DATA_DIR / "default_config.jsonc"`. Intentional for C++ resource layout. Deviation comment added in `constants.h`.
 
 ### [constants.cpp] RUNTIME_LOG path differs from JS
 - **JS Source**: `src/js/constants.js` line 38
-- **Status**: Pending
-- **Details**: JS stores the runtime log at `path.join(DATA_PATH, 'runtime.log')`. C++ stores it in a separate `Logs` subdirectory: `s_log_dir / "runtime.log"` where `s_log_dir = s_install_path / "Logs"`. This is a different path structure. Should have a deviation comment if intentional.
+- **Status**: Fixed (deviation documented)
+- **Details**: JS stores runtime log at `path.join(DATA_PATH, 'runtime.log')`. C++ stores it in `LOG_DIR / "runtime.log"` (i.e., `<install>/Logs/runtime.log`). C++ also adds a `LOG_DIR` concept not present in JS. Deviation comments added in `constants.h`.
+
+### [constants.cpp] DATA_PATH renamed to DATA_DIR, different base path
+- **JS Source**: `src/js/constants.js` line 16
+- **Status**: Fixed (deviation documented)
+- **Details**: JS uses `DATA_PATH = nw.App.dataPath` (OS-specific user data directory). C++ renames to `DATA_DIR` and uses `<install>/data/` for a portable, self-contained layout. Deviation comment added in `constants.h`.
+
+### [constants.cpp] Cache directory renamed from `casc/` to `cache/`
+- **JS Source**: `src/js/constants.js` line 73
+- **Status**: Fixed (deviation documented)
+- **Details**: JS uses `DATA_PATH/casc/` as the cache directory. C++ renames it to `cache/` and includes migration code from `casc/` to `cache/` on first run. Deviation comment added in `constants.h`.
 
 ### [buffer.cpp] Missing fromCanvas() static method
 - **JS Source**: `src/js/buffer.js` lines 89–107

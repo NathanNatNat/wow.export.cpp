@@ -21,15 +21,21 @@ void init();
 // ── Runtime path constants (valid after init()) ──────────────────
 
 const std::filesystem::path& INSTALL_PATH(); // Path to the application installation.
+// Deviation: JS uses `DATA_PATH = nw.App.dataPath` (OS-specific user data dir).
+// C++ uses `<install>/data/` for a portable, self-contained layout.
 const std::filesystem::path& DATA_DIR(); // Path to the application data directory.
+// Deviation: JS has no LOG_DIR; C++ adds a separate Logs directory.
 const std::filesystem::path& LOG_DIR(); // Path to the application logs directory.
+// Deviation: JS stores runtime.log in DATA_PATH directly.
+// C++ stores it in LOG_DIR (<install>/Logs/) for cleaner separation.
 const std::filesystem::path& RUNTIME_LOG(); // Path to the runtime log.
 const std::filesystem::path& LAST_EXPORT(); // Location of the last export.
 
 // Maximum recent local installations to remember.
 inline constexpr int MAX_RECENT_LOCAL = 3;
 
-// Location of GL shaders.
+// Deviation: JS uses `INSTALL_PATH/src/shaders`. C++ uses `<install>/data/shaders`
+// because resources are bundled in the data/ directory in the C++ port.
 const std::filesystem::path& SHADER_PATH();
 
 // Current version of wow.export.
@@ -51,6 +57,8 @@ namespace GAME {
 }
 
 // ── Cache constants ──────────────────────────────────────────────
+// Deviation: JS uses `DATA_PATH/casc/` as cache directory. C++ renames
+// it to `cache/` with a migration from legacy `casc/` on first run.
 namespace CACHE {
 	const std::filesystem::path& DIR(); // Cache directory.
 	const std::filesystem::path& SIZE(); // Cache size.
@@ -74,9 +82,23 @@ namespace CACHE {
 }
 
 // ── Config paths ─────────────────────────────────────────────────
+// Deviation: JS uses `INSTALL_PATH/src/default_config.jsonc`. C++ uses
+// `<install>/data/default_config.jsonc` to match the C++ resource layout.
 namespace CONFIG {
 	const std::filesystem::path& DEFAULT_PATH(); // Path of default configuration file.
 	const std::filesystem::path& USER_PATH(); // Path of user-defined configuration file.
+}
+
+// ── Blender constants ────────────────────────────────────────────
+namespace BLENDER {
+	// Platform-specific Blender app-data directory:
+	// Windows: %APPDATA%/Blender Foundation/Blender
+	// Linux: ~/.config/blender
+	const std::filesystem::path& DIR();
+	inline constexpr std::string_view ADDON_DIR = "scripts/addons/io_scene_wowobj"; // Install path for add-ons.
+	const std::filesystem::path& LOCAL_DIR(); // Local copy of our Blender add-on.
+	inline constexpr std::string_view ADDON_ENTRY = "__init__.py"; // Add-on entry point that contains the version.
+	inline constexpr double MIN_VER = 2.8; // Minimum version supported by our add-on.
 }
 
 // ── Update constants ─────────────────────────────────────────────
@@ -188,8 +210,9 @@ inline constexpr std::array<std::string_view, 20> NAV_BUTTON_ORDER = {{
 }};
 
 // ── Context menu item order (module names or static option IDs) ──
-inline constexpr std::array<std::string_view, 9> CONTEXT_MENU_ORDER = {{
-	// "tab_changelog", // Removed: module deleted
+inline constexpr std::array<std::string_view, 12> CONTEXT_MENU_ORDER = {{
+	"tab_blender",
+	"tab_changelog",
 	"runtime-log",
 	"tab_raw",
 	"tab_install",
@@ -198,8 +221,8 @@ inline constexpr std::array<std::string_view, 9> CONTEXT_MENU_ORDER = {{
 	"reload-shaders",
 	"reload-style",
 	"reload-active",
-	"reload-all"
-	// "tab_help" // Removed: module deleted
+	"reload-all",
+	"tab_help"
 }};
 
 // ── Font preview quotes ──────────────────────────────────────────

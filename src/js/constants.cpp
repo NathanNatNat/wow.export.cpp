@@ -8,6 +8,7 @@
 #include "constants.h"
 
 #include <filesystem>
+#include <cstdlib>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -45,6 +46,22 @@ static fs::path getExecutablePath() {
 #endif
 }
 
+// ── Platform-specific Blender app-data directory ─────────────────
+
+static fs::path getBlenderBaseDir() {
+#ifdef _WIN32
+	const char* appdata = std::getenv("APPDATA");
+	if (appdata)
+		return fs::path(appdata) / "Blender Foundation" / "Blender";
+	return {};
+#else
+	const char* home = std::getenv("HOME");
+	if (home)
+		return fs::path(home) / ".config" / "blender";
+	return {};
+#endif
+}
+
 // ── Internal storage for runtime path constants ──────────────────
 
 namespace {
@@ -72,6 +89,9 @@ namespace {
 
 	fs::path s_update_directory;
 	std::string s_update_helper;
+
+	fs::path s_blender_dir;
+	fs::path s_blender_local_dir;
 
 	std::string s_user_agent;
 }
@@ -146,6 +166,9 @@ void init() {
 	s_update_helper = "updater";
 #endif
 
+	s_blender_dir = getBlenderBaseDir();
+	s_blender_local_dir = s_install_path / "addon" / "io_scene_wowobj";
+
 	s_user_agent = std::string("wow.export (") + std::string(VERSION) + ")";
 }
 
@@ -175,6 +198,11 @@ namespace CACHE {
 namespace CONFIG {
 	const fs::path& DEFAULT_PATH() { return s_config_default_path; }
 	const fs::path& USER_PATH() { return s_config_user_path; }
+}
+
+namespace BLENDER {
+	const fs::path& DIR() { return s_blender_dir; }
+	const fs::path& LOCAL_DIR() { return s_blender_local_dir; }
 }
 
 namespace UPDATE {
