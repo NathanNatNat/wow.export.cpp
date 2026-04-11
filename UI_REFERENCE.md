@@ -11,7 +11,7 @@ When making UI changes to the C++ ImGui conversion, **always compare against the
 
 The initial screen where the user chooses how to open a World of Warcraft installation (local, CDN, or legacy MPQ).
 
-![Source Select Screen](https://github.com/user-attachments/assets/56a22cc1-81c3-4f93-87f0-2255a00bb755)
+![Source Select Screen](UI_REFERENCE_IMAGES/Source%20Select%20Screen.png)
 
 ---
 
@@ -19,7 +19,7 @@ The initial screen where the user chooses how to open a World of Warcraft instal
 
 Shown after choosing a source — lists available game builds to explore.
 
-![Build Select Screen](https://github.com/user-attachments/assets/9f4df6f4-fa96-4ed8-b49d-c799a04695a2)
+![Build Select Screen](UI_REFERENCE_IMAGES/Build%20Select%20Screen.png)
 
 ---
 
@@ -27,7 +27,7 @@ Shown after choosing a source — lists available game builds to explore.
 
 Displayed whenever the app is loading resources — opening a CASC/legacy source, loading tab data (models, textures, maps, creatures, characters, items, audio, videos, etc.), and exporting. Any operation that calls `showLoadingScreen()` shows this overlay with a progress bar.
 
-![Loading Screen](https://github.com/user-attachments/assets/af551c6f-a3af-44ad-9fa1-c3b15108cf9d)
+![Loading Screen](UI_REFERENCE_IMAGES/Loading%20Screen.png)
 
 ---
 
@@ -35,7 +35,7 @@ Displayed whenever the app is loading resources — opening a CASC/legacy source
 
 The main landing screen after a build has been loaded, showing navigation options for the various content tabs.
 
-![Home Screen](https://github.com/user-attachments/assets/150151e0-4012-4a59-a46c-3e2df60f9fd6)
+![Home Screen](UI_REFERENCE_IMAGES/Home%20Screen.png)
 
 > **Legacy (MPQ) sources** use the same layout, but show only the navigation buttons available for that game version — not all tabs are present. Refer to the original JS source for which tabs are shown per version.
 
@@ -45,7 +45,7 @@ The main landing screen after a build has been loaded, showing navigation option
 
 The models tab after data has loaded, showing the file list, empty 3D preview area, and Preview/Export controls on the right.
 
-![Models Tab — Nothing Loaded](https://github.com/user-attachments/assets/52168fdb-bb8c-43ad-922e-42f7ff1b62fd)
+![Models Tab — Nothing Loaded](UI_REFERENCE_IMAGES/Models%20Tab%20-%20Nothing%20Loaded.png)
 
 ---
 
@@ -53,7 +53,7 @@ The models tab after data has loaded, showing the file list, empty 3D preview ar
 
 An M2 model selected and previewed. M3 models render with the same layout.
 
-![Models Tab — M2 Model Loaded](https://github.com/user-attachments/assets/3cfbcd92-78e5-4e64-ba42-bd6e19f9631d)
+![Models Tab — M2 Model Loaded](UI_REFERENCE_IMAGES/Models%20Tab%20-%20M2%20Model%20Loaded.png)
 
 ---
 
@@ -61,7 +61,7 @@ An M2 model selected and previewed. M3 models render with the same layout.
 
 A WMO model selected and previewed.
 
-![Models Tab — WMO Model Loaded](https://github.com/user-attachments/assets/dfc64133-f177-453a-98ce-1ac21cc0fb9d)
+![Models Tab — WMO Model Loaded](UI_REFERENCE_IMAGES/Models%20Tab%20-%20WMO%20Model%20Loaded.png)
 
 ---
 
@@ -69,7 +69,7 @@ A WMO model selected and previewed.
 
 The textures tab with file list, texture preview, and export controls.
 
-![Textures Tab](https://github.com/user-attachments/assets/580cb305-db6a-4bf9-b2d9-a940e7bb635a)
+![Textures Tab](UI_REFERENCE_IMAGES/Textures%20Tab.png)
 
 ---
 
@@ -77,7 +77,7 @@ The textures tab with file list, texture preview, and export controls.
 
 The textures tab with the "Atlas Regions" option enabled, showing region overlays on the texture preview.
 
-![Textures Tab — Atlas Regions](https://github.com/user-attachments/assets/e0bc21de-e8dd-4651-9a19-a4ee4078f809)
+![Textures Tab — Atlas Regions](UI_REFERENCE_IMAGES/Textures%20Tab%20-%20Atlas%20Regions%20Enabled.png)
 
 ---
 
@@ -85,7 +85,7 @@ The textures tab with the "Atlas Regions" option enabled, showing region overlay
 
 The characters tab with character selection options on the left (race, gender, skin color, etc.), 3D preview in the center, and the Export panel selected in the bottom-right. Note: dropdown options are populated from the database.
 
-![Characters Tab — Export](https://github.com/user-attachments/assets/da6d1ff2-f4be-42f5-ad11-19f62c3efd53)
+![Characters Tab — Export](UI_REFERENCE_IMAGES/Characters%20Tab%20-%20Export%20Panel.png)
 
 ---
 
@@ -93,7 +93,7 @@ The characters tab with character selection options on the left (race, gender, s
 
 The characters tab with the Textures panel selected in the bottom-right, showing texture file list and export options.
 
-![Characters Tab — Textures](https://github.com/user-attachments/assets/826989f8-0dba-42d4-a2b0-01148872e816)
+![Characters Tab — Textures](UI_REFERENCE_IMAGES/Characters%20Tab%20-%20Textures%20Panel.png)
 
 ---
 
@@ -101,7 +101,7 @@ The characters tab with the Textures panel selected in the bottom-right, showing
 
 The characters tab with the Settings panel selected in the bottom-right, showing model display settings.
 
-![Characters Tab — Settings](https://github.com/user-attachments/assets/972a530b-c380-40fc-9ae8-6f23344c1ac3)
+![Characters Tab — Settings](UI_REFERENCE_IMAGES/Characters%20Tab%20-%20Settings%20Panel.png)
 
 ---
 
@@ -109,7 +109,7 @@ The characters tab with the Settings panel selected in the bottom-right, showing
 
 The characters tab with the custom geoset selection panel open on the left, allowing toggling of individual geometry groups on the character model.
 
-![Characters Tab — Custom Geoset Selection](https://github.com/user-attachments/assets/545ae7f4-a7ee-4a6e-8571-4b3d1803b0f7)
+![Characters Tab — Custom Geoset Selection](UI_REFERENCE_IMAGES/Characters%20Tab%20-%20Custom%20Geoset%20Selection.png)
 
 ---
 
@@ -117,7 +117,7 @@ The characters tab with the custom geoset selection panel open on the left, allo
 
 The items tab with an item selected, showing the 3D model preview and export controls.
 
-![Items Tab](https://github.com/user-attachments/assets/b4f3393b-705d-4d08-b208-0ec33ce00be3)
+![Items Tab](UI_REFERENCE_IMAGES/Items%20Tab.png)
 
 ---
 
@@ -125,7 +125,7 @@ The items tab with an item selected, showing the 3D model preview and export con
 
 The item sets tab showing grouped equipment sets with preview and export controls.
 
-![Item Sets Tab](https://github.com/user-attachments/assets/1a9c5d73-cc14-4256-9452-3e540a2f333e)
+![Item Sets Tab](UI_REFERENCE_IMAGES/Item%20Sets%20Tab.png)
 
 ---
 
@@ -133,7 +133,7 @@ The item sets tab showing grouped equipment sets with preview and export control
 
 The decor tab with a model loaded, showing 3D preview and export controls.
 
-![Decor Tab](https://github.com/user-attachments/assets/ef3b3d72-b66f-4403-9a51-50b42d3a65e7)
+![Decor Tab](UI_REFERENCE_IMAGES/Decor%20Tab.png)
 
 ---
 
@@ -141,7 +141,7 @@ The decor tab with a model loaded, showing 3D preview and export controls.
 
 The creatures tab with a creature model loaded, showing 3D preview and export controls.
 
-![Creatures Tab](https://github.com/user-attachments/assets/0739440c-21f2-4824-b595-0c9b7d9c3e65)
+![Creatures Tab](UI_REFERENCE_IMAGES/Creatures%20Tab.png)
 
 ---
 
@@ -149,7 +149,7 @@ The creatures tab with a creature model loaded, showing 3D preview and export co
 
 The audio tab with a sound playing, showing the animated model, playback controls, progress bar, and export options.
 
-![Audio Tab](https://github.com/user-attachments/assets/3c07c360-d126-4a53-bd05-bf7e17f2d112)
+![Audio Tab](UI_REFERENCE_IMAGES/Audio%20Tab.png)
 
 ---
 
@@ -157,7 +157,7 @@ The audio tab with a sound playing, showing the animated model, playback control
 
 The videos tab with a video playing, showing the video list, playback area, and streaming controls.
 
-![Videos Tab](https://github.com/user-attachments/assets/b9dfce9f-968b-43ee-a7b0-9adeb4350827)
+![Videos Tab](UI_REFERENCE_IMAGES/Videos%20Tab.png)
 
 ---
 
@@ -165,11 +165,11 @@ The videos tab with a video playing, showing the video list, playback area, and 
 
 The maps tab with a map section selected, showing the tile map viewer with selected region highlighted.
 
-![Maps Tab - Map Selected](https://github.com/user-attachments/assets/22f4ed11-c73f-47cd-a4cc-4da11f1ec412)
+![Maps Tab - Map Selected](UI_REFERENCE_IMAGES/Maps%20Tab.png)
 
 The maps tab when there is only a WMO (no terrain tiles), showing the WMO-only export view.
 
-![Maps Tab - WMO Only](https://github.com/user-attachments/assets/93fc6baa-0912-445e-afbf-95fd5fcf7846)
+![Maps Tab - WMO Only](UI_REFERENCE_IMAGES/Maps%20Tab%20with%20only%20WMO.png)
 
 ---
 
@@ -177,7 +177,7 @@ The maps tab when there is only a WMO (no terrain tiles), showing the WMO-only e
 
 The zones tab with a zone map loaded, showing the zone image viewer with navigation and export controls.
 
-![Zones Tab](https://github.com/user-attachments/assets/0e0190ac-9541-4642-b052-158400ec7124)
+![Zones Tab](UI_REFERENCE_IMAGES/Zones%20Tab.png)
 
 ---
 
@@ -185,7 +185,7 @@ The zones tab with a zone map loaded, showing the zone image viewer with navigat
 
 The text tab showing the text file list with search/filter and file preview.
 
-![Text Tab](https://github.com/user-attachments/assets/17bc8831-c9c7-4677-a744-bf20c1664efb)
+![Text Tab](UI_REFERENCE_IMAGES/Text%20Tab.png)
 
 ---
 
@@ -193,7 +193,7 @@ The text tab showing the text file list with search/filter and file preview.
 
 The fonts tab with a font file selected, showing the font preview and export controls. Note: this tab uses single-selection only (no multi-select).
 
-![Fonts Tab](https://github.com/user-attachments/assets/87c1f420-39d9-4b32-9429-a9e7e49e0db6)
+![Fonts Tab](UI_REFERENCE_IMAGES/Fonts%20Tab.png)
 
 ---
 
@@ -201,7 +201,7 @@ The fonts tab with a font file selected, showing the font preview and export con
 
 The data tab with a data table loaded, showing column headers and row data.
 
-![Data Tab - Table Loaded](https://github.com/user-attachments/assets/a182bd36-058c-408d-be1a-be70326df55f)
+![Data Tab - Table Loaded](UI_REFERENCE_IMAGES/Data%20Tab.png)
 
 ---
 
@@ -209,7 +209,7 @@ The data tab with a data table loaded, showing column headers and row data.
 
 Options Dropdown menu (This image is just to show the drop down menu in the top right, the dropdown can be used in any tab).
 
-![Options Dropdown Menu](https://github.com/user-attachments/assets/9b6e1ccb-7ee1-4423-92be-95fee72f8daf)
+![Options Dropdown Menu](UI_REFERENCE_IMAGES/Options%20Dropdown%20Menu.png)
 
 ---
 
@@ -217,7 +217,7 @@ Options Dropdown menu (This image is just to show the drop down menu in the top 
 
 The "Browse Install Manifest" tab, showing the install manifest file list.
 
-![Install Manifest Tab](https://github.com/user-attachments/assets/286867a4-ec47-47dd-8fe9-a4a05ae16bff)
+![Install Manifest Tab](UI_REFERENCE_IMAGES/Install%20Manifest%20Tab.png)
 
 ---
 
@@ -225,7 +225,7 @@ The "Browse Install Manifest" tab, showing the install manifest file list.
 
 The "Browse Raw Client Files" tab, showing the raw file browser for exploring CASC data directly.
 
-![Raw Client Files Tab](https://github.com/user-attachments/assets/264c226a-a884-4e3d-8de4-457228c997d3)
+![Raw Client Files Tab](UI_REFERENCE_IMAGES/Raw%20Client%20Files%20Tab.png)
 
 ---
 
@@ -233,14 +233,14 @@ The "Browse Raw Client Files" tab, showing the raw file browser for exploring CA
 
 The full settings screen, shown across multiple screenshots to capture the entire scrollable page. Settings include export directory, character save directory, scroll speed, file list ordering, unknown files, model skins, bone prefixes, shared textures/children, and more.
 
-![Settings Screen — Top](https://github.com/user-attachments/assets/3159072d-1168-4cd6-999a-405665a04883)
+![Settings Screen — Top](UI_REFERENCE_IMAGES/Settings%20Screen%201.png)
 
-![Settings Screen — Upper Middle](https://github.com/user-attachments/assets/be93641d-815a-47d4-9ffb-9ce2dc691cf9)
+![Settings Screen — Upper Middle](UI_REFERENCE_IMAGES/Settings%20Screen%202.png)
 
-![Settings Screen — Middle](https://github.com/user-attachments/assets/b07a5fff-1307-4f23-bfe2-9800197dcb74)
+![Settings Screen — Middle](UI_REFERENCE_IMAGES/Settings%20Screen%203.png)
 
-![Settings Screen — Lower Middle](https://github.com/user-attachments/assets/e7e1cb11-5399-49a8-9789-30292a8feb8f)
+![Settings Screen — Lower Middle](UI_REFERENCE_IMAGES/Settings%20Screen%204.png)
 
-![Settings Screen — Lower Bottom](https://github.com/user-attachments/assets/421f7185-e519-4071-b694-70e60d4dd908)
+![Settings Screen — Lower Bottom](UI_REFERENCE_IMAGES/Settings%20Screen%205.png)
 
-![Settings Screen — Bottom](https://github.com/user-attachments/assets/0e2d1fed-082e-473f-be66-47bff9a308a0)
+![Settings Screen — Bottom](UI_REFERENCE_IMAGES/Settings%20Screen%206.png)
