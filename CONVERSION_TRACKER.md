@@ -590,8 +590,8 @@ The C++ version sequentially fetches each product's version config.
 
 With ~10 products, the C++ version takes ~10× the total HTTP request time compared to the JS version which fetches them all in parallel.
 
-- [ ] Use `std::async` / `std::future` to fetch all product configs in parallel
-- [ ] Collect results after all futures complete (matching `Promise.allSettled` semantics)
+- [x] Use `std::async` / `std::future` to fetch all product configs in parallel
+- [x] Collect results after all futures complete (matching `Promise.allSettled` semantics)
 
 ### 10.4 `generics::redraw()` No-Op (Medium)
 
