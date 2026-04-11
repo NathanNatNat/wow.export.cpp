@@ -576,9 +576,12 @@ The C++ version processes all batches in a tight loop with no yielding.
 For listfile parsing (~3-5 million entries at 1000 per batch = 3000-5000 batches),
 this means the UI is frozen for the entire parsing duration.
 
-- [ ] If loading is on background thread: call `core::progressLoadingScreen()` between batches
-- [ ] If loading is on main thread: yield between batches to allow ImGui frame rendering
-- [ ] Add actual progress percentage updates during batch processing
+- [x] If loading is on background thread: call `core::progressLoadingScreen()` between batches
+  - Loading runs on a background `std::jthread`; `batchWork()` now posts progress text updates to the main thread via `core::postToMainThread()` between batches (every 10% increment), so the loading screen reflects batch progress while the main loop keeps rendering.
+- [x] If loading is on main thread: yield between batches to allow ImGui frame rendering
+  - N/A — loading already runs on a background thread; the main loop continues rendering ImGui frames uninterrupted.
+- [x] Add actual progress percentage updates during batch processing
+  - `batchWork()` now updates `view->loadingProgress` with `"<name>... <percent>%"` text at every 10% milestone, giving users visual feedback during long-running batch operations.
 
 ### 10.3 Sequential Remote Product Fetching (High)
 

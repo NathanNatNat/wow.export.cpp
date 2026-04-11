@@ -6,6 +6,7 @@
 #include "generics.h"
 #include "buffer.h"
 #include "constants.h"
+#include "core.h"
 #include "log.h"
 
 #include <cmath>
@@ -601,6 +602,14 @@ void batchWork(std::string_view name,
 		if (progressPercent >= lastProgressPercent + 10 && progressPercent < 100) {
 			logging::write(std::format("Batch work \"{}\" progress: {}% ({}/{})", name, progressPercent, index, total));
 			lastProgressPercent = progressPercent;
+
+			// Post progress text update to the main thread so the loading
+			// screen reflects batch progress.  Since loading runs on a
+			// background thread, the main loop keeps rendering ImGui frames
+			// and will pick this up on the next drain.
+			core::postToMainThread([text = std::format("{}... {}%", name, progressPercent)]() {
+				core::view->loadingProgress = text;
+			});
 		}
 	}
 
