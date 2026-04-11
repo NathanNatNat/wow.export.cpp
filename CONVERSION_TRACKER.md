@@ -792,19 +792,19 @@ currently render as flat sequential ImGui widgets without proper grid/split layo
 ### 9.14 Home Tab Layout (`#tab-home`)
 
 **CSS:** `display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr auto auto; padding: 50px; gap: 0 50px`
-**Current C++:** Flat sequential widgets — buttons with `SameLine` + `TextDisabled`.
+**Current C++:** Full grid layout with nav cards, What's New panel, and help buttons.
 
-- [ ] Implement 2-column grid layout: left column for info/buttons, right column for "What's New" changelog
-- [ ] Left column heading: "wow.export vX.X.X" title at large bold size, subtitle text below
-- [ ] Left column navigation cards: arranged in a 4-column grid of square card buttons (~100×100px each), each with a Font Awesome icon centered above a label — these are the tab navigation shortcuts (Models, Textures, Characters, Items, etc.)
-- [ ] Navigation card hover: subtle border highlight, icon color change
-- [ ] Navigation cards: only show tabs available for the current install type (CASC shows all, MPQ shows subset)
-- [ ] "What's New" panel (`#home-changes`): `home-background.webp` background, border-radius 10px, padding 50px, scrollable changelog entries with version headers
-- [ ] Help buttons row (`#home-help-buttons`): 3 cards, 300px wide each, centered at bottom, 20px gap
-- [ ] Each help button: 1px solid `--border` border, border-radius 10px, 20px padding, icon watermark at 20% opacity on right
-- [ ] Help button hover: border → `--nav-option-selected` (#22b549), text → green
-- [ ] Responsive: at window height < 900px, hide help buttons entirely
-- [ ] Legacy home tab (`#legacy-tab-home`) uses the same layout
+- [x] Implement 2-column grid layout: left column for info/buttons, right column for "What's New" changelog
+- [x] Left column heading: "wow.export vX.X.X" title at large bold size, subtitle text below
+- [x] Left column navigation cards: arranged in a 4-column grid of square card buttons (~100×100px each), each with a Font Awesome icon centered above a label — these are the tab navigation shortcuts (Models, Textures, Characters, Items, etc.)
+- [x] Navigation card hover: subtle border highlight, icon color change
+- [x] Navigation cards: only show tabs available for the current install type (CASC shows all, MPQ shows subset)
+- [x] "What's New" panel (`#home-changes`): `home-background.webp` background, border-radius 10px, padding 50px, scrollable changelog entries with version headers
+- [x] Help buttons row (`#home-help-buttons`): 3 cards, 300px wide each, centered at bottom, 20px gap
+- [x] Each help button: 1px solid `--border` border, border-radius 10px, 20px padding, icon watermark at 20% opacity on right
+- [x] Help button hover: border → `--nav-option-selected` (#22b549), text → green
+- [x] Responsive: at window height < 900px, hide help buttons entirely
+- [x] Legacy home tab (`#legacy-tab-home`) uses the same layout
 
 ### 9.15 Text Tab Layout (`#tab-text`)
 
