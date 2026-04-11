@@ -243,4 +243,6 @@ The full settings screen, shown across multiple screenshots to capture the entir
 
 ![Settings Screen — Lower Middle](https://github.com/user-attachments/assets/e7e1cb11-5399-49a8-9789-30292a8feb8f)
 
-![Settings Screen — Bottom](https://github.com/user-attachments/assets/421f7185-e519-4071-b694-70e60d4dd908)
+![Settings Screen — Lower Bottom](https://github.com/user-attachments/assets/421f7185-e519-4071-b694-70e60d4dd908)
+
+![Settings Screen — Bottom](https://github.com/user-attachments/assets/0e2d1fed-082e-473f-be66-47bff9a308a0)
