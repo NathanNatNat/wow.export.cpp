@@ -33,6 +33,10 @@ All dependencies should be git submodules integrated via CMake where possible.
 | Audio | miniaudio |
 | Threading | std::jthread, std::async (standard library — no external dependency) |
 
+## Reference Sources
+- The **original JavaScript/NW.js source code** is at **https://github.com/Kruithne/wow.export** — always refer to it when making changes or reviewing code to ensure fidelity with the original application.
+- **Reference screenshots** of the original app are in [`UI_REFERENCE.md`](../UI_REFERENCE.md) — always compare against these screenshots when making UI changes to ensure visual fidelity.
+
 ## Fidelity Rules
 
 ### General Conversion Fidelity
