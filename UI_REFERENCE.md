@@ -124,3 +124,19 @@ The items tab with an item selected, showing the 3D model preview and export con
 The item sets tab showing grouped equipment sets with preview and export controls.
 
 ![Item Sets Tab](https://github.com/user-attachments/assets/1a9c5d73-cc14-4256-9452-3e540a2f333e)
+
+---
+
+## Decor Tab
+
+The decor tab with a model loaded, showing 3D preview and export controls.
+
+![Decor Tab](https://github.com/user-attachments/assets/ef3b3d72-b66f-4403-9a51-50b42d3a65e7)
+
+---
+
+## Creatures Tab
+
+The creatures tab with a creature model loaded, showing 3D preview and export controls.
+
+![Creatures Tab](https://github.com/user-attachments/assets/0739440c-21f2-4824-b595-0c9b7d9c3e65)
