@@ -304,11 +304,35 @@ void mounted() {
 void render() {
 	auto& view = *core::view;
 
+	// JS: <div class="tab list-tab" id="tab-install">
+	// CSS: #tab-install { grid-template-columns: 1fr auto }
+	// CSS: .tab.list-tab { grid-template-rows: 1fr 60px }
+	if (app::layout::BeginTab("tab-install")) {
+
+	const ImVec2 avail = ImGui::GetContentRegionAvail();
+	const ImVec2 cursor = ImGui::GetCursorPos();
+	constexpr float FILTER_H = app::layout::FILTER_BAR_HEIGHT; // 60px
+	constexpr float SIDEBAR_W = app::layout::SIDEBAR_WIDTH;    // 210px
+
+	// CSS: .sidebar { grid-column: 2 for install; width: 210px; grid-row: 1/span 2 }
+	// CSS: .list-container { grid-column: 1 }
+	// CSS: #tab-install-tray { grid-row: 2 }
+	const float gridW = avail.x - SIDEBAR_W;
+	const float topH = avail.y - FILTER_H;
+
 	if (!view.installStringsView) {
+		// JS: <template v-if="!$core.view.installStringsView">
 		// Main manifest view.
 
-		// List container.
-		ImGui::BeginChild("install-list-container", ImVec2(-150, -ImGui::GetFrameHeightWithSpacing() * 2), ImGuiChildFlags_Borders);
+		// --- List container (row 1, col 1) ---
+		// CSS: .list-container { margin: 20px 10px 0 20px }
+		constexpr float listTopM = app::layout::LIST_MARGIN_TOP;     // 20px
+		constexpr float listLeftM = app::layout::LIST_MARGIN_LEFT;   // 20px
+		constexpr float listRightM = app::layout::LIST_MARGIN_RIGHT; // 10px
+
+		ImGui::SetCursorPos(ImVec2(cursor.x + listLeftM, cursor.y + listTopM));
+		ImGui::BeginChild("install-list-container",
+			ImVec2(gridW - listLeftM - listRightM, topH - listTopM));
 		{
 			std::vector<std::string> items_str;
 			items_str.reserve(view.listfileInstall.size());
@@ -347,49 +371,86 @@ void render() {
 		}
 		ImGui::EndChild();
 
-		// Tray.
-		// Filter input.
-		ImGui::BeginGroup();
-		if (view.config.value("regexFilters", false))
-			ImGui::TextUnformatted("Regex Enabled");
+		// --- Tray (row 2, col 1) ---
+		// CSS: #tab-install-tray { grid-row: 2; display: flex; margin: 10px }
+		constexpr float TRAY_M = 10.0f;
+		ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + topH));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(TRAY_M, 0.0f));
+		ImGui::BeginChild("install-tray", ImVec2(gridW, FILTER_H), ImGuiChildFlags_None,
+			ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
+		// Vertically center content.
+		float padY = (FILTER_H - ImGui::GetFrameHeight()) * 0.5f;
+		if (padY > 0.0f)
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
+
+		// JS: <div class="filter"> — flex-grow: 1
+		if (view.config.value("regexFilters", false)) {
+			ImGui::TextUnformatted("Regex Enabled");
+			ImGui::SameLine();
+		}
+
+		const bool busy = view.isBusy > 0;
+
+		// Calculate button widths so filter gets remaining space.
+		float btnStringsW = ImGui::CalcTextSize("View Strings").x + ImGui::GetStyle().FramePadding.x * 2;
+		float btnExportW = ImGui::CalcTextSize("Export Selected").x + ImGui::GetStyle().FramePadding.x * 2;
+		// CSS: #tab-install-tray input[type=button] { margin-left: 5px }
+		float buttonsW = 5.0f + btnStringsW + 5.0f + btnExportW;
+		float filterW = ImGui::GetContentRegionAvail().x - buttonsW;
+		if (filterW < 50.0f) filterW = 50.0f;
+
+		ImGui::SetNextItemWidth(filterW);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterInstall.c_str(), sizeof(filter_buf) - 1);
 		if (ImGui::InputText("##FilterInstall", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterInstall = filter_buf;
 
-		// Buttons.
-		const bool busy = view.isBusy > 0;
+		ImGui::SameLine(0.0f, 5.0f);
 		if (busy) app::theme::BeginDisabledButton();
 		if (ImGui::Button("View Strings"))
 			view_strings_impl();
-
-		ImGui::SameLine();
-
+		ImGui::SameLine(0.0f, 5.0f);
 		if (ImGui::Button("Export Selected"))
 			export_install_files();
 		if (busy) app::theme::EndDisabledButton();
-		ImGui::EndGroup();
 
-		// Sidebar — tag checkboxes.
-		ImGui::SameLine();
-		ImGui::BeginChild("install-sidebar", ImVec2(0, 0), ImGuiChildFlags_Borders);
-		bool tags_changed = false;
-		for (auto& tag : view.installTags) {
-			bool enabled = tag.value("enabled", true);
-			if (ImGui::Checkbox(tag["label"].get<std::string>().c_str(), &enabled)) {
-				tag["enabled"] = enabled;
-				tags_changed = true;
-			}
-		}
-		if (tags_changed)
-			update_install_listfile();
 		ImGui::EndChild();
+		ImGui::PopStyleVar(); // WindowPadding
+
+		// --- Sidebar (col 2, spanning both rows) ---
+		// CSS: .sidebar { grid-column: 2; width: 210px; margin-top: 20px; padding-right: 20px }
+		constexpr float sidebarTopM = app::layout::SIDEBAR_MARGIN_TOP;     // 20px
+		constexpr float sidebarPadR = app::layout::SIDEBAR_PADDING_RIGHT;  // 20px
+		ImGui::SetCursorPos(ImVec2(cursor.x + gridW, cursor.y + sidebarTopM));
+		ImGui::BeginChild("install-sidebar",
+			ImVec2(SIDEBAR_W - sidebarPadR, avail.y - sidebarTopM));
+		{
+			bool tags_changed = false;
+			for (auto& tag : view.installTags) {
+				bool enabled = tag.value("enabled", true);
+				if (ImGui::Checkbox(tag["label"].get<std::string>().c_str(), &enabled)) {
+					tag["enabled"] = enabled;
+					tags_changed = true;
+				}
+			}
+			if (tags_changed)
+				update_install_listfile();
+		}
+		ImGui::EndChild();
+
 	} else {
+		// JS: <template v-else>
 		// String viewer.
 
-		// List container.
-		ImGui::BeginChild("install-strings-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 3), ImGuiChildFlags_Borders);
+		// --- List container (row 1, col 1) ---
+		constexpr float listTopM = app::layout::LIST_MARGIN_TOP;
+		constexpr float listLeftM = app::layout::LIST_MARGIN_LEFT;
+		constexpr float listRightM = app::layout::LIST_MARGIN_RIGHT;
+
+		ImGui::SetCursorPos(ImVec2(cursor.x + listLeftM, cursor.y + listTopM));
+		ImGui::BeginChild("install-strings-list-container",
+			ImVec2(gridW - listLeftM - listRightM, topH - listTopM));
 		{
 			std::vector<std::string> selection_str;
 			for (const auto& s : view.selectionInstallStrings)
@@ -423,32 +484,72 @@ void render() {
 		}
 		ImGui::EndChild();
 
-		// Tray.
-		if (view.config.value("regexFilters", false))
-			ImGui::TextUnformatted("Regex Enabled");
+		// --- Tray (row 2, col 1) ---
+		constexpr float TRAY_M = 10.0f;
+		ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + topH));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(TRAY_M, 0.0f));
+		ImGui::BeginChild("install-strings-tray", ImVec2(gridW, FILTER_H), ImGuiChildFlags_None,
+			ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
+		float padY = (FILTER_H - ImGui::GetFrameHeight()) * 0.5f;
+		if (padY > 0.0f)
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
+
+		if (view.config.value("regexFilters", false)) {
+			ImGui::TextUnformatted("Regex Enabled");
+			ImGui::SameLine();
+		}
+
+		const bool busy = view.isBusy > 0;
+
+		float btnBackW = ImGui::CalcTextSize("Back to Manifest").x + ImGui::GetStyle().FramePadding.x * 2;
+		float btnExportW = ImGui::CalcTextSize("Export Strings").x + ImGui::GetStyle().FramePadding.x * 2;
+		float buttonsW = 5.0f + btnBackW + 5.0f + btnExportW;
+		float filterW = ImGui::GetContentRegionAvail().x - buttonsW;
+		if (filterW < 50.0f) filterW = 50.0f;
+
+		ImGui::SetNextItemWidth(filterW);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterInstallStrings.c_str(), sizeof(filter_buf) - 1);
 		if (ImGui::InputText("##FilterInstallStrings", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterInstallStrings = filter_buf;
 
+		ImGui::SameLine(0.0f, 5.0f);
 		if (ImGui::Button("Back to Manifest"))
 			back_to_manifest_impl();
-
-		ImGui::SameLine();
-
-		const bool busy = view.isBusy > 0;
+		ImGui::SameLine(0.0f, 5.0f);
 		if (busy) app::theme::BeginDisabledButton();
 		if (ImGui::Button("Export Strings"))
 			export_strings_impl();
 		if (busy) app::theme::EndDisabledButton();
 
-		// Sidebar — strings info.
-		ImGui::BeginChild("install-strings-info", ImVec2(0, 0), ImGuiChildFlags_Borders);
-		ImGui::TextUnformatted("Strings from:");
-		ImGui::TextWrapped("%s", view.installStringsFileName.c_str());
+		ImGui::EndChild();
+		ImGui::PopStyleVar(); // WindowPadding
+
+		// --- Sidebar: strings info (col 2, spanning both rows) ---
+		// CSS: .sidebar.strings-info { display: flex; flex-direction: column; gap: 5px }
+		constexpr float sidebarTopM = app::layout::SIDEBAR_MARGIN_TOP;
+		constexpr float sidebarPadR = app::layout::SIDEBAR_PADDING_RIGHT;
+		ImGui::SetCursorPos(ImVec2(cursor.x + gridW, cursor.y + sidebarTopM));
+		ImGui::BeginChild("install-strings-info",
+			ImVec2(SIDEBAR_W - sidebarPadR, avail.y - sidebarTopM));
+		{
+			// CSS: .strings-header { font-size: 14px; opacity: 0.7 }
+			ImGui::PushStyleColor(ImGuiCol_Text,
+				ImVec4(1.0f, 1.0f, 1.0f, 0.7f));
+			ImGui::TextUnformatted("Strings from:");
+			ImGui::PopStyleColor();
+
+			ImGui::Spacing();
+
+			// CSS: .strings-filename { font-size: 12px; word-break: break-all }
+			ImGui::TextWrapped("%s", view.installStringsFileName.c_str());
+		}
 		ImGui::EndChild();
 	}
+
+	} // if BeginTab
+	app::layout::EndTab();
 }
 
 void export_install() {
