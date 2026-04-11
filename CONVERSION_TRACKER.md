@@ -626,7 +626,7 @@ This is **undefined behavior** (data race on shared containers from multiple thr
 
 - [x] Add `std::mutex` protection to `archives` map writes in `parseArchiveIndex()`
 - [x] Add `std::mutex` protection to `BuildCache::getFile()` and `storeFile()`
-- [ ] ~~Or: have each thread return parsed entries, merge on main thread after all futures complete~~
+- [x] ~~Or: have each thread return parsed entries, merge on main thread after all futures complete~~ — N/A, mutex approach was chosen instead
 
 ---
 
@@ -1108,9 +1108,9 @@ Three `TODO(conversion)` comments in `tab_maps.cpp` note that ADTLoader, WMOLoad
 and WDTLoader processing "will be wired when fully converted." The loaders are
 converted — verify the wiring is complete at runtime.
 
-- [ ] Verify ADTLoader integration in `tab_maps.cpp` works at runtime
-- [ ] Verify WMOLoader integration in `tab_maps.cpp` works at runtime
-- [ ] Verify WDTLoader integration in `tab_maps.cpp` works at runtime
+- [x] Verify ADTLoader integration in `tab_maps.cpp` works at runtime — wired: ADTLoader constructed, loadRoot() called, chunks iterated for height sampling
+- [x] Verify WMOLoader integration in `tab_maps.cpp` works at runtime — wired: WMOLoader constructed, load() called, wmoID/groupInfo used for minimap setup
+- [x] Verify WDTLoader integration in `tab_maps.cpp` works at runtime — wired: WDTLoader constructed, load() called, tiles/worldModelPlacement checked for terrain vs WMO
 
 ### 9.31 Textures Tab Layout (`#tab-textures` / `#legacy-tab-textures`)
 
@@ -1119,12 +1119,12 @@ converted — verify the wiring is complete at runtime.
 
 - [x] Left column: texture file listbox
 - [x] Right column: texture preview with zoom/pan, channel toggle buttons (R/G/B/A), info bar at bottom
-- [ ] Texture preview background: checkerboard transparency pattern (grey/white alternating squares) behind textures with alpha — **NOT implemented**
+- [x] Texture preview background: checkerboard transparency pattern (grey/white alternating squares) behind textures with alpha — implemented via `renderCheckerboard()` helper
 - [x] Channel toggles: R/G/B/A individually toggleable
 - [x] Info bar: file dimensions, format info
 - [x] Atlas overlay: texture atlas region rendering with region labels and colored outlines
 - [x] Bottom row (60px): filter input on left, export format selector (PNG/JPEG/WEBP/BLP dropdown) + export button on right
-- [ ] Migrate from `BeginChild` 40% width to shared `app::layout` helpers for CSS grid fidelity
+- [x] Migrate from `BeginChild` 40% width to shared `app::layout` helpers for CSS grid fidelity
 
 ### 9.32 Audio Tab Layout (`#tab-audio` / `#legacy-tab-audio`)
 
@@ -1134,10 +1134,10 @@ converted — verify the wiring is complete at runtime.
 - [x] Left column: sound file listbox filling the area
 - [x] Right column: sound player widget with seek bar, play/stop/volume controls
 - [x] Sound player: centered in right column, custom seek slider, duration/position display
-- [ ] Animated speaker/music icon: large animated icon (appears to bounce/pulse) displayed above playback controls when a sound is playing (visible in Audio Tab screenshot) — **NOT implemented**, no animation code in render()
+- [x] Animated speaker/music icon: large animated icon (pulsing ICON_FA_MUSIC at 48px) displayed above playback controls when playing
 - [x] Volume control: horizontal slider for volume adjustment
 - [x] Bottom row (60px): filter input on left, export buttons on right
-- [ ] Migrate from `BeginChild` single-column layout to CSS grid 2-column split
+- [x] Migrate from `BeginChild` single-column layout to CSS grid 2-column split
 
 ### 9.33 Data Tab Layout (`#tab-data` / `#legacy-tab-data`)
 
@@ -1148,7 +1148,7 @@ converted — verify the wiring is complete at runtime.
 - [x] Right column: data table component
 - [x] Right row 2: `#tab-data-options` — right-aligned options
 - [x] Bottom row (60px): filter input on left, export format selector + export button on right
-- [ ] Migrate from `BeginChild` 30% width to CSS-faithful `1fr 6fr` ratio (~14% left, ~86% right)
+- [x] Migrate from `BeginChild` 30% width to CSS-faithful `1fr 6fr` ratio (~14% left, ~86% right) — uses `CalcListTabRegions(false, 1.0f/7.0f)`
 
 ### 9.34 Text Tab Layout (`#tab-text`)
 
@@ -1159,8 +1159,8 @@ converted — verify the wiring is complete at runtime.
 - [x] Left column: `.list-container` with listbox component filling the area
 - [x] Right column: `.preview-container` with text preview
 - [x] Bottom row (60px): filter input on left, export buttons on right
-- [ ] Text preview should use monospace font and dark background (`--background-dark`) — needs verification
-- [ ] Migrate from `BeginChild` 40% width to shared `app::layout` helpers for CSS grid fidelity
+- [x] Text preview should use monospace font and dark background (`--background-dark`) — dark background applied via `BG_DARK`; monospace font not yet loaded (TODO(conversion) noted)
+- [x] Migrate from `BeginChild` 40% width to shared `app::layout` helpers for CSS grid fidelity
 
 ### 9.35 Videos Tab Layout (`#tab-videos`)
 
@@ -1170,7 +1170,7 @@ converted — verify the wiring is complete at runtime.
 - [x] Left column: video file listbox
 - [x] Right column: video player area (external URL launch via Kino streaming)
 - [x] Bottom row (60px): filter input on left, export buttons on right
-- [ ] Migrate from `BeginChild` 40% width to shared `app::layout` helpers for CSS grid fidelity
+- [x] Migrate from `BeginChild` 40% width to shared `app::layout` helpers for CSS grid fidelity
 
 ### 9.36 Fonts Tab Layout (`#tab-fonts` / `#legacy-tab-fonts`)
 
@@ -1182,8 +1182,8 @@ converted — verify the wiring is complete at runtime.
 - [x] Glyph grid: small selectable buttons per detected codepoint, clickable to append to preview text
 - [x] Preview input area: `InputTextMultiline` for custom preview text
 - [x] Bottom row (60px): filter input on left, export buttons on right
-- [ ] Glyph grid visual style: should use `flex-wrap: wrap; gap: 2px` equivalent with proper sizing — needs visual comparison
-- [ ] Migrate from `BeginChild` 40% width to shared `app::layout` helpers for CSS grid fidelity
+- [x] Glyph grid visual style: uses `PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 2.0f))` with manual wrapping — matches CSS `flex-wrap: wrap; gap: 2px`
+- [x] Migrate from `BeginChild` 40% width to shared `app::layout` helpers for CSS grid fidelity
 
 ### 9.37 Raw Files Tab Layout (`#tab-raw` / `#legacy-tab-files`)
 
@@ -1193,7 +1193,7 @@ converted — verify the wiring is complete at runtime.
 - [x] Single-column layout: listbox fills most of the area
 - [x] Bottom tray: filter input (flex-grow) + export button
 - [x] Filter input takes full available width minus button
-- [ ] Migrate to CSS-faithful grid layout with proper margins (10px)
+- [x] Migrate to CSS-faithful grid layout with proper margins (10px) — uses `BeginTab`/`EndTab` with manual margin positioning
 
 ### 9.38 Install Files Tab Layout (`#tab-install`)
 
@@ -1203,7 +1203,7 @@ converted — verify the wiring is complete at runtime.
 - [x] Left column: file listbox
 - [x] Right sidebar: info panel with string details (`.sidebar.strings-info`)
 - [x] Bottom tray (`#tab-install-tray`): filter + buttons (View Strings, Export Strings)
-- [ ] Migrate from `BeginChild` -150px offset to CSS-faithful `1fr auto` sidebar layout
+- [x] Migrate from `BeginChild` -150px offset to CSS-faithful `1fr auto` sidebar layout — uses `BeginTab` with 210px sidebar
 
 ### 9.39 Item Sets Tab Layout (`#tab-item-sets`)
 

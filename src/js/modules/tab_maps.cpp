@@ -503,7 +503,7 @@ index += is_short ? (std::min)(x, 7) : (std::min)(x, 8);
 return index;
 }
 
-static float sample_chunk_height(const ADTChunk& chunk, float localX, float localY) {
+static float sample_chunk_height(const ::ADTChunk& chunk, float localX, float localY) {
 float vx = localX * 8.0f;
 float vy = localY * 8.0f;
 
@@ -563,14 +563,45 @@ return std::nullopt;
 
 // JS: const root_file = await core.view.casc.getFile(root_fid);
 BufferWrapper root_file = core::view->casc->getVirtualFileByID(*root_fid);
-// JS: const root_adt = new ADTLoader(root_file);
-// JS: root_adt.loadRoot();
-// TODO(conversion): ADTLoader processing will be wired when ADTLoader is fully converted.
-// The height values are stored in a resolution x resolution grid with
-// a 90-degree CW rotation: heights[height_idx] where
-// height_idx = (resolution - 1 - px) * resolution + py.
-(void)root_file;
+ADTLoader root_adt(root_file);
+root_adt.loadRoot();
+
+if (root_adt.chunks.empty()) {
+logging::write(std::format("no chunks found in ADT file {}", tile_prefix));
 return std::nullopt;
+}
+
+std::vector<float> heights(resolution * resolution, 0.0f);
+for (int py = 0; py < resolution; py++) {
+for (int px = 0; px < resolution; px++) {
+int chunk_x = static_cast<int>(std::floor(px * 16.0 / resolution));
+int chunk_y = static_cast<int>(std::floor(py * 16.0 / resolution));
+int chunk_index = chunk_y * 16 + chunk_x;
+
+if (chunk_index >= static_cast<int>(root_adt.chunks.size()))
+	continue;
+
+const auto& chunk = root_adt.chunks[chunk_index];
+if (chunk.vertices.empty())
+	continue;
+
+float local_x = static_cast<float>(px * 16.0 / resolution) - chunk_x;
+float local_y = static_cast<float>(py * 16.0 / resolution) - chunk_y;
+
+float height = sample_chunk_height(chunk, local_x, local_y);
+
+// rotate 90° CW to align with terrain mesh coordinate system
+int height_idx = (resolution - 1 - px) * resolution + py;
+heights[height_idx] = height;
+}
+}
+
+HeightData result;
+result.heights = std::move(heights);
+result.resolution = resolution;
+result.tileX = tile_x;
+result.tileY = tile_y;
+return result;
 
 } catch (const std::exception& e) {
 logging::write(std::format("error extracting height data from tile {}: {}", tile_prefix, e.what()));
@@ -709,11 +740,158 @@ file_data_id = placement.id;
 BufferWrapper wmo_data = core::view->casc->getVirtualFileByID(file_data_id);
 // JS: const wmo = new WMOLoader(wmo_data, file_data_id);
 // JS: await wmo.load();
-// TODO(conversion): WMOLoader processing will be wired when WMOLoader integration is complete.
-// When wired, this will load the WMO, find minimap textures by wmoID,
-// compute group bounding boxes, position tiles absolutely, bin into a grid,
-// and populate current_wmo_minimap with mask/tiles_by_coord/grid_size.
-(void)wmo_data;
+WMOLoader wmo(wmo_data, file_data_id);
+wmo.load();
+
+uint32_t wmo_id = wmo.wmoID;
+if (!wmo_id)
+return;
+
+auto tex_it = wmo_minimap_textures.find(wmo_id);
+if (tex_it == wmo_minimap_textures.end() || tex_it->second.empty())
+return;
+
+const auto& group_info = wmo.groupInfo;
+if (group_info.empty())
+return;
+
+// group tiles by groupNum
+std::map<int, std::vector<db::DataRecord*>> groups_tiles;
+for (auto& tile_row : tex_it->second) {
+int group_num = static_cast<int>(fieldToUint32(tile_row.at("GroupNum")));
+groups_tiles[group_num].push_back(&tile_row);
+}
+
+// calculate absolute pixel position for each tile
+struct TilePos {
+uint32_t fileDataID;
+int groupNum;
+int blockX;
+int blockY;
+float absX;
+float absY;
+float zOrder;
+};
+std::vector<TilePos> tile_positions;
+
+for (auto& [group_num, group_tiles] : groups_tiles) {
+if (group_num >= static_cast<int>(group_info.size()))
+	continue;
+
+const auto& group = group_info[group_num];
+float g_min_x = (std::min)(group.boundingBox1[0], group.boundingBox2[0]) * 2.0f;
+float g_min_y = (std::min)(group.boundingBox1[1], group.boundingBox2[1]) * 2.0f;
+float g_min_z = (std::min)(group.boundingBox1[2], group.boundingBox2[2]);
+
+for (auto* tile_row : group_tiles) {
+	int bx = static_cast<int>(fieldToUint32(tile_row->at("BlockX")));
+	int by = static_cast<int>(fieldToUint32(tile_row->at("BlockY")));
+	uint32_t fdid = fieldToUint32(tile_row->at("FileDataID"));
+	tile_positions.push_back({
+		fdid, group_num, bx, by,
+		g_min_x + (bx * 256.0f),
+		g_min_y + (by * 256.0f),
+		g_min_z
+	});
+}
+}
+
+// find bounds of all tiles
+float min_x = std::numeric_limits<float>::infinity();
+float max_x = -std::numeric_limits<float>::infinity();
+float min_y = std::numeric_limits<float>::infinity();
+float max_y = -std::numeric_limits<float>::infinity();
+
+for (const auto& t : tile_positions) {
+min_x = (std::min)(min_x, t.absX);
+max_x = (std::max)(max_x, t.absX + 256.0f);
+min_y = (std::min)(min_y, t.absY);
+max_y = (std::max)(max_y, t.absY + 256.0f);
+}
+
+int canvas_width = static_cast<int>(std::ceil(max_x - min_x));
+int canvas_height = static_cast<int>(std::ceil(max_y - min_y));
+
+// convert to canvas coords and build positioned tiles
+std::vector<WMOMinimapTileInfo> positioned_tiles;
+for (const auto& t : tile_positions) {
+float canvas_x = t.absX - min_x;
+float canvas_y = (max_y - 256.0f) - t.absY; // flip Y for canvas
+
+WMOMinimapTileInfo info;
+info.fileDataID = t.fileDataID;
+info.groupNum = t.groupNum;
+info.blockX = t.blockX;
+info.blockY = t.blockY;
+info.pixelX = canvas_x;
+info.pixelY = canvas_y;
+info.scaleX = 1.0f;
+info.scaleY = 1.0f;
+info.srcWidth = 256;
+info.srcHeight = 256;
+info.zOrder = t.zOrder;
+positioned_tiles.push_back(info);
+}
+
+if (positioned_tiles.empty())
+return;
+
+// use 256px output tile size, calculate grid
+constexpr int OUTPUT_TILE_SIZE = 256;
+int grid_width = static_cast<int>(std::ceil(static_cast<float>(canvas_width) / OUTPUT_TILE_SIZE));
+int grid_height = static_cast<int>(std::ceil(static_cast<float>(canvas_height) / OUTPUT_TILE_SIZE));
+int grid_size = (std::max)(grid_width, grid_height);
+std::vector<int> mask(grid_size * grid_size, 0);
+std::map<std::string, std::vector<WMOMinimapTileInfo>> tiles_by_coord;
+
+// assign tiles to grid cells based on their pixel position
+for (auto& tile : positioned_tiles) {
+int gx_start = static_cast<int>(std::floor(tile.pixelX / OUTPUT_TILE_SIZE));
+int gy_start = static_cast<int>(std::floor(tile.pixelY / OUTPUT_TILE_SIZE));
+float tile_width = tile.srcWidth * tile.scaleX;
+float tile_height = tile.srcHeight * tile.scaleY;
+int gx_end = static_cast<int>(std::floor((tile.pixelX + tile_width - 1) / OUTPUT_TILE_SIZE));
+int gy_end = static_cast<int>(std::floor((tile.pixelY + tile_height - 1) / OUTPUT_TILE_SIZE));
+
+for (int gx = gx_start; gx <= gx_end; gx++) {
+	for (int gy = gy_start; gy <= gy_end; gy++) {
+		if (gx < 0 || gx >= grid_size || gy < 0 || gy >= grid_size)
+			continue;
+
+		int index = gx * grid_size + gy;
+		mask[index] = 1;
+
+		std::string key = std::format("{},{}", gx, gy);
+		WMOMinimapTileInfo draw_tile = tile;
+		draw_tile.drawX = tile.pixelX - (gx * OUTPUT_TILE_SIZE);
+		draw_tile.drawY = tile.pixelY - (gy * OUTPUT_TILE_SIZE);
+		tiles_by_coord[key].push_back(draw_tile);
+	}
+}
+}
+
+// sort tiles in each grid cell by Z order
+for (auto& [key, tile_list] : tiles_by_coord)
+std::sort(tile_list.begin(), tile_list.end(),
+	[](const WMOMinimapTileInfo& a, const WMOMinimapTileInfo& b) { return a.zOrder < b.zOrder; });
+
+WMOMinimapData data;
+data.wmo_id = wmo_id;
+data.tiles = std::move(positioned_tiles);
+data.canvas_width = canvas_width;
+data.canvas_height = canvas_height;
+data.grid_width = grid_width;
+data.grid_height = grid_height;
+data.grid_size = grid_size;
+data.mask = std::move(mask);
+data.tiles_by_coord = std::move(tiles_by_coord);
+data.output_tile_size = OUTPUT_TILE_SIZE;
+current_wmo_minimap = std::move(data);
+
+logging::write(std::format("loaded WMO minimap: {} tiles, {}x{} canvas, {}x{} grid",
+current_wmo_minimap->tiles.size(), current_wmo_minimap->canvas_width, current_wmo_minimap->canvas_height,
+current_wmo_minimap->grid_width, current_wmo_minimap->grid_height));
+logging::write(std::format("WMO minimap unique grid cells: {}", current_wmo_minimap->tiles_by_coord.size()));
 } catch (const std::exception& e) {
 logging::write(std::format("failed to setup WMO minimap: {}", e.what()));
 current_wmo_minimap = std::nullopt;
@@ -749,19 +927,66 @@ logging::write(std::format("loading map preview for {} ({})", map_dir_lower, map
 
 // JS: const data = await this.$core.view.casc.getFileByName(wdt_path);
 BufferWrapper wdt_data = core::view->casc->getVirtualFileByName(wdt_path);
+
+try {
 // JS: const wdt = selected_wdt = new WDTLoader(data);
 // JS: wdt.load();
-// TODO(conversion): WDTLoader processing will be wired when WDTLoader is fully converted.
-// When wired, the WDT will be loaded and checked for terrain/WMO.
-// If no terrain but has WMO, setup_wmo_minimap is called.
-// Otherwise terrain minimap loader is used.
 selected_wdt_data = std::move(wdt_data);
+selected_wdt = std::make_unique<WDTLoader>(selected_wdt_data);
+selected_wdt->load();
 
-// Fallback until CASC is wired:
+// JS: if (wdt.worldModelPlacement) this.$core.view.mapViewerHasWorldModel = true;
+if (selected_wdt->worldModelPlacement.id != 0)
+	core::view->mapViewerHasWorldModel = true;
+
+// JS: const has_terrain = wdt.tiles && wdt.tiles.some(tile => tile === 1);
+const bool has_terrain = !selected_wdt->tiles.empty() &&
+	std::any_of(selected_wdt->tiles.begin(), selected_wdt->tiles.end(),
+		[](uint32_t t) { return t == 1; });
+
+// JS: const has_global_wmo = wdt.worldModelPlacement !== undefined;
+const bool has_global_wmo = (selected_wdt->worldModelPlacement.id != 0);
+
+if (!has_terrain && has_global_wmo) {
+	// JS: await this.setup_wmo_minimap(wdt);
+	setup_wmo_minimap(*selected_wdt);
+
+	if (current_wmo_minimap) {
+		// JS: this.$core.view.mapViewerTileLoader = load_wmo_minimap_tile;
+		core::view->mapViewerTileLoader = "wmo_minimap";
+		// JS: this.$core.view.mapViewerChunkMask = current_wmo_minimap.mask;
+		core::view->mapViewerChunkMask = nlohmann::json::array();
+		for (int m : current_wmo_minimap->mask)
+			core::view->mapViewerChunkMask.push_back(m);
+		// JS: this.$core.view.mapViewerGridSize = current_wmo_minimap.grid_size;
+		core::view->mapViewerGridSize = current_wmo_minimap->grid_size;
+		core::view->mapViewerIsWMOMinimap = true;
+		core::view->mapViewerSelectedMap = mapID;
+		core::view->mapViewerSelectedDir = mapDir;
+		core::setToast("info", "Showing WMO minimap. Use \"Export Global WMO\" to export the world model.", {}, 6000);
+		return;
+	}
+
+	core::setToast("info", "This map has no terrain tiles. Use \"Export Global WMO\" to export the world model.", {}, 6000);
+}
+
+// JS: this.$core.view.mapViewerTileLoader = load_map_tile;
+core::view->mapViewerTileLoader = "terrain";
+// JS: this.$core.view.mapViewerChunkMask = wdt.tiles;
+core::view->mapViewerChunkMask = nlohmann::json::array();
+for (uint32_t t : selected_wdt->tiles)
+	core::view->mapViewerChunkMask.push_back(static_cast<int>(t));
+core::view->mapViewerSelectedMap = mapID;
+core::view->mapViewerSelectedDir = mapDir;
+} catch (const std::exception& e) {
+// JS: log.write('cannot load %s, defaulting to all chunks enabled', wdt_path);
+logging::write(std::format("cannot load {}, defaulting to all chunks enabled", wdt_path));
+selected_wdt_data = {};
 core::view->mapViewerTileLoader = "terrain";
 core::view->mapViewerChunkMask = nullptr;
 core::view->mapViewerSelectedMap = mapID;
 core::view->mapViewerSelectedDir = mapDir;
+}
 }
 
 // --- Export functions ---
