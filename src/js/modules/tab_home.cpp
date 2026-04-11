@@ -53,7 +53,7 @@ static void loadBackgroundTexture() {
 		return;
 
 	auto fileSize = file.tellg();
-	if (fileSize <= 0)
+	if (fileSize == std::streampos(-1) || fileSize == std::streampos(0))
 		return;
 
 	std::vector<uint8_t> fileData(static_cast<size_t>(fileSize));
@@ -273,7 +273,7 @@ void renderHomeLayout() {
 	// ═════════════════════════════════════════════════════════════
 	{
 		ImFont* boldFont = app::theme::getBoldFont();
-		std::string title = std::format("wow.export v{}", constants::VERSION);
+		static const std::string title = std::format("wow.export v{}", constants::VERSION);
 		float titleFontSize = 28.0f;
 		ImGui::GetWindowDrawList()->AddText(boldFont, titleFontSize,
 			ImVec2(startX, startY), app::theme::FONT_HIGHLIGHT_U32, title.c_str());
