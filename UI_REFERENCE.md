@@ -204,3 +204,27 @@ The data tab with a data table loaded, showing column headers and row data.
 The data tab showing the settings menu in the top right corner.
 
 ![Data Tab - Settings Menu](https://github.com/user-attachments/assets/99310ff8-76e4-486a-af7a-1c4a3cf417e9)
+
+---
+
+## Options Menu — Dev Build
+
+The options/settings menu in the top right corner, shown with a dev build. Dev builds expose additional options not available in release builds.
+
+![Options Menu — Dev Build](https://github.com/user-attachments/assets/9b6e1ccb-7ee1-4423-92be-95fee72f8daf)
+
+---
+
+## Install Manifest Tab
+
+The "Browse Install Manifest" tab, showing the install manifest file list.
+
+![Install Manifest Tab](https://github.com/user-attachments/assets/286867a4-ec47-47dd-8fe9-a4a05ae16bff)
+
+---
+
+## Raw Client Files Tab
+
+The "Browse Raw Client Files" tab, showing the raw file browser for exploring CASC data directly.
+
+![Raw Client Files Tab](https://github.com/user-attachments/assets/264c226a-a884-4e3d-8de4-457228c997d3)
