@@ -166,13 +166,16 @@ void render() {
 			font_helpers::process_glyph_detection_batch(font, glyph_state);
 	}
 
-	// List container with context menu.
+	if (app::layout::BeginTab("tab-legacy-fonts")) {
+
+	auto regions = app::layout::CalcListTabRegions(false);
+
+	// --- Left panel: List container (row 1, col 1) ---
 	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionFonts" :items="listfileFonts" ...>
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	//       copy_file_paths, copy_export_paths, open_export_directory
-	ImGui::BeginChild("legacy-fonts-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.4f, 0), ImGuiChildFlags_Borders);
-	{
+	if (app::layout::BeginListContainer("legacy-fonts-list-container", regions)) {
 		// Convert JSON items/selection to string vectors.
 		std::vector<std::string> items_str;
 		items_str.reserve(view.listfileFonts.size());
@@ -246,74 +249,90 @@ void render() {
 			}
 		);
 	}
-	ImGui::EndChild();
+	app::layout::EndListContainer();
 
-	ImGui::SameLine();
-
-	// Right side — filter, preview, controls.
-	ImGui::BeginGroup();
-
-	// Filter.
+	// --- Filter bar (row 2, col 1) ---
 	// JS: <div class="filter">
-	if (view.config.value("regexFilters", false))
-		ImGui::TextUnformatted("Regex Enabled");
+	if (app::layout::BeginFilterBar("legacy-fonts-filter", regions)) {
+		if (view.config.value("regexFilters", false))
+			ImGui::TextUnformatted("Regex Enabled");
 
-	char filter_buf[256] = {};
-	std::strncpy(filter_buf, view.userInputFilterFonts.c_str(), sizeof(filter_buf) - 1);
-	if (ImGui::InputText("##FilterFonts", filter_buf, sizeof(filter_buf)))
-		view.userInputFilterFonts = filter_buf;
-
-	// Font preview container.
-	// JS: <div class="preview-container font-preview">
-	ImGui::BeginChild("font-preview-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-
-	// Glyph grid.
-	// JS: <div class="font-character-grid"></div>
-	ImGui::BeginChild("font-character-grid", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.5f), ImGuiChildFlags_Borders);
-	for (const auto& codepoint : glyph_state.detected_codepoints) {
-		char utf8_buf[5] = {};
-		ImTextCharToUtf8(utf8_buf, static_cast<unsigned int>(codepoint));
-
-		// Each glyph cell is a small selectable button.
-		ImGui::PushID(static_cast<int>(codepoint));
-		if (ImGui::Selectable(utf8_buf, false, 0, ImVec2(24, 24))) {
-			// JS: on_glyph_click(char) => this.$core.view.fontPreviewText += char;
-			view.fontPreviewText += utf8_buf;
-		}
-		if (ImGui::IsItemHovered()) {
-			char tooltip[32];
-			std::snprintf(tooltip, sizeof(tooltip), "U+%04X", codepoint);
-			ImGui::SetTooltip("%s", tooltip);
-		}
-		ImGui::PopID();
-		ImGui::SameLine();
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterFonts.c_str(), sizeof(filter_buf) - 1);
+		if (ImGui::InputText("##FilterFonts", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterFonts = filter_buf;
 	}
-	ImGui::NewLine();
-	ImGui::EndChild();
+	app::layout::EndFilterBar();
 
-	// Font preview text input.
-	// JS: <textarea :style="{ fontFamily: fontPreviewFontFamily }" :placeholder="fontPreviewPlaceholder" v-model="fontPreviewText">
-	char preview_buf[4096] = {};
-	std::strncpy(preview_buf, view.fontPreviewText.c_str(), sizeof(preview_buf) - 1);
-	if (ImGui::InputTextMultiline("##FontPreviewText", preview_buf, sizeof(preview_buf),
-		ImVec2(-1, ImGui::GetContentRegionAvail().y)))
-		view.fontPreviewText = preview_buf;
+	// --- Right panel: Preview container (row 1, col 2) ---
+	// JS: <div class="preview-container font-preview">
+	if (app::layout::BeginPreviewContainer("legacy-fonts-preview-container", regions)) {
+		// Glyph grid.
+		// JS: <div class="font-character-grid"></div>
+		ImGui::BeginChild("font-character-grid", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.5f), ImGuiChildFlags_Borders);
 
-	if (view.fontPreviewText.empty())
-		ImGui::SetItemTooltip("%s", view.fontPreviewPlaceholder.c_str());
+		// Set 2px spacing to match CSS: flex-wrap: wrap; gap: 2px
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 2.0f));
+		float avail_width = ImGui::GetContentRegionAvail().x;
+		float cursor_x = 0.0f;
 
-	ImGui::EndChild();
+		for (const auto& codepoint : glyph_state.detected_codepoints) {
+			char utf8_buf[5] = {};
+			ImTextCharToUtf8(utf8_buf, static_cast<unsigned int>(codepoint));
 
-	// Preview controls.
+			// Each glyph cell is a small selectable button.
+			ImGui::PushID(static_cast<int>(codepoint));
+			if (ImGui::Selectable(utf8_buf, false, 0, ImVec2(24, 24))) {
+				// JS: on_glyph_click(char) => this.$core.view.fontPreviewText += char;
+				view.fontPreviewText += utf8_buf;
+			}
+			if (ImGui::IsItemHovered()) {
+				char tooltip[32];
+				std::snprintf(tooltip, sizeof(tooltip), "U+%04X", codepoint);
+				ImGui::SetTooltip("%s", tooltip);
+			}
+			ImGui::PopID();
+
+			// Manual wrap: continue on same line if next button fits.
+			cursor_x += 24.0f + 2.0f;
+			if (cursor_x + 24.0f <= avail_width) {
+				ImGui::SameLine();
+			} else {
+				cursor_x = 0.0f;
+			}
+		}
+		ImGui::NewLine();
+		ImGui::PopStyleVar();
+		ImGui::EndChild();
+
+		// Font preview text input.
+		// JS: <textarea :style="{ fontFamily: fontPreviewFontFamily }" :placeholder="fontPreviewPlaceholder" v-model="fontPreviewText">
+		char preview_buf[4096] = {};
+		std::strncpy(preview_buf, view.fontPreviewText.c_str(), sizeof(preview_buf) - 1);
+		if (ImGui::InputTextMultiline("##FontPreviewText", preview_buf, sizeof(preview_buf),
+			ImVec2(-1, ImGui::GetContentRegionAvail().y)))
+			view.fontPreviewText = preview_buf;
+
+		if (view.fontPreviewText.empty())
+			ImGui::SetItemTooltip("%s", view.fontPreviewPlaceholder.c_str());
+	}
+	app::layout::EndPreviewContainer();
+
+	// --- Bottom-right: Preview controls (row 2, col 2) ---
 	// JS: <div class="preview-controls">
 	//     <input type="button" value="Export Selected" @click="export_fonts" :class="{ disabled: isBusy }"/>
-	const bool busy = view.isBusy > 0;
-	if (busy) app::theme::BeginDisabledButton();
-	if (ImGui::Button("Export Selected"))
-		export_fonts();
-	if (busy) app::theme::EndDisabledButton();
+	if (app::layout::BeginPreviewControls("legacy-fonts-preview-controls", regions)) {
+		const bool busy = view.isBusy > 0;
+		if (busy) app::theme::BeginDisabledButton();
+		if (ImGui::Button("Export Selected"))
+			export_fonts();
+		if (busy) app::theme::EndDisabledButton();
+	}
+	app::layout::EndPreviewControls();
 
-	ImGui::EndGroup();
+	} // if BeginTab
+	app::layout::EndTab();
 }
 
 void export_fonts() {
