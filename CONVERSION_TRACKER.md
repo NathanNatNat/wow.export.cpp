@@ -544,12 +544,12 @@ Files with informational no-ops: `generics.cpp`, `modules.cpp`, `components/*.cp
 
 ## ⚠️ Loading Performance — MUST FIX
 
-> **The C++ app's loading is significantly slower than the original JS app.**
+> **The C++ app's loading is significantly slower (estimated 2-10× slower) than the original JS app.**
 > This section documents the root causes and required fixes. These are NOT
 > acceptable deviations — the JS async patterns exist for real functional
 > reasons and the C++ port must preserve equivalent behavior.
 >
-> See AUDIT_TRACKER.md "Performance-Critical Deviations" section for detailed
+> See AUDIT_TRACKER.md "Performance-Critical Issues" section for detailed
 > analysis of each issue.
 
 ### 10.1 Main Thread Blocking (Critical)
@@ -597,7 +597,7 @@ this means the UI is frozen for the entire parsing duration.
 The JS `CASCRemote::init()` uses `Promise.allSettled()` for parallel product config fetches.
 The C++ version sequentially fetches each product's version config.
 
-With ~10 products, this is ~10x slower than the JS version.
+With ~10 products, the C++ version takes ~10× the total HTTP request time compared to the JS version which fetches them all in parallel.
 
 - [ ] Use `std::async` / `std::future` to fetch all product configs in parallel
 - [ ] Collect results after all futures complete (matching `Promise.allSettled` semantics)
@@ -618,6 +618,23 @@ This may cause data races when items are invalidated by iterator advancement.
 
 - [ ] Audit lambda captures in `queue()` for correctness
 - [ ] Capture items by value instead of by reference
+
+### 10.6 Data Race in `parseArchiveIndex` (Critical)
+
+JS's `generics.queue()` with Promise concurrency limiting is single-threaded —
+only I/O (network downloads) runs concurrently, all data processing serializes
+on the event loop. C++ `generics::queue()` uses `std::async(std::launch::async)`
+which creates REAL parallel OS threads.
+
+`CASCRemote::parseArchiveIndex()` is called from 50 concurrent threads and writes to:
+- `this->archives` (`std::unordered_map`) — no mutex protection
+- `cache->getFile()` / `cache->storeFile()` (BuildCache) — no mutex protection
+
+This is **undefined behavior** (data race on shared containers from multiple threads).
+
+- [ ] Add `std::mutex` protection to `archives` map writes in `parseArchiveIndex()`
+- [ ] Add `std::mutex` protection to `BuildCache::getFile()` and `storeFile()`
+- [ ] Or: have each thread return parsed entries, merge on main thread after all futures complete
 
 ---
 
