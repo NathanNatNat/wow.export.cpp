@@ -7,6 +7,7 @@
 #include "tab_data.h"
 #include "../log.h"
 #include "../core.h"
+#include "../../app.h"
 #include "../casc/export-helper.h"
 #include "../casc/listfile.h"
 #include "../casc/casc-source.h"
@@ -257,12 +258,17 @@ void render() {
 
 	// --- Template rendering ---
 
-	// Left panel: DB2 table list.
+	// JS: <div class="tab list-tab" id="tab-data">
+	// CSS: grid-template-columns: 1fr 6fr → ratio 1/7
+	if (app::layout::BeginTab("tab-data")) {
+
+	auto regions = app::layout::CalcListTabRegions(false, 1.0f / 7.0f);
+
+	// --- Left panel: List container (row 1, col 1) ---
 	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionDB2s" :items="dbdManifest" ...>
 	// </div>
-	ImGui::BeginChild("db2-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing() * 3), ImGuiChildFlags_Borders);
-	{
+	if (app::layout::BeginListContainer("db2-list-container", regions)) {
 		std::vector<std::string> items_str;
 		items_str.reserve(view.dbdManifest.size());
 		for (const auto& item : view.dbdManifest)
@@ -298,27 +304,25 @@ void render() {
 			nullptr  // no context menu
 		);
 	}
-	ImGui::EndChild();
+	app::layout::EndListContainer();
 
-	// Filter for DB2 list.
+	// --- Filter bar (row 2, col 1) ---
 	// JS: <div class="filter">
-	if (view.config.value("regexFilters", false))
-		ImGui::TextUnformatted("Regex Enabled");
+	if (app::layout::BeginFilterBar("db2-filter", regions)) {
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		char filter_db2_buf[256] = {};
+		std::strncpy(filter_db2_buf, view.userInputFilterDB2s.c_str(), sizeof(filter_db2_buf) - 1);
+		if (ImGui::InputText("##FilterDB2s", filter_db2_buf, sizeof(filter_db2_buf)))
+			view.userInputFilterDB2s = filter_db2_buf;
+	}
+	app::layout::EndFilterBar();
 
-	char filter_db2_buf[256] = {};
-	std::strncpy(filter_db2_buf, view.userInputFilterDB2s.c_str(), sizeof(filter_db2_buf) - 1);
-	if (ImGui::InputText("##FilterDB2s", filter_db2_buf, sizeof(filter_db2_buf)))
-		view.userInputFilterDB2s = filter_db2_buf;
-
-	ImGui::SameLine();
-
-	// Right panel: data table.
-	// JS: <div class="list-container">
+	// --- Right panel: Preview container (row 1, col 2) ---
+	// JS: <div class="list-container"> (data table + options)
 	//     <DataTable ref="dataTable" :headers="tableBrowserHeaders" :rows="tableBrowserRows" ...>
 	//     <ContextMenu :node="contextMenus.nodeDataTable" ...>
 	// </div>
-	ImGui::BeginChild("data-table-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 3), ImGuiChildFlags_Borders);
-	{
+	if (app::layout::BeginPreviewContainer("data-table-container", regions)) {
 		// Convert json headers to string array.
 		std::vector<std::string> headers_str;
 		for (const auto& h : view.tableBrowserHeaders)
@@ -378,56 +382,60 @@ void render() {
 				ImGui::EndPopup();
 			}
 		}
+
+		// Options row.
+		// JS: <div id="tab-data-options">
+		const std::string export_format = view.config.value("exportDataFormat", std::string("CSV"));
+
+		if (export_format == "CSV") {
+			bool copy_header = view.config.value("dataCopyHeader", false);
+			if (ImGui::Checkbox("Copy Header", &copy_header))
+				view.config["dataCopyHeader"] = copy_header;
+			ImGui::SameLine();
+		}
+
+		if (export_format == "SQL") {
+			bool create_table_val = view.config.value("dataSQLCreateTable", false);
+			if (ImGui::Checkbox("Create Table", &create_table_val))
+				view.config["dataSQLCreateTable"] = create_table_val;
+			ImGui::SameLine();
+		}
+
+		bool export_all = view.config.value("dataExportAll", false);
+		if (ImGui::Checkbox("Export all rows", &export_all))
+			view.config["dataExportAll"] = export_all;
 	}
-	ImGui::EndChild();
+	app::layout::EndPreviewContainer();
 
-	// Options row.
-	// JS: <div id="tab-data-options">
-	const std::string export_format = view.config.value("exportDataFormat", std::string("CSV"));
-
-	if (export_format == "CSV") {
-		bool copy_header = view.config.value("dataCopyHeader", false);
-		if (ImGui::Checkbox("Copy Header", &copy_header))
-			view.config["dataCopyHeader"] = copy_header;
-		ImGui::SameLine();
-	}
-
-	if (export_format == "SQL") {
-		bool create_table_val = view.config.value("dataSQLCreateTable", false);
-		if (ImGui::Checkbox("Create Table", &create_table_val))
-			view.config["dataSQLCreateTable"] = create_table_val;
-		ImGui::SameLine();
-	}
-
-	bool export_all = view.config.value("dataExportAll", false);
-	if (ImGui::Checkbox("Export all rows", &export_all))
-		view.config["dataExportAll"] = export_all;
-
-	// Bottom tray: data table filter + export button.
+	// --- Bottom: Preview controls (row 2, col 2) ---
 	// JS: <div id="tab-data-tray">
-	if (view.config.value("regexFilters", false))
-		ImGui::TextUnformatted("Regex Enabled");
+	//     <input> filter + <MenuButton> export
+	if (app::layout::BeginPreviewControls("data-preview-controls", regions)) {
+		char filter_data_buf[256] = {};
+		std::strncpy(filter_data_buf, view.userInputFilterDataTable.c_str(), sizeof(filter_data_buf) - 1);
+		if (ImGui::InputText("##FilterDataTable", filter_data_buf, sizeof(filter_data_buf)))
+			view.userInputFilterDataTable = filter_data_buf;
 
-	char filter_data_buf[256] = {};
-	std::strncpy(filter_data_buf, view.userInputFilterDataTable.c_str(), sizeof(filter_data_buf) - 1);
-	if (ImGui::InputText("##FilterDataTable", filter_data_buf, sizeof(filter_data_buf)))
-		view.userInputFilterDataTable = filter_data_buf;
+		ImGui::SameLine();
 
-	ImGui::SameLine();
-
-	// JS: <MenuButton :options="menuButtonData" :default="config.exportDataFormat" @change="..." @click="export_data">
-	{
-		std::vector<menu_button::MenuOption> mb_options;
-		for (const auto& opt : view.menuButtonData)
-			mb_options.push_back({ opt.label, opt.value });
-		const bool busy = view.isBusy > 0;
-		const bool no_selection = view.selectionDB2s.empty();
-		menu_button::render("##MenuButtonData", mb_options,
-			view.config.value("exportDataFormat", std::string("CSV")),
-			busy || no_selection, false, menu_button_data_state,
-			[&](const std::string& val) { view.config["exportDataFormat"] = val; },
-			[&]() { export_data(); });
+		// JS: <MenuButton :options="menuButtonData" :default="config.exportDataFormat" @change="..." @click="export_data">
+		{
+			std::vector<menu_button::MenuOption> mb_options;
+			for (const auto& opt : view.menuButtonData)
+				mb_options.push_back({ opt.label, opt.value });
+			const bool busy = view.isBusy > 0;
+			const bool no_selection = view.selectionDB2s.empty();
+			menu_button::render("##MenuButtonData", mb_options,
+				view.config.value("exportDataFormat", std::string("CSV")),
+				busy || no_selection, false, menu_button_data_state,
+				[&](const std::string& val) { view.config["exportDataFormat"] = val; },
+				[&]() { export_data(); });
+		}
 	}
+	app::layout::EndPreviewControls();
+
+	}
+	app::layout::EndTab();
 }
 
 // --- Export methods ---
