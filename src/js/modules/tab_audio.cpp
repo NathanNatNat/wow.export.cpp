@@ -22,6 +22,7 @@
 #include "../components/context-menu.h"
 #include "../../app.h"
 
+#include <cmath>
 #include <cstring>
 #include <format>
 #include <filesystem>
@@ -379,12 +380,16 @@ void render() {
 
 	// --- Template rendering ---
 
-	// List container with context menu.
+	// JS: <div class="tab list-tab" id="tab-audio">
+	if (app::layout::BeginTab("tab-audio")) {
+
+	auto regions = app::layout::CalcListTabRegions(false);
+
+	// --- Left panel: List container (row 1, col 1) ---
 	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionSounds" :items="listfileSounds" ...>
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
-	ImGui::BeginChild("sounds-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 5), ImGuiChildFlags_Borders);
-	{
+	if (app::layout::BeginListContainer("sounds-list-container", regions)) {
 		// Convert JSON items/selection to string vectors.
 		std::vector<std::string> items_str;
 		items_str.reserve(view.listfileSounds.size());
@@ -458,77 +463,105 @@ void render() {
 			}
 		);
 	}
-	ImGui::EndChild();
+	app::layout::EndListContainer();
 
-	// Filter.
+	// --- Filter bar (row 2, col 1) ---
 	// JS: <div class="filter">
-	if (view.config.value("regexFilters", false))
-		ImGui::TextUnformatted("Regex Enabled");
+	if (app::layout::BeginFilterBar("sounds-filter", regions)) {
+		if (view.config.value("regexFilters", false))
+			ImGui::TextUnformatted("Regex Enabled");
 
-	char filter_buf[256] = {};
-	std::strncpy(filter_buf, view.userInputFilterSounds.c_str(), sizeof(filter_buf) - 1);
-	if (ImGui::InputText("##FilterSounds", filter_buf, sizeof(filter_buf)))
-		view.userInputFilterSounds = filter_buf;
-
-	// Sound player.
-	// JS: <div id="sound-player">
-	ImGui::BeginChild("sound-player", ImVec2(0, ImGui::GetFrameHeightWithSpacing() * 2.5f));
-
-	// JS: <div id="sound-player-info">
-	//     <span>{{ $core.view.soundPlayerSeekFormatted }}</span>
-	//     <span class="title">{{ $core.view.soundPlayerTitle }}</span>
-	//     <span>{{ $core.view.soundPlayerDurationFormatted }}</span>
-	// </div>
-	const std::string seek_formatted = format_time(view.soundPlayerSeek * view.soundPlayerDuration);
-	const std::string duration_formatted = format_time(view.soundPlayerDuration);
-	ImGui::Text("%s  %s  %s", seek_formatted.c_str(), view.soundPlayerTitle.c_str(), duration_formatted.c_str());
-
-	// JS: <Slider id="slider-seek" v-model="soundPlayerSeek" @update:model-value="handle_seek">
-	float seek_val = static_cast<float>(view.soundPlayerSeek);
-	if (ImGui::SliderFloat("##SeekSlider", &seek_val, 0.0f, 1.0f, "")) {
-		view.soundPlayerSeek = seek_val;
-		// JS: handle_seek(seek) { ... player.seek(duration * seek); }
-		const double duration = player.get_duration();
-		if (duration > 0)
-			player.seek(duration * seek_val);
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterSounds.c_str(), sizeof(filter_buf) - 1);
+		if (ImGui::InputText("##FilterSounds", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterSounds = filter_buf;
 	}
+	app::layout::EndFilterBar();
 
-	// JS: <div class="buttons">
-	//     <input type="button" :class="{ isPlaying: !soundPlayerState }" @click="toggle_playback"/>
-	//     <Slider id="slider-volume" v-model="config.soundPlayerVolume">
-	// </div>
-	if (ImGui::Button(view.soundPlayerState ? "Pause" : "Play"))
-		toggle_playback();
+	// --- Right panel: Preview container (row 1, col 2) ---
+	// JS: <div class="preview-container"> (sound player)
+	if (app::layout::BeginPreviewContainer("sounds-preview-container", regions)) {
 
-	ImGui::SameLine();
+		// Animated music icon when playing.
+		if (player.is_playing) {
+			float t = static_cast<float>(ImGui::GetTime());
+			float scale = 1.0f + 0.08f * std::sin(t * 3.0f);
+			ImFont* iconFont = app::theme::getIconFont();
+			if (iconFont) {
+				float baseSize = 48.0f;
+				float animSize = baseSize * scale;
+				ImVec2 iconTextSize = iconFont->CalcTextSizeA(animSize, FLT_MAX, 0.0f, ICON_FA_MUSIC);
+				float availW = ImGui::GetContentRegionAvail().x;
+				ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availW - iconTextSize.x) * 0.5f);
+				ImVec2 pos = ImGui::GetCursorScreenPos();
+				ImGui::GetWindowDrawList()->AddText(iconFont, animSize, pos, app::theme::FONT_PRIMARY_U32, ICON_FA_MUSIC);
+				ImGui::Dummy(iconTextSize);
+			}
+		}
 
-	float vol = view.config.value("soundPlayerVolume", 1.0f);
-	if (ImGui::SliderFloat("##VolumeSlider", &vol, 0.0f, 1.0f, "Vol: %.0f%%")) {
-		// This triggers the change-detection above on next frame.
-		view.config["soundPlayerVolume"] = vol;
+		ImGui::Spacing();
+
+		// JS: <div id="sound-player-info">
+		//     <span>{{ $core.view.soundPlayerSeekFormatted }}</span>
+		//     <span class="title">{{ $core.view.soundPlayerTitle }}</span>
+		//     <span>{{ $core.view.soundPlayerDurationFormatted }}</span>
+		// </div>
+		const std::string seek_formatted = format_time(view.soundPlayerSeek * view.soundPlayerDuration);
+		const std::string duration_formatted = format_time(view.soundPlayerDuration);
+		ImGui::Text("%s  %s  %s", seek_formatted.c_str(), view.soundPlayerTitle.c_str(), duration_formatted.c_str());
+
+		// JS: <Slider id="slider-seek" v-model="soundPlayerSeek" @update:model-value="handle_seek">
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		float seek_val = static_cast<float>(view.soundPlayerSeek);
+		if (ImGui::SliderFloat("##SeekSlider", &seek_val, 0.0f, 1.0f, "")) {
+			view.soundPlayerSeek = seek_val;
+			const double duration = player.get_duration();
+			if (duration > 0)
+				player.seek(duration * seek_val);
+		}
+
+		// JS: <div class="buttons">
+		//     <input type="button" :class="{ isPlaying: !soundPlayerState }" @click="toggle_playback"/>
+		//     <Slider id="slider-volume" v-model="config.soundPlayerVolume">
+		// </div>
+		if (ImGui::Button(view.soundPlayerState ? "Pause" : "Play"))
+			toggle_playback();
+
+		ImGui::SameLine();
+
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		float vol = view.config.value("soundPlayerVolume", 1.0f);
+		if (ImGui::SliderFloat("##VolumeSlider", &vol, 0.0f, 1.0f, "Vol: %.0f%%")) {
+			view.config["soundPlayerVolume"] = vol;
+		}
+
+		// Loop / Autoplay checkboxes.
+		bool loop_val = view.config.value("soundPlayerLoop", false);
+		if (ImGui::Checkbox("Loop", &loop_val))
+			view.config["soundPlayerLoop"] = loop_val;
+
+		ImGui::SameLine();
+
+		bool autoplay_val = view.config.value("soundPlayerAutoPlay", false);
+		if (ImGui::Checkbox("Autoplay", &autoplay_val))
+			view.config["soundPlayerAutoPlay"] = autoplay_val;
 	}
+	app::layout::EndPreviewContainer();
 
-	ImGui::EndChild();
-
-	// Preview controls.
+	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
 	// JS: <div class="preview-controls">
-	bool loop_val = view.config.value("soundPlayerLoop", false);
-	if (ImGui::Checkbox("Loop", &loop_val))
-		view.config["soundPlayerLoop"] = loop_val;
+	if (app::layout::BeginPreviewControls("sounds-preview-controls", regions)) {
+		const bool busy = view.isBusy > 0;
+		if (busy) app::theme::BeginDisabledButton();
+		if (ImGui::Button("Export Selected"))
+			export_selected();
+		if (busy) app::theme::EndDisabledButton();
+	}
+	app::layout::EndPreviewControls();
 
-	ImGui::SameLine();
-
-	bool autoplay_val = view.config.value("soundPlayerAutoPlay", false);
-	if (ImGui::Checkbox("Autoplay", &autoplay_val))
-		view.config["soundPlayerAutoPlay"] = autoplay_val;
-
-	ImGui::SameLine();
-
-	const bool busy = view.isBusy > 0;
-	if (busy) app::theme::BeginDisabledButton();
-	if (ImGui::Button("Export Selected"))
-		export_selected();
-	if (busy) app::theme::EndDisabledButton();
+	} // if BeginTab
+	app::layout::EndTab();
 }
 
 void toggle_playback() {
