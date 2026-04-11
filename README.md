@@ -7,6 +7,10 @@ This project is a **personal project for experimenting and learning** and a **C+
 
 This is an independent effort and is not affiliated with or endorsed by the original wow.export project.
 
+## Original Source
+
+The original JavaScript/NW.js source code can be found at **https://github.com/Kruithne/wow.export** and should be referred to when making changes to ensure fidelity with the original application.
+
 ## Credits
 
 All credit for the design, functionality, and original implementation of wow.export goes to its creators and contributors:
