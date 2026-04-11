@@ -596,11 +596,12 @@ With ~10 products, the C++ version takes ~10× the total HTTP request time compa
 ### 10.4 `generics::redraw()` No-Op (Medium)
 
 The JS `redraw()` uses `requestAnimationFrame` to force a UI repaint.
-The C++ `redraw()` is a no-op. The rationale "ImGui redraws every frame" is incorrect
-in the loading context — when the main thread is blocked, no frames are rendered.
+The C++ `redraw()` is a no-op. CASC loading runs on a background `std::jthread`,
+so the main ImGui loop keeps rendering every frame. Progress updates are posted
+via `core::postToMainThread()` and drained each frame by `core::drainMainThreadQueue()`.
 
-- [ ] If loading moves to background thread: no fix needed (main loop keeps rendering)
-- [ ] If loading stays on main thread: implement as a mini render pass (poll events, render, swap)
+- [x] If loading moves to background thread: no fix needed (main loop keeps rendering)
+- [x] If loading stays on main thread: implement as a mini render pass (poll events, render, swap) — N/A, loading is on background thread
 
 ### 10.5 `generics::queue()` Reference Safety (Medium)
 
