@@ -16,6 +16,7 @@
 #include "../components/file-field.h"
 #include "../components/menu-button.h"
 
+#include <algorithm>
 #include <cstring>
 #include <format>
 #include <optional>
@@ -168,6 +169,16 @@ void render() {
 	// --- Template rendering ---
 	// JS: <div id="config-wrapper">
 	// JS: <div id="config" :class="{ toastgap: $core.view.toast !== null }">
+
+	// CSS: .tab#tab-settings .settings-content { max-width: 800px; margin: 0 auto; }
+	const float availW = ImGui::GetContentRegionAvail().x;
+	const float maxW = 800.0f;
+	const float contentW = std::min(availW, maxW);
+	const float indent = (availW - contentW) * 0.5f;
+	if (indent > 0.0f)
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indent);
+	ImGui::BeginChild("settings-content", ImVec2(contentW, 0));
+
 	ImGui::BeginChild("##config-scroll", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2));
 
 	// JS: Export Directory
@@ -540,6 +551,8 @@ void render() {
 	ImGui::SameLine();
 	if (ImGui::Button("Reset to Defaults"))
 		handle_reset();
+
+	ImGui::EndChild(); // settings-content
 }
 
 // JS: methods.handle_cache_clear(event)

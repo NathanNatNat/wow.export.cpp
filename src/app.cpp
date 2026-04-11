@@ -540,6 +540,24 @@ static void renderAppShell() {
 							}
 						}
 
+						ImGui::Separator();
+
+						// Config toggle items
+						bool showFileDataIDs = core::view->config.value("showFileDataIDs", false);
+						if (ImGui::MenuItem("Show File Data IDs", nullptr, showFileDataIDs)) {
+							core::view->config["showFileDataIDs"] = !showFileDataIDs;
+						}
+
+						bool enableSharedTextures = core::view->config.value("enableSharedTextures", false);
+						if (ImGui::MenuItem("Enable Shared Textures", nullptr, enableSharedTextures)) {
+							core::view->config["enableSharedTextures"] = !enableSharedTextures;
+						}
+
+						bool showUnknownFiles = core::view->config.value("showUnknownFiles", false);
+						if (ImGui::MenuItem("Show Unknown Files", nullptr, showUnknownFiles)) {
+							core::view->config["showUnknownFiles"] = !showUnknownFiles;
+						}
+
 						ImGui::PopStyleColor();
 					}
 					ImGui::End();
@@ -2408,6 +2426,7 @@ int main(int argc, char* argv[]) {
 	// register static context menu options
 	modules::registerContextMenuOption("runtime-log", "Open Runtime Log", "timeline.svg", []() { logging::openRuntimeLog(); });
 	modules::registerContextMenuOption("restart", "Restart wow.export", "arrow-rotate-left.svg", []() { app::restartApplication(); });
+	modules::registerContextMenuOption("settings", "Settings", "gear.svg", []() { modules::setActive("settings"); });
 	modules::registerContextMenuOption("reload-style", "Reload Styling", "palette.svg", []() { app::reloadStylesheet(); }, true);
 	modules::registerContextMenuOption("reload-shaders", "Reload Shaders", "cube.svg", []() { shaders::reload_all(); }, true);
 	modules::registerContextMenuOption("reload-active", "Reload Active Module", "gear.svg", []() { modules::reloadActiveModule(); }, true);
