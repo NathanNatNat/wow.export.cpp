@@ -184,3 +184,23 @@ The zones tab with a zone map loaded, showing the zone image viewer with navigat
 The text tab showing the text file list with search/filter and file preview.
 
 ![Text Tab](https://github.com/user-attachments/assets/17bc8831-c9c7-4677-a744-bf20c1664efb)
+
+---
+
+## Fonts Tab
+
+The fonts tab with a font file loaded, showing the font preview and export controls.
+
+![Fonts Tab](https://github.com/user-attachments/assets/87c1f420-39d9-4b32-9429-a9e7e49e0db6)
+
+---
+
+## Data Tab
+
+The data tab with a data table loaded, showing column headers and row data.
+
+![Data Tab - Table Loaded](https://github.com/user-attachments/assets/a182bd36-058c-408d-be1a-be70326df55f)
+
+The data tab showing the settings menu in the top right corner.
+
+![Data Tab - Settings Menu](https://github.com/user-attachments/assets/99310ff8-76e4-486a-af7a-1c4a3cf417e9)
