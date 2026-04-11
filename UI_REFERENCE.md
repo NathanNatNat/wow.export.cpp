@@ -140,3 +140,11 @@ The decor tab with a model loaded, showing 3D preview and export controls.
 The creatures tab with a creature model loaded, showing 3D preview and export controls.
 
 ![Creatures Tab](https://github.com/user-attachments/assets/0739440c-21f2-4824-b595-0c9b7d9c3e65)
+
+---
+
+## Audio Tab
+
+The audio tab with a sound playing, showing the animated model, playback controls, progress bar, and export options.
+
+![Audio Tab](https://github.com/user-attachments/assets/3c07c360-d126-4a53-bd05-bf7e17f2d112)
