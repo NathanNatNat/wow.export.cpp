@@ -148,3 +148,11 @@ The creatures tab with a creature model loaded, showing 3D preview and export co
 The audio tab with a sound playing, showing the animated model, playback controls, progress bar, and export options.
 
 ![Audio Tab](https://github.com/user-attachments/assets/3c07c360-d126-4a53-bd05-bf7e17f2d112)
+
+---
+
+## Videos Tab
+
+The videos tab with a video playing, showing the video list, playback area, and streaming controls.
+
+![Videos Tab](https://github.com/user-attachments/assets/b9dfce9f-968b-43ee-a7b0-9adeb4350827)
