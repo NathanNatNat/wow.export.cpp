@@ -1,6 +1,98 @@
 # TODO Tracker
 
-## Audit Findings
+## Missing C++ Files (No Counterpart Exists)
+
+### [external-links.js] No C++ port exists
+- **JS Source**: `src/js/external-links.js` lines 1–end
+- **Status**: Pending
+- **Details**: Entire file needs to be ported. Contains URL constants for Discord, GitHub, Patreon, website, and issue tracker links. These are referenced by core.js and the app footer.
+
+### [updater.js] No C++ port exists
+- **JS Source**: `src/js/updater.js` lines 1–end
+- **Status**: Pending
+- **Details**: Entire file needs to be ported. Contains auto-update check logic using the GitHub releases API to detect and prompt for new versions.
+
+### [wmv.js] No C++ port exists
+- **JS Source**: `src/js/wmv.js` lines 1–end
+- **Status**: Pending
+- **Details**: Entire file needs to be ported. Contains WoW Model Viewer character import/export integration logic used by tab_characters.
+
+### [wowhead.js] No C++ port exists
+- **JS Source**: `src/js/wowhead.js` lines 1–end
+- **Status**: Pending
+- **Details**: Entire file needs to be ported. Contains Wowhead character import integration used by tab_characters for importing character appearances from Wowhead URLs.
+
+### [home-showcase.js] No C++ port exists
+- **JS Source**: `src/js/components/home-showcase.js` lines 1–end
+- **Status**: Pending
+- **Details**: Entire Vue component needs to be ported to ImGui. Displays a rotating showcase of images on the home tab using data from showcase.json.
+
+### [markdown-content.js] No C++ port exists
+- **JS Source**: `src/js/components/markdown-content.js` lines 1–end
+- **Status**: Pending
+- **Details**: Entire Vue component needs to be ported to ImGui. Renders markdown content used in changelogs and help screens. Handles headers, links, images, bold, italic, code blocks, and lists.
+
+## CASC Files (Audit Incomplete — Needs Detailed Review)
+
+### [blte-reader.cpp] Missing _checkBounds() override for lazy block decompression
+- **JS Source**: `src/js/casc/blte-reader.js` lines 311–321
+- **Status**: Pending
+- **Details**: JS BLTEReader overrides `_checkBounds()` to lazily decompress BLTE blocks on demand during reads. C++ BLTEReader is missing this override — `_checkBounds` is private non-virtual in BufferWrapper. Three call sites (parseEncodingFile, parseRootFile, getInstallManifest) create BLTEReader and read without processAllBlocks(), causing reads from zeroed memory.
+
+### [casc-source-remote.cpp] Data race in parseArchiveIndex — concurrent writes to unprotected maps
+- **JS Source**: `src/js/casc/casc-source-remote.js` lines 130–170
+- **Status**: Pending
+- **Details**: JS queue() uses Promise-based concurrency which is single-threaded (event loop). C++ queue() uses real std::async threads. 50 concurrent threads write to unprotected std::unordered_map `archives` and call BuildCache methods without mutex. Needs mutex protection or thread-safe container.
+
+### [casc-source-remote.cpp] Remaining 20 CASC files need line-by-line audit
+- **JS Source**: `src/js/casc/*.js` (all files)
+- **Status**: Pending
+- **Details**: The following CASC files were not fully audited against their JS originals due to time constraints: blte-stream-reader, build-cache, casc-source-local, casc-source, cdn-config, cdn-resolver, content-flags, db2, dbd-manifest, export-helper, install-manifest, jenkins96, listfile, locale-flags, realmlist, salsa20, tact-keys, version-config, vp9-avi-demuxer. Each needs a detailed line-by-line comparison.
+
+## Component Files (Audit Incomplete — Needs Detailed Review)
+
+### [components/*.cpp] Component files need line-by-line audit
+- **JS Source**: `src/js/components/*.js` (all files)
+- **Status**: Pending
+- **Details**: The following component files were not fully audited: checkboxlist, combobox, context-menu, data-table, file-field, itemlistbox, listbox, listbox-maps, listbox-zones, listboxb, map-viewer, menu-button, model-viewer-gl, resize-layer, slider. Each needs a detailed comparison against the JS original to verify all event handlers, watchers, computed properties, and template rendering are correctly converted.
+
+## Module/Tab Files (Audit Incomplete — Needs Detailed Review)
+
+### [modules/*.cpp] Module and tab files need line-by-line audit
+- **JS Source**: `src/js/modules/*.js` (all files)
+- **Status**: Pending
+- **Details**: The following module/tab files were not fully audited: font_helpers, screen_settings, screen_source_select, tab_audio, tab_characters, tab_creatures, tab_data, tab_decor, tab_fonts, tab_home, tab_install, tab_item_sets, tab_items, tab_maps, tab_models, tab_models_legacy, tab_raw, tab_text, tab_textures, tab_videos, tab_zones, legacy_tab_audio, legacy_tab_data, legacy_tab_files, legacy_tab_fonts, legacy_tab_home, legacy_tab_textures. Each needs a detailed comparison.
+
+## 3D Files (Audit Incomplete — Needs Detailed Review)
+
+### [3D/**/*.cpp] 3D system files need line-by-line audit
+- **JS Source**: `src/js/3D/**/*.js` (all files)
+- **Status**: Pending
+- **Details**: The following 3D files were not fully audited: AnimMapper, BoneMapper, GeosetMapper, ShaderMapper, Shaders, Skin, Texture, WMOShaderMapper, camera/CameraControlsGL, camera/CharacterCameraControlsGL, exporters/ADTExporter, exporters/CharacterExporter, exporters/M2Exporter, exporters/M2LegacyExporter, exporters/M3Exporter, exporters/WMOExporter, exporters/WMOLegacyExporter, gl/GLContext, gl/GLTexture, gl/ShaderProgram, gl/UniformBuffer, gl/VertexArray, loaders/ADTLoader, loaders/ANIMLoader, loaders/BONELoader, loaders/LoaderGenerics, loaders/M2Generics, loaders/M2LegacyLoader, loaders/M2Loader, loaders/M3Loader, loaders/MDXLoader, loaders/SKELLoader, loaders/WDTLoader, loaders/WMOLegacyLoader, loaders/WMOLoader, renderers/CharMaterialRenderer, renderers/GridRenderer, renderers/M2LegacyRendererGL, renderers/M2RendererGL, renderers/M3RendererGL, renderers/MDXRendererGL, renderers/ShadowPlaneRenderer, renderers/WMOLegacyRendererGL, renderers/WMORendererGL, writers/CSVWriter, writers/GLBWriter, writers/GLTFWriter, writers/JSONWriter, writers/MTLWriter, writers/OBJWriter, writers/SQLWriter, writers/STLWriter.
+
+## DB, UI, MPQ, Workers, WoW Files (Audit Incomplete — Needs Detailed Review)
+
+### [db/**/*.cpp] Database files need line-by-line audit
+- **JS Source**: `src/js/db/**/*.js` (all files)
+- **Status**: Pending
+- **Details**: The following DB files were not fully audited: CompressionType, DBCReader, DBDParser, FieldType, WDCReader, and all 18 db/caches files (DBCharacterCustomization, DBComponentModelFileData, DBComponentTextureFileData, DBCreatureDisplayExtra, DBCreatureList, DBCreatures, DBCreaturesLegacy, DBDecor, DBDecorCategories, DBGuildTabard, DBItemCharTextures, DBItemDisplays, DBItemGeosets, DBItemModels, DBItems, DBModelFileData, DBNpcEquipment, DBTextureFileData).
+
+### [ui/*.cpp] UI helper files need line-by-line audit
+- **JS Source**: `src/js/ui/*.js` (all files)
+- **Status**: Pending
+- **Details**: The following UI files were not fully audited: audio-helper, char-texture-overlay, character-appearance, data-exporter, listbox-context, model-viewer-utils, texture-exporter, texture-ribbon, uv-drawer.
+
+### [mpq/*.cpp] MPQ files need line-by-line audit
+- **JS Source**: `src/js/mpq/*.js` (all files)
+- **Status**: Pending
+- **Details**: The following MPQ files were not fully audited: bitstream, build-version, bzip2, huffman, mpq-install, mpq, pkware.
+
+### [workers/cache-collector.cpp] Worker file needs line-by-line audit
+- **JS Source**: `src/js/workers/cache-collector.js` lines 1–end
+- **Status**: Pending
+- **Details**: Needs comparison against JS original for correctness of hash implementations, file scanning logic, and cache eviction behavior.
+
+## Detailed Audit Findings (Core Files)
 
 ### [constants.cpp] Missing BLENDER namespace constants
 - **JS Source**: `src/js/constants.js` lines 20–61
