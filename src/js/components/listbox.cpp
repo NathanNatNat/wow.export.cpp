@@ -715,11 +715,21 @@ void render(const char* id,
 		const std::string& item = filteredItems[static_cast<size_t>(i)];
 		const bool itemSelected = isSelected(selection, item);
 
-		// Selected highlight (:class="{ selected: selection.includes(item) }").
-		if (itemSelected) {
+		// Alternating row background + selected highlight.
+		// CSS: .ui-listbox .item { background: var(--background-dark); }
+		//      .ui-listbox .item:nth-child(even) { background: var(--background-alt); }
+		//      .ui-listbox .item.selected { background: var(--font-alt); }
+		{
 			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
 			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
-			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::ROW_SELECTED_U32);
+			// nth-child(even) in the JS DOM: scroller is child 1, first item is child 2 (even).
+			const ImU32 rowBg = ((i - startIdx) % 2 == 0)
+				? app::theme::BG_ALT_U32
+				: app::theme::BG_DARK_U32;
+			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, rowBg);
+
+			if (itemSelected)
+				ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::ROW_SELECTED_U32);
 		}
 
 		ImGui::PushID(i);

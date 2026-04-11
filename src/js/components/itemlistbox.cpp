@@ -540,11 +540,20 @@ void render(const char* id,
 		// watch: displayItems — load icons for visible items.
 		icon_render::loadIcon(item.icon);
 
-		// Selected highlight (:class="{ selected: selection.includes(item) }").
-		if (itemSelected) {
+		// Alternating row background + selected highlight.
+		// CSS: .ui-listbox .item { background: var(--background-dark); }
+		//      .ui-listbox .item:nth-child(even) { background: var(--background-alt); }
+		//      .ui-listbox .item.selected { background: var(--font-alt); }
+		{
 			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
 			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeightVal);
-			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::ROW_SELECTED_U32);
+			const ImU32 rowBg = ((i - startIdx) % 2 == 0)
+				? app::theme::BG_ALT_U32
+				: app::theme::BG_DARK_U32;
+			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, rowBg);
+
+			if (itemSelected)
+				ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::ROW_SELECTED_U32);
 		}
 
 		ImGui::PushID(i);

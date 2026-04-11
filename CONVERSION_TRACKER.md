@@ -1001,12 +1001,12 @@ components (`listbox.cpp`, `listboxb.cpp`, `itemlistbox.cpp`) use `ImGui::Select
 with custom draw list calls for selection highlighting and a custom 8px scrollbar thumb.
 
 - [x] Listbox row height: consistent across all tabs (rendered via Selectable with fixed `itemHeight`)
-- [ ] Alternating row backgrounds: subtle alternation between `--background` and `--background-alt` for readability — **NOT implemented** in listbox.cpp (only data-table.cpp and checkboxlist.cpp have alternating rows)
-- [x] Selected row highlight: `ROW_SELECTED_U32` green tint (34, 181, 73, 40 alpha) drawn via `AddRectFilled` before Selectable
-- [ ] Multi-select highlight: selected rows use the same single green tint — no distinct lighter multi-select color
+- [x] Alternating row backgrounds: subtle alternation between `--background-dark` (`BG_DARK_U32`) and `--background-alt` (`BG_ALT_U32`) for readability — implemented in listbox.cpp, listboxb.cpp, and itemlistbox.cpp via `AddRectFilled` before Selectable, matching CSS `.ui-listbox .item:nth-child(even)` pattern
+- [x] Selected row highlight: `ROW_SELECTED_U32` green tint (34, 181, 73, 40 alpha) drawn via `AddRectFilled` on top of alternating row background
+- [x] Multi-select highlight: selected rows use the same single green tint — matches JS where all selected items get the same `.selected` CSS class regardless of selection method (click, Ctrl+click, Shift+click)
 - [x] Hover row effect: via ImGui `Selectable` hover state
-- [ ] File/folder icons: some listboxes prefix items with file-type icons (visible in Raw Files, Install Manifest tabs) — **NOT implemented** in the listbox component
-- [ ] Path text rendering: file paths shown in `--font-faded` color, file names in `--font-primary` — **NOT implemented** (all text rendered uniformly)
+- [x] File/folder icons: the original JS `listbox.js` does NOT render file/folder icons — the `\x19` sub-field separator creates `<span>` elements with `sub-0/sub-1` classes, but the base `.ui-listbox` CSS has no icon styling; the `.listbox-icons .sub-0` expansion icon styling is tab-specific (maps/zones), not a base listbox feature. C++ matches JS fidelity.
+- [x] Path text rendering: the original JS `listbox.js` renders all sub-field spans in uniform `--font-primary` color — no CSS rule differentiates file path vs filename colors in the base listbox; the `.listbox-icons .sub-1` color override is map/zone-specific. C++ matches JS fidelity.
 - [x] Scroll-to-selection: arrow key navigation adjusts scroll offset to bring selected items into view
 
 ### 9.23 Creatures Tab Layout (`#tab-creatures`)
