@@ -809,17 +809,17 @@ currently render as flat sequential ImGui widgets without proper grid/split layo
 ### 9.15 Models Tab Layout (`#tab-models` / `#tab-models-legacy`)
 
 **CSS:** `grid-template-columns: 1fr 1fr auto` (list, 3D viewer, sidebar).
-**Current C++:** Uses `BeginChild` at 30% width — but CSS says 3-column with auto sidebar.
+**Current C++:** Uses `app::layout` helpers (`BeginTab`, `CalcListTabRegions(true)`, `BeginListContainer`, `BeginFilterBar`, `BeginPreviewContainer`, `BeginPreviewControls`, `BeginSidebar`) matching the CSS grid layout.
 
-- [ ] Left column (1fr): model file listbox + filter
-- [ ] Middle column (1fr): 3D model viewer (OpenGL viewport)
-- [ ] Texture ribbon strip: horizontal strip below 3D viewport showing model texture thumbnails with left/right page arrows when more textures than visible slots (visible in M2 Model Loaded screenshot)
-- [ ] Right column (auto, 210px): sidebar with "Preview" and "Export" sub-tab buttons at top
-- [ ] Sidebar — Preview sub-tab: animation controls (animation listbox, play/pause button, speed slider), geoset/WMO group checkboxes with "Show All" / "Hide All" toggle buttons, background color picker
-- [ ] Sidebar — Export sub-tab: export format selector (OBJ/GLTF/GLB), export options checkboxes, export button
-- [ ] Sidebar toggle list: `.list-toggles` with `input[type=button]` for "Show All" / "Hide All"
-- [ ] Model type detection: M2 models show geoset checkboxes + animation controls; WMO models show group checkboxes + set checkboxes (visible in WMO screenshot)
-- [ ] Bottom row (60px): export buttons
+- [x] Left column (1fr): model file listbox + filter
+- [x] Middle column (1fr): 3D model viewer (OpenGL viewport)
+- [x] Texture ribbon strip: horizontal strip below 3D viewport showing model texture thumbnails with left/right page arrows when more textures than visible slots (visible in M2 Model Loaded screenshot)
+- [x] Right column (auto, 210px): sidebar with "Preview" and "Export" sub-tab buttons at top
+- [x] Sidebar — Preview sub-tab: animation controls (animation listbox, play/pause button, speed slider), geoset/WMO group checkboxes with "Show All" / "Hide All" toggle buttons, background color picker
+- [x] Sidebar — Export sub-tab: export format selector (OBJ/GLTF/GLB), export options checkboxes, export button
+- [x] Sidebar toggle list: `.list-toggles` with `input[type=button]` for "Show All" / "Hide All"
+- [x] Model type detection: M2 models show geoset checkboxes + animation controls; WMO models show group checkboxes + set checkboxes (visible in WMO screenshot)
+- [x] Bottom row (60px): export buttons
 
 ### 9.16 Texture Ribbon Strip (Model/Creature/Decor Tabs)
 
