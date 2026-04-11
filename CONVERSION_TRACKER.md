@@ -968,7 +968,7 @@ and rounding are applied in `applyTheme()`. Per-button padding is applied via
 - [x] Set `ImGuiCol_ButtonActive` to a pressed variant
 - [x] Set `ImGuiStyle::FrameRounding` to 5px for buttons
 - [x] Set `ImGuiStyle::FramePadding` to (13px, 9px) for standard buttons — applied per-button via `PushStyleVar` with `app::theme::BUTTON_PADDING`
-- [ ] Disabled button style: opacity 0.5, `--form-button-disabled` (#696969) background — constant `BUTTON_DISABLED` / `BUTTON_DISABLED_U32` exists in `app.h` but is not used anywhere
+- [x] Disabled button style: opacity 0.5, `--form-button-disabled` (#696969) background — `app::theme::BeginDisabledButton()` / `EndDisabledButton()` push `BUTTON_DISABLED` color + `ImGui::BeginDisabled()`, `DisabledAlpha` set to 0.5 in `applyTheme()`
 
 ### 9.20 Input Field Styling
 

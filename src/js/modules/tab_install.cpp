@@ -14,6 +14,7 @@
 #include "../casc/casc-source.h"
 #include "../casc/install-manifest.h"
 #include "../components/listbox.h"
+#include "../../app.h"
 
 #include <format>
 #include <filesystem>
@@ -359,7 +360,7 @@ void render() {
 
 		// Buttons.
 		const bool busy = view.isBusy > 0;
-		if (busy) ImGui::BeginDisabled();
+		if (busy) app::theme::BeginDisabledButton();
 		if (ImGui::Button("View Strings"))
 			view_strings_impl();
 
@@ -367,7 +368,7 @@ void render() {
 
 		if (ImGui::Button("Export Selected"))
 			export_install_files();
-		if (busy) ImGui::EndDisabled();
+		if (busy) app::theme::EndDisabledButton();
 		ImGui::EndGroup();
 
 		// Sidebar — tag checkboxes.
@@ -437,10 +438,10 @@ void render() {
 		ImGui::SameLine();
 
 		const bool busy = view.isBusy > 0;
-		if (busy) ImGui::BeginDisabled();
+		if (busy) app::theme::BeginDisabledButton();
 		if (ImGui::Button("Export Strings"))
 			export_strings_impl();
-		if (busy) ImGui::EndDisabled();
+		if (busy) app::theme::EndDisabledButton();
 
 		// Sidebar — strings info.
 		ImGui::BeginChild("install-strings-info", ImVec2(0, 0), ImGuiChildFlags_Borders);

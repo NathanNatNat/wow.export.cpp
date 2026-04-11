@@ -193,6 +193,24 @@ inline constexpr ImVec2 BUTTON_PADDING    = ImVec2(13.0f, 9.0f); // input[type=b
  */
 void applyTheme();
 
+/**
+ * Push disabled-button styling: gray (#696969) background + ImGui::BeginDisabled().
+ * CSS: input[type=button].disabled { background-color: var(--form-button-disabled); opacity: 0.5; }
+ * Must be paired with EndDisabledButton().
+ */
+inline void BeginDisabledButton() {
+	ImGui::PushStyleColor(ImGuiCol_Button, BUTTON_DISABLED);
+	ImGui::BeginDisabled();
+}
+
+/**
+ * Pop disabled-button styling pushed by BeginDisabledButton().
+ */
+inline void EndDisabledButton() {
+	ImGui::EndDisabled();
+	ImGui::PopStyleColor();
+}
+
 // ── Font size from CSS ───────────────────────────────────────────
 // body { font-family: "Selawik", sans-serif; } — browser default is 16px.
 inline constexpr float DEFAULT_FONT_SIZE = 16.0f;

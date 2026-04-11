@@ -23,6 +23,7 @@
 #include "../components/context-menu.h"
 #include "../install-type.h"
 #include "../modules.h"
+#include "../../app.h"
 
 #include <webp/encode.h>
 
@@ -765,7 +766,7 @@ void render() {
 	// JS: <input v-if="is_baked_npc_texture()" type="button" value="Apply to Character" ...>
 	if (is_baked_npc_texture()) {
 		const bool busy = view.isBusy > 0;
-		if (busy) ImGui::BeginDisabled();
+		if (busy) app::theme::BeginDisabledButton();
 		if (ImGui::Button("Apply to Character")) {
 			// JS: methods.apply_baked_npc_texture()
 			BusyLock _lock = core::create_busy_lock();
@@ -788,28 +789,28 @@ void render() {
 				logging::write(std::format("failed to load baked npc texture: {}", e.what()));
 			}
 		}
-		if (busy) ImGui::EndDisabled();
+		if (busy) app::theme::EndDisabledButton();
 		ImGui::SameLine();
 	}
 
 	// JS: <input v-if="showTextureAtlas" type="button" value="Export Atlas Regions" ...>
 	if (view.config.value("showTextureAtlas", false)) {
 		const bool busy = view.isBusy > 0;
-		if (busy) ImGui::BeginDisabled();
+		if (busy) app::theme::BeginDisabledButton();
 		if (ImGui::Button("Export Atlas Regions"))
 			export_atlas_regions();
-		if (busy) ImGui::EndDisabled();
+		if (busy) app::theme::EndDisabledButton();
 		ImGui::SameLine();
 	}
 
 	// JS: <MenuButton :options="menuButtonTextures" :default="config.exportTextureFormat" ... @click="export_textures">
 	{
 		const bool busy = view.isBusy > 0;
-		if (busy) ImGui::BeginDisabled();
+		if (busy) app::theme::BeginDisabledButton();
 		const std::string export_format = view.config.value("exportTextureFormat", std::string("PNG"));
 		if (ImGui::Button(std::format("Export as {}", export_format).c_str()))
 			export_textures();
-		if (busy) ImGui::EndDisabled();
+		if (busy) app::theme::EndDisabledButton();
 	}
 
 	ImGui::EndGroup();

@@ -17,6 +17,7 @@
 #include "../install-type.h"
 #include "../modules.h"
 #include "../mpq/mpq-install.h"
+#include "../../app.h"
 
 #include <cstring>
 #include <format>
@@ -518,10 +519,10 @@ void render() {
 	ImGui::SameLine();
 
 	const bool busy = view.isBusy > 0;
-	if (busy) ImGui::BeginDisabled();
+	if (busy) app::theme::BeginDisabledButton();
 	if (ImGui::Button("Export Selected"))
 		export_selected();
-	if (busy) ImGui::EndDisabled();
+	if (busy) app::theme::EndDisabledButton();
 }
 
 void toggle_playback() {

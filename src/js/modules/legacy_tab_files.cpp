@@ -13,6 +13,7 @@
 #include "../install-type.h"
 #include "../modules.h"
 #include "../mpq/mpq-install.h"
+#include "../../app.h"
 
 #include <cstring>
 #include <format>
@@ -224,10 +225,10 @@ void render() {
 
 	// JS: <input type="button" value="Export Selected" @click="export_selected" :class="{ disabled: isBusy || selectionRaw.length === 0 }"/>
 	const bool disabled = view.isBusy > 0 || view.selectionRaw.empty();
-	if (disabled) ImGui::BeginDisabled();
+	if (disabled) app::theme::BeginDisabledButton();
 	if (ImGui::Button("Export Selected"))
 		export_selected();
-	if (disabled) ImGui::EndDisabled();
+	if (disabled) app::theme::EndDisabledButton();
 }
 
 void export_selected() {
