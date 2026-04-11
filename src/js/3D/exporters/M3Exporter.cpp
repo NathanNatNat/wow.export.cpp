@@ -57,6 +57,8 @@ dataTextures.emplace(out, std::move(pngData));
 std::map<uint32_t, std::string> M3Exporter::exportTextures(const std::filesystem::path& out, bool raw,
 MTLWriter* mtl, casc::ExportHelper* helper, bool fullTexPaths)
 {
+// Note: The original JS M3Exporter.exportTextures() also returns an empty map.
+// M3 texture export is not yet implemented in the upstream JS source.
 const std::map<uint32_t, std::string> validTextures;
 return validTextures;
 }
@@ -160,9 +162,10 @@ obj.addUVArray(m3->uv1);
 // Textures
 const auto outDir = out.parent_path();
 auto validTextures = exportTextures(outDir, false, &mtl, helper);
-// TODO(conversion): fileManifest texture entries will be added once exportTextures is implemented
-// JS: for (const [texFileDataID, texInfo] of validTextures)
-//     fileManifest?.push({ type: 'PNG', fileDataID: texFileDataID, file: texInfo.matPath });
+for (const auto& [texFileDataID, matPath] : validTextures) {
+if (fileManifest)
+fileManifest->push_back({ "PNG", texFileDataID, std::filesystem::path(matPath) });
+}
 
 // Abort if the export has been cancelled.
 if (helper && helper->isCancelled())
