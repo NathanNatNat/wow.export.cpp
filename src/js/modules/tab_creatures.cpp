@@ -43,6 +43,8 @@
 #include "../file-writer.h"
 #include "../png-writer.h"
 #include "../components/model-viewer-gl.h"
+#include "../components/menu-button.h"
+#include "../../app.h"
 
 #include <algorithm>
 #include <cmath>
@@ -173,6 +175,7 @@ static std::vector<bool> prev_equipment_checked;
 static bool is_initialized = false;
 
 static listbox::ListboxState listbox_creatures_state;
+static menu_button::MenuButtonState menu_button_creatures_state;
 
 // Model viewer GL state/context (replaces Vue <ModelViewerGL :context="creatureViewerContext"/>).
 static model_viewer_gl::State viewer_state;
@@ -2062,518 +2065,505 @@ void render() {
 	// ─── Template rendering ─────────────────────────────────────────────────
 
 	// JS: <div class="tab list-tab" id="tab-creatures">
+	if (app::layout::BeginTab("tab-creatures")) {
+		auto regions = app::layout::CalcListTabRegions(true);
 
-	// --- Left panel: List container ---
-	// JS: <div class="list-container">
-	//     <Listbox v-model:selection="selectionCreatures" ... @contextmenu="handle_listbox_context" />
-	ImGui::BeginChild("creature-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-	{
-		std::vector<std::string> items_str;
-		items_str.reserve(view.listfileCreatures.size());
-		for (const auto& item : view.listfileCreatures)
-			items_str.push_back(item.get<std::string>());
+		// --- Left panel: List container (row 1, col 1) ---
+		// JS: <div class="list-container">
+		//     <Listbox v-model:selection="selectionCreatures" ... @contextmenu="handle_listbox_context" />
+		if (app::layout::BeginListContainer("creatures-list-container", regions)) {
+			std::vector<std::string> items_str;
+			items_str.reserve(view.listfileCreatures.size());
+			for (const auto& item : view.listfileCreatures)
+				items_str.push_back(item.get<std::string>());
 
-		std::vector<std::string> selection_str;
-		for (const auto& s : view.selectionCreatures)
-			selection_str.push_back(s.get<std::string>());
+			std::vector<std::string> selection_str;
+			for (const auto& s : view.selectionCreatures)
+				selection_str.push_back(s.get<std::string>());
 
-		listbox::CopyMode copy_mode = listbox::CopyMode::Default;
-		{
-			std::string cm = view.config.value("copyMode", std::string("Default"));
-			if (cm == "DIR") copy_mode = listbox::CopyMode::DIR;
-			else if (cm == "FID") copy_mode = listbox::CopyMode::FID;
-		}
-
-		listbox::render(
-			"listbox-creatures",
-			items_str,
-			view.userInputFilterCreatures,
-			selection_str,
-			false,      // single
-			true,       // keyinput
-			view.config.value("regexFilters", false),
-			copy_mode,
-			view.config.value("pasteSelection", false),
-			view.config.value("removePathSpacesCopy", false),
-			"creature", // unittype
-			nullptr,    // overrideItems
-			false,      // disable
-			"creatures", // persistscrollkey
-			{},         // quickfilters
-			false,      // nocopy
-			listbox_creatures_state,
-			[&](const std::vector<std::string>& new_sel) {
-				view.selectionCreatures.clear();
-				for (const auto& s : new_sel)
-					view.selectionCreatures.push_back(s);
-			},
-			[](const listbox::ContextMenuEvent& ev) {
-				handle_listbox_context(ev.selection);
+			listbox::CopyMode copy_mode = listbox::CopyMode::Default;
+			{
+				std::string cm = view.config.value("copyMode", std::string("Default"));
+				if (cm == "DIR") copy_mode = listbox::CopyMode::DIR;
+				else if (cm == "FID") copy_mode = listbox::CopyMode::FID;
 			}
-		);
-	}
 
-	// JS: <input type="text" v-model="$core.view.userInputFilterCreatures" placeholder="Filter creatures..."/>
-	{
-		char filter_buf[256] = {};
-		std::strncpy(filter_buf, view.userInputFilterCreatures.c_str(), sizeof(filter_buf) - 1);
-		if (ImGui::InputText("##FilterCreatures", filter_buf, sizeof(filter_buf)))
-			view.userInputFilterCreatures = filter_buf;
-	}
-
-	ImGui::EndChild();
-
-	ImGui::SameLine();
-
-	// --- Middle panel: Preview container ---
-	// JS: <div class="preview-container">
-	ImGui::BeginChild("creature-preview-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.55f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-
-	// JS: <component :is="$components.ResizeLayer" ... id="texture-ribbon" ... >
-	if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
-		// Texture ribbon slot rendering with pagination
-		float ribbon_width = ImGui::GetContentRegionAvail().x;
-		texture_ribbon::onResize(static_cast<int>(ribbon_width));
-
-		int maxPages = (view.textureRibbonSlotCount > 0)
-			? static_cast<int>(std::ceil(static_cast<double>(view.textureRibbonStack.size()) / view.textureRibbonSlotCount))
-			: 0;
-
-		// Prev button
-		if (view.textureRibbonPage > 0) {
-			if (ImGui::SmallButton("<##ribbon_prev"))
-				view.textureRibbonPage--;
-			ImGui::SameLine();
+			listbox::render(
+				"listbox-creatures",
+				items_str,
+				view.userInputFilterCreatures,
+				selection_str,
+				false,      // single
+				true,       // keyinput
+				view.config.value("regexFilters", false),
+				copy_mode,
+				view.config.value("pasteSelection", false),
+				view.config.value("removePathSpacesCopy", false),
+				"creature", // unittype
+				nullptr,    // overrideItems
+				false,      // disable
+				"creatures", // persistscrollkey
+				{},         // quickfilters
+				false,      // nocopy
+				listbox_creatures_state,
+				[&](const std::vector<std::string>& new_sel) {
+					view.selectionCreatures.clear();
+					for (const auto& s : new_sel)
+						view.selectionCreatures.push_back(s);
+				},
+				[](const listbox::ContextMenuEvent& ev) {
+					handle_listbox_context(ev.selection);
+				}
+			);
 		}
+		app::layout::EndListContainer();
 
-		// Visible slots
-		int startIndex = view.textureRibbonPage * view.textureRibbonSlotCount;
-		int endIndex = (std::min)(startIndex + view.textureRibbonSlotCount, static_cast<int>(view.textureRibbonStack.size()));
-
-		for (int si = startIndex; si < endIndex; si++) {
-			auto& slot = view.textureRibbonStack[si];
-			std::string slotDisplayName = slot.value("displayName", std::string(""));
-
-			ImGui::PushID(si);
-			GLuint slotTex = texture_ribbon::getSlotTexture(si);
-			bool clicked = false;
-			if (slotTex != 0) {
-				clicked = ImGui::ImageButton("##ribbon_slot",
-					static_cast<ImTextureID>(static_cast<uintptr_t>(slotTex)),
-					ImVec2(64, 64));
-			} else {
-				clicked = ImGui::Button(slotDisplayName.c_str(), ImVec2(64, 64));
-			}
-			if (ImGui::IsItemHovered())
-				ImGui::SetTooltip("%s", slotDisplayName.c_str());
-			if (ImGui::IsItemClicked(ImGuiMouseButton_Right) || clicked) {
-				view.contextMenus.nodeTextureRibbon = slot;
-				ImGui::OpenPopup("CreatureTextureRibbonContextMenu");
-			}
-			ImGui::PopID();
-			ImGui::SameLine();
+		// --- Filter bar (row 2, col 1) ---
+		// JS: <input type="text" v-model="$core.view.userInputFilterCreatures" placeholder="Filter creatures..."/>
+		if (app::layout::BeginFilterBar("creatures-filter", regions)) {
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+			char filter_buf[256] = {};
+			std::strncpy(filter_buf, view.userInputFilterCreatures.c_str(), sizeof(filter_buf) - 1);
+			if (ImGui::InputText("##FilterCreatures", filter_buf, sizeof(filter_buf)))
+				view.userInputFilterCreatures = filter_buf;
 		}
+		app::layout::EndFilterBar();
 
-		// Next button
-		if (view.textureRibbonPage < maxPages - 1) {
-			if (ImGui::SmallButton(">##ribbon_next"))
-				view.textureRibbonPage++;
-		} else {
-			ImGui::NewLine();
-		}
+		// --- Middle panel: Preview container (row 1, col 2) ---
+		// JS: <div class="preview-container">
+		if (app::layout::BeginPreviewContainer("creatures-preview-container", regions)) {
+			// JS: <component :is="$components.ResizeLayer" ... id="texture-ribbon" ... >
+			if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
+				// Texture ribbon slot rendering with pagination
+				float ribbon_width = ImGui::GetContentRegionAvail().x;
+				texture_ribbon::onResize(static_cast<int>(ribbon_width));
 
-		// JS: <component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeTextureRibbon" ...>
-		if (!view.contextMenus.nodeTextureRibbon.is_null()) {
-			if (ImGui::BeginPopup("CreatureTextureRibbonContextMenu")) {
-				const auto& node = view.contextMenus.nodeTextureRibbon;
-				uint32_t fdid = node.value("fileDataID", 0u);
-				std::string ctxDisplayName = node.value("displayName", std::string(""));
+				int maxPages = (view.textureRibbonSlotCount > 0)
+					? static_cast<int>(std::ceil(static_cast<double>(view.textureRibbonStack.size()) / view.textureRibbonSlotCount))
+					: 0;
 
-				// JS: <span @click.self="preview_texture(...)">Preview {{ displayName }}</span>
-				if (ImGui::MenuItem(std::format("Preview {}", ctxDisplayName).c_str())) {
-					preview_texture(fdid, ctxDisplayName);
-					view.contextMenus.nodeTextureRibbon = nullptr;
+				// Prev button
+				if (view.textureRibbonPage > 0) {
+					if (ImGui::SmallButton("<##ribbon_prev"))
+						view.textureRibbonPage--;
+					ImGui::SameLine();
 				}
 
-				// JS: <span @click.self="export_ribbon_texture(...)">Export {{ displayName }}</span>
-				if (ImGui::MenuItem(std::format("Export {}", ctxDisplayName).c_str())) {
-					export_ribbon_texture(fdid, ctxDisplayName);
-					view.contextMenus.nodeTextureRibbon = nullptr;
+				// Visible slots
+				int startIndex = view.textureRibbonPage * view.textureRibbonSlotCount;
+				int endIndex = (std::min)(startIndex + view.textureRibbonSlotCount, static_cast<int>(view.textureRibbonStack.size()));
+
+				for (int si = startIndex; si < endIndex; si++) {
+					auto& slot = view.textureRibbonStack[si];
+					std::string slotDisplayName = slot.value("displayName", std::string(""));
+
+					ImGui::PushID(si);
+					GLuint slotTex = texture_ribbon::getSlotTexture(si);
+					bool clicked = false;
+					if (slotTex != 0) {
+						clicked = ImGui::ImageButton("##ribbon_slot",
+							static_cast<ImTextureID>(static_cast<uintptr_t>(slotTex)),
+							ImVec2(64, 64));
+					} else {
+						clicked = ImGui::Button(slotDisplayName.c_str(), ImVec2(64, 64));
+					}
+					if (ImGui::IsItemHovered())
+						ImGui::SetTooltip("%s", slotDisplayName.c_str());
+					if (ImGui::IsItemClicked(ImGuiMouseButton_Right) || clicked) {
+						view.contextMenus.nodeTextureRibbon = slot;
+						ImGui::OpenPopup("CreatureTextureRibbonContextMenu");
+					}
+					ImGui::PopID();
+					ImGui::SameLine();
 				}
 
-				// JS: <span @click.self="$core.view.copyToClipboard(fileDataID)">Copy file data ID to clipboard</span>
-				if (ImGui::MenuItem("Copy file data ID to clipboard")) {
-					ImGui::SetClipboardText(std::to_string(fdid).c_str());
-					view.contextMenus.nodeTextureRibbon = nullptr;
+				// Next button
+				if (view.textureRibbonPage < maxPages - 1) {
+					if (ImGui::SmallButton(">##ribbon_next"))
+						view.textureRibbonPage++;
+				} else {
+					ImGui::NewLine();
 				}
 
-				// JS: <span @click.self="$core.view.copyToClipboard(displayName)">Copy texture name to clipboard</span>
-				if (ImGui::MenuItem("Copy texture name to clipboard")) {
-					ImGui::SetClipboardText(ctxDisplayName.c_str());
-					view.contextMenus.nodeTextureRibbon = nullptr;
+				// JS: <component :is="$components.ContextMenu" :node="$core.view.contextMenus.nodeTextureRibbon" ...>
+				if (!view.contextMenus.nodeTextureRibbon.is_null()) {
+					if (ImGui::BeginPopup("CreatureTextureRibbonContextMenu")) {
+						const auto& node = view.contextMenus.nodeTextureRibbon;
+						uint32_t fdid = node.value("fileDataID", 0u);
+						std::string ctxDisplayName = node.value("displayName", std::string(""));
+
+						// JS: <span @click.self="preview_texture(...)">Preview {{ displayName }}</span>
+						if (ImGui::MenuItem(std::format("Preview {}", ctxDisplayName).c_str())) {
+							preview_texture(fdid, ctxDisplayName);
+							view.contextMenus.nodeTextureRibbon = nullptr;
+						}
+
+						// JS: <span @click.self="export_ribbon_texture(...)">Export {{ displayName }}</span>
+						if (ImGui::MenuItem(std::format("Export {}", ctxDisplayName).c_str())) {
+							export_ribbon_texture(fdid, ctxDisplayName);
+							view.contextMenus.nodeTextureRibbon = nullptr;
+						}
+
+						// JS: <span @click.self="$core.view.copyToClipboard(fileDataID)">Copy file data ID to clipboard</span>
+						if (ImGui::MenuItem("Copy file data ID to clipboard")) {
+							ImGui::SetClipboardText(std::to_string(fdid).c_str());
+							view.contextMenus.nodeTextureRibbon = nullptr;
+						}
+
+						// JS: <span @click.self="$core.view.copyToClipboard(displayName)">Copy texture name to clipboard</span>
+						if (ImGui::MenuItem("Copy texture name to clipboard")) {
+							ImGui::SetClipboardText(ctxDisplayName.c_str());
+							view.contextMenus.nodeTextureRibbon = nullptr;
+						}
+
+						ImGui::EndPopup();
+					}
+				}
+			}
+
+			// JS: <div id="creature-texture-preview" v-if="$core.view.creatureTexturePreviewURL.length > 0">
+			if (!view.creatureTexturePreviewURL.empty()) {
+				// JS: <div id="creature-texture-preview-toast" @click="...">Close Preview</div>
+				if (ImGui::Button("Close Preview"))
+					view.creatureTexturePreviewURL.clear();
+
+				// JS: <div class="image" :style="..."> ... </div>
+				if (view.creatureTexturePreviewTexID != 0) {
+					const ImVec2 avail = ImGui::GetContentRegionAvail();
+					const float tex_w = static_cast<float>(view.creatureTexturePreviewWidth);
+					const float tex_h = static_cast<float>(view.creatureTexturePreviewHeight);
+					const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
+					const ImVec2 img_size(tex_w * scale, tex_h * scale);
+
+					const ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+					ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.creatureTexturePreviewTexID)), img_size);
+
+					// JS: <div class="uv-overlay" v-if="creatureTexturePreviewUVOverlay" ...>
+					if (view.creatureTexturePreviewUVTexID != 0 && !view.creatureTexturePreviewUVOverlay.empty()) {
+						ImGui::SetCursorScreenPos(cursor_pos);
+						ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.creatureTexturePreviewUVTexID)), img_size);
+					}
+				} else {
+					ImGui::Text("Texture preview: %dx%d", view.creatureTexturePreviewWidth, view.creatureTexturePreviewHeight);
 				}
 
-				ImGui::EndPopup();
+				// JS: <div id="uv-layer-buttons" v-if="creatureViewerUVLayers.length > 0">
+				if (!view.creatureViewerUVLayers.empty()) {
+					for (auto& layer : view.creatureViewerUVLayers) {
+						std::string layer_name = layer.value("name", "");
+						bool is_active = layer.value("active", false);
+						if (is_active)
+							ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+
+						if (ImGui::Button(layer_name.c_str()))
+							toggle_uv_layer(layer_name);
+
+						if (is_active)
+							ImGui::PopStyleColor();
+
+						ImGui::SameLine();
+					}
+					ImGui::NewLine();
+				}
 			}
-		}
-	}
 
-	// JS: <div id="creature-texture-preview" v-if="$core.view.creatureTexturePreviewURL.length > 0">
-	if (!view.creatureTexturePreviewURL.empty()) {
-		// JS: <div id="creature-texture-preview-toast" @click="...">Close Preview</div>
-		if (ImGui::Button("Close Preview"))
-			view.creatureTexturePreviewURL.clear();
-
-		// JS: <div class="image" :style="..."> ... </div>
-		if (view.creatureTexturePreviewTexID != 0) {
-			const ImVec2 avail = ImGui::GetContentRegionAvail();
-			const float tex_w = static_cast<float>(view.creatureTexturePreviewWidth);
-			const float tex_h = static_cast<float>(view.creatureTexturePreviewHeight);
-			const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
-			const ImVec2 img_size(tex_w * scale, tex_h * scale);
-
-			const ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
-			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.creatureTexturePreviewTexID)), img_size);
-
-			// JS: <div class="uv-overlay" v-if="creatureTexturePreviewUVOverlay" ...>
-			if (view.creatureTexturePreviewUVTexID != 0 && !view.creatureTexturePreviewUVOverlay.empty()) {
-				ImGui::SetCursorScreenPos(cursor_pos);
-				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.creatureTexturePreviewUVTexID)), img_size);
+			// JS: <div class="preview-background" id="creature-preview">
+			// JS: <input v-if="modelViewerShowBackground" type="color" v-model="config.modelViewerBackgroundColor"/>
+			if (view.config.value("modelViewerShowBackground", false)) {
+				std::string hex_str = view.config.value("modelViewerBackgroundColor", std::string("#343a40"));
+				auto [cr, cg, cb] = model_viewer_gl::parse_hex_color(hex_str);
+				float color[3] = {cr, cg, cb};
+				if (ImGui::ColorEdit3("##bg_color_creatures", color, ImGuiColorEditFlags_NoInputs))
+					view.config["modelViewerBackgroundColor"] = std::format("#{:02x}{:02x}{:02x}",
+						static_cast<int>(color[0] * 255.0f), static_cast<int>(color[1] * 255.0f), static_cast<int>(color[2] * 255.0f));
 			}
-		} else {
-			ImGui::Text("Texture preview: %dx%d", view.creatureTexturePreviewWidth, view.creatureTexturePreviewHeight);
-		}
 
-		// JS: <div id="uv-layer-buttons" v-if="creatureViewerUVLayers.length > 0">
-		if (!view.creatureViewerUVLayers.empty()) {
-			for (auto& layer : view.creatureViewerUVLayers) {
-				std::string layer_name = layer.value("name", "");
-				bool is_active = layer.value("active", false);
-				if (is_active)
-					ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-
-				if (ImGui::Button(layer_name.c_str()))
-					toggle_uv_layer(layer_name);
-
-				if (is_active)
-					ImGui::PopStyleColor();
-
-				ImGui::SameLine();
+			// JS: <component :is="$components.ModelViewerGL" v-if="creatureViewerContext" :context="...">
+			if (!view.creatureViewerContext.is_null()) {
+				model_viewer_gl::renderWidget("##creature_viewer", viewer_state, viewer_context);
 			}
-			ImGui::NewLine();
-		}
-	}
 
-	// JS: <div class="preview-background" id="creature-preview">
-	// JS: <input v-if="modelViewerShowBackground" type="color" v-model="config.modelViewerBackgroundColor"/>
-	if (view.config.value("modelViewerShowBackground", false)) {
-		std::string hex_str = view.config.value("modelViewerBackgroundColor", std::string("#343a40"));
-		auto [cr, cg, cb] = model_viewer_gl::parse_hex_color(hex_str);
-		float color[3] = {cr, cg, cb};
-		if (ImGui::ColorEdit3("##bg_color_creatures", color, ImGuiColorEditFlags_NoInputs))
-			view.config["modelViewerBackgroundColor"] = std::format("#{:02x}{:02x}{:02x}",
-				static_cast<int>(color[0] * 255.0f), static_cast<int>(color[1] * 255.0f), static_cast<int>(color[2] * 255.0f));
-	}
+			// JS: <div v-if="creatureViewerAnims && creatureViewerAnims.length > 0" class="preview-dropdown-overlay">
+			if (!view.creatureViewerAnims.empty() && view.creatureTexturePreviewURL.empty()) {
+				// JS: <select v-model="creatureViewerAnimSelection">
+				std::string current_anim_label;
+				std::string current_anim_id;
+				if (view.creatureViewerAnimSelection.is_string())
+					current_anim_id = view.creatureViewerAnimSelection.get<std::string>();
 
-	// JS: <component :is="$components.ModelViewerGL" v-if="creatureViewerContext" :context="...">
-	if (!view.creatureViewerContext.is_null()) {
-		model_viewer_gl::renderWidget("##creature_viewer", viewer_state, viewer_context);
-	}
-
-	// JS: <div v-if="creatureViewerAnims && creatureViewerAnims.length > 0" class="preview-dropdown-overlay">
-	if (!view.creatureViewerAnims.empty() && view.creatureTexturePreviewURL.empty()) {
-		// JS: <select v-model="creatureViewerAnimSelection">
-		std::string current_anim_label;
-		std::string current_anim_id;
-		if (view.creatureViewerAnimSelection.is_string())
-			current_anim_id = view.creatureViewerAnimSelection.get<std::string>();
-
-		for (const auto& anim : view.creatureViewerAnims) {
-			if (anim.value("id", "") == current_anim_id) {
-				current_anim_label = anim.value("label", "");
-				break;
-			}
-		}
-
-		if (ImGui::BeginCombo("##creature-animation", current_anim_label.c_str())) {
-			for (const auto& anim : view.creatureViewerAnims) {
-				std::string anim_id = anim.value("id", "");
-				std::string anim_label = anim.value("label", "");
-				bool is_selected = (anim_id == current_anim_id);
-				if (ImGui::Selectable(anim_label.c_str(), is_selected))
-					view.creatureViewerAnimSelection = anim_id;
-				if (is_selected)
-					ImGui::SetItemDefaultFocus();
-			}
-			ImGui::EndCombo();
-		}
-
-		// JS: <div v-if="creatureViewerAnimSelection !== 'none'" class="anim-controls">
-		if (current_anim_id != "none" && !current_anim_id.empty()) {
-			// JS: <button ... @click="step_animation(-1)">Previous frame</button>
-			bool is_paused = view.creatureViewerAnimPaused;
-
-			ImGui::BeginDisabled(!is_paused);
-			if (ImGui::Button("<##creature-step-left"))
-				anim_methods->step_animation(-1);
-			ImGui::EndDisabled();
-
-			ImGui::SameLine();
-
-			// JS: <button ... @click="toggle_animation_pause()">Play/Pause</button>
-			if (ImGui::Button(is_paused ? "Play##creature" : "Pause##creature"))
-				anim_methods->toggle_animation_pause();
-
-			ImGui::SameLine();
-
-			// JS: <button ... @click="step_animation(1)">Next frame</button>
-			ImGui::BeginDisabled(!is_paused);
-			if (ImGui::Button(">##creature-step-right"))
-				anim_methods->step_animation(1);
-			ImGui::EndDisabled();
-
-			ImGui::SameLine();
-
-			// JS: <div class="anim-scrubber">
-			//     <input type="range" min="0" :max="animFrameCount - 1" :value="animFrame" @input="seek_animation" />
-			int frame = view.creatureViewerAnimFrame;
-			int max_frame = view.creatureViewerAnimFrameCount > 0 ? view.creatureViewerAnimFrameCount - 1 : 0;
-
-			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 80.0f);
-			if (ImGui::IsItemActivated())
-				anim_methods->start_scrub();
-			if (ImGui::SliderInt("##creature-scrub", &frame, 0, max_frame)) {
-				anim_methods->seek_animation(frame);
-			}
-			if (ImGui::IsItemDeactivatedAfterEdit())
-				anim_methods->end_scrub();
-
-			ImGui::SameLine();
-			// JS: <div class="anim-frame-display">{{ animFrame }}</div>
-			ImGui::Text("%d", view.creatureViewerAnimFrame);
-		}
-	}
-
-	ImGui::EndChild();
-
-	ImGui::SameLine();
-
-	// --- Right panel: Sidebar ---
-	// JS: <div id="creature-sidebar" class="sidebar">
-	ImGui::BeginChild("creature-sidebar", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-
-	// JS: <span class="header">Preview</span>
-	ImGui::SeparatorText("Preview");
-
-	// JS: <label class="ui-checkbox" title="Automatically preview a creature when selecting it">
-	{
-		bool auto_preview = view.config.value("creatureAutoPreview", false);
-		if (ImGui::Checkbox("Auto Preview##creature", &auto_preview))
-			view.config["creatureAutoPreview"] = auto_preview;
-	}
-
-	// JS: <label class="ui-checkbox" title="Automatically adjust camera when selecting a new creature">
-	ImGui::Checkbox("Auto Camera##creature", &view.creatureViewerAutoAdjust);
-
-	// JS: <label class="ui-checkbox" title="Show a grid in the 3D viewport">
-	{
-		bool show_grid = view.config.value("modelViewerShowGrid", false);
-		if (ImGui::Checkbox("Show Grid##creature", &show_grid))
-			view.config["modelViewerShowGrid"] = show_grid;
-	}
-
-	// JS: <label class="ui-checkbox" title="Render the preview model as a wireframe">
-	{
-		bool wireframe = view.config.value("modelViewerWireframe", false);
-		if (ImGui::Checkbox("Show Wireframe##creature", &wireframe))
-			view.config["modelViewerWireframe"] = wireframe;
-	}
-
-	// JS: <label class="ui-checkbox" title="Show the model's bone structure">
-	{
-		bool show_bones = view.config.value("modelViewerShowBones", false);
-		if (ImGui::Checkbox("Show Bones##creature", &show_bones))
-			view.config["modelViewerShowBones"] = show_bones;
-	}
-
-	// JS: <label class="ui-checkbox" title="Show model textures in the preview pane">
-	{
-		bool show_textures = view.config.value("modelViewerShowTextures", true);
-		if (ImGui::Checkbox("Show Textures##creature", &show_textures))
-			view.config["modelViewerShowTextures"] = show_textures;
-	}
-
-	// JS: <label class="ui-checkbox" title="Show a background color in the 3D viewport">
-	{
-		bool show_bg = view.config.value("modelViewerShowBackground", false);
-		if (ImGui::Checkbox("Show Background##creature", &show_bg))
-			view.config["modelViewerShowBackground"] = show_bg;
-	}
-
-	// JS: <span class="header">Export</span>
-	ImGui::SeparatorText("Export");
-
-	// JS: <label class="ui-checkbox" title="Include textures when exporting models">
-	{
-		bool export_textures = view.config.value("modelsExportTextures", true);
-		if (ImGui::Checkbox("Textures##creature-export", &export_textures))
-			view.config["modelsExportTextures"] = export_textures;
-
-		// JS: <label v-if="modelsExportTextures" ... title="Include alpha channel ...">
-		if (export_textures) {
-			bool export_alpha = view.config.value("modelsExportAlpha", false);
-			if (ImGui::Checkbox("Texture Alpha##creature", &export_alpha))
-				view.config["modelsExportAlpha"] = export_alpha;
-		}
-	}
-
-	// JS: <label v-if="exportCreatureFormat === 'GLTF' && creatureViewerActiveType === 'm2'" ...>
-	{
-		std::string fmt = view.config.value("exportCreatureFormat", std::string("OBJ"));
-		if (fmt == "GLTF" && view.creatureViewerActiveType == "m2") {
-			bool export_anims = view.config.value("modelsExportAnimations", false);
-			if (ImGui::Checkbox("Export animations##creature", &export_anims))
-				view.config["modelsExportAnimations"] = export_anims;
-		}
-	}
-
-	// JS: <template v-if="creatureViewerActiveType === 'm2'">
-	if (view.creatureViewerActiveType == "m2") {
-		// JS: <template v-if="creatureViewerEquipment.length > 0">
-		if (!view.creatureViewerEquipment.empty()) {
-			ImGui::SeparatorText("Equipment");
-			// JS: <component :is="$components.Checkboxlist" :items="creatureViewerEquipment">
-			for (auto& item : view.creatureViewerEquipment) {
-				bool checked = item.value("checked", true);
-				std::string label = item.value("label", "");
-				if (ImGui::Checkbox(label.c_str(), &checked))
-					item["checked"] = checked;
-			}
-			// JS: <div class="list-toggles">
-			//     <a @click="setAllCreatureEquipment(true)">Enable All</a> / <a @click="setAllCreatureEquipment(false)">Disable All</a>
-			if (ImGui::SmallButton("Enable All##creature-equip")) {
-				for (auto& item : view.creatureViewerEquipment)
-					item["checked"] = true;
-			}
-			ImGui::SameLine();
-			ImGui::Text("/");
-			ImGui::SameLine();
-			if (ImGui::SmallButton("Disable All##creature-equip")) {
-				for (auto& item : view.creatureViewerEquipment)
-					item["checked"] = false;
-			}
-		}
-
-		// JS: <template v-if="creatureViewerGeosets.length > 0">
-		if (!view.creatureViewerGeosets.empty()) {
-			ImGui::SeparatorText("Geosets");
-			// JS: <component :is="$components.Checkboxlist" :items="creatureViewerGeosets">
-			for (auto& item : view.creatureViewerGeosets) {
-				bool checked = item.value("checked", false);
-				std::string label = item.value("label", std::to_string(item.value("id", 0)));
-				std::string checkbox_id = label + "##creature-geoset-" + std::to_string(item.value("id", 0));
-				if (ImGui::Checkbox(checkbox_id.c_str(), &checked))
-					item["checked"] = checked;
-			}
-			// JS: <a @click="setAllCreatureGeosets(true)">Enable All</a> / <a @click="setAllCreatureGeosets(false)">Disable All</a>
-			if (ImGui::SmallButton("Enable All##creature-geosets")) {
-				for (auto& item : view.creatureViewerGeosets)
-					item["checked"] = true;
-			}
-			ImGui::SameLine();
-			ImGui::Text("/");
-			ImGui::SameLine();
-			if (ImGui::SmallButton("Disable All##creature-geosets")) {
-				for (auto& item : view.creatureViewerGeosets)
-					item["checked"] = false;
-			}
-		}
-
-		// JS: <template v-if="config.modelsExportTextures && creatureViewerSkins.length > 0">
-		bool show_textures = view.config.value("modelsExportTextures", true);
-		if (show_textures && !view.creatureViewerSkins.empty()) {
-			ImGui::SeparatorText("Skins");
-			// JS: <component :is="$components.Listboxb" :items="creatureViewerSkins" v-model:selection="creatureViewerSkinsSelection" :single="true">
-			for (size_t i = 0; i < view.creatureViewerSkins.size(); i++) {
-				const auto& skin = view.creatureViewerSkins[i];
-				std::string skin_label = skin.value("label", "");
-				std::string skin_id = skin.value("id", "");
-				bool is_selected = false;
-				for (const auto& sel : view.creatureViewerSkinsSelection) {
-					if (sel.value("id", "") == skin_id) {
-						is_selected = true;
+				for (const auto& anim : view.creatureViewerAnims) {
+					if (anim.value("id", "") == current_anim_id) {
+						current_anim_label = anim.value("label", "");
 						break;
 					}
 				}
-				if (ImGui::Selectable(skin_label.c_str(), is_selected)) {
-					view.creatureViewerSkinsSelection.clear();
-					view.creatureViewerSkinsSelection.push_back(skin);
+
+				if (ImGui::BeginCombo("##creature-animation", current_anim_label.c_str())) {
+					for (const auto& anim : view.creatureViewerAnims) {
+						std::string anim_id = anim.value("id", "");
+						std::string anim_label = anim.value("label", "");
+						bool is_selected = (anim_id == current_anim_id);
+						if (ImGui::Selectable(anim_label.c_str(), is_selected))
+							view.creatureViewerAnimSelection = anim_id;
+						if (is_selected)
+							ImGui::SetItemDefaultFocus();
+					}
+					ImGui::EndCombo();
+				}
+
+				// JS: <div v-if="creatureViewerAnimSelection !== 'none'" class="anim-controls">
+				if (current_anim_id != "none" && !current_anim_id.empty()) {
+					// JS: <button ... @click="step_animation(-1)">Previous frame</button>
+					bool is_paused = view.creatureViewerAnimPaused;
+
+					ImGui::BeginDisabled(!is_paused);
+					if (ImGui::Button("<##creature-step-left"))
+						anim_methods->step_animation(-1);
+					ImGui::EndDisabled();
+
+					ImGui::SameLine();
+
+					// JS: <button ... @click="toggle_animation_pause()">Play/Pause</button>
+					if (ImGui::Button(is_paused ? "Play##creature" : "Pause##creature"))
+						anim_methods->toggle_animation_pause();
+
+					ImGui::SameLine();
+
+					// JS: <button ... @click="step_animation(1)">Next frame</button>
+					ImGui::BeginDisabled(!is_paused);
+					if (ImGui::Button(">##creature-step-right"))
+						anim_methods->step_animation(1);
+					ImGui::EndDisabled();
+
+					ImGui::SameLine();
+
+					// JS: <div class="anim-scrubber">
+					//     <input type="range" min="0" :max="animFrameCount - 1" :value="animFrame" @input="seek_animation" />
+					int frame = view.creatureViewerAnimFrame;
+					int max_frame = view.creatureViewerAnimFrameCount > 0 ? view.creatureViewerAnimFrameCount - 1 : 0;
+
+					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 80.0f);
+					if (ImGui::IsItemActivated())
+						anim_methods->start_scrub();
+					if (ImGui::SliderInt("##creature-scrub", &frame, 0, max_frame)) {
+						anim_methods->seek_animation(frame);
+					}
+					if (ImGui::IsItemDeactivatedAfterEdit())
+						anim_methods->end_scrub();
+
+					ImGui::SameLine();
+					// JS: <div class="anim-frame-display">{{ animFrame }}</div>
+					ImGui::Text("%d", view.creatureViewerAnimFrame);
 				}
 			}
 		}
-	}
+		app::layout::EndPreviewContainer();
 
-	// JS: <template v-if="creatureViewerActiveType === 'wmo'">
-	if (view.creatureViewerActiveType == "wmo") {
-		// JS: <span class="header">WMO Groups</span>
-		ImGui::SeparatorText("WMO Groups");
-		for (auto& item : view.creatureViewerWMOGroups) {
-			bool checked = item.value("checked", false);
-			std::string label = item.value("label", "");
-			if (ImGui::Checkbox(label.c_str(), &checked))
-				item["checked"] = checked;
+		// --- Bottom: Export controls (row 2, col 2) ---
+		// JS: <div class="preview-controls">
+		//     <component :is="$components.MenuButton" :options="menuButtonCreatures" :default="config.exportCreatureFormat" @change="..." @click="export_creatures">
+		if (app::layout::BeginPreviewControls("creatures-preview-controls", regions)) {
+			std::vector<menu_button::MenuOption> mb_options;
+			for (const auto& opt : view.menuButtonCreatures)
+				mb_options.push_back({ opt.label, opt.value });
+			menu_button::render("##MenuButtonCreatures", mb_options,
+				view.config.value("exportCreatureFormat", std::string("OBJ")),
+				view.isBusy > 0, false, menu_button_creatures_state,
+				[&](const std::string& val) { view.config["exportCreatureFormat"] = val; },
+				[&]() { export_creatures(); });
 		}
-		// JS: Enable All / Disable All
-		if (ImGui::SmallButton("Enable All##creature-wmo-groups")) {
-			for (auto& item : view.creatureViewerWMOGroups)
-				item["checked"] = true;
-		}
-		ImGui::SameLine();
-		ImGui::Text("/");
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Disable All##creature-wmo-groups")) {
-			for (auto& item : view.creatureViewerWMOGroups)
-				item["checked"] = false;
-		}
+		app::layout::EndPreviewControls();
 
-		// JS: <span class="header">Doodad Sets</span>
-		ImGui::SeparatorText("Doodad Sets");
-		for (auto& item : view.creatureViewerWMOSets) {
-			bool checked = item.value("checked", false);
-			std::string label = item.value("label", "");
-			if (ImGui::Checkbox(label.c_str(), &checked))
-				item["checked"] = checked;
-		}
-	}
+		// --- Right panel: Sidebar (col 3, spanning both rows) ---
+		// JS: <div id="creature-sidebar" class="sidebar">
+		if (app::layout::BeginSidebar("creatures-sidebar", regions)) {
+			// JS: <span class="header">Preview</span>
+			ImGui::SeparatorText("Preview");
 
-	ImGui::EndChild();
-
-	// --- Bottom: Export controls ---
-	// JS: <div class="preview-controls">
-	//     <component :is="$components.MenuButton" :options="menuButtonCreatures" :default="config.exportCreatureFormat" @change="..." @click="export_creatures">
-	{
-		std::string current_format = view.config.value("exportCreatureFormat", std::string("OBJ"));
-
-		// JS: MenuButton rendering
-		if (ImGui::Button(("Export " + current_format + "##creature-export").c_str()))
-			export_creatures();
-
-		ImGui::SameLine();
-
-		// Format selector dropdown
-		if (ImGui::BeginCombo("##creature-format", current_format.c_str())) {
-			for (const auto& opt : view.menuButtonCreatures) {
-				std::string opt_value = opt.value;
-				std::string opt_label = opt.label;
-				bool is_selected = (opt_value == current_format);
-				if (ImGui::Selectable(opt_label.c_str(), is_selected))
-					view.config["exportCreatureFormat"] = opt_value;
-				if (is_selected)
-					ImGui::SetItemDefaultFocus();
+			// JS: <label class="ui-checkbox" title="Automatically preview a creature when selecting it">
+			{
+				bool auto_preview = view.config.value("creatureAutoPreview", false);
+				if (ImGui::Checkbox("Auto Preview##creature", &auto_preview))
+					view.config["creatureAutoPreview"] = auto_preview;
 			}
-			ImGui::EndCombo();
+
+			// JS: <label class="ui-checkbox" title="Automatically adjust camera when selecting a new creature">
+			ImGui::Checkbox("Auto Camera##creature", &view.creatureViewerAutoAdjust);
+
+			// JS: <label class="ui-checkbox" title="Show a grid in the 3D viewport">
+			{
+				bool show_grid = view.config.value("modelViewerShowGrid", false);
+				if (ImGui::Checkbox("Show Grid##creature", &show_grid))
+					view.config["modelViewerShowGrid"] = show_grid;
+			}
+
+			// JS: <label class="ui-checkbox" title="Render the preview model as a wireframe">
+			{
+				bool wireframe = view.config.value("modelViewerWireframe", false);
+				if (ImGui::Checkbox("Show Wireframe##creature", &wireframe))
+					view.config["modelViewerWireframe"] = wireframe;
+			}
+
+			// JS: <label class="ui-checkbox" title="Show the model's bone structure">
+			{
+				bool show_bones = view.config.value("modelViewerShowBones", false);
+				if (ImGui::Checkbox("Show Bones##creature", &show_bones))
+					view.config["modelViewerShowBones"] = show_bones;
+			}
+
+			// JS: <label class="ui-checkbox" title="Show model textures in the preview pane">
+			{
+				bool show_textures = view.config.value("modelViewerShowTextures", true);
+				if (ImGui::Checkbox("Show Textures##creature", &show_textures))
+					view.config["modelViewerShowTextures"] = show_textures;
+			}
+
+			// JS: <label class="ui-checkbox" title="Show a background color in the 3D viewport">
+			{
+				bool show_bg = view.config.value("modelViewerShowBackground", false);
+				if (ImGui::Checkbox("Show Background##creature", &show_bg))
+					view.config["modelViewerShowBackground"] = show_bg;
+			}
+
+			// JS: <span class="header">Export</span>
+			ImGui::SeparatorText("Export");
+
+			// JS: <label class="ui-checkbox" title="Include textures when exporting models">
+			{
+				bool export_textures = view.config.value("modelsExportTextures", true);
+				if (ImGui::Checkbox("Textures##creature-export", &export_textures))
+					view.config["modelsExportTextures"] = export_textures;
+
+				// JS: <label v-if="modelsExportTextures" ... title="Include alpha channel ...">
+				if (export_textures) {
+					bool export_alpha = view.config.value("modelsExportAlpha", false);
+					if (ImGui::Checkbox("Texture Alpha##creature", &export_alpha))
+						view.config["modelsExportAlpha"] = export_alpha;
+				}
+			}
+
+			// JS: <label v-if="exportCreatureFormat === 'GLTF' && creatureViewerActiveType === 'm2'" ...>
+			{
+				std::string fmt = view.config.value("exportCreatureFormat", std::string("OBJ"));
+				if (fmt == "GLTF" && view.creatureViewerActiveType == "m2") {
+					bool export_anims = view.config.value("modelsExportAnimations", false);
+					if (ImGui::Checkbox("Export animations##creature", &export_anims))
+						view.config["modelsExportAnimations"] = export_anims;
+				}
+			}
+
+			// JS: <template v-if="creatureViewerActiveType === 'm2'">
+			if (view.creatureViewerActiveType == "m2") {
+				// JS: <template v-if="creatureViewerEquipment.length > 0">
+				if (!view.creatureViewerEquipment.empty()) {
+					ImGui::SeparatorText("Equipment");
+					// JS: <component :is="$components.Checkboxlist" :items="creatureViewerEquipment">
+					for (auto& item : view.creatureViewerEquipment) {
+						bool checked = item.value("checked", true);
+						std::string label = item.value("label", "");
+						if (ImGui::Checkbox(label.c_str(), &checked))
+							item["checked"] = checked;
+					}
+					// JS: <div class="list-toggles">
+					//     <a @click="setAllCreatureEquipment(true)">Enable All</a> / <a @click="setAllCreatureEquipment(false)">Disable All</a>
+					if (ImGui::SmallButton("Enable All##creature-equip")) {
+						for (auto& item : view.creatureViewerEquipment)
+							item["checked"] = true;
+					}
+					ImGui::SameLine();
+					ImGui::Text("/");
+					ImGui::SameLine();
+					if (ImGui::SmallButton("Disable All##creature-equip")) {
+						for (auto& item : view.creatureViewerEquipment)
+							item["checked"] = false;
+					}
+				}
+
+				// JS: <template v-if="creatureViewerGeosets.length > 0">
+				if (!view.creatureViewerGeosets.empty()) {
+					ImGui::SeparatorText("Geosets");
+					// JS: <component :is="$components.Checkboxlist" :items="creatureViewerGeosets">
+					for (auto& item : view.creatureViewerGeosets) {
+						bool checked = item.value("checked", false);
+						std::string label = item.value("label", std::to_string(item.value("id", 0)));
+						std::string checkbox_id = label + "##creature-geoset-" + std::to_string(item.value("id", 0));
+						if (ImGui::Checkbox(checkbox_id.c_str(), &checked))
+							item["checked"] = checked;
+					}
+					// JS: <a @click="setAllCreatureGeosets(true)">Enable All</a> / <a @click="setAllCreatureGeosets(false)">Disable All</a>
+					if (ImGui::SmallButton("Enable All##creature-geosets")) {
+						for (auto& item : view.creatureViewerGeosets)
+							item["checked"] = true;
+					}
+					ImGui::SameLine();
+					ImGui::Text("/");
+					ImGui::SameLine();
+					if (ImGui::SmallButton("Disable All##creature-geosets")) {
+						for (auto& item : view.creatureViewerGeosets)
+							item["checked"] = false;
+					}
+				}
+
+				// JS: <template v-if="config.modelsExportTextures && creatureViewerSkins.length > 0">
+				bool show_textures = view.config.value("modelsExportTextures", true);
+				if (show_textures && !view.creatureViewerSkins.empty()) {
+					ImGui::SeparatorText("Skins");
+					// JS: <component :is="$components.Listboxb" :items="creatureViewerSkins" v-model:selection="creatureViewerSkinsSelection" :single="true">
+					for (size_t i = 0; i < view.creatureViewerSkins.size(); i++) {
+						const auto& skin = view.creatureViewerSkins[i];
+						std::string skin_label = skin.value("label", "");
+						std::string skin_id = skin.value("id", "");
+						bool is_selected = false;
+						for (const auto& sel : view.creatureViewerSkinsSelection) {
+							if (sel.value("id", "") == skin_id) {
+								is_selected = true;
+								break;
+							}
+						}
+						if (ImGui::Selectable(skin_label.c_str(), is_selected)) {
+							view.creatureViewerSkinsSelection.clear();
+							view.creatureViewerSkinsSelection.push_back(skin);
+						}
+					}
+				}
+			}
+
+			// JS: <template v-if="creatureViewerActiveType === 'wmo'">
+			if (view.creatureViewerActiveType == "wmo") {
+				// JS: <span class="header">WMO Groups</span>
+				ImGui::SeparatorText("WMO Groups");
+				for (auto& item : view.creatureViewerWMOGroups) {
+					bool checked = item.value("checked", false);
+					std::string label = item.value("label", "");
+					if (ImGui::Checkbox(label.c_str(), &checked))
+						item["checked"] = checked;
+				}
+				// JS: Enable All / Disable All
+				if (ImGui::SmallButton("Enable All##creature-wmo-groups")) {
+					for (auto& item : view.creatureViewerWMOGroups)
+						item["checked"] = true;
+				}
+				ImGui::SameLine();
+				ImGui::Text("/");
+				ImGui::SameLine();
+				if (ImGui::SmallButton("Disable All##creature-wmo-groups")) {
+					for (auto& item : view.creatureViewerWMOGroups)
+						item["checked"] = false;
+				}
+
+				// JS: <span class="header">Doodad Sets</span>
+				ImGui::SeparatorText("Doodad Sets");
+				for (auto& item : view.creatureViewerWMOSets) {
+					bool checked = item.value("checked", false);
+					std::string label = item.value("label", "");
+					if (ImGui::Checkbox(label.c_str(), &checked))
+						item["checked"] = checked;
+				}
+			}
 		}
+		app::layout::EndSidebar();
 	}
+	app::layout::EndTab();
 }
 
 } // namespace tab_creatures

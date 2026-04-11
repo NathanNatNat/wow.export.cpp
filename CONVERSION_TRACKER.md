@@ -1012,14 +1012,14 @@ with custom draw list calls for selection highlighting and a custom 8px scrollba
 ### 9.23 Creatures Tab Layout (`#tab-creatures`)
 
 **CSS:** `grid-template-columns: 1fr 1fr auto` (list, 3D viewer, sidebar).
-**Current C++:** Uses `ImGui::BeginChild` with percentage widths (30%, 55%, remainder) instead of shared layout helpers. Has all functional elements but layout proportions differ from CSS grid.
+**Current C++:** Uses shared `app::layout` helpers (`CalcListTabRegions(true)`) for CSS grid fidelity. Has all functional elements with proper 3-column layout (list, preview, sidebar) and 2-row structure (content, controls/filter).
 
 - [x] Left column: creature listbox + search filter
 - [x] Middle column: 3D creature viewer with texture overlay support
 - [x] Right column (sidebar): geoset checkboxes with "Show All"/"Hide All", equipment toggle checkboxes, skin/display variant selector dropdown, replaceable texture file selector
 - [x] Creature display info: shows creature name and display ID
 - [x] Bottom row (60px): export format selector + export button
-- [ ] Migrate from `BeginChild` percentage widths to shared `app::layout` helpers (`CalcListTabRegions(true)`) for CSS grid fidelity
+- [x] Migrate from `BeginChild` percentage widths to shared `app::layout` helpers (`CalcListTabRegions(true)`) for CSS grid fidelity
 
 ### 9.24 Decor Tab Layout (`#tab-decor`)
 
