@@ -425,7 +425,10 @@ void open_legacy_install(const std::string& install_path) {
 // JS: methods.init_cdn_pings()
 static void init_cdn_pings() {
 	auto& regions = core::view->cdnRegions;
-	std::string user_region = core::view->config.value("sourceSelectUserRegion", std::string{});
+	std::string user_region;
+	auto it = core::view->config.find("sourceSelectUserRegion");
+	if (it != core::view->config.end() && it->is_string())
+		user_region = it->get<std::string>();
 
 	if (!user_region.empty())
 		core::view->lockCDNRegion = true;
