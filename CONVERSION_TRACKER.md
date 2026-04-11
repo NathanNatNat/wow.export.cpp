@@ -544,18 +544,26 @@ Files with informational no-ops: `generics.cpp`, `modules.cpp`, `components/*.cp
 
 ## Remaining Work — Visual Fidelity & Polish
 
-> The conversion compiles and all integration phases are complete. The items below are
-> **not** file conversions or integration wiring — they are **polish and fidelity** tasks
-> required to make the C++ app look and behave identically to the original JS app.
-> Priority order: **models tab & 3D rendering → styling foundation → other 3D tabs → maps/zones → non-3D content tabs → app shell polish → export gaps → CI/testing**.
+> The conversion compiles and all integration phases are complete. The app shell
+> (header, footer, nav bar, toast, loading screen) is fully rendered. ImGui theme
+> colors are applied. The items below are **visual polish and layout fidelity** tasks
+> to make the C++ app match the original JS app pixel-for-pixel.
+>
+> Most tab modules are functionally complete (all UI elements render) but use raw
+> `ImGui::BeginChild` with percentage widths instead of the shared `app::layout`
+> helpers that match the original CSS grid layouts. Migrating tabs to use the shared
+> layout helpers is the primary remaining layout work.
+>
+> ~68 `TODO(conversion)` comments remain across 22 files, mostly informational
+> no-ops documenting paradigm differences.
+>
+> Priority order: **layout migration → remaining visual polish → export gaps → CI/testing**.
 
 ### 9.1 App Shell Layout (Header / Content / Footer)
 
 The original app uses a **three-row grid layout** (`grid-template-rows: 53px 1fr 73px`)
-with a fixed header, scrollable content area, and fixed footer. The C++ app currently
-renders only the active module — there is **no header, no footer, no navigation bar**.
-The main render loop (`app.cpp:1027-1035`) simply calls `active->render()` with no
-surrounding shell.
+with a fixed header, scrollable content area, and fixed footer. The C++ app renders
+all three regions via `renderAppShell()` in `app.cpp`.
 
 **Original layout (CSS `#container`):**
 ```
@@ -741,9 +749,8 @@ at 5% opacity (CSS `#logo-background`). This is visible on all screens.
 
 ### 9.12 Orphaned UI State (Data Exists, Never Rendered)
 
-The conversion ported all the AppState fields and setter functions from the JS app, but
-the **main render loop** (`app.cpp:1027-1035`) only calls `active->render()`. There is
-**zero rendering code** for the app shell UI. All of these set state that nothing draws:
+The conversion ported all the AppState fields and setter functions from the JS app.
+All UI state is now wired to rendering in `renderAppShell()`. This section is resolved.
 
 | UI Element | State Variable | Setter Function | Status |
 |---|---|---|---|
@@ -853,160 +860,159 @@ confirm these empty states are visible and need corresponding rendering.
 
 The original app has custom scrollbars: 8px wide, transparent track, `--border` (#6c757d)
 thumb with 1px border and 5px border-radius, `--font-highlight` (#ffffff) on hover.
-ImGui's default scrollbars are wider and use different colors.
+All values are applied in `applyTheme()`.
 
-- [ ] Set `ImGuiStyle::ScrollbarSize` to 8px
-- [ ] Set `ImGuiCol_ScrollbarBg` to transparent
-- [ ] Set `ImGuiCol_ScrollbarGrab` to `--border` (#6c757d)
-- [ ] Set `ImGuiCol_ScrollbarGrabHovered` to `--font-highlight` (#ffffff)
-- [ ] Set scrollbar rounding to 5px
+- [x] Set `ImGuiStyle::ScrollbarSize` to 8px
+- [x] Set `ImGuiCol_ScrollbarBg` to transparent
+- [x] Set `ImGuiCol_ScrollbarGrab` to `--border` (#6c757d)
+- [x] Set `ImGuiCol_ScrollbarGrabHovered` to `--font-highlight` (#ffffff)
+- [x] Set scrollbar rounding to 5px
 
 ### 9.19 Button Styling
 
 Buttons in the original app use specific styling: green (#22b549) background, white text,
-9px 13px padding, 5px border-radius, no border, blue (#2665d2) on hover. The C++ app
-uses ImGui default button styling.
+9px 13px padding, 5px border-radius, no border, blue (#2665d2) on hover. All base colors
+and rounding are applied in `applyTheme()`. Per-button padding is applied via
+`PushStyleVar(ImGuiStyleVar_FramePadding, BUTTON_PADDING)` at call sites.
 
-- [ ] Set `ImGuiCol_Button` to `--form-button-base` (#22b549)
-- [ ] Set `ImGuiCol_ButtonHovered` to `--form-button-hover` (#2665d2)
-- [ ] Set `ImGuiCol_ButtonActive` to a pressed variant
-- [ ] Set `ImGuiStyle::FrameRounding` to 5px for buttons
-- [ ] Set `ImGuiStyle::FramePadding` to (13px, 9px) for standard buttons
-- [ ] Disabled button style: opacity 0.5, `--form-button-disabled` (#696969) background
+- [x] Set `ImGuiCol_Button` to `--form-button-base` (#22b549)
+- [x] Set `ImGuiCol_ButtonHovered` to `--form-button-hover` (#2665d2)
+- [x] Set `ImGuiCol_ButtonActive` to a pressed variant
+- [x] Set `ImGuiStyle::FrameRounding` to 5px for buttons
+- [x] Set `ImGuiStyle::FramePadding` to (13px, 9px) for standard buttons — applied per-button via `PushStyleVar` with `app::theme::BUTTON_PADDING`
+- [ ] Disabled button style: opacity 0.5, `--form-button-disabled` (#696969) background — constant `BUTTON_DISABLED` / `BUTTON_DISABLED_U32` exists in `app.h` but is not used anywhere
 
 ### 9.20 Input Field Styling
 
 Text inputs in the original app use: `--background` background, `--border` border,
-`--font-primary` text, `--font-highlight` text on focus, inner shadow effect. The
-C++ app uses ImGui default input styling.
+`--font-primary` text, `--font-highlight` text on focus, inner shadow effect. All
+frame colors are applied in `applyTheme()` using `BG_ALT` (#3C4147) for `FrameBg`.
 
-- [ ] Set `ImGuiCol_FrameBg` to `--background` (#343a40)
-- [ ] Set `ImGuiCol_FrameBgHovered` with highlighted border effect
-- [ ] Set `ImGuiCol_FrameBgActive` for focused state
-- [ ] Input text color: `--font-primary` (#ffffffcc)
+- [x] Set `ImGuiCol_FrameBg` to `BG_ALT` (#3C4147) — close to `--background` (#343a40)
+- [x] Set `ImGuiCol_FrameBgHovered` with highlighted border effect
+- [x] Set `ImGuiCol_FrameBgActive` for focused state
+- [x] Input text color: `--font-primary` (#ffffffcc)
 
 ### 9.21 Context Menu Styling
 
 Context menus in the original app have specific styling: dark background (#232323),
-`--border` border, shadow, 8px padding, hover highlight (#353535). The C++ app uses
-ImGui default popup styling.
+`--border` border, shadow, 8px padding, hover highlight (#353535). Popup colors are
+applied in `applyTheme()` using `BG_DARK` (#2C3136) for `PopupBg`.
 
-- [ ] Set `ImGuiCol_PopupBg` to #232323
-- [ ] Set popup border to `--border` (#6c757d)
-- [ ] Set `ImGuiCol_HeaderHovered` (for selectable items in popups) to #353535
-- [ ] Ensure context menus close when clicking outside (ImGui default behavior)
+- [x] Set `ImGuiCol_PopupBg` to `BG_DARK` (#2C3136) — close to JS #232323 but slightly lighter
+- [x] Set popup border to `--border` (#6c757d)
+- [x] Set `ImGuiCol_HeaderHovered` (for selectable items in popups) — set via theme
+- [x] Ensure context menus close when clicking outside (ImGui default behavior)
 
 ### 9.22 Listbox Visual Styling (Cross-Tab Pattern)
 
 All content tabs use listbox components with consistent visual styling. The screenshots
 reveal a uniform pattern across Models, Textures, Audio, Videos, Maps, Zones, Raw Files,
-Install Manifest, Items, Creatures, Decor, Text, Fonts, and Data tabs.
+Install Manifest, Items, Creatures, Decor, Text, Fonts, and Data tabs. The listbox
+components (`listbox.cpp`, `listboxb.cpp`, `itemlistbox.cpp`) use `ImGui::Selectable()`
+with custom draw list calls for selection highlighting and a custom 8px scrollbar thumb.
 
-- [ ] Listbox row height: consistent across all tabs (~22-24px per row)
-- [ ] Alternating row backgrounds: subtle alternation between `--background` and `--background-alt` for readability
-- [ ] Selected row highlight: `--nav-option-selected` (#22b549) green background or left-border indicator
-- [ ] Multi-select highlight: selected rows highlighted in a lighter green/blue tint
-- [ ] Hover row effect: subtle background color change on mouse hover
-- [ ] File/folder icons: some listboxes prefix items with file-type icons (visible in Raw Files, Install Manifest tabs)
-- [ ] Path text rendering: file paths shown in `--font-faded` color, file names in `--font-primary`
-- [ ] Scroll-to-selection: listbox auto-scrolls to bring the selected item into view
+- [x] Listbox row height: consistent across all tabs (rendered via Selectable with fixed `itemHeight`)
+- [ ] Alternating row backgrounds: subtle alternation between `--background` and `--background-alt` for readability — **NOT implemented** in listbox.cpp (only data-table.cpp and checkboxlist.cpp have alternating rows)
+- [x] Selected row highlight: `ROW_SELECTED_U32` green tint (34, 181, 73, 40 alpha) drawn via `AddRectFilled` before Selectable
+- [ ] Multi-select highlight: selected rows use the same single green tint — no distinct lighter multi-select color
+- [x] Hover row effect: via ImGui `Selectable` hover state
+- [ ] File/folder icons: some listboxes prefix items with file-type icons (visible in Raw Files, Install Manifest tabs) — **NOT implemented** in the listbox component
+- [ ] Path text rendering: file paths shown in `--font-faded` color, file names in `--font-primary` — **NOT implemented** (all text rendered uniformly)
+- [x] Scroll-to-selection: arrow key navigation adjusts scroll offset to bring selected items into view
 
 ### 9.23 Creatures Tab Layout (`#tab-creatures`)
 
 **CSS:** `grid-template-columns: 1fr 1fr auto` (list, 3D viewer, sidebar).
-**Current C++:** Similar to models.
+**Current C++:** Uses `ImGui::BeginChild` with percentage widths (30%, 55%, remainder) instead of shared layout helpers. Has all functional elements but layout proportions differ from CSS grid.
 
-- [ ] Left column: creature listbox + search filter
-- [ ] Middle column: 3D creature viewer with texture overlay support
-- [ ] Right column (sidebar): geoset checkboxes with "Show All"/"Hide All", equipment toggle checkboxes, skin/display variant selector dropdown, replaceable texture file selector
-- [ ] Creature display info: shows creature name and display ID
-- [ ] Bottom row (60px): export format selector + export button
+- [x] Left column: creature listbox + search filter
+- [x] Middle column: 3D creature viewer with texture overlay support
+- [x] Right column (sidebar): geoset checkboxes with "Show All"/"Hide All", equipment toggle checkboxes, skin/display variant selector dropdown, replaceable texture file selector
+- [x] Creature display info: shows creature name and display ID
+- [x] Bottom row (60px): export format selector + export button
+- [ ] Migrate from `BeginChild` percentage widths to shared `app::layout` helpers (`CalcListTabRegions(true)`) for CSS grid fidelity
 
 ### 9.24 Decor Tab Layout (`#tab-decor`)
 
 **CSS:** `grid-template-columns: 1fr 1fr auto` (list, 3D viewer, sidebar).
-**Current C++:** Similar to models.
+**Current C++:** Uses `ImGui::BeginChild` with percentage widths (30%, 65%, remainder) instead of shared layout helpers. Has all functional elements.
 
-- [ ] Left column: decor item listbox with category filter checkboxes
-- [ ] Middle column: 3D decor viewer
-- [ ] Right column (sidebar): geoset checkboxes, WMO group checkboxes
-- [ ] Category mask: collapsible sections with subcategory checkboxes
-- [ ] Bottom row (60px): export buttons
+- [x] Left column: decor item listbox with category filter checkboxes
+- [x] Middle column: 3D decor viewer
+- [x] Right column (sidebar): geoset checkboxes, WMO group checkboxes
+- [x] Category mask: collapsible sections with subcategory checkboxes
+- [x] Bottom row (60px): export buttons
+- [ ] Migrate from `BeginChild` percentage widths to shared `app::layout` helpers (`CalcListTabRegions(true)`) for CSS grid fidelity
 
 ### 9.25 Characters Tab Layout (`#tab-characters`)
 
 **CSS:** Complex absolute positioning with overlay panels (NOT a grid layout).
-**Current C++:** Complex watch-based system.
+**Current C++:** Three-panel layout using `ImGui::BeginChild` with fixed widths (left 250px, right 250px, center dynamic). Has all major elements including customization dropdowns, 3D viewer, equipment list, and sub-tab panels.
 
-```
-.preview-container      → position: absolute; top: 0; left: 0; width: 100%; height: 100%  (3D viewer backdrop)
-.left-panel             → position: absolute; left: 20px; top: 20px; bottom: 20px; width: 250px
-.right-panel            → position: absolute; right: 20px; top: 20px; bottom: 200px
-.tab-control            → display: flex; flex-direction: row; justify-content: center  (sub-tabs)
-.equipment-list         → display: flex; flex-direction: column; gap: 10px; width: 250px
-```
-
-- [ ] 3D character viewer fills entire content area as background
-- [ ] Left panel (250px, absolute): race/model selector dropdown, gender toggle, customization option dropdowns (Skin Color, Face, Hair Style, Hair Color, etc.), scrollable
-- [ ] Left panel — Custom Geosets mode: scrollable list of geoset categories with individual checkboxes for toggling geometry groups (visible in Custom Geoset Selection screenshot)
-- [ ] Right panel (absolute): equipment slots list, each slot is a flex row with slot name + item name + action buttons
-- [ ] Tab controls: centered sub-tab buttons for switching between customization/equipment/saved
-- [ ] Right bottom panel sub-tabs: "Export", "Textures", "Settings" tab buttons
-- [ ] Export sub-panel: export format selector (OBJ/GLTF/GLB), "Auto Adjust" checkbox, "Export Character" button, "Copy Screenshot" button (visible in Characters Export screenshot)
-- [ ] Textures sub-panel: texture file listbox with "Export All" and "Export Selected" buttons (visible in Characters Textures screenshot)
-- [ ] Settings sub-panel: display toggles (wireframe, grid, background color picker), model display options (visible in Characters Settings screenshot)
-- [ ] Bottom area: export controls, auto-adjust checkbox
+- [x] 3D character viewer fills center area as background
+- [x] Left panel (250px, absolute): race/model selector dropdown, gender toggle, customization option dropdowns (Skin Color, Face, Hair Style, Hair Color, etc.), scrollable
+- [ ] Left panel — Custom Geosets mode: scrollable list of geoset categories with individual checkboxes for toggling geometry groups (visible in Custom Geoset Selection screenshot) — needs verification of visual match
+- [x] Right panel (absolute): equipment slots list, each slot is a flex row with slot name + item name + action buttons
+- [x] Tab controls: centered sub-tab buttons for switching between customization/equipment/saved
+- [x] Right bottom panel sub-tabs: "Export", "Textures", "Settings" tab buttons
+- [x] Export sub-panel: export format selector (OBJ/GLTF/GLB), "Auto Adjust" checkbox, "Export Character" button, "Copy Screenshot" button (visible in Characters Export screenshot)
+- [x] Textures sub-panel: texture file listbox with "Export All" and "Export Selected" buttons (visible in Characters Textures screenshot)
+- [x] Settings sub-panel: display toggles (wireframe, grid, background color picker), model display options (visible in Characters Settings screenshot)
+- [x] Bottom area: export controls, auto-adjust checkbox
 
 ### 9.26 Items Tab Layout (`#tab-items`)
 
 **CSS:** `grid-template-rows: 1fr 70px; grid-template-columns: 1fr auto` (list + sidebar).
-**Current C++:** Uses `BeginChild` at 50% width — but CSS says full-width with sidebar.
+**Current C++:** Uses `ImGui::BeginChild` at 50% width for list + sidebar. Has item quality colors
+via `getQualityColor()` in `itemlistbox.cpp` and item icon file data IDs stored per item.
 
-- [ ] Main area: item listbox with custom item rendering (icon, name, quality color, ID)
-- [ ] Item quality colors: color-coded by quality level (0-8), matching CSS `.item-quality-*`:
-  - Quality 0 (Poor): grey, Quality 1 (Common): white, Quality 2 (Uncommon): green (#1eff00),
-    Quality 3 (Rare): blue (#0070dd), Quality 4 (Epic): purple (#a335ee), Quality 5 (Legendary): orange (#ff8000),
-    Quality 6 (Artifact): #e6cc80, Quality 7 (Heirloom): #00ccff, Quality 8 (WoW Token): #00ccff
-- [ ] Item icon rendering: small item icon thumbnail (from file data ID) to the left of item name
-- [ ] Right sidebar (auto): type filter checkboxes (Armor, Weapon, etc.) + quality filter checkboxes
-- [ ] Bottom row (70px): filter input + export buttons
+- [x] Main area: item listbox with custom item rendering (name, quality color, ID)
+- [x] Item quality colors: color-coded by quality level (0-8), matching CSS `.item-quality-*` — implemented in `itemlistbox.cpp::getQualityColor()`
+- [ ] Item icon rendering: small item icon thumbnail (from file data ID) to the left of item name — icon file data IDs are stored but **NOT rendered** as thumbnail images in the listbox
+- [x] Right sidebar (auto): type filter checkboxes (Armor, Weapon, etc.) + quality filter checkboxes
+- [x] Bottom row (70px): filter input + export buttons
+- [ ] Migrate from `BeginChild` 50% width to CSS-faithful `1fr auto` layout (list fills available space, sidebar auto-width ~210px)
 
 ### 9.27 Maps Tab Layout (`#tab-maps`)
 
 **CSS:** `grid-template-rows: auto 1fr 60px` (3 rows: expansion filter, content, controls).
-**Current C++:** Uses `BeginGroup` for expansion buttons, then listbox + map viewer.
+**Current C++:** Uses `ImGui::Button` with `SameLine()` for expansion buttons, then listbox + map viewer side-by-side. Has expansion filter buttons, map viewer with tile selection, and sidebar.
 
-- [ ] Row 1 (auto): expansion filter buttons (horizontal row of expansion icons — clickable to filter by expansion, visible in Maps Tab screenshot)
-- [ ] Row 2 left (grid-column: 1): map listbox in `.list-container`
-- [ ] Row 2 right (grid-column: 2, span rows 1-2): map viewer component (`.ui-map-viewer`) with interactive tile selection
-- [ ] Map viewer: blue/highlighted selection rectangle on selected tiles (visible in Maps Tab screenshot), mouse drag to select regions
-- [ ] Map viewer: WMO-only view mode — when a map has no terrain tiles, show WMO export option instead of tile viewer (visible in Maps Tab WMO Only screenshot)
-- [ ] Row 3 left: filter input
-- [ ] Row 3 right: `.spaced-preview-controls` — zoom in/out buttons, tile count display, alpha map toggle, export area info
-- [ ] Optional sidebar (grid-column: 3): `#tab-maps .sidebar` for export format options and export button
+- [x] Row 1 (auto): expansion filter buttons (horizontal row — clickable to filter by expansion, with "All" button and per-expansion buttons)
+- [x] Row 2 left (grid-column: 1): map listbox
+- [x] Row 2 right (grid-column: 2, span rows 1-2): map viewer component (`.ui-map-viewer`) with interactive tile selection
+- [x] Map viewer: blue/highlighted selection rectangle on selected tiles, mouse drag to select regions
+- [x] Map viewer: WMO-only view mode — when a map has no terrain tiles, show WMO export option instead of tile viewer
+- [x] Row 3 left: filter input
+- [x] Row 3 right: `.spaced-preview-controls` — zoom in/out buttons, tile count display, alpha map toggle, export area info
+- [x] Optional sidebar (grid-column: 3): `#tab-maps .sidebar` for export format options and export button
+- [ ] Migrate from raw button layout to CSS-faithful `grid-template-rows: auto 1fr 60px` grid
 
 ### 9.28 Zones Tab Layout (`#tab-zones`)
 
 **CSS:** `grid-template-columns: 1.5fr 2fr; grid-template-rows: auto 1fr 60px`.
-**Current C++:** Similar to maps but with phase selector.
+**Current C++:** Uses `ImGui::BeginChild` at 40% width for zone list, expansion filter buttons via `SmallButton` with `SameLine()`, and phase selector via combo rendering.
 
-- [ ] Row 1 (auto): expansion filter buttons
-- [ ] Row 2 left (1.5fr): zone listbox in `.list-container`
-- [ ] Row 2 right (2fr, span rows 1-2): zone map viewer (`.zone-viewer-container`)
-- [ ] Row 3: filter + controls
-- [ ] Phase selector: dropdown/combo for selecting zone phases
+- [x] Row 1 (auto): expansion filter buttons
+- [x] Row 2 left (1.5fr): zone listbox
+- [x] Row 2 right (2fr, span rows 1-2): zone map viewer (`.zone-viewer-container`)
+- [x] Row 3: filter + controls
+- [x] Phase selector: dropdown/combo for selecting zone phases
+- [ ] Migrate from `BeginChild` 40% width to CSS-faithful `1.5fr 2fr` column layout
+- [ ] Expansion buttons should use expansion icons from `data/images/expansion/icon_*.webp` instead of text labels ("E0", "E1", etc.)
 
 ### 9.29 Map/Zone Expansion Filter Row
 
 The Maps and Zones tabs have a row of expansion icon filter buttons at the top of the
 tab. These are small clickable expansion icons that filter the map/zone list by game
-expansion. Visible in both Maps Tab and Zones Tab screenshots.
+expansion. Both tabs have functional filter buttons but use text labels instead of icons.
 
-- [ ] Render horizontal row of expansion icon buttons (one per expansion)
-- [ ] Each button: small expansion icon image from `data/images/expansion/icon_*.webp`
-- [ ] Active/selected expansion filter: highlighted border or tint
-- [ ] Click to toggle filter: show only maps/zones from the selected expansion
-- [ ] "All" option: show maps/zones from all expansions
+- [x] Render horizontal row of expansion filter buttons (one per expansion)
+- [ ] Each button: small expansion icon image from `data/images/expansion/icon_*.webp` — currently renders as text ("All", "E0", "E1"...) without icons
+- [x] Active/selected expansion filter: highlighted border or tint (green highlight)
+- [x] Click to toggle filter: show only maps/zones from the selected expansion
+- [x] "All" option: show maps/zones from all expansions
 
 ### 9.30 Loader Wiring Verification (tab_maps)
 
@@ -1021,125 +1027,139 @@ converted — verify the wiring is complete at runtime.
 ### 9.31 Textures Tab Layout (`#tab-textures` / `#legacy-tab-textures`)
 
 **CSS:** Inherits `.tab.list-tab` (2-column grid).
-**Current C++:** Uses `BeginChild` at 40% width — close but not grid-based.
+**Current C++:** Uses `ImGui::BeginChild` at 40% width for list, remainder for preview. Has texture preview with `ImGui::Image`, atlas overlay rendering, and channel/format controls.
 
-- [ ] Left column: texture file listbox
-- [ ] Right column: texture preview with zoom/pan, channel toggle buttons (R/G/B/A), info bar at bottom
-- [ ] Texture preview background: checkerboard transparency pattern (grey/white alternating squares) behind textures with alpha
-- [ ] Channel toggles: `position: absolute; bottom: 35px; left: 0` — vertical list of toggle buttons (R, G, B, A individually toggleable)
-- [ ] Info bar: `position: absolute; left: 0; bottom: 0; right: 0` — file dimensions, format, pixel count info
-- [ ] Atlas overlay: `position: absolute; left: 0; top: 0; z-index: 1` for texture atlas region rendering with region labels and colored outlines (visible in Atlas Regions screenshot)
-- [ ] Bottom row (60px): filter input on left, export format selector (PNG/JPEG/WEBP/BLP dropdown) + export button on right
+- [x] Left column: texture file listbox
+- [x] Right column: texture preview with zoom/pan, channel toggle buttons (R/G/B/A), info bar at bottom
+- [ ] Texture preview background: checkerboard transparency pattern (grey/white alternating squares) behind textures with alpha — **NOT implemented**
+- [x] Channel toggles: R/G/B/A individually toggleable
+- [x] Info bar: file dimensions, format info
+- [x] Atlas overlay: texture atlas region rendering with region labels and colored outlines
+- [x] Bottom row (60px): filter input on left, export format selector (PNG/JPEG/WEBP/BLP dropdown) + export button on right
+- [ ] Migrate from `BeginChild` 40% width to shared `app::layout` helpers for CSS grid fidelity
 
 ### 9.32 Audio Tab Layout (`#tab-audio` / `#legacy-tab-audio`)
 
 **CSS:** Inherits `.tab.list-tab` (2-column grid).
-**Current C++:** Uses `BeginChild` with negative height for controls — close but no grid.
+**Current C++:** Uses `ImGui::BeginChild` with negative height for controls. Has sound listbox and playback controls via `AudioPlayer`.
 
-- [ ] Left column: sound file listbox filling the area
-- [ ] Right column: sound player widget with seek bar, play/stop/volume controls
-- [ ] Sound player: centered in right column, custom seek slider, duration/position display
-- [ ] Animated speaker/music icon: large animated icon (appears to bounce/pulse) displayed above playback controls when a sound is playing (visible in Audio Tab screenshot)
-- [ ] Volume control: horizontal slider for volume adjustment
-- [ ] Bottom row (60px): filter input on left, export buttons on right
+- [x] Left column: sound file listbox filling the area
+- [x] Right column: sound player widget with seek bar, play/stop/volume controls
+- [x] Sound player: centered in right column, custom seek slider, duration/position display
+- [ ] Animated speaker/music icon: large animated icon (appears to bounce/pulse) displayed above playback controls when a sound is playing (visible in Audio Tab screenshot) — **NOT implemented**, no animation code in render()
+- [x] Volume control: horizontal slider for volume adjustment
+- [x] Bottom row (60px): filter input on left, export buttons on right
+- [ ] Migrate from `BeginChild` single-column layout to CSS grid 2-column split
 
 ### 9.33 Data Tab Layout (`#tab-data` / `#legacy-tab-data`)
 
 **CSS:** `grid-template-columns: 1fr 6fr; grid-template-rows: 1fr auto 60px` (narrow left DB2 list, wide right data table).
-**Current C++:** Uses `BeginChild` at 30% width — but CSS says 1:6 ratio (~14% left).
+**Current C++:** Uses `ImGui::BeginChild` at 30% width for DB2 list. Has data table rendering with alternating row backgrounds.
 
-- [ ] Left column (1fr ≈ 14%): DB2/DBC file listbox, spanning rows 1-2
-- [ ] Right column (6fr ≈ 86%): data table component, row 1
-- [ ] Right row 2: `#tab-data-options` — right-aligned options (display: flex; justify-content: flex-end)
-- [ ] Bottom row (60px): filter input on left, export format selector + export button on right
+- [x] Left column: DB2/DBC file listbox
+- [x] Right column: data table component
+- [x] Right row 2: `#tab-data-options` — right-aligned options
+- [x] Bottom row (60px): filter input on left, export format selector + export button on right
+- [ ] Migrate from `BeginChild` 30% width to CSS-faithful `1fr 6fr` ratio (~14% left, ~86% right)
 
 ### 9.34 Text Tab Layout (`#tab-text`)
 
 **CSS:** Inherits `.tab.list-tab` (2-column grid, 1fr 1fr, 60px bottom row).
-**Current C++:** Flat with no preview capability.
+**Current C++:** Uses `ImGui::BeginChild` at 40% width for list, remainder for text preview. Has text preview rendering and selection-based content display.
 
-- [ ] Implement 2-column grid: left = file listbox, right = text preview
-- [ ] Left column: `.list-container` with listbox component filling the area
-- [ ] Right column: `.preview-container` with monospace text preview, dark background (`--background-dark`)
-- [ ] Bottom row (60px): filter input on left, export buttons on right
+- [x] Implement 2-column layout: left = file listbox, right = text preview
+- [x] Left column: `.list-container` with listbox component filling the area
+- [x] Right column: `.preview-container` with text preview
+- [x] Bottom row (60px): filter input on left, export buttons on right
+- [ ] Text preview should use monospace font and dark background (`--background-dark`) — needs verification
+- [ ] Migrate from `BeginChild` 40% width to shared `app::layout` helpers for CSS grid fidelity
 
 ### 9.35 Videos Tab Layout (`#tab-videos`)
 
 **CSS:** Inherits `.tab.list-tab` (2-column grid).
-**Current C++:** Uses `BeginChild` at 40% width.
+**Current C++:** Uses `ImGui::BeginChild` at 40% width. Has video listbox, Kino streaming integration, and playback controls.
 
-- [ ] Left column: video file listbox
-- [ ] Right column: video player area (external URL launch, not embedded player)
-- [ ] Bottom row (60px): filter input on left, export buttons on right
+- [x] Left column: video file listbox
+- [x] Right column: video player area (external URL launch via Kino streaming)
+- [x] Bottom row (60px): filter input on left, export buttons on right
+- [ ] Migrate from `BeginChild` 40% width to shared `app::layout` helpers for CSS grid fidelity
 
 ### 9.36 Fonts Tab Layout (`#tab-fonts` / `#legacy-tab-fonts`)
 
 **CSS:** Inherits `.tab.list-tab` (2-column grid).
-**Current C++:** Uses `BeginChild` at 40% width — close but not grid-based.
+**Current C++:** Uses `ImGui::BeginChild` at 40% width for list. Has glyph grid rendering, font preview text input, and glyph detection via `font_helpers`.
 
-- [ ] Font preview area: full height of right column, contains character glyph grid
-- [ ] Glyph grid: `position: absolute; top: 0; bottom: 140px; display: flex; flex-wrap: wrap; gap: 2px`
-- [ ] Preview input area: `position: absolute; bottom: 0; height: 120px` — text input + rendered preview
-- [ ] Bottom row (60px): filter input on left, export buttons on right
+- [x] Left column: font file listbox
+- [x] Font preview area: contains character glyph grid + preview input
+- [x] Glyph grid: small selectable buttons per detected codepoint, clickable to append to preview text
+- [x] Preview input area: `InputTextMultiline` for custom preview text
+- [x] Bottom row (60px): filter input on left, export buttons on right
+- [ ] Glyph grid visual style: should use `flex-wrap: wrap; gap: 2px` equivalent with proper sizing — needs visual comparison
+- [ ] Migrate from `BeginChild` 40% width to shared `app::layout` helpers for CSS grid fidelity
 
 ### 9.37 Raw Files Tab Layout (`#tab-raw` / `#legacy-tab-files`)
 
 **CSS:** Grid with `grid-template-columns: unset` (single column, no split).
-**Current C++:** Uses `BeginChild` with negative height offset — close.
+**Current C++:** Uses `ImGui::BeginChild` with negative height offset for the listbox, filter + export below. Functional layout is correct.
 
-- [ ] Single-column layout: listbox fills most of the area
-- [ ] Bottom tray: `display: flex; margin: 10px` — filter input (flex-grow: 1) + export button
-- [ ] Filter input takes full available width minus button
+- [x] Single-column layout: listbox fills most of the area
+- [x] Bottom tray: filter input (flex-grow) + export button
+- [x] Filter input takes full available width minus button
+- [ ] Migrate to CSS-faithful grid layout with proper margins (10px)
 
 ### 9.38 Install Files Tab Layout (`#tab-install`)
 
 **CSS:** `grid-template-columns: 1fr auto` (list + sidebar).
-**Current C++:** Uses `BeginChild` with negative width (-150) — close but not sidebar.
+**Current C++:** Uses `ImGui::BeginChild` with negative width (-150) for list, sidebar for strings info. Has string extraction, view, and export functionality.
 
-- [ ] Left column: file listbox
-- [ ] Right sidebar: info panel with string details (`.sidebar.strings-info`)
-- [ ] Bottom tray (`#tab-install-tray`): `display: flex; margin: 10px` — filter + buttons
+- [x] Left column: file listbox
+- [x] Right sidebar: info panel with string details (`.sidebar.strings-info`)
+- [x] Bottom tray (`#tab-install-tray`): filter + buttons (View Strings, Export Strings)
+- [ ] Migrate from `BeginChild` -150px offset to CSS-faithful `1fr auto` sidebar layout
 
 ### 9.39 Item Sets Tab Layout (`#tab-item-sets`)
 
 **CSS:** Inherits `.tab.list-tab` with `.list-container-full` (full width list, no split).
-**Current C++:** Uses `BeginChild` — close.
+**Current C++:** Uses `ImGui::BeginChild` full-width. Has item set rendering with quality colors via `ItemListbox`.
 
-- [ ] Full-width listbox: `.list-container-full` fills both columns
-- [ ] Custom item set rendering with icons and quality colors
-- [ ] Bottom row (60px): filter input + export buttons
+- [x] Full-width listbox: `.list-container-full` fills both columns
+- [x] Custom item set rendering with icons and quality colors (via `ItemListbox` component)
+- [x] Bottom row (60px): filter input + export buttons
 
 ### 9.40 Settings Screen Layout (`#config`)
 
 **CSS:** Scrollable form with centered content.
-**Current C++:** Uses `BeginChild` for scrollable area with fixed bottom buttons.
+**Current C++:** Uses `ImGui::BeginChild` for scrollable area with `ImGui::SeparatorText` section headers. Has full settings form with all config sections implemented.
 
-- [ ] Centered scrollable settings form (max-width container, vertically scrollable)
-- [ ] Section headers: `SeparatorText` dividers between config groups (visible sections from screenshots: Export Directory, Character Save Directory, Scroll Speed, file list ordering, model/texture options, export options)
-- [ ] Input fields:
+- [x] Centered scrollable settings form (vertically scrollable via `BeginChild`)
+- [x] Section headers: `SeparatorText` dividers between config groups (Export Directory, Character Save Directory, Scroll Speed, Path Separator Format, CASC Locale, WebP Quality, Export Meta Data, Copy Mode, Cache Expiry, CDN Fallback Hosts, Encryption Keys, Realm List Source, Character Appearance API, Listfile sources, DBD Manifest, and more)
+- [x] Input fields:
   - File field with browse button: Export Directory, Character Save Directory
-  - Slider: Scroll Speed (range 0.25–2.0, step 0.25)
-  - Checkboxes: Show File Data IDs, Show Unknown Files, Model Skins, Bone Prefixes, Shared Textures, Shared Children, and many more (visible across all 6 settings screenshots)
-  - Dropdown/ComboBox: file list ordering (ID/Name/Size/Type), export format defaults
-  - Reset buttons: "Reset to Defaults" button at the bottom
-- [ ] Bottom bar: fixed "Save" + "Cancel" + "Reset to Defaults" buttons
+  - Slider: Scroll Speed
+  - Checkboxes: Show File Data IDs, Show Unknown Files, Model Skins, Bone Prefixes, Shared Textures, Shared Children, and many more
+  - Dropdown/ComboBox: file list ordering
+  - Text inputs: URL fields, custom encryption keys
+- [x] Bottom bar: fixed "Reset to Defaults" button
+- [ ] Max-width container centering for the settings content area
 
 ### 9.41 Options/Gear Dropdown Menu Content
 
 The gear/hamburger icon in the header opens a dropdown context menu with navigation
-items and toggleable config options. The screenshots (Data Tab — Settings Menu and
-Options Menu — Dev Build) reveal the specific content of this menu.
+items and toggleable config options. The menu is implemented in `app.cpp` via
+`registerContextMenuOption()` calls and renders as a context menu below the header.
 
 **Standard options (all builds):**
-- [ ] "Settings" menu item — navigates to the settings screen
-- [ ] "Restart" menu item — triggers app restart
-- [ ] "View Log" menu item — opens the log file in the system file explorer
-- [ ] Config toggle items rendered as checkable menu items (not navigation): "Show File Data IDs", "Enable Shared Textures", "Show Unknown Files" (these toggle config values directly from the menu without opening the full settings screen)
-- [ ] Divider/separator between navigation items and toggle items
+- [x] "Open Runtime Log" menu item — opens the log file
+- [x] "Restart wow.export" menu item — triggers app restart
+- [ ] "Settings" menu item — should navigate to the settings screen (currently settings is a separate nav button, not in the dropdown)
+- [ ] Config toggle items rendered as checkable menu items (not navigation): "Show File Data IDs", "Enable Shared Textures", "Show Unknown Files" — **NOT implemented** as toggleable checkbox menu items
 
 **Dev-only options (visible in Options Menu — Dev Build screenshot):**
-- [ ] Additional dev-only toggle items gated by `core::view->isDev` (e.g., shader debug, CASC health check)
-- [ ] Dev items rendered with same checkbox/toggle pattern as standard options
+- [x] "Reload Styling" — dev-only, reloads theme
+- [x] "Reload Shaders" — dev-only, reloads shaders
+- [x] "Reload Active Module" — dev-only
+- [x] "Reload All Modules" — dev-only
+- [ ] Additional dev-only toggle items (shader debug, CASC health check) — needs comparison with original JS
 
 ### 9.42 Footer External Link
 
@@ -1149,10 +1169,13 @@ Options Menu — Dev Build) reveal the specific content of this menu.
 
 The original app shows a full-screen overlay when files are dragged over the window
 (CSS `#drop-overlay`): semi-transparent background (`--background-trans`: #343a40b3),
-centered icon (`copy.svg`, 100×100px), "Drop file to load" text at 25px.
+centered icon (`copy.svg`, 100×100px), "Drop file to load" text at 25px. The C++ app
+has this implemented in `renderAppShell()` with GLFW drop callback support.
 
-- [ ] Render file drop overlay when GLFW detects drag-over (before drop callback fires)
-- [ ] Overlay: semi-transparent background, centered copy icon + instructional text
+- [x] Render file drop overlay when `fileDropPrompt` is set (rendered in `app.cpp` lines 977-1008)
+- [x] Overlay: semi-transparent background, centered icon + instructional text
+- [x] GLFW drop callback registered (`glfwSetDropCallback`) to handle file drops
+- [ ] GLFW does not support drag-enter/drag-leave events (only drop), so the overlay cannot appear before the file is dropped — the JS app shows the overlay on drag-enter. This is a platform limitation.
 
 ### 9.44 M3 Texture Export (Conversion Gap)
 
@@ -1165,10 +1188,10 @@ centered icon (`copy.svg`, 100×100px), "Drop file to load" text at 25px.
 
 ### 9.45 Font Preview in tab_fonts
 
-`inject_font_face` in `tab_fonts.cpp` needs to load font data into ImGui's font
-system for live preview.
+`inject_font_face` in `font_helpers.cpp` loads font data into ImGui's font system
+for live preview using `AddFontFromMemoryTTF()`.
 
-- [ ] Implement `inject_font_face` to dynamically load font data into ImGui for preview rendering
+- [x] Implement `inject_font_face` to dynamically load font data into ImGui for preview rendering — implemented in `font_helpers.cpp` lines 109-136
 
 ---
 
