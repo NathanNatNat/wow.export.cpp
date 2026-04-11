@@ -559,11 +559,21 @@ void render(const char* id,
 		ImGui::PushID(i);
 
 		// Item icon (<div :class="['item-icon', 'icon-' + item.icon ]"></div>).
+		// CSS: .item-icon { width: 32px; height: 32px; border: 1px solid #8a8a8a; margin-right: 10px; }
 		const uint32_t iconTex = icon_render::getIconTexture(item.icon);
 		if (iconTex != 0) {
+			const ImVec2 iconPos = ImGui::GetCursorScreenPos();
+			constexpr float ICON_SIZE = 32.0f;
+
 			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(iconTex)),
-			             ImVec2(20.0f, 20.0f));
-			ImGui::SameLine();
+			             ImVec2(ICON_SIZE, ICON_SIZE));
+
+			// Draw 1px border on top of the icon matching CSS border: 1px solid #8a8a8a.
+			const ImVec2 borderMin(iconPos.x - 1.0f, iconPos.y - 1.0f);
+			const ImVec2 borderMax(iconPos.x + ICON_SIZE + 1.0f, iconPos.y + ICON_SIZE + 1.0f);
+			ImGui::GetWindowDrawList()->AddRect(borderMin, borderMax, IM_COL32(138, 138, 138, 255));
+
+			ImGui::SameLine(0.0f, 10.0f); // CSS: margin-right: 10px
 		}
 
 		// Item name with quality color (<div :class="['item-name', 'item-quality-' + item.quality]">).

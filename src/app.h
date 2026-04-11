@@ -337,6 +337,31 @@ GLuint loadSvgTexture(const std::filesystem::path& path, int size);
  */
 GLuint loadImageTexture(const std::filesystem::path& path, int* out_w = nullptr, int* out_h = nullptr);
 
+/**
+ * Load a WebP image from disk into an OpenGL texture.
+ * Returns the GL texture ID (0 on failure).
+ */
+GLuint loadWebPTexture(const std::filesystem::path& path, int* out_w = nullptr, int* out_h = nullptr);
+
+/**
+ * Get the OpenGL texture handle for an expansion icon.
+ * Lazily loads from data/images/expansion/icon_*.webp on first request.
+ * @param expansionId  Expansion ID (0=Classic, 1=TBC, ..., 12=TLT).
+ *                     Pass -1 for the "All" icon (returns 0 — use FA icon).
+ * @return GL texture ID (0 if unavailable).
+ */
+GLuint getExpansionIconTexture(int expansionId);
+
+/**
+ * Render a row of expansion filter buttons with icon images.
+ * Renders a "Show All" button followed by per-expansion icon buttons.
+ * Matches the CSS `.expansion-buttons` layout (30x30px buttons, 8px gap).
+ *
+ * @param selectedFilter  Current filter (-1 = all). Modified on click.
+ * @param expansionCount  Number of expansions to show.
+ */
+void renderExpansionFilterButtons(int& selectedFilter, int expansionCount);
+
 } // namespace app::theme
 
 /**

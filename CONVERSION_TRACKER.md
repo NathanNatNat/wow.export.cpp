@@ -1040,7 +1040,7 @@ with custom draw list calls for selection highlighting and a custom 8px scrollba
 
 - [x] 3D character viewer fills center area as background
 - [x] Left panel (250px, absolute): race/model selector dropdown, gender toggle, customization option dropdowns (Skin Color, Face, Hair Style, Hair Color, etc.), scrollable
-- [ ] Left panel — Custom Geosets mode: scrollable list of geoset categories with individual checkboxes for toggling geometry groups (visible in Custom Geoset Selection screenshot) — needs verification of visual match
+- [x] Left panel — Custom Geosets mode: scrollable list of geoset categories with individual checkboxes for toggling geometry groups (visible in Custom Geoset Selection screenshot) — verified: matches JS behavior (checkboxes for each geoset skipping id=0, Enable All/Disable All buttons)
 - [x] Right panel (absolute): equipment slots list, each slot is a flex row with slot name + item name + action buttons
 - [x] Tab controls: centered sub-tab buttons for switching between customization/equipment/saved
 - [x] Right bottom panel sub-tabs: "Export", "Textures", "Settings" tab buttons
@@ -1052,20 +1052,20 @@ with custom draw list calls for selection highlighting and a custom 8px scrollba
 ### 9.26 Items Tab Layout (`#tab-items`)
 
 **CSS:** `grid-template-rows: 1fr 70px; grid-template-columns: 1fr auto` (list + sidebar).
-**Current C++:** Uses `ImGui::BeginChild` at 50% width for list + sidebar. Has item quality colors
-via `getQualityColor()` in `itemlistbox.cpp` and item icon file data IDs stored per item.
+**Current C++:** Uses `BeginTab` + manual grid calc with `1fr auto` layout (list fills available space, 210px sidebar). Has item quality colors
+via `getQualityColor()` in `itemlistbox.cpp`, item icon rendering (32×32 with border), and expansion-style filter sidebar.
 
 - [x] Main area: item listbox with custom item rendering (name, quality color, ID)
 - [x] Item quality colors: color-coded by quality level (0-8), matching CSS `.item-quality-*` — implemented in `itemlistbox.cpp::getQualityColor()`
-- [ ] Item icon rendering: small item icon thumbnail (from file data ID) to the left of item name — icon file data IDs are stored but **NOT rendered** as thumbnail images in the listbox
+- [x] Item icon rendering: small item icon thumbnail (from file data ID) to the left of item name — renders 32×32 icon with 1px border (#8a8a8a), matching CSS `.item-icon` specs
 - [x] Right sidebar (auto): type filter checkboxes (Armor, Weapon, etc.) + quality filter checkboxes
 - [x] Bottom row (70px): filter input + export buttons
-- [ ] Migrate from `BeginChild` 50% width to CSS-faithful `1fr auto` layout (list fills available space, sidebar auto-width ~210px)
+- [x] Migrate from `BeginChild` 50% width to CSS-faithful `1fr auto` layout (list fills available space, sidebar auto-width ~210px) — uses `BeginTab` + manual grid calc with sidebar
 
 ### 9.27 Maps Tab Layout (`#tab-maps`)
 
 **CSS:** `grid-template-rows: auto 1fr 60px` (3 rows: expansion filter, content, controls).
-**Current C++:** Uses `ImGui::Button` with `SameLine()` for expansion buttons, then listbox + map viewer side-by-side. Has expansion filter buttons, map viewer with tile selection, and sidebar.
+**Current C++:** Uses `BeginTab` + manual grid calc with `auto 1fr 60px` rows. Expansion icon filter buttons via `renderExpansionFilterButtons()` (WebP textures), map viewer with tile selection, and sidebar with export options.
 
 - [x] Row 1 (auto): expansion filter buttons (horizontal row — clickable to filter by expansion, with "All" button and per-expansion buttons)
 - [x] Row 2 left (grid-column: 1): map listbox
@@ -1075,20 +1075,20 @@ via `getQualityColor()` in `itemlistbox.cpp` and item icon file data IDs stored 
 - [x] Row 3 left: filter input
 - [x] Row 3 right: `.spaced-preview-controls` — zoom in/out buttons, tile count display, alpha map toggle, export area info
 - [x] Optional sidebar (grid-column: 3): `#tab-maps .sidebar` for export format options and export button
-- [ ] Migrate from raw button layout to CSS-faithful `grid-template-rows: auto 1fr 60px` grid
+- [x] Migrate from raw button layout to CSS-faithful `grid-template-rows: auto 1fr 60px` grid — uses `BeginTab` + expansion icon buttons + manual grid positioning
 
 ### 9.28 Zones Tab Layout (`#tab-zones`)
 
 **CSS:** `grid-template-columns: 1.5fr 2fr; grid-template-rows: auto 1fr 60px`.
-**Current C++:** Uses `ImGui::BeginChild` at 40% width for zone list, expansion filter buttons via `SmallButton` with `SameLine()`, and phase selector via combo rendering.
+**Current C++:** Uses `BeginTab` + manual grid calc with `1.5fr 2fr` columns and `auto 1fr 60px` rows. Expansion icon filter buttons via `renderExpansionFilterButtons()` (WebP textures), phase selector via combo rendering.
 
 - [x] Row 1 (auto): expansion filter buttons
 - [x] Row 2 left (1.5fr): zone listbox
 - [x] Row 2 right (2fr, span rows 1-2): zone map viewer (`.zone-viewer-container`)
 - [x] Row 3: filter + controls
 - [x] Phase selector: dropdown/combo for selecting zone phases
-- [ ] Migrate from `BeginChild` 40% width to CSS-faithful `1.5fr 2fr` column layout
-- [ ] Expansion buttons should use expansion icon images instead of text labels — see section 9.29
+- [x] Migrate from `BeginChild` 40% width to CSS-faithful `1.5fr 2fr` column layout — uses `BeginTab` + manual grid calc with COL_RATIO = 1.5/3.5
+- [x] Expansion buttons should use expansion icon images instead of text labels — uses `renderExpansionFilterButtons()` with WebP icon textures
 
 ### 9.29 Map/Zone Expansion Filter Row
 
@@ -1097,7 +1097,7 @@ tab. These are small clickable expansion icons that filter the map/zone list by 
 expansion. Both tabs have functional filter buttons but use text labels instead of icons.
 
 - [x] Render horizontal row of expansion filter buttons (one per expansion)
-- [ ] Each button: small expansion icon image from `data/images/expansion/icon_*.webp` — currently renders as text ("All", "E0", "E1"...) without icons
+- [x] Each button: small expansion icon image from `data/images/expansion/icon_*.webp` — loaded via `loadWebPTexture()`, displayed as `ImGui::ImageButton` (24px icon in 30px button)
 - [x] Active/selected expansion filter: highlighted border or tint (green highlight)
 - [x] Click to toggle filter: show only maps/zones from the selected expansion
 - [x] "All" option: show maps/zones from all expansions

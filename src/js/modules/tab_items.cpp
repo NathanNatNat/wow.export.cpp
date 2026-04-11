@@ -20,6 +20,7 @@
 #include "../modules.h"
 #include "../components/context-menu.h"
 #include "../components/itemlistbox.h"
+#include "../../app.h"
 // const ExternalLinks = require('../external-links'); // Removed: external-links module deleted
 
 #include <cstring>
@@ -665,10 +666,30 @@ void render() {
 	// --- Template rendering ---
 
 	// JS: <div class="tab" id="tab-items">
+	// CSS: #tab-items { grid-template-rows: 1fr 70px; grid-template-columns: 1fr auto; }
+	if (app::layout::BeginTab("tab-items")) {
 
+	// Calculate layout manually since items uses 1fr auto (not standard 2-col list-tab).
+	const ImVec2 avail = ImGui::GetContentRegionAvail();
+	const ImVec2 cursor = ImGui::GetCursorPos();
+
+	// CSS: grid-template-columns: 1fr auto → sidebar is 210px, list fills the rest.
+	constexpr float SIDEBAR_W = app::layout::SIDEBAR_WIDTH; // 210px
+	// CSS: #tab-items .filter { height: 70px; }
+	constexpr float FILTER_H = 70.0f;
+
+	const float listW = avail.x - SIDEBAR_W;
+	const float topH = avail.y - FILTER_H;
+
+	// --- List container (row 1, col 1) ---
 	// JS: <div class="list-container">
 	//     <Itemlistbox id="listbox-items" ... @options="contextMenus.nodeItem = $event" @equip="equip_item">
-	ImGui::BeginChild("items-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.5f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
+	// CSS: .list-container { margin: 20px 10px 0 20px }
+	ImGui::SetCursorPos(ImVec2(cursor.x + app::layout::LIST_MARGIN_LEFT,
+	                           cursor.y + app::layout::LIST_MARGIN_TOP));
+	ImGui::BeginChild("items-list-container",
+		ImVec2(listW - app::layout::LIST_MARGIN_LEFT - app::layout::LIST_MARGIN_RIGHT,
+		       topH - app::layout::LIST_MARGIN_TOP));
 	{
 		// Convert json items to ItemEntry array.
 		std::vector<itemlistbox::ItemEntry> item_entries;
@@ -725,10 +746,14 @@ void render() {
 	}
 	ImGui::EndChild();
 
-	ImGui::SameLine();
-
+	// --- Sidebar (col 2, spanning both rows) ---
 	// JS: <div id="items-sidebar" class="sidebar">
-	ImGui::BeginChild("items-sidebar", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
+	// CSS: .sidebar { grid-column: 3; width: 210px; grid-row: 1/span 2; margin-top: 20px; padding-right: 20px; }
+	ImGui::SetCursorPos(ImVec2(cursor.x + listW,
+	                           cursor.y + app::layout::SIDEBAR_MARGIN_TOP));
+	ImGui::BeginChild("items-sidebar",
+		ImVec2(SIDEBAR_W - app::layout::SIDEBAR_PADDING_RIGHT,
+		       avail.y - app::layout::SIDEBAR_MARGIN_TOP));
 
 	// JS: <span class="header">Item Types</span>
 	ImGui::SeparatorText("Item Types");
@@ -804,16 +829,38 @@ void render() {
 
 	ImGui::EndChild(); // items-sidebar
 
+	// --- Filter bar (row 2, col 1) ---
 	// JS: <div class="filter">
 	//     <div class="regex-info" v-if="$core.view.config.regexFilters" ...>Regex Enabled</div>
 	//     <input type="text" v-model="$core.view.userInputFilterItems" placeholder="Filter items..."/>
-	if (view.config.value("regexFilters", false))
-		ImGui::TextUnformatted("Regex Enabled");
+	// CSS: #tab-items .filter { height: 70px; }
+	ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + topH));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f, 0.0f));
+	ImGui::BeginChild("items-filter", ImVec2(listW, FILTER_H), ImGuiChildFlags_None,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	{
+		// Vertically center the filter input.
+		float itemH = ImGui::GetFrameHeight();
+		float padY = (FILTER_H - itemH) * 0.5f;
+		if (padY > 0.0f)
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
 
-	char filter_buf[256] = {};
-	std::strncpy(filter_buf, view.userInputFilterItems.c_str(), sizeof(filter_buf) - 1);
-	if (ImGui::InputText("##FilterItems", filter_buf, sizeof(filter_buf)))
-		view.userInputFilterItems = filter_buf;
+		if (view.config.value("regexFilters", false)) {
+			ImGui::TextUnformatted("Regex Enabled");
+			ImGui::SameLine();
+		}
+
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterItems.c_str(), sizeof(filter_buf) - 1);
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		if (ImGui::InputText("##FilterItems", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterItems = filter_buf;
+	}
+	ImGui::EndChild();
+	ImGui::PopStyleVar(); // WindowPadding
+
+	} // if BeginTab
+	app::layout::EndTab();
 
 	// --- Context menu ---
 	// JS: <ContextMenu :node="contextMenus.nodeItem" ...>
