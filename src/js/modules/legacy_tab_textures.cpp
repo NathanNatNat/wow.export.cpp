@@ -17,6 +17,7 @@
 #include "../components/listbox.h"
 #include "../components/context-menu.h"
 #include "../components/menu-button.h"
+#include "../../app.h"
 
 #include <glad/gl.h>
 #include <stb_image.h>
@@ -235,6 +236,23 @@ void mounted() {
 	prev_export_channel_mask = static_cast<uint8_t>(core::view->config.value("exportChannelMask", 0b1111));
 }
 
+// Render checkerboard behind texture to show transparency.
+static void renderCheckerboard(ImDrawList* dl, ImVec2 pos, ImVec2 size, float cellSize = 8.0f) {
+	const ImU32 colA = IM_COL32(204, 204, 204, 255); // light grey
+	const ImU32 colB = IM_COL32(255, 255, 255, 255); // white
+	for (float y = 0; y < size.y; y += cellSize) {
+		for (float x = 0; x < size.x; x += cellSize) {
+			int ix = static_cast<int>(x / cellSize);
+			int iy = static_cast<int>(y / cellSize);
+			ImU32 col = ((ix + iy) % 2 == 0) ? colA : colB;
+			ImVec2 pMin(pos.x + x, pos.y + y);
+			ImVec2 pMax(pos.x + std::min(x + cellSize, size.x),
+			            pos.y + std::min(y + cellSize, size.y));
+			dl->AddRectFilled(pMin, pMax, col);
+		}
+	}
+}
+
 void render() {
 	// --- Change-detection for selectionTextures watch ---
 	// JS: this.$core.view.$watch('selectionTextures', async selection => { ... });
@@ -267,10 +285,14 @@ void render() {
 	// JS: <div class="tab list-tab" id="legacy-tab-textures">
 	auto& view = *core::view;
 
+	if (app::layout::BeginTab("legacy-tab-textures")) {
+
+	auto regions = app::layout::CalcListTabRegions(false);
+
+	// --- Left panel: List container (row 1, col 1) ---
 	// JS: <div class="list-container">
 	//   Listbox with selectionTextures, listfileTextures, filter, context menu
-	ImGui::BeginChild("legacy-tex-list", ImVec2(ImGui::GetContentRegionAvail().x * 0.4f, -ImGui::GetFrameHeightWithSpacing() * 2), ImGuiChildFlags_Borders);
-	{
+	if (app::layout::BeginListContainer("legacy-tex-list", regions)) {
 		// Convert json items to string array.
 		std::vector<std::string> tex_strings;
 		tex_strings.reserve(view.listfileTextures.size());
@@ -309,24 +331,27 @@ void render() {
 				handle_listbox_context(node);
 			});
 	}
-	ImGui::EndChild();
+	app::layout::EndListContainer();
 
+	// --- Filter bar (row 2, col 1) ---
 	// JS: <div class="filter">
 	//   Regex info + filter input
-	if (view.config.value("regexFilters", false))
-		ImGui::TextUnformatted("Regex Enabled");
+	if (app::layout::BeginFilterBar("legacy-tex-filter", regions)) {
+		if (view.config.value("regexFilters", false))
+			ImGui::TextUnformatted("Regex Enabled");
 
-	char filter_buf[256] = {};
-	std::strncpy(filter_buf, view.userInputFilterTextures.c_str(), sizeof(filter_buf) - 1);
-	if (ImGui::InputText("##FilterLegacyTextures", filter_buf, sizeof(filter_buf)))
-		view.userInputFilterTextures = filter_buf;
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterTextures.c_str(), sizeof(filter_buf) - 1);
+		if (ImGui::InputText("##FilterLegacyTextures", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterTextures = filter_buf;
+	}
+	app::layout::EndFilterBar();
 
-	ImGui::SameLine();
-
+	// --- Right panel: Preview container (row 1, col 2) ---
 	// JS: <div class="preview-container">
 	//   Preview info, channel mask toggles (R/G/B/A), texture preview image
-	ImGui::BeginChild("legacy-tex-preview", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-	{
+	if (app::layout::BeginPreviewContainer("legacy-tex-preview", regions)) {
 		// Texture preview info.
 		if (!view.texturePreviewInfo.empty())
 			ImGui::Text("%s", view.texturePreviewInfo.c_str());
@@ -363,17 +388,23 @@ void render() {
 			if (tex_w > 0 && tex_h > 0) {
 				const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
 				const ImVec2 img_size(tex_w * scale, tex_h * scale);
+
+				// Draw checkerboard transparency pattern behind texture.
+				const ImVec2 checkerPos = ImGui::GetCursorScreenPos();
+				renderCheckerboard(ImGui::GetWindowDrawList(), checkerPos, img_size);
+
 				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.texturePreviewTexID)), img_size);
 			}
 		} else if (!view.texturePreviewURL.empty()) {
 			ImGui::TextWrapped("Texture loaded: %dx%d", view.texturePreviewWidth, view.texturePreviewHeight);
 		}
 	}
-	ImGui::EndChild();
+	app::layout::EndPreviewContainer();
 
+	// --- Bottom-right: Preview controls (row 2, col 2) ---
 	// JS: <div class="preview-controls">
 	//   MenuButton for export format + export action
-	{
+	if (app::layout::BeginPreviewControls("legacy-tex-controls", regions)) {
 		std::vector<menu_button::MenuOption> tex_options;
 		for (const auto& opt : view.menuButtonTextures)
 			tex_options.push_back({ opt.label, opt.value });
@@ -383,6 +414,10 @@ void render() {
 			[&](const std::string& val) { view.config["exportTextureFormat"] = val; },
 			[&]() { export_textures(); });
 	}
+	app::layout::EndPreviewControls();
+
+	} // if BeginTab
+	app::layout::EndTab();
 }
 
 // JS: methods.handle_listbox_context(data)

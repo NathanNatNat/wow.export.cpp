@@ -513,6 +513,23 @@ void mounted() {
 	});
 }
 
+// Render checkerboard behind texture to show transparency.
+static void renderCheckerboard(ImDrawList* dl, ImVec2 pos, ImVec2 size, float cellSize = 8.0f) {
+	const ImU32 colA = IM_COL32(204, 204, 204, 255); // light grey
+	const ImU32 colB = IM_COL32(255, 255, 255, 255); // white
+	for (float y = 0; y < size.y; y += cellSize) {
+		for (float x = 0; x < size.x; x += cellSize) {
+			int ix = static_cast<int>(x / cellSize);
+			int iy = static_cast<int>(y / cellSize);
+			ImU32 col = ((ix + iy) % 2 == 0) ? colA : colB;
+			ImVec2 pMin(pos.x + x, pos.y + y);
+			ImVec2 pMax(pos.x + std::min(x + cellSize, size.x),
+			            pos.y + std::min(y + cellSize, size.y));
+			dl->AddRectFilled(pMin, pMax, col);
+		}
+	}
+}
+
 void render() {
 	auto& view = *core::view;
 
@@ -558,6 +575,11 @@ void render() {
 
 	// --- Template rendering ---
 
+	// JS: <div class="tab list-tab" id="tab-textures">
+	if (app::layout::BeginTab("tab-textures")) {
+
+	auto regions = app::layout::CalcListTabRegions(false);
+
 	// Override texture toast.
 	// JS: <div id="toast" v-if="!$core.view.toast && $core.view.overrideTextureList.length > 0" class="progress">
 	if (!view.toast.has_value() && !view.overrideTextureList.empty()) {
@@ -570,12 +592,11 @@ void render() {
 		}
 	}
 
-	// List container with context menu.
+	// --- Left panel: List container (row 1, col 1) ---
 	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionTextures" :items="listfileTextures" ...>
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
-	ImGui::BeginChild("textures-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.4f, 0), ImGuiChildFlags_Borders);
-	{
+	if (app::layout::BeginListContainer("textures-list-container", regions)) {
 		// Convert JSON items/selection to string vectors.
 		std::vector<std::string> items_str;
 		items_str.reserve(view.listfileTextures.size());
@@ -649,171 +670,176 @@ void render() {
 			}
 		);
 	}
-	ImGui::EndChild();
+	app::layout::EndListContainer();
 
-	ImGui::SameLine();
-
-	// Right side — filter, preview, controls.
-	ImGui::BeginGroup();
-
-	// Filter.
+	// --- Filter bar (row 2, col 1) ---
 	// JS: <div class="filter">
-	if (view.config.value("regexFilters", false))
-		ImGui::TextUnformatted("Regex Enabled");
+	if (app::layout::BeginFilterBar("textures-filter", regions)) {
+		if (view.config.value("regexFilters", false))
+			ImGui::TextUnformatted("Regex Enabled");
 
-	char filter_buf[256] = {};
-	std::strncpy(filter_buf, view.userInputFilterTextures.c_str(), sizeof(filter_buf) - 1);
-	if (ImGui::InputText("##FilterTextures", filter_buf, sizeof(filter_buf)))
-		view.userInputFilterTextures = filter_buf;
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterTextures.c_str(), sizeof(filter_buf) - 1);
+		if (ImGui::InputText("##FilterTextures", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterTextures = filter_buf;
+	}
+	app::layout::EndFilterBar();
 
-	// Preview container.
+	// --- Right panel: Preview container (row 1, col 2) ---
 	// JS: <div class="preview-container">
 	//     <div class="preview-info" ...>
 	//     <ul class="preview-channels" ...>
 	//     <div class="preview-background" id="texture-preview" ...>
-	if (!view.texturePreviewInfo.empty())
-		ImGui::TextUnformatted(view.texturePreviewInfo.c_str());
+	if (app::layout::BeginPreviewContainer("textures-preview-container", regions)) {
+		if (!view.texturePreviewInfo.empty())
+			ImGui::TextUnformatted(view.texturePreviewInfo.c_str());
 
-	// Channel mask toggles.
-	// JS: <ul class="preview-channels" v-if="$core.view.texturePreviewURL.length > 0">
-	if (!view.texturePreviewURL.empty()) {
-		int mask = view.config.value("exportChannelMask", 0b1111);
+		// Channel mask toggles.
+		// JS: <ul class="preview-channels" v-if="$core.view.texturePreviewURL.length > 0">
+		if (!view.texturePreviewURL.empty()) {
+			int mask = view.config.value("exportChannelMask", 0b1111);
 
-		bool r = (mask & 0b0001) != 0;
-		bool g = (mask & 0b0010) != 0;
-		bool b = (mask & 0b0100) != 0;
-		bool a = (mask & 0b1000) != 0;
+			bool r = (mask & 0b0001) != 0;
+			bool g = (mask & 0b0010) != 0;
+			bool b = (mask & 0b0100) != 0;
+			bool a = (mask & 0b1000) != 0;
 
-		ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(1, 0, 0, 1));
-		if (ImGui::Checkbox("R", &r)) { mask ^= 0b0001; view.config["exportChannelMask"] = mask; }
-		ImGui::PopStyleColor();
-		ImGui::SameLine();
+			ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(1, 0, 0, 1));
+			if (ImGui::Checkbox("R", &r)) { mask ^= 0b0001; view.config["exportChannelMask"] = mask; }
+			ImGui::PopStyleColor();
+			ImGui::SameLine();
 
-		ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0, 1, 0, 1));
-		if (ImGui::Checkbox("G", &g)) { mask ^= 0b0010; view.config["exportChannelMask"] = mask; }
-		ImGui::PopStyleColor();
-		ImGui::SameLine();
+			ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0, 1, 0, 1));
+			if (ImGui::Checkbox("G", &g)) { mask ^= 0b0010; view.config["exportChannelMask"] = mask; }
+			ImGui::PopStyleColor();
+			ImGui::SameLine();
 
-		ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.3f, 0.3f, 1, 1));
-		if (ImGui::Checkbox("B", &b)) { mask ^= 0b0100; view.config["exportChannelMask"] = mask; }
-		ImGui::PopStyleColor();
-		ImGui::SameLine();
+			ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.3f, 0.3f, 1, 1));
+			if (ImGui::Checkbox("B", &b)) { mask ^= 0b0100; view.config["exportChannelMask"] = mask; }
+			ImGui::PopStyleColor();
+			ImGui::SameLine();
 
-		ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(1, 1, 1, 1));
-		if (ImGui::Checkbox("A", &a)) { mask ^= 0b1000; view.config["exportChannelMask"] = mask; }
-		ImGui::PopStyleColor();
-	}
-
-	// Texture preview area.
-	ImGui::BeginChild("texture-preview-area", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-
-	// JS: <div class="image" :style="{ 'background-image': 'url(' + texturePreviewURL + ')' }">
-	if (view.texturePreviewTexID != 0) {
-		// Fit the texture into the available area while preserving aspect ratio.
-		const ImVec2 avail = ImGui::GetContentRegionAvail();
-		const float tex_w = static_cast<float>(view.texturePreviewWidth);
-		const float tex_h = static_cast<float>(view.texturePreviewHeight);
-		const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
-		const ImVec2 img_size(tex_w * scale, tex_h * scale);
-
-		const ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
-		ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.texturePreviewTexID)), img_size);
-
-		// Atlas overlay regions drawn on top of the texture image.
-		// JS: <div id="atlas-overlay" v-if="$core.view.config.showTextureAtlas">
-		if (view.config.value("showTextureAtlas", false) && !view.textureAtlasOverlayRegions.empty()) {
-			ImDrawList* draw_list = ImGui::GetWindowDrawList();
-			for (const auto& region : view.textureAtlasOverlayRegions) {
-				if (!region.contains("name"))
-					continue;
-
-				// Region positions are stored as percentage strings (e.g. "25.5%").
-				auto parse_pct = [](const nlohmann::json& j, const std::string& key) -> float {
-					if (!j.contains(key)) return 0.0f;
-					const std::string s = j[key].get<std::string>();
-					return std::stof(s) / 100.0f;
-				};
-
-				const float pct_left   = parse_pct(region, "left");
-				const float pct_top    = parse_pct(region, "top");
-				const float pct_width  = parse_pct(region, "width");
-				const float pct_height = parse_pct(region, "height");
-
-				const ImVec2 rect_min(cursor_pos.x + pct_left * img_size.x,
-				                      cursor_pos.y + pct_top  * img_size.y);
-				const ImVec2 rect_max(rect_min.x + pct_width  * img_size.x,
-				                      rect_min.y + pct_height * img_size.y);
-
-				draw_list->AddRect(rect_min, rect_max, IM_COL32(255, 255, 0, 200), 0.0f, 0, 1.0f);
-				const std::string name = region["name"].get<std::string>();
-				draw_list->AddText(ImVec2(rect_min.x + 2, rect_min.y + 1), IM_COL32(255, 255, 0, 255), name.c_str());
-			}
+			ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(1, 1, 1, 1));
+			if (ImGui::Checkbox("A", &a)) { mask ^= 0b1000; view.config["exportChannelMask"] = mask; }
+			ImGui::PopStyleColor();
 		}
-	} else if (!view.texturePreviewURL.empty()) {
-		ImGui::Text("[Texture Preview: %dx%d]", view.texturePreviewWidth, view.texturePreviewHeight);
-	}
 
-	ImGui::EndChild();
+		// JS: <div class="image" :style="{ 'background-image': 'url(' + texturePreviewURL + ')' }">
+		if (view.texturePreviewTexID != 0) {
+			// Fit the texture into the available area while preserving aspect ratio.
+			const ImVec2 avail = ImGui::GetContentRegionAvail();
+			const float tex_w = static_cast<float>(view.texturePreviewWidth);
+			const float tex_h = static_cast<float>(view.texturePreviewHeight);
+			const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
+			const ImVec2 img_size(tex_w * scale, tex_h * scale);
 
-	// Preview controls.
-	// JS: <div class="preview-controls">
-	bool show_atlas = view.config.value("showTextureAtlas", false);
-	if (ImGui::Checkbox("Atlas Regions", &show_atlas))
-		view.config["showTextureAtlas"] = show_atlas;
+			// Draw checkerboard transparency pattern behind texture.
+			const ImVec2 checkerPos = ImGui::GetCursorScreenPos();
+			renderCheckerboard(ImGui::GetWindowDrawList(), checkerPos, img_size);
 
-	ImGui::SameLine();
+			const ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.texturePreviewTexID)), img_size);
 
-	// JS: <input v-if="is_baked_npc_texture()" type="button" value="Apply to Character" ...>
-	if (is_baked_npc_texture()) {
-		const bool busy = view.isBusy > 0;
-		if (busy) app::theme::BeginDisabledButton();
-		if (ImGui::Button("Apply to Character")) {
-			// JS: methods.apply_baked_npc_texture()
-			BusyLock _lock = core::create_busy_lock();
-			core::setToast("progress", "loading baked npc texture...", {}, -1, false);
+			// Atlas overlay regions drawn on top of the texture image.
+			// JS: <div id="atlas-overlay" v-if="$core.view.config.showTextureAtlas">
+			if (view.config.value("showTextureAtlas", false) && !view.textureAtlasOverlayRegions.empty()) {
+				ImDrawList* draw_list = ImGui::GetWindowDrawList();
+				for (const auto& region : view.textureAtlasOverlayRegions) {
+					if (!region.contains("name"))
+						continue;
 
-			try {
-				const std::string first = casc::listfile::stripFileEntry(view.selectionTextures[0].get<std::string>());
-				const auto file_data_id_opt = casc::listfile::getByFilename(first);
-				if (file_data_id_opt.has_value()) {
-					// JS: const file = await this.$core.view.casc.getFile(file_data_id);
-					// JS: const blp = new BLPFile(file);
-					// JS: view.chrCustBakedNPCTexture = blp;
-					// In C++, store the file data ID so tab_characters can load the BLP on demand.
-					core::view->chrCustBakedNPCTexture = file_data_id_opt.value();
-					core::setToast("success", "baked npc texture applied to character", {}, 3000);
-					logging::write(std::format("applied baked npc texture {} to character", first));
+					// Region positions are stored as percentage strings (e.g. "25.5%").
+					auto parse_pct = [](const nlohmann::json& j, const std::string& key) -> float {
+						if (!j.contains(key)) return 0.0f;
+						const std::string s = j[key].get<std::string>();
+						return std::stof(s) / 100.0f;
+					};
+
+					const float pct_left   = parse_pct(region, "left");
+					const float pct_top    = parse_pct(region, "top");
+					const float pct_width  = parse_pct(region, "width");
+					const float pct_height = parse_pct(region, "height");
+
+					const ImVec2 rect_min(cursor_pos.x + pct_left * img_size.x,
+					                      cursor_pos.y + pct_top  * img_size.y);
+					const ImVec2 rect_max(rect_min.x + pct_width  * img_size.x,
+					                      rect_min.y + pct_height * img_size.y);
+
+					draw_list->AddRect(rect_min, rect_max, IM_COL32(255, 255, 0, 200), 0.0f, 0, 1.0f);
+					const std::string name = region["name"].get<std::string>();
+					draw_list->AddText(ImVec2(rect_min.x + 2, rect_min.y + 1), IM_COL32(255, 255, 0, 255), name.c_str());
 				}
-			} catch (const std::exception& e) {
-				core::setToast("error", "failed to load baked npc texture", {}, -1);
-				logging::write(std::format("failed to load baked npc texture: {}", e.what()));
 			}
+		} else if (!view.texturePreviewURL.empty()) {
+			ImGui::Text("[Texture Preview: %dx%d]", view.texturePreviewWidth, view.texturePreviewHeight);
 		}
-		if (busy) app::theme::EndDisabledButton();
+	}
+	app::layout::EndPreviewContainer();
+
+	// --- Bottom-right: Preview controls (row 2, col 2) ---
+	// JS: <div class="preview-controls">
+	if (app::layout::BeginPreviewControls("textures-preview-controls", regions)) {
+		bool show_atlas = view.config.value("showTextureAtlas", false);
+		if (ImGui::Checkbox("Atlas Regions", &show_atlas))
+			view.config["showTextureAtlas"] = show_atlas;
+
 		ImGui::SameLine();
-	}
 
-	// JS: <input v-if="showTextureAtlas" type="button" value="Export Atlas Regions" ...>
-	if (view.config.value("showTextureAtlas", false)) {
-		const bool busy = view.isBusy > 0;
-		if (busy) app::theme::BeginDisabledButton();
-		if (ImGui::Button("Export Atlas Regions"))
-			export_atlas_regions();
-		if (busy) app::theme::EndDisabledButton();
-		ImGui::SameLine();
-	}
+		// JS: <input v-if="is_baked_npc_texture()" type="button" value="Apply to Character" ...>
+		if (is_baked_npc_texture()) {
+			const bool busy = view.isBusy > 0;
+			if (busy) app::theme::BeginDisabledButton();
+			if (ImGui::Button("Apply to Character")) {
+				// JS: methods.apply_baked_npc_texture()
+				BusyLock _lock = core::create_busy_lock();
+				core::setToast("progress", "loading baked npc texture...", {}, -1, false);
 
-	// JS: <MenuButton :options="menuButtonTextures" :default="config.exportTextureFormat" ... @click="export_textures">
-	{
-		const bool busy = view.isBusy > 0;
-		if (busy) app::theme::BeginDisabledButton();
-		const std::string export_format = view.config.value("exportTextureFormat", std::string("PNG"));
-		if (ImGui::Button(std::format("Export as {}", export_format).c_str()))
-			export_textures();
-		if (busy) app::theme::EndDisabledButton();
-	}
+				try {
+					const std::string first = casc::listfile::stripFileEntry(view.selectionTextures[0].get<std::string>());
+					const auto file_data_id_opt = casc::listfile::getByFilename(first);
+					if (file_data_id_opt.has_value()) {
+						// JS: const file = await this.$core.view.casc.getFile(file_data_id);
+						// JS: const blp = new BLPFile(file);
+						// JS: view.chrCustBakedNPCTexture = blp;
+						// In C++, store the file data ID so tab_characters can load the BLP on demand.
+						core::view->chrCustBakedNPCTexture = file_data_id_opt.value();
+						core::setToast("success", "baked npc texture applied to character", {}, 3000);
+						logging::write(std::format("applied baked npc texture {} to character", first));
+					}
+				} catch (const std::exception& e) {
+					core::setToast("error", "failed to load baked npc texture", {}, -1);
+					logging::write(std::format("failed to load baked npc texture: {}", e.what()));
+				}
+			}
+			if (busy) app::theme::EndDisabledButton();
+			ImGui::SameLine();
+		}
 
-	ImGui::EndGroup();
+		// JS: <input v-if="showTextureAtlas" type="button" value="Export Atlas Regions" ...>
+		if (view.config.value("showTextureAtlas", false)) {
+			const bool busy = view.isBusy > 0;
+			if (busy) app::theme::BeginDisabledButton();
+			if (ImGui::Button("Export Atlas Regions"))
+				export_atlas_regions();
+			if (busy) app::theme::EndDisabledButton();
+			ImGui::SameLine();
+		}
+
+		// JS: <MenuButton :options="menuButtonTextures" :default="config.exportTextureFormat" ... @click="export_textures">
+		{
+			const bool busy = view.isBusy > 0;
+			if (busy) app::theme::BeginDisabledButton();
+			const std::string export_format = view.config.value("exportTextureFormat", std::string("PNG"));
+			if (ImGui::Button(std::format("Export as {}", export_format).c_str()))
+				export_textures();
+			if (busy) app::theme::EndDisabledButton();
+		}
+	}
+	app::layout::EndPreviewControls();
+
+	} // if BeginTab
+	app::layout::EndTab();
 }
 
 void previewTextureByID(uint32_t file_data_id, const std::string& texture) {
