@@ -156,3 +156,15 @@ The audio tab with a sound playing, showing the animated model, playback control
 The videos tab with a video playing, showing the video list, playback area, and streaming controls.
 
 ![Videos Tab](https://github.com/user-attachments/assets/b9dfce9f-968b-43ee-a7b0-9adeb4350827)
+
+---
+
+## Maps Tab
+
+The maps tab with a map section selected, showing the tile map viewer with selected region highlighted.
+
+![Maps Tab - Map Selected](https://github.com/user-attachments/assets/22f4ed11-c73f-47cd-a4cc-4da11f1ec412)
+
+The maps tab when there is only a WMO (no terrain tiles), showing the WMO-only export view.
+
+![Maps Tab - WMO Only](https://github.com/user-attachments/assets/93fc6baa-0912-445e-afbf-95fd5fcf7846)
