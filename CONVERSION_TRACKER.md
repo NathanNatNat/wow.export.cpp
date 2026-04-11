@@ -576,6 +576,7 @@ surrounding shell.
 - [x] Render the **help icon** (`help.svg`, 20px) at the right side of the header, left of the hamburger menu
 - [x] Render the **footer** as a fixed-height (73px) bar at the bottom with `--background-dark` (#2c3136) background and a 1px `--border` (#6c757d) top border
 - [x] Footer content: centered text showing version and copyright in `--font-faded` (#6c757d) color
+- [ ] Footer external links: add missing "Issues" link (https://github.com/Kruithne/wow.export/issues) — original JS has 5 links (Website, Discord, Patreon, GitHub, Issues), C++ only renders 4
 - [x] Render the **content area** between header and footer, filling available space
 - [x] Render the active module **inside** the content area, not as the entire window
 
@@ -794,7 +795,11 @@ currently render as flat sequential ImGui widgets without proper grid/split layo
 **Current C++:** Flat sequential widgets — buttons with `SameLine` + `TextDisabled`.
 
 - [ ] Implement 2-column grid layout: left column for info/buttons, right column for "What's New" changelog
-- [ ] "What's New" panel (`#home-changes`): `home-background.webp` background, border-radius 10px, padding 50px
+- [ ] Left column heading: "wow.export vX.X.X" title at large bold size, subtitle text below
+- [ ] Left column navigation cards: arranged in a 4-column grid of square card buttons (~100×100px each), each with a Font Awesome icon centered above a label — these are the tab navigation shortcuts (Models, Textures, Characters, Items, etc.)
+- [ ] Navigation card hover: subtle border highlight, icon color change
+- [ ] Navigation cards: only show tabs available for the current install type (CASC shows all, MPQ shows subset)
+- [ ] "What's New" panel (`#home-changes`): `home-background.webp` background, border-radius 10px, padding 50px, scrollable changelog entries with version headers
 - [ ] Help buttons row (`#home-help-buttons`): 3 cards, 300px wide each, centered at bottom, 20px gap
 - [ ] Each help button: 1px solid `--border` border, border-radius 10px, 20px padding, icon watermark at 20% opacity on right
 - [ ] Help button hover: border → `--nav-option-selected` (#22b549), text → green
@@ -829,6 +834,8 @@ currently render as flat sequential ImGui widgets without proper grid/split layo
 - [ ] Left column: sound file listbox filling the area
 - [ ] Right column: sound player widget with seek bar, play/stop/volume controls
 - [ ] Sound player: centered in right column, custom seek slider, duration/position display
+- [ ] Animated speaker/music icon: large animated icon (appears to bounce/pulse) displayed above playback controls when a sound is playing (visible in Audio Tab screenshot)
+- [ ] Volume control: horizontal slider for volume adjustment
 - [ ] Bottom row (60px): filter input on left, export buttons on right
 
 ### 9.18 Textures Tab Layout (`#tab-textures` / `#legacy-tab-textures`)
@@ -838,10 +845,11 @@ currently render as flat sequential ImGui widgets without proper grid/split layo
 
 - [ ] Left column: texture file listbox
 - [ ] Right column: texture preview with zoom/pan, channel toggle buttons (R/G/B/A), info bar at bottom
-- [ ] Channel toggles: `position: absolute; bottom: 35px; left: 0` — vertical list of toggle buttons
-- [ ] Info bar: `position: absolute; left: 0; bottom: 0; right: 0` — file dimensions, format, etc.
-- [ ] Atlas overlay: `position: absolute; left: 0; top: 0; z-index: 1` for texture atlas region rendering
-- [ ] Bottom row (60px): filter input on left, export format selector + export button on right
+- [ ] Texture preview background: checkerboard transparency pattern (grey/white alternating squares) behind textures with alpha
+- [ ] Channel toggles: `position: absolute; bottom: 35px; left: 0` — vertical list of toggle buttons (R, G, B, A individually toggleable)
+- [ ] Info bar: `position: absolute; left: 0; bottom: 0; right: 0` — file dimensions, format, pixel count info
+- [ ] Atlas overlay: `position: absolute; left: 0; top: 0; z-index: 1` for texture atlas region rendering with region labels and colored outlines (visible in Atlas Regions screenshot)
+- [ ] Bottom row (60px): filter input on left, export format selector (PNG/JPEG/WEBP/BLP dropdown) + export button on right
 
 ### 9.19 Videos Tab Layout (`#tab-videos`)
 
@@ -885,12 +893,14 @@ currently render as flat sequential ImGui widgets without proper grid/split layo
 **CSS:** `grid-template-rows: auto 1fr 60px` (3 rows: expansion filter, content, controls).
 **Current C++:** Uses `BeginGroup` for expansion buttons, then listbox + map viewer.
 
-- [ ] Row 1 (auto): expansion filter buttons (horizontal row of expansion icons)
+- [ ] Row 1 (auto): expansion filter buttons (horizontal row of expansion icons — clickable to filter by expansion, visible in Maps Tab screenshot)
 - [ ] Row 2 left (grid-column: 1): map listbox in `.list-container`
-- [ ] Row 2 right (grid-column: 2, span rows 1-2): map viewer component (`.ui-map-viewer`)
+- [ ] Row 2 right (grid-column: 2, span rows 1-2): map viewer component (`.ui-map-viewer`) with interactive tile selection
+- [ ] Map viewer: blue/highlighted selection rectangle on selected tiles (visible in Maps Tab screenshot), mouse drag to select regions
+- [ ] Map viewer: WMO-only view mode — when a map has no terrain tiles, show WMO export option instead of tile viewer (visible in Maps Tab WMO Only screenshot)
 - [ ] Row 3 left: filter input
-- [ ] Row 3 right: `.spaced-preview-controls` — zoom controls, preview options
-- [ ] Optional sidebar (grid-column: 3): `#tab-maps .sidebar` for export options
+- [ ] Row 3 right: `.spaced-preview-controls` — zoom in/out buttons, tile count display, alpha map toggle, export area info
+- [ ] Optional sidebar (grid-column: 3): `#tab-maps .sidebar` for export format options and export button
 
 ### 9.24 Zones Tab Layout (`#tab-zones`)
 
@@ -910,8 +920,12 @@ currently render as flat sequential ImGui widgets without proper grid/split layo
 
 - [ ] Left column (1fr): model file listbox + filter
 - [ ] Middle column (1fr): 3D model viewer (OpenGL viewport)
-- [ ] Right column (auto, 210px): sidebar with checkboxes (geosets, WMO groups, animation controls)
+- [ ] Texture ribbon strip: horizontal strip below 3D viewport showing model texture thumbnails with left/right page arrows when more textures than visible slots (visible in M2 Model Loaded screenshot)
+- [ ] Right column (auto, 210px): sidebar with "Preview" and "Export" sub-tab buttons at top
+- [ ] Sidebar — Preview sub-tab: animation controls (animation listbox, play/pause button, speed slider), geoset/WMO group checkboxes with "Show All" / "Hide All" toggle buttons, background color picker
+- [ ] Sidebar — Export sub-tab: export format selector (OBJ/GLTF/GLB), export options checkboxes, export button
 - [ ] Sidebar toggle list: `.list-toggles` with `input[type=button]` for "Show All" / "Hide All"
+- [ ] Model type detection: M2 models show geoset checkboxes + animation controls; WMO models show group checkboxes + set checkboxes (visible in WMO screenshot)
 - [ ] Bottom row (60px): export buttons
 
 ### 9.26 Creatures Tab Layout (`#tab-creatures`)
@@ -921,8 +935,9 @@ currently render as flat sequential ImGui widgets without proper grid/split layo
 
 - [ ] Left column: creature listbox + search filter
 - [ ] Middle column: 3D creature viewer with texture overlay support
-- [ ] Right column (sidebar): geoset checkboxes, equipment toggles, skin selector
-- [ ] Bottom row (60px): export buttons
+- [ ] Right column (sidebar): geoset checkboxes with "Show All"/"Hide All", equipment toggle checkboxes, skin/display variant selector dropdown, replaceable texture file selector
+- [ ] Creature display info: shows creature name and display ID
+- [ ] Bottom row (60px): export format selector + export button
 
 ### 9.27 Decor Tab Layout (`#tab-decor`)
 
@@ -941,8 +956,12 @@ currently render as flat sequential ImGui widgets without proper grid/split layo
 **Current C++:** Uses `BeginChild` at 50% width — but CSS says full-width with sidebar.
 
 - [ ] Main area: item listbox with custom item rendering (icon, name, quality color, ID)
-- [ ] Item quality colors: color-coded by quality level (0-8), matching CSS `.item-quality-*`
-- [ ] Right sidebar (auto): type filter checkboxes + quality filter checkboxes
+- [ ] Item quality colors: color-coded by quality level (0-8), matching CSS `.item-quality-*`:
+  - Quality 0 (Poor): grey, Quality 1 (Common): white, Quality 2 (Uncommon): green (#1eff00),
+    Quality 3 (Rare): blue (#0070dd), Quality 4 (Epic): purple (#a335ee), Quality 5 (Legendary): orange (#ff8000),
+    Quality 6 (Artifact): #e6cc80, Quality 7 (Heirloom): #00ccff, Quality 8 (WoW Token): #00ccff
+- [ ] Item icon rendering: small item icon thumbnail (from file data ID) to the left of item name
+- [ ] Right sidebar (auto): type filter checkboxes (Armor, Weapon, etc.) + quality filter checkboxes
 - [ ] Bottom row (70px): filter input + export buttons
 
 ### 9.29 Item Sets Tab Layout (`#tab-item-sets`)
@@ -968,9 +987,14 @@ currently render as flat sequential ImGui widgets without proper grid/split layo
 ```
 
 - [ ] 3D character viewer fills entire content area as background
-- [ ] Left panel (250px, absolute): race/model selector dropdown, customization options, scrollable
-- [ ] Right panel (absolute): equipment slots list, each slot is a flex row with name + buttons
+- [ ] Left panel (250px, absolute): race/model selector dropdown, gender toggle, customization option dropdowns (Skin Color, Face, Hair Style, Hair Color, etc.), scrollable
+- [ ] Left panel — Custom Geosets mode: scrollable list of geoset categories with individual checkboxes for toggling geometry groups (visible in Custom Geoset Selection screenshot)
+- [ ] Right panel (absolute): equipment slots list, each slot is a flex row with slot name + item name + action buttons
 - [ ] Tab controls: centered sub-tab buttons for switching between customization/equipment/saved
+- [ ] Right bottom panel sub-tabs: "Export", "Textures", "Settings" tab buttons
+- [ ] Export sub-panel: export format selector (OBJ/GLTF/GLB), "Auto Adjust" checkbox, "Export Character" button, "Copy Screenshot" button (visible in Characters Export screenshot)
+- [ ] Textures sub-panel: texture file listbox with "Export All" and "Export Selected" buttons (visible in Characters Textures screenshot)
+- [ ] Settings sub-panel: display toggles (wireframe, grid, background color picker), model display options (visible in Characters Settings screenshot)
 - [ ] Bottom area: export controls, auto-adjust checkbox
 
 ### 9.31 Settings Screen Layout (`#config`)
@@ -978,10 +1002,15 @@ currently render as flat sequential ImGui widgets without proper grid/split layo
 **CSS:** Scrollable form with centered content.
 **Current C++:** Uses `BeginChild` for scrollable area with fixed bottom buttons.
 
-- [ ] Centered scrollable settings form
-- [ ] Section headers: `SeparatorText` dividers between config groups
-- [ ] Input fields: text, checkbox, slider, file field (with browse button)
-- [ ] Bottom bar: fixed "Save" + "Cancel" buttons
+- [ ] Centered scrollable settings form (max-width container, vertically scrollable)
+- [ ] Section headers: `SeparatorText` dividers between config groups (visible sections from screenshots: Export Directory, Character Save Directory, Scroll Speed, file list ordering, model/texture options, export options)
+- [ ] Input fields:
+  - File field with browse button: Export Directory, Character Save Directory
+  - Slider: Scroll Speed (range 0.25–2.0, step 0.25)
+  - Checkboxes: Show File Data IDs, Show Unknown Files, Model Skins, Bone Prefixes, Shared Textures, Shared Children, and many more (visible across all 6 settings screenshots)
+  - Dropdown/ComboBox: file list ordering (ID/Name/Size/Type), export format defaults
+  - Reset buttons: "Reset to Defaults" button at the bottom
+- [ ] Bottom bar: fixed "Save" + "Cancel" + "Reset to Defaults" buttons
 
 ### 9.32 Scrollbar Styling
 
@@ -1064,6 +1093,78 @@ converted — verify the wiring is complete at runtime.
 - [ ] Verify ADTLoader integration in `tab_maps.cpp` works at runtime
 - [ ] Verify WMOLoader integration in `tab_maps.cpp` works at runtime
 - [ ] Verify WDTLoader integration in `tab_maps.cpp` works at runtime
+
+### 9.40 Options/Gear Dropdown Menu Content
+
+The gear/hamburger icon in the header opens a dropdown context menu with navigation
+items and toggleable config options. The screenshots (Data Tab — Settings Menu and
+Options Menu — Dev Build) reveal the specific content of this menu.
+
+**Standard options (all builds):**
+- [ ] "Settings" menu item — navigates to the settings screen
+- [ ] "Restart" menu item — triggers app restart
+- [ ] "View Log" menu item — opens the log file in the system file explorer
+- [ ] Config toggle items rendered as checkable menu items (not navigation): "Show File Data IDs", "Enable Shared Textures", "Show Unknown Files" (these toggle config values directly from the menu without opening the full settings screen)
+- [ ] Divider/separator between navigation items and toggle items
+
+**Dev-only options (visible in Options Menu — Dev Build screenshot):**
+- [ ] Additional dev-only toggle items gated by `core::view->isDev` (e.g., shader debug, CASC health check)
+- [ ] Dev items rendered with same checkbox/toggle pattern as standard options
+
+### 9.41 Listbox Visual Styling (Cross-Tab Pattern)
+
+All content tabs use listbox components with consistent visual styling. The screenshots
+reveal a uniform pattern across Models, Textures, Audio, Videos, Maps, Zones, Raw Files,
+Install Manifest, Items, Creatures, Decor, Text, Fonts, and Data tabs.
+
+- [ ] Listbox row height: consistent across all tabs (~22-24px per row)
+- [ ] Alternating row backgrounds: subtle alternation between `--background` and `--background-alt` for readability
+- [ ] Selected row highlight: `--nav-option-selected` (#22b549) green background or left-border indicator
+- [ ] Multi-select highlight: selected rows highlighted in a lighter green/blue tint
+- [ ] Hover row effect: subtle background color change on mouse hover
+- [ ] File/folder icons: some listboxes prefix items with file-type icons (visible in Raw Files, Install Manifest tabs)
+- [ ] Path text rendering: file paths shown in `--font-faded` color, file names in `--font-primary`
+- [ ] Scroll-to-selection: listbox auto-scrolls to bring the selected item into view
+
+### 9.42 Preview Area Empty States
+
+Several tabs show placeholder content when no item is selected. The screenshots
+confirm these empty states are visible and need corresponding rendering.
+
+- [ ] Models tab: empty 3D preview area with instructional message (e.g., "Select a model from the listbox")
+- [ ] Textures tab: empty preview area when no texture is selected
+- [ ] Audio tab: empty player area when no sound file is selected
+- [ ] Videos tab: empty player area when no video is selected
+- [ ] Characters tab: default 3D view with no character loaded
+- [ ] Maps tab: empty map viewer when no map is selected
+- [ ] Zones tab: empty zone viewer when no zone is selected
+- [ ] Data tab: empty data table when no DB2/DBC file is selected
+- [ ] Text tab: empty preview area when no text file is selected
+- [ ] Fonts tab: empty font preview when no font is selected
+
+### 9.43 Texture Ribbon Strip (Model/Creature/Decor Tabs)
+
+The 3D model viewer tabs show a horizontal texture ribbon strip below the viewport
+displaying thumbnail previews of the model's textures. This is visible in the
+M2 Model Loaded and Creatures Tab screenshots.
+
+- [ ] Render texture ribbon below 3D viewport: horizontal strip of texture thumbnails
+- [ ] Ribbon pagination: left/right arrow buttons when textures exceed visible slot count
+- [ ] Texture slot rendering: small square thumbnail for each texture, clickable to select
+- [ ] Ribbon visibility: only show when `config.modelViewerShowTextures` is true and `textureRibbonStack` is non-empty
+- [ ] Ribbon width: fills the model viewer column width, slot count adapts to available space
+
+### 9.44 Map/Zone Expansion Filter Row
+
+The Maps and Zones tabs have a row of expansion icon filter buttons at the top of the
+tab. These are small clickable expansion icons that filter the map/zone list by game
+expansion. Visible in both Maps Tab and Zones Tab screenshots.
+
+- [ ] Render horizontal row of expansion icon buttons (one per expansion)
+- [ ] Each button: small expansion icon image from `data/images/expansion/icon_*.webp`
+- [ ] Active/selected expansion filter: highlighted border or tint
+- [ ] Click to toggle filter: show only maps/zones from the selected expansion
+- [ ] "All" option: show maps/zones from all expansions
 
 ---
 
