@@ -489,6 +489,12 @@ void set_active(const std::string& module_key) {
 			}
 
 			logging::write(std::format("set active module: {}", module_key));
+
+			// JS equivalent: Vue <keep-alive> activated() hook calls initialize()
+			// on first activation. The wrapped initialize has an idempotency guard,
+			// so it's safe to call on every activation.
+			if (it->second.initialize)
+				it->second.initialize();
 		}
 	}
 }
