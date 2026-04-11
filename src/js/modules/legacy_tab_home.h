@@ -8,9 +8,15 @@
 /**
  * Legacy home tab module (ImGui immediate-mode equivalent).
  *
- * JS equivalent: Vue component with template showing whatsNewHTML,
- * Discord/GitHub/Patreon help buttons, and a navigate() method.
+ * JS equivalent: Vue component with template:
+ *   <div class="tab" id="legacy-tab-home">
+ *     <HomeShowcase />
+ *     <div id="home-changes"><div v-html="$core.view.whatsNewHTML"></div></div>
+ *     <div id="home-help-buttons"> ... </div>
+ *   </div>
+ *
  * Identical to tab_home but with the "legacy-tab-home" CSS ID.
+ * CSS: #tab-home, #legacy-tab-home share the same grid layout.
  */
 namespace legacy_tab_home {
 

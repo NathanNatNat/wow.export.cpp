@@ -5,6 +5,7 @@
  */
 
 #include "legacy_tab_home.h"
+#include "tab_home.h"
 #include "../modules.h"
 #include "../core.h"
 
@@ -16,39 +17,17 @@ namespace legacy_tab_home {
  * Render the legacy home tab widget using ImGui.
  * JS template:
  *   <div class="tab" id="legacy-tab-home">
+ *     <HomeShowcase />
  *     <div id="home-changes"><div v-html="$core.view.whatsNewHTML"></div></div>
  *     <div id="home-help-buttons"> ... </div>
  *   </div>
+ *
+ * CSS: #tab-home, #legacy-tab-home share the same grid layout.
+ * Uses the same renderHomeLayout() as tab_home.
  */
 void render() {
-	// #home-changes: display "What's New" content.
-	if (!core::view->whatsNewHTML.empty()) {
-		ImGui::TextWrapped("%s", core::view->whatsNewHTML.c_str());
-		ImGui::Separator();
-	}
-
-	// #home-help-buttons: three informational help buttons.
-	// JS: data-external="::DISCORD" / "::GITHUB" / "::PATREON"
-	// ExternalLinks module was deleted; buttons render as informational text.
-	ImGui::Spacing();
-
-	if (ImGui::Button("Stuck? Need Help?##discord")) {
-		// ExternalLinks.open('::DISCORD') — Removed: external-links module deleted
-	}
-	ImGui::SameLine();
-	ImGui::TextDisabled("Join our Discord community for support!");
-
-	if (ImGui::Button("Gnomish Heritage?##github")) {
-		// ExternalLinks.open('::GITHUB') — Removed: external-links module deleted
-	}
-	ImGui::SameLine();
-	ImGui::TextDisabled("wow.export is open-source, tinkerers are welcome!");
-
-	if (ImGui::Button("Support Us!##patreon")) {
-		// ExternalLinks.open('::PATREON') — Removed: external-links module deleted
-	}
-	ImGui::SameLine();
-	ImGui::TextDisabled("Support development of wow.export through Patreon!");
+	// JS: #legacy-tab-home uses the same layout as #tab-home
+	tab_home::renderHomeLayout();
 }
 
 void navigate(const char* module_name) {
