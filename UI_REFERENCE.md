@@ -5,6 +5,8 @@ These were captured at **full screen on Windows on a 4K monitor** (3840Ã—2076 â€
 
 When making UI changes to the C++ ImGui conversion, **always compare against these screenshots** to ensure visual fidelity with the original app.
 
+The original JavaScript/NW.js source code can be found at **https://github.com/Kruithne/wow.export** and should be referred to when making changes.
+
 ---
 
 ## Source Select Screen
