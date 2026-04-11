@@ -273,7 +273,7 @@ static void renderCrashScreen() {
 		ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
 		ImGuiWindowFlags_NoBringToFrontOnFocus);
 
-	ImGui::Text("wow.export has crashed!");
+	ImGui::Text("wow.export.cpp has crashed!");
 	ImGui::Separator();
 
 	// Show build version/flavour/ID.
@@ -360,7 +360,7 @@ static void renderAppShell() {
 			ImVec2(vp_pos.x + vp_size.x, vp_pos.y + HEADER_HEIGHT - 1.0f),
 			ImGui::ColorConvertFloat4ToU32(COLOR_BORDER), 1.0f);
 
-		// ── Logo (#logo): 15px left margin, 32px image, then "wow.export" text ──
+		// ── Logo (#logo): 15px left margin, 32px image, then "wow.export.cpp" text ──
 		float cursor_x = 15.0f;
 		ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - 32.0f) * 0.5f));
 		if (s_logoTexture) {
@@ -378,13 +378,13 @@ static void renderAppShell() {
 			cursor_x += 32.0f + 8.0f; // 32px image + 8px padding (CSS: padding: 0 0 3px 40px — 40px includes 32px icon + 8px gap)
 		}
 
-		// "wow.export" text at 25px bold
+		// "wow.export.cpp" text at 25px bold
 		ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - 25.0f) * 0.5f));
 		// Push bold font at 25px (CSS: #logo span { font-size: 25px; font-weight: 700; })
 		{
 			ImFont* bold = app::theme::getBoldFont();
 			ImGui::PushFont(bold, 25.0f);
-			ImGui::TextUnformatted("wow.export");
+			ImGui::TextUnformatted("wow.export.cpp");
 			if (ImGui::IsItemClicked()) {
 				if (core::view) {
 					if (core::view->installType == static_cast<int>(install_type::MPQ))
@@ -642,7 +642,7 @@ static void renderAppShell() {
 				{ "Website", "https://www.kruithne.net/wow.export/" },
 				{ "Discord", "https://discord.gg/kC3EzAYBtf" },
 				{ "Patreon", "https://patreon.com/Kruithne" },
-				{ "GitHub", "https://github.com/Kruithne/wow.export" }
+				{ "GitHub", "https://github.com/NathanNatNat/wow.export.cpp" }
 			};
 
 			// Calculate total width of links line for centering
@@ -2337,7 +2337,7 @@ int main(int argc, char* argv[]) {
 #endif
 
 	// Append the application version to the title bar.
-	std::string windowTitle = std::format("wow.export v{}", constants::VERSION);
+	std::string windowTitle = std::format("wow.export.cpp v{}", constants::VERSION);
 	GLFWwindow* window = glfwCreateWindow(1280, 720, windowTitle.c_str(), nullptr, nullptr);
 	if (!window) {
 		crash("ERR_WINDOW_CREATE", "Failed to create GLFW window");
@@ -2425,7 +2425,7 @@ int main(int argc, char* argv[]) {
 
 	// register static context menu options
 	modules::registerContextMenuOption("runtime-log", "Open Runtime Log", "timeline.svg", []() { logging::openRuntimeLog(); });
-	modules::registerContextMenuOption("restart", "Restart wow.export", "arrow-rotate-left.svg", []() { app::restartApplication(); });
+	modules::registerContextMenuOption("restart", "Restart wow.export.cpp", "arrow-rotate-left.svg", []() { app::restartApplication(); });
 	modules::registerContextMenuOption("settings", "Settings", "gear.svg", []() { modules::setActive("settings"); });
 	modules::registerContextMenuOption("reload-style", "Reload Styling", "palette.svg", []() { app::reloadStylesheet(); }, true);
 	modules::registerContextMenuOption("reload-shaders", "Reload Shaders", "cube.svg", []() { shaders::reload_all(); }, true);
@@ -2433,7 +2433,7 @@ int main(int argc, char* argv[]) {
 	modules::registerContextMenuOption("reload-all", "Reload All Modules", "gear.svg", []() { modules::reloadAllModules(); }, true);
 
 	// Log some basic information for potential diagnostics.
-	logging::write(std::format("wow.export has started v{}", constants::VERSION));
+	logging::write(std::format("wow.export.cpp has started v{}", constants::VERSION));
 	logging::write(std::format("Host {} ({}), CPU {} ({} cores), Memory {} / {}",
 		getPlatformName(), getArchName(), getCPUModel(), getCPUCoreCount(),
 		generics::filesize(static_cast<double>(getFreeMemory())),

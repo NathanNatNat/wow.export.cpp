@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
-project(wow_export
+project(wow_export_cpp
     VERSION 0.1.0
     LANGUAGES C CXX
-    DESCRIPTION "wow.export — WoW game-data export tool (C++ port)"
+    DESCRIPTION "wow.export.cpp — WoW game-data export tool (C++ port)"
 )
 
 # ── Force x64 architecture ──────────────────────────────────────
 # Reject any non-64-bit configuration early.
 if(CMAKE_SIZEOF_VOID_P AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
     message(FATAL_ERROR
-        "wow.export requires a 64-bit (x64) build. "
+        "wow.export.cpp requires a 64-bit (x64) build. "
         "Detected pointer size: ${CMAKE_SIZEOF_VOID_P} bytes. "
         "Please select an x64 toolchain / preset."
     )
@@ -18,7 +18,7 @@ endif()
 # On MSVC, verify the target processor architecture.
 if(MSVC AND DEFINED CMAKE_VS_PLATFORM_NAME AND NOT CMAKE_VS_PLATFORM_NAME STREQUAL "x64")
     message(FATAL_ERROR
-        "wow.export requires x64. Current platform: ${CMAKE_VS_PLATFORM_NAME}. "
+        "wow.export.cpp requires x64. Current platform: ${CMAKE_VS_PLATFORM_NAME}. "
         "Use an x64 preset or pass -A x64."
     )
 endif()
@@ -36,8 +36,8 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type" FORCE)
 endif()
 
-# ── Visual Studio: set wow_export as the startup project ──────
-set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT wow_export)
+# ── Visual Studio: set wow_export_cpp as the startup project ──────
+set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT wow_export_cpp)
 
 # ── Git submodule check ─────────────────────────────────────────
 # Verify all required submodules are initialized and populated.
@@ -197,14 +197,14 @@ target_include_directories(miniaudio INTERFACE extern/miniaudio)
 #  Main executable
 # ════════════════════════════════════════════════════════════════
 
-add_executable(wow_export src/app.cpp)
+add_executable(wow_export_cpp src/app.cpp)
 
-target_include_directories(wow_export PRIVATE
+target_include_directories(wow_export_cpp PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/src/js
 )
 
-target_link_libraries(wow_export PRIVATE
+target_link_libraries(wow_export_cpp PRIVATE
     # Windowing & rendering
     glfw
     glad_gl_core_46
@@ -230,61 +230,61 @@ target_link_libraries(wow_export PRIVATE
 
 # Platform-specific link dependencies
 if(WIN32)
-    target_link_libraries(wow_export PRIVATE ws2_32 crypt32)
+    target_link_libraries(wow_export_cpp PRIVATE ws2_32 crypt32)
 elseif(UNIX)
     find_package(Threads REQUIRED)
-    target_link_libraries(wow_export PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+    target_link_libraries(wow_export_cpp PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
 endif()
 
 # ── Copy runtime resources to the build output directory ───────
 # The application locates resources relative to the executable directory
 # under a "data" subdirectory (constants::DATA_DIR = <exe_dir>/data).
 # After every build, mirror the project's data/ tree next to the binary.
-add_custom_command(TARGET wow_export POST_BUILD
+add_custom_command(TARGET wow_export_cpp POST_BUILD
     # data/shaders/  →  <exe_dir>/data/shaders/
     COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:wow_export>/data/shaders"
+        "$<TARGET_FILE_DIR:wow_export_cpp>/data/shaders"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/data/shaders"
-        "$<TARGET_FILE_DIR:wow_export>/data/shaders"
+        "$<TARGET_FILE_DIR:wow_export_cpp>/data/shaders"
 
     # data/fa-icons/  →  <exe_dir>/data/fa-icons/
     COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:wow_export>/data/fa-icons"
+        "$<TARGET_FILE_DIR:wow_export_cpp>/data/fa-icons"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/data/fa-icons"
-        "$<TARGET_FILE_DIR:wow_export>/data/fa-icons"
+        "$<TARGET_FILE_DIR:wow_export_cpp>/data/fa-icons"
 
     # data/images/  →  <exe_dir>/data/images/
     COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:wow_export>/data/images"
+        "$<TARGET_FILE_DIR:wow_export_cpp>/data/images"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/data/images"
-        "$<TARGET_FILE_DIR:wow_export>/data/images"
+        "$<TARGET_FILE_DIR:wow_export_cpp>/data/images"
 
     # data/fonts/  →  <exe_dir>/data/fonts/
     COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:wow_export>/data/fonts"
+        "$<TARGET_FILE_DIR:wow_export_cpp>/data/fonts"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/data/fonts"
-        "$<TARGET_FILE_DIR:wow_export>/data/fonts"
+        "$<TARGET_FILE_DIR:wow_export_cpp>/data/fonts"
 
     # data/icons/  →  <exe_dir>/data/icons/
     COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:wow_export>/data/icons"
+        "$<TARGET_FILE_DIR:wow_export_cpp>/data/icons"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/data/icons"
-        "$<TARGET_FILE_DIR:wow_export>/data/icons"
+        "$<TARGET_FILE_DIR:wow_export_cpp>/data/icons"
 
     # data/default_config.jsonc  →  <exe_dir>/data/
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_SOURCE_DIR}/data/default_config.jsonc"
-        "$<TARGET_FILE_DIR:wow_export>/data/default_config.jsonc"
+        "$<TARGET_FILE_DIR:wow_export_cpp>/data/default_config.jsonc"
 
     # data/app.css  →  <exe_dir>/data/
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_SOURCE_DIR}/data/app.css"
-        "$<TARGET_FILE_DIR:wow_export>/data/app.css"
+        "$<TARGET_FILE_DIR:wow_export_cpp>/data/app.css"
 
     COMMENT "Copying runtime resources to data/ directory"
 )
