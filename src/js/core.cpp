@@ -22,6 +22,7 @@
 #include "mpq/mpq-install.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <ctime>
 #include <format>
@@ -165,8 +166,18 @@ static std::vector<DropHandler> dropHandlers;
 static std::unordered_map<std::string, ScrollPosition> scrollPositions;
 
 // internal progress state for loading screen api
-static int loading_progress_segments = 1;
-static int loading_progress_value = 0;
+// These are written by showLoadingScreen / progressLoadingScreen which
+// run on the CASC loading background thread.  Using atomics for formal
+// correctness (no concurrent writers, but the main thread could
+// theoretically call showLoadingScreen for a different purpose).
+static std::atomic<int> loading_progress_segments{1};
+static std::atomic<int> loading_progress_value{0};
+
+// ─── Main-thread task queue ──────────────────────────────────────
+// Thread-safe queue for posting work from background threads to the
+// main thread.  The main loop drains this once per frame.
+static std::mutex s_mainQueueMutex;
+static std::vector<std::function<void()>> s_mainQueue;
 
 AppState makeNewView() {
 	AppState state;
@@ -303,38 +314,46 @@ BusyLock create_busy_lock() {
 
 /**
  * Show loading screen with specified number of progress steps.
+ * Thread-safe: posts UI state changes to the main-thread queue.
  */
 void showLoadingScreen(int segments, const std::string& title) {
 	loading_progress_segments = segments;
 	loading_progress_value = 0;
-	view->loadPct = 0;
-	view->loadingTitle = title;
-	view->isLoading = true;
-	view->isBusy++;
+	postToMainThread([segments, title]() {
+		view->loadPct = 0;
+		view->loadingTitle = title;
+		view->isLoading = true;
+		view->isBusy++;
+	});
 }
 
 /**
  * Advance loading screen progress by one step.
+ * Thread-safe: posts UI state changes to the main-thread queue.
  */
 void progressLoadingScreen(const std::string& text) {
 	loading_progress_value++;
-	view->loadPct = std::min(
+	double newPct = std::min(
 		static_cast<double>(loading_progress_value) / loading_progress_segments, 1.0
 	);
 
-	if (!text.empty())
-		view->loadingProgress = text;
-
-	generics::redraw();
+	postToMainThread([newPct, progressText = text]() {
+		view->loadPct = newPct;
+		if (!progressText.empty())
+			view->loadingProgress = progressText;
+	});
 }
 
 /**
  * Hide loading screen.
+ * Thread-safe: posts UI state changes to the main-thread queue.
  */
 void hideLoadingScreen() {
-	view->loadPct = -1;
-	view->isLoading = false;
-	view->isBusy--;
+	postToMainThread([]() {
+		view->loadPct = -1;
+		view->isLoading = false;
+		view->isBusy--;
+	});
 }
 
 /**
@@ -457,6 +476,27 @@ std::optional<ScrollPosition> getScrollPosition(const std::string& key) {
 		return std::nullopt;
 
 	return it->second;
+}
+
+/**
+ * Post a task to be executed on the main thread.
+ */
+void postToMainThread(std::function<void()> task) {
+	std::lock_guard lock(s_mainQueueMutex);
+	s_mainQueue.push_back(std::move(task));
+}
+
+/**
+ * Drain and execute all tasks posted via postToMainThread().
+ */
+void drainMainThreadQueue() {
+	std::vector<std::function<void()>> tasks;
+	{
+		std::lock_guard lock(s_mainQueueMutex);
+		tasks.swap(s_mainQueue);
+	}
+	for (auto& task : tasks)
+		task();
 }
 
 } // namespace core

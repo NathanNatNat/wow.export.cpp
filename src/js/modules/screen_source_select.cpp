@@ -154,6 +154,9 @@ static SourceType active_source_type = SourceType::None;
 // Background thread for cache collection (replaces JS Worker).
 static std::unique_ptr<std::jthread> cache_worker_thread;
 
+// Background thread for CASC loading (prevents main-thread blocking).
+static std::unique_ptr<std::jthread> casc_load_thread;
+
 // CDN ping results collected by the background thread.
 struct CdnPingResult {
 	size_t index;     // region index in cdnRegions array
@@ -251,63 +254,103 @@ void load_install(int index) {
 			recent_local.erase(recent_local.size() - 1);
 	}
 
-	try {
-		if (active_source_type == SourceType::Local && casc_local_source) {
-			casc_local_source->load(index);
+	// Stop any previous CASC load thread before starting a new one.
+	casc_load_thread.reset();
 
-			// JS: if (casc_source instanceof CASCLocal && this.$core.view.config.allowCacheCollection) { ... }
-			// JS: Worker for cache-collector.
-			if (core::view->config.value("allowCacheCollection", false)) {
-				if (!core::view->config.contains("machineId") || !core::view->config["machineId"].is_string()
-					|| core::view->config["machineId"].get<std::string>().empty()) {
-					core::view->config["machineId"] = generate_uuid();
-				}
+	if (active_source_type == SourceType::Local && casc_local_source) {
+		// Capture raw pointer — the unique_ptr remains alive for the
+		// lifetime of the source_select module, which outlives the thread.
+		casc::CASCLocal* src = casc_local_source.get();
 
-				cache_collector::WorkerConfig wconfig;
-				wconfig.install_path = casc_local_source->dir;
-				wconfig.machine_id = core::view->config["machineId"].get<std::string>();
-				wconfig.submit_url = std::string(constants::CACHE::SUBMIT_URL);
-				wconfig.finalize_url = std::string(constants::CACHE::FINALIZE_URL);
-				wconfig.user_agent = constants::USER_AGENT();
-				wconfig.state_path = constants::CACHE::STATE_FILE();
+		casc_load_thread = std::make_unique<std::jthread>([src, index]() {
+			try {
+				src->load(index);
 
-				// Stop any previous cache worker.
-				cache_worker_thread.reset();
+				// Post all completion actions to the main thread.
+				core::postToMainThread([src]() {
+					// Synchronize CASC result back to main thread.
+					core::view->casc = src;
 
-				cache_worker_thread = std::make_unique<std::jthread>([cfg = std::move(wconfig)]() {
-					try {
-						cache_collector::collect(cfg, [](const std::string& msg) {
-							logging::write(std::format("cache-collector: {}", msg));
+					// JS: if (casc_source instanceof CASCLocal && this.$core.view.config.allowCacheCollection) { ... }
+					// JS: Worker for cache-collector.
+					if (core::view->config.value("allowCacheCollection", false)) {
+						if (!core::view->config.contains("machineId") || !core::view->config["machineId"].is_string()
+							|| core::view->config["machineId"].get<std::string>().empty()) {
+							core::view->config["machineId"] = generate_uuid();
+						}
+
+						cache_collector::WorkerConfig wconfig;
+						wconfig.install_path = src->dir;
+						wconfig.machine_id = core::view->config["machineId"].get<std::string>();
+						wconfig.submit_url = std::string(constants::CACHE::SUBMIT_URL);
+						wconfig.finalize_url = std::string(constants::CACHE::FINALIZE_URL);
+						wconfig.user_agent = constants::USER_AGENT();
+						wconfig.state_path = constants::CACHE::STATE_FILE();
+
+						// Stop any previous cache worker.
+						cache_worker_thread.reset();
+
+						cache_worker_thread = std::make_unique<std::jthread>([cfg = std::move(wconfig)]() {
+							try {
+								cache_collector::collect(cfg, [](const std::string& msg) {
+									logging::write(std::format("cache-collector: {}", msg));
+								});
+							} catch (const std::exception& err) {
+								logging::write(std::format("cache-collector error: {}", err.what()));
+							}
 						});
-					} catch (const std::exception& err) {
-						logging::write(std::format("cache-collector error: {}", err.what()));
 					}
+
+					core::view->installType = install_type::CASC;
+					// JS: this.$modules.tab_home.setActive();
+					modules::set_active("tab_home");
+				});
+			} catch (const std::exception& e) {
+				std::string errMsg = e.what();
+				core::postToMainThread([errMsg = std::move(errMsg)]() {
+					logging::write(std::format("Failed to load CASC: {}", errMsg));
+					// JS: 'Visit Support Discord': () => ExternalLinks.open('::DISCORD') // Removed: external-links module deleted
+					core::setToast("error", "Unable to initialize CASC. Try repairing your game installation, or seek support.",
+						{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
+					// JS: this.$modules.source_select.setActive();
+					modules::set_active("source_select");
 				});
 			}
+		});
+	} else if (active_source_type == SourceType::Remote && casc_remote_source) {
+		casc::CASCRemote* src = casc_remote_source.get();
 
-			core::view->installType = install_type::CASC;
-			// JS: this.$modules.tab_home.setActive();
-			modules::set_active("tab_home");
-		} else if (active_source_type == SourceType::Remote && casc_remote_source) {
-			casc_remote_source->load(index);
+		casc_load_thread = std::make_unique<std::jthread>([src, index]() {
+			try {
+				src->load(index);
 
-			core::view->installType = install_type::CASC;
-			// JS: this.$modules.tab_home.setActive();
-			modules::set_active("tab_home");
-		}
-	} catch (const std::exception& e) {
-		logging::write(std::format("Failed to load CASC: {}", e.what()));
-		// JS: 'Visit Support Discord': () => ExternalLinks.open('::DISCORD') // Removed: external-links module deleted
-		core::setToast("error", "Unable to initialize CASC. Try repairing your game installation, or seek support.",
-			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
-		// JS: this.$modules.source_select.setActive();
-		modules::set_active("source_select");
+				core::postToMainThread([src]() {
+					// Synchronize CASC result back to main thread.
+					core::view->casc = src;
+					core::view->installType = install_type::CASC;
+					// JS: this.$modules.tab_home.setActive();
+					modules::set_active("tab_home");
+				});
+			} catch (const std::exception& e) {
+				std::string errMsg = e.what();
+				core::postToMainThread([errMsg = std::move(errMsg)]() {
+					logging::write(std::format("Failed to load CASC: {}", errMsg));
+					core::setToast("error", "Unable to initialize CASC. Try repairing your game installation, or seek support.",
+						{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
+					modules::set_active("source_select");
+				});
+			}
+		});
 	}
 }
 
 // JS: methods.open_local_install(install_path, product)
 void open_local_install(const std::string& install_path, const std::string& product) {
 	core::hideToast();
+
+	// Ensure any in-progress CASC loading thread is finished before
+	// replacing the source pointers it may reference.
+	casc_load_thread.reset();
 
 	auto& recent_local = core::view->config["recentLocal"];
 	if (!recent_local.is_array())
@@ -519,6 +562,10 @@ static void click_source_local_recent(const nlohmann::json& entry) {
 static void click_source_remote() {
 	if (core::view->isBusy)
 		return;
+
+	// Ensure any in-progress CASC loading thread is finished before
+	// replacing the source pointers it may reference.
+	casc_load_thread.reset();
 
 	BusyLock _lock = core::create_busy_lock();
 	std::string tag = core::view->selectedCDNRegion.value("tag", "us");

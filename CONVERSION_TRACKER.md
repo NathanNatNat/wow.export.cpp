@@ -552,33 +552,21 @@ Files with informational no-ops: `generics.cpp`, `modules.cpp`, `components/*.cp
 > See AUDIT_TRACKER.md "Performance-Critical Issues" section for detailed
 > analysis of each issue.
 
-### 10.1 Main Thread Blocking (Critical)
+### 10.1 Main Thread Blocking (Critical) — **RESOLVED**
 
 The entire CASC loading pipeline (`load()` in `casc-source-local.cpp` / `casc-source-remote.cpp`)
-runs synchronously on the main thread. In the JS app, `load()` is `async` and yields
-between each step, allowing the browser to render progress updates. In C++, the loading
-screen progress bar is set up but **never actually rendered** because the main thread
-is blocked.
+previously ran synchronously on the main thread. Now `load()` runs on a background
+`std::jthread` spawned from `screen_source_select::load_install()`. Progress updates
+are posted to the main thread via a thread-safe task queue (`core::postToMainThread`),
+which is drained once per frame (`core::drainMainThreadQueue`). The main loop
+continues rendering ImGui frames (including the loading screen with progress bar)
+while loading proceeds in the background. On completion, the CASC pointer and post-load
+actions are synchronized back to the main thread through the same queue.
 
-**Affected call chain:**
-```
-screen_source_select::load_install()          ← main thread, synchronous
-  └─ CASCLocal::load()                        ← synchronous
-       ├─ loadConfigs()                        ← file I/O, possible HTTP
-       ├─ loadIndexes()                        ← iterates all .idx files
-       ├─ loadEncoding()                       ← downloads + decompresses + parses encoding
-       ├─ loadRoot()                           ← downloads + decompresses + parses root
-       ├─ prepareListfile()                    ← downloads listfile from CDN
-       ├─ prepareDBDManifest()                 ← downloads DBD manifest
-       └─ loadListfile()                       ← parses millions of listfile entries
-```
-
-All of this runs without a single ImGui frame being rendered.
-
-- [ ] Move `load()` to a background thread (`std::jthread`)
-- [ ] Post progress updates to main thread via thread-safe queue
-- [ ] Main thread continues rendering ImGui frames (loading screen with progress bar)
-- [ ] Synchronize CASC result back to main thread when loading completes
+- [x] Move `load()` to a background thread (`std::jthread`)
+- [x] Post progress updates to main thread via thread-safe queue
+- [x] Main thread continues rendering ImGui frames (loading screen with progress bar)
+- [x] Synchronize CASC result back to main thread when loading completes
 
 ### 10.2 `batchWork()` Does Not Yield (Critical)
 

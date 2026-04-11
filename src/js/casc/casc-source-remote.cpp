@@ -345,8 +345,6 @@ void CASCRemote::load(int buildIndex) {
 	loadEncoding();
 	loadRoot();
 
-	core::view->casc = this;
-
 	prepareListfile();
 	prepareDBDManifest();
 	loadListfile(build["BuildConfig"]);

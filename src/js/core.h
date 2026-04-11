@@ -641,4 +641,17 @@ void saveScrollPosition(const std::string& key, double scrollRel, int scrollInde
  */
 std::optional<ScrollPosition> getScrollPosition(const std::string& key);
 
+/**
+ * Post a task to be executed on the main thread.
+ * Thread-safe: may be called from any thread.
+ * Tasks are drained once per frame by the main loop via drainMainThreadQueue().
+ */
+void postToMainThread(std::function<void()> task);
+
+/**
+ * Drain and execute all tasks posted via postToMainThread().
+ * Must be called from the main thread (once per frame in the main loop).
+ */
+void drainMainThreadQueue();
+
 } // namespace core
