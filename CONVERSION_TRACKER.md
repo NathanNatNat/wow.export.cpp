@@ -547,15 +547,15 @@ Files with informational no-ops: `generics.cpp`, `modules.cpp`, `components/*.cp
 > The conversion compiles and all integration phases are complete. The app shell
 > (header, footer, nav bar, toast, loading screen) is fully rendered. ImGui theme
 > colors are applied. The items below are **visual polish and layout fidelity** tasks
-> to make the C++ app match the original JS app pixel-for-pixel.
+> to make the C++ app visually match the original JS app.
 >
 > Most tab modules are functionally complete (all UI elements render) but use raw
 > `ImGui::BeginChild` with percentage widths instead of the shared `app::layout`
 > helpers that match the original CSS grid layouts. Migrating tabs to use the shared
 > layout helpers is the primary remaining layout work.
 >
-> ~68 `TODO(conversion)` comments remain across 22 files, mostly informational
-> no-ops documenting paradigm differences.
+> 68 `TODO(conversion)` comments remain across 22 files, mostly informational
+> no-ops documenting paradigm differences (count may change as work progresses).
 >
 > Priority order: **layout migration → remaining visual polish → export gaps → CI/testing**.
 
@@ -1000,7 +1000,7 @@ via `getQualityColor()` in `itemlistbox.cpp` and item icon file data IDs stored 
 - [x] Row 3: filter + controls
 - [x] Phase selector: dropdown/combo for selecting zone phases
 - [ ] Migrate from `BeginChild` 40% width to CSS-faithful `1.5fr 2fr` column layout
-- [ ] Expansion buttons should use expansion icons from `data/images/expansion/icon_*.webp` instead of text labels ("E0", "E1", etc.)
+- [ ] Expansion buttons should use expansion icon images instead of text labels — see section 9.29
 
 ### 9.29 Map/Zone Expansion Filter Row
 
@@ -1151,7 +1151,7 @@ items and toggleable config options. The menu is implemented in `app.cpp` via
 **Standard options (all builds):**
 - [x] "Open Runtime Log" menu item — opens the log file
 - [x] "Restart wow.export" menu item — triggers app restart
-- [ ] "Settings" menu item — should navigate to the settings screen (currently settings is a separate nav button, not in the dropdown)
+- [ ] "Settings" menu item — the original JS app has this in the dropdown; C++ currently navigates to settings via a separate nav button instead. Should be added to the dropdown menu for parity.
 - [ ] Config toggle items rendered as checkable menu items (not navigation): "Show File Data IDs", "Enable Shared Textures", "Show Unknown Files" — **NOT implemented** as toggleable checkbox menu items
 
 **Dev-only options (visible in Options Menu — Dev Build screenshot):**
@@ -1175,7 +1175,7 @@ has this implemented in `renderAppShell()` with GLFW drop callback support.
 - [x] Render file drop overlay when `fileDropPrompt` is set (rendered in `app.cpp` lines 977-1008)
 - [x] Overlay: semi-transparent background, centered icon + instructional text
 - [x] GLFW drop callback registered (`glfwSetDropCallback`) to handle file drops
-- [ ] GLFW does not support drag-enter/drag-leave events (only drop), so the overlay cannot appear before the file is dropped — the JS app shows the overlay on drag-enter. This is a platform limitation.
+- [ ] GLFW does not support drag-enter/drag-leave events (only drop), so the overlay cannot appear *before* the file is dropped — the JS app shows the overlay on drag-enter. This is an accepted platform limitation (documented as ACCEPTABLE deviation in AUDIT_TRACKER.md under systemic Browser & NW.js API translations).
 
 ### 9.44 M3 Texture Export (Conversion Gap)
 
