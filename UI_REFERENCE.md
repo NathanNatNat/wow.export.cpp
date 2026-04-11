@@ -108,3 +108,19 @@ The characters tab with the Settings panel selected in the bottom-right, showing
 The characters tab with the custom geoset selection panel open on the left, allowing toggling of individual geometry groups on the character model.
 
 ![Characters Tab — Custom Geoset Selection](https://github.com/user-attachments/assets/545ae7f4-a7ee-4a6e-8571-4b3d1803b0f7)
+
+---
+
+## Items Tab
+
+The items tab with an item selected, showing the 3D model preview and export controls.
+
+![Items Tab](https://github.com/user-attachments/assets/b4f3393b-705d-4d08-b208-0ec33ce00be3)
+
+---
+
+## Item Sets Tab
+
+The item sets tab showing grouped equipment sets with preview and export controls.
+
+![Item Sets Tab](https://github.com/user-attachments/assets/1a9c5d73-cc14-4256-9452-3e540a2f333e)
