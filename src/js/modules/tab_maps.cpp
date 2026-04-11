@@ -33,6 +33,7 @@ License: MIT
 #include "../components/context-menu.h"
 #include "../components/map-viewer.h"
 #include "../components/menu-button.h"
+#include "../../app.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1681,13 +1682,13 @@ view.mapViewerSelection.push_back(idx);
 {
 if (view.mapViewerHasWorldModel) {
 bool disabled = view.isBusy;
-if (disabled) ImGui::BeginDisabled();
+if (disabled) app::theme::BeginDisabledButton();
 if (ImGui::Button("Export Global WMO"))
 export_map_wmo();
 ImGui::SameLine();
 if (ImGui::Button("Export WMO Minimap"))
 export_map_wmo_minimap();
-if (disabled) ImGui::EndDisabled();
+if (disabled) app::theme::EndDisabledButton();
 }
 
 if (!view.mapViewerIsWMOMinimap) {
@@ -1698,7 +1699,7 @@ export_options.push_back({opt.label, opt.value});
 std::string default_format = view.config.value("exportMapFormat", "OBJ");
 bool export_disabled = view.isBusy || view.mapViewerSelection.empty();
 
-if (export_disabled) ImGui::BeginDisabled();
+if (export_disabled) app::theme::BeginDisabledButton();
 menu_button::render(
 "map-export-btn",
 export_options,
@@ -1713,7 +1714,7 @@ view.config["exportMapFormat"] = val;
 export_map();
 }
 );
-if (export_disabled) ImGui::EndDisabled();
+if (export_disabled) app::theme::EndDisabledButton();
 }
 }
 

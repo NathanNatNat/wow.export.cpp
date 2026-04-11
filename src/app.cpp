@@ -1726,6 +1726,9 @@ void applyTheme() {
 	style.WindowBorderSize  = 1.0f;
 	style.FrameBorderSize   = 0.0f;
 	style.PopupBorderSize   = 1.0f;
+
+	// Disabled-item alpha: CSS input[type=button].disabled { opacity: 0.5; }
+	style.DisabledAlpha     = 0.5f;
 }
 
 // ── Custom font loading ──────────────────────────────────────────

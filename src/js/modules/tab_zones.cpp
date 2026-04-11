@@ -22,6 +22,7 @@ License: MIT
 #include "../modules.h"
 #include "../components/context-menu.h"
 #include "../components/listbox-zones.h"
+#include "../../app.h"
 
 #include <webp/encode.h>
 
@@ -895,10 +896,10 @@ ImGui::SameLine();
 
 const bool busy = view.isBusy > 0;
 const bool no_selection = view.selectionZones.empty();
-if (busy || no_selection) ImGui::BeginDisabled();
+if (busy || no_selection) app::theme::BeginDisabledButton();
 if (ImGui::Button("Export Map"))
 export_zone_map();
-if (busy || no_selection) ImGui::EndDisabled();
+if (busy || no_selection) app::theme::EndDisabledButton();
 
 // Phase dropdown.
 // JS: <select v-model="$core.view.zonePhaseSelection">

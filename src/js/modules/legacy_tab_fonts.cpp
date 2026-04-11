@@ -14,6 +14,7 @@
 #include "../install-type.h"
 #include "../modules.h"
 #include "../mpq/mpq-install.h"
+#include "../../app.h"
 
 #include <cstring>
 #include <cmath>
@@ -307,10 +308,10 @@ void render() {
 	// JS: <div class="preview-controls">
 	//     <input type="button" value="Export Selected" @click="export_fonts" :class="{ disabled: isBusy }"/>
 	const bool busy = view.isBusy > 0;
-	if (busy) ImGui::BeginDisabled();
+	if (busy) app::theme::BeginDisabledButton();
 	if (ImGui::Button("Export Selected"))
 		export_fonts();
-	if (busy) ImGui::EndDisabled();
+	if (busy) app::theme::EndDisabledButton();
 
 	ImGui::EndGroup();
 }

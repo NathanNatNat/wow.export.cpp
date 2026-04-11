@@ -18,6 +18,7 @@
 #include "../components/listbox.h"
 #include "../components/context-menu.h"
 #include "../buffer.h"
+#include "../../app.h"
 
 #include <cstring>
 #include <format>
@@ -317,7 +318,7 @@ void render() {
 		view.userInputFilterRaw = filter_buf;
 
 	const bool busy = view.isBusy > 0;
-	if (busy) ImGui::BeginDisabled();
+	if (busy) app::theme::BeginDisabledButton();
 
 	if (ImGui::Button("Auto-Detect Selected"))
 		detect_raw_files();
@@ -327,7 +328,7 @@ void render() {
 	if (ImGui::Button("Export Selected"))
 		export_raw_files();
 
-	if (busy) ImGui::EndDisabled();
+	if (busy) app::theme::EndDisabledButton();
 }
 
 void detect_raw() {
