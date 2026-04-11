@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include <glad/gl.h>
 
 /**
  * Texture ribbon UI state management.
@@ -68,5 +69,19 @@ void setSlotSrc(int slotIndex, const std::string& src, int syncID);
  * @returns The index of the newly added slot.
  */
 int addSlot();
+
+/**
+ * Get or create an OpenGL texture for the given ribbon slot.
+ * Decodes the slot's data-URL src (base64 PNG) into an RGBA texture
+ * on first access, then caches the result.
+ * @param slotIndex Slot index in the ribbon stack.
+ * @returns GL texture ID, or 0 if no src is available.
+ */
+GLuint getSlotTexture(int slotIndex);
+
+/**
+ * Delete all cached slot textures.  Called automatically by reset().
+ */
+void clearSlotTextures();
 
 } // namespace texture_ribbon
