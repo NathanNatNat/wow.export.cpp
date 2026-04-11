@@ -229,8 +229,7 @@ void queue(const std::vector<T>& items,
 	while (complete < items.size()) {
 		// Launch up to 'limit' concurrent tasks
 		while (futures.size() < limit && index < items.size()) {
-			const T& item = items[index];
-			futures.push_back(std::async(std::launch::async, [&handler, &item]() {
+			futures.push_back(std::async(std::launch::async, [&handler, item = items[index]]() {
 				handler(item);
 			}));
 			index++;

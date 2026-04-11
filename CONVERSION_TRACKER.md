@@ -608,8 +608,8 @@ via `core::postToMainThread()` and drained each frame by `core::drainMainThreadQ
 The `queue()` function captures loop variables by reference in async lambdas.
 This may cause data races when items are invalidated by iterator advancement.
 
-- [ ] Audit lambda captures in `queue()` for correctness
-- [ ] Capture items by value instead of by reference
+- [x] Audit lambda captures in `queue()` for correctness
+- [x] Capture items by value instead of by reference
 
 ### 10.6 Data Race in `parseArchiveIndex` (Critical)
 
