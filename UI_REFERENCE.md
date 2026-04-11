@@ -228,3 +228,19 @@ The "Browse Install Manifest" tab, showing the install manifest file list.
 The "Browse Raw Client Files" tab, showing the raw file browser for exploring CASC data directly.
 
 ![Raw Client Files Tab](https://github.com/user-attachments/assets/264c226a-a884-4e3d-8de4-457228c997d3)
+
+---
+
+## Settings Screen
+
+The full settings screen, shown across multiple screenshots to capture the entire scrollable page. Settings include export directory, character save directory, scroll speed, file list ordering, unknown files, model skins, bone prefixes, shared textures/children, and more.
+
+![Settings Screen — Top](https://github.com/user-attachments/assets/3159072d-1168-4cd6-999a-405665a04883)
+
+![Settings Screen — Upper Middle](https://github.com/user-attachments/assets/be93641d-815a-47d4-9ffb-9ce2dc691cf9)
+
+![Settings Screen — Middle](https://github.com/user-attachments/assets/b07a5fff-1307-4f23-bfe2-9800197dcb74)
+
+![Settings Screen — Lower Middle](https://github.com/user-attachments/assets/e7e1cb11-5399-49a8-9789-30292a8feb8f)
+
+![Settings Screen — Bottom](https://github.com/user-attachments/assets/421f7185-e519-4071-b694-70e60d4dd908)
