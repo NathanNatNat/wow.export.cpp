@@ -114,7 +114,7 @@ std::vector<uint8_t> doHttpGet(const std::string& url,
 	if (!res)
 		throw std::runtime_error(std::format("HTTP request failed for {}: {}", url, httplib::to_string(res.error())));
 
-	if (res->status < 200 || res->status > 302)
+	if (res->status < 200 || res->status >= 300)
 		throw std::runtime_error(std::format("Status Code: {}", res->status));
 
 	const auto& body = res->body;
@@ -279,7 +279,12 @@ std::optional<nlohmann::json> parseJSON(std::string_view data) {
 nlohmann::json getJSON(const std::string& url) {
 	auto data = get(url);
 	std::string_view sv(reinterpret_cast<const char*>(data.data()), data.size());
-	return nlohmann::json::parse(sv);
+
+	auto json = nlohmann::json::parse(sv, nullptr, false);
+	if (json.is_discarded())
+		throw std::runtime_error("Unable to request JSON from end-point");
+
+	return json;
 }
 
 /**
