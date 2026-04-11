@@ -137,15 +137,19 @@ bool addKey(std::string_view keyName, std::string_view key) {
 	std::string lowerName = toLower(keyName);
 	std::string lowerKey = toLower(key);
 
+	bool needsSave = false;
 	{
 		std::lock_guard<std::mutex> lock(keyRingMutex);
 		auto it = KEY_RING.find(lowerName);
 		if (it == KEY_RING.end() || it->second != lowerKey) {
 			KEY_RING[lowerName] = lowerKey;
 			logging::write(std::format("Registered new decryption key {} -> {}", lowerName, lowerKey));
-			save();
+			needsSave = true;
 		}
 	}
+
+	if (needsSave)
+		save();
 
 	return true;
 }
