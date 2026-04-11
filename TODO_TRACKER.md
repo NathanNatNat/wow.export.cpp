@@ -32,7 +32,9 @@
 - **Status**: Pending
 - **Details**: Entire Vue component needs to be ported to ImGui. Renders markdown content used in changelogs and help screens. Handles headers, links, images, bold, italic, code blocks, and lists.
 
-## CASC Files (Audited — Issues Below)
+## CASC Files (Audited)
+
+Note: 17 other CASC files (blte-stream-reader, build-cache, cdn-config, cdn-resolver, content-flags, db2, dbd-manifest, export-helper, install-manifest, jenkins96, listfile, locale-flags, realmlist, salsa20, tact-keys, version-config, vp9-avi-demuxer) were audited and found to have no substantive issues.
 
 ### [blte-reader.cpp] Missing _checkBounds() override for lazy block decompression
 - **JS Source**: `src/js/casc/blte-reader.js` lines 311–321
@@ -53,6 +55,65 @@
 - **JS Source**: `src/js/casc/casc-source-local.js` line 179
 - **Status**: Pending
 - **Details**: The JS `load()` method sets `core.view.casc = this` between `loadRoot()` and `prepareListfile()`. This assignment is missing in the C++ `CASCLocal::load()`. Without it, the rest of the application has no reference to the active CASC source after loading completes locally. The C++ equivalent (e.g., `core::view->casc = this;`) must be added in the same position. Note: the same issue exists in `casc-source-remote.cpp` (JS line 290).
+
+## DB Cache Files (Audited — Issues Below)
+
+### [DBCharacterCustomization.cpp] Missing re-entrancy guard for concurrent initialization
+- **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 37–44
+- **Status**: Pending
+- **Details**: JS uses `init_promise` so concurrent callers await the same promise. C++ `ensureInitialized()` has no guard against concurrent calls — could initialize multiple times. Needs `std::once_flag` or mutex+condvar.
+
+### [DBCreatureDisplayExtra.cpp] ensureInitialized doesn't properly handle concurrent initialization
+- **JS Source**: `src/js/db/caches/DBCreatureDisplayExtra.js` lines 16–23
+- **Status**: Pending
+- **Details**: JS stores and returns `init_promise` so concurrent callers await the same promise. C++ returns immediately if `is_initializing` is set, meaning a second caller gets uninitialized data. Needs `std::once_flag` or mutex+condvar.
+
+### [DBCreaturesLegacy.cpp] Missing error stack trace logging on catch
+- **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 95–96
+- **Status**: Pending
+- **Details**: JS catch logs both `e.message` and `e.stack`. C++ only logs `e.what()`, omitting the stack trace log line.
+
+### [DBDecorCategories.cpp] Incorrect skip logic for decor_id == 0 in mapping loop
+- **JS Source**: `src/js/db/caches/DBDecorCategories.js` lines 37–47
+- **Status**: Pending
+- **Details**: JS uses `row.HouseDecorID ?? row.DecorID` (nullish coalescing — falls through only if `undefined`, not `0`). C++ treats `0` as missing and falls through to `DecorID`, producing different behavior when `HouseDecorID` is explicitly `0`. The skip condition `decor_id == 0` also differs from JS's `decor_id === undefined`.
+
+### [DBModelFileData.cpp] Missing getFileDataIDs() reset behavior
+- **JS Source**: `src/js/db/caches/DBModelFileData.js` lines 42–50
+- **Status**: Pending
+- **Details**: JS resets `fileDataIDs` to `undefined` after first retrieval to free memory. C++ returns a persistent const reference and never clears the set.
+
+### [DBTextureFileData.cpp] Missing getFileDataIDs() reset behavior
+- **JS Source**: `src/js/db/caches/DBTextureFileData.js` lines 52–62
+- **Status**: Pending
+- **Details**: Same as DBModelFileData — JS resets after first call; C++ never clears.
+
+### [DBItemDisplays.cpp] Missing initializeModelFileData() call
+- **JS Source**: `src/js/db/caches/DBItemDisplays.js` lines 17–19
+- **Status**: Pending
+- **Details**: JS calls `await initializeModelFileData()` at the start. C++ calls `DBTextureFileData::ensureInitialized()` but does **not** call `DBModelFileData::initializeModelFileData()`. Model data may not be loaded when needed.
+
+### [DBItems.cpp] Missing classID/subclassID default initialization
+- **JS Source**: `src/js/db/caches/DBItems.js` lines 30–55
+- **Status**: Pending
+- **Details**: Items not in the `Item` table have `classID`/`subclassID` as `undefined` in JS. If C++ struct defaults to 0 instead of using `std::optional`, `isItemBow()` could incorrectly match items with classID=2/subclassID=2.
+
+## UI Helper Files (Audited — Issues Below)
+
+### [texture-exporter.cpp] Clipboard copies base64 text instead of PNG image data
+- **JS Source**: `src/js/ui/texture-exporter.js` CLIPBOARD export branch
+- **Status**: In Progress
+- **Details**: C++ uses `ImGui::SetClipboardText(base64)` (text). JS uses `clipboard.set(png, 'png', true)` (actual image data). Users can't paste-as-image.
+
+### [texture-ribbon.cpp] Missing context menu event handlers and page navigation
+- **JS Source**: `src/js/ui/texture-ribbon.js` event handlers
+- **Status**: Pending
+- **Details**: JS registers handlers for `click-texture-ribbon-next/prev` and context menu interactions. C++ has no `initEvents()` or equivalent; page navigation and context menu logic appear missing.
+
+### [uv-drawer.cpp] Returns raw pixels instead of data URL
+- **JS Source**: `src/js/ui/uv-drawer.js` `generateUVLayerDataURL()`
+- **Status**: In Progress
+- **Details**: JS returns a canvas data URL string. C++ returns raw RGBA pixels. All call sites must handle this difference correctly.
 
 ## Component Files (Audit Incomplete — Needs Detailed Review)
 
@@ -75,17 +136,7 @@
 - **Status**: Pending
 - **Details**: The following 3D files were not fully audited: AnimMapper, BoneMapper, GeosetMapper, ShaderMapper, Shaders, Skin, Texture, WMOShaderMapper, camera/CameraControlsGL, camera/CharacterCameraControlsGL, exporters/ADTExporter, exporters/CharacterExporter, exporters/M2Exporter, exporters/M2LegacyExporter, exporters/M3Exporter, exporters/WMOExporter, exporters/WMOLegacyExporter, gl/GLContext, gl/GLTexture, gl/ShaderProgram, gl/UniformBuffer, gl/VertexArray, loaders/ADTLoader, loaders/ANIMLoader, loaders/BONELoader, loaders/LoaderGenerics, loaders/M2Generics, loaders/M2LegacyLoader, loaders/M2Loader, loaders/M3Loader, loaders/MDXLoader, loaders/SKELLoader, loaders/WDTLoader, loaders/WMOLegacyLoader, loaders/WMOLoader, renderers/CharMaterialRenderer, renderers/GridRenderer, renderers/M2LegacyRendererGL, renderers/M2RendererGL, renderers/M3RendererGL, renderers/MDXRendererGL, renderers/ShadowPlaneRenderer, renderers/WMOLegacyRendererGL, renderers/WMORendererGL, writers/CSVWriter, writers/GLBWriter, writers/GLTFWriter, writers/JSONWriter, writers/MTLWriter, writers/OBJWriter, writers/SQLWriter, writers/STLWriter.
 
-## DB, UI, MPQ, Workers, WoW Files (Audit Incomplete — Needs Detailed Review)
-
-### [db/**/*.cpp] Database files need line-by-line audit
-- **JS Source**: `src/js/db/**/*.js` (all files)
-- **Status**: Pending
-- **Details**: The following DB files were not fully audited: CompressionType, DBCReader, DBDParser, FieldType, WDCReader, and all 18 db/caches files (DBCharacterCustomization, DBComponentModelFileData, DBComponentTextureFileData, DBCreatureDisplayExtra, DBCreatureList, DBCreatures, DBCreaturesLegacy, DBDecor, DBDecorCategories, DBGuildTabard, DBItemCharTextures, DBItemDisplays, DBItemGeosets, DBItemModels, DBItems, DBModelFileData, DBNpcEquipment, DBTextureFileData).
-
-### [ui/*.cpp] UI helper files need line-by-line audit
-- **JS Source**: `src/js/ui/*.js` (all files)
-- **Status**: Pending
-- **Details**: The following UI files were not fully audited: audio-helper, char-texture-overlay, character-appearance, data-exporter, listbox-context, model-viewer-utils, texture-exporter, texture-ribbon, uv-drawer.
+## MPQ, Workers Files (Audit Incomplete — Needs Detailed Review)
 
 ### [mpq/*.cpp] MPQ files need line-by-line audit
 - **JS Source**: `src/js/mpq/*.js` (all files)
