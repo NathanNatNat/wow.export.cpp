@@ -404,13 +404,15 @@ void createDirectory(const std::filesystem::path& dir) {
 
 /**
  * Returns after a redraw.
- * TODO(conversion): In C++ (ImGui), this is a no-op since ImGui redraws every frame.
+ * JS uses requestAnimationFrame to yield until the next frame paints.
+ * In C++ this is a no-op: CASC loading runs on a background std::jthread so
+ * the main loop keeps rendering every frame.  Progress updates are posted to
+ * the main thread via core::postToMainThread() and drained each frame by
+ * core::drainMainThreadQueue().
  */
 void redraw() {
-	// In ImGui, the main loop redraws every frame.  With CASC loading
-	// running on a background thread, the main loop keeps rendering
-	// while progress updates are posted via core::postToMainThread().
-	// No explicit redraw trigger is needed.
+	// No-op — the main ImGui loop redraws every frame while background
+	// threads handle heavy work (CASC loading, listfile scanning, etc.).
 }
 
 /**

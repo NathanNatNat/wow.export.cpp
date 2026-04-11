@@ -170,8 +170,8 @@ std::string formatPlaybackSeconds(double seconds);
 
 /**
  * Returns after a redraw.
- * In C++ (ImGui), this is a no-op since CASC loading runs on a
- * background thread and the main loop keeps rendering every frame.
+ * No-op in C++: CASC loading runs on a background std::jthread, so the
+ * main ImGui loop keeps rendering.  See generics.cpp for full rationale.
  */
 void redraw();
 
