@@ -76,3 +76,35 @@ The textures tab with file list, texture preview, and export controls.
 The textures tab with the "Atlas Regions" option enabled, showing region overlays on the texture preview.
 
 ![Textures Tab — Atlas Regions](https://github.com/user-attachments/assets/e0bc21de-e8dd-4651-9a19-a4ee4078f809)
+
+---
+
+## Characters Tab — Export Panel
+
+The characters tab with character selection options on the left (race, gender, skin color, etc.), 3D preview in the center, and the Export panel selected in the bottom-right. Note: dropdown options are populated from the database.
+
+![Characters Tab — Export](https://github.com/user-attachments/assets/da6d1ff2-f4be-42f5-ad11-19f62c3efd53)
+
+---
+
+## Characters Tab — Textures Panel
+
+The characters tab with the Textures panel selected in the bottom-right, showing texture file list and export options.
+
+![Characters Tab — Textures](https://github.com/user-attachments/assets/826989f8-0dba-42d4-a2b0-01148872e816)
+
+---
+
+## Characters Tab — Settings Panel
+
+The characters tab with the Settings panel selected in the bottom-right, showing model display settings.
+
+![Characters Tab — Settings](https://github.com/user-attachments/assets/972a530b-c380-40fc-9ae8-6f23344c1ac3)
+
+---
+
+## Characters Tab — Custom Geoset Selection
+
+The characters tab with the custom geoset selection panel open on the left, allowing toggling of individual geometry groups on the character model.
+
+![Characters Tab — Custom Geoset Selection](https://github.com/user-attachments/assets/545ae7f4-a7ee-4a6e-8571-4b3d1803b0f7)
