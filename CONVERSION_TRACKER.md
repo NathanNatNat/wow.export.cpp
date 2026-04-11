@@ -624,9 +624,9 @@ which creates REAL parallel OS threads.
 
 This is **undefined behavior** (data race on shared containers from multiple threads).
 
-- [ ] Add `std::mutex` protection to `archives` map writes in `parseArchiveIndex()`
-- [ ] Add `std::mutex` protection to `BuildCache::getFile()` and `storeFile()`
-- [ ] Or: have each thread return parsed entries, merge on main thread after all futures complete
+- [x] Add `std::mutex` protection to `archives` map writes in `parseArchiveIndex()`
+- [x] Add `std::mutex` protection to `BuildCache::getFile()` and `storeFile()`
+- [ ] ~~Or: have each thread return parsed entries, merge on main thread after all futures complete~~
 
 ---
 

@@ -28,6 +28,7 @@ namespace casc {
 // Module-level state: cache integrity hash map.
 static nlohmann::json cacheIntegrity;
 static bool cacheIntegrityLoaded = false;
+static std::mutex cacheIntegrityMutex;
 
 /**
  * Returns the current timestamp in milliseconds since epoch (Date.now() equivalent).
@@ -75,6 +76,8 @@ std::optional<BufferWrapper> BuildCache::getFile(const std::string& file, const 
 		const fs::path filePath = getFilePath(file, dir);
 		const std::string filePathStr = filePath.string();
 
+		std::lock_guard<std::mutex> lock(cacheIntegrityMutex);
+
 		// Cache integrity is not loaded yet, reject.
 		if (!cacheIntegrityLoaded) {
 			logging::write(std::format("Cannot verify integrity of file, cache integrity not loaded ({})", filePathStr));
@@ -117,16 +120,21 @@ void BuildCache::storeFile(const std::string& file, BufferWrapper& data, const s
 	if (!dir.empty())
 		generics::createDirectory(filePath.parent_path());
 
-	// Cache integrity is not loaded yet, initialize an empty map.
-	if (!cacheIntegrityLoaded) {
-		logging::write("Cache integrity not loaded, initializing empty integrity map.");
-		cacheIntegrity = nlohmann::json::object();
-		cacheIntegrityLoaded = true;
-	}
-
 	// Integrity checking.
 	const std::string hash = data.calculateHash("sha1", "hex");
-	cacheIntegrity[filePath.string()] = hash;
+
+	{
+		std::lock_guard<std::mutex> lock(cacheIntegrityMutex);
+
+		// Cache integrity is not loaded yet, initialize an empty map.
+		if (!cacheIntegrityLoaded) {
+			logging::write("Cache integrity not loaded, initializing empty integrity map.");
+			cacheIntegrity = nlohmann::json::object();
+			cacheIntegrityLoaded = true;
+		}
+
+		cacheIntegrity[filePath.string()] = hash;
+	}
 
 	data.writeToFile(filePath);
 	core::view->cacheSize += static_cast<int64_t>(data.byteLength());
@@ -135,6 +143,7 @@ void BuildCache::storeFile(const std::string& file, BufferWrapper& data, const s
 }
 
 void BuildCache::saveCacheIntegrity() {
+	std::lock_guard<std::mutex> lock(cacheIntegrityMutex);
 	std::ofstream ofs(constants::CACHE::INTEGRITY_FILE());
 	if (ofs.is_open())
 		ofs << cacheIntegrity.dump();

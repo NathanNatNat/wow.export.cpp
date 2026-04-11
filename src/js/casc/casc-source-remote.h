@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <optional>
 #include <memory>
+#include <mutex>
 
 #include "casc-source.h"
 #include "build-cache.h"
@@ -213,6 +214,7 @@ public:
 	};
 
 	std::unordered_map<std::string, ArchiveEntry> archives;
+	mutable std::mutex archivesMutex;
 	std::string region;
 	std::string host;
 	std::vector<std::unordered_map<std::string, std::string>> builds;

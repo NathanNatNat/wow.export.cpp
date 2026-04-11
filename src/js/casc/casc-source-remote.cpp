@@ -518,6 +518,10 @@ void CASCRemote::parseArchiveIndex(const std::string& key) {
 
 	data.seek(0); // Reset position.
 
+	// Parse entries into a local vector to avoid contention on the shared map.
+	std::vector<std::pair<std::string, ArchiveEntry>> localEntries;
+	localEntries.reserve(count);
+
 	for (int32_t i = 0; i < count; i++) {
 		std::string hash = data.readHexString(16);
 
@@ -525,7 +529,14 @@ void CASCRemote::parseArchiveIndex(const std::string& key) {
 		if (hash == EMPTY_HASH)
 			hash = data.readHexString(16);
 
-		archives[hash] = { key, data.readInt32BE(), data.readInt32BE() };
+		localEntries.emplace_back(std::move(hash), ArchiveEntry{ key, data.readInt32BE(), data.readInt32BE() });
+	}
+
+	// Merge local entries into the shared archives map under lock.
+	{
+		std::lock_guard<std::mutex> lock(archivesMutex);
+		for (auto& [hash, entry] : localEntries)
+			archives[std::move(hash)] = std::move(entry);
 	}
 }
 

@@ -8,6 +8,7 @@
 #include <string>
 #include <filesystem>
 #include <optional>
+#include <mutex>
 
 #include <nlohmann/json.hpp>
 
