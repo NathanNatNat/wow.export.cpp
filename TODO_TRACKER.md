@@ -32,7 +32,7 @@
 - **Status**: Pending
 - **Details**: Entire Vue component needs to be ported to ImGui. Renders markdown content used in changelogs and help screens. Handles headers, links, images, bold, italic, code blocks, and lists.
 
-## CASC Files (Audit Incomplete — Needs Detailed Review)
+## CASC Files (Audited — Issues Below)
 
 ### [blte-reader.cpp] Missing _checkBounds() override for lazy block decompression
 - **JS Source**: `src/js/casc/blte-reader.js` lines 311–321
@@ -44,10 +44,15 @@
 - **Status**: Pending
 - **Details**: JS queue() uses Promise-based concurrency which is single-threaded (event loop). C++ queue() uses real std::async threads. 50 concurrent threads write to unprotected std::unordered_map `archives` and call BuildCache methods without mutex. Needs mutex protection or thread-safe container.
 
-### [casc-source-remote.cpp] Remaining 20 CASC files need line-by-line audit
-- **JS Source**: `src/js/casc/*.js` (all files)
+### [casc-source.cpp] `getFileByName` drops parameters and does not return decoded data
+- **JS Source**: `src/js/casc/casc-source.js` lines 169–195
 - **Status**: Pending
-- **Details**: The following CASC files were not fully audited against their JS originals due to time constraints: blte-stream-reader, build-cache, casc-source-local, casc-source, cdn-config, cdn-resolver, content-flags, db2, dbd-manifest, export-helper, install-manifest, jenkins96, listfile, locale-flags, realmlist, salsa20, tact-keys, version-config, vp9-avi-demuxer. Each needs a detailed line-by-line comparison.
+- **Details**: In JS, `getFileByName` calls `this.getFile(fileDataID, partialDecrypt, suppressLog, supportFallback, forceFallback)` which polymorphically dispatches to the subclass `getFile` (CASCLocal/CASCRemote) that accepts all 5+ parameters and returns decoded file data (a BLTEReader). In C++, `getFileByName` accepts these parameters but silently drops them, calling only `getFile(fileDataID)` which returns an encoding key string. The C++ subclasses provide `getFileAsBLTE` instead of overriding `getFile`, and there is no `getFileByNameAsBLTE` equivalent. When callers are converted (tab_maps, tab_fonts, tab_audio, tab_videos, tab_text, tab_raw all reference `getFileByName`), this function will not deliver decoded data as expected.
+
+### [casc-source-local.cpp] Missing `core.view.casc = this` assignment in `load()`
+- **JS Source**: `src/js/casc/casc-source-local.js` line 179
+- **Status**: Pending
+- **Details**: The JS `load()` method sets `core.view.casc = this` between `loadRoot()` and `prepareListfile()`. This assignment is missing in the C++ `CASCLocal::load()`. Without it, the rest of the application has no reference to the active CASC source after loading completes locally. The C++ equivalent (e.g., `core::view->casc = this;`) must be added in the same position. Note: the same issue exists in `casc-source-remote.cpp` (JS line 290).
 
 ## Component Files (Audit Incomplete — Needs Detailed Review)
 
