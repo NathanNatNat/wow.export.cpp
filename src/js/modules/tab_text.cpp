@@ -74,9 +74,16 @@ void render() {
 		}
 	}
 
-	// List container with context menu.
-	ImGui::BeginChild("text-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.4f, 0), ImGuiChildFlags_Borders);
-	{
+	// JS: <div class="tab list-tab" id="tab-text">
+	if (app::layout::BeginTab("tab-text")) {
+
+	auto regions = app::layout::CalcListTabRegions(false);
+
+	// --- Left panel: List container (row 1, col 1) ---
+	// JS: <div class="list-container">
+	//     <Listbox v-model:selection="selectionText" :items="listfileText" ...>
+	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
+	if (app::layout::BeginListContainer("text-list-container", regions)) {
 		// Convert JSON items/selection to string vectors.
 		std::vector<std::string> items_str;
 		items_str.reserve(view.listfileText.size());
@@ -150,41 +157,58 @@ void render() {
 			}
 		);
 	}
-	ImGui::EndChild();
+	app::layout::EndListContainer();
 
-	ImGui::SameLine();
+	// --- Filter bar (row 2, col 1) ---
+	// JS: <div class="filter">
+	if (app::layout::BeginFilterBar("text-filter", regions)) {
+		if (view.config.value("regexFilters", false))
+			ImGui::TextUnformatted("Regex Enabled");
 
-	// Right side — filter, preview, controls.
-	ImGui::BeginGroup();
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterText.c_str(), sizeof(filter_buf) - 1);
+		if (ImGui::InputText("##FilterText", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterText = filter_buf;
+	}
+	app::layout::EndFilterBar();
 
-	// Filter.
-	if (view.config.value("regexFilters", false))
-		ImGui::TextUnformatted("Regex Enabled");
+	// --- Right panel: Preview container (row 1, col 2) ---
+	// JS: <div class="preview-container">
+	//     <div class="preview-background"><pre>{{ textViewerSelectedText }}</pre></div>
+	if (app::layout::BeginPreviewContainer("text-preview-container", regions)) {
+		// CSS: .preview-background { background: var(--background-dark) }
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, app::theme::BG_DARK);
+		ImGui::BeginChild("text-preview-background", ImVec2(0, 0), ImGuiChildFlags_None);
 
-	char filter_buf[256] = {};
-	std::strncpy(filter_buf, view.userInputFilterText.c_str(), sizeof(filter_buf) - 1);
-	if (ImGui::InputText("##FilterText", filter_buf, sizeof(filter_buf)))
-		view.userInputFilterText = filter_buf;
+		// TODO(conversion): Use a monospace font here when one is loaded into the font atlas.
+		// CSS: <pre> renders in the browser's default monospace font.
+		// JS: <pre>{{ $core.view.textViewerSelectedText }}</pre>
+		ImGui::TextWrapped("%s", view.textViewerSelectedText.c_str());
 
-	// Preview container.
-	ImGui::BeginChild("text-preview-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-	// JS: <pre>{{ $core.view.textViewerSelectedText }}</pre>
-	ImGui::TextWrapped("%s", view.textViewerSelectedText.c_str());
-	ImGui::EndChild();
+		ImGui::EndChild();
+		ImGui::PopStyleColor();
+	}
+	app::layout::EndPreviewContainer();
 
-	// Preview controls.
-	if (ImGui::Button("Copy to Clipboard"))
-		copy_text();
+	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
+	// JS: <div class="preview-controls">
+	if (app::layout::BeginPreviewControls("text-preview-controls", regions)) {
+		if (ImGui::Button("Copy to Clipboard"))
+			copy_text();
 
-	ImGui::SameLine();
+		ImGui::SameLine();
 
-	const bool busy = view.isBusy > 0;
-	if (busy) app::theme::BeginDisabledButton();
-	if (ImGui::Button("Export Selected"))
-		export_text();
-	if (busy) app::theme::EndDisabledButton();
+		const bool busy = view.isBusy > 0;
+		if (busy) app::theme::BeginDisabledButton();
+		if (ImGui::Button("Export Selected"))
+			export_text();
+		if (busy) app::theme::EndDisabledButton();
+	}
+	app::layout::EndPreviewControls();
 
-	ImGui::EndGroup();
+	} // if BeginTab
+	app::layout::EndTab();
 }
 
 void copy_text() {
