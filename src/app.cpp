@@ -2344,6 +2344,11 @@ int main(int argc, char* argv[]) {
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
+		// Drain the main-thread task queue.  Background threads (e.g.
+		// CASC loading) post tasks here so that all shared-state
+		// mutations happen on the main thread.
+		core::drainMainThreadQueue();
+
 		// Debugging reloader.
 		if (!BUILD_RELEASE) {
 			if (glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS) {

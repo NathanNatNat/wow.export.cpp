@@ -406,8 +406,10 @@ void createDirectory(const std::filesystem::path& dir) {
  * TODO(conversion): In C++ (ImGui), this is a no-op since ImGui redraws every frame.
  */
 void redraw() {
-	// TODO(conversion): In ImGui, the main loop redraws every frame.
-	// This is a no-op placeholder for JS compatibility.
+	// In ImGui, the main loop redraws every frame.  With CASC loading
+	// running on a background thread, the main loop keeps rendering
+	// while progress updates are posted via core::postToMainThread().
+	// No explicit redraw trigger is needed.
 }
 
 /**

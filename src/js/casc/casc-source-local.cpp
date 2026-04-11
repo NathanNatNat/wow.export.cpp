@@ -241,8 +241,6 @@ void CASCLocal::load(int buildIndex) {
 	loadEncoding();
 	loadRoot();
 
-	core::view->casc = this;
-
 	prepareListfile();
 	prepareDBDManifest();
 	loadListfile(build["BuildKey"]);
