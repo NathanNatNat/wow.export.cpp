@@ -1982,6 +1982,163 @@ static void checkWatchers(GLFWwindow* window) {
 	}
 }
 
+// ── Tab layout helpers (app::layout) ─────────────────────────────
+// Maps CSS grid patterns from app.css to ImGui child windows.
+
+app::layout::ListTabRegions app::layout::CalcListTabRegions(bool hasSidebar, float colRatio) {
+	ListTabRegions r{};
+	r.hasSidebar = hasSidebar;
+
+	const ImVec2 avail = ImGui::GetContentRegionAvail();
+	const ImVec2 cursor = ImGui::GetCursorPos();
+
+	// Reserve sidebar width from the right edge if present.
+	const float sidebarW = hasSidebar ? SIDEBAR_WIDTH : 0.0f;
+	const float gridW = avail.x - sidebarW;
+	const float gridH = avail.y;
+
+	// Two columns: left = colRatio, right = 1-colRatio
+	const float leftColW = gridW * colRatio;
+	const float rightColW = gridW * (1.0f - colRatio);
+
+	// Two rows: row 1 = remaining, row 2 = FILTER_BAR_HEIGHT
+	const float bottomH = FILTER_BAR_HEIGHT;
+	const float topH = gridH - bottomH;
+
+	// ── List container (row 1, column 1) ──
+	// .list-container { margin: 20px 10px 0 20px }
+	r.listPos = ImVec2(cursor.x + LIST_MARGIN_LEFT, cursor.y + LIST_MARGIN_TOP);
+	r.listSize = ImVec2(
+		leftColW - LIST_MARGIN_LEFT - LIST_MARGIN_RIGHT,
+		topH - LIST_MARGIN_TOP - LIST_MARGIN_BOTTOM
+	);
+
+	// ── Preview container (row 1, column 2) ──
+	// .preview-container { margin: 20px 20px 0 10px; grid-row: 1; grid-column: 2 }
+	r.previewPos = ImVec2(cursor.x + leftColW + PREVIEW_MARGIN_LEFT, cursor.y + PREVIEW_MARGIN_TOP);
+	r.previewSize = ImVec2(
+		rightColW - PREVIEW_MARGIN_LEFT - PREVIEW_MARGIN_RIGHT,
+		topH - PREVIEW_MARGIN_TOP - PREVIEW_MARGIN_BOTTOM
+	);
+
+	// ── Filter bar (row 2, column 1) ──
+	// .filter { display: flex; align-items: center; grid-column: 1; grid-row: 2 }
+	r.filterPos = ImVec2(cursor.x, cursor.y + topH);
+	r.filterSize = ImVec2(leftColW, bottomH);
+
+	// ── Preview controls (row 2, column 2) ──
+	// .preview-controls { display: flex; justify-content: flex-end; grid-column: 2; grid-row: 2 }
+	r.controlsPos = ImVec2(cursor.x + leftColW, cursor.y + topH);
+	r.controlsSize = ImVec2(rightColW, bottomH);
+
+	// ── Sidebar (column 3, spanning both rows) ──
+	if (hasSidebar) {
+		// .sidebar { grid-column: 3; width: 210px; grid-row: 1/span 2; margin-top: 20px; padding-right: 20px }
+		r.sidebarPos = ImVec2(cursor.x + gridW, cursor.y + SIDEBAR_MARGIN_TOP);
+		r.sidebarSize = ImVec2(
+			SIDEBAR_WIDTH - SIDEBAR_PADDING_RIGHT,
+			gridH - SIDEBAR_MARGIN_TOP
+		);
+	}
+
+	return r;
+}
+
+bool app::layout::BeginTab(const char* id) {
+	// .tab { position: absolute; top: 0; left: 0; right: 0; bottom: 0 }
+	// Fills the entire content region, no borders, no scrollbar by default.
+	ImVec2 avail = ImGui::GetContentRegionAvail();
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+	bool visible = ImGui::BeginChild(id, avail, ImGuiChildFlags_None,
+	    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	ImGui::PopStyleVar(); // WindowPadding
+	return visible;
+}
+
+void app::layout::EndTab() {
+	ImGui::EndChild();
+}
+
+bool app::layout::BeginListContainer(const char* id, const ListTabRegions& regions) {
+	ImGui::SetCursorPos(regions.listPos);
+	return ImGui::BeginChild(id, regions.listSize, ImGuiChildFlags_None);
+}
+
+void app::layout::EndListContainer() {
+	ImGui::EndChild();
+}
+
+bool app::layout::BeginPreviewContainer(const char* id, const ListTabRegions& regions) {
+	ImGui::SetCursorPos(regions.previewPos);
+	return ImGui::BeginChild(id, regions.previewSize, ImGuiChildFlags_None);
+}
+
+void app::layout::EndPreviewContainer() {
+	ImGui::EndChild();
+}
+
+bool app::layout::BeginFilterBar(const char* id, const ListTabRegions& regions) {
+	ImGui::SetCursorPos(regions.filterPos);
+
+	// Vertically center content within the filter bar.
+	// .filter input { margin: 0 10px 0 20px } — apply left/right margins.
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f, 0.0f));
+	bool visible = ImGui::BeginChild(id, regions.filterSize, ImGuiChildFlags_None,
+	    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+	// Vertically center: push cursor to (height - item_height) / 2
+	if (visible) {
+		float itemH = ImGui::GetFrameHeight();
+		float padY = (regions.filterSize.y - itemH) * 0.5f;
+		if (padY > 0.0f)
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
+	}
+
+	ImGui::PopStyleVar(); // WindowPadding
+	return visible;
+}
+
+void app::layout::EndFilterBar() {
+	ImGui::EndChild();
+}
+
+bool app::layout::BeginPreviewControls(const char* id, const ListTabRegions& regions) {
+	ImGui::SetCursorPos(regions.controlsPos);
+
+	// .preview-controls { margin-right: 20px }
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	bool visible = ImGui::BeginChild(id, regions.controlsSize, ImGuiChildFlags_None,
+	    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	ImGui::PopStyleVar(); // WindowPadding
+
+	if (visible) {
+		// Vertically center content within the controls bar.
+		// Right-alignment (CSS justify-content: flex-end) is the caller's responsibility.
+		float itemH = ImGui::GetFrameHeight();
+		float padY = (regions.controlsSize.y - itemH) * 0.5f;
+		if (padY > 0.0f)
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
+	}
+
+	return visible;
+}
+
+void app::layout::EndPreviewControls() {
+	ImGui::EndChild();
+}
+
+bool app::layout::BeginSidebar(const char* id, const ListTabRegions& regions) {
+	if (!regions.hasSidebar)
+		return false;
+
+	ImGui::SetCursorPos(regions.sidebarPos);
+	return ImGui::BeginChild(id, regions.sidebarSize, ImGuiChildFlags_None);
+}
+
+void app::layout::EndSidebar() {
+	ImGui::EndChild();
+}
+
 // ── Main entry point ─────────────────────────────────────────────
 
 int main(int argc, char* argv[]) {

@@ -781,13 +781,13 @@ currently render as flat sequential ImGui widgets without proper grid/split layo
 .preview-controls       → display: flex; justify-content: flex-end; grid-column: 2; grid-row: 2
 ```
 
-- [ ] Create a shared tab layout helper that establishes the full-area child window for each tab (`.tab` equivalent)
-- [ ] Create a shared list-tab layout helper that splits into left list + right preview + bottom bar (`.tab.list-tab` equivalent)
-- [ ] Create a shared sidebar layout helper that renders a 210px right column (`.sidebar` equivalent)
-- [ ] Create shared `.list-container` layout: 20px margin, position within left grid column
-- [ ] Create shared `.preview-container` layout: 20px margin, centered content, right grid column
-- [ ] Create shared `.filter` bar: flex row at bottom of left column, input + buttons
-- [ ] Create shared `.preview-controls` bar: flex row at bottom of right column, right-aligned buttons
+- [x] Create a shared tab layout helper that establishes the full-area child window for each tab (`.tab` equivalent)
+- [x] Create a shared list-tab layout helper that splits into left list + right preview + bottom bar (`.tab.list-tab` equivalent)
+- [x] Create a shared sidebar layout helper that renders a 210px right column (`.sidebar` equivalent)
+- [x] Create shared `.list-container` layout: 20px margin, position within left grid column
+- [x] Create shared `.preview-container` layout: 20px margin, centered content, right grid column
+- [x] Create shared `.filter` bar: flex row at bottom of left column, input + buttons
+- [x] Create shared `.preview-controls` bar: flex row at bottom of right column, right-aligned buttons
 
 ### 9.14 Home Tab Layout (`#tab-home`)
 

@@ -320,3 +320,182 @@ GLuint loadSvgTexture(const std::filesystem::path& path, int size);
 GLuint loadImageTexture(const std::filesystem::path& path, int* out_w = nullptr, int* out_h = nullptr);
 
 } // namespace app::theme
+
+/**
+ * Shared tab layout helpers — CSS grid-like layout for ImGui.
+ *
+ * Maps the standard layout patterns from app.css (.tab, .tab.list-tab,
+ * .sidebar, .list-container, .preview-container, .filter, .preview-controls)
+ * into ImGui Begin/End child-window helpers.
+ *
+ * Usage:
+ *   if (app::layout::BeginTab("my-tab")) {
+ *       auto regions = app::layout::CalcListTabRegions();
+ *       if (app::layout::BeginListContainer("list", regions)) {
+ *           // render list...
+ *           app::layout::EndListContainer();
+ *       }
+ *       if (app::layout::BeginPreviewContainer("preview", regions)) {
+ *           // render preview...
+ *           app::layout::EndPreviewContainer();
+ *       }
+ *       if (app::layout::BeginFilterBar("filter", regions)) {
+ *           // render filter input + buttons...
+ *           app::layout::EndFilterBar();
+ *       }
+ *       if (app::layout::BeginPreviewControls("controls", regions)) {
+ *           // render export buttons...
+ *           app::layout::EndPreviewControls();
+ *       }
+ *   }
+ *   app::layout::EndTab();
+ */
+namespace app::layout {
+
+// ── Constants matching app.css layout values ─────────────────────
+
+// .tab.list-tab { grid-template-rows: 1fr 60px }
+inline constexpr float FILTER_BAR_HEIGHT  = 60.0f;
+
+// .sidebar { width: 210px }
+inline constexpr float SIDEBAR_WIDTH      = 210.0f;
+
+// .list-container { margin: 20px 10px 0 20px }
+inline constexpr float LIST_MARGIN_TOP    = 20.0f;
+inline constexpr float LIST_MARGIN_RIGHT  = 10.0f;
+inline constexpr float LIST_MARGIN_BOTTOM = 0.0f;
+inline constexpr float LIST_MARGIN_LEFT   = 20.0f;
+
+// .preview-container { margin: 20px 20px 0 10px }
+inline constexpr float PREVIEW_MARGIN_TOP    = 20.0f;
+inline constexpr float PREVIEW_MARGIN_RIGHT  = 20.0f;
+inline constexpr float PREVIEW_MARGIN_BOTTOM = 0.0f;
+inline constexpr float PREVIEW_MARGIN_LEFT   = 10.0f;
+
+// .preview-controls { margin-right: 20px }
+inline constexpr float CONTROLS_MARGIN_RIGHT = 20.0f;
+
+// .sidebar { margin-top: 20px; padding-right: 20px }
+inline constexpr float SIDEBAR_MARGIN_TOP    = 20.0f;
+inline constexpr float SIDEBAR_PADDING_RIGHT = 20.0f;
+
+/**
+ * Calculated regions for a list-tab grid layout.
+ * Populated by CalcListTabRegions() and consumed by the Begin* helpers.
+ */
+struct ListTabRegions {
+	// Left column: list area (row 1)
+	ImVec2 listPos;
+	ImVec2 listSize;
+
+	// Right column: preview area (row 1)
+	ImVec2 previewPos;
+	ImVec2 previewSize;
+
+	// Bottom-left: filter bar (row 2, column 1)
+	ImVec2 filterPos;
+	ImVec2 filterSize;
+
+	// Bottom-right: preview controls (row 2, column 2)
+	ImVec2 controlsPos;
+	ImVec2 controlsSize;
+
+	// Optional sidebar (column 3, spanning both rows)
+	bool hasSidebar = false;
+	ImVec2 sidebarPos;
+	ImVec2 sidebarSize;
+};
+
+/**
+ * Calculate grid regions for a list-tab layout.
+ *
+ * Divides the current content region into a 2-column grid matching
+ * `.tab.list-tab { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 60px }`.
+ * When hasSidebar is true, a 210px third column is reserved on the right.
+ *
+ * @param hasSidebar  Reserve a 210px sidebar column on the right.
+ * @param colRatio    Ratio of left column width to total (default 0.5 = 1fr 1fr).
+ * @return Calculated regions (positions relative to the current window).
+ */
+ListTabRegions CalcListTabRegions(bool hasSidebar = false, float colRatio = 0.5f);
+
+/**
+ * Begin a full-area tab child window (`.tab` equivalent).
+ *
+ * Creates a borderless, no-scroll child window that fills the entire
+ * content region, matching `.tab { position: absolute; top/left/right/bottom: 0 }`.
+ *
+ * Must be paired with EndTab().
+ * @return true if the child window is visible (same as ImGui::BeginChild).
+ */
+bool BeginTab(const char* id);
+
+/**
+ * End the full-area tab child window.
+ */
+void EndTab();
+
+/**
+ * Begin the list container region (`.list-container` equivalent).
+ *
+ * Creates a child window at the calculated list position with
+ * margins: 20px top, 10px right, 0 bottom, 20px left.
+ *
+ * Must be paired with EndListContainer().
+ */
+bool BeginListContainer(const char* id, const ListTabRegions& regions);
+void EndListContainer();
+
+/**
+ * Begin the preview container region (`.preview-container` equivalent).
+ *
+ * Creates a child window at the calculated preview position with
+ * margins: 20px top, 20px right, 0 bottom, 10px left.
+ *
+ * The CSS original uses `display: flex; align-items: center; justify-content: center`
+ * to center content. In ImGui's immediate mode, the caller is responsible for
+ * centering content within this region (e.g. using SetCursorPos with size math).
+ *
+ * Must be paired with EndPreviewContainer().
+ */
+bool BeginPreviewContainer(const char* id, const ListTabRegions& regions);
+void EndPreviewContainer();
+
+/**
+ * Begin the filter bar region (`.filter` equivalent).
+ *
+ * Creates a 60px-tall child window at the bottom of the left column.
+ * Items are vertically centered within the bar (flex align-items: center).
+ *
+ * Must be paired with EndFilterBar().
+ */
+bool BeginFilterBar(const char* id, const ListTabRegions& regions);
+void EndFilterBar();
+
+/**
+ * Begin the preview controls region (`.preview-controls` equivalent).
+ *
+ * Creates a 60px-tall child window at the bottom of the right column.
+ * Content is vertically centered within the bar.
+ *
+ * The CSS original uses `justify-content: flex-end` to right-align buttons.
+ * In ImGui's immediate mode, the caller is responsible for right-aligning
+ * widgets (e.g. `ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - totalW)`).
+ *
+ * Must be paired with EndPreviewControls().
+ */
+bool BeginPreviewControls(const char* id, const ListTabRegions& regions);
+void EndPreviewControls();
+
+/**
+ * Begin the sidebar region (`.sidebar` equivalent).
+ *
+ * Creates a 210px-wide child window on the right edge spanning both rows.
+ * margin-top: 20px, padding-right: 20px.
+ *
+ * Must be paired with EndSidebar().
+ */
+bool BeginSidebar(const char* id, const ListTabRegions& regions);
+void EndSidebar();
+
+} // namespace app::layout
