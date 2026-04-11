@@ -168,3 +168,19 @@ The maps tab with a map section selected, showing the tile map viewer with selec
 The maps tab when there is only a WMO (no terrain tiles), showing the WMO-only export view.
 
 ![Maps Tab - WMO Only](https://github.com/user-attachments/assets/93fc6baa-0912-445e-afbf-95fd5fcf7846)
+
+---
+
+## Zones Tab
+
+The zones tab with a zone map loaded, showing the zone image viewer with navigation and export controls.
+
+![Zones Tab](https://github.com/user-attachments/assets/0e0190ac-9541-4642-b052-158400ec7124)
+
+---
+
+## Text Tab
+
+The text tab showing the text file list with search/filter and file preview.
+
+![Text Tab](https://github.com/user-attachments/assets/17bc8831-c9c7-4677-a744-bf20c1664efb)
