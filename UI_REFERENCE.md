@@ -203,17 +203,13 @@ The data tab with a data table loaded, showing column headers and row data.
 
 ![Data Tab - Table Loaded](https://github.com/user-attachments/assets/a182bd36-058c-408d-be1a-be70326df55f)
 
-The data tab showing the settings menu in the top right corner. **Note:** this settings/options dropdown menu is persistent across all tabs — it is not specific to the data tab. It appears whenever the gear icon in the header bar is clicked.
-
-![Data Tab - Settings Menu](https://github.com/user-attachments/assets/99310ff8-76e4-486a-af7a-1c4a3cf417e9)
-
 ---
 
-## Options Menu — Dev Build
+## Options Dropdown
 
-The options/settings menu in the top right corner, shown with a dev build. Dev builds expose additional options not available in release builds.
+Options Dropdown menu (This image is just to show the drop down menu in the top right, the dropdown can be used in any tab).
 
-![Options Menu — Dev Build](https://github.com/user-attachments/assets/9b6e1ccb-7ee1-4423-92be-95fee72f8daf)
+![Options Dropdown Menu](https://github.com/user-attachments/assets/9b6e1ccb-7ee1-4423-92be-95fee72f8daf)
 
 ---
 
