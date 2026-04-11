@@ -87,6 +87,7 @@ Map Node.js built-in modules to project dependencies as follows:
 - Conversions must be fully comprehensive — every line, every function, method, constant, code path, and UI element from the JS source must be ported.
 - The C++ conversion MUST be 100% identical in functionality and visual appearance to the original JavaScript code. Nothing may be left as a stub or omitted.
 - Always do a thorough comparison against the original JS source when making changes or reviewing code.
+- **Existing C++ code is not assumed correct.** Much of the codebase has already been converted, but previous conversions may contain errors, omissions, or deviations from the original JS source. When working on any file, always verify the existing C++ code against the original JS and fix any issues found.
 - Deviations from the original JS Source are NOT ACCEPTABLE unless impossible to implement in C++. In such cases, the deviation must be documented with a comment in the code explaining why it was necessary and how it differs from the original JS behavior.
 - Things that need to be done should be documented in TODO_TRACKER.md with a reference to the original JS source line(s) that require attention.
 
