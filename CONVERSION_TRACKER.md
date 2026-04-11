@@ -1031,7 +1031,7 @@ with custom draw list calls for selection highlighting and a custom 8px scrollba
 - [x] Right column (sidebar): geoset checkboxes, WMO group checkboxes
 - [x] Category mask: collapsible sections with subcategory checkboxes
 - [x] Bottom row (60px): export buttons
-- [ ] Migrate from `BeginChild` percentage widths to shared `app::layout` helpers (`CalcListTabRegions(true)`) for CSS grid fidelity
+- [x] Migrate from `BeginChild` percentage widths to shared `app::layout` helpers (`CalcListTabRegions(true)`) for CSS grid fidelity
 
 ### 9.25 Characters Tab Layout (`#tab-characters`)
 

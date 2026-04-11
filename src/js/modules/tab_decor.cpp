@@ -5,6 +5,7 @@
  */
 
 #include "tab_decor.h"
+#include "../../app.h"
 #include "../log.h"
 #include "../core.h"
 #include "../casc/export-helper.h"
@@ -836,13 +837,15 @@ void render() {
 	// ─── Template rendering ─────────────────────────────────────────────────
 
 	// JS: <div class="tab list-tab" id="tab-decor">
+	if (app::layout::BeginTab("tab-decor")) {
 
-	// --- Left panel: List container ---
+	auto regions = app::layout::CalcListTabRegions(true);
+
+	// --- Left panel: List container (row 1, col 1) ---
 	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionDecor" v-model:filter="userInputFilterDecor"
 	//         :items="listfileDecor" ... @contextmenu="handle_listbox_context" />
-	ImGui::BeginChild("decor-list-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
-	{
+	if (app::layout::BeginListContainer("decor-list-container", regions)) {
 		std::vector<std::string> items_str;
 		items_str.reserve(view.listfileDecor.size());
 		for (const auto& item : view.listfileDecor)
@@ -887,22 +890,22 @@ void render() {
 			}
 		);
 	}
+	app::layout::EndListContainer();
 
+	// --- Filter bar (row 2, col 1) ---
 	// JS: <input type="text" v-model="$core.view.userInputFilterDecor" placeholder="Filter decor..."/>
-	{
+	if (app::layout::BeginFilterBar("decor-filter", regions)) {
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterDecor.c_str(), sizeof(filter_buf) - 1);
 		if (ImGui::InputText("##FilterDecor", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterDecor = filter_buf;
 	}
+	app::layout::EndFilterBar();
 
-	ImGui::EndChild();
-
-	ImGui::SameLine();
-
-	// --- Middle panel: Preview container ---
+	// --- Middle panel: Preview container (row 1, col 2) ---
 	// JS: <div class="preview-container">
-	ImGui::BeginChild("decor-preview-container", ImVec2(ImGui::GetContentRegionAvail().x * 0.65f, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
+	if (app::layout::BeginPreviewContainer("decor-preview-container", regions)) {
 
 	// JS: <component :is="$components.ResizeLayer" id="texture-ribbon" v-if="config.modelViewerShowTextures && textureRibbonStack.length > 0">
 	if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
@@ -1132,10 +1135,14 @@ void render() {
 		}
 	}
 
+	}
+	app::layout::EndPreviewContainer();
+
+	// --- Bottom: Export controls (row 2, col 2) ---
 	// JS: <div class="preview-controls">
 	//     <MenuButton :options="menuButtonDecor" :default="config.exportDecorFormat" ... @click="export_decor"/>
 	// </div>
-	{
+	if (app::layout::BeginPreviewControls("decor-preview-controls", regions)) {
 		std::vector<menu_button::MenuOption> mb_options;
 		for (const auto& opt : view.menuButtonDecor)
 			mb_options.push_back({ opt.label, opt.value });
@@ -1145,14 +1152,11 @@ void render() {
 			[&](const std::string& val) { view.config["exportDecorFormat"] = val; },
 			[&]() { export_decor(); });
 	}
+	app::layout::EndPreviewControls();
 
-	ImGui::EndChild(); // decor-preview-container
-
-	ImGui::SameLine();
-
-	// --- Right panel: Sidebar ---
+	// --- Right panel: Sidebar (col 3, spanning both rows) ---
 	// JS: <div id="decor-sidebar" class="sidebar">
-	ImGui::BeginChild("decor-sidebar", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
+	if (app::layout::BeginSidebar("decor-sidebar", regions)) {
 
 	// JS: <span class="header">Categories</span>
 	ImGui::SeparatorText("Categories");
@@ -1334,7 +1338,8 @@ void render() {
 		}
 	}
 
-	ImGui::EndChild(); // decor-sidebar
+	}
+	app::layout::EndSidebar();
 
 	// --- Listbox context menu popup ---
 	// JS: <ContextMenu :node="contextMenus.nodeListbox" ...>
@@ -1366,6 +1371,9 @@ void render() {
 			ImGui::EndPopup();
 		}
 	}
+
+	} // if BeginTab
+	app::layout::EndTab();
 }
 
 } // namespace tab_decor
