@@ -1023,7 +1023,16 @@ void render() {
 					std::string slotDisplayName = slot.value("displayName", std::string(""));
 
 					ImGui::PushID(si);
-					ImGui::Button(slotDisplayName.c_str(), ImVec2(64, 0));
+					GLuint slotTex = texture_ribbon::getSlotTexture(si);
+					if (slotTex != 0) {
+						ImGui::ImageButton("##ribbon_slot",
+							static_cast<ImTextureID>(static_cast<uintptr_t>(slotTex)),
+							ImVec2(64, 64));
+					} else {
+						ImGui::Button(slotDisplayName.c_str(), ImVec2(64, 64));
+					}
+					if (ImGui::IsItemHovered())
+						ImGui::SetTooltip("%s", slotDisplayName.c_str());
 					ImGui::PopID();
 					ImGui::SameLine();
 				}

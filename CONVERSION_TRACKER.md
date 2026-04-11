@@ -827,11 +827,11 @@ The 3D model viewer tabs show a horizontal texture ribbon strip below the viewpo
 displaying thumbnail previews of the model's textures. This is visible in the
 M2 Model Loaded and Creatures Tab screenshots.
 
-- [ ] Render texture ribbon below 3D viewport: horizontal strip of texture thumbnails
-- [ ] Ribbon pagination: left/right arrow buttons when textures exceed visible slot count
-- [ ] Texture slot rendering: small square thumbnail for each texture, clickable to select
-- [ ] Ribbon visibility: only show when `config.modelViewerShowTextures` is true and `textureRibbonStack` is non-empty
-- [ ] Ribbon width: fills the model viewer column width, slot count adapts to available space
+- [x] Render texture ribbon below 3D viewport: horizontal strip of texture thumbnails
+- [x] Ribbon pagination: left/right arrow buttons when textures exceed visible slot count
+- [x] Texture slot rendering: small square thumbnail for each texture, clickable to select
+- [x] Ribbon visibility: only show when `config.modelViewerShowTextures` is true and `textureRibbonStack` is non-empty
+- [x] Ribbon width: fills the model viewer column width, slot count adapts to available space
 
 ### 9.17 Preview Area Empty States
 

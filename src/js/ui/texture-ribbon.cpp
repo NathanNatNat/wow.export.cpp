@@ -7,15 +7,24 @@
 #include "texture-ribbon.h"
 #include "../core.h"
 #include "../casc/listfile.h"
+#include "../buffer.h"
 
 #include <filesystem>
+#include <unordered_map>
 #include <nlohmann/json.hpp>
+#include <stb_image.h>
 
 namespace fs = std::filesystem;
 
 namespace texture_ribbon {
 
 static int _syncID = 0;
+
+// Cache of GL textures keyed by slot index.
+static std::unordered_map<int, GLuint> s_slotTextures;
+// Cache of the src string that produced the cached texture, so we can
+// detect when a slot's src has changed and re-upload.
+static std::unordered_map<int, std::string> s_slotSrcCache;
 
 /**
  * Invoked when the texture ribbon element resizes.
@@ -34,6 +43,7 @@ void onResize(int width) {
  * Reset the texture ribbon.
  */
 int reset() {
+	clearSlotTextures();
 	core::view->textureRibbonStack.clear();
 	core::view->textureRibbonPage = 0;
 	core::view->contextMenus.nodeTextureRibbon = nullptr;
@@ -121,6 +131,92 @@ int addSlot() {
 	stack.push_back(std::move(slot));
 
 	return slotIndex;
+}
+
+/**
+ * Delete all cached slot textures.
+ */
+void clearSlotTextures() {
+	for (auto& [idx, tex] : s_slotTextures) {
+		if (tex != 0)
+			glDeleteTextures(1, &tex);
+	}
+	s_slotTextures.clear();
+	s_slotSrcCache.clear();
+}
+
+/**
+ * Get or create an OpenGL texture for the given ribbon slot.
+ */
+GLuint getSlotTexture(int slotIndex) {
+	if (!core::view)
+		return 0;
+
+	auto& stack = core::view->textureRibbonStack;
+	if (slotIndex < 0 || slotIndex >= static_cast<int>(stack.size()))
+		return 0;
+
+	const auto& slot = stack[slotIndex];
+	std::string src = slot.value("src", std::string(""));
+	if (src.empty())
+		return 0;
+
+	// Check if we already have a cached texture for this slot with the same src.
+	auto texIt = s_slotTextures.find(slotIndex);
+	auto srcIt = s_slotSrcCache.find(slotIndex);
+	if (texIt != s_slotTextures.end() && srcIt != s_slotSrcCache.end() && srcIt->second == src)
+		return texIt->second;
+
+	// src changed or new slot — delete old texture if any.
+	if (texIt != s_slotTextures.end() && texIt->second != 0)
+		glDeleteTextures(1, &texIt->second);
+
+	// Strip the data-URL header to get the base64 payload.
+	// Format: "data:<mime>;base64,<payload>"
+	std::string_view sv(src);
+	auto commaPos = sv.find(',');
+	if (commaPos == std::string_view::npos) {
+		s_slotTextures[slotIndex] = 0;
+		s_slotSrcCache[slotIndex] = src;
+		return 0;
+	}
+	std::string_view b64 = sv.substr(commaPos + 1);
+
+	// Decode base64 → PNG bytes.
+	BufferWrapper pngBuf = BufferWrapper::fromBase64(b64);
+	if (pngBuf.byteLength() == 0) {
+		s_slotTextures[slotIndex] = 0;
+		s_slotSrcCache[slotIndex] = src;
+		return 0;
+	}
+
+	// Decode PNG → RGBA pixels via stb_image.
+	int w = 0, h = 0, channels = 0;
+	unsigned char* pixels = stbi_load_from_memory(
+		pngBuf.raw().data(), static_cast<int>(pngBuf.byteLength()),
+		&w, &h, &channels, 4);
+	if (!pixels) {
+		s_slotTextures[slotIndex] = 0;
+		s_slotSrcCache[slotIndex] = src;
+		return 0;
+	}
+
+	// Upload to GL texture.
+	GLuint tex = 0;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	stbi_image_free(pixels);
+
+	s_slotTextures[slotIndex] = tex;
+	s_slotSrcCache[slotIndex] = src;
+	return tex;
 }
 
 } // namespace texture_ribbon
