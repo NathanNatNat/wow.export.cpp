@@ -230,8 +230,27 @@ void render() {
 		compute_raw_files();
 	}
 
-	// List container with context menu.
-	ImGui::BeginChild("raw-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2), ImGuiChildFlags_Borders);
+	// JS: <div class="tab list-tab" id="tab-raw">
+	// CSS: #tab-raw { grid-template-columns: unset } — single column
+	// CSS: .tab.list-tab { grid-template-rows: 1fr 60px }
+	if (app::layout::BeginTab("tab-raw")) {
+
+	const ImVec2 avail = ImGui::GetContentRegionAvail();
+	const ImVec2 cursor = ImGui::GetCursorPos();
+	constexpr float FILTER_H = app::layout::FILTER_BAR_HEIGHT; // 60px
+	constexpr float MARGIN = 10.0f;
+
+	// --- List container (row 1, single column) ---
+	// JS: <div class="list-container">
+	// CSS: .list-container { margin: 20px 10px 0 20px }
+	const float listTopM = 20.0f;
+	const float listLeftM = 20.0f;
+	const float listRightM = 10.0f;
+	const float topH = avail.y - FILTER_H;
+
+	ImGui::SetCursorPos(ImVec2(cursor.x + listLeftM, cursor.y + listTopM));
+	ImGui::BeginChild("raw-list-container",
+		ImVec2(avail.x - listLeftM - listRightM, topH - listTopM));
 	{
 		// Convert JSON items/selection to string vectors.
 		std::vector<std::string> items_str;
@@ -308,27 +327,59 @@ void render() {
 	}
 	ImGui::EndChild();
 
-	// Tray.
-	if (view.config.value("regexFilters", false))
-		ImGui::TextUnformatted("Regex Enabled");
+	// --- Tray (row 2) ---
+	// JS: <div id="tab-raw-tray">
+	// CSS: #tab-raw-tray { display: flex; margin: 10px }
+	ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + topH));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(MARGIN, 0.0f));
+	ImGui::BeginChild("raw-tray", ImVec2(avail.x, FILTER_H), ImGuiChildFlags_None,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
+	// Vertically center content.
+	float padY = (FILTER_H - ImGui::GetFrameHeight()) * 0.5f;
+	if (padY > 0.0f)
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
+
+	// JS: <div class="filter"> — flex-grow: 1
+	if (view.config.value("regexFilters", false)) {
+		ImGui::TextUnformatted("Regex Enabled");
+		ImGui::SameLine();
+	}
+
+	const bool busy = view.isBusy > 0;
+
+	// Calculate button widths to give filter the remaining space.
+	float btnDetectW = ImGui::CalcTextSize("Auto-Detect Selected").x + ImGui::GetStyle().FramePadding.x * 2;
+	float btnExportW = ImGui::CalcTextSize("Export Selected").x + ImGui::GetStyle().FramePadding.x * 2;
+	// CSS: #tab-raw-tray input[type=button] { margin-right: 5px }
+	float buttonsW = btnDetectW + 5.0f + btnExportW + 5.0f;
+	float filterW = ImGui::GetContentRegionAvail().x - buttonsW;
+	if (filterW < 50.0f) filterW = 50.0f;
+
+	ImGui::SetNextItemWidth(filterW);
 	char filter_buf[256] = {};
 	std::strncpy(filter_buf, view.userInputFilterRaw.c_str(), sizeof(filter_buf) - 1);
 	if (ImGui::InputText("##FilterRaw", filter_buf, sizeof(filter_buf)))
 		view.userInputFilterRaw = filter_buf;
 
-	const bool busy = view.isBusy > 0;
+	ImGui::SameLine(0.0f, 5.0f);
 	if (busy) app::theme::BeginDisabledButton();
 
 	if (ImGui::Button("Auto-Detect Selected"))
 		detect_raw_files();
 
-	ImGui::SameLine();
+	ImGui::SameLine(0.0f, 5.0f);
 
 	if (ImGui::Button("Export Selected"))
 		export_raw_files();
 
 	if (busy) app::theme::EndDisabledButton();
+
+	ImGui::EndChild();
+	ImGui::PopStyleVar(); // WindowPadding
+
+	} // if BeginTab
+	app::layout::EndTab();
 }
 
 void detect_raw() {
