@@ -303,8 +303,10 @@ void initialize() {
 	// Register all modules with their function pointers.
 	// The order matches the JS MODULES object.
 
-	// module_test_a: require('./modules/module_test_a'), // Removed: module deleted
-	// module_test_b: require('./modules/module_test_b'), // Removed: module deleted
+	// TODO(conversion): module_test_a and module_test_b exist in JS source but
+	// their module headers have not been created yet. They need to be ported.
+	// JS: module_test_a: require('./modules/module_test_a'),
+	// JS: module_test_b: require('./modules/module_test_b'),
 
 	auto add_module = [](const std::string& name,
 	                     std::function<void()> render_fn,
@@ -415,8 +417,17 @@ void initialize() {
 		[]() { tab_textures::mounted(); },
 		[]() { tab_textures::registerTab(); });
 
-	// tab_help: require('./modules/tab_help'), // Removed: module deleted
-	// tab_changelog: require('./modules/tab_changelog'), // Removed: module deleted
+	// TODO(conversion): tab_help exists in JS source but its module header
+	// has not been created yet. It needs to be ported.
+	// JS: tab_help: require('./modules/tab_help'),
+
+	// TODO(conversion): tab_blender exists in JS source but its module header
+	// has not been created yet. It needs to be ported.
+	// JS: tab_blender: require('./modules/tab_blender'),
+
+	// TODO(conversion): tab_changelog exists in JS source but its module header
+	// has not been created yet. It needs to be ported.
+	// JS: tab_changelog: require('./modules/tab_changelog'),
 
 	add_module("legacy_tab_home",
 		[]() { legacy_tab_home::render(); },

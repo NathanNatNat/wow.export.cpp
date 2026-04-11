@@ -101,3 +101,8 @@
 - **JS Source**: `src/js/mmap.js` lines 35–47
 - **Status**: Fixed
 - **Details**: Fixed: Added `std::exception` catch handler with `.what()` message to match JS `e.message` logging.
+
+### [modules.cpp] Missing 5 modules from JS MODULES object
+- **JS Source**: `src/js/modules.js` lines 27–59
+- **Status**: Pending
+- **Details**: The JS `MODULES` object includes `module_test_a`, `module_test_b`, `tab_help`, `tab_blender`, and `tab_changelog`, but none of these have been ported to C++. No corresponding header/cpp files exist in `src/js/modules/`. The C++ `modules.cpp` previously marked these as "Removed: module deleted" which is incorrect — they exist in the JS source. Comments have been corrected to indicate they are pending conversion. Each module needs its `.cpp` and `.h` files created and its `add_module()` registration added to `modules::initialize()`.
