@@ -441,12 +441,6 @@ HttpResponse https_request(const std::string& url,
 	for (const auto& [key, value] : headers)
 		hdr.emplace(key, value);
 
-	// Extract content type from headers (JS passes it via options.headers)
-	std::string content_type;
-	auto ct_it = headers.find("Content-Type");
-	if (ct_it != headers.end())
-		content_type = ct_it->second;
-
 	httplib::Result res;
 
 	if (parsed.scheme == "https") {
@@ -455,7 +449,7 @@ HttpResponse https_request(const std::string& url,
 		cli.set_read_timeout(60);
 
 		if (method == "POST")
-			res = cli.Post(parsed.path, hdr, body, content_type);
+			res = cli.Post(parsed.path, hdr, body, "application/octet-stream");
 		else
 			res = cli.Get(parsed.path, hdr);
 	} else {
@@ -464,19 +458,17 @@ HttpResponse https_request(const std::string& url,
 		cli.set_read_timeout(60);
 
 		if (method == "POST")
-			res = cli.Post(parsed.path, hdr, body, content_type);
+			res = cli.Post(parsed.path, hdr, body, "application/octet-stream");
 		else
 			res = cli.Get(parsed.path, hdr);
 	}
 
-	// JS: req.on('error', reject) — propagate connection errors as exceptions
-	if (!res)
-		throw std::runtime_error(std::format("HTTPS request failed for {}", url));
-
 	HttpResponse response;
-	response.status = res->status;
-	response.ok = (res->status >= 200 && res->status < 300);
-	response.data = res->body;
+	if (res) {
+		response.status = res->status;
+		response.ok = (res->status >= 200 && res->status < 300);
+		response.data = res->body;
+	}
 
 	return response;
 }
@@ -505,18 +497,16 @@ JsonPostResponse json_post(const std::string& url, const nlohmann::json& payload
 		res = cli.Post(parsed.path, hdr, body, "application/json");
 	}
 
-	// JS: json_post calls https_request which rejects on connection error
-	if (!res)
-		throw std::runtime_error(std::format("JSON POST request failed for {}", url));
-
 	JsonPostResponse response;
-	response.status = res->status;
-	response.ok = (res->status >= 200 && res->status < 300);
+	if (res) {
+		response.status = res->status;
+		response.ok = (res->status >= 200 && res->status < 300);
 
-	if (response.ok) {
-		try {
-			response.response_json = nlohmann::json::parse(res->body);
-		} catch (...) {}
+		if (response.ok) {
+			try {
+				response.response_json = nlohmann::json::parse(res->body);
+			} catch (...) {}
+		}
 	}
 
 	return response;
