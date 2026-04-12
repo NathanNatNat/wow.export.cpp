@@ -8,6 +8,7 @@
 - The C++ Version should be 100% functionally identical to the original JavaScript code. The goal is a line-by-line port, with the same code structure and logic, but in C++.
 - The C++ Version should be 100% visually identical to the original JavaScript app. Use the same colors, fonts, layout, and styling as defined in app.css and the reference screenshots in UI_REFERENCE.md.
 - User-facing text (window title, crash screen, logs, context menus) should say **wow.export.cpp**, not wow.export.
+- The `src/` directory currently contains **190** `.cpp` files in total.
 
 ## Platform & Toolchain
 - Platforms: Windows x64 and Linux x64 ONLY. No macOS.
@@ -100,10 +101,11 @@ Map Node.js built-in modules to project dependencies as follows:
 - If a visual element cannot be replicated exactly in Dear ImGui, document the limitation in a code comment and in `TODO_TRACKER.md`, and get as close as possible.
 
 ### TODO_TRACKER.md Format
-Entries in `TODO_TRACKER.md` should follow this format:
+Entries in `TODO_TRACKER.md` must be **numbered sequentially**. When adding a new entry, increment from the last existing number. The format is:
 ```
-### [filename.cpp] Brief description
+### N. [filename.cpp] Brief description
 - **JS Source**: `src/js/original-file.js` lines XX–YY
 - **Status**: Pending | In Progress | Blocked
 - **Details**: What needs to be done and why it could not be completed inline.
 ```
+where `N` is the next sequential number after the last entry in the file.
