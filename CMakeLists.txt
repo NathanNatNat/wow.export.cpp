@@ -239,51 +239,51 @@ endif()
 # ── Copy runtime resources to the build output directory ───────
 # The application locates resources relative to the executable directory
 # under a "data" subdirectory (constants::DATA_DIR = <exe_dir>/data).
-# After every build, mirror the project's data/ tree next to the binary.
+# After every build, mirror the project's resource files next to the binary.
 add_custom_command(TARGET wow_export_cpp POST_BUILD
-    # data/shaders/  →  <exe_dir>/data/shaders/
+    # src/shaders/  →  <exe_dir>/data/shaders/
     COMMAND ${CMAKE_COMMAND} -E make_directory
         "$<TARGET_FILE_DIR:wow_export_cpp>/data/shaders"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/data/shaders"
+        "${CMAKE_SOURCE_DIR}/src/shaders"
         "$<TARGET_FILE_DIR:wow_export_cpp>/data/shaders"
 
-    # data/fa-icons/  →  <exe_dir>/data/fa-icons/
+    # src/fa-icons/  →  <exe_dir>/data/fa-icons/
     COMMAND ${CMAKE_COMMAND} -E make_directory
         "$<TARGET_FILE_DIR:wow_export_cpp>/data/fa-icons"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/data/fa-icons"
+        "${CMAKE_SOURCE_DIR}/src/fa-icons"
         "$<TARGET_FILE_DIR:wow_export_cpp>/data/fa-icons"
 
-    # data/images/  →  <exe_dir>/data/images/
+    # src/images/  →  <exe_dir>/data/images/
     COMMAND ${CMAKE_COMMAND} -E make_directory
         "$<TARGET_FILE_DIR:wow_export_cpp>/data/images"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/data/images"
+        "${CMAKE_SOURCE_DIR}/src/images"
         "$<TARGET_FILE_DIR:wow_export_cpp>/data/images"
 
-    # data/fonts/  →  <exe_dir>/data/fonts/
+    # src/fonts/  →  <exe_dir>/data/fonts/
     COMMAND ${CMAKE_COMMAND} -E make_directory
         "$<TARGET_FILE_DIR:wow_export_cpp>/data/fonts"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/data/fonts"
+        "${CMAKE_SOURCE_DIR}/src/fonts"
         "$<TARGET_FILE_DIR:wow_export_cpp>/data/fonts"
 
-    # data/icons/  →  <exe_dir>/data/icons/
+    # resources/  →  <exe_dir>/data/icons/
     COMMAND ${CMAKE_COMMAND} -E make_directory
         "$<TARGET_FILE_DIR:wow_export_cpp>/data/icons"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/data/icons"
+        "${CMAKE_SOURCE_DIR}/resources"
         "$<TARGET_FILE_DIR:wow_export_cpp>/data/icons"
 
-    # data/default_config.jsonc  →  <exe_dir>/data/
+    # src/default_config.jsonc  →  <exe_dir>/data/
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/data/default_config.jsonc"
+        "${CMAKE_SOURCE_DIR}/src/default_config.jsonc"
         "$<TARGET_FILE_DIR:wow_export_cpp>/data/default_config.jsonc"
 
-    # data/app.css  →  <exe_dir>/data/
+    # src/app.css  →  <exe_dir>/data/
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/data/app.css"
+        "${CMAKE_SOURCE_DIR}/src/app.css"
         "$<TARGET_FILE_DIR:wow_export_cpp>/data/app.css"
 
     COMMENT "Copying runtime resources to data/ directory"
