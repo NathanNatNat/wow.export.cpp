@@ -1023,3 +1023,425 @@
 - **JS Source**: `src/js/db/caches/DBItems.js` line 40
 - **Status**: Pending
 - **Details**: JS line 40 accesses `item_row.Display_lang` which returns `undefined` gracefully when the field is absent, then `??` substitutes the fallback. C++ line 63 uses `item_row.at("Display_lang")` which throws `std::out_of_range` if the `Display_lang` field does not exist in the row map. If any ItemSparse row lacks a `Display_lang` field, C++ crashes; JS handles it gracefully.
+
+## src/js/components/ Audit
+
+### 203. [checkboxlist.cpp] `resize()` called every frame instead of only on layout change
+- **JS Source**: `src/js/components/checkboxlist.js` lines 28–38
+- **Status**: Pending
+- **Details**: In JS, `resize()` is called only when the `ResizeObserver` fires (actual DOM resize). In C++ (line 149), `resize()` is called unconditionally every frame inside `render()`. This continuously overwrites `state.scroll` with `(containerHeight - scrollerHeight) * scrollRel`, potentially preventing user-initiated scroll from persisting between frames.
+
+### 204. [checkboxlist.cpp] `itemWeight` returns 0.0f instead of JS Infinity when list is empty
+- **JS Source**: `src/js/components/checkboxlist.js` line 83
+- **Status**: Pending
+- **Details**: JS returns `1 / this.items.length` which yields `Infinity` when `items.length === 0`. C++ (lines 56–58) returns `0.0f` when items is empty. Downstream arithmetic in `wheelMouse` will behave differently with an empty list.
+
+### 205. [checkboxlist.cpp] `recalculateBounds` division-by-zero guard diverges from JS
+- **JS Source**: `src/js/components/checkboxlist.js` line 105
+- **Status**: Pending
+- **Details**: JS sets `this.scrollRel = this.scroll / max` which produces `Infinity`/`NaN` when `max === 0`. C++ (line 77) guards with `(max > 0.0f) ? (state.scroll / max) : 0.0f`. Added safety guard changes behavior when container and scroller heights are equal.
+
+### 206. [checkboxlist.cpp] `wheelMouse` uses hardcoded itemHeight instead of querying actual child height
+- **JS Source**: `src/js/components/checkboxlist.js` lines 142–145
+- **Status**: Pending
+- **Details**: JS dynamically queries `this.$el.querySelector('.item').clientHeight` to compute `scrollCount`. C++ (line 143) uses hardcoded `const float itemHeight = 26.0f`. If the actual rendered item height ever differs from 26px (due to styling, DPI, or font size), the JS would adapt while the C++ would not.
+
+### 207. [checkboxlist.cpp] Custom scrollbar styling does not replicate CSS `.scroller` appearance
+- **JS Source**: `src/js/components/checkboxlist.js` line 171
+- **Status**: Pending
+- **Details**: C++ (lines 179–201) uses hardcoded 8px-wide scrollbar, 4.0f corner rounding, TEXT_ACTIVE_U32/TEXT_IDLE_U32 colors. No track background is drawn. The original CSS `.scroller` likely specifies different width, colors, and may include a track/background. The `using` class (hover/active state styling) is reduced to just a color toggle.
+
+### 208. [checkboxlist.cpp] Alternate row background uses ROW_HOVER_U32 instead of even-row color
+- **JS Source**: `src/js/components/checkboxlist.js` line 172
+- **Status**: Pending
+- **Details**: JS uses CSS `:nth-child(even)` styling applied via external stylesheet. C++ (lines 214–218) uses `app::theme::ROW_HOVER_U32`. The constant name suggests it's a hover color, not an alternate-row background color. The original CSS nth-child(even) would use a distinct background color.
+
+### 209. [combobox.cpp] `watchValue` does not call `selectOption` / does not emit `onChange`
+- **JS Source**: `src/js/components/combobox.js` lines 19–24
+- **Status**: Pending
+- **Details**: JS Watch calls `this.selectOption(this.source.find(...))`, which may emit `update:value` (e.g., if the item isn't found, it emits null). C++ (lines 86–110) `watchValue` manually sets `currentText` and `isActive` but never calls `selectOption` or invokes `onChange`. When value changes externally and the matching source item is not found, JS emits null back via `selectOption`; C++ silently clears `currentText` without notifying the caller.
+
+### 210. [combobox.cpp] `mounted()` initialization not explicitly ported
+- **JS Source**: `src/js/components/combobox.js` lines 27–31
+- **Status**: Pending
+- **Details**: JS `mounted()` calls `selectOption` if `value !== null`, else clears text. C++ relies on `watchValue` being called each frame. If the initial value is non-null, `watchValue` will fire but won't call `onChange` (see #209).
+
+### 211. [combobox.cpp] `onBlur` 200ms delay replaced with hover detection
+- **JS Source**: `src/js/components/combobox.js` lines 68–71
+- **Status**: Pending
+- **Details**: JS uses `setTimeout(() => { this.isActive = false; }, 200)` to delay deactivation by 200ms, allowing dropdown clicks to register. C++ (lines 194–196) uses `!inputActive && !ImGui::IsAnyItemHovered()` which may close the dropdown prematurely or fail to close it in edge cases. `IsAnyItemHovered()` checks all ImGui items, not just dropdown items.
+
+### 212. [combobox.cpp] Dropdown max height hardcoded to 200px
+- **JS Source**: `src/js/components/combobox.js` lines 87–93
+- **Status**: Pending
+- **Details**: The JS `<ul>` has no explicit max-height in the template; it's controlled entirely by CSS. C++ (line 175) hardcodes `std::min(..., 200.0f)` as max dropdown height. If the CSS specifies a different max height, this won't match.
+
+### 213. [combobox.cpp] `InputText` buffer management is fragile / potential UB
+- **JS Source**: `src/js/components/combobox.js` line 89
+- **Status**: Pending
+- **Details**: C++ (line 128) uses `ImGui::InputText("##input", &state.currentText[0], state.currentText.capacity() + 1, ...)`. When `state.currentText` is empty, `&state.currentText[0]` may be undefined behavior. Modern ImGui provides `ImGui::InputText` overloads that accept `std::string*` directly (via `imgui_stdlib.h`), which would be safer.
+
+### 214. [combobox.cpp] Placeholder text rendered manually with hardcoded offsets
+- **JS Source**: `src/js/components/combobox.js` line 89
+- **Status**: Pending
+- **Details**: JS uses standard HTML `placeholder` attribute. C++ (lines 144–151) draws placeholder via `AddText` with hardcoded offsets `+4.0f, +2.0f`. The positioning offset may not match the actual input text position across different DPI/font settings.
+
+### 215. [context-menu.cpp] `@mouseleave` close behavior replaced with click-outside
+- **JS Source**: `src/js/components/context-menu.js` line 54
+- **Status**: Pending
+- **Details**: JS menu closes immediately when the mouse leaves the menu div (`@mouseleave="$emit('close')"`). C++ (lines 94–98) only closes when clicking outside the window (`!ImGui::IsWindowHovered(...) && ImGui::IsMouseClicked(0)`). This is a significant behavioral difference — JS: hover-out closes; C++: click-outside closes.
+
+### 216. [context-menu.cpp] `@click` on container div not fully ported
+- **JS Source**: `src/js/components/context-menu.js` line 54
+- **Status**: Pending
+- **Details**: In JS, any click anywhere inside the `<div class="context-menu">` emits `close`. C++ (lines 100–102) says "handled by individual Selectable items" but no general click handler exists. If `contentCallback` renders non-Selectable elements (text, separators), clicking them won't close the menu in C++.
+
+### 217. [context-menu.cpp] `context-menu-zone` div not implemented
+- **JS Source**: `src/js/components/context-menu.js` line 55
+- **Status**: Pending
+- **Details**: JS has a `<div class="context-menu-zone"></div>` — an invisible zone that extends the hover area between the trigger and menu, preventing premature close. C++ (lines 85–86) acknowledges this in a comment but does not implement it.
+
+### 218. [context-menu.cpp] Window ID collision for multiple instances
+- **JS Source**: `src/js/components/context-menu.js` — each Vue component instance is independent
+- **Status**: Pending
+- **Details**: C++ (line 84) uses `ImGui::Begin("##context_menu_popup", ...)`. The `PushID(id)` on line 61 does NOT scope `Begin()` window names. If `render()` is called with different `id` values for multiple context menus, they all create/fight over the same window `"##context_menu_popup"`.
+
+### 219. [data-table.cpp] `moveMouse` missing `manuallyResizedColumns` update during resize drag
+- **JS Source**: `src/js/components/data-table.js` lines 572–576
+- **Status**: Pending
+- **Details**: In JS, both `columnWidths[i]` and `manuallyResizedColumns[columnName]` are updated during the drag inside the `requestAnimationFrame` callback. C++ (lines 453–462) only updates `state.columnWidths`; `state.manuallyResizedColumns` is not updated until `stopMouse`. During the drag, the column is resized visually but not recorded as "manually resized," which could cause `calculateColumnWidths` to overwrite the in-progress width if headers change mid-drag.
+
+### 220. [data-table.cpp] `syncScrollPosition` completely omitted
+- **JS Source**: `src/js/components/data-table.js` lines 515–527
+- **Status**: Pending
+- **Details**: JS syncs the custom scrollbar position with the native scroll position (handles native scroll events on the root div). C++ (line 422) has a comment saying "is fully managed by our custom scrollbar logic" but the function body is entirely absent.
+
+### 221. [data-table.cpp] `ContextMenuEvent` struct missing mouse position data
+- **JS Source**: `src/js/components/data-table.js` lines 883–889
+- **Status**: Pending
+- **Details**: JS emits `{ rowIndex, columnIndex, cellValue, selectedCount, event }` — the mouse `event` object is included, which consumers use to position the context menu. C++ `ContextMenuEvent` (data-table.h lines 38–43) has `rowIndex`, `columnIndex`, `cellValue`, `selectedCount` but no mouse position data. Consumers cannot determine where to display the context menu.
+
+### 222. [data-table.cpp] Status text missing locale/thousands-separator formatting
+- **JS Source**: `src/js/components/data-table.js` lines 1018–1019
+- **Status**: Pending
+- **Details**: JS uses `.toLocaleString()` to format numbers with thousands separators (e.g., "1,234,567"). C++ (lines 1320–1323) uses `std::to_string()` which produces "1234567" without separators.
+
+### 223. [data-table.cpp] `escape_value` in `getSelectedRowsAsSQL` treats empty string as NULL
+- **JS Source**: `src/js/components/data-table.js` lines 950–951
+- **Status**: Pending
+- **Details**: JS only returns `'NULL'` for `null` and `undefined`; an empty string `""` would be escaped as `''`. C++ (lines 826–827) `if (val.empty()) return "NULL";` treats empty strings as SQL NULL, which differs from JS behavior.
+
+### 224. [data-table.cpp] Row selected/hover color constants appear swapped
+- **JS Source**: `src/js/components/data-table.js` line 1011
+- **Status**: Pending
+- **Details**: C++ (line 1187) uses `app::theme::TABLE_ROW_HOVER_U32` for selected rows; hover effect on non-selected rows at line 1200 uses `app::theme::TABLE_ROW_SELECTED_U32`. The constant names are semantically swapped.
+
+### 225. [data-table.cpp] `sortedItems` uses unstable sort
+- **JS Source**: `src/js/components/data-table.js` line 170
+- **Status**: Pending
+- **Details**: Modern JS engines use stable sort (TimSort). C++ (line 294) uses `std::sort(...)` which is not guaranteed stable (typically introsort). Should use `std::stable_sort` to match JS behavior for rows with equal sort keys.
+
+### 226. [data-table.cpp] `handleKey` focus check semantic difference
+- **JS Source**: `src/js/components/data-table.js` line 778
+- **Status**: Pending
+- **Details**: JS checks `if (document.activeElement !== document.body) return;` — only intercepts keys when nothing is focused. C++ (line 663) checks `if (ImGui::IsAnyItemActive()) return;`. These are conceptually similar but `IsAnyItemActive` may behave differently when a child window is focused but no item is active.
+
+### 227. [data-table.cpp] Rows watcher change detection may miss in-place mutations
+- **JS Source**: `src/js/components/data-table.js` lines 316–324
+- **Status**: Pending
+- **Details**: JS Vue reactivity watches the `rows` prop reference; any change to the array triggers the handler. C++ (lines 897–904) checks `rows.size()` and `rows.data()` pointer. This can miss changes if rows are mutated in-place without changing size or base pointer (e.g., editing cell content).
+
+### 228. [file-field.cpp] Extra `openFileDialog()` and `saveFileDialog()` functions not in JS
+- **JS Source**: `src/js/components/file-field.js`
+- **Status**: Pending
+- **Details**: JS only has directory picker functionality (input with `nwdirectory`). C++ (lines 106–300) adds `openFileDialog()` (~95 lines) and `saveFileDialog()` (~100 lines) with file type filters, default directory. These ~195 lines of code have no JS equivalent and are entirely new functionality.
+
+### 229. [file-field.cpp] Dialog opens on button click instead of on input focus
+- **JS Source**: `src/js/components/file-field.js` line 46
+- **Status**: Pending
+- **Details**: JS renders a single `<input type="text">` that opens the dialog on focus (`@focus="openDialog"`). C++ (lines 317–361) renders an `ImGui::InputText` + a separate "..." browse button. The dialog opens on button click, not on input focus. This changes user interaction flow.
+
+### 230. [file-field.cpp] Missing `$el.blur()` equivalent after dialog
+- **JS Source**: `src/js/components/file-field.js` line 39
+- **Status**: Pending
+- **Details**: JS calls `this.$el.blur()` to blur the input after opening the dialog. C++ (lines 301–308) has no equivalent `ImGui::ClearActiveID()` or similar blur call after dialog selection.
+
+### 231. [home-showcase.cpp] ENTIRE FILE IS UNCONVERTED JAVASCRIPT
+- **JS Source**: `src/js/components/home-showcase.js` lines 1–65
+- **Status**: Pending
+- **Details**: The `.cpp` file contains identical JavaScript code — `const showcases = require(...)`, `module.exports = { ... }`, Vue template syntax, etc. Zero conversion has been done. All elements need porting: `require('../showcase.json')` parsing, `BASE_LAYERS` constant array, `get_random_index()`, `build_background_style()`, Vue `data()`/`computed`/`methods`, HTML template with `<h1>`, `<a>`, `<video>`, `<span>`, click handlers, external link handling, and video playback. No `.h` header file exists either.
+
+### 232. [itemlistbox.cpp] Item height hardcoded to 26px vs dynamic DOM query in JS
+- **JS Source**: `src/js/components/itemlistbox.js` lines 201–209
+- **Status**: Pending
+- **Details**: JS queries `this.$refs.root.querySelector('.item').clientHeight` dynamically. C++ (lines 125–135, 435) hardcodes `itemHeightVal` to `26.0f`. Since itemlistbox items include 32px icons plus padding/margins, the actual rendered row height is likely larger than 26px, meaning scroll-wheel step size would differ.
+
+### 233. [itemlistbox.cpp] `itemWeight` returns 0.0f instead of JS Infinity when list is empty
+- **JS Source**: `src/js/components/itemlistbox.js` lines 143–145
+- **Status**: Pending
+- **Details**: JS returns `1 / this.filteredItems.length` which yields `Infinity` when length is 0. C++ (lines 68–72) returns `0.0f` when empty. This affects scroll calculations when the list is empty.
+
+### 234. [itemlistbox.cpp] `recalculateBounds` division-by-zero protection differs from JS
+- **JS Source**: `src/js/components/itemlistbox.js` lines 162–166
+- **Status**: Pending
+- **Details**: JS sets `scrollRel = scroll / max` with no guard, producing `NaN`/`Infinity` when `max == 0`. C++ (lines 87–91) guards with `(max > 0.0f) ? (state.scroll / max) : 0.0f`. Defensive but deviates from JS behavior.
+
+### 235. [itemlistbox.cpp] Item ID `<span>` loses separate CSS styling when rendered inline
+- **JS Source**: `src/js/components/itemlistbox.js` line 335
+- **Status**: Pending
+- **Details**: JS wraps the item ID in `<span class="item-id">({{ item.id }})</span>` which likely has distinct styling (e.g., different opacity or color). C++ (line 559) renders `item.name + " (" + std::to_string(item.id) + ")"` as one string, losing per-sub-field styling.
+
+### 236. [itemlistbox.cpp] Quality color values unverified against CSS
+- **JS Source**: `src/js/components/itemlistbox.js` line 334
+- **Status**: Pending
+- **Details**: JS uses CSS classes `.item-quality-0` through `.item-quality-7` via `:class="'item-quality-' + item.quality"`. C++ (lines 389–401) hardcodes `ImVec4` color values. These should be verified against the actual CSS color definitions in `app.css`.
+
+### 237. [itemlistbox.cpp] Odd rows get explicit BG_DARK instead of transparent
+- **JS Source**: `src/js/components/itemlistbox.js` template
+- **Status**: Pending
+- **Details**: JS only sets background on even rows (via CSS `:nth-child(even)`); odd rows are transparent (inherit parent background). C++ (lines 526–529) explicitly sets `BG_DARK_U32` on odd rows. If `BG_DARK_U32` doesn't match the parent container's background color, this could produce a visible difference.
+
+### 238. [itemlistbox.cpp] Selectable width hardcoded to `availSize.x - 120.0f`
+- **JS Source**: `src/js/components/itemlistbox.js` lines 333–340
+- **Status**: Pending
+- **Details**: JS uses CSS flex to let the item name fill available space dynamically. C++ (line 563) hardcodes `ImVec2(availSize.x - 120.0f, 0.0f)` for reserved button width, which may not match the actual button width and could cause misalignment or clipping.
+
+### 239. [listbox-maps.cpp] Missing `recalculateBounds()` call on expansion filter change
+- **JS Source**: `src/js/components/listbox-maps.js` lines 27–31
+- **Status**: Pending
+- **Details**: JS calls `this.recalculateBounds()` after resetting scroll. C++ (lines 91–95) only resets `scroll` and `scrollRel` to 0, no `recalculateBounds`. The JS `recalculateBounds()` also saves scroll position via `core.saveScrollPosition` when `persistscrollkey` is set. Scroll position persistence is not saved when the expansion filter changes.
+
+### 240. [listbox-maps.cpp] Expansion filtering applied before override resolution (order of operations differs)
+- **JS Source**: `src/js/components/listbox-maps.js` lines 44–45
+- **Status**: Pending
+- **Details**: In JS, `this.itemList` resolves to `this.override?.length > 0 ? this.override : this.items` first, then expansion filtering is applied to the resolved list. In C++, expansion filtering is applied to raw `items` before passing to `listbox::render()` which may apply its own override logic. If `overrideItems` is provided, the C++ would discard the expansion-filtered items entirely and use overrideItems. Behavioral difference when both override and expansion filter are active.
+
+### 241. [listbox-zones.cpp] Missing `recalculateBounds()` call on expansion filter change
+- **JS Source**: `src/js/components/listbox-zones.js` lines 27–31
+- **Status**: Pending
+- **Details**: Same issue as #239 for listbox-maps. JS calls `this.recalculateBounds()` after resetting scroll. C++ (lines 91–95) only resets scroll values without calling recalculateBounds. Scroll position persistence is not saved.
+
+### 242. [listbox-zones.cpp] Expansion filtering applied before override resolution (order of operations differs)
+- **JS Source**: `src/js/components/listbox-zones.js` lines 44–45
+- **Status**: Pending
+- **Details**: Same issue as #240 for listbox-maps. Override resolution order differs from JS when both override and expansion filter are active.
+
+### 243. [listbox.cpp] Missing `\31` sub-field rendering with distinct CSS classes
+- **JS Source**: `src/js/components/listbox.js` line 507
+- **Status**: Pending
+- **Details**: JS renders each sub-field (split by `\31`) with its own CSS class (`sub-0`, `sub-1`, etc.) and `data-item` attribute, allowing different styling per sub-field. C++ (lines 731–745) concatenates all sub-fields into a single `displayText` string separated by spaces, then renders as one `ImGui::Selectable`, losing per-sub-field styling.
+
+### 244. [listbox.cpp] Missing `update:filter` emit
+- **JS Source**: `src/js/components/listbox.js` line 41
+- **Status**: Pending
+- **Details**: JS declares `emits: ['update:selection', 'update:filter', 'contextmenu']`. C++ has no callback parameter or mechanism for `update:filter`. If any parent component relies on this event, it will not receive updates.
+
+### 245. [listbox.cpp] Scroll position restoration skips recalculation
+- **JS Source**: `src/js/components/listbox.js` lines 84–88, 150–157
+- **Status**: Pending
+- **Details**: JS scroll position restoration sets `scrollRel`, then computes `this.scroll = (root.clientHeight - scroller.clientHeight) * scrollRel` and calls `recalculateBounds()`. C++ (lines 615–621) only sets `state.scrollRel` from saved state without recalculating `state.scroll` or calling `recalculateBounds()`.
+
+### 246. [listbox.cpp] `activated` / `deactivated` lifecycle (keep-alive) not ported
+- **JS Source**: `src/js/components/listbox.js` lines 97–113
+- **Status**: Pending
+- **Details**: JS `activated()` adds paste and keydown listeners; `deactivated()` removes them, modeling Vue keep-alive component activation. C++ has no equivalent activation/deactivation mechanism. Paste and keyboard input are always processed every frame when the component is rendered. If this listbox is inside a tab-switching container, keyboard/paste events may fire when the component is not the active tab.
+
+### 247. [listbox.cpp] `handleKey` not scoped to `document.body` active element check
+- **JS Source**: `src/js/components/listbox.js` line 346
+- **Status**: Pending
+- **Details**: JS checks `if (document.activeElement !== document.body) return;` — only intercepts when nothing is focused. C++ (line 295) checks `if (ImGui::IsAnyItemActive()) return;`, which is conceptually similar but not identical. `IsAnyItemActive()` returns true only when an item is being interacted with, while `document.activeElement !== document.body` returns true when ANY DOM element has focus.
+
+### 248. [listbox.cpp] `filteredItems` recomputed every frame instead of cached
+- **JS Source**: `src/js/components/listbox.js` line 193
+- **Status**: Pending
+- **Details**: JS `filteredItems` is a Vue computed property, cached until dependencies change. C++ (lines 610–612) calls `computeFilteredItems()` every frame unconditionally, even when nothing has changed. For large item lists, recomputing the filter every frame is expensive.
+
+### 249. [listbox.cpp] Quick filter active color hardcoded
+- **JS Source**: `src/js/components/listbox.js` line 513
+- **Status**: Pending
+- **Details**: JS active quick filter gets class `active`, styled by CSS. C++ (line 798) hardcodes `ImVec4(0.13f, 0.71f, 0.29f, 1.0f)` for the active color. Should reference a theme constant from `app.css` rather than a hardcoded value.
+
+### 250. [listboxb.cpp] `handleKey` Ctrl+C copies `[object Object]` in JS vs `.label` in C++
+- **JS Source**: `src/js/components/listboxb.js` line 181
+- **Status**: Pending
+- **Details**: JS `this.selection.join('\n')` on item objects would produce `[object Object]`. C++ (lines 169–175) copies `items[idx].label` for each selected index, producing meaningful text. The C++ version handles this better but deviates from JS behavior.
+
+### 251. [listboxb.cpp] Selection model differs: JS uses item references, C++ uses indices
+- **JS Source**: `src/js/components/listboxb.js` lines 14, 230–273
+- **Status**: Pending
+- **Details**: JS `selection` prop contains item references (objects). `indexOf(item)` searches for the item object. C++ (listboxb.h line 52, listboxb.cpp lines 221–272) uses `std::vector<int>` (indices). If items are reordered or the list changes, index-based selection will point to wrong items. The JS version is reference-based and survives reordering.
+
+### 252. [listboxb.cpp] Alternating row pattern shifts during scrolling
+- **JS Source**: `src/js/components/listboxb.js` line 281
+- **Status**: Pending
+- **Details**: JS rows get alternating background via CSS `:nth-child(even)` based on DOM child position (stable). C++ (lines 373–376) uses `((i - startIdx) % 2 == 0)` based on offset from `startIdx`. As scrolling changes `startIdx`, the even/odd pattern can flip, whereas in JS the pattern is always relative to DOM position.
+
+### 253. [map-viewer.cpp] Missing double-buffer pixel blitting — no canvas shift on pan
+- **JS Source**: `src/js/components/map-viewer.js` lines 82–83, 555–627
+- **Status**: Pending
+- **Details**: JS creates an offscreen canvas element, copies the main canvas to it with offset via `doubleCtx.drawImage(canvas, deltaX, deltaY)`, then copies back. C++ (lines 452–527) tracks the technique structurally but has NO actual pixel-level double-buffer blitting. `deltaX`/`deltaY` are computed but marked `[[maybe_unused]]`. Already-rendered tiles are NOT shifted by the pan delta.
+
+### 254. [map-viewer.cpp] `loadTile` is synchronous in C++, async in JS
+- **JS Source**: `src/js/components/map-viewer.js` lines 387–414
+- **Status**: Pending
+- **Details**: JS tile loading is async (Promise-based) with multiple tiles loading concurrently, managed by `maxConcurrentTiles` and `activeTileRequests`. C++ (lines 279–326) calls the loader synchronously/blocking. The concurrency tracking (`activeTileRequests++`/`--`) happens in the same function call, making it meaningless. Synchronous loading will block the UI thread.
+
+### 255. [map-viewer.cpp] No actual tile texture rendering in `renderWidget`
+- **JS Source**: `src/js/components/map-viewer.js` lines 1101–1112
+- **Status**: Pending
+- **Details**: JS draws tiles via `context.putImageData()` to a canvas. C++ `renderWidget()` (lines 1108–1246) renders info text, an invisible button for interaction, and the overlay, but there is NO code to draw tile textures from `tilePixelCache` to the screen. The map tiles are never actually displayed — the overlay draws selection/hover highlights over empty space. Critical missing functionality.
+
+### 256. [map-viewer.cpp] Overlay color values may differ from JS hardcoded RGBA
+- **JS Source**: `src/js/components/map-viewer.js` lines 744, 750, 755
+- **Status**: Pending
+- **Details**: JS uses hardcoded `rgba(159, 241, 161, 0.5)` for selection and `rgba(87, 175, 226, 0.5)` for hover/box-select. C++ (lines 656, 665) uses `app::theme::FONT_ALT_HIGHLIGHT_U32` and `app::theme::FONT_ALT_U32` with alpha override. The theme constants may not match the hardcoded JS RGBA values. Should be verified against `app.css`.
+
+### 257. [map-viewer.cpp] `handleTileInteraction` does not call `onSelectionChanged` callback
+- **JS Source**: `src/js/components/map-viewer.js` lines 846–874
+- **Status**: Pending
+- **Details**: JS directly mutates `this.selection` which triggers Vue reactivity. C++ (lines 805–839) directly mutates the `selection` vector passed by reference but does NOT call `onSelectionChanged`. The callback is only invoked for box-select and Ctrl+A/D but never for shift-click tile selection. If the caller relies on the callback to know about selection changes, shift-click selection will silently change the vector without notification.
+
+### 258. [map-viewer.cpp] `mapPositionFromClientPoint` may use wrong origin position
+- **JS Source**: `src/js/components/map-viewer.js` lines 991–1011
+- **Status**: Pending
+- **Details**: JS uses `viewport.getBoundingClientRect()` and `canvas.width/height` for coordinate conversion. C++ (lines 969–994) uses `ImGui::GetCursorScreenPos()` for `contentOrigin`. After `InvisibleButton` is drawn, the cursor has advanced, so `GetCursorScreenPos()` may return the wrong position depending on when it's called during the frame.
+
+### 259. [markdown-content.cpp] ENTIRE FILE IS UNCONVERTED JAVASCRIPT
+- **JS Source**: `src/js/components/markdown-content.js` lines 1–255
+- **Status**: Pending
+- **Details**: The `.cpp` file is a byte-for-byte copy of the `.js` file. It contains `module.exports`, Vue lifecycle hooks (`mounted`, `beforeUnmount`), `this.$refs`, `this.$emit`, `document.addEventListener`, `ResizeObserver`, `requestAnimationFrame`, JavaScript template literals, etc. None of this is valid C++. All functionality needs porting: `htmlContent` computed property, `parseMarkdown()` (lines 143–202), `parseInline()` (lines 204–237), `escapeHtml()` (lines 239–248), scrollbar logic, resize observation, and Vue template with `v-html` / `:style` / `@wheel` / `@mousedown` bindings. No `.h` header file exists either.
+
+### 260. [menu-button.cpp] Popup window ID collision for multiple instances
+- **JS Source**: `src/js/components/menu-button.js` lines 78–80
+- **Status**: Pending
+- **Details**: The popup window uses hardcoded ID `"##menu_button_popup"` (line 140). If multiple `menu_button::render()` instances exist in the same frame, they will share the same ImGui window. Should incorporate the widget `id` parameter into the popup ID.
+
+### 261. [menu-button.cpp] Arrow button uses text "v" instead of CSS-styled chevron
+- **JS Source**: `src/js/components/menu-button.js` line 77
+- **Status**: Pending
+- **Details**: JS renders a `<div class="arrow">` styled via CSS (likely with a triangle/chevron icon). C++ (line 116) uses a text button with literal character `"v"`. This will not match the original visual appearance.
+
+### 262. [menu-button.cpp] CSS class states `disabled`, `dropdown`, `open` not replicated
+- **JS Source**: `src/js/components/menu-button.js` line 75
+- **Status**: Pending
+- **Details**: JS applies CSS classes `disabled`, `dropdown`, `open` on the container `<div>`, driving visual styling (hover effects, borders, etc.). C++ relies entirely on ImGui's default disabled styling and has no equivalent for `dropdown` or `open` visual states.
+
+### 263. [menu-button.cpp] Context-menu component replaced with raw ImGui::Begin window
+- **JS Source**: `src/js/components/menu-button.js` lines 78–80
+- **Status**: Pending
+- **Details**: JS uses a `<context-menu>` child component with `@close` event binding. C++ (lines 127–155) replaces this with a raw `ImGui::Begin` window with NoMove/NoTitleBar flags. The visual and behavioral fidelity (focus handling, z-ordering, click-outside dismiss) may differ from the JS context-menu component.
+
+### 264. [menu-button.cpp] `selectedObj` uses index instead of object reference
+- **JS Source**: `src/js/components/menu-button.js` line 59
+- **Status**: Pending
+- **Details**: JS stores the option object itself (`this.selectedObj ?? this.defaultObj`), immune to array reordering. C++ uses `selectedIndex >= 0` check (lines 40–44). If `options` are reordered between frames, the selected index may point to a different option than intended.
+
+### 265. [model-viewer-gl.cpp] `fit_camera_for_character` signature diverges — updates dual controls
+- **JS Source**: `src/js/components/model-viewer-gl.js` line 186
+- **Status**: Pending
+- **Details**: JS takes a single `controls` parameter (duck-typed). C++ (lines 191–218) splits into `CameraControlsGL* orbit_controls` and `CharacterCameraControlsGL* char_controls`, updating both if both are non-null. JS only updates the single passed-in controls object.
+
+### 266. [model-viewer-gl.cpp] `render_scene` rotation guard differs from JS
+- **JS Source**: `src/js/components/model-viewer-gl.js` line 240
+- **Status**: Pending
+- **Details**: JS: `if (rotation_speed !== 0 && activeRenderer && activeRenderer.setTransform && !this.use_character_controls)`. C++ drops the `activeRenderer` and `activeRenderer.setTransform` guards from the outer condition. It also applies rotation via a `context.setActiveModelTransform` fallback path (lines 427–433) that has no JS equivalent, allowing rotation even without an M2 renderer.
+
+### 267. [model-viewer-gl.cpp] Hand grip check missing `activeRenderer.setHandGrip` guard
+- **JS Source**: `src/js/components/model-viewer-gl.js` line 277
+- **Status**: Pending
+- **Details**: JS: `if (activeRenderer && equipment_renderers && activeRenderer.setHandGrip)`. C++ (line 481) omits the `activeRenderer.setHandGrip` existence check, only checking `if (activeRenderer && equipment_renderers)`.
+
+### 268. [model-viewer-gl.cpp] Animation update missing `activeRenderer.updateAnimation` guard
+- **JS Source**: `src/js/components/model-viewer-gl.js` line 224
+- **Status**: Pending
+- **Details**: JS: `if (activeRenderer && activeRenderer.updateAnimation)`. C++ (lines 399–400) only checks `if (activeRenderer)` and unconditionally calls `updateAnimation(deltaTime)`, also omitting the `get_animation_frame` existence check (JS line 229).
+
+### 269. [model-viewer-gl.cpp] `window.devicePixelRatio` not accounted for in FBO sizing
+- **JS Source**: `src/js/components/model-viewer-gl.js` lines 482–483
+- **Status**: Pending
+- **Details**: JS multiplies canvas dimensions by `window.devicePixelRatio` for HiDPI rendering. C++ comment says "ImGui handles DPI internally" but does not apply any DPI scaling to FBO size (lines 778–779). On HiDPI displays, the 3D rendering may appear at lower resolution.
+
+### 270. [model-viewer-gl.cpp] GLContext created without WebGL options equivalent
+- **JS Source**: `src/js/components/model-viewer-gl.js` lines 435–438
+- **Status**: Pending
+- **Details**: JS: `new GLContext(canvas, { antialias: true, alpha: true, preserveDrawingBuffer: true })`. C++ (line 684) creates `gl::GLContext()` with no arguments. The WebGL context options (antialias, alpha, preserveDrawingBuffer) are not passed or configured. While some don't directly apply to desktop GL, `alpha` and multisampling equivalents should be addressed.
+
+### 271. [model-viewer-gl.cpp] `context.controls` split into dual typed pointers
+- **JS Source**: `src/js/components/model-viewer-gl.js` line 395
+- **Status**: Pending
+- **Details**: JS: `this.context.controls = this.controls;` — one untyped reference. C++ maintains separate `context.controls_orbit` and `context.controls_character` pointers (lines 624–636). Parent code accessing `context.controls` in JS must use the appropriate typed pointer in C++. This structural change affects all consumers of the context object.
+
+### 272. [model-viewer-gl.cpp] Extra C++ fallback paths not in JS (`renderActiveModel`, `getActiveBoundingBox`, `setActiveModelTransform`)
+- **JS Source**: `src/js/components/model-viewer-gl.js`
+- **Status**: Pending
+- **Details**: C++ adds `context.renderActiveModel` (lines 525–527), `context.getActiveBoundingBox` (model-viewer-gl.h line 159), and `context.setActiveModelTransform` (model-viewer-gl.h line 167) as fallback paths for non-M2 renderers. JS has no equivalent — it only operates on M2 `activeRenderer`. These are new functionality not present in the original.
+
+### 273. [resize-layer.cpp] Floating-point comparison for width change detection
+- **JS Source**: `src/js/components/resize-layer.js` line 13
+- **Status**: Pending
+- **Details**: JS `ResizeObserver` uses integer `clientWidth` making exact comparison safe. C++ (line 33) compares `currentWidth != state.prevWidth` on floats from `ImGui::GetContentRegionAvail().x`. Floating-point `!=` comparison is fragile due to IEEE rounding. Should use an epsilon or cast to int.
+
+### 274. [resize-layer.cpp] No wrapping container element equivalent
+- **JS Source**: `src/js/components/resize-layer.js` line 25
+- **Status**: Pending
+- **Details**: JS template is `<div><slot></slot></div>`, a wrapper div observed by the `ResizeObserver`. C++ (lines 24–44) has no `ImGui::BeginGroup()`/`EndGroup()` or `BeginChild()`/`EndChild()` wrapping. Width is measured from the parent's content region, not a dedicated wrapper. If content changes the layout, the measured width may not correspond to what the JS wrapper div would report.
+
+### 275. [slider.cpp] Fill bar spans only middle 40% instead of full height
+- **JS Source**: CSS `app.css` lines 1267–1274
+- **Status**: Pending
+- **Details**: CSS `.ui-slider .fill` has `top: 0; bottom: 0;` filling the entire 20px container height. C++ (lines 120–121) draws fill rect from `sliderHeight * 0.3f` to `sliderHeight * 0.7f` (only middle 40%). Visual fidelity error.
+
+### 276. [slider.cpp] Track background spans only middle 40% instead of full height
+- **JS Source**: CSS `app.css` lines 1259–1266
+- **Status**: Pending
+- **Details**: CSS `.ui-slider` is a full 20px-tall box with background and border. C++ (lines 112–114) draws only a narrow stripe in the center. Both the background area and the border are missing.
+
+### 277. [slider.cpp] Track color is wrong — `(80,80,80)` instead of CSS `#2c3136` `(44,49,54)`
+- **JS Source**: CSS `app.css` line 1264
+- **Status**: Pending
+- **Details**: CSS `.ui-slider` background is `var(--background-dark)` = `#2c3136` = `RGB(44, 49, 54)`. C++ `SLIDER_TRACK_U32 = IM_COL32(80, 80, 80, 255)` (app.h line 117) is `RGB(80, 80, 80)`. Significant color mismatch.
+
+### 278. [slider.cpp] Fill color is wrong — green `(34,181,73)` instead of blue `#57afe2` `(87,175,226)`
+- **JS Source**: CSS `app.css` line 1273
+- **Status**: Pending
+- **Details**: CSS `.fill` background is `var(--font-alt)` = `#57afe2` = `RGB(87, 175, 226)` (blue). C++ uses `BUTTON_BASE_U32 = IM_COL32(34, 181, 73, 255)` (green). Major color mismatch.
+
+### 279. [slider.cpp] Handle colors are wrong — default and hover
+- **JS Source**: CSS `app.css` lines 1283, 1287–1288
+- **Status**: Pending
+- **Details**: CSS `.handle` background is `var(--border)` = `#6c757d` = `RGB(108, 117, 125)`. CSS `.handle:hover` is `var(--font-alt)` = `#57afe2` = `RGB(87, 175, 226)`. C++ `SLIDER_THUMB_U32 = IM_COL32(200, 200, 200, 200)` and `SLIDER_THUMB_ACTIVE_U32 = IM_COL32(255, 255, 255, 220)`. Both default and hover handle colors are wrong.
+
+### 280. [slider.cpp] Handle height is 20px instead of CSS 28px — no vertical overhang
+- **JS Source**: CSS `app.css` line 1278
+- **Status**: Pending
+- **Details**: CSS `.handle` height is `28px`, deliberately taller than the 20px container, vertically centered via `transform: translateY(-50%)`. C++ handle (lines 89, 129) equals `sliderHeight` (20px) with no overhang or centering.
+
+### 281. [slider.cpp] Handle horizontal positioning center-aligned instead of left-edge-aligned
+- **JS Source**: `src/js/components/slider.js` line 97
+- **Status**: Pending
+- **Details**: JS handle `left` is `(modelValue * 100) + '%'` — the handle's left edge is at the value position with no `translateX`. C++ (line 127) centers the handle on the value point: `handleX = winPos.x + fillWidth - handleWidth * 0.5f`. At `value=1.0`, JS handle left edge is at 100% while C++ handle center is at 100%, creating positioning difference.
+
+### 282. [slider.cpp] Handle box-shadow, slider border, and slider box-shadow all missing
+- **JS Source**: CSS `app.css` lines 1263, 1265, 1282
+- **Status**: Pending
+- **Details**: CSS `.handle` has `box-shadow: black 0 0 8px`, `.ui-slider` has `border: 1px solid var(--border)` and `box-shadow: black 0 0 1px`. None of these are rendered in the C++ version. Only `AddRectFilled` is used; no border (`AddRect`) or shadow effects exist.
+
+### 283. [slider.cpp] Slider margin missing — no 4px vertical spacing
+- **JS Source**: CSS `app.css` line 1262
+- **Status**: Pending
+- **Details**: CSS `.ui-slider` has `margin: 4px 0`. C++ (lines 86–93) has no spacing or margin before or after the slider.
+
+### 284. [slider.cpp] Track click fires on mousedown instead of click event
+- **JS Source**: `src/js/components/slider.js` line 95
+- **Status**: Pending
+- **Details**: JS `@click="handleClick"` fires on `click` event (mousedown + mouseup on same element). C++ (line 145) uses `ImGui::IsMouseClicked(0)` which fires on the frame the mouse button is pressed down. If the user presses on the track then drags away before releasing, JS does not fire but C++ would have already jumped the value.
+
+### 285. [slider.cpp] Handle hover state persists during entire drag
+- **JS Source**: `src/js/components/slider.js` line 97, CSS `app.css` line 1287
+- **Status**: Pending
+- **Details**: JS handle hover style only applies via CSS `:hover` pseudo-class. When dragging and the cursor leaves the handle, the hover style is lost. C++ (line 130) `handleHovered` is true if hovered OR `state.isScrolling`, so the active color persists during the entire drag even when the cursor is far from the handle.
+
+### 286. [slider.cpp] Missing `cursor: pointer` on handle hover
+- **JS Source**: CSS `app.css` line 1284
+- **Status**: Pending
+- **Details**: CSS `.handle` has `cursor: pointer`. The mouse cursor should change to a pointer when hovering the handle. ImGui supports `ImGui::SetMouseCursor(ImGuiMouseCursor_Hand)` but this is not called in slider.cpp.
