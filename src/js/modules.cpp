@@ -199,12 +199,8 @@ static void wrap_module(ModuleDef& mod) {
 	// JS: if (typeof module_def.register === 'function') { ... }
 	if (mod.registerModule) {
 		// The registerModule function for tabs calls register_nav_button internally.
+		// We capture the display_label for error messages.
 		mod.registerModule();
-
-		// JS: display_label = label (set inside registerNavButton callback)
-		auto it = nav_button_map.find(mod.name);
-		if (it != nav_button_map.end())
-			display_label = it->second.label;
 	}
 
 	// wrap initialize() with idempotency guard, error handling, and activated() retry
@@ -519,9 +515,6 @@ void setActive(const std::string& module_key) {
 }
 
 void go_to_landing() {
-	if (!core::view)
-		return;
-
 	if (core::view->installType == 0)
 		set_active("source_select");
 	else if (core::view->installType == static_cast<int>(install_type::MPQ))

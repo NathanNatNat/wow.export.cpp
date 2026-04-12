@@ -697,3 +697,70 @@ The following file groups were partially or not fully audited at the line-by-lin
 - **JS Source**: `src/js/casc/dbd-manifest.js`
 - **Status**: Pending
 - **Details**: JS `prepareManifest()` returns a boolean and uses `is_preloaded` to gate re-entry. C++ needs to match the return type and ensure `is_preloaded` is thread-safe (should be `std::atomic<bool>` if accessed from multiple threads).
+
+---
+
+## Reverted Code Changes (Need Implementation)
+
+The following entries document code changes that were made by a previous agent session but have been reverted per user request. They are documented here as pending work items.
+
+### 135. [wowhead.cpp] Full JS-to-C++ conversion needed
+- **JS Source**: `src/js/wowhead.js` (entire file)
+- **Status**: Pending
+- **Details**: The file currently contains the original JavaScript code. Needs full conversion to C++:
+  - `charset` constant → `constexpr std::string_view`
+  - `WOWHEAD_SLOT_TO_SLOT_ID` object → `std::unordered_map<int,int>`
+  - `decode(str)` → `int decode(std::string_view)`
+  - `decompress_zeros(str)` → `std::vector<int> decompress_zeros(std::string_view)`
+  - `extract_hash_from_url(url)` → `std::string extract_hash_from_url(std::string_view)`
+  - `parse_v15(hash)` → parses v15 wowhead outfit format
+  - `parse_legacy(segments)` → parses legacy wowhead outfit format
+  - `wowhead_parse_hash(hash)` → dispatches to v15 or legacy parser
+  - Public `wowhead_parse(url_or_hash)` → main entry point returning `WowheadResult` struct
+  - Create `wowhead.h` header with `WowheadResult` struct and public API
+  - Add `wowhead.cpp` to `src/js/CMakeLists.txt`
+
+### 136. [updater.cpp] Full JS-to-C++ conversion needed
+- **JS Source**: `src/js/updater.js` (entire file)
+- **Status**: Pending
+- **Details**: The file currently contains the original JavaScript code. Needs full conversion to C++:
+  - `checkForUpdates()` → fetches update manifest JSON, compares GUIDs, returns bool
+  - `applyUpdate()` → downloads update files with progress, writes to disk
+  - `launchUpdater()` → spawns external updater process (platform-specific: Windows uses `CreateProcess`/`ShellExecute`, Linux uses `fork`/`exec`)
+  - Uses `generics::getJSON()`, `generics::downloadFile()`, `core::view`, `log::write()`
+  - User-facing text should reference `wow.export.cpp` not `wow.export`
+  - Create `updater.h` header with public API declarations
+  - Requires `<filesystem>`, `<nlohmann/json.hpp>`, platform headers (`<windows.h>` / `<unistd.h>`)
+
+### 137. [wmv.cpp] Full JS-to-C++ conversion needed
+- **JS Source**: `src/js/wmv.js` (entire file)
+- **Status**: Pending
+- **Details**: The file currently contains the original JavaScript code. Needs full conversion to C++:
+  - `wmv_parse(xml_str)` → parses `.chr` file XML, dispatches to v1/v2 parser
+  - `wmv_parse_v2(data)` → parses v2 SavedCharacter format, extracts model path, race/gender, equipment slots, customizations
+  - `wmv_parse_v1(data)` → parses v1 SavedCharacter format (simpler structure)
+  - `extract_race_gender_from_path(path)` → regex extraction from model file path
+  - Returns `WmvResult` struct with race, gender, items (slot→displayID), customizations
+  - Uses `xml::parse_xml()` and `wow::get_slot_id_for_wmv_slot()`
+  - Create `wmv.h` header with `WmvResult` struct and public API
+  - Requires `<nlohmann/json.hpp>` for XML data access
+
+### 138. [modules.cpp] Null pointer dereference in go_to_landing()
+- **JS Source**: `src/js/modules.js`, `go_to_landing()` function
+- **Status**: Pending
+- **Details**: `modules::go_to_landing()` accesses `core::view->installType` without checking if `core::view` is null. In JS this is safe because `core.view` is always an object, but in C++ `core::view` can be `nullptr` (e.g. during startup before a source is selected). Fix: add `if (!core::view) return;` guard at the top of `go_to_landing()`.
+
+### 139. [modules.cpp] wrap_module() display_label not updated from nav button
+- **JS Source**: `src/js/modules.js`, `wrap_module()` function
+- **Status**: Pending
+- **Details**: In JS, `display_label` is set inside the `registerNavButton` callback to the nav button's label. In the C++ version, `display_label` stays as the module key name. After calling `mod.registerModule()`, the code should look up the registered nav button label: `auto it = nav_button_map.find(mod.name); if (it != nav_button_map.end()) display_label = it->second.label;` — this ensures error messages reference the user-visible tab name rather than the internal module key.
+
+### 140. [cache-collector.cpp] https_request() hardcodes content-type instead of using caller's headers
+- **JS Source**: `src/js/workers/cache-collector.js`, `https_request()` function
+- **Status**: Pending
+- **Details**: The `https_request()` function hardcodes `"application/octet-stream"` as the content type for POST requests. In JS, the caller controls the content type via `options.headers['Content-Type']`. Fix: extract `Content-Type` from the `headers` map parameter and pass it to `cli.Post()` instead of the hardcoded string.
+
+### 141. [cache-collector.cpp] https_request() silently returns default response on connection error
+- **JS Source**: `src/js/workers/cache-collector.js`, `https_request()` function
+- **Status**: Pending
+- **Details**: When `httplib::Result` is falsy (connection failure, DNS error, timeout), the C++ code returns a default `HttpResponse` with status 0 and empty data. In JS, `req.on('error', reject)` propagates the error as a promise rejection. Fix: throw `std::runtime_error` when `!res` to match JS error propagation behavior. Same issue exists in `json_post()`.
