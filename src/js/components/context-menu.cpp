@@ -10,7 +10,6 @@
 namespace context_menu {
 
 // Keep a global track of the client mouse position.
-// TODO(conversion): In ImGui, mouse position is available via ImGui::GetIO().MousePos
 // each frame, so we read it directly instead of tracking via a global listener.
 // window.addEventListener('mousemove', event => { ... });
 
@@ -33,7 +32,6 @@ void reposition(ContextMenuState& state) {
 
 // mounted: Initial position in case the menu renders immediately, but primary
 // positioning occurs when `node` flips truthy (on open).
-// TODO(conversion): Handled via change-detection in render().
 
 // template: converted to ImGui immediate-mode rendering below.
 // <div class="context-menu" v-if="node !== null && node !== false"
@@ -85,7 +83,6 @@ void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
 
 	if (ImGui::Begin("##context_menu_popup", nullptr, windowFlags)) {
 		// <div class="context-menu-zone"></div>
-		// TODO(conversion): The context-menu-zone is a CSS hover dead-zone used in the HTML
 		// version to prevent accidental close. In ImGui, we handle close via mouse-leave logic.
 
 		// Render menu content via the callback (equivalent of <slot v-bind:node="node">).

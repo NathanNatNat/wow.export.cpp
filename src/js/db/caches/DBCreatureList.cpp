@@ -42,12 +42,9 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 	return result;
 }
 
-// JS: const creatures = new Map();
 static std::unordered_map<uint32_t, CreatureEntry> creatures;
-// JS: let is_initialized = false;
 static bool is_initialized = false;
 
-// JS: const initialize_creature_list = async () => { ... }
 void initialize_creature_list() {
 	if (is_initialized)
 		return;
@@ -56,12 +53,10 @@ void initialize_creature_list() {
 
 	auto allRows = casc::db2::preloadTable("Creature").getAllRows();
 	for (const auto& [id, row] : allRows) {
-		// JS: const name = row.Name_lang;
 		std::string name = fieldToString(row.at("Name_lang"));
 		if (name.empty())
 			continue;
 
-		// JS: let display_id = 0; for (const did of row.DisplayID) { if (did > 0) { display_id = did; break; } }
 		uint32_t display_id = 0;
 		auto displayIDs = fieldToUint32Vec(row.at("DisplayID"));
 		for (auto did : displayIDs) {
@@ -71,7 +66,6 @@ void initialize_creature_list() {
 			}
 		}
 
-		// JS: const always_items = row.AlwaysItem?.filter(e => e > 0) ?? [];
 		std::vector<uint32_t> always_items;
 		auto it = row.find("AlwaysItem");
 		if (it != row.end()) {
@@ -89,12 +83,10 @@ void initialize_creature_list() {
 	is_initialized = true;
 }
 
-// JS: const get_all_creatures = () => creatures;
 const std::unordered_map<uint32_t, CreatureEntry>& get_all_creatures() {
 	return creatures;
 }
 
-// JS: const get_creature_by_id = (id) => creatures.get(id);
 const CreatureEntry* get_creature_by_id(uint32_t id) {
 	auto it = creatures.find(id);
 	if (it != creatures.end())

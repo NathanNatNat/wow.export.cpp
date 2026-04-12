@@ -8,7 +8,6 @@
 #include <string>
 #include <memory>
 
-// Forward declarations
 namespace gl {
 class GLContext;
 class ShaderProgram;

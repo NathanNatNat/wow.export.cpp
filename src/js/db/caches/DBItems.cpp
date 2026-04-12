@@ -60,13 +60,11 @@ void initialize() {
 		ItemInfo info;
 		info.id = item_id;
 
-		// JS: item_row.Display_lang ?? 'Unknown item #' + item_id
 		std::string name = fieldToString(item_row.at("Display_lang"));
 		info.name = name.empty() ? std::format("Unknown item #{}", item_id) : std::move(name);
 
 		info.inventoryType = fieldToUint32(item_row.at("InventoryType"));
 
-		// JS: item_row.OverallQualityID ?? 0
 		auto qualIt = item_row.find("OverallQualityID");
 		info.quality = (qualIt != item_row.end()) ? fieldToUint32(qualIt->second) : 0;
 

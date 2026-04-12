@@ -25,18 +25,13 @@ return static_cast<uint32_t>(*p);
 return 0;
 }
 
-// JS: const GENDER_ANY = 2;
 static constexpr uint32_t GENDER_ANY = 2;
 
-// JS: const file_data_to_info = new Map();
 static std::unordered_map<uint32_t, ComponentTextureInfo> file_data_to_info;
 
-// JS: let is_initialized = false;
 static bool is_initialized = false;
-// JS: let init_promise = null;
 static bool is_initializing = false;
 
-// JS: const initialize = async () => { ... }
 void initialize() {
 if (is_initialized)
 return;
@@ -48,7 +43,6 @@ is_initializing = true;
 
 logging::write("Loading ComponentTextureFileData...");
 
-// JS: for (const [id, row] of await db2.ComponentTextureFileData.getAllRows())
 auto allRows = casc::db2::preloadTable("ComponentTextureFileData").getAllRows();
 for (const auto& [id, row] : allRows) {
 ComponentTextureInfo info;
@@ -63,7 +57,6 @@ is_initialized = true;
 is_initializing = false;
 }
 
-// JS: const getTextureForRaceGender = (file_data_ids, race_id, gender_index, fallback_race_id = 0) => { ... }
 std::optional<uint32_t> getTextureForRaceGender(const std::vector<uint32_t>& file_data_ids, uint32_t race_id, uint32_t gender_index, uint32_t fallback_race_id) {
 if (file_data_ids.empty())
 return std::nullopt;
@@ -113,12 +106,10 @@ return fdid;
 return file_data_ids[0];
 }
 
-// JS: const hasEntry = (file_data_id) => file_data_to_info.has(file_data_id);
 bool hasEntry(uint32_t file_data_id) {
 return file_data_to_info.contains(file_data_id);
 }
 
-// JS: const getInfo = (file_data_id) => file_data_to_info.get(file_data_id) || null;
 const ComponentTextureInfo* getInfo(uint32_t file_data_id) {
 auto it = file_data_to_info.find(file_data_id);
 if (it != file_data_to_info.end())

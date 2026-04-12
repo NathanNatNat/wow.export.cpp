@@ -22,7 +22,6 @@
 
 // -----------------------------------------------------------------------
 // detectFileType — detect audio format from raw bytes.
-// JS equivalent: detectFileType(data)
 // -----------------------------------------------------------------------
 
 AudioType detectFileType(const uint8_t* data, size_t size) {

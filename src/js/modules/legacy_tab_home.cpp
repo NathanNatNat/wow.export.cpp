@@ -22,16 +22,13 @@ namespace legacy_tab_home {
  *     <div id="home-help-buttons"> ... </div>
  *   </div>
  *
- * CSS: #tab-home, #legacy-tab-home share the same grid layout.
  * Uses the same renderHomeLayout() as tab_home.
  */
 void render() {
-	// JS: #legacy-tab-home uses the same layout as #tab-home
 	tab_home::renderHomeLayout();
 }
 
 void navigate(const char* module_name) {
-	// JS: this.$modules[module_name].setActive();
 	modules::set_active(module_name);
 }
 

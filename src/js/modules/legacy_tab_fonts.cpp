@@ -31,17 +31,11 @@ namespace legacy_tab_fonts {
 
 // --- File-local state ---
 
-// JS: const loaded_fonts = new Map();
 static std::unordered_map<std::string, void*> loaded_fonts;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
-// JS: const get_font_id = (file_name) => { ... }
 static std::string get_font_id(const std::string& file_name) {
-	// JS: let hash = 0;
-	// JS: for (let i = 0; i < file_name.length; i++)
-	// JS:     hash = ((hash << 5) - hash + file_name.charCodeAt(i)) | 0;
-	// JS: return 'font_legacy_' + Math.abs(hash);
 	// Use uint32_t for the computation to avoid signed overflow UB,
 	// then cast to int32_t at the end to match JS `| 0` (ToInt32) semantics.
 	uint32_t hash = 0;
@@ -51,7 +45,6 @@ static std::string get_font_id(const std::string& file_name) {
 	return "font_legacy_" + std::to_string(std::abs(static_cast<int32_t>(hash)));
 }
 
-// JS: const load_font = async (core, file_name) => { ... }
 static void* load_font(const std::string& file_name) {
 	const std::string font_id = get_font_id(file_name);
 
@@ -60,7 +53,6 @@ static void* load_font(const std::string& file_name) {
 		return it->second;
 
 	try {
-		// JS: const data = core.view.mpq.getFile(file_name);
 		mpq::MPQInstall* mpq = core::view->mpq.get();
 		std::optional<std::vector<uint8_t>> data = mpq ? mpq->getFile(file_name) : std::nullopt;
 
@@ -69,7 +61,6 @@ static void* load_font(const std::string& file_name) {
 			return nullptr;
 		}
 
-		// JS: const url = await inject_font_face(font_id, new Uint8Array(data), log);
 		void* font = font_helpers::inject_font_face(font_id, data->data(), data->size());
 
 		if (font) {
@@ -93,7 +84,6 @@ static std::string prev_selection_first;
 
 // --- Internal functions ---
 
-// JS: const load_font_list = async (core) => { ... }
 static void load_font_list() {
 	auto& view = *core::view;
 	if (!view.listfileFonts.empty() || view.isBusy > 0)
@@ -102,7 +92,6 @@ static void load_font_list() {
 	BusyLock _lock = core::create_busy_lock();
 
 	try {
-		// JS: core.view.listfileFonts = core.view.mpq.getFilesByExtension('.ttf');
 		mpq::MPQInstall* mpq = core::view->mpq.get();
 		if (!mpq) return;
 		auto ttf_files = mpq->getFilesByExtension(".ttf");
@@ -115,26 +104,18 @@ static void load_font_list() {
 // --- Public API ---
 
 void registerTab() {
-	// JS: this.registerNavButton('Fonts', 'font.svg', InstallType.MPQ);
 	modules::register_nav_button("legacy_tab_fonts", "Fonts", "font.svg", install_type::MPQ);
 }
 
 void mounted() {
 	auto& view = *core::view;
 
-	// JS: await load_font_list(this.$core);
 	load_font_list();
 
-	// JS: this.$core.view.fontPreviewPlaceholder = get_random_quote();
 	view.fontPreviewPlaceholder = font_helpers::get_random_quote();
-	// JS: this.$core.view.fontPreviewText = '';
 	view.fontPreviewText.clear();
-	// JS: this.$core.view.fontPreviewFontFamily = '';
 	view.fontPreviewFontFamily.clear();
 
-	// JS: const grid_element = this.$el.querySelector('.font-character-grid');
-	// JS: const on_glyph_click = (char) => this.$core.view.fontPreviewText += char;
-	// JS: this.$core.view.$watch('selectionFonts', async selection => { ... });
 	// Change-detection is handled in render() by comparing selectionFonts[0] each frame.
 }
 
@@ -171,7 +152,6 @@ void render() {
 	auto regions = app::layout::CalcListTabRegions(false);
 
 	// --- Left panel: List container (row 1, col 1) ---
-	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionFonts" :items="listfileFonts" ...>
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	//       copy_file_paths, copy_export_paths, open_export_directory
@@ -252,7 +232,6 @@ void render() {
 	app::layout::EndListContainer();
 
 	// --- Filter bar (row 2, col 1) ---
-	// JS: <div class="filter">
 	if (app::layout::BeginFilterBar("legacy-fonts-filter", regions)) {
 		if (view.config.value("regexFilters", false))
 			ImGui::TextUnformatted("Regex Enabled");
@@ -266,10 +245,8 @@ void render() {
 	app::layout::EndFilterBar();
 
 	// --- Right panel: Preview container (row 1, col 2) ---
-	// JS: <div class="preview-container font-preview">
 	if (app::layout::BeginPreviewContainer("legacy-fonts-preview-container", regions)) {
 		// Glyph grid.
-		// JS: <div class="font-character-grid"></div>
 		ImGui::BeginChild("font-character-grid", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.5f), ImGuiChildFlags_Borders);
 
 		// Set 2px spacing to match CSS: flex-wrap: wrap; gap: 2px
@@ -284,7 +261,6 @@ void render() {
 			// Each glyph cell is a small selectable button.
 			ImGui::PushID(static_cast<int>(codepoint));
 			if (ImGui::Selectable(utf8_buf, false, 0, ImVec2(24, 24))) {
-				// JS: on_glyph_click(char) => this.$core.view.fontPreviewText += char;
 				view.fontPreviewText += utf8_buf;
 			}
 			if (ImGui::IsItemHovered()) {
@@ -307,7 +283,6 @@ void render() {
 		ImGui::EndChild();
 
 		// Font preview text input.
-		// JS: <textarea :style="{ fontFamily: fontPreviewFontFamily }" :placeholder="fontPreviewPlaceholder" v-model="fontPreviewText">
 		char preview_buf[4096] = {};
 		std::strncpy(preview_buf, view.fontPreviewText.c_str(), sizeof(preview_buf) - 1);
 		if (ImGui::InputTextMultiline("##FontPreviewText", preview_buf, sizeof(preview_buf),
@@ -320,7 +295,6 @@ void render() {
 	app::layout::EndPreviewContainer();
 
 	// --- Bottom-right: Preview controls (row 2, col 2) ---
-	// JS: <div class="preview-controls">
 	//     <input type="button" value="Export Selected" @click="export_fonts" :class="{ disabled: isBusy }"/>
 	if (app::layout::BeginPreviewControls("legacy-fonts-preview-controls", regions)) {
 		const bool busy = view.isBusy > 0;
@@ -354,18 +328,14 @@ void export_fonts() {
 		const std::string file_name = sel_entry.get<std::string>();
 
 		try {
-			// JS: const export_path = path.join(export_dir, file_name);
 			namespace fs = std::filesystem;
 			const fs::path export_path = fs::path(export_dir) / file_name;
 
-			// JS: const data = this.$core.view.mpq.getFile(file_name);
 			mpq::MPQInstall* mpq = core::view->mpq.get();
 			std::optional<std::vector<uint8_t>> data = mpq ? mpq->getFile(file_name) : std::nullopt;
 
 			if (data) {
-				// JS: await fsp.mkdir(path.dirname(export_path), { recursive: true });
 				fs::create_directories(export_path.parent_path());
-				// JS: await fsp.writeFile(export_path, new Uint8Array(data));
 				std::ofstream ofs(export_path, std::ios::binary);
 				ofs.write(reinterpret_cast<const char*>(data->data()), static_cast<std::streamsize>(data->size()));
 				last_export_path = export_path.string();
@@ -384,8 +354,6 @@ void export_fonts() {
 		core::setToast("error", std::format("Exported {} fonts with {} failures.", exported, failed));
 	} else if (!last_export_path.empty()) {
 		namespace fs = std::filesystem;
-		// JS: const dir = path.dirname(last_export_path);
-		// JS: const toast_opt = { 'View in Explorer': () => nw.Shell.openItem(dir) };
 		const std::string dir = fs::path(last_export_path).parent_path().string();
 		std::vector<ToastAction> toast_opt = { {"View in Explorer", [dir]() { core::openInExplorer(dir); }} };
 

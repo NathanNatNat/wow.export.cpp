@@ -129,7 +129,6 @@ static void quat_slerp(float* out, float ax, float ay, float az, float aw, float
 }
 
 // -----------------------------------------------------------------------
-// Helper to extract a vec3 from an MDXAnimValue
 // -----------------------------------------------------------------------
 static std::array<float, 3> anim_value_to_vec3(const MDXAnimValue& val) {
 	if (const auto* vec = std::get_if<std::vector<float>>(&val)) {
@@ -215,10 +214,6 @@ void MDXRendererGL::load() {
 	_build_geometry();
 
 	if (reactive && !geosetArray.empty()) {
-		// JS: core.view[this.geosetKey] = this.geosetArray;
-		// JS: this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true });
-		// JS: this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true });
-		// Vue watchers → no-op in immediate mode; updateGeosets() called manually.
 	}
 
 	data_ptr = nullptr;
@@ -242,7 +237,6 @@ void MDXRendererGL::_create_default_texture() {
 
 void MDXRendererGL::_load_textures() {
 	auto& tex_list = mdx->textures;
-	// JS: const mpq = core.view.mpq;
 	mpq::MPQInstall* mpq = core::view->mpq.get();
 
 	if (useRibbon)
@@ -250,18 +244,15 @@ void MDXRendererGL::_load_textures() {
 
 	for (size_t i = 0, n = tex_list.size(); i < n; i++) {
 		auto& texture = tex_list[i];
-		// JS: const ribbonSlot = this.useRibbon ? textureRibbon.addSlot() : null;
 		int ribbonSlot = useRibbon ? texture_ribbon::addSlot() : -1;
 
 		// mdx uses image filename directly
 		const std::string& fileName = texture.image;
 		if (!fileName.empty()) {
-			// JS: if (ribbonSlot !== null) textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID);
 			if (ribbonSlot >= 0)
 				texture_ribbon::setSlotFileLegacy(ribbonSlot, fileName, syncID);
 
 			try {
-				// JS: const data = mpq.getFile(fileName);
 				// MPQ file access — get texture file data from MPQ archive
 				if (!mpq)
 					continue;
@@ -284,7 +275,6 @@ void MDXRendererGL::_load_textures() {
 
 					textures[static_cast<int>(i)] = std::move(gl_tex);
 
-					// JS: if (ribbonSlot !== null) textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
 					if (ribbonSlot >= 0)
 						texture_ribbon::setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), syncID);
 				}
@@ -364,7 +354,6 @@ void MDXRendererGL::_build_geometry() {
 				flippedUvs[i * 2 + 1] = 1.0f - uvs[i * 2 + 1];
 			}
 		} else {
-			// JS: new Float32Array(vertCount * 2) — zero-filled
 			flippedUvs.resize(vertCount * 2, 0.0f);
 		}
 
@@ -809,7 +798,6 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 	shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
 	shader->set_uniform_3f("u_view_up", 0, 1, 0);
 
-	// JS: performance.now() * 0.001
 	auto now = std::chrono::steady_clock::now();
 	float time_sec = std::chrono::duration<float>(now.time_since_epoch()).count();
 	shader->set_uniform_1f("u_time", time_sec);
@@ -929,8 +917,6 @@ std::optional<MDXRendererGL::BoundingBoxResult> MDXRendererGL::getBoundingBox() 
 // -----------------------------------------------------------------------
 
 void MDXRendererGL::dispose() {
-	// JS: this.geosetWatcher?.(); this.wireframeWatcher?.();
-	// TODO(conversion): Vue watchers → no-op in C++ (no reactive system)
 
 	for (auto& vao : vaos)
 		vao->dispose();

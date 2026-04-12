@@ -13,7 +13,6 @@
  * In the JS version, icons were loaded as BLP files, converted to data URLs,
  * and set as CSS background-image properties on dynamic stylesheet rules.
  *
- * In C++/ImGui, icons are loaded as BLP files and stored as OpenGL textures
  * in a cache. The queue mechanism with priority ordering is preserved.
  *
  * JS equivalent: module.exports = { loadIcon }

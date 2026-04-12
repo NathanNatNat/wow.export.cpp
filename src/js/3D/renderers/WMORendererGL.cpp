@@ -94,14 +94,8 @@ void WMORendererGL::load() {
 	_setup_doodad_sets();
 
 	// setup reactive controls
-	// JS: view[this.wmoGroupKey] = this.groupArray;
 	get_wmo_groups_view() = groupArray;
-	// JS: view[this.wmoSetKey] = this.setArray;
 	get_wmo_sets_view() = setArray;
-	// JS: this.groupWatcher = view.$watch(this.wmoGroupKey, () => this.updateGroups(), { deep: true });
-	// JS: this.setWatcher   = view.$watch(this.wmoSetKey,   () => this.updateSets(),   { deep: true });
-	// JS: this.wireframeWatcher = view.$watch('config.modelViewerWireframe', () => {}, { deep: true });
-	// C++: Change detection replaces Vue watchers; checked states are compared each frame in render().
 	{
 		const auto& gv = get_wmo_groups_view();
 		prev_group_checked.resize(gv.size());
@@ -137,7 +131,6 @@ void WMORendererGL::_create_default_texture() {
 void WMORendererGL::_load_textures() {
 	const auto& materials = wmo->materials;
 
-	// JS: if (this.useRibbon) this.syncID = textureRibbon.reset();
 	if (useRibbon)
 		syncID = texture_ribbon::reset();
 
@@ -200,10 +193,8 @@ void WMORendererGL::_load_textures() {
 			if (textures.count(textureFileDataID))
 				continue;
 
-			// JS: const ribbonSlot = this.useRibbon ? textureRibbon.addSlot() : null;
 			int ribbonSlot = useRibbon ? texture_ribbon::addSlot() : -1;
 
-			// JS: if (ribbonSlot !== null) textureRibbon.setSlotFile(ribbonSlot, textureFileDataID, this.syncID);
 			if (ribbonSlot >= 0)
 				texture_ribbon::setSlotFile(ribbonSlot, textureFileDataID, syncID);
 
@@ -228,7 +219,6 @@ void WMORendererGL::_load_textures() {
 
 				textures[textureFileDataID] = std::move(gl_tex);
 
-				// JS: if (ribbonSlot !== null) textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
 				if (ribbonSlot >= 0)
 					texture_ribbon::setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), syncID);
 			} catch (const std::exception& e) {
@@ -499,7 +489,6 @@ void WMORendererGL::loadDoodadSet(uint32_t index) {
 
 			if (renderer) {
 				// apply doodad transform (convert WoW coords to OpenGL)
-				// JS: [pos[0], pos[2], pos[1] * -1]
 				WMODoodadInstance inst;
 				inst.renderer = renderer;
 				inst.position = {
@@ -507,7 +496,6 @@ void WMORendererGL::loadDoodadSet(uint32_t index) {
 					(doodad.position.size() > 2) ? doodad.position[2] : 0.0f,
 					(doodad.position.size() > 1) ? doodad.position[1] * -1.0f : 0.0f
 				};
-				// JS: [rot[0], rot[2], rot[1] * -1, rot[3]]
 				inst.rotation = {
 					(doodad.rotation.size() > 0) ? doodad.rotation[0] : 0.0f,
 					(doodad.rotation.size() > 2) ? doodad.rotation[2] : 0.0f,
@@ -638,7 +626,6 @@ void WMORendererGL::render(const float* view_matrix, const float* projection_mat
 	if (!shader)
 		return;
 
-	// ─── Change detection (replaces Vue deep watchers) ─────────────────
 	{
 		const auto& gv = get_wmo_groups_view();
 		bool groups_changed = gv.size() != prev_group_checked.size();
@@ -819,8 +806,6 @@ std::optional<WMORendererGL::BoundingBoxResult> WMORendererGL::getBoundingBox() 
 
 void WMORendererGL::dispose() {
 	// unregister watchers
-	// JS: this.groupWatcher?.(); this.setWatcher?.(); this.wireframeWatcher?.();
-	// C++: Change detection is inline in render(); no listener handles to unregister.
 	prev_group_checked.clear();
 	prev_set_checked.clear();
 

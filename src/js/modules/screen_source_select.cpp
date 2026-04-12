@@ -58,7 +58,6 @@ static void ensureSourceTextures() {
 }
 
 // --- Expansion icon textures (lazy-loaded from WebP) ---
-// JS: CSS var(--expansion-icon-N) mapped via expansion-icon-bg-N class
 // Maps expansionId (0..12) to icon_*.webp filenames.
 static constexpr std::array<const char*, 13> EXPANSION_ICON_FILES = {{
 	"icon_classic.webp",
@@ -119,7 +118,6 @@ static GLuint loadWebpTexture(const std::filesystem::path& path) {
 
 /**
  * Get or load an expansion icon texture by expansion ID.
- * JS: CSS background-image var(--expansion-icon-N) with expansion-icon-bg-N class.
  */
 static GLuint getExpansionIconTexture(int expansionId) {
 	if (expansionId < 0 || expansionId >= static_cast<int>(EXPANSION_ICON_FILES.size()))
@@ -139,7 +137,6 @@ static GLuint getExpansionIconTexture(int expansionId) {
 
 // --- File-local state ---
 
-// JS: let casc_source = null;
 static std::unique_ptr<casc::CASCLocal> casc_local_source;
 static std::unique_ptr<casc::CASCRemote> casc_remote_source;
 
@@ -147,8 +144,6 @@ static std::unique_ptr<casc::CASCRemote> casc_remote_source;
 enum class SourceType { None, Local, Remote };
 static SourceType active_source_type = SourceType::None;
 
-// JS: let local_selector = null;
-// JS: let legacy_selector = null;
 // In ImGui, file selectors are triggered via file_field::openDirectoryDialog().
 
 // Background thread for cache collection (replaces JS Worker).
@@ -194,7 +189,6 @@ static std::string generate_uuid() {
 
 // --- Internal functions ---
 
-// JS: methods.get_product_tag(product)
 static std::string get_product_tag(const std::string& product) {
 	for (const auto& entry : constants::PRODUCTS) {
 		if (entry.product == product)
@@ -203,7 +197,6 @@ static std::string get_product_tag(const std::string& product) {
 	return "Unknown";
 }
 
-// JS: methods.set_selected_cdn(region)
 static void set_selected_cdn(const nlohmann::json& region) {
 	core::view->selectedCDNRegion = region;
 	core::view->lockCDNRegion = true;
@@ -211,7 +204,6 @@ static void set_selected_cdn(const nlohmann::json& region) {
 	casc::cdn_resolver::startPreResolution(region["tag"].get<std::string>());
 }
 
-// JS: methods.load_install(index)
 void load_install(int index) {
 	core::view->availableLocalBuilds = nullptr;
 	core::view->availableRemoteBuilds = nullptr;
@@ -271,8 +263,6 @@ void load_install(int index) {
 					// Synchronize CASC result back to main thread.
 					core::view->casc = src;
 
-					// JS: if (casc_source instanceof CASCLocal && this.$core.view.config.allowCacheCollection) { ... }
-					// JS: Worker for cache-collector.
 					if (core::view->config.value("allowCacheCollection", false)) {
 						if (!core::view->config.contains("machineId") || !core::view->config["machineId"].is_string()
 							|| core::view->config["machineId"].get<std::string>().empty()) {
@@ -302,17 +292,14 @@ void load_install(int index) {
 					}
 
 					core::view->installType = install_type::CASC;
-					// JS: this.$modules.tab_home.setActive();
 					modules::set_active("tab_home");
 				});
 			} catch (const std::exception& e) {
 				std::string errMsg = e.what();
 				core::postToMainThread([errMsg = std::move(errMsg)]() {
 					logging::write(std::format("Failed to load CASC: {}", errMsg));
-					// JS: 'Visit Support Discord': () => ExternalLinks.open('::DISCORD') // Removed: external-links module deleted
 					core::setToast("error", "Unable to initialize CASC. Try repairing your game installation, or seek support.",
 						{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
-					// JS: this.$modules.source_select.setActive();
 					modules::set_active("source_select");
 				});
 			}
@@ -328,7 +315,6 @@ void load_install(int index) {
 					// Synchronize CASC result back to main thread.
 					core::view->casc = src;
 					core::view->installType = install_type::CASC;
-					// JS: this.$modules.tab_home.setActive();
 					modules::set_active("tab_home");
 				});
 			} catch (const std::exception& e) {
@@ -344,7 +330,6 @@ void load_install(int index) {
 	}
 }
 
-// JS: methods.open_local_install(install_path, product)
 void open_local_install(const std::string& install_path, const std::string& product) {
 	core::hideToast();
 
@@ -399,17 +384,14 @@ void open_local_install(const std::string& install_path, const std::string& prod
 	}
 }
 
-// JS: methods.open_legacy_install(install_path)
 void open_legacy_install(const std::string& install_path) {
 	core::hideToast();
 
 	try {
-		// JS: this.$core.view.mpq = new MPQInstall(install_path);
 		core::view->mpq = std::make_unique<mpq::MPQInstall>(install_path);
 
 		core::showLoadingScreen(2, "Loading Legacy Installation");
 
-		// JS: await this.$core.view.mpq.loadInstall();
 		core::view->mpq->loadInstall();
 
 		auto& recent_legacy = core::view->config["recentLegacy"];
@@ -444,7 +426,6 @@ void open_legacy_install(const std::string& install_path) {
 			recent_legacy.erase(recent_legacy.size() - 1);
 
 		core::view->installType = install_type::MPQ;
-		// JS: this.$modules.legacy_tab_home.setActive();
 		modules::set_active("legacy_tab_home");
 		core::hideLoadingScreen();
 	} catch (const std::exception& e) {
@@ -460,12 +441,10 @@ void open_legacy_install(const std::string& install_path) {
 			}
 		}
 
-		// JS: this.$modules.source_select.setActive();
 		modules::set_active("source_select");
 	}
 }
 
-// JS: methods.init_cdn_pings()
 static void init_cdn_pings() {
 	auto& regions = core::view->cdnRegions;
 	std::string user_region;
@@ -481,7 +460,6 @@ static void init_cdn_pings() {
 		if (region.tag == "cn") {
 			cdn_url = std::string(constants::PATCH::HOST_CHINA);
 		} else {
-			// JS: cdn_url = util.format(constants.PATCH.HOST, region.tag);
 			// HOST is "https://%s.version.battle.net/" — insert region tag.
 			cdn_url = std::format("https://{}.version.battle.net/", std::string(region.tag));
 		}
@@ -501,7 +479,6 @@ static void init_cdn_pings() {
 	}
 
 	// Ping all regions asynchronously.
-	// JS: Promise.all(pings).then(() => { ... auto-select fastest region ... });
 	// Background thread pings all regions, stores results via mutex.
 	// Results are applied to core::view from the main thread in render().
 	{
@@ -538,19 +515,15 @@ static void init_cdn_pings() {
 	});
 }
 
-// JS: methods.click_source_local()
 static void click_source_local() {
 	if (core::view->isBusy)
 		return;
 
-	// JS: local_selector.value = ''; local_selector.click();
-	// In C++, open a native directory picker dialog.
 	std::string selected = file_field::openDirectoryDialog();
 	if (!selected.empty())
 		open_local_install(selected);
 }
 
-// JS: methods.click_source_local_recent(entry)
 static void click_source_local_recent(const nlohmann::json& entry) {
 	if (core::view->isBusy)
 		return;
@@ -558,7 +531,6 @@ static void click_source_local_recent(const nlohmann::json& entry) {
 	open_local_install(entry["path"].get<std::string>(), entry.value("product", ""));
 }
 
-// JS: methods.click_source_remote()
 static void click_source_remote() {
 	if (core::view->isBusy)
 		return;
@@ -598,19 +570,15 @@ static void click_source_remote() {
 	}
 }
 
-// JS: methods.click_source_legacy()
 static void click_source_legacy() {
 	if (core::view->isBusy)
 		return;
 
-	// JS: legacy_selector.value = ''; legacy_selector.click();
-	// In C++, open a native directory picker dialog.
 	std::string selected = file_field::openDirectoryDialog();
 	if (!selected.empty())
 		open_legacy_install(selected);
 }
 
-// JS: methods.click_source_legacy_recent(entry)
 static void click_source_legacy_recent(const nlohmann::json& entry) {
 	if (core::view->isBusy)
 		return;
@@ -618,7 +586,6 @@ static void click_source_legacy_recent(const nlohmann::json& entry) {
 	open_legacy_install(entry["path"].get<std::string>());
 }
 
-// JS: methods.click_source_build(index)
 static void click_source_build(int index) {
 	if (core::view->isBusy)
 		return;
@@ -626,7 +593,6 @@ static void click_source_build(int index) {
 	load_install(index);
 }
 
-// JS: methods.click_return_to_source_select()
 static void click_return_to_source_select() {
 	core::view->availableLocalBuilds = nullptr;
 	core::view->availableRemoteBuilds = nullptr;
@@ -642,7 +608,6 @@ static void click_return_to_source_select() {
  */
 static void drawDashedRoundedRect(ImDrawList* draw, ImVec2 p_min, ImVec2 p_max, ImU32 color, float rounding, float thickness, float dash_len, float gap_len) {
 	// Generate the path for a rounded rectangle, then walk it with dashes.
-	// ImGui's PathRect + PathStroke draws solid; we manually segment.
 
 	// Build polyline points for the rounded rect using ImGui's path API.
 	draw->PathClear();
@@ -687,20 +652,16 @@ static void drawDashedRoundedRect(ImDrawList* draw, ImVec2 p_min, ImVec2 p_max, 
 	}
 }
 
-// JS: mounted()
 void mounted() {
 	// init recent local/legacy arrays if needed.
-	// JS: if (!Array.isArray(this.$core.view.config.recentLocal))
 	//     this.$core.view.config.recentLocal = [];
 	if (!core::view->config.contains("recentLocal") || !core::view->config["recentLocal"].is_array())
 		core::view->config["recentLocal"] = nlohmann::json::array();
 
-	// JS: if (!Array.isArray(this.$core.view.config.recentLegacy))
 	//     this.$core.view.config.recentLegacy = [];
 	if (!core::view->config.contains("recentLegacy") || !core::view->config["recentLegacy"].is_array())
 		core::view->config["recentLegacy"] = nlohmann::json::array();
 
-	// JS: create file selectors
 	// In ImGui, file selectors are triggered via file_field::openDirectoryDialog()
 	// instead of NW.js <input type="file" nwdirectory>.
 
@@ -773,7 +734,6 @@ void render() {
 	ImDrawList* draw = ImGui::GetWindowDrawList();
 
 	// --- Template rendering ---
-	// JS: <div id="source-select" v-if="!$core.view.sourceSelectShowBuildSelect">
 	if (!core::view->sourceSelectShowBuildSelect) {
 		// Count number of cards (always 3: local, remote, legacy).
 		const int num_cards = 3;
@@ -956,7 +916,6 @@ void render() {
 				draw->AddText(ImGui::GetFont(), link_size, link_pos, link_color, link_part.c_str());
 			} else if (card.card_id == 1) {
 				// CDN region: "Region: NAME (Change)" with context menu.
-				// JS: Region: {{ $core.view.selectedCDNRegion.name }} (Change)
 				text_y += 5.0f;
 				if (!core::view->selectedCDNRegion.is_null()) {
 					std::string region_label = std::format("Region: {} ", core::view->selectedCDNRegion.value("name", std::string("...")));
@@ -1031,7 +990,6 @@ void render() {
 			cur_y += card_h + card_gap;
 		}
 	} else {
-		// JS: <div id="build-select">
 		//   <div class="build-select-content">
 		//     <div class="build-select-title">Select Build</div>
 		//     <div class="build-select-buttons">
@@ -1101,7 +1059,6 @@ void render() {
 				}
 
 				// Expansion icon (32px, at 10px from left, vertically centered).
-				// JS: CSS background-image var(--expansion-icon-N), background-position: 10px center, background-size: 32px.
 				int expansionId = build.value("expansionId", 0);
 				GLuint iconTex = getExpansionIconTexture(expansionId);
 				if (iconTex) {

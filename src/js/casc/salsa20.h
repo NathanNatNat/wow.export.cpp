@@ -12,7 +12,6 @@
 #include <string_view>
 #include <span>
 
-// Forward declaration to avoid circular dependency.
 class BufferWrapper;
 
 namespace casc {

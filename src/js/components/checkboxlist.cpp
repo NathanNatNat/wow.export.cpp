@@ -26,14 +26,11 @@ namespace checkboxlist {
  * Invoked when the component is mounted.
  * Used to register global listeners and resize observer.
  */
-// TODO(conversion): In ImGui, global mouse listeners and ResizeObserver are not needed.
-// ImGui provides mouse state via ImGui::GetIO() and resizing is handled by layout each frame.
 
 /**
  * Invoked when the component is destroyed.
  * Used to unregister global mouse listeners and resize observer.
  */
-// TODO(conversion): No explicit unmount needed in ImGui immediate mode.
 
 /**
  * Offset of the scroll widget in pixels.
@@ -128,7 +125,6 @@ static void wheelMouse(float wheelDelta, float containerHeight, float scrollerHe
  * Propagate entry clicks to the child checkbox.
  * @param {MouseEvent} event
  */
-// TODO(conversion): In ImGui, click propagation to checkbox is built into the rendering
 // loop below — clicking the row toggles the checkbox directly.
 
 /**
@@ -150,7 +146,6 @@ void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListStat
 		? std::max(20.0f, containerHeight * (static_cast<float>(state.slotCount) / static_cast<float>(totalItems)))
 		: containerHeight;
 
-	// Equivalent of resize() — recalculate slot count and scroll each frame.
 	resize(containerHeight, scrollerHeight, state);
 
 	// Compute display range.

@@ -93,7 +93,6 @@ public:
 
 	/**
 	 * Add a single texture buffer for embedding in GLB.
-	 * C++ accessor: JS accesses gltf.texture_buffers directly as a public property.
 	 * @param fileDataID Texture file data ID
 	 * @param buffer PNG data buffer
 	 */

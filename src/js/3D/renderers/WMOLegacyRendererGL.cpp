@@ -91,14 +91,8 @@ void WMOLegacyRendererGL::load() {
 	_load_groups();
 	_setup_doodad_sets();
 
-	// JS: view.modelViewerWMOGroups = this.groupArray;
 	core::view->modelViewerWMOGroups = groupArray;
-	// JS: view.modelViewerWMOSets = this.setArray;
 	core::view->modelViewerWMOSets = setArray;
-	// JS: this.groupWatcher = view.$watch('modelViewerWMOGroups', ...);
-	// JS: this.setWatcher   = view.$watch('modelViewerWMOSets',   ...);
-	// JS: this.wireframeWatcher = view.$watch('config.modelViewerWireframe', ...);
-	// C++: Change detection replaces Vue watchers; checked states are compared each frame in render().
 	{
 		const auto& gv = core::view->modelViewerWMOGroups;
 		prev_group_checked.resize(gv.size());
@@ -133,14 +127,12 @@ void WMOLegacyRendererGL::_create_default_texture() {
 void WMOLegacyRendererGL::_load_textures() {
 	const auto& materials = wmo->materials;
 
-	// JS: if (this.useRibbon) this.syncID = textureRibbon.reset();
 	if (useRibbon)
 		syncID = texture_ribbon::reset();
 
 	// legacy wmos use texture names directly from MOTX
 	const auto& textureNames = wmo->textureNames;
 
-	// JS: const mpq = core.view.mpq;
 	mpq::MPQInstall* mpq = core::view->mpq.get();
 
 	for (size_t i = 0; i < materials.size(); i++) {
@@ -166,15 +158,12 @@ void WMOLegacyRendererGL::_load_textures() {
 			if (textures.count(textureName))
 				continue;
 
-			// JS: const ribbonSlot = this.useRibbon ? textureRibbon.addSlot() : null;
 			int ribbonSlot = useRibbon ? texture_ribbon::addSlot() : -1;
 
-			// JS: if (ribbonSlot !== null) textureRibbon.setSlotFile(ribbonSlot, textureName, this.syncID);
 			if (ribbonSlot >= 0)
 				texture_ribbon::setSlotFileLegacy(ribbonSlot, textureName, syncID);
 
 			try {
-				// JS: const data = mpq.getFile(textureName);
 				if (!mpq)
 					continue;
 
@@ -187,7 +176,6 @@ void WMOLegacyRendererGL::_load_textures() {
 					gl_tex->set_blp(blp, blp_flags);
 					textures[textureName] = std::move(gl_tex);
 
-					// JS: if (ribbonSlot !== null) textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
 					if (ribbonSlot >= 0)
 						texture_ribbon::setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), syncID);
 				}
@@ -353,7 +341,6 @@ void WMOLegacyRendererGL::loadDoodadSet(uint32_t index) {
 
 	WMOLegacyDoodadSet doodadSetData;
 
-	// JS: const mpq = core.view.mpq;
 	mpq::MPQInstall* mpq = core::view->mpq.get();
 
 	for (uint32_t i = 0; i < count; i++) {
@@ -378,7 +365,6 @@ void WMOLegacyRendererGL::loadDoodadSet(uint32_t index) {
 			if (rendIt != m2_renderers.end()) {
 				renderer = rendIt->second.get();
 			} else {
-				// JS: const fileData = mpq.getFile(doodadName);
 				if (mpq) {
 					auto fileData = mpq->getFile(doodadName);
 					if (fileData.has_value()) {
@@ -399,13 +385,11 @@ void WMOLegacyRendererGL::loadDoodadSet(uint32_t index) {
 				WMOLegacyDoodadInstance inst;
 				inst.renderer = renderer;
 				// apply doodad transform (convert WoW coords to OpenGL)
-				// JS: [pos[0], pos[2], pos[1] * -1]
 				inst.position = {
 					(doodad.position.size() > 0) ? doodad.position[0] : 0.0f,
 					(doodad.position.size() > 2) ? doodad.position[2] : 0.0f,
 					(doodad.position.size() > 1) ? doodad.position[1] * -1.0f : 0.0f
 				};
-				// JS: [rot[0], rot[2], rot[1] * -1, rot[3]]
 				inst.rotation = {
 					(doodad.rotation.size() > 0) ? doodad.rotation[0] : 0.0f,
 					(doodad.rotation.size() > 2) ? doodad.rotation[2] : 0.0f,
@@ -431,7 +415,6 @@ void WMOLegacyRendererGL::loadDoodadSet(uint32_t index) {
 // -----------------------------------------------------------------------
 
 void WMOLegacyRendererGL::updateGroups() {
-	// JS: view.modelViewerWMOGroups is authoritative; sync visibility from it
 	const auto& groups_view = core::view->modelViewerWMOGroups;
 	for (size_t i = 0; i < groups.size() && i < groups_view.size(); i++)
 		groups[i].visible = groups_view[i].value("checked", true);
@@ -512,7 +495,6 @@ void WMOLegacyRendererGL::render(const float* view_matrix, const float* projecti
 	if (!shader)
 		return;
 
-	// ─── Change detection (replaces Vue deep watchers) ─────────────────
 	{
 		const auto& gv = core::view->modelViewerWMOGroups;
 		bool groups_changed = gv.size() != prev_group_checked.size();
@@ -673,8 +655,6 @@ std::optional<WMOLegacyRendererGL::BoundingBoxResult> WMOLegacyRendererGL::getBo
 // -----------------------------------------------------------------------
 
 void WMOLegacyRendererGL::dispose() {
-	// JS: this.groupWatcher?.(); this.setWatcher?.(); this.wireframeWatcher?.();
-	// C++: Change detection is inline in render(); no listener handles to unregister.
 	prev_group_checked.clear();
 	prev_set_checked.clear();
 

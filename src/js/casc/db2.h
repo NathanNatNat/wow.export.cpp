@@ -23,7 +23,6 @@ namespace casc {
  *   - db2.SomeTable.getAllRows()  → lazy parse on first method call
  *   - db2.preload.SomeTable()    → parse + preload immediately
  *
- * In C++, this is a namespace with functions:
  *   - db2::getTable("SomeTable") → returns a WDCReader& (lazy parse)
  *   - db2::preloadTable("SomeTable") → parse + preload, returns WDCReader&
  */

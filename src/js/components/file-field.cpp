@@ -27,14 +27,11 @@ namespace file_field {
  * Invoked when the component is mounted.
  * Used to create an internal file node.
  */
-// TODO(conversion): In C++, we use platform-native directory dialogs instead of
-// DOM input elements. No mount/unmount lifecycle needed.
 
 /**
  * Invoked when this component is unmounted.
  * Used to remove internal references to file node.
  */
-// TODO(conversion): No explicit unmount needed — no DOM resources to clean up.
 
 /**
  * Open a native directory picker dialog.

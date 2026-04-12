@@ -22,10 +22,8 @@
 
 namespace model_viewer_gl {
 
-// ─── parse_hex_color ────────────────────────────────────────────
 
 std::array<float, 3> parse_hex_color(const std::string& hex) {
-	// JS: const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
 	static const std::regex hex_regex("^#?([a-fA-F\\d]{2})([a-fA-F\\d]{2})([a-fA-F\\d]{2})$");
 	std::smatch result;
 	if (!std::regex_match(hex, result, hex_regex))
@@ -38,7 +36,6 @@ std::array<float, 3> parse_hex_color(const std::string& hex) {
 	};
 }
 
-// ─── PerspectiveCamera ─────────────────────────────────────────
 
 // simple perspective camera implementation
 PerspectiveCamera::PerspectiveCamera(float fov, float aspect, float near_val, float far_val)
@@ -130,7 +127,6 @@ void PerspectiveCamera::setPosition(float x, float y, float z) {
 	update_view();
 }
 
-// ─── Camera Fitting ─────────────────────────────────────────────
 
 /**
  * Fit camera to bounding box using diagonal view approach
@@ -222,10 +218,7 @@ void fit_camera_for_character(const BoundingBox* /*bounding_box*/, PerspectiveCa
 	}
 }
 
-// ─── FBO Management ─────────────────────────────────────────────
 
-// TODO(conversion): In JS, a canvas element and WebGL2 context are created.
-// In C++/ImGui, we render to an offscreen FBO and display the color texture
 // via ImGui::Image. These helpers manage FBO lifecycle.
 
 static void create_fbo(State& state, int width, int height) {
@@ -280,7 +273,6 @@ static void destroy_fbo(State& state) {
 	}
 }
 
-// ─── Camera Adapter Sync ────────────────────────────────────────
 
 // Sync PerspectiveCamera position → CameraGL adapter (before orbit controls update)
 static void sync_camera_to_gl(State& state) {
@@ -313,9 +305,7 @@ static void setup_camera_gl_callbacks(State& state) {
 	};
 }
 
-// ─── Input Handling ─────────────────────────────────────────────
 
-// TODO(conversion): In JS, event listeners are bound to the canvas/document for
 // mouse and keyboard events. In C++/ImGui, we query ImGui::GetIO() and forward
 // events to the camera controls. This handles the equivalent of:
 //   canvas.addEventListener('mousedown', ...)
@@ -386,7 +376,6 @@ static void handle_input(State& state) {
 	}
 }
 
-// ─── Render Scene ───────────────────────────────────────────────
 
 /**
  * Render the 3D scene to the FBO.
@@ -397,7 +386,6 @@ static void render_scene(State& state, Context& context) {
 		return;
 
 	// Calculate delta time
-	// JS: const currentTime = performance.now() * 0.001;
 	float currentTime = static_cast<float>(ImGui::GetTime());
 	if (state.lastTime < 0)
 		state.lastTime = currentTime;
@@ -406,7 +394,6 @@ static void render_scene(State& state, Context& context) {
 	state.lastTime = currentTime;
 
 	// update animation
-	// JS: const activeRenderer = this.context.getActiveRenderer?.();
 	M2RendererGL* activeRenderer = context.getActiveRenderer ? context.getActiveRenderer() : nullptr;
 
 	if (activeRenderer) {
@@ -601,7 +588,6 @@ static void render_scene(State& state, Context& context) {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-// ─── Methods ────────────────────────────────────────────────────
 
 void recreate_controls(State& state, Context& context) {
 	// Dispose existing controls
@@ -693,22 +679,17 @@ void fit_camera(State& state, Context& context) {
 	}
 }
 
-// ─── Init / Dispose / RenderWidget ──────────────────────────────
 
 void init(State& state, Context& context) {
-	// JS: this.gl_context = new GLContext(canvas, { antialias: true, alpha: true, preserveDrawingBuffer: true });
 	state.gl_context = std::make_unique<gl::GLContext>();
 
 	// store context for renderers
-	// JS: this.context.gl_context = this.gl_context;
 	context.gl_context = state.gl_context.get();
 
 	// create camera (already default-constructed in State)
-	// JS: this.camera = new PerspectiveCamera(70, 1, 0.01, 2000);
 	// (State default-initializes camera with these values)
 
 	// model rotation
-	// JS: this.model_rotation_y = 0; this.use_character_controls = false;
 	state.model_rotation_y = 0;
 	state.use_character_controls = false;
 
@@ -716,29 +697,19 @@ void init(State& state, Context& context) {
 	setup_camera_gl_callbacks(state);
 
 	// create controls
-	// JS: this.recreate_controls();
 	recreate_controls(state, context);
 
 	// expose fit_camera on context
-	// JS: this.context.fitCamera = () => this.fit_camera();
 	context.fitCamera = [&state, &context]() { fit_camera(state, context); };
 
 	// create grid renderer
-	// JS: this.grid_renderer = new GridRenderer(this.gl_context, 100, 100);
 	state.grid_renderer = std::make_unique<GridRenderer>(*state.gl_context, 100.0f, 100);
 
 	// create shadow renderer (for character mode)
-	// JS: this.shadow_renderer = new ShadowPlaneRenderer(this.gl_context, 2);
 	state.shadow_renderer = std::make_unique<ShadowPlaneRenderer>(*state.gl_context, 2.0f);
 	state.shadow_renderer->visible = false;
 	update_shadow_visibility(state, context);
 
-	// watchers for character mode
-	// JS: core.view.$watch('config.chrUse3DCamera', () => this.recreate_controls())
-	//     core.view.$watch('config.chrRenderShadow', () => this.update_shadow_visibility())
-	//     core.view.$watch('chrModelLoading', () => this.update_shadow_visibility())
-	// TODO(conversion): In ImGui, watchers are replaced by change-detection logic
-	// in renderWidget. The prev_* fields in State track previous values.
 	if (context.useCharacterControls) {
 		state.prev_chrUse3DCamera = core::view->config.value("chrUse3DCamera", true);
 		state.prev_chrRenderShadow = core::view->config.value("chrRenderShadow", false);
@@ -746,8 +717,6 @@ void init(State& state, Context& context) {
 	}
 
 	// start render loop
-	// JS: this.isRendering = true; this.render();
-	// TODO(conversion): In ImGui, the render loop is driven by the main loop.
 	// isRendering controls whether render_scene() executes.
 	state.isRendering = true;
 
@@ -755,10 +724,8 @@ void init(State& state, Context& context) {
 }
 
 void dispose(State& state) {
-	// JS: this.isRendering = false;
 	state.isRendering = false;
 
-	// JS: this.controls.dispose();
 	if (state.orbit_controls) {
 		state.orbit_controls->dispose();
 		state.orbit_controls.reset();
@@ -768,29 +735,21 @@ void dispose(State& state) {
 		state.char_controls.reset();
 	}
 
-	// JS: this.grid_renderer.dispose();
 	if (state.grid_renderer) {
 		state.grid_renderer->dispose();
 		state.grid_renderer.reset();
 	}
 
-	// JS: this.shadow_renderer?.dispose();
 	if (state.shadow_renderer) {
 		state.shadow_renderer->dispose();
 		state.shadow_renderer.reset();
 	}
 
-	// JS: this.gl_context.dispose();
 	if (state.gl_context) {
 		state.gl_context->dispose();
 		state.gl_context.reset();
 	}
 
-	// JS: window.removeEventListener('resize', this.onResize);
-	// TODO(conversion): In ImGui, resize is handled per-frame via layout. No listener to remove.
-
-	// JS: for (const watcher of this.watchers) watcher();
-	// TODO(conversion): In ImGui, watchers are change-detection in renderWidget. No cleanup needed.
 
 	// Destroy FBO
 	destroy_fbo(state);
@@ -801,7 +760,6 @@ void dispose(State& state) {
 void renderWidget(const char* id, State& state, Context& context) {
 	ImGui::PushID(id);
 
-	// JS template: <div class="image ui-model-viewer"></div>
 	ImVec2 avail = ImGui::GetContentRegionAvail();
 	int width = static_cast<int>(avail.x);
 	int height = static_cast<int>(avail.y);
@@ -817,8 +775,6 @@ void renderWidget(const char* id, State& state, Context& context) {
 	}
 
 	// resize handler
-	// JS: this.onResize = () => { ... canvas.width = width * devicePixelRatio; ... }
-	// TODO(conversion): In ImGui, we use the available content region size directly.
 	// No devicePixelRatio scaling is needed since ImGui handles DPI internally.
 	if (state.fbo_width != width || state.fbo_height != height) {
 		create_fbo(state, width, height);
@@ -836,7 +792,6 @@ void renderWidget(const char* id, State& state, Context& context) {
 	}
 
 	// Watcher change detection (character mode only)
-	// JS: core.view.$watch('config.chrUse3DCamera', () => this.recreate_controls())
 	//     core.view.$watch('config.chrRenderShadow', () => this.update_shadow_visibility())
 	//     core.view.$watch('chrModelLoading', () => this.update_shadow_visibility())
 	if (context.useCharacterControls) {
@@ -871,8 +826,6 @@ void renderWidget(const char* id, State& state, Context& context) {
 	// Handle input (mouse/keyboard → camera controls)
 	handle_input(state);
 
-	// JS: requestAnimationFrame(() => this.render());
-	// TODO(conversion): In ImGui, the render loop is driven by the main loop.
 	// renderWidget is called each frame by the parent tab, which is equivalent
 	// to requestAnimationFrame in the JS version.
 

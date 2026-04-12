@@ -103,7 +103,6 @@ public:
 
 	void dispose();
 
-	// C++ accessors for JS public properties.
 	const std::vector<WMOLegacyGroup>& get_groups() const { return groups; }
 
 	// Public state (matches JS properties)
@@ -132,7 +131,6 @@ private:
 	std::vector<nlohmann::json> groupArray;
 	std::vector<nlohmann::json> setArray;
 
-	// change detection for Vue watcher replacement
 	std::vector<bool> prev_group_checked;
 	std::vector<bool> prev_set_checked;
 

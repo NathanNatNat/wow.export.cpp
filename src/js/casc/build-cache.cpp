@@ -194,7 +194,6 @@ void registerBuildCacheEvents() {
 			core::view->cacheSize = 0;
 			logging::write("Purge complete, awaiting mandatory restart.");
 
-			// JS: { 'Restart': () => restartApplication() }
 			core::setToast("success", "Cache has been successfully cleared, a restart is required.",
 				{ {"Restart", []() { app::restartApplication(); }} }, -1, false);
 

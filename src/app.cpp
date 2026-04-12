@@ -91,7 +91,6 @@ static std::string crashErrorCode;
 static std::string crashErrorText;
 static std::string crashLogDump;
 
-// ── App shell texture state (header logo + SVG icons) ────────────
 
 static GLuint s_logoTexture = 0;
 static int s_logoWidth = 0;
@@ -245,7 +244,6 @@ static void crash(const std::string& errorCode, const std::string& errorText) {
 
 	isCrashed = true;
 
-	// TODO(conversion): In JS, the crash function replaces the entire document
 	// with a crash screen showing version/flavour/build, error code/text, and
 	// log dump. In C++/ImGui, we store the crash state and render it in the
 	// main loop as a full-window crash overlay.
@@ -262,7 +260,6 @@ static void crash(const std::string& errorCode, const std::string& errorText) {
 		core::events.emit("crash");
 }
 
-// ── Crash screen rendering (ImGui equivalent of the <noscript> crash markup) ──
 
 static void renderCrashScreen() {
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -296,18 +293,14 @@ static void renderCrashScreen() {
 	ImGui::End();
 }
 
-// ── App shell rendering (header / content / footer) ──────────────
-// JS equivalent: The Vue template in index.html that defines the
 // #container with grid-template-rows: 53px 1fr 73px.
 
-// App shell layout constants from app.css
-static constexpr float HEADER_HEIGHT = 53.0f;  // grid-template-rows: 53px
-static constexpr float FOOTER_HEIGHT = 73.0f;  // grid-template-rows: 73px
-static constexpr float TOAST_HEIGHT   = 30.0f;  // #toast height
-static constexpr float NAV_ICON_WIDTH = 45.0f;  // #nav .option .nav-icon width
-static constexpr float NAV_ICON_HEIGHT = 52.0f; // #nav .option .nav-icon height
+static constexpr float HEADER_HEIGHT = 53.0f;
+static constexpr float FOOTER_HEIGHT = 73.0f;
+static constexpr float TOAST_HEIGHT   = 30.0f;
+static constexpr float NAV_ICON_WIDTH = 45.0f;
+static constexpr float NAV_ICON_HEIGHT = 52.0f;
 
-// CSS color constants — aliases to centralized theme (app.h / app::theme)
 static constexpr ImVec4 COLOR_BG_DARK    = app::theme::BG_DARK;
 static constexpr ImVec4 COLOR_BORDER     = app::theme::BORDER;
 static constexpr ImVec4 COLOR_FONT_FADED = app::theme::FONT_FADED;
@@ -339,7 +332,6 @@ static void renderAppShell() {
 	const ImVec2 vp_pos = viewport->WorkPos;
 	const ImVec2 vp_size = viewport->WorkSize;
 
-	// ── Header (53px) ───────────────────────────────────────────
 	{
 		ImGui::SetNextWindowPos(vp_pos);
 		ImGui::SetNextWindowSize(ImVec2(vp_size.x, HEADER_HEIGHT));
@@ -360,14 +352,12 @@ static void renderAppShell() {
 			ImVec2(vp_pos.x + vp_size.x, vp_pos.y + HEADER_HEIGHT - 1.0f),
 			ImGui::ColorConvertFloat4ToU32(COLOR_BORDER), 1.0f);
 
-		// ── Logo (#logo): 15px left margin, 32px image, then "wow.export.cpp" text ──
 		float cursor_x = 15.0f;
 		ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - 32.0f) * 0.5f));
 		if (s_logoTexture) {
 			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(s_logoTexture)),
 				ImVec2(32.0f, 32.0f));
 			if (ImGui::IsItemClicked()) {
-				// JS: @click="setActiveModule(installType === 1 ? 'legacy_tab_home' : 'tab_home')"
 				if (core::view) {
 					if (core::view->installType == static_cast<int>(install_type::MPQ))
 						modules::setActive("legacy_tab_home");
@@ -397,11 +387,8 @@ static void renderAppShell() {
 		}
 		cursor_x = ImGui::GetItemRectMax().x - vp_pos.x + 10.0f;
 
-		// ── Navigation icons (#nav) ─────────────────────────────
-		// JS: <div id="nav" v-if="!isLoading">
 		if (core::view && !core::view->isLoading) {
 			// Render nav buttons filtered by installType
-			// JS: <template v-for="btn in modNavButtons">
 			//       <div v-if="btn.installTypes & installType" ...>
 			const auto& navButtons = modules::getNavButtons();
 			for (const auto& btn : navButtons) {
@@ -461,7 +448,6 @@ static void renderAppShell() {
 					modules::setActive(btn.module);
 
 				// Tooltip label on hover: white text on dark background, to the right of the icon
-				// JS: .nav-label { position: absolute; left: 100%; color: var(--font-primary);
 				//      background: var(--background-dark); height: 52px; }
 				if (hovered) {
 					ImVec2 tooltip_pos(ImGui::GetItemRectMax().x + 8.0f, ImGui::GetItemRectMin().y);
@@ -485,15 +471,11 @@ static void renderAppShell() {
 				cursor_x += NAV_ICON_WIDTH;
 			}
 
-			// ── Right-side icons (help + hamburger menu) ────────
 			// These are positioned from the right edge of the header.
-			// JS: #nav-help { margin-left: auto; margin-right: 10px; }
-			// JS: #nav-extra { margin-right: 15px; }
 
 			float right_x = vp_size.x;
 
 			// Hamburger menu icon (rightmost, 15px right margin)
-			// JS: #nav-extra { width: 20px; height: 20px; margin-right: 15px; }
 			if (!core::view->isBusy) {
 				right_x -= 15.0f + 20.0f;
 				ImGui::SetCursorPos(ImVec2(right_x, (HEADER_HEIGHT - 20.0f) * 0.5f));
@@ -515,7 +497,6 @@ static void renderAppShell() {
 				}
 
 				// Context menu for hamburger button
-				// JS: <context-menu @close="contextMenus.stateNavExtra = false" :node="contextMenus.stateNavExtra" id="menu-extra">
 				if (core::view->contextMenus.stateNavExtra) {
 					ImGui::SetNextWindowPos(ImVec2(vp_pos.x + right_x, vp_pos.y + HEADER_HEIGHT));
 					if (ImGui::Begin("##MenuExtra", nullptr,
@@ -527,7 +508,6 @@ static void renderAppShell() {
 
 						const auto& contextOpts = modules::getContextMenuOptions();
 						for (const auto& opt : contextOpts) {
-							// JS: v-if="!opt.action?.dev_only || isDev"
 							if (opt.dev_only && !(core::view->isDev))
 								continue;
 
@@ -568,7 +548,6 @@ static void renderAppShell() {
 				}
 
 				// Help icon (left of hamburger, 10px right margin)
-				// JS: #nav-help { margin-left: auto; margin-right: 10px; }
 				right_x -= 10.0f + 20.0f;
 				ImGui::SetCursorPos(ImVec2(right_x, (HEADER_HEIGHT - 20.0f) * 0.5f));
 				{
@@ -583,7 +562,6 @@ static void renderAppShell() {
 					                btn_min.y + (20.0f - text_sz.y) * 0.5f);
 					ImGui::GetWindowDrawList()->AddText(icon_font, icon_size, icon_pos,
 						app::theme::FONT_PRIMARY_U32, ICON_FA_CIRCLE_QUESTION);
-					// JS: @click="setActiveModule('tab_help')" — tab_help is removed in C++ version
 					// The help icon currently has no action since tab_help was deleted.
 					if (ImGui::IsItemHovered()) {
 						ImGui::BeginTooltip();
@@ -600,7 +578,6 @@ static void renderAppShell() {
 		ImGui::PopStyleColor(2);
 	}
 
-	// ── Footer (73px) ───────────────────────────────────────────
 	{
 		float footer_y = vp_pos.y + vp_size.y - FOOTER_HEIGHT;
 		ImGui::SetNextWindowPos(ImVec2(vp_pos.x, footer_y));
@@ -622,7 +599,6 @@ static void renderAppShell() {
 			ImVec2(vp_pos.x + vp_size.x, footer_y),
 			ImGui::ColorConvertFloat4ToU32(COLOR_BORDER), 1.0f);
 
-		// JS: <span id="footer-links">
 		//       <a data-external="::WEBSITE">Website</a> -
 		//       <a data-external="::DISCORD">Discord</a> -
 		//       <a data-external="::PATREON">Patreon</a> -
@@ -633,7 +609,6 @@ static void renderAppShell() {
 			ImGui::PushStyleColor(ImGuiCol_Text, COLOR_FONT_FADED);
 
 			// Links line — render each link as a clickable item
-			// JS: data-external="::WEBSITE" etc. → opens via nw.Shell.openExternal()
 			struct FooterLink {
 				const char* label;
 				const char* url;
@@ -676,7 +651,6 @@ static void renderAppShell() {
 			// End the SameLine sequence
 			ImGui::NewLine();
 
-			// JS: <span id="footer-copyright">
 			//       World of Warcraft and related trademarks are registered trademarks of
 			//       Blizzard Entertainment whom this application is not affiliated with.
 			//     </span>
@@ -693,7 +667,6 @@ static void renderAppShell() {
 		ImGui::PopStyleColor(2);
 	}
 
-	// ── Content area (between header and footer) ────────────────
 	{
 		float content_y = vp_pos.y + HEADER_HEIGHT;
 		float content_h = vp_size.y - HEADER_HEIGHT - FOOTER_HEIGHT;
@@ -709,9 +682,6 @@ static void renderAppShell() {
 			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
 			ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing);
 
-		// ── Logo background watermark (CSS: #logo-background) ──────
-		// JS: <div id="logo-background"></div>
-		// CSS: position: absolute; top:0; left:0; bottom:0; right:0;
 		//      background: url(./images/logo.png) no-repeat center center;
 		//      opacity: 0.05; z-index: -5;
 		if (s_logoTexture) {
@@ -729,8 +699,6 @@ static void renderAppShell() {
 				logo_min, logo_max, ImVec2(0, 0), ImVec2(1, 1), watermark_tint);
 		}
 
-		// ── Toast notification bar ──────────────────────────────────
-		// JS: <div id="toast" v-if="toast" :class="toast.type">
 		//       {{ toast.message }}
 		//       <span v-for="action in toast.actions" @click="handleToastOptionClick(action)">{{ action.label }}</span>
 		//       <div class="close" v-if="toast.closable" @click="hideToast(true)"></div>
@@ -761,7 +729,6 @@ static void renderAppShell() {
 			dl->AddRectFilled(toast_min, toast_max, bg_color);
 
 			// Icon: 15px, positioned at 10px from left, vertically centered
-			// CSS: background-size: 15px; background-position: 10px center
 			constexpr float ICON_SIZE = 15.0f;
 			constexpr float ICON_LEFT = 10.0f;
 			ImFont* icon_font = app::theme::getIconFont();
@@ -771,7 +738,6 @@ static void renderAppShell() {
 			dl->AddText(icon_font, ICON_SIZE, icon_pos, app::theme::FONT_TOAST_U32, icon_glyph);
 
 			// Message text: starts at padding-left: 30px
-			// CSS: font-size: 15px; color: var(--font-toast)
 			constexpr float TEXT_LEFT = 30.0f;
 			constexpr float TEXT_FONT_SIZE = 15.0f;
 			ImFont* font = ImGui::GetFont();
@@ -781,7 +747,6 @@ static void renderAppShell() {
 			dl->AddText(font, TEXT_FONT_SIZE, msg_pos, app::theme::FONT_TOAST_U32, toast.message.c_str());
 
 			// Action links
-			// CSS: margin: 0 5px; color: var(--font-toast-link); text-decoration: underline
 			float action_x = msg_pos.x + msg_size.x;
 			for (size_t i = 0; i < toast.actions.size(); ++i) {
 				const auto& action = toast.actions[i];
@@ -809,7 +774,6 @@ static void renderAppShell() {
 			}
 
 			// Close button: xmark icon at the right edge
-			// CSS: margin-left: auto; width: 30px; height: 100%
 			if (toast.closable) {
 				constexpr float CLOSE_WIDTH = 30.0f;
 				constexpr float CLOSE_ICON_SIZE = 10.0f;
@@ -838,7 +802,6 @@ static void renderAppShell() {
 		}
 
 		// Render the active module inside the content area
-		// JS: <div id="module-container" v-if="activeModule">
 		//       <keep-alive><component :is="activeModule"></component></keep-alive>
 		//     </div>
 		modules::ModuleDef* active = modules::getActive();
@@ -854,8 +817,6 @@ static void renderAppShell() {
 		ImGui::PopStyleVar(2);
 	}
 
-	// ── Loading screen overlay (z-index 9999 in JS) ────────────────
-	// JS: <div id="loading" v-if="isLoading">
 	//       <div id="loading-background" :class="{ xmas: isXmas }"></div>
 	//       <div id="loading-icon"></div>
 	//       <span id="loading-title">{{ loadingTitle }}</span>
@@ -993,8 +954,6 @@ static void renderAppShell() {
 		ImGui::PopStyleVar(2);
 	}
 
-	// ── File drop overlay (z-index 500 in JS) ─────────────────────
-	// JS: <div id="drop-overlay" v-if="!!fileDropPrompt">
 	//       <div id="drop-overlay-icon"></div>
 	//       <div id="drop-overlay-text">» {{ fileDropPrompt }} «</div>
 	//     </div>
@@ -1016,15 +975,13 @@ static void renderAppShell() {
 			float center_x = vp_pos.x + vp_size.x * 0.5f;
 			float center_y = vp_pos.y + vp_size.y * 0.5f;
 
-			// CSS: #drop-overlay-icon { width: 100px; height: 100px; margin-bottom: 20px;
 			//        background-image: url(./fa-icons/copy.svg) }
 			constexpr float ICON_SIZE = 100.0f;
 			constexpr float ICON_MARGIN_BOTTOM = 20.0f;
-			constexpr float TEXT_FONT_SIZE = 25.0f; // CSS: font-size: 25px
+			constexpr float TEXT_FONT_SIZE = 25.0f;
 
 			// Calculate total height for vertical centering: icon(100) + margin(20) + text
 			ImFont* font = ImGui::GetFont();
-			// JS: » {{ fileDropPrompt }} «
 			std::string formatted = std::string("\xc2\xbb ") + prompt_text + " \xc2\xab";
 			ImVec2 text_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, formatted.c_str());
 			float total_h = ICON_SIZE + ICON_MARGIN_BOTTOM + text_size.y;
@@ -1167,7 +1124,6 @@ static std::filesystem::path getHomeDir() {
 #endif
 }
 
-// ── GLFW drop callback for file drag/drop ────────────────────────
 
 static void glfw_drop_callback(GLFWwindow* /*window*/, int count, const char** paths) {
 	if (count <= 0 || !paths)
@@ -1176,10 +1132,8 @@ static void glfw_drop_callback(GLFWwindow* /*window*/, int count, const char** p
 	if (!core::view)
 		return;
 
-	// JS: window.ondrop = e => { core.view.fileDropPrompt = null; ... }
 	core::view->fileDropPrompt = nullptr;
 
-	// JS: isBusy check — don't process drops while busy
 	if (core::view->isBusy)
 		return;
 
@@ -1210,13 +1164,10 @@ static void glfw_drop_callback(GLFWwindow* /*window*/, int count, const char** p
 		if (!include.empty() && handler->process)
 			handler->process(include[0]);
 	} else {
-		// JS: ondragenter sets fileDropPrompt = 'That file cannot be converted.'
-		// GLFW has no dragenter/dragleave, so show a toast instead.
 		core::setToast("error", "That file cannot be converted.", {}, 3000);
 	}
 }
 
-// ── Cache size file management ───────────────────────────────────
 
 static int64_t prevCacheSize = -1;
 static std::chrono::steady_clock::time_point cacheSizeUpdateScheduledAt;
@@ -1246,7 +1197,6 @@ static void checkCacheSizeUpdate() {
 	if (!core::view)
 		return;
 
-	// Create a watcher programmatically *after* assigning the initial value
 	// to prevent a needless file write by triggering itself during init.
 	if (core::view->cacheSize != prevCacheSize) {
 		prevCacheSize = core::view->cacheSize;
@@ -1273,8 +1223,6 @@ static void checkCacheSizeUpdate() {
 	}
 }
 
-// ── Vue methods / computed / watch equivalents ───────────────────
-// In C++/ImGui, these are called directly from the modules or from
 // the main loop. They are defined here to preserve the JS structure.
 
 namespace app {
@@ -1289,7 +1237,6 @@ static void openRuntimeLog() {
 /**
  * Reloads all stylesheets in the document.
  * JS equivalent: reloads <link> tags. C++ equivalent: re-applies the
- * ImGui theme derived from app.css.
  */
 static void reloadStylesheet() {
 	app::theme::applyTheme();
@@ -1424,7 +1371,6 @@ static void setDecorCategoryGroup(int category_id, bool state) {
  * @param {boolean} state
  */
 static void setAllItemTypes(bool /*state*/) {
-	// TODO(conversion): itemViewerTypeMask is std::vector<int>, not JSON with checked field.
 	// The JS version sets entry.checked for each entry. In C++, the mask is handled
 	// differently by the item viewer module.
 }
@@ -1434,7 +1380,6 @@ static void setAllItemTypes(bool /*state*/) {
  * @param {boolean} state
  */
 static void setAllItemQualities(bool /*state*/) {
-	// TODO(conversion): itemViewerQualityMask is std::vector<int>, not JSON with checked field.
 	// The JS version sets entry.checked for each entry. In C++, the mask is handled
 	// differently by the item viewer module.
 }
@@ -1499,7 +1444,6 @@ static void setSelectedCDN(const nlohmann::json& region) {
  * @param {object} event
  */
 static void click(const std::string& tag) {
-	// TODO(conversion): In JS, this checks event.target.classList.contains('disabled')
 	// before emitting. In ImGui, disabled state is handled differently by each widget.
 	core::events.emit("click-" + tag);
 }
@@ -1516,7 +1460,6 @@ static void emit(const std::string& tag) {
 /**
  * Restart the application.
  * JS equivalent: chrome.runtime.reload() — reloads the NW.js app.
- * C++ equivalent: re-exec the current process binary.
  */
 void restartApplication() {
 #ifdef _WIN32
@@ -1574,7 +1517,6 @@ static void getExternalLink() {
 	return; // Removed: external-links module deleted
 }
 
-// ── Computed property equivalents ────────────────────────────────
 
 /**
  * Return the formatted duration of the selected track on the sound player.
@@ -1626,21 +1568,18 @@ static std::vector<nlohmann::json> textureRibbonDisplay() {
 
 } // namespace app
 
-// Clamp a raw DPI scale value to a sane range and replace invalid/zero values.
 static constexpr float DPI_SCALE_EPSILON = 0.01f;  // tolerance for DPI change detection
 static float clampDpiScale(float raw) {
 	if (raw <= 0.0f) raw = 1.0f;
 	return (std::max)(0.5f, (std::min)(raw, 4.0f));
 }
 
-// ── Centralized ImGui theme from app.css ─────────────────────────
 
 namespace app::theme {
 
 void applyTheme() {
 	ImGuiStyle& style = ImGui::GetStyle();
 
-	// ── Colors ───────────────────────────────────────────────────
 	ImVec4* colors = style.Colors;
 
 	// Window backgrounds
@@ -1724,7 +1663,6 @@ void applyTheme() {
 	// Drag-drop target
 	colors[ImGuiCol_DragDropTarget] = FONT_ALT;
 
-	// ── Rounding / sizing ────────────────────────────────────────
 	style.WindowRounding    = WINDOW_ROUNDING;  // 0 — sharp corners
 	style.FrameRounding     = FRAME_ROUNDING;   // 5px input border-radius
 	style.GrabRounding      = FRAME_ROUNDING;
@@ -1750,9 +1688,7 @@ void applyTheme() {
 	style.DisabledAlpha     = 0.5f;
 }
 
-// ── Custom font loading ──────────────────────────────────────────
 // Loads Selawik (regular + bold), Gambler, and Font Awesome icon fonts from data/fonts/.
-// CSS: body { font-family: "Selawik", sans-serif; } — default 16px.
 // @font-face { font-family: "Selawik"; font-weight: bold; src: url("fonts/selawkb.woff2"); }
 // @font-face { font-family: "Gambler"; src: url("fonts/gmblr.woff2"); }
 
@@ -1855,10 +1791,8 @@ float getDpiScale() {
 	return s_dpiScale;
 }
 
-// ── SVG filename → Font Awesome codepoint mapping ────────────────
 // Maps SVG icon filenames used by nav buttons and context menus to their
 // corresponding Font Awesome 6 Solid UTF-8 codepoints.
-// Custom icons (armour, sword, nessy, mountain-castle) have no FA mapping
 // and will continue to render via the SVG texture pipeline.
 
 static const std::unordered_map<std::string, const char*> s_iconMapping = {
@@ -1957,7 +1891,6 @@ GLuint loadWebPTexture(const std::filesystem::path& path, int* out_w, int* out_h
 	return tex;
 }
 
-// ── Expansion icon textures ──────────────────────────────────────
 
 // Expansion ID → icon filename mapping.
 static const char* s_expansionIconFiles[] = {
@@ -2000,8 +1933,6 @@ GLuint getExpansionIconTexture(int expansionId) {
 void renderExpansionFilterButtons(int& selectedFilter, int expansionCount) {
 	loadExpansionIcons();
 
-	// CSS: .expansion-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; justify-content: center; }
-	// CSS: .expansion-button { width: 30px; height: 30px; background: rgb(0 0 0 / 28%); border: 0; border-radius: 3px; }
 	constexpr float BTN_SIZE = 30.0f;
 	constexpr float GAP = 8.0f;
 
@@ -2023,7 +1954,6 @@ void renderExpansionFilterButtons(int& selectedFilter, int expansionCount) {
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(GAP, 0));
 
 	// "Show All" button — uses a ban/slash icon.
-	// CSS: .expansion-button.show-all { background-image: url('fa-icons/ban.svg'); background-size: 30%; }
 	{
 		bool isActive = (selectedFilter == -1);
 		ImU32 bg = isActive ? activeBg : normalBg;
@@ -2049,7 +1979,6 @@ void renderExpansionFilterButtons(int& selectedFilter, int expansionCount) {
 		GLuint tex = getExpansionIconTexture(i);
 		if (tex != 0) {
 			ImGui::PushID(i);
-			// CSS: background-size: 24px on a 30px button → 3px padding each side
 			if (ImGui::ImageButton("##exp", static_cast<ImTextureID>(static_cast<uintptr_t>(tex)),
 			                       ImVec2(24.0f, 24.0f))) {
 				selectedFilter = i;
@@ -2069,7 +1998,6 @@ void renderExpansionFilterButtons(int& selectedFilter, int expansionCount) {
 
 } // namespace app::theme
 
-// ── Watch equivalents (change detection in the main loop) ────────
 
 static double prevLoadPct = -1;
 static void* prevCasc = nullptr;
@@ -2116,7 +2044,6 @@ static void checkWatchers(GLFWwindow* window) {
 	 */
 	if (core::view->loadPct != prevLoadPct) {
 		prevLoadPct = core::view->loadPct;
-		// JS: win.setProgressBar(val) sets taskbar progress.
 #ifdef _WIN32
 		setTaskbarProgress(window, prevLoadPct);
 #else
@@ -2150,7 +2077,6 @@ static void checkWatchers(GLFWwindow* window) {
 	}
 }
 
-// ── Tab layout helpers (app::layout) ─────────────────────────────
 // Maps CSS grid patterns from app.css to ImGui child windows.
 
 app::layout::ListTabRegions app::layout::CalcListTabRegions(bool hasSidebar, float colRatio) {
@@ -2173,7 +2099,6 @@ app::layout::ListTabRegions app::layout::CalcListTabRegions(bool hasSidebar, flo
 	const float bottomH = FILTER_BAR_HEIGHT;
 	const float topH = gridH - bottomH;
 
-	// ── List container (row 1, column 1) ──
 	// .list-container { margin: 20px 10px 0 20px }
 	r.listPos = ImVec2(cursor.x + LIST_MARGIN_LEFT, cursor.y + LIST_MARGIN_TOP);
 	r.listSize = ImVec2(
@@ -2181,7 +2106,6 @@ app::layout::ListTabRegions app::layout::CalcListTabRegions(bool hasSidebar, flo
 		topH - LIST_MARGIN_TOP - LIST_MARGIN_BOTTOM
 	);
 
-	// ── Preview container (row 1, column 2) ──
 	// .preview-container { margin: 20px 20px 0 10px; grid-row: 1; grid-column: 2 }
 	r.previewPos = ImVec2(cursor.x + leftColW + PREVIEW_MARGIN_LEFT, cursor.y + PREVIEW_MARGIN_TOP);
 	r.previewSize = ImVec2(
@@ -2189,17 +2113,14 @@ app::layout::ListTabRegions app::layout::CalcListTabRegions(bool hasSidebar, flo
 		topH - PREVIEW_MARGIN_TOP - PREVIEW_MARGIN_BOTTOM
 	);
 
-	// ── Filter bar (row 2, column 1) ──
 	// .filter { display: flex; align-items: center; grid-column: 1; grid-row: 2 }
 	r.filterPos = ImVec2(cursor.x, cursor.y + topH);
 	r.filterSize = ImVec2(leftColW, bottomH);
 
-	// ── Preview controls (row 2, column 2) ──
 	// .preview-controls { display: flex; justify-content: flex-end; grid-column: 2; grid-row: 2 }
 	r.controlsPos = ImVec2(cursor.x + leftColW, cursor.y + topH);
 	r.controlsSize = ImVec2(rightColW, bottomH);
 
-	// ── Sidebar (column 3, spanning both rows) ──
 	if (hasSidebar) {
 		// .sidebar { grid-column: 3; width: 210px; grid-row: 1/span 2; margin-top: 20px; padding-right: 20px }
 		r.sidebarPos = ImVec2(cursor.x + gridW, cursor.y + SIDEBAR_MARGIN_TOP);
@@ -2307,7 +2228,6 @@ void app::layout::EndSidebar() {
 	ImGui::EndChild();
 }
 
-// ── Main entry point ─────────────────────────────────────────────
 
 int main(int argc, char* argv[]) {
 	// check for --disable-auto-update flag
@@ -2322,7 +2242,6 @@ int main(int argc, char* argv[]) {
 	// Initialize logging stream.
 	logging::init();
 
-	// ── GLFW / OpenGL / ImGui initialization ─────────────────────
 
 	if (!glfwInit()) {
 		crash("ERR_GLFW_INIT", "Failed to initialize GLFW");
@@ -2366,7 +2285,6 @@ int main(int argc, char* argv[]) {
 	// (GLFW does not have ondragover; drop callback is set later.)
 
 	// Force all links to open in the users default application.
-	// TODO(conversion): In ImGui, external links are opened via platform shell commands
 	// rather than DOM click events. Each module handles this directly.
 	// ExternalLinks.open(externalElement.getAttribute('data-external')); // Removed: external-links module deleted
 
@@ -2381,7 +2299,6 @@ int main(int argc, char* argv[]) {
 
 	// Query the initial display content scale for high-DPI support.
 	// On standard displays this is 1.0; on Retina / 200% displays it is 2.0.
-	// We use glfwGetWindowContentScale directly here because the ImGui GLFW
 	// backend is not yet initialized at this point.
 	float initialDpiScale;
 	{
@@ -2402,15 +2319,12 @@ int main(int argc, char* argv[]) {
 	// Load app shell textures (logo, SVG icons) now that OpenGL is ready.
 	initAppShellTextures();
 
-	// ── Application state initialization ─────────────────────────
 
 	// Initialize Vue equivalent: create AppState and assign to core::view.
 	static AppState appState = core::makeNewView();
 	core::view = &appState;
 
 	// Interlink error handling for Vue.
-	// TODO(conversion): In JS, app.config.errorHandler catches Vue render errors.
-	// In C++, exceptions during render are caught by the main loop try/catch.
 
 	modules::register_components();
 
@@ -2508,7 +2422,6 @@ int main(int argc, char* argv[]) {
 	prevCasc = static_cast<void*>(core::view->casc);
 	prevActiveModule = core::view->activeModule;
 
-	// ── Main loop ────────────────────────────────────────────────
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
@@ -2522,12 +2435,10 @@ int main(int argc, char* argv[]) {
 		if (!BUILD_RELEASE) {
 			if (glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS) {
 				// In NW.js, F5 reloads the app via chrome.runtime.reload().
-				// C++ equivalent: re-exec the current process binary.
 				app::restartApplication();
 			}
 		}
 
-		// ── High-DPI + small-window scaling ─────────────────────────
 		// 1) If the display DPI scale changed (e.g. window moved to a
 		//    different monitor), rebuild the font atlas at the new scale.
 		// 2) Compute a window-size scale factor that shrinks the UI when
@@ -2593,7 +2504,6 @@ int main(int argc, char* argv[]) {
 		glfwSwapBuffers(window);
 	}
 
-	// ── Cleanup ──────────────────────────────────────────────────
 
 	// Release app shell OpenGL textures before context teardown.
 	destroyAppShellTextures();

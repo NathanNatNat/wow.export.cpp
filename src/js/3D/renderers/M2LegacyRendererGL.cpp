@@ -134,7 +134,6 @@ static void quat_slerp(float* out, float ax, float ay, float az, float aw, float
 }
 
 // -----------------------------------------------------------------------
-// Helper to extract a float from a LegacyTrackValue (used by sampling)
 // -----------------------------------------------------------------------
 static float track_value_to_float(const LegacyTrackValue& v) {
 	if (auto* val = std::get_if<uint8_t>(&v))
@@ -215,9 +214,6 @@ void M2LegacyRendererGL::load() {
 		loadSkin(0);
 
 		if (reactive) {
-			// JS: this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true });
-			// JS: this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true });
-			// Vue watchers → no-op in immediate mode; updateGeosets() called manually.
 		}
 	}
 
@@ -242,7 +238,6 @@ void M2LegacyRendererGL::_create_default_texture() {
 
 void M2LegacyRendererGL::_load_textures() {
 	auto& tex_list = m2->textures;
-	// JS: const mpq = core.view.mpq;
 	mpq::MPQInstall* mpq = core::view->mpq.get();
 
 	if (useRibbon)
@@ -250,19 +245,16 @@ void M2LegacyRendererGL::_load_textures() {
 
 	for (size_t i = 0, n = tex_list.size(); i < n; i++) {
 		auto& texture = tex_list[i];
-		// JS: const ribbonSlot = this.useRibbon ? textureRibbon.addSlot() : null;
 		int ribbonSlot = useRibbon ? texture_ribbon::addSlot() : -1;
 
 		// legacy textures use fileName property set by loader
 		const std::string& fileName = texture.fileName;
 
 		if (!fileName.empty()) {
-			// JS: if (ribbonSlot !== null) textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID);
 			if (ribbonSlot >= 0)
 				texture_ribbon::setSlotFileLegacy(ribbonSlot, fileName, syncID);
 
 			try {
-				// JS: const data = mpq.getFile(fileName);
 				// MPQ file access — get texture file data
 				std::optional<BufferWrapper> file_data;
 				if (mpq) {
@@ -281,7 +273,6 @@ void M2LegacyRendererGL::_load_textures() {
 					gl_tex->set_blp(blp, blp_flags);
 					textures[static_cast<int>(i)] = std::move(gl_tex);
 
-					// JS: if (ribbonSlot !== null) textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
 					if (ribbonSlot >= 0)
 						texture_ribbon::setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), syncID);
 				}
@@ -297,7 +288,6 @@ void M2LegacyRendererGL::_load_textures() {
 // -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& texture_paths) {
-	// JS: const mpq = core.view.mpq;
 	mpq::MPQInstall* mpq = core::view->mpq.get();
 	const auto& textureTypes = m2->textureTypes;
 
@@ -315,7 +305,6 @@ void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& textu
 				const std::string& texture_path = texture_paths[skin_index];
 
 				try {
-					// JS: const data = mpq.getFile(texture_path);
 					if (!mpq)
 						continue;
 
@@ -328,7 +317,6 @@ void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& textu
 						gl_tex->set_blp(blp, blp_flags);
 						textures[static_cast<int>(i)] = std::move(gl_tex);
 
-						// JS: if (this.useRibbon) { textureRibbon.setSlotFile(...); textureRibbon.setSlotSrc(...); }
 						if (useRibbon) {
 							texture_ribbon::setSlotFileLegacy(static_cast<int>(i), texture_path, syncID);
 							texture_ribbon::setSlotSrc(static_cast<int>(i), blp.getDataURL(0b0111), syncID);
@@ -501,7 +489,6 @@ void M2LegacyRendererGL::loadSkin(int index) {
 	}
 
 	if (reactive) {
-		// JS: core.view[this.geosetKey] = this.geosetArray;
 		auto& geosets = core::view->modelViewerGeosets;
 		geosets.clear();
 		for (const auto& entry : geosetArray) {
@@ -512,7 +499,6 @@ void M2LegacyRendererGL::loadSkin(int index) {
 			geosets.push_back(j);
 		}
 
-		// JS: GeosetMapper.map(this.geosetArray);
 		std::vector<geoset_mapper::Geoset> mapper_geosets;
 		for (const auto& entry : geosetArray) {
 			geoset_mapper::Geoset g;
@@ -1150,7 +1136,6 @@ void M2LegacyRendererGL::render(const float* view_matrix, const float* projectio
 	shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
 	shader->set_uniform_3f("u_view_up", 0, 1, 0);
 
-	// JS: performance.now() * 0.001
 	auto now = std::chrono::steady_clock::now();
 	float time_sec = std::chrono::duration<float>(now.time_since_epoch()).count();
 	shader->set_uniform_1f("u_time", time_sec);
@@ -1290,8 +1275,6 @@ void M2LegacyRendererGL::_dispose_skin() {
 // -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::dispose() {
-	// JS: this.geosetWatcher?.(); this.wireframeWatcher?.();
-	// Vue watchers — no-op in C++ (no reactive system)
 
 	_dispose_skin();
 

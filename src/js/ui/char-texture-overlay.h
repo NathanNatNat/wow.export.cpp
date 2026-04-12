@@ -13,7 +13,6 @@
  * Character texture overlay layer management.
  *
  * In JS, this manages DOM canvas elements as texture preview layers.
- * In C++/ImGui, each "layer" is an OpenGL texture ID that can be displayed.
  *
  * JS equivalent: module.exports = { add, remove, ensureActiveLayerAttached, getActiveLayer }
  */

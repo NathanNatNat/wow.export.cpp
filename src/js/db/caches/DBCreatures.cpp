@@ -39,13 +39,9 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 	return result;
 }
 
-// JS: const creatureDisplays = new Map();
 static std::unordered_map<uint32_t, std::vector<CreatureDisplayInfo>> creatureDisplays;
-// JS: const creatureDisplayInfoMap = new Map();
 static std::unordered_map<uint32_t, CreatureDisplayInfo> creatureDisplayInfoMap;
-// JS: const displayIDToFileDataID = new Map();
 static std::unordered_map<uint32_t, uint32_t> displayIDToFileDataID;
-// JS: let isInitialized = false;
 static bool isInitialized = false;
 
 /**
@@ -57,10 +53,8 @@ void initializeCreatureData() {
 
 	logging::write("Loading creature textures...");
 
-	// JS: const creatureGeosetMap = new Map();
 	std::unordered_map<uint32_t, std::vector<uint32_t>> creatureGeosetMap;
 
-	// JS: const creatureDisplayInfoGeosetData = db2.CreatureDisplayInfoGeosetData;
 	// CreatureDisplayInfoID => Array of geosets to enable which should only be used if CreatureModelData.CreatureDisplayInfoGeosetData != 0
 	auto geosetRows = casc::db2::preloadTable("CreatureDisplayInfoGeosetData").getAllRows();
 	for (const auto& [_geosetId, geosetRow] : geosetRows) {
@@ -72,7 +66,6 @@ void initializeCreatureData() {
 		creatureGeosetMap[creatureDisplayInfoID].push_back((geosetIndex + 1) * 100 + geosetValue);
 	}
 
-	// JS: const modelIDToDisplayInfoMap = new Map();
 	std::unordered_map<uint32_t, std::vector<uint32_t>> modelIDToDisplayInfoMap;
 
 	// Map all available texture fileDataIDs to model IDs.
@@ -81,7 +74,6 @@ void initializeCreatureData() {
 		uint32_t modelID = fieldToUint32(displayRow.at("ModelID"));
 		uint32_t extendedDisplayInfoID = fieldToUint32(displayRow.at("ExtendedDisplayInfoID"));
 
-		// JS: displayRow.TextureVariationFileDataID.filter(e => e > 0)
 		auto allTextures = fieldToUint32Vec(displayRow.at("TextureVariationFileDataID"));
 		std::vector<uint32_t> textures;
 		for (auto t : allTextures) {
@@ -99,7 +91,6 @@ void initializeCreatureData() {
 		modelIDToDisplayInfoMap[modelID].push_back(displayID);
 	}
 
-	// Using the texture mapping, map all model fileDataIDs to used textures.
 	auto modelRows = casc::db2::preloadTable("CreatureModelData").getAllRows();
 	for (const auto& [modelID, modelRow] : modelRows) {
 		auto it = modelIDToDisplayInfoMap.find(modelID);
@@ -152,7 +143,6 @@ uint32_t getFileDataIDByDisplayID(uint32_t displayID) {
 	return 0;
 }
 
-// JS: const getDisplayInfo = (displayID) => creatureDisplayInfoMap.get(displayID);
 const CreatureDisplayInfo* getDisplayInfo(uint32_t displayID) {
 	auto it = creatureDisplayInfoMap.find(displayID);
 	if (it != creatureDisplayInfoMap.end())

@@ -29,7 +29,6 @@
  */
 namespace map_viewer {
 
-// ── Tile queue node ─────────────────────────────────────────────
 // [x, y, index, tileSize, renderTarget]
 // renderTarget: 0 = main, 1 = double-buffer
 struct TileQueueNode {
@@ -40,7 +39,6 @@ struct TileQueueNode {
 	int renderTarget = 0; // 0 = 'main', 1 = 'double-buffer'
 };
 
-// ── Map position result ─────────────────────────────────────────
 struct MapPosition {
 	int tileX = 0;
 	int tileY = 0;
@@ -48,13 +46,11 @@ struct MapPosition {
 	double posY = 0.0;
 };
 
-// ── Point helper ────────────────────────────────────────────────
 struct Point {
 	float x = 0.0f;
 	float y = 0.0f;
 };
 
-// ── Tile needing re-render ──────────────────────────────────────
 struct TileRerenderInfo {
 	int x = 0;
 	int y = 0;
@@ -145,7 +141,6 @@ struct MapViewerState {
  * or an empty vector if the tile failed to load.
  *
  * In the JS source this returns a Promise<ImageData|false>.
- * In C++ we use a synchronous callback that returns the pixel data directly
  * (tile loading is queued and rate-limited by the component itself).
  */
 using TileLoader = std::function<std::vector<uint8_t>(int x, int y, int tileSize)>;
@@ -156,10 +151,8 @@ using TileLoader = std::function<std::vector<uint8_t>(int x, int y, int tileSize
  */
 using SelectionChangedCallback = std::function<void(const std::vector<int>&)>;
 
-// ── Persisted state (global singleton) ──────────────────────────
 MapViewerPersistedState& getPersistedState();
 
-// ── Methods (static helpers matching JS methods) ────────────────
 
 /**
  * Clear tile queue, requested set, and rendered set.
@@ -182,7 +175,6 @@ void checkTileQueue(MapViewerState& state, const TileLoader& loader);
  * This addresses seams caused by tiles being clipped but still marked as rendered.
  *
  * In the JS source this checks canvas pixel data via getImageData.
- * In C++ the tilePixelCache stores per-tile RGBA data for sampling.
  */
 void performFinalPass(MapViewerState& state, int tileSize_prop, int gridSize,
                       const std::vector<int>& mask, const TileLoader& loader);

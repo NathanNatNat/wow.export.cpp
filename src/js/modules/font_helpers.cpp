@@ -27,15 +27,9 @@ const std::vector<GlyphRange> GLYPH_RANGES = {
 
 // --- Internal state ---
 
-// JS: let glyph_detection_canvas = null;
-// JS: let glyph_detection_ctx = null;
-// JS: let active_detection = null;
-// In C++ (ImGui), we don't need a canvas — we check ImFont::FindGlyphNoFallback directly.
 
-// JS: const compute_alpha_sum = (data) => { ... }
 // Not needed in C++: ImGui glyph detection doesn't use pixel-based comparison.
 
-// JS: const check_glyph_support = (ctx, font_family, char) => { ... }
 bool check_glyph_support(void* font, uint32_t codepoint) {
 	auto* im_font = static_cast<ImFont*>(font);
 	if (!im_font)
@@ -45,7 +39,6 @@ bool check_glyph_support(void* font, uint32_t codepoint) {
 	return im_font->IsGlyphInFont(static_cast<ImWchar>(codepoint));
 }
 
-// JS: const detect_glyphs_async = (font_family, grid_element, on_glyph_click, on_complete) => { ... }
 void detect_glyphs_async(void* font, GlyphDetectionState& state) {
 	// Cancel any previous detection.
 	state.cancelled = false;
@@ -95,7 +88,6 @@ void process_glyph_detection_batch(void* font, GlyphDetectionState& state) {
 	state.complete = true;
 }
 
-// JS: const get_random_quote = () => { ... }
 std::string get_random_quote() {
 	const auto& quotes = constants::FONT_PREVIEW_QUOTES;
 
@@ -105,14 +97,11 @@ std::string get_random_quote() {
 	return std::string(quotes[dist(rng)]);
 }
 
-// JS: const inject_font_face = async (font_id, blob_data, log, on_error) => { ... }
 void* inject_font_face(const std::string& /*font_id*/, const uint8_t* data, size_t data_size) {
 	// In JS, this creates a @font-face CSS rule with a blob URL and loads it.
-	// In C++ (ImGui), we add the font data to ImGui's font atlas.
 
 	ImGuiIO& io = ImGui::GetIO();
 
-	// ImGui takes ownership of the data if we use AddFontFromMemoryTTF,
 	// so we need to provide a copy that ImGui can free.
 	void* font_data_copy = ImGui::MemAlloc(data_size);
 	if (!font_data_copy)
@@ -125,7 +114,6 @@ void* inject_font_face(const std::string& /*font_id*/, const uint8_t* data, size
 
 	ImFont* font = io.Fonts->AddFontFromMemoryTTF(font_data_copy, static_cast<int>(data_size), 16.0f, &config);
 	if (!font) {
-		// ImGui frees font_data_copy on failure if FontDataOwnedByAtlas is true.
 		return nullptr;
 	}
 

@@ -11,7 +11,6 @@
 
 #include <nlohmann/json.hpp>
 
-// Forward declarations.
 class M2LegacyRendererGL;
 class WMOLegacyRendererGL;
 class MDXRendererGL;

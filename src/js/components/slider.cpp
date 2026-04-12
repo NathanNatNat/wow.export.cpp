@@ -24,14 +24,11 @@ namespace slider {
  * Invoked when the component is mounted.
  * Used to register global mouse listeners.
  */
-// TODO(conversion): In ImGui, global mouse listeners are not needed.
-// ImGui provides mouse state via ImGui::GetIO() each frame.
 
 /**
  * Invoked when the component is destroyed.
  * Used to unregister global mouse listeners.
  */
-// TODO(conversion): No explicit unmount needed in ImGui immediate mode.
 
 /**
  * Set the current value of this slider.

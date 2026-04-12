@@ -27,7 +27,6 @@ CASC::CASC(bool isRemote)
 	: isRemote(isRemote)
 {
 	// Listen for configuration changes to cascLocale.
-	// In C++, we read the config value directly at construction and whenever needed.
 	// The JS $watch with immediate:true is equivalent to reading the value now.
 	const auto& configJson = core::view->config;
 	if (configJson.contains("cascLocale")) {

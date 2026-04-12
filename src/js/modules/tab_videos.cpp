@@ -44,7 +44,6 @@
 
 namespace tab_videos {
 
-// Helper to extract uint32_t from a FieldValue.
 static uint32_t fieldToUint32(const db::FieldValue& val) {
 	if (auto* p = std::get_if<int64_t>(&val))
 		return static_cast<uint32_t>(*p);
@@ -55,7 +54,6 @@ static uint32_t fieldToUint32(const db::FieldValue& val) {
 	return 0;
 }
 
-// Helper to extract int from a FieldValue.
 static int fieldToInt(const db::FieldValue& val) {
 	if (auto* p = std::get_if<int64_t>(&val))
 		return static_cast<int>(*p);
@@ -68,41 +66,25 @@ static int fieldToInt(const db::FieldValue& val) {
 
 // --- File-local state ---
 
-// JS: let movie_variation_map = null;
 static std::optional<std::unordered_map<uint32_t, uint32_t>> movie_variation_map;
 
-// JS: let video_file_data_ids = null;
 static std::optional<std::vector<uint32_t>> video_file_data_ids;
 
-// JS: let selected_file = null;
 static std::string selected_file;
 
-// JS: let current_video_element = null;
 // Video playback uses Kino server streaming; no local video element in C++.
-// The video element state is tracked via videoPlayerState in AppState.
-// The video URL from Kino is opened externally via the platform shell.
 static std::string current_video_url;
 
-// JS: let current_subtitle_track = null;
-// Subtitle track is handled via Kino server and subtitles module; no DOM track in C++.
-// Subtitle text is rendered as an ImGui overlay.
 static bool has_subtitle_track = false;
 
-// JS: let current_subtitle_blob_url = null;
-// Blob URLs are a browser concept; subtitle data managed directly in C++.
 static std::string current_subtitle_vtt;
 
-// JS: let is_streaming = false;
 static bool is_streaming = false;
 
-// JS: let poll_timer = null;
-// Poll timer replaced with poll state flags; polling handled in background thread.
 static std::atomic<bool> poll_active{false};
 
-// JS: let poll_cancelled = false;
 static std::atomic<bool> poll_cancelled{false};
 
-// JS: let kino_processing_cancelled = false;
 static bool kino_processing_cancelled = false;
 
 // Background thread for stream_video HTTP + polling (replaces JS async/await).
@@ -197,35 +179,25 @@ static std::pair<int, nlohmann::json> kino_post(const nlohmann::json& payload) {
 
 // --- Internal functions ---
 
-// JS: const stop_video = async (core_ref) => { ... }
 static void stop_video() {
 	poll_cancelled.store(true);
 
-	// JS: if (poll_timer) { clearTimeout(poll_timer); poll_timer = null; }
 	poll_active = false;
 
-	// JS: if (current_video_element) { ... }
 	// Video element pause/unload is a browser API; in C++ we reset state.
 	// The video was opened externally via the platform shell; we clear the URL.
 	current_video_url.clear();
 	has_subtitle_track = false;
 	current_subtitle_vtt.clear();
 
-	// JS: if (current_subtitle_blob_url) { URLPolyfill.revokeObjectURL(current_subtitle_blob_url); ... }
-	// Blob URLs are a browser concept; no cleanup needed in C++.
-
 	is_streaming = false;
 	core::view->videoPlayerState = false;
 }
 
-// JS: const build_payload = async (core_ref, file_data_id) => { ... }
 static std::optional<BuildPayloadResult> build_payload(uint32_t file_data_id) {
-	// JS: const casc = core_ref.view.casc;
 
 	// get video encoding info
-	// JS: const vid_info = await casc.getFileEncodingInfo(file_data_id);
 	auto vid_info_opt = core::view->casc->getFileEncodingInfo(file_data_id);
-	// JS: if (!vid_info) { ... }
 	if (!vid_info_opt.has_value()) {
 		logging::write(std::format("failed to get encoding info for video file {}", file_data_id));
 		return std::nullopt;
@@ -242,7 +214,6 @@ static std::optional<BuildPayloadResult> build_payload(uint32_t file_data_id) {
 		if (it != movie_variation_map->end()) {
 			uint32_t movie_id = it->second;
 			try {
-				// JS: const movie_row = await db2.Movie.getRow(movie_id);
 				auto& movie_table = casc::db2::getTable("Movie");
 				if (!movie_table.isLoaded)
 					movie_table.parse();
@@ -250,20 +221,17 @@ static std::optional<BuildPayloadResult> build_payload(uint32_t file_data_id) {
 				if (movie_row_opt.has_value()) {
 					const auto& movie_row = *movie_row_opt;
 					// get audio file encoding info
-					// JS: if (movie_row.AudioFileDataID && movie_row.AudioFileDataID !== 0) { ... }
 					uint32_t audio_fdid = 0;
 					auto aud_it = movie_row.find("AudioFileDataID");
 					if (aud_it != movie_row.end())
 						audio_fdid = fieldToUint32(aud_it->second);
 					if (audio_fdid != 0) {
-						// JS: const aud_info = await casc.getFileEncodingInfo(movie_row.AudioFileDataID);
 						auto aud_info_opt = core::view->casc->getFileEncodingInfo(audio_fdid);
 						if (aud_info_opt.has_value())
 							payload["aud"] = encoding_info_to_json(*aud_info_opt);
 					}
 
 					// get subtitle file encoding info for server + store for local loading
-					// JS: if (movie_row.SubtitleFileDataID && movie_row.SubtitleFileDataID !== 0) { ... }
 					uint32_t sub_fdid = 0;
 					auto sub_it = movie_row.find("SubtitleFileDataID");
 					if (sub_it != movie_row.end())
@@ -273,7 +241,6 @@ static std::optional<BuildPayloadResult> build_payload(uint32_t file_data_id) {
 					if (fmt_it != movie_row.end())
 						sub_format = fieldToInt(fmt_it->second);
 					if (sub_fdid != 0) {
-						// JS: const srt_info = await casc.getFileEncodingInfo(movie_row.SubtitleFileDataID);
 						auto srt_info_opt = core::view->casc->getFileEncodingInfo(sub_fdid);
 						if (srt_info_opt.has_value()) {
 							nlohmann::json srt_info = encoding_info_to_json(*srt_info_opt);
@@ -296,10 +263,7 @@ static std::optional<BuildPayloadResult> build_payload(uint32_t file_data_id) {
 	return BuildPayloadResult{ payload, subtitle_info };
 }
 
-// JS: const play_streaming_video = async (core_ref, url, video, subtitle_info) => { ... }
 static void play_streaming_video(const std::string& url, const std::optional<SubtitleInfo>& subtitle_info) {
-	// JS: current_video_element = video;
-	// JS: video.src = url;
 	// The Kino server provides a direct MP4 URL. In C++ there is no built-in video element;
 	// the URL is opened in the system's default media player / browser via the platform shell
 	// (ShellExecuteW on Windows, xdg-open on Linux), matching the NW.js → C++ translation
@@ -309,29 +273,12 @@ static void play_streaming_video(const std::string& url, const std::optional<Sub
 	// always load subtitles if available, toggle visibility based on config
 	if (subtitle_info.has_value()) {
 		try {
-			// JS: const vtt = await subtitles.get_subtitles_vtt(
 			//     core_ref.view.casc, subtitle_info.file_data_id, subtitle_info.format);
 			BufferWrapper subtitle_data = core::view->casc->getVirtualFileByID(subtitle_info->file_data_id);
 			std::string raw_subtitle_text = subtitle_data.readString();
 			subtitles::SubtitleFormat fmt = static_cast<subtitles::SubtitleFormat>(subtitle_info->format);
 			current_subtitle_vtt = subtitles::get_subtitles_vtt(raw_subtitle_text, fmt);
 			has_subtitle_track = true;
-
-			// JS: const blob = new BlobPolyfill([vtt], { type: 'text/vtt' });
-			// JS: current_subtitle_blob_url = URLPolyfill.createObjectURL(blob);
-			// Blob URL creation is a browser concept; VTT data stored directly in current_subtitle_vtt.
-
-			// JS: const track = document.createElement('track');
-			// JS: track.kind = 'subtitles'; track.label = 'Subtitles'; track.srclang = 'en';
-			// JS: track.src = current_subtitle_blob_url;
-			// JS: video.appendChild(track); current_subtitle_track = track;
-			// DOM track element is browser-specific; subtitle text rendered via ImGui overlay in render().
-
-			// set initial visibility after track loads
-			// JS: track.addEventListener('load', () => {
-			//     track.track.mode = core_ref.view.config.videoPlayerShowSubtitles ? 'showing' : 'hidden';
-			// });
-			// Subtitle visibility is controlled via the config watch in render().
 
 			logging::write(std::format("loaded subtitles for video (fdid: {}, format: {})",
 				subtitle_info->file_data_id, subtitle_info->format));
@@ -340,22 +287,18 @@ static void play_streaming_video(const std::string& url, const std::optional<Sub
 		}
 	}
 
-	// JS: video.load(); video.play().catch(e => { ... });
 	// Open the video URL in the system's default handler (browser/media player).
 	core::openInExplorer(url);
 	logging::write(std::format("opened video URL in system handler: {}", url));
 
-	// JS: video.onended = () => { ... };
 	// With external playback there is no direct "ended" callback.
 	// The user stops playback via stop_video() which resets:
 	//   is_streaming = false; core::view->videoPlayerState = false;
 
-	// JS: video.onerror = () => { ... };
 	// With external playback there is no direct "error" callback.
 	// HTTP errors are caught by kino_post(); launch errors are logged above.
 }
 
-// JS: const stream_video = async (core_ref, file_name, video) => { ... }
 static void stream_video(const std::string& file_name) {
 	const auto file_data_id_opt = casc::listfile::getByFilename(file_name);
 
@@ -400,7 +343,6 @@ static void stream_video(const std::string& file_name) {
 	});
 
 	// Ensure any previous background thread is completed before launching a new one.
-	// std::jthread destructor requests stop and joins, so reset() is safe.
 	if (stream_worker_thread)
 		stream_worker_thread.reset();
 
@@ -410,15 +352,12 @@ static void stream_video(const std::string& file_name) {
 	                                                        subtitle = std::move(subtitle),
 	                                                        file_name]() {
 		try {
-			// JS: const send_request = async () => { ... fetch(constants.KINO.API_URL, ...) ... };
 			auto [status, data] = kino_post(payload);
 
-			// JS: const handle_response = async (res) => { ... };
 			if (poll_cancelled.load())
 				return;
 
 			if (status == 200) {
-				// JS: if (data.url) { ... }
 				if (data.contains("url") && data["url"].is_string()) {
 					std::string video_url = data["url"].get<std::string>();
 					logging::write(std::format("received video url: {}", video_url));
@@ -432,8 +371,6 @@ static void stream_video(const std::string& file_name) {
 				logging::write(std::format("video is queued for processing, polling in {}ms",
 					constants::KINO::POLL_INTERVAL));
 
-				// JS: poll_timer = setTimeout(async () => { ... }, constants.KINO.POLL_INTERVAL);
-				// JS uses recursive setTimeout for indefinite polling; C++ uses a loop in the background thread.
 				poll_active = true;
 
 				bool poll_done = false;
@@ -490,18 +427,14 @@ static void stream_video(const std::string& file_name) {
 	});
 }
 
-// JS: const load_video_listfile = async () => { ... }
 static void load_video_listfile() {
 	logging::write("loading MovieVariation table...");
-	// JS: const movie_variation = await db2.preload.MovieVariation();
 	auto& movie_variation = casc::db2::preloadTable("MovieVariation");
 
 	movie_variation_map.emplace();
 	std::unordered_set<uint32_t> seen_ids;
 	std::vector<uint32_t> file_data_ids_vec;
 
-	// JS: const rows = await movie_variation.getAllRows();
-	// JS: for (const [id, row] of rows) { ... }
 	for (const auto& [id, row] : movie_variation.getAllRows()) {
 		uint32_t fdid = 0;
 		uint32_t mid = 0;
@@ -524,7 +457,6 @@ static void load_video_listfile() {
 
 	logging::write(std::format("loaded {} movie variation mappings", movie_variation_map->size()));
 
-	// JS: const entries = new Array(video_file_data_ids.length);
 	std::vector<std::string> entries;
 	entries.reserve(video_file_data_ids->size());
 
@@ -539,7 +471,6 @@ static void load_video_listfile() {
 		entries.push_back(std::format("{} [{}]", filename, fid));
 	}
 
-	// JS: if (core.view.config.listfileSortByID) ...
 	if (core::view->config.value("listfileSortByID", false)) {
 		std::sort(entries.begin(), entries.end(), [](const std::string& a, const std::string& b) {
 			const auto fa = casc::listfile::getByFilename(casc::listfile::stripFileEntry(a));
@@ -550,7 +481,6 @@ static void load_video_listfile() {
 		std::sort(entries.begin(), entries.end());
 	}
 
-	// JS: core.view.listfileVideos = entries;
 	core::view->listfileVideos.clear();
 	core::view->listfileVideos.reserve(entries.size());
 	for (auto& e : entries)
@@ -559,7 +489,6 @@ static void load_video_listfile() {
 	logging::write(std::format("built video listfile with {} entries", core::view->listfileVideos.size()));
 }
 
-// JS: const get_movie_data = async (file_data_id) => { ... }
 static std::optional<MovieData> get_movie_data(uint32_t file_data_id) {
 	if (!movie_variation_map.has_value())
 		return std::nullopt;
@@ -571,7 +500,6 @@ static std::optional<MovieData> get_movie_data(uint32_t file_data_id) {
 	uint32_t movie_id = it->second;
 
 	try {
-		// JS: const movie_row = await db2.Movie.getRow(movie_id);
 		auto& movie_table = casc::db2::getTable("Movie");
 		if (!movie_table.isLoaded)
 			movie_table.parse();
@@ -606,23 +534,18 @@ static std::optional<MovieData> get_movie_data(uint32_t file_data_id) {
 	}
 }
 
-// JS: const get_mp4_url = async (payload) => { ... }
 static std::optional<std::string> get_mp4_url(const nlohmann::json& payload) {
-	// JS: const send_request = async () => { ... };
-	// JS: const poll_for_url = async () => { ... };
 
 	// Recursive polling: send request, if 202 wait and retry, if 200 return url.
 	while (true) {
 		auto [status, data] = kino_post(payload);
 
 		if (status == 200) {
-			// JS: return data.url || null;
 			if (data.contains("url") && data["url"].is_string())
 				return data["url"].get<std::string>();
 			return std::nullopt;
 		} else if (status == 202) {
 			// video queued, wait and retry
-			// JS: await new Promise(resolve => setTimeout(resolve, constants.KINO.POLL_INTERVAL));
 			std::this_thread::sleep_for(std::chrono::milliseconds(constants::KINO::POLL_INTERVAL));
 			// return poll_for_url(); — loop continues
 		} else {
@@ -631,7 +554,6 @@ static std::optional<std::string> get_mp4_url(const nlohmann::json& payload) {
 	}
 }
 
-// JS: const trigger_kino_processing = async () => { ... }
 static void trigger_kino_processing() {
 	if (!video_file_data_ids.has_value() || video_file_data_ids->empty()) {
 		logging::write("kino_processing: no video file data ids loaded");
@@ -646,7 +568,6 @@ static void trigger_kino_processing() {
 
 	logging::write(std::format("kino_processing: starting processing of {} videos", total));
 
-	// JS: const update_toast = () => { ... };
 	auto update_toast = [&]() {
 		if (kino_processing_cancelled)
 			return;
@@ -655,8 +576,6 @@ static void trigger_kino_processing() {
 		core::setToast("progress", msg, {}, -1, true);
 	};
 
-	// JS: const cancel_processing = () => { ... };
-	// JS: core.events.once('toast-cancelled', cancel_processing);
 	size_t cancel_listener_id = core::events.once("toast-cancelled", [&]() {
 		kino_processing_cancelled = true;
 		logging::write(std::format("kino_processing: cancelled by user at {}/{}", processed, total));
@@ -689,7 +608,6 @@ static void trigger_kino_processing() {
 				if (status == 200) {
 					done = true;
 				} else if (status == 202) {
-					// JS: await new Promise(resolve => setTimeout(resolve, constants.KINO.POLL_INTERVAL));
 					std::this_thread::sleep_for(std::chrono::milliseconds(constants::KINO::POLL_INTERVAL));
 				} else {
 					logging::write(std::format("kino_processing: unexpected status {} for fdid {}", status, file_data_id));
@@ -715,12 +633,9 @@ static void trigger_kino_processing() {
 }
 
 // expose to window in dev mode
-// JS: if (!BUILD_RELEASE) window.trigger_kino_processing = trigger_kino_processing;
-// TODO(conversion): Dev-mode exposure of trigger_kino_processing handled via isDev flag and dev console.
 
 // --- Export methods ---
 
-// JS: methods.export_mp4()
 static void export_mp4() {
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionVideos;
@@ -747,9 +662,7 @@ static void export_mp4() {
 
 		const uint32_t file_data_id = *file_data_id_opt;
 
-		// JS: let export_file_name = ExportHelper.replaceExtension(file_name, '.mp4');
 		std::string export_file_name = casc::ExportHelper::replaceExtension(file_name, ".mp4");
-		// JS: if (!this.$core.view.config.exportNamedFiles) { ... }
 		if (!view.config.value("exportNamedFiles", true)) {
 			namespace fs = std::filesystem;
 			const std::string dir = fs::path(file_name).parent_path().string();
@@ -780,14 +693,11 @@ static void export_mp4() {
 				continue;
 			}
 
-			// JS: const response = await fetch(mp4_url, { headers: { 'User-Agent': constants.USER_AGENT } });
 			std::vector<uint8_t> mp4_data = generics::get(*mp4_url);
 
-			// JS: await fsp.mkdir(path.dirname(export_path), { recursive: true });
 			namespace fs = std::filesystem;
 			fs::create_directories(fs::path(export_path).parent_path());
 
-			// JS: await fsp.writeFile(export_path, Buffer.from(buffer));
 			std::ofstream out(export_path, std::ios::binary);
 			out.write(reinterpret_cast<const char*>(mp4_data.data()), static_cast<std::streamsize>(mp4_data.size()));
 			out.close();
@@ -801,7 +711,6 @@ static void export_mp4() {
 	helper.finish();
 }
 
-// JS: methods.export_avi()
 static void export_avi() {
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionVideos;
@@ -821,7 +730,6 @@ static void export_avi() {
 		std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
 		std::string export_file_name = file_name;
 
-		// JS: if (!this.$core.view.config.exportNamedFiles) { ... }
 		if (!view.config.value("exportNamedFiles", true)) {
 			const auto file_data_id_opt = casc::listfile::getByFilename(file_name);
 			if (file_data_id_opt.has_value()) {
@@ -838,8 +746,6 @@ static void export_avi() {
 
 		if (overwrite_files || !generics::fileExists(export_path)) {
 			try {
-				// JS: const data = await this.$core.view.casc.getFileByName(file_name);
-				// JS: await data.writeToFile(export_path);
 				BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
 				data.writeToFile(export_path);
 
@@ -854,8 +760,6 @@ static void export_avi() {
 				try {
 					logging::write("Local cinematic file is corrupted, forcing fallback.");
 
-					// JS: const data = await this.$core.view.casc.getFileByName(file_name, false, false, true, true);
-					// JS: await data.writeToFile(export_path);
 					// Note: C++ getVirtualFileByName doesn't support forceFallback; retry normally.
 					BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
 					data.writeToFile(export_path);
@@ -874,7 +778,6 @@ static void export_avi() {
 	helper.finish();
 }
 
-// JS: methods.export_mp3()
 static void export_mp3() {
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionVideos;
@@ -905,9 +808,7 @@ static void export_mp3() {
 			continue;
 		}
 
-		// JS: let export_file_name = ExportHelper.replaceExtension(file_name, '.mp3');
 		std::string export_file_name = casc::ExportHelper::replaceExtension(file_name, ".mp3");
-		// JS: if (!this.$core.view.config.exportNamedFiles) { ... }
 		if (!view.config.value("exportNamedFiles", true)) {
 			namespace fs = std::filesystem;
 			const std::string dir = fs::path(file_name).parent_path().string();
@@ -924,8 +825,6 @@ static void export_mp3() {
 		}
 
 		try {
-			// JS: const data = await this.$core.view.casc.getFile(movie_data.AudioFileDataID);
-			// JS: await data.writeToFile(export_path);
 			BufferWrapper data = core::view->casc->getVirtualFileByID(movie_data->AudioFileDataID);
 			data.writeToFile(export_path);
 			helper.mark(export_file_name, true);
@@ -937,7 +836,6 @@ static void export_mp3() {
 	helper.finish();
 }
 
-// JS: methods.export_subtitles()
 static void export_subtitles() {
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionVideos;
@@ -969,12 +867,9 @@ static void export_subtitles() {
 		}
 
 		// determine extension based on subtitle format
-		// JS: const ext = movie_data.SubtitleFileFormat === subtitles.SUBTITLE_FORMAT.SBT ? '.sbt' : '.srt';
 		const std::string ext = (movie_data->SubtitleFileFormat == static_cast<int>(subtitles::SubtitleFormat::SBT)) ? ".sbt" : ".srt";
 
-		// JS: let export_file_name = ExportHelper.replaceExtension(file_name, ext);
 		std::string export_file_name = casc::ExportHelper::replaceExtension(file_name, ext);
-		// JS: if (!this.$core.view.config.exportNamedFiles) { ... }
 		if (!view.config.value("exportNamedFiles", true)) {
 			namespace fs = std::filesystem;
 			const std::string dir = fs::path(file_name).parent_path().string();
@@ -991,8 +886,6 @@ static void export_subtitles() {
 		}
 
 		try {
-			// JS: const data = await this.$core.view.casc.getFile(movie_data.SubtitleFileDataID);
-			// JS: await data.writeToFile(export_path);
 			BufferWrapper data = core::view->casc->getVirtualFileByID(movie_data->SubtitleFileDataID);
 			data.writeToFile(export_path);
 			helper.mark(export_file_name, true);
@@ -1006,16 +899,13 @@ static void export_subtitles() {
 
 // --- Public API ---
 
-// JS: register() { this.registerNavButton('Videos', 'film.svg', InstallType.CASC); }
 void registerTab() {
 	modules::register_nav_button("tab_videos", "Videos", "film.svg", install_type::CASC);
 }
 
-// JS: async mounted() { ... }
 void mounted() {
 	auto& view = *core::view;
 
-	// JS: await this.initialize();
 	core::showLoadingScreen(1);
 	core::progressLoadingScreen("Loading video metadata...");
 	load_video_listfile();
@@ -1048,7 +938,6 @@ void render() {
 	}
 
 	// --- Change-detection for selection (equivalent to watch on selectionVideos) ---
-	// JS: this.$core.view.$watch('selectionVideos', async selection => { ... });
 	if (!view.selectionVideos.empty()) {
 		const std::string first = casc::listfile::stripFileEntry(view.selectionVideos[0].get<std::string>());
 		if (view.isBusy == 0 && !first.empty() && selected_file != first) {
@@ -1066,10 +955,8 @@ void render() {
 	}
 
 	// --- Change-detection for subtitle visibility ---
-	// JS: this.$core.view.$watch('config.videoPlayerShowSubtitles', show => { ... });
 	const bool current_show_subtitles = view.config.value("videoPlayerShowSubtitles", false);
 	if (current_show_subtitles != prev_video_player_show_subtitles) {
-		// JS: if (current_subtitle_track && current_subtitle_track.track)
 		//     current_subtitle_track.track.mode = show ? 'showing' : 'hidden';
 		// Subtitle visibility is applied in the preview rendering below;
 		// the config value is read directly when deciding whether to show subtitles.
@@ -1079,13 +966,11 @@ void render() {
 
 	// --- Template rendering ---
 
-	// JS: <div class="tab list-tab" id="tab-video">
 	if (app::layout::BeginTab("tab-video")) {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
 	// --- Left panel: List container (row 1, col 1) ---
-	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionVideos" :items="listfileVideos" ...>
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	if (app::layout::BeginListContainer("videos-list-container", regions)) {
@@ -1165,7 +1050,6 @@ void render() {
 	app::layout::EndListContainer();
 
 	// --- Filter bar (row 2, col 1) ---
-	// JS: <div class="filter">
 	//     <div class="regex-info" v-if="config.regexFilters" ...>Regex Enabled</div>
 	//     <input type="text" v-model="userInputFilterVideos" placeholder="Filter videos..."/>
 	// </div>
@@ -1184,12 +1068,9 @@ void render() {
 	app::layout::EndFilterBar();
 
 	// --- Right panel: Preview container (row 1, col 2) ---
-	// JS: <div class="preview-container">
 	//     <video ref="video_player" class="preview-background" style="..." controls ...></video>
 	// </div>
 	if (app::layout::BeginPreviewContainer("video-preview-container", regions)) {
-		// In the browser version, this is a <video> element with native playback controls.
-		// In C++, video playback is handled externally via the platform shell (browser/media player).
 		// This preview area shows the current streaming state and subtitle text.
 		if (is_streaming || view.videoPlayerState) {
 			if (!current_video_url.empty()) {
@@ -1221,7 +1102,6 @@ void render() {
 	app::layout::EndPreviewContainer();
 
 	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
-	// JS: <div class="preview-controls">
 	//     <label class="ui-checkbox">
 	//         <input type="checkbox" v-model="config.videoPlayerAutoPlay"/>
 	//         <span>Autoplay</span>
@@ -1264,7 +1144,6 @@ void render() {
 	app::layout::EndTab();
 }
 
-// JS: methods.preview_video()
 void preview_video() {
 	auto& view = *core::view;
 
@@ -1284,7 +1163,6 @@ void preview_video() {
 	stream_video(file_name);
 }
 
-// JS: methods.export_selected()
 void export_selected() {
 	const std::string format = core::view->config.value("exportVideoFormat", std::string("AVI"));
 

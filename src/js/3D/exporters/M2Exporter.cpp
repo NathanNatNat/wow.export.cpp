@@ -746,7 +746,6 @@ auto fileData = casc->getVirtualFileByID(texFileDataID);
 casc::BLPImage blp(fileData);
 auto png_buffer = blp.toPNG(config.value("modelsExportAlpha", false) ? 0b1111 : 0b0111);
 
-// JS: gltf.texture_buffers[texFileDataID] = png_buffer;
 gltf.addTextureBuffer(texFileDataID, std::move(png_buffer));
 } else if (config.value("overwriteFiles", true) || !generics::fileExists(texPath)) {
 auto fileData = casc->getVirtualFileByID(texFileDataID);

@@ -17,9 +17,7 @@
  *
  * JS equivalent: module.exports = { detect_glyphs_async, get_random_quote, inject_font_face }
  *
- * In C++ (ImGui), glyph detection is done by testing whether a loaded ImFont
  * has a glyph for each codepoint. Font injection loads a TTF/OTF blob into
- * ImGui's font atlas. The glyph grid is rendered via ImGui instead of DOM.
  */
 namespace font_helpers {
 

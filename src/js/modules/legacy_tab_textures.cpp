@@ -50,7 +50,6 @@ static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t 
 
 // --- File-local state ---
 
-// JS: let selected_file = null;
 static std::string selected_file;
 
 // Change-detection for selection and config watches.
@@ -66,7 +65,6 @@ static void handle_listbox_context(const nlohmann::json& data);
 
 // --- Internal functions ---
 
-// JS: const preview_texture = async (core, filename) => { ... }
 static void preview_texture(const std::string& filename) {
 	auto& view = *core::view;
 	// Get extension.
@@ -81,7 +79,6 @@ static void preview_texture(const std::string& filename) {
 	logging::write(std::format("previewing texture file {}", filename));
 
 	try {
-		// JS: const data = core.view.mpq.getFile(filename);
 		mpq::MPQInstall* mpq = core::view->mpq.get();
 		auto data = mpq ? mpq->getFile(filename) : std::nullopt;
 		if (!data) {
@@ -90,22 +87,14 @@ static void preview_texture(const std::string& filename) {
 		}
 
 		if (ext == ".blp") {
-			// JS: const buffer = Buffer.from(data);
-			// JS: const wrapped = new BufferWrapper(buffer);
-			// JS: const blp = new BLPFile(wrapped);
 			BufferWrapper wrapped(std::move(*data));
 			casc::BLPImage blp(wrapped);
 
-			// JS: core.view.texturePreviewURL = blp.getDataURL(core.view.config.exportChannelMask);
 			uint8_t mask = static_cast<uint8_t>(view.config.value("exportChannelMask", 0b1111));
 			view.texturePreviewURL = blp.getDataURL(mask);
-			// JS: core.view.texturePreviewWidth = blp.width;
-			// JS: core.view.texturePreviewHeight = blp.height;
 			view.texturePreviewWidth = static_cast<int>(blp.width);
 			view.texturePreviewHeight = static_cast<int>(blp.height);
 
-			// JS: let info = '';
-			// JS: switch (blp.encoding) { ... }
 			std::string info;
 			switch (blp.encoding) {
 				case 1: info = "Palette"; break;
@@ -119,7 +108,6 @@ static void preview_texture(const std::string& filename) {
 				default: info = std::format("Unsupported [{}]", blp.encoding); break;
 			}
 
-			// JS: core.view.texturePreviewInfo = `${blp.width}x${blp.height} (${info})`;
 			view.texturePreviewInfo = std::format("{}x{} ({})", blp.width, blp.height, info);
 
 			// Upload BLP as GL texture for ImGui::Image display.
@@ -128,8 +116,6 @@ static void preview_texture(const std::string& filename) {
 				pixels.data(), static_cast<int>(blp.width), static_cast<int>(blp.height),
 				view.texturePreviewTexID);
 		} else if (ext == ".png" || ext == ".jpg") {
-			// JS: const buffer = Buffer.from(data);
-			// JS: const img = new Image(); img.onload = () => { ... }
 			// Use stb_image to decode and detect dimensions.
 			int img_w = 0, img_h = 0, img_channels = 0;
 			unsigned char* pixels = stbi_load_from_memory(
@@ -155,7 +141,6 @@ static void preview_texture(const std::string& filename) {
 	}
 }
 
-// JS: const refresh_blp_preview = (core) => { ... }
 static void refresh_blp_preview() {
 	if (selected_file.empty())
 		return;
@@ -171,7 +156,6 @@ static void refresh_blp_preview() {
 		return;
 
 	try {
-		// JS: const data = core.view.mpq.getFile(selected_file);
 		mpq::MPQInstall* mpq = core::view->mpq.get();
 		auto data = mpq ? mpq->getFile(selected_file) : std::nullopt;
 		if (data) {
@@ -191,16 +175,11 @@ static void refresh_blp_preview() {
 	}
 }
 
-// JS: const load_texture_list = async (core) => { ... }
 static void load_texture_list() {
 	if (core::view->listfileTextures.empty() && !core::view->isBusy) {
 		BusyLock _lock = core::create_busy_lock();
 
 		try {
-			// JS: const blp_files = core.view.mpq.getFilesByExtension('.blp');
-			// JS: const png_files = core.view.mpq.getFilesByExtension('.png');
-			// JS: const jpg_files = core.view.mpq.getFilesByExtension('.jpg');
-			// JS: core.view.listfileTextures = [...blp_files, ...png_files, ...jpg_files];
 			mpq::MPQInstall* mpq = core::view->mpq.get();
 			if (!mpq) return;
 			auto blp_files = mpq->getFilesByExtension(".blp");
@@ -220,15 +199,11 @@ static void load_texture_list() {
 
 // --- Public functions ---
 
-// JS: register() { this.registerNavButton('Textures', 'image.svg', InstallType.MPQ); }
 void registerTab() {
-	// JS: this.registerNavButton('Textures', 'image.svg', InstallType.MPQ);
 	modules::register_nav_button("legacy_tab_textures", "Textures", "image.svg", install_type::MPQ);
 }
 
-// JS: mounted()
 void mounted() {
-	// JS: await load_texture_list(this.$core);
 	load_texture_list();
 
 	// Initialize change-detection state.
@@ -255,7 +230,6 @@ static void renderCheckerboard(ImDrawList* dl, ImVec2 pos, ImVec2 size, float ce
 
 void render() {
 	// --- Change-detection for selectionTextures watch ---
-	// JS: this.$core.view.$watch('selectionTextures', async selection => { ... });
 	{
 		std::string current_first;
 		if (!core::view->selectionTextures.empty())
@@ -271,7 +245,6 @@ void render() {
 	}
 
 	// --- Change-detection for config.exportChannelMask watch ---
-	// JS: this.$core.view.$watch('config.exportChannelMask', () => { ... });
 	{
 		uint8_t current_mask = static_cast<uint8_t>(core::view->config.value("exportChannelMask", 0b1111));
 		if (current_mask != prev_export_channel_mask) {
@@ -282,7 +255,6 @@ void render() {
 	}
 
 	// --- Template rendering ---
-	// JS: <div class="tab list-tab" id="legacy-tab-textures">
 	auto& view = *core::view;
 
 	if (app::layout::BeginTab("legacy-tab-textures")) {
@@ -290,7 +262,6 @@ void render() {
 	auto regions = app::layout::CalcListTabRegions(false);
 
 	// --- Left panel: List container (row 1, col 1) ---
-	// JS: <div class="list-container">
 	//   Listbox with selectionTextures, listfileTextures, filter, context menu
 	if (app::layout::BeginListContainer("legacy-tex-list", regions)) {
 		// Convert json items to string array.
@@ -334,7 +305,6 @@ void render() {
 	app::layout::EndListContainer();
 
 	// --- Filter bar (row 2, col 1) ---
-	// JS: <div class="filter">
 	//   Regex info + filter input
 	if (app::layout::BeginFilterBar("legacy-tex-filter", regions)) {
 		if (view.config.value("regexFilters", false))
@@ -349,7 +319,6 @@ void render() {
 	app::layout::EndFilterBar();
 
 	// --- Right panel: Preview container (row 1, col 2) ---
-	// JS: <div class="preview-container">
 	//   Preview info, channel mask toggles (R/G/B/A), texture preview image
 	if (app::layout::BeginPreviewContainer("legacy-tex-preview", regions)) {
 		// Texture preview info.
@@ -402,7 +371,6 @@ void render() {
 	app::layout::EndPreviewContainer();
 
 	// --- Bottom-right: Preview controls (row 2, col 2) ---
-	// JS: <div class="preview-controls">
 	//   MenuButton for export format + export action
 	if (app::layout::BeginPreviewControls("legacy-tex-controls", regions)) {
 		std::vector<menu_button::MenuOption> tex_options;
@@ -420,27 +388,22 @@ void render() {
 	app::layout::EndTab();
 }
 
-// JS: methods.handle_listbox_context(data)
 static void handle_listbox_context(const nlohmann::json& data) {
 	listbox_context::handle_context_menu(data, true);
 }
 
-// JS: methods.copy_file_paths(selection)
 static void copy_file_paths(const nlohmann::json& selection) {
 	listbox_context::copy_file_paths(selection);
 }
 
-// JS: methods.copy_export_paths(selection)
 static void copy_export_paths(const nlohmann::json& selection) {
 	listbox_context::copy_export_paths(selection);
 }
 
-// JS: methods.open_export_directory(selection)
 static void open_export_directory(const nlohmann::json& selection) {
 	listbox_context::open_export_directory(selection);
 }
 
-// JS: methods.export_textures()
 void export_textures() {
 	const auto& selected = core::view->selectionTextures;
 	if (selected.empty()) {
@@ -448,8 +411,6 @@ void export_textures() {
 		return;
 	}
 
-	// JS: await textureExporter.exportFiles(selected, false, -1, true);
-	// C++ signature: exportFiles(files, casc, mpq, isLocal, exportID)
 	// For legacy MPQ textures: casc=nullptr, mpq=source, isLocal=true
 	texture_exporter::exportFiles(selected, nullptr, core::view->mpq.get(), true, -1);
 }

@@ -56,7 +56,6 @@ void initializeItemDisplays() {
 
 	logging::write("Loading item textures...");
 
-	// Using the texture mapping, map all model fileDataIDs to used textures.
 	for (const auto& [itemDisplayInfoID, itemDisplayInfoRow] : casc::db2::preloadTable("ItemDisplayInfo").getAllRows()) {
 		auto allModelResIDs = fieldToUint32Vec(itemDisplayInfoRow.at("ModelResourcesID"));
 		std::vector<uint32_t> modelResIDs;

@@ -21,9 +21,6 @@ static constexpr uint64_t PRIME64_3 = 1609587929392839161ULL;
 static constexpr uint64_t PRIME64_4 = 9650029242287828579ULL;
 static constexpr uint64_t PRIME64_5 = 2870177450012600261ULL;
 
-// JS toUTF8Array() is not needed in C++ — std::string_view is already
-// a UTF-8 byte sequence. The update(std::string_view) overload
-// reinterprets the chars as bytes directly.
 
 static inline uint64_t rotl64(uint64_t value, int n) {
 	return (value << n) | (value >> (64 - n));

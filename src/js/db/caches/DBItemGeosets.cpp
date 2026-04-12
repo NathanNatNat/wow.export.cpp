@@ -179,7 +179,6 @@ void initialize() {
 		if (helmetVisIt != row.end())
 			helmet_geoset_vis = fieldToIntVec(helmetVisIt->second);
 
-		// JS: if (geoset_group || helmet_geoset_vis)
 		// In JS, any array (even all zeros) is truthy, so this checks if the field exists.
 		bool has_geoset = geoGrpIt != row.end();
 		bool has_helmet = helmetVisIt != row.end();

@@ -236,7 +236,6 @@ void M3RendererGL::render(const float* view_matrix, const float* projection_matr
 	shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
 	shader->set_uniform_3f("u_view_up", 0, 1, 0);
 
-	// JS: performance.now() * 0.001
 	const float time = static_cast<float>(
 		std::chrono::duration<double>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()
 	);

@@ -23,8 +23,6 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
-// JS uses Node.js crypto for MD5/SHA256 hashing.
-// C++ uses self-contained RFC 1321 (MD5) and FIPS 180-4 (SHA-256) implementations
 // below (md5_impl / sha256_impl namespaces). No external dependency required.
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -40,7 +38,6 @@ namespace cache_collector {
 
 namespace fs = std::filesystem;
 
-// ── Helper: case-insensitive string ends-with ──────────────────────
 static bool iends_with(const std::string& str, std::string_view suffix) {
 	if (str.size() < suffix.size())
 		return false;
@@ -54,20 +51,17 @@ static bool iends_with(const std::string& str, std::string_view suffix) {
 	return true;
 }
 
-// ── Helper: convert file_time to milliseconds since epoch ──────────
 static int64_t file_time_to_ms(const fs::file_time_type& ft) {
 	auto sctp = std::chrono::clock_cast<std::chrono::system_clock>(ft);
 	auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(sctp.time_since_epoch());
 	return ms.count();
 }
 
-// ── Helper: current time in milliseconds ───────────────────────────
 static int64_t now_ms() {
 	auto now = std::chrono::system_clock::now();
 	return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 }
 
-// ── Helper: read entire file into bytes ────────────────────────────
 static std::vector<uint8_t> read_file_bytes(const fs::path& file_path) {
 	std::ifstream ifs(file_path, std::ios::binary | std::ios::ate);
 	if (!ifs)
@@ -83,7 +77,6 @@ static std::vector<uint8_t> read_file_bytes(const fs::path& file_path) {
 	return buffer;
 }
 
-// ── Helper: read entire file as string ─────────────────────────────
 static std::string read_file_text(const fs::path& file_path) {
 	std::ifstream ifs(file_path);
 	if (!ifs)
@@ -94,7 +87,6 @@ static std::string read_file_text(const fs::path& file_path) {
 	return ss.str();
 }
 
-// ── Helper: write string to file ───────────────────────────────────
 static void write_file_text(const fs::path& file_path, const std::string& text) {
 	std::ofstream ofs(file_path);
 	if (!ofs)
@@ -103,7 +95,6 @@ static void write_file_text(const fs::path& file_path, const std::string& text) 
 	ofs << text;
 }
 
-// ── Helper: hex encode ─────────────────────────────────────────────
 static std::string to_hex(const std::vector<uint8_t>& data) {
 	static constexpr char hex_chars[] = "0123456789abcdef";
 	std::string result;
@@ -115,8 +106,6 @@ static std::string to_hex(const std::vector<uint8_t>& data) {
 	return result;
 }
 
-// ── Helper: generate random hex string ─────────────────────────────
-// JS: crypto.randomBytes(16).toString('hex')
 static std::string random_hex(size_t num_bytes) {
 	std::random_device rd;
 	std::mt19937 gen(rd());
@@ -129,7 +118,6 @@ static std::string random_hex(size_t num_bytes) {
 	return to_hex(bytes);
 }
 
-// ── Helper: MD5 hash (RFC 1321) ────────────────────────────────────
 // Self-contained implementation matching JS crypto.createHash('md5').
 
 // MD5 implementation for file hashing.
@@ -271,7 +259,6 @@ static std::vector<uint8_t> md5_final(MD5Context& ctx) {
 
 } // namespace md5_impl
 
-// ── Helper: simple SHA-256 hash ────────────────────────────────────
 namespace sha256_impl {
 
 static constexpr uint32_t k[64] = {
@@ -352,7 +339,6 @@ static std::string sha256(const std::vector<uint8_t>& data) {
 
 } // namespace sha256_impl
 
-// ── Helper: ISO 8601 timestamp from milliseconds ───────────────────
 static std::string ms_to_iso8601(int64_t ms) {
 	auto tp = std::chrono::system_clock::time_point(std::chrono::milliseconds(ms));
 	auto time_t_val = std::chrono::system_clock::to_time_t(tp);
@@ -369,7 +355,6 @@ static std::string ms_to_iso8601(int64_t ms) {
 	return std::format("{}.{:03d}Z", buf, ms_part);
 }
 
-// ── Helper: parse URL into host/port/path ──────────────────────────
 struct ParsedURL {
 	std::string scheme;
 	std::string host;
@@ -410,7 +395,6 @@ static ParsedURL parse_url(const std::string& url) {
 	return result;
 }
 
-// ── Helper: trim whitespace ────────────────────────────────────────
 static std::string trim(const std::string& s) {
 	auto start = s.find_first_not_of(" \t\r\n");
 	if (start == std::string::npos)
@@ -419,7 +403,6 @@ static std::string trim(const std::string& s) {
 	return s.substr(start, end - start + 1);
 }
 
-// ── Helper: split string ───────────────────────────────────────────
 static std::vector<std::string> split(const std::string& s, char delimiter) {
 	std::vector<std::string> result;
 	std::istringstream stream(s);
@@ -429,7 +412,6 @@ static std::vector<std::string> split(const std::string& s, char delimiter) {
 	return result;
 }
 
-// ── Public API ─────────────────────────────────────────────────────
 
 HttpResponse https_request(const std::string& url,
                            const std::string& method,
@@ -546,7 +528,6 @@ std::vector<uint8_t> build_multipart(const std::string& boundary, const std::vec
 }
 
 void upload_chunks(const std::string& url, const std::vector<uint8_t>& buffer) {
-	// JS: crypto.randomBytes(16).toString('hex')
 	std::string boundary = random_hex(16);
 
 	for (int64_t offset = 0; offset < static_cast<int64_t>(buffer.size()); offset += CHUNK_SIZE) {
@@ -621,7 +602,6 @@ std::vector<std::unordered_map<std::string, std::string>> parse_build_info(const
 }
 
 std::string hash_file(const fs::path& file_path) {
-	// JS: crypto.createHash('md5') streaming
 	std::ifstream ifs(file_path, std::ios::binary);
 	if (!ifs)
 		throw std::runtime_error(std::format("Cannot open file for hashing: {}", file_path.string()));
@@ -648,7 +628,6 @@ std::vector<fs::path> find_binaries(const fs::path& flavor_dir) {
 			if (entry.is_regular_file()) {
 				auto name = entry.path().filename().string();
 				if (iends_with(name, ".exe")) {
-					// JS: entry.name.toLowerCase() !== 'blizzarderror.exe'
 					std::string lower_name = name;
 					std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(),
 					               [](unsigned char c) { return std::tolower(c); });
@@ -917,7 +896,6 @@ void collect(const WorkerConfig& config, const LogCallback& log) {
 				std::string flavor_text = read_file_text(flavor_info_path);
 				flavor_text = trim(flavor_text);
 
-				// JS: flavor_text.trim().split('\n').pop()?.trim()
 				auto flavor_lines = split(flavor_text, '\n');
 				std::string product;
 				if (!flavor_lines.empty()) {
@@ -932,7 +910,6 @@ void collect(const WorkerConfig& config, const LogCallback& log) {
 		}
 
 		for (const auto& flavor : flavor_dirs) {
-			// JS: builds.find(b => b.Product === flavor.product)
 			const std::unordered_map<std::string, std::string>* build_row = nullptr;
 			for (const auto& b : builds) {
 				auto it = b.find("Product");

@@ -38,7 +38,6 @@ namespace tab_items {
 
 // --- File-local structures ---
 
-// JS: class Item { constructor(id, item_sparse_row, item_appearance_row, textures, models) { ... } }
 struct Item {
 	uint32_t id = 0;
 	std::string name;
@@ -50,24 +49,20 @@ struct Item {
 	int modelCount = 0;
 	int textureCount = 0;
 
-	// JS: get itemSlotName() { return ItemSlot.getSlotName(this.inventoryType); }
 	std::string_view itemSlotName() const {
 		return wow::getSlotName(inventoryType);
 	}
 
-	// JS: get displayName() { return this.name + ' (' + this.id + ')'; }
 	std::string displayName() const {
 		return std::format("{} ({})", name, id);
 	}
 };
 
-// JS: itemViewerTypeMask entries: { label, checked }
 struct TypeMaskEntry {
 	std::string label;
 	bool checked = false;
 };
 
-// JS: itemViewerQualityMask entries: { id, label, checked }
 struct QualityMaskEntry {
 	int id = 0;
 	std::string label;
@@ -76,10 +71,8 @@ struct QualityMaskEntry {
 
 // --- File-local constants ---
 
-// JS: const ITEM_SLOTS_IGNORED = [0, 18, 11, 12, 24, 25, 27, 28];
 static const std::vector<int> ITEM_SLOTS_IGNORED = { 0, 18, 11, 12, 24, 25, 27, 28 };
 
-// JS: const ITEM_QUALITIES = [ { id: 0, label: 'Poor' }, ... ];
 struct QualityDef {
 	int id;
 	const char* label;
@@ -96,8 +89,6 @@ static const QualityDef ITEM_QUALITIES[] = {
 	{ 7, "Heirloom" }
 };
 
-// JS: const ITEM_SLOTS_MERGED = { 'Head': [1], 'Neck': [2], ... };
-// Using a vector of pairs to preserve insertion order (matching JS Object.keys() order).
 struct SlotMergedEntry {
 	const char* label;
 	std::vector<int> slots;
@@ -161,10 +152,8 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 
 // --- File-local state ---
 
-// JS: let items = [];
 static std::vector<Item> items;
 
-// JS: itemViewerTypeMask / itemViewerQualityMask — module-local filter state.
 // (JS stores these on core.view but they are objects with {label, checked};
 //  core.h declares them as std::vector<int> which is insufficient, so we keep
 //  the real state here and sync back as needed.)
@@ -181,7 +170,6 @@ static itemlistbox::ItemListboxState itemlistbox_items_state;
 
 // --- Internal functions ---
 
-// JS: const view_item_models = (core, modules, item) => { ... }
 static void view_item_models(const Item& item) {
 	modules::set_active("tab_models");
 
@@ -212,7 +200,6 @@ static void view_item_models(const Item& item) {
 	view.overrideModelName = item.name;
 }
 
-// JS: const view_item_textures = async (core, modules, item) => { ... }
 static void view_item_textures(const Item& item) {
 	modules::set_active("tab_textures");
 	db::caches::DBTextureFileData::ensureInitialized();
@@ -244,7 +231,6 @@ static void view_item_textures(const Item& item) {
 	view.overrideTextureName = item.name;
 }
 
-// JS: const initialize_items = async (core) => { ... }
 static void initialize_items() {
 	items.clear();
 
@@ -254,11 +240,8 @@ static void initialize_items() {
 	core::progressLoadingScreen("Loading item data...");
 	db::caches::DBItems::ensureInitialized();
 
-	// JS: const item_sparse_rows = await db2.ItemSparse.getAllRows();
 	auto item_sparse_rows = casc::db2::preloadTable("ItemSparse").getAllRows();
 
-	// JS: const appearance_map = new Map();
-	// JS: for (const row of (await db2.ItemModifiedAppearance.getAllRows()).values())
 	//         appearance_map.set(row.ItemID, row.ItemAppearanceID);
 	std::unordered_map<uint32_t, uint32_t> appearance_map;
 	for (const auto& [_id, row] : casc::db2::preloadTable("ItemModifiedAppearance").getAllRows()) {
@@ -267,8 +250,6 @@ static void initialize_items() {
 		appearance_map[itemID] = itemAppearanceID;
 	}
 
-	// JS: const material_map = new MultiMap();
-	// JS: for (const row of (await db2.ItemDisplayInfoMaterialRes.getAllRows()).values())
 	//         material_map.set(row.ItemDisplayInfoID, row.MaterialResourcesID);
 	MultiMap<uint32_t, uint32_t> material_map;
 	for (const auto& [_id, row] : casc::db2::preloadTable("ItemDisplayInfoMaterialRes").getAllRows()) {
@@ -283,7 +264,6 @@ static void initialize_items() {
 	for (const auto& [item_id, item_row] : item_sparse_rows) {
 		int inventoryType = static_cast<int>(fieldToUint32(item_row.at("InventoryType")));
 
-		// JS: if (ITEM_SLOTS_IGNORED.includes(item_row.inventoryType)) continue;
 		if (std::find(ITEM_SLOTS_IGNORED.begin(), ITEM_SLOTS_IGNORED.end(), inventoryType) != ITEM_SLOTS_IGNORED.end())
 			continue;
 
@@ -291,48 +271,39 @@ static void initialize_items() {
 		new_item.id = item_id;
 		new_item.inventoryType = inventoryType;
 
-		// JS: this.name = item_sparse_row.Display_lang;
 		std::string display_name = fieldToString(item_row.at("Display_lang"));
 		new_item.name = display_name.empty() ? std::format("Unknown item #{}", item_id) : std::move(display_name);
 
-		// JS: this.quality = item_sparse_row.OverallQualityID ?? 0;
 		auto qualIt = item_row.find("OverallQualityID");
 		new_item.quality = (qualIt != item_row.end()) ? static_cast<int>(fieldToUint32(qualIt->second)) : 0;
 
-		// JS: const item_appearance_id = appearance_map.get(item_id);
-		// JS: const item_appearance_row = await db2.ItemAppearance.getRow(item_appearance_id);
 		auto app_it = appearance_map.find(item_id);
 		std::optional<db::DataRecord> item_appearance_row;
 		if (app_it != appearance_map.end())
 			item_appearance_row = item_appearance_table.getRow(app_it->second);
 
-		// JS: this.icon = item_appearance_row?.DefaultIconFileDataID ?? 0;
 		if (item_appearance_row.has_value()) {
 			auto iconIt = item_appearance_row->find("DefaultIconFileDataID");
 			new_item.icon = (iconIt != item_appearance_row->end()) ? fieldToUint32(iconIt->second) : 0;
 		}
 
-		// JS: if (this.icon == 0) this.icon = item_sparse_row.IconFileDataID;
 		if (new_item.icon == 0) {
 			auto sparseIconIt = item_row.find("IconFileDataID");
 			if (sparseIconIt != item_row.end())
 				new_item.icon = fieldToUint32(sparseIconIt->second);
 		}
 
-		// JS: if (item_appearance_row !== null) { materials = []; models = []; ... }
 		if (item_appearance_row.has_value()) {
 			uint32_t displayInfoID = fieldToUint32(item_appearance_row->at("ItemDisplayInfoID"));
 			auto item_display_info_row = item_display_info_table.getRow(displayInfoID);
 
 			if (item_display_info_row.has_value()) {
-				// JS: materials.push(...item_display_info_row.ModelMaterialResourcesID);
 				auto matIt = item_display_info_row->find("ModelMaterialResourcesID");
 				if (matIt != item_display_info_row->end()) {
 					auto vec = fieldToUint32Vec(matIt->second);
 					new_item.textures.insert(new_item.textures.end(), vec.begin(), vec.end());
 				}
 
-				// JS: models.push(...item_display_info_row.ModelResourcesID);
 				auto modIt = item_display_info_row->find("ModelResourcesID");
 				if (modIt != item_display_info_row->end()) {
 					auto vec = fieldToUint32Vec(modIt->second);
@@ -340,8 +311,6 @@ static void initialize_items() {
 				}
 			}
 
-			// JS: const material_res = material_map.get(item_appearance_row.ItemDisplayInfoID);
-			// JS: if (material_res !== undefined)
 			//         Array.isArray(material_res) ? materials.push(...material_res) : materials.push(material_res);
 			const auto* material_res = material_map.get(displayInfoID);
 			if (material_res) {
@@ -352,9 +321,7 @@ static void initialize_items() {
 				}
 			}
 
-			// JS: materials = materials.filter(e => e !== 0);
 			std::erase(new_item.textures, 0u);
-			// JS: models = models.filter(e => e !== 0);
 			std::erase(new_item.models, 0u);
 		}
 
@@ -364,23 +331,19 @@ static void initialize_items() {
 		items.push_back(std::move(new_item));
 	}
 
-	// JS: if (core.view.config.itemViewerShowAll) { ... }
 	if (core::view->config.value("itemViewerShowAll", false)) {
 		auto& item_db = casc::db2::preloadTable("Item");
 
 		for (const auto& [item_id, item_row] : item_db.getAllRows()) {
 			int inventoryType = static_cast<int>(fieldToUint32(item_row.at("InventoryType")));
 
-			// JS: if (ITEM_SLOTS_IGNORED.includes(item_row.inventoryType)) continue;
 			if (std::find(ITEM_SLOTS_IGNORED.begin(), ITEM_SLOTS_IGNORED.end(), inventoryType) != ITEM_SLOTS_IGNORED.end())
 				continue;
 
-			// JS: if (item_sparse_rows.has(item_id)) continue;
 			if (item_sparse_rows.contains(item_id))
 				continue;
 
 			// For items only in the Item table (not ItemSparse), create with minimal data.
-			// JS: items.push(Object.freeze(new Item(item_id, item_row, null, null, null)));
 			Item new_item;
 			new_item.id = item_id;
 			new_item.inventoryType = inventoryType;
@@ -404,13 +367,9 @@ static void initialize_items() {
 	logging::write(std::format("Loaded {} items", items.size()));
 }
 
-// JS: const apply_filters = (core) => { ... }
 static void apply_filters() {
 	auto& view = *core::view;
 
-	// JS: const type_filter = core.view.itemViewerTypeMask.filter(e => e.checked);
-	// JS: const type_mask = [];
-	// JS: type_filter.forEach(e => type_mask.push(...ITEM_SLOTS_MERGED[e.label]));
 	std::vector<int> type_mask;
 	for (const auto& entry : type_mask_entries) {
 		if (!entry.checked)
@@ -424,14 +383,12 @@ static void apply_filters() {
 		}
 	}
 
-	// JS: const quality_mask = core.view.itemViewerQualityMask.filter(e => e.checked).map(e => e.id);
 	std::vector<int> quality_mask;
 	for (const auto& entry : quality_mask_entries) {
 		if (entry.checked)
 			quality_mask.push_back(entry.id);
 	}
 
-	// JS: const filtered = items.filter(item => type_mask.includes(item.inventoryType) && quality_mask.includes(item.quality));
 	view.listfileItems.clear();
 	for (const auto& item : items) {
 		bool type_match = std::find(type_mask.begin(), type_mask.end(), item.inventoryType) != type_mask.end();
@@ -451,7 +408,6 @@ static void apply_filters() {
 		}
 	}
 
-	// JS: core.view.config.itemViewerEnabledTypes = core.view.itemViewerTypeMask.filter(e => e.checked).map(e => e.label);
 	nlohmann::json enabled_types = nlohmann::json::array();
 	for (const auto& entry : type_mask_entries) {
 		if (entry.checked)
@@ -459,7 +415,6 @@ static void apply_filters() {
 	}
 	view.config["itemViewerEnabledTypes"] = enabled_types;
 
-	// JS: core.view.config.itemViewerEnabledQualities = quality_mask;
 	view.config["itemViewerEnabledQualities"] = quality_mask;
 }
 
@@ -474,21 +429,17 @@ static const Item* find_item_by_id(uint32_t item_id) {
 
 // --- methods ---
 
-// JS: methods.copy_to_clipboard(value)
 static void copy_to_clipboard(const std::string& value) {
 	ImGui::SetClipboardText(value.c_str());
 }
 
 // Removed: view_on_wowhead() — external-links module deleted
-// JS: view_on_wowhead(item_id) { return; }
 static void view_on_wowhead([[maybe_unused]] uint32_t item_id) {
 	return;
 }
 
-// JS: methods.toggle_checklist_item(item) { item.checked = !item.checked; }
 // (Handled inline in render via ImGui::Checkbox)
 
-// JS: methods.equip_item(item)
 static void equip_item(const nlohmann::json& item_json) {
 	uint32_t item_id = item_json.value("id", 0u);
 	std::string item_name = item_json.value("name", std::string("Unknown"));
@@ -502,55 +453,41 @@ static void equip_item(const nlohmann::json& item_json) {
 	int slot_id = slot_id_opt.value();
 	auto& view = *core::view;
 
-	// JS: this.$core.view.chrEquippedItems[slot_id] = item.id;
 	view.chrEquippedItems[std::to_string(slot_id)] = item_id;
 
-	// JS: const slot_name = get_slot_name(slot_id);
 	auto slot_name_opt = wow::get_slot_name(slot_id);
 	std::string slot_name = slot_name_opt.has_value() ? std::string(slot_name_opt.value()) : "Unknown";
 
-	// JS: this.$core.setToast('success', `Equipped ${item.name} to ${slot_name} slot.`, null, 2000);
 	core::setToast("success", std::format("Equipped {} to {} slot.", item_name, slot_name), {}, 2000);
 }
 
 // --- Public API ---
 
-// JS: register() { this.registerNavButton('Items', 'sword.svg', InstallType.CASC); }
 void registerTab() {
 	modules::register_nav_button("tab_items", "Items", "sword.svg", install_type::CASC);
 }
 
-// JS: async mounted() { await this.initialize(); }
 void mounted() {
 	auto& view = *core::view;
 
-	// JS: this.$core.showLoadingScreen(2);
 	core::showLoadingScreen(2);
 
-	// JS: await initialize_items(this.$core);
 	initialize_items();
 
-	// JS: this.$core.hideLoadingScreen();
 	core::hideLoadingScreen();
 
-	// JS: const enabled_types = this.$core.view.config.itemViewerEnabledTypes;
 	nlohmann::json enabled_types_json = view.config.value("itemViewerEnabledTypes", nlohmann::json::array());
 
-	// JS: const pending_slot = this.$core.view.pendingItemSlotFilter;
 	const std::string pending_slot = view.pendingItemSlotFilter;
 
-	// JS: const type_mask = [];
-	// JS: for (const label of Object.keys(ITEM_SLOTS_MERGED)) { ... }
 	type_mask_entries.clear();
 	for (const auto& merged : ITEM_SLOTS_MERGED) {
 		TypeMaskEntry entry;
 		entry.label = merged.label;
 
 		if (!pending_slot.empty()) {
-			// JS: type_mask.push({ label, checked: label === pending_slot });
 			entry.checked = (entry.label == pending_slot);
 		} else {
-			// JS: type_mask.push({ label, checked: enabled_types.includes(label) });
 			entry.checked = false;
 			for (const auto& et : enabled_types_json) {
 				if (et.is_string() && et.get<std::string>() == entry.label) {
@@ -563,13 +500,10 @@ void mounted() {
 		type_mask_entries.push_back(std::move(entry));
 	}
 
-	// JS: this.$core.view.pendingItemSlotFilter = null;
 	view.pendingItemSlotFilter.clear();
 
-	// JS: const enabled_qualities = this.$core.view.config.itemViewerEnabledQualities;
 	nlohmann::json enabled_qualities_json = view.config.value("itemViewerEnabledQualities", nlohmann::json());
 
-	// JS: const quality_mask = ITEM_QUALITIES.map(q => ({
 	//         id: q.id, label: q.label,
 	//         checked: enabled_qualities === undefined || enabled_qualities.includes(q.id)
 	//     }));
@@ -604,8 +538,6 @@ void mounted() {
 		prev_quality_mask_checked.push_back(e.checked);
 
 	// Initial filter application.
-	// JS: this.$core.view.itemViewerQualityMask = quality_mask;
-	// JS: this.$core.view.itemViewerTypeMask = type_mask;
 	// (Vue watches fire immediately on assignment — replicate by calling apply_filters.)
 	apply_filters();
 
@@ -623,8 +555,6 @@ void render() {
 		return;
 
 	// --- Change-detection for type and quality mask watches ---
-	// JS: this.$core.view.$watch('itemViewerTypeMask', () => apply_filters(this.$core), { deep: true });
-	// JS: this.$core.view.$watch('itemViewerQualityMask', () => apply_filters(this.$core), { deep: true });
 	{
 		bool type_changed = false;
 		if (prev_type_mask_checked.size() == type_mask_entries.size()) {
@@ -665,26 +595,20 @@ void render() {
 
 	// --- Template rendering ---
 
-	// JS: <div class="tab" id="tab-items">
-	// CSS: #tab-items { grid-template-rows: 1fr 70px; grid-template-columns: 1fr auto; }
 	if (app::layout::BeginTab("tab-items")) {
 
 	// Calculate layout manually since items uses 1fr auto (not standard 2-col list-tab).
 	const ImVec2 avail = ImGui::GetContentRegionAvail();
 	const ImVec2 cursor = ImGui::GetCursorPos();
 
-	// CSS: grid-template-columns: 1fr auto → sidebar is 210px, list fills the rest.
 	constexpr float SIDEBAR_W = app::layout::SIDEBAR_WIDTH; // 210px
-	// CSS: #tab-items .filter { height: 70px; }
 	constexpr float FILTER_H = 70.0f;
 
 	const float listW = avail.x - SIDEBAR_W;
 	const float topH = avail.y - FILTER_H;
 
 	// --- List container (row 1, col 1) ---
-	// JS: <div class="list-container">
 	//     <Itemlistbox id="listbox-items" ... @options="contextMenus.nodeItem = $event" @equip="equip_item">
-	// CSS: .list-container { margin: 20px 10px 0 20px }
 	ImGui::SetCursorPos(ImVec2(cursor.x + app::layout::LIST_MARGIN_LEFT,
 	                           cursor.y + app::layout::LIST_MARGIN_TOP));
 	ImGui::BeginChild("items-list-container",
@@ -747,18 +671,14 @@ void render() {
 	ImGui::EndChild();
 
 	// --- Sidebar (col 2, spanning both rows) ---
-	// JS: <div id="items-sidebar" class="sidebar">
-	// CSS: .sidebar { grid-column: 3; width: 210px; grid-row: 1/span 2; margin-top: 20px; padding-right: 20px; }
 	ImGui::SetCursorPos(ImVec2(cursor.x + listW,
 	                           cursor.y + app::layout::SIDEBAR_MARGIN_TOP));
 	ImGui::BeginChild("items-sidebar",
 		ImVec2(SIDEBAR_W - app::layout::SIDEBAR_PADDING_RIGHT,
 		       avail.y - app::layout::SIDEBAR_MARGIN_TOP));
 
-	// JS: <span class="header">Item Types</span>
 	ImGui::SeparatorText("Item Types");
 
-	// JS: <div class="sidebar-checklist">
 	//     <div v-for="item in $core.view.itemViewerTypeMask" ...>
 	//         <input type="checkbox" v-model="item.checked" @click.stop/>
 	//         <span>{{ item.label }}</span>
@@ -766,7 +686,6 @@ void render() {
 	for (auto& entry : type_mask_entries)
 		ImGui::Checkbox(entry.label.c_str(), &entry.checked);
 
-	// JS: <div class="list-toggles">
 	//     <a @click="setAllItemTypes(true)">Enable All</a> / <a @click="setAllItemTypes(false)">Disable All</a>
 	if (ImGui::SmallButton("Enable All##types")) {
 		for (auto& entry : type_mask_entries)
@@ -782,10 +701,8 @@ void render() {
 
 	ImGui::Spacing();
 
-	// JS: <span class="header">Quality</span>
 	ImGui::SeparatorText("Quality");
 
-	// JS: <div class="sidebar-checklist">
 	//     <div v-for="item in $core.view.itemViewerQualityMask" ...>
 	//         <input type="checkbox" v-model="item.checked" :class="'quality-' + item.id" @click.stop/>
 	//         <span>{{ item.label }}</span>
@@ -813,7 +730,6 @@ void render() {
 			ImGui::PopStyleColor();
 	}
 
-	// JS: <div class="list-toggles">
 	//     <a @click="setAllItemQualities(true)">Enable All</a> / <a @click="setAllItemQualities(false)">Disable All</a>
 	if (ImGui::SmallButton("Enable All##qualities")) {
 		for (auto& entry : quality_mask_entries)
@@ -830,10 +746,8 @@ void render() {
 	ImGui::EndChild(); // items-sidebar
 
 	// --- Filter bar (row 2, col 1) ---
-	// JS: <div class="filter">
 	//     <div class="regex-info" v-if="$core.view.config.regexFilters" ...>Regex Enabled</div>
 	//     <input type="text" v-model="$core.view.userInputFilterItems" placeholder="Filter items..."/>
-	// CSS: #tab-items .filter { height: 70px; }
 	ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + topH));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f, 0.0f));
 	ImGui::BeginChild("items-filter", ImVec2(listW, FILTER_H), ImGuiChildFlags_None,
@@ -863,7 +777,6 @@ void render() {
 	app::layout::EndTab();
 
 	// --- Context menu ---
-	// JS: <ContextMenu :node="contextMenus.nodeItem" ...>
 	//     <span v-if="context.node.modelCount > 0" @click.self="view_models(context.node)">View related models ({{ context.node.modelCount }})</span>
 	//     <span v-if="context.node.textureCount > 0" @click.self="view_textures(context.node)">View related textures ({{ context.node.textureCount }})</span>
 	//     <span @click.self="copy_to_clipboard(context.node.name)">Copy item name to clipboard</span>
@@ -880,7 +793,6 @@ void render() {
 			uint32_t node_id = node.value("id", 0u);
 			std::string node_name = node.value("name", std::string(""));
 
-			// JS: <span v-if="context.node.modelCount > 0" ...>View related models</span>
 			if (model_count > 0) {
 				if (ImGui::Selectable(std::format("View related models ({})", model_count).c_str())) {
 					const Item* item = find_item_by_id(node_id);
@@ -889,7 +801,6 @@ void render() {
 				}
 			}
 
-			// JS: <span v-if="context.node.textureCount > 0" ...>View related textures</span>
 			if (texture_count > 0) {
 				if (ImGui::Selectable(std::format("View related textures ({})", texture_count).c_str())) {
 					const Item* item = find_item_by_id(node_id);
@@ -898,15 +809,12 @@ void render() {
 				}
 			}
 
-			// JS: <span @click.self="copy_to_clipboard(context.node.name)">Copy item name to clipboard</span>
 			if (ImGui::Selectable("Copy item name to clipboard"))
 				copy_to_clipboard(node_name);
 
-			// JS: <span @click.self="copy_to_clipboard(context.node.id)">Copy item ID to clipboard</span>
 			if (ImGui::Selectable("Copy item ID to clipboard"))
 				copy_to_clipboard(std::to_string(node_id));
 
-			// JS: <span @click.self="view_on_wowhead(context.node.id)">View item on Wowhead (web)</span>
 			if (ImGui::Selectable("View item on Wowhead (web)"))
 				view_on_wowhead(node_id);
 		}

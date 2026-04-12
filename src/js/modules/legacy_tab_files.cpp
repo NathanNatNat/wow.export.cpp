@@ -27,14 +27,12 @@ namespace legacy_tab_files {
 
 // --- File-local state ---
 
-// JS: let files_loaded = false;
 static bool files_loaded = false;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
 // --- Internal functions ---
 
-// JS: const load_files = async (core) => { ... }
 static void load_files() {
 	auto& view = *core::view;
 	if (files_loaded || view.isBusy > 0)
@@ -43,8 +41,6 @@ static void load_files() {
 	BusyLock _lock = core::create_busy_lock();
 
 	try {
-		// JS: const files = core.view.mpq.getAllFiles();
-		// JS: core.view.listfileRaw = files;
 		mpq::MPQInstall* mpq = core::view->mpq.get();
 		if (!mpq) return;
 		auto files = mpq->getAllFiles();
@@ -56,7 +52,6 @@ static void load_files() {
 	}
 }
 
-// JS: const export_files = async (core) => { ... }
 static void export_files() {
 	auto& view = *core::view;
 	const auto& selection = view.selectionRaw;
@@ -72,7 +67,6 @@ static void export_files() {
 		for (const auto& sel_entry : selection) {
 			const std::string display_path = sel_entry.get<std::string>();
 
-			// JS: const data = core.view.mpq.getFile(display_path);
 			mpq::MPQInstall* mpq = core::view->mpq.get();
 			std::optional<std::vector<uint8_t>> data = mpq ? mpq->getFile(display_path) : std::nullopt;
 
@@ -81,14 +75,11 @@ static void export_files() {
 				continue;
 			}
 
-			// JS: const output_path = path.join(export_dir, display_path);
 			namespace fs = std::filesystem;
 			const fs::path output_path = fs::path(export_dir) / display_path;
 			const fs::path output_dir = output_path.parent_path();
 
-			// JS: await fsp.mkdir(output_dir, { recursive: true });
 			fs::create_directories(output_dir);
-			// JS: await fsp.writeFile(output_path, new Uint8Array(data));
 			std::ofstream ofs(output_path, std::ios::binary);
 			ofs.write(reinterpret_cast<const char*>(data->data()), static_cast<std::streamsize>(data->size()));
 
@@ -99,7 +90,6 @@ static void export_files() {
 		if (!last_export_path.empty()) {
 			namespace fs = std::filesystem;
 			const std::string dir = fs::path(last_export_path).parent_path().string();
-			// JS: const toast_opt = { 'View in Explorer': () => nw.Shell.openItem(dir) };
 			std::vector<ToastAction> toast_opt = { {"View in Explorer", [dir]() { core::openInExplorer(dir); }} };
 
 			if (selection.size() > 1)
@@ -117,12 +107,10 @@ static void export_files() {
 // --- Public API ---
 
 void registerTab() {
-	// JS: this.registerNavButton('Files', 'file-lines.svg', InstallType.MPQ);
 	modules::register_nav_button("legacy_tab_files", "Files", "file-lines.svg", install_type::MPQ);
 }
 
 void mounted() {
-	// JS: await load_files(this.$core);
 	load_files();
 }
 
@@ -130,7 +118,6 @@ void render() {
 	auto& view = *core::view;
 
 	// List container with context menu.
-	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionRaw" :items="listfileRaw" :filter="userInputFilterRaw" ...>
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	//       copy_file_paths, copy_export_paths, open_export_directory
@@ -212,7 +199,6 @@ void render() {
 	ImGui::EndChild();
 
 	// Tray.
-	// JS: <div id="tab-legacy-files-tray">
 	if (view.config.value("regexFilters", false))
 		ImGui::TextUnformatted("Regex Enabled");
 
@@ -223,7 +209,6 @@ void render() {
 
 	ImGui::SameLine();
 
-	// JS: <input type="button" value="Export Selected" @click="export_selected" :class="{ disabled: isBusy || selectionRaw.length === 0 }"/>
 	const bool disabled = view.isBusy > 0 || view.selectionRaw.empty();
 	if (disabled) app::theme::BeginDisabledButton();
 	if (ImGui::Button("Export Selected"))
@@ -232,7 +217,6 @@ void render() {
 }
 
 void export_selected() {
-	// JS: await export_files(this.$core);
 	export_files();
 }
 

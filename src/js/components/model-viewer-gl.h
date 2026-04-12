@@ -23,7 +23,6 @@
 #include "../3D/renderers/GridRenderer.h"
 #include "../3D/renderers/ShadowPlaneRenderer.h"
 
-// Forward declarations
 class M2RendererGL;
 
 /**
@@ -40,7 +39,6 @@ class M2RendererGL;
  */
 namespace model_viewer_gl {
 
-// ─── Utility ────────────────────────────────────────────────────
 
 /**
  * Parse a hex color string to normalized RGB values.
@@ -49,7 +47,6 @@ namespace model_viewer_gl {
  */
 std::array<float, 3> parse_hex_color(const std::string& hex);
 
-// ─── Constants ──────────────────────────────────────────────────
 
 // general model camera fit constants
 constexpr float CAMERA_FIT_DIAGONAL_ANGLE = 45.0f;
@@ -57,7 +54,6 @@ constexpr float CAMERA_FIT_DISTANCE_MULTIPLIER = 2.0f;
 constexpr float CAMERA_FIT_ELEVATION_FACTOR = 0.3f;
 constexpr float CAMERA_FIT_CENTER_OFFSET_Y = -0.5f;
 
-// ─── PerspectiveCamera ─────────────────────────────────────────
 
 /**
  * simple perspective camera implementation
@@ -86,7 +82,6 @@ public:
 	std::array<float, 16> projection_matrix = {};
 };
 
-// ─── Camera Fitting ─────────────────────────────────────────────
 
 struct BoundingBox {
 	std::array<float, 3> min;
@@ -113,7 +108,6 @@ void fit_camera_for_character(const BoundingBox* bounding_box, PerspectiveCamera
                               CameraControlsGL* orbit_controls,
                               CharacterCameraControlsGL* char_controls);
 
-// ─── Equipment/Collection Renderer Types ────────────────────────
 
 /**
  * Entry for an equipment renderer attached to a character.
@@ -143,7 +137,6 @@ struct CollectionSlotRenderers {
 	std::vector<M2RendererGL*> renderers;
 };
 
-// ─── Context ────────────────────────────────────────────────────
 
 /**
  * Shared context between the parent tab module and the model viewer component.
@@ -153,7 +146,6 @@ struct CollectionSlotRenderers {
  * the model viewer (outputs) during init/recreate_controls.
  */
 struct Context {
-	// ── Input (set by parent tab module) ──
 	bool useCharacterControls = false;
 
 	// Active M2 renderer (for animation, equipment, bones, etc.)
@@ -182,7 +174,6 @@ struct Context {
 	// Returns a map of slot_id → CollectionSlotRenderers, or nullptr.
 	std::function<std::unordered_map<int, CollectionSlotRenderers>*()> getCollectionRenderers;
 
-	// ── Output (written by model viewer) ──
 
 	// GL context used by this model viewer instance.
 	gl::GLContext* gl_context = nullptr;
@@ -196,7 +187,6 @@ struct Context {
 	std::function<void()> fitCamera;
 };
 
-// ─── State ──────────────────────────────────────────────────────
 
 /**
  * Per-instance state for the model-viewer-gl component.
@@ -233,8 +223,6 @@ struct State {
 	int frameUpdateCounter = 0;
 
 	// FBO for offscreen 3D rendering
-	// TODO(conversion): In JS, a canvas element is created and rendered to directly.
-	// In C++/ImGui, we render to an offscreen FBO and display the color texture
 	// via ImGui::Image. The FBO is created/resized as needed.
 	GLuint fbo = 0;
 	GLuint color_texture = 0;
@@ -243,7 +231,6 @@ struct State {
 	int fbo_height = 0;
 
 	// Change detection for watchers
-	// JS: core.view.$watch('config.chrUse3DCamera', ...) etc.
 	bool prev_chrUse3DCamera = true;
 	bool prev_chrRenderShadow = false;
 	bool prev_chrModelLoading = false;
@@ -251,7 +238,6 @@ struct State {
 	bool initialized = false;
 };
 
-// ─── Public API ─────────────────────────────────────────────────
 
 /**
  * Initialize the model viewer (replaces Vue mounted lifecycle).
@@ -282,7 +268,6 @@ void dispose(State& state);
  */
 void render_one_frame(State& state, Context& context);
 
-// ─── Methods (matching JS component methods) ────────────────────
 
 /**
  * Recreate camera controls based on current mode (orbit or character).

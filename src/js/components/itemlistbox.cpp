@@ -39,14 +39,11 @@ namespace itemlistbox {
  * Invoked when the component is mounted.
  * Used to register global listeners and resize observer.
  */
-// TODO(conversion): In ImGui, global mouse listeners and ResizeObserver are not needed.
-// ImGui provides mouse state via ImGui::GetIO() and resizing is handled by layout each frame.
 
 /**
  * Invoked when the component is destroyed.
  * Used to unregister global mouse listeners and resize observer.
  */
-// TODO(conversion): No explicit unmount needed in ImGui immediate mode.
 
 /**
  * Offset of the scroll widget in pixels.
@@ -228,9 +225,7 @@ static std::vector<ItemEntry> computeFilteredItems(const std::vector<ItemEntry>&
 	}
 
 	// Prune selection: remove any selected item IDs that are no longer in the filtered result.
-	// JS equivalent: this.selection.filter(item => res.includes(item))
 	// In JS, selection stores item objects and checks by reference identity.
-	// In C++, selection stores item IDs and checks by ID equality.
 	bool hasChanges = false;
 	std::vector<int> newSelection;
 	for (int selectedId : selection) {
@@ -266,18 +261,15 @@ static void handleKey(const std::vector<ItemEntry>& filteredItems, const std::ve
 
 	// If document.activeElement is the document body, then we can safely assume
 	// the user is not focusing anything, and can intercept keyboard input.
-	// TODO(conversion): In ImGui, we check if no item is active (no text input focused, etc.).
 	if (ImGui::IsAnyItemActive())
 		return;
 
 	// User hasn't selected anything in the listbox yet.
-	// JS: if (!this.lastSelectItem) return; — checks null
 	if (state.lastSelectItem < 0)
 		return;
 
 	if (ImGui::IsKeyPressed(ImGuiKey_C) && io.KeyCtrl) {
 		// Copy selection to clipboard.
-		// JS: nw.Clipboard.get().set(this.selection.map(e => e.displayName).join('\n'), 'text');
 		std::string clipText;
 		bool first = true;
 		for (int selectedId : selection) {
@@ -297,13 +289,11 @@ static void handleKey(const std::vector<ItemEntry>& filteredItems, const std::ve
 			const int delta = isArrowUp ? -1 : 1;
 
 			// Move/expand selection one.
-			// JS: const lastSelectIndex = this.filteredItems.indexOf(this.lastSelectItem);
 			const int lastSelectIndex = indexOfItemById(filteredItems, state.lastSelectItem);
 			if (lastSelectIndex < 0)
 				return;
 
 			const int nextIndex = lastSelectIndex + delta;
-			// JS: const next = this.filteredItems[nextIndex]; if (next) { ... }
 			if (nextIndex >= 0 && nextIndex < static_cast<int>(filteredItems.size())) {
 				const int currentScrollIdx = scrollIndex(filteredItems, state);
 				const int lastViewIndex = isArrowUp ? currentScrollIdx : currentScrollIdx + state.slotCount;
@@ -319,12 +309,9 @@ static void handleKey(const std::vector<ItemEntry>& filteredItems, const std::ve
 
 				std::vector<int> newSelection = selection;
 
-				// JS: if (!e.shiftKey || this.single) newSelection.splice(0);
 				if (!io.KeyShift || single)
 					newSelection.clear();
 
-				// JS: newSelection.push(next); — pushes item object
-				// C++: push item ID
 				const int nextItemId = filteredItems[static_cast<size_t>(nextIndex)].id;
 				newSelection.push_back(nextItemId);
 				state.lastSelectItem = nextItemId;
@@ -352,13 +339,11 @@ static void selectItem(int itemIndex, bool ctrlKey, bool shiftKey,
 
 	if (single) {
 		// Listbox is in single-entry mode, replace selection.
-		// JS: if (checkIndex === -1) { newSelection.splice(0); newSelection.push(item); }
 		if (checkIndex == -1) {
 			newSelection.clear();
 			newSelection.push_back(itemId);
 		}
 
-		// JS: this.lastSelectItem = item;
 		state.lastSelectItem = itemId;
 	} else {
 		if (ctrlKey) {
@@ -369,9 +354,7 @@ static void selectItem(int itemIndex, bool ctrlKey, bool shiftKey,
 				newSelection.push_back(itemId);
 		} else if (shiftKey) {
 			// Shift-key held, select a range.
-			// JS: if (this.lastSelectItem && this.lastSelectItem !== item)
 			if (state.lastSelectItem >= 0 && state.lastSelectItem != itemId) {
-				// JS: const lastSelectIndex = this.filteredItems.indexOf(this.lastSelectItem);
 				const int lastSelectIndex = indexOfItemById(filteredItems, state.lastSelectItem);
 				const int thisSelectIndex = itemIndex;
 
@@ -379,8 +362,6 @@ static void selectItem(int itemIndex, bool ctrlKey, bool shiftKey,
 					const int rangeLen = std::abs(lastSelectIndex - thisSelectIndex);
 					const int lowest = std::min(lastSelectIndex, thisSelectIndex);
 
-					// JS: const range = this.filteredItems.slice(lowest, lowest + delta + 1);
-					// JS: for (const select of range) { if (newSelection.indexOf(select) === -1) newSelection.push(select); }
 					for (int i = lowest; i <= lowest + rangeLen; ++i) {
 						const int rangeItemId = filteredItems[static_cast<size_t>(i)].id;
 						if (!isSelected(newSelection, rangeItemId))
@@ -394,11 +375,9 @@ static void selectItem(int itemIndex, bool ctrlKey, bool shiftKey,
 			newSelection.push_back(itemId);
 		}
 
-		// JS: this.lastSelectItem = item;
 		state.lastSelectItem = itemId;
 	}
 
-	// JS: this.$emit('update:selection', newSelection);
 	if (onSelectionChanged)
 		onSelectionChanged(newSelection);
 }
@@ -424,7 +403,6 @@ static ImVec4 getQualityColor(int quality) {
 /**
  * watch: displayItems — load icons for visible items.
  */
-// NOTE: Icon loading is done inline during rendering below.
 
 /**
  * HTML mark-up to render for this component.
@@ -460,7 +438,6 @@ void render(const char* id,
 		? std::max(20.0f, containerHeight * (static_cast<float>(state.slotCount) / static_cast<float>(totalItems)))
 		: containerHeight;
 
-	// Equivalent of resize() — recalculate slot count and scroll each frame.
 	resize(containerHeight, scrollerHeight, state);
 
 	// Compute display range.
@@ -541,7 +518,6 @@ void render(const char* id,
 		icon_render::loadIcon(item.icon);
 
 		// Alternating row background + selected highlight.
-		// CSS: .ui-listbox .item { background: var(--background-dark); }
 		//      .ui-listbox .item:nth-child(even) { background: var(--background-alt); }
 		//      .ui-listbox .item.selected { background: var(--font-alt); }
 		{
@@ -559,7 +535,6 @@ void render(const char* id,
 		ImGui::PushID(i);
 
 		// Item icon (<div :class="['item-icon', 'icon-' + item.icon ]"></div>).
-		// CSS: .item-icon { width: 32px; height: 32px; border: 1px solid #8a8a8a; margin-right: 10px; }
 		const uint32_t iconTex = icon_render::getIconTexture(item.icon);
 		if (iconTex != 0) {
 			const ImVec2 iconPos = ImGui::GetCursorScreenPos();
@@ -573,7 +548,7 @@ void render(const char* id,
 			const ImVec2 borderMax(iconPos.x + ICON_SIZE + 1.0f, iconPos.y + ICON_SIZE + 1.0f);
 			ImGui::GetWindowDrawList()->AddRect(borderMin, borderMax, IM_COL32(138, 138, 138, 255));
 
-			ImGui::SameLine(0.0f, 10.0f); // CSS: margin-right: 10px
+			ImGui::SameLine(0.0f, 10.0f);
 		}
 
 		// Item name with quality color (<div :class="['item-name', 'item-quality-' + item.quality]">).

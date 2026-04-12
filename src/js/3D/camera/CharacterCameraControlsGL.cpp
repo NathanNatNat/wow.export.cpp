@@ -24,8 +24,6 @@ CharacterCameraControlsGL::CharacterCameraControlsGL(CharacterCameraGL& camera,
 	  is_panning(false),
 	  prev_mouse_x(0),
 	  prev_mouse_y(0) {
-	// In C++/GLFW, event listeners are wired externally via GLFW callbacks.
-	// JS: this.dom_element.addEventListener('mousedown', ...) etc.
 }
 
 void CharacterCameraControlsGL::on_mouse_down(int button, int clientX, int clientY) {
@@ -34,7 +32,6 @@ void CharacterCameraControlsGL::on_mouse_down(int button, int clientX, int clien
 		prev_mouse_x = clientX;
 
 		// In JS, document.addEventListener('mousemove'/'mouseup') is added here.
-		// In C++/GLFW, these are handled by the GLFW callback system.
 	} else if (button == 2) {
 		is_panning = true;
 		prev_mouse_x = clientX;
@@ -109,7 +106,6 @@ void CharacterCameraControlsGL::on_mouse_up(int button) {
 		is_rotating = false;
 
 		// In JS, document.removeEventListener('mousemove'/'mouseup') is called here.
-		// In C++/GLFW, these are handled by the GLFW callback system.
 	} else if (button == 2) {
 		is_panning = false;
 
@@ -154,6 +150,4 @@ void CharacterCameraControlsGL::update() {
 }
 
 void CharacterCameraControlsGL::dispose() {
-	// In C++/GLFW, event listeners are unwired externally.
-	// JS: this.dom_element.removeEventListener(...) etc.
 }

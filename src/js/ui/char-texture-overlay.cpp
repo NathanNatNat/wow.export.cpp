@@ -14,11 +14,8 @@ namespace char_texture_overlay {
 static std::vector<uint32_t> layers;
 static uint32_t active_layer = 0;
 
-// JS equivalent: update_button_visibility()
-// TODO(conversion): In ImGui, button visibility is handled inline during
 // rendering (layers.size() > 1 check), so this is a no-op.
 static void update_button_visibility() {
-	// In the JS version, this toggles display of overlay navigation buttons.
 	// In ImGui, the caller checks getLayerCount() > 1 to decide whether to
 	// show next/prev buttons.
 }
@@ -28,7 +25,6 @@ void add(uint32_t textureID) {
 
 	if (active_layer == 0) {
 		active_layer = textureID;
-		// JS: element.appendChild(canvas) — in ImGui, rendering uses getActiveLayer().
 	}
 
 	update_button_visibility();
@@ -40,7 +36,6 @@ void remove(uint32_t textureID) {
 		layers.erase(it);
 
 	if (textureID == active_layer) {
-		// JS: element.removeChild(canvas)
 		active_layer = 0;
 
 		if (!layers.empty())
@@ -51,14 +46,12 @@ void remove(uint32_t textureID) {
 }
 
 void ensureActiveLayerAttached() {
-	// TODO(conversion): In ImGui, this is a no-op since ImGui redraws every frame.
 	// The JS version uses process.nextTick() to re-attach a canvas to the DOM
 	// after a tab switch. ImGui doesn't need this because getActiveLayer() is
 	// read fresh each frame.
 }
 
 // legacy event for non-module usage
-// JS: core.events.on('screen-tab-characters', ensure_active_layer_attached);
 
 void nextOverlay() {
 	if (layers.empty() || active_layer == 0)

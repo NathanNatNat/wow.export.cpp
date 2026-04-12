@@ -164,7 +164,6 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 
 	// onBlur equivalent — with a slight tolerance for clicking dropdown items.
 	// This is delayed because if we click an option, the blur event will fire before the click event.
-	// TODO(conversion): ImGui handles focus differently than DOM; we keep isActive true while
 	// hovering the dropdown popup, and deactivate when neither input nor popup is interacted with.
 
 	// <ul v-if="isActive && currentText.length > 0">

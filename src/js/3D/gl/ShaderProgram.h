@@ -61,7 +61,6 @@ public:
 	std::unordered_map<std::string, GLuint> uniform_block_indices;
 
 	// Set by Shaders module to enable unregistration on dispose.
-	// JS equivalent: program._shader_name = name  (set by Shaders.create_program)
 	std::string _shader_name;
 
 	// Callback for shader unregistration — set by the Shaders module once

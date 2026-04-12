@@ -39,9 +39,7 @@ static std::vector<std::string> fieldToStringVec(const db::FieldValue& val) {
 	return {};
 }
 
-// JS: const creatureDisplays = new Map(); // model_path (lowercase) -> array of display info
 static std::unordered_map<std::string, std::vector<LegacyCreatureDisplay>> creatureDisplays;
-// JS: let isInitialized = false;
 static bool isInitialized = false;
 
 // Helper: normalize path (lowercase, forward slashes, .mdl/.mdx to .m2)
@@ -82,27 +80,22 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
 
 	try {
 		// load CreatureModelData.dbc
-		// JS: const model_data_raw = mpq.getFile('DBFilesClient\\CreatureModelData.dbc');
 		auto model_data_raw = getFile("DBFilesClient\\CreatureModelData.dbc");
 		if (model_data_raw.empty()) {
 			logging::write("CreatureModelData.dbc not found in MPQ");
 			return;
 		}
 
-		// JS: const model_data_reader = new DBCReader('CreatureModelData.dbc', build_id);
 		db::DBCReader model_data_reader("CreatureModelData.dbc", build_id);
-		// JS: await model_data_reader.parse(new BufferWrapper(Buffer.from(model_data_raw)));
 		BufferWrapper model_buf = BufferWrapper::from(model_data_raw);
 		model_data_reader.parse(model_buf);
 
 		// build map of modelID -> model filepath
-		// JS: const model_id_to_path = new Map();
 		std::unordered_map<uint32_t, std::string> model_id_to_path;
 
 		auto model_rows = model_data_reader.getAllRows();
 		for (const auto& [id, row] : model_rows) {
 			// CreatureModelData has ModelPath field (string)
-			// JS: const model_path = row.ModelName || row.ModelPath || row.field_2;
 			std::string model_path;
 			auto it = row.find("ModelName");
 			if (it != row.end())
@@ -128,14 +121,12 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
 		logging::write(std::format("Loaded {} creature models from CreatureModelData.dbc", model_id_to_path.size()));
 
 		// load CreatureDisplayInfo.dbc
-		// JS: const display_info_raw = mpq.getFile('DBFilesClient\\CreatureDisplayInfo.dbc');
 		auto display_info_raw = getFile("DBFilesClient\\CreatureDisplayInfo.dbc");
 		if (display_info_raw.empty()) {
 			logging::write("CreatureDisplayInfo.dbc not found in MPQ");
 			return;
 		}
 
-		// JS: const display_info_reader = new DBCReader('CreatureDisplayInfo.dbc', build_id);
 		db::DBCReader display_info_reader("CreatureDisplayInfo.dbc", build_id);
 		BufferWrapper display_buf = BufferWrapper::from(display_info_raw);
 		display_info_reader.parse(display_buf);
@@ -143,7 +134,6 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
 		auto display_rows = display_info_reader.getAllRows();
 
 		for (const auto& [display_id, row] : display_rows) {
-			// JS: const model_id = row.ModelID ?? row.field_1;
 			uint32_t model_id = 0;
 			auto mit = row.find("ModelID");
 			if (mit != row.end())
@@ -161,7 +151,6 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
 			const std::string& model_path = pathIt->second;
 
 			// get texture variation strings (3 slots)
-			// JS: const tex1 = row.TextureVariation?.[0] ?? row.Skin1 ?? row.field_6 ?? '';
 			std::string tex1, tex2, tex3;
 
 			auto tvIt = row.find("TextureVariation");
@@ -202,7 +191,6 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
 			if (tex1.empty() && tex2.empty() && tex3.empty())
 				continue;
 
-			// JS: const model_dir = path.dirname(model_path).replace(/\\/g, '/');
 			std::string model_dir = getDirectory(model_path);
 
 			LegacyCreatureDisplay display;
@@ -237,7 +225,6 @@ const std::vector<LegacyCreatureDisplay>* getCreatureDisplaysByPath(const std::s
 	std::string normalized = normalizePath(model_path);
 
 	// strip MPQ archive prefix if present (e.g., "data/model.mpq/creature/...")
-	// JS: const mpq_match = normalized.match(/\.mpq[\/\\](.+)/i);
 	static const std::regex mpq_regex(R"(\.mpq[/\\](.+))", std::regex::icase);
 	std::smatch match;
 	if (std::regex_search(normalized, match, mpq_regex))

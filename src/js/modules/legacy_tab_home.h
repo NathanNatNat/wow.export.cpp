@@ -16,7 +16,6 @@
  *   </div>
  *
  * Identical to tab_home but with the "legacy-tab-home" CSS ID.
- * CSS: #tab-home, #legacy-tab-home share the same grid layout.
  */
 namespace legacy_tab_home {
 

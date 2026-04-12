@@ -193,7 +193,6 @@ void BLTEReader::_handleBlock(BufferWrapper& block, size_t blockEnd, size_t inde
 				else
 					throw;
 			} catch (...) {
-				// JS catches all exceptions and silently swallows non-EncryptionError.
 			}
 
 			break;

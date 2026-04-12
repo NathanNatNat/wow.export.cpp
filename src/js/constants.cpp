@@ -27,7 +27,6 @@ namespace constants {
 
 namespace fs = std::filesystem;
 
-// ── Platform-specific executable path detection ──────────────────
 
 static fs::path getExecutablePath() {
 #ifdef _WIN32
@@ -46,7 +45,6 @@ static fs::path getExecutablePath() {
 #endif
 }
 
-// ── Platform-specific Blender app-data directory ─────────────────
 
 static fs::path getBlenderBaseDir() {
 #ifdef _WIN32
@@ -62,7 +60,6 @@ static fs::path getBlenderBaseDir() {
 #endif
 }
 
-// ── Internal storage for runtime path constants ──────────────────
 
 namespace {
 	fs::path s_install_path;
@@ -96,7 +93,6 @@ namespace {
 	std::string s_user_agent;
 }
 
-// ── Initialization ───────────────────────────────────────────────
 
 void init() {
 	// on macOS, process.execPath points to the renderer helper binary deep inside
@@ -121,7 +117,6 @@ void init() {
 			}
 		}
 	} catch (...) {
-		// Migration failed; data directory will be created fresh below.
 	}
 
 	// Ensure data and log directories exist before any module attempts to
@@ -136,7 +131,6 @@ void init() {
 		if (fs::exists(legacyCascDir) && !fs::exists(newCacheDir))
 			fs::rename(legacyCascDir, newCacheDir);
 	} catch (...) {
-		// Migration failed; cache directory will be recreated as needed.
 	}
 
 	// Compute derived paths.
@@ -172,7 +166,6 @@ void init() {
 	s_user_agent = std::string("wow.export (") + std::string(VERSION) + ")";
 }
 
-// ── Path accessor functions ──────────────────────────────────────
 
 const fs::path& INSTALL_PATH() { return s_install_path; }
 const fs::path& DATA_DIR() { return s_data_dir; }
@@ -217,7 +210,6 @@ const std::regex& LISTFILE_MODEL_FILTER() {
 	return re;
 }
 
-// ── File identifiers ─────────────────────────────────────────────
 
 using namespace std::string_view_literals;
 

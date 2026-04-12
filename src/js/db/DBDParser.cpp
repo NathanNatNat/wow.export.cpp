@@ -96,7 +96,6 @@ bool isBuildInRange(const std::string& build, const std::string& min, const std:
 	return true;
 }
 
-// ── DBDField ──────────────────────────────────────────────────────────────────
 
 DBDField::DBDField(const std::string& fieldName, const std::string& fieldType)
 	: type(fieldType)
@@ -110,7 +109,6 @@ DBDField::DBDField(const std::string& fieldName, const std::string& fieldType)
 {
 }
 
-// ── DBDEntry ──────────────────────────────────────────────────────────────────
 
 DBDEntry::DBDEntry() = default;
 
@@ -167,7 +165,6 @@ bool DBDEntry::isValidFor(const std::string& buildID, const std::string& layoutH
 	return false;
 }
 
-// ── DBDParser ─────────────────────────────────────────────────────────────────
 
 /**
  * Construct a new DBDParser instance.

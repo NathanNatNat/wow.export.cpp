@@ -212,7 +212,6 @@ void load() {
 		// Trim leading spaces on value side.
 		std::string_view key = trim(rest);
 
-		// JS splits by ' ' and checks parts.length !== 2, meaning exactly 2 parts.
 		// If there's another space in the key value, skip.
 		if (key.find(' ') != std::string_view::npos)
 			continue;

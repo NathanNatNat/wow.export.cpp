@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <string>
 
-// Forward declarations.
 class M2RendererGL;
 
 /**

@@ -52,7 +52,6 @@ void preload() {
 			{
 				std::lock_guard<std::mutex> lock(manifest_mutex);
 				for (const auto& entry : manifest_data) {
-					// JS checks truthiness: skip empty tableName or zero db2FileDataID
 					if (entry.contains("tableName") && entry["tableName"].is_string()
 						&& !entry["tableName"].get<std::string>().empty()
 						&& entry.contains("db2FileDataID") && entry["db2FileDataID"].is_number()

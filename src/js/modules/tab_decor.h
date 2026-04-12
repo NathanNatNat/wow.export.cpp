@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-// Forward declarations.
 class M2RendererGL;
 
 /**

@@ -25,9 +25,7 @@ static uint32_t fieldToUint32(const db::FieldValue& val) {
 	return 0;
 }
 
-// JS: const matResIDToFileDataID = new Map();
 static std::unordered_map<uint32_t, std::vector<uint32_t>> matResIDToFileDataID;
-// JS: const fileDataIDs = new Set();
 static std::unordered_set<uint32_t> fileDataIDs;
 
 /**
@@ -36,7 +34,6 @@ static std::unordered_set<uint32_t> fileDataIDs;
 void initializeTextureFileData() {
 	logging::write("Loading texture mapping...");
 
-	// Using the texture mapping, map all model fileDataIDs to used textures.
 	auto allRows = casc::db2::preloadTable("TextureFileData").getAllRows();
 	for (const auto& [textureFileDataID, textureFileDataRow] : allRows) {
 		// Keep a list of all FIDs for listfile unknowns.
@@ -75,7 +72,6 @@ const std::vector<uint32_t>* getTextureFDIDsByMatID(uint32_t matResID) {
  * Ensure texture file data is initialized. Call this before using other functions.
  */
 void ensureInitialized() {
-	// JS: if (matResIDToFileDataID.size === 0) await initializeTextureFileData();
 	if (matResIDToFileDataID.empty())
 		initializeTextureFileData();
 }

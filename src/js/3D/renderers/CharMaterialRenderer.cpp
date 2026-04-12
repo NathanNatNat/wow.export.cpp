@@ -33,7 +33,6 @@ CharMaterialRenderer::CharMaterialRenderer(int textureLayer, int width, int heig
 	: width_(width), height_(height)
 {
 	// VAO is required in OpenGL 4.6 core profile (no default VAO exists).
-	// WebGL 1.0 (JS) has a default vertex array — this is the C++ equivalent.
 	glGenVertexArrays(1, &vao_);
 	glBindVertexArray(vao_);
 
@@ -61,7 +60,6 @@ CharMaterialRenderer::CharMaterialRenderer(int textureLayer, int width, int heig
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	// JS: overlay.add(canvas) — register the FBO texture as a layer in the
 	// character texture overlay so the user can cycle through them.
 	char_texture_overlay::add(fbo_texture_);
 }
@@ -180,7 +178,6 @@ void CharMaterialRenderer::dispose() {
 	unbindAllTextures();
 
 	// Delete all loaded layer textures.
-	// JS relies on WEBGL_lose_context to destroy the entire context and all
 	// associated resources; in desktop GL we must free them explicitly.
 	for (auto& target : textureTargets) {
 		if (target.textureID) {
@@ -197,7 +194,6 @@ void CharMaterialRenderer::dispose() {
 
 	clearCanvas();
 
-	// JS: overlay.remove(this.glCanvas) — unregister from overlay before
 	// destroying the FBO resources.
 	char_texture_overlay::remove(fbo_texture_);
 
@@ -232,7 +228,6 @@ GLuint CharMaterialRenderer::loadTexture(uint32_t fileDataID, bool useAlpha) {
 	GLuint texture;
 	glGenTextures(1, &texture);
 
-	// JS: const blp = new BLPFile(await core.view.casc.getFile(fileDataID));
 	// core.view.casc is the active CASC source — use getVirtualFileByID to get file data.
 	BufferWrapper fileData = casc_source_->getVirtualFileByID(fileDataID);
 	casc::BLPImage blp(std::move(fileData));
@@ -499,7 +494,6 @@ void CharMaterialRenderer::update() {
 
 			if (layer.material.Width == layer.section.Width && layer.material.Height == layer.section.Height) {
 				// Just copy the canvas (read from FBO and upload).
-				// JS uses texImage2D(canvas) which implicitly Y-flips the image
 				// (canvas is top-down, textures are bottom-up). glReadPixels
 				// returns bottom-up data, so we must flip to match JS behavior.
 				std::vector<uint8_t> canvasPixels(width_ * height_ * 4);

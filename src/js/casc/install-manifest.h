@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-// Forward declaration to avoid circular dependency.
 class BufferWrapper;
 
 namespace casc {

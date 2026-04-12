@@ -54,7 +54,6 @@ void InstallManifest::parse(BufferWrapper& data) {
 			for (int j = 0; j < 8; j++) {
 				if (((mask[i] >> (7 - j)) & 0x1) == 1) {
 					std::size_t fileIdx = (i % n * 8) + static_cast<std::size_t>(j);
-					// JS uses optional chaining (?.) — skip if out of range.
 					if (fileIdx < files.size())
 						files[fileIdx].tags.push_back(tag.name);
 				}

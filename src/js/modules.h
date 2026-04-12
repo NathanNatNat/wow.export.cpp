@@ -19,7 +19,6 @@
  * including registration, activation, nav buttons, context menu options,
  * hot-reloading (dev only), and the component_registry proxy.
  *
- * C++ equivalent: Static module registry with function pointers for
  * render(), mounted(), registerTab()/registerScreen() for each module.
  * Components are simply included via headers (no hot-reload in C++).
  *

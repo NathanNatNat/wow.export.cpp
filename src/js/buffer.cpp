@@ -28,7 +28,6 @@ License: MIT
 
 namespace {
 
-// ─── Endian-aware read/write helpers ────────────────────────────────
 
 template<size_t N>
 uint64_t read_uint_le(const uint8_t* p) {
@@ -105,7 +104,6 @@ val |= ~mask;
 return static_cast<int64_t>(val);
 }
 
-// ─── Base64 helpers ─────────────────────────────────────────────────
 
 constexpr char base64_chars[] =
 "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -161,7 +159,6 @@ result.push_back(static_cast<uint8_t>((val >> bits) & 0xff));
 return result;
 }
 
-// ─── MD5 implementation (RFC 1321) ──────────────────────────────────
 
 constexpr uint32_t md5_s[64] = {
 7,12,17,22, 7,12,17,22, 7,12,17,22, 7,12,17,22,
@@ -306,7 +303,6 @@ digest[j * 4 + k] = static_cast<uint8_t>(state[j] >> (k * 8));
 return base64_encode(digest, 16);
 }
 
-// ─── SHA1 implementation (RFC 3174) ─────────────────────────────────
 
 inline uint32_t sha1_left_rotate(uint32_t x, uint32_t n) {
 	return (x << n) | (x >> (32 - n));
@@ -427,7 +423,6 @@ std::string sha1_base64(const uint8_t* data, size_t len) {
 	return base64_encode(digest, 20);
 }
 
-// ─── zlib helpers ───────────────────────────────────────────────────
 
 std::vector<uint8_t> zlib_inflate(const uint8_t* data, size_t len) {
 z_stream strm{};
@@ -538,7 +533,6 @@ BufferWrapper BufferWrapper::alloc(size_t length, bool secure) {
 std::vector<uint8_t> buf(length);
 if (!secure) {
 // Insecure alloc — contents uninitialized in the JS sense.
-// std::vector value-initializes to zero anyway, which is fine.
 }
 return BufferWrapper(std::move(buf));
 }

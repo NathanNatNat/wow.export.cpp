@@ -24,7 +24,6 @@
  *   - Uploads changed cache files in chunks to a remote endpoint
  *   - Maintains persistent state to avoid re-uploading unchanged files
  *
- * C++ equivalent: Runs on a std::jthread, communicates via a message callback
  * instead of parentPort.postMessage.
  */
 namespace cache_collector {

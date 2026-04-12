@@ -32,13 +32,10 @@ namespace legacy_tab_audio {
 
 // --- File-local state ---
 
-// JS: let selected_file = null;
 static std::string selected_file;
 
-// JS: let animation_frame_id = null;
 static bool seek_loop_active = false;
 
-// JS: const player = new AudioPlayer();
 static AudioPlayer player;
 
 // Change-detection for config watches and selection.
@@ -50,7 +47,6 @@ static context_menu::ContextMenuState context_menu_state;
 
 // --- Internal functions ---
 
-// JS: const update_seek = (core) => { ... }
 static void update_seek() {
 	if (!player.is_playing) {
 		seek_loop_active = false;
@@ -65,7 +61,6 @@ static void update_seek() {
 	// seek_loop_active remains true to keep updating.
 }
 
-// JS: const start_seek_loop = (core) => { ... }
 static void start_seek_loop() {
 	if (!seek_loop_active) {
 		seek_loop_active = true;
@@ -73,12 +68,10 @@ static void start_seek_loop() {
 	}
 }
 
-// JS: const stop_seek_loop = () => { ... }
 static void stop_seek_loop() {
 	seek_loop_active = false;
 }
 
-// JS: const load_track = async (core) => { ... }
 static bool load_track() {
 	if (selected_file.empty())
 		return false;
@@ -88,7 +81,6 @@ static bool load_track() {
 	logging::write(std::format("Previewing sound file {}", selected_file));
 
 	try {
-		// JS: const raw_data = core.view.mpq.getFile(selected_file);
 		mpq::MPQInstall* mpq = core::view->mpq.get();
 		std::optional<std::vector<uint8_t>> raw_data = mpq ? mpq->getFile(selected_file) : std::nullopt;
 
@@ -98,11 +90,8 @@ static bool load_track() {
 			return false;
 		}
 
-		// JS: const buffer = Buffer.from(raw_data);
-		// JS: const data = new BufferWrapper(buffer);
 		BufferWrapper data(*raw_data);
 
-		// JS: const ext = selected_file.slice(selected_file.lastIndexOf('.')).toLowerCase();
 		namespace fs = std::filesystem;
 		std::string ext = fs::path(selected_file).extension().string();
 		for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -110,7 +99,6 @@ static bool load_track() {
 		if (ext == ".wav_") {
 			core::view->soundPlayerTitle += " (WAV)";
 		} else {
-			// JS: const file_type = detectFileType(data);
 			const AudioType file_type = detectFileType(raw_data->data(), raw_data->size());
 			if (file_type == AudioType::OGG)
 				core::view->soundPlayerTitle += " (OGG)";
@@ -118,21 +106,16 @@ static bool load_track() {
 				core::view->soundPlayerTitle += " (MP3)";
 		}
 
-		// JS: log.write('audio decode: buffer length=%d, byteOffset=%d, byteLength=%d', ...);
 		logging::write(std::format("audio decode: buffer length={}, byteOffset=0, byteLength={}", raw_data->size(), raw_data->size()));
-		// JS: log.write('audio decode: first 16 bytes: %s', data.readHexString(16));
 		logging::write(std::format("audio decode: first 16 bytes: {}", data.readHexString(16)));
 
-		// JS: log.write('audio decode: sliced array_buffer length=%d', array_buffer.byteLength);
 		logging::write(std::format("audio decode: sliced array_buffer length={}", raw_data->size()));
 
-		// JS: await player.load(array_buffer);
 		player.load(*raw_data);
 		core::view->soundPlayerDuration = player.get_duration();
 		core::hideToast();
 		return true;
 	} catch (const std::exception& e) {
-		// JS: core.setToast('error', 'Unable to preview audio ' + selected_file, { 'View Log': () => log.openRuntimeLog() }, -1);
 		core::setToast("error", "Unable to preview audio " + selected_file,
 			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to load MPQ audio file: {}", e.what()));
@@ -140,7 +123,6 @@ static bool load_track() {
 	}
 }
 
-// JS: const unload_track = (core) => { ... }
 static void unload_track() {
 	stop_seek_loop();
 	player.unload();
@@ -150,10 +132,7 @@ static void unload_track() {
 	core::view->soundPlayerSeek = 0;
 }
 
-// JS: const play_track = async (core) => { ... }
 static void play_track() {
-	// JS: if (!player.buffer) { ... }
-	// In C++, AudioPlayer has no public 'buffer' field; get_duration() returns 0 when no audio loaded.
 	if (player.get_duration() <= 0) {
 		if (selected_file.empty()) {
 			core::setToast("info", "You need to select an audio track first!", {}, -1, true);
@@ -170,14 +149,12 @@ static void play_track() {
 	start_seek_loop();
 }
 
-// JS: const pause_track = (core) => { ... }
 static void pause_track() {
 	player.pause();
 	stop_seek_loop();
 	core::view->soundPlayerState = false;
 }
 
-// JS: const load_sound_list = async (core) => { ... }
 static void load_sound_list() {
 	auto& view = *core::view;
 	if (!view.listfileSounds.empty() || view.isBusy > 0)
@@ -186,10 +163,6 @@ static void load_sound_list() {
 	BusyLock _lock = core::create_busy_lock();
 
 	try {
-		// JS: const ogg_files = core.view.mpq.getFilesByExtension('.ogg');
-		// JS: const wav_files = core.view.mpq.getFilesByExtension('.wav');
-		// JS: const mp3_files = core.view.mpq.getFilesByExtension('.mp3');
-		// JS: const wav__files = core.view.mpq.getFilesByExtension('.wav_');
 		mpq::MPQInstall* mpq = core::view->mpq.get();
 		if (!mpq) return;
 		auto ogg_files = mpq->getFilesByExtension(".ogg");
@@ -197,7 +170,6 @@ static void load_sound_list() {
 		auto mp3_files = mpq->getFilesByExtension(".mp3");
 		auto wav__files = mpq->getFilesByExtension(".wav_");
 
-		// JS: core.view.listfileSounds = [...ogg_files, ...wav_files, ...mp3_files, ...wav__files];
 		view.listfileSounds.clear();
 		view.listfileSounds.reserve(ogg_files.size() + wav_files.size() + mp3_files.size() + wav__files.size());
 		for (auto& f : ogg_files) view.listfileSounds.push_back(std::move(f));
@@ -209,7 +181,6 @@ static void load_sound_list() {
 	}
 }
 
-// JS: const export_sounds = async (core) => { ... }
 static void export_sounds() {
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionSounds;
@@ -231,20 +202,16 @@ static void export_sounds() {
 		std::string export_file_name = file_name;
 
 		try {
-			// JS: const ext = file_name.slice(file_name.lastIndexOf('.')).toLowerCase();
 			namespace fs = std::filesystem;
 			std::string ext = fs::path(file_name).extension().string();
 			for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 
 			if (ext == ".wav_") {
-				// JS: export_file_name = file_name.slice(0, -1);
 				export_file_name = file_name.substr(0, file_name.size() - 1);
 			} else {
-				// JS: const raw_data = core.view.mpq.getFile(file_name);
 				std::optional<std::vector<uint8_t>> raw_data = mpq ? mpq->getFile(file_name) : std::nullopt;
 
 				if (raw_data) {
-					// JS: const file_type = detectFileType(wrapped);
 					const AudioType file_type = detectFileType(raw_data->data(), raw_data->size());
 
 					if (file_type == AudioType::OGG)
@@ -254,17 +221,13 @@ static void export_sounds() {
 				}
 			}
 
-			// JS: const export_path = ExportHelper.getExportPath(export_file_name);
 			const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
 			if (overwrite_files || !generics::fileExists(export_path)) {
-				// JS: const raw_data = core.view.mpq.getFile(file_name);
 				auto raw_data2 = mpq ? mpq->getFile(file_name) : std::nullopt;
 				if (!raw_data2)
 					throw std::runtime_error("Failed to read file from MPQ");
 
-				// JS: await fsp.mkdir(path.dirname(export_path), { recursive: true });
 				fs::create_directories(fs::path(export_path).parent_path());
-				// JS: await fsp.writeFile(export_path, new Uint8Array(raw_data));
 				std::ofstream ofs(export_path, std::ios::binary);
 				ofs.write(reinterpret_cast<const char*>(raw_data2->data()), static_cast<std::streamsize>(raw_data2->size()));
 			} else {
@@ -294,38 +257,31 @@ static std::string format_time(double seconds) {
 // --- Public API ---
 
 void registerTab() {
-	// JS: this.registerNavButton('Audio', 'music.svg', InstallType.MPQ);
 	modules::register_nav_button("legacy_tab_audio", "Audio", "music.svg", install_type::MPQ);
 }
 
 void mounted() {
 	auto& view = *core::view;
 
-	// JS: player.init();
 	player.init();
-	// JS: player.set_volume(this.$core.view.config.soundPlayerVolume);
 	const float initial_volume = view.config.value("soundPlayerVolume", 1.0f);
 	player.set_volume(initial_volume);
 	prev_sound_player_volume = initial_volume;
-	// JS: player.set_loop(this.$core.view.config.soundPlayerLoop);
 	const bool initial_loop = view.config.value("soundPlayerLoop", false);
 	player.set_loop(initial_loop);
 	prev_sound_player_loop = initial_loop;
 
-	// JS: player.on_ended = () => { ... };
 	player.on_ended = []() {
 		stop_seek_loop();
 		core::view->soundPlayerState = false;
 		core::view->soundPlayerSeek = 0;
 	};
 
-	// JS: this.$core.events.on('crash', () => { unload_track(this.$core); player.destroy(); });
 	core::events.on("crash", []() {
 		unload_track();
 		player.destroy();
 	});
 
-	// JS: await load_sound_list(this.$core);
 	load_sound_list();
 }
 
@@ -334,14 +290,12 @@ void render() {
 
 	// --- Change-detection for config watches ---
 
-	// JS: this.$core.view.$watch('config.soundPlayerVolume', value => { player.set_volume(value); });
 	const float current_volume = view.config.value("soundPlayerVolume", 1.0f);
 	if (current_volume != prev_sound_player_volume) {
 		player.set_volume(current_volume);
 		prev_sound_player_volume = current_volume;
 	}
 
-	// JS: this.$core.view.$watch('config.soundPlayerLoop', value => { player.set_loop(value); });
 	const bool current_loop = view.config.value("soundPlayerLoop", false);
 	if (current_loop != prev_sound_player_loop) {
 		player.set_loop(current_loop);
@@ -352,14 +306,12 @@ void render() {
 	if (!view.selectionSounds.empty()) {
 		const std::string first = view.selectionSounds[0].get<std::string>();
 		if (view.isBusy == 0 && !first.empty() && first != prev_selection_first) {
-			// JS: this.$core.view.soundPlayerTitle = path.basename(first);
 			namespace fs = std::filesystem;
 			view.soundPlayerTitle = fs::path(first).filename().string();
 
 			selected_file = first;
 			unload_track();
 
-			// JS: if (this.$core.view.config.soundPlayerAutoPlay) play_track(this.$core);
 			if (view.config.value("soundPlayerAutoPlay", false))
 				play_track();
 
@@ -373,13 +325,11 @@ void render() {
 
 	// --- Template rendering ---
 
-	// JS: <div class="tab list-tab" id="tab-legacy-audio">
 	if (app::layout::BeginTab("tab-legacy-audio")) {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
 	// --- Left panel: List container (row 1, col 1) ---
-	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionSounds" :items="listfileSounds" ...>
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	//       copy_file_paths, copy_export_paths, open_export_directory
@@ -460,7 +410,6 @@ void render() {
 	app::layout::EndListContainer();
 
 	// --- Filter bar (row 2, col 1) ---
-	// JS: <div class="filter">
 	if (app::layout::BeginFilterBar("legacy-sounds-filter", regions)) {
 		if (view.config.value("regexFilters", false))
 			ImGui::TextUnformatted("Regex Enabled");
@@ -474,7 +423,6 @@ void render() {
 	app::layout::EndFilterBar();
 
 	// --- Right panel: Preview container (row 1, col 2) ---
-	// JS: <div class="preview-container"> (sound player)
 	if (app::layout::BeginPreviewContainer("legacy-sounds-preview-container", regions)) {
 
 		// Animated music icon when playing.
@@ -496,7 +444,6 @@ void render() {
 
 		ImGui::Spacing();
 
-		// JS: <div id="sound-player-info">
 		//     <span>{{ $core.view.soundPlayerSeekFormatted }}</span>
 		//     <span class="title">{{ $core.view.soundPlayerTitle }}</span>
 		//     <span>{{ $core.view.soundPlayerDurationFormatted }}</span>
@@ -505,7 +452,6 @@ void render() {
 		const std::string duration_formatted = format_time(view.soundPlayerDuration);
 		ImGui::Text("%s  %s  %s", seek_formatted.c_str(), view.soundPlayerTitle.c_str(), duration_formatted.c_str());
 
-		// JS: <Slider id="slider-seek" v-model="soundPlayerSeek" @update:model-value="handle_seek">
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		float seek_val = static_cast<float>(view.soundPlayerSeek);
 		if (ImGui::SliderFloat("##LegacySeekSlider", &seek_val, 0.0f, 1.0f, "")) {
@@ -515,7 +461,6 @@ void render() {
 				player.seek(duration * seek_val);
 		}
 
-		// JS: <div class="buttons">
 		//     <input type="button" :class="{ isPlaying: !soundPlayerState }" @click="toggle_playback"/>
 		//     <Slider id="slider-volume" v-model="config.soundPlayerVolume">
 		// </div>
@@ -544,7 +489,6 @@ void render() {
 	app::layout::EndPreviewContainer();
 
 	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
-	// JS: <div class="preview-controls">
 	if (app::layout::BeginPreviewControls("legacy-sounds-preview-controls", regions)) {
 		const bool busy = view.isBusy > 0;
 		if (busy) app::theme::BeginDisabledButton();
@@ -559,7 +503,6 @@ void render() {
 }
 
 void toggle_playback() {
-	// JS: if (this.$core.view.soundPlayerState) pause_track(this.$core); else play_track(this.$core);
 	if (core::view->soundPlayerState)
 		pause_track();
 	else
@@ -567,7 +510,6 @@ void toggle_playback() {
 }
 
 void export_selected() {
-	// JS: await export_sounds(this.$core);
 	export_sounds();
 }
 

@@ -14,24 +14,20 @@
 
 namespace data_table {
 
-// ─── props ──────────────────────────────────────────────────────────
 // props: ['headers', 'rows', 'filter', 'regex', 'selection', 'copyheader', 'tablename']
 // emits: ['update:selection', 'contextmenu', 'copy']
 
-// ─── data ───────────────────────────────────────────────────────────
 // Reactive instance data — stored in DataTableState.
 
 /**
  * selectedOption: An array of strings denoting options shown in the menu.
  */
 
-// ─── mounted / beforeUnmount ────────────────────────────────────────
 
 /**
  * Invoked when the component is mounted.
  * Used to register global listeners and resize observer.
  */
-// TODO(conversion): In ImGui, global mouse listeners, ResizeObserver, and keydown listeners
 // are not needed. ImGui provides mouse/keyboard state via ImGui::GetIO() each frame.
 // Resize is handled by layout recalculation every frame.
 
@@ -39,11 +35,9 @@ namespace data_table {
  * Invoked when the component is destroyed.
  * Used to unregister global mouse listeners and resize observer.
  */
-// TODO(conversion): No explicit unmount needed in ImGui immediate mode.
 // Animation frame IDs (horizontalScrollAnimationId, resizeAnimationId) are not needed
 // since ImGui redraws every frame.
 
-// ─── computed properties ────────────────────────────────────────────
 
 /**
  * Offset of the scroll widget in pixels.
@@ -374,7 +368,6 @@ static void resetHorizontalScroll(DataTableState& state) {
 	state.horizontalScrollRel = 0.0f;
 
 	// In JS: this.$refs.table.offsetHeight forces a re-evaluation.
-	// TODO(conversion): In ImGui, we increment forceHorizontalUpdate to trigger recalculation.
 	state.forceHorizontalUpdate++;
 }
 
@@ -426,7 +419,6 @@ static bool needsHorizontalScrolling(float tableWidth, float containerWidth) {
 /**
  * Sync custom scrollbar position with native scroll position
  */
-// TODO(conversion): In ImGui we don't have native scrollbar sync; horizontal scroll
 // is fully managed by our custom scrollbar logic.
 
 /**
@@ -478,7 +470,6 @@ static void stopMouse(DataTableState& state, const std::vector<std::string>& hea
 	state.isHorizontalScrolling = false;
 
 	// In JS: cancelAnimationFrame(this.horizontalScrollAnimationId)
-	// TODO(conversion): No animation frame batching needed in ImGui; updates happen immediately.
 
 	if (state.isResizing) {
 		// Finalize column width and mark as manually resized
@@ -567,7 +558,6 @@ static void handleFilterIconClick(int columnIndex, const std::vector<std::string
 		onFilterChanged(newFilter);
 
 	// In JS: this.$nextTick(() => { filterInput.focus(); filterInput.setSelectionRange(...) });
-	// TODO(conversion): In ImGui, keyboard focus management is handled differently.
 	// The caller should set focus to the filter input if desired.
 }
 
@@ -575,7 +565,6 @@ static void handleFilterIconClick(int columnIndex, const std::vector<std::string
  * Prevent middle mouse button from triggering autopan.
  * @param {MouseEvent} e
  */
-// TODO(conversion): In ImGui, there is no native auto-pan behavior from middle mouse button.
 // This is a no-op but preserved for completeness.
 
 /**
@@ -724,7 +713,6 @@ static void handleKey(const std::vector<std::vector<std::string>>& sorted,
 	}
 }
 
-// ─── CSV / SQL export helpers ───────────────────────────────────────
 
 /**
  * Helper: escape a value for CSV.
@@ -876,7 +864,6 @@ std::string getSelectedRowsAsSQL(const std::vector<std::string>& headers,
 	return result;
 }
 
-// ─── template (ImGui render) ────────────────────────────────────────
 
 /**
  * HTML mark-up to render for this component.
@@ -898,7 +885,6 @@ void render(const char* id,
             const std::function<void(const std::string&)>& onFilterChanged) {
 	ImGui::PushID(id);
 
-	// ── Watch: headers ──────────────────────────────────────────────
 	// Watch for header changes to recalculate column widths.
 	if (state.prevHeaders != headers) {
 		state.prevHeaders = headers;
@@ -907,7 +893,6 @@ void render(const char* id,
 		resetHorizontalScroll(state);
 	}
 
-	// ── Watch: rows ─────────────────────────────────────────────────
 	// Watch for rows changes to reset selection (new table loaded).
 	if (state.prevRowCount != rows.size() || state.prevRowsPtr != static_cast<const void*>(rows.data())) {
 		state.prevRowCount = rows.size();
@@ -918,12 +903,10 @@ void render(const char* id,
 		resetHorizontalScroll(state);
 	}
 
-	// ── Compute filtered and sorted items ───────────────────────────
 	auto filtered = filteredItems(rows, filter, regex, headers, selection, onSelectionChanged);
 	auto sorted = sortedItems(filtered, state);
 	const int sortedCount = static_cast<int>(sorted.size());
 
-	// ── Container dimensions ────────────────────────────────────────
 	const ImVec2 availSize = ImGui::GetContentRegionAvail();
 	const float containerWidth = availSize.x;
 	const float containerHeight = availSize.y;
@@ -934,7 +917,7 @@ void render(const char* id,
 	const float headerHeight = 40.0f;
 
 	// Vertical scroller dimensions
-	const float scrollerHeight = 45.0f; // CSS: .scroller height: 45px
+	const float scrollerHeight = 45.0f;
 
 	// Calculate total table width from column widths
 	float tableWidth = 0.0f;
@@ -947,15 +930,12 @@ void render(const char* id,
 		? std::max(45.0f, (containerWidth / tableWidth) * (containerWidth - 16.0f))
 		: 45.0f;
 
-	// ── Resize (equivalent of ResizeObserver callback) ──────────────
 	resize(containerHeight, headerHeight, scrollerHeight, containerWidth, hScrollerWidth, state);
 
-	// ── Compute display range ───────────────────────────────────────
 	const int idx = scrollIndex(sortedCount, state);
 	const int startIdx = std::max(0, idx);
 	const int endIdx = std::min(sortedCount, startIdx + state.slotCount);
 
-	// ── Begin container child ───────────────────────────────────────
 	// <div ref="root" class="ui-datatable" @wheel="wheelMouse">
 	ImGui::BeginChild("##datatable_root", availSize, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
@@ -963,7 +943,6 @@ void render(const char* id,
 	const ImGuiIO& io = ImGui::GetIO();
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-	// ── Handle mouse wheel ──────────────────────────────────────────
 	// @wheel="wheelMouse"
 	if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None)) {
 		const float wheelY = io.MouseWheel;
@@ -994,7 +973,6 @@ void render(const char* id,
 		}
 	}
 
-	// ── Handle global mouse move/up for scrollbar/resize dragging ───
 	if (state.isScrolling || state.isHorizontalScrolling || state.isResizing) {
 		moveMouse(io.MousePos.x, io.MousePos.y,
 		          containerHeight, headerHeight, scrollerHeight,
@@ -1004,18 +982,15 @@ void render(const char* id,
 		}
 	}
 
-	// ── Handle keyboard input ───────────────────────────────────────
 	handleKey(sorted, selection, containerHeight, headerHeight, scrollerHeight,
 	          state, onSelectionChanged, onCopy);
 
-	// ── Compute horizontal offset ───────────────────────────────────
 	float horizontalOffset = 0.0f;
 	if (showHScroll) {
 		const float maxScroll = std::max(0.0f, tableWidth - containerWidth);
 		horizontalOffset = -maxScroll * state.horizontalScrollRel;
 	}
 
-	// ── Draw header ─────────────────────────────────────────────────
 	// <thead ref="datatableheader" @mousemove="headerMouseMove" @mousedown="headerMouseDown" :style="headerCursorStyle">
 	{
 		const float headerStartX = winPos.x + horizontalOffset;
@@ -1053,7 +1028,6 @@ void render(const char* id,
 				drawList->AddText(textPos, app::theme::FONT_PRIMARY_U32, headers[static_cast<size_t>(i)].c_str());
 				drawList->PopClipRect();
 
-				// ── Header icons (filter + sort) ────────────────────
 				const float iconSize = 12.0f;
 				const float iconGap = 4.0f;
 				const float iconsX = colX + colWidth - textPadding - iconSize * 2.0f - iconGap;
@@ -1133,7 +1107,6 @@ void render(const char* id,
 				}
 			}
 
-			// ── Column resize detection ─────────────────────────────
 			// headerMouseMove: detect resize zones near column borders
 			if (!state.isResizing) {
 				const float resizeZoneWidth = 5.0f;
@@ -1192,7 +1165,6 @@ void render(const char* id,
 		}
 	}
 
-	// ── Draw table body ─────────────────────────────────────────────
 	// <tbody>
 	{
 		const float bodyStartY = winPos.y + headerHeight;
@@ -1210,11 +1182,8 @@ void render(const char* id,
 			const bool isSelected = std::find(selection.begin(), selection.end(), rowIdx) != selection.end();
 
 			// Row background
-			// CSS: .ui-datatable table tr { background: var(--background-dark) }
-			// CSS: .ui-datatable table tr:nth-child(even) { background: var(--background-alt) }
 			ImU32 rowBg;
 			if (isSelected) {
-				// CSS: .ui-datatable table tr.selected { background: var(--font-alt) !important }
 				rowBg = app::theme::TABLE_ROW_HOVER_U32;
 			} else if (displayRow % 2 == 1) {
 				rowBg = app::theme::BG_ALT_U32;
@@ -1227,7 +1196,6 @@ void render(const char* id,
 			drawList->AddRectFilled(rowMin, rowMax, rowBg);
 
 			// Row hover effect
-			// CSS: .ui-datatable table tbody tr:hover { background: var(--font-alt) }
 			if (!isSelected && ImGui::IsMouseHoveringRect(rowMin, rowMax)) {
 				drawList->AddRectFilled(rowMin, rowMax, app::theme::TABLE_ROW_SELECTED_U32);
 			}
@@ -1268,7 +1236,6 @@ void render(const char* id,
 
 				// Clip: only render if visible
 				if (cellX + cw > winPos.x && cellX < winPos.x + containerWidth) {
-					// CSS: td { padding: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 					const float cellPadding = 5.0f;
 					ImVec2 textPos(cellX + cellPadding, rowY + (rowHeight - ImGui::GetTextLineHeight()) / 2.0f);
 
@@ -1282,29 +1249,25 @@ void render(const char* id,
 		}
 	}
 
-	// ── Draw vertical scroller ──────────────────────────────────────
 	// <div class="scroller" ref="dtscroller" @mousedown="startMouse" :class="{ using: isScrolling }" :style="{ top: scrollOffset }">
 	{
-		const float scrollerWidth = 8.0f; // CSS: .scroller width: 8px
-		const float scrollerMarginTop = headerHeight + 6.0f; // CSS: .ui-datatable .scroller margin-top: 46px
-		const float scrollerX = winPos.x + containerWidth - scrollerWidth - 3.0f; // CSS: right: 3px
+		const float scrollerWidth = 8.0f;
+		const float scrollerMarginTop = headerHeight + 6.0f;
+		const float scrollerX = winPos.x + containerWidth - scrollerWidth - 3.0f;
 		const float thumbY = winPos.y + scrollerMarginTop + scrollOffset(state);
 
 		ImVec2 thumbMin(scrollerX, thumbY);
 		ImVec2 thumbMax(scrollerX + scrollerWidth, thumbY + scrollerHeight);
 
 		// Inner div with rounded corners
-		// CSS: .scroller > div { top: 3px; bottom: 3px; border-radius: 4px; background: var(--font-primary) }
 		ImVec2 innerMin(thumbMin.x, thumbMin.y + 3.0f);
 		ImVec2 innerMax(thumbMax.x, thumbMax.y - 3.0f);
 
 		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
-		// CSS: .scroller > div { background: var(--font-primary) } / .scroller:hover > div { background: var(--font-highlight) }
 		const ImU32 thumbColor = thumbHovered
 			? app::theme::FONT_HIGHLIGHT_U32
 			: app::theme::FONT_PRIMARY_U32;
 
-		// CSS: opacity: 0.7
 		const ImU32 thumbColorWithOpacity = (thumbColor & 0x00FFFFFF) | (static_cast<ImU32>(static_cast<float>((thumbColor >> 24) & 0xFF) * 0.7f) << 24);
 
 		drawList->AddRectFilled(innerMin, innerMax, thumbColorWithOpacity, 4.0f);
@@ -1315,18 +1278,16 @@ void render(const char* id,
 		}
 	}
 
-	// ── Draw horizontal scroller ────────────────────────────────────
 	// <div class="hscroller" ref="dthscroller" @mousedown="startHorizontalMouse" :class="{ using: isHorizontalScrolling }" :style="...">
 	if (showHScroll) {
-		const float hScrollerHeight = 8.0f; // CSS: .hscroller height: 8px
-		const float hScrollerY = winPos.y + containerHeight - hScrollerHeight - 3.0f; // CSS: bottom: 3px
+		const float hScrollerHeight = 8.0f;
+		const float hScrollerY = winPos.y + containerHeight - hScrollerHeight - 3.0f;
 		const float hScrollerX = winPos.x + state.horizontalScroll;
 
 		ImVec2 thumbMin(hScrollerX, hScrollerY);
 		ImVec2 thumbMax(hScrollerX + hScrollerWidth, hScrollerY + hScrollerHeight);
 
 		// Inner div
-		// CSS: .hscroller > div { left: 3px; right: 3px; border-radius: 4px }
 		ImVec2 innerMin(thumbMin.x + 3.0f, thumbMin.y);
 		ImVec2 innerMax(thumbMax.x - 3.0f, thumbMax.y);
 
@@ -1346,7 +1307,6 @@ void render(const char* id,
 
 	ImGui::EndChild();
 
-	// ── Status bar ──────────────────────────────────────────────────
 	// <div class="list-status" v-if="rows && rows.length > 0">
 	if (!rows.empty()) {
 		const int filteredCount = static_cast<int>(filtered.size());

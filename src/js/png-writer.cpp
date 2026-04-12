@@ -11,7 +11,6 @@
 
 namespace {
 
-// ── Paeth predictor ──────────────────────────────────────────────
 
 inline int paeth(int left, int up, int upLeft) {
 	int p = left + up - upLeft;
@@ -28,7 +27,6 @@ inline int paeth(int left, int up, int upLeft) {
 	return upLeft;
 }
 
-// ── Filter functions ─────────────────────────────────────────────
 
 // None
 void filter_none(const uint8_t* data, size_t dataOfs, size_t byteWidth,
@@ -94,7 +92,6 @@ constexpr FilterFunc FILTERS[5] = {
 	filter_paeth
 };
 
-// ── Filter sum functions (adaptive filter selection) ─────────────
 
 // None
 int64_t filter_sum_none(const uint8_t* data, size_t dataOfs, size_t byteWidth, size_t /*bytesPerPixel*/) {

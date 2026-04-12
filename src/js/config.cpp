@@ -80,7 +80,6 @@ void load() {
 		userConfig = userResult.value_or(nlohmann::json::object());
 	} catch (const std::exception& e) {
 		// Check for permission-denied errors (EPERM equivalent).
-		// In C++, permission errors manifest as filesystem exceptions.
 		std::string msg = e.what();
 		if (msg.find("permission") != std::string::npos ||
 		    msg.find("EPERM") != std::string::npos ||

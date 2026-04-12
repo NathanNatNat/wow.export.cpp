@@ -96,7 +96,6 @@ gltf.addUVArray(m3->uv1);
 
 const auto outDir = out.parent_path();
 auto textureMap = exportTextures(outDir, false, nullptr, helper, true);
-// TODO(conversion): GLTFWriter::setTextureMap takes map<uint32_t, GLTFTextureEntry>,
 // but M3Exporter::exportTextures returns map<uint32_t, string>. Currently exportTextures
 // is a stub returning empty map, so this is a no-op until textures are implemented.
 

@@ -29,12 +29,10 @@
 #include <memory>
 #include <thread>
 
-// ─── AppState ────────────────────────────────────────────────────
 
 // Out-of-line destructor: unique_ptr<mpq::MPQInstall> requires complete type.
 AppState::~AppState() = default;
 
-// ─── EventEmitter ────────────────────────────────────────────────
 
 void EventEmitter::setMaxListeners(int max) {
 	maxListeners = max;
@@ -115,7 +113,6 @@ void EventEmitter::removeAllListeners(const std::string& event) {
 	listeners.erase(event);
 }
 
-// ─── BusyLock ────────────────────────────────────────────────────
 
 BusyLock::BusyLock(AppState& state)
 	: state(&state) {
@@ -142,7 +139,6 @@ BusyLock& BusyLock::operator=(BusyLock&& other) noexcept {
 	return *this;
 }
 
-// ─── core namespace ──────────────────────────────────────────────
 
 namespace core {
 
@@ -173,7 +169,6 @@ static std::unordered_map<std::string, ScrollPosition> scrollPositions;
 static std::atomic<int> loading_progress_segments{1};
 static std::atomic<int> loading_progress_value{0};
 
-// ─── Main-thread task queue ──────────────────────────────────────
 // Thread-safe queue for posting work from background threads to the
 // main thread.  The main loop drains this once per frame.
 static std::mutex s_mainQueueMutex;
@@ -403,7 +398,6 @@ void openExportDirectory() {
 
 /**
  * Open a file or directory with the OS default application/explorer.
- * C++ equivalent of nw.Shell.openItem(path).
  */
 void openInExplorer(const std::string& path) {
 #ifdef _WIN32

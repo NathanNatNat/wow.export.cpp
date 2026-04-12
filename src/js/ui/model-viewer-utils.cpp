@@ -41,7 +41,6 @@ namespace model_viewer_utils {
 
 namespace fs = std::filesystem;
 
-// ─── AnimationMethods ────────────────────────────────────────────────────────
 
 AnimationMethods::AnimationMethods(
 	std::function<M2RendererGL*()> get_renderer,
@@ -109,7 +108,6 @@ void AnimationMethods::end_scrub() {
 	}
 }
 
-// ─── Functions ───────────────────────────────────────────────────────────────
 
 /**
  * Detect model type from file data magic.
@@ -481,8 +479,6 @@ bool export_preview(const std::string& format, gl::GLContext& ctx,
 			std::format("Successfully exported preview to {}", out_file),
 			{ {"View in Explorer", [out_dir]() { core::openInExplorer(out_dir); }} }, -1);
 	} else if (format == "CLIPBOARD") {
-		// JS: clipboard.set(buf.toBase64(), 'png', true)
-		// C++: ImGui text clipboard with base64 PNG data
 		ImGui::SetClipboardText(buf.toBase64().c_str());
 
 		logging::write(std::format("Copied 3D preview to clipboard ({})", export_name));

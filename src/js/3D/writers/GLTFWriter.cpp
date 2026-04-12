@@ -207,7 +207,6 @@ return;
 if (!overwrite && format == "gltf" && generics::fileExists(outBIN))
 return;
 
-// JS: util.format('wow.export v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid)
 // flavour and guid are runtime values set when a CASC source is selected.
 const std::string flavour = core::view->config.value("selectedFlavour", std::string(""));
 const std::string guid = core::view->config.value("selectedGuid", std::string(""));
