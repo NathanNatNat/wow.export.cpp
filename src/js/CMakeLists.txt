@@ -183,5 +183,6 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/screen_settings.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/screen_source_select.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/workers/cache-collector.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/external-links.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules.cpp
 )
