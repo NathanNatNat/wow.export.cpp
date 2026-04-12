@@ -1,8 +1,8 @@
 # Copilot Instructions
 
 ## Project Overview
-- Project: **wow.export.cpp** — a C++ port of the original JavaScript/NW.js application **wow.export** (https://github.com/Kruithne/wow.export).
-- The original JS files have been renamed to .cpp. Convert the JavaScript code to C++ IN PLACE.
+- Project: **wow.export.cpp** - a C++ port of the original JavaScript/NW.js application **wow.export** (https://github.com/Kruithne/wow.export).
+- Convert the JavaScript code to C++ IN PLACE.
 - DO NOT create extra files except for .h header files that pair with an existing .cpp file.
 - The C++ entry point is app.cpp.
 - The C++ Version should be 100% functionally identical to the original JavaScript code. The goal is a line-by-line port, with the same code structure and logic, but in C++.
@@ -37,7 +37,7 @@ All dependencies should be git submodules integrated via CMake where possible.
 | Threading | std::jthread, std::async (standard library — no external dependency) |
 
 ## Reference Sources
-- The **original JavaScript/NW.js source code** (wow.export) is at **https://github.com/Kruithne/wow.export** — always refer to it when making changes or reviewing code to ensure fidelity with the original application.
+- The **original JavaScript/NW.js source code** (wow.export) is at **https://github.com/Kruithne/wow.export** - always refer to it when making changes or reviewing code to ensure fidelity with the original application.
 - This C++ port (wow.export.cpp) is at **https://github.com/NathanNatNat/wow.export.cpp**.
 - **Reference screenshots** of the original app are in [`UI_REFERENCE.md`](../UI_REFERENCE.md) — always compare against these screenshots when making UI changes to ensure visual fidelity.
 
