@@ -171,7 +171,6 @@ inline void EndDisabledButton() {
 	ImGui::PopStyleColor();
 }
 
-// body { font-family: "Selawik", sans-serif; } — browser default is 16px.
 inline constexpr float DEFAULT_FONT_SIZE = 16.0f;
 
 /**

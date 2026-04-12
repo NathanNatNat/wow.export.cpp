@@ -21,7 +21,6 @@
 #include "../components/context-menu.h"
 #include "../components/itemlistbox.h"
 #include "../../app.h"
-// const ExternalLinks = require('../external-links'); // Removed: external-links module deleted
 
 #include <cstring>
 #include <algorithm>
@@ -433,12 +432,9 @@ static void copy_to_clipboard(const std::string& value) {
 	ImGui::SetClipboardText(value.c_str());
 }
 
-// Removed: view_on_wowhead() — external-links module deleted
 static void view_on_wowhead([[maybe_unused]] uint32_t item_id) {
 	return;
 }
-
-// (Handled inline in render via ImGui::Checkbox)
 
 static void equip_item(const nlohmann::json& item_json) {
 	uint32_t item_id = item_json.value("id", 0u);

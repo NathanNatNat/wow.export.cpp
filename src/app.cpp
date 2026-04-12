@@ -49,7 +49,6 @@
 #include "app.h"
 #include "js/constants.h"
 #include "js/generics.h"
-// const updater = require('./js/updater'); // Removed: updater module deleted
 #include "js/core.h"
 #include "js/install-type.h"
 #include "js/casc/listfile.h"
@@ -59,7 +58,6 @@
 #include "js/config.h"
 #include "js/casc/tact-keys.h"
 #include "js/casc/export-helper.h"
-// const ExternalLinks = require('./js/external-links'); // Removed: external-links module deleted
 #include "js/ui/texture-ribbon.h"
 #include "js/3D/Shaders.h"
 #include "js/gpu-info.h"
@@ -244,10 +242,6 @@ static void crash(const std::string& errorCode, const std::string& errorText) {
 
 	isCrashed = true;
 
-	// with a crash screen showing version/flavour/build, error code/text, and
-	// log dump. In C++/ImGui, we store the crash state and render it in the
-	// main loop as a full-window crash overlay.
-
 	crashErrorCode = errorCode;
 	crashErrorText = errorText;
 
@@ -365,12 +359,10 @@ static void renderAppShell() {
 						modules::setActive("tab_home");
 				}
 			}
-			cursor_x += 32.0f + 8.0f; // 32px image + 8px padding (CSS: padding: 0 0 3px 40px — 40px includes 32px icon + 8px gap)
+			cursor_x += 32.0f + 8.0f;
 		}
 
-		// "wow.export.cpp" text at 25px bold
 		ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - 25.0f) * 0.5f));
-		// Push bold font at 25px (CSS: #logo span { font-size: 25px; font-weight: 700; })
 		{
 			ImFont* bold = app::theme::getBoldFont();
 			ImGui::PushFont(bold, 25.0f);
@@ -562,7 +554,6 @@ static void renderAppShell() {
 					                btn_min.y + (20.0f - text_sz.y) * 0.5f);
 					ImGui::GetWindowDrawList()->AddText(icon_font, icon_size, icon_pos,
 						app::theme::FONT_PRIMARY_U32, ICON_FA_CIRCLE_QUESTION);
-					// The help icon currently has no action since tab_help was deleted.
 					if (ImGui::IsItemHovered()) {
 						ImGui::BeginTooltip();
 						ImGui::TextUnformatted("Help");
@@ -837,7 +828,6 @@ static void renderAppShell() {
 
 		ImDrawList* dl = ImGui::GetWindowDrawList();
 
-		// Background image at 0.2 opacity (CSS: opacity: 0.2; background-size: cover)
 		GLuint bg_tex = core::view->isXmas ? s_loadingXmasBgTexture : s_loadingBgTexture;
 		if (bg_tex) {
 			ImVec2 uv0(0, 0), uv1(1, 1);
@@ -865,7 +855,6 @@ static void renderAppShell() {
 		float total_h = GEAR_SIZE + GEAR_MARGIN_BOTTOM + TITLE_FONT_SIZE + PROGRESS_FONT_SIZE + BAR_MARGIN_TOP + BAR_HEIGHT;
 		float start_y = center_y - total_h * 0.5f;
 
-		// Spinning gear icon (CSS: animation: update-cog-spin 6s infinite linear)
 		float gear_x = center_x - GEAR_SIZE * 0.5f;
 		float gear_y = start_y;
 		if (s_gearTexture) {
@@ -895,7 +884,6 @@ static void renderAppShell() {
 				IM_COL32(255, 255, 255, 255));
 		}
 
-		// Title text (CSS: #loading-title { font-size: 25px; })
 		float text_y = gear_y + GEAR_SIZE + GEAR_MARGIN_BOTTOM;
 		{
 			ImFont* bold = app::theme::getBoldFont();
@@ -907,7 +895,6 @@ static void renderAppShell() {
 			text_y += title_size.y;
 		}
 
-		// Progress text (CSS: #loading-progress { font-size: 20px; })
 		{
 			ImFont* font = ImGui::GetFont();
 			ImVec2 prog_size = font->CalcTextSizeA(PROGRESS_FONT_SIZE, FLT_MAX, 0.0f,
@@ -918,24 +905,20 @@ static void renderAppShell() {
 			text_y += prog_size.y;
 		}
 
-		// Progress bar (CSS: #loading-bar { width: 400px; height: 15px; border: 1px solid var(--border) })
 		if (core::view->loadPct >= 0.0) {
 			float bar_x = center_x - BAR_WIDTH * 0.5f;
 			float bar_y = text_y + BAR_MARGIN_TOP;
 
-			// Bar background (CSS: background: rgba(0, 0, 0, 0.22))
 			dl->AddRectFilled(
 				ImVec2(bar_x, bar_y),
 				ImVec2(bar_x + BAR_WIDTH, bar_y + BAR_HEIGHT),
 				app::theme::LOADING_BAR_BG_U32);
 
-			// Bar border (CSS: border: 1px solid var(--border))
 			dl->AddRect(
 				ImVec2(bar_x, bar_y),
 				ImVec2(bar_x + BAR_WIDTH, bar_y + BAR_HEIGHT),
 				app::theme::BORDER_U32, 0.0f, 0, 1.0f);
 
-			// Bar fill (CSS: background: var(--progress-bar) = linear-gradient(180deg, #57afe2, #35759a))
 			float fill_w = static_cast<float>(std::clamp(core::view->loadPct, 0.0, 1.0) * BAR_WIDTH);
 			if (fill_w > 0.0f) {
 				// Vertical gradient: top color → bottom color
@@ -1223,7 +1206,6 @@ static void checkCacheSizeUpdate() {
 	}
 }
 
-// the main loop. They are defined here to preserve the JS structure.
 
 namespace app {
 
@@ -1327,7 +1309,6 @@ static void setAllCreatureWMOGroups(bool state) {
  * @param {string} layerName
  */
 static void toggleUVLayer(const std::string& layerName) {
-	// In JS: core.events.emit('toggle-uv-layer', layerName);
 	core::events.emit("toggle-uv-layer", layerName);
 }
 
@@ -1371,7 +1352,6 @@ static void setDecorCategoryGroup(int category_id, bool state) {
  * @param {boolean} state
  */
 static void setAllItemTypes(bool /*state*/) {
-	// The JS version sets entry.checked for each entry. In C++, the mask is handled
 	// differently by the item viewer module.
 }
 
@@ -1380,7 +1360,6 @@ static void setAllItemTypes(bool /*state*/) {
  * @param {boolean} state
  */
 static void setAllItemQualities(bool /*state*/) {
-	// The JS version sets entry.checked for each entry. In C++, the mask is handled
 	// differently by the item viewer module.
 }
 
@@ -1444,7 +1423,6 @@ static void setSelectedCDN(const nlohmann::json& region) {
  * @param {object} event
  */
 static void click(const std::string& tag) {
-	// before emitting. In ImGui, disabled state is handled differently by each widget.
 	core::events.emit("click-" + tag);
 }
 
@@ -1512,9 +1490,8 @@ static std::string getExportPath(const std::string& file) {
 	return casc::ExportHelper::getExportPath(file);
 }
 
-// Removed: getExternalLink() — external-links module deleted
 static void getExternalLink() {
-	return; // Removed: external-links module deleted
+	return;
 }
 
 
@@ -1583,18 +1560,18 @@ void applyTheme() {
 	ImVec4* colors = style.Colors;
 
 	// Window backgrounds
-	colors[ImGuiCol_WindowBg]  = BG;          // --background
-	colors[ImGuiCol_ChildBg]   = BG_ALT;      // --background-alt
-	colors[ImGuiCol_PopupBg]   = BG_DARK;     // --background-dark
-	colors[ImGuiCol_MenuBarBg] = BG_DARK;     // --background-dark
+	colors[ImGuiCol_WindowBg]  = BG;
+	colors[ImGuiCol_ChildBg]   = BG_ALT;
+	colors[ImGuiCol_PopupBg]   = BG_DARK;
+	colors[ImGuiCol_MenuBarBg] = BG_DARK;
 
 	// Borders
-	colors[ImGuiCol_Border]       = BORDER;   // --border
+	colors[ImGuiCol_Border]       = BORDER;
 	colors[ImGuiCol_BorderShadow] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	// Text
-	colors[ImGuiCol_Text]         = FONT_PRIMARY;   // --font-primary: #ffffffcc
-	colors[ImGuiCol_TextDisabled] = FONT_FADED;     // --font-faded: #6c757d
+	colors[ImGuiCol_Text]         = FONT_PRIMARY;
+	colors[ImGuiCol_TextDisabled] = FONT_FADED;
 
 	// Frame (input fields, checkboxes, sliders)
 	colors[ImGuiCol_FrameBg]        = BG_ALT;
@@ -1607,14 +1584,13 @@ void applyTheme() {
 	colors[ImGuiCol_TitleBgCollapsed] = BG_DARK;
 
 	// Scrollbar
-	colors[ImGuiCol_ScrollbarBg]          = ImVec4(0.0f, 0.0f, 0.0f, 0.0f); // transparent track
-	colors[ImGuiCol_ScrollbarGrab]        = BORDER;         // --border
-	colors[ImGuiCol_ScrollbarGrabHovered] = FONT_HIGHLIGHT; // --font-highlight (white on hover)
+	colors[ImGuiCol_ScrollbarBg]          = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+	colors[ImGuiCol_ScrollbarGrab]        = BORDER;
+	colors[ImGuiCol_ScrollbarGrabHovered] = FONT_HIGHLIGHT;
 	colors[ImGuiCol_ScrollbarGrabActive]  = FONT_HIGHLIGHT;
 
-	// Buttons (CSS: --form-button-base / --form-button-hover)
-	colors[ImGuiCol_Button]        = BUTTON_BASE;    // --form-button-base: #22b549
-	colors[ImGuiCol_ButtonHovered] = BUTTON_HOVER;   // --form-button-hover: #2665d2
+	colors[ImGuiCol_Button]        = BUTTON_BASE;
+	colors[ImGuiCol_ButtonHovered] = BUTTON_HOVER;
 	colors[ImGuiCol_ButtonActive]  = BUTTON_HOVER;
 
 	// Headers (collapsible headers, selectable highlights)
@@ -1635,13 +1611,13 @@ void applyTheme() {
 	// Tabs
 	colors[ImGuiCol_Tab]                = BG_DARK;
 	colors[ImGuiCol_TabHovered]         = BUTTON_BASE;
-	colors[ImGuiCol_TabSelected]        = BUTTON_BASE;     // --nav-option-selected
+	colors[ImGuiCol_TabSelected]        = BUTTON_BASE;
 	colors[ImGuiCol_TabSelectedOverline]= NAV_SELECTED;
 	colors[ImGuiCol_TabDimmed]          = BG_DARK;
 	colors[ImGuiCol_TabDimmedSelected]  = BG_ALT;
 
 	// Check mark
-	colors[ImGuiCol_CheckMark] = BUTTON_BASE; // green check
+	colors[ImGuiCol_CheckMark] = BUTTON_BASE;
 
 	// Slider grab
 	colors[ImGuiCol_SliderGrab]       = BUTTON_BASE;
@@ -1668,7 +1644,7 @@ void applyTheme() {
 	style.GrabRounding      = FRAME_ROUNDING;
 	style.PopupRounding     = POPUP_ROUNDING;   // 0 — sharp popup corners
 	style.ScrollbarRounding = SCROLLBAR_ROUNDING; // 5px thumb rounding
-	style.TabRounding       = 0.0f;             // sharp tab edges like CSS
+	style.TabRounding       = 0.0f;
 	style.ChildRounding     = 0.0f;
 
 	style.ScrollbarSize     = SCROLLBAR_SIZE;   // 8px width
@@ -1677,14 +1653,11 @@ void applyTheme() {
 	style.WindowPadding     = ImVec2(8.0f, 8.0f);
 
 	// Button-specific padding is applied via PushStyleVar where needed,
-	// since ImGui does not have a dedicated button padding style variable.
-	// The CSS value is 9px 13px (vertical, horizontal) — see BUTTON_PADDING.
 
 	style.WindowBorderSize  = 1.0f;
 	style.FrameBorderSize   = 0.0f;
 	style.PopupBorderSize   = 1.0f;
 
-	// Disabled-item alpha: CSS input[type=button].disabled { opacity: 0.5; }
 	style.DisabledAlpha     = 0.5f;
 }
 
@@ -1718,10 +1691,8 @@ void loadFonts(float dpiScale) {
 	std::string gamblerPath = (fontsDir / "gmblr.ttf").string();
 	std::string iconPath    = (fontsDir / "fa-solid-900.ttf").string();
 
-	// Load Selawik regular as the default font (16px matches CSS body default).
 	ImFont* regularFont = io.Fonts->AddFontFromFileTTF(regularPath.c_str(), scaledDefault);
 	if (!regularFont) {
-		// Fallback: use ImGui's built-in font if the TTF file is not found.
 		regularFont = io.Fonts->AddFontDefault();
 	}
 
@@ -1734,14 +1705,12 @@ void loadFonts(float dpiScale) {
 		io.Fonts->AddFontFromFileTTF(iconPath.c_str(), scaledDefault, &iconCfg, s_iconRanges);
 	}
 
-	// Load Selawik bold for use with ImGui::PushFont() where JS uses font-weight: bold.
 	s_fontBold = io.Fonts->AddFontFromFileTTF(boldPath.c_str(), scaledDefault);
 	if (!s_fontBold) {
 		// Fallback to the regular/default font.
 		s_fontBold = regularFont;
 	}
 
-	// Load Gambler font (defined in app.css @font-face but not actively referenced in selectors).
 	s_fontGambler = io.Fonts->AddFontFromFileTTF(gamblerPath.c_str(), scaledDefault);
 	if (!s_fontGambler) {
 		s_fontGambler = regularFont;
@@ -1755,7 +1724,6 @@ void loadFonts(float dpiScale) {
 		s_fontIcon = regularFont;
 	}
 
-	// With new ImGui backends (RendererHasTextures), the atlas is built
 	// automatically on the first frame — no manual Build() call needed.
 }
 
@@ -1783,7 +1751,6 @@ void rebuildFontsForScale(float dpiScale) {
 	// Reload all fonts at the new DPI scale.
 	loadFonts(dpiScale);
 
-	// The backend supports ImGuiBackendFlags_RendererHasTextures, so the
 	// font atlas GPU texture is rebuilt automatically on the next frame.
 }
 
@@ -1940,7 +1907,7 @@ void renderExpansionFilterButtons(int& selectedFilter, int expansionCount) {
 	const ImU32 activeBg   = IM_COL32(0, 0, 0, 204);   // rgba(0,0,0,0.8)
 	const ImU32 hoveredBg  = IM_COL32(0, 0, 0, 204);
 
-	ImGui::Dummy(ImVec2(0, 10.0f)); // margin-top: 10px
+	ImGui::Dummy(ImVec2(0, 10.0f));
 
 	// Center the row: total width = (count+1) * BTN_SIZE + count * GAP
 	int totalBtns = 1 + expansionCount; // "All" + per-expansion
@@ -2077,7 +2044,6 @@ static void checkWatchers(GLFWwindow* window) {
 	}
 }
 
-// Maps CSS grid patterns from app.css to ImGui child windows.
 
 app::layout::ListTabRegions app::layout::CalcListTabRegions(bool hasSidebar, float colRatio) {
 	ListTabRegions r{};
@@ -2140,7 +2106,7 @@ bool app::layout::BeginTab(const char* id) {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 	bool visible = ImGui::BeginChild(id, avail, ImGuiChildFlags_None,
 	    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-	ImGui::PopStyleVar(); // WindowPadding
+	ImGui::PopStyleVar();
 	return visible;
 }
 
@@ -2183,7 +2149,7 @@ bool app::layout::BeginFilterBar(const char* id, const ListTabRegions& regions) 
 			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
 	}
 
-	ImGui::PopStyleVar(); // WindowPadding
+	ImGui::PopStyleVar();
 	return visible;
 }
 
@@ -2198,11 +2164,10 @@ bool app::layout::BeginPreviewControls(const char* id, const ListTabRegions& reg
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 	bool visible = ImGui::BeginChild(id, regions.controlsSize, ImGuiChildFlags_None,
 	    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-	ImGui::PopStyleVar(); // WindowPadding
+	ImGui::PopStyleVar();
 
 	if (visible) {
 		// Vertically center content within the controls bar.
-		// Right-alignment (CSS justify-content: flex-end) is the caller's responsibility.
 		float itemH = ImGui::GetFrameHeight();
 		float padY = (regions.controlsSize.y - itemH) * 0.5f;
 		if (padY > 0.0f)
@@ -2265,7 +2230,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	glfwMakeContextCurrent(window);
-	glfwSwapInterval(1); // VSync
+	glfwSwapInterval(1);
 
 #ifdef _WIN32
 	// Initialize Windows taskbar progress (ITaskbarList3).
@@ -2282,11 +2247,8 @@ int main(int argc, char* argv[]) {
 
 	// Prevent files from being dropped onto the window. These are over-written
 	// later but we disable here to prevent them working if init fails.
-	// (GLFW does not have ondragover; drop callback is set later.)
 
 	// Force all links to open in the users default application.
-	// rather than DOM click events. Each module handles this directly.
-	// ExternalLinks.open(externalElement.getAttribute('data-external')); // Removed: external-links module deleted
 
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -2294,7 +2256,7 @@ int main(int argc, char* argv[]) {
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-	// Apply the app.css theme to ImGui (replaces StyleColorsDark).
+	// Apply the app theme.
 	app::theme::applyTheme();
 
 	// Query the initial display content scale for high-DPI support.
@@ -2329,9 +2291,7 @@ int main(int argc, char* argv[]) {
 	modules::register_components();
 
 	// Dynamic interface scaling thresholds matching the original JS logic.
-	// The JS version scales a CSS transform on the app container:
 	//   scale = min(window.innerWidth / 1120, window.innerHeight / 700, 1.0)
-	// In ImGui the equivalent is adjusting FontGlobalScale each frame.
 	constexpr int SCALE_THRESHOLD_W = 1120;
 	constexpr int SCALE_THRESHOLD_H = 700;
 
@@ -2389,7 +2349,6 @@ int main(int argc, char* argv[]) {
 	// Load/update BLTE decryption keys.
 	casc::tact_keys::load();
 
-	// Removed: auto-update check — updater module deleted
 	// if (BUILD_RELEASE && !DISABLE_AUTO_UPDATE) {
 	// 	core::showLoadingScreen(1, "Checking for updates...");
 	// 	updater::checkForUpdates().then(updateAvailable => {
@@ -2403,7 +2362,6 @@ int main(int argc, char* argv[]) {
 	// }
 
 	// Load what's new HTML on app start
-	// Removed: whats-new.html is no longer used — home page is a blank placeholder.
 	// (async () => {
 	// 	try {
 	// 		const whats_new_path = BUILD_RELEASE ? './src/whats-new.html' : './src/whats-new.html';

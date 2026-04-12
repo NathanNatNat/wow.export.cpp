@@ -1186,12 +1186,10 @@ core::setToast("error", "Failed to import character " + character_label, {}, -1)
 view.chrModelLoading = false;
 }
 
-// Removed: import_wmv_character() — wmv module deleted
 static void import_wmv_character() {
 return;
 }
 
-// Removed: import_wowhead_character() — wowhead module deleted
 static void import_wowhead_character() {
 return;
 }

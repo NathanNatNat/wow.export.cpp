@@ -13,7 +13,6 @@ namespace resize_layer {
  * Invoked when this component is mounted.
  * @see https://vuejs.org/v2/guide/instance.html
  */
-// the content region width each frame and fire the callback on change.
 
 /**
  * Invoked before this component is destroyed.

@@ -64,10 +64,8 @@ static std::string stringDecode(std::span<const uint8_t> buf) {
 	return std::string(reinterpret_cast<const char*>(buf.data()), buf.size());
 }
 
-// Not needed in C++: std::vector copy construction handles this.
 
 // arrayBufferClassNames, isArrayBuffer(o) — JS runtime type introspection.
-// Not needed in C++: the type system handles this at compile time
 // through BlobPart's overloaded constructors.
 
 static std::vector<uint8_t> concatTypedarrays(const std::vector<std::vector<uint8_t>>& chunks) {
