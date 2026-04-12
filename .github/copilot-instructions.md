@@ -8,7 +8,6 @@
 - The C++ Version should be 100% functionally identical to the original JavaScript code. The goal is a line-by-line port, with the same code structure and logic, but in C++.
 - The C++ Version should be 100% visually identical to the original JavaScript app. Use the same colors, fonts, layout, and styling as defined in app.css and the reference screenshots in UI_REFERENCE.md.
 - User-facing text (window title, crash screen, logs, context menus) should say **wow.export.cpp**, not wow.export.
-- The `src/` directory currently contains **190** `.cpp` files in total.
 - The **original JS source files** (**192** in total) are included in the repo under `src/js/` (and `src/installer/`), sitting alongside the C++ files. Always read these local JS files as the authoritative reference when converting or verifying C++ code.
 
 ## Platform & Toolchain
