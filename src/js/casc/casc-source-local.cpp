@@ -78,6 +78,11 @@ void CASCLocal::init() {
 
 /**
  * Obtain a file by it's fileDataID.
+ * Note: In JS this method is named getFile() and overrides the base class.
+ * In C++ it is renamed to getFileAsBLTE() because the base class getFile()
+ * returns std::string (encoding key) while this returns BLTEReader.
+ * Callers that used JS getFileByName() should use getVirtualFileByID/Name
+ * or call getFileAsBLTE() directly.
  * @param fileDataID
  * @param partialDecryption
  * @param suppressLog

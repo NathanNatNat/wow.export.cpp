@@ -94,6 +94,8 @@ std::vector<std::unordered_map<std::string, std::string>> CASCRemote::getConfig(
 	const std::string url = host + product + file;
 	auto res = generics::get(url);
 
+	// JS checks !res.ok and reports res.status — in C++, generics::get throws on HTTP failure,
+	// but an empty body on success should still be treated as an error.
 	if (res.empty())
 		throw std::runtime_error(std::format("HTTP error from remote CASC endpoint: {}", url));
 
@@ -147,6 +149,11 @@ std::unordered_map<std::string, std::string> CASCRemote::getCDNConfig(const std:
 
 /**
  * Obtain a file by it's fileDataID.
+ * Note: In JS this method is named getFile() and overrides the base class.
+ * In C++ it is renamed to getFileAsBLTE() because the base class getFile()
+ * returns std::string (encoding key) while this returns BLTEReader.
+ * Callers that used JS getFileByName() should use getVirtualFileByID/Name
+ * or call getFileAsBLTE() directly.
  * @param fileDataID
  * @param partialDecrypt
  * @param suppressLog

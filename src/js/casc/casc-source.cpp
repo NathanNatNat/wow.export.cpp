@@ -200,6 +200,16 @@ std::optional<FileEncodingInfo> CASC::getFileEncodingInfo(uint32_t fileDataID) {
 /**
  * Obtain a file by a filename.
  * fileName must exist in the loaded listfile.
+ *
+ * Note: In JS, this calls this.getFile() which dispatches to the subclass
+ * override (CASCLocal/CASCRemote) and returns a BLTEReader with the extra
+ * parameters (partialDecrypt, suppressLog, supportFallback, forceFallback).
+ * In C++, getFile() returns std::string (encoding key) from the base class
+ * and the subclass versions are renamed getFileAsBLTE(). The extra parameters
+ * are accepted for API compatibility but not forwarded.
+ * Callers needing decoded data should use getVirtualFileByName() or call
+ * getFileAsBLTE() on the concrete subclass directly.
+ *
  * @param fileName
  * @param partialDecrypt
  * @param suppressLog
