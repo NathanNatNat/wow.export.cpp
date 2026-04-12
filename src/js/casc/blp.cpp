@@ -253,7 +253,7 @@ BufferWrapper BLPImage::_getCompressed(uint8_t* canvasData, uint8_t mask) {
 		for (uint32_t x = 0, sw = scaledWidth_; x < sw; x += 4) {
 			int blockPos = 0;
 
-			if (static_cast<size_t>(pos) >= rawData_.size())
+			if (static_cast<size_t>(pos) == rawData_.size())
 				continue;
 
 			int colourIndex = pos;
