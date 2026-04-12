@@ -764,3 +764,33 @@ The following entries document code changes that were made by a previous agent s
 - **JS Source**: `src/js/workers/cache-collector.js`, `https_request()` function
 - **Status**: Pending
 - **Details**: When `httplib::Result` is falsy (connection failure, DNS error, timeout), the C++ code returns a default `HttpResponse` with status 0 and empty data. In JS, `req.on('error', reject)` propagates the error as a promise rejection. Fix: throw `std::runtime_error` when `!res` to match JS error propagation behavior. Same issue exists in `json_post()`.
+
+### 142. [tab_changelog.cpp] No C++ port — still raw JavaScript
+- **JS Source**: `src/js/modules/tab_changelog.js`
+- **Status**: Pending
+- **Details**: The file contains unconverted JavaScript code (`const fsp = require('fs').promises; ...module.exports = { ... }`). Needs full conversion to C++/ImGui: load `CHANGELOG.md` from disk, render with MarkdownContent component, and provide a "Go Back" button calling `modules::go_to_landing()`.
+
+### 143. [home-showcase.cpp] No C++ port — still raw JavaScript
+- **JS Source**: `src/js/components/home-showcase.js`
+- **Status**: Pending
+- **Details**: The file contains unconverted JavaScript code (`const showcases = require('../showcase.json'); ...module.exports = { ... }`). Needs conversion to ImGui: load `showcase.json`, render a random showcase image with layered backgrounds, title overlay, external link, and "Refresh" / "Feedback" buttons.
+
+### 144. [module_test_a.cpp] No C++ port — still raw JavaScript
+- **JS Source**: `src/js/modules/module_test_a.js`
+- **Status**: Pending
+- **Details**: The file contains unconverted JavaScript (`module.exports = { template: ..., methods: { ... } }`). Needs conversion to ImGui: counter display with increment button, and a "Switch to Module B" button calling `modules::set_active("module_test_b")`.
+
+### 145. [module_test_b.cpp] No C++ port — still raw JavaScript
+- **JS Source**: `src/js/modules/module_test_b.js`
+- **Status**: Pending
+- **Details**: The file contains unconverted JavaScript (`module.exports = { template: ..., methods: { ... } }`). Needs conversion to ImGui: text input for message, display of dev mode/busy/CASC state, buttons for switch to Module A, reload self, and show toast.
+
+### 146. [Texture.cpp] getTextureFile() calls getVirtualFileByID instead of getFile
+- **JS Source**: `src/js/3D/Texture.js`, `getTextureFile()` method
+- **Status**: Pending
+- **Details**: JS calls `core.view.casc.getFile(this.fileDataID)` which uses the polymorphic `getFile()` dispatch (virtual file lookup → encoding → data extraction). C++ calls `core::view->casc->getVirtualFileByID()` which may skip steps that `getFile()` handles internally (e.g. encoding lookup, archive extraction). Verify that `getVirtualFileByID()` is functionally equivalent to the JS `getFile()` path, or change to use the correct polymorphic dispatch. Related: TODO #89.
+
+### 147. [subtitles.cpp] get_subtitles_vtt() signature differs from JS — caller must load CASC file
+- **JS Source**: `src/js/subtitles.js`, `get_subtitles_vtt()` function
+- **Status**: Pending — Intentional Deviation
+- **Details**: JS `get_subtitles_vtt(casc, file_data_id, format)` is async and loads the file from CASC internally. C++ `get_subtitles_vtt(text, format)` takes pre-loaded text, requiring the caller to load the CASC file first. This is documented in the header comment and is an intentional separation of concerns. However, callers must replicate the CASC file loading + UTF-8 decoding that the JS version does internally. Verify all call sites pass correctly decoded text.
