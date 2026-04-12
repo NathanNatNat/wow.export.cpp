@@ -704,3 +704,170 @@
 - **JS Source**: `src/js/workers/cache-collector.js` lines 46–65
 - **Status**: Pending
 - **Details**: Same issue as #138 but for `json_post()`. The JS `json_post` calls `https_request` which rejects on connection error, causing the error to propagate to callers. The C++ `json_post()` (lines 482–493) returns a default `JsonPostResponse` with `status=0, ok=false` when the httplib result is falsy, silently swallowing the connection error. In `upload_flavor()`, this means a connection failure during submit would log `"submit failed (0) for ..."` rather than propagating the actual error.
+
+## src/js/ui/ Audit
+
+### 140. [audio-helper.cpp] `load()` returns void instead of the decoded audio buffer
+- **JS Source**: `src/js/ui/audio-helper.js` lines 31–35
+- **Status**: Pending
+- **Details**: The JS `async load(array_buffer)` returns `this.buffer` (the decoded `AudioBuffer`). The C++ `void load(...)` (lines 108–125) returns `void`. Any caller relying on the return value of `load()` would break. The JS function is async and returns the buffer; C++ is synchronous and returns nothing.
+
+### 141. [audio-helper.cpp] `on_ended` callback requires polling `get_position()` instead of firing automatically
+- **JS Source**: `src/js/ui/audio-helper.js` lines 57–67
+- **Status**: Pending
+- **Details**: JS registers `source.onended` callback directly on the `AudioBufferSourceNode`, which the browser fires automatically when playback reaches the end. The C++ version (lines 172–174, 232–242) documents that miniaudio has no per-sound `onended` callback. Instead, `on_ended` is fired from inside `get_position()` by polling `ma_sound_at_end()`. If consumers never call `get_position()`, `on_ended` never fires. This is a necessary deviation due to miniaudio's API, but callers must be aware they must poll `get_position()` periodically.
+
+### 142. [audio-helper.cpp] `get_position()` has side effects not present in JS
+- **JS Source**: `src/js/ui/audio-helper.js` lines 115–130
+- **Status**: Pending
+- **Details**: JS `get_position()` is a pure getter with no side effects. The C++ version (lines 223–251) detects natural end-of-playback via `ma_sound_at_end()`. When detected, it sets `is_playing = false`, `start_offset = 0`, calls `stop_source()`, fires `on_ended()`, and returns 0. In JS, `onended` is asynchronous and separate from `get_position()`. In C++, calling `get_position()` can mutate state and trigger callbacks.
+
+### 143. [audio-helper.cpp] `get_position()` returns 0 at natural end instead of ~duration
+- **JS Source**: `src/js/ui/audio-helper.js` line 126
+- **Status**: Pending
+- **Details**: When playback reaches the end naturally, JS returns `Math.min(position, this.buffer.duration)` (approximately the full duration). The `onended` fires separately/asynchronously. The C++ version (line 241) immediately returns `0` after resetting state. UI progress bars or position displays may flash to 0 instead of showing the full duration momentarily.
+
+### 144. [audio-helper.cpp] `set_volume()` remembers value before `init()` — JS doesn't
+- **JS Source**: `src/js/ui/audio-helper.js` lines 136–139
+- **Status**: Pending
+- **Details**: JS does `if (this.gain) this.gain.gain.value = value;` — if `init()` hasn't been called, this is a no-op and the volume is not remembered. C++ (lines 257–262) always stores `volume = value`, then applies to sound if it exists. Volume is remembered and applied on next `play()` (line 170). C++ behavior is arguably better but differs from JS.
+
+### 145. [char-texture-overlay.cpp] `initEvents()` is dead code — never called
+- **JS Source**: `src/js/ui/char-texture-overlay.js` lines 74–108
+- **Status**: Pending
+- **Details**: In JS, events are registered at module load time (automatic on `require()`). In C++ (lines 94–106), three event handlers are wrapped in `initEvents()`, but it is never called anywhere in the codebase. `tab_characters.cpp` directly calls `nextOverlay()`, `prevOverlay()`, and `ensureActiveLayerAttached()`, bypassing the event system entirely. Either `initEvents()` should be called at startup or removed.
+
+### 146. [character-appearance.cpp] `get_field_int` default of 512 for Width/Height differs from JS undefined behavior
+- **JS Source**: `src/js/ui/character-appearance.js` lines 91, 141, 150
+- **Status**: Pending
+- **Details**: The C++ helper `get_field_int` (lines 22–34) uses a default value of `512` for Width/Height fields. In JS, missing fields would produce `undefined`/`NaN`, which is a different failure mode. If a DataRecord is missing Width/Height, JS would get `undefined` (NaN in arithmetic), while C++ silently uses 512.
+
+### 147. [character-appearance.cpp] Bit-shift `1 << sectionType` uses 64-bit in C++ vs 32-bit in JS
+- **JS Source**: `src/js/ui/character-appearance.js` line 154
+- **Status**: Pending
+- **Details**: JS uses `(1 << section_type)` which is a 32-bit operation. C++ (line 246) uses `(1LL << section_type)` which is a 64-bit operation. For `section_type >= 32`, the results differ. C++ is more correct but produces different results than JS for high values.
+
+### 148. [data-exporter.cpp] `mark()` calls missing stack trace parameter
+- **JS Source**: `src/js/ui/data-exporter.js` lines 70, 126, 198, 248
+- **Status**: Pending
+- **Details**: JS calls `helper.mark(fileName, false, e.message, e.stack)` — passes both error message AND stack trace (4 args). C++ (lines 95, 161, 247, 306) calls `h->mark(fileName, false, e.what())` — passes only the error message (3 args), losing diagnostic stack trace information.
+
+### 149. [data-exporter.cpp] `exportRawDB2` missing null check on fileData
+- **JS Source**: `src/js/ui/data-exporter.js` lines 115–116
+- **Status**: Pending
+- **Details**: JS has `if (!fileData) throw new Error('Failed to retrieve DB2 file from CASC');` — an explicit null guard before calling `writeToFile`. C++ (line 153) does `BufferWrapper fileData = casc->getVirtualFileByID(fileDataID, true); fileData.writeToFile(...)` with no check. If the call returns an empty/invalid BufferWrapper, it proceeds to `writeToFile` which could silently write nothing or crash.
+
+### 150. [data-exporter.cpp] `overwriteFiles` config default value may be inverted
+- **JS Source**: `src/js/ui/data-exporter.js` lines 45, 109, 169, 229
+- **Status**: Pending
+- **Details**: JS accesses `core.view.config.overwriteFiles` directly — if undefined, evaluates to `undefined` (falsy), meaning `!overwriteFiles` = `true`, so it checks for existing files and skips. C++ (lines 71, 148, 218, 284) uses `core::view->config.value("overwriteFiles", true)` — default is `true`, so if the key is missing, `!true` = `false`, and it would always overwrite. The default behavior is inverted if the config key is absent.
+
+### 151. [data-exporter.cpp] `exportDataTableSQL` null value handling differs
+- **JS Source**: `src/js/ui/data-exporter.js` line 185
+- **Status**: Pending
+- **Details**: JS does `rowObject[headers[i]] = value !== null && value !== undefined ? value : null;` — preserves JS `null` for null/undefined values and preserves original type (number, string, etc.) for non-null. The C++ version (line 235) converts everything to `std::string`, using empty string for missing values. Comment says "empty string maps to NULL in SQLWriter" but this depends on SQLWriter treating empty strings as NULL correctly. All values are strings, so numeric values may be quoted differently in SQL output.
+
+### 152. [data-exporter.cpp] `exportRawDBC` no error checking on file write
+- **JS Source**: `src/js/ui/data-exporter.js` line 240
+- **Status**: Pending
+- **Details**: JS `await fsp.writeFile(exportPath, Buffer.from(raw_data));` rejects on I/O errors. C++ (lines 296–298) does `std::ofstream ofs(...); ofs.write(...); ofs.close();` with no check on `ofs.good()`, `ofs.fail()`, or `ofs.is_open()`. A write failure would be silently ignored.
+
+### 153. [listbox-context.cpp] `get_listfile_entries` fileDataID == 0 treated differently
+- **JS Source**: `src/js/ui/listbox-context.js` line 41
+- **Status**: Pending
+- **Details**: JS uses `fileDataID ? \`${filePath};${fileDataID}\` : filePath` — JS truthiness means `0` is falsy, so fileDataID of `0` would output just `filePath` (no `;0`). C++ (line 75) uses `parsed.fileDataID.has_value()` — `std::optional<uint32_t>(0)` has a value, so it would output `filePath;0`. Behavioral divergence for the edge case of fileDataID == 0.
+
+### 154. [listbox-context.cpp] `open_export_directory` naive UTF-8 to wide string conversion (Windows)
+- **JS Source**: `src/js/ui/listbox-context.js` line 126
+- **Status**: Pending
+- **Details**: JS `nw.Shell.openItem(dir)` handles encoding correctly via NW.js. C++ (line 194) does `std::wstring wpath(dir.begin(), dir.end())` — naively copies byte-by-byte from `char` to `wchar_t`. This only works for ASCII paths. Any non-ASCII characters (accented characters, CJK) will produce a garbled wide string. Should use `MultiByteToWideChar(CP_UTF8, ...)` or equivalent.
+
+### 155. [listbox-context.cpp] `open_export_directory` command injection risk (Linux)
+- **JS Source**: `src/js/ui/listbox-context.js` line 126
+- **Status**: Pending
+- **Details**: JS uses `nw.Shell.openItem(dir)` — a safe API. C++ (lines 197–198) does `std::string cmd = "xdg-open \"" + dir + "\" &"; std::system(cmd.c_str());` — if `dir` contains shell metacharacters, this is a command injection vector. Should use `fork()/exec()` to avoid shell interpretation.
+
+### 156. [model-viewer-utils.cpp] `create_renderer()` passes file_data_id (uint32_t) instead of file_name (string) for WMO
+- **JS Source**: `src/js/ui/model-viewer-utils.js` line 208
+- **Status**: Pending
+- **Details**: JS does `new WMORendererGL(data, file_name, gl_context, show_textures)` — passes the file name string. C++ (line 343) does `std::make_unique<WMORendererGL>(data, file_data_id, ctx, show_textures)` — passes the numeric file data ID instead. The JS WMO renderer receives the file name string; the C++ passes a numeric ID.
+
+### 157. [model-viewer-utils.cpp] `export_preview()` clipboard copy sets text instead of PNG image
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 300–301
+- **Status**: Pending
+- **Details**: JS uses `nw.Clipboard.get()` then `clipboard.set(buf.toBase64(), 'png', true)` to copy an actual PNG image to the system clipboard. C++ (line 482) uses `ImGui::SetClipboardText(buf.toBase64().c_str())` which copies base64 text to the clipboard, not a PNG image. Users cannot paste the image into other apps. Needs a platform-specific clipboard image API.
+
+### 158. [model-viewer-utils.cpp] `handle_animation_change()` missing `playAnimation` capability check
+- **JS Source**: `src/js/ui/model-viewer-utils.js` line 243
+- **Status**: Pending
+- **Details**: JS checks `if (!renderer || !renderer.playAnimation)` — verifies renderer has `playAnimation` method. C++ (line 395) only checks `if (!renderer)`. If the renderer type doesn't support animations (e.g., WMO), JS would bail out but C++ would proceed to call it.
+
+### 159. [model-viewer-utils.cpp] `handle_animation_change()` empty string vs null/undefined check
+- **JS Source**: `src/js/ui/model-viewer-utils.js` line 251
+- **Status**: Pending
+- **Details**: JS checks `if (selected_animation_id === null || selected_animation_id === undefined)` — an empty string `""` would pass through and reach the find logic. C++ (line 403) checks `if (selected_animation_id.empty())` — an empty string returns early. Different behavior for the empty string case.
+
+### 160. [model-viewer-utils.cpp] `create_view_state()` only supports 3 hardcoded prefixes
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 503–528
+- **Status**: Pending
+- **Details**: JS is fully generic — uses `core.view[prefix + 'TexturePreviewURL']` dynamic property access that works for ANY prefix. C++ (lines 720–772) only supports 3 hardcoded prefixes: `"model"`, `"decor"`, `"creature"`. Any other prefix returns all-null pointers, silently failing.
+
+### 161. [model-viewer-utils.cpp] `export_model()` WMO non-RAW constructor passes file_data_id instead of file_name
+- **JS Source**: `src/js/ui/model-viewer-utils.js` line 405
+- **Status**: Pending
+- **Details**: JS does `new WMOExporter(data, file_name)` — passes the file_name string for non-RAW WMO exports. C++ (line 673) does `WMOExporter exporter(data, file_data_id, casc)` — passes file_data_id number and an extra casc parameter. The JS uses the file name; C++ uses file_data_id.
+
+### 162. [model-viewer-utils.cpp] `export_preview()` export_paths not null-checked
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 283–296
+- **Status**: Pending
+- **Details**: JS uses optional chaining `export_paths?.writeLine(...)` and `export_paths?.close()` because `core.openLastExportStream()` can return `null`. C++ (lines 460–475) calls `exportPaths.writeLine(...)` and `exportPaths.close()` unconditionally. If the stream is invalid/empty, this could crash or behave differently.
+
+### 163. [model-viewer-utils.cpp] `extract_animations()` missing `Math.floor` on animation.id
+- **JS Source**: `src/js/ui/model-viewer-utils.js` line 223
+- **Status**: Pending
+- **Details**: JS uses `Math.floor(animation.id)` in id string and label. C++ (lines 361, 363, 374, 376) uses `std::to_string(animation.id)` with no floor/truncation. If `animation.id` can be a float in the data format, C++ won't truncate it, producing different id/label strings.
+
+### 164. [texture-exporter.cpp] Clipboard copy sets text instead of PNG image
+- **JS Source**: `src/js/ui/texture-exporter.js` lines 86–87
+- **Status**: Pending
+- **Details**: JS uses `nw.Clipboard.get()` then `clipboard.set(png.toBase64(), 'png', true)` to copy an actual PNG image to the system clipboard. C++ (line 115) uses `ImGui::SetClipboardText(png.toBase64().c_str())` which copies base64 text to the clipboard, not a PNG image. Users cannot paste the image into other apps.
+
+### 165. [texture-exporter.cpp] Missing null guard for exportPaths
+- **JS Source**: `src/js/ui/texture-exporter.js` lines 148, 152, 157, 165, 182
+- **Status**: Pending
+- **Details**: JS uses `exportPaths?.writeLine(...)` and `exportPaths?.close()` (optional chaining) because `core.openLastExportStream()` can return `null`. C++ (lines 198, 202, 209, 218, 239) calls `exportPaths.writeLine(...)` and `exportPaths.close()` unconditionally. If the stream is invalid/empty, this could crash.
+
+### 166. [texture-exporter.cpp] Case-insensitive `.blp` check only covers two cases
+- **JS Source**: `src/js/ui/texture-exporter.js` line 117
+- **Status**: Pending
+- **Details**: JS uses `fileName.toLowerCase().endsWith('.blp')` for fully case-insensitive matching. C++ (lines 153–155) only checks `== ".blp" || == ".BLP"`, missing mixed-case variants like `.Blp`, `.bLp`, etc.
+
+### 167. [texture-exporter.cpp] File extension detection hardcodes 4-char suffix
+- **JS Source**: `src/js/ui/texture-exporter.js` line 143
+- **Status**: Pending
+- **Details**: JS uses `fileName.slice(fileName.lastIndexOf('.')).toLowerCase()` for proper extension parsing — finds last `.`, any length, lowercased. C++ (lines 188–192) hardcodes 4-char suffix `fileName.substr(fileName.size() - 4)` then only checks `.png`/`.PNG` and `.jpg`/`.JPG`. Misses extensions not exactly 4 chars (e.g., `.jpeg`), mixed-case variants, and files with no extension or short names.
+
+### 168. [texture-exporter.cpp] `mark()` calls missing stack trace parameter
+- **JS Source**: `src/js/ui/texture-exporter.js` line 177
+- **Status**: Pending
+- **Details**: JS calls `helper.mark(markFileName, false, e.message, e.stack)` passing 4 args including stack trace. C++ (line 232) calls `helper.mark(markFileName, false, e.what())` passing 3 args, no stack trace. C++ `std::exception` has no `.stack` equivalent.
+
+### 169. [uv-drawer.cpp] Line width 1px instead of JS 0.5px
+- **JS Source**: `src/js/ui/uv-drawer.js` line 24
+- **Status**: Pending
+- **Details**: JS sets `ctx.lineWidth = 0.5` — the Canvas API renders these as semi-transparent 1px lines via anti-aliasing. C++ uses Bresenham's line algorithm (lines 18–48) which always draws fully opaque 1px lines — visually thicker and more prominent than the original. This is a visual fidelity difference inherent to the rasterization approach.
+
+### 170. [uv-drawer.cpp] Anti-aliased (JS) vs aliased (C++) line rendering
+- **JS Source**: `src/js/ui/uv-drawer.js` lines 41–44
+- **Status**: Pending
+- **Details**: JS `ctx.moveTo()`/`ctx.lineTo()` uses the Canvas 2D API which provides anti-aliased line rendering by default. C++ uses Bresenham's algorithm (lines 18–48) which produces aliased (staircase) lines with no smoothing. UV wireframes will appear more jagged in the C++ version.
+
+### 171. [uv-drawer.cpp] Sub-pixel precision lost — float coords truncated to int
+- **JS Source**: `src/js/ui/uv-drawer.js` lines 34–39
+- **Status**: Pending
+- **Details**: JS keeps UV coordinates as floating-point values and passes them directly to `moveTo()`/`lineTo()` which handles sub-pixel positioning natively. C++ (lines 71–76) truncates UV coordinates to `int` via `static_cast<int>()`. Lines may be offset by up to 1 pixel vs the JS version. Using `std::round()` or `std::lround()` would better match Canvas behavior.
+
+### 172. [uv-drawer.cpp] No bounds checking on `uvCoords` array access
+- **JS Source**: `src/js/ui/uv-drawer.js` lines 34–39
+- **Status**: Pending
+- **Details**: JS accessing `uvCoords[idx]` out-of-bounds returns `undefined` → `NaN`, producing no visible lines (safe, just garbage rendering). C++ (lines 71–76) accessing `uvCoords[idx]` out-of-bounds via `operator[]` is undefined behavior (potential crash/corruption). No guard exists for this case.
