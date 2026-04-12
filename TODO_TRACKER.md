@@ -926,3 +926,18 @@
 - **JS Source**: `src/js/modules/screen_settings.js` lines ~460–462 (template buttons)
 - **Status**: Pending
 - **Details**: C++ lines 482–484 contain commented-out Vue template code: `// <input type="button" value="Discard" @click="handle_discard"/>`, `// <input type="button" value="Apply" @click="handle_apply"/>`, `// <input type="button" id="config-reset" value="Reset to Defaults" @click="handle_reset"/>`. The ImGui equivalents are properly implemented on lines 486–493, but the residual HTML/Vue template comments should be removed.
+
+### 184. [DBDParser.cpp] TODO placeholder: foreign key support not implemented
+- **JS Source**: `src/js/db/DBDParser.js` line 342
+- **Status**: Pending
+- **Details**: C++ line 379 contains `// TODO: Support foreign key support.` carried over from the original JS source (line 342). The `parseColumnChunk` method reads the column foreign key match group (`<TableName::ColumnName>`) but discards it (C++ line 372 has the commented-out capture `//const std::string columnForeignKey = match[2].str();`). This matches the JS behavior exactly — the JS also captures but discards the foreign key (JS line 338). Both C++ and JS are missing this feature identically.
+
+### 185. [WDCReader.cpp] TODO placeholder: string vs locstring not differentiated
+- **JS Source**: `src/js/db/WDCReader.js` line 42
+- **Status**: Pending
+- **Details**: C++ line 89 contains `// TODO: Handle string separate to locstring in the event we need it.` carried over from the original JS source (line 42). The `convertDBDToSchemaType` function treats both `"string"` and `"locstring"` DBD types identically, mapping them both to `FieldType::String`. This matches the JS behavior exactly — the JS also maps both to `FieldType.String` (JS line 43). If localized string handling is ever needed, both would need to be updated.
+
+### 186. [WDCReader.cpp] TODO placeholder: WDC4 chunk data not fully read
+- **JS Source**: `src/js/db/WDCReader.js` line 429
+- **Status**: Pending
+- **Details**: C++ line 497 contains `// New WDC4 chunk: TODO read` carried over from the original JS source (line 429). For WDC versions > 3 (WDC4, WDC5), both JS and C++ read and skip over this chunk data without parsing it (`data.move(entryCount * 4)` in JS; `dataRef.move(static_cast<int64_t>(entryCount) * 4)` in C++). The chunk's purpose is not documented, and the data is discarded. This matches the JS behavior exactly.
