@@ -264,3 +264,199 @@ Note: 17 other CASC files (blte-stream-reader, build-cache, cdn-config, cdn-reso
 - **JS Source**: `src/js/modules.js` lines 27–59
 - **Status**: Pending
 - **Details**: The JS `MODULES` object includes `module_test_a`, `module_test_b`, `tab_help`, `tab_blender`, and `tab_changelog`, but none of these have been ported to C++. No corresponding header/cpp files exist in `src/js/modules/`. The C++ `modules.cpp` previously marked these as "Removed: module deleted" which is incorrect — they exist in the JS source. Comments have been corrected to indicate they are pending conversion. Each module needs its `.cpp` and `.h` files created and its `add_module()` registration added to `modules::initialize()`.
+
+## Detailed Audit Findings (2026-04-12 Comprehensive Audit)
+
+### 50. [external-links.cpp] Entire file is still raw unconverted JavaScript
+- **JS Source**: `src/js/external-links.js` lines 1–end
+- **Status**: Pending
+- **Details**: The file uses `require('util')`, `const`, `module.exports`, `nw.Shell.openExternal()`. No C++ conversion has been performed. No `.h` header file exists. All URL constants and the `openLink()` function need to be ported to C++.
+
+### 51. [core.cpp] openInExplorer() uses incorrect UTF-8 to UTF-16 conversion on Windows
+- **JS Source**: `src/js/core.js` line 465
+- **Status**: Pending
+- **Details**: The C++ `openInExplorer` on Windows uses `std::wstring(path.begin(), path.end())` which performs incorrect char-by-char widening instead of proper UTF-8→UTF-16 conversion. Unicode paths containing non-ASCII characters will be mangled. Needs `MultiByteToWideChar` or equivalent.
+
+### 52. [gpu-info.cpp] Queries wrong OpenGL uniform constant — values 4× too large
+- **JS Source**: `src/js/gpu-info.js` lines 41–42
+- **Status**: Pending
+- **Details**: C++ queries `GL_MAX_VERTEX_UNIFORM_COMPONENTS` (counts individual floats) instead of JS's `MAX_VERTEX_UNIFORM_VECTORS` (counts vec4s). The reported values will be approximately 4× larger than the JS equivalent. Should use `GL_MAX_VERTEX_UNIFORM_VECTORS` or divide by 4.
+
+### 53. [gpu-info.cpp] exec_cmd() has no timeout — can hang indefinitely
+- **JS Source**: `src/js/gpu-info.js` line 67
+- **Status**: Pending
+- **Details**: JS uses `child_process.execSync` with a 5000ms timeout. C++ uses `popen()` with no timeout mechanism. If the external command hangs, the application will hang indefinitely.
+
+### 54. [gpu-info.cpp] get_gl_info() never returns null on context failure
+- **JS Source**: `src/js/gpu-info.js` lines 14–58
+- **Status**: Pending
+- **Details**: JS returns `null` if WebGL context creation fails. C++ always returns a struct (never null). Callers that check for null/undefined will behave differently.
+
+### 55. [blob.cpp] stringEncode() does not handle UTF-16 surrogate pairs
+- **JS Source**: `src/js/blob.js` lines 41–82
+- **Status**: Pending
+- **Details**: JS `stringEncode` performs full UTF-16→UTF-8 conversion with proper surrogate pair handling. C++ simply reinterprets bytes directly, which will produce incorrect output for any text containing characters outside the Basic Multilingual Plane.
+
+### 56. [blob.cpp] stringDecode() missing UTF-8 error recovery
+- **JS Source**: `src/js/blob.js` lines 84–137
+- **Status**: Pending
+- **Details**: JS `stringDecode` performs full UTF-8→UTF-16 decoding with `0xFFFD` replacement for malformed sequences. C++ skips this error recovery, which could produce different output for malformed UTF-8 data.
+
+### 57. [buffer.cpp] _writeCheck() throws instead of creating silent error like JS
+- **JS Source**: `src/js/buffer.js` lines 639–640
+- **Status**: Pending
+- **Details**: JS creates `new Error(...)` but does NOT throw it — the error is silently created and the write continues. C++ **throws** `std::runtime_error`, which will crash the program on out-of-bounds writes. This is a behavioral difference that could affect callers.
+
+### 58. [buffer.cpp] getDataURL() generates base64 string instead of object URL
+- **JS Source**: `src/js/buffer.js` lines 606–611
+- **Status**: Pending
+- **Details**: JS uses `URL.createObjectURL()` which creates a short blob URL. C++ generates a full base64 data URL string. For very large buffers this produces huge strings that may cause performance issues.
+
+### 59. [buffer.cpp] calculateHash() only supports md5/sha1
+- **JS Source**: `src/js/buffer.js` lines 625–627
+- **Status**: Pending
+- **Details**: JS supports any Node.js hash algorithm (sha256, sha512, etc.) via `crypto.createHash(hash)`. C++ only implements md5 and sha1. If any caller requests sha256 or other algorithms, it will fail.
+
+### 60. [log.cpp] write() accepts single string instead of variadic parameters
+- **JS Source**: `src/js/log.js` line 78
+- **Status**: Pending
+- **Details**: JS `write(...parameters)` accepts variadic args and formats them with `util.format()` (printf-style `%s`, `%d` interpolation). C++ accepts only a single `std::string`. Callers using format strings like `log.write("Loaded %d items", count)` will output literal `%d` instead of the count.
+
+### 61. [log.cpp] timeEnd() missing variadic format parameters
+- **JS Source**: `src/js/log.js` lines 64–66
+- **Status**: Pending
+- **Details**: JS `timeEnd(label, ...params)` passes extra params to `write()` for format interpolation. C++ `timeEnd()` only accepts the label. Calls like `timeEnd("Loaded %s", "textures")` would output literal `%s`.
+
+### 62. [log.cpp] Console output suppression uses NDEBUG instead of BUILD_RELEASE
+- **JS Source**: `src/js/log.js` line 93
+- **Status**: Pending
+- **Details**: JS checks `!BUILD_RELEASE` to decide if console output is enabled. C++ checks `NDEBUG`. These may not map to the same build configurations, potentially suppressing console output in debug builds or showing it in release builds.
+
+### 63. [file-writer.cpp] Encoding parameter is ignored
+- **JS Source**: `src/js/file-writer.js` line 14
+- **Status**: Pending
+- **Details**: JS `FileWriter` constructor accepts and uses an encoding parameter (defaulting to 'utf8'). C++ ignores the encoding entirely — non-UTF-8 encodings would produce different file output.
+
+### 64. [MultiMap.cpp] Missing forEach, keys, values, entries accessors
+- **JS Source**: `src/js/MultiMap.js` lines 1–34
+- **Status**: Pending
+- **Details**: JS `MultiMap` extends `Map` and inherits `forEach`, `keys`, `values`, `entries` accessors. The C++ `MultiMap` class does not expose these — callers needing to iterate all entries or keys will have no API to do so.
+
+### 65. [constants.h] VERSION hardcoded instead of read from manifest
+- **JS Source**: `src/js/constants.js` line 46
+- **Status**: Pending
+- **Details**: JS reads VERSION dynamically from `nw.App.manifest.version`. C++ hardcodes `"0.1.0"`. Version won't update automatically with builds.
+
+### 66. [generics.cpp] get() hardcodes [200] in log instead of actual HTTP status
+- **JS Source**: `src/js/generics.js` line 44
+- **Status**: Pending
+- **Details**: C++ always logs `[200]` for successful HTTP responses instead of the actual HTTP status code. Misleading for 301/302 redirects or other success codes.
+
+### 67. [generics.cpp] batchWork() processes synchronously without yielding
+- **JS Source**: `src/js/generics.js` lines 420–469
+- **Status**: Pending
+- **Details**: JS `batchWork()` uses `MessageChannel` port messaging to yield between batches, allowing the event loop to process other work. C++ processes everything in a tight synchronous loop, blocking the main thread and preventing UI updates during large batch operations.
+
+### 68. [blp.cpp] Missing toCanvas() method
+- **JS Source**: `src/js/casc/blp.js` lines ~91–107
+- **Status**: Pending
+- **Details**: JS `toCanvas()` creates an HTML Canvas element and draws decoded BLP pixel data to it. This is a browser-specific API. The C++ equivalent (creating an OpenGL texture or returning raw pixels for ImGui) needs to be implemented or documented as a deviation.
+
+### 69. [blp.cpp] Missing drawToCanvas() method
+- **JS Source**: `src/js/casc/blp.js` lines ~144–160
+- **Status**: Pending
+- **Details**: JS `drawToCanvas()` draws BLP data onto an existing canvas at specified coordinates. The C++ port needs an equivalent for compositing BLP textures, or this should be documented as a deviation.
+
+### 70. [blp.cpp] getDataURL() uses different encoding path than JS
+- **JS Source**: `src/js/casc/blp.js` line ~83–88
+- **Status**: Pending
+- **Details**: JS uses `canvas.toDataURL()` which produces a PNG data URL via the browser's Canvas API. C++ uses a different PNG encoding path. While functionally similar, there could be subtle differences in the output.
+
+### 71. [blp.cpp] _getCompressed boundary check differs from JS
+- **JS Source**: `src/js/casc/blp.js` line ~173
+- **Status**: Pending
+- **Details**: C++ uses `>=` for boundary check instead of JS's `===`. This could accept values that JS would reject, or reject values JS would accept, depending on the check direction.
+
+### 72. [blte-reader.cpp] _decompressBlock missing 3rd argument to readBuffer()
+- **JS Source**: `src/js/casc/blte-reader.js` line 196
+- **Status**: Pending
+- **Details**: JS passes 3 arguments `readBuffer(length, true, true)` where the 3rd `true` means `noVerify`. C++ only passes 2 arguments `readBuffer(length, true)`. This may cause unwanted hash verification on decompressed data.
+
+### 73. [blte-reader.cpp] Missing decodeAudio() method
+- **JS Source**: `src/js/casc/blte-reader.js` lines 236–239
+- **Status**: Pending
+- **Details**: JS `decodeAudio(context)` calls `processAllBlocks()` then delegates to `super.decodeAudio(context)`. This method is completely missing from the C++ port.
+
+### 74. [blte-reader.cpp] getDataURL() missing dataURL cache
+- **JS Source**: `src/js/casc/blte-reader.js` lines 244–251
+- **Status**: Pending
+- **Details**: JS checks `if (!this.dataURL)` before processing and caches the result. C++ always reprocesses, which is wasteful for repeated calls.
+
+### 75. [icon-render.cpp] Extra getIconTexture() function not in JS source
+- **JS Source**: N/A
+- **Status**: Pending
+- **Details**: C++ has a `getIconTexture()` function (lines ~271–276) that does not exist in the original JS source. This appears to be a C++-specific addition and should be documented as a deviation.
+
+## Audit Coverage Notes (2026-04-12)
+
+The following file groups were partially or not fully audited at the line-by-line level and need follow-up audits:
+
+### 76. [casc-source.cpp, casc-source-local.cpp, casc-source-remote.cpp] CASC source files need deeper audit
+- **JS Source**: `src/js/casc/casc-source.js`, `casc-source-local.js`, `casc-source-remote.js`
+- **Status**: Pending
+- **Details**: These files were previously audited at a high level (entries 7–10) but need a complete line-by-line comparison of all methods including: `getFile`, `getFileByName`, `load`, `parseEncodingFile`, `parseRootFile`, `getInstallManifest`, `prepareListfile`, and all error handling paths.
+
+### 77. [blte-stream-reader.cpp, build-cache.cpp, cdn-config.cpp, cdn-resolver.cpp] Remaining CASC utility files need audit
+- **JS Source**: Corresponding `.js` files in `src/js/casc/`
+- **Status**: Pending
+- **Details**: These files were not compared at the line-by-line level. Each needs a detailed function-by-function comparison against the JS original to verify all code paths are correctly converted.
+
+### 78. [listfile.cpp, export-helper.cpp] CASC data files need audit
+- **JS Source**: `src/js/casc/listfile.js`, `src/js/casc/export-helper.js`
+- **Status**: Pending
+- **Details**: These are complex files (listfile.js is 26KB) that need detailed comparison. Listfile handles file name resolution, filtering, and searching. Export-helper handles file export with directory creation and progress tracking.
+
+### 79. [db/WDCReader.cpp] WDCReader needs detailed audit — highest complexity risk
+- **JS Source**: `src/js/db/WDCReader.js` (31KB)
+- **Status**: Pending
+- **Details**: This is the most complex DB reader file, handling WDC1/WDC2/WDC3 formats with bitpacked field decompression, pallet data, common data, copy tables, and relationship mapping. High risk for conversion errors due to complexity.
+
+### 80. [db/DBCReader.cpp] DBCReader needs detailed audit
+- **JS Source**: `src/js/db/DBCReader.js` (11KB)
+- **Status**: Pending
+- **Details**: Complex parsing with locale count logic, `loadSchema()` with DBD manifest lookup and fallback URLs, `_read_record()` with locstring handling. Needs line-by-line comparison.
+
+### 81. [db/DBDParser.cpp] DBDParser needs detailed audit
+- **JS Source**: `src/js/db/DBDParser.js` (8KB)
+- **Status**: Pending
+- **Details**: Contains 7 regex patterns, `parseBuildID()`, `isBuildInRange()`, `DBDField` class with specific defaults, and `isValidFor()` method. Needs verification that all regex patterns and default values match JS.
+
+### 82. [db/caches/*.cpp] All DB cache files need line-by-line audit
+- **JS Source**: `src/js/db/caches/*.js` (17 files)
+- **Status**: Pending
+- **Details**: Files DBComponentModelFileData, DBComponentTextureFileData, DBCreatureList, DBCreatures, DBCreaturesLegacy, DBDecor, DBGuildTabard, DBItemCharTextures, DBItemGeosets, DBItemModels, DBNpcEquipment need detailed comparison. Each follows a pattern of loading DB2 tables and building lookup maps — need to verify field names, query logic, and initialization patterns.
+
+### 83. [components/*.cpp] All component files need line-by-line audit
+- **JS Source**: `src/js/components/*.js` (17 files)
+- **Status**: Pending
+- **Details**: Component files checkboxlist, combobox, context-menu, data-table, file-field, home-showcase, itemlistbox, listbox, listbox-maps, listbox-zones, listboxb, map-viewer, markdown-content, menu-button, model-viewer-gl, resize-layer, slider need detailed comparison. These are Vue components converted to ImGui — need to verify all event handlers, computed properties, watchers, and template rendering are correctly ported.
+
+### 84. [modules/*.cpp] All module/tab files need line-by-line audit
+- **JS Source**: `src/js/modules/*.js` (27 files)
+- **Status**: Pending
+- **Details**: All module and tab files need detailed comparison: font_helpers, screen_settings, screen_source_select, tab_audio, tab_blender, tab_changelog, tab_characters, tab_creatures, tab_data, tab_decor, tab_fonts, tab_help, tab_home, tab_install, tab_item_sets, tab_items, tab_maps, tab_models, tab_models_legacy, tab_raw, tab_text, tab_textures, tab_videos, tab_zones, legacy_tab_audio, legacy_tab_data, legacy_tab_files, legacy_tab_fonts, legacy_tab_home, legacy_tab_textures, module_test_a, module_test_b.
+
+### 85. [3D/**/*.cpp] All 3D system files need line-by-line audit
+- **JS Source**: `src/js/3D/**/*.js` (51 files)
+- **Status**: Pending
+- **Details**: All 3D files need detailed comparison. This includes: AnimMapper, BoneMapper, GeosetMapper, ShaderMapper, Shaders, Skin, Texture, WMOShaderMapper, camera/* (2), exporters/* (7), gl/* (5), loaders/* (13), renderers/* (9), writers/* (8). These contain complex 3D math, OpenGL rendering, model loading, and file export logic — high risk for conversion errors.
+
+### 86. [mpq/*.cpp] All MPQ files need line-by-line audit
+- **JS Source**: `src/js/mpq/*.js` (7 files)
+- **Status**: Pending
+- **Details**: MPQ files bitstream, build-version, bzip2, huffman, mpq-install, mpq, pkware need detailed comparison. These implement MPQ archive reading with multiple compression algorithms — critical for legacy WoW client support.
+
+### 87. [ui/*.cpp] UI helper files need deeper audit
+- **JS Source**: `src/js/ui/*.js` (9 files)
+- **Status**: Pending
+- **Details**: Files audio-helper, char-texture-overlay, character-appearance, data-exporter, listbox-context, model-viewer-utils need detailed comparison (texture-exporter, texture-ribbon, and uv-drawer already have entries 19–21). These handle UI logic for audio playback, character customization, data export, and model viewing.
