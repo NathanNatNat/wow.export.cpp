@@ -59,8 +59,9 @@ static void doSave() {
 		file << out;
 		file.close();
 	} else {
+		int err = errno; // capture immediately before any other calls
 		logging::write("Failed to save user config to: " + constants::CONFIG::USER_PATH()
-			+ " (" + std::string(std::strerror(errno)) + ")");
+			+ " (" + std::string(std::strerror(err)) + ")");
 	}
 
 	// If another save was attempted during this one, re-save.
