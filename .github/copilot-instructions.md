@@ -9,6 +9,7 @@
 - The C++ Version should be 100% visually identical to the original JavaScript app. Use the same colors, fonts, layout, and styling as defined in app.css and the reference screenshots in UI_REFERENCE.md.
 - User-facing text (window title, crash screen, logs, context menus) should say **wow.export.cpp**, not wow.export.
 - The `src/` directory currently contains **190** `.cpp` files in total.
+- The **original JS source files** (**192** in total) are included in the repo under `src/js/` (and `src/installer/`), sitting alongside the C++ files. Always read these local JS files as the authoritative reference when converting or verifying C++ code.
 
 ## Platform & Toolchain
 - Platforms: Windows x64 and Linux x64 ONLY. No macOS.
@@ -37,7 +38,8 @@ All dependencies should be git submodules integrated via CMake where possible.
 | Threading | std::jthread, std::async (standard library — no external dependency) |
 
 ## Reference Sources
-- The **original JavaScript/NW.js source code** (wow.export) is at **https://github.com/Kruithne/wow.export** - always refer to it when making changes or reviewing code to ensure fidelity with the original application.
+- The **original JavaScript/NW.js source code** (wow.export) is included **directly in this repository** under `src/js/` (and `src/installer/`). These are the authoritative JS source files — always refer to them locally when making changes or reviewing code to ensure fidelity with the original application. The upstream repo is at **https://github.com/Kruithne/wow.export** for historical reference.
+- When converting or verifying a C++ file, **open the corresponding JS file from `src/js/`** (e.g., for `src/casc/casc-source-remote.cpp`, refer to `src/js/casc/casc-source-remote.js`). Use `get_file` to read the local JS source — do not rely solely on external URLs.
 - This C++ port (wow.export.cpp) is at **https://github.com/NathanNatNat/wow.export.cpp**.
 - **Reference screenshots** of the original app are in [`UI_REFERENCE.md`](../UI_REFERENCE.md) — always compare against these screenshots when making UI changes to ensure visual fidelity.
 
