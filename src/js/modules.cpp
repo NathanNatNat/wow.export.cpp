@@ -71,20 +71,9 @@ static constexpr bool IS_BUNDLED = true;
 static constexpr bool IS_BUNDLED = false;
 #endif
 
-// --- Internal functions ---
-
-// The JS component registry (COMPONENT_PATH_MAP, component_cache, EXCLUDE_FROM_RELOAD)
-// and hot-reload proxy are not needed since C++ uses static linking.
-
-// Not needed in C++: components are included via headers at compile time.
-
-// Not needed in C++.
-
 // components that should not be reloaded. in an ideal world we would support hot-reloading
 // these but it was too much effort at the time, so c'est la vie
-// Not needed in C++.
 
-// Not needed in C++: component access is direct via #include and namespace calls.
 
 static void update_nav_buttons() {
 	const auto& order = constants::NAV_BUTTON_ORDER;

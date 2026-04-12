@@ -653,7 +653,7 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 				drawList->AddRectFilled(
 					ImVec2(screenX, screenY),
 					ImVec2(screenX + static_cast<float>(tileSize), screenY + static_cast<float>(tileSize)),
-					(app::theme::FONT_ALT_HIGHLIGHT_U32 & 0x00FFFFFFu) | 0x80000000u); // --font-alt-highlight at 50% alpha
+					(app::theme::FONT_ALT_HIGHLIGHT_U32 & 0x00FFFFFFu) | 0x80000000u);
 			}
 
 			// Draw box selection preview highlight
@@ -662,14 +662,14 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 				drawList->AddRectFilled(
 					ImVec2(screenX, screenY),
 					ImVec2(screenX + static_cast<float>(tileSize), screenY + static_cast<float>(tileSize)),
-					(app::theme::FONT_ALT_U32 & 0x00FFFFFFu) | 0x80000000u); // --font-alt at 50% alpha
+					(app::theme::FONT_ALT_U32 & 0x00FFFFFFu) | 0x80000000u);
 			} else if (!state.isBoxSelectMode && state.hoverTile == index) {
 				// Draw the hover overlay only when not in box select mode
 				// overlayCtx.fillStyle = 'rgba(87, 175, 226, 0.5)';
 				drawList->AddRectFilled(
 					ImVec2(screenX, screenY),
 					ImVec2(screenX + static_cast<float>(tileSize), screenY + static_cast<float>(tileSize)),
-					(app::theme::FONT_ALT_U32 & 0x00FFFFFFu) | 0x80000000u); // --font-alt at 50% alpha
+					(app::theme::FONT_ALT_U32 & 0x00FFFFFFu) | 0x80000000u);
 			}
 		}
 	}

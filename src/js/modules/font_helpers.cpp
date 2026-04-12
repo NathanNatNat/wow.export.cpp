@@ -28,8 +28,6 @@ const std::vector<GlyphRange> GLYPH_RANGES = {
 // --- Internal state ---
 
 
-// Not needed in C++: ImGui glyph detection doesn't use pixel-based comparison.
-
 bool check_glyph_support(void* font, uint32_t codepoint) {
 	auto* im_font = static_cast<ImFont*>(font);
 	if (!im_font)

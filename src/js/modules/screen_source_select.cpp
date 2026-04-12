@@ -804,7 +804,7 @@ void render() {
 
 			// Link or CDN region line
 			if (card.has_link || card.card_id == 1) {
-				h += 5.0f; // margin-top
+				h += 5.0f;
 				h += link_size;
 			}
 
