@@ -792,8 +792,8 @@ The following entries document code changes that were made by a previous agent s
 
 ### 147. [subtitles.cpp] get_subtitles_vtt() signature differs from JS — caller must load CASC file
 - **JS Source**: `src/js/subtitles.js`, `get_subtitles_vtt()` function
-- **Status**: Pending — Intentional Deviation
-- **Details**: JS `get_subtitles_vtt(casc, file_data_id, format)` is async and loads the file from CASC internally. C++ `get_subtitles_vtt(text, format)` takes pre-loaded text, requiring the caller to load the CASC file first. This is documented in the header comment and is an intentional separation of concerns. However, callers must replicate the CASC file loading + UTF-8 decoding that the JS version does internally. Verify all call sites pass correctly decoded text.
+- **Status**: Resolved (Intentional Deviation)
+- **Details**: JS `get_subtitles_vtt(casc, file_data_id, format)` is async and loads the file from CASC internally. C++ `get_subtitles_vtt(text, format)` takes pre-loaded text, requiring the caller to load the CASC file first. This is documented in the header comment and is an intentional separation of concerns. Callers must replicate the CASC file loading + UTF-8 decoding that the JS version does internally. Verified: call sites pass correctly decoded text.
 
 ### 148. [Skin.cpp] load() calls getVirtualFileByID instead of getFile
 - **JS Source**: `src/js/3D/Skin.js`, `load()` method
