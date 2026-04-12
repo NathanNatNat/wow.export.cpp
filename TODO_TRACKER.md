@@ -265,3 +265,410 @@
 - **JS Source**: `src/updater/updater.js` lines 87–197
 - **Status**: Pending
 - **Details**: The JS main IIFE (immediately invoked async function) orchestrates the full update process: (1) parses the parent PID from `process.argv` (line 93), (2) waits for the parent process to terminate by polling `process.kill(pid, 0)` with 500ms delays (lines 95–110), (3) sends an auxiliary OS-specific termination command — `taskkill /f /im wow.export.exe` on Windows, `pkill -f wow.export` on Linux/macOS (lines 117–129), (4) determines the install and update directories relative to the executable path (lines 131–132), (5) iterates all files in the `.update` directory and copies each to the install directory, with file-lock retry logic up to `MAX_LOCK_TRIES` with 1-second delays (lines 137–166), (6) creates parent directories as needed via `fsp.mkdir(…, { recursive: true })` (line 159), (7) re-launches the main application binary — `wow.export.exe` on Windows, `wow.export` on Linux — as a detached child process (lines 171–181), (8) deletes the `.update` directory after completion (line 184), and (9) in the `finally` block, writes all accumulated log lines to a timestamped log file in `./logs/` (lines 188–193) and calls `process.exit()`. No C++ equivalent exists. The C++ version should be a separate executable with its own `main()`, using `std::filesystem` for file operations, platform APIs for process management, and the naming convention `wow.export.cpp` / `wow.export.cpp.exe` for user-facing binary names and termination commands.
+
+## src/js/ Top-Level Audit
+
+### 53. [blob.cpp] stringEncode() missing full UTF-8 encoding logic
+- **JS Source**: `src/js/blob.js` lines 42–95
+- **Status**: Pending
+- **Details**: The C++ `stringEncode()` (lines 57–61) is a trivial byte copy that assumes the input is already UTF-8. The JS version performs full UTF-8 encoding from a UTF-16 JavaScript string, handling surrogate pairs (0xD800–0xDBFF), multi-byte UTF-8 sequences (2/3/4-byte), dynamic buffer resizing, and skipping lone surrogates. The entire encoding logic from JS lines 42–95 is absent.
+
+### 54. [blob.cpp] stringDecode() missing full UTF-8 decoding logic
+- **JS Source**: `src/js/blob.js` lines 97–167
+- **Status**: Pending
+- **Details**: The C++ `stringDecode()` (lines 63–65) is a trivial byte reinterpretation. The JS version performs full UTF-8 decoding with multi-byte sequence detection (1–4 bytes), validation of continuation bytes (0xC0 mask checks), surrogate pair generation for code points > 0xFFFF, replacement character (0xFFFD) for invalid sequences, and batched String.fromCharCode conversion. The entire 70-line UTF-8 decoder from the JS is omitted.
+
+### 55. [blob.cpp] Missing textEncode/textDecode conditional selection
+- **JS Source**: `src/js/blob.js` lines 169–173
+- **Status**: Pending
+- **Details**: The JS `textEncode` and `textDecode` constants conditionally select between native TextEncoder/TextDecoder and the polyfill stringEncode/stringDecode functions. This conditional selection is not ported. The C++ directly uses its simplified stringEncode/stringDecode. While reasonable for C++ (no TextEncoder API), it should be documented since the original polyfill functions contained significant UTF-8 logic.
+
+### 56. [blob.cpp] Missing bufferClone() function
+- **JS Source**: `src/js/blob.js` lines 175–182
+- **Status**: Pending
+- **Details**: The JS `bufferClone()` function creates a byte-by-byte copy of an ArrayBuffer. While C++ vector copies serve the same purpose via BlobPart constructors, the function itself and its specific cloning logic for DataView and ArrayBuffer inputs (used in the BlobPolyfill constructor at lines 235–236) is replaced by implicit vector copying without an explicit equivalent function.
+
+### 57. [blob.cpp] stream() method has sync/eager semantics instead of async/lazy
+- **JS Source**: `src/js/blob.js` lines 271–288
+- **Status**: Pending
+- **Details**: The JS version returns a ReadableStream object with an async `pull()` method that uses `arrayBuffer()` (which returns a Promise). The stream is pull-based and lazy — the consumer controls the pace. The C++ version (lines 161–170) uses a synchronous callback that iterates all chunks eagerly in a blocking while loop. While both deliver the same data in 512KB chunks, the async/lazy vs sync/eager execution model differs.
+
+### 58. [blob.cpp] URLPolyfill missing fallback path and revokeObjectURL is a no-op
+- **JS Source**: `src/js/blob.js` lines 293–307
+- **Status**: Pending
+- **Details**: The JS `URLPolyfill.createObjectURL()` (lines 294–299) has a fallback path: if the blob is NOT an instance of BlobPolyfill, it falls back to the native `URL.createObjectURL(blob)`. The C++ version (lines 186–188) only accepts `const BlobPolyfill&` and has no fallback. The JS `revokeObjectURL()` (lines 302–306) calls `URL.revokeObjectURL(url)` for non-data URLs; the C++ version (lines 194–198) is a complete no-op, meaning non-data URLs would leak.
+
+### 59. [buffer.cpp] Missing fromCanvas() static method
+- **JS Source**: `src/js/buffer.js` lines 89–107
+- **Status**: Pending
+- **Details**: The static `fromCanvas()` method is completely missing from the C++ port. This async method converts an HTMLCanvasElement or OffscreenCanvas to a BufferWrapper, with special handling for lossless WebP encoding (using webp-wasm) when quality=100, and standard browser blob conversion for other formats.
+
+### 60. [buffer.cpp] Missing decodeAudio() method
+- **JS Source**: `src/js/buffer.js` lines 981–983
+- **Status**: Pending
+- **Details**: The `decodeAudio()` method is completely missing. The JS method decodes the buffer's ArrayBuffer using Web Audio API AudioContext.decodeAudioData(). Not ported and not declared in buffer.h.
+
+### 61. [buffer.cpp] readString() drops encoding parameter
+- **JS Source**: `src/js/buffer.js` lines 551–561
+- **Status**: Pending
+- **Details**: The JS `readString()` accepts an optional `encoding` parameter (default 'utf8') that is passed to `Buffer.toString(encoding, ...)`. The C++ version drops the encoding parameter entirely. All string reads are effectively raw byte copies. If callers pass a non-utf8 encoding (e.g., 'ascii', 'latin1', 'hex'), the C++ behavior will silently differ. The encoding parameter is also missing from readNullTerminatedString, startsWith, readJSON, and readLines.
+
+### 62. [buffer.cpp] getDataURL() produces data: URLs instead of blob: URLs
+- **JS Source**: `src/js/buffer.js` lines 989–995
+- **Status**: Pending
+- **Details**: The JS creates a Blob from `this.internalArrayBuffer` and uses `URL.createObjectURL(blob)` to produce a `blob:` URL. The C++ produces a `data:` URL with inline base64 encoding. The format is completely different (`blob:...` vs `data:application/octet-stream;base64,...`). For large buffers the data URL will be very large, and any code checking URL format/prefix will break.
+
+### 63. [buffer.cpp] revokeDataURL() does not match JS blob URL lifecycle
+- **JS Source**: `src/js/buffer.js` lines 1000–1005
+- **Status**: Pending
+- **Details**: The JS calls `URL.revokeObjectURL()` to free the blob URL resource, then sets `this.dataURL = undefined`. Since C++ getDataURL() creates data: URLs (not blob: URLs), revoking is a no-op, representing a behavioral change from the JS blob URL lifecycle management.
+
+### 64. [buffer.cpp] writeBuffer() JS bug not replicated — C++ throws instead of silently discarding Error
+- **JS Source**: `src/js/buffer.js` lines 899–928
+- **Status**: Pending
+- **Details**: In the raw Buffer branch (lines 913–918), the JS has a bug: `new Error(...)` without `throw` (line 917). The C++ span-based overload correctly throws via `throw std::runtime_error(...)`. While arguably an improvement, it changes behavior: the JS silently creates (and discards) an Error object, while C++ throws an exception. Code relying on the JS non-throwing behavior would break.
+
+### 65. [buffer.cpp] alloc() always zero-initializes regardless of secure parameter
+- **JS Source**: `src/js/buffer.js` lines 54–56
+- **Status**: Pending
+- **Details**: JS uses `Buffer.alloc(length)` for secure (zeroed) and `Buffer.allocUnsafe(length)` for non-secure (uninitialized). The C++ always creates a zero-initialized vector via `std::vector<uint8_t>(length)` regardless of the `secure` parameter. This is a performance difference — JS `allocUnsafe` intentionally avoids zeroing for speed.
+
+### 66. [buffer.cpp] calculateHash() only supports md5 and sha1
+- **JS Source**: `src/js/buffer.js` lines 1036–1038
+- **Status**: Pending
+- **Details**: The JS uses Node's crypto module which supports all hash algorithms (md5, sha1, sha256, sha384, sha512, etc.) and all encodings. The C++ only supports 'md5' and 'sha1' hash algorithms and only 'hex' and 'base64' encodings, throwing for anything else. This limitation is not documented.
+
+### 67. [buffer.cpp] unmapSource() uses _buf.size() which may be incorrect after setCapacity()
+- **JS Source**: `src/js/buffer.js` lines 123–127, 1065
+- **Status**: Pending
+- **Details**: The JS `fromMmap()` stores the mmap object itself which has an `unmap()` method. The C++ `fromMmap()` copies mapped data into a vector and stores the raw void pointer. The C++ `unmapSource()` uses `_buf.size()` as the mapping size for `munmap()`, which will be incorrect if `setCapacity()` was ever called after `fromMmap()`, potentially causing undefined behavior.
+
+### 68. [buffer.cpp] readBuffer() API split differs from JS
+- **JS Source**: `src/js/buffer.js` lines 531–543
+- **Status**: Pending
+- **Details**: The JS `readBuffer()` has a `wrap` parameter controlling whether the result is a BufferWrapper (wrap=true) or raw Buffer (wrap=false). The C++ splits this into two separate methods: `readBuffer()` (returns BufferWrapper) and `readBufferRaw()` (returns vector). Any JS caller using `readBuffer(length, false)` must be changed to `readBufferRaw(length)`.
+
+### 69. [buffer.h] BufferWrapper has virtual methods not present in JS
+- **JS Source**: `src/js/buffer.js` lines 47–1128
+- **Status**: Pending
+- **Details**: The C++ BufferWrapper declares `virtual ~BufferWrapper()` and `virtual void _checkBounds()`. The JS BufferWrapper class has no virtual methods or inheritance. Making _checkBounds virtual and the destructor virtual adds vtable overhead. The header says "Virtual so that BLTEReader can override to lazily decompress blocks" — this is C++-specific design with no equivalent in the JS source.
+
+### 70. [config.cpp] save() is synchronous instead of deferred
+- **JS Source**: `src/js/config.js` lines 83–91
+- **Status**: Pending
+- **Details**: `save()` calls `doSave()` synchronously, but JS uses `setImmediate(doSave)` which defers execution to the next event loop tick. This changes timing behavior — the C++ version blocks the caller with synchronous file I/O, while JS defers it to prevent blocking UI rendering.
+
+### 71. [config.cpp] Toast message says "wow.export" instead of "wow.export.cpp"
+- **JS Source**: `src/js/config.js` line 46
+- **Status**: Pending
+- **Details**: Toast message reads `"Restart wow.export using \"Run as Administrator\"."` Per project naming conventions, user-facing text should say `"wow.export.cpp"` not `"wow.export"`.
+
+### 72. [config.cpp] doSave() is synchronous instead of async
+- **JS Source**: `src/js/config.js` lines 96–116
+- **Status**: Pending
+- **Details**: `doSave()` in JS is `async` — it uses `await fsp.writeFile(...)` for non-blocking file I/O. The C++ performs synchronous `std::ofstream` writes. This may block the UI thread if called from the main thread.
+
+### 73. [config.cpp] Missing Vue $watch for auto-save on config changes
+- **JS Source**: `src/js/config.js` line 60
+- **Status**: Pending
+- **Details**: JS sets up `core.view.$watch('config', () => save(), { deep: true })` to auto-save on any config change. The C++ has a comment saying this is replaced by explicit `save()` calls from the UI layer. Config changes made programmatically (not through UI) will NOT auto-persist, which is a functional deviation.
+
+### 74. [constants.cpp] DATA_PATH uses install-relative path instead of OS user-data directory
+- **JS Source**: `src/js/constants.js` line 16
+- **Status**: Pending
+- **Details**: `DATA_PATH` in JS is `nw.App.dataPath` — an OS-specific user-data directory (e.g., `%LOCALAPPDATA%` on Windows, `~/.config` on Linux). C++ uses `s_install_path / "data"` (a subdirectory of the install path). This affects portability and multi-user scenarios.
+
+### 75. [constants.cpp] RUNTIME_LOG in different directory than JS
+- **JS Source**: `src/js/constants.js` line 38
+- **Status**: Pending
+- **Details**: `RUNTIME_LOG` in JS is `path.join(DATA_PATH, 'runtime.log')`. C++ is `s_log_dir / "runtime.log"` where `s_log_dir = s_install_path / "Logs"` — a separate `Logs/` directory that doesn't exist in JS. The log file ends up in a completely different location.
+
+### 76. [constants.cpp] SHADER_PATH uses different subdirectory structure
+- **JS Source**: `src/js/constants.js` line 43
+- **Status**: Pending
+- **Details**: `SHADER_PATH` in JS is `path.join(INSTALL_PATH, 'src', 'shaders')`. C++ is `s_data_dir / "shaders"` (i.e. `<install>/data/shaders`). Different subdirectory structure.
+
+### 77. [constants.cpp] CONFIG.DEFAULT_PATH uses different subdirectory
+- **JS Source**: `src/js/constants.js` line 95
+- **Status**: Pending
+- **Details**: `CONFIG.DEFAULT_PATH` in JS is `path.join(INSTALL_PATH, 'src', 'default_config.jsonc')`. C++ is `s_data_dir / "default_config.jsonc"` (i.e. `<install>/data/default_config.jsonc`).
+
+### 78. [constants.cpp] CACHE.DIR renamed from "casc" to "cache"
+- **JS Source**: `src/js/constants.js` line 72
+- **Status**: Pending
+- **Details**: `CACHE.DIR` in JS is `path.join(DATA_PATH, 'casc')`. C++ renames it to `s_data_dir / "cache"` with a migration from legacy `casc/`. This changes the cache directory name, which could break any external tools referencing the `casc` directory.
+
+### 79. [constants.cpp] init() contains legacy directory migration logic not in JS
+- **JS Source**: `src/js/constants.js` lines 97–103
+- **Status**: Pending
+- **Details**: C++ `init()` contains legacy directory migration logic (renaming `config/` → `persistence/` → `data/`, and `casc/` → `cache/`) that does not exist in the JS source at all. This is entirely new functionality not present in the original application.
+
+### 80. [constants.h] VERSION is hardcoded instead of read from manifest
+- **JS Source**: `src/js/constants.js` line 46
+- **Status**: Pending
+- **Details**: `VERSION` is hardcoded as `"0.1.0"` in C++. JS reads it dynamically from `nw.App.manifest.version`. There is no mechanism to keep the C++ version string in sync with build/release processes.
+
+### 81. [constants.h] getBlenderBaseDir() missing macOS case without documentation
+- **JS Source**: `src/js/constants.js` lines 20–33
+- **Status**: Pending
+- **Details**: `getBlenderBaseDir()` in JS handles three platforms: `win32`, `darwin` (macOS), and `linux`/default. The C++ only handles `_WIN32` and else (Linux). The macOS case is intentionally skipped per project scope, but there is no code comment in the .cpp file documenting this omission.
+
+### 82. [core.cpp] Toast TTL auto-dismiss is non-functional
+- **JS Source**: `src/js/core.js` lines 470–479
+- **Status**: Pending
+- **Details**: `setToast()` in JS stores the timer ID from `setTimeout(hideToast, ttl)` in `toastTimer`, and `clearTimeout(toastTimer)` cancels pending auto-dismiss. In C++, `setToast()` stores `toastExpiry` as a time point, but there is NO polling mechanism to check if `toastExpiry` has passed and call `hideToast()`. The `toastTimer` and `toastExpiry` static variables are only accessible within `core.cpp`. Toasts with a TTL will never auto-dismiss.
+
+### 83. [core.cpp] hideToast() timer cancellation is a no-op
+- **JS Source**: `src/js/core.js` lines 449–460
+- **Status**: Pending
+- **Details**: `hideToast()` in JS calls `clearTimeout(toastTimer)` to cancel the pending timeout. C++ only sets `toastTimer = -1` — since there's no actual timer/timeout mechanism, this is a no-op. Combined with entry 82, the entire toast TTL system is non-functional.
+
+### 84. [core.cpp] showLoadingScreen() has one-frame delay due to postToMainThread
+- **JS Source**: `src/js/core.js` lines 413–420
+- **Status**: Pending
+- **Details**: In JS, `showLoadingScreen()` sets state synchronously (same event loop turn). C++ posts state changes to a main-thread queue via `postToMainThread()`, meaning the loading screen won't appear until the next frame when `drainMainThreadQueue()` runs. This introduces a one-frame delay.
+
+### 85. [core.cpp] progressLoadingScreen() lacks forced redraw
+- **JS Source**: `src/js/core.js` lines 426–434
+- **Status**: Pending
+- **Details**: `progressLoadingScreen()` in JS calls `await generics.redraw()` which forces a UI repaint/yield so the progress is visible immediately. The C++ posts via `postToMainThread()` with no equivalent forced redraw. Progress updates may not be visible until the background work completes and the main thread drains the queue.
+
+### 86. [core.cpp] openExportDirectory() uses non-JS openInExplorer() function
+- **JS Source**: `src/js/core.js` line 484–486
+- **Status**: Pending
+- **Details**: JS calls `nw.Shell.openItem(core.view.config.exportDirectory)` directly. C++ calls `openInExplorer()` which is an extra function not present in the JS source. Additionally, the Windows implementation uses `std::wstring wpath(path.begin(), path.end())` which is incorrect for non-ASCII (UTF-8) paths — it copies bytes as if they were UTF-16 code units. Should use `MultiByteToWideChar`.
+
+### 87. [core.h] AppState contains many fields not in JS makeNewView()
+- **JS Source**: `src/js/core.js` lines 30–381
+- **Status**: Pending
+- **Details**: C++ `AppState` contains fields not present in the JS `makeNewView()`: `mpq`, `chrCustRacesPlayable`, `chrCustRacesNPC`, `pendingItemSlotFilter`, `zoneMapTexID`, `zoneMapWidth`, `zoneMapHeight`, `zoneMapPixels`, various texture preview Tex IDs. While most are C++/OpenGL-specific additions, they represent deviations from the JS source.
+
+### 88. [core.h] Missing constants field on AppState
+- **JS Source**: `src/js/core.js` line 44–45
+- **Status**: Pending
+- **Details**: JS `makeNewView()` includes `constants: constants` as a field on the view object, making the constants module available through the view. C++ omits this (accessed via `constants::` namespace), changing how templates/components access constants.
+
+### 89. [core.h] Missing availableLocale field on AppState
+- **JS Source**: `src/js/core.js` line 120
+- **Status**: Pending
+- **Details**: JS `makeNewView()` includes `availableLocale: Locale` as a field on the view. C++ only has a comment saying it's a compile-time constant. Any JS code accessing `view.availableLocale` would not find it on the C++ `AppState`.
+
+### 90. [external-links.cpp] Entire file is unconverted JavaScript
+- **JS Source**: `src/js/external-links.js` lines 1–45
+- **Status**: Pending
+- **Details**: The .cpp file is entirely unconverted — it contains raw JavaScript (`const util = require('util')`, `module.exports`, `nw.Shell.openExternal`, etc.). It is a byte-for-byte copy of the .js file. No header file (external-links.h) exists. Nothing has been ported: the STATIC_LINKS map (5 entries), the WOWHEAD_ITEM constant, and the ExternalLinks class with `open()` and `wowHead_viewItem()` static methods are all still JavaScript.
+
+### 91. [file-writer.cpp] Backpressure/drain mechanism is non-functional
+- **JS Source**: `src/js/file-writer.js` lines 24–33
+- **Status**: Pending
+- **Details**: In JS, if blocked is true, `writeLine()` awaits a promise that is resolved by `_drain()` when the stream's 'drain' event fires. In C++, if blocked is true, `_drain()` is called synchronously (immediately setting blocked=false) and the write proceeds unconditionally. The C++ never actually waits or handles backpressure. The mechanism should either be removed (since std::ofstream doesn't need backpressure) or corrected.
+
+### 92. [file-writer.cpp] blocked flag set on I/O error instead of backpressure
+- **JS Source**: `src/js/file-writer.js` lines 28–32
+- **Status**: Pending
+- **Details**: In JS, `stream.write()` returning false indicates backpressure (normal flow control, not an error). In C++, `stream.fail()` indicates an actual I/O error (disk full, permissions). C++ sets blocked=true on I/O failure and then calls `stream.clear()` which resets error flags but doesn't fix the underlying problem, potentially causing silent data loss.
+
+### 93. [generics.cpp] get() returns raw bytes instead of Response-like object
+- **JS Source**: `src/js/generics.js` lines 22–54
+- **Status**: Pending
+- **Details**: The JS `get()` returns a fetch Response object (with .ok, .status, .statusText, .json(), .text(), etc.). The C++ returns `std::vector<uint8_t>` (raw body bytes only). External callers cannot inspect HTTP status codes or headers. Additionally, in JS, non-ok responses don't throw — they proceed to the next URL. In C++, `doHttpGet()` throws on any non-2xx status, changing control flow.
+
+### 94. [generics.cpp] get() always logs [200] status regardless of actual status
+- **JS Source**: `src/js/generics.js` line 44
+- **Status**: Pending
+- **Details**: The JS logs the real response status: `get -> [${index++}][${res.status}] ${url}` which could be 200, 201, 206, etc. The C++ hardcodes `[200]` regardless of actual status.
+
+### 95. [generics.cpp] getJSON() error message omits HTTP status details
+- **JS Source**: `src/js/generics.js` lines 116–122
+- **Status**: Pending
+- **Details**: JS throws "Unable to request JSON from end-point. HTTP ${res.status} ${res.statusText}". C++ throws only "Unable to request JSON from end-point" without status details.
+
+### 96. [generics.cpp] requestData() missing download progress logging and redirect logging
+- **JS Source**: `src/js/generics.js` lines 145–205
+- **Status**: Pending
+- **Details**: The JS logs "Starting download: N bytes expected" (content-length), "Download progress: X/Y bytes (Z%)" at 25% thresholds, and "Got redirect to " + location for 301/302 redirects. The C++ only logs the initial request and "Download complete" — all intermediate progress and redirect logging is absent.
+
+### 97. [generics.cpp] queue() waits FIFO instead of as-available
+- **JS Source**: `src/js/generics.js` lines 63–83
+- **Status**: Pending
+- **Details**: The JS uses promise-based concurrency where ANY completed task immediately triggers the next one via `check()` callback chained with `.then()`. The C++ always waits on `futures.front().get()` — it only checks the FIRST future, meaning if later tasks complete before earlier ones, the C++ won't start new work until the front finishes. This reduces effective parallelism.
+
+### 98. [generics.cpp] readJSON() EPERM detection only checks owner permission bits
+- **JS Source**: `src/js/generics.js` lines 130–143
+- **Status**: Pending
+- **Details**: The JS checks `e.code === 'EPERM'` which is an OS-level permission error from the effective process access. The C++ checks owner_read permission bits via `std::filesystem::status()`, which misses group/other/ACL/SELinux denials. A file unreadable due to group permissions would incorrectly return `std::nullopt`.
+
+### 99. [generics.cpp] directoryIsWritable() only checks owner_write permission bit
+- **JS Source**: `src/js/generics.js` lines 356–363
+- **Status**: Pending
+- **Details**: The JS uses `fs.constants.W_OK` with `fsp.access()` which checks effective access permissions of the calling process (including group, other, and ACL). The C++ only checks `std::filesystem::perms::owner_write`. A directory writable via group permissions would return true in JS but false in C++.
+
+### 100. [generics.cpp] batchWork() does not yield between batches
+- **JS Source**: `src/js/generics.js` lines 420–469
+- **Status**: Pending
+- **Details**: The JS uses MessageChannel scheduling to yield to the browser event loop between batches, enabling UI updates mid-processing. The C++ runs all batches synchronously in a tight loop with no yielding. The C++ also adds `core::postToMainThread()` calls to update loadingProgress that do not exist in the JS source.
+
+### 101. [generics.cpp] getFileHash() loads entire file into memory instead of streaming
+- **JS Source**: `src/js/generics.js` lines 329–337
+- **Status**: Pending
+- **Details**: JS streams the file using `fs.createReadStream()` and pipes chunks to the hash, which is memory-efficient. C++ loads the entire file via `BufferWrapper::readFile()`, then hashes it. For large WoW game files this could cause excessive memory usage.
+
+### 102. [gpu-info.cpp] exec_cmd() missing 5000ms timeout
+- **JS Source**: `src/js/gpu-info.js` lines 65–74
+- **Status**: Pending
+- **Details**: The JS uses `exec(cmd, { timeout: 5000 }, ...)` which kills the child process after 5 seconds. The C++ popen-based implementation has no timeout mechanism, so a hung command (e.g. nvidia-smi on a misconfigured system) will block indefinitely.
+
+### 103. [gpu-info.cpp] GL capability queries use component counts instead of vector counts
+- **JS Source**: `src/js/gpu-info.js` lines 41–42
+- **Status**: Pending
+- **Details**: JS queries `gl.MAX_VERTEX_UNIFORM_VECTORS` and `gl.MAX_FRAGMENT_UNIFORM_VECTORS` (WebGL vector-based counts). C++ queries `GL_MAX_VERTEX_UNIFORM_COMPONENTS` and `GL_MAX_FRAGMENT_UNIFORM_COMPONENTS` (component-based counts). Components = Vectors × 4, so logged values will be ~4× larger than JS output. OpenGL 4.1+ does define the vector variants for compatibility.
+
+### 104. [gpu-info.cpp] get_gl_info() cannot indicate "GL unavailable" state
+- **JS Source**: `src/js/gpu-info.js` lines 14–58
+- **Status**: Pending
+- **Details**: The JS `get_webgl_info()` can return null (no GL context), `{ error: msg }` (exception), or a full result object. The C++ `get_gl_info()` always returns a populated GLInfo struct — there is no way to distinguish "GL context not available" from "GL context available but no debug info." This merges the "GPU: WebGL unavailable" code path with "GL debug info unavailable."
+
+### 105. [gpu-info.cpp] format_extensions() uses different prefix-stripping logic
+- **JS Source**: `src/js/gpu-info.js` lines 250–303
+- **Status**: Pending
+- **Details**: The JS strips WebGL-specific prefixes (e.g. "WEBGL_compressed_texture_", "WEBGL_", "EXT_"). The C++ strips OpenGL-specific prefixes (e.g. "GL_ARB_", "GL_EXT_", "GL_OES_"). While adapting for OpenGL is reasonable, the stripping structure also differs: JS uses `string.replace()` (replaces first occurrence anywhere) while C++ uses `find() + substr()` (only strips matching prefixes). This could produce different output for certain extension names.
+
+### 106. [gpu-info.cpp] get_macos_gpu_info() entirely omitted
+- **JS Source**: `src/js/gpu-info.js` lines 203–226
+- **Status**: Pending
+- **Details**: The JS contains a full macOS implementation using `system_profiler SPDisplaysDataType`. While the project specifies no macOS support, this represents a deviation from the JS source that should be documented.
+
+### 107. [icon-render.cpp] processQueue() is completely stubbed out
+- **JS Source**: `src/js/icon-render.js` lines 48–65
+- **Status**: Pending
+- **Details**: The function body contains only a comment placeholder ("CASC source and BLP decoder are unconverted") and an empty try/catch. The actual functionality — calling `core.view.casc.getFile(entry.fileDataID)`, constructing a BLPFile, and calling `blp.getDataURL(0b0111)` to create the icon image — is entirely missing. No BLP decoding, no texture creation, no CASC file retrieval occurs.
+
+### 108. [icon-render.cpp] processQueue() changed from async recursive to synchronous loop
+- **JS Source**: `src/js/icon-render.js` lines 48–65
+- **Status**: Pending
+- **Details**: The JS processes one item at a time via promise chaining (`.then/.catch/.finally(() => processQueue())`), returning to the event loop between items. The C++ uses a synchronous while loop that would block the main thread if the BLP loading were implemented.
+
+### 109. [icon-render.cpp] getIconTexture() is an extra function not in JS
+- **JS Source**: `src/js/icon-render.js` (not in original)
+- **Status**: Pending
+- **Details**: `getIconTexture(uint32_t fileDataID)` does not exist in the JS source. While needed for the C++ OpenGL-based rendering approach (replacing CSS background-image), it represents an API addition beyond the original module interface which only exported `{ loadIcon }`.
+
+### 110. [icon-render.cpp] STB_IMAGE_IMPLEMENTATION defined in wrong file
+- **JS Source**: `src/js/icon-render.js` lines 1–109
+- **Status**: Pending
+- **Details**: `STB_IMAGE_IMPLEMENTATION` is `#defined` in icon-render.cpp (line 17). This macro causes stb_image to emit all function definitions. If any other translation unit also defines it before including stb_image.h, it will cause linker errors. This macro should be defined in exactly one dedicated .cpp file, not in a module like icon-render.cpp.
+
+### 111. [log.cpp] write() does not support variadic printf-style formatting
+- **JS Source**: `src/js/log.js` lines 78–95
+- **Status**: Pending
+- **Details**: The JS `write(...parameters)` uses `util.format(...parameters)` to support calls like `write('GPU: %s (%s)', renderer, vendor)`. The C++ `write(std::string_view message)` only accepts a pre-formatted string, requiring all callers to use `std::format()` externally. This changes the API contract.
+
+### 112. [log.cpp] timeEnd() does not support variadic format parameters
+- **JS Source**: `src/js/log.js` lines 64–66
+- **Status**: Pending
+- **Details**: The JS `timeEnd(label, ...params)` constructs `write(label + ' (%dms)', ...params, elapsed)`, allowing callers to pass format arguments. The C++ only takes a label and appends elapsed time. Format specifiers in the label appear as literal text.
+
+### 113. [log.cpp] Bug: line moved before debug output, prints empty string
+- **JS Source**: `src/js/log.js` lines 78–95
+- **Status**: Pending
+- **Details**: When the stream is clogged and `pool.size() < MAX_LOG_POOL`, line is moved via `pool.push_back(std::move(line))` on line 122. After the move, line is in an unspecified (typically empty) state. The subsequent `std::fputs(line.c_str(), stdout)` on line 131 will print an empty string instead of the log message.
+
+### 114. [log.cpp] drainPool() infinite retry on permanently failed stream
+- **JS Source**: `src/js/log.js` lines 32–49
+- **Status**: Pending
+- **Details**: In JS, `pool.shift()` always removes the item before writing — Node.js `stream.write()` returning false means backpressure but the data IS buffered and will be written. In C++, if `stream.fail()` occurs, the item stays in the pool. A permanently failed stream would retry the same item forever.
+
+### 115. [log.cpp] drainPool() missing "schedule another drain" logic
+- **JS Source**: `src/js/log.js` lines 46–48
+- **Status**: Pending
+- **Details**: The JS calls `process.nextTick(drainPool)` after the while loop if `!isClogged && pool.length > 0`, ensuring remaining pooled items are drained even without new write() calls. The C++ only drains when `write()` is called, so if more than MAX_DRAIN_PER_TICK (50) items are pooled and no new writes occur, remaining items stay in the pool indefinitely.
+
+### 116. [log.cpp] timeEnd() uses fixed 64-byte buffer that may truncate
+- **JS Source**: `src/js/log.js` lines 64–66
+- **Status**: Pending
+- **Details**: `timeEnd()` uses a fixed `char buf[64]` for snprintf output. If the label string is longer than ~50 characters, the output will be silently truncated. The JS version has no such length limitation.
+
+### 117. [mmap.cpp] release_virtual_files() does not protect against exceptions from delete
+- **JS Source**: `src/js/mmap.js` lines 30–47
+- **Status**: Pending
+- **Details**: In the C++ release loop, `delete mmap_obj` (line 243) is called inside the loop. If `delete` throws, the remaining objects won't be cleaned up. The JS version calls only `unmap()` and lets GC handle destruction, ensuring all objects in the set are always attempted. The C++ should catch exceptions around `delete` for parity with the JS's "swallows errors" contract.
+
+### 118. [modules.cpp] Missing module_test_a and module_test_b registrations
+- **JS Source**: `src/js/modules.js` lines 27–28
+- **Status**: Pending
+- **Details**: `module_test_a` and `module_test_b` are defined in the JS MODULES object but are completely absent from the C++ `initialize()` function. The corresponding .cpp files exist but no headers exist and they are not registered.
+
+### 119. [modules.cpp] Missing tab_help, tab_blender, tab_changelog module registrations
+- **JS Source**: `src/js/modules.js` lines 48–50
+- **Status**: Pending
+- **Details**: `tab_help`, `tab_blender`, and `tab_changelog` are defined in the JS MODULES object but the C++ `initialize()` function has only placeholder comments saying "has not been created yet. It needs to be ported." The .cpp files exist but no .h headers exist and they are not registered.
+
+### 120. [modules.cpp] wrap_module() does not provide register_context to modules
+- **JS Source**: `src/js/modules.js` lines 208–218
+- **Status**: Pending
+- **Details**: The JS `wrap_module()` provides a `register_context` object with `registerNavButton()` and `registerContextMenuOption()` to each module's `register()` function. `registerNavButton()` captures the label into `display_label` for error messages. The C++ calls `mod.registerModule()` directly without a register_context, so `display_label` is never updated and error messages always show the internal module key instead of the user-facing label.
+
+### 121. [modules.cpp] Module initialize() called synchronously instead of async
+- **JS Source**: `src/js/modules.js` lines 225, 231–232
+- **Status**: Pending
+- **Details**: The JS initialize wrapper is an async function using `await original_initialize.call(this)`. The C++ calls `original_initialize()` synchronously. Since JS module initialize() functions use await, the C++ error handling will not catch errors from asynchronous operations that happen after the initial synchronous return.
+
+### 122. [modules.cpp] _tab_initializing reset not protected by RAII/finally equivalent
+- **JS Source**: `src/js/modules.js` lines 239–241
+- **Status**: Pending
+- **Details**: The JS uses try/catch/finally to ensure `_tab_initializing` is always reset to false. The C++ places `mod._tab_initializing = false` after the catch block but outside any RAII guard. If the catch block throws, `_tab_initializing` won't be reset, causing the module to be permanently stuck in the "initializing" state.
+
+### 123. [modules.cpp] Missing activated() lifecycle hook wrapping
+- **JS Source**: `src/js/modules.js` lines 244–251
+- **Status**: Pending
+- **Details**: The JS `wrap_module()` wraps the module's `activated()` lifecycle hook to retry initialization if not yet initialized. The C++ does not implement any `activated()` equivalent. Instead, `set_active()` calls `initialize()` on every activation, but the JS `activated()` also calls the `original_activated` callback if present, which the C++ does not preserve.
+
+### 124. [modules.cpp] Missing Proxy-based setActive() and reload() on module objects
+- **JS Source**: `src/js/modules.js` lines 254–267
+- **Status**: Pending
+- **Details**: The JS `wrap_module()` returns a Proxy that intercepts property access to provide `__name`, `setActive()`, and `reload()` virtual properties. The C++ ModuleDef struct has no equivalent. Any code calling `module.setActive()` or `module.reload()` on a module object will not work in C++.
+
+### 125. [modules.cpp] register_context_menu_option() does not support dev_only
+- **JS Source**: `src/js/modules.js` lines 162–165, 289–291
+- **Status**: Pending
+- **Details**: The JS `register_static_context_menu_option()` wraps the action in `{ handler: action, dev_only }` and passes it to `register_context_menu_option()`. The C++ internal `register_context_menu_option()` creates a ContextMenuOption without setting dev_only, so options registered through it always have dev_only=false.
+
+### 126. [png-writer.cpp] write() is synchronous instead of async
+- **JS Source**: `src/js/png-writer.js` lines 247–249
+- **Status**: Pending
+- **Details**: The JS `write()` is `async` and returns a promise from `this.getBuffer().writeToFile(file)`. The C++ `write()` is synchronous and returns void. Callers expecting async behavior (error handling via promise rejection, non-blocking I/O) will behave differently.
+
+### 127. [subtitles.cpp] get_subtitles_vtt() signature differs — CASC loading removed
+- **JS Source**: `src/js/subtitles.js` lines 172–187
+- **Status**: Pending
+- **Details**: The JS is an async function taking `(casc, file_data_id, format)` that calls `await casc.getFile(file_data_id)` to load data. The C++ takes `(std::string_view text, SubtitleFormat format)` — CASC file loading is removed entirely and delegated to the caller, significantly changing the function signature and responsibilities.
+
+### 128. [subtitles.h] Internal functions exposed as public API
+- **JS Source**: `src/js/subtitles.js` lines 189–192
+- **Status**: Pending
+- **Details**: The JS exports only `SUBTITLE_FORMAT` and `get_subtitles_vtt`. The C++ header additionally exposes `parse_sbt_timestamp`, `format_srt_timestamp`, `format_vtt_timestamp`, `parse_srt_timestamp`, `sbt_to_srt`, and `srt_to_vtt` as public API. The JS keeps these as module-private. These internal functions could be made file-local to match JS encapsulation.
+
+### 129. [tiled-png-writer.cpp] Tile iteration order differs from JS Map insertion order
+- **JS Source**: `src/js/tiled-png-writer.js` lines 38–46, 52–62
+- **Status**: Pending
+- **Details**: The C++ uses `std::map<std::string, Tile>` (sorted by key) whereas the JS uses `Map` (preserves insertion order). When tiles overlap, alpha blending in `_writeTileToPixelData` means iteration order affects final pixel values. JS iterates in insertion order; C++ iterates in lexicographic key order. For overlapping tiles, this produces different blending results. Should use a container that preserves insertion order.
+
+### 130. [tiled-png-writer.cpp] write() is synchronous instead of async
+- **JS Source**: `src/js/tiled-png-writer.js` lines 123–125
+- **Status**: Pending
+- **Details**: The JS `write()` is `async` and returns the result of `this.getBuffer().writeToFile(file)`. The C++ `write()` returns void. Same issue as entry 126 for png-writer.cpp.
+
+### 131. [updater.cpp] Entire file is unconverted JavaScript
+- **JS Source**: `src/js/updater.js` lines 1–169
+- **Status**: Pending
+- **Details**: The entire .cpp file is still raw JavaScript — it is a verbatim copy of updater.js with zero C++ conversion. All three functions (`checkForUpdates`, `applyUpdate`, `launchUpdater`), the module-level `updateManifest` variable, and the `module.exports` line are unconverted. There is no corresponding .h header file. Every line needs to be ported to C++.
+
+### 132. [wmv.cpp] Entire file is unconverted JavaScript
+- **JS Source**: `src/js/wmv.js` lines 1–177
+- **Status**: Pending
+- **Details**: The entire .cpp file is still raw JavaScript — it is a verbatim copy of wmv.js with zero C++ conversion. All four functions (`wmv_parse`, `wmv_parse_v2`, `wmv_parse_v1`, `extract_race_gender_from_path`), the `race_map` constant, and the `module.exports` line are unconverted. No .h header file exists.
+
+### 133. [wowhead.cpp] Entire file is unconverted JavaScript
+- **JS Source**: `src/js/wowhead.js` lines 1–245
+- **Status**: Pending
+- **Details**: The entire .cpp file is still raw JavaScript — it is a verbatim copy of wowhead.js with zero C++ conversion. All seven functions (`decode`, `decompress_zeros`, `extract_hash_from_url`, `wowhead_parse_hash`, `parse_v15`, `parse_legacy`, `wowhead_parse`), both constants (`charset`, `WOWHEAD_SLOT_TO_SLOT_ID`), and the `module.exports` line are unconverted. No .h header file exists.
