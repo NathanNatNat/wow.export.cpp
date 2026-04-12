@@ -131,3 +131,38 @@
 - **JS Source**: `src/app.js` lines 318–323
 - **Status**: Pending
 - **Details**: The JS `handleContextMenuClick(opt)` checks `opt.action?.handler` (optional chaining — checks if `opt.action` exists and has a `handler` property). The C++ version (lines 1380–1385) checks `opt.handler` directly. This suggests the C++ `ContextMenuOption` struct may have a different shape than the JS object. In JS, the handler is nested under `opt.action.handler`; in C++, it's directly on `opt.handler`. This could cause the handler to not be found or called incorrectly if the data structures diverge.
+
+### 27. [app.cpp] F5 debug reload fires every frame while key is held
+- **JS Source**: `src/app.js` lines 64–69
+- **Status**: Pending
+- **Details**: The JS registers a `window.addEventListener('keyup', ...)` handler that fires exactly once when the F5 key is released. The C++ (lines 2393–2397) polls `glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS` every frame in the main loop. This means holding F5 in the C++ port will call `app::restartApplication()` on every frame for the duration of the key press, rather than triggering a single restart on key release. This should either use a one-shot edge detection (track previous key state) or use a GLFW key callback.
+
+### 28. [app.cpp] Drop handler shows error toast for unrecognized files; JS does nothing on drop
+- **JS Source**: `src/app.js` lines 626–647
+- **Status**: Pending
+- **Details**: In the JS, the `ondrop` handler (line 626–647) checks for a handler and, if found, processes the matching files. If no handler is found, it simply returns false — no error is displayed to the user. The error message "That file cannot be converted." is only shown during the drag-enter phase (line 619), not on drop. The C++ `glfw_drop_callback` (line 1150) calls `core::setToast("error", "That file cannot be converted.", {}, 3000)` when no handler matches, showing an error toast on drop. This is a behavioral deviation — the JS silently ignores unrecognized drops, the C++ shows an error toast.
+
+### 29. [app.cpp] Startup log message missing flavour and build guid fields
+- **JS Source**: `src/app.js` line 569
+- **Status**: Pending
+- **Details**: The JS logs `'wow.export has started v%s %s [%s]'` with three fields: `manifest.version`, `manifest.flavour`, and `manifest.guid`. The C++ (line 2310) logs `"wow.export.cpp has started v{}"` with only `constants::VERSION`. The flavour and build guid fields are entirely missing from the startup diagnostic log line. These fields help identify the build configuration and should be included.
+
+### 30. [app.cpp] Startup log path fields differ from JS (DATA_DIR/LOG_DIR instead of DATA_PATH)
+- **JS Source**: `src/app.js` line 571
+- **Status**: Pending
+- **Details**: The JS logs `'INSTALL_PATH %s DATA_PATH %s'` with two path fields: `constants.INSTALL_PATH` and `constants.DATA_PATH`. The C++ (lines 2315–2318) logs `"INSTALL_PATH {} DATA_DIR {} LOG_DIR {}"` with three different path fields: `constants::INSTALL_PATH()`, `constants::DATA_DIR()`, and `constants::LOG_DIR()`. The field name `DATA_DIR` replaces `DATA_PATH`, and `LOG_DIR` is added as an extra. This could cause confusion when comparing logs between the JS and C++ versions for diagnostics.
+
+### 31. [app.cpp] Dynamic interface scaling uses uniform min(w,h) instead of independent x/y scaling
+- **JS Source**: `src/app.js` lines 519–543
+- **Status**: Pending
+- **Details**: The JS computes `scale_w` and `scale_h` independently and applies them as `transform: scale(${scale_w}, ${scale_h})` — an anisotropic (non-uniform) CSS transform. If the window is 800×900, the result is `scale(0.71, 1.0)` — only the horizontal axis shrinks. The C++ (lines 2416–2427) computes `windowScale = min(scale_w, scale_h)` and applies this single value uniformly via `io.FontGlobalScale`. With the same 800×900 window, both axes would scale to 0.71, making the UI smaller than it should be vertically. This differs from the JS's independent x/y scaling behavior. (Related to entry 24 which covers the FontGlobalScale vs CSS transform difference more broadly, but this specific uniform-vs-independent scaling is a distinct behavioral deviation.)
+
+### 32. [app.cpp] Missing global `data-external` click handler for opening external links
+- **JS Source**: `src/app.js` lines 115–131
+- **Status**: Pending
+- **Details**: The JS registers a document-level `click` event listener that intercepts clicks on any element with a `data-external` attribute and opens the URL via `ExternalLinks.open(...)`. This is a global mechanism used by any UI component that needs to open external links — not just the footer. The C++ port only handles external link clicks explicitly in the footer (lines 607–641), with hardcoded URLs. Any other part of the UI (e.g., crash screen report/Discord buttons, settings links, module-specific links) that would have used `data-external` attributes in the JS will not have working link-opening behavior in C++. A centralized external link system is needed to match the JS architecture.
+
+### 33. [app.cpp] Missing texture override persistent toast bar
+- **JS Source**: `src/app.js` lines 348–351, corresponding HTML template
+- **Status**: Pending
+- **Details**: Similar to the model override toast bar documented in entry 18, the JS app renders a persistent toast bar when `overrideTextureList.length > 0`, showing "Filtering textures for item: {overrideTextureName}" with a "Remove" action. The C++ `renderAppShell()` does not render this texture override toast bar — only the model override bar was mentioned in entry 18, and neither bar is actually rendered in the C++ port. The `removeOverrideTextures()` function exists in C++ (lines 1400–1404) but has no corresponding UI trigger in the app shell.
