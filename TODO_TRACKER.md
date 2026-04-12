@@ -223,3 +223,45 @@
 - **JS Source**: `src/installer/installer.js` line 30
 - **Status**: Pending
 - **Details**: The JS uses `const PLATFORM = process.platform` to detect the runtime platform (`'win32'`, `'linux'`, `'darwin'`), which is then used by `get_install_path()`, `get_executable_name()`, `get_icon_path()`, `create_desktop_shortcut()`, and `extract_data_pak()` for platform-specific logic. No C++ equivalent exists. The C++ version should use preprocessor macros (`_WIN32`, `__linux__`) or `std::filesystem` capabilities to determine the platform at compile time.
+
+## src/updater Audit
+
+### 45. [updater — no .cpp file exists] Entire standalone updater application is unconverted
+- **JS Source**: `src/updater/updater.js` lines 1–197
+- **Status**: Pending
+- **Details**: The `src/updater/` directory contains only `updater.js` — the standalone updater helper application that is spawned by the main app to apply updates after the main process exits. There is no corresponding `.cpp` file anywhere in the repository. The entire standalone updater application needs to be ported to C++. This is a separate executable from the main app, with its own entry point. All functions and code paths described in entries 46–52 below are part of this unconverted file.
+
+### 46. [updater — no .cpp file exists] Missing `get_timestamp()` function
+- **JS Source**: `src/updater/updater.js` lines 21–29
+- **Status**: Pending
+- **Details**: The JS `get_timestamp()` function creates a `Date` object and formats a `HH:MM:SS` timestamp string using `util.format()` with zero-padded hours, minutes, and seconds. No C++ equivalent exists. The C++ version should use `<chrono>` and `std::format` to produce the same formatted timestamp.
+
+### 47. [updater — no .cpp file exists] Missing `log()` function and `log_output` array
+- **JS Source**: `src/updater/updater.js` lines 13, 31–35
+- **Status**: Pending
+- **Details**: The JS defines a module-level `log_output` array (line 13) and a `log(message, ...params)` function (lines 31–35) that: (1) formats a timestamped message using `get_timestamp()` and `util.format()`, (2) pushes it to the `log_output` array for later writing to a log file, and (3) prints it to the console via `console.log()`. No C++ equivalent exists. The C++ version should use `spdlog` and/or `std::vector<std::string>` to collect log lines for the final log file write.
+
+### 48. [updater — no .cpp file exists] Missing `collect_files()` function
+- **JS Source**: `src/updater/updater.js` lines 37–48
+- **Status**: Pending
+- **Details**: The JS `collect_files(dir, out)` recursively walks a directory using `fsp.readdir()` with `withFileTypes: true`, collecting all file paths (non-directories) into the `out` array. No C++ equivalent exists. The C++ version should use `std::filesystem::recursive_directory_iterator` to achieve the same recursive file collection.
+
+### 49. [updater — no .cpp file exists] Missing `delete_directory()` function
+- **JS Source**: `src/updater/updater.js` lines 50–67
+- **Status**: Pending
+- **Details**: The JS `delete_directory(dir)` synchronously checks if a directory exists, iterates its entries, recursively deletes files/symlinks via `fs.unlinkSync()` and subdirectories via recursion, then removes the directory itself with `fs.rmdirSync()`. No C++ equivalent exists. The C++ version should use `std::filesystem::remove_all()` for equivalent behavior.
+
+### 50. [updater — no .cpp file exists] Missing `file_exists()` and `is_file_locked()` helper functions
+- **JS Source**: `src/updater/updater.js` lines 69–85
+- **Status**: Pending
+- **Details**: The JS defines two async helper functions: (1) `file_exists(file)` (lines 69–76) checks if a file exists using `fsp.access(file, fs.constants.F_OK)`, returning true/false; (2) `is_file_locked(file)` (lines 78–85) checks if a file is write-locked using `fsp.access(file, fs.constants.W_OK)`, returning true if locked, false if writable. No C++ equivalents exist. The C++ version should use `std::filesystem::exists()` and platform-specific file locking checks.
+
+### 51. [updater — no .cpp file exists] Missing `MAX_LOCK_TRIES` constant
+- **JS Source**: `src/updater/updater.js` lines 18–19
+- **Status**: Pending
+- **Details**: The JS defines `const MAX_LOCK_TRIES = 30` which limits the number of retry attempts when waiting for a locked file to become writable during the update process. No C++ equivalent exists.
+
+### 52. [updater — no .cpp file exists] Missing main entry point and update orchestration logic
+- **JS Source**: `src/updater/updater.js` lines 87–197
+- **Status**: Pending
+- **Details**: The JS main IIFE (immediately invoked async function) orchestrates the full update process: (1) parses the parent PID from `process.argv` (line 93), (2) waits for the parent process to terminate by polling `process.kill(pid, 0)` with 500ms delays (lines 95–110), (3) sends an auxiliary OS-specific termination command — `taskkill /f /im wow.export.exe` on Windows, `pkill -f wow.export` on Linux/macOS (lines 117–129), (4) determines the install and update directories relative to the executable path (lines 131–132), (5) iterates all files in the `.update` directory and copies each to the install directory, with file-lock retry logic up to `MAX_LOCK_TRIES` with 1-second delays (lines 137–166), (6) creates parent directories as needed via `fsp.mkdir(…, { recursive: true })` (line 159), (7) re-launches the main application binary — `wow.export.exe` on Windows, `wow.export` on Linux — as a detached child process (lines 171–181), (8) deletes the `.update` directory after completion (line 184), and (9) in the `finally` block, writes all accumulated log lines to a timestamped log file in `./logs/` (lines 188–193) and calls `process.exit()`. No C++ equivalent exists. The C++ version should be a separate executable with its own `main()`, using `std::filesystem` for file operations, platform APIs for process management, and the naming convention `wow.export.cpp` / `wow.export.cpp.exe` for user-facing binary names and termination commands.
