@@ -1147,8 +1147,11 @@ return -1;
 // =====================================================================
 
 const std::string& BufferWrapper::getDataURL() {
-if (!dataURL)
-dataURL = "data:application/octet-stream;base64," + toBase64();
+if (!dataURL) {
+// JS: new Blob([this.internalArrayBuffer]) creates a blob with empty type,
+// then URLPolyfill.createObjectURL produces 'data:;base64,...'.
+dataURL = "data:;base64," + toBase64();
+}
 
 return *dataURL;
 }

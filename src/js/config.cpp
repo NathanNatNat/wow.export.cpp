@@ -13,6 +13,8 @@
 #include <fstream>
 #include <filesystem>
 #include <stdexcept>
+#include <cerrno>
+#include <cstring>
 
 namespace config {
 
@@ -56,6 +58,9 @@ static void doSave() {
 	if (file.is_open()) {
 		file << out;
 		file.close();
+	} else {
+		logging::write("Failed to save user config to: " + constants::CONFIG::USER_PATH()
+			+ " (" + std::string(std::strerror(errno)) + ")");
 	}
 
 	// If another save was attempted during this one, re-save.
@@ -79,7 +84,8 @@ void load() {
 		auto userResult = generics::readJSON(constants::CONFIG::USER_PATH());
 		userConfig = userResult.value_or(nlohmann::json::object());
 	} catch (const std::exception& e) {
-		// Check for permission-denied errors (EPERM equivalent).
+		// JS checks e.code === 'EPERM'; C++ lacks structured error codes
+		// so we match common permission-related substrings instead.
 		std::string msg = e.what();
 		if (msg.find("permission") != std::string::npos ||
 		    msg.find("EPERM") != std::string::npos ||
@@ -128,6 +134,7 @@ void resetAllToDefault() {
 void save() {
 	if (!isSaving) {
 		isSaving = true;
+		// JS uses setImmediate(doSave) to defer; C++ calls synchronously.
 		doSave();
 	} else {
 		// Queue another save.

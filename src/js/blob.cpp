@@ -51,8 +51,9 @@ static std::string array2base64(std::span<const uint8_t> input) {
 }
 
 /**
- * a simple byte reinterpretation (no encoding conversion needed).
- *
+ * Convert a string to bytes. In JS this is a full UTF-16→UTF-8 encoder
+ * (blob.js stringEncode). In C++, std::string is already UTF-8, so a
+ * simple byte copy is correct and sufficient.
  */
 static std::vector<uint8_t> stringEncode(std::string_view str) {
 	return std::vector<uint8_t>(
@@ -60,6 +61,11 @@ static std::vector<uint8_t> stringEncode(std::string_view str) {
 		reinterpret_cast<const uint8_t*>(str.data()) + str.size());
 }
 
+/**
+ * Convert bytes to string. In JS this is a full UTF-8→UTF-16 decoder
+ * (blob.js stringDecode). In C++, std::string is already UTF-8, so a
+ * simple byte copy is correct and sufficient.
+ */
 static std::string stringDecode(std::span<const uint8_t> buf) {
 	return std::string(reinterpret_cast<const char*>(buf.data()), buf.size());
 }
