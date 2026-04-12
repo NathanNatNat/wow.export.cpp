@@ -38,8 +38,8 @@ Note: 17 other CASC files (blte-stream-reader, build-cache, cdn-config, cdn-reso
 
 ### 7. [blte-reader.cpp] Missing _checkBounds() override for lazy block decompression
 - **JS Source**: `src/js/casc/blte-reader.js` lines 311–321
-- **Status**: Pending
-- **Details**: JS BLTEReader overrides `_checkBounds()` to lazily decompress BLTE blocks on demand during reads. C++ BLTEReader is missing this override — `_checkBounds` is private non-virtual in BufferWrapper. Three call sites (parseEncodingFile, parseRootFile, getInstallManifest) create BLTEReader and read without processAllBlocks(), causing reads from zeroed memory.
+- **Status**: Resolved
+- **Details**: `_checkBounds()` override is now implemented in blte-reader.cpp (lines 135–143) and declared virtual in BufferWrapper. Lazy block decompression during reads works correctly.
 
 ### 8. [casc-source-remote.cpp] Data race in parseArchiveIndex — concurrent writes to unprotected maps
 - **JS Source**: `src/js/casc/casc-source-remote.js` lines 130–170
@@ -379,8 +379,8 @@ Note: 17 other CASC files (blte-stream-reader, build-cache, cdn-config, cdn-reso
 
 ### 72. [blte-reader.cpp] _decompressBlock missing 3rd argument to readBuffer()
 - **JS Source**: `src/js/casc/blte-reader.js` line 196
-- **Status**: Pending
-- **Details**: JS passes 3 arguments `readBuffer(length, true, true)` where the 3rd `true` means `noVerify`. C++ only passes 2 arguments `readBuffer(length, true)`. This may cause unwanted hash verification on decompressed data.
+- **Status**: Resolved (Non-issue)
+- **Details**: JS `readBuffer(length, wrap, inflate)` has 3 params; C++ `readBuffer(length, inflate)` drops the `wrap` param (always returns BufferWrapper). JS call `readBuffer(len, true, true)` correctly maps to C++ `readBuffer(len, true)` with `inflate=true`. No code change needed.
 
 ### 73. [blte-reader.cpp] Missing decodeAudio() method
 - **JS Source**: `src/js/casc/blte-reader.js` lines 236–239
@@ -389,8 +389,8 @@ Note: 17 other CASC files (blte-stream-reader, build-cache, cdn-config, cdn-reso
 
 ### 74. [blte-reader.cpp] getDataURL() missing dataURL cache
 - **JS Source**: `src/js/casc/blte-reader.js` lines 244–251
-- **Status**: Pending
-- **Details**: JS checks `if (!this.dataURL)` before processing and caches the result. C++ always reprocesses, which is wasteful for repeated calls.
+- **Status**: Resolved (Non-issue)
+- **Details**: JS checks `if (!this.dataURL)` before processing as an optimization. C++ `BufferWrapper::getDataURL()` already caches via `std::optional<std::string> dataURL`, and `processAllBlocks()` is a no-op when done. Behavior is functionally identical.
 
 ### 75. [icon-render.cpp] Extra getIconTexture() function not in JS source
 - **JS Source**: N/A
@@ -406,10 +406,10 @@ The following file groups were partially or not fully audited at the line-by-lin
 - **Status**: Pending
 - **Details**: These files were previously audited at a high level (entries 7–10) but need a complete line-by-line comparison of all methods including: `getFile`, `getFileByName`, `load`, `parseEncodingFile`, `parseRootFile`, `getInstallManifest`, `prepareListfile`, and all error handling paths.
 
-### 77. [blte-stream-reader.cpp, build-cache.cpp, cdn-config.cpp, cdn-resolver.cpp] Remaining CASC utility files need audit
+### 77. [build-cache.cpp, cdn-config.cpp, cdn-resolver.cpp] Remaining CASC utility files need audit
 - **JS Source**: Corresponding `.js` files in `src/js/casc/`
 - **Status**: Pending
-- **Details**: These files were not compared at the line-by-line level. Each needs a detailed function-by-function comparison against the JS original to verify all code paths are correctly converted.
+- **Details**: These files were not compared at the line-by-line level. Each needs a detailed function-by-function comparison against the JS original to verify all code paths are correctly converted. (blte-stream-reader.cpp was audited — see entry 88.)
 
 ### 78. [listfile.cpp, export-helper.cpp] CASC data files need audit
 - **JS Source**: `src/js/casc/listfile.js`, `src/js/casc/export-helper.js`
@@ -460,3 +460,8 @@ The following file groups were partially or not fully audited at the line-by-lin
 - **JS Source**: `src/js/ui/*.js` (9 files)
 - **Status**: Pending
 - **Details**: Files audio-helper, char-texture-overlay, character-appearance, data-exporter, listbox-context, model-viewer-utils need detailed comparison (texture-exporter, texture-ribbon, and uv-drawer already have entries 19–21). These handle UI logic for audio playback, character customization, data export, and model viewing.
+
+### 88. [blte-stream-reader.cpp] Missing createReadableStream() method
+- **JS Source**: `src/js/casc/blte-stream-reader.js` lines 148–170
+- **Status**: Pending
+- **Details**: JS `createReadableStream()` returns a `ReadableStream` with `pull` and `cancel` callbacks for progressive block consumption. Not used in the codebase currently, but missing from the C++ port. Needs a C++ equivalent (e.g., a generator/coroutine or pull-based iterator) or documentation as a deviation if ReadableStream semantics are not needed.
