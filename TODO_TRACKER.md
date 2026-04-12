@@ -886,3 +886,43 @@
 - **JS Source**: `src/js/mpq/mpq.js` line 422
 - **Status**: Pending
 - **Details**: JS uses `console.error('decompression error:', e)` for error logging in the zlib decompression catch block. C++ (line 511) uses `spdlog::error("decompression error: {}", e.what())` directly instead of the project's `logging::write` function that is used consistently throughout the rest of the codebase (including elsewhere in mpq.cpp via the logging header). This is inconsistent with the project's logging convention.
+
+### 176. [module_test_a.cpp] Entire file is unconverted JavaScript
+- **JS Source**: `src/js/modules/module_test_a.js` lines 1–34
+- **Status**: Pending
+- **Details**: `module_test_a.cpp` is byte-identical to `module_test_a.js`. The file contains `module.exports`, a Vue template string, and JavaScript `data()` / `methods` — it is pure JavaScript with no C++ conversion. The file needs to be fully converted to C++ or removed if the test module is not needed in the C++ port.
+
+### 177. [module_test_b.cpp] Entire file is unconverted JavaScript
+- **JS Source**: `src/js/modules/module_test_b.js` lines 1–43
+- **Status**: Pending
+- **Details**: `module_test_b.cpp` is byte-identical to `module_test_b.js`. The file contains `module.exports`, a Vue template string, and JavaScript `data()` / `methods` / `mounted()` — it is pure JavaScript with no C++ conversion. The file needs to be fully converted to C++ or removed if the test module is not needed in the C++ port.
+
+### 178. [tab_blender.cpp] Entire file is unconverted JavaScript
+- **JS Source**: `src/js/modules/tab_blender.js` lines 1–171
+- **Status**: Pending
+- **Details**: `tab_blender.cpp` is byte-identical to `tab_blender.js` (171 lines). The file contains `require()` calls, `nw.Shell.openItem()`, `async/await`, `module.exports`, a Vue template, and JavaScript methods. No C++ conversion has been performed. The entire module — including Blender addon download logic, version checking, and the settings UI — needs to be ported to C++.
+
+### 179. [tab_changelog.cpp] Entire file is unconverted JavaScript
+- **JS Source**: `src/js/modules/tab_changelog.js` lines 1–53
+- **Status**: Pending
+- **Details**: `tab_changelog.cpp` is byte-identical to `tab_changelog.js` (53 lines). The file contains `require('fs').promises`, `require('../log')`, `async/await`, `module.exports`, and a Vue template with `MarkdownContent` component. No C++ conversion has been performed. The changelog file reading and markdown rendering need to be ported to C++.
+
+### 180. [tab_help.cpp] Entire file is unconverted JavaScript
+- **JS Source**: `src/js/modules/tab_help.js` lines 1–174
+- **Status**: Pending
+- **Details**: `tab_help.cpp` is byte-identical to `tab_help.js` (174 lines). The file contains `require('fs').promises`, `require('path')`, `module.exports`, `async mounted()`, a Vue template with `MarkdownContent` component, and JavaScript DOM manipulation. No C++ conversion has been performed. The help article loading, navigation, and markdown rendering need to be ported to C++.
+
+### 181. [tab_decor.cpp] Model export functionality is stubbed out
+- **JS Source**: `src/js/modules/tab_decor.js` lines 167–175 (`export_model` call inside export loop)
+- **Status**: Pending
+- **Details**: In C++ (lines 273–291), the model export code inside the per-file export loop is entirely commented out. The `ExportModelOptions` struct population and `export_model` call are replaced with `(void)data; (void)model_type; (void)file_name; (void)export_path; (void)is_active;` followed by `helper.mark(decor_name, true);`. This means decor export reports success without actually writing any model files. The JS version (line 167) calls `modelViewerUtils.export_model(...)` with full options including geoset masks, WMO group masks, and WMO set masks.
+
+### 182. [tab_audio.cpp] Residual commented-out JavaScript reference code
+- **JS Source**: `src/js/modules/tab_audio.js` lines 56–59, 73, 94–97
+- **Status**: Pending
+- **Details**: C++ lines 90–92 contain `// file_data = await core.view.casc.getFile(selected_file_data_id);`, line 208 contains `// export_data = await core.view.casc.getFileByName(file_name);`, and lines 465–467 contain commented-out Vue template spans (`// <span>{{ $core.view.soundPlayerSeekFormatted }}</span>` etc.). These are leftover JavaScript reference comments from the conversion process. While the C++ implementation following each comment is correct, the residual JS code should be cleaned up for clarity.
+
+### 183. [screen_settings.cpp] Residual commented-out Vue template code
+- **JS Source**: `src/js/modules/screen_settings.js` lines ~460–462 (template buttons)
+- **Status**: Pending
+- **Details**: C++ lines 482–484 contain commented-out Vue template code: `// <input type="button" value="Discard" @click="handle_discard"/>`, `// <input type="button" value="Apply" @click="handle_apply"/>`, `// <input type="button" id="config-reset" value="Reset to Defaults" @click="handle_reset"/>`. The ImGui equivalents are properly implemented on lines 486–493, but the residual HTML/Vue template comments should be removed.
