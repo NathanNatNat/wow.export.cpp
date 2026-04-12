@@ -672,3 +672,35 @@
 - **JS Source**: `src/js/wowhead.js` lines 1–245
 - **Status**: Pending
 - **Details**: The entire .cpp file is still raw JavaScript — it is a verbatim copy of wowhead.js with zero C++ conversion. All seven functions (`decode`, `decompress_zeros`, `extract_hash_from_url`, `wowhead_parse_hash`, `parse_v15`, `parse_legacy`, `wowhead_parse`), both constants (`charset`, `WOWHEAD_SLOT_TO_SLOT_ID`), and the `module.exports` line are unconverted. No .h header file exists.
+
+## src/js/workers/ Audit
+
+### 134. [cache-collector.cpp] `https_request()` hardcodes POST content type to `application/octet-stream`
+- **JS Source**: `src/js/workers/cache-collector.js` lines 19–44
+- **Status**: Pending
+- **Details**: The JS `https_request(url, options, body)` passes headers from `options.headers` directly to the request, including whatever `Content-Type` the caller specified. The C++ `https_request()` (lines 416–456) passes the caller's headers to httplib but then also provides a hardcoded `"application/octet-stream"` as the content-type argument to `cli.Post()` (line 434), which overrides any `Content-Type` already set in the headers map. If `https_request()` were called with `Content-Type: multipart/form-data` (as the JS `upload_chunks` does on line 103), the wrong content type would be sent. The function should use the Content-Type from the headers parameter, not a hardcoded value.
+
+### 135. [cache-collector.cpp] `json_post()` and `upload_chunks()` duplicate HTTP client logic instead of calling `https_request()`
+- **JS Source**: `src/js/workers/cache-collector.js` lines 46–65 (`json_post`), 93–111 (`upload_chunks`)
+- **Status**: Pending
+- **Details**: In the JS, `json_post` (line 48) calls `https_request()` to perform the HTTP POST, and `upload_chunks` (line 100) also calls `https_request()`. In the C++, both `json_post()` (lines 458–495) and `upload_chunks()` (lines 530–564) create their own httplib `SSLClient`/`Client` instances, set timeouts, and call `cli.Post()` directly — completely bypassing the `https_request()` function. This means any future fix or change to `https_request()` (e.g., adding retry logic, proxy support, or certificate handling) would not apply to `json_post()` or `upload_chunks()`. The three functions should share a single HTTP request path as the JS does.
+
+### 136. [cache-collector.cpp] `scan_wdb()` uses case-insensitive `.wdb` extension check instead of case-sensitive
+- **JS Source**: `src/js/workers/cache-collector.js` lines 201–203
+- **Status**: Pending
+- **Details**: The JS `scan_wdb` (line 202) uses `file.endsWith('.wdb')` which is a case-sensitive check — only files with a lowercase `.wdb` extension are matched. The C++ `scan_wdb()` (line 685) uses `iends_with(file_name, ".wdb")` which is case-insensitive, meaning it would also match `.WDB`, `.Wdb`, etc. While this is unlikely to cause issues in practice (WoW cache files always use lowercase extensions), it is a behavioral deviation from the original JS.
+
+### 137. [cache-collector.cpp] HTTP client timeouts are hardcoded with no JS equivalent
+- **JS Source**: `src/js/workers/cache-collector.js` lines 19–44
+- **Status**: Pending
+- **Details**: The C++ code sets `set_connection_timeout(30)` and `set_read_timeout(60)` on all httplib clients (e.g., lines 431–432, 472–473, 551–552). The JS code uses Node.js `https.request()` with no explicit timeout configuration, relying on Node.js defaults. While adding timeouts is arguably an improvement, it is a behavioral deviation — very large file uploads or slow connections could time out in the C++ version but succeed in the JS version.
+
+### 138. [cache-collector.cpp] `https_request()` does not propagate error on connection failure
+- **JS Source**: `src/js/workers/cache-collector.js` lines 37–38
+- **Status**: Pending
+- **Details**: The JS `https_request` (line 37) has `req.on('error', reject)` which rejects the promise (throws) on connection errors, DNS failures, TLS errors, etc. The C++ `https_request()` (lines 448–455) checks `if (res)` but when the httplib result is falsy (connection failed), it returns a default `HttpResponse` with `status=0, ok=false, data=""` instead of throwing an exception. Callers that check `res.ok` will see a non-OK response, but they lose the specific error information. The JS behavior would cause `upload_chunks` to throw `'upload chunk failed: ...'` with the underlying error, whereas the C++ would throw `'upload chunk failed: 0'` (line 562) with no descriptive error.
+
+### 139. [cache-collector.cpp] `json_post()` does not propagate error on connection failure
+- **JS Source**: `src/js/workers/cache-collector.js` lines 46–65
+- **Status**: Pending
+- **Details**: Same issue as #138 but for `json_post()`. The JS `json_post` calls `https_request` which rejects on connection error, causing the error to propagate to callers. The C++ `json_post()` (lines 482–493) returns a default `JsonPostResponse` with `status=0, ok=false` when the httplib result is falsy, silently swallowing the connection error. In `upload_flavor()`, this means a connection failure during submit would log `"submit failed (0) for ..."` rather than propagating the actual error.
