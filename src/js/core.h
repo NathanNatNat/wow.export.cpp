@@ -22,7 +22,6 @@
 
 #include "file-writer.h"
 
-// Forward declarations
 namespace casc {
 	class CASC;
 	namespace locale_flags {
@@ -210,7 +209,6 @@ struct DropHandler {
 
 /**
  * AppState — Central application state struct.
- * C++ equivalent of the JS `makeNewView()` return object.
  * Since ImGui is immediate-mode, state changes are reflected
  * automatically on the next frame — no "reactivity" system needed.
  */
@@ -235,7 +233,7 @@ struct AppState {
 	nlohmann::json selectedCDNRegion;            // Active CDN region.
 	bool lockCDNRegion = false;                  // If true, do not programmatically alter the selected CDN region.
 	nlohmann::json config = nlohmann::json::object();  // Default/user-set configuration.
-	nlohmann::json configEdit = nlohmann::json::object(); // Temporary configuration clone during editing.
+	nlohmann::json configEdit = nlohmann::json::object();
 	nlohmann::json availableLocalBuilds;         // Local builds to display during source select.
 	nlohmann::json availableRemoteBuilds;        // Remote builds to display during source select.
 	bool sourceSelectShowBuildSelect = false;    // Controls whether build select is shown.
@@ -602,7 +600,6 @@ void openExportDirectory();
 
 /**
  * Open a file or directory with the OS default application/explorer.
- * C++ equivalent of nw.Shell.openItem(path).
  * @param path Path to open.
  */
 void openInExplorer(const std::string& path);

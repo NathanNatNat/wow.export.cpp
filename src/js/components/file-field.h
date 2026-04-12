@@ -15,7 +15,6 @@
  * emits: ['update:modelValue']. Renders a text input that opens a native
  * directory picker dialog when focused/clicked.
  *
- * In C++, the directory picker uses platform-specific APIs:
  * - Windows: IFileOpenDialog (COM)
  * - Linux: zenity or kdialog via popen
  */

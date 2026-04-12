@@ -19,9 +19,6 @@ struct CharacterCameraGL {
 	std::function<void()> update_view;
 };
 
-/**
- * DOM element interface for CharacterCameraControlsGL.
- */
 struct CharacterDomElementGL {
 	int clientWidth = 800;
 	int clientHeight = 600;

@@ -112,8 +112,6 @@ void exportFiles(
 		casc::BLPImage blp(std::move(data));
 		const BufferWrapper png = blp.toPNG(mask);
 
-		// JS: clipboard.set(png.toBase64(), 'png', true)
-		// C++: ImGui text clipboard with base64 PNG data
 		ImGui::SetClipboardText(png.toBase64().c_str());
 
 		logging::write(std::format("Copied texture to clipboard ({})", fileName));

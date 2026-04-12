@@ -62,7 +62,6 @@ public:
 	void set_rgba(const uint8_t* pixels, int width, int height,
 	              const TextureOptions& options = {});
 
-	// JS set_canvas: adapted from HTMLCanvasElement to raw pixel data
 	// (Browser API systemic translation — no HTML canvas in desktop GL)
 	void set_canvas(const uint8_t* pixels, int width, int height,
 	                const TextureOptions& options = {});

@@ -88,9 +88,6 @@ static bool hasLoadedFoliage = false;
 static db::WDCReader* dbTextures = nullptr;
 static db::WDCReader* dbDoodads = nullptr;
 
-// GL texture baking (loadTexture, bindAlphaLayer, unbindAllTextures,
-// build_texture_array, clearCanvas, compileShaders) uses raw OpenGL via GLAD2, replacing
-// WebGL2 calls. The offscreen FBO approach follows CharMaterialRenderer's pattern.
 static GLuint glShaderProg = 0;
 static GLuint glFBO = 0;
 static GLuint glFBOTexture = 0;
@@ -1050,8 +1047,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 					auto data = casc->getVirtualFileByName(tilePath, true);
 					casc::BLPImage blp(std::move(data));
 
-					// JS: canvas scaling draws the BLP at target quality resolution.
-					// C++: decode BLP to RGBA, resize with stb_image_resize2, then write as PNG.
 					auto raw_pixels = blp.toUInt8Array(0, 0b0111);
 					const int src_w = static_cast<int>(blp.width);
 					const int src_h = static_cast<int>(blp.height);
@@ -1335,8 +1330,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 
 							glDeleteBuffers(1, &indexBuffer);
 
-							// JS uses canvas rotation (180 degrees) for output.
-							// In C++ we read the FBO pixels directly; the 180-degree rotation is
 							// applied by flipping the pixel data during the copy.
 							auto fboPixels = readFBOPixels(tileSize, tileSize);
 
@@ -1832,7 +1825,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 					foliageJSON = std::make_unique<JSONWriter>(foliageDir / (std::to_string(layer.effectID) + ".json"));
 
 					// Serialize groundEffectTexture data record fields at root level.
-					// JS: foliageJSON.data = groundEffectTexture (spread all fields at root).
 					for (const auto& [key, val] : *groundEffectTexture) {
 						std::visit([&](const auto& v) {
 							foliageJSON->addProperty(key, v);

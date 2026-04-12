@@ -224,7 +224,6 @@ const std::vector<uint32_t>* getItemModels(uint32_t item_id) {
 		return nullptr;
 
 	// Build and cache the first-option models
-	// We use a static thread_local to avoid repeated allocation
 	thread_local std::vector<uint32_t> temp_models;
 	temp_models.clear();
 	for (const auto& opts : data_it->second.modelOptions) {

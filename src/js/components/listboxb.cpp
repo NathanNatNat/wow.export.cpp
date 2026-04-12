@@ -32,14 +32,11 @@ namespace listboxb {
  * Invoked when the component is mounted.
  * Used to register global listeners and resize observer.
  */
-// TODO(conversion): In ImGui, global mouse listeners and ResizeObserver are not needed.
-// ImGui provides mouse state via ImGui::GetIO() and resizing is handled by layout each frame.
 
 /**
  * Invoked when the component is destroyed.
  * Used to unregister global mouse listeners and resize observer.
  */
-// TODO(conversion): No explicit unmount needed in ImGui immediate mode.
 
 /**
  * Offset of the scroll widget in pixels.
@@ -159,7 +156,6 @@ static void handleKey(const std::vector<ListboxBItem>& items, const std::vector<
 
 	// If document.activeElement is the document body, then we can safely assume
 	// the user is not focusing anything, and can intercept keyboard input.
-	// TODO(conversion): In ImGui, we check if no item is active (no text input focused, etc.).
 	if (ImGui::IsAnyItemActive())
 		return;
 
@@ -297,7 +293,6 @@ void render(const char* id, const std::vector<ListboxBItem>& items,
 		? std::max(20.0f, containerHeight * (static_cast<float>(state.slotCount) / static_cast<float>(totalItems)))
 		: containerHeight;
 
-	// Equivalent of resize() — recalculate slot count and scroll each frame.
 	resize(containerHeight, scrollerHeight, state);
 
 	// Compute display range.
@@ -370,7 +365,6 @@ void render(const char* id, const std::vector<ListboxBItem>& items,
 		const bool itemSelected = isSelected(selection, i);
 
 		// Alternating row background + selected highlight.
-		// CSS: .ui-listbox .item { background: var(--background-dark); }
 		//      .ui-listbox .item:nth-child(even) { background: var(--background-alt); }
 		//      .ui-listbox .item.selected { background: var(--font-alt); }
 		{

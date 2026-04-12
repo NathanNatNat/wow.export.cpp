@@ -20,9 +20,7 @@ namespace texture_ribbon {
 
 static int _syncID = 0;
 
-// Cache of GL textures keyed by slot index.
 static std::unordered_map<int, GLuint> s_slotTextures;
-// Cache of the src string that produced the cached texture, so we can
 // detect when a slot's src has changed and re-upload.
 static std::unordered_map<int, std::string> s_slotSrcCache;
 

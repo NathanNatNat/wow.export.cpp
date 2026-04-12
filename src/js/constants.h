@@ -18,16 +18,13 @@ namespace constants {
 /// perform legacy directory migrations.
 void init();
 
-// ── Runtime path constants (valid after init()) ──────────────────
 
 const std::filesystem::path& INSTALL_PATH(); // Path to the application installation.
 // Deviation: JS uses `DATA_PATH = nw.App.dataPath` (OS-specific user data dir).
-// C++ uses `<install>/data/` for a portable, self-contained layout.
 const std::filesystem::path& DATA_DIR(); // Path to the application data directory.
 // Deviation: JS has no LOG_DIR; C++ adds a separate Logs directory.
 const std::filesystem::path& LOG_DIR(); // Path to the application logs directory.
 // Deviation: JS stores runtime.log in DATA_PATH directly.
-// C++ stores it in LOG_DIR (<install>/Logs/) for cleaner separation.
 const std::filesystem::path& RUNTIME_LOG(); // Path to the runtime log.
 const std::filesystem::path& LAST_EXPORT(); // Location of the last export.
 
@@ -47,7 +44,6 @@ const std::regex& LISTFILE_MODEL_FILTER();
 // User-agent used for HTTP/HTTPS requests.
 const std::string& USER_AGENT();
 
-// ── Game-specific constants ──────────────────────────────────────
 namespace GAME {
 	inline constexpr int MAP_SIZE = 64;
 	inline constexpr int MAP_SIZE_SQ = 4096; // MAP_SIZE ^ 2
@@ -56,7 +52,6 @@ namespace GAME {
 	inline constexpr int MAP_OFFSET = 17066;
 }
 
-// ── Cache constants ──────────────────────────────────────────────
 // Deviation: JS uses `DATA_PATH/casc/` as cache directory. C++ renames
 // it to `cache/` with a migration from legacy `casc/` on first run.
 namespace CACHE {
@@ -81,7 +76,6 @@ namespace CACHE {
 	const std::filesystem::path& STATE_FILE();
 }
 
-// ── Config paths ─────────────────────────────────────────────────
 // Deviation: JS uses `INSTALL_PATH/src/default_config.jsonc`. C++ uses
 // `<install>/data/default_config.jsonc` to match the C++ resource layout.
 namespace CONFIG {
@@ -89,7 +83,6 @@ namespace CONFIG {
 	const std::filesystem::path& USER_PATH(); // Path of user-defined configuration file.
 }
 
-// ── Blender constants ────────────────────────────────────────────
 namespace BLENDER {
 	// Platform-specific Blender app-data directory:
 	// Windows: %APPDATA%/Blender Foundation/Blender
@@ -101,13 +94,11 @@ namespace BLENDER {
 	inline constexpr double MIN_VER = 2.8; // Minimum version supported by our add-on.
 }
 
-// ── Update constants ─────────────────────────────────────────────
 namespace UPDATE {
-	const std::filesystem::path& DIRECTORY(); // Temporary directory for storing update data.
+	const std::filesystem::path& DIRECTORY();
 	const std::string& HELPER(); // Path to update helper application.
 }
 
-// ── Products ─────────────────────────────────────────────────────
 // product: Internal product ID.
 // title: Label as it appears on the Battle.net launcher.
 // tag: Specific version tag.
@@ -131,7 +122,6 @@ inline constexpr std::array<Product, 11> PRODUCTS = {{
 	{ "wow_anniversary", "World of Warcraft Classic Anniversary", "Classic Anniversary" }
 }};
 
-// ── Patch server ─────────────────────────────────────────────────
 struct Region {
 	std::string_view tag;
 	std::string_view name;
@@ -152,31 +142,26 @@ namespace PATCH {
 	inline constexpr std::string_view VERSION_CONFIG = "/versions"; // Versions config file on patch server.
 }
 
-// ── Build constants ──────────────────────────────────────────────
 namespace BUILD {
 	inline constexpr std::string_view MANIFEST = ".build.info"; // File that contains version information in local installs.
 	inline constexpr std::string_view DATA_DIR = "Data";
 }
 
-// ── Time constants ───────────────────────────────────────────────
 namespace TIME {
 	inline constexpr int DAY = 86400000; // Milliseconds in a day.
 }
 
-// ── Kino (video) constants ───────────────────────────────────────
 namespace KINO {
 	inline constexpr std::string_view API_URL = "https://www.kruithne.net/wow.export/v2/get_video";
 	inline constexpr int POLL_INTERVAL = 20000;
 }
 
-// ── Magic numbers ────────────────────────────────────────────────
 namespace MAGIC {
 	inline constexpr uint32_t M3DT = 0x5444334D; // M3 model magic.
 	inline constexpr uint32_t MD21 = 0x3132444D; // M2 model magic.
 	inline constexpr uint32_t MD20 = 0x3032444D; // M2 model magic (legacy)
 }
 
-// ── File identifiers ─────────────────────────────────────────────
 struct FileIdentifier {
 	std::array<std::string_view, 4> matches;
 	int match_count;
@@ -185,7 +170,6 @@ struct FileIdentifier {
 
 extern const std::array<FileIdentifier, 17> FILE_IDENTIFIERS;
 
-// ── Navigation button order (module names) ───────────────────────
 inline constexpr std::array<std::string_view, 20> NAV_BUTTON_ORDER = {{
 	"tab_models",
 	"tab_textures",
@@ -209,7 +193,6 @@ inline constexpr std::array<std::string_view, 20> NAV_BUTTON_ORDER = {{
 	"legacy_tab_files"
 }};
 
-// ── Context menu item order (module names or static option IDs) ──
 inline constexpr std::array<std::string_view, 12> CONTEXT_MENU_ORDER = {{
 	"tab_blender",
 	"tab_changelog",
@@ -225,7 +208,6 @@ inline constexpr std::array<std::string_view, 12> CONTEXT_MENU_ORDER = {{
 	"tab_help"
 }};
 
-// ── Font preview quotes ──────────────────────────────────────────
 inline constexpr std::array<std::string_view, 14> FONT_PREVIEW_QUOTES = {{
 	"You take no candle!",
 	"Keep your feet on the ground.",
@@ -243,7 +225,6 @@ inline constexpr std::array<std::string_view, 14> FONT_PREVIEW_QUOTES = {{
 	"Avast ye swabs, repel the invaders!"
 }};
 
-// ── Expansions ───────────────────────────────────────────────────
 struct Expansion {
 	int id;
 	std::string_view name;

@@ -53,23 +53,18 @@ namespace modules {
 
 // --- File-local state ---
 
-// JS: const modules = {}
 static std::map<std::string, ModuleDef> module_registry;
 
-// JS: const module_nav_buttons = new Map()
 static std::map<std::string, NavButton> nav_button_map;
 
-// JS: const module_context_menu_options = new Map()
 static std::map<std::string, ContextMenuOption> context_menu_map;
 
-// JS: let active_module = null
 static ModuleDef* active_module = nullptr;
 
 // Cached sorted vectors for external access
 static std::vector<NavButton> sorted_nav_buttons;
 static std::vector<ContextMenuOption> sorted_context_menu_options;
 
-// JS: const IS_BUNDLED = typeof process.env.BUILD_RELEASE !== 'undefined'
 #ifdef NDEBUG
 static constexpr bool IS_BUNDLED = true;
 #else
@@ -78,23 +73,17 @@ static constexpr bool IS_BUNDLED = false;
 
 // --- Internal functions ---
 
-// JS: const COMPONENTS = { ... }
-// TODO(conversion): In C++, components are simply header-included. No registry proxy needed.
 // The JS component registry (COMPONENT_PATH_MAP, component_cache, EXCLUDE_FROM_RELOAD)
 // and hot-reload proxy are not needed since C++ uses static linking.
 
-// JS: const COMPONENT_PATH_MAP = { ... }
 // Not needed in C++: components are included via headers at compile time.
 
-// JS: let component_cache = {}
 // Not needed in C++.
 
 // components that should not be reloaded. in an ideal world we would support hot-reloading
 // these but it was too much effort at the time, so c'est la vie
-// JS: const EXCLUDE_FROM_RELOAD = new Set(['ModelViewerGL', 'MapViewer']);
 // Not needed in C++.
 
-// JS: const component_registry = new Proxy({}, { ... })
 // Not needed in C++: component access is direct via #include and namespace calls.
 
 static void update_nav_buttons() {
@@ -129,7 +118,6 @@ static void update_nav_buttons() {
 
 	sorted_nav_buttons = std::move(buttons);
 
-	// JS: core.view.modNavButtons = buttons;
 	if (core::view) {
 		core::view->modNavButtons.clear();
 		for (const auto& btn : sorted_nav_buttons) {
@@ -176,7 +164,6 @@ static void update_context_menu_options() {
 
 	sorted_context_menu_options = std::move(options);
 
-	// JS: core.view.modContextMenuOptions = options;
 	if (core::view) {
 		core::view->modContextMenuOptions.clear();
 		for (const auto& opt : sorted_context_menu_options) {
@@ -190,13 +177,10 @@ static void update_context_menu_options() {
 	}
 }
 
-// JS: function wrap_module(module_name, module_def)
-// In C++, modules are statically defined. The wrapping logic (idempotency guard,
 // error handling, register() call) is handled during initialize().
 static void wrap_module(ModuleDef& mod) {
 	std::string display_label = mod.name;
 
-	// JS: if (typeof module_def.register === 'function') { ... }
 	if (mod.registerModule) {
 		// The registerModule function for tabs calls register_nav_button internally.
 		// We capture the display_label for error messages.
@@ -221,7 +205,6 @@ static void wrap_module(ModuleDef& mod) {
 				logging::write(std::format("Failed to initialize {} tab: {}", display_label, error.what()));
 				core::setToast("error", std::format("Failed to initialize {} tab. Check the log for details.", display_label),
 				               { {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
-				// JS: { 'View Log': () => log.openRuntimeLog() }
 				go_to_landing();
 			}
 
@@ -288,8 +271,6 @@ void registerContextMenuOption(const std::string& id, const std::string& label,
 }
 
 void register_components() {
-	// JS: for (const [name, def] of Object.entries(COMPONENTS)) app.component(name, def);
-	// TODO(conversion): In C++/ImGui, components are header-included and called directly.
 	// No dynamic component registration is needed.
 	logging::write("components loaded (C++: statically linked via headers)");
 }
@@ -297,16 +278,12 @@ void register_components() {
 void initialize() {
 	logging::write("initializing modules");
 
-	// JS: for (const [name, module_def] of Object.entries(MODULES))
 	//         modules[name] = wrap_module(name, Vue.markRaw(module_def));
 
 	// Register all modules with their function pointers.
 	// The order matches the JS MODULES object.
 
-	// TODO(conversion): module_test_a and module_test_b exist in JS source but
 	// their module headers have not been created yet. They need to be ported.
-	// JS: module_test_a: require('./modules/module_test_a'),
-	// JS: module_test_b: require('./modules/module_test_b'),
 
 	auto add_module = [](const std::string& name,
 	                     std::function<void()> render_fn,
@@ -417,17 +394,11 @@ void initialize() {
 		[]() { tab_textures::mounted(); },
 		[]() { tab_textures::registerTab(); });
 
-	// TODO(conversion): tab_help exists in JS source but its module header
 	// has not been created yet. It needs to be ported.
-	// JS: tab_help: require('./modules/tab_help'),
 
-	// TODO(conversion): tab_blender exists in JS source but its module header
 	// has not been created yet. It needs to be ported.
-	// JS: tab_blender: require('./modules/tab_blender'),
 
-	// TODO(conversion): tab_changelog exists in JS source but its module header
 	// has not been created yet. It needs to be ported.
-	// JS: tab_changelog: require('./modules/tab_changelog'),
 
 	add_module("legacy_tab_home",
 		[]() { legacy_tab_home::render(); },
@@ -481,7 +452,6 @@ void initialize() {
 
 void set_active(const std::string& module_key) {
 	if (active_module) {
-		// JS: core.view.activeModule = null;
 		if (core::view)
 			core::view->activeModule = nullptr;
 		active_module = nullptr;
@@ -492,7 +462,6 @@ void set_active(const std::string& module_key) {
 		if (it != module_registry.end()) {
 			active_module = &it->second;
 
-			// JS: core.view.activeModule = active_module;
 			if (core::view) {
 				nlohmann::json mod_json;
 				mod_json["__name"] = module_key;
@@ -501,7 +470,6 @@ void set_active(const std::string& module_key) {
 
 			logging::write(std::format("set active module: {}", module_key));
 
-			// JS equivalent: Vue <keep-alive> activated() hook calls initialize()
 			// on first activation. The wrapped initialize has an idempotency guard,
 			// so it's safe to call on every activation.
 			if (it->second.initialize)
@@ -535,7 +503,6 @@ void reload_module(const std::string& module_key) {
 		return;
 	}
 
-	// JS: const was_active = active_module === modules[module_key];
 	bool was_active = (active_module == &it->second);
 
 	if (was_active) {
@@ -546,16 +513,11 @@ void reload_module(const std::string& module_key) {
 
 	// invalidate component cache so they're re-required on next access
 	// preserve excluded components (stateful 3D viewers)
-	// TODO(conversion): In C++, there is no component cache or hot-reload.
 	// Components are statically linked. This is a no-op.
 
 	unregister_nav_button(module_key);
 	unregister_context_menu_option(module_key);
 
-	// JS: delete require.cache[module_path];
-	// JS: const module_def = Vue.markRaw(require('./modules/' + module_key));
-	// JS: modules[module_key] = wrap_module(module_key, module_def);
-	// TODO(conversion): C++ cannot dynamically reload compiled code.
 	// Re-wrapping the existing module definition instead.
 	it->second._tab_initialized = false;
 	it->second._tab_initializing = false;
@@ -604,8 +566,6 @@ void reloadAllModules() {
 		unregister_context_menu_option(module_key);
 	}
 
-	// JS: for (const [name, module_def] of Object.entries(MODULES)) { ... }
-	// TODO(conversion): C++ cannot dynamically reload compiled code.
 	// Re-wrapping all existing module definitions instead.
 	for (auto& [name, mod] : module_registry) {
 		mod._tab_initialized = false;

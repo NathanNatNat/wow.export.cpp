@@ -33,7 +33,6 @@ namespace tab_raw {
 
 // --- File-local state ---
 
-// JS: let is_dirty = true;
 static bool is_dirty = true;
 
 // Change-detection for config watches.
@@ -43,7 +42,6 @@ static context_menu::ContextMenuState context_menu_state;
 
 // --- Internal functions ---
 
-// JS: const compute_raw_files = async (core) => { ... }
 static void compute_raw_files() {
 	if (!is_dirty)
 		return;
@@ -59,8 +57,6 @@ static void compute_raw_files() {
 	generics::redraw();
 
 	if (enable_unknown) {
-		// JS: const root_entries = core.view.casc.getValidRootEntries();
-		// JS: core.view.listfileRaw = await listfile.renderListfile(root_entries, true);
 		std::vector<uint32_t> root_entries = core::view->casc->getValidRootEntries();
 		auto rendered = casc::listfile::renderListfile(root_entries, true);
 		view.listfileRaw.clear();
@@ -76,7 +72,6 @@ static void compute_raw_files() {
 	core::setToast("success", std::format("Found {} files in the game client", view.listfileRaw.size()));
 }
 
-// JS: const detect_raw_files = async (core) => { ... }
 static void detect_raw_files() {
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionRaw;
@@ -101,10 +96,8 @@ static void detect_raw_files() {
 		return;
 	}
 
-	// JS: using _lock = core.create_busy_lock();
 	BusyLock _lock = core::create_busy_lock();
 
-	// JS: const extension_map = new Map();
 	std::unordered_map<uint32_t, std::string> extension_map;
 	int current_index = 1;
 
@@ -113,11 +106,9 @@ static void detect_raw_files() {
 			file_data_id, current_index++, filtered_selection.size()));
 
 		try {
-			// JS: const data = await core.view.casc.getFile(file_data_id);
 			BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
 
 			for (const auto& check : constants::FILE_IDENTIFIERS) {
-				// JS: if (data.startsWith(check.match))
 				std::vector<std::string_view> patterns(check.matches.begin(), check.matches.begin() + std::min(static_cast<size_t>(check.match_count), check.matches.size()));
 				if (data.startsWith(patterns)) {
 					extension_map[file_data_id] = std::string(check.ext);
@@ -150,7 +141,6 @@ static void detect_raw_files() {
 	}
 }
 
-// JS: const export_raw_files = async (core) => { ... }
 static void export_raw_files() {
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionRaw;
@@ -185,8 +175,6 @@ static void export_raw_files() {
 
 		if (overwrite_files || !generics::fileExists(export_path)) {
 			try {
-				// JS: const data = await core.view.casc.getFileByName(file_name, true);
-				// JS: await data.writeToFile(export_path);
 				BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
 				data.writeToFile(export_path);
 				helper.mark(export_file_name, true);
@@ -205,7 +193,6 @@ static void export_raw_files() {
 // --- Public API ---
 
 void registerTab() {
-	// JS: this.registerContextMenuOption('Browse Raw Client Files', 'fish.svg');
 	modules::register_context_menu_option("tab_raw", "Browse Raw Client Files", "fish.svg",
 		[]() { modules::set_active("tab_raw"); });
 }
@@ -213,7 +200,6 @@ void registerTab() {
 void mounted() {
 	compute_raw_files();
 
-	// JS: this.$core.view.$watch('config.cascLocale', () => { is_dirty = true; });
 	// Store initial config value for change-detection in render().
 	prev_cascLocale = core::view->config.value("cascLocale", static_cast<uint32_t>(casc::locale_flags::enUS));
 }
@@ -222,7 +208,6 @@ void render() {
 	auto& view = *core::view;
 
 	// --- Change-detection for cascLocale config (equivalent to watch on config.cascLocale) ---
-	// JS: this.$core.view.$watch('config.cascLocale', () => { is_dirty = true; });
 	const uint32_t current_cascLocale = view.config.value("cascLocale", static_cast<uint32_t>(casc::locale_flags::enUS));
 	if (current_cascLocale != prev_cascLocale) {
 		is_dirty = true;
@@ -230,9 +215,6 @@ void render() {
 		compute_raw_files();
 	}
 
-	// JS: <div class="tab list-tab" id="tab-raw">
-	// CSS: #tab-raw { grid-template-columns: unset } — single column
-	// CSS: .tab.list-tab { grid-template-rows: 1fr 60px }
 	if (app::layout::BeginTab("tab-raw")) {
 
 	const ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -241,8 +223,6 @@ void render() {
 	constexpr float MARGIN = 10.0f;
 
 	// --- List container (row 1, single column) ---
-	// JS: <div class="list-container">
-	// CSS: .list-container { margin: 20px 10px 0 20px }
 	const float listTopM = 20.0f;
 	const float listLeftM = 20.0f;
 	const float listRightM = 10.0f;
@@ -328,8 +308,6 @@ void render() {
 	ImGui::EndChild();
 
 	// --- Tray (row 2) ---
-	// JS: <div id="tab-raw-tray">
-	// CSS: #tab-raw-tray { display: flex; margin: 10px }
 	ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + topH));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(MARGIN, 0.0f));
 	ImGui::BeginChild("raw-tray", ImVec2(avail.x, FILTER_H), ImGuiChildFlags_None,
@@ -340,7 +318,6 @@ void render() {
 	if (padY > 0.0f)
 		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
 
-	// JS: <div class="filter"> — flex-grow: 1
 	if (view.config.value("regexFilters", false)) {
 		ImGui::TextUnformatted("Regex Enabled");
 		ImGui::SameLine();
@@ -351,7 +328,6 @@ void render() {
 	// Calculate button widths to give filter the remaining space.
 	float btnDetectW = ImGui::CalcTextSize("Auto-Detect Selected").x + ImGui::GetStyle().FramePadding.x * 2;
 	float btnExportW = ImGui::CalcTextSize("Export Selected").x + ImGui::GetStyle().FramePadding.x * 2;
-	// CSS: #tab-raw-tray input[type=button] { margin-right: 5px }
 	float buttonsW = btnDetectW + 5.0f + btnExportW + 5.0f;
 	float filterW = ImGui::GetContentRegionAvail().x - buttonsW;
 	if (filterW < 50.0f) filterW = 50.0f;

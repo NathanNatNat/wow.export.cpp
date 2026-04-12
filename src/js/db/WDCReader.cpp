@@ -40,37 +40,30 @@ static const std::unordered_map<uint32_t, TableFormat> TABLE_FORMATS = {
 	{ 0x35434457, { "WDC5", 5 } },
 };
 
-// Helper to get the uint32_t record count from a section header variant.
 static uint32_t getSectionRecordCount(const WDCSectionHeader& header) {
 	return std::visit([](const auto& h) -> uint32_t { return h.recordCount; }, header);
 }
 
-// Helper to get the uint64_t tactKeyHash from a section header variant.
 static uint64_t getSectionTactKeyHash(const WDCSectionHeader& header) {
 	return std::visit([](const auto& h) -> uint64_t { return h.tactKeyHash; }, header);
 }
 
-// Helper to get the uint32_t stringTableSize from a section header variant.
 static uint32_t getSectionStringTableSize(const WDCSectionHeader& header) {
 	return std::visit([](const auto& h) -> uint32_t { return h.stringTableSize; }, header);
 }
 
-// Helper to get the uint32_t idListSize from a section header variant.
 static uint32_t getSectionIdListSize(const WDCSectionHeader& header) {
 	return std::visit([](const auto& h) -> uint32_t { return h.idListSize; }, header);
 }
 
-// Helper to get the uint32_t relationshipDataSize from a section header variant.
 static uint32_t getSectionRelationshipDataSize(const WDCSectionHeader& header) {
 	return std::visit([](const auto& h) -> uint32_t { return h.relationshipDataSize; }, header);
 }
 
-// Helper to check if all elements in a vector are zero.
 static bool allZero(const std::vector<uint32_t>& v) {
 	return std::all_of(v.begin(), v.end(), [](uint32_t id) { return id == 0; });
 }
 
-// Helper to convert a FieldValue to int64_t for ID extraction.
 static int64_t fieldValueToInt64(const FieldValue& val) {
 	if (auto* p = std::get_if<int64_t>(&val))
 		return *p;

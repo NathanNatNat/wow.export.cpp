@@ -156,7 +156,6 @@ namespace {
 		return mask;
 	}
 
-	// Helper to remove whitespace from a string
 	std::string removeSpaces(const std::string& str) {
 		std::string result;
 		result.reserve(str.size());

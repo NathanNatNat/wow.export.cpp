@@ -47,8 +47,6 @@ void CASCRemote::init() {
 	builds.clear();
 
 	// Collect version configs for all products in parallel.
-	// JS: const promises = constants.PRODUCTS.map(p => this.getVersionConfig(p.product));
-	// JS: const results = await Promise.allSettled(promises);
 	using ConfigResult = std::vector<std::unordered_map<std::string, std::string>>;
 	std::vector<std::future<ConfigResult>> futures;
 	futures.reserve(constants::PRODUCTS.size());
@@ -63,14 +61,12 @@ void CASCRemote::init() {
 		try {
 			auto config = fut.get();
 
-			// JS: result.value.find(e => e.Region === this.region)
 			// .find() returns undefined if no match — we push empty map as equivalent.
 			auto it = std::find_if(config.begin(), config.end(), [this](const auto& entry) {
 				return entry.count("Region") && entry.at("Region") == region;
 			});
 			builds.push_back(it != config.end() ? *it : std::unordered_map<std::string, std::string>{});
 		} catch (const std::exception& e) {
-			// JS Promise.allSettled: rejected promises are NOT pushed to builds.
 			// Only fulfilled results contribute to the builds array.
 		}
 	}

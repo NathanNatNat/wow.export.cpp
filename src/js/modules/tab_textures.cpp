@@ -40,7 +40,6 @@
 
 namespace tab_textures {
 
-// Helper to extract uint32_t from a FieldValue.
 static uint32_t fieldToUint32(const db::FieldValue& val) {
 	if (auto* p = std::get_if<int64_t>(&val))
 		return static_cast<uint32_t>(*p);
@@ -51,7 +50,6 @@ static uint32_t fieldToUint32(const db::FieldValue& val) {
 	return 0;
 }
 
-// Helper to extract int from a FieldValue.
 static int fieldToInt(const db::FieldValue& val) {
 	if (auto* p = std::get_if<int64_t>(&val))
 		return static_cast<int>(*p);
@@ -62,7 +60,6 @@ static int fieldToInt(const db::FieldValue& val) {
 	return 0;
 }
 
-// Helper to extract std::string from a FieldValue.
 static std::string fieldToString(const db::FieldValue& val) {
 	if (auto* p = std::get_if<std::string>(&val))
 		return *p;
@@ -87,25 +84,18 @@ struct AtlasEntry {
 
 // --- File-local state ---
 
-// JS: const texture_atlas_entries = new Map();
 static std::unordered_map<int, AtlasEntry> texture_atlas_entries;
 
-// JS: const texture_atlas_regions = new Map();
 static std::unordered_map<int, AtlasRegion> texture_atlas_regions;
 
-// JS: const texture_atlas_map = new Map();
 static std::unordered_map<uint32_t, int> texture_atlas_map;
 
-// JS: let has_loaded_atlas_table = false;
 static bool has_loaded_atlas_table = false;
 
-// JS: let has_loaded_unknown_textures = false;
 static bool has_loaded_unknown_textures = false;
 
-// JS: let selected_file_data_id = 0;
 static uint32_t selected_file_data_id = 0;
 
-// JS: let resize_observer = null;
 // In ImGui, resize observation is implicit (immediate mode).
 
 // Change-detection for selection and config watches.
@@ -137,7 +127,6 @@ static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t 
 
 // --- Internal functions ---
 
-// JS: const update_texture_atlas_overlay = (core) => { ... }
 static void update_texture_atlas_overlay() {
 	auto atlas_it = texture_atlas_map.find(selected_file_data_id);
 	if (atlas_it != texture_atlas_map.end()) {
@@ -172,7 +161,6 @@ static void update_texture_atlas_overlay() {
 	}
 }
 
-// JS: const preview_texture_by_id = async (core, file_data_id, texture = null) => { ... }
 static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string& texture_name) {
 	std::string texture = texture_name;
 	if (texture.empty()) {
@@ -186,12 +174,9 @@ static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string&
 	logging::write(std::format("Previewing texture file {}", texture));
 
 	try {
-		// JS: const file = await core.view.casc.getFile(file_data_id);
-		// JS: const blp = new BLPFile(file);
 		BufferWrapper file_data = core::view->casc->getVirtualFileByID(file_data_id);
 		casc::BLPImage blp(file_data);
 
-		// JS: core.view.texturePreviewURL = blp.getDataURL(core.view.config.exportChannelMask);
 		const uint8_t channel_mask = static_cast<uint8_t>(core::view->config.value("exportChannelMask", 0b1111));
 		core::view->texturePreviewURL = blp.getDataURL(channel_mask);
 		core::view->texturePreviewWidth = static_cast<int>(blp.width);
@@ -223,7 +208,6 @@ static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string&
 			fs::path(texture).filename().string(), blp.width, blp.height, info);
 		selected_file_data_id = file_data_id;
 
-		// JS: update_texture_atlas_overlay(core);
 		update_texture_atlas_overlay();
 
 		core::hideToast();
@@ -231,20 +215,17 @@ static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string&
 		core::setToast("error", std::format("The texture {} is encrypted with an unknown key ({}).", texture, e.key), {}, -1);
 		logging::write(std::format("Failed to decrypt texture {} ({})", texture, e.key));
 	} catch (const std::exception& e) {
-		// JS: core.setToast('error', 'Unable to preview texture ' + texture, { 'View Log': () => log.openRuntimeLog() }, -1);
 		core::setToast("error", "Unable to preview texture " + texture,
 			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 }
 
-// JS: const load_texture_atlas_data = async (core) => { ... }
 static void load_texture_atlas_data() {
 	auto& view = *core::view;
 	if (!has_loaded_atlas_table && view.config.value("showTextureAtlas", false)) {
 		core::progressLoadingScreen("Parsing texture atlases...");
 
-		// JS: for (const [id, row] of await db2.UiTextureAtlas.getAllRows()) { ... }
 		auto& ui_texture_atlas = casc::db2::getTable("UiTextureAtlas");
 		auto& ui_texture_atlas_member = casc::db2::getTable("UiTextureAtlasMember");
 		if (!ui_texture_atlas.isLoaded)
@@ -309,7 +290,6 @@ static void load_texture_atlas_data() {
 	}
 }
 
-// JS: const reload_texture_atlas_data = async (core) => { ... }
 static void reload_texture_atlas_data() {
 	auto& view = *core::view;
 	if (!has_loaded_atlas_table && view.config.value("showTextureAtlas", false) && view.isBusy == 0) {
@@ -326,17 +306,13 @@ static void reload_texture_atlas_data() {
 	}
 }
 
-// JS: const update_texture_atlas_overlay_scaling = (core) => { ... }
 // In ImGui, atlas overlay scaling is handled by the rendering code using available region size.
 // The JS version manipulates DOM element styles; in ImGui this is implicit.
 
-// JS: const attach_overlay_listener = (core) => { ... }
 // In ImGui, no ResizeObserver needed; immediate-mode handles this per frame.
 
-// JS: const update_texture_atlas_overlay = (core) => { ... }
 // This is inlined into preview_texture_by_id_impl above.
 
-// JS: const export_texture_atlas_regions = async (core, file_data_id) => { ... }
 static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 	auto atlas_map_it = texture_atlas_map.find(file_data_id);
 	if (atlas_map_it == texture_atlas_map.end())
@@ -361,14 +337,9 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 	const float quality = core::view->config.value("exportWebPQuality", 0.9f);
 
 	try {
-		// JS: const data = await core.view.casc.getFile(file_data_id);
-		// JS: const blp = new BLPFile(data);
 		BufferWrapper file_data_buf = core::view->casc->getVirtualFileByID(file_data_id);
 		casc::BLPImage blp(file_data_buf);
 
-		// JS: const canvas = blp.toCanvas();
-		// JS: const ctx = canvas.getContext('2d');
-		// In C++, we get raw RGBA pixel data instead.
 		std::vector<uint8_t> rgba_data = blp.toUInt8Array(0, 0b1111);
 		const uint32_t blp_width = blp.width;
 		const uint32_t blp_height = blp.height;
@@ -387,7 +358,6 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 			export_file_name = (fs::path(export_dir) / region.name).string();
 			const std::string export_path = casc::ExportHelper::getExportPath(export_file_name + ext);
 
-			// JS: const crop = ctx.getImageData(region.left, region.top, region.width, region.height);
 			// Crop the RGBA data manually.
 			std::vector<uint8_t> cropped(region.width * region.height * 4);
 			for (int y = 0; y < region.height; y++) {
@@ -398,8 +368,6 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 					std::memcpy(cropped.data() + dst_offset, rgba_data.data() + src_offset, region.width * 4);
 			}
 
-			// JS: const buf = await BufferWrapper.fromCanvas(save_canvas, mime_type, quality);
-			// JS: await buf.writeToFile(export_path);
 			if (mime_type == "image/webp") {
 				uint8_t* output = nullptr;
 				size_t outputSize = 0;
@@ -438,7 +406,6 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 	helper.finish();
 }
 
-// JS: const is_baked_npc_texture = (core) => { ... }
 static bool is_baked_npc_texture() {
 	auto& view = *core::view;
 	if (view.selectionTextures.empty())
@@ -457,14 +424,12 @@ static bool is_baked_npc_texture() {
 // --- Public API ---
 
 void registerTab() {
-	// JS: this.registerNavButton('Textures', 'image.svg', InstallType.CASC);
 	modules::register_nav_button("tab_textures", "Textures", "image.svg", install_type::CASC);
 }
 
 void mounted() {
 	auto& view = *core::view;
 
-	// JS: await this.initialize();
 	const bool needs_unknown_textures = view.config.value("enableUnknownFiles", false) && !has_loaded_unknown_textures;
 	const bool needs_atlas_data = !has_loaded_atlas_table && view.config.value("showTextureAtlas", false);
 
@@ -490,7 +455,6 @@ void mounted() {
 		core::hideLoadingScreen();
 	}
 
-	// JS: attach_overlay_listener(this.$core);
 	// In ImGui, overlay listeners are not needed (immediate mode).
 
 	// Store initial config values for change-detection.
@@ -498,14 +462,12 @@ void mounted() {
 	prev_export_texture_alpha = view.config.value("exportTextureAlpha", false);
 	prev_show_texture_atlas = view.config.value("showTextureAtlas", false);
 
-	// JS: this.$core.registerDropHandler({ ext: ['.blp'], ... });
 	core::registerDropHandler({
 		{".blp"},
 		[&view]() -> std::string {
 			return std::format("Export textures as {}", view.config.value("exportTextureFormat", std::string("PNG")));
 		},
 		[](const std::string& file) {
-			// JS: process: files => textureExporter.exportFiles(files, true)
 			nlohmann::json entry;
 			entry["fileName"] = file;
 			texture_exporter::exportFiles({entry}, core::view->casc, nullptr, true);
@@ -535,7 +497,6 @@ void render() {
 
 	// --- Change-detection for config watches ---
 
-	// JS: this.$core.view.$watch('config.exportTextureAlpha', () => { ... });
 	const bool current_export_alpha = view.config.value("exportTextureAlpha", false);
 	if (current_export_alpha != prev_export_texture_alpha) {
 		if (view.isBusy == 0 && selected_file_data_id > 0)
@@ -543,7 +504,6 @@ void render() {
 		prev_export_texture_alpha = current_export_alpha;
 	}
 
-	// JS: this.$core.view.$watch('config.exportChannelMask', () => { ... });
 	const uint8_t current_channel_mask = static_cast<uint8_t>(view.config.value("exportChannelMask", 0b1111));
 	if (current_channel_mask != prev_export_channel_mask) {
 		if (view.isBusy == 0 && selected_file_data_id > 0)
@@ -551,11 +511,9 @@ void render() {
 		prev_export_channel_mask = current_channel_mask;
 	}
 
-	// JS: this.$core.view.$watch('config.showTextureAtlas', async () => { ... });
 	const bool current_show_atlas = view.config.value("showTextureAtlas", false);
 	if (current_show_atlas != prev_show_texture_atlas) {
 		reload_texture_atlas_data();
-		// JS: update_texture_atlas_overlay(core) — just update overlay data, don't reload the full texture.
 		update_texture_atlas_overlay();
 		prev_show_texture_atlas = current_show_atlas;
 	}
@@ -575,25 +533,21 @@ void render() {
 
 	// --- Template rendering ---
 
-	// JS: <div class="tab list-tab" id="tab-textures">
 	if (app::layout::BeginTab("tab-textures")) {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
 	// Override texture toast.
-	// JS: <div id="toast" v-if="!$core.view.toast && $core.view.overrideTextureList.length > 0" class="progress">
 	if (!view.toast.has_value() && !view.overrideTextureList.empty()) {
 		ImGui::TextColored(ImVec4(1, 1, 0.5f, 1), "Filtering textures for item: %s", view.overrideTextureName.c_str());
 		ImGui::SameLine();
 		if (ImGui::SmallButton("Remove")) {
-			// JS: this.$core.view.removeOverrideTextures();
 			view.overrideTextureList.clear();
 			view.overrideTextureName.clear();
 		}
 	}
 
 	// --- Left panel: List container (row 1, col 1) ---
-	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionTextures" :items="listfileTextures" ...>
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	if (app::layout::BeginListContainer("textures-list-container", regions)) {
@@ -673,7 +627,6 @@ void render() {
 	app::layout::EndListContainer();
 
 	// --- Filter bar (row 2, col 1) ---
-	// JS: <div class="filter">
 	if (app::layout::BeginFilterBar("textures-filter", regions)) {
 		if (view.config.value("regexFilters", false))
 			ImGui::TextUnformatted("Regex Enabled");
@@ -687,7 +640,6 @@ void render() {
 	app::layout::EndFilterBar();
 
 	// --- Right panel: Preview container (row 1, col 2) ---
-	// JS: <div class="preview-container">
 	//     <div class="preview-info" ...>
 	//     <ul class="preview-channels" ...>
 	//     <div class="preview-background" id="texture-preview" ...>
@@ -696,7 +648,6 @@ void render() {
 			ImGui::TextUnformatted(view.texturePreviewInfo.c_str());
 
 		// Channel mask toggles.
-		// JS: <ul class="preview-channels" v-if="$core.view.texturePreviewURL.length > 0">
 		if (!view.texturePreviewURL.empty()) {
 			int mask = view.config.value("exportChannelMask", 0b1111);
 
@@ -725,7 +676,6 @@ void render() {
 			ImGui::PopStyleColor();
 		}
 
-		// JS: <div class="image" :style="{ 'background-image': 'url(' + texturePreviewURL + ')' }">
 		if (view.texturePreviewTexID != 0) {
 			// Fit the texture into the available area while preserving aspect ratio.
 			const ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -742,7 +692,6 @@ void render() {
 			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.texturePreviewTexID)), img_size);
 
 			// Atlas overlay regions drawn on top of the texture image.
-			// JS: <div id="atlas-overlay" v-if="$core.view.config.showTextureAtlas">
 			if (view.config.value("showTextureAtlas", false) && !view.textureAtlasOverlayRegions.empty()) {
 				ImDrawList* draw_list = ImGui::GetWindowDrawList();
 				for (const auto& region : view.textureAtlasOverlayRegions) {
@@ -778,7 +727,6 @@ void render() {
 	app::layout::EndPreviewContainer();
 
 	// --- Bottom-right: Preview controls (row 2, col 2) ---
-	// JS: <div class="preview-controls">
 	if (app::layout::BeginPreviewControls("textures-preview-controls", regions)) {
 		bool show_atlas = view.config.value("showTextureAtlas", false);
 		if (ImGui::Checkbox("Atlas Regions", &show_atlas))
@@ -786,12 +734,10 @@ void render() {
 
 		ImGui::SameLine();
 
-		// JS: <input v-if="is_baked_npc_texture()" type="button" value="Apply to Character" ...>
 		if (is_baked_npc_texture()) {
 			const bool busy = view.isBusy > 0;
 			if (busy) app::theme::BeginDisabledButton();
 			if (ImGui::Button("Apply to Character")) {
-				// JS: methods.apply_baked_npc_texture()
 				BusyLock _lock = core::create_busy_lock();
 				core::setToast("progress", "loading baked npc texture...", {}, -1, false);
 
@@ -799,10 +745,6 @@ void render() {
 					const std::string first = casc::listfile::stripFileEntry(view.selectionTextures[0].get<std::string>());
 					const auto file_data_id_opt = casc::listfile::getByFilename(first);
 					if (file_data_id_opt.has_value()) {
-						// JS: const file = await this.$core.view.casc.getFile(file_data_id);
-						// JS: const blp = new BLPFile(file);
-						// JS: view.chrCustBakedNPCTexture = blp;
-						// In C++, store the file data ID so tab_characters can load the BLP on demand.
 						core::view->chrCustBakedNPCTexture = file_data_id_opt.value();
 						core::setToast("success", "baked npc texture applied to character", {}, 3000);
 						logging::write(std::format("applied baked npc texture {} to character", first));
@@ -816,7 +758,6 @@ void render() {
 			ImGui::SameLine();
 		}
 
-		// JS: <input v-if="showTextureAtlas" type="button" value="Export Atlas Regions" ...>
 		if (view.config.value("showTextureAtlas", false)) {
 			const bool busy = view.isBusy > 0;
 			if (busy) app::theme::BeginDisabledButton();
@@ -826,7 +767,6 @@ void render() {
 			ImGui::SameLine();
 		}
 
-		// JS: <MenuButton :options="menuButtonTextures" :default="config.exportTextureFormat" ... @click="export_textures">
 		{
 			const bool busy = view.isBusy > 0;
 			if (busy) app::theme::BeginDisabledButton();

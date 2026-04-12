@@ -38,7 +38,6 @@ void initializeModelFileData() {
 
 	logging::write("Loading model mapping...");
 
-	// Using the texture mapping, map all model fileDataIDs to used textures.
 	auto allRows = casc::db2::preloadTable("ModelFileData").getAllRows();
 	for (const auto& [modelFileDataID, modelFileDataRow] : allRows) {
 		// Keep a list of all FIDs for listfile unknowns.

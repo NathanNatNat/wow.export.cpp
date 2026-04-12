@@ -63,7 +63,6 @@ License: MIT
 
 namespace tab_maps {
 
-// ── MD5 helper (matches JS crypto.createHash('md5')) ────────────────────
 // Same RFC 1321 implementation used in cache-collector.cpp.
 namespace md5_detail {
 
@@ -178,34 +177,26 @@ static std::string md5_hex(const std::string& input) {
 
 // --- Constants ---
 
-// JS: const TILE_SIZE = constants.GAME.TILE_SIZE;
 static constexpr double TILE_SIZE = constants::GAME::TILE_SIZE;
 
-// JS: const MAP_OFFSET = constants.GAME.MAP_OFFSET;
 static constexpr int MAP_OFFSET = constants::GAME::MAP_OFFSET;
 
 // --- File-local state ---
 
-// JS: let selected_map_id = null;
 static std::optional<int> selected_map_id;
 
-// JS: let selected_map_dir = null;
 static std::string selected_map_dir;
 static bool has_selected_map_dir = false;
 
-// JS: let selected_wdt = null;
 static std::unique_ptr<WDTLoader> selected_wdt;
 static BufferWrapper selected_wdt_data; // Keeps the buffer alive for WDTLoader
 
-// JS: let game_objects_db2 = null;
 static bool game_objects_db2_loaded = false;
 static std::unordered_map<uint32_t, std::vector<db::DataRecord>> game_objects_db2;
 
-// JS: let wmo_minimap_textures = null;
 static bool wmo_minimap_textures_loaded = false;
 static std::unordered_map<uint32_t, std::vector<db::DataRecord>> wmo_minimap_textures;
 
-// JS: let current_wmo_minimap = null;
 static std::optional<WMOMinimapData> current_wmo_minimap;
 
 // Change-detection for watches
@@ -279,12 +270,10 @@ return {};
 
 /**
  * Parse a map entry from the listbox.
- * JS: const parse_map_entry = (entry) => { ... }
  * @param entry
  */
 static MapEntry parse_map_entry(const std::string& entry) {
 // Format: expansion_id \x19 [map_id] \x19 MapName_lang \x19 (Directory)
-// JS regex: /\[(\d+)\]\31([^\31]+)\31\(([^)]+)\)/
 std::regex re(R"(\[(\d+)\]\x19([^\x19]+)\x19\(([^)]+)\))");
 std::smatch match;
 if (!std::regex_search(entry, match, re))
@@ -299,7 +288,6 @@ return result;
 
 /**
  * Load a map tile.
- * JS: const load_map_tile = async (x, y, size) => { ... }
  *
  * Returns RGBA pixel data (size * size * 4 bytes), or empty if not available.
  */
@@ -312,7 +300,6 @@ const std::string padded_x = std::format("{:02d}", x);
 const std::string padded_y = std::format("{:02d}", y);
 const std::string tile_path = std::format("world/minimaps/{}/map{}_{}.blp", selected_map_dir, padded_x, padded_y);
 
-// JS: const data = await core.view.casc.getFileByName(tile_path, false, true);
 BufferWrapper data = core::view->casc->getVirtualFileByName(tile_path, true);
 casc::BLPImage blp(data);
 auto rgba = blp.toUInt8Array(0, 0b0111);
@@ -350,7 +337,6 @@ return {};
 /**
  * Load a WMO minimap tile.
  * Composites multiple tiles at the same position using alpha blending.
- * JS: const load_wmo_minimap_tile = async (x, y, size) => { ... }
  */
 static std::vector<uint8_t> load_wmo_minimap_tile(int x, int y, int size) {
 if (!current_wmo_minimap)
@@ -365,7 +351,6 @@ try {
 std::vector<uint8_t> composite(size * size * 4, 0);
 float output_scale = static_cast<float>(size) / static_cast<float>(current_wmo_minimap->output_tile_size);
 
-// JS: for (const tile of tile_list) { const data = await core.view.casc.getFile(tile.fileDataID); ... }
 const auto& tile_list = it->second;
 for (const auto& tile : tile_list) {
 BufferWrapper data = core::view->casc->getVirtualFileByID(tile.fileDataID, true);
@@ -414,7 +399,6 @@ return {};
 
 /**
  * Collect game objects from GameObjects.db2 for export.
- * JS: const collect_game_objects = async (mapID, filter) => { ... }
  * @param mapID
  * @param filter
  */
@@ -425,7 +409,6 @@ if (!game_objects_db2_loaded) {
 game_objects_db2_loaded = true;
 game_objects_db2.clear();
 
-// JS: for (const row of (await db2.GameObjects.getAllRows()).values()) { ... }
 auto& go_table = casc::db2::getTable("GameObjects");
 auto all_rows = go_table.getAllRows();
 
@@ -441,7 +424,6 @@ auto fid_row = go_display_table.getRow(display_id);
 if (fid_row.has_value()) {
 auto fid_it = fid_row->find("FileDataID");
 if (fid_it != fid_row->end()) {
-// JS: row.FileDataID = fid_row.FileDataID;
 uint32_t file_data_id = fieldToUint32(fid_it->second);
 row["FileDataID"] = static_cast<uint64_t>(file_data_id);
 
@@ -485,13 +467,11 @@ return result;
 
 /**
  * Sample height at a specific position within a chunk using bilinear interpolation.
- * JS: const sample_chunk_height = (chunk, localX, localY) => { ... }
  * @param chunk
  * @param localX
  * @param localY
  * @returns interpolated height
  */
-// JS: const get_vert_idx = (x, y) => { ... }
 // Extracted as a static helper to avoid MSVC lambda capture issues.
 static int get_vert_idx(int x, int y) {
 int index = 0;
@@ -521,7 +501,6 @@ return chunk.vertices[idx] + base_z;
 return base_z;
 };
 
-// JS: const h00 = chunk.vertices[get_vert_idx(x0, y0)] + chunk.position[2];
 float h00 = get_height(x0, y0);
 float h10 = get_height(x1, y0);
 float h01 = get_height(x0, y1);
@@ -538,7 +517,6 @@ return h0 * (1.0f - fy) + h1 * fy;
 
 /**
  * Extract height data from a terrain tile.
- * JS: const extract_height_data_from_tile = async (adt, resolution) => { ... }
  * @param map_dir
  * @param tile_x
  * @param tile_y
@@ -548,20 +526,16 @@ return h0 * (1.0f - fy) + h1 * fy;
 static std::optional<HeightData> extract_height_data_from_tile(
 const std::string& map_dir, uint32_t tile_x, uint32_t tile_y, int resolution)
 {
-// JS: const prefix = util.format('world/maps/%s/%s', map_dir, map_dir);
 const std::string prefix = std::format("world/maps/{}/{}", map_dir, map_dir);
-// JS: const tile_prefix = prefix + '_' + adt.tileY + '_' + adt.tileX;
 const std::string tile_prefix = prefix + '_' + std::to_string(tile_y) + '_' + std::to_string(tile_x);
 
 try {
-// JS: const root_fid = listfile.getByFilename(tile_prefix + '.adt');
 auto root_fid = casc::listfile::getByFilename(tile_prefix + ".adt");
 if (!root_fid) {
 logging::write(std::format("cannot find fileDataID for {}.adt", tile_prefix));
 return std::nullopt;
 }
 
-// JS: const root_file = await core.view.casc.getFile(root_fid);
 BufferWrapper root_file = core::view->casc->getVirtualFileByID(*root_fid);
 ADTLoader root_adt(root_file);
 root_adt.loadRoot();
@@ -609,7 +583,6 @@ return std::nullopt;
 }
 }
 
-// Forward declarations for methods
 static void load_map(int mapID, const std::string& mapDir);
 static void setup_wmo_minimap(WDTLoader& wdt);
 static void initialize();
@@ -620,20 +593,13 @@ static void export_selected_map_as_heightmaps();
 
 // --- Context menu methods ---
 
-/**
- * JS: handle_map_context(data)
- */
 static void handle_map_context(const listbox::ContextMenuEvent& data) {
-// JS: this.$core.view.contextMenus.nodeMap = { selection: data.selection, count: data.selection.length };
 core::view->contextMenus.nodeMap = nlohmann::json{
 {"selection", data.selection},
 {"count", static_cast<int>(data.selection.size())}
 };
 }
 
-/**
- * JS: copy_map_names(selection)
- */
 static void copy_map_names(const std::vector<std::string>& selection) {
 std::string result;
 for (const auto& entry : selection) {
@@ -646,9 +612,6 @@ result += map.name;
 ImGui::SetClipboardText(result.c_str());
 }
 
-/**
- * JS: copy_map_internal_names(selection)
- */
 static void copy_map_internal_names(const std::vector<std::string>& selection) {
 std::string result;
 for (const auto& entry : selection) {
@@ -661,9 +624,6 @@ result += map.dir;
 ImGui::SetClipboardText(result.c_str());
 }
 
-/**
- * JS: copy_map_ids(selection)
- */
 static void copy_map_ids(const std::vector<std::string>& selection) {
 std::string result;
 for (const auto& entry : selection) {
@@ -676,9 +636,6 @@ result += std::to_string(map.id);
 ImGui::SetClipboardText(result.c_str());
 }
 
-/**
- * JS: copy_map_export_paths(selection)
- */
 static void copy_map_export_paths(const std::vector<std::string>& selection) {
 std::string result;
 for (const auto& entry : selection) {
@@ -693,9 +650,6 @@ result += path;
 ImGui::SetClipboardText(result.c_str());
 }
 
-/**
- * JS: open_map_export_directory(selection)
- */
 static void open_map_export_directory(const std::vector<std::string>& selection) {
 if (selection.empty())
 return;
@@ -716,15 +670,11 @@ std::string cmd = "xdg-open \"" + dir + "\" &";
 
 // --- Map loading ---
 
-/**
- * JS: methods.setup_wmo_minimap(wdt)
- */
 static void setup_wmo_minimap(WDTLoader& wdt) {
 try {
 const auto& placement = wdt.worldModelPlacement;
 uint32_t file_data_id = 0;
 
-// JS: if (wdt.worldModel) { file_data_id = listfile.getByFilename(wdt.worldModel); }
 if (!wdt.worldModel.empty()) {
 auto fid = casc::listfile::getByFilename(wdt.worldModel);
 if (!fid)
@@ -736,10 +686,7 @@ return;
 file_data_id = placement.id;
 }
 
-// JS: const wmo_data = await this.$core.view.casc.getFile(file_data_id);
 BufferWrapper wmo_data = core::view->casc->getVirtualFileByID(file_data_id);
-// JS: const wmo = new WMOLoader(wmo_data, file_data_id);
-// JS: await wmo.load();
 WMOLoader wmo(wmo_data, file_data_id);
 wmo.load();
 
@@ -898,67 +845,50 @@ current_wmo_minimap = std::nullopt;
 }
 }
 
-/**
- * JS: methods.load_map(mapID, mapDir)
- */
 static void load_map(int mapID, const std::string& mapDir) {
-// JS: const map_dir_lower = mapDir.toLowerCase();
 std::string map_dir_lower = mapDir;
 std::transform(map_dir_lower.begin(), map_dir_lower.end(), map_dir_lower.begin(), ::tolower);
 
-// JS: this.$core.hideToast();
 core::hideToast();
 
 selected_map_id = mapID;
 selected_map_dir = map_dir_lower;
 has_selected_map_dir = true;
 
-// JS: selected_wdt = null; current_wmo_minimap = null;
 selected_wdt.reset();
 current_wmo_minimap = std::nullopt;
 core::view->mapViewerHasWorldModel = false;
 core::view->mapViewerIsWMOMinimap = false;
 core::view->mapViewerGridSize = nullptr;
-// JS: this.$core.view.mapViewerSelection.splice(0);
 core::view->mapViewerSelection.clear();
 
 const std::string wdt_path = std::format("world/maps/{}/{}.wdt", map_dir_lower, map_dir_lower);
 logging::write(std::format("loading map preview for {} ({})", map_dir_lower, mapID));
 
-// JS: const data = await this.$core.view.casc.getFileByName(wdt_path);
 BufferWrapper wdt_data = core::view->casc->getVirtualFileByName(wdt_path);
 
 try {
-// JS: const wdt = selected_wdt = new WDTLoader(data);
-// JS: wdt.load();
 selected_wdt_data = std::move(wdt_data);
 selected_wdt = std::make_unique<WDTLoader>(selected_wdt_data);
 selected_wdt->load();
 
-// JS: if (wdt.worldModelPlacement) this.$core.view.mapViewerHasWorldModel = true;
 if (selected_wdt->worldModelPlacement.id != 0)
 	core::view->mapViewerHasWorldModel = true;
 
-// JS: const has_terrain = wdt.tiles && wdt.tiles.some(tile => tile === 1);
 const bool has_terrain = !selected_wdt->tiles.empty() &&
 	std::any_of(selected_wdt->tiles.begin(), selected_wdt->tiles.end(),
 		[](uint32_t t) { return t == 1; });
 
-// JS: const has_global_wmo = wdt.worldModelPlacement !== undefined;
 const bool has_global_wmo = (selected_wdt->worldModelPlacement.id != 0);
 
 if (!has_terrain && has_global_wmo) {
-	// JS: await this.setup_wmo_minimap(wdt);
 	setup_wmo_minimap(*selected_wdt);
 
 	if (current_wmo_minimap) {
-		// JS: this.$core.view.mapViewerTileLoader = load_wmo_minimap_tile;
 		core::view->mapViewerTileLoader = "wmo_minimap";
-		// JS: this.$core.view.mapViewerChunkMask = current_wmo_minimap.mask;
 		core::view->mapViewerChunkMask = nlohmann::json::array();
 		for (int m : current_wmo_minimap->mask)
 			core::view->mapViewerChunkMask.push_back(m);
-		// JS: this.$core.view.mapViewerGridSize = current_wmo_minimap.grid_size;
 		core::view->mapViewerGridSize = current_wmo_minimap->grid_size;
 		core::view->mapViewerIsWMOMinimap = true;
 		core::view->mapViewerSelectedMap = mapID;
@@ -970,16 +900,13 @@ if (!has_terrain && has_global_wmo) {
 	core::setToast("info", "This map has no terrain tiles. Use \"Export Global WMO\" to export the world model.", {}, 6000);
 }
 
-// JS: this.$core.view.mapViewerTileLoader = load_map_tile;
 core::view->mapViewerTileLoader = "terrain";
-// JS: this.$core.view.mapViewerChunkMask = wdt.tiles;
 core::view->mapViewerChunkMask = nlohmann::json::array();
 for (uint32_t t : selected_wdt->tiles)
 	core::view->mapViewerChunkMask.push_back(static_cast<int>(t));
 core::view->mapViewerSelectedMap = mapID;
 core::view->mapViewerSelectedDir = mapDir;
 } catch (const std::exception& e) {
-// JS: log.write('cannot load %s, defaulting to all chunks enabled', wdt_path);
 logging::write(std::format("cannot load {}, defaulting to all chunks enabled", wdt_path));
 selected_wdt_data = {};
 core::view->mapViewerTileLoader = "terrain";
@@ -991,15 +918,11 @@ core::view->mapViewerSelectedDir = mapDir;
 
 // --- Export functions ---
 
-/**
- * JS: methods.export_map_wmo()
- */
 void export_map_wmo() {
 casc::ExportHelper helper(1, "WMO");
 helper.start();
 
 try {
-// JS: if (!selected_wdt || !selected_wdt.worldModelPlacement)
 if (!selected_wdt || (selected_wdt->worldModelPlacement.id == 0 && selected_wdt->worldModel.empty()))
 throw std::runtime_error("map does not contain a world model.");
 
@@ -1007,7 +930,6 @@ const auto& placement = selected_wdt->worldModelPlacement;
 uint32_t file_data_id = 0;
 std::string file_name;
 
-// JS: if (selected_wdt.worldModel) { ... } else { ... }
 if (!selected_wdt->worldModel.empty()) {
 file_name = selected_wdt->worldModel;
 auto fid = casc::listfile::getByFilename(file_name);
@@ -1028,15 +950,11 @@ file_name = !name.empty() ? name : ("unknown_" + std::to_string(file_data_id) + 
 const std::string mark_file_name = casc::ExportHelper::replaceExtension(file_name, ".obj");
 const std::string export_path = casc::ExportHelper::getExportPath(mark_file_name);
 
-// JS: const data = await this.$core.view.casc.getFile(file_data_id);
 BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
-// JS: const wmo = new WMOExporter(data, file_data_id);
 WMOExporter wmo(std::move(data), file_data_id, core::view->casc);
-// JS: wmo.setDoodadSetMask({ [placement.doodadSetIndex]: { checked: true } });
 std::vector<WMOExportDoodadSetMask> doodad_mask(placement.doodadSetIndex + 1);
 doodad_mask[placement.doodadSetIndex].checked = true;
 wmo.setDoodadSetMask(std::move(doodad_mask));
-// JS: await wmo.exportAsOBJ(export_path, helper);
 wmo.exportAsOBJ(export_path, &helper, nullptr);
 
 if (helper.isCancelled())
@@ -1051,15 +969,11 @@ WMOExporter::clearCache();
 helper.finish();
 }
 
-/**
- * JS: methods.export_map_wmo_minimap()
- */
 void export_map_wmo_minimap() {
 casc::ExportHelper helper(1, "minimap");
 helper.start();
 
 try {
-// JS: let minimap_data = current_wmo_minimap;
 if (!current_wmo_minimap) {
 if (!selected_wdt || (selected_wdt->worldModelPlacement.id == 0 && selected_wdt->worldModel.empty()))
 throw std::runtime_error("map does not contain a world model.");
@@ -1081,7 +995,6 @@ tiles_by_coord.size(), canvas_width, canvas_height));
 
 TiledPNGWriter writer(canvas_width, canvas_height, output_tile_size);
 
-// JS: for (const [key, tile_list] of tiles_by_coord) { ... casc.getFile, BLPFile, canvas compositing ... }
 for (const auto& [coord_key, tile_list] : tiles_by_coord) {
 	// Parse coord key "x,y"
 	auto comma = coord_key.find(',');
@@ -1134,7 +1047,6 @@ const std::string out_path = casc::ExportHelper::getExportPath(relative_path);
 
 writer.write(out_path);
 
-// JS: const export_paths = this.$core.openLastExportStream();
 auto export_paths = core::openLastExportStream();
 export_paths.writeLine("png:" + out_path);
 export_paths.close();
@@ -1149,11 +1061,7 @@ helper.mark("WMO minimap", false, e.what());
 helper.finish();
 }
 
-/**
- * JS: methods.export_map()
- */
 void export_map() {
-// JS: const format = this.$core.view.config.exportMapFormat;
 auto& view = *core::view;
 std::string format = view.config.value("exportMapFormat", "OBJ");
 if (format == "OBJ")
@@ -1166,15 +1074,11 @@ else if (format == "HEIGHTMAPS")
 export_selected_map_as_heightmaps();
 }
 
-/**
- * JS: methods.export_selected_map()
- */
 static void export_selected_map() {
 auto& view = *core::view;
 const auto& export_tiles = view.mapViewerSelection;
 int export_quality = view.config.value("exportMapQuality", 512);
 
-// JS: if (export_tiles.length === 0) return this.$core.setToast('error', ...);
 if (export_tiles.empty()) {
 core::setToast("error", "You haven't selected any tiles; hold shift and click on a map tile to select it.", {}, -1);
 return;
@@ -1204,7 +1108,6 @@ uint32_t tile_y = static_cast<uint32_t>(index) % constants::GAME::MAP_SIZE;
 
 std::vector<ADTGameObject> game_objects_vec;
 
-// JS: if (this.$core.view.config.mapsIncludeGameObjects === true) { ... }
 if (view.config.value("mapsIncludeGameObjects", false)) {
 double start_x = MAP_OFFSET - (tile_x * TILE_SIZE) - TILE_SIZE;
 double start_y = MAP_OFFSET - (tile_y * TILE_SIZE) - TILE_SIZE;
@@ -1225,8 +1128,6 @@ return posX > start_x && posX < end_x && posY > start_y && posY < end_y;
 }
 
 try {
-// JS: const out = await adt.export(dir, export_quality, game_objects, helper);
-// JS: await export_paths?.writeLine(out.type + ':' + out.path);
 // Convert tab_maps::ADTGameObject to ::ADTGameObject for ADTExporter API
 std::vector<::ADTGameObject> export_game_objects;
 for (const auto& go : game_objects_vec) {
@@ -1252,9 +1153,6 @@ ADTExporter::clearCache();
 helper.finish();
 }
 
-/**
- * JS: methods.export_selected_map_as_raw()
- */
 static void export_selected_map_as_raw() {
 auto& view = *core::view;
 const auto& export_tiles = view.mapViewerSelection;
@@ -1283,7 +1181,6 @@ break;
 ADTExporter adt(selected_map_id.value_or(0), selected_map_dir, static_cast<uint32_t>(index));
 
 try {
-// JS: const out = await adt.export(dir, 0, undefined, helper);
 auto out = adt.exportTile(dir, 0, nullptr, &helper, core::view->casc);
 export_paths.writeLine(out.type + ":" + out.path.string());
 helper.mark(mark_path, true);
@@ -1297,9 +1194,6 @@ ADTExporter::clearCache();
 helper.finish();
 }
 
-/**
- * JS: methods.export_selected_map_as_png()
- */
 static void export_selected_map_as_png() {
 auto& view = *core::view;
 const auto& export_tiles = view.mapViewerSelection;
@@ -1317,7 +1211,6 @@ casc::ExportHelper helper(static_cast<int>(tile_indices.size()) + 1, "tile");
 helper.start();
 
 try {
-// JS: const tile_coords = export_tiles.map(index => ({ index, x: Math.floor(index / MAP_SIZE), y: index % MAP_SIZE }));
 struct TileCoord {
 int index;
 int x;
@@ -1345,7 +1238,6 @@ min_y = (std::min)(min_y, t.y);
 max_y = (std::max)(max_y, t.y);
 }
 
-// JS: const first_tile = await load_map_tile(tile_coords[0].x, tile_coords[0].y, 512);
 auto first_tile = load_map_tile(tile_coords[0].x, tile_coords[0].y, 512);
 if (first_tile.empty())
 throw std::runtime_error("unable to load first tile to determine tile size");
@@ -1386,8 +1278,6 @@ helper.mark(std::format("Tile {} {}", tile_coord.x, tile_coord.y), false, "Tile 
 }
 }
 
-// JS: const sorted_tiles = [...export_tiles].sort((a, b) => a - b);
-// JS: const tile_hash = crypto.createHash('md5').update(sorted_tiles.join(',')).digest('hex').substring(0, 8);
 auto sorted_tiles = tile_indices;
 std::sort(sorted_tiles.begin(), sorted_tiles.end());
 
@@ -1423,9 +1313,6 @@ logging::write(std::format("PNG export failed: {}", e.what()));
 helper.finish();
 }
 
-/**
- * JS: methods.export_selected_map_as_heightmaps()
- */
 static void export_selected_map_as_heightmaps() {
 auto& view = *core::view;
 const auto& export_tiles = view.mapViewerSelection;
@@ -1436,7 +1323,6 @@ core::setToast("error", "You haven't selected any tiles; hold shift and click on
 return;
 }
 
-// JS: if (export_resolution === -1) export_resolution = this.$core.view.config.heightmapCustomResolution;
 if (export_resolution == -1)
 export_resolution = view.config.value("heightmapCustomResolution", 256);
 
@@ -1453,7 +1339,6 @@ const std::string dir = casc::ExportHelper::getExportPath(
 (std::filesystem::path("maps") / selected_map_dir / "heightmaps").string());
 auto export_paths = core::openLastExportStream();
 
-// JS: this.$core.setToast('progress', 'Calculating height range across all tiles...', null, -1, false);
 core::setToast("progress", "Calculating height range across all tiles...", {}, -1, false);
 float global_min_height = (std::numeric_limits<float>::infinity)();
 float global_max_height = -(std::numeric_limits<float>::infinity)();
@@ -1527,12 +1412,10 @@ continue;
 
 const std::string out_path = (std::filesystem::path(dir) / filename).string();
 
-// JS: const writer = new PNGWriter(export_resolution, export_resolution);
 PNGWriter writer(export_resolution, export_resolution);
 int bit_depth = view.config.value("heightmapBitDepth", 8);
 
 if (bit_depth == 32) {
-// JS: writer.bytesPerPixel = 4; writer.bitDepth = 8; writer.colorType = 6;
 writer.bytesPerPixel = 4;
 writer.bitDepth = 8;
 writer.colorType = 6;
@@ -1543,7 +1426,6 @@ pixel_data.resize(export_resolution * export_resolution * 4);
 for (size_t j = 0; j < height_data->heights.size(); j++) {
 float normalized_height = (height_data->heights[j] - global_min_height) / height_range;
 
-// JS: float_view[0] = normalized_height; pixel_data = byte_view bytes
 uint8_t byte_view[4];
 std::memcpy(byte_view, &normalized_height, 4);
 
@@ -1554,7 +1436,6 @@ pixel_data[pixel_offset + 2] = byte_view[2];
 pixel_data[pixel_offset + 3] = byte_view[3];
 }
 } else if (bit_depth == 16) {
-// JS: writer.bytesPerPixel = 2; writer.bitDepth = 16; writer.colorType = 0;
 writer.bytesPerPixel = 2;
 writer.bitDepth = 16;
 writer.colorType = 0;
@@ -1604,29 +1485,18 @@ helper.finish();
 
 // --- Tab registration ---
 
-/**
- * JS: register() { this.registerNavButton('Maps', 'map.svg', InstallType.CASC); }
- */
 void registerTab() {
-// JS: this.registerNavButton('Maps', 'map.svg', InstallType.CASC);
 modules::register_nav_button("tab_maps", "Maps", "map.svg", install_type::CASC);
 }
 
-/**
- * JS: methods.initialize()
- */
 static void initialize() {
-// JS: this.$core.showLoadingScreen(3);
 core::showLoadingScreen(3);
 
-// JS: await this.$core.progressLoadingScreen('Loading WMO minimap textures...');
 core::progressLoadingScreen("Loading WMO minimap textures...");
 
-// JS: wmo_minimap_textures = new Map();
 wmo_minimap_textures_loaded = true;
 wmo_minimap_textures.clear();
 
-// JS: for (const row of (await db2.WMOMinimapTexture.getAllRows()).values()) { ... }
 auto& wmo_mm_table = casc::db2::getTable("WMOMinimapTexture");
 auto all_wmo_rows = wmo_mm_table.getAllRows();
 
@@ -1636,16 +1506,13 @@ if (wmoid_it == row.end())
 continue;
 uint32_t wmo_id = fieldToUint32(wmoid_it->second);
 
-// JS: tiles.push({ groupNum: row.GroupNum, blockX: row.BlockX, blockY: row.BlockY, fileDataID: row.FileDataID });
 wmo_minimap_textures[wmo_id].push_back(row);
 }
 
 logging::write(std::format("loaded {} WMO minimap entries", wmo_minimap_textures.size()));
 
-// JS: await this.$core.progressLoadingScreen('Loading maps...');
 core::progressLoadingScreen("Loading maps...");
 
-// JS: const maps = [];
 auto& map_table = casc::db2::getTable("Map");
 auto map_rows = map_table.getAllRows();
 
@@ -1666,7 +1533,6 @@ uint32_t expansion_id = (exp_it != entry.end()) ? fieldToUint32(exp_it->second) 
 
 std::string wdt_path = std::format("world/maps/{}/{}.wdt", directory, directory);
 
-// JS: if (entry.WdtFileDataID) { ... } else if (listfile.getByFilename(wdt_path)) { ... }
 if (wdt_fid) {
 if (!casc::listfile::existsByID(wdt_fid))
 casc::listfile::addEntry(wdt_fid, wdt_path);
@@ -1677,20 +1543,14 @@ maps.push_back(std::format("{}\x19[{}]\x19{}\x19({})", expansion_id, id, map_nam
 }
 }
 
-// JS: this.$core.view.mapViewerMaps = maps;
 core::view->mapViewerMaps.clear();
 for (const auto& m : maps)
 core::view->mapViewerMaps.push_back(m);
 
-// JS: this.$core.hideLoadingScreen();
 core::hideLoadingScreen();
 }
 
-/**
- * JS: mounted()
- */
 void mounted() {
-// JS: this.$core.view.mapViewerTileLoader = load_map_tile;
 core::view->mapViewerTileLoader = "terrain";
 
 // Initialize will be called after tab is shown (lazy init in render)
@@ -1714,7 +1574,6 @@ initialize();
 }
 
 // --- Watch: selectionMaps ---
-// JS: this.$core.view.$watch('selectionMaps', async selection => { ... })
 std::string current_selection_first;
 if (!view.selectionMaps.empty()) {
 current_selection_first = view.selectionMaps[0].get<std::string>();
@@ -1732,16 +1591,12 @@ load_map(map.id, map.dir);
 }
 
 // --- UI Layout ---
-// JS: <div class="tab list-tab" id="tab-maps">
-// CSS: #tab-maps { grid-template-rows: auto 1fr 60px; }
 if (app::layout::BeginTab("tab-maps")) {
 
 const ImVec2 tabAvail = ImGui::GetContentRegionAvail();
 const ImVec2 tabOrigin = ImGui::GetCursorPos();
 
 // --- Row 1: Expansion filter buttons (auto height) ---
-// JS: <div class="expansion-buttons"> ... </div>
-// CSS: .expansion-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; justify-content: center; }
 {
 	ImGui::SetCursorPos(tabOrigin);
 	app::theme::renderExpansionFilterButtons(
@@ -1755,8 +1610,6 @@ constexpr float FILTER_BAR_H = app::layout::FILTER_BAR_HEIGHT; // 60px
 const float contentH = tabAvail.y - expansionRowH;
 
 // --- Calculate grid regions manually for the remaining space ---
-// CSS: grid-template-columns: 1fr 1fr auto (with sidebar)
-// CSS: grid-template-rows: 1fr 60px (within the remaining space)
 constexpr float SIDEBAR_W = app::layout::SIDEBAR_WIDTH;
 const float gridW = tabAvail.x - SIDEBAR_W;
 const float leftColW = gridW * 0.5f;
@@ -1766,9 +1619,6 @@ const float topRowH = contentH - FILTER_BAR_H;
 const float rowYStart = tabOrigin.y + expansionRowH;
 
 // --- Left panel: Map list container (row 2, col 1) ---
-// JS: <div class="list-container">
-// CSS: .list-container { margin: 20px 10px 0 20px }
-// CSS: #tab-maps .list-container { grid-column: 1; grid-row: 2; }
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + app::layout::LIST_MARGIN_LEFT,
 	                           rowYStart + app::layout::LIST_MARGIN_TOP));
@@ -1826,7 +1676,6 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 }
 
 // --- Right panel: Map Viewer (row 1 spanning to row 2, col 2) ---
-// CSS: #tab-maps .ui-map-viewer { grid-column: 2; grid-row: 1 / span 2; }
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + leftColW + app::layout::PREVIEW_MARGIN_LEFT,
 	                           tabOrigin.y + app::layout::PREVIEW_MARGIN_TOP));
@@ -1883,7 +1732,6 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 }
 
 // --- Filter bar (row 3, col 1) ---
-// CSS: #tab-maps .filter { grid-column: 1; grid-row: 3; }
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x, rowYStart + topRowH));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f, 0.0f));
@@ -1941,7 +1789,6 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 }
 
 // --- Preview controls (row 3, col 2) ---
-// CSS: #tab-maps .spaced-preview-controls { grid-column: 2; grid-row: 3; }
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + leftColW, rowYStart + topRowH));
 	ImGui::BeginChild("maps-preview-controls", ImVec2(rightColW, FILTER_BAR_H), ImGuiChildFlags_None,
@@ -1992,7 +1839,6 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 }
 
 // --- Sidebar (col 3, spanning all rows) ---
-// CSS: #tab-maps .sidebar { grid-row: 1/span 3; }
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + gridW,
 	                           tabOrigin.y + app::layout::SIDEBAR_MARGIN_TOP));

@@ -55,14 +55,12 @@ void GLTexture::set_rgba(const uint8_t* pixels, int w, int h,
 		glGenerateMipmap(GL_TEXTURE_2D);
 }
 
-// JS set_canvas: adapted from HTMLCanvasElement → raw pixel data.
-// In the original JS this takes an HTMLCanvasElement and reads its pixels
 // via texImage2D(... canvas).  In desktop C++ there is no canvas, so the
 // caller supplies pixel data + dimensions directly.
 void GLTexture::set_canvas(const uint8_t* pixels, int w, int h,
                             const TextureOptions& options) {
 	TextureOptions opts = options;
-	opts.has_alpha = true; // canvas is always RGBA
+	opts.has_alpha = true;
 	set_rgba(pixels, w, h, opts);
 }
 

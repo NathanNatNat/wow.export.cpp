@@ -13,14 +13,12 @@ namespace resize_layer {
  * Invoked when this component is mounted.
  * @see https://vuejs.org/v2/guide/instance.html
  */
-// TODO(conversion): In ImGui, ResizeObserver is not needed. We check
 // the content region width each frame and fire the callback on change.
 
 /**
  * Invoked before this component is destroyed.
  * @see https://vuejs.org/v2/guide/instance.html
  */
-// TODO(conversion): No explicit unmount needed in ImGui immediate mode.
 
 // template: `<div><slot></slot></div>` — converted to ImGui below.
 

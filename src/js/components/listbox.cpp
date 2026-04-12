@@ -60,27 +60,22 @@ static std::string fid_filter(const std::string& e) {
  * Invoked when the component is mounted.
  * Used to register global listeners and resize observer.
  */
-// TODO(conversion): In ImGui, global mouse listeners and ResizeObserver are not needed.
-// ImGui provides mouse state via ImGui::GetIO() and resizing is handled by layout each frame.
 
 /**
  * Invoked when the component is activated (keep-alive).
  * Registers keyboard and paste listeners.
  */
-// TODO(conversion): In ImGui, activation/deactivation is handled by the caller controlling
 // whether render() is called each frame.
 
 /**
  * Invoked when the component is deactivated (keep-alive).
  * Unregisters keyboard and paste listeners.
  */
-// TODO(conversion): No explicit deactivation needed in ImGui immediate mode.
 
 /**
  * Invoked when the component is destroyed.
  * Used to unregister global mouse listeners and resize observer.
  */
-// TODO(conversion): No explicit unmount needed in ImGui immediate mode.
 // Scroll position saving is done each frame when persistscrollkey is set.
 
 /**
@@ -297,7 +292,6 @@ static void handleKey(const std::vector<std::string>& filteredItems,
 
 	// If document.activeElement is the document body, then we can safely assume
 	// the user is not focusing anything, and can intercept keyboard input.
-	// TODO(conversion): In ImGui, we check if no item is active (no text input focused, etc.).
 	if (ImGui::IsAnyItemActive())
 		return;
 
@@ -637,7 +631,6 @@ void render(const char* id,
 		? std::max(20.0f, containerHeight * (static_cast<float>(state.slotCount) / static_cast<float>(totalItems)))
 		: containerHeight;
 
-	// Equivalent of resize() — recalculate slot count and scroll each frame.
 	resize(containerHeight, scrollerHeight, state);
 
 	// Compute display range.
@@ -716,7 +709,6 @@ void render(const char* id,
 		const bool itemSelected = isSelected(selection, item);
 
 		// Alternating row background + selected highlight.
-		// CSS: .ui-listbox .item { background: var(--background-dark); }
 		//      .ui-listbox .item:nth-child(even) { background: var(--background-alt); }
 		//      .ui-listbox .item.selected { background: var(--font-alt); }
 		{
@@ -825,7 +817,6 @@ void render(const char* id,
 void saveState(const ListboxState& state,
                const std::string& persistscrollkey,
                const std::vector<std::string>& filteredItems) {
-	// Equivalent to JS beforeUnmount: save final scroll position.
 	if (!persistscrollkey.empty())
 		core::saveScrollPosition(persistscrollkey, static_cast<double>(state.scrollRel), scrollIndex(filteredItems, state));
 }

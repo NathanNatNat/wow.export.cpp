@@ -20,7 +20,6 @@
 
 namespace tab_home {
 
-// ── Static texture state ─────────────────────────────────────────
 
 // Home background texture (home-background.webp) for the What's New panel.
 static GLuint s_bgTexture = 0;
@@ -34,13 +33,10 @@ static GLuint s_githubIconTex = 0;
 static GLuint s_patreonIconTex = 0;
 static bool s_helpIconsLoaded = false;
 
-// ── External link URLs ───────────────────────────────────────────
-// JS: data-external="::DISCORD" / "::GITHUB" / "::PATREON"
 static constexpr const char* URL_DISCORD = "https://discord.gg/kC3EzAYBtf";
 static constexpr const char* URL_GITHUB  = "https://github.com/Kruithne/wow.export";
 static constexpr const char* URL_PATREON = "https://patreon.com/Kruithne";
 
-// ── Texture loading helpers ──────────────────────────────────────
 
 static void loadBackgroundTexture() {
 	if (s_bgLoaded)
@@ -91,17 +87,6 @@ static void loadHelpIcons() {
 	s_patreonIconTex = app::theme::loadSvgTexture(faDir / "patreon.svg", 80);
 }
 
-// ── Shared rendering (used by both tab_home and legacy_tab_home) ─
-
-/**
- * Render a single help button card.
- * JS: <div data-external="::URL"><b>title</b><span>subtitle</span></div>
- *
- * CSS: #home-help-buttons > div { width: 300px; border: 1px solid var(--border);
- *      border-radius: 10px; padding: 20px; height: 65px; }
- * Hover: border-color → #22b549, color → #22b549
- * Icon watermark: 20% opacity, positioned right, rotated 20deg (simulated).
- */
 static void renderHelpButton(const char* id, const char* title, const char* subtitle,
                               const char* url, GLuint iconTex) {
 	constexpr float CARD_WIDTH = 300.0f;
@@ -121,16 +106,13 @@ static void renderHelpButton(const char* id, const char* title, const char* subt
 
 	ImDrawList* draw = ImGui::GetWindowDrawList();
 
-	// CSS: background-color: #00000014
 	ImU32 bgCol = IM_COL32(0, 0, 0, 20);
 	draw->AddRectFilled(cardMin, cardMax, bgCol, ROUNDING);
 
-	// CSS: border: 1px solid var(--border); hover: border-color → #22b549
 	ImU32 borderCol = hovered ? app::theme::NAV_SELECTED_U32 : app::theme::BORDER_U32;
 	draw->AddRect(cardMin, cardMax, borderCol, ROUNDING, 0, 1.0f);
 
 	// Icon watermark at 20% opacity on right side
-	// CSS: ::before { right: -20px; width: 120px; height: 120px; opacity: 0.2; }
 	if (iconTex) {
 		float iconSize = 80.0f;
 		ImVec2 iconMin(cardMax.x - iconSize - 10.0f, cardMin.y + (cardMax.y - cardMin.y - iconSize) * 0.5f);
@@ -142,7 +124,6 @@ static void renderHelpButton(const char* id, const char* title, const char* subt
 	}
 
 	// Text content
-	// CSS: hover → color: var(--nav-option-selected)
 	ImU32 textCol = hovered ? app::theme::NAV_SELECTED_U32 : app::theme::FONT_PRIMARY_U32;
 	ImU32 subtitleCol = hovered ? app::theme::NAV_SELECTED_U32 : app::theme::FONT_FADED_U32;
 
@@ -165,7 +146,6 @@ static void renderHelpButton(const char* id, const char* title, const char* subt
 /**
  * Render a single navigation card.
  * Each card is ~100x100px with a Font Awesome icon centered above a label.
- * Hover: subtle border highlight (green), icon color change.
  */
 static void renderNavCard(const modules::NavButton& btn, float cardSize) {
 	ImVec2 cursor = ImGui::GetCursorScreenPos();
@@ -244,8 +224,6 @@ void renderHomeLayout() {
 
 	float colW = (usableW - COL_GAP) * 0.5f;
 
-	// CSS: @media (max-height: 899px) { #home-help-buttons { display: none; } }
-	// We use the full window height for this check (including header/footer).
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 	bool showHelpButtons = viewport->Size.y >= 900.0f;
 
@@ -268,7 +246,6 @@ void renderHomeLayout() {
 
 	// ═════════════════════════════════════════════════════════════
 	// Row 1, Column 1: Title heading
-	// JS HomeShowcase: <h1 id="home-showcase-header">Made with wow.export</h1>
 	// Tracker: "wow.export vX.X.X" title at large bold size, subtitle text below
 	// ═════════════════════════════════════════════════════════════
 	{
@@ -281,7 +258,6 @@ void renderHomeLayout() {
 
 	// ═════════════════════════════════════════════════════════════
 	// Row 2, Column 1: Navigation cards (replaces HomeShowcase)
-	// CSS: #home-showcase { grid-column: 1; grid-row: 2; border: 1px solid
 	//      var(--border); border-radius: 10px; }
 	// ═════════════════════════════════════════════════════════════
 	{
@@ -336,7 +312,6 @@ void renderHomeLayout() {
 
 	// ═════════════════════════════════════════════════════════════
 	// Row 2, Column 2: "What's New" panel (#home-changes)
-	// CSS: #home-changes { grid-column: 2; grid-row: 2; padding: 0 50px;
 	//      border: 1px solid var(--border); border-radius: 10px;
 	//      background: #0000002e url(./images/home-background.webp) no-repeat center / cover; }
 	// ═════════════════════════════════════════════════════════════
@@ -366,7 +341,6 @@ void renderHomeLayout() {
 		draw->AddRect(panelMin, panelMax, app::theme::BORDER_U32, 10.0f, 0, 1.0f);
 
 		// Content: whatsNewHTML inside a scrolling child window.
-		// CSS: padding: 0 50px; flex-direction: column; justify-content: center;
 		float contentPadX = 50.0f;
 		float contentPadY = 20.0f;
 
@@ -392,7 +366,6 @@ void renderHomeLayout() {
 
 	// ═════════════════════════════════════════════════════════════
 	// Row 4: Help buttons (#home-help-buttons) — full width
-	// CSS: grid-column: 1 / -1; display: flex; justify-content: center; gap: 20px;
 	// @media (max-height: 899px) { #home-help-buttons { display: none; } }
 	// ═════════════════════════════════════════════════════════════
 	if (showHelpButtons) {
@@ -400,21 +373,18 @@ void renderHomeLayout() {
 		float totalHelpW = 300.0f * 3 + 20.0f * 2;
 		float helpStartX = startX + (usableW - totalHelpW) * 0.5f;
 
-		// JS: <div data-external="::DISCORD"><b>Stuck? Need Help?</b>
 		//     <span>Join our Discord community for support!</span></div>
 		ImGui::SetCursorScreenPos(ImVec2(helpStartX, helpY));
 		renderHelpButton("discord", "Stuck? Need Help?",
 		                 "Join our Discord community for support!",
 		                 URL_DISCORD, s_discordIconTex);
 
-		// JS: <div data-external="::GITHUB"><b>Gnomish Heritage?</b>
 		//     <span>wow.export is open-source, tinkerers are welcome!</span></div>
 		ImGui::SetCursorScreenPos(ImVec2(helpStartX + 300.0f + 20.0f, helpY));
 		renderHelpButton("github", "Gnomish Heritage?",
 		                 "wow.export is open-source, tinkerers are welcome!",
 		                 URL_GITHUB, s_githubIconTex);
 
-		// JS: <div data-external="::PATREON"><b>Support Us!</b>
 		//     <span>Support development of wow.export through Patreon!</span></div>
 		ImGui::SetCursorScreenPos(ImVec2(helpStartX + (300.0f + 20.0f) * 2, helpY));
 		renderHelpButton("patreon", "Support Us!",
@@ -437,7 +407,6 @@ void render() {
 }
 
 void navigate(const char* module_name) {
-	// JS: this.$modules[module_name].setActive();
 	modules::set_active(module_name);
 }
 

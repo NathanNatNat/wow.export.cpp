@@ -49,7 +49,6 @@ public:
 
 	/**
 	 * Concatenate all decoded blocks into a single BufferWrapper.
-	 * C++ equivalent of JS createBlobURL() — returns data instead of URL.
 	 * @returns BufferWrapper containing all decoded block data.
 	 */
 	BufferWrapper createBlobURL();

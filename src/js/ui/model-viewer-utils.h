@@ -146,7 +146,6 @@ private:
 	bool _was_paused_before_scrub = false;
 };
 
-// ─── Functions ──────────────────────────────────────────────────────────────
 
 /**
  * Detect model type from file data magic.

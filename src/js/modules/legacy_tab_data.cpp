@@ -34,26 +34,19 @@ namespace legacy_tab_data {
 
 // --- File-local state ---
 
-// JS: let selected_file = null;
 static std::string selected_file;
 
-// JS: let selected_file_path = null;
 static std::string selected_file_path;
 
-// JS: let selected_file_schema = null;
 // Stored as a copy (not a pointer) because the DBCReader is a local variable in load_table().
 static std::map<std::string, db::DBCSchemaField> selected_file_schema;
 
-// JS: let dbc_listfile = [];
 static std::vector<std::string> dbc_listfile;
 
-// JS: let dbc_path_map = new Map();
 static std::unordered_map<std::string, std::string> dbc_path_map;
 
-// JS: const DBC_EXTENSION = '.dbc';
 static constexpr const char* DBC_EXTENSION = ".dbc";
 
-// JS: data() { return { dbcListfile: [], menuButtonDataLegacy: [...] }; }
 static std::vector<std::string> local_dbc_listfile;
 
 // Change-detection for selectionDB2s.
@@ -71,55 +64,44 @@ static void copy_cell(const std::string& value);
 
 // --- Internal functions ---
 
-// JS: const initialize_dbc_listfile = async (core) => { ... }
 static void initialize_dbc_listfile() {
 	if (!dbc_listfile.empty())
 		return;
 
-	// JS: const mpq = core.view.mpq;
 	mpq::MPQInstall* mpq = core::view->mpq.get();
 	if (!mpq) return;
 
-	// JS: const all_dbc_files = mpq.getFilesByExtension(DBC_EXTENSION);
 	auto all_dbc_files = mpq->getFilesByExtension(DBC_EXTENSION);
 
 	dbc_path_map.clear();
 	std::set<std::string> table_names;
 
 	for (const auto& full_path : all_dbc_files) {
-		// JS: const parts = full_path.split('\\');
-		// JS: const dbc_file = parts[parts.length - 1];
 		namespace fs = std::filesystem;
 		std::string dbc_file = fs::path(full_path).filename().string();
-		// JS: const table_name = dbc_file.replace(/\.dbc$/i, '');
 		std::string table_name = dbc_file;
 		const auto dot_pos = table_name.rfind('.');
 		if (dot_pos != std::string::npos)
 			table_name = table_name.substr(0, dot_pos);
 
-		// JS: if (!dbc_path_map.has(table_name)) { ... }
 		if (dbc_path_map.find(table_name) == dbc_path_map.end()) {
 			dbc_path_map[table_name] = full_path;
 			table_names.insert(table_name);
 		}
 	}
 
-	// JS: dbc_listfile = Array.from(table_names).sort((a, b) => a.localeCompare(b));
 	dbc_listfile.assign(table_names.begin(), table_names.end());
 	std::sort(dbc_listfile.begin(), dbc_listfile.end());
 
 	logging::write(std::format("initialized {} dbc files from mpq archives", dbc_listfile.size()));
 }
 
-// JS: const load_table = async (core, table_name) => { ... }
 static void load_table(const std::string& table_name) {
 	auto& view = *core::view;
 
 	try {
-		// JS: const mpq = core.view.mpq;
 		mpq::MPQInstall* mpq = core::view->mpq.get();
 
-		// JS: const full_path = dbc_path_map.get(table_name);
 		auto it = dbc_path_map.find(table_name);
 		if (it == dbc_path_map.end()) {
 			core::setToast("error", std::format("Unable to find DBC file: {}", table_name), {}, -1);
@@ -127,7 +109,6 @@ static void load_table(const std::string& table_name) {
 		}
 		const std::string& full_path = it->second;
 
-		// JS: let raw_data = mpq.getFile(full_path);
 		auto raw_data = mpq ? mpq->getFile(full_path) : std::nullopt;
 
 		if (!raw_data) {
@@ -135,24 +116,17 @@ static void load_table(const std::string& table_name) {
 			return;
 		}
 
-		// JS: const data = new BufferWrapper(Buffer.from(raw_data));
 		BufferWrapper data(*raw_data);
 
-		// JS: const build_id = get_build_version(core);
-		// JS: return core.view.mpq?.build_id ?? '1.12.1.5875';
 		std::string build_id = mpq ? mpq->build_id : "1.12.1.5875";
 
-		// JS: const dbc_reader = new DBCReader(table_name + '.dbc', build_id);
 		db::DBCReader dbc_reader(table_name + ".dbc", build_id);
-		// JS: await dbc_reader.parse(data);
 		dbc_reader.parse(data);
 
-		// JS: const all_headers = [...dbc_reader.schema.keys()];
 		std::vector<std::string> all_headers;
 		for (const auto& key : dbc_reader.schemaOrder)
 			all_headers.push_back(key);
 
-		// JS: const id_index = all_headers.findIndex(header => header.toUpperCase() === 'ID');
 		int id_index = -1;
 		for (int i = 0; i < static_cast<int>(all_headers.size()); i++) {
 			std::string upper = all_headers[i];
@@ -163,30 +137,24 @@ static void load_table(const std::string& table_name) {
 			}
 		}
 
-		// JS: if (id_index > 0) { ... move ID to front }
 		if (id_index > 0) {
 			std::string id_header = all_headers[id_index];
 			all_headers.erase(all_headers.begin() + id_index);
 			all_headers.insert(all_headers.begin(), id_header);
 		}
 
-		// JS: core.view.tableBrowserHeaders = all_headers;
 		view.tableBrowserHeaders.clear();
 		for (const auto& h : all_headers)
 			view.tableBrowserHeaders.push_back(h);
 
-		// JS: core.view.selectionDataTable = [];
 		view.selectionDataTable.clear();
 
-		// JS: const rows = await dbc_reader.getAllRows();
 		auto rows = dbc_reader.getAllRows();
 		if (rows.empty())
 			core::setToast("info", "Selected DBC has no rows.");
 		else
 			core::hideToast(false);
 
-		// JS: const parsed = Array(rows.size);
-		// JS: for (const row of rows.values()) { ... }
 		view.tableBrowserRows.clear();
 		for (const auto& [row_id, row] : rows) {
 			nlohmann::json row_values = nlohmann::json::array();
@@ -198,8 +166,6 @@ static void load_table(const std::string& table_name) {
 				}
 
 				const auto& value = field_it->second;
-				// JS: if (Array.isArray(value)) row_values.push(value.join(', '));
-				// JS: else row_values.push(value);
 				std::visit([&row_values](const auto& v) {
 					using T = std::decay_t<decltype(v)>;
 					if constexpr (std::is_same_v<T, std::string>) {
@@ -250,16 +216,13 @@ static void load_table(const std::string& table_name) {
 		selected_file_path = full_path;
 		selected_file_schema = dbc_reader.schema;
 	} catch (const std::exception& e) {
-		// JS: core.setToast('error', 'Unable to open DBC file ' + table_name, { 'View Log': () => log.openRuntimeLog() }, -1);
 		core::setToast("error", "Unable to open DBC file " + table_name,
 			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open DBC file: {}", e.what()));
 	}
 }
 
-// JS: const get_build_version = (core) => { ... }
 static std::string get_build_version() {
-	// JS: return core.view.mpq?.build_id ?? '1.12.1.5875';
 	mpq::MPQInstall* mpq = core::view->mpq.get();
 	return mpq ? mpq->build_id : "1.12.1.5875";
 }
@@ -267,21 +230,16 @@ static std::string get_build_version() {
 // --- Public API ---
 
 void registerTab() {
-	// JS: this.registerNavButton('Data', 'database.svg', InstallType.MPQ);
 	modules::register_nav_button("legacy_tab_data", "Data", "database.svg", install_type::MPQ);
 }
 
 void mounted() {
-	// JS: this.$core.showLoadingScreen(1);
 	core::showLoadingScreen(1);
 
 	try {
-		// JS: await this.$core.progressLoadingScreen('Scanning DBC files...');
 		core::progressLoadingScreen("Scanning DBC files...");
-		// JS: await initialize_dbc_listfile(this.$core);
 		initialize_dbc_listfile();
 
-		// JS: this.dbcListfile = dbc_listfile;
 		local_dbc_listfile = dbc_listfile;
 		core::hideLoadingScreen();
 	} catch (const std::exception& e) {
@@ -290,7 +248,6 @@ void mounted() {
 		core::setToast("error", "Failed to load DBC files. Check the log for details.");
 	}
 
-	// JS: this.$core.view.$watch('selectionDB2s', async selection => { ... });
 	// Change-detection is handled in render() by comparing selectionDB2s[0] each frame.
 }
 
@@ -308,14 +265,11 @@ void render() {
 
 	// --- Template rendering ---
 
-	// JS: <div class="tab list-tab" id="tab-legacy-data">
-	// CSS: grid-template-columns: 1fr 6fr → ratio 1/7
 	if (app::layout::BeginTab("tab-legacy-data")) {
 
 	auto regions = app::layout::CalcListTabRegions(false, 1.0f / 7.0f);
 
 	// --- Left panel: List container (row 1, col 1) ---
-	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionDB2s" :items="dbcListfile" :filter="userInputFilterDB2s" ...>
 	// </div>
 	if (app::layout::BeginListContainer("dbc-list-container", regions)) {
@@ -352,7 +306,6 @@ void render() {
 	app::layout::EndListContainer();
 
 	// --- Filter bar (row 2, col 1) ---
-	// JS: <div class="filter">
 	if (app::layout::BeginFilterBar("dbc-filter", regions)) {
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_db2_buf[256] = {};
@@ -363,7 +316,6 @@ void render() {
 	app::layout::EndFilterBar();
 
 	// --- Right panel: Preview container (row 1, col 2) ---
-	// JS: <div class="list-container"> (data table + options)
 	//     <DataTable ref="dataTable" :headers="tableBrowserHeaders" :rows="tableBrowserRows" ...>
 	//     <ContextMenu :node="contextMenus.nodeDataTable" ...>
 	//       copy_rows_csv, copy_rows_sql, copy_cell
@@ -428,10 +380,8 @@ void render() {
 		}
 
 		// Options row.
-		// JS: <div id="tab-data-options">
 		const std::string export_format = view.config.value("exportDataFormat", std::string("CSV"));
 
-		// JS: <label> Copy Header </label> (only if CSV)
 		if (export_format == "CSV") {
 			bool copy_header = view.config.value("dataCopyHeader", false);
 			if (ImGui::Checkbox("Copy Header", &copy_header))
@@ -439,7 +389,6 @@ void render() {
 			ImGui::SameLine();
 		}
 
-		// JS: <label> Create Table </label> (only if SQL)
 		if (export_format == "SQL") {
 			bool create_table_val = view.config.value("dataSQLCreateTable", false);
 			if (ImGui::Checkbox("Create Table", &create_table_val))
@@ -447,7 +396,6 @@ void render() {
 			ImGui::SameLine();
 		}
 
-		// JS: <label> Export all rows </label>
 		bool export_all = view.config.value("dataExportAll", false);
 		if (ImGui::Checkbox("Export all rows", &export_all))
 			view.config["dataExportAll"] = export_all;
@@ -455,7 +403,6 @@ void render() {
 	app::layout::EndPreviewContainer();
 
 	// --- Bottom: Preview controls (row 2, col 2) ---
-	// JS: <div id="tab-data-tray">
 	//     <input> filter + <MenuButton> export
 	if (app::layout::BeginPreviewControls("legacy-data-preview-controls", regions)) {
 		char filter_data_buf[256] = {};
@@ -465,7 +412,6 @@ void render() {
 
 		ImGui::SameLine();
 
-		// JS: <MenuButton :options="menuButtonDataLegacy" :default="config.exportDataFormat" @change="..." @click="export_data">
 		{
 			// Legacy data only supports CSV export.
 			static const std::vector<menu_button::MenuOption> legacy_data_opts = {
@@ -488,10 +434,7 @@ void render() {
 
 // --- Copy methods (context menu) ---
 
-// JS: methods.copy_rows_csv()
 static void copy_rows_csv() {
-	// JS: const data_table = this.$refs.dataTable;
-	// JS: const csv = data_table.getSelectedRowsAsCSV();
 	const auto& view = *core::view;
 	const size_t count = view.selectionDataTable.size();
 	if (count == 0)
@@ -519,15 +462,11 @@ static void copy_rows_csv() {
 	std::string csv = data_table::getSelectedRowsAsCSV(headers, sorted_rows, sel_indices,
 		view.config.value("dataCopyHeader", false));
 
-	// JS: nw.Clipboard.get().set(csv, 'text');
 	ImGui::SetClipboardText(csv.c_str());
 	core::setToast("success", std::format("Copied {} row{} as CSV to the clipboard", count, count != 1 ? "s" : ""), {}, 2000);
 }
 
-// JS: methods.copy_rows_sql()
 static void copy_rows_sql() {
-	// JS: const data_table = this.$refs.dataTable;
-	// JS: const sql = data_table.getSelectedRowsAsSQL();
 	const auto& view = *core::view;
 	const size_t count = view.selectionDataTable.size();
 	if (count == 0)
@@ -555,23 +494,19 @@ static void copy_rows_sql() {
 	std::string sql = data_table::getSelectedRowsAsSQL(headers, sorted_rows, sel_indices,
 		selected_file.empty() ? "unknown_table" : selected_file);
 
-	// JS: nw.Clipboard.get().set(sql, 'text');
 	ImGui::SetClipboardText(sql.c_str());
 	core::setToast("success", std::format("Copied {} row{} as SQL to the clipboard", count, count != 1 ? "s" : ""), {}, 2000);
 }
 
-// JS: methods.copy_cell(value)
 static void copy_cell(const std::string& value) {
 	if (value.empty())
 		return;
 
-	// JS: nw.Clipboard.get().set(String(value), 'text');
 	ImGui::SetClipboardText(value.c_str());
 }
 
 // --- Export methods ---
 
-// JS: methods.export_csv()
 static void export_csv() {
 	auto& view = *core::view;
 	const auto& headers_json = view.tableBrowserHeaders;
@@ -604,7 +539,6 @@ static void export_csv() {
 			return;
 		}
 
-		// JS: rows_to_export = selection.map(row_index => all_rows[row_index]).filter(row => row !== undefined);
 		for (const auto& row_index_json : selection) {
 			const int row_index = row_index_json.get<int>();
 			if (row_index >= 0 && row_index < static_cast<int>(all_rows_json.size())) {
@@ -622,11 +556,9 @@ static void export_csv() {
 		}
 	}
 
-	// JS: await dataExporter.exportDataTable(headers, rows_to_export, selected_file || 'unknown_table');
 	data_exporter::exportDataTable(headers, rows_to_export, selected_file.empty() ? "unknown_table" : selected_file);
 }
 
-// JS: methods.export_sql()
 static void export_sql() {
 	auto& view = *core::view;
 	const auto& headers_json = view.tableBrowserHeaders;
@@ -674,10 +606,8 @@ static void export_sql() {
 		}
 	}
 
-	// JS: const create_table = this.$core.view.config.dataSQLCreateTable;
 	const bool create_table = view.config.value("dataSQLCreateTable", false);
 
-	// JS: await dataExporter.exportDataTableSQL(headers, rows_to_export, selected_file || 'unknown_table', selected_file_schema, create_table);
 	// Convert DBC schema (map<string, DBCSchemaField>) to WDC schema (map<string, SchemaField>).
 	std::map<std::string, db::SchemaField> converted_schema;
 	for (const auto& [name, field] : selected_file_schema) {
@@ -691,20 +621,17 @@ static void export_sql() {
 		&converted_schema, create_table);
 }
 
-// JS: methods.export_dbc()
 static void export_dbc() {
 	if (selected_file.empty() || selected_file_path.empty()) {
 		core::setToast("info", "No DBC file selected to export.");
 		return;
 	}
 
-	// JS: await dataExporter.exportRawDBC(selected_file, selected_file_path, this.$core.view.mpq);
 	mpq::MPQInstall* mpq = core::view->mpq.get();
 	data_exporter::exportRawDBC(selected_file, selected_file_path, mpq);
 }
 
 void export_data() {
-	// JS: const format = this.$core.view.config.exportDataFormat;
 	const std::string format = core::view->config.value("exportDataFormat", std::string("CSV"));
 
 	if (format == "CSV")

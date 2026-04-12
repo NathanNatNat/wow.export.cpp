@@ -30,14 +30,11 @@ MapViewerPersistedState& getPersistedState() {
 	return s_state;
 }
 
-// ─── props ──────────────────────────────────────────────────────────
 // props: ['loader', 'tileSize', 'map', 'zoom', 'mask', 'selection', 'selectable', 'gridSize']
 // emits: ['update:selection']
 
-// ─── data ───────────────────────────────────────────────────────────
 // Reactive instance data — stored in MapViewerState.
 
-// ─── computed ───────────────────────────────────────────────────────
 
 /**
  * Returns the effective grid size, defaulting to MAP_SIZE if not specified.
@@ -46,46 +43,15 @@ int effectiveGridSize(int gridSize) {
 	return gridSize > 0 ? gridSize : MAP_SIZE;
 }
 
-// ─── mounted / beforeUnmount ────────────────────────────────────────
 
 /**
  * Invoked when this component is mounted in the DOM.
  */
-// In ImGui, there are no canvas contexts, ResizeObserver,
-// or global document event listeners. Mouse/keyboard state is queried via
-// ImGui::GetIO() each frame. Resize is handled by layout recalculation every frame.
-// The mounted/beforeUnmount lifecycle is replaced by per-frame logic in renderWidget().
-//
-// JS mounted:
-//   this.context = this.$refs.canvas.getContext('2d', { willReadFrequently: true });
-//   this.overlayContext = this.$refs.overlayCanvas.getContext('2d');
-//   state.doubleBuffer ??= document.createElement('canvas');
-//   this.doubleBufferContext = state.doubleBuffer.getContext('2d');
-//   this.onMouseMove = event => this.handleMouseMove(event);
-//   this.onMouseUp = event => this.handleMouseUp(event);
-//   document.addEventListener('mousemove', this.onMouseMove);
-//   document.addEventListener('mouseup', this.onMouseUp);
-//   this.onKeyPress = event => this.handleKeyPress(event);
-//   document.addEventListener('keydown', this.onKeyPress);
-//   this.onResize = () => this.render();
-//   window.addEventListener('resize', this.onResize);
-//   this.observer = new ResizeObserver(() => this.onResize());
-//   this.observer.observe(this.$el);
-//   this.render();
 
 /**
  * Invoked when this component is about to be destroyed.
  */
-// No explicit unmount needed in ImGui immediate mode.
-// JS beforeUnmount:
-//   window.removeEventListener('resize', this.onResize);
-//   document.removeEventListener('mousemove', this.onMouseMove);
-//   document.removeEventListener('mouseup', this.onMouseUp);
-//   document.removeEventListener('keydown', this.onKeyPress);
-//   this.observer.disconnect();
-//   if (state.finalPassTimeout) { clearTimeout(state.finalPassTimeout); state.finalPassTimeout = null; }
 
-// ─── watch ──────────────────────────────────────────────────────────
 
 /**
  * Invoked when the map property changes for this component.
@@ -103,7 +69,6 @@ int effectiveGridSize(int gridSize) {
  */
 // Change detection is done in renderWidget() by comparing prevSelectionSize.
 
-// ─── methods ────────────────────────────────────────────────────────
 
 /**
  * Clear tile queue, requested set, and rendered set.
@@ -220,7 +185,6 @@ void performFinalPass(MapViewerState& state, int tileSize_prop, int gridSize,
  */
 bool tileHasUnexpectedTransparency(float drawX, float drawY, int tileSize) {
 	// In JS this reads Canvas 2D pixel data via getImageData().
-	// In C++ we sample from the CPU-side tilePixelCache populated by loadTile().
 	// The original JS code samples 9 points (corners, edge centers, center)
 	// and checks the alpha channel for 0.
 
@@ -343,7 +307,6 @@ void loadTile(MapViewerState& state, const TileQueueNode& tile, const TileLoader
 			//   } else {
 			//       this.context.putImageData(data, drawX, drawY);
 			//   }
-			// In C++ / ImGui, the pixel data is cached for the final-pass transparency
 			// check. GL texture upload for rendering is handled externally.
 
 			// Store pixel data in CPU-side cache for tileHasUnexpectedTransparency()
@@ -450,7 +413,6 @@ void render(MapViewerState& state, int tileSize_prop, int gridSize,
 
 	// Update double-buffer dimensions to match
 	// In JS, state.doubleBuffer is a separate offscreen canvas.
-	// In C++ / ImGui, double-buffering is handled via the tile pixel cache and
 	// rendered set — the panning optimization is preserved structurally.
 
 	// Update overlay canvas dimensions to match
@@ -562,7 +524,6 @@ void renderWithDoubleBuffer(MapViewerState& state, float canvasW, float canvasH,
 	// Copy double-buffer back to main canvas
 	// In JS, this clears the main canvas and draws the double-buffer
 	// via ctx.clearRect() + ctx.drawImage(state.doubleBuffer, 0, 0).
-	// In C++ / ImGui, the draw list is rebuilt each frame from the tile pixel cache.
 }
 
 /**
@@ -743,7 +704,6 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 		const float gapLen = 5.0f;
 		const float thickness = 2.0f;
 
-		// Helper lambda: draw a dashed line from (ax,ay) to (bx,by)
 		auto drawDashedLine = [&](float ax, float ay, float bx, float by) {
 			const float dx = bx - ax;
 			const float dy = by - ay;
@@ -1125,7 +1085,6 @@ void handleMouseWheel(MapViewerState& state, float deltaY, float clientX, float 
 	}
 }
 
-// ─── Main widget render ─────────────────────────────────────────────
 
 /**
  * HTML mark-up to render for this component.
@@ -1159,7 +1118,6 @@ void renderWidget(const char* id,
                   const SelectionChangedCallback& onSelectionChanged) {
 	ImGui::PushID(id);
 
-	// ── Watch: map change ───────────────────────────────────────
 	if (state.prevMap != mapId) {
 		state.prevMap = mapId;
 		// Reset the cache.
@@ -1179,7 +1137,6 @@ void renderWidget(const char* id,
 	state.viewportWidth = regionAvail.x;
 	state.viewportHeight = regionAvail.y;
 
-	// ── Mounted equivalent: set default position on first frame ──
 	if (!state.initialized && mapId != -1 && state.viewportWidth > 0.0f && state.viewportHeight > 0.0f) {
 		state.initialized = true;
 		// Set the map position to a default position.
@@ -1188,7 +1145,6 @@ void renderWidget(const char* id,
 		render(state, tileSize_prop, gridSize, mask, loader);
 	}
 
-	// ── Info bar ────────────────────────────────────────────────
 	// <div class="info">
 	ImGui::BeginGroup();
 	ImGui::TextUnformatted("Navigate: Click + Drag");
@@ -1217,7 +1173,6 @@ void renderWidget(const char* id,
 		ImGui::TextUnformatted(state.hoverInfo.c_str());
 	}
 
-	// ── Canvas area (tile rendering + overlay) ──────────────────
 	// <canvas ref="canvas"></canvas>
 	// <canvas ref="overlayCanvas" class="overlay-canvas"></canvas>
 	ImVec2 canvasAvail = ImGui::GetContentRegionAvail();
@@ -1233,7 +1188,6 @@ void renderWidget(const char* id,
 	const ImGuiIO& io = ImGui::GetIO();
 	const ImVec2 mousePos = io.MousePos;
 
-	// ── Mouse event handling ────────────────────────────────────
 
 	// @mousemove="handleMouseOver" / @mouseout="handleMouseOut"
 	if (isCanvasHovered) {
@@ -1270,8 +1224,6 @@ void renderWidget(const char* id,
 		handleKeyPress(state, gridSize, mask, selection, selectable, onSelectionChanged);
 	}
 
-	// ── Final pass timer handling ───────────────────────────────
-	// JS: setTimeout(() => { this.performFinalPass(); state.finalPassTimeout = null; }, 100);
 	if (s_state.finalPassTimer > 0.0) {
 		s_state.finalPassTimer -= static_cast<double>(io.DeltaTime);
 		if (s_state.finalPassTimer <= 0.0) {
@@ -1280,7 +1232,6 @@ void renderWidget(const char* id,
 		}
 	}
 
-	// ── Render overlay (selection + hover highlights) ───────────
 	if (mapId != -1) {
 		// Watch: hoverTile change → renderOverlay()
 		// Watch: selection change → renderOverlay()

@@ -20,8 +20,6 @@
 namespace {
 
 // inv_misc_questionmark — default placeholder icon (embedded JPEG bytes).
-// Original JS: base64 data URL set as CSS background-image.
-// C++: raw JPEG bytes decoded via stb_image into an OpenGL texture.
 // clang-format off
 const uint8_t DEFAULT_ICON_JPEG[] = {
 	0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48,
@@ -157,14 +155,12 @@ constexpr int QUEUE_LIMIT = 20;
 /**
  * Queue entry for icon loading.
  * In JS, this held { fileDataID, rule } where rule was a CSSStyleRule.
- * In C++, we only need the fileDataID since textures are stored in the cache.
  */
 struct QueueEntry {
 	uint32_t fileDataID;
 };
 
 // Texture cache: fileDataID -> OpenGL texture handle.
-// Replaces the JS dynamic stylesheet with CSS rules.
 std::unordered_map<uint32_t, uint32_t> _textureCache;
 
 // Set of fileDataIDs that have been registered (equivalent to iconRuleExists).
@@ -204,7 +200,6 @@ void removeRule(uint32_t fileDataID) {
 /**
  * Process the next item in the icon loading queue.
  * JS equivalent: processQueue() — loaded BLP files and set CSS background-image.
- * In C++, this loads BLP files and creates OpenGL textures.
  */
 void processQueue() {
 	_loading = true;
@@ -214,7 +209,6 @@ void processQueue() {
 		_queue.pop_back();
 
 		try {
-			// JS: core.view.casc.getFile(entry.fileDataID)
 			//       .then(data => { entry.rule.style.backgroundImage = 'url(' + new BLPFile(data).getDataURL(0b0111) + ')'; })
 			//       .catch(() => {})
 			//
@@ -257,7 +251,6 @@ namespace icon_render {
 void loadIcon(uint32_t fileDataID) {
 	if (!iconRuleExists(fileDataID)) {
 		// Register the icon with a default/placeholder texture.
-		// JS equivalent: sheet.insertRule(selector + ' {}') then setting backgroundImage to DEFAULT_ICON.
 		_registeredIcons.insert(fileDataID);
 		_textureCache[fileDataID] = getDefaultTexture();
 

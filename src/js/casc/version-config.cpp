@@ -57,7 +57,6 @@ std::vector<std::unordered_map<std::string, std::string>> parseVersionConfig(std
 
 			// Whitespace is replaced so that a field like 'Install Key' becomes 'InstallKey'.
 			// This just improves coding readability when accessing the fields later on.
-			// JS String.replace(' ', '') only replaces the first occurrence.
 			std::string field(header);
 			auto space_pos = field.find(' ');
 			if (space_pos != std::string::npos)

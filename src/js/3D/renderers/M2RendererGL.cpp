@@ -493,10 +493,6 @@ if (!m2->vertices.empty()) {
 loadSkin(0);
 
 if (reactive) {
-// JS: this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true });
-// JS: this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true });
-// JS: this.bonesWatcher = core.view.$watch('config.modelViewerShowBones', () => {}, { deep: true });
-// Vue watchers → no-op in immediate mode; updateGeosets() called manually.
 }
 }
 
@@ -528,16 +524,13 @@ syncID = texture_ribbon::reset();
 
 for (size_t i = 0, n = tex_list.size(); i < n; i++) {
 auto& texture = tex_list[i];
-// JS: const ribbonSlot = this.useRibbon ? textureRibbon.addSlot() : null;
 int ribbonSlot = useRibbon ? texture_ribbon::addSlot() : -1;
 
 if (texture.fileDataID > 0) {
-// JS: if (ribbonSlot !== null) textureRibbon.setSlotFile(ribbonSlot, texture.fileDataID, this.syncID);
 if (ribbonSlot >= 0)
 texture_ribbon::setSlotFile(ribbonSlot, texture.fileDataID, syncID);
 
 try {
-// JS: const data = await texture.getTextureFile();
 if (casc_source_) {
 BufferWrapper file_data = casc_source_->getVirtualFileByID(texture.fileDataID);
 casc::BLPImage blp(std::move(file_data));
@@ -547,7 +540,6 @@ blp_flags.flags = texture.flags;
 gl_tex->set_blp(blp, blp_flags);
 textures[static_cast<int>(i)] = std::move(gl_tex);
 
-// JS: if (ribbonSlot !== null) textureRibbon.setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), this.syncID);
 if (ribbonSlot >= 0)
 texture_ribbon::setSlotSrc(ribbonSlot, blp.getDataURL(0b0111), syncID);
 }
@@ -732,7 +724,6 @@ draw_calls.push_back(draw_call);
 }
 
 if (reactive) {
-// JS: core.view[this.geosetKey] = this.geosetArray;
 auto& geosets = core::view->modelViewerGeosets;
 geosets.clear();
 for (const auto& entry : geosetArray) {
@@ -743,7 +734,6 @@ j["id"] = entry.id;
 geosets.push_back(j);
 }
 
-// JS: GeosetMapper.map(this.geosetArray);
 std::vector<geoset_mapper::Geoset> mapper_geosets;
 for (const auto& entry : geosetArray) {
 geoset_mapper::Geoset g;
@@ -1473,8 +1463,6 @@ shader->set_uniform_mat4("u_projection_matrix", false, projection_matrix);
 shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
 shader->set_uniform_3f("u_view_up", 0, 1, 0);
 
-// JS: performance.now() * 0.001 — seconds since page load (starts near 0)
-// C++ equivalent: use time since process start so u_time starts near 0 like JS
 static const auto s_render_start = std::chrono::steady_clock::now();
 auto now = std::chrono::steady_clock::now();
 float time_sec = std::chrono::duration<float>(now - s_render_start).count();
@@ -1626,7 +1614,6 @@ it->second->dispose();
 
 textures[static_cast<int>(i)] = std::move(gl_tex);
 
-// JS: if (this.useRibbon) { textureRibbon.setSlotFile(i, fileDataID, this.syncID); ... }
 if (useRibbon) {
 texture_ribbon::setSlotFile(static_cast<int>(i), fileDataID, syncID);
 texture_ribbon::setSlotSrc(static_cast<int>(i), blp.getDataURL(0b0111), syncID);
@@ -1639,7 +1626,6 @@ logging::write(std::format("Failed to override texture: {}", e.what()));
 
 // -----------------------------------------------------------------------
 // overrideTextureTypeWithCanvas
-// Adapted from JS canvas override to raw pixel data
 // (Browser API systemic translation — no HTML canvas in desktop GL)
 // -----------------------------------------------------------------------
 
@@ -1937,8 +1923,6 @@ geosetArray.clear();
 // -----------------------------------------------------------------------
 
 void M2RendererGL::dispose() {
-// JS: this.geosetWatcher?.(); this.wireframeWatcher?.(); this.bonesWatcher?.();
-// Vue watchers — no-op in C++ (no reactive system)
 
 _dispose_skin();
 

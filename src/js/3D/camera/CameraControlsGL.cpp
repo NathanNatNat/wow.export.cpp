@@ -204,7 +204,6 @@ CameraControlsGL::CameraControlsGL(CameraGL& camera, DomElementGL& dom_element)
 }
 
 void CameraControlsGL::init() {
-	// In C++/GLFW, event listeners are wired externally.
 	// The JS dom_element.addEventListener calls are replaced by
 	// the GLFW callback system calling these methods directly.
 
@@ -215,7 +214,6 @@ void CameraControlsGL::init() {
 }
 
 void CameraControlsGL::dispose() {
-	// In C++/GLFW, event listeners are unwired externally.
 }
 
 void CameraControlsGL::on_mouse_down(int button, int clientX, int clientY,

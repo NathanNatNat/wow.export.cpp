@@ -9,7 +9,6 @@
 #include <vector>
 #include <functional>
 
-// Forward declare miniaudio types to avoid exposing the header.
 struct ma_engine;
 struct ma_sound;
 struct ma_decoder;

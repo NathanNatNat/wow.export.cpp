@@ -39,7 +39,6 @@ namespace listbox_maps {
  * This overrides listboxComponent.computed.filteredItems to add
  * expansion-based filtering before the text filter.
  */
-// NOTE: The expansion filtering is integrated into the render() call below
 // by pre-filtering items before passing to the base listbox render.
 
 static std::vector<std::string> filterByExpansion(const std::vector<std::string>& items, int expansionFilter) {

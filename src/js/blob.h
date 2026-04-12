@@ -16,7 +16,7 @@
 #include <functional>
 #include <optional>
 
-class BlobPolyfill; // forward declaration for BlobPart
+class BlobPolyfill;
 
 /**
  * Represents a part of a Blob, enabling implicit construction
@@ -51,7 +51,6 @@ struct BlobOptions {
  *
  * In the JS original, this was a polyfill for the browser Blob API
  * in environments where native Blob isn't available (NW.js).
- * In C++, it serves as the actual Blob implementation.
  *
  * JS equivalent: module.exports.BlobPolyfill
  */
@@ -78,14 +77,12 @@ public:
 	/**
 	 * Returns the underlying buffer.
 	 * JS equivalent: BlobPolyfill.prototype.arrayBuffer() — returns Promise<ArrayBuffer>.
-	 * C++ returns a const reference directly (no Promise needed).
 	 */
 	const std::vector<uint8_t>& arrayBuffer() const;
 
 	/**
 	 * Returns the blob content decoded as a UTF-8 string.
 	 * JS equivalent: BlobPolyfill.prototype.text() — returns Promise<string>.
-	 * C++ returns a string directly (no Promise needed).
 	 */
 	std::string text() const;
 
@@ -112,7 +109,6 @@ public:
 	/**
 	 * Iterates over the blob's data in 512KB chunks.
 	 * JS equivalent: BlobPolyfill.prototype.stream() — returns a ReadableStream.
-	 * C++ uses a callback instead of ReadableStream, yielding each chunk
 	 * as a span. The chunk size (524288 bytes) matches the JS original.
 	 *
 	 * @param callback Called once per chunk with a span of the chunk data.
@@ -146,7 +142,6 @@ private:
  * URLPolyfill class — creates/revokes data URLs from BlobPolyfill objects.
  *
  * In JS, this wraps native URL API with Blob polyfill support.
- * In C++, all URLs are base64 data URLs since there's no native URL API.
  *
  * JS equivalent: module.exports.URLPolyfill
  */

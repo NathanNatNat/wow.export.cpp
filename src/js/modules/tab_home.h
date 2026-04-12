@@ -34,7 +34,6 @@ void render();
 
 /**
  * Render the shared home tab layout (used by both tab_home and legacy_tab_home).
- * CSS: #tab-home, #legacy-tab-home share the same grid layout.
  */
 void renderHomeLayout();
 

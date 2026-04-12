@@ -35,10 +35,8 @@ namespace tab_install {
 
 // --- File-local state ---
 
-// JS: let manifest = null;
 static std::unique_ptr<casc::InstallManifest> manifest;
 
-// JS: const MIN_STRING_LENGTH = 4;
 static constexpr int MIN_STRING_LENGTH = 4;
 
 static listbox::ListboxState listbox_install_state;
@@ -150,7 +148,6 @@ static void export_install_files() {
 
 		if (overwrite_files || !generics::fileExists(export_path)) {
 			try {
-				// JS: const data = await core.view.casc.getFile(0, false, false, true, false, file.hash);
 				std::string enc_key = core::view->casc->getEncodingKeyForContentKey(file->hash);
 				std::string cached_path = core::view->casc->_ensureFileInCache(enc_key, 0, false);
 				BufferWrapper data = BufferWrapper::readFile(cached_path);
@@ -197,9 +194,6 @@ static void view_strings_impl() {
 	view.isBusy++;
 
 	try {
-		// JS: const data = await core.view.casc.getFile(0, false, false, true, false, file.hash);
-		// JS: data.processAllBlocks();
-		// JS: const strings = extract_strings(data.raw);
 		std::string enc_key = core::view->casc->getEncodingKeyForContentKey(file->hash);
 		std::string cached_path = core::view->casc->_ensureFileInCache(enc_key, 0, false);
 		BufferWrapper data = BufferWrapper::readFile(cached_path);
@@ -252,7 +246,6 @@ static void export_strings_impl() {
 		ofs.close();
 
 		const std::string dir_path = fs::path(export_path).parent_path().string();
-		// JS: { 'View in Explorer': () => nw.Shell.openItem(dir_path) }
 		core::setToast("success", std::format("Exported {} strings.", strings.size()),
 			{ {"View in Explorer", [dir_path]() { core::openInExplorer(dir_path); }} });
 		logging::write(std::format("Exported {} strings to {}", strings.size(), export_path));
@@ -274,14 +267,11 @@ static void back_to_manifest_impl() {
 // --- Public API ---
 
 void registerTab() {
-	// JS: this.registerContextMenuOption('Browse Install Manifest', 'clipboard-list.svg');
 	modules::register_context_menu_option("tab_install", "Browse Install Manifest", "clipboard-list.svg",
 		[]() { modules::set_active("tab_install"); });
 }
 
 void mounted() {
-	// JS: this.$core.setToast('progress', 'Retrieving installation manifest...', null, -1, false);
-	// JS: manifest = await this.$core.view.casc.getInstallManifest();
 	core::setToast("progress", "Retrieving installation manifest...", {}, -1, false);
 
 	auto inst = core::view->casc->getInstallManifest();
@@ -304,9 +294,6 @@ void mounted() {
 void render() {
 	auto& view = *core::view;
 
-	// JS: <div class="tab list-tab" id="tab-install">
-	// CSS: #tab-install { grid-template-columns: 1fr auto }
-	// CSS: .tab.list-tab { grid-template-rows: 1fr 60px }
 	if (app::layout::BeginTab("tab-install")) {
 
 	const ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -314,18 +301,13 @@ void render() {
 	constexpr float FILTER_H = app::layout::FILTER_BAR_HEIGHT; // 60px
 	constexpr float SIDEBAR_W = app::layout::SIDEBAR_WIDTH;    // 210px
 
-	// CSS: .sidebar { grid-column: 2 for install; width: 210px; grid-row: 1/span 2 }
-	// CSS: .list-container { grid-column: 1 }
-	// CSS: #tab-install-tray { grid-row: 2 }
 	const float gridW = avail.x - SIDEBAR_W;
 	const float topH = avail.y - FILTER_H;
 
 	if (!view.installStringsView) {
-		// JS: <template v-if="!$core.view.installStringsView">
 		// Main manifest view.
 
 		// --- List container (row 1, col 1) ---
-		// CSS: .list-container { margin: 20px 10px 0 20px }
 		constexpr float listTopM = app::layout::LIST_MARGIN_TOP;     // 20px
 		constexpr float listLeftM = app::layout::LIST_MARGIN_LEFT;   // 20px
 		constexpr float listRightM = app::layout::LIST_MARGIN_RIGHT; // 10px
@@ -372,7 +354,6 @@ void render() {
 		ImGui::EndChild();
 
 		// --- Tray (row 2, col 1) ---
-		// CSS: #tab-install-tray { grid-row: 2; display: flex; margin: 10px }
 		constexpr float TRAY_M = 10.0f;
 		ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + topH));
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(TRAY_M, 0.0f));
@@ -384,7 +365,6 @@ void render() {
 		if (padY > 0.0f)
 			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
 
-		// JS: <div class="filter"> — flex-grow: 1
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
 			ImGui::SameLine();
@@ -395,7 +375,6 @@ void render() {
 		// Calculate button widths so filter gets remaining space.
 		float btnStringsW = ImGui::CalcTextSize("View Strings").x + ImGui::GetStyle().FramePadding.x * 2;
 		float btnExportW = ImGui::CalcTextSize("Export Selected").x + ImGui::GetStyle().FramePadding.x * 2;
-		// CSS: #tab-install-tray input[type=button] { margin-left: 5px }
 		float buttonsW = 5.0f + btnStringsW + 5.0f + btnExportW;
 		float filterW = ImGui::GetContentRegionAvail().x - buttonsW;
 		if (filterW < 50.0f) filterW = 50.0f;
@@ -419,7 +398,6 @@ void render() {
 		ImGui::PopStyleVar(); // WindowPadding
 
 		// --- Sidebar (col 2, spanning both rows) ---
-		// CSS: .sidebar { grid-column: 2; width: 210px; margin-top: 20px; padding-right: 20px }
 		constexpr float sidebarTopM = app::layout::SIDEBAR_MARGIN_TOP;     // 20px
 		constexpr float sidebarPadR = app::layout::SIDEBAR_PADDING_RIGHT;  // 20px
 		ImGui::SetCursorPos(ImVec2(cursor.x + gridW, cursor.y + sidebarTopM));
@@ -440,7 +418,6 @@ void render() {
 		ImGui::EndChild();
 
 	} else {
-		// JS: <template v-else>
 		// String viewer.
 
 		// --- List container (row 1, col 1) ---
@@ -527,14 +504,12 @@ void render() {
 		ImGui::PopStyleVar(); // WindowPadding
 
 		// --- Sidebar: strings info (col 2, spanning both rows) ---
-		// CSS: .sidebar.strings-info { display: flex; flex-direction: column; gap: 5px }
 		constexpr float sidebarTopM = app::layout::SIDEBAR_MARGIN_TOP;
 		constexpr float sidebarPadR = app::layout::SIDEBAR_PADDING_RIGHT;
 		ImGui::SetCursorPos(ImVec2(cursor.x + gridW, cursor.y + sidebarTopM));
 		ImGui::BeginChild("install-strings-info",
 			ImVec2(SIDEBAR_W - sidebarPadR, avail.y - sidebarTopM));
 		{
-			// CSS: .strings-header { font-size: 14px; opacity: 0.7 }
 			ImGui::PushStyleColor(ImGuiCol_Text,
 				ImVec4(1.0f, 1.0f, 1.0f, 0.7f));
 			ImGui::TextUnformatted("Strings from:");
@@ -542,7 +517,6 @@ void render() {
 
 			ImGui::Spacing();
 
-			// CSS: .strings-filename { font-size: 12px; word-break: break-all }
 			ImGui::TextWrapped("%s", view.installStringsFileName.c_str());
 		}
 		ImGui::EndChild();

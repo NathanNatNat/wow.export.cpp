@@ -41,7 +41,6 @@ struct MapEntry {
 
 /**
  * Height data extracted from a terrain tile.
- * JS: return { heights, resolution, tileX, tileY };
  */
 struct HeightData {
 	std::vector<float> heights;
@@ -71,7 +70,6 @@ struct WMOMinimapTileInfo {
 
 /**
  * WMO minimap data for the currently loaded map.
- * JS: current_wmo_minimap object.
  */
 struct WMOMinimapData {
 	uint32_t wmo_id = 0;

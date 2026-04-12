@@ -32,17 +32,14 @@ namespace tab_fonts {
 
 // --- File-local state ---
 
-// JS: const loaded_fonts = new Map();
 static std::unordered_map<std::string, void*> loaded_fonts;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
-// JS: const get_font_id = (file_data_id) => 'font_id_' + file_data_id;
 static std::string get_font_id(uint32_t file_data_id) {
 	return "font_id_" + std::to_string(file_data_id);
 }
 
-// JS: const load_font = async (core, file_name) => { ... }
 static void* load_font(const std::string& file_name) {
 	auto file_data_id = casc::listfile::getByFilename(file_name);
 	if (!file_data_id)
@@ -55,9 +52,6 @@ static void* load_font(const std::string& file_name) {
 		return it->second;
 
 	try {
-		// JS: const data = await core.view.casc.getFileByName(file_name);
-		// JS: data.processAllBlocks();
-		// JS: const url = await inject_font_face(font_id, data.raw, log);
 		BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
 		void* font = font_helpers::inject_font_face(font_id, data.raw().data(), data.byteLength());
 
@@ -83,23 +77,16 @@ static std::string prev_selection_first;
 // --- Public API ---
 
 void registerTab() {
-	// JS: this.registerNavButton('Fonts', 'font.svg', InstallType.CASC);
 	modules::register_nav_button("tab_fonts", "Fonts", "font.svg", install_type::CASC);
 }
 
 void mounted() {
 	auto& view = *core::view;
 
-	// JS: this.$core.view.fontPreviewPlaceholder = get_random_quote();
 	view.fontPreviewPlaceholder = font_helpers::get_random_quote();
-	// JS: this.$core.view.fontPreviewText = '';
 	view.fontPreviewText.clear();
-	// JS: this.$core.view.fontPreviewFontFamily = '';
 	view.fontPreviewFontFamily.clear();
 
-	// JS: const grid_element = this.$el.querySelector('.font-character-grid');
-	// JS: const on_glyph_click = (char) => this.$core.view.fontPreviewText += char;
-	// JS: this.$core.view.$watch('selectionFonts', async selection => { ... });
 	// Change-detection is handled in render() by comparing selectionFonts[0] each frame.
 }
 
@@ -242,7 +229,6 @@ void render() {
 			// Each glyph cell is a small selectable button.
 			ImGui::PushID(static_cast<int>(codepoint));
 			if (ImGui::Selectable(utf8_buf, false, 0, ImVec2(24, 24))) {
-				// JS: on_glyph_click(char) => this.$core.view.fontPreviewText += char;
 				view.fontPreviewText += utf8_buf;
 			}
 			if (ImGui::IsItemHovered()) {
@@ -265,7 +251,6 @@ void render() {
 		ImGui::EndChild();
 
 		// Font preview text input.
-		// JS: <textarea :style="{ fontFamily: fontPreviewFontFamily }" :placeholder="fontPreviewPlaceholder" v-model="fontPreviewText">
 		char preview_buf[4096] = {};
 		std::strncpy(preview_buf, view.fontPreviewText.c_str(), sizeof(preview_buf) - 1);
 		if (ImGui::InputTextMultiline("##FontPreviewText", preview_buf, sizeof(preview_buf),
@@ -324,8 +309,6 @@ void export_fonts() {
 		try {
 			const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
 			if (overwrite_files || !generics::fileExists(export_path)) {
-				// JS: const data = await this.$core.view.casc.getFileByName(file_name);
-				// JS: await data.writeToFile(export_path);
 				BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
 				data.writeToFile(export_path);
 			} else {

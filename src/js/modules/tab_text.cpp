@@ -30,7 +30,6 @@ namespace tab_text {
 
 // --- File-local state ---
 
-// JS: let selected_file = null;
 static std::string selected_file;
 
 // Change-detection for selectionText.
@@ -41,12 +40,10 @@ static context_menu::ContextMenuState context_menu_state;
 // --- Public API ---
 
 void registerTab() {
-	// JS: this.registerNavButton('Text', 'file-lines.svg', InstallType.CASC);
 	modules::register_nav_button("tab_text", "Text", "file-lines.svg", install_type::CASC);
 }
 
 void mounted() {
-	// JS: this.$core.view.$watch('selectionText', async selection => { ... });
 	// Change-detection is handled in render() by comparing selectionText[0] each frame.
 }
 
@@ -58,8 +55,6 @@ void render() {
 		const std::string first = casc::listfile::stripFileEntry(view.selectionText[0].get<std::string>());
 		if (view.isBusy == 0 && !first.empty() && first != prev_selection_first) {
 			try {
-				// JS: const file = await this.$core.view.casc.getFileByName(first);
-				// JS: this.$core.view.textViewerSelectedText = file.readString(undefined, 'utf8');
 				BufferWrapper file = core::view->casc->getVirtualFileByName(first);
 				core::view->textViewerSelectedText = file.readString();
 				selected_file = first;
@@ -74,13 +69,11 @@ void render() {
 		}
 	}
 
-	// JS: <div class="tab list-tab" id="tab-text">
 	if (app::layout::BeginTab("tab-text")) {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
 	// --- Left panel: List container (row 1, col 1) ---
-	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionText" :items="listfileText" ...>
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	if (app::layout::BeginListContainer("text-list-container", regions)) {
@@ -160,7 +153,6 @@ void render() {
 	app::layout::EndListContainer();
 
 	// --- Filter bar (row 2, col 1) ---
-	// JS: <div class="filter">
 	if (app::layout::BeginFilterBar("text-filter", regions)) {
 		if (view.config.value("regexFilters", false))
 			ImGui::TextUnformatted("Regex Enabled");
@@ -174,16 +166,11 @@ void render() {
 	app::layout::EndFilterBar();
 
 	// --- Right panel: Preview container (row 1, col 2) ---
-	// JS: <div class="preview-container">
 	//     <div class="preview-background"><pre>{{ textViewerSelectedText }}</pre></div>
 	if (app::layout::BeginPreviewContainer("text-preview-container", regions)) {
-		// CSS: .preview-background { background: var(--background-dark) }
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, app::theme::BG_DARK);
 		ImGui::BeginChild("text-preview-background", ImVec2(0, 0), ImGuiChildFlags_None);
 
-		// TODO(conversion): Use a monospace font here when one is loaded into the font atlas.
-		// CSS: <pre> renders in the browser's default monospace font.
-		// JS: <pre>{{ $core.view.textViewerSelectedText }}</pre>
 		ImGui::TextWrapped("%s", view.textViewerSelectedText.c_str());
 
 		ImGui::EndChild();
@@ -192,7 +179,6 @@ void render() {
 	app::layout::EndPreviewContainer();
 
 	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
-	// JS: <div class="preview-controls">
 	if (app::layout::BeginPreviewControls("text-preview-controls", regions)) {
 		if (ImGui::Button("Copy to Clipboard"))
 			copy_text();
@@ -212,8 +198,6 @@ void render() {
 }
 
 void copy_text() {
-	// JS: const clipboard = nw.Clipboard.get();
-	// JS: clipboard.set(this.$core.view.textViewerSelectedText, 'text');
 	ImGui::SetClipboardText(core::view->textViewerSelectedText.c_str());
 	core::setToast("success", std::format("Copied contents of {} to the clipboard.", selected_file), {}, -1, true);
 }
@@ -251,8 +235,6 @@ void export_text() {
 		try {
 			const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
 			if (overwrite_files || !generics::fileExists(export_path)) {
-				// JS: const data = await this.$core.view.casc.getFileByName(file_name);
-				// JS: await data.writeToFile(export_path);
 				BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
 				data.writeToFile(export_path);
 			} else {

@@ -23,7 +23,6 @@ struct CameraGL {
 };
 
 /**
- * DOM element interface (GLFW window abstraction).
  * The actual implementation wraps GLFW callbacks.
  */
 struct DomElementGL {

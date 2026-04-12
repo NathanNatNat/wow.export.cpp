@@ -24,7 +24,6 @@
 
 namespace mmap_util {
 
-// ── MmapObject implementation ────────────────────────────────────
 
 MmapObject::MmapObject(MmapObject&& other) noexcept
 	: data(other.data),
@@ -204,7 +203,6 @@ MmapObject::~MmapObject() {
 		unmap();
 }
 
-// ── Module-level state (replaces JS `const virtual_files = new Set()`) ──
 
 namespace {
 

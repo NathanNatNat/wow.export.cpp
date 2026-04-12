@@ -29,7 +29,6 @@ namespace tab_item_sets {
 
 // --- File-local structures ---
 
-// JS: class ItemSet { constructor(id, name, item_ids, first_item) { ... } }
 struct ItemSet {
 	uint32_t id = 0;
 	std::string name;
@@ -37,7 +36,6 @@ struct ItemSet {
 	uint32_t icon = 0;
 	int quality = 0;
 
-	// JS: get displayName() { return this.name + ' (' + this.id + ')'; }
 	std::string displayName() const {
 		return std::format("{} ({})", name, id);
 	}
@@ -81,7 +79,6 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 
 // --- File-local state ---
 
-// JS: let item_sets = [];
 static std::vector<ItemSet> item_sets;
 
 static bool is_initialized = false;
@@ -89,18 +86,12 @@ static itemlistbox::ItemListboxState itemlistbox_item_sets_state;
 
 // --- Internal functions ---
 
-// JS: const initialize_item_sets = async (core) => { ... }
 static void initialize_item_sets() {
 	item_sets.clear();
 
-	// JS: await core.progressLoadingScreen('Loading item data...');
-	// JS: await DBItems.ensureInitialized();
 	core::progressLoadingScreen("Loading item data...");
 	db::caches::DBItems::ensureInitialized();
 
-	// JS: await core.progressLoadingScreen('Loading item appearance data...');
-	// JS: const appearance_map = new Map();
-	// JS: for (const row of (await db2.ItemModifiedAppearance.getAllRows()).values())
 	//         appearance_map.set(row.ItemID, row.ItemAppearanceID);
 	core::progressLoadingScreen("Loading item appearance data...");
 	std::unordered_map<uint32_t, uint32_t> appearance_map;
@@ -110,14 +101,11 @@ static void initialize_item_sets() {
 		appearance_map[itemID] = itemAppearanceID;
 	}
 
-	// JS: await core.progressLoadingScreen('Loading item sets...');
-	// JS: const item_set_rows = await db2.ItemSet.getAllRows();
 	core::progressLoadingScreen("Loading item sets...");
 	auto& item_appearance_table = casc::db2::preloadTable("ItemAppearance");
 	const auto& item_set_rows = casc::db2::preloadTable("ItemSet").getAllRows();
 
 	for (const auto& [set_id, set_row] : item_set_rows) {
-		// JS: const item_ids = set_row.ItemID.filter(id => id !== 0);
 		auto item_id_it = set_row.find("ItemID");
 		if (item_id_it == set_row.end())
 			continue;
@@ -129,29 +117,23 @@ static void initialize_item_sets() {
 				item_ids.push_back(id);
 		}
 
-		// JS: if (item_ids.length === 0) continue;
 		if (item_ids.empty())
 			continue;
 
 		// get first item for icon/quality
-		// JS: let first_item = null;
 		uint32_t first_icon = 0;
 		int first_quality = 0;
 		bool found_first = false;
 
 		for (const uint32_t item_id : item_ids) {
-			// JS: const item = DBItems.getItemById(item_id);
 			const auto* item = db::caches::DBItems::getItemById(item_id);
 			if (item) {
-				// JS: const appearance_id = appearance_map.get(item_id);
 				auto app_it = appearance_map.find(item_id);
 				uint32_t icon = 0;
 
 				if (app_it != appearance_map.end()) {
-					// JS: const appearance_row = await db2.ItemAppearance.getRow(appearance_id);
 					auto appearance_row = item_appearance_table.getRow(app_it->second);
 
-					// JS: first_item = { icon: appearance_row?.DefaultIconFileDataID ?? 0, quality: item.quality };
 					if (appearance_row.has_value()) {
 						auto iconIt = appearance_row->find("DefaultIconFileDataID");
 						icon = (iconIt != appearance_row->end()) ? fieldToUint32(iconIt->second) : 0;
@@ -162,13 +144,11 @@ static void initialize_item_sets() {
 				first_quality = item->quality;
 				found_first = true;
 
-				// JS: if (first_item.icon !== 0) break;
 				if (first_icon != 0)
 					break;
 			}
 		}
 
-		// JS: item_sets.push(Object.freeze(new ItemSet(set_id, set_row.Name_lang, item_ids, first_item)));
 		ItemSet new_set;
 		new_set.id = set_id;
 
@@ -182,11 +162,9 @@ static void initialize_item_sets() {
 		item_sets.push_back(std::move(new_set));
 	}
 
-	// JS: log.write('Loaded %d item sets', item_sets.length);
 	logging::write(std::format("Loaded {} item sets", item_sets.size()));
 }
 
-// JS: const apply_filter = (core) => { core.view.listfileItemSets = item_sets; };
 static void apply_filter() {
 	auto& view = *core::view;
 	view.listfileItemSets.clear();
@@ -208,12 +186,10 @@ static void apply_filter() {
 	}
 }
 
-// JS: methods.equip_set(set)
 static void equip_set(const nlohmann::json& set) {
 	int equipped_count = 0;
 	std::string set_name = set.value("name", std::string("Unknown"));
 
-	// JS: for (const item_id of set.item_ids) { ... }
 	if (!set.contains("item_ids") || !set["item_ids"].is_array())
 		return;
 
@@ -222,20 +198,15 @@ static void equip_set(const nlohmann::json& set) {
 	for (const auto& id_val : set["item_ids"]) {
 		uint32_t item_id = id_val.get<uint32_t>();
 
-		// JS: const slot_id = DBItems.getItemSlotId(item_id);
 		auto slot_id_opt = db::caches::DBItems::getItemSlotId(item_id);
 
-		// JS: if (slot_id) { this.$core.view.chrEquippedItems[slot_id] = item_id; equipped_count++; }
 		if (slot_id_opt.has_value()) {
 			view.chrEquippedItems[std::to_string(slot_id_opt.value())] = item_id;
 			equipped_count++;
 		}
 	}
 
-	// JS: if (equipped_count > 0) { ... } else { ... }
 	if (equipped_count > 0) {
-		// JS: this.$core.view.chrEquippedItems = { ...this.$core.view.chrEquippedItems };
-		// In C++ the JSON object is already mutated in place; no spread needed.
 		core::setToast("success", std::format("Equipped {} items from {}.", equipped_count, set_name), {}, 2000);
 	} else {
 		core::setToast("info", "No equippable items in this set.", {}, 2000);
@@ -244,23 +215,17 @@ static void equip_set(const nlohmann::json& set) {
 
 // --- Public API ---
 
-// JS: register() { this.registerNavButton('Item Sets', 'armour.svg', InstallType.CASC); }
 void registerTab() {
 	modules::register_nav_button("tab_item_sets", "Item Sets", "armour.svg", install_type::CASC);
 }
 
-// JS: async mounted() { await this.initialize(); }
 void mounted() {
-	// JS: this.$core.showLoadingScreen(3);
 	core::showLoadingScreen(3);
 
-	// JS: await initialize_item_sets(this.$core);
 	initialize_item_sets();
 
-	// JS: this.$core.hideLoadingScreen();
 	core::hideLoadingScreen();
 
-	// JS: apply_filter(this.$core);
 	apply_filter();
 
 	is_initialized = true;
@@ -274,7 +239,6 @@ void render() {
 
 	// --- Template rendering ---
 
-	// JS: <div class="tab" id="tab-item-sets">
 	//     <div class="list-container list-container-full">
 	//         <Itemlistbox id="listbox-item-sets" v-model:selection="$core.view.selectionItemSets"
 	//          :items="$core.view.listfileItemSets" :filter="$core.view.userInputFilterItemSets"
@@ -330,7 +294,6 @@ void render() {
 
 	ImGui::EndChild(); // item-sets-list-container
 
-	// JS: <div class="filter">
 	//     <div class="regex-info" v-if="$core.view.config.regexFilters" ...>Regex Enabled</div>
 	//     <input type="text" v-model="$core.view.userInputFilterItemSets" placeholder="Filter item sets..."/>
 	if (view.config.value("regexFilters", false))

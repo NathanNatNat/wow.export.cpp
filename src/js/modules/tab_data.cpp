@@ -37,16 +37,12 @@ namespace tab_data {
 
 // --- File-local state ---
 
-// JS: let selected_file = null;
 static std::string selected_file;
 
-// JS: let selected_file_data_id = null;
 static std::optional<int> selected_file_data_id;
 
-// JS: let selected_file_schema = null;
 static const std::map<std::string, db::SchemaField>* selected_file_schema = nullptr;
 
-// JS: data() { return { active_table: '' }; }
 static std::string active_table;
 
 // Change-detection for selectionDB2s.
@@ -64,7 +60,6 @@ static void copy_cell(const nlohmann::json& value);
 
 // --- Internal functions ---
 
-// JS: const initialize_available_tables = async (core) => { ... }
 static void initialize_available_tables() {
 	auto& view = *core::view;
 	auto& manifest = view.dbdManifest;
@@ -73,13 +68,11 @@ static void initialize_available_tables() {
 
 	casc::dbd_manifest::prepareManifest();
 	const auto table_names = casc::dbd_manifest::getAllTableNames();
-	// JS: manifest.push(...table_names);
 	for (const auto& name : table_names)
 		manifest.push_back(name);
 	logging::write("initialized available db2 tables from dbd manifest");
 }
 
-// Helper to convert a FieldValue to a display string.
 static std::string field_value_to_string(const db::FieldValue& val) {
 	return std::visit([](const auto& v) -> std::string {
 		using T = std::decay_t<decltype(v)>;
@@ -125,7 +118,6 @@ static std::string field_value_to_string(const db::FieldValue& val) {
 	}, val);
 }
 
-// JS: const parse_table = async (table_name) => { ... }
 struct ParseTableResult {
 	std::vector<std::string> headers;
 	std::vector<std::vector<std::string>> rows;
@@ -133,20 +125,16 @@ struct ParseTableResult {
 };
 
 static ParseTableResult parse_table(const std::string& table_name) {
-	// JS: const db2_reader = new WDCReader('DBFilesClient/' + table_name + '.db2');
-	// JS: await db2_reader.parse();
 	auto& db2_reader = casc::db2::getTable(table_name);
 	if (!db2_reader.isLoaded)
 		db2_reader.parse();
 
-	// JS: const all_headers = [...db2_reader.schema.keys()];
 	const auto& schema = db2_reader.schema;
 	std::vector<std::string> all_headers;
 	// Use schemaOrder to preserve insertion order (matches JS Map iteration order).
 	for (const auto& key : db2_reader.schemaOrder)
 		all_headers.push_back(key);
 
-	// JS: const id_index = all_headers.findIndex(header => header.toUpperCase() === 'ID');
 	int id_index = -1;
 	for (int i = 0; i < static_cast<int>(all_headers.size()); i++) {
 		std::string upper = all_headers[i];
@@ -157,15 +145,12 @@ static ParseTableResult parse_table(const std::string& table_name) {
 		}
 	}
 
-	// JS: if (id_index > 0) { ... move ID to front }
 	if (id_index > 0) {
 		std::string id_header = all_headers[id_index];
 		all_headers.erase(all_headers.begin() + id_index);
 		all_headers.insert(all_headers.begin(), id_header);
 	}
 
-	// JS: const rows = await db2_reader.getAllRows();
-	// JS: for (const row of rows.values()) { ... }
 	std::vector<std::vector<std::string>> parsed;
 
 	for (const auto& [id, row] : db2_reader.getAllRows()) {
@@ -183,22 +168,18 @@ static ParseTableResult parse_table(const std::string& table_name) {
 	return { std::move(all_headers), std::move(parsed), &schema };
 }
 
-// JS: const load_table = async (core, table_name) => { ... }
 static void load_table(const std::string& table_name) {
 	auto& view = *core::view;
 
 	try {
-		// JS: selected_file_data_id = dbd_manifest.getByTableName(table_name) || null;
 		selected_file_data_id = casc::dbd_manifest::getByTableName(table_name);
 
 		const auto result = parse_table(table_name);
 
-		// JS: core.view.tableBrowserHeaders = result.headers;
 		view.tableBrowserHeaders.clear();
 		for (const auto& h : result.headers)
 			view.tableBrowserHeaders.push_back(h);
 
-		// JS: core.view.selectionDataTable = [];
 		view.selectionDataTable.clear();
 
 		if (result.rows.empty())
@@ -206,7 +187,6 @@ static void load_table(const std::string& table_name) {
 		else
 			core::hideToast(false);
 
-		// JS: core.view.tableBrowserRows = result.rows;
 		view.tableBrowserRows.clear();
 		for (const auto& row : result.rows) {
 			nlohmann::json json_row = nlohmann::json::array();
@@ -226,20 +206,17 @@ static void load_table(const std::string& table_name) {
 // --- Public API ---
 
 void registerTab() {
-	// JS: this.registerNavButton('Data', 'database.svg', InstallType.CASC);
 	modules::register_nav_button("tab_data", "Data", "database.svg", install_type::CASC);
 }
 
 void mounted() {
 	auto& view = *core::view;
 
-	// JS: await this.initialize();
 	core::showLoadingScreen(1);
 	core::progressLoadingScreen("Loading data table manifest...");
 	initialize_available_tables();
 	core::hideLoadingScreen();
 
-	// JS: this.$core.view.$watch('selectionDB2s', async selection => { ... });
 	// Change-detection is handled in render() by comparing selectionDB2s.back() each frame.
 }
 
@@ -258,14 +235,11 @@ void render() {
 
 	// --- Template rendering ---
 
-	// JS: <div class="tab list-tab" id="tab-data">
-	// CSS: grid-template-columns: 1fr 6fr → ratio 1/7
 	if (app::layout::BeginTab("tab-data")) {
 
 	auto regions = app::layout::CalcListTabRegions(false, 1.0f / 7.0f);
 
 	// --- Left panel: List container (row 1, col 1) ---
-	// JS: <div class="list-container">
 	//     <Listbox v-model:selection="selectionDB2s" :items="dbdManifest" ...>
 	// </div>
 	if (app::layout::BeginListContainer("db2-list-container", regions)) {
@@ -307,7 +281,6 @@ void render() {
 	app::layout::EndListContainer();
 
 	// --- Filter bar (row 2, col 1) ---
-	// JS: <div class="filter">
 	if (app::layout::BeginFilterBar("db2-filter", regions)) {
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_db2_buf[256] = {};
@@ -318,7 +291,6 @@ void render() {
 	app::layout::EndFilterBar();
 
 	// --- Right panel: Preview container (row 1, col 2) ---
-	// JS: <div class="list-container"> (data table + options)
 	//     <DataTable ref="dataTable" :headers="tableBrowserHeaders" :rows="tableBrowserRows" ...>
 	//     <ContextMenu :node="contextMenus.nodeDataTable" ...>
 	// </div>
@@ -384,7 +356,6 @@ void render() {
 		}
 
 		// Options row.
-		// JS: <div id="tab-data-options">
 		const std::string export_format = view.config.value("exportDataFormat", std::string("CSV"));
 
 		if (export_format == "CSV") {
@@ -408,7 +379,6 @@ void render() {
 	app::layout::EndPreviewContainer();
 
 	// --- Bottom: Preview controls (row 2, col 2) ---
-	// JS: <div id="tab-data-tray">
 	//     <input> filter + <MenuButton> export
 	if (app::layout::BeginPreviewControls("data-preview-controls", regions)) {
 		char filter_data_buf[256] = {};
@@ -418,7 +388,6 @@ void render() {
 
 		ImGui::SameLine();
 
-		// JS: <MenuButton :options="menuButtonData" :default="config.exportDataFormat" @change="..." @click="export_data">
 		{
 			std::vector<menu_button::MenuOption> mb_options;
 			for (const auto& opt : view.menuButtonData)
@@ -440,10 +409,7 @@ void render() {
 
 // --- Export methods ---
 
-// JS: methods.copy_rows_csv()
 static void copy_rows_csv() {
-	// JS: const data_table = this.$refs.dataTable;
-	// JS: const csv = data_table.getSelectedRowsAsCSV();
 	const auto& view = *core::view;
 	const size_t count = view.selectionDataTable.size();
 	if (count == 0)
@@ -471,15 +437,11 @@ static void copy_rows_csv() {
 	std::string csv = data_table::getSelectedRowsAsCSV(headers, sorted_rows, sel_indices,
 		view.config.value("dataCopyHeader", false));
 
-	// JS: nw.Clipboard.get().set(csv, 'text');
 	ImGui::SetClipboardText(csv.c_str());
 	core::setToast("success", std::format("Copied {} row{} as CSV to the clipboard", count, count != 1 ? "s" : ""), {}, 2000);
 }
 
-// JS: methods.copy_rows_sql()
 static void copy_rows_sql() {
-	// JS: const data_table = this.$refs.dataTable;
-	// JS: const sql = data_table.getSelectedRowsAsSQL();
 	const auto& view = *core::view;
 	const size_t count = view.selectionDataTable.size();
 	if (count == 0)
@@ -507,21 +469,17 @@ static void copy_rows_sql() {
 	std::string sql = data_table::getSelectedRowsAsSQL(headers, sorted_rows, sel_indices,
 		selected_file.empty() ? "unknown_table" : selected_file);
 
-	// JS: nw.Clipboard.get().set(sql, 'text');
 	ImGui::SetClipboardText(sql.c_str());
 	core::setToast("success", std::format("Copied {} row{} as SQL to the clipboard", count, count != 1 ? "s" : ""), {}, 2000);
 }
 
-// JS: methods.copy_cell(value)
 static void copy_cell(const nlohmann::json& value) {
 	if (value.is_null())
 		return;
 
-	// JS: nw.Clipboard.get().set(String(value), 'text');
 	ImGui::SetClipboardText(value.dump().c_str());
 }
 
-// JS: methods.export_csv()
 static void export_csv() {
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionDB2s;
@@ -532,9 +490,6 @@ static void export_csv() {
 
 	// single table: use row selection behavior
 	if (user_selection.size() == 1) {
-		// JS: const headers = this.$core.view.tableBrowserHeaders;
-		// JS: const all_rows = this.$core.view.tableBrowserRows;
-		// JS: const selection = this.$core.view.selectionDataTable;
 		const auto& headers_json = view.tableBrowserHeaders;
 		const auto& all_rows_json = view.tableBrowserRows;
 		const auto& selection = view.selectionDataTable;
@@ -608,12 +563,10 @@ static void export_csv() {
 		}
 	}
 
-	// JS: export_paths?.close();
 	export_paths.close();
 	helper.finish();
 }
 
-// JS: methods.export_sql()
 static void export_sql() {
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionDB2s;
@@ -703,7 +656,6 @@ static void export_sql() {
 	helper.finish();
 }
 
-// JS: methods.export_db2()
 static void export_db2() {
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionDB2s;
@@ -719,7 +671,6 @@ static void export_db2() {
 			return;
 		}
 
-		// JS: await dataExporter.exportRawDB2(selected_file, selected_file_data_id);
 		data_exporter::exportRawDB2(selected_file, static_cast<uint32_t>(*selected_file_data_id), core::view->casc);
 		return;
 	}
@@ -741,7 +692,6 @@ static void export_db2() {
 			if (!file_data_id_opt.has_value())
 				throw std::runtime_error("No file data ID found for table " + table_name);
 
-			// JS: await dataExporter.exportRawDB2(table_name, file_data_id, { helper, export_paths });
 			data_exporter::exportRawDB2(table_name, static_cast<uint32_t>(*file_data_id_opt),
 				nullptr, &helper, &export_paths);
 		} catch (const std::exception& e) {

@@ -14,7 +14,6 @@
 
 #include "../../db/FieldType.h"
 
-// Forward declaration for SchemaField
 namespace db {
 	using SchemaField = std::variant<db::FieldType, std::pair<db::FieldType, int>>;
 }

@@ -20,7 +20,6 @@ FileWriter::FileWriter(const std::filesystem::path& file, std::string_view /*enc
  */
 void FileWriter::writeLine(std::string_view line) {
 	// In JS, writeLine awaits if the stream is blocked (backpressure).
-	// In C++, std::ofstream writes are synchronous and block until
 	// complete, so explicit backpressure handling is unnecessary.
 	// If the stream was previously in a failed state, attempt recovery.
 	if (blocked)

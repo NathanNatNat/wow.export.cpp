@@ -69,7 +69,6 @@ namespace CG = db::caches::DBItemGeosets::CG;
 
 // --- File-local structures ---
 
-// JS: equipment_model_renderers entries: { renderers: [{ renderer, attachment_id, is_collection_style }], item_id }
 struct EquipmentModelEntry {
 struct RendererInfo {
 std::unique_ptr<M2RendererGL> renderer;
@@ -80,7 +79,6 @@ std::vector<RendererInfo> renderers;
 uint32_t item_id = 0;
 };
 
-// JS: collection_model_renderers entries: { renderers: [M2RendererGL], item_id }
 struct CollectionModelEntry {
 std::vector<std::unique_ptr<M2RendererGL>> renderers;
 uint32_t item_id = 0;
@@ -94,7 +92,6 @@ int char_geoset;
 
 // --- CG alias + SLOT_TO_GEOSET_GROUPS ---
 
-// JS: const SLOT_TO_GEOSET_GROUPS = { ... };
 static const std::unordered_map<int, std::vector<SlotGeosetMapping>> SLOT_TO_GEOSET_GROUPS = {
 { 1,  {{ 0, CG::HELM }, { 1, CG::SKULL }} },
 { 5,  {{ 0, CG::SLEEVES }, { 1, CG::CHEST }, { 2, CG::TROUSERS }, { 3, CG::TORSO }, { 4, CG::ARM_UPPER }} },
@@ -105,13 +102,11 @@ static const std::unordered_map<int, std::vector<SlotGeosetMapping>> SLOT_TO_GEO
 { 15, {{ 0, CG::CLOAK }} }
 };
 
-// JS: function get_slot_geoset_mapping(slot_id) { return SLOT_TO_GEOSET_GROUPS[slot_id] || null; }
 static const std::vector<SlotGeosetMapping>* get_slot_geoset_mapping(int slot_id) {
 auto it = SLOT_TO_GEOSET_GROUPS.find(slot_id);
 return (it != SLOT_TO_GEOSET_GROUPS.end()) ? &it->second : nullptr;
 }
 
-// JS: const THUMBNAIL_PRESETS = { ... };
 // format: [cam_x, cam_y, cam_z, tgt_x, tgt_y, tgt_z, rot]
 struct ThumbnailPreset {
 float cam_x, cam_y, cam_z;
@@ -156,33 +151,24 @@ static const std::unordered_map<int, std::unordered_map<int, ThumbnailPreset>> T
 
 // --- File-local state ---
 
-// JS: const active_skins = new Map();
 static std::map<std::string, nlohmann::json> active_skins;
 
-// JS: let gl_context = null;
 // GL context is managed by model_viewer_gl::State; use viewer_context.gl_context to access it.
 
-// JS: let active_renderer; let active_model;
 static std::unique_ptr<M2RendererGL> active_renderer;
 static uint32_t active_model = 0;
 
-// JS: const skinned_model_renderers = new Map(); const skinned_model_meshes = new Set();
 static std::map<uint32_t, std::unique_ptr<M2RendererGL>> skinned_model_renderers;
 static std::unordered_set<uint32_t> skinned_model_meshes;
 
-// JS: const chr_materials = new Map();
 static std::map<uint32_t, std::unique_ptr<CharMaterialRenderer>> chr_materials;
 
-// JS: const equipment_model_renderers = new Map();
 static std::map<int, EquipmentModelEntry> equipment_model_renderers;
 
-// JS: const collection_model_renderers = new Map();
 static std::map<int, CollectionModelEntry> collection_model_renderers;
 
-// JS: let current_char_component_texture_layout_id = 0;
 static uint32_t current_char_component_texture_layout_id = 0;
 
-// JS: let is_importing = false;
 static bool is_importing = false;
 
 // Animation state proxy for model_viewer_utils
@@ -213,10 +199,8 @@ static model_viewer_gl::Context viewer_context;
 // ComboBox state for realm selector.
 static combobox::ComboBoxState realm_combobox_state;
 
-// JS: const base_regions = ['us', 'eu', 'kr', 'tw'];
 static const std::vector<std::string> base_regions = { "us", "eu", "kr", "tw" };
 
-// JS: const tabard_options = [...]
 struct TabardOptionDef {
 std::string key;
 std::string label;
@@ -312,7 +296,6 @@ return std::nullopt;
 
 // --- reset_module_state ---
 
-// JS: function reset_module_state()
 static void reset_module_state() {
 active_skins.clear();
 skinned_model_renderers.clear();
@@ -331,7 +314,6 @@ active_model = 0;
 
 //region appearance
 
-// JS: async function refresh_character_appearance(core)
 static void refresh_character_appearance() {
 if (!active_renderer || is_importing)
 return;
@@ -348,7 +330,6 @@ logging::write("Character appearance refresh complete");
 /**
  * Updates all geoset visibility based on customization choices and equipped items.
  * Order: 1) Reset to model defaults, 2) Apply customization, 3) Apply equipment
- * JS: function update_geosets(core)
  */
 static void update_geosets() {
 if (!active_renderer)
@@ -427,7 +408,6 @@ active_renderer->updateGeosets();
 
 /**
  * Updates all character textures based on baked NPC texture, customization, and equipment.
- * JS: async function update_textures(core)
  *
  * Steps:
  *   1-3: Reset materials, apply baked NPC texture, apply customization textures.
@@ -449,7 +429,6 @@ return;
 auto& view = *core::view;
 
 // steps 1-3: reset, apply baked NPC texture, apply customization textures
-// JS: if (core.view.chrCustBakedNPCTexture) baked_npc_blp = core.view.chrCustBakedNPCTexture;
 std::unique_ptr<casc::BLPImage> baked_npc_blp;
 if (!view.chrCustBakedNPCTexture.is_null() && view.chrCustBakedNPCTexture.is_number_unsigned()) {
 	uint32_t bake_fdid = view.chrCustBakedNPCTexture.get<uint32_t>();
@@ -669,7 +648,6 @@ character_appearance::upload_textures_to_gpu(active_renderer.get(), chr_material
 
 /**
  * Updates equipment model renderers based on equipped items.
- * JS: async function update_equipment_models(core)
  */
 static void update_equipment_models() {
 if (viewer_context.gl_context == nullptr)
@@ -774,10 +752,7 @@ uint32_t file_data_id = display->models[i];
 int attachment_id = attachment_ids[i];
 
 try {
-// JS: const file = await core.view.casc.getFile(file_data_id);
 BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
-// JS: const renderer = new M2RendererGL(file, gl_context, false, false);
-// JS: await renderer.load();
 auto renderer = std::make_unique<M2RendererGL>(file, *viewer_context.gl_context, false, false);
 renderer->load();
 EquipmentModelEntry::RendererInfo ri;
@@ -804,12 +779,9 @@ for (size_t i = collection_start_index; i < display->models.size(); i++) {
 uint32_t file_data_id = display->models[i];
 
 try {
-// JS: const file = await core.view.casc.getFile(file_data_id);
 BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
-// JS: const renderer = new M2RendererGL(file, gl_context, false, false);
 auto renderer = std::make_unique<M2RendererGL>(file, *viewer_context.gl_context, false, false);
 renderer->load();
-// JS: if (active_renderer?.bones) renderer.buildBoneRemapTable(active_renderer.bones);
 if (active_renderer && active_renderer->get_bones_m2())
 renderer->buildBoneRemapTable(*active_renderer->get_bones_m2());
 entry.renderers.push_back(std::move(renderer));
@@ -830,7 +802,6 @@ collection_model_renderers[slot_id] = std::move(entry);
 
 //region models
 
-// JS: async function load_character_model(core, file_data_id)
 static void load_character_model(uint32_t file_data_id) {
 if (file_data_id == 0 || active_model == file_data_id)
 return;
@@ -857,11 +828,7 @@ dispose_skinned_models();
 dispose_equipment_models();
 dispose_collection_models();
 
-// JS: const file = await core.view.casc.getFile(file_data_id);
 BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
-// JS: active_renderer = new M2RendererGL(file, gl_context, true, false);
-// JS: active_renderer.geosetKey = 'chrCustGeosets';
-// JS: await active_renderer.load();
 gl::GLContext* gl_ctx = viewer_context.gl_context;
 if (!gl_ctx) {
 logging::write("Cannot load character model: GL context not available");
@@ -879,7 +846,6 @@ active_model = file_data_id;
 view.chrModelViewerAnims = model_viewer_utils::extract_animations(*active_renderer);
 view.chrModelViewerAnimSelection = "none";
 
-// JS: const has_content = active_renderer.draw_calls?.length > 0;
 const bool has_content = !active_renderer->get_draw_calls().empty();
 if (!has_content) {
 core::setToast("info", "This model has no visible geometry.", {}, 4000);
@@ -897,7 +863,6 @@ logging::write(std::format("Failed to load character model: {}", e.what()));
 view.chrModelLoading = false;
 }
 
-// JS: function dispose_skinned_models()
 static void dispose_skinned_models() {
 for (auto& [_, renderer] : skinned_model_renderers)
 renderer->dispose();
@@ -906,7 +871,6 @@ skinned_model_renderers.clear();
 skinned_model_meshes.clear();
 }
 
-// JS: function dispose_equipment_models()
 static void dispose_equipment_models() {
 for (auto& [_, entry] : equipment_model_renderers) {
 for (auto& ri : entry.renderers)
@@ -915,7 +879,6 @@ ri.renderer->dispose();
 equipment_model_renderers.clear();
 }
 
-// JS: function dispose_collection_models()
 static void dispose_collection_models() {
 for (auto& [_, entry] : collection_model_renderers) {
 for (auto& r : entry.renderers)
@@ -924,12 +887,10 @@ r->dispose();
 collection_model_renderers.clear();
 }
 
-// JS: function clear_materials()
 static void clear_materials() {
 character_appearance::dispose_materials(chr_materials);
 }
 
-// JS: function fit_camera(core)
 static void fit_camera() {
 	if (viewer_context.fitCamera) {
 		viewer_context.fitCamera();
@@ -940,7 +901,6 @@ static void fit_camera() {
 
 //region character state
 
-// JS: function update_chr_model_list(core)
 static void update_chr_model_list() {
 auto& view = *core::view;
 
@@ -998,7 +958,6 @@ view.chrCustModelSelection = { view.chrCustModels[selection_index] };
 
 /**
  * Handles body type selection change - loads new model and sets up customization options.
- * JS: async function update_model_selection(core)
  */
 static void update_model_selection() {
 auto& state = *core::view;
@@ -1065,7 +1024,6 @@ uint32_t file_data_id = db::caches::DBCharacterCustomization::get_model_file_dat
 load_character_model(file_data_id);
 }
 
-// JS: function update_customization_type(core)
 static void update_customization_type() {
 auto& state = *core::view;
 
@@ -1092,7 +1050,6 @@ state.chrCustChoices.push_back(nlohmann::json{
 }
 }
 
-// JS: function update_customization_choice(core)
 static void update_customization_choice() {
 auto& state = *core::view;
 
@@ -1125,7 +1082,6 @@ state.chrCustActiveChoices.push_back(nlohmann::json{
 }
 }
 
-// JS: function update_choice_for_option(core, option_id, choice_id)
 static void update_choice_for_option(uint32_t option_id, uint32_t choice_id) {
 auto& state = *core::view;
 
@@ -1142,7 +1098,6 @@ state.chrCustActiveChoices.push_back(nlohmann::json{
 });
 }
 
-// JS: function randomize_customization(core)
 static void randomize_customization() {
 auto& state = *core::view;
 
@@ -1163,7 +1118,6 @@ update_choice_for_option(option_id, random_choice_id);
 
 //region import
 
-// JS: async function import_character(core)
 static void import_character() {
 auto& view = *core::view;
 view.characterImportMode = "none";
@@ -1199,7 +1153,6 @@ auto url_encode = [](const std::string& s) -> std::string {
 	return encoded;
 };
 
-// JS: const url = util.format(core.view.config.armoryURL, encodeURIComponent(region), ...)
 // URL template uses %s placeholders for region, realm, character.
 std::string encoded_region = url_encode(effective_region);
 std::string encoded_realm = url_encode(realm_value);
@@ -1218,7 +1171,6 @@ replace_first(url, "%s", encoded_name);
 logging::write(std::format("Retrieving character data for {} from {}", character_label, url));
 
 try {
-// JS: const res = await generics.get(url);
 nlohmann::json res = generics::getJSON(url);
 apply_import_data(res, "bnet");
 } catch (const std::exception& e) {
@@ -1235,20 +1187,17 @@ view.chrModelLoading = false;
 }
 
 // Removed: import_wmv_character() — wmv module deleted
-// JS: async function import_wmv_character(core) { return; }
 static void import_wmv_character() {
 return;
 }
 
 // Removed: import_wowhead_character() — wowhead module deleted
-// JS: async function import_wowhead_character(core) { return; }
 static void import_wowhead_character() {
 return;
 }
 
 /**
  * Unified import handler - parses import data and applies it.
- * JS: async function apply_import_data(core, data, source)
  */
 static void apply_import_data(const nlohmann::json& data, const std::string& source) {
 auto& view = *core::view;
@@ -1383,7 +1332,6 @@ std::unordered_set<uint32_t> available_option_ids;
 for (const auto& opt : *available_options)
 available_option_ids.insert(opt.id);
 
-// JS: for (const choice_id of data.customizations) { ... db2.ChrCustomizationChoice.getRow(choice_id) ... }
 auto& chr_choice_table = casc::db2::getTable("ChrCustomizationChoice");
 if (!chr_choice_table.isLoaded)
 	chr_choice_table.parse();
@@ -1452,7 +1400,6 @@ is_importing = false;
 
 //region saved characters
 
-// JS: function get_default_characters_dir()
 std::string get_default_characters_dir() {
 namespace fs = std::filesystem;
 const char* home = nullptr;
@@ -1466,7 +1413,6 @@ home = ".";
 return (fs::path(home) / "wow.export" / "My Characters").string();
 }
 
-// JS: function get_saved_characters_dir(core)
 static std::string get_saved_characters_dir() {
 auto& view = *core::view;
 std::string custom_path = view.config.value("characterExportPath", "");
@@ -1480,14 +1426,12 @@ return custom_path.substr(start, end - start + 1);
 return get_default_characters_dir();
 }
 
-// JS: function generate_character_id()
 static std::string generate_character_id() {
 static std::mt19937 rng(std::random_device{}());
 std::uniform_int_distribution<int> dist(10000, 99999);
 return std::to_string(dist(rng));
 }
 
-// JS: async function load_saved_characters(core)
 static void load_saved_characters() {
 namespace fs = std::filesystem;
 auto& view = *core::view;
@@ -1532,7 +1476,6 @@ try {
 std::ifstream thumb_file(thumb_path, std::ios::binary);
 std::vector<uint8_t> thumb_buffer((std::istreambuf_iterator<char>(thumb_file)),
                                    std::istreambuf_iterator<char>());
-// JS: thumb_data = 'data:image/png;base64,' + thumb_buffer.toString('base64');
 BufferWrapper thumb_bw(thumb_buffer);
 thumb_data = "data:image/png;base64," + thumb_bw.toBase64();
 } catch (...) {
@@ -1551,7 +1494,6 @@ characters.push_back(nlohmann::json{
 view.chrSavedCharacters = characters;
 }
 
-// JS: async function save_character(core, name, thumb_data)
 static void save_character(const std::string& name, const std::string& thumb_data) {
 namespace fs = std::filesystem;
 auto& view = *core::view;
@@ -1580,7 +1522,6 @@ return;
 
 // save thumbnail if provided
 if (!thumb_data.empty()) {
-// JS: const base64 = data.thumb.split(',')[1]; Buffer.from(base64, 'base64')
 std::string thumb_str = thumb_data;
 size_t comma_pos = thumb_str.find(',');
 if (comma_pos != std::string::npos)
@@ -1596,7 +1537,6 @@ load_saved_characters();
 core::setToast("success", std::format("Character \"{}\" saved.", name), {}, 3000);
 }
 
-// JS: async function delete_character(core, character)
 static void delete_character(const nlohmann::json& character) {
 namespace fs = std::filesystem;
 auto& view = *core::view;
@@ -1622,7 +1562,6 @@ chars.end());
 core::setToast("success", std::format("Character \"{}\" deleted.", name), {}, 3000);
 }
 
-// JS: async function load_character(core, character)
 static void load_character(const nlohmann::json& character) {
 namespace fs = std::filesystem;
 auto& view = *core::view;
@@ -1677,7 +1616,6 @@ core::setToast("error", std::format("Failed to load character: {}", e.what()), {
 }
 }
 
-// JS: async function capture_character_thumbnail(core)
 static std::string capture_character_thumbnail() {
 auto& view = *core::view;
 
@@ -1774,7 +1712,6 @@ active_renderer->set_animation_paused(saved_paused);
 return data_uri;
 }
 
-// JS: function get_current_character_data(core)
 static nlohmann::json get_current_character_data() {
 auto& view = *core::view;
 
@@ -1801,7 +1738,6 @@ return nlohmann::json{
 };
 }
 
-// JS: async function export_json_character(core)
 static void export_json_character() {
 auto& view = *core::view;
 
@@ -1811,12 +1747,10 @@ core::setToast("error", "No character loaded to export.", {}, 3000);
 return;
 }
 
-// JS: const thumb_data = await capture_character_thumbnail(core);
 std::string thumb_data = capture_character_thumbnail();
 if (!thumb_data.empty())
 data["thumb"] = thumb_data;
 
-// JS: file_input.setAttribute('nwsaveas', 'character.json');
 std::string file_path = file_field::saveFileDialog("character.json", "JSON Files", "*.json");
 if (file_path.empty())
 return;
@@ -1831,7 +1765,6 @@ core::setToast("error", std::format("Failed to export character: {}", e.what()),
 }
 }
 
-// JS: async function export_saved_character(core, character)
 static void export_saved_character(const nlohmann::json& character) {
 namespace fs = std::filesystem;
 std::string dir = get_saved_characters_dir();
@@ -1855,7 +1788,6 @@ core::setToast("error", std::format("Failed to read character: {}", e.what()), {
 return;
 }
 
-// JS: file_input.setAttribute('nwsaveas', character.name + '.json');
 std::string file_path = file_field::saveFileDialog(name + ".json", "JSON Files", "*.json");
 if (file_path.empty())
 return;
@@ -1870,12 +1802,10 @@ core::setToast("error", std::format("Failed to export character: {}", e.what()),
 }
 }
 
-// JS: async function import_json_character(core, save_to_my_characters)
 static void import_json_character(bool save_to_my_characters) {
 namespace fs = std::filesystem;
 auto& view = *core::view;
 
-// JS: file_input.setAttribute('accept', '.json');
 std::string file_path = file_field::openFileDialog("JSON Files", "*.json");
 if (file_path.empty())
 return;
@@ -1988,7 +1918,6 @@ core::setToast("error", std::format("Failed to import character: {}", e.what()),
 
 //region race
 
-// JS: function update_chr_race_list(core)
 static void update_chr_race_list() {
 auto& view = *core::view;
 
@@ -2057,7 +1986,6 @@ view.chrCustRaceSelection = { view.chrCustRacesPlayable[0] };
 
 //region export
 
-// JS: const export_char_model = async (core) => { ... }
 static void export_char_model() {
 auto& view = *core::view;
 auto export_paths = core::openLastExportStream();
@@ -2065,8 +1993,6 @@ std::string format = view.config.value("exportCharacterFormat", "GLTF");
 
 if (format == "PNG" || format == "CLIPBOARD") {
 if (active_model != 0) {
-// JS: const canvas = document.querySelector('.char-preview canvas');
-// JS: const buf = await BufferWrapper.fromCanvas(canvas, 'image/png');
 gl::GLContext* gl_ctx = viewer_context.gl_context;
 if (gl_ctx && viewer_state.fbo != 0) {
 std::string file_name = casc::listfile::getByID(active_model);
@@ -2104,7 +2030,6 @@ std::string ext = (format == "STL") ? ".stl" : ".obj";
 std::string mark_file_name = casc::ExportHelper::replaceExtension(file_name, ext);
 std::string export_path = casc::ExportHelper::getExportPath(mark_file_name);
 
-// JS: const data = await casc.getFile(file_data_id);
 BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
 M2Exporter exporter(std::move(data), {}, file_data_id, core::view->casc);
 
@@ -2125,7 +2050,6 @@ helper.mark(mark_file_name, true);
 std::string mark_file_name = casc::ExportHelper::replaceExtension(file_name, ".gltf");
 std::string export_path = casc::ExportHelper::getExportPath(mark_file_name);
 
-// JS: const data = await casc.getFile(file_data_id);
 BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
 M2Exporter exporter(std::move(data), {}, file_data_id, core::view->casc);
 exporter.exportAsGLTF(export_path, &helper, format);
@@ -2145,7 +2069,6 @@ helper.finish();
 export_paths.close();
 }
 
-// JS: const export_chr_texture = async (core) => { ... }
 static void export_chr_texture() {
 uint32_t active_canvas = char_texture_overlay::getActiveLayer();
 if (active_canvas == 0) {
@@ -2156,7 +2079,6 @@ return;
 auto export_paths = core::openLastExportStream();
 core::setToast("progress", "exporting texture, hold on...", {}, -1, false);
 
-// JS: for (const [type, material] of chr_materials) {
 //       if (material.getCanvas() === active_canvas) { ... }
 uint32_t texture_type = 0;
 CharMaterialRenderer* chr_material = nullptr;
@@ -2174,14 +2096,12 @@ if (!chr_material) {
 	return;
 }
 
-// JS: const file_name = listfile.getByID(active_model);
 std::string file_name = casc::listfile::getByID(active_model);
 namespace fs = std::filesystem;
 fs::path p(file_name);
 std::string base_name = p.stem().string();
 std::string dir_name = p.parent_path().string();
 
-// JS: const texture_file_name = path.join(dir_name, base_name + '_texture_' + texture_type + '.png');
 std::string texture_file_name = (fs::path(dir_name) / (base_name + "_texture_" + std::to_string(texture_type) + ".png")).string();
 std::string export_path = casc::ExportHelper::getExportPath(texture_file_name);
 std::string out_dir = fs::path(export_path).parent_path().string();
@@ -2189,21 +2109,17 @@ std::string out_dir = fs::path(export_path).parent_path().string();
 // Ensure the output directory exists.
 generics::createDirectory(out_dir);
 
-// JS: const pixels = chr_material.getRawPixels();
 auto pixels = chr_material->getRawPixels();
 int width = chr_material->getWidth();
 int height = chr_material->getHeight();
 
-// JS: const png = new PNGWriter(width, height); ... pixel_data.set(pixels);
 PNGWriter png(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 auto& pixel_data = png.getPixelData();
 std::memcpy(pixel_data.data(), pixels.data(), pixels.size());
 
-// JS: await buffer.writeToFile(export_path);
 BufferWrapper buffer = png.getBuffer();
 buffer.writeToFile(export_path);
 
-// JS: await export_paths?.writeLine('PNG:' + export_path);
 export_paths.writeLine("PNG:" + export_path);
 
 logging::write(std::format("exported character texture to {}", export_path));
@@ -2217,7 +2133,6 @@ export_paths.close();
 
 //region utils
 
-// JS: function int_to_css_color(value)
 static std::string int_to_css_color(uint32_t value) {
 if (value == 0)
 return "transparent";
@@ -2242,7 +2157,6 @@ uint8_t b = value & 0xFF;
 return IM_COL32(r, g, b, 255);
 }
 
-// JS: function get_selected_choice(core, option_id)
 static const db::caches::DBCharacterCustomization::ChoiceEntry* get_selected_choice(uint32_t option_id) {
 auto& view = *core::view;
 
@@ -2271,7 +2185,6 @@ return &c;
 return nullptr;
 }
 
-// JS: function update_realm_list()
 static void update_realm_list() {
 auto& state = *core::view;
 std::string base_region = state.chrImportSelectedRegion;
@@ -2307,7 +2220,6 @@ state.chrImportSelectedRealm = nullptr;
 
 //region tabard helpers
 
-// JS: is_guild_tabard_equipped()
 static bool is_guild_tabard_equipped() {
 auto& view = *core::view;
 if (!view.chrEquippedItems.contains("19"))
@@ -2316,7 +2228,6 @@ uint32_t item_id = view.chrEquippedItems["19"].get<uint32_t>();
 return db::caches::DBGuildTabard::isGuildTabard(item_id);
 }
 
-// JS: get_tabard_tier()
 static int get_tabard_tier() {
 auto& view = *core::view;
 if (!view.chrEquippedItems.contains("19"))
@@ -2325,7 +2236,6 @@ uint32_t item_id = view.chrEquippedItems["19"].get<uint32_t>();
 return db::caches::DBGuildTabard::getTabardTier(item_id);
 }
 
-// JS: get_tabard_max(key)
 static int get_tabard_max(const std::string& key) {
 if (key == "background") return db::caches::DBGuildTabard::getBackgroundColorCount();
 if (key == "border_style") return db::caches::DBGuildTabard::getBorderStyleCount(get_tabard_tier());
@@ -2335,7 +2245,6 @@ if (key == "emblem_color") return db::caches::DBGuildTabard::getEmblemColorCount
 return 0;
 }
 
-// JS: set_tabard_config(key, value)
 static void set_tabard_config(const std::string& key, int value) {
 auto& view = *core::view;
 int max_val = get_tabard_max(key);
@@ -2350,7 +2259,6 @@ else if (key == "emblem_design") cfg.emblem_design = value;
 else if (key == "emblem_color") cfg.emblem_color = value;
 }
 
-// JS: adjust_tabard_config(key, delta)
 static void adjust_tabard_config(const std::string& key, int delta) {
 auto& view = *core::view;
 int max_val = get_tabard_max(key);
@@ -2372,7 +2280,6 @@ value += max_val;
 set_tabard_config(key, value);
 }
 
-// JS: get_tabard_color_css(key)
 static ImU32 get_tabard_color_imgui(const std::string& key) {
 auto& view = *core::view;
 int color_id = 0;
@@ -2406,7 +2313,6 @@ return nullptr;
 
 //endregion
 
-// JS: get_equipped_item(slot_id)
 static const db::caches::DBItems::ItemInfo* get_equipped_item(int slot_id) {
 auto& view = *core::view;
 std::string slot_str = std::to_string(slot_id);
@@ -2738,7 +2644,6 @@ ImGui::InputText("Character Name##bnet", chr_name_buf, sizeof(chr_name_buf));
 view.chrImportChrName = chr_name_buf;
 
 // Realm combo
-// JS: <ComboBox :value="chrImportSelectedRealm" :source="chrImportRealms" placeholder="Select Realm" :maxheight="10" @update:value="...">
 if (!view.chrImportRealms.empty()) {
 combobox::render("##RealmCombo", view.chrImportSelectedRealm, view.chrImportRealms,
 	"Select Realm", 10, realm_combobox_state,
@@ -3016,7 +2921,6 @@ if (ImGui::Checkbox(label.c_str(), &checked))
 geoset["checked"] = checked;
 }
 
-// JS: <div class="geoset-toggles">
 //     <a @click="set_all_geosets(true)">Enable All</a> / <a @click="set_all_geosets(false)">Disable All</a>
 if (ImGui::Button("Enable All")) {
 for (auto& g : view.chrCustGeosets)
@@ -3136,7 +3040,6 @@ if (ImGui::Checkbox("Show background##chr", &show_bg))
 view.config["chrShowBackground"] = show_bg;
 
 if (show_bg) {
-// JS: <input type="color" v-model="config.chrBackgroundColor"/>
 std::string bg_color_str = view.config.value("chrBackgroundColor", std::string("#343a40"));
 auto [cr, cg, cb] = model_viewer_gl::parse_hex_color(bg_color_str);
 float color[3] = {cr, cg, cb};
@@ -3405,7 +3308,6 @@ char_texture_overlay::ensureActiveLayerAttached();
  * JS equivalent: register() { this.registerNavButton('Characters', 'person-solid.svg', InstallType.CASC) }
  */
 void registerTab() {
-// JS: this.registerNavButton('Characters', 'person-solid.svg', InstallType.CASC);
 modules::register_nav_button("tab_characters", "Characters", "person-solid.svg", install_type::CASC);
 }
 

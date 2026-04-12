@@ -169,7 +169,6 @@ private:
 	int height_;
 
 	// Active CASC source for loading texture files.
-	// JS: core.view.casc — set by caller before texture loading.
 	casc::CASC* casc_source_ = nullptr;
 
 	// FBO-based offscreen rendering (replaces JS canvas + WebGL context)

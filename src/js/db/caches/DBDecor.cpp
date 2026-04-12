@@ -30,9 +30,7 @@ static std::string fieldToString(const db::FieldValue& val) {
 	return "";
 }
 
-// JS: const decorItems = new Map();
 static std::unordered_map<uint32_t, DecorItem> decorItems;
-// JS: let isInitialized = false;
 static bool isInitialized = false;
 
 /**
@@ -53,29 +51,23 @@ void initializeDecorData() {
 		DecorItem item;
 		item.id = id;
 
-		// JS: name: row.Name_lang || `Decor ${id}`
 		std::string name = fieldToString(row.at("Name_lang"));
 		item.name = name.empty() ? std::format("Decor {}", id) : std::move(name);
 
 		item.modelFileDataID = model_file_id;
 
-		// JS: thumbnailFileDataID: row.ThumbnailFileDataID || 0
 		auto thumbIt = row.find("ThumbnailFileDataID");
 		item.thumbnailFileDataID = (thumbIt != row.end()) ? fieldToUint32(thumbIt->second) : 0;
 
-		// JS: itemID: row.ItemID || 0
 		auto itemIdIt = row.find("ItemID");
 		item.itemID = (itemIdIt != row.end()) ? fieldToUint32(itemIdIt->second) : 0;
 
-		// JS: gameObjectID: row.GameObjectID || 0
 		auto goIt = row.find("GameObjectID");
 		item.gameObjectID = (goIt != row.end()) ? fieldToUint32(goIt->second) : 0;
 
-		// JS: type: row.Type || 0
 		auto typeIt = row.find("Type");
 		item.type = (typeIt != row.end()) ? fieldToUint32(typeIt->second) : 0;
 
-		// JS: modelType: row.ModelType || 0
 		auto mtIt = row.find("ModelType");
 		item.modelType = (mtIt != row.end()) ? fieldToUint32(mtIt->second) : 0;
 

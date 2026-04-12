@@ -25,24 +25,18 @@ static uint32_t fieldToUint32(const db::FieldValue& val) {
 	return 0;
 }
 
-// JS: const extra_map = new Map();
 static std::unordered_map<uint32_t, ExtraInfo> extra_map;
-// JS: const option_map = new Map();
 static std::unordered_map<uint32_t, std::vector<CustomizationOption>> option_map;
 
-// JS: let is_initialized = false;
 static bool is_initialized = false;
-// JS: let init_promise = null;
 static bool is_initializing = false;
 
 // Empty vector for returning when no customization choices found
 static const std::vector<CustomizationOption> empty_options;
 
-// JS: const _initialize = async () => { ... }
 static void _initialize() {
 	logging::write("Loading creature display extra data...");
 
-	// JS: for (const [id, row] of await db2.CreatureDisplayInfoExtra.getAllRows())
 	auto extraRows = casc::db2::preloadTable("CreatureDisplayInfoExtra").getAllRows();
 	for (const auto& [id, row] : extraRows) {
 		ExtraInfo info;
@@ -54,7 +48,6 @@ static void _initialize() {
 		extra_map.emplace(id, info);
 	}
 
-	// JS: for (const row of (await db2.CreatureDisplayInfoOption.getAllRows()).values())
 	auto optionRows = casc::db2::preloadTable("CreatureDisplayInfoOption").getAllRows();
 	for (const auto& [_optId, row] : optionRows) {
 		(void)_optId;
@@ -72,7 +65,6 @@ static void _initialize() {
 	is_initializing = false;
 }
 
-// JS: const ensureInitialized = async () => { ... }
 void ensureInitialized() {
 	if (is_initialized)
 		return;
@@ -84,7 +76,6 @@ void ensureInitialized() {
 	_initialize();
 }
 
-// JS: const get_extra = (id) => extra_map.get(id);
 const ExtraInfo* get_extra(uint32_t id) {
 	auto it = extra_map.find(id);
 	if (it != extra_map.end())
@@ -92,7 +83,6 @@ const ExtraInfo* get_extra(uint32_t id) {
 	return nullptr;
 }
 
-// JS: const get_customization_choices = (extra_id) => option_map.get(extra_id) ?? [];
 const std::vector<CustomizationOption>& get_customization_choices(uint32_t extra_id) {
 	auto it = option_map.find(extra_id);
 	if (it != option_map.end())

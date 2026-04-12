@@ -55,7 +55,6 @@ struct LegacyM2Track {
 	// timestamps and values are stored as either:
 	//   flat: vector<LegacyTrackValue>
 	//   nested: vector<vector<LegacyTrackValue>>
-	// We use a unified nested representation:
 	//   pre-WotLK: timestamps/values are flat (outer vec size = element count)
 	//   WotLK: timestamps/values are nested (outer vec = per-animation)
 

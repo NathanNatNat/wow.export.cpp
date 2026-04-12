@@ -31,7 +31,6 @@ namespace generics {
 
 namespace {
 
-// ── JEDEC file size units ────────────────────────────────────────
 
 constexpr const char* JEDEC[] = {
 	"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"
@@ -409,7 +408,6 @@ void createDirectory(const std::filesystem::path& dir) {
 /**
  * Returns after a redraw.
  * JS uses requestAnimationFrame to yield until the next frame paints.
- * In C++ this is a no-op: CASC loading runs on a background std::jthread so
  * the main loop keeps rendering every frame.  Progress updates are posted to
  * the main thread via core::postToMainThread() and drained each frame by
  * core::drainMainThreadQueue().

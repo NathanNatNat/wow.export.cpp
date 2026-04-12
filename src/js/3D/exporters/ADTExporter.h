@@ -74,8 +74,6 @@ public:
 	 * @param helper
 	 * @returns Export result with type and path.
 	 */
-	// TODO(conversion): Renamed from `export` to `exportTile` because `export` is a C++ keyword (modules).
-	// TODO(conversion): Added casc parameter because C++ core::view doesn't store a typed CASC pointer.
 	ADTExportResult exportTile(const std::filesystem::path& dir, int quality,
 		const std::vector<ADTGameObject>* gameObjects, casc::ExportHelper* helper,
 		casc::CASC* casc);

@@ -58,46 +58,28 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 	return result;
 }
 
-// JS: const tfd_map = new Map();
 static std::unordered_map<uint32_t, uint32_t> tfd_map;
-// JS: const choice_to_geoset = new Map();
 static std::unordered_map<uint32_t, uint32_t> choice_to_geoset;
-// JS: const choice_to_chr_cust_material_id = new Map();
 static std::unordered_map<uint32_t, std::vector<ChrCustMaterialRef>> choice_to_chr_cust_material_id;
-// JS: const choice_to_skinned_model = new Map();
 static std::unordered_map<uint32_t, uint32_t> choice_to_skinned_model;
-// JS: const unsupported_choices = new Array();
 static std::vector<uint32_t> unsupported_choices;
 
-// JS: const options_by_chr_model = new Map();
 static std::unordered_map<uint32_t, std::vector<OptionEntry>> options_by_chr_model;
-// JS: const option_to_choices = new Map();
 static std::unordered_map<uint32_t, std::vector<ChoiceEntry>> option_to_choices;
-// JS: const default_options = new Array();
 static std::vector<uint32_t> default_options;
 
-// JS: const chr_model_id_to_file_data_id = new Map();
 static std::unordered_map<uint32_t, uint32_t> chr_model_id_to_file_data_id;
-// JS: const chr_model_id_to_texture_layout_id = new Map();
 static std::unordered_map<uint32_t, uint32_t> chr_model_id_to_texture_layout_id;
 
-// JS: const chr_race_map = new Map();
 static std::unordered_map<uint32_t, ChrRaceInfo> chr_race_map_data;
-// JS: const chr_race_x_chr_model_map = new Map();
 static std::unordered_map<uint32_t, std::unordered_map<uint32_t, uint32_t>> chr_race_x_chr_model_map_data;
 
-// JS: const chr_model_material_map = new Map();
 static std::unordered_map<std::string, db::DataRecord> chr_model_material_map_data;
-// JS: const char_component_texture_section_map = new Map();
 static std::unordered_map<uint32_t, std::vector<db::DataRecord>> char_component_texture_section_map;
-// JS: const chr_model_texture_layer_map = new Map();
 static std::unordered_map<std::string, db::DataRecord> chr_model_texture_layer_map_data;
 
-// JS: const geoset_map = new Map();
 static std::unordered_map<uint32_t, int> geoset_map;
-// JS: const chr_cust_mat_map = new Map();
 static std::unordered_map<uint32_t, ChrCustMaterialInfo> chr_cust_mat_map;
-// JS: const chr_cust_skinned_model_map = new Map();
 static std::unordered_map<uint32_t, db::DataRecord> chr_cust_skinned_model_map;
 
 static bool is_initialized = false;
@@ -295,7 +277,6 @@ static void _initialize() {
 	for (const auto& [chr_customization_geoset_id, chr_customization_geoset_row] : casc::db2::preloadTable("ChrCustomizationGeoset").getAllRows()) {
 		int geosetType = fieldToInt(chr_customization_geoset_row.at("GeosetType"));
 		int geosetID = fieldToInt(chr_customization_geoset_row.at("GeosetID"));
-		// JS: const geoset = chr_customization_geoset_row.GeosetType.toString().padStart(2, '0') + chr_customization_geoset_row.GeosetID.toString().padStart(2, '0');
 		std::ostringstream oss;
 		oss << std::setw(2) << std::setfill('0') << geosetType
 		    << std::setw(2) << std::setfill('0') << geosetID;
