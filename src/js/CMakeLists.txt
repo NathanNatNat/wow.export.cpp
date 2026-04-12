@@ -8,6 +8,7 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/MultiMap.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/crc32.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/xml.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/wowhead.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/subtitles.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/blob.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/hashing/xxhash64.cpp
