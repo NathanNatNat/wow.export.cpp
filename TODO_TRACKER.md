@@ -871,3 +871,18 @@
 - **JS Source**: `src/js/ui/uv-drawer.js` lines 34–39
 - **Status**: Pending
 - **Details**: JS accessing `uvCoords[idx]` out-of-bounds returns `undefined` → `NaN`, producing no visible lines (safe, just garbage rendering). C++ (lines 71–76) accessing `uvCoords[idx]` out-of-bounds via `operator[]` is undefined behavior (potential crash/corruption). No guard exists for this case.
+
+### 173. [build-version.cpp] `find_version_in_buffer` search range off-by-4
+- **JS Source**: `src/js/mpq/build-version.js` lines 51–69
+- **Status**: Pending
+- **Details**: JS `buf.indexOf(sig_bytes, pos)` searches the entire remaining buffer from `pos` onward and can find signatures at any position; `parse_vs_fixed_file_info` then validates that at least 52 bytes remain from the match position. C++ (lines 81–100) uses `std::search(buf.begin() + pos, buf.end() - 52, sig_bytes.begin(), sig_bytes.end())`, which limits the search endpoint to `buf.end() - 52`. For a 4-byte signature pattern, `std::search` can only find matches starting at positions up to `buf.end() - 56`. This misses valid signature positions `buf.size() - 55` through `buf.size() - 52` where `parse_vs_fixed_file_info` would succeed (since `offset + 52 <= buf.size()` holds for all four). The search endpoint should be `buf.end() - 48` to allow matches up to position `buf.size() - 52`.
+
+### 174. [mpq.cpp] `extractFileByBlockIndex` TODO: encrypted file support incomplete
+- **JS Source**: `src/js/mpq/mpq.js` lines 600–601
+- **Status**: Pending
+- **Details**: Both JS (`return null; // todo: MPQ_FILE_FIX_KEY?`) and C++ (line 698, `return std::nullopt; // todo: MPQ_FILE_FIX_KEY?`) return null/nullopt for encrypted files in `extractFileByBlockIndex` without attempting decryption. The full `extractFile` method handles encrypted files via filename-based key derivation, but `extractFileByBlockIndex` lacks the filename needed for key computation. The TODO comment indicates this is acknowledged unfinished work, consistent between both versions.
+
+### 175. [mpq.cpp] `inflateData` uses `spdlog::error` instead of project logging module
+- **JS Source**: `src/js/mpq/mpq.js` line 422
+- **Status**: Pending
+- **Details**: JS uses `console.error('decompression error:', e)` for error logging in the zlib decompression catch block. C++ (line 511) uses `spdlog::error("decompression error: {}", e.what())` directly instead of the project's `logging::write` function that is used consistently throughout the rest of the codebase (including elsewhere in mpq.cpp via the logging header). This is inconsistent with the project's logging convention.
