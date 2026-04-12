@@ -28,8 +28,6 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/casc/realmlist.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/casc/cdn-resolver.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/casc/build-cache.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/casc/blte-reader.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/casc/blte-stream-reader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/constants.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/log.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/file-writer.cpp
