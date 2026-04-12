@@ -794,3 +794,33 @@ The following entries document code changes that were made by a previous agent s
 - **JS Source**: `src/js/subtitles.js`, `get_subtitles_vtt()` function
 - **Status**: Pending — Intentional Deviation
 - **Details**: JS `get_subtitles_vtt(casc, file_data_id, format)` is async and loads the file from CASC internally. C++ `get_subtitles_vtt(text, format)` takes pre-loaded text, requiring the caller to load the CASC file first. This is documented in the header comment and is an intentional separation of concerns. However, callers must replicate the CASC file loading + UTF-8 decoding that the JS version does internally. Verify all call sites pass correctly decoded text.
+
+### 148. [Skin.cpp] load() calls getVirtualFileByID instead of getFile
+- **JS Source**: `src/js/3D/Skin.js`, `load()` method
+- **Status**: Pending
+- **Details**: JS calls `core.view.casc.getFile(this.fileDataID)` which uses the polymorphic `getFile()` dispatch. C++ calls `core::view->casc->getVirtualFileByID(this->fileDataID)`. Same issue as TODO #146 (Texture.cpp). Verify that `getVirtualFileByID()` is functionally equivalent, or use the correct polymorphic dispatch. Related: TODO #89.
+
+### 149. [markdown-content.cpp] No C++ port — still raw JavaScript
+- **JS Source**: `src/js/components/markdown-content.js`
+- **Status**: Pending
+- **Details**: The file contains unconverted JavaScript (`module.exports = { ... }`). Needs conversion to ImGui: parse Markdown content and render inline text with headings, paragraphs, links, etc. Referenced by tab_changelog for rendering CHANGELOG.md.
+
+### 150. [tab_blender.cpp] No C++ port — still raw JavaScript
+- **JS Source**: `src/js/modules/tab_blender.js`
+- **Status**: Pending
+- **Details**: The file contains unconverted JavaScript (`require`, `module.exports`). Needs full conversion to C++/ImGui. Tab for Blender integration / 3D model preview features.
+
+### 151. [tab_help.cpp] No C++ port — still raw JavaScript
+- **JS Source**: `src/js/modules/tab_help.js`
+- **Status**: Pending
+- **Details**: The file contains unconverted JavaScript (`require`, `module.exports`). Needs full conversion to C++/ImGui. Tab for displaying help/documentation content.
+
+### 152. [tab_items.cpp] No C++ port — still raw JavaScript
+- **JS Source**: `src/js/modules/tab_items.js`
+- **Status**: Pending
+- **Details**: The file contains unconverted JavaScript (`require`, `module.exports`). Needs full conversion to C++/ImGui. Tab for item browsing, equipping items on character models, and item search/filtering.
+
+### 153. [tab_models.cpp] No C++ port — still raw JavaScript
+- **JS Source**: `src/js/modules/tab_models.js`
+- **Status**: Pending
+- **Details**: The file contains unconverted JavaScript (`require`, `module.exports`). Needs full conversion to C++/ImGui. Tab for M2/WMO 3D model browsing, preview, and export.
