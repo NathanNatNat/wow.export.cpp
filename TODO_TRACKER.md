@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 75/561 verified (13%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 87/561 verified (15%)** — ✅ = Verified, ⬜ = Pending
 
 ## 🔴 Priority: Models Tab (Rendering, Camera, Export)
 
@@ -8,65 +8,65 @@
 
 ## src/js/3D/gl/ Audit (0/18 ✅)
 
-### ⬜ 408. [GLContext.cpp] `dispose()` does not null out `canvas`/`gl` — JS sets both to `null`
+### ✅ 408. [GLContext.cpp] `dispose()` does not null out `canvas`/`gl` — JS sets both to `null`
 - **JS Source**: `src/js/3D/gl/GLContext.js` lines 403–407
-- **Status**: Pending
-- **Details**: JS `dispose()` sets `this.gl = null` and `this.canvas = null` to release the WebGL2 context and canvas reference. C++ `dispose()` (line 289–291) is empty — the comment says the context is cleaned up when GLFW window is destroyed. This is an intentional adaptation, but means C++ callers cannot check for a disposed context (JS callers could check `this.gl === null`). If any code relies on that null check to detect a disposed context, the C++ version will not match.
+- **Status**: Verified
+- **Details**: JS `dispose()` sets `this.gl = null` and `this.canvas = null` to release the WebGL2 context and canvas reference. C++ `dispose()` (line 289–291) is empty — the context is cleaned up when GLFW window is destroyed. This is a correct platform adaptation: GLFW owns the GL context lifecycle. No JS code checks `this.gl === null` after dispose, so no code path depends on detecting disposed state. Verified: no functional difference.
 
-### ⬜ 409. [GLContext.cpp] Constructor takes no arguments — JS takes `canvas` and `options`
+### ✅ 409. [GLContext.cpp] Constructor takes no arguments — JS takes `canvas` and `options`
 - **JS Source**: `src/js/3D/gl/GLContext.js` lines 29–45
-- **Status**: Pending
-- **Details**: JS constructor accepts a canvas element and an options object (`antialias`, `alpha`, `preserveDrawingBuffer`, `powerPreference`) and creates a WebGL2 context. C++ constructor (line 15) takes no arguments — the OpenGL context is created by GLFW externally. This is a necessary adaptation, but means any code that passes options to the GLContext constructor would need to be reworked.
+- **Status**: Verified
+- **Details**: JS constructor accepts a canvas element and an options object (`antialias`, `alpha`, `preserveDrawingBuffer`, `powerPreference`) and creates a WebGL2 context. C++ constructor takes no arguments — the OpenGL 4.6 core context is created by GLFW externally before GLContext is constructed. This is a necessary platform adaptation. Verified: all JS constructor behavior (extension init, state init) is correctly performed in the C++ constructor.
 
-### ⬜ 410. [GLContext.h] `_bound_textures` uses `GLuint` (0 == no texture) — JS uses `null`
+### ✅ 410. [GLContext.h] `_bound_textures` uses `GLuint` (0 == no texture) — JS uses `null`
 - **JS Source**: `src/js/3D/gl/GLContext.js` line 79
-- **Status**: Pending
-- **Details**: JS `_bound_textures` is `new Array(16).fill(null)` — `null` is used to indicate no texture bound. C++ (header line 110) uses `std::array<GLuint, 16>{}` initialized to `0`. Since OpenGL name `0` means "no texture", this is functionally correct. However, `bind_texture` (C++ line 272) compares `_bound_textures[unit] == texture` — if a valid texture with ID 0 existed (impossible in practice), it would mismatch. Minor concern.
+- **Status**: Verified
+- **Details**: JS `_bound_textures` is `new Array(16).fill(null)` — `null` indicates no texture bound. C++ uses `std::array<GLuint, 16>{}` initialized to `0`. OpenGL texture name `0` is the "default texture" (no user texture bound), so `GLuint(0)` is the correct C++ equivalent of JS `null` for texture tracking. `bind_texture` comparison `_bound_textures[unit] == texture` works correctly because valid textures always have IDs > 0. Verified: functionally equivalent.
 
-### ⬜ 411. [GLTexture.cpp] `set_rgba` flip_y option defaults to `true` — JS always flips unconditionally
+### ✅ 411. [GLTexture.cpp] `set_rgba` flip_y option defaults to `true` — JS always flips unconditionally
 - **JS Source**: `src/js/3D/gl/GLTexture.js` lines 34–56
-- **Status**: Pending
-- **Details**: JS `set_rgba()` always sets `gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)` before upload and resets to `false` after. C++ (line 36) checks `if (options.flip_y && pixels)` before flipping. The C++ `TextureOptions::flip_y` defaults to `true` (header line 30), so the default matches JS. However, if any caller explicitly sets `flip_y = false` in C++, the texture will NOT be flipped, which JS never allows. Also, C++ does a CPU-side row flip (memcpy loop) while JS uses the GPU-side UNPACK_FLIP_Y — functionally equivalent but with different performance characteristics.
+- **Status**: Verified
+- **Details**: JS `set_rgba()` always sets `gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)` before upload. C++ `TextureOptions::flip_y` defaults to `true`, so the default behavior matches JS exactly. The C++ does a CPU-side row flip (memcpy loop) instead of the GPU-side `UNPACK_FLIP_Y_WEBGL`, which is functionally equivalent. No existing callers set `flip_y = false`. Verified: default behavior matches JS unconditional flip.
 
-### ⬜ 412. [GLTexture.cpp] `set_canvas` delegates to `set_rgba` — JS uses different `texImage2D` overload
+### ✅ 412. [GLTexture.cpp] `set_canvas` delegates to `set_rgba` — JS uses different `texImage2D` overload
 - **JS Source**: `src/js/3D/gl/GLTexture.js` lines 63–85
-- **Status**: Pending
-- **Details**: JS `set_canvas(canvas, options)` calls `gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, canvas)` with a 6-argument overload that takes the canvas directly (no width/height args — inferred from canvas). C++ `set_canvas` (line 60–65) simply delegates to `set_rgba()` with explicit pixel data and dimensions. This is a necessary adaptation since desktop GL has no canvas object. The JS version sets `has_alpha = true` unconditionally; C++ also does this (line 63).
+- **Status**: Verified
+- **Details**: JS `set_canvas(canvas, options)` uses the 6-argument `texImage2D` overload that takes the canvas directly. C++ `set_canvas` delegates to `set_rgba()` with explicit pixel data and dimensions — a necessary adaptation since desktop GL has no canvas object. Both set `has_alpha = true` unconditionally. Both apply wrap, filter, and mipmap options identically. Verified: functionally equivalent.
 
-### ⬜ 413. [GLTexture.cpp] `_apply_filter` anisotropy constant differs — JS uses extension property, C++ uses core GL define
+### ✅ 413. [GLTexture.cpp] `_apply_filter` anisotropy constant differs — JS uses extension property, C++ uses core GL define
 - **JS Source**: `src/js/3D/gl/GLTexture.js` lines 131–143
-- **Status**: Pending
-- **Details**: JS accesses `this.ctx.ext_aniso.TEXTURE_MAX_ANISOTROPY_EXT` — the extension object property. C++ (line 102) uses `GL_TEXTURE_MAX_ANISOTROPY` — the core GL 4.6 define. Functionally identical (same enum value `0x84FE`), but the JS also checks `this.ctx.ext_aniso` as a truthy extension object, while C++ checks `ctx_.ext_aniso` as a bool. Both work correctly.
+- **Status**: Verified
+- **Details**: JS accesses `this.ctx.ext_aniso.TEXTURE_MAX_ANISOTROPY_EXT` — the extension object property. C++ uses `GL_TEXTURE_MAX_ANISOTROPY` — the core GL 4.6 define. Both resolve to the same enum value `0x84FE`. JS checks `this.ctx.ext_aniso` as a truthy extension object; C++ checks `ctx_.ext_aniso` as a bool. Both correctly gate anisotropy application. Verified: functionally identical.
 
-### ⬜ 414. [GLTexture.h] `BLPTextureFlags` uses `std::optional<bool>` — JS uses `flags.wrap_s ?? (flags.flags & 0x1)`
+### ✅ 414. [GLTexture.h] `BLPTextureFlags` uses `std::optional<bool>` — JS uses `flags.wrap_s ?? (flags.flags & 0x1)`
 - **JS Source**: `src/js/3D/gl/GLTexture.js` lines 167–168
-- **Status**: Pending
-- **Details**: JS `set_blp` determines wrap modes using nullish coalescing: `flags.wrap_s ?? (flags.flags & 0x1)`. If `wrap_s` is `undefined`/`null`, it falls back to the bitflag. C++ uses `std::optional<bool>` with `value_or()` (line 114): `flags.wrap_s.value_or((flags.flags & 0x1) != 0)`. Functionally equivalent. However, in JS the expression `flags.flags & 0x1` evaluates to a number (0 or 1), which is then used as a boolean — `0` is falsy, `1` is truthy. C++ adds explicit `!= 0` comparison, which is correct.
+- **Status**: Verified
+- **Details**: JS uses nullish coalescing: `flags.wrap_s ?? (flags.flags & 0x1)`. C++ uses `std::optional<bool>` with `value_or()`: `flags.wrap_s.value_or((flags.flags & 0x1) != 0)`. The `!= 0` comparison correctly converts the bitmask to bool, matching JS's truthy/falsy behavior (`0` is falsy, `1` is truthy). Verified: functionally equivalent.
 
-### ⬜ 415. [ShaderProgram.cpp] `_compile` leak-guards added for first-time compilation — JS only guards in `recompile()`
+### ✅ 415. [ShaderProgram.cpp] `_compile` leak-guards added for first-time compilation — JS only guards in `recompile()`
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 29–55
-- **Status**: Pending
-- **Details**: JS `_compile()` checks `if (!vert_shader || !frag_shader) return;` but does NOT clean up the successfully compiled shader if the other fails (JS line 35–36). C++ `_compile()` (lines 26–31) properly deletes both shaders if either fails. This is a C++ improvement that prevents GPU resource leaks, but diverges from the JS behaviour (JS leaks the successful shader in this edge case).
+- **Status**: Verified
+- **Details**: JS `_compile()` checks `if (!vert_shader || !frag_shader) return;` but does NOT delete the successfully compiled shader if the other fails (JS leaks it). C++ properly deletes both shaders in the failure path. This is a deliberate C++ improvement that prevents GPU resource leaks. The observable behavior is identical: the shader program fails to compile. Verified: strictly better than JS, no functional regression.
 
-### ⬜ 416. [ShaderProgram.cpp] Uniform null-check uses `-1` — JS uses `!== null`
+### ✅ 416. [ShaderProgram.cpp] Uniform null-check uses `-1` — JS uses `!== null`
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 131–135
-- **Status**: Pending
-- **Details**: JS `set_uniform_1i` checks `if (loc !== null)` — WebGL returns `null` for unknown uniforms. C++ (line 117) checks `if (loc != -1)` — desktop GL returns `-1` for unknown uniforms. Both are correct for their respective APIs. The location cache also differs: JS stores `null` for unfound uniforms, C++ stores `-1`. This is a correct adaptation.
+- **Status**: Verified
+- **Details**: JS `set_uniform_1i` checks `if (loc !== null)` — WebGL `getUniformLocation` returns `null` for unknown uniforms. C++ checks `if (loc != -1)` — desktop GL `glGetUniformLocation` returns `-1` for unknown uniforms. The location cache stores the respective sentinel values. Verified: correct platform adaptation, functionally identical.
 
-### ⬜ 417. [ShaderProgram.cpp] `set_uniform_3fv` / `set_uniform_4fv` take extra `count` parameter
+### ✅ 417. [ShaderProgram.cpp] `set_uniform_3fv` / `set_uniform_4fv` take extra `count` parameter
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 187–201
-- **Status**: Pending
-- **Details**: JS `set_uniform_3fv(name, value)` and `set_uniform_4fv(name, value)` pass the array directly — WebGL infers the count from the array length. C++ versions (lines 147–158) take an extra `GLsizei count` parameter (defaulting to 1 in the header). This extends the API beyond the JS original — callers can pass multiple vec3/vec4 values at once in C++ but not in JS. Not a bug, but an API deviation.
+- **Status**: Verified
+- **Details**: JS `set_uniform_3fv(name, value)` and `set_uniform_4fv(name, value)` pass the array directly — WebGL infers count from array length. C++ versions take an extra `GLsizei count` parameter defaulting to `1`. With the default, single-value calls match JS behavior exactly. The extra parameter is a necessary C++ adaptation since `glUniform3fv`/`glUniform4fv` require an explicit count. Verified: default behavior matches JS.
 
-### ⬜ 418. [ShaderProgram.cpp] `set_uniform_mat4_array` takes extra `count` parameter — JS infers from array
+### ✅ 418. [ShaderProgram.cpp] `set_uniform_mat4_array` takes extra `count` parameter — JS infers from array
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 230–234
-- **Status**: Pending
-- **Details**: JS `set_uniform_mat4_array(name, transpose, value)` passes the entire flat array to `gl.uniformMatrix4fv()` — WebGL infers the matrix count from array length / 16. C++ (line 175–182) requires an explicit `count` parameter. This is a necessary adaptation since C++ glUniformMatrix4fv requires count. The default is `count = 1` (header line 51), which would only upload one matrix — callers must explicitly pass count for multi-matrix uploads.
+- **Status**: Verified
+- **Details**: JS `set_uniform_mat4_array(name, transpose, value)` passes the flat array to `gl.uniformMatrix4fv()` — WebGL infers matrix count from array length / 16. C++ requires an explicit `count` parameter since `glUniformMatrix4fv` needs it. The default is `count = 1`. Callers that upload multiple matrices must pass the correct count. Verified: necessary platform adaptation, API is correct.
 
-### ⬜ 419. [ShaderProgram.h] `_unregister_fn` is a global static callback — JS uses lazy `require('../Shaders')`
+### ✅ 419. [ShaderProgram.h] `_unregister_fn` is a global static callback — JS uses lazy `require('../Shaders')`
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 288–292
-- **Status**: Pending
-- **Details**: JS `dispose()` uses a lazy `require('../Shaders')` to call `Shaders.unregister(this)`. C++ (header line 68) uses a static `std::function<void(ShaderProgram*)> _unregister_fn` callback that must be set externally. The Shaders module must assign this callback during initialization. If the callback is never set (e.g., Shaders module not yet converted), dispose() silently skips unregistration. The comment on header line 67 acknowledges this.
+- **Status**: Verified
+- **Details**: JS `dispose()` uses lazy `require('../Shaders')` to call `Shaders.unregister(this)`. C++ uses a static `std::function<void(ShaderProgram*)> _unregister_fn` callback that must be set by the Shaders module during initialization. The `dispose()` method checks `!_shader_name.empty() && _unregister_fn` before calling, matching the JS guard `if (this._shader_name)`. Verified: correct adaptation of lazy require pattern to static callback.
 
 ### ⬜ 420. [UniformBuffer.cpp] `upload` uses total buffer size — JS uploads `this.data` (ArrayBuffer)
 - **JS Source**: `src/js/3D/gl/UniformBuffer.js` lines 179–186
