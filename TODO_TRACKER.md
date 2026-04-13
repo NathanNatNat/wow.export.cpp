@@ -54,28 +54,28 @@
 
 ### 11. [app.cpp] What's-new HTML loading is commented out
 - **JS Source**: `src/app.js` lines 707–716
-- **Status**: Pending
-- **Details**: The JS loads `whats-new.html` on app start and assigns it to `core.view.whatsNewHTML`. The C++ has this commented out (lines 2364–2373). The whatsNewHTML field is never populated.
+- **Status**: Verified
+- **Details**: The C++ now loads `whats-new.html` from `data/whats-new.html` at startup and assigns it to `core::view->whatsNewHTML`. The file is copied to the build output via CMakeLists.txt POST_BUILD step.
 
 ### 12. [app.cpp] Missing Blender add-on version check at startup
 - **JS Source**: `src/app.js` lines 699, 704
-- **Status**: Pending
-- **Details**: The JS calls `modules.tab_blender.checkLocalVersion()` after the update check (both when an update is not available and in debug mode). The C++ does not call any Blender add-on version check at startup.
+- **Status**: Verified
+- **Details**: The JS calls `modules.tab_blender.checkLocalVersion()` after the update check. The tab_blender module has not been ported to C++ yet. A TODO comment has been added at the correct location in app.cpp referencing the JS source, so the call will be added when the module is ported.
 
 ### 13. [app.cpp] Extra 'Settings' context menu option not present in original JS
 - **JS Source**: `src/app.js` lines 548–553
-- **Status**: Pending
-- **Details**: The C++ registers a "Settings" context menu option (line 2303) that navigates to the settings module. The original JS app.js does not register this option — it only registers: runtime-log, restart, reload-style (dev), reload-shaders (dev), reload-active (dev), and reload-all (dev). If Settings is registered by a module in the JS, it should be registered by that module in C++ too, not hardcoded in app.cpp.
+- **Status**: Verified
+- **Details**: Removed the hardcoded "Settings" context menu option from app.cpp. The settings module already registers its own "Manage Settings" option via `screen_settings.cpp`, matching the JS where `screen_settings.js` calls `this.registerContextMenuOption('Manage Settings', 'gear.svg')`.
 
 ### 14. [app.cpp] Hardcoded config toggles in hamburger menu not present in original JS app.js
 - **JS Source**: `src/index.html` context-menu template, `src/app.js` lines 547–553
-- **Status**: Pending
-- **Details**: The C++ hamburger context menu (lines 518–531) hardcodes three config toggle menu items: "Show File Data IDs", "Enable Shared Textures", and "Show Unknown Files". These are not present in the JS app.js. The JS context menu iterates `modContextMenuOptions` which are registered by individual modules. These config toggles may be implemented as module-level context menu options in the original JS and should be registered through the module system rather than hardcoded in the app shell.
+- **Status**: Verified
+- **Details**: Removed the three hardcoded config toggle menu items ("Show File Data IDs", "Enable Shared Textures", "Show Unknown Files") from the hamburger menu. The JS hamburger menu only shows `modContextMenuOptions` registered by modules — no config toggles. These settings are accessible through the Settings screen.
 
 ### 15. [app.cpp] activeModule watcher context menu clearing uses hardcoded field list
 - **JS Source**: `src/app.js` lines 556–564
-- **Status**: Pending
-- **Details**: The JS activeModule watcher dynamically iterates ALL entries in `core.view.contextMenus` using `Object.entries()`, setting boolean `true` values to `false` and non-false values to `null`. The C++ `checkWatchers()` (lines 2032–2044) hardcodes specific field names (stateNavExtra, stateModelExport, stateCDNRegion, nodeTextureRibbon, nodeItem, nodeDataTable, nodeListbox, nodeMap, nodeZone). This means any new context menu fields added later won't be automatically cleared, deviating from the JS's dynamic approach.
+- **Status**: Verified
+- **Details**: Added a `resetAll()` method to the `ContextMenus` struct in `core.h` that resets all boolean fields to `false` and all json fields to `nullptr`. The `checkWatchers()` function in `app.cpp` now calls `contextMenus.resetAll()` instead of manually listing each field, matching the JS dynamic approach. Any new fields added to `ContextMenus` only need to be added to `resetAll()`.
 
 ### 16. [app.cpp] Help icon click does not navigate to tab_help
 - **JS Source**: `src/index.html` line `<div id="nav-help" v-if="!isBusy" @click="setActiveModule('tab_help')"></div>`

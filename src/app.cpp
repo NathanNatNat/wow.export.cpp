@@ -609,24 +609,6 @@ static void renderAppShell() {
 							}
 						}
 
-						ImGui::Separator();
-
-						// Config toggle items
-						bool showFileDataIDs = core::view->config.value("showFileDataIDs", false);
-						if (ImGui::MenuItem("Show File Data IDs", nullptr, showFileDataIDs)) {
-							core::view->config["showFileDataIDs"] = !showFileDataIDs;
-						}
-
-						bool enableSharedTextures = core::view->config.value("enableSharedTextures", false);
-						if (ImGui::MenuItem("Enable Shared Textures", nullptr, enableSharedTextures)) {
-							core::view->config["enableSharedTextures"] = !enableSharedTextures;
-						}
-
-						bool showUnknownFiles = core::view->config.value("showUnknownFiles", false);
-						if (ImGui::MenuItem("Show Unknown Files", nullptr, showUnknownFiles)) {
-							core::view->config["showUnknownFiles"] = !showUnknownFiles;
-						}
-
 						ImGui::PopStyleColor();
 					}
 					ImGui::End();
@@ -2160,18 +2142,10 @@ static void checkWatchers(GLFWwindow* window) {
 	}
 
 	// watch activeModule and close context menus when it changes
+	// JS: app.js lines 556-563 — dynamically iterates all contextMenu entries.
 	if (core::view->activeModule != prevActiveModule) {
 		prevActiveModule = core::view->activeModule;
-		auto& contextMenus = core::view->contextMenus;
-		contextMenus.stateNavExtra = false;
-		contextMenus.stateModelExport = false;
-		contextMenus.stateCDNRegion = false;
-		contextMenus.nodeTextureRibbon = nullptr;
-		contextMenus.nodeItem = nullptr;
-		contextMenus.nodeDataTable = nullptr;
-		contextMenus.nodeListbox = nullptr;
-		contextMenus.nodeMap = nullptr;
-		contextMenus.nodeZone = nullptr;
+		core::view->contextMenus.resetAll();
 	}
 }
 
@@ -2440,9 +2414,10 @@ int main(int argc, char* argv[]) {
 	modules::initialize();
 
 	// register static context menu options
+	// JS: app.js lines 548-553 — register static context menu options.
+	// Note: "Settings" / "Manage Settings" is registered by screen_settings module, not here.
 	modules::registerContextMenuOption("runtime-log", "Open Runtime Log", "timeline.svg", []() { logging::openRuntimeLog(); });
 	modules::registerContextMenuOption("restart", "Restart wow.export.cpp", "arrow-rotate-left.svg", []() { app::restartApplication(); });
-	modules::registerContextMenuOption("settings", "Settings", "gear.svg", []() { modules::setActive("settings"); });
 	modules::registerContextMenuOption("reload-style", "Reload Styling", "palette.svg", []() { app::reloadStylesheet(); }, true);
 	modules::registerContextMenuOption("reload-shaders", "Reload Shaders", "cube.svg", []() { shaders::reload_all(); }, true);
 	modules::registerContextMenuOption("reload-active", "Reload Active Module", "gear.svg", []() { modules::reloadActiveModule(); }, true);
@@ -2510,10 +2485,28 @@ int main(int argc, char* argv[]) {
 	// adapt the logic above. For now, we skip directly to source_select.
 	// TODO: Port src/js/updater.js to C++ (see TODO_TRACKER.md entry #34+).
 
+	// JS: app.js lines 699, 704 — check Blender add-on version after update check.
+	// The tab_blender module has not been ported to C++ yet. When it is, call
+	// tab_blender::checkLocalVersion() here. See src/js/modules/tab_blender.js:127-170.
+	// TODO: Port tab_blender module to C++ and enable checkLocalVersion() call.
+
 	// Load what's new HTML on app start
 	// JS: app.js lines 707-716
-	// The whats-new.html loading has not been ported yet.
-	// TODO: Load whats-new.html and assign to core::view->whatsNewHTML (see TODO_TRACKER.md entry #11).
+	{
+		auto whatsNewPath = constants::DATA_DIR() / "whats-new.html";
+		try {
+			std::ifstream ifs(whatsNewPath, std::ios::in);
+			if (ifs.is_open()) {
+				std::string html((std::istreambuf_iterator<char>(ifs)),
+				                  std::istreambuf_iterator<char>());
+				core::view->whatsNewHTML = std::move(html);
+			} else {
+				logging::write(std::format("failed to load whats-new.html: could not open {}", whatsNewPath.string()));
+			}
+		} catch (const std::exception& e) {
+			logging::write(std::format("failed to load whats-new.html: {}", e.what()));
+		}
+	}
 
 	// Set source select as the currently active interface screen.
 	modules::setActive("source_select");
