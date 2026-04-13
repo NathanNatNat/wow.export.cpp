@@ -528,10 +528,16 @@ void mounted() {
 		[]() -> std::string {
 			return std::format("Export models as {}", core::view->config.value("exportModelFormat", std::string("OBJ")));
 		},
-		[](const std::string& file) {
-			nlohmann::json entry;
-			entry["fileName"] = file;
-			export_files({entry}, true);
+		[](const std::vector<std::string>& files) {
+			// JS: process: files => export_files(this.$core, files, true)
+			std::vector<nlohmann::json> entries;
+			entries.reserve(files.size());
+			for (const auto& file : files) {
+				nlohmann::json entry;
+				entry["fileName"] = file;
+				entries.push_back(std::move(entry));
+			}
+			export_files(entries, true);
 		}
 	});
 

@@ -47,4 +47,16 @@ void render();
  */
 void setActive();
 
+/**
+ * Mark all item types to the given state.
+ * JS equivalent: setAllItemTypes(state) on the Vue app.
+ */
+void setAllItemTypes(bool state);
+
+/**
+ * Mark all item qualities to the given state.
+ * JS equivalent: setAllItemQualities(state) on the Vue app.
+ */
+void setAllItemQualities(bool state);
+
 } // namespace tab_items

@@ -817,4 +817,14 @@ void render() {
 	);
 }
 
+void setAllItemTypes(bool state) {
+	for (auto& entry : type_mask_entries)
+		entry.checked = state;
+}
+
+void setAllItemQualities(bool state) {
+	for (auto& entry : quality_mask_entries)
+		entry.checked = state;
+}
+
 } // namespace tab_items
