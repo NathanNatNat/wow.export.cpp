@@ -286,6 +286,11 @@ add_custom_command(TARGET wow_export_cpp POST_BUILD
         "${CMAKE_SOURCE_DIR}/src/app.css"
         "$<TARGET_FILE_DIR:wow_export_cpp>/data/app.css"
 
+    # src/whats-new.html  →  <exe_dir>/data/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/src/whats-new.html"
+        "$<TARGET_FILE_DIR:wow_export_cpp>/data/whats-new.html"
+
     COMMENT "Copying runtime resources to data/ directory"
 )
 
