@@ -1799,3 +1799,65 @@
 - **JS Source**: `src/js/3D/Texture.js` lines 15–18
 - **Status**: Pending
 - **Details**: JS `Texture` class has only `flags`, `fileDataID`, and `data` as instance properties. The C++ `Texture` class in `Texture.h` (line 36) declares an additional `std::string fileName` public member that has no counterpart in JS. `setFileName` in JS sets `this.fileDataID` (not `this.fileName`) — the C++ version correctly sets `this->fileDataID` but the unused `fileName` member remains as dead state. This is a minor deviation; the extra member should be removed to match JS fidelity, or documented as intentional.
+
+## src/js/3D/camera/ Audit
+
+### 357. [CameraControlsGL.cpp] `init()` omits all event listener registration
+- **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 198–216
+- **Status**: Pending
+- **Details**: JS `init()` registers six event listeners: `contextmenu` (prevent default), `mousedown`, `wheel` on `dom_element`, and `mousemove`/`mouseup` on `document`. It also stores `move_listener` and `up_listener` references for later removal in `dispose()`. C++ `init()` (lines 206–214) omits all of this with a comment about GLFW callbacks. The `move_listener`/`up_listener` members from JS are absent. While GLFW handles input differently, the contextmenu prevention (right-click menu suppression) has no C++ equivalent documented or implemented.
+
+### 358. [CameraControlsGL.cpp] `dispose()` is empty — no cleanup
+- **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 218–221
+- **Status**: Pending
+- **Details**: JS `dispose()` removes `mousemove` and `mouseup` event listeners from `document` using stored handler references. C++ `dispose()` (lines 216–217) is completely empty. If any GLFW callback cleanup is needed, it is not performed. This could leave dangling callbacks if a `CameraControlsGL` instance is destroyed while callbacks are still registered.
+
+### 359. [CameraControlsGL.cpp] `on_mouse_down` missing `window.focus()` fallback
+- **JS Source**: `src/js/3D/camera/CameraControlsGL.js` line 226
+- **Status**: Pending
+- **Details**: JS calls `this.dom_element.focus ? this.dom_element.focus() : window.focus()` — if `dom_element.focus` is falsy, it falls back to `window.focus()`. C++ (lines 221–222) calls `dom_element.focus()` only if `dom_element.focus` is set, but has no fallback equivalent for focusing the window when the dom element has no focus function.
+
+### 360. [CameraControlsGL.cpp] `update()` unconditionally copies `camera.quaternion` — JS guards with null check
+- **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 417–420
+- **Status**: Pending
+- **Details**: JS `update()` at line 417 uses `this.camera.quaternion || [0, 0, 0, 1]` for the distance check, and at lines 419–420 only copies `this.camera.quaternion` to `last_quaternion` if `this.camera.quaternion` is truthy (using spread `[...this.camera.quaternion]`). C++ (lines 407–410) unconditionally accesses `camera.quaternion` in both the distance check and the copy — no null/optional guard. Since `CameraGL::quaternion` is always initialized, this works but changes the conditional semantics: JS would use a default `[0,0,0,1]` if `quaternion` were ever null at runtime.
+
+### 361. [CameraControlsGL.cpp] `update()` guards `camera.lookAt` with null check — JS calls unconditionally
+- **JS Source**: `src/js/3D/camera/CameraControlsGL.js` line 408
+- **Status**: Pending
+- **Details**: JS calls `this.camera.lookAt(this.target[0], this.target[1], this.target[2])` unconditionally at line 408 — if `lookAt` is undefined, JS would throw a runtime error. C++ (lines 398–399) adds `if (camera.lookAt)` before calling, silently skipping if not set. This is a behavioral deviation: JS would crash on a missing `lookAt`, while C++ silently produces no camera orientation update.
+
+### 362. [CameraControlsGL.cpp] `get_pan_scale` missing `fov || 50` fallback pattern
+- **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 300–301
+- **Status**: Pending
+- **Details**: JS reads `this.camera.fov || 50` at line 300, falling back to `50` if `fov` is `0`, `undefined`, or `null`. C++ (line 292) reads `camera.fov` directly. While `CameraGL::fov` is initialized to `50.0f`, if it is ever set to `0.0f` at runtime, JS would use `50` but C++ would use `0.0f`, producing a zero `v_fov` and `NaN` from `tan(0/2)`.
+
+### 363. [CameraControlsGL.h] `Spherical` and `CameraGL`/`DomElementGL` structs are local — JS has no equivalent types
+- **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 155–196
+- **Status**: Pending
+- **Details**: JS uses plain objects and arrays for `spherical`, `camera`, and `dom_element` (duck typing). C++ defines three structs (`CameraGL`, `DomElementGL`, `Spherical`) in `CameraControlsGL.h` (lines 16–40). These are reasonable C++ equivalents but are unique to this header — if other files need the same camera or dom element interface, they define their own duplicate structs (see `CharacterCameraControlsGL.h` `CharacterCameraGL`/`CharacterDomElementGL`). This duplication could cause type mismatches across the codebase.
+
+### 364. [CharacterCameraControlsGL.cpp] Constructor omits event listener registration
+- **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` lines 27–35
+- **Status**: Pending
+- **Details**: JS constructor registers three event listeners on `dom_element`: `mousedown`, `wheel`, and `contextmenu` (with `e.preventDefault()`). It also stores `mouse_down_handler`, `mouse_move_handler`, `mouse_up_handler`, `mouse_wheel_handler` as instance properties for later removal. C++ constructor (lines 17–27) does none of this — it only initializes member variables. While GLFW handles input differently, the stored handler references and contextmenu prevention are absent.
+
+### 365. [CharacterCameraControlsGL.cpp] `dispose()` is empty — JS removes four event listeners
+- **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` lines 170–175
+- **Status**: Pending
+- **Details**: JS `dispose()` removes four event listeners: `mousedown` and `wheel` from `dom_element`, and `mousemove` and `mouseup` from `document`. C++ `dispose()` (lines 151–152) is completely empty. Any GLFW callback cleanup that may be needed is not performed.
+
+### 366. [CharacterCameraControlsGL.cpp] `on_mouse_move` guards `camera.lookAt` with null check — JS calls unconditionally
+- **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` line 112
+- **Status**: Pending
+- **Details**: JS calls `this.camera.lookAt(this.target[0], this.target[1], this.target[2])` unconditionally at line 112 during panning. C++ (line 99) guards with `if (camera.lookAt)`. This is a behavioral deviation: JS would crash if `lookAt` is missing, while C++ silently skips the camera orientation update, potentially leaving the camera in an inconsistent state after panning.
+
+### 367. [CharacterCameraControlsGL.cpp] `on_mouse_wheel` guards `camera.update_view` with null check — JS calls unconditionally
+- **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` line 162
+- **Status**: Pending
+- **Details**: JS calls `this.camera.update_view()` unconditionally at line 162 after zooming. C++ (line 143) guards with `if (camera.update_view)`. This is a behavioral deviation: JS would crash if `update_view` is missing, while C++ silently skips the view matrix update after zoom, potentially leaving the rendering state stale.
+
+### 368. [CharacterCameraControlsGL.h] Duplicate camera/dom structs — `CharacterCameraGL` vs `CameraGL`
+- **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` lines 14–16
+- **Status**: Pending
+- **Details**: JS uses duck typing — both `CameraControlsGL` and `CharacterCameraControlsGL` accept the same camera object with `position`, `lookAt`, etc. C++ defines separate struct types: `CameraGL` (in `CameraControlsGL.h`) and `CharacterCameraGL` (in `CharacterCameraControlsGL.h`). These are structurally similar but distinct types: `CameraGL` has `up`, `quaternion`, `fov` members while `CharacterCameraGL` has `update_view` instead. This prevents passing the same camera object to both control types, which JS allows freely. A shared base struct or a single unified type would better match JS's duck-typed flexibility.
