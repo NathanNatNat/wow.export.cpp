@@ -96,7 +96,7 @@ void UniformBuffer::upload() {
 
 	glBindBuffer(GL_UNIFORM_BUFFER, buffer);
 	glBufferSubData(GL_UNIFORM_BUFFER, 0,
-	                static_cast<GLsizeiptr>(size), data_.data());
+	                static_cast<GLsizeiptr>(data_.size()), data_.data());
 	dirty = false;
 }
 
