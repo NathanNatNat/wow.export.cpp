@@ -298,32 +298,36 @@ add_custom_command(TARGET wow_export_cpp POST_BUILD
 add_subdirectory(src/js)
 
 # ════════════════════════════════════════════════════════════════
-#  Installer executable (standalone console application)
+#  Installer executable (standalone console application — disabled by default)
+#  Set -DWOW_EXPORT_BUILD_INSTALLER=ON to build.
 # ════════════════════════════════════════════════════════════════
+option(WOW_EXPORT_BUILD_INSTALLER "Build the installer executable" OFF)
 
-add_executable(wow_export_installer src/installer/installer.cpp)
+if(WOW_EXPORT_BUILD_INSTALLER)
+    add_executable(wow_export_installer src/installer/installer.cpp)
 
-target_include_directories(wow_export_installer PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-)
+    target_include_directories(wow_export_installer PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+    )
 
-target_link_libraries(wow_export_installer PRIVATE
-    nlohmann_json::nlohmann_json
-    zlibstatic
-)
+    target_link_libraries(wow_export_installer PRIVATE
+        nlohmann_json::nlohmann_json
+        zlibstatic
+    )
 
-if(MSVC)
-    target_compile_options(wow_export_installer PRIVATE /W4)
-else()
-    target_compile_options(wow_export_installer PRIVATE -Wall -Wextra)
+    if(MSVC)
+        target_compile_options(wow_export_installer PRIVATE /W4)
+    else()
+        target_compile_options(wow_export_installer PRIVATE -Wall -Wextra)
+    endif()
+
+    set_target_properties(wow_export_installer PROPERTIES
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+        OUTPUT_NAME "wow.export.cpp.installer"
+    )
 endif()
-
-set_target_properties(wow_export_installer PROPERTIES
-    CXX_STANDARD 23
-    CXX_STANDARD_REQUIRED ON
-    CXX_EXTENSIONS OFF
-    OUTPUT_NAME "wow.export.cpp.installer"
-)
 
 # ════════════════════════════════════════════════════════════════
 #  Updater executable (standalone application — disabled by default)
