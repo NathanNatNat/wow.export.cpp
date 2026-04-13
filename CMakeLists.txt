@@ -304,7 +304,7 @@ add_subdirectory(src/js)
 option(WOW_EXPORT_BUILD_INSTALLER "Build the installer executable" OFF)
 
 if(WOW_EXPORT_BUILD_INSTALLER)
-    add_executable(wow_export_installer src/installer/installer.cpp)
+    add_executable(wow_export_installer installer/installer.cpp)
 
     target_include_directories(wow_export_installer PRIVATE
         ${CMAKE_SOURCE_DIR}/src
@@ -336,7 +336,7 @@ endif()
 option(WOW_EXPORT_BUILD_UPDATER "Build the updater executable" OFF)
 
 if(WOW_EXPORT_BUILD_UPDATER)
-    add_executable(wow_export_updater src/updater/updater.cpp)
+    add_executable(wow_export_updater updater/updater.cpp)
 
     target_include_directories(wow_export_updater PRIVATE
         ${CMAKE_SOURCE_DIR}/src

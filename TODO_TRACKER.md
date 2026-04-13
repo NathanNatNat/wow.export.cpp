@@ -167,7 +167,7 @@
 - **Status**: Verified
 - **Details**: Fixed: added texture override toast bar in `renderAppShell()` after the model override toast, using identical styling (progress-type background, stopwatch icon, "Remove" action link, close button). Shows when active module is `tab_textures`, `overrideTextureList` is non-empty, and no regular toast is displayed. Calls `removeOverrideTextures()` on Remove/Close. Removed the basic `TextColored`/`SmallButton` fallback from `tab_textures.cpp` to avoid duplication.
 
-## src/installer/ Audit
+## installer/ Audit
 
 ### 34. [installer.cpp] Entire installer.js is unconverted — no installer.cpp exists
 - **JS Source**: `src/installer/installer.js` lines 1–261
@@ -224,7 +224,7 @@
 - **Status**: Verified
 - **Details**: The JS uses `const PLATFORM = process.platform` to detect the runtime platform (`'win32'`, `'linux'`, `'darwin'`), which is then used by `get_install_path()`, `get_executable_name()`, `get_icon_path()`, `create_desktop_shortcut()`, and `extract_data_pak()` for platform-specific logic. No C++ equivalent exists. The C++ version should use preprocessor macros (`_WIN32`, `__linux__`) or `std::filesystem` capabilities to determine the platform at compile time.
 
-## src/updater Audit
+## updater/ Audit
 
 ### 45. [updater/updater.cpp] Entire standalone updater application is unconverted
 - **JS Source**: `src/updater/updater.js` lines 1–197
