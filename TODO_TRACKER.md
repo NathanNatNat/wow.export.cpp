@@ -100,22 +100,22 @@
 
 ## src/js/3D/ Audit (0/4 ✅)
 
-### ⬜ 353. [Skin.h] `SubMesh::triangleStart` is `uint16_t` but must hold a 32-bit value
+### ✅ 353. [Skin.h] `SubMesh::triangleStart` is `uint16_t` but must hold a 32-bit value
 - **JS Source**: `src/js/3D/Skin.js` lines 61, 72
 - **Status**: Verified
 - **Details**: Changed `SubMesh::triangleStart` from `uint16_t` to `uint32_t` in `Skin.h` so that the `triangleStart += level << 16` operation does not silently overflow.
 
-### ⬜ 354. [Shaders.cpp] `SHADER_MANIFEST` is `static` but JS exports it
+### ✅ 354. [Shaders.cpp] `SHADER_MANIFEST` is `static` but JS exports it
 - **JS Source**: `src/js/3D/Shaders.js` lines 13–19, 147
 - **Status**: Verified
 - **Details**: Removed `static` from `SHADER_MANIFEST` in `Shaders.cpp` and added an `extern` declaration in `Shaders.h` so it is accessible to other translation units, matching JS `module.exports`.
 
-### ⬜ 355. [Shaders.cpp] `create_program` allocates with `new` but no ownership/cleanup — memory leak
+### ✅ 355. [Shaders.cpp] `create_program` allocates with `new` but no ownership/cleanup — memory leak
 - **JS Source**: `src/js/3D/Shaders.js` lines 56–72
 - **Status**: Verified
 - **Details**: Changed `create_program` to return `std::unique_ptr<gl::ShaderProgram>`. Added `~ShaderProgram()` destructor that calls `dispose()` for automatic GL cleanup. Updated all 6 renderer classes (`load_shaders` return type and `shader` member) to use `std::unique_ptr`. The `active_programs` map retains raw non-owning pointers for hot-reload tracking; `unregister` removes from tracking, and the owning `unique_ptr` (held by the renderer) handles deletion.
 
-### ⬜ 356. [Texture.h] Extra `fileName` member not present in JS
+### ✅ 356. [Texture.h] Extra `fileName` member not present in JS
 - **JS Source**: `src/js/3D/Texture.js` lines 15–18
 - **Status**: Verified
 - **Details**: The `fileName` member is intentionally kept. While not declared in JS `Texture` constructor, it is dynamically set by `M2LegacyLoader.js` (line 540: `texture.fileName = fileName`) and read by `M2LegacyRendererGL.js`, `MDXRendererGL.js`, and `M2LegacyExporter.js`. Since C++ does not support dynamic properties, the member must be declared in the class. Added a documentation comment explaining this.
