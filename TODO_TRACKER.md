@@ -2534,3 +2534,110 @@
 - **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 287–291
 - **Status**: Pending
 - **Details**: C++ `loadDoodadSet()` (line 347) adds `if (firstIndex + i >= wmo->doodads.size()) continue;` which doesn't exist in JS. In JS, out-of-bounds access returns `undefined` and the subsequent property access throws, caught by catch. C++ silently skips.
+
+## src/js/3D/writers Audit
+
+### 504. [CSVWriter.cpp] `escapeCSVField()` treats empty string as null/undefined — JS does not
+- **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 42–51
+- **Status**: Pending
+- **Details**: The JS `escapeCSVField()` checks `if (value === null || value === undefined)` and returns empty string. Then it calls `value.toString()`. The C++ version checks `if (value.empty())` and returns empty string. This means a value that is an empty string `""` in JS would be passed through `toString()` (returning `""`) and then returned as-is. In C++, an empty string returns `""` immediately. While functionally equivalent for strings, the JS version also handles non-string types (numbers, booleans) via `toString()`, whereas the C++ only accepts `const std::string&` — callers must convert to string before calling.
+
+### 505. [CSVWriter.cpp] Row values are `std::string` only — JS supports arbitrary types per field
+- **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 33–35, 74–79
+- **Status**: Pending
+- **Details**: The JS `addRow()` accepts an `object` whose field values can be any type (number, boolean, null, etc.) — `escapeCSVField` handles all types via `value.toString()`. The C++ `addRow()` only accepts `std::unordered_map<std::string, std::string>`, requiring all values to be pre-converted to strings by the caller. This shifts the type conversion responsibility to the caller and means null/undefined handling (JS returns `''` for these) must be handled externally.
+
+### 506. [GLBWriter.h] Constants declared as `inline constexpr` in header — JS uses module-level `const`
+- **JS Source**: `src/js/3D/writers/GLBWriter.js` lines 8–14
+- **Status**: Pending
+- **Details**: JS declares `GLB_MAGIC`, `GLB_VERSION`, `CHUNK_TYPE_JSON`, `CHUNK_TYPE_BIN` as module-scoped constants (not exported). The C++ declares these as `inline constexpr` in the header file, making them visible to all translation units that include `GLBWriter.h`. This leaks implementation-detail constants into the global namespace. They should be either `static constexpr` in the `.cpp` file or in an anonymous namespace. While not a functional bug, it deviates from the JS's module-local scoping.
+
+### 507. [GLTFWriter.cpp] Generator string sources differ — C++ reads runtime config instead of build manifest
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 208–213
+- **Status**: Pending
+- **Details**: JS constructs the generator string as `util.format('wow.export v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid)` reading from `nw.App.manifest` (build-time constants). C++ reads `constants::VERSION` for version but reads `selectedFlavour` and `selectedGuid` from `core::view->config` (runtime config). The C++ also conditionally omits flavour/guid when empty, while JS always formats all three values unconditionally — JS would produce `"undefined"` for absent values.
+
+### 508. [GLTFWriter.cpp] Animation channel target `node` index differs when bone prefix mode is disabled
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 620–628, 757–765, 887–895
+- **Status**: Pending
+- **Details**: JS always uses `nodeIndex + 1` for translation, rotation, and scale animation channel target nodes. C++ uses `actual_node_idx` which equals `nodeIndex + 1` only when `modelsExportWithBonePrefix` is true, and equals `nodeIndex` when false. This changes animation behavior when bone prefix mode is disabled. The JS appears to have a bug here (the `+1` is correct only with prefix nodes), and the C++ fixes it without documenting the intentional deviation.
+
+### 509. [GLTFWriter.cpp] `addTextureBuffer()` method added — does not exist in JS source
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` (entire class)
+- **Status**: Pending
+- **Details**: The C++ adds `addTextureBuffer(uint32_t fileDataID, BufferWrapper buffer)` (header line 98–99, cpp lines 108–110). The JS class only has `setTextureBuffers(texture_buffers)` to set the entire texture buffer map at once. The extra method is a C++ API addition not present in the original.
+
+### 510. [GLTFWriter.cpp] `calculate_min_max` returns early on empty values — JS does not guard
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 34–51
+- **Status**: Pending
+- **Details**: C++ `calculate_min_max` has `if (values.empty()) return;` which skips setting min/max on the accessor. JS would create `target.min` and `target.max` as arrays filled with `undefined` (serializing as `null`). This means empty arrays produce no min/max keys in C++ output vs. `null`-filled arrays in JS output.
+
+### 511. [GLTFWriter.cpp] JSON output key ordering differs — nlohmann uses alphabetical, JS preserves insertion order
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1484–1494
+- **Status**: Pending
+- **Details**: JS uses `JSON.stringify(root, null, '\t')` which preserves property insertion order. C++ uses `nlohmann::json` which by default sorts keys alphabetically (using `std::map` internally). This produces semantically equivalent but textually different GLTF/GLB JSON output. To match JS insertion order, `nlohmann::ordered_json` would be needed.
+
+### 512. [GLTFWriter.cpp] GLTF text file written without error checking and may have different line endings
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` line 1493
+- **Status**: Pending
+- **Details**: JS uses `await fsp.writeFile(outGLTF, ..., 'utf8')` which rejects on error. C++ uses `std::ofstream` without checking open/write success. Additionally, on Windows `std::ofstream` defaults to text mode (`\n` → `\r\n` translation), producing different line endings than the JS version.
+
+### 513. [JSONWriter.cpp] `dump()` indentation uses 1-space width with tab character — may differ from JS format
+- **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40–43
+- **Status**: Pending
+- **Details**: JS uses `JSON.stringify(this.data, ..., '\t')` which uses tab-based indentation. C++ uses `data.dump(1, '\t')` where the first argument `1` is the indent width (number of tab characters per level). Both produce tab indentation, but `nlohmann::json` may differ in key ordering (alphabetical vs. insertion-order). The JS also has a custom replacer function for BigInt values that converts them to strings; the C++ comment says nlohmann handles large integers natively, but C++ `int64_t` has a fixed range while JS BigInt is arbitrary-precision. If any property value exceeds int64 range, the C++ serialization would differ.
+
+### 514. [JSONWriter.cpp] BigInt serialization handled differently — C++ lacks arbitrary-precision support
+- **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40–43
+- **Status**: Pending
+- **Details**: The JS `write()` uses a custom JSON replacer `(key, value) => typeof value === 'bigint' ? value.toString() : value` to serialize BigInt values as strings. The C++ comment says "nlohmann::json handles all types natively including large integers; no special BigInt serialization needed as in JS." However, nlohmann::json stores integers as `int64_t` or `uint64_t` (max ~18.4 quintillion), while JS BigInt can represent arbitrarily large integers. Values exceeding the 64-bit range would overflow in C++ but be correctly serialized as strings in JS.
+
+### 515. [MTLWriter.cpp] `path.resolve()` vs `std::filesystem::weakly_canonical()` may differ for relative paths
+- **JS Source**: `src/js/3D/writers/MTLWriter.js` lines 60–63
+- **Status**: Pending
+- **Details**: JS uses `path.resolve(mtlDir, materialFile)` which resolves against `mtlDir` to produce an absolute path. C++ uses `std::filesystem::weakly_canonical(mtlDir / materialFile)` which additionally canonicalizes the path (resolves `.` and `..` segments, normalizes separators). These may produce different results for paths containing `..` segments, symlinks, or non-existent intermediate directories. `weakly_canonical` can also throw on some platforms.
+
+### 516. [OBJWriter.cpp] Version header says "wow.export" — should say "wow.export.cpp"
+- **JS Source**: `src/js/3D/writers/OBJWriter.js` line 138
+- **Status**: Pending
+- **Details**: C++ line 75 writes `"# Exported using wow.export v" + std::string(constants::VERSION)`. Per project conventions, user-facing text should say "wow.export.cpp" not "wow.export". The JS original says "wow.export" but the C++ port should use the project's own name.
+
+### 517. [OBJWriter.cpp] `std::to_string()` float formatting differs from JS `toString()` — trailing zeros, precision
+- **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 161, 170, 194
+- **Status**: Pending
+- **Details**: JS converts floats with default `toString()` which produces minimal representation (e.g., `1.5`, `0.123456789`). C++ uses `std::to_string()` which formats with 6 decimal places and trailing zeros (e.g., `1.500000`, `0.123457`). This produces larger output files and may introduce precision differences due to rounding. For example, JS `(0.1).toString()` → `"0.1"` but C++ `std::to_string(0.1)` → `"0.100000"`. This affects vertex, normal, and UV coordinate output.
+
+### 518. [SQLWriter.cpp] `escapeSQLValue()` treats empty string as NULL — JS treats it differently
+- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 65–77
+- **Status**: Pending
+- **Details**: JS `escapeSQLValue()` checks `if (value === null || value === undefined)` and returns `'NULL'`. An empty string `""` would pass through to `toString()` (returning `""`), fail the `isNaN` check (since `isNaN("") === false` in JS, empty string coerces to 0), and be returned as-is (bare `""`). The C++ checks `if (value.empty())` and returns `"NULL"`. This means an empty string is treated as NULL in C++ but as a numeric value `0` (or empty string) in JS — a significant behavioral difference for SQL output.
+
+### 519. [SQLWriter.cpp] `escapeSQLValue()` numeric detection logic differs from JS `isNaN()` behavior
+- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 72–73
+- **Status**: Pending
+- **Details**: JS uses `!isNaN(value) && str.trim() !== ''` for numeric detection. JS `isNaN()` coerces its argument: `isNaN("123") === false` (numeric), `isNaN("12.3e5") === false` (numeric), `isNaN("0x1F") === false` (hex is numeric). The C++ implementation manually checks for digits, decimal point, and sign characters but does not handle scientific notation (`1e5`), hexadecimal (`0xFF`), or other JS-coercible numeric formats. Values like `"1e5"` or `"0xFF"` would be treated as numeric in JS but as strings in C++.
+
+### 520. [SQLWriter.cpp] `generateDDL()` skips fields not found in schema — JS uses undefined
+- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 154–166
+- **Status**: Pending
+- **Details**: JS does `const field_type = this.schema.get(field)` — if the field is not in the schema, `field_type` is `undefined`. Then `fieldTypeToSQL(undefined, field)` is called, which falls through all switch cases to the `default: return 'TEXT'` branch. So missing-schema fields get type `TEXT`. In C++, `if (it == schema->end()) continue;` skips the field entirely — it won't appear in the CREATE TABLE statement. This means C++ DDL output may have fewer columns than JS DDL output for the same data.
+
+### 521. [SQLWriter.cpp] `generateDDL()` column_defs joined with different formatting than JS
+- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 171–173
+- **Status**: Pending
+- **Details**: JS uses `column_defs.join(',\n')` which puts commas at the end of each line except the last. C++ (lines 175–179) manually appends commas: each line gets a trailing comma unless it's the last entry (`if (i + 1 < column_defs.size()) result += ","`). In JS, the comma is on the same line as the column definition. In C++, the comma is also on the same line. However, the newline placement may differ slightly: JS produces `col1 INT,\ncol2 TEXT` while C++ produces `col1 INT,\ncol2 TEXT` — these should be equivalent. No functional difference but worth verifying during testing.
+
+### 522. [SQLWriter.cpp] `toSQL()` value row formatting — comma placement and newlines differ slightly
+- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 191–203
+- **Status**: Pending
+- **Details**: JS batch format: `INSERT INTO ... VALUES\n(row1),\n(row2);` — commas appear after `)` on each row except the last in the batch, joined by `,\n`. The C++ (lines 206–222) produces `(row1),\n(row2)\n;\n\n` — the semicolon is on its own line followed by two newlines. The JS produces `(row2);\n\n` — the semicolon immediately follows the last row with a blank line after. This produces slightly different SQL formatting.
+
+### 523. [STLWriter.cpp] Version header says "wow.export" — should say "wow.export.cpp"
+- **JS Source**: `src/js/3D/writers/STLWriter.js` line 147
+- **Status**: Pending
+- **Details**: C++ line 93 writes `"Exported using wow.export v" + std::string(constants::VERSION)` into the STL header. Per project conventions, user-facing text should say "wow.export.cpp" not "wow.export". The JS original says "wow.export" but the C++ port should use its own project name.
+
+### 524. [GLTFWriter.cpp] Generator string says "wow.export" — should say "wow.export.cpp"
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 208–213
+- **Status**: Pending
+- **Details**: The GLTF generator metadata string in C++ starts with `"wow.export v"`. Per project conventions, user-facing text should say "wow.export.cpp" not "wow.export".
