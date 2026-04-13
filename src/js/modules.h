@@ -169,4 +169,18 @@ const std::vector<NavButton>& getNavButtons();
  */
 const std::vector<ContextMenuOption>& getContextMenuOptions();
 
+/**
+ * Open a knowledge-base article in the help tab.
+ * JS equivalent: modules.tab_help.open_article(kb_id)
+ *
+ * Sets a pending KB ID and activates the tab_help module. When tab_help
+ * mounts, it picks up the pending ID and scrolls to the article.
+ */
+void openHelpArticle(const std::string& kb_id);
+
+/**
+ * Get and clear the pending KB article ID (consumed by tab_help on mount).
+ */
+std::string consumePendingKbId();
+
 } // namespace modules

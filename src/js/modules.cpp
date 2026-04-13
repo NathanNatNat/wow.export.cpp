@@ -595,4 +595,20 @@ const std::vector<ContextMenuOption>& getContextMenuOptions() {
 	return sorted_context_menu_options;
 }
 
+// Pending knowledge-base article ID for tab_help.
+// JS equivalent: let pending_kb_id = null; in tab_help.js
+static std::string s_pending_kb_id;
+
+void openHelpArticle(const std::string& kb_id) {
+	// JS: open_article(kb_id) { pending_kb_id = kb_id; this.setActive(); }
+	s_pending_kb_id = kb_id;
+	setActive("tab_help");
+}
+
+std::string consumePendingKbId() {
+	std::string id = std::move(s_pending_kb_id);
+	s_pending_kb_id.clear();
+	return id;
+}
+
 } // namespace modules

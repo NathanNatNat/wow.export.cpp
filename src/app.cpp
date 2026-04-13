@@ -418,6 +418,16 @@ static void hideToast(bool userCancel = false) {
 	core::hideToast(userCancel);
 }
 
+/**
+ * Invoked when a user cancels a model override filter.
+ */
+static void removeOverrideModels() {
+	if (!core::view)
+		return;
+	core::view->overrideModelList.clear();
+	core::view->overrideModelName.clear();
+}
+
 static void renderAppShell() {
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 	const ImVec2 vp_pos = viewport->WorkPos;
@@ -633,6 +643,9 @@ static void renderAppShell() {
 					                btn_min.y + (20.0f - text_sz.y) * 0.5f);
 					ImGui::GetWindowDrawList()->AddText(icon_font, icon_size, icon_pos,
 						app::theme::FONT_PRIMARY_U32, ICON_FA_CIRCLE_QUESTION);
+					// JS: @click="setActiveModule('tab_help')"
+					if (ImGui::IsItemClicked())
+						modules::setActive("tab_help");
 					if (ImGui::IsItemHovered()) {
 						ImGui::BeginTooltip();
 						ImGui::TextUnformatted("Help");
@@ -869,6 +882,86 @@ static void renderAppShell() {
 
 			// Advance cursor past the toast bar
 			ImGui::SetCursorScreenPos(ImVec2(toast_min.x, toast_max.y));
+		}
+
+		// Secondary toast: model override filter bar.
+		// JS: <div id="toast" v-if="!toast && activeModule && activeModule.__name === 'tab_models' && overrideModelList.length > 0" class="progress">
+		//       Filtering models for item: {{ overrideModelName }}
+		//       <span @click="removeOverrideModels">Remove</span>
+		//       <div class="close" @click="removeOverrideModels"></div>
+		//     </div>
+		if (core::view && !core::view->toast.has_value()) {
+			modules::ModuleDef* cur = modules::getActive();
+			if (cur && cur->name == "tab_models" && !core::view->overrideModelList.empty()) {
+				toast_h = TOAST_HEIGHT;
+
+				ImU32 bg_color = app::theme::TOAST_PROGRESS_U32;
+				const char* icon_glyph = ICON_FA_STOPWATCH;
+
+				ImVec2 toast_min = ImGui::GetCursorScreenPos();
+				ImVec2 toast_max(toast_min.x + vp_size.x, toast_min.y + TOAST_HEIGHT);
+				ImDrawList* dl = ImGui::GetWindowDrawList();
+				dl->AddRectFilled(toast_min, toast_max, bg_color);
+
+				// Icon
+				constexpr float ICON_SIZE = 15.0f;
+				constexpr float ICON_LEFT = 10.0f;
+				ImFont* icon_font = app::theme::getIconFont();
+				ImVec2 icon_text_size = icon_font->CalcTextSizeA(ICON_SIZE, FLT_MAX, 0.0f, icon_glyph);
+				ImVec2 icon_pos(toast_min.x + ICON_LEFT,
+				                toast_min.y + (TOAST_HEIGHT - icon_text_size.y) * 0.5f);
+				dl->AddText(icon_font, ICON_SIZE, icon_pos, app::theme::FONT_TOAST_U32, icon_glyph);
+
+				// Message: "Filtering models for item: {overrideModelName}"
+				constexpr float TEXT_LEFT = 30.0f;
+				constexpr float TEXT_FONT_SIZE = 15.0f;
+				ImFont* font = ImGui::GetFont();
+				std::string msg = std::format("Filtering models for item: {}", core::view->overrideModelName);
+				ImVec2 msg_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, msg.c_str());
+				ImVec2 msg_pos(toast_min.x + TEXT_LEFT,
+				               toast_min.y + (TOAST_HEIGHT - msg_size.y) * 0.5f);
+				dl->AddText(font, TEXT_FONT_SIZE, msg_pos, app::theme::FONT_TOAST_U32, msg.c_str());
+
+				// "Remove" action link
+				float action_x = msg_pos.x + msg_size.x + 5.0f;
+				const char* remove_label = "Remove";
+				ImVec2 act_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, remove_label);
+				ImVec2 act_pos(action_x, toast_min.y + (TOAST_HEIGHT - act_size.y) * 0.5f);
+
+				ImGui::SetCursorScreenPos(act_pos);
+				ImGui::InvisibleButton("##override_remove", act_size);
+				if (ImGui::IsItemClicked())
+					removeOverrideModels();
+				if (ImGui::IsItemHovered())
+					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+				dl->AddText(font, TEXT_FONT_SIZE, act_pos, app::theme::FONT_TOAST_LINK_U32, remove_label);
+				dl->AddLine(ImVec2(act_pos.x, act_pos.y + act_size.y),
+				            ImVec2(act_pos.x + act_size.x, act_pos.y + act_size.y),
+				            app::theme::FONT_TOAST_LINK_U32, 1.0f);
+
+				// Close button (also calls removeOverrideModels)
+				constexpr float CLOSE_WIDTH = 30.0f;
+				constexpr float CLOSE_ICON_SIZE = 10.0f;
+				ImVec2 close_pos(toast_max.x - CLOSE_WIDTH, toast_min.y);
+				ImGui::SetCursorScreenPos(close_pos);
+				ImGui::InvisibleButton("##override_close", ImVec2(CLOSE_WIDTH, TOAST_HEIGHT));
+				if (ImGui::IsItemClicked())
+					removeOverrideModels();
+				if (ImGui::IsItemHovered())
+					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+				const char* close_glyph = ICON_FA_XMARK;
+				ImVec2 close_icon_size = icon_font->CalcTextSizeA(CLOSE_ICON_SIZE, FLT_MAX, 0.0f, close_glyph);
+				ImVec2 close_icon_pos(
+					close_pos.x + (CLOSE_WIDTH - close_icon_size.x) * 0.5f,
+					close_pos.y + (TOAST_HEIGHT - close_icon_size.y) * 0.5f);
+				dl->AddText(icon_font, CLOSE_ICON_SIZE, close_icon_pos,
+				            app::theme::FONT_TOAST_U32, close_glyph);
+
+				// Advance cursor past the override toast bar
+				ImGui::SetCursorScreenPos(ImVec2(toast_min.x, toast_max.y));
+			}
 		}
 
 		// Render the active module inside the content area
@@ -1465,16 +1558,6 @@ static void handleContextMenuClick(const modules::ContextMenuOption& opt) {
 		opt.handler();
 	else
 		modules::setActive(opt.id);
-}
-
-/**
- * Invoked when a user cancels a model override filter.
- */
-static void removeOverrideModels() {
-	if (!core::view)
-		return;
-	core::view->overrideModelList.clear();
-	core::view->overrideModelName.clear();
 }
 
 /**
@@ -2351,6 +2434,8 @@ int main(int argc, char* argv[]) {
 #ifdef _WIN32
 	// Initialize Windows taskbar progress (ITaskbarList3).
 	initTaskbarProgress();
+	// JS: win.setProgressBar(-1); // Reset taskbar progress in-case it's stuck.
+	setTaskbarProgress(window, -1);
 #endif
 
 	// Load OpenGL function pointers via GLAD2.
