@@ -171,57 +171,57 @@
 
 ### 34. [installer.cpp] Entire installer.js is unconverted — no installer.cpp exists
 - **JS Source**: `src/installer/installer.js` lines 1–261
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The `src/installer/` directory contains only the original `installer.js` (261 lines, 14 functions). No `installer.cpp` or `installer.h` file exists. The entire installer program needs to be ported to C++. The installer is a standalone console application (not part of the main GUI app) that extracts a `data.pak` archive into a platform-specific install directory and creates desktop shortcuts. All functions and logic listed in entries 35–44 below are completely missing.
 
 ### 35. [installer.cpp] Missing `wait_for_exit()` function
 - **JS Source**: `src/installer/installer.js` lines 17–28
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `wait_for_exit()` function flushes stdout/stderr, creates a readline interface on stdin, and prompts the user with "Press ENTER to exit..." before resolving. This is used at the end of both successful and failed installations to keep the console window open so the user can read the output. No C++ equivalent exists.
 
 ### 36. [installer.cpp] Missing `get_install_path()` function
 - **JS Source**: `src/installer/installer.js` lines 32–46
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `get_install_path()` returns platform-specific install directories: `%LOCALAPPDATA%/wow.export` on Windows, `~/.local/share/wow.export` on Linux, and `~/Library/Application Support/wow.export` on macOS. No C++ equivalent exists. Note: per project conventions, only Windows x64 and Linux x64 are targeted — the macOS case can be omitted or stubbed.
 
 ### 37. [installer.cpp] Missing `get_executable_name()` function
 - **JS Source**: `src/installer/installer.js` lines 48–59
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `get_executable_name()` returns the platform-specific executable name: `wow.export.exe` on Windows, `wow.export` on Linux (and a macOS variant). No C++ equivalent exists. Note: per naming conventions, the C++ port should use `wow.export.cpp.exe` / `wow.export.cpp` as the executable name.
 
 ### 38. [installer.cpp] Missing `get_icon_path()` function
 - **JS Source**: `src/installer/installer.js` lines 61–72
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `get_icon_path(install_path)` returns the platform-specific icon path used for shortcuts: `<install_path>/res/icon.png` on Windows and Linux. No C++ equivalent exists.
 
 ### 39. [installer.cpp] Missing `create_desktop_shortcut()` and platform-specific shortcut functions
 - **JS Source**: `src/installer/installer.js` lines 74–151
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS provides four shortcut-creation functions: (1) `create_desktop_shortcut(install_path)` (lines 74–90) dispatches to the platform-specific function, (2) `create_windows_shortcut(exec_path)` (lines 92–113) uses PowerShell to create a `.lnk` file on the Desktop via WScript.Shell COM, (3) `create_macos_shortcut(install_path)` (lines 115–131) creates a symlink in `/Applications`, and (4) `create_linux_shortcut(exec_path, icon_path)` (lines 133–151) writes a `.desktop` file to `~/.local/share/applications/` with appropriate metadata and chmod 755. None of these have C++ equivalents. The macOS function can be omitted per project platform requirements.
 
 ### 40. [installer.cpp] Missing `get_installer_dir()` function
 - **JS Source**: `src/installer/installer.js` lines 153–155
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `get_installer_dir()` returns the directory containing the installer executable itself, using `path.dirname(path.resolve(process.execPath))`. No C++ equivalent exists. This is needed by `validate_data_pak()` and `extract_data_pak()` to locate the `data.pak` and `data.pak.json` files that ship alongside the installer.
 
 ### 41. [installer.cpp] Missing `validate_data_pak()` function
 - **JS Source**: `src/installer/installer.js` lines 157–169
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `validate_data_pak()` checks that both `data.pak` and `data.pak.json` exist in the installer directory. If either is missing, it throws an error instructing the user to extract the entire archive before running the installer. No C++ equivalent exists.
 
 ### 42. [installer.cpp] Missing `extract_data_pak()` function
 - **JS Source**: `src/installer/installer.js` lines 171–216
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `extract_data_pak(install_path)` is the core installation function. It: (1) reads and parses `data.pak.json` as a manifest, (2) reads the binary `data.pak` file, (3) iterates over all entries in `manifest.contents`, (4) for each entry, creates parent directories recursively, extracts the compressed slice from `data.pak` using offset and compSize, decompresses it with zlib inflate, and writes the decompressed file to the install path, (5) logs progress as `[N/total] relative_path`, and (6) on non-Windows platforms, sets executable permissions (chmod 755) on the main executable and the updater binary. No C++ equivalent exists. The C++ version should use zlib for decompression and `nlohmann::json` for manifest parsing, per project dependencies.
 
 ### 43. [installer.cpp] Missing main entry point and installation flow
 - **JS Source**: `src/installer/installer.js` lines 218–260
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS main IIFE (immediately invoked async function) orchestrates the full installation: (1) calls `validate_data_pak()`, (2) prints an ASCII art banner for "wow.export", (3) logs the install location, (4) creates the install directory recursively, (5) calls `extract_data_pak()`, (6) calls `create_desktop_shortcut()`, (7) prints a success banner, and (8) calls `wait_for_exit()`. On error, it prints the failure message and exits with code 1 after waiting. No C++ `main()` function exists for the installer. The ASCII art banner should say `wow.export.cpp` per naming conventions, and the success message should reference `wow.export.cpp` rather than `wow.export`.
 
 ### 44. [installer.cpp] Missing PLATFORM constant and platform detection
 - **JS Source**: `src/installer/installer.js` line 30
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS uses `const PLATFORM = process.platform` to detect the runtime platform (`'win32'`, `'linux'`, `'darwin'`), which is then used by `get_install_path()`, `get_executable_name()`, `get_icon_path()`, `create_desktop_shortcut()`, and `extract_data_pak()` for platform-specific logic. No C++ equivalent exists. The C++ version should use preprocessor macros (`_WIN32`, `__linux__`) or `std::filesystem` capabilities to determine the platform at compile time.
 
 ## src/updater Audit

@@ -296,3 +296,31 @@ add_custom_command(TARGET wow_export_cpp POST_BUILD
 
 # ── Converted source files (added incrementally) ───────────────
 add_subdirectory(src/js)
+
+# ════════════════════════════════════════════════════════════════
+#  Installer executable (standalone console application)
+# ════════════════════════════════════════════════════════════════
+
+add_executable(wow_export_installer src/installer/installer.cpp)
+
+target_include_directories(wow_export_installer PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(wow_export_installer PRIVATE
+    nlohmann_json::nlohmann_json
+    zlibstatic
+)
+
+if(MSVC)
+    target_compile_options(wow_export_installer PRIVATE /W4)
+else()
+    target_compile_options(wow_export_installer PRIVATE -Wall -Wextra)
+endif()
+
+set_target_properties(wow_export_installer PROPERTIES
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+    OUTPUT_NAME "wow.export.cpp.installer"
+)
