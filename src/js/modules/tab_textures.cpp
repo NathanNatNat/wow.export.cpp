@@ -543,15 +543,9 @@ void render() {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
-	// Override texture toast.
-	if (!view.toast.has_value() && !view.overrideTextureList.empty()) {
-		ImGui::TextColored(ImVec4(1, 1, 0.5f, 1), "Filtering textures for item: %s", view.overrideTextureName.c_str());
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Remove")) {
-			view.overrideTextureList.clear();
-			view.overrideTextureName.clear();
-		}
-	}
+	// Override texture toast is rendered in the app shell (renderAppShell)
+	// with the same styling as the model override toast bar.
+	// JS: tab_textures.js template lines 284–288.
 
 	// --- Left panel: List container (row 1, col 1) ---
 	//     <Listbox v-model:selection="selectionTextures" :items="listfileTextures" ...>

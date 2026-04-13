@@ -9,6 +9,7 @@
 #include <format>
 #include <unordered_map>
 #include <cstdlib>
+#include <imgui.h>
 
 /**
  * ExternalLinks — centralized external link resolution and opening.
@@ -79,6 +80,33 @@ inline void open(const std::string& link) {
  */
 inline void wowHead_viewItem(int itemID) {
 	open(std::format("https://www.wowhead.com/item={}", itemID));
+}
+
+/**
+ * Render an ImGui clickable text link that opens an external URL when clicked.
+ *
+ * This provides the C++ equivalent of the JS global `data-external` click
+ * handler (app.js lines 115–131). In the JS, any element with a
+ * `data-external` attribute automatically opens the URL on click. In Dear
+ * ImGui there is no DOM, so each link must call this function explicitly.
+ *
+ * The link text is rendered with the specified color (defaults to current text
+ * color) and shows a hand cursor on hover.
+ *
+ * @param link   Link identifier (e.g. "::DISCORD") or direct URL.
+ * @param label  Visible text for the link.
+ * @param color  Optional text color. Pass nullptr to use default ImGui text color.
+ */
+inline void renderLink(const char* link, const char* label, const ImVec4* color = nullptr) {
+	if (color)
+		ImGui::PushStyleColor(ImGuiCol_Text, *color);
+	ImGui::TextUnformatted(label);
+	if (color)
+		ImGui::PopStyleColor();
+	if (ImGui::IsItemHovered())
+		ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+	if (ImGui::IsItemClicked())
+		open(link);
 }
 
 } // namespace ExternalLinks
