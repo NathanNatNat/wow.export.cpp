@@ -9,7 +9,6 @@
 #include <filesystem>
 #include <map>
 #include <memory>
-#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -99,8 +98,8 @@ private:
 	std::string filePath;
 	mpq::MPQInstall* mpq;
 	std::unique_ptr<WMOLegacyLoader> wmo;
-	std::optional<std::vector<WMOGroupMaskEntry>> groupMask;
-	std::optional<std::vector<WMODoodadSetMaskEntry>> doodadSetMask;
+	std::vector<WMOGroupMaskEntry> groupMask;
+	std::vector<WMODoodadSetMaskEntry> doodadSetMask;
 
 	// extract mpq prefix from filepath (e.g. "wmo.MPQ" from "wmo.MPQ\world\...")
 	std::string mpqPrefix;

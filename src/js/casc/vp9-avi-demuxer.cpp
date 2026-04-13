@@ -31,7 +31,7 @@ VP9AVIDemuxer::VP9AVIDemuxer(BLTEStreamReader& stream_reader)
 	: reader(stream_reader), config(std::nullopt), frame_rate(30.0) { // default, will parse from avih chunk
 }
 
-std::optional<VP9Config> VP9AVIDemuxer::parse_header() {
+VP9Config VP9AVIDemuxer::parse_header() {
 	BufferWrapper first_block = reader.getBlock(0);
 	const std::vector<uint8_t>& data = first_block.raw();
 
@@ -64,11 +64,11 @@ std::optional<VP9Config> VP9AVIDemuxer::parse_header() {
 		};
 	}
 
-	return config;
+	return config.value_or(VP9Config{});
 }
 
 int64_t VP9AVIDemuxer::find_chunk(const std::vector<uint8_t>& data, const char fourcc[4]) {
-	for (size_t i = 0; i + 4 < data.size(); i++) {
+	for (size_t i = 0; i + 3 < data.size(); i++) {
 		if (data[i] == static_cast<uint8_t>(fourcc[0]) &&
 			data[i + 1] == static_cast<uint8_t>(fourcc[1]) &&
 			data[i + 2] == static_cast<uint8_t>(fourcc[2]) &&

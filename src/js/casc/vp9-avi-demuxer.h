@@ -49,7 +49,7 @@ public:
 	 * Parse AVI header to extract codec configuration.
 	 * @returns VP9Config with codec parameters.
 	 */
-	std::optional<VP9Config> parse_header();
+	VP9Config parse_header();
 
 	/**
 	 * Find chunk by fourCC identifier in AVI data.
