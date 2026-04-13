@@ -324,3 +324,30 @@ set_target_properties(wow_export_installer PROPERTIES
     CXX_EXTENSIONS OFF
     OUTPUT_NAME "wow.export.cpp.installer"
 )
+
+# ════════════════════════════════════════════════════════════════
+#  Updater executable (standalone application — disabled by default)
+#  Set -DWOW_EXPORT_BUILD_UPDATER=ON to build.
+# ════════════════════════════════════════════════════════════════
+option(WOW_EXPORT_BUILD_UPDATER "Build the updater executable" OFF)
+
+if(WOW_EXPORT_BUILD_UPDATER)
+    add_executable(wow_export_updater src/updater/updater.cpp)
+
+    target_include_directories(wow_export_updater PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+    )
+
+    if(MSVC)
+        target_compile_options(wow_export_updater PRIVATE /W4)
+    else()
+        target_compile_options(wow_export_updater PRIVATE -Wall -Wextra)
+    endif()
+
+    set_target_properties(wow_export_updater PROPERTIES
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+        OUTPUT_NAME "wow.export.cpp.updater"
+    )
+endif()
