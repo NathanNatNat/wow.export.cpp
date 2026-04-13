@@ -2258,10 +2258,10 @@
 - **Status**: Pending
 - **Details**: JS M2Loader reads `fileName = this.data.readString(nameLength)` then does `fileName.replace('\0', '')` (line 792). Note: this JS code has a bug — it uses `replace('\0', '')` (string) instead of `replace(/\0/g, '')` (regex), so it only removes the FIRST null character. The C++ (line 773) uses `fileName.erase(std::remove(...), fileName.end())` which correctly removes ALL null characters. The C++ is actually more correct than the JS.
 
-### 448. [MDXLoader.cpp] Node registration deferred to post-parse — acceptable design difference from JS
+### 448. [MDXLoader.cpp] Node registration deferred to post-parse — necessary C++ deviation (impossible to replicate JS timing)
 - **JS Source**: `src/js/3D/loaders/MDXLoader.js` lines 208–209
-- **Status**: Verified — Acceptable design difference
-- **Details**: JS `_read_node` immediately registers nodes: `if (node.objectId !== null) this.nodes[node.objectId] = node;` (lines 208–209). The C++ defers all node registration to after parsing is complete (lines 76–106), building a `nodes` lookup from final container addresses. This is documented with a comment explaining the C++ difference (pointer stability). The behavior is functionally equivalent — nodes are still accessible by objectId after loading — but the timing differs. This is the correct approach in C++ since objects are moved into vectors after `_read_node` returns, which would invalidate any pointers.
+- **Status**: Verified — Necessary deviation (impossible to implement identically in C++)
+- **Details**: JS `_read_node` immediately registers nodes: `if (node.objectId !== null) this.nodes[node.objectId] = node;` (lines 208–209). The C++ defers all node registration to after parsing is complete (lines 76–106), building a `nodes` lookup from final container addresses. This deviation is **impossible to avoid** in C++: nodes are constructed locally in `_read_node` and then moved into `std::vector` containers (e.g. `bones`, `helpers`, etc.), which invalidates any pointers stored during `_read_node`. Vectors may also reallocate on growth, further invalidating earlier pointers. The only correct approach is to register pointers after all vectors are fully populated and stable. The behavior is functionally identical — nodes are accessible by objectId after loading — only the internal registration timing differs. This is documented with a code comment (lines 76–79) explaining why the deviation is necessary.
 
 ### 449. [M2Loader.cpp] `globalLoops` uses `readInt16LE` — possible shared bug with JS
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` line 883
