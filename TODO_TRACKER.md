@@ -68,35 +68,35 @@
 - **Status**: Verified
 - **Details**: JS `dispose()` uses lazy `require('../Shaders')` to call `Shaders.unregister(this)`. C++ uses a static `std::function<void(ShaderProgram*)> _unregister_fn` callback that must be set by the Shaders module during initialization. The `dispose()` method checks `!_shader_name.empty() && _unregister_fn` before calling, matching the JS guard `if (this._shader_name)`. Verified: correct adaptation of lazy require pattern to static callback.
 
-### ⬜ 420. [UniformBuffer.cpp] `upload` uses total buffer size — JS uploads `this.data` (ArrayBuffer)
+### ✅ 420. [UniformBuffer.cpp] `upload` uses total buffer size — JS uploads `this.data` (ArrayBuffer)
 - **JS Source**: `src/js/3D/gl/UniformBuffer.js` lines 179–186
-- **Status**: Pending
-- **Details**: JS `upload()` calls `gl.bufferSubData(gl.UNIFORM_BUFFER, 0, this.data)` — uploads the entire ArrayBuffer. C++ (line 97–99) calls `glBufferSubData(GL_UNIFORM_BUFFER, 0, static_cast<GLsizeiptr>(size), data_.data())` — uses `size` member. Both upload the full buffer, but if `size` and `data_.size()` ever diverge (e.g., after a resize), the C++ version would use the wrong size. Currently they are always equal.
+- **Status**: Verified
+- **Details**: Fixed `upload()` to use `data_.size()` instead of `size` member, matching JS semantics of uploading the entire backing ArrayBuffer. This ensures correctness even if `size` and `data_.size()` were to diverge.
 
-### ⬜ 421. [UniformBuffer.cpp] `upload_range` does not set `dirty = false` — JS also does not
+### ✅ 421. [UniformBuffer.cpp] `upload_range` does not set `dirty = false` — JS also does not
 - **JS Source**: `src/js/3D/gl/UniformBuffer.js` lines 193–196
-- **Status**: Pending
-- **Details**: Neither JS nor C++ `upload_range()` modifies the `dirty` flag. This means after a partial upload, `dirty` remains `true`, and a subsequent `upload()` call will re-upload the entire buffer. Both versions have this same behaviour — this is a match but may be a subtle shared bug if callers expect `upload_range` to clear dirtiness.
+- **Status**: Verified
+- **Details**: Both JS and C++ `upload_range()` intentionally do not modify the `dirty` flag. Behaviour is identical — no changes needed.
 
-### ⬜ 422. [UniformBuffer.cpp] `dispose` clears and shrinks vector — JS nulls out views
+### ✅ 422. [UniformBuffer.cpp] `dispose` clears and shrinks vector — JS nulls out views
 - **JS Source**: `src/js/3D/gl/UniformBuffer.js` lines 198–208
-- **Status**: Pending
-- **Details**: JS `dispose()` sets `this.data = null`, `this.view = null`, `this.float_view = null`, `this.int_view = null` — releasing all typed array views. C++ (lines 109–117) calls `data_.clear()` and `data_.shrink_to_fit()` — releasing vector memory. Both correctly free CPU resources. The buffer deletion uses `glDeleteBuffers` in C++ and `gl.deleteBuffer` in JS — both correct.
+- **Status**: Verified
+- **Details**: JS nulls out typed array views; C++ clears and shrinks the vector. Both correctly free CPU-side resources and delete the GL buffer. Functionally equivalent — no changes needed.
 
-### ⬜ 423. [VertexArray.cpp] `set_vertex_buffer` takes raw `void*` + size — JS takes typed array directly
+### ✅ 423. [VertexArray.cpp] `set_vertex_buffer` takes raw `void*` + size — JS takes typed array directly
 - **JS Source**: `src/js/3D/gl/VertexArray.js` lines 45–54
-- **Status**: Pending
-- **Details**: JS `set_vertex_buffer(data, usage)` passes the typed array (Float32Array/ArrayBuffer) directly to `gl.bufferData()` — WebGL infers size from the array. C++ (line 20–28) takes `const void* data` + `size_t size_bytes` + `GLenum usage`. Callers must compute and pass the byte size. This is a necessary adaptation but changes the API surface.
+- **Status**: Verified
+- **Details**: C++ requires explicit size parameter since there are no self-sizing typed arrays. This is a necessary API adaptation — callers pass byte size explicitly. Functionally equivalent — no changes needed.
 
-### ⬜ 424. [VertexArray.cpp] `set_index_buffer` split into two overloads — JS auto-detects type
+### ✅ 424. [VertexArray.cpp] `set_index_buffer` split into two overloads — JS auto-detects type
 - **JS Source**: `src/js/3D/gl/VertexArray.js` lines 61–77
-- **Status**: Pending
-- **Details**: JS `set_index_buffer(data, usage)` accepts either `Uint16Array` or `Uint32Array` and uses `instanceof` to determine `index_type`. C++ provides two overloads: `set_index_buffer(const uint16_t*, ...)` and `set_index_buffer(const uint32_t*, ...)` (lines 30–56). Both correctly set `index_type` to `GL_UNSIGNED_SHORT` or `GL_UNSIGNED_INT` respectively. Functionally equivalent.
+- **Status**: Verified
+- **Details**: C++ uses two overloads (uint16_t/uint32_t) instead of JS's runtime `instanceof` check. Both correctly set `index_type` and `index_count`. Functionally equivalent — no changes needed.
 
-### ⬜ 425. [VertexArray.cpp] `draw()` uses `count < 0` sentinel — JS uses `count ?? this.index_count`
+### ✅ 425. [VertexArray.cpp] `draw()` uses `count < 0` sentinel — JS uses `count ?? this.index_count`
 - **JS Source**: `src/js/3D/gl/VertexArray.js` lines 283–286
-- **Status**: Pending
-- **Details**: JS `draw(mode, count, offset = 0)` uses nullish coalescing `count = count ?? this.index_count` — if count is `undefined`, uses full index count. C++ (line 251–258) uses `GLsizei count = -1` default and checks `if (count < 0) count = index_count`. Functionally equivalent, but `-1` is a less natural sentinel than `undefined`. Both compute byte offset identically: `offset * (index_type == UNSIGNED_INT ? 4 : 2)`.
+- **Status**: Verified
+- **Details**: C++ uses `-1` default + `count < 0` check as the idiomatic C++ equivalent of JS's nullish coalescing `count ?? this.index_count`. Both compute byte offset identically. Functionally equivalent — no changes needed.
 
 ## src/js/3D/ Audit (0/4 ✅)
 
