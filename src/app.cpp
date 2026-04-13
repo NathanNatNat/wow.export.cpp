@@ -428,6 +428,16 @@ static void removeOverrideModels() {
 	core::view->overrideModelName.clear();
 }
 
+/**
+ * Invoked when a user cancels a texture override filter.
+ */
+static void removeOverrideTextures() {
+	if (!core::view)
+		return;
+	core::view->overrideTextureList.clear();
+	core::view->overrideTextureName.clear();
+}
+
 static void renderAppShell() {
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 	const ImVec2 vp_pos = viewport->WorkPos;
@@ -960,6 +970,87 @@ static void renderAppShell() {
 				            app::theme::FONT_TOAST_U32, close_glyph);
 
 				// Advance cursor past the override toast bar
+				ImGui::SetCursorScreenPos(ImVec2(toast_min.x, toast_max.y));
+			}
+		}
+
+		// Tertiary toast: texture override filter bar.
+		// JS: tab_textures.js template lines 284–288:
+		//   <div id="toast" v-if="!$core.view.toast && $core.view.overrideTextureList.length > 0" class="progress">
+		//       Filtering textures for item: {{ $core.view.overrideTextureName }}
+		//       <span @click="remove_override_textures">Remove</span>
+		//       <div class="close" @click="remove_override_textures"></div>
+		//   </div>
+		if (core::view && !core::view->toast.has_value() && toast_h == 0.0f) {
+			modules::ModuleDef* cur = modules::getActive();
+			if (cur && cur->name == "tab_textures" && !core::view->overrideTextureList.empty()) {
+				toast_h = TOAST_HEIGHT;
+
+				ImU32 bg_color = app::theme::TOAST_PROGRESS_U32;
+				const char* icon_glyph = ICON_FA_STOPWATCH;
+
+				ImVec2 toast_min = ImGui::GetCursorScreenPos();
+				ImVec2 toast_max(toast_min.x + vp_size.x, toast_min.y + TOAST_HEIGHT);
+				ImDrawList* dl = ImGui::GetWindowDrawList();
+				dl->AddRectFilled(toast_min, toast_max, bg_color);
+
+				// Icon
+				constexpr float ICON_SIZE = 15.0f;
+				constexpr float ICON_LEFT = 10.0f;
+				ImFont* icon_font = app::theme::getIconFont();
+				ImVec2 icon_text_size = icon_font->CalcTextSizeA(ICON_SIZE, FLT_MAX, 0.0f, icon_glyph);
+				ImVec2 icon_pos(toast_min.x + ICON_LEFT,
+				                toast_min.y + (TOAST_HEIGHT - icon_text_size.y) * 0.5f);
+				dl->AddText(icon_font, ICON_SIZE, icon_pos, app::theme::FONT_TOAST_U32, icon_glyph);
+
+				// Message: "Filtering textures for item: {overrideTextureName}"
+				constexpr float TEXT_LEFT = 30.0f;
+				constexpr float TEXT_FONT_SIZE = 15.0f;
+				ImFont* font = ImGui::GetFont();
+				std::string msg = std::format("Filtering textures for item: {}", core::view->overrideTextureName);
+				ImVec2 msg_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, msg.c_str());
+				ImVec2 msg_pos(toast_min.x + TEXT_LEFT,
+				               toast_min.y + (TOAST_HEIGHT - msg_size.y) * 0.5f);
+				dl->AddText(font, TEXT_FONT_SIZE, msg_pos, app::theme::FONT_TOAST_U32, msg.c_str());
+
+				// "Remove" action link
+				float action_x = msg_pos.x + msg_size.x + 5.0f;
+				const char* remove_label = "Remove";
+				ImVec2 act_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, remove_label);
+				ImVec2 act_pos(action_x, toast_min.y + (TOAST_HEIGHT - act_size.y) * 0.5f);
+
+				ImGui::SetCursorScreenPos(act_pos);
+				ImGui::InvisibleButton("##tex_override_remove", act_size);
+				if (ImGui::IsItemClicked())
+					removeOverrideTextures();
+				if (ImGui::IsItemHovered())
+					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+				dl->AddText(font, TEXT_FONT_SIZE, act_pos, app::theme::FONT_TOAST_LINK_U32, remove_label);
+				dl->AddLine(ImVec2(act_pos.x, act_pos.y + act_size.y),
+				            ImVec2(act_pos.x + act_size.x, act_pos.y + act_size.y),
+				            app::theme::FONT_TOAST_LINK_U32, 1.0f);
+
+				// Close button (also calls removeOverrideTextures)
+				constexpr float CLOSE_WIDTH = 30.0f;
+				constexpr float CLOSE_ICON_SIZE = 10.0f;
+				ImVec2 close_pos(toast_max.x - CLOSE_WIDTH, toast_min.y);
+				ImGui::SetCursorScreenPos(close_pos);
+				ImGui::InvisibleButton("##tex_override_close", ImVec2(CLOSE_WIDTH, TOAST_HEIGHT));
+				if (ImGui::IsItemClicked())
+					removeOverrideTextures();
+				if (ImGui::IsItemHovered())
+					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+				const char* close_glyph = ICON_FA_XMARK;
+				ImVec2 close_icon_size = icon_font->CalcTextSizeA(CLOSE_ICON_SIZE, FLT_MAX, 0.0f, close_glyph);
+				ImVec2 close_icon_pos(
+					close_pos.x + (CLOSE_WIDTH - close_icon_size.x) * 0.5f,
+					close_pos.y + (TOAST_HEIGHT - close_icon_size.y) * 0.5f);
+				dl->AddText(icon_font, CLOSE_ICON_SIZE, close_icon_pos,
+				            app::theme::FONT_TOAST_U32, close_glyph);
+
+				// Advance cursor past the texture override toast bar
 				ImGui::SetCursorScreenPos(ImVec2(toast_min.x, toast_max.y));
 			}
 		}
@@ -1560,15 +1651,7 @@ static void handleContextMenuClick(const modules::ContextMenuOption& opt) {
 		modules::setActive(opt.id);
 }
 
-/**
- * Invoked when a user cancels a texture override filter.
- */
-static void removeOverrideTextures() {
-	if (!core::view)
-		return;
-	core::view->overrideTextureList.clear();
-	core::view->overrideTextureName.clear();
-}
+// removeOverrideTextures() moved earlier in file (before renderAppShell).
 
 /**
  * Invoked when the user manually selects a CDN region.
@@ -2628,11 +2711,6 @@ int main(int argc, char* argv[]) {
 
 			// 1) If the display DPI scale changed (e.g. window moved to a
 			//    different monitor), rebuild the font atlas at the new scale.
-			// 2) Compute a window-size scale factor that shrinks the UI when
-			//    the window is smaller than 1120×700 but never exceeds 1.0.
-			// 3) Combine both: FontGlobalScale = windowScale / dpiScale.
-			//    The division by dpiScale compensates for the fonts being
-			//    rasterized at dpiScale× so that logical sizes stay correct.
 			{
 				float dpiScale = clampDpiScale(
 					ImGui_ImplGlfw_GetContentScaleForWindow(window));
@@ -2641,19 +2719,6 @@ int main(int argc, char* argv[]) {
 				if (std::abs(dpiScale - app::theme::getDpiScale()) > DPI_SCALE_EPSILON) {
 					app::theme::rebuildFontsForScale(dpiScale);
 				}
-
-				// Window-size scale: scale down when smaller than thresholds, never up.
-				int win_w, win_h;
-				glfwGetWindowSize(window, &win_w, &win_h);
-				float scale_w = win_w < SCALE_THRESHOLD_W ? static_cast<float>(win_w) / SCALE_THRESHOLD_W : 1.0f;
-				float scale_h = win_h < SCALE_THRESHOLD_H ? static_cast<float>(win_h) / SCALE_THRESHOLD_H : 1.0f;
-				float windowScale = (std::min)(scale_w, scale_h);
-
-				// FontGlobalScale = windowScale / dpiScale.
-				// Fonts are rasterized at baseSize * dpiScale; dividing by
-				// dpiScale brings them back to logical baseSize, then
-				// windowScale applies the small-window shrink.
-				io.FontGlobalScale = windowScale / dpiScale;
 			}
 
 			// Check watchers (loadPct, casc, activeModule)
@@ -2665,6 +2730,55 @@ int main(int argc, char* argv[]) {
 			// Start the Dear ImGui frame
 			ImGui_ImplOpenGL3_NewFrame();
 			ImGui_ImplGlfw_NewFrame();
+
+			// 2) Dynamic interface scaling for smaller displays.
+			//    JS (app.js lines 519–543) computes scale_w and scale_h
+			//    independently and applies `transform: scale(scale_w, scale_h)`
+			//    — an anisotropic CSS transform. To match this in Dear ImGui we
+			//    override io.DisplaySize to a "logical" size that is never
+			//    smaller than the design thresholds (1120×700), then adjust
+			//    io.DisplayFramebufferScale so the GL viewport maps the larger
+			//    logical area to the actual framebuffer. Mouse coordinates are
+			//    remapped from screen space to logical space.
+			{
+				float dpiScale = app::theme::getDpiScale();
+
+				int win_w, win_h;
+				glfwGetWindowSize(window, &win_w, &win_h);
+				int fb_w, fb_h;
+				glfwGetFramebufferSize(window, &fb_w, &fb_h);
+
+				// Logical size: at least threshold dimensions, matching JS
+				// container.style.width/height = SCALE_THRESHOLD when below.
+				float logical_w = static_cast<float>((std::max)(win_w, SCALE_THRESHOLD_W));
+				float logical_h = static_cast<float>((std::max)(win_h, SCALE_THRESHOLD_H));
+
+				// Override display size to logical dimensions so ImGui lays out
+				// the UI at the threshold size even when the window is smaller.
+				io.DisplaySize = ImVec2(logical_w, logical_h);
+
+				// Framebuffer scale maps logical coords to actual framebuffer
+				// pixels. This handles both DPI scaling and window-size scaling.
+				io.DisplayFramebufferScale = ImVec2(
+					static_cast<float>(fb_w) / logical_w,
+					static_cast<float>(fb_h) / logical_h);
+
+				// Remap mouse position from screen coordinates (set by
+				// ImGui_ImplGlfw_NewFrame) to logical coordinates.
+				if (io.MousePos.x != -FLT_MAX) {
+					float screen_to_logical_x = logical_w / static_cast<float>(win_w);
+					float screen_to_logical_y = logical_h / static_cast<float>(win_h);
+					io.MousePos.x *= screen_to_logical_x;
+					io.MousePos.y *= screen_to_logical_y;
+				}
+
+				// FontGlobalScale compensates for fonts being rasterized at
+				// baseSize * dpiScale; dividing by dpiScale brings them back to
+				// logical baseSize. Window-size shrinking is handled by the
+				// display-size / framebuffer-scale mapping above.
+				io.FontGlobalScale = 1.0f / dpiScale;
+			}
+
 			ImGui::NewFrame();
 
 			if (isCrashed) {

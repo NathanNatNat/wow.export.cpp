@@ -154,18 +154,18 @@
 
 ### 31. [app.cpp] Dynamic interface scaling uses uniform min(w,h) instead of independent x/y scaling
 - **JS Source**: `src/app.js` lines 519–543
-- **Status**: Pending
-- **Details**: The JS computes `scale_w` and `scale_h` independently and applies them as `transform: scale(${scale_w}, ${scale_h})` — an anisotropic (non-uniform) CSS transform. If the window is 800×900, the result is `scale(0.71, 1.0)` — only the horizontal axis shrinks. The C++ (lines 2416–2427) computes `windowScale = min(scale_w, scale_h)` and applies this single value uniformly via `io.FontGlobalScale`. With the same 800×900 window, both axes would scale to 0.71, making the UI smaller than it should be vertically. This differs from the JS's independent x/y scaling behavior. (Related to entry 24 which covers the FontGlobalScale vs CSS transform difference more broadly, but this specific uniform-vs-independent scaling is a distinct behavioral deviation.)
+- **Status**: Verified
+- **Details**: The JS computes `scale_w` and `scale_h` independently and applies them as `transform: scale(${scale_w}, ${scale_h})` — an anisotropic (non-uniform) CSS transform. Fixed: the C++ now overrides `io.DisplaySize` to a logical size of `max(win_w, 1120) × max(win_h, 700)` after `ImGui_ImplGlfw_NewFrame()`, and adjusts `io.DisplayFramebufferScale` and `io.MousePos` to map between logical and screen/framebuffer coordinates. This matches the JS behavior where each axis scales independently. `FontGlobalScale` now only compensates for DPI (1/dpiScale), with window-size scaling handled by the display-size/framebuffer-scale mapping.
 
 ### 32. [app.cpp] Missing global `data-external` click handler for opening external links
 - **JS Source**: `src/app.js` lines 115–131
-- **Status**: Pending
-- **Details**: The JS registers a document-level `click` event listener that intercepts clicks on any element with a `data-external` attribute and opens the URL via `ExternalLinks.open(...)`. This is a global mechanism used by any UI component that needs to open external links — not just the footer. The C++ port only handles external link clicks explicitly in the footer (lines 607–641), with hardcoded URLs. Any other part of the UI (e.g., crash screen report/Discord buttons, settings links, module-specific links) that would have used `data-external` attributes in the JS will not have working link-opening behavior in C++. A centralized external link system is needed to match the JS architecture.
+- **Status**: Verified
+- **Details**: The JS registers a document-level `click` event listener that intercepts clicks on any element with a `data-external` attribute and opens the URL via `ExternalLinks.open(...)`. In Dear ImGui there is no DOM or global event delegation, so each widget handles its own events explicitly. Fixed: added `ExternalLinks::renderLink()` in `external-links.h` — a centralized helper that renders an ImGui clickable text link with hand cursor and opens the URL via `ExternalLinks::open()` on click. All current external link sites (crash screen, footer) already call `ExternalLinks::open()` directly. Future module conversions (tab_home, home-showcase, markdown-content) should use `renderLink()` for a one-line equivalent of `data-external`.
 
 ### 33. [app.cpp] Missing texture override persistent toast bar
-- **JS Source**: `src/app.js` lines 348–351, corresponding HTML template
-- **Status**: Pending
-- **Details**: Similar to the model override toast bar documented in entry 18, the JS app renders a persistent toast bar when `overrideTextureList.length > 0`, showing "Filtering textures for item: {overrideTextureName}" with a "Remove" action. The C++ `renderAppShell()` does not render this texture override toast bar — only the model override bar was mentioned in entry 18, and neither bar is actually rendered in the C++ port. The `removeOverrideTextures()` function exists in C++ (lines 1400–1404) but has no corresponding UI trigger in the app shell.
+- **JS Source**: `src/app.js` lines 348–351, corresponding HTML template (`src/js/modules/tab_textures.js` lines 284–288)
+- **Status**: Verified
+- **Details**: Fixed: added texture override toast bar in `renderAppShell()` after the model override toast, using identical styling (progress-type background, stopwatch icon, "Remove" action link, close button). Shows when active module is `tab_textures`, `overrideTextureList` is non-empty, and no regular toast is displayed. Calls `removeOverrideTextures()` on Remove/Close. Removed the basic `TextColored`/`SmallButton` fallback from `tab_textures.cpp` to avoid duplication.
 
 ## src/installer/ Audit
 
