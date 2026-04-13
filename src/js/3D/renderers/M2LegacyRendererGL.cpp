@@ -193,7 +193,7 @@ M2LegacyRendererGL::M2LegacyRendererGL(BufferWrapper& data, gl::GLContext& gl_co
 // static load_shaders
 // -----------------------------------------------------------------------
 
-gl::ShaderProgram* M2LegacyRendererGL::load_shaders(gl::GLContext& ctx) {
+std::unique_ptr<gl::ShaderProgram> M2LegacyRendererGL::load_shaders(gl::GLContext& ctx) {
 	return shaders::create_program(ctx, "m2");
 }
 

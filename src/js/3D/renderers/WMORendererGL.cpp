@@ -49,7 +49,7 @@ WMORendererGL::WMORendererGL(BufferWrapper& data, uint32_t fileID, gl::GLContext
 // load_shaders
 // -----------------------------------------------------------------------
 
-gl::ShaderProgram* WMORendererGL::load_shaders(gl::GLContext& ctx) {
+std::unique_ptr<gl::ShaderProgram> WMORendererGL::load_shaders(gl::GLContext& ctx) {
 	return shaders::create_program(ctx, "wmo");
 }
 

@@ -18,6 +18,10 @@ ShaderProgram::ShaderProgram(GLContext& ctx, const std::string& vert_source,
 	_compile(vert_source, frag_source);
 }
 
+ShaderProgram::~ShaderProgram() {
+	dispose();
+}
+
 void ShaderProgram::_compile(const std::string& vert_source,
                               const std::string& frag_source) {
 	GLuint vert_shader = _compile_shader(GL_VERTEX_SHADER, vert_source);

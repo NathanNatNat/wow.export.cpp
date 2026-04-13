@@ -19,7 +19,7 @@
 
 namespace shaders {
 
-static const std::unordered_map<std::string, ShaderManifestEntry> SHADER_MANIFEST = {
+const std::unordered_map<std::string, ShaderManifestEntry> SHADER_MANIFEST = {
 	{"m2",       {"m2.vertex.shader",   "m2.fragment.shader"}},
 	{"wmo",      {"wmo.vertex.shader",  "wmo.fragment.shader"}},
 	{"adt",      {"adt.vertex.shader",  "adt.fragment.shader"}},
@@ -74,7 +74,7 @@ const ShaderSource& get_source(const std::string& name) {
  * @param name
  * @returns Pointer to a ShaderProgram
  */
-gl::ShaderProgram* create_program(gl::GLContext& ctx, const std::string& name) {
+std::unique_ptr<gl::ShaderProgram> create_program(gl::GLContext& ctx, const std::string& name) {
 	// Wire up the unregister callback on first use
 	if (!gl::ShaderProgram::_unregister_fn) {
 		gl::ShaderProgram::_unregister_fn = [](gl::ShaderProgram* p) {
@@ -83,7 +83,7 @@ gl::ShaderProgram* create_program(gl::GLContext& ctx, const std::string& name) {
 	}
 
 	const auto& sources = get_source(name);
-	auto* program = new gl::ShaderProgram(ctx, sources.vert, sources.frag);
+	auto program = std::make_unique<gl::ShaderProgram>(ctx, sources.vert, sources.frag);
 
 	if (!program->is_valid())
 		throw std::runtime_error("Failed to compile shader: " + name);
@@ -91,7 +91,7 @@ gl::ShaderProgram* create_program(gl::GLContext& ctx, const std::string& name) {
 	// track for hot-reload
 	program->_shader_name = name;
 
-	active_programs[name].insert(program);
+	active_programs[name].insert(program.get());
 
 	return program;
 }

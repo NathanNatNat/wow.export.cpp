@@ -39,7 +39,7 @@ class M3RendererGL {
 public:
 	M3RendererGL(BufferWrapper& data, gl::GLContext& gl_context, bool reactive = false, bool useRibbon = true);
 
-	static gl::ShaderProgram* load_shaders(gl::GLContext& ctx);
+	static std::unique_ptr<gl::ShaderProgram> load_shaders(gl::GLContext& ctx);
 
 	void load();
 
@@ -65,7 +65,7 @@ public:
 
 	// Public state (matches JS properties)
 	std::unique_ptr<M3Loader> m3;
-	gl::ShaderProgram* shader = nullptr;
+	std::unique_ptr<gl::ShaderProgram> shader;
 
 private:
 	BufferWrapper* data_ptr;

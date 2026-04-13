@@ -194,7 +194,7 @@ MDXRendererGL::MDXRendererGL(BufferWrapper& data, gl::GLContext& gl_context, boo
 // static load_shaders
 // -----------------------------------------------------------------------
 
-gl::ShaderProgram* MDXRendererGL::load_shaders(gl::GLContext& ctx) {
+std::unique_ptr<gl::ShaderProgram> MDXRendererGL::load_shaders(gl::GLContext& ctx) {
 	return shaders::create_program(ctx, "m2");
 }
 

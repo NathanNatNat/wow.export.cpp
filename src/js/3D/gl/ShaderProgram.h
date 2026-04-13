@@ -25,6 +25,7 @@ class ShaderProgram {
 public:
 	ShaderProgram(GLContext& ctx, const std::string& vert_source,
 	              const std::string& frag_source);
+	~ShaderProgram();
 
 	bool is_valid() const;
 	void use();

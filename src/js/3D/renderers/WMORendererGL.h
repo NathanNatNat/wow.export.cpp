@@ -86,7 +86,7 @@ public:
 	 */
 	WMORendererGL(BufferWrapper& data, uint32_t fileID, gl::GLContext& gl_context, bool useRibbon = true);
 
-	static gl::ShaderProgram* load_shaders(gl::GLContext& ctx);
+	static std::unique_ptr<gl::ShaderProgram> load_shaders(gl::GLContext& ctx);
 
 	/**
 	 * Set the active CASC source for texture and doodad loading.
@@ -155,7 +155,7 @@ public:
 
 	// Public state (matches JS properties)
 	std::unique_ptr<WMOLoader> wmo;
-	gl::ShaderProgram* shader = nullptr;
+	std::unique_ptr<gl::ShaderProgram> shader;
 	int syncID = -1;
 
 private:

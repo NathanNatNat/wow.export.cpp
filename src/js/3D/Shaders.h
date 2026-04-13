@@ -7,6 +7,7 @@
 
 #include <string>
 #include <memory>
+#include <unordered_map>
 
 namespace gl {
 class GLContext;
@@ -22,6 +23,12 @@ struct ShaderManifestEntry {
 	std::string vert;
 	std::string frag;
 };
+
+/**
+ * Shader manifest — maps shader names to vertex/fragment file names.
+ * JS equivalent: const SHADER_MANIFEST = { ... }; module.exports = { SHADER_MANIFEST, ... }
+ */
+extern const std::unordered_map<std::string, ShaderManifestEntry> SHADER_MANIFEST;
 
 /**
  * Shader source pair.
@@ -44,7 +51,7 @@ const ShaderSource& get_source(const std::string& name);
  * @param name
  * @returns Pointer to a ShaderProgram (owned by the module)
  */
-gl::ShaderProgram* create_program(gl::GLContext& ctx, const std::string& name);
+std::unique_ptr<gl::ShaderProgram> create_program(gl::GLContext& ctx, const std::string& name);
 
 /**
  * Unregister a shader program (call on dispose)

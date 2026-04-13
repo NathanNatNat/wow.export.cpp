@@ -33,6 +33,9 @@ public:
 
 	uint32_t flags;
 	uint32_t fileDataID;
+	// Not in JS Texture constructor, but dynamically set by M2LegacyLoader
+	// (texture.fileName = fileName) and read by legacy renderers/exporters.
+	// Declared here because C++ does not support dynamic properties.
 	std::string fileName;
 
 private:

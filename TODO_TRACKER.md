@@ -102,23 +102,23 @@
 
 ### ⬜ 353. [Skin.h] `SubMesh::triangleStart` is `uint16_t` but must hold a 32-bit value
 - **JS Source**: `src/js/3D/Skin.js` lines 61, 72
-- **Status**: Pending
-- **Details**: JS reads `triangleStart` as `readUInt16LE()` then adds `level << 16` to it (`this.subMeshes[i].triangleStart += this.subMeshes[i].level << 16`). In JS, numbers are 64-bit doubles so this works fine, producing values up to `0xFFFF + (0xFFFF << 16)`. In C++, `SubMesh::triangleStart` is declared as `uint16_t` in `Skin.h` (line 18). The operation `sm.triangleStart += sm.level << 16` at `Skin.cpp` line 87 silently overflows — the high 16 bits from `level << 16` are truncated, so `triangleStart` always equals the original 16-bit value unchanged. This should be `uint32_t` to match JS behaviour.
+- **Status**: Verified
+- **Details**: Changed `SubMesh::triangleStart` from `uint16_t` to `uint32_t` in `Skin.h` so that the `triangleStart += level << 16` operation does not silently overflow.
 
 ### ⬜ 354. [Shaders.cpp] `SHADER_MANIFEST` is `static` but JS exports it
 - **JS Source**: `src/js/3D/Shaders.js` lines 13–19, 147
-- **Status**: Pending
-- **Details**: JS exports `SHADER_MANIFEST` via `module.exports` (line 147), making it accessible to other modules. C++ declares `SHADER_MANIFEST` as `static const` at `Shaders.cpp` line 22, giving it internal linkage (file-local). It is not declared in `Shaders.h`. Any other translation unit that needs to look up shader manifest entries (e.g., to enumerate available shader names) cannot access it. Either make it non-static or add a declaration in the header.
+- **Status**: Verified
+- **Details**: Removed `static` from `SHADER_MANIFEST` in `Shaders.cpp` and added an `extern` declaration in `Shaders.h` so it is accessible to other translation units, matching JS `module.exports`.
 
 ### ⬜ 355. [Shaders.cpp] `create_program` allocates with `new` but no ownership/cleanup — memory leak
 - **JS Source**: `src/js/3D/Shaders.js` lines 56–72
-- **Status**: Pending
-- **Details**: JS `create_program` creates a `new ShaderProgram(...)` and relies on garbage collection for cleanup. C++ `create_program` (line 86) uses `new gl::ShaderProgram(...)` and returns a raw pointer. The `unregister` function (line 103) removes the pointer from the `active_programs` tracking set but does not `delete` the program. No other code deletes the programs either. This is a memory leak — every created shader program leaks when unregistered. The raw pointer should either be wrapped in a `std::unique_ptr` or `unregister`/a cleanup function should `delete` the program.
+- **Status**: Verified
+- **Details**: Changed `create_program` to return `std::unique_ptr<gl::ShaderProgram>`. Added `~ShaderProgram()` destructor that calls `dispose()` for automatic GL cleanup. Updated all 6 renderer classes (`load_shaders` return type and `shader` member) to use `std::unique_ptr`. The `active_programs` map retains raw non-owning pointers for hot-reload tracking; `unregister` removes from tracking, and the owning `unique_ptr` (held by the renderer) handles deletion.
 
 ### ⬜ 356. [Texture.h] Extra `fileName` member not present in JS
 - **JS Source**: `src/js/3D/Texture.js` lines 15–18
-- **Status**: Pending
-- **Details**: JS `Texture` class has only `flags`, `fileDataID`, and `data` as instance properties. The C++ `Texture` class in `Texture.h` (line 36) declares an additional `std::string fileName` public member that has no counterpart in JS. `setFileName` in JS sets `this.fileDataID` (not `this.fileName`) — the C++ version correctly sets `this->fileDataID` but the unused `fileName` member remains as dead state. This is a minor deviation; the extra member should be removed to match JS fidelity, or documented as intentional.
+- **Status**: Verified
+- **Details**: The `fileName` member is intentionally kept. While not declared in JS `Texture` constructor, it is dynamically set by `M2LegacyLoader.js` (line 540: `texture.fileName = fileName`) and read by `M2LegacyRendererGL.js`, `MDXRendererGL.js`, and `M2LegacyExporter.js`. Since C++ does not support dynamic properties, the member must be declared in the class. Added a documentation comment explaining this.
 
 ## src/js/3D/camera/ Audit (0/12 ✅)
 
