@@ -4,8 +4,8 @@
 
 ### 1. [app.cpp] Crash screen missing original UI elements and buttons
 - **JS Source**: `src/app.js` lines 24–61, `src/index.html` `<noscript>` block
-- **Status**: Pending
-- **Details**: The original JS crash screen displays "Oh no! The kākāpō has exploded..." as the heading, shows version/flavour/build-guid fields, and provides four action buttons: "Report Issue" (opens issue tracker), "Get Help on Discord" (opens Discord), "Copy Log to Clipboard" (copies log textarea to clipboard), and "Restart Application" (calls `chrome.runtime.reload()`). The C++ `renderCrashScreen()` (lines 258–288) instead shows "wow.export.cpp has crashed!" as a heading (acceptable per naming convention), shows only the version, and lacks all four action buttons. The runtime log is rendered as read-only ImGui text rather than a selectable/copyable textarea. The flavour and build/guid fields are also missing from the crash screen display.
+- **Status**: Verified
+- **Details**: Added FLAVOUR and BUILD_GUID constants to `constants.h`. Rewrote `renderCrashScreen()` to display version/flavour/build-guid fields, four action buttons (Report Issue → issue tracker URL, Get Help on Discord → Discord URL, Copy Log to Clipboard → ImGui clipboard, Restart Application → `app::restartApplication()`), and replaced `TextUnformatted` with `InputTextMultiline` (ReadOnly) for a selectable/copyable log textarea. Heading "wow.export.cpp has crashed!" retained per naming convention.
 
 ### 2. [app.cpp] Missing global crash handlers (unhandledRejection / uncaughtException equivalents)
 - **JS Source**: `src/app.js` lines 72–73

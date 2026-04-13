@@ -38,6 +38,15 @@ const std::filesystem::path& SHADER_PATH();
 // Current version of wow.export.
 inline constexpr std::string_view VERSION = "0.1.0";
 
+// Build flavour identifier (JS: nw.App.manifest.flavour).
+// In the JS version this comes from the NW.js package manifest.
+// For the C++ port we define it as a compile-time constant.
+inline constexpr std::string_view FLAVOUR = "win-x64";
+
+// Build GUID (JS: nw.App.manifest.guid).
+// In the JS version this is a unique build identifier from the NW.js manifest.
+inline constexpr std::string_view BUILD_GUID = "cpp-dev";
+
 // Filter used to filter out WMO LOD files.
 const std::regex& LISTFILE_MODEL_FILTER();
 

@@ -264,25 +264,57 @@ static void renderCrashScreen() {
 		ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
 		ImGuiWindowFlags_NoBringToFrontOnFocus);
 
+	// JS: <h1>Oh no! The kākāpō has exploded...</h1>
+	// Per naming convention, user-facing text says "wow.export.cpp".
 	ImGui::Text("wow.export.cpp has crashed!");
 	ImGui::Separator();
 
 	// Show build version/flavour/ID.
-	ImGui::Text("Version: v%s", std::string(constants::VERSION).c_str());
+	// JS: setText('#crash-screen-version', 'v' + manifest.version);
+	// JS: setText('#crash-screen-flavour', manifest.flavour);
+	// JS: setText('#crash-screen-build', manifest.guid);
+	ImGui::Text("v%s", std::string(constants::VERSION).c_str());
+	ImGui::SameLine();
+	ImGui::Text("%s", std::string(constants::FLAVOUR).c_str());
+	ImGui::SameLine();
+	ImGui::Text("[%s]", std::string(constants::BUILD_GUID).c_str());
 
 	// Display our error code/text.
 	ImGui::Spacing();
-	ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Error Code: %s", crashErrorCode.c_str());
-	ImGui::TextWrapped("Error Message: %s", crashErrorText.c_str());
+	ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", crashErrorCode.c_str());
+	ImGui::TextWrapped("%s", crashErrorText.c_str());
 
-	// Show log dump if available.
-	if (!crashLogDump.empty()) {
-		ImGui::Spacing();
-		ImGui::Text("Runtime Log:");
-		ImGui::BeginChild("##CrashLog", ImVec2(0, 0), ImGuiChildFlags_Borders);
-		ImGui::TextUnformatted(crashLogDump.c_str(), crashLogDump.c_str() + crashLogDump.size());
-		ImGui::EndChild();
-	}
+	// Action buttons matching JS: <div class="form-tray"> with 4 buttons.
+	ImGui::Spacing();
+
+	// JS: <input type="button" value="Report Issue" data-external="::ISSUE_TRACKER"/>
+	if (ImGui::Button("Report Issue"))
+		core::openInExplorer("https://github.com/Kruithne/wow.export/issues");
+	ImGui::SameLine();
+
+	// JS: <input type="button" value="Get Help on Discord" data-external="::DISCORD"/>
+	if (ImGui::Button("Get Help on Discord"))
+		core::openInExplorer("https://discord.gg/kC3EzAYBtf");
+	ImGui::SameLine();
+
+	// JS: <input type="button" value="Copy Log to Clipboard" onclick="nw.Clipboard.get().set(...)">
+	if (ImGui::Button("Copy Log to Clipboard"))
+		ImGui::SetClipboardText(crashLogDump.c_str());
+	ImGui::SameLine();
+
+	// JS: <input type="button" value="Restart Application" onclick="chrome.runtime.reload()"/>
+	if (ImGui::Button("Restart Application"))
+		app::restartApplication();
+
+	// Runtime log displayed as a read-only, selectable textarea.
+	// JS: <textarea id="crash-screen-log">No runtime log available.</textarea>
+	ImGui::Spacing();
+	static std::string crashLogBuffer;
+	if (crashLogBuffer.empty())
+		crashLogBuffer = crashLogDump.empty() ? "No runtime log available." : crashLogDump;
+
+	ImGui::InputTextMultiline("##CrashLog", &crashLogBuffer[0], crashLogBuffer.size() + 1,
+		ImVec2(-FLT_MIN, -FLT_MIN), ImGuiInputTextFlags_ReadOnly);
 
 	ImGui::End();
 }
