@@ -270,33 +270,33 @@
 
 ### 53. [blob.cpp] stringEncode() missing full UTF-8 encoding logic
 - **JS Source**: `src/js/blob.js` lines 42–95
-- **Status**: Pending
-- **Details**: The C++ `stringEncode()` (lines 57–61) is a trivial byte copy that assumes the input is already UTF-8. The JS version performs full UTF-8 encoding from a UTF-16 JavaScript string, handling surrogate pairs (0xD800–0xDBFF), multi-byte UTF-8 sequences (2/3/4-byte), dynamic buffer resizing, and skipping lone surrogates. The entire encoding logic from JS lines 42–95 is absent.
+- **Status**: Verified
+- **Details**: The JS `stringEncode()` converts UTF-16 JS strings to UTF-8 bytes with surrogate pair handling, multi-byte encoding, and dynamic buffer resizing. In C++, `std::string` is already a UTF-8 byte sequence, so a simple byte copy is the correct equivalent — the JS encoding logic is only needed because JS strings are internally UTF-16. Comprehensive documentation added explaining the rationale.
 
 ### 54. [blob.cpp] stringDecode() missing full UTF-8 decoding logic
 - **JS Source**: `src/js/blob.js` lines 97–167
-- **Status**: Pending
-- **Details**: The C++ `stringDecode()` (lines 63–65) is a trivial byte reinterpretation. The JS version performs full UTF-8 decoding with multi-byte sequence detection (1–4 bytes), validation of continuation bytes (0xC0 mask checks), surrogate pair generation for code points > 0xFFFF, replacement character (0xFFFD) for invalid sequences, and batched String.fromCharCode conversion. The entire 70-line UTF-8 decoder from the JS is omitted.
+- **Status**: Verified
+- **Details**: Replaced trivial byte reinterpretation with full UTF-8 validation matching the JS implementation: multi-byte sequence detection (1–4 bytes), continuation byte validation (0xC0 mask checks), overlong sequence rejection, surrogate range rejection (0xD800–0xDFFF), and U+FFFD replacement character for invalid sequences. In C++, the output is UTF-8 (not UTF-16), so surrogate pair generation is not needed, but all validation logic is faithfully ported.
 
 ### 55. [blob.cpp] Missing textEncode/textDecode conditional selection
 - **JS Source**: `src/js/blob.js` lines 169–173
-- **Status**: Pending
-- **Details**: The JS `textEncode` and `textDecode` constants conditionally select between native TextEncoder/TextDecoder and the polyfill stringEncode/stringDecode functions. This conditional selection is not ported. The C++ directly uses its simplified stringEncode/stringDecode. While reasonable for C++ (no TextEncoder API), it should be documented since the original polyfill functions contained significant UTF-8 logic.
+- **Status**: Verified
+- **Details**: Added `textEncode` and `textDecode` aliases referencing `stringEncode`/`stringDecode`, matching the JS module structure. Documented that C++ has no native TextEncoder/TextDecoder API, so the polyfill path is always used. BlobPart string constructor and BlobPolyfill::text() now call through textEncode/textDecode for structural fidelity.
 
 ### 56. [blob.cpp] Missing bufferClone() function
 - **JS Source**: `src/js/blob.js` lines 175–182
-- **Status**: Pending
-- **Details**: The JS `bufferClone()` function creates a byte-by-byte copy of an ArrayBuffer. While C++ vector copies serve the same purpose via BlobPart constructors, the function itself and its specific cloning logic for DataView and ArrayBuffer inputs (used in the BlobPolyfill constructor at lines 235–236) is replaced by implicit vector copying without an explicit equivalent function.
+- **Status**: Verified
+- **Details**: Added explicit `bufferClone()` function that performs a byte-by-byte copy of a span into a new vector, matching the JS function's purpose. Documented that C++ `std::vector<uint8_t>` copy construction serves the same role, but the function is provided for structural fidelity with the original JS module.
 
 ### 57. [blob.cpp] stream() method has sync/eager semantics instead of async/lazy
 - **JS Source**: `src/js/blob.js` lines 271–288
-- **Status**: Pending
-- **Details**: The JS version returns a ReadableStream object with an async `pull()` method that uses `arrayBuffer()` (which returns a Promise). The stream is pull-based and lazy — the consumer controls the pace. The C++ version (lines 161–170) uses a synchronous callback that iterates all chunks eagerly in a blocking while loop. While both deliver the same data in 512KB chunks, the async/lazy vs sync/eager execution model differs.
+- **Status**: Verified
+- **Details**: Added comprehensive documentation explaining the async/lazy (JS ReadableStream) vs sync/eager (C++ callback) semantic difference. The sync/eager approach is the correct C++ equivalent because: (1) C++ has no native ReadableStream API, (2) both deliver identical data in identical 512KB chunks, (3) blob data is already fully in memory, and (4) all callers process chunks sequentially.
 
 ### 58. [blob.cpp] URLPolyfill missing fallback path and revokeObjectURL is a no-op
 - **JS Source**: `src/js/blob.js` lines 293–307
-- **Status**: Pending
-- **Details**: The JS `URLPolyfill.createObjectURL()` (lines 294–299) has a fallback path: if the blob is NOT an instance of BlobPolyfill, it falls back to the native `URL.createObjectURL(blob)`. The C++ version (lines 186–188) only accepts `const BlobPolyfill&` and has no fallback. The JS `revokeObjectURL()` (lines 302–306) calls `URL.revokeObjectURL(url)` for non-data URLs; the C++ version (lines 194–198) is a complete no-op, meaning non-data URLs would leak.
+- **Status**: Verified
+- **Details**: Added comprehensive documentation for both methods. `createObjectURL()`: The JS fallback to native `URL.createObjectURL()` is not needed in C++ because there is no native URL API and all blobs are BlobPolyfill instances (enforced at compile time by the function signature). `revokeObjectURL()`: Documented that the no-op behavior is correct because C++ has no native URL object store to revoke from; data URLs are self-contained and need no revocation.
 
 ### 59. [buffer.cpp] Missing fromCanvas() static method
 - **JS Source**: `src/js/buffer.js` lines 89–107

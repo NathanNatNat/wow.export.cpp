@@ -51,8 +51,17 @@ static std::string array2base64(std::span<const uint8_t> input) {
 }
 
 /**
- * a simple byte reinterpretation (no encoding conversion needed).
+ * Encodes a string to UTF-8 bytes.
  *
+ * JS equivalent: stringEncode() (blob.js lines 42–95)
+ *
+ * The JS version performs full UTF-8 encoding from a UTF-16 JavaScript string,
+ * handling surrogate pairs (0xD800–0xDBFF), multi-byte UTF-8 sequences (2/3/4-byte),
+ * dynamic buffer resizing, and skipping lone surrogates. In C++, std::string is
+ * already a UTF-8 byte sequence, so the encoding conversion is not needed — a
+ * simple byte copy produces identical output. This is the correct C++ equivalent
+ * because the JS function's purpose is "string → UTF-8 bytes", which is a no-op
+ * when the input is already UTF-8.
  */
 static std::vector<uint8_t> stringEncode(std::string_view str) {
 	return std::vector<uint8_t>(
@@ -60,13 +69,154 @@ static std::vector<uint8_t> stringEncode(std::string_view str) {
 		reinterpret_cast<const uint8_t*>(str.data()) + str.size());
 }
 
+/**
+ * Decodes UTF-8 bytes to a string, validating sequences and replacing
+ * invalid bytes with U+FFFD (replacement character).
+ *
+ * JS equivalent: stringDecode() (blob.js lines 97–167)
+ *
+ * The JS version performs full UTF-8 decoding with multi-byte sequence detection
+ * (1–4 bytes), validation of continuation bytes (0xC0 mask checks), surrogate pair
+ * generation for code points > 0xFFFF, replacement character (0xFFFD) for invalid
+ * sequences, and batched String.fromCharCode conversion. In C++, the output is a
+ * UTF-8 std::string (not UTF-16), so surrogate pair generation is not needed.
+ * However, the validation logic and U+FFFD replacement are preserved to ensure
+ * identical error handling behavior.
+ */
 static std::string stringDecode(std::span<const uint8_t> buf) {
-	return std::string(reinterpret_cast<const char*>(buf.data()), buf.size());
+	const std::size_t end = buf.size();
+	std::string result;
+	result.reserve(end);
+
+	std::size_t i = 0;
+	while (i < end) {
+		const uint8_t firstByte = buf[i];
+		int bytesPerSequence = (firstByte > 0xEF) ? 4 :
+			(firstByte > 0xDF) ? 3 :
+			(firstByte > 0xBF) ? 2 : 1;
+
+		uint32_t codePoint = 0;
+		bool valid = false;
+
+		if (i + bytesPerSequence <= end) {
+			switch (bytesPerSequence) {
+				case 1:
+					if (firstByte < 0x80) {
+						codePoint = firstByte;
+						valid = true;
+					}
+					break;
+				case 2: {
+					uint8_t secondByte = buf[i + 1];
+					if ((secondByte & 0xC0) == 0x80) {
+						uint32_t tempCodePoint = (static_cast<uint32_t>(firstByte & 0x1F) << 6)
+							| (secondByte & 0x3F);
+						if (tempCodePoint > 0x7F) {
+							codePoint = tempCodePoint;
+							valid = true;
+						}
+					}
+					break;
+				}
+				case 3: {
+					uint8_t secondByte = buf[i + 1];
+					uint8_t thirdByte = buf[i + 2];
+					if ((secondByte & 0xC0) == 0x80 && (thirdByte & 0xC0) == 0x80) {
+						uint32_t tempCodePoint = (static_cast<uint32_t>(firstByte & 0x0F) << 12)
+							| (static_cast<uint32_t>(secondByte & 0x3F) << 6)
+							| (thirdByte & 0x3F);
+						if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
+							codePoint = tempCodePoint;
+							valid = true;
+						}
+					}
+					break;
+				}
+				case 4: {
+					uint8_t secondByte = buf[i + 1];
+					uint8_t thirdByte = buf[i + 2];
+					uint8_t fourthByte = buf[i + 3];
+					if ((secondByte & 0xC0) == 0x80 && (thirdByte & 0xC0) == 0x80 && (fourthByte & 0xC0) == 0x80) {
+						uint32_t tempCodePoint = (static_cast<uint32_t>(firstByte & 0x0F) << 18)
+							| (static_cast<uint32_t>(secondByte & 0x3F) << 12)
+							| (static_cast<uint32_t>(thirdByte & 0x3F) << 6)
+							| (fourthByte & 0x3F);
+						if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
+							codePoint = tempCodePoint;
+							valid = true;
+						}
+					}
+					break;
+				}
+			}
+		}
+
+		if (!valid) {
+			// Invalid sequence: emit U+FFFD replacement character (UTF-8: 0xEF 0xBF 0xBD)
+			result += '\xEF';
+			result += '\xBF';
+			result += '\xBD';
+			i += 1; // Advance by 1 byte only, matching JS bytesPerSequence = 1 on null codePoint
+		} else {
+			// Encode valid code point as UTF-8
+			// (In JS, code points > 0xFFFF would be split into surrogate pairs for the
+			// UTF-16 string; in C++, we encode directly as UTF-8.)
+			if (codePoint < 0x80) {
+				result += static_cast<char>(codePoint);
+			} else if (codePoint < 0x800) {
+				result += static_cast<char>(0xC0 | (codePoint >> 6));
+				result += static_cast<char>(0x80 | (codePoint & 0x3F));
+			} else if (codePoint < 0x10000) {
+				result += static_cast<char>(0xE0 | (codePoint >> 12));
+				result += static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F));
+				result += static_cast<char>(0x80 | (codePoint & 0x3F));
+			} else {
+				result += static_cast<char>(0xF0 | (codePoint >> 18));
+				result += static_cast<char>(0x80 | ((codePoint >> 12) & 0x3F));
+				result += static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F));
+				result += static_cast<char>(0x80 | (codePoint & 0x3F));
+			}
+			i += bytesPerSequence;
+		}
+	}
+
+	return result;
 }
 
+/**
+ * In JS (blob.js lines 169–173):
+ *   const textEncode = typeof TextEncoder === 'function' ?
+ *       TextEncoder.prototype.encode.bind(new TextEncoder()) : stringEncode;
+ *   const textDecode = typeof TextDecoder === 'function' ?
+ *       TextDecoder.prototype.decode.bind(new TextDecoder()) : stringDecode;
+ *
+ * The JS conditionally selects between native TextEncoder/TextDecoder and the
+ * polyfill stringEncode/stringDecode. In C++, there is no native TextEncoder/
+ * TextDecoder API, so we use stringEncode/stringDecode directly. Both the native
+ * and polyfill paths produce identical UTF-8 output, so this is functionally
+ * equivalent.
+ */
+static auto& textEncode = stringEncode;
+static auto& textDecode = stringDecode;
 
+/**
+ * Creates a byte-by-byte copy of a buffer.
+ *
+ * JS equivalent: bufferClone() (blob.js lines 175–182)
+ *
+ * In JS, this is used to clone ArrayBuffer/DataView inputs in the BlobPolyfill
+ * constructor (lines 235–236). In C++, std::vector<uint8_t> copy construction
+ * serves the same purpose, but we provide this explicit function for structural
+ * fidelity with the original JS module.
+ */
+static std::vector<uint8_t> bufferClone(std::span<const uint8_t> buf) {
+	return std::vector<uint8_t>(buf.begin(), buf.end());
+}
+
+// getObjectTypeName(o), isPrototypeOf(c, o), isDataView(o),
 // arrayBufferClassNames, isArrayBuffer(o) — JS runtime type introspection.
-// through BlobPart's overloaded constructors.
+// In C++, type dispatch is handled at compile time through BlobPart's
+// overloaded constructors.
 
 static std::vector<uint8_t> concatTypedarrays(const std::vector<std::vector<uint8_t>>& chunks) {
 	std::size_t total_size = 0;
@@ -93,8 +243,9 @@ BlobPart::BlobPart(const std::vector<uint8_t>& data)
 BlobPart::BlobPart(std::vector<uint8_t>&& data)
 	: bytes(std::move(data)) {}
 
+// JS: chunks[i] = textEncode(chunk)  (blob.js line 233)
 BlobPart::BlobPart(std::string_view str)
-	: bytes(stringEncode(str)) {}
+	: bytes(textEncode(str)) {}
 
 BlobPart::BlobPart(const BlobPolyfill& blob)
 	: bytes(blob.arrayBuffer()) {}
@@ -133,8 +284,9 @@ const std::vector<uint8_t>& BlobPolyfill::arrayBuffer() const {
 	return _buffer;
 }
 
+// JS: return Promise.resolve(textDecode(this._buffer))  (blob.js line 259)
 std::string BlobPolyfill::text() const {
-	return stringDecode(_buffer);
+	return textDecode(_buffer);
 }
 
 //     const slice = this._buffer.slice(start || 0, end || this._buffer.length);
@@ -158,6 +310,24 @@ std::string BlobPolyfill::toString() const {
 	return "[object Blob]";
 }
 
+/**
+ * Iterates over the blob's data in 512KB chunks.
+ *
+ * JS equivalent: BlobPolyfill.prototype.stream() (blob.js lines 271–288)
+ *
+ * The JS version returns a ReadableStream with an async pull() method that uses
+ * arrayBuffer() (which returns a Promise). The stream is pull-based and lazy —
+ * the consumer controls the pace via the ReadableStream protocol.
+ *
+ * The C++ version uses a synchronous callback that iterates all chunks eagerly
+ * in a blocking loop. This is the appropriate C++ equivalent because:
+ * 1. C++ has no native ReadableStream API
+ * 2. Both versions deliver identical data in identical 512KB (524288 byte) chunks
+ * 3. All current callers process chunks sequentially anyway
+ *
+ * The semantic difference (async/lazy vs sync/eager) does not affect functionality
+ * because the blob data is already fully in memory in both implementations.
+ */
 void BlobPolyfill::stream(std::function<void(std::span<const uint8_t>)> callback) const {
 	constexpr std::size_t CHUNK_SIZE = 524288; // 512KB, matching JS
 	std::size_t position = 0;
@@ -179,21 +349,41 @@ const std::string& BlobPolyfill::type() const {
 
 // --- URLPolyfill ---
 
-//     if (blob instanceof BlobPolyfill)
-//         return 'data:' + blob.type + ';base64,' + array2base64(blob._buffer);
-//     return URL.createObjectURL(blob); // fallback to native
-// }
+/**
+ * Create a data URL from a blob.
+ *
+ * JS equivalent: URLPolyfill.createObjectURL() (blob.js lines 294–299)
+ *
+ * The JS version has a fallback path: if the blob is NOT an instance of
+ * BlobPolyfill, it falls back to the native URL.createObjectURL(blob).
+ * In C++, there is no native URL.createObjectURL API, and all blobs in the
+ * application are BlobPolyfill instances, so no fallback path is needed.
+ * The C++ function signature enforces this at compile time by accepting
+ * only const BlobPolyfill&.
+ */
 std::string URLPolyfill::createObjectURL(const BlobPolyfill& blob) {
 	return "data:" + blob.type() + ";base64," + array2base64(blob.arrayBuffer());
 }
 
-//     if (!url.startsWith('data:'))
-//         URL.revokeObjectURL(url); // only revoke non-data URLs
-// }
-// effectively a no-op. We preserve the startsWith check for fidelity.
+/**
+ * Revoke a previously created URL.
+ *
+ * JS equivalent: URLPolyfill.revokeObjectURL() (blob.js lines 302–306)
+ *
+ * The JS version calls URL.revokeObjectURL(url) for non-data URLs to free
+ * native object URL resources. For data URLs (produced by createObjectURL
+ * above), no revocation is needed since data URLs are self-contained.
+ *
+ * In C++, there is no native URL object store, so:
+ * - Data URLs: no action needed (self-contained, no resources to free)
+ * - Non-data URLs: not produced by our createObjectURL, but we preserve
+ *   the startsWith check for structural fidelity. No native API exists
+ *   to revoke them, so this is effectively a no-op.
+ */
 void URLPolyfill::revokeObjectURL(const std::string& url) {
 	if (!url.starts_with("data:")) {
 		// In JS: URL.revokeObjectURL(url);
+		// In C++: no native URL object store exists to revoke from.
 	}
 }
 
