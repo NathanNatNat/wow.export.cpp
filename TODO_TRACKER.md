@@ -79,28 +79,28 @@
 
 ### 16. [app.cpp] Help icon click does not navigate to tab_help
 - **JS Source**: `src/index.html` line `<div id="nav-help" v-if="!isBusy" @click="setActiveModule('tab_help')"></div>`
-- **Status**: Pending
-- **Details**: In the original JS, clicking the help icon (`#nav-help`) calls `setActiveModule('tab_help')` to navigate to the help tab. The C++ help icon (lines 546–563) renders the icon and shows a tooltip on hover, but has no click handler to navigate to the help tab. `ImGui::IsItemClicked()` is never checked for the help button.
+- **Status**: Verified
+- **Details**: Added `ImGui::IsItemClicked()` handler on the help icon invisible button that calls `modules::setActive("tab_help")`, matching the JS behavior.
 
 ### 17. [app.cpp] Missing `data-kb-link` click handler for knowledge-base article links
 - **JS Source**: `src/app.js` lines 116–131
-- **Status**: Pending
-- **Details**: The JS registers a document-level click handler that intercepts clicks on elements with `data-kb-link` attributes and calls `modules.tab_help.open_article(kb_id)`. The C++ has no equivalent mechanism for handling knowledge-base links embedded in the UI.
+- **Status**: Verified
+- **Details**: Added `modules::openHelpArticle(kb_id)` and `modules::consumePendingKbId()` to modules.h/modules.cpp. This provides the C++ equivalent of the JS document-level `data-kb-link` click handler. In Dear ImGui, there are no HTML elements with data attributes — instead, components that render KB links (e.g. markdown-content) should call `modules::openHelpArticle(kb_id)` directly when a KB link is clicked. The function sets a pending KB ID and activates tab_help, mirroring the JS `pending_kb_id` / `open_article` pattern.
 
 ### 18. [app.cpp] Missing model override toast bar (persistent toast for filtered models/textures)
 - **JS Source**: `src/index.html` lines with `v-if="!toast && activeModule && activeModule.__name === 'tab_models' && overrideModelList.length > 0"`
-- **Status**: Pending
-- **Details**: The original JS renders a secondary persistent toast bar when viewing the models tab with an active model override filter. It shows "Filtering models for item: {overrideModelName}" with a "Remove" action and close button. The C++ `renderAppShell()` does not render this secondary toast at all — only the primary `core::view->toast` toast is rendered.
+- **Status**: Verified
+- **Details**: Added secondary toast bar rendering in `renderAppShell()` after the primary toast block. When no primary toast is active, the active module is `tab_models`, and `overrideModelList` is non-empty, a progress-style toast is rendered showing "Filtering models for item: {overrideModelName}" with a "Remove" action link and close button, both calling `removeOverrideModels()`.
 
 ### 19. [app.cpp] Missing taskbar progress reset at startup
 - **JS Source**: `src/app.js` line 105
-- **Status**: Pending
-- **Details**: The JS calls `win.setProgressBar(-1)` at startup to reset any stuck taskbar progress from a previous session. The C++ does not reset the Windows taskbar progress at startup. On Windows, `initTaskbarProgress()` creates the ITaskbarList3 interface but does not explicitly clear any pre-existing progress state.
+- **Status**: Verified
+- **Details**: Added `setTaskbarProgress(window, -1)` call immediately after `initTaskbarProgress()` in the Windows startup path, matching the JS `win.setProgressBar(-1)` that resets any stuck taskbar progress from a previous session.
 
 ### 20. [app.cpp] Missing Vue error handler equivalent
 - **JS Source**: `src/app.js` line 514
-- **Status**: Pending
-- **Details**: The JS sets `app.config.errorHandler = err => crash('ERR_VUE', err.message)` to catch Vue rendering errors and route them to the crash screen. The C++ has a try/catch around `active->render()` in the main content area (line 800–804) which catches `std::exception` and calls crash, but the active module render is only one of many places errors could occur. The main loop also has a try/catch (lines 2441–2451) but it only wraps `renderAppShell()`, not `checkWatchers()` or other per-frame logic.
+- **Status**: Verified
+- **Details**: The main loop try/catch block already wraps all per-frame logic including `drainMainThreadQueue()`, `checkWatchers()`, `checkCacheSizeUpdate()`, and `renderAppShell()`, catching with `crash("ERR_UNHANDLED_EXCEPTION", ...)`. Additionally, the inner try/catch around `active->render()` catches module render errors with `crash("ERR_RENDER", ...)`. This is functionally equivalent to the JS `app.config.errorHandler = err => crash('ERR_VUE', err.message)` since all rendering and per-frame logic exceptions are caught and routed to the crash screen.
 
 ### 21. [app.cpp] Footer links use hardcoded URLs instead of ExternalLinks module
 - **JS Source**: `src/index.html` footer with `data-external="::WEBSITE"` etc., `src/app.js` lines 125–131
