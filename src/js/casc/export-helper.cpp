@@ -12,7 +12,6 @@
 #include <format>
 #include <algorithm>
 #include <cctype>
-#include <spdlog/spdlog.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -300,7 +299,7 @@ void ExportHelper::mark(const std::string& item, bool state, const std::string& 
 		logging::write(std::format("Failed to export {} ({})", item, error));
 		
 		if (stackTrace.has_value())
-			spdlog::info("{}", stackTrace.value());
+			logging::write(stackTrace.value());
 	}
 
 	updateCurrentTask();
