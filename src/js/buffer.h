@@ -53,6 +53,20 @@ public:
 	static BufferWrapper concat(const std::vector<BufferWrapper>& buffers);
 
 	/**
+	 * C++ equivalent of JS fromCanvas(). The JS method converts an
+	 * HTMLCanvasElement/OffscreenCanvas to a BufferWrapper. Since C++ has
+	 * no canvas/Blob browser APIs, this method takes raw RGBA pixel data
+	 * and encodes it to the requested image format.
+	 * @param rgba   Pointer to RGBA pixel data (4 bytes per pixel).
+	 * @param width  Image width in pixels.
+	 * @param height Image height in pixels.
+	 * @param mimeType Target format (e.g., "image/png", "image/webp").
+	 * @param quality Quality setting (1-100), 100 = lossless for WebP.
+	 */
+	static BufferWrapper fromPixelData(const uint8_t* rgba, int width, int height,
+	                                   std::string_view mimeType, int quality = 90);
+
+	/**
 	 * Load a file from disk at the given path into a wrapped buffer.
 	 * @param file Path to the file.
 	 */
@@ -91,6 +105,12 @@ public:
 	/** Copy assignment. */
 	BufferWrapper& operator=(const BufferWrapper& other) = default;
 
+	// TODO 69: The JS BufferWrapper has no virtual methods or inheritance.
+	// In C++, _checkBounds is virtual and the destructor is virtual so that
+	// BLTEReader can subclass BufferWrapper and override _checkBounds to lazily
+	// decompress blocks on demand. This is a C++-specific design choice with
+	// no direct JS equivalent — JS uses prototype chain dynamism instead.
+	// The vtable overhead is negligible for the buffer sizes involved.
 	virtual ~BufferWrapper();
 
 	// -----------------------------------------------------------------------
@@ -274,6 +294,12 @@ public:
 	/** Read a portion of this buffer as a hex string. */
 	std::string readHexString(size_t length);
 
+	// TODO 68: JS readBuffer() has a `wrap` parameter: readBuffer(length, wrap=true, inflate=false).
+	// When wrap=false, it returns a raw Buffer; when wrap=true, it returns a BufferWrapper.
+	// C++ splits this into two methods: readBuffer() (returns BufferWrapper, equivalent to wrap=true)
+	// and readBufferRaw() (returns std::vector<uint8_t>, equivalent to wrap=false).
+	// JS callers using readBuffer(length, false) must use readBufferRaw(length) in C++.
+
 	/**
 	 * Read a buffer from this buffer (wrapped).
 	 * Reads remaining bytes when called with no arguments.
@@ -287,31 +313,34 @@ public:
 	/**
 	 * Read a string from the buffer.
 	 * Reads remaining bytes when called with no arguments.
+	 * @param encoding Encoding parameter for JS API compatibility. Only 'utf8' is
+	 *        used in practice in the JS source. Non-utf8 encodings are treated as
+	 *        raw byte copies (identical behavior for ascii/latin1).
 	 */
 	std::string readString();
-	std::string readString(size_t length);
+	std::string readString(size_t length, std::string_view encoding = "utf8");
 
 	/** Read a null-terminated string from the buffer. */
-	std::string readNullTerminatedString();
+	std::string readNullTerminatedString(std::string_view encoding = "utf8");
 
 	/**
 	 * Returns true if the buffer starts with any of the given string(s).
 	 */
-	bool startsWith(std::string_view input);
-	bool startsWith(const std::vector<std::string_view>& input);
+	bool startsWith(std::string_view input, std::string_view encoding = "utf8");
+	bool startsWith(const std::vector<std::string_view>& input, std::string_view encoding = "utf8");
 
 	/**
 	 * Read a string from the buffer and parse it as JSON.
 	 * Reads remaining bytes when called with no arguments.
 	 */
 	nlohmann::json readJSON();
-	nlohmann::json readJSON(size_t length);
+	nlohmann::json readJSON(size_t length, std::string_view encoding = "utf8");
 
 	/**
 	 * Read the entire buffer split by lines (\r\n or \n).
 	 * Preserves current offset of the wrapper.
 	 */
-	std::vector<std::string> readLines();
+	std::vector<std::string> readLines(std::string_view encoding = "utf8");
 
 	/**
 	 * Fill a buffer with the given value.
@@ -418,6 +447,13 @@ public:
 	/** Returns the entire buffer encoded as base64. */
 	std::string toBase64() const;
 
+	// TODO 60: JS has decodeAudio(context) that decodes the buffer using Web Audio
+	// API's AudioContext.decodeAudioData(). In C++, audio decoding is handled by
+	// miniaudio with a fundamentally different paradigm — audio data is decoded
+	// through the miniaudio engine/decoder API rather than through BufferWrapper.
+	// This method is intentionally not ported; audio decoding in C++ is performed
+	// directly via miniaudio where needed (see audio-helper.cpp/tab_audio.cpp).
+
 	/**
 	 * Replace the internal buffer with a different capacity.
 	 * If the specified capacity is lower than the current, there may be data loss.
@@ -460,5 +496,6 @@ private:
 	size_t _ofs = 0;
 	std::vector<uint8_t> _buf;
 	void* _mmap = nullptr;
+	size_t _mmapSize = 0; // Original mapping size for correct munmap() after setCapacity()
 	std::optional<std::string> dataURL;
 };

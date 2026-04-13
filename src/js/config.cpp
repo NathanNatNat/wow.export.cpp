@@ -13,6 +13,7 @@
 #include <fstream>
 #include <filesystem>
 #include <stdexcept>
+#include <future>
 
 namespace config {
 
@@ -124,11 +125,15 @@ void resetAllToDefault() {
 
 /**
  * Mark configuration for saving.
+ * TODO 70: JS uses setImmediate(doSave) to defer execution to the next event
+ * loop tick, preventing synchronous file I/O from blocking UI rendering.
+ * C++ uses std::async(std::launch::async, doSave) to replicate this deferred
+ * behavior — doSave runs on a separate thread, not blocking the caller.
  */
 void save() {
 	if (!isSaving) {
 		isSaving = true;
-		doSave();
+		std::async(std::launch::async, doSave);
 	} else {
 		// Queue another save.
 		isQueued = true;

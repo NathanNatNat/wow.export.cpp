@@ -17,6 +17,14 @@ License: MIT
 
 #include <nlohmann/json.hpp>
 
+#include <webp/encode.h>
+
+// stb_image_write for PNG encoding in fromPixelData
+#ifndef STB_IMAGE_WRITE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#endif
+#include <stb_image_write.h>
+
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -424,6 +432,120 @@ std::string sha1_base64(const uint8_t* data, size_t len) {
 }
 
 
+// SHA-256 implementation
+inline uint32_t sha256_rotr(uint32_t x, uint32_t n) { return (x >> n) | (x << (32 - n)); }
+inline uint32_t sha256_ch(uint32_t x, uint32_t y, uint32_t z) { return (x & y) ^ (~x & z); }
+inline uint32_t sha256_maj(uint32_t x, uint32_t y, uint32_t z) { return (x & y) ^ (x & z) ^ (y & z); }
+inline uint32_t sha256_sigma0(uint32_t x) { return sha256_rotr(x, 2) ^ sha256_rotr(x, 13) ^ sha256_rotr(x, 22); }
+inline uint32_t sha256_sigma1(uint32_t x) { return sha256_rotr(x, 6) ^ sha256_rotr(x, 11) ^ sha256_rotr(x, 25); }
+inline uint32_t sha256_gamma0(uint32_t x) { return sha256_rotr(x, 7) ^ sha256_rotr(x, 18) ^ (x >> 3); }
+inline uint32_t sha256_gamma1(uint32_t x) { return sha256_rotr(x, 17) ^ sha256_rotr(x, 19) ^ (x >> 10); }
+
+constexpr uint32_t sha256_k[64] = {
+	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+	0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+	0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+	0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+	0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+	0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+};
+
+void sha256_transform(uint32_t state[8], const uint8_t block[64]) {
+	uint32_t w[64];
+	for (int i = 0; i < 16; i++)
+		w[i] = (static_cast<uint32_t>(block[i * 4]) << 24) |
+		       (static_cast<uint32_t>(block[i * 4 + 1]) << 16) |
+		       (static_cast<uint32_t>(block[i * 4 + 2]) << 8) |
+		        static_cast<uint32_t>(block[i * 4 + 3]);
+
+	for (int i = 16; i < 64; i++)
+		w[i] = sha256_gamma1(w[i - 2]) + w[i - 7] + sha256_gamma0(w[i - 15]) + w[i - 16];
+
+	uint32_t a = state[0], b = state[1], c = state[2], d = state[3];
+	uint32_t e = state[4], f = state[5], g = state[6], h = state[7];
+
+	for (int i = 0; i < 64; i++) {
+		uint32_t t1 = h + sha256_sigma1(e) + sha256_ch(e, f, g) + sha256_k[i] + w[i];
+		uint32_t t2 = sha256_sigma0(a) + sha256_maj(a, b, c);
+		h = g; g = f; f = e; e = d + t1;
+		d = c; c = b; b = a; a = t1 + t2;
+	}
+
+	state[0] += a; state[1] += b; state[2] += c; state[3] += d;
+	state[4] += e; state[5] += f; state[6] += g; state[7] += h;
+}
+
+void sha256_compute(const uint8_t* data, size_t len, uint32_t state[8]) {
+	state[0] = 0x6a09e667; state[1] = 0xbb67ae85;
+	state[2] = 0x3c6ef372; state[3] = 0xa54ff53a;
+	state[4] = 0x510e527f; state[5] = 0x9b05688c;
+	state[6] = 0x1f83d9ab; state[7] = 0x5be0cd19;
+
+	size_t i = 0;
+	for (; i + 64 <= len; i += 64)
+		sha256_transform(state, data + i);
+
+	uint8_t block[64];
+	size_t remaining = len - i;
+	std::memcpy(block, data + i, remaining);
+	block[remaining] = 0x80;
+
+	if (remaining >= 56) {
+		std::memset(block + remaining + 1, 0, 63 - remaining);
+		sha256_transform(state, block);
+		std::memset(block, 0, 56);
+	} else {
+		std::memset(block + remaining + 1, 0, 55 - remaining);
+	}
+
+	// SHA-256 uses big-endian bit length
+	uint64_t bits = static_cast<uint64_t>(len) * 8;
+	block[56] = static_cast<uint8_t>(bits >> 56);
+	block[57] = static_cast<uint8_t>(bits >> 48);
+	block[58] = static_cast<uint8_t>(bits >> 40);
+	block[59] = static_cast<uint8_t>(bits >> 32);
+	block[60] = static_cast<uint8_t>(bits >> 24);
+	block[61] = static_cast<uint8_t>(bits >> 16);
+	block[62] = static_cast<uint8_t>(bits >> 8);
+	block[63] = static_cast<uint8_t>(bits);
+
+	sha256_transform(state, block);
+}
+
+std::string sha256_hex(const uint8_t* data, size_t len) {
+	uint32_t state[8];
+	sha256_compute(data, len, state);
+
+	constexpr char hex_chars[] = "0123456789abcdef";
+	std::string result;
+	result.reserve(64);
+	for (int j = 0; j < 8; j++) {
+		for (int k = 3; k >= 0; k--) {
+			uint8_t byte = static_cast<uint8_t>(state[j] >> (k * 8));
+			result += hex_chars[byte >> 4];
+			result += hex_chars[byte & 0xf];
+		}
+	}
+	return result;
+}
+
+std::string sha256_base64(const uint8_t* data, size_t len) {
+	uint32_t state[8];
+	sha256_compute(data, len, state);
+
+	uint8_t digest[32];
+	for (int j = 0; j < 8; j++) {
+		digest[j * 4]     = static_cast<uint8_t>(state[j] >> 24);
+		digest[j * 4 + 1] = static_cast<uint8_t>(state[j] >> 16);
+		digest[j * 4 + 2] = static_cast<uint8_t>(state[j] >> 8);
+		digest[j * 4 + 3] = static_cast<uint8_t>(state[j]);
+	}
+	return base64_encode(digest, 32);
+}
+
+
 std::vector<uint8_t> zlib_inflate(const uint8_t* data, size_t len) {
 z_stream strm{};
 if (inflateInit(&strm) != Z_OK)
@@ -530,10 +652,10 @@ _ofs += N; \
 // =====================================================================
 
 BufferWrapper BufferWrapper::alloc(size_t length, bool secure) {
+// TODO 65: JS uses Buffer.allocUnsafe(length) when !secure to skip zeroing.
+// C++ std::vector<uint8_t>(length) always value-initializes (zeroes).
+// This is a harmless performance-only difference — no functional impact.
 std::vector<uint8_t> buf(length);
-if (!secure) {
-// Insecure alloc — contents uninitialized in the JS sense.
-}
 return BufferWrapper(std::move(buf));
 }
 
@@ -562,6 +684,55 @@ combined.insert(combined.end(), b._buf.begin(), b._buf.end());
 return BufferWrapper(std::move(combined));
 }
 
+// TODO 59: C++ equivalent of JS fromCanvas(). The JS method converts an
+// HTMLCanvasElement/OffscreenCanvas to a BufferWrapper using browser Blob APIs
+// and webp-wasm for lossless WebP. Since C++ has no canvas/Blob browser APIs,
+// this method takes raw RGBA pixel data and encodes it using libwebp/stb.
+BufferWrapper BufferWrapper::fromPixelData(const uint8_t* rgba, int width, int height,
+                                           std::string_view mimeType, int quality) {
+if (mimeType == "image/webp" && quality == 100) {
+// Lossless WebP encoding — matches JS webp.encode(imageData, { lossless: true })
+uint8_t* output = nullptr;
+size_t outputSize = WebPEncodeLosslessRGBA(rgba, width, height, width * 4, &output);
+if (outputSize == 0 || output == nullptr)
+throw std::runtime_error("fromPixelData: WebP lossless encoding failed");
+
+std::vector<uint8_t> buf(output, output + outputSize);
+WebPFree(output);
+return BufferWrapper(std::move(buf));
+}
+
+if (mimeType == "image/webp") {
+// Lossy WebP encoding
+uint8_t* output = nullptr;
+size_t outputSize = WebPEncodeRGBA(rgba, width, height, width * 4,
+                                    static_cast<float>(quality), &output);
+if (outputSize == 0 || output == nullptr)
+throw std::runtime_error("fromPixelData: WebP lossy encoding failed");
+
+std::vector<uint8_t> buf(output, output + outputSize);
+WebPFree(output);
+return BufferWrapper(std::move(buf));
+}
+
+if (mimeType == "image/png") {
+// PNG encoding via stb_image_write to memory
+std::vector<uint8_t> pngBuf;
+auto writeFunc = [](void* context, void* data, int size) {
+auto* vec = static_cast<std::vector<uint8_t>*>(context);
+auto* bytes = static_cast<const uint8_t*>(data);
+vec->insert(vec->end(), bytes, bytes + size);
+};
+int ret = stbi_write_png_to_func(writeFunc, &pngBuf, width, height, 4, rgba, width * 4);
+if (ret == 0)
+throw std::runtime_error("fromPixelData: PNG encoding failed");
+
+return BufferWrapper(std::move(pngBuf));
+}
+
+throw std::runtime_error("fromPixelData: unsupported mimeType '" + std::string(mimeType) + "'");
+}
+
 BufferWrapper BufferWrapper::readFile(const std::filesystem::path& file) {
 std::ifstream ifs(file, std::ios::binary | std::ios::ate);
 if (!ifs)
@@ -581,6 +752,7 @@ BufferWrapper BufferWrapper::fromMmap(void* mmapData, size_t size) {
 auto* src = static_cast<const uint8_t*>(mmapData);
 BufferWrapper wrapper(std::vector<uint8_t>(src, src + size));
 wrapper._mmap = mmapData;
+wrapper._mmapSize = size;
 return wrapper;
 }
 
@@ -597,9 +769,10 @@ BufferWrapper::BufferWrapper(std::vector<uint8_t> buf, size_t offset)
 : _ofs(offset), _buf(std::move(buf)) {}
 
 BufferWrapper::BufferWrapper(BufferWrapper&& other) noexcept
-: _ofs(other._ofs), _buf(std::move(other._buf)), _mmap(other._mmap), dataURL(std::move(other.dataURL)) {
+: _ofs(other._ofs), _buf(std::move(other._buf)), _mmap(other._mmap), _mmapSize(other._mmapSize), dataURL(std::move(other.dataURL)) {
 other._ofs = 0;
 other._mmap = nullptr;
+other._mmapSize = 0;
 }
 
 BufferWrapper& BufferWrapper::operator=(BufferWrapper&& other) noexcept {
@@ -607,9 +780,11 @@ if (this != &other) {
 _ofs = other._ofs;
 _buf = std::move(other._buf);
 _mmap = other._mmap;
+_mmapSize = other._mmapSize;
 dataURL = std::move(other.dataURL);
 other._ofs = 0;
 other._mmap = nullptr;
+other._mmapSize = 0;
 }
 return *this;
 }
@@ -935,7 +1110,12 @@ std::string BufferWrapper::readString() {
 return readString(remainingBytes());
 }
 
-std::string BufferWrapper::readString(size_t length) {
+std::string BufferWrapper::readString(size_t length, [[maybe_unused]] std::string_view encoding) {
+// TODO 61: JS readString() accepts an encoding parameter (default 'utf8') that
+// is passed to Buffer.toString(encoding, ...). In practice, all callers in the
+// JS source use 'utf8' (the default). For utf8/ascii/latin1, the raw byte copy
+// produces identical results. The encoding parameter is accepted for API
+// compatibility but does not change behavior.
 if (length == 0)
 return "";
 
@@ -945,7 +1125,7 @@ _ofs += length;
 return str;
 }
 
-std::string BufferWrapper::readNullTerminatedString() {
+std::string BufferWrapper::readNullTerminatedString([[maybe_unused]] std::string_view encoding) {
 size_t startPos = _ofs;
 size_t length = 0;
 
@@ -957,20 +1137,20 @@ length++;
 
 seek(static_cast<int64_t>(startPos));
 
-std::string str = readString(length);
+std::string str = readString(length, encoding);
 move(1); // Skip the null-terminator.
 return str;
 }
 
-bool BufferWrapper::startsWith(std::string_view input) {
+bool BufferWrapper::startsWith(std::string_view input, [[maybe_unused]] std::string_view encoding) {
 seek(0);
-return readString(input.size()) == input;
+return readString(input.size(), encoding) == input;
 }
 
-bool BufferWrapper::startsWith(const std::vector<std::string_view>& input) {
+bool BufferWrapper::startsWith(const std::vector<std::string_view>& input, [[maybe_unused]] std::string_view encoding) {
 seek(0);
 for (const auto& entry : input) {
-if (readString(entry.size()) == entry)
+if (readString(entry.size(), encoding) == entry)
 return true;
 }
 return false;
@@ -980,15 +1160,15 @@ nlohmann::json BufferWrapper::readJSON() {
 return readJSON(remainingBytes());
 }
 
-nlohmann::json BufferWrapper::readJSON(size_t length) {
-return nlohmann::json::parse(readString(length));
+nlohmann::json BufferWrapper::readJSON(size_t length, std::string_view encoding) {
+return nlohmann::json::parse(readString(length, encoding));
 }
 
-std::vector<std::string> BufferWrapper::readLines() {
+std::vector<std::string> BufferWrapper::readLines([[maybe_unused]] std::string_view encoding) {
 size_t savedOfs = _ofs;
 seek(0);
 
-std::string str = readString(remainingBytes());
+std::string str = readString(remainingBytes(), encoding);
 seek(static_cast<int64_t>(savedOfs));
 
 std::vector<std::string> lines;
@@ -1089,9 +1269,11 @@ buf._ofs += copyLength;
 void BufferWrapper::writeBuffer(std::span<const uint8_t> buf, size_t copyLength) {
 if (copyLength == 0)
 copyLength = buf.size();
-else if (buf.size() < copyLength)
-throw std::runtime_error("Buffer operation out-of-bounds: " +
-std::to_string(copyLength) + " > " + std::to_string(buf.size()));
+else if (buf.size() <= copyLength) {
+// NOTE: Matches JS bug — original JS creates `new Error(...)` without `throw`,
+// so the error is silently discarded. We replicate the same no-op behavior here.
+// (JS source: buffer.js line 917)
+}
 
 _checkBounds(copyLength);
 
@@ -1146,6 +1328,12 @@ return -1;
 // Utility
 // =====================================================================
 
+// TODO 62: JS creates blob: URLs via URL.createObjectURL(new Blob([data])).
+// C++ has no Blob/URL API, so we produce data: URLs with inline base64 encoding
+// instead. This is a platform-specific deviation that is functionally equivalent
+// for the purpose of embedding buffer content in URLs. The format differs
+// (blob:... vs data:application/octet-stream;base64,...) but consumers in the
+// C++ port use this for texture/image data display which works with data: URLs.
 const std::string& BufferWrapper::getDataURL() {
 if (!dataURL)
 dataURL = "data:application/octet-stream;base64," + toBase64();
@@ -1153,6 +1341,11 @@ dataURL = "data:application/octet-stream;base64," + toBase64();
 return *dataURL;
 }
 
+// TODO 63: JS calls URL.revokeObjectURL() to free blob URL resources.
+// Since C++ uses data: URLs (not blob: URLs), there is no external resource to
+// revoke. Resetting the optional string is the correct C++ equivalent — it frees
+// the memory used by the base64 string. This matches the JS lifecycle semantics
+// (after revokeDataURL, getDataURL will regenerate a new URL).
 void BufferWrapper::revokeDataURL() {
 dataURL.reset();
 }
@@ -1177,14 +1370,21 @@ _buf = std::move(buf);
 }
 
 std::string BufferWrapper::calculateHash(std::string_view hash, std::string_view encoding) {
-if (hash != "md5" && hash != "sha1")
-throw std::runtime_error("calculateHash: unsupported hash algorithm '" + std::string(hash) + "' (only md5, sha1 supported)");
+// TODO 66: JS uses Node's crypto module which supports all hash algorithms.
+// C++ supports md5, sha1, and sha256. Other algorithms (sha384, sha512, etc.)
+// are not yet implemented — add them as needed.
+if (hash != "md5" && hash != "sha1" && hash != "sha256")
+throw std::runtime_error("calculateHash: unsupported hash algorithm '" + std::string(hash) + "' (only md5, sha1, sha256 supported)");
 
 if (encoding == "hex") {
+if (hash == "sha256")
+return sha256_hex(_buf.data(), _buf.size());
 if (hash == "sha1")
 return sha1_hex(_buf.data(), _buf.size());
 return md5_hex(_buf.data(), _buf.size());
 } else if (encoding == "base64") {
+if (hash == "sha256")
+return sha256_base64(_buf.data(), _buf.size());
 if (hash == "sha1")
 return sha1_base64(_buf.data(), _buf.size());
 return md5_base64(_buf.data(), _buf.size());
@@ -1210,11 +1410,11 @@ if (_mmap) {
 #ifdef _WIN32
 UnmapViewOfFile(_mmap);
 #else
-// Size must match the original mapping; _buf.size() equals the
-// size passed to fromMmap() as long as setCapacity() was not called.
-munmap(_mmap, _buf.size());
+// Use stored mapping size to ensure correct munmap() even after setCapacity().
+munmap(_mmap, _mmapSize);
 #endif
 _mmap = nullptr;
+_mmapSize = 0;
 }
 }
 
