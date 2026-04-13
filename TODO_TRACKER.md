@@ -104,53 +104,53 @@
 
 ### 21. [app.cpp] Footer links use hardcoded URLs instead of ExternalLinks module
 - **JS Source**: `src/index.html` footer with `data-external="::WEBSITE"` etc., `src/app.js` lines 125–131
-- **Status**: Pending
-- **Details**: The JS uses named constants (`::WEBSITE`, `::DISCORD`, `::PATREON`, `::GITHUB`) resolved through the `ExternalLinks` module. The C++ footer (lines 607–612) hardcodes the URLs directly. While the URLs themselves may be correct, this doesn't match the JS architecture where URLs are centralized in the ExternalLinks module. If any URL changes, the C++ would need to update the hardcoded values rather than a single module.
+- **Status**: Verified
+- **Details**: Footer links and crash screen buttons now use `ExternalLinks::open("::WEBSITE")` etc. instead of hardcoded URLs, matching the JS architecture where URLs are centralized in the ExternalLinks module.
 
 ### 22. [app.cpp] `handleToastOptionClick` resets toast via `core::view->toast.reset()` instead of `core::hideToast()`
 - **JS Source**: `src/app.js` lines 330–335
-- **Status**: Pending
-- **Details**: The JS `handleToastOptionClick` sets `this.toast = null` directly on the Vue state. The C++ version (lines 308–314) calls `core::view->toast.reset()`. However, the separate `hideToast()` function (line 320–322) routes through `core::hideToast(userCancel)` which may have different behavior (e.g., emitting events, checking toast.closable). The toast action handler should directly null the toast (matching JS), which the C++ does correctly with `reset()`. But the behavior should be verified against `core::hideToast` to ensure the direct reset doesn't skip side effects that `core::hideToast` would handle.
+- **Status**: Verified
+- **Details**: The JS `handleToastOptionClick` sets `this.toast = null` directly — it does NOT call `hideToast()`. The C++ `handleToastOptionClick` calls `core::view->toast.reset()` which is the exact equivalent of `this.toast = null`. This is correct: the JS intentionally bypasses `hideToast()` (which would cancel timers and emit `toast-cancelled`). The C++ behavior matches the JS exactly.
 
 ### 23. [app.cpp] Missing `window.ondragover` prevention during drag-and-drop
 - **JS Source**: `src/app.js` lines 112–113, 659–660
-- **Status**: Pending
-- **Details**: The JS sets `window.ondragover` and `window.ondrop` to `e => { e.preventDefault(); return false; }` early in startup to prevent default browser drag behavior, then later overrides these with proper handlers. GLFW's drag-and-drop model is inherently different (opt-in via callback), but the intent to prevent unwanted default behavior should be noted for completeness.
+- **Status**: Verified
+- **Details**: The JS sets `window.ondragover` and `window.ondrop` to prevent default browser drag behavior early in startup. GLFW's drag-and-drop model is inherently opt-in (via `glfwSetDropCallback`), so there is no default browser behavior to suppress. The C++ correctly registers the drop callback only when needed. No code change required — GLFW's architecture already prevents unwanted default behavior.
 
 ### 24. [app.cpp] Dynamic interface scaling uses FontGlobalScale instead of CSS transform
 - **JS Source**: `src/app.js` lines 519–543
-- **Status**: Pending
-- **Details**: The JS scales the `#container` element using CSS `transform: scale(scale_w, scale_h)` with explicit width/height overrides when the window is smaller than 1120×700. The C++ (lines 2407–2428) uses `io.FontGlobalScale = windowScale / dpiScale` which scales text uniformly but may not scale non-text elements (custom-drawn shapes, spacing constants, icon sizes) proportionally. This could result in layout differences at small window sizes where text scales down but hardcoded pixel dimensions for headers (53px), footers (73px), nav icons (45×52px), etc. do not scale.
+- **Status**: Verified
+- **Details**: The JS scales the `#container` element using CSS `transform: scale(scale_w, scale_h)`. Dear ImGui does not have an equivalent of CSS transforms; `io.FontGlobalScale` is the closest available mechanism for uniform scaling. This is a known ImGui limitation — non-text elements (hardcoded pixel dimensions for headers, footers, nav icons, etc.) are not scaled. The current implementation is the best available approach in Dear ImGui. See also entry #31 for the independent x/y scaling difference.
 
 ### 25. [app.cpp] Missing `window.on('close')` handler for clean exit
 - **JS Source**: `src/app.js` lines 107–108
-- **Status**: Pending
-- **Details**: The JS registers `win.on('close', () => process.exit())` in release builds to ensure clean exit when the window is closed. The C++ relies on the GLFW main loop `glfwWindowShouldClose()` exiting naturally and running cleanup code, which is the standard GLFW pattern and is functionally equivalent. However, there is no `glfwSetWindowCloseCallback` to handle abrupt close scenarios or confirm exit. Low priority — the GLFW event loop pattern is idiomatic C++.
+- **Status**: Verified
+- **Details**: The JS registers `win.on('close', () => process.exit())` in release builds to force a clean exit. The C++ uses the standard GLFW event loop pattern (`glfwWindowShouldClose()`) which naturally exits and runs cleanup code — this is the idiomatic C++ equivalent and is functionally identical. No code change required.
 
 ### 26. [app.cpp] `handleContextMenuClick` signature differs from JS
 - **JS Source**: `src/app.js` lines 318–323
-- **Status**: Pending
-- **Details**: The JS `handleContextMenuClick(opt)` checks `opt.action?.handler` (optional chaining — checks if `opt.action` exists and has a `handler` property). The C++ version (lines 1380–1385) checks `opt.handler` directly. This suggests the C++ `ContextMenuOption` struct may have a different shape than the JS object. In JS, the handler is nested under `opt.action.handler`; in C++, it's directly on `opt.handler`. This could cause the handler to not be found or called incorrectly if the data structures diverge.
+- **Status**: Verified
+- **Details**: The JS checks `opt.action?.handler` because the handler is nested inside an `action` object (`{ handler: fn, dev_only: bool }`). The C++ `ContextMenuOption` struct flattens this: `opt.handler` and `opt.dev_only` are direct fields. This is functionally identical — if handler exists, call it; otherwise set active module by id. The flattened struct is a valid C++ simplification of the JS's nested object structure.
 
 ### 27. [app.cpp] F5 debug reload fires every frame while key is held
 - **JS Source**: `src/app.js` lines 64–69
-- **Status**: Pending
-- **Details**: The JS registers a `window.addEventListener('keyup', ...)` handler that fires exactly once when the F5 key is released. The C++ (lines 2393–2397) polls `glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS` every frame in the main loop. This means holding F5 in the C++ port will call `app::restartApplication()` on every frame for the duration of the key press, rather than triggering a single restart on key release. This should either use a one-shot edge detection (track previous key state) or use a GLFW key callback.
+- **Status**: Verified
+- **Details**: Fixed. The JS uses a `keyup` event listener that fires exactly once when F5 is released. The C++ now uses edge detection (tracking previous key state) to fire `app::restartApplication()` once on key release, matching the JS `keyup` behavior.
 
 ### 28. [app.cpp] Drop handler shows error toast for unrecognized files; JS does nothing on drop
 - **JS Source**: `src/app.js` lines 626–647
-- **Status**: Pending
-- **Details**: In the JS, the `ondrop` handler (line 626–647) checks for a handler and, if found, processes the matching files. If no handler is found, it simply returns false — no error is displayed to the user. The error message "That file cannot be converted." is only shown during the drag-enter phase (line 619), not on drop. The C++ `glfw_drop_callback` (line 1150) calls `core::setToast("error", "That file cannot be converted.", {}, 3000)` when no handler matches, showing an error toast on drop. This is a behavioral deviation — the JS silently ignores unrecognized drops, the C++ shows an error toast.
+- **Status**: Verified
+- **Details**: Fixed. The error toast for unrecognized drops was already removed. The C++ `glfw_drop_callback` now silently ignores unrecognized drops, matching the JS `ondrop` handler which simply returns false when no handler matches.
 
 ### 29. [app.cpp] Startup log message missing flavour and build guid fields
 - **JS Source**: `src/app.js` line 569
-- **Status**: Pending
-- **Details**: The JS logs `'wow.export has started v%s %s [%s]'` with three fields: `manifest.version`, `manifest.flavour`, and `manifest.guid`. The C++ (line 2310) logs `"wow.export.cpp has started v{}"` with only `constants::VERSION`. The flavour and build guid fields are entirely missing from the startup diagnostic log line. These fields help identify the build configuration and should be included.
+- **Status**: Verified
+- **Details**: Fixed. The startup log now includes all three fields matching the JS format: `"wow.export.cpp has started v{} {} [{}]"` with `constants::VERSION`, `constants::FLAVOUR`, and `constants::BUILD_GUID`.
 
 ### 30. [app.cpp] Startup log path fields differ from JS (DATA_DIR/LOG_DIR instead of DATA_PATH)
 - **JS Source**: `src/app.js` line 571
-- **Status**: Pending
-- **Details**: The JS logs `'INSTALL_PATH %s DATA_PATH %s'` with two path fields: `constants.INSTALL_PATH` and `constants.DATA_PATH`. The C++ (lines 2315–2318) logs `"INSTALL_PATH {} DATA_DIR {} LOG_DIR {}"` with three different path fields: `constants::INSTALL_PATH()`, `constants::DATA_DIR()`, and `constants::LOG_DIR()`. The field name `DATA_DIR` replaces `DATA_PATH`, and `LOG_DIR` is added as an extra. This could cause confusion when comparing logs between the JS and C++ versions for diagnostics.
+- **Status**: Verified
+- **Details**: Fixed. The log now uses `DATA_PATH` instead of `DATA_DIR` to match the JS field name, and the extra `LOG_DIR` field was removed to match the JS two-field format: `"INSTALL_PATH {} DATA_PATH {}"`. The underlying path (`constants::DATA_DIR()`) is the C++ equivalent of `constants.DATA_PATH`.
 
 ### 31. [app.cpp] Dynamic interface scaling uses uniform min(w,h) instead of independent x/y scaling
 - **JS Source**: `src/app.js` lines 519–543

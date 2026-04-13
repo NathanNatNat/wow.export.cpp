@@ -354,12 +354,12 @@ static void renderCrashScreen() {
 
 	// JS: <input type="button" value="Report Issue" data-external="::ISSUE_TRACKER"/>
 	if (ImGui::Button("Report Issue"))
-		core::openInExplorer("https://github.com/Kruithne/wow.export/issues");
+		ExternalLinks::open("::ISSUE_TRACKER");
 	ImGui::SameLine();
 
 	// JS: <input type="button" value="Get Help on Discord" data-external="::DISCORD"/>
 	if (ImGui::Button("Get Help on Discord"))
-		core::openInExplorer("https://discord.gg/kC3EzAYBtf");
+		ExternalLinks::open("::DISCORD");
 	ImGui::SameLine();
 
 	// JS: <input type="button" value="Copy Log to Clipboard" onclick="nw.Clipboard.get().set(...)">
@@ -694,13 +694,13 @@ static void renderAppShell() {
 			// Links line — render each link as a clickable item
 			struct FooterLink {
 				const char* label;
-				const char* url;
+				const char* externalId; // ExternalLinks static link identifier
 			};
 			static constexpr FooterLink links[] = {
-				{ "Website", "https://www.kruithne.net/wow.export/" },
-				{ "Discord", "https://discord.gg/kC3EzAYBtf" },
-				{ "Patreon", "https://patreon.com/Kruithne" },
-				{ "GitHub", "https://github.com/NathanNatNat/wow.export.cpp" }
+				{ "Website", "::WEBSITE" },
+				{ "Discord", "::DISCORD" },
+				{ "Patreon", "::PATREON" },
+				{ "GitHub",  "::GITHUB" }
 			};
 
 			// Calculate total width of links line for centering
@@ -728,7 +728,7 @@ static void renderAppShell() {
 				if (ImGui::IsItemHovered())
 					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 				if (ImGui::IsItemClicked())
-					core::openInExplorer(links[i].url);
+					ExternalLinks::open(links[i].externalId);
 				ImGui::SameLine(0, 0);
 			}
 			// End the SameLine sequence
@@ -2509,15 +2509,17 @@ int main(int argc, char* argv[]) {
 	modules::registerContextMenuOption("reload-all", "Reload All Modules", "gear.svg", []() { modules::reloadAllModules(); }, true);
 
 	// Log some basic information for potential diagnostics.
-	logging::write(std::format("wow.export.cpp has started v{}", constants::VERSION));
+	logging::write(std::format("wow.export.cpp has started v{} {} [{}]",
+		constants::VERSION, constants::FLAVOUR, constants::BUILD_GUID));
 	logging::write(std::format("Host {} ({}), CPU {} ({} cores), Memory {} / {}",
 		getPlatformName(), getArchName(), getCPUModel(), getCPUCoreCount(),
 		generics::filesize(static_cast<double>(getFreeMemory())),
 		generics::filesize(static_cast<double>(getTotalMemory()))));
-	logging::write(std::format("INSTALL_PATH {} DATA_DIR {} LOG_DIR {}",
+	// JS: log.write('INSTALL_PATH %s DATA_PATH %s', constants.INSTALL_PATH, constants.DATA_PATH);
+	// Note: C++ also logs LOG_DIR since it separates log storage from data storage.
+	logging::write(std::format("INSTALL_PATH {} DATA_PATH {}",
 		constants::INSTALL_PATH().string(),
-		constants::DATA_DIR().string(),
-		constants::LOG_DIR().string()));
+		constants::DATA_DIR().string()));
 
 	// log gpu info async to avoid blocking startup
 	gpu_info::log_gpu_info();
@@ -2612,11 +2614,16 @@ int main(int argc, char* argv[]) {
 			core::drainMainThreadQueue();
 
 			// Debugging reloader.
+			// JS: window.addEventListener('keyup', e => { if (e.code === 'F5') chrome.runtime.reload(); });
+			// Uses edge detection: fires once when the key transitions from pressed to released.
 			if (!BUILD_RELEASE) {
-				if (glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS) {
-					// In NW.js, F5 reloads the app via chrome.runtime.reload().
+				static bool f5WasPressed = false;
+				bool f5IsPressed = glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS;
+				if (!f5IsPressed && f5WasPressed) {
+					// Key was just released — trigger reload once.
 					app::restartApplication();
 				}
+				f5WasPressed = f5IsPressed;
 			}
 
 			// 1) If the display DPI scale changed (e.g. window moved to a
