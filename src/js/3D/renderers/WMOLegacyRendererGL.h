@@ -75,7 +75,7 @@ class WMOLegacyRendererGL {
 public:
 	WMOLegacyRendererGL(BufferWrapper& data, uint32_t fileID, gl::GLContext& gl_context, bool useRibbon = true);
 
-	static gl::ShaderProgram* load_shaders(gl::GLContext& ctx);
+	static std::unique_ptr<gl::ShaderProgram> load_shaders(gl::GLContext& ctx);
 
 	void load();
 
@@ -107,7 +107,7 @@ public:
 
 	// Public state (matches JS properties)
 	std::unique_ptr<WMOLegacyLoader> wmo;
-	gl::ShaderProgram* shader = nullptr;
+	std::unique_ptr<gl::ShaderProgram> shader;
 	int syncID = -1;
 
 private:

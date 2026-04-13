@@ -42,7 +42,7 @@ M3RendererGL::M3RendererGL(BufferWrapper& data, gl::GLContext& gl_context, bool 
 // load_shaders
 // -----------------------------------------------------------------------
 
-gl::ShaderProgram* M3RendererGL::load_shaders(gl::GLContext& ctx) {
+std::unique_ptr<gl::ShaderProgram> M3RendererGL::load_shaders(gl::GLContext& ctx) {
 	return shaders::create_program(ctx, "m2");
 }
 

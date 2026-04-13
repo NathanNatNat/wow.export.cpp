@@ -72,7 +72,7 @@ WMOLegacyRendererGL::WMOLegacyRendererGL(BufferWrapper& data, uint32_t fileID, g
 // load_shaders
 // -----------------------------------------------------------------------
 
-gl::ShaderProgram* WMOLegacyRendererGL::load_shaders(gl::GLContext& ctx) {
+std::unique_ptr<gl::ShaderProgram> WMOLegacyRendererGL::load_shaders(gl::GLContext& ctx) {
 	return shaders::create_program(ctx, "wmo");
 }
 

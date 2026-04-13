@@ -15,7 +15,7 @@ struct SubMesh {
 	uint16_t level;
 	uint16_t vertexStart;
 	uint16_t vertexCount;
-	uint16_t triangleStart;
+	uint32_t triangleStart;
 	uint16_t triangleCount;
 	uint16_t boneCount;
 	uint16_t boneStart;

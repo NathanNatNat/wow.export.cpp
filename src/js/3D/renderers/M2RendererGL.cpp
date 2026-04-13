@@ -466,7 +466,7 @@ scale_ = {1, 1, 1};
 // static load_shaders
 // -----------------------------------------------------------------------
 
-gl::ShaderProgram* M2RendererGL::load_shaders(gl::GLContext& ctx) {
+std::unique_ptr<gl::ShaderProgram> M2RendererGL::load_shaders(gl::GLContext& ctx) {
 return shaders::create_program(ctx, "m2");
 }
 
