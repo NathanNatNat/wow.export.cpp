@@ -9,8 +9,8 @@
 
 ### 2. [app.cpp] Missing global crash handlers (unhandledRejection / uncaughtException equivalents)
 - **JS Source**: `src/app.js` lines 72–73
-- **Status**: Pending
-- **Details**: The JS registers `process.on('unhandledRejection', ...)` and `process.on('uncaughtException', ...)` to catch unhandled errors and invoke `crash()`. The C++ has no equivalent global exception handler such as `std::set_terminate()`, signal handlers, or structured exception handling (on Windows) to catch unhandled exceptions that escape the main loop's try/catch.
+- **Status**: Verified
+- **Details**: Added `std::set_terminate(terminateHandler)` to catch uncaught C++ exceptions (equivalent to `process.on('uncaughtException', ...)`), signal handlers for SIGSEGV/SIGABRT/SIGFPE/SIGILL via `fatalSignalHandler`, and on Windows `SetUnhandledExceptionFilter(unhandledSEHFilter)` for SEH exceptions. All handlers route to `crash()` with appropriate error codes. The main loop's try/catch was expanded to cover all per-frame logic (drainMainThreadQueue, checkWatchers, checkCacheSizeUpdate, DPI scaling, and rendering) instead of only the render call, and a catch-all `catch(...)` clause was added for non-std exceptions. Handlers are registered early in `main()` right after `logging::init()`.
 
 ### 3. [app.cpp] Missing `goToTexture(fileDataID)` method
 - **JS Source**: `src/app.js` lines 418–434

@@ -17,7 +17,9 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <csignal>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -234,6 +236,66 @@ static GLuint getNavIconTexture(const std::string& icon_filename) {
 	s_navIconTextures[icon_filename] = tex;
 	return tex;
 }
+
+// Forward declaration so crash handlers can call crash().
+static void crash(const std::string& errorCode, const std::string& errorText);
+
+/**
+ * Global terminate handler — equivalent to JS:
+ *   process.on('uncaughtException', e => crash('ERR_UNHANDLED_EXCEPTION', e.message));
+ *
+ * Called when a C++ exception escapes all try/catch blocks.
+ * The handler must not return; after recording the crash it aborts.
+ */
+static void terminateHandler() {
+	std::string message = "Unknown error";
+	if (auto eptr = std::current_exception()) {
+		try {
+			std::rethrow_exception(eptr);
+		} catch (const std::exception& e) {
+			message = e.what();
+		} catch (...) {
+			message = "Non-standard exception";
+		}
+	}
+	crash("ERR_UNHANDLED_EXCEPTION", message);
+	// Reset SIGABRT to default before aborting to avoid recursion with our signal handler.
+	std::signal(SIGABRT, SIG_DFL);
+	std::abort();
+}
+
+/**
+ * Signal handler for fatal signals (SIGSEGV, SIGABRT, SIGFPE, SIGILL).
+ * Best-effort crash capture — not strictly async-signal-safe, but matches
+ * the JS intent of catching unhandled errors and routing them to crash().
+ */
+static void fatalSignalHandler(int sig) {
+	const char* sigName = "UNKNOWN";
+	switch (sig) {
+		case SIGSEGV: sigName = "SIGSEGV (Segmentation fault)"; break;
+		case SIGABRT: sigName = "SIGABRT (Abort)"; break;
+		case SIGFPE:  sigName = "SIGFPE (Floating-point exception)"; break;
+		case SIGILL:  sigName = "SIGILL (Illegal instruction)"; break;
+	}
+	crash("ERR_FATAL_SIGNAL", std::string("Fatal signal: ") + sigName);
+	// Re-raise with default handler for core dump / OS reporting.
+	std::signal(sig, SIG_DFL);
+	std::raise(sig);
+}
+
+#ifdef _WIN32
+/**
+ * Windows Structured Exception Handler for unhandled SEH exceptions
+ * (access violations, stack overflows, etc.).
+ * Equivalent to JS: process.on('uncaughtException', ...).
+ */
+static LONG WINAPI unhandledSEHFilter(EXCEPTION_POINTERS* exInfo) {
+	std::string message = std::format("Unhandled SEH exception: 0x{:08X}",
+		exInfo->ExceptionRecord->ExceptionCode);
+	crash("ERR_UNHANDLED_EXCEPTION", message);
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+#endif
 
 static void crash(const std::string& errorCode, const std::string& errorText) {
 	// Prevent a never-ending cycle of depression.
@@ -2239,6 +2301,17 @@ int main(int argc, char* argv[]) {
 	// Initialize logging stream.
 	logging::init();
 
+	// Register crash handlers.
+	// JS: process.on('unhandledRejection', e => crash('ERR_UNHANDLED_REJECTION', e.message));
+	// JS: process.on('uncaughtException', e => crash('ERR_UNHANDLED_EXCEPTION', e.message));
+	std::set_terminate(terminateHandler);
+	std::signal(SIGSEGV, fatalSignalHandler);
+	std::signal(SIGABRT, fatalSignalHandler);
+	std::signal(SIGFPE, fatalSignalHandler);
+	std::signal(SIGILL, fatalSignalHandler);
+#ifdef _WIN32
+	SetUnhandledExceptionFilter(unhandledSEHFilter);
+#endif
 
 	if (!glfwInit()) {
 		crash("ERR_GLFW_INIT", "Failed to initialize GLFW");
@@ -2416,61 +2489,61 @@ int main(int argc, char* argv[]) {
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
-		// Drain the main-thread task queue.  Background threads (e.g.
-		// CASC loading) post tasks here so that all shared-state
-		// mutations happen on the main thread.
-		core::drainMainThreadQueue();
-
-		// Debugging reloader.
-		if (!BUILD_RELEASE) {
-			if (glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS) {
-				// In NW.js, F5 reloads the app via chrome.runtime.reload().
-				app::restartApplication();
-			}
-		}
-
-		// 1) If the display DPI scale changed (e.g. window moved to a
-		//    different monitor), rebuild the font atlas at the new scale.
-		// 2) Compute a window-size scale factor that shrinks the UI when
-		//    the window is smaller than 1120×700 but never exceeds 1.0.
-		// 3) Combine both: FontGlobalScale = windowScale / dpiScale.
-		//    The division by dpiScale compensates for the fonts being
-		//    rasterized at dpiScale× so that logical sizes stay correct.
-		{
-			float dpiScale = clampDpiScale(
-				ImGui_ImplGlfw_GetContentScaleForWindow(window));
-
-			// Rebuild fonts when DPI changes (moving between monitors).
-			if (std::abs(dpiScale - app::theme::getDpiScale()) > DPI_SCALE_EPSILON) {
-				app::theme::rebuildFontsForScale(dpiScale);
-			}
-
-			// Window-size scale: scale down when smaller than thresholds, never up.
-			int win_w, win_h;
-			glfwGetWindowSize(window, &win_w, &win_h);
-			float scale_w = win_w < SCALE_THRESHOLD_W ? static_cast<float>(win_w) / SCALE_THRESHOLD_W : 1.0f;
-			float scale_h = win_h < SCALE_THRESHOLD_H ? static_cast<float>(win_h) / SCALE_THRESHOLD_H : 1.0f;
-			float windowScale = (std::min)(scale_w, scale_h);
-
-			// FontGlobalScale = windowScale / dpiScale.
-			// Fonts are rasterized at baseSize * dpiScale; dividing by
-			// dpiScale brings them back to logical baseSize, then
-			// windowScale applies the small-window shrink.
-			io.FontGlobalScale = windowScale / dpiScale;
-		}
-
-		// Check watchers (loadPct, casc, activeModule)
-		checkWatchers(window);
-
-		// Check cache size update timer
-		checkCacheSizeUpdate();
-
-		// Start the Dear ImGui frame
-		ImGui_ImplOpenGL3_NewFrame();
-		ImGui_ImplGlfw_NewFrame();
-		ImGui::NewFrame();
-
 		try {
+			// Drain the main-thread task queue.  Background threads (e.g.
+			// CASC loading) post tasks here so that all shared-state
+			// mutations happen on the main thread.
+			core::drainMainThreadQueue();
+
+			// Debugging reloader.
+			if (!BUILD_RELEASE) {
+				if (glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS) {
+					// In NW.js, F5 reloads the app via chrome.runtime.reload().
+					app::restartApplication();
+				}
+			}
+
+			// 1) If the display DPI scale changed (e.g. window moved to a
+			//    different monitor), rebuild the font atlas at the new scale.
+			// 2) Compute a window-size scale factor that shrinks the UI when
+			//    the window is smaller than 1120×700 but never exceeds 1.0.
+			// 3) Combine both: FontGlobalScale = windowScale / dpiScale.
+			//    The division by dpiScale compensates for the fonts being
+			//    rasterized at dpiScale× so that logical sizes stay correct.
+			{
+				float dpiScale = clampDpiScale(
+					ImGui_ImplGlfw_GetContentScaleForWindow(window));
+
+				// Rebuild fonts when DPI changes (moving between monitors).
+				if (std::abs(dpiScale - app::theme::getDpiScale()) > DPI_SCALE_EPSILON) {
+					app::theme::rebuildFontsForScale(dpiScale);
+				}
+
+				// Window-size scale: scale down when smaller than thresholds, never up.
+				int win_w, win_h;
+				glfwGetWindowSize(window, &win_w, &win_h);
+				float scale_w = win_w < SCALE_THRESHOLD_W ? static_cast<float>(win_w) / SCALE_THRESHOLD_W : 1.0f;
+				float scale_h = win_h < SCALE_THRESHOLD_H ? static_cast<float>(win_h) / SCALE_THRESHOLD_H : 1.0f;
+				float windowScale = (std::min)(scale_w, scale_h);
+
+				// FontGlobalScale = windowScale / dpiScale.
+				// Fonts are rasterized at baseSize * dpiScale; dividing by
+				// dpiScale brings them back to logical baseSize, then
+				// windowScale applies the small-window shrink.
+				io.FontGlobalScale = windowScale / dpiScale;
+			}
+
+			// Check watchers (loadPct, casc, activeModule)
+			checkWatchers(window);
+
+			// Check cache size update timer
+			checkCacheSizeUpdate();
+
+			// Start the Dear ImGui frame
+			ImGui_ImplOpenGL3_NewFrame();
+			ImGui_ImplGlfw_NewFrame();
+			ImGui::NewFrame();
+
 			if (isCrashed) {
 				renderCrashScreen();
 			} else {
@@ -2479,7 +2552,9 @@ int main(int argc, char* argv[]) {
 				renderAppShell();
 			}
 		} catch (const std::exception& e) {
-			crash("ERR_RENDER", e.what());
+			crash("ERR_UNHANDLED_EXCEPTION", e.what());
+		} catch (...) {
+			crash("ERR_UNHANDLED_EXCEPTION", "Non-standard exception in main loop");
 		}
 
 		// Rendering
