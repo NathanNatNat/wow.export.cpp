@@ -467,10 +467,16 @@ void mounted() {
 		[&view]() -> std::string {
 			return std::format("Export textures as {}", view.config.value("exportTextureFormat", std::string("PNG")));
 		},
-		[](const std::string& file) {
-			nlohmann::json entry;
-			entry["fileName"] = file;
-			texture_exporter::exportFiles({entry}, core::view->casc, nullptr, true);
+		[](const std::vector<std::string>& files) {
+			// JS: process: files => textureExporter.exportFiles(files, true)
+			std::vector<nlohmann::json> entries;
+			entries.reserve(files.size());
+			for (const auto& file : files) {
+				nlohmann::json entry;
+				entry["fileName"] = file;
+				entries.push_back(std::move(entry));
+			}
+			texture_exporter::exportFiles(entries, core::view->casc, nullptr, true);
 		}
 	});
 }

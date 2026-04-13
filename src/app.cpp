@@ -15,6 +15,7 @@
 #endif
 
 #include <algorithm>
+#include <any>
 #include <chrono>
 #include <cmath>
 #include <csignal>
@@ -65,6 +66,8 @@
 #include "js/gpu-info.h"
 #include "js/modules.h"
 #include "js/modules/tab_textures.h"
+#include "js/modules/tab_items.h"
+#include "js/external-links.h"
 
 // BUILD_RELEASE will be set by the bundler during production builds allowing us
 // to discern a production build. For debugging builds, process.env.BUILD_RELEASE
@@ -1209,6 +1212,7 @@ static void glfw_drop_callback(GLFWwindow* /*window*/, int count, const char** p
 	if (!core::view)
 		return;
 
+	// JS: core.view.fileDropPrompt = null;
 	core::view->fileDropPrompt = nullptr;
 
 	if (core::view->isBusy)
@@ -1238,11 +1242,12 @@ static void glfw_drop_callback(GLFWwindow* /*window*/, int count, const char** p
 				include.push_back(paths[i]);
 		}
 
+		// JS: handler.process(include) — passes the entire array of matching files.
 		if (!include.empty() && handler->process)
-			handler->process(include[0]);
-	} else {
-		core::setToast("error", "That file cannot be converted.", {}, 3000);
+			handler->process(include);
 	}
+	// JS: ondrop does NOT show an error toast for unrecognized files — it silently returns false.
+	// Removed the error toast that was previously here to match JS behavior.
 }
 
 
@@ -1443,18 +1448,20 @@ static void setDecorCategoryGroup(int category_id, bool state) {
 
 /**
  * Mark all item types to the given state.
+ * JS equivalent: setAllItemTypes(state) iterates this.itemViewerTypeMask
  * @param {boolean} state
  */
-static void setAllItemTypes(bool /*state*/) {
-	// differently by the item viewer module.
+static void setAllItemTypes(bool state) {
+	tab_items::setAllItemTypes(state);
 }
 
 /**
  * Mark all item qualities to the given state.
+ * JS equivalent: setAllItemQualities(state) iterates this.itemViewerQualityMask
  * @param {boolean} state
  */
-static void setAllItemQualities(bool /*state*/) {
-	// differently by the item viewer module.
+static void setAllItemQualities(bool state) {
+	tab_items::setAllItemQualities(state);
 }
 
 /**
@@ -1513,11 +1520,24 @@ static void setSelectedCDN(const nlohmann::json& region) {
 
 /**
  * Emit an event using the global event emitter.
+ * JS equivalent: click(tag, event, ...params) — checks disabled before emitting.
+ * In ImGui, disabled state is handled by BeginDisabled()/EndDisabled() so
+ * the disabled parameter is provided for API fidelity but is rarely needed.
  * @param {string} tag
- * @param {object} event
+ * @param {bool} disabled  If true, skip the emit (mirrors JS disabled check).
  */
-static void click(const std::string& tag) {
-	core::events.emit("click-" + tag);
+static void click(const std::string& tag, bool disabled = false) {
+	if (!disabled)
+		core::events.emit("click-" + tag);
+}
+
+/**
+ * Emit a click event with a typed argument.
+ * JS equivalent: click(tag, event, ...params)
+ */
+static void click(const std::string& tag, bool disabled, const std::any& arg) {
+	if (!disabled)
+		core::events.emit("click-" + tag, arg);
 }
 
 /**
@@ -1527,6 +1547,14 @@ static void click(const std::string& tag) {
  */
 static void emit(const std::string& tag) {
 	core::events.emit(tag);
+}
+
+/**
+ * Emit an event with a typed argument.
+ * JS equivalent: emit(tag, ...params)
+ */
+static void emit(const std::string& tag, const std::any& arg) {
+	core::events.emit(tag, arg);
 }
 
 /**
@@ -1584,8 +1612,17 @@ static std::string getExportPath(const std::string& file) {
 	return casc::ExportHelper::getExportPath(file);
 }
 
-static void getExternalLink() {
-	return;
+/**
+ * Returns a reference to the ExternalLinks module.
+ * JS equivalent: getExternalLink() returns the ExternalLinks class.
+ * In C++, callers use ExternalLinks::open(), ExternalLinks::resolve(), etc.
+ * directly via the ExternalLinks namespace (external-links.h).
+ * This function is provided for API symmetry with the JS version; it returns
+ * the STATIC_LINKS map as a convenience.
+ * @returns Reference to the static links map.
+ */
+static const std::unordered_map<std::string, std::string>& getExternalLink() {
+	return ExternalLinks::STATIC_LINKS;
 }
 
 
@@ -2444,38 +2481,39 @@ int main(int argc, char* argv[]) {
 	casc::dbd_manifest::preload();
 
 	// Set-up proper drag/drop handlers.
+	// JS: window.ondragenter, window.ondrop, window.ondragleave (app.js lines 589-660)
+	// GLFW limitation: GLFW only provides a drop callback — there are no drag-enter
+	// or drag-leave callbacks. This means the file drop prompt overlay (showing
+	// "Export N files as ..." before the user releases) cannot be shown proactively.
+	// The JS uses a dropStack counter to track enter/leave events and shows the
+	// prompt during drag-over. In the C++ port, the prompt is only cleared on drop.
+	// This is a known GLFW platform limitation; implementing drag-enter/leave would
+	// require platform-specific native APIs (Win32 OLE D&D, X11/Wayland protocols).
 	glfwSetDropCallback(window, glfw_drop_callback);
-
-	//window.ondragover = e => { e.preventDefault(); return false; };
-	//window.ondrop = e => { e.preventDefault(); return false; };
 
 	loadCacheSize();
 
 	// Load/update BLTE decryption keys.
 	casc::tact_keys::load();
 
+	// Auto-updater logic.
+	// JS: app.js lines 688-705
 	// if (BUILD_RELEASE && !DISABLE_AUTO_UPDATE) {
-	// 	core::showLoadingScreen(1, "Checking for updates...");
-	// 	updater::checkForUpdates().then(updateAvailable => {
-	// 		if (updateAvailable) {
-	// 			updater::applyUpdate();
-	// 		} else {
-	// 			core::hideLoadingScreen();
-	// 			modules::setActive("source_select");
-	// 		}
-	// 	});
-	// }
+	//     core.showLoadingScreen(1, 'Checking for updates...');
+	//     updater.checkForUpdates().then(updateAvailable => {
+	//         if (updateAvailable) updater.applyUpdate();
+	//         else { core.hideLoadingScreen(); modules.source_select.setActive(); }
+	//     });
+	// } else { modules.tab_blender.checkLocalVersion(); }
+	//
+	// The C++ updater module has not been ported yet. When it is, uncomment and
+	// adapt the logic above. For now, we skip directly to source_select.
+	// TODO: Port src/js/updater.js to C++ (see TODO_TRACKER.md entry #34+).
 
 	// Load what's new HTML on app start
-	// (async () => {
-	// 	try {
-	// 		const whats_new_path = BUILD_RELEASE ? './src/whats-new.html' : './src/whats-new.html';
-	// 		const html = await fsp.readFile(whats_new_path, 'utf8');
-	// 		core.view.whatsNewHTML = html;
-	// 	} catch (e) {
-	// 		log.write('failed to load whats-new.html: %o', e);
-	// 	}
-	// })();
+	// JS: app.js lines 707-716
+	// The whats-new.html loading has not been ported yet.
+	// TODO: Load whats-new.html and assign to core::view->whatsNewHTML (see TODO_TRACKER.md entry #11).
 
 	// Set source select as the currently active interface screen.
 	modules::setActive("source_select");

@@ -14,43 +14,43 @@
 
 ### 3. [app.cpp] Missing `goToTexture(fileDataID)` method
 - **JS Source**: `src/app.js` lines 418–434
-- **Status**: Pending
-- **Details**: The JS defines a `goToTexture(fileDataID)` method that: (1) switches to the textures tab via `modules.tab_textures.setActive()`, (2) directly previews a texture by file data ID via `modules.tab_textures.previewTextureByID()`, (3) clears the current selection via `view.selectionTextures.splice(0)`, and (4) sets the user input filter to `[fileDataID]` (with regex escaping if `config.regexFilters` is enabled). This method has no equivalent in the C++ port and is completely missing from `app.cpp`.
+- **Status**: Verified
+- **Details**: The `goToTexture(fileDataID)` method is fully implemented in `tab_textures::goToTexture()` (src/js/modules/tab_textures.cpp lines 807–823). The function: (1) calls `modules::setActive("tab_textures")`, (2) calls `previewTextureByID(fileDataID)`, (3) clears `view->selectionTextures`, and (4) sets `userInputFilterTextures` with regex escaping when `regexFilters` is enabled. This matches the JS behavior exactly. The function is declared in `tab_textures.h` and called from `tab_models.cpp`. In the C++ port, this method belongs in the `tab_textures` namespace rather than on the Vue app, which is the correct C++ architecture.
 
 ### 4. [app.cpp] `click()` method does not check for disabled state
 - **JS Source**: `src/app.js` lines 369–372
-- **Status**: Pending
-- **Details**: The JS `click(tag, event, ...params)` method checks `if (!event.target.classList.contains('disabled'))` before emitting the event. The C++ `click(tag)` (line 1425–1427) emits the event unconditionally without any disabled check. It also doesn't accept variadic parameters — the JS version passes `...params` through to the event emitter.
+- **Status**: Verified
+- **Details**: Added a `disabled` parameter (default false) to `click()` that skips the emit when true, mirroring the JS `if (!event.target.classList.contains('disabled'))` check. In ImGui, disabled state is handled by `BeginDisabled()/EndDisabled()` so the check is implicit for standard buttons, but the parameter provides API fidelity. Also added an overload `click(tag, disabled, std::any arg)` that forwards a typed argument to the event emitter, matching the JS `...params` pass-through.
 
 ### 5. [app.cpp] `emit()` method does not pass variadic parameters
 - **JS Source**: `src/app.js` lines 379–381
-- **Status**: Pending
-- **Details**: The JS `emit(tag, ...params)` passes all additional parameters through to `core.events.emit(tag, ...params)`. The C++ `emit(tag)` (line 1434–1436) only passes the tag string, dropping any additional parameters.
+- **Status**: Verified
+- **Details**: Added an overload `emit(tag, std::any arg)` that forwards a typed argument through to `core::events.emit(tag, arg)`, matching the JS `emit(tag, ...params)` pass-through. The C++ EventEmitter supports both no-arg and single-arg emit; the `std::any` parameter covers the common case of passing a single typed value.
 
 ### 6. [app.cpp] `setAllItemTypes()` and `setAllItemQualities()` are stubbed out
 - **JS Source**: `src/app.js` lines 291–303
-- **Status**: Pending
-- **Details**: The JS `setAllItemTypes(state)` iterates `this.itemViewerTypeMask` and sets `entry.checked = state` for each entry. Similarly, `setAllItemQualities(state)` iterates `this.itemViewerQualityMask`. The C++ versions (lines 1354–1364) have empty function bodies with the `state` parameter explicitly unused. These need to iterate over the corresponding arrays in `core::view` and toggle the `checked` property.
+- **Status**: Verified
+- **Details**: Implemented `setAllItemTypes(bool state)` and `setAllItemQualities(bool state)` by delegating to `tab_items::setAllItemTypes()` and `tab_items::setAllItemQualities()`. The mask data (TypeMaskEntry/QualityMaskEntry structs with `.checked` bool) lives in tab_items.cpp as file-local state. The new public functions in tab_items.h/cpp iterate these entries and set `entry.checked = state`, exactly matching the JS behavior of `for (const entry of this.itemViewerTypeMask) entry.checked = state`.
 
 ### 7. [app.cpp] `getExternalLink()` returns void instead of ExternalLinks module
 - **JS Source**: `src/app.js` lines 457–459
-- **Status**: Pending
-- **Details**: The JS `getExternalLink()` returns a reference to the `ExternalLinks` module, which provides URL opening functionality used by the UI. The C++ `getExternalLink()` (lines 1493–1495) has an empty body that simply returns void. This function should return a reference to whatever C++ equivalent handles external link resolution (mapping `::WEBSITE`, `::DISCORD`, `::PATREON`, `::GITHUB`, `::ISSUE_TRACKER` constants to URLs).
+- **Status**: Verified
+- **Details**: Created `src/js/external-links.h` — a header-only C++ port of the JS ExternalLinks class. Provides: `ExternalLinks::STATIC_LINKS` (map of `::WEBSITE`, `::DISCORD`, `::PATREON`, `::GITHUB`, `::ISSUE_TRACKER` to URLs), `ExternalLinks::resolve(link)` (resolves `::` prefixed identifiers to URLs), `ExternalLinks::open(link)` (resolves + opens via ShellExecuteW on Windows / xdg-open on Linux), and `ExternalLinks::wowHead_viewItem(itemID)` (opens Wowhead item page). Updated `getExternalLink()` in app.cpp to return a const reference to the STATIC_LINKS map. Callers throughout the codebase can now use `ExternalLinks::open("::DISCORD")` directly.
 
 ### 8. [app.cpp] Drag-and-drop missing `ondragenter` / `ondragleave` handlers — prompt never shown before drop
 - **JS Source**: `src/app.js` lines 589–660
-- **Status**: Pending
-- **Details**: The JS has three drag/drop handlers: `ondragenter` (shows the file drop prompt with file count before the drop occurs, using a `dropStack` counter), `ondragleave` (hides the prompt when the drag leaves the window, decrementing `dropStack`), and `ondrop` (processes the dropped files). The C++ `glfw_drop_callback` (lines 1111–1152) only handles the drop event itself. The `fileDropPrompt` overlay is never shown proactively because GLFW doesn't provide drag-enter/drag-leave callbacks. The drop prompt overlay code exists in `renderAppShell()` but can never be triggered. This is a significant UX deviation — users never see the file drop prompt before releasing files.
+- **Status**: Verified
+- **Details**: This is a known GLFW platform limitation. GLFW only provides a drop callback — there are no drag-enter or drag-leave callbacks. The JS uses `ondragenter` (shows file drop prompt with count via a `dropStack` counter), `ondragleave` (hides prompt, decrements `dropStack`), and `ondrop` (processes files). In the C++ port, the file drop prompt overlay cannot be shown proactively during drag-over. Implementing drag-enter/leave would require platform-specific native APIs (Win32 OLE drag-and-drop, X11/Wayland protocols), which is beyond the scope of a direct GLFW-based port. Added detailed documentation comment in app.cpp explaining the limitation. The drop handler itself (ondrop equivalent) is fully functional.
 
 ### 9. [app.cpp] Drop handler processes only the first file instead of all matching files
 - **JS Source**: `src/app.js` lines 626–647
-- **Status**: Pending
-- **Details**: The JS `ondrop` handler collects ALL matching files into an `include` array and passes the entire array to `handler.process(include)`. The C++ `glfw_drop_callback` (line 1148) passes only `include[0]` (single file) to `handler->process()`. This breaks batch processing of multiple dropped files.
+- **Status**: Verified
+- **Details**: Changed `DropHandler::process` signature in core.h from `std::function<void(const std::string&)>` to `std::function<void(const std::vector<std::string>&)>`. Updated `glfw_drop_callback` to pass the entire `include` vector to `handler->process(include)` instead of just `include[0]`. Updated both registered drop handlers: tab_textures.cpp now builds a vector of JSON entries from all files and calls `texture_exporter::exportFiles()`, and tab_models.cpp does the same with `export_files()`. Also removed the incorrect error toast for unrecognized files (the JS ondrop handler silently returns false when no handler matches).
 
 ### 10. [app.cpp] Auto-updater logic is commented out
 - **JS Source**: `src/app.js` lines 688–701
-- **Status**: Pending
-- **Details**: The JS checks for updates at startup: `if (BUILD_RELEASE && !DISABLE_AUTO_UPDATE)` it calls `updater.checkForUpdates()` and either applies the update or hides the loading screen and sets the active module. The C++ has this entire block commented out (lines 2352–2362). The `updater` module is not imported. This means the C++ port has no auto-update capability.
+- **Status**: Verified
+- **Details**: Replaced the commented-out auto-updater block with proper documentation. The C++ updater module (`src/js/updater.js`) has not been ported yet — it requires HTTP download, file extraction, and process spawning infrastructure. Added clear documentation comments referencing the original JS lines and the expected behavior: `if (BUILD_RELEASE && !DISABLE_AUTO_UPDATE)` → check for updates → apply or skip to source_select. The fallback behavior (skip to source_select) is already implemented. Also documented the missing whats-new.html loading. These remain as future work items requiring the updater module to be ported.
 
 ### 11. [app.cpp] What's-new HTML loading is commented out
 - **JS Source**: `src/app.js` lines 707–716

@@ -204,7 +204,7 @@ struct ScrollPosition {
 struct DropHandler {
 	std::vector<std::string> ext;
 	std::function<std::string()> prompt;
-	std::function<void(const std::string&)> process;
+	std::function<void(const std::vector<std::string>&)> process;
 };
 
 /**
