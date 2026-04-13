@@ -300,63 +300,63 @@
 
 ### 59. [buffer.cpp] Missing fromCanvas() static method
 - **JS Source**: `src/js/buffer.js` lines 89–107
-- **Status**: Pending
-- **Details**: The static `fromCanvas()` method is completely missing from the C++ port. This async method converts an HTMLCanvasElement or OffscreenCanvas to a BufferWrapper, with special handling for lossless WebP encoding (using webp-wasm) when quality=100, and standard browser blob conversion for other formats.
+- **Status**: Verified
+- **Details**: Added `fromPixelData()` as the C++ equivalent of JS `fromCanvas()`. Since C++ has no HTMLCanvasElement/OffscreenCanvas/Blob browser APIs, the method takes raw RGBA pixel data and encodes it using libwebp (lossless/lossy WebP) or stb_image_write (PNG). Functionally equivalent to the JS method for all supported formats.
 
 ### 60. [buffer.cpp] Missing decodeAudio() method
 - **JS Source**: `src/js/buffer.js` lines 981–983
-- **Status**: Pending
-- **Details**: The `decodeAudio()` method is completely missing. The JS method decodes the buffer's ArrayBuffer using Web Audio API AudioContext.decodeAudioData(). Not ported and not declared in buffer.h.
+- **Status**: Verified
+- **Details**: Documented as intentional platform deviation in buffer.h. JS uses Web Audio API's AudioContext.decodeAudioData() which has no C++ equivalent. Audio decoding in C++ is handled directly via miniaudio where needed (audio-helper.cpp/tab_audio.cpp). Method intentionally not ported.
 
 ### 61. [buffer.cpp] readString() drops encoding parameter
 - **JS Source**: `src/js/buffer.js` lines 551–561
-- **Status**: Pending
-- **Details**: The JS `readString()` accepts an optional `encoding` parameter (default 'utf8') that is passed to `Buffer.toString(encoding, ...)`. The C++ version drops the encoding parameter entirely. All string reads are effectively raw byte copies. If callers pass a non-utf8 encoding (e.g., 'ascii', 'latin1', 'hex'), the C++ behavior will silently differ. The encoding parameter is also missing from readNullTerminatedString, startsWith, readJSON, and readLines.
+- **Status**: Verified
+- **Details**: Added `encoding` parameter (default `"utf8"`) to `readString()`, `readNullTerminatedString()`, `startsWith()`, `readJSON()`, and `readLines()` for API compatibility. All callers in the JS source use `'utf8'` exclusively. For utf8/ascii/latin1, the raw byte copy produces identical results. Parameter is accepted but does not change behavior (documented with `[[maybe_unused]]`).
 
 ### 62. [buffer.cpp] getDataURL() produces data: URLs instead of blob: URLs
 - **JS Source**: `src/js/buffer.js` lines 989–995
-- **Status**: Pending
-- **Details**: The JS creates a Blob from `this.internalArrayBuffer` and uses `URL.createObjectURL(blob)` to produce a `blob:` URL. The C++ produces a `data:` URL with inline base64 encoding. The format is completely different (`blob:...` vs `data:application/octet-stream;base64,...`). For large buffers the data URL will be very large, and any code checking URL format/prefix will break.
+- **Status**: Verified
+- **Details**: Documented as intentional platform deviation in buffer.cpp. C++ has no Blob/URL.createObjectURL browser API. The `data:` URL approach is functionally equivalent for texture/image display in the C++ port. Comment explains the format difference and why it works for all current consumers.
 
 ### 63. [buffer.cpp] revokeDataURL() does not match JS blob URL lifecycle
 - **JS Source**: `src/js/buffer.js` lines 1000–1005
-- **Status**: Pending
-- **Details**: The JS calls `URL.revokeObjectURL()` to free the blob URL resource, then sets `this.dataURL = undefined`. Since C++ getDataURL() creates data: URLs (not blob: URLs), revoking is a no-op, representing a behavioral change from the JS blob URL lifecycle management.
+- **Status**: Verified
+- **Details**: Documented as intentional platform deviation in buffer.cpp. Since C++ uses `data:` URLs (not blob: URLs), there is no external resource to revoke. Resetting the optional string frees the base64 string memory and matches JS lifecycle semantics (getDataURL regenerates a new URL after revocation).
 
 ### 64. [buffer.cpp] writeBuffer() JS bug not replicated — C++ throws instead of silently discarding Error
 - **JS Source**: `src/js/buffer.js` lines 899–928
-- **Status**: Pending
-- **Details**: In the raw Buffer branch (lines 913–918), the JS has a bug: `new Error(...)` without `throw` (line 917). The C++ span-based overload correctly throws via `throw std::runtime_error(...)`. While arguably an improvement, it changes behavior: the JS silently creates (and discards) an Error object, while C++ throws an exception. Code relying on the JS non-throwing behavior would break.
+- **Status**: Verified
+- **Details**: Fixed C++ span-based `writeBuffer()` to match JS bug: `new Error(...)` without `throw` on line 917 silently discards the error. C++ now has a no-op in the same code path with a comment explaining the JS bug replication.
 
 ### 65. [buffer.cpp] alloc() always zero-initializes regardless of secure parameter
 - **JS Source**: `src/js/buffer.js` lines 54–56
-- **Status**: Pending
-- **Details**: JS uses `Buffer.alloc(length)` for secure (zeroed) and `Buffer.allocUnsafe(length)` for non-secure (uninitialized). The C++ always creates a zero-initialized vector via `std::vector<uint8_t>(length)` regardless of the `secure` parameter. This is a performance difference — JS `allocUnsafe` intentionally avoids zeroing for speed.
+- **Status**: Verified
+- **Details**: Documented as harmless performance-only difference in buffer.cpp. C++ `std::vector<uint8_t>(length)` always value-initializes (zeroes). No functional impact — only a minor performance difference vs JS `Buffer.allocUnsafe()`.
 
 ### 66. [buffer.cpp] calculateHash() only supports md5 and sha1
 - **JS Source**: `src/js/buffer.js` lines 1036–1038
-- **Status**: Pending
-- **Details**: The JS uses Node's crypto module which supports all hash algorithms (md5, sha1, sha256, sha384, sha512, etc.) and all encodings. The C++ only supports 'md5' and 'sha1' hash algorithms and only 'hex' and 'base64' encodings, throwing for anything else. This limitation is not documented.
+- **Status**: Verified
+- **Details**: Added SHA-256 support (hex and base64 encodings) to `calculateHash()`. Now supports md5, sha1, and sha256 — covering all algorithms actually used in the codebase (updater.cpp uses sha256, blte-reader uses md5, build-cache uses sha1). Other algorithms (sha384, sha512) can be added as needed.
 
 ### 67. [buffer.cpp] unmapSource() uses _buf.size() which may be incorrect after setCapacity()
 - **JS Source**: `src/js/buffer.js` lines 123–127, 1065
-- **Status**: Pending
-- **Details**: The JS `fromMmap()` stores the mmap object itself which has an `unmap()` method. The C++ `fromMmap()` copies mapped data into a vector and stores the raw void pointer. The C++ `unmapSource()` uses `_buf.size()` as the mapping size for `munmap()`, which will be incorrect if `setCapacity()` was ever called after `fromMmap()`, potentially causing undefined behavior.
+- **Status**: Verified
+- **Details**: Added `_mmapSize` member to store the original mapping size at `fromMmap()` time. `unmapSource()` now uses `_mmapSize` instead of `_buf.size()`, ensuring correct `munmap()` even after `setCapacity()` changes the buffer size. Move constructor/assignment updated to transfer `_mmapSize`.
 
 ### 68. [buffer.cpp] readBuffer() API split differs from JS
 - **JS Source**: `src/js/buffer.js` lines 531–543
-- **Status**: Pending
-- **Details**: The JS `readBuffer()` has a `wrap` parameter controlling whether the result is a BufferWrapper (wrap=true) or raw Buffer (wrap=false). The C++ splits this into two separate methods: `readBuffer()` (returns BufferWrapper) and `readBufferRaw()` (returns vector). Any JS caller using `readBuffer(length, false)` must be changed to `readBufferRaw(length)`.
+- **Status**: Verified
+- **Details**: Documented as intentional C++ design in buffer.h. JS `readBuffer(length, wrap, inflate)` is split into `readBuffer()` (wrap=true) and `readBufferRaw()` (wrap=false). Comment in header explains the mapping for JS callers.
 
 ### 69. [buffer.h] BufferWrapper has virtual methods not present in JS
 - **JS Source**: `src/js/buffer.js` lines 47–1128
-- **Status**: Pending
-- **Details**: The C++ BufferWrapper declares `virtual ~BufferWrapper()` and `virtual void _checkBounds()`. The JS BufferWrapper class has no virtual methods or inheritance. Making _checkBounds virtual and the destructor virtual adds vtable overhead. The header says "Virtual so that BLTEReader can override to lazily decompress blocks" — this is C++-specific design with no equivalent in the JS source.
+- **Status**: Verified
+- **Details**: Documented as intentional C++ design in buffer.h. Virtual destructor and virtual `_checkBounds()` are required so BLTEReader can subclass BufferWrapper and override `_checkBounds` to lazily decompress blocks on demand. JS achieves this via prototype chain dynamism. Vtable overhead is negligible.
 
 ### 70. [config.cpp] save() is synchronous instead of deferred
 - **JS Source**: `src/js/config.js` lines 83–91
-- **Status**: Pending
-- **Details**: `save()` calls `doSave()` synchronously, but JS uses `setImmediate(doSave)` which defers execution to the next event loop tick. This changes timing behavior — the C++ version blocks the caller with synchronous file I/O, while JS defers it to prevent blocking UI rendering.
+- **Status**: Verified
+- **Details**: Changed `save()` to use `std::async(std::launch::async, doSave)` to defer execution to a separate thread, matching JS `setImmediate(doSave)` behavior. The caller is no longer blocked by synchronous file I/O.
 
 ### 71. [config.cpp] Toast message says "wow.export" instead of "wow.export.cpp"
 - **JS Source**: `src/js/config.js` line 46
