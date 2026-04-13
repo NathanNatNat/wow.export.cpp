@@ -126,7 +126,11 @@ WMOTextureExportResult WMOLegacyExporter::exportTextures(
 				// legacy mpq exports always use flat textures alongside model for compatibility
 				std::filesystem::path texPath = outDir / texFile;
 
-				std::string matName = "mat_" + std::filesystem::path(toLower(texturePath)).stem().string();
+				// JS: path.basename(texturePath.toLowerCase(), '.blp') — only strips .blp extension
+				std::string lowerBase = std::filesystem::path(toLower(texturePath)).filename().string();
+				if (lowerBase.size() > 4 && lowerBase.substr(lowerBase.size() - 4) == ".blp")
+					lowerBase = lowerBase.substr(0, lowerBase.size() - 4);
+				std::string matName = "mat_" + lowerBase;
 				if (config.value("removePathSpaces", false)) {
 					std::erase_if(matName, [](char c) { return std::isspace(static_cast<unsigned char>(c)); });
 				}
@@ -205,9 +209,9 @@ void WMOLegacyExporter::exportAsOBJ(
 	size_t maxLayerCount = 0;
 
 	std::set<uint32_t> mask;
-	bool hasMask = !groupMask.empty();
+	bool hasMask = groupMask.has_value();
 	if (hasMask) {
-		for (const auto& group : groupMask) {
+		for (const auto& group : *groupMask) {
 			if (group.checked)
 				mask.insert(group.groupIndex);
 		}
@@ -285,7 +289,7 @@ void WMOLegacyExporter::exportAsOBJ(
 			const auto& batch = group->renderBatches[bI];
 			std::vector<uint32_t> indices(batch.numFaces);
 
-			for (uint16_t i = 0; i < batch.numFaces; i++)
+			for (uint32_t i = 0; i < batch.numFaces; i++)
 				indices[i] = group->indices[batch.firstFace + i] + static_cast<uint32_t>(indOfs);
 
 			const int matID = ((batch.flags & 2) == 2) ? static_cast<int>(batch.possibleBox2[2]) : static_cast<int>(batch.materialID);
@@ -313,7 +317,7 @@ void WMOLegacyExporter::exportAsOBJ(
 
 		const auto& doodadSets = wmo->doodadSets;
 		for (size_t i = 0, n = doodadSets.size(); i < n; i++) {
-			if (i >= doodadSetMask.size() || !doodadSetMask[i].checked)
+			if (!doodadSetMask.has_value() || i >= doodadSetMask->size() || !(*doodadSetMask)[i].checked)
 				continue;
 
 			const auto& set = doodadSets[i];
@@ -542,9 +546,9 @@ void WMOLegacyExporter::exportAsSTL(
 	size_t nInd = 0;
 
 	std::set<uint32_t> mask;
-	bool hasMask = !groupMask.empty();
+	bool hasMask = groupMask.has_value();
 	if (hasMask) {
-		for (const auto& group : groupMask) {
+		for (const auto& group : *groupMask) {
 			if (group.checked)
 				mask.insert(group.groupIndex);
 		}
@@ -600,7 +604,7 @@ void WMOLegacyExporter::exportAsSTL(
 			const auto& batch = group->renderBatches[bI];
 			std::vector<uint32_t> indices(batch.numFaces);
 
-			for (uint16_t i = 0; i < batch.numFaces; i++)
+			for (uint32_t i = 0; i < batch.numFaces; i++)
 				indices[i] = group->indices[batch.firstFace + i] + static_cast<uint32_t>(indOfs);
 
 			stl.addMesh(groupName + std::to_string(bI), indices);
@@ -699,11 +703,11 @@ void WMOLegacyExporter::exportRaw(
 			if (helper && helper->isCancelled())
 				return;
 
-			// Replace .wmo with _NNN.wmo
+			// Replace first occurrence of .wmo with _NNN.wmo (matches JS String.replace)
 			std::ostringstream oss;
 			oss << std::setfill('0') << std::setw(3) << i;
 			std::string groupFileName = filePath;
-			auto wmoPos = groupFileName.rfind(".wmo");
+			auto wmoPos = groupFileName.find(".wmo");
 			if (wmoPos != std::string::npos)
 				groupFileName = groupFileName.substr(0, wmoPos) + "_" + oss.str() + ".wmo";
 
