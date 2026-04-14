@@ -85,12 +85,21 @@ void render(const char* id, float value, SliderState& state,
 	ImGui::PushID(id);
 
 	const ImVec2 availSize = ImGui::GetContentRegionAvail();
-	const float sliderHeight = 20.0f;
+	const float sliderHeight = 20.0f;   // CSS: .ui-slider { height: 20px; }
+	const float handleHeight = 28.0f;   // CSS: .handle { height: 28px; }
 	const float sliderWidth = availSize.x;
-	const float handleWidth = 10.0f;
+	const float handleWidth = 10.0f;    // CSS: .handle { width: 10px; }
+	const float verticalOverhang = (handleHeight - sliderHeight) * 0.5f; // Handle extends beyond track
 
-	// Begin a child region for the slider.
-	ImGui::BeginChild("##slider_container", ImVec2(sliderWidth, sliderHeight), ImGuiChildFlags_None,
+	// CSS: .ui-slider { margin: 4px 0; } — top margin
+	ImGui::Dummy(ImVec2(0.0f, 4.0f));
+
+	// Total height includes the handle overhang on both sides.
+	const float totalHeight = handleHeight;
+	const float trackOffsetY = verticalOverhang; // Track is vertically centered within total area
+
+	// Begin a child region for the slider (sized to fit handle overhang).
+	ImGui::BeginChild("##slider_container", ImVec2(sliderWidth, totalHeight), ImGuiChildFlags_None,
 	                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 	const ImVec2 winPos = ImGui::GetWindowPos();
@@ -107,42 +116,72 @@ void render(const char* id, float value, SliderState& state,
 			stopMouse(state);
 	}
 
-	// <div class="ui-slider" @click="handleClick">
-	// Track background.
-	const ImVec2 trackMin(winPos.x, winPos.y + sliderHeight * 0.3f);
-	const ImVec2 trackMax(winPos.x + sliderWidth, winPos.y + sliderHeight * 0.7f);
-	drawList->AddRectFilled(trackMin, trackMax, app::theme::SLIDER_TRACK_U32, 3.0f);
+	// --- Track (CSS: .ui-slider) ---
+	// Track background: full 20px height, vertically centered within the child region.
+	const ImVec2 trackMin(winPos.x, winPos.y + trackOffsetY);
+	const ImVec2 trackMax(winPos.x + sliderWidth, winPos.y + trackOffsetY + sliderHeight);
 
-	// <div class="fill" :style="{ width: (modelValue * 100) + '%' }"></div>
-	// Fill bar.
+	// CSS: box-shadow: black 0 0 1px — approximate with a slightly larger dark rect behind the track
+	drawList->AddRectFilled(
+		ImVec2(trackMin.x - 1.0f, trackMin.y - 1.0f),
+		ImVec2(trackMax.x + 1.0f, trackMax.y + 1.0f),
+		IM_COL32(0, 0, 0, 128));
+
+	// Track background fill
+	drawList->AddRectFilled(trackMin, trackMax, app::theme::SLIDER_TRACK_U32);
+
+	// CSS: border: 1px solid var(--border)
+	drawList->AddRect(trackMin, trackMax, app::theme::BORDER_U32, 0.0f, 0, 1.0f);
+
+	// --- Fill bar (CSS: .ui-slider .fill) ---
+	// CSS: position: absolute; top: 0; left: 0; bottom: 0; — fills full height of the track
 	const float fillWidth = sliderWidth * value;
 	if (fillWidth > 0.0f) {
-		const ImVec2 fillMin(winPos.x, winPos.y + sliderHeight * 0.3f);
-		const ImVec2 fillMax(winPos.x + fillWidth, winPos.y + sliderHeight * 0.7f);
-		drawList->AddRectFilled(fillMin, fillMax, app::theme::BUTTON_BASE_U32, 3.0f);
+		const ImVec2 fillMin(winPos.x, winPos.y + trackOffsetY);
+		const ImVec2 fillMax(winPos.x + fillWidth, winPos.y + trackOffsetY + sliderHeight);
+		drawList->AddRectFilled(fillMin, fillMax, app::theme::SLIDER_FILL_U32);
 	}
 
-	// <div class="handle" ref="handle" @mousedown="startMouse" :style="{ left: (modelValue * 100) + '%' }"></div>
-	// Handle.
-	const float handleX = winPos.x + fillWidth - handleWidth * 0.5f;
+	// --- Handle (CSS: .ui-slider .handle) ---
+	// CSS: left: (modelValue * 100) + '%' — left edge at value position (no translateX centering)
+	// CSS: top: 50%; transform: translateY(-50%) — vertically centered
+	const float handleX = winPos.x + fillWidth;
 	const ImVec2 handleMin(handleX, winPos.y);
-	const ImVec2 handleMax(handleX + handleWidth, winPos.y + sliderHeight);
-	const bool handleHovered = ImGui::IsMouseHoveringRect(handleMin, handleMax) || state.isScrolling;
-	const ImU32 handleColor = handleHovered
+	const ImVec2 handleMax(handleX + handleWidth, winPos.y + handleHeight);
+
+	// CSS: .handle:hover — hover only when actually hovering, NOT during drag (TODO 420)
+	const bool handleActuallyHovered = ImGui::IsMouseHoveringRect(handleMin, handleMax);
+
+	// CSS: box-shadow: black 0 0 8px — approximate shadow behind the handle
+	drawList->AddRectFilled(
+		ImVec2(handleMin.x - 2.0f, handleMin.y - 2.0f),
+		ImVec2(handleMax.x + 2.0f, handleMax.y + 2.0f),
+		IM_COL32(0, 0, 0, 80));
+
+	// Handle color: default = var(--border), hover = var(--font-alt)
+	const ImU32 handleColor = handleActuallyHovered
 		? app::theme::SLIDER_THUMB_ACTIVE_U32
 		: app::theme::SLIDER_THUMB_U32;
-	drawList->AddRectFilled(handleMin, handleMax, handleColor, 3.0f);
+	drawList->AddRectFilled(handleMin, handleMax, handleColor);
 
-	// Handle mouse-down on the handle.
-	if (ImGui::IsMouseHoveringRect(handleMin, handleMax) && ImGui::IsMouseClicked(0)) {
+	// CSS: cursor: pointer — show hand cursor on handle hover (TODO 421)
+	if (handleActuallyHovered)
+		ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+	// Handle mouse-down on the handle — start dragging.
+	if (handleActuallyHovered && ImGui::IsMouseClicked(0)) {
 		startMouse(io.MousePos.x, value, state);
 	}
 
 	// Click on the track (not the handle) — jump to position.
+	// JS: @click="handleClick" — fires on click (mousedown + mouseup on same element),
+	// so we use IsMouseReleased instead of IsMouseClicked (TODO 419).
 	// Don't handle click events on the draggable handle.
-	if (!state.isScrolling && !ImGui::IsMouseHoveringRect(handleMin, handleMax) &&
-	    ImGui::IsMouseHoveringRect(ImVec2(winPos.x, winPos.y), ImVec2(winPos.x + sliderWidth, winPos.y + sliderHeight)) &&
-	    ImGui::IsMouseClicked(0)) {
+	const ImVec2 sliderAreaMin(winPos.x, winPos.y + trackOffsetY);
+	const ImVec2 sliderAreaMax(winPos.x + sliderWidth, winPos.y + trackOffsetY + sliderHeight);
+	if (!state.isScrolling && !handleActuallyHovered &&
+	    ImGui::IsMouseHoveringRect(sliderAreaMin, sliderAreaMax) &&
+	    ImGui::IsMouseReleased(0)) {
 		const float clickOffsetX = io.MousePos.x - winPos.x;
 		const float newValue = handleClick(clickOffsetX, sliderWidth);
 		if (onChange)
@@ -150,6 +189,10 @@ void render(const char* id, float value, SliderState& state,
 	}
 
 	ImGui::EndChild();
+
+	// CSS: .ui-slider { margin: 4px 0; } — bottom margin
+	ImGui::Dummy(ImVec2(0.0f, 4.0f));
+
 	ImGui::PopID();
 }
 

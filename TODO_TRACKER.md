@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 415/567 verified (73%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 427/567 verified (75%)** — ✅ = Verified, ⬜ = Pending
 
 ---
 
@@ -2049,64 +2049,64 @@
 - **Status**: Verified
 - **Details**: JS template is `<div><slot></slot></div>`, a wrapper div observed by the `ResizeObserver`. C++ (lines 24–44) has no `ImGui::BeginGroup()`/`EndGroup()` or `BeginChild()`/`EndChild()` wrapping. Width is measured from the parent's content region, not a dedicated wrapper. If content changes the layout, the measured width may not correspond to what the JS wrapper div would report.
 
-### ⬜ 410. [slider.cpp] Fill bar spans only middle 40% instead of full height
+### ✅ 410. [slider.cpp] Fill bar spans only middle 40% instead of full height
 - **JS Source**: CSS `app.css` lines 1267–1274
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: CSS `.ui-slider .fill` has `top: 0; bottom: 0;` filling the entire 20px container height. C++ (lines 120–121) draws fill rect from `sliderHeight * 0.3f` to `sliderHeight * 0.7f` (only middle 40%). Visual fidelity error.
 
-### ⬜ 411. [slider.cpp] Track background spans only middle 40% instead of full height
+### ✅ 411. [slider.cpp] Track background spans only middle 40% instead of full height
 - **JS Source**: CSS `app.css` lines 1259–1266
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: CSS `.ui-slider` is a full 20px-tall box with background and border. C++ (lines 112–114) draws only a narrow stripe in the center. Both the background area and the border are missing.
 
-### ⬜ 412. [slider.cpp] Track color is wrong — `(80,80,80)` instead of CSS `#2c3136` `(44,49,54)`
+### ✅ 412. [slider.cpp] Track color is wrong — `(80,80,80)` instead of CSS `#2c3136` `(44,49,54)`
 - **JS Source**: CSS `app.css` line 1264
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: CSS `.ui-slider` background is `var(--background-dark)` = `#2c3136` = `RGB(44, 49, 54)`. C++ `SLIDER_TRACK_U32 = IM_COL32(80, 80, 80, 255)` (app.h line 117) is `RGB(80, 80, 80)`. Significant color mismatch.
 
-### ⬜ 413. [slider.cpp] Fill color is wrong — green `(34,181,73)` instead of blue `#57afe2` `(87,175,226)`
+### ✅ 413. [slider.cpp] Fill color is wrong — green `(34,181,73)` instead of blue `#57afe2` `(87,175,226)`
 - **JS Source**: CSS `app.css` line 1273
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: CSS `.fill` background is `var(--font-alt)` = `#57afe2` = `RGB(87, 175, 226)` (blue). C++ uses `BUTTON_BASE_U32 = IM_COL32(34, 181, 73, 255)` (green). Major color mismatch.
 
-### ⬜ 414. [slider.cpp] Handle colors are wrong — default and hover
+### ✅ 414. [slider.cpp] Handle colors are wrong — default and hover
 - **JS Source**: CSS `app.css` lines 1283, 1287–1288
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: CSS `.handle` background is `var(--border)` = `#6c757d` = `RGB(108, 117, 125)`. CSS `.handle:hover` is `var(--font-alt)` = `#57afe2` = `RGB(87, 175, 226)`. C++ `SLIDER_THUMB_U32 = IM_COL32(200, 200, 200, 200)` and `SLIDER_THUMB_ACTIVE_U32 = IM_COL32(255, 255, 255, 220)`. Both default and hover handle colors are wrong.
 
-### ⬜ 415. [slider.cpp] Handle height is 20px instead of CSS 28px — no vertical overhang
+### ✅ 415. [slider.cpp] Handle height is 20px instead of CSS 28px — no vertical overhang
 - **JS Source**: CSS `app.css` line 1278
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: CSS `.handle` height is `28px`, deliberately taller than the 20px container, vertically centered via `transform: translateY(-50%)`. C++ handle (lines 89, 129) equals `sliderHeight` (20px) with no overhang or centering.
 
-### ⬜ 416. [slider.cpp] Handle horizontal positioning center-aligned instead of left-edge-aligned
+### ✅ 416. [slider.cpp] Handle horizontal positioning center-aligned instead of left-edge-aligned
 - **JS Source**: `src/js/components/slider.js` line 97
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS handle `left` is `(modelValue * 100) + '%'` — the handle's left edge is at the value position with no `translateX`. C++ (line 127) centers the handle on the value point: `handleX = winPos.x + fillWidth - handleWidth * 0.5f`. At `value=1.0`, JS handle left edge is at 100% while C++ handle center is at 100%, creating positioning difference.
 
-### ⬜ 417. [slider.cpp] Handle box-shadow, slider border, and slider box-shadow all missing
+### ✅ 417. [slider.cpp] Handle box-shadow, slider border, and slider box-shadow all missing
 - **JS Source**: CSS `app.css` lines 1263, 1265, 1282
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: CSS `.handle` has `box-shadow: black 0 0 8px`, `.ui-slider` has `border: 1px solid var(--border)` and `box-shadow: black 0 0 1px`. None of these are rendered in the C++ version. Only `AddRectFilled` is used; no border (`AddRect`) or shadow effects exist.
 
-### ⬜ 418. [slider.cpp] Slider margin missing — no 4px vertical spacing
+### ✅ 418. [slider.cpp] Slider margin missing — no 4px vertical spacing
 - **JS Source**: CSS `app.css` line 1262
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: CSS `.ui-slider` has `margin: 4px 0`. C++ (lines 86–93) has no spacing or margin before or after the slider.
 
-### ⬜ 419. [slider.cpp] Track click fires on mousedown instead of click event
+### ✅ 419. [slider.cpp] Track click fires on mousedown instead of click event
 - **JS Source**: `src/js/components/slider.js` line 95
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `@click="handleClick"` fires on `click` event (mousedown + mouseup on same element). C++ (line 145) uses `ImGui::IsMouseClicked(0)` which fires on the frame the mouse button is pressed down. If the user presses on the track then drags away before releasing, JS does not fire but C++ would have already jumped the value.
 
-### ⬜ 420. [slider.cpp] Handle hover state persists during entire drag
+### ✅ 420. [slider.cpp] Handle hover state persists during entire drag
 - **JS Source**: `src/js/components/slider.js` line 97, CSS `app.css` line 1287
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS handle hover style only applies via CSS `:hover` pseudo-class. When dragging and the cursor leaves the handle, the hover style is lost. C++ (line 130) `handleHovered` is true if hovered OR `state.isScrolling`, so the active color persists during the entire drag even when the cursor is far from the handle.
 
-### ⬜ 421. [slider.cpp] Missing `cursor: pointer` on handle hover
+### ✅ 421. [slider.cpp] Missing `cursor: pointer` on handle hover
 - **JS Source**: CSS `app.css` line 1284
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: CSS `.handle` has `cursor: pointer`. The mouse cursor should change to a pointer when hovering the handle. ImGui supports `ImGui::SetMouseCursor(ImGuiMouseCursor_Hand)` but this is not called in slider.cpp.
 
 ### ⬜ 422. [module_test_a.cpp] Entire file is unconverted JavaScript
