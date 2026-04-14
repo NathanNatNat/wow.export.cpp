@@ -19,6 +19,7 @@ License: MIT
 #include <algorithm>
 #include <cstring>
 #include <format>
+#include <stdexcept>
 
 static const float UV_BUFFER_DATA[] = {
 	0.0f, 1.0f,
@@ -315,7 +316,7 @@ void CharMaterialRenderer::compileShaders() {
 		glGetShaderInfoLog(vertShader, sizeof(infoLog), nullptr, infoLog);
 		logging::write(std::format("Vertex shader failed to compile: {}", infoLog));
 		glDeleteShader(vertShader);
-		return;
+		throw std::runtime_error("Failed to compile vertex shader");
 	}
 
 	// Compile fragment shader.
@@ -331,7 +332,7 @@ void CharMaterialRenderer::compileShaders() {
 		logging::write(std::format("Fragment shader failed to compile: {}", infoLog));
 		glDeleteShader(vertShader);
 		glDeleteShader(fragShader);
-		return;
+		throw std::runtime_error("Failed to compile fragment shader");
 	}
 
 	// Attach shaders.
@@ -348,7 +349,7 @@ void CharMaterialRenderer::compileShaders() {
 		logging::write(std::format("Unable to link shader program: {}", infoLog));
 		glDeleteShader(vertShader);
 		glDeleteShader(fragShader);
-		return;
+		throw std::runtime_error("Failed to link shader program");
 	}
 
 	// Shaders can be detached/deleted after linking

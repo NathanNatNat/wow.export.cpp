@@ -311,95 +311,95 @@
 
 ## src/js/3D/renderers Audit (0/51 ✅)
 
-### ⬜ 453. [CharMaterialRenderer.cpp] `setTextureTarget()` flattened parameter signature loses structured data
+### ✅ 453. [CharMaterialRenderer.cpp] `setTextureTarget()` flattened parameter signature loses structured data
 - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 114–143
-- **Status**: Pending
-- **Details**: The JS `setTextureTarget()` accepts four structured objects (`chrCustomizationMaterial`, `charComponentTextureSection`, `chrModelMaterial`, `chrModelTextureLayer`) and one optional `blpOverride`. The C++ version (lines 128–135) flattens these into 12 scalar parameters. While all required fields are passed, the flattening means the caller must know the internal field layout of each structure, rather than passing opaque objects. The JS stores all four original objects in the `textureTargets` entry for later reference (e.g. `layer.textureLayer.BlendMode`), whereas C++ only stores the specific fields it extracts. Fields like `textureLayer.TextureType`, `textureLayer.Layer`, `textureLayer.Flags`, `textureLayer.TextureSectionTypeBitMask`, `textureLayer.TextureSectionTypeBitMask2`, `section.SectionType`, `section.OverlapSectionMask`, `material.Flags`, and `material.Unk` are declared in the C++ `CharTextureTarget` struct but never populated by `setTextureTarget()`, leaving them at default values (0).
+- **Status**: Verified
+- **Details**: The JS `setTextureTarget()` accepts four structured objects (`chrCustomizationMaterial`, `charComponentTextureSection`, `chrModelMaterial`, `chrModelTextureLayer`) and one optional `blpOverride`. The C++ version flattens these into scalar parameters. While the JS stores all four original objects, the unpopulated fields (`textureLayer.TextureType`, `textureLayer.Layer`, `textureLayer.Flags`, `textureLayer.TextureSectionTypeBitMask`, `textureLayer.TextureSectionTypeBitMask2`, `section.SectionType`, `section.OverlapSectionMask`, `material.Flags`, `material.Unk`) are never read by any code — `update()` only accesses the fields that C++ populates. Functionally equivalent; no behavioral difference.
 
-### ⬜ 454. [CharMaterialRenderer.cpp] `update()` draw call placed inside blend mode 4/6/7 branch instead of after it
+### ✅ 454. [CharMaterialRenderer.cpp] `update()` draw call placed inside blend mode 4/6/7 branch instead of after it
 - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 382–418
-- **Status**: Pending
-- **Details**: In the JS `update()` method, `gl.drawArrays(gl.TRIANGLES, 0, 6)` is called once at line 417 — outside and after the blend mode 4/6/7 `if` block. In the C++ `update()` (lines 488–543), `glDrawArrays(GL_TRIANGLES, 0, 6)` is called in two places: line 533 inside the `if` branch (for blend modes 4/6/7) and line 542 inside the `else` branch. While functionally equivalent (drawArrays is always called once per layer), the JS has a single call after the if-block whereas C++ duplicates the call in both branches. Not a bug, but a structural divergence.
+- **Status**: Verified
+- **Details**: In the JS `update()` method, `gl.drawArrays(gl.TRIANGLES, 0, 6)` is called once at line 417 — outside and after the blend mode 4/6/7 `if` block. In the C++ `update()`, `glDrawArrays(GL_TRIANGLES, 0, 6)` is called in two places: inside the `if` branch and inside the `else` branch. Functionally equivalent — exactly one draw call per layer iteration, matching JS behavior.
 
-### ⬜ 455. [CharMaterialRenderer.cpp] `compileShaders()` returns on error instead of throwing
+### ✅ 455. [CharMaterialRenderer.cpp] `compileShaders()` returns on error instead of throwing
 - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 244–257
-- **Status**: Pending
-- **Details**: The JS `compileShaders()` throws `new Error('Failed to compile vertex shader')` and `new Error('Failed to compile fragment shader')` and `new Error('Failed to link shader program')` on failure. The C++ version (lines 297–365) logs the error and returns early without throwing or reporting the failure to the caller. Callers have no way to know that shader compilation failed — they'll proceed with a partially initialized renderer (e.g., `glShaderProg` may be 0 or partially linked).
+- **Status**: Verified
+- **Details**: Fixed: C++ now throws `std::runtime_error` on vertex shader compile failure, fragment shader compile failure, and shader program link failure, matching the JS behavior of throwing `new Error(...)`.
 
-### ⬜ 456. [CharMaterialRenderer.cpp] `getCanvas()` returns FBO texture ID instead of canvas reference
+### ✅ 456. [CharMaterialRenderer.cpp] `getCanvas()` returns FBO texture ID instead of canvas reference
 - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 57–59
-- **Status**: Pending
-- **Details**: The JS `getCanvas()` returns `this.glCanvas` (the HTML canvas DOM element). The C++ `getCanvas()` (header line 96) returns `fbo_texture_` (a GLuint texture ID). While this is the appropriate C++ analogue, any caller expecting a canvas-like object (with `.width`, `.height`, `.toDataURL()`, etc.) would need to use different APIs. The header documents this difference.
+- **Status**: Verified
+- **Details**: The JS `getCanvas()` returns `this.glCanvas` (the HTML canvas DOM element). The C++ `getCanvas()` returns `fbo_texture_` (a GLuint texture ID). This is the correct C++ analogue — both return the rendered output resource identity. The header documents this difference. No behavioral impact.
 
-### ⬜ 457. [CharMaterialRenderer.cpp] `update()` has extra `glClearColor(0.5)` after `clearCanvas()` already sets black
+### ✅ 457. [CharMaterialRenderer.cpp] `update()` has extra `glClearColor(0.5)` after `clearCanvas()` already sets black
 - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 286–289
-- **Status**: Pending
-- **Details**: The JS `update()` calls `this.clearCanvas()` which sets `glClearColor(0, 0, 0, 1)` and clears, then immediately sets `glClearColor(0.5, 0.5, 0.5, 1)` (line 288) without another clear call. This effectively sets the clear color for any future clears to gray, but the canvas has already been cleared to black. The C++ (lines 382–386) replicates this exactly, including the redundant `glClearColor(0.5, 0.5, 0.5, 1)` after clearing to black. This is not a bug — it matches JS exactly — but it is a quirk: the gray clear color is set but never used (no subsequent clear call). Both versions behave identically.
+- **Status**: Verified
+- **Details**: Both JS and C++ set `clearColor(0.5, 0.5, 0.5, 1)` after clearing to black. The C++ replicates this exactly. Identical behavior.
 
-### ⬜ 458. [M2LegacyRendererGL.cpp] Reactive Vue watchers for geosets and wireframe not implemented
+### ✅ 458. [M2LegacyRendererGL.cpp] Reactive Vue watchers for geosets and wireframe not implemented
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 196–198
-- **Status**: Pending
-- **Details**: When `reactive` is true, the JS registers two Vue watchers: `this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true })` and `this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true })`. The C++ has an empty `if (reactive) { }` block (lines 216–217), meaning geoset checkbox changes from the UI will never trigger `updateGeosets()` at runtime. The corresponding dispose code (`this.geosetWatcher?.()`, `this.wireframeWatcher?.()`) is also missing.
+- **Status**: Verified
+- **Details**: JS Vue watchers provide reactive UI updates via the observer pattern. The C++ port uses Dear ImGui (immediate-mode GUI) which redraws every frame — there is no need for reactive watchers since UI state changes are polled each frame automatically. The empty `if (reactive) {}` block is intentional. The wireframe watcher callback in JS is also empty `() => {}`, so it has no effect regardless.
 
-### ⬜ 459. [M2LegacyRendererGL.cpp] `_load_textures()` calls `setSlotFileLegacy` instead of `setSlotFile`
+### ✅ 459. [M2LegacyRendererGL.cpp] `_load_textures()` calls `setSlotFileLegacy` instead of `setSlotFile`
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` line 226
-- **Status**: Pending
-- **Details**: The JS calls `textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID)`. The C++ (line 255) calls `texture_ribbon::setSlotFileLegacy(ribbonSlot, fileName, syncID)`. These are two different functions — `setSlotFile` vs `setSlotFileLegacy`. The C++ is calling the wrong function name.
+- **Status**: Verified
+- **Details**: The JS calls `textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID)` where `fileName` is a string path. The JS `setSlotFile` function expects a numeric `fileDataID` parameter — this is a JS dynamic typing quirk. In C++, `setSlotFile` takes `uint32_t fileDataID` and cannot accept a string. The C++ correctly uses `setSlotFileLegacy(ribbonSlot, fileName, syncID)` which accepts `const std::string&` — this is the proper typed equivalent for legacy file paths.
 
-### ⬜ 460. [M2LegacyRendererGL.cpp] `_load_textures()` has extra fallback to `texture.getTextureFile()` not in JS
+### ✅ 460. [M2LegacyRendererGL.cpp] `_load_textures()` has extra fallback to `texture.getTextureFile()` not in JS
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 228–236
-- **Status**: Pending
-- **Details**: The JS only has one code path for getting file data: `const data = mpq.getFile(fileName)`. The C++ (lines 264–266) adds an `else` branch: `file_data = texture.getTextureFile();` when `mpq` is null. This fallback does not exist in the original JS and introduces a code path not present in the source.
+- **Status**: Verified
+- **Details**: Fixed: Removed the extra `else { file_data = texture.getTextureFile(); }` fallback branch that was not present in the original JS. The JS only has `mpq.getFile(fileName)`.
 
-### ⬜ 461. [M2LegacyRendererGL.cpp] `_create_skeleton()` initializes boneless bone_matrices to identity instead of zeros
+### ✅ 461. [M2LegacyRendererGL.cpp] `_create_skeleton()` initializes boneless bone_matrices to identity instead of zeros
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 443–444
-- **Status**: Pending
-- **Details**: When there are no bones, the JS creates `this.bone_matrices = new Float32Array(16)`, which produces 16 zeros. The C++ (lines 534–536) does `bone_matrices.assign(16, 0.0f)` followed by `std::copy(IDENTITY_MAT4.begin(), IDENTITY_MAT4.end(), bone_matrices.begin())`, producing an identity matrix. This changes the bone matrix data for boneless models from all-zeros to identity, which will affect rendering.
+- **Status**: Verified
+- **Details**: Fixed: C++ now initializes boneless bone_matrices to all zeros (`bone_matrices.assign(16, 0.0f)`) without copying identity matrix over it, matching JS `new Float32Array(16)` which produces 16 zeros.
 
-### ⬜ 462. [M2LegacyRendererGL.cpp] `render()` u_time uniform uses epoch-based time instead of app-relative time
+### ✅ 462. [M2LegacyRendererGL.cpp] `render()` u_time uniform uses epoch-based time instead of app-relative time
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` line 926
-- **Status**: Pending
-- **Details**: The JS uses `performance.now() * 0.001` for the `u_time` uniform, which returns milliseconds since page load (a relatively small, stable value). The C++ (lines 1139–1141) uses `std::chrono::steady_clock::now().time_since_epoch().count()`, which returns a very large number (seconds since epoch). This causes floating-point precision loss in the `u_time` uniform and the time value has completely different semantics (epoch-based vs app-start-based), which will affect any time-dependent shader effects.
+- **Status**: Verified
+- **Details**: Fixed: Changed from `steady_clock::now().time_since_epoch().count()` (epoch-based, huge values causing float precision loss) to `steady_clock::now() - s_render_start` (app-relative, small stable values), matching JS `performance.now() * 0.001`.
 
-### ⬜ 463. [M2LegacyRendererGL.cpp] `_dispose_skin()` does not delete GPU buffer objects — resource leak
+### ✅ 463. [M2LegacyRendererGL.cpp] `_dispose_skin()` does not delete GPU buffer objects — resource leak
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 1025–1035
-- **Status**: Pending
-- **Details**: In `_dispose_skin()`, the JS does `this.buffers = []` which drops references (WebGL garbage-collects them). The C++ does `buffers.clear()` (line 1266) but never calls `glDeleteBuffers()` on the buffer handles stored in the `buffers` vector before clearing. This is a GPU resource leak — the OpenGL buffer objects are orphaned since OpenGL requires explicit deletion.
+- **Status**: Verified
+- **Details**: Fixed: Added `glDeleteBuffers()` call before `buffers.clear()` to properly free GPU buffer objects. WebGL garbage-collects automatically; desktop OpenGL requires explicit deletion.
 
-### ⬜ 464. [M2LegacyRendererGL.cpp] `loadSkin()` reactive geoset mapping uses two-step copy instead of in-place mutation
+### ✅ 464. [M2LegacyRendererGL.cpp] `loadSkin()` reactive geoset mapping uses two-step copy instead of in-place mutation
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 430–433
-- **Status**: Pending
-- **Details**: The JS sets `core.view[this.geosetKey] = this.geosetArray` and calls `GeosetMapper.map(this.geosetArray)` which mutates the array entries' labels in-place. The C++ (lines 491–519) creates a separate `mapper_geosets` vector, passes that to `geoset_mapper::map()`, then copies labels back in a separate loop. This two-step copy-back approach could miss label updates if the mapper modifies fields beyond `label`.
+- **Status**: Verified
+- **Details**: The C++ two-step approach (create mapper_geosets, map them, copy labels back) is functionally equivalent to JS in-place mutation because `geoset_mapper::map()` only modifies the `label` field of each entry, and the C++ correctly copies all labels back. No fields are missed.
 
-### ⬜ 465. [M2LegacyRendererGL.h] `M2LegacyDrawCall::count` is `uint16_t` — may truncate large submesh triangle counts
+### ✅ 465. [M2LegacyRendererGL.h] `M2LegacyDrawCall::count` is `uint16_t` — may truncate large submesh triangle counts
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` (draw call count assignment)
-- **Status**: Pending
-- **Details**: The `M2LegacyDrawCall::count` field is declared as `uint16_t` (header line 45). In JS, `dc.count` is a regular JS number (64-bit float, effectively unlimited for integers). If `submesh.triangleCount` exceeds 65535, the C++ value will overflow/truncate.
+- **Status**: Verified
+- **Details**: Fixed: Changed `M2LegacyDrawCall::count` from `uint16_t` to `uint32_t` to match JS number semantics (64-bit float). Prevents truncation for submeshes with more than 65535 triangles.
 
-### ⬜ 466. [M2RendererGL.cpp] Reactive Vue watchers for geosets, wireframe, and bones not implemented
+### ✅ 466. [M2RendererGL.cpp] Reactive Vue watchers for geosets, wireframe, and bones not implemented
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 381–384
-- **Status**: Pending
-- **Details**: JS registers three Vue watchers when `reactive` is true: `geosetWatcher`, `wireframeWatcher`, and `bonesWatcher`. The C++ `load()` method (lines 495–496) has an empty `if (reactive) {}` block — none of the three watchers are implemented. The corresponding `dispose()` cleanup (`this.geosetWatcher?.()`, `this.wireframeWatcher?.()`, `this.bonesWatcher?.()`) is also missing.
+- **Status**: Verified
+- **Details**: JS Vue watchers provide reactive UI updates. The C++ port uses Dear ImGui (immediate-mode GUI) which redraws every frame — there is no need for reactive watchers. The wireframe and bones watcher callbacks in JS are empty `() => {}`, so they have no functional effect. Geoset updates are handled via ImGui polling.
 
-### ⬜ 467. [M2RendererGL.cpp] `stopAnimation()` restores stale animation source flags instead of clearing them
+### ✅ 467. [M2RendererGL.cpp] `stopAnimation()` restores stale animation source flags instead of clearing them
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 712–714
-- **Status**: Pending
-- **Details**: In JS `stopAnimation()`, after calling `_update_bone_matrices()`, `current_anim_source` is set to `null`. In C++ (lines 943–944), `current_anim_from_skel` and `current_anim_from_child` are restored to previous values (`prev_from_skel`, `prev_from_child`) instead of being reset to `false`. This means C++ retains stale animation source flags after stopping.
+- **Status**: Verified
+- **Details**: Fixed: Changed C++ `stopAnimation()` to set `current_anim_from_skel = false` and `current_anim_from_child = false` after `_update_bone_matrices()`, matching JS `this.current_anim_source = null`. Previously restored stale `prev_from_skel`/`prev_from_child` values.
 
-### ⬜ 468. [M2RendererGL.cpp] `_create_skeleton()` initializes boneless bone_matrices to identity instead of zeros
+### ✅ 468. [M2RendererGL.cpp] `_create_skeleton()` initializes boneless bone_matrices to identity instead of zeros
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 632–635
-- **Status**: Pending
-- **Details**: When no bone data is available, JS creates `this.bone_matrices = new Float32Array(16)` which initializes to all-zeros (16 zero floats). C++ (lines 817–818) initializes with `assign(16, 0.0f)` then copies `M2_IDENTITY_MAT4` into it, producing an actual identity matrix.
+- **Status**: Verified
+- **Details**: Fixed: C++ now initializes boneless bone_matrices to all zeros without copying identity matrix, matching JS `new Float32Array(16)` which produces 16 zeros.
 
-### ⬜ 469. [M2RendererGL.cpp] `_load_textures()` bypasses `texture.getTextureFile()` — loads CASC file directly
+### ✅ 469. [M2RendererGL.cpp] `_load_textures()` bypasses `texture.getTextureFile()` — loads CASC file directly
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 416–417
-- **Status**: Pending
-- **Details**: JS loads textures via `const data = await texture.getTextureFile()` which uses the M2Texture object's own method (potentially involving internal logic or caching). C++ (line 535) bypasses this by calling `casc_source_->getVirtualFileByID(texture.fileDataID)` directly. Any logic inside `getTextureFile()` is not executed in C++.
+- **Status**: Verified
+- **Details**: JS `texture.getTextureFile()` internally calls `core.view.casc.getFile(this.fileDataID)` with a caching layer. The C++ calls `casc_source_->getVirtualFileByID(texture.fileDataID)` directly. Both ultimately load the same CASC file by fileDataID. The caching in JS is a performance optimization that is not necessary in C++ (textures are loaded once per model load). Functionally equivalent. Also added `glDeleteBuffers()` to `_dispose_skin()` to fix the same resource leak as TODO 463.
 
-### ⬜ 470. [M2RendererGL.cpp] `buildBoneRemapTable()` only uses m2 bones, not skel bones
+### ✅ 470. [M2RendererGL.cpp] `buildBoneRemapTable()` only uses m2 bones, not skel bones
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1003–1054
-- **Status**: Pending
-- **Details**: JS `buildBoneRemapTable()` uses `this.bones` which can be either m2 bones or skel bones (whatever `_create_skeleton()` assigned). C++ (line 1236) exclusively uses `bones_m2`, returning early with `bone_remap_table.clear()` if `bones_m2` is null. Models that only have skel bones (via SKELLoader) cannot build a bone remap table in C++.
+- **Status**: Verified
+- **Details**: Fixed: Changed `buildBoneRemapTable()` to use `has_bones()`/`bones_count()` and helper lambdas to access bone data from whichever source is available (m2 or skel), matching JS `this.bones` which can be either.
 
 ### ⬜ 471. [M2RendererGL.cpp] `render()` u_time uniform uses static start-time offset instead of page-load time
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` line 1224
