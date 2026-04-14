@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <optional>
+#include <regex>
 #include <utility>
 
 namespace casc {
@@ -51,13 +52,18 @@ struct ParsedEntry {
  * JS equivalent: string | [string, RegExp]
  * In JS, extension filters can be a plain string like ".blp" or a
  * tuple [".wmo", LISTFILE_MODEL_FILTER] where the regex excludes matches.
+ *
+ * TODO 201: The exclusion regex is now stored in the struct, allowing
+ * different exclusion patterns per extension (matching JS behavior).
  */
 struct ExtFilter {
 	std::string ext;
 	bool has_exclusion = false;
+	std::optional<std::regex> exclusion_regex;
 
 	ExtFilter(const std::string& e) : ext(e), has_exclusion(false) {}
-	ExtFilter(const std::string& e, bool exclude) : ext(e), has_exclusion(exclude) {}
+	ExtFilter(const std::string& e, const std::regex& regex)
+		: ext(e), has_exclusion(true), exclusion_regex(regex) {}
 };
 
 // --- Preloading ---
@@ -179,11 +185,11 @@ void addEntry(uint32_t fileDataID, const std::string& fileName,
 
 /**
  * Render listfile entries for display.
- * @param file_data_ids Optional set of IDs to include (empty = all).
+ * @param file_data_ids Optional set of IDs to include (nullopt = all, empty = match nothing).
  * @param include_main_index Whether to include the main string index (binary mode).
  * @returns Formatted listfile strings.
  */
-std::vector<std::string> renderListfile(const std::vector<uint32_t>& file_data_ids = {},
+std::vector<std::string> renderListfile(const std::optional<std::vector<uint32_t>>& file_data_ids = std::nullopt,
                                          bool include_main_index = false);
 
 // --- State ---

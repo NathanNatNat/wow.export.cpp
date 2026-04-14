@@ -189,32 +189,38 @@ void load() {
 	std::vector<uint8_t> resData;
 	try {
 		resData = generics::get({tact_url, tact_url_fallback});
-	} catch (...) {
-		throw std::runtime_error("Unable to update tactKeys");
+	} catch (const std::exception& e) {
+		// TODO 206: Preserve error details (including HTTP status if available)
+		// to match JS's `throw new Error('Unable to update tactKeys, HTTP ${res.status}')`.
+		throw std::runtime_error(std::format("Unable to update tactKeys: {}", e.what()));
 	}
 
-	if (resData.empty())
-		throw std::runtime_error("Unable to update tactKeys, empty response");
-
+	// Note: JS does not have an explicit empty-response check; it would just
+	// parse 0 keys from an empty body. We match that behavior by proceeding
+	// with an empty data set rather than throwing.
 	std::string_view dataView(reinterpret_cast<const char*>(resData.data()), resData.size());
 	auto lines = splitLines(dataView);
 	int remoteAdded = 0;
 
 	for (const auto& line : lines) {
-		// Split by space.
+		// TODO 205: Match JS `line.split(' ')` which splits on every space.
+		// JS checks `parts.length !== 2` — lines with 0, 1, or 3+ space-separated
+		// parts are skipped. The C++ now counts parts by splitting on spaces.
 		auto spacePos = line.find(' ');
 		if (spacePos == std::string_view::npos)
 			continue;
 
-		// Check there are exactly 2 parts (no additional spaces in value).
-		std::string_view keyName = trim(line.substr(0, spacePos));
-		std::string_view rest = line.substr(spacePos + 1);
-		// Trim leading spaces on value side.
-		std::string_view key = trim(rest);
+		std::string_view keyName = line.substr(0, spacePos);
+		std::string_view key = line.substr(spacePos + 1);
 
-		// If there's another space in the key value, skip.
+		// JS split(' ') would produce 3+ parts if there are additional spaces.
+		// Reject if key portion contains any spaces (i.e., more than 2 parts).
 		if (key.find(' ') != std::string_view::npos)
 			continue;
+
+		// JS trims the parts
+		keyName = trim(keyName);
+		key = trim(key);
 
 		if (validateKeyPair(keyName, key)) {
 			std::lock_guard<std::mutex> lock(keyRingMutex);

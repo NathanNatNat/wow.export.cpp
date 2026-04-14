@@ -58,7 +58,7 @@ static void compute_raw_files() {
 
 	if (enable_unknown) {
 		std::vector<uint32_t> root_entries = core::view->casc->getValidRootEntries();
-		auto rendered = casc::listfile::renderListfile(root_entries, true);
+		auto rendered = casc::listfile::renderListfile(std::optional<std::vector<uint32_t>>(root_entries), true);
 		view.listfileRaw.clear();
 		for (auto& s : rendered)
 			view.listfileRaw.push_back(std::move(s));

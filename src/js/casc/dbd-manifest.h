@@ -19,8 +19,9 @@ void preload();
 
 /**
  * prepare the manifest for use, awaiting preload if necessary
+ * @returns true (always, matches JS Promise<boolean> return)
  */
-void prepareManifest();
+bool prepareManifest();
 
 /**
  * get table name by filedataid

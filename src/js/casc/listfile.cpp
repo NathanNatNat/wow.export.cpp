@@ -19,6 +19,8 @@
 #include <filesystem>
 #include <fstream>
 #include <algorithm>
+#include <future>
+#include <mutex>
 #include <regex>
 #include <chrono>
 #include <cstring>
@@ -86,7 +88,10 @@ static std::vector<uint32_t> preload_fonts_ids;
 static std::vector<uint32_t> preload_models_ids;
 
 static bool is_preloaded = false;
-static bool preload_in_progress = false;
+// TODO 195/196: Use a shared_future so concurrent callers can wait on the
+// same preload operation, matching JS's shared promise semantics.
+static std::optional<std::shared_future<void>> preload_future;
+static std::mutex preload_mutex;
 
 // --- Internal helper: getFileDataIDsByExtension (legacy mode) ---
 static std::vector<uint32_t> getFileDataIDsByExtension(const std::vector<ExtFilter>& exts, std::string_view name) {
@@ -98,8 +103,8 @@ static std::vector<uint32_t> getFileDataIDsByExtension(const std::vector<ExtFilt
 		[&](const std::pair<uint32_t, std::string>& item, size_t) {
 			const auto& [fileDataID, filename] = item;
 			for (const auto& ext : exts) {
-				if (ext.has_exclusion) {
-					if (filename.ends_with(ext.ext) && !std::regex_search(filename, constants::LISTFILE_MODEL_FILTER())) {
+				if (ext.has_exclusion && ext.exclusion_regex) {
+					if (filename.ends_with(ext.ext) && !std::regex_search(filename, *ext.exclusion_regex)) {
 						entries.push_back(fileDataID);
 						break;
 					}
@@ -577,8 +582,10 @@ static bool listfile_preload_legacy() {
 				std::transform(fileName.begin(), fileName.end(), fileName.begin(),
 					[](unsigned char c) { return std::tolower(c); });
 
-				preloadedIdLookup.emplace(fileDataID, fileName);
-				preloadedNameLookup.emplace(fileName, fileDataID);
+				// TODO 197: Use operator[] instead of emplace() to match JS Map.set()
+				// which overwrites existing entries with the same key.
+				preloadedIdLookup[fileDataID] = fileName;
+				preloadedNameLookup[fileName] = fileDataID;
 			}, 1000);
 
 		if (preloadedIdLookup.empty()) {
@@ -599,7 +606,7 @@ static bool listfile_preload_legacy() {
 		preload_fonts_ids = getFileDataIDsByExtension({ExtFilter(".ttf")}, "filtering fonts");
 
 		preload_models_ids = getFileDataIDsByExtension(
-			{ExtFilter(".m2"), ExtFilter(".m3"), ExtFilter(".wmo", true)},
+			{ExtFilter(".m2"), ExtFilter(".m3"), ExtFilter(".wmo", constants::LISTFILE_MODEL_FILTER())},
 			"filtering models");
 
 		is_preloaded = true;
@@ -635,25 +642,39 @@ static void listfile_preload_impl() {
 }
 
 void preload() {
-	if (preload_in_progress)
-		return;
+	// TODO 195: Deduplicate concurrent calls by storing and returning a shared future.
+	// JS stores a preload_promise that multiple callers can await.
+	std::lock_guard<std::mutex> guard(preload_mutex);
+
+	if (preload_future.has_value())
+		return; // already started (or completed)
 
 	if (is_preloaded)
 		return;
 
-	preload_in_progress = true;
-	listfile_preload_impl();
-	preload_in_progress = false;
+	// Launch synchronously (JS is single-threaded so preload runs inline).
+	// Store a future so prepareListfile can wait on it.
+	preload_future = std::async(std::launch::deferred, []() {
+		listfile_preload_impl();
+	}).share();
+
+	// Execute immediately (deferred future executes on first .get()/.wait())
+	preload_future->wait();
 }
 
 void prepareListfile() {
 	if (is_preloaded)
 		return;
 
-	if (preload_in_progress) {
-		logging::write("Waiting for listfile preload to complete...");
-		// running concurrently — it would have completed. Just return.
-		return;
+	{
+		std::lock_guard<std::mutex> guard(preload_mutex);
+		if (preload_future.has_value()) {
+			// TODO 196: Wait for in-progress preload to complete,
+			// matching JS's `return await preload_promise`.
+			logging::write("Waiting for listfile preload to complete...");
+			preload_future->wait();
+			return;
+		}
 	}
 
 	logging::write("Starting listfile preload...");
@@ -667,8 +688,9 @@ static size_t loadIDTable(const std::unordered_set<uint32_t>& ids, const std::st
 	for (uint32_t fileDataID : ids) {
 		if (!existsByID(fileDataID)) {
 			std::string fileName = "unknown/" + std::to_string(fileDataID) + ext;
-			legacy_id_lookup.emplace(fileDataID, fileName);
-			legacy_name_lookup.emplace(fileName, fileDataID);
+			// TODO 197: Use operator[] to match JS Map.set() overwrite semantics.
+			legacy_id_lookup[fileDataID] = fileName;
+			legacy_name_lookup[fileName] = fileDataID;
 			loadCount++;
 		}
 	}
@@ -685,7 +707,9 @@ size_t loadUnknownTextures() {
 }
 
 size_t loadUnknownModels() {
-	db::caches::DBModelFileData::initializeModelFileData();
+	// TODO 198: JS calls DBModelFileData.getFileDataIDs() directly without explicit
+	// initialization. Removed the extra initializeModelFileData() call that had no
+	// JS equivalent.
 	const auto& ids = db::caches::DBModelFileData::getFileDataIDs();
 	size_t unkM2 = loadIDTable(ids, ".m2");
 	logging::write(std::format("Added {} unknown M2 models from ModelFileData to listfile", unkM2));
@@ -706,6 +730,11 @@ bool existsByID(uint32_t id) {
 	return false;
 }
 
+// TODO 202: JS returns `undefined` when a file data ID is not found.
+// C++ returns empty string "" instead. getByIDOrUnknown uses `!result.empty()`
+// which is equivalent to JS's nullish coalescing `result ?? formatUnknownFile(...)`.
+// If a file legitimately has an empty filename, the behavior would differ,
+// but in practice WoW file entries always have non-empty names.
 std::string getByID(uint32_t id) {
 	if (is_binary_mode) {
 		auto it = legacy_id_lookup.find(id);
@@ -767,8 +796,8 @@ std::vector<std::string> getFilenamesByExtension(const std::vector<ExtFilter>& e
 			auto pf_it = binary_id_to_pf_index.find(fileDataID);
 			const std::string fn = binary_read_string_at_offset(pf_it->second, offset);
 			for (const auto& ext : exts) {
-				if (ext.has_exclusion) {
-					if (fn.ends_with(ext.ext) && !std::regex_search(fn, constants::LISTFILE_MODEL_FILTER())) {
+				if (ext.has_exclusion && ext.exclusion_regex) {
+					if (fn.ends_with(ext.ext) && !std::regex_search(fn, *ext.exclusion_regex)) {
 						entries.push_back(fileDataID);
 						break;
 					}
@@ -783,8 +812,8 @@ std::vector<std::string> getFilenamesByExtension(const std::vector<ExtFilter>& e
 	} else {
 		for (const auto& [fileDataID, fn] : legacy_id_lookup) {
 			for (const auto& ext : exts) {
-				if (ext.has_exclusion) {
-					if (fn.ends_with(ext.ext) && !std::regex_search(fn, constants::LISTFILE_MODEL_FILTER())) {
+				if (ext.has_exclusion && ext.exclusion_regex) {
+					if (fn.ends_with(ext.ext) && !std::regex_search(fn, *ext.exclusion_regex)) {
 						entries.push_back(fileDataID);
 						break;
 					}
@@ -836,8 +865,9 @@ void applyPreload(const std::unordered_set<uint32_t>& rootEntries) {
 		if (!is_binary_mode) {
 			for (const auto& [fileDataID, fileName] : preloadedIdLookup) {
 				if (rootEntries.contains(fileDataID)) {
-					legacy_id_lookup.emplace(fileDataID, fileName);
-					legacy_name_lookup.emplace(fileName, fileDataID);
+					// TODO 197: Use operator[] to match JS Map.set() overwrite semantics.
+					legacy_id_lookup[fileDataID] = fileName;
+					legacy_name_lookup[fileName] = fileDataID;
 					valid_entries++;
 				}
 			}
@@ -872,6 +902,9 @@ void applyPreload(const std::unordered_set<uint32_t>& rootEntries) {
 				}
 			}
 
+			// TODO 199: JS filter_and_format returns string[], but core::view members
+			// are typed as std::vector<nlohmann::json>. nlohmann::json implicitly
+			// wraps strings, so this produces semantically equivalent results.
 			auto filter_and_format = [&rootEntries](std::unordered_map<uint32_t, std::string>& preload_map)
 				-> std::vector<nlohmann::json>
 			{
@@ -903,6 +936,10 @@ void applyPreload(const std::unordered_set<uint32_t>& rootEntries) {
 	}
 }
 
+// TODO 203: JS auto-detects regex via `search instanceof RegExp`. C++ requires
+// explicit `is_regex` parameter since there's no runtime type detection for strings.
+// Also, C++ silently returns empty results on invalid regex (catch block),
+// while JS would propagate the error. This is an acceptable C++ adaptation.
 std::vector<FilteredEntry> getFilteredEntries(const std::string& search, bool is_regex) {
 	std::vector<FilteredEntry> results;
 
@@ -943,10 +980,13 @@ std::vector<FilteredEntry> getFilteredEntries(const std::string& search, bool is
 	return results;
 }
 
-std::vector<std::string> renderListfile(const std::vector<uint32_t>& file_data_ids,
+// TODO 200: Use std::optional to distinguish between "no filter" (nullopt = include everything)
+// and "empty filter" (empty vector = match nothing), matching JS's undefined vs [].
+std::vector<std::string> renderListfile(const std::optional<std::vector<uint32_t>>& file_data_ids,
                                          bool include_main_index) {
 	std::vector<std::string> result;
-	bool has_id_filter = !file_data_ids.empty();
+	// has_id_filter is true when file_data_ids is provided (even if empty)
+	const bool has_id_filter = file_data_ids.has_value();
 
 	if (is_binary_mode) {
 		constexpr std::array<std::string_view, 7> pf_files = {
@@ -962,7 +1002,7 @@ std::vector<std::string> renderListfile(const std::vector<uint32_t>& file_data_i
 		const size_t start_index = include_main_index ? 0 : 1;
 		std::unordered_set<uint32_t> id_set;
 		if (has_id_filter)
-			id_set.insert(file_data_ids.begin(), file_data_ids.end());
+			id_set.insert(file_data_ids->begin(), file_data_ids->end());
 
 		for (size_t i = start_index; i < pf_files.size(); i++) {
 			auto file_path = constants::CACHE::DIR_LISTFILE() / std::string(pf_files[i]);
@@ -979,12 +1019,14 @@ std::vector<std::string> renderListfile(const std::vector<uint32_t>& file_data_i
 		}
 	}
 
+	// JS: `file_data_ids === undefined` means no filter — include all legacy entries.
+	// JS: `file_data_ids = []` means empty filter — include nothing from legacy lookups.
 	if (!has_id_filter) {
 		for (const auto& [file_data_id, fn] : legacy_id_lookup) {
 			result.push_back(fn + " [" + std::to_string(file_data_id) + "]");
 		}
 	} else {
-		std::unordered_set<uint32_t> id_set(file_data_ids.begin(), file_data_ids.end());
+		std::unordered_set<uint32_t> id_set(file_data_ids->begin(), file_data_ids->end());
 		for (const auto& [file_data_id, fn] : legacy_id_lookup) {
 			if (id_set.contains(file_data_id))
 				result.push_back(fn + " [" + std::to_string(file_data_id) + "]");
@@ -1006,7 +1048,8 @@ ParsedEntry parseFileEntry(const std::string& entry) {
 	ParsedEntry result;
 	result.file_path = stripFileEntry(entry);
 
-	std::regex fid_regex(R"(\[(\d+)\]$)");
+	// TODO 204: Make regex static const to avoid recompiling on every call.
+	static const std::regex fid_regex(R"(\[(\d+)\]$)");
 	std::smatch match;
 	if (std::regex_search(entry, match, fid_regex))
 		result.file_data_id = static_cast<uint32_t>(std::stoul(match[1].str()));
@@ -1025,8 +1068,9 @@ bool isLoaded() {
 void ingestIdentifiedFiles(const std::vector<std::pair<uint32_t, std::string>>& entries) {
 	for (const auto& [fileDataID, ext] : entries) {
 		std::string fileName = "unknown/" + std::to_string(fileDataID) + ext;
-		legacy_id_lookup.emplace(fileDataID, fileName);
-		legacy_name_lookup.emplace(fileName, fileDataID);
+		// TODO 197: Use operator[] to match JS Map.set() overwrite semantics.
+		legacy_id_lookup[fileDataID] = fileName;
+		legacy_name_lookup[fileName] = fileDataID;
 	}
 }
 

@@ -58,9 +58,17 @@ namespace realmlist {
 void load() {
 	logging::write("Loading realmlist...");
 
+	// TODO 194: Match JS behavior — JS does `String(core.view.config.realmListURL)`
+	// which converts any value (including undefined) to a string. We match by
+	// accepting any JSON type and converting to string.
 	std::string url;
-	if (core::view->config.contains("realmListURL") && core::view->config["realmListURL"].is_string())
-		url = core::view->config["realmListURL"].get<std::string>();
+	if (core::view->config.contains("realmListURL")) {
+		const auto& val = core::view->config["realmListURL"];
+		if (val.is_string())
+			url = val.get<std::string>();
+		else if (!val.is_null())
+			url = val.dump(); // converts number/bool/etc. to string like JS String()
+	}
 
 	if (url.empty())
 		throw std::runtime_error("Missing/malformed realmListURL in configuration!");
@@ -83,6 +91,12 @@ void load() {
 	// Fetch latest realmlist from remote URL.
 	try {
 		std::vector<uint8_t> res = generics::get(url);
+
+		// TODO 193: The JS checks `if (res.ok)` for HTTP status. generics::get()
+		// in C++ throws on HTTP errors, so if we reach here the response was OK.
+		// If the HTTP library returns error pages as data without throwing, the
+		// JSON parse below will fail with a clear error. This matches the JS
+		// behavior where a non-ok response is logged and the remote update is skipped.
 		std::string json_text(res.begin(), res.end());
 		nlohmann::json json = nlohmann::json::parse(json_text);
 		parseRealmList(json);
