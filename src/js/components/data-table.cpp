@@ -291,7 +291,9 @@ static std::vector<std::vector<std::string>> sortedItems(
 	const int columnIndex = state.sortColumn;
 	const bool ascending = (state.sortDirection == SortDirection::Asc);
 
-	std::sort(sorted.begin(), sorted.end(), [columnIndex, ascending](const std::vector<std::string>& a, const std::vector<std::string>& b) {
+	// JS uses Array.prototype.sort() which is stable (TimSort in modern engines).
+	// Use std::stable_sort to match JS behavior for rows with equal sort keys.
+	std::stable_sort(sorted.begin(), sorted.end(), [columnIndex, ascending](const std::vector<std::string>& a, const std::vector<std::string>& b) {
 		// Handle null/undefined values (empty strings as null equivalent)
 		const bool aEmpty = (columnIndex >= static_cast<int>(a.size()));
 		const bool bEmpty = (columnIndex >= static_cast<int>(b.size()));
@@ -417,9 +419,15 @@ static bool needsHorizontalScrolling(float tableWidth, float containerWidth) {
 }
 
 /**
- * Sync custom scrollbar position with native scroll position
+ * Sync custom scrollbar position with native scroll position.
+ *
+ * In JS, this syncs the custom scrollbar with the browser's native scroll position
+ * (handles native scroll events on the root div). In ImGui, there is no native
+ * scroll — the custom scrollbar is the only scroll mechanism. Scroll position is
+ * fully managed by our scrollbar drag and wheel handlers, so this function is
+ * intentionally omitted as it has no ImGui equivalent.
  */
-// is fully managed by our custom scrollbar logic.
+// static void syncScrollPosition(...) — not needed in ImGui.
 
 /**
  * Invoked when a mouse-down event is captured on the scroll widget.
@@ -438,6 +446,7 @@ static void startMouse(float mouseY, DataTableState& state) {
 static void moveMouse(float mouseX, float mouseY,
                        float containerHeight, float headerHeight, float scrollerHeight,
                        float containerWidth, float hScrollerWidth,
+                       const std::vector<std::string>& headers,
                        DataTableState& state) {
 	if (state.isScrolling) {
 		state.scroll = state.scrollStart + (mouseY - state.scrollStartY);
@@ -458,6 +467,13 @@ static void moveMouse(float mouseX, float mouseY,
 		if (!state.columnWidths.empty() && state.resizeColumnIndex >= 0 &&
 		    state.resizeColumnIndex < static_cast<int>(state.columnWidths.size())) {
 			state.columnWidths[static_cast<size_t>(state.resizeColumnIndex)] = state.targetColumnWidth;
+
+			// Mark this column as manually resized during the drag (not just on stopMouse).
+			// JS updates manuallyResizedColumns inside the requestAnimationFrame callback.
+			if (state.resizeColumnIndex < static_cast<int>(headers.size())) {
+				const std::string& columnName = headers[static_cast<size_t>(state.resizeColumnIndex)];
+				state.manuallyResizedColumns[columnName] = state.targetColumnWidth;
+			}
 		}
 	}
 }
@@ -645,6 +661,10 @@ static void handleContextMenu(int rowIndex, int columnIndex,
 		evt.columnIndex = columnIndex;
 		evt.cellValue = cellValue;
 		evt.selectedCount = std::max(1, static_cast<int>(selection.size()));
+		// Include mouse position data (equivalent to the JS `event` object).
+		const ImGuiIO& io = ImGui::GetIO();
+		evt.mouseX = io.MousePos.x;
+		evt.mouseY = io.MousePos.y;
 		onContextMenu(evt);
 	}
 }
@@ -659,7 +679,12 @@ static void handleKey(const std::vector<std::vector<std::string>>& sorted,
                        DataTableState& state,
                        const std::function<void(const std::vector<int>&)>& onSelectionChanged,
                        const std::function<void()>& onCopy) {
-	// If any ImGui item is active (e.g. text input focused), don't intercept.
+	// JS checks: if (document.activeElement !== document.body) return;
+	// — only intercepts keys when nothing is focused (activeElement is body).
+	// ImGui equivalent: IsAnyItemActive() returns true when a text input or other
+	// interactive widget has keyboard focus. This is conceptually similar but may
+	// differ in edge cases (e.g., a child window is focused but no item is active).
+	// This is the closest ImGui approximation of the JS behavior.
 	if (ImGui::IsAnyItemActive())
 		return;
 
@@ -713,6 +738,25 @@ static void handleKey(const std::vector<std::vector<std::string>>& sorted,
 	}
 }
 
+/**
+ * Helper: format a number with thousands separators.
+ * Equivalent to JS .toLocaleString() for integers.
+ */
+static std::string formatWithThousandsSep(int value) {
+	std::string str = std::to_string(value);
+	if (str.size() <= 3)
+		return str;
+
+	std::string result;
+	int count = 0;
+	for (auto it = str.rbegin(); it != str.rend(); ++it) {
+		if (count > 0 && count % 3 == 0)
+			result.insert(result.begin(), ',');
+		result.insert(result.begin(), *it);
+		count++;
+	}
+	return result;
+}
 
 /**
  * Helper: escape a value for CSV.
@@ -823,13 +867,16 @@ std::string getSelectedRowsAsSQL(const std::vector<std::string>& headers,
 	};
 
 	auto escape_value = [](const std::string& val) -> std::string {
-		if (val.empty())
-			return "NULL";
+		// JS: only returns 'NULL' for null/undefined; empty string "" is escaped as ''.
+		// In C++, row data is always std::string so there's no null/undefined distinction.
+		// An empty string should be escaped as '' (not NULL).
 
 		// Check if numeric
-		double num = 0.0;
-		if (tryParseNumber(val, num))
-			return val;
+		if (!val.empty()) {
+			double num = 0.0;
+			if (tryParseNumber(val, num))
+				return val;
+		}
 
 		std::string result = "'";
 		for (char c : val) {
@@ -894,9 +941,16 @@ void render(const char* id,
 	}
 
 	// Watch for rows changes to reset selection (new table loaded).
-	if (state.prevRowCount != rows.size() || state.prevRowsPtr != static_cast<const void*>(rows.data())) {
+	// JS Vue reactivity watches the `rows` prop reference; any change triggers the handler.
+	// We check size, base pointer, and a version counter. The version counter catches
+	// in-place mutations that don't change size or pointer (e.g., editing cell content).
+	// Callers should increment state.rowsVersion when mutating rows in-place.
+	if (state.prevRowCount != rows.size() ||
+	    state.prevRowsPtr != static_cast<const void*>(rows.data()) ||
+	    state.prevRowsVersion != state.rowsVersion) {
 		state.prevRowCount = rows.size();
 		state.prevRowsPtr = static_cast<const void*>(rows.data());
+		state.prevRowsVersion = state.rowsVersion;
 		state.lastSelectItem = -1;
 		if (onSelectionChanged)
 			onSelectionChanged({});
@@ -976,7 +1030,7 @@ void render(const char* id,
 	if (state.isScrolling || state.isHorizontalScrolling || state.isResizing) {
 		moveMouse(io.MousePos.x, io.MousePos.y,
 		          containerHeight, headerHeight, scrollerHeight,
-		          containerWidth, hScrollerWidth, state);
+		          containerWidth, hScrollerWidth, headers, state);
 		if (!io.MouseDown[0]) {
 			stopMouse(state, headers);
 		}
@@ -1184,7 +1238,7 @@ void render(const char* id,
 			// Row background
 			ImU32 rowBg;
 			if (isSelected) {
-				rowBg = app::theme::TABLE_ROW_HOVER_U32;
+				rowBg = app::theme::TABLE_ROW_SELECTED_U32;
 			} else if (displayRow % 2 == 1) {
 				rowBg = app::theme::BG_ALT_U32;
 			} else {
@@ -1197,7 +1251,7 @@ void render(const char* id,
 
 			// Row hover effect
 			if (!isSelected && ImGui::IsMouseHoveringRect(rowMin, rowMax)) {
-				drawList->AddRectFilled(rowMin, rowMax, app::theme::TABLE_ROW_SELECTED_U32);
+				drawList->AddRectFilled(rowMin, rowMax, app::theme::TABLE_ROW_HOVER_U32);
 			}
 
 			// Row click handling
@@ -1317,10 +1371,10 @@ void render(const char* id,
 			// <span v-if="filteredItems.length !== rows.length">
 			//     Showing {{ filteredItems.length.toLocaleString() }} of {{ rows.length.toLocaleString() }} rows
 			// </span>
-			statusText = "Showing " + std::to_string(filteredCount) + " of " + std::to_string(totalCount) + " rows";
+			statusText = "Showing " + formatWithThousandsSep(filteredCount) + " of " + formatWithThousandsSep(totalCount) + " rows";
 		} else {
 			// <span v-else>{{ rows.length.toLocaleString() }} rows</span>
-			statusText = std::to_string(totalCount) + " rows";
+			statusText = formatWithThousandsSep(totalCount) + " rows";
 		}
 
 		ImGui::TextDisabled("%s", statusText.c_str());

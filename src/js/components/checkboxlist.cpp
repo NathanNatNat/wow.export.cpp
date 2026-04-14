@@ -51,10 +51,10 @@ static int scrollIndex(const std::vector<nlohmann::json>& items, const CheckboxL
 
 /**
  * Weight (0-1) of a single item.
+ * JS: `return 1 / this.items.length;` — yields Infinity when items is empty.
  */
 static float itemWeight(const std::vector<nlohmann::json>& items) {
-	if (items.empty())
-		return 0.0f;
+	// Match JS: 1 / 0 === Infinity
 	return 1.0f / static_cast<float>(items.size());
 }
 
@@ -70,6 +70,11 @@ static void resize(float containerHeight, float scrollerHeight, CheckboxListStat
 /**
  * Restricts the scroll offset to prevent overflowing and
  * calculates the relative (0-1) offset based on the scroll.
+ *
+ * Note: JS does `this.scrollRel = this.scroll / max` which produces Infinity/NaN
+ * when max === 0. We guard against division by zero here because NaN/Infinity
+ * would break downstream arithmetic in C++ (unlike JS where it silently propagates).
+ * When max === 0, all items fit in view, so scrollRel = 0 is correct.
  */
 static void recalculateBounds(float containerHeight, float scrollerHeight, CheckboxListState& state) {
 	const float max = containerHeight - scrollerHeight;
@@ -139,14 +144,23 @@ void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListStat
 	const ImVec2 availSize = ImGui::GetContentRegionAvail();
 	const float containerHeight = availSize.y;
 
-	// The scroller thumb height is proportional to visible vs total items.
-	const float itemHeight = 26.0f;
+	// JS dynamically queries child.clientHeight; CSS sets height: 26px on .item.
+	// Use the ImGui equivalent: checkbox frame height with spacing.
+	const float itemHeight = std::max(ImGui::GetFrameHeightWithSpacing(), 26.0f);
 	const int totalItems = static_cast<int>(items.size());
+
+	// The scroller thumb height is proportional to visible vs total items.
 	const float scrollerHeight = (totalItems > 0)
 		? std::max(20.0f, containerHeight * (static_cast<float>(state.slotCount) / static_cast<float>(totalItems)))
 		: containerHeight;
 
-	resize(containerHeight, scrollerHeight, state);
+	// Only call resize() when container/scroller dimensions actually change (ResizeObserver equivalent).
+	if (state.prevContainerHeight != containerHeight || state.prevScrollerHeight != scrollerHeight || !state.initialized) {
+		state.prevContainerHeight = containerHeight;
+		state.prevScrollerHeight = scrollerHeight;
+		state.initialized = true;
+		resize(containerHeight, scrollerHeight, state);
+	}
 
 	// Compute display range.
 	const int idx = scrollIndex(items, state);
@@ -174,25 +188,38 @@ void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListStat
 	}
 
 	// Draw the scrollbar on the right side.
+	// CSS: .scroller { right: 3px; width: 8px; height: 45px; opacity: 0.7; }
+	// CSS: .scroller > div { top: 3px; bottom: 3px; background: var(--font-primary); border-radius: 5px; }
+	// CSS: .scroller:hover > div, .scroller.using > div { background: var(--font-highlight); }
 	{
 		const ImVec2 winPos = ImGui::GetWindowPos();
 		const float scrollbarWidth = 8.0f;
-		const float scrollbarX = winPos.x + availSize.x - scrollbarWidth;
+		const float scrollbarX = winPos.x + availSize.x - scrollbarWidth - 3.0f; // right: 3px
 		const float thumbY = winPos.y + scrollOffset(state);
 
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-		// Scroller thumb.
+		// Scroller outer bounds (for hit-testing).
 		const ImVec2 thumbMin(scrollbarX, thumbY);
 		const ImVec2 thumbMax(scrollbarX + scrollbarWidth, thumbY + scrollerHeight);
 
+		// Inner div: inset top: 3px, bottom: 3px from outer scroller.
+		const ImVec2 innerMin(scrollbarX, thumbY + 3.0f);
+		const ImVec2 innerMax(scrollbarX + scrollbarWidth, thumbY + scrollerHeight - 3.0f);
+
 		// Determine if mouse is over the thumb for hover effect.
 		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
-		const ImU32 thumbColor = thumbHovered
-			? app::theme::TEXT_ACTIVE_U32
-			: app::theme::TEXT_IDLE_U32;
 
-		drawList->AddRectFilled(thumbMin, thumbMax, thumbColor, 4.0f);
+		// CSS: default background: var(--font-primary) at 0.7 opacity
+		// CSS: hover/using: background: var(--font-highlight) at 0.7 opacity
+		const ImU32 baseColor = thumbHovered
+			? app::theme::FONT_HIGHLIGHT_U32
+			: app::theme::FONT_PRIMARY_U32;
+		// Apply 0.7 opacity
+		const ImU32 thumbColor = (baseColor & 0x00FFFFFF) |
+			(static_cast<ImU32>(static_cast<float>((baseColor >> 24) & 0xFF) * 0.7f) << 24);
+
+		drawList->AddRectFilled(innerMin, innerMax, thumbColor, app::theme::SCROLLBAR_ROUNDING);
 
 		// Handle mouse-down on the scroller thumb.
 		if (ImGui::IsMouseHoveringRect(thumbMin, thumbMax) && ImGui::IsMouseClicked(0)) {
@@ -210,18 +237,18 @@ void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListStat
 		bool checked = item.value("checked", false);
 		const std::string label = item.value("label", std::string(""));
 
-		// Alternate row background (nth-child(even) effect).
+		// CSS: .item:nth-child(even) { background: var(--background-alt); }
 		if ((i - startIdx) % 2 == 1) {
 			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
 			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
-			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::ROW_HOVER_U32);
+			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::BG_ALT_U32);
 		}
 
-		// Selected highlight (class "selected" when item.checked).
+		// CSS: .item.selected { background: var(--font-alt); }
 		if (checked) {
 			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
 			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
-			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::ROW_SELECTED_U32);
+			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::FONT_ALT_U32);
 		}
 
 		ImGui::PushID(i);

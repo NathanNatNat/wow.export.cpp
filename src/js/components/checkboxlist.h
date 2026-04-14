@@ -34,6 +34,14 @@ struct CheckboxListState {
 	// Mouse drag tracking (equivalent to JS instance vars set in startMouse).
 	float scrollStartY = 0.0f;
 	float scrollStart = 0.0f;
+
+	// Change-detection for resize (ResizeObserver equivalent).
+	// In JS, resize() only fires when the ResizeObserver detects a layout change.
+	float prevContainerHeight = 0.0f;
+	float prevScrollerHeight = 0.0f;
+
+	// Initialization flag (mounted() equivalent).
+	bool initialized = false;
 };
 
 /**

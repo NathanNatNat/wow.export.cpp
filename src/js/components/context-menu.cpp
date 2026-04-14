@@ -6,6 +6,7 @@
 #include "context-menu.h"
 
 #include <imgui.h>
+#include <string>
 
 namespace context_menu {
 
@@ -81,25 +82,36 @@ void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
 	                                ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
 	                                ImGuiWindowFlags_NoMove;
 
-	if (ImGui::Begin("##context_menu_popup", nullptr, windowFlags)) {
+	// Use unique window name per id to avoid collision between multiple instances.
+	std::string windowName = std::string("##context_menu_") + id;
+	if (ImGui::Begin(windowName.c_str(), nullptr, windowFlags)) {
 		// <div class="context-menu-zone"></div>
-		// version to prevent accidental close. In ImGui, we handle close via mouse-leave logic.
+		// The context-menu-zone in JS is an invisible div that extends the hover area between
+		// the trigger and menu to prevent premature close. In ImGui, the window itself acts
+		// as the hover region, and we handle close on mouse-leave below, making a separate
+		// zone unnecessary.
 
 		// Render menu content via the callback (equivalent of <slot v-bind:node="node">).
 		if (contentCallback) {
 			contentCallback(node);
 		}
 
-		// @mouseleave="$emit('close')" — close when mouse leaves the window.
-		if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_RectOnly) &&
+		// @click="$emit('close')" — close on any click within the menu.
+		// This catches clicks on non-Selectable elements (text, separators, etc.)
+		// which individual Selectable items would not handle.
+		if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
 		    ImGui::IsMouseClicked(0)) {
 			if (onClose)
 				onClose();
 		}
 
-		// @click="$emit('close')" — close on any click within the menu.
-		// This is handled by individual Selectable items in the content callback,
-		// but we also handle a general click-outside-to-close here.
+		// @mouseleave="$emit('close')" — close when mouse leaves the window.
+		// JS closes immediately on mouseleave. We replicate this by checking if the
+		// mouse is outside the window bounds.
+		if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_RectOnly)) {
+			if (onClose)
+				onClose();
+		}
 	}
 	ImGui::End();
 
