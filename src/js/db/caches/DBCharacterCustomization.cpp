@@ -94,7 +94,7 @@ static void _initialize() {
 		if (usageType != 0)
 			continue;
 		uint32_t matResID = fieldToUint32(tfd_row.at("MaterialResourcesID"));
-		tfd_map[matResID] = _id;
+		tfd_map[matResID] = fieldToUint32(tfd_row.at("FileDataID"));
 	}
 
 	// creature data (needed for ChrModel -> FileDataID)
@@ -161,7 +161,7 @@ static void _initialize() {
 	// ChrModel -> FileDataID, texture layout, options, choices
 	for (const auto& [chr_model_id, chr_model_row] : casc::db2::preloadTable("ChrModel").getAllRows()) {
 		uint32_t displayID = fieldToUint32(chr_model_row.at("DisplayID"));
-		uint32_t file_data_id = DBCreatures::getFileDataIDByDisplayID(displayID);
+		uint32_t file_data_id = DBCreatures::getFileDataIDByDisplayID(displayID).value_or(0);
 
 		chr_model_id_to_file_data_id[chr_model_id] = file_data_id;
 		chr_model_id_to_texture_layout_id[chr_model_id] = fieldToUint32(chr_model_row.at("CharComponentTextureLayoutID"));
@@ -295,7 +295,14 @@ void ensureInitialized() {
 	if (is_initialized)
 		return;
 
+	// Guard against re-entrant/concurrent calls (matches JS init_promise pattern)
+	static bool is_initializing = false;
+	if (is_initializing)
+		return;
+	is_initializing = true;
+
 	_initialize();
+	is_initializing = false;
 }
 
 // getters

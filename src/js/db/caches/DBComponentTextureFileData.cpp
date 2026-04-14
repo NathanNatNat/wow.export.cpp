@@ -57,7 +57,7 @@ is_initialized = true;
 is_initializing = false;
 }
 
-std::optional<uint32_t> getTextureForRaceGender(const std::vector<uint32_t>& file_data_ids, uint32_t race_id, uint32_t gender_index, uint32_t fallback_race_id) {
+std::optional<uint32_t> getTextureForRaceGender(const std::vector<uint32_t>& file_data_ids, std::optional<uint32_t> race_id, std::optional<uint32_t> gender_index, uint32_t fallback_race_id) {
 if (file_data_ids.empty())
 return std::nullopt;
 
@@ -65,17 +65,21 @@ return std::nullopt;
 if (file_data_ids.size() == 1)
 return file_data_ids[0];
 
+// When race_id/gender_index are nullopt (JS null), skip race/gender-specific matching
+// and fall through to generic "any race" entries (matches JS === comparison behavior).
+
+if (race_id.has_value() && gender_index.has_value()) {
 // try exact race + gender match
 for (const auto fdid : file_data_ids) {
 auto it = file_data_to_info.find(fdid);
-if (it != file_data_to_info.end() && it->second.raceID == race_id && it->second.genderIndex == gender_index)
+if (it != file_data_to_info.end() && it->second.raceID == *race_id && it->second.genderIndex == *gender_index)
 return fdid;
 }
 
 // try race + any gender
 for (const auto fdid : file_data_ids) {
 auto it = file_data_to_info.find(fdid);
-if (it != file_data_to_info.end() && it->second.raceID == race_id && it->second.genderIndex == GENDER_ANY)
+if (it != file_data_to_info.end() && it->second.raceID == *race_id && it->second.genderIndex == GENDER_ANY)
 return fdid;
 }
 
@@ -83,7 +87,7 @@ return fdid;
 if (fallback_race_id > 0) {
 for (const auto fdid : file_data_ids) {
 auto it = file_data_to_info.find(fdid);
-if (it != file_data_to_info.end() && it->second.raceID == fallback_race_id && (it->second.genderIndex == gender_index || it->second.genderIndex == GENDER_ANY))
+if (it != file_data_to_info.end() && it->second.raceID == fallback_race_id && (it->second.genderIndex == *gender_index || it->second.genderIndex == GENDER_ANY))
 return fdid;
 }
 }
@@ -91,8 +95,9 @@ return fdid;
 // try race=0 (any race) with specific gender
 for (const auto fdid : file_data_ids) {
 auto it = file_data_to_info.find(fdid);
-if (it != file_data_to_info.end() && it->second.raceID == 0 && it->second.genderIndex == gender_index)
+if (it != file_data_to_info.end() && it->second.raceID == 0 && it->second.genderIndex == *gender_index)
 return fdid;
+}
 }
 
 // try race=0 (any race)

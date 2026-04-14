@@ -16,7 +16,7 @@ struct CreatureDisplayInfo {
 	uint32_t modelID = 0;
 	uint32_t extendedDisplayInfoID = 0;
 	std::vector<uint32_t> textures;
-	std::vector<uint32_t> extraGeosets;
+	std::optional<std::vector<uint32_t>> extraGeosets;
 };
 
 /**
@@ -34,9 +34,9 @@ const std::vector<CreatureDisplayInfo>* getCreatureDisplaysByFileDataID(uint32_t
 /**
  * Gets the file data ID for a given display ID.
  * @param displayID Creature display ID.
- * @returns File data ID, or 0 if not found.
+ * @returns File data ID, or std::nullopt if not found.
  */
-uint32_t getFileDataIDByDisplayID(uint32_t displayID);
+std::optional<uint32_t> getFileDataIDByDisplayID(uint32_t displayID);
 
 /**
  * Gets the display info for a given display ID.

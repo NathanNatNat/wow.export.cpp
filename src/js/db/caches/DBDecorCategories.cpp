@@ -76,13 +76,18 @@ void initialize_categories() {
 	for (const auto& [_mapId, row] : mapRows) {
 		(void)_mapId;
 		uint32_t decor_id = 0;
+		bool decor_id_found = false;
 		auto hdIt = row.find("HouseDecorID");
-		if (hdIt != row.end())
+		if (hdIt != row.end()) {
 			decor_id = fieldToUint32(hdIt->second);
-		if (decor_id == 0) {
+			decor_id_found = true;
+		}
+		if (!decor_id_found) {
 			auto dIt = row.find("DecorID");
-			if (dIt != row.end())
+			if (dIt != row.end()) {
 				decor_id = fieldToUint32(dIt->second);
+				decor_id_found = true;
+			}
 		}
 
 		auto subIt = row.find("DecorSubcategoryID");
@@ -90,7 +95,9 @@ void initialize_categories() {
 			continue;
 		uint32_t sub_id = fieldToUint32(subIt->second);
 
-		if (decor_id == 0)
+		// JS: if (decor_id === undefined || sub_id === undefined) continue;
+		// Skip only if field was not found (0 is a valid ID)
+		if (!decor_id_found)
 			continue;
 
 		decor_subcategory_map[decor_id].insert(sub_id);

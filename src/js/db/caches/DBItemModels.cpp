@@ -214,26 +214,25 @@ void ensureInitialized() {
 /**
  * Get model file data IDs for an item (first option per model resource).
  */
-const std::vector<uint32_t>* getItemModels(uint32_t item_id) {
+std::optional<std::vector<uint32_t>> getItemModels(uint32_t item_id) {
 	auto disp_it = item_to_display_id.find(item_id);
 	if (disp_it == item_to_display_id.end())
-		return nullptr;
+		return std::nullopt;
 
 	auto data_it = display_to_data.find(disp_it->second);
 	if (data_it == display_to_data.end())
-		return nullptr;
+		return std::nullopt;
 
-	// Build and cache the first-option models
-	thread_local std::vector<uint32_t> temp_models;
-	temp_models.clear();
+	// return first option for each model resource, filtering falsy (0) values (JS filter(Boolean))
+	std::vector<uint32_t> models;
 	for (const auto& opts : data_it->second.modelOptions) {
-		if (!opts.empty())
-			temp_models.push_back(opts[0]);
+		if (!opts.empty() && opts[0] != 0)
+			models.push_back(opts[0]);
 	}
 
-	if (temp_models.empty())
-		return nullptr;
-	return &temp_models;
+	if (models.empty())
+		return std::nullopt;
+	return models;
 }
 
 /**
