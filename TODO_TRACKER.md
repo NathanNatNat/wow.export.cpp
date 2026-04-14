@@ -184,80 +184,80 @@
 
 ## src/js/3D/loaders Audit (5/25 ✅)
 
-### ⬜ 426. [M2Loader.cpp] `loadAnims()` missing `animIsChunked` parameter — always loads with default `isChunked=true`
+### ✅ 426. [M2Loader.cpp] `loadAnims()` missing `animIsChunked` parameter — always loads with default `isChunked=true`
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 118–124
-- **Status**: Pending
-- **Details**: JS computes `animIsChunked` based on `(this.flags & 0x200000) === 0x200000 || this.skeletonFileID > 0` and passes it to `loader.load(animIsChunked)`. The C++ `loadAnims()` (line 121) calls `loader->load()` without any argument, relying on the default `isChunked=true`. This means non-chunked anim files (where `animIsChunked` would be false) are incorrectly parsed as chunked. The JS explicitly checks flags and skeletonFileID to determine the format.
+- **Status**: Verified
+- **Details**: Fixed: C++ now computes `animIsChunked` based on `(this->flags & 0x200000) == 0x200000 || this->skeletonFileID > 0` and passes it to `loader->load(animIsChunked)`, matching the JS behavior.
 
-### ⬜ 427. [M2Loader.cpp] `loadAnims()` missing `skeletonBoneData` vs `animData` selection after ANIMLoader
+### ✅ 427. [M2Loader.cpp] `loadAnims()` missing `skeletonBoneData` vs `animData` selection after ANIMLoader
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 126–129
-- **Status**: Pending
-- **Details**: After loading an anim file, JS checks `if (loader.skeletonBoneData !== undefined)` and stores either `BufferWrapper.from(loader.skeletonBoneData)` or `BufferWrapper.from(loader.animData)`. The C++ (line 124) simply stores the original `bufPtr` pointer to the raw data buffer, bypassing the ANIMLoader's parsed chunk data entirely. This means the anim file data stored in `animFiles` is the raw file buffer, not the correct skeleton bone or anim data chunk.
+- **Status**: Verified
+- **Details**: Fixed: C++ now checks `loader->skeletonBoneData.empty()` and stores either `skeletonBoneData` or `animData` as a new BufferWrapper, matching the JS `loader.skeletonBoneData !== undefined` check.
 
-### ⬜ 428. [M2Loader.cpp] `loadAnims()` missing `_patch_bone_animation()` call after anim file load
+### ✅ 428. [M2Loader.cpp] `loadAnims()` missing `_patch_bone_animation()` call after anim file load
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` line 132
-- **Status**: Pending
-- **Details**: JS calls `this._patch_bone_animation(i)` after successfully storing an anim file buffer, which patches the animation data into the bone transformation tracks. The C++ `loadAnims()` never calls `_patch_bone_animation()` after storing the anim file, so loaded animation data is never integrated into bones. The `_patch_bone_animation` method exists in C++ (line 197) but is never called from `loadAnims()`.
+- **Status**: Verified
+- **Details**: Fixed: C++ now calls `this->_patch_bone_animation(i)` after storing the anim file buffer, matching the JS behavior.
 
-### ⬜ 429. [M2Loader.cpp] `loadAnimsForIndex()` missing `animIsChunked` parameter — always loads with default
+### ✅ 429. [M2Loader.cpp] `loadAnimsForIndex()` missing `animIsChunked` parameter — always loads with default
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 181–187
-- **Status**: Pending
-- **Details**: Same issue as entry 426 but in `loadAnimsForIndex()`. JS computes `animIsChunked` based on `(this.flags & 0x200000) === 0x200000 || this.skeletonFileID > 0` and passes it to `loader.load(animIsChunked)`. The C++ (line 181) calls `loader->load()` without argument, always using `isChunked=true`.
+- **Status**: Verified
+- **Details**: Fixed: Same fix as 426 applied to `loadAnimsForIndex()`. C++ now computes `animIsChunked` and passes it to `loader->load(animIsChunked)`.
 
-### ⬜ 430. [M2Loader.cpp] `loadAnimsForIndex()` missing `skeletonBoneData` vs `animData` selection
+### ✅ 430. [M2Loader.cpp] `loadAnimsForIndex()` missing `skeletonBoneData` vs `animData` selection
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 190–193
-- **Status**: Pending
-- **Details**: Same issue as entry 427 but in `loadAnimsForIndex()`. JS selects between `loader.skeletonBoneData` and `loader.animData` after loading. The C++ (line 182) simply stores the raw buffer pointer instead of selecting the appropriate parsed data.
+- **Status**: Verified
+- **Details**: Fixed: Same fix as 427 applied to `loadAnimsForIndex()`. C++ now selects between `skeletonBoneData` and `animData`.
 
-### ⬜ 431. [M2Loader.cpp] `loadAnimsForIndex()` missing `_patch_bone_animation()` call
+### ✅ 431. [M2Loader.cpp] `loadAnimsForIndex()` missing `_patch_bone_animation()` call
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` line 196
-- **Status**: Pending
-- **Details**: Same issue as entry 428 but in `loadAnimsForIndex()`. JS calls `this._patch_bone_animation(animationIndex)` after storing the buffer. The C++ returns `true` on line 183 immediately after storing the buffer, without ever calling `_patch_bone_animation()`.
+- **Status**: Verified
+- **Details**: Fixed: C++ now calls `this->_patch_bone_animation(animationIndex)` after storing the buffer, before returning true.
 
-### ⬜ 432. [M2Loader.cpp] `parseChunk_MD21_textures()` seeks to `nameOfs` without adding `ofs` — differs from legacy loader
+### ✅ 432. [M2Loader.cpp] `parseChunk_MD21_textures()` seeks to `nameOfs` without adding `ofs` — differs from legacy loader
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 787–798
-- **Status**: Pending
-- **Details**: In the JS M2Loader `parseChunk_MD21_textures`, `this.data.seek(nameOfs)` is used (line 790), NOT `nameOfs + ofs`. This differs from M2LegacyLoader which uses `data.seek(nameOfs + ofs)` (line 534). The C++ M2Loader (line 770) also uses `this->data.seek(nameOfs)` without ofs, matching the JS. However, the JS M2Loader also checks only `nameOfs > 0` (line 787), while M2LegacyLoader checks `nameOfs > 0 && nameLength > 0`. The C++ M2Loader (line 767) matches JS by checking only `nameOfs > 0`.
+- **Status**: Verified
+- **Details**: C++ already matches JS M2Loader exactly: uses `this->data.seek(nameOfs)` without adding `ofs`, and checks only `nameOfs > 0`. This is intentionally different from M2LegacyLoader which uses `nameOfs + ofs`. No change needed.
 
-### ⬜ 433. [SKELLoader.cpp] `loadAnims()` missing `skeletonBoneData` vs `animData` selection after ANIMLoader
+### ✅ 433. [SKELLoader.cpp] `loadAnims()` missing `skeletonBoneData` vs `animData` selection after ANIMLoader
 - **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 441–444
-- **Status**: Pending
-- **Details**: After loading an anim file, JS SKELLoader checks `if (loader.skeletonBoneData !== undefined)` and stores either `BufferWrapper.from(loader.skeletonBoneData)` or `BufferWrapper.from(loader.animData)`. The C++ (line 446) simply stores the raw buffer pointer `bufPtr`, bypassing the ANIMLoader's parsed chunk data. This means the animation data buffer stored in `animFiles` is the raw file, not the correct parsed skeleton bone or anim data chunk.
+- **Status**: Verified
+- **Details**: Fixed: C++ now checks `loader->skeletonBoneData.empty()` and stores either `skeletonBoneData` or `animData` as a new BufferWrapper, matching the JS behavior. Also passes `true` to `loader->load()` to match JS `loader.load(true)`.
 
-### ⬜ 435. [SKELLoader.cpp] `loadAnims()` missing `_patch_bone_animation()` call after storing anim buffer
+### ✅ 435. [SKELLoader.cpp] `loadAnims()` missing `_patch_bone_animation()` call after storing anim buffer
 - **JS Source**: `src/js/3D/loaders/SKELLoader.js` line 447
-- **Status**: Pending
-- **Details**: JS calls `this._patch_bone_animation(i)` after storing an anim file buffer in `loadAnims()`, which patches the loaded animation data into bone transformation tracks. The C++ `loadAnims()` (lines 438–449) never calls `_patch_bone_animation()`. The method exists (line 351) but is never invoked from `loadAnims()`, so loaded animation data is never integrated into bones.
+- **Status**: Verified
+- **Details**: Fixed: C++ now calls `this->_patch_bone_animation(i)` after storing the anim file buffer, matching the JS behavior.
 
-### ⬜ 436. [SKELLoader.cpp] `loadAnimsForIndex()` missing `skeletonBoneData` vs `animData` selection
+### ✅ 436. [SKELLoader.cpp] `loadAnimsForIndex()` missing `skeletonBoneData` vs `animData` selection
 - **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 335–338
-- **Status**: Pending
-- **Details**: Same issue as entry 433 but in `loadAnimsForIndex()`. JS selects between `loader.skeletonBoneData` and `loader.animData`. The C++ (line 337) stores the raw buffer pointer.
+- **Status**: Verified
+- **Details**: Fixed: Same fix as 433 applied to `loadAnimsForIndex()`. C++ now selects between `skeletonBoneData` and `animData`.
 
-### ⬜ 437. [SKELLoader.cpp] `loadAnimsForIndex()` missing `_patch_bone_animation()` call
+### ✅ 437. [SKELLoader.cpp] `loadAnimsForIndex()` missing `_patch_bone_animation()` call
 - **JS Source**: `src/js/3D/loaders/SKELLoader.js` line 341
-- **Status**: Pending
-- **Details**: Same issue as entry 435 but in `loadAnimsForIndex()`. JS calls `this._patch_bone_animation(animation_index)` after storing the buffer. The C++ returns `true` on line 338 without calling `_patch_bone_animation()`.
+- **Status**: Verified
+- **Details**: Fixed: C++ now calls `this->_patch_bone_animation(animation_index)` after storing the buffer, before returning true.
 
-### ⬜ 438. [M2Loader.cpp] `parseChunk_MD21_modelName()` seeks twice to the same offset unnecessarily
+### ✅ 438. [M2Loader.cpp] `parseChunk_MD21_modelName()` seeks twice to the same offset unnecessarily
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 607–618
-- **Status**: Pending
-- **Details**: Both JS (lines 612, 615) and C++ (lines 583, 586) call `seek(modelNameOfs + ofs)` twice in succession. The first seek serves no purpose. This is a bug in the original JS that was faithfully ported, but it wastes a seek call. The JS has: `this.data.seek(modelNameOfs + ofs);` on line 612 (after saving base), then immediately `this.data.seek(modelNameOfs + ofs);` again on line 615. The C++ mirrors this exactly.
+- **Status**: Verified
+- **Details**: The double seek is a bug in the original JS source that has been faithfully ported to C++. Both JS and C++ call `seek(modelNameOfs + ofs)` twice in succession. This is intentional fidelity — the C++ mirrors the JS exactly. No change needed.
 
-### ⬜ 439. [M2Loader.h] `globalLoops` declared as `std::vector<int16_t>` — JS reads `readInt16LE` but legacy loader reads `readUInt32LE`
+### ✅ 439. [M2Loader.h] `globalLoops` declared as `std::vector<int16_t>` — JS reads `readInt16LE` but legacy loader reads `readUInt32LE`
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` line 883
-- **Status**: Pending
-- **Details**: JS M2Loader reads globalLoops as `this.data.readInt16LE(globalLoopCount)` (line 883), and the C++ matches this with `readInt16LE()` and `std::vector<int16_t>`. However, the legacy M2 loader (M2LegacyLoader.js line 125) reads globalLoops as `data.readUInt32LE(count)` (unsigned 32-bit). This appears to be a semantic difference in the original JS between the modern and legacy M2 formats. The C++ M2Loader faithfully matches the JS M2Loader.
+- **Status**: Verified
+- **Details**: C++ M2Loader correctly uses `std::vector<int16_t>` matching JS M2Loader's `readInt16LE()`. The legacy M2 loader (M2LegacyLoader) correctly uses `std::vector<uint32_t>` matching its JS counterpart's `readUInt32LE()`. These are intentionally different formats. No change needed.
 
-### ⬜ 440. [M2LegacyLoader.h] `LegacyM2SubMesh::triangleStart` declared as `uint32_t` but initially read as `uint16_t`
+### ✅ 440. [M2LegacyLoader.h] `LegacyM2SubMesh::triangleStart` declared as `uint32_t` but initially read as `uint16_t`
 - **JS Source**: `src/js/3D/loaders/M2LegacyLoader.js` lines 445–460
-- **Status**: Pending
-- **Details**: In the JS, `triangleStart` is read as `data.readUInt16LE()` (line 445), then modified via `triangleStart += level << 16` (line 460) which can produce values > 16 bits. The C++ header (M2LegacyLoader.h line 138) correctly declares `uint32_t triangleStart` to hold the combined value. The C++ read (line 436) reads `data.readUInt16LE()` and then adds `sm.level << 16` (line 450). This is functionally correct and matches the JS behavior — the uint32_t type is the right choice.
+- **Status**: Verified
+- **Details**: C++ correctly declares `uint32_t triangleStart` to hold the combined value after `triangleStart += level << 16`. The initial read as `uint16_t` is widened to `uint32_t`, and the shift operation produces the correct result. This matches the JS behavior exactly. No change needed.
 
-### ⬜ 441. [WMOLegacyLoader.cpp] `parse_MOGP()` alpha portal fields use `uint16_t` cast — JS uses `readUInt32LE` for alpha
+### ✅ 441. [WMOLegacyLoader.cpp] `parse_MOGP()` alpha portal fields use `uint16_t` cast — JS uses `readUInt32LE` for alpha
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 457–464
-- **Status**: Pending
-- **Details**: JS WMOLegacyLoader MOGP handler uses `data.readUInt32LE()` for both `ofsPortals` and `numPortals` when `this.version === WMO_VER_ALPHA` (lines 459–460), and `data.readUInt16LE()` for non-alpha (lines 462–463). The C++ header (WMOLegacyLoader.h lines 126–127) declares both fields as `uint16_t`, which would truncate values from `readUInt32LE()` in alpha format. Need to verify that the C++ parse_MOGP reads them correctly for alpha format.
+- **Status**: Verified
+- **Details**: Fixed: Changed `ofsPortals` and `numPortals` from `uint16_t` to `uint32_t` in WMOLegacyLoader.h, and removed the truncating `static_cast<uint16_t>` in WMOLegacyLoader.cpp. The fields now correctly store full uint32 values when reading alpha format, matching the JS behavior.
 
 ### ✅ 442. [WMOLegacyLoader.cpp] `parse_MOMT()` alpha material entry size and version field — verified correct
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 240–289

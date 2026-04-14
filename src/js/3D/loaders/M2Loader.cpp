@@ -117,11 +117,26 @@ auto ownedBuf = std::make_unique<BufferWrapper>(std::move(animData));
 BufferWrapper* bufPtr = ownedBuf.get();
 this->ownedAnimBuffers.push_back(std::move(ownedBuf));
 
+bool animIsChunked = (this->flags & 0x200000) == 0x200000 || this->skeletonFileID > 0;
+
 auto loader = std::make_unique<ANIMLoader>(*bufPtr);
-loader->load();
-// ANIMLoader stores raw data in animData/skeletonAttachmentData/skeletonBoneData vectors.
-// Store the BufferWrapper pointer for patch_track_animation() access.
-this->animFiles[static_cast<uint32_t>(i)] = bufPtr;
+loader->load(animIsChunked);
+
+// Select the correct parsed data from the ANIMLoader.
+if (!loader->skeletonBoneData.empty()) {
+auto parsedBuf = std::make_unique<BufferWrapper>(std::move(loader->skeletonBoneData));
+BufferWrapper* parsedPtr = parsedBuf.get();
+this->ownedAnimBuffers.push_back(std::move(parsedBuf));
+this->animFiles[static_cast<uint32_t>(i)] = parsedPtr;
+} else {
+auto parsedBuf = std::make_unique<BufferWrapper>(std::move(loader->animData));
+BufferWrapper* parsedPtr = parsedBuf.get();
+this->ownedAnimBuffers.push_back(std::move(parsedBuf));
+this->animFiles[static_cast<uint32_t>(i)] = parsedPtr;
+}
+
+// patch this animation into bones
+this->_patch_bone_animation(static_cast<uint32_t>(i));
 } catch (const std::exception& e) {
 logging::write(std::format("Failed to load .anim file (fileDataID={}): {}", fileDataID, e.what()));
 }
@@ -177,9 +192,27 @@ auto ownedBuf = std::make_unique<BufferWrapper>(std::move(animData));
 BufferWrapper* bufPtr = ownedBuf.get();
 this->ownedAnimBuffers.push_back(std::move(ownedBuf));
 
+bool animIsChunked = (this->flags & 0x200000) == 0x200000 || this->skeletonFileID > 0;
+
 auto loader = std::make_unique<ANIMLoader>(*bufPtr);
-loader->load();
-this->animFiles[animationIndex] = bufPtr;
+loader->load(animIsChunked);
+
+// store .anim data
+if (!loader->skeletonBoneData.empty()) {
+auto parsedBuf = std::make_unique<BufferWrapper>(std::move(loader->skeletonBoneData));
+BufferWrapper* parsedPtr = parsedBuf.get();
+this->ownedAnimBuffers.push_back(std::move(parsedBuf));
+this->animFiles[animationIndex] = parsedPtr;
+} else {
+auto parsedBuf = std::make_unique<BufferWrapper>(std::move(loader->animData));
+BufferWrapper* parsedPtr = parsedBuf.get();
+this->ownedAnimBuffers.push_back(std::move(parsedBuf));
+this->animFiles[animationIndex] = parsedPtr;
+}
+
+// patch animation data into existing bones
+this->_patch_bone_animation(animationIndex);
+
 return true;
 } catch (const std::exception& e) {
 logging::write(std::format("Failed to load .anim file (fileDataID={}): {}", fileDataID, e.what()));
