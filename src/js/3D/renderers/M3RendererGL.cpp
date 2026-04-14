@@ -10,8 +10,6 @@
 #include "../Shaders.h"
 #include "../../buffer.h"
 
-#include "../../ui/texture-ribbon.h"
-
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -194,7 +192,10 @@ void M3RendererGL::updateWireframe() {
 // -----------------------------------------------------------------------
 
 std::optional<M3RendererGL::BoundingBoxResult> M3RendererGL::getBoundingBox() {
-	if (!m3 || m3->vertices.empty())
+	// JS checks `!this.m3.vertices` — an empty array [] is truthy in JS,
+	// so it passes the guard and returns {min: [Inf,Inf,Inf], max: [-Inf,-Inf,-Inf]}.
+	// Match that behavior: only check for null m3, not empty vertices.
+	if (!m3)
 		return std::nullopt;
 
 	const auto& verts = m3->vertices;
@@ -236,9 +237,12 @@ void M3RendererGL::render(const float* view_matrix, const float* projection_matr
 	shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
 	shader->set_uniform_3f("u_view_up", 0, 1, 0);
 
-	const float time = static_cast<float>(
-		std::chrono::duration<double>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()
-	);
+	// JS: performance.now() * 0.001 — seconds since page load.
+	// Use static start time for small-valued monotonic floats, avoiding epoch precision loss.
+	static const auto s_render_start = std::chrono::steady_clock::now();
+	const float time = std::chrono::duration<float>(
+		std::chrono::steady_clock::now() - s_render_start
+	).count();
 	shader->set_uniform_1f("u_time", time);
 
 	// set identity bone matrix for bone 0 (M3 has no skeleton)
