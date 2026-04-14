@@ -5,7 +5,6 @@
  */
 
 #include "char-texture-overlay.h"
-#include "../core.h"
 
 #include <algorithm>
 
@@ -89,20 +88,6 @@ uint32_t getActiveLayer() {
 
 size_t getLayerCount() {
 	return layers.size();
-}
-
-void initEvents() {
-	core::events.on("screen-tab-characters", []() {
-		ensureActiveLayerAttached();
-	});
-
-	core::events.on("click-chr-next-overlay", []() {
-		nextOverlay();
-	});
-
-	core::events.on("click-chr-prev-overlay", []() {
-		prevOverlay();
-	});
 }
 
 } // namespace char_texture_overlay

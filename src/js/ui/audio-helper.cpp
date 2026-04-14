@@ -105,6 +105,9 @@ void AudioPlayer::init() {
 	}
 }
 
+// Deviation from JS: returns void instead of the decoded buffer.
+// JS `async load()` returns `this.buffer` (AudioBuffer) but no caller uses the return value.
+// miniaudio decodes on-the-fly during playback, so there is no decoded buffer to return.
 void AudioPlayer::load(const std::vector<uint8_t>& data) {
 	stop();
 
@@ -169,8 +172,10 @@ void AudioPlayer::play(double from_offset) {
 	ma_sound_set_looping(sound, loop ? MA_TRUE : MA_FALSE);
 	ma_sound_set_volume(sound, volume);
 
-	// miniaudio does not have a direct per-sound "onended" callback like Web Audio API.
-	// The on_ended callback is fired from get_position() which polls ma_sound_at_end().
+	// Deviation from JS: miniaudio has no per-sound "onended" callback like Web Audio API.
+	// In JS, the browser fires source.onended automatically when playback completes.
+	// In C++, on_ended is fired from get_position() by polling ma_sound_at_end().
+	// This means get_position() has side effects (fires on_ended, resets state) not present in JS.
 	// Consumers must call get_position() periodically for end-of-playback detection.
 
 	ma_sound_start(sound);
@@ -231,6 +236,7 @@ double AudioPlayer::get_position() {
 
 		// Check for natural end of playback.
 		if (ma_sound_at_end(sound) && !loop) {
+			double final_pos = std::min(position, duration_cache);
 			is_playing = false;
 			start_offset = 0;
 			stop_source();
@@ -238,7 +244,7 @@ double AudioPlayer::get_position() {
 			if (on_ended)
 				on_ended();
 
-			return 0;
+			return final_pos;
 		}
 
 		if (loop && duration_cache > 0.0)
@@ -255,6 +261,12 @@ double AudioPlayer::get_duration() {
 }
 
 void AudioPlayer::set_volume(float value) {
+	// JS: if (this.gain) this.gain.gain.value = value;
+	// Only apply if engine has been initialized (gain node exists in JS).
+	// Before init(), this is a no-op and the value is not remembered.
+	if (!engine)
+		return;
+
 	volume = value;
 
 	if (sound)

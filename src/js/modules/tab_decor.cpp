@@ -270,25 +270,22 @@ static void export_files(const std::vector<const db::caches::DBDecor::DecorItem*
 
 			const bool is_active = (file_data_id == active_file_data_id);
 
-			// model_viewer_utils::ExportModelOptions opts;
-			// opts.data = &data;
-			// opts.file_data_id = file_data_id;
-			// opts.file_name = file_name;
-			// opts.format = format;
-			// opts.export_path = export_path;
-			// opts.helper = &helper;
-			// opts.file_manifest = &file_manifest;
-			// opts.geoset_mask = is_active ? &view.decorViewerGeosets : nullptr;
-			// opts.wmo_group_mask = is_active ? &view.decorViewerWMOGroups : nullptr;
-			// opts.wmo_set_mask = is_active ? &view.decorViewerWMOSets : nullptr;
-			// helper.mark(mark_name, true);
+			model_viewer_utils::ExportModelOptions opts;
+			opts.data = &data;
+			opts.file_data_id = file_data_id;
+			opts.file_name = file_name;
+			opts.format = format;
+			opts.export_path = export_path;
+			opts.helper = &helper;
+			opts.casc = casc;
+			opts.file_manifest = &file_manifest;
+			opts.geoset_mask = is_active ? &view.decorViewerGeosets : nullptr;
+			opts.wmo_group_mask = is_active ? &view.decorViewerWMOGroups : nullptr;
+			opts.wmo_set_mask = is_active ? &view.decorViewerWMOSets : nullptr;
+			opts.export_paths = &export_paths;
+			std::string mark_name = model_viewer_utils::export_model(opts);
 
-			(void)data;
-			(void)model_type;
-			(void)file_name;
-			(void)export_path;
-			(void)is_active;
-			helper.mark(decor_name, true);
+			helper.mark(mark_name, true);
 		} catch (const std::exception& e) {
 			helper.mark(decor_name, false, e.what());
 		}
