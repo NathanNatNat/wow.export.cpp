@@ -10,8 +10,9 @@
 #include <functional>
 
 /**
- * Camera interface expected by CameraControlsGL.
- * The actual camera implementation must provide these members.
+ * Unified camera interface used by both CameraControlsGL and CharacterCameraControlsGL.
+ * JS uses duck typing — the same camera object is passed to both control types.
+ * This single struct provides all members needed by either control type.
  */
 struct CameraGL {
 	std::array<float, 3> position = {0, 0, 0};
@@ -20,10 +21,12 @@ struct CameraGL {
 	float fov = 50.0f;
 
 	std::function<void(float, float, float)> lookAt;
+	std::function<void()> update_view;
 };
 
 /**
- * The actual implementation wraps GLFW callbacks.
+ * Unified DOM element interface used by both CameraControlsGL and CharacterCameraControlsGL.
+ * JS uses the same DOM element for both control types via duck typing.
  */
 struct DomElementGL {
 	int clientWidth = 800;

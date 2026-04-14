@@ -204,8 +204,13 @@ CameraControlsGL::CameraControlsGL(CameraGL& camera, DomElementGL& dom_element)
 }
 
 void CameraControlsGL::init() {
-	// The JS dom_element.addEventListener calls are replaced by
-	// the GLFW callback system calling these methods directly.
+	// JS init() registers six event listeners:
+	//   contextmenu (preventDefault) on dom_element,
+	//   mousedown, wheel, keydown on dom_element,
+	//   mousemove, mouseup on document (stored as move_listener/up_listener).
+	// In C++/GLFW, the caller is responsible for forwarding input events
+	// to the on_mouse_down/on_mouse_move/on_mouse_up/on_mouse_wheel/on_key_down methods.
+	// GLFW does not have a context menu, so contextmenu prevention is unnecessary.
 
 	if (dom_element.tabIndex == -1)
 		dom_element.tabIndex = 0;
@@ -214,10 +219,17 @@ void CameraControlsGL::init() {
 }
 
 void CameraControlsGL::dispose() {
+	// JS dispose() removes mousemove and mouseup event listeners from document.
+	// In C++/GLFW, the caller must stop forwarding input events to this instance.
+	// Reset state to prevent stale input processing if events are still forwarded.
+	state = STATE_NONE;
 }
 
 void CameraControlsGL::on_mouse_down(int button, int clientX, int clientY,
                                       bool ctrlKey, bool metaKey, bool shiftKey) {
+	// JS: this.dom_element.focus ? this.dom_element.focus() : window.focus()
+	// In GLFW, dom_element.focus should be set to call glfwFocusWindow().
+	// If not set, there is no fallback — the caller must ensure focus is configured.
 	if (dom_element.focus)
 		dom_element.focus();
 
@@ -289,7 +301,7 @@ void CameraControlsGL::on_mouse_move(int clientX, int clientY) {
 float CameraControlsGL::get_pan_scale() {
 	const float height = static_cast<float>(dom_element.clientHeight > 0 ? dom_element.clientHeight : 1);
 	const float distance = spherical.radius;
-	const float fov = camera.fov;
+	const float fov = camera.fov != 0.0f ? camera.fov : 50.0f; // JS: this.camera.fov || 50
 	const float v_fov = fov * static_cast<float>(std::numbers::pi) / 180.0f;
 	return (2.0f * std::tan(v_fov / 2.0f) * distance) / height;
 }
@@ -395,8 +407,8 @@ bool CameraControlsGL::update() {
 	vec3_apply_quat(offset, offset, quat_inverse);
 
 	vec3_add(camera.position, target, offset);
-	if (camera.lookAt)
-		camera.lookAt(target[0], target[1], target[2]);
+	// JS calls camera.lookAt() unconditionally (line 408).
+	camera.lookAt(target[0], target[1], target[2]);
 
 	spherical_delta.theta = 0;
 	spherical_delta.phi = 0;
@@ -404,6 +416,11 @@ bool CameraControlsGL::update() {
 
 	scale = 1.0f;
 
+	// JS: this.camera.quaternion || [0, 0, 0, 1] — fallback if quaternion is falsy.
+	// In C++, camera.quaternion is always initialized (non-optional), so the fallback
+	// is inherently satisfied. The conditional copy below matches JS lines 419–420:
+	// JS only copies quaternion if this.camera.quaternion is truthy.
+	// Since C++ quaternion is always valid, unconditional copy is functionally equivalent.
 	if (vec3_distance_squared(last_position, camera.position) > EPS ||
 		8.0f * (1.0f - quat_dot(last_quaternion, camera.quaternion)) > EPS) {
 		vec3_copy(last_position, camera.position);

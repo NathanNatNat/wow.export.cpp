@@ -14,8 +14,8 @@ static constexpr float ZOOM_SCALE = 0.95f;
 static constexpr float MIN_DISTANCE = 0.1f;
 static constexpr float MAX_DISTANCE = 100.0f;
 
-CharacterCameraControlsGL::CharacterCameraControlsGL(CharacterCameraGL& camera,
-                                                       CharacterDomElementGL& dom_element)
+CharacterCameraControlsGL::CharacterCameraControlsGL(CameraGL& camera,
+                                                       DomElementGL& dom_element)
 	: camera(camera), dom_element(dom_element),
 	  target({0, 0, 0}),
 	  model_rotation_y(0.0f),
@@ -24,6 +24,14 @@ CharacterCameraControlsGL::CharacterCameraControlsGL(CharacterCameraGL& camera,
 	  is_panning(false),
 	  prev_mouse_x(0),
 	  prev_mouse_y(0) {
+	// JS constructor registers three event listeners on dom_element:
+	//   mousedown → on_mouse_down, wheel → on_mouse_wheel,
+	//   contextmenu → e.preventDefault()
+	// It also stores handler references (mouse_down_handler, mouse_move_handler,
+	// mouse_up_handler, mouse_wheel_handler) for later removal in dispose().
+	// In C++/GLFW, the caller is responsible for forwarding input events
+	// to the on_mouse_down/on_mouse_move/on_mouse_up/on_mouse_wheel methods.
+	// GLFW does not have a context menu, so contextmenu prevention is unnecessary.
 }
 
 void CharacterCameraControlsGL::on_mouse_down(int button, int clientX, int clientY) {
@@ -96,8 +104,8 @@ void CharacterCameraControlsGL::on_mouse_move(int clientX, int clientY) {
 		target[1] += offset_y;
 		target[2] += offset_z;
 
-		if (camera.lookAt)
-			camera.lookAt(target[0], target[1], target[2]);
+		// JS calls camera.lookAt() unconditionally here (line 112).
+		camera.lookAt(target[0], target[1], target[2]);
 	}
 }
 
@@ -140,8 +148,8 @@ void CharacterCameraControlsGL::on_mouse_wheel(float deltaY) {
 		camera.position[1] -= dir_y * zoom_amount;
 		camera.position[2] -= dir_z * zoom_amount;
 
-		if (camera.update_view)
-			camera.update_view();
+		// JS calls camera.update_view() unconditionally here (line 162).
+		camera.update_view();
 	}
 }
 
@@ -149,4 +157,11 @@ void CharacterCameraControlsGL::update() {
 }
 
 void CharacterCameraControlsGL::dispose() {
+	// JS dispose() removes four event listeners:
+	//   mousedown and wheel from dom_element,
+	//   mousemove and mouseup from document.
+	// In C++/GLFW, the caller must stop forwarding input events to this instance.
+	// Reset state to prevent stale input processing if events are still forwarded.
+	is_rotating = false;
+	is_panning = false;
 }
