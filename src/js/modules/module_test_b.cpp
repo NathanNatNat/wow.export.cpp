@@ -43,4 +43,8 @@ void mounted() {
 	logging::write("module_test_b mounted");
 }
 
+void unmounted() {
+	logging::write("module_test_b unmounted");
+}
+
 } // namespace module_test_b

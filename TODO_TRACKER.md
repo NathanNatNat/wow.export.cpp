@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 427/567 verified (75%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 432/567 verified (76%)** — ✅ = Verified, ⬜ = Pending
 
 ---
 
@@ -2109,30 +2109,30 @@
 - **Status**: Verified
 - **Details**: CSS `.handle` has `cursor: pointer`. The mouse cursor should change to a pointer when hovering the handle. ImGui supports `ImGui::SetMouseCursor(ImGuiMouseCursor_Hand)` but this is not called in slider.cpp.
 
-### ⬜ 422. [module_test_a.cpp] Entire file is unconverted JavaScript
+### ✅ 422. [module_test_a.cpp] Entire file is unconverted JavaScript
 - **JS Source**: `src/js/modules/module_test_a.js` lines 1–34
-- **Status**: Pending
-- **Details**: `module_test_a.cpp` is byte-identical to `module_test_a.js`. The file contains `module.exports`, a Vue template string, and JavaScript `data()` / `methods` — it is pure JavaScript with no C++ conversion. The file needs to be fully converted to C++ or removed if the test module is not needed in the C++ port.
+- **Status**: Verified
+- **Details**: File was already converted to C++. Added missing `unmounted()` callback to match JS lifecycle. All counter, increment, and module-switch functionality matches the original JS.
 
-### ⬜ 423. [module_test_b.cpp] Entire file is unconverted JavaScript
+### ✅ 423. [module_test_b.cpp] Entire file is unconverted JavaScript
 - **JS Source**: `src/js/modules/module_test_b.js` lines 1–43
-- **Status**: Pending
-- **Details**: `module_test_b.cpp` is byte-identical to `module_test_b.js`. The file contains `module.exports`, a Vue template string, and JavaScript `data()` / `methods` / `mounted()` — it is pure JavaScript with no C++ conversion. The file needs to be fully converted to C++ or removed if the test module is not needed in the C++ port.
+- **Status**: Verified
+- **Details**: File was already converted to C++. Added missing `unmounted()` callback to match JS lifecycle. All message input, dev/busy/CASC state display, module-switch, reload, and toast functionality matches the original JS.
 
-### ⬜ 424. [tab_blender.cpp] Entire file is unconverted JavaScript
+### ✅ 424. [tab_blender.cpp] Entire file is unconverted JavaScript
 - **JS Source**: `src/js/modules/tab_blender.js` lines 1–171
-- **Status**: Pending
-- **Details**: `tab_blender.cpp` is byte-identical to `tab_blender.js` (171 lines). The file contains `require()` calls, `nw.Shell.openItem()`, `async/await`, `module.exports`, a Vue template, and JavaScript methods. No C++ conversion has been performed. The entire module — including Blender addon download logic, version checking, and the settings UI — needs to be ported to C++.
+- **Status**: Verified
+- **Details**: File was already converted to C++. Fixed user-facing text from "wow.export" to "wow.export.cpp" per project conventions. All Blender addon installation logic (automatic/manual install, version detection, checkLocalVersion with update prompt) matches the original JS.
 
-### ⬜ 425. [tab_changelog.cpp] Entire file is unconverted JavaScript
+### ✅ 425. [tab_changelog.cpp] Entire file is unconverted JavaScript
 - **JS Source**: `src/js/modules/tab_changelog.js` lines 1–53
-- **Status**: Pending
-- **Details**: `tab_changelog.cpp` is byte-identical to `tab_changelog.js` (53 lines). The file contains `require('fs').promises`, `require('../log')`, `async/await`, `module.exports`, and a Vue template with `MarkdownContent` component. No C++ conversion has been performed. The changelog file reading and markdown rendering need to be ported to C++.
+- **Status**: Verified
+- **Details**: File was already converted to C++. Replaced ImGui::TextWrapped with markdown_content::render() to properly render changelog content as formatted markdown, matching the JS MarkdownContent component usage. All changelog loading, caching, and go-back navigation matches the original JS.
 
-### ⬜ 426. [tab_help.cpp] Entire file is unconverted JavaScript
+### ✅ 426. [tab_help.cpp] Entire file is unconverted JavaScript
 - **JS Source**: `src/js/modules/tab_help.js` lines 1–174
-- **Status**: Pending
-- **Details**: `tab_help.cpp` is byte-identical to `tab_help.js` (174 lines). The file contains `require('fs').promises`, `require('path')`, `module.exports`, `async mounted()`, a Vue template with `MarkdownContent` component, and JavaScript DOM manipulation. No C++ conversion has been performed. The help article loading, navigation, and markdown rendering need to be ported to C++.
+- **Status**: Verified
+- **Details**: File was already converted to C++. Replaced ImGui::TextWrapped with markdown_content::render() for article body rendering, matching the JS MarkdownContent component usage. Added KB link handler callback and markdown scroll state reset on article selection. All help article loading, search/filtering, KB ID navigation, and go-back functionality matches the original JS.
 
 ### ⬜ 427. [tab_decor.cpp] Model export functionality is stubbed out
 - **JS Source**: `src/js/modules/tab_decor.js` lines 167–175 (`export_model` call inside export loop)

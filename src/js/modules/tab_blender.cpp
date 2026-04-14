@@ -148,7 +148,7 @@ void registerTab() {
 }
 
 void render() {
-	ImGui::Text("Installing the wow.export Add-on for Blender 2.8+");
+	ImGui::Text("Installing the wow.export.cpp Add-on for Blender 2.8+");
 	ImGui::Separator();
 
 	ImGui::TextWrapped(
