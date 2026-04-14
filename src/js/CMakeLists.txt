@@ -41,6 +41,7 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/tiled-png-writer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/gpu-info.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/icon-render.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/wowhead.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/CompressionType.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/FieldType.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/DBDParser.cpp
