@@ -803,6 +803,8 @@ const size_t pos = this->data.offset();
 this->data.seek(nameOfs);
 std::string fileName = this->data.readString(nameLength);
 // Remove NULL characters.
+// Note: JS uses fileName.replace('\0', '') which only removes the FIRST null (string replace, not regex).
+// C++ std::remove removes ALL nulls, which is more correct behavior for null-terminated strings.
 fileName.erase(std::remove(fileName.begin(), fileName.end(), '\0'), fileName.end());
 
 if (!fileName.empty())
