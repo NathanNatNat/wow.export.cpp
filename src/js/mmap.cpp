@@ -20,6 +20,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <cerrno>
+#include <cstring>
 #endif
 
 namespace mmap_util {
@@ -28,7 +30,8 @@ namespace mmap_util {
 MmapObject::MmapObject(MmapObject&& other) noexcept
 	: data(other.data),
 	  size(other.size),
-	  isMapped(other.isMapped)
+	  isMapped(other.isMapped),
+	  lastError(std::move(other.lastError))
 #ifdef _WIN32
 	  , fileHandle(other.fileHandle)
 	  , mappingHandle(other.mappingHandle)
@@ -92,12 +95,14 @@ bool MmapObject::map(const std::filesystem::path& path) {
 	);
 
 	if (fileHandle == INVALID_HANDLE_VALUE) {
+		lastError = "CreateFile failed: " + std::to_string(GetLastError());
 		fileHandle = nullptr;
 		return false;
 	}
 
 	LARGE_INTEGER fileSize;
 	if (!GetFileSizeEx(fileHandle, &fileSize)) {
+		lastError = "GetFileSizeEx failed: " + std::to_string(GetLastError());
 		CloseHandle(fileHandle);
 		fileHandle = nullptr;
 		return false;
@@ -106,6 +111,7 @@ bool MmapObject::map(const std::filesystem::path& path) {
 	size = static_cast<size_t>(fileSize.QuadPart);
 
 	if (size == 0) {
+		lastError = "File is empty";
 		CloseHandle(fileHandle);
 		fileHandle = nullptr;
 		return false;
@@ -121,6 +127,7 @@ bool MmapObject::map(const std::filesystem::path& path) {
 	);
 
 	if (!mappingHandle) {
+		lastError = "CreateFileMapping failed: " + std::to_string(GetLastError());
 		CloseHandle(fileHandle);
 		fileHandle = nullptr;
 		return false;
@@ -128,6 +135,7 @@ bool MmapObject::map(const std::filesystem::path& path) {
 
 	data = MapViewOfFile(mappingHandle, FILE_MAP_READ, 0, 0, 0);
 	if (!data) {
+		lastError = "MapViewOfFile failed: " + std::to_string(GetLastError());
 		CloseHandle(mappingHandle);
 		CloseHandle(fileHandle);
 		mappingHandle = nullptr;
@@ -136,11 +144,14 @@ bool MmapObject::map(const std::filesystem::path& path) {
 	}
 #else
 	fd = open(path.c_str(), O_RDONLY);
-	if (fd == -1)
+	if (fd == -1) {
+		lastError = std::string("open failed: ") + strerror(errno);
 		return false;
+	}
 
 	struct stat st;
 	if (fstat(fd, &st) == -1) {
+		lastError = std::string("fstat failed: ") + strerror(errno);
 		close(fd);
 		fd = -1;
 		return false;
@@ -149,6 +160,7 @@ bool MmapObject::map(const std::filesystem::path& path) {
 	size = static_cast<size_t>(st.st_size);
 
 	if (size == 0) {
+		lastError = "File is empty";
 		close(fd);
 		fd = -1;
 		return false;
@@ -156,6 +168,7 @@ bool MmapObject::map(const std::filesystem::path& path) {
 
 	data = ::mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (data == MAP_FAILED) {
+		lastError = std::string("mmap failed: ") + strerror(errno);
 		data = nullptr;
 		close(fd);
 		fd = -1;

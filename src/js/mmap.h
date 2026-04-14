@@ -20,6 +20,7 @@ struct MmapObject {
 	void* data = nullptr;      ///< Pointer to the mapped memory region.
 	size_t size = 0;           ///< Size of the mapped region in bytes.
 	bool isMapped = false;     ///< Whether the file is currently mapped.
+	std::string lastError;     ///< Last error message from map() failure.
 
 #ifdef _WIN32
 	void* fileHandle = nullptr;    ///< Windows file handle (HANDLE).

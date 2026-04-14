@@ -49,7 +49,13 @@ public:
 	void init();
 
 	/**
-	 * Obtain a file by it's fileDataID.
+	 * Obtain a file by it's fileDataID as a BLTEReader.
+	 *
+	 * In JS this overrides CASC.getFile() polymorphically (JS allows different return
+	 * types). In C++, virtual getFile() returns std::string (encoding key), so we use a
+	 * separate method name. Callers needing the decoded file should call getFileAsBLTE()
+	 * directly on a CASCLocal instance rather than through the base CASC pointer.
+	 *
 	 * @param fileDataID
 	 * @param partialDecryption
 	 * @param suppressLog

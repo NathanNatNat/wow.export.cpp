@@ -31,9 +31,10 @@ namespace db2 {
 /**
  * Get a WDCReader for the given table name.
  * Creates and caches the reader if not already cached.
- * The reader is NOT parsed until you call parse() on it.
+ * The reader is automatically parsed on first access (matching JS Proxy behavior
+ * where any method call triggers parse). Parse is deduplicated via std::once_flag.
  *
- * JS equivalent: db2[table_name] (Proxy get handler)
+ * JS equivalent: db2[table_name] (Proxy get handler with auto-parse)
  *
  * @param table_name DB2 table name (e.g. "TextureFileData").
  * @returns Reference to the cached WDCReader.

@@ -9,29 +9,54 @@
 
 #include <unordered_map>
 #include <memory>
+#include <mutex>
 #include <string>
 
 namespace casc {
 namespace db2 {
 
-static std::unordered_map<std::string, std::unique_ptr<db::WDCReader>> cache;
+/**
+ * Cache entry wrapping a WDCReader with auto-parse support.
+ *
+ * JS equivalent: create_wrapper() returns a Proxy that intercepts method calls
+ * to auto-parse the reader on first use. In C++, we achieve this by wrapping
+ * the reader with a mutex-protected parse-once guard.
+ *
+ * The JS Proxy also enforces that getRelationRows() requires preload() to have
+ * been called. In C++, WDCReader::getRelationRows() itself validates this
+ * (returns empty if rows are not preloaded).
+ */
+struct CacheEntry {
+	std::unique_ptr<db::WDCReader> reader;
+	std::once_flag parseFlag;
 
-// In JS, create_wrapper returns a Proxy that intercepts property/method access
-// to auto-parse the reader on first use. In C++, callers are expected to call
-// parse() explicitly or use preloadTable(). The wrapper concept is not needed
-// because C++ doesn't have dynamic property access like JS Proxies.
+	void ensureParsed() {
+		std::call_once(parseFlag, [this]() {
+			reader->parse();
+		});
+	}
+};
+
+static std::unordered_map<std::string, std::unique_ptr<CacheEntry>> cache;
 
 db::WDCReader& getTable(const std::string& table_name) {
 	auto it = cache.find(table_name);
-	if (it != cache.end())
-		return *it->second;
+	if (it != cache.end()) {
+		// JS Proxy auto-parses on first method call; ensureParsed() is the C++ equivalent.
+		it->second->ensureParsed();
+		return *it->second->reader;
+	}
 
 	const std::string file_path = "DBFilesClient/" + table_name + ".db2";
 
-	auto reader = std::make_unique<db::WDCReader>(file_path);
+	auto entry = std::make_unique<CacheEntry>();
+	entry->reader = std::make_unique<db::WDCReader>(file_path);
 
-	auto& ref = *reader;
-	cache.emplace(table_name, std::move(reader));
+	// JS Proxy auto-parses on first method call.
+	entry->ensureParsed();
+
+	auto& ref = *entry->reader;
+	cache.emplace(table_name, std::move(entry));
 	return ref;
 }
 
@@ -39,22 +64,21 @@ db::WDCReader& preloadTable(const std::string& table_name) {
 	auto it = cache.find(table_name);
 
 	if (it != cache.end()) {
-		if (!it->second->isLoaded)
-			it->second->parse();
-
-		it->second->preload();
-		return *it->second;
+		it->second->ensureParsed();
+		it->second->reader->preload();
+		return *it->second->reader;
 	}
 
 	const std::string file_path = "DBFilesClient/" + table_name + ".db2";
 
-	auto reader = std::make_unique<db::WDCReader>(file_path);
+	auto entry = std::make_unique<CacheEntry>();
+	entry->reader = std::make_unique<db::WDCReader>(file_path);
 
-	reader->parse();
-	reader->preload();
+	entry->ensureParsed();
+	entry->reader->preload();
 
-	auto& ref = *reader;
-	cache.emplace(table_name, std::move(reader));
+	auto& ref = *entry->reader;
+	cache.emplace(table_name, std::move(entry));
 	return ref;
 }
 
