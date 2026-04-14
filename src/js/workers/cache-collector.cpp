@@ -419,38 +419,44 @@ HttpResponse https_request(const std::string& url,
                            const std::string& body) {
 	auto parsed = parse_url(url);
 
+	// Extract Content-Type from headers (if present) so it can be passed as
+	// the dedicated content_type argument to httplib::Post(). The JS code
+	// passes all headers including Content-Type directly to the request.
 	httplib::Headers hdr;
-	for (const auto& [key, value] : headers)
-		hdr.emplace(key, value);
+	std::string content_type;
+	for (const auto& [key, value] : headers) {
+		if (key == "Content-Type")
+			content_type = value;
+		else
+			hdr.emplace(key, value);
+	}
 
 	httplib::Result res;
 
 	if (parsed.scheme == "https") {
 		httplib::SSLClient cli(parsed.host, parsed.port);
-		cli.set_connection_timeout(30);
-		cli.set_read_timeout(60);
 
 		if (method == "POST")
-			res = cli.Post(parsed.path, hdr, body, "application/octet-stream");
+			res = cli.Post(parsed.path, hdr, body, content_type);
 		else
 			res = cli.Get(parsed.path, hdr);
 	} else {
 		httplib::Client cli(parsed.host, parsed.port);
-		cli.set_connection_timeout(30);
-		cli.set_read_timeout(60);
 
 		if (method == "POST")
-			res = cli.Post(parsed.path, hdr, body, "application/octet-stream");
+			res = cli.Post(parsed.path, hdr, body, content_type);
 		else
 			res = cli.Get(parsed.path, hdr);
 	}
 
+	// JS: req.on('error', reject) — reject the promise on connection errors.
+	if (!res)
+		throw std::runtime_error(httplib::to_string(res.error()));
+
 	HttpResponse response;
-	if (res) {
-		response.status = res->status;
-		response.ok = (res->status >= 200 && res->status < 300);
-		response.data = res->body;
-	}
+	response.status = res->status;
+	response.ok = (res->status >= 200 && res->status < 300);
+	response.data = res->body;
 
 	return response;
 }
@@ -458,37 +464,22 @@ HttpResponse https_request(const std::string& url,
 JsonPostResponse json_post(const std::string& url, const nlohmann::json& payload, const std::string& user_agent) {
 	std::string body = payload.dump();
 
-	auto parsed = parse_url(url);
+	// JS: json_post calls https_request() with method/headers/body.
+	std::unordered_map<std::string, std::string> headers;
+	headers["Content-Type"] = "application/json";
+	headers["User-Agent"] = user_agent;
+	headers["Content-Length"] = std::to_string(body.size());
 
-	httplib::Headers hdr;
-	hdr.emplace("Content-Type", "application/json");
-	hdr.emplace("User-Agent", user_agent);
-	hdr.emplace("Content-Length", std::to_string(body.size()));
-
-	httplib::Result res;
-
-	if (parsed.scheme == "https") {
-		httplib::SSLClient cli(parsed.host, parsed.port);
-		cli.set_connection_timeout(30);
-		cli.set_read_timeout(60);
-		res = cli.Post(parsed.path, hdr, body, "application/json");
-	} else {
-		httplib::Client cli(parsed.host, parsed.port);
-		cli.set_connection_timeout(30);
-		cli.set_read_timeout(60);
-		res = cli.Post(parsed.path, hdr, body, "application/json");
-	}
+	auto res = https_request(url, "POST", headers, body);
 
 	JsonPostResponse response;
-	if (res) {
-		response.status = res->status;
-		response.ok = (res->status >= 200 && res->status < 300);
+	response.status = res.status;
+	response.ok = res.ok;
 
-		if (response.ok) {
-			try {
-				response.response_json = nlohmann::json::parse(res->body);
-			} catch (...) {}
-		}
+	if (response.ok) {
+		try {
+			response.response_json = nlohmann::json::parse(res.data);
+		} catch (...) {}
 	}
 
 	return response;
@@ -533,33 +524,20 @@ void upload_chunks(const std::string& url, const std::vector<uint8_t>& buffer) {
 	for (int64_t offset = 0; offset < static_cast<int64_t>(buffer.size()); offset += CHUNK_SIZE) {
 		int64_t end = (std::min)(offset + CHUNK_SIZE, static_cast<int64_t>(buffer.size()));
 		std::vector<uint8_t> chunk(buffer.begin() + offset, buffer.begin() + end);
-		std::vector<uint8_t> body = build_multipart(boundary, chunk, offset);
-
-		auto parsed = parse_url(url);
+		std::vector<uint8_t> body_bytes = build_multipart(boundary, chunk, offset);
 
 		std::string content_type = std::format("multipart/form-data; boundary={}", boundary);
+		std::string body_str(body_bytes.begin(), body_bytes.end());
 
-		httplib::Headers hdr;
-		hdr.emplace("Content-Type", content_type);
-		hdr.emplace("Content-Length", std::to_string(body.size()));
+		// JS: upload_chunks calls https_request() with method/headers/body.
+		std::unordered_map<std::string, std::string> headers;
+		headers["Content-Type"] = content_type;
+		headers["Content-Length"] = std::to_string(body_bytes.size());
 
-		std::string body_str(body.begin(), body.end());
-		httplib::Result res;
+		auto res = https_request(url, "POST", headers, body_str);
 
-		if (parsed.scheme == "https") {
-			httplib::SSLClient cli(parsed.host, parsed.port);
-			cli.set_connection_timeout(30);
-			cli.set_read_timeout(60);
-			res = cli.Post(parsed.path, hdr, body_str, content_type);
-		} else {
-			httplib::Client cli(parsed.host, parsed.port);
-			cli.set_connection_timeout(30);
-			cli.set_read_timeout(60);
-			res = cli.Post(parsed.path, hdr, body_str, content_type);
-		}
-
-		if (!res || res->status < 200 || res->status >= 300)
-			throw std::runtime_error(std::format("upload chunk failed: {}", res ? res->status : 0));
+		if (!res.ok)
+			throw std::runtime_error(std::format("upload chunk failed: {}", res.status));
 	}
 }
 
@@ -682,7 +660,7 @@ std::vector<CacheFileEntry> scan_wdb(const fs::path& flavor_dir) {
 			try {
 				for (const auto& file_entry : fs::directory_iterator(locale_entry.path())) {
 					auto file_name = file_entry.path().filename().string();
-					if (!iends_with(file_name, ".wdb"))
+					if (!file_name.ends_with(".wdb"))
 						continue;
 
 					try {
