@@ -8,6 +8,7 @@
 
 #include <fstream>
 #include <deque>
+#include <format>
 #include <string>
 #include <chrono>
 #include <ctime>
@@ -64,8 +65,16 @@ std::string getTimestamp() {
  * so this is called at the start of write() when the stream was
  * previously in a failed state and has recovered.
  */
+/**
+ * Flag indicating that a deferred drain has been requested.
+ * When true, the next call to write() will trigger drainPool()
+ * even if isClogged is false, to drain remaining pooled items.
+ */
+bool drainPending = false;
+
 void drainPool() {
 	isClogged = false;
+	drainPending = false;
 
 	// If the pool is empty, don't slip into a loop.
 	if (pool.empty())
@@ -73,16 +82,27 @@ void drainPool() {
 
 	int ticks = 0;
 	while (!isClogged && ticks < MAX_DRAIN_PER_TICK && !pool.empty()) {
-		stream << pool.front();
+		// JS: pool.shift() always removes the item before writing.
+		// Node.js stream.write() returning false means backpressure but
+		// the data IS buffered and will be written. Match that by always
+		// removing from pool.
+		std::string item = std::move(pool.front());
+		pool.pop_front();
+
+		stream << item;
 		stream.flush();
 		if (stream.fail()) {
 			stream.clear();
 			isClogged = true;
-		} else {
-			pool.erase(pool.begin());
 		}
 		ticks++;
 	}
+
+	// JS equivalent: process.nextTick(drainPool) — schedule another drain
+	// if we're not blocked and there are remaining items in the pool.
+	// In C++, we set a flag so the next write() call triggers drainPool().
+	if (!isClogged && !pool.empty())
+		drainPending = true;
 }
 
 } // anonymous namespace
@@ -96,13 +116,19 @@ void init() {
 
 /**
  * Write a message to the log.
+ *
+ * JS equivalent: write(...parameters) uses util.format(...parameters).
+ * In C++, callers should use std::format() to build the message before
+ * passing it. This accepts a pre-formatted string for API simplicity,
+ * matching the JS behavior of producing a single formatted line.
  */
 void write(std::string_view message) {
 	std::lock_guard<std::mutex> lock(logMutex);
 	std::string line = "[" + getTimestamp() + "] " + std::string(message) + "\n";
 
-	// Try to drain pooled entries if the stream was previously clogged.
-	if (isClogged) {
+	// Try to drain pooled entries if the stream was previously clogged,
+	// or if a deferred drain was scheduled (JS equivalent of process.nextTick(drainPool)).
+	if (isClogged || drainPending) {
 		stream.clear();
 		drainPool();
 	}
@@ -119,7 +145,7 @@ void write(std::string_view message) {
 	if (isClogged) {
 		// Stream is blocked, pool instead.
 		if (pool.size() < static_cast<std::size_t>(MAX_LOG_POOL)) {
-			pool.push_back(std::move(line));
+			pool.push_back(line);
 		} else if (pool.size() == static_cast<std::size_t>(MAX_LOG_POOL)) {
 			pool.push_back("[" + getTimestamp() + "] WARNING: Log pool overflow - some log entries have been truncated.\n");
 		}
@@ -142,16 +168,18 @@ void timeLog() {
 /**
  * Logs the time (in milliseconds) between the last logging::timeLog()
  * call and this call, with the given label prefixed.
+ *
+ * JS equivalent: timeEnd(label, ...params) => write(label + ' (%dms)', ...params, elapsed)
+ * The JS version supports variadic format parameters; in C++, the label
+ * should already be formatted by the caller using std::format(). The
+ * elapsed time is appended automatically.
+ *
  * @param label Label to prefix the time output.
  */
 void timeEnd(std::string_view label) {
 	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::steady_clock::now() - markTimer).count();
-	char buf[64];
-	std::snprintf(buf, sizeof(buf), "%.*s (%lldms)",
-		static_cast<int>(label.size()), label.data(),
-		static_cast<long long>(elapsed));
-	write(std::string_view(buf));
+	write(std::format("{} ({}ms)", label, elapsed));
 }
 
 /**

@@ -275,6 +275,11 @@ BufferWrapper PNGWriter::getBuffer() {
 
 /**
  * Write this PNG to a file.
+ *
+ * Deviation: JS version is async (returns a Promise). C++ version is synchronous
+ * since file I/O in this codebase is handled synchronously. The caller should wrap
+ * in std::async if non-blocking behavior is needed.
+ *
  * @param file Path to write the PNG file to.
  */
 void PNGWriter::write(const std::filesystem::path& file) {

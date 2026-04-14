@@ -24,6 +24,8 @@
 // Module headers
 #include "modules/screen_source_select.h"
 #include "modules/screen_settings.h"
+#include "modules/module_test_a.h"
+#include "modules/module_test_b.h"
 #include "modules/tab_home.h"
 #include "modules/tab_maps.h"
 #include "modules/tab_zones.h"
@@ -41,6 +43,9 @@
 #include "modules/tab_item_sets.h"
 #include "modules/tab_characters.h"
 #include "modules/tab_textures.h"
+#include "modules/tab_help.h"
+#include "modules/tab_blender.h"
+#include "modules/tab_changelog.h"
 #include "modules/legacy_tab_home.h"
 #include "modules/legacy_tab_audio.h"
 #include "modules/legacy_tab_textures.h"
@@ -166,7 +171,17 @@ static void update_context_menu_options() {
 	}
 }
 
-// error handling, register() call) is handled during initialize().
+// wrap_module:
+// JS equivalent: wrap_module(module_name, module_def) — wraps the module's
+// register(), initialize(), and activated() functions with error handling
+// and idempotency guards.
+//
+// JS register_context:
+// In JS, the register() function receives a `register_context` object with
+// `registerNavButton(label, icon, install_types)` and `registerContextMenuOption(label, icon)`.
+// The context captures `display_label` from the nav button label. In C++, modules call
+// register_nav_button() and register_context_menu_option() directly, so the register_context
+// is implicit. display_label defaults to the module name.
 static void wrap_module(ModuleDef& mod) {
 	std::string display_label = mod.name;
 
@@ -177,6 +192,7 @@ static void wrap_module(ModuleDef& mod) {
 	}
 
 	// wrap initialize() with idempotency guard, error handling, and activated() retry
+	// JS equivalent: wraps methods.initialize with try/catch/finally
 	if (mod.initialize) {
 		auto original_initialize = mod.initialize;
 
@@ -197,6 +213,8 @@ static void wrap_module(ModuleDef& mod) {
 				go_to_landing();
 			}
 
+			// JS equivalent of `finally { this._tab_initializing = false; }`
+			// Always reset even if an exception was caught above.
 			mod._tab_initializing = false;
 		};
 	}
@@ -287,6 +305,16 @@ void initialize() {
 		mod.initialize = initialize_fn ? initialize_fn : mounted_fn;
 		module_registry[name] = std::move(mod);
 	};
+
+	add_module("module_test_a",
+		[]() { module_test_a::render(); },
+		[]() { module_test_a::mounted(); },
+		nullptr);
+
+	add_module("module_test_b",
+		[]() { module_test_b::render(); },
+		[]() { module_test_b::mounted(); },
+		nullptr);
 
 	add_module("source_select",
 		[]() { screen_source_select::render(); },
@@ -383,11 +411,20 @@ void initialize() {
 		[]() { tab_textures::mounted(); },
 		[]() { tab_textures::registerTab(); });
 
-	// has not been created yet. It needs to be ported.
+	add_module("tab_help",
+		[]() { tab_help::render(); },
+		[]() { tab_help::mounted(); },
+		[]() { tab_help::registerTab(); });
 
-	// has not been created yet. It needs to be ported.
+	add_module("tab_blender",
+		[]() { tab_blender::render(); },
+		nullptr,
+		[]() { tab_blender::registerTab(); });
 
-	// has not been created yet. It needs to be ported.
+	add_module("tab_changelog",
+		[]() { tab_changelog::render(); },
+		[]() { tab_changelog::mounted(); },
+		[]() { tab_changelog::registerTab(); });
 
 	add_module("legacy_tab_home",
 		[]() { legacy_tab_home::render(); },
@@ -478,6 +515,16 @@ void go_to_landing() {
 		set_active("legacy_tab_home");
 	else
 		set_active("tab_home");
+}
+
+// JS equivalent: proxy get 'setActive' => () => set_active(module_name)
+void ModuleDef::setActive() {
+	modules::set_active(name);
+}
+
+// JS equivalent: proxy get 'reload' => () => reload_module(module_name)
+void ModuleDef::reload() {
+	modules::reload_module(name);
 }
 
 void reload_module(const std::string& module_key) {

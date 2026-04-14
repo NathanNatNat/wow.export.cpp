@@ -16,7 +16,7 @@ namespace subtitles {
 
 static constexpr int FRAMES_PER_SECOND = 24;
 
-int64_t parse_sbt_timestamp(std::string_view timestamp) {
+static int64_t parse_sbt_timestamp(std::string_view timestamp) {
 	// Split by ':'
 	std::vector<std::string_view> parts;
 	std::size_t start = 0;
@@ -62,7 +62,7 @@ static std::string pad3(int64_t n) {
 	return oss.str();
 }
 
-std::string format_srt_timestamp(int64_t ms) {
+static std::string format_srt_timestamp(int64_t ms) {
 	int64_t hours = ms / 3600000;
 	ms %= 3600000;
 
@@ -75,7 +75,7 @@ std::string format_srt_timestamp(int64_t ms) {
 	return pad2(hours) + ":" + pad2(minutes) + ":" + pad2(seconds) + "," + pad3(millis);
 }
 
-std::string format_vtt_timestamp(int64_t ms) {
+static std::string format_vtt_timestamp(int64_t ms) {
 	int64_t hours = ms / 3600000;
 	ms %= 3600000;
 
@@ -88,7 +88,7 @@ std::string format_vtt_timestamp(int64_t ms) {
 	return pad2(hours) + ":" + pad2(minutes) + ":" + pad2(seconds) + "." + pad3(millis);
 }
 
-int64_t parse_srt_timestamp(std::string_view timestamp) {
+static int64_t parse_srt_timestamp(std::string_view timestamp) {
 	// Match pattern: HH:MM:SS,mmm
 	std::regex re(R"((\d{2}):(\d{2}):(\d{2}),(\d{3}))");
 	std::string ts_str(timestamp);
@@ -166,7 +166,7 @@ struct SubtitleEntry {
 	std::vector<std::string> text;
 };
 
-std::string sbt_to_srt(std::string_view sbt) {
+static std::string sbt_to_srt(std::string_view sbt) {
 	auto lines = split_lines(sbt);
 
 	std::vector<SubtitleEntry> entries;
@@ -231,7 +231,7 @@ std::string sbt_to_srt(std::string_view sbt) {
 	return result;
 }
 
-std::string srt_to_vtt(std::string_view srt) {
+static std::string srt_to_vtt(std::string_view srt) {
 	auto lines = split_lines(srt);
 
 	std::vector<SubtitleEntry> entries;
@@ -302,6 +302,18 @@ std::string srt_to_vtt(std::string_view srt) {
 	return result;
 }
 
+/**
+ * Convert subtitle text to WebVTT format, handling BOM stripping
+ * and format detection.
+ *
+ * Deviation: The JS version is async and loads the file from CASC directly
+ * (taking casc + file_data_id as parameters). In C++, the caller is responsible
+ * for loading the file from CASC and passing the decoded text. The CASC
+ * integration happens at the call site, keeping this function pure.
+ *
+ * JS BOM check: charCodeAt(0) === 0xFEFF (UTF-16 BOM).
+ * C++ BOM check: UTF-8 BOM (EF BB BF) since text is stored as UTF-8.
+ */
 std::string get_subtitles_vtt(std::string_view text, SubtitleFormat format) {
 	std::string str(text);
 
