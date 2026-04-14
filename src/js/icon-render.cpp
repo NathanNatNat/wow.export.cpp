@@ -14,7 +14,9 @@
 
 #include <glad/gl.h>
 
-#define STB_IMAGE_IMPLEMENTATION
+// stb_image.h is included without STB_IMAGE_IMPLEMENTATION here.
+// The implementation macro is defined in a dedicated translation unit
+// (stb-impl.cpp) to avoid linker errors if multiple files include stb_image.h.
 #include <stb_image.h>
 
 namespace {
@@ -199,7 +201,22 @@ void removeRule(uint32_t fileDataID) {
 
 /**
  * Process the next item in the icon loading queue.
- * JS equivalent: processQueue() — loaded BLP files and set CSS background-image.
+ *
+ * JS equivalent: processQueue() — async recursive function that processes
+ * one item at a time via promise chaining (.then/.catch/.finally(() => processQueue())),
+ * returning to the event loop between items.
+ *
+ * In the original JS:
+ *   const entry = _queue.pop();
+ *   core.view.casc.getFile(entry.fileDataID).then(data => {
+ *       const blp = new BLPFile(data);
+ *       entry.rule.style.backgroundImage = 'url(' + blp.getDataURL(0b0111) + ')';
+ *   }).catch(() => {}).finally(() => processQueue());
+ *
+ * The C++ implementation uses a synchronous loop since the CASC file retrieval
+ * and BLP decoder are not yet asynchronous. When CASC/BLP are fully ported,
+ * this should be converted to process one item at a time with yielding between
+ * items to match the JS async recursive pattern.
  */
 void processQueue() {
 	_loading = true;
@@ -209,11 +226,14 @@ void processQueue() {
 		_queue.pop_back();
 
 		try {
-			//       .then(data => { entry.rule.style.backgroundImage = 'url(' + new BLPFile(data).getDataURL(0b0111) + ')'; })
-			//       .catch(() => {})
+			// JS: core.view.casc.getFile(entry.fileDataID).then(data => {
+			//         const blp = new BLPFile(data);
+			//         entry.rule.style.backgroundImage = 'url(' + blp.getDataURL(0b0111) + ')';
+			//     })
 			//
-			// CASC source and BLP decoder (casc/blp.cpp) are unconverted (Tiers 4-9).
-			// When converted, load BLP data here and store as GL texture in _textureCache.
+			// CASC file retrieval and BLP texture loading will be implemented
+			// here when the CASC source and BLP decoder modules are fully ported.
+			// The loaded BLP texture would be stored as a GL texture in _textureCache.
 		} catch (...) {
 			// Icon failed to load — keep the default placeholder texture.
 		}
@@ -261,6 +281,19 @@ void loadIcon(uint32_t fileDataID) {
 	}
 }
 
+/**
+ * Get the OpenGL texture handle for a loaded icon.
+ *
+ * This function does not exist in the original JS source. The JS module
+ * only exported { loadIcon }. In JS, icons were rendered via CSS
+ * background-image on dynamic stylesheet rules. In C++ with Dear ImGui,
+ * we need direct access to the GL texture handle for rendering. This
+ * function is a necessary C++ addition for the OpenGL-based rendering
+ * approach, replacing the CSS-based icon display mechanism.
+ *
+ * @param fileDataID The CASC file data ID for the icon.
+ * @returns OpenGL texture handle, or 0 if unavailable.
+ */
 uint32_t getIconTexture(uint32_t fileDataID) {
 	auto it = _textureCache.find(fileDataID);
 	if (it != _textureCache.end())

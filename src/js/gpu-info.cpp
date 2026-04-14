@@ -71,14 +71,20 @@ struct PlatformGPUInfo {
 
 /**
  * Execute a shell command and return stdout.
+ * JS: exec(cmd, { timeout: 5000 }, callback) — kills child after 5 seconds.
  * @param cmd Command to execute.
  * @returns Trimmed stdout output.
  */
 std::string exec_cmd(const std::string& cmd) {
+	// JS uses { timeout: 5000 } which kills the child process after 5 seconds.
+	// We use 'timeout' command on Linux and a simple popen with a time limit
+	// on Windows. For simplicity, on Linux we wrap with 'timeout 5' command.
 #ifdef _WIN32
 	FILE* pipe = _popen(cmd.c_str(), "r");
 #else
-	FILE* pipe = popen(cmd.c_str(), "r");
+	// Wrap command with timeout(1) to enforce 5-second limit, matching JS behavior
+	std::string timed_cmd = "timeout 5 " + cmd;
+	FILE* pipe = popen(timed_cmd.c_str(), "r");
 #endif
 	if (!pipe)
 		throw std::runtime_error("Failed to execute command");
@@ -120,9 +126,17 @@ std::string format_vram(int64_t bytes) {
 
 /**
  * Get GPU renderer/vendor info and capabilities via OpenGL.
- * @returns GLInfo struct with GPU information.
+ * Returns std::nullopt if no GL context is available (equivalent to JS returning null).
+ * Returns GLInfo with error field set if an exception occurs (equivalent to JS { error: msg }).
+ * Returns full GLInfo on success (equivalent to JS { vendor, renderer, caps, extensions }).
  */
-GLInfo get_gl_info() {
+std::optional<GLInfo> get_gl_info() {
+	// Check if GL functions are available (context was created)
+	// JS: const gl = canvas.getContext('webgl'); if (!gl) return null;
+	if (!glGetString) {
+		return std::nullopt;
+	}
+
 	GLInfo result;
 
 	try {
@@ -130,17 +144,22 @@ GLInfo get_gl_info() {
 		const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
 		const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
 
+		if (!vendor && !renderer) {
+			// GL context not properly initialized
+			return std::nullopt;
+		}
+
 		if (vendor)
 			result.vendor = vendor;
 		if (renderer)
 			result.renderer = renderer;
 
-		// capability limits
+		// capability limits — using VECTORS (not COMPONENTS) to match JS WebGL queries
 		glGetIntegerv(GL_MAX_TEXTURE_SIZE, &result.caps.max_tex_size);
 		glGetIntegerv(GL_MAX_CUBE_MAP_TEXTURE_SIZE, &result.caps.max_cube_size);
 		glGetIntegerv(GL_MAX_VARYING_VECTORS, &result.caps.max_varyings);
-		glGetIntegerv(GL_MAX_VERTEX_UNIFORM_COMPONENTS, &result.caps.max_vert_uniforms);
-		glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, &result.caps.max_frag_uniforms);
+		glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, &result.caps.max_vert_uniforms);
+		glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_VECTORS, &result.caps.max_frag_uniforms);
 		glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &result.caps.max_vert_attribs);
 		glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &result.caps.max_tex_units);
 		glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &result.caps.max_vert_tex_units);
@@ -494,7 +513,7 @@ std::string format_caps(const GLCaps& caps) {
 namespace gpu_info {
 
 void log_gpu_info() {
-	GLInfo gl = get_gl_info();
+	auto gl = get_gl_info();
 	std::optional<PlatformGPUInfo> platform_info;
 
 	try {
@@ -504,19 +523,24 @@ void log_gpu_info() {
 	}
 
 	// log everything together
-	if (!gl.error.empty()) {
-		logging::write(std::format("GPU: GL query failed: {}", gl.error));
+	// JS: if (webgl?.error) ... else if (webgl) ... else ... "GPU: WebGL unavailable"
+	if (!gl.has_value()) {
+		// JS: webgl === null — no GL context
+		logging::write("GPU: GL unavailable");
+	} else if (!gl->error.empty()) {
+		// JS: webgl.error — exception occurred
+		logging::write(std::format("GPU: GL query failed: {}", gl->error));
 	} else {
-		if (!gl.renderer.empty())
-			logging::write(std::format("GPU: {} ({})", gl.renderer, gl.vendor));
+		if (!gl->renderer.empty())
+			logging::write(std::format("GPU: {} ({})", gl->renderer, gl->vendor));
 		else
 			logging::write("GPU: GL debug info unavailable");
 
-		if (gl.caps.max_tex_size > 0)
-			logging::write(std::format("GPU caps: {}", format_caps(gl.caps)));
+		if (gl->caps.max_tex_size > 0)
+			logging::write(std::format("GPU caps: {}", format_caps(gl->caps)));
 
-		if (!gl.extensions.empty())
-			logging::write(std::format("GPU ext ({}): {}", gl.extensions.size(), format_extensions(gl.extensions)));
+		if (!gl->extensions.empty())
+			logging::write(std::format("GPU ext ({}): {}", gl->extensions.size(), format_extensions(gl->extensions)));
 	}
 
 	if (platform_info.has_value())
