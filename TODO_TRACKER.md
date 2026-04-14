@@ -274,40 +274,40 @@
 - **Status**: Verified — C++ matches JS
 - **Details**: After reading doodad names, JS iterates all entries and converts: lowercases and replaces `.mdx` with `.m2`. C++ (lines 447–453 in WMOLegacyLoader.cpp) performs the same conversion using `std::transform` for lowercasing and `file.find(".mdx")` / `file.replace()` for extension replacement. This matches JS behavior.
 
-### ⬜ 445. [WMOLegacyLoader.h] `ofsPortals` and `numPortals` should be `uint32_t` to handle alpha format
+### ✅ 445. [WMOLegacyLoader.h] `ofsPortals` and `numPortals` should be `uint32_t` to handle alpha format
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 459–460
-- **Status**: Pending
-- **Details**: As noted in entry 441, the JS reads these as `readUInt32LE()` for alpha format. The C++ header declares them as `uint16_t` (lines 126–127). For alpha format WMOs (version 14), these fields should be 32-bit to avoid data truncation. The field types should be widened to `uint32_t`.
+- **Status**: Verified
+- **Details**: Already fixed in entry 441. The C++ header declares `ofsPortals` and `numPortals` as `uint32_t` (WMOLegacyLoader.h lines 125–126), and WMOLegacyLoader.cpp reads them without truncating casts. Matches JS behavior exactly.
 
-### ⬜ 446. [M2Loader.cpp] `parseChunk_MD21_textures()` does not check `nameLength > 0` — JS also omits this check
+### ✅ 446. [M2Loader.cpp] `parseChunk_MD21_textures()` does not check `nameLength > 0` — JS also omits this check
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` line 787
-- **Status**: Pending
-- **Details**: JS M2Loader checks `if (textureType === 0 && nameOfs > 0)` without checking `nameLength > 0` (line 787). This differs from M2LegacyLoader which checks both `nameOfs > 0 && nameLength > 0` (line 532). The C++ M2Loader (line 767) matches JS M2Loader by only checking `nameOfs > 0`. This means zero-length texture names could trigger a seek and read in M2Loader but would be filtered in M2LegacyLoader. Both C++ and JS are consistent within their respective loaders.
+- **Status**: Verified
+- **Details**: JS M2Loader checks `if (textureType === 0 && nameOfs > 0)` without checking `nameLength > 0` (line 787). This differs from M2LegacyLoader which checks both `nameOfs > 0 && nameLength > 0` (line 532). The C++ M2Loader (line 800) matches JS M2Loader by only checking `nameOfs > 0`. Both C++ and JS are consistent within their respective loaders. No change needed.
 
-### ⬜ 447. [M2Loader.cpp] `parseChunk_MD21_textures()` does not use `replace(/\0/g, '')` — uses `std::remove` instead
+### ✅ 447. [M2Loader.cpp] `parseChunk_MD21_textures()` does not use `replace(/\0/g, '')` — uses `std::remove` instead
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` line 792
-- **Status**: Pending
-- **Details**: JS M2Loader reads `fileName = this.data.readString(nameLength)` then does `fileName.replace('\0', '')` (line 792). Note: this JS code has a bug — it uses `replace('\0', '')` (string) instead of `replace(/\0/g, '')` (regex), so it only removes the FIRST null character. The C++ (line 773) uses `fileName.erase(std::remove(...), fileName.end())` which correctly removes ALL null characters. The C++ is actually more correct than the JS.
+- **Status**: Verified — C++ is more correct than JS
+- **Details**: JS M2Loader reads `fileName = this.data.readString(nameLength)` then does `fileName.replace('\0', '')` (line 792). Note: this JS code has a bug — it uses `replace('\0', '')` (string) instead of `replace(/\0/g, '')` (regex), so it only removes the FIRST null character. The C++ (line 808) uses `fileName.erase(std::remove(...), fileName.end())` which correctly removes ALL null characters. The C++ is actually more correct than the JS. A code comment documents this deviation.
 
 ### ✅ 448. [MDXLoader.cpp] Node registration deferred to post-parse — necessary C++ deviation (impossible to replicate JS timing)
 - **JS Source**: `src/js/3D/loaders/MDXLoader.js` lines 208–209
 - **Status**: Verified — Necessary deviation (impossible to implement identically in C++)
 - **Details**: JS `_read_node` immediately registers nodes: `if (node.objectId !== null) this.nodes[node.objectId] = node;` (lines 208–209). The C++ defers all node registration to after parsing is complete (lines 76–106), building a `nodes` lookup from final container addresses. This deviation is **impossible to avoid** in C++: nodes are constructed locally in `_read_node` and then moved into `std::vector` containers (e.g. `bones`, `helpers`, etc.), which invalidates any pointers stored during `_read_node`. Vectors may also reallocate on growth, further invalidating earlier pointers. The only correct approach is to register pointers after all vectors are fully populated and stable. The behavior is functionally identical — nodes are accessible by objectId after loading — only the internal registration timing differs. This is documented with a code comment (lines 76–79) explaining why the deviation is necessary.
 
-### ⬜ 449. [M2Loader.cpp] `globalLoops` uses `readInt16LE` — possible shared bug with JS
+### ✅ 449. [M2Loader.cpp] `globalLoops` uses `readInt16LE` — possible shared bug with JS
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` line 883
-- **Status**: Pending
-- **Details**: The M2 format specification defines global loops (global sequences) as 32-bit unsigned timestamps, but both JS M2Loader (line 883) and C++ M2Loader (line 859) read them as `readInt16LE`. This matches the original JS behavior but may be incorrect per the M2 format specification. The legacy loader (M2LegacyLoader.js line 125) correctly uses `readUInt32LE`. Both C++ and JS modern loaders are consistent with each other but may have the same bug.
+- **Status**: Verified — Matches JS
+- **Details**: The M2 format specification defines global loops (global sequences) as 32-bit unsigned timestamps, but both JS M2Loader (line 883) and C++ M2Loader (line 894) read them as `readInt16LE`. This matches the original JS behavior but may be incorrect per the M2 format specification. The legacy loader (M2LegacyLoader.js line 125) correctly uses `readUInt32LE`. Both C++ and JS modern loaders are consistent with each other but may have the same bug. No change needed — C++ faithfully replicates JS.
 
 ### ✅ 451. [M2LegacyLoader.cpp] `_parse_header()` parse sequence — verified correct
 - **JS Source**: `src/js/3D/loaders/M2LegacyLoader.js` lines 75–105
 - **Status**: Verified — Correct
 - **Details**: C++ `_parse_header()` (lines 63–97 in M2LegacyLoader.cpp) calls the same methods in the same order as the JS: model_name, global_loops, animations, animation_lookup, playable_animation_lookup, bones, (skip 8 bytes), vertices, views_inline (pre-WotLK only), colors, textures, texture_weights, texture_transforms, replaceable_texture_lookup, materials, (skip 8 bytes), texture_combos, (skip 8 bytes), transparency_lookup, texture_transform_lookup, bounding_box, collision, attachments. The sequence matches JS exactly.
 
-### ⬜ 452. [WMOLegacyLoader.h] `ofsPortals` and `numPortals` `uint16_t` truncation confirmed — duplicate of entry 441/445
+### ✅ 452. [WMOLegacyLoader.h] `ofsPortals` and `numPortals` `uint16_t` truncation confirmed — duplicate of entry 441/445
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 457–464
-- **Status**: Pending
-- **Details**: C++ `parse_MOGP()` (lines 531–534) reads `data.readUInt32LE()` for alpha format but casts to `uint16_t` via `static_cast<uint16_t>()`, which truncates values above 65535. The header declares both fields as `uint16_t`. For full fidelity with JS (which stores the full 32-bit values), these should be widened to `uint32_t`. See entries 441 and 445.
+- **Status**: Verified — Fixed in entry 441
+- **Details**: This is a duplicate of entries 441 and 445. The C++ header now declares both fields as `uint32_t` and WMOLegacyLoader.cpp reads them without truncating casts, matching JS behavior exactly.
 
 ## src/js/3D/renderers Audit (0/51 ✅)
 
