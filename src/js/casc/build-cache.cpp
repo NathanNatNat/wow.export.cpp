@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <fstream>
 #include <chrono>
+#include <condition_variable>
 #include <format>
 #include <string>
 #include <stdexcept>
@@ -29,6 +30,7 @@ namespace casc {
 static nlohmann::json cacheIntegrity;
 static bool cacheIntegrityLoaded = false;
 static std::mutex cacheIntegrityMutex;
+static std::condition_variable cacheIntegrityCV;
 
 /**
  * Returns the current timestamp in milliseconds since epoch (Date.now() equivalent).
@@ -76,12 +78,13 @@ std::optional<BufferWrapper> BuildCache::getFile(const std::string& file, const 
 		const fs::path filePath = getFilePath(file, dir);
 		const std::string filePathStr = filePath.string();
 
-		std::lock_guard<std::mutex> lock(cacheIntegrityMutex);
+		std::unique_lock<std::mutex> lock(cacheIntegrityMutex);
 
-		// Cache integrity is not loaded yet, reject.
+		// JS: if (!cacheIntegrity) await cacheIntegrityReady();
+		// Wait for cache integrity to be loaded instead of rejecting immediately.
 		if (!cacheIntegrityLoaded) {
-			logging::write(std::format("Cannot verify integrity of file, cache integrity not loaded ({})", filePathStr));
-			return std::nullopt;
+			logging::write("Cache integrity is not ready, waiting!");
+			cacheIntegrityCV.wait(lock, [] { return cacheIntegrityLoaded; });
 		}
 
 		// File integrity cannot be verified, reject.
@@ -91,6 +94,7 @@ std::optional<BufferWrapper> BuildCache::getFile(const std::string& file, const 
 		}
 
 		const std::string integrityHash = cacheIntegrity[filePathStr].get<std::string>();
+		lock.unlock();
 
 		BufferWrapper data = BufferWrapper::readFile(filePath);
 		const std::string dataHash = data.calculateHash("sha1", "hex");
@@ -124,13 +128,13 @@ void BuildCache::storeFile(const std::string& file, BufferWrapper& data, const s
 	const std::string hash = data.calculateHash("sha1", "hex");
 
 	{
-		std::lock_guard<std::mutex> lock(cacheIntegrityMutex);
+		std::unique_lock<std::mutex> lock(cacheIntegrityMutex);
 
-		// Cache integrity is not loaded yet, initialize an empty map.
+		// JS: if (!cacheIntegrity) await cacheIntegrityReady();
+		// Wait for cache integrity to be loaded instead of initializing empty.
 		if (!cacheIntegrityLoaded) {
-			logging::write("Cache integrity not loaded, initializing empty integrity map.");
-			cacheIntegrity = nlohmann::json::object();
-			cacheIntegrityLoaded = true;
+			logging::write("Cache integrity is not ready, waiting!");
+			cacheIntegrityCV.wait(lock, [] { return cacheIntegrityLoaded; });
 		}
 
 		cacheIntegrity[filePath.string()] = hash;
@@ -171,7 +175,11 @@ void initBuildCacheSystem() {
 		cacheIntegrity = nlohmann::json::object();
 	}
 
-	cacheIntegrityLoaded = true;
+	{
+		std::lock_guard<std::mutex> lock(cacheIntegrityMutex);
+		cacheIntegrityLoaded = true;
+	}
+	cacheIntegrityCV.notify_all();
 	core::events.emit("cache-integrity-ready");
 }
 
@@ -281,8 +289,9 @@ void registerBuildCacheEvents() {
 			if (deleteEntry) {
 				uintmax_t deleteSize = generics::deleteDirectory(entryDir);
 
-				// We don't include manifests in the cache size, so we need to make
-				// sure we don't subtract the size of it from our total to maintain accuracy.
+				// Deviation: JS `deleteSize -= manifestSize` has no underflow guard since
+				// JS numbers are doubles that can go negative. C++ uses uintmax_t (unsigned),
+				// so we guard against wraparound. This is a defensive fix.
 				if (deleteSize >= manifestSize)
 					deleteSize -= manifestSize;
 

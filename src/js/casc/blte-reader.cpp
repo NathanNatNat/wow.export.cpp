@@ -188,6 +188,8 @@ void BLTEReader::_handleBlock(BufferWrapper& block, size_t blockEnd, size_t inde
 				_handleBlock(decrypted, decrypted.byteLength(), index);
 			} catch (const EncryptionError&) {
 				// Partial decryption allows us to leave zeroed data.
+				// JS: this._ofs += this.blocks[index].DecompSize
+				// C++ move() adds to offset, equivalent to direct _ofs increment.
 				if (partialDecrypt)
 					move(static_cast<int64_t>(blocks[index].DecompSize));
 				else
@@ -274,12 +276,20 @@ void BLTEReader::_writeBufferBLTE(BufferWrapper& buf, size_t blockEnd) {
 	move(static_cast<int64_t>(length));
 }
 
+// Deviation: JS decodeAudio(context) calls processAllBlocks() then
+// super.decodeAudio(context) using the Web Audio API. This is browser-specific
+// and cannot be directly ported. Audio decoding in C++ uses miniaudio instead.
+
 void BLTEReader::writeToFile(const std::filesystem::path& file) {
 	processAllBlocks();
 	BufferWrapper::writeToFile(file);
 }
 
 const std::string& BLTEReader::getDataURL() {
+	// JS checks if this.dataURL is already set (could be assigned externally)
+	// and skips block processing in that case. Since C++ dataURL is private and
+	// handled by BufferWrapper::getDataURL() with internal caching, we always
+	// process blocks first — BufferWrapper::getDataURL() will cache the result.
 	processAllBlocks();
 	return BufferWrapper::getDataURL();
 }

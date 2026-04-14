@@ -28,7 +28,7 @@
 #include <sys/stat.h>
 #endif
 
-#include <spdlog/spdlog.h>
+#include "../log.h"
 
 namespace mpq {
 
@@ -508,7 +508,7 @@ std::vector<uint8_t> MPQArchive::inflateData(std::span<const uint8_t> data) {
 		inflateEnd(&strm);
 		return result;
 	} catch (const std::exception& e) {
-		spdlog::error("decompression error: {}", e.what());
+		logging::write(std::format("decompression error: {}", e.what()));
 		throw;
 	}
 }

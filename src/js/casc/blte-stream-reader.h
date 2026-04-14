@@ -21,6 +21,18 @@ namespace casc {
  * Streaming BLTE reader that fetches and decodes blocks on demand.
  *
  * JS equivalent: class BLTEStreamReader — module.exports = BLTEStreamReader
+ *
+ * Deviations from JS:
+ * - JS blockFetcher is async; C++ is synchronous (blocks the calling thread).
+ * - JS getBlock(), _decodeBlock(), streamBlocks(), createBlobURL() are all async;
+ *   C++ equivalents are synchronous.
+ * - JS createReadableStream() returns a Web Streams API ReadableStream for
+ *   progressive block consumption — browser-specific, not ported.
+ * - JS streamBlocks() is an async generator (async *streamBlocks()) yielding
+ *   blocks lazily; C++ uses a synchronous callback that iterates eagerly.
+ * - JS createBlobURL() creates a Blob with MIME type 'video/x-msvideo' and
+ *   returns an object URL string; C++ concatenates blocks into a BufferWrapper
+ *   (raw data, no URL or MIME type).
  */
 class BLTEStreamReader {
 public:
