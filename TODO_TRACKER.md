@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 432/567 verified (76%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 443/567 verified (78%)** — ✅ = Verified, ⬜ = Pending
 
 ---
 
@@ -2134,59 +2134,59 @@
 - **Status**: Verified
 - **Details**: File was already converted to C++. Replaced ImGui::TextWrapped with markdown_content::render() for article body rendering, matching the JS MarkdownContent component usage. Added KB link handler callback and markdown scroll state reset on article selection. All help article loading, search/filtering, KB ID navigation, and go-back functionality matches the original JS.
 
-### ⬜ 427. [tab_decor.cpp] Model export functionality is stubbed out
+### ✅ 427. [tab_decor.cpp] Model export functionality is stubbed out
 - **JS Source**: `src/js/modules/tab_decor.js` lines 167–175 (`export_model` call inside export loop)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In C++ (lines 273–291), the model export code inside the per-file export loop is entirely commented out. The `ExportModelOptions` struct population and `export_model` call are replaced with `(void)data; (void)model_type; (void)file_name; (void)export_path; (void)is_active;` followed by `helper.mark(decor_name, true);`. This means decor export reports success without actually writing any model files. The JS version (line 167) calls `modelViewerUtils.export_model(...)` with full options including geoset masks, WMO group masks, and WMO set masks.
 
-### ⬜ 428. [tab_audio.cpp] Residual commented-out JavaScript reference code
+### ✅ 428. [tab_audio.cpp] Residual commented-out JavaScript reference code
 - **JS Source**: `src/js/modules/tab_audio.js` lines 56–59, 73, 94–97
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ lines 90–92 contain `// file_data = await core.view.casc.getFile(selected_file_data_id);`, line 208 contains `// export_data = await core.view.casc.getFileByName(file_name);`, and lines 465–467 contain commented-out Vue template spans (`// <span>{{ $core.view.soundPlayerSeekFormatted }}</span>` etc.). These are leftover JavaScript reference comments from the conversion process. While the C++ implementation following each comment is correct, the residual JS code should be cleaned up for clarity.
 
-### ⬜ 429. [screen_settings.cpp] Residual commented-out Vue template code
+### ✅ 429. [screen_settings.cpp] Residual commented-out Vue template code
 - **JS Source**: `src/js/modules/screen_settings.js` lines ~460–462 (template buttons)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ lines 482–484 contain commented-out Vue template code: `// <input type="button" value="Discard" @click="handle_discard"/>`, `// <input type="button" value="Apply" @click="handle_apply"/>`, `// <input type="button" id="config-reset" value="Reset to Defaults" @click="handle_reset"/>`. The ImGui equivalents are properly implemented on lines 486–493, but the residual HTML/Vue template comments should be removed.
 
-### ⬜ 430. [audio-helper.cpp] `load()` returns void instead of the decoded audio buffer
+### ✅ 430. [audio-helper.cpp] `load()` returns void instead of the decoded audio buffer
 - **JS Source**: `src/js/ui/audio-helper.js` lines 31–35
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `async load(array_buffer)` returns `this.buffer` (the decoded `AudioBuffer`). The C++ `void load(...)` (lines 108–125) returns `void`. Any caller relying on the return value of `load()` would break. The JS function is async and returns the buffer; C++ is synchronous and returns nothing.
 
-### ⬜ 431. [audio-helper.cpp] `on_ended` callback requires polling `get_position()` instead of firing automatically
+### ✅ 431. [audio-helper.cpp] `on_ended` callback requires polling `get_position()` instead of firing automatically
 - **JS Source**: `src/js/ui/audio-helper.js` lines 57–67
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS registers `source.onended` callback directly on the `AudioBufferSourceNode`, which the browser fires automatically when playback reaches the end. The C++ version (lines 172–174, 232–242) documents that miniaudio has no per-sound `onended` callback. Instead, `on_ended` is fired from inside `get_position()` by polling `ma_sound_at_end()`. If consumers never call `get_position()`, `on_ended` never fires. This is a necessary deviation due to miniaudio's API, but callers must be aware they must poll `get_position()` periodically.
 
-### ⬜ 432. [audio-helper.cpp] `get_position()` has side effects not present in JS
+### ✅ 432. [audio-helper.cpp] `get_position()` has side effects not present in JS
 - **JS Source**: `src/js/ui/audio-helper.js` lines 115–130
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `get_position()` is a pure getter with no side effects. The C++ version (lines 223–251) detects natural end-of-playback via `ma_sound_at_end()`. When detected, it sets `is_playing = false`, `start_offset = 0`, calls `stop_source()`, fires `on_ended()`, and returns 0. In JS, `onended` is asynchronous and separate from `get_position()`. In C++, calling `get_position()` can mutate state and trigger callbacks.
 
-### ⬜ 433. [audio-helper.cpp] `get_position()` returns 0 at natural end instead of ~duration
+### ✅ 433. [audio-helper.cpp] `get_position()` returns 0 at natural end instead of ~duration
 - **JS Source**: `src/js/ui/audio-helper.js` line 126
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: When playback reaches the end naturally, JS returns `Math.min(position, this.buffer.duration)` (approximately the full duration). The `onended` fires separately/asynchronously. The C++ version (line 241) immediately returns `0` after resetting state. UI progress bars or position displays may flash to 0 instead of showing the full duration momentarily.
 
-### ⬜ 434. [audio-helper.cpp] `set_volume()` remembers value before `init()` — JS doesn't
+### ✅ 434. [audio-helper.cpp] `set_volume()` remembers value before `init()` — JS doesn't
 - **JS Source**: `src/js/ui/audio-helper.js` lines 136–139
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS does `if (this.gain) this.gain.gain.value = value;` — if `init()` hasn't been called, this is a no-op and the volume is not remembered. C++ (lines 257–262) always stores `volume = value`, then applies to sound if it exists. Volume is remembered and applied on next `play()` (line 170). C++ behavior is arguably better but differs from JS.
 
-### ⬜ 435. [char-texture-overlay.cpp] `initEvents()` is dead code — never called
+### ✅ 435. [char-texture-overlay.cpp] `initEvents()` is dead code — never called
 - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 74–108
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, events are registered at module load time (automatic on `require()`). In C++ (lines 94–106), three event handlers are wrapped in `initEvents()`, but it is never called anywhere in the codebase. `tab_characters.cpp` directly calls `nextOverlay()`, `prevOverlay()`, and `ensureActiveLayerAttached()`, bypassing the event system entirely. Either `initEvents()` should be called at startup or removed.
 
-### ⬜ 436. [character-appearance.cpp] `get_field_int` default of 512 for Width/Height differs from JS undefined behavior
+### ✅ 436. [character-appearance.cpp] `get_field_int` default of 512 for Width/Height differs from JS undefined behavior
 - **JS Source**: `src/js/ui/character-appearance.js` lines 91, 141, 150
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The C++ helper `get_field_int` (lines 22–34) uses a default value of `512` for Width/Height fields. In JS, missing fields would produce `undefined`/`NaN`, which is a different failure mode. If a DataRecord is missing Width/Height, JS would get `undefined` (NaN in arithmetic), while C++ silently uses 512.
 
-### ⬜ 437. [character-appearance.cpp] Bit-shift `1 << sectionType` uses 64-bit in C++ vs 32-bit in JS
+### ✅ 437. [character-appearance.cpp] Bit-shift `1 << sectionType` uses 64-bit in C++ vs 32-bit in JS
 - **JS Source**: `src/js/ui/character-appearance.js` line 154
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `(1 << section_type)` which is a 32-bit operation. C++ (line 246) uses `(1LL << section_type)` which is a 64-bit operation. For `section_type >= 32`, the results differ. C++ is more correct but produces different results than JS for high values.
 
 ### ⬜ 438. [data-exporter.cpp] `mark()` calls missing stack trace parameter

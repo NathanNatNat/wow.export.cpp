@@ -69,10 +69,4 @@ void prevOverlay();
  */
 size_t getLayerCount();
 
-/**
- * Initialize event listeners on the core event emitter.
- * Must be called once at startup.
- */
-void initEvents();
-
 } // namespace char_texture_overlay

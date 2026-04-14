@@ -87,9 +87,6 @@ static bool load_track() {
 	logging::write(std::format("Previewing sound file {}", selected_file));
 
 	try {
-		//     file_data = await core.view.casc.getFile(selected_file_data_id);
-		// else
-		//     file_data = await core.view.casc.getFileByName(selected_file);
 		BufferWrapper file_data_buf;
 		if (selected_file_data_id.has_value())
 			file_data_buf = core::view->casc->getVirtualFileByID(selected_file_data_id.value());
@@ -205,7 +202,6 @@ static void export_sounds() {
 		try {
 			const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
 			if (overwrite_files || !generics::fileExists(export_path)) {
-				//     export_data = await core.view.casc.getFileByName(file_name);
 				if (!has_export_data) {
 					BufferWrapper export_buf = core::view->casc->getVirtualFileByName(file_name);
 					export_data = std::move(export_buf.raw());
@@ -462,10 +458,6 @@ void render() {
 
 		ImGui::Spacing();
 
-		//     <span>{{ $core.view.soundPlayerSeekFormatted }}</span>
-		//     <span class="title">{{ $core.view.soundPlayerTitle }}</span>
-		//     <span>{{ $core.view.soundPlayerDurationFormatted }}</span>
-		// </div>
 		const std::string seek_formatted = format_time(view.soundPlayerSeek * view.soundPlayerDuration);
 		const std::string duration_formatted = format_time(view.soundPlayerDuration);
 		ImGui::Text("%s  %s  %s", seek_formatted.c_str(), view.soundPlayerTitle.c_str(), duration_formatted.c_str());

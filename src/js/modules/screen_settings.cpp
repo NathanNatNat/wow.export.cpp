@@ -479,9 +479,6 @@ void render() {
 
 	ImGui::EndChild(); // config-scroll
 
-	//   <input type="button" value="Discard" @click="handle_discard"/>
-	//   <input type="button" value="Apply" @click="handle_apply"/>
-	//   <input type="button" id="config-reset" value="Reset to Defaults" @click="handle_reset"/>
 	ImGui::Separator();
 	if (ImGui::Button("Discard"))
 		handle_discard();

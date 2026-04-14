@@ -145,8 +145,8 @@ std::optional<uint32_t> apply_customization_textures(
 			if (chr_materials.find(tex_type_u) == chr_materials.end()) {
 				auto mat = std::make_unique<CharMaterialRenderer>(
 					static_cast<int>(texture_type),
-					static_cast<int>(get_field_int(*chr_model_material, "Width", 512)),
-					static_cast<int>(get_field_int(*chr_model_material, "Height", 512))
+					static_cast<int>(get_field_int(*chr_model_material, "Width")),
+					static_cast<int>(get_field_int(*chr_model_material, "Height"))
 				);
 				mat->init();
 				chr_material = mat.get();
@@ -159,11 +159,11 @@ std::optional<uint32_t> apply_customization_textures(
 				0,                                                                     // chrModelTextureTargetID
 				0,                                                                     // fileDataID
 				0, 0,                                                                  // sectionX, sectionY
-				static_cast<int>(get_field_int(*chr_model_material, "Width", 512)),
-				static_cast<int>(get_field_int(*chr_model_material, "Height", 512)),
+				static_cast<int>(get_field_int(*chr_model_material, "Width")),
+				static_cast<int>(get_field_int(*chr_model_material, "Height")),
 				static_cast<int>(get_field_int(*chr_model_material, "TextureType")),  // materialTextureType
-				static_cast<int>(get_field_int(*chr_model_material, "Width", 512)),   // materialWidth
-				static_cast<int>(get_field_int(*chr_model_material, "Height", 512)),  // materialHeight
+				static_cast<int>(get_field_int(*chr_model_material, "Width")),   // materialWidth
+				static_cast<int>(get_field_int(*chr_model_material, "Height")),  // materialHeight
 				0,                                                                     // textureLayerBlendMode
 				true,                                                                  // useAlpha
 				baked_npc_blp                                                          // blpOverride
@@ -221,8 +221,8 @@ std::optional<uint32_t> apply_customization_textures(
 			if (chr_materials.find(mat_type_u) == chr_materials.end()) {
 				auto mat = std::make_unique<CharMaterialRenderer>(
 					static_cast<int>(mat_texture_type),
-					static_cast<int>(get_field_int(*chr_model_material, "Width", 512)),
-					static_cast<int>(get_field_int(*chr_model_material, "Height", 512))
+					static_cast<int>(get_field_int(*chr_model_material, "Width")),
+					static_cast<int>(get_field_int(*chr_model_material, "Height"))
 				);
 				mat->init();
 				chr_material = mat.get();
@@ -234,8 +234,8 @@ std::optional<uint32_t> apply_customization_textures(
 			const int64_t bit_mask = get_field_int(*chr_model_texture_layer, "TextureSectionTypeBitMask");
 
 			int sectionX = 0, sectionY = 0;
-			int sectionWidth  = static_cast<int>(get_field_int(*chr_model_material, "Width", 512));
-			int sectionHeight = static_cast<int>(get_field_int(*chr_model_material, "Height", 512));
+			int sectionWidth  = static_cast<int>(get_field_int(*chr_model_material, "Width"));
+			int sectionHeight = static_cast<int>(get_field_int(*chr_model_material, "Height"));
 
 			if (bit_mask != -1) {
 				const auto* sections = db::caches::DBCharacterCustomization::get_texture_sections(layout_id);
@@ -243,7 +243,8 @@ std::optional<uint32_t> apply_customization_textures(
 				if (sections) {
 					for (const auto& row : *sections) {
 						const int64_t section_type = get_field_int(row, "SectionType");
-						if ((1LL << section_type) & bit_mask) {
+						// JS uses 32-bit shift: (1 << section_type)
+						if ((1 << static_cast<int>(section_type)) & static_cast<int>(bit_mask)) {
 							sectionX      = static_cast<int>(get_field_int(row, "X"));
 							sectionY      = static_cast<int>(get_field_int(row, "Y"));
 							sectionWidth  = static_cast<int>(get_field_int(row, "Width"));
@@ -262,8 +263,8 @@ std::optional<uint32_t> apply_customization_textures(
 				chr_cust_mat->FileDataID,
 				sectionX, sectionY, sectionWidth, sectionHeight,
 				static_cast<int>(get_field_int(*chr_model_material, "TextureType")),
-				static_cast<int>(get_field_int(*chr_model_material, "Width", 512)),
-				static_cast<int>(get_field_int(*chr_model_material, "Height", 512)),
+				static_cast<int>(get_field_int(*chr_model_material, "Width")),
+				static_cast<int>(get_field_int(*chr_model_material, "Height")),
 				static_cast<int>(get_field_int(*chr_model_texture_layer, "BlendMode")),
 				true
 			);
