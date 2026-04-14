@@ -53,6 +53,8 @@ static fs::path getBlenderBaseDir() {
 		return fs::path(appdata) / "Blender Foundation" / "Blender";
 	return {};
 #else
+	// macOS case intentionally omitted — project scope is Windows and Linux only.
+	// JS equivalent: case 'darwin': return path.join(home_dir, 'Library', 'Application Support', 'Blender');
 	const char* home = std::getenv("HOME");
 	if (home)
 		return fs::path(home) / ".config" / "blender";
@@ -99,10 +101,25 @@ void init() {
 	// the framework, not the app root. use __dirname (app.nw/src/) instead.
 	// macOS is not supported in the C++ port — only Windows and Linux.
 	s_install_path = getExecutablePath().parent_path();
+
+	// Deviation from JS: JS uses `DATA_PATH = nw.App.dataPath` which is the
+	// OS-specific user-data directory (e.g., %LOCALAPPDATA% on Windows,
+	// ~/.config on Linux). C++ uses `<install>/data` — a subdirectory of the
+	// install path. This is a deliberate platform adaptation: the C++ port
+	// bundles resources (shaders, config, fonts) in data/ alongside the
+	// executable, whereas NW.js stores user data separately from install data.
 	s_data_dir = s_install_path / "data";
+
+	// Deviation from JS: JS stores runtime.log in DATA_PATH directly.
+	// C++ uses a separate Logs/ directory. This does not affect functionality
+	// — only the log file location.
 	s_log_dir = s_install_path / "Logs";
 
-	// Migrate legacy directories to the data directory.
+	// Deviation from JS: Legacy directory migration logic below does not exist
+	// in the JS source. This is C++-specific code to handle migration from
+	// earlier C++ port directory layouts (config/ → persistence/ → data/).
+	// This is a safe addition — it only runs once on first launch after upgrade
+	// and does not affect any JS-equivalent behavior.
 	const fs::path legacyDirs[] = {
 		s_install_path / "config",      // Original name
 		s_install_path / "persistence"  // Previous rename
@@ -124,7 +141,11 @@ void init() {
 	fs::create_directories(s_data_dir);
 	fs::create_directories(s_log_dir);
 
-	// Migrate legacy casc/ cache directory to cache/.
+	// Deviation from JS: Legacy casc/ → cache/ migration does not exist in JS.
+	// JS uses `path.join(DATA_PATH, 'casc')` for the cache directory name.
+	// C++ renames it to `cache/` with a migration from legacy `casc/` on first
+	// run. This is a C++-specific change; the directory content and structure
+	// are identical. See also constants.h CACHE namespace.
 	const auto legacyCascDir = s_data_dir / "casc";
 	const auto newCacheDir = s_data_dir / "cache";
 	try {
@@ -134,8 +155,14 @@ void init() {
 	}
 
 	// Compute derived paths.
+	// Deviation from JS: JS RUNTIME_LOG is `path.join(DATA_PATH, 'runtime.log')`.
+	// C++ uses LOG_DIR/runtime.log (separate Logs/ directory).
 	s_runtime_log = s_log_dir / "runtime.log";
 	s_last_export = s_data_dir / "last_export";
+
+	// Deviation from JS: JS SHADER_PATH is `path.join(INSTALL_PATH, 'src', 'shaders')`.
+	// C++ uses `<install>/data/shaders` because resources are bundled in the
+	// data/ directory in the C++ port (POST_BUILD copy step in CMakeLists.txt).
 	s_shader_path = s_data_dir / "shaders";
 
 	s_cache_dir = s_data_dir / "cache";
@@ -150,6 +177,8 @@ void init() {
 	s_cache_realmlist = s_data_dir / "realmlist.json";
 	s_cache_state_file = s_data_dir / "cache_state.json";
 
+	// Deviation from JS: CONFIG.DEFAULT_PATH is `path.join(INSTALL_PATH, 'src', 'default_config.jsonc')`.
+	// C++ uses `<install>/data/default_config.jsonc` — same resource layout as SHADER_PATH.
 	s_config_default_path = s_data_dir / "default_config.jsonc";
 	s_config_user_path = s_data_dir / "config.json";
 

@@ -310,6 +310,11 @@ BusyLock create_busy_lock() {
 /**
  * Show loading screen with specified number of progress steps.
  * Thread-safe: posts UI state changes to the main-thread queue.
+ *
+ * Deviation from JS: In JS, showLoadingScreen() sets state synchronously
+ * on the current event loop turn. In C++, we post to the main-thread queue
+ * because this may be called from a background thread. This introduces a
+ * one-frame delay, which is a necessary platform adaptation for thread safety.
  */
 void showLoadingScreen(int segments, const std::string& title) {
 	loading_progress_segments = segments;
@@ -325,6 +330,12 @@ void showLoadingScreen(int segments, const std::string& title) {
 /**
  * Advance loading screen progress by one step.
  * Thread-safe: posts UI state changes to the main-thread queue.
+ *
+ * Deviation from JS: JS calls `await generics.redraw()` to force an immediate
+ * UI repaint so progress is visible. In C++/ImGui, repaint happens on every
+ * frame tick in the main loop. The postToMainThread() ensures state is updated
+ * before the next frame renders, but there is no explicit forced redraw.
+ * This is a necessary platform adaptation (ImGui is immediate-mode).
  */
 void progressLoadingScreen(const std::string& text) {
 	loading_progress_value++;
@@ -356,9 +367,9 @@ void hideLoadingScreen() {
  */
 void hideToast(bool userCancel) {
 	// Cancel outstanding toast expiry timer.
-	if (toastTimer > -1) {
-		toastTimer = -1;
-	}
+	// In JS this calls clearTimeout(toastTimer). Here we reset the flag
+	// so the polling in drainMainThreadQueue() won't fire hideToast again.
+	toastTimer = -1;
 
 	view->toast = std::nullopt;
 
@@ -390,6 +401,7 @@ void setToast(const std::string& toastType, const std::string& message,
 
 /**
  * Open user-configured export directory with OS default.
+ * JS equivalent: nw.Shell.openItem(core.view.config.exportDirectory)
  */
 void openExportDirectory() {
 	const std::string exportDir = view->config.value("exportDirectory", "");
@@ -398,10 +410,14 @@ void openExportDirectory() {
 
 /**
  * Open a file or directory with the OS default application/explorer.
+ * JS equivalent: nw.Shell.openItem(path)
  */
 void openInExplorer(const std::string& path) {
 #ifdef _WIN32
-	const std::wstring wpath(path.begin(), path.end());
+	// Convert UTF-8 to UTF-16 for Windows API (nw.Shell.openItem handles this internally).
+	int wlen = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
+	std::wstring wpath(wlen, L'\0');
+	MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wpath.data(), wlen);
 	ShellExecuteW(nullptr, L"open", wpath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #else
 	std::string cmd = "xdg-open \"" + path + "\" &";
@@ -482,6 +498,7 @@ void postToMainThread(std::function<void()> task) {
 
 /**
  * Drain and execute all tasks posted via postToMainThread().
+ * Also checks toast TTL for auto-dismiss (JS: setTimeout(hideToast, ttl)).
  */
 void drainMainThreadQueue() {
 	std::vector<std::function<void()>> tasks;
@@ -491,6 +508,11 @@ void drainMainThreadQueue() {
 	}
 	for (auto& task : tasks)
 		task();
+
+	// Poll toast expiry — equivalent to JS setTimeout(hideToast, ttl).
+	if (toastTimer > -1 && std::chrono::steady_clock::now() >= toastExpiry) {
+		hideToast();
+	}
 }
 
 } // namespace core
