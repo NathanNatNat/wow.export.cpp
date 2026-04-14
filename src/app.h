@@ -114,10 +114,11 @@ inline constexpr ImU32 TEXT_IDLE_U32     = IM_COL32(255, 255, 255, 80);
 
 inline constexpr ImU32 ICON_DEFAULT_U32  = IM_COL32(255, 255, 255, 128);
 
-inline constexpr ImU32 SLIDER_TRACK_U32  = IM_COL32(80, 80, 80, 255);
+inline constexpr ImU32 SLIDER_TRACK_U32  = BG_DARK_U32;               // CSS: var(--background-dark) = #2c3136
 
-inline constexpr ImU32 SLIDER_THUMB_U32        = IM_COL32(200, 200, 200, 200);
-inline constexpr ImU32 SLIDER_THUMB_ACTIVE_U32 = IM_COL32(255, 255, 255, 220);
+inline constexpr ImU32 SLIDER_THUMB_U32        = BORDER_U32;            // CSS: var(--border) = #6c757d
+inline constexpr ImU32 SLIDER_THUMB_ACTIVE_U32 = FONT_ALT_U32;          // CSS: var(--font-alt) = #57afe2
+inline constexpr ImU32 SLIDER_FILL_U32         = FONT_ALT_U32;          // CSS .fill: var(--font-alt) = #57afe2
 
 inline constexpr ImU32 FIELD_PLACEHOLDER_U32 = IM_COL32(255, 255, 255, 100);
 
