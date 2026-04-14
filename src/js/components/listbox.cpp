@@ -795,7 +795,7 @@ void render(const char* id,
 
 				const bool isActive = (state.activeQuickFilter == ext);
 				if (isActive)
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.13f, 0.71f, 0.29f, 1.0f));
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f)); // CSS: .quick-filters a.active { color: #ffffff; font-weight: bold; }
 
 				if (ImGui::SmallButton(upperExt.c_str()))
 					applyQuickFilter(ext, state);

@@ -94,12 +94,18 @@ void render(const char* id,
 		state.base.scrollRel = 0.0f;
 	}
 
-	// Pre-filter items by expansion before passing to base listbox.
-	const std::vector<std::string> expansionFiltered = filterByExpansion(items, expansionFilter);
+	// JS: let res = this.itemList (resolves override first, then expansion filter).
+	// Resolve override before expansion filtering to match JS order of operations.
+	const auto& resolvedItems = (overrideItems != nullptr && !overrideItems->empty())
+		? *overrideItems : items;
 
-	// Delegate to the base listbox render with expansion-filtered items.
+	// Pre-filter resolved items by expansion before passing to base listbox.
+	const std::vector<std::string> expansionFiltered = filterByExpansion(resolvedItems, expansionFilter);
+
+	// Delegate to the base listbox render with expansion-filtered items (no override,
+	// since we already resolved it above).
 	listbox::render(id, expansionFiltered, filter, selection, single, keyinput, regex,
-	                copymode, pasteselection, copytrimwhitespace, unittype, overrideItems,
+	                copymode, pasteselection, copytrimwhitespace, unittype, nullptr,
 	                disable, persistscrollkey, quickfilters, nocopy, state.base,
 	                onSelectionChanged, onContextMenu);
 }
