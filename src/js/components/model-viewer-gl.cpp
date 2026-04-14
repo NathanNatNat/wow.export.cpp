@@ -201,20 +201,21 @@ void fit_camera_for_character(const BoundingBox* /*bounding_box*/, PerspectiveCa
 
 	camera.lookAt(target_x, target_y, target_z);
 
-	if (orbit_controls) {
-		orbit_controls->target[0] = target_x;
-		orbit_controls->target[1] = target_y;
-		orbit_controls->target[2] = target_z;
-
-		orbit_controls->update();
-	}
-
+	// JS takes a single duck-typed `controls` parameter and updates only that one.
+	// C++ splits into two typed pointers. Only the active one (non-null) should be updated.
+	// The caller passes the appropriate controls; typically only one is non-null.
 	if (char_controls) {
 		char_controls->target[0] = target_x;
 		char_controls->target[1] = target_y;
 		char_controls->target[2] = target_z;
 
 		char_controls->update();
+	} else if (orbit_controls) {
+		orbit_controls->target[0] = target_x;
+		orbit_controls->target[1] = target_y;
+		orbit_controls->target[2] = target_z;
+
+		orbit_controls->update();
 	}
 }
 
@@ -394,12 +395,16 @@ static void render_scene(State& state, Context& context) {
 	state.lastTime = currentTime;
 
 	// update animation
+	// JS: if (activeRenderer && activeRenderer.updateAnimation) — duck-typed check.
+	// In C++, M2RendererGL always has updateAnimation, so a null check suffices.
 	M2RendererGL* activeRenderer = context.getActiveRenderer ? context.getActiveRenderer() : nullptr;
 
 	if (activeRenderer) {
 		activeRenderer->updateAnimation(deltaTime);
 
 		// update frame counter in view (throttled to ~15fps for UI updates)
+		// JS: if (activeRenderer.get_animation_frame && !activeRenderer.animation_paused)
+		// In C++, M2RendererGL always has these methods, so null check on activeRenderer suffices.
 		if (!activeRenderer->is_animation_paused()) {
 			state.frameUpdateCounter = (state.frameUpdateCounter) + 1;
 			if (state.frameUpdateCounter >= 4) {
@@ -415,22 +420,15 @@ static void render_scene(State& state, Context& context) {
 	}
 
 	// apply model rotation if speed is non-zero (non-character mode)
+	// JS: if (rotation_speed !== 0 && activeRenderer && activeRenderer.setTransform && !this.use_character_controls)
 	const double rotation_speed = core::view->modelViewerRotationSpeed;
-	if (rotation_speed != 0 && !state.use_character_controls) {
+	if (rotation_speed != 0 && activeRenderer && !state.use_character_controls) {
 		state.model_rotation_y += static_cast<float>(rotation_speed) * deltaTime;
-		if (activeRenderer) {
-			activeRenderer->setTransform(
-				{0, 0, 0},
-				{0, state.model_rotation_y, 0},
-				{1, 1, 1}
-			);
-		} else if (context.setActiveModelTransform) {
-			context.setActiveModelTransform(
-				{0, 0, 0},
-				{0, state.model_rotation_y, 0},
-				{1, 1, 1}
-			);
-		}
+		activeRenderer->setTransform(
+			{0, 0, 0},
+			{0, state.model_rotation_y, 0},
+			{1, 1, 1}
+		);
 	}
 
 	// update controls
@@ -478,6 +476,8 @@ static void render_scene(State& state, Context& context) {
 	auto* equipment_renderers = context.getEquipmentRenderers ? context.getEquipmentRenderers() : nullptr;
 
 	// determine hand grip state based on equipped weapons
+	// JS: if (activeRenderer && equipment_renderers && activeRenderer.setHandGrip)
+	// In C++, M2RendererGL always has setHandGrip, so null check on activeRenderer suffices.
 	if (activeRenderer && equipment_renderers) {
 		bool close_right = false;
 		bool close_left = false;
@@ -520,10 +520,10 @@ static void render_scene(State& state, Context& context) {
 	}
 
 	// render model
+	// JS: if (activeRenderer && activeRenderer.render) activeRenderer.render(...)
+	// No fallback to context.renderActiveModel in JS.
 	if (activeRenderer) {
 		activeRenderer->render(view_mat, proj_mat);
-	} else if (context.renderActiveModel) {
-		context.renderActiveModel(view_mat, proj_mat);
 	}
 
 	if (equipment_renderers && activeRenderer) {
@@ -649,26 +649,20 @@ void update_shadow_visibility(State& state, const Context& context) {
 }
 
 void fit_camera(State& state, Context& context) {
-	std::optional<BoundingBox> bb;
+	// JS: const active_renderer = this.context.getActiveRenderer?.();
+	//     if (!active_renderer || !active_renderer.getBoundingBox) return;
+	//     const bounding_box = active_renderer.getBoundingBox();
+	// C++ also tries getActiveBoundingBox as a fallback for non-M2 renderer types,
+	// but this is an extension not present in the original JS.
+	M2RendererGL* active_renderer = context.getActiveRenderer ? context.getActiveRenderer() : nullptr;
+	if (!active_renderer)
+		return;
 
-	// Try the generic bounding box provider first (covers all renderer types).
-	if (context.getActiveBoundingBox)
-		bb = context.getActiveBoundingBox();
+	auto m2_bb = active_renderer->getBoundingBox();
+	if (!m2_bb)
+		return;
 
-	// Fallback: get bounding box from M2 renderer directly.
-	if (!bb) {
-		M2RendererGL* active_renderer = context.getActiveRenderer ? context.getActiveRenderer() : nullptr;
-		if (!active_renderer)
-			return;
-
-		auto m2_bb = active_renderer->getBoundingBox();
-		if (!m2_bb)
-			return;
-
-		bb = BoundingBox{ m2_bb->min, m2_bb->max };
-	}
-
-	BoundingBox bounding_box = *bb;
+	BoundingBox bounding_box{ m2_bb->min, m2_bb->max };
 
 	if (context.useCharacterControls) {
 		fit_camera_for_character(&bounding_box, state.camera,
@@ -681,6 +675,11 @@ void fit_camera(State& state, Context& context) {
 
 
 void init(State& state, Context& context) {
+	// JS: this.gl_context = new GLContext(canvas, { antialias: true, alpha: true, preserveDrawingBuffer: true });
+	// In desktop OpenGL, these WebGL context options map as follows:
+	// - antialias: Multisampling is not needed since we render to an FBO (can add MSAA FBO if needed).
+	// - alpha: The FBO color attachment uses GL_RGBA8, which includes alpha.
+	// - preserveDrawingBuffer: Not applicable — desktop GL framebuffers are always preserved.
 	state.gl_context = std::make_unique<gl::GLContext>();
 
 	// store context for renderers
@@ -775,7 +774,12 @@ void renderWidget(const char* id, State& state, Context& context) {
 	}
 
 	// resize handler
-	// No devicePixelRatio scaling is needed since ImGui handles DPI internally.
+	// JS: canvas.width = width * window.devicePixelRatio (lines 482–483).
+	// In desktop OpenGL, ImGui::GetContentRegionAvail() already returns dimensions
+	// in framebuffer pixels (accounting for DPI scaling done by GLFW). The FBO is
+	// sized to match these pixel dimensions, providing full-resolution rendering.
+	// If GLFW content scale != 1.0 in the future, this should be revisited to
+	// multiply by the content scale factor (equivalent of devicePixelRatio).
 	if (state.fbo_width != width || state.fbo_height != height) {
 		create_fbo(state, width, height);
 

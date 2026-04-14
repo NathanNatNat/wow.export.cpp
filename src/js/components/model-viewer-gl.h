@@ -178,8 +178,12 @@ struct Context {
 	// GL context used by this model viewer instance.
 	gl::GLContext* gl_context = nullptr;
 
-	// Pointer to active controls (CameraControlsGL* or CharacterCameraControlsGL*).
-	// Updated by recreate_controls.
+	// Pointer to active controls.
+	// JS: `this.context.controls = this.controls;` — one duck-typed reference.
+	// C++ uses two typed pointers because CameraControlsGL and CharacterCameraControlsGL
+	// are distinct types. Only one should be non-null at a time (the active one).
+	// Parent code accessing `context.controls` in JS should check whichever typed pointer
+	// corresponds to the current mode (useCharacterControls → controls_character, else → controls_orbit).
 	CameraControlsGL* controls_orbit = nullptr;
 	CharacterCameraControlsGL* controls_character = nullptr;
 

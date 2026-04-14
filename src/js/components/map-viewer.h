@@ -132,6 +132,12 @@ struct MapViewerState {
 	float viewportHeight = 0.0f;
 	float canvasWidth = 0.0f;
 	float canvasHeight = 0.0f;
+
+	// Screen-space origin of the canvas area, captured before InvisibleButton
+	// advances the cursor. Used by mapPositionFromClientPoint and renderOverlay
+	// so that coordinate conversion uses the correct origin.
+	float canvasOriginX = 0.0f;
+	float canvasOriginY = 0.0f;
 };
 
 /**
