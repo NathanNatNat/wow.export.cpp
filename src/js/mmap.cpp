@@ -239,7 +239,12 @@ void release_virtual_files() {
 			} catch (...) {
 				// swallow individual unmap errors
 			}
-			delete mmap_obj;
+
+			try {
+				delete mmap_obj;
+			} catch (...) {
+				// swallow individual delete errors to ensure all objects are attempted
+			}
 		}
 
 		size_t count = virtual_files.size();

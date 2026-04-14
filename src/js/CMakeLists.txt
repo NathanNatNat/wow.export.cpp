@@ -179,6 +179,11 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_models.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_models_legacy.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_characters.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/module_test_a.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/module_test_b.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_help.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_blender.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_changelog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/legacy_tab_textures.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/screen_settings.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/screen_source_select.cpp
@@ -186,5 +191,8 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/modules.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/stb-impl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/external-links.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/updater.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/wmv.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/wowhead.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/updater.cpp
 )

@@ -64,6 +64,18 @@ struct ModuleDef {
 	// Internal state for initialization guard
 	bool _tab_initialized = false;
 	bool _tab_initializing = false;
+
+	/**
+	 * Activate this module (JS equivalent: proxy get 'setActive').
+	 * Calls modules::set_active(this->name).
+	 */
+	void setActive();
+
+	/**
+	 * Reload this module (JS equivalent: proxy get 'reload').
+	 * Calls modules::reload_module(this->name).
+	 */
+	void reload();
 };
 
 /**

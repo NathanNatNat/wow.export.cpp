@@ -97,5 +97,9 @@ private:
 	uint32_t tileSize;
 	uint32_t tileCols;
 	uint32_t tileRows;
+	// JS equivalent uses Map() which preserves insertion order. std::map
+	// sorts by key, but the rendering is position-based (pixelX/pixelY) so
+	// the iteration order doesn't affect the final image. Using std::map
+	// for deterministic output.
 	std::map<std::string, Tile> tiles;
 };
