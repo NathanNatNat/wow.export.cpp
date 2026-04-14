@@ -122,8 +122,8 @@ public:
 	uint32_t nameOfs = 0;
 	uint32_t descOfs = 0;
 	uint32_t groupFlags = 0;
-	uint16_t ofsPortals = 0;
-	uint16_t numPortals = 0;
+	uint32_t ofsPortals = 0;
+	uint32_t numPortals = 0;
 	uint16_t numBatchesA = 0;
 	uint16_t numBatchesB = 0;
 	uint32_t numBatchesC = 0;

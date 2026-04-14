@@ -333,8 +333,23 @@ bool SKELLoader::loadAnimsForIndex(uint32_t animation_index) {
 			this->ownedAnimBuffers.push_back(std::move(ownedBuf));
 
 			auto loader = std::make_unique<ANIMLoader>(*bufPtr);
-			loader->load();
-			this->animFiles[animation_index] = bufPtr;
+			loader->load(true);
+
+			if (!loader->skeletonBoneData.empty()) {
+				auto parsedBuf = std::make_unique<BufferWrapper>(std::move(loader->skeletonBoneData));
+				BufferWrapper* parsedPtr = parsedBuf.get();
+				this->ownedAnimBuffers.push_back(std::move(parsedBuf));
+				this->animFiles[animation_index] = parsedPtr;
+			} else {
+				auto parsedBuf = std::make_unique<BufferWrapper>(std::move(loader->animData));
+				BufferWrapper* parsedPtr = parsedBuf.get();
+				this->ownedAnimBuffers.push_back(std::move(parsedBuf));
+				this->animFiles[animation_index] = parsedPtr;
+			}
+
+			// patch animation data into existing bones
+			this->_patch_bone_animation(animation_index);
+
 			return true;
 		} catch (const std::exception& e) {
 			logging::write(std::format("Failed to load .anim file (fileDataID={}): {}", fileDataID, e.what()));
@@ -435,15 +450,29 @@ void SKELLoader::loadAnims(bool load_all) {
 
 				logging::write(std::format("Loading .anim file for animation: {} ({}) - {}", entry.animID, get_anim_name(entry.animID), entry.subAnimID));
 
-				try {
+			try {
 					BufferWrapper animData = core::view->casc->getVirtualFileByID(fileDataID);
 					auto ownedBuf = std::make_unique<BufferWrapper>(std::move(animData));
 					BufferWrapper* bufPtr = ownedBuf.get();
 					this->ownedAnimBuffers.push_back(std::move(ownedBuf));
 
 					auto loader = std::make_unique<ANIMLoader>(*bufPtr);
-					loader->load();
-					this->animFiles[static_cast<uint32_t>(i)] = bufPtr;
+					loader->load(true);
+
+					if (!loader->skeletonBoneData.empty()) {
+						auto parsedBuf = std::make_unique<BufferWrapper>(std::move(loader->skeletonBoneData));
+						BufferWrapper* parsedPtr = parsedBuf.get();
+						this->ownedAnimBuffers.push_back(std::move(parsedBuf));
+						this->animFiles[static_cast<uint32_t>(i)] = parsedPtr;
+					} else {
+						auto parsedBuf = std::make_unique<BufferWrapper>(std::move(loader->animData));
+						BufferWrapper* parsedPtr = parsedBuf.get();
+						this->ownedAnimBuffers.push_back(std::move(parsedBuf));
+						this->animFiles[static_cast<uint32_t>(i)] = parsedPtr;
+					}
+
+					// patch this animation into bones
+					this->_patch_bone_animation(static_cast<uint32_t>(i));
 				} catch (const std::exception& e) {
 					logging::write(std::format("Failed to load .anim file (fileDataID={}): {}", fileDataID, e.what()));
 				}

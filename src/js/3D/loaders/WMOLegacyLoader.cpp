@@ -530,8 +530,8 @@ void WMOLegacyLoader::parse_MOGP(BufferWrapper& data, uint32_t chunkSize) {
 
 	if (this->version == WMO_VER_ALPHA) {
 		// alpha uses uint32 for portal fields
-		this->ofsPortals = static_cast<uint16_t>(data.readUInt32LE());
-		this->numPortals = static_cast<uint16_t>(data.readUInt32LE());
+		this->ofsPortals = data.readUInt32LE();
+		this->numPortals = data.readUInt32LE();
 	} else {
 		this->ofsPortals = data.readUInt16LE();
 		this->numPortals = data.readUInt16LE();
