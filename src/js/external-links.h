@@ -11,6 +11,14 @@
 #include <cstdlib>
 #include <imgui.h>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 /**
  * ExternalLinks — centralized external link resolution and opening.
  *
@@ -64,7 +72,6 @@ inline std::string resolve(const std::string& link) {
 inline void open(const std::string& link) {
 	std::string url = resolve(link);
 #ifdef _WIN32
-	// ShellExecuteW is available via windows.h (included by the caller).
 	std::wstring wurl(url.begin(), url.end());
 	ShellExecuteW(nullptr, L"open", wurl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #else
