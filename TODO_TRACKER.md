@@ -1,12 +1,12 @@
 # TODO Tracker
 
-> **Progress: 87/561 verified (15%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 129/561 verified (23%)** — ✅ = Verified, ⬜ = Pending
 
 ## 🔴 Priority: Models Tab (Rendering, Camera, Export)
 
 *These sections are prioritized to get the Models tab 100% functional — including proper model rendering, camera controls, GL infrastructure, model loading, and export.*
 
-## src/js/3D/gl/ Audit (0/18 ✅)
+## src/js/3D/gl/ Audit (18/18 ✅)
 
 ### ✅ 408. [GLContext.cpp] `dispose()` does not null out `canvas`/`gl` — JS sets both to `null`
 - **JS Source**: `src/js/3D/gl/GLContext.js` lines 403–407
@@ -98,7 +98,7 @@
 - **Status**: Verified
 - **Details**: C++ uses `-1` default + `count < 0` check as the idiomatic C++ equivalent of JS's nullish coalescing `count ?? this.index_count`. Both compute byte offset identically. Functionally equivalent — no changes needed.
 
-## src/js/3D/ Audit (0/4 ✅)
+## src/js/3D/ Audit (4/4 ✅)
 
 ### ✅ 353. [Skin.h] `SubMesh::triangleStart` is `uint16_t` but must hold a 32-bit value
 - **JS Source**: `src/js/3D/Skin.js` lines 61, 72
@@ -120,7 +120,7 @@
 - **Status**: Verified
 - **Details**: The `fileName` member is intentionally kept. While not declared in JS `Texture` constructor, it is dynamically set by `M2LegacyLoader.js` (line 540: `texture.fileName = fileName`) and read by `M2LegacyRendererGL.js`, `MDXRendererGL.js`, and `M2LegacyExporter.js`. Since C++ does not support dynamic properties, the member must be declared in the class. Added a documentation comment explaining this.
 
-## src/js/3D/camera/ Audit (0/12 ✅)
+## src/js/3D/camera/ Audit (12/12 ✅)
 
 ### ✅ 357. [CameraControlsGL.cpp] `init()` omits all event listener registration
 - **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 198–216
@@ -182,7 +182,7 @@
 - **Status**: Verified
 - **Details**: JS uses duck typing — both control types accept the same camera object. C++ now uses a single unified `CameraGL` struct (in `CameraControlsGL.h`) with all members needed by either control type. `CharacterCameraGL` and `CharacterDomElementGL` have been removed. `CharacterCameraControlsGL.h` includes `CameraControlsGL.h` and uses `CameraGL&` and `DomElementGL&`. `model-viewer-gl.h` updated accordingly.
 
-## src/js/3D/loaders Audit (5/25 ✅)
+## src/js/3D/loaders Audit (25/25 ✅)
 
 ### ✅ 426. [M2Loader.cpp] `loadAnims()` missing `animIsChunked` parameter — always loads with default `isChunked=true`
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 118–124
