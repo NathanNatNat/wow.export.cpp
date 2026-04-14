@@ -27,10 +27,32 @@
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+#include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
 
 namespace casc {
+
+namespace {
+// Helper to dump a string map as JSON (matches JS log.write('%o', obj) behavior).
+std::string dumpMap(const std::unordered_map<std::string, std::string>& m) {
+	nlohmann::json j;
+	for (const auto& [k, v] : m)
+		j[k] = v;
+	return j.dump();
+}
+
+std::string dumpMaps(const std::vector<std::unordered_map<std::string, std::string>>& v) {
+	nlohmann::json j = nlohmann::json::array();
+	for (const auto& m : v) {
+		nlohmann::json obj;
+		for (const auto& [k, val] : m)
+			obj[k] = val;
+		j.push_back(obj);
+	}
+	return j.dump();
+}
+} // anonymous namespace
 
 CASCLocal::CASCLocal(const std::string& dir)
 	: CASC(false), dir(dir)
@@ -73,7 +95,7 @@ void CASCLocal::init() {
 			builds.push_back(entry);
 	}
 
-	logging::write("Local builds found: " + std::to_string(builds.size()));
+	logging::write(dumpMaps(builds));
 }
 
 /**
@@ -228,7 +250,7 @@ std::vector<ProductEntry> CASCLocal::getProductList() {
  */
 void CASCLocal::load(int buildIndex) {
 	build = builds[buildIndex];
-	logging::write("Loading local CASC build");
+	logging::write("Loading local CASC build: " + dumpMap(build));
 
 	ownedCache = std::make_unique<BuildCache>(build["BuildKey"]);
 	ownedCache->init();
@@ -240,6 +262,8 @@ void CASCLocal::load(int buildIndex) {
 	loadIndexes();
 	loadEncoding();
 	loadRoot();
+
+	core::view->casc = this;
 
 	prepareListfile();
 	prepareDBDManifest();
@@ -287,8 +311,8 @@ void CASCLocal::loadConfigs() {
 
 	cdnConfig = getConfigFileWithRemoteFallback(build["CDNKey"]);
 
-	logging::write("BuildConfig loaded");
-	logging::write("CDNConfig loaded");
+	logging::write("BuildConfig: " + dumpMap(buildConfig));
+	logging::write("CDNConfig: " + dumpMap(cdnConfig));
 }
 
 /**
@@ -429,7 +453,9 @@ void CASCLocal::initializeRemoteCASC() {
 	remote = std::make_unique<CASCRemote>(regionTag);
 	remote->init();
 
-	// Find matching build index.
+	// JS: const buildIndex = remote.builds.findIndex(build => build.Product === this.build.Product);
+	// JS calls preload(buildIndex, ...) unconditionally — if buildIndex is -1, preload will
+	// receive an invalid index (matching JS behavior where it would cause an error).
 	int buildIndex = -1;
 	const std::string& product = build["Product"];
 	for (size_t i = 0; i < remote->builds.size(); i++) {
@@ -439,8 +465,7 @@ void CASCLocal::initializeRemoteCASC() {
 		}
 	}
 
-	if (buildIndex >= 0)
-		remote->preload(buildIndex, cache);
+	remote->preload(buildIndex, cache);
 }
 
 /**

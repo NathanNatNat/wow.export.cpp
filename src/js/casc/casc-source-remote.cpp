@@ -24,8 +24,30 @@
 #include <algorithm>
 #include <numeric>
 #include <future>
+#include <nlohmann/json.hpp>
 
 namespace casc {
+
+namespace {
+// Helper to dump a string map as JSON (matches JS log.write('%o', obj) behavior).
+std::string dumpMap(const std::unordered_map<std::string, std::string>& m) {
+	nlohmann::json j;
+	for (const auto& [k, v] : m)
+		j[k] = v;
+	return j.dump();
+}
+
+std::string dumpMaps(const std::vector<std::unordered_map<std::string, std::string>>& v) {
+	nlohmann::json j = nlohmann::json::array();
+	for (const auto& m : v) {
+		nlohmann::json obj;
+		for (const auto& [k, val] : m)
+			obj[k] = val;
+		j.push_back(obj);
+	}
+	return j.dump();
+}
+} // anonymous namespace
 
 // EMPTY_HASH is already defined in blte-reader.h as casc::EMPTY_HASH
 
@@ -40,7 +62,12 @@ CASCRemote::CASCRemote(const std::string& region)
 void CASCRemote::init() {
 	logging::write("Initializing remote CASC source (" + region + ")");
 
-	host = std::format(constants::PATCH::HOST, region);
+	// Use printf-style %s replacement to match JS util.format(constants.PATCH.HOST, region).
+	std::string host_fmt(constants::PATCH::HOST);
+	auto pos = host_fmt.find("%s");
+	if (pos != std::string::npos)
+		host_fmt.replace(pos, 2, region);
+	host = host_fmt;
 	if (region == "cn")
 		host = std::string(constants::PATCH::HOST_CHINA);
 
@@ -71,7 +98,7 @@ void CASCRemote::init() {
 		}
 	}
 
-	logging::write("Remote builds loaded: " + std::to_string(builds.size()));
+	logging::write(dumpMaps(builds));
 }
 
 /**
@@ -94,6 +121,8 @@ std::vector<std::unordered_map<std::string, std::string>> CASCRemote::getConfig(
 	const std::string url = host + product + file;
 	auto res = generics::get(url);
 
+	// JS: if (!res.ok) throw new Error(util.format('HTTP %d from remote CASC endpoint: %s', res.status, url));
+	// generics::get() already returns empty on non-OK HTTP responses, so empty check is equivalent.
 	if (res.empty())
 		throw std::runtime_error(std::format("HTTP error from remote CASC endpoint: {}", url));
 
@@ -120,6 +149,8 @@ std::unordered_map<std::string, std::string> CASCRemote::getCDNConfig(const std:
 			logging::write("Attempting to retrieve CDN config from: " + url);
 			auto res = generics::get(url);
 
+			// JS: if (!res.ok) throw new Error(util.format('HTTP %d from CDN config endpoint', res.status));
+			// generics::get() already returns empty on non-OK HTTP responses, so empty check is equivalent.
 			if (res.empty())
 				throw std::runtime_error("HTTP error from CDN config endpoint");
 
@@ -316,7 +347,7 @@ std::vector<ProductEntry> CASCRemote::getProductList() {
  */
 void CASCRemote::preload(int buildIndex, BuildCache* sharedCache) {
 	build = builds[buildIndex];
-	logging::write("Preloading remote CASC build");
+	logging::write("Preloading remote CASC build: " + dumpMap(build));
 
 	if (sharedCache) {
 		cache = sharedCache;
@@ -342,6 +373,8 @@ void CASCRemote::load(int buildIndex) {
 
 	loadEncoding();
 	loadRoot();
+
+	core::view->casc = this;
 
 	prepareListfile();
 	prepareDBDManifest();
@@ -372,13 +405,13 @@ void CASCRemote::loadEncoding() {
 	BufferWrapper encData;
 	if (!encRaw.has_value()) {
 		// Encoding file not cached, download it.
-		logging::write("Encoding for build " + build["BuildConfig"] + " not cached, downloading.");
+		logging::write("Encoding for build " + cache->key + " not cached, downloading.");
 		encData = getDataFile(formatCDNKey(encKey));
 
 		// Store back into cache (no need to block).
 		cache->storeFile(std::string(constants::CACHE::BUILD_ENCODING), encData);
 	} else {
-		logging::write("Encoding for build " + build["BuildConfig"] + " cached locally.");
+		logging::write("Encoding for build " + cache->key + " cached locally.");
 		encData = std::move(encRaw.value());
 	}
 
@@ -409,7 +442,7 @@ void CASCRemote::loadRoot() {
 	BufferWrapper rootData;
 	if (!rootCached.has_value()) {
 		// Root file not cached, download.
-		logging::write("Root file for build " + build["BuildConfig"] + " not cached, downloading.");
+		logging::write("Root file for build " + cache->key + " not cached, downloading.");
 
 		rootData = getDataFile(formatCDNKey(rootKey));
 		cache->storeFile(std::string(constants::CACHE::BUILD_ROOT), rootData);
@@ -472,7 +505,7 @@ void CASCRemote::loadServerConfig() {
 
 	// Download CDN server list.
 	auto serverConfigs = getConfig(build["Product"], std::string(constants::PATCH::SERVER_CONFIG));
-	logging::write("Server configs loaded: " + std::to_string(serverConfigs.size()));
+	logging::write(dumpMaps(serverConfigs));
 
 	// Locate the CDN entry for our selected region.
 	bool found = false;
@@ -553,6 +586,7 @@ BufferWrapper CASCRemote::getDataFile(const std::string& file) {
  * @returns BufferWrapper
  */
 BufferWrapper CASCRemote::getDataFilePartial(const std::string& file, int64_t ofs, int64_t len) {
+	// JS passes null for output path (don't write to disk); C++ uses "" which has the same effect.
 	return generics::downloadFile(host + "data/" + file, "", ofs, len);
 }
 
@@ -568,8 +602,8 @@ void CASCRemote::loadConfigs() {
 	cdnConfig = getCDNConfig(build["CDNConfig"], cdnHosts);
 	buildConfig = getCDNConfig(build["BuildConfig"], cdnHosts);
 
-	logging::write("CDNConfig loaded");
-	logging::write("BuildConfig loaded");
+	logging::write("CDNConfig: " + dumpMap(cdnConfig));
+	logging::write("BuildConfig: " + dumpMap(buildConfig));
 }
 
 /**

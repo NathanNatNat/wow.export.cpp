@@ -11,6 +11,7 @@
 #include "version-config.h"
 
 #include <algorithm>
+#include <chrono>
 #include <format>
 #include <future>
 #include <mutex>
@@ -44,8 +45,9 @@ std::unordered_map<std::string, CacheEntry> resolutionCache;
 // Track hosts that have failed to respond properly (e.g., censored responses)
 std::unordered_set<std::string> failedHosts;
 
-// Background threads for pre-resolution
-std::vector<std::jthread> backgroundThreads;
+// Background futures for pre-resolution (replaces jthread vector to avoid unbounded growth).
+// std::shared_future can be safely overwritten — previous futures complete independently.
+std::vector<std::shared_future<void>> backgroundFutures;
 
 /**
  * Generate cache key from region and hosts.
@@ -171,6 +173,11 @@ void _resolveRegionProduct(const std::string& region, const std::string& product
 		std::string url = host + product + std::string(constants::PATCH::SERVER_CONFIG);
 		auto data = generics::get(url);
 
+		// JS: if (!res.ok) throw new Error(util.format('HTTP %d from server config endpoint: %s', res.status, url));
+		// generics::get() returns empty on non-OK responses, so empty check is equivalent.
+		if (data.empty())
+			throw std::runtime_error(std::format("HTTP error from server config endpoint: {}", url));
+
 		std::string text(data.begin(), data.end());
 		auto serverConfigs = casc::parseVersionConfig(text);
 		auto serverConfig = std::find_if(serverConfigs.begin(), serverConfigs.end(),
@@ -193,16 +200,24 @@ void _resolveRegionProduct(const std::string& region, const std::string& product
 
 void startPreResolution(const std::string& region, const std::string& product) {
 	logging::write(std::format("Starting CDN pre-resolution for region: {}", region));
-	backgroundThreads.emplace_back([region, product]() {
+
+	// Remove completed futures to prevent unbounded growth.
+	backgroundFutures.erase(
+		std::remove_if(backgroundFutures.begin(), backgroundFutures.end(),
+			[](const std::shared_future<void>& f) {
+				return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+			}),
+		backgroundFutures.end());
+
+	backgroundFutures.push_back(std::async(std::launch::async, [region, product]() {
 		_resolveRegionProduct(region, product);
-	});
+	}));
 }
 
 std::string getBestHost(const std::string& region, const std::unordered_map<std::string, std::string>& serverConfig) {
 	auto cacheKey = _getCacheKey(region, serverConfig.at("Hosts"));
 
 	std::shared_future<std::vector<HostResult>> existingFuture;
-	bool isNewResolution = false;
 
 	{
 		std::lock_guard lock(cacheMutex);
@@ -230,13 +245,13 @@ std::string getBestHost(const std::string& region, const std::unordered_map<std:
 
 			resolutionCache[cacheKey] = CacheEntry{ future, std::nullopt, {} };
 			existingFuture = future;
-			isNewResolution = true;
 		}
 	}
 
 	auto rankedHosts = existingFuture.get();
 
-	if (isNewResolution) {
+	// JS always updates the cache after awaiting the promise (not guarded by isNewResolution).
+	{
 		std::lock_guard lock(cacheMutex);
 		auto& entry = resolutionCache[cacheKey];
 		entry.bestHost = rankedHosts[0];
@@ -250,7 +265,6 @@ std::vector<std::string> getRankedHosts(const std::string& region, const std::un
 	auto cacheKey = _getCacheKey(region, serverConfig.at("Hosts"));
 
 	std::shared_future<std::vector<HostResult>> existingFuture;
-	bool isNewResolution = false;
 
 	{
 		std::lock_guard lock(cacheMutex);
@@ -281,13 +295,13 @@ std::vector<std::string> getRankedHosts(const std::string& region, const std::un
 
 			resolutionCache[cacheKey] = CacheEntry{ future, std::nullopt, {} };
 			existingFuture = future;
-			isNewResolution = true;
 		}
 	}
 
 	auto rankedHosts = existingFuture.get();
 
-	if (isNewResolution) {
+	// JS always updates the cache after awaiting the promise (not guarded by isNewResolution).
+	{
 		std::lock_guard lock(cacheMutex);
 		auto& entry = resolutionCache[cacheKey];
 		entry.bestHost = rankedHosts[0];

@@ -99,13 +99,14 @@ InstallManifest CASC::getInstallManifest() {
 			installKeys.push_back(token);
 	}
 
+	// JS: installKey = installKeys.length === 1 ? this.encodingKeys.get(installKeys[0]) : installKeys[1]
+	// If encodingKeys.get() returns undefined, installKey becomes undefined — propagate failure.
 	std::string installKey;
 	if (installKeys.size() == 1) {
 		auto it = encodingKeys.find(installKeys[0]);
 		if (it != encodingKeys.end())
 			installKey = it->second;
-		else
-			installKey = installKeys[0];
+		// else: installKey stays empty (equivalent to JS undefined) — will propagate downstream
 	} else {
 		installKey = installKeys[1];
 	}
@@ -233,6 +234,10 @@ std::string CASC::getFileByName(const std::string& fileName, bool partialDecrypt
 	if (!fileDataID.has_value())
 		throw std::runtime_error("File not mapping in listfile: " + fileName);
 
+	// NOTE: In JS, this.getFile() dispatches polymorphically to CASCLocal.getFile()
+	// or CASCRemote.getFile() which accept (fileDataID, partialDecrypt, suppressLog,
+	// supportFallback, forceFallback). In C++, getFile() returns the encoding key only;
+	// callers needing a BLTEReader should use getFileAsBLTE() on the subclass directly.
 	return getFile(fileDataID.value());
 }
 
@@ -272,7 +277,7 @@ BufferWrapper CASC::getVirtualFileByID(uint32_t fileDataID, bool suppressLog) {
 
 	auto* mmap_obj = mmap_util::create_virtual_file();
 	if (!mmap_obj->map(cachedPath))
-		throw std::runtime_error("failed to map file: " + cachedPath);
+		throw std::runtime_error("failed to map file: " + mmap_obj->lastError);
 
 	return BufferWrapper::fromMmap(mmap_obj->data, mmap_obj->size);
 }
