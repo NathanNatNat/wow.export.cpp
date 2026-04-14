@@ -102,7 +102,7 @@ Map Node.js built-in modules to project dependencies as follows:
 - If a visual element cannot be replicated exactly in Dear ImGui, document the limitation in a code comment and in `TODO_TRACKER.md`, and get as close as possible.
 
 ### TODO_TRACKER.md Format
-Entries in `TODO_TRACKER.md` must be **numbered sequentially**. When adding a new entry, increment from the last existing number. The format is:
+Entries in `TODO_TRACKER.md` must be **numbered sequentially** and **ordered by number** (no section headers or groupings). When adding a new entry, increment from the last existing number and append it at the end. The format is:
 ```
 ### N. [filename.cpp] Brief description
 - **JS Source**: `src/js/original-file.js` lines XX–YY
@@ -110,3 +110,11 @@ Entries in `TODO_TRACKER.md` must be **numbered sequentially**. When adding a ne
 - **Details**: What needs to be done and why it could not be completed inline.
 ```
 where `N` is the next sequential number after the last entry in the file.
+
+### TODO_TRACKER.md Totals
+The progress summary line at the top of `TODO_TRACKER.md` must always be kept up to date:
+```
+> **Progress: X/Y verified (Z%)** — ✅ = Verified, ⬜ = Pending
+```
+- `X` = number of `✅` entries, `Y` = total entries, `Z` = percentage (`round(X/Y * 100)`).
+- **Update this line whenever you add, remove, or change the status of any entry** (e.g., marking ⬜ → ✅ or adding new entries).
