@@ -34,12 +34,15 @@ enum class SortDirection {
 /**
  * Context menu event data emitted by the table.
  * Equivalent to the JS object emitted via $emit('contextmenu', { ... }).
+ * Includes the mouse event position data so consumers can position the context menu.
  */
 struct ContextMenuEvent {
 	int rowIndex = -1;
 	int columnIndex = -1;
 	std::string cellValue;
 	int selectedCount = 0;
+	float mouseX = 0.0f;  // Mouse X position (from the event object in JS)
+	float mouseY = 0.0f;  // Mouse Y position (from the event object in JS)
 };
 
 /**
@@ -79,6 +82,11 @@ struct DataTableState {
 	std::vector<std::string> prevHeaders;
 	size_t prevRowCount = 0;
 	const void* prevRowsPtr = nullptr;
+	// Content-based change detection: version counter incremented externally
+	// when rows are mutated in-place. This catches changes that don't alter
+	// size or base pointer (e.g., editing cell content).
+	size_t rowsVersion = 0;
+	size_t prevRowsVersion = 0;
 
 	// Cached sorted/filtered items (recomputed each frame).
 	// These are indices into the original rows array for filtered items,

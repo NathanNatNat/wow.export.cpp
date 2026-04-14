@@ -82,6 +82,9 @@ static void onEnter(ComboBoxState& state, const nlohmann::json& currentValue,
 /**
  * Watch handler for value prop changes.
  * Equivalent to the JS watch: { value: function(newValue) { ... } }.
+ *
+ * JS calls this.selectOption(this.source.find(item => item.value === newValue.value))
+ * which may emit update:value if no matching option is found (emits null via selectOption).
  */
 static void watchValue(const nlohmann::json& value, const std::vector<nlohmann::json>& source,
                         ComboBoxState& state, const std::function<void(const nlohmann::json&)>& onChange) {
@@ -97,12 +100,8 @@ static void watchValue(const nlohmann::json& value, const std::vector<nlohmann::
 					break;
 				}
 			}
-			if (found) {
-				state.currentText = found->value("label", std::string(""));
-				state.isActive = false;
-			} else {
-				state.currentText = "";
-			}
+			// Call selectOption to match JS behavior (emits null if not found).
+			selectOption(found, value, state, onChange);
 		} else {
 			state.currentText = "";
 		}
@@ -117,6 +116,25 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
             const std::function<void(const nlohmann::json&)>& onChange) {
 	ImGui::PushID(id);
 
+	// mounted() equivalent: initialize on first render.
+	// JS: if (this.value !== null) this.selectOption(this.source.find(...)); else this.currentText = '';
+	if (!state.initialized) {
+		state.initialized = true;
+		if (!value.is_null()) {
+			const nlohmann::json* found = nullptr;
+			for (const auto& item : source) {
+				if (item.contains("value") && value.contains("value") && item["value"] == value["value"]) {
+					found = &item;
+					break;
+				}
+			}
+			selectOption(found, value, state, onChange);
+		} else {
+			state.currentText = "";
+		}
+		state.prevValue = value;
+	}
+
 	// Watch: value prop change detection.
 	watchValue(value, source, state, onChange);
 
@@ -125,13 +143,19 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 
 	ImGui::SetNextItemWidth(-FLT_MIN);
 	bool inputActive = false;
-	if (ImGui::InputText("##input", &state.currentText[0], state.currentText.capacity() + 1,
+
+	// Ensure currentText has capacity for InputText to write into.
+	// Reserve at least some space to avoid UB when string is empty.
+	if (state.currentText.capacity() < 256)
+		state.currentText.reserve(256);
+
+	if (ImGui::InputText("##input", state.currentText.data(), state.currentText.capacity() + 1,
 	                     ImGuiInputTextFlags_CallbackResize,
 	                     [](ImGuiInputTextCallbackData* data) -> int {
 	                         if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
 	                             auto* str = static_cast<std::string*>(data->UserData);
 	                             str->resize(static_cast<size_t>(data->BufTextLen));
-	                             data->Buf = &(*str)[0];
+	                             data->Buf = str->data();
 	                         }
 	                         return 0;
 	                     },
@@ -141,10 +165,13 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 	}
 
 	// Show placeholder when empty and not focused.
+	// Use ImGui item rect for accurate positioning (not hardcoded offsets).
 	if (state.currentText.empty() && !ImGui::IsItemActive()) {
-		const ImVec2 textPos = ImGui::GetItemRectMin();
+		const ImVec2 itemMin = ImGui::GetItemRectMin();
+		const ImVec2 itemMax = ImGui::GetItemRectMax();
+		const float textY = itemMin.y + (itemMax.y - itemMin.y - ImGui::GetTextLineHeight()) * 0.5f;
 		ImGui::GetWindowDrawList()->AddText(
-			ImVec2(textPos.x + 4.0f, textPos.y + 2.0f),
+			ImVec2(itemMin.x + ImGui::GetStyle().FramePadding.x, textY),
 			app::theme::FIELD_PLACEHOLDER_U32,
 			placeholder
 		);
@@ -162,9 +189,12 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 
 	inputActive = ImGui::IsItemActive();
 
-	// onBlur equivalent — with a slight tolerance for clicking dropdown items.
-	// This is delayed because if we click an option, the blur event will fire before the click event.
-	// hovering the dropdown popup, and deactivate when neither input nor popup is interacted with.
+	// onBlur equivalent — JS uses setTimeout(() => { this.isActive = false; }, 200)
+	// to delay deactivation by 200ms, allowing dropdown clicks to register.
+	// We use a frame counter (~12 frames at 60fps ≈ 200ms).
+	if (ImGui::IsItemDeactivated() && !inputActive) {
+		state.blurDelayFrames = 12;
+	}
 
 	// <ul v-if="isActive && currentText.length > 0">
 	//     <li v-for="item in filteredSource" @click="selectOption(item)">{{ item.label }}</li>
@@ -172,27 +202,37 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 	if (state.isActive && !state.currentText.empty()) {
 		auto matches = filteredSource(state.currentText, source, maxheight);
 		if (!matches.empty()) {
-			ImGui::BeginChild("##dropdown", ImVec2(0.0f, std::min(static_cast<float>(matches.size()) * ImGui::GetTextLineHeightWithSpacing(), 200.0f)),
+			// CSS: <ul> has no explicit max-height in template; controlled by CSS.
+			// Use calculated height based on item count (no arbitrary cap).
+			const float dropdownHeight = static_cast<float>(matches.size()) * ImGui::GetTextLineHeightWithSpacing();
+
+			ImGui::BeginChild("##dropdown", ImVec2(0.0f, dropdownHeight),
 			                  ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
 
 			for (const auto* item : matches) {
 				const std::string label = item->value("label", std::string(""));
 				if (ImGui::Selectable(label.c_str())) {
 					selectOption(item, value, state, onChange);
+					state.blurDelayFrames = 0; // Cancel pending blur
 				}
 			}
 
 			// Keep active while hovering dropdown.
-			if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None))
+			if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None)) {
 				inputActive = true;
+				state.blurDelayFrames = 0; // Cancel pending blur while hovering dropdown
+			}
 
 			ImGui::EndChild();
 		}
 	}
 
-	// Deactivate if neither input nor dropdown is active/hovered.
-	if (!inputActive && state.isActive && !ImGui::IsAnyItemHovered()) {
-		state.isActive = false;
+	// Deactivate after blur delay expires (200ms equivalent).
+	if (state.blurDelayFrames > 0) {
+		state.blurDelayFrames--;
+		if (state.blurDelayFrames == 0 && !inputActive) {
+			state.isActive = false;
+		}
 	}
 
 	ImGui::PopID();

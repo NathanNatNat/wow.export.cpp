@@ -30,6 +30,13 @@ struct ComboBoxState {
 
 	// Change-detection for the 'value' prop watch.
 	nlohmann::json prevValue;
+
+	// Initialization flag (mounted() equivalent).
+	bool initialized = false;
+
+	// Blur delay: frames remaining before deactivation.
+	// JS uses setTimeout(..., 200ms). We approximate with a frame counter.
+	int blurDelayFrames = 0;
 };
 
 /**

@@ -1756,130 +1756,130 @@
 
 ## src/js/components/ Audit (0/84 ✅)
 
-### ⬜ 338. [checkboxlist.cpp] `resize()` called every frame instead of only on layout change
+### ✅ 338. [checkboxlist.cpp] `resize()` called every frame instead of only on layout change
 - **JS Source**: `src/js/components/checkboxlist.js` lines 28–38
-- **Status**: Pending
-- **Details**: In JS, `resize()` is called only when the `ResizeObserver` fires (actual DOM resize). In C++ (line 149), `resize()` is called unconditionally every frame inside `render()`. This continuously overwrites `state.scroll` with `(containerHeight - scrollerHeight) * scrollRel`, potentially preventing user-initiated scroll from persisting between frames.
+- **Status**: Verified
+- **Details**: Fixed by adding `prevContainerHeight`, `prevScrollerHeight`, and `initialized` fields to `CheckboxListState`. The `resize()` function now only fires when the container or scroller dimensions actually change, matching the JS `ResizeObserver` behavior.
 
-### ⬜ 339. [checkboxlist.cpp] `itemWeight` returns 0.0f instead of JS Infinity when list is empty
+### ✅ 339. [checkboxlist.cpp] `itemWeight` returns 0.0f instead of JS Infinity when list is empty
 - **JS Source**: `src/js/components/checkboxlist.js` line 83
-- **Status**: Pending
-- **Details**: JS returns `1 / this.items.length` which yields `Infinity` when `items.length === 0`. C++ (lines 56–58) returns `0.0f` when items is empty. Downstream arithmetic in `wheelMouse` will behave differently with an empty list.
+- **Status**: Verified
+- **Details**: Fixed by removing the `items.empty()` guard and returning `1.0f / static_cast<float>(items.size())` unconditionally, which yields `+Infinity` when items is empty — matching JS `1 / 0 === Infinity`.
 
-### ⬜ 340. [checkboxlist.cpp] `recalculateBounds` division-by-zero guard diverges from JS
+### ✅ 340. [checkboxlist.cpp] `recalculateBounds` division-by-zero guard diverges from JS
 - **JS Source**: `src/js/components/checkboxlist.js` line 105
-- **Status**: Pending
-- **Details**: JS sets `this.scrollRel = this.scroll / max` which produces `Infinity`/`NaN` when `max === 0`. C++ (line 77) guards with `(max > 0.0f) ? (state.scroll / max) : 0.0f`. Added safety guard changes behavior when container and scroller heights are equal.
+- **Status**: Verified
+- **Details**: The guard is intentionally kept as a safe deviation. JS `this.scroll / max` yields Infinity/NaN when max===0, which propagates to scrollIndex producing NaN → Math.round(NaN) = NaN → items.slice(NaN) = []. In C++, NaN/Infinity would cause undefined rendering behavior. When max===0, all items fit in view so scrollRel=0 is correct. Added documentation comment explaining the deviation.
 
-### ⬜ 341. [checkboxlist.cpp] `wheelMouse` uses hardcoded itemHeight instead of querying actual child height
+### ✅ 341. [checkboxlist.cpp] `wheelMouse` uses hardcoded itemHeight instead of querying actual child height
 - **JS Source**: `src/js/components/checkboxlist.js` lines 142–145
-- **Status**: Pending
-- **Details**: JS dynamically queries `this.$el.querySelector('.item').clientHeight` to compute `scrollCount`. C++ (line 143) uses hardcoded `const float itemHeight = 26.0f`. If the actual rendered item height ever differs from 26px (due to styling, DPI, or font size), the JS would adapt while the C++ would not.
+- **Status**: Verified
+- **Details**: Fixed by computing itemHeight dynamically using `std::max(ImGui::GetFrameHeightWithSpacing(), 26.0f)` instead of hardcoding 26.0f. This adapts to DPI and font size changes while maintaining the CSS minimum height of 26px.
 
-### ⬜ 342. [checkboxlist.cpp] Custom scrollbar styling does not replicate CSS `.scroller` appearance
+### ✅ 342. [checkboxlist.cpp] Custom scrollbar styling does not replicate CSS `.scroller` appearance
 - **JS Source**: `src/js/components/checkboxlist.js` line 171
-- **Status**: Pending
-- **Details**: C++ (lines 179–201) uses hardcoded 8px-wide scrollbar, 4.0f corner rounding, TEXT_ACTIVE_U32/TEXT_IDLE_U32 colors. No track background is drawn. The original CSS `.scroller` likely specifies different width, colors, and may include a track/background. The `using` class (hover/active state styling) is reduced to just a color toggle.
+- **Status**: Verified
+- **Details**: Fixed scrollbar styling to match CSS `.scroller`: right: 3px offset, inner div inset (top: 3px, bottom: 3px), FONT_PRIMARY color at 0.7 opacity (default), FONT_HIGHLIGHT color at 0.7 opacity (hover/using), and SCROLLBAR_ROUNDING (5px border-radius from CSS).
 
-### ⬜ 343. [checkboxlist.cpp] Alternate row background uses ROW_HOVER_U32 instead of even-row color
+### ✅ 343. [checkboxlist.cpp] Alternate row background uses ROW_HOVER_U32 instead of even-row color
 - **JS Source**: `src/js/components/checkboxlist.js` line 172
-- **Status**: Pending
-- **Details**: JS uses CSS `:nth-child(even)` styling applied via external stylesheet. C++ (lines 214–218) uses `app::theme::ROW_HOVER_U32`. The constant name suggests it's a hover color, not an alternate-row background color. The original CSS nth-child(even) would use a distinct background color.
+- **Status**: Verified
+- **Details**: Fixed to use `app::theme::BG_ALT_U32` (--background-alt: #3c4147) for nth-child(even) rows and `app::theme::FONT_ALT_U32` (--font-alt: #57afe2) for selected rows, matching the CSS `.item:nth-child(even) { background: var(--background-alt); }` and `.item.selected { background: var(--font-alt); }`.
 
-### ⬜ 344. [combobox.cpp] `watchValue` does not call `selectOption` / does not emit `onChange`
+### ✅ 344. [combobox.cpp] `watchValue` does not call `selectOption` / does not emit `onChange`
 - **JS Source**: `src/js/components/combobox.js` lines 19–24
-- **Status**: Pending
-- **Details**: JS Watch calls `this.selectOption(this.source.find(...))`, which may emit `update:value` (e.g., if the item isn't found, it emits null). C++ (lines 86–110) `watchValue` manually sets `currentText` and `isActive` but never calls `selectOption` or invokes `onChange`. When value changes externally and the matching source item is not found, JS emits null back via `selectOption`; C++ silently clears `currentText` without notifying the caller.
+- **Status**: Verified
+- **Details**: Fixed `watchValue` to call `selectOption()` when value changes and is non-null, matching JS behavior. When the matching source item is not found, `selectOption(nullptr, ...)` emits null via `onChange`, just like JS does.
 
-### ⬜ 345. [combobox.cpp] `mounted()` initialization not explicitly ported
+### ✅ 345. [combobox.cpp] `mounted()` initialization not explicitly ported
 - **JS Source**: `src/js/components/combobox.js` lines 27–31
-- **Status**: Pending
-- **Details**: JS `mounted()` calls `selectOption` if `value !== null`, else clears text. C++ relies on `watchValue` being called each frame. If the initial value is non-null, `watchValue` will fire but won't call `onChange` (see #209).
+- **Status**: Verified
+- **Details**: Added `initialized` flag to `ComboBoxState`. On first render, the mounted() logic is executed: if value is non-null, `selectOption()` is called with the matching source item (which calls `onChange` if the values differ); otherwise `currentText` is cleared.
 
-### ⬜ 346. [combobox.cpp] `onBlur` 200ms delay replaced with hover detection
+### ✅ 346. [combobox.cpp] `onBlur` 200ms delay replaced with hover detection
 - **JS Source**: `src/js/components/combobox.js` lines 68–71
-- **Status**: Pending
-- **Details**: JS uses `setTimeout(() => { this.isActive = false; }, 200)` to delay deactivation by 200ms, allowing dropdown clicks to register. C++ (lines 194–196) uses `!inputActive && !ImGui::IsAnyItemHovered()` which may close the dropdown prematurely or fail to close it in edge cases. `IsAnyItemHovered()` checks all ImGui items, not just dropdown items.
+- **Status**: Verified
+- **Details**: Replaced `!ImGui::IsAnyItemHovered()` check with a frame-based delay counter (`blurDelayFrames`). When the input is deactivated, a 12-frame delay (~200ms at 60fps) is started before setting `isActive = false`. Hovering the dropdown cancels the blur delay, matching the JS behavior of allowing dropdown clicks to register before deactivation.
 
-### ⬜ 347. [combobox.cpp] Dropdown max height hardcoded to 200px
+### ✅ 347. [combobox.cpp] Dropdown max height hardcoded to 200px
 - **JS Source**: `src/js/components/combobox.js` lines 87–93
-- **Status**: Pending
-- **Details**: The JS `<ul>` has no explicit max-height in the template; it's controlled entirely by CSS. C++ (line 175) hardcodes `std::min(..., 200.0f)` as max dropdown height. If the CSS specifies a different max height, this won't match.
+- **Status**: Verified
+- **Details**: Removed the hardcoded `std::min(..., 200.0f)` cap. The dropdown height is now calculated directly from the number of filtered items (`matches.size() * GetTextLineHeightWithSpacing()`), matching JS where the `<ul>` has no explicit max-height in the template.
 
-### ⬜ 348. [combobox.cpp] `InputText` buffer management is fragile / potential UB
+### ✅ 348. [combobox.cpp] `InputText` buffer management is fragile / potential UB
 - **JS Source**: `src/js/components/combobox.js` line 89
-- **Status**: Pending
-- **Details**: C++ (line 128) uses `ImGui::InputText("##input", &state.currentText[0], state.currentText.capacity() + 1, ...)`. When `state.currentText` is empty, `&state.currentText[0]` may be undefined behavior. Modern ImGui provides `ImGui::InputText` overloads that accept `std::string*` directly (via `imgui_stdlib.h`), which would be safer.
+- **Status**: Verified
+- **Details**: Fixed by reserving a minimum capacity of 256 bytes before calling `InputText`, and using `state.currentText.data()` instead of `&state.currentText[0]`. This ensures the buffer pointer is always valid even when the string is empty.
 
-### ⬜ 349. [combobox.cpp] Placeholder text rendered manually with hardcoded offsets
+### ✅ 349. [combobox.cpp] Placeholder text rendered manually with hardcoded offsets
 - **JS Source**: `src/js/components/combobox.js` line 89
-- **Status**: Pending
-- **Details**: JS uses standard HTML `placeholder` attribute. C++ (lines 144–151) draws placeholder via `AddText` with hardcoded offsets `+4.0f, +2.0f`. The positioning offset may not match the actual input text position across different DPI/font settings.
+- **Status**: Verified
+- **Details**: Fixed placeholder positioning to use `ImGui::GetItemRectMin()` / `ImGui::GetItemRectMax()` for bounds and `ImGui::GetStyle().FramePadding.x` for horizontal offset. Vertical centering uses the actual item rect height. This adapts to DPI and style changes instead of using hardcoded `+4.0f, +2.0f`.
 
-### ⬜ 350. [context-menu.cpp] `@mouseleave` close behavior replaced with click-outside
+### ✅ 350. [context-menu.cpp] `@mouseleave` close behavior replaced with click-outside
 - **JS Source**: `src/js/components/context-menu.js` line 54
-- **Status**: Pending
-- **Details**: JS menu closes immediately when the mouse leaves the menu div (`@mouseleave="$emit('close')"`). C++ (lines 94–98) only closes when clicking outside the window (`!ImGui::IsWindowHovered(...) && ImGui::IsMouseClicked(0)`). This is a significant behavioral difference — JS: hover-out closes; C++: click-outside closes.
+- **Status**: Verified
+- **Details**: Fixed to match JS `@mouseleave` behavior: the menu now closes when the mouse leaves the window bounds (using `!ImGui::IsWindowHovered(RectOnly)`), not just on click-outside. This matches the JS behavior where the menu closes immediately on mouse-leave.
 
-### ⬜ 351. [context-menu.cpp] `@click` on container div not fully ported
+### ✅ 351. [context-menu.cpp] `@click` on container div not fully ported
 - **JS Source**: `src/js/components/context-menu.js` line 54
-- **Status**: Pending
-- **Details**: In JS, any click anywhere inside the `<div class="context-menu">` emits `close`. C++ (lines 100–102) says "handled by individual Selectable items" but no general click handler exists. If `contentCallback` renders non-Selectable elements (text, separators), clicking them won't close the menu in C++.
+- **Status**: Verified
+- **Details**: Added a general click handler that detects any left click inside the hovered window and emits close. This catches clicks on non-Selectable elements (text, separators) in addition to the individual Selectable items.
 
-### ⬜ 352. [context-menu.cpp] `context-menu-zone` div not implemented
+### ✅ 352. [context-menu.cpp] `context-menu-zone` div not implemented
 - **JS Source**: `src/js/components/context-menu.js` line 55
-- **Status**: Pending
-- **Details**: JS has a `<div class="context-menu-zone"></div>` — an invisible zone that extends the hover area between the trigger and menu, preventing premature close. C++ (lines 85–86) acknowledges this in a comment but does not implement it.
+- **Status**: Verified
+- **Details**: The `context-menu-zone` is an invisible div that extends the hover area between the trigger and menu to prevent premature close in the HTML/CSS layout. In ImGui, the window itself serves as the hover region. Since we now use mouseleave (window hover check) for closing, the zone is not needed — the ImGui window's rectangular bounds provide equivalent functionality. Added documentation comment explaining why.
 
-### ⬜ 353. [context-menu.cpp] Window ID collision for multiple instances
+### ✅ 353. [context-menu.cpp] Window ID collision for multiple instances
 - **JS Source**: `src/js/components/context-menu.js` — each Vue component instance is independent
-- **Status**: Pending
-- **Details**: C++ (line 84) uses `ImGui::Begin("##context_menu_popup", ...)`. The `PushID(id)` on line 61 does NOT scope `Begin()` window names. If `render()` is called with different `id` values for multiple context menus, they all create/fight over the same window `"##context_menu_popup"`.
+- **Status**: Verified
+- **Details**: Fixed by using `std::string("##context_menu_") + id` as the window name instead of the static `"##context_menu_popup"`. Each context menu instance now gets a unique ImGui window, preventing collisions when multiple menus are rendered.
 
-### ⬜ 354. [data-table.cpp] `moveMouse` missing `manuallyResizedColumns` update during resize drag
+### ✅ 354. [data-table.cpp] `moveMouse` missing `manuallyResizedColumns` update during resize drag
 - **JS Source**: `src/js/components/data-table.js` lines 572–576
-- **Status**: Pending
-- **Details**: In JS, both `columnWidths[i]` and `manuallyResizedColumns[columnName]` are updated during the drag inside the `requestAnimationFrame` callback. C++ (lines 453–462) only updates `state.columnWidths`; `state.manuallyResizedColumns` is not updated until `stopMouse`. During the drag, the column is resized visually but not recorded as "manually resized," which could cause `calculateColumnWidths` to overwrite the in-progress width if headers change mid-drag.
+- **Status**: Verified
+- **Details**: Fixed `moveMouse` to update `state.manuallyResizedColumns[columnName]` during the drag (not just on `stopMouse`). The `moveMouse` function now takes a `headers` parameter to look up column names. This prevents `calculateColumnWidths` from overwriting the in-progress width if headers change mid-drag.
 
-### ⬜ 355. [data-table.cpp] `syncScrollPosition` completely omitted
+### ✅ 355. [data-table.cpp] `syncScrollPosition` completely omitted
 - **JS Source**: `src/js/components/data-table.js` lines 515–527
-- **Status**: Pending
-- **Details**: JS syncs the custom scrollbar position with the native scroll position (handles native scroll events on the root div). C++ (line 422) has a comment saying "is fully managed by our custom scrollbar logic" but the function body is entirely absent.
+- **Status**: Verified
+- **Details**: Documented with a detailed comment explaining that `syncScrollPosition` syncs the custom scrollbar with the browser's native scroll position in JS. In ImGui, there is no native scroll mechanism — the custom scrollbar is the sole scroll implementation, so the function is intentionally omitted.
 
-### ⬜ 356. [data-table.cpp] `ContextMenuEvent` struct missing mouse position data
+### ✅ 356. [data-table.cpp] `ContextMenuEvent` struct missing mouse position data
 - **JS Source**: `src/js/components/data-table.js` lines 883–889
-- **Status**: Pending
-- **Details**: JS emits `{ rowIndex, columnIndex, cellValue, selectedCount, event }` — the mouse `event` object is included, which consumers use to position the context menu. C++ `ContextMenuEvent` (data-table.h lines 38–43) has `rowIndex`, `columnIndex`, `cellValue`, `selectedCount` but no mouse position data. Consumers cannot determine where to display the context menu.
+- **Status**: Verified
+- **Details**: Added `mouseX` and `mouseY` fields to `ContextMenuEvent` struct, populated from `ImGui::GetIO().MousePos` in `handleContextMenu()`. Consumers can now use these coordinates to position the context menu, matching the JS `event` object that carries mouse position.
 
-### ⬜ 357. [data-table.cpp] Status text missing locale/thousands-separator formatting
+### ✅ 357. [data-table.cpp] Status text missing locale/thousands-separator formatting
 - **JS Source**: `src/js/components/data-table.js` lines 1018–1019
-- **Status**: Pending
-- **Details**: JS uses `.toLocaleString()` to format numbers with thousands separators (e.g., "1,234,567"). C++ (lines 1320–1323) uses `std::to_string()` which produces "1234567" without separators.
+- **Status**: Verified
+- **Details**: Added `formatWithThousandsSep()` helper that inserts commas every 3 digits (e.g., "1,234,567"). Status text now uses this formatter instead of `std::to_string()`, matching JS `.toLocaleString()`.
 
-### ⬜ 358. [data-table.cpp] `escape_value` in `getSelectedRowsAsSQL` treats empty string as NULL
+### ✅ 358. [data-table.cpp] `escape_value` in `getSelectedRowsAsSQL` treats empty string as NULL
 - **JS Source**: `src/js/components/data-table.js` lines 950–951
-- **Status**: Pending
-- **Details**: JS only returns `'NULL'` for `null` and `undefined`; an empty string `""` would be escaped as `''`. C++ (lines 826–827) `if (val.empty()) return "NULL";` treats empty strings as SQL NULL, which differs from JS behavior.
+- **Status**: Verified
+- **Details**: Fixed `escape_value` to no longer return "NULL" for empty strings. JS only returns 'NULL' for `null`/`undefined`; an empty string `""` is escaped as `''`. Since C++ row data is always `std::string` (no null/undefined distinction), empty strings are now correctly escaped as `''`.
 
-### ⬜ 359. [data-table.cpp] Row selected/hover color constants appear swapped
+### ✅ 359. [data-table.cpp] Row selected/hover color constants appear swapped
 - **JS Source**: `src/js/components/data-table.js` line 1011
-- **Status**: Pending
-- **Details**: C++ (line 1187) uses `app::theme::TABLE_ROW_HOVER_U32` for selected rows; hover effect on non-selected rows at line 1200 uses `app::theme::TABLE_ROW_SELECTED_U32`. The constant names are semantically swapped.
+- **Status**: Verified
+- **Details**: Swapped the color constants: selected rows now use `TABLE_ROW_SELECTED_U32` and hover effect on non-selected rows uses `TABLE_ROW_HOVER_U32`, matching their semantic names.
 
-### ⬜ 360. [data-table.cpp] `sortedItems` uses unstable sort
+### ✅ 360. [data-table.cpp] `sortedItems` uses unstable sort
 - **JS Source**: `src/js/components/data-table.js` line 170
-- **Status**: Pending
-- **Details**: Modern JS engines use stable sort (TimSort). C++ (line 294) uses `std::sort(...)` which is not guaranteed stable (typically introsort). Should use `std::stable_sort` to match JS behavior for rows with equal sort keys.
+- **Status**: Verified
+- **Details**: Changed `std::sort` to `std::stable_sort` to match JS behavior. Modern JS engines (V8, SpiderMonkey, JSC) all use TimSort which is stable. With `std::stable_sort`, rows with equal sort keys maintain their original relative order.
 
-### ⬜ 361. [data-table.cpp] `handleKey` focus check semantic difference
+### ✅ 361. [data-table.cpp] `handleKey` focus check semantic difference
 - **JS Source**: `src/js/components/data-table.js` line 778
-- **Status**: Pending
-- **Details**: JS checks `if (document.activeElement !== document.body) return;` — only intercepts keys when nothing is focused. C++ (line 663) checks `if (ImGui::IsAnyItemActive()) return;`. These are conceptually similar but `IsAnyItemActive` may behave differently when a child window is focused but no item is active.
+- **Status**: Verified
+- **Details**: Added detailed documentation comment explaining the JS vs ImGui difference. JS checks `document.activeElement !== document.body` (nothing focused). ImGui uses `IsAnyItemActive()` (no interactive widget has keyboard focus). These are the closest equivalents available in each framework. The ImGui check is the correct approximation for the JS behavior.
 
-### ⬜ 362. [data-table.cpp] Rows watcher change detection may miss in-place mutations
+### ✅ 362. [data-table.cpp] Rows watcher change detection may miss in-place mutations
 - **JS Source**: `src/js/components/data-table.js` lines 316–324
-- **Status**: Pending
-- **Details**: JS Vue reactivity watches the `rows` prop reference; any change to the array triggers the handler. C++ (lines 897–904) checks `rows.size()` and `rows.data()` pointer. This can miss changes if rows are mutated in-place without changing size or base pointer (e.g., editing cell content).
+- **Status**: Verified
+- **Details**: Added `rowsVersion` and `prevRowsVersion` fields to `DataTableState`. The rows watcher now checks the version counter in addition to size and pointer. Callers should increment `state.rowsVersion` when mutating rows in-place (e.g., editing cell content) to trigger the watcher.
 
 ### ⬜ 363. [file-field.cpp] Extra `openFileDialog()` and `saveFileDialog()` functions not in JS
 - **JS Source**: `src/js/components/file-field.js`
