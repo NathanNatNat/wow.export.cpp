@@ -178,4 +178,67 @@ void render() {
 		modules::go_to_landing();
 }
 
+void checkLocalVersion() {
+	logging::write("Checking local Blender add-on version...");
+
+	const auto versions = get_blender_installations();
+	if (versions.empty()) {
+		logging::write("Error: User does not have any Blender installations.");
+		return;
+	}
+
+	// JS: log.write('Available Blender installations: %s', versions.length > 0 ? versions.join(', ') : 'None');
+	std::string versionsStr;
+	for (const auto& v : versions) {
+		if (!versionsStr.empty())
+			versionsStr += ", ";
+		versionsStr += v;
+	}
+	logging::write(std::format("Available Blender installations: {}", versionsStr.empty() ? "None" : versionsStr));
+
+	// JS: const blender_version = versions.sort().pop();
+	auto sortedVersions = versions;
+	std::sort(sortedVersions.begin(), sortedVersions.end());
+	const std::string blenderVersion = sortedVersions.back();
+
+	// JS: if (blender_version < constants.BLENDER.MIN_VER)
+	double verNum = 0;
+	try { verNum = std::stod(blenderVersion); } catch (...) {}
+	if (verNum < constants::BLENDER::MIN_VER) {
+		logging::write(std::format("Latest Blender install does not meet minimum requirements ({} < {})",
+			blenderVersion, constants::BLENDER::MIN_VER));
+		return;
+	}
+
+	namespace fs = std::filesystem;
+	const fs::path latestManifest = constants::BLENDER::LOCAL_DIR() / std::string(constants::BLENDER::ADDON_ENTRY);
+	const auto latestAddonVersion = parse_manifest_version(latestManifest);
+
+	if (!latestAddonVersion.error.empty()) {
+		if (latestAddonVersion.error == "file_not_found")
+			logging::write(std::format("Error: Add-on entry file not found: {}", latestManifest.string()));
+		else if (latestAddonVersion.error == "version_pattern_mismatch")
+			logging::write(std::format("Error: Add-on entry file does not contain valid version pattern: {}", latestManifest.string()));
+		else
+			logging::write(std::format("Error: Failed to read add-on entry file ({}): {}", latestManifest.string(), latestAddonVersion.message));
+		return;
+	}
+
+	const fs::path blenderManifest = constants::BLENDER::DIR() / blenderVersion
+		/ std::string(constants::BLENDER::ADDON_DIR) / std::string(constants::BLENDER::ADDON_ENTRY);
+	const auto blenderAddonVersion = parse_manifest_version(blenderManifest);
+
+	logging::write(std::format("Latest add-on version: {}, Blender add-on version: {}",
+		latestAddonVersion.version,
+		blenderAddonVersion.error.empty() ? blenderAddonVersion.version : blenderAddonVersion.error));
+
+	if (latestAddonVersion.version > blenderAddonVersion.version) {
+		logging::write("Prompting user for Blender add-on update...");
+		core::setToast("info", "A newer version of the Blender add-on is available for you.", {
+			{"Install", []() { modules::setActive("tab_blender"); }},
+			{"Maybe Later", []() { /* dismiss */ }}
+		}, -1, false);
+	}
+}
+
 } // namespace tab_blender

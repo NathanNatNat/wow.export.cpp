@@ -58,7 +58,15 @@ namespace modules {
 
 // --- File-local state ---
 
-static std::map<std::string, ModuleDef> module_registry;
+// Module registry — uses a vector of pairs to preserve insertion order,
+// matching JS plain object iteration order (ES2015 spec for string keys).
+static std::vector<std::pair<std::string, ModuleDef>> module_registry;
+
+// Helper: find a module by name in the insertion-ordered registry.
+static auto find_module(const std::string& name) {
+	return std::find_if(module_registry.begin(), module_registry.end(),
+		[&name](const auto& entry) { return entry.first == name; });
+}
 
 static std::map<std::string, NavButton> nav_button_map;
 
@@ -303,7 +311,7 @@ void initialize() {
 		mod.mounted = mounted_fn;
 		mod.registerModule = register_fn;
 		mod.initialize = initialize_fn ? initialize_fn : mounted_fn;
-		module_registry[name] = std::move(mod);
+		module_registry.emplace_back(name, std::move(mod));
 	};
 
 	add_module("module_test_a",
@@ -465,7 +473,7 @@ void initialize() {
 	for (auto& [name, mod] : module_registry)
 		wrap_module(mod);
 
-	// Build the module name list for logging
+	// Build the module name list for logging (in insertion order)
 	std::string module_names;
 	for (const auto& [name, mod] : module_registry) {
 		if (!module_names.empty())
@@ -484,7 +492,7 @@ void set_active(const std::string& module_key) {
 	}
 
 	if (!module_key.empty()) {
-		auto it = module_registry.find(module_key);
+		auto it = find_module(module_key);
 		if (it != module_registry.end()) {
 			active_module = &it->second;
 
@@ -533,7 +541,7 @@ void reload_module(const std::string& module_key) {
 		return;
 	}
 
-	auto it = module_registry.find(module_key);
+	auto it = find_module(module_key);
 	if (it == module_registry.end()) {
 		logging::write(std::format("cannot reload module {}: not found", module_key));
 		return;
@@ -619,12 +627,12 @@ void reloadAllModules() {
 
 	logging::write(std::format("reloaded all modules: {}", module_names));
 
-	if (!active_module_key.empty() && module_registry.contains(active_module_key))
+	if (!active_module_key.empty() && find_module(active_module_key) != module_registry.end())
 		set_active(active_module_key);
 }
 
 ModuleDef* get(const std::string& module_key) {
-	auto it = module_registry.find(module_key);
+	auto it = find_module(module_key);
 	if (it != module_registry.end())
 		return &it->second;
 	return nullptr;

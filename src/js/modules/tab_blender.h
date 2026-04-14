@@ -25,4 +25,10 @@ void registerTab();
  */
 void render();
 
+/**
+ * Check local Blender add-on version and prompt user to update if newer version available.
+ * JS equivalent: checkLocalVersion() in tab_blender.js lines 127-170.
+ */
+void checkLocalVersion();
+
 } // namespace tab_blender
