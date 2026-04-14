@@ -2006,114 +2006,114 @@
 - **Status**: Verified
 - **Details**: JS uses CSS `:nth-child(even)` based on DOM child position. The scroller div is child(1), so the first rendered item is always child(2) = even = ALT background. C++ uses `((i - startIdx) % 2 == 0)` which also makes the first visible item always get BG_ALT (since `i - startIdx = 0` for the first item). Both produce the same pattern: first visible item = ALT, second = DARK, alternating. The pattern is relative to screen position in both implementations, not data position.
 
-### ⬜ 388. [map-viewer.cpp] Missing double-buffer pixel blitting — no canvas shift on pan
+### ✅ 388. [map-viewer.cpp] Missing double-buffer pixel blitting — no canvas shift on pan
 - **JS Source**: `src/js/components/map-viewer.js` lines 82–83, 555–627
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS creates an offscreen canvas element, copies the main canvas to it with offset via `doubleCtx.drawImage(canvas, deltaX, deltaY)`, then copies back. C++ (lines 452–527) tracks the technique structurally but has NO actual pixel-level double-buffer blitting. `deltaX`/`deltaY` are computed but marked `[[maybe_unused]]`. Already-rendered tiles are NOT shifted by the pan delta.
 
-### ⬜ 389. [map-viewer.cpp] `loadTile` is synchronous in C++, async in JS
+### ✅ 389. [map-viewer.cpp] `loadTile` is synchronous in C++, async in JS
 - **JS Source**: `src/js/components/map-viewer.js` lines 387–414
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS tile loading is async (Promise-based) with multiple tiles loading concurrently, managed by `maxConcurrentTiles` and `activeTileRequests`. C++ (lines 279–326) calls the loader synchronously/blocking. The concurrency tracking (`activeTileRequests++`/`--`) happens in the same function call, making it meaningless. Synchronous loading will block the UI thread.
 
-### ⬜ 390. [map-viewer.cpp] No actual tile texture rendering in `renderWidget`
+### ✅ 390. [map-viewer.cpp] No actual tile texture rendering in `renderWidget`
 - **JS Source**: `src/js/components/map-viewer.js` lines 1101–1112
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS draws tiles via `context.putImageData()` to a canvas. C++ `renderWidget()` (lines 1108–1246) renders info text, an invisible button for interaction, and the overlay, but there is NO code to draw tile textures from `tilePixelCache` to the screen. The map tiles are never actually displayed — the overlay draws selection/hover highlights over empty space. Critical missing functionality.
 
-### ⬜ 391. [map-viewer.cpp] Overlay color values may differ from JS hardcoded RGBA
+### ✅ 391. [map-viewer.cpp] Overlay color values may differ from JS hardcoded RGBA
 - **JS Source**: `src/js/components/map-viewer.js` lines 744, 750, 755
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses hardcoded `rgba(159, 241, 161, 0.5)` for selection and `rgba(87, 175, 226, 0.5)` for hover/box-select. C++ (lines 656, 665) uses `app::theme::FONT_ALT_HIGHLIGHT_U32` and `app::theme::FONT_ALT_U32` with alpha override. The theme constants may not match the hardcoded JS RGBA values. Should be verified against `app.css`.
 
-### ⬜ 392. [map-viewer.cpp] `handleTileInteraction` does not call `onSelectionChanged` callback
+### ✅ 392. [map-viewer.cpp] `handleTileInteraction` does not call `onSelectionChanged` callback
 - **JS Source**: `src/js/components/map-viewer.js` lines 846–874
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS directly mutates `this.selection` which triggers Vue reactivity. C++ (lines 805–839) directly mutates the `selection` vector passed by reference but does NOT call `onSelectionChanged`. The callback is only invoked for box-select and Ctrl+A/D but never for shift-click tile selection. If the caller relies on the callback to know about selection changes, shift-click selection will silently change the vector without notification.
 
-### ⬜ 393. [map-viewer.cpp] `mapPositionFromClientPoint` may use wrong origin position
+### ✅ 393. [map-viewer.cpp] `mapPositionFromClientPoint` may use wrong origin position
 - **JS Source**: `src/js/components/map-viewer.js` lines 991–1011
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `viewport.getBoundingClientRect()` and `canvas.width/height` for coordinate conversion. C++ (lines 969–994) uses `ImGui::GetCursorScreenPos()` for `contentOrigin`. After `InvisibleButton` is drawn, the cursor has advanced, so `GetCursorScreenPos()` may return the wrong position depending on when it's called during the frame.
 
-### ⬜ 394. [markdown-content.cpp] ENTIRE FILE IS UNCONVERTED JAVASCRIPT
+### ✅ 394. [markdown-content.cpp] ENTIRE FILE IS UNCONVERTED JAVASCRIPT
 - **JS Source**: `src/js/components/markdown-content.js` lines 1–255
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The `.cpp` file is a byte-for-byte copy of the `.js` file. It contains `module.exports`, Vue lifecycle hooks (`mounted`, `beforeUnmount`), `this.$refs`, `this.$emit`, `document.addEventListener`, `ResizeObserver`, `requestAnimationFrame`, JavaScript template literals, etc. None of this is valid C++. All functionality needs porting: `htmlContent` computed property, `parseMarkdown()` (lines 143–202), `parseInline()` (lines 204–237), `escapeHtml()` (lines 239–248), scrollbar logic, resize observation, and Vue template with `v-html` / `:style` / `@wheel` / `@mousedown` bindings. No `.h` header file exists either.
 
-### ⬜ 395. [menu-button.cpp] Popup window ID collision for multiple instances
+### ✅ 395. [menu-button.cpp] Popup window ID collision for multiple instances
 - **JS Source**: `src/js/components/menu-button.js` lines 78–80
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The popup window uses hardcoded ID `"##menu_button_popup"` (line 140). If multiple `menu_button::render()` instances exist in the same frame, they will share the same ImGui window. Should incorporate the widget `id` parameter into the popup ID.
 
-### ⬜ 396. [menu-button.cpp] Arrow button uses text "v" instead of CSS-styled chevron
+### ✅ 396. [menu-button.cpp] Arrow button uses text "v" instead of CSS-styled chevron
 - **JS Source**: `src/js/components/menu-button.js` line 77
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS renders a `<div class="arrow">` styled via CSS (likely with a triangle/chevron icon). C++ (line 116) uses a text button with literal character `"v"`. This will not match the original visual appearance.
 
-### ⬜ 397. [menu-button.cpp] CSS class states `disabled`, `dropdown`, `open` not replicated
+### ✅ 397. [menu-button.cpp] CSS class states `disabled`, `dropdown`, `open` not replicated
 - **JS Source**: `src/js/components/menu-button.js` line 75
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS applies CSS classes `disabled`, `dropdown`, `open` on the container `<div>`, driving visual styling (hover effects, borders, etc.). C++ relies entirely on ImGui's default disabled styling and has no equivalent for `dropdown` or `open` visual states.
 
-### ⬜ 398. [menu-button.cpp] Context-menu component replaced with raw ImGui::Begin window
+### ✅ 398. [menu-button.cpp] Context-menu component replaced with raw ImGui::Begin window
 - **JS Source**: `src/js/components/menu-button.js` lines 78–80
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses a `<context-menu>` child component with `@close` event binding. C++ (lines 127–155) replaces this with a raw `ImGui::Begin` window with NoMove/NoTitleBar flags. The visual and behavioral fidelity (focus handling, z-ordering, click-outside dismiss) may differ from the JS context-menu component.
 
-### ⬜ 399. [menu-button.cpp] `selectedObj` uses index instead of object reference
+### ✅ 399. [menu-button.cpp] `selectedObj` uses index instead of object reference
 - **JS Source**: `src/js/components/menu-button.js` line 59
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS stores the option object itself (`this.selectedObj ?? this.defaultObj`), immune to array reordering. C++ uses `selectedIndex >= 0` check (lines 40–44). If `options` are reordered between frames, the selected index may point to a different option than intended.
 
-### ⬜ 400. [model-viewer-gl.cpp] `fit_camera_for_character` signature diverges — updates dual controls
+### ✅ 400. [model-viewer-gl.cpp] `fit_camera_for_character` signature diverges — updates dual controls
 - **JS Source**: `src/js/components/model-viewer-gl.js` line 186
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS takes a single `controls` parameter (duck-typed). C++ (lines 191–218) splits into `CameraControlsGL* orbit_controls` and `CharacterCameraControlsGL* char_controls`, updating both if both are non-null. JS only updates the single passed-in controls object.
 
-### ⬜ 401. [model-viewer-gl.cpp] `render_scene` rotation guard differs from JS
+### ✅ 401. [model-viewer-gl.cpp] `render_scene` rotation guard differs from JS
 - **JS Source**: `src/js/components/model-viewer-gl.js` line 240
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS: `if (rotation_speed !== 0 && activeRenderer && activeRenderer.setTransform && !this.use_character_controls)`. C++ drops the `activeRenderer` and `activeRenderer.setTransform` guards from the outer condition. It also applies rotation via a `context.setActiveModelTransform` fallback path (lines 427–433) that has no JS equivalent, allowing rotation even without an M2 renderer.
 
-### ⬜ 402. [model-viewer-gl.cpp] Hand grip check missing `activeRenderer.setHandGrip` guard
+### ✅ 402. [model-viewer-gl.cpp] Hand grip check missing `activeRenderer.setHandGrip` guard
 - **JS Source**: `src/js/components/model-viewer-gl.js` line 277
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS: `if (activeRenderer && equipment_renderers && activeRenderer.setHandGrip)`. C++ (line 481) omits the `activeRenderer.setHandGrip` existence check, only checking `if (activeRenderer && equipment_renderers)`.
 
-### ⬜ 403. [model-viewer-gl.cpp] Animation update missing `activeRenderer.updateAnimation` guard
+### ✅ 403. [model-viewer-gl.cpp] Animation update missing `activeRenderer.updateAnimation` guard
 - **JS Source**: `src/js/components/model-viewer-gl.js` line 224
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS: `if (activeRenderer && activeRenderer.updateAnimation)`. C++ (lines 399–400) only checks `if (activeRenderer)` and unconditionally calls `updateAnimation(deltaTime)`, also omitting the `get_animation_frame` existence check (JS line 229).
 
-### ⬜ 404. [model-viewer-gl.cpp] `window.devicePixelRatio` not accounted for in FBO sizing
+### ✅ 404. [model-viewer-gl.cpp] `window.devicePixelRatio` not accounted for in FBO sizing
 - **JS Source**: `src/js/components/model-viewer-gl.js` lines 482–483
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS multiplies canvas dimensions by `window.devicePixelRatio` for HiDPI rendering. C++ comment says "ImGui handles DPI internally" but does not apply any DPI scaling to FBO size (lines 778–779). On HiDPI displays, the 3D rendering may appear at lower resolution.
 
-### ⬜ 405. [model-viewer-gl.cpp] GLContext created without WebGL options equivalent
+### ✅ 405. [model-viewer-gl.cpp] GLContext created without WebGL options equivalent
 - **JS Source**: `src/js/components/model-viewer-gl.js` lines 435–438
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS: `new GLContext(canvas, { antialias: true, alpha: true, preserveDrawingBuffer: true })`. C++ (line 684) creates `gl::GLContext()` with no arguments. The WebGL context options (antialias, alpha, preserveDrawingBuffer) are not passed or configured. While some don't directly apply to desktop GL, `alpha` and multisampling equivalents should be addressed.
 
-### ⬜ 406. [model-viewer-gl.cpp] `context.controls` split into dual typed pointers
+### ✅ 406. [model-viewer-gl.cpp] `context.controls` split into dual typed pointers
 - **JS Source**: `src/js/components/model-viewer-gl.js` line 395
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS: `this.context.controls = this.controls;` — one untyped reference. C++ maintains separate `context.controls_orbit` and `context.controls_character` pointers (lines 624–636). Parent code accessing `context.controls` in JS must use the appropriate typed pointer in C++. This structural change affects all consumers of the context object.
 
-### ⬜ 407. [model-viewer-gl.cpp] Extra C++ fallback paths not in JS (`renderActiveModel`, `getActiveBoundingBox`, `setActiveModelTransform`)
+### ✅ 407. [model-viewer-gl.cpp] Extra C++ fallback paths not in JS (`renderActiveModel`, `getActiveBoundingBox`, `setActiveModelTransform`)
 - **JS Source**: `src/js/components/model-viewer-gl.js`
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ adds `context.renderActiveModel` (lines 525–527), `context.getActiveBoundingBox` (model-viewer-gl.h line 159), and `context.setActiveModelTransform` (model-viewer-gl.h line 167) as fallback paths for non-M2 renderers. JS has no equivalent — it only operates on M2 `activeRenderer`. These are new functionality not present in the original.
 
-### ⬜ 408. [resize-layer.cpp] Floating-point comparison for width change detection
+### ✅ 408. [resize-layer.cpp] Floating-point comparison for width change detection
 - **JS Source**: `src/js/components/resize-layer.js` line 13
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `ResizeObserver` uses integer `clientWidth` making exact comparison safe. C++ (line 33) compares `currentWidth != state.prevWidth` on floats from `ImGui::GetContentRegionAvail().x`. Floating-point `!=` comparison is fragile due to IEEE rounding. Should use an epsilon or cast to int.
 
-### ⬜ 409. [resize-layer.cpp] No wrapping container element equivalent
+### ✅ 409. [resize-layer.cpp] No wrapping container element equivalent
 - **JS Source**: `src/js/components/resize-layer.js` line 25
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS template is `<div><slot></slot></div>`, a wrapper div observed by the `ResizeObserver`. C++ (lines 24–44) has no `ImGui::BeginGroup()`/`EndGroup()` or `BeginChild()`/`EndChild()` wrapping. Width is measured from the parent's content region, not a dedicated wrapper. If content changes the layout, the measured width may not correspond to what the JS wrapper div would report.
 
 ### ⬜ 410. [slider.cpp] Fill bar spans only middle 40% instead of full height
