@@ -329,6 +329,7 @@ private:
 	bool current_anim_from_child = false;
 
 	std::vector<float> bone_matrices;
+	GLuint bone_ssbo = 0;  // SSBO for bone matrices (avoids uniform register limits)
 	int current_animation = -1;   // -1 = null (no animation playing)
 	int current_anim_index = -1;  // index within the source skeleton
 	float animation_time = 0;

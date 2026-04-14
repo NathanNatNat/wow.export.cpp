@@ -1,6 +1,4 @@
-#version 300 es
-precision highp float;
-precision highp int;
+#version 460 core
 
 // vertex attributes
 layout(location = 0) in vec3 a_position;
@@ -17,9 +15,10 @@ uniform mat4 u_model_matrix;
 uniform vec3 u_view_up;
 uniform float u_time;
 
-// bone matrices (max 256 bones)
-#define MAX_BONES 256
-uniform mat4 u_bone_matrices[MAX_BONES];
+// bone matrices via SSBO (avoids uniform register limits)
+layout(std430, binding = 0) buffer BoneMatrixBuffer {
+	mat4 u_bone_matrices[];
+};
 uniform int u_bone_count;
 
 // texture transform matrices

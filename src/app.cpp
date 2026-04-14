@@ -593,8 +593,9 @@ static void renderAppShell() {
 				{
 					ImGui::PushID("##nav-extra");
 					ImGui::InvisibleButton("##hamburger", ImVec2(20.0f, 20.0f));
+					// JS: @click="contextMenus.stateNavExtra = true" — always opens (not toggle)
 					if (ImGui::IsItemClicked())
-						core::view->contextMenus.stateNavExtra = !core::view->contextMenus.stateNavExtra;
+						ImGui::OpenPopup("##MenuExtraPopup");
 					// Render hamburger icon using Font Awesome icon font
 					ImFont* icon_font = app::theme::getIconFont();
 					float icon_size = 18.0f;
@@ -604,18 +605,14 @@ static void renderAppShell() {
 					                btn_min.y + (20.0f - text_sz.y) * 0.5f);
 					ImGui::GetWindowDrawList()->AddText(icon_font, icon_size, icon_pos,
 						app::theme::FONT_PRIMARY_U32, ICON_FA_BARS);
-					ImGui::PopID();
-				}
 
-				// Context menu for hamburger button
-				if (core::view->contextMenus.stateNavExtra) {
+					// Context menu popup for hamburger button
+					// Uses ImGui popup API for correct z-ordering (always on top) and
+					// automatic close-on-click-outside, matching JS <context-menu> behavior.
 					ImGui::SetNextWindowPos(ImVec2(vp_pos.x + right_x, vp_pos.y + HEADER_HEIGHT));
-					if (ImGui::Begin("##MenuExtra", nullptr,
-						ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-						ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize |
-						ImGuiWindowFlags_NoFocusOnAppearing)) {
-
-						ImGui::PushStyleColor(ImGuiCol_WindowBg, COLOR_BG_DARK);
+					ImGui::PushStyleColor(ImGuiCol_PopupBg, COLOR_BG_DARK);
+					if (ImGui::BeginPopup("##MenuExtraPopup",
+						ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize)) {
 
 						const auto& contextOpts = modules::getContextMenuOptions();
 						for (const auto& opt : contextOpts) {
@@ -623,7 +620,6 @@ static void renderAppShell() {
 								continue;
 
 							if (ImGui::MenuItem(opt.label.c_str())) {
-								core::view->contextMenus.stateNavExtra = false;
 								if (opt.handler)
 									opt.handler();
 								else
@@ -631,13 +627,11 @@ static void renderAppShell() {
 							}
 						}
 
-						ImGui::PopStyleColor();
+						ImGui::EndPopup();
 					}
-					ImGui::End();
+					ImGui::PopStyleColor();
 
-					// Close context menu when clicking outside
-					if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) && ImGui::IsMouseClicked(0))
-						core::view->contextMenus.stateNavExtra = false;
+					ImGui::PopID();
 				}
 
 				// Help icon (left of hamburger, 10px right margin)
