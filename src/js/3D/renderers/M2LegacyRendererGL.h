@@ -42,7 +42,7 @@ static constexpr int LEGACY_PIXEL_SHADER = 0;  // Combiners_Opaque
 struct M2LegacyDrawCall {
 	gl::VertexArray* vao = nullptr;
 	uint32_t start = 0;
-	uint16_t count = 0;
+	uint32_t count = 0;
 	std::array<int, 4> tex_indices = { -1, -1, -1, -1 };
 	uint16_t texture_count = 1;
 	int vertex_shader = LEGACY_VERTEX_SHADER;

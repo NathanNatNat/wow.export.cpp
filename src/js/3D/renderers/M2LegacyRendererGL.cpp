@@ -261,8 +261,6 @@ void M2LegacyRendererGL::_load_textures() {
 					auto raw = mpq->getFile(fileName);
 					if (raw.has_value())
 						file_data = BufferWrapper(std::move(raw.value()));
-				} else {
-					file_data = texture.getTextureFile();
 				}
 
 				if (file_data.has_value()) {
@@ -532,7 +530,6 @@ void M2LegacyRendererGL::_create_skeleton() {
 	if (bone_data.empty()) {
 		bones = nullptr;
 		bone_matrices.assign(16, 0.0f);
-		std::copy(IDENTITY_MAT4.begin(), IDENTITY_MAT4.end(), bone_matrices.begin());
 		return;
 	}
 
@@ -1136,8 +1133,9 @@ void M2LegacyRendererGL::render(const float* view_matrix, const float* projectio
 	shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
 	shader->set_uniform_3f("u_view_up", 0, 1, 0);
 
+	static const auto s_render_start = std::chrono::steady_clock::now();
 	auto now = std::chrono::steady_clock::now();
-	float time_sec = std::chrono::duration<float>(now.time_since_epoch()).count();
+	float time_sec = std::chrono::duration<float>(now - s_render_start).count();
 	shader->set_uniform_1f("u_time", time_sec);
 
 	// bone skinning disabled for legacy models until animation system is fixed
@@ -1263,7 +1261,13 @@ void M2LegacyRendererGL::_dispose_skin() {
 		vao->dispose();
 
 	vaos.clear();
+
+	// Delete GPU buffer objects (WebGL GC handles this automatically;
+	// in desktop GL we must free explicitly).
+	if (!buffers.empty())
+		glDeleteBuffers(static_cast<GLsizei>(buffers.size()), buffers.data());
 	buffers.clear();
+
 	draw_calls.clear();
 
 	if (!geosetArray.empty())

@@ -815,7 +815,6 @@ bones_m2 = &m2->bones;
 const size_t bc = bones_count();
 if (bc == 0) {
 bone_matrices.assign(16, 0.0f);
-std::copy(M2_IDENTITY_MAT4.begin(), M2_IDENTITY_MAT4.end(), bone_matrices.begin());
 return;
 }
 
@@ -927,11 +926,6 @@ animation_paused = false;
 
 // calculate bone matrices using animation 0 (stand) at time 0 for rest pose
 if (has_bones()) {
-const int prev_anim = current_animation;
-const int prev_anim_idx = current_anim_index;
-const bool prev_from_skel = current_anim_from_skel;
-const bool prev_from_child = current_anim_from_child;
-
 current_animation = 0;
 current_anim_index = 0;
 current_anim_from_skel = (skelLoader != nullptr);
@@ -940,8 +934,8 @@ _update_bone_matrices();
 
 current_animation = -1; // null
 current_anim_index = -1;
-current_anim_from_skel = prev_from_skel;
-current_anim_from_child = prev_from_child;
+current_anim_from_skel = false;
+current_anim_from_child = false;
 }
 }
 
@@ -1231,20 +1225,32 @@ return {0, 0, 0, 1};
 // -----------------------------------------------------------------------
 
 void M2RendererGL::buildBoneRemapTable(const std::vector<M2Bone>& char_bones) {
-// buildBoneRemapTable is only called for collection models (equipment, weapons) which
-// use m2->bones (M2Bone) — not skel bones. Use bones_m2 as the structural source.
-if (!bones_m2 || char_bones.empty()) {
+// JS uses this.bones which can be either m2 bones or skel bones (whatever
+// _create_skeleton() assigned). Use whichever bone source is available.
+if (!has_bones() || char_bones.empty()) {
 bone_remap_table.clear();
 use_external_bones = false;
 return;
 }
 
 const float epsilon = 0.0001f;
-bone_remap_table.resize(bones_m2->size());
+const size_t bc = bones_count();
+bone_remap_table.resize(bc);
 
-for (size_t i = 0; i < bones_m2->size(); i++) {
-const auto& coll_bone = (*bones_m2)[i];
-const auto& coll_pivot = coll_bone.pivot;
+// Helper to access bone fields from whichever source is available.
+// M2Bone and SKELBone are structurally identical.
+auto get_bone_pivot = [&](size_t idx) -> const std::vector<float>& {
+if (bones_m2) return (*bones_m2)[idx].pivot;
+return (*bones_skel)[idx].pivot;
+};
+auto get_bone_crc = [&](size_t idx) -> uint32_t {
+if (bones_m2) return (*bones_m2)[idx].boneNameCRC;
+return (*bones_skel)[idx].boneNameCRC;
+};
+
+for (size_t i = 0; i < bc; i++) {
+const auto& coll_pivot = get_bone_pivot(i);
+const uint32_t coll_crc = get_bone_crc(i);
 int found = -1;
 
 // match by pivot position AND boneNameCRC (like wowmodelviewer)
@@ -1261,7 +1267,7 @@ const float dy = std::abs(coll_pivot[1] - char_pivot[1]);
 const float dz = std::abs(coll_pivot[2] - char_pivot[2]);
 
 if (dx < epsilon && dy < epsilon && dz < epsilon &&
-coll_bone.boneNameCRC == char_bone.boneNameCRC)
+coll_crc == char_bone.boneNameCRC)
 {
 found = static_cast<int>(j);
 break;
@@ -1910,7 +1916,13 @@ for (auto& vao : vaos)
 vao->dispose();
 
 vaos.clear();
+
+// Delete GPU buffer objects (WebGL GC handles this automatically;
+// in desktop GL we must free explicitly).
+if (!buffers.empty())
+glDeleteBuffers(static_cast<GLsizei>(buffers.size()), buffers.data());
 buffers.clear();
+
 draw_calls.clear();
 indices_data.clear();
 
