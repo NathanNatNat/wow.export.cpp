@@ -3,167 +3,288 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const util = require('util');
-const path = require('path');
-const assert = require('assert').strict;
-const fsp = require('fs').promises;
-const cp = require('child_process');
-const constants = require('./constants');
-const generics = require('./generics');
-const core = require('./core');
-const log = require('./log');
 
-let updateManifest;
+#include "updater.h"
+
+#include <cstdlib>
+#include <filesystem>
+#include <format>
+#include <numeric>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include <nlohmann/json.hpp>
+
+#include "constants.h"
+#include "core.h"
+#include "generics.h"
+#include "buffer.h"
+#include "log.h"
+
+#ifdef _WIN32
+#	define WIN32_LEAN_AND_MEAN
+#	include <windows.h>
+#else
+#	include <unistd.h>
+#	include <sys/types.h>
+#	include <sys/wait.h>
+#	include <signal.h>
+#endif
+
+namespace fs = std::filesystem;
+
+namespace updater {
+
+// Module-level state mirroring the JS `let updateManifest;`
+static nlohmann::json updateManifest;
+
+// Forward declaration (internal helper, not exported).
+static void launchUpdater();
+
+/**
+ * Helper to replicate Node.js util.format() behavior: replaces the first
+ * occurrence of %s in `fmt` with `arg`.
+ */
+static std::string utilFormat(const std::string& fmt, const std::string& arg) {
+	std::string result = fmt;
+	auto pos = result.find("%s");
+	if (pos != std::string::npos)
+		result.replace(pos, 2, arg);
+	return result;
+}
 
 /**
  * Check if there are any available updates.
- * Returns a Promise that resolves to true if an update is available.
+ * Returns true if an update is available.
+ * JS: checkForUpdates()
  */
-const checkForUpdates = async () => {
+bool checkForUpdates() {
 	try {
-		const localManifest = nw.App.manifest;
-		const manifestURL = util.format(core.view.config.updateURL, localManifest.flavour) + 'update.json';
-		log.write('Checking for updates (%s)...', manifestURL);
+		const std::string updateURL = core::view->config.at("updateURL").get<std::string>();
+		const std::string manifestURL = utilFormat(updateURL, std::string(constants::FLAVOUR)) + "update.json";
+		logging::write(std::format("Checking for updates ({})...", manifestURL));
 
-		const manifest = await generics.getJSON(manifestURL);
+		nlohmann::json manifest = generics::getJSON(manifestURL);
 
-		assert(typeof manifest.guid === 'string', 'Update manifest does not contain a valid build GUID');
-		assert(typeof manifest.contents === 'object', 'Update manifest does not contain a valid contents list');
+		if (!manifest.contains("guid") || !manifest["guid"].is_string())
+			throw std::runtime_error("Update manifest does not contain a valid build GUID");
 
-		if (manifest.guid !== localManifest.guid) {
-			updateManifest = manifest;
-			log.write('Update available, prompting using (%s != %s)', manifest.guid, localManifest.guid);
+		if (!manifest.contains("contents") || !manifest["contents"].is_object())
+			throw std::runtime_error("Update manifest does not contain a valid contents list");
+
+		const std::string remoteGuid = manifest["guid"].get<std::string>();
+		const std::string localGuid(constants::BUILD_GUID);
+
+		if (remoteGuid != localGuid) {
+			updateManifest = std::move(manifest);
+			logging::write(std::format("Update available, prompting using ({} != {})", remoteGuid, localGuid));
 			return true;
 		}
 
-		log.write('Not updating (%s == %s)', manifest.guid, localManifest.guid);
+		logging::write(std::format("Not updating ({} == {})", remoteGuid, localGuid));
 		return false;
-	} catch (e) {
-		log.write('Not updating due to error: %s', e.message);
+	} catch (const std::exception& e) {
+		logging::write(std::format("Not updating due to error: {}", e.what()));
 		return false;
 	}
-};
+}
 
 /**
  * Apply an outstanding update.
+ * JS: applyUpdate()
  */
-const applyUpdate = async () => {
-	const entries = Object.entries(updateManifest.contents);
-	core.showLoadingScreen(entries.length, 'Verifying local files...');
+void applyUpdate() {
+	// Collect entries from the manifest contents object.
+	struct FileNode {
+		std::string file;
+		int64_t size;
+		std::string hash;
+		int64_t compSize;
+		int64_t ofs;
+	};
 
-	log.write('Starting update to %s...', updateManifest.guid);
+	const auto& contents = updateManifest["contents"];
+	const int entryCount = static_cast<int>(contents.size());
+	core::showLoadingScreen(entryCount, "Verifying local files...");
 
-	const requiredFiles = [];
+	logging::write(std::format("Starting update to {}...", updateManifest["guid"].get<std::string>()));
 
-	for (let i = 0, n = entries.length; i < n; i++) {
-		const [file, meta] = entries[i];
+	std::vector<FileNode> requiredFiles;
 
-		await core.progressLoadingScreen((i + 1) + ' / ' + n);
+	int i = 0;
+	for (auto it = contents.begin(); it != contents.end(); ++it, ++i) {
+		const std::string& file = it.key();
+		const auto& meta = it.value();
 
-		const localPath = path.join(constants.INSTALL_PATH, file);
-		const node = { file, meta };
+		core::progressLoadingScreen(std::format("{} / {}", i + 1, entryCount));
+
+		const fs::path localPath = constants::INSTALL_PATH() / file;
+
+		const int64_t metaSize = meta["size"].get<int64_t>();
+		const std::string metaHash = meta["hash"].get<std::string>();
+		const int64_t metaCompSize = meta["compSize"].get<int64_t>();
+		const int64_t metaOfs = meta["ofs"].get<int64_t>();
 
 		try {
-			log.write('Verifying local file: %s', file);
-			const stats = await fsp.stat(localPath);
+			logging::write(std::format("Verifying local file: {}", file));
+			const auto fileSize = static_cast<int64_t>(fs::file_size(localPath));
 
 			// If the file size is different, skip hashing and just mark for update.
-			if (stats.size !== meta.size) {
-				log.write('Marking %s for update due to size mismatch (%d != %d)', file, stats.size, meta.size);
-				requiredFiles.push(node);
+			if (fileSize != metaSize) {
+				logging::write(std::format("Marking {} for update due to size mismatch ({} != {})", file, fileSize, metaSize));
+				requiredFiles.push_back({file, metaSize, metaHash, metaCompSize, metaOfs});
 				continue;
 			}
 
 			// Verify local sha256 hash with remote one.
-			log.write('Hashing local file %s for verification (size: %d bytes)...', file, stats.size);
-			const localHash = await generics.getFileHash(localPath, 'sha256', 'hex');
-			log.write('Hash calculated for %s: %s', file, localHash);
+			logging::write(std::format("Hashing local file {} for verification (size: {} bytes)...", file, fileSize));
+			const std::string localHash = generics::getFileHash(localPath, "sha256", "hex");
+			logging::write(std::format("Hash calculated for {}: {}", file, localHash));
 
-			if (localHash !== meta.hash) {
-				log.write('Marking %s for update due to hash mismatch (%s != %s)', file, localHash, meta.hash);
-				requiredFiles.push(node);
+			if (localHash != metaHash) {
+				logging::write(std::format("Marking {} for update due to hash mismatch ({} != {})", file, localHash, metaHash));
+				requiredFiles.push_back({file, metaSize, metaHash, metaCompSize, metaOfs});
 				continue;
 			}
 
-			log.write('File %s verified successfully', file);
-		} catch (e) {
+			logging::write(std::format("File {} verified successfully", file));
+		} catch (const std::exception& e) {
 			// Error thrown, likely due to file not existing.
-			log.write('Marking %s for update due to local error: %s', file, e.message);
-			requiredFiles.push(node);
+			logging::write(std::format("Marking {} for update due to local error: {}", file, e.what()));
+			requiredFiles.push_back({file, metaSize, metaHash, metaCompSize, metaOfs});
 		}
 	}
 
-	const downloadSize = generics.filesize(requiredFiles.map(e => e.meta.compSize).reduce((total, val) => total + val));
-	log.write('%d files (%s) marked for download.', requiredFiles.length, downloadSize);
+	const double totalCompSize = std::accumulate(
+		requiredFiles.begin(), requiredFiles.end(), 0.0,
+		[](double total, const FileNode& node) { return total + static_cast<double>(node.compSize); });
+	const std::string downloadSize = generics::filesize(totalCompSize);
+	logging::write(std::format("{} files ({}) marked for download.", requiredFiles.size(), downloadSize));
 
-	core.showLoadingScreen(requiredFiles.length, 'Downloading updates...');
+	core::showLoadingScreen(static_cast<int>(requiredFiles.size()), "Downloading updates...");
 
-	// Create .update directory here and then check if it exists and is writeable. If not, we can't continue.
-	try{
-		await generics.createDirectory(constants.UPDATE.DIRECTORY);
-		if(!await generics.directoryIsWritable(constants.UPDATE.DIRECTORY)) {
-			throw new Error('.update directory does not exist or is not writable');
+	// Create .update directory here and then check if it exists and is writeable.
+	try {
+		generics::createDirectory(constants::UPDATE::DIRECTORY());
+		if (!generics::directoryIsWritable(constants::UPDATE::DIRECTORY())) {
+			throw std::runtime_error(".update directory does not exist or is not writable");
 		}
-	}catch(e){
-		log.write('Failed to create directory for update files: %s', e.message);
-		core.view.loadingTitle = 'wow.export couldn\'t create the update directory. Ensure it has write permissions to its folder and restart the app, or update manually.';
+	} catch (const std::exception& e) {
+		logging::write(std::format("Failed to create directory for update files: {}", e.what()));
+		// Deviation: user-facing text says "wow.export.cpp" per project guidelines.
+		core::view->loadingTitle = "wow.export.cpp couldn't create the update directory. Ensure it has write permissions to its folder and restart the app, or update manually.";
 		return;
 	}
 
-	const remoteEndpoint = util.format(core.view.config.updateURL, nw.App.manifest.flavour) + 'update';
-	for (let i = 0, n = requiredFiles.length; i < n; i++) {
-		const node = requiredFiles[i];
-		const localFile = path.join(constants.UPDATE.DIRECTORY, node.file);
-		log.write('Downloading %s to %s', node.file, localFile);
+	const std::string updateURL2 = core::view->config.at("updateURL").get<std::string>();
+	const std::string remoteEndpoint = utilFormat(updateURL2, std::string(constants::FLAVOUR)) + "update";
 
-		await core.progressLoadingScreen(util.format('%d / %d (%s)', i + 1, n, downloadSize));
-		await generics.downloadFile(remoteEndpoint, localFile, node.meta.ofs, node.meta.compSize, true);
+	for (size_t j = 0, n = requiredFiles.size(); j < n; ++j) {
+		const FileNode& node = requiredFiles[j];
+		const fs::path localFile = constants::UPDATE::DIRECTORY() / node.file;
+		logging::write(std::format("Downloading {} to {}", node.file, localFile.string()));
+
+		core::progressLoadingScreen(std::format("{} / {} ({})", j + 1, n, downloadSize));
+		generics::downloadFile(remoteEndpoint, localFile.string(), node.ofs, node.compSize, true);
 	}
 
-	core.view.loadingTitle = 'Restarting application...';
-	await launchUpdater();
-};
+	core::view->loadingTitle = "Restarting application...";
+	launchUpdater();
+}
 
 /**
  * Launch the external updater process and exit.
+ * JS: launchUpdater()
  */
-const launchUpdater = async () => {
+static void launchUpdater() {
 	// On the rare occurrence that we've updated the updater, the updater
 	// cannot update the updater, so instead we update the updater here.
-	const helperApp = path.join(constants.INSTALL_PATH, constants.UPDATE.HELPER);
-	const updatedApp = path.join(constants.UPDATE.DIRECTORY, constants.UPDATE.HELPER);
+	const fs::path helperApp = constants::INSTALL_PATH() / constants::UPDATE::HELPER();
+	const fs::path updatedApp = constants::UPDATE::DIRECTORY() / constants::UPDATE::HELPER();
 
 	try {
-		log.write('Checking for updater application at %s', updatedApp);
-		const updaterExists = await generics.fileExists(updatedApp);
-		log.write('Updater exists check: %s', updaterExists);
+		logging::write(std::format("Checking for updater application at {}", updatedApp.string()));
+		const bool updaterExists = generics::fileExists(updatedApp);
+		logging::write(std::format("Updater exists check: {}", updaterExists));
 
 		if (updaterExists) {
-			log.write('Renaming updater from %s to %s', updatedApp, helperApp);
-			await fsp.rename(updatedApp, helperApp);
-			log.write('Updater renamed successfully');
+			logging::write(std::format("Renaming updater from {} to {}", updatedApp.string(), helperApp.string()));
+			fs::rename(updatedApp, helperApp);
+			logging::write("Updater renamed successfully");
 		}
 
-		log.write('Spawning updater process: %s with parent PID %d', helperApp, process.pid);
+#ifdef _WIN32
+		const DWORD pid = GetCurrentProcessId();
+#else
+		const pid_t pid = getpid();
+#endif
+		logging::write(std::format("Spawning updater process: {} with parent PID {}",
+					  helperApp.string(), static_cast<int64_t>(pid)));
 
 		// Launch the updater application.
-		const child = cp.spawn(helperApp, [process.pid], { detached: true, stdio: 'ignore' });
+#ifdef _WIN32
+		const std::string cmdLine = std::format("\"{}\" {}", helperApp.string(), pid);
 
-		child.on('error', (err) => {
-			log.write('ERROR: Failed to spawn updater: %s', err.message);
-			throw err;
-		});
+		STARTUPINFOA si{};
+		si.cb = sizeof(si);
+		PROCESS_INFORMATION pi{};
 
-		await new Promise(resolve => setTimeout(resolve, 100));
-		log.write('Updater spawned successfully (PID: %d), detaching...', child.pid);
+		BOOL success = CreateProcessA(
+			nullptr,
+			const_cast<char*>(cmdLine.c_str()),
+			nullptr, nullptr,
+			FALSE,
+			DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+			nullptr, nullptr,
+			&si, &pi
+		);
 
-		child.unref();
-		log.write('Exiting main process to allow update...');
-		process.exit();
-	} catch (e) {
-		log.write('Failed to restart for update: %s', e.message);
-		log.write(e);
+		if (!success) {
+			throw std::runtime_error(
+				std::format("CreateProcess failed with error {}", GetLastError()));
+		}
+
+		// Brief delay to let the updater start.
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		logging::write(std::format("Updater spawned successfully (PID: {}), detaching...",
+					  static_cast<int64_t>(pi.dwProcessId)));
+
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+#else
+		const std::string pidStr = std::to_string(pid);
+		const std::string helperStr = helperApp.string();
+
+		pid_t child = fork();
+		if (child < 0) {
+			throw std::runtime_error("fork() failed");
+		} else if (child == 0) {
+			// Child process — detach into new session.
+			setsid();
+
+			// Close standard file descriptors.
+			close(STDIN_FILENO);
+			close(STDOUT_FILENO);
+			close(STDERR_FILENO);
+
+			execl(helperStr.c_str(), helperStr.c_str(), pidStr.c_str(), nullptr);
+			// If execl returns, it failed.
+			_exit(1);
+		}
+
+		// Brief delay to let the updater start.
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		logging::write(std::format("Updater spawned successfully (PID: {}), detaching...",
+					  static_cast<int64_t>(child)));
+#endif
+
+		logging::write("Exiting main process to allow update...");
+		std::exit(0);
+	} catch (const std::exception& e) {
+		logging::write(std::format("Failed to restart for update: {}", e.what()));
 	}
-};
+}
 
-module.exports = { checkForUpdates, applyUpdate };
+} // namespace updater
