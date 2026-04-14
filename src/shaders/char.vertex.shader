@@ -1,7 +1,8 @@
-attribute vec4 a_position;
-attribute vec2 a_texCoord;
+#version 460 core
+layout(location = 0) in vec4 a_position;
+layout(location = 1) in vec2 a_texCoord;
 
-varying vec2 v_texCoord;
+out vec2 v_texCoord;
 
 void main() {
 	gl_Position = a_position;
