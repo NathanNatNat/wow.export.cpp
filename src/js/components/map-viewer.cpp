@@ -275,6 +275,13 @@ void queueTileForDoubleBuffer(MapViewerState& state, int x, int y, int index, in
  * Load a given tile and draw it to the appropriate canvas.
  * Triggers a queue-check once loaded.
  * @param tile
+ *
+ * JS note: In the original, loader(x, y, tileSize) returns a Promise, and tiles
+ * load concurrently (up to maxConcurrentTiles). In C++/ImGui, the loader is called
+ * synchronously. The concurrency limit (activeTileRequests/maxConcurrentTiles) is
+ * still tracked to maintain the same queue-drain logic, but actual loading is serial.
+ * This is acceptable because ImGui rendering is single-threaded and the loader
+ * callback already provides the data synchronously from the CASC cache.
  */
 void loadTile(MapViewerState& state, const TileQueueNode& tile, const TileLoader& loader) {
 	state.awaitingTile = true;
@@ -454,16 +461,17 @@ void renderWithDoubleBuffer(MapViewerState& state, float canvasW, float canvasH,
                             const TileLoader& loader) {
 	const int grid_size = effectiveGridSize(gridSize);
 
-	// Calculate the offset delta from last render
+	// Calculate the offset delta from last render.
+	// JS uses deltaX/deltaY for pixel-level canvas blitting (lines 560–565):
+	//   doubleCtx.clearRect(0, 0, canvasSize.width, canvasSize.height);
+	//   doubleCtx.drawImage(canvas, deltaX, deltaY);
+	// In C++/ImGui, tile rendering is done via GL textures rather than canvas pixel
+	// blitting, so the double-buffer optimization does not shift existing pixels.
+	// Instead, we track which tiles are rendered (via the rendered set) and only
+	// queue missing tiles. The visual result is identical — already-loaded tiles
+	// are repositioned by the offset change and newly-visible tiles are queued.
 	[[maybe_unused]] const float deltaX = s_state.offsetX - s_state.prevOffsetX;
 	[[maybe_unused]] const float deltaY = s_state.offsetY - s_state.prevOffsetY;
-
-	// Copy current canvas to double-buffer with the new offset applied
-	// In JS, this copies the main canvas to the double-buffer with the
-	// delta offset applied via doubleCtx.drawImage(canvas, deltaX, deltaY), then copies
-	// back via ctx.drawImage(state.doubleBuffer, 0, 0). In C++ / ImGui, the tile pixel
-	// cache is used directly, so the double-buffer copy is a conceptual operation tracked
-	// via the rendered set rather than actual pixel blitting.
 
 	const float bufferX = (canvasW - state.viewportWidth) / 2.0f;
 	const float bufferY = (canvasH - state.viewportHeight) / 2.0f;
@@ -613,8 +621,9 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 	const float bufferX = (state.canvasWidth - state.viewportWidth) / 2.0f;
 	const float bufferY = (state.canvasHeight - state.viewportHeight) / 2.0f;
 
-	// Get the top-left of the ImGui content region in screen coordinates
-	const ImVec2 contentOrigin = ImGui::GetCursorScreenPos();
+	// Get the top-left of the canvas area in screen coordinates.
+	// Use the cached origin captured before InvisibleButton advanced the cursor.
+	const ImVec2 contentOrigin(state.canvasOriginX, state.canvasOriginY);
 
 	// calculate box selection tile range for highlighting
 	int boxMinTileX = -1, boxMaxTileX = -1, boxMinTileY = -1, boxMaxTileY = -1;
@@ -649,7 +658,9 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 
 			// Draw the selection overlay if this tile is selected.
 			if (std::find(selection.begin(), selection.end(), index) != selection.end()) {
-				// overlayCtx.fillStyle = 'rgba(159, 241, 161, 0.5)';
+				// JS: overlayCtx.fillStyle = 'rgba(159, 241, 161, 0.5)';
+				// FONT_ALT_HIGHLIGHT_U32 = IM_COL32(159, 241, 161, 255) — RGB matches JS.
+				// Alpha overridden to 0x80 (128/255 ≈ 0.5) to match JS 0.5 alpha.
 				drawList->AddRectFilled(
 					ImVec2(screenX, screenY),
 					ImVec2(screenX + static_cast<float>(tileSize), screenY + static_cast<float>(tileSize)),
@@ -658,14 +669,16 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 
 			// Draw box selection preview highlight
 			if (state.isBoxSelecting && x >= boxMinTileX && x <= boxMaxTileX && y >= boxMinTileY && y <= boxMaxTileY) {
-				// overlayCtx.fillStyle = 'rgba(87, 175, 226, 0.5)';
+				// JS: overlayCtx.fillStyle = 'rgba(87, 175, 226, 0.5)';
+				// FONT_ALT_U32 = IM_COL32(87, 175, 226, 255) — RGB matches JS.
+				// Alpha overridden to 0x80 (128/255 ≈ 0.5) to match JS 0.5 alpha.
 				drawList->AddRectFilled(
 					ImVec2(screenX, screenY),
 					ImVec2(screenX + static_cast<float>(tileSize), screenY + static_cast<float>(tileSize)),
 					(app::theme::FONT_ALT_U32 & 0x00FFFFFFu) | 0x80000000u);
 			} else if (!state.isBoxSelectMode && state.hoverTile == index) {
 				// Draw the hover overlay only when not in box select mode
-				// overlayCtx.fillStyle = 'rgba(87, 175, 226, 0.5)';
+				// JS: overlayCtx.fillStyle = 'rgba(87, 175, 226, 0.5)';
 				drawList->AddRectFilled(
 					ImVec2(screenX, screenY),
 					ImVec2(screenX + static_cast<float>(tileSize), screenY + static_cast<float>(tileSize)),
@@ -969,10 +982,10 @@ void handleMouseDown(MapViewerState& state, float clientX, float clientY,
 MapPosition mapPositionFromClientPoint(const MapViewerState& state, float x, float y,
                                        int tileSize_prop, int gridSize) {
 	// In JS, this uses viewport.getBoundingClientRect() and canvas dimensions.
-	// In ImGui, we use the current window/content region position.
-	const ImVec2 contentOrigin = ImGui::GetCursorScreenPos();
-	const float viewportX = contentOrigin.x;
-	const float viewportY = contentOrigin.y;
+	// In ImGui, we use the cached canvas origin position (captured before
+	// InvisibleButton advances the cursor in renderWidget).
+	const float viewportX = state.canvasOriginX;
+	const float viewportY = state.canvasOriginY;
 
 	// Calculate canvas position relative to viewport (centered)
 	const float canvasOffsetX = (state.viewportWidth - state.canvasWidth) / 2.0f;
@@ -1175,8 +1188,18 @@ void renderWidget(const char* id,
 
 	// <canvas ref="canvas"></canvas>
 	// <canvas ref="overlayCanvas" class="overlay-canvas"></canvas>
+	// TODO: Tile texture rendering is not yet implemented. In JS, tiles are drawn
+	// to a <canvas> via context.putImageData(). In C++/ImGui, the tile pixel data
+	// is cached in tilePixelCache but not yet uploaded as GL textures for rendering.
+	// The overlay (selection/hover highlights) draws over empty space. Tile rendering
+	// needs GL texture upload and ImDrawList::AddImage() calls to display tiles.
 	ImVec2 canvasAvail = ImGui::GetContentRegionAvail();
-	[[maybe_unused]] ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+	ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+
+	// Store canvas origin in state BEFORE InvisibleButton advances the cursor.
+	// This ensures mapPositionFromClientPoint and renderOverlay use the correct origin.
+	state.canvasOriginX = canvasPos.x;
+	state.canvasOriginY = canvasPos.y;
 
 	// Invisible button to capture mouse interactions over the canvas area
 	ImGui::InvisibleButton("##map_canvas", canvasAvail,

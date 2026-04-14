@@ -146,6 +146,7 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/components/data-table.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/file-field.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/listboxb.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/components/markdown-content.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/menu-button.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/resize-layer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/slider.cpp

@@ -33,8 +33,11 @@ struct MenuOption {
  * Equivalent to the Vue component's data() reactive state.
  */
 struct MenuButtonState {
-	int selectedIndex = -1;  // -1 = use default
-	bool open = false;       // If the menu is open or not.
+	std::string selectedValue;  // Stores the selected option value (empty = use default).
+	                            // JS stores the option object reference (this.selectedObj),
+	                            // making it immune to array reordering. Using the value string
+	                            // achieves the same effect.
+	bool open = false;          // If the menu is open or not.
 };
 
 /**
