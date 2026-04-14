@@ -387,16 +387,18 @@ static void selectItem(int itemIndex, bool ctrlKey, bool shiftKey,
  * Maps WoW item quality values to standard color scheme.
  */
 static ImVec4 getQualityColor(int quality) {
+	// Exact CSS hex values from app.css .item-quality-N classes.
 	switch (quality) {
-		case 0: return ImVec4(0.62f, 0.62f, 0.62f, 1.0f); // Poor (gray)
-		case 1: return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);    // Common (white)
-		case 2: return ImVec4(0.12f, 1.0f, 0.0f, 1.0f);    // Uncommon (green)
-		case 3: return ImVec4(0.0f, 0.44f, 0.87f, 1.0f);   // Rare (blue)
-		case 4: return ImVec4(0.64f, 0.21f, 0.93f, 1.0f);  // Epic (purple)
-		case 5: return ImVec4(1.0f, 0.5f, 0.0f, 1.0f);     // Legendary (orange)
-		case 6: return ImVec4(0.9f, 0.8f, 0.5f, 1.0f);     // Artifact (light gold)
-		case 7: return ImVec4(0.0f, 0.8f, 1.0f, 1.0f);     // Heirloom (light blue)
-		default: return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);    // Default (white)
+		case 0: return ImVec4(157/255.0f, 157/255.0f, 157/255.0f, 1.0f); // Poor (#9d9d9d)
+		case 1: return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);                   // Common (#ffffff)
+		case 2: return ImVec4(30/255.0f, 1.0f, 0.0f, 1.0f);              // Uncommon (#1eff00)
+		case 3: return ImVec4(0.0f, 112/255.0f, 221/255.0f, 1.0f);       // Rare (#0070dd)
+		case 4: return ImVec4(163/255.0f, 53/255.0f, 238/255.0f, 1.0f);  // Epic (#a335ee)
+		case 5: return ImVec4(1.0f, 128/255.0f, 0.0f, 1.0f);             // Legendary (#ff8000)
+		case 6: return ImVec4(230/255.0f, 204/255.0f, 128/255.0f, 1.0f); // Artifact (#e6cc80)
+		case 7: // fallthrough
+		case 8: return ImVec4(0.0f, 204/255.0f, 1.0f, 1.0f);             // Heirloom/Mythic (#00ccff)
+		default: return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);                  // Default (white)
 	}
 }
 
@@ -555,15 +557,29 @@ void render(const char* id,
 		const ImVec4 qualColor = getQualityColor(item.quality);
 		ImGui::PushStyleColor(ImGuiCol_Text, qualColor);
 
-		// Build display text: "Name (ID)"
-		std::string displayText = item.name + " (" + std::to_string(item.id) + ")";
-
 		// Clicking the row selects the item.
-		if (ImGui::Selectable(displayText.c_str(), itemSelected, ImGuiSelectableFlags_None,
+		// Build display text: "Name" (quality colored) + " (ID)" (grey, smaller — CSS .item-id { color: grey; font-size: 0.8em; })
+		if (ImGui::Selectable("##item_sel", itemSelected, ImGuiSelectableFlags_None,
 		                      ImVec2(availSize.x - 120.0f, 0.0f))) {
 			selectItem(i, io.KeyCtrl, io.KeyShift, filteredItems, selection, single, state, onSelectionChanged);
 		}
+		// Render name and ID on top of the selectable at the same line.
+		ImGui::SameLine(0.0f, 0.0f);
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() - (availSize.x - 120.0f));
+		ImGui::Text("%s", item.name.c_str());
+		ImGui::PopStyleColor();
 
+		// Item ID: <span class="item-id">({{ item.id }})</span> — grey, font-size: 0.8em
+		ImGui::SameLine(0.0f, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(128/255.0f, 128/255.0f, 128/255.0f, 1.0f)); // grey
+		{
+			const float origScale = ImGui::GetFont()->Scale;
+			ImGui::GetFont()->Scale *= 0.8f;
+			ImGui::PushFont(ImGui::GetFont());
+			ImGui::Text("(%d)", item.id);
+			ImGui::GetFont()->Scale = origScale;
+			ImGui::PopFont();
+		}
 		ImGui::PopStyleColor();
 
 		// Item buttons (<ul class="item-buttons">).
