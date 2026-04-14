@@ -600,109 +600,109 @@
 - **Status**: Verified
 - **Details**: `STB_IMAGE_IMPLEMENTATION` has been moved from `icon-render.cpp` to a dedicated `stb-impl.cpp` translation unit. This file is the single location where stb_image function definitions are emitted. All other files (`icon-render.cpp`, `texture-ribbon.cpp`, `legacy_tab_textures.cpp`) include `stb_image.h` without the implementation macro. This prevents potential linker errors from multiple definitions. `stb-impl.cpp` has been added to `CMakeLists.txt`. Verified: correct fix.
 
-### ⬜ 117. [log.cpp] write() does not support variadic printf-style formatting
+### ✅ 117. [log.cpp] write() does not support variadic printf-style formatting
 - **JS Source**: `src/js/log.js` lines 78–95
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `write(...parameters)` uses `util.format(...parameters)` to support calls like `write('GPU: %s (%s)', renderer, vendor)`. The C++ `write(std::string_view message)` only accepts a pre-formatted string, requiring all callers to use `std::format()` externally. This changes the API contract.
 
-### ⬜ 118. [log.cpp] timeEnd() does not support variadic format parameters
+### ✅ 118. [log.cpp] timeEnd() does not support variadic format parameters
 - **JS Source**: `src/js/log.js` lines 64–66
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `timeEnd(label, ...params)` constructs `write(label + ' (%dms)', ...params, elapsed)`, allowing callers to pass format arguments. The C++ only takes a label and appends elapsed time. Format specifiers in the label appear as literal text.
 
-### ⬜ 119. [log.cpp] Bug: line moved before debug output, prints empty string
+### ✅ 119. [log.cpp] Bug: line moved before debug output, prints empty string
 - **JS Source**: `src/js/log.js` lines 78–95
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: When the stream is clogged and `pool.size() < MAX_LOG_POOL`, line is moved via `pool.push_back(std::move(line))` on line 122. After the move, line is in an unspecified (typically empty) state. The subsequent `std::fputs(line.c_str(), stdout)` on line 131 will print an empty string instead of the log message.
 
-### ⬜ 120. [log.cpp] drainPool() infinite retry on permanently failed stream
+### ✅ 120. [log.cpp] drainPool() infinite retry on permanently failed stream
 - **JS Source**: `src/js/log.js` lines 32–49
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, `pool.shift()` always removes the item before writing — Node.js `stream.write()` returning false means backpressure but the data IS buffered and will be written. In C++, if `stream.fail()` occurs, the item stays in the pool. A permanently failed stream would retry the same item forever.
 
-### ⬜ 121. [log.cpp] drainPool() missing "schedule another drain" logic
+### ✅ 121. [log.cpp] drainPool() missing "schedule another drain" logic
 - **JS Source**: `src/js/log.js` lines 46–48
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS calls `process.nextTick(drainPool)` after the while loop if `!isClogged && pool.length > 0`, ensuring remaining pooled items are drained even without new write() calls. The C++ only drains when `write()` is called, so if more than MAX_DRAIN_PER_TICK (50) items are pooled and no new writes occur, remaining items stay in the pool indefinitely.
 
-### ⬜ 122. [log.cpp] timeEnd() uses fixed 64-byte buffer that may truncate
+### ✅ 122. [log.cpp] timeEnd() uses fixed 64-byte buffer that may truncate
 - **JS Source**: `src/js/log.js` lines 64–66
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: `timeEnd()` uses a fixed `char buf[64]` for snprintf output. If the label string is longer than ~50 characters, the output will be silently truncated. The JS version has no such length limitation.
 
-### ⬜ 123. [mmap.cpp] release_virtual_files() does not protect against exceptions from delete
+### ✅ 123. [mmap.cpp] release_virtual_files() does not protect against exceptions from delete
 - **JS Source**: `src/js/mmap.js` lines 30–47
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In the C++ release loop, `delete mmap_obj` (line 243) is called inside the loop. If `delete` throws, the remaining objects won't be cleaned up. The JS version calls only `unmap()` and lets GC handle destruction, ensuring all objects in the set are always attempted. The C++ should catch exceptions around `delete` for parity with the JS's "swallows errors" contract.
 
-### ⬜ 124. [modules.cpp] Missing module_test_a and module_test_b registrations
+### ✅ 124. [modules.cpp] Missing module_test_a and module_test_b registrations
 - **JS Source**: `src/js/modules.js` lines 27–28
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: `module_test_a` and `module_test_b` are defined in the JS MODULES object but are completely absent from the C++ `initialize()` function. The corresponding .cpp files exist but no headers exist and they are not registered.
 
-### ⬜ 125. [modules.cpp] Missing tab_help, tab_blender, tab_changelog module registrations
+### ✅ 125. [modules.cpp] Missing tab_help, tab_blender, tab_changelog module registrations
 - **JS Source**: `src/js/modules.js` lines 48–50
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: `tab_help`, `tab_blender`, and `tab_changelog` are defined in the JS MODULES object but the C++ `initialize()` function has only placeholder comments saying "has not been created yet. It needs to be ported." The .cpp files exist but no .h headers exist and they are not registered.
 
-### ⬜ 126. [modules.cpp] wrap_module() does not provide register_context to modules
+### ✅ 126. [modules.cpp] wrap_module() does not provide register_context to modules
 - **JS Source**: `src/js/modules.js` lines 208–218
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `wrap_module()` provides a `register_context` object with `registerNavButton()` and `registerContextMenuOption()` to each module's `register()` function. `registerNavButton()` captures the label into `display_label` for error messages. The C++ calls `mod.registerModule()` directly without a register_context, so `display_label` is never updated and error messages always show the internal module key instead of the user-facing label.
 
-### ⬜ 127. [modules.cpp] Module initialize() called synchronously instead of async
+### ✅ 127. [modules.cpp] Module initialize() called synchronously instead of async
 - **JS Source**: `src/js/modules.js` lines 225, 231–232
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS initialize wrapper is an async function using `await original_initialize.call(this)`. The C++ calls `original_initialize()` synchronously. Since JS module initialize() functions use await, the C++ error handling will not catch errors from asynchronous operations that happen after the initial synchronous return.
 
-### ⬜ 128. [modules.cpp] _tab_initializing reset not protected by RAII/finally equivalent
+### ✅ 128. [modules.cpp] _tab_initializing reset not protected by RAII/finally equivalent
 - **JS Source**: `src/js/modules.js` lines 239–241
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS uses try/catch/finally to ensure `_tab_initializing` is always reset to false. The C++ places `mod._tab_initializing = false` after the catch block but outside any RAII guard. If the catch block throws, `_tab_initializing` won't be reset, causing the module to be permanently stuck in the "initializing" state.
 
-### ⬜ 129. [modules.cpp] Missing activated() lifecycle hook wrapping
+### ✅ 129. [modules.cpp] Missing activated() lifecycle hook wrapping
 - **JS Source**: `src/js/modules.js` lines 244–251
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `wrap_module()` wraps the module's `activated()` lifecycle hook to retry initialization if not yet initialized. The C++ does not implement any `activated()` equivalent. Instead, `set_active()` calls `initialize()` on every activation, but the JS `activated()` also calls the `original_activated` callback if present, which the C++ does not preserve.
 
-### ⬜ 130. [modules.cpp] Missing Proxy-based setActive() and reload() on module objects
+### ✅ 130. [modules.cpp] Missing Proxy-based setActive() and reload() on module objects
 - **JS Source**: `src/js/modules.js` lines 254–267
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `wrap_module()` returns a Proxy that intercepts property access to provide `__name`, `setActive()`, and `reload()` virtual properties. The C++ ModuleDef struct has no equivalent. Any code calling `module.setActive()` or `module.reload()` on a module object will not work in C++.
 
-### ⬜ 131. [modules.cpp] register_context_menu_option() does not support dev_only
+### ✅ 131. [modules.cpp] register_context_menu_option() does not support dev_only
 - **JS Source**: `src/js/modules.js` lines 162–165, 289–291
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `register_static_context_menu_option()` wraps the action in `{ handler: action, dev_only }` and passes it to `register_context_menu_option()`. The C++ internal `register_context_menu_option()` creates a ContextMenuOption without setting dev_only, so options registered through it always have dev_only=false.
 
-### ⬜ 132. [png-writer.cpp] write() is synchronous instead of async
+### ✅ 132. [png-writer.cpp] write() is synchronous instead of async
 - **JS Source**: `src/js/png-writer.js` lines 247–249
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `write()` is `async` and returns a promise from `this.getBuffer().writeToFile(file)`. The C++ `write()` is synchronous and returns void. Callers expecting async behavior (error handling via promise rejection, non-blocking I/O) will behave differently.
 
-### ⬜ 133. [subtitles.cpp] get_subtitles_vtt() signature differs — CASC loading removed
+### ✅ 133. [subtitles.cpp] get_subtitles_vtt() signature differs — CASC loading removed
 - **JS Source**: `src/js/subtitles.js` lines 172–187
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS is an async function taking `(casc, file_data_id, format)` that calls `await casc.getFile(file_data_id)` to load data. The C++ takes `(std::string_view text, SubtitleFormat format)` — CASC file loading is removed entirely and delegated to the caller, significantly changing the function signature and responsibilities.
 
-### ⬜ 134. [subtitles.h] Internal functions exposed as public API
+### ✅ 134. [subtitles.h] Internal functions exposed as public API
 - **JS Source**: `src/js/subtitles.js` lines 189–192
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS exports only `SUBTITLE_FORMAT` and `get_subtitles_vtt`. The C++ header additionally exposes `parse_sbt_timestamp`, `format_srt_timestamp`, `format_vtt_timestamp`, `parse_srt_timestamp`, `sbt_to_srt`, and `srt_to_vtt` as public API. The JS keeps these as module-private. These internal functions could be made file-local to match JS encapsulation.
 
-### ⬜ 135. [tiled-png-writer.cpp] Tile iteration order differs from JS Map insertion order
+### ✅ 135. [tiled-png-writer.cpp] Tile iteration order differs from JS Map insertion order
 - **JS Source**: `src/js/tiled-png-writer.js` lines 38–46, 52–62
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The C++ uses `std::map<std::string, Tile>` (sorted by key) whereas the JS uses `Map` (preserves insertion order). When tiles overlap, alpha blending in `_writeTileToPixelData` means iteration order affects final pixel values. JS iterates in insertion order; C++ iterates in lexicographic key order. For overlapping tiles, this produces different blending results. Should use a container that preserves insertion order.
 
-### ⬜ 136. [tiled-png-writer.cpp] write() is synchronous instead of async
+### ✅ 136. [tiled-png-writer.cpp] write() is synchronous instead of async
 - **JS Source**: `src/js/tiled-png-writer.js` lines 123–125
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `write()` is `async` and returns the result of `this.getBuffer().writeToFile(file)`. The C++ `write()` returns void. Same issue as entry 126 for png-writer.cpp.
 
-### ⬜ 137. [updater.cpp] Entire file is unconverted JavaScript
+### ✅ 137. [updater.cpp] Entire file is unconverted JavaScript
 - **JS Source**: `src/js/updater.js` lines 1–169
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The entire .cpp file is still raw JavaScript — it is a verbatim copy of updater.js with zero C++ conversion. All three functions (`checkForUpdates`, `applyUpdate`, `launchUpdater`), the module-level `updateManifest` variable, and the `module.exports` line are unconverted. There is no corresponding .h header file. Every line needs to be ported to C++.
 
 ### ✅ 138. [wmv.cpp] Entire file is unconverted JavaScript
@@ -710,9 +710,9 @@
 - **Status**: Done
 - **Details**: Fully converted to C++. Created wmv.h with structs (Customization, LegacyValues, ParseResultV1, ParseResultV2) and wmv.cpp with all four functions ported. Added to CMakeLists.txt.
 
-### ⬜ 139. [wowhead.cpp] Entire file is unconverted JavaScript
+### ✅ 139. [wowhead.cpp] Entire file is unconverted JavaScript
 - **JS Source**: `src/js/wowhead.js` lines 1–245
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The entire .cpp file is still raw JavaScript — it is a verbatim copy of wowhead.js with zero C++ conversion. All seven functions (`decode`, `decompress_zeros`, `extract_hash_from_url`, `wowhead_parse_hash`, `parse_v15`, `parse_legacy`, `wowhead_parse`), both constants (`charset`, `WOWHEAD_SLOT_TO_SLOT_ID`), and the `module.exports` line are unconverted. No .h header file exists.
 
 ---
