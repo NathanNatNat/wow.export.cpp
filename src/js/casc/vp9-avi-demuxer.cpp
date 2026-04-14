@@ -31,7 +31,9 @@ VP9AVIDemuxer::VP9AVIDemuxer(BLTEStreamReader& stream_reader)
 	: reader(stream_reader), config(std::nullopt), frame_rate(30.0) { // default, will parse from avih chunk
 }
 
-VP9Config VP9AVIDemuxer::parse_header() {
+// TODO 208: Return std::optional<VP9Config> to match JS's nullable return
+// (JS returns `null` when strf chunk is missing).
+std::optional<VP9Config> VP9AVIDemuxer::parse_header() {
 	BufferWrapper first_block = reader.getBlock(0);
 	const std::vector<uint8_t>& data = first_block.raw();
 
@@ -64,11 +66,16 @@ VP9Config VP9AVIDemuxer::parse_header() {
 		};
 	}
 
-	return config.value_or(VP9Config{});
+	// Return std::nullopt when strf chunk is not found (matching JS `return this.config` where config starts as null)
+	return config;
 }
 
 int64_t VP9AVIDemuxer::find_chunk(const std::vector<uint8_t>& data, const char fourcc[4]) {
-	for (size_t i = 0; i + 3 < data.size(); i++) {
+	// TODO 207: Match JS loop bound `i < length - 4` (not `i + 3 < size`).
+	// JS uses the stricter bound to avoid reading too close to the buffer end.
+	if (data.size() < 4)
+		return -1;
+	for (size_t i = 0; i + 4 < data.size(); i++) {
 		if (data[i] == static_cast<uint8_t>(fourcc[0]) &&
 			data[i + 1] == static_cast<uint8_t>(fourcc[1]) &&
 			data[i + 2] == static_cast<uint8_t>(fourcc[2]) &&
