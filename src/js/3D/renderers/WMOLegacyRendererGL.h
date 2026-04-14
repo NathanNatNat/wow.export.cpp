@@ -31,7 +31,7 @@ class M2LegacyRendererGL;
  */
 struct WMOLegacyDrawCall {
 	uint32_t start = 0;
-	uint16_t count = 0;
+	uint32_t count = 0;  // JS: unrestricted number — use uint32_t to avoid truncation
 	uint32_t blendMode = 0;
 	uint32_t material_id = 0;
 	int vertex_shader = 0;

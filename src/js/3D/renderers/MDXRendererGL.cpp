@@ -213,7 +213,20 @@ void MDXRendererGL::load() {
 	_create_skeleton();
 	_build_geometry();
 
-	if (reactive && !geosetArray.empty()) {
+	// JS: `if (this.reactive && this.geosetArray)` — geosetArray is always truthy (even empty).
+	// In C++, always enter when reactive is true, matching JS behavior.
+	if (reactive) {
+		// JS: core.view[this.geosetKey] = this.geosetArray
+		core::view->modelViewerGeosets.clear();
+		for (const auto& entry : geosetArray) {
+			nlohmann::json j;
+			j["label"] = entry.label;
+			j["checked"] = entry.checked;
+			j["id"] = entry.id;
+			core::view->modelViewerGeosets.push_back(j);
+		}
+		// NOTE: Vue $watch for geosets and wireframe cannot be implemented in C++;
+		// polling is handled in render() via updateGeosets() checks.
 	}
 
 	data_ptr = nullptr;
@@ -250,6 +263,9 @@ void MDXRendererGL::_load_textures() {
 		const std::string& fileName = texture.image;
 		if (!fileName.empty()) {
 			if (ribbonSlot >= 0)
+				// JS: textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID)
+				// C++ uses setSlotFileLegacy for string paths (MDX/legacy format).
+				// JS has a single function accepting both strings and numbers.
 				texture_ribbon::setSlotFileLegacy(ribbonSlot, fileName, syncID);
 
 			try {
@@ -299,6 +315,9 @@ void MDXRendererGL::_create_skeleton() {
 	}
 
 	// flatten nodes array (may have gaps)
+	// NOTE: JS uses plain number objectId — undefined values would produce NaN
+	// in matrix calculations. C++ uses std::optional<int> and skips undefined nodes,
+	// which is a deliberate improvement over JS behavior.
 	nodes.clear();
 	int maxId = 0;
 	for (size_t i = 0; i < src_nodes.size(); i++) {
@@ -342,18 +361,18 @@ void MDXRendererGL::_build_geometry() {
 		}
 
 		// uvs (flip v)
-		const std::vector<float>& uvs = (!geoset.tVertices.empty() && !geoset.tVertices[0].empty())
-			? geoset.tVertices[0]
-			: vertices; // fallback — will use empty-like default below
-
+		// JS: `const uvs = geoset.tVertices[0] || new Float32Array(vertCount * 2);`
+		// The fallback creates a zero-filled UV array of correct size.
 		std::vector<float> flippedUvs;
 		if (!geoset.tVertices.empty() && !geoset.tVertices[0].empty()) {
+			const std::vector<float>& uvs = geoset.tVertices[0];
 			flippedUvs.resize(uvs.size());
 			for (size_t i = 0; i < vertCount; i++) {
 				flippedUvs[i * 2] = uvs[i * 2];
 				flippedUvs[i * 2 + 1] = 1.0f - uvs[i * 2 + 1];
 			}
 		} else {
+			// Fallback: zero-filled UV array (matches JS Float32Array default)
 			flippedUvs.resize(vertCount * 2, 0.0f);
 		}
 
@@ -798,8 +817,11 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 	shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
 	shader->set_uniform_3f("u_view_up", 0, 1, 0);
 
+	// JS: performance.now() * 0.001 — seconds since page load.
+	// Use static start time for small-valued monotonic floats, avoiding epoch precision loss.
+	static const auto s_render_start = std::chrono::steady_clock::now();
 	auto now = std::chrono::steady_clock::now();
-	float time_sec = std::chrono::duration<float>(now.time_since_epoch()).count();
+	float time_sec = std::chrono::duration<float>(now - s_render_start).count();
 	shader->set_uniform_1f("u_time", time_sec);
 
 	// bone matrices (mdx uses node-based skeleton)
@@ -861,7 +883,7 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 			ctx.set_cull_mode(GL_BACK);
 		}
 
-		// bind texture
+		// bind texture — JS unconditionally binds (guaranteed non-null via fallback)
 		gl::GLTexture* texture = nullptr;
 		if (dc.textureId >= 0) {
 			auto it = textures.find(dc.textureId);
@@ -870,13 +892,10 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 			texture = default_texture.get();
 		}
 
-		if (texture)
-			texture->bind(0);
-		if (default_texture) {
-			default_texture->bind(1);
-			default_texture->bind(2);
-			default_texture->bind(3);
-		}
+		texture->bind(0);
+		default_texture->bind(1);
+		default_texture->bind(2);
+		default_texture->bind(3);
 
 		dc.vao->bind();
 		glDrawElements(

@@ -724,7 +724,8 @@ draw_calls.push_back(draw_call);
 }
 
 if (reactive) {
-auto& geosets = core::view->modelViewerGeosets;
+// JS: core.view[this.geosetKey] = this.geosetArray — uses dynamic property key
+auto& geosets = _get_geoset_view();
 geosets.clear();
 for (const auto& entry : geosetArray) {
 nlohmann::json j;
@@ -969,9 +970,9 @@ void M2RendererGL::updateAnimation(float delta_time) {
 if (current_animation < 0 || !has_bones())
 return;
 
+// JS does NOT return early for zero-duration animations — it still calls
+// _update_bone_matrices(). Match that behavior.
 const uint32_t duration_ms = _get_anim_duration_ms();
-if (duration_ms == 0)
-return;
 
 if (!animation_paused)
 animation_time += delta_time;
@@ -1469,6 +1470,10 @@ shader->set_uniform_mat4("u_projection_matrix", false, projection_matrix);
 shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
 shader->set_uniform_3f("u_view_up", 0, 1, 0);
 
+// JS: performance.now() * 0.001 — seconds since page load.
+// C++: use a static app-start time and compute elapsed seconds.
+// NOTE: JS measures from page load, C++ from first render call.
+// Both produce small-valued monotonic floats suitable for shader animation.
 static const auto s_render_start = std::chrono::steady_clock::now();
 auto now = std::chrono::steady_clock::now();
 float time_sec = std::chrono::duration<float>(now - s_render_start).count();
@@ -1850,8 +1855,10 @@ attachment = reinterpret_cast<const M2Attachment*>(skel_att);
 if (!attachment)
 return std::nullopt;
 
-const uint16_t bone_idx = attachment->bone;
-if (bone_matrices.empty())
+// JS: bone_idx is a plain number, checked with `if (bone_idx < 0 || !this.bone_matrices)`.
+// Use int16_t to detect negative sentinel values (e.g., -1 = 0xFFFF in uint16_t).
+const int16_t bone_idx = static_cast<int16_t>(attachment->bone);
+if (bone_idx < 0 || bone_matrices.empty())
 return std::nullopt;
 
 // get bone world matrix (includes rotation from animation)
@@ -1948,4 +1955,20 @@ if (default_texture) {
 default_texture->dispose();
 default_texture.reset();
 }
+}
+
+// -----------------------------------------------------------------------
+// _get_geoset_view — resolve geosetKey to the corresponding view vector
+// JS equivalent: core.view[this.geosetKey]
+// -----------------------------------------------------------------------
+
+std::vector<nlohmann::json>& M2RendererGL::_get_geoset_view() {
+	if (geosetKey == "creatureViewerGeosets")
+		return core::view->creatureViewerGeosets;
+	if (geosetKey == "decorViewerGeosets")
+		return core::view->decorViewerGeosets;
+	if (geosetKey == "chrCustGeosets")
+		return core::view->chrCustGeosets;
+	// default
+	return core::view->modelViewerGeosets;
 }

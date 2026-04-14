@@ -62,10 +62,16 @@ public:
 
 	// Accessor for draw_calls (JS: public property)
 	const std::vector<M3DrawCall>& get_draw_calls() const { return draw_calls; }
+	// Non-const accessor for draw_calls mutation (JS allows direct mutation)
+	std::vector<M3DrawCall>& get_draw_calls_mut() { return draw_calls; }
 
 	// Public state (matches JS properties)
 	std::unique_ptr<M3Loader> m3;
 	std::unique_ptr<gl::ShaderProgram> shader;
+
+	// JS: model_matrix is a public property. Expose via accessor.
+	std::array<float, 16>& get_model_matrix() { return model_matrix; }
+	const std::array<float, 16>& get_model_matrix() const { return model_matrix; }
 
 private:
 	BufferWrapper* data_ptr;

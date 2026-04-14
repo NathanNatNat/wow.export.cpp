@@ -94,6 +94,9 @@ void WMORendererGL::load() {
 	_setup_doodad_sets();
 
 	// setup reactive controls
+	// NOTE: JS assigns by reference: view[key] = this.groupArray.
+	// C++ copies by value. The polling mechanism in render() syncs changes from
+	// view→renderer. For renderer→view sync, we re-assign after modifications.
 	get_wmo_groups_view() = groupArray;
 	get_wmo_sets_view() = setArray;
 	{
@@ -134,6 +137,10 @@ void WMORendererGL::_load_textures() {
 	if (useRibbon)
 		syncID = texture_ribbon::reset();
 
+	// JS: `!!wmo.textureNames` — truthiness check. Empty array [] is truthy in JS.
+	// C++: empty map means no texture names were loaded. If textureNames exists but
+	// is empty, JS enters classic mode while C++ does not. This is acceptable because
+	// WMO files that have a MOTX chunk always populate textureNames with at least one entry.
 	const bool isClassic = !wmo->textureNames.empty();
 
 	for (size_t i = 0; i < materials.size(); i++) {
@@ -201,8 +208,11 @@ void WMORendererGL::_load_textures() {
 			try {
 				Texture texture(material.flags, textureFileDataID);
 				auto data = texture.getTextureFile();
-				if (!data.has_value())
+				if (!data.has_value()) {
+					// JS: would throw and be caught, logging the error.
+					logging::write(std::format("Failed to load WMO texture {}: getTextureFile returned null", textureFileDataID));
 					continue;
+				}
 
 				casc::BLPImage blp(std::move(data.value()));
 				auto gl_tex = std::make_unique<gl::GLTexture>(ctx);
@@ -626,6 +636,10 @@ void WMORendererGL::render(const float* view_matrix, const float* projection_mat
 	if (!shader)
 		return;
 
+	// NOTE: JS uses Vue $watch for reactive updates (groupWatcher, setWatcher,
+	// wireframeWatcher). C++ replaces this with per-frame polling that compares
+	// prev_group_checked/prev_set_checked. This is an architectural difference
+	// inherent to porting from a reactive framework — functionally equivalent.
 	{
 		const auto& gv = get_wmo_groups_view();
 		bool groups_changed = gv.size() != prev_group_checked.size();
@@ -770,7 +784,9 @@ void WMORendererGL::updateAnimation(float delta_time) {
 			continue;
 
 		for (auto& doodad : ds->renderers)
-			doodad.renderer->updateAnimation(delta_time);
+			// JS: doodad.renderer.updateAnimation?.(delta_time) — optional chaining
+			if (doodad.renderer)
+				doodad.renderer->updateAnimation(delta_time);
 	}
 }
 
@@ -836,9 +852,13 @@ void WMORendererGL::dispose() {
 	m2_renderers.clear();
 	m2_data_buffers_.clear();
 
-	// clear arrays
+	// clear arrays — JS: this.groupArray.splice(0) / this.setArray.splice(0)
+	// In JS, splice(0) clears the shared array (same reference as view), so view is also cleared.
+	// In C++, we must explicitly clear both local and view copies.
 	groupArray.clear();
 	setArray.clear();
+	get_wmo_groups_view().clear();
+	get_wmo_sets_view().clear();
 
 	groups.clear();
 	buffers.clear();

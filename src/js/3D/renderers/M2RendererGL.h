@@ -359,4 +359,7 @@ private:
 
 	// internal helpers
 	uint32_t _get_anim_duration_ms() const;
+
+	// Resolve geosetKey to the corresponding view vector (JS: core.view[this.geosetKey])
+	std::vector<nlohmann::json>& _get_geoset_view();
 };
