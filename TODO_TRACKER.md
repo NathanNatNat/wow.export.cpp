@@ -1,12 +1,8 @@
 # TODO Tracker
 
-> **Progress: 197/565 verified (34%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 415/567 verified (73%)** — ✅ = Verified, ⬜ = Pending
 
 ---
-
-## 🟢 Base App / Core / Settings
-
-## app.cpp / app.h Audit (33/33 ✅)
 
 ### ✅ 1. [app.cpp] Crash screen missing original UI elements and buttons
 - **JS Source**: `src/app.js` lines 24–61, `src/index.html` `<noscript>` block
@@ -173,8 +169,6 @@
 - **Status**: Verified
 - **Details**: Fixed: added texture override toast bar in `renderAppShell()` after the model override toast, using identical styling (progress-type background, stopwatch icon, "Remove" action link, close button). Shows when active module is `tab_textures`, `overrideTextureList` is non-empty, and no regular toast is displayed. Calls `removeOverrideTextures()` on Remove/Close. Removed the basic `TextColored`/`SmallButton` fallback from `tab_textures.cpp` to avoid duplication.
 
-## installer/ Audit (11/11 ✅)
-
 ### ✅ 34. [installer.cpp] Entire installer.js is unconverted — no installer.cpp exists
 - **JS Source**: `src/installer/installer.js` lines 1–261
 - **Status**: Verified
@@ -230,8 +224,6 @@
 - **Status**: Verified
 - **Details**: The JS uses `const PLATFORM = process.platform` to detect the runtime platform (`'win32'`, `'linux'`, `'darwin'`), which is then used by `get_install_path()`, `get_executable_name()`, `get_icon_path()`, `create_desktop_shortcut()`, and `extract_data_pak()` for platform-specific logic. No C++ equivalent exists. The C++ version should use preprocessor macros (`_WIN32`, `__linux__`) or `std::filesystem` capabilities to determine the platform at compile time.
 
-## updater/ Audit (8/8 ✅)
-
 ### ✅ 45. [updater/updater.cpp] Entire standalone updater application is unconverted
 - **JS Source**: `src/updater/updater.js` lines 1–197
 - **Status**: Verified
@@ -272,8 +264,6 @@
 - **Status**: Verified
 - **Details**: Ported the full main() entry point with: PID argument parsing, parent process wait loop (500ms polling), OS-specific termination command (taskkill/pkill with wow.export.cpp binary name), install/update directory resolution, file iteration with lock-retry logic (MAX_LOCK_TRIES with 1s delays), directory creation, file copying, detached process re-launch, .update cleanup, and finally-block log file writing to ./logs/{timestamp}-update.log.
 
-## src/js/workers/ Audit (0/6 ✅)
-
 ### ✅ 53. [cache-collector.cpp] `https_request()` hardcodes POST content type to `application/octet-stream`
 - **JS Source**: `src/js/workers/cache-collector.js` lines 19–44
 - **Status**: Verified
@@ -303,12 +293,6 @@
 - **JS Source**: `src/js/workers/cache-collector.js` lines 46–65
 - **Status**: Verified
 - **Details**: Resolved by rewriting `json_post()` to call `https_request()` (TODO 54). Since `https_request()` now throws on connection failure (TODO 57), the error automatically propagates through `json_post()` to callers, matching the JS behavior.
-
----
-
-## 🔵 Core Utilities
-
-## src/js/ Top-Level Audit (58/81 ✅)
 
 ### ✅ 59. [blob.cpp] stringEncode() missing full UTF-8 encoding logic
 - **JS Source**: `src/js/blob.js` lines 42–95
@@ -675,11 +659,6 @@
 - **Status**: Verified
 - **Details**: The JS `register_static_context_menu_option()` wraps the action in `{ handler: action, dev_only }` and passes it to `register_context_menu_option()`. The C++ internal `register_context_menu_option()` creates a ContextMenuOption without setting dev_only, so options registered through it always have dev_only=false.
 
-### ✅ 564. [modules.cpp] `module_registry` uses `std::map` — iteration order is alphabetical instead of insertion order
-- **JS Source**: `src/js/modules.js` lines 277–295 (`MODULES` object and `initialize()` loop)
-- **Status**: Verified
-- **Details**: Fixed by changing `module_registry` from `std::map<std::string, ModuleDef>` to `std::vector<std::pair<std::string, ModuleDef>>`, preserving insertion order. A `find_module()` helper provides O(n) lookup by name. The `wrap_module()` loop and log message now iterate in the original JS insertion order.
-
 ### ✅ 132. [png-writer.cpp] write() is synchronous instead of async
 - **JS Source**: `src/js/png-writer.js` lines 247–249
 - **Status**: Verified
@@ -720,12 +699,6 @@
 - **Status**: Verified
 - **Details**: The entire .cpp file is still raw JavaScript — it is a verbatim copy of wowhead.js with zero C++ conversion. All seven functions (`decode`, `decompress_zeros`, `extract_hash_from_url`, `wowhead_parse_hash`, `parse_v15`, `parse_legacy`, `wowhead_parse`), both constants (`charset`, `WOWHEAD_SLOT_TO_SLOT_ID`), and the `module.exports` line are unconverted. No .h header file exists.
 
----
-
-## 🟡 File Readers / Archive Formats
-
-## src/js/mpq/ Audit (0/3 ✅)
-
 ### ✅ 140. [build-version.cpp] `find_version_in_buffer` search range off-by-4
 - **JS Source**: `src/js/mpq/build-version.js` lines 51–69
 - **Status**: Verified
@@ -740,8 +713,6 @@
 - **JS Source**: `src/js/mpq/mpq.js` line 422
 - **Status**: Verified
 - **Details**: JS uses `console.error('decompression error:', e)` for error logging in the zlib decompression catch block. C++ (line 511) uses `spdlog::error("decompression error: {}", e.what())` directly instead of the project's `logging::write` function that is used consistently throughout the rest of the codebase (including elsewhere in mpq.cpp via the logging header). This is inconsistent with the project's logging convention.
-
-## src/js/casc/ Audit (0/66 ✅)
 
 ### ✅ 143. [blp.cpp] Missing `toCanvas()` method
 - **JS Source**: `src/js/casc/blp.js` lines 103–117
@@ -827,16 +798,6 @@
 - **JS Source**: `src/js/casc/build-cache.js` line 252
 - **Status**: Verified
 - **Details**: JS `deleteSize -= manifestSize;` has no guard — `deleteSize` is a JS number (double) and can go negative. C++ uses `uintmax_t` (unsigned), so `if (deleteSize >= manifestSize) deleteSize -= manifestSize;` is added to prevent wraparound. Reasonable defensive fix but a deviation.
-
-### ✅ 562. [build-cache.cpp] `initBuildCacheSystem()` is never called — deadlocks on cache access
-- **JS Source**: `src/js/casc/build-cache.js` lines 156–171
-- **Status**: Verified
-- **Details**: Fixed by adding `casc::initBuildCacheSystem()` call in `app.cpp` after `loadCacheSize()`, before any CASC source can be selected. This matches the JS IIFE that self-initializes at module load time.
-
-### ✅ 563. [build-cache.cpp] `registerBuildCacheEvents()` is never called — cache purge and stale cleanup broken
-- **JS Source**: `src/js/casc/build-cache.js` lines 174–240
-- **Status**: Verified
-- **Details**: Fixed by adding `casc::registerBuildCacheEvents()` call in `app.cpp` after `initBuildCacheSystem()`. This registers the `click-cache-clear` and `casc-source-changed` event handlers, matching the JS module-level registration that runs on `require()`.
 
 ### ✅ 160. [casc-source.cpp] `getInstallManifest()` fallback differs when encoding key not found
 - **JS Source**: `src/js/casc/casc-source.js` line 72
@@ -1083,12 +1044,6 @@
 - **Status**: Verified
 - **Details**: JS returns `null` when the `strf` chunk is not found. C++ (line 34) returns a default-constructed `VP9Config` instead. Should return `std::optional<VP9Config>` to match JS's nullable return path. Callers cannot distinguish "missing chunk" from "valid config with default values".
 
----
-
-## 🟠 Database
-
-## src/js/db/ Audit (0/3 ✅)
-
 ### ✅ 209. [DBDParser.cpp] TODO placeholder: foreign key support not implemented
 - **JS Source**: `src/js/db/DBDParser.js` line 342
 - **Status**: Verified
@@ -1103,8 +1058,6 @@
 - **JS Source**: `src/js/db/WDCReader.js` line 429
 - **Status**: Verified
 - **Details**: C++ line 497 contains `// New WDC4 chunk: TODO read` carried over from the original JS source (line 429). For WDC versions > 3 (WDC4, WDC5), both JS and C++ read and skip over this chunk data without parsing it (`data.move(entryCount * 4)` in JS; `dataRef.move(static_cast<int64_t>(entryCount) * 4)` in C++). The chunk's purpose is not documented, and the data is discarded. This matches the JS behavior exactly.
-
-## src/js/db/caches Audit (0/16 ✅)
 
 ### ✅ 212. [DBCharacterCustomization.cpp] tfd_map uses record ID instead of explicit FileDataID field
 - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` line 55
@@ -1185,12 +1138,6 @@
 - **JS Source**: `src/js/db/caches/DBItems.js` line 40
 - **Status**: Verified
 - **Details**: JS line 40 accesses `item_row.Display_lang` which returns `undefined` gracefully when the field is absent, then `??` substitutes the fallback. C++ line 63 uses `item_row.at("Display_lang")` which throws `std::out_of_range` if the `Display_lang` field does not exist in the row map. If any ItemSparse row lacks a `Display_lang` field, C++ crashes; JS handles it gracefully.
-
----
-
-## 🔴 Rendering / 3D
-
-## src/js/3D/gl/ Audit (18/18 ✅)
 
 ### ✅ 228. [GLContext.cpp] `dispose()` does not null out `canvas`/`gl` — JS sets both to `null`
 - **JS Source**: `src/js/3D/gl/GLContext.js` lines 403–407
@@ -1282,8 +1229,6 @@
 - **Status**: Verified
 - **Details**: C++ uses `-1` default + `count < 0` check as the idiomatic C++ equivalent of JS's nullish coalescing `count ?? this.index_count`. Both compute byte offset identically. Functionally equivalent — no changes needed.
 
-## src/js/3D/ Audit (4/4 ✅)
-
 ### ✅ 246. [Skin.h] `SubMesh::triangleStart` is `uint16_t` but must hold a 32-bit value
 - **JS Source**: `src/js/3D/Skin.js` lines 61, 72
 - **Status**: Verified
@@ -1303,8 +1248,6 @@
 - **JS Source**: `src/js/3D/Texture.js` lines 15–18
 - **Status**: Verified
 - **Details**: The `fileName` member is intentionally kept. While not declared in JS `Texture` constructor, it is dynamically set by `M2LegacyLoader.js` (line 540: `texture.fileName = fileName`) and read by `M2LegacyRendererGL.js`, `MDXRendererGL.js`, and `M2LegacyExporter.js`. Since C++ does not support dynamic properties, the member must be declared in the class. Added a documentation comment explaining this.
-
-## src/js/3D/camera/ Audit (12/12 ✅)
 
 ### ✅ 250. [CameraControlsGL.cpp] `init()` omits all event listener registration
 - **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 198–216
@@ -1365,8 +1308,6 @@
 - **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` lines 14–16
 - **Status**: Verified
 - **Details**: JS uses duck typing — both control types accept the same camera object. C++ now uses a single unified `CameraGL` struct (in `CameraControlsGL.h`) with all members needed by either control type. `CharacterCameraGL` and `CharacterDomElementGL` have been removed. `CharacterCameraControlsGL.h` includes `CameraControlsGL.h` and uses `CameraGL&` and `DomElementGL&`. `model-viewer-gl.h` updated accordingly.
-
-## src/js/3D/loaders Audit (25/25 ✅)
 
 ### ✅ 262. [M2Loader.cpp] `loadAnims()` missing `animIsChunked` parameter — always loads with default `isChunked=true`
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 118–124
@@ -1492,8 +1433,6 @@
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 457–464
 - **Status**: Verified — Fixed in entry 441
 - **Details**: This is a duplicate of entries 441 and 445. The C++ header now declares both fields as `uint32_t` and WMOLegacyLoader.cpp reads them without truncating casts, matching JS behavior exactly.
-
-## src/js/3D/renderers Audit (18/51 ✅)
 
 ### ✅ 287. [CharMaterialRenderer.cpp] `setTextureTarget()` flattened parameter signature loses structured data
 - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 114–143
@@ -1749,12 +1688,6 @@
 - **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 287–291
 - **Status**: Verified
 - **Details**: Documented: JS does not have explicit out-of-bounds guard — accessing `wmo.doodads[outOfRange]` returns `undefined`, subsequent property access throws, caught by catch. C++ adds bounds check to prevent undefined behavior. This is a deliberate improvement. Added explanatory comment.
-
----
-
-## 🟣 UI
-
-## src/js/components/ Audit (0/84 ✅)
 
 ### ✅ 338. [checkboxlist.cpp] `resize()` called every frame instead of only on layout change
 - **JS Source**: `src/js/components/checkboxlist.js` lines 28–38
@@ -2176,8 +2109,6 @@
 - **Status**: Pending
 - **Details**: CSS `.handle` has `cursor: pointer`. The mouse cursor should change to a pointer when hovering the handle. ImGui supports `ImGui::SetMouseCursor(ImGuiMouseCursor_Hand)` but this is not called in slider.cpp.
 
-## src/js/modules/ Audit (0/8 ✅)
-
 ### ⬜ 422. [module_test_a.cpp] Entire file is unconverted JavaScript
 - **JS Source**: `src/js/modules/module_test_a.js` lines 1–34
 - **Status**: Pending
@@ -2217,8 +2148,6 @@
 - **JS Source**: `src/js/modules/screen_settings.js` lines ~460–462 (template buttons)
 - **Status**: Pending
 - **Details**: C++ lines 482–484 contain commented-out Vue template code: `// <input type="button" value="Discard" @click="handle_discard"/>`, `// <input type="button" value="Apply" @click="handle_apply"/>`, `// <input type="button" id="config-reset" value="Reset to Defaults" @click="handle_reset"/>`. The ImGui equivalents are properly implemented on lines 486–493, but the residual HTML/Vue template comments should be removed.
-
-## src/js/ui/ Audit (0/33 ✅)
 
 ### ⬜ 430. [audio-helper.cpp] `load()` returns void instead of the decoded audio buffer
 - **JS Source**: `src/js/ui/audio-helper.js` lines 31–35
@@ -2384,8 +2313,6 @@
 - **JS Source**: `src/js/ui/uv-drawer.js` lines 34–39
 - **Status**: Pending
 - **Details**: JS accessing `uvCoords[idx]` out-of-bounds returns `undefined` → `NaN`, producing no visible lines (safe, just garbage rendering). C++ (lines 71–76) accessing `uvCoords[idx]` out-of-bounds via `operator[]` is undefined behavior (potential crash/corruption). No guard exists for this case.
-
-## UI Visual Fidelity Audit (0/39 ✅)
 
 ### ⬜ 463. [app.h] Listbox ROW_SELECTED_U32 color is green (#22b549) instead of blue (#57afe2)
 - **JS Source**: `src/app.css` `.ui-listbox .item.selected` / `.item:hover` (line ~1409)
@@ -2581,11 +2508,6 @@
 - **JS Source**: `src/app.css` `.character-import-buttons` (lines ~2985–3065)
 - **Status**: Pending
 - **Details**: The CSS specifies the bottom character buttons (Battle.net, WMV, Wowhead, Save, Quick Save, Import JSON, Export JSON) with specific colors — BNet: `#148eff`, WMV: `#d22c1e`, Wowhead: `#e02020`, Save: `#5865f2`, Quick Save: `#22b549`, Import JSON: `#e67e22`, Export JSON: `#22b549`. Each has icon images as backgrounds. The C++ should verify these specific brand colors and icon backgrounds are applied.
----
-
-## 🔵 Exporting
-
-## src/js/3D/exporters/ Audit (0/39 ✅)
 
 ### ⬜ 502. [ADTExporter.cpp] `loadTexture` uses `blp.width`/`blp.height` instead of `blp.scaledWidth`/`blp.scaledHeight`
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 63
@@ -2782,8 +2704,6 @@
 - **Status**: Pending
 - **Details**: JS `doodadCache` is `new Set()` at module scope. C++ (line 38) uses `std::unordered_set<std::string>` in an anonymous namespace. Functionally equivalent, but the JS `Set` can store any type while C++ is typed to `string`. Both use case-insensitive lookups via `toLower()`. The `clearCache()` static method (JS line 585, C++ implied via header line 94) correctly clears both.
 
-## src/js/3D/writers Audit (0/21 ✅)
-
 ### ⬜ 541. [CSVWriter.cpp] `escapeCSVField()` treats empty string as null/undefined — JS does not
 - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 42–51
 - **Status**: Pending
@@ -2889,6 +2809,21 @@
 - **Status**: Pending
 - **Details**: The GLTF generator metadata string in C++ starts with `"wow.export v"`. Per project conventions, user-facing text should say "wow.export.cpp" not "wow.export".
 
+### ✅ 562. [build-cache.cpp] `initBuildCacheSystem()` is never called — deadlocks on cache access
+- **JS Source**: `src/js/casc/build-cache.js` lines 156–171
+- **Status**: Verified
+- **Details**: Fixed by adding `casc::initBuildCacheSystem()` call in `app.cpp` after `loadCacheSize()`, before any CASC source can be selected. This matches the JS IIFE that self-initializes at module load time.
+
+### ✅ 563. [build-cache.cpp] `registerBuildCacheEvents()` is never called — cache purge and stale cleanup broken
+- **JS Source**: `src/js/casc/build-cache.js` lines 174–240
+- **Status**: Verified
+- **Details**: Fixed by adding `casc::registerBuildCacheEvents()` call in `app.cpp` after `initBuildCacheSystem()`. This registers the `click-cache-clear` and `casc-source-changed` event handlers, matching the JS module-level registration that runs on `require()`.
+
+### ✅ 564. [modules.cpp] `module_registry` uses `std::map` — iteration order is alphabetical instead of insertion order
+- **JS Source**: `src/js/modules.js` lines 277–295 (`MODULES` object and `initialize()` loop)
+- **Status**: Verified
+- **Details**: Fixed by changing `module_registry` from `std::map<std::string, ModuleDef>` to `std::vector<std::pair<std::string, ModuleDef>>`, preserving insertion order. A `find_module()` helper provides O(n) lookup by name. The `wrap_module()` loop and log message now iterate in the original JS insertion order.
+
 ### ✅ 565. [app.cpp] Missing `checkLocalVersion()` call for Blender add-on version check
 - **JS Source**: `src/app.js` lines 699, 704
 - **Status**: Verified
@@ -2903,4 +2838,3 @@
 - **JS Source**: `src/index.html` lines 18–23, `src/js/components/context-menu.js` lines 16–58, `src/app.css` lines 873–913
 - **Status**: Verified
 - **Details**: Refactored hamburger menu to use ImGui's built-in popup API (`ImGui::OpenPopup`/`ImGui::BeginPopup`) which handles z-ordering (always renders on top) and close-on-click-outside automatically. Fixed all five issues: (1) z-ordering — popups always render above regular windows; (2) uses proper popup API instead of custom Begin/End; (3) click always opens (not toggle), matching JS `contextMenus.stateNavExtra = true`; (4) close-on-click-outside replaces mouseleave+buffer-zone pattern; (5) `PushStyleColor(ImGuiCol_PopupBg)` applied before `BeginPopup()` so background color is correct.
-
