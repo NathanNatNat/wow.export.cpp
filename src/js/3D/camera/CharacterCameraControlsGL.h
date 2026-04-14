@@ -5,28 +5,14 @@
 */
 #pragma once
 
+#include "CameraControlsGL.h"
+
 #include <array>
-#include <cmath>
 #include <functional>
-
-/**
- * Camera interface expected by CharacterCameraControlsGL.
- */
-struct CharacterCameraGL {
-	std::array<float, 3> position = {0, 0, 0};
-
-	std::function<void(float, float, float)> lookAt;
-	std::function<void()> update_view;
-};
-
-struct CharacterDomElementGL {
-	int clientWidth = 800;
-	int clientHeight = 600;
-};
 
 class CharacterCameraControlsGL {
 public:
-	CharacterCameraControlsGL(CharacterCameraGL& camera, CharacterDomElementGL& dom_element);
+	CharacterCameraControlsGL(CameraGL& camera, DomElementGL& dom_element);
 
 	void on_mouse_down(int button, int clientX, int clientY);
 	void on_mouse_move(int clientX, int clientY);
@@ -35,8 +21,8 @@ public:
 	void update();
 	void dispose();
 
-	CharacterCameraGL& camera;
-	CharacterDomElementGL& dom_element;
+	CameraGL& camera;
+	DomElementGL& dom_element;
 
 	std::array<float, 3> target;
 	float model_rotation_y;

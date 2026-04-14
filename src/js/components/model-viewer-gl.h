@@ -197,10 +197,11 @@ struct State {
 	PerspectiveCamera camera{70.0f, 1.0f, 0.01f, 2000.0f};
 
 	// Camera control adapters (bridges between PerspectiveCamera and control types)
+	// Both use unified CameraGL and DomElementGL types (matching JS duck typing).
 	CameraGL camera_gl;
-	CharacterCameraGL char_camera_gl;
+	CameraGL char_camera_gl;
 	DomElementGL dom_element;
-	CharacterDomElementGL char_dom_element;
+	DomElementGL char_dom_element;
 
 	// Controls (only one active at a time)
 	std::unique_ptr<CameraControlsGL> orbit_controls;
