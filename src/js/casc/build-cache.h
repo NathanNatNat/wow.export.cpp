@@ -68,6 +68,12 @@ public:
 	 */
 	void saveManifest();
 
+	/**
+	 * Get the build key.
+	 * JS equivalent: this.cache.key (accessed as a public property).
+	 */
+	const std::string& getKey() const { return key; }
+
 private:
 	std::string key;
 	nlohmann::json meta;

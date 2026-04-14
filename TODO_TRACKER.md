@@ -823,149 +823,149 @@
 - **Status**: Verified
 - **Details**: JS `deleteSize -= manifestSize;` has no guard — `deleteSize` is a JS number (double) and can go negative. C++ uses `uintmax_t` (unsigned), so `if (deleteSize >= manifestSize) deleteSize -= manifestSize;` is added to prevent wraparound. Reasonable defensive fix but a deviation.
 
-### ⬜ 160. [casc-source.cpp] `getInstallManifest()` fallback differs when encoding key not found
+### ✅ 160. [casc-source.cpp] `getInstallManifest()` fallback differs when encoding key not found
 - **JS Source**: `src/js/casc/casc-source.js` line 72
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, if `encodingKeys.get(installKeys[0])` returns `undefined`, `installKey` becomes `undefined`, which would propagate downstream. In C++ (lines 103–111), if the encoding key is not found, it falls back to using the raw key (`installKeys[0]`) instead of propagating the failure. This silently changes behavior for the key-not-found case.
 
-### ⬜ 161. [casc-source.cpp] `getFileByName()` drops parameters, breaking subclass dispatch
+### ✅ 161. [casc-source.cpp] `getFileByName()` drops parameters, breaking subclass dispatch
 - **JS Source**: `src/js/casc/casc-source.js` line 190
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, `this.getFile()` dispatches polymorphically to `CASCLocal.getFile()` or `CASCRemote.getFile()`, accepting extra parameters (`partialDecrypt`, `suppressLog`, `supportFallback`, `forceFallback`). In C++ (line 236), `getFile()` is called with only `fileDataID`, dropping all extra parameters. CASCLocal doesn't override `getFile()` (renamed to `getFileAsBLTE()`), so polymorphic dispatch is broken.
 
-### ⬜ 162. [casc-source.cpp] `getVirtualFileByID()` missing readonly mmap protection and wrong error message
+### ✅ 162. [casc-source.cpp] `getVirtualFileByID()` missing readonly mmap protection and wrong error message
 - **JS Source**: `src/js/casc/casc-source.js` line 225
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: (a) JS passes `{ protection: 'readonly' }` to map the file read-only; C++ (lines 274–275) calls `map()` with no protection argument. (b) JS error message includes `mmap_obj.lastError` (OS error details); C++ error message includes `cachedPath` (just the file path), losing diagnostic information.
 
-### ⬜ 163. [casc-source.cpp] `getModelFormats()` uses boolean instead of explicit filter constant
+### ✅ 163. [casc-source.cpp] `getModelFormats()` uses boolean instead of explicit filter constant
 - **JS Source**: `src/js/casc/casc-source.js` line 301
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, `modelExt.push(['.wmo', constants.LISTFILE_MODEL_FILTER])` passes the actual regex filter. In C++ (line 364), `ExtFilter` struct stores `has_exclusion = true` as a boolean flag. Consumers separately call `constants::LISTFILE_MODEL_FILTER()`. Functionally equivalent for current use case but creates an indirect coupling.
 
-### ⬜ 164. [casc-source-local.cpp] `getFile()` renamed to `getFileAsBLTE()`, breaking polymorphism
+### ✅ 164. [casc-source-local.cpp] `getFile()` renamed to `getFileAsBLTE()`, breaking polymorphism
 - **JS Source**: `src/js/casc/casc-source-local.js` lines 63–70
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, `CASCLocal.getFile()` overrides the base `CASC.getFile()` and returns a `BLTEReader`. In C++ it is renamed to `getFileAsBLTE()`, so `CASC::getFile()` (which returns a raw encoding key string) is never overridden. Any code calling `getFile()` polymorphically on a CASCLocal instance gets the base behavior (encoding key) instead of decoded file data. Directly impacts `getFileByName` dispatch (see #305).
 
-### ⬜ 165. [casc-source-local.cpp] `load()` missing `core.view.casc = this` assignment
+### ✅ 165. [casc-source-local.cpp] `load()` missing `core.view.casc = this` assignment
 - **JS Source**: `src/js/casc/casc-source-local.js` line 179
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, `core.view.casc = this;` is set inside `load()`, immediately after `loadRoot()` but before `prepareListfile()`, `prepareDBDManifest()`, and `loadListfile()`. In C++ (lines 229–249), this assignment is done externally after `load()` returns, meaning `core::view->casc` is null/stale during those methods. If any code during those steps references `core::view->casc`, it would fail in C++ but work in JS.
 
-### ⬜ 166. [casc-source-local.cpp] `init()` logs count instead of full builds object
+### ✅ 166. [casc-source-local.cpp] `init()` logs count instead of full builds object
 - **JS Source**: `src/js/casc/casc-source-local.js` line 51
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS logs the full builds array via `log.write('%o', this.builds)`. C++ (line 76) only logs `"Local builds found: " + std::to_string(builds.size())`. Full build details are lost for debugging.
 
-### ⬜ 167. [casc-source-local.cpp] `loadConfigs()` simplified log messages
+### ✅ 167. [casc-source-local.cpp] `loadConfigs()` simplified log messages
 - **JS Source**: `src/js/casc/casc-source-local.js` lines 212–213
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS dumps the full config objects via `log.write('BuildConfig: %o', this.buildConfig)`. C++ (lines 290–291) only logs `"BuildConfig loaded"` and `"CDNConfig loaded"`. Diagnostic information lost.
 
-### ⬜ 168. [casc-source-local.cpp] `load()` log message missing build details
+### ✅ 168. [casc-source-local.cpp] `load()` log message missing build details
 - **JS Source**: `src/js/casc/casc-source-local.js` line 167
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS logs `'Loading local CASC build: %o', this.build` with the full build object. C++ (line 231) only logs `"Loading local CASC build"`.
 
-### ⬜ 169. [casc-source-local.cpp] `initializeRemoteCASC()` silently skips preload on invalid build index
+### ✅ 169. [casc-source-local.cpp] `initializeRemoteCASC()` silently skips preload on invalid build index
 - **JS Source**: `src/js/casc/casc-source-local.js` lines 328–330
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, `builds.findIndex(...)` returns `-1` if not found, and `preload(-1, ...)` is called with an invalid index (likely causing an error). In C++ (lines 442–443), `if (buildIndex >= 0)` guards against the -1 case, silently skipping preload. The remote instance is set up but unpreloaded, so subsequent operations may fail silently.
 
-### ⬜ 170. [casc-source-remote.cpp] `std::format` used with `%s` placeholder — host URL formatting is broken
+### ✅ 170. [casc-source-remote.cpp] `std::format` used with `%s` placeholder — host URL formatting is broken
 - **JS Source**: `src/js/casc/casc-source-remote.js` line 39
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: `constants::PATCH::HOST` is `"https://%s.version.battle.net/"` (printf-style). `std::format` (line 43) requires `{}` placeholders, not `%s`. This will NOT substitute the region, producing the literal string `https://%s.version.battle.net/` or throwing `std::format_error`. Compare with `cdn-resolver.cpp:164-168` which correctly does manual `%s` replacement.
 
-### ⬜ 171. [casc-source-remote.cpp] `getConfig()` checks `res.empty()` instead of HTTP status
+### ✅ 171. [casc-source-remote.cpp] `getConfig()` checks `res.empty()` instead of HTTP status
 - **JS Source**: `src/js/casc/casc-source-remote.js` line 77
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS checks `if (!res.ok)` on the HTTP response status flag, including the HTTP status code in the error message. C++ (line 97) only checks `if (res.empty())`, which would not catch non-200 HTTP responses that have a body. Also, the error message omits the HTTP status code.
 
-### ⬜ 172. [casc-source-remote.cpp] `getCDNConfig()` same `res.empty()` vs `!res.ok` mismatch
+### ✅ 172. [casc-source-remote.cpp] `getCDNConfig()` same `res.empty()` vs `!res.ok` mismatch
 - **JS Source**: `src/js/casc/casc-source-remote.js` lines 100–101
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: Same issue as #315. JS throws with HTTP status code on `!res.ok`. C++ (lines 123–124) only checks `res.empty()` and omits the status code from the error.
 
-### ⬜ 173. [casc-source-remote.cpp] `load()` missing `core.view.casc = this` assignment
+### ✅ 173. [casc-source-remote.cpp] `load()` missing `core.view.casc = this` assignment
 - **JS Source**: `src/js/casc/casc-source-remote.js` line 290
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: After `loadRoot()` and before `prepareListfile()`, the JS assigns `core.view.casc = this`. This is critical for other parts of the application to access the CASC source. The C++ port (lines 339–351) completely omits this assignment.
 
-### ⬜ 174. [casc-source-remote.cpp] `preload()` log message missing build details
+### ✅ 174. [casc-source-remote.cpp] `preload()` log message missing build details
 - **JS Source**: `src/js/casc/casc-source-remote.js` line 264
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS logs `'Preloading remote CASC build: %o', this.build` with the full build object. C++ (line 319) only logs `"Preloading remote CASC build"`.
 
-### ⬜ 175. [casc-source-remote.cpp] `loadEncoding()` uses `build["BuildConfig"]` instead of `cache.key`
+### ✅ 175. [casc-source-remote.cpp] `loadEncoding()` uses `build["BuildConfig"]` instead of `cache.key`
 - **JS Source**: `src/js/casc/casc-source-remote.js` line 314
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `this.cache.key` (the BuildCache's key property) in log messages. C++ (line 375) uses `build["BuildConfig"]` instead. While they are likely the same value, using the wrong source could diverge if the cache key is transformed differently.
 
-### ⬜ 176. [casc-source-remote.cpp] `loadServerConfig()` log missing server config details
+### ✅ 176. [casc-source-remote.cpp] `loadServerConfig()` log missing server config details
 - **JS Source**: `src/js/casc/casc-source-remote.js` line 388
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS logs `log.write('%o', serverConfigs)` with the full server config array. C++ (line 475) only logs `"Server configs loaded: " + std::to_string(serverConfigs.size())`.
 
-### ⬜ 177. [casc-source-remote.cpp] `loadConfigs()` config objects not logged
+### ✅ 177. [casc-source-remote.cpp] `loadConfigs()` config objects not logged
 - **JS Source**: `src/js/casc/casc-source-remote.js` lines 463–464
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS logs full config objects via `log.write('CDNConfig: %o', this.cdnConfig)`. C++ (lines 571–572) only logs `"CDNConfig loaded"` and `"BuildConfig loaded"`.
 
-### ⬜ 178. [casc-source-remote.cpp] `getDataFilePartial()` passes `""` instead of `null` for output path
+### ✅ 178. [casc-source-remote.cpp] `getDataFilePartial()` passes `""` instead of `null` for output path
 - **JS Source**: `src/js/casc/casc-source-remote.js` line 448
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS passes `null` as the output-file parameter to `downloadFile()` meaning "don't write to disk". C++ (line 556) passes empty string `""`. Depending on how `downloadFile` handles these, behavior could differ.
 
-### ⬜ 179. [casc-source-remote.cpp] `init()` log doesn't dump builds array
+### ✅ 179. [casc-source-remote.cpp] `init()` log doesn't dump builds array
 - **JS Source**: `src/js/casc/casc-source-remote.js` line 55
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS logs the full builds data structure via `log.write('%o', this.builds)`. C++ (line 74) only logs `"Remote builds loaded: " + std::to_string(builds.size())`.
 
-### ⬜ 180. [cdn-resolver.cpp] Missing HTTP response status check in `_resolveRegionProduct()`
+### ✅ 180. [cdn-resolver.cpp] Missing HTTP response status check in `_resolveRegionProduct()`
 - **JS Source**: `src/js/casc/cdn-resolver.js` lines 152–153
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS checks `if (!res.ok)` and throws with the HTTP status code and URL. C++ (line 172) calls `generics::get(url)` with no HTTP status check at all. If the server returns an error status with a body, C++ would try to parse it as a version config, producing garbage results.
 
-### ⬜ 181. [cdn-resolver.cpp] `getBestHost()` cache update race condition
+### ✅ 181. [cdn-resolver.cpp] `getBestHost()` cache update race condition
 - **JS Source**: `src/js/casc/cdn-resolver.js` lines 66–73
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, the resolution result is always stored back into the cache after awaiting the promise. In C++ (lines 239–244), the cache is only updated `if (isNewResolution)`. If a second caller waits on an existing future, it skips the cache update. A third concurrent caller might trigger a redundant resolution. Subtle race condition absent from the JS single-threaded model.
 
-### ⬜ 182. [cdn-resolver.cpp] `getRankedHosts()` same cache update race condition
+### ✅ 182. [cdn-resolver.cpp] `getRankedHosts()` same cache update race condition
 - **JS Source**: `src/js/casc/cdn-resolver.js` lines 108–114
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: Same issue as #325 in `getRankedHosts()`. Only updates cache `if (isNewResolution)`.
 
-### ⬜ 183. [cdn-resolver.cpp] `backgroundThreads` vector never cleared
+### ✅ 183. [cdn-resolver.cpp] `backgroundThreads` vector never cleared
 - **JS Source**: `src/js/casc/cdn-resolver.js` line 34
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses fire-and-forget async calls for pre-resolution. C++ (lines 48, 196–198) pushes `std::jthread` instances into a `backgroundThreads` vector that is never cleared. The vector grows without bound if `startPreResolution` is called repeatedly. `std::jthread` joins on destruction, so cleanup is deferred to program exit.
 
-### ⬜ 184. [db2.cpp] Missing auto-parse proxy behavior (lazy parsing on method access)
+### ✅ 184. [db2.cpp] Missing auto-parse proxy behavior (lazy parsing on method access)
 - **JS Source**: `src/js/casc/db2.js` lines 37–73
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, `create_wrapper` returns a `Proxy` around the `WDCReader`. When any method is called, the proxy intercepts and automatically calls `parse()` if the reader hasn't been loaded yet. In C++ (lines 24–36), `getTable()` returns a raw `WDCReader&` with no parsing done and no automatic parsing on method calls. Callers must manually call `parse()` before using the reader.
 
-### ⬜ 185. [db2.cpp] Missing `parse_promise` deduplication for concurrent callers
+### ✅ 185. [db2.cpp] Missing `parse_promise` deduplication for concurrent callers
 - **JS Source**: `src/js/casc/db2.js` lines 38, 60–63
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, `create_wrapper` captures a `parse_promise` variable. If multiple async callers invoke a method on the same table simultaneously, only the first triggers `parse()` and subsequent callers await the same promise. In C++, there is no deduplication — multiple threads calling `parse()` on the same reader could parse concurrently, causing data races or redundant work.
 
-### ⬜ 186. [db2.cpp] Missing `getRelationRows` validation guards
+### ✅ 186. [db2.cpp] Missing `getRelationRows` validation guards
 - **JS Source**: `src/js/casc/db2.js` lines 45–56
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, the wrapper proxy has special handling for `getRelationRows`. If the table is not loaded, it throws `'Table must be loaded before calling getRelationRows'`. If loaded but rows are `null`, it throws `'Table must be preloaded before calling getRelationRows'`. None of this validation exists in C++. A caller could invoke `getRelationRows()` on an unparsed or un-preloaded reader with no guard.
 
-### ⬜ 187. [db2.cpp] Extra `clearCache()` function not in original JS
+### ✅ 187. [db2.cpp] Extra `clearCache()` function not in original JS
 - **JS Source**: N/A
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ (lines 61–63, db2.h line 57) adds a `clearCache()` function that clears the entire table cache. This function does not exist in the original JS module. While potentially useful, it is an addition not present in the original source.
 
-### ⬜ 188. [db2.cpp] Cache stores raw readers instead of wrappers
+### ✅ 188. [db2.cpp] Cache stores raw readers instead of wrappers
 - **JS Source**: `src/js/casc/db2.js` lines 8, 30–31, 88–89
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, the `cache` Map stores wrapped Proxy objects (`create_wrapper(reader)`) with auto-parse and validation guard behavior. In C++ (line 17), the cache stores raw `std::unique_ptr<db::WDCReader>` instances with none of these behaviors. Cached readers have no protections.
 
 ### ⬜ 189. [dbd-manifest.cpp] `prepareManifest()` returns void instead of bool

@@ -405,13 +405,13 @@ void CASCRemote::loadEncoding() {
 	BufferWrapper encData;
 	if (!encRaw.has_value()) {
 		// Encoding file not cached, download it.
-		logging::write("Encoding for build " + cache->key + " not cached, downloading.");
+		logging::write("Encoding for build " + cache->getKey() + " not cached, downloading.");
 		encData = getDataFile(formatCDNKey(encKey));
 
 		// Store back into cache (no need to block).
 		cache->storeFile(std::string(constants::CACHE::BUILD_ENCODING), encData);
 	} else {
-		logging::write("Encoding for build " + cache->key + " cached locally.");
+		logging::write("Encoding for build " + cache->getKey() + " cached locally.");
 		encData = std::move(encRaw.value());
 	}
 
@@ -442,7 +442,7 @@ void CASCRemote::loadRoot() {
 	BufferWrapper rootData;
 	if (!rootCached.has_value()) {
 		// Root file not cached, download.
-		logging::write("Root file for build " + cache->key + " not cached, downloading.");
+		logging::write("Root file for build " + cache->getKey() + " not cached, downloading.");
 
 		rootData = getDataFile(formatCDNKey(rootKey));
 		cache->storeFile(std::string(constants::CACHE::BUILD_ROOT), rootData);
