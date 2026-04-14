@@ -3,175 +3,254 @@
 	Authors: Kruithne <kruithne@gmail.com>
 	License: MIT
  */
-const { parse_xml } = require('./xml');
-const { get_slot_id_for_wmv_slot } = require('./wow/EquipmentSlots');
+#include "wmv.h"
+#include "xml.h"
+#include "wow/EquipmentSlots.h"
 
-const wmv_parse = (xml_str) => {
-	const parsed = parse_xml(xml_str);
+#include <algorithm>
+#include <format>
+#include <optional>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
 
-	if (!parsed.SavedCharacter)
-		throw new Error('invalid .chr file: missing SavedCharacter root');
+#include <nlohmann/json.hpp>
 
-	const version = parsed.SavedCharacter['@_version'];
+namespace wmv {
 
-	if (version === '2.0')
-		return wmv_parse_v2(parsed.SavedCharacter);
-	else if (version === '1.0')
-		return wmv_parse_v1(parsed.SavedCharacter);
-	else
-		throw new Error(`unsupported .chr version: ${version}`);
+namespace {
+
+// Safely parse an int from a JSON value (string or number).
+// Returns std::nullopt if the value is null, missing, or not parseable (equivalent to JS isNaN).
+std::optional<int> safe_parse_int(const nlohmann::json& val) {
+	if (val.is_null())
+		return std::nullopt;
+
+	if (val.is_number_integer())
+		return val.get<int>();
+
+	if (val.is_string()) {
+		const auto& s = val.get_ref<const std::string&>();
+		try {
+			size_t pos = 0;
+			int result = std::stoi(s, &pos);
+			if (pos > 0)
+				return result;
+		} catch (...) {}
+	}
+
+	return std::nullopt;
+}
+
+// Safely navigate a JSON path, returning null json if any key is missing.
+const nlohmann::json& safe_at(const nlohmann::json& j, const std::string& key) {
+	static const nlohmann::json null_json;
+	if (j.is_object() && j.contains(key))
+		return j[key];
+	return null_json;
+}
+
+// Extract a nested JSON value using chained keys, returning null json if any key is missing.
+const nlohmann::json& safe_navigate(const nlohmann::json& j, std::initializer_list<std::string> keys) {
+	static const nlohmann::json null_json;
+	const nlohmann::json* current = &j;
+	for (const auto& key : keys) {
+		if (!current->is_object() || !current->contains(key))
+			return null_json;
+		current = &(*current)[key];
+	}
+	return *current;
+}
+
+struct RaceGender {
+	int race;
+	int gender;
 };
 
-const wmv_parse_v2 = (data) => {
-	const model_path = data.model?.file?.['@_name'];
-	if (!model_path)
-		throw new Error('invalid .chr file: missing model path');
+RaceGender extract_race_gender_from_path(const std::string& model_path) {
+	static const std::unordered_map<std::string, int> race_map = {
+		{ "human", 1 },
+		{ "orc", 2 },
+		{ "dwarf", 3 },
+		{ "nightelf", 4 },
+		{ "scourge", 5 },
+		{ "tauren", 6 },
+		{ "gnome", 7 },
+		{ "troll", 8 },
+		{ "goblin", 9 },
+		{ "bloodelf", 10 },
+		{ "draenei", 11 },
+		{ "worgen", 22 },
+		{ "pandaren", 24 },
+		{ "nightborne", 27 },
+		{ "highmountaintauren", 28 },
+		{ "voidelf", 29 },
+		{ "lightforgeddraenei", 30 },
+		{ "zandalaritroll", 31 },
+		{ "kultiran", 32 },
+		{ "darkirondwarf", 34 },
+		{ "vulpera", 35 },
+		{ "mechagnome", 37 },
+		{ "dracthyr", 52 },
+		{ "earthen", 84 },
 
-	const { race, gender } = extract_race_gender_from_path(model_path);
+		// todo: 36, MagharOrc
+	};
 
-	const customizations = [];
-	const char_details = data.model?.CharDetails;
+	// lowercase and replace backslashes with forward slashes
+	std::string path_lower = model_path;
+	std::transform(path_lower.begin(), path_lower.end(), path_lower.begin(),
+		[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+	std::replace(path_lower.begin(), path_lower.end(), '\\', '/');
 
-	if (char_details?.customization) {
-		const cust_array = Array.isArray(char_details.customization)
-			? char_details.customization
-			: [char_details.customization];
+	// split by '/'
+	std::vector<std::string> parts;
+	std::istringstream stream(path_lower);
+	std::string part;
+	while (std::getline(stream, part, '/'))
+		parts.push_back(part);
 
-		for (const cust of cust_array) {
-			const option_id = parseInt(cust['@_id']);
-			const choice_id = parseInt(cust['@_value']);
+	std::optional<int> race;
+	std::optional<int> gender;
 
-			if (!isNaN(option_id) && !isNaN(choice_id))
-				customizations.push({ option_id, choice_id });
+	for (const auto& p : parts) {
+		auto it = race_map.find(p);
+		if (it != race_map.end())
+			race = it->second;
+
+		if (p == "male" || (p.find("male") != std::string::npos && p.find("female") == std::string::npos))
+			gender = 0;
+		else if (p == "female" || p.find("female") != std::string::npos)
+			gender = 1;
+	}
+
+	if (!race.has_value() || !gender.has_value())
+		throw std::runtime_error(std::format("unable to determine race/gender from model path: {}", model_path));
+
+	return { race.value(), gender.value() };
+}
+
+// Normalize an item list from JSON: if it's an array, return it; if it's a single object, wrap it.
+std::vector<nlohmann::json> normalize_array(const nlohmann::json& val) {
+	if (val.is_array())
+		return val.get<std::vector<nlohmann::json>>();
+	else
+		return { val };
+}
+
+// Parse the equipment node common to both v1 and v2.
+std::unordered_map<int, int> parse_equipment(const nlohmann::json& data) {
+	std::unordered_map<int, int> equipment;
+
+	const auto& item_node = safe_navigate(data, { "equipment", "item" });
+	if (item_node.is_null())
+		return equipment;
+
+	auto items = normalize_array(item_node);
+
+	for (const auto& item : items) {
+		auto wmv_slot = safe_parse_int(safe_navigate(item, { "slot", "@_value" }));
+		auto item_id = safe_parse_int(safe_navigate(item, { "id", "@_value" }));
+
+		if (!wmv_slot.has_value() || !item_id.has_value() || item_id.value() == 0)
+			continue;
+
+		auto slot_id = wow::get_slot_id_for_wmv_slot(wmv_slot.value());
+		if (slot_id.has_value())
+			equipment[slot_id.value()] = item_id.value();
+	}
+
+	return equipment;
+}
+
+ParseResultV2 wmv_parse_v2(const nlohmann::json& data) {
+	const auto& model_path_val = safe_navigate(data, { "model", "file", "@_name" });
+	if (model_path_val.is_null() || !model_path_val.is_string())
+		throw std::runtime_error("invalid .chr file: missing model path");
+
+	std::string model_path = model_path_val.get<std::string>();
+	auto [race, gender] = extract_race_gender_from_path(model_path);
+
+	std::vector<Customization> customizations;
+	const auto& char_details = safe_navigate(data, { "model", "CharDetails" });
+
+	if (!char_details.is_null() && char_details.contains("customization")) {
+		auto cust_array = normalize_array(char_details["customization"]);
+
+		for (const auto& cust : cust_array) {
+			auto option_id = safe_parse_int(safe_at(cust, "@_id"));
+			auto choice_id = safe_parse_int(safe_at(cust, "@_value"));
+
+			if (option_id.has_value() && choice_id.has_value())
+				customizations.push_back({ option_id.value(), choice_id.value() });
 		}
 	}
 
 	// parse equipment
-	const equipment = {};
-	if (data.equipment?.item) {
-		const items = Array.isArray(data.equipment.item)
-			? data.equipment.item
-			: [data.equipment.item];
-
-		for (const item of items) {
-			const wmv_slot = parseInt(item.slot?.['@_value']);
-			const item_id = parseInt(item.id?.['@_value']);
-
-			if (isNaN(wmv_slot) || isNaN(item_id) || item_id === 0)
-				continue;
-
-			const slot_id = get_slot_id_for_wmv_slot(wmv_slot);
-			if (slot_id)
-				equipment[slot_id] = item_id;
-		}
-	}
+	auto equipment = parse_equipment(data);
 
 	return {
 		race,
 		gender,
-		customizations,
-		equipment,
-		model_path
+		std::move(customizations),
+		std::move(equipment),
+		std::move(model_path)
 	};
-};
+}
 
-const wmv_parse_v1 = (data) => {
-	const model_path = data.model?.file?.['@_name'];
-	if (!model_path)
-		throw new Error('invalid .chr file: missing model path');
+ParseResultV1 wmv_parse_v1(const nlohmann::json& data) {
+	const auto& model_path_val = safe_navigate(data, { "model", "file", "@_name" });
+	if (model_path_val.is_null() || !model_path_val.is_string())
+		throw std::runtime_error("invalid .chr file: missing model path");
 
-	const { race, gender } = extract_race_gender_from_path(model_path);
+	std::string model_path = model_path_val.get<std::string>();
+	auto [race, gender] = extract_race_gender_from_path(model_path);
 
-	const char_details = data.model?.CharDetails;
-	const legacy_values = {
-		skin_color: parseInt(char_details?.skinColor?.['@_value'] ?? '0'),
-		face_type: parseInt(char_details?.faceType?.['@_value'] ?? '0'),
-		hair_color: parseInt(char_details?.hairColor?.['@_value'] ?? '0'),
-		hair_style: parseInt(char_details?.hairStyle?.['@_value'] ?? '0'),
-		facial_hair: parseInt(char_details?.facialHair?.['@_value'] ?? '0')
+	const auto& char_details = safe_navigate(data, { "model", "CharDetails" });
+
+	auto get_legacy_value = [&](const std::string& key) -> int {
+		const auto& val = safe_navigate(char_details, { key, "@_value" });
+		auto parsed = safe_parse_int(val);
+		return parsed.value_or(0);
 	};
+
+	LegacyValues legacy_values;
+	legacy_values.skin_color = get_legacy_value("skinColor");
+	legacy_values.face_type = get_legacy_value("faceType");
+	legacy_values.hair_color = get_legacy_value("hairColor");
+	legacy_values.hair_style = get_legacy_value("hairStyle");
+	legacy_values.facial_hair = get_legacy_value("facialHair");
 
 	// parse equipment (v1 also has equipment node)
-	const equipment = {};
-	if (data.equipment?.item) {
-		const items = Array.isArray(data.equipment.item)
-			? data.equipment.item
-			: [data.equipment.item];
-
-		for (const item of items) {
-			const wmv_slot = parseInt(item.slot?.['@_value']);
-			const item_id = parseInt(item.id?.['@_value']);
-
-			if (isNaN(wmv_slot) || isNaN(item_id) || item_id === 0)
-				continue;
-
-			const slot_id = get_slot_id_for_wmv_slot(wmv_slot);
-			if (slot_id)
-				equipment[slot_id] = item_id;
-		}
-	}
+	auto equipment = parse_equipment(data);
 
 	return {
 		race,
 		gender,
 		legacy_values,
-		equipment,
-		model_path
+		std::move(equipment),
+		std::move(model_path)
 	};
-};
+}
 
-const extract_race_gender_from_path = (model_path) => {
-	const race_map = {
-		'human': 1,
-		'orc': 2,
-		'dwarf': 3,
-		'nightelf': 4,
-		'scourge': 5,
-		'tauren': 6,
-		'gnome': 7,
-		'troll': 8,
-		'goblin': 9,
-		'bloodelf': 10,
-		'draenei': 11,
-		'worgen': 22,
-		'pandaren': 24,
-		'nightborne': 27,
-		'highmountaintauren': 28,
-		'voidelf': 29,
-		'lightforgeddraenei': 30,
-		'zandalaritroll': 31,
-		'kultiran': 32,
-		'darkirondwarf': 34,
-		'vulpera': 35,
-		'mechagnome': 37,
-		'dracthyr': 52,
-		'earthen': 84,
+} // anonymous namespace
 
-		// todo: 36, MagharOrc
-	};
+ParseResult wmv_parse(std::string_view xml_str) {
+	auto parsed = parse_xml(xml_str);
 
-	const path_lower = model_path.toLowerCase().replace(/\\/g, '/');
-	const parts = path_lower.split('/');
+	if (!parsed.contains("SavedCharacter"))
+		throw std::runtime_error("invalid .chr file: missing SavedCharacter root");
 
-	let race = null;
-	let gender = null;
+	const auto& saved_char = parsed["SavedCharacter"];
+	std::string version = saved_char.value("@_version", "");
 
-	for (let i = 0; i < parts.length; i++) {
-		const part = parts[i];
+	if (version == "2.0")
+		return wmv_parse_v2(saved_char);
+	else if (version == "1.0")
+		return wmv_parse_v1(saved_char);
+	else
+		throw std::runtime_error(std::format("unsupported .chr version: {}", version));
+}
 
-		if (race_map[part])
-			race = race_map[part];
-
-		if (part === 'male' || part.includes('male') && !part.includes('female'))
-			gender = 0;
-		else if (part === 'female' || part.includes('female'))
-			gender = 1;
-	}
-
-	if (race === null || gender === null)
-		throw new Error(`unable to determine race/gender from model path: ${model_path}`);
-
-	return { race, gender };
-};
-
-module.exports = { wmv_parse };
+} // namespace wmv

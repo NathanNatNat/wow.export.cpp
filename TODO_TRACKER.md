@@ -705,10 +705,10 @@
 - **Status**: Pending
 - **Details**: The entire .cpp file is still raw JavaScript — it is a verbatim copy of updater.js with zero C++ conversion. All three functions (`checkForUpdates`, `applyUpdate`, `launchUpdater`), the module-level `updateManifest` variable, and the `module.exports` line are unconverted. There is no corresponding .h header file. Every line needs to be ported to C++.
 
-### ⬜ 138. [wmv.cpp] Entire file is unconverted JavaScript
+### ✅ 138. [wmv.cpp] Entire file is unconverted JavaScript
 - **JS Source**: `src/js/wmv.js` lines 1–177
-- **Status**: Pending
-- **Details**: The entire .cpp file is still raw JavaScript — it is a verbatim copy of wmv.js with zero C++ conversion. All four functions (`wmv_parse`, `wmv_parse_v2`, `wmv_parse_v1`, `extract_race_gender_from_path`), the `race_map` constant, and the `module.exports` line are unconverted. No .h header file exists.
+- **Status**: Done
+- **Details**: Fully converted to C++. Created wmv.h with structs (Customization, LegacyValues, ParseResultV1, ParseResultV2) and wmv.cpp with all four functions ported. Added to CMakeLists.txt.
 
 ### ⬜ 139. [wowhead.cpp] Entire file is unconverted JavaScript
 - **JS Source**: `src/js/wowhead.js` lines 1–245
