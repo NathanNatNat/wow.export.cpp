@@ -2370,511 +2370,507 @@
 - **Status**: Pending
 - **Details**: JS accessing `uvCoords[idx]` out-of-bounds returns `undefined` → `NaN`, producing no visible lines (safe, just garbage rendering). C++ (lines 71–76) accessing `uvCoords[idx]` out-of-bounds via `operator[]` is undefined behavior (potential crash/corruption). No guard exists for this case.
 
+## UI Visual Fidelity Audit (0/39 ✅)
+
+### ⬜ 463. [app.h] Listbox ROW_SELECTED_U32 color is green (#22b549) instead of blue (#57afe2)
+- **JS Source**: `src/app.css` `.ui-listbox .item.selected` / `.item:hover` (line ~1409)
+- **Status**: Pending
+- **Details**: The CSS specifies that selected listbox items use `background: var(--font-alt)` which is `#57afe2` (blue). The C++ `ROW_SELECTED_U32` at `app.h:109` is `IM_COL32(34, 181, 73, 40)` — a semi-transparent green derived from `#22b549` (the button/nav color). This affects every listbox throughout the application. The selected row should be blue `IM_COL32(87, 175, 226, 255)` to match the CSS, not green. Similarly, the hover state should also be `#57afe2`.
+
+### ⬜ 464. [app.h] Listbox ROW_HOVER_U32 color does not match CSS hover specification
+- **JS Source**: `src/app.css` `.ui-listbox .item:hover` (line ~1411)
+- **Status**: Pending
+- **Details**: The CSS specifies listbox hover as `background: var(--font-alt) !important` which is `#57afe2`. The C++ `ROW_HOVER_U32` at `app.h:107` is `IM_COL32(255, 255, 255, 8)` — a nearly invisible white tint. Should be a visible blue hover highlight matching `#57afe2` (possibly with reduced opacity for hover vs. selected).
+
+### ⬜ 465. [app.h] Slider track color does not match CSS specification
+- **JS Source**: `src/app.css` `.ui-slider` (line ~1307)
+- **Status**: Pending
+- **Details**: The CSS specifies the slider track background as `var(--background-dark)` = `#2c3136` with `border: 1px solid var(--border)`. The C++ `SLIDER_TRACK_U32` at `app.h:117` is `IM_COL32(80, 80, 80, 255)` = `#505050`, which is significantly lighter than the CSS spec `#2c3136` (44, 49, 54). Should be `IM_COL32(44, 49, 54, 255)`.
+
+### ⬜ 466. [app.h] Slider fill color uses green instead of blue
+- **JS Source**: `src/app.css` `.ui-slider .fill` (line ~1315)
+- **Status**: Pending
+- **Details**: The CSS specifies the slider fill as `background: var(--font-alt)` = `#57afe2` (blue). The C++ slider at `slider.cpp:122` uses `app::theme::BUTTON_BASE_U32` = `#22b549` (green). The fill color should use `FONT_ALT_U32` = `#57afe2` instead of `BUTTON_BASE_U32`.
+
+### ⬜ 467. [app.h] Slider handle idle color does not match CSS
+- **JS Source**: `src/app.css` `.ui-slider .handle` (line ~1319)
+- **Status**: Pending
+- **Details**: The CSS specifies the slider handle as `background: var(--border)` = `#6c757d`. The C++ `SLIDER_THUMB_U32` at `app.h:119` is `IM_COL32(200, 200, 200, 200)` = light gray with reduced opacity. Should be `IM_COL32(108, 117, 125, 255)` to match `#6c757d`.
+
+### ⬜ 468. [app.h] Slider handle hover color does not match CSS
+- **JS Source**: `src/app.css` `.ui-slider .handle:hover` (line ~1329)
+- **Status**: Pending
+- **Details**: The CSS specifies the slider handle hover as `background: var(--font-alt)` = `#57afe2` (blue). The C++ `SLIDER_THUMB_ACTIVE_U32` at `app.h:120` is `IM_COL32(255, 255, 255, 220)` = white. Should be `IM_COL32(87, 175, 226, 255)` to match `#57afe2`.
+
+### ⬜ 469. [app.h] Data table selected row color is gray instead of blue
+- **JS Source**: `src/app.css` `.ui-datatable tr.selected` (line ~1387)
+- **Status**: Pending
+- **Details**: The CSS specifies `background: var(--font-alt) !important` = `#57afe2` for selected data table rows. The C++ `TABLE_ROW_SELECTED_U32` at `app.h:127` is `IM_COL32(100, 100, 100, 100)` — a semi-transparent gray. Should be `IM_COL32(87, 175, 226, 255)` to match `#57afe2`.
+
+### ⬜ 470. [app.h] Data table hover row color is gray instead of blue
+- **JS Source**: `src/app.css` `.ui-datatable tbody tr:hover` (line ~1389)
+- **Status**: Pending
+- **Details**: The CSS specifies `background: var(--font-alt)` = `#57afe2` for hovered data table rows. The C++ `TABLE_ROW_HOVER_U32` at `app.h:126` is `IM_COL32(100, 100, 100, 255)` — a solid gray. Should be `IM_COL32(87, 175, 226, 255)` to match `#57afe2`.
+
+### ⬜ 471. [listbox.cpp] Status bar missing background color and border-radius styling
+- **JS Source**: `src/app.css` `.list-container .list-status` (line ~2459–2470)
+- **Status**: Pending
+- **Details**: The CSS specifies the listbox status bar has `background: #1f1f20`, `height: 27px`, `border-radius` bottom 10px, `font-weight: bold`, `padding-left: 10px`, `padding-top: 3px`. The C++ status bar rendering at `listbox.cpp:775–812` uses plain `ImGui::Text()` calls with no background rectangle, no border-radius, no specific padding, and no bold weight. The status bar should be rendered as a styled bar below the listbox with the specified background and rounded bottom corners.
+
+### ⬜ 472. [slider.cpp] Slider handle dimensions do not match CSS specification
+- **JS Source**: `src/app.css` `.ui-slider .handle` (line ~1319–1328)
+- **Status**: Pending
+- **Details**: The CSS specifies the slider handle as `width: 10px`, `height: 28px`, centered vertically with `transform: translateY(-50%)`, and `box-shadow: black 0 0 8px`. The C++ slider implementation should be verified to match these exact dimensions. The CSS also specifies `z-index: 1` for the handle above the fill.
+
+### ⬜ 473. [context-menu.cpp] Missing background color, border, and shadow styling
+- **JS Source**: `src/app.css` `.context-menu` (line ~1259–1287)
+- **Status**: Pending
+- **Details**: The CSS specifies the context menu has `background: #232323`, `border: 1px solid var(--border)` (#6c757d), `box-shadow: black 0 0 3px 0`. The C++ context-menu component does not apply these styles explicitly — it relies on ImGui's default popup styling. Items should have `padding: 8px`, `border-bottom: 1px solid var(--border)`, and hover background `#353535`. These CSS-specific styles are not replicated in the ImGui popup.
+
+### ⬜ 474. [combobox.cpp] Dropdown popup missing specific CSS styling
+- **JS Source**: `src/app.css` `.ui-combobox ul` (line ~1294–1306)
+- **Status**: Pending
+- **Details**: The CSS specifies the combobox dropdown has `background: #232323`, `border: 1px solid var(--border)`, `box-shadow: black 0 0 3px 0`. Options have `border-bottom: 1px solid var(--border)`, `padding: 10px 15px`, and hover `background: #353535`. The C++ implementation relies on ImGui's default Selectable/ListBox styling, not these specific CSS colors and spacing.
+
+### ⬜ 475. [tab_fonts.cpp] Glyph cell size is 24×24px instead of CSS-specified 32×32px
+- **JS Source**: `src/app.css` `.font-glyph-cell` (line ~2303–2314)
+- **Status**: Pending
+- **Details**: The CSS specifies `.font-glyph-cell` as `width: 32px; height: 32px; font-size: 20px; background: var(--background-alt); border-radius: 3px`. The C++ implementation at `tab_fonts.cpp:231` uses `ImVec2(24, 24)` for glyph selectables — 8px smaller than the CSS spec. Should be `ImVec2(32, 32)`.
+
+### ⬜ 476. [tab_fonts.cpp] Glyph cells missing background color and hover color
+- **JS Source**: `src/app.css` `.font-glyph-cell` and `.font-glyph-cell:hover` (lines ~2303–2317)
+- **Status**: Pending
+- **Details**: The CSS specifies glyph cells have `background: var(--background-alt)` = `#3c4147` and hover `background: var(--font-alt)` = `#57afe2`. The C++ uses ImGui's default Selectable styling, which does not apply these specific background colors. Each cell should have the `#3c4147` background and `#57afe2` hover.
+
+### ⬜ 477. [tab_fonts.cpp] Font preview input area missing CSS styling
+- **JS Source**: `src/app.css` `.font-preview-input` (lines ~2329–2352)
+- **Status**: Pending
+- **Details**: The CSS specifies the font preview input as `height: 120px`, `font-size: 32px`, `background: var(--background-dark)` = `#2c3136`, `border: 1px solid var(--border)`, and placeholder color `#888`. The C++ `InputTextMultiline` at `tab_fonts.cpp:256–258` uses the remaining available height (not fixed 120px), default ImGui font size (not 32px), and default styling. The preview input needs explicit height constraint and font size override.
+
+### ⬜ 478. [tab_fonts.cpp] Character grid does not fill correct vertical proportion
+- **JS Source**: `src/app.css` `.font-character-grid` (lines ~2286–2301)
+- **Status**: Pending
+- **Details**: The CSS specifies the character grid as `position: absolute; top: 0; bottom: 140px` — meaning it fills all space except the bottom 140px reserved for the preview input container. The C++ uses `ImGui::GetContentRegionAvail().y * 0.5f` (50% of height) at `tab_fonts.cpp:218`, which does not match the CSS layout. The grid should fill the available space minus 140px (120px input + 20px container spacing).
+
+### ⬜ 479. [tab_text.cpp] Text preview uses TextWrapped instead of monospace pre with scroll
+- **JS Source**: `src/app.css` `#tab-text .preview-background pre` (lines ~2252–2259)
+- **Status**: Pending
+- **Details**: The CSS specifies the text preview uses a `<pre>` element with `overflow: scroll`, `padding: 15px`, `position: absolute` (full container), and `user-select: text`. The C++ at `tab_text.cpp:174` uses `ImGui::TextWrapped()` which wraps text (pre does not wrap by default), has no explicit 15px padding, and no scrollable region. Should use a scrollable child window with monospace/non-wrapping text and proper padding.
+
+### ⬜ 480. [screen_settings.cpp] Settings content bounded at 800px instead of full-screen
+- **JS Source**: `src/app.css` `#config-wrapper` / `#config` (lines ~1221–1245)
+- **Status**: Pending
+- **Details**: The CSS specifies `#config-wrapper` as `position: absolute` (full screen) and `#config` as `flex: 1` filling the available width. The C++ at `screen_settings.cpp:160` caps the content width to `800.0f` pixels, which means the settings page doesn't fill the full window width as the original JS app does. The settings content should span the full available width.
+
+### ⬜ 481. [screen_settings.cpp] Button bar layout is left-to-right instead of CSS row-reverse
+- **JS Source**: `src/app.css` `#config-buttons` (lines ~1237–1245)
+- **Status**: Pending
+- **Details**: The CSS specifies `#config-buttons` as `display: flex; flex-direction: row-reverse; padding: 15px 0; border-top: 1px solid var(--border); background: var(--background)`. The C++ at `screen_settings.cpp:483–493` renders buttons left-to-right using `ImGui::Button()` + `ImGui::SameLine()`, but the CSS uses `row-reverse` so "Apply" appears on the right and "Reset to Defaults" on the far left. Also missing: explicit 15px vertical padding, border-top, background color, and the Reset button's `margin-right: auto; margin-left: 20px` alignment.
+
+### ⬜ 482. [screen_settings.cpp] Section headings use SeparatorText instead of styled h1 at 18px
+- **JS Source**: `src/app.css` `#config > div h1` (line ~1232)
+- **Status**: Pending
+- **Details**: The CSS specifies section headings as `<h1>` with `font-size: 18px`. The C++ uses `ImGui::SeparatorText()` calls which render text with separator lines on either side — visually different from the original's plain bold heading. The headings should be rendered as 18px bold text without separator lines to match the original.
+
+### ⬜ 483. [screen_settings.cpp] Missing 20px section padding between setting groups
+- **JS Source**: `src/app.css` `#config > div` (line ~1230)
+- **Status**: Pending
+- **Details**: The CSS specifies each settings section (`#config > div`) has `padding: 20px` (with bottom 0). The C++ settings implementation does not add explicit 20px padding between sections — ImGui's default spacing is used instead, which is typically smaller. Each group of settings should have 20px padding around it.
+
+### ⬜ 484. [app.cpp] Crash screen missing exclamation-triangle icon before heading
+- **JS Source**: `src/app.css` `#crash-screen h1` (lines ~1212–1215), `src/index.html` noscript block
+- **Status**: Pending
+- **Details**: The CSS specifies the crash screen h1 has `background: url(./fa-icons/triangle-exclamation-white.svg) no-repeat left center; padding-left: 50px` — showing a warning triangle icon to the left of the heading text. The C++ `renderCrashScreen()` at `app.cpp:258–288` renders the heading as plain text without any icon. A Font Awesome warning triangle icon should precede the heading.
+
+### ⬜ 485. [tab_maps.cpp] Map viewer missing box-shadow styling
+- **JS Source**: `src/app.css` `.ui-map-viewer` (lines ~1333–1345)
+- **Status**: Pending
+- **Details**: The CSS specifies the map viewer has `box-shadow: black 0 0 3px 0` and `border: 1px solid var(--border)`. The C++ map viewer component does not render box-shadow effects. While ImGui doesn't natively support box-shadow, a dark border or shadow rectangle could simulate this effect.
+
+### ⬜ 486. [tab_maps.cpp] Map viewer checkerboard pattern size not verified
+- **JS Source**: `src/app.css` `.ui-map-viewer` background (lines ~1334–1338)
+- **Status**: Pending
+- **Details**: The CSS specifies the map viewer checkerboard pattern as `background-size: 30px 30px` using colors `--trans-check-a: #303030` and `--trans-check-b: #272727`. While the C++ uses the correct colors (`TRANS_CHECK_A_U32` and `TRANS_CHECK_B_U32`), the checkerboard tile size should be verified to be 30×30 pixels to match the CSS.
+
+### ⬜ 487. [tab_zones.cpp] Zone viewer missing border and box-shadow styling
+- **JS Source**: `src/app.css` `.ui-map-viewer` (lines ~1333–1345)
+- **Status**: Pending
+- **Details**: Same as the map viewer — the zone viewer canvas area should have `border: 1px solid var(--border)` and `box-shadow: black 0 0 3px 0`. The C++ implementation is missing these border/shadow effects.
+
+### ⬜ 488. [tab_help.cpp] Not ported to C++ — still JavaScript
+- **JS Source**: `src/js/modules/tab_help.js` (entire file)
+- **Status**: Pending
+- **Details**: The help tab (`tab_help.cpp`) is still a Node.js/JavaScript file, not converted to C++. The CSS specifies a `#help-screen` grid layout with `grid-template-columns: 1fr 1fr`, `gap: 20px`, article items with `padding: 15px 20px`, `background: var(--background-dark)`, `border-radius: 8px`, `border: 1px solid white`, title at `18px`, and tags at `13px` with `opacity: 0.7`. The entire tab needs conversion to C++ with ImGui.
+
+### ⬜ 489. [tab_blender.cpp] Not ported to C++ — still JavaScript
+- **JS Source**: `src/js/modules/tab_blender.js` (entire file)
+- **Status**: Pending
+- **Details**: The Blender addon tab (`tab_blender.cpp`) is still a Node.js/JavaScript file. It provides UI for checking/installing/updating the Blender addon (3 buttons + status messages). Needs full C++ conversion.
+
+### ⬜ 490. [tab_changelog.cpp] Not ported to C++ — still JavaScript
+- **JS Source**: `src/js/modules/tab_changelog.js` (entire file)
+- **Status**: Pending
+- **Details**: The changelog tab (`tab_changelog.cpp`) is still a Node.js/JavaScript file. It reads and displays a Markdown changelog file using the `markdown-content` component. Needs full C++ conversion.
+
+### ⬜ 491. [checkboxlist.cpp] Selected item color is green instead of CSS blue
+- **JS Source**: `src/app.css` `.ui-checkboxlist .item.selected` (same styling as `.ui-listbox .item.selected`)
+- **Status**: Pending
+- **Details**: The checkboxlist at `checkboxlist.cpp:224` uses `app::theme::ROW_SELECTED_U32` which is `IM_COL32(34, 181, 73, 40)` — green. The CSS `.ui-checkboxlist` shares the same styling as `.ui-listbox` where selected items use `background: var(--font-alt)` = `#57afe2` (blue). Fix is the same as #525 — once `ROW_SELECTED_U32` is corrected, checkboxlist will also be fixed.
+
+### ⬜ 492. [markdown-content.cpp] Missing CSS background, border-radius, and heading font sizes
+- **JS Source**: `src/app.css` `.markdown-content` (lines ~458–530)
+- **Status**: Pending
+- **Details**: The CSS specifies `.markdown-content` has `background: rgb(0 0 0 / 22%)`, `border-radius: 10px`, `padding: 20px`, `font-size: 20px`. Headings: h1 `1.8em`, h2 `1.5em`, h3 `1.2em` (all bold). Code blocks: `background: rgba(0,0,0,0.3)`, `padding: 2px 6px`, `border-radius: 3px`. The C++ markdown-content component should apply these specific styles when rendering markdown elements.
+
+### ⬜ 493. [tab_videos.cpp] Video player area rendering not implemented
+- **JS Source**: `src/js/modules/tab_videos.js` (entire render function)
+- **Status**: Pending
+- **Details**: The videos tab should display a video list and a streaming video player area. The C++ implementation has HTTP streaming infrastructure but the actual video player display area (canvas/viewport for video frames) may not be fully rendered in the UI. The video playback area should match the reference screenshot layout.
+
+### ⬜ 494. [app.h] Missing FONT_DISABLED color constant referenced by character tab
+- **JS Source**: `src/app.css` `.slot-empty` `color: var(--font-disabled)` (line ~2938)
+- **Status**: Pending
+- **Details**: The CSS references a `--font-disabled` variable for empty equipment slot text (italic, grayed out). No corresponding `FONT_DISABLED` constant exists in `app.h`. This color should be defined (likely a muted gray similar to `--font-faded` or darker) and used for disabled/empty state text.
+
+### ⬜ 495. [itemlistbox.cpp] Item icon border color should be #8a8a8a
+- **JS Source**: `src/app.css` `.item-icon` `border: 1px solid #8a8a8a` (line ~1537)
+- **Status**: Pending
+- **Details**: The CSS specifies item icons have `border: 1px solid #8a8a8a` (138, 138, 138). The C++ itemlistbox renders item icons but should verify the border color matches this specific gray value rather than using a different theme color.
+
+### ⬜ 496. [itemlistbox.cpp] Item row height should be 46px with 1.2em font size
+- **JS Source**: `src/app.css` `#tab-items #listbox-items .item` (lines ~1520–1525)
+- **Status**: Pending
+- **Details**: The CSS specifies items tab listbox items have `height: 46px`, `font-size: 1.2em`, and `display: flex; align-items: center`. This is taller than the standard 26px listbox item height. The C++ itemlistbox should use 46px row height with the larger font size for the items tab, matching the reference screenshot which shows larger item entries with icons.
+
+### ⬜ 497. [data-table.cpp] Table header padding should be 10px
+- **JS Source**: `src/app.css` `.ui-datatable th` (lines ~1374–1377)
+- **Status**: Pending
+- **Details**: The CSS specifies data table headers have `border: 1px solid var(--border)` and `padding: 10px`. The C++ data-table should verify that header cells have proper 10px padding and visible border styling matching the CSS specification.
+
+### ⬜ 498. [data-table.cpp] Table row height should be 32px
+- **JS Source**: `src/app.css` `.ui-datatable tr` (lines ~1366–1370)
+- **Status**: Pending
+- **Details**: The CSS specifies data table rows have `min-height: 32px; max-height: 32px; height: 32px` — a fixed 32px row height. The C++ implementation should ensure rows are exactly 32px tall to match the original layout.
+
+### ⬜ 499. [tab_characters.cpp] Character tab missing tab-control styling
+- **JS Source**: `src/app.css` `.tab-control` and `.tab-control span` (lines ~2645–2654)
+- **Status**: Pending
+- **Details**: The CSS specifies the character tab's panel selector (Export/Textures/Settings) uses `.tab-control` with `display: flex`, spans at `font-size: 20px`, `padding: 5px`, background `var(--form-button-disabled)` (#696969 gray) for unselected and `var(--form-button-hover)` (#2665d2 blue) for selected, with `border-radius: 10px` on first/last children. The C++ implementation should verify these tab control styles match the reference screenshot appearance.
+
+### ⬜ 500. [tab_characters.cpp] Character equipment slot styling needs CSS match
+- **JS Source**: `src/app.css` `.equipment-slot` (lines ~2913–2927)
+- **Status**: Pending
+- **Details**: The CSS specifies equipment slots as `display: flex; justify-content: space-between; padding: 6px 12px; background: var(--background-dark); border: 1px solid var(--border); border-radius: 8px; font-size: 13px`. Hover: `background: var(--background-alt)`. Labels use `color: var(--font-alt)` (#57afe2). The C++ implementation should match these exact sizes, colors, and border-radius values.
+
+### ⬜ 501. [tab_characters.cpp] Character import buttons at bottom missing specific CSS styling
+- **JS Source**: `src/app.css` `.character-import-buttons` (lines ~2985–3065)
+- **Status**: Pending
+- **Details**: The CSS specifies the bottom character buttons (Battle.net, WMV, Wowhead, Save, Quick Save, Import JSON, Export JSON) with specific colors — BNet: `#148eff`, WMV: `#d22c1e`, Wowhead: `#e02020`, Save: `#5865f2`, Quick Save: `#22b549`, Import JSON: `#e67e22`, Export JSON: `#22b549`. Each has icon images as backgrounds. The C++ should verify these specific brand colors and icon backgrounds are applied.
 ---
 
 ## 🔵 Exporting
 
 ## src/js/3D/exporters/ Audit (0/39 ✅)
 
-### ⬜ 463. [ADTExporter.cpp] `loadTexture` uses `blp.width`/`blp.height` instead of `blp.scaledWidth`/`blp.scaledHeight`
+### ⬜ 502. [ADTExporter.cpp] `loadTexture` uses `blp.width`/`blp.height` instead of `blp.scaledWidth`/`blp.scaledHeight`
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 63
 - **Status**: Pending
 - **Details**: JS `loadTexture` calls `gl.texImage2D(..., blp.scaledWidth, blp.scaledHeight, ...)`. C++ (line 112) uses `blp.width`/`blp.height`. If a BLP's scaled dimensions differ from raw dimensions, the GL texture will have wrong dimensions, causing rendering mismatches.
 
-### ⬜ 464. [ADTExporter.cpp] `useADTSets` flag check — `model & 0x80` vs `model.flags & 0x80`
+### ⬜ 503. [ADTExporter.cpp] `useADTSets` flag check — `model & 0x80` vs `model.flags & 0x80`
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1301
 - **Status**: Pending
 - **Details**: JS does `const useADTSets = model & 0x80` — bitwise-AND on the *object* itself, which always evaluates to `0` in JS since `ToInt32(object)` is `0`, making `useADTSets` always falsy. C++ (line 1569) correctly reads `model.flags & 0x80`, which can produce `true`. This means C++ can produce different doodad-set behaviour for WMO models.
 
-### ⬜ 465. [ADTExporter.cpp] Cancellation returns populated `ADTExportResult` instead of `undefined`
+### ⬜ 504. [ADTExporter.cpp] Cancellation returns populated `ADTExportResult` instead of `undefined`
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 623, 1025, 1252, 1537
 - **Status**: Pending
 - **Details**: JS `return;` returns `undefined` on cancellation. C++ (lines 811, 1228, 1494, 1904) does `return out;` returning a populated `ADTExportResult`. Callers checking for cancellation may behave differently.
 
-### ⬜ 466. [ADTExporter.cpp] Liquid JSON export uses explicit fields — JS uses spread operator
+### ⬜ 505. [ADTExporter.cpp] Liquid JSON export uses explicit fields — JS uses spread operator
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1428–1438
 - **Status**: Pending
 - **Details**: JS uses `{ ...instance, worldPosition, terrainChunkPosition }` and `{ ...chunk, instances }` to copy *all* fields. C++ (lines 1737–1772) only serializes explicitly listed fields (`chunkIndex`, `instanceIndex`, `liquidType`, etc. for instance; `instances` and `attributes` for chunk). Any additional instance or chunk fields not explicitly listed are lost in C++ output.
 
-### ⬜ 467. [ADTExporter.cpp] Minimap export uses `blp.width` for scaling — JS uses `blp.scaledWidth`
+### ⬜ 506. [ADTExporter.cpp] Minimap export uses `blp.width` for scaling — JS uses `blp.scaledWidth`
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 873, 877
 - **Status**: Pending
 - **Details**: JS calls `blp.toCanvas(0b0111)` and then uses `blp.scaledWidth` for the scale factor. C++ (lines 1050–1051) calls `blp.toUInt8Array(0, 0b0111)` and uses `blp.width`. If `scaledWidth != width`, the scale factor and resulting minimap resolution will differ.
 
-### ⬜ 468. [ADTExporter.cpp] GL index buffer uses `uint32` — JS uses `Uint16`
+### ⬜ 507. [ADTExporter.cpp] GL index buffer uses `uint32` — JS uses `Uint16`
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1117–1118
 - **Status**: Pending
 - **Details**: JS creates `new Uint16Array(indices)` and uses `gl.UNSIGNED_SHORT`. C++ (lines 1322–1323) uses `uint32_t` data with `GL_UNSIGNED_INT`. Functionally works but the GL data type and memory layout differ; doubles index buffer memory usage.
 
-### ⬜ 469. [ADTExporter.cpp] Doodad/model `ScaleFactor` missing fallback for undefined scale
+### ⬜ 508. [ADTExporter.cpp] Doodad/model `ScaleFactor` missing fallback for undefined scale
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1270
 - **Status**: Pending
 - **Details**: JS uses `model.scale !== undefined ? model.scale / 1024 : 1` — defaults to `1` if `scale` is absent. C++ (lines 1516/1525) always computes `model.scale / 1024.0f` with no fallback. If `scale` is `0`, C++ uses `0` while JS would use `1`.
 
-### ⬜ 470. [ADTExporter.cpp] `texParams` guard only checks bounds, not element truthiness
+### ⬜ 509. [ADTExporter.cpp] `texParams` guard only checks bounds, not element truthiness
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 639
 - **Status**: Pending
 - **Details**: JS checks `if (texParams && texParams[i])` — also verifies the element is truthy (not `0`/`null`/`undefined`). C++ (line 785) only checks `if (i < texParams.size())` — a default-constructed element at index `i` passes the check. This could cause different behaviour if texture parameters contain zero/null entries.
 
-### ⬜ 471. [ADTExporter.cpp] `STB_IMAGE_RESIZE_IMPLEMENTATION` defined in .cpp — potential ODR violation
+### ⬜ 510. [ADTExporter.cpp] `STB_IMAGE_RESIZE_IMPLEMENTATION` defined in .cpp — potential ODR violation
 - **JS Source**: N/A (C++-specific)
 - **Status**: Pending
 - **Details**: C++ line 10 defines `#define STB_IMAGE_RESIZE_IMPLEMENTATION` before `#include <stb_image_resize2.h>`. If another translation unit also defines this macro, it will cause duplicate-symbol linker errors. This implementation define should be in exactly one `.cpp` file in the project.
 
-### ⬜ 472. [ADTExporter.cpp] Unique texture ID ordering — `Set` insertion-order vs `std::set` sorted
+### ⬜ 511. [ADTExporter.cpp] Unique texture ID ordering — `Set` insertion-order vs `std::set` sorted
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 921
 - **Status**: Pending
 - **Details**: JS uses `[...new Set(materialIDs.filter(...))]` which preserves insertion order. C++ (lines 1101–1105) uses `std::set<uint32_t>` which sorts numerically. Texture array indices in the output will differ. Since the mapping is self-consistent, rendering should be identical but debug output or derived data will vary.
 
-### ⬜ 473. [M2Exporter.cpp] `addURITexture()` parameter semantics changed
+### ⬜ 512. [M2Exporter.cpp] `addURITexture()` parameter semantics changed
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59–61
 - **Status**: Pending
 - **Details**: JS `addURITexture(out, dataURI)` takes a string name and a base64 data URI, storing string→string in a Map. C++ takes `uint32_t textureType` and a pre-decoded `BufferWrapper pngData` (header line 123). The key type changes from arbitrary string to uint32_t. JS decodes the base64 inside `exportTextures`; C++ requires callers to decode before calling.
 
-### ⬜ 474. [M2Exporter.cpp] `dataTextures` map key type changed from string to uint32_t
+### ⬜ 513. [M2Exporter.cpp] `dataTextures` map key type changed from string to uint32_t
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 35
 - **Status**: Pending
 - **Details**: JS `this.dataTextures = new Map()` stores string keys (the `out` parameter from `addURITexture`). C++ (header line 207) uses `std::map<uint32_t, BufferWrapper>`. The JS API accepts any string key; C++ restricts to uint32_t. This constrains the API and changes lookup semantics.
 
-### ⬜ 475. [M2Exporter.cpp] Data textures silently dropped from GLB/GLTF output
+### ⬜ 514. [M2Exporter.cpp] Data textures silently dropped from GLB/GLTF output
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 361, 366
 - **Status**: Pending
 - **Details**: JS passes `result.texture_buffers` (with `'data-5'`-style string keys) to `gltf.setTextureBuffers()` and `gltf.setTextureMap()`. C++ (lines 610–636) attempts to convert string keys to `uint32_t` via `std::stoul()`; entries with "data-" prefix keys are silently dropped in the catch block. Data textures will NOT be embedded in GLB output in C++.
 
-### ⬜ 476. [M2Exporter.cpp] `posedVertices` empty-vs-null check differs
+### ⬜ 515. [M2Exporter.cpp] `posedVertices` empty-vs-null check differs
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 738
 - **Status**: Pending
 - **Details**: JS uses `this.posedVertices ?? this.m2.vertices` — nullish coalescing; an empty array `[]` is truthy and WOULD be used. C++ (line 1038) uses `!posedVertices.empty() ? posedVertices : m2->vertices` — an empty vector falls through to m2 data. If `setPosedGeometry()` is called with empty arrays, JS uses the empty arrays while C++ falls back to bind pose.
 
-### ⬜ 477. [M2Exporter.cpp] `getSkin()` return not null-checked in equipment helper methods
+### ⬜ 516. [M2Exporter.cpp] `getSkin()` return not null-checked in equipment helper methods
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 420–421, 559–561, 683–685
 - **Status**: Pending
 - **Details**: JS null-checks the skin result: `const skin = await m2.getSkin(0); if (!skin) return;`. C++ `_addEquipmentToGLTF` (line 700), `_exportEquipmentToOBJ` (line 847), and `_exportEquipmentToSTL` (line 980) all take a reference directly from `getSkin(0)` with no null/validity check. If `getSkin` fails to return valid data, C++ has undefined behaviour.
 
-### ⬜ 478. [M2Exporter.cpp] Meta JSON `subMeshes` serialization — explicit fields vs JS spread
+### ⬜ 517. [M2Exporter.cpp] Meta JSON `subMeshes` serialization — explicit fields vs JS spread
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 794
 - **Status**: Pending
 - **Details**: JS uses `Object.assign({ enabled: subMeshEnabled }, skin.subMeshes[i])` which copies ALL submesh properties. C++ (lines 1102–1117) manually serializes specific SubMesh fields. If the SubMesh struct has additional fields not explicitly listed, they will be missing from the JSON output.
 
-### ⬜ 479. [M2Exporter.cpp] Meta JSON `textures` entry serialization — missing fields vs JS spread
+### ⬜ 518. [M2Exporter.cpp] Meta JSON `textures` entry serialization — missing fields vs JS spread
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 804–808
 - **Status**: Pending
 - **Details**: JS uses `Object.assign({ fileNameInternal, fileNameExternal, mtlName }, texture)` which includes ALL texture properties. C++ (lines 1127–1138) only serializes `fileDataID`, `flags`, `fileNameInternal`, `fileNameExternal`, `mtlName`. Any extra JS texture properties (e.g., `type`) not listed are missing from C++ JSON.
 
-### ⬜ 480. [M2Exporter.cpp] `fileNameInternal` returns empty string instead of null for unknown files
+### ⬜ 519. [M2Exporter.cpp] `fileNameInternal` returns empty string instead of null for unknown files
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 805
 - **Status**: Pending
 - **Details**: JS `listfile.getByID(texture.fileDataID)` returns `undefined` when not found. C++ `casc::listfile::getByID(texture.fileDataID)` returns empty string. JSON output will have `"fileNameInternal": ""` instead of `null`/absent.
 
-### ⬜ 481. [M2Exporter.cpp] Data texture fileDataIDs zeroed in manifests
+### ⬜ 520. [M2Exporter.cpp] Data texture fileDataIDs zeroed in manifests
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 747–748, 997–998
 - **Status**: Pending
 - **Details**: JS pushes `fileDataID: texFileDataID` to file manifests where `texFileDataID` can be a string like `'data-5'` for data textures. C++ (lines 1050–1052, 1367–1368) tries `std::stoul(texKey)` which fails for "data-" prefix keys and falls through to `texID=0`. Data texture manifest entries lose their identifiers.
 
-### ⬜ 482. [M2Exporter.cpp] Constructor takes extra `casc` parameter not in JS
+### ⬜ 521. [M2Exporter.cpp] Constructor takes extra `casc` parameter not in JS
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 31
 - **Status**: Pending
 - **Details**: JS constructor is `constructor(data, variantTextures, fileDataID)` — 3 params; uses `core.view.casc` inline. C++ (header line 103) is `M2Exporter(BufferWrapper data, ..., casc::CASC* casc)` — 4 params; stores `casc` as member. Callers must pass CASC source explicitly.
 
-### ⬜ 483. [CharacterExporter.cpp] `applyExternalBoneMatrices` called unconditionally — JS guards with `if (renderer.applyExternalBoneMatrices)`
+### ⬜ 522. [CharacterExporter.cpp] `applyExternalBoneMatrices` called unconditionally — JS guards with `if (renderer.applyExternalBoneMatrices)`
 - **JS Source**: `src/js/3D/exporters/CharacterExporter.js` lines 272–273
 - **Status**: Pending
 - **Details**: JS checks `if (renderer.applyExternalBoneMatrices)` before calling the method (duck-type guard). C++ (line 311) calls `renderer->applyExternalBoneMatrices(...)` unconditionally. If the renderer does not implement this method (or it's not defined), C++ would fail at compile time; at runtime, if the method is a no-op, behaviour matches but the guard pattern differs.
 
-### ⬜ 484. [CharacterExporter.cpp] `remap_bone_indices` truncates remap values above 255
+### ⬜ 523. [CharacterExporter.cpp] `remap_bone_indices` truncates remap values above 255
 - **JS Source**: `src/js/3D/exporters/CharacterExporter.js` lines 126–138
 - **Status**: Pending
 - **Details**: JS creates `new Uint8Array(bone_indices.length)` and sets `remapped[i] = remap_table[original_idx]`. JS Uint8Array automatically truncates to 0–255 but the remap_table values could be larger. C++ (line 148) casts `static_cast<uint8_t>(remap_table[original_idx])` which also truncates; the remap_table is `std::vector<int16_t>` which can hold negative values that would wrap differently than JS's unsigned truncation.
 
-### ⬜ 485. [CharacterExporter.h] `EquipmentGeometry::uv`/`uv2` are raw pointers — JS returns direct references
+### ⬜ 524. [CharacterExporter.h] `EquipmentGeometry::uv`/`uv2` are raw pointers — JS returns direct references
 - **JS Source**: `src/js/3D/exporters/CharacterExporter.js` lines 314–321
 - **Status**: Pending
 - **Details**: JS `_process_equipment_renderer` returns `{ uv: m2.uv, uv2: m2.uv2 }` which are direct references to the model's UV arrays. C++ (header lines 52–53) stores `const std::vector<float>* uv` and `const std::vector<float>* uv2` — raw pointers to the model data. If the underlying model (`M2Loader`) is destroyed before these pointers are used, they become dangling. JS garbage collection prevents this.
 
-### ⬜ 486. [M2LegacyExporter.cpp] Meta JSON serialization uses explicit field lists — JS uses direct property assignment
+### ⬜ 525. [M2LegacyExporter.cpp] Meta JSON serialization uses explicit field lists — JS uses direct property assignment
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 206–258
 - **Status**: Pending
 - **Details**: JS meta export uses `json.addProperty('materials', this.m2.materials)` which serializes the entire materials array as-is. C++ (lines 306–312) manually serializes each material field (`flags`, `blendingMode`). Similarly, bounding boxes, submeshes, and texture units are manually decomposed into individual JSON properties. If the M2 loader structs have additional fields, they will be missing from C++ JSON output.
 
-### ⬜ 487. [M3Exporter.cpp] `addURITexture` parameter type differs — JS takes string, C++ takes string
+### ⬜ 526. [M3Exporter.cpp] `addURITexture` parameter type differs — JS takes string, C++ takes string
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 49–51
 - **Status**: Pending
 - **Details**: JS `addURITexture(out, dataURI)` stores `this.dataTextures.set(out, dataURI)` — both params are strings (out=path, dataURI=base64). C++ (header line 59) takes `const std::string& out` and `BufferWrapper pngData`, storing `string→BufferWrapper` in `std::map`. The value type changes from base64 data URI string to decoded buffer — callers must provide pre-decoded PNG data.
 
-### ⬜ 488. [M3Exporter.cpp] `exportTextures()` is a stub returning empty map — matches JS
+### ⬜ 527. [M3Exporter.cpp] `exportTextures()` is a stub returning empty map — matches JS
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 62–65
 - **Status**: Pending
 - **Details**: Both JS and C++ `exportTextures()` return an empty map. The C++ comment at line 60 documents this intentional match. While technically not a deviation, `dataTextures` populated via `addURITexture` are never consumed in either version, meaning data textures for M3 models are silently lost.
 
-### ⬜ 489. [M3Exporter.cpp] `geosetName` extraction uses BufferWrapper seek/read — JS uses string slice
+### ⬜ 528. [M3Exporter.cpp] `geosetName` extraction uses BufferWrapper seek/read — JS uses string slice
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 101, 160, 220
 - **Status**: Pending
 - **Details**: JS reads geoset names via `this.m3.stringBlock.slice(geoset.nameCharStart, geoset.nameCharStart + geoset.nameCharCount)` — directly slicing the string block. C++ (lines 113–116, 185–188, 261–264) uses `m3->stringBlock->seek(geoset.nameCharStart)` then `m3->stringBlock->readString(geoset.nameCharCount)`. This mutates the BufferWrapper's read position, which could cause issues if stringBlock is read multiple times or concurrently.
 
-### ⬜ 490. [M3Exporter.cpp] `exportAsGLTF()` missing `gltf.setTextureMap()` call
+### ⬜ 529. [M3Exporter.cpp] `exportAsGLTF()` missing `gltf.setTextureMap()` call
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` line 92
 - **Status**: Pending
 - **Details**: JS calls `gltf.setTextureMap(textureMap)` at line 92 after `exportTextures`. C++ (lines 97–100) calls `exportTextures` but has a comment "Currently exportTextures is a stub returning empty map, so this is a no-op" — the `setTextureMap` call is present in JS but the C++ omits it (or passes a different type). When texture export is eventually implemented, C++ must add this call.
 
-### ⬜ 491. [M3Exporter.cpp] `exportAsOBJ()` commented-out collision export block
+### ⬜ 530. [M3Exporter.cpp] `exportAsOBJ()` commented-out collision export block
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 176–184
 - **Status**: Pending
 - **Details**: Both JS and C++ have the collision export code commented out (C++ lines 211–219). This is a pre-existing TODO in both versions — collision export for M3 models is not yet implemented. The commented code references `this.m2.collisionPositions` (wrong model type — should be m3), suggesting it was copied from M2Exporter.
 
-### ⬜ 492. [WMOExporter.cpp] `exportTextures()` — `runtimeData` bounds checks added defensively
+### ⬜ 531. [WMOExporter.cpp] `exportTextures()` — `runtimeData` bounds checks added defensively
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 100–102
 - **Status**: Pending
 - **Details**: JS unconditionally accesses `material.runtimeData[0]` through `[3]` for shader type 23. C++ (lines 241–244) guards each access with `if (material.runtimeData.size() > N)`. If runtimeData has fewer than 4 elements, fewer textures are added. This is a defensive improvement but changes behaviour — JS would crash, C++ silently skips.
 
-### ⬜ 493. [WMOExporter.cpp] `formatUnknownFile` call signature differs
+### ⬜ 532. [WMOExporter.cpp] `formatUnknownFile` call signature differs
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` line 160
 - **Status**: Pending
 - **Details**: JS calls `listfile.formatUnknownFile(texFile)` with one argument (the full filename string like `"12345.png"`). C++ (line 310) calls `casc::listfile::formatUnknownFile(texFileDataID, raw ? ".blp" : ".png")` with two arguments (integer ID + extension). Both must produce identical path strings for the output to match.
 
-### ⬜ 494. [WMOExporter.cpp] `exportRaw()` — `groupFileDataID == 0` fallback vs JS `??` (nullish coalescing)
+### ⬜ 533. [WMOExporter.cpp] `exportRaw()` — `groupFileDataID == 0` fallback vs JS `??` (nullish coalescing)
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` line 1232
 - **Status**: Pending
 - **Details**: JS uses `this.wmo.groupIDs?.[groupOffset] ?? listfile.getByFilename(groupName)` — `??` only falls back on `undefined`/`null`, NOT on `0`. A groupID of `0` stays `0`. C++ (lines 1578–1584) falls back to filename lookup when `groupFileDataID == 0`. A groupID of `0` triggers the filename lookup in C++ but not in JS, potentially exporting WMO groups that JS would skip.
 
-### ⬜ 495. [WMOExporter.cpp] `exportAsGLTF()` — log format missing `toUpperCase()` for format name
+### ⬜ 534. [WMOExporter.cpp] `exportAsGLTF()` — log format missing `toUpperCase()` for format name
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 225, 232
 - **Status**: Pending
 - **Details**: JS uses `format.toUpperCase()` producing `"GLTF"` / `"GLB"` in log output. C++ (lines 376, 383) uses `format` as-is, logging lowercase `"gltf"` / `"glb"`. Minor cosmetic deviation in log messages.
 
-### ⬜ 496. [WMOExporter.cpp] `exportRaw()` data check — `data === undefined` vs `data.byteLength() == 0`
+### ⬜ 535. [WMOExporter.cpp] `exportRaw()` data check — `data === undefined` vs `data.byteLength() == 0`
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` line 1189
 - **Status**: Pending
 - **Details**: JS checks `if (this.wmo.data === undefined)` — only true when no buffer was provided at all. C++ (line 1531) checks `if (data.byteLength() == 0)` — true for any empty buffer. An explicitly-provided empty buffer would take the CASC-fetch branch in C++ but the write-buffer branch in JS.
 
-### ⬜ 497. [WMOExporter.h] Extra `loadWMO()` and `getDoodadSetNames()` methods not in JS
+### ⬜ 536. [WMOExporter.h] Extra `loadWMO()` and `getDoodadSetNames()` methods not in JS
 - **JS Source**: N/A
 - **Status**: Pending
 - **Details**: C++ header (lines 157–165) declares `loadWMO()` and `getDoodadSetNames()` utility methods not present in the JS WMOExporter class. These are additive API extensions for callers that need doodad set names before export. While not a functional deviation, they extend the API surface beyond the JS original.
 
-### ⬜ 498. [WMOLegacyExporter.cpp] `doodadSetMask` check differs — C++ uses `std::optional` with `has_value()`
+### ⬜ 537. [WMOLegacyExporter.cpp] `doodadSetMask` check differs — C++ uses `std::optional` with `has_value()`
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` line 265
 - **Status**: Pending
 - **Details**: JS checks `if (!doodadSetMask?.[i]?.checked)` — optional chaining handles both missing mask and missing entry gracefully. C++ (line 320) checks `!doodadSetMask.has_value() || i >= doodadSetMask->size() || !(*doodadSetMask)[i].checked`. While functionally equivalent, C++ uses `std::optional<std::vector<>>` which was not used for `groupMask` in the JS (JS uses simple truthiness). The `doodadSetMask` member is also `std::optional` (header line 103) while JS has no explicit nullability — it just checks via optional chaining.
 
-### ⬜ 499. [WMOLegacyExporter.cpp] `groupMask` stored as `std::optional<std::vector<>>` — JS uses simple truthiness
+### ⬜ 538. [WMOLegacyExporter.cpp] `groupMask` stored as `std::optional<std::vector<>>` — JS uses simple truthiness
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 169–175
 - **Status**: Pending
 - **Details**: JS checks `if (groupMask)` (truthy check on the array). C++ stores `groupMask` as `std::optional<std::vector<WMOGroupMaskEntry>>` (header line 102), checking `groupMask.has_value()`. While functionally equivalent for the "set or not set" case, an empty array in JS is truthy (creates empty mask set), while an empty optional vector in C++ means "no mask". `setGroupMask` should set `std::optional` even if the vector is empty to match JS truthy semantics.
 
-### ⬜ 500. [WMOLegacyExporter.cpp] Meta JSON serializes materials with explicit field list
+### ⬜ 539. [WMOLegacyExporter.cpp] Meta JSON serializes materials with explicit field list
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` line 383
 - **Status**: Pending
 - **Details**: JS does `json.addProperty('materials', wmo.materials)` which serializes the entire materials array as-is with all properties. C++ (lines 476–493) manually serializes each material field (`flags`, `shader`, `blendMode`, `texture1`, etc.). If the WMOLegacyLoader material struct has additional fields, they will be missing from C++ JSON output. Same applies to `doodadSets` (C++ lines 497–505) and `doodads` (C++ lines 509–519) and `groupInfo` (C++ lines 464–472).
 
-### ⬜ 501. [WMOLegacyExporter.cpp] `doodadCache` is `std::unordered_set<std::string>` — JS uses module-scope `Set`
+### ⬜ 540. [WMOLegacyExporter.cpp] `doodadCache` is `std::unordered_set<std::string>` — JS uses module-scope `Set`
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` line 22
 - **Status**: Pending
 - **Details**: JS `doodadCache` is `new Set()` at module scope. C++ (line 38) uses `std::unordered_set<std::string>` in an anonymous namespace. Functionally equivalent, but the JS `Set` can store any type while C++ is typed to `string`. Both use case-insensitive lookups via `toLower()`. The `clearCache()` static method (JS line 585, C++ implied via header line 94) correctly clears both.
 
 ## src/js/3D/writers Audit (0/21 ✅)
 
-### ⬜ 502. [CSVWriter.cpp] `escapeCSVField()` treats empty string as null/undefined — JS does not
+### ⬜ 541. [CSVWriter.cpp] `escapeCSVField()` treats empty string as null/undefined — JS does not
 - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 42–51
 - **Status**: Pending
 - **Details**: The JS `escapeCSVField()` checks `if (value === null || value === undefined)` and returns empty string. Then it calls `value.toString()`. The C++ version checks `if (value.empty())` and returns empty string. This means a value that is an empty string `""` in JS would be passed through `toString()` (returning `""`) and then returned as-is. In C++, an empty string returns `""` immediately. While functionally equivalent for strings, the JS version also handles non-string types (numbers, booleans) via `toString()`, whereas the C++ only accepts `const std::string&` — callers must convert to string before calling.
 
-### ⬜ 503. [CSVWriter.cpp] Row values are `std::string` only — JS supports arbitrary types per field
+### ⬜ 542. [CSVWriter.cpp] Row values are `std::string` only — JS supports arbitrary types per field
 - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 33–35, 74–79
 - **Status**: Pending
 - **Details**: The JS `addRow()` accepts an `object` whose field values can be any type (number, boolean, null, etc.) — `escapeCSVField` handles all types via `value.toString()`. The C++ `addRow()` only accepts `std::unordered_map<std::string, std::string>`, requiring all values to be pre-converted to strings by the caller. This shifts the type conversion responsibility to the caller and means null/undefined handling (JS returns `''` for these) must be handled externally.
 
-### ⬜ 504. [GLBWriter.h] Constants declared as `inline constexpr` in header — JS uses module-level `const`
+### ⬜ 543. [GLBWriter.h] Constants declared as `inline constexpr` in header — JS uses module-level `const`
 - **JS Source**: `src/js/3D/writers/GLBWriter.js` lines 8–14
 - **Status**: Pending
 - **Details**: JS declares `GLB_MAGIC`, `GLB_VERSION`, `CHUNK_TYPE_JSON`, `CHUNK_TYPE_BIN` as module-scoped constants (not exported). The C++ declares these as `inline constexpr` in the header file, making them visible to all translation units that include `GLBWriter.h`. This leaks implementation-detail constants into the global namespace. They should be either `static constexpr` in the `.cpp` file or in an anonymous namespace. While not a functional bug, it deviates from the JS's module-local scoping.
 
-### ⬜ 505. [GLTFWriter.cpp] Generator string sources differ — C++ reads runtime config instead of build manifest
+### ⬜ 544. [GLTFWriter.cpp] Generator string sources differ — C++ reads runtime config instead of build manifest
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 208–213
 - **Status**: Pending
 - **Details**: JS constructs the generator string as `util.format('wow.export v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid)` reading from `nw.App.manifest` (build-time constants). C++ reads `constants::VERSION` for version but reads `selectedFlavour` and `selectedGuid` from `core::view->config` (runtime config). The C++ also conditionally omits flavour/guid when empty, while JS always formats all three values unconditionally — JS would produce `"undefined"` for absent values.
 
-### ⬜ 506. [GLTFWriter.cpp] Animation channel target `node` index differs when bone prefix mode is disabled
+### ⬜ 545. [GLTFWriter.cpp] Animation channel target `node` index differs when bone prefix mode is disabled
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 620–628, 757–765, 887–895
 - **Status**: Pending
 - **Details**: JS always uses `nodeIndex + 1` for translation, rotation, and scale animation channel target nodes. C++ uses `actual_node_idx` which equals `nodeIndex + 1` only when `modelsExportWithBonePrefix` is true, and equals `nodeIndex` when false. This changes animation behavior when bone prefix mode is disabled. The JS appears to have a bug here (the `+1` is correct only with prefix nodes), and the C++ fixes it without documenting the intentional deviation.
 
-### ⬜ 507. [GLTFWriter.cpp] `addTextureBuffer()` method added — does not exist in JS source
+### ⬜ 546. [GLTFWriter.cpp] `addTextureBuffer()` method added — does not exist in JS source
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` (entire class)
 - **Status**: Pending
 - **Details**: The C++ adds `addTextureBuffer(uint32_t fileDataID, BufferWrapper buffer)` (header line 98–99, cpp lines 108–110). The JS class only has `setTextureBuffers(texture_buffers)` to set the entire texture buffer map at once. The extra method is a C++ API addition not present in the original.
 
-### ⬜ 508. [GLTFWriter.cpp] `calculate_min_max` returns early on empty values — JS does not guard
+### ⬜ 547. [GLTFWriter.cpp] `calculate_min_max` returns early on empty values — JS does not guard
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 34–51
 - **Status**: Pending
 - **Details**: C++ `calculate_min_max` has `if (values.empty()) return;` which skips setting min/max on the accessor. JS would create `target.min` and `target.max` as arrays filled with `undefined` (serializing as `null`). This means empty arrays produce no min/max keys in C++ output vs. `null`-filled arrays in JS output.
 
-### ⬜ 509. [GLTFWriter.cpp] JSON output key ordering differs — nlohmann uses alphabetical, JS preserves insertion order
+### ⬜ 548. [GLTFWriter.cpp] JSON output key ordering differs — nlohmann uses alphabetical, JS preserves insertion order
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1484–1494
 - **Status**: Pending
 - **Details**: JS uses `JSON.stringify(root, null, '\t')` which preserves property insertion order. C++ uses `nlohmann::json` which by default sorts keys alphabetically (using `std::map` internally). This produces semantically equivalent but textually different GLTF/GLB JSON output. To match JS insertion order, `nlohmann::ordered_json` would be needed.
 
-### ⬜ 510. [GLTFWriter.cpp] GLTF text file written without error checking and may have different line endings
+### ⬜ 549. [GLTFWriter.cpp] GLTF text file written without error checking and may have different line endings
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` line 1493
 - **Status**: Pending
 - **Details**: JS uses `await fsp.writeFile(outGLTF, ..., 'utf8')` which rejects on error. C++ uses `std::ofstream` without checking open/write success. Additionally, on Windows `std::ofstream` defaults to text mode (`\n` → `\r\n` translation), producing different line endings than the JS version.
 
-### ⬜ 511. [JSONWriter.cpp] `dump()` indentation uses 1-space width with tab character — may differ from JS format
+### ⬜ 550. [JSONWriter.cpp] `dump()` indentation uses 1-space width with tab character — may differ from JS format
 - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40–43
 - **Status**: Pending
 - **Details**: JS uses `JSON.stringify(this.data, ..., '\t')` which uses tab-based indentation. C++ uses `data.dump(1, '\t')` where the first argument `1` is the indent width (number of tab characters per level). Both produce tab indentation, but `nlohmann::json` may differ in key ordering (alphabetical vs. insertion-order). The JS also has a custom replacer function for BigInt values that converts them to strings; the C++ comment says nlohmann handles large integers natively, but C++ `int64_t` has a fixed range while JS BigInt is arbitrary-precision. If any property value exceeds int64 range, the C++ serialization would differ.
 
-### ⬜ 512. [JSONWriter.cpp] BigInt serialization handled differently — C++ lacks arbitrary-precision support
+### ⬜ 551. [JSONWriter.cpp] BigInt serialization handled differently — C++ lacks arbitrary-precision support
 - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40–43
 - **Status**: Pending
 - **Details**: The JS `write()` uses a custom JSON replacer `(key, value) => typeof value === 'bigint' ? value.toString() : value` to serialize BigInt values as strings. The C++ comment says "nlohmann::json handles all types natively including large integers; no special BigInt serialization needed as in JS." However, nlohmann::json stores integers as `int64_t` or `uint64_t` (max ~18.4 quintillion), while JS BigInt can represent arbitrarily large integers. Values exceeding the 64-bit range would overflow in C++ but be correctly serialized as strings in JS.
 
-### ⬜ 513. [MTLWriter.cpp] `path.resolve()` vs `std::filesystem::weakly_canonical()` may differ for relative paths
+### ⬜ 552. [MTLWriter.cpp] `path.resolve()` vs `std::filesystem::weakly_canonical()` may differ for relative paths
 - **JS Source**: `src/js/3D/writers/MTLWriter.js` lines 60–63
 - **Status**: Pending
 - **Details**: JS uses `path.resolve(mtlDir, materialFile)` which resolves against `mtlDir` to produce an absolute path. C++ uses `std::filesystem::weakly_canonical(mtlDir / materialFile)` which additionally canonicalizes the path (resolves `.` and `..` segments, normalizes separators). These may produce different results for paths containing `..` segments, symlinks, or non-existent intermediate directories. `weakly_canonical` can also throw on some platforms.
 
-### ⬜ 514. [OBJWriter.cpp] Version header says "wow.export" — should say "wow.export.cpp"
+### ⬜ 553. [OBJWriter.cpp] Version header says "wow.export" — should say "wow.export.cpp"
 - **JS Source**: `src/js/3D/writers/OBJWriter.js` line 138
 - **Status**: Pending
 - **Details**: C++ line 75 writes `"# Exported using wow.export v" + std::string(constants::VERSION)`. Per project conventions, user-facing text should say "wow.export.cpp" not "wow.export". The JS original says "wow.export" but the C++ port should use the project's own name.
 
-### ⬜ 515. [OBJWriter.cpp] `std::to_string()` float formatting differs from JS `toString()` — trailing zeros, precision
+### ⬜ 554. [OBJWriter.cpp] `std::to_string()` float formatting differs from JS `toString()` — trailing zeros, precision
 - **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 161, 170, 194
 - **Status**: Pending
 - **Details**: JS converts floats with default `toString()` which produces minimal representation (e.g., `1.5`, `0.123456789`). C++ uses `std::to_string()` which formats with 6 decimal places and trailing zeros (e.g., `1.500000`, `0.123457`). This produces larger output files and may introduce precision differences due to rounding. For example, JS `(0.1).toString()` → `"0.1"` but C++ `std::to_string(0.1)` → `"0.100000"`. This affects vertex, normal, and UV coordinate output.
 
-### ⬜ 516. [SQLWriter.cpp] `escapeSQLValue()` treats empty string as NULL — JS treats it differently
+### ⬜ 555. [SQLWriter.cpp] `escapeSQLValue()` treats empty string as NULL — JS treats it differently
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 65–77
 - **Status**: Pending
 - **Details**: JS `escapeSQLValue()` checks `if (value === null || value === undefined)` and returns `'NULL'`. An empty string `""` would pass through to `toString()` (returning `""`), fail the `isNaN` check (since `isNaN("") === false` in JS, empty string coerces to 0), and be returned as-is (bare `""`). The C++ checks `if (value.empty())` and returns `"NULL"`. This means an empty string is treated as NULL in C++ but as a numeric value `0` (or empty string) in JS — a significant behavioral difference for SQL output.
 
-### ⬜ 517. [SQLWriter.cpp] `escapeSQLValue()` numeric detection logic differs from JS `isNaN()` behavior
+### ⬜ 556. [SQLWriter.cpp] `escapeSQLValue()` numeric detection logic differs from JS `isNaN()` behavior
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 72–73
 - **Status**: Pending
 - **Details**: JS uses `!isNaN(value) && str.trim() !== ''` for numeric detection. JS `isNaN()` coerces its argument: `isNaN("123") === false` (numeric), `isNaN("12.3e5") === false` (numeric), `isNaN("0x1F") === false` (hex is numeric). The C++ implementation manually checks for digits, decimal point, and sign characters but does not handle scientific notation (`1e5`), hexadecimal (`0xFF`), or other JS-coercible numeric formats. Values like `"1e5"` or `"0xFF"` would be treated as numeric in JS but as strings in C++.
 
-### ⬜ 518. [SQLWriter.cpp] `generateDDL()` skips fields not found in schema — JS uses undefined
+### ⬜ 557. [SQLWriter.cpp] `generateDDL()` skips fields not found in schema — JS uses undefined
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 154–166
 - **Status**: Pending
 - **Details**: JS does `const field_type = this.schema.get(field)` — if the field is not in the schema, `field_type` is `undefined`. Then `fieldTypeToSQL(undefined, field)` is called, which falls through all switch cases to the `default: return 'TEXT'` branch. So missing-schema fields get type `TEXT`. In C++, `if (it == schema->end()) continue;` skips the field entirely — it won't appear in the CREATE TABLE statement. This means C++ DDL output may have fewer columns than JS DDL output for the same data.
 
-### ⬜ 519. [SQLWriter.cpp] `generateDDL()` column_defs joined with different formatting than JS
+### ⬜ 558. [SQLWriter.cpp] `generateDDL()` column_defs joined with different formatting than JS
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 171–173
 - **Status**: Pending
 - **Details**: JS uses `column_defs.join(',\n')` which puts commas at the end of each line except the last. C++ (lines 175–179) manually appends commas: each line gets a trailing comma unless it's the last entry (`if (i + 1 < column_defs.size()) result += ","`). In JS, the comma is on the same line as the column definition. In C++, the comma is also on the same line. However, the newline placement may differ slightly: JS produces `col1 INT,\ncol2 TEXT` while C++ produces `col1 INT,\ncol2 TEXT` — these should be equivalent. No functional difference but worth verifying during testing.
 
-### ⬜ 520. [SQLWriter.cpp] `toSQL()` value row formatting — comma placement and newlines differ slightly
+### ⬜ 559. [SQLWriter.cpp] `toSQL()` value row formatting — comma placement and newlines differ slightly
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 191–203
 - **Status**: Pending
 - **Details**: JS batch format: `INSERT INTO ... VALUES\n(row1),\n(row2);` — commas appear after `)` on each row except the last in the batch, joined by `,\n`. The C++ (lines 206–222) produces `(row1),\n(row2)\n;\n\n` — the semicolon is on its own line followed by two newlines. The JS produces `(row2);\n\n` — the semicolon immediately follows the last row with a blank line after. This produces slightly different SQL formatting.
 
-### ⬜ 521. [STLWriter.cpp] Version header says "wow.export" — should say "wow.export.cpp"
+### ⬜ 560. [STLWriter.cpp] Version header says "wow.export" — should say "wow.export.cpp"
 - **JS Source**: `src/js/3D/writers/STLWriter.js` line 147
 - **Status**: Pending
 - **Details**: C++ line 93 writes `"Exported using wow.export v" + std::string(constants::VERSION)` into the STL header. Per project conventions, user-facing text should say "wow.export.cpp" not "wow.export". The JS original says "wow.export" but the C++ port should use its own project name.
 
-### ⬜ 522. [GLTFWriter.cpp] Generator string says "wow.export" — should say "wow.export.cpp"
+### ⬜ 561. [GLTFWriter.cpp] Generator string says "wow.export" — should say "wow.export.cpp"
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 208–213
 - **Status**: Pending
 - **Details**: The GLTF generator metadata string in C++ starts with `"wow.export v"`. Per project conventions, user-facing text should say "wow.export.cpp" not "wow.export".
 
----
-
-## 🎨 UI Visual Fidelity
-
-## UI Visual Fidelity Audit (0/39 ✅)
-
-### ⬜ 523. [app.h] Listbox ROW_SELECTED_U32 color is green (#22b549) instead of blue (#57afe2)
-- **JS Source**: `src/app.css` `.ui-listbox .item.selected` / `.item:hover` (line ~1409)
-- **Status**: Pending
-- **Details**: The CSS specifies that selected listbox items use `background: var(--font-alt)` which is `#57afe2` (blue). The C++ `ROW_SELECTED_U32` at `app.h:109` is `IM_COL32(34, 181, 73, 40)` — a semi-transparent green derived from `#22b549` (the button/nav color). This affects every listbox throughout the application. The selected row should be blue `IM_COL32(87, 175, 226, 255)` to match the CSS, not green. Similarly, the hover state should also be `#57afe2`.
-
-### ⬜ 524. [app.h] Listbox ROW_HOVER_U32 color does not match CSS hover specification
-- **JS Source**: `src/app.css` `.ui-listbox .item:hover` (line ~1411)
-- **Status**: Pending
-- **Details**: The CSS specifies listbox hover as `background: var(--font-alt) !important` which is `#57afe2`. The C++ `ROW_HOVER_U32` at `app.h:107` is `IM_COL32(255, 255, 255, 8)` — a nearly invisible white tint. Should be a visible blue hover highlight matching `#57afe2` (possibly with reduced opacity for hover vs. selected).
-
-### ⬜ 525. [app.h] Slider track color does not match CSS specification
-- **JS Source**: `src/app.css` `.ui-slider` (line ~1307)
-- **Status**: Pending
-- **Details**: The CSS specifies the slider track background as `var(--background-dark)` = `#2c3136` with `border: 1px solid var(--border)`. The C++ `SLIDER_TRACK_U32` at `app.h:117` is `IM_COL32(80, 80, 80, 255)` = `#505050`, which is significantly lighter than the CSS spec `#2c3136` (44, 49, 54). Should be `IM_COL32(44, 49, 54, 255)`.
-
-### ⬜ 526. [app.h] Slider fill color uses green instead of blue
-- **JS Source**: `src/app.css` `.ui-slider .fill` (line ~1315)
-- **Status**: Pending
-- **Details**: The CSS specifies the slider fill as `background: var(--font-alt)` = `#57afe2` (blue). The C++ slider at `slider.cpp:122` uses `app::theme::BUTTON_BASE_U32` = `#22b549` (green). The fill color should use `FONT_ALT_U32` = `#57afe2` instead of `BUTTON_BASE_U32`.
-
-### ⬜ 527. [app.h] Slider handle idle color does not match CSS
-- **JS Source**: `src/app.css` `.ui-slider .handle` (line ~1319)
-- **Status**: Pending
-- **Details**: The CSS specifies the slider handle as `background: var(--border)` = `#6c757d`. The C++ `SLIDER_THUMB_U32` at `app.h:119` is `IM_COL32(200, 200, 200, 200)` = light gray with reduced opacity. Should be `IM_COL32(108, 117, 125, 255)` to match `#6c757d`.
-
-### ⬜ 528. [app.h] Slider handle hover color does not match CSS
-- **JS Source**: `src/app.css` `.ui-slider .handle:hover` (line ~1329)
-- **Status**: Pending
-- **Details**: The CSS specifies the slider handle hover as `background: var(--font-alt)` = `#57afe2` (blue). The C++ `SLIDER_THUMB_ACTIVE_U32` at `app.h:120` is `IM_COL32(255, 255, 255, 220)` = white. Should be `IM_COL32(87, 175, 226, 255)` to match `#57afe2`.
-
-### ⬜ 529. [app.h] Data table selected row color is gray instead of blue
-- **JS Source**: `src/app.css` `.ui-datatable tr.selected` (line ~1387)
-- **Status**: Pending
-- **Details**: The CSS specifies `background: var(--font-alt) !important` = `#57afe2` for selected data table rows. The C++ `TABLE_ROW_SELECTED_U32` at `app.h:127` is `IM_COL32(100, 100, 100, 100)` — a semi-transparent gray. Should be `IM_COL32(87, 175, 226, 255)` to match `#57afe2`.
-
-### ⬜ 530. [app.h] Data table hover row color is gray instead of blue
-- **JS Source**: `src/app.css` `.ui-datatable tbody tr:hover` (line ~1389)
-- **Status**: Pending
-- **Details**: The CSS specifies `background: var(--font-alt)` = `#57afe2` for hovered data table rows. The C++ `TABLE_ROW_HOVER_U32` at `app.h:126` is `IM_COL32(100, 100, 100, 255)` — a solid gray. Should be `IM_COL32(87, 175, 226, 255)` to match `#57afe2`.
-
-### ⬜ 531. [listbox.cpp] Status bar missing background color and border-radius styling
-- **JS Source**: `src/app.css` `.list-container .list-status` (line ~2459–2470)
-- **Status**: Pending
-- **Details**: The CSS specifies the listbox status bar has `background: #1f1f20`, `height: 27px`, `border-radius` bottom 10px, `font-weight: bold`, `padding-left: 10px`, `padding-top: 3px`. The C++ status bar rendering at `listbox.cpp:775–812` uses plain `ImGui::Text()` calls with no background rectangle, no border-radius, no specific padding, and no bold weight. The status bar should be rendered as a styled bar below the listbox with the specified background and rounded bottom corners.
-
-### ⬜ 532. [slider.cpp] Slider handle dimensions do not match CSS specification
-- **JS Source**: `src/app.css` `.ui-slider .handle` (line ~1319–1328)
-- **Status**: Pending
-- **Details**: The CSS specifies the slider handle as `width: 10px`, `height: 28px`, centered vertically with `transform: translateY(-50%)`, and `box-shadow: black 0 0 8px`. The C++ slider implementation should be verified to match these exact dimensions. The CSS also specifies `z-index: 1` for the handle above the fill.
-
-### ⬜ 533. [context-menu.cpp] Missing background color, border, and shadow styling
-- **JS Source**: `src/app.css` `.context-menu` (line ~1259–1287)
-- **Status**: Pending
-- **Details**: The CSS specifies the context menu has `background: #232323`, `border: 1px solid var(--border)` (#6c757d), `box-shadow: black 0 0 3px 0`. The C++ context-menu component does not apply these styles explicitly — it relies on ImGui's default popup styling. Items should have `padding: 8px`, `border-bottom: 1px solid var(--border)`, and hover background `#353535`. These CSS-specific styles are not replicated in the ImGui popup.
-
-### ⬜ 534. [combobox.cpp] Dropdown popup missing specific CSS styling
-- **JS Source**: `src/app.css` `.ui-combobox ul` (line ~1294–1306)
-- **Status**: Pending
-- **Details**: The CSS specifies the combobox dropdown has `background: #232323`, `border: 1px solid var(--border)`, `box-shadow: black 0 0 3px 0`. Options have `border-bottom: 1px solid var(--border)`, `padding: 10px 15px`, and hover `background: #353535`. The C++ implementation relies on ImGui's default Selectable/ListBox styling, not these specific CSS colors and spacing.
-
-### ⬜ 535. [tab_fonts.cpp] Glyph cell size is 24×24px instead of CSS-specified 32×32px
-- **JS Source**: `src/app.css` `.font-glyph-cell` (line ~2303–2314)
-- **Status**: Pending
-- **Details**: The CSS specifies `.font-glyph-cell` as `width: 32px; height: 32px; font-size: 20px; background: var(--background-alt); border-radius: 3px`. The C++ implementation at `tab_fonts.cpp:231` uses `ImVec2(24, 24)` for glyph selectables — 8px smaller than the CSS spec. Should be `ImVec2(32, 32)`.
-
-### ⬜ 536. [tab_fonts.cpp] Glyph cells missing background color and hover color
-- **JS Source**: `src/app.css` `.font-glyph-cell` and `.font-glyph-cell:hover` (lines ~2303–2317)
-- **Status**: Pending
-- **Details**: The CSS specifies glyph cells have `background: var(--background-alt)` = `#3c4147` and hover `background: var(--font-alt)` = `#57afe2`. The C++ uses ImGui's default Selectable styling, which does not apply these specific background colors. Each cell should have the `#3c4147` background and `#57afe2` hover.
-
-### ⬜ 537. [tab_fonts.cpp] Font preview input area missing CSS styling
-- **JS Source**: `src/app.css` `.font-preview-input` (lines ~2329–2352)
-- **Status**: Pending
-- **Details**: The CSS specifies the font preview input as `height: 120px`, `font-size: 32px`, `background: var(--background-dark)` = `#2c3136`, `border: 1px solid var(--border)`, and placeholder color `#888`. The C++ `InputTextMultiline` at `tab_fonts.cpp:256–258` uses the remaining available height (not fixed 120px), default ImGui font size (not 32px), and default styling. The preview input needs explicit height constraint and font size override.
-
-### ⬜ 538. [tab_fonts.cpp] Character grid does not fill correct vertical proportion
-- **JS Source**: `src/app.css` `.font-character-grid` (lines ~2286–2301)
-- **Status**: Pending
-- **Details**: The CSS specifies the character grid as `position: absolute; top: 0; bottom: 140px` — meaning it fills all space except the bottom 140px reserved for the preview input container. The C++ uses `ImGui::GetContentRegionAvail().y * 0.5f` (50% of height) at `tab_fonts.cpp:218`, which does not match the CSS layout. The grid should fill the available space minus 140px (120px input + 20px container spacing).
-
-### ⬜ 539. [tab_text.cpp] Text preview uses TextWrapped instead of monospace pre with scroll
-- **JS Source**: `src/app.css` `#tab-text .preview-background pre` (lines ~2252–2259)
-- **Status**: Pending
-- **Details**: The CSS specifies the text preview uses a `<pre>` element with `overflow: scroll`, `padding: 15px`, `position: absolute` (full container), and `user-select: text`. The C++ at `tab_text.cpp:174` uses `ImGui::TextWrapped()` which wraps text (pre does not wrap by default), has no explicit 15px padding, and no scrollable region. Should use a scrollable child window with monospace/non-wrapping text and proper padding.
-
-### ⬜ 540. [screen_settings.cpp] Settings content bounded at 800px instead of full-screen
-- **JS Source**: `src/app.css` `#config-wrapper` / `#config` (lines ~1221–1245)
-- **Status**: Pending
-- **Details**: The CSS specifies `#config-wrapper` as `position: absolute` (full screen) and `#config` as `flex: 1` filling the available width. The C++ at `screen_settings.cpp:160` caps the content width to `800.0f` pixels, which means the settings page doesn't fill the full window width as the original JS app does. The settings content should span the full available width.
-
-### ⬜ 541. [screen_settings.cpp] Button bar layout is left-to-right instead of CSS row-reverse
-- **JS Source**: `src/app.css` `#config-buttons` (lines ~1237–1245)
-- **Status**: Pending
-- **Details**: The CSS specifies `#config-buttons` as `display: flex; flex-direction: row-reverse; padding: 15px 0; border-top: 1px solid var(--border); background: var(--background)`. The C++ at `screen_settings.cpp:483–493` renders buttons left-to-right using `ImGui::Button()` + `ImGui::SameLine()`, but the CSS uses `row-reverse` so "Apply" appears on the right and "Reset to Defaults" on the far left. Also missing: explicit 15px vertical padding, border-top, background color, and the Reset button's `margin-right: auto; margin-left: 20px` alignment.
-
-### ⬜ 542. [screen_settings.cpp] Section headings use SeparatorText instead of styled h1 at 18px
-- **JS Source**: `src/app.css` `#config > div h1` (line ~1232)
-- **Status**: Pending
-- **Details**: The CSS specifies section headings as `<h1>` with `font-size: 18px`. The C++ uses `ImGui::SeparatorText()` calls which render text with separator lines on either side — visually different from the original's plain bold heading. The headings should be rendered as 18px bold text without separator lines to match the original.
-
-### ⬜ 543. [screen_settings.cpp] Missing 20px section padding between setting groups
-- **JS Source**: `src/app.css` `#config > div` (line ~1230)
-- **Status**: Pending
-- **Details**: The CSS specifies each settings section (`#config > div`) has `padding: 20px` (with bottom 0). The C++ settings implementation does not add explicit 20px padding between sections — ImGui's default spacing is used instead, which is typically smaller. Each group of settings should have 20px padding around it.
-
-### ⬜ 544. [app.cpp] Crash screen missing exclamation-triangle icon before heading
-- **JS Source**: `src/app.css` `#crash-screen h1` (lines ~1212–1215), `src/index.html` noscript block
-- **Status**: Pending
-- **Details**: The CSS specifies the crash screen h1 has `background: url(./fa-icons/triangle-exclamation-white.svg) no-repeat left center; padding-left: 50px` — showing a warning triangle icon to the left of the heading text. The C++ `renderCrashScreen()` at `app.cpp:258–288` renders the heading as plain text without any icon. A Font Awesome warning triangle icon should precede the heading.
-
-### ⬜ 545. [tab_maps.cpp] Map viewer missing box-shadow styling
-- **JS Source**: `src/app.css` `.ui-map-viewer` (lines ~1333–1345)
-- **Status**: Pending
-- **Details**: The CSS specifies the map viewer has `box-shadow: black 0 0 3px 0` and `border: 1px solid var(--border)`. The C++ map viewer component does not render box-shadow effects. While ImGui doesn't natively support box-shadow, a dark border or shadow rectangle could simulate this effect.
-
-### ⬜ 546. [tab_maps.cpp] Map viewer checkerboard pattern size not verified
-- **JS Source**: `src/app.css` `.ui-map-viewer` background (lines ~1334–1338)
-- **Status**: Pending
-- **Details**: The CSS specifies the map viewer checkerboard pattern as `background-size: 30px 30px` using colors `--trans-check-a: #303030` and `--trans-check-b: #272727`. While the C++ uses the correct colors (`TRANS_CHECK_A_U32` and `TRANS_CHECK_B_U32`), the checkerboard tile size should be verified to be 30×30 pixels to match the CSS.
-
-### ⬜ 547. [tab_zones.cpp] Zone viewer missing border and box-shadow styling
-- **JS Source**: `src/app.css` `.ui-map-viewer` (lines ~1333–1345)
-- **Status**: Pending
-- **Details**: Same as the map viewer — the zone viewer canvas area should have `border: 1px solid var(--border)` and `box-shadow: black 0 0 3px 0`. The C++ implementation is missing these border/shadow effects.
-
-### ⬜ 548. [tab_help.cpp] Not ported to C++ — still JavaScript
-- **JS Source**: `src/js/modules/tab_help.js` (entire file)
-- **Status**: Pending
-- **Details**: The help tab (`tab_help.cpp`) is still a Node.js/JavaScript file, not converted to C++. The CSS specifies a `#help-screen` grid layout with `grid-template-columns: 1fr 1fr`, `gap: 20px`, article items with `padding: 15px 20px`, `background: var(--background-dark)`, `border-radius: 8px`, `border: 1px solid white`, title at `18px`, and tags at `13px` with `opacity: 0.7`. The entire tab needs conversion to C++ with ImGui.
-
-### ⬜ 549. [tab_blender.cpp] Not ported to C++ — still JavaScript
-- **JS Source**: `src/js/modules/tab_blender.js` (entire file)
-- **Status**: Pending
-- **Details**: The Blender addon tab (`tab_blender.cpp`) is still a Node.js/JavaScript file. It provides UI for checking/installing/updating the Blender addon (3 buttons + status messages). Needs full C++ conversion.
-
-### ⬜ 550. [tab_changelog.cpp] Not ported to C++ — still JavaScript
-- **JS Source**: `src/js/modules/tab_changelog.js` (entire file)
-- **Status**: Pending
-- **Details**: The changelog tab (`tab_changelog.cpp`) is still a Node.js/JavaScript file. It reads and displays a Markdown changelog file using the `markdown-content` component. Needs full C++ conversion.
-
-### ⬜ 551. [checkboxlist.cpp] Selected item color is green instead of CSS blue
-- **JS Source**: `src/app.css` `.ui-checkboxlist .item.selected` (same styling as `.ui-listbox .item.selected`)
-- **Status**: Pending
-- **Details**: The checkboxlist at `checkboxlist.cpp:224` uses `app::theme::ROW_SELECTED_U32` which is `IM_COL32(34, 181, 73, 40)` — green. The CSS `.ui-checkboxlist` shares the same styling as `.ui-listbox` where selected items use `background: var(--font-alt)` = `#57afe2` (blue). Fix is the same as #525 — once `ROW_SELECTED_U32` is corrected, checkboxlist will also be fixed.
-
-### ⬜ 552. [markdown-content.cpp] Missing CSS background, border-radius, and heading font sizes
-- **JS Source**: `src/app.css` `.markdown-content` (lines ~458–530)
-- **Status**: Pending
-- **Details**: The CSS specifies `.markdown-content` has `background: rgb(0 0 0 / 22%)`, `border-radius: 10px`, `padding: 20px`, `font-size: 20px`. Headings: h1 `1.8em`, h2 `1.5em`, h3 `1.2em` (all bold). Code blocks: `background: rgba(0,0,0,0.3)`, `padding: 2px 6px`, `border-radius: 3px`. The C++ markdown-content component should apply these specific styles when rendering markdown elements.
-
-### ⬜ 553. [tab_videos.cpp] Video player area rendering not implemented
-- **JS Source**: `src/js/modules/tab_videos.js` (entire render function)
-- **Status**: Pending
-- **Details**: The videos tab should display a video list and a streaming video player area. The C++ implementation has HTTP streaming infrastructure but the actual video player display area (canvas/viewport for video frames) may not be fully rendered in the UI. The video playback area should match the reference screenshot layout.
-
-### ⬜ 554. [app.h] Missing FONT_DISABLED color constant referenced by character tab
-- **JS Source**: `src/app.css` `.slot-empty` `color: var(--font-disabled)` (line ~2938)
-- **Status**: Pending
-- **Details**: The CSS references a `--font-disabled` variable for empty equipment slot text (italic, grayed out). No corresponding `FONT_DISABLED` constant exists in `app.h`. This color should be defined (likely a muted gray similar to `--font-faded` or darker) and used for disabled/empty state text.
-
-### ⬜ 555. [itemlistbox.cpp] Item icon border color should be #8a8a8a
-- **JS Source**: `src/app.css` `.item-icon` `border: 1px solid #8a8a8a` (line ~1537)
-- **Status**: Pending
-- **Details**: The CSS specifies item icons have `border: 1px solid #8a8a8a` (138, 138, 138). The C++ itemlistbox renders item icons but should verify the border color matches this specific gray value rather than using a different theme color.
-
-### ⬜ 556. [itemlistbox.cpp] Item row height should be 46px with 1.2em font size
-- **JS Source**: `src/app.css` `#tab-items #listbox-items .item` (lines ~1520–1525)
-- **Status**: Pending
-- **Details**: The CSS specifies items tab listbox items have `height: 46px`, `font-size: 1.2em`, and `display: flex; align-items: center`. This is taller than the standard 26px listbox item height. The C++ itemlistbox should use 46px row height with the larger font size for the items tab, matching the reference screenshot which shows larger item entries with icons.
-
-### ⬜ 557. [data-table.cpp] Table header padding should be 10px
-- **JS Source**: `src/app.css` `.ui-datatable th` (lines ~1374–1377)
-- **Status**: Pending
-- **Details**: The CSS specifies data table headers have `border: 1px solid var(--border)` and `padding: 10px`. The C++ data-table should verify that header cells have proper 10px padding and visible border styling matching the CSS specification.
-
-### ⬜ 558. [data-table.cpp] Table row height should be 32px
-- **JS Source**: `src/app.css` `.ui-datatable tr` (lines ~1366–1370)
-- **Status**: Pending
-- **Details**: The CSS specifies data table rows have `min-height: 32px; max-height: 32px; height: 32px` — a fixed 32px row height. The C++ implementation should ensure rows are exactly 32px tall to match the original layout.
-
-### ⬜ 559. [tab_characters.cpp] Character tab missing tab-control styling
-- **JS Source**: `src/app.css` `.tab-control` and `.tab-control span` (lines ~2645–2654)
-- **Status**: Pending
-- **Details**: The CSS specifies the character tab's panel selector (Export/Textures/Settings) uses `.tab-control` with `display: flex`, spans at `font-size: 20px`, `padding: 5px`, background `var(--form-button-disabled)` (#696969 gray) for unselected and `var(--form-button-hover)` (#2665d2 blue) for selected, with `border-radius: 10px` on first/last children. The C++ implementation should verify these tab control styles match the reference screenshot appearance.
-
-### ⬜ 560. [tab_characters.cpp] Character equipment slot styling needs CSS match
-- **JS Source**: `src/app.css` `.equipment-slot` (lines ~2913–2927)
-- **Status**: Pending
-- **Details**: The CSS specifies equipment slots as `display: flex; justify-content: space-between; padding: 6px 12px; background: var(--background-dark); border: 1px solid var(--border); border-radius: 8px; font-size: 13px`. Hover: `background: var(--background-alt)`. Labels use `color: var(--font-alt)` (#57afe2). The C++ implementation should match these exact sizes, colors, and border-radius values.
-
-### ⬜ 561. [tab_characters.cpp] Character import buttons at bottom missing specific CSS styling
-- **JS Source**: `src/app.css` `.character-import-buttons` (lines ~2985–3065)
-- **Status**: Pending
-- **Details**: The CSS specifies the bottom character buttons (Battle.net, WMV, Wowhead, Save, Quick Save, Import JSON, Export JSON) with specific colors — BNet: `#148eff`, WMV: `#d22c1e`, Wowhead: `#e02020`, Save: `#5865f2`, Quick Save: `#22b549`, Import JSON: `#e67e22`, Export JSON: `#22b549`. Each has icon images as backgrounds. The C++ should verify these specific brand colors and icon backgrounds are applied.
