@@ -88,7 +88,7 @@ void load() {
 		    msg.find("Access is denied") != std::string::npos) {
 			logging::write("Failed to load user config due to restricted permissions (EPERM)");
 			core::setToast("info",
-				"Restricted permissions detected. Restart wow.export using \"Run as Administrator\".",
+				"Restricted permissions detected. Restart wow.export.cpp using \"Run as Administrator\".",
 				{}, -1, true);
 		} else {
 			throw;

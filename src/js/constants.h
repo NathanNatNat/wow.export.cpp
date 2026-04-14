@@ -36,6 +36,9 @@ inline constexpr int MAX_RECENT_LOCAL = 3;
 const std::filesystem::path& SHADER_PATH();
 
 // Current version of wow.export.
+// Deviation from JS: JS reads version dynamically from `nw.App.manifest.version`.
+// C++ hardcodes it as a compile-time constant. Keep in sync with releases manually
+// or via a build-system substitution step.
 inline constexpr std::string_view VERSION = "0.1.0";
 
 // Build flavour identifier (JS: nw.App.manifest.flavour).

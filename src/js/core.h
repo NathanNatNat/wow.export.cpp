@@ -232,6 +232,23 @@ struct DropHandler {
  * AppState — Central application state struct.
  * Since ImGui is immediate-mode, state changes are reflected
  * automatically on the next frame — no "reactivity" system needed.
+ *
+ * JS equivalent: makeNewView() in core.js
+ *
+ * Deviations from JS makeNewView():
+ * - `constants` field omitted: JS stores `constants: constants` on the view
+ *   for Vue template access. In C++, constants are accessed via the
+ *   `constants::` namespace directly — no need for a runtime reference.
+ * - `availableLocale` field omitted: JS stores `availableLocale: Locale`.
+ *   In C++, this is a compile-time constant accessed via
+ *   `casc::locale_flags::entries`.
+ * - Additional C++/OpenGL-specific fields not in JS:
+ *   `mpq` (MPQ install instance, JS uses different install model),
+ *   `chrCustRacesPlayable`, `chrCustRacesNPC` (split from chrCustRaces),
+ *   `pendingItemSlotFilter` (ImGui UI plumbing),
+ *   `zoneMapTexID/Width/Height/Pixels` (OpenGL texture resources),
+ *   `*TexID` fields (OpenGL texture handles for preview images).
+ *   These are necessary platform adaptations for C++/OpenGL/ImGui.
  */
 struct AppState {
 	~AppState();                                 // Defined in core.cpp (needs complete mpq::MPQInstall).
@@ -331,6 +348,10 @@ struct AppState {
 	std::vector<nlohmann::json> tableBrowserHeaders;
 	std::vector<nlohmann::json> tableBrowserRows;
 	// availableLocale is the casc::locale_flags::entries array (compile-time constant).
+	// JS equivalent: `availableLocale: Locale` on makeNewView().
+	// In C++ this is accessed directly via casc::locale_flags::entries instead of
+	// being stored as a field. Any JS code using `view.availableLocale` maps to
+	// casc::locale_flags::entries in C++.
 	nlohmann::json fileDropPrompt;
 	std::string whatsNewHTML;
 	std::string textViewerSelectedText;
