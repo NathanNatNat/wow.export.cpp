@@ -1,43 +1,46 @@
-module.exports = {
-	template: `
-		<div class="module-test-b">
-			<h2>Module Test B</h2>
-			<p>Message: {{ message }}</p>
-			<input v-model="message" />
-			<p>Dev Mode: {{ $core.view.isDev }}</p>
-			<p>Busy State: {{ $core.view.isBusy }}</p>
-			<p>CASC Loaded: {{ $core.view.casc !== null }}</p>
-			<button @click="switch_module">Switch to Module A</button>
-			<button @click="reload_self">Reload Module B</button>
-			<button @click="show_toast">Show Toast</button>
-		</div>
-	`,
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-	data() {
-		return {
-			message: 'Hello Thrall'
-		};
-	},
+#include "module_test_b.h"
+#include "../log.h"
+#include "../core.h"
+#include "../modules.h"
 
-	methods: {
-		switch_module() {
-			this.$modules.module_test_a.setActive();
-		},
+#include <cstring>
 
-		reload_self() {
-			this.$modules.module_test_b.reload();
-		},
+#include <imgui.h>
 
-		show_toast() {
-			this.$core.setToast('info', 'test toast from module b');
-		}
-	},
+namespace module_test_b {
 
-	mounted() {
-		console.log('module_test_b mounted');
-	},
+// --- File-local state (JS equivalent: data() { return { message: 'Hello Thrall' }; }) ---
+static char message[256] = "Hello Thrall";
 
-	unmounted() {
-		console.log('module_test_b unmounted');
-	}
-};
+void render() {
+	ImGui::Text("Module Test B");
+	ImGui::Separator();
+
+	ImGui::Text("Message: %s", message);
+	ImGui::InputText("##message", message, sizeof(message));
+
+	ImGui::Text("Dev Mode: %s", core::view->isDev ? "true" : "false");
+	ImGui::Text("Busy State: %d", core::view->isBusy);
+	ImGui::Text("CASC Loaded: %s", core::view->casc != nullptr ? "true" : "false");
+
+	if (ImGui::Button("Switch to Module A"))
+		modules::set_active("module_test_a");
+
+	if (ImGui::Button("Reload Module B"))
+		modules::reload_module("module_test_b");
+
+	if (ImGui::Button("Show Toast"))
+		core::setToast("info", "test toast from module b");
+}
+
+void mounted() {
+	logging::write("module_test_b mounted");
+}
+
+} // namespace module_test_b

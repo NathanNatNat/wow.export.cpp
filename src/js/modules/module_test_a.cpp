@@ -1,34 +1,35 @@
-module.exports = {
-	template: `
-		<div class="module-test-a">
-			<h2>Module Test A</h2>
-			<p>Counter: {{ counter }}</p>
-			<button @click="increment">Increment</button>
-			<button @click="switch_module">Switch to Module B</button>
-		</div>
-	`,
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-	data() {
-		return {
-			counter: 0
-		};
-	},
+#include "module_test_a.h"
+#include "../log.h"
+#include "../modules.h"
 
-	methods: {
-		increment() {
-			this.counter++;
-		},
+#include <imgui.h>
 
-		switch_module() {
-			this.$modules.module_test_b.setActive();
-		}
-	},
+namespace module_test_a {
 
-	mounted() {
-		console.log('module_test_a mounted');
-	},
+// --- File-local state (JS equivalent: data() { return { counter: 0 }; }) ---
+static int counter = 0;
 
-	unmounted() {
-		console.log('module_test_a unmounted');
-	}
-};
+void render() {
+	ImGui::Text("Module Test A");
+	ImGui::Separator();
+
+	ImGui::Text("Counter: %d", counter);
+
+	if (ImGui::Button("Increment"))
+		counter++;
+
+	if (ImGui::Button("Switch to Module B"))
+		modules::set_active("module_test_b");
+}
+
+void mounted() {
+	logging::write("module_test_a mounted");
+}
+
+} // namespace module_test_a

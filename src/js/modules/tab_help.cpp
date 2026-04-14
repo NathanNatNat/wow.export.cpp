@@ -1,174 +1,309 @@
-const fsp = require('fs').promises;
-const path = require('path');
-const log = require('../log');
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-const help_articles = [];
-let help_loaded = false;
+#include "tab_help.h"
+#include "../log.h"
+#include "../core.h"
+#include "../modules.h"
 
-const load_help_docs = async (core) => {
+#include <cstring>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <format>
+#include <regex>
+
+#include <imgui.h>
+
+namespace tab_help {
+
+// --- Help article data ---
+
+struct HelpArticle {
+	std::vector<std::string> tags;
+	std::string title;
+	std::string kb_id;
+	std::string body;
+};
+
+// --- File-local state ---
+
+static std::vector<HelpArticle> help_articles;
+static bool help_loaded = false;
+
+static char search_query[256] = "";
+static std::vector<const HelpArticle*> filtered_articles;
+static const HelpArticle* selected_article = nullptr;
+
+// --- Internal functions ---
+
+static std::string trim(const std::string& s) {
+	size_t start = s.find_first_not_of(" \t\r\n");
+	size_t end = s.find_last_not_of(" \t\r\n");
+	if (start == std::string::npos)
+		return "";
+	return s.substr(start, end - start + 1);
+}
+
+static std::string to_lower(const std::string& s) {
+	std::string result = s;
+	std::transform(result.begin(), result.end(), result.begin(),
+		[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+	return result;
+}
+
+static std::vector<std::string> split_whitespace(const std::string& s) {
+	std::vector<std::string> tokens;
+	std::istringstream iss(s);
+	std::string token;
+	while (iss >> token)
+		tokens.push_back(token);
+	return tokens;
+}
+
+static void load_help_docs() {
 	if (help_loaded)
 		return;
 
-	core.showLoadingScreen(1);
+	core::showLoadingScreen(1);
 
 	try {
-		await core.progressLoadingScreen('loading help documents...');
+		core::progressLoadingScreen("loading help documents...");
 
-		const help_dir = './src/help_docs';
-		log.write('loading help docs from: %s', help_dir);
+		namespace fs = std::filesystem;
+		const fs::path help_dir = "src/help_docs";
+		logging::write(std::format("loading help docs from: {}", help_dir.string()));
 
-		const files = await fsp.readdir(help_dir);
-		const md_files = files.filter(f => f.endsWith('.md'));
-		log.write('found %d markdown files', md_files.length);
-
-		for (const file of md_files) {
-			const file_path = path.join(help_dir, file);
-			const content = await fsp.readFile(file_path, 'utf8');
-			const lines = content.split('\n');
-
-			if (lines.length < 2)
-				continue;
-
-			const tag_line = lines[0].trim();
-			if (!tag_line.startsWith('!'))
-				continue;
-
-			const tags = tag_line.substring(1).trim().split(/\s+/).map(t => t.toLowerCase());
-			const title_line = lines[1].trim();
-
-			if (!title_line.startsWith('#'))
-				continue;
-
-			const title = title_line.substring(1).trim();
-			const body = lines.slice(1).join('\n');
-
-			const kb_match = title.match(/^(KB\d+):\s*(.+)/);
-			const kb_id = kb_match ? kb_match[1] : null;
-			const title_text = kb_match ? kb_match[2] : title;
-
-			help_articles.push({ tags, title: title_text, kb_id, body });
-			log.write('loaded help article: %s', title_text);
+		if (!fs::exists(help_dir) || !fs::is_directory(help_dir)) {
+			logging::write("help_docs directory not found");
+			core::hideLoadingScreen();
+			return;
 		}
 
-		log.write('loaded %d help articles total', help_articles.length);
+		int md_count = 0;
+		for (const auto& entry : fs::directory_iterator(help_dir)) {
+			if (!entry.is_regular_file())
+				continue;
+
+			const std::string filename = entry.path().filename().string();
+			if (filename.size() < 3 || filename.substr(filename.size() - 3) != ".md")
+				continue;
+
+			md_count++;
+			std::ifstream file(entry.path());
+			if (!file.is_open())
+				continue;
+
+			std::string content((std::istreambuf_iterator<char>(file)),
+				std::istreambuf_iterator<char>());
+			file.close();
+
+			// Split content into lines.
+			std::vector<std::string> lines;
+			std::istringstream stream(content);
+			std::string line;
+			while (std::getline(stream, line))
+				lines.push_back(line);
+
+			if (lines.size() < 2)
+				continue;
+
+			// First line: tag line starting with '!'.
+			std::string tag_line = trim(lines[0]);
+			if (tag_line.empty() || tag_line[0] != '!')
+				continue;
+
+			std::string tags_str = to_lower(trim(tag_line.substr(1)));
+			std::vector<std::string> tags = split_whitespace(tags_str);
+
+			// Second line: title starting with '#'.
+			std::string title_line = trim(lines[1]);
+			if (title_line.empty() || title_line[0] != '#')
+				continue;
+
+			std::string title = trim(title_line.substr(1));
+
+			// Body is everything from line 1 onwards (title + rest).
+			std::string body;
+			for (size_t i = 1; i < lines.size(); i++) {
+				if (i > 1)
+					body += '\n';
+				body += lines[i];
+			}
+
+			// Parse KB ID from title (e.g., "KB001: Some Title").
+			std::string kb_id;
+			std::string title_text = title;
+			std::regex kb_regex(R"(^(KB\d+):\s*(.+))");
+			std::smatch kb_match;
+			if (std::regex_match(title, kb_match, kb_regex)) {
+				kb_id = kb_match[1].str();
+				title_text = kb_match[2].str();
+			}
+
+			help_articles.push_back({ tags, title_text, kb_id, body });
+			logging::write(std::format("loaded help article: {}", title_text));
+		}
+
+		logging::write(std::format("found {} markdown files", md_count));
+		logging::write(std::format("loaded {} help articles total", help_articles.size()));
 		help_loaded = true;
-		core.hideLoadingScreen();
-	} catch (e) {
-		log.write('failed to load help documents: %s', e.message);
-		core.hideLoadingScreen();
-		core.setToast('error', 'failed to load help documents');
+		core::hideLoadingScreen();
+	} catch (const std::exception& e) {
+		logging::write(std::format("failed to load help documents: {}", e.what()));
+		core::hideLoadingScreen();
+		core::setToast("error", "failed to load help documents");
 	}
-};
+}
 
-const filter_articles = (search) => {
-	if (!search || search.trim() === '')
-		return help_articles;
+static std::vector<const HelpArticle*> filter_articles(const std::string& search) {
+	std::string trimmed = trim(search);
+	if (trimmed.empty()) {
+		std::vector<const HelpArticle*> result;
+		result.reserve(help_articles.size());
+		for (const auto& article : help_articles)
+			result.push_back(&article);
+		return result;
+	}
 
-	const keywords = search.toLowerCase().trim().split(/\s+/);
-	const scored = help_articles.map(article => {
-		const has_default = article.tags.includes('default');
-		let score = 0;
+	std::vector<std::string> keywords = split_whitespace(to_lower(trimmed));
 
-		for (const kw of keywords) {
-			if (article.kb_id && article.kb_id.toLowerCase() === kw)
+	struct ScoredArticle {
+		const HelpArticle* article;
+		int matched;
+		bool has_default;
+	};
+
+	std::vector<ScoredArticle> scored;
+	for (const auto& article : help_articles) {
+		bool has_default = std::find(article.tags.begin(), article.tags.end(), "default") != article.tags.end();
+		int score = 0;
+
+		for (const auto& kw : keywords) {
+			std::string kb_lower = to_lower(article.kb_id);
+			if (!article.kb_id.empty() && kb_lower == kw)
 				score += 3;
-			else if (article.kb_id && article.kb_id.toLowerCase().includes(kw))
+			else if (!article.kb_id.empty() && kb_lower.find(kw) != std::string::npos)
 				score += 2;
 
-			for (const tag of article.tags) {
-				if (tag === kw)
+			for (const auto& tag : article.tags) {
+				if (tag == kw)
 					score += 2;
-				else if (tag.includes(kw))
+				else if (tag.find(kw) != std::string::npos)
 					score += 1;
 			}
 		}
 
-		return { article, matched: score, has_default };
-	}).filter(s => s.matched > 0 || s.has_default);
+		if (score > 0 || has_default)
+			scored.push_back({ &article, score, has_default });
+	}
 
-	scored.sort((a, b) => b.matched - a.matched);
-	return scored.map(s => s.article);
-};
+	std::sort(scored.begin(), scored.end(),
+		[](const ScoredArticle& a, const ScoredArticle& b) { return b.matched < a.matched; });
 
-let filter_timeout = null;
+	std::vector<const HelpArticle*> result;
+	result.reserve(scored.size());
+	for (const auto& s : scored)
+		result.push_back(s.article);
+	return result;
+}
 
-let pending_kb_id = null;
+static void update_filter() {
+	filtered_articles = filter_articles(std::string(search_query));
+}
 
-module.exports = {
-	register() {
-		this.registerContextMenuOption('Help', 'help.svg');
-	},
+// --- Public API ---
 
-	open_article(kb_id) {
-		pending_kb_id = kb_id;
-		this.setActive();
-	},
+void registerTab() {
+	modules::register_context_menu_option("tab_help", "Help", "help.svg");
+}
 
-	template: `
-		<div id="help-screen">
-			<div class="help-list-container">
-				<h1>Help</h1>
-				<div class="filter">
-					<input type="text" v-model="search_query" placeholder="Search help articles..."/>
-				</div>
-				<div id="help-articles">
-					<div v-for="article in filtered_articles" @click="selected_article = article" class="help-article-item" :class="{ selected: selected_article === article }">
-						<div class="help-article-title">{{ article.title }}</div>
-						<div class="help-article-tags">
-							<span v-if="article.kb_id" class="help-kb-id">{{ article.kb_id }}</span>
-							<span>{{ article.tags.join(', ') }}</span>
-						</div>
-					</div>
-				</div>
-			</div>
-			<div class="help-article-container">
-				<component :is="$components.MarkdownContent" v-if="selected_article" :content="selected_article.body"></component>
-				<div v-else class="help-placeholder">Select an article to view</div>
-			</div>
-			<input type="button" value="Go Back" @click="go_back"/>
-		</div>
-	`,
+void mounted() {
+	load_help_docs();
 
-	data() {
-		return {
-			search_query: '',
-			filtered_articles: [],
-			selected_article: null
-		};
-	},
+	update_filter();
 
-	methods: {
-		go_back() {
-			this.$modules.go_to_landing();
-		},
-
-		debounced_filter(search) {
-			clearTimeout(filter_timeout);
-			filter_timeout = setTimeout(() => {
-				this.filtered_articles = filter_articles(search);
-			}, 300);
-		}
-	},
-
-	watch: {
-		search_query(value) {
-			this.debounced_filter(value);
-		}
-	},
-
-	async mounted() {
-		await load_help_docs(this.$core);
-
-		this.filtered_articles = help_articles;
-
-		if (pending_kb_id) {
-			this.selected_article = help_articles.find(a => a.kb_id === pending_kb_id) ?? null;
-			pending_kb_id = null;
-		}
-
-		if (!this.selected_article) {
-			const kb002 = help_articles.find(a => a.kb_id === 'KB002');
-			this.selected_article = kb002 ?? null;
+	// Check for pending KB article from modules::openHelpArticle().
+	std::string pending_kb = modules::consumePendingKbId();
+	if (!pending_kb.empty()) {
+		for (const auto& article : help_articles) {
+			if (article.kb_id == pending_kb) {
+				selected_article = &article;
+				break;
+			}
 		}
 	}
-};
+
+	// Default to KB002 if nothing selected.
+	if (!selected_article) {
+		for (const auto& article : help_articles) {
+			if (article.kb_id == "KB002") {
+				selected_article = &article;
+				break;
+			}
+		}
+	}
+}
+
+void render() {
+	// Left panel: article list.
+	ImGui::BeginChild("##help-list", ImVec2(300, -ImGui::GetFrameHeightWithSpacing()), true);
+	{
+		ImGui::Text("Help");
+		ImGui::Separator();
+
+		// Search bar.
+		if (ImGui::InputText("##search", search_query, sizeof(search_query)))
+			update_filter();
+
+		ImGui::Separator();
+
+		// Article list.
+		for (const auto* article : filtered_articles) {
+			bool is_selected = (selected_article == article);
+
+			std::string label = article->title;
+			if (!article->kb_id.empty())
+				label = std::format("[{}] {}", article->kb_id, article->title);
+
+			if (ImGui::Selectable(label.c_str(), is_selected))
+				selected_article = article;
+
+			// Show tags as tooltip.
+			if (ImGui::IsItemHovered() && !article->tags.empty()) {
+				std::string tags_str;
+				for (size_t i = 0; i < article->tags.size(); i++) {
+					if (i > 0)
+						tags_str += ", ";
+					tags_str += article->tags[i];
+				}
+				ImGui::SetTooltip("%s", tags_str.c_str());
+			}
+		}
+	}
+	ImGui::EndChild();
+
+	ImGui::SameLine();
+
+	// Right panel: article content.
+	ImGui::BeginChild("##help-content", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), true);
+	{
+		if (selected_article)
+			ImGui::TextWrapped("%s", selected_article->body.c_str());
+		else
+			ImGui::TextDisabled("Select an article to view");
+	}
+	ImGui::EndChild();
+
+	// Bottom: Go Back button.
+	if (ImGui::Button("Go Back"))
+		modules::go_to_landing();
+}
+
+} // namespace tab_help
