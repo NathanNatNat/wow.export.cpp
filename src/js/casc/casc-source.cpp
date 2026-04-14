@@ -366,7 +366,7 @@ std::vector<listfile::ExtFilter> CASC::getModelFormats() {
 		modelExt.emplace_back(".m2");
 
 	if (cfg.contains("modelsShowWMO") && cfg["modelsShowWMO"].get<bool>())
-		modelExt.emplace_back(".wmo", true);
+		modelExt.emplace_back(".wmo", constants::LISTFILE_MODEL_FILTER());
 
 	return modelExt;
 }

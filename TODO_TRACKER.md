@@ -968,104 +968,104 @@
 - **Status**: Verified
 - **Details**: In JS, the `cache` Map stores wrapped Proxy objects (`create_wrapper(reader)`) with auto-parse and validation guard behavior. In C++ (line 17), the cache stores raw `std::unique_ptr<db::WDCReader>` instances with none of these behaviors. Cached readers have no protections.
 
-### ⬜ 189. [dbd-manifest.cpp] `prepareManifest()` returns void instead of bool
+### ✅ 189. [dbd-manifest.cpp] `prepareManifest()` returns void instead of bool
 - **JS Source**: `src/js/casc/dbd-manifest.js` lines 50–56
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS function returns `Promise<boolean>` and always returns `true`. The C++ version (line 22) returns `void`. While the boolean return is always `true` and likely never checked, this is a signature deviation. If any caller checked the return value, it would be a compilation error.
 
-### ⬜ 190. [dbd-manifest.cpp] Truthiness check for JSON fields is stricter than JS
+### ✅ 190. [dbd-manifest.cpp] Truthiness check for JSON fields is stricter than JS
 - **JS Source**: `src/js/casc/dbd-manifest.js` line 31
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses simple truthiness: `if (entry.tableName && entry.db2FileDataID)`. C++ (lines 55–58) uses explicit type checks (`is_string()`, `is_number()`, `.empty()` checks). Stricter — rejects a `tableName` that is a non-string truthy value or a `db2FileDataID` that is a non-number truthy value.
 
-### ⬜ 191. [dbd-manifest.cpp] Data race on `is_preloaded` flag — not atomic or mutex-protected
+### ✅ 191. [dbd-manifest.cpp] Data race on `is_preloaded` flag — not atomic or mutex-protected
 - **JS Source**: `src/js/casc/dbd-manifest.js` lines 10, 38, 41, 51
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ adds `manifest_mutex` (line 30) to protect `table_to_id` and `id_to_table` access. However, `is_preloaded` is written on lines 68 and 71 (inside async lambda, potentially on worker thread) and read on line 80 (`prepareManifest`) on the calling thread — all without mutex protection or atomic access. This is a data race (undefined behavior in C++). Should be `std::atomic<bool>`.
 
-### ⬜ 192. [dbd-manifest.cpp] `preload()` has TOCTOU race on `preload_promise`
+### ✅ 192. [dbd-manifest.cpp] `preload()` has TOCTOU race on `preload_promise`
 - **JS Source**: `src/js/casc/dbd-manifest.js` lines 18–43
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The check `if (preload_promise.has_value())` (line 41) and the assignment `preload_promise = std::async(...)` (line 44) are not protected by any lock. If two threads call `preload()` concurrently, both could pass the check and launch two async tasks. In JS this cannot happen because JS is single-threaded. Should use a mutex or `std::call_once`.
 
-### ⬜ 193. [realmlist.cpp] Missing HTTP response status check
+### ✅ 193. [realmlist.cpp] Missing HTTP response status check
 - **JS Source**: `src/js/casc/realmlist.js` lines 50–64
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS has two distinct error paths: `if (res.ok)` for success and `log.write('Failed to retrieve realmlist from ${url} (${res.status})')` for failure. C++ (lines 83–95) calls `generics::get(url)` with no HTTP status check. If the HTTP library returns error pages as data without throwing, C++ would attempt to JSON-parse the error page, producing a misleading parse error instead of a clean status-code error message.
 
-### ⬜ 194. [realmlist.cpp] `url` validation logic differs from JS
+### ✅ 194. [realmlist.cpp] `url` validation logic differs from JS
 - **JS Source**: `src/js/casc/realmlist.js` lines 39–41
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS does `let url = String(core.view.config.realmListURL)` which converts any value (including `undefined` → `"undefined"`) to a string. C++ checks `config.contains("realmListURL") && config["realmListURL"].is_string()` then checks `url.empty()`. Stricter: rejects non-string config values and empty strings that JS would accept via coercion.
 
-### ⬜ 195. [listfile.cpp] `preload()` does not deduplicate concurrent calls properly
+### ✅ 195. [listfile.cpp] `preload()` does not deduplicate concurrent calls properly
 - **JS Source**: `src/js/casc/listfile.js` lines 478–487
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS stores a `preload_promise` that multiple callers can `await`. All concurrent callers receive the same promise and wait for the single preload to finish. C++ uses a `bool preload_in_progress` flag. When a second caller sees `preload_in_progress == true`, it returns immediately without waiting. This means the second caller proceeds as if preload is done when it is not, potentially causing downstream failures.
 
-### ⬜ 196. [listfile.cpp] `prepareListfile()` does not wait for in-progress preload
+### ✅ 196. [listfile.cpp] `prepareListfile()` does not wait for in-progress preload
 - **JS Source**: `src/js/casc/listfile.js` lines 489–500
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS does `return await preload_promise` to block until preload completes. C++ has a comment `"running concurrently — it would have completed. Just return."` and returns immediately. This comment is incorrect — if preload is in progress, it has NOT completed. The caller would proceed without the listfile being loaded.
 
-### ⬜ 197. [listfile.cpp] `emplace()` vs `set()` — duplicate handling differs in multiple functions
+### ✅ 197. [listfile.cpp] `emplace()` vs `set()` — duplicate handling differs in multiple functions
 - **JS Source**: `src/js/casc/listfile.js` lines 428–430, 541–542, 626–627, 703–707
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: Throughout the codebase, JS uses `Map.set()` which overwrites existing entries with the same key. C++ uses `std::unordered_map::emplace()` which does NOT overwrite — it silently discards the new value if the key exists. Affects: listfile line parsing (preloadedIdLookup), `applyPreload` legacy mode, `loadIDTable`, and `ingestIdentifiedFiles`. Most impactful in `ingestIdentifiedFiles` where JS always overwrites but C++ never does.
 
-### ⬜ 198. [listfile.cpp] `loadUnknownModels` calls extra initialization not present in JS
+### ✅ 198. [listfile.cpp] `loadUnknownModels` calls extra initialization not present in JS
 - **JS Source**: `src/js/casc/listfile.js` lines 610–614
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS calls `DBModelFileData.getFileDataIDs()` directly with no explicit initialization. C++ (lines 687–693) calls `db::caches::DBModelFileData::initializeModelFileData()` before `getFileDataIDs()`. This extra call has no JS equivalent and may cause side effects or redundant initialization.
 
-### ⬜ 199. [listfile.cpp] `applyPreload` binary mode `filter_and_format` returns wrong type
+### ✅ 199. [listfile.cpp] `applyPreload` binary mode `filter_and_format` returns wrong type
 - **JS Source**: `src/js/casc/listfile.js` lines 572–582
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ lambda `filter_and_format` (lines 875–885) returns `std::vector<nlohmann::json>` instead of `std::vector<std::string>`. Each formatted string is implicitly wrapped in a `nlohmann::json` object. The JS returns a plain string array. Depending on how the view members are typed, this may cause type mismatches or unnecessary JSON overhead.
 
-### ⬜ 200. [listfile.cpp] `renderListfile` — empty `file_data_ids` vector treated as "no filter" instead of "match nothing"
+### ✅ 200. [listfile.cpp] `renderListfile` — empty `file_data_ids` vector treated as "no filter" instead of "match nothing"
 - **JS Source**: `src/js/casc/listfile.js` lines 710–756
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS distinguishes between `file_data_ids === undefined` (no filter — include everything) and `file_data_ids = []` (empty filter — include nothing). C++ uses `bool has_id_filter = !file_data_ids.empty()` which treats an empty vector the same as "no filter" — it includes ALL entries. Calling `renderListfile({})` in C++ returns everything, while `renderListfile([])` in JS returns nothing from legacy lookups.
 
-### ⬜ 201. [listfile.cpp] `ExtFilter` struct does not store the actual exclusion regex
+### ✅ 201. [listfile.cpp] `ExtFilter` struct does not store the actual exclusion regex
 - **JS Source**: `src/js/casc/listfile.js` lines 446, 511–513, 647–649, 664–666
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS extension filter can be `['.wmo', constants.LISTFILE_MODEL_FILTER]` where any regex can be used per-extension. C++ `ExtFilter` struct only stores `bool has_exclusion` and always hardcodes `constants::LISTFILE_MODEL_FILTER()` when true. Impossible to use a different exclusion regex per extension — a structural deviation.
 
-### ⬜ 202. [listfile.cpp] `getByID` returns empty string instead of undefined/null sentinel
+### ✅ 202. [listfile.cpp] `getByID` returns empty string instead of undefined/null sentinel
 - **JS Source**: `src/js/casc/listfile.js` lines 778–794
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `getByID` returns `undefined` when a file data ID is not found. C++ returns an empty string `""`. In `getByIDOrUnknown`, JS uses nullish coalescing (`result ?? formatUnknownFile(...)`) which only triggers on `undefined`/`null`. C++ uses `!result.empty()`. If a file legitimately has an empty filename, the behavior would differ.
 
-### ⬜ 203. [listfile.cpp] `getFilteredEntries` API signature change — regex detection
+### ✅ 203. [listfile.cpp] `getFilteredEntries` API signature change — regex detection
 - **JS Source**: `src/js/casc/listfile.js` lines 832–857
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS function accepts either a `string` or `RegExp` and auto-detects via `search instanceof RegExp`. C++ takes `const std::string& search, bool is_regex = false`, requiring the caller to explicitly specify the regex flag. Additionally, C++ silently returns empty results on invalid regex (catch block), while JS would propagate the error.
 
-### ⬜ 204. [listfile.cpp] `parseFileEntry` compiles regex on every call
+### ✅ 204. [listfile.cpp] `parseFileEntry` compiles regex on every call
 - **JS Source**: `src/js/casc/listfile.js` lines 871–876
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ (lines 1005–1015) constructs `std::regex fid_regex(R"(\[(\d+)\]$)")` inside the function body, recompiling it on every invocation. `std::regex` construction is expensive. The regex should be `static const` to avoid repeated compilation.
 
-### ⬜ 205. [tact-keys.cpp] Remote key line-splitting is more lenient than JS
+### ✅ 205. [tact-keys.cpp] Remote key line-splitting is more lenient than JS
 - **JS Source**: `src/js/casc/tact-keys.js` lines 99–100
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `line.split(' ')` which requires exactly 2 parts (rejects lines with double spaces or trailing spaces producing 3+ parts). C++ (lines 205–216) finds the first space and trims the remainder, accepting lines with multiple spaces. Behavioral deviation for malformed input.
 
-### ⬜ 206. [tact-keys.cpp] Error message loses HTTP status code
+### ✅ 206. [tact-keys.cpp] Error message loses HTTP status code
 - **JS Source**: `src/js/casc/tact-keys.js` lines 91–92
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS error message is `"Unable to update tactKeys, HTTP ${res.status}"` with the HTTP status code. C++ (lines 190–197) uses generic `"Unable to update tactKeys"` — catches all exceptions and rethrows without status info. Also adds an `empty response` error path that doesn't exist in JS (JS would just parse 0 keys from empty body).
 
-### ⬜ 207. [vp9-avi-demuxer.cpp] `find_chunk` loop bound off-by-one
+### ✅ 207. [vp9-avi-demuxer.cpp] `find_chunk` loop bound off-by-one
 - **JS Source**: `src/js/casc/vp9-avi-demuxer.js` — `i < length - 4`
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `i < length - 4`. C++ (line 71) uses `i + 3 < size` which is equivalent to `i < size - 3`, allowing one extra position compared to JS's `i < size - 4`. Could read out of bounds on the last byte.
 
-### ⬜ 208. [vp9-avi-demuxer.cpp] `parse_header` missing nullable return
+### ✅ 208. [vp9-avi-demuxer.cpp] `parse_header` missing nullable return
 - **JS Source**: `src/js/casc/vp9-avi-demuxer.js` — returns `null` when `strf` chunk is missing
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS returns `null` when the `strf` chunk is not found. C++ (line 34) returns a default-constructed `VP9Config` instead. Should return `std::optional<VP9Config>` to match JS's nullable return path. Callers cannot distinguish "missing chunk" from "valid config with default values".
 
 ---
