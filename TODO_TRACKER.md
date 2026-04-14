@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 193/565 verified (34%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 197/565 verified (34%)** — ✅ = Verified, ⬜ = Pending
 
 ---
 
@@ -675,10 +675,10 @@
 - **Status**: Verified
 - **Details**: The JS `register_static_context_menu_option()` wraps the action in `{ handler: action, dev_only }` and passes it to `register_context_menu_option()`. The C++ internal `register_context_menu_option()` creates a ContextMenuOption without setting dev_only, so options registered through it always have dev_only=false.
 
-### ⬜ 564. [modules.cpp] `module_registry` uses `std::map` — iteration order is alphabetical instead of insertion order
+### ✅ 564. [modules.cpp] `module_registry` uses `std::map` — iteration order is alphabetical instead of insertion order
 - **JS Source**: `src/js/modules.js` lines 277–295 (`MODULES` object and `initialize()` loop)
-- **Status**: Pending
-- **Details**: `modules.cpp` line 61 declares `static std::map<std::string, ModuleDef> module_registry;`. `std::map` iterates in alphabetical key order, but the JS `MODULES` plain object preserves insertion order (guaranteed by the ES2015 spec for string keys). This causes: (1) the `"modules loaded: ..."` log message lists modules alphabetically (C++: `legacy_tab_audio, legacy_tab_data, ...`) instead of in registration order (JS: `module_test_a, module_test_b, source_select, settings, tab_home, ...`), and (2) the `wrap_module()` loop at line 465 (`for (auto& [name, mod] : module_registry)`) calls each module's `registerModule()` in alphabetical order instead of the defined order, which changes the order nav buttons and context menu options are registered. The fix is to either use an insertion-ordered container (e.g. a `std::vector<std::pair<std::string, ModuleDef>>` or a linked map) or to track registration order separately.
+- **Status**: Verified
+- **Details**: Fixed by changing `module_registry` from `std::map<std::string, ModuleDef>` to `std::vector<std::pair<std::string, ModuleDef>>`, preserving insertion order. A `find_module()` helper provides O(n) lookup by name. The `wrap_module()` loop and log message now iterate in the original JS insertion order.
 
 ### ✅ 132. [png-writer.cpp] write() is synchronous instead of async
 - **JS Source**: `src/js/png-writer.js` lines 247–249
@@ -828,15 +828,15 @@
 - **Status**: Verified
 - **Details**: JS `deleteSize -= manifestSize;` has no guard — `deleteSize` is a JS number (double) and can go negative. C++ uses `uintmax_t` (unsigned), so `if (deleteSize >= manifestSize) deleteSize -= manifestSize;` is added to prevent wraparound. Reasonable defensive fix but a deviation.
 
-### ⬜ 562. [build-cache.cpp] `initBuildCacheSystem()` is never called — deadlocks on cache access
+### ✅ 562. [build-cache.cpp] `initBuildCacheSystem()` is never called — deadlocks on cache access
 - **JS Source**: `src/js/casc/build-cache.js` lines 156–171
-- **Status**: Pending
-- **Details**: In JS, the cache integrity system self-initializes via a self-executing IIFE at module load time (`(async () => { ... cacheIntegrity = integrity; core.events.emit('cache-integrity-ready'); })()`). In C++, the equivalent function `initBuildCacheSystem()` is defined in `build-cache.cpp` (line 164) and declared in `build-cache.h` (line 88) but is **never called** from `app.cpp`, `modules.cpp`, or any other file. Because `cacheIntegrityLoaded` is never set to `true`, any call to `BuildCache::getFile()` or `BuildCache::storeFile()` hits `cacheIntegrityCV.wait()` (lines 87 and 137) and **blocks forever**. The runtime log confirms this: the last entry before the hang is `"Cache integrity is not ready, waiting!"`, triggered when tab_models tries to load `DBFilesClient/ModelFileData.db2` from the CASC build cache. This is a **critical deadlock bug** — the function must be called during startup (e.g. early in `app.cpp`'s initialization sequence, before any CASC source can be selected).
+- **Status**: Verified
+- **Details**: Fixed by adding `casc::initBuildCacheSystem()` call in `app.cpp` after `loadCacheSize()`, before any CASC source can be selected. This matches the JS IIFE that self-initializes at module load time.
 
-### ⬜ 563. [build-cache.cpp] `registerBuildCacheEvents()` is never called — cache purge and stale cleanup broken
+### ✅ 563. [build-cache.cpp] `registerBuildCacheEvents()` is never called — cache purge and stale cleanup broken
 - **JS Source**: `src/js/casc/build-cache.js` lines 174–240
-- **Status**: Pending
-- **Details**: In JS, the `click-cache-clear` event handler (cache purge button) and the `casc-source-changed` stale cache cleanup handler are registered at the module level (lines 174–240), which runs automatically on `require()`. In C++, `registerBuildCacheEvents()` is defined at `build-cache.cpp` line 188 and declared at `build-cache.h` line 93 but is **never called** from anywhere. This means: (1) the cache purge button in the settings screen does nothing (the `click-cache-clear` event is never handled), and (2) stale build caches are never cleaned up on `casc-source-changed`. The function must be called during startup alongside `initBuildCacheSystem()`.
+- **Status**: Verified
+- **Details**: Fixed by adding `casc::registerBuildCacheEvents()` call in `app.cpp` after `initBuildCacheSystem()`. This registers the `click-cache-clear` and `casc-source-changed` event handlers, matching the JS module-level registration that runs on `require()`.
 
 ### ✅ 160. [casc-source.cpp] `getInstallManifest()` fallback differs when encoding key not found
 - **JS Source**: `src/js/casc/casc-source.js` line 72
@@ -2889,8 +2889,8 @@
 - **Status**: Pending
 - **Details**: The GLTF generator metadata string in C++ starts with `"wow.export v"`. Per project conventions, user-facing text should say "wow.export.cpp" not "wow.export".
 
-### ⬜ 565. [app.cpp] Missing `checkLocalVersion()` call for Blender add-on version check
+### ✅ 565. [app.cpp] Missing `checkLocalVersion()` call for Blender add-on version check
 - **JS Source**: `src/app.js` lines 699, 704
-- **Status**: Pending
-- **Details**: In JS, `modules.tab_blender.checkLocalVersion()` is called after the update check completes (line 699 in release mode, line 704 in debug mode). This function checks for locally installed Blender versions, compares the bundled add-on version against what's installed, and prompts the user to update if a newer version is available. In C++ (`app.cpp` lines 2658–2661), this call is commented out with a TODO note. The `tab_blender.cpp` module does have `get_blender_installations()` and related logic implemented, but the `checkLocalVersion()` function itself has not been ported as a callable public function, and the startup call site in `app.cpp` is disabled. The JS runtime log shows `"Checking local Blender add-on version..."` and `"Available Blender installations: 4.5"` — these messages are absent from the C++ runtime log.
+- **Status**: Verified
+- **Details**: Fixed by porting `checkLocalVersion()` as a public function in `tab_blender` namespace (tab_blender.h/cpp) and calling it from `app.cpp`. The function checks for locally installed Blender versions, compares the bundled add-on version against what's installed, and prompts the user to update if a newer version is available.
 

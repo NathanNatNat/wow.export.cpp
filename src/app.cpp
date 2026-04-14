@@ -60,6 +60,7 @@
 #include "js/log.h"
 #include "js/config.h"
 #include "js/casc/tact-keys.h"
+#include "js/casc/build-cache.h"
 #include "js/casc/export-helper.h"
 #include "js/ui/texture-ribbon.h"
 #include "js/3D/Shaders.h"
@@ -67,6 +68,7 @@
 #include "js/modules.h"
 #include "js/modules/tab_textures.h"
 #include "js/modules/tab_items.h"
+#include "js/modules/tab_blender.h"
 #include "js/external-links.h"
 
 // BUILD_RELEASE will be set by the bundler during production builds allowing us
@@ -2638,6 +2640,14 @@ int main(int argc, char* argv[]) {
 
 	loadCacheSize();
 
+	// Initialize build cache integrity system.
+	// JS: build-cache.js IIFE (lines 156-171) runs at module load time.
+	casc::initBuildCacheSystem();
+
+	// Register event handlers for cache clearing and stale cache cleanup.
+	// JS: build-cache.js lines 174-240 run at module load time.
+	casc::registerBuildCacheEvents();
+
 	// Load/update BLTE decryption keys.
 	casc::tact_keys::load();
 
@@ -2656,9 +2666,10 @@ int main(int argc, char* argv[]) {
 	// TODO: Port src/js/updater.js to C++ (see TODO_TRACKER.md entry #34+).
 
 	// JS: app.js lines 699, 704 — check Blender add-on version after update check.
-	// The tab_blender module has not been ported to C++ yet. When it is, call
-	// tab_blender::checkLocalVersion() here. See src/js/modules/tab_blender.js:127-170.
-	// TODO: Port tab_blender module to C++ and enable checkLocalVersion() call.
+	// In JS, checkLocalVersion() is called after the update check completes (line 699
+	// in release mode, line 704 in debug mode). Since the updater is not yet ported,
+	// we call it unconditionally here.
+	tab_blender::checkLocalVersion();
 
 	// Load what's new HTML on app start
 	// JS: app.js lines 707-716
