@@ -1,171 +1,181 @@
-const path = require('path');
-const util = require('util');
-const fsp = require('fs').promises;
+/*!
+	wow.export (https://github.com/Kruithne/wow.export)
+	Authors: Kruithne <kruithne@gmail.com>
+	License: MIT
+ */
 
-const constants = require('../constants');
-const generics = require('../generics');
-const core = require('../core');
-const log = require('../log');
-const PATTERN_ADDON_VER = /'version': \((\d+), (\d+), (\d+)\),/;
-const PATTERN_BLENDER_VER = /\d+\.\d+\w?/;
+#include "tab_blender.h"
+#include "../log.h"
+#include "../core.h"
+#include "../modules.h"
+#include "../constants.h"
+#include "../generics.h"
 
-const parse_manifest_version = async (file) => {
-	try {
-		const data = await fsp.readFile(file, 'utf8');
-		const match = data.match(PATTERN_ADDON_VER);
+#include <string>
+#include <vector>
+#include <format>
+#include <regex>
+#include <fstream>
+#include <filesystem>
+#include <algorithm>
 
-		if (match)
-			return util.format('%d.%d.%d', match[1], match[2], match[3]);
+#include <imgui.h>
 
-		return { error: 'version_pattern_mismatch' };
-	} catch (err) {
-		if (err.code === 'ENOENT')
-			return { error: 'file_not_found' };
+namespace tab_blender {
 
-		return { error: 'read_error', message: err.message };
-	}
+// --- Internal constants (JS equivalents) ---
+
+static const std::regex PATTERN_ADDON_VER(R"('version': \((\d+), (\d+), (\d+)\),)");
+static const std::regex PATTERN_BLENDER_VER(R"(\d+\.\d+\w?)");
+
+// --- Internal functions ---
+
+struct ManifestResult {
+	std::string version;
+	std::string error;
+	std::string message;
 };
 
-const get_blender_installations = async () => {
-	const installs = [];
+static ManifestResult parse_manifest_version(const std::filesystem::path& file) {
+	try {
+		std::ifstream ifs(file);
+		if (!ifs.is_open())
+			return { "", "file_not_found", "" };
+
+		std::string data((std::istreambuf_iterator<char>(ifs)),
+			std::istreambuf_iterator<char>());
+		ifs.close();
+
+		std::smatch match;
+		if (std::regex_search(data, match, PATTERN_ADDON_VER))
+			return { std::format("{}.{}.{}", match[1].str(), match[2].str(), match[3].str()), "", "" };
+
+		return { "", "version_pattern_mismatch", "" };
+	} catch (const std::exception& e) {
+		return { "", "read_error", e.what() };
+	}
+}
+
+static std::vector<std::string> get_blender_installations() {
+	std::vector<std::string> installs;
 
 	try {
-		const entries = await fsp.readdir(constants.BLENDER.DIR, { withFileTypes: true });
+		namespace fs = std::filesystem;
+		const fs::path& blender_dir = constants::BLENDER::DIR();
 
-		for (const entry of entries) {
-			if (!entry.isDirectory())
+		if (!fs::exists(blender_dir) || !fs::is_directory(blender_dir))
+			return installs;
+
+		for (const auto& entry : fs::directory_iterator(blender_dir)) {
+			if (!entry.is_directory())
 				continue;
 
-			if (!entry.name.match(PATTERN_BLENDER_VER)) {
-				log.write('Skipping invalid Blender installation dir: %s', entry.name);
+			const std::string name = entry.path().filename().string();
+			if (!std::regex_match(name, PATTERN_BLENDER_VER)) {
+				logging::write(std::format("Skipping invalid Blender installation dir: {}", name));
 				continue;
 			}
 
-			installs.push(entry.name);
+			installs.push_back(name);
 		}
-	} catch {
-		// no blender installation or cannot access
+	} catch (...) {
+		// No blender installation or cannot access.
 	}
 
 	return installs;
-};
+}
 
-module.exports = {
-	register() {
-		this.registerContextMenuOption('Install Blender Add-on', '../images/blender.png');
-	},
+static void start_automatic_install() {
+	BusyLock _lock = core::create_busy_lock();
+	core::setToast("progress", "Installing Blender add-on, please wait...", {}, -1, false);
+	logging::write("Starting automatic installation of Blender add-on...");
 
-	template: `
-		<div id="blender-info">
-			<div id="blender-info-header">
-				<h1>Installing the wow.export Add-on for Blender 2.8+</h1>
-				<p>Blender users can make use of our special importer add-on which makes importing advanced objects as simple as a single click. WMO objects are imported with any exported doodad sets included. ADT map tiles are imported complete with all WMOs and doodads positioned as they would be in-game.</p>
-			</div>
-			<div id="blender-info-buttons">
-				<input type="button" value="Install Automatically (Recommended)" @click="start_automatic_install" :class="{ disabled: $core.view.isBusy }"/>
-				<input type="button" value="Install Manually (Advanced)" @click="open_addon_directory"/>
-				<input type="button" value="Go Back" @click="go_back"/>
-			</div>
-		</div>
-	`,
+	try {
+		namespace fs = std::filesystem;
+		const auto versions = get_blender_installations();
+		bool installed = false;
 
-	methods: {
-		open_addon_directory() {
-			nw.Shell.openItem(constants.BLENDER.LOCAL_DIR);
-		},
+		for (const auto& version : versions) {
+			// Compare version string against minimum.
+			double ver_num = 0;
+			try { ver_num = std::stod(version); } catch (...) { continue; }
 
-		go_back() {
-			this.$modules.go_to_landing();
-		},
+			if (ver_num >= constants::BLENDER::MIN_VER) {
+				const fs::path addon_path = constants::BLENDER::DIR() / version / std::string(constants::BLENDER::ADDON_DIR);
+				logging::write(std::format("Targeting Blender version {} ({})", version, addon_path.string()));
 
-		async start_automatic_install() {
-			using _lock = core.create_busy_lock();
-			core.setToast('progress', 'Installing Blender add-on, please wait...', null, -1, false);
-			log.write('Starting automatic installation of Blender add-on...');
+				generics::deleteDirectory(addon_path.string());
+				generics::createDirectory(addon_path.string());
 
-			try {
-				const versions = await get_blender_installations();
-				let installed = false;
+				const fs::path& local_dir = constants::BLENDER::LOCAL_DIR();
+				if (fs::exists(local_dir) && fs::is_directory(local_dir)) {
+					for (const auto& file : fs::directory_iterator(local_dir)) {
+						if (file.is_directory())
+							continue;
 
-				for (const version of versions) {
-					if (version >= constants.BLENDER.MIN_VER) {
-						const addon_path = path.join(constants.BLENDER.DIR, version, constants.BLENDER.ADDON_DIR);
-						log.write('Targeting Blender version %s (%s)', version, addon_path);
+						const fs::path src_path = file.path();
+						const fs::path dest_path = addon_path / file.path().filename();
 
-						await generics.deleteDirectory(addon_path);
-						await generics.createDirectory(addon_path);
-
-						const files = await fsp.readdir(constants.BLENDER.LOCAL_DIR, { withFileTypes: true });
-						for (const file of files) {
-							if (file.isDirectory())
-								continue;
-
-							const src_path = path.join(constants.BLENDER.LOCAL_DIR, file.name);
-							const dest_path = path.join(addon_path, file.name);
-
-							log.write('%s -> %s', src_path, dest_path);
-							await fsp.copyFile(src_path, dest_path);
-						}
-
-						installed = true;
+						logging::write(std::format("{} -> {}", src_path.string(), dest_path.string()));
+						fs::copy_file(src_path, dest_path, fs::copy_options::overwrite_existing);
 					}
 				}
 
-				if (installed)
-					core.setToast('success', 'The latest add-on version has been installed! (You will need to restart Blender)');
-				else {
-					log.write('No valid Blender installation found, add-on install failed.');
-					core.setToast('error', 'Sorry, a valid Blender 2.8+ installation was not be detected on your system.', null, -1);
-				}
-			} catch (e) {
-				log.write('Installation failed due to exception: %s', e.message);
-				core.setToast('error', 'Sorry, an unexpected error occurred trying to install the add-on.', null, -1);
+				installed = true;
 			}
 		}
-	},
 
-	async checkLocalVersion() {
-		log.write('Checking local Blender add-on version...');
-
-		const versions = await get_blender_installations();
-		if (versions.length === 0) {
-			log.write('Error: User does not have any Blender installations.');
-			return;
+		if (installed)
+			core::setToast("success", "The latest add-on version has been installed! (You will need to restart Blender)");
+		else {
+			logging::write("No valid Blender installation found, add-on install failed.");
+			core::setToast("error", "Sorry, a valid Blender 2.8+ installation was not be detected on your system.", {}, -1);
 		}
-
-		log.write('Available Blender installations: %s', versions.length > 0 ? versions.join(', ') : 'None');
-		const blender_version = versions.sort().pop();
-
-		if (blender_version < constants.BLENDER.MIN_VER) {
-			log.write('Latest Blender install does not meet minimum requirements (%s < %s)', blender_version, constants.BLENDER.MIN_VER);
-			return;
-		}
-
-		const latest_manifest = path.join(constants.BLENDER.LOCAL_DIR, constants.BLENDER.ADDON_ENTRY);
-		const latest_addon_version = await parse_manifest_version(latest_manifest);
-
-		if (typeof latest_addon_version === 'object') {
-			if (latest_addon_version.error === 'file_not_found')
-				log.write('Error: Add-on entry file not found: %s', latest_manifest);
-			else if (latest_addon_version.error === 'version_pattern_mismatch')
-				log.write('Error: Add-on entry file does not contain valid version pattern: %s', latest_manifest);
-			else
-				log.write('Error: Failed to read add-on entry file (%s): %s', latest_manifest, latest_addon_version.message);
-
-			return;
-		}
-
-		const blender_manifest = path.join(constants.BLENDER.DIR, blender_version, constants.BLENDER.ADDON_DIR, constants.BLENDER.ADDON_ENTRY);
-		const blender_addon_version = await parse_manifest_version(blender_manifest);
-
-		log.write('Latest add-on version: %s, Blender add-on version: %s', latest_addon_version, blender_addon_version);
-
-		if (latest_addon_version > blender_addon_version) {
-			log.write('Prompting user for Blender add-on update...');
-			core.setToast('info', 'A newer version of the Blender add-on is available for you.', {
-				'Install': () => require('../modules').setActive('tab_blender'),
-				'Maybe Later': () => false
-			}, -1, false);
-		}
+	} catch (const std::exception& e) {
+		logging::write(std::format("Installation failed due to exception: {}", e.what()));
+		core::setToast("error", "Sorry, an unexpected error occurred trying to install the add-on.", {}, -1);
 	}
-};
+}
+
+static void open_addon_directory() {
+	core::openInExplorer(constants::BLENDER::LOCAL_DIR().string());
+}
+
+// --- Public API ---
+
+void registerTab() {
+	modules::register_context_menu_option("tab_blender", "Install Blender Add-on", "../images/blender.png");
+}
+
+void render() {
+	ImGui::Text("Installing the wow.export Add-on for Blender 2.8+");
+	ImGui::Separator();
+
+	ImGui::TextWrapped(
+		"Blender users can make use of our special importer add-on which makes importing "
+		"advanced objects as simple as a single click. WMO objects are imported with any "
+		"exported doodad sets included. ADT map tiles are imported complete with all WMOs "
+		"and doodads positioned as they would be in-game."
+	);
+
+	ImGui::Spacing();
+
+	const bool busy = core::view->isBusy > 0;
+
+	if (busy)
+		ImGui::BeginDisabled();
+
+	if (ImGui::Button("Install Automatically (Recommended)"))
+		start_automatic_install();
+
+	if (busy)
+		ImGui::EndDisabled();
+
+	if (ImGui::Button("Install Manually (Advanced)"))
+		open_addon_directory();
+
+	if (ImGui::Button("Go Back"))
+		modules::go_to_landing();
+}
+
+} // namespace tab_blender
