@@ -8,6 +8,7 @@
 #include "../log.h"
 #include "../core.h"
 #include "../modules.h"
+#include "../components/markdown-content.h"
 
 #include <cstring>
 #include <string>
@@ -40,6 +41,7 @@ static bool help_loaded = false;
 static char search_query[256] = "";
 static std::vector<const HelpArticle*> filtered_articles;
 static const HelpArticle* selected_article = nullptr;
+static markdown_content::MarkdownContentState md_state;
 
 // --- Internal functions ---
 
@@ -272,8 +274,11 @@ void render() {
 			if (!article->kb_id.empty())
 				label = std::format("[{}] {}", article->kb_id, article->title);
 
-			if (ImGui::Selectable(label.c_str(), is_selected))
+			if (ImGui::Selectable(label.c_str(), is_selected)) {
 				selected_article = article;
+				// Reset markdown scroll state when selecting a new article.
+				md_state = markdown_content::MarkdownContentState{};
+			}
 
 			// Show tags as tooltip.
 			if (ImGui::IsItemHovered() && !article->tags.empty()) {
@@ -291,13 +296,17 @@ void render() {
 
 	ImGui::SameLine();
 
-	// Right panel: article content.
-	ImGui::BeginChild("##help-content", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), true);
+	// Right panel: article content rendered as markdown.
+	// JS equivalent: <component :is="$components.MarkdownContent" v-if="selected_article" :content="selected_article.body">
+	ImGui::BeginChild("##help-content-wrapper", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), true);
 	{
-		if (selected_article)
-			ImGui::TextWrapped("%s", selected_article->body.c_str());
-		else
+		if (selected_article) {
+			markdown_content::render("##help-article-md", md_state, selected_article->body,
+				// KB link handler: navigate to the referenced help article.
+				[](const std::string& kb_id) { modules::openHelpArticle(kb_id); });
+		} else {
 			ImGui::TextDisabled("Select an article to view");
+		}
 	}
 	ImGui::EndChild();
 

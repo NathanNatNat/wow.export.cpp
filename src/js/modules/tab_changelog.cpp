@@ -7,6 +7,7 @@
 #include "tab_changelog.h"
 #include "../log.h"
 #include "../modules.h"
+#include "../components/markdown-content.h"
 
 #include <string>
 #include <fstream>
@@ -21,6 +22,7 @@ namespace tab_changelog {
 
 static std::string changelog_text;
 static bool has_loaded = false;
+static markdown_content::MarkdownContentState md_state;
 
 // --- Internal functions ---
 
@@ -75,10 +77,9 @@ void render() {
 	ImGui::Text("Changelog");
 	ImGui::Separator();
 
-	// Scrollable region for changelog content.
-	ImGui::BeginChild("##changelog-text", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), true);
-	ImGui::TextWrapped("%s", changelog_text.c_str());
-	ImGui::EndChild();
+	// Scrollable region for changelog content rendered as markdown.
+	// JS equivalent: <component :is="$components.MarkdownContent" id="changelog-text" :content="content">
+	markdown_content::render("##changelog-text", md_state, changelog_text);
 
 	// Bottom: Go Back button.
 	if (ImGui::Button("Go Back"))

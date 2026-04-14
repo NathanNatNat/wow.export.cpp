@@ -23,4 +23,10 @@ void render();
  */
 void mounted();
 
+/**
+ * Unmounted callback (logs to console).
+ * JS equivalent: unmounted() { console.log('module_test_a unmounted'); }
+ */
+void unmounted();
+
 } // namespace module_test_a
