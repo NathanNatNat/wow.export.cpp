@@ -32,9 +32,9 @@ void ensureInitialized();
 /**
  * Get model file data IDs for an item (first option per model resource).
  * @param item_id Item ID.
- * @returns Vector of model file data IDs, or nullptr if not found.
+ * @returns Vector of model file data IDs, or std::nullopt if not found.
  */
-const std::vector<uint32_t>* getItemModels(uint32_t item_id);
+std::optional<std::vector<uint32_t>> getItemModels(uint32_t item_id);
 
 /**
  * Get display data for an item (models and textures).

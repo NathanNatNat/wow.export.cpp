@@ -113,10 +113,13 @@ std::optional<std::vector<TextureComponent>> getTexturesByDisplayId(uint32_t dis
 	for (const auto& component : comp_it->second) {
 		const auto* file_data_ids = DBTextureFileData::getTextureFDIDsByMatID(component.materialResourcesID);
 		if (file_data_ids && !file_data_ids->empty()) {
+			// Pass std::nullopt for "no preference" (matches JS null), not 0
+			std::optional<uint32_t> opt_race = (race_id >= 0) ? std::optional<uint32_t>(static_cast<uint32_t>(race_id)) : std::nullopt;
+			std::optional<uint32_t> opt_gender = (gender_index >= 0) ? std::optional<uint32_t>(static_cast<uint32_t>(gender_index)) : std::nullopt;
 			auto bestFileDataID = DBComponentTextureFileData::getTextureForRaceGender(
 				*file_data_ids,
-				(race_id >= 0) ? static_cast<uint32_t>(race_id) : 0,
-				(gender_index >= 0) ? static_cast<uint32_t>(gender_index) : 0,
+				opt_race,
+				opt_gender,
 				0);
 
 			TextureComponent tc;

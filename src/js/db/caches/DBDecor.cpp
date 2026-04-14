@@ -44,14 +44,16 @@ void initializeDecorData() {
 
 	auto allRows = casc::db2::preloadTable("HouseDecor").getAllRows();
 	for (const auto& [id, row] : allRows) {
-		uint32_t model_file_id = fieldToUint32(row.at("ModelFileDataID"));
+		auto mfIt = row.find("ModelFileDataID");
+		uint32_t model_file_id = (mfIt != row.end()) ? fieldToUint32(mfIt->second) : 0;
 		if (model_file_id == 0)
 			continue;
 
 		DecorItem item;
 		item.id = id;
 
-		std::string name = fieldToString(row.at("Name_lang"));
+		auto nameIt = row.find("Name_lang");
+		std::string name = (nameIt != row.end()) ? fieldToString(nameIt->second) : "";
 		item.name = name.empty() ? std::format("Decor {}", id) : std::move(name);
 
 		item.modelFileDataID = model_file_id;

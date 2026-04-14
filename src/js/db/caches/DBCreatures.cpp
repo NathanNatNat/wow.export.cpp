@@ -106,7 +106,7 @@ void initializeCreatureData() {
 				auto& display = creatureDisplayInfoMap.at(displayID);
 
 				if (modelIDHasExtraGeosets) {
-					display.extraGeosets.clear();
+					display.extraGeosets.emplace();
 					auto geoIt = creatureGeosetMap.find(displayID);
 					if (geoIt != creatureGeosetMap.end())
 						display.extraGeosets = geoIt->second;
@@ -136,11 +136,11 @@ const std::vector<CreatureDisplayInfo>* getCreatureDisplaysByFileDataID(uint32_t
 /**
  * Gets the file data ID for a given display ID.
  */
-uint32_t getFileDataIDByDisplayID(uint32_t displayID) {
+std::optional<uint32_t> getFileDataIDByDisplayID(uint32_t displayID) {
 	auto it = displayIDToFileDataID.find(displayID);
 	if (it != displayIDToFileDataID.end())
 		return it->second;
-	return 0;
+	return std::nullopt;
 }
 
 const CreatureDisplayInfo* getDisplayInfo(uint32_t displayID) {

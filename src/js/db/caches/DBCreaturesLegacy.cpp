@@ -42,17 +42,17 @@ static std::vector<std::string> fieldToStringVec(const db::FieldValue& val) {
 static std::unordered_map<std::string, std::vector<LegacyCreatureDisplay>> creatureDisplays;
 static bool isInitialized = false;
 
-// Helper: normalize path (lowercase, forward slashes, .mdl/.mdx to .m2)
+// Helper: normalize path (lowercase, forward slashes, .mdx to .m2)
 static std::string normalizePath(const std::string& path) {
 	std::string normalized = path;
 	std::transform(normalized.begin(), normalized.end(), normalized.begin(),
 		[](unsigned char c) { return std::tolower(c); });
 	std::replace(normalized.begin(), normalized.end(), '\\', '/');
 
-	// Convert .mdl/.mdx to .m2
+	// Convert .mdx to .m2
 	if (normalized.size() >= 4) {
 		std::string ext = normalized.substr(normalized.size() - 4);
-		if (ext == ".mdl" || ext == ".mdx")
+		if (ext == ".mdx")
 			normalized = normalized.substr(0, normalized.size() - 4) + ".m2";
 	}
 
@@ -112,7 +112,7 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
 			}
 
 			if (!model_path.empty()) {
-				// normalize: lowercase, convert .mdl/.mdx to .m2
+				// normalize: lowercase, convert .mdx to .m2
 				std::string normalized = normalizePath(model_path);
 				model_id_to_path.emplace(id, std::move(normalized));
 			}
@@ -135,10 +135,13 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
 
 		for (const auto& [display_id, row] : display_rows) {
 			uint32_t model_id = 0;
+			bool model_id_found = false;
 			auto mit = row.find("ModelID");
-			if (mit != row.end())
+			if (mit != row.end()) {
 				model_id = fieldToUint32(mit->second);
-			if (model_id == 0) {
+				model_id_found = true;
+			}
+			if (!model_id_found) {
 				mit = row.find("field_1");
 				if (mit != row.end())
 					model_id = fieldToUint32(mit->second);
@@ -153,36 +156,40 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
 			// get texture variation strings (3 slots)
 			std::string tex1, tex2, tex3;
 
+			// JS: tex1 = row.TextureVariation?.[0] ?? row.Skin1 ?? row.field_6 ?? ''
+			// ?? only falls through on null/undefined, not on empty string
+			bool tex1_found = false, tex2_found = false, tex3_found = false;
+
 			auto tvIt = row.find("TextureVariation");
 			if (tvIt != row.end()) {
 				auto texVec = fieldToStringVec(tvIt->second);
-				if (texVec.size() > 0) tex1 = texVec[0];
-				if (texVec.size() > 1) tex2 = texVec[1];
-				if (texVec.size() > 2) tex3 = texVec[2];
+				if (texVec.size() > 0) { tex1 = texVec[0]; tex1_found = true; }
+				if (texVec.size() > 1) { tex2 = texVec[1]; tex2_found = true; }
+				if (texVec.size() > 2) { tex3 = texVec[2]; tex3_found = true; }
 			}
 
-			// Fallback field names
-			if (tex1.empty()) {
+			// Fallback field names (only if field was not found, matching JS ?? semantics)
+			if (!tex1_found) {
 				auto it2 = row.find("Skin1");
-				if (it2 != row.end()) tex1 = fieldToString(it2->second);
+				if (it2 != row.end()) { tex1 = fieldToString(it2->second); tex1_found = true; }
 			}
-			if (tex1.empty()) {
+			if (!tex1_found) {
 				auto it2 = row.find("field_6");
 				if (it2 != row.end()) tex1 = fieldToString(it2->second);
 			}
-			if (tex2.empty()) {
+			if (!tex2_found) {
 				auto it2 = row.find("Skin2");
-				if (it2 != row.end()) tex2 = fieldToString(it2->second);
+				if (it2 != row.end()) { tex2 = fieldToString(it2->second); tex2_found = true; }
 			}
-			if (tex2.empty()) {
+			if (!tex2_found) {
 				auto it2 = row.find("field_7");
 				if (it2 != row.end()) tex2 = fieldToString(it2->second);
 			}
-			if (tex3.empty()) {
+			if (!tex3_found) {
 				auto it2 = row.find("Skin3");
-				if (it2 != row.end()) tex3 = fieldToString(it2->second);
+				if (it2 != row.end()) { tex3 = fieldToString(it2->second); tex3_found = true; }
 			}
-			if (tex3.empty()) {
+			if (!tex3_found) {
 				auto it2 = row.find("field_8");
 				if (it2 != row.end()) tex3 = fieldToString(it2->second);
 			}
@@ -212,6 +219,7 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
 		isInitialized = true;
 	} catch (const std::exception& e) {
 		logging::write(std::format("Failed to load legacy creature data: {}", e.what()));
+		// Note: JS also logs e.stack here, but C++ exceptions do not carry stack traces by default
 	}
 }
 

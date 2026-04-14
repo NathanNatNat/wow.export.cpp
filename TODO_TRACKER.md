@@ -1074,101 +1074,101 @@
 
 ## src/js/db/ Audit (0/3 ✅)
 
-### ⬜ 209. [DBDParser.cpp] TODO placeholder: foreign key support not implemented
+### ✅ 209. [DBDParser.cpp] TODO placeholder: foreign key support not implemented
 - **JS Source**: `src/js/db/DBDParser.js` line 342
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ line 379 contains `// TODO: Support foreign key support.` carried over from the original JS source (line 342). The `parseColumnChunk` method reads the column foreign key match group (`<TableName::ColumnName>`) but discards it (C++ line 372 has the commented-out capture `//const std::string columnForeignKey = match[2].str();`). This matches the JS behavior exactly — the JS also captures but discards the foreign key (JS line 338). Both C++ and JS are missing this feature identically.
 
-### ⬜ 210. [WDCReader.cpp] TODO placeholder: string vs locstring not differentiated
+### ✅ 210. [WDCReader.cpp] TODO placeholder: string vs locstring not differentiated
 - **JS Source**: `src/js/db/WDCReader.js` line 42
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ line 89 contains `// TODO: Handle string separate to locstring in the event we need it.` carried over from the original JS source (line 42). The `convertDBDToSchemaType` function treats both `"string"` and `"locstring"` DBD types identically, mapping them both to `FieldType::String`. This matches the JS behavior exactly — the JS also maps both to `FieldType.String` (JS line 43). If localized string handling is ever needed, both would need to be updated.
 
-### ⬜ 211. [WDCReader.cpp] TODO placeholder: WDC4 chunk data not fully read
+### ✅ 211. [WDCReader.cpp] TODO placeholder: WDC4 chunk data not fully read
 - **JS Source**: `src/js/db/WDCReader.js` line 429
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ line 497 contains `// New WDC4 chunk: TODO read` carried over from the original JS source (line 429). For WDC versions > 3 (WDC4, WDC5), both JS and C++ read and skip over this chunk data without parsing it (`data.move(entryCount * 4)` in JS; `dataRef.move(static_cast<int64_t>(entryCount) * 4)` in C++). The chunk's purpose is not documented, and the data is discarded. This matches the JS behavior exactly.
 
 ## src/js/db/caches Audit (0/16 ✅)
 
-### ⬜ 212. [DBCharacterCustomization.cpp] tfd_map uses record ID instead of explicit FileDataID field
+### ✅ 212. [DBCharacterCustomization.cpp] tfd_map uses record ID instead of explicit FileDataID field
 - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` line 55
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS line 55 reads `tfd_row.FileDataID` explicitly from the TextureFileData row and stores it as the map value: `tfd_map.set(tfd_row.MaterialResourcesID, tfd_row.FileDataID)`. C++ line 97 instead uses the row's map key `_id` as the value: `tfd_map[matResID] = _id;`, never reading the `"FileDataID"` field from the row data. For the TextureFileData table the record ID happens to be the FileDataID, so this is correct in practice, but it is an implicit assumption that deviates from the explicit field access in the original JS.
 
-### ⬜ 213. [DBCharacterCustomization.cpp] Missing concurrent-initialization guard (init_promise pattern)
+### ✅ 213. [DBCharacterCustomization.cpp] Missing concurrent-initialization guard (init_promise pattern)
 - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 37–46, 208
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `ensureInitialized` (lines 37–46) stores and returns `init_promise` so that concurrent async callers await the same initialization promise, preventing double-initialization. After completion, line 208 sets `init_promise = null`. C++ `ensureInitialized` (lines 294–299) simply calls `_initialize()` synchronously with no re-entrancy guard, mutex, or flag to prevent concurrent calls. While acceptable for single-threaded use, this deviates from the JS pattern which explicitly guards against concurrent initialization.
 
-### ⬜ 214. [DBCreatures.cpp] getFileDataIDByDisplayID returns 0 instead of undefined equivalent
+### ✅ 214. [DBCreatures.cpp] getFileDataIDByDisplayID returns 0 instead of undefined equivalent
 - **JS Source**: `src/js/db/caches/DBCreatures.js` line 88
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `getFileDataIDByDisplayID` (line 88) returns `displayIDToFileDataID.get(displayID)`, which yields `undefined` when the key is not found. C++ (line 143) returns `0` when the key is not found. This means callers cannot distinguish "not found" from "found with FileDataID=0". A `std::optional<uint32_t>` return type (as used elsewhere in the codebase, e.g., `get_chr_model_id` in DBCharacterCustomization) would be a more faithful port.
 
-### ⬜ 215. [DBCreatures.cpp] extraGeosets always present on struct vs conditionally added in JS
+### ✅ 215. [DBCreatures.cpp] extraGeosets always present on struct vs conditionally added in JS
 - **JS Source**: `src/js/db/caches/DBCreatures.js` lines 57–61
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS only adds the `extraGeosets` property to a display object when `modelIDHasExtraGeosets` is true (lines 57–61). When false, `display.extraGeosets` is `undefined`, allowing callers to check `if (display.extraGeosets)` to determine if extra geosets apply. In C++ (`DBCreatures.h` line 19), `std::vector<uint32_t> extraGeosets` is always present (default-constructed to empty). Callers must use `.empty()` instead, which cannot distinguish "model has no extra geosets configured" from "model supports extra geosets but this display has none" (JS line 58: `display.extraGeosets = Array()`).
 
-### ⬜ 216. [DBCreaturesLegacy.cpp] model_id fallback uses == 0 instead of JS ?? (nullish coalescing)
+### ✅ 216. [DBCreaturesLegacy.cpp] model_id fallback uses == 0 instead of JS ?? (nullish coalescing)
 - **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` line 69
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS line 69 uses `row.ModelID ?? row.field_1` — the `??` operator only falls through on `null`/`undefined`, keeping `0` as a valid model ID. C++ lines 137–145 use `if (model_id == 0)` to trigger the fallback, which incorrectly treats a valid model_id of `0` as missing and falls through to `field_1`. This is a semantic difference in nullish coalescing translation.
 
-### ⬜ 217. [DBCreaturesLegacy.cpp] normalizePath converts .mdl to .m2 beyond JS behavior
+### ✅ 217. [DBCreaturesLegacy.cpp] normalizePath converts .mdl to .m2 beyond JS behavior
 - **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` line 129
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `getCreatureDisplaysByPath` (line 129) only normalizes `.mdx` to `.m2`: `normalized.replace(/\.mdx$/i, '.m2')`. C++ `normalizePath` (line 55) additionally converts `.mdl` to `.m2`: `if (ext == ".mdl" || ext == ".mdx")`. This adds behavior not present in the original JS and could match model paths that the JS would not match.
 
-### ⬜ 218. [DBCreaturesLegacy.cpp] Missing stack trace log in error handler
+### ✅ 218. [DBCreaturesLegacy.cpp] Missing stack trace log in error handler
 - **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 109–110
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS error handler logs both the error message (line 109: `log.write('Failed to load legacy creature data: %s', e.message)`) and the stack trace (line 110: `log.write('%o', e.stack)`). C++ (line 214) only logs `e.what()` and omits the stack trace. C++ exceptions do not carry stack traces by default, but the omission should be documented.
 
-### ⬜ 219. [DBCreaturesLegacy.cpp] Texture fallback uses .empty() instead of JS ?? semantics
+### ✅ 219. [DBCreaturesLegacy.cpp] Texture fallback uses .empty() instead of JS ?? semantics
 - **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 76–78
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS lines 76–78 use `??` for texture fallback chains: `row.TextureVariation?.[0] ?? row.Skin1 ?? row.field_6 ?? ''`. The `??` operator only falls through on `null`/`undefined`, keeping an empty string `""` as a valid value. C++ lines 165–188 use `.empty()` to trigger fallbacks, which also falls through on empty strings. If a texture field has an intentional empty string value, JS would keep it while C++ would try the next fallback.
 
-### ⬜ 220. [DBDecor.cpp] Uses row.at() for mandatory fields which throws on missing keys
+### ✅ 220. [DBDecor.cpp] Uses row.at() for mandatory fields which throws on missing keys
 - **JS Source**: `src/js/db/caches/DBDecor.js` lines 22–34
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS accesses row fields via property access (`row.ModelFileDataID`, `row.Name_lang`) which returns `undefined` gracefully when a field is absent. C++ lines 47 and 54 use `row.at("ModelFileDataID")` and `row.at("Name_lang")` which throw `std::out_of_range` if the field does not exist. Other fields on lines 59–72 correctly use `row.find()` with fallback. This inconsistency means C++ will crash on rows with missing mandatory fields that JS would handle gracefully.
 
-### ⬜ 221. [DBDecorCategories.cpp] decor_id fallback uses == 0 instead of JS ?? (nullish coalescing)
+### ✅ 221. [DBDecorCategories.cpp] decor_id fallback uses == 0 instead of JS ?? (nullish coalescing)
 - **JS Source**: `src/js/db/caches/DBDecorCategories.js` line 34
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS line 34 uses `row.HouseDecorID ?? row.DecorID` — the `??` operator only falls through on `null`/`undefined`, keeping `0` as a valid decor ID. C++ line 82 uses `if (decor_id == 0)` to trigger the fallback to `DecorID`, which incorrectly treats a valid HouseDecorID of `0` as missing.
 
-### ⬜ 222. [DBDecorCategories.cpp] Skip condition uses == 0 instead of JS === undefined
+### ✅ 222. [DBDecorCategories.cpp] Skip condition uses == 0 instead of JS === undefined
 - **JS Source**: `src/js/db/caches/DBDecorCategories.js` line 37
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS line 37 uses `if (decor_id === undefined || sub_id === undefined)` to skip entries where fields are genuinely absent. C++ line 93 uses `if (decor_id == 0)` which also skips entries where the decor_id is legitimately `0`. This is a semantic difference — JS allows `0` as a valid ID, C++ does not.
 
-### ⬜ 223. [DBItemCharTextures.cpp] Passes 0 instead of null for race_id/gender_index "no preference"
+### ✅ 223. [DBItemCharTextures.cpp] Passes 0 instead of null for race_id/gender_index "no preference"
 - **JS Source**: `src/js/db/caches/DBItemCharTextures.js` lines 98, 122, 131
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `get_textures_by_display_id` defaults `race_id` and `gender_index` to `null` (lines 98, 122). When `null` is passed to `getTextureForRaceGender`, all race/gender comparisons (`info.raceID === null`) fail, causing the function to skip to generic "any race" fallbacks. C++ lines 118–119 convert the `-1` sentinel (used for "no preference") to `0` via `(race_id >= 0) ? static_cast<uint32_t>(race_id) : 0`, then passes `0` to `getTextureForRaceGender`. With `race_id=0`, the function matches "exact race=0 + gender=0" entries first (male-specific any-race), whereas JS with `null` would skip all race/gender matching and fall through to generic "any raceID=0" entries regardless of gender. This produces different texture selection results.
 
-### ⬜ 224. [DBItemModels.cpp] Missing filter(Boolean) equivalent in getItemModels
+### ✅ 224. [DBItemModels.cpp] Missing filter(Boolean) equivalent in getItemModels
 - **JS Source**: `src/js/db/caches/DBItemModels.js` line 120
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS line 120 uses `data.modelOptions.map(opts => opts[0]).filter(Boolean)` which removes all falsy values from the result, including `0` and `undefined`. C++ lines 229–231 only skip entries where `opts` is empty (`if (!opts.empty()) temp_models.push_back(opts[0])`), but does not filter out entries where `opts[0] == 0`. If any `modelOptions` sub-array has a first element of `0`, JS would exclude it but C++ would include it.
 
-### ⬜ 225. [DBItemModels.cpp] getItemModels uses thread_local static vector instead of returning new value
+### ✅ 225. [DBItemModels.cpp] getItemModels uses thread_local static vector instead of returning new value
 - **JS Source**: `src/js/db/caches/DBItemModels.js` line 120
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS line 120 returns a newly-allocated array each call. C++ lines 227–236 return a pointer to a `thread_local std::vector` that is cleared and reused on each call. The caller must consume the result before calling `getItemModels` again on the same thread, or the data is silently overwritten. This is a semantic deviation — JS always returns an independent value, while C++ returns a pointer to shared mutable storage.
 
-### ⬜ 226. [DBItems.cpp] name.empty() replaces empty strings unlike JS ?? which preserves them
+### ✅ 226. [DBItems.cpp] name.empty() replaces empty strings unlike JS ?? which preserves them
 - **JS Source**: `src/js/db/caches/DBItems.js` line 40
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS line 40 uses `item_row.Display_lang ?? 'Unknown item #' + item_id` — the `??` operator only substitutes on `null`/`undefined`, keeping an empty string `""` as the item name. C++ line 64 uses `name.empty() ? std::format("Unknown item #{}", item_id) : std::move(name)` which replaces empty strings with the fallback text. Items with an intentionally empty `Display_lang` would show `""` in JS but `"Unknown item #N"` in C++.
 
-### ⬜ 227. [DBItems.cpp] row.at("Display_lang") throws on missing field unlike JS graceful undefined
+### ✅ 227. [DBItems.cpp] row.at("Display_lang") throws on missing field unlike JS graceful undefined
 - **JS Source**: `src/js/db/caches/DBItems.js` line 40
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS line 40 accesses `item_row.Display_lang` which returns `undefined` gracefully when the field is absent, then `??` substitutes the fallback. C++ line 63 uses `item_row.at("Display_lang")` which throws `std::out_of_range` if the `Display_lang` field does not exist in the row map. If any ItemSparse row lacks a `Display_lang` field, C++ crashes; JS handles it gracefully.
 
 ---

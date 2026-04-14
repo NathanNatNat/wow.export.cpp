@@ -901,7 +901,7 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			is_character_model = true;
 		} else {
 			// standard creature model
-			uint32_t file_data_id = db::caches::DBCreatures::getFileDataIDByDisplayID(creature.displayID);
+			uint32_t file_data_id = db::caches::DBCreatures::getFileDataIDByDisplayID(creature.displayID).value_or(0);
 			if (file_data_id == 0) {
 				core::setToast("error", std::format("No model data found for creature {}.", creature.name), {}, -1);
 				return;
@@ -994,11 +994,11 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 					if (clean_skin_name.empty())
 						clean_skin_name = "base";
 
-					if (!display.extraGeosets.empty()) {
+					if (display.extraGeosets.has_value() && !display.extraGeosets->empty()) {
 						std::string geoset_str;
-						for (size_t gi = 0; gi < display.extraGeosets.size(); gi++) {
+						for (size_t gi = 0; gi < display.extraGeosets->size(); gi++) {
 							if (gi > 0) geoset_str += ",";
-							geoset_str += std::to_string(display.extraGeosets[gi]);
+							geoset_str += std::to_string((*display.extraGeosets)[gi]);
 						}
 						skin_name += geoset_str;
 					}
@@ -1333,7 +1333,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 		}
 
 		// standard creature export
-		uint32_t file_data_id = db::caches::DBCreatures::getFileDataIDByDisplayID(creature->displayID);
+		uint32_t file_data_id = db::caches::DBCreatures::getFileDataIDByDisplayID(creature->displayID).value_or(0);
 		if (file_data_id == 0) {
 			helper.mark(creature_name, false, "No model data found");
 			continue;
@@ -1639,14 +1639,14 @@ void render() {
 
 							auto& curr_geosets = view.creatureViewerGeosets;
 
-							if (!display.extraGeosets.empty()) {
+							if (display.extraGeosets.has_value()) {
 								for (auto& geoset : curr_geosets) {
 									int gid = geoset.value("id", 0);
 									if (gid > 0 && gid < 900)
 										geoset["checked"] = false;
 								}
 
-								for (uint32_t extra_geoset : display.extraGeosets) {
+								for (uint32_t extra_geoset : *display.extraGeosets) {
 									for (auto& geoset : curr_geosets) {
 										if (static_cast<uint32_t>(geoset.value("id", 0)) == extra_geoset)
 											geoset["checked"] = true;

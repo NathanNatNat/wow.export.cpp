@@ -98,7 +98,7 @@ static model_viewer_utils::ViewStateProxy* get_view_state_ptr() {
 struct DisplayVariant {
 	uint32_t ID = 0;
 	std::vector<uint32_t> textures;
-	std::vector<uint32_t> extraGeosets;
+	std::optional<std::vector<uint32_t>> extraGeosets;
 	bool from_creature = false;
 };
 
@@ -238,11 +238,11 @@ static void preview_model(const std::string& file_name) {
 				if (clean_skin_name.empty())
 					clean_skin_name = "base";
 
-				if (!display.extraGeosets.empty()) {
+				if (display.extraGeosets.has_value() && !display.extraGeosets->empty()) {
 					std::string geo_str;
-					for (size_t g = 0; g < display.extraGeosets.size(); ++g) {
+					for (size_t g = 0; g < display.extraGeosets->size(); ++g) {
 						if (g > 0) geo_str += ',';
-						geo_str += std::to_string(display.extraGeosets[g]);
+						geo_str += std::to_string((*display.extraGeosets)[g]);
 					}
 					skin_name += geo_str;
 				}
@@ -462,8 +462,10 @@ static void handle_skins_selection_change(const std::vector<nlohmann::json>& sel
 	auto it_creature = active_skins_creature.find(sel_id);
 	if (it_creature != active_skins_creature.end()) {
 		const auto& display = it_creature->second;
-		extra_geosets = display.extraGeosets;
-		has_extra_geosets = !extra_geosets.empty();
+		if (display.extraGeosets.has_value()) {
+			extra_geosets = *display.extraGeosets;
+			has_extra_geosets = true;
+		}
 		display_textures = display.textures;
 	} else {
 		auto it_item = active_skins_item.find(sel_id);

@@ -30,7 +30,7 @@ void initialize();
  * @param fallback_race_id Optional fallback race.
  * @returns Best matching FileDataID or std::nullopt.
  */
-std::optional<uint32_t> getTextureForRaceGender(const std::vector<uint32_t>& file_data_ids, uint32_t race_id, uint32_t gender_index, uint32_t fallback_race_id = 0);
+std::optional<uint32_t> getTextureForRaceGender(const std::vector<uint32_t>& file_data_ids, std::optional<uint32_t> race_id, std::optional<uint32_t> gender_index, uint32_t fallback_race_id = 0);
 
 /**
  * Check if a FileDataID has ComponentTextureFileData entry.
