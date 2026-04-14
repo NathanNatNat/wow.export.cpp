@@ -721,106 +721,106 @@
 
 ## src/js/mpq/ Audit (0/3 ✅)
 
-### ⬜ 140. [build-version.cpp] `find_version_in_buffer` search range off-by-4
+### ✅ 140. [build-version.cpp] `find_version_in_buffer` search range off-by-4
 - **JS Source**: `src/js/mpq/build-version.js` lines 51–69
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `buf.indexOf(sig_bytes, pos)` searches the entire remaining buffer from `pos` onward and can find signatures at any position; `parse_vs_fixed_file_info` then validates that at least 52 bytes remain from the match position. C++ (lines 81–100) uses `std::search(buf.begin() + pos, buf.end() - 52, sig_bytes.begin(), sig_bytes.end())`, which limits the search endpoint to `buf.end() - 52`. For a 4-byte signature pattern, `std::search` can only find matches starting at positions up to `buf.end() - 56`. This misses valid signature positions `buf.size() - 55` through `buf.size() - 52` where `parse_vs_fixed_file_info` would succeed (since `offset + 52 <= buf.size()` holds for all four). The search endpoint should be `buf.end() - 48` to allow matches up to position `buf.size() - 52`.
 
-### ⬜ 141. [mpq.cpp] `extractFileByBlockIndex` TODO: encrypted file support incomplete
+### ✅ 141. [mpq.cpp] `extractFileByBlockIndex` TODO: encrypted file support incomplete
 - **JS Source**: `src/js/mpq/mpq.js` lines 600–601
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: Both JS (`return null; // todo: MPQ_FILE_FIX_KEY?`) and C++ (line 698, `return std::nullopt; // todo: MPQ_FILE_FIX_KEY?`) return null/nullopt for encrypted files in `extractFileByBlockIndex` without attempting decryption. The full `extractFile` method handles encrypted files via filename-based key derivation, but `extractFileByBlockIndex` lacks the filename needed for key computation. The TODO comment indicates this is acknowledged unfinished work, consistent between both versions.
 
-### ⬜ 142. [mpq.cpp] `inflateData` uses `spdlog::error` instead of project logging module
+### ✅ 142. [mpq.cpp] `inflateData` uses `spdlog::error` instead of project logging module
 - **JS Source**: `src/js/mpq/mpq.js` line 422
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `console.error('decompression error:', e)` for error logging in the zlib decompression catch block. C++ (line 511) uses `spdlog::error("decompression error: {}", e.what())` directly instead of the project's `logging::write` function that is used consistently throughout the rest of the codebase (including elsewhere in mpq.cpp via the logging header). This is inconsistent with the project's logging convention.
 
 ## src/js/casc/ Audit (0/66 ✅)
 
-### ⬜ 143. [blp.cpp] Missing `toCanvas()` method
+### ✅ 143. [blp.cpp] Missing `toCanvas()` method
 - **JS Source**: `src/js/casc/blp.js` lines 103–117
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `toCanvas(mask, mipmap)` creates an HTML `<canvas>` element at the proper mipmap-scaled dimensions and draws the BLP onto it. This method is entirely absent from C++. It is browser-specific (uses `document.createElement('canvas')`), so it cannot be directly ported but should have a documented equivalent or TODO for an alternative rendering approach.
 
-### ⬜ 144. [blp.cpp] Missing `drawToCanvas()` method
+### ✅ 144. [blp.cpp] Missing `drawToCanvas()` method
 - **JS Source**: `src/js/casc/blp.js` lines 221–234
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `drawToCanvas(canvas, mipmap, mask)` draws BLP pixel data onto an existing HTML canvas via a 2D context. Entirely absent from C++. Browser-specific — uses `canvas.getContext('2d')`, `createImageData`, `putImageData`. Needs a C++ equivalent for rendering BLP data to a texture or framebuffer.
 
-### ⬜ 145. [blp.cpp] `getDataURL()` implementation differs from JS
+### ✅ 145. [blp.cpp] `getDataURL()` implementation differs from JS
 - **JS Source**: `src/js/casc/blp.js` lines 94–96
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS calls `this.toCanvas(mask, mipmap).toDataURL()`, which generates a data URL from an HTML canvas. C++ calls `toPNG(mask, mipmap).getDataURL()`. The output should be equivalent (both produce a PNG-encoded data URL), but the approach differs. This adaptation is undocumented.
 
-### ⬜ 146. [blp.h] Missing `dataURL` field
+### ✅ 146. [blp.h] Missing `dataURL` field
 - **JS Source**: `src/js/casc/blp.js` line 85
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS sets `this.dataURL = null` in the constructor. This field is not declared in the C++ class. While it appears unused within `BLPImage` itself, it is a public property that external code could reference.
 
-### ⬜ 147. [blp.cpp] `_getCompressed()` boundary check uses `>=` instead of `===`
+### ✅ 147. [blp.cpp] `_getCompressed()` boundary check uses `>=` instead of `===`
 - **JS Source**: `src/js/casc/blp.js` line 323
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses strict equality (`if (this.rawData.length === pos)`), meaning only when `pos` exactly equals length does it skip. C++ (line 256) uses `>=` (`if (static_cast<size_t>(pos) >= rawData_.size())`), which is strictly safer but technically a behavioral deviation for the case where `pos > length`.
 
-### ⬜ 148. [blp.cpp] `_getAlpha()` case 4 — C++ integer division fixes JS bug but changes behavior
+### ✅ 148. [blp.cpp] `_getAlpha()` case 4 — C++ integer division fixes JS bug but changes behavior
 - **JS Source**: `src/js/casc/blp.js` line 294
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, `index / 2` produces a float (e.g., `3 / 2 = 1.5`). Accessing `rawData[1.5]` on a Uint8Array returns `undefined`, and `undefined & 0x0F` evaluates to `0`, producing incorrect alpha for all odd-indexed pixels. In C++, `index / 2` is integer division (floors automatically), so it correctly reads the byte containing the 4-bit alpha nibble. C++ accidentally fixes a JS bug. Should be documented with a comment explaining the intentional deviation.
 
-### ⬜ 149. [blp.cpp] `toBuffer()` extra `default` case not in JS
+### ✅ 149. [blp.cpp] `toBuffer()` extra `default` case not in JS
 - **JS Source**: `src/js/casc/blp.js` lines 242–250
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS switch has cases 1, 2, 3 only — returns `undefined` for other encodings. C++ (lines 190–198) adds `default: return BufferWrapper();` which returns an empty buffer. Minor behavioral deviation — in JS the caller would get `undefined`, while in C++ it gets an empty buffer object.
 
-### ⬜ 150. [blte-reader.cpp] Missing `decodeAudio()` method
+### ✅ 150. [blte-reader.cpp] Missing `decodeAudio()` method
 - **JS Source**: `src/js/casc/blte-reader.js` lines 337–340
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `decodeAudio(context)` calls `this.processAllBlocks()` then `super.decodeAudio(context)`. This method is entirely absent from C++. It uses a Web Audio `AudioContext` which is browser-specific, but the `processAllBlocks()` call before delegating to the parent is important for ensuring blocks are processed before audio decoding.
 
-### ⬜ 151. [blte-reader.cpp] `getDataURL()` missing cached `dataURL` check
+### ✅ 151. [blte-reader.cpp] `getDataURL()` missing cached `dataURL` check
 - **JS Source**: `src/js/casc/blte-reader.js` lines 346–353
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS checks `if (!this.dataURL)` before processing blocks, and returns the cached `this.dataURL` if already set. C++ (lines 282–285) always calls `processAllBlocks()` then `BufferWrapper::getDataURL()` with no caching check. The JS allows `dataURL` to be set externally without processing any blocks, which C++ does not support.
 
-### ⬜ 152. [blte-reader.cpp] `_handleBlock()` encrypted case uses `move()` instead of direct `_ofs +=`
+### ✅ 152. [blte-reader.cpp] `_handleBlock()` encrypted case uses `move()` instead of direct `_ofs +=`
 - **JS Source**: `src/js/casc/blte-reader.js` line 211
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS directly modifies `this._ofs += this.blocks[index].DecompSize`. C++ (line 192) calls `move(static_cast<int64_t>(blocks[index].DecompSize))`. If `move()` has any bounds checking or side effects that `_ofs +=` does not, behavior could differ. Should verify `move()` semantics match direct offset addition.
 
-### ⬜ 153. [blte-stream-reader.cpp] Missing `createReadableStream()` method
+### ✅ 153. [blte-stream-reader.cpp] Missing `createReadableStream()` method
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 168–193
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS creates a Web Streams API `ReadableStream` with `pull()` and `cancel()` callbacks for progressive block consumption. Entirely absent from C++. This is browser-specific, but the progressive streaming pattern could be replicated with C++ iterators or coroutines.
 
-### ⬜ 154. [blte-stream-reader.cpp] `streamBlocks()` async generator replaced with synchronous callback
+### ✅ 154. [blte-stream-reader.cpp] `streamBlocks()` async generator replaced with synchronous callback
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 199–202
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `async *streamBlocks()` (async generator, yields `BufferWrapper`) allowing the caller to consume blocks lazily with `for await...of`. C++ (lines 128–133) uses `void streamBlocks(const std::function<void(BufferWrapper&)>& callback)` which iterates all blocks eagerly and synchronously. The caller cannot pause/resume iteration.
 
-### ⬜ 155. [blte-stream-reader.cpp] `createBlobURL()` returns BufferWrapper instead of URL string
+### ✅ 155. [blte-stream-reader.cpp] `createBlobURL()` returns BufferWrapper instead of URL string
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 208–218
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS creates a `Blob` with MIME type `'video/x-msvideo'` from decoded block chunks, then creates an object URL for direct use in `<video>` elements. C++ (lines 135–142) just concatenates all blocks into one `BufferWrapper` and returns raw data. The return type, semantics, and MIME type metadata are all different. The method name `createBlobURL` is misleading in C++ since no URL is created.
 
-### ⬜ 156. [blte-stream-reader.cpp] All async methods converted to synchronous
+### ✅ 156. [blte-stream-reader.cpp] All async methods converted to synchronous
 - **JS Source**: `src/js/casc/blte-stream-reader.js` line 38 and throughout
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `blockFetcher` is async (returns a Promise), allowing non-blocking I/O for fetching block data from remote sources. C++ (`blte-stream-reader.h` line 35) uses `std::function<BufferWrapper(size_t)>` (synchronous). Methods like `getBlock()`, `_decodeBlock()`, `streamBlocks()`, and `createBlobURL()` are all `async` in JS but synchronous in C++, blocking the calling thread during block fetches.
 
-### ⬜ 157. [build-cache.cpp] `getFile()` rejects immediately instead of waiting for cache integrity
+### ✅ 157. [build-cache.cpp] `getFile()` rejects immediately instead of waiting for cache integrity
 - **JS Source**: `src/js/casc/build-cache.js` lines 77–79
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, if `cacheIntegrity` is not yet loaded, `getFile()` calls `await cacheIntegrityReady()`, which creates a Promise that resolves once the `'cache-integrity-ready'` event fires. The function waits for integrity to become available. In C++ (lines 81–85), the function checks `cacheIntegrityLoaded` and, if false, immediately logs a rejection message and returns `std::nullopt`. Files requested before initialization completes will fail in C++ but succeed in JS.
 
-### ⬜ 158. [build-cache.cpp] `storeFile()` initializes empty integrity instead of waiting
+### ✅ 158. [build-cache.cpp] `storeFile()` initializes empty integrity instead of waiting
 - **JS Source**: `src/js/casc/build-cache.js` lines 128–129
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `await`s `cacheIntegrityReady()` to ensure integrity is loaded before writing. C++ (lines 129–134) checks `cacheIntegrityLoaded`, and if false, initializes an empty integrity map and proceeds. This silently discards any previously-cached integrity data that was still loading and creates a divergent code path.
 
-### ⬜ 159. [build-cache.cpp] Underflow guard on cache size subtraction deviates from JS
+### ✅ 159. [build-cache.cpp] Underflow guard on cache size subtraction deviates from JS
 - **JS Source**: `src/js/casc/build-cache.js` line 252
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `deleteSize -= manifestSize;` has no guard — `deleteSize` is a JS number (double) and can go negative. C++ uses `uintmax_t` (unsigned), so `if (deleteSize >= manifestSize) deleteSize -= manifestSize;` is added to prevent wraparound. Reasonable defensive fix but a deviation.
 
 ### ⬜ 160. [casc-source.cpp] `getInstallManifest()` fallback differs when encoding key not found
