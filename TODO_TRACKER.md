@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/190 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/202 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -953,3 +953,63 @@
 - **JS Source**: `src/js/subtitles.js` lines 172–187
 - **Status**: Pending
 - **Details**: JS `get_subtitles_vtt(casc, file_data_id, format)` is `async`, loads the file from CASC, decodes the string, strips the BOM, and converts. C++ takes `(text, format)` — the caller must pre-load the file data and pass the decoded string. This decomposes the JS function across a call-site boundary and changes the module's responsibility contract. Documented in the source code comment.
+
+### 191. [tiled-png-writer.cpp] `write()` lost JS async/Promise behavior
+- **JS Source**: `src/js/tiled-png-writer.js` lines 123–125
+- **Status**: Pending
+- **Details**: JS exposes `async write(file)` and returns a Promise from `await this.getBuffer().writeToFile(file)`. C++ changed this to synchronous `void write(...)`, so callers cannot await update sequencing the same way.
+
+### 192. [tiled-png-writer.cpp] Tile compositing order differs from JS `Map` insertion order
+- **JS Source**: `src/js/tiled-png-writer.js` lines 25, 58–59, 71–114
+- **Status**: Pending
+- **Details**: JS stores tiles in `Map` and composites in insertion order (`for ... of this.tiles.values()`). C++ stores tiles in `std::map` and iterates key-sorted order, which can change alpha-over blending results when tiles overlap.
+
+### 193. [updater.cpp] `checkForUpdates()` local manifest source differs from JS runtime manifest
+- **JS Source**: `src/js/updater.js` lines 24–25, 33–39, 113
+- **Status**: Pending
+- **Details**: JS reads `nw.App.manifest` at runtime for both `guid` and `flavour`. C++ uses compile-time `constants::BUILD_GUID` and `constants::FLAVOUR`, so runtime manifest values are no longer honored.
+
+### 194. [updater.cpp] Update flow is synchronous instead of Promise-based async
+- **JS Source**: `src/js/updater.js` lines 22, 50, 61, 79, 103–104, 119–120, 124, 130
+- **Status**: Pending
+- **Details**: JS `checkForUpdates`, `applyUpdate`, and `launchUpdater` are async and await progress/file/network operations. C++ converted all of them to synchronous calls, changing execution timing and call-site expectations.
+
+### 195. [updater.cpp] `applyUpdate()` behavior when no manifest is loaded diverges from JS
+- **JS Source**: `src/js/updater.js` lines 16, 51
+- **Status**: Pending
+- **Details**: JS keeps `updateManifest` undefined until set and would fail at `Object.entries(updateManifest.contents)` if `applyUpdate()` is called prematurely. C++ initializes `updateManifest` to an empty JSON value and indexes `["contents"]`, changing this failure mode.
+
+### 196. [updater.cpp] Empty download set handling differs from JS reduce semantics
+- **JS Source**: `src/js/updater.js` line 96
+- **Status**: Pending
+- **Details**: JS computes compressed size via `.map(...).reduce(...)` without an initial accumulator, which throws on an empty `requiredFiles` list. C++ uses `std::accumulate` from `0.0`, so empty sets proceed without error.
+
+### 197. [updater.cpp] Missing JS spawn error-event handling for updater launch
+- **JS Source**: `src/js/updater.js` lines 150–155
+- **Status**: Pending
+- **Details**: JS attaches `child.on('error', ...)` and throws when process spawn fails. C++ has no equivalent asynchronous spawn-error callback path; on POSIX, parent can continue toward exit even if child `execl` fails.
+
+### 198. [updater.cpp] `launchUpdater()` catch block omits JS secondary error log
+- **JS Source**: `src/js/updater.js` lines 163–165
+- **Status**: Pending
+- **Details**: JS logs both formatted message (`e.message`) and the raw error object (`log.write(e)`). C++ only logs the formatted exception message.
+
+### 199. [wmv.cpp] Public parse result contract differs from JS object shape
+- **JS Source**: `src/js/wmv.js` lines 25–76, 78–121, 177
+- **Status**: Pending
+- **Details**: JS always returns a plain object with common keys plus version-specific fields. C++ returns `std::variant<ParseResultV1, ParseResultV2>`, changing the external API contract and requiring callers to branch on type instead of property presence.
+
+### 200. [wowhead.cpp] Result key `class` renamed to `player_class`
+- **JS Source**: `src/js/wowhead.js` lines 168–174, 222–228
+- **Status**: Pending
+- **Details**: JS output uses the property name `class`. C++ stores this value in `ParseResult::player_class`, which is a contract mismatch for code expecting the original key.
+
+### 201. [xml.cpp] Child tag grouping order is nondeterministic vs JS object insertion order
+- **JS Source**: `src/js/xml.js` lines 137–153
+- **Status**: Pending
+- **Details**: JS groups children with a plain object and iterates `Object.entries(groups)` in insertion order. C++ uses `std::unordered_map` for `groups`, so key iteration order is hash-dependent and can differ between runs/platforms.
+
+### 202. [xml.cpp] Parser performs out-of-bounds reads where JS safely sees `undefined`
+- **JS Source**: `src/js/xml.js` lines 25–55, 71–77, 89–95
+- **Status**: Pending
+- **Details**: JS bounds checks rely on `xml[pos]` becoming `undefined` safely at string end. C++ directly indexes `xml[pos]` in multiple places without rechecking `pos < xml.size()` after whitespace/position changes, which can read out of bounds on malformed/truncated XML inputs.
