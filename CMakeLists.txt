@@ -230,7 +230,7 @@ target_link_libraries(wow_export_cpp PRIVATE
 
 # Platform-specific link dependencies
 if(WIN32)
-    target_link_libraries(wow_export_cpp PRIVATE ws2_32 crypt32)
+    target_link_libraries(wow_export_cpp PRIVATE ws2_32 crypt32 dwmapi)
 elseif(UNIX)
     find_package(Threads REQUIRED)
     target_link_libraries(wow_export_cpp PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
