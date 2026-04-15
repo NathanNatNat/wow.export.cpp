@@ -30,10 +30,13 @@ All dependencies should be git submodules integrated via CMake where possible.
 | Math | GLM |
 | JSON | nlohmann/json |
 | Logging | spdlog |
-| HTTP | cpp-httplib |
+| HTTP / HTTPS | cpp-httplib (HTTPS enabled via bundled mbedTLS — no system OpenSSL required) |
+| TLS / Crypto | mbedTLS v3.6.x LTS (bundled submodule; provides HTTPS for cpp-httplib and MD hash APIs replacing hand-rolled MD5/SHA1/SHA256) |
 | Compression | zlib |
+| Archive I/O | minizip-ng 4.0.x (bundled submodule; ZIP read/write — C++ equivalent of JS adm-zip) |
 | Image I/O | stb_image / stb_image_write, libwebp, nanosvg |
 | Audio | miniaudio |
+| File Dialogs | portable-file-dialogs 0.1.0 (bundled submodule; cross-platform native open/save/folder dialogs — replaces platform-specific COM/zenity code) |
 | Threading | std::jthread, std::async (standard library — no external dependency) |
 
 ## Reference Sources
@@ -77,9 +80,9 @@ Map Node.js built-in modules to project dependencies as follows:
 |----------------|------------------|
 | `fs` | `std::filesystem`, standard file I/O |
 | `path` | `std::filesystem::path` |
-| `http` / `https` | cpp-httplib |
+| `http` / `https` | cpp-httplib (with mbedTLS for HTTPS) |
 | `zlib` | zlib |
-| `crypto` | Platform APIs or a lightweight library (document in TODO_TRACKER.md if needed) |
+| `crypto` | mbedTLS MD API (`mbedtls/md.h` — `mbedtls_md_info_from_type`, `mbedtls_md_update`, etc.) |
 | `events` (EventEmitter) | Custom callback/signal mechanism preserving identical behavior |
 | `child_process` | `std::system`, platform process APIs |
 | `os` | `std::filesystem`, platform APIs |
