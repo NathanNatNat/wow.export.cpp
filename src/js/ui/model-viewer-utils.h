@@ -200,7 +200,8 @@ void preview_texture_by_id(ViewStateProxy& state, M2RendererGL* renderer,
  * @param file_data_id  File data ID (used for WMO renderer).
  */
 RendererResult create_renderer(BufferWrapper& data, ModelType model_type,
-	gl::GLContext& ctx, bool show_textures, uint32_t file_data_id = 0);
+	gl::GLContext& ctx, bool show_textures, uint32_t file_data_id = 0,
+	const std::string& file_name = "");
 
 /**
  * Extract animation list from M2 renderer (using skelLoader or m2 animations).

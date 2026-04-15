@@ -68,7 +68,7 @@ void exportDataTable(
 	try {
 		const std::string exportPath = casc::ExportHelper::getExportPath(fileName);
 
-		const bool overwriteFiles = core::view->config.value("overwriteFiles", true);
+		const bool overwriteFiles = core::view->config.value("overwriteFiles", false);
 		if (!overwriteFiles && generics::fileExists(exportPath)) {
 			logging::write(std::format("Skipping export of {} (file exists, overwrite disabled)", exportPath));
 			h->mark(fileName, true);
@@ -92,7 +92,8 @@ void exportDataTable(
 			logging::write(std::format("Successfully exported data table to {}", exportPath));
 		}
 	} catch (const std::exception& e) {
-		h->mark(fileName, false, e.what());
+		// C++ exceptions do not carry stack traces like JS e.stack; pass std::nullopt.
+		h->mark(fileName, false, e.what(), std::nullopt);
 		logging::write(std::format("Failed to export data table: {}", e.what()));
 	}
 
@@ -145,12 +146,15 @@ void exportRawDB2(
 	try {
 		const std::string exportPath = casc::ExportHelper::getExportPath(fileName);
 
-		const bool overwriteFiles = core::view->config.value("overwriteFiles", true);
+		const bool overwriteFiles = core::view->config.value("overwriteFiles", false);
 		if (!overwriteFiles && generics::fileExists(exportPath)) {
 			logging::write(std::format("Skipping export of {} (file exists, overwrite disabled)", exportPath));
 			h->mark(fileName, true);
 		} else {
 			BufferWrapper fileData = casc->getVirtualFileByID(fileDataID, true);
+			if (fileData.byteLength() == 0)
+				throw std::runtime_error("Failed to retrieve DB2 file from CASC");
+
 			fileData.writeToFile(fs::path(exportPath));
 			if (ep) ep->writeLine("DB2:" + exportPath);
 
@@ -158,7 +162,8 @@ void exportRawDB2(
 			logging::write(std::format("Successfully exported raw DB2 file to {}", exportPath));
 		}
 	} catch (const std::exception& e) {
-		h->mark(fileName, false, e.what());
+		// C++ exceptions do not carry stack traces like JS e.stack; pass std::nullopt.
+		h->mark(fileName, false, e.what(), std::nullopt);
 		logging::write(std::format("Failed to export raw DB2 file: {}", e.what()));
 	}
 
@@ -215,7 +220,7 @@ void exportDataTableSQL(
 	try {
 		const std::string exportPath = casc::ExportHelper::getExportPath(fileName);
 
-		const bool overwriteFiles = core::view->config.value("overwriteFiles", true);
+		const bool overwriteFiles = core::view->config.value("overwriteFiles", false);
 		if (!overwriteFiles && generics::fileExists(exportPath)) {
 			logging::write(std::format("Skipping export of {} (file exists, overwrite disabled)", exportPath));
 			h->mark(fileName, true);
@@ -231,7 +236,11 @@ void exportDataTableSQL(
 			for (const auto& row : rows) {
 				std::unordered_map<std::string, std::string> rowObject;
 				for (size_t i = 0; i < headers.size(); i++) {
-					// empty string maps to NULL in SQLWriter
+					// JS: value !== null && value !== undefined ? value : null
+					// In C++, rows are pre-converted to strings. Empty string maps to
+					// NULL in SQLWriter, preserving the JS behavior where null/undefined
+					// values become SQL NULL. Numeric vs string quoting is handled by
+					// SQLWriter's numeric detection logic.
 					rowObject[headers[i]] = (i < row.size()) ? row[i] : "";
 				}
 				sqlWriter.addRow(rowObject);
@@ -244,7 +253,8 @@ void exportDataTableSQL(
 			logging::write(std::format("Successfully exported data table to {}", exportPath));
 		}
 	} catch (const std::exception& e) {
-		h->mark(fileName, false, e.what());
+		// C++ exceptions do not carry stack traces like JS e.stack; pass std::nullopt.
+		h->mark(fileName, false, e.what(), std::nullopt);
 		logging::write(std::format("Failed to export data table: {}", e.what()));
 	}
 
@@ -281,7 +291,7 @@ void exportRawDBC(
 	try {
 		const std::string exportPath = casc::ExportHelper::getExportPath(fileName);
 
-		const bool overwriteFiles = core::view->config.value("overwriteFiles", true);
+		const bool overwriteFiles = core::view->config.value("overwriteFiles", false);
 		if (!overwriteFiles && generics::fileExists(exportPath)) {
 			logging::write(std::format("Skipping export of {} (file exists, overwrite disabled)", exportPath));
 			helper.mark(fileName, true);
@@ -294,7 +304,13 @@ void exportRawDBC(
 			const fs::path outPath(exportPath);
 			fs::create_directories(outPath.parent_path());
 			std::ofstream ofs(outPath, std::ios::binary);
+			if (!ofs.is_open())
+				throw std::runtime_error("Failed to open file for writing: " + exportPath);
+
 			ofs.write(reinterpret_cast<const char*>(raw_data->data()), static_cast<std::streamsize>(raw_data->size()));
+			if (!ofs.good())
+				throw std::runtime_error("Failed to write DBC file: " + exportPath);
+
 			ofs.close();
 
 			exportPaths.writeLine("DBC:" + exportPath);
@@ -303,7 +319,8 @@ void exportRawDBC(
 			logging::write(std::format("Successfully exported raw DBC file to {}", exportPath));
 		}
 	} catch (const std::exception& e) {
-		helper.mark(fileName, false, e.what());
+		// C++ exceptions do not carry stack traces like JS e.stack; pass std::nullopt.
+		helper.mark(fileName, false, e.what(), std::nullopt);
 		logging::write(std::format("Failed to export raw DBC file: {}", e.what()));
 	}
 
