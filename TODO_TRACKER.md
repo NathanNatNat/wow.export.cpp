@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/122 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/124 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -611,3 +611,13 @@
 - **JS Source**: `src/js/MultiMap.js` lines 6–30
 - **Status**: Pending
 - **Details**: JS `MultiMap` extends `Map`, which guarantees insertion-order iteration. C++ implementation uses `std::unordered_map`, so iteration order is non-deterministic and can diverge from JS behavior anywhere map traversal order is observable.
+
+### 123. ⬜ [cache-collector.cpp] `parse_url()` is not equivalent to JS WHATWG URL parsing
+- **JS Source**: `src/js/workers/cache-collector.js` lines 21–27
+- **Status**: Pending
+- **Details**: JS uses `new URL(url)` and then `pathname + search`, which correctly handles full URL grammar (userinfo, IPv6 literals, host-only URLs with query strings, etc.). C++ `parse_url()` is a manual parser (`src/js/workers/cache-collector.cpp` lines 365–395) and only splits on `://`, `/`, and `:`, so edge-case URLs can be parsed differently and sent to the wrong endpoint.
+
+### 124. ⬜ [cache-collector.cpp] Host-only URLs with query strings lose query parameters
+- **JS Source**: `src/js/workers/cache-collector.js` lines 21–26
+- **Status**: Pending
+- **Details**: In JS, `new URL("https://example.com?x=1")` produces `pathname="/"` and `search="?x=1"`, so request path becomes `"/?x=1"`. In C++, `parse_url()` sets `path="/"` whenever no `/` exists after host (`src/js/workers/cache-collector.cpp` lines 375–383), dropping `?x=1`. This changes request behavior for valid URLs that rely on query parameters without an explicit path segment.
