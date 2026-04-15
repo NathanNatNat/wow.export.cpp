@@ -8,6 +8,7 @@
 #include "../../file-writer.h"
 
 #include <algorithm>
+#include <cstdlib>
 
 SQLWriter::SQLWriter(const std::filesystem::path& out, const std::string& table_name)
 	: out(out), table_name(table_name), schema(nullptr), include_ddl(false) {}
@@ -33,41 +34,31 @@ void SQLWriter::addRow(const std::unordered_map<std::string, std::string>& row) 
 }
 
 std::string SQLWriter::escapeSQLValue(const std::string& value) const {
+	// In C++, empty string is used as the sentinel for null/undefined values,
+	// since the API uses std::string (not std::optional). Callers (e.g. data-exporter)
+	// map null/undefined JS values to empty strings. This matches the JS behavior
+	// where `value === null || value === undefined` returns 'NULL'.
 	if (value.empty())
 		return "NULL";
 
 	// numeric values don't need quotes
-	// Check if the string is a valid number
-	bool isNumeric = true;
-	bool hasContent = false;
-	for (size_t i = 0; i < value.size(); i++) {
-		char c = value[i];
-		if (c == ' ' || c == '\t') {
-			if (hasContent) {
-				// trailing whitespace after digits — check remaining
-				for (size_t j = i; j < value.size(); j++) {
-					if (value[j] != ' ' && value[j] != '\t') {
-						isNumeric = false;
-						break;
-					}
-				}
-				break;
-			}
-			continue;
-		}
-		hasContent = true;
-		if (c == '-' || c == '+') {
-			if (i > 0 && (value[i-1] != ' ' && value[i-1] != '\t'))
-				isNumeric = false;
-		} else if (c == '.') {
-			// allow decimal point
-		} else if (c < '0' || c > '9') {
-			isNumeric = false;
-		}
-	}
+	// Match JS isNaN() behavior: supports integers, decimals, scientific notation (1e5),
+	// and hexadecimal (0xFF). JS isNaN() coerces the value and returns false if numeric.
+	const std::string trimmed = [&]() {
+		size_t start = value.find_first_not_of(" \t");
+		if (start == std::string::npos) return std::string();
+		size_t end = value.find_last_not_of(" \t");
+		return value.substr(start, end - start + 1);
+	}();
 
-	if (isNumeric && hasContent)
-		return value;
+	if (!trimmed.empty()) {
+		// Use strtod for numeric detection, which handles integers, decimals,
+		// scientific notation (1e5, 1.2e-3), and hexadecimal (0xFF) — matching JS isNaN() coercion.
+		char* endptr = nullptr;
+		std::strtod(trimmed.c_str(), &endptr);
+		if (endptr == trimmed.c_str() + trimmed.size())
+			return value;
+	}
 
 	// escape single quotes and wrap in quotes
 	std::string escaped;
@@ -151,10 +142,11 @@ std::string SQLWriter::generateDDL() const {
 
 	for (const auto& field : fields) {
 		auto it = schema->find(field);
-		if (it == schema->end())
-			continue;
 
-		const std::string sql_type = fieldTypeToSQL(it->second, field);
+		// JS does schema.get(field) which returns undefined for missing fields.
+		// fieldTypeToSQL(undefined) falls through switch to default: 'TEXT'.
+		// Match this behavior by using TEXT for fields not in the schema.
+		const std::string sql_type = (it != schema->end()) ? fieldTypeToSQL(it->second, field) : "TEXT";
 		const std::string escaped_field = escapeIdentifier(field);
 
 		// ID field is typically the primary key
@@ -172,14 +164,13 @@ std::string SQLWriter::generateDDL() const {
 		column_defs.push_back("\tPRIMARY KEY (" + primary_key + ")");
 
 	result += "CREATE TABLE " + escaped_table + " (\n";
+	// Join with ',\n' to match JS: column_defs.join(',\n')
 	for (size_t i = 0; i < column_defs.size(); i++) {
+		if (i > 0)
+			result += ",\n";
 		result += column_defs[i];
-		if (i + 1 < column_defs.size())
-			result += ",";
-		result += "\n";
 	}
-	result += ");\n";
-	result += "\n";
+	result += "\n);\n";
 
 	return result;
 }
@@ -215,11 +206,12 @@ std::string SQLWriter::toSQL() const {
 
 			result += "(" + values + ")";
 			if (j + 1 < batch_end)
-				result += ",";
-			result += "\n";
+				result += ",\n";
+			else
+				result += ";\n";
 		}
 
-		result += ";\n\n";
+		result += "\n";
 	}
 
 	return result;

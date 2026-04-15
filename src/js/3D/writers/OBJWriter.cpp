@@ -11,6 +11,21 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
+#include <charconv>
+#include <array>
+
+/**
+ * Convert float to string with minimal representation (no trailing zeros),
+ * matching JS Number.toString() behavior.
+ */
+static std::string float_to_string(float val) {
+	// Use snprintf with enough precision to round-trip
+	std::array<char, 32> buf;
+	int len = std::snprintf(buf.data(), buf.size(), "%.17g", static_cast<double>(val));
+	if (len <= 0 || static_cast<size_t>(len) >= buf.size())
+		return std::to_string(val);
+	return std::string(buf.data(), len);
+}
 
 OBJWriter::OBJWriter(const std::filesystem::path& out)
 	: out(out), name("Mesh"), vertex_offset(0) {}
@@ -72,7 +87,7 @@ void OBJWriter::write(bool overwrite) {
 	FileWriter writer(out);
 
 	// Write header.
-	writer.writeLine("# Exported using wow.export v" + std::string(constants::VERSION));
+	writer.writeLine("# Exported using wow.export.cpp v" + std::string(constants::VERSION));
 	writer.writeLine("o " + name);
 
 	// Link material library.
@@ -95,7 +110,7 @@ void OBJWriter::write(bool overwrite) {
 	for (size_t i = 0, j = 0, u = 0, n = verts.size(); i < n; j++, i += 3) {
 		if (usedIndices.count(j)) {
 			vertMap[j] = u++;
-			writer.writeLine("v " + std::to_string(verts[i]) + " " + std::to_string(verts[i + 1]) + " " + std::to_string(verts[i + 2]));
+			writer.writeLine("v " + float_to_string(verts[i]) + " " + float_to_string(verts[i + 1]) + " " + float_to_string(verts[i + 2]));
 		}
 	}
 
@@ -103,7 +118,7 @@ void OBJWriter::write(bool overwrite) {
 	for (size_t i = 0, j = 0, u = 0, n = normals.size(); i < n; j++, i += 3) {
 		if (usedIndices.count(j)) {
 			normalMap[j] = u++;
-			writer.writeLine("vn " + std::to_string(normals[i]) + " " + std::to_string(normals[i + 1]) + " " + std::to_string(normals[i + 2]));
+			writer.writeLine("vn " + float_to_string(normals[i]) + " " + float_to_string(normals[i + 1]) + " " + float_to_string(normals[i + 2]));
 		}
 	}
 
@@ -127,7 +142,7 @@ void OBJWriter::write(bool overwrite) {
 					if (uvIndex == 0)
 						uvMap[j] = u++;
 
-					writer.writeLine(prefix + " " + std::to_string(uv[i]) + " " + std::to_string(uv[i + 1]));
+					writer.writeLine(prefix + " " + float_to_string(uv[i]) + " " + float_to_string(uv[i + 1]));
 				}
 			}
 		}
