@@ -16,7 +16,6 @@
 #include <format>
 #include <limits>
 #include <memory>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -109,7 +108,7 @@ static GLuint loadTexture(uint32_t fileDataID, casc::CASC* casc) {
 	auto blpData = blp.toUInt8Array(0);
 
 	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, blp.width, blp.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, blpData.data());
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, blp.getScaledWidth(), blp.getScaledHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, blpData.data());
 	glGenerateMipmap(GL_TEXTURE_2D);
 
 	return texture;
@@ -1048,8 +1047,8 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 					casc::BLPImage blp(std::move(data));
 
 					auto raw_pixels = blp.toUInt8Array(0, 0b0111);
-					const int src_w = static_cast<int>(blp.width);
-					const int src_h = static_cast<int>(blp.height);
+					const int src_w = static_cast<int>(blp.getScaledWidth());
+					const int src_h = static_cast<int>(blp.getScaledHeight());
 
 					if (src_w != quality || src_h != quality) {
 						std::vector<uint8_t> resized(quality * quality * 4);
@@ -1097,18 +1096,24 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 
 					helper->setCurrentTaskName("Tile " + tileID + ", building texture arrays");
 
-					// collect unique texture ids for arrays
-					std::set<uint32_t> uniqueDiffuseSet;
-					for (const auto id : materialIDs2) {
-						if (id != 0) uniqueDiffuseSet.insert(id);
+					// collect unique texture ids for arrays (preserve insertion order like JS Set)
+					std::vector<uint32_t> unique_diffuse_ids;
+					{
+						std::unordered_set<uint32_t> seen;
+						for (const auto id : materialIDs2) {
+							if (id != 0 && seen.insert(id).second)
+								unique_diffuse_ids.push_back(id);
+						}
 					}
-					std::vector<uint32_t> unique_diffuse_ids(uniqueDiffuseSet.begin(), uniqueDiffuseSet.end());
 
-					std::set<uint32_t> uniqueHeightSet;
-					for (const auto id : heightIDs2) {
-						if (id != 0) uniqueHeightSet.insert(id);
+					std::vector<uint32_t> unique_height_ids;
+					{
+						std::unordered_set<uint32_t> seen;
+						for (const auto id : heightIDs2) {
+							if (id != 0 && seen.insert(id).second)
+								unique_height_ids.push_back(id);
+						}
 					}
-					std::vector<uint32_t> unique_height_ids(uniqueHeightSet.begin(), uniqueHeightSet.end());
 
 					GLuint diffuse_array = build_texture_array(unique_diffuse_ids, false, casc);
 					GLuint height_array = build_texture_array(!unique_height_ids.empty() ? unique_height_ids : unique_diffuse_ids, true, casc);
@@ -1513,7 +1518,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 							if (model.Rotation.size() >= 4) {
 								rotX = model.Rotation[0]; rotY = model.Rotation[1]; rotZ = model.Rotation[2]; rotW = model.Rotation[3];
 							}
-							scaleFactor = model.scale / 1024.0f;
+							scaleFactor = model.scale != 0 ? model.scale / 1024.0f : 1.0f;
 							modelId = model.uniqueId;
 						} else {
 							if (model.position.size() >= 3) {
@@ -1522,7 +1527,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 							if (model.rotation.size() >= 4) {
 								rotX = model.rotation[0]; rotY = model.rotation[1]; rotZ = model.rotation[2]; rotW = model.rotation[3];
 							}
-							scaleFactor = model.scale / 1024.0f;
+							scaleFactor = model.scale != 0 ? model.scale / 1024.0f : 1.0f;
 							modelId = model.uniqueId;
 						}
 
@@ -1566,7 +1571,9 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				int worldModelIndex = 0;
 				const bool usingNames = !objAdt.wmoNames.empty();
 				for (const auto& model : objAdt.worldModels) {
-					const bool useADTSets = !!(model.flags & 0x80);
+					// JS does `model & 0x80` which bitwise-ANDs the object itself,
+					// always producing 0 (ToInt32(object) == 0). Match that behavior.
+					const bool useADTSets = false;
 					helper->setCurrentTaskValue(worldModelIndex++);
 
 					uint32_t fileDataID = 0;

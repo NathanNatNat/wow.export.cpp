@@ -96,8 +96,11 @@ gltf.addUVArray(m3->uv1);
 
 const auto outDir = out.parent_path();
 auto textureMap = exportTextures(outDir, false, nullptr, helper, true);
-// but M3Exporter::exportTextures returns map<uint32_t, string>. Currently exportTextures
-// is a stub returning empty map, so this is a no-op until textures are implemented.
+// JS: gltf.setTextureMap(textureMap) — convert map<uint32_t, string> to GLTFTextureEntry map
+std::map<uint32_t, GLTFTextureEntry> gltfTexMap;
+for (const auto& [key, path] : textureMap)
+	gltfTexMap[key] = { path, "" };
+gltf.setTextureMap(gltfTexMap);
 
 const int index = 0;
 for (size_t lodIndex = 0; lodIndex < m3->lodLevels.size(); lodIndex++) {
@@ -108,11 +111,13 @@ for (size_t geosetIndex = m3->geosetCountPerLOD * lodIndex;
      geosetIndex < (m3->geosetCountPerLOD * (lodIndex + 1)); geosetIndex++) {
 const auto& geoset = m3->geosets[geosetIndex];
 
-// Read geoset name from the string block
+// Read geoset name from string block (save/restore position to avoid state mutation)
 std::string geosetName;
 if (m3->stringBlock && geoset.nameCharCount > 0) {
+const auto savedPos = m3->stringBlock->offset();
 m3->stringBlock->seek(geoset.nameCharStart);
 geosetName = m3->stringBlock->readString(geoset.nameCharCount);
+m3->stringBlock->seek(static_cast<int64_t>(savedPos));
 }
 
 logging::write(std::format("Exporting geoset {} ({})", geosetIndex, geosetName));
@@ -180,11 +185,13 @@ for (size_t geosetIndex = m3->geosetCountPerLOD * lodIndex;
      geosetIndex < (m3->geosetCountPerLOD * (lodIndex + 1)); geosetIndex++) {
 const auto& geoset = m3->geosets[geosetIndex];
 
-// Read geoset name from the string block
+// Read geoset name from string block (save/restore position to avoid state mutation)
 std::string geosetName;
 if (m3->stringBlock && geoset.nameCharCount > 0) {
+const auto savedPos = m3->stringBlock->offset();
 m3->stringBlock->seek(geoset.nameCharStart);
 geosetName = m3->stringBlock->readString(geoset.nameCharCount);
+m3->stringBlock->seek(static_cast<int64_t>(savedPos));
 }
 
 logging::write(std::format("Exporting geoset {} ({})", geosetIndex, geosetName));
@@ -256,11 +263,13 @@ for (size_t geosetIndex = m3->geosetCountPerLOD * lodIndex;
      geosetIndex < (m3->geosetCountPerLOD * (lodIndex + 1)); geosetIndex++) {
 const auto& geoset = m3->geosets[geosetIndex];
 
-// Read geoset name from the string block
+// Read geoset name from string block (save/restore position to avoid state mutation)
 std::string geosetName;
 if (m3->stringBlock && geoset.nameCharCount > 0) {
+const auto savedPos = m3->stringBlock->offset();
 m3->stringBlock->seek(geoset.nameCharStart);
 geosetName = m3->stringBlock->readString(geoset.nameCharCount);
+m3->stringBlock->seek(static_cast<int64_t>(savedPos));
 }
 
 logging::write(std::format("Exporting geoset {} ({})", geosetIndex, geosetName));

@@ -697,6 +697,9 @@ return;
 auto& equipM2 = *renderer->m2;
 equipM2.load();
 
+// JS: const skin = await m2.getSkin(0); if (!skin) return;
+if (equipM2.getSkinList().empty())
+	return;
 auto& equipSkin = equipM2.getSkin(0);
 
 auto slotNameOpt = wow::get_slot_name(slot_id);
@@ -844,6 +847,9 @@ return;
 auto& equipM2 = *renderer->m2;
 equipM2.load();
 
+// JS: const skin = await m2.getSkin(0); if (!skin) return;
+if (equipM2.getSkinList().empty())
+	return;
 auto& equipSkin = equipM2.getSkin(0);
 
 // build UV arrays
@@ -977,6 +983,9 @@ return;
 auto& equipM2 = *renderer->m2;
 equipM2.load();
 
+// JS: const skin = await m2.getSkin(0); if (!skin) return;
+if (equipM2.getSkinList().empty())
+	return;
 auto& equipSkin = equipM2.getSkin(0);
 
 // append geometry to STL
@@ -1127,7 +1136,18 @@ auto textureIt = validTextures.find(std::to_string(texture.fileDataID));
 nlohmann::json texObj;
 texObj["fileDataID"] = texture.fileDataID;
 texObj["flags"] = texture.flags;
-texObj["fileNameInternal"] = casc::listfile::getByID(texture.fileDataID);
+// JS Object.assign also spreads texture.fileName if set
+if (!texture.fileName.empty())
+	texObj["fileName"] = texture.fileName;
+// JS: listfile.getByID() returns undefined when not found;
+// use null in JSON to match JS behavior instead of empty string.
+{
+	auto internalName = casc::listfile::getByID(texture.fileDataID);
+	if (!internalName.empty())
+		texObj["fileNameInternal"] = internalName;
+	else
+		texObj["fileNameInternal"] = nullptr;
+}
 if (textureIt != validTextures.end()) {
 texObj["fileNameExternal"] = textureIt->second.matPathRelative;
 texObj["mtlName"] = textureIt->second.matName;

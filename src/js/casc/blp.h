@@ -110,6 +110,18 @@ public:
 	// JS: this.dataURL = null — cached data URL string.
 	std::optional<std::string> dataURL;
 
+	/**
+	 * Get the scaled width of the image (after mipmap scaling).
+	 * Matches JS `blp.scaledWidth`.
+	 */
+	uint32_t getScaledWidth() const { return scaledWidth_; }
+
+	/**
+	 * Get the scaled height of the image (after mipmap scaling).
+	 * Matches JS `blp.scaledHeight`.
+	 */
+	uint32_t getScaledHeight() const { return scaledHeight_; }
+
 private:
 	/**
 	 * Prepare BLP for processing.
