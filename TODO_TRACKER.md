@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/161 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/169 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -807,3 +807,43 @@
 - **JS Source**: `src/js/buffer.js` lines 1000–1004
 - **Status**: Pending
 - **Details**: JS calls `URL.revokeObjectURL(this.dataURL)` before clearing the cached URL. C++ only resets the cached optional string (`src/js/buffer.cpp` lines 1022–1029), so native object-URL revocation semantics are not preserved.
+
+### 162. ⬜ [core.cpp] Loading-screen updates are queued instead of immediate and no longer await redraw
+- **JS Source**: `src/js/core.js` lines 413–434, 439–443
+- **Status**: Pending
+- **Details**: JS mutates `core.view` synchronously in `showLoadingScreen/progressLoadingScreen/hideLoadingScreen`, and `progressLoadingScreen` awaits `generics.redraw()`. C++ posts these updates through `postToMainThread()` and does not force redraw, changing timing/ordering semantics versus the JS event-loop behavior.
+
+### 163. ⬜ [core.cpp] `setToast()` payload shape differs from JS (`options` object vs action list)
+- **JS Source**: `src/js/core.js` lines 470–472
+- **Status**: Pending
+- **Details**: JS stores `core.view.toast = { type, message, options, closable }` with generic `options`. C++ maps this to `ToastAction` vector (`toast.actions`) and drops the generic options object shape, which can change behavior for toast consumers expecting JS `options`.
+
+### 164. ⬜ [external-links.cpp] File is a placeholder and does not contain the JS module implementation
+- **JS Source**: `src/js/external-links.js` lines 12–44
+- **Status**: Pending
+- **Details**: JS defines `STATIC_LINKS`, `WOWHEAD_ITEM`, `open()`, and `wowHead_viewItem()` in this module. C++ `src/js/external-links.cpp` only includes the header and contains no method/constant implementation in the `.cpp` translation unit.
+
+### 165. ⬜ [file-writer.cpp] Backpressure wait/resume path from JS is not behavior-identical
+- **JS Source**: `src/js/file-writer.js` lines 24–38
+- **Status**: Pending
+- **Details**: JS `writeLine()` awaits when blocked and resumes through stored resolver on `'drain'`. C++ makes the blocked/drain path a no-op and removes resolver wake-up semantics, so the original asynchronous backpressure code path is not preserved.
+
+### 166. ⬜ [generics.cpp] `get()` API contract differs from JS `fetch`-style response object
+- **JS Source**: `src/js/generics.js` lines 22–54
+- **Status**: Pending
+- **Details**: JS `get()` returns a Response-like object (`ok/status/statusText/json`) and can return non-OK responses after fallback exhaustion. C++ `get()` returns raw bytes and throws on non-OK terminal responses, changing caller-visible behavior and error flow.
+
+### 167. ⬜ [generics.cpp] `requestData()` status handling differs from JS 200–302 acceptance
+- **JS Source**: `src/js/generics.js` lines 160–167
+- **Status**: Pending
+- **Details**: JS rejects only when status is `<200` or `>302`, while C++ rejects `>=300` after internal redirect handling. This narrows accepted HTTP outcomes versus the original JS logic.
+
+### 168. ⬜ [generics.cpp] `redraw()` is a no-op instead of frame-yielding behavior
+- **JS Source**: `src/js/generics.js` lines 263–269
+- **Status**: Pending
+- **Details**: JS resolves after two `requestAnimationFrame` ticks to guarantee a paint cycle. C++ `redraw()` is an immediate no-op, so code paths relying on explicit redraw yielding are behaviorally different.
+
+### 169. ⬜ [generics.cpp] `batchWork()` is synchronous and no longer Promise/event-loop scheduled
+- **JS Source**: `src/js/generics.js` lines 420–469
+- **Status**: Pending
+- **Details**: JS processes batches asynchronously via `MessageChannel` and returns a Promise that resolves/rejects after scheduled batches. C++ `batchWork()` runs synchronously in a loop with `std::this_thread::yield()`, which does not preserve the original async scheduling contract.
