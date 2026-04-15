@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/169 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/178 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -847,3 +847,49 @@
 - **JS Source**: `src/js/generics.js` lines 420–469
 - **Status**: Pending
 - **Details**: JS processes batches asynchronously via `MessageChannel` and returns a Promise that resolves/rejects after scheduled batches. C++ `batchWork()` runs synchronously in a loop with `std::this_thread::yield()`, which does not preserve the original async scheduling contract.
+
+
+### 170. [gpu-info.cpp] Windows command execution does not enforce the JS 5-second timeout
+- **JS Source**: `src/js/gpu-info.js` lines 65–73
+- **Status**: Pending
+- **Details**: JS always executes platform probes via `exec(..., { timeout: 5000 })`. The C++ Windows path uses `_popen` without timeout control, so WMIC/PowerShell calls can block indefinitely instead of timing out like the original behavior.
+
+### 171. [gpu-info.cpp] WebGL debug renderer gating behavior is not preserved
+- **JS Source**: `src/js/gpu-info.js` lines 30–34, 343–347
+- **Status**: Pending
+- **Details**: JS only reports vendor/renderer when `WEBGL_debug_renderer_info` is available; otherwise it logs `GPU: WebGL debug info unavailable`. C++ always uses `glGetString(GL_VENDOR/GL_RENDERER)` and therefore bypasses this gate, producing different diagnostic output paths.
+
+### 172. [gpu-info.cpp] GPU log message text differs from the JS module
+- **JS Source**: `src/js/gpu-info.js` lines 341, 346, 354
+- **Status**: Pending
+- **Details**: JS emits `GPU: WebGL query failed`, `GPU: WebGL debug info unavailable`, and `GPU: WebGL unavailable`. C++ emits `GL` variants, which is a direct behavior/output deviation in user-visible runtime logs.
+
+### 173. [icon-render.cpp] Icon loading pipeline is still stubbed and never applies real BLP icon data
+- **JS Source**: `src/js/icon-render.js` lines 56–65, 93–106
+- **Status**: Pending
+- **Details**: JS dequeues each icon, fetches CASC file data, decodes BLP, and updates the rule background image. C++ `processQueue()` contains placeholder comments instead of loading/decode logic, so icons remain on the default placeholder image.
+
+### 174. [icon-render.cpp] Queue processing model differs from JS async recursive behavior
+- **JS Source**: `src/js/icon-render.js` lines 48–65, 89–91
+- **Status**: Pending
+- **Details**: JS processes one queue entry at a time through promise chaining (`finally(() => processQueue())`), preserving event-loop yielding and back-to-back requests ordering. C++ drains the queue synchronously in a loop, so scheduling/latency behavior diverges from the original implementation.
+
+### 175. [log.cpp] `write()` no longer supports JS variadic util.format semantics
+- **JS Source**: `src/js/log.js` lines 78–89, 114
+- **Status**: Pending
+- **Details**: JS `write(...parameters)` accepts format strings and arguments directly via `util.format`. C++ exposes `write(std::string_view)` only, changing the module contract and requiring pre-formatting at call sites instead of preserving the original API behavior.
+
+### 176. [log.cpp] `timeEnd()` omits JS variadic parameter forwarding
+- **JS Source**: `src/js/log.js` lines 64–66
+- **Status**: Pending
+- **Details**: JS `timeEnd(label, ...params)` forwards additional formatting parameters and appends elapsed milliseconds. C++ `timeEnd(std::string_view)` only logs the label plus elapsed time, so mixed label/format argument behavior is not preserved.
+
+### 177. [log.cpp] Pooled log draining is tied to subsequent writes instead of next-tick drain scheduling
+- **JS Source**: `src/js/log.js` lines 45–49
+- **Status**: Pending
+- **Details**: JS schedules another drain with `process.nextTick(drainPool)` whenever backlog remains and stream is writable. C++ sets `drainPending` and only drains again when another `write()` call occurs, so queued entries can remain undrained longer than in JS.
+
+### 178. [mmap.cpp] `release_virtual_files()` deletes tracked objects instead of only unmapping them
+- **JS Source**: `src/js/mmap.js` lines 30–43
+- **Status**: Pending
+- **Details**: JS iterates tracked mmap objects, unmaps mapped ones, and clears the tracking set; objects themselves remain valid references managed by JS GC. C++ explicitly `delete`s each tracked `MmapObject`, which changes lifetime semantics and can invalidate pointers still held by callers.
