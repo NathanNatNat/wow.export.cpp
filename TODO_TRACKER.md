@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/86 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/89 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -431,3 +431,18 @@
 - **JS Source**: `src/js/wmv.js` lines 50–67, 94–112
 - **Status**: Pending
 - **Details**: JS duplicates the equipment parsing loop identically in both `wmv_parse_v2` (lines 50–67) and `wmv_parse_v1` (lines 94–112). C++ extracts this into a shared `parse_equipment()` helper function (line 143). While functionally equivalent, this is a structural refactoring not present in the original JS. Per fidelity rules, structural deviations should be documented.
+
+### 87. [app.cpp] Crash screen missing `#logo-background` watermark
+- **JS Source**: `src/app.js` lines 36–39, `src/app.css` lines 132–141
+- **Status**: Pending
+- **Details**: The JS crash function (lines 36–39) explicitly appends a `<div id="logo-background">` to `document.body` to keep the centered logo watermark (5% opacity) visible in the crash screen background. CSS specifies `#logo-background { background: url(./images/logo.png) no-repeat center center; opacity: 0.05; }`. The C++ `renderCrashScreen()` function (lines 326–404) does not render this watermark — it renders only the crash window content without the logo background. The logo watermark should be drawn behind the crash screen window to match the JS visual appearance.
+
+### 88. [app.cpp] `restartApplication()` uses process restart instead of JS in-place reload
+- **JS Source**: `src/app.js` lines 63–69, 389–391
+- **Status**: Pending
+- **Details**: JS uses `chrome.runtime.reload()` (NW.js API) which reloads the application runtime in-place — fast, no new process, preserves environment. C++ `app::restartApplication()` (lines 1775–1799) uses `CreateProcess`/`execl` to spawn a new process and then calls `std::exit(0)`. This is heavier: it starts a new OS process, may fail to release file handles or network connections before the new process starts, and is significantly slower than NW.js in-place reload. This affects both the "Restart Application" button in the crash screen (line 391) and the F5 debug reload in the main loop (line 2805).
+
+### 89. [app.cpp] `emit()` and `click()` functions are not variadic — JS versions spread multiple params
+- **JS Source**: `src/app.js` lines 437–444, 447–449
+- **Status**: Pending
+- **Details**: JS `emit(tag, ...params)` is variadic and spreads all extra params to `core.events.emit(tag, ...params)`. JS `click(tag, event, ...params)` is also variadic and passes all extra params to the event emitter. C++ has two overloads: `emit(tag)` and `emit(tag, const std::any& arg)`, and similarly for `click()`. If any caller passes 2 or more extra params, the C++ version silently drops the extras. In addition, `click()` in JS checks `event.target.classList.contains('disabled')` to auto-detect the disabled state from the DOM element class — C++ requires callers to explicitly pass a `disabled` bool, relying on ImGui's `BeginDisabled()` for UI-level disabled handling rather than automatic class-based detection.
