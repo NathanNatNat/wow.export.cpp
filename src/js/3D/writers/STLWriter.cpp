@@ -90,7 +90,7 @@ void STLWriter::write(bool overwrite) {
 	BufferWrapper buffer = BufferWrapper::alloc(buffer_size, true);
 
 	// write header (80 bytes)
-	const std::string header = "Exported using wow.export v" + std::string(constants::VERSION);
+	const std::string header = "Exported using wow.export.cpp v" + std::string(constants::VERSION);
 	const size_t header_len = std::min(header.size(), static_cast<size_t>(80));
 	buffer.writeBuffer(std::span<const uint8_t>(
 		reinterpret_cast<const uint8_t*>(header.data()), header_len));

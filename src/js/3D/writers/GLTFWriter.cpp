@@ -15,8 +15,13 @@ License: MIT
 
 #include <nlohmann/json.hpp>
 #include <fstream>
+#include <format>
 #include <algorithm>
 #include <array>
+
+// Use ordered_json to preserve property insertion order, matching JS JSON.stringify()
+// which outputs keys in insertion order. Standard nlohmann::json uses alphabetical ordering.
+using json = nlohmann::ordered_json;
 
 // See https://gist.github.com/mhenry07/e31d8c94db91fb823f2eed2fc1b43f15
 static constexpr int GLTF_ARRAY_BUFFER = 0x8892;
@@ -36,7 +41,7 @@ static constexpr int GLTF_TRIANGLES = 0x0004;
  * @param target JSON accessor to set min/max on
  */
 template<typename T>
-static void calculate_min_max(const std::vector<T>& values, int stride, nlohmann::json& target) {
+static void calculate_min_max(const std::vector<T>& values, int stride, json& target) {
 if (values.empty()) return;
 
 std::vector<T> min_vals(stride);
@@ -56,8 +61,8 @@ max_vals[ofs] = value;
 first = false;
 }
 
-nlohmann::json min_json = nlohmann::json::array();
-nlohmann::json max_json = nlohmann::json::array();
+json min_json = json::array();
+json max_json = json::array();
 for (int i = 0; i < stride; i++) {
 min_json.push_back(min_vals[i]);
 max_json.push_back(max_vals[i]);
@@ -207,35 +212,33 @@ return;
 if (!overwrite && format == "gltf" && generics::fileExists(outBIN))
 return;
 
-// flavour and guid are runtime values set when a CASC source is selected.
-const std::string flavour = core::view->config.value("selectedFlavour", std::string(""));
-const std::string guid = core::view->config.value("selectedGuid", std::string(""));
-const std::string generator = std::string("wow.export v") + std::string(constants::VERSION)
-	+ (flavour.empty() ? "" : " " + flavour)
-	+ (guid.empty() ? "" : " [" + guid + "]");
-nlohmann::json root = {
+// Use build manifest constants for generator string, matching JS:
+// util.format('wow.export v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid)
+const std::string generator = std::format("wow.export.cpp v{} {} [{}]",
+	constants::VERSION, constants::FLAVOUR, constants::BUILD_GUID);
+json root = {
 {"asset", {
 {"version", "2.0"},
 {"generator", generator}
 }},
-{"nodes", nlohmann::json::array({
+{"nodes", json::array({
 {
 {"name", name},
-{"children", nlohmann::json::array()}
+{"children", json::array()}
 }
 })},
-{"scenes", nlohmann::json::array({
+{"scenes", json::array({
 {
 {"name", name + "_Scene"},
-{"nodes", nlohmann::json::array({0})}
+{"nodes", json::array({0})}
 }
 })},
-{"buffers", nlohmann::json::array({
+{"buffers", json::array({
 {
 {"byteLength", 0}
 }
 })},
-{"bufferViews", nlohmann::json::array({
+{"bufferViews", json::array({
 {
 // Vertices ARRAY_BUFFER
 {"buffer", 0},
@@ -251,7 +254,7 @@ nlohmann::json root = {
 {"target", GLTF_ARRAY_BUFFER}
 }
 })},
-{"accessors", nlohmann::json::array({
+{"accessors", json::array({
 {
 // Vertices (Float)
 {"name", "POSITION"},
@@ -271,24 +274,24 @@ nlohmann::json root = {
 {"type", "VEC3"}
 }
 })},
-{"meshes", nlohmann::json::array()},
+{"meshes", json::array()},
 {"scene", 0}
 };
 
-nlohmann::json primitive_attributes = {
+json primitive_attributes = {
 {"POSITION", 0},
 {"NORMAL", 1}
 };
 
-auto add_scene_node = [&](nlohmann::json node) -> size_t {
+auto add_scene_node = [&](json node) -> size_t {
 root["nodes"].push_back(std::move(node));
 size_t idx = root["nodes"].size() - 1;
 root["nodes"][0]["children"].push_back(static_cast<int>(idx));
 return idx;
 };
 
-auto add_buffered_accessor = [&](nlohmann::json accessor, int buffer_target, bool add_primitive = false) -> int {
-nlohmann::json bv = {
+auto add_buffered_accessor = [&](json accessor, int buffer_target, bool add_primitive = false) -> int {
+json bv = {
 {"buffer", 0},
 {"byteLength", 0},
 {"byteOffset", 0}
@@ -344,16 +347,16 @@ idx_inv_bind = add_buffered_accessor({
 {"type", "MAT4"}
 }, -1); // undefined target
 
-root["skins"] = nlohmann::json::array({{
+root["skins"] = json::array({{
 {"name", name + "_Armature"},
-{"joints", nlohmann::json::array()},
+{"joints", json::array()},
 {"inverseBindMatrices", idx_inv_bind},
 {"skeleton", 0}
 }});
 
 size_t skeleton_idx = add_scene_node({
 {"name", name + "_skeleton"},
-{"children", nlohmann::json::array()}
+{"children", json::array()}
 });
 
 std::map<int, size_t> bone_lookup_map;
@@ -429,12 +432,12 @@ animation_buffer_lookup_map[animKey] = static_cast<int>(root["buffers"].size() -
 }
 
 // Animations
-root["animations"] = nlohmann::json::array();
+root["animations"] = json::array();
 
 for (const auto& animation : animations) {
 root["animations"].push_back({
-{"samplers", nlohmann::json::array()},
-{"channels", nlohmann::json::array()},
+{"samplers", json::array()},
+{"channels", json::array()},
 {"name", get_anim_name(animation.id) + " (ID " + std::to_string(animation.id) + " variation " + std::to_string(animation.variationIndex) + ")"}
 });
 }
@@ -455,7 +458,7 @@ parent_pos[2] = parent_bone.pivot[2];
 size_t parent_node_idx = bone_lookup_map[bone.parentBone];
 auto& parent_node = nodes[parent_node_idx];
 if (!parent_node.contains("children"))
-parent_node["children"] = nlohmann::json::array();
+parent_node["children"] = json::array();
 parent_node["children"].push_back(static_cast<int>(nodeIndex));
 } else {
 // Parent stray bones to the skeleton root.
@@ -466,24 +469,24 @@ const std::string bone_name = get_bone_name(bone.boneID, static_cast<int>(bi), b
 
 const bool usePrefix = core::view->config.value("modelsExportWithBonePrefix", false);
 
-nlohmann::json prefix_node = {
+json prefix_node = {
 {"name", bone_name + "_p"},
-{"translation", nlohmann::json::array({
+{"translation", json::array({
 bone.pivot[0] - parent_pos[0],
 bone.pivot[1] - parent_pos[1],
 bone.pivot[2] - parent_pos[2]
 })},
-{"children", nlohmann::json::array({static_cast<int>(nodeIndex + 1)})}
+{"children", json::array({static_cast<int>(nodeIndex + 1)})}
 };
 
 // Define how node acts, if we don't use prefixes we need to add position translation
-nlohmann::json node;
+json node;
 if (usePrefix) {
 node = {{"name", bone_name}};
 } else {
 node = {
 {"name", bone_name},
-{"translation", nlohmann::json::array({
+{"translation", json::array({
 bone.pivot[0] - parent_pos[0],
 bone.pivot[1] - parent_pos[1],
 bone.pivot[2] - parent_pos[2]
@@ -591,8 +594,8 @@ root["accessors"].push_back({
 {"byteOffset", 0},
 {"type", "SCALAR"},
 {"componentType", 5126}, // Float
-{"min", nlohmann::json::array({time_min})},
-{"max", nlohmann::json::array({time_max})}
+{"min", json::array({time_min})},
+{"max", json::array({time_max})}
 });
 
 root["animations"][i]["samplers"].back()["input"] = static_cast<int>(root["accessors"].size() - 1);
@@ -632,8 +635,8 @@ root["accessors"].push_back({
 {"byteOffset", 0},
 {"type", "VEC3"},
 {"componentType", 5126}, // Float
-{"min", nlohmann::json::array({val_min[0], val_min[1], val_min[2]})},
-{"max", nlohmann::json::array({val_max[0], val_max[1], val_max[2]})}
+{"min", json::array({val_min[0], val_min[1], val_min[2]})},
+{"max", json::array({val_max[0], val_max[1], val_max[2]})}
 });
 
 root["animations"][i]["samplers"].back()["output"] = static_cast<int>(root["accessors"].size() - 1);
@@ -710,8 +713,8 @@ root["accessors"].push_back({
 {"byteOffset", 0},
 {"type", "SCALAR"},
 {"componentType", 5126}, // Float
-{"min", nlohmann::json::array({time_min})},
-{"max", nlohmann::json::array({time_max})}
+{"min", json::array({time_min})},
+{"max", json::array({time_max})}
 });
 
 root["animations"][i]["samplers"].back()["input"] = static_cast<int>(root["accessors"].size() - 1);
@@ -754,8 +757,8 @@ root["accessors"].push_back({
 {"byteOffset", 0},
 {"type", "VEC4"},
 {"componentType", 5126}, // Float
-{"min", nlohmann::json::array({val_min[0], val_min[1], val_min[2], val_min[3]})},
-{"max", nlohmann::json::array({val_max[0], val_max[1], val_max[2], val_max[3]})}
+{"min", json::array({val_min[0], val_min[1], val_min[2], val_min[3]})},
+{"max", json::array({val_max[0], val_max[1], val_max[2], val_max[3]})}
 });
 
 root["animations"][i]["samplers"].back()["output"] = static_cast<int>(root["accessors"].size() - 1);
@@ -832,8 +835,8 @@ root["accessors"].push_back({
 {"byteOffset", 0},
 {"type", "SCALAR"},
 {"componentType", 5126}, // Float
-{"min", nlohmann::json::array({time_min})},
-{"max", nlohmann::json::array({time_max})}
+{"min", json::array({time_min})},
+{"max", json::array({time_max})}
 });
 
 root["animations"][i]["samplers"].back()["input"] = static_cast<int>(root["accessors"].size() - 1);
@@ -873,8 +876,8 @@ root["accessors"].push_back({
 {"byteOffset", 0},
 {"type", "VEC3"},
 {"componentType", 5126}, // Float
-{"min", nlohmann::json::array({val_min[0], val_min[1], val_min[2]})},
-{"max", nlohmann::json::array({val_max[0], val_max[1], val_max[2]})}
+{"min", json::array({val_min[0], val_min[1], val_min[2]})},
+{"max", json::array({val_max[0], val_max[1], val_max[2]})}
 });
 
 root["animations"][i]["samplers"].back()["output"] = static_cast<int>(root["accessors"].size() - 1);
@@ -896,9 +899,9 @@ logging::write("Bone " + std::to_string(bi) + " has unsupported interpolation ty
 }
 
 if (!textures.empty()) {
-root["images"] = nlohmann::json::array();
-root["textures"] = nlohmann::json::array();
-root["materials"] = nlohmann::json::array();
+root["images"] = json::array();
+root["textures"] = json::array();
+root["materials"] = json::array();
 }
 
 std::map<std::string, int> materialMap;
@@ -929,7 +932,7 @@ root["images"].push_back({{"uri", mat_path}});
 root["textures"].push_back({{"source", imageIndex}});
 root["materials"].push_back({
 {"name", std::filesystem::path(texFile.matName).stem().string()},
-{"emissiveFactor", nlohmann::json::array({0, 0, 0})},
+{"emissiveFactor", json::array({0, 0, 0})},
 {"pbrMetallicRoughness", {
 {"baseColorTexture", {
 {"index", textureIndex}
@@ -1105,7 +1108,7 @@ buffer.writeUInt32LE(idx);
 
 const int meshIndex = static_cast<int>(root["meshes"].size());
 
-nlohmann::json primitive = {
+json primitive = {
 {"attributes", primitive_attributes},
 {"indices", accessorIndex},
 {"mode", GLTF_TRIANGLES}
@@ -1115,10 +1118,10 @@ if (mat_it != materialMap.end())
 primitive["material"] = mat_it->second;
 
 root["meshes"].push_back({
-{"primitives", nlohmann::json::array({primitive})}
+{"primitives", json::array({primitive})}
 });
 
-nlohmann::json scene_node = {{"name", name + "_" + mesh.name}, {"mesh", meshIndex}};
+json scene_node = {{"name", name + "_" + mesh.name}, {"mesh", meshIndex}};
 if (!bones_ref.empty())
 scene_node["skin"] = 0;
 
@@ -1166,7 +1169,7 @@ root["accessors"].push_back({
 });
 
 // equipment primitive attributes
-nlohmann::json eq_prim_attribs = {
+json eq_prim_attribs = {
 {"POSITION", eq_vert_accessor},
 {"NORMAL", eq_norm_accessor}
 };
@@ -1402,7 +1405,7 @@ buffer.writeUInt32LE(idx);
 
 const int meshIndex = static_cast<int>(root["meshes"].size());
 
-nlohmann::json eq_primitive = {
+json eq_primitive = {
 {"attributes", eq_prim_attribs},
 {"indices", accessorIndex},
 {"mode", GLTF_TRIANGLES}
@@ -1412,10 +1415,10 @@ if (eq_mat_it != materialMap.end())
 eq_primitive["material"] = eq_mat_it->second;
 
 root["meshes"].push_back({
-{"primitives", nlohmann::json::array({eq_primitive})}
+{"primitives", json::array({eq_primitive})}
 });
 
-nlohmann::json eq_node = {{"name", equip.name + "_" + mesh.name}, {"mesh", meshIndex}};
+json eq_node = {{"name", equip.name + "_" + mesh.name}, {"mesh", meshIndex}};
 
 // apply skin or parent to attachment bone
 if (eq_has_skin)
@@ -1496,8 +1499,14 @@ glb_buffer.writeToFile(outGLTF);
 } else {
 // gltf mode: write separate json and bin files
 root["buffers"][0]["uri"] = outBIN.filename().string();
-std::ofstream ofs(outGLTF);
+// Use binary mode to prevent platform-specific line ending translation,
+// matching JS writeFile('utf8') which writes raw bytes.
+std::ofstream ofs(outGLTF, std::ios::binary);
+if (!ofs)
+	throw std::runtime_error("Failed to open file for writing: " + outGLTF.string());
 ofs << root.dump(1, '\t');
+if (!ofs)
+	throw std::runtime_error("Failed to write GLTF file: " + outGLTF.string());
 bin_combined.writeToFile(outBIN);
 }
 
