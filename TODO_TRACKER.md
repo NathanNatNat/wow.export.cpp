@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/25 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/86 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -417,7 +417,17 @@
 - **Status**: Pending
 - **Details**: JS plain objects preserve insertion order for string keys. C++ `std::unordered_map` does not, potentially changing key ordering in output JSON.
 
-### 84. [wmv.cpp] Audit incomplete — requires re-run
-- **JS Source**: `src/js/wmv.js` lines 1–177
+### 84. [wmv.cpp] `wmv_parse` return type uses `std::variant` instead of plain object
+- **JS Source**: `src/js/wmv.js` lines 9–23, 69–75, 114–120
 - **Status**: Pending
-- **Details**: The wmv.cpp vs wmv.js comparison was not completed due to agent session timeout. A full line-by-line audit is still needed.
+- **Details**: JS `wmv_parse` returns a plain object with `{ race, gender, customizations/legacy_values, equipment, model_path }`. Both v1 and v2 return the same shape (with different fields). C++ returns `std::variant<ParseResultV1, ParseResultV2>`, requiring callers to use `std::visit` or `std::get` to access the result. This changes the API contract — JS callers can check for the presence of `customizations` vs `legacy_values` to distinguish versions, while C++ callers must pattern-match on the variant type.
+
+### 85. [wmv.cpp] `equipment` field uses `std::unordered_map` — does not preserve insertion order
+- **JS Source**: `src/js/wmv.js` lines 50–67, 95–112
+- **Status**: Pending
+- **Details**: JS `equipment` is a plain object (`{}`), which preserves integer key insertion order in modern JS engines. C++ uses `std::unordered_map<int, int>`, which does not preserve insertion order. If any consumer iterates the equipment map and depends on slot ordering, results will differ.
+
+### 86. [wmv.cpp] `parse_equipment` extracted as shared helper — JS duplicates the code
+- **JS Source**: `src/js/wmv.js` lines 50–67, 94–112
+- **Status**: Pending
+- **Details**: JS duplicates the equipment parsing loop identically in both `wmv_parse_v2` (lines 50–67) and `wmv_parse_v1` (lines 94–112). C++ extracts this into a shared `parse_equipment()` helper function (line 143). While functionally equivalent, this is a structural refactoring not present in the original JS. Per fidelity rules, structural deviations should be documented.
