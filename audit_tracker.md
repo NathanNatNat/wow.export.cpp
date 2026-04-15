@@ -2,18 +2,18 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 5/191 audited (3%)**
+**Progress: 10/191 audited (5%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
 - [x] 3. `src/js/buffer.cpp`
 - [x] 4. `src/js/config.cpp`
 - [x] 5. `src/js/constants.cpp`
-- [ ] 6. `src/js/core.cpp`
-- [ ] 7. `src/js/crc32.cpp`
-- [ ] 8. `src/js/external-links.cpp`
-- [ ] 9. `src/js/file-writer.cpp`
-- [ ] 10. `src/js/generics.cpp`
+- [x] 6. `src/js/core.cpp`
+- [x] 7. `src/js/crc32.cpp`
+- [x] 8. `src/js/external-links.cpp`
+- [x] 9. `src/js/file-writer.cpp`
+- [x] 10. `src/js/generics.cpp`
 - [ ] 11. `src/js/gpu-info.cpp`
 - [ ] 12. `src/js/icon-render.cpp`
 - [ ] 13. `src/js/install-type.cpp`
