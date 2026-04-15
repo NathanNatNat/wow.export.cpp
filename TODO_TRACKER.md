@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 567/567 verified (100%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 567/579 verified (97%)** — ✅ = Verified, ⬜ = Pending
 
 ---
 
@@ -2838,3 +2838,63 @@
 - **JS Source**: `src/index.html` lines 18–23, `src/js/components/context-menu.js` lines 16–58, `src/app.css` lines 873–913
 - **Status**: Verified
 - **Details**: Refactored hamburger menu to use ImGui's built-in popup API (`ImGui::OpenPopup`/`ImGui::BeginPopup`) which handles z-ordering (always renders on top) and close-on-click-outside automatically. Fixed all five issues: (1) z-ordering — popups always render above regular windows; (2) uses proper popup API instead of custom Begin/End; (3) click always opens (not toggle), matching JS `contextMenus.stateNavExtra = true`; (4) close-on-click-outside replaces mouseleave+buffer-zone pattern; (5) `PushStyleColor(ImGuiCol_PopupBg)` applied before `BeginPopup()` so background color is correct.
+
+### ⬜ 568. [screen_source_select.cpp] Link hover color uses white instead of green
+- **JS Source**: `src/app.css` lines 104–110 (`.link` / `.link:hover`)
+- **Status**: Pending
+- **Details**: CSS `.link:hover` uses `--font-alt-highlight` (`#9ff1a1`, light green), but the C++ code uses `FONT_HIGHLIGHT_U32` (pure white `#ffffff`) for the hovered state of "Last Opened:" links (line 915), the CDN "(Change)" link (line 935), and the legacy "Last Opened:" link (line 977). All three should use `FONT_ALT_HIGHLIGHT_U32` (`#9ff1a1`) on hover instead of `FONT_HIGHLIGHT_U32`.
+
+### ⬜ 569. [screen_source_select.cpp] Subtitle effective opacity is wrong — alpha 179 instead of 143
+- **JS Source**: `src/app.css` lines 638–641 (`.source-subtitle { opacity: 0.7 }`), line 9 (`--font-primary: #ffffffcc`)
+- **Status**: Pending
+- **Details**: The CSS `opacity: 0.7` is applied to an element inheriting `color: var(--font-primary)` which is `#ffffffcc` (alpha 204, i.e. 80% white). The effective rendered alpha is `204 × 0.7 ≈ 143`, i.e. `IM_COL32(255, 255, 255, 143)`. But the C++ code (line 870) computes `subtitle_color = IM_COL32(255, 255, 255, 179)` which is `255 × 0.7 = 179` — treating the base as pure white instead of `--font-primary`. The subtitle text appears brighter than the original. Fix: change alpha from 179 to 143.
+
+### ⬜ 570. [screen_source_select.cpp] "Last Opened:" and "Region:" prefix text uses wrong color
+- **JS Source**: `src/app.css` lines 642–649 (`.source-last-opened`, `.source-cdn-region`)
+- **Status**: Pending
+- **Details**: The CSS `.source-last-opened` and `.source-cdn-region` classes do not override color — they inherit `--font-primary` (`#ffffffcc`, alpha 204). But the C++ code uses `subtitle_color` (alpha 179) for the "Last Opened:" prefix (lines 898, 962) and "Region:" prefix (line 923). The prefix text should use `FONT_PRIMARY_U32` (`IM_COL32(255, 255, 255, 204)`) instead of `subtitle_color`. Only the `.link` portion (the path/change text) should use `FONT_ALT_U32`.
+
+### ⬜ 571. [screen_source_select.cpp] Card height calculation ignores icon height — cards are shorter than CSS
+- **JS Source**: `src/app.css` lines 595–606 (`#source-select > div { min-height: 120px; padding: 30px; align-items: center }`)
+- **Status**: Pending
+- **Details**: The CSS card uses `display: flex; align-items: center; padding: 30px` with the icon at 80px tall. The card's actual rendered height is `max(min-height, padding-top + max(icon_height, text_height) + padding-bottom)` = `max(120, 30 + max(80, ~46–66) + 30)` = `max(120, 140)` = 140px. But the C++ `calcCardHeight()` (lines 793–812) only computes height from text content plus padding, ignoring the icon height. This results in cards being ~120–126px instead of ~140px. Fix: add `h = std::max(h, card_padding * 2 + icon_size)` before the final return.
+
+### ⬜ 572. [screen_source_select.cpp] Text block is top-aligned instead of vertically centered in card
+- **JS Source**: `src/app.css` lines 595–606 (`#source-select > div { align-items: center }`)
+- **Status**: Pending
+- **Details**: The CSS `align-items: center` vertically centers both the icon and the text content block within the card's padded area. The C++ vertically centers the icon (line 851) but top-aligns the text at `card_min.y + card_padding` (line 863). The text block should be vertically centered within the card like the icon is: compute `text_block_height`, then `text_y = card_min.y + (card_h - text_block_height) * 0.5f`.
+
+### ⬜ 573. [screen_source_select.cpp] Missing hand cursor on card hover
+- **JS Source**: `src/app.css` line 600 (`#source-select > div { cursor: pointer }`)
+- **Status**: Pending
+- **Details**: The CSS sets `cursor: pointer` on the source select card divs, showing a hand cursor when hovering anywhere on the card. The C++ code does not call `ImGui::SetMouseCursor(ImGuiMouseCursor_Hand)` when hovering over the card's InvisibleButton. Add `if (hovered) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);` after the hover check (around line 841).
+
+### ⬜ 574. [screen_source_select.cpp] Missing border-color hover transition animation
+- **JS Source**: `src/app.css` line 605 (`transition: border-color 0.2s`)
+- **Status**: Pending
+- **Details**: The CSS smoothly transitions the card border color over 0.2 seconds on hover. The C++ instantly switches between `FONT_FADED_U32` and `FONT_HIGHLIGHT_U32` with no animation. To replicate this, track a per-card animation float that lerps between 0.0 and 1.0 over 0.2s based on hover state, then interpolate the border color. This is a minor polish difference but noticeable in side-by-side comparison.
+
+### ⬜ 575. [screen_source_select.cpp] CDN region context menu background color mismatch
+- **JS Source**: `src/app.css` line 879 (`.context-menu { background: #232323 }`)
+- **Status**: Pending
+- **Details**: The JS context menu component uses `background: #232323` (very dark gray). The C++ CDN region popup (line 940) uses ImGui's default `PopupBg` which is set globally to `BG_DARK` = `#2c3136` (slightly lighter/blue-tinted). Fix: push `ImGui::PushStyleColor(ImGuiCol_PopupBg, IM_COL32(0x23, 0x23, 0x23, 0xFF))` before `BeginPopup("##cdn_region_menu")`.
+
+### ⬜ 576. [screen_source_select.cpp] CDN context menu ping delay text lacks separate styling
+- **JS Source**: `src/js/modules/screen_source_select.js` lines 40–41 (inline `style="opacity: 0.7; font-size: 12px;"`)
+- **Status**: Pending
+- **Details**: The JS renders the ping delay in a separate `<span>` with `opacity: 0.7; font-size: 12px`, making it visually subdued relative to the region name. The C++ (lines 944–949) concatenates name and delay into a single `ImGui::MenuItem()` string with uniform font size and opacity. Fix: render region name and delay as separate text runs with the delay portion drawn at reduced size/opacity, or use ImGui custom rendering within the popup.
+
+### ⬜ 577. [app.cpp] Header help icon uses Font Awesome glyph instead of custom SVG
+- **JS Source**: `src/app.css` lines 531–538 (`#nav-help { background: url(./fa-icons/help.svg) }`)
+- **Status**: Pending
+- **Details**: The JS header renders the help button using `help.svg` — a custom icon with a question mark inside a rounded square. The C++ (lines 660–667) uses `ICON_FA_CIRCLE_QUESTION` (Font Awesome's circle-question glyph, U+F059), which is a different design (question mark in a circle). Fix: load and render `help.svg` as a texture instead of using the Font Awesome glyph.
+
+### ⬜ 578. [app.cpp] Header hamburger icon uses Font Awesome bars glyph instead of custom SVG
+- **JS Source**: `src/app.css` lines 540–546 (`#nav-extra { background: url(./fa-icons/line-columns.svg) }`)
+- **Status**: Pending
+- **Details**: The JS header renders the hamburger/options button using `line-columns.svg` — a two-column list icon with multiple horizontal lines arranged in two columns. The C++ (lines 616–623) uses `ICON_FA_BARS` (Font Awesome's standard three-line hamburger glyph, U+F0C9), which looks entirely different. Fix: load and render `line-columns.svg` as a texture instead of using the Font Awesome glyph.
+
+### ⬜ 579. [app.cpp] Footer links missing bold weight and hover styling
+- **JS Source**: `src/app.css` lines 93–102 (`a { font-weight: bold }`, `a:hover { color: var(--font-highlight); text-decoration: underline }`)
+- **Status**: Pending
+- **Details**: The JS footer links use `<a>` elements styled with `font-weight: bold`, `color: var(--font-alt)` (#57afe2), and on hover: `color: var(--font-highlight)` (white) + `text-decoration: underline`. The C++ footer (lines 747–754) renders links with the correct blue color and hand cursor, but: (1) text is not bold — should use `app::theme::getBoldFont()`; (2) text color doesn't change to white on hover; (3) no underline on hover. Fix: push bold font, and add hover state that changes text color to `FONT_HIGHLIGHT_U32` with an underline line drawn beneath.
