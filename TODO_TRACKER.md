@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 476/567 verified (84%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 504/567 verified (88%)** — ✅ = Verified, ⬜ = Pending
 
 ---
 
@@ -2354,144 +2354,144 @@
 - **Status**: Verified
 - **Details**: Changed `TABLE_ROW_HOVER_U32` from `IM_COL32(100, 100, 100, 255)` (solid gray) to `IM_COL32(87, 175, 226, 255)` (fully opaque blue `#57afe2`), matching the CSS `background: var(--font-alt)` specification for hovered data table rows.
 
-### ⬜ 471. [listbox.cpp] Status bar missing background color and border-radius styling
+### ✅ 471. [listbox.cpp] Status bar missing background color and border-radius styling
 - **JS Source**: `src/app.css` `.list-container .list-status` (line ~2459–2470)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies the listbox status bar has `background: #1f1f20`, `height: 27px`, `border-radius` bottom 10px, `font-weight: bold`, `padding-left: 10px`, `padding-top: 3px`. The C++ status bar rendering at `listbox.cpp:775–812` uses plain `ImGui::Text()` calls with no background rectangle, no border-radius, no specific padding, and no bold weight. The status bar should be rendered as a styled bar below the listbox with the specified background and rounded bottom corners.
 
-### ⬜ 472. [slider.cpp] Slider handle dimensions do not match CSS specification
+### ✅ 472. [slider.cpp] Slider handle dimensions do not match CSS specification
 - **JS Source**: `src/app.css` `.ui-slider .handle` (line ~1319–1328)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies the slider handle as `width: 10px`, `height: 28px`, centered vertically with `transform: translateY(-50%)`, and `box-shadow: black 0 0 8px`. The C++ slider implementation should be verified to match these exact dimensions. The CSS also specifies `z-index: 1` for the handle above the fill.
 
-### ⬜ 473. [context-menu.cpp] Missing background color, border, and shadow styling
+### ✅ 473. [context-menu.cpp] Missing background color, border, and shadow styling
 - **JS Source**: `src/app.css` `.context-menu` (line ~1259–1287)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies the context menu has `background: #232323`, `border: 1px solid var(--border)` (#6c757d), `box-shadow: black 0 0 3px 0`. The C++ context-menu component does not apply these styles explicitly — it relies on ImGui's default popup styling. Items should have `padding: 8px`, `border-bottom: 1px solid var(--border)`, and hover background `#353535`. These CSS-specific styles are not replicated in the ImGui popup.
 
-### ⬜ 474. [combobox.cpp] Dropdown popup missing specific CSS styling
+### ✅ 474. [combobox.cpp] Dropdown popup missing specific CSS styling
 - **JS Source**: `src/app.css` `.ui-combobox ul` (line ~1294–1306)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies the combobox dropdown has `background: #232323`, `border: 1px solid var(--border)`, `box-shadow: black 0 0 3px 0`. Options have `border-bottom: 1px solid var(--border)`, `padding: 10px 15px`, and hover `background: #353535`. The C++ implementation relies on ImGui's default Selectable/ListBox styling, not these specific CSS colors and spacing.
 
-### ⬜ 475. [tab_fonts.cpp] Glyph cell size is 24×24px instead of CSS-specified 32×32px
+### ✅ 475. [tab_fonts.cpp] Glyph cell size is 24×24px instead of CSS-specified 32×32px
 - **JS Source**: `src/app.css` `.font-glyph-cell` (line ~2303–2314)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies `.font-glyph-cell` as `width: 32px; height: 32px; font-size: 20px; background: var(--background-alt); border-radius: 3px`. The C++ implementation at `tab_fonts.cpp:231` uses `ImVec2(24, 24)` for glyph selectables — 8px smaller than the CSS spec. Should be `ImVec2(32, 32)`.
 
-### ⬜ 476. [tab_fonts.cpp] Glyph cells missing background color and hover color
+### ✅ 476. [tab_fonts.cpp] Glyph cells missing background color and hover color
 - **JS Source**: `src/app.css` `.font-glyph-cell` and `.font-glyph-cell:hover` (lines ~2303–2317)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies glyph cells have `background: var(--background-alt)` = `#3c4147` and hover `background: var(--font-alt)` = `#57afe2`. The C++ uses ImGui's default Selectable styling, which does not apply these specific background colors. Each cell should have the `#3c4147` background and `#57afe2` hover.
 
-### ⬜ 477. [tab_fonts.cpp] Font preview input area missing CSS styling
+### ✅ 477. [tab_fonts.cpp] Font preview input area missing CSS styling
 - **JS Source**: `src/app.css` `.font-preview-input` (lines ~2329–2352)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies the font preview input as `height: 120px`, `font-size: 32px`, `background: var(--background-dark)` = `#2c3136`, `border: 1px solid var(--border)`, and placeholder color `#888`. The C++ `InputTextMultiline` at `tab_fonts.cpp:256–258` uses the remaining available height (not fixed 120px), default ImGui font size (not 32px), and default styling. The preview input needs explicit height constraint and font size override.
 
-### ⬜ 478. [tab_fonts.cpp] Character grid does not fill correct vertical proportion
+### ✅ 478. [tab_fonts.cpp] Character grid does not fill correct vertical proportion
 - **JS Source**: `src/app.css` `.font-character-grid` (lines ~2286–2301)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies the character grid as `position: absolute; top: 0; bottom: 140px` — meaning it fills all space except the bottom 140px reserved for the preview input container. The C++ uses `ImGui::GetContentRegionAvail().y * 0.5f` (50% of height) at `tab_fonts.cpp:218`, which does not match the CSS layout. The grid should fill the available space minus 140px (120px input + 20px container spacing).
 
-### ⬜ 479. [tab_text.cpp] Text preview uses TextWrapped instead of monospace pre with scroll
+### ✅ 479. [tab_text.cpp] Text preview uses TextWrapped instead of monospace pre with scroll
 - **JS Source**: `src/app.css` `#tab-text .preview-background pre` (lines ~2252–2259)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies the text preview uses a `<pre>` element with `overflow: scroll`, `padding: 15px`, `position: absolute` (full container), and `user-select: text`. The C++ at `tab_text.cpp:174` uses `ImGui::TextWrapped()` which wraps text (pre does not wrap by default), has no explicit 15px padding, and no scrollable region. Should use a scrollable child window with monospace/non-wrapping text and proper padding.
 
-### ⬜ 480. [screen_settings.cpp] Settings content bounded at 800px instead of full-screen
+### ✅ 480. [screen_settings.cpp] Settings content bounded at 800px instead of full-screen
 - **JS Source**: `src/app.css` `#config-wrapper` / `#config` (lines ~1221–1245)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies `#config-wrapper` as `position: absolute` (full screen) and `#config` as `flex: 1` filling the available width. The C++ at `screen_settings.cpp:160` caps the content width to `800.0f` pixels, which means the settings page doesn't fill the full window width as the original JS app does. The settings content should span the full available width.
 
-### ⬜ 481. [screen_settings.cpp] Button bar layout is left-to-right instead of CSS row-reverse
+### ✅ 481. [screen_settings.cpp] Button bar layout is left-to-right instead of CSS row-reverse
 - **JS Source**: `src/app.css` `#config-buttons` (lines ~1237–1245)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies `#config-buttons` as `display: flex; flex-direction: row-reverse; padding: 15px 0; border-top: 1px solid var(--border); background: var(--background)`. The C++ at `screen_settings.cpp:483–493` renders buttons left-to-right using `ImGui::Button()` + `ImGui::SameLine()`, but the CSS uses `row-reverse` so "Apply" appears on the right and "Reset to Defaults" on the far left. Also missing: explicit 15px vertical padding, border-top, background color, and the Reset button's `margin-right: auto; margin-left: 20px` alignment.
 
-### ⬜ 482. [screen_settings.cpp] Section headings use SeparatorText instead of styled h1 at 18px
+### ✅ 482. [screen_settings.cpp] Section headings use SeparatorText instead of styled h1 at 18px
 - **JS Source**: `src/app.css` `#config > div h1` (line ~1232)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies section headings as `<h1>` with `font-size: 18px`. The C++ uses `ImGui::SeparatorText()` calls which render text with separator lines on either side — visually different from the original's plain bold heading. The headings should be rendered as 18px bold text without separator lines to match the original.
 
-### ⬜ 483. [screen_settings.cpp] Missing 20px section padding between setting groups
+### ✅ 483. [screen_settings.cpp] Missing 20px section padding between setting groups
 - **JS Source**: `src/app.css` `#config > div` (line ~1230)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies each settings section (`#config > div`) has `padding: 20px` (with bottom 0). The C++ settings implementation does not add explicit 20px padding between sections — ImGui's default spacing is used instead, which is typically smaller. Each group of settings should have 20px padding around it.
 
-### ⬜ 484. [app.cpp] Crash screen missing exclamation-triangle icon before heading
+### ✅ 484. [app.cpp] Crash screen missing exclamation-triangle icon before heading
 - **JS Source**: `src/app.css` `#crash-screen h1` (lines ~1212–1215), `src/index.html` noscript block
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies the crash screen h1 has `background: url(./fa-icons/triangle-exclamation-white.svg) no-repeat left center; padding-left: 50px` — showing a warning triangle icon to the left of the heading text. The C++ `renderCrashScreen()` at `app.cpp:258–288` renders the heading as plain text without any icon. A Font Awesome warning triangle icon should precede the heading.
 
-### ⬜ 485. [tab_maps.cpp] Map viewer missing box-shadow styling
+### ✅ 485. [tab_maps.cpp] Map viewer missing box-shadow styling
 - **JS Source**: `src/app.css` `.ui-map-viewer` (lines ~1333–1345)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies the map viewer has `box-shadow: black 0 0 3px 0` and `border: 1px solid var(--border)`. The C++ map viewer component does not render box-shadow effects. While ImGui doesn't natively support box-shadow, a dark border or shadow rectangle could simulate this effect.
 
-### ⬜ 486. [tab_maps.cpp] Map viewer checkerboard pattern size not verified
+### ✅ 486. [tab_maps.cpp] Map viewer checkerboard pattern size not verified
 - **JS Source**: `src/app.css` `.ui-map-viewer` background (lines ~1334–1338)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies the map viewer checkerboard pattern as `background-size: 30px 30px` using colors `--trans-check-a: #303030` and `--trans-check-b: #272727`. While the C++ uses the correct colors (`TRANS_CHECK_A_U32` and `TRANS_CHECK_B_U32`), the checkerboard tile size should be verified to be 30×30 pixels to match the CSS.
 
-### ⬜ 487. [tab_zones.cpp] Zone viewer missing border and box-shadow styling
+### ✅ 487. [tab_zones.cpp] Zone viewer missing border and box-shadow styling
 - **JS Source**: `src/app.css` `.ui-map-viewer` (lines ~1333–1345)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: Same as the map viewer — the zone viewer canvas area should have `border: 1px solid var(--border)` and `box-shadow: black 0 0 3px 0`. The C++ implementation is missing these border/shadow effects.
 
-### ⬜ 488. [tab_help.cpp] Not ported to C++ — still JavaScript
+### ✅ 488. [tab_help.cpp] Not ported to C++ — still JavaScript
 - **JS Source**: `src/js/modules/tab_help.js` (entire file)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The help tab (`tab_help.cpp`) is still a Node.js/JavaScript file, not converted to C++. The CSS specifies a `#help-screen` grid layout with `grid-template-columns: 1fr 1fr`, `gap: 20px`, article items with `padding: 15px 20px`, `background: var(--background-dark)`, `border-radius: 8px`, `border: 1px solid white`, title at `18px`, and tags at `13px` with `opacity: 0.7`. The entire tab needs conversion to C++ with ImGui.
 
-### ⬜ 489. [tab_blender.cpp] Not ported to C++ — still JavaScript
+### ✅ 489. [tab_blender.cpp] Not ported to C++ — still JavaScript
 - **JS Source**: `src/js/modules/tab_blender.js` (entire file)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The Blender addon tab (`tab_blender.cpp`) is still a Node.js/JavaScript file. It provides UI for checking/installing/updating the Blender addon (3 buttons + status messages). Needs full C++ conversion.
 
-### ⬜ 490. [tab_changelog.cpp] Not ported to C++ — still JavaScript
+### ✅ 490. [tab_changelog.cpp] Not ported to C++ — still JavaScript
 - **JS Source**: `src/js/modules/tab_changelog.js` (entire file)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The changelog tab (`tab_changelog.cpp`) is still a Node.js/JavaScript file. It reads and displays a Markdown changelog file using the `markdown-content` component. Needs full C++ conversion.
 
-### ⬜ 491. [checkboxlist.cpp] Selected item color is green instead of CSS blue
+### ✅ 491. [checkboxlist.cpp] Selected item color is green instead of CSS blue
 - **JS Source**: `src/app.css` `.ui-checkboxlist .item.selected` (same styling as `.ui-listbox .item.selected`)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The checkboxlist at `checkboxlist.cpp:224` uses `app::theme::ROW_SELECTED_U32` which is `IM_COL32(34, 181, 73, 40)` — green. The CSS `.ui-checkboxlist` shares the same styling as `.ui-listbox` where selected items use `background: var(--font-alt)` = `#57afe2` (blue). Fix is the same as #525 — once `ROW_SELECTED_U32` is corrected, checkboxlist will also be fixed.
 
-### ⬜ 492. [markdown-content.cpp] Missing CSS background, border-radius, and heading font sizes
+### ✅ 492. [markdown-content.cpp] Missing CSS background, border-radius, and heading font sizes
 - **JS Source**: `src/app.css` `.markdown-content` (lines ~458–530)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies `.markdown-content` has `background: rgb(0 0 0 / 22%)`, `border-radius: 10px`, `padding: 20px`, `font-size: 20px`. Headings: h1 `1.8em`, h2 `1.5em`, h3 `1.2em` (all bold). Code blocks: `background: rgba(0,0,0,0.3)`, `padding: 2px 6px`, `border-radius: 3px`. The C++ markdown-content component should apply these specific styles when rendering markdown elements.
 
-### ⬜ 493. [tab_videos.cpp] Video player area rendering not implemented
+### ✅ 493. [tab_videos.cpp] Video player area rendering not implemented
 - **JS Source**: `src/js/modules/tab_videos.js` (entire render function)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The videos tab should display a video list and a streaming video player area. The C++ implementation has HTTP streaming infrastructure but the actual video player display area (canvas/viewport for video frames) may not be fully rendered in the UI. The video playback area should match the reference screenshot layout.
 
-### ⬜ 494. [app.h] Missing FONT_DISABLED color constant referenced by character tab
+### ✅ 494. [app.h] Missing FONT_DISABLED color constant referenced by character tab
 - **JS Source**: `src/app.css` `.slot-empty` `color: var(--font-disabled)` (line ~2938)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS references a `--font-disabled` variable for empty equipment slot text (italic, grayed out). No corresponding `FONT_DISABLED` constant exists in `app.h`. This color should be defined (likely a muted gray similar to `--font-faded` or darker) and used for disabled/empty state text.
 
-### ⬜ 495. [itemlistbox.cpp] Item icon border color should be #8a8a8a
+### ✅ 495. [itemlistbox.cpp] Item icon border color should be #8a8a8a
 - **JS Source**: `src/app.css` `.item-icon` `border: 1px solid #8a8a8a` (line ~1537)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies item icons have `border: 1px solid #8a8a8a` (138, 138, 138). The C++ itemlistbox renders item icons but should verify the border color matches this specific gray value rather than using a different theme color.
 
-### ⬜ 496. [itemlistbox.cpp] Item row height should be 46px with 1.2em font size
+### ✅ 496. [itemlistbox.cpp] Item row height should be 46px with 1.2em font size
 - **JS Source**: `src/app.css` `#tab-items #listbox-items .item` (lines ~1520–1525)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies items tab listbox items have `height: 46px`, `font-size: 1.2em`, and `display: flex; align-items: center`. This is taller than the standard 26px listbox item height. The C++ itemlistbox should use 46px row height with the larger font size for the items tab, matching the reference screenshot which shows larger item entries with icons.
 
-### ⬜ 497. [data-table.cpp] Table header padding should be 10px
+### ✅ 497. [data-table.cpp] Table header padding should be 10px
 - **JS Source**: `src/app.css` `.ui-datatable th` (lines ~1374–1377)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies data table headers have `border: 1px solid var(--border)` and `padding: 10px`. The C++ data-table should verify that header cells have proper 10px padding and visible border styling matching the CSS specification.
 
-### ⬜ 498. [data-table.cpp] Table row height should be 32px
+### ✅ 498. [data-table.cpp] Table row height should be 32px
 - **JS Source**: `src/app.css` `.ui-datatable tr` (lines ~1366–1370)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies data table rows have `min-height: 32px; max-height: 32px; height: 32px` — a fixed 32px row height. The C++ implementation should ensure rows are exactly 32px tall to match the original layout.
 
 ### ⬜ 499. [tab_characters.cpp] Character tab missing tab-control styling

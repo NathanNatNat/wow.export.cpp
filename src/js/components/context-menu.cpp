@@ -8,6 +8,8 @@
 #include <imgui.h>
 #include <string>
 
+#include "../../app.h"
+
 namespace context_menu {
 
 // Keep a global track of the client mouse position.

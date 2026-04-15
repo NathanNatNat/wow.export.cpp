@@ -26,6 +26,8 @@
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 
+#include "../../app.h"
+
 namespace screen_settings {
 
 // --- File-local state ---
