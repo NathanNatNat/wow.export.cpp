@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 504/567 verified (88%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 536/567 verified (95%)** — ✅ = Verified, ⬜ = Pending
 
 ---
 
@@ -2494,319 +2494,319 @@
 - **Status**: Verified
 - **Details**: The CSS specifies data table rows have `min-height: 32px; max-height: 32px; height: 32px` — a fixed 32px row height. The C++ implementation should ensure rows are exactly 32px tall to match the original layout.
 
-### ⬜ 499. [tab_characters.cpp] Character tab missing tab-control styling
+### ✅ 499. [tab_characters.cpp] Character tab missing tab-control styling
 - **JS Source**: `src/app.css` `.tab-control` and `.tab-control span` (lines ~2645–2654)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies the character tab's panel selector (Export/Textures/Settings) uses `.tab-control` with `display: flex`, spans at `font-size: 20px`, `padding: 5px`, background `var(--form-button-disabled)` (#696969 gray) for unselected and `var(--form-button-hover)` (#2665d2 blue) for selected, with `border-radius: 10px` on first/last children. The C++ implementation should verify these tab control styles match the reference screenshot appearance.
 
-### ⬜ 500. [tab_characters.cpp] Character equipment slot styling needs CSS match
+### ✅ 500. [tab_characters.cpp] Character equipment slot styling needs CSS match
 - **JS Source**: `src/app.css` `.equipment-slot` (lines ~2913–2927)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies equipment slots as `display: flex; justify-content: space-between; padding: 6px 12px; background: var(--background-dark); border: 1px solid var(--border); border-radius: 8px; font-size: 13px`. Hover: `background: var(--background-alt)`. Labels use `color: var(--font-alt)` (#57afe2). The C++ implementation should match these exact sizes, colors, and border-radius values.
 
-### ⬜ 501. [tab_characters.cpp] Character import buttons at bottom missing specific CSS styling
+### ✅ 501. [tab_characters.cpp] Character import buttons at bottom missing specific CSS styling
 - **JS Source**: `src/app.css` `.character-import-buttons` (lines ~2985–3065)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The CSS specifies the bottom character buttons (Battle.net, WMV, Wowhead, Save, Quick Save, Import JSON, Export JSON) with specific colors — BNet: `#148eff`, WMV: `#d22c1e`, Wowhead: `#e02020`, Save: `#5865f2`, Quick Save: `#22b549`, Import JSON: `#e67e22`, Export JSON: `#22b549`. Each has icon images as backgrounds. The C++ should verify these specific brand colors and icon backgrounds are applied.
 
-### ⬜ 502. [ADTExporter.cpp] `loadTexture` uses `blp.width`/`blp.height` instead of `blp.scaledWidth`/`blp.scaledHeight`
+### ✅ 502. [ADTExporter.cpp] `loadTexture` uses `blp.width`/`blp.height` instead of `blp.scaledWidth`/`blp.scaledHeight`
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 63
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `loadTexture` calls `gl.texImage2D(..., blp.scaledWidth, blp.scaledHeight, ...)`. C++ (line 112) uses `blp.width`/`blp.height`. If a BLP's scaled dimensions differ from raw dimensions, the GL texture will have wrong dimensions, causing rendering mismatches.
 
-### ⬜ 503. [ADTExporter.cpp] `useADTSets` flag check — `model & 0x80` vs `model.flags & 0x80`
+### ✅ 503. [ADTExporter.cpp] `useADTSets` flag check — `model & 0x80` vs `model.flags & 0x80`
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1301
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS does `const useADTSets = model & 0x80` — bitwise-AND on the *object* itself, which always evaluates to `0` in JS since `ToInt32(object)` is `0`, making `useADTSets` always falsy. C++ (line 1569) correctly reads `model.flags & 0x80`, which can produce `true`. This means C++ can produce different doodad-set behaviour for WMO models.
 
-### ⬜ 504. [ADTExporter.cpp] Cancellation returns populated `ADTExportResult` instead of `undefined`
+### ✅ 504. [ADTExporter.cpp] Cancellation returns populated `ADTExportResult` instead of `undefined`
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 623, 1025, 1252, 1537
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `return;` returns `undefined` on cancellation. C++ (lines 811, 1228, 1494, 1904) does `return out;` returning a populated `ADTExportResult`. Callers checking for cancellation may behave differently.
 
-### ⬜ 505. [ADTExporter.cpp] Liquid JSON export uses explicit fields — JS uses spread operator
+### ✅ 505. [ADTExporter.cpp] Liquid JSON export uses explicit fields — JS uses spread operator
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1428–1438
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `{ ...instance, worldPosition, terrainChunkPosition }` and `{ ...chunk, instances }` to copy *all* fields. C++ (lines 1737–1772) only serializes explicitly listed fields (`chunkIndex`, `instanceIndex`, `liquidType`, etc. for instance; `instances` and `attributes` for chunk). Any additional instance or chunk fields not explicitly listed are lost in C++ output.
 
-### ⬜ 506. [ADTExporter.cpp] Minimap export uses `blp.width` for scaling — JS uses `blp.scaledWidth`
+### ✅ 506. [ADTExporter.cpp] Minimap export uses `blp.width` for scaling — JS uses `blp.scaledWidth`
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 873, 877
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS calls `blp.toCanvas(0b0111)` and then uses `blp.scaledWidth` for the scale factor. C++ (lines 1050–1051) calls `blp.toUInt8Array(0, 0b0111)` and uses `blp.width`. If `scaledWidth != width`, the scale factor and resulting minimap resolution will differ.
 
-### ⬜ 507. [ADTExporter.cpp] GL index buffer uses `uint32` — JS uses `Uint16`
+### ✅ 507. [ADTExporter.cpp] GL index buffer uses `uint32` — JS uses `Uint16`
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1117–1118
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS creates `new Uint16Array(indices)` and uses `gl.UNSIGNED_SHORT`. C++ (lines 1322–1323) uses `uint32_t` data with `GL_UNSIGNED_INT`. Functionally works but the GL data type and memory layout differ; doubles index buffer memory usage.
 
-### ⬜ 508. [ADTExporter.cpp] Doodad/model `ScaleFactor` missing fallback for undefined scale
+### ✅ 508. [ADTExporter.cpp] Doodad/model `ScaleFactor` missing fallback for undefined scale
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1270
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `model.scale !== undefined ? model.scale / 1024 : 1` — defaults to `1` if `scale` is absent. C++ (lines 1516/1525) always computes `model.scale / 1024.0f` with no fallback. If `scale` is `0`, C++ uses `0` while JS would use `1`.
 
-### ⬜ 509. [ADTExporter.cpp] `texParams` guard only checks bounds, not element truthiness
+### ✅ 509. [ADTExporter.cpp] `texParams` guard only checks bounds, not element truthiness
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 639
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS checks `if (texParams && texParams[i])` — also verifies the element is truthy (not `0`/`null`/`undefined`). C++ (line 785) only checks `if (i < texParams.size())` — a default-constructed element at index `i` passes the check. This could cause different behaviour if texture parameters contain zero/null entries.
 
-### ⬜ 510. [ADTExporter.cpp] `STB_IMAGE_RESIZE_IMPLEMENTATION` defined in .cpp — potential ODR violation
+### ✅ 510. [ADTExporter.cpp] `STB_IMAGE_RESIZE_IMPLEMENTATION` defined in .cpp — potential ODR violation
 - **JS Source**: N/A (C++-specific)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ line 10 defines `#define STB_IMAGE_RESIZE_IMPLEMENTATION` before `#include <stb_image_resize2.h>`. If another translation unit also defines this macro, it will cause duplicate-symbol linker errors. This implementation define should be in exactly one `.cpp` file in the project.
 
-### ⬜ 511. [ADTExporter.cpp] Unique texture ID ordering — `Set` insertion-order vs `std::set` sorted
+### ✅ 511. [ADTExporter.cpp] Unique texture ID ordering — `Set` insertion-order vs `std::set` sorted
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 921
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `[...new Set(materialIDs.filter(...))]` which preserves insertion order. C++ (lines 1101–1105) uses `std::set<uint32_t>` which sorts numerically. Texture array indices in the output will differ. Since the mapping is self-consistent, rendering should be identical but debug output or derived data will vary.
 
-### ⬜ 512. [M2Exporter.cpp] `addURITexture()` parameter semantics changed
+### ✅ 512. [M2Exporter.cpp] `addURITexture()` parameter semantics changed
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59–61
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `addURITexture(out, dataURI)` takes a string name and a base64 data URI, storing string→string in a Map. C++ takes `uint32_t textureType` and a pre-decoded `BufferWrapper pngData` (header line 123). The key type changes from arbitrary string to uint32_t. JS decodes the base64 inside `exportTextures`; C++ requires callers to decode before calling.
 
-### ⬜ 513. [M2Exporter.cpp] `dataTextures` map key type changed from string to uint32_t
+### ✅ 513. [M2Exporter.cpp] `dataTextures` map key type changed from string to uint32_t
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 35
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `this.dataTextures = new Map()` stores string keys (the `out` parameter from `addURITexture`). C++ (header line 207) uses `std::map<uint32_t, BufferWrapper>`. The JS API accepts any string key; C++ restricts to uint32_t. This constrains the API and changes lookup semantics.
 
-### ⬜ 514. [M2Exporter.cpp] Data textures silently dropped from GLB/GLTF output
+### ✅ 514. [M2Exporter.cpp] Data textures silently dropped from GLB/GLTF output
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 361, 366
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS passes `result.texture_buffers` (with `'data-5'`-style string keys) to `gltf.setTextureBuffers()` and `gltf.setTextureMap()`. C++ (lines 610–636) attempts to convert string keys to `uint32_t` via `std::stoul()`; entries with "data-" prefix keys are silently dropped in the catch block. Data textures will NOT be embedded in GLB output in C++.
 
-### ⬜ 515. [M2Exporter.cpp] `posedVertices` empty-vs-null check differs
+### ✅ 515. [M2Exporter.cpp] `posedVertices` empty-vs-null check differs
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 738
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `this.posedVertices ?? this.m2.vertices` — nullish coalescing; an empty array `[]` is truthy and WOULD be used. C++ (line 1038) uses `!posedVertices.empty() ? posedVertices : m2->vertices` — an empty vector falls through to m2 data. If `setPosedGeometry()` is called with empty arrays, JS uses the empty arrays while C++ falls back to bind pose.
 
-### ⬜ 516. [M2Exporter.cpp] `getSkin()` return not null-checked in equipment helper methods
+### ✅ 516. [M2Exporter.cpp] `getSkin()` return not null-checked in equipment helper methods
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 420–421, 559–561, 683–685
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS null-checks the skin result: `const skin = await m2.getSkin(0); if (!skin) return;`. C++ `_addEquipmentToGLTF` (line 700), `_exportEquipmentToOBJ` (line 847), and `_exportEquipmentToSTL` (line 980) all take a reference directly from `getSkin(0)` with no null/validity check. If `getSkin` fails to return valid data, C++ has undefined behaviour.
 
-### ⬜ 517. [M2Exporter.cpp] Meta JSON `subMeshes` serialization — explicit fields vs JS spread
+### ✅ 517. [M2Exporter.cpp] Meta JSON `subMeshes` serialization — explicit fields vs JS spread
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 794
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `Object.assign({ enabled: subMeshEnabled }, skin.subMeshes[i])` which copies ALL submesh properties. C++ (lines 1102–1117) manually serializes specific SubMesh fields. If the SubMesh struct has additional fields not explicitly listed, they will be missing from the JSON output.
 
-### ⬜ 518. [M2Exporter.cpp] Meta JSON `textures` entry serialization — missing fields vs JS spread
+### ✅ 518. [M2Exporter.cpp] Meta JSON `textures` entry serialization — missing fields vs JS spread
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 804–808
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `Object.assign({ fileNameInternal, fileNameExternal, mtlName }, texture)` which includes ALL texture properties. C++ (lines 1127–1138) only serializes `fileDataID`, `flags`, `fileNameInternal`, `fileNameExternal`, `mtlName`. Any extra JS texture properties (e.g., `type`) not listed are missing from C++ JSON.
 
-### ⬜ 519. [M2Exporter.cpp] `fileNameInternal` returns empty string instead of null for unknown files
+### ✅ 519. [M2Exporter.cpp] `fileNameInternal` returns empty string instead of null for unknown files
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 805
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `listfile.getByID(texture.fileDataID)` returns `undefined` when not found. C++ `casc::listfile::getByID(texture.fileDataID)` returns empty string. JSON output will have `"fileNameInternal": ""` instead of `null`/absent.
 
-### ⬜ 520. [M2Exporter.cpp] Data texture fileDataIDs zeroed in manifests
+### ✅ 520. [M2Exporter.cpp] Data texture fileDataIDs zeroed in manifests
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 747–748, 997–998
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS pushes `fileDataID: texFileDataID` to file manifests where `texFileDataID` can be a string like `'data-5'` for data textures. C++ (lines 1050–1052, 1367–1368) tries `std::stoul(texKey)` which fails for "data-" prefix keys and falls through to `texID=0`. Data texture manifest entries lose their identifiers.
 
-### ⬜ 521. [M2Exporter.cpp] Constructor takes extra `casc` parameter not in JS
+### ✅ 521. [M2Exporter.cpp] Constructor takes extra `casc` parameter not in JS
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 31
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS constructor is `constructor(data, variantTextures, fileDataID)` — 3 params; uses `core.view.casc` inline. C++ (header line 103) is `M2Exporter(BufferWrapper data, ..., casc::CASC* casc)` — 4 params; stores `casc` as member. Callers must pass CASC source explicitly.
 
-### ⬜ 522. [CharacterExporter.cpp] `applyExternalBoneMatrices` called unconditionally — JS guards with `if (renderer.applyExternalBoneMatrices)`
+### ✅ 522. [CharacterExporter.cpp] `applyExternalBoneMatrices` called unconditionally — JS guards with `if (renderer.applyExternalBoneMatrices)`
 - **JS Source**: `src/js/3D/exporters/CharacterExporter.js` lines 272–273
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS checks `if (renderer.applyExternalBoneMatrices)` before calling the method (duck-type guard). C++ (line 311) calls `renderer->applyExternalBoneMatrices(...)` unconditionally. If the renderer does not implement this method (or it's not defined), C++ would fail at compile time; at runtime, if the method is a no-op, behaviour matches but the guard pattern differs.
 
-### ⬜ 523. [CharacterExporter.cpp] `remap_bone_indices` truncates remap values above 255
+### ✅ 523. [CharacterExporter.cpp] `remap_bone_indices` truncates remap values above 255
 - **JS Source**: `src/js/3D/exporters/CharacterExporter.js` lines 126–138
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS creates `new Uint8Array(bone_indices.length)` and sets `remapped[i] = remap_table[original_idx]`. JS Uint8Array automatically truncates to 0–255 but the remap_table values could be larger. C++ (line 148) casts `static_cast<uint8_t>(remap_table[original_idx])` which also truncates; the remap_table is `std::vector<int16_t>` which can hold negative values that would wrap differently than JS's unsigned truncation.
 
-### ⬜ 524. [CharacterExporter.h] `EquipmentGeometry::uv`/`uv2` are raw pointers — JS returns direct references
+### ✅ 524. [CharacterExporter.h] `EquipmentGeometry::uv`/`uv2` are raw pointers — JS returns direct references
 - **JS Source**: `src/js/3D/exporters/CharacterExporter.js` lines 314–321
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `_process_equipment_renderer` returns `{ uv: m2.uv, uv2: m2.uv2 }` which are direct references to the model's UV arrays. C++ (header lines 52–53) stores `const std::vector<float>* uv` and `const std::vector<float>* uv2` — raw pointers to the model data. If the underlying model (`M2Loader`) is destroyed before these pointers are used, they become dangling. JS garbage collection prevents this.
 
-### ⬜ 525. [M2LegacyExporter.cpp] Meta JSON serialization uses explicit field lists — JS uses direct property assignment
+### ✅ 525. [M2LegacyExporter.cpp] Meta JSON serialization uses explicit field lists — JS uses direct property assignment
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 206–258
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS meta export uses `json.addProperty('materials', this.m2.materials)` which serializes the entire materials array as-is. C++ (lines 306–312) manually serializes each material field (`flags`, `blendingMode`). Similarly, bounding boxes, submeshes, and texture units are manually decomposed into individual JSON properties. If the M2 loader structs have additional fields, they will be missing from C++ JSON output.
 
-### ⬜ 526. [M3Exporter.cpp] `addURITexture` parameter type differs — JS takes string, C++ takes string
+### ✅ 526. [M3Exporter.cpp] `addURITexture` parameter type differs — JS takes string, C++ takes string
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 49–51
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `addURITexture(out, dataURI)` stores `this.dataTextures.set(out, dataURI)` — both params are strings (out=path, dataURI=base64). C++ (header line 59) takes `const std::string& out` and `BufferWrapper pngData`, storing `string→BufferWrapper` in `std::map`. The value type changes from base64 data URI string to decoded buffer — callers must provide pre-decoded PNG data.
 
-### ⬜ 527. [M3Exporter.cpp] `exportTextures()` is a stub returning empty map — matches JS
+### ✅ 527. [M3Exporter.cpp] `exportTextures()` is a stub returning empty map — matches JS
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 62–65
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: Both JS and C++ `exportTextures()` return an empty map. The C++ comment at line 60 documents this intentional match. While technically not a deviation, `dataTextures` populated via `addURITexture` are never consumed in either version, meaning data textures for M3 models are silently lost.
 
-### ⬜ 528. [M3Exporter.cpp] `geosetName` extraction uses BufferWrapper seek/read — JS uses string slice
+### ✅ 528. [M3Exporter.cpp] `geosetName` extraction uses BufferWrapper seek/read — JS uses string slice
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 101, 160, 220
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS reads geoset names via `this.m3.stringBlock.slice(geoset.nameCharStart, geoset.nameCharStart + geoset.nameCharCount)` — directly slicing the string block. C++ (lines 113–116, 185–188, 261–264) uses `m3->stringBlock->seek(geoset.nameCharStart)` then `m3->stringBlock->readString(geoset.nameCharCount)`. This mutates the BufferWrapper's read position, which could cause issues if stringBlock is read multiple times or concurrently.
 
-### ⬜ 529. [M3Exporter.cpp] `exportAsGLTF()` missing `gltf.setTextureMap()` call
+### ✅ 529. [M3Exporter.cpp] `exportAsGLTF()` missing `gltf.setTextureMap()` call
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` line 92
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS calls `gltf.setTextureMap(textureMap)` at line 92 after `exportTextures`. C++ (lines 97–100) calls `exportTextures` but has a comment "Currently exportTextures is a stub returning empty map, so this is a no-op" — the `setTextureMap` call is present in JS but the C++ omits it (or passes a different type). When texture export is eventually implemented, C++ must add this call.
 
-### ⬜ 530. [M3Exporter.cpp] `exportAsOBJ()` commented-out collision export block
+### ✅ 530. [M3Exporter.cpp] `exportAsOBJ()` commented-out collision export block
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 176–184
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: Both JS and C++ have the collision export code commented out (C++ lines 211–219). This is a pre-existing TODO in both versions — collision export for M3 models is not yet implemented. The commented code references `this.m2.collisionPositions` (wrong model type — should be m3), suggesting it was copied from M2Exporter.
 
 ### ⬜ 531. [WMOExporter.cpp] `exportTextures()` — `runtimeData` bounds checks added defensively
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 100–102
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS unconditionally accesses `material.runtimeData[0]` through `[3]` for shader type 23. C++ (lines 241–244) guards each access with `if (material.runtimeData.size() > N)`. If runtimeData has fewer than 4 elements, fewer textures are added. This is a defensive improvement but changes behaviour — JS would crash, C++ silently skips.
 
 ### ⬜ 532. [WMOExporter.cpp] `formatUnknownFile` call signature differs
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` line 160
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS calls `listfile.formatUnknownFile(texFile)` with one argument (the full filename string like `"12345.png"`). C++ (line 310) calls `casc::listfile::formatUnknownFile(texFileDataID, raw ? ".blp" : ".png")` with two arguments (integer ID + extension). Both must produce identical path strings for the output to match.
 
 ### ⬜ 533. [WMOExporter.cpp] `exportRaw()` — `groupFileDataID == 0` fallback vs JS `??` (nullish coalescing)
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` line 1232
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `this.wmo.groupIDs?.[groupOffset] ?? listfile.getByFilename(groupName)` — `??` only falls back on `undefined`/`null`, NOT on `0`. A groupID of `0` stays `0`. C++ (lines 1578–1584) falls back to filename lookup when `groupFileDataID == 0`. A groupID of `0` triggers the filename lookup in C++ but not in JS, potentially exporting WMO groups that JS would skip.
 
 ### ⬜ 534. [WMOExporter.cpp] `exportAsGLTF()` — log format missing `toUpperCase()` for format name
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 225, 232
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `format.toUpperCase()` producing `"GLTF"` / `"GLB"` in log output. C++ (lines 376, 383) uses `format` as-is, logging lowercase `"gltf"` / `"glb"`. Minor cosmetic deviation in log messages.
 
 ### ⬜ 535. [WMOExporter.cpp] `exportRaw()` data check — `data === undefined` vs `data.byteLength() == 0`
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` line 1189
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS checks `if (this.wmo.data === undefined)` — only true when no buffer was provided at all. C++ (line 1531) checks `if (data.byteLength() == 0)` — true for any empty buffer. An explicitly-provided empty buffer would take the CASC-fetch branch in C++ but the write-buffer branch in JS.
 
 ### ⬜ 536. [WMOExporter.h] Extra `loadWMO()` and `getDoodadSetNames()` methods not in JS
 - **JS Source**: N/A
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ header (lines 157–165) declares `loadWMO()` and `getDoodadSetNames()` utility methods not present in the JS WMOExporter class. These are additive API extensions for callers that need doodad set names before export. While not a functional deviation, they extend the API surface beyond the JS original.
 
 ### ⬜ 537. [WMOLegacyExporter.cpp] `doodadSetMask` check differs — C++ uses `std::optional` with `has_value()`
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` line 265
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS checks `if (!doodadSetMask?.[i]?.checked)` — optional chaining handles both missing mask and missing entry gracefully. C++ (line 320) checks `!doodadSetMask.has_value() || i >= doodadSetMask->size() || !(*doodadSetMask)[i].checked`. While functionally equivalent, C++ uses `std::optional<std::vector<>>` which was not used for `groupMask` in the JS (JS uses simple truthiness). The `doodadSetMask` member is also `std::optional` (header line 103) while JS has no explicit nullability — it just checks via optional chaining.
 
 ### ⬜ 538. [WMOLegacyExporter.cpp] `groupMask` stored as `std::optional<std::vector<>>` — JS uses simple truthiness
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 169–175
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS checks `if (groupMask)` (truthy check on the array). C++ stores `groupMask` as `std::optional<std::vector<WMOGroupMaskEntry>>` (header line 102), checking `groupMask.has_value()`. While functionally equivalent for the "set or not set" case, an empty array in JS is truthy (creates empty mask set), while an empty optional vector in C++ means "no mask". `setGroupMask` should set `std::optional` even if the vector is empty to match JS truthy semantics.
 
 ### ⬜ 539. [WMOLegacyExporter.cpp] Meta JSON serializes materials with explicit field list
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` line 383
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS does `json.addProperty('materials', wmo.materials)` which serializes the entire materials array as-is with all properties. C++ (lines 476–493) manually serializes each material field (`flags`, `shader`, `blendMode`, `texture1`, etc.). If the WMOLegacyLoader material struct has additional fields, they will be missing from C++ JSON output. Same applies to `doodadSets` (C++ lines 497–505) and `doodads` (C++ lines 509–519) and `groupInfo` (C++ lines 464–472).
 
 ### ⬜ 540. [WMOLegacyExporter.cpp] `doodadCache` is `std::unordered_set<std::string>` — JS uses module-scope `Set`
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` line 22
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `doodadCache` is `new Set()` at module scope. C++ (line 38) uses `std::unordered_set<std::string>` in an anonymous namespace. Functionally equivalent, but the JS `Set` can store any type while C++ is typed to `string`. Both use case-insensitive lookups via `toLower()`. The `clearCache()` static method (JS line 585, C++ implied via header line 94) correctly clears both.
 
 ### ⬜ 541. [CSVWriter.cpp] `escapeCSVField()` treats empty string as null/undefined — JS does not
 - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 42–51
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `escapeCSVField()` checks `if (value === null || value === undefined)` and returns empty string. Then it calls `value.toString()`. The C++ version checks `if (value.empty())` and returns empty string. This means a value that is an empty string `""` in JS would be passed through `toString()` (returning `""`) and then returned as-is. In C++, an empty string returns `""` immediately. While functionally equivalent for strings, the JS version also handles non-string types (numbers, booleans) via `toString()`, whereas the C++ only accepts `const std::string&` — callers must convert to string before calling.
 
 ### ⬜ 542. [CSVWriter.cpp] Row values are `std::string` only — JS supports arbitrary types per field
 - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 33–35, 74–79
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `addRow()` accepts an `object` whose field values can be any type (number, boolean, null, etc.) — `escapeCSVField` handles all types via `value.toString()`. The C++ `addRow()` only accepts `std::unordered_map<std::string, std::string>`, requiring all values to be pre-converted to strings by the caller. This shifts the type conversion responsibility to the caller and means null/undefined handling (JS returns `''` for these) must be handled externally.
 
 ### ⬜ 543. [GLBWriter.h] Constants declared as `inline constexpr` in header — JS uses module-level `const`
 - **JS Source**: `src/js/3D/writers/GLBWriter.js` lines 8–14
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS declares `GLB_MAGIC`, `GLB_VERSION`, `CHUNK_TYPE_JSON`, `CHUNK_TYPE_BIN` as module-scoped constants (not exported). The C++ declares these as `inline constexpr` in the header file, making them visible to all translation units that include `GLBWriter.h`. This leaks implementation-detail constants into the global namespace. They should be either `static constexpr` in the `.cpp` file or in an anonymous namespace. While not a functional bug, it deviates from the JS's module-local scoping.
 
 ### ⬜ 544. [GLTFWriter.cpp] Generator string sources differ — C++ reads runtime config instead of build manifest
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 208–213
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS constructs the generator string as `util.format('wow.export v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid)` reading from `nw.App.manifest` (build-time constants). C++ reads `constants::VERSION` for version but reads `selectedFlavour` and `selectedGuid` from `core::view->config` (runtime config). The C++ also conditionally omits flavour/guid when empty, while JS always formats all three values unconditionally — JS would produce `"undefined"` for absent values.
 
 ### ⬜ 545. [GLTFWriter.cpp] Animation channel target `node` index differs when bone prefix mode is disabled
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 620–628, 757–765, 887–895
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS always uses `nodeIndex + 1` for translation, rotation, and scale animation channel target nodes. C++ uses `actual_node_idx` which equals `nodeIndex + 1` only when `modelsExportWithBonePrefix` is true, and equals `nodeIndex` when false. This changes animation behavior when bone prefix mode is disabled. The JS appears to have a bug here (the `+1` is correct only with prefix nodes), and the C++ fixes it without documenting the intentional deviation.
 
 ### ⬜ 546. [GLTFWriter.cpp] `addTextureBuffer()` method added — does not exist in JS source
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` (entire class)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The C++ adds `addTextureBuffer(uint32_t fileDataID, BufferWrapper buffer)` (header line 98–99, cpp lines 108–110). The JS class only has `setTextureBuffers(texture_buffers)` to set the entire texture buffer map at once. The extra method is a C++ API addition not present in the original.
 
 ### ⬜ 547. [GLTFWriter.cpp] `calculate_min_max` returns early on empty values — JS does not guard
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 34–51
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ `calculate_min_max` has `if (values.empty()) return;` which skips setting min/max on the accessor. JS would create `target.min` and `target.max` as arrays filled with `undefined` (serializing as `null`). This means empty arrays produce no min/max keys in C++ output vs. `null`-filled arrays in JS output.
 
 ### ⬜ 548. [GLTFWriter.cpp] JSON output key ordering differs — nlohmann uses alphabetical, JS preserves insertion order
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1484–1494
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `JSON.stringify(root, null, '\t')` which preserves property insertion order. C++ uses `nlohmann::json` which by default sorts keys alphabetically (using `std::map` internally). This produces semantically equivalent but textually different GLTF/GLB JSON output. To match JS insertion order, `nlohmann::ordered_json` would be needed.
 
 ### ⬜ 549. [GLTFWriter.cpp] GLTF text file written without error checking and may have different line endings
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` line 1493
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `await fsp.writeFile(outGLTF, ..., 'utf8')` which rejects on error. C++ uses `std::ofstream` without checking open/write success. Additionally, on Windows `std::ofstream` defaults to text mode (`\n` → `\r\n` translation), producing different line endings than the JS version.
 
 ### ⬜ 550. [JSONWriter.cpp] `dump()` indentation uses 1-space width with tab character — may differ from JS format
 - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40–43
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `JSON.stringify(this.data, ..., '\t')` which uses tab-based indentation. C++ uses `data.dump(1, '\t')` where the first argument `1` is the indent width (number of tab characters per level). Both produce tab indentation, but `nlohmann::json` may differ in key ordering (alphabetical vs. insertion-order). The JS also has a custom replacer function for BigInt values that converts them to strings; the C++ comment says nlohmann handles large integers natively, but C++ `int64_t` has a fixed range while JS BigInt is arbitrary-precision. If any property value exceeds int64 range, the C++ serialization would differ.
 
 ### ⬜ 551. [JSONWriter.cpp] BigInt serialization handled differently — C++ lacks arbitrary-precision support
 - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40–43
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The JS `write()` uses a custom JSON replacer `(key, value) => typeof value === 'bigint' ? value.toString() : value` to serialize BigInt values as strings. The C++ comment says "nlohmann::json handles all types natively including large integers; no special BigInt serialization needed as in JS." However, nlohmann::json stores integers as `int64_t` or `uint64_t` (max ~18.4 quintillion), while JS BigInt can represent arbitrarily large integers. Values exceeding the 64-bit range would overflow in C++ but be correctly serialized as strings in JS.
 
 ### ⬜ 552. [MTLWriter.cpp] `path.resolve()` vs `std::filesystem::weakly_canonical()` may differ for relative paths
 - **JS Source**: `src/js/3D/writers/MTLWriter.js` lines 60–63
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `path.resolve(mtlDir, materialFile)` which resolves against `mtlDir` to produce an absolute path. C++ uses `std::filesystem::weakly_canonical(mtlDir / materialFile)` which additionally canonicalizes the path (resolves `.` and `..` segments, normalizes separators). These may produce different results for paths containing `..` segments, symlinks, or non-existent intermediate directories. `weakly_canonical` can also throw on some platforms.
 
 ### ⬜ 553. [OBJWriter.cpp] Version header says "wow.export" — should say "wow.export.cpp"
 - **JS Source**: `src/js/3D/writers/OBJWriter.js` line 138
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ line 75 writes `"# Exported using wow.export v" + std::string(constants::VERSION)`. Per project conventions, user-facing text should say "wow.export.cpp" not "wow.export". The JS original says "wow.export" but the C++ port should use the project's own name.
 
 ### ⬜ 554. [OBJWriter.cpp] `std::to_string()` float formatting differs from JS `toString()` — trailing zeros, precision
 - **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 161, 170, 194
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS converts floats with default `toString()` which produces minimal representation (e.g., `1.5`, `0.123456789`). C++ uses `std::to_string()` which formats with 6 decimal places and trailing zeros (e.g., `1.500000`, `0.123457`). This produces larger output files and may introduce precision differences due to rounding. For example, JS `(0.1).toString()` → `"0.1"` but C++ `std::to_string(0.1)` → `"0.100000"`. This affects vertex, normal, and UV coordinate output.
 
 ### ⬜ 555. [SQLWriter.cpp] `escapeSQLValue()` treats empty string as NULL — JS treats it differently
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 65–77
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `escapeSQLValue()` checks `if (value === null || value === undefined)` and returns `'NULL'`. An empty string `""` would pass through to `toString()` (returning `""`), fail the `isNaN` check (since `isNaN("") === false` in JS, empty string coerces to 0), and be returned as-is (bare `""`). The C++ checks `if (value.empty())` and returns `"NULL"`. This means an empty string is treated as NULL in C++ but as a numeric value `0` (or empty string) in JS — a significant behavioral difference for SQL output.
 
 ### ⬜ 556. [SQLWriter.cpp] `escapeSQLValue()` numeric detection logic differs from JS `isNaN()` behavior
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 72–73
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `!isNaN(value) && str.trim() !== ''` for numeric detection. JS `isNaN()` coerces its argument: `isNaN("123") === false` (numeric), `isNaN("12.3e5") === false` (numeric), `isNaN("0x1F") === false` (hex is numeric). The C++ implementation manually checks for digits, decimal point, and sign characters but does not handle scientific notation (`1e5`), hexadecimal (`0xFF`), or other JS-coercible numeric formats. Values like `"1e5"` or `"0xFF"` would be treated as numeric in JS but as strings in C++.
 
 ### ⬜ 557. [SQLWriter.cpp] `generateDDL()` skips fields not found in schema — JS uses undefined
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 154–166
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS does `const field_type = this.schema.get(field)` — if the field is not in the schema, `field_type` is `undefined`. Then `fieldTypeToSQL(undefined, field)` is called, which falls through all switch cases to the `default: return 'TEXT'` branch. So missing-schema fields get type `TEXT`. In C++, `if (it == schema->end()) continue;` skips the field entirely — it won't appear in the CREATE TABLE statement. This means C++ DDL output may have fewer columns than JS DDL output for the same data.
 
 ### ⬜ 558. [SQLWriter.cpp] `generateDDL()` column_defs joined with different formatting than JS
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 171–173
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `column_defs.join(',\n')` which puts commas at the end of each line except the last. C++ (lines 175–179) manually appends commas: each line gets a trailing comma unless it's the last entry (`if (i + 1 < column_defs.size()) result += ","`). In JS, the comma is on the same line as the column definition. In C++, the comma is also on the same line. However, the newline placement may differ slightly: JS produces `col1 INT,\ncol2 TEXT` while C++ produces `col1 INT,\ncol2 TEXT` — these should be equivalent. No functional difference but worth verifying during testing.
 
 ### ⬜ 559. [SQLWriter.cpp] `toSQL()` value row formatting — comma placement and newlines differ slightly
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 191–203
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS batch format: `INSERT INTO ... VALUES\n(row1),\n(row2);` — commas appear after `)` on each row except the last in the batch, joined by `,\n`. The C++ (lines 206–222) produces `(row1),\n(row2)\n;\n\n` — the semicolon is on its own line followed by two newlines. The JS produces `(row2);\n\n` — the semicolon immediately follows the last row with a blank line after. This produces slightly different SQL formatting.
 
 ### ⬜ 560. [STLWriter.cpp] Version header says "wow.export" — should say "wow.export.cpp"
 - **JS Source**: `src/js/3D/writers/STLWriter.js` line 147
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ line 93 writes `"Exported using wow.export v" + std::string(constants::VERSION)` into the STL header. Per project conventions, user-facing text should say "wow.export.cpp" not "wow.export". The JS original says "wow.export" but the C++ port should use its own project name.
 
 ### ⬜ 561. [GLTFWriter.cpp] Generator string says "wow.export" — should say "wow.export.cpp"
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 208–213
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: The GLTF generator metadata string in C++ starts with `"wow.export v"`. Per project conventions, user-facing text should say "wow.export.cpp" not "wow.export".
 
 ### ✅ 562. [build-cache.cpp] `initBuildCacheSystem()` is never called — deadlocks on cache access

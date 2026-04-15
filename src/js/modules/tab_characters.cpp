@@ -2971,14 +2971,52 @@ refresh_character_appearance();
 
 ImGui::Separator();
 
-// Export tabs
+// Export tabs — styled to match CSS .tab-control
 static int export_tab = 0; // 0=Export, 1=Textures, 2=Settings
 
-if (ImGui::Button("Export##tab")) export_tab = 0;
-ImGui::SameLine();
-if (ImGui::Button("Textures##tab")) export_tab = 1;
-ImGui::SameLine();
-if (ImGui::Button("Settings##tab")) export_tab = 2;
+{
+const ImVec4 unselected_color(0.412f, 0.412f, 0.412f, 1.0f); // #696969
+const ImVec4 selected_color(0.149f, 0.396f, 0.824f, 1.0f);   // #2665d2
+const ImVec4 hover_color(0.2f, 0.45f, 0.85f, 1.0f);
+const char* tab_labels[] = { "Export", "Textures", "Settings" };
+const float avail = ImGui::GetContentRegionAvail().x;
+const float tab_width = avail / 3.0f;
+const float rounding = 10.0f;
+
+for (int i = 0; i < 3; i++) {
+	if (i > 0) ImGui::SameLine(0.0f, 0.0f);
+	bool is_selected = (export_tab == i);
+	ImVec4 bg = is_selected ? selected_color : unselected_color;
+	ImGui::PushStyleColor(ImGuiCol_Button, bg);
+	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, is_selected ? selected_color : hover_color);
+	ImGui::PushStyleColor(ImGuiCol_ButtonActive, selected_color);
+	// border-radius: only on first/last child
+	float rnd_tl = (i == 0) ? rounding : 0.0f;
+	float rnd_bl = (i == 0) ? rounding : 0.0f;
+	float rnd_tr = (i == 2) ? rounding : 0.0f;
+	float rnd_br = (i == 2) ? rounding : 0.0f;
+	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 5.0f));
+	// Use drawlist rounding for individual corners
+	ImVec2 pos = ImGui::GetCursorScreenPos();
+	ImVec2 size(tab_width, ImGui::GetFrameHeight());
+	std::string label = std::format("{}##tab", tab_labels[i]);
+	if (ImGui::Button(label.c_str(), ImVec2(tab_width, 0)))
+		export_tab = i;
+	// Draw rounded corners overlay for first/last tabs
+	if (i == 0 || i == 2) {
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		ImU32 col = ImGui::GetColorU32(bg);
+		ImVec2 p_min = pos;
+		ImVec2 p_max(pos.x + tab_width, pos.y + ImGui::GetFrameHeight());
+		dl->AddRectFilled(p_min, p_max, col, (i == 0) ? rounding : rounding,
+			(i == 0) ? (ImDrawFlags_RoundCornersTopLeft | ImDrawFlags_RoundCornersBottomLeft) :
+			(ImDrawFlags_RoundCornersTopRight | ImDrawFlags_RoundCornersBottomRight));
+	}
+	ImGui::PopStyleVar(2);
+	ImGui::PopStyleColor(3);
+}
+}
 
 if (export_tab == 0) {
 // Export panel
