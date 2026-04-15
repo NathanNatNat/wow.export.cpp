@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/138 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/144 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -691,3 +691,33 @@
 - **JS Source**: `src/js/components/markdown-content.js` lines 173, 229–234, `src/app.css` lines 249–253, 311–314
 - **Status**: Pending
 - **Details**: JS renders links as underlined `var(--font-highlight)` anchors and H1 without a separator. C++ renders links with `FONT_ALT` and no underline (`src/js/components/markdown-content.cpp` lines 254–256), and adds an H1 separator not present in JS (`line 347`).
+
+### 139. ⬜ [screen_source_select.cpp] Directory selection flow differs from JS hidden `nwdirectory` inputs
+- **JS Source**: `src/js/modules/screen_source_select.js` lines 252–257, 289–294, 327–337
+- **Status**: Pending
+- **Details**: JS creates persistent hidden `<input type="file" nwdirectory>` selectors and triggers `.click()` for local/legacy source selection. C++ directly calls `file_field::openDirectoryDialog()` on card clicks (`src/js/modules/screen_source_select.cpp` lines 535–542, 590–597), which changes picker behavior details and event flow from the original NW.js implementation.
+
+### 140. ⬜ [screen_source_select.cpp] Dashed source/build borders are custom-drawn approximations, not CSS-native rendering
+- **JS Source**: `src/js/modules/screen_source_select.js` lines 19–63, `src/app.css` lines 595–610, 675–689
+- **Status**: Pending
+- **Details**: JS/CSS relies on browser-native `border: 3px dashed` with radius and hover styling for source cards and build buttons. C++ uses `drawDashedRoundedRect()` with manual dash/gap segment walking (`src/js/modules/screen_source_select.cpp` lines 621–670, 876, 1115–1117), so dash cadence/corner joins and hover appearance can differ from the original visuals.
+
+### 141. ⬜ [tab_videos.cpp] Corrupted-cinematic fallback path does not force CDN fallback like JS
+- **JS Source**: `src/js/modules/tab_videos.js` lines 693–703
+- **Status**: Pending
+- **Details**: JS retries corrupted cinematic loads with `getFileByName(file_name, false, false, true, true)` to force fallback. C++ notes `getVirtualFileByName` has no `forceFallback` support and retries normally (`src/js/modules/tab_videos.cpp` lines 761–765), so corrupted local files may not recover using the same behavior.
+
+### 142. ⬜ [tab_characters.cpp] Saved-character card visuals are replaced with generic buttons and no thumbnail/action overlay
+- **JS Source**: `src/js/modules/tab_characters.js` lines 1925–1944, `src/app.css` lines 3124–3231
+- **Status**: Pending
+- **Details**: JS renders `.saved-character-card` tiles with thumbnail backgrounds, hover action overlay buttons, and styled name footer. C++ renders `ImGui::Button`/`SmallButton` controls with a `// thumbnail placeholder` note (`src/js/modules/tab_characters.cpp` lines 2439–2451), which does not match the original card layout/styling.
+
+### 143. ⬜ [tab_characters.cpp] Saved-character click handling differs and can trigger load on delete click
+- **JS Source**: `src/js/modules/tab_characters.js` lines 1928–1933, 2346–2354
+- **Status**: Pending
+- **Details**: JS loads a character from card click and prevents load when export/delete are clicked (`@click.stop`). In C++, `load_character(character)` is gated by `ImGui::IsItemClicked()` immediately after the Delete button (`src/js/modules/tab_characters.cpp` lines 2449–2453), so load behavior is tied to the last widget state instead of the card container and can fire alongside delete.
+
+### 144. ⬜ [tab_characters.cpp] Save-character prompt behavior and styling diverge from JS overlay implementation
+- **JS Source**: `src/js/modules/tab_characters.js` lines 1946–1951, 2335–2344
+- **Status**: Pending
+- **Details**: JS uses `.chr-save-prompt-overlay` with text input placeholder and Enter key handler (`@keyup.enter="confirm_save_character"`). C++ uses an ImGui popup modal with labeled `InputText` and button-only save handling (`src/js/modules/tab_characters.cpp` lines 2476–2499), changing both interaction and CSS-defined visual presentation.
