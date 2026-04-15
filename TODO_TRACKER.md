@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/113 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/122 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -566,3 +566,48 @@
 - **JS Source**: `src/js/constants.js` line 95
 - **Status**: Pending
 - **Details**: JS default config path is tied to the install tree (`INSTALL_PATH/src/default_config.jsonc`). C++ rewires it to `s_data_dir / "default_config.jsonc"`. This changes where defaults are loaded from and diverges from the original module’s constant export behavior.
+
+### 114. ⬜ [blob.cpp] `URLPolyfill.createObjectURL` fallback path for non-polyfill blobs is missing
+- **JS Source**: `src/js/blob.js` lines 294–300
+- **Status**: Pending
+- **Details**: JS checks `if (blob instanceof BlobPolyfill)` and otherwise calls native `URL.createObjectURL(blob)`. C++ hard-restricts `createObjectURL` to `const BlobPolyfill&` and removes the fallback code path entirely, so non-`BlobPolyfill` blob inputs cannot be handled.
+
+### 115. ⬜ [blob.cpp] `URLPolyfill.revokeObjectURL` does not revoke non-data URLs
+- **JS Source**: `src/js/blob.js` lines 302–306
+- **Status**: Pending
+- **Details**: JS calls native `URL.revokeObjectURL(url)` for non-`data:` URLs. C++ keeps the `data:` prefix check but leaves the non-data branch as a no-op, so equivalent revocation behavior is missing.
+
+### 116. ⬜ [blob.cpp] `BlobPolyfill` constructor no longer supports JS fallback coercion `textEncode(String(chunk))`
+- **JS Source**: `src/js/blob.js` lines 228–240
+- **Status**: Pending
+- **Details**: JS accepts arbitrary chunk values and coerces unsupported types through `String(chunk)` before UTF-8 encoding. C++ only accepts explicitly modeled `BlobPart` inputs (byte buffers/strings/blob), so the generic fallback conversion path is not present.
+
+### 117. ⬜ [xml.cpp] Parser performs unchecked `xml[pos]` reads where JS safely sees `undefined`
+- **JS Source**: `src/js/xml.js` lines 25–55, 66–99, 117–123
+- **Status**: Pending
+- **Details**: JS string indexing past bounds yields `undefined` and remains safe on malformed/truncated XML. C++ directly indexes `xml[pos]` in multiple branches without always guarding `pos < xml.size()`, which can cause out-of-bounds reads and undefined behavior for malformed input.
+
+### 118. ⬜ [xml.cpp] Object key ordering differs because parsed objects are stored in ordered JSON maps
+- **JS Source**: `src/js/xml.js` lines 132–165
+- **Status**: Pending
+- **Details**: JS object keys preserve insertion order as built during parsing. C++ builds parsed objects with `nlohmann::json` default object storage (ordered `std::map`), which reorders keys lexicographically and changes observable key iteration order beyond the already-tracked `unordered_map` child grouping issue.
+
+### 119. ⬜ [install-type.cpp] Translation unit is a placeholder and does not contain JS module logic
+- **JS Source**: `src/js/install-type.js` lines 1–6
+- **Status**: Pending
+- **Details**: JS file defines and exports `InstallType`. C++ `install-type.cpp` contains only include/comment placeholders and no code, so the module implementation is not actually in the matching `.cpp` file.
+
+### 120. ⬜ [crc32.cpp] Return value semantics differ from JS signed 32-bit number behavior
+- **JS Source**: `src/js/crc32.js` lines 28–34
+- **Status**: Pending
+- **Details**: JS bitwise operators produce a signed 32-bit `number` result (negative values possible). C++ returns `uint32_t`, which changes signedness/representation semantics for callers expecting the JS numeric behavior.
+
+### 121. ⬜ [MultiMap.cpp] Translation unit is a placeholder and does not contain JS module logic
+- **JS Source**: `src/js/MultiMap.js` lines 6–32
+- **Status**: Pending
+- **Details**: JS `MultiMap` class implementation lives in the file body. C++ `MultiMap.cpp` contains only include/comment placeholders, with implementation moved to the header, so the matching `.cpp` file remains an unconverted placeholder.
+
+### 122. ⬜ [MultiMap.cpp] Iteration order semantics differ from JS `Map`
+- **JS Source**: `src/js/MultiMap.js` lines 6–30
+- **Status**: Pending
+- **Details**: JS `MultiMap` extends `Map`, which guarantees insertion-order iteration. C++ implementation uses `std::unordered_map`, so iteration order is non-deterministic and can diverge from JS behavior anywhere map traversal order is observable.
