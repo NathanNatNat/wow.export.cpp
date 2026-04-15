@@ -7,8 +7,17 @@
 
 #include <format>
 #include <filesystem>
+#include <algorithm>
+#include <cctype>
 
 #include <imgui.h>
+#include <stb_image.h>
+
+#ifdef _WIN32
+#include <Windows.h>
+#else
+#include <cstdio>
+#endif
 
 #include "../core.h"
 #include "../log.h"
@@ -25,6 +34,112 @@
 namespace texture_exporter {
 
 namespace fs = std::filesystem;
+
+/**
+ * Copy PNG image data to the system clipboard.
+ * JS equivalent: nw.Clipboard.get().set(png.toBase64(), 'png', true)
+ *
+ * On Windows, decodes the PNG to RGBA pixels and places a CF_DIB on the clipboard.
+ * On Linux, pipes the raw PNG data to xclip -selection clipboard -target image/png.
+ * Falls back to copying the base64-encoded text if platform clipboard fails.
+ */
+static void copyPNGToClipboard(const BufferWrapper& png) {
+#ifdef _WIN32
+	// Decode PNG → RGBA pixels using stb_image.
+	int w = 0, h = 0, channels = 0;
+	const auto* pngData = png.internalArrayBuffer();
+	unsigned char* pixels = stbi_load_from_memory(pngData, static_cast<int>(png.byteLength()), &w, &h, &channels, 4);
+	if (!pixels) {
+		// Fallback to text clipboard if decode fails.
+		ImGui::SetClipboardText(png.toBase64().c_str());
+		return;
+	}
+
+	// Build a CF_DIB (BITMAPINFOHEADER + pixel data in bottom-up BGR order).
+	const int stride = w * 4;
+	const size_t pixelBytes = static_cast<size_t>(h) * stride;
+	const size_t dibSize = sizeof(BITMAPINFOHEADER) + pixelBytes;
+
+	HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, dibSize);
+	if (!hMem) {
+		stbi_image_free(pixels);
+		ImGui::SetClipboardText(png.toBase64().c_str());
+		return;
+	}
+
+	void* mem = GlobalLock(hMem);
+	auto* bmi = reinterpret_cast<BITMAPINFOHEADER*>(mem);
+	std::memset(bmi, 0, sizeof(BITMAPINFOHEADER));
+	bmi->biSize = sizeof(BITMAPINFOHEADER);
+	bmi->biWidth = w;
+	bmi->biHeight = h;  // positive = bottom-up
+	bmi->biPlanes = 1;
+	bmi->biBitCount = 32;
+	bmi->biCompression = BI_RGB;
+
+	// Convert RGBA top-down to BGRA bottom-up.
+	auto* dst = reinterpret_cast<uint8_t*>(mem) + sizeof(BITMAPINFOHEADER);
+	for (int row = 0; row < h; ++row) {
+		const uint8_t* src = pixels + static_cast<size_t>(h - 1 - row) * stride;
+		for (int col = 0; col < w; ++col) {
+			dst[col * 4 + 0] = src[col * 4 + 2]; // B
+			dst[col * 4 + 1] = src[col * 4 + 1]; // G
+			dst[col * 4 + 2] = src[col * 4 + 0]; // R
+			dst[col * 4 + 3] = src[col * 4 + 3]; // A
+		}
+		dst += stride;
+	}
+
+	GlobalUnlock(hMem);
+	stbi_image_free(pixels);
+
+	if (OpenClipboard(nullptr)) {
+		EmptyClipboard();
+		if (!SetClipboardData(CF_DIB, hMem))
+			GlobalFree(hMem);  // only free on failure; clipboard owns hMem on success
+		CloseClipboard();
+	} else {
+		GlobalFree(hMem);
+		ImGui::SetClipboardText(png.toBase64().c_str());
+	}
+#else
+	// Linux: pipe PNG data to xclip.
+	FILE* proc = popen("xclip -selection clipboard -target image/png 2>/dev/null", "w");
+	if (proc) {
+		std::fwrite(png.internalArrayBuffer(), 1, png.byteLength(), proc);
+		pclose(proc);
+	} else {
+		// Fallback to text clipboard if xclip is unavailable.
+		ImGui::SetClipboardText(png.toBase64().c_str());
+	}
+#endif
+}
+
+/**
+ * Case-insensitive check whether a filename ends with a given extension.
+ * JS equivalent: fileName.toLowerCase().endsWith(ext)
+ */
+static bool endsWithCI(const std::string& str, const std::string& suffix) {
+	if (suffix.size() > str.size())
+		return false;
+	return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin(),
+		[](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); });
+}
+
+/**
+ * Extract the file extension from a filename (from the last '.' to end), lowercased.
+ * JS equivalent: fileName.slice(fileName.lastIndexOf('.')).toLowerCase()
+ * Returns empty string if no '.' is found.
+ */
+static std::string getExtensionLower(const std::string& fileName) {
+	const auto dotPos = fileName.rfind('.');
+	if (dotPos == std::string::npos)
+		return "";
+	std::string ext = fileName.substr(dotPos);
+	std::transform(ext.begin(), ext.end(), ext.begin(),
+		[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+	return ext;
+}
 
 /**
  * Retrieve the fileDataID and fileName for a given fileDataID or fileName.
@@ -112,7 +227,8 @@ void exportFiles(
 		casc::BLPImage blp(std::move(data));
 		const BufferWrapper png = blp.toPNG(mask);
 
-		ImGui::SetClipboardText(png.toBase64().c_str());
+		// JS: clipboard.set(png.toBase64(), 'png', true) — copies actual PNG image data.
+		copyPNGToClipboard(png);
 
 		logging::write(std::format("Copied texture to clipboard ({})", fileName));
 		core::setToast("success",
@@ -150,9 +266,8 @@ void exportFiles(
 
 			// Use fileDataID as filename if exportNamedFiles is disabled
 			if (!isLocal && !core::view->config.value("exportNamedFiles", true) && fileDataID) {
-				const std::string ext = (fileName.size() >= 4 &&
-					(fileName.substr(fileName.size() - 4) == ".blp" || fileName.substr(fileName.size() - 4) == ".BLP"))
-					? ".blp" : ".png";
+				// JS: fileName.toLowerCase().endsWith('.blp') — fully case-insensitive
+				const std::string ext = endsWithCI(fileName, ".blp") ? ".blp" : ".png";
 				const fs::path namePath(fileName);
 				const std::string fileDataIDName = std::to_string(*fileDataID) + ext;
 				const fs::path dir = namePath.parent_path();
@@ -184,12 +299,10 @@ void exportFiles(
 					data = casc->getVirtualFileByID(*fileDataID);
 				}
 
-				// Determine file extension
-				const std::string file_ext = fileName.size() >= 4
-					? fileName.substr(fileName.size() - 4)
-					: "";
-				const bool is_png = (file_ext == ".png" || file_ext == ".PNG");
-				const bool is_jpg = (file_ext == ".jpg" || file_ext == ".JPG");
+				// Determine file extension — JS: fileName.slice(fileName.lastIndexOf('.')).toLowerCase()
+				const std::string file_ext = getExtensionLower(fileName);
+				const bool is_png = (file_ext == ".png");
+				const bool is_jpg = (file_ext == ".jpg" || file_ext == ".jpeg");
 
 				if (is_png || is_jpg) {
 					// Raw export for png/jpg (no BLP conversion)
@@ -229,7 +342,9 @@ void exportFiles(
 			if (fileDataID) entry["fileDataID"] = *fileDataID;
 			manifest["succeeded"].push_back(std::move(entry));
 		} catch (const std::exception& e) {
-			helper.mark(markFileName, false, e.what());
+			// JS: helper.mark(markFileName, false, e.message, e.stack)
+			// C++ std::exception has no .stack equivalent; pass std::nullopt for stackTrace.
+			helper.mark(markFileName, false, e.what(), std::nullopt);
 			nlohmann::json entry = {{"type", format}};
 			if (fileDataID) entry["fileDataID"] = *fileDataID;
 			manifest["failed"].push_back(std::move(entry));
