@@ -330,7 +330,8 @@ void preview_texture_by_id(ViewStateProxy& state, M2RendererGL* renderer,
  * Create appropriate renderer for model data.
  */
 RendererResult create_renderer(BufferWrapper& data, ModelType model_type,
-	gl::GLContext& ctx, bool show_textures, uint32_t file_data_id)
+	gl::GLContext& ctx, bool show_textures, uint32_t file_data_id,
+	const std::string& file_name)
 {
 	RendererResult result;
 	result.type = model_type;
@@ -340,6 +341,11 @@ RendererResult create_renderer(BufferWrapper& data, ModelType model_type,
 	} else if (model_type == ModelType::M3) {
 		result.m3 = std::make_unique<M3RendererGL>(data, ctx, true, show_textures);
 	} else {
+		// JS: new WMORendererGL(data, file_name, gl_context, show_textures)
+		// C++ WMORendererGL constructor takes uint32_t fileID — using file_data_id.
+		// The file_name parameter is accepted for API parity with JS but not used here
+		// because the C++ WMORendererGL is designed around numeric file data IDs for CASC lookup.
+		(void)file_name;
 		result.wmo = std::make_unique<WMORendererGL>(data, file_data_id, ctx, show_textures);
 	}
 
@@ -348,6 +354,8 @@ RendererResult create_renderer(BufferWrapper& data, ModelType model_type,
 
 /**
  * Extract animation list from M2 renderer (using skelLoader or m2 animations).
+ * JS uses Math.floor(animation.id) — this is a no-op because animation.id is uint16_t
+ * in C++ (always integral). std::to_string(uint16_t) produces identical output.
  */
 std::vector<nlohmann::json> extract_animations(const M2RendererGL& renderer) {
 	std::vector<nlohmann::json> anim_list;
@@ -392,6 +400,9 @@ std::vector<nlohmann::json> extract_animations(const M2RendererGL& renderer) {
 void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
 	const std::string& selected_animation_id)
 {
+	// JS: if (!renderer || !renderer.playAnimation) — checks method existence.
+	// C++: M2RendererGL always has playAnimation, so null check suffices.
+	// Non-M2 renderers (WMO, M3) would be passed as nullptr.
 	if (!renderer)
 		return;
 
@@ -400,6 +411,10 @@ void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
 	if (state.animFrame)     *state.animFrame     = 0;
 	if (state.animFrameCount) *state.animFrameCount = 0;
 
+	// JS: if (selected_animation_id === null || selected_animation_id === undefined) return;
+	// C++: empty string is the equivalent of JS null/undefined for std::string parameters.
+	// In JS, empty string "" would pass through — but callers never pass "" in practice;
+	// they pass null/undefined (no selection) or a valid ID string.
 	if (selected_animation_id.empty())
 		return;
 
@@ -457,6 +472,9 @@ bool export_preview(const std::string& format, gl::GLContext& ctx,
 	BufferWrapper buf = png_writer.getBuffer();
 
 	if (format == "PNG") {
+		// JS: const export_paths = core.openLastExportStream(); with optional chaining (?.)
+		// C++: FileWriter is a value type — always valid. core::openLastExportStream() creates
+		// the file; if it fails, the stream methods are no-ops (ofstream in failed state).
 		FileWriter export_paths = core::openLastExportStream();
 
 		const std::string base_path = export_subdir.empty()
@@ -479,6 +497,10 @@ bool export_preview(const std::string& format, gl::GLContext& ctx,
 			std::format("Successfully exported preview to {}", out_file),
 			{ {"View in Explorer", [out_dir]() { core::openInExplorer(out_dir); }} }, -1);
 	} else if (format == "CLIPBOARD") {
+		// JS: clipboard.set(buf.toBase64(), 'png', true) — copies actual PNG image data.
+		// C++ limitation: ImGui only supports text clipboard. Platform-specific PNG clipboard
+		// APIs (e.g., Win32 CF_DIB, X11 image/png) would be needed for true image copy.
+		// For now, copies base64-encoded PNG text as a fallback.
 		ImGui::SetClipboardText(buf.toBase64().c_str());
 
 		logging::write(std::format("Copied 3D preview to clipboard ({})", export_name));
@@ -670,6 +692,10 @@ std::string export_model(const ExportModelOptions& options) {
 			}
 		} else {
 			// WMO
+			// JS: new WMOExporter(data, file_name) — passes file_name string for non-RAW.
+			// C++ WMOExporter constructor takes (data, uint32_t fileDataID, CASC*) — using
+			// file_data_id because the C++ WMOExporter is designed around numeric IDs for
+			// CASC-based group/doodad file lookup.
 			WMOExporter exporter(data, file_data_id, casc);
 
 			if (options.wmo_group_mask)
@@ -716,6 +742,10 @@ AnimationMethods create_animation_methods(
 
 /**
  * Create a view state proxy for a model viewer tab.
+ * JS uses dynamic property access (core.view[prefix + 'TexturePreviewURL']) which works for
+ * any prefix. C++ uses explicit field mapping. Only "model", "decor", and "creature" prefixes
+ * are supported because AppState only defines fields for these three tab types. This matches
+ * all actual callers — no other prefixes are used at runtime.
  */
 ViewStateProxy create_view_state(const std::string& prefix) {
 	ViewStateProxy proxy;
