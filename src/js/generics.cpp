@@ -30,6 +30,7 @@
 #include <nlohmann/json.hpp>
 #include <httplib.h>
 #include <zlib.h>
+#include <mbedtls/md.h>
 
 namespace generics {
 
@@ -250,35 +251,75 @@ std::vector<uint8_t> inflateData(const std::vector<uint8_t>& input) {
 /**
  * Compute hash of a file using streaming I/O.
  * JS: fs.createReadStream(file) piped to crypto hash.
- * C++ reads the file in chunks to avoid loading the entire file into memory.
- * Returns the hash in the specified encoding.
+/**
+ * Compute hash of a file using streaming mbedTLS MD API.
+ * JS: fs.createReadStream(file) piped to crypto.createHash().
+ * C++ feeds the file in 64KB chunks to mbedtls_md_update(), so the entire
+ * file is never loaded into memory — identical streaming semantics to JS.
  */
 std::string computeFileHash(const std::filesystem::path& file,
                             std::string_view method,
                             std::string_view encoding) {
-	// Read the file in chunks and hash incrementally, matching JS behavior
-	// of using fs.createReadStream() piped to a hash. This avoids loading
-	// the entire file into memory for large WoW game files.
 	std::ifstream ifs(file, std::ios::binary);
 	if (!ifs.is_open())
 		throw std::runtime_error("Failed to open file for hashing: " + file.string());
 
-	// For now, read in chunks and use BufferWrapper's hash on the full data.
-	// TODO: When a streaming hash API is available, use it directly.
-	// This is still an improvement over the previous approach since we can
-	// control chunk size in the future.
-	std::vector<uint8_t> data;
-	constexpr size_t CHUNK_SIZE = 65536; // 64KB chunks
-	std::array<char, CHUNK_SIZE> buffer;
+	// Map JS algorithm name to mbedTLS type
+	const auto nameToType = [](std::string_view name) {
+		if (name == "md5")    return MBEDTLS_MD_MD5;
+		if (name == "sha1")   return MBEDTLS_MD_SHA1;
+		if (name == "sha224") return MBEDTLS_MD_SHA224;
+		if (name == "sha256") return MBEDTLS_MD_SHA256;
+		if (name == "sha384") return MBEDTLS_MD_SHA384;
+		if (name == "sha512") return MBEDTLS_MD_SHA512;
+		return MBEDTLS_MD_NONE;
+	};
 
-	while (ifs.read(buffer.data(), CHUNK_SIZE) || ifs.gcount() > 0) {
-		size_t bytesRead = static_cast<size_t>(ifs.gcount());
-		data.insert(data.end(), buffer.data(), buffer.data() + bytesRead);
+	mbedtls_md_type_t type = nameToType(method);
+	if (type == MBEDTLS_MD_NONE)
+		throw std::runtime_error("computeFileHash: unsupported algorithm '" + std::string(method) + "'");
+
+	const mbedtls_md_info_t* info = mbedtls_md_info_from_type(type);
+	mbedtls_md_context_t ctx;
+	mbedtls_md_init(&ctx);
+	if (mbedtls_md_setup(&ctx, info, 0) != 0 || mbedtls_md_starts(&ctx) != 0) {
+		mbedtls_md_free(&ctx);
+		throw std::runtime_error("computeFileHash: failed to initialize hash");
+	}
+
+	constexpr size_t CHUNK = 65536;
+	std::array<char, CHUNK> buf;
+	while (ifs.read(buf.data(), CHUNK) || ifs.gcount() > 0) {
+		auto n = static_cast<size_t>(ifs.gcount());
+		if (mbedtls_md_update(&ctx, reinterpret_cast<const uint8_t*>(buf.data()), n) != 0) {
+			mbedtls_md_free(&ctx);
+			throw std::runtime_error("computeFileHash: hash update failed");
+		}
 		if (ifs.eof()) break;
 	}
 
-	BufferWrapper buf(std::move(data));
-	return buf.calculateHash(method, encoding);
+	std::vector<uint8_t> digest(mbedtls_md_get_size(info));
+	if (mbedtls_md_finish(&ctx, digest.data()) != 0) {
+		mbedtls_md_free(&ctx);
+		throw std::runtime_error("computeFileHash: hash finalization failed");
+	}
+	mbedtls_md_free(&ctx);
+
+	if (encoding == "hex") {
+		constexpr char hex_chars[] = "0123456789abcdef";
+		std::string result;
+		result.reserve(digest.size() * 2);
+		for (uint8_t b : digest) {
+			result += hex_chars[b >> 4];
+			result += hex_chars[b & 0xf];
+		}
+		return result;
+	}
+	if (encoding == "base64") {
+		BufferWrapper tmp(std::move(digest));
+		return tmp.calculateHash(method, "base64");
+	}
+	throw std::runtime_error("computeFileHash: unsupported encoding '" + std::string(encoding) + "'");
 }
 
 } // anonymous namespace

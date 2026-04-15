@@ -15,6 +15,8 @@ License: MIT
 
 #include <zlib.h>
 
+#include <mbedtls/md.h>
+
 #include <nlohmann/json.hpp>
 
 #include <webp/encode.h>
@@ -168,382 +170,58 @@ return result;
 }
 
 
-constexpr uint32_t md5_s[64] = {
-7,12,17,22, 7,12,17,22, 7,12,17,22, 7,12,17,22,
-5, 9,14,20, 5, 9,14,20, 5, 9,14,20, 5, 9,14,20,
-4,11,16,23, 4,11,16,23, 4,11,16,23, 4,11,16,23,
-6,10,15,21, 6,10,15,21, 6,10,15,21, 6,10,15,21
-};
 
-constexpr uint32_t md5_k[64] = {
-0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee,
-0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
-0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be,
-0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821,
-0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa,
-0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
-0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed,
-0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a,
-0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c,
-0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70,
-0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05,
-0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
-0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039,
-0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
-0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
-0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391
-};
+/**
+ * Compute a cryptographic hash using the mbedTLS MD (message digest) API.
+ * Supports all algorithms mbedTLS provides: md5, sha1, sha224, sha256,
+ * sha384, sha512 — matching Node.js crypto.createHash() flexibility.
+ * Returns raw digest bytes.
+ */
+static std::vector<uint8_t> mbedtls_hash(const uint8_t* data, size_t len,
+                                          mbedtls_md_type_t type) {
+	const mbedtls_md_info_t* info = mbedtls_md_info_from_type(type);
+	if (!info)
+		throw std::runtime_error("Unsupported mbedTLS hash algorithm");
 
-inline uint32_t md5_left_rotate(uint32_t x, uint32_t c) {
-return (x << c) | (x >> (32 - c));
-}
-
-void md5_transform(uint32_t state[4], const uint8_t block[64]) {
-uint32_t a = state[0], b = state[1], c = state[2], d = state[3];
-uint32_t M[16];
-
-for (int i = 0; i < 16; i++) {
-M[i] = static_cast<uint32_t>(block[i * 4]) |
-(static_cast<uint32_t>(block[i * 4 + 1]) << 8) |
-(static_cast<uint32_t>(block[i * 4 + 2]) << 16) |
-(static_cast<uint32_t>(block[i * 4 + 3]) << 24);
-}
-
-for (int i = 0; i < 64; i++) {
-uint32_t f, g;
-if (i < 16) {
-f = (b & c) | (~b & d);
-g = static_cast<uint32_t>(i);
-} else if (i < 32) {
-f = (d & b) | (~d & c);
-g = static_cast<uint32_t>((5 * i + 1) % 16);
-} else if (i < 48) {
-f = b ^ c ^ d;
-g = static_cast<uint32_t>((3 * i + 5) % 16);
-} else {
-f = c ^ (b | ~d);
-g = static_cast<uint32_t>((7 * i) % 16);
-}
-
-f = f + a + md5_k[i] + M[g];
-a = d;
-d = c;
-c = b;
-b = b + md5_left_rotate(f, md5_s[i]);
-}
-
-state[0] += a;
-state[1] += b;
-state[2] += c;
-state[3] += d;
-}
-
-std::string md5_hex(const uint8_t* data, size_t len) {
-uint32_t state[4] = { 0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476 };
-
-size_t i = 0;
-for (; i + 64 <= len; i += 64)
-md5_transform(state, data + i);
-
-uint8_t block[64];
-size_t remaining = len - i;
-std::memcpy(block, data + i, remaining);
-block[remaining] = 0x80;
-
-if (remaining >= 56) {
-std::memset(block + remaining + 1, 0, 63 - remaining);
-md5_transform(state, block);
-std::memset(block, 0, 56);
-} else {
-std::memset(block + remaining + 1, 0, 55 - remaining);
-}
-
-uint64_t bits = static_cast<uint64_t>(len) * 8;
-for (int j = 0; j < 8; j++)
-block[56 + j] = static_cast<uint8_t>(bits >> (j * 8));
-
-md5_transform(state, block);
-
-constexpr char hex_chars[] = "0123456789abcdef";
-std::string result;
-result.reserve(32);
-for (int j = 0; j < 4; j++) {
-for (int k = 0; k < 4; k++) {
-uint8_t byte = static_cast<uint8_t>(state[j] >> (k * 8));
-result += hex_chars[byte >> 4];
-result += hex_chars[byte & 0xf];
-}
-}
-return result;
-}
-
-std::string md5_base64(const uint8_t* data, size_t len) {
-uint32_t state[4] = { 0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476 };
-
-size_t i = 0;
-for (; i + 64 <= len; i += 64)
-md5_transform(state, data + i);
-
-uint8_t block[64];
-size_t remaining = len - i;
-std::memcpy(block, data + i, remaining);
-block[remaining] = 0x80;
-
-if (remaining >= 56) {
-std::memset(block + remaining + 1, 0, 63 - remaining);
-md5_transform(state, block);
-std::memset(block, 0, 56);
-} else {
-std::memset(block + remaining + 1, 0, 55 - remaining);
-}
-
-uint64_t bits = static_cast<uint64_t>(len) * 8;
-for (int j = 0; j < 8; j++)
-block[56 + j] = static_cast<uint8_t>(bits >> (j * 8));
-
-md5_transform(state, block);
-
-uint8_t digest[16];
-for (int j = 0; j < 4; j++) {
-for (int k = 0; k < 4; k++)
-digest[j * 4 + k] = static_cast<uint8_t>(state[j] >> (k * 8));
-}
-return base64_encode(digest, 16);
-}
-
-
-inline uint32_t sha1_left_rotate(uint32_t x, uint32_t n) {
-	return (x << n) | (x >> (32 - n));
-}
-
-void sha1_transform(uint32_t state[5], const uint8_t block[64]) {
-	uint32_t w[80];
-
-	for (int i = 0; i < 16; i++) {
-		w[i] = (static_cast<uint32_t>(block[i * 4]) << 24) |
-			   (static_cast<uint32_t>(block[i * 4 + 1]) << 16) |
-			   (static_cast<uint32_t>(block[i * 4 + 2]) << 8) |
-			    static_cast<uint32_t>(block[i * 4 + 3]);
+	mbedtls_md_context_t ctx;
+	mbedtls_md_init(&ctx);
+	if (mbedtls_md_setup(&ctx, info, 0) != 0 ||
+	    mbedtls_md_starts(&ctx) != 0 ||
+	    mbedtls_md_update(&ctx, data, len) != 0) {
+		mbedtls_md_free(&ctx);
+		throw std::runtime_error("mbedTLS hash computation failed");
 	}
 
-	for (int i = 16; i < 80; i++)
-		w[i] = sha1_left_rotate(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
-
-	uint32_t a = state[0], b = state[1], c = state[2], d = state[3], e = state[4];
-
-	for (int i = 0; i < 80; i++) {
-		uint32_t f, k;
-		if (i < 20) {
-			f = (b & c) | (~b & d);
-			k = 0x5A827999;
-		} else if (i < 40) {
-			f = b ^ c ^ d;
-			k = 0x6ED9EBA1;
-		} else if (i < 60) {
-			f = (b & c) | (b & d) | (c & d);
-			k = 0x8F1BBCDC;
-		} else {
-			f = b ^ c ^ d;
-			k = 0xCA62C1D6;
-		}
-
-		uint32_t temp = sha1_left_rotate(a, 5) + f + e + k + w[i];
-		e = d;
-		d = c;
-		c = sha1_left_rotate(b, 30);
-		b = a;
-		a = temp;
+	std::vector<uint8_t> digest(mbedtls_md_get_size(info));
+	if (mbedtls_md_finish(&ctx, digest.data()) != 0) {
+		mbedtls_md_free(&ctx);
+		throw std::runtime_error("mbedTLS hash finalization failed");
 	}
-
-	state[0] += a;
-	state[1] += b;
-	state[2] += c;
-	state[3] += d;
-	state[4] += e;
+	mbedtls_md_free(&ctx);
+	return digest;
 }
 
-void sha1_compute(const uint8_t* data, size_t len, uint32_t state[5]) {
-	state[0] = 0x67452301;
-	state[1] = 0xEFCDAB89;
-	state[2] = 0x98BADCFE;
-	state[3] = 0x10325476;
-	state[4] = 0xC3D2E1F0;
-
-	size_t i = 0;
-	for (; i + 64 <= len; i += 64)
-		sha1_transform(state, data + i);
-
-	uint8_t block[64];
-	size_t remaining = len - i;
-	std::memcpy(block, data + i, remaining);
-	block[remaining] = 0x80;
-
-	if (remaining >= 56) {
-		std::memset(block + remaining + 1, 0, 63 - remaining);
-		sha1_transform(state, block);
-		std::memset(block, 0, 56);
-	} else {
-		std::memset(block + remaining + 1, 0, 55 - remaining);
-	}
-
-	// SHA1 uses big-endian bit length
-	uint64_t bits = static_cast<uint64_t>(len) * 8;
-	block[56] = static_cast<uint8_t>(bits >> 56);
-	block[57] = static_cast<uint8_t>(bits >> 48);
-	block[58] = static_cast<uint8_t>(bits >> 40);
-	block[59] = static_cast<uint8_t>(bits >> 32);
-	block[60] = static_cast<uint8_t>(bits >> 24);
-	block[61] = static_cast<uint8_t>(bits >> 16);
-	block[62] = static_cast<uint8_t>(bits >> 8);
-	block[63] = static_cast<uint8_t>(bits);
-
-	sha1_transform(state, block);
+static mbedtls_md_type_t hash_name_to_type(std::string_view name) {
+	if (name == "md5")    return MBEDTLS_MD_MD5;
+	if (name == "sha1")   return MBEDTLS_MD_SHA1;
+	if (name == "sha224") return MBEDTLS_MD_SHA224;
+	if (name == "sha256") return MBEDTLS_MD_SHA256;
+	if (name == "sha384") return MBEDTLS_MD_SHA384;
+	if (name == "sha512") return MBEDTLS_MD_SHA512;
+	return MBEDTLS_MD_NONE;
 }
 
-std::string sha1_hex(const uint8_t* data, size_t len) {
-	uint32_t state[5];
-	sha1_compute(data, len, state);
-
+static std::string digest_to_hex(const std::vector<uint8_t>& digest) {
 	constexpr char hex_chars[] = "0123456789abcdef";
 	std::string result;
-	result.reserve(40);
-	for (int j = 0; j < 5; j++) {
-		for (int k = 3; k >= 0; k--) {
-			uint8_t byte = static_cast<uint8_t>(state[j] >> (k * 8));
-			result += hex_chars[byte >> 4];
-			result += hex_chars[byte & 0xf];
-		}
+	result.reserve(digest.size() * 2);
+	for (uint8_t b : digest) {
+		result += hex_chars[b >> 4];
+		result += hex_chars[b & 0xf];
 	}
 	return result;
 }
 
-std::string sha1_base64(const uint8_t* data, size_t len) {
-	uint32_t state[5];
-	sha1_compute(data, len, state);
-
-	uint8_t digest[20];
-	for (int j = 0; j < 5; j++) {
-		digest[j * 4]     = static_cast<uint8_t>(state[j] >> 24);
-		digest[j * 4 + 1] = static_cast<uint8_t>(state[j] >> 16);
-		digest[j * 4 + 2] = static_cast<uint8_t>(state[j] >> 8);
-		digest[j * 4 + 3] = static_cast<uint8_t>(state[j]);
-	}
-	return base64_encode(digest, 20);
-}
-
-
-// SHA-256 implementation
-inline uint32_t sha256_rotr(uint32_t x, uint32_t n) { return (x >> n) | (x << (32 - n)); }
-inline uint32_t sha256_ch(uint32_t x, uint32_t y, uint32_t z) { return (x & y) ^ (~x & z); }
-inline uint32_t sha256_maj(uint32_t x, uint32_t y, uint32_t z) { return (x & y) ^ (x & z) ^ (y & z); }
-inline uint32_t sha256_sigma0(uint32_t x) { return sha256_rotr(x, 2) ^ sha256_rotr(x, 13) ^ sha256_rotr(x, 22); }
-inline uint32_t sha256_sigma1(uint32_t x) { return sha256_rotr(x, 6) ^ sha256_rotr(x, 11) ^ sha256_rotr(x, 25); }
-inline uint32_t sha256_gamma0(uint32_t x) { return sha256_rotr(x, 7) ^ sha256_rotr(x, 18) ^ (x >> 3); }
-inline uint32_t sha256_gamma1(uint32_t x) { return sha256_rotr(x, 17) ^ sha256_rotr(x, 19) ^ (x >> 10); }
-
-constexpr uint32_t sha256_k[64] = {
-	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-	0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-	0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-	0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-	0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-	0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
-};
-
-void sha256_transform(uint32_t state[8], const uint8_t block[64]) {
-	uint32_t w[64];
-	for (int i = 0; i < 16; i++)
-		w[i] = (static_cast<uint32_t>(block[i * 4]) << 24) |
-		       (static_cast<uint32_t>(block[i * 4 + 1]) << 16) |
-		       (static_cast<uint32_t>(block[i * 4 + 2]) << 8) |
-		        static_cast<uint32_t>(block[i * 4 + 3]);
-
-	for (int i = 16; i < 64; i++)
-		w[i] = sha256_gamma1(w[i - 2]) + w[i - 7] + sha256_gamma0(w[i - 15]) + w[i - 16];
-
-	uint32_t a = state[0], b = state[1], c = state[2], d = state[3];
-	uint32_t e = state[4], f = state[5], g = state[6], h = state[7];
-
-	for (int i = 0; i < 64; i++) {
-		uint32_t t1 = h + sha256_sigma1(e) + sha256_ch(e, f, g) + sha256_k[i] + w[i];
-		uint32_t t2 = sha256_sigma0(a) + sha256_maj(a, b, c);
-		h = g; g = f; f = e; e = d + t1;
-		d = c; c = b; b = a; a = t1 + t2;
-	}
-
-	state[0] += a; state[1] += b; state[2] += c; state[3] += d;
-	state[4] += e; state[5] += f; state[6] += g; state[7] += h;
-}
-
-void sha256_compute(const uint8_t* data, size_t len, uint32_t state[8]) {
-	state[0] = 0x6a09e667; state[1] = 0xbb67ae85;
-	state[2] = 0x3c6ef372; state[3] = 0xa54ff53a;
-	state[4] = 0x510e527f; state[5] = 0x9b05688c;
-	state[6] = 0x1f83d9ab; state[7] = 0x5be0cd19;
-
-	size_t i = 0;
-	for (; i + 64 <= len; i += 64)
-		sha256_transform(state, data + i);
-
-	uint8_t block[64];
-	size_t remaining = len - i;
-	std::memcpy(block, data + i, remaining);
-	block[remaining] = 0x80;
-
-	if (remaining >= 56) {
-		std::memset(block + remaining + 1, 0, 63 - remaining);
-		sha256_transform(state, block);
-		std::memset(block, 0, 56);
-	} else {
-		std::memset(block + remaining + 1, 0, 55 - remaining);
-	}
-
-	// SHA-256 uses big-endian bit length
-	uint64_t bits = static_cast<uint64_t>(len) * 8;
-	block[56] = static_cast<uint8_t>(bits >> 56);
-	block[57] = static_cast<uint8_t>(bits >> 48);
-	block[58] = static_cast<uint8_t>(bits >> 40);
-	block[59] = static_cast<uint8_t>(bits >> 32);
-	block[60] = static_cast<uint8_t>(bits >> 24);
-	block[61] = static_cast<uint8_t>(bits >> 16);
-	block[62] = static_cast<uint8_t>(bits >> 8);
-	block[63] = static_cast<uint8_t>(bits);
-
-	sha256_transform(state, block);
-}
-
-std::string sha256_hex(const uint8_t* data, size_t len) {
-	uint32_t state[8];
-	sha256_compute(data, len, state);
-
-	constexpr char hex_chars[] = "0123456789abcdef";
-	std::string result;
-	result.reserve(64);
-	for (int j = 0; j < 8; j++) {
-		for (int k = 3; k >= 0; k--) {
-			uint8_t byte = static_cast<uint8_t>(state[j] >> (k * 8));
-			result += hex_chars[byte >> 4];
-			result += hex_chars[byte & 0xf];
-		}
-	}
-	return result;
-}
-
-std::string sha256_base64(const uint8_t* data, size_t len) {
-	uint32_t state[8];
-	sha256_compute(data, len, state);
-
-	uint8_t digest[32];
-	for (int j = 0; j < 8; j++) {
-		digest[j * 4]     = static_cast<uint8_t>(state[j] >> 24);
-		digest[j * 4 + 1] = static_cast<uint8_t>(state[j] >> 16);
-		digest[j * 4 + 2] = static_cast<uint8_t>(state[j] >> 8);
-		digest[j * 4 + 3] = static_cast<uint8_t>(state[j]);
-	}
-	return base64_encode(digest, 32);
-}
 
 
 std::vector<uint8_t> zlib_inflate(const uint8_t* data, size_t len) {
@@ -1370,27 +1048,19 @@ _buf = std::move(buf);
 }
 
 std::string BufferWrapper::calculateHash(std::string_view hash, std::string_view encoding) {
-// TODO 66: JS uses Node's crypto module which supports all hash algorithms.
-// C++ supports md5, sha1, and sha256. Other algorithms (sha384, sha512, etc.)
-// are not yet implemented — add them as needed.
-if (hash != "md5" && hash != "sha1" && hash != "sha256")
-throw std::runtime_error("calculateHash: unsupported hash algorithm '" + std::string(hash) + "' (only md5, sha1, sha256 supported)");
+// Uses mbedTLS MD API — supports md5, sha1, sha224, sha256, sha384, sha512,
+// matching Node.js crypto.createHash() flexibility.
+mbedtls_md_type_t type = hash_name_to_type(hash);
+if (type == MBEDTLS_MD_NONE)
+throw std::runtime_error("calculateHash: unsupported hash algorithm '" + std::string(hash) + "'");
 
-if (encoding == "hex") {
-if (hash == "sha256")
-return sha256_hex(_buf.data(), _buf.size());
-if (hash == "sha1")
-return sha1_hex(_buf.data(), _buf.size());
-return md5_hex(_buf.data(), _buf.size());
-} else if (encoding == "base64") {
-if (hash == "sha256")
-return sha256_base64(_buf.data(), _buf.size());
-if (hash == "sha1")
-return sha1_base64(_buf.data(), _buf.size());
-return md5_base64(_buf.data(), _buf.size());
-} else {
-throw std::runtime_error("calculateHash: unsupported encoding '" + std::string(encoding) + "' (only hex, base64 supported)");
-}
+auto digest = mbedtls_hash(_buf.data(), _buf.size(), type);
+
+if (encoding == "hex")
+return digest_to_hex(digest);
+if (encoding == "base64")
+return base64_encode(digest.data(), digest.size());
+throw std::runtime_error("calculateHash: unsupported encoding '" + std::string(encoding) + "' (hex or base64)");
 }
 
 bool BufferWrapper::isZeroed() const {

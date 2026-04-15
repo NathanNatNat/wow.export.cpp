@@ -44,19 +44,22 @@ set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT wow_expor
 # Each entry maps a submodule directory to a sentinel file that
 # must exist when the submodule has been checked out.
 set(_REQUIRED_SUBMODULES
-    "extern/cpp-httplib  CMakeLists.txt"
-    "extern/glad         LICENSE"
-    "extern/glfw         CMakeLists.txt"
-    "extern/glm          CMakeLists.txt"
-    "extern/imgui        imgui.cpp"
-    "extern/json         CMakeLists.txt"
-    "extern/libwebp      CMakeLists.txt"
-    "extern/miniaudio    miniaudio.h"
-    "extern/nanosvg      CMakeLists.txt"
-    "extern/pugixml      CMakeLists.txt"
-    "extern/spdlog       CMakeLists.txt"
-    "extern/stb          stb_image.h"
-    "extern/zlib         CMakeLists.txt"
+    "extern/cpp-httplib           CMakeLists.txt"
+    "extern/glad                  LICENSE"
+    "extern/glfw                  CMakeLists.txt"
+    "extern/glm                   CMakeLists.txt"
+    "extern/imgui                 imgui.cpp"
+    "extern/json                  CMakeLists.txt"
+    "extern/libwebp               CMakeLists.txt"
+    "extern/mbedtls               CMakeLists.txt"
+    "extern/miniaudio             miniaudio.h"
+    "extern/minizip-ng            CMakeLists.txt"
+    "extern/nanosvg               CMakeLists.txt"
+    "extern/portable-file-dialogs portable-file-dialogs.h"
+    "extern/pugixml               CMakeLists.txt"
+    "extern/spdlog                CMakeLists.txt"
+    "extern/stb                   stb_image.h"
+    "extern/zlib                  CMakeLists.txt"
 )
 
 set(_MISSING_SUBMODULES "")
@@ -139,10 +142,26 @@ set(SPDLOG_BUILD_ALL        OFF CACHE BOOL "" FORCE)
 set(SPDLOG_INSTALL          OFF CACHE BOOL "" FORCE)
 add_subdirectory(extern/spdlog EXCLUDE_FROM_ALL)
 
+# ── mbedTLS (bundled TLS/crypto — no system OpenSSL required) ──
+# Provides HTTPS for cpp-httplib AND the MD (hash) API used by buffer.cpp
+# and generics.cpp.  Pins to the 3.6.x LTS branch for compatibility with
+# cpp-httplib's CPPHTTPLIB_MBEDTLS_SUPPORT code path.
+set(ENABLE_PROGRAMS       OFF CACHE BOOL "" FORCE)
+set(ENABLE_TESTING        OFF CACHE BOOL "" FORCE)
+set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+add_subdirectory(extern/mbedtls EXCLUDE_FROM_ALL)
+
 # ── cpp-httplib (HTTP client/server, header-only) ─────────────
+# Enable HTTPS/TLS via bundled mbedTLS — requires no system packages.
 set(HTTPLIB_COMPILE OFF CACHE BOOL "" FORCE)
 set(HTTPLIB_TEST    OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_INSTALL OFF CACHE BOOL "" FORCE)
+# Disable OpenSSL auto-detection — we use bundled mbedTLS instead.
+set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_REQUIRE_OPENSSL          OFF CACHE BOOL "" FORCE)
 add_subdirectory(extern/cpp-httplib EXCLUDE_FROM_ALL)
+target_compile_definitions(httplib INTERFACE CPPHTTPLIB_MBEDTLS_SUPPORT)
+target_link_libraries(httplib INTERFACE mbedtls mbedx509 mbedcrypto)
 
 # ── zlib (compression) ────────────────────────────────────────
 set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -193,6 +212,39 @@ target_include_directories(nanosvg INTERFACE extern/nanosvg/src)
 add_library(miniaudio INTERFACE)
 target_include_directories(miniaudio INTERFACE extern/miniaudio)
 
+# ── minizip-ng (ZIP archive I/O — C++ equivalent of JS adm-zip) ─
+# Reuse our bundled zlibstatic for Deflate compression.
+# Create a ZLIB::ZLIB alias so CMake's FindZLIB early-returns and
+# minizip-ng uses our bundled zlib rather than looking for a system one.
+add_library(ZLIB::ZLIB ALIAS zlibstatic)
+set(ZLIB_FOUND          TRUE  CACHE BOOL   "" FORCE)
+set(ZLIB_VERSION_STRING "1.3" CACHE STRING "" FORCE)
+set(ZLIB_INCLUDE_DIRS
+    "${CMAKE_SOURCE_DIR}/extern/zlib"
+    "${CMAKE_BINARY_DIR}/extern/zlib"
+    CACHE STRING "" FORCE)
+set(ZLIB_LIBRARIES zlibstatic CACHE STRING "" FORCE)
+set(MZ_ZLIB          ON  CACHE BOOL "" FORCE)
+set(MZ_BZIP2         OFF CACHE BOOL "" FORCE)
+set(MZ_LZMA          OFF CACHE BOOL "" FORCE)
+set(MZ_ZSTD          OFF CACHE BOOL "" FORCE)
+set(MZ_LIBCOMP       OFF CACHE BOOL "" FORCE)
+set(MZ_PKCRYPT       OFF CACHE BOOL "" FORCE)
+set(MZ_WZAES         OFF CACHE BOOL "" FORCE)
+set(MZ_OPENSSL       OFF CACHE BOOL "" FORCE)
+set(MZ_SIGNING       OFF CACHE BOOL "" FORCE)
+set(MZ_FETCH_LIBS    OFF CACHE BOOL "" FORCE)
+set(MZ_FORCE_FETCH_LIBS OFF CACHE BOOL "" FORCE)
+set(MZ_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
+set(MZ_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+set(MZ_BUILD_FUZZ_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(extern/minizip-ng EXCLUDE_FROM_ALL)
+
+# ── portable-file-dialogs (cross-platform native file dialogs) ─
+# Header-only — replaces all the Windows COM / Linux zenity dialog code.
+add_library(portable_file_dialogs INTERFACE)
+target_include_directories(portable_file_dialogs INTERFACE extern/portable-file-dialogs)
+
 # ════════════════════════════════════════════════════════════════
 #  Main executable
 # ════════════════════════════════════════════════════════════════
@@ -214,16 +266,21 @@ target_link_libraries(wow_export_cpp PRIVATE
     # Data formats
     nlohmann_json::nlohmann_json
     pugixml::pugixml
-    # Compression
+    # Compression & archive I/O
     zlibstatic
+    minizip
     # Image I/O
     webp
     stb
     nanosvg
     # Audio
     miniaudio
-    # HTTP
+    # HTTP + TLS (mbedTLS pulled in transitively via httplib INTERFACE)
     httplib::httplib
+    # Crypto hashing (mbedTLS MD API — replaces hand-rolled MD5/SHA1/SHA256)
+    mbedcrypto
+    # Native file dialogs
+    portable_file_dialogs
     # Logging (bundles fmt)
     spdlog::spdlog
 )
