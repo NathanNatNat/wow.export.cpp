@@ -77,7 +77,8 @@ static float itemWeight(const std::vector<ItemEntry>& filteredItems) {
  */
 static void resize(float containerHeight, float scrollerHeight, ItemListboxState& state) {
 	state.scroll = (containerHeight - scrollerHeight) * state.scrollRel;
-	state.slotCount = static_cast<int>(std::floor(containerHeight / 26.0f));
+	// CSS: #tab-items #listbox-items .item { height: 46px; }
+	state.slotCount = static_cast<int>(std::floor(containerHeight / 46.0f));
 }
 
 /**
@@ -434,7 +435,8 @@ void render(const char* id,
 	const float containerHeight = availSize.y;
 
 	// The scroller thumb height is proportional to visible vs total items.
-	const float itemHeightVal = 26.0f;
+	// CSS: #tab-items #listbox-items .item { height: 46px; font-size: 1.2em; }
+	const float itemHeightVal = 46.0f;
 	const int totalItems = static_cast<int>(filteredItems.size());
 	const float scrollerHeight = (totalItems > 0)
 		? std::max(20.0f, containerHeight * (static_cast<float>(state.slotCount) / static_cast<float>(totalItems)))

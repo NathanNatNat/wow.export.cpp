@@ -780,7 +780,23 @@ void render(const char* id,
 		if (!selection.empty())
 			statusText += " (" + std::to_string(selection.size()) + " selected)";
 
-		ImGui::Text("%s", statusText.c_str());
+		// CSS: .list-container .list-status { background: #1f1f20; height: 27px;
+		//      border-bottom-right-radius: 10px; border-bottom-left-radius: 10px;
+		//      font-weight: bold; padding-left: 10px; padding-top: 3px; }
+		{
+			const ImVec2 pos = ImGui::GetCursorScreenPos();
+			const float statusW = ImGui::GetContentRegionAvail().x;
+			const float statusH = 27.0f;
+			ImDrawList* dl = ImGui::GetWindowDrawList();
+			dl->AddRectFilled(pos, ImVec2(pos.x + statusW, pos.y + statusH),
+			                  IM_COL32(31, 31, 32, 255), 10.0f,
+			                  ImDrawFlags_RoundCornersBottom);
+
+			// Render bold status text with padding.
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f);
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3.0f);
+		}
+		ImGui::TextUnformatted(statusText.c_str());
 
 		// Quick filters.
 		if (!quickfilters.empty()) {

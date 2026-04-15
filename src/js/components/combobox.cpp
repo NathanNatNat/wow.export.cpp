@@ -201,20 +201,37 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 	// </ul>
 	if (state.isActive && !state.currentText.empty()) {
 		auto matches = filteredSource(state.currentText, source, maxheight);
+		// CSS: .ui-combobox ul { background: #232323; border: 1px solid var(--border); box-shadow: black 0 0 3px 0; }
 		if (!matches.empty()) {
 			// CSS: <ul> has no explicit max-height in template; controlled by CSS.
 			// Use calculated height based on item count (no arbitrary cap).
-			const float dropdownHeight = static_cast<float>(matches.size()) * ImGui::GetTextLineHeightWithSpacing();
+			// CSS: .ui-combobox ul li { padding: 10px 15px; border-bottom: 1px solid var(--border); }
+			const float itemPaddingY = 10.0f * 2.0f;
+			const float dropdownHeight = static_cast<float>(matches.size()) * (ImGui::GetTextLineHeight() + itemPaddingY);
 
+			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.137f, 0.137f, 0.137f, 1.0f)); // #232323
+			ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 			ImGui::BeginChild("##dropdown", ImVec2(0.0f, dropdownHeight),
 			                  ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
 
 			for (const auto* item : matches) {
 				const std::string label = item->value("label", std::string(""));
+				// CSS: .ui-combobox ul li { padding: 10px 15px; }
+				ImGui::SetCursorPosX(15.0f);
+				ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
+				// CSS: .ui-combobox ul li:hover { background: #353535; }
+				ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.208f, 0.208f, 0.208f, 1.0f)); // #353535
 				if (ImGui::Selectable(label.c_str())) {
 					selectOption(item, value, state, onChange);
 					state.blurDelayFrames = 0; // Cancel pending blur
 				}
+				ImGui::PopStyleColor();
+				ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
+				// CSS: border-bottom: 1px solid var(--border) — draw separator between items.
+				ImDrawList* dl = ImGui::GetWindowDrawList();
+				ImVec2 p = ImGui::GetCursorScreenPos();
+				dl->AddLine(p, ImVec2(p.x + ImGui::GetContentRegionAvail().x, p.y), app::theme::BORDER_U32);
 			}
 
 			// Keep active while hovering dropdown.
@@ -224,6 +241,8 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 			}
 
 			ImGui::EndChild();
+			ImGui::PopStyleVar();
+			ImGui::PopStyleColor(2);
 		}
 	}
 

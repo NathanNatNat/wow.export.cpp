@@ -122,6 +122,11 @@ inline constexpr ImU32 SLIDER_FILL_U32         = FONT_ALT_U32;          // CSS .
 
 inline constexpr ImU32 FIELD_PLACEHOLDER_U32 = IM_COL32(255, 255, 255, 100);
 
+// CSS: var(--font-disabled) — used for empty/disabled state text (e.g., slot-empty).
+// Not explicitly defined in :root; falls back to a muted gray similar to --font-faded.
+inline constexpr ImVec4 FONT_DISABLED     = ImVec4(0.424f, 0.459f, 0.490f, 0.6f);
+inline constexpr ImU32  FONT_DISABLED_U32 = IM_COL32(108, 117, 125, 153);
+
 inline constexpr ImU32 DASH_COLOR_U32    = IM_COL32(255, 255, 255, 230);
 
 inline constexpr ImU32 TABLE_ROW_HOVER_U32    = IM_COL32(87, 175, 226, 255); // CSS: var(--font-alt) = #57afe2
