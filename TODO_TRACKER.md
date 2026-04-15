@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/105 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/113 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -526,3 +526,43 @@
 - **JS Source**: `src/js/mmap.js` lines 20–24
 - **Status**: Pending
 - **Details**: C++ `create_virtual_file()` returns an `MmapObject*` allocated with `new` and tracked in the internal `virtual_files` set. Callers must not `delete` the pointer themselves, and must not dereference it after `release_virtual_files()` (which `delete`s all tracked objects). `mmap.h` documents neither the ownership rule nor the lifetime constraint. JS relies on garbage collection and has no equivalent concern. This missing documentation creates a risk of double-free or use-after-free if callers store the returned pointer beyond the cleanup call.
+
+### 106. ⬜ [external-links.cpp] Translation unit is a placeholder and does not contain the JS module logic
+- **JS Source**: `src/js/external-links.js` lines 26–44
+- **Status**: Pending
+- **Details**: `external-links.cpp` only contains comments plus `#include "external-links.h"` and no functions/classes matching the JS module body. The JS file defines the exported class and both `open()` and `wowHead_viewItem()` methods in this file. The C++ implementation being moved entirely into a header means this `.cpp` file itself is effectively an unconverted placeholder instead of a line-by-line port of the source file it is supposed to mirror.
+
+### 107. ⬜ [gpu-info.cpp] Renderer/vendor path bypasses JS `WEBGL_debug_renderer_info` behavior
+- **JS Source**: `src/js/gpu-info.js` lines 30–34, 343–347
+- **Status**: Pending
+- **Details**: JS only populates vendor/renderer when `gl.getExtension('WEBGL_debug_renderer_info')` is available; otherwise it logs `"GPU: WebGL debug info unavailable"`. C++ always queries `glGetString(GL_VENDOR/GL_RENDERER)` directly, which can produce renderer/vendor output even when the JS path would not. This changes logging behavior and diagnostic parity with the original implementation.
+
+### 108. ⬜ [gpu-info.cpp] `log_gpu_info()` is synchronous while JS implementation is async
+- **JS Source**: `src/js/gpu-info.js` lines 329–361
+- **Status**: Pending
+- **Details**: JS exposes `log_gpu_info` as `async` and awaits platform command queries through promise-based `exec_cmd`. C++ defines `void log_gpu_info()` and performs command execution synchronously on the calling thread. This can block startup/UI flow in scenarios where JS would yield back to the event loop while subprocess queries complete.
+
+### 109. ⬜ [core.cpp] Linux path opening uses shell command string instead of JS native shell API
+- **JS Source**: `src/js/core.js` lines 484–486
+- **Status**: Pending
+- **Details**: JS opens the export directory with `nw.Shell.openItem(...)` (native API, no shell string construction). C++ Linux path builds `xdg-open \"...\" &` and passes it to `std::system()`. This changes behavior for special characters/quoting and introduces shell parsing semantics that do not exist in the original JS code path.
+
+### 110. ⬜ [config.cpp] `load()` is synchronous in C++ but asynchronous in JS
+- **JS Source**: `src/js/config.js` lines 37–43
+- **Status**: Pending
+- **Details**: JS defines `load` as `async` and awaits disk reads, allowing callers to await completion. C++ `void load()` performs reads synchronously and returns no future/promise-like handle. This changes call semantics and can block the calling thread while reading/parsing config files.
+
+### 111. ⬜ [constants.cpp] Cache root directory name differs (`casc` in JS vs `cache` in C++)
+- **JS Source**: `src/js/constants.js` lines 72–81
+- **Status**: Pending
+- **Details**: JS defines `CACHE.DIR` and all related cache paths under `<DATA_PATH>/casc`. C++ renames this root to `<data>/cache` and adds migration logic from `casc` to `cache`. This is a path-contract deviation that changes on-disk layout relative to the original JS behavior.
+
+### 112. ⬜ [constants.cpp] `SHADER_PATH` points to `<data>/shaders` instead of `<INSTALL_PATH>/src/shaders`
+- **JS Source**: `src/js/constants.js` line 43
+- **Status**: Pending
+- **Details**: JS resolves shader files from `path.join(INSTALL_PATH, 'src', 'shaders')`. C++ sets `s_shader_path = s_data_dir / "shaders"`. This changes resource lookup location and diverges from the original runtime path contract.
+
+### 113. ⬜ [constants.cpp] `CONFIG.DEFAULT_PATH` points to `<data>/default_config.jsonc` instead of `<INSTALL_PATH>/src/default_config.jsonc`
+- **JS Source**: `src/js/constants.js` line 95
+- **Status**: Pending
+- **Details**: JS default config path is tied to the install tree (`INSTALL_PATH/src/default_config.jsonc`). C++ rewires it to `s_data_dir / "default_config.jsonc"`. This changes where defaults are loaded from and diverges from the original module’s constant export behavior.
