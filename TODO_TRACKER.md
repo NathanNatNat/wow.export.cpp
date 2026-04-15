@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/144 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/156 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -721,3 +721,63 @@
 - **JS Source**: `src/js/modules/tab_characters.js` lines 1946–1951, 2335–2344
 - **Status**: Pending
 - **Details**: JS uses `.chr-save-prompt-overlay` with text input placeholder and Enter key handler (`@keyup.enter="confirm_save_character"`). C++ uses an ImGui popup modal with labeled `InputText` and button-only save handling (`src/js/modules/tab_characters.cpp` lines 2476–2499), changing both interaction and CSS-defined visual presentation.
+
+### 145. ⬜ [audio-helper.cpp] `load()` API does not return decoded buffer like JS
+- **JS Source**: `src/js/ui/audio-helper.js` lines 31–35
+- **Status**: Pending
+- **Details**: JS `AudioPlayer.load()` is async and returns `this.buffer` (decoded `AudioBuffer`). C++ `AudioPlayer::load()` is `void` and explicitly documents the return-value deviation. This changes API behavior for any caller expecting a load result.
+
+### 146. ⬜ [audio-helper.cpp] End-of-playback callback depends on polling instead of event callback
+- **JS Source**: `src/js/ui/audio-helper.js` lines 57–67, 115–130
+- **Status**: Pending
+- **Details**: JS uses `source.onended` to fire completion immediately on natural playback end. C++ fires `on_ended` from `get_position()` polling (`ma_sound_at_end()`), so callback timing depends on callers polling position and introduces side effects in a getter path.
+
+### 147. ⬜ [char-texture-overlay.cpp] `remove()` behavior differs when layer is missing
+- **JS Source**: `src/js/ui/char-texture-overlay.js` lines 46–48
+- **Status**: Pending
+- **Details**: JS uses `layers.splice(layers.indexOf(canvas), 1)`, which removes the last element when `indexOf` returns `-1`. C++ checks `find()` and only erases when found. Although safer, this is not behavior-identical to JS.
+
+### 148. ⬜ [char-texture-overlay.cpp] Active-layer reattach flow is stubbed out
+- **JS Source**: `src/js/ui/char-texture-overlay.js` lines 63–71, 74
+- **Status**: Pending
+- **Details**: JS re-attaches the active overlay canvas on tab switch via `process.nextTick` and `screen-tab-characters` event wiring. C++ `ensureActiveLayerAttached()` is a no-op, so the original explicit reattach code path is not represented.
+
+### 149. ⬜ [data-exporter.cpp] Failure marks omit stack traces compared to JS
+- **JS Source**: `src/js/ui/data-exporter.js` lines 69–71, 125–127, 197–199, 247–249
+- **Status**: Pending
+- **Details**: JS marks failed exports with `helper.mark(..., e.message, e.stack)`. C++ passes `std::nullopt` stack traces in all four exporters, so export reports/log diagnostics are less complete than JS.
+
+### 150. ⬜ [listbox-context.cpp] `get_export_directory()` empty-selection return value differs
+- **JS Source**: `src/js/ui/listbox-context.js` lines 74–81
+- **Status**: Pending
+- **Details**: JS returns `null` when selection is empty. C++ returns empty string (`""`). This changes sentinel semantics for callers checking absence via null/undefined.
+
+### 151. ⬜ [model-viewer-utils.cpp] Empty animation ID handling differs from JS
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 251–266
+- **Status**: Pending
+- **Details**: JS only early-returns for `null`/`undefined` selection IDs; empty string continues through lookup. C++ treats `selected_animation_id.empty()` as null/undefined and returns early, which is a behavior change.
+
+### 152. ⬜ [model-viewer-utils.cpp] Preview clipboard export copies base64 text instead of PNG image data
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 299–305
+- **Status**: Pending
+- **Details**: JS uses `clipboard.set(buf.toBase64(), 'png', true)` for real image clipboard data. C++ `export_preview("CLIPBOARD")` uses `ImGui::SetClipboardText(...)`, which places text payload only. Clipboard behavior is not functionally identical.
+
+### 153. ⬜ [model-viewer-utils.cpp] WMO renderer/exporter uses `file_data_id` in place of JS `file_name`
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 201–209, 405–421
+- **Status**: Pending
+- **Details**: JS constructs WMO renderer/exporter with `file_name` for path-based behavior. C++ routes WMO creation through numeric `file_data_id` constructors, which can diverge for non-CASC/path-driven flows.
+
+### 154. ⬜ [model-viewer-utils.cpp] `create_view_state()` is hard-coded to three prefixes
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 503–528
+- **Status**: Pending
+- **Details**: JS dynamically proxies any `prefix` via bracket access. C++ only maps `model`, `decor`, and `creature`, returning null pointers for other prefixes. This narrows original JS behavior.
+
+### 155. ⬜ [texture-exporter.cpp] Failure marks omit stack traces compared to JS
+- **JS Source**: `src/js/ui/texture-exporter.js` lines 176–178
+- **Status**: Pending
+- **Details**: JS records `e.stack` in `helper.mark` on per-file export failures. C++ passes `std::nullopt` stack traces, reducing parity in export failure diagnostics.
+
+### 156. ⬜ [uv-drawer.cpp] UV overlay rendering path is algorithmically different from canvas implementation
+- **JS Source**: `src/js/ui/uv-drawer.js` lines 16–55
+- **Status**: Pending
+- **Details**: JS draws directly with Canvas2D (`lineWidth = 0.5`, browser anti-aliasing) then exports `toDataURL`. C++ uses a custom Xiaolin-Wu rasterizer into RGBA pixels. Visual output can differ at edges/subpixel joins, so pixel-identical overlay parity is not guaranteed.
