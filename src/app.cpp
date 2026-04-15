@@ -9,6 +9,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <dwmapi.h>
 #include <shobjidl.h>
 #else
 #include <unistd.h>
@@ -777,9 +778,9 @@ static void renderAppShell() {
 					ImGui::PopStyleColor();
 					ImGui::SameLine(0, 0);
 				}
-				// CSS: a { font-weight: bold; color: var(--font-alt) }
+				// CSS: a { font-weight: bold; color: var(--font-primary) }
 				// CSS: a:hover { color: var(--font-highlight); text-decoration: underline }
-				ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_ALT);
+				ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_PRIMARY);
 				ImGui::TextUnformatted(links[i].label);
 				ImGui::PopStyleColor();
 				bool link_hovered = ImGui::IsItemHovered();
@@ -2563,8 +2564,19 @@ int main(int argc, char* argv[]) {
 #ifndef NDEBUG
 	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 #endif
+	// Scale the window to the monitor's content scale so that CSS-equivalent
+	// pixel values (53px header, 700px cards, etc.) map correctly to physical
+	// pixels on HiDPI displays. Without this, the window is 1280×720
+	// physical pixels regardless of DPI, making the UI appear too small on
+	// scaled displays.  With SCALE_TO_MONITOR, GLFW automatically sizes the
+	// window to 1280*dpiScale × 720*dpiScale physical pixels on creation,
+	// and adjusts when the window moves to a monitor with a different scale.
+	glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
 
 	// Append the application version to the title bar.
+	// Note: the window is created at 1280×720 "virtual" units.
+	// GLFW_SCALE_TO_MONITOR automatically scales this by the monitor's
+	// content scale (e.g. 1920×1080 on a 150% display).
 	std::string windowTitle = std::format("wow.export.cpp v{}", constants::VERSION);
 	GLFWwindow* window = glfwCreateWindow(1280, 720, windowTitle.c_str(), nullptr, nullptr);
 	if (!window) {
@@ -2577,6 +2589,21 @@ int main(int argc, char* argv[]) {
 	glfwSwapInterval(1);
 
 #ifdef _WIN32
+	// Apply dark title bar to match the app's dark theme.
+	// NW.js/Chromium does this automatically; GLFW windows default to the
+	// OS light theme, making the title bar appear white/light gray.
+	{
+		HWND hwnd = glfwGetWin32Window(window);
+		// DWMWA_USE_IMMERSIVE_DARK_MODE = 20 (Windows 10 1809+, Windows 11)
+		BOOL useDarkMode = TRUE;
+		::DwmSetWindowAttribute(hwnd, 20, &useDarkMode, sizeof(useDarkMode));
+
+		// DWMWA_CAPTION_COLOR = 35 (Windows 11 22000+) — set to --background-dark #2c3136
+		// Silently ignored on older Windows versions.
+		COLORREF captionColor = RGB(44, 49, 54);
+		::DwmSetWindowAttribute(hwnd, 35, &captionColor, sizeof(captionColor));
+	}
+
 	// Initialize Windows taskbar progress (ITaskbarList3).
 	initTaskbarProgress();
 	// JS: win.setProgressBar(-1); // Reset taskbar progress in-case it's stuck.
@@ -2806,11 +2833,21 @@ int main(int argc, char* argv[]) {
 			//    JS (app.js lines 519–543) computes scale_w and scale_h
 			//    independently and applies `transform: scale(scale_w, scale_h)`
 			//    — an anisotropic CSS transform. To match this in Dear ImGui we
-			//    override io.DisplaySize to a "logical" size that is never
-			//    smaller than the design thresholds (1120×700), then adjust
-			//    io.DisplayFramebufferScale so the GL viewport maps the larger
-			//    logical area to the actual framebuffer. Mouse coordinates are
-			//    remapped from screen space to logical space.
+			//    override io.DisplaySize to a CSS-equivalent "logical" size
+			//    (fb_size / dpiScale) that is never smaller than the design
+			//    thresholds (1120×700), then adjust io.DisplayFramebufferScale
+			//    so the GL viewport maps the larger logical area to the actual
+			//    framebuffer. Mouse coordinates are remapped from screen space
+			//    to logical space.
+			//
+			//    On Windows with e.g. 150% DPI:
+			//      fb = 1920×1080, dpiScale = 1.5
+			//      css_equiv = 1280×720 (matching what NW.js uses as CSS pixels)
+			//      53px header = 53 * 1.5 = 79.5 physical pixels ✓
+			//
+			//    On macOS Retina (2×):
+			//      fb = 2560×1440, dpiScale = 2.0
+			//      css_equiv = 1280×720 ✓
 			{
 				float dpiScale = app::theme::getDpiScale();
 
@@ -2819,13 +2856,20 @@ int main(int argc, char* argv[]) {
 				int fb_w, fb_h;
 				glfwGetFramebufferSize(window, &fb_w, &fb_h);
 
+				// Convert framebuffer size to CSS-equivalent pixels.
+				// On macOS Retina: fb=2560, dpiScale=2 → css=1280 (screen coords)
+				// On Windows 150%: fb=1920, dpiScale=1.5 → css=1280 (CSS pixels)
+				// On standard 1×: fb=1280, dpiScale=1 → css=1280 (identical)
+				float css_w = static_cast<float>(fb_w) / dpiScale;
+				float css_h = static_cast<float>(fb_h) / dpiScale;
+
 				// Logical size: at least threshold dimensions, matching JS
 				// container.style.width/height = SCALE_THRESHOLD when below.
-				float logical_w = static_cast<float>((std::max)(win_w, SCALE_THRESHOLD_W));
-				float logical_h = static_cast<float>((std::max)(win_h, SCALE_THRESHOLD_H));
+				float logical_w = (std::max)(css_w, static_cast<float>(SCALE_THRESHOLD_W));
+				float logical_h = (std::max)(css_h, static_cast<float>(SCALE_THRESHOLD_H));
 
 				// Override display size to logical dimensions so ImGui lays out
-				// the UI at the threshold size even when the window is smaller.
+				// the UI at the CSS-equivalent size even on HiDPI displays.
 				io.DisplaySize = ImVec2(logical_w, logical_h);
 
 				// Framebuffer scale maps logical coords to actual framebuffer
@@ -2845,8 +2889,8 @@ int main(int argc, char* argv[]) {
 
 				// FontGlobalScale compensates for fonts being rasterized at
 				// baseSize * dpiScale; dividing by dpiScale brings them back to
-				// logical baseSize. Window-size shrinking is handled by the
-				// display-size / framebuffer-scale mapping above.
+				// logical baseSize. The DisplayFramebufferScale above then maps
+				// those logical pixels to the correct physical framebuffer size.
 				io.FontGlobalScale = 1.0f / dpiScale;
 			}
 
