@@ -37,6 +37,19 @@ static file_field::FileFieldState export_dir_state;
 static file_field::FileFieldState char_save_dir_state;
 static menu_button::MenuButtonState locale_menu_state;
 
+/**
+ * Render a settings section heading as bold text at 18px font size.
+ * CSS: #config > div h1 { font-size: 18px; }
+ * Replaces SectionHeading() to match the original JS heading style.
+ */
+static void SectionHeading(const char* label) {
+	// CSS: #config > div { padding: 20px; padding-bottom: 0; }
+	ImGui::Dummy(ImVec2(0.0f, 20.0f));
+	ImGui::SetWindowFontScale(18.0f / app::theme::DEFAULT_FONT_SIZE);
+	ImGui::TextUnformatted(label);
+	ImGui::SetWindowFontScale(1.0f);
+}
+
 // --- Forward declarations ---
 static void handle_cache_clear();
 static void handle_tact_key();
@@ -156,17 +169,13 @@ void render() {
 
 	// --- Template rendering ---
 
+	// CSS: #config-wrapper fills the entire screen. #config has flex: 1 filling available width.
 	const float availW = ImGui::GetContentRegionAvail().x;
-	const float maxW = 800.0f;
-	const float contentW = std::min(availW, maxW);
-	const float indent = (availW - contentW) * 0.5f;
-	if (indent > 0.0f)
-		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indent);
-	ImGui::BeginChild("settings-content", ImVec2(contentW, 0));
+	ImGui::BeginChild("settings-content", ImVec2(availW, 0));
 
 	ImGui::BeginChild("##config-scroll", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2));
 
-	ImGui::SeparatorText("Export Directory");
+	SectionHeading("Export Directory");
 	ImGui::TextWrapped("Local directory where files will be exported to.");
 	if (is_edit_export_path_concerning())
 		ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Warning: Using an export path with spaces may cause issues in some applications.");
@@ -176,7 +185,7 @@ void render() {
 			[&](const std::string& new_path) { cfg["exportDirectory"] = new_path; });
 	}
 
-	ImGui::SeparatorText("Character Save Directory");
+	SectionHeading("Character Save Directory");
 	ImGui::TextWrapped("Local directory where saved characters are stored. Leave empty to use the default location.");
 	{
 		std::string char_dir = cfg.value("characterExportPath", std::string(""));
@@ -184,7 +193,7 @@ void render() {
 			[&](const std::string& new_path) { cfg["characterExportPath"] = new_path; });
 	}
 
-	ImGui::SeparatorText("Scroll Speed");
+	SectionHeading("Scroll Speed");
 	{
 		int scroll_speed = cfg.value("scrollSpeed", 2);
 		if (ImGui::InputInt("##ScrollSpeed", &scroll_speed))
@@ -239,7 +248,7 @@ void render() {
 			cfg["removePathSpacesCopy"] = val;
 	}
 
-	ImGui::SeparatorText("Path Separator Format");
+	SectionHeading("Path Separator Format");
 	{
 		std::string path_fmt = cfg.value("pathFormat", std::string("win32"));
 		bool is_win = (path_fmt == "win32");
@@ -269,7 +278,7 @@ void render() {
 			cfg["enableAbsoluteCSVPaths"] = val;
 	}
 
-	ImGui::SeparatorText("CASC Locale");
+	SectionHeading("CASC Locale");
 	{
 		auto keys = available_locale_keys();
 		std::string current_key = selected_locale_key();
@@ -289,7 +298,7 @@ void render() {
 			nullptr);
 	}
 
-	ImGui::SeparatorText("WebP Quality");
+	SectionHeading("WebP Quality");
 	{
 		int val = cfg.value("exportWebPQuality", 75);
 		if (ImGui::SliderInt("##WebPQuality", &val, 1, 100))
@@ -308,7 +317,7 @@ void render() {
 			cfg["modelsExportUV2"] = val;
 	}
 
-	ImGui::SeparatorText("Export Meta Data");
+	SectionHeading("Export Meta Data");
 	{
 		bool m2_meta = cfg.value("exportM2Meta", false);
 		if (ImGui::Checkbox("M2 Meta##meta", &m2_meta))
@@ -357,7 +366,7 @@ void render() {
 			cfg["regexFilters"] = val;
 	}
 
-	ImGui::SeparatorText("Copy Mode");
+	SectionHeading("Copy Mode");
 	{
 		std::string copy_mode = cfg.value("copyMode", std::string("FULL"));
 		if (ImGui::RadioButton("Full##copymode", copy_mode == "FULL"))
@@ -394,14 +403,14 @@ void render() {
 			cfg["itemViewerShowAll"] = val;
 	}
 
-	ImGui::SeparatorText("Cache Expiry (hours)");
+	SectionHeading("Cache Expiry (hours)");
 	{
 		int val = cfg.value("cacheExpiry", 168);
 		if (ImGui::InputInt("##CacheExpiry", &val))
 			cfg["cacheExpiry"] = val;
 	}
 
-	ImGui::SeparatorText("CDN Fallback Hosts");
+	SectionHeading("CDN Fallback Hosts");
 	configTextInput("##CDNFallbackHosts", cdn_fallback_state, cfg, "cdnFallbackHosts");
 
 	{
@@ -410,7 +419,7 @@ void render() {
 			handle_cache_clear();
 	}
 
-	ImGui::SeparatorText("Encryption Keys");
+	SectionHeading("Encryption Keys");
 	ImGui::Text("Primary TACT Keys URL");
 	configTextInput("##TactKeysURL", tact_url_state, cfg, "tactKeysURL");
 	ImGui::Text("Fallback TACT Keys URL");
@@ -431,10 +440,10 @@ void render() {
 		}
 	}
 
-	ImGui::SeparatorText("Realm List Source");
+	SectionHeading("Realm List Source");
 	configTextInput("##RealmListURL", realm_url_state, cfg, "realmListURL");
 
-	ImGui::SeparatorText("Character Appearance API Endpoint");
+	SectionHeading("Character Appearance API Endpoint");
 	configTextInput("##ArmoryURL", armory_url_state, cfg, "armoryURL");
 
 	{
@@ -443,29 +452,29 @@ void render() {
 			cfg["enableBinaryListfile"] = val;
 	}
 
-	ImGui::SeparatorText("Listfile Binary Source");
+	SectionHeading("Listfile Binary Source");
 	configTextInput("##ListfileBinSrc", listfile_bin_state, cfg, "listfileBinarySource");
 
-	ImGui::SeparatorText("Listfile Source");
+	SectionHeading("Listfile Source");
 	ImGui::Text("Primary");
 	configTextInput("##ListfileURL", listfile_url_state, cfg, "listfileURL");
 	ImGui::Text("Fallback");
 	configTextInput("##ListfileFallbackURL", listfile_fb_url_state, cfg, "listfileFallbackURL");
 
-	ImGui::SeparatorText("Listfile Update Frequency (hours)");
+	SectionHeading("Listfile Update Frequency (hours)");
 	{
 		int val = cfg.value("listfileCacheRefresh", 168);
 		if (ImGui::InputInt("##ListfileCacheRefresh", &val))
 			cfg["listfileCacheRefresh"] = val;
 	}
 
-	ImGui::SeparatorText("Data Table Definition Repository");
+	SectionHeading("Data Table Definition Repository");
 	ImGui::Text("Primary");
 	configTextInput("##DBDURL", dbd_url_state, cfg, "dbdURL");
 	ImGui::Text("Fallback");
 	configTextInput("##DBDFallbackURL", dbd_fb_url_state, cfg, "dbdFallbackURL");
 
-	ImGui::SeparatorText("DBD Manifest Repository");
+	SectionHeading("DBD Manifest Repository");
 	ImGui::Text("Primary");
 	configTextInput("##DBDFilenameURL", dbdf_url_state, cfg, "dbdFilenameURL");
 	ImGui::Text("Fallback");
@@ -479,15 +488,35 @@ void render() {
 
 	ImGui::EndChild(); // config-scroll
 
-	ImGui::Separator();
-	if (ImGui::Button("Discard"))
-		handle_discard();
+	// CSS: #config-buttons { display: flex; flex-direction: row-reverse; padding: 15px 0; border-top: 1px solid var(--border); background: var(--background); }
+	// row-reverse puts the first button on the right. Order in HTML: Discard, Apply, Reset.
+	// Visually: [Reset to Defaults (far left)] ... [Apply] [Discard (far right)]
+	ImGui::Spacing();
+	{
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		ImVec2 curPos = ImGui::GetCursorScreenPos();
+		float availW = ImGui::GetContentRegionAvail().x;
+		// border-top: 1px solid var(--border)
+		dl->AddLine(ImVec2(curPos.x, curPos.y), ImVec2(curPos.x + availW, curPos.y), app::theme::BORDER_U32);
+	}
+	ImGui::Dummy(ImVec2(0.0f, 15.0f));
+
+	// CSS: row-reverse — "Reset to Defaults" has margin-right: auto (pushes it to the left),
+	// "Discard" and "Apply" are on the right side.
+	// CSS: #config-buttons #config-reset { margin-right: auto; margin-left: 20px; }
+	if (ImGui::Button("Reset to Defaults"))
+		handle_reset();
 	ImGui::SameLine();
+	// Push remaining buttons to the right.
+	const float buttonWidth = ImGui::CalcTextSize("Discard").x + ImGui::CalcTextSize("Apply").x + ImGui::GetStyle().FramePadding.x * 4 + 20.0f * 2;
+	ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - buttonWidth);
 	if (ImGui::Button("Apply"))
 		handle_apply();
 	ImGui::SameLine();
-	if (ImGui::Button("Reset to Defaults"))
-		handle_reset();
+	if (ImGui::Button("Discard"))
+		handle_discard();
+
+	ImGui::Dummy(ImVec2(0.0f, 15.0f));
 
 	ImGui::EndChild(); // settings-content
 }

@@ -303,11 +303,24 @@ state.scroll_pos = 0.0f;
 }
 
 // <div ref="root" class="markdown-content">
+// CSS: .markdown-content { background: rgb(0 0 0 / 22%); border-radius: 10px; padding: 20px; font-size: 20px; }
 ImVec2 avail = ImGui::GetContentRegionAvail();
 float viewport_height = avail.y;
 
-// Begin clipping region for scrollable content
-ImGui::BeginChild("##md_container", avail, false,
+// Draw background with rounded corners.
+{
+	ImVec2 pos = ImGui::GetCursorScreenPos();
+	ImDrawList* dl = ImGui::GetWindowDrawList();
+	// background: rgb(0 0 0 / 22%) = rgba(0, 0, 0, 0.22)
+	dl->AddRectFilled(pos, ImVec2(pos.x + avail.x, pos.y + avail.y),
+	                  IM_COL32(0, 0, 0, 56), 10.0f);
+}
+
+// Begin clipping region for scrollable content with 20px padding.
+ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 20.0f);
+ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 20.0f);
+ImVec2 innerAvail(avail.x - 40.0f, avail.y - 40.0f);
+ImGui::BeginChild("##md_container", innerAvail, false,
                    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 const ImVec2 containerPos = ImGui::GetCursorScreenPos();
@@ -325,27 +338,28 @@ ImGui::SetCursorPosY(ImGui::GetCursorPosY() - state.scroll_pos);
 for (const auto& block : blocks) {
 switch (block.type) {
 case BlockType::Header1:
-ImGui::PushFont(nullptr); // Use default font (no header font available)
+// CSS: .markdown-content-inner h1 { font-size: 1.8em; font-weight: bold; }
 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-ImGui::SetWindowFontScale(1.6f);
+ImGui::SetWindowFontScale(1.8f);
 renderInlineSegments(block.segments, onKBLink, onExternalLink);
 ImGui::SetWindowFontScale(1.0f);
 ImGui::PopStyleColor();
-ImGui::PopFont();
 ImGui::Separator();
 break;
 
 case BlockType::Header2:
+// CSS: .markdown-content-inner h2 { font-size: 1.5em; font-weight: bold; }
 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-ImGui::SetWindowFontScale(1.3f);
+ImGui::SetWindowFontScale(1.5f);
 renderInlineSegments(block.segments, onKBLink, onExternalLink);
 ImGui::SetWindowFontScale(1.0f);
 ImGui::PopStyleColor();
 break;
 
 case BlockType::Header3:
+// CSS: .markdown-content-inner h3 { font-size: 1.2em; font-weight: bold; }
 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-ImGui::SetWindowFontScale(1.1f);
+ImGui::SetWindowFontScale(1.2f);
 renderInlineSegments(block.segments, onKBLink, onExternalLink);
 ImGui::SetWindowFontScale(1.0f);
 ImGui::PopStyleColor();
@@ -360,13 +374,21 @@ ImGui::Unindent(16.0f);
 break;
 
 case BlockType::CodeBlock:
-ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
-ImGui::BeginChild("##code", ImVec2(0, 0), true, ImGuiWindowFlags_AlwaysAutoResize);
-ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.8f, 1.0f));
-ImGui::TextUnformatted(block.raw_text.c_str());
-ImGui::PopStyleColor();
-ImGui::EndChild();
-ImGui::PopStyleColor();
+// CSS: .markdown-content-inner pre { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; }
+{
+	ImVec2 codePos = ImGui::GetCursorScreenPos();
+	// Measure text height for background rect
+	ImVec2 textSize = ImGui::CalcTextSize(block.raw_text.c_str(), nullptr, false, ImGui::GetContentRegionAvail().x - 20.0f);
+	ImVec2 bgMin = codePos;
+	ImVec2 bgMax(codePos.x + ImGui::GetContentRegionAvail().x, codePos.y + textSize.y + 20.0f);
+	ImGui::GetWindowDrawList()->AddRectFilled(bgMin, bgMax, IM_COL32(0, 0, 0, 77), 5.0f);
+	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f);
+	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
+	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.8f, 1.0f));
+	ImGui::TextUnformatted(block.raw_text.c_str());
+	ImGui::PopStyleColor();
+	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
+}
 break;
 
 case BlockType::Paragraph:

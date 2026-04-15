@@ -215,7 +215,10 @@ void render() {
 	// --- Right panel: Preview container (row 1, col 2) ---
 	if (app::layout::BeginPreviewContainer("fonts-preview-container", regions)) {
 		// Glyph grid.
-		ImGui::BeginChild("font-character-grid", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.5f), ImGuiChildFlags_Borders);
+		// CSS: .font-character-grid { bottom: 140px; } — fills all space except bottom 140px for preview input.
+		const float gridHeight = std::max(50.0f, ImGui::GetContentRegionAvail().y - 140.0f);
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, app::theme::BG_DARK);
+		ImGui::BeginChild("font-character-grid", ImVec2(0, gridHeight), ImGuiChildFlags_Borders);
 
 		// Set 2px spacing to match CSS: flex-wrap: wrap; gap: 2px
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 2.0f));
@@ -227,10 +230,16 @@ void render() {
 			ImTextCharToUtf8(utf8_buf, static_cast<unsigned int>(codepoint));
 
 			// Each glyph cell is a small selectable button.
+			// CSS: .font-glyph-cell { width: 32px; height: 32px; background: var(--background-alt); border-radius: 3px; }
+			// CSS: .font-glyph-cell:hover { background: var(--font-alt); }
 			ImGui::PushID(static_cast<int>(codepoint));
-			if (ImGui::Selectable(utf8_buf, false, 0, ImVec2(24, 24))) {
+			ImGui::PushStyleColor(ImGuiCol_Header, app::theme::BG_ALT);           // normal bg
+			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, app::theme::FONT_ALT);   // hover bg (#57afe2)
+			ImGui::PushStyleColor(ImGuiCol_HeaderActive, app::theme::FONT_ALT);    // active bg
+			if (ImGui::Selectable(utf8_buf, false, 0, ImVec2(32, 32))) {
 				view.fontPreviewText += utf8_buf;
 			}
+			ImGui::PopStyleColor(3);
 			if (ImGui::IsItemHovered()) {
 				char tooltip[32];
 				std::snprintf(tooltip, sizeof(tooltip), "U+%04X", codepoint);
@@ -239,8 +248,8 @@ void render() {
 			ImGui::PopID();
 
 			// Manual wrap: continue on same line if next button fits.
-			cursor_x += 24.0f + 2.0f;
-			if (cursor_x + 24.0f <= avail_width) {
+			cursor_x += 32.0f + 2.0f;
+			if (cursor_x + 32.0f <= avail_width) {
 				ImGui::SameLine();
 			} else {
 				cursor_x = 0.0f;
@@ -249,13 +258,18 @@ void render() {
 		ImGui::NewLine();
 		ImGui::PopStyleVar();
 		ImGui::EndChild();
+		ImGui::PopStyleColor(); // BG_DARK child background
 
 		// Font preview text input.
+		// CSS: .font-preview-input { height: 120px; font-size: 32px; background: var(--background-dark); border: 1px solid var(--border); }
+		const float previewInputHeight = std::min(120.0f, ImGui::GetContentRegionAvail().y);
+		ImGui::PushStyleColor(ImGuiCol_FrameBg, app::theme::BG_DARK);
 		char preview_buf[4096] = {};
 		std::strncpy(preview_buf, view.fontPreviewText.c_str(), sizeof(preview_buf) - 1);
 		if (ImGui::InputTextMultiline("##FontPreviewText", preview_buf, sizeof(preview_buf),
-			ImVec2(-1, ImGui::GetContentRegionAvail().y)))
+			ImVec2(-1, previewInputHeight)))
 			view.fontPreviewText = preview_buf;
+		ImGui::PopStyleColor();
 
 		if (view.fontPreviewText.empty())
 			ImGui::SetItemTooltip("%s", view.fontPreviewPlaceholder.c_str());

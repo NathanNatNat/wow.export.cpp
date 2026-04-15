@@ -326,11 +326,27 @@ static void renderCrashScreen() {
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(viewport->WorkPos);
 	ImGui::SetNextWindowSize(viewport->WorkSize);
+	// CSS: #crash-screen { padding: 50px; }
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(50.0f, 50.0f));
 	ImGui::Begin("##CrashScreen", nullptr,
 		ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
 		ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
 		ImGuiWindowFlags_NoBringToFrontOnFocus);
+	ImGui::PopStyleVar();
 
+	// CSS: #crash-screen h1 { background: url(./fa-icons/triangle-exclamation-white.svg) no-repeat left center; padding-left: 50px; }
+	// Render warning triangle icon before heading text.
+	{
+		ImFont* icon_font = app::theme::getIconFont();
+		if (icon_font) {
+			const float iconSize = 24.0f;
+			ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+			ImGui::GetWindowDrawList()->AddText(icon_font, iconSize,
+				ImVec2(cursorPos.x, cursorPos.y + 2.0f),
+				app::theme::FONT_HIGHLIGHT_U32, ICON_FA_TRIANGLE_EXCLAMATION);
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 50.0f);
+		}
+	}
 	// JS: <h1>Oh no! The kākāpō has exploded...</h1>
 	// Per naming convention, user-facing text says "wow.export.cpp".
 	ImGui::Text("wow.export.cpp has crashed!");

@@ -168,10 +168,16 @@ void render() {
 	// --- Right panel: Preview container (row 1, col 2) ---
 	//     <div class="preview-background"><pre>{{ textViewerSelectedText }}</pre></div>
 	if (app::layout::BeginPreviewContainer("text-preview-container", regions)) {
+		// CSS: #tab-text .preview-container .preview-background { background: var(--background-dark); }
+		// CSS: #tab-text .preview-container .preview-background pre { overflow: scroll; padding: 15px; }
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, app::theme::BG_DARK);
-		ImGui::BeginChild("text-preview-background", ImVec2(0, 0), ImGuiChildFlags_None);
+		ImGui::BeginChild("text-preview-background", ImVec2(0, 0), ImGuiChildFlags_None,
+		                  ImGuiWindowFlags_HorizontalScrollbar);
 
-		ImGui::TextWrapped("%s", view.textViewerSelectedText.c_str());
+		// Apply 15px padding inside the child region.
+		ImGui::SetCursorPos(ImVec2(15.0f, 15.0f));
+		// Pre-formatted text: no wrapping, monospace-style output.
+		ImGui::TextUnformatted(view.textViewerSelectedText.c_str());
 
 		ImGui::EndChild();
 		ImGui::PopStyleColor();

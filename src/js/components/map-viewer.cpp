@@ -1142,7 +1142,10 @@ void renderWidget(const char* id,
 	// Render the container
 	// <div class="ui-map-viewer" :class="{ 'box-select-mode': isBoxSelectMode }">
 	ImVec2 avail = ImGui::GetContentRegionAvail();
-	ImGui::BeginChild("##map_viewer_container", avail, false,
+	// CSS: .ui-map-viewer { border: 1px solid var(--border); box-shadow: black 0 0 3px 0; }
+	ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+	ImGui::BeginChild("##map_viewer_container", avail, ImGuiChildFlags_Borders,
 	                   ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 	// Update viewport dimensions from ImGui layout
@@ -1263,6 +1266,8 @@ void renderWidget(const char* id,
 	}
 
 	ImGui::EndChild();
+	ImGui::PopStyleVar();
+	ImGui::PopStyleColor();
 	ImGui::PopID();
 }
 

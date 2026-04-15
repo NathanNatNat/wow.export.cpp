@@ -845,6 +845,8 @@ context_menu::render(
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + leftColW + app::layout::PREVIEW_MARGIN_LEFT,
 	                           tabOrigin.y + app::layout::PREVIEW_MARGIN_TOP));
+	// CSS: .ui-map-viewer { border: 1px solid var(--border); box-shadow: black 0 0 3px 0; }
+	ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
 	ImGui::BeginChild("zone-canvas-area",
 		ImVec2(rightColW - app::layout::PREVIEW_MARGIN_LEFT - app::layout::PREVIEW_MARGIN_RIGHT,
 		       tabAvail.y - FILTER_BAR_H - app::layout::PREVIEW_MARGIN_TOP),
@@ -863,6 +865,7 @@ context_menu::render(
 	}
 
 	ImGui::EndChild(); // zone-canvas-area
+	ImGui::PopStyleColor();
 }
 
 // --- Filter bar (row 3, col 1) ---
