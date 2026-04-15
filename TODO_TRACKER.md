@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/126 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/138 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -631,3 +631,63 @@
 - **JS Source**: `src/js/hashing/xxhash64.js` lines 64–75, 286–288
 - **Status**: Pending
 - **Details**: JS exports a callable `XXH64` function that dispatches by argument count (`XXH64(data, seed)`, `XXH64(data)`) and also supports constructor-style invocation fallback (`if (!(this instanceof XXH64)) return new XXH64(input_data)`). C++ only exposes class/state methods and static `hash()` helpers, so these JS export dispatch code paths are absent as direct equivalents.
+
+### 127. ⬜ [data-table.cpp] `syncScrollPosition` path is missing
+- **JS Source**: `src/js/components/data-table.js` lines 51–52, 515–527
+- **Status**: Pending
+- **Details**: JS registers a native scroll listener (`this.onScroll`) and keeps the custom horizontal scroller synchronized with `this.$refs.root.scrollLeft`. C++ explicitly omits this path as “no ImGui equivalent” (`src/js/components/data-table.cpp` lines 421–430), so native/container scroll syncing behavior from JS is not present.
+
+### 128. ⬜ [data-table.cpp] Keyboard focus gate differs from JS `document.activeElement` check
+- **JS Source**: `src/js/components/data-table.js` lines 776–779
+- **Status**: Pending
+- **Details**: JS only handles table keyboard shortcuts when `document.activeElement === document.body`. C++ substitutes `ImGui::IsAnyItemActive()` (`src/js/components/data-table.cpp` lines 682–689), which is acknowledged in-code as an approximation and can diverge in edge cases where window focus exists but no active item is reported.
+
+### 129. ⬜ [file-field.cpp] Directory picker trigger changed from input focus to browse button click
+- **JS Source**: `src/js/components/file-field.js` lines 34–40, 46
+- **Status**: Pending
+- **Details**: JS opens the dialog on text input focus via `@focus="openDialog"`. C++ renders an explicit `...` button and opens the dialog only on button click (`src/js/components/file-field.cpp` lines 128–132), changing interaction flow and focus behavior.
+
+### 130. ⬜ [home-showcase.cpp] Showcase hero media/background layers are not rendered
+- **JS Source**: `src/js/components/home-showcase.js` lines 15–29, 34–37, 55–57
+- **Status**: Pending
+- **Details**: JS computes layered CSS backgrounds (`background_style`) and optionally renders autoplay video in `#home-showcase`. C++ explicitly states video/background layers are unsupported and replaces the showcase with plain text/buttons (`src/js/components/home-showcase.cpp` lines 113–130), causing visible behavior differences.
+
+### 131. ⬜ [home-showcase.cpp] Showcase layout/styling from CSS is not reproduced
+- **JS Source**: `src/js/components/home-showcase.js` lines 32–41, `src/app.css` lines 3586–3633
+- **Status**: Pending
+- **Details**: JS uses styled `#home-showcase`, `.showcase-title`, and `#home-showcase-links` elements with specific sizing/positioning/hover styles. C++ renders `ImGui::Text`/`SmallButton` controls (`src/js/components/home-showcase.cpp` lines 106–143), which does not match the original visual structure.
+
+### 132. ⬜ [home-showcase.cpp] Feedback link handling diverges from `data-kb-link` behavior
+- **JS Source**: `src/js/components/home-showcase.js` line 40
+- **Status**: Pending
+- **Details**: JS emits a `data-kb-link="KB011"` element that routes through the app KB link handler. C++ calls `ExternalLinks::open("KB011")` directly (`src/js/components/home-showcase.cpp` lines 141–142), bypassing the JS-style in-app KB routing path.
+
+### 133. ⬜ [map-viewer.cpp] Base tile texture rendering is still stubbed out
+- **JS Source**: `src/js/components/map-viewer.js` lines 376–401, 632–677
+- **Status**: Pending
+- **Details**: JS draws tile pixel data to canvas via `putImageData`. C++ contains an explicit TODO stating tile pixel cache is not uploaded/rendered (`src/js/components/map-viewer.cpp` lines 1194–1199), so only overlay visuals render over empty space.
+
+### 134. ⬜ [map-viewer.cpp] `.info` and `.hover-info` overlay positioning differs from CSS
+- **JS Source**: `src/js/components/map-viewer.js` lines 1101–1110, `src/app.css` lines 1330–1347
+- **Status**: Pending
+- **Details**: JS/CSS positions `.info` top-center and `.hover-info` bottom-left as absolute overlays on the viewer. C++ renders both as normal inline text/group widgets before the canvas (`src/js/components/map-viewer.cpp` lines 1164–1190), changing placement and layering.
+
+### 135. ⬜ [map-viewer.cpp] Box-select crosshair cursor state is missing
+- **JS Source**: `src/js/components/map-viewer.js` lines 1101, `src/app.css` lines 1351–1353
+- **Status**: Pending
+- **Details**: JS toggles the `box-select-mode` class and CSS sets `cursor: crosshair`. C++ toggles `state.isBoxSelectMode` (`src/js/components/map-viewer.cpp` lines 800–803) but does not set a crosshair cursor in render path.
+
+### 136. ⬜ [markdown-content.cpp] Inline image rendering is replaced by placeholder text
+- **JS Source**: `src/js/components/markdown-content.js` lines 208–216, `src/app.css` lines 316–320
+- **Status**: Pending
+- **Details**: JS converts markdown images to `<img>` elements with CSS styling. C++ explicitly cannot render inline images and outputs `[Image: ...]` text placeholders instead (`src/js/components/markdown-content.cpp` lines 270–274).
+
+### 137. ⬜ [markdown-content.cpp] `strong`/`em` semantics are approximated with colors instead of typography
+- **JS Source**: `src/js/components/markdown-content.js` lines 218–224, `src/app.css` lines 303–309
+- **Status**: Pending
+- **Details**: JS emits `<strong>` and `<em>` with bold/italic typography. C++ notes inline bold/italic are unsupported and renders them as color variants (`src/js/components/markdown-content.cpp` lines 221–247), which is visually different.
+
+### 138. ⬜ [markdown-content.cpp] Link and heading rendering differ from JS/CSS
+- **JS Source**: `src/js/components/markdown-content.js` lines 173, 229–234, `src/app.css` lines 249–253, 311–314
+- **Status**: Pending
+- **Details**: JS renders links as underlined `var(--font-highlight)` anchors and H1 without a separator. C++ renders links with `FONT_ALT` and no underline (`src/js/components/markdown-content.cpp` lines 254–256), and adds an H1 separator not present in JS (`line 347`).
