@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/156 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/161 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -781,3 +781,29 @@
 - **JS Source**: `src/js/ui/uv-drawer.js` lines 16–55
 - **Status**: Pending
 - **Details**: JS draws directly with Canvas2D (`lineWidth = 0.5`, browser anti-aliasing) then exports `toDataURL`. C++ uses a custom Xiaolin-Wu rasterizer into RGBA pixels. Visual output can differ at edges/subpixel joins, so pixel-identical overlay parity is not guaranteed.
+
+
+### 157. ⬜ [app.cpp] Linux build does not mirror JS `win.setProgressBar()` watcher behavior
+- **JS Source**: `src/app.js` lines 500–502
+- **Status**: Pending
+- **Details**: JS always calls `win.setProgressBar(val)` when `loadPct` changes. C++ only updates taskbar progress on Windows and uses a Linux no-op branch (`src/app.cpp` lines 2356–2360), so loading progress is not surfaced on Linux like the JS behavior.
+
+### 158. ⬜ [buffer.cpp] `fromCanvas()` API from JS is not ported
+- **JS Source**: `src/js/buffer.js` lines 89–107
+- **Status**: Pending
+- **Details**: JS exposes `BufferWrapper.fromCanvas(canvas, mimeType, quality)` as an async API accepting `HTMLCanvasElement|OffscreenCanvas`, including browser Blob conversion and webp-wasm flow. C++ replaces this with `fromPixelData(...)` (`src/js/buffer.cpp` lines 365–412), which changes the callable API shape and removes the original canvas-object code path.
+
+### 159. ⬜ [buffer.cpp] `readString(length, encoding)` ignores requested encoding
+- **JS Source**: `src/js/buffer.js` lines 551–558
+- **Status**: Pending
+- **Details**: JS forwards `encoding` to `Buffer.toString(encoding, ...)`, supporting multiple Node encodings. C++ accepts the parameter but marks it unused and always constructs a raw byte string (`src/js/buffer.cpp` lines 791–803), so non-UTF8 decoding behavior is missing.
+
+### 160. ⬜ [buffer.cpp] `getDataURL()` returns `data:` URL instead of JS blob URL
+- **JS Source**: `src/js/buffer.js` lines 989–995
+- **Status**: Pending
+- **Details**: JS creates blob URLs via `URL.createObjectURL(new Blob([...]))`. C++ returns inline base64 `data:application/octet-stream;base64,...` (`src/js/buffer.cpp` lines 1009–1019). This changes URL format and blob lifecycle behavior.
+
+### 161. ⬜ [buffer.cpp] `revokeDataURL()` does not call blob URL revocation API
+- **JS Source**: `src/js/buffer.js` lines 1000–1004
+- **Status**: Pending
+- **Details**: JS calls `URL.revokeObjectURL(this.dataURL)` before clearing the cached URL. C++ only resets the cached optional string (`src/js/buffer.cpp` lines 1022–1029), so native object-URL revocation semantics are not preserved.
