@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/124 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/126 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -621,3 +621,13 @@
 - **JS Source**: `src/js/workers/cache-collector.js` lines 21–26
 - **Status**: Pending
 - **Details**: In JS, `new URL("https://example.com?x=1")` produces `pathname="/"` and `search="?x=1"`, so request path becomes `"/?x=1"`. In C++, `parse_url()` sets `path="/"` whenever no `/` exists after host (`src/js/workers/cache-collector.cpp` lines 375–383), dropping `?x=1`. This changes request behavior for valid URLs that rely on query parameters without an explicit path segment.
+
+### 125. ⬜ [xxhash64.cpp] String hashing path does not replicate JS `toUTF8Array()` conversion semantics
+- **JS Source**: `src/js/hashing/xxhash64.js` lines 20–40, 103–106
+- **Status**: Pending
+- **Details**: JS `update()` converts string input through `toUTF8Array()` (UTF-16 code units to UTF-8 bytes, including surrogate-pair handling). C++ `XXH64::update(std::string_view)` directly reinterprets `std::string_view` bytes as input without an equivalent conversion step, so behavior depends on caller-provided byte encoding instead of enforcing JS string-to-UTF8 semantics.
+
+### 126. ⬜ [xxhash64.cpp] JS `XXH64` function/constructor dispatch code paths are not fully preserved
+- **JS Source**: `src/js/hashing/xxhash64.js` lines 64–75, 286–288
+- **Status**: Pending
+- **Details**: JS exports a callable `XXH64` function that dispatches by argument count (`XXH64(data, seed)`, `XXH64(data)`) and also supports constructor-style invocation fallback (`if (!(this instanceof XXH64)) return new XXH64(input_data)`). C++ only exposes class/state methods and static `hash()` helpers, so these JS export dispatch code paths are absent as direct equivalents.
