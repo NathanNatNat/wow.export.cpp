@@ -26,6 +26,10 @@ FileWriter::FileWriter(const std::filesystem::path& file, std::string_view /*enc
  * is effectively a no-op in the C++ implementation.
  */
 void FileWriter::writeLine(std::string_view line) {
+	// Guard: JS uses exportPaths?.writeLine(...) — silently ignore when stream isn't open.
+	if (!stream.is_open())
+		return;
+
 	// In JS: if (this.blocked) await new Promise(resolve => this.resolver = resolve);
 	// std::ofstream is synchronous, so no waiting is needed.
 
@@ -42,5 +46,8 @@ void FileWriter::_drain() {
 }
 
 void FileWriter::close() {
+	// Guard: JS uses exportPaths?.close() — silently ignore when stream isn't open.
+	if (!stream.is_open())
+		return;
 	stream.close();
 }

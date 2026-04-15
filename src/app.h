@@ -104,9 +104,9 @@ inline constexpr ImU32 TRANS_CHECK_A_U32 = IM_COL32(48, 48, 48, 255);
 inline constexpr ImU32 TRANS_CHECK_B_U32 = IM_COL32(39, 39, 39, 255);
 
 
-inline constexpr ImU32 ROW_HOVER_U32     = IM_COL32(255, 255, 255, 8);
+inline constexpr ImU32 ROW_HOVER_U32     = IM_COL32(87, 175, 226, 255); // CSS: var(--font-alt) = #57afe2
 
-inline constexpr ImU32 ROW_SELECTED_U32  = IM_COL32(34, 181, 73, 40);
+inline constexpr ImU32 ROW_SELECTED_U32  = IM_COL32(87, 175, 226, 255); // CSS: var(--font-alt) = #57afe2
 
 inline constexpr ImU32 TEXT_ACTIVE_U32   = IM_COL32(255, 255, 255, 180);
 
@@ -124,8 +124,8 @@ inline constexpr ImU32 FIELD_PLACEHOLDER_U32 = IM_COL32(255, 255, 255, 100);
 
 inline constexpr ImU32 DASH_COLOR_U32    = IM_COL32(255, 255, 255, 230);
 
-inline constexpr ImU32 TABLE_ROW_HOVER_U32    = IM_COL32(100, 100, 100, 255);
-inline constexpr ImU32 TABLE_ROW_SELECTED_U32 = IM_COL32(100, 100, 100, 100);
+inline constexpr ImU32 TABLE_ROW_HOVER_U32    = IM_COL32(87, 175, 226, 255); // CSS: var(--font-alt) = #57afe2
+inline constexpr ImU32 TABLE_ROW_SELECTED_U32 = IM_COL32(87, 175, 226, 255); // CSS: var(--font-alt) = #57afe2
 
 inline constexpr ImU32 PROGRESS_BAR_TOP_U32    = IM_COL32(87, 175, 226, 255);  // #57afe2
 inline constexpr ImU32 PROGRESS_BAR_BOTTOM_U32 = IM_COL32(53, 117, 154, 255);  // #35759a

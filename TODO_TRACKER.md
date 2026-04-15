@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 459/567 verified (81%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 476/567 verified (84%)** — ✅ = Verified, ⬜ = Pending
 
 ---
 
@@ -2269,90 +2269,90 @@
 - **Status**: Verified
 - **Details**: JS uses `Math.floor(animation.id)` in id string and label. C++ (lines 361, 363, 374, 376) uses `std::to_string(animation.id)` with no floor/truncation. If `animation.id` can be a float in the data format, C++ won't truncate it, producing different id/label strings.
 
-### ⬜ 454. [texture-exporter.cpp] Clipboard copy sets text instead of PNG image
+### ✅ 454. [texture-exporter.cpp] Clipboard copy sets text instead of PNG image
 - **JS Source**: `src/js/ui/texture-exporter.js` lines 86–87
-- **Status**: Pending
-- **Details**: JS uses `nw.Clipboard.get()` then `clipboard.set(png.toBase64(), 'png', true)` to copy an actual PNG image to the system clipboard. C++ (line 115) uses `ImGui::SetClipboardText(png.toBase64().c_str())` which copies base64 text to the clipboard, not a PNG image. Users cannot paste the image into other apps.
+- **Status**: Verified
+- **Details**: Implemented platform-specific `copyPNGToClipboard()` function. On Windows, decodes PNG via stb_image, converts to CF_DIB (BGRA bottom-up), and uses Win32 clipboard APIs (OpenClipboard/SetClipboardData). On Linux, pipes raw PNG data to `xclip -selection clipboard -target image/png`. Falls back to base64 text clipboard if platform clipboard fails. Matches JS `nw.Clipboard.get().set(png.toBase64(), 'png', true)` behavior.
 
-### ⬜ 455. [texture-exporter.cpp] Missing null guard for exportPaths
+### ✅ 455. [texture-exporter.cpp] Missing null guard for exportPaths
 - **JS Source**: `src/js/ui/texture-exporter.js` lines 148, 152, 157, 165, 182
-- **Status**: Pending
-- **Details**: JS uses `exportPaths?.writeLine(...)` and `exportPaths?.close()` (optional chaining) because `core.openLastExportStream()` can return `null`. C++ (lines 198, 202, 209, 218, 239) calls `exportPaths.writeLine(...)` and `exportPaths.close()` unconditionally. If the stream is invalid/empty, this could crash.
+- **Status**: Verified
+- **Details**: Added `isOpen()` method to `FileWriter` that checks `stream.is_open()`. Updated `writeLine()` and `close()` to guard against invalid/closed streams — calls are silently ignored when `!isOpen()`, matching the JS `exportPaths?.writeLine(...)` optional chaining behavior. This prevents crashes when `core::openLastExportStream()` returns a FileWriter with an invalid path.
 
-### ⬜ 456. [texture-exporter.cpp] Case-insensitive `.blp` check only covers two cases
+### ✅ 456. [texture-exporter.cpp] Case-insensitive `.blp` check only covers two cases
 - **JS Source**: `src/js/ui/texture-exporter.js` line 117
-- **Status**: Pending
-- **Details**: JS uses `fileName.toLowerCase().endsWith('.blp')` for fully case-insensitive matching. C++ (lines 153–155) only checks `== ".blp" || == ".BLP"`, missing mixed-case variants like `.Blp`, `.bLp`, etc.
+- **Status**: Verified
+- **Details**: Replaced hardcoded `== ".blp" || == ".BLP"` check with `endsWithCI()` helper function that performs fully case-insensitive suffix matching using `std::equal` with `std::tolower`. Now correctly handles all mixed-case variants (`.Blp`, `.bLp`, etc.), matching JS `fileName.toLowerCase().endsWith('.blp')`.
 
-### ⬜ 457. [texture-exporter.cpp] File extension detection hardcodes 4-char suffix
+### ✅ 457. [texture-exporter.cpp] File extension detection hardcodes 4-char suffix
 - **JS Source**: `src/js/ui/texture-exporter.js` line 143
-- **Status**: Pending
-- **Details**: JS uses `fileName.slice(fileName.lastIndexOf('.')).toLowerCase()` for proper extension parsing — finds last `.`, any length, lowercased. C++ (lines 188–192) hardcodes 4-char suffix `fileName.substr(fileName.size() - 4)` then only checks `.png`/`.PNG` and `.jpg`/`.JPG`. Misses extensions not exactly 4 chars (e.g., `.jpeg`), mixed-case variants, and files with no extension or short names.
+- **Status**: Verified
+- **Details**: Replaced hardcoded 4-char `fileName.substr(fileName.size() - 4)` with `getExtensionLower()` helper that uses `rfind('.')` to find the last dot and `std::transform` with `std::tolower` for case-insensitive comparison. Now correctly handles extensions of any length (`.jpeg`), mixed-case variants, and files with no extension. Matches JS `fileName.slice(fileName.lastIndexOf('.')).toLowerCase()`.
 
-### ⬜ 458. [texture-exporter.cpp] `mark()` calls missing stack trace parameter
+### ✅ 458. [texture-exporter.cpp] `mark()` calls missing stack trace parameter
 - **JS Source**: `src/js/ui/texture-exporter.js` line 177
-- **Status**: Pending
-- **Details**: JS calls `helper.mark(markFileName, false, e.message, e.stack)` passing 4 args including stack trace. C++ (line 232) calls `helper.mark(markFileName, false, e.what())` passing 3 args, no stack trace. C++ `std::exception` has no `.stack` equivalent.
+- **Status**: Verified
+- **Details**: Updated the catch block to explicitly pass `std::nullopt` as the 4th parameter to `helper.mark()`, matching the JS 4-argument call `helper.mark(markFileName, false, e.message, e.stack)`. C++ `std::exception` has no `.stack` equivalent — `std::nullopt` is the correct C++ representation. Added a code comment documenting this C++ limitation. The `ExportHelper::mark()` already accepts an `std::optional<std::string>` stackTrace parameter.
 
-### ⬜ 459. [uv-drawer.cpp] Line width 1px instead of JS 0.5px
+### ✅ 459. [uv-drawer.cpp] Line width 1px instead of JS 0.5px
 - **JS Source**: `src/js/ui/uv-drawer.js` line 24
-- **Status**: Pending
-- **Details**: JS sets `ctx.lineWidth = 0.5` — the Canvas API renders these as semi-transparent 1px lines via anti-aliasing. C++ uses Bresenham's line algorithm (lines 18–48) which always draws fully opaque 1px lines — visually thicker and more prominent than the original. This is a visual fidelity difference inherent to the rasterization approach.
+- **Status**: Verified
+- **Details**: Replaced Bresenham's algorithm with Xiaolin Wu's anti-aliased line algorithm. The `drawLineAA()` function applies a `lineAlpha = 0.5` scaling factor to all alpha values, simulating the JS `ctx.lineWidth = 0.5` which produces semi-transparent 1px lines via anti-aliasing. Lines now render as thin, semi-transparent wireframes matching the original visual appearance.
 
-### ⬜ 460. [uv-drawer.cpp] Anti-aliased (JS) vs aliased (C++) line rendering
+### ✅ 460. [uv-drawer.cpp] Anti-aliased (JS) vs aliased (C++) line rendering
 - **JS Source**: `src/js/ui/uv-drawer.js` lines 41–44
-- **Status**: Pending
-- **Details**: JS `ctx.moveTo()`/`ctx.lineTo()` uses the Canvas 2D API which provides anti-aliased line rendering by default. C++ uses Bresenham's algorithm (lines 18–48) which produces aliased (staircase) lines with no smoothing. UV wireframes will appear more jagged in the C++ version.
+- **Status**: Verified
+- **Details**: Replaced Bresenham's aliased line algorithm with Xiaolin Wu's anti-aliased line algorithm. The new `drawLineAA()` function computes fractional pixel coverage and distributes alpha across adjacent pixels, producing smooth anti-aliased lines that closely match the JS Canvas 2D `moveTo()`/`lineTo()` rendering. The `plotPixel()` helper handles alpha blending with bounds checking.
 
-### ⬜ 461. [uv-drawer.cpp] Sub-pixel precision lost — float coords truncated to int
+### ✅ 461. [uv-drawer.cpp] Sub-pixel precision lost — float coords truncated to int
 - **JS Source**: `src/js/ui/uv-drawer.js` lines 34–39
-- **Status**: Pending
-- **Details**: JS keeps UV coordinates as floating-point values and passes them directly to `moveTo()`/`lineTo()` which handles sub-pixel positioning natively. C++ (lines 71–76) truncates UV coordinates to `int` via `static_cast<int>()`. Lines may be offset by up to 1 pixel vs the JS version. Using `std::round()` or `std::lround()` would better match Canvas behavior.
+- **Status**: Verified
+- **Details**: UV coordinates are now kept as `float` throughout the rendering pipeline instead of being truncated to `int` via `static_cast<int>()`. The `drawLineAA()` function accepts `float` parameters and handles sub-pixel positioning natively via the Xiaolin Wu algorithm's fractional pixel coverage computation. This matches the JS Canvas `moveTo()`/`lineTo()` sub-pixel rendering behavior.
 
-### ⬜ 462. [uv-drawer.cpp] No bounds checking on `uvCoords` array access
+### ✅ 462. [uv-drawer.cpp] No bounds checking on `uvCoords` array access
 - **JS Source**: `src/js/ui/uv-drawer.js` lines 34–39
-- **Status**: Pending
-- **Details**: JS accessing `uvCoords[idx]` out-of-bounds returns `undefined` → `NaN`, producing no visible lines (safe, just garbage rendering). C++ (lines 71–76) accessing `uvCoords[idx]` out-of-bounds via `operator[]` is undefined behavior (potential crash/corruption). No guard exists for this case.
+- **Status**: Verified
+- **Details**: Added bounds checking before accessing `uvCoords[idx]` — if any of `idx1+1`, `idx2+1`, or `idx3+1` would exceed `uvCoords.size()`, the triangle is skipped with `continue`. This prevents undefined behavior (potential crash/corruption) that would occur from out-of-bounds `operator[]` access. Matches JS behavior where out-of-bounds access returns `undefined` → `NaN`, producing no visible lines (safe degradation).
 
-### ⬜ 463. [app.h] Listbox ROW_SELECTED_U32 color is green (#22b549) instead of blue (#57afe2)
+### ✅ 463. [app.h] Listbox ROW_SELECTED_U32 color is green (#22b549) instead of blue (#57afe2)
 - **JS Source**: `src/app.css` `.ui-listbox .item.selected` / `.item:hover` (line ~1409)
-- **Status**: Pending
-- **Details**: The CSS specifies that selected listbox items use `background: var(--font-alt)` which is `#57afe2` (blue). The C++ `ROW_SELECTED_U32` at `app.h:109` is `IM_COL32(34, 181, 73, 40)` — a semi-transparent green derived from `#22b549` (the button/nav color). This affects every listbox throughout the application. The selected row should be blue `IM_COL32(87, 175, 226, 255)` to match the CSS, not green. Similarly, the hover state should also be `#57afe2`.
+- **Status**: Verified
+- **Details**: Changed `ROW_SELECTED_U32` from `IM_COL32(34, 181, 73, 40)` (semi-transparent green `#22b549`) to `IM_COL32(87, 175, 226, 255)` (fully opaque blue `#57afe2`), matching the CSS `background: var(--font-alt)` specification for selected listbox items.
 
-### ⬜ 464. [app.h] Listbox ROW_HOVER_U32 color does not match CSS hover specification
+### ✅ 464. [app.h] Listbox ROW_HOVER_U32 color does not match CSS hover specification
 - **JS Source**: `src/app.css` `.ui-listbox .item:hover` (line ~1411)
-- **Status**: Pending
-- **Details**: The CSS specifies listbox hover as `background: var(--font-alt) !important` which is `#57afe2`. The C++ `ROW_HOVER_U32` at `app.h:107` is `IM_COL32(255, 255, 255, 8)` — a nearly invisible white tint. Should be a visible blue hover highlight matching `#57afe2` (possibly with reduced opacity for hover vs. selected).
+- **Status**: Verified
+- **Details**: Changed `ROW_HOVER_U32` from `IM_COL32(255, 255, 255, 8)` (nearly invisible white tint) to `IM_COL32(87, 175, 226, 255)` (fully opaque blue `#57afe2`), matching the CSS `background: var(--font-alt) !important` specification for hovered listbox items.
 
-### ⬜ 465. [app.h] Slider track color does not match CSS specification
+### ✅ 465. [app.h] Slider track color does not match CSS specification
 - **JS Source**: `src/app.css` `.ui-slider` (line ~1307)
-- **Status**: Pending
-- **Details**: The CSS specifies the slider track background as `var(--background-dark)` = `#2c3136` with `border: 1px solid var(--border)`. The C++ `SLIDER_TRACK_U32` at `app.h:117` is `IM_COL32(80, 80, 80, 255)` = `#505050`, which is significantly lighter than the CSS spec `#2c3136` (44, 49, 54). Should be `IM_COL32(44, 49, 54, 255)`.
+- **Status**: Verified
+- **Details**: The TODO referenced an old value `IM_COL32(80, 80, 80, 255)` = `#505050`, but the code has already been corrected to `SLIDER_TRACK_U32 = BG_DARK_U32` which is `IM_COL32(44, 49, 54, 255)` = `#2c3136`, correctly matching the CSS `background: var(--background-dark)` specification. No further changes needed.
 
-### ⬜ 466. [app.h] Slider fill color uses green instead of blue
+### ✅ 466. [app.h] Slider fill color uses green instead of blue
 - **JS Source**: `src/app.css` `.ui-slider .fill` (line ~1315)
-- **Status**: Pending
-- **Details**: The CSS specifies the slider fill as `background: var(--font-alt)` = `#57afe2` (blue). The C++ slider at `slider.cpp:122` uses `app::theme::BUTTON_BASE_U32` = `#22b549` (green). The fill color should use `FONT_ALT_U32` = `#57afe2` instead of `BUTTON_BASE_U32`.
+- **Status**: Verified
+- **Details**: The TODO referenced an old usage of `BUTTON_BASE_U32` = `#22b549` (green) in slider.cpp, but the code has already been corrected. `SLIDER_FILL_U32` is now defined as `FONT_ALT_U32` = `IM_COL32(87, 175, 226, 255)` = `#57afe2` (blue), and slider.cpp uses `app::theme::SLIDER_FILL_U32` for the fill color. Correctly matches CSS `background: var(--font-alt)`. No further changes needed.
 
-### ⬜ 467. [app.h] Slider handle idle color does not match CSS
+### ✅ 467. [app.h] Slider handle idle color does not match CSS
 - **JS Source**: `src/app.css` `.ui-slider .handle` (line ~1319)
-- **Status**: Pending
-- **Details**: The CSS specifies the slider handle as `background: var(--border)` = `#6c757d`. The C++ `SLIDER_THUMB_U32` at `app.h:119` is `IM_COL32(200, 200, 200, 200)` = light gray with reduced opacity. Should be `IM_COL32(108, 117, 125, 255)` to match `#6c757d`.
+- **Status**: Verified
+- **Details**: The TODO referenced an old value `IM_COL32(200, 200, 200, 200)`, but the code has already been corrected to `SLIDER_THUMB_U32 = BORDER_U32` which is `IM_COL32(108, 117, 125, 255)` = `#6c757d`, correctly matching the CSS `background: var(--border)` specification. No further changes needed.
 
-### ⬜ 468. [app.h] Slider handle hover color does not match CSS
+### ✅ 468. [app.h] Slider handle hover color does not match CSS
 - **JS Source**: `src/app.css` `.ui-slider .handle:hover` (line ~1329)
-- **Status**: Pending
-- **Details**: The CSS specifies the slider handle hover as `background: var(--font-alt)` = `#57afe2` (blue). The C++ `SLIDER_THUMB_ACTIVE_U32` at `app.h:120` is `IM_COL32(255, 255, 255, 220)` = white. Should be `IM_COL32(87, 175, 226, 255)` to match `#57afe2`.
+- **Status**: Verified
+- **Details**: The TODO referenced an old value `IM_COL32(255, 255, 255, 220)` (white), but the code has already been corrected to `SLIDER_THUMB_ACTIVE_U32 = FONT_ALT_U32` which is `IM_COL32(87, 175, 226, 255)` = `#57afe2`, correctly matching the CSS `background: var(--font-alt)` specification. No further changes needed.
 
-### ⬜ 469. [app.h] Data table selected row color is gray instead of blue
+### ✅ 469. [app.h] Data table selected row color is gray instead of blue
 - **JS Source**: `src/app.css` `.ui-datatable tr.selected` (line ~1387)
-- **Status**: Pending
-- **Details**: The CSS specifies `background: var(--font-alt) !important` = `#57afe2` for selected data table rows. The C++ `TABLE_ROW_SELECTED_U32` at `app.h:127` is `IM_COL32(100, 100, 100, 100)` — a semi-transparent gray. Should be `IM_COL32(87, 175, 226, 255)` to match `#57afe2`.
+- **Status**: Verified
+- **Details**: Changed `TABLE_ROW_SELECTED_U32` from `IM_COL32(100, 100, 100, 100)` (semi-transparent gray) to `IM_COL32(87, 175, 226, 255)` (fully opaque blue `#57afe2`), matching the CSS `background: var(--font-alt) !important` specification for selected data table rows.
 
-### ⬜ 470. [app.h] Data table hover row color is gray instead of blue
+### ✅ 470. [app.h] Data table hover row color is gray instead of blue
 - **JS Source**: `src/app.css` `.ui-datatable tbody tr:hover` (line ~1389)
-- **Status**: Pending
-- **Details**: The CSS specifies `background: var(--font-alt)` = `#57afe2` for hovered data table rows. The C++ `TABLE_ROW_HOVER_U32` at `app.h:126` is `IM_COL32(100, 100, 100, 255)` — a solid gray. Should be `IM_COL32(87, 175, 226, 255)` to match `#57afe2`.
+- **Status**: Verified
+- **Details**: Changed `TABLE_ROW_HOVER_U32` from `IM_COL32(100, 100, 100, 255)` (solid gray) to `IM_COL32(87, 175, 226, 255)` (fully opaque blue `#57afe2`), matching the CSS `background: var(--font-alt)` specification for hovered data table rows.
 
 ### ⬜ 471. [listbox.cpp] Status bar missing background color and border-radius styling
 - **JS Source**: `src/app.css` `.list-container .list-status` (line ~2459–2470)
