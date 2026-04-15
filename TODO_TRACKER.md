@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/178 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/190 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -893,3 +893,63 @@
 - **JS Source**: `src/js/mmap.js` lines 30–43
 - **Status**: Pending
 - **Details**: JS iterates tracked mmap objects, unmaps mapped ones, and clears the tracking set; objects themselves remain valid references managed by JS GC. C++ explicitly `delete`s each tracked `MmapObject`, which changes lifetime semantics and can invalidate pointers still held by callers.
+
+### 179. ⬜ [modules.cpp] `wrap_module` does not wrap the `activated()` lifecycle callback
+- **JS Source**: `src/js/modules.js` lines 244–251
+- **Status**: Pending
+- **Details**: JS wraps `activated()` to call `initialize()` if the tab has not yet been initialized and is not in progress. C++ has no `activated()` concept on `ModuleDef`, so first-activation lazy initialization is only triggered by the direct `initialize()` call in `set_active()`. Any code that relies on `activated()` triggering re-initialization after a failed init will not work correctly.
+
+### 180. ⬜ [modules.cpp] `wrap_module` lambda captures `&mod` by reference — potential dangling reference
+- **JS Source**: `src/js/modules.js` lines 200–268
+- **Status**: Pending
+- **Details**: `wrap_module(ModuleDef& mod)` assigns a lambda that captures `&mod` (a reference into `module_registry` vector element) to `mod.initialize`. If `module_registry` ever reallocates (e.g. a later `add_module` call), all captured `&mod` references in existing lambdas become dangling pointers. Currently safe because adds precede wrapping, but is a latent correctness risk.
+
+### 181. ⬜ [modules.cpp] `reload_module` and `reloadAllModules` do not reload actual module code
+- **JS Source**: `src/js/modules.js` lines 319–360, 377–407
+- **Status**: Pending
+- **Details**: JS deletes the `require.cache` entry and re-requires the module file from disk, picking up any code changes. C++ only resets `_tab_initialized`/`_tab_initializing` flags and re-calls `wrap_module` on the existing `ModuleDef` object. The module implementation itself is unchanged. This is a fundamental limitation of static linking, but the behavior diverges from JS reload semantics.
+
+### 182. ⬜ [modules.cpp] `register_components()` is a no-op stub
+- **JS Source**: `src/js/modules.js` lines 270–275
+- **Status**: Pending
+- **Details**: JS `register_components(app)` iterates `COMPONENTS` and calls `app.component(name, def)` for every Vue component, then logs the list. C++ logs a single static string `"components loaded (C++: statically linked via headers)"` and does not perform any registration. This breaks the component-loaded log message fidelity.
+
+### 183. ⬜ [modules.cpp] `go_to_landing()` dereferences `core::view` without null-check
+- **JS Source**: `src/js/modules.js` lines 310–317
+- **Status**: Pending
+- **Details**: C++ `go_to_landing()` reads `core::view->installType` unconditionally. If `core::view` is `nullptr` at call time (e.g. during error recovery before core initializes), this causes a null-pointer dereference. JS `core.view.installType` would return `undefined` and the first `if` branch would activate.
+
+### 184. ⬜ [modules.cpp] `initialize()` wrapping is synchronous, not async
+- **JS Source**: `src/js/modules.js` lines 225–242
+- **Status**: Pending
+- **Details**: JS wraps each module's `initialize()` as an `async function` that awaits the original, catches exceptions with `hideLoadingScreen()`/`setToast()`/`go_to_landing()`, and resets `_tab_initializing` in a `finally` block. C++ calls `original_initialize()` synchronously without a `finally` equivalent — if `original_initialize()` throws, `_tab_initializing` is reset after the catch but any asynchronous initialization patterns in the module body are not preserved.
+
+### 185. ⬜ [modules.cpp] `set_active()` calls `initialize()` directly instead of via `activated()` hook
+- **JS Source**: `src/js/modules.js` lines 244–251, 293–304
+- **Status**: Pending
+- **Details**: In JS, `set_active` changes `core.view.activeModule` which triggers the Vue `activated()` hook on the component, and *that* hook calls `initialize()`. C++ calls `initialize()` directly from `set_active()`, bypassing any activation-step logic. This collapses two lifecycle stages (activation and initialization) into one and changes the timing and error-recovery flow.
+
+### 186. ⬜ [MultiMap.cpp] C++ `erase()` method is named differently from JS `Map.delete()`
+- **JS Source**: `src/js/MultiMap.js` (inherits `Map.delete` via extension)
+- **Status**: Pending
+- **Details**: JS `MultiMap` extends `Map`, so it exposes `delete(key)` for removal. C++ `MultiMap<K,V>` exposes `erase(key)` instead. Any call site that uses the JS `.delete()` interface and is translated to C++ must use `.erase()`, which is a method-name divergence from the original API contract.
+
+### 187. ⬜ [MultiMap.cpp] Missing `keys()`, `values()`, `entries()` iterator methods from JS `Map` interface
+- **JS Source**: `src/js/MultiMap.js` (inherits from `Map`)
+- **Status**: Pending
+- **Details**: JS `MultiMap` extends `Map` and therefore provides `keys()`, `values()`, `entries()`, `forEach()`, and `Symbol.iterator`. C++ `MultiMap` only exposes `begin()`/`end()` over key-value pairs. Callers that iterate keys or values separately, or use `forEach`, have no direct equivalent in the C++ API.
+
+### 188. ⬜ [MultiMap.cpp] `get()` returns a pointer to a variant instead of the raw value
+- **JS Source**: `src/js/MultiMap.js` lines 19–28 (inherits `Map.get`)
+- **Status**: Pending
+- **Details**: JS `MultiMap.get(key)` returns either the single value or the array of values, just like `Map.get`. C++ `get()` returns `const SingleOrMulti*` — a pointer to `std::variant<Value, std::vector<Value>>`. Callers must use `std::get_if` or `std::visit` to access the actual value, making the API substantially different from the JS interface.
+
+### 189. ⬜ [png-writer.cpp] `write()` is synchronous instead of async
+- **JS Source**: `src/js/png-writer.js` lines 247–249
+- **Status**: Pending
+- **Details**: JS `write(file)` is `async` and `await`s `getBuffer().writeToFile(file)`. C++ `write()` calls `getBuffer().writeToFile(file)` synchronously. This is documented in the source code comment, but callers that relied on the Promise return for sequencing file-write completion will behave differently.
+
+### 190. ⬜ [subtitles.cpp] `get_subtitles_vtt()` API signature differs from JS — CASC loading removed
+- **JS Source**: `src/js/subtitles.js` lines 172–187
+- **Status**: Pending
+- **Details**: JS `get_subtitles_vtt(casc, file_data_id, format)` is `async`, loads the file from CASC, decodes the string, strips the BOM, and converts. C++ takes `(text, format)` — the caller must pre-load the file data and pass the decoded string. This decomposes the JS function across a call-site boundary and changes the module's responsibility contract. Documented in the source code comment.
