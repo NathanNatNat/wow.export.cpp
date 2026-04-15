@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/97 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/105 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -486,3 +486,43 @@
 - **JS Source**: `src/js/modules.js` lines 222–242
 - **Status**: Pending
 - **Details**: The lambda assigned to `mod.initialize` captures `mod` by reference (`[&mod, original_initialize, display_label]()`). `mod` is a reference to an element in the `module_registry` `std::vector`. If any code ever calls `module_registry.push_back()` / `emplace_back()` after `wrap_module` has been called (e.g., a dynamically registered module), the vector may reallocate its storage, invalidating all `&mod` references and causing undefined behaviour on the next `initialize()` call. Currently no modules are added after `initialize()`, but there is no `const`-lock, `reserve`, or comment documenting this fragile assumption.
+
+### 98. ⬜ [subtitles.cpp] `sbt_to_srt` and `srt_to_vtt` construct `std::regex` on every call
+- **JS Source**: `src/js/subtitles.js` lines 87, 142
+- **Status**: Pending
+- **Details**: TODO #80 documents the same issue in `parse_srt_timestamp`. The same problem also exists in `sbt_to_srt` (C++ line 176, `timestamp_re`) and `srt_to_vtt` (C++ line 241, `timestamp_re`): both construct a `std::regex` object on every function invocation. In JS, regex literals are compiled once by the engine. All three functions should declare their regex objects as `static const` for performance parity with JS.
+
+### 99. ⬜ [tiled-png-writer.cpp] `write()` is synchronous; JS version is `async`
+- **JS Source**: `src/js/tiled-png-writer.js` lines 123–125
+- **Status**: Pending
+- **Details**: JS `write(file)` is declared `async` and returns `await this.getBuffer().writeToFile(file)`. C++ `write(const std::filesystem::path&)` is entirely synchronous. A code comment in `tiled-png-writer.cpp` documents this deviation but it is not recorded in TODO_TRACKER. Callers that previously awaited the result to detect write errors or chain further work receive no equivalent feedback in C++.
+
+### 100. ⬜ [tiled-png-writer.cpp] `tiles` uses `std::map` (key-sorted) instead of JS `Map` (insertion-ordered)
+- **JS Source**: `src/js/tiled-png-writer.js` line 25
+- **Status**: Pending
+- **Details**: JS constructor does `this.tiles = new Map()`, which preserves insertion order. C++ uses `std::map<std::string, Tile>`, which iterates tiles in lexicographic key order (`"0,0"`, `"0,1"`, ..., `"1,10"`, `"1,2"` — not numeric order). A comment in `tiled-png-writer.h` explains that rendering is position-based so iteration order does not affect pixel output, but per fidelity rules the structural deviation must be recorded here as well as in code comments.
+
+### 101. ⬜ [updater.cpp] `constants::FLAVOUR` hardcoded as `"win-x64"` and `constants::BUILD_GUID` hardcoded as `"cpp-dev"` — not read from runtime manifest
+- **JS Source**: `src/js/updater.js` lines 24–25, 33, 113
+- **Status**: Pending
+- **Details**: JS reads `nw.App.manifest.flavour` and `nw.App.manifest.guid` at runtime from `package.json`, enabling per-distribution and per-build values. C++ uses `constants::FLAVOUR = "win-x64"` (compile-time, always "win-x64" even on Linux) and `constants::BUILD_GUID = "cpp-dev"` (compile-time). Consequences: (a) on Linux, the update URL always requests win-x64 artefacts — wrong platform; (b) `BUILD_GUID = "cpp-dev"` will never equal a real server GUID, causing `checkForUpdates` to always return `true` (update available) in a production environment. No CMake option exists to set these per-platform or per-build.
+
+### 102. ⬜ [wmv.cpp] `normalize_array` extracted as a C++ helper; JS inlines the `Array.isArray` check at every call site
+- **JS Source**: `src/js/wmv.js` lines 36–38, 52–53, 97–98
+- **Status**: Pending
+- **Details**: JS inlines `Array.isArray(x) ? x : [x]` at three separate call sites (customization array, v2 equipment items, v1 equipment items). C++ extracts this into a shared `normalize_array()` helper function (line 135). While functionally equivalent, this is a structural refactoring not present in the original JS and deviates from the line-by-line fidelity requirement. Similar to the existing entry #86 for `parse_equipment`.
+
+### 103. ⬜ [log.cpp] `getErrorDump()` is synchronous in C++; JS version is `async`
+- **JS Source**: `src/js/log.js` lines 102–108
+- **Status**: Pending
+- **Details**: JS `getErrorDump` is an `async` function using `fs.promises.readFile`, returning a Promise. C++ reads the file synchronously with `std::ifstream`. If called from the render/UI thread during crash handling this could cause a momentary block. Additionally, in JS `getErrorDump` is a bare global assignment (`getErrorDump = async () => {...}`, no `const`) so it is attached to the `window` object — accessible from crash handler code without a module import. C++ declares it as a free function in `log.h` outside the `logging` namespace, preserving the module-free accessibility but through a different mechanism. The async deviation is not documented in either `log.cpp` or TODO_TRACKER.
+
+### 104. ⬜ [log.cpp] Linux `openRuntimeLog()` builds shell command via string concatenation — path injection risk
+- **JS Source**: `src/js/log.js` lines 72–73
+- **Status**: Pending
+- **Details**: C++ constructs `"xdg-open '" + constants::RUNTIME_LOG().string() + "' &"` and passes it to `std::system()`. If `RUNTIME_LOG` resolves to a path containing a single-quote character (e.g., a username with an apostrophe), the resulting shell command is malformed or exploitable. JS uses `nw.Shell.openItem()`, which is a safe native API that never invokes a shell. No sanitisation or quoting is applied to the path before embedding it in the command string.
+
+### 105. ⬜ [mmap.cpp] `create_virtual_file` returns a raw `new`-allocated pointer; ownership model is undocumented in the header
+- **JS Source**: `src/js/mmap.js` lines 20–24
+- **Status**: Pending
+- **Details**: C++ `create_virtual_file()` returns an `MmapObject*` allocated with `new` and tracked in the internal `virtual_files` set. Callers must not `delete` the pointer themselves, and must not dereference it after `release_virtual_files()` (which `delete`s all tracked objects). `mmap.h` documents neither the ownership rule nor the lifetime constraint. JS relies on garbage collection and has no equivalent concern. This missing documentation creates a risk of double-free or use-after-free if callers store the returned pointer beyond the cleanup call.
