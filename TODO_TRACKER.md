@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/89 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/97 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -446,3 +446,43 @@
 - **JS Source**: `src/app.js` lines 437–444, 447–449
 - **Status**: Pending
 - **Details**: JS `emit(tag, ...params)` is variadic and spreads all extra params to `core.events.emit(tag, ...params)`. JS `click(tag, event, ...params)` is also variadic and passes all extra params to the event emitter. C++ has two overloads: `emit(tag)` and `emit(tag, const std::any& arg)`, and similarly for `click()`. If any caller passes 2 or more extra params, the C++ version silently drops the extras. In addition, `click()` in JS checks `event.target.classList.contains('disabled')` to auto-detect the disabled state from the DOM element class — C++ requires callers to explicitly pass a `disabled` bool, relying on ImGui's `BeginDisabled()` for UI-level disabled handling rather than automatic class-based detection.
+
+### 90. ⬜ [generics.cpp] `batchWork()` does not catch exceptions thrown by the processor
+- **JS Source**: `src/js/generics.js` lines 438–465
+- **Status**: Pending
+- **Details**: JS wraps every `processBatch()` call in `try { ... } catch (error) { cleanup(); reject(error); }`, so exceptions from `processor` reject the Promise and close the `MessageChannel` ports. C++ `batchWork()` has no try/catch around `processor(work[i], i)` — an exception thrown by the processor propagates directly to the caller of `batchWork()`, skipping any cleanup or progress logging. The error-handling contract differs: JS rejects gracefully, C++ propagates as a thrown exception.
+
+### 91. ⬜ [generics.cpp] `downloadFile` missing second `log.write(error)` call on failure
+- **JS Source**: `src/js/generics.js` lines 243–244
+- **Status**: Pending
+- **Details**: JS logs two lines when a download attempt fails: `log.write(\`Failed to download from ${currentUrl}: ${error.message}\`)` then `log.write(error)` (logs the full error object). C++ only calls `logging::write` once with the exception message. The second log call (full error details/stack) is missing.
+
+### 92. ⬜ [generics.cpp] `filesize()` returns string "NaN" for NaN input; JS returns the numeric NaN
+- **JS Source**: `src/js/generics.js` line 279–280
+- **Status**: Pending
+- **Details**: JS `if (isNaN(input)) return input;` returns the original NaN value (a JS number). C++ returns the string `"NaN"`. This is a necessary deviation because the C++ return type is `std::string`, but the deviation is not documented with a comment or TODO entry. Callers that previously checked `typeof result === 'number'` or `isNaN(result)` would see different behaviour.
+
+### 93. ⬜ [buffer.cpp] `setCapacity(capacity, false)` always zeroes new memory; JS `Buffer.allocUnsafe` does not
+- **JS Source**: `src/js/buffer.js` lines 1021–1029
+- **Status**: Pending
+- **Details**: JS `setCapacity` with `secure = false` calls `Buffer.allocUnsafe(capacity)`, which does not zero memory (performance optimisation). C++ uses `std::vector<uint8_t>(capacity, 0)`, which always value-initialises to zero regardless of the `secure` parameter. The `secure` argument is completely ignored for the allocation step. The same deviation is noted for `alloc()` in TODO 65, but `setCapacity` is not covered there.
+
+### 94. ⬜ [buffer.cpp] `writeBuffer(span, copyLength)` silently replicates a JS bug without a TODO entry
+- **JS Source**: `src/js/buffer.js` lines 914–918
+- **Status**: Pending
+- **Details**: JS `writeBuffer` when given a raw Buffer (not a BufferWrapper) and `copyLength > buf.length` executes `new Error(...)` without `throw`, silently discarding the error. The C++ implementation at lines 950–954 intentionally replicates this as a no-op and documents it with an inline comment. However there is no corresponding TODO_TRACKER entry for this intentional JS-bug replication, which makes it invisible to future code reviewers looking for fidelity deviations.
+
+### 95. ⬜ [file-writer.cpp] Constructor fails silently when file cannot be opened; JS `createWriteStream` throws
+- **JS Source**: `src/js/file-writer.js` line 15
+- **Status**: Pending
+- **Details**: JS `fs.createWriteStream(file, ...)` throws synchronously (or emits an `error` event) when the target file cannot be created (bad path, permissions denied, parent directory missing). The C++ `std::ofstream` constructor silently transitions to a bad/closed state without throwing. Callers that do not explicitly check `isOpen()` after construction will silently lose all written data with no indication of failure. This diverges from the fail-fast JS behaviour.
+
+### 96. ⬜ [modules.cpp] `add_module` incorrectly substitutes `mounted_fn` when `initialize_fn` is null
+- **JS Source**: `src/js/modules.js` lines 200–252
+- **Status**: Pending
+- **Details**: In C++ `add_module`, when `initialize_fn` is nullptr, the code sets `mod.initialize = mounted_fn`. The `wrap_module` function then wraps `mounted_fn` with an idempotency guard, causing it to run at most once (on first activation). In Vue.js, `mounted()` is a lifecycle hook that runs every time a component mounts, not just the first time — it should not be guarded for idempotency. JS `wrap_module` only wraps `methods.initialize` if it is defined; modules without it are not affected by the guard. Affected modules include `module_test_a`, `module_test_b`, `source_select`, and others that provide `mounted` but no separate `initialize`.
+
+### 97. ⬜ [modules.cpp] `wrap_module` lambda captures `ModuleDef` by reference — dangling reference risk
+- **JS Source**: `src/js/modules.js` lines 222–242
+- **Status**: Pending
+- **Details**: The lambda assigned to `mod.initialize` captures `mod` by reference (`[&mod, original_initialize, display_label]()`). `mod` is a reference to an element in the `module_registry` `std::vector`. If any code ever calls `module_registry.push_back()` / `emplace_back()` after `wrap_module` has been called (e.g., a dynamically registered module), the vector may reallocate its storage, invalidating all `&mod` references and causing undefined behaviour on the next `initialize()` call. Currently no modules are added after `initialize()`, but there is no `const`-lock, `reserve`, or comment documenting this fragile assumption.
