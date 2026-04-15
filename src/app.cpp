@@ -612,15 +612,29 @@ static void renderAppShell() {
 					// JS: @click="contextMenus.stateNavExtra = true" — always opens (not toggle)
 					if (ImGui::IsItemClicked())
 						ImGui::OpenPopup("##MenuExtraPopup");
-					// Render hamburger icon using Font Awesome icon font
-					ImFont* icon_font = app::theme::getIconFont();
-					float icon_size = 18.0f;
+					// Render hamburger icon using custom SVG texture (line-columns.svg)
+					GLuint hamburger_tex = getNavIconTexture("line-columns.svg");
 					ImVec2 btn_min = ImGui::GetItemRectMin();
-					ImVec2 text_sz = icon_font->CalcTextSizeA(icon_size, FLT_MAX, 0.0f, ICON_FA_BARS);
-					ImVec2 icon_pos(btn_min.x + (20.0f - text_sz.x) * 0.5f,
-					                btn_min.y + (20.0f - text_sz.y) * 0.5f);
-					ImGui::GetWindowDrawList()->AddText(icon_font, icon_size, icon_pos,
-						app::theme::FONT_PRIMARY_U32, ICON_FA_BARS);
+					if (hamburger_tex) {
+						float icon_display = 18.0f;
+						ImVec2 icon_pos(btn_min.x + (20.0f - icon_display) * 0.5f,
+						                btn_min.y + (20.0f - icon_display) * 0.5f);
+						ImGui::GetWindowDrawList()->AddImage(
+							static_cast<ImTextureID>(static_cast<uintptr_t>(hamburger_tex)),
+							icon_pos,
+							ImVec2(icon_pos.x + icon_display, icon_pos.y + icon_display),
+							ImVec2(0, 0), ImVec2(1, 1),
+							app::theme::FONT_PRIMARY_U32);
+					} else {
+						// Fallback to Font Awesome glyph if SVG failed to load
+						ImFont* icon_font = app::theme::getIconFont();
+						float icon_size = 18.0f;
+						ImVec2 text_sz = icon_font->CalcTextSizeA(icon_size, FLT_MAX, 0.0f, ICON_FA_BARS);
+						ImVec2 icon_pos(btn_min.x + (20.0f - text_sz.x) * 0.5f,
+						                btn_min.y + (20.0f - text_sz.y) * 0.5f);
+						ImGui::GetWindowDrawList()->AddText(icon_font, icon_size, icon_pos,
+							app::theme::FONT_PRIMARY_U32, ICON_FA_BARS);
+					}
 
 					// Context menu popup for hamburger button
 					// Uses ImGui popup API for correct z-ordering (always on top) and
@@ -656,15 +670,29 @@ static void renderAppShell() {
 				{
 					ImGui::PushID("##nav-help");
 					ImGui::InvisibleButton("##help", ImVec2(20.0f, 20.0f));
-					// Render help icon using Font Awesome icon font
-					ImFont* icon_font = app::theme::getIconFont();
-					float icon_size = 18.0f;
+					// Render help icon using custom SVG texture (help.svg)
+					GLuint help_tex = getNavIconTexture("help.svg");
 					ImVec2 btn_min = ImGui::GetItemRectMin();
-					ImVec2 text_sz = icon_font->CalcTextSizeA(icon_size, FLT_MAX, 0.0f, ICON_FA_CIRCLE_QUESTION);
-					ImVec2 icon_pos(btn_min.x + (20.0f - text_sz.x) * 0.5f,
-					                btn_min.y + (20.0f - text_sz.y) * 0.5f);
-					ImGui::GetWindowDrawList()->AddText(icon_font, icon_size, icon_pos,
-						app::theme::FONT_PRIMARY_U32, ICON_FA_CIRCLE_QUESTION);
+					if (help_tex) {
+						float icon_display = 18.0f;
+						ImVec2 icon_pos(btn_min.x + (20.0f - icon_display) * 0.5f,
+						                btn_min.y + (20.0f - icon_display) * 0.5f);
+						ImGui::GetWindowDrawList()->AddImage(
+							static_cast<ImTextureID>(static_cast<uintptr_t>(help_tex)),
+							icon_pos,
+							ImVec2(icon_pos.x + icon_display, icon_pos.y + icon_display),
+							ImVec2(0, 0), ImVec2(1, 1),
+							app::theme::FONT_PRIMARY_U32);
+					} else {
+						// Fallback to Font Awesome glyph if SVG failed to load
+						ImFont* icon_font = app::theme::getIconFont();
+						float icon_size = 18.0f;
+						ImVec2 text_sz = icon_font->CalcTextSizeA(icon_size, FLT_MAX, 0.0f, ICON_FA_CIRCLE_QUESTION);
+						ImVec2 icon_pos(btn_min.x + (20.0f - text_sz.x) * 0.5f,
+						                btn_min.y + (20.0f - text_sz.y) * 0.5f);
+						ImGui::GetWindowDrawList()->AddText(icon_font, icon_size, icon_pos,
+							app::theme::FONT_PRIMARY_U32, ICON_FA_CIRCLE_QUESTION);
+					}
 					// JS: @click="setActiveModule('tab_help')"
 					if (ImGui::IsItemClicked())
 						modules::setActive("tab_help");
@@ -725,7 +753,9 @@ static void renderAppShell() {
 				{ "GitHub",  "::GITHUB" }
 			};
 
-			// Calculate total width of links line for centering
+			// Calculate total width of links line for centering (use bold font for accurate sizing)
+			ImFont* bold_font = app::theme::getBoldFont();
+			ImGui::PushFont(bold_font);
 			float total_w = 0;
 			for (int i = 0; i < 4; i++) {
 				total_w += ImGui::CalcTextSize(links[i].label).x;
@@ -738,23 +768,43 @@ static void renderAppShell() {
 			float start_x = (vp_size.x - total_w) * 0.5f;
 			ImGui::SetCursorPos(ImVec2(start_x, links_y));
 
+			ImDrawList* footer_draw = ImGui::GetWindowDrawList();
 			for (int i = 0; i < 4; i++) {
 				if (i > 0) {
 					ImGui::SameLine(0, 0);
+					ImGui::PushStyleColor(ImGuiCol_Text, COLOR_FONT_FADED);
 					ImGui::TextUnformatted(" - ");
+					ImGui::PopStyleColor();
 					ImGui::SameLine(0, 0);
 				}
+				// CSS: a { font-weight: bold; color: var(--font-alt) }
+				// CSS: a:hover { color: var(--font-highlight); text-decoration: underline }
 				ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_ALT);
 				ImGui::TextUnformatted(links[i].label);
 				ImGui::PopStyleColor();
-				if (ImGui::IsItemHovered())
+				bool link_hovered = ImGui::IsItemHovered();
+				if (link_hovered) {
 					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+					// Re-draw text in highlight color on hover
+					ImVec2 item_min = ImGui::GetItemRectMin();
+					ImVec2 item_max = ImGui::GetItemRectMax();
+					// Overdraw with highlight color
+					footer_draw->AddText(bold_font, ImGui::GetFontSize(), item_min,
+						app::theme::FONT_HIGHLIGHT_U32, links[i].label);
+					// Draw underline
+					float underline_y = item_max.y;
+					footer_draw->AddLine(
+						ImVec2(item_min.x, underline_y),
+						ImVec2(item_max.x, underline_y),
+						app::theme::FONT_HIGHLIGHT_U32, 1.0f);
+				}
 				if (ImGui::IsItemClicked())
 					ExternalLinks::open(links[i].externalId);
 				ImGui::SameLine(0, 0);
 			}
 			// End the SameLine sequence
 			ImGui::NewLine();
+			ImGui::PopFont(); // pop bold font
 
 			//       World of Warcraft and related trademarks are registered trademarks of
 			//       Blizzard Entertainment whom this application is not affiliated with.

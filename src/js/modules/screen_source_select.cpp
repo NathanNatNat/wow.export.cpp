@@ -41,6 +41,23 @@
 
 namespace screen_source_select {
 
+// --- Per-card border hover animation state ---
+static float s_cardBorderAnim[3] = { 0.0f, 0.0f, 0.0f };
+
+// Linearly interpolate between two ImU32 colors.
+static ImU32 lerpColor(ImU32 a, ImU32 b, float t) {
+	int ra = (a >> IM_COL32_R_SHIFT) & 0xFF, ga = (a >> IM_COL32_G_SHIFT) & 0xFF;
+	int ba2 = (a >> IM_COL32_B_SHIFT) & 0xFF, aa = (a >> IM_COL32_A_SHIFT) & 0xFF;
+	int rb = (b >> IM_COL32_R_SHIFT) & 0xFF, gb = (b >> IM_COL32_G_SHIFT) & 0xFF;
+	int bb = (b >> IM_COL32_B_SHIFT) & 0xFF, ab = (b >> IM_COL32_A_SHIFT) & 0xFF;
+	return IM_COL32(
+		static_cast<int>(ra + (rb - ra) * t),
+		static_cast<int>(ga + (gb - ga) * t),
+		static_cast<int>(ba2 + (bb - ba2) * t),
+		static_cast<int>(aa + (ab - aa) * t)
+	);
+}
+
 // --- Source icon SVG textures (lazy-loaded) ---
 static GLuint s_texWowLogo = 0;
 static GLuint s_texBattlenet = 0;
@@ -808,7 +825,7 @@ void render() {
 				h += link_size;
 			}
 
-			return std::max(h, card_min_h);
+			return std::max(h, std::max(card_min_h, card_padding * 2 + icon_size));
 		};
 
 		float total_height = 0.0f;
@@ -839,12 +856,23 @@ void render() {
 			bool clicked = ImGui::InvisibleButton(btn_id.c_str(), ImVec2(card_width, card_h));
 			bool hovered = ImGui::IsItemHovered();
 
+			// CSS: cursor: pointer on card divs
+			if (hovered)
+				ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
 			// Get absolute screen coordinates for drawing.
 			ImVec2 card_min = ImGui::GetItemRectMin();
 			ImVec2 card_max = ImGui::GetItemRectMax();
 
-			// Draw dashed border.
-			ImU32 border_color = hovered ? app::theme::FONT_HIGHLIGHT_U32 : app::theme::FONT_FADED_U32;
+			// Animate border color with 0.2s transition (CSS: transition: border-color 0.2s).
+			float& anim = s_cardBorderAnim[ci];
+			float dt = ImGui::GetIO().DeltaTime;
+			float anim_speed = 1.0f / 0.2f; // 0.2 seconds
+			if (hovered)
+				anim = std::min(anim + dt * anim_speed, 1.0f);
+			else
+				anim = std::max(anim - dt * anim_speed, 0.0f);
+			ImU32 border_color = lerpColor(app::theme::FONT_FADED_U32, app::theme::FONT_HIGHLIGHT_U32, anim);
 			drawDashedRoundedRect(draw, card_min, card_max, border_color, border_radius, border_thick, 8.0f, 6.0f);
 
 			// Draw icon.
@@ -860,14 +888,24 @@ void render() {
 			float text_x = icon_x + icon_size + card_gap;
 			float text_width = card_max.x - card_pad_x - text_x;
 			if (text_width < 50.0f) text_width = 50.0f;
-			float text_y = card_min.y + card_padding;
+
+			// CSS: align-items: center — vertically center text block within card.
+			// Compute total text block height to center it.
+			float text_block_h = title_size + content_gap;
+			{
+				ImVec2 subtitle_sz = ImGui::CalcTextSize(card.subtitle, nullptr, false, text_width);
+				text_block_h += subtitle_sz.y;
+			}
+			if (card.has_link || card.card_id == 1)
+				text_block_h += 5.0f + link_size;
+			float text_y = card_min.y + (card_h - text_block_h) * 0.5f;
 
 			// Title (bold, highlight color).
 			draw->AddText(bold_font, title_size, ImVec2(text_x, text_y), app::theme::FONT_HIGHLIGHT_U32, card.title);
 			text_y += title_size + content_gap;
 
 			// Subtitle (opacity 0.7).
-			ImU32 subtitle_color = IM_COL32(255, 255, 255, 179); // #ffffffb3 (0.7 opacity)
+			ImU32 subtitle_color = IM_COL32(255, 255, 255, 143); // CSS: opacity: 0.7 applied to --font-primary (#ffffffcc, alpha 204). Effective alpha = 204 * 0.7 ≈ 143.
 			{
 				const char* text_begin = card.subtitle;
 				const char* text_end = text_begin + strlen(text_begin);
@@ -895,7 +933,7 @@ void render() {
 				text_y += 5.0f;
 				std::string label_prefix = "Last Opened: ";
 				ImVec2 prefix_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, label_prefix.c_str());
-				draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), subtitle_color, label_prefix.c_str());
+				draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), app::theme::FONT_PRIMARY_U32, label_prefix.c_str());
 
 				// Clickable link part.
 				std::string link_part = card.link_text.substr(label_prefix.size());
@@ -912,7 +950,7 @@ void render() {
 					}
 				}
 				bool link_hovered = ImGui::IsItemHovered();
-				ImU32 link_color = link_hovered ? app::theme::FONT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
+				ImU32 link_color = link_hovered ? app::theme::FONT_ALT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
 				draw->AddText(ImGui::GetFont(), link_size, link_pos, link_color, link_part.c_str());
 			} else if (card.card_id == 1) {
 				// CDN region: "Region: NAME (Change)" with context menu.
@@ -920,7 +958,7 @@ void render() {
 				if (!core::view->selectedCDNRegion.is_null()) {
 					std::string region_label = std::format("Region: {} ", core::view->selectedCDNRegion.value("name", std::string("...")));
 					ImVec2 region_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, region_label.c_str());
-					draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), subtitle_color, region_label.c_str());
+					draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), app::theme::FONT_PRIMARY_U32, region_label.c_str());
 
 					// "(Change)" link
 					const char* change_text = "(Change)";
@@ -932,34 +970,55 @@ void render() {
 						ImGui::OpenPopup("##cdn_region_menu");
 					}
 					bool change_hovered = ImGui::IsItemHovered();
-					ImU32 change_color = change_hovered ? app::theme::FONT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
+					ImU32 change_color = change_hovered ? app::theme::FONT_ALT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
 					draw->AddText(ImGui::GetFont(), link_size, change_pos, change_color, change_text);
 				}
 
 				// CDN region context menu popup.
+				// CSS: .context-menu { background: #232323 }
+				ImGui::PushStyleColor(ImGuiCol_PopupBg, IM_COL32(0x23, 0x23, 0x23, 0xFF));
 				if (ImGui::BeginPopup("##cdn_region_menu")) {
 					for (auto& region : core::view->cdnRegions) {
 						std::string name = region.value("name", std::string("Unknown"));
 						int64_t delay = region.value("delay", static_cast<int64_t>(-1));
-						std::string delay_str;
-						if (!region["delay"].is_null())
-							delay_str = delay >= 0 ? std::format(" {}ms", delay) : " N/A";
-						else
-							delay_str = "";
-						std::string item_label = std::format("{}{}", name, delay_str);
 
-						if (ImGui::MenuItem(item_label.c_str())) {
+						// Render region name as selectable item.
+						if (ImGui::Selectable(std::format("##cdn_region_{}", name).c_str(), false, 0, ImVec2(0, 0))) {
 							set_selected_cdn(region);
+						}
+						// Custom render: region name at normal opacity, delay at 0.7 opacity + 12px font.
+						ImVec2 item_min = ImGui::GetItemRectMin();
+						ImVec2 item_max = ImGui::GetItemRectMax();
+						float item_h = item_max.y - item_min.y;
+						ImFont* font = ImGui::GetFont();
+						float normal_size = ImGui::GetFontSize();
+						float delay_font_size = 12.0f;
+
+						// Draw region name.
+						ImVec2 name_sz = font->CalcTextSizeA(normal_size, FLT_MAX, 0.0f, name.c_str());
+						float text_center_y = item_min.y + (item_h - name_sz.y) * 0.5f;
+						draw->AddText(font, normal_size, ImVec2(item_min.x, text_center_y),
+							app::theme::FONT_PRIMARY_U32, name.c_str());
+
+						// Draw delay string with reduced opacity and smaller font.
+						if (!region["delay"].is_null()) {
+							std::string delay_text = delay >= 0 ? std::format(" {}ms", delay) : " N/A";
+							ImU32 delay_color = IM_COL32(255, 255, 255, 143); // opacity: 0.7 * --font-primary alpha
+							ImVec2 delay_sz = font->CalcTextSizeA(delay_font_size, FLT_MAX, 0.0f, delay_text.c_str());
+							float delay_y = item_min.y + (item_h - delay_sz.y) * 0.5f;
+							draw->AddText(font, delay_font_size, ImVec2(item_min.x + name_sz.x, delay_y),
+								delay_color, delay_text.c_str());
 						}
 					}
 					ImGui::EndPopup();
 				}
+				ImGui::PopStyleColor();
 			} else if (card.card_id == 2 && card.has_link) {
 				// Legacy "Last Opened: path" — clickable link
 				text_y += 5.0f;
 				std::string label_prefix = "Last Opened: ";
 				ImVec2 prefix_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, label_prefix.c_str());
-				draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), subtitle_color, label_prefix.c_str());
+				draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), app::theme::FONT_PRIMARY_U32, label_prefix.c_str());
 
 				std::string link_part = card.link_text.substr(label_prefix.size());
 				ImVec2 link_pos(text_x + prefix_sz.x, text_y);
@@ -974,7 +1033,7 @@ void render() {
 					}
 				}
 				bool link_hovered_l = ImGui::IsItemHovered();
-				ImU32 link_color_l = link_hovered_l ? app::theme::FONT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
+				ImU32 link_color_l = link_hovered_l ? app::theme::FONT_ALT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
 				draw->AddText(ImGui::GetFont(), link_size, link_pos, link_color_l, link_part.c_str());
 			}
 
