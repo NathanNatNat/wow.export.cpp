@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 536/567 verified (95%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 549/567 verified (96%)** — ✅ = Verified, ⬜ = Pending
 
 ---
 
@@ -2654,67 +2654,67 @@
 - **Status**: Verified
 - **Details**: Both JS and C++ have the collision export code commented out (C++ lines 211–219). This is a pre-existing TODO in both versions — collision export for M3 models is not yet implemented. The commented code references `this.m2.collisionPositions` (wrong model type — should be m3), suggesting it was copied from M2Exporter.
 
-### ⬜ 531. [WMOExporter.cpp] `exportTextures()` — `runtimeData` bounds checks added defensively
+### ✅ 531. [WMOExporter.cpp] `exportTextures()` — `runtimeData` bounds checks added defensively
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 100–102
 - **Status**: Verified
 - **Details**: JS unconditionally accesses `material.runtimeData[0]` through `[3]` for shader type 23. C++ (lines 241–244) guards each access with `if (material.runtimeData.size() > N)`. If runtimeData has fewer than 4 elements, fewer textures are added. This is a defensive improvement but changes behaviour — JS would crash, C++ silently skips.
 
-### ⬜ 532. [WMOExporter.cpp] `formatUnknownFile` call signature differs
+### ✅ 532. [WMOExporter.cpp] `formatUnknownFile` call signature differs
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` line 160
 - **Status**: Verified
 - **Details**: JS calls `listfile.formatUnknownFile(texFile)` with one argument (the full filename string like `"12345.png"`). C++ (line 310) calls `casc::listfile::formatUnknownFile(texFileDataID, raw ? ".blp" : ".png")` with two arguments (integer ID + extension). Both must produce identical path strings for the output to match.
 
-### ⬜ 533. [WMOExporter.cpp] `exportRaw()` — `groupFileDataID == 0` fallback vs JS `??` (nullish coalescing)
+### ✅ 533. [WMOExporter.cpp] `exportRaw()` — `groupFileDataID == 0` fallback vs JS `??` (nullish coalescing)
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` line 1232
 - **Status**: Verified
 - **Details**: JS uses `this.wmo.groupIDs?.[groupOffset] ?? listfile.getByFilename(groupName)` — `??` only falls back on `undefined`/`null`, NOT on `0`. A groupID of `0` stays `0`. C++ (lines 1578–1584) falls back to filename lookup when `groupFileDataID == 0`. A groupID of `0` triggers the filename lookup in C++ but not in JS, potentially exporting WMO groups that JS would skip.
 
-### ⬜ 534. [WMOExporter.cpp] `exportAsGLTF()` — log format missing `toUpperCase()` for format name
+### ✅ 534. [WMOExporter.cpp] `exportAsGLTF()` — log format missing `toUpperCase()` for format name
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 225, 232
 - **Status**: Verified
 - **Details**: JS uses `format.toUpperCase()` producing `"GLTF"` / `"GLB"` in log output. C++ (lines 376, 383) uses `format` as-is, logging lowercase `"gltf"` / `"glb"`. Minor cosmetic deviation in log messages.
 
-### ⬜ 535. [WMOExporter.cpp] `exportRaw()` data check — `data === undefined` vs `data.byteLength() == 0`
+### ✅ 535. [WMOExporter.cpp] `exportRaw()` data check — `data === undefined` vs `data.byteLength() == 0`
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` line 1189
 - **Status**: Verified
 - **Details**: JS checks `if (this.wmo.data === undefined)` — only true when no buffer was provided at all. C++ (line 1531) checks `if (data.byteLength() == 0)` — true for any empty buffer. An explicitly-provided empty buffer would take the CASC-fetch branch in C++ but the write-buffer branch in JS.
 
-### ⬜ 536. [WMOExporter.h] Extra `loadWMO()` and `getDoodadSetNames()` methods not in JS
+### ✅ 536. [WMOExporter.h] Extra `loadWMO()` and `getDoodadSetNames()` methods not in JS
 - **JS Source**: N/A
 - **Status**: Verified
 - **Details**: C++ header (lines 157–165) declares `loadWMO()` and `getDoodadSetNames()` utility methods not present in the JS WMOExporter class. These are additive API extensions for callers that need doodad set names before export. While not a functional deviation, they extend the API surface beyond the JS original.
 
-### ⬜ 537. [WMOLegacyExporter.cpp] `doodadSetMask` check differs — C++ uses `std::optional` with `has_value()`
+### ✅ 537. [WMOLegacyExporter.cpp] `doodadSetMask` check differs — C++ uses `std::optional` with `has_value()`
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` line 265
 - **Status**: Verified
 - **Details**: JS checks `if (!doodadSetMask?.[i]?.checked)` — optional chaining handles both missing mask and missing entry gracefully. C++ (line 320) checks `!doodadSetMask.has_value() || i >= doodadSetMask->size() || !(*doodadSetMask)[i].checked`. While functionally equivalent, C++ uses `std::optional<std::vector<>>` which was not used for `groupMask` in the JS (JS uses simple truthiness). The `doodadSetMask` member is also `std::optional` (header line 103) while JS has no explicit nullability — it just checks via optional chaining.
 
-### ⬜ 538. [WMOLegacyExporter.cpp] `groupMask` stored as `std::optional<std::vector<>>` — JS uses simple truthiness
+### ✅ 538. [WMOLegacyExporter.cpp] `groupMask` stored as `std::optional<std::vector<>>` — JS uses simple truthiness
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 169–175
 - **Status**: Verified
 - **Details**: JS checks `if (groupMask)` (truthy check on the array). C++ stores `groupMask` as `std::optional<std::vector<WMOGroupMaskEntry>>` (header line 102), checking `groupMask.has_value()`. While functionally equivalent for the "set or not set" case, an empty array in JS is truthy (creates empty mask set), while an empty optional vector in C++ means "no mask". `setGroupMask` should set `std::optional` even if the vector is empty to match JS truthy semantics.
 
-### ⬜ 539. [WMOLegacyExporter.cpp] Meta JSON serializes materials with explicit field list
+### ✅ 539. [WMOLegacyExporter.cpp] Meta JSON serializes materials with explicit field list
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` line 383
 - **Status**: Verified
 - **Details**: JS does `json.addProperty('materials', wmo.materials)` which serializes the entire materials array as-is with all properties. C++ (lines 476–493) manually serializes each material field (`flags`, `shader`, `blendMode`, `texture1`, etc.). If the WMOLegacyLoader material struct has additional fields, they will be missing from C++ JSON output. Same applies to `doodadSets` (C++ lines 497–505) and `doodads` (C++ lines 509–519) and `groupInfo` (C++ lines 464–472).
 
-### ⬜ 540. [WMOLegacyExporter.cpp] `doodadCache` is `std::unordered_set<std::string>` — JS uses module-scope `Set`
+### ✅ 540. [WMOLegacyExporter.cpp] `doodadCache` is `std::unordered_set<std::string>` — JS uses module-scope `Set`
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` line 22
 - **Status**: Verified
 - **Details**: JS `doodadCache` is `new Set()` at module scope. C++ (line 38) uses `std::unordered_set<std::string>` in an anonymous namespace. Functionally equivalent, but the JS `Set` can store any type while C++ is typed to `string`. Both use case-insensitive lookups via `toLower()`. The `clearCache()` static method (JS line 585, C++ implied via header line 94) correctly clears both.
 
-### ⬜ 541. [CSVWriter.cpp] `escapeCSVField()` treats empty string as null/undefined — JS does not
+### ✅ 541. [CSVWriter.cpp] `escapeCSVField()` treats empty string as null/undefined — JS does not
 - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 42–51
 - **Status**: Verified
 - **Details**: The JS `escapeCSVField()` checks `if (value === null || value === undefined)` and returns empty string. Then it calls `value.toString()`. The C++ version checks `if (value.empty())` and returns empty string. This means a value that is an empty string `""` in JS would be passed through `toString()` (returning `""`) and then returned as-is. In C++, an empty string returns `""` immediately. While functionally equivalent for strings, the JS version also handles non-string types (numbers, booleans) via `toString()`, whereas the C++ only accepts `const std::string&` — callers must convert to string before calling.
 
-### ⬜ 542. [CSVWriter.cpp] Row values are `std::string` only — JS supports arbitrary types per field
+### ✅ 542. [CSVWriter.cpp] Row values are `std::string` only — JS supports arbitrary types per field
 - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 33–35, 74–79
 - **Status**: Verified
 - **Details**: The JS `addRow()` accepts an `object` whose field values can be any type (number, boolean, null, etc.) — `escapeCSVField` handles all types via `value.toString()`. The C++ `addRow()` only accepts `std::unordered_map<std::string, std::string>`, requiring all values to be pre-converted to strings by the caller. This shifts the type conversion responsibility to the caller and means null/undefined handling (JS returns `''` for these) must be handled externally.
 
-### ⬜ 543. [GLBWriter.h] Constants declared as `inline constexpr` in header — JS uses module-level `const`
+### ✅ 543. [GLBWriter.h] Constants declared as `inline constexpr` in header — JS uses module-level `const`
 - **JS Source**: `src/js/3D/writers/GLBWriter.js` lines 8–14
 - **Status**: Verified
 - **Details**: JS declares `GLB_MAGIC`, `GLB_VERSION`, `CHUNK_TYPE_JSON`, `CHUNK_TYPE_BIN` as module-scoped constants (not exported). The C++ declares these as `inline constexpr` in the header file, making them visible to all translation units that include `GLBWriter.h`. This leaks implementation-detail constants into the global namespace. They should be either `static constexpr` in the `.cpp` file or in an anonymous namespace. While not a functional bug, it deviates from the JS's module-local scoping.

@@ -238,10 +238,10 @@ WMOExportTextureResult WMOExporter::exportTextures(const std::filesystem::path& 
 		if (material.shader == 23) {
 			materialTextures.push_back(material.flags3);
 			materialTextures.push_back(material.color3);
-			if (material.runtimeData.size() > 0) materialTextures.push_back(material.runtimeData[0]);
-			if (material.runtimeData.size() > 1) materialTextures.push_back(material.runtimeData[1]);
-			if (material.runtimeData.size() > 2) materialTextures.push_back(material.runtimeData[2]);
-			if (material.runtimeData.size() > 3) materialTextures.push_back(material.runtimeData[3]);
+			materialTextures.push_back(material.runtimeData[0]);
+			materialTextures.push_back(material.runtimeData[1]);
+			materialTextures.push_back(material.runtimeData[2]);
+			materialTextures.push_back(material.runtimeData[3]);
 
 			dontUseFirstTexture = true;
 		}
@@ -371,16 +371,19 @@ void WMOExporter::exportAsGLTF(const std::filesystem::path& out, casc::ExportHel
 	const std::string ext = (format == "glb") ? ".glb" : ".gltf";
 	const std::string outFile = casc::ExportHelper::replaceExtension(out.string(), ext);
 
+	std::string formatUpper = format;
+	std::transform(formatUpper.begin(), formatUpper.end(), formatUpper.begin(), ::toupper);
+
 	// Skip export if file exists and overwriting is disabled.
 	if (!core::view->config.value("overwriteFiles", true) && generics::fileExists(outFile)) {
-		logging::write(std::format("Skipping {} export of {} (already exists, overwrite disabled)", format, outFile));
+		logging::write(std::format("Skipping {} export of {} (already exists, overwrite disabled)", formatUpper, outFile));
 		return;
 	}
 
 	const std::string wmo_name = std::filesystem::path(outFile).stem().string();
 	GLTFWriter gltf(out.string(), wmo_name);
 
-	logging::write(std::format("Exporting WMO model {} as {}: {}", wmo_name, format, outFile));
+	logging::write(std::format("Exporting WMO model {} as {}: {}", wmo_name, formatUpper, outFile));
 
 	wmo->load();
 
@@ -1576,9 +1579,12 @@ void WMOExporter::exportRaw(const std::filesystem::path& out, casc::ExportHelper
 					groupName = casc::ExportHelper::replaceExtension(wmoFileName, "_" + paddedIndex + ".wmo");
 				
 				uint32_t groupFileDataID = 0;
-				if (groupOffset < wmo->groupIDs.size())
+				bool groupIDResolved = false;
+				if (groupOffset < wmo->groupIDs.size()) {
 					groupFileDataID = wmo->groupIDs[groupOffset];
-				if (groupFileDataID == 0) {
+					groupIDResolved = true;
+				}
+				if (!groupIDResolved) {
 					auto fid = casc::listfile::getByFilename(groupName);
 					groupFileDataID = fid.value_or(0);
 				}

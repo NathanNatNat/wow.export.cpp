@@ -10,14 +10,6 @@
 
 class BufferWrapper;
 
-// glb magic number: 'glTF' in ascii
-inline constexpr uint32_t GLB_MAGIC = 0x46546C67;
-inline constexpr uint32_t GLB_VERSION = 2;
-
-// chunk types
-inline constexpr uint32_t CHUNK_TYPE_JSON = 0x4E4F534A;
-inline constexpr uint32_t CHUNK_TYPE_BIN = 0x004E4942;
-
 class GLBWriter {
 public:
 	/**
