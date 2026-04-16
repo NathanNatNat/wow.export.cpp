@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/214 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/227 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1028,3 +1028,68 @@
 - **JS Source**: `src/js/db/caches/DBDecorCategories.js` lines 10–56
 - **Status**: Pending
 - **Details**: JS uses async initialization plus `Map`/`Set` insertion order iteration; C++ ports to synchronous initialization with `std::unordered_map`/`std::unordered_set`, which can change iteration ordering and timing semantics.
+
+### 215. [DBGuildTabard.cpp] Sibling `.cpp` file is still unconverted JavaScript and appears swapped with `.js`
+- **JS Source**: `src/js/db/caches/DBGuildTabard.js` lines 1–133
+- **Status**: Pending
+- **Details**: `DBGuildTabard.cpp` contains JS module code (`require`, `module.exports`, async functions), while the sibling `DBGuildTabard.js` contains C++ code, so the `.cpp` translation unit is not actually a C++ line-by-line port of the JS source.
+
+### 216. [DBItemCharTextures.cpp] Initialization flow is synchronous and drops JS shared-promise semantics
+- **JS Source**: `src/js/db/caches/DBItemCharTextures.js` lines 34–88
+- **Status**: Pending
+- **Details**: JS uses `init_promise` and async `initialize/ensureInitialized` so concurrent callers await the same in-flight work; C++ uses synchronous initialization with no promise-sharing behavior.
+
+### 217. [DBItemCharTextures.cpp] Race/gender texture selection fallback differs from JS behavior
+- **JS Source**: `src/js/db/caches/DBItemCharTextures.js` lines 129–135
+- **Status**: Pending
+- **Details**: JS pushes `bestFileDataID` as returned (can be `undefined` when no match), but C++ falls back to the first entry (`value_or((*file_data_ids)[0])`), changing file-data selection behavior.
+
+### 218. [DBItemDisplays.cpp] Item display cache initialization is synchronous instead of JS async flow
+- **JS Source**: `src/js/db/caches/DBItemDisplays.js` lines 18–53
+- **Status**: Pending
+- **Details**: JS `initializeItemDisplays` is Promise-based and awaits DB2/cache calls; C++ ports this path as synchronous blocking logic.
+
+### 219. [DBItemGeosets.cpp] Initialization lifecycle is synchronous and omits JS `init_promise` contract
+- **JS Source**: `src/js/db/caches/DBItemGeosets.js` lines 154–220
+- **Status**: Pending
+- **Details**: JS uses async initialization with `init_promise` deduplication; C++ uses a synchronous one-shot initializer and cannot preserve awaitable initialization semantics.
+
+### 220. [DBItemGeosets.cpp] Equipped-items input coercion differs from JS `Object.entries` + `parseInt` behavior
+- **JS Source**: `src/js/db/caches/DBItemGeosets.js` lines 251–259, 339–345
+- **Status**: Pending
+- **Details**: JS accepts plain objects keyed by strings and parses slot IDs with `parseInt`; C++ requires `std::unordered_map<int, uint32_t>` inputs, removing JS key-coercion behavior.
+
+### 221. [DBItemModels.cpp] Item model cache initialization is synchronous instead of JS Promise-based flow
+- **JS Source**: `src/js/db/caches/DBItemModels.js` lines 22–103
+- **Status**: Pending
+- **Details**: JS uses async `initialize` with shared `init_promise` and awaited dependent caches; C++ performs the entire load synchronously with no async/promise contract.
+
+### 222. [DBItems.cpp] Item cache initialization is synchronous and does not preserve JS shared `init_promise`
+- **JS Source**: `src/js/db/caches/DBItems.js` lines 14–59
+- **Status**: Pending
+- **Details**: JS deduplicates concurrent initialization via `init_promise` and async functions; C++ uses synchronous initialization and lacks equivalent awaitable behavior.
+
+### 223. [DBModelFileData.cpp] Model mapping loader is synchronous instead of JS async API
+- **JS Source**: `src/js/db/caches/DBModelFileData.js` lines 17–35
+- **Status**: Pending
+- **Details**: JS exposes `initializeModelFileData` as an async Promise-based loader; C++ implementation is synchronous blocking code.
+
+### 224. [DBNpcEquipment.cpp] NPC equipment cache initialization is synchronous and drops JS `init_promise`
+- **JS Source**: `src/js/db/caches/DBNpcEquipment.js` lines 30–66
+- **Status**: Pending
+- **Details**: JS uses async initialization with in-flight promise reuse; C++ initialization is synchronous and does not retain the JS async concurrency contract.
+
+### 225. [DBTextureFileData.cpp] Texture mapping loader/ensure APIs are synchronous instead of JS async APIs
+- **JS Source**: `src/js/db/caches/DBTextureFileData.js` lines 16–52
+- **Status**: Pending
+- **Details**: JS defines async `initializeTextureFileData` and `ensureInitialized`; C++ ports both as synchronous methods.
+
+### 226. [DBTextureFileData.cpp] UsageType remap path remains a TODO placeholder in C++ port
+- **JS Source**: `src/js/db/caches/DBTextureFileData.js` line 24
+- **Status**: Pending
+- **Details**: C++ retains the same `TODO` comment (`Need to remap this to support other UsageTypes`) and still skips non-zero `UsageType`, leaving this path explicitly unfinished.
+
+### 227. [xxhash64.cpp] Public API contract differs from JS callable-export behavior
+- **JS Source**: `src/js/hashing/xxhash64.js` lines 64–75, 286–288
+- **Status**: Pending
+- **Details**: JS exports a callable function that doubles as constructor/state prototype (`module.exports = XXH64`), while C++ exposes a class/static-method API only, changing the original module’s call surface semantics.
