@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/83 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/88 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -372,3 +372,28 @@
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 88–89, 141–142
 - **Status**: Pending
 - **Details**: JS exports UV1 whenever it is defined (`!== undefined`), including empty arrays. C++ requires `!m3->uv1.empty()`, which changes behavior for defined-but-empty UV sets.
+
+### 84. [WMOExporter.cpp] Export methods are synchronous instead of JS Promise-based async flow
+- **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 62, 219, 360, 739, 841, 1179
+- **Status**: Pending
+- **Details**: JS uses async export methods (`exportTextures`, `exportAsGLTF`, `exportAsOBJ`, `exportAsSTL`, `exportGroupsAsSeparateOBJ`, `exportRaw`) with awaited CASC/file operations, while C++ executes these paths synchronously.
+
+### 85. [WMOLegacyExporter.cpp] Export methods are synchronous instead of JS Promise-based async flow
+- **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 47, 130, 392, 478
+- **Status**: Pending
+- **Details**: JS legacy WMO export methods are async and await texture/model I/O; C++ methods (`exportTextures`, `exportAsOBJ`, `exportAsSTL`, `exportRaw`) are synchronous, changing timing/cancellation semantics.
+
+### 86. [GLContext.cpp] Context creation and capability detection behavior differs from JS canvas/WebGL2 path
+- **JS Source**: `src/js/3D/gl/GLContext.js` lines 29–41, 55–63
+- **Status**: Pending
+- **Details**: JS creates the context with per-call options and throws `WebGL2 not supported` if context acquisition fails; it also conditionally enables anisotropy/float-texture extension flags. C++ assumes an already-created GL context and sets some capability flags via desktop-core assumptions instead of matching JS extension-availability behavior.
+
+### 87. [ANIMLoader.cpp] `load` API is synchronous instead of JS async Promise-based method
+- **JS Source**: `src/js/3D/loaders/ANIMLoader.js` line 25
+- **Status**: Pending
+- **Details**: JS exposes `async load(isChunked = true)` while C++ exposes synchronous `void load(bool isChunked)`, changing API timing/await semantics.
+
+### 88. [BONELoader.cpp] `load` API is synchronous instead of JS async Promise-based method
+- **JS Source**: `src/js/3D/loaders/BONELoader.js` line 24
+- **Status**: Pending
+- **Details**: JS exposes `async load()` while C++ exposes synchronous `void load()`, changing API timing/await semantics.
