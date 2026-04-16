@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 25/191 audited (13%)**
+**Progress: 30/191 audited (16%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -29,11 +29,11 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 23. `src/js/wmv.cpp`
 - [x] 24. `src/js/wowhead.cpp`
 - [x] 25. `src/js/xml.cpp`
-- [ ] 26. `src/js/3D/AnimMapper.cpp`
-- [ ] 27. `src/js/3D/BoneMapper.cpp`
-- [ ] 28. `src/js/3D/GeosetMapper.cpp`
-- [ ] 29. `src/js/3D/ShaderMapper.cpp`
-- [ ] 30. `src/js/3D/Shaders.cpp`
+- [x] 26. `src/js/3D/AnimMapper.cpp`
+- [x] 27. `src/js/3D/BoneMapper.cpp`
+- [x] 28. `src/js/3D/GeosetMapper.cpp`
+- [x] 29. `src/js/3D/ShaderMapper.cpp`
+- [x] 30. `src/js/3D/Shaders.cpp`
 - [ ] 31. `src/js/3D/Skin.cpp`
 - [ ] 32. `src/js/3D/Texture.cpp`
 - [ ] 33. `src/js/3D/WMOShaderMapper.cpp`
