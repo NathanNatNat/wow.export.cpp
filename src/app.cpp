@@ -2627,6 +2627,7 @@ int main(int argc, char* argv[]) {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
+	ImGui::GetStyle().ScaleAllSizes(1.5f);
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
 	// Apply the app theme.
@@ -2856,42 +2857,26 @@ int main(int argc, char* argv[]) {
 				int fb_w, fb_h;
 				glfwGetFramebufferSize(window, &fb_w, &fb_h);
 
-				// Convert framebuffer size to CSS-equivalent pixels.
-				// On macOS Retina: fb=2560, dpiScale=2 → css=1280 (screen coords)
-				// On Windows 150%: fb=1920, dpiScale=1.5 → css=1280 (CSS pixels)
-				// On standard 1×: fb=1280, dpiScale=1 → css=1280 (identical)
-				float css_w = static_cast<float>(fb_w) / dpiScale;
-				float css_h = static_cast<float>(fb_h) / dpiScale;
+				// Keep baseline in window coordinate space (matches io.MousePos source).
+				float css_w = static_cast<float>(win_w);
+				float css_h = static_cast<float>(win_h);
 
-				// Logical size: at least threshold dimensions, matching JS
-				// container.style.width/height = SCALE_THRESHOLD when below.
+				// JS threshold behavior first.
 				float logical_w = (std::max)(css_w, static_cast<float>(SCALE_THRESHOLD_W));
 				float logical_h = (std::max)(css_h, static_cast<float>(SCALE_THRESHOLD_H));
 
-				// Override display size to logical dimensions so ImGui lays out
-				// the UI at the CSS-equivalent size even on HiDPI displays.
 				io.DisplaySize = ImVec2(logical_w, logical_h);
 
-				// Framebuffer scale maps logical coords to actual framebuffer
-				// pixels. This handles both DPI scaling and window-size scaling.
 				io.DisplayFramebufferScale = ImVec2(
 					static_cast<float>(fb_w) / logical_w,
 					static_cast<float>(fb_h) / logical_h);
 
-				// Remap mouse position from screen coordinates (set by
-				// ImGui_ImplGlfw_NewFrame) to logical coordinates.
-				if (io.MousePos.x != -FLT_MAX) {
-					float screen_to_logical_x = logical_w / static_cast<float>(win_w);
-					float screen_to_logical_y = logical_h / static_cast<float>(win_h);
-					io.MousePos.x *= screen_to_logical_x;
-					io.MousePos.y *= screen_to_logical_y;
+				if (io.MousePos.x != -FLT_MAX && win_w > 0 && win_h > 0) {
+					io.MousePos.x *= (logical_w / static_cast<float>(win_w));
+					io.MousePos.y *= (logical_h / static_cast<float>(win_h));
 				}
 
-				// FontGlobalScale compensates for fonts being rasterized at
-				// baseSize * dpiScale; dividing by dpiScale brings them back to
-				// logical baseSize. The DisplayFramebufferScale above then maps
-				// those logical pixels to the correct physical framebuffer size.
-				io.FontGlobalScale = 1.0f / dpiScale;
+				io.FontGlobalScale = 1.5f / dpiScale;
 			}
 
 			ImGui::NewFrame();
