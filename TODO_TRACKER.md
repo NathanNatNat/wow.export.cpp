@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/245 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/267 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1183,3 +1183,113 @@
 - **JS Source**: `src/js/modules/screen_settings.js` lines 111–115, 178–183, 232–236
 - **Status**: Pending
 - **Details**: JS uses `.ui-multi-button` grouped toggles for path format, export metadata, and copy mode; C++ replaces these with ImGui radio buttons/checkboxes, causing visible layout and styling deviations.
+
+### 246. [screen_source_select.cpp] Source selection load flow is no longer Promise-based like JS
+- **JS Source**: `src/js/modules/screen_source_select.js` lines 85–140, 142–167, 169–204, 267–287
+- **Status**: Pending
+- **Details**: JS source-open and build-load paths are async/await methods; C++ replaces these with synchronous calls and background-thread posting, changing timing/error propagation behavior versus the original module flow.
+
+### 247. [screen_source_select.cpp] Hidden directory input reset/click flow is replaced with direct native dialog calls
+- **JS Source**: `src/js/modules/screen_source_select.js` lines 252–258, 289–295, 326–337
+- **Status**: Pending
+- **Details**: JS creates persistent `<input nwdirectory>` selectors and resets `.value` before click to preserve reselection behavior; C++ calls `file_field::openDirectoryDialog()` directly and does not preserve the original selector-reset path.
+
+### 248. [screen_source_select.cpp] CASC initialization failure toast omits JS support action
+- **JS Source**: `src/js/modules/screen_source_select.js` lines 134–137
+- **Status**: Pending
+- **Details**: JS error toast includes both `View Log` and `Visit Support Discord` actions; C++ keeps only `View Log`, removing one original recovery handler.
+
+### 249. [tab_audio.cpp] Audio quick-filter list path is missing from listbox wiring
+- **JS Source**: `src/js/modules/tab_audio.js` line 190
+- **Status**: Pending
+- **Details**: JS passes `$core.view.audioQuickFilters` into the sound listbox. C++ passes an empty quickfilter list (`{}`), so the original quick-filter behavior is not available.
+
+### 250. [tab_audio.cpp] `unload_track` no longer revokes preview URL data like JS
+- **JS Source**: `src/js/modules/tab_audio.js` lines 95–97
+- **Status**: Pending
+- **Details**: JS explicitly calls `file_data?.revokeDataURL()` and clears `file_data`; C++ has no equivalent revoke path, changing cleanup behavior for previewed track resources.
+
+### 251. [tab_audio.cpp] Sound player visuals differ from the JS template/CSS implementation
+- **JS Source**: `src/js/modules/tab_audio.js` lines 203–228
+- **Status**: Pending
+- **Details**: JS renders `#sound-player-anim`, custom component sliders, and CSS-styled play-state button classes; C++ uses plain ImGui button/slider widgets and a different animated icon presentation, so visuals are not identical.
+
+### 252. [tab_blender.cpp] Blender version gating semantics differ from JS string comparison behavior
+- **JS Source**: `src/js/modules/tab_blender.js` lines 91, 139
+- **Status**: Pending
+- **Details**: JS compares versions as strings (`version >= MIN_VER`, `blender_version < MIN_VER`), while C++ parses with `std::stod` and compares numerically, changing edge-case ordering behavior.
+
+### 253. [tab_blender.cpp] Blender install screen layout is not a pixel-equivalent port of JS markup
+- **JS Source**: `src/js/modules/tab_blender.js` lines 59–69
+- **Status**: Pending
+- **Details**: JS uses structured `#blender-info`/`#blender-info-buttons` markup with CSS-defined spacing/styling; C++ replaces it with simple ImGui text/separator/buttons, producing visual/layout mismatch.
+
+### 254. [tab_changelog.cpp] Changelog path resolution logic differs from JS two-path contract
+- **JS Source**: `src/js/modules/tab_changelog.js` lines 14–16
+- **Status**: Pending
+- **Details**: JS uses `BUILD_RELEASE ? './src/CHANGELOG.md' : '../../CHANGELOG.md'`; C++ adds a third fallback (`CHANGELOG.md`) and different path probing order, changing source resolution behavior.
+
+### 255. [tab_characters.cpp] Saved-character thumbnail card rendering is replaced by a placeholder button path
+- **JS Source**: `src/js/modules/tab_characters.js` lines 1928–1934
+- **Status**: Pending
+- **Details**: JS renders thumbnail backgrounds and overlay action buttons in `.saved-character-card`; C++ renders a generic button with a `// thumbnail placeholder` path, so card visuals and thumbnail behavior diverge.
+
+### 256. [tab_characters.cpp] Main-screen quick-save flow skips JS thumbnail capture step
+- **JS Source**: `src/js/modules/tab_characters.js` lines 1973, 2328–2333
+- **Status**: Pending
+- **Details**: JS quick-save button routes through `open_save_prompt()` which captures `chrPendingThumbnail` before prompting; C++ main `Save` button only toggles prompt state and does not capture a fresh thumbnail first.
+
+### 257. [tab_characters.cpp] Outside-click handlers for import/color popups from JS mounted lifecycle are missing
+- **JS Source**: `src/js/modules/tab_characters.js` lines 2668–2685
+- **Status**: Pending
+- **Details**: JS registers a document click listener to close color pickers and floating import panels when clicking elsewhere; C++ has no equivalent mounted/unmounted document-listener path, changing panel-dismiss behavior.
+
+### 258. [tab_creatures.cpp] Creature list context actions are not equivalent to JS copy-name/copy-ID menu
+- **JS Source**: `src/js/modules/tab_creatures.js` lines 983–986, 1179–1203
+- **Status**: Pending
+- **Details**: JS creature list context menu exposes only `Copy name(s)` and `Copy ID(s)` handlers; C++ delegates to generic `listbox_context::handle_context_menu(...)`, changing the context action contract from the original creature-specific menu.
+
+### 259. [tab_data.cpp] Data-table cell copy stringification differs from JS `String(value)` behavior
+- **JS Source**: `src/js/modules/tab_data.js` lines 172–177
+- **Status**: Pending
+- **Details**: JS copies with `String(value)`, while C++ uses `value.dump()`; for string JSON values this includes JSON quoting/escaping, changing clipboard output.
+
+### 260. [tab_data.cpp] DB2 load error toast omits JS `View Log` action callback
+- **JS Source**: `src/js/modules/tab_data.js` lines 80–82
+- **Status**: Pending
+- **Details**: JS error toast includes `{'View Log': () => log.openRuntimeLog()}`; C++ error toast uses empty actions, removing the original recovery handler.
+
+### 261. [tab_decor.cpp] PNG/CLIPBOARD export branch does not short-circuit like JS
+- **JS Source**: `src/js/modules/tab_decor.js` lines 129–140
+- **Status**: Pending
+- **Details**: JS returns immediately after preview export for PNG/CLIPBOARD; C++ closes the export stream but continues into full model export logic, changing export behavior for these formats.
+
+### 262. [tab_decor.cpp] Decor list context menu open/interaction path differs from JS ContextMenu component flow
+- **JS Source**: `src/js/modules/tab_decor.js` lines 234–237
+- **Status**: Pending
+- **Details**: JS renders a dedicated ContextMenu node for listbox selections (`Copy name(s)` / `Copy file data ID(s)`); C++ uses a manual popup path without equivalent Vue component lifecycle/wiring, deviating from original interaction flow.
+
+### 263. [tab_fonts.cpp] Font preview textarea is not rendered with the selected loaded font family
+- **JS Source**: `src/js/modules/tab_fonts.js` lines 67, 159–163
+- **Status**: Pending
+- **Details**: JS binds preview textarea style `fontFamily` to the loaded font id; C++ updates `fontPreviewFontFamily` state but renders `InputTextMultiline` without switching ImGui font, so preview text does not reflect selected font family.
+
+### 264. [tab_fonts.cpp] Loaded font cache contract differs from JS URL-based font-face lifecycle
+- **JS Source**: `src/js/modules/tab_fonts.js` lines 10, 30–32
+- **Status**: Pending
+- **Details**: JS caches `font_id -> blob URL` from `inject_font_face`, preserving URL/font-face lifecycle; C++ caches `font_id -> void*` ImGui font pointer, changing resource model and API behavior.
+
+### 265. [tab_help.cpp] Search filtering no longer uses JS 300ms debounce behavior
+- **JS Source**: `src/js/modules/tab_help.js` lines 145–149, 153–157
+- **Status**: Pending
+- **Details**: JS applies article filtering via `setTimeout(..., 300)` debounce on `search_query`; C++ filters immediately on each input change, changing responsiveness and update timing.
+
+### 266. [tab_help.cpp] Help article list presentation differs from JS title/tag/KB layout
+- **JS Source**: `src/js/modules/tab_help.js` lines 115–121
+- **Status**: Pending
+- **Details**: JS renders per-item title and a separate tags row with KB badge styling; C++ combines content into selectable labels and tooltip tags, so article list visuals/structure are not identical.
+
+### 267. [tab_changelog.cpp] Changelog screen typography/layout diverges from JS `#changelog` template styling
+- **JS Source**: `src/js/modules/tab_changelog.js` lines 31–35
+- **Status**: Pending
+- **Details**: JS uses dedicated `#changelog`/`#changelog-text` template structure and CSS styling; C++ renders plain ImGui title/separator/button layout, causing visible UI differences.
