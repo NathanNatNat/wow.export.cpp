@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/66 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/74 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -287,3 +287,43 @@
 - **JS Source**: `src/js/xml.js` lines 25–29, 39, 89, 97
 - **Status**: Pending
 - **Details**: JS safely reads `xml[pos]` as `undefined` at end-of-input, but C++ reads `xml[pos]` in `parse_attributes()`/`parse_node()` without guarding `pos < xml.size()` at several checks, which can trigger out-of-bounds access on malformed/truncated XML.
+
+### 67. [Skin.cpp] `load()` API timing differs from JS Promise-based async flow
+- **JS Source**: `src/js/3D/Skin.js` lines 20–23, 96–100
+- **Status**: Pending
+- **Details**: JS exposes `async load()` and awaits CASC file retrieval (`await core.view.casc.getFile(...)`), while C++ `Skin::load()` is synchronous and throws directly, changing caller timing/error-propagation semantics.
+
+### 68. [Texture.cpp] `getTextureFile()` return contract differs from JS async/null behavior
+- **JS Source**: `src/js/3D/Texture.js` lines 32–41
+- **Status**: Pending
+- **Details**: JS returns a Promise from `async getTextureFile()` and yields `null` when unset; C++ returns `std::optional<BufferWrapper>` synchronously, changing both async behavior and API shape.
+
+### 69. [WMOShaderMapper.cpp] Pixel shader enum naming deviates from JS export contract
+- **JS Source**: `src/js/3D/WMOShaderMapper.js` lines 35, 90, 94
+- **Status**: Pending
+- **Details**: JS exports `WMOPixelShader.MapObjParallax`, while C++ renames this constant to `MapObjParallax_PS`; numeric mapping is preserved but exported identifier parity differs from the original module.
+
+### 70. [CameraControlsGL.cpp] Event listener lifecycle from JS `init()/dispose()` is not ported equivalently
+- **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 198–221
+- **Status**: Pending
+- **Details**: JS `init()` registers DOM/document listeners and `dispose()` removes document listeners, but C++ relies on externally forwarded events and only resets state, changing ownership/lifecycle semantics.
+
+### 71. [CameraControlsGL.cpp] Input default-handling behavior differs from JS browser event flow
+- **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 223–248, 257–262, 309–329
+- **Status**: Pending
+- **Details**: JS calls `preventDefault()` (and wheel `stopPropagation()`), while C++ handler methods have no equivalent suppression path, so browser-default behavior parity is not represented.
+
+### 72. [CameraControlsGL.cpp] Mouse-down focus fallback differs from JS
+- **JS Source**: `src/js/3D/camera/CameraControlsGL.js` line 226
+- **Status**: Pending
+- **Details**: JS falls back to `window.focus()` when `dom_element.focus` is unavailable; C++ only invokes `dom_element.focus` if present and has no fallback focus path.
+
+### 73. [CharacterCameraControlsGL.cpp] DOM/document listener registration-removal flow differs from JS
+- **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` lines 27–35, 42–43, 51–52, 122–129, 170–175
+- **Status**: Pending
+- **Details**: JS stores handler refs, registers mousedown/wheel/contextmenu listeners in constructor, dynamically attaches/removes document mousemove/mouseup listeners, and removes listeners in `dispose()`; C++ omits this lifecycle and depends on caller-forwarded events.
+
+### 74. [CharacterCameraControlsGL.cpp] Event suppression parity is missing in mouse handlers
+- **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` lines 45, 54, 68, 114, 133–135
+- **Status**: Pending
+- **Details**: JS calls `preventDefault()` during rotate/pan interactions and both `preventDefault()`/`stopPropagation()` on wheel; C++ has no equivalent event suppression behavior.
