@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 100/191 audited (52%)**
+**Progress: 110/191 audited (58%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -104,16 +104,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 98. `src/js/casc/version-config.cpp`
 - [x] 99. `src/js/casc/vp9-avi-demuxer.cpp`
 - [x] 100. `src/js/components/checkboxlist.cpp`
-- [ ] 101. `src/js/components/combobox.cpp`
-- [ ] 102. `src/js/components/context-menu.cpp`
-- [ ] 103. `src/js/components/data-table.cpp`
-- [ ] 104. `src/js/components/file-field.cpp`
-- [ ] 105. `src/js/components/home-showcase.cpp`
-- [ ] 106. `src/js/components/itemlistbox.cpp`
-- [ ] 107. `src/js/components/listbox-maps.cpp`
-- [ ] 108. `src/js/components/listbox-zones.cpp`
-- [ ] 109. `src/js/components/listbox.cpp`
-- [ ] 110. `src/js/components/listboxb.cpp`
+- [x] 101. `src/js/components/combobox.cpp`
+- [x] 102. `src/js/components/context-menu.cpp`
+- [x] 103. `src/js/components/data-table.cpp`
+- [x] 104. `src/js/components/file-field.cpp`
+- [x] 105. `src/js/components/home-showcase.cpp`
+- [x] 106. `src/js/components/itemlistbox.cpp`
+- [x] 107. `src/js/components/listbox-maps.cpp`
+- [x] 108. `src/js/components/listbox-zones.cpp`
+- [x] 109. `src/js/components/listbox.cpp`
+- [x] 110. `src/js/components/listboxb.cpp`
 - [ ] 111. `src/js/components/map-viewer.cpp`
 - [ ] 112. `src/js/components/markdown-content.cpp`
 - [ ] 113. `src/js/components/menu-button.cpp`
