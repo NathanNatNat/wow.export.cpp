@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/131 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/146 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -612,3 +612,78 @@
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 199–218
 - **Status**: Pending
 - **Details**: JS uses an async generator for `streamBlocks()` and returns an object URL from `createBlobURL()` via `BlobPolyfill/URLPolyfill`. C++ uses eager callback iteration and returns concatenated raw bytes (`BufferWrapper`) instead of a blob URL string.
+
+### 132. [build-cache.cpp] Build cache APIs are synchronous instead of JS Promise-based async methods
+- **JS Source**: `src/js/casc/build-cache.js` lines 49–152, 174–257
+- **Status**: Pending
+- **Details**: JS uses async methods (`init/getFile/storeFile/saveCacheIntegrity/saveManifest`) and async event handlers with awaited I/O; C++ runs equivalent flows synchronously, changing timing/error propagation behavior.
+
+### 133. [build-cache.cpp] Cache cleanup size subtraction behavior differs from JS
+- **JS Source**: `src/js/casc/build-cache.js` lines 247–254
+- **Status**: Pending
+- **Details**: JS always performs `deleteSize -= manifestSize` (can go negative with Number); C++ adds an unsigned underflow guard before subtraction, changing edge-case cache-size accounting semantics.
+
+### 134. [casc-source-local.cpp] Local CASC public/file-loading methods are synchronous instead of JS async methods
+- **JS Source**: `src/js/casc/casc-source-local.js` lines 42–517
+- **Status**: Pending
+- **Details**: JS methods (`init/getFile/getFileStream/load/loadConfigs/loadIndexes/parseIndex/loadEncoding/loadRoot/initializeRemoteCASC/getDataFileWithRemoteFallback/getDataFile/_ensureFileInCache/getFileEncodingInfo`) are Promise-based; C++ equivalents are synchronous.
+
+### 135. [casc-source-local.cpp] Remote CASC initialization region fallback differs from JS behavior
+- **JS Source**: `src/js/casc/casc-source-local.js` lines 324–332
+- **Status**: Pending
+- **Details**: JS directly constructs `new CASCRemote(core.view.selectedCDNRegion.tag)`; C++ silently falls back to `constants::PATCH::DEFAULT_REGION` when `selectedCDNRegion.tag` is missing, altering failure/selection behavior.
+
+### 136. [casc-source-remote.cpp] Remote CASC lifecycle and data-access methods are synchronous instead of JS async methods
+- **JS Source**: `src/js/casc/casc-source-remote.js` lines 37–556
+- **Status**: Pending
+- **Details**: JS uses async Promise-based control flow for initialization/config/archive loading and file access (`init/getVersionConfig/getConfig/getCDNConfig/getFile/getFileStream/preload/load/loadEncoding/loadRoot/loadArchives/loadServerConfig/parseArchiveIndex/getDataFile/getDataFilePartial/loadConfigs/resolveCDNHost/_ensureFileInCache/getFileEncodingInfo`); C++ is synchronous.
+
+### 137. [casc-source-remote.cpp] HTTP error detail from remote config requests differs from JS
+- **JS Source**: `src/js/casc/casc-source-remote.js` lines 75–79, 98–102, 121
+- **Status**: Pending
+- **Details**: JS includes HTTP status codes in thrown messages for `getConfig/getCDNConfig`; C++ checks only for empty `generics::get()` payload and throws generic HTTP error strings without the JS status payload.
+
+### 138. [casc-source.cpp] `getFileByName` no longer forwards to subclass file-reader path like JS
+- **JS Source**: `src/js/casc/casc-source.js` lines 169–191
+- **Status**: Pending
+- **Details**: JS `getFileByName(...)` forwards all read flags to polymorphic `this.getFile(...)` on subclass implementations; C++ `CASC::getFileByName(...)` returns only the encoding key from base `getFile`, changing behavior and API contract.
+
+### 139. [casc-source.cpp] Base CASC APIs are synchronous instead of JS async methods
+- **JS Source**: `src/js/casc/casc-source.js` lines 70–275, 312–444
+- **Status**: Pending
+- **Details**: JS methods (`getInstallManifest/getFile/getFileEncodingInfo/getFileByName/getVirtualFileByID/getVirtualFileByName/prepareListfile/prepareDBDManifest/loadListfile/parseRootFile/parseEncodingFile`) are Promise-based; C++ equivalents are synchronous.
+
+### 140. [cdn-resolver.cpp] Resolver API and internal host-resolution flow are synchronous instead of JS async Promise flow
+- **JS Source**: `src/js/casc/cdn-resolver.js` lines 43–116, 143–217
+- **Status**: Pending
+- **Details**: JS `getBestHost/getRankedHosts/_resolveRegionProduct/_resolveHosts` are async and await Promise pipelines; C++ resolves through blocking waits/futures and synchronous return APIs.
+
+### 141. [content-flags.cpp] Sibling `.cpp` translation unit does not contain line-by-line ported JS constant exports
+- **JS Source**: `src/js/casc/content-flags.js` lines 4–15
+- **Status**: Pending
+- **Details**: JS sibling exports all content-flag constants in the module body, while `content-flags.cpp` only includes the header and comments; parity exists only via header constants, not in the sibling `.cpp` implementation.
+
+### 142. [db2.cpp] `getRelationRows` preload-guard error semantics differ from JS proxy behavior
+- **JS Source**: `src/js/casc/db2.js` lines 45–53
+- **Status**: Pending
+- **Details**: JS proxy throws explicit errors if `getRelationRows` is called before parse/preload; C++ delegates to `WDCReader::getRelationRows()` behavior (commented as returning empty), so the JS error path is not preserved.
+
+### 143. [db2.cpp] JS async proxy call model is replaced with synchronous parse-once wrappers
+- **JS Source**: `src/js/casc/db2.js` lines 58–67, 75–92
+- **Status**: Pending
+- **Details**: JS wraps reader methods in async proxy handlers and memoized parse promises; C++ uses synchronous `std::call_once` parse guards with direct `WDCReader&` access, changing call timing and API behavior.
+
+### 144. [dbd-manifest.cpp] JS truthiness filter for manifest entries is not preserved for object/array values
+- **JS Source**: `src/js/casc/dbd-manifest.js` lines 30–34
+- **Status**: Pending
+- **Details**: JS `if (entry.tableName && entry.db2FileDataID)` treats objects/arrays as truthy; C++ truthiness logic only handles string/number/bool and treats other JSON value types as false, diverging from JS semantics.
+
+### 145. [export-helper.cpp] `getIncrementalFilename` is synchronous instead of JS async Promise API
+- **JS Source**: `src/js/casc/export-helper.js` lines 97–114
+- **Status**: Pending
+- **Details**: JS exposes `static async getIncrementalFilename(...)` and awaits `generics.fileExists`; C++ implementation is synchronous, changing timing/error behavior expected by Promise-style callers.
+
+### 146. [export-helper.cpp] Export failure stack-trace output target differs from JS
+- **JS Source**: `src/js/casc/export-helper.js` lines 284–288
+- **Status**: Pending
+- **Details**: JS writes stack traces with `console.log(stackTrace)` in `mark(...)`; C++ routes stack trace strings through `logging::write(...)`, changing where detailed error output appears.
