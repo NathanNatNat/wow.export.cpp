@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/146 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/164 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -687,3 +687,93 @@
 - **JS Source**: `src/js/casc/export-helper.js` lines 284–288
 - **Status**: Pending
 - **Details**: JS writes stack traces with `console.log(stackTrace)` in `mark(...)`; C++ routes stack trace strings through `logging::write(...)`, changing where detailed error output appears.
+
+### 147. [listfile.cpp] Public listfile APIs are synchronous instead of JS Promise-based async methods
+- **JS Source**: `src/js/casc/listfile.js` lines 478–500, 603–620, 710–756
+- **Status**: Pending
+- **Details**: JS exposes async `preload`, `prepareListfile`, `loadUnknownTextures`, `loadUnknownModels`, `loadUnknowns`, and `renderListfile`; C++ ports these as synchronous/blocking methods.
+
+### 148. [listfile.cpp] Shared preload promise semantics differ from JS
+- **JS Source**: `src/js/casc/listfile.js` lines 478–500
+- **Status**: Pending
+- **Details**: JS stores and returns `preload_promise` so all callers can await the same Promise result; C++ uses `void` entrypoints with internal future state and does not expose equivalent awaitable API behavior.
+
+### 149. [listfile.cpp] `applyPreload` return contract differs from JS
+- **JS Source**: `src/js/casc/listfile.js` lines 528–532, 591–601
+- **Status**: Pending
+- **Details**: JS returns `0` in fallback/no-match paths and otherwise returns `undefined`; C++ changes this API to `void`, removing JS return-value semantics.
+
+### 150. [listfile.cpp] `getByID` not-found sentinel differs from JS
+- **JS Source**: `src/js/casc/listfile.js` lines 778–794
+- **Status**: Pending
+- **Details**: JS returns `undefined` when ID lookup fails; C++ returns empty string, changing not-found representation and call-site semantics.
+
+### 151. [listfile.cpp] `getFilteredEntries` search contract differs from JS
+- **JS Source**: `src/js/casc/listfile.js` lines 832–857
+- **Status**: Pending
+- **Details**: JS auto-detects regex via `search instanceof RegExp` and propagates regex errors; C++ requires explicit `is_regex` flag and swallows invalid regex by returning empty results.
+
+### 152. [listfile.cpp] Binary preload list ordering can differ from JS Map insertion order
+- **JS Source**: `src/js/casc/listfile.js` lines 563–588
+- **Status**: Pending
+- **Details**: JS iterates `Map` keys in insertion order when building filtered preloaded lists; C++ iterates `std::unordered_map` in non-deterministic hash order, which can reorder displayed list entries.
+
+### 153. [locale-flags.cpp] Sibling `.cpp` translation unit does not contain line-by-line JS exports
+- **JS Source**: `src/js/casc/locale-flags.js` lines 4–40
+- **Status**: Pending
+- **Details**: JS sibling exports `flags` and `names` objects in module body, while `locale-flags.cpp` only includes the header and comments; parity lives in header constants rather than `.cpp` implementation.
+
+### 154. [realmlist.cpp] `load` API is synchronous instead of JS Promise-based async method
+- **JS Source**: `src/js/casc/realmlist.js` lines 36–65
+- **Status**: Pending
+- **Details**: JS exposes `async load()` with awaited cache/network I/O; C++ ports `load()` as synchronous blocking flow, changing timing/error propagation semantics.
+
+### 155. [realmlist.cpp] `realmListURL` coercion semantics differ from JS `String(...)` behavior
+- **JS Source**: `src/js/casc/realmlist.js` lines 39–42
+- **Status**: Pending
+- **Details**: JS converts any value with `String(core.view.config.realmListURL)` (including `undefined`), while C++ treats missing/null as empty and throws `Missing/malformed realmListURL`, changing edge-case behavior.
+
+### 156. [realmlist.cpp] Remote non-OK handling/logging path differs from JS response contract
+- **JS Source**: `src/js/casc/realmlist.js` lines 51–63
+- **Status**: Pending
+- **Details**: JS branches on `res.ok` and logs `Failed to retrieve ... (${res.status})` for non-OK responses; C++ uses byte-returning `generics::get()` and exception-based failure handling, removing explicit JS `res.ok/res.status` behavior.
+
+### 157. [tact-keys.cpp] Tact key lifecycle APIs are synchronous instead of JS async methods
+- **JS Source**: `src/js/casc/tact-keys.js` lines 65–137
+- **Status**: Pending
+- **Details**: JS `load`, `save`, and `doSave` are Promise-based/async; C++ ports to synchronous methods and immediate file I/O.
+
+### 158. [tact-keys.cpp] Save scheduling differs from JS `setImmediate` batching behavior
+- **JS Source**: `src/js/casc/tact-keys.js` lines 122–135
+- **Status**: Pending
+- **Details**: JS coalesces multiple save requests into a next-tick `setImmediate(doSave)` write; C++ runs `doSave()` immediately, changing batching/timing semantics.
+
+### 159. [tact-keys.cpp] Remote update error contract differs from JS HTTP status error path
+- **JS Source**: `src/js/casc/tact-keys.js` lines 89–93
+- **Status**: Pending
+- **Details**: JS throws `Unable to update tactKeys, HTTP ${res.status}` when response is non-OK; C++ throws a generic `Unable to update tactKeys: ...` message from caught exceptions without preserving JS status-based error contract.
+
+### 160. [vp9-avi-demuxer.cpp] Parsing/extraction flow is synchronous callback-based instead of JS async APIs
+- **JS Source**: `src/js/casc/vp9-avi-demuxer.js` lines 22–23, 83–126
+- **Status**: Pending
+- **Details**: JS exposes `async parse_header()` and `async* extract_frames()` generator semantics; C++ ports these to synchronous methods with callback iteration, changing consumption and scheduling behavior.
+
+### 161. [checkboxlist.cpp] Component lifecycle/event model differs from JS mounted/unmount listener flow
+- **JS Source**: `src/js/components/checkboxlist.js` lines 28–51, 122–134
+- **Status**: Pending
+- **Details**: JS registers/removes document-level mouse listeners and a `ResizeObserver`; C++ emulates behavior via per-frame ImGui polling and internal state, not equivalent listener lifecycle semantics.
+
+### 162. [checkboxlist.cpp] Scroll bound edge-case behavior differs for zero scrollbar range
+- **JS Source**: `src/js/components/checkboxlist.js` lines 102–106
+- **Status**: Pending
+- **Details**: JS sets `scrollRel = this.scroll / max` (allowing `Infinity/NaN` when `max === 0`); C++ clamps to `0.0f` when range is zero, changing parity in that edge case.
+
+### 163. [checkboxlist.cpp] Scrollbar height behavior differs from original CSS
+- **JS Source**: `src/js/components/checkboxlist.js` lines 93–94; `src/app.css` lines 1097–1103
+- **Status**: Pending
+- **Details**: JS/CSS uses `.scroller` with fixed `height: 45px` and resize math based on that DOM height; C++ computes a dynamic proportional thumb height with `std::max(20.0f, ...)`, producing different visual size/scroll behavior.
+
+### 164. [checkboxlist.cpp] Scrollbar default styling differs from CSS reference
+- **JS Source**: `src/app.css` lines 1106–1114, 1116–1117
+- **Status**: Pending
+- **Details**: CSS default scrollbar inner color/border uses `var(--border)` and hover uses `var(--font-highlight)`; C++ uses `FONT_PRIMARY` for default thumb color, causing visual mismatch against reference styling.
