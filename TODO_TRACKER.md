@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/60 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/66 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -257,3 +257,33 @@
 - **JS Source**: `src/js/subtitles.js` lines 13–20
 - **Status**: Pending
 - **Details**: JS uses `parseInt(...)` and can propagate `NaN` for malformed timestamp segments, while C++ digit-filter parsing can still produce numeric output from mixed/invalid strings.
+
+### 61. [tiled-png-writer.cpp] `write()` contract is synchronous instead of JS Promise-based async
+- **JS Source**: `src/js/tiled-png-writer.js` lines 123–125
+- **Status**: Pending
+- **Details**: JS exposes `async write(file)` and returns `await this.getBuffer().writeToFile(file)`, while C++ `TiledPNGWriter::write(...)` is `void` and synchronous.
+
+### 62. [updater.cpp] Update manifest flavour/guid source differs from JS runtime manifest
+- **JS Source**: `src/js/updater.js` lines 24–26, 33–35, 113
+- **Status**: Pending
+- **Details**: JS reads `nw.App.manifest.flavour/guid` at runtime, while C++ uses `constants::FLAVOUR` and `constants::BUILD_GUID`, changing update target selection/comparison behavior.
+
+### 63. [updater.cpp] Async update flow is flattened into synchronous calls
+- **JS Source**: `src/js/updater.js` lines 50, 61, 79, 103–104, 119–124
+- **Status**: Pending
+- **Details**: JS `applyUpdate`/`launchUpdater` are async and await progress/hash/download/process-launch steps; C++ runs these paths synchronously with blocking calls and no Promise-equivalent sequencing.
+
+### 64. [updater.cpp] Launch failure logging omits JS error-object log line
+- **JS Source**: `src/js/updater.js` lines 163–166
+- **Status**: Pending
+- **Details**: JS catch block logs both formatted message and the raw error object (`log.write(e)`), while C++ only logs the formatted message text (`e.what()`).
+
+### 65. [wowhead.cpp] Parse result field name differs from JS API (`class` vs `player_class`)
+- **JS Source**: `src/js/wowhead.js` lines 172, 226
+- **Status**: Pending
+- **Details**: JS returns `class` in parsed output objects; C++ stores this value in `ParseResult::player_class`, changing the exported result shape.
+
+### 66. [xml.cpp] End-of-input handling can dereference past bounds unlike JS parser semantics
+- **JS Source**: `src/js/xml.js` lines 25–29, 39, 89, 97
+- **Status**: Pending
+- **Details**: JS safely reads `xml[pos]` as `undefined` at end-of-input, but C++ reads `xml[pos]` in `parse_attributes()`/`parse_node()` without guarding `pos < xml.size()` at several checks, which can trigger out-of-bounds access on malformed/truncated XML.
