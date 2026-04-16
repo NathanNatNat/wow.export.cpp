@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 20/191 audited (10%)**
+**Progress: 25/191 audited (13%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -24,11 +24,11 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 18. `src/js/png-writer.cpp`
 - [x] 19. `src/js/stb-impl.cpp`
 - [x] 20. `src/js/subtitles.cpp`
-- [ ] 21. `src/js/tiled-png-writer.cpp`
-- [ ] 22. `src/js/updater.cpp`
-- [ ] 23. `src/js/wmv.cpp`
-- [ ] 24. `src/js/wowhead.cpp`
-- [ ] 25. `src/js/xml.cpp`
+- [x] 21. `src/js/tiled-png-writer.cpp`
+- [x] 22. `src/js/updater.cpp`
+- [x] 23. `src/js/wmv.cpp`
+- [x] 24. `src/js/wowhead.cpp`
+- [x] 25. `src/js/xml.cpp`
 - [ ] 26. `src/js/3D/AnimMapper.cpp`
 - [ ] 27. `src/js/3D/BoneMapper.cpp`
 - [ ] 28. `src/js/3D/GeosetMapper.cpp`
