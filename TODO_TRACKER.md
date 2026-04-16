@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/164 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/183 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -777,3 +777,99 @@
 - **JS Source**: `src/app.css` lines 1106–1114, 1116–1117
 - **Status**: Pending
 - **Details**: CSS default scrollbar inner color/border uses `var(--border)` and hover uses `var(--font-highlight)`; C++ uses `FONT_PRIMARY` for default thumb color, causing visual mismatch against reference styling.
+
+
+### 165. [combobox.cpp] Blur-close timing is frame-based instead of JS 200ms timeout
+- **JS Source**: `src/js/components/combobox.js` lines 67–72
+- **Status**: Pending
+- **Details**: JS uses `setTimeout(..., 200)` for blur-close timing, but C++ uses a fixed 12-frame countdown. The effective delay changes with frame rate, so dropdown close behavior differs from JS.
+
+### 166. [combobox.cpp] Dropdown menu is rendered in normal layout flow instead of absolute popup overlay
+- **JS Source**: `src/js/components/combobox.js` lines 87–93
+- **Status**: Pending
+- **Details**: JS renders `<ul>` as an absolutely positioned popup under the input. C++ renders the dropdown as an ImGui child region in normal flow, which can alter layout/overlap behavior and visual parity.
+
+### 167. [context-menu.cpp] Invisible hover buffer zone (`.context-menu-zone`) is not ported
+- **JS Source**: `src/js/components/context-menu.js` lines 54–56
+- **Status**: Pending
+- **Details**: JS includes a dedicated `.context-menu-zone` element to extend hover bounds around the menu. C++ explicitly omits it, which can change close-on-mouseleave behavior near menu edges.
+
+### 168. [data-table.cpp] Filter icon click no longer focuses the data-table filter input
+- **JS Source**: `src/js/components/data-table.js` lines 742–760
+- **Status**: Pending
+- **Details**: JS appends `column:` filter text and then focuses `#data-table-filter-input` with cursor placement. C++ only emits the new filter string and leaves focus behavior unimplemented.
+
+### 169. [data-table.cpp] Empty-string numeric sorting semantics differ from JS `Number(...)`
+- **JS Source**: `src/js/components/data-table.js` lines 179–193
+- **Status**: Pending
+- **Details**: JS treats `''` as numeric (`Number('') === 0`) during sort. C++ `tryParseNumber` rejects empty strings, so those values sort as text instead of numeric values.
+
+### 170. [data-table.cpp] Header sort/filter icons are custom-drawn instead of CSS/SVG assets
+- **JS Source**: `src/js/components/data-table.js` lines 988–1003
+- **Status**: Pending
+- **Details**: JS uses CSS icon classes backed by `fa-icons` images for exact visuals. C++ draws procedural triangles/lines, producing non-identical icon appearance versus the JS UI.
+
+### 171. [data-table.cpp] Native scroll-to-custom-scroll sync path from JS is missing
+- **JS Source**: `src/js/components/data-table.js` lines 51–57, 513–527
+- **Status**: Pending
+- **Details**: JS listens for native root scroll events and synchronizes custom scrollbar state. C++ omits this path entirely, so behavior differs from the original scroll synchronization model.
+
+### 172. [file-field.cpp] Directory dialog trigger moved from input focus to separate browse button
+- **JS Source**: `src/js/components/file-field.js` lines 34–40, 46
+- **Status**: Pending
+- **Details**: JS opens the directory picker when the text field receives focus. C++ opens the dialog only from a dedicated `...` button, changing interaction flow and UI behavior.
+
+### 173. [file-field.cpp] Same-directory reselection behavior differs from JS file input reset logic
+- **JS Source**: `src/js/components/file-field.js` lines 35–38
+- **Status**: Pending
+- **Details**: JS clears the hidden file input value before click so selecting the same directory re-triggers change emission. C++ dialog path does not mirror this reset contract.
+
+### 174. [home-showcase.cpp] Showcase card/video/background layer rendering is not ported
+- **JS Source**: `src/js/components/home-showcase.js` lines 15–29, 32–42, 55–57
+- **Status**: Pending
+- **Details**: JS builds a layered CSS showcase card with optional autoplay video and title overlay. C++ replaces this with plain text/buttons and no equivalent visual composition.
+
+### 175. [home-showcase.cpp] `background_style` computed output is missing from C++ render path
+- **JS Source**: `src/js/components/home-showcase.js` lines 15–29, 55–57
+- **Status**: Pending
+- **Details**: JS computes `backgroundImage/backgroundSize/backgroundPosition/backgroundRepeat` from base + showcase layers. C++ does not apply these style layers, so showcase visuals diverge.
+
+### 176. [home-showcase.cpp] Feedback action wiring differs from JS `data-kb-link` behavior
+- **JS Source**: `src/js/components/home-showcase.js` lines 39–41
+- **Status**: Pending
+- **Details**: JS emits a KB-link anchor (`data-kb-link="KB011"`) handled by the app link system. C++ directly calls `ExternalLinks::open("KB011")`, which is not the same contract/path as the original markup-driven behavior.
+
+### 177. [itemlistbox.cpp] Selection model changed from item-object references to item ID integers
+- **JS Source**: `src/js/components/itemlistbox.js` lines 117–129, 271–315
+- **Status**: Pending
+- **Details**: JS selection stores full item objects and compares by object identity (`includes/indexOf(item)`). C++ stores numeric IDs, changing selection semantics and update payload shape.
+
+### 178. [itemlistbox.cpp] Item action controls are rendered as ImGui buttons instead of list item links
+- **JS Source**: `src/js/components/itemlistbox.js` lines 336–339
+- **Status**: Pending
+- **Details**: JS renders actions as `<ul class="item-buttons"><li>...</li></ul>` with CSS styling. C++ uses `SmallButton` widgets, producing different visual and interaction behavior.
+
+### 179. [listbox.cpp] Keep-alive lifecycle listener behavior (`activated`/`deactivated`) is missing
+- **JS Source**: `src/js/components/listbox.js` lines 97–113
+- **Status**: Pending
+- **Details**: JS conditionally registers/unregisters paste and keydown listeners on keep-alive activation state. C++ has no equivalent lifecycle gating, so keyboard/paste handling differs when component activation changes.
+
+### 180. [listbox.cpp] Context menu emit payload omits original JS mouse event object
+- **JS Source**: `src/js/components/listbox.js` lines 493–497
+- **Status**: Pending
+- **Details**: JS emits `{ item, selection, event }` including the full event object. C++ emits only simplified coordinates/fields, which drops event data expected by the original contract.
+
+### 181. [listbox.cpp] Multi-subfield span structure from `item.split('\31')` is flattened
+- **JS Source**: `src/js/components/listbox.js` lines 506–508
+- **Status**: Pending
+- **Details**: JS renders each subfield in separate `<span class="sub sub-N">` elements. C++ concatenates subfields into one display string, removing per-subfield structure and styling parity.
+
+### 182. [listboxb.cpp] Selection payload changed from item values to row indices
+- **JS Source**: `src/js/components/listboxb.js` lines 226–273
+- **Status**: Pending
+- **Details**: JS selection stores selected item values directly. C++ stores selected indices (`std::vector<int>`), which changes emitted selection data and behavior when item ordering changes.
+
+### 183. [listboxb.cpp] Selection highlighting logic uses index identity instead of value identity
+- **JS Source**: `src/js/components/listboxb.js` lines 281–283
+- **Status**: Pending
+- **Details**: JS checks `selection.includes(item)` by item value/object. C++ checks index membership, so highlight/selection parity diverges when values repeat or list contents are reordered.
