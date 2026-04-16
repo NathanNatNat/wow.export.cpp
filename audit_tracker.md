@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 70/191 audited (37%)**
+**Progress: 80/191 audited (42%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -74,16 +74,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 68. `src/js/3D/renderers/WMOLegacyRendererGL.cpp`
 - [x] 69. `src/js/3D/renderers/WMORendererGL.cpp`
 - [x] 70. `src/js/3D/writers/CSVWriter.cpp`
-- [ ] 71. `src/js/3D/writers/GLBWriter.cpp`
-- [ ] 72. `src/js/3D/writers/GLTFWriter.cpp`
-- [ ] 73. `src/js/3D/writers/JSONWriter.cpp`
-- [ ] 74. `src/js/3D/writers/MTLWriter.cpp`
-- [ ] 75. `src/js/3D/writers/OBJWriter.cpp`
-- [ ] 76. `src/js/3D/writers/SQLWriter.cpp`
-- [ ] 77. `src/js/3D/writers/STLWriter.cpp`
-- [ ] 78. `src/js/casc/blp.cpp`
-- [ ] 79. `src/js/casc/blte-reader.cpp`
-- [ ] 80. `src/js/casc/blte-stream-reader.cpp`
+- [x] 71. `src/js/3D/writers/GLBWriter.cpp`
+- [x] 72. `src/js/3D/writers/GLTFWriter.cpp`
+- [x] 73. `src/js/3D/writers/JSONWriter.cpp`
+- [x] 74. `src/js/3D/writers/MTLWriter.cpp`
+- [x] 75. `src/js/3D/writers/OBJWriter.cpp`
+- [x] 76. `src/js/3D/writers/SQLWriter.cpp`
+- [x] 77. `src/js/3D/writers/STLWriter.cpp`
+- [x] 78. `src/js/casc/blp.cpp`
+- [x] 79. `src/js/casc/blte-reader.cpp`
+- [x] 80. `src/js/casc/blte-stream-reader.cpp`
 - [ ] 81. `src/js/casc/build-cache.cpp`
 - [ ] 82. `src/js/casc/casc-source-local.cpp`
 - [ ] 83. `src/js/casc/casc-source-remote.cpp`
