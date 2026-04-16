@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 130/191 audited (68%)**
+**Progress: 140/191 audited (73%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -134,16 +134,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 128. `src/js/db/caches/DBCreaturesLegacy.cpp`
 - [x] 129. `src/js/db/caches/DBDecor.cpp`
 - [x] 130. `src/js/db/caches/DBDecorCategories.cpp`
-- [ ] 131. `src/js/db/caches/DBGuildTabard.cpp`
-- [ ] 132. `src/js/db/caches/DBItemCharTextures.cpp`
-- [ ] 133. `src/js/db/caches/DBItemDisplays.cpp`
-- [ ] 134. `src/js/db/caches/DBItemGeosets.cpp`
-- [ ] 135. `src/js/db/caches/DBItemModels.cpp`
-- [ ] 136. `src/js/db/caches/DBItems.cpp`
-- [ ] 137. `src/js/db/caches/DBModelFileData.cpp`
-- [ ] 138. `src/js/db/caches/DBNpcEquipment.cpp`
-- [ ] 139. `src/js/db/caches/DBTextureFileData.cpp`
-- [ ] 140. `src/js/hashing/xxhash64.cpp`
+- [x] 131. `src/js/db/caches/DBGuildTabard.cpp`
+- [x] 132. `src/js/db/caches/DBItemCharTextures.cpp`
+- [x] 133. `src/js/db/caches/DBItemDisplays.cpp`
+- [x] 134. `src/js/db/caches/DBItemGeosets.cpp`
+- [x] 135. `src/js/db/caches/DBItemModels.cpp`
+- [x] 136. `src/js/db/caches/DBItems.cpp`
+- [x] 137. `src/js/db/caches/DBModelFileData.cpp`
+- [x] 138. `src/js/db/caches/DBNpcEquipment.cpp`
+- [x] 139. `src/js/db/caches/DBTextureFileData.cpp`
+- [x] 140. `src/js/hashing/xxhash64.cpp`
 - [ ] 141. `src/js/modules/font_helpers.cpp`
 - [ ] 142. `src/js/modules/legacy_tab_audio.cpp`
 - [ ] 143. `src/js/modules/legacy_tab_data.cpp`
