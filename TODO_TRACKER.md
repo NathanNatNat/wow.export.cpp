@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/32 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/44 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -161,3 +161,63 @@
 - **JS Source**: `src/js/generics.js` lines 420–469
 - **Status**: Pending
 - **Details**: JS slices work via MessageChannel posts between batches; C++ runs batches in a tight loop with `std::this_thread::yield()`, which is not equivalent to browser event-loop task scheduling.
+
+### 33. [gpu-info.cpp] macOS GPU info path from JS is missing in C++
+- **JS Source**: `src/js/gpu-info.js` lines 199–243
+- **Status**: Pending
+- **Details**: JS implements `get_macos_gpu_info()` and a `darwin` branch in `get_platform_gpu_info()`, but C++ only handles Windows/Linux and returns `nullopt` for all other platforms.
+
+### 34. [gpu-info.cpp] WebGL debug renderer detection logic differs from JS extension-gated behavior
+- **JS Source**: `src/js/gpu-info.js` lines 30–34, 340–347
+- **Status**: Pending
+- **Details**: JS only populates vendor/renderer when `WEBGL_debug_renderer_info` is available and otherwise logs `WebGL debug info unavailable`; C++ reads `GL_VENDOR/GL_RENDERER` directly, changing the fallback path and emitted diagnostics.
+
+### 35. [gpu-info.cpp] `exec_cmd` timeout behavior is not equivalent on Windows
+- **JS Source**: `src/js/gpu-info.js` lines 65–73
+- **Status**: Pending
+- **Details**: JS enforces `{ timeout: 5000 }` through `child_process.exec`; C++ only wraps Linux commands with `timeout 5` and does not enforce the same timeout semantics on Windows `_popen`.
+
+### 36. [gpu-info.cpp] Extension category normalization diverges from JS WebGL formatting
+- **JS Source**: `src/js/gpu-info.js` lines 250–303
+- **Status**: Pending
+- **Details**: JS normalizes `WEBGL_/EXT_/OES_` extension names for compact logging, while C++ uses different `GL_ARB_/GL_EXT_/GL_OES_` stripping rules and produces different category labels/content.
+
+### 37. [icon-render.cpp] Icon load pipeline is still stubbed and never replaces placeholders
+- **JS Source**: `src/js/icon-render.js` lines 57–64, 93–106
+- **Status**: Pending
+- **Details**: JS asynchronously loads CASC icon data, decodes BLP, and updates the rendered icon; C++ `processQueue()` contains placeholder comments and does not fetch/decode icon data, so queued icons remain on the default image.
+
+### 38. [icon-render.cpp] Queue execution model differs from JS async recursive processing
+- **JS Source**: `src/js/icon-render.js` lines 48–65, 77–91
+- **Status**: Pending
+- **Details**: JS processes one queue entry per async chain and re-enters via `.finally(() => processQueue())`; C++ drains the queue in a synchronous `while` loop, changing scheduling and starvation behavior.
+
+### 39. [icon-render.cpp] Dynamic stylesheet/CSS-rule icon path is replaced with non-equivalent texture cache flow
+- **JS Source**: `src/js/icon-render.js` lines 14–46, 67–75, 93–109
+- **Status**: Pending
+- **Details**: JS creates `.icon-<id>` CSS rules in a dynamic stylesheet and renders via `background-image`; C++ uses `_registeredIcons/_textureCache` and does not implement stylesheet rule insertion/removal semantics from the JS module.
+
+### 40. [log.cpp] `write()` API contract differs from JS variadic util.format behavior
+- **JS Source**: `src/js/log.js` lines 78–80, 114
+- **Status**: Pending
+- **Details**: JS `write(...parameters)` formats arguments with `util.format`; C++ `write(std::string_view)` accepts only a pre-formatted message, changing caller-facing formatting behavior.
+
+### 41. [log.cpp] Pool drain scheduling differs from JS `drain` event + `process.nextTick`
+- **JS Source**: `src/js/log.js` lines 32–49, 111–112
+- **Status**: Pending
+- **Details**: JS drains pooled logs from stream `drain` events and recursively schedules with `process.nextTick`; C++ uses synchronous flush checks and a `drainPending` flag that only drains on later writes, which can leave queued entries undrained.
+
+### 42. [log.cpp] Log stream initialization timing differs from JS module-load behavior
+- **JS Source**: `src/js/log.js` lines 111–112
+- **Status**: Pending
+- **Details**: JS initializes `stream` at module load and immediately binds `drain`; C++ requires explicit `logging::init()` calls, so behavior differs if writes occur before initialization.
+
+### 43. [mmap.cpp] Module architecture differs from JS wrapper around `mmap.node`
+- **JS Source**: `src/js/mmap.js` lines 8–23, 49–52
+- **Status**: Pending
+- **Details**: JS delegates mapping behavior to native addon object construction (`new mmap_native.MmapObject()`); C++ reimplements mapping logic directly in this module, changing parity with the original JS/native boundary.
+
+### 44. [mmap.cpp] Virtual-file ownership semantics differ from JS object-lifetime model
+- **JS Source**: `src/js/mmap.js` lines 14–24, 30–43
+- **Status**: Pending
+- **Details**: JS tracks objects in a `Set` and only calls `unmap()`/`clear()`; C++ tracks raw pointers in a global set and deletes them in `release_virtual_files()`, introducing different lifetime/aliasing behavior versus JS-managed object references.
