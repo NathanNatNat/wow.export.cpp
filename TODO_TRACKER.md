@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/325 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/336 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1583,3 +1583,58 @@
 - **JS Source**: `src/js/constants.js` (no equivalent)
 - **Status**: Pending
 - **Details**: C++ `constants::init()` lines 141–142 call `fs::create_directories(s_data_dir)` and `fs::create_directories(s_log_dir)` to ensure directories exist before any module writes to them. JS relies on NW.js to automatically create `nw.App.dataPath`. This is a necessary C++ adaptation but represents additional logic not in the JS source.
+
+- [ ] 326. [core.cpp] isDev uses NDEBUG instead of JS BUILD_RELEASE flag
+- **JS Source**: `src/js/core.js` line 33
+- **Status**: Pending
+- **Details**: JS sets `isDev: !BUILD_RELEASE` using a specific build-pipeline flag. C++ uses `#ifdef NDEBUG` (core.h lines 260–264) which is a standard C++ debug macro tied to CMake build types. The semantics may differ: `NDEBUG` is defined for both Release and RelWithDebInfo configurations, while `BUILD_RELEASE` is a custom flag that may only be set for true production builds. A custom `BUILD_RELEASE` CMake definition would be more faithful.
+
+- [ ] 327. [core.cpp] openInExplorer() is a C++ addition with no direct JS equivalent
+- **JS Source**: `src/js/core.js` line 485 (`nw.Shell.openItem()`)
+- **Status**: Pending
+- **Details**: C++ core.cpp lines 415–426 defines `openInExplorer(const std::string& path)` as a standalone utility function declared in core.h line 647. The JS source only uses `nw.Shell.openItem(core.view.config.exportDirectory)` inline in `openExportDirectory()`. While `openInExplorer` is a necessary platform adaptation (ShellExecuteW / xdg-open), its existence as a separately exported function is additional API surface not present in the JS module exports.
+
+- [ ] 328. [external-links.h] Windows open() uses naive wstring conversion instead of proper MultiByteToWideChar
+- **JS Source**: `src/js/external-links.js` lines 31–35
+- **Status**: Pending
+- **Details**: `ExternalLinks::open()` in external-links.h line 75 converts URL to wstring via `std::wstring(url.begin(), url.end())`, a naive char-by-char copy that only works for ASCII characters. This is inconsistent with `core::openInExplorer()` (core.cpp lines 418–420) which properly uses `MultiByteToWideChar(CP_UTF8, ...)` for correct UTF-8 to UTF-16 conversion. While URLs are typically ASCII, this is a correctness bug for any URL containing non-ASCII bytes.
+
+- [ ] 329. [external-links.h] wowHead_viewItem() hardcodes URL string instead of using WOWHEAD_ITEM constant
+- **JS Source**: `src/js/external-links.js` lines 24, 42–43
+- **Status**: Pending
+- **Details**: JS defines `const WOWHEAD_ITEM = 'https://www.wowhead.com/item=%d'` and uses it via `util.format(WOWHEAD_ITEM, itemID)`. C++ defines `WOWHEAD_ITEM` as `"https://www.wowhead.com/item={}"` (external-links.h line 48) but `wowHead_viewItem()` (line 89) hardcodes `std::format("https://www.wowhead.com/item={}", itemID)` instead of using the constant. The constant is effectively dead code.
+
+- [ ] 330. [external-links.h] renderLink() missing CSS a:hover visual effects (color change and underline)
+- **JS Source**: `src/app.css` lines 93–101 (a tag styling, a:hover)
+- **Status**: Pending
+- **Details**: `ExternalLinks::renderLink()` (external-links.h lines 107–117) only changes the cursor to a hand on hover. The original CSS defines `a:hover { color: var(--font-highlight); text-decoration: underline; }` which means links should change to pure white (#ffffff) and show an underline on hover. The C++ renderLink() is missing both the hover color change and the underline decoration, causing a visual fidelity difference from the original JS app.
+
+- [ ] 331. [generics.cpp] get() timeout semantics differ from JS 30-second AbortSignal
+- **JS Source**: `src/js/generics.js` lines 23–31
+- **Status**: Pending
+- **Details**: JS uses `AbortSignal.timeout(30000)` which enforces a hard 30-second total timeout for the entire fetch operation. C++ `doHttpGet()` (generics.cpp lines 123–124) sets `set_connection_timeout(30)` and `set_read_timeout(60)` separately, allowing up to 90 seconds total (30s to connect + 60s to read). This means C++ requests can take up to 3x longer than the JS equivalent before timing out.
+
+- [ ] 332. [generics.cpp] queue() initial batch size off-by-one compared to JS
+- **JS Source**: `src/js/generics.js` lines 63–83
+- **Status**: Pending
+- **Details**: JS initializes `free = limit` and `complete = -1`, then calls `check()` which increments both (`complete++; free++`), resulting in `free = limit + 1` items launched in the first batch. C++ (generics.cpp lines 399–433) launches exactly `limit` items in the first batch. This off-by-one means the JS version processes `limit + 1` items concurrently on the initial dispatch, while C++ processes exactly `limit`.
+
+- [ ] 333. [generics.cpp] fileExists() checks existence only, not accessibility like JS fsp.access
+- **JS Source**: `src/js/generics.js` lines 343–350
+- **Status**: Pending
+- **Details**: JS uses `await fsp.access(file)` which checks that the file both exists AND is accessible to the current process (read permission). C++ uses `std::filesystem::exists(file)` (generics.cpp line 710) which only checks existence, not accessibility. A file that exists but has restrictive permissions (e.g., mode 000) would return `true` in C++ but `false` in JS, potentially causing downstream errors when attempting to read/open such files.
+
+- [ ] 334. [generics.cpp] computeFileHash() has malformed duplicate doc comment block
+- **JS Source**: `src/js/generics.js` lines 328–336
+- **Status**: Pending
+- **Details**: generics.cpp lines 251–258 contain a broken doc comment where a new `/**` block starts (line 254) before the previous `/**` block (line 252) is properly closed. The first comment says "Compute hash of a file using streaming I/O." and the second says "Compute hash of a file using streaming mbedTLS MD API." This is a documentation-only issue that does not affect compilation but makes the comment block malformed.
+
+- [ ] 335. [generics.cpp] downloadFile() error logging loses full error object details
+- **JS Source**: `src/js/generics.js` lines 243–244
+- **Status**: Pending
+- **Details**: JS logs the full error object with `log.write(error)` (line 244) which includes the error message, stack trace, and any additional properties. C++ (generics.cpp line 595) only logs `error.what()` message string via `logging::write(std::format("Failed to download from {}: {}", currentUrl, error.what()))`. Stack trace and other diagnostic information available in the original JS error are lost.
+
+- [ ] 336. [generics.cpp] requestData() is publicly declared but is a private/unexported function in JS
+- **JS Source**: `src/js/generics.js` lines 145–205, 484–502
+- **Status**: Pending
+- **Details**: JS `requestData()` is a file-scoped function that is NOT included in `module.exports` (lines 484–502). C++ declares `requestData()` in `generics.h` line 86 as a public function in the `generics` namespace, making it part of the public API. While this doesn't break functionality, it exposes an internal implementation detail that JS keeps private, and external callers could depend on this function when they shouldn't.
