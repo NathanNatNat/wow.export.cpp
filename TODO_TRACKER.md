@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/336 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/341 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1638,3 +1638,28 @@
 - **JS Source**: `src/js/generics.js` lines 145–205, 484–502
 - **Status**: Pending
 - **Details**: JS `requestData()` is a file-scoped function that is NOT included in `module.exports` (lines 484–502). C++ declares `requestData()` in `generics.h` line 86 as a public function in the `generics` namespace, making it part of the public API. While this doesn't break functionality, it exposes an internal implementation detail that JS keeps private, and external callers could depend on this function when they shouldn't.
+
+- [ ] 337. [gpu-info.cpp] Caps logging condition differs from JS — C++ uses `max_tex_size > 0` while JS always logs caps
+- **JS Source**: `src/js/gpu-info.js` lines 348–349
+- **Status**: Pending
+- **Details**: JS checks `if (webgl.caps)` (line 348) before logging capabilities. Since `caps` is always assigned as an object `{}` (line 25), this condition is always truthy when the WebGL context exists. C++ (gpu-info.cpp line 539) checks `if (gl->caps.max_tex_size > 0)` which would skip caps logging if `max_tex_size` happened to be 0. While unlikely in practice with real GPUs, this is a behavioral deviation from JS which unconditionally logs caps when the GL context is available.
+
+- [ ] 338. [icon-render.h] Truncated doc comment — sentence fragment on line 17
+- **JS Source**: `src/js/icon-render.js` lines 1–109
+- **Status**: Pending
+- **Details**: The namespace doc comment in `icon-render.h` lines 14–18 contains a sentence fragment: `" * in a cache. The queue mechanism with priority ordering is preserved."` on line 17. The preceding text (lines 14–15) describes the JS CSS-based approach but the transition to the C++ approach is missing — "in a cache." is an orphaned fragment, likely left over from an incomplete edit. The full comment should describe that in C++, icons are loaded as BLP files, decoded to RGBA pixel data, and stored as GL textures in a cache.
+
+- [ ] 339. [log.cpp] timeEnd() signature loses JS variadic parameter support
+- **JS Source**: `src/js/log.js` lines 64–66
+- **Status**: Pending
+- **Details**: JS `timeEnd(label, ...params)` passes additional variadic parameters through to `write()`: `write(label + ' (%dms)', ...params, (Date.now() - markTimer))` (line 65). C++ `timeEnd(std::string_view label)` (log.cpp line 179) only accepts a single label string and appends the elapsed time. Any caller that passes extra format arguments to `timeEnd` in JS would lose those values in C++. This is a separate concern from entry 40 (which covers `write()` itself) because `timeEnd` is a distinct exported API with its own parameter contract.
+
+- [ ] 340. [log.cpp] getErrorDump() is synchronous in C++ vs async in JS
+- **JS Source**: `src/js/log.js` lines 102–108
+- **Status**: Pending
+- **Details**: JS declares `getErrorDump = async () => { return await fs.promises.readFile(constants.RUNTIME_LOG, 'utf8'); }` (line 102–104), making it an async function that returns a Promise. C++ `getErrorDump()` (log.cpp lines 208–220) reads the file synchronously with `std::ifstream` and returns `std::string` directly. While the C++ approach is arguably more appropriate for crash-time diagnostics (where the event loop may be unavailable), it changes the function's execution model from non-blocking to blocking I/O.
+
+- [ ] 341. [mmap.cpp] C++ map() explicitly rejects empty files which JS wrapper does not handle
+- **JS Source**: `src/js/mmap.js` lines 20–23
+- **Status**: Pending
+- **Details**: C++ `MmapObject::map()` explicitly checks for `size == 0` and returns false with `lastError = "File is empty"` (mmap.cpp lines 113–118 on Windows, lines 162–167 on Linux). The JS wrapper in `mmap.js` has no such guard — it delegates entirely to `new mmap_native.MmapObject()` and the native addon's `map()` method. Whether the native `.node` addon rejects empty files is unknown from the JS source alone, making this a potential behavioral divergence where C++ would fail on empty files while JS might succeed (mapping zero bytes).
