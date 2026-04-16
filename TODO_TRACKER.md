@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/297 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/305 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1443,3 +1443,43 @@
 - **JS Source**: `src/js/ui/audio-helper.js` lines 57–67, 115–127
 - **Status**: Pending
 - **Details**: JS triggers completion via `source.onended`; C++ checks `ma_sound_at_end()` inside `get_position()` and invokes `on_ended` there, requiring polling and adding side effects to position queries.
+
+### 298. [char-texture-overlay.cpp] Overlay button visibility updater is a no-op instead of internally toggling visibility
+- **JS Source**: `src/js/ui/char-texture-overlay.js` lines 23–31
+- **Status**: Pending
+- **Details**: JS toggles `#chr-overlay-btn` display between `flex` and `none` inside `update_button_visibility()`, while C++ leaves `update_button_visibility()` empty and relies on external rendering checks.
+
+### 299. [char-texture-overlay.cpp] Active-layer reattach flow is stubbed out
+- **JS Source**: `src/js/ui/char-texture-overlay.js` lines 63–70
+- **Status**: Pending
+- **Details**: JS schedules `process.nextTick()` to re-append the active canvas after tab changes; C++ `ensureActiveLayerAttached()` is intentionally a no-op, so no equivalent reattach path runs.
+
+### 300. [data-exporter.cpp] SQL null handling differs for empty-string values
+- **JS Source**: `src/js/ui/data-exporter.js` lines 181–187
+- **Status**: Pending
+- **Details**: JS forwards actual empty strings as values and only maps `null`/`undefined` to SQL null; C++ passes only `std::string` data and routes empty strings through SQLWriter’s null sentinel path, changing empty-string semantics.
+
+### 301. [data-exporter.cpp] Export failure records omit stack traces from helper marks
+- **JS Source**: `src/js/ui/data-exporter.js` lines 68–71, 124–127, 196–199, 246–249
+- **Status**: Pending
+- **Details**: JS passes both `e.message` and `e.stack` to `helper.mark(...)`; C++ passes `e.what()` and `std::nullopt`, dropping stack details from failure metadata.
+
+### 302. [model-viewer-utils.cpp] Clipboard preview export copies base64 text instead of PNG image data
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 299–303
+- **Status**: Pending
+- **Details**: JS writes PNG binary payload to the clipboard (`clipboard.set(..., 'png', true)`), while C++ uses `ImGui::SetClipboardText(buf.toBase64().c_str())`, resulting in text clipboard content rather than image clipboard content.
+
+### 303. [model-viewer-utils.cpp] Animation selection guard treats empty string as null/undefined
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 251–253
+- **Status**: Pending
+- **Details**: JS exits only for `null`/`undefined`; C++ exits for `selected_animation_id.empty()`, which changes behavior for explicit empty-string IDs.
+
+### 304. [model-viewer-utils.cpp] WMO renderer/export constructor inputs differ from JS filename-based path
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 208, 405
+- **Status**: Pending
+- **Details**: JS constructs `WMORendererGL`/`WMOExporter` with `file_name`; C++ uses `file_data_id`-based constructors and ignores the filename parameter in these paths.
+
+### 305. [model-viewer-utils.cpp] View-state proxy is hardcoded to three prefixes instead of dynamic property resolution
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 503–528
+- **Status**: Pending
+- **Details**: JS proxy resolves fields dynamically via `core.view[prefix + ...]`; C++ only maps `"model"`, `"decor"`, and `"creature"` with explicit branches, removing generic-prefix behavior.
