@@ -74,13 +74,38 @@ endforeach()
 
 if(_MISSING_SUBMODULES)
     string(REPLACE ";" "\n    " _formatted "${_MISSING_SUBMODULES}")
-    message(FATAL_ERROR
+    message(STATUS
         "The following git submodules are not initialized:\n"
         "    ${_formatted}\n"
-        "Please run:\n"
-        "    git submodule update --init --recursive\n"
-        "then re-run CMake."
+        "Attempting automatic initialization via git submodule update --init --recursive ..."
     )
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+        execute_process(
+            COMMAND "${GIT_EXECUTABLE}" submodule update --init --recursive
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            RESULT_VARIABLE _submodule_result
+            OUTPUT_VARIABLE _submodule_output
+            ERROR_VARIABLE  _submodule_error
+        )
+        if(NOT _submodule_result EQUAL 0)
+            message(FATAL_ERROR
+                "Automatic git submodule init failed (exit code ${_submodule_result}).\n"
+                "${_submodule_error}\n"
+                "Please run manually:\n"
+                "    git submodule update --init --recursive\n"
+                "then re-run CMake."
+            )
+        endif()
+        message(STATUS "Git submodules initialized successfully.")
+    else()
+        message(FATAL_ERROR
+            "Git not found; cannot auto-initialize submodules.\n"
+            "Please run:\n"
+            "    git submodule update --init --recursive\n"
+            "then re-run CMake."
+        )
+    endif()
 endif()
 
 # ════════════════════════════════════════════════════════════════
