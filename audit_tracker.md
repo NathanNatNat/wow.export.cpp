@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 90/191 audited (47%)**
+**Progress: 100/191 audited (52%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -94,16 +94,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 88. `src/js/casc/db2.cpp`
 - [x] 89. `src/js/casc/dbd-manifest.cpp`
 - [x] 90. `src/js/casc/export-helper.cpp`
-- [ ] 91. `src/js/casc/install-manifest.cpp`
-- [ ] 92. `src/js/casc/jenkins96.cpp`
-- [ ] 93. `src/js/casc/listfile.cpp`
-- [ ] 94. `src/js/casc/locale-flags.cpp`
-- [ ] 95. `src/js/casc/realmlist.cpp`
-- [ ] 96. `src/js/casc/salsa20.cpp`
-- [ ] 97. `src/js/casc/tact-keys.cpp`
-- [ ] 98. `src/js/casc/version-config.cpp`
-- [ ] 99. `src/js/casc/vp9-avi-demuxer.cpp`
-- [ ] 100. `src/js/components/checkboxlist.cpp`
+- [x] 91. `src/js/casc/install-manifest.cpp`
+- [x] 92. `src/js/casc/jenkins96.cpp`
+- [x] 93. `src/js/casc/listfile.cpp`
+- [x] 94. `src/js/casc/locale-flags.cpp`
+- [x] 95. `src/js/casc/realmlist.cpp`
+- [x] 96. `src/js/casc/salsa20.cpp`
+- [x] 97. `src/js/casc/tact-keys.cpp`
+- [x] 98. `src/js/casc/version-config.cpp`
+- [x] 99. `src/js/casc/vp9-avi-demuxer.cpp`
+- [x] 100. `src/js/components/checkboxlist.cpp`
 - [ ] 101. `src/js/components/combobox.cpp`
 - [ ] 102. `src/js/components/context-menu.cpp`
 - [ ] 103. `src/js/components/data-table.cpp`
