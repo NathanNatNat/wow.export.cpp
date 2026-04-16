@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/101 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/114 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -462,3 +462,68 @@
 - **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 75–79
 - **Status**: Pending
 - **Details**: JS loads by `groupIDs[index]` when present, otherwise falls back to `getFileByName(this.fileName.replace(...))`; C++ hard-requires `groupIDs` and throws out-of-range instead of performing the filename fallback.
+
+### 102. [CharMaterialRenderer.cpp] Core renderer methods are synchronous instead of JS Promise-based async methods
+- **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 49, 105, 114, 170, 189, 231, 282
+- **Status**: Pending
+- **Details**: JS defines `init`, `reset`, `setTextureTarget`, `loadTexture`, `loadTextureFromBLP`, `compileShaders`, and `update` as async/await flows. C++ ports these methods synchronously, changing timing/error-propagation behavior expected by async call sites.
+
+### 103. [M2LegacyRendererGL.cpp] Loader/skin/animation entrypoints are synchronous instead of JS async methods
+- **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 183, 210, 252, 294, 455
+- **Status**: Pending
+- **Details**: JS exposes async `load`, `_load_textures`, `applyCreatureSkin`, `loadSkin`, and `playAnimation`; C++ ports these execution paths as synchronous methods, altering await behavior and scheduling.
+
+### 104. [M2RendererGL.cpp] Multiple texture/skeleton/animation methods are synchronous instead of JS async methods
+- **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 362, 401, 431, 587, 663, 1336, 1371, 1399, 1424
+- **Status**: Pending
+- **Details**: JS keeps `load`, `_load_textures`, `loadSkin`, `_create_skeleton`, `playAnimation`, `overrideTextureType*`, and `applyReplaceableTextures` asynchronous; C++ ports them synchronously, changing promise timing and exception propagation behavior.
+
+### 105. [M2RendererGL.cpp] Shader time uniform start-point differs from JS `performance.now()` baseline
+- **JS Source**: `src/js/3D/renderers/M2RendererGL.js` line 1224
+- **Status**: Pending
+- **Details**: JS feeds `u_time` from `performance.now() * 0.001` (seconds since page load). C++ computes time from a static timestamp initialized on first render call, shifting animation phase baseline relative to JS.
+
+### 106. [M3RendererGL.cpp] Load APIs are synchronous instead of JS async methods
+- **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 56, 76
+- **Status**: Pending
+- **Details**: JS defines async `load` and `loadLOD`; C++ ports both as synchronous calls, changing await/timing semantics.
+
+### 107. [MDXRendererGL.cpp] Load and texture/animation paths are synchronous instead of JS async methods
+- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 174, 200, 407
+- **Status**: Pending
+- **Details**: JS uses async `load`, `_load_textures`, and `playAnimation`; C++ ports these paths synchronously, changing asynchronous control flow and failure timing.
+
+### 108. [MDXRendererGL.cpp] Skeleton node flattening changes JS undefined/NaN behavior for `objectId`
+- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 256–264
+- **Status**: Pending
+- **Details**: JS compares raw `nodes[i].objectId` and can propagate undefined/NaN semantics. C++ uses `std::optional<int>` checks and skips undefined IDs, which changes edge-case matrix-index behavior from JS.
+
+### 109. [WMOLegacyRendererGL.cpp] Load/update-set paths are synchronous instead of JS async methods
+- **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 77, 104, 168, 270, 353
+- **Status**: Pending
+- **Details**: JS exposes async `load`, `_load_textures`, `_load_groups`, `loadDoodadSet`, and `updateSets`; C++ ports these paths as synchronous methods, altering Promise scheduling and error propagation behavior.
+
+### 110. [WMOLegacyRendererGL.cpp] Doodad-set iteration adds bounds guard not present in JS
+- **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 287–289
+- **Status**: Pending
+- **Details**: JS directly accesses `wmo.doodads[firstIndex + i]` without a pre-check. C++ introduces explicit range guarding/continue behavior, changing edge-case handling when doodad counts/indices are inconsistent.
+
+### 111. [WMOLegacyRendererGL.cpp] Vue watcher-based reactive updates are replaced with render-time polling
+- **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 88–93, 519–521
+- **Status**: Pending
+- **Details**: JS wires `$watch` callbacks and unregisters them in `dispose`. C++ removes watcher registration and uses per-frame state polling, which changes update trigger timing and reactivity semantics.
+
+### 112. [WMORendererGL.cpp] Load/update-set paths are synchronous instead of JS async methods
+- **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 81, 119, 206, 353, 434
+- **Status**: Pending
+- **Details**: JS defines async `load`, `_load_textures`, `_load_groups`, `loadDoodadSet`, and `updateSets`; C++ ports these methods synchronously, changing await/timing behavior.
+
+### 113. [WMORendererGL.cpp] Reactive view binding/watcher lifecycle differs from JS
+- **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 101–107, 637–639
+- **Status**: Pending
+- **Details**: JS stores `groupArray`/`setArray` by reference in `core.view` and updates via Vue `$watch` callbacks with explicit unregister in `dispose`. C++ copies arrays into view state and replaces watcher callbacks with polling logic, changing reactivity/update timing semantics.
+
+### 114. [CSVWriter.cpp] `.cpp`/`.js` sibling contents are swapped, leaving `.cpp` as unconverted JavaScript
+- **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 1–86
+- **Status**: Pending
+- **Details**: `CSVWriter.cpp` currently contains JavaScript (`require`, `class`, `module.exports`) while `CSVWriter.js` contains C++ (`#include`, `CSVWriter::...`). This violates expected source pairing and leaves the `.cpp` translation unit unconverted.

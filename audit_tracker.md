@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 60/191 audited (31%)**
+**Progress: 70/191 audited (37%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -64,16 +64,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 58. `src/js/3D/loaders/WDTLoader.cpp`
 - [x] 59. `src/js/3D/loaders/WMOLegacyLoader.cpp`
 - [x] 60. `src/js/3D/loaders/WMOLoader.cpp`
-- [ ] 61. `src/js/3D/renderers/CharMaterialRenderer.cpp`
-- [ ] 62. `src/js/3D/renderers/GridRenderer.cpp`
-- [ ] 63. `src/js/3D/renderers/M2LegacyRendererGL.cpp`
-- [ ] 64. `src/js/3D/renderers/M2RendererGL.cpp`
-- [ ] 65. `src/js/3D/renderers/M3RendererGL.cpp`
-- [ ] 66. `src/js/3D/renderers/MDXRendererGL.cpp`
-- [ ] 67. `src/js/3D/renderers/ShadowPlaneRenderer.cpp`
-- [ ] 68. `src/js/3D/renderers/WMOLegacyRendererGL.cpp`
-- [ ] 69. `src/js/3D/renderers/WMORendererGL.cpp`
-- [ ] 70. `src/js/3D/writers/CSVWriter.cpp`
+- [x] 61. `src/js/3D/renderers/CharMaterialRenderer.cpp`
+- [x] 62. `src/js/3D/renderers/GridRenderer.cpp`
+- [x] 63. `src/js/3D/renderers/M2LegacyRendererGL.cpp`
+- [x] 64. `src/js/3D/renderers/M2RendererGL.cpp`
+- [x] 65. `src/js/3D/renderers/M3RendererGL.cpp`
+- [x] 66. `src/js/3D/renderers/MDXRendererGL.cpp`
+- [x] 67. `src/js/3D/renderers/ShadowPlaneRenderer.cpp`
+- [x] 68. `src/js/3D/renderers/WMOLegacyRendererGL.cpp`
+- [x] 69. `src/js/3D/renderers/WMORendererGL.cpp`
+- [x] 70. `src/js/3D/writers/CSVWriter.cpp`
 - [ ] 71. `src/js/3D/writers/GLBWriter.cpp`
 - [ ] 72. `src/js/3D/writers/GLTFWriter.cpp`
 - [ ] 73. `src/js/3D/writers/JSONWriter.cpp`
