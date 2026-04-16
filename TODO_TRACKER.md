@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/305 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/305 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -789,9 +789,9 @@
 - **Status**: Pending
 - **Details**: JS renders `<ul>` as an absolutely positioned popup under the input. C++ renders the dropdown as an ImGui child region in normal flow, which can alter layout/overlap behavior and visual parity.
 
-- [ ] 167. [context-menu.cpp] Invisible hover buffer zone (`.context-menu-zone`) is not ported
+- [x] 167. [context-menu.cpp] Invisible hover buffer zone (`.context-menu-zone`) is not ported
 - **JS Source**: `src/js/components/context-menu.js` lines 54–56
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS includes a dedicated `.context-menu-zone` element to extend hover bounds around the menu. C++ explicitly omits it, which can change close-on-mouseleave behavior near menu edges.
 
 - [ ] 168. [data-table.cpp] Filter icon click no longer focuses the data-table filter input

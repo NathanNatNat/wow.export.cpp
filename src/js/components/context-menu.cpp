@@ -92,10 +92,9 @@ void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
 	std::string windowName = std::string("##context_menu_") + id;
 	if (ImGui::Begin(windowName.c_str(), nullptr, windowFlags)) {
 		// <div class="context-menu-zone"></div>
-		// The context-menu-zone in JS is an invisible div that extends the hover area between
-		// the trigger and menu to prevent premature close. In ImGui, the window itself acts
-		// as the hover region, and we handle close on mouse-leave below, making a separate
-		// zone unnecessary.
+		// JS uses an absolutely positioned child with ±20px bounds to extend hover area.
+		// We replicate this by inflating close-on-mouseleave bounds by 20px on each side.
+		constexpr float contextMenuZonePadding = 20.0f;
 
 		// Render menu content via the callback (equivalent of <slot v-bind:node="node">).
 		if (contentCallback) {
@@ -111,10 +110,17 @@ void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
 				onClose();
 		}
 
-		// @mouseleave="$emit('close')" — close when mouse leaves the window.
-		// JS closes immediately on mouseleave. We replicate this by checking if the
-		// mouse is outside the window bounds.
-		if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_RectOnly)) {
+		// @mouseleave="$emit('close')" — close when mouse leaves the menu + hover buffer zone.
+		const ImVec2 mousePos = ImGui::GetIO().MousePos;
+		ImVec2 zoneMin = ImGui::GetWindowPos();
+		ImVec2 zoneMax = ImVec2(zoneMin.x + ImGui::GetWindowSize().x, zoneMin.y + ImGui::GetWindowSize().y);
+		zoneMin.x -= contextMenuZonePadding;
+		zoneMin.y -= contextMenuZonePadding;
+		zoneMax.x += contextMenuZonePadding;
+		zoneMax.y += contextMenuZonePadding;
+		const bool isInHoverZone = mousePos.x >= zoneMin.x && mousePos.x <= zoneMax.x &&
+		                           mousePos.y >= zoneMin.y && mousePos.y <= zoneMax.y;
+		if (!isInHoverZone) {
 			if (onClose)
 				onClose();
 		}
