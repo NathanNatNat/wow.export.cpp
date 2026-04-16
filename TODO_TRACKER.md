@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/267 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/284 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1293,3 +1293,88 @@
 - **JS Source**: `src/js/modules/tab_changelog.js` lines 31–35
 - **Status**: Pending
 - **Details**: JS uses dedicated `#changelog`/`#changelog-text` template structure and CSS styling; C++ renders plain ImGui title/separator/button layout, causing visible UI differences.
+
+### 268. [tab_home.cpp] Home showcase content is replaced with custom nav-card UI instead of the JS `HomeShowcase` component
+- **JS Source**: `src/js/modules/tab_home.js` lines 4–5
+- **Status**: Pending
+- **Details**: JS renders `<HomeShowcase />`; C++ replaces that section with a custom navigation-card grid (`renderNavCard`/`renderHomeLayout`), changing the original home-tab content and visuals.
+
+### 269. [tab_home.cpp] `whatsNewHTML` is rendered as plain text instead of HTML content
+- **JS Source**: `src/js/modules/tab_home.js` line 6
+- **Status**: Pending
+- **Details**: JS uses `v-html="$core.view.whatsNewHTML"` to render formatted markup; C++ calls `ImGui::TextWrapped` on the raw string, so HTML formatting/links are not rendered.
+
+### 270. [tab_install.cpp] Install listbox copy/paste options are hardcoded instead of using JS config-driven behavior
+- **JS Source**: `src/js/modules/tab_install.js` lines 165, 184
+- **Status**: Pending
+- **Details**: JS listbox wiring uses `$core.view.config.copyMode`, `pasteSelection`, and `removePathSpacesCopy`; C++ passes `CopyMode::Default` with `pasteselection=false` and `copytrimwhitespace=false`, changing list interaction behavior.
+
+### 271. [tab_install.cpp] Regex indicator tooltip metadata from JS template is missing
+- **JS Source**: `src/js/modules/tab_install.js` lines 169, 188
+- **Status**: Pending
+- **Details**: JS renders `Regex Enabled` with `:title="$core.view.regexTooltip"`; C++ renders plain text without the tooltip contract, changing UI affordance.
+
+### 272. [tab_item_sets.cpp] Regex indicator tooltip metadata from JS template is missing
+- **JS Source**: `src/js/modules/tab_item_sets.js` line 82
+- **Status**: Pending
+- **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ shows plain `Regex Enabled` text without tooltip behavior.
+
+### 273. [tab_items.cpp] Wowhead item handler is stubbed out
+- **JS Source**: `src/js/modules/tab_items.js` lines 322–324
+- **Status**: Pending
+- **Details**: JS calls `ExternalLinks.wowHead_viewItem(item_id)` from the context action; C++ `view_on_wowhead(...)` immediately returns and does nothing.
+
+### 274. [tab_items.cpp] Item sidebar checklist interaction/layout diverges from JS clickable row design
+- **JS Source**: `src/js/modules/tab_items.js` lines 254–266
+- **Status**: Pending
+- **Details**: JS uses `.sidebar-checklist-item` rows with selected-state styling and row-level click toggling; C++ renders plain ImGui checkboxes, changing sidebar visuals and interaction feel.
+
+### 275. [tab_items.cpp] Regex indicator tooltip metadata from JS template is missing
+- **JS Source**: `src/js/modules/tab_items.js` line 248
+- **Status**: Pending
+- **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ renders plain `Regex Enabled` text without tooltip behavior.
+
+### 276. [tab_maps.cpp] Regex indicator tooltip metadata from JS template is missing
+- **JS Source**: `src/js/modules/tab_maps.js` line 302
+- **Status**: Pending
+- **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ renders plain `Regex Enabled` text without tooltip behavior.
+
+### 277. [tab_models.cpp] Regex indicator tooltip metadata from JS template is missing
+- **JS Source**: `src/js/modules/tab_models.js` line 296
+- **Status**: Pending
+- **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ renders plain `Regex Enabled` text without tooltip behavior.
+
+### 278. [tab_models_legacy.cpp] Regex indicator tooltip metadata from JS template is missing
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 340
+- **Status**: Pending
+- **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ renders plain `Regex Enabled` text without tooltip behavior.
+
+### 279. [tab_raw.cpp] Regex indicator tooltip metadata from JS template is missing
+- **JS Source**: `src/js/modules/tab_raw.js` line 158
+- **Status**: Pending
+- **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ renders plain `Regex Enabled` text without tooltip behavior.
+
+### 280. [tab_text.cpp] Text preview failure toast omits JS `View Log` action callback
+- **JS Source**: `src/js/modules/tab_text.js` lines 138–139
+- **Status**: Pending
+- **Details**: JS preview failure toast provides `{ 'View Log': () => log.openRuntimeLog() }`; C++ passes empty toast actions, removing the original recovery handler.
+
+### 281. [tab_text.cpp] Regex indicator tooltip metadata from JS template is missing
+- **JS Source**: `src/js/modules/tab_text.js` line 31
+- **Status**: Pending
+- **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ renders plain `Regex Enabled` text without tooltip behavior.
+
+### 282. [tab_textures.cpp] Baked NPC texture apply path stores a file data ID instead of the JS BLP object
+- **JS Source**: `src/js/modules/tab_textures.js` lines 423–427
+- **Status**: Pending
+- **Details**: JS loads the selected texture file and stores a `BLPFile` instance in `chrCustBakedNPCTexture`; C++ stores only the resolved file data ID, changing downstream data shape/behavior.
+
+### 283. [tab_textures.cpp] Baked NPC texture failure toast omits JS `view log` action callback
+- **JS Source**: `src/js/modules/tab_textures.js` lines 430–431
+- **Status**: Pending
+- **Details**: JS error toast includes `{ 'view log': () => log.openRuntimeLog() }`; C++ error toast has no action handlers, removing the original troubleshooting entry point.
+
+### 284. [tab_textures.cpp] Texture channel controls are rendered as checkboxes instead of JS channel chips
+- **JS Source**: `src/js/modules/tab_textures.js` lines 306–311
+- **Status**: Pending
+- **Details**: JS uses styled `li` channel chips (`R/G/B/A`) with selected-state classes; C++ renders standard ImGui checkboxes, causing visible control-style differences.
