@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/317 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/325 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1543,3 +1543,43 @@
 - **JS Source**: `src/app.js` lines 76–78
 - **Status**: Pending
 - **Details**: JS calls `win.showDevTools()` for non-release builds to open the Chrome DevTools inspector. C++ has no equivalent debug tool launcher. This is an expected platform difference but should be documented.
+
+- [ ] 318. [blob.cpp] BlobPolyfill::slice() treats end=0 differently from JS
+- **JS Source**: `src/js/blob.js` lines 262–265
+- **Status**: Pending
+- **Details**: JS uses `end || this._buffer.length`, where `||` treats 0 as falsy and defaults to the full buffer length. C++ uses `std::optional<std::size_t>` with `value_or(_buffer.size())`, so passing `end=0` gives a 0-length slice in C++ but the full buffer in JS. This is a behavioral difference for the edge case where `end` is explicitly 0.
+
+- [ ] 319. [buffer.cpp] setCapacity(secure=false) always zero-initializes unlike JS Buffer.allocUnsafe
+- **JS Source**: `src/js/buffer.js` lines 1021–1029
+- **Status**: Pending
+- **Details**: JS `setCapacity` uses `Buffer.allocUnsafe(capacity)` when `secure=false`, leaving expanded memory uninitialized. C++ uses `std::vector<uint8_t>(capacity, 0)` which always zero-initializes. This mirrors the existing alloc() difference (TODO 6) but applies to setCapacity specifically. Performance-only difference with no functional impact.
+
+- [ ] 320. [buffer.cpp] startsWith(array) reads entries from sequential positions instead of all from offset 0
+- **JS Source**: `src/js/buffer.js` lines 592–604
+- **Status**: Pending
+- **Details**: Both JS and C++ `startsWith(array)` call `seek(0)` once before the loop, then read each alternative entry sequentially. After reading the first entry (e.g., 3 bytes), the offset advances, so the second entry is checked at offset 3, not 0. This is a faithful port of the JS logic, but the likely intent is to check if the buffer starts with ANY of the alternatives (all from offset 0). In practice, FILE_IDENTIFIERS matching likely calls the single-string overload per match, so the array overload may not be triggered for multi-match identifiers.
+
+- [ ] 321. [config.cpp] doSave() array comparison uses value equality instead of JS reference equality
+- **JS Source**: `src/js/config.js` lines 98–104
+- **Status**: Pending
+- **Details**: JS `defaultConfig[key] === value` uses strict reference equality — since `copyConfig` clones arrays with `value.slice(0)`, array config values are always different instances from defaults, so arrays are always persisted to the user config file. C++ `defaultConfig[it.key()] == it.value()` uses nlohmann::json value equality, so arrays matching defaults are skipped. This means the C++ user config file will be smaller (omitting default-matching arrays), while JS always includes them. On reload, missing arrays are filled from defaults, so this is a write-path-only difference.
+
+- [ ] 322. [config.cpp] save() std::async discarded future blocks in destructor making save synchronous
+- **JS Source**: `src/js/config.js` lines 83–91
+- **Status**: Pending
+- **Details**: C++ `save()` calls `std::async(std::launch::async, doSave)` but discards the returned `std::future`. Per the C++ standard, a `std::future` from `std::async` blocks in its destructor until the task completes. This makes the save effectively synchronous (blocking the caller), defeating the intended deferred behavior that JS achieves with `setImmediate(doSave)`. Complements existing TODO 13 which notes the scheduling mechanism differs but does not mention the blocking destructor.
+
+- [ ] 323. [constants.cpp] RUNTIME_LOG placed in separate Logs/ subdirectory instead of DATA_PATH root
+- **JS Source**: `src/js/constants.js` line 38
+- **Status**: Pending
+- **Details**: JS sets `RUNTIME_LOG: path.join(DATA_PATH, 'runtime.log')` — the log file sits directly in the user data directory. C++ creates a separate `Logs/` subdirectory under the install path (`s_log_dir = s_install_path / "Logs"`) and places `runtime.log` inside it. This is a path deviation beyond the general DATA_PATH difference (TODO 16) — the directory structure gains an extra nesting level.
+
+- [ ] 324. [constants.cpp] Legacy directory migration code in init() has no JS equivalent
+- **JS Source**: `src/js/constants.js` (no equivalent)
+- **Status**: Pending
+- **Details**: C++ `constants::init()` lines 123–155 contain migration logic to rename legacy `config/` or `persistence/` directories to `data/`, and `casc/` to `cache/`. This code has no counterpart in the JS source and is a C++-specific addition to handle evolving directory naming across C++ port versions. While harmless, it is additional logic that deviates from the JS source structure.
+
+- [ ] 325. [constants.cpp] Explicit create_directories() for data and log dirs not present in JS
+- **JS Source**: `src/js/constants.js` (no equivalent)
+- **Status**: Pending
+- **Details**: C++ `constants::init()` lines 141–142 call `fs::create_directories(s_data_dir)` and `fs::create_directories(s_log_dir)` to ensure directories exist before any module writes to them. JS relies on NW.js to automatically create `nw.App.dataPath`. This is a necessary C++ adaptation but represents additional logic not in the JS source.
