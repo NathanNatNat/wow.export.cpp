@@ -4,36 +4,36 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 
 **Progress: 30/191 audited (16%)**
 
-- [x] 1. `src/app.cpp`
-- [x] 2. `src/js/blob.cpp`
-- [x] 3. `src/js/buffer.cpp`
-- [x] 4. `src/js/config.cpp`
-- [x] 5. `src/js/constants.cpp`
-- [x] 6. `src/js/core.cpp`
-- [x] 7. `src/js/crc32.cpp`
-- [x] 8. `src/js/external-links.cpp`
-- [x] 9. `src/js/file-writer.cpp`
-- [x] 10. `src/js/generics.cpp`
-- [x] 11. `src/js/gpu-info.cpp`
-- [x] 12. `src/js/icon-render.cpp`
-- [x] 13. `src/js/install-type.cpp`
-- [x] 14. `src/js/log.cpp`
-- [x] 15. `src/js/mmap.cpp`
-- [x] 16. `src/js/modules.cpp`
-- [x] 17. `src/js/MultiMap.cpp`
-- [x] 18. `src/js/png-writer.cpp`
-- [x] 19. `src/js/stb-impl.cpp`
-- [x] 20. `src/js/subtitles.cpp`
-- [x] 21. `src/js/tiled-png-writer.cpp`
-- [x] 22. `src/js/updater.cpp`
-- [x] 23. `src/js/wmv.cpp`
-- [x] 24. `src/js/wowhead.cpp`
-- [x] 25. `src/js/xml.cpp`
-- [x] 26. `src/js/3D/AnimMapper.cpp`
-- [x] 27. `src/js/3D/BoneMapper.cpp`
-- [x] 28. `src/js/3D/GeosetMapper.cpp`
-- [x] 29. `src/js/3D/ShaderMapper.cpp`
-- [x] 30. `src/js/3D/Shaders.cpp`
+- [ ] 1. `src/app.cpp`
+- [ ] 2. `src/js/blob.cpp`
+- [ ] 3. `src/js/buffer.cpp`
+- [ ] 4. `src/js/config.cpp`
+- [ ] 5. `src/js/constants.cpp`
+- [ ] 6. `src/js/core.cpp`
+- [ ] 7. `src/js/crc32.cpp`
+- [ ] 8. `src/js/external-links.cpp`
+- [ ] 9. `src/js/file-writer.cpp`
+- [ ] 10. `src/js/generics.cpp`
+- [ ] 11. `src/js/gpu-info.cpp`
+- [ ] 12. `src/js/icon-render.cpp`
+- [ ] 13. `src/js/install-type.cpp`
+- [ ] 14. `src/js/log.cpp`
+- [ ] 15. `src/js/mmap.cpp`
+- [ ] 16. `src/js/modules.cpp`
+- [ ] 17. `src/js/MultiMap.cpp`
+- [ ] 18. `src/js/png-writer.cpp`
+- [ ] 19. `src/js/stb-impl.cpp`
+- [ ] 20. `src/js/subtitles.cpp`
+- [ ] 21. `src/js/tiled-png-writer.cpp`
+- [ ] 22. `src/js/updater.cpp`
+- [ ] 23. `src/js/wmv.cpp`
+- [ ] 24. `src/js/wowhead.cpp`
+- [ ] 25. `src/js/xml.cpp`
+- [ ] 26. `src/js/3D/AnimMapper.cpp`
+- [ ] 27. `src/js/3D/BoneMapper.cpp`
+- [ ] 28. `src/js/3D/GeosetMapper.cpp`
+- [ ] 29. `src/js/3D/ShaderMapper.cpp`
+- [ ] 30. `src/js/3D/Shaders.cpp`
 - [ ] 31. `src/js/3D/Skin.cpp`
 - [ ] 32. `src/js/3D/Texture.cpp`
 - [ ] 33. `src/js/3D/WMOShaderMapper.cpp`
