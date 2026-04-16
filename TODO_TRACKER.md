@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/88 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/101 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -397,3 +397,68 @@
 - **JS Source**: `src/js/3D/loaders/BONELoader.js` line 24
 - **Status**: Pending
 - **Details**: JS exposes `async load()` while C++ exposes synchronous `void load()`, changing API timing/await semantics.
+
+### 89. [M2LegacyLoader.cpp] `load`/`getSkin` APIs are synchronous instead of JS Promise-based async methods
+- **JS Source**: `src/js/3D/loaders/M2LegacyLoader.js` lines 34, 819
+- **Status**: Pending
+- **Details**: JS exposes `async load()` and `async getSkin(index)` while C++ exposes synchronous `void load()` and `LegacyM2Skin& getSkin(int)`, changing await/timing behavior.
+
+### 90. [M2Loader.cpp] Primary loader methods are synchronous instead of JS Promise-based async methods
+- **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 37, 67, 87, 146, 332
+- **Status**: Pending
+- **Details**: JS exposes async `load`, `getSkin`, `loadAnims`, `loadAnimsForIndex`, and `parseChunk_MD21`; C++ ports these as synchronous methods, altering call/await semantics.
+
+### 91. [M2Loader.cpp] `loadAnims` error propagation differs from JS
+- **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 87–138
+- **Status**: Pending
+- **Details**: JS `loadAnims` does not catch loader/CASC failures (Promise rejects). C++ wraps per-entry loads in `try/catch` and continues, swallowing errors and changing failure behavior.
+
+### 92. [M2Loader.cpp] Model-name null stripping differs from original JS behavior
+- **JS Source**: `src/js/3D/loaders/M2Loader.js` line 792
+- **Status**: Pending
+- **Details**: JS calls `fileName.replace('\0', '')` (single replacement call result not reassigned), while C++ removes all null bytes in-place; resulting `name` values differ.
+
+### 93. [M3Loader.cpp] Loader methods are synchronous instead of JS Promise-based async methods
+- **JS Source**: `src/js/3D/loaders/M3Loader.js` lines 67, 104, 269, 277, 299, 315
+- **Status**: Pending
+- **Details**: JS exposes async `load`, `parseChunk_M3DT`, and async sub-chunk parsers; C++ ports these paths as synchronous calls, changing API timing/await semantics.
+
+### 94. [MDXLoader.cpp] `load` API is synchronous instead of JS async Promise-based method
+- **JS Source**: `src/js/3D/loaders/MDXLoader.js` line 28
+- **Status**: Pending
+- **Details**: JS exposes `async load()` while C++ exposes synchronous `void load()`, changing await/timing behavior.
+
+### 95. [SKELLoader.cpp] Loader animation APIs are synchronous instead of JS Promise-based async methods
+- **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 36, 308, 407
+- **Status**: Pending
+- **Details**: JS exposes async `load`, `loadAnimsForIndex`, and `loadAnims`; C++ ports all three as synchronous methods, altering call/await behavior.
+
+### 96. [SKELLoader.cpp] Animation-load failure handling differs from JS
+- **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 332–344, 438–448
+- **Status**: Pending
+- **Details**: JS does not catch ANIM/CASC load failures in `loadAnimsForIndex`/`loadAnims` (Promise rejects). C++ catches exceptions, logs, and returns/continues, changing failure propagation.
+
+### 97. [WDTLoader.cpp] `MWMO` string null handling differs from JS
+- **JS Source**: `src/js/3D/loaders/WDTLoader.js` line 86
+- **Status**: Pending
+- **Details**: JS uses `.replace('\0', '')` (first match only), while C++ removes all `'\0'` bytes from the string, producing different `worldModel` values in edge cases.
+
+### 98. [WMOLegacyLoader.cpp] `load`/internal load helpers/`getGroup` are synchronous instead of JS async methods
+- **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 33, 54, 86, 116
+- **Status**: Pending
+- **Details**: JS uses async `load`, `_load_alpha_format`, `_load_standard_format`, and `getGroup`; C++ ports these paths synchronously, changing await/timing behavior.
+
+### 99. [WMOLegacyLoader.cpp] Group-loader initialization differs from JS in `getGroup`
+- **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 146–149
+- **Status**: Pending
+- **Details**: JS creates group loaders with `fileID` undefined and explicitly seeds `group.version = this.version` before `await group.load()`. C++ does not pre-seed `version`, changing legacy group parse assumptions.
+
+### 100. [WMOLoader.cpp] `load`/`getGroup` APIs are synchronous instead of JS async methods
+- **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 37, 64
+- **Status**: Pending
+- **Details**: JS exposes async `load()` and `getGroup(index)` while C++ ports both as synchronous methods, changing await/timing behavior.
+
+### 101. [WMOLoader.cpp] `getGroup` omits JS filename-based fallback when `groupIDs` are missing
+- **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 75–79
+- **Status**: Pending
+- **Details**: JS loads by `groupIDs[index]` when present, otherwise falls back to `getFileByName(this.fileName.replace(...))`; C++ hard-requires `groupIDs` and throws out-of-range instead of performing the filename fallback.
