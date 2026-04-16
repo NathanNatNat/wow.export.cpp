@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/284 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/297 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1378,3 +1378,68 @@
 - **JS Source**: `src/js/modules/tab_textures.js` lines 306–311
 - **Status**: Pending
 - **Details**: JS uses styled `li` channel chips (`R/G/B/A`) with selected-state classes; C++ renders standard ImGui checkboxes, causing visible control-style differences.
+
+### 285. [tab_videos.cpp] Video preview playback is opened externally instead of using an embedded player
+- **JS Source**: `src/js/modules/tab_videos.js` lines 219–276, 493
+- **Status**: Pending
+- **Details**: JS renders and controls an in-tab `<video>` element with `onended`/`onerror` and subtitle track attachment, while C++ opens the stream URL in an external handler and shows status text in the preview area.
+
+### 286. [tab_videos.cpp] Video export format selector from MenuButton is missing
+- **JS Source**: `src/js/modules/tab_videos.js` lines 505, 559–571
+- **Status**: Pending
+- **Details**: JS uses a `MenuButton` bound to `config.exportVideoFormat` and dispatches format-specific export via selection; C++ renders a single `Export Selected` button with no in-UI format picker.
+
+### 287. [tab_videos.cpp] Kino processing toast omits the explicit Cancel action payload
+- **JS Source**: `src/js/modules/tab_videos.js` lines 394–400
+- **Status**: Pending
+- **Details**: JS updates progress toast with `{ 'Cancel': cancel_processing }`; C++ calls `setToast(..., {}, ...)`, removing the explicit cancel action binding from the toast configuration.
+
+### 288. [tab_videos.cpp] Dev-mode kino processing trigger export is missing
+- **JS Source**: `src/js/modules/tab_videos.js` lines 467–469
+- **Status**: Pending
+- **Details**: JS exposes `window.trigger_kino_processing = trigger_kino_processing` in non-release mode; C++ has no equivalent debug export hook.
+
+### 289. [tab_videos.cpp] Corrupted AVI fallback does not force CASC fallback fetch path
+- **JS Source**: `src/js/modules/tab_videos.js` line 697
+- **Status**: Pending
+- **Details**: JS retries corrupted cinematic reads with `getFileByName(file_name, false, false, true, true)` to force fallback behavior; C++ retries `getVirtualFileByName(file_name)` with normal arguments.
+
+### 290. [tab_zones.cpp] Default phase filtering excludes non-zero phases unlike JS
+- **JS Source**: `src/js/modules/tab_zones.js` lines 78–79
+- **Status**: Pending
+- **Details**: JS includes all `UiMapXMapArt` links when `phase_id === null`; C++ filters to `PhaseID == 0` when no phase is selected.
+
+### 291. [tab_zones.cpp] UiMapArtStyleLayer lookup key differs from JS relation logic
+- **JS Source**: `src/js/modules/tab_zones.js` lines 88–90
+- **Status**: Pending
+- **Details**: JS resolves style layers by matching `UiMapArtStyleID` to `art_entry.UiMapArtStyleID`; C++ matches `UiMapArtID` to the linked art ID, changing style-layer association behavior.
+
+### 292. [tab_zones.cpp] Base tile relation lookup uses layer-row ID instead of UiMapArt ID
+- **JS Source**: `src/js/modules/tab_zones.js` lines 120–121
+- **Status**: Pending
+- **Details**: JS fetches `UiMapArtTile` relation rows with `art_style.ID` from the UiMapArt entry; C++ stores `CombinedArtStyle::id` as the UiMapArtStyleLayer row ID and uses that in `getRelationRows`, altering tile resolution.
+
+### 293. [tab_zones.cpp] Base map tile OffsetX/OffsetY offsets are ignored
+- **JS Source**: `src/js/modules/tab_zones.js` lines 181–182
+- **Status**: Pending
+- **Details**: JS applies `tile.OffsetX`/`tile.OffsetY` when placing map tiles; C++ calculates tile position from row/column and tile dimensions only.
+
+### 294. [tab_zones.cpp] Zone listbox copy/paste trim options are hardcoded instead of config-bound
+- **JS Source**: `src/js/modules/tab_zones.js` line 315
+- **Status**: Pending
+- **Details**: JS binds `copymode`, `pasteselection`, and `copytrimwhitespace` to config values; C++ hardcodes `CopyMode::Default`, `pasteselection=false`, and `copytrimwhitespace=false`.
+
+### 295. [tab_zones.cpp] Phase selector placement differs from JS preview overlay layout
+- **JS Source**: `src/js/modules/tab_zones.js` lines 341–349
+- **Status**: Pending
+- **Details**: JS renders the phase dropdown in a `preview-dropdown-overlay` inside the preview background; C++ renders phase selection in the bottom control bar.
+
+### 296. [audio-helper.cpp] AudioPlayer::load does not return decoded buffer like JS
+- **JS Source**: `src/js/ui/audio-helper.js` lines 31–35
+- **Status**: Pending
+- **Details**: JS `load()` returns the decoded `AudioBuffer`; C++ `AudioPlayer::load(...)` returns `void`, changing function contract.
+
+### 297. [audio-helper.cpp] End-of-playback callback is polling-driven instead of event-driven
+- **JS Source**: `src/js/ui/audio-helper.js` lines 57–67, 115–127
+- **Status**: Pending
+- **Details**: JS triggers completion via `source.onended`; C++ checks `ma_sound_at_end()` inside `get_position()` and invokes `on_ended` there, requiring polling and adding side effects to position queries.
