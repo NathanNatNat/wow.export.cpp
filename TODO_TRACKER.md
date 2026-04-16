@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/305 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/317 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1483,3 +1483,63 @@
 - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 503–528
 - **Status**: Pending
 - **Details**: JS proxy resolves fields dynamically via `core.view[prefix + ...]`; C++ only maps `"model"`, `"decor"`, and `"creature"` with explicit branches, removing generic-prefix behavior.
+
+- [ ] 306. [app.cpp] Crash screen heading text differs from original JS
+- **JS Source**: `src/app.js` line 70 / `src/index.html` line 70
+- **Status**: Pending
+- **Details**: JS crash screen displays `"Oh no! The kākāpō has exploded..."` in an `<h1>` tag. C++ (line 353) displays `"wow.export.cpp has crashed!"` instead. While the naming convention allows user-facing text to say "wow.export.cpp", the original personality/flavor text ("kākāpō has exploded") is lost entirely.
+
+- [ ] 307. [app.cpp] Crash screen missing logo background element
+- **JS Source**: `src/app.js` lines 37–39
+- **Status**: Pending
+- **Details**: JS crash() appends a `#logo-background` div to the body after replacing the markup. C++ renderCrashScreen() does not render any background logo watermark, deviating from the original visual appearance.
+
+- [ ] 308. [app.cpp] Crash screen version/flavour/build color differs from JS CSS
+- **JS Source**: `src/app.js` lines 44–47 / `src/app.css` `#crash-screen-versions span`
+- **Status**: Pending
+- **Details**: JS CSS styles version spans with `color: var(--border)` (#6c757d). C++ renderCrashScreen() (lines 360–364) uses default text color (FONT_PRIMARY) for version/flavour/build text, not the muted FONT_FADED / BORDER color.
+
+- [ ] 309. [app.cpp] Crash screen error text styling does not match JS CSS
+- **JS Source**: `src/app.js` lines 49–51 / `src/app.css` `#crash-screen-text`
+- **Status**: Pending
+- **Details**: JS CSS uses `font-weight: normal; font-size: 20px; margin: 20px 0` for the error text container, with `#crash-screen-text-code { font-weight: bold; margin-right: 5px }`. C++ uses `TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), ...)` for the error code (red color not in JS CSS) and default size text. The font size, spacing, and color all differ.
+
+- [ ] 310. [app.cpp] ScaleAllSizes(1.5f) has no JS equivalent and alters all UI metrics
+- **JS Source**: N/A (no equivalent in `src/app.js`)
+- **Status**: Pending
+- **Details**: C++ line 2630 calls `ImGui::GetStyle().ScaleAllSizes(1.5f)` which multiplies ALL ImGui style metrics (padding, spacing, rounding, scrollbar size, etc.) by 1.5. This has no JS counterpart and will make the UI 50% larger than the CSS-defined values in app.h/app.css. Combined with `FontGlobalScale = 1.5f / dpiScale` (line 2879), the net effect is a 1.5x magnification that doesn't exist in the original app.
+
+- [ ] 311. [app.cpp] handleContextMenuClick accesses opt.handler instead of opt.action?.handler
+- **JS Source**: `src/app.js` lines 318–322
+- **Status**: Pending
+- **Details**: JS `handleContextMenuClick(opt)` accesses `opt.action?.handler` (a nested property on the action object). C++ (line 1710) accesses `opt.handler` directly. This is a structural mapping difference — if the C++ ContextMenuOption struct stores the handler at the top level rather than nested under an `action` sub-object, callers constructing these options must account for the difference.
+
+- [ ] 312. [app.cpp] click() disabled check uses bool parameter instead of DOM class check
+- **JS Source**: `src/app.js` lines 369–371
+- **Status**: Pending
+- **Details**: JS `click(tag, event, ...params)` checks `event.target.classList.contains('disabled')` to determine if the element is disabled. C++ (line 1740) takes a `bool disabled` parameter. While functionally similar in ImGui context, the JS checks the actual DOM state of the clicked element (which could be stale or dynamically applied), while C++ requires the caller to explicitly pass the disabled flag.
+
+- [ ] 313. [app.cpp] JS source_select.setActive() called twice; C++ only calls once
+- **JS Source**: `src/app.js` lines 696, 719
+- **Status**: Pending
+- **Details**: JS calls `modules.source_select.setActive()` both inside the updater flow (line 696, after update check completes) AND unconditionally at line 719. C++ only calls `modules::setActive("source_select")` once at line 2781, and the updater flow is not ported. When the updater is ported, the C++ must replicate both call sites.
+
+- [ ] 314. [app.cpp] whats-new.html path resolution differs from JS
+- **JS Source**: `src/app.js` lines 710–711
+- **Status**: Pending
+- **Details**: JS reads from `'./src/whats-new.html'` (relative to the NW.js app root). C++ reads from `constants::DATA_DIR() / "whats-new.html"` (line 2765). The resolved paths may differ depending on how DATA_DIR is configured vs the NW.js working directory.
+
+- [ ] 315. [app.cpp] Vue error handler uses 'ERR_VUE' error code; C++ render catch uses 'ERR_RENDER'
+- **JS Source**: `src/app.js` line 514
+- **Status**: Pending
+- **Details**: JS sets `app.config.errorHandler = err => crash('ERR_VUE', err.message)` to catch Vue rendering errors. C++ catches exceptions in the render loop (line 1129) with `crash("ERR_RENDER", e.what())`. The error code string differs — JS uses `ERR_VUE`, C++ uses `ERR_RENDER`.
+
+- [ ] 316. [app.cpp] JS `data-kb-link` click handler for help articles not ported
+- **JS Source**: `src/app.js` lines 116–131
+- **Status**: Pending
+- **Details**: JS has a global click event listener that intercepts clicks on `[data-kb-link]` elements to open help articles via `modules.tab_help.open_article(kb_id)`, and clicks on `[data-external]` elements to open external links. In ImGui there are no DOM elements, so this click delegation pattern cannot exist as-is, but the equivalent functionality (help article deep-linking and external link handling) must be implemented wherever those links appear in the C++ UI.
+
+- [ ] 317. [app.cpp] JS `showDevTools()` for debug builds has no C++ equivalent
+- **JS Source**: `src/app.js` lines 76–78
+- **Status**: Pending
+- **Details**: JS calls `win.showDevTools()` for non-release builds to open the Chrome DevTools inspector. C++ has no equivalent debug tool launcher. This is an expected platform difference but should be documented.
