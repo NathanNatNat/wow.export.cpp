@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/183 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/198 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -873,3 +873,78 @@
 - **JS Source**: `src/js/components/listboxb.js` lines 281–283
 - **Status**: Pending
 - **Details**: JS checks `selection.includes(item)` by item value/object. C++ checks index membership, so highlight/selection parity diverges when values repeat or list contents are reordered.
+
+### 184. [map-viewer.cpp] Tile image drawing path is still unimplemented
+- **JS Source**: `src/js/components/map-viewer.js` lines 380–402, 1111–1113
+- **Status**: Pending
+- **Details**: JS draws loaded tiles to canvas via `putImageData(...)` on main/double-buffer contexts. C++ caches tile pixels but does not upload/draw them, so only overlays render and map tiles are not visually equivalent.
+
+### 185. [map-viewer.cpp] Tile loading flow is synchronous instead of JS Promise-based async queueing
+- **JS Source**: `src/js/components/map-viewer.js` lines 192–197, 380–414
+- **Status**: Pending
+- **Details**: JS tile loader is async (`loader(...).then(...)`) with Promise completion timing. C++ calls loader synchronously in `loadTile(...)`, changing queue timing and behavior during panning/zoom updates.
+
+### 186. [markdown-content.cpp] Inline image markdown is not rendered as images
+- **JS Source**: `src/js/components/markdown-content.js` lines 208–216, 251–253
+- **Status**: Pending
+- **Details**: JS converts `![alt](src)` to `<img ...>` in `v-html` output. C++ renders image segments as placeholder text (`[Image: ...]`), causing functional and visual mismatch.
+
+### 187. [markdown-content.cpp] Inline bold/italic formatting behavior differs from JS HTML rendering
+- **JS Source**: `src/js/components/markdown-content.js` lines 219–224
+- **Status**: Pending
+- **Details**: JS emits `<strong>`/`<em>` markup; C++ substitutes color-only text rendering because ImGui has no inline bold/italic in this path, so typography does not match original styling.
+
+### 188. [menu-button.cpp] Click emit payload drops the original event object
+- **JS Source**: `src/js/components/menu-button.js` lines 45–50
+- **Status**: Pending
+- **Details**: JS emits `click` with the DOM event argument (`this.$emit('click', e)`). C++ exposes `onClick()` with no event payload, changing callback contract.
+
+### 189. [menu-button.cpp] Context-menu close behavior differs from original component flow
+- **JS Source**: `src/js/components/menu-button.js` lines 75–80; `src/js/components/context-menu.js` line 54
+- **Status**: Pending
+- **Details**: JS menu closes via context-menu `@close` events (mouseleave/click behavior). C++ popup primarily closes on click-outside checks and does not mirror the same close trigger semantics.
+
+### 190. [model-viewer-gl.cpp] Character-mode reactive watchers are replaced with render-time polling
+- **JS Source**: `src/js/components/model-viewer-gl.js` lines 469–473
+- **Status**: Pending
+- **Details**: JS registers Vue `$watch` handlers for `chrUse3DCamera`, `chrRenderShadow`, and `chrModelLoading`. C++ polls these values each frame in `renderWidget`, changing update/lifecycle behavior.
+
+### 191. [model-viewer-gl.cpp] Active renderer contract is narrowed from JS duck-typed renderer to `M2RendererGL`
+- **JS Source**: `src/js/components/model-viewer-gl.js` lines 223–226, 304–307, 409–416
+- **Status**: Pending
+- **Details**: JS uses optional/duck-typed renderer checks (`getActiveRenderer?.()` + method checks). C++ hard-types active renderer as `M2RendererGL*`, reducing parity with the original renderer-agnostic method contract.
+
+### 192. [resize-layer.cpp] ResizeObserver lifecycle is replaced by per-frame width polling
+- **JS Source**: `src/js/components/resize-layer.js` lines 12–15, 21–23
+- **Status**: Pending
+- **Details**: JS emits resize through `ResizeObserver` mount/unmount lifecycle. C++ emits when measured width changes during render, so behavior is tied to render frames instead of observer callbacks.
+
+### 193. [slider.cpp] Document-level mouse listener lifecycle from JS is not ported directly
+- **JS Source**: `src/js/components/slider.js` lines 23–29, 35–38
+- **Status**: Pending
+- **Details**: JS installs/removes global `mousemove`/`mouseup` listeners in `mounted`/`beforeUnmount`. C++ handles drag state via ImGui per-frame input polling and has no equivalent listener registration lifecycle.
+
+### 194. [CompressionType.cpp] Sibling `.cpp` translation unit does not contain line-by-line JS exports
+- **JS Source**: `src/js/db/CompressionType.js` lines 1–8
+- **Status**: Pending
+- **Details**: JS sibling exports compression constants in module body, while `CompressionType.cpp` only includes the header and comments; implementation parity is header-only, not in the `.cpp` sibling.
+
+### 195. [DBCReader.cpp] Public load path is synchronous instead of JS Promise-based async flow
+- **JS Source**: `src/js/db/DBCReader.js` lines 162–209, 244–279
+- **Status**: Pending
+- **Details**: JS `loadSchema()`/`parse()` are async and awaited. C++ ports these flows synchronously, changing timing and error propagation semantics.
+
+### 196. [DBCReader.cpp] DBD cache backend behavior differs from JS CASC cache API
+- **JS Source**: `src/js/db/DBCReader.js` lines 177–195
+- **Status**: Pending
+- **Details**: JS reads/writes DBD cache via `core.view.casc?.cache.getFile/storeFile`. C++ uses direct filesystem cache paths and bypasses the JS cache interface behavior.
+
+### 197. [DBDParser.cpp] Empty-chunk parsing behavior differs from original JS control flow
+- **JS Source**: `src/js/db/DBDParser.js` lines 215–223, 237–320
+- **Status**: Pending
+- **Details**: JS `parseChunk` path can process empty chunks produced by blank-line splits, while C++ returns early on `chunk.empty()`, changing edge-case entry creation behavior.
+
+### 198. [FieldType.cpp] Sibling `.cpp` translation unit does not contain line-by-line JS exports
+- **JS Source**: `src/js/db/FieldType.js` lines 1–14
+- **Status**: Pending
+- **Details**: JS sibling exports field-type symbols in module body, while `FieldType.cpp` only includes the header and comments; parity is provided in header enums, not in `.cpp` implementation.
