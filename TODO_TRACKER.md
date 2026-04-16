@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/57 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/60 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -208,37 +208,52 @@
 - **Status**: Pending
 - **Details**: JS clears `require.cache` and re-requires modules/components during reload; C++ only resets internal flags and re-wraps existing in-memory module definitions.
 
-### 51. [MultiMap.cpp] `.cpp` translation unit still contains unconverted JavaScript source
-- **JS Source**: `src/js/MultiMap.cpp` lines 6–32
+### 51. [modules.cpp] `set_active` eagerly initializes modules unlike JS activation flow
+- **JS Source**: `src/js/modules.js` lines 244–251, 293–303
 - **Status**: Pending
-- **Details**: `src/js/MultiMap.cpp` currently contains JS syntax (`class MultiMap extends Map`, `module.exports`) instead of C++ implementation.
+- **Details**: JS `set_active` only switches `core.view.activeModule`; first-time initialization is triggered by wrapped `activated()`. C++ calls `initialize()` directly inside `set_active`, changing lifecycle timing/side effects.
 
-### 52. [MultiMap.cpp] Sibling `.js` file contains C++ stub instead of original JS implementation
-- **JS Source**: `src/js/MultiMap.js` lines 6–9
+### 52. [modules.cpp] `modContextMenuOptions` payload omits JS `action` object data
+- **JS Source**: `src/js/modules.js` lines 162–167, 176–198, 289–291
 - **Status**: Pending
-- **Details**: `src/js/MultiMap.js` has `#include "MultiMap.h"` and C++ comments, while the expected JS implementation is not present in the `.js` sibling file.
+- **Details**: JS writes option objects containing `action` (or `{ handler, dev_only }` for static options) into `core.view.modContextMenuOptions`; C++ serializes only `id/label/icon/dev_only` to view state, dropping JS action payload shape.
 
-### 53. [png-writer.cpp] `write()` call contract differs from JS async behavior
+### 53. [modules.cpp] Unknown nav/context entries lose JS insertion-order behavior
+- **JS Source**: `src/js/modules.js` lines 112–114, 139–157, 176–195
+- **Status**: Pending
+- **Details**: JS builds arrays from `Map` insertion order before stable sort (entries not in order arrays keep insertion order). C++ stores entries in `std::map`, so unordered items are pre-sorted by key, changing final order semantics.
+
+### 54. [MultiMap.cpp] MultiMap logic is not ported in the `.cpp` sibling translation unit
+- **JS Source**: `src/js/MultiMap.js` lines 6–32
+- **Status**: Pending
+- **Details**: The JS sibling contains the full `MultiMap extends Map` implementation, but `src/js/MultiMap.cpp` only includes `MultiMap.h` and comments; line-by-line implementation parity is not present in the `.cpp` file itself.
+
+### 55. [MultiMap.cpp] Public API model differs from JS `Map` subclass contract
+- **JS Source**: `src/js/MultiMap.js` lines 6, 20–28, 32
+- **Status**: Pending
+- **Details**: JS exports an actual `Map` subclass with standard `Map` behavior/interop, while C++ exposes a template wrapper (header implementation) returning `std::variant` pointers and not `Map`-equivalent runtime semantics.
+
+### 56. [png-writer.cpp] `write()` call contract differs from JS async behavior
 - **JS Source**: `src/js/png-writer.js` lines 243–249
 - **Status**: Pending
 - **Details**: JS `write(file)` is `async` and returns/awaits `this.getBuffer().writeToFile(file)`; C++ `PNGWriter::write(...)` is synchronous `void`.
 
-### 54. [stb-impl.cpp] Required sibling JS source file is missing, blocking parity verification
+### 57. [stb-impl.cpp] Required sibling JS source file is missing, blocking parity verification
 - **JS Source**: `src/js/stb-impl.js` lines N/A (file missing)
 - **Status**: Blocked
 - **Details**: `src/js/stb-impl.cpp` exists, but `src/js/stb-impl.js` is absent, so line-by-line comparison against an original JS sibling cannot be completed.
 
-### 55. [subtitles.cpp] `get_subtitles_vtt` API and data-loading path differ from JS
+### 58. [subtitles.cpp] `get_subtitles_vtt` API and data-loading path differ from JS
 - **JS Source**: `src/js/subtitles.js` lines 172–175
 - **Status**: Pending
 - **Details**: JS `get_subtitles_vtt(casc, file_data_id, format)` loads file data internally via CASC; C++ takes preloaded subtitle text and format only.
 
-### 56. [subtitles.cpp] BOM stripping behavior differs from original JS
+### 59. [subtitles.cpp] BOM stripping behavior differs from original JS
 - **JS Source**: `src/js/subtitles.js` lines 176–178
 - **Status**: Pending
 - **Details**: JS removes leading UTF-16 BOM codepoint (`0xFEFF`) via `charCodeAt`; C++ strips UTF-8 byte-order mark bytes (`EF BB BF`) instead.
 
-### 57. [subtitles.cpp] Invalid SBT timestamp parsing semantics differ from JS `parseInt` behavior
+### 60. [subtitles.cpp] Invalid SBT timestamp parsing semantics differ from JS `parseInt` behavior
 - **JS Source**: `src/js/subtitles.js` lines 13–20
 - **Status**: Pending
 - **Details**: JS uses `parseInt(...)` and can propagate `NaN` for malformed timestamp segments, while C++ digit-filter parsing can still produce numeric output from mixed/invalid strings.
