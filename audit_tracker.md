@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 170/191 audited (89%)**
+**Progress: 180/191 audited (94%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -174,16 +174,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 168. `src/js/modules/tab_raw.cpp`
 - [x] 169. `src/js/modules/tab_text.cpp`
 - [x] 170. `src/js/modules/tab_textures.cpp`
-- [ ] 171. `src/js/modules/tab_videos.cpp`
-- [ ] 172. `src/js/modules/tab_zones.cpp`
-- [ ] 173. `src/js/mpq/bitstream.cpp`
-- [ ] 174. `src/js/mpq/build-version.cpp`
-- [ ] 175. `src/js/mpq/bzip2.cpp`
-- [ ] 176. `src/js/mpq/huffman.cpp`
-- [ ] 177. `src/js/mpq/mpq-install.cpp`
-- [ ] 178. `src/js/mpq/mpq.cpp`
-- [ ] 179. `src/js/mpq/pkware.cpp`
-- [ ] 180. `src/js/ui/audio-helper.cpp`
+- [x] 171. `src/js/modules/tab_videos.cpp`
+- [x] 172. `src/js/modules/tab_zones.cpp`
+- [x] 173. `src/js/mpq/bitstream.cpp`
+- [x] 174. `src/js/mpq/build-version.cpp`
+- [x] 175. `src/js/mpq/bzip2.cpp`
+- [x] 176. `src/js/mpq/huffman.cpp`
+- [x] 177. `src/js/mpq/mpq-install.cpp`
+- [x] 178. `src/js/mpq/mpq.cpp`
+- [x] 179. `src/js/mpq/pkware.cpp`
+- [x] 180. `src/js/ui/audio-helper.cpp`
 - [ ] 181. `src/js/ui/char-texture-overlay.cpp`
 - [ ] 182. `src/js/ui/character-appearance.cpp`
 - [ ] 183. `src/js/ui/data-exporter.cpp`
