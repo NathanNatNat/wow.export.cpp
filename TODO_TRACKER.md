@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/227 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/245 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1093,3 +1093,93 @@
 - **JS Source**: `src/js/hashing/xxhash64.js` lines 64–75, 286–288
 - **Status**: Pending
 - **Details**: JS exports a callable function that doubles as constructor/state prototype (`module.exports = XXH64`), while C++ exposes a class/static-method API only, changing the original module’s call surface semantics.
+
+### 228. [font_helpers.cpp] `detect_glyphs_async` no longer implements JS DOM/callback contract
+- **JS Source**: `src/js/modules/font_helpers.js` lines 56–106
+- **Status**: Pending
+- **Details**: JS clears and repopulates `grid_element`, wires per-glyph click handlers, and invokes `on_complete`; C++ only accumulates codepoints in `GlyphDetectionState` and drops the DOM/callback path from the original module API.
+
+### 229. [font_helpers.cpp] Active detection cancellation semantics differ from JS global `active_detection`
+- **JS Source**: `src/js/modules/font_helpers.js` lines 17, 57–63
+- **Status**: Pending
+- **Details**: JS tracks a module-level `active_detection` and cancels prior runs automatically, while C++ relies on caller-owned state and does not preserve the same global cancellation behavior across concurrent detections.
+
+### 230. [font_helpers.cpp] `inject_font_face` return type/behavior differs from JS blob-URL + `document.fonts` flow
+- **JS Source**: `src/js/modules/font_helpers.js` lines 113–133
+- **Status**: Pending
+- **Details**: JS injects `@font-face`, waits for `document.fonts.load/check`, and returns a URL string; C++ adds the font directly to ImGui atlas and returns `ImFont*`, dropping JS URL lifecycle and decode verification behavior.
+
+### 231. [legacy_tab_audio.cpp] Playback UI visuals diverge from JS template/CSS
+- **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 201–241
+- **Status**: Pending
+- **Details**: JS renders `#sound-player-anim`, CSS-styled play button state classes, and component sliders, while C++ replaces this with ImGui text/buttons/checkboxes and a custom icon pulse, so layout/styling is not pixel-identical.
+
+### 232. [legacy_tab_audio.cpp] Seek-loop scheduling differs from JS `requestAnimationFrame` lifecycle
+- **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 19–42
+- **Status**: Pending
+- **Details**: JS drives seek updates with `requestAnimationFrame` and explicit cancellation IDs; C++ updates via render-loop polling with `seek_loop_active`, changing timing and loop lifecycle semantics.
+
+### 233. [legacy_tab_data.cpp] Export format menu omits JS SQL/DBC options
+- **JS Source**: `src/js/modules/legacy_tab_data.js` lines 172–176, 222–231
+- **Status**: Pending
+- **Details**: JS menu exposes `CSV`, `SQL`, and `DBC` export actions, but C++ `legacy_data_opts` only includes `Export as CSV`, making SQL/DBC exports unavailable through the settings menu path.
+
+### 234. [legacy_tab_data.cpp] `copy_cell` empty-string handling differs from JS
+- **JS Source**: `src/js/modules/legacy_tab_data.js` lines 215–220
+- **Status**: Pending
+- **Details**: JS copies any non-null/undefined value (including empty string), while C++ returns early on `value.empty()`, so empty-cell clipboard behavior is not equivalent.
+
+### 235. [legacy_tab_files.cpp] Listbox context menu includes extra FileDataID actions absent in JS
+- **JS Source**: `src/js/modules/legacy_tab_files.js` lines 76–80
+- **Status**: Pending
+- **Details**: JS legacy-files menu only provides copy file path, copy export path, and open export directory; C++ conditionally adds listfile-format and fileDataID entries, changing context-menu behavior.
+
+### 236. [legacy_tab_fonts.cpp] Preview text is not rendered with the selected font family
+- **JS Source**: `src/js/modules/legacy_tab_fonts.js` lines 78, 165–169
+- **Status**: Pending
+- **Details**: JS binds textarea `fontFamily` to `fontPreviewFontFamily`, but C++ renders `InputTextMultiline` without switching to the loaded `ImFont`, so font preview output does not use the selected legacy font.
+
+### 237. [legacy_tab_fonts.cpp] Font loading contract differs from JS URL-based `loaded_fonts` cache
+- **JS Source**: `src/js/modules/legacy_tab_fonts.js` lines 18–41
+- **Status**: Pending
+- **Details**: JS caches `font_id -> blob URL` and reuses CSS font-family identifiers; C++ caches `font_id -> void*` ImGui font pointers, changing the original module’s data model and font-resource lifecycle behavior.
+
+### 238. [legacy_tab_home.cpp] Legacy home tab template is replaced by shared `tab_home` layout
+- **JS Source**: `src/js/modules/legacy_tab_home.js` lines 2–23
+- **Status**: Pending
+- **Details**: JS defines a dedicated legacy-home template structure (`#legacy-tab-home`, changelog HTML block, and external-link button rows), while C++ delegates to `tab_home::renderHomeLayout()`, so the legacy tab is not a line-by-line equivalent render path.
+
+### 239. [legacy_tab_textures.cpp] Listbox context menu render path from JS template is missing
+- **JS Source**: `src/js/modules/legacy_tab_textures.js` lines 118–122, 147–161
+- **Status**: Pending
+- **Details**: JS mounts a `ContextMenu` component for texture list selections, but C++ never calls `context_menu::render(...)` in `render()`, leaving the expected right-click action menu unrendered.
+
+### 240. [legacy_tab_textures.cpp] Channel toggle visuals/interaction differ from JS channel list UI
+- **JS Source**: `src/js/modules/legacy_tab_textures.js` lines 130–135
+- **Status**: Pending
+- **Details**: JS uses styled `<li>` channel pills with selected classes (`R/G/B/A`), while C++ uses standard ImGui checkboxes, producing non-identical visuals and interaction behavior.
+
+### 241. [module_test_a.cpp] Module UI template structure differs from JS component markup
+- **JS Source**: `src/js/modules/module_test_a.js` lines 2–8
+- **Status**: Pending
+- **Details**: JS renders a structured HTML block (`.module-test-a`, `<h2>`, `<p>`, buttons) styled via CSS, while C++ uses plain ImGui text/button primitives without equivalent DOM/CSS layout fidelity.
+
+### 242. [module_test_b.cpp] Busy-state text formatting differs from JS boolean rendering
+- **JS Source**: `src/js/modules/module_test_b.js` line 8
+- **Status**: Pending
+- **Details**: JS displays `Busy State` using Vue boolean/string rendering, while C++ prints `core::view->isBusy` with `%d`, emitting numeric values rather than matching the original presentation contract.
+
+### 243. [screen_settings.cpp] Settings descriptions/help text from JS template are largely omitted
+- **JS Source**: `src/js/modules/screen_settings.js` lines 24–353
+- **Status**: Pending
+- **Details**: JS includes extensive per-setting explanatory `<p>` text and warning copy, but C++ mostly renders condensed headings/controls; this is a substantial visual/content mismatch versus the original settings screen.
+
+### 244. [screen_settings.cpp] Cache/listfile interval labels changed from days to hours
+- **JS Source**: `src/js/modules/screen_settings.js` lines 271–274, 329–332
+- **Status**: Pending
+- **Details**: JS labels `cacheExpiry` and `listfileCacheRefresh` as day-based values, while C++ headings explicitly state hours (`Cache Expiry (hours)`, `Listfile Update Frequency (hours)`), changing user-facing semantics.
+
+### 245. [screen_settings.cpp] Multi-button style groups are replaced with radio/checkbox controls
+- **JS Source**: `src/js/modules/screen_settings.js` lines 111–115, 178–183, 232–236
+- **Status**: Pending
+- **Details**: JS uses `.ui-multi-button` grouped toggles for path format, export metadata, and copy mode; C++ replaces these with ImGui radio buttons/checkboxes, causing visible layout and styling deviations.
