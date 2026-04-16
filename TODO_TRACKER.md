@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/202 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/208 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. ⬜ [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/index.html` line 70, `src/app.js` line 24
@@ -1013,3 +1013,33 @@
 - **JS Source**: `src/js/xml.js` lines 25–55, 71–77, 89–95
 - **Status**: Pending
 - **Details**: JS bounds checks rely on `xml[pos]` becoming `undefined` safely at string end. C++ directly indexes `xml[pos]` in multiple places without rechecking `pos < xml.size()` after whitespace/position changes, which can read out of bounds on malformed/truncated XML inputs.
+
+### 203. ⬜ [GeosetMapper.cpp] `map` is async in JS but synchronous void in C++
+- **JS Source**: `src/js/3D/GeosetMapper.js` line 79
+- **Status**: Pending
+- **Details**: JS declares `const map = async (geosets) => { ... }`, making it return a Promise. All callers use `await geoset_mapper.map(geosets)`. C++ declares it `void map(std::vector<Geoset>& geosets)` (synchronous). The body has no `await`, so there is no actual async work, and the C++ sync version is functionally equivalent. However, any callers ported from JS that relied on `await` semantics may need to adapt.
+
+### 204. ⬜ [GeosetMapper.cpp] Integer truncation instead of `Math.floor` for negative geoset IDs
+- **JS Source**: `src/js/3D/GeosetMapper.js` line 66
+- **Status**: Pending
+- **Details**: JS uses `const base = Math.floor(id / 100) * 100;` which rounds toward negative infinity for negative values. C++ uses `const int base = (id / 100) * 100;` which truncates toward zero. For any negative `id` (e.g., `-50`) JS gives `-100` while C++ gives `0`. In practice geoset IDs are non-negative, but the deviation should be documented. Fix: replace with `const int base = ((id < 0 ? id - 99 : id) / 100) * 100;` or equivalent floor-div.
+
+### 205. ⬜ [ShaderMapper.cpp] Functions return `std::nullopt` instead of JS `null` — caller contract change
+- **JS Source**: `src/js/3D/ShaderMapper.js` lines 57, 100, 151, 170
+- **Status**: Pending
+- **Details**: JS `getVertexShader`, `getPixelShader`, `getHullShader`, and `getDomainShader` return `null` when an unknown shader ID is encountered. C++ returns `std::nullopt` (`std::optional<std::string>`). This is a valid C++ mapping but changes the calling convention: JS callers check for `null` via truthiness, while C++ callers must check `.has_value()` or dereference only if valid. All call sites that use these functions must use the optional correctly.
+
+### 206. ⬜ [Shaders.cpp] `create_program` has extra `_unregister_fn` wiring not present in JS
+- **JS Source**: `src/js/3D/Shaders.js` lines 56–72
+- **Status**: Pending
+- **Details**: C++ `create_program` (lines 78–83) sets `gl::ShaderProgram::_unregister_fn` on first call so the ShaderProgram destructor can invoke `shaders::unregister`. This is a C++-specific callback mechanism with no equivalent in JS. While necessary for RAII cleanup, it introduces a global side-effect (mutating a static function pointer) on the first `create_program` call and is not thread-safe.
+
+### 207. ⬜ [Shaders.cpp] `unregister` has extra null-pointer guard changing error semantics
+- **JS Source**: `src/js/3D/Shaders.js` lines 78–86
+- **Status**: Pending
+- **Details**: JS `unregister(program)` immediately reads `program._shader_name`, which throws `TypeError` if `program` is `null`/`undefined`. C++ `unregister(gl::ShaderProgram* program)` first checks `if (!program) return;` (line 104), silently swallowing null calls. This changes the error semantics: bugs that pass a null program are hidden in C++ but would crash loudly in JS.
+
+### 208. ⬜ [Shaders.cpp] `active_programs` stores raw pointers — dangling pointer risk
+- **JS Source**: `src/js/3D/Shaders.js` lines 26, 69
+- **Status**: Pending
+- **Details**: JS `active_programs` is a `Map<name, Set<ShaderProgram>>` that holds object references, keeping programs alive. C++ `active_programs` is `std::unordered_map<std::string, std::unordered_set<gl::ShaderProgram*>>` storing raw pointers to programs whose lifetime is owned by the `unique_ptr` returned to the caller. If a caller destroys the `unique_ptr` without first calling `shaders::unregister`, `active_programs` will contain a dangling pointer and `reload_all` will dereference it, causing undefined behaviour. A safer design would store `std::weak_ptr` or ensure callers always unregister via RAII.
