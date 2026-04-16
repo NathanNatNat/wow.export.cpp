@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/74 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/83 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -327,3 +327,48 @@
 - **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` lines 45, 54, 68, 114, 133–135
 - **Status**: Pending
 - **Details**: JS calls `preventDefault()` during rotate/pan interactions and both `preventDefault()`/`stopPropagation()` on wheel; C++ has no equivalent event suppression behavior.
+
+### 75. [ADTExporter.cpp] `calculateUVBounds` skips chunks when `vertices` is empty, unlike JS truthiness check
+- **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 267–268
+- **Status**: Pending
+- **Details**: JS only skips when `chunk`/`chunk.vertices` is missing; an empty typed array is still truthy and processing continues. C++ adds `chunk.vertices.empty()` as an additional skip condition, changing edge-case behavior.
+
+### 76. [ADTExporter.cpp] Export API flow is synchronous instead of JS Promise-based `async export()`
+- **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 309–367
+- **Status**: Pending
+- **Details**: JS `export()` is asynchronous and yields between CASC/file operations; C++ `exportTile()` performs the flow synchronously, changing timing/cancellation behavior relative to the original async path.
+
+### 77. [CharacterExporter.cpp] `get_item_id_for_slot` does not preserve JS falsy fallback semantics
+- **JS Source**: `src/js/3D/exporters/CharacterExporter.js` lines 342–345
+- **Status**: Pending
+- **Details**: JS uses `a || b || null`, so a slot `item_id` of `0` falls through to collection/null. C++ returns the first found `item_id` directly (including `0`), which differs for falsy-ID edge cases.
+
+### 78. [M2Exporter.cpp] `addURITexture` input contract differs from JS (data URI string vs decoded PNG buffer)
+- **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59–61, 111–112
+- **Status**: Pending
+- **Details**: JS stores a data-URI string and decodes it inside `exportTextures()`. C++ `addURITexture` accepts `BufferWrapper` PNG bytes directly, changing caller-facing behavior and where decoding occurs.
+
+### 79. [M2Exporter.cpp] Equipment UV2 export guard differs from JS truthy check
+- **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 568
+- **Status**: Pending
+- **Details**: JS exports UV2 when `config.modelsExportUV2 && uv2` (empty arrays are truthy). C++ requires `!uv2.empty()`, so empty-but-present UV2 buffers are not exported.
+
+### 80. [M2LegacyExporter.cpp] Skin texture override condition differs when `skinTextures` is an empty array
+- **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 65–70, 176–181, 220–225
+- **Status**: Pending
+- **Details**: JS checks `this.skinTextures` truthiness (empty array is truthy) and may overwrite to `undefined`, then skip texture. C++ requires `!skinTextures.empty()`, so it keeps original texture paths in that edge case.
+
+### 81. [M2LegacyExporter.cpp] Export API flow is synchronous instead of JS Promise-based async methods
+- **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 39, 123, 262, 299
+- **Status**: Pending
+- **Details**: JS export methods (`exportTextures`, `exportAsOBJ`, `exportAsSTL`, `exportRaw`) are async and yield during I/O. C++ runs these paths synchronously, altering timing/cancellation behavior versus JS.
+
+### 82. [M3Exporter.cpp] `addURITexture` input contract differs from JS (data URI string vs decoded PNG buffer)
+- **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 49–50
+- **Status**: Pending
+- **Details**: JS stores raw data-URI strings in `dataTextures`; C++ stores `BufferWrapper` PNG bytes, changing caller contract and data normalization stage.
+
+### 83. [M3Exporter.cpp] UV2 export condition checks non-empty instead of JS defined-ness
+- **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 88–89, 141–142
+- **Status**: Pending
+- **Details**: JS exports UV1 whenever it is defined (`!== undefined`), including empty arrays. C++ requires `!m3->uv1.empty()`, which changes behavior for defined-but-empty UV sets.

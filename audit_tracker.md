@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 35/191 audited (18%)**
+**Progress: 40/191 audited (21%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -39,11 +39,11 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 33. `src/js/3D/WMOShaderMapper.cpp`
 - [x] 34. `src/js/3D/camera/CameraControlsGL.cpp`
 - [x] 35. `src/js/3D/camera/CharacterCameraControlsGL.cpp`
-- [ ] 36. `src/js/3D/exporters/ADTExporter.cpp`
-- [ ] 37. `src/js/3D/exporters/CharacterExporter.cpp`
-- [ ] 38. `src/js/3D/exporters/M2Exporter.cpp`
-- [ ] 39. `src/js/3D/exporters/M2LegacyExporter.cpp`
-- [ ] 40. `src/js/3D/exporters/M3Exporter.cpp`
+- [x] 36. `src/js/3D/exporters/ADTExporter.cpp`
+- [x] 37. `src/js/3D/exporters/CharacterExporter.cpp`
+- [x] 38. `src/js/3D/exporters/M2Exporter.cpp`
+- [x] 39. `src/js/3D/exporters/M2LegacyExporter.cpp`
+- [x] 40. `src/js/3D/exporters/M3Exporter.cpp`
 - [ ] 41. `src/js/3D/exporters/WMOExporter.cpp`
 - [ ] 42. `src/js/3D/exporters/WMOLegacyExporter.cpp`
 - [ ] 43. `src/js/3D/gl/GLContext.cpp`
