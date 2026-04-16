@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/114 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/131 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -527,3 +527,88 @@
 - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 1–86
 - **Status**: Pending
 - **Details**: `CSVWriter.cpp` currently contains JavaScript (`require`, `class`, `module.exports`) while `CSVWriter.js` contains C++ (`#include`, `CSVWriter::...`). This violates expected source pairing and leaves the `.cpp` translation unit unconverted.
+
+### 115. [GLTFWriter.cpp] Export entrypoint is synchronous instead of JS Promise-based async flow
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 194–1504
+- **Status**: Pending
+- **Details**: JS defines `async write(overwrite, format)` and awaits filesystem/export operations throughout. C++ exposes `void write(...)` and executes all I/O synchronously, changing call timing/error propagation semantics for callers expecting Promise behavior.
+
+### 116. [JSONWriter.cpp] `write()` is synchronous and BigInt-stringify behavior differs from JS
+- **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 33–43
+- **Status**: Pending
+- **Details**: JS uses `async write()` and a `JSON.stringify` replacer that converts `bigint` values to strings. C++ `write()` is synchronous and writes `nlohmann::json::dump()` directly, which changes both async semantics and JS BigInt serialization parity.
+
+### 117. [MTLWriter.cpp] `write()` is synchronous instead of JS Promise-based async method
+- **JS Source**: `src/js/3D/writers/MTLWriter.js` lines 41–68
+- **Status**: Pending
+- **Details**: JS awaits file existence checks, directory creation, and line writes in `async write()`. C++ performs the same work synchronously, so behavior differs for call sites that rely on async completion semantics.
+
+### 118. [OBJWriter.cpp] `write()` is synchronous instead of JS Promise-based async method
+- **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 129–225
+- **Status**: Pending
+- **Details**: JS implements asynchronous writes (`await writer.writeLine(...)` and async filesystem calls). C++ `write()` is synchronous, which changes ordering and error propagation relative to the original Promise API.
+
+### 119. [SQLWriter.cpp] `write()` is synchronous instead of JS Promise-based async method
+- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 210–229
+- **Status**: Pending
+- **Details**: JS `async write()` awaits file checks, directory creation, and output writes. C++ performs the same operations synchronously, diverging from JS caller-visible async behavior.
+
+### 120. [SQLWriter.cpp] Empty-string SQL value handling differs from JS null/undefined checks
+- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 66–76
+- **Status**: Pending
+- **Details**: JS returns `NULL` only for `null`/`undefined`; an empty string serializes to `''`. C++ maps `value.empty()` to `NULL`, so genuine empty-string field values are emitted as SQL `NULL`, changing exported data.
+
+### 121. [STLWriter.cpp] `write()` is synchronous instead of JS Promise-based async method
+- **JS Source**: `src/js/3D/writers/STLWriter.js` lines 131–249
+- **Status**: Pending
+- **Details**: JS writer path is asynchronous and awaited by callers. C++ `write()` runs synchronously, changing API timing semantics compared to the original implementation.
+
+### 122. [blp.cpp] Canvas rendering APIs (`toCanvas`/`drawToCanvas`) are not ported
+- **JS Source**: `src/js/casc/blp.js` lines 95, 103–117, 221–234
+- **Status**: Pending
+- **Details**: JS exposes canvas-based rendering and uses `toCanvas(...).toDataURL()` in `getDataURL()`. C++ removes canvas APIs and routes `getDataURL()` through PNG encoding, which changes available surface API and rendering path behavior.
+
+### 123. [blp.cpp] WebP/PNG save methods are synchronous instead of JS async Promise APIs
+- **JS Source**: `src/js/casc/blp.js` lines 146–194
+- **Status**: Pending
+- **Details**: JS implements `async saveToPNG`, `async toWebP`, and `async saveToWebP`. C++ equivalents are synchronous, changing completion/error semantics for consumers expecting Promise-based behavior.
+
+### 124. [blp.cpp] 4-bit alpha nibble indexing behavior differs from original JS
+- **JS Source**: `src/js/casc/blp.js` lines 286–299
+- **Status**: Pending
+- **Details**: JS uses `this.rawData[this.scaledLength + (index / 2)]` (floating index for odd values), while C++ uses integer division. This intentionally fixes a JS bug but still deviates from original runtime behavior.
+
+### 125. [blp.cpp] DXT block overrun guard differs from JS equality check
+- **JS Source**: `src/js/casc/blp.js` lines 323–324
+- **Status**: Pending
+- **Details**: JS skips only when `this.rawData.length === pos`. C++ skips when `pos >= rawData_.size()`, adding defensive handling for overrun states and altering edge-case decode behavior.
+
+### 126. [blp.cpp] `toBuffer()` fallback differs for unknown encodings
+- **JS Source**: `src/js/casc/blp.js` lines 242–250
+- **Status**: Pending
+- **Details**: JS has no default branch and therefore returns `undefined` for unsupported encodings. C++ returns an empty `BufferWrapper`, changing caller-observed fallback behavior.
+
+### 127. [blte-reader.cpp] `decodeAudio(context)` API from JS is missing
+- **JS Source**: `src/js/casc/blte-reader.js` lines 337–340
+- **Status**: Pending
+- **Details**: JS exposes `async decodeAudio(context)` after block processing. C++ removes this method entirely, so the sibling port is missing a public API/code path present in the original module.
+
+### 128. [blte-reader.cpp] `getDataURL()` no longer honors pre-populated `dataURL` short-circuit
+- **JS Source**: `src/js/casc/blte-reader.js` lines 346–353
+- **Status**: Pending
+- **Details**: JS returns existing `this.dataURL` without forcing `processAllBlocks()`. C++ always processes blocks before delegating to `BufferWrapper::getDataURL()`, changing caching/override behavior.
+
+### 129. [blte-stream-reader.cpp] Block retrieval/decode flow is synchronous instead of JS async
+- **JS Source**: `src/js/casc/blte-stream-reader.js` lines 54–118
+- **Status**: Pending
+- **Details**: JS defines `async getBlock` and `async _decodeBlock` and awaits async `blockFetcher`. C++ changes these paths to synchronous calls, altering control flow and error timing.
+
+### 130. [blte-stream-reader.cpp] `createReadableStream()` Web Streams API path is missing
+- **JS Source**: `src/js/casc/blte-stream-reader.js` lines 168–193
+- **Status**: Pending
+- **Details**: JS provides `createReadableStream()` for progressive consumption and cancellation behavior. C++ has no equivalent method, leaving the stream-based event handler/code path unported.
+
+### 131. [blte-stream-reader.cpp] `streamBlocks` and `createBlobURL` behavior differs from JS
+- **JS Source**: `src/js/casc/blte-stream-reader.js` lines 199–218
+- **Status**: Pending
+- **Details**: JS uses an async generator for `streamBlocks()` and returns an object URL from `createBlobURL()` via `BlobPolyfill/URLPolyfill`. C++ uses eager callback iteration and returns concatenated raw bytes (`BufferWrapper`) instead of a blob URL string.
