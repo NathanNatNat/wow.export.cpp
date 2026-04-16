@@ -1,6 +1,6 @@
 # TODO Tracker
 
-**Progress: 0/44 verified (0%)**
+> **Progress: 0/57 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -177,3 +177,68 @@
 - [ ] 44. [mmap.cpp] Virtual-file ownership semantics differ from JS object-lifetime model
 - **JS Source**: `src/js/mmap.js` lines 14–24, 30–43
 - **Details**: JS tracks objects in a `Set` and only calls `unmap()`/`clear()`; C++ tracks raw pointers in a global set and deletes them in `release_virtual_files()`, introducing different lifetime/aliasing behavior versus JS-managed object references.
+
+### 45. [modules.cpp] Dynamic component registry and hot-reload proxy behavior is not ported
+- **JS Source**: `src/js/modules.js` lines 6–24, 62–109, 270–275
+- **Status**: Pending
+- **Details**: JS exposes `COMPONENTS`, `COMPONENT_PATH_MAP`, `component_cache`, and `component_registry` proxy with dynamic require-cache invalidation; C++ replaces this with a static/no-op `register_components()` path.
+
+### 46. [modules.cpp] `wrap_module` computed helper injection differs from JS
+- **JS Source**: `src/js/modules.js` lines 200–207
+- **Status**: Pending
+- **Details**: JS injects `$modules`, `$core`, and `$components` via `module_def.computed`; C++ does not provide equivalent computed helper bindings.
+
+### 47. [modules.cpp] `activated` lifecycle wrapping logic is missing
+- **JS Source**: `src/js/modules.js` lines 244–251
+- **Status**: Pending
+- **Details**: JS wraps `activated` so `initialize()` is retried before calling original `activated`; C++ only wraps `initialize` and does not implement equivalent `activated` wrapper behavior.
+
+### 48. [modules.cpp] `initialize(core_instance)` bootstrap flow differs from JS module wiring
+- **JS Source**: `src/js/modules.js` lines 277–287
+- **Status**: Pending
+- **Details**: JS stores `core_instance`, assigns `manager = module.exports`, and wraps every entry in `MODULES` with `Vue.markRaw`; C++ `initialize()` takes no core parameter and builds a static function-pointer registry instead.
+
+### 49. [modules.cpp] `set_active` assigns different active-module payload to view state
+- **JS Source**: `src/js/modules.js` lines 254–267, 293–303
+- **Status**: Pending
+- **Details**: JS sets `core.view.activeModule` to the wrapped module proxy (including proxy getters like `__name`/`setActive`/`reload`); C++ writes a minimal JSON object with `__name` only.
+
+### 50. [modules.cpp] Dev hot-reload no longer refreshes module/component code from disk
+- **JS Source**: `src/js/modules.js` lines 337–355, 395–401
+- **Status**: Pending
+- **Details**: JS clears `require.cache` and re-requires modules/components during reload; C++ only resets internal flags and re-wraps existing in-memory module definitions.
+
+### 51. [MultiMap.cpp] `.cpp` translation unit still contains unconverted JavaScript source
+- **JS Source**: `src/js/MultiMap.cpp` lines 6–32
+- **Status**: Pending
+- **Details**: `src/js/MultiMap.cpp` currently contains JS syntax (`class MultiMap extends Map`, `module.exports`) instead of C++ implementation.
+
+### 52. [MultiMap.cpp] Sibling `.js` file contains C++ stub instead of original JS implementation
+- **JS Source**: `src/js/MultiMap.js` lines 6–9
+- **Status**: Pending
+- **Details**: `src/js/MultiMap.js` has `#include "MultiMap.h"` and C++ comments, while the expected JS implementation is not present in the `.js` sibling file.
+
+### 53. [png-writer.cpp] `write()` call contract differs from JS async behavior
+- **JS Source**: `src/js/png-writer.js` lines 243–249
+- **Status**: Pending
+- **Details**: JS `write(file)` is `async` and returns/awaits `this.getBuffer().writeToFile(file)`; C++ `PNGWriter::write(...)` is synchronous `void`.
+
+### 54. [stb-impl.cpp] Required sibling JS source file is missing, blocking parity verification
+- **JS Source**: `src/js/stb-impl.js` lines N/A (file missing)
+- **Status**: Blocked
+- **Details**: `src/js/stb-impl.cpp` exists, but `src/js/stb-impl.js` is absent, so line-by-line comparison against an original JS sibling cannot be completed.
+
+### 55. [subtitles.cpp] `get_subtitles_vtt` API and data-loading path differ from JS
+- **JS Source**: `src/js/subtitles.js` lines 172–175
+- **Status**: Pending
+- **Details**: JS `get_subtitles_vtt(casc, file_data_id, format)` loads file data internally via CASC; C++ takes preloaded subtitle text and format only.
+
+### 56. [subtitles.cpp] BOM stripping behavior differs from original JS
+- **JS Source**: `src/js/subtitles.js` lines 176–178
+- **Status**: Pending
+- **Details**: JS removes leading UTF-16 BOM codepoint (`0xFEFF`) via `charCodeAt`; C++ strips UTF-8 byte-order mark bytes (`EF BB BF`) instead.
+
+### 57. [subtitles.cpp] Invalid SBT timestamp parsing semantics differ from JS `parseInt` behavior
+- **JS Source**: `src/js/subtitles.js` lines 13–20
+- **Status**: Pending
+- **Details**: JS uses `parseInt(...)` and can propagate `NaN` for malformed timestamp segments, while C++ digit-filter parsing can still produce numeric output from mixed/invalid strings.
