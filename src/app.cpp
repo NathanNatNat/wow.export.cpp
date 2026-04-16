@@ -640,10 +640,10 @@ static void renderAppShell() {
 					// Context menu popup for hamburger button
 					// Uses ImGui popup API for correct z-ordering (always on top) and
 					// automatic close-on-click-outside, matching JS <context-menu> behavior.
-					ImGui::SetNextWindowPos(ImVec2(vp_pos.x + right_x, vp_pos.y + HEADER_HEIGHT));
+					ImGui::SetNextWindowPos(ImVec2(vp_pos.x + right_x + 20.0f, vp_pos.y + HEADER_HEIGHT), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
 					ImGui::PushStyleColor(ImGuiCol_PopupBg, COLOR_BG_DARK);
 					if (ImGui::BeginPopup("##MenuExtraPopup",
-						ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize)) {
+						ImGuiWindowFlags_AlwaysAutoResize)) {
 
 						const auto& contextOpts = modules::getContextMenuOptions();
 						for (const auto& opt : contextOpts) {
