@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 110/191 audited (58%)**
+**Progress: 120/191 audited (63%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -114,16 +114,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 108. `src/js/components/listbox-zones.cpp`
 - [x] 109. `src/js/components/listbox.cpp`
 - [x] 110. `src/js/components/listboxb.cpp`
-- [ ] 111. `src/js/components/map-viewer.cpp`
-- [ ] 112. `src/js/components/markdown-content.cpp`
-- [ ] 113. `src/js/components/menu-button.cpp`
-- [ ] 114. `src/js/components/model-viewer-gl.cpp`
-- [ ] 115. `src/js/components/resize-layer.cpp`
-- [ ] 116. `src/js/components/slider.cpp`
-- [ ] 117. `src/js/db/CompressionType.cpp`
-- [ ] 118. `src/js/db/DBCReader.cpp`
-- [ ] 119. `src/js/db/DBDParser.cpp`
-- [ ] 120. `src/js/db/FieldType.cpp`
+- [x] 111. `src/js/components/map-viewer.cpp`
+- [x] 112. `src/js/components/markdown-content.cpp`
+- [x] 113. `src/js/components/menu-button.cpp`
+- [x] 114. `src/js/components/model-viewer-gl.cpp`
+- [x] 115. `src/js/components/resize-layer.cpp`
+- [x] 116. `src/js/components/slider.cpp`
+- [x] 117. `src/js/db/CompressionType.cpp`
+- [x] 118. `src/js/db/DBCReader.cpp`
+- [x] 119. `src/js/db/DBDParser.cpp`
+- [x] 120. `src/js/db/FieldType.cpp`
 - [ ] 121. `src/js/db/WDCReader.cpp`
 - [ ] 122. `src/js/db/caches/DBCharacterCustomization.cpp`
 - [ ] 123. `src/js/db/caches/DBComponentModelFileData.cpp`
