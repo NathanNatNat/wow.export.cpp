@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 120/191 audited (63%)**
+**Progress: 130/191 audited (68%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -124,16 +124,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 118. `src/js/db/DBCReader.cpp`
 - [x] 119. `src/js/db/DBDParser.cpp`
 - [x] 120. `src/js/db/FieldType.cpp`
-- [ ] 121. `src/js/db/WDCReader.cpp`
-- [ ] 122. `src/js/db/caches/DBCharacterCustomization.cpp`
-- [ ] 123. `src/js/db/caches/DBComponentModelFileData.cpp`
-- [ ] 124. `src/js/db/caches/DBComponentTextureFileData.cpp`
-- [ ] 125. `src/js/db/caches/DBCreatureDisplayExtra.cpp`
-- [ ] 126. `src/js/db/caches/DBCreatureList.cpp`
-- [ ] 127. `src/js/db/caches/DBCreatures.cpp`
-- [ ] 128. `src/js/db/caches/DBCreaturesLegacy.cpp`
-- [ ] 129. `src/js/db/caches/DBDecor.cpp`
-- [ ] 130. `src/js/db/caches/DBDecorCategories.cpp`
+- [x] 121. `src/js/db/WDCReader.cpp`
+- [x] 122. `src/js/db/caches/DBCharacterCustomization.cpp`
+- [x] 123. `src/js/db/caches/DBComponentModelFileData.cpp`
+- [x] 124. `src/js/db/caches/DBComponentTextureFileData.cpp`
+- [x] 125. `src/js/db/caches/DBCreatureDisplayExtra.cpp`
+- [x] 126. `src/js/db/caches/DBCreatureList.cpp`
+- [x] 127. `src/js/db/caches/DBCreatures.cpp`
+- [x] 128. `src/js/db/caches/DBCreaturesLegacy.cpp`
+- [x] 129. `src/js/db/caches/DBDecor.cpp`
+- [x] 130. `src/js/db/caches/DBDecorCategories.cpp`
 - [ ] 131. `src/js/db/caches/DBGuildTabard.cpp`
 - [ ] 132. `src/js/db/caches/DBItemCharTextures.cpp`
 - [ ] 133. `src/js/db/caches/DBItemDisplays.cpp`

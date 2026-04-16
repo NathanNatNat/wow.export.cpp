@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/198 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/214 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -948,3 +948,83 @@
 - **JS Source**: `src/js/db/FieldType.js` lines 1–14
 - **Status**: Pending
 - **Details**: JS sibling exports field-type symbols in module body, while `FieldType.cpp` only includes the header and comments; parity is provided in header enums, not in `.cpp` implementation.
+
+### 199. [WDCReader.cpp] Public schema/data loading APIs are synchronous instead of JS async Promise flow
+- **JS Source**: `src/js/db/WDCReader.js` lines 240–277, 303–564
+- **Status**: Pending
+- **Details**: JS `loadSchema(...)` and `parse()` are async and await cache/network/CASC operations; C++ ports both as blocking synchronous methods, changing timing and error propagation behavior.
+
+### 200. [WDCReader.cpp] DBD cache access path bypasses JS CASC cache API contract
+- **JS Source**: `src/js/db/WDCReader.js` lines 251–266
+- **Status**: Pending
+- **Details**: JS uses `casc.cache.getFile/storeFile` for DBD cache reads/writes; C++ directly reads/writes filesystem paths under `constants::CACHE::DIR_DBD()`, changing cache backend behavior and integration points.
+
+### 201. [WDCReader.cpp] Row collection ordering/identity semantics differ from JS Map behavior
+- **JS Source**: `src/js/db/WDCReader.js` lines 149–193, 200–208
+- **Status**: Pending
+- **Details**: JS stores rows in `Map` preserving insertion order and returns the same cached map object after `preload()`. C++ uses `std::map` (key-sorted order) and returns map copies, changing iteration order and object identity/mutability semantics.
+
+### 202. [WDCReader.cpp] Numeric input coercion from JS `parseInt(...)` is not preserved
+- **JS Source**: `src/js/db/WDCReader.js` lines 119–120, 220
+- **Status**: Pending
+- **Details**: JS coerces `recordID` and `foreignKeyValue` with `parseInt(...)` in `getRow`/`getRelationRows`; C++ requires already-typed integers, so string/loose inputs no longer follow JS coercion behavior.
+
+### 203. [DBCharacterCustomization.cpp] Initialization flow is synchronous and drops JS shared-promise waiting behavior
+- **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 37–46
+- **Status**: Pending
+- **Details**: JS `ensureInitialized` awaits a shared `init_promise` so concurrent callers wait for completion; C++ uses `is_initializing` early-return logic and can return before initialization completes.
+
+### 204. [DBCharacterCustomization.cpp] Getter not-found contracts differ from JS `Map.get(...)` undefined behavior
+- **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 212–253
+- **Status**: Pending
+- **Details**: JS getters return `undefined` when keys are missing; C++ ports several getters to `0`, `nullptr`, or `std::nullopt`, changing not-found sentinel behavior expected by JS-style callers.
+
+### 205. [DBComponentModelFileData.cpp] Initialization API is synchronous and does not preserve JS promise-sharing semantics
+- **JS Source**: `src/js/db/caches/DBComponentModelFileData.js` lines 18–43
+- **Status**: Pending
+- **Details**: JS `initialize()` is async and returns shared `init_promise` while loading; C++ initialization is synchronous with `is_initializing` early return, so concurrent calls can return before data is ready.
+
+### 206. [DBComponentTextureFileData.cpp] Initialization API is synchronous and does not preserve JS promise-sharing semantics
+- **JS Source**: `src/js/db/caches/DBComponentTextureFileData.js` lines 17–41
+- **Status**: Pending
+- **Details**: JS `initialize()` is async and returns shared `init_promise`; C++ uses synchronous loading with boolean reentry guards, changing completion/wait behavior for concurrent callers.
+
+### 207. [DBCreatureDisplayExtra.cpp] Initialization flow is synchronous and does not mirror JS awaited init promise
+- **JS Source**: `src/js/db/caches/DBCreatureDisplayExtra.js` lines 15–24, 26–53
+- **Status**: Pending
+- **Details**: JS `ensureInitialized()` awaits `_initialize()` via `init_promise`; C++ makes `_initialize()` synchronous with `is_initializing` early return, so callers may proceed without JS-equivalent awaited completion semantics.
+
+### 208. [DBCreatureList.cpp] Public load API is synchronous instead of JS Promise-based async loading
+- **JS Source**: `src/js/db/caches/DBCreatureList.js` lines 12–43
+- **Status**: Pending
+- **Details**: JS `initialize_creature_list` is async and awaits DB2 row retrieval; C++ ports this path as synchronous, changing timing and error-propagation behavior.
+
+### 209. [DBCreatures.cpp] `initializeCreatureData` is synchronous instead of JS async data-loading flow
+- **JS Source**: `src/js/db/caches/DBCreatures.js` lines 17–73
+- **Status**: Pending
+- **Details**: JS implementation awaits multiple `getAllRows()` calls and exposes Promise timing; C++ performs blocking synchronous table loads, diverging from JS async behavior contract.
+
+### 210. [DBCreaturesLegacy.cpp] Model path normalization misses JS `.mdl` to `.m2` conversion
+- **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 45–47
+- **Status**: Pending
+- **Details**: JS normalizes both `.mdl` and `.mdx` model extensions to `.m2` during model map build; C++ `normalizePath` converts only `.mdx`, so `.mdl` model rows resolve differently.
+
+### 211. [DBCreaturesLegacy.cpp] Legacy load API is synchronous instead of JS Promise-based async parse flow
+- **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 19–112
+- **Status**: Pending
+- **Details**: JS uses async initialization and awaits DBC parsing operations; C++ performs synchronous parsing and loading, altering timing/error behavior relative to original Promise flow.
+
+### 212. [DBCreaturesLegacy.cpp] Exception logging omits JS stack trace output behavior
+- **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 108–111
+- **Status**: Pending
+- **Details**: JS logs both error message and stack (`log.write('%o', e.stack)`); C++ logs only `e.what()` and drops stack trace output.
+
+### 213. [DBDecor.cpp] Decor cache initialization is synchronous instead of JS async table load
+- **JS Source**: `src/js/db/caches/DBDecor.js` lines 15–40
+- **Status**: Pending
+- **Details**: JS `initializeDecorData` is async and awaits DB2 reads; C++ uses a synchronous blocking initializer, changing API timing behavior.
+
+### 214. [DBDecorCategories.cpp] Category cache loading is synchronous and unordered-container iteration differs from JS Map/Set ordering
+- **JS Source**: `src/js/db/caches/DBDecorCategories.js` lines 10–56
+- **Status**: Pending
+- **Details**: JS uses async initialization plus `Map`/`Set` insertion order iteration; C++ ports to synchronous initialization with `std::unordered_map`/`std::unordered_set`, which can change iteration ordering and timing semantics.
