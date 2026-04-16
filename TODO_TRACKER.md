@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/21 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/32 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ### 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -106,3 +106,58 @@
 - **JS Source**: `src/js/constants.js` lines 24–32
 - **Status**: Pending
 - **Details**: JS handles `win32`, `darwin`, and `linux`; C++ implementation omits macOS branch.
+
+### 22. [core.cpp] Loading screen updates are deferred to a main-thread queue instead of immediate state writes
+- **JS Source**: `src/js/core.js` lines 413–420, 439–443
+- **Status**: Pending
+- **Details**: JS writes `core.view` loading fields synchronously in `showLoadingScreen()`/`hideLoadingScreen()`, while C++ posts these mutations via `postToMainThread()`, introducing frame-delayed behavior differences.
+
+### 23. [core.cpp] progressLoadingScreen no longer awaits a forced redraw
+- **JS Source**: `src/js/core.js` lines 426–434
+- **Status**: Pending
+- **Details**: JS explicitly calls `await generics.redraw()` after updating progress text/percentage; C++ removed the awaited redraw path and only queues state changes.
+
+### 24. [core.cpp] Toast payload shape differs from JS `options` object contract
+- **JS Source**: `src/js/core.js` lines 470–472
+- **Status**: Pending
+- **Details**: JS stores toast data as `{ type, message, options, closable }`, while C++ `setToast(...)` maps the third field to typed toast actions rather than a generic options object.
+
+### 25. [external-links.cpp] JS logic is not implemented in the .cpp translation unit
+- **JS Source**: `src/js/external-links.js` lines 12–44
+- **Status**: Pending
+- **Details**: `external-links.cpp` only includes `external-links.h`; the sibling `.cpp` file does not contain line-by-line equivalents of JS constants/methods (`STATIC_LINKS`, `WOWHEAD_ITEM`, `open`, `wowHead_viewItem`).
+
+### 26. [file-writer.cpp] writeLine backpressure/await behavior differs from JS stream semantics
+- **JS Source**: `src/js/file-writer.js` lines 24–33, 35–38
+- **Status**: Pending
+- **Details**: JS `writeLine()` is async and waits on resolver/drain when `stream.write()` backpressures; C++ writes synchronously and keeps blocked/drain as structural no-ops.
+
+### 27. [file-writer.cpp] Closed-stream writes are silently ignored unlike JS stream-end behavior
+- **JS Source**: `src/js/file-writer.js` lines 24–33, 40–42
+- **Status**: Pending
+- **Details**: C++ guards `writeLine()`/`close()` with `is_open()` and returns early; JS writes to a stream that has been `end()`ed follow Node stream error semantics rather than a silent no-op guard.
+
+### 28. [generics.cpp] Exported get() API shape differs from JS fetch-style response contract
+- **JS Source**: `src/js/generics.js` lines 22–54
+- **Status**: Pending
+- **Details**: JS `get()` returns a fetch `Response` object (`ok`, `status`, `statusText`, body/json methods), while C++ `get()` returns raw bytes and hides response metadata from callers.
+
+### 29. [generics.cpp] get() fallback completion behavior differs when all URLs return non-ok responses
+- **JS Source**: `src/js/generics.js` lines 38–54
+- **Status**: Pending
+- **Details**: JS returns the last non-ok `Response` after exhausting fallback URLs; C++ throws `HTTP <status> <statusText>` instead of returning a non-ok response object.
+
+### 30. [generics.cpp] requestData status/redirect handling differs from JS manual 3xx flow
+- **JS Source**: `src/js/generics.js` lines 159–167
+- **Status**: Pending
+- **Details**: JS manually follows 301/302 and accepts status codes up to 302 in that flow; C++ relies on auto-follow and then enforces a strict 2xx success check in `doHttpGetRaw()`.
+
+### 31. [generics.cpp] redraw() is a no-op instead of double requestAnimationFrame scheduling
+- **JS Source**: `src/js/generics.js` lines 263–268
+- **Status**: Pending
+- **Details**: JS resolves `redraw()` only after two animation frames to force UI repaint ordering; C++ redraw is intentionally empty, changing timing guarantees for callers that rely on redraw completion.
+
+### 32. [generics.cpp] batchWork scheduling model differs from MessageChannel event-loop batching
+- **JS Source**: `src/js/generics.js` lines 420–469
+- **Status**: Pending
+- **Details**: JS slices work via MessageChannel posts between batches; C++ runs batches in a tight loop with `std::this_thread::yield()`, which is not equivalent to browser event-loop task scheduling.
