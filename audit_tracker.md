@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 140/191 audited (73%)**
+**Progress: 150/191 audited (79%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -144,16 +144,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 138. `src/js/db/caches/DBNpcEquipment.cpp`
 - [x] 139. `src/js/db/caches/DBTextureFileData.cpp`
 - [x] 140. `src/js/hashing/xxhash64.cpp`
-- [ ] 141. `src/js/modules/font_helpers.cpp`
-- [ ] 142. `src/js/modules/legacy_tab_audio.cpp`
-- [ ] 143. `src/js/modules/legacy_tab_data.cpp`
-- [ ] 144. `src/js/modules/legacy_tab_files.cpp`
-- [ ] 145. `src/js/modules/legacy_tab_fonts.cpp`
-- [ ] 146. `src/js/modules/legacy_tab_home.cpp`
-- [ ] 147. `src/js/modules/legacy_tab_textures.cpp`
-- [ ] 148. `src/js/modules/module_test_a.cpp`
-- [ ] 149. `src/js/modules/module_test_b.cpp`
-- [ ] 150. `src/js/modules/screen_settings.cpp`
+- [x] 141. `src/js/modules/font_helpers.cpp`
+- [x] 142. `src/js/modules/legacy_tab_audio.cpp`
+- [x] 143. `src/js/modules/legacy_tab_data.cpp`
+- [x] 144. `src/js/modules/legacy_tab_files.cpp`
+- [x] 145. `src/js/modules/legacy_tab_fonts.cpp`
+- [x] 146. `src/js/modules/legacy_tab_home.cpp`
+- [x] 147. `src/js/modules/legacy_tab_textures.cpp`
+- [x] 148. `src/js/modules/module_test_a.cpp`
+- [x] 149. `src/js/modules/module_test_b.cpp`
+- [x] 150. `src/js/modules/screen_settings.cpp`
 - [ ] 151. `src/js/modules/screen_source_select.cpp`
 - [ ] 152. `src/js/modules/tab_audio.cpp`
 - [ ] 153. `src/js/modules/tab_blender.cpp`
