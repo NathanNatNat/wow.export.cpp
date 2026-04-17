@@ -31,6 +31,9 @@
 #	include <sys/types.h>
 #	include <sys/wait.h>
 #	include <signal.h>
+#	include <fcntl.h>
+#	include <cerrno>
+#	include <cstring>
 #endif
 
 namespace fs = std::filesystem;
@@ -59,6 +62,11 @@ static std::string utilFormat(const std::string& fmt, const std::string& arg) {
  * Check if there are any available updates.
  * Returns true if an update is available.
  * JS: checkForUpdates()
+ *
+ * Note: JS reads nw.App.manifest.flavour/guid at runtime (updater.js lines 24-26, 33-35).
+ * In C++, constants::FLAVOUR and constants::BUILD_GUID serve the same role — both are
+ * set at build time and identify the current installation's update channel and version.
+ * The functional behavior is identical.
  */
 bool checkForUpdates() {
 	try {
@@ -94,6 +102,12 @@ bool checkForUpdates() {
 /**
  * Apply an outstanding update.
  * JS: applyUpdate()
+ *
+ * Deviation from JS: JS applyUpdate/launchUpdater are async with await at each
+ * step (updater.js lines 50, 61, 79, 103-104, 119-124). C++ executes the same
+ * logical sequence synchronously with blocking calls. This is the standard
+ * JS async → C++ synchronous mapping — the step ordering and error handling
+ * are identical, only the execution model differs (no event loop yielding).
  */
 void applyUpdate() {
 	// Collect entries from the manifest contents object.
@@ -257,11 +271,28 @@ static void launchUpdater() {
 		const std::string pidStr = std::to_string(pid);
 		const std::string helperStr = helperApp.string();
 
+		// Use a pipe to detect exec failure in the child process.
+		// JS equivalent: child.on('error', ...) handler (updater.js lines 152-155).
+		// The write end is set close-on-exec so that a successful execl()
+		// closes it automatically (parent reads EOF). On failure, the child
+		// writes errno to the pipe so the parent can log the error.
+		int pipefd[2];
+		if (pipe(pipefd) < 0)
+			throw std::runtime_error("pipe() failed");
+
+		// Set close-on-exec on write end.
+		fcntl(pipefd[1], F_SETFD, FD_CLOEXEC);
+
 		pid_t child = fork();
 		if (child < 0) {
+			close(pipefd[0]);
+			close(pipefd[1]);
 			throw std::runtime_error("fork() failed");
 		} else if (child == 0) {
-			// Child process — detach into new session.
+			// Child process — close read end of pipe.
+			close(pipefd[0]);
+
+			// Detach into new session.
 			setsid();
 
 			// Close standard file descriptors.
@@ -270,12 +301,30 @@ static void launchUpdater() {
 			close(STDERR_FILENO);
 
 			execl(helperStr.c_str(), helperStr.c_str(), pidStr.c_str(), nullptr);
-			// If execl returns, it failed.
+			// If execl returns, it failed — write errno to pipe for parent to log.
+			int err = errno;
+			(void)::write(pipefd[1], &err, sizeof(err));
+			close(pipefd[1]);
 			_exit(1);
 		}
 
+		// Parent process — close write end of pipe.
+		close(pipefd[1]);
+
 		// Brief delay to let the updater start.
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+		// Check if exec failed in the child via the pipe.
+		int execErr = 0;
+		ssize_t nread = ::read(pipefd[0], &execErr, sizeof(execErr));
+		close(pipefd[0]);
+
+		if (nread > 0) {
+			// exec failed — log matching JS child.on('error') handler (updater.js line 153).
+			logging::write(std::format("ERROR: Failed to spawn updater: {}", std::strerror(execErr)));
+			throw std::runtime_error(std::format("execl() failed: {}", std::strerror(execErr)));
+		}
+
 		logging::write(std::format("Updater spawned successfully (PID: {}), detaching...",
 					  static_cast<int64_t>(child)));
 #endif
@@ -284,6 +333,11 @@ static void launchUpdater() {
 		std::exit(0);
 	} catch (const std::exception& e) {
 		logging::write(std::format("Failed to restart for update: {}", e.what()));
+		// JS: log.write(e) — logs the raw error object (updater.js line 165).
+		// util.format(e) on an Error object produces its toString(), which
+		// typically includes the error name and message (e.g. "Error: ...").
+		// In C++, e.what() is the message; log the full exception representation.
+		logging::write(std::string("Error: ") + e.what());
 	}
 }
 

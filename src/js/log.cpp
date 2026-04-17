@@ -36,9 +36,24 @@ constexpr int MAX_DRAIN_PER_TICK = 50;
 
 std::chrono::steady_clock::time_point markTimer{};
 bool isClogged = false;
+bool streamInitialized = false;
 std::deque<std::string> pool;
 std::ofstream stream;
 std::mutex logMutex;
+
+/**
+ * Ensure the log stream is open.
+ * JS initializes the stream at module-load time (log.js line 111).
+ * In C++, init() should be called at startup, but if a write occurs
+ * before init(), this lazy-opens the stream so no log entries are lost.
+ * Must be called while logMutex is held.
+ */
+void ensureStreamOpen() {
+	if (!streamInitialized) {
+		stream.open(constants::RUNTIME_LOG().string());
+		streamInitialized = true;
+	}
+}
 
 /**
  * Return a HH:MM:SS formatted timestamp.
@@ -60,15 +75,19 @@ std::string getTimestamp() {
 /**
  * Invoked when the stream has finished flushing.
  *
- * In JS, this is triggered by the stream 'drain' event when the
- * internal buffer has been flushed. In C++, file I/O is synchronous,
- * so this is called at the start of write() when the stream was
- * previously in a failed state and has recovered.
+ * JS equivalent: triggered by the stream 'drain' event (log.js line 112)
+ * when the internal buffer has been flushed, and recursively scheduled via
+ * process.nextTick (log.js line 48). In C++, file I/O is synchronous, so
+ * we use a 'drainPending' flag to schedule draining on the next write()
+ * call — the closest equivalent to process.nextTick in a non-event-loop
+ * architecture. The flush() function provides an explicit drain-all for
+ * shutdown, ensuring no entries remain in the pool.
  */
 /**
  * Flag indicating that a deferred drain has been requested.
  * When true, the next call to write() will trigger drainPool()
  * even if isClogged is false, to drain remaining pooled items.
+ * This is the C++ equivalent of JS process.nextTick(drainPool).
  */
 bool drainPending = false;
 
@@ -110,8 +129,14 @@ void drainPool() {
 namespace logging {
 
 void init() {
+	std::lock_guard<std::mutex> lock(logMutex);
 	// Initialize the logging stream.
-	stream.open(constants::RUNTIME_LOG().string());
+	// JS: const stream = fs.createWriteStream(constants.RUNTIME_LOG); (line 111)
+	// JS: stream.on('drain', drainPool); (line 112)
+	if (!streamInitialized) {
+		stream.open(constants::RUNTIME_LOG().string());
+		streamInitialized = true;
+	}
 }
 
 /**
@@ -124,6 +149,11 @@ void init() {
  */
 void write(std::string_view message) {
 	std::lock_guard<std::mutex> lock(logMutex);
+
+	// Lazy init: JS initializes the stream at module-load time (log.js line 111).
+	// Ensure the stream is open even if init() wasn't called yet.
+	ensureStreamOpen();
+
 	std::string line = "[" + getTimestamp() + "] " + std::string(message) + "\n";
 
 	// Try to drain pooled entries if the stream was previously clogged,
@@ -198,12 +228,36 @@ void openRuntimeLog() {
 #endif
 }
 
+void flush() {
+	std::lock_guard<std::mutex> lock(logMutex);
+
+	// Drain all remaining pooled entries.
+	// JS equivalent: the stream 'drain' event + process.nextTick scheduling
+	// ensures pooled entries are eventually written. In C++, this explicit
+	// flush ensures no entries remain when called at shutdown.
+	ensureStreamOpen();
+	stream.clear();
+	isClogged = false;
+	drainPending = false;
+
+	while (!pool.empty()) {
+		stream << pool.front();
+		pool.pop_front();
+	}
+	stream.flush();
+}
+
 } // namespace logging
 
 /**
  * Attempts to return the contents of the runtime log.
  * This is defined as a global as it is requested during
  * an application crash where modules may not be loaded.
+ *
+ * Deviation from JS: JS declares getErrorDump as async (log.js lines 102-108),
+ * returning a Promise<string>. C++ reads the file synchronously and returns
+ * std::string directly. This is intentional — during a crash the event loop
+ * may be unavailable, so blocking I/O is more reliable for diagnostics.
  */
 std::string getErrorDump() {
 	try {
