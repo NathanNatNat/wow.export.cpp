@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/381 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/415 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1863,3 +1863,173 @@
 - **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 208–216
 - **Status**: Pending
 - **Details**: MOPR entry count is calculated as `chunkSize / 8` (8 bytes per entry). Fields read: `portalIndex(2) + groupIndex(2) + side(2)` = 6 bytes, then `data.move(4)` skips 4 more = 10 bytes per entry. Per wowdev.wiki, `SMOPortalRef` has a 2-byte `filler` (uint16_t), making entries 8 bytes. `data.move(2)` would be correct, not `data.move(4)`. Both JS and C++ match (C++ faithfully ports the JS), but both overread by 2 bytes per entry. The outer `data.seek(nextChunkPos)` corrects the position so parsing doesn't break, but this is a latent bug in both codebases.
+
+- [ ] 382. [CharMaterialRenderer.cpp] `getCanvas()` method missing — JS returns `this.glCanvas` for external use
+- **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 55–59
+- **Status**: Pending
+- **Details**: JS `getCanvas()` returns the canvas element so external code can access the rendered character material texture. C++ has no equivalent method. Any code that calls `getCanvas()` will fail.
+
+- [ ] 383. [CharMaterialRenderer.cpp] `update()` draw call placement differs — C++ draws inside blend-mode conditional instead of after it
+- **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 382–417
+- **Status**: Pending
+- **Details**: JS draws ONCE per layer at line 417 (`this.gl.drawArrays(this.gl.TRIANGLES, 0, 6)`) OUTSIDE the blend-mode 4/6/7 if block. C++ has the draw call INSIDE the if block (for blend modes 4/6/7) at line ~534 AND inside the else block at line ~543. This means the draw happens in both branches but the pre-draw setup is different, which could lead to incorrect rendering for certain blend modes.
+
+- [ ] 384. [CharMaterialRenderer.cpp] `setTextureTarget()` signature completely changed — JS takes full objects, C++ takes individual scalar parameters
+- **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 114–144
+- **Status**: Pending
+- **Details**: JS signature is `setTextureTarget(chrCustomizationMaterial, charComponentTextureSection, chrModelMaterial, chrModelTextureLayer, useAlpha, blpOverride)` receiving full objects. C++ takes individual fields: `setTextureTarget(chrModelTextureTargetID, fileDataID, sectionX, sectionY, sectionWidth, sectionHeight, materialTextureType, materialWidth, materialHeight, textureLayerBlendMode, useAlpha, blpOverride)`. If JS objects contain additional fields used downstream, C++ will lose them.
+
+- [ ] 385. [CharMaterialRenderer.cpp] `clearCanvas()` binds/unbinds FBO in C++ but JS does not
+- **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 218–225
+- **Status**: Pending
+- **Details**: JS `clearCanvas()` operates on the current WebGL framebuffer (the canvas) without explicit bind/unbind. C++ explicitly binds `fbo_` before clearing and unbinds after. This is architecturally correct for desktop GL but represents a behavioral difference if called while another FBO is bound.
+
+- [ ] 386. [CharMaterialRenderer.cpp] `dispose()` missing WebGL context loss equivalent
+- **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` line 160
+- **Status**: Pending
+- **Details**: JS calls `gl.getExtension('WEBGL_lose_context').loseContext()` to invalidate all WebGL resources at once. C++ manually deletes each GL resource individually (FBO, textures, depth buffer, VAO). The C++ approach is correct for desktop GL but the order and completeness of cleanup should be verified.
+
+- [ ] 387. [GridRenderer.cpp] GLSL shader version differs — C++ uses `#version 460 core`, JS uses `#version 300 es`
+- **JS Source**: `src/js/3D/renderers/GridRenderer.js` lines 9–35
+- **Status**: Pending
+- **Details**: C++ vertex/fragment shaders use `#version 460 core` (desktop OpenGL 4.6). JS uses `#version 300 es` with `precision highp float;` (WebGL 2.0/OpenGL ES 3.0). The shader logic is identical but the version/precision declarations differ. This is an expected platform adaptation but should be documented.
+
+- [ ] 388. [M2LegacyRendererGL.cpp] Reactive watchers not set up — `geosetWatcher` and `wireframeWatcher` completely missing
+- **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 196–197
+- **Status**: Pending
+- **Details**: JS `load()` sets up Vue reactive watchers: `this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true })` and `this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true })`. C++ has an empty `if (reactive) {}` block at lines 216–217. Geoset changes from the UI will not trigger `updateGeosets()`. No polling replacement exists.
+
+- [ ] 389. [M2LegacyRendererGL.cpp] `dispose()` missing watcher cleanup calls
+- **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 1038–1039
+- **Status**: Pending
+- **Details**: JS `dispose()` calls `this.geosetWatcher?.()` and `this.wireframeWatcher?.()` to unregister Vue watchers. C++ `dispose()` has no equivalent cleanup because watchers were never set up. If a polling mechanism is later added, cleanup must be added here too.
+
+- [ ] 390. [M2LegacyRendererGL.cpp] `u_time` uniform calculation uses relative time instead of `performance.now()`
+- **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` line 926
+- **Status**: Pending
+- **Details**: JS sets `u_time` to `performance.now() * 0.001` (absolute time from page load in seconds). C++ uses a static `std::chrono::steady_clock` start time and computes elapsed seconds from first render call. Both produce monotonically increasing values suitable for shader animations, but absolute values will differ, potentially affecting time-dependent shader effects.
+
+- [ ] 391. [M2LegacyRendererGL.cpp] Track data property names differ from JS — uses `flatValues`/`nestedTimestamps` instead of `values`/`timestamps`
+- **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 581–609
+- **Status**: Pending
+- **Details**: JS accesses bone animation data as `bone.translation.values`, `bone.translation.timestamps`, `bone.translation.timestamps[anim_idx]`, `bone.translation.values[anim_idx]`. C++ accesses `bone.translation.flatValues`, `bone.translation.flatTimestamps`, `bone.translation.nestedTimestamps[anim_idx]`, `bone.translation.nestedValues[anim_idx]`. This implies the M2LegacyLoader stores data in a different structure, which must match the renderer's expectations.
+
+- [ ] 392. [M2LegacyRendererGL.cpp] `loadSkin()` geoset assignment to `core.view` uses JSON serialization instead of direct assignment
+- **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 431–432
+- **Status**: Pending
+- **Details**: JS directly assigns `core.view[this.geosetKey] = this.geosetArray` and passes `this.geosetArray` to `GeosetMapper.map()`. C++ builds nlohmann::json objects manually from `geosetArray` entries (lines 490–498) and constructs a separate `mapper_geosets` vector for GeosetMapper (lines 500–507), then updates labels back. This indirect approach may not synchronize correctly if core.view expects the raw array reference.
+
+- [ ] 393. [M2LegacyRendererGL.cpp] `setSlotFile` called as `setSlotFileLegacy` — function name differs from JS
+- **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` line 226
+- **Status**: Pending
+- **Details**: JS calls `textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID)`. C++ calls `texture_ribbon::setSlotFileLegacy(ribbonSlot, fileName, syncID)` at line 255. The C++ function has a different name, which may indicate it has different behavior or was renamed for disambiguation.
+
+- [ ] 394. [M2RendererGL.cpp] Reactive watchers not set up — `geosetWatcher`, `wireframeWatcher`, `bonesWatcher` completely missing
+- **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 381–383
+- **Status**: Pending
+- **Details**: JS `load()` sets up three Vue watchers for geoset, wireframe, and bone visibility. C++ has empty braces at lines 495–496 with no watcher registration. UI changes to geosets won't trigger `updateGeosets()` automatically.
+
+- [ ] 395. [M2RendererGL.cpp] `dispose()` missing watcher cleanup — no `geosetWatcher`, `wireframeWatcher`, `bonesWatcher` unregister
+- **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1629–1633
+- **Status**: Pending
+- **Details**: JS `dispose()` calls `this.geosetWatcher?.()`, `this.wireframeWatcher?.()`, `this.bonesWatcher?.()` to unregister watchers. C++ has no equivalent cleanup because watchers were never created.
+
+- [ ] 396. [M2RendererGL.cpp] Bone matrix upload uses SSBO instead of uniform array
+- **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1228–1231
+- **Status**: Pending
+- **Details**: JS uploads bone matrices via `gl.uniformMatrix4fv(loc, false, this.bone_matrices)` (uniform array). C++ uses Shader Storage Buffer Objects (SSBOs) at lines 1482–1495 (`glBindBuffer(GL_SHADER_STORAGE_BUFFER, ...)`, `glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ...)`). This is a valid modern OpenGL optimization but requires the shader to declare an SSBO binding instead of a uniform array. If the shader still expects a uniform array, bone animation will not work.
+
+- [ ] 397. [M2RendererGL.cpp] `u_time` uniform calculation uses relative time instead of `performance.now()`
+- **JS Source**: `src/js/3D/renderers/M2RendererGL.js` line 1224
+- **Status**: Pending
+- **Details**: Same issue as M2LegacyRendererGL — JS uses `performance.now() * 0.001`, C++ uses elapsed time from first render call (lines 1477–1480).
+
+- [ ] 398. [M2RendererGL.cpp] `overrideTextureTypeWithCanvas()` takes raw pixel data instead of canvas element
+- **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1371–1390
+- **Status**: Pending
+- **Details**: JS takes `HTMLCanvasElement canvas` and calls `gl_tex.set_canvas(canvas, {...})`. C++ takes `const uint8_t* pixels, int width, int height` and calls `gl_tex->set_canvas(pixels, width, height, opts)`. This is an expected platform adaptation but the interface change means all callers must provide raw pixel data instead of a canvas reference.
+
+- [ ] 399. [M3RendererGL.cpp] `getBoundingBox()` missing vertex array empty check
+- **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 174–175
+- **Status**: Pending
+- **Details**: JS checks `if (!this.m3 || !this.m3.vertices) return null`. C++ only checks `if (!m3) return std::nullopt` at line 198–199 without checking if vertices array is empty. If m3 is loaded but vertices array is empty, C++ will attempt bounding box calculation on empty data.
+
+- [ ] 400. [M3RendererGL.cpp] `u_time` uniform calculation uses relative time instead of `performance.now()`
+- **JS Source**: `src/js/3D/renderers/M3RendererGL.js` line 214
+- **Status**: Pending
+- **Details**: Same issue as M2RendererGL/M2LegacyRendererGL — C++ uses `std::chrono::steady_clock` elapsed time (lines 242–246) instead of `performance.now() * 0.001`.
+
+- [ ] 401. [MDXRendererGL.cpp] Reactive watchers not set up — `geosetWatcher` and `wireframeWatcher` completely missing
+- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 187–188
+- **Status**: Pending
+- **Details**: JS `load()` sets up Vue watchers: `this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true })` and `this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true })`. C++ completely omits these watchers. Comment at lines 228–229 states "polling is handled in render()." but no polling code exists.
+
+- [ ] 402. [MDXRendererGL.cpp] `dispose()` missing watcher cleanup calls
+- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 780–781
+- **Status**: Pending
+- **Details**: JS `dispose()` calls `this.geosetWatcher?.()` and `this.wireframeWatcher?.()`. C++ has no equivalent cleanup because watchers were never created.
+
+- [ ] 403. [MDXRendererGL.cpp] `_create_skeleton()` doesn't initialize `node_matrices` to identity when nodes are empty
+- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 252
+- **Status**: Pending
+- **Details**: JS sets `this.node_matrices = new Float32Array(16)` which creates a zero-filled 16-element array (single identity-sized buffer). C++ does `node_matrices.resize(16)` at line 313 which leaves elements uninitialized. Should zero-initialize or set to identity to match JS behavior.
+
+- [ ] 404. [MDXRendererGL.cpp] `u_time` uniform calculation uses relative time instead of `performance.now()`
+- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 681
+- **Status**: Pending
+- **Details**: Same issue as other renderers — C++ uses elapsed time from first render call instead of `performance.now() * 0.001`.
+
+- [ ] 405. [MDXRendererGL.cpp] Interpolation constants `INTERP_NONE/LINEAR/HERMITE/BEZIER` defined but never used in either JS or C++
+- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 27–30
+- **Status**: Pending
+- **Details**: Both files define `INTERP_NONE=0`, `INTERP_LINEAR=1`, `INTERP_HERMITE=2`, `INTERP_BEZIER=3` but neither uses them. The `_sample_vec3()` and `_sample_quat()` methods only implement linear interpolation (lerp/slerp), never checking interpolation type. Hermite and Bezier interpolation are not implemented in either codebase.
+
+- [ ] 406. [MDXRendererGL.cpp] `_build_geometry()` VAO setup passes 5 params instead of 6 — JS passes `null` as 6th parameter
+- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 368
+- **Status**: Pending
+- **Details**: JS calls `vao.setup_m2_separate_buffers(vbo, nbo, uvo, bibo, bwbo, null)` with 6 parameters (last is null for index buffer). C++ calls `vao->setup_m2_separate_buffers(vbo, nbo, uvo, bibo, bwbo)` with only 5 parameters. The 6th parameter (index/element buffer) is missing in C++.
+
+- [ ] 407. [ShadowPlaneRenderer.cpp] GLSL shader version differs — C++ uses `#version 460 core`, JS uses `#version 300 es`
+- **JS Source**: `src/js/3D/renderers/ShadowPlaneRenderer.js` lines 9–40
+- **Status**: Pending
+- **Details**: Same issue as GridRenderer — C++ uses desktop GL 4.6 shaders, JS uses WebGL 2.0 shaders. Logic is identical but version/precision declarations differ. Expected platform adaptation.
+
+- [ ] 408. [WMOLegacyRendererGL.cpp] Reactive watchers replaced with polling — `groupWatcher`, `setWatcher`, `wireframeWatcher` not created
+- **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 91–93
+- **Status**: Pending
+- **Details**: JS sets up three Vue watchers in `load()`. C++ replaces these with manual per-frame polling in `render()` (lines 517–551), comparing current state against `prev_group_checked`/`prev_set_checked` arrays. This is functionally equivalent but architecturally different — watchers are event-driven, polling is frame-driven with potential one-frame delay.
+
+- [ ] 409. [WMOLegacyRendererGL.cpp] Texture wrap flag logic potentially inverted
+- **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 146–147
+- **Status**: Pending
+- **Details**: JS sets `wrap_s = (material.flags & 0x40) ? gl.CLAMP_TO_EDGE : gl.REPEAT` and `wrap_t = (material.flags & 0x80) ? gl.CLAMP_TO_EDGE : gl.REPEAT`. C++ creates `BLPTextureFlags` with `wrap_s = !(material.flags & 0x40)` at line 184–185. The boolean negation may invert the wrap behavior — if `true` maps to CLAMP in the BLPTextureFlags API, then `!(flags & 0x40)` produces the opposite of what JS does. Need to verify the BLPTextureFlags API to confirm.
+
+- [ ] 410. [WMORendererGL.cpp] Reactive watchers replaced with polling — `groupWatcher`, `setWatcher`, `wireframeWatcher` not created
+- **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 105–107
+- **Status**: Pending
+- **Details**: Same approach as WMOLegacyRendererGL — JS uses Vue watchers, C++ uses per-frame polling in `render()` (lines 643–676). Architecturally different but functionally equivalent with potential one-frame delay.
+
+- [ ] 411. [WMORendererGL.cpp] `_load_textures()` `isClassic` check differs — JS tests `!!wmo.textureNames` (truthiness), C++ tests `!wmo->textureNames.empty()`
+- **JS Source**: `src/js/3D/renderers/WMORendererGL.js` line 126
+- **Status**: Pending
+- **Details**: JS `!!wmo.textureNames` is true if the property exists and is truthy (even an empty array `[]` is truthy). C++ `!wmo->textureNames.empty()` is only true if the map has entries. If a WMO has the texture names chunk but it's empty, JS enters classic mode but C++ does not. Comment at C++ line 140–143 acknowledges this.
+
+- [ ] 412. [WMORendererGL.cpp] `get_wmo_groups_view()`/`get_wmo_sets_view()` accessor methods don't exist in JS — C++ addition for multi-viewer support
+- **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 64–65, 103–104
+- **Status**: Pending
+- **Details**: JS uses `view[this.wmoGroupKey]` and `view[this.wmoSetKey]` for dynamic property access. C++ implements `get_wmo_groups_view()` and `get_wmo_sets_view()` methods (lines 60–69) that return references to the appropriate core::view member based on the key string, supporting `modelViewerWMOGroups`, `creatureViewerWMOGroups`, and `decorViewerWMOGroups`. This is a valid C++ adaptation of JS's dynamic property access.
+
+- [ ] 413. [CSVWriter.cpp] `addField()` overloaded — JS uses variadic `...fields`, C++ has two overloads (single string and vector)
+- **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 25–27
+- **Status**: Pending
+- **Details**: JS `addField(...fields)` accepts any number of arguments via rest parameters and pushes all. C++ provides `addField(const std::string&)` for single fields and `addField(const std::vector<std::string>&)` for multiple. Callers must adapt to one of these two signatures instead of passing multiple individual arguments.
+
+- [ ] 414. [CSVWriter.cpp] `escapeCSVField()` handles `null`/`undefined` differently — JS converts via `.toString()`, C++ returns empty for empty string
+- **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 42–51
+- **Status**: Pending
+- **Details**: JS `escapeCSVField()` handles `null`/`undefined` by returning empty string (line 43–44), then calls `value.toString()` for other types. C++ only accepts `const std::string&` and returns empty for empty strings (line 28–29). JS could receive numbers/booleans and stringify them; C++ requires pre-conversion to string by the caller.
+
+- [ ] 415. [CSVWriter.cpp] `write()` default parameter differs — JS defaults `overwrite = true`, C++ has no default
+- **JS Source**: `src/js/3D/writers/CSVWriter.js` line 57
+- **Status**: Pending
+- **Details**: JS `async write(overwrite = true)` defaults to overwriting. C++ `void write(bool overwrite)` has no default value. Callers must always explicitly pass the overwrite flag in C++.
