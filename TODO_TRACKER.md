@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/693 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/814 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -3423,3 +3423,608 @@
 - **JS Source**: `src/js/modules/tab_help.js` line 8
 - **Status**: Pending
 - **Details**: JS load_help_docs is async. C++ is synchronous blocking the main thread during file reads.
+
+- [ ] 694. [tab_home.cpp] "wow.export vX.X.X" title text is an invention not in original JS
+- **JS Source**: `src/js/modules/tab_home.js` lines 2–23
+- **Status**: Pending
+- **Details**: C++ renders a large "wow.export vX.X.X" title in Row 1, Column 1. The original JS template has no such title. Row 1 of the original grid is the HomeShowcase header reading "Made with wow.export" (from home-showcase.js).
+
+- [ ] 695. [tab_home.cpp] HomeShowcase component entirely replaced with navigation cards
+- **JS Source**: `src/js/modules/tab_home.js` line 4
+- **Status**: Pending
+- **Details**: The JS HomeShowcase component loads showcase.json, displays multi-layered background images, optional video with autoplay, clickable links, a Refresh link, and a Feedback link. The C++ replaces ALL of this with a grid of navigation card shortcuts. This is a massive visual and functional deviation.
+
+- [ ] 696. [tab_home.cpp] URLs hardcoded instead of using external-links system
+- **JS Source**: `src/js/modules/tab_home.js` lines 9–19
+- **Status**: Pending
+- **Details**: JS uses data-external="::DISCORD", "::GITHUB", "::PATREON" which resolves through ExternalLinks. C++ hardcodes URLs directly as static constexpr strings instead of using external-links.h lookup table.
+
+- [ ] 697. [tab_home.cpp] whatsNewHTML rendered as plain text instead of HTML
+- **JS Source**: `src/js/modules/tab_home.js` line 6
+- **Status**: Pending
+- **Details**: JS uses v-html="$core.view.whatsNewHTML" which renders actual HTML markup (headings, paragraphs, bold, etc.). C++ uses ImGui::TextWrapped() which renders plain text only. HTML tags appear as raw text, not formatted content. CSS container-query responsive sizing is also absent.
+
+- [ ] 698. [tab_home.cpp] #home-changes vertical padding differs from CSS
+- **JS Source**: `src/js/modules/tab_home.js` lines 5–7
+- **Status**: Pending
+- **Details**: CSS specifies padding: 0 50px (zero vertical, 50px horizontal). C++ uses contentPadY=20.0f, adding 20px vertical padding not present in the original. CSS justify-content: center vertical centering is also missing.
+
+- [ ] 699. [tab_home.cpp] Background image "cover" mode not implemented correctly
+- **JS Source**: `src/js/modules/tab_home.js` line 5
+- **Status**: Pending
+- **Details**: CSS uses background center/cover which maintains aspect ratio while filling container, cropping overflow. C++ uses AddImageRounded with UV (0,0)-(1,1) which stretches the image to fill, distorting aspect ratio instead of cropping.
+
+- [ ] 700. [tab_home.cpp] Help button icon size, position, and rotation differ from CSS
+- **JS Source**: `src/js/modules/tab_home.js` lines 9–20
+- **Status**: Pending
+- **Details**: CSS ::before uses width/height: 120px, right: -20px, transform: rotate(20deg), opacity: 0.2. C++ uses iconSize=80px (should be 120), positions 10px from right edge (should extend 20px beyond), and has no rotation.
+
+- [ ] 701. [tab_home.cpp] Missing hover transition animations on help buttons
+- **JS Source**: `src/js/modules/tab_home.js` lines 8–21
+- **Status**: Pending
+- **Details**: CSS specifies transition: all 0.3s ease on help button divs and transition: transform 0.3s ease on ::before icon with hover scale(1.1). C++ has no transition/animation effects — changes are instantaneous.
+
+- [ ] 702. [tab_home.cpp] Help button subtitle uses FONT_FADED instead of inheriting parent color
+- **JS Source**: `src/js/modules/tab_home.js` lines 10–19
+- **Status**: Pending
+- **Details**: In JS, both <b> and <span> children inherit the same parent text color. On hover, both change to --nav-option-selected. C++ uses FONT_FADED for the subtitle, making it dimmer than the title.
+
+- [ ] 703. [tab_home.cpp] #home-help-buttons grid-column full-width not fully replicated
+- **JS Source**: `src/js/modules/tab_home.js` lines 8–21
+- **Status**: Pending
+- **Details**: CSS places help buttons spanning full width with grid-column: 1 / -1 and centers them with justify-content/align-items. C++ manually calculates centering with fixed card width of 940px. If the window is narrower, buttons push off-screen rather than wrapping.
+
+- [ ] 704. [tab_home.cpp] #home-changes container query responsive font sizes not implemented
+- **JS Source**: `src/js/modules/tab_home.js` line 6
+- **Status**: Pending
+- **Details**: CSS defines container-type: size with container query units: h1 font-size: clamp(16px, 4cqi, 28px) and p font-size: clamp(12px, 3cqi, 20px). C++ does not implement any responsive font sizing.
+
+- [ ] 705. [tab_home.cpp] openInExplorer used for URL opening instead of external-links open
+- **JS Source**: `src/js/modules/tab_home.js` lines 9–17
+- **Status**: Pending
+- **Details**: JS uses ExternalLinks.open() via data-external which calls nw.Shell.openExternal(). C++ calls core::openInExplorer(url). openInExplorer is typically for file paths/folders, while JS uses openExternal for URLs.
+
+- [ ] 706. [tab_home.cpp] No cleanup/destruction of OpenGL textures
+- **JS Source**: `src/js/modules/tab_home.js` lines N/A
+- **Status**: Pending
+- **Details**: C++ allocates OpenGL textures with glGenTextures and loadSvgTexture but has no cleanup/shutdown function to call glDeleteTextures. Textures leak if the tab is re-initialized or the application shuts down.
+
+- [ ] 707. [tab_install.cpp] Async operations converted to synchronous calls
+- **JS Source**: `src/js/modules/tab_install.js` lines 52–146
+- **Status**: Pending
+- **Details**: JS export_install_files(), view_strings(), and export_strings() are all async functions that await CASC file I/O. C++ versions are fully synchronous, blocking the UI thread.
+
+- [ ] 708. [tab_install.cpp] CASC getFile replaced with low-level two-step call, losing BLTE decoding
+- **JS Source**: `src/js/modules/tab_install.js` lines 73–74
+- **Status**: Pending
+- **Details**: JS calls core.view.casc.getFile() which returns a BLTEReader for BLTE block decompression. C++ calls getEncodingKeyForContentKey then _ensureFileInCache then BufferWrapper::readFile, skipping BLTE decompression entirely. Exported files may be corrupt.
+
+- [ ] 709. [tab_install.cpp] processAllBlocks() call missing in view_strings_impl
+- **JS Source**: `src/js/modules/tab_install.js` lines 103–105
+- **Status**: Pending
+- **Details**: JS calls data.processAllBlocks() after getFile() to force all BLTE blocks decompressed before extract_strings. C++ skips this step because it uses plain BufferWrapper instead of BLTEReader.
+
+- [ ] 710. [tab_install.cpp] export_install_files missing stack trace in error mark
+- **JS Source**: `src/js/modules/tab_install.js` line 78
+- **Status**: Pending
+- **Details**: JS calls helper.mark(file_name, false, e.message, e.stack) passing both message and stack trace. C++ passes only e.what(), omitting the stack trace parameter.
+
+- [ ] 711. [tab_install.cpp] First listbox missing copyMode from config
+- **JS Source**: `src/js/modules/tab_install.js` line 165
+- **Status**: Pending
+- **Details**: JS passes :copymode="$core.view.config.copyMode" to the main install Listbox. C++ hardcodes listbox::CopyMode::Default instead of reading from view.config.
+
+- [ ] 712. [tab_install.cpp] First listbox missing pasteSelection from config
+- **JS Source**: `src/js/modules/tab_install.js` line 165
+- **Status**: Pending
+- **Details**: JS passes :pasteselection="$core.view.config.pasteSelection". C++ hardcodes false instead of reading from view.config.
+
+- [ ] 713. [tab_install.cpp] First listbox missing copytrimwhitespace from config
+- **JS Source**: `src/js/modules/tab_install.js` line 165
+- **Status**: Pending
+- **Details**: JS passes :copytrimwhitespace="$core.view.config.removePathSpacesCopy". C++ hardcodes false, disabling the remove-path-spaces-on-copy feature.
+
+- [ ] 714. [tab_install.cpp] Second listbox (strings) missing copyMode from config
+- **JS Source**: `src/js/modules/tab_install.js` line 184
+- **Status**: Pending
+- **Details**: JS passes :copymode="$core.view.config.copyMode" to the strings Listbox. C++ hardcodes listbox::CopyMode::Default.
+
+- [ ] 715. [tab_install.cpp] First listbox unittype should be "install file" not "file"
+- **JS Source**: `src/js/modules/tab_install.js` line 165
+- **Status**: Pending
+- **Details**: JS template has unittype="install file". C++ passes "file". The status bar will show "X files found" instead of "X install files found".
+
+- [ ] 716. [tab_install.cpp] Strings listbox nocopy incorrectly set to true
+- **JS Source**: `src/js/modules/tab_install.js` line 184
+- **Status**: Pending
+- **Details**: The JS strings Listbox does NOT pass :nocopy (defaults to false). C++ passes true for nocopy, incorrectly disabling copy functionality in the strings list view.
+
+- [ ] 717. [tab_install.cpp] Strings sidebar missing CSS styling equivalents
+- **JS Source**: `src/js/modules/tab_install.js` lines 194–197
+- **Status**: Pending
+- **Details**: CSS defines .strings-header font-size 14px opacity 0.7, .strings-filename font-size 12px word-break: break-all, 5px gap. C++ uses default font sizes and ImGui::Spacing() which may not match.
+
+- [ ] 718. [tab_install.cpp] Input placeholder text not rendered
+- **JS Source**: `src/js/modules/tab_install.js` lines 170, 189
+- **Status**: Pending
+- **Details**: JS filter inputs have placeholder="Filter install files..." and "Filter strings...". C++ uses plain ImGui::InputText without hint/placeholder.
+
+- [ ] 719. [tab_install.cpp] Regex tooltip not rendered
+- **JS Source**: `src/js/modules/tab_install.js` lines 169, 188
+- **Status**: Pending
+- **Details**: JS "Regex Enabled" div has :title="$core.view.regexTooltip" showing tooltip on hover. C++ has no tooltip implementation.
+
+- [ ] 720. [tab_install.cpp] extract_strings and update_install_listfile exposed in header but should be file-local
+- **JS Source**: `src/js/modules/tab_install.js` lines 16, 41
+- **Status**: Pending
+- **Details**: In JS, extract_strings and update_install_listfile are file-local (not exported). C++ header exposes them publicly. They should be static in the .cpp and removed from the header.
+
+- [ ] 721. [tab_item_sets.cpp] Missing filter input placeholder text
+- **JS Source**: `src/js/modules/tab_item_sets.js` line 83
+- **Status**: Pending
+- **Details**: JS uses placeholder="Filter item sets..." on the text input. C++ uses ImGui::InputText without hint/placeholder text.
+
+- [ ] 722. [tab_item_sets.cpp] Missing regex tooltip on "Regex Enabled" text
+- **JS Source**: `src/js/modules/tab_item_sets.js` line 82
+- **Status**: Pending
+- **Details**: JS has :title="$core.view.regexTooltip" showing tooltip on hover. C++ just renders ImGui::TextUnformatted("Regex Enabled") with no tooltip.
+
+- [ ] 723. [tab_item_sets.cpp] Async initialization converted to synchronous blocking calls
+- **JS Source**: `src/js/modules/tab_item_sets.js` lines 23–65
+- **Status**: Pending
+- **Details**: JS initialize_item_sets is async with await for progressLoadingScreen(), DBItems.ensureInitialized(), db2 getAllRows(). C++ calls all synchronously, blocking the UI thread and preventing loading screen updates.
+
+- [ ] 724. [tab_item_sets.cpp] apply_filter converts ItemSet structs to JSON objects unnecessarily
+- **JS Source**: `src/js/modules/tab_item_sets.js` lines 67–69
+- **Status**: Pending
+- **Details**: JS simply assigns the array of ItemSet objects directly. C++ iterates every ItemSet, constructs nlohmann::json objects, and pushes them. render() then converts JSON back into ItemEntry structs every frame — double-conversion overhead.
+
+- [ ] 725. [tab_item_sets.cpp] render() re-creates item_entries vector from JSON every frame
+- **JS Source**: `src/js/modules/tab_item_sets.js` lines 76–86
+- **Status**: Pending
+- **Details**: C++ render allocates a vector, loops over all JSON items, copies fields into ItemEntry structs, and pushes — every frame. JS template binds directly to existing objects with no per-frame allocation.
+
+- [ ] 726. [tab_item_sets.cpp] Regex-enabled text and filter input lack proper layout container
+- **JS Source**: `src/js/modules/tab_item_sets.js` lines 81–84
+- **Status**: Pending
+- **Details**: JS wraps regex info and filter input inside div class="filter" providing inline layout. C++ renders them sequentially without SameLine() or horizontal group, causing "Regex Enabled" to appear above the filter input instead of beside it.
+
+- [ ] 727. [tab_item_sets.cpp] fieldToUint32Vec does not handle single-value fields
+- **JS Source**: `src/js/modules/tab_item_sets.js` line 38
+- **Status**: Pending
+- **Details**: JS set_row.ItemID is expected to be an array with .filter(id => id !== 0). C++ fieldToUint32Vec only handles vector variants. If a DB2 reader returns a single scalar, the function returns an empty vector, silently dropping data.
+
+- [ ] 728. [tab_items.cpp] view_on_wowhead is stubbed — does nothing
+- **JS Source**: `src/js/modules/tab_items.js` lines 322–324
+- **Status**: Pending
+- **Details**: JS calls ExternalLinks.wowHead_viewItem(item_id) which opens a Wowhead URL. C++ function is { return; } — a no-op. external_links.h already provides wowHead_viewItem().
+
+- [ ] 729. [tab_items.cpp] copy_to_clipboard bypasses core.view.copyToClipboard
+- **JS Source**: `src/js/modules/tab_items.js` lines 318–320
+- **Status**: Pending
+- **Details**: JS calls this.$core.view.copyToClipboard(value) which may have additional behavior (e.g. toast notification). C++ calls ImGui::SetClipboardText() directly, skipping view layer.
+
+- [ ] 730. [tab_items.cpp] std::set ordering differs from JS Set insertion order
+- **JS Source**: `src/js/modules/tab_items.js` lines 85–127
+- **Status**: Pending
+- **Details**: view_item_models and view_item_textures use JS Set which preserves insertion order. C++ uses std::set<std::string> which sorts lexicographically. Should use std::vector with uniqueness check.
+
+- [ ] 731. [tab_items.cpp] Second loop (itemViewerShowAll) retrieves item name from wrong source
+- **JS Source**: `src/js/modules/tab_items.js` lines 181–211
+- **Status**: Pending
+- **Details**: JS constructs new Item(item_id, item_row, null, null, null) where Item constructor reads item_row.Display_lang. C++ looks up name via DBItems::getItemById(item_id), a different data source.
+
+- [ ] 732. [tab_items.cpp] Regex tooltip not rendered
+- **JS Source**: `src/js/modules/tab_items.js` line 248
+- **Status**: Pending
+- **Details**: JS has :title="$core.view.regexTooltip" on "Regex Enabled" div. C++ renders ImGui::TextUnformatted("Regex Enabled") without any tooltip.
+
+- [ ] 733. [tab_items.cpp] Sidebar headers use SeparatorText instead of styled header span
+- **JS Source**: `src/js/modules/tab_items.js` lines 252, 262
+- **Status**: Pending
+- **Details**: JS uses <span class="header">Item Types</span> which renders as styled header text. C++ uses ImGui::SeparatorText() which draws a horizontal separator line with text — visually different.
+
+- [ ] 734. [tab_items.cpp] Sidebar checklist items lack .selected class visual feedback
+- **JS Source**: `src/js/modules/tab_items.js` lines 254–257
+- **Status**: Pending
+- **Details**: JS adds :class="{ selected: item.checked }" to checklist items. CSS gives .sidebar-checklist-item.selected a background of rgba(255,255,255,0.05). C++ uses plain ImGui::Checkbox with no highlight.
+
+- [ ] 735. [tab_items.cpp] All async operations converted to synchronous — UI may block
+- **JS Source**: `src/js/modules/tab_items.js` lines 104, 129, 277, 345–346
+- **Status**: Pending
+- **Details**: JS initialize_items, view_item_textures, and the mounted initialize flow are all async with await. C++ converts all to synchronous blocking calls, freezing the ImGui render loop.
+
+- [ ] 736. [tab_items.cpp] Quality color applied only to CheckMark, not to label text
+- **JS Source**: `src/js/modules/tab_items.js` lines 264–265
+- **Status**: Pending
+- **Details**: CSS accent-color applies quality color to the checkbox. C++ pushes ImGuiCol_CheckMark only coloring the checkmark glyph. The checkbox background/frame and label text are unaffected.
+
+- [ ] 737. [tab_items.cpp] Filter input buffer limited to 256 bytes
+- **JS Source**: `src/js/modules/tab_items.js` line 249
+- **Status**: Pending
+- **Details**: JS input has no character limit. C++ uses char filter_buf[256] with std::strncpy, silently truncating beyond 255 characters.
+
+- [ ] 738. [tab_maps.cpp] Hand-rolled MD5 instead of mbedTLS
+- **JS Source**: `src/js/modules/tab_maps.js` line 914
+- **Status**: Pending
+- **Details**: C++ implements a full RFC 1321 MD5 from scratch instead of using mbedTLS MD API (mbedtls/md.h) as specified in project conventions.
+
+- [ ] 739. [tab_maps.cpp] load_map_tile uses nearest-neighbor scaling instead of bilinear interpolation
+- **JS Source**: `src/js/modules/tab_maps.js` lines 62–71
+- **Status**: Pending
+- **Details**: JS Canvas 2D drawImage performs bilinear interpolation when scaling. C++ uses nearest-neighbor sampling (integer coordinate snapping), making scaled minimap tiles look blockier/pixelated.
+
+- [ ] 740. [tab_maps.cpp] load_map_tile uses blp.width instead of blp.scaledWidth
+- **JS Source**: `src/js/modules/tab_maps.js` line 62
+- **Status**: Pending
+- **Details**: JS computes scale as size / blp.scaledWidth. C++ uses blp.width. If the BLP has a scaledWidth differing from raw width (e.g. mipmaps), the scaling factor will be wrong.
+
+- [ ] 741. [tab_maps.cpp] load_wmo_minimap_tile ignores drawX/drawY and scaleX/scaleY positioning
+- **JS Source**: `src/js/modules/tab_maps.js` lines 107–112
+- **Status**: Pending
+- **Details**: JS draws each tile at its specific offset (tile.drawX * output_scale, tile.drawY * output_scale) with scaled dimensions. C++ ignores drawX, drawY, scaleX, scaleY entirely — stretching all tiles to fill the full cell. Multi-tile compositing within a grid cell is completely broken.
+
+- [ ] 742. [tab_maps.cpp] export_map_wmo_minimap uses max-alpha instead of source-over compositing
+- **JS Source**: `src/js/modules/tab_maps.js` lines 721–733
+- **Status**: Pending
+- **Details**: JS Canvas 2D drawImage uses Porter-Duff source-over compositing. C++ export computes alpha as max(dst_alpha, src_alpha) instead of correct source-over formula.
+
+- [ ] 743. [tab_maps.cpp] WDT file load is outside try-catch block
+- **JS Source**: `src/js/modules/tab_maps.js` lines 433–434
+- **Status**: Pending
+- **Details**: In JS, getFileByName(wdt_path) is inside the try block. In C++, getVirtualFileByName(wdt_path) is BEFORE the try block. If WDT file doesn't exist, exception propagates uncaught.
+
+- [ ] 744. [tab_maps.cpp] mapViewerHasWorldModel check differs from JS
+- **JS Source**: `src/js/modules/tab_maps.js` lines 438–439
+- **Status**: Pending
+- **Details**: JS checks if (wdt.worldModelPlacement) — any non-null object is truthy. C++ checks if (worldModelPlacement.id != 0), which misses placement with id=0. Also affects has_global_wmo and export_map_wmo checks.
+
+- [ ] 745. [tab_maps.cpp] Missing e.stack in all helper.mark error calls
+- **JS Source**: `src/js/modules/tab_maps.js` lines 680, 759, 815, 848, 931, 1122
+- **Status**: Pending
+- **Details**: JS passes both e.message and e.stack to helper.mark. C++ only passes e.what(), omitting stack trace. Affects 6 export functions.
+
+- [ ] 746. [tab_maps.cpp] All async functions converted to synchronous — UI will block
+- **JS Source**: `src/js/modules/tab_maps.js` lines 49–980
+- **Status**: Pending
+- **Details**: Every async function (load_map_tile, load_wmo_minimap_tile, collect_game_objects, extract_height_data_from_tile, load_map, setup_wmo_minimap, all export functions, initialize) is synchronous C++. Long exports freeze the UI.
+
+- [ ] 747. [tab_maps.cpp] Missing optional chaining for export_paths
+- **JS Source**: `src/js/modules/tab_maps.js` lines 752–853
+- **Status**: Pending
+- **Details**: JS uses optional chaining export_paths?.writeLine() and export_paths?.close(). C++ calls directly without null checks. If openLastExportStream returns invalid object, C++ will crash.
+
+- [ ] 748. [tab_maps.cpp] Missing "Filter maps..." placeholder text
+- **JS Source**: `src/js/modules/tab_maps.js` line 303
+- **Status**: Pending
+- **Details**: JS filter input has placeholder="Filter maps...". C++ uses ImGui::InputText without placeholder text.
+
+- [ ] 749. [tab_maps.cpp] Missing regex tooltip
+- **JS Source**: `src/js/modules/tab_maps.js` line 302
+- **Status**: Pending
+- **Details**: JS has :title="$core.view.regexTooltip" on regex-info div. C++ renders ImGui::TextDisabled("Regex Enabled") without any tooltip.
+
+- [ ] 750. [tab_maps.cpp] Sidebar headers use SeparatorText instead of styled span
+- **JS Source**: `src/js/modules/tab_maps.js` lines 313, 342, 352, 354
+- **Status**: Pending
+- **Details**: JS uses <span class="header"> which renders as bold text. C++ uses ImGui::SeparatorText() which draws a horizontal separator line with text — visually different.
+
+- [ ] 751. [tab_maps.cpp] collect_game_objects returns vector instead of Set
+- **JS Source**: `src/js/modules/tab_maps.js` lines 146–157
+- **Status**: Pending
+- **Details**: JS returns a Set guaranteeing uniqueness. C++ returns std::vector<ADTGameObject> which can contain duplicates.
+
+- [ ] 752. [tab_maps.cpp] Selection watch may miss intermediate changes
+- **JS Source**: `src/js/modules/tab_maps.js` lines 1135–1143
+- **Status**: Pending
+- **Details**: JS Vue $watch triggers on any reactive change. C++ only compares the first element string between frames. If selection changes and reverts within same frame, or changes to different item with same first entry, C++ misses it.
+
+- [ ] 753. [tab_models.cpp] preview_model and export_files are synchronous instead of async
+- **JS Source**: `src/js/modules/tab_models.js` lines 61, 180
+- **Status**: Pending
+- **Details**: JS preview_model and export_files are async using await for CASC reads and renderer operations. C++ versions are fully synchronous, blocking UI thread.
+
+- [ ] 754. [tab_models.cpp] create_renderer last parameter is file_data_id instead of file_name
+- **JS Source**: `src/js/modules/tab_models.js` line 99
+- **Status**: Pending
+- **Details**: JS passes file_name as last argument. C++ passes file_data_id (uint32_t). If renderer uses this for name-based logic (e.g. fallback texture paths), it would fail.
+
+- [ ] 755. [tab_models.cpp] M3 has_content hardcoded to true instead of checking draw_calls/groups
+- **JS Source**: `src/js/modules/tab_models.js` line 148
+- **Status**: Pending
+- **Details**: JS checks active_renderer.draw_calls?.length > 0 || active_renderer.groups?.length > 0 for all types. C++ hardcodes M3 as always having content. M3 models with no 3D data won't show the "no 3D data" toast.
+
+- [ ] 756. [tab_models.cpp] Missing "View Log" button in generic error toast
+- **JS Source**: `src/js/modules/tab_models.js` line 163
+- **Status**: Pending
+- **Details**: JS passes { 'View Log': () => log.openRuntimeLog() } as toast buttons on preview failure. C++ passes empty {}, so user has no way to open the runtime log from error toast.
+
+- [ ] 757. [tab_models.cpp] path.basename strips differently than C++ extension removal
+- **JS Source**: `src/js/modules/tab_models.js` line 107
+- **Status**: Pending
+- **Details**: JS path.basename(model_name, 'm2') strips literal 'm2' leaving trailing dot (e.g. 'creature.'). C++ strips at last dot giving 'creature' (no trailing dot). Affects skin name replacement results.
+
+- [ ] 758. [tab_models.cpp] Drop handler prompt lambda missing count parameter
+- **JS Source**: `src/js/modules/tab_models.js` line 580
+- **Status**: Pending
+- **Details**: JS prompt receives count parameter: count => util.format('Export %d models as %s', count, ...). C++ lambda returns string without using/accepting a count, so prompt won't show number of files.
+
+- [ ] 759. [tab_models.cpp] Model quick filters not passed to listbox
+- **JS Source**: `src/js/modules/tab_models.js` line 286
+- **Status**: Pending
+- **Details**: JS passes :quickfilters="$core.view.modelQuickFilters" to Listbox. C++ passes empty {}. Quick filter buttons won't appear.
+
+- [ ] 760. [tab_models.cpp] Missing "Regex Enabled" indicator in filter bar
+- **JS Source**: `src/js/modules/tab_models.js` line 296
+- **Status**: Pending
+- **Details**: JS renders regex-info div with tooltip when config.regexFilters is true. C++ filter bar only renders the text input, completely omitting the regex indicator and tooltip.
+
+- [ ] 761. [tab_models.cpp] Sidebar checkboxes missing tooltip text
+- **JS Source**: `src/js/modules/tab_models.js` lines 358–425
+- **Status**: Pending
+- **Details**: Every JS checkbox has a title attribute for contextual help. C++ checkboxes have no ImGui tooltip equivalents, losing all tooltip help text.
+
+- [ ] 762. [tab_models.cpp] WMO Groups uses raw checkboxes instead of CheckboxList component
+- **JS Source**: `src/js/modules/tab_models.js` line 440
+- **Status**: Pending
+- **Details**: JS uses Checkboxlist component for WMO groups. C++ uses manual loop of ImGui::Checkbox instead of checkboxlist::render(), causing visual/behavioral inconsistency.
+
+- [ ] 763. [tab_models.cpp] WMO Doodad Sets uses raw checkboxes instead of CheckboxList component
+- **JS Source**: `src/js/modules/tab_models.js` line 445
+- **Status**: Pending
+- **Details**: JS uses Checkboxlist component for doodad sets. C++ uses individual ImGui::Checkbox in a loop instead of checkboxlist::render().
+
+- [ ] 764. [tab_models.cpp] getActiveRenderer() only returns M2, not polymorphic like JS
+- **JS Source**: `src/js/modules/tab_models.js` line 652
+- **Status**: Pending
+- **Details**: JS returns active_renderer regardless of type (M2/M3/WMO). C++ always returns active_renderer_result.m2.get() which is nullptr for M3/WMO. External callers get nullptr for non-M2 models.
+
+- [ ] 765. [tab_models.cpp] enableM2Skins config default may differ
+- **JS Source**: `src/js/modules/tab_models.js` line 548
+- **Status**: Pending
+- **Details**: JS checks config.enableM2Skins with truthiness (undefined = false). C++ uses view.config.value("enableM2Skins", true) defaulting to true. Different behavior on first run when key not set.
+
+- [ ] 766. [tab_models.cpp] helper.mark on failure missing stack trace parameter
+- **JS Source**: `src/js/modules/tab_models.js` line 269
+- **Status**: Pending
+- **Details**: JS calls helper.mark(file_name, false, e.message, e.stack) with 4 args. C++ calls helper.mark(file_name, false, e.what()) with only 3, losing stack trace.
+
+- [ ] 767. [tab_models.cpp] MenuButton missing "upward" class styling
+- **JS Source**: `src/js/modules/tab_models.js` line 354
+- **Status**: Pending
+- **Details**: JS MenuButton has class="upward" making dropdown open upward. C++ menu_button::render doesn't pass any upward/direction flag, so dropdown may render downward and overlap content.
+
+- [ ] 768. [tab_models.cpp] Texture ribbon slot click behavior differs from JS
+- **JS Source**: `src/js/modules/tab_models.js` line 302
+- **Status**: Pending
+- **Details**: JS uses @click (left-click) to open context menu. C++ uses both right-click and left-click to open the same popup. JS only uses left-click for texture ribbon — right-click is not handled.
+
+- [ ] 769. [tab_models_legacy.cpp] WMOLegacyRendererGL constructor passes 0 instead of file_name
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 86
+- **Status**: Pending
+- **Details**: JS passes (data, file_name, gl_context, showTextures). C++ passes (data, 0, *gl_ctx, showTextures). WMO renderer needs file_name for group file path resolution. Passing 0 is incorrect.
+
+- [ ] 770. [tab_models_legacy.cpp] Missing "View Log" button in preview_model error toast
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 185
+- **Status**: Pending
+- **Details**: JS provides { 'View Log': () => log.openRuntimeLog() } as toast action. C++ passes empty {}, losing the user-facing button.
+
+- [ ] 771. [tab_models_legacy.cpp] Missing requestAnimationFrame deferral for fitCamera
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 182
+- **Status**: Pending
+- **Details**: JS wraps fitCamera in requestAnimationFrame() for next-frame deferral. C++ calls fitCamera() synchronously, which may execute before render state is fully set up.
+
+- [ ] 772. [tab_models_legacy.cpp] PNG/CLIPBOARD export_paths stream not written for PNG exports
+- **JS Source**: `src/js/modules/tab_models_legacy.js` lines 197–224
+- **Status**: Pending
+- **Details**: JS writes 'PNG:' + out_file to export_paths stream. C++ delegates to model_viewer_utils::export_preview which opens its own FileWriter. The export_files-level stream gets no entries for PNG exports.
+
+- [ ] 773. [tab_models_legacy.cpp] helper.mark on failure missing stack trace argument
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 311
+- **Status**: Pending
+- **Details**: JS calls helper.mark(file_name, false, e.message, e.stack). C++ passes only e.what(), omitting stack trace.
+
+- [ ] 774. [tab_models_legacy.cpp] Listbox missing quickfilters from view
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 332
+- **Status**: Pending
+- **Details**: JS passes :quickfilters="$core.view.legacyModelQuickFilters" (which is ['m2','mdx','wmo']). C++ passes empty {}. Quick filter buttons won't appear.
+
+- [ ] 775. [tab_models_legacy.cpp] Listbox missing copyMode config binding
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 332
+- **Status**: Pending
+- **Details**: JS passes :copymode="$core.view.config.copyMode". C++ hardcodes listbox::CopyMode::Default.
+
+- [ ] 776. [tab_models_legacy.cpp] Listbox missing pasteSelection config binding
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 332
+- **Status**: Pending
+- **Details**: JS passes :pasteselection="$core.view.config.pasteSelection". C++ hardcodes false.
+
+- [ ] 777. [tab_models_legacy.cpp] Listbox missing copytrimwhitespace config binding
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 332
+- **Status**: Pending
+- **Details**: JS passes :copytrimwhitespace="$core.view.config.removePathSpacesCopy". C++ hardcodes false.
+
+- [ ] 778. [tab_models_legacy.cpp] Missing "Regex Enabled" indicator in filter bar
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 340
+- **Status**: Pending
+- **Details**: JS shows regex-info div with tooltip when config.regexFilters is true. C++ filter bar only renders text input, no regex indicator.
+
+- [ ] 779. [tab_models_legacy.cpp] Filter input missing placeholder text
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 341
+- **Status**: Pending
+- **Details**: JS uses placeholder="Filter models...". C++ ImGui::InputText has no hint text. Should use InputTextWithHint.
+
+- [ ] 780. [tab_models_legacy.cpp] All sidebar checkboxes missing tooltip text
+- **JS Source**: `src/js/modules/tab_models_legacy.js` lines 377–399
+- **Status**: Pending
+- **Details**: JS has title="..." on every sidebar checkbox (6 items). C++ renders none of these tooltips.
+
+- [ ] 781. [tab_models_legacy.cpp] step/seek/start_scrub/end_scrub only handle M2, not MDX
+- **JS Source**: `src/js/modules/tab_models_legacy.js` lines 462–496
+- **Status**: Pending
+- **Details**: JS uses optional chaining on single active_renderer for animation methods. C++ only checks active_renderer_m2 — MDX renderer is ignored for all animation control operations.
+
+- [ ] 782. [tab_models_legacy.cpp] WMO Groups rendered with raw Checkbox instead of Checkboxlist component
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 414
+- **Status**: Pending
+- **Details**: JS uses Checkboxlist component for WMO groups. C++ uses manual loop of ImGui::Checkbox. Checkboxlist may have additional styling/behavior.
+
+- [ ] 783. [tab_models_legacy.cpp] Doodad Sets rendered with raw Checkbox instead of Checkboxlist component
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 419
+- **Status**: Pending
+- **Details**: JS uses Checkboxlist component for doodad sets. C++ uses raw ImGui::Checkbox loop.
+
+- [ ] 784. [tab_models_legacy.cpp] getActiveRenderer() only returns M2, not active renderer
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 592
+- **Status**: Pending
+- **Details**: JS returns active_renderer which could be M2, WMO, or MDX. C++ always returns active_renderer_m2.get(), returning nullptr when active model is WMO or MDX.
+
+- [ ] 785. [tab_models_legacy.cpp] preview_model and export_files are synchronous instead of async
+- **JS Source**: `src/js/modules/tab_models_legacy.js` lines 42, 191
+- **Status**: Pending
+- **Details**: JS preview_model and export_files are async with await. C++ versions are fully synchronous, blocking UI thread for expensive operations.
+
+- [ ] 786. [tab_models_legacy.cpp] MenuButton missing "upward" class/direction
+- **JS Source**: `src/js/modules/tab_models_legacy.js` line 373
+- **Status**: Pending
+- **Details**: JS uses class="upward" on MenuButton so dropdown opens upward. C++ menu_button::render doesn't pass upward/direction flag.
+
+- [ ] 787. [tab_raw.cpp] export_raw_files uses getVirtualFileByName and drops partialDecrypt=true
+- **JS Source**: `src/js/modules/tab_raw.js` line 123
+- **Status**: Pending
+- **Details**: JS calls core.view.casc.getFileByName(file_name, true) passing partialDecrypt=true. C++ calls getVirtualFileByName(file_name) without partialDecrypt parameter, silently dropping partial decryption capability for encrypted files.
+
+- [ ] 788. [tab_raw.cpp] export_raw_files error mark missing stack trace argument
+- **JS Source**: `src/js/modules/tab_raw.js` line 128
+- **Status**: Pending
+- **Details**: JS calls helper.mark(export_file_name, false, e.message, e.stack). C++ passes only e.what(), omitting stack trace.
+
+- [ ] 789. [tab_raw.cpp] parent_path() returns "" not "." for bare filenames
+- **JS Source**: `src/js/modules/tab_raw.js` lines 113–115
+- **Status**: Pending
+- **Details**: JS path.dirname returns "." for bare filenames, then checks dir === ".". C++ parent_path() returns "" for bare filenames, then checks dir == "." which never matches. Functionally similar result but fragile — should check dir.empty() || dir == ".".
+
+- [ ] 790. [tab_raw.cpp] Missing placeholder text on filter input
+- **JS Source**: `src/js/modules/tab_raw.js` line 159
+- **Status**: Pending
+- **Details**: JS has placeholder="Filter raw files...". C++ uses ImGui::InputText with no hint text.
+
+- [ ] 791. [tab_raw.cpp] Missing tooltip on "Regex Enabled" text
+- **JS Source**: `src/js/modules/tab_raw.js` line 158
+- **Status**: Pending
+- **Details**: JS has :title="$core.view.regexTooltip" showing tooltip on hover. C++ has no tooltip.
+
+- [ ] 792. [tab_raw.cpp] All async functions converted to synchronous — blocks UI thread
+- **JS Source**: `src/js/modules/tab_raw.js` lines 12, 31, 91
+- **Status**: Pending
+- **Details**: JS compute_raw_files, detect_raw_files, and export_raw_files are all async. C++ versions are synchronous, blocking render thread during CASC I/O and disk operations.
+
+- [ ] 793. [tab_raw.cpp] detect_raw_files manually sets is_dirty=true — deviates from JS
+- **JS Source**: `src/js/modules/tab_raw.js` lines 75–76
+- **Status**: Pending
+- **Details**: JS calls listfile.ingestIdentifiedFiles then compute_raw_files without setting is_dirty. Since is_dirty was false, JS would return early (apparent JS bug). C++ adds is_dirty=true to fix this, which is arguably correct but deviates from original JS behavior.
+
+- [ ] 794. [tab_text.cpp] getFileByName vs getVirtualFileByName in preview and export
+- **JS Source**: `src/js/modules/tab_text.js` lines 129, 108
+- **Status**: Pending
+- **Details**: JS calls casc.getFileByName(first) for preview and export. C++ calls getVirtualFileByName which is a different method with different behavior (extra DBD manifest logic, unknown/ path handling).
+
+- [ ] 795. [tab_text.cpp] readString() encoding parameter missing
+- **JS Source**: `src/js/modules/tab_text.js` line 130
+- **Status**: Pending
+- **Details**: JS calls file.readString(undefined, 'utf8') passing explicit utf8 encoding. C++ calls file.readString() with no encoding argument. May produce different output for non-ASCII content.
+
+- [ ] 796. [tab_text.cpp] Missing 'View Log' button in error toast
+- **JS Source**: `src/js/modules/tab_text.js` lines 138–139
+- **Status**: Pending
+- **Details**: JS passes { 'View Log': () => log.openRuntimeLog() } as toast action. C++ passes empty {}. User has no way to open runtime log from error toast.
+
+- [ ] 797. [tab_text.cpp] Regex tooltip missing on "Regex Enabled" text
+- **JS Source**: `src/js/modules/tab_text.js` line 31
+- **Status**: Pending
+- **Details**: JS has :title="$core.view.regexTooltip" showing tooltip on hover. C++ renders text with no tooltip.
+
+- [ ] 798. [tab_text.cpp] Filter input missing placeholder text
+- **JS Source**: `src/js/modules/tab_text.js` line 32
+- **Status**: Pending
+- **Details**: JS has placeholder="Filter text files...". C++ uses ImGui::InputText with no hint text.
+
+- [ ] 799. [tab_text.cpp] export_text is synchronous instead of async
+- **JS Source**: `src/js/modules/tab_text.js` lines 77–121
+- **Status**: Pending
+- **Details**: JS export_text is async with await for generics.fileExists(), casc.getFileByName(), and data.writeToFile(). C++ runs entirely synchronously, freezing UI during multi-file export.
+
+- [ ] 800. [tab_text.cpp] export_text error handler missing stack trace parameter
+- **JS Source**: `src/js/modules/tab_text.js` line 116
+- **Status**: Pending
+- **Details**: JS calls helper.mark(export_file_name, false, e.message, e.stack). C++ passes only e.what(), omitting stack trace.
+
+- [ ] 801. [tab_text.cpp] Text preview child window padding differs from CSS
+- **JS Source**: `src/js/modules/tab_text.js` line 36
+- **Status**: Pending
+- **Details**: CSS padding: 15px adds padding on all four sides. C++ sets ImGui::SetCursorPos(15, 15) for top-left only — no bottom/right padding. Content scrolls to exact end of text with no margin.
+
+- [ ] 802. [tab_textures.cpp] Listbox override texture list not forwarded
+- **JS Source**: `src/js/modules/tab_textures.js` line 291
+- **Status**: Pending
+- **Details**: JS passes :override="$core.view.overrideTextureList" to Listbox. C++ passes nullptr for overrideItems. When another tab sets an override texture list, the listbox will ignore it entirely.
+
+- [ ] 803. [tab_textures.cpp] MenuButton replaced with plain Button — no format dropdown
+- **JS Source**: `src/js/modules/tab_textures.js` line 328
+- **Status**: Pending
+- **Details**: JS uses MenuButton component with :options providing dropdown to change export format (PNG/WEBP/BLP). C++ uses plain ImGui::Button showing only current format — no way to change export texture format from this tab's UI.
+
+- [ ] 804. [tab_textures.cpp] apply_baked_npc_texture skips CASC file load and BLP creation
+- **JS Source**: `src/js/modules/tab_textures.js` lines 421–426
+- **Status**: Pending
+- **Details**: JS loads file from CASC, creates BLPFile, stores BLP object in chrCustBakedNPCTexture. C++ just stores the raw file data ID integer without loading or decoding. Downstream consumers expecting decoded BLP will receive only an integer.
+
+- [ ] 805. [tab_textures.cpp] Missing "View Log" action button on baked NPC texture error toast
+- **JS Source**: `src/js/modules/tab_textures.js` line 430
+- **Status**: Pending
+- **Details**: JS error toast passes { 'view log': () => log.openRuntimeLog() }. C++ passes empty {}.
+
+- [ ] 806. [tab_textures.cpp] Atlas overlay regions not cleared when atlas_id found but entry missing
+- **JS Source**: `src/js/modules/tab_textures.js` lines 184–213
+- **Status**: Pending
+- **Details**: JS always assigns textureAtlasOverlayRegions = render_regions unconditionally after the if(entry) block. C++ doesn't clear regions when texture_atlas_map has file_data_id but texture_atlas_entries lacks atlas_id, leaving stale data.
+
+- [ ] 807. [tab_textures.cpp] Drop handler prompt omits file count
+- **JS Source**: `src/js/modules/tab_textures.js` line 468
+- **Status**: Pending
+- **Details**: JS prompt includes count parameter: count => util.format('Export %d textures as %s', count, ...). C++ lambda takes no count and produces "Export textures as PNG" without count.
+
+- [ ] 808. [tab_textures.cpp] Atlas region tooltip positioning not implemented
+- **JS Source**: `src/js/modules/tab_textures.js` lines 148–182
+- **Status**: Pending
+- **Details**: JS attach_overlay_listener adds mousemove handler for dynamic tooltip repositioning based on mouse position (4 CSS tooltip classes). C++ draws region name text at fixed position with no hover interaction.
+
+- [ ] 809. [tab_textures.cpp] Filter input missing placeholder text
+- **JS Source**: `src/js/modules/tab_textures.js` line 302
+- **Status**: Pending
+- **Details**: JS uses placeholder="Filter textures...". C++ uses ImGui::InputText with no hint text.
+
+- [ ] 810. [tab_textures.cpp] Regex tooltip text missing
+- **JS Source**: `src/js/modules/tab_textures.js` line 301
+- **Status**: Pending
+- **Details**: JS shows :title="$core.view.regexTooltip" on "Regex Enabled" div. C++ has no tooltip.
+
+- [ ] 811. [tab_textures.cpp] export_texture_atlas_regions missing stack trace in error mark
+- **JS Source**: `src/js/modules/tab_textures.js` line 261
+- **Status**: Pending
+- **Details**: JS calls helper.mark(export_file_name, false, e.message, e.stack). C++ passes only e.what(), omitting stack trace.
+
+- [ ] 812. [tab_textures.cpp] All async operations are synchronous — blocks UI thread
+- **JS Source**: `src/js/modules/tab_textures.js` lines 23–413
+- **Status**: Pending
+- **Details**: JS preview_texture_by_id, load_texture_atlas_data, reload_texture_atlas_data, export_texture_atlas_regions, export_textures, initialize, and apply_baked_npc_texture are all async. C++ equivalents all run synchronously on UI thread.
+
+- [ ] 813. [tab_textures.cpp] Channel mask toggles rendered as checkboxes instead of styled inline buttons
+- **JS Source**: `src/js/modules/tab_textures.js` lines 306–311
+- **Status**: Pending
+- **Details**: JS renders channel toggles as <li> items with colored backgrounds/borders using .selected CSS class. C++ uses ImGui::Checkbox with colored check marks — visually different from original compact colored square buttons.
+
+- [ ] 814. [tab_textures.cpp] Preview image max dimensions not clamped to texture dimensions
+- **JS Source**: `src/js/modules/tab_textures.js` line 312
+- **Status**: Pending
+- **Details**: JS applies max-width/max-height from texture dimensions so preview never upscales beyond native resolution. C++ computes scale = min(avail/tex) which upscales small textures to fill the panel.
