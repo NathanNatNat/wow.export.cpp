@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/864 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/883 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -4278,3 +4278,98 @@
 - **JS Source**: `src/js/ui/audio-helper.js` lines 43–44
 - **Status**: Pending
 - **Details**: JS `play()` only checks `if (!this.buffer)`. C++ checks `if (audio_data.empty() || !engine)`. If JS `init()` was never called, `this.context.createBufferSource()` would throw at runtime. C++ handles this gracefully with the extra guard — more defensive but different error behavior.
+
+- [ ] 865. [char-texture-overlay.cpp] Missing event registrations for tab switch and overlay navigation
+- **JS Source**: `src/js/ui/char-texture-overlay.js` lines 71–84
+- **Status**: Pending
+- **Details**: JS registers `core.events.on('screen-tab-characters', ensure_active_layer_attached)`, `core.events.on('click-chr-next-overlay', ...)`, `core.events.on('click-chr-prev-overlay', ...)` at module load time. C++ exposes nextOverlay/prevOverlay/ensureActiveLayerAttached as public functions but has no event hook registration. Callers must invoke these manually; the implicit event-driven wiring from JS is absent.
+
+- [ ] 866. [char-texture-overlay.cpp] getLayerCount/nextOverlay/prevOverlay are C++ additions not in JS module exports
+- **JS Source**: `src/js/ui/char-texture-overlay.js` lines 86–89
+- **Status**: Pending
+- **Details**: JS module.exports only exports: add, remove, ensureActiveLayerAttached, getActiveLayer. C++ header additionally exposes getLayerCount(), nextOverlay(), prevOverlay(). The overlay navigation is handled by event listeners in JS that are internal to the module; C++ makes them public API. Not a bug, but an API surface deviation.
+
+- [ ] 867. [character-appearance.cpp] apply_customization_textures init() ordering differs from JS
+- **JS Source**: `src/js/ui/character-appearance.js` lines 130–145
+- **Status**: Pending
+- **Details**: JS constructs CharMaterialRenderer, inserts it into the chr_materials map, then calls `await chr_material.init()`. C++ calls `mat->init()` BEFORE inserting into `chr_materials` map. If init() throws in C++, the material won't be in the map (clean); in JS it would be present in a partially initialized state. Subtle ordering difference in error scenarios.
+
+- [ ] 868. [character-appearance.cpp] setTextureTarget API decomposed from composite objects to scalar parameters
+- **JS Source**: `src/js/ui/character-appearance.js` lines 155–170
+- **Status**: Pending
+- **Details**: JS calls `setTextureTarget(chr_material, { FileDataID, ChrModelTextureTargetID }, { X, Y, Width, Height })` with composite objects. C++ decomposes these into individual scalar parameters. Correct adaptation for C++ but callers must match the decomposed C++ signature exactly.
+
+- [ ] 869. [listbox-context.cpp] handle_context_menu signature changed from data object to direct selection array
+- **JS Source**: `src/js/ui/listbox-context.js` lines 1–10
+- **Status**: Pending
+- **Details**: JS `handle_context_menu(data, isLegacy)` takes a data object with a `.selection` property. C++ takes `(const std::vector<std::string>& selection, bool isLegacy)` directly. Callers must adapt to pass the selection array instead of wrapping it in a data object.
+
+- [ ] 870. [listbox-context.cpp] get_export_directory returns empty string instead of null
+- **JS Source**: `src/js/ui/listbox-context.js` lines 25–40
+- **Status**: Pending
+- **Details**: JS returns `null` when selection is empty or no valid directory found. C++ returns `""` (empty string). Callers must check `.empty()` instead of a null/nullptr check.
+
+- [ ] 871. [model-viewer-utils.cpp] export_preview CLIPBOARD copies base64 text instead of PNG image data
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 115–120
+- **Status**: Pending
+- **Details**: JS `clipboard.set(buf.toBase64(), 'png', true)` copies actual PNG image data to the system clipboard so pasting in an image editor shows the screenshot. C++ `ImGui::SetClipboardText(buf.toBase64().c_str())` copies base64-encoded text. Pasting in an image editor produces text, not an image. A platform-specific clipboard API (Win32 CF_DIB, X11 image/png) is needed for parity.
+
+- [ ] 872. [model-viewer-utils.cpp] WMO renderer and exporter pass file_data_id instead of file_name
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 85–95, 190–210
+- **Status**: Pending
+- **Details**: JS `WMORendererGL(data, file_name, gl_context, show_textures)` and `WMOExporter(data, file_name)` use the file name string. C++ passes `file_data_id` (uint32_t) to both `WMORendererGL(data, file_data_id, ctx, show_textures)` and `WMOExporter(data, file_data_id, casc)`. The `file_name` parameter is explicitly discarded via `(void)file_name`. This is a documented API adaptation but changes how WMO resources are resolved internally.
+
+- [ ] 873. [model-viewer-utils.cpp] create_view_state only supports 3 hardcoded prefixes
+- **JS Source**: `src/js/ui/model-viewer-utils.js` lines 235–270
+- **Status**: Pending
+- **Details**: JS uses dynamic property access `core.view[prefix + 'TexturePreviewURL']` supporting any prefix string. C++ hardcodes only "model", "decor", "creature" — any other prefix silently returns a ViewStateProxy with all nullptr fields. This matches current runtime usage but would break if new tab types are added without updating the if/else chain.
+
+- [ ] 874. [texture-exporter.cpp] overwriteFiles config default is true in C++ vs undefined (falsy) in JS
+- **JS Source**: `src/js/ui/texture-exporter.js` lines 100–105
+- **Status**: Pending
+- **Details**: JS reads `core.view.config.overwriteFiles` which is undefined if not set (falsy → no overwrite). C++ uses `.value("overwriteFiles", true)` defaulting to `true`. If the config key is absent, C++ overwrites existing files by default while JS would not. Behavioral difference in default export behavior.
+
+- [ ] 875. [texture-exporter.cpp] Added .jpeg extension handling not present in JS
+- **JS Source**: `src/js/ui/texture-exporter.js` lines 145–150
+- **Status**: Pending
+- **Details**: JS only checks `file_ext === '.jpg'` for JPG detection. C++ additionally checks `file_ext == ".jpeg"`. Minor deviation: C++ handles an extra extension that JS does not recognize, so a file named "foo.jpeg" would be processed as JPG in C++ but treated as unknown in JS.
+
+- [ ] 876. [texture-exporter.cpp] markFileName declared outside try-catch, fixing JS let-scoping bug
+- **JS Source**: `src/js/ui/texture-exporter.js` lines 124–180
+- **Status**: Pending
+- **Details**: JS declares `let markFileName` inside the try block, then references it in the catch block. Because `let` is block-scoped, `markFileName` is NOT accessible in the catch, which would cause a ReferenceError if an error occurs. C++ declares `markFileName` before the try block, avoiding the issue. This is a deviation from JS that actually fixes a latent JS scoping bug.
+
+- [ ] 877. [uv-drawer.cpp] Output format changed from data URL string to raw RGBA pixels
+- **JS Source**: `src/js/ui/uv-drawer.js` lines 1–5, 45–50
+- **Status**: Pending
+- **Details**: JS `generateUVLayerDataURL` returns `canvas.toDataURL('image/png')` (a data URL string). C++ `generateUVLayerPixels` returns `std::vector<uint8_t>` raw RGBA pixel data. The caller (model-viewer-utils.cpp) handles PNG encoding and GL texture upload separately. Function name and return type both differ.
+
+- [ ] 878. [uv-drawer.cpp] Line rendering algorithm differs from Canvas 2D API
+- **JS Source**: `src/js/ui/uv-drawer.js` lines 10–45
+- **Status**: Pending
+- **Details**: JS uses Canvas 2D `ctx.strokeStyle`, `ctx.lineWidth = 0.5`, `ctx.beginPath/moveTo/lineTo/stroke` with all triangles in a single path (overlapping edges drawn at same alpha). C++ uses Xiaolin Wu's anti-aliased line algorithm drawing each segment individually with alpha compositing. Visual results will differ at edge overlaps and anti-aliasing quality — not pixel-identical to the JS version.
+
+- [ ] 879. [cache-collector.cpp] Hand-rolled MD5 and SHA256 instead of using mbedTLS
+- **JS Source**: `src/js/workers/cache-collector.js` lines 5–10
+- **Status**: Pending
+- **Details**: JS uses Node.js `crypto.createHash('md5')` and `crypto.createHash('sha256')`. C++ implements MD5 and SHA256 from scratch in `md5_impl` and `sha256_impl` namespaces (~200 lines each). Project convention specifies mbedTLS (`mbedtls/md.h`) for crypto hashing. Hand-rolled implementations increase maintenance burden and risk of subtle correctness bugs.
+
+- [ ] 880. [cache-collector.cpp] upload_chunks converts binary multipart body through std::string
+- **JS Source**: `src/js/workers/cache-collector.js` lines 95–115
+- **Status**: Pending
+- **Details**: JS handles multipart body as Buffer objects preserving binary integrity. C++ converts `std::vector<uint8_t>` to `std::string(body_bytes.begin(), body_bytes.end())` before passing to `https_request`. While `std::string` can hold embedded null bytes, this conversion path is fragile — httplib's content_type/body API must handle binary strings correctly or data may be corrupted.
+
+- [ ] 881. [cache-collector.cpp] random_hex uses std::mt19937 instead of cryptographically secure random
+- **JS Source**: `src/js/workers/cache-collector.js` lines 85–90
+- **Status**: Pending
+- **Details**: JS uses `crypto.randomBytes(16).toString('hex')` which is cryptographically secure. C++ uses `std::random_device` + `std::mt19937` which is NOT guaranteed to be cryptographic on all platforms (MSVC's `std::random_device` uses CryptGenRandom but GCC/Linux may use `/dev/urandom` or a PRNG). Used only for multipart boundary generation so security impact is minimal, but it deviates from JS behavior.
+
+- [ ] 882. [data-exporter.cpp] exportDataTable defaults exportDBFormat to "CSV" while JS has no default
+- **JS Source**: `src/js/ui/data-exporter.js` line 30
+- **Status**: Pending
+- **Details**: JS reads `core.view.config.exportDBFormat` directly; if the key is unset, it's `undefined` which won't match 'CSV' or 'SQL', so the function returns without exporting. C++ uses `.value("exportDBFormat", "CSV")` which defaults to "CSV" — always exports as CSV if the config key is absent. Different behavior when config is incomplete.
+
+- [ ] 883. [texture-ribbon.cpp] Additional GL texture management functions not present in JS
+- **JS Source**: `src/js/ui/texture-ribbon.js` (entire file)
+- **Status**: Pending
+- **Details**: C++ adds `clearSlotTextures()`, `getSlotTexture()`, `s_slotTextures` map, and `s_slotSrcCache` map for OpenGL texture lifecycle management. JS uses DOM img elements with `.src` assignment which handles image loading/display natively. C++ `reset()` additionally calls `clearSlotTextures()` to delete GL resources. These are expected platform additions but expand the API surface beyond the JS module exports.
