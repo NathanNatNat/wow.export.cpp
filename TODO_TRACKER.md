@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/359 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/365 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1753,3 +1753,33 @@
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 62–65
 - **Status**: Pending
 - **Details**: While the JS `exportTextures()` currently returns an empty Map (texture export not yet implemented), the C++ return type `std::map<uint32_t, std::string>` constrains future implementation to numeric-only keys. If M3 texture export is later implemented following M2Exporter's pattern (which uses string keys like `"data-X"` for data textures), the uint32_t key type would need to change. The JS Map supports mixed key types natively. This is a forward-compatibility concern rather than a current bug.
+
+- [ ] 360. [WMOExporter.cpp] uint16_t loop variable for face iteration risks overflow/infinite loop (4 locations)
+- **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 385, 551, 862, 1004 (batch.numFaces iteration)
+- **Status**: Pending
+- **Details**: Four face iteration loops in WMOExporter.cpp (lines 484, 643, 1077, 1202) use `for (uint16_t fi = 0; fi < batch.numFaces; fi++)`. If `batch.numFaces` reaches or exceeds 65535, the `uint16_t` loop variable wraps to 0, causing an infinite loop or incorrect iteration. JS uses `let i` which is a double-precision float with no overflow at these magnitudes. Should use `uint32_t` for the loop variable. Same issue as entry 352 (M2Exporter) and entry 357 (M2LegacyExporter).
+
+- [ ] 361. [WMOExporter.cpp] Constructor takes explicit casc::CASC* parameter not present in JS
+- **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 34–36
+- **Status**: Pending
+- **Details**: JS constructor is `constructor(data, fileID)` and obtains CASC source internally via `core.view.casc`. C++ constructor is `WMOExporter(BufferWrapper data, uint32_t fileDataID, casc::CASC* casc)` with explicit casc pointer. Additionally, `fileDataID` is constrained to `uint32_t` while JS accepts `string|number` for `fileID`. This is an API deviation — callers must pass the correct CASC instance and cannot pass string file paths.
+
+- [ ] 362. [WMOExporter.cpp] Extra loadWMO() and getDoodadSetNames() accessor methods not in JS
+- **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 34–36
+- **Status**: Pending
+- **Details**: C++ adds `loadWMO()` (line 1698) and `getDoodadSetNames()` (line 1702) methods that do not exist in the JS WMOExporter class. In JS, `this.wmo` is a public property accessed directly by callers. In C++, `wmo` is a private `std::unique_ptr<WMOLoader>`, so these accessor methods were added to expose the loader. This is a necessary C++ adaptation but changes the public API surface.
+
+- [ ] 363. [WMOLegacyExporter.cpp] uint16_t loop variable for face iteration risks overflow/infinite loop (2 locations)
+- **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 202, 425 (batch.numFaces iteration)
+- **Status**: Pending
+- **Details**: Two face iteration loops in WMOLegacyExporter.cpp (lines 288, 603) use `for (uint16_t i = 0; i < batch.numFaces; i++)`. If `batch.numFaces` reaches or exceeds 65535, the `uint16_t` loop variable wraps to 0, causing an infinite loop or incorrect iteration. JS uses `let i` with no overflow risk. Should use `uint32_t` for the loop variable. Same issue as entries 352, 357, 360.
+
+- [ ] 364. [ShaderProgram.cpp] `_compile` method handles partial shader failure differently from JS
+- **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 29–36
+- **Status**: Pending
+- **Details**: When one shader compiles successfully but the other fails, JS `_compile` (line 35-36) simply returns without deleting the successfully compiled shader, leaking a WebGL resource until garbage collection. C++ `_compile` (lines 30-35) correctly deletes both shaders on partial failure (`if (vert_shader) glDeleteShader(vert_shader); if (frag_shader) glDeleteShader(frag_shader);`). This is a behavioral improvement over JS but is technically a deviation from the original logic. Note: JS `recompile()` (line 248-256) does handle this correctly — only `_compile` has the issue.
+
+- [ ] 365. [ShaderProgram.cpp] `set_uniform_3fv`/`set_uniform_4fv`/`set_uniform_mat4_array` have extra count parameter
+- **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 187–234
+- **Status**: Pending
+- **Details**: JS `set_uniform_3fv(name, value)` calls `gl.uniform3fv(loc, value)` where the WebGL2 API infers the count from the typed array length. C++ `set_uniform_3fv(name, value, count=1)` takes an explicit `count` parameter (defaulting to 1) because OpenGL's `glUniform3fv(loc, count, value)` requires it. Same applies to `set_uniform_4fv` and `set_uniform_mat4_array`. While single-value calls work identically (count defaults to 1), callers passing arrays of multiple vec3/vec4/mat4 values must specify the correct count in C++. This is a necessary C++ adaptation but changes the API contract.
