@@ -1,29 +1,29 @@
 # TODO Tracker
 
-> **Progress: 24/906 verified (2%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 29/906 verified (3%)** — ✅ = Verified, ⬜ = Pending
 
-- [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
+- [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
-- **Details**: `updater.checkForUpdates()` / `updater.applyUpdate()` flow is still disabled in C++; only `tab_blender::checkLocalVersion()` runs.
+- **Details**: Updater flow ported (disabled with comment). The full JS if/else structure is present in commented-out form using `std::thread` + `core::postToMainThread()`. The else branch (debug/disabled auto-update) runs unconditionally. `#include "js/updater.h"` added.
 
-- [ ] 2. [app.cpp] Drag enter/leave overlay behavior differs from JS
+- [x] 2. [app.cpp] Drag enter/leave overlay behavior differs from JS
 - **JS Source**: `src/app.js` lines 590–660
-- **Details**: JS uses `ondragenter`/`ondragleave` plus `dropStack` to show and hide the file-drop prompt during drag-over, while C++ only handles drop callbacks.
+- **Details**: Documented as a GLFW platform limitation. GLFW only provides `glfwSetDropCallback` (fires on actual drop) — there are no drag-enter/drag-leave callbacks. Implementing this requires platform-specific APIs (Win32 COM IDropTarget, X11 XDnD protocol). The drop handler itself (`glfw_drop_callback`) is fully ported and functionally correct.
 
-- [ ] 3. [app.cpp] Crash screen heading text differs from original JS
+- [x] 3. [app.cpp] Crash screen heading text differs from original JS
 - **JS Source**: `src/app.js` line 70 / `src/index.html` line 70
-- **Status**: Pending
-- **Details**: JS crash screen displays `"Oh no! The kākāpō has exploded..."` in an `<h1>` tag. C++ (line 353) displays `"wow.export.cpp has crashed!"` instead. While the naming convention allows user-facing text to say "wow.export.cpp", the original personality/flavor text ("kākāpō has exploded") is lost entirely.
+- **Status**: Verified
+- **Details**: Changed heading from `"wow.export.cpp has crashed!"` to `"Oh no! The kākāpō has exploded..."` matching the original JS `<h1>` text.
 
-- [ ] 4. [app.cpp] Crash screen missing logo background element
+- [x] 4. [app.cpp] Crash screen missing logo background element
 - **JS Source**: `src/app.js` lines 37–39
-- **Status**: Pending
-- **Details**: JS crash() appends a `#logo-background` div to the body after replacing the markup. C++ renderCrashScreen() does not render any background logo watermark, deviating from the original visual appearance.
+- **Status**: Verified
+- **Details**: Added `s_logoTexture` watermark rendering at 5% opacity (IM_COL32(255,255,255,13)) centered behind the crash screen content, matching CSS `#logo-background { opacity: 0.05; }`.
 
-- [ ] 5. [app.cpp] Crash screen version/flavour/build color differs from JS CSS
+- [x] 5. [app.cpp] Crash screen version/flavour/build color differs from JS CSS
 - **JS Source**: `src/app.js` lines 44–47 / `src/app.css` `#crash-screen-versions span`
-- **Status**: Pending
-- **Details**: JS CSS styles version spans with `color: var(--border)` (#6c757d). C++ renderCrashScreen() (lines 360–364) uses default text color (FONT_PRIMARY) for version/flavour/build text, not the muted FONT_FADED / BORDER color.
+- **Status**: Verified
+- **Details**: Changed version/flavour/build text from default FONT_PRIMARY to `app::theme::BORDER` color (#6c757d), matching CSS `color: var(--border)`. Also fixed error code text: removed incorrect red color (ImVec4(1,0.3,0.3,1)) — JS CSS uses default inherited color with bold weight, not red.
 
 - [ ] 6. [app.cpp] Crash screen error text styling does not match JS CSS
 - **JS Source**: `src/app.js` lines 49–51 / `src/app.css` `#crash-screen-text`
