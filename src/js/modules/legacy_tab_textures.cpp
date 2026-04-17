@@ -304,6 +304,12 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
+	// --- Status bar ---
+	if (app::layout::BeginStatusBar("legacy-tex-status", regions)) {
+		listbox::renderStatusBar("texture", {".blp", ".png", ".jpg"}, legacy_tex_listbox_state);
+	}
+	app::layout::EndStatusBar();
+
 	// --- Filter bar (row 2, col 1) ---
 	//   Regex info + filter input
 	if (app::layout::BeginFilterBar("legacy-tex-filter", regions)) {

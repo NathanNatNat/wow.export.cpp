@@ -199,6 +199,12 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
+	// --- Status bar ---
+	if (app::layout::BeginStatusBar("fonts-status", regions)) {
+		listbox::renderStatusBar("font", {}, listbox_state);
+	}
+	app::layout::EndStatusBar();
+
 	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("fonts-filter", regions)) {
 		if (view.config.value("regexFilters", false))

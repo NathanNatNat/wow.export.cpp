@@ -388,9 +388,13 @@ inline constexpr float SIDEBAR_PADDING_RIGHT = 20.0f;
  * Populated by CalcListTabRegions() and consumed by the Begin* helpers.
  */
 struct ListTabRegions {
-	// Left column: list area (row 1)
+	// Left column: list area (row 1, minus status bar)
 	ImVec2 listPos;
 	ImVec2 listSize;
+
+	// Status bar: between list and filter bar
+	ImVec2 statusBarPos;
+	ImVec2 statusBarSize;
 
 	// Right column: preview area (row 1)
 	ImVec2 previewPos;
@@ -449,6 +453,13 @@ void EndTab();
  */
 bool BeginListContainer(const char* id, const ListTabRegions& regions);
 void EndListContainer();
+
+/**
+ * Begin the status bar region between the list and filter bar.
+ * Must be paired with EndStatusBar().
+ */
+bool BeginStatusBar(const char* id, const ListTabRegions& regions);
+void EndStatusBar();
 
 /**
  * Begin the preview container region (`.preview-container` equivalent).

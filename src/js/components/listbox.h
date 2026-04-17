@@ -73,6 +73,10 @@ struct ListboxState {
 
 	// Whether the component has been initialized (first frame).
 	bool initialized = false;
+
+	// Cached counts from last render (for external status bar rendering).
+	int lastFilteredCount = 0;
+	int lastSelectionCount = 0;
 };
 
 /**
@@ -126,5 +130,13 @@ void render(const char* id,
 void saveState(const ListboxState& state,
                const std::string& persistscrollkey,
                const std::vector<std::string>& filteredItems);
+
+/**
+ * Render the status bar with item count and optional quick filters.
+ * Call this OUTSIDE the list container, between EndListContainer and BeginFilterBar.
+ */
+void renderStatusBar(const std::string& unittype,
+					 const std::vector<std::string>& quickfilters,
+					 ListboxState& state);
 
 } // namespace listbox

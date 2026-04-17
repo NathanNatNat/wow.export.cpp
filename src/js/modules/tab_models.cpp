@@ -869,6 +869,12 @@ void render() {
 		}
 		app::layout::EndListContainer();
 
+		// --- Status bar (between list and filter) ---
+		if (app::layout::BeginStatusBar("models-status", regions)) {
+			listbox::renderStatusBar("model", view.modelQuickFilters, listbox_models_state);
+		}
+		app::layout::EndStatusBar();
+
 		// --- Filter bar (row 2, col 1) ---
 		if (app::layout::BeginFilterBar("models-filter", regions)) {
 			// <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>

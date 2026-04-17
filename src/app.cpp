@@ -2397,7 +2397,8 @@ app::layout::ListTabRegions app::layout::CalcListTabRegions(bool hasSidebar, flo
 
 	// Two rows: row 1 = remaining, row 2 = FILTER_BAR_HEIGHT
 	const float bottomH = FILTER_BAR_HEIGHT;
-	const float topH = gridH - bottomH;
+	const float statusBarH = 27.0f;
+	const float topH = gridH - bottomH - statusBarH;
 
 	// .list-container { margin: 20px 10px 0 20px }
 	r.listPos = ImVec2(cursor.x + LIST_MARGIN_LEFT, cursor.y + LIST_MARGIN_TOP);
@@ -2405,6 +2406,10 @@ app::layout::ListTabRegions app::layout::CalcListTabRegions(bool hasSidebar, flo
 		leftColW - LIST_MARGIN_LEFT - LIST_MARGIN_RIGHT,
 		topH - LIST_MARGIN_TOP - LIST_MARGIN_BOTTOM
 	);
+
+	// Status bar: below list, above filter bar, same horizontal extent as list
+	r.statusBarPos = ImVec2(cursor.x + LIST_MARGIN_LEFT, cursor.y + topH);
+	r.statusBarSize = ImVec2(leftColW - LIST_MARGIN_LEFT - LIST_MARGIN_RIGHT, statusBarH);
 
 	// .preview-container { margin: 20px 20px 0 10px; grid-row: 1; grid-column: 2 }
 	r.previewPos = ImVec2(cursor.x + leftColW + PREVIEW_MARGIN_LEFT, cursor.y + PREVIEW_MARGIN_TOP);
@@ -2414,11 +2419,11 @@ app::layout::ListTabRegions app::layout::CalcListTabRegions(bool hasSidebar, flo
 	);
 
 	// .filter { display: flex; align-items: center; grid-column: 1; grid-row: 2 }
-	r.filterPos = ImVec2(cursor.x, cursor.y + topH);
+	r.filterPos = ImVec2(cursor.x, cursor.y + topH + statusBarH);
 	r.filterSize = ImVec2(leftColW, bottomH);
 
 	// .preview-controls { display: flex; justify-content: flex-end; grid-column: 2; grid-row: 2 }
-	r.controlsPos = ImVec2(cursor.x + leftColW, cursor.y + topH);
+	r.controlsPos = ImVec2(cursor.x + leftColW, cursor.y + topH + statusBarH);
 	r.controlsSize = ImVec2(rightColW, bottomH);
 
 	if (hasSidebar) {
@@ -2450,10 +2455,21 @@ void app::layout::EndTab() {
 
 bool app::layout::BeginListContainer(const char* id, const ListTabRegions& regions) {
 	ImGui::SetCursorPos(regions.listPos);
-	return ImGui::BeginChild(id, regions.listSize, ImGuiChildFlags_None);
+	return ImGui::BeginChild(id, regions.listSize, ImGuiChildFlags_None,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 }
 
 void app::layout::EndListContainer() {
+	ImGui::EndChild();
+}
+
+bool app::layout::BeginStatusBar(const char* id, const ListTabRegions& regions) {
+	ImGui::SetCursorPos(regions.statusBarPos);
+	return ImGui::BeginChild(id, regions.statusBarSize, ImGuiChildFlags_None,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+}
+
+void app::layout::EndStatusBar() {
 	ImGui::EndChild();
 }
 

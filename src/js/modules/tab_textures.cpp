@@ -626,6 +626,12 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
+	// --- Status bar ---
+	if (app::layout::BeginStatusBar("textures-status", regions)) {
+		listbox::renderStatusBar("texture", {}, listbox_state);
+	}
+	app::layout::EndStatusBar();
+
 	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("textures-filter", regions)) {
 		if (view.config.value("regexFilters", false))

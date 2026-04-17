@@ -1801,6 +1801,12 @@ void render() {
 		}
 		app::layout::EndListContainer();
 
+		// --- Status bar ---
+		if (app::layout::BeginStatusBar("creatures-status", regions)) {
+			listbox::renderStatusBar("creature", {}, listbox_creatures_state);
+		}
+		app::layout::EndStatusBar();
+
 		// --- Filter bar (row 2, col 1) ---
 		if (app::layout::BeginFilterBar("creatures-filter", regions)) {
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);

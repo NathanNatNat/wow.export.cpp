@@ -818,6 +818,12 @@ void render() {
 		}
 		app::layout::EndListContainer();
 
+		// --- Status bar ---
+		if (app::layout::BeginStatusBar("legacy-models-status", regions)) {
+			listbox::renderStatusBar("model", {}, listbox_legacy_models_state);
+		}
+		app::layout::EndStatusBar();
+
 		// --- Filter bar (row 2, col 1) ---
 		if (app::layout::BeginFilterBar("legacy-models-filter", regions)) {
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);

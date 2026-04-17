@@ -1049,6 +1049,12 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
+	// --- Status bar ---
+	if (app::layout::BeginStatusBar("videos-status", regions)) {
+		listbox::renderStatusBar("video", {}, listbox_state);
+	}
+	app::layout::EndStatusBar();
+
 	// --- Filter bar (row 2, col 1) ---
 	//     <div class="regex-info" v-if="config.regexFilters" ...>Regex Enabled</div>
 	//     <input type="text" v-model="userInputFilterVideos" placeholder="Filter videos..."/>

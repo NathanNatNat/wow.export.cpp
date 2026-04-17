@@ -763,78 +763,78 @@ void render(const char* id,
 
 	ImGui::EndChild();
 
-	// <div class="list-status" v-if="unittype" :class="{ 'with-quick-filters': quickfilters && quickfilters.length > 0 }">
-	//     <span>{{ filteredItems.length }} {{ unittype + (filteredItems.length != 1 ? 's' : '') }} found. {{ selection.length > 0 ? ' (' + selection.length + ' selected)' : '' }}</span>
-	//     <span v-if="quickfilters && quickfilters.length > 0" class="quick-filters">
-	//         Quick filter: <template v-for="(ext, index) in quickfilters" :key="ext">
-	//             <a @click="applyQuickFilter(ext)" :class="{ active: activeQuickFilter === ext }">{{ ext.toUpperCase() }}</a>
-	//             <span v-if="index < quickfilters.length - 1"> / </span>
-	//         </template>
-	//     </span>
-	// </div>
-	if (!unittype.empty()) {
-		std::string statusText = std::to_string(filteredItems.size()) + " " + unittype;
-		if (filteredItems.size() != 1)
-			statusText += "s";
-		statusText += " found.";
-		if (!selection.empty())
-			statusText += " (" + std::to_string(selection.size()) + " selected)";
-
-		// CSS: .list-container .list-status { background: #1f1f20; height: 27px;
-		//      border-bottom-right-radius: 10px; border-bottom-left-radius: 10px;
-		//      font-weight: bold; padding-left: 10px; padding-top: 3px; }
-		{
-			const ImVec2 pos = ImGui::GetCursorScreenPos();
-			const float statusW = ImGui::GetContentRegionAvail().x;
-			const float statusH = 27.0f;
-			ImDrawList* dl = ImGui::GetWindowDrawList();
-			dl->AddRectFilled(pos, ImVec2(pos.x + statusW, pos.y + statusH),
-			                  IM_COL32(31, 31, 32, 255), 10.0f,
-			                  ImDrawFlags_RoundCornersBottom);
-
-			// Render bold status text with padding.
-			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f);
-			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3.0f);
-		}
-		ImGui::TextUnformatted(statusText.c_str());
-
-		// Quick filters.
-		if (!quickfilters.empty()) {
-			ImGui::SameLine();
-			ImGui::Text("Quick filter:");
-			for (size_t qi = 0; qi < quickfilters.size(); ++qi) {
-				ImGui::SameLine();
-				const std::string& ext = quickfilters[qi];
-				std::string upperExt = ext;
-				std::transform(upperExt.begin(), upperExt.end(), upperExt.begin(),
-				               [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-
-				const bool isActive = (state.activeQuickFilter == ext);
-				if (isActive)
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f)); // CSS: .quick-filters a.active { color: #ffffff; font-weight: bold; }
-
-				if (ImGui::SmallButton(upperExt.c_str()))
-					applyQuickFilter(ext, state);
-
-				if (isActive)
-					ImGui::PopStyleColor();
-
-				if (qi < quickfilters.size() - 1) {
-					ImGui::SameLine();
-					ImGui::Text("/");
-				}
-			}
-		}
-	}
+	// Cache counts for external status bar rendering.
+	state.lastFilteredCount = static_cast<int>(filteredItems.size());
+	state.lastSelectionCount = static_cast<int>(selection.size());
 
 	ImGui::PopID();
 }
 
 void saveState(const ListboxState& state,
-               const std::string& persistscrollkey,
-               const std::vector<std::string>& filteredItems) {
+			   const std::string& persistscrollkey,
+			   const std::vector<std::string>& filteredItems) {
 	if (!persistscrollkey.empty())
 		core::saveScrollPosition(persistscrollkey, static_cast<double>(state.scrollRel), scrollIndex(filteredItems, state));
+}
+
+void renderStatusBar(const std::string& unittype,
+					 const std::vector<std::string>& quickfilters,
+					 ListboxState& state) {
+	if (unittype.empty())
+		return;
+
+	std::string statusText = std::to_string(state.lastFilteredCount) + " " + unittype;
+	if (state.lastFilteredCount != 1)
+		statusText += "s";
+	statusText += " found.";
+	if (state.lastSelectionCount > 0)
+		statusText += " (" + std::to_string(state.lastSelectionCount) + " selected)";
+
+	// CSS: .list-container .list-status { background: #1f1f20; height: 27px;
+	//      border-bottom-right-radius: 10px; border-bottom-left-radius: 10px;
+	//      font-weight: bold; padding-left: 10px; padding-top: 3px; }
+	{
+		const ImVec2 pos = ImGui::GetCursorScreenPos();
+		const float statusW = ImGui::GetContentRegionAvail().x;
+		const float statusH = 27.0f;
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		dl->AddRectFilled(pos, ImVec2(pos.x + statusW, pos.y + statusH),
+						  IM_COL32(31, 31, 32, 255), 10.0f,
+						  ImDrawFlags_RoundCornersBottom);
+
+		// Render bold status text with padding.
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f);
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3.0f);
+	}
+	ImGui::TextUnformatted(statusText.c_str());
+
+	// Quick filters.
+	if (!quickfilters.empty()) {
+		ImGui::SameLine();
+		ImGui::Text("Quick filter:");
+		for (size_t qi = 0; qi < quickfilters.size(); ++qi) {
+			ImGui::SameLine();
+			const std::string& ext = quickfilters[qi];
+			std::string upperExt = ext;
+			std::transform(upperExt.begin(), upperExt.end(), upperExt.begin(),
+						   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+
+			const bool isActive = (state.activeQuickFilter == ext);
+			if (isActive)
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+
+			if (ImGui::SmallButton(upperExt.c_str()))
+				applyQuickFilter(ext, state);
+
+			if (isActive)
+				ImGui::PopStyleColor();
+
+			if (qi < quickfilters.size() - 1) {
+				ImGui::SameLine();
+				ImGui::Text("/");
+			}
+		}
+	}
 }
 
 } // namespace listbox

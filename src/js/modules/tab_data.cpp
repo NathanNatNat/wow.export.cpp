@@ -280,6 +280,12 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
+	// --- Status bar ---
+	if (app::layout::BeginStatusBar("db2-status", regions)) {
+		listbox::renderStatusBar("table", {}, listbox_db2_state);
+	}
+	app::layout::EndStatusBar();
+
 	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("db2-filter", regions)) {
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);

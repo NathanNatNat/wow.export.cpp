@@ -152,6 +152,12 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
+	// --- Status bar ---
+	if (app::layout::BeginStatusBar("text-status", regions)) {
+		listbox::renderStatusBar("text file", view.textQuickFilters, listbox_state);
+	}
+	app::layout::EndStatusBar();
+
 	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("text-filter", regions)) {
 		if (view.config.value("regexFilters", false))
