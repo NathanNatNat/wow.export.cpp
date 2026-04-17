@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/457 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/462 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -2243,3 +2243,28 @@
 - **JS Source**: `src/js/casc/db2.js` (entire file)
 - **Status**: Pending
 - **Details**: C++ `db2::clearCache()` (line 85–87 in db2.cpp, declared in db2.h line 58) clears the entire table cache, releasing all WDCReader instances. The original JS module exports only `db2_proxy` (the Proxy object) with its `.preload` property — there is no `clearCache` or equivalent cleanup function. This is additional API surface not present in the JS source.
+
+- [ ] 458. [version-config.cpp] Extra data fields beyond header count silently discarded instead of creating JS `undefined` key
+- **JS Source**: `src/js/casc/version-config.js` lines 26–29
+- **Status**: Pending
+- **Details**: JS iterates `entryFields.length` (the pipe-split data values) which may exceed `fields.length` (the header field count). When there are more data values than header fields, JS creates node entries with key `"undefined"` (since `fields[i]` is `undefined` for excess indices). C++ (line 88) loops `while (pos <= entry.size() && fi < fields.size())`, stopping at the header field count and silently discarding extra data values. In practice, WoW CASC version configs always have matching field counts, but the edge-case behavior differs.
+
+- [ ] 459. [tact-keys.cpp] `getKey` returns empty string instead of JS `undefined` when key not found
+- **JS Source**: `src/js/casc/tact-keys.js` lines 19–21
+- **Status**: Pending
+- **Details**: JS `getKey` returns `KEY_RING[keyName.toLowerCase()]` which evaluates to `undefined` when the key is not in the object. C++ `getKey` (line 130) returns `{}` (empty string) when not found. Callers that compare the result against `undefined` (JS) vs checking `.empty()` (C++) should be functionally equivalent, but the sentinel value difference could cause issues if any code path checks for empty string vs non-existent key, or if a key legitimately has an empty value (not possible for TACT keys but differs in contract).
+
+- [ ] 460. [checkboxlist.cpp] Missing container border and box-shadow from CSS reference
+- **JS Source**: `src/app.css` lines 1074–1079
+- **Status**: Pending
+- **Details**: CSS `.ui-checkboxlist` has `border: 1px solid var(--border)` and `box-shadow: black 0 0 3px 0px` providing a bordered, shadowed container. C++ (line 171) uses `ImGui::BeginChild("##checkboxlist_container", ...)` with `ImGuiChildFlags_None` which does not render a border or shadow, producing a visually different container appearance.
+
+- [ ] 461. [checkboxlist.cpp] Missing default item background and CSS padding values
+- **JS Source**: `src/app.css` lines 1081–1086
+- **Status**: Pending
+- **Details**: CSS sets ALL items to `background: var(--background-dark)` with `padding: 2px 8px`. Even-indexed items override with `background: var(--background-alt)`. C++ (lines 241–244) only draws background for even items (`BG_ALT_U32`) and selected items (`FONT_ALT_U32`); odd non-selected items receive no explicit background, inheriting the ImGui child window background instead of the CSS `--background-dark` color. The `2px 8px` padding is not replicated — ImGui uses its default item spacing.
+
+- [ ] 462. [checkboxlist.cpp] Missing item text left margin from CSS `.item span` rule
+- **JS Source**: `src/app.css` lines 1065–1068
+- **Status**: Pending
+- **Details**: CSS `.ui-checkboxlist .item span` has `margin: 0 0 1px 5px` giving the label text 5px left margin and 1px bottom margin relative to the checkbox. C++ (line 260) uses `ImGui::SameLine()` between the checkbox and selectable label with default ImGui spacing (typically 4px item spacing), which may not exactly match the 5px CSS margin. The 1px bottom margin is also not replicated.
