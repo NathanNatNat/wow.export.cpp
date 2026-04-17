@@ -12,10 +12,8 @@
 
 #include <algorithm>
 #include <format>
-#include <map>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 #include <spdlog/spdlog.h>
@@ -68,9 +66,19 @@ static auto find_module(const std::string& name) {
 		[&name](const auto& entry) { return entry.first == name; });
 }
 
-static std::map<std::string, NavButton> nav_button_map;
+// Nav buttons and context menu options use vectors of pairs to preserve
+// insertion order, matching JS Map iteration order (ES2015+).
+// (TODO #67: std::map sorted by key, losing JS insertion-order semantics.)
+static std::vector<std::pair<std::string, NavButton>> nav_button_vec;
 
-static std::map<std::string, ContextMenuOption> context_menu_map;
+static std::vector<std::pair<std::string, ContextMenuOption>> context_menu_vec;
+
+// Helper: find entry in an insertion-ordered vector of pairs.
+template<typename T>
+static auto find_in_vec(std::vector<std::pair<std::string, T>>& vec, const std::string& key) {
+	return std::find_if(vec.begin(), vec.end(),
+		[&key](const auto& entry) { return entry.first == key; });
+}
 
 static ModuleDef* active_module = nullptr;
 
@@ -91,12 +99,14 @@ static constexpr bool IS_BUNDLED = false;
 static void update_nav_buttons() {
 	const auto& order = constants::NAV_BUTTON_ORDER;
 	std::vector<NavButton> buttons;
-	buttons.reserve(nav_button_map.size());
+	buttons.reserve(nav_button_vec.size());
 
-	for (const auto& [name, button] : nav_button_map)
+	for (const auto& [name, button] : nav_button_vec)
 		buttons.push_back(button);
 
-	std::sort(buttons.begin(), buttons.end(), [&order](const NavButton& a, const NavButton& b) {
+	// JS Array.from(map.values()).sort(...) — stable sort preserving insertion
+	// order for items not in the order array (both idx == -1 → return 0).
+	std::stable_sort(buttons.begin(), buttons.end(), [&order](const NavButton& a, const NavButton& b) {
 		int idx_a = -1, idx_b = -1;
 
 		for (size_t i = 0; i < order.size(); i++) {
@@ -136,12 +146,14 @@ static void update_nav_buttons() {
 static void update_context_menu_options() {
 	const auto& order = constants::CONTEXT_MENU_ORDER;
 	std::vector<ContextMenuOption> options;
-	options.reserve(context_menu_map.size());
+	options.reserve(context_menu_vec.size());
 
-	for (const auto& [id, option] : context_menu_map)
+	for (const auto& [id, option] : context_menu_vec)
 		options.push_back(option);
 
-	std::sort(options.begin(), options.end(), [&order](const ContextMenuOption& a, const ContextMenuOption& b) {
+	// JS Array.from(map.values()).sort(...) — stable sort preserving insertion
+	// order for items not in the order array.
+	std::stable_sort(options.begin(), options.end(), [&order](const ContextMenuOption& a, const ContextMenuOption& b) {
 		int idx_a = -1, idx_b = -1;
 
 		for (size_t i = 0; i < order.size(); i++) {
@@ -174,6 +186,10 @@ static void update_context_menu_options() {
 			j["label"] = opt.label;
 			j["icon"] = opt.icon;
 			j["dev_only"] = opt.dev_only;
+			// JS stores the full option object including `action` in the view.
+			// C++ omits the handler from JSON (not serializable); the actual
+			// handler is accessible via getContextMenuOptions() which returns
+			// the C++ structs with handler function pointers.
 			core::view->modContextMenuOptions.push_back(j);
 		}
 	}
@@ -189,14 +205,19 @@ static void update_context_menu_options() {
 // `registerNavButton(label, icon, install_types)` and `registerContextMenuOption(label, icon)`.
 // The context captures `display_label` from the nav button label. In C++, modules call
 // register_nav_button() and register_context_menu_option() directly, so the register_context
-// is implicit. display_label defaults to the module name.
+// is implicit. display_label is updated from the nav button label after registration.
 static void wrap_module(ModuleDef& mod) {
 	std::string display_label = mod.name;
 
 	if (mod.registerModule) {
 		// The registerModule function for tabs calls register_nav_button internally.
-		// We capture the display_label for error messages.
 		mod.registerModule();
+
+		// JS: display_label = label (captured from registerNavButton callback).
+		// Look up the nav button label to update display_label for error messages.
+		auto it = find_in_vec(nav_button_vec, mod.name);
+		if (it != nav_button_vec.end())
+			display_label = it->second.label;
 	}
 
 	// wrap initialize() with idempotency guard, error handling, and activated() retry
@@ -225,6 +246,17 @@ static void wrap_module(ModuleDef& mod) {
 			// Always reset even if an exception was caught above.
 			mod._tab_initializing = false;
 		};
+
+		// JS equivalent (lines 244-251): wrap activated() so initialize() is
+		// retried before calling original activated.
+		auto original_activated = mod.activated;
+		mod.activated = [&mod, original_activated]() {
+			if (!mod._tab_initialized && !mod._tab_initializing)
+				mod.initialize();
+
+			if (original_activated)
+				original_activated();
+		};
 	}
 }
 
@@ -238,13 +270,21 @@ void register_nav_button(const std::string& module_name, const std::string& labe
 	button.icon = icon;
 	button.installTypes = install_types;
 
-	nav_button_map[module_name] = button;
+	// Update existing or insert new (preserving insertion order for new entries)
+	auto it = find_in_vec(nav_button_vec, module_name);
+	if (it != nav_button_vec.end())
+		it->second = button;
+	else
+		nav_button_vec.emplace_back(module_name, button);
+
 	update_nav_buttons();
 	logging::write(std::format("registered nav button for module: {}", module_name));
 }
 
 void unregister_nav_button(const std::string& module_name) {
-	if (nav_button_map.erase(module_name)) {
+	auto it = find_in_vec(nav_button_vec, module_name);
+	if (it != nav_button_vec.end()) {
+		nav_button_vec.erase(it);
 		update_nav_buttons();
 		logging::write(std::format("unregistered nav button for module: {}", module_name));
 	}
@@ -258,13 +298,21 @@ void register_context_menu_option(const std::string& id, const std::string& labe
 	option.icon = icon;
 	option.handler = action;
 
-	context_menu_map[id] = option;
+	// Update existing or insert new (preserving insertion order for new entries)
+	auto it = find_in_vec(context_menu_vec, id);
+	if (it != context_menu_vec.end())
+		it->second = option;
+	else
+		context_menu_vec.emplace_back(id, option);
+
 	update_context_menu_options();
 	logging::write(std::format("registered context menu option: {}", id));
 }
 
 void unregister_context_menu_option(const std::string& id) {
-	if (context_menu_map.erase(id)) {
+	auto it = find_in_vec(context_menu_vec, id);
+	if (it != context_menu_vec.end()) {
+		context_menu_vec.erase(it);
 		update_context_menu_options();
 		logging::write(std::format("unregistered context menu option: {}", id));
 	}
@@ -273,6 +321,8 @@ void unregister_context_menu_option(const std::string& id) {
 void registerContextMenuOption(const std::string& id, const std::string& label,
                                const std::string& icon, std::function<void()> action,
                                bool dev_only) {
+	// JS equivalent: register_static_context_menu_option(id, label, icon, action, dev_only)
+	// calls register_context_menu_option(id, label, icon, { handler: action, dev_only })
 	ContextMenuOption option;
 	option.id = id;
 	option.label = label;
@@ -280,7 +330,12 @@ void registerContextMenuOption(const std::string& id, const std::string& label,
 	option.handler = action;
 	option.dev_only = dev_only;
 
-	context_menu_map[id] = option;
+	auto it = find_in_vec(context_menu_vec, id);
+	if (it != context_menu_vec.end())
+		it->second = option;
+	else
+		context_menu_vec.emplace_back(id, option);
+
 	update_context_menu_options();
 	logging::write(std::format("registered context menu option: {}", id));
 }
@@ -504,10 +559,12 @@ void set_active(const std::string& module_key) {
 
 			logging::write(std::format("set active module: {}", module_key));
 
-			// on first activation. The wrapped initialize has an idempotency guard,
-			// so it's safe to call on every activation.
-			if (it->second.initialize)
-				it->second.initialize();
+			// JS equivalent: Vue triggers activated() lifecycle hook on the
+			// keep-alive component. The wrapped activated() calls initialize()
+			// on first activation (with idempotency guard), then calls the
+			// original activated() if present.
+			if (it->second.activated)
+				it->second.activated();
 		}
 	}
 }
