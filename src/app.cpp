@@ -70,6 +70,7 @@
 #include "js/modules/tab_textures.h"
 #include "js/modules/tab_items.h"
 #include "js/modules/tab_blender.h"
+#include "js/updater.h"
 #include "js/external-links.h"
 
 // BUILD_RELEASE will be set by the bundler during production builds allowing us
@@ -335,6 +336,25 @@ static void renderCrashScreen() {
 		ImGuiWindowFlags_NoBringToFrontOnFocus);
 	ImGui::PopStyleVar();
 
+	// JS: crash() appends a #logo-background div after replacing markup.
+	// CSS: #logo-background { background: url(./images/logo.png) no-repeat center center;
+	//       position: absolute; top:0; left:0; bottom:0; right:0; opacity: 0.05; z-index: -5; }
+	if (s_logoTexture) {
+		float logo_w = static_cast<float>(s_logoWidth);
+		float logo_h = static_cast<float>(s_logoHeight);
+		ImVec2 wp = viewport->WorkPos;
+		ImVec2 ws = viewport->WorkSize;
+		ImVec2 logo_min(
+			wp.x + (ws.x - logo_w) * 0.5f,
+			wp.y + (ws.y - logo_h) * 0.5f);
+		ImVec2 logo_max(logo_min.x + logo_w, logo_min.y + logo_h);
+		// 5% opacity (0.05 * 255 ≈ 13)
+		ImU32 watermark_tint = IM_COL32(255, 255, 255, 13);
+		ImGui::GetWindowDrawList()->AddImage(
+			static_cast<ImTextureID>(static_cast<uintptr_t>(s_logoTexture)),
+			logo_min, logo_max, ImVec2(0, 0), ImVec2(1, 1), watermark_tint);
+	}
+
 	// CSS: #crash-screen h1 { background: url(./fa-icons/triangle-exclamation-white.svg) no-repeat left center; padding-left: 50px; }
 	// Render warning triangle icon before heading text.
 	{
@@ -349,23 +369,28 @@ static void renderCrashScreen() {
 		}
 	}
 	// JS: <h1>Oh no! The kākāpō has exploded...</h1>
-	// Per naming convention, user-facing text says "wow.export.cpp".
-	ImGui::Text("wow.export.cpp has crashed!");
+	ImGui::Text("Oh no! The k\xc4\x81k\xc4\x81p\xc5\x8d has exploded...");
 	ImGui::Separator();
 
 	// Show build version/flavour/ID.
 	// JS: setText('#crash-screen-version', 'v' + manifest.version);
 	// JS: setText('#crash-screen-flavour', manifest.flavour);
 	// JS: setText('#crash-screen-build', manifest.guid);
-	ImGui::Text("v%s", std::string(constants::VERSION).c_str());
+	// CSS: #crash-screen-versions span { margin: 0 5px; color: var(--border); }
+	ImGui::TextColored(app::theme::BORDER, "v%s", std::string(constants::VERSION).c_str());
 	ImGui::SameLine();
-	ImGui::Text("%s", std::string(constants::FLAVOUR).c_str());
+	ImGui::TextColored(app::theme::BORDER, "%s", std::string(constants::FLAVOUR).c_str());
 	ImGui::SameLine();
-	ImGui::Text("[%s]", std::string(constants::BUILD_GUID).c_str());
+	ImGui::TextColored(app::theme::BORDER, "[%s]", std::string(constants::BUILD_GUID).c_str());
 
 	// Display our error code/text.
+	// CSS: #crash-screen-text { font-weight: normal; font-size: 20px; margin: 20px 0; }
+	// CSS: #crash-screen-text-code { font-weight: bold; margin-right: 5px; }
+	// Note: JS CSS does NOT apply red color to the error code — it uses default (inherited) color.
+	// The bold weight and inline layout are the only special styling.
 	ImGui::Spacing();
-	ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", crashErrorCode.c_str());
+	ImGui::TextUnformatted(crashErrorCode.c_str());
+	ImGui::SameLine();
 	ImGui::TextWrapped("%s", crashErrorText.c_str());
 
 	// Action buttons matching JS: <div class="form-tray"> with 4 buttons.
@@ -2733,13 +2758,17 @@ int main(int argc, char* argv[]) {
 
 	// Set-up proper drag/drop handlers.
 	// JS: window.ondragenter, window.ondrop, window.ondragleave (app.js lines 589-660)
-	// GLFW limitation: GLFW only provides a drop callback — there are no drag-enter
-	// or drag-leave callbacks. This means the file drop prompt overlay (showing
-	// "Export N files as ..." before the user releases) cannot be shown proactively.
-	// The JS uses a dropStack counter to track enter/leave events and shows the
-	// prompt during drag-over. In the C++ port, the prompt is only cleared on drop.
-	// This is a known GLFW platform limitation; implementing drag-enter/leave would
-	// require platform-specific native APIs (Win32 OLE D&D, X11/Wayland protocols).
+	// JS uses a dropStack counter to track nested dragenter/dragleave events and
+	// shows a fileDropPrompt overlay (e.g. "Export N files as ...") while the user
+	// is hovering files over the window, before they release (drop).
+	//
+	// GLFW platform limitation: GLFW only provides glfwSetDropCallback (fires on
+	// actual file drop). There are no drag-enter or drag-leave callbacks. This
+	// means the proactive file-drop prompt overlay cannot be shown during drag-over.
+	// Implementing this would require platform-specific native APIs:
+	//   - Windows: COM IDropTarget (DragEnter/DragOver/DragLeave/Drop)
+	//   - Linux: X11 XDnD protocol or Wayland data-device events
+	// The drop itself (ondrop handler) is fully ported in glfw_drop_callback.
 	glfwSetDropCallback(window, glfw_drop_callback);
 
 	loadCacheSize();
@@ -2757,22 +2786,35 @@ int main(int argc, char* argv[]) {
 
 	// Auto-updater logic.
 	// JS: app.js lines 688-705
-	// if (BUILD_RELEASE && !DISABLE_AUTO_UPDATE) {
-	//     core.showLoadingScreen(1, 'Checking for updates...');
-	//     updater.checkForUpdates().then(updateAvailable => {
-	//         if (updateAvailable) updater.applyUpdate();
-	//         else { core.hideLoadingScreen(); modules.source_select.setActive(); }
-	//     });
-	// } else { modules.tab_blender.checkLocalVersion(); }
+	// The updater module is ported (src/js/updater.cpp) but disabled for now
+	// until the update server infrastructure is ready and tested end-to-end.
+	// When enabling, uncomment the if-block and ensure updater::checkForUpdates()
+	// runs on a background thread (it does synchronous HTTP) with the result
+	// posted back via core::postToMainThread().
 	//
-	// The C++ updater module has not been ported yet. When it is, uncomment and
-	// adapt the logic above. For now, we skip directly to source_select.
-	// TODO: Port src/js/updater.js to C++ (see TODO_TRACKER.md entry #34+).
+	// if (BUILD_RELEASE && !DISABLE_AUTO_UPDATE) {
+	//     core::showLoadingScreen(1, "Checking for updates...");
+	//     std::thread([]{
+	//         bool updateAvailable = updater::checkForUpdates();
+	//         core::postToMainThread([updateAvailable]{
+	//             if (updateAvailable) {
+	//                 updater::applyUpdate();
+	//             } else {
+	//                 core::hideLoadingScreen();
+	//                 modules::setActive("source_select");
+	//                 // No update available, start checking Blender add-on.
+	//                 tab_blender::checkLocalVersion();
+	//             }
+	//         });
+	//     }).detach();
+	// } else {
+	//     // debug mode or auto-update disabled, skip to blender add-on check
+	//     tab_blender::checkLocalVersion();
+	// }
 
-	// JS: app.js lines 699, 704 — check Blender add-on version after update check.
-	// In JS, checkLocalVersion() is called after the update check completes (line 699
-	// in release mode, line 704 in debug mode). Since the updater is not yet ported,
-	// we call it unconditionally here.
+	// Since the updater is disabled, we follow the else branch unconditionally:
+	// debug mode or auto-update disabled, skip to blender add-on check.
+	// JS: app.js line 704
 	tab_blender::checkLocalVersion();
 
 	// Load what's new HTML on app start
