@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/585 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/621 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -2883,3 +2883,183 @@
 - **JS Source**: `src/js/db/caches/DBNpcEquipment.js` lines 25, 49–52
 - **Status**: Pending
 - **Details**: JS `equipment_map` maps `CreatureDisplayInfoExtraID -> Map<slot_id, item_display_info_id>` where the inner `Map` preserves insertion order from `NPCModelItemSlotDisplayInfo` DB2 iteration. C++ uses `std::unordered_map<uint32_t, std::unordered_map<int, uint32_t>>` — both levels have hash-based ordering. If a caller iterates equipment slots for a creature (e.g., to process items in slot order for equipping), the iteration order differs from JS.
+
+- [ ] 586. [font_helpers.cpp] `check_glyph_support` uses fundamentally different detection algorithm
+- **JS Source**: `src/js/modules/font_helpers.js` lines 30–53
+- **Status**: Pending
+- **Details**: JS detects glyph support by rendering the character with a fallback font and the target font on a canvas, then comparing alpha sums. C++ uses `ImFont::IsGlyphInFont()` which only checks if a glyph index exists in the loaded font atlas. The JS canvas-based approach can detect visual differences between fallback and target glyphs; the C++ approach may report false positives for glyphs mapped to the fallback/notdef glyph.
+
+- [ ] 587. [font_helpers.cpp] `inject_font_face` is synchronous and returns `void*` vs JS async returning blob URL string
+- **JS Source**: `src/js/modules/font_helpers.js` lines 113–133
+- **Status**: Pending
+- **Details**: JS `inject_font_face` is async: creates a `@font-face` CSS rule with a blob URL, calls `document.fonts.load()`, verifies with `document.fonts.check()`, and returns the blob URL string (or throws). C++ version is synchronous: calls `ImGui::MemAlloc` + `AddFontFromMemoryTTF`, returns `void*` pointer to `ImFont`. Callers that depend on the return type being a string or the async flow will behave differently.
+
+- [ ] 588. [legacy_tab_audio.cpp] Context menu adds FileDataID-related items not present in JS legacy audio template
+- **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 205–209
+- **Status**: Pending
+- **Details**: JS context menu has 3 items: "Copy file path(s)", "Copy export path(s)", "Open export directory". C++ adds conditional "Copy file path(s) (listfile format)" and "Copy file data ID(s)" when `hasFileDataIDs` is true (lines 399–402). Legacy MPQ files don't have FileDataIDs, so these extra menu items are incorrect for the legacy audio tab.
+
+- [ ] 589. [legacy_tab_audio.cpp] Sound player info combines seek/title/duration into single Text call vs JS 3 separate spans
+- **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 218–222
+- **Status**: Pending
+- **Details**: JS renders sound player info as 3 separate `<span>` elements in a flex container: seek formatted time, title (with CSS class "title"), and duration formatted time. C++ combines them into a single `ImGui::Text("%s  %s  %s", ...)` call (line 453). The title won't have distinct styling, and the layout/alignment will differ from the JS flex row.
+
+- [ ] 590. [legacy_tab_audio.cpp] Play/Pause uses text toggle ("Play"/"Pause") vs JS CSS class-based visual toggle
+- **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 225
+- **Status**: Pending
+- **Details**: JS uses `<input type="button" :class="{ isPlaying: !soundPlayerState }">` — the button appearance changes via CSS class (likely showing a play/pause icon). C++ uses `ImGui::Button(view.soundPlayerState ? "Pause" : "Play")` with text labels. The visual appearance differs significantly from the original icon-based toggle.
+
+- [ ] 591. [legacy_tab_audio.cpp] Volume slider is ImGui::SliderFloat with format string vs JS custom Slider component
+- **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 226
+- **Status**: Pending
+- **Details**: JS uses a custom `<Slider>` component with id "slider-volume" for volume control. C++ uses `ImGui::SliderFloat` with format "Vol: %.0f%%" (line 474). The custom JS Slider has its own visual styling defined in CSS; the ImGui slider will look different (default ImGui styling vs themed slider).
+
+- [ ] 592. [legacy_tab_audio.cpp] Loop/Autoplay checkboxes placed in preview container instead of preview-controls div
+- **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 231–239
+- **Status**: Pending
+- **Details**: JS places Loop/Autoplay checkboxes and Export button together in the `preview-controls` div. C++ places Loop/Autoplay in the `PreviewContainer` section (lines 479–487) and Export in `PreviewControls` (lines 492–498). This changes the visual layout — checkboxes are above the export button area instead of beside it.
+
+- [ ] 593. [legacy_tab_audio.cpp] `load_track` checks `player.get_duration() <= 0` vs JS `!player.buffer`
+- **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 100–101
+- **Status**: Pending
+- **Details**: JS `play_track` checks `!player.buffer` to determine if a track needs loading. C++ checks `player.get_duration() <= 0` (line 136). If a loaded track has zero duration (e.g., corrupt file that loads but has 0-length), C++ would re-load while JS would not. The check semantics are subtly different.
+
+- [ ] 594. [legacy_tab_audio.cpp] `export_sounds` `helper.mark` doesn't pass error stack trace
+- **JS Source**: `src/js/modules/legacy_tab_audio.js` line 189
+- **Status**: Pending
+- **Details**: JS calls `helper.mark(export_file_name, false, e.message, e.stack)` with 4 arguments including the stack trace. C++ calls `helper.mark(export_file_name, false, e.what())` with only 3 arguments (line 239). Error stack information is lost in C++ export failure reports.
+
+- [ ] 595. [legacy_tab_audio.cpp] Filter input missing placeholder text "Filter sound files..."
+- **JS Source**: `src/js/modules/legacy_tab_audio.js` line 213
+- **Status**: Pending
+- **Details**: JS filter input has `placeholder="Filter sound files..."`. C++ `ImGui::InputText("##FilterLegacySounds", ...)` (line 420) has no placeholder/hint text. The empty filter field won't show the helpful hint.
+
+- [ ] 596. [legacy_tab_data.cpp] DBC filename extraction uses `std::filesystem::path` which won't split backslash-delimited MPQ paths on Linux
+- **JS Source**: `src/js/modules/legacy_tab_data.js` lines 33–36
+- **Status**: Pending
+- **Details**: JS uses `full_path.split('\\')` to extract the DBC filename from backslash-delimited MPQ paths. C++ uses `std::filesystem::path(full_path).filename()` (line 81). On Linux, `std::filesystem::path` treats `\` as a regular character, not a separator, so `filename()` would return the entire path string instead of just the filename. This would cause the table name extraction to fail for MPQ paths like `DBFilesClient\Achievement.dbc`.
+
+- [ ] 597. [legacy_tab_data.cpp] Listbox `unittype` is "table" vs JS "dbc file"
+- **JS Source**: `src/js/modules/legacy_tab_data.js` line 131
+- **Status**: Pending
+- **Details**: JS Listbox uses `unittype="dbc file"` for the file count display. C++ uses `"table"` (line 293). The status bar will show "X tables" instead of "X dbc files", which is a user-facing text difference.
+
+- [ ] 598. [legacy_tab_data.cpp] Listbox `nocopy` is `false` vs JS `:nocopy="true"`
+- **JS Source**: `src/js/modules/legacy_tab_data.js` line 131
+- **Status**: Pending
+- **Details**: JS DBC listbox has `:nocopy="true"` which disables CTRL+C copy functionality. C++ passes `false` for nocopy (line 297), allowing copy. This is a behavioral difference — users can copy DBC table names in C++ but not in JS.
+
+- [ ] 599. [legacy_tab_data.cpp] Missing regex info display in DBC filter bar
+- **JS Source**: `src/js/modules/legacy_tab_data.js` lines 134–135
+- **Status**: Pending
+- **Details**: JS has `<div class="regex-info" v-if="$core.view.config.regexFilters">Regex Enabled</div>` in the DBC listbox filter section. C++ DBC filter bar (lines 309–316) does not show the regex enabled indicator.
+
+- [ ] 600. [legacy_tab_data.cpp] Context menu uses `ImGui::BeginPopupContextItem` vs JS ContextMenu component
+- **JS Source**: `src/js/modules/legacy_tab_data.js` lines 139–143
+- **Status**: Pending
+- **Details**: JS uses the custom `ContextMenu` component with slot-based content rendering and a close event. C++ uses native `ImGui::BeginPopupContextItem` (line 368) which has different popup behavior, positioning, and styling compared to the custom ContextMenu component used elsewhere in the app.
+
+- [ ] 601. [legacy_tab_files.cpp] Layout doesn't use `app::layout` helpers — uses raw `ImGui::BeginChild`
+- **JS Source**: `src/js/modules/legacy_tab_files.js` lines 72–89
+- **Status**: Pending
+- **Details**: Other legacy tabs (audio, fonts, textures, data) use `app::layout::BeginTab/EndTab`, `CalcListTabRegions`, `BeginListContainer`, etc. for consistent layout. `legacy_tab_files.cpp` uses raw `ImGui::BeginChild("legacy-files-list-container", ...)` (line 124) without the layout system. This will produce inconsistent sizing and positioning compared to sibling legacy tabs.
+
+- [ ] 602. [legacy_tab_files.cpp] Filter input missing placeholder text "Filter files..."
+- **JS Source**: `src/js/modules/legacy_tab_files.js` line 85
+- **Status**: Pending
+- **Details**: JS filter input has `placeholder="Filter files..."`. C++ `ImGui::InputText("##FilterFiles", ...)` (line 207) has no placeholder/hint text.
+
+- [ ] 603. [legacy_tab_files.cpp] Tray layout structure differs from JS
+- **JS Source**: `src/js/modules/legacy_tab_files.js` lines 82–88
+- **Status**: Pending
+- **Details**: JS wraps the filter and export button in a `#tab-legacy-files-tray` div with its own layout (likely flex row). C++ renders filter input, then `ImGui::SameLine()`, then the export button (lines 206–216). The proportions and alignment of filter vs button may not match the JS CSS-defined tray layout.
+
+- [ ] 604. [legacy_tab_fonts.cpp] Glyph cells rendered in default ImGui font, not the selected font family
+- **JS Source**: `src/js/modules/legacy_tab_fonts.js` lines 88–91
+- **Status**: Pending
+- **Details**: JS glyph cells have `cell.style.fontFamily = '"${font_family}", monospace'` so each cell displays in the loaded font. C++ uses `ImGui::Selectable(utf8_buf, ...)` (line 263) which renders in the default ImGui font. Glyphs from the inspected font (e.g., decorative characters) will appear as the default UI font instead, making the glyph grid useless for visual font inspection.
+
+- [ ] 605. [legacy_tab_fonts.cpp] Font preview placeholder shown as tooltip vs JS textarea placeholder
+- **JS Source**: `src/js/modules/legacy_tab_fonts.js` line 78
+- **Status**: Pending
+- **Details**: JS uses `<textarea :placeholder="$core.view.fontPreviewPlaceholder">` which shows ghost placeholder text inside the text area when empty. C++ uses `ImGui::SetItemTooltip(...)` (line 293) which only shows the text on mouse hover as a tooltip popup. The visual behavior differs — JS shows persistent in-field hint text; C++ shows nothing until hover.
+
+- [ ] 606. [legacy_tab_fonts.cpp] Glyph cell size hardcoded 24x24 may not match JS CSS
+- **JS Source**: `src/js/modules/legacy_tab_fonts.js` line 76
+- **Status**: Pending
+- **Details**: C++ glyph cells use `ImVec2(24, 24)` (line 263) for the Selectable size. JS uses CSS class `font-glyph-cell` whose dimensions are defined in `app.css`. The CSS may define different sizing, padding, or font-size for glyph cells, causing a visual mismatch.
+
+- [ ] 607. [legacy_tab_home.cpp] External link help buttons (Discord, GitHub, Patreon) not rendered
+- **JS Source**: `src/js/modules/legacy_tab_home.js` lines 8–21
+- **Status**: Pending
+- **Details**: JS template includes 3 help buttons: Discord ("Stuck? Need Help?"), GitHub ("Gnomish Heritage?"), and Patreon ("Support Us!"), each with `data-external` links and description text. C++ `render()` delegates entirely to `tab_home::renderHomeLayout()` (line 28) and does not render these help buttons. Unless `renderHomeLayout()` includes them, these interactive elements are missing from the legacy home tab.
+
+- [ ] 608. [legacy_tab_textures.cpp] PNG/JPG preview info shows lowercase extension vs JS uppercase
+- **JS Source**: `src/js/modules/legacy_tab_textures.js` lines 58
+- **Status**: Pending
+- **Details**: JS formats PNG/JPG info as `${ext.slice(1).toUpperCase()}` (e.g., "256x256 (PNG)"). C++ uses `ext.substr(1)` without uppercasing (line 132), producing "256x256 (png)". Minor visual inconsistency in the preview info text.
+
+- [ ] 609. [legacy_tab_textures.cpp] Listbox hardcodes `pasteselection` and `copytrimwhitespace` to false vs JS config values
+- **JS Source**: `src/js/modules/legacy_tab_textures.js` line 117
+- **Status**: Pending
+- **Details**: JS Listbox passes `:pasteselection="$core.view.config.pasteSelection"` and `:copytrimwhitespace="$core.view.config.removePathSpacesCopy"` from user config. C++ hardcodes both to `false` (lines 284–285). User settings for paste selection and whitespace trimming are ignored in the legacy textures tab.
+
+- [ ] 610. [legacy_tab_textures.cpp] Listbox hardcodes `CopyMode::Default` vs JS `$core.view.config.copyMode`
+- **JS Source**: `src/js/modules/legacy_tab_textures.js` line 117
+- **Status**: Pending
+- **Details**: JS Listbox passes `:copymode="$core.view.config.copyMode"` so the user's copy mode preference (Full/DIR/FID) is respected. C++ hardcodes `listbox::CopyMode::Default` (line 283). The user's configured copy mode is ignored.
+
+- [ ] 611. [legacy_tab_textures.cpp] Channel checkboxes always visible vs JS conditional on `texturePreviewURL`
+- **JS Source**: `src/js/modules/legacy_tab_textures.js` lines 130–135
+- **Status**: Pending
+- **Details**: JS only shows channel toggle buttons (`<ul class="preview-channels">`) when `$core.view.texturePreviewURL.length > 0`. C++ always renders the R/G/B/A checkboxes regardless of whether a texture is loaded (lines 329–350). Before any texture is selected, the channel controls are visible but non-functional.
+
+- [ ] 612. [module_test_a.cpp] Counter is static (persists across mount/unmount) vs JS instance data (resets)
+- **JS Source**: `src/js/modules/module_test_a.js` lines 11–13
+- **Status**: Pending
+- **Details**: JS `data()` returns `{ counter: 0 }` — each mount creates fresh component state, resetting counter to 0. C++ `static int counter = 0` (line 16) persists across module activations/deactivations. If the user switches away and back, JS counter resets to 0 but C++ counter keeps its accumulated value.
+
+- [ ] 613. [module_test_a.cpp] Uses `logging::write` vs JS `console.log`
+- **JS Source**: `src/js/modules/module_test_a.js` lines 28, 32
+- **Status**: Pending
+- **Details**: JS `mounted`/`unmounted` lifecycle hooks use `console.log('module_test_a mounted/unmounted')`. C++ uses `logging::write(...)` (lines 32–33). The output destination differs: JS goes to browser devtools console; C++ goes to the application log file. For a test module this is minor but changes observability.
+
+- [ ] 614. [module_test_b.cpp] Message char buffer limited to 255 chars vs JS unlimited string
+- **JS Source**: `src/js/modules/module_test_b.js` lines 15–16
+- **Status**: Pending
+- **Details**: JS `data()` returns `{ message: 'Hello Thrall' }` with no length limit. C++ uses `static char message[256]` (line 19). If a user types a message longer than 255 characters, C++ will silently truncate while JS would accept it fully.
+
+- [ ] 615. [module_test_b.cpp] Uses `logging::write` vs JS `console.log`
+- **JS Source**: `src/js/modules/module_test_b.js` lines 38, 42
+- **Status**: Pending
+- **Details**: JS `mounted`/`unmounted` hooks use `console.log`. C++ uses `logging::write` (lines 43, 47). Same difference as module_test_a — different logging target.
+
+- [ ] 616. [screen_settings.cpp] "Manually Clear Cache" heading missing "(Requires Restart)" from JS
+- **JS Source**: `src/js/modules/screen_settings.js` lines 282–285
+- **Status**: Pending
+- **Details**: JS heading is "Manually Clear Cache (Requires Restart)". C++ doesn't have a separate heading for this section — it just renders a button with the cache size (line 419–421). The "(Requires Restart)" information is not conveyed to the user.
+
+- [ ] 617. [screen_settings.cpp] WebP Quality uses `SliderInt` vs JS `<input type="number">`
+- **JS Source**: `src/js/modules/screen_settings.js` lines 156–157
+- **Status**: Pending
+- **Details**: JS uses `<input type="number" min="1" max="100">` for WebP quality — a numeric input field with up/down arrows. C++ uses `ImGui::SliderInt` (line 306) — a draggable slider. The interaction model differs: clicking/typing a specific value vs dragging to a value. Visual appearance also differs.
+
+- [ ] 618. [screen_settings.cpp] Config buttons not visually disabled when busy
+- **JS Source**: `src/js/modules/screen_settings.js` lines 355–357
+- **Status**: Pending
+- **Details**: JS applies `:class="{ disabled: $core.view.isBusy }"` to all 3 buttons (Discard, Apply, Reset to Defaults), visually greying them out. C++ doesn't apply disabled styling to the buttons (lines 509–519) — the functions internally check `isBusy` but the buttons appear clickable. Users may click buttons that silently do nothing when busy.
+
+- [ ] 619. [screen_settings.cpp] Encryption key inputs don't enforce `maxlength` from JS
+- **JS Source**: `src/js/modules/screen_settings.js` lines 295–296
+- **Status**: Pending
+- **Details**: JS key name input has `maxlength="16"` and key value input has `maxlength="32"`. C++ uses `char key_name_buf[32]` and `char key_val_buf[64]` (lines 433–434) but `ImGui::InputText` doesn't enforce the JS maxlength limits — the C++ buffers are larger than the JS maximums, allowing longer input.
+
+- [ ] 620. [screen_settings.cpp] Listfile Source heading missing "(Legacy)" suffix
+- **JS Source**: `src/js/modules/screen_settings.js` lines 322–323
+- **Status**: Pending
+- **Details**: JS heading is "Listfile Source (Legacy)". C++ heading is just "Listfile Source" (line 460). The "(Legacy)" qualifier that distinguishes this from the binary listfile source is missing.
+
+- [ ] 621. [screen_settings.cpp] Locale dropdown shows full locale names vs JS short locale keys
+- **JS Source**: `src/js/modules/screen_settings.js` lines 381–383
+- **Status**: Pending
+- **Details**: JS `available_locale_keys` computed property returns `{ value: e }` objects where `e` is the short key like "enUS". The MenuButton displays these short keys. C++ creates `MenuOption` with `label = getName(key)` (e.g., "English (US)") and `value = key` (line 291). The dropdown items show full locale names in C++ but short codes in JS.
