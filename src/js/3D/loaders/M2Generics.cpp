@@ -46,7 +46,7 @@ static M2Value read_value(BufferWrapper& buf, M2DataType dataType) {
 		case M2DataType::uint8:
 			return buf.readUInt8();
 		default:
-			throw std::runtime_error("Unknown data type");
+			throw std::runtime_error("Unknown data type: " + std::to_string(static_cast<int>(dataType)));
 	}
 }
 
@@ -125,10 +125,9 @@ std::vector<std::vector<M2Value>> read_m2_array_array(
 	BufferWrapper& data, uint32_t ofs, M2DataType dataType,
 	bool useAnims,
 	std::map<uint32_t, BufferWrapper*> animFiles,
-	bool storeOffsets,
 	const std::vector<M2Sequence>* sequences)
 {
-	return read_m2_array_array_internal(data, ofs, dataType, useAnims, animFiles, storeOffsets, sequences, nullptr);
+	return read_m2_array_array_internal(data, ofs, dataType, useAnims, animFiles, false, sequences, nullptr);
 }
 
 M2ArrayArrayResult read_m2_array_array_with_offsets(
@@ -159,21 +158,21 @@ M2Track read_m2_track(
 	std::vector<M2ArrayOffset> valueOffsets;
 
 	if (useAnims) {
-		timestamps = read_m2_array_array(data, ofs, M2DataType::uint32, useAnims, animFiles, false, sequences);
-		values = read_m2_array_array(data, ofs, dataType, useAnims, animFiles, false, sequences);
+		timestamps = read_m2_array_array(data, ofs, M2DataType::uint32, useAnims, animFiles, sequences);
+		values = read_m2_array_array(data, ofs, dataType, useAnims, animFiles, sequences);
 	} else if (storeOffsets) {
-		auto tsResult = read_m2_array_array_with_offsets(data, ofs, M2DataType::uint32, false, {}, sequences);
+		auto tsResult = read_m2_array_array_with_offsets(data, ofs, M2DataType::uint32, false, animFiles, sequences);
 		timestamps = std::move(tsResult.arr);
 		timestampOffsets = std::move(tsResult.offsets);
 
-		auto valResult = read_m2_array_array_with_offsets(data, ofs, dataType, false, {}, sequences);
+		auto valResult = read_m2_array_array_with_offsets(data, ofs, dataType, false, animFiles, sequences);
 		values = std::move(valResult.arr);
 		valueOffsets = std::move(valResult.offsets);
 	} else {
 		std::map<uint32_t, BufferWrapper*> emptyMap;
-		timestamps = read_m2_array_array(data, ofs, M2DataType::uint32, false, std::move(emptyMap), false, sequences);
+		timestamps = read_m2_array_array(data, ofs, M2DataType::uint32, false, std::move(emptyMap), sequences);
 		std::map<uint32_t, BufferWrapper*> emptyMap2;
-		values = read_m2_array_array(data, ofs, dataType, false, std::move(emptyMap2), false, sequences);
+		values = read_m2_array_array(data, ofs, dataType, false, std::move(emptyMap2), sequences);
 	}
 
 	return M2Track(globalSeq, interpolation,
