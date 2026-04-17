@@ -91,6 +91,7 @@ static void handleClick(bool dropdownMode, bool disabled, MenuButtonState& state
 
 void render(const char* id, const std::vector<MenuOption>& options,
             const std::string& defaultVal, bool disabled, bool dropdown,
+            bool upward,
             MenuButtonState& state,
             const std::function<void(const std::string&)>& onChange,
             const std::function<void()>& onClick) {
@@ -158,10 +159,16 @@ void render(const char* id, const std::vector<MenuOption>& options,
 		                                ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
 		                                ImGuiWindowFlags_NoMove;
 
-		// Position the popup below the button.
+		// Position the popup below or above the button.
 		const ImVec2 buttonMin = ImGui::GetItemRectMin();
 		const ImVec2 buttonMax = ImGui::GetItemRectMax();
-		ImGui::SetNextWindowPos(ImVec2(buttonMin.x, buttonMax.y), ImGuiCond_Always);
+		if (upward) {
+			// CSS: .ui-menu-button.upward .menu { bottom: 85% }
+			// Position popup above the button.
+			ImGui::SetNextWindowPos(ImVec2(buttonMin.x, buttonMin.y), ImGuiCond_Always, ImVec2(0.0f, 1.0f));
+		} else {
+			ImGui::SetNextWindowPos(ImVec2(buttonMin.x, buttonMax.y), ImGuiCond_Always);
+		}
 
 		if (ImGui::Begin((std::string("##menu_button_popup_") + id).c_str(), nullptr, windowFlags)) {
 			for (size_t i = 0; i < options.size(); ++i) {
