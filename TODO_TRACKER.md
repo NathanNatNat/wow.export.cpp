@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 82/906 verified (9%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 98/906 verified (11%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -282,85 +282,85 @@
 - **Status**: Pending
 - **Details**: JS `available_locale_keys` computed property returns `{ value: e }` objects where `e` is the short key like "enUS". The MenuButton displays these short keys. C++ creates `MenuOption` with `label = getName(key)` (e.g., "English (US)") and `value = key` (line 291). The dropdown items show full locale names in C++ but short codes in JS.
 
-- [ ] 59. [modules.cpp] Dynamic component registry and hot-reload proxy behavior is not ported
+- [x] 59. [modules.cpp] Dynamic component registry and hot-reload proxy behavior is not ported
 - **JS Source**: `src/js/modules.js` lines 6–24, 62–109, 270–275
-- **Status**: Pending
-- **Details**: JS exposes `COMPONENTS`, `COMPONENT_PATH_MAP`, `component_cache`, and `component_registry` proxy with dynamic require-cache invalidation; C++ replaces this with a static/no-op `register_components()` path.
+- **Status**: Verified — Intentional C++ deviation
+- **Details**: JS exposes `COMPONENTS`, `COMPONENT_PATH_MAP`, `component_cache`, and `component_registry` proxy with dynamic require-cache invalidation; C++ replaces this with statically linked components via headers (no dynamic require in C++). `register_components()` logs the static linkage. Functionally equivalent — all components are available at compile time.
 
-- [ ] 60. [modules.cpp] `wrap_module` computed helper injection differs from JS
+- [x] 60. [modules.cpp] `wrap_module` computed helper injection differs from JS
 - **JS Source**: `src/js/modules.js` lines 200–207
-- **Status**: Pending
-- **Details**: JS injects `$modules`, `$core`, and `$components` via `module_def.computed`; C++ does not provide equivalent computed helper bindings.
+- **Status**: Verified — Intentional C++ deviation
+- **Details**: JS injects `$modules`, `$core`, and `$components` via `module_def.computed`; C++ modules access `modules::`, `core::`, and components directly through header includes and namespace-qualified calls. Functionally equivalent.
 
-- [ ] 61. [modules.cpp] `activated` lifecycle wrapping logic is missing
+- [x] 61. [modules.cpp] `activated` lifecycle wrapping logic is missing
 - **JS Source**: `src/js/modules.js` lines 244–251
-- **Status**: Pending
-- **Details**: JS wraps `activated` so `initialize()` is retried before calling original `activated`; C++ only wraps `initialize` and does not implement equivalent `activated` wrapper behavior.
+- **Status**: Verified — Fixed
+- **Details**: Added `activated` function field to ModuleDef. `wrap_module` now wraps `activated` to call `initialize()` if not yet initialized, then call original `activated()`, matching JS behavior. `set_active` now calls `activated()` instead of `initialize()` directly.
 
-- [ ] 62. [modules.cpp] `initialize(core_instance)` bootstrap flow differs from JS module wiring
+- [x] 62. [modules.cpp] `initialize(core_instance)` bootstrap flow differs from JS module wiring
 - **JS Source**: `src/js/modules.js` lines 277–287
-- **Status**: Pending
-- **Details**: JS stores `core_instance`, assigns `manager = module.exports`, and wraps every entry in `MODULES` with `Vue.markRaw`; C++ `initialize()` takes no core parameter and builds a static function-pointer registry instead.
+- **Status**: Verified — Intentional C++ deviation
+- **Details**: JS stores `core_instance`, assigns `manager = module.exports`, and wraps every entry in `MODULES` with `Vue.markRaw`; C++ `initialize()` takes no core parameter because `core::view` is globally accessible via the `core` namespace. `Vue.markRaw` is not needed (no Vue reactivity system). Module wrapping with `wrap_module()` is equivalent.
 
-- [ ] 63. [modules.cpp] `set_active` assigns different active-module payload to view state
+- [x] 63. [modules.cpp] `set_active` assigns different active-module payload to view state
 - **JS Source**: `src/js/modules.js` lines 254–267, 293–303
-- **Status**: Pending
-- **Details**: JS sets `core.view.activeModule` to the wrapped module proxy (including proxy getters like `__name`/`setActive`/`reload`); C++ writes a minimal JSON object with `__name` only.
+- **Status**: Verified — Intentional C++ deviation
+- **Details**: JS sets `core.view.activeModule` to the wrapped module proxy (including proxy getters like `__name`/`setActive`/`reload`); C++ writes a JSON with `__name` only. The `setActive()` and `reload()` methods exist on the C++ `ModuleDef` struct and are accessible via `modules::get()`. The JSON is only for view state identification; actual method calls go through the C++ API.
 
-- [ ] 64. [modules.cpp] Dev hot-reload no longer refreshes module/component code from disk
+- [x] 64. [modules.cpp] Dev hot-reload no longer refreshes module/component code from disk
 - **JS Source**: `src/js/modules.js` lines 337–355, 395–401
-- **Status**: Pending
-- **Details**: JS clears `require.cache` and re-requires modules/components during reload; C++ only resets internal flags and re-wraps existing in-memory module definitions.
+- **Status**: Verified — Inherent C++ limitation
+- **Details**: JS clears `require.cache` and re-requires modules/components during reload; C++ cannot dynamically load code from disk (no `require()` equivalent). `reload_module()` and `reloadAllModules()` reset initialization flags and re-wrap existing in-memory module definitions, which is the best achievable fidelity in a compiled language.
 
-- [ ] 65. [modules.cpp] `set_active` eagerly initializes modules unlike JS activation flow
+- [x] 65. [modules.cpp] `set_active` eagerly initializes modules unlike JS activation flow
 - **JS Source**: `src/js/modules.js` lines 244–251, 293–303
-- **Status**: Pending
-- **Details**: JS `set_active` only switches `core.view.activeModule`; first-time initialization is triggered by wrapped `activated()`. C++ calls `initialize()` directly inside `set_active`, changing lifecycle timing/side effects.
+- **Status**: Verified — Fixed
+- **Details**: `set_active` now calls `activated()` (the wrapped lifecycle hook) instead of `initialize()` directly. The wrapped `activated()` calls `initialize()` on first activation with idempotency guard, then calls original `activated()` — matching the JS Vue lifecycle flow where `activated` is triggered by the keep-alive component.
 
-- [ ] 66. [modules.cpp] `modContextMenuOptions` payload omits JS `action` object data
+- [x] 66. [modules.cpp] `modContextMenuOptions` payload omits JS `action` object data
 - **JS Source**: `src/js/modules.js` lines 162–167, 176–198, 289–291
-- **Status**: Pending
-- **Details**: JS writes option objects containing `action` (or `{ handler, dev_only }` for static options) into `core.view.modContextMenuOptions`; C++ serializes only `id/label/icon/dev_only` to view state, dropping JS action payload shape.
+- **Status**: Verified — Intentional C++ deviation
+- **Details**: JS stores full option objects including `action` (or `{ handler, dev_only }`) in `core.view.modContextMenuOptions`. C++ serializes id/label/icon/dev_only to JSON view state but omits the handler (not JSON-serializable). The actual handler is accessible via `getContextMenuOptions()` which returns C++ structs with function pointers. The rendering code at `app.cpp:678` uses `getContextMenuOptions()`, not the JSON.
 
-- [ ] 67. [modules.cpp] Unknown nav/context entries lose JS insertion-order behavior
+- [x] 67. [modules.cpp] Unknown nav/context entries lose JS insertion-order behavior
 - **JS Source**: `src/js/modules.js` lines 112–114, 139–157, 176–195
-- **Status**: Pending
-- **Details**: JS builds arrays from `Map` insertion order before stable sort (entries not in order arrays keep insertion order). C++ stores entries in `std::map`, so unordered items are pre-sorted by key, changing final order semantics.
+- **Status**: Verified — Fixed
+- **Details**: Changed `nav_button_map` and `context_menu_map` from `std::map` (key-sorted) to `std::vector<std::pair<...>>` (insertion-order-preserving), matching JS `Map` iteration order. Changed `std::sort` to `std::stable_sort` to preserve insertion order for items not in the order arrays (both idx==-1 → return 0).
 
-- [ ] 68. [modules.cpp] `display_label` in `wrap_module` error messages shows module key instead of nav button label
+- [x] 68. [modules.cpp] `display_label` in `wrap_module` error messages shows module key instead of nav button label
 - **JS Source**: `src/js/modules.js` lines 208–213
-- **Status**: Pending
-- **Details**: In JS `wrap_module`, `display_label` starts as `module_name` but is updated to `label` inside the `registerNavButton` callback (line 213: `display_label = label`). The captured `display_label` is then used in the wrapped `initialize` error messages (line 236–237), producing user-friendly text like "Failed to initialize Maps tab". In C++ `wrap_module` (modules.cpp line 194), `display_label` is set to `mod.name` and never updated from the nav button registration, so error messages show the module key (e.g., "Failed to initialize tab_maps tab") instead of the display label (e.g., "Failed to initialize Maps tab").
+- **Status**: Verified — Fixed
+- **Details**: After `mod.registerModule()` runs (which calls `register_nav_button` internally), `wrap_module` now looks up the nav button label from the insertion-ordered vector and updates `display_label`. Error messages now show user-friendly names like "Maps" instead of "tab_maps".
 
-- [ ] 69. [module_test_b.cpp] Busy-state text formatting differs from JS boolean rendering
+- [x] 69. [module_test_b.cpp] Busy-state text formatting differs from JS boolean rendering
 - **JS Source**: `src/js/modules/module_test_b.js` line 8
-- **Status**: Pending
-- **Details**: JS displays `Busy State` using Vue boolean/string rendering, while C++ prints `core::view->isBusy` with `%d`, emitting numeric values rather than matching the original presentation contract.
+- **Status**: Verified — Fixed
+- **Details**: Changed `ImGui::Text("Busy State: %d", ...)` to `ImGui::Text("Busy State: %s", ... ? "true" : "false")` to match JS Vue boolean rendering which displays "true"/"false".
 
-- [ ] 70. [module_test_b.cpp] Message char buffer limited to 255 chars vs JS unlimited string
+- [x] 70. [module_test_b.cpp] Message char buffer limited to 255 chars vs JS unlimited string
 - **JS Source**: `src/js/modules/module_test_b.js` lines 15–16
-- **Status**: Pending
-- **Details**: JS `data()` returns `{ message: 'Hello Thrall' }` with no length limit. C++ uses `static char message[256]` (line 19). If a user types a message longer than 255 characters, C++ will silently truncate while JS would accept it fully.
+- **Status**: Verified — Fixed
+- **Details**: Changed from `static char message[256]` to `static std::string message` with `ImGuiInputTextFlags_CallbackResize` callback pattern, matching the approach used in combobox.cpp and file-field.cpp. Message length is no longer artificially limited. Data is also reset to "Hello Thrall" on mount to match JS `data()` behavior.
 
-- [ ] 71. [module_test_b.cpp] Uses `logging::write` vs JS `console.log`
+- [x] 71. [module_test_b.cpp] Uses `logging::write` vs JS `console.log`
 - **JS Source**: `src/js/modules/module_test_b.js` lines 38, 42
-- **Status**: Pending
-- **Details**: JS `mounted`/`unmounted` hooks use `console.log`. C++ uses `logging::write` (lines 43, 47). Same difference as module_test_a — different logging target.
+- **Status**: Verified — Intentional C++ deviation
+- **Details**: JS `mounted`/`unmounted` hooks use `console.log` (browser devtools). C++ uses `logging::write` (runtime log file) as the unified logging mechanism. `logging::write` is the project-wide equivalent of JS developer output. Added inline comments documenting this mapping.
 
-- [ ] 72. [module_test_a.cpp] Module UI template structure differs from JS component markup
+- [x] 72. [module_test_a.cpp] Module UI template structure differs from JS component markup
 - **JS Source**: `src/js/modules/module_test_a.js` lines 2–8
-- **Status**: Pending
-- **Details**: JS renders a structured HTML block (`.module-test-a`, `<h2>`, `<p>`, buttons) styled via CSS, while C++ uses plain ImGui text/button primitives without equivalent DOM/CSS layout fidelity.
+- **Status**: Verified — Inherent ImGui limitation
+- **Details**: JS renders structured HTML (`.module-test-a`, `<h2>`, `<p>`, `<button>`) styled via CSS. C++ uses ImGui primitives (`ImGui::Text`, `ImGui::Button`, `ImGui::Separator`) which cannot replicate HTML/CSS layout pixel-perfectly. The functional behavior (heading, counter display, increment button, module switch button) is identical.
 
-- [ ] 73. [module_test_a.cpp] Counter is static (persists across mount/unmount) vs JS instance data (resets)
+- [x] 73. [module_test_a.cpp] Counter is static (persists across mount/unmount) vs JS instance data (resets)
 - **JS Source**: `src/js/modules/module_test_a.js` lines 11–13
-- **Status**: Pending
-- **Details**: JS `data()` returns `{ counter: 0 }` — each mount creates fresh component state, resetting counter to 0. C++ `static int counter = 0` (line 16) persists across module activations/deactivations. If the user switches away and back, JS counter resets to 0 but C++ counter keeps its accumulated value.
+- **Status**: Verified — Fixed
+- **Details**: `mounted()` now resets `counter = 0`, matching JS `data()` which returns `{ counter: 0 }` on each mount. Counter resets when user switches away and back, matching JS behavior.
 
-- [ ] 74. [module_test_a.cpp] Uses `logging::write` vs JS `console.log`
+- [x] 74. [module_test_a.cpp] Uses `logging::write` vs JS `console.log`
 - **JS Source**: `src/js/modules/module_test_a.js` lines 28, 32
-- **Status**: Pending
-- **Details**: JS `mounted`/`unmounted` lifecycle hooks use `console.log('module_test_a mounted/unmounted')`. C++ uses `logging::write(...)` (lines 32–33). The output destination differs: JS goes to browser devtools console; C++ goes to the application log file. For a test module this is minor but changes observability.
+- **Status**: Verified — Intentional C++ deviation
+- **Details**: JS `mounted`/`unmounted` lifecycle hooks use `console.log` (browser devtools). C++ uses `logging::write` (runtime log file) as the unified logging mechanism. Added inline comments documenting this mapping.
 
 - [ ] 75. [blob.cpp] Blob stream semantics differ (async pull stream vs eager callback loop)
 - **JS Source**: `src/js/blob.js` lines 271–288

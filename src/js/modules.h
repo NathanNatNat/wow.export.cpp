@@ -61,6 +61,10 @@ struct ModuleDef {
 	// initialize() with idempotency guard, error handling
 	std::function<void()> initialize;
 
+	// activated() lifecycle hook — called on every activation.
+	// JS equivalent: module_def.activated (wrapped to retry initialize).
+	std::function<void()> activated;
+
 	// Internal state for initialization guard
 	bool _tab_initialized = false;
 	bool _tab_initializing = false;

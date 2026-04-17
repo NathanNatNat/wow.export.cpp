@@ -13,6 +13,8 @@
 namespace module_test_a {
 
 // --- File-local state (JS equivalent: data() { return { counter: 0 }; }) ---
+// JS creates fresh component state on each mount, resetting counter to 0.
+// In C++, mounted() resets counter to match this behavior.
 static int counter = 0;
 
 void render() {
@@ -29,10 +31,15 @@ void render() {
 }
 
 void mounted() {
+	// JS: data() returns { counter: 0 } on each mount — reset to match.
+	counter = 0;
+	// JS uses console.log (browser devtools output).
+	// C++ uses logging::write (runtime log file) as the unified logging mechanism.
 	logging::write("module_test_a mounted");
 }
 
 void unmounted() {
+	// JS uses console.log; C++ uses logging::write as the unified equivalent.
 	logging::write("module_test_a unmounted");
 }
 
