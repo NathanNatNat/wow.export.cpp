@@ -17,6 +17,7 @@
 #include "../mpq/mpq-install.h"
 #include "../components/file-field.h"
 #include "../workers/cache-collector.h"
+#include "../external-links.h"
 #include "../../app.h"
 
 #include <atomic>
@@ -161,7 +162,13 @@ static std::unique_ptr<casc::CASCRemote> casc_remote_source;
 enum class SourceType { None, Local, Remote };
 static SourceType active_source_type = SourceType::None;
 
-// In ImGui, file selectors are triggered via file_field::openDirectoryDialog().
+// JS uses NW.js <input nwdirectory> elements with value-reset/click patterns for
+// directory selection. C++ uses native file dialogs via file_field::openDirectoryDialog()
+// which is functionally equivalent (the reset/reselection behavior is handled natively).
+
+// JS source-open and build-load paths are async/await methods; C++ uses std::jthread +
+// core::postToMainThread() to achieve the same non-blocking behavior with identical
+// error propagation and UI flow.
 
 // Background thread for cache collection (replaces JS Worker).
 static std::unique_ptr<std::jthread> cache_worker_thread;
@@ -316,7 +323,10 @@ void load_install(int index) {
 				core::postToMainThread([errMsg = std::move(errMsg)]() {
 					logging::write(std::format("Failed to load CASC: {}", errMsg));
 					core::setToast("error", "Unable to initialize CASC. Try repairing your game installation, or seek support.",
-						{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
+						{
+							{"View Log", []() { logging::openRuntimeLog(); }},
+							{"Visit Support Discord", []() { ExternalLinks::open("::DISCORD"); }}
+						}, -1);
 					modules::set_active("source_select");
 				});
 			}
@@ -339,7 +349,10 @@ void load_install(int index) {
 				core::postToMainThread([errMsg = std::move(errMsg)]() {
 					logging::write(std::format("Failed to load CASC: {}", errMsg));
 					core::setToast("error", "Unable to initialize CASC. Try repairing your game installation, or seek support.",
-						{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
+						{
+							{"View Log", []() { logging::openRuntimeLog(); }},
+							{"Visit Support Discord", []() { ExternalLinks::open("::DISCORD"); }}
+						}, -1);
 					modules::set_active("source_select");
 				});
 			}
@@ -477,8 +490,14 @@ static void init_cdn_pings() {
 		if (region.tag == "cn") {
 			cdn_url = std::string(constants::PATCH::HOST_CHINA);
 		} else {
-			// HOST is "https://%s.version.battle.net/" — insert region tag.
-			cdn_url = std::format("https://{}.version.battle.net/", std::string(region.tag));
+			// JS: util.format(constants.PATCH.HOST, region.tag)
+			// HOST is "https://%s.version.battle.net/" — replace %s with region tag.
+			std::string host_template(constants::PATCH::HOST);
+			auto pos = host_template.find("%s");
+			if (pos != std::string::npos)
+				cdn_url = host_template.substr(0, pos) + std::string(region.tag) + host_template.substr(pos + 2);
+			else
+				cdn_url = host_template;
 		}
 
 		nlohmann::json node;
@@ -511,7 +530,6 @@ static void init_cdn_pings() {
 		targets.push_back({i, regions[i]["url"].get<std::string>()});
 
 	cdn_ping_thread = std::make_unique<std::jthread>([targets = std::move(targets)]() {
-		std::vector<CdnPingResult> results;
 		for (const auto& target : targets) {
 			int64_t delay = -1;
 			try {
@@ -519,12 +537,12 @@ static void init_cdn_pings() {
 			} catch (const std::exception& e) {
 				logging::write(std::format("Failed ping to {}: {}", target.url, e.what()));
 			}
-			results.push_back({target.index, delay});
 
-			// Push intermediate results so the UI can update progressively.
+			// Push each result immediately so the UI updates progressively per-ping.
+			// JS equivalent: .finally(() => { this.$core.view.cdnRegions = [...regions]; })
 			{
 				std::lock_guard<std::mutex> lock(cdn_ping_mutex);
-				cdn_ping_results = results;
+				cdn_ping_results.push_back({target.index, delay});
 			}
 		}
 

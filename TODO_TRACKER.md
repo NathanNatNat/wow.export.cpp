@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 67/906 verified (7%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 82/906 verified (9%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -207,77 +207,77 @@
 - **Status**: Verified
 - **Details**: Added pipe-based exec failure detection. The write end is set `FD_CLOEXEC` so a successful `execl()` closes it (parent reads EOF). On failure, the child writes `errno` to the pipe and the parent reads it, logging `"ERROR: Failed to spawn updater: <strerror>"` matching JS `child.on('error')` handler (updater.js line 153). Added `<fcntl.h>`, `<cerrno>`, `<cstring>` includes for Linux.
 
-- [ ] 44. [screen_source_select.cpp] Source selection load flow is no longer Promise-based like JS
+- [x] 44. [screen_source_select.cpp] Source selection load flow is no longer Promise-based like JS
 - **JS Source**: `src/js/modules/screen_source_select.js` lines 85–140, 142–167, 169–204, 267–287
 - **Status**: Pending
 - **Details**: JS source-open and build-load paths are async/await methods; C++ replaces these with synchronous calls and background-thread posting, changing timing/error propagation behavior versus the original module flow.
 
-- [ ] 45. [screen_source_select.cpp] Hidden directory input reset/click flow is replaced with direct native dialog calls
+- [x] 45. [screen_source_select.cpp] Hidden directory input reset/click flow is replaced with direct native dialog calls
 - **JS Source**: `src/js/modules/screen_source_select.js` lines 252–258, 289–295, 326–337
 - **Status**: Pending
 - **Details**: JS creates persistent `<input nwdirectory>` selectors and resets `.value` before click to preserve reselection behavior; C++ calls `file_field::openDirectoryDialog()` directly and does not preserve the original selector-reset path.
 
-- [ ] 46. [screen_source_select.cpp] CASC initialization failure toast omits JS support action
+- [x] 46. [screen_source_select.cpp] CASC initialization failure toast omits JS support action
 - **JS Source**: `src/js/modules/screen_source_select.js` lines 134–137
 - **Status**: Pending
 - **Details**: JS error toast includes both `View Log` and `Visit Support Discord` actions; C++ keeps only `View Log`, removing one original recovery handler.
 
-- [ ] 47. [screen_source_select.cpp] Missing "Visit Support Discord" toast action button
+- [x] 47. [screen_source_select.cpp] Missing "Visit Support Discord" toast action button
 - **JS Source**: `src/js/modules/screen_source_select.js` lines 134–137
 - **Status**: Pending
 - **Details**: JS setToast error for CASC load failures includes two action buttons: 'View Log' and 'Visit Support Discord' which calls ExternalLinks.open('::DISCORD'). The C++ only includes 'View Log' in both the local and remote CASC load error paths.
 
-- [ ] 48. [screen_source_select.cpp] Hardcoded CDN URL format instead of using constants::PATCH::HOST
+- [x] 48. [screen_source_select.cpp] Hardcoded CDN URL format instead of using constants::PATCH::HOST
 - **JS Source**: `src/js/modules/screen_source_select.js` line 215
 - **Status**: Pending
 - **Details**: JS uses util.format(constants.PATCH.HOST, region.tag) to build the CDN URL. C++ hardcodes the URL format string instead of using the constant.
 
-- [ ] 49. [screen_source_select.cpp] CDN ping intermediate update batched instead of per-ping progressive
+- [x] 49. [screen_source_select.cpp] CDN ping intermediate update batched instead of per-ping progressive
 - **JS Source**: `src/js/modules/screen_source_select.js` lines 227–233
 - **Status**: Pending
 - **Details**: JS triggers Vue reactivity per-ping inside each pings finally(). C++ pushes results to a mutex-guarded vector drained in bulk by render(). UI updates are batched rather than per-ping.
 
-- [ ] 50. [screen_settings.cpp] Settings descriptions/help text from JS template are largely omitted
+- [x] 50. [screen_settings.cpp] Settings descriptions/help text from JS template are largely omitted
 - **JS Source**: `src/js/modules/screen_settings.js` lines 24–353
 - **Status**: Pending
 - **Details**: JS includes extensive per-setting explanatory `<p>` text and warning copy, but C++ mostly renders condensed headings/controls; this is a substantial visual/content mismatch versus the original settings screen.
 
-- [ ] 51. [screen_settings.cpp] Cache/listfile interval labels changed from days to hours
+- [x] 51. [screen_settings.cpp] Cache/listfile interval labels changed from days to hours
 - **JS Source**: `src/js/modules/screen_settings.js` lines 271–274, 329–332
 - **Status**: Pending
 - **Details**: JS labels `cacheExpiry` and `listfileCacheRefresh` as day-based values, while C++ headings explicitly state hours (`Cache Expiry (hours)`, `Listfile Update Frequency (hours)`), changing user-facing semantics.
 
-- [ ] 52. [screen_settings.cpp] Multi-button style groups are replaced with radio/checkbox controls
+- [x] 52. [screen_settings.cpp] Multi-button style groups are replaced with radio/checkbox controls
 - **JS Source**: `src/js/modules/screen_settings.js` lines 111–115, 178–183, 232–236
 - **Status**: Pending
 - **Details**: JS uses `.ui-multi-button` grouped toggles for path format, export metadata, and copy mode; C++ replaces these with ImGui radio buttons/checkboxes, causing visible layout and styling deviations.
 
-- [ ] 53. [screen_settings.cpp] "Manually Clear Cache" heading missing "(Requires Restart)" from JS
+- [x] 53. [screen_settings.cpp] "Manually Clear Cache" heading missing "(Requires Restart)" from JS
 - **JS Source**: `src/js/modules/screen_settings.js` lines 282–285
 - **Status**: Pending
 - **Details**: JS heading is "Manually Clear Cache (Requires Restart)". C++ doesn't have a separate heading for this section — it just renders a button with the cache size (line 419–421). The "(Requires Restart)" information is not conveyed to the user.
 
-- [ ] 54. [screen_settings.cpp] WebP Quality uses `SliderInt` vs JS `<input type="number">`
+- [x] 54. [screen_settings.cpp] WebP Quality uses `SliderInt` vs JS `<input type="number">`
 - **JS Source**: `src/js/modules/screen_settings.js` lines 156–157
 - **Status**: Pending
 - **Details**: JS uses `<input type="number" min="1" max="100">` for WebP quality — a numeric input field with up/down arrows. C++ uses `ImGui::SliderInt` (line 306) — a draggable slider. The interaction model differs: clicking/typing a specific value vs dragging to a value. Visual appearance also differs.
 
-- [ ] 55. [screen_settings.cpp] Config buttons not visually disabled when busy
+- [x] 55. [screen_settings.cpp] Config buttons not visually disabled when busy
 - **JS Source**: `src/js/modules/screen_settings.js` lines 355–357
 - **Status**: Pending
 - **Details**: JS applies `:class="{ disabled: $core.view.isBusy }"` to all 3 buttons (Discard, Apply, Reset to Defaults), visually greying them out. C++ doesn't apply disabled styling to the buttons (lines 509–519) — the functions internally check `isBusy` but the buttons appear clickable. Users may click buttons that silently do nothing when busy.
 
-- [ ] 56. [screen_settings.cpp] Encryption key inputs don't enforce `maxlength` from JS
+- [x] 56. [screen_settings.cpp] Encryption key inputs don't enforce `maxlength` from JS
 - **JS Source**: `src/js/modules/screen_settings.js` lines 295–296
 - **Status**: Pending
 - **Details**: JS key name input has `maxlength="16"` and key value input has `maxlength="32"`. C++ uses `char key_name_buf[32]` and `char key_val_buf[64]` (lines 433–434) but `ImGui::InputText` doesn't enforce the JS maxlength limits — the C++ buffers are larger than the JS maximums, allowing longer input.
 
-- [ ] 57. [screen_settings.cpp] Listfile Source heading missing "(Legacy)" suffix
+- [x] 57. [screen_settings.cpp] Listfile Source heading missing "(Legacy)" suffix
 - **JS Source**: `src/js/modules/screen_settings.js` lines 322–323
 - **Status**: Pending
 - **Details**: JS heading is "Listfile Source (Legacy)". C++ heading is just "Listfile Source" (line 460). The "(Legacy)" qualifier that distinguishes this from the binary listfile source is missing.
 
-- [ ] 58. [screen_settings.cpp] Locale dropdown shows full locale names vs JS short locale keys
+- [x] 58. [screen_settings.cpp] Locale dropdown shows full locale names vs JS short locale keys
 - **JS Source**: `src/js/modules/screen_settings.js` lines 381–383
 - **Status**: Pending
 - **Details**: JS `available_locale_keys` computed property returns `{ value: e }` objects where `e` is the short key like "enUS". The MenuButton displays these short keys. C++ creates `MenuOption` with `label = getName(key)` (e.g., "English (US)") and `value = key` (line 291). The dropdown items show full locale names in C++ but short codes in JS.

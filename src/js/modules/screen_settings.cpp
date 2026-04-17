@@ -180,7 +180,7 @@ void render() {
 	SectionHeading("Export Directory");
 	ImGui::TextWrapped("Local directory where files will be exported to.");
 	if (is_edit_export_path_concerning())
-		ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Warning: Using an export path with spaces may cause issues in some applications.");
+		ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Warning: Using an export path with spaces may lead to problems in most 3D programs.");
 	{
 		std::string export_dir = cfg.value("exportDirectory", std::string(""));
 		file_field::render("##ExportDir", export_dir, "", export_dir_state,
@@ -196,6 +196,7 @@ void render() {
 	}
 
 	SectionHeading("Scroll Speed");
+	ImGui::TextWrapped("How many lines at a time you scroll down in the results view (leave at 0 for default scroll amount)");
 	{
 		int scroll_speed = cfg.value("scrollSpeed", 2);
 		if (ImGui::InputInt("##ScrollSpeed", &scroll_speed))
@@ -204,53 +205,77 @@ void render() {
 
 	{
 		bool val = cfg.value("listfileSortByID", false);
-		if (ImGui::Checkbox("Display File Lists in Numerical Order (FileDataID)", &val))
+		SectionHeading("Display File Lists in Numerical Order (FileDataID)");
+		ImGui::TextWrapped("If enabled, all file lists will be ordered numerically by file ID, otherwise alphabetically by filename.");
+		if (ImGui::Checkbox("Enable##listfileSortByID", &val))
 			cfg["listfileSortByID"] = val;
 	}
 
 	{
 		bool val = cfg.value("enableUnknownFiles", false);
-		if (ImGui::Checkbox("Find Unknown Files (Requires Restart)", &val))
+		SectionHeading("Find Unknown Files (Requires Restart)");
+		ImGui::TextWrapped("If enabled, wow.export.cpp will use various methods to locate unknown files.");
+		if (ImGui::Checkbox("Enable##enableUnknownFiles", &val))
 			cfg["enableUnknownFiles"] = val;
 	}
 
 	{
 		bool val = cfg.value("enableM2Skins", true);
-		if (ImGui::Checkbox("Load Model Skins (Requires Restart)", &val))
+		SectionHeading("Load Model Skins (Requires Restart)");
+		ImGui::TextWrapped("If enabled, wow.export.cpp will parse creature and item skins from data tables for M2 models.");
+		ImGui::TextWrapped("Disabling this will reduce memory usage and improve loading, but will disable M2 skin functionality.");
+		if (ImGui::Checkbox("Enable##enableM2Skins", &val))
 			cfg["enableM2Skins"] = val;
 	}
 
 	{
 		bool val = cfg.value("modelsExportWithBonePrefix", false);
-		if (ImGui::Checkbox("Include Bone Prefixes", &val))
+		SectionHeading("Include Bone Prefixes");
+		ImGui::TextWrapped("If enabled, wow.export.cpp will Include _p Bone prefixes in model skeleton/armature.");
+		ImGui::TextWrapped("Disabling this will break backwards compatibility with previous glTF model and animation exports.");
+		if (ImGui::Checkbox("Enable##modelsExportWithBonePrefix", &val))
 			cfg["modelsExportWithBonePrefix"] = val;
 	}
 
 	{
 		bool val = cfg.value("enableSharedTextures", true);
-		if (ImGui::Checkbox("Enable Shared Textures (Recommended)", &val))
+		SectionHeading("Enable Shared Textures (Recommended)");
+		ImGui::TextWrapped("If enabled, exported textures will be exported to their own path rather than with their parent.");
+		ImGui::TextWrapped("This dramatically reduces disk space used by not duplicating textures.");
+		if (ImGui::Checkbox("Enable##enableSharedTextures", &val))
 			cfg["enableSharedTextures"] = val;
 	}
 
 	{
 		bool val = cfg.value("enableSharedChildren", true);
-		if (ImGui::Checkbox("Enable Shared Children (Recommended)", &val))
+		SectionHeading("Enable Shared Children (Recommended)");
+		ImGui::TextWrapped("If enabled, exported models on a WMO/ADT will be exported to their own path rather than with their parent.");
+		ImGui::TextWrapped("This dramatically reduces disk space used by not duplicating models.");
+		if (ImGui::Checkbox("Enable##enableSharedChildren", &val))
 			cfg["enableSharedChildren"] = val;
 	}
 
 	{
 		bool val = cfg.value("removePathSpaces", false);
-		if (ImGui::Checkbox("Strip Whitespace From Export Paths", &val))
+		SectionHeading("Strip Whitespace From Export Paths");
+		ImGui::TextWrapped("If enabled, whitespace will be removed from exported paths.");
+		ImGui::TextWrapped("Enable this option if your 3D software does not support whitespace in paths.");
+		if (ImGui::Checkbox("Enable##removePathSpaces", &val))
 			cfg["removePathSpaces"] = val;
 	}
 
 	{
 		bool val = cfg.value("removePathSpacesCopy", false);
-		if (ImGui::Checkbox("Strip Whitespace From Copied Paths", &val))
+		SectionHeading("Strip Whitespace From Copied Paths");
+		ImGui::TextWrapped("If enabled, file paths copied from a listbox (CTRL + C) will have whitespace stripped.");
+		if (ImGui::Checkbox("Enable##removePathSpacesCopy", &val))
 			cfg["removePathSpacesCopy"] = val;
 	}
 
 	SectionHeading("Path Separator Format");
+	ImGui::TextWrapped("Sets the path separator format used in exported files.");
+	// Note: JS uses .ui-multi-button grouped toggles; C++ uses ImGui radio buttons
+	// which provide equivalent toggle functionality with a different visual style.
 	{
 		std::string path_fmt = cfg.value("pathFormat", std::string("win32"));
 		bool is_win = (path_fmt == "win32");
@@ -264,31 +289,45 @@ void render() {
 
 	{
 		bool val = cfg.value("enableAbsoluteMTLPaths", false);
-		if (ImGui::Checkbox("Use Absolute MTL Texture Paths", &val))
+		SectionHeading("Use Absolute MTL Texture Paths");
+		ImGui::TextWrapped("If enabled, MTL files will contain absolute textures paths rather than relative ones.");
+		ImGui::TextWrapped("This will cause issues when sharing exported models between computers.");
+		ImGui::TextWrapped("Enable this option if you are having issues importing OBJ models with Shared Textures enabled.");
+		if (ImGui::Checkbox("Enable##enableAbsoluteMTLPaths", &val))
 			cfg["enableAbsoluteMTLPaths"] = val;
 	}
 
 	{
 		bool val = cfg.value("enableAbsoluteGLTFPaths", false);
-		if (ImGui::Checkbox("Use Absolute glTF Texture Paths", &val))
+		SectionHeading("Use Absolute glTF Texture Paths");
+		ImGui::TextWrapped("If enabled, glTF files will contain absolute textures paths rather than relative ones.");
+		ImGui::TextWrapped("This will cause issues when sharing exported models between computers.");
+		ImGui::TextWrapped("Enable this option if you are having issues importing glTF models with Shared Textures enabled.");
+		if (ImGui::Checkbox("Enable##enableAbsoluteGLTFPaths", &val))
 			cfg["enableAbsoluteGLTFPaths"] = val;
 	}
 
 	{
 		bool val = cfg.value("enableAbsoluteCSVPaths", false);
-		if (ImGui::Checkbox("Use Absolute Model Placement Paths", &val))
+		SectionHeading("Use Absolute Model Placement Paths");
+		ImGui::TextWrapped("If enabled, paths inside model placement files (CSV) will contain absolute paths rather than relative ones.");
+		ImGui::TextWrapped("This will cause issues when sharing exported models between computers.");
+		if (ImGui::Checkbox("Enable##enableAbsoluteCSVPaths", &val))
 			cfg["enableAbsoluteCSVPaths"] = val;
 	}
 
 	SectionHeading("CASC Locale");
+	ImGui::TextWrapped("Which locale to use for file reading. This only affects game files.");
+	ImGui::TextWrapped("This should match the locale of your client when using local installations.");
 	{
 		auto keys = available_locale_keys();
 		std::string current_key = selected_locale_key();
 
 		std::vector<menu_button::MenuOption> locale_options;
 		for (const auto& key : keys) {
-			auto name = casc::locale_flags::getName(key);
-			locale_options.push_back({ std::string(name), key });
+			// JS: available_locale_keys returns { value: e } where e is the short key.
+			// The MenuButton displays the short key (e.g. "enUS"), not the full name.
+			locale_options.push_back({ key, key });
 		}
 
 		menu_button::render("##LocaleMenuButton", locale_options,
@@ -301,74 +340,104 @@ void render() {
 	}
 
 	SectionHeading("WebP Quality");
+	ImGui::TextWrapped("Quality setting for WebP exports. Range is 1-100 (100 is lossless)");
 	{
+		// JS: <input type="number" min="1" max="100">
 		int val = cfg.value("exportWebPQuality", 75);
-		if (ImGui::SliderInt("##WebPQuality", &val, 1, 100))
+		if (ImGui::InputInt("##WebPQuality", &val)) {
+			if (val < 1) val = 1;
+			if (val > 100) val = 100;
 			cfg["exportWebPQuality"] = val;
+		}
 	}
 
 	{
 		bool val = cfg.value("modelsExportCollision", false);
-		if (ImGui::Checkbox("Export Model Collision", &val))
+		SectionHeading("Export Model Collision");
+		ImGui::TextWrapped("If enabled, M2 models exported as OBJ will also have their collision exported into a .phys.obj file.");
+		if (ImGui::Checkbox("Enable##modelsExportCollision", &val))
 			cfg["modelsExportCollision"] = val;
 	}
 
 	{
 		bool val = cfg.value("modelsExportUV2", false);
-		if (ImGui::Checkbox("Export Additional UV Layers", &val))
+		SectionHeading("Export Additional UV Layers");
+		ImGui::TextWrapped("If enabled, additional UV layers will be exported for M2/WMO models, included as non-standard properties (vt2, vt3, etc) in OBJ files.");
+		ImGui::TextWrapped("Use the wow.export Blender add-on to import OBJ models with additional UV layers.");
+		if (ImGui::Checkbox("Enable##modelsExportUV2", &val))
 			cfg["modelsExportUV2"] = val;
 	}
 
 	SectionHeading("Export Meta Data");
+	ImGui::TextWrapped("If enabled, verbose data will be exported for enabled formats into relative .json files.");
+	// Note: JS uses .ui-multi-button grouped toggles; C++ uses checkboxes on SameLine
+	// which provide equivalent toggle functionality with a different visual style.
 	{
 		bool m2_meta = cfg.value("exportM2Meta", false);
-		if (ImGui::Checkbox("M2 Meta##meta", &m2_meta))
+		if (ImGui::Checkbox("M2##meta", &m2_meta))
 			cfg["exportM2Meta"] = m2_meta;
 		ImGui::SameLine();
 		bool wmo_meta = cfg.value("exportWMOMeta", false);
-		if (ImGui::Checkbox("WMO Meta##meta", &wmo_meta))
+		if (ImGui::Checkbox("WMO##meta", &wmo_meta))
 			cfg["exportWMOMeta"] = wmo_meta;
 		ImGui::SameLine();
 		bool blp_meta = cfg.value("exportBLPMeta", false);
-		if (ImGui::Checkbox("BLP Meta##meta", &blp_meta))
+		if (ImGui::Checkbox("BLP##meta", &blp_meta))
 			cfg["exportBLPMeta"] = blp_meta;
 		ImGui::SameLine();
 		bool foliage_meta = cfg.value("exportFoliageMeta", false);
-		if (ImGui::Checkbox("Foliage Meta##meta", &foliage_meta))
+		if (ImGui::Checkbox("Foliage##meta", &foliage_meta))
 			cfg["exportFoliageMeta"] = foliage_meta;
 	}
 
 	{
 		bool val = cfg.value("exportM2Bones", false);
-		if (ImGui::Checkbox("Export M2 Bone Data", &val))
+		SectionHeading("Export M2 Bone Data");
+		ImGui::TextWrapped("If enabled, bone data will be exported in a relative _bones.json file.");
+		if (ImGui::Checkbox("Enable##exportM2Bones", &val))
 			cfg["exportM2Bones"] = val;
 	}
 
 	{
 		bool val = cfg.value("overwriteFiles", true);
-		if (ImGui::Checkbox("Always Overwrite Existing Files (Recommended)", &val))
+		SectionHeading("Always Overwrite Existing Files (Recommended)");
+		ImGui::TextWrapped("When exporting, files will always be written to disk even if they exist.");
+		ImGui::TextWrapped("Disabling this can speed up exporting, but may lead to issues between versions.");
+		if (ImGui::Checkbox("Enable##overwriteFiles", &val))
 			cfg["overwriteFiles"] = val;
 	}
 
 	{
 		bool val = cfg.value("exportNamedFiles", false);
-		if (ImGui::Checkbox("Name Exported Files", &val))
+		SectionHeading("Name Exported Files");
+		ImGui::TextWrapped("When enabled, files are exported using their listfile names (e.g., \"ability_stealth.png\").");
+		ImGui::TextWrapped("When disabled, files are exported using their fileDataID numbers (e.g., \"12345.png\").");
+		if (ImGui::Checkbox("Enable##exportNamedFiles", &val))
 			cfg["exportNamedFiles"] = val;
 	}
 
 	{
 		bool val = cfg.value("modelsExportPngIncrements", false);
-		if (ImGui::Checkbox("Prevent 3D Preview Overwrites", &val))
+		SectionHeading("Prevent 3D Preview Overwrites");
+		ImGui::TextWrapped("If enabled, 3D preview exports will add increments to prevent overwriting existing files.");
+		if (ImGui::Checkbox("Enable##modelsExportPngIncrements", &val))
 			cfg["modelsExportPngIncrements"] = val;
 	}
 
 	{
 		bool val = cfg.value("regexFilters", false);
-		if (ImGui::Checkbox("Regular Expression Filtering (Advanced)", &val))
+		SectionHeading("Regular Expression Filtering (Advanced)");
+		ImGui::TextWrapped("Allows use of regular expressions in filtering lists.");
+		if (ImGui::Checkbox("Enable##regexFilters", &val))
 			cfg["regexFilters"] = val;
 	}
 
 	SectionHeading("Copy Mode");
+	ImGui::TextWrapped("By default, using CTRL + C on a file list will copy the full entry to your clipboard.");
+	ImGui::TextWrapped("Setting this to Directory will instead only copy the directory of the given entry.");
+	ImGui::TextWrapped("Setting this to FileDataID will instead only copy the FID of the entry (must have FIDs enabled).");
+	// Note: JS uses .ui-multi-button grouped toggles; C++ uses radio buttons
+	// which provide equivalent toggle functionality with a different visual style.
 	{
 		std::string copy_mode = cfg.value("copyMode", std::string("FULL"));
 		if (ImGui::RadioButton("Full##copymode", copy_mode == "FULL"))
@@ -383,29 +452,39 @@ void render() {
 
 	{
 		bool val = cfg.value("pasteSelection", false);
-		if (ImGui::Checkbox("Paste Selection", &val))
+		SectionHeading("Paste Selection");
+		ImGui::TextWrapped("If enabled, using CTRL + V on the model list will attempt to select filenames you paste.");
+		if (ImGui::Checkbox("Enable##pasteSelection", &val))
 			cfg["pasteSelection"] = val;
 	}
 
 	{
 		bool val = cfg.value("splitLargeTerrainBakes", true);
-		if (ImGui::Checkbox("Split Large Terrain Maps (Recommended)", &val))
+		SectionHeading("Split Large Terrain Maps (Recommended)");
+		ImGui::TextWrapped("If enabled, exporting baked terrain above 8k will be split into smaller files rather than one large file.");
+		if (ImGui::Checkbox("Enable##splitLargeTerrainBakes", &val))
 			cfg["splitLargeTerrainBakes"] = val;
 	}
 
 	{
 		bool val = cfg.value("splitAlphaMaps", false);
-		if (ImGui::Checkbox("Split Alpha Maps", &val))
+		SectionHeading("Split Alpha Maps");
+		ImGui::TextWrapped("If enabled, terrain alpha maps will be exported as individual images for each ADT chunk.");
+		if (ImGui::Checkbox("Enable##splitAlphaMaps", &val))
 			cfg["splitAlphaMaps"] = val;
 	}
 
 	{
 		bool val = cfg.value("itemViewerShowAll", false);
-		if (ImGui::Checkbox("Show Unknown Items", &val))
+		SectionHeading("Show unknown items");
+		ImGui::TextWrapped("When enabled, wow.export.cpp will list all items in the items tab, even those without a name.");
+		if (ImGui::Checkbox("Enable##itemViewerShowAll", &val))
 			cfg["itemViewerShowAll"] = val;
 	}
 
-	SectionHeading("Cache Expiry (hours)");
+	// Item 51: JS labels this as "Cache Expiry" with description "After how many days..."
+	SectionHeading("Cache Expiry");
+	ImGui::TextWrapped("After how many days of inactivity is cached data deleted. Setting to zero disables cache clean-up (not recommended).");
 	{
 		int val = cfg.value("cacheExpiry", 168);
 		if (ImGui::InputInt("##CacheExpiry", &val))
@@ -413,24 +492,40 @@ void render() {
 	}
 
 	SectionHeading("CDN Fallback Hosts");
+	ImGui::TextWrapped("Comma-separated list of additional CDN hostnames to try when official CDN servers are unavailable or slow.");
+	ImGui::TextWrapped("These are pinged alongside official servers and used based on speed and availability.");
 	configTextInput("##CDNFallbackHosts", cdn_fallback_state, cfg, "cdnFallbackHosts");
 
+	// Item 53: JS heading is "Manually Clear Cache (Requires Restart)"
+	SectionHeading("Manually Clear Cache (Requires Restart)");
+	ImGui::TextWrapped("While housekeeping on the cache is mostly automatic, sometimes clearing manually can resolve issues.");
 	{
+		// JS: :class="{ disabled: $core.view.isBusy }" — visually disable when busy
+		bool busy = view.isBusy;
+		if (busy) {
+			ImGui::BeginDisabled();
+		}
 		std::string btn_label = std::format("Clear Cache ({})", cache_size_formatted());
 		if (ImGui::Button(btn_label.c_str()))
 			handle_cache_clear();
+		if (busy) {
+			ImGui::EndDisabled();
+		}
 	}
 
 	SectionHeading("Encryption Keys");
-	ImGui::Text("Primary TACT Keys URL");
+	ImGui::TextWrapped("Remote URL used to update keys for encrypted files.");
+	ImGui::Text("Primary");
 	configTextInput("##TactKeysURL", tact_url_state, cfg, "tactKeysURL");
-	ImGui::Text("Fallback TACT Keys URL");
+	ImGui::Text("Fallback");
 	configTextInput("##TactKeysFallbackURL", tact_fallback_url_state, cfg, "tactKeysFallbackURL");
 
-	ImGui::Text("Add Encryption Key");
+	SectionHeading("Add Encryption Key");
+	ImGui::TextWrapped("Manually add a BLTE encryption key.");
 	{
-		static char key_name_buf[32] = {};
-		static char key_val_buf[64] = {};
+		// Item 56: JS maxlength="16" for key name, maxlength="32" for key value
+		static char key_name_buf[17] = {}; // 16 chars + null terminator
+		static char key_val_buf[33] = {};  // 32 chars + null terminator
 		ImGui::InputText("Key Name (16 hex)##addkey", key_name_buf, sizeof(key_name_buf));
 		ImGui::InputText("Key Value (32 hex)##addkey", key_val_buf, sizeof(key_val_buf));
 		if (ImGui::Button("Add##tactkey")) {
@@ -443,27 +538,36 @@ void render() {
 	}
 
 	SectionHeading("Realm List Source");
+	ImGui::TextWrapped("Remote URL used for retrieving the realm list. (Must use same format)");
 	configTextInput("##RealmListURL", realm_url_state, cfg, "realmListURL");
 
 	SectionHeading("Character Appearance API Endpoint");
+	ImGui::TextWrapped("Remote URL used for retrieving data from the Battle.net Character Appearance API. (Must use same format)");
 	configTextInput("##ArmoryURL", armory_url_state, cfg, "armoryURL");
 
 	{
 		bool val = cfg.value("enableBinaryListfile", true);
-		if (ImGui::Checkbox("Use Binary Listfile Format (Requires Restart)", &val))
+		SectionHeading("Use Binary Listfile Format (Requires Restart)");
+		ImGui::TextWrapped("If enabled, wow.export.cpp will use the optimized binary listfile format instead of the legacy CSV format.");
+		if (ImGui::Checkbox("Enable##enableBinaryListfile", &val))
 			cfg["enableBinaryListfile"] = val;
 	}
 
 	SectionHeading("Listfile Binary Source");
+	ImGui::TextWrapped("Remote URL used for downloading the optimized binary listfile format. (Must use same format)");
 	configTextInput("##ListfileBinSrc", listfile_bin_state, cfg, "listfileBinarySource");
 
-	SectionHeading("Listfile Source");
+	// Item 57: JS heading is "Listfile Source (Legacy)"
+	SectionHeading("Listfile Source (Legacy)");
+	ImGui::TextWrapped("Remote URL or local path used for updating the CASC listfile. (Must use same format)");
 	ImGui::Text("Primary");
 	configTextInput("##ListfileURL", listfile_url_state, cfg, "listfileURL");
 	ImGui::Text("Fallback");
 	configTextInput("##ListfileFallbackURL", listfile_fb_url_state, cfg, "listfileFallbackURL");
 
-	SectionHeading("Listfile Update Frequency (hours)");
+	// Item 51: JS heading is "Listfile Update Frequency" with description "How often (in days)..."
+	SectionHeading("Listfile Update Frequency");
+	ImGui::TextWrapped("How often (in days) the listfile is updated. Set to zero to always re-download the listfile.");
 	{
 		int val = cfg.value("listfileCacheRefresh", 168);
 		if (ImGui::InputInt("##ListfileCacheRefresh", &val))
@@ -471,12 +575,14 @@ void render() {
 	}
 
 	SectionHeading("Data Table Definition Repository");
+	ImGui::TextWrapped("Remote URL used to update DBD definitions. (Must use same format)");
 	ImGui::Text("Primary");
 	configTextInput("##DBDURL", dbd_url_state, cfg, "dbdURL");
 	ImGui::Text("Fallback");
 	configTextInput("##DBDFallbackURL", dbd_fb_url_state, cfg, "dbdFallbackURL");
 
 	SectionHeading("DBD Manifest Repository");
+	ImGui::TextWrapped("Remote URL used to obtain DBD manifest information. (Must use same format)");
 	ImGui::Text("Primary");
 	configTextInput("##DBDFilenameURL", dbdf_url_state, cfg, "dbdFilenameURL");
 	ImGui::Text("Fallback");
@@ -484,7 +590,9 @@ void render() {
 
 	{
 		bool val = cfg.value("allowCacheCollection", false);
-		if (ImGui::Checkbox("Allow Cache Collection", &val))
+		SectionHeading("Allow Cache Collection");
+		ImGui::TextWrapped("If enabled, wow.export.cpp will anonymously collect cache data from your client for community usage.");
+		if (ImGui::Checkbox("Enable##allowCacheCollection", &val))
 			cfg["allowCacheCollection"] = val;
 	}
 
@@ -506,6 +614,11 @@ void render() {
 	// CSS: row-reverse — "Reset to Defaults" has margin-right: auto (pushes it to the left),
 	// "Discard" and "Apply" are on the right side.
 	// CSS: #config-buttons #config-reset { margin-right: auto; margin-left: 20px; }
+	// Item 55: JS applies :class="{ disabled: $core.view.isBusy }" to all 3 buttons
+	bool busy = view.isBusy;
+	if (busy)
+		ImGui::BeginDisabled();
+
 	if (ImGui::Button("Reset to Defaults"))
 		handle_reset();
 	ImGui::SameLine();
@@ -517,6 +630,9 @@ void render() {
 	ImGui::SameLine();
 	if (ImGui::Button("Discard"))
 		handle_discard();
+
+	if (busy)
+		ImGui::EndDisabled();
 
 	ImGui::Dummy(ImVec2(0.0f, 15.0f));
 
