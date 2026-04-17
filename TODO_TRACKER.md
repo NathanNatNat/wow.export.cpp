@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/572 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/580 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -2818,3 +2818,43 @@
 - **JS Source**: `src/js/db/FieldType.js` lines 1–13
 - **Status**: Pending
 - **Details**: JS defines 12 field types using `Symbol()` for unique identity. C++ defines them as `enum class FieldType : uint32_t` in the header with matching names (String, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float, Relation, NonInlineID). All types are present and correctly mapped. The .cpp file is a placeholder. No deviations found.
+
+- [ ] 573. [WDCReader.cpp] `idField` initialized to empty string instead of JS `null` — divergent sentinel before first record read
+- **JS Source**: `src/js/db/WDCReader.js` lines 79, 176
+- **Status**: Pending
+- **Details**: JS initializes `this.idField = null` (line 79). C++ declares `std::string idField;` which default-initializes to `""`. In `getAllRows()` (JS line 176), the fallback `record[this.idField]` with `null` key returns `undefined` in JS, while C++ `record.value().at(idField)` with empty string key throws `std::out_of_range` if no field has an empty name. This only matters for tables with no ID map and no inline ID field, but represents a behavioral divergence in the edge case.
+
+- [ ] 574. [WDCReader.cpp] BigInt arbitrary-precision bit-shift operations vs C++ fixed-width uint64_t — potential UB for large fieldSizeBits
+- **JS Source**: `src/js/db/WDCReader.js` lines 816–818
+- **Status**: Pending
+- **Details**: JS uses BigInt for bitpacked field computation (`1n << BigInt(fieldSizeBits)`) which supports arbitrary precision. C++ uses `1ULL << recordFieldInfo.fieldSizeBits` (line 1048) which produces undefined behavior if `fieldSizeBits >= 64`. While field sizes this large are unlikely in practice, JS would handle them correctly while C++ would produce incorrect results or UB.
+
+- [ ] 575. [DBCharacterCustomization.cpp] `chr_cust_mat_map` stores FileDataID=0 for absent tfd_map entries; JS stores `undefined`
+- **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` line 88
+- **Status**: Pending
+- **Details**: JS `tfd_map.get(mat_row.MaterialResourcesID)` returns `undefined` when key is absent, and this `undefined` is stored as the `FileDataID` property. C++ (line 144–145) uses a fallback of 0 when the key is not found. Later code checking `FileDataID` may behave differently: JS `undefined` is falsy but `!== 0` and `!== undefined` checks distinguish it, while C++ `0` conflates absent entries with genuinely zero-valued entries.
+
+- [ ] 576. [DBCharacterCustomization.cpp] Race/model/option maps use `unordered_map` with no ordering guarantee; JS `Map` preserves insertion order
+- **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 95–162, 172–185
+- **Status**: Pending
+- **Details**: JS `options_by_chr_model`, `chr_race_map`, `chr_race_x_chr_model_map` are `Map` objects that preserve DB2 iteration/insertion order. C++ uses `std::unordered_map` with hash-based ordering that provides no ordering guarantee. When UI code iterates these maps (e.g., to build race selection lists or option panels), iteration order could differ from JS, potentially affecting display ordering unless callers explicitly sort.
+
+- [ ] 577. [DBCreatures.cpp] `creatureDisplays` entries are value copies, not shared references with `creatureDisplayInfoMap`
+- **JS Source**: `src/js/db/caches/DBCreatures.js` lines 55–66
+- **Status**: Pending
+- **Details**: JS line 55 gets a reference to a display object from `creatureDisplayInfoMap`, mutates `extraGeosets` on it (line 58–60), then pushes the same object reference into `creatureDisplays` (line 64). Both maps share the same object identity. C++ line 106 gets a reference to modify `extraGeosets`, but line 115 `push_back(display)` copies the struct into `creatureDisplays`, creating an independent instance. After initialization, JS maps share object identity (mutations visible through either map); C++ maps hold independent copies.
+
+- [ ] 578. [DBCreatureList.cpp] `get_all_creatures()` returns `unordered_map` (no order) vs JS `Map` (insertion order)
+- **JS Source**: `src/js/db/caches/DBCreatureList.js` lines 9, 45–47
+- **Status**: Pending
+- **Details**: JS `creatures` is a `Map` preserving insertion order from `Creature.db2` iteration. C++ `creatures` is `std::unordered_map<uint32_t, CreatureEntry>` with hash-based ordering. Code that iterates all creatures (e.g., for UI list display or filtering) may see different ordering, which could affect creature list presentation order in the UI.
+
+- [ ] 579. [DBCreaturesLegacy.cpp] `creatureDisplays` uses `unordered_map` (no order) vs JS `Map` (insertion order)
+- **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 11, 100–103
+- **Status**: Pending
+- **Details**: JS `creatureDisplays` is a `Map` keyed by lowercase model path that preserves insertion order from DBC iteration. C++ uses `std::unordered_map<std::string, std::vector<LegacyCreatureDisplay>>` with string-hash ordering. Iteration over all creature displays may produce different ordering, though this is less impactful since lookups are typically by specific model path.
+
+- [ ] 580. [DBDecor.cpp] `decorItems` unordered_map iteration order differs from JS `Map` insertion order
+- **JS Source**: `src/js/db/caches/DBDecor.js` lines 9, 46–48
+- **Status**: Pending
+- **Details**: JS `decorItems` is a `Map` preserving insertion order from `HouseDecor.db2` iteration. C++ uses `std::unordered_map<uint32_t, DecorItem>`. Code iterating all decor items (e.g., `getAllDecorItems()` return value or `getDecorItemByModelFileDataID()` linear scan) may encounter items in different order, potentially affecting UI list order for decor items.
