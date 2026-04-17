@@ -1,0 +1,677 @@
+# Codebase Overview — wow.export.cpp
+
+> A comprehensive guide to the repository structure, technologies, code organization, and dependency chains.
+
+---
+
+## 1. What Is This Project?
+
+**wow.export.cpp** is a C++23 port of [wow.export](https://github.com/Kruithne/wow.export), a popular World of Warcraft game-data export tool originally written in JavaScript/NW.js. The goal is a **line-by-line, functionally identical** conversion — same UI appearance, same features, same logic — using native C++ libraries instead of a browser runtime.
+
+The tool allows users to browse and export WoW assets (models, textures, audio, maps, data tables, etc.) from both **local WoW installations** and **Blizzard's CDN** (remote builds).
+
+---
+
+## 2. Key Technologies
+
+| Category | Technology | Purpose |
+|----------|-----------|---------|
+| **Language** | C++23 | Core language (replacing JavaScript) |
+| **Build System** | CMake 3.20+ with Presets | Cross-platform build configuration |
+| **Windowing** | GLFW | Window creation, input handling, OpenGL context |
+| **UI Framework** | Dear ImGui (docking branch) | Immediate-mode GUI (replacing Vue.js + HTML/CSS) |
+| **Rendering** | OpenGL 4.6 Core via GLAD2 | GPU rendering for 3D model viewers and textures |
+| **Math** | GLM | Vectors, matrices, quaternions for 3D math |
+| **JSON** | nlohmann/json | JSON parsing and serialization |
+| **Logging** | spdlog (bundles fmt) | Structured logging |
+| **HTTP/HTTPS** | cpp-httplib + mbedTLS | CDN access, downloading game data |
+| **TLS/Crypto** | mbedTLS 3.6.x LTS | HTTPS support + MD5/SHA hash APIs |
+| **Compression** | zlib | Deflate compression/decompression |
+| **Archives** | minizip-ng 4.0.x | ZIP read/write (replaces JS adm-zip) |
+| **Images** | stb_image / stb_image_write, libwebp, nanosvg | PNG/BMP/WebP/SVG loading and writing |
+| **Audio** | miniaudio | Audio playback for sound previews |
+| **XML** | pugixml | XML parsing |
+| **File Dialogs** | portable-file-dialogs | Native open/save/folder dialogs |
+| **Platforms** | Windows x64 (MSVC), Linux x64 (GCC) | Target platforms |
+
+All dependencies are **git submodules** in the `extern/` directory and are integrated via CMake — no system package installs required (except X11 dev libs on Linux).
+
+---
+
+## 3. Repository Structure
+
+```
+wow.export.cpp/
+├── CMakeLists.txt              # Root build file — all deps + main executable
+├── CMakePresets.json           # Build presets (win-msvc-debug, linux-gcc-debug, etc.)
+├── README.md                   # Project overview and credits
+├── TODO_TRACKER.md             # Conversion progress tracker
+├── UI_REFERENCE.md             # Visual reference screenshots for UI fidelity
+├── LICENSE                     # MIT License
+│
+├── extern/                     # Git submodules (all dependencies)
+│   ├── cpp-httplib/            #   HTTP client (header-only)
+│   ├── glad/                   #   OpenGL loader generator
+│   ├── glfw/                   #   Window/input library
+│   ├── glm/                    #   Math library (header-only)
+│   ├── imgui/                  #   Dear ImGui (docking branch)
+│   ├── json/                   #   nlohmann/json
+│   ├── libwebp/                #   WebP codec
+│   ├── mbedtls/                #   TLS + crypto
+│   ├── miniaudio/              #   Audio (header-only, single file)
+│   ├── minizip-ng/             #   ZIP archive I/O
+│   ├── nanosvg/                #   SVG parsing (header-only)
+│   ├── portable-file-dialogs/  #   Native file dialogs (header-only)
+│   ├── pugixml/                #   XML parser
+│   ├── spdlog/                 #   Logging (bundles fmt)
+│   ├── stb/                    #   Image I/O (header-only)
+│   └── zlib/                   #   Compression
+│
+├── src/                        # Application source
+│   ├── app.cpp                 #   C++ entry point (main loop, ImGui setup, rendering)
+│   ├── app.h                   #   App namespace + theme constants (CSS → ImGui colors)
+│   ├── app.css                 #   Original CSS (read at runtime for reference/parsing)
+│   ├── app.js                  #   Original JS entry point (reference only)
+│   ├── default_config.jsonc    #   Default configuration values
+│   ├── index.html              #   Original HTML template (reference only)
+│   ├── whats-new.html          #   Changelog/what's new content
+│   ├── fonts/                  #   Font files (Selawik, FontAwesome, etc.)
+│   ├── fa-icons/               #   FontAwesome icon SVGs
+│   ├── images/                 #   UI images (logo, backgrounds, etc.)
+│   ├── shaders/                #   GLSL shaders (vertex + fragment for ADT, M2, WMO, char)
+│   ├── help_docs/              #   Help/knowledge-base markdown articles
+│   │
+│   └── js/                     #   Converted C++ code + original JS reference files
+│       ├── CMakeLists.txt      #   Lists all compiled .cpp files (192 entries)
+│       ├── *.cpp / *.h / *.js  #   Root-level modules (each .js has a matching .cpp + .h)
+│       ├── casc/               #   CASC file system (CDN + local data access)
+│       ├── components/         #   Reusable UI components (listbox, combobox, slider, etc.)
+│       ├── modules/            #   Application tabs/screens (tab_models, tab_textures, etc.)
+│       ├── 3D/                 #   3D rendering pipeline (loaders, renderers, exporters, writers)
+│       ├── db/                 #   Database readers (WDC, DBC, DBD) + caches
+│       ├── ui/                 #   UI helpers (audio, texture ribbon, data exporter, etc.)
+│       ├── mpq/                #   MPQ archive support (legacy WoW format)
+│       ├── hashing/            #   Hash algorithms (xxhash64)
+│       ├── wow/                #   WoW-specific types (ItemSlot, EquipmentSlots)
+│       └── workers/            #   Background tasks (cache-collector)
+│
+├── installer/                  # Standalone installer executable (optional build)
+│   ├── installer.cpp
+│   └── installer.js            #   Original JS reference
+│
+├── updater/                    # Standalone updater executable (optional build)
+│   ├── updater.cpp
+│   └── updater.js              #   Original JS reference
+│
+├── addons/
+│   └── blender/                # Blender addon for importing exported data
+│
+├── resources/                  # Application icons
+└── UI_REFERENCE_IMAGES/        # Screenshots for visual fidelity comparison
+```
+
+---
+
+## 4. Code Organization
+
+### 4.1 Dual-File Convention (JS alongside C++)
+
+Every converted module lives in `src/js/` and has **three files side by side**:
+
+| File | Purpose |
+|------|---------|
+| `module.js` | Original JavaScript source (authoritative reference) |
+| `module.cpp` | C++ conversion |
+| `module.h` | C++ header |
+
+For example:
+```
+src/js/casc/casc-source.js     ← Original JS
+src/js/casc/casc-source.cpp    ← C++ port
+src/js/casc/casc-source.h      ← C++ header
+```
+
+Only `.cpp` files listed in `src/js/CMakeLists.txt` are compiled — the `.js` files are kept in-tree purely as reference.
+
+### 4.2 Architectural Layers
+
+The application follows a layered architecture:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     app.cpp (Entry Point)                │
+│     Window creation, ImGui setup, main render loop       │
+├─────────────────────────────────────────────────────────┤
+│                  modules.cpp (Module Manager)             │
+│   Registers/activates tabs & screens, navigation logic   │
+├──────────────┬────────────────────────┬─────────────────┤
+│  Screens     │        Tabs            │   UI Helpers     │
+│  (source     │  (tab_models,          │  (texture-       │
+│   select,    │   tab_textures,        │   ribbon,        │
+│   settings)  │   tab_audio, ...)      │   data-exporter) │
+├──────────────┴────────────────────────┴─────────────────┤
+│               components/ (Reusable UI Widgets)          │
+│    listbox, combobox, slider, map-viewer, model-viewer   │
+├─────────────────────────────────────────────────────────┤
+│                    core.cpp (Application State)           │
+│        AppState struct, EventEmitter, view management    │
+├──────────────┬─────────────────────┬────────────────────┤
+│   casc/      │       3D/           │       db/           │
+│ (File System │  (Rendering         │  (Database          │
+│  Access)     │   Pipeline)         │   Readers)          │
+├──────────────┼─────────────────────┼────────────────────┤
+│   mpq/       │     writers/        │     caches/         │
+│ (Legacy      │  (OBJ, GLTF, GLB,  │  (DB model/texture  │
+│  Archives)   │   CSV, SQL, STL)    │   file data)        │
+├──────────────┴─────────────────────┴────────────────────┤
+│                 Foundation Layer                          │
+│  constants, config, log, buffer, generics, blob, mmap    │
+├─────────────────────────────────────────────────────────┤
+│              External Libraries (extern/)                 │
+│  GLFW, ImGui, GLAD, GLM, nlohmann/json, spdlog,         │
+│  cpp-httplib, mbedTLS, zlib, minizip-ng, stb, libwebp,   │
+│  nanosvg, miniaudio, pugixml, portable-file-dialogs      │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4.3 Key Subsystem Descriptions
+
+#### **`src/app.cpp`** — Application Entry Point
+The C++ `main()` function lives here. Handles:
+- GLFW window creation with HiDPI scaling
+- OpenGL 4.6 context setup via GLAD2
+- Dear ImGui initialization with custom theme (mapped from `app.css`)
+- Windows dark title bar via `DwmSetWindowAttribute`
+- The main render loop (poll events → start ImGui frame → render active module → swap buffers)
+- Crash screen rendering
+
+#### **`src/js/core.cpp`** — Application State
+The `AppState` struct is the central state container (equivalent to Vue's reactive data). It holds:
+- Active CASC/MPQ source instances
+- All listfile data (textures, models, sounds, etc.)
+- User input/filter strings
+- Selection arrays for each tab
+- Model viewer state (geosets, skins, animations)
+- Configuration, toast notifications, loading state
+
+An `EventEmitter` class provides Node.js-style `on/emit/off` event handling.
+
+#### **`src/js/modules.cpp`** — Module Manager
+Manages the tab/screen lifecycle:
+- Registers all modules at startup
+- Handles activation/deactivation of tabs
+- Manages navigation buttons and context menu options
+- Routes to the correct render function each frame
+
+#### **`src/js/casc/`** — CASC File System
+The core data access layer for reading WoW game files:
+- `CASC` base class with root/encoding file parsing
+- `CASCRemote` — streams data from Blizzard's CDN
+- `CASCLocal` — reads from local WoW installation
+- `blte-reader` / `blte-stream-reader` — BLTE container format decompression
+- `listfile` — maps fileDataIDs to human-readable paths
+- `tact-keys` — encryption key management
+- `cdn-resolver` — CDN endpoint discovery
+- `build-cache` — caches downloaded data to disk
+
+#### **`src/js/3D/`** — 3D Rendering Pipeline
+Complete pipeline for WoW model rendering:
+- **`gl/`** — OpenGL abstractions (context, textures, shaders, VAOs, UBOs)
+- **`loaders/`** — Parse WoW file formats (M2, M3, WMO, ADT, SKEL, ANIM, MDX, WDT)
+- **`renderers/`** — OpenGL renderers per format (M2RendererGL, WMORendererGL, etc.)
+- **`exporters/`** — Export logic per format (M2Exporter, WMOExporter, ADTExporter, CharacterExporter)
+- **`writers/`** — Output format serializers (OBJ, GLTF, GLB, STL, CSV, SQL, JSON, MTL)
+- **`camera/`** — Camera controls for 3D viewports
+- Root-level mappers: `AnimMapper`, `BoneMapper`, `GeosetMapper`, `ShaderMapper`, `Skin`, `Texture`
+
+#### **`src/js/db/`** — Database Readers
+Reads WoW's client database formats:
+- `WDCReader` — WDC3/WDC4/WDC5 format reader
+- `DBCReader` — Legacy DBC format reader
+- `DBDParser` — Database definition parser (column schemas)
+- **`caches/`** — Pre-built DB caches for specific tables (items, creatures, models, textures, decor, guild tabards, character customization, etc.)
+
+#### **`src/js/components/`** — Reusable UI Widgets
+ImGui-based custom components replacing Vue.js components:
+- `listbox` / `listboxb` / `itemlistbox` — Virtualized list displays
+- `listbox-maps` / `listbox-zones` — Specialized map/zone browsers
+- `map-viewer` — 2D tiled map rendering
+- `model-viewer-gl` — 3D model preview viewport
+- `combobox`, `slider`, `checkboxlist`, `menu-button` — Form controls
+- `context-menu` — Right-click context menus
+- `data-table` — Tabular data browser
+- `file-field` — File/folder picker (uses portable-file-dialogs)
+- `markdown-content` — Markdown renderer
+- `resize-layer` — Resizable panel splitters
+
+#### **`src/js/modules/`** — Application Tabs & Screens
+Each tab/screen is a module with `render()`, `mounted()`, and `initialize()`:
+
+| Module | Description |
+|--------|-------------|
+| `screen_source_select` | First screen — choose local or remote data source |
+| `screen_settings` | Settings/configuration screen |
+| `tab_home` | Home/landing page after connecting to a data source |
+| `tab_models` | Browse and export 3D models (M2, WMO) |
+| `tab_textures` | Browse and export textures (BLP → PNG/WebP) |
+| `tab_audio` | Browse and play/export audio files |
+| `tab_maps` | World map tile browser and exporter |
+| `tab_zones` | Zone minimap viewer and exporter |
+| `tab_items` | Item model browser (by type/quality) |
+| `tab_item_sets` | Item set browser |
+| `tab_creatures` | Creature model browser |
+| `tab_characters` | Character customization viewer |
+| `tab_decor` | Decoration/prop browser by category |
+| `tab_data` | DB2 table browser |
+| `tab_raw` | Raw file browser (by fileDataID) |
+| `tab_text` | Text file viewer (Lua, XML, etc.) |
+| `tab_fonts` | Font file previewer |
+| `tab_videos` | Video file browser |
+| `tab_install` | Install manifest browser |
+| `tab_blender` | Blender addon integration |
+| `tab_help` | Knowledge base / help articles |
+| `tab_changelog` | What's new / changelog viewer |
+| `legacy_tab_*` | Legacy (pre-CASC / MPQ) versions of tabs |
+
+#### **`src/js/mpq/`** — MPQ Archive Support
+Reads legacy MPQ archives (pre-CASC WoW versions):
+- `mpq` — MPQ archive reader
+- `mpq-install` — MPQ-based installation handler
+- `bitstream`, `huffman`, `bzip2`, `pkware` — Decompression algorithms
+- `build-version` — Legacy build version parsing
+
+---
+
+## 5. Dependency Chain / File Hierarchy
+
+This section shows how the main files depend on each other, from the entry point down through the layers.
+
+### 5.1 Entry Point Chain
+
+```
+app.cpp (main entry point)
+├── app.h                          (theme constants, app namespace)
+├── js/constants.h                 (paths, version, game constants)
+│   └── (self-contained — uses only std::filesystem, std::regex)
+├── js/log.h                       (logging)
+│   └── depends on: constants.h (for RUNTIME_LOG path)
+├── js/config.h                    (configuration load/save)
+│   └── depends on: constants.h, generics.h, core.h
+├── js/core.h                      (AppState, EventEmitter)
+│   ├── js/file-writer.h           (file output abstraction)
+│   └── nlohmann/json.hpp
+├── js/generics.h                  (HTTP get, file I/O, hashing utilities)
+│   ├── js/buffer.h                (byte buffer wrapper)
+│   │   └── nlohmann/json_fwd.hpp
+│   └── nlohmann/json_fwd.hpp
+├── js/modules.h                   (module manager)
+│   └── (self-contained — function declarations only)
+├── js/install-type.h              (MPQ vs CASC enum)
+├── js/casc/listfile.h             (listfile loading)
+│   └── js/buffer.h
+├── js/casc/dbd-manifest.h         (DB definition manifest)
+├── js/casc/cdn-resolver.h         (CDN endpoint discovery)
+├── js/casc/tact-keys.h            (encryption keys)
+├── js/casc/build-cache.h          (disk cache management)
+├── js/casc/export-helper.h        (export utilities)
+├── js/ui/texture-ribbon.h         (texture strip UI)
+├── js/3D/Shaders.h                (shader loading)
+├── js/gpu-info.h                  (GPU capabilities)
+├── js/updater.h                   (auto-update logic)
+└── js/external-links.h            (open URLs in browser)
+```
+
+### 5.2 Module Manager Chain
+
+```
+modules.cpp
+├── modules.h
+├── log.h
+├── install-type.h
+├── constants.h
+├── core.h
+│
+├── modules/screen_source_select.h
+├── modules/screen_settings.h
+├── modules/tab_home.h
+├── modules/tab_models.h
+├── modules/tab_textures.h
+├── modules/tab_audio.h
+├── modules/tab_data.h
+├── modules/tab_maps.h
+├── modules/tab_zones.h
+├── modules/tab_items.h
+├── modules/tab_item_sets.h
+├── modules/tab_creatures.h
+├── modules/tab_characters.h
+├── modules/tab_decor.h
+├── modules/tab_raw.h
+├── modules/tab_text.h
+├── modules/tab_fonts.h
+├── modules/tab_videos.h
+├── modules/tab_install.h
+├── modules/tab_help.h
+├── modules/tab_blender.h
+├── modules/tab_changelog.h
+├── modules/legacy_tab_home.h
+├── modules/legacy_tab_audio.h
+├── modules/legacy_tab_textures.h
+├── modules/legacy_tab_fonts.h
+├── modules/legacy_tab_files.h
+├── modules/legacy_tab_data.h
+└── modules/tab_models_legacy.h
+```
+
+### 5.3 CASC Data Access Chain
+
+```
+casc/casc-source-remote.h (CASCRemote — CDN access)
+├── casc/casc-source.h (CASC base class)
+│   ├── buffer.h (BufferWrapper)
+│   ├── casc/install-manifest.h
+│   └── casc/listfile.h
+│       └── buffer.h
+├── casc/build-cache.h (disk cache)
+└── casc/blte-reader.h (BLTE decompression)
+    └── buffer.h
+
+casc/casc-source-local.h (CASCLocal — local install access)
+├── casc/casc-source.h
+├── casc/casc-source-remote.h (inherits remote CDN fallback)
+├── casc/build-cache.h
+└── buffer.h
+
+Internal CASC dependencies:
+    casc-source.cpp
+    ├── casc/cdn-config.h (CDN configuration parsing)
+    │   └── buffer.h
+    ├── casc/version-config.h (build version info)
+    ├── casc/content-flags.h (content flag filtering)
+    ├── casc/locale-flags.h (locale filtering)
+    ├── casc/salsa20.h (Salsa20 decryption)
+    ├── casc/tact-keys.h (encryption key registry)
+    ├── casc/blte-reader.h
+    └── casc/jenkins96.h (hash function)
+```
+
+### 5.4 3D Rendering Pipeline Chain
+
+```
+3D Pipeline (top-down):
+
+Tab Modules (entry points)
+├── tab_models.cpp → uses model-viewer-gl component
+├── tab_maps.cpp → uses map-viewer component
+├── tab_zones.cpp → uses map-viewer component
+└── tab_characters.cpp → uses model-viewer-gl component
+
+components/model-viewer-gl.cpp (3D viewport)
+├── 3D/renderers/M2RendererGL.h
+│   ├── 3D/gl/GLContext.h (OpenGL state management)
+│   │   └── glad/gl.h
+│   ├── 3D/gl/ShaderProgram.h
+│   ├── 3D/gl/VertexArray.h
+│   ├── 3D/gl/GLTexture.h
+│   ├── 3D/gl/UniformBuffer.h
+│   ├── 3D/Texture.h
+│   ├── 3D/Skin.h
+│   ├── 3D/ShaderMapper.h
+│   └── 3D/Shaders.h
+├── 3D/renderers/WMORendererGL.h
+│   ├── 3D/gl/GLContext.h
+│   ├── 3D/WMOShaderMapper.h
+│   └── 3D/Shaders.h
+├── 3D/renderers/GridRenderer.h
+├── 3D/renderers/ShadowPlaneRenderer.h
+├── 3D/camera/CameraControlsGL.h
+│   └── 3D/camera/CharacterCameraControlsGL.h
+└── 3D/loaders/M2Loader.h (parses M2 binary format)
+    ├── 3D/loaders/M2Generics.h (shared M2 utilities)
+    ├── 3D/loaders/ANIMLoader.h (animation chunks)
+    ├── 3D/loaders/BONELoader.h (skeleton data)
+    ├── 3D/loaders/SKELLoader.h (skeleton file loader)
+    ├── 3D/AnimMapper.h
+    ├── 3D/BoneMapper.h
+    ├── 3D/GeosetMapper.h
+    └── buffer.h
+
+3D/exporters/ (export from loaded data to output formats)
+├── M2Exporter.cpp
+│   ├── 3D/writers/OBJWriter.h
+│   ├── 3D/writers/MTLWriter.h
+│   ├── 3D/writers/GLTFWriter.h
+│   ├── 3D/writers/GLBWriter.h
+│   ├── 3D/writers/STLWriter.h
+│   └── casc/export-helper.h
+├── WMOExporter.cpp
+│   ├── 3D/writers/OBJWriter.h
+│   ├── 3D/writers/GLTFWriter.h
+│   └── 3D/loaders/WMOLoader.h
+├── ADTExporter.cpp
+│   ├── 3D/loaders/ADTLoader.h
+│   │   └── 3D/loaders/WDTLoader.h
+│   └── 3D/writers/OBJWriter.h
+└── CharacterExporter.cpp
+    ├── 3D/renderers/CharMaterialRenderer.h
+    └── ui/char-texture-overlay.h
+```
+
+### 5.5 Database Reader Chain
+
+```
+db/WDCReader.h (WDC3/4/5 format)
+├── db/DBDParser.h (column schema definitions)
+│   ├── db/FieldType.h (field type enum)
+│   └── db/CompressionType.h (compression type enum)
+├── buffer.h
+└── core.h
+
+db/DBCReader.h (legacy DBC format)
+├── db/DBDParser.h
+└── buffer.h
+
+db/caches/ (all depend on WDCReader or DBCReader)
+├── DBModelFileData.h → WDCReader
+├── DBTextureFileData.h → WDCReader
+├── DBItems.h → WDCReader
+├── DBItemDisplays.h → WDCReader
+├── DBCreatures.h → WDCReader
+├── DBCreatureList.h → DBCreatures
+├── DBDecor.h → WDCReader
+├── DBDecorCategories.h → WDCReader
+├── DBCharacterCustomization.h → WDCReader
+├── DBGuildTabard.h → WDCReader
+└── ... (16 cache modules total)
+
+casc/db2.cpp (high-level DB2 loading from CASC)
+├── db/WDCReader.h
+├── casc/casc-source.h
+└── buffer.h
+```
+
+### 5.6 Foundation Layer Dependencies
+
+```
+buffer.h (BufferWrapper — byte buffer with read/write API)
+├── nlohmann/json_fwd.hpp
+└── mbedtls/md.h (for hash methods: md5, sha1, sha256)
+
+generics.h (HTTP, file I/O, hashing utilities)
+├── buffer.h
+├── nlohmann/json_fwd.hpp
+└── cpp-httplib (via httplib.h)
+
+file-writer.h (file output abstraction)
+├── buffer.h
+└── minizip-ng (mz.h, mz_zip.h)
+
+constants.h (paths, version, config values)
+└── std::filesystem
+
+log.h (logging)
+├── constants.h (for log file path)
+└── spdlog
+
+config.h (configuration)
+├── constants.h (for config file paths)
+├── generics.h (for file reading)
+└── nlohmann/json.hpp
+
+core.h (AppState, EventEmitter)
+├── file-writer.h
+└── nlohmann/json.hpp
+
+mmap.h (memory-mapped file access)
+└── (platform APIs: Windows CreateFileMapping / Linux mmap)
+
+blob.h (binary data wrapper)
+└── buffer.h
+
+crc32.h (CRC32 checksum)
+└── zlib (for crc32 function)
+```
+
+### 5.7 Initialization Order (Runtime)
+
+This is the order in which systems are initialized when the application starts:
+
+```
+1. main()                          [app.cpp]
+2. constants::init()               [constants.cpp — sets up paths, DATA_DIR, LOG_DIR]
+3. logging::init()                 [log.cpp — opens runtime log file]
+4. config::load()                  [config.cpp — reads default_config.jsonc + user overrides]
+5. GLFW init + window creation     [app.cpp — glfwInit, glfwCreateWindow]
+6. GLAD OpenGL loader              [app.cpp — gladLoadGL]
+7. ImGui context + backends        [app.cpp — ImGui::CreateContext, ImGui_ImplGlfw_Init, ImGui_ImplOpenGL3_Init]
+8. Theme setup                     [app.cpp — applies app::theme colors to ImGui style]
+9. Font loading                    [app.cpp — loads Selawik + FontAwesome into ImGui font atlas]
+10. Shaders::init()                [3D/Shaders.cpp — compiles GLSL shaders]
+11. modules::register_components() [modules.cpp — registers all tab/screen modules]
+12. modules::initialize()          [modules.cpp — calls registerModule() on each module]
+13. modules::go_to_landing()       [modules.cpp — activates screen_source_select]
+14. ─── Main render loop begins ───
+15.   Per frame:
+16.     a. glfwPollEvents()
+17.     b. ImGui_ImplOpenGL3_NewFrame / ImGui_ImplGlfw_NewFrame / ImGui::NewFrame
+17.     c. Active module's render() function
+18.     d. ImGui::Render / ImGui_ImplOpenGL3_RenderDrawData
+19.     e. glfwSwapBuffers
+```
+
+### 5.8 Data Flow: Opening a Remote Source
+
+```
+User clicks "Use Remote CDN" on screen_source_select
+│
+├─1→ casc/cdn-resolver.cpp — fetches CDN config from Blizzard
+│    └── generics::get() → cpp-httplib HTTPS request
+│
+├─2→ casc/realmlist.cpp — fetches product list
+│    └── generics::get()
+│
+├─3→ User selects a build version
+│
+├─4→ casc/casc-source-remote.cpp::load()
+│    ├── casc/version-config.cpp — parse version info
+│    ├── casc/cdn-config.cpp — parse CDN config
+│    ├── casc/casc-source.cpp::loadRemote() — parse encoding + root tables
+│    │   ├── casc/blte-reader.cpp — decompress BLTE containers
+│    │   │   ├── zlib (Deflate)
+│    │   │   └── casc/salsa20.cpp (decryption if needed)
+│    │   └── casc/tact-keys.cpp — lookup encryption keys
+│    ├── casc/listfile.cpp — load file ID → path mappings
+│    ├── casc/dbd-manifest.cpp — load DB definition manifest
+│    └── casc/build-cache.cpp — cache data to disk
+│
+├─5→ modules::go_to_landing() — switch to tab_home
+│
+└─6→ Tab modules load data on activation
+     ├── tab_textures → casc/listfile (filter by .blp)
+     ├── tab_models → casc/listfile (filter by .m2/.wmo)
+     ├── tab_data → casc/db2.cpp → db/WDCReader → db/caches/
+     └── etc.
+```
+
+---
+
+## 6. Build Instructions
+
+### Prerequisites
+- CMake 3.20+
+- Python 3 + Jinja2 (`pip install jinja2`) — for GLAD2 OpenGL loader generation
+- **Windows**: MSVC (Visual Studio 2022+)
+- **Linux**: GCC 13+, plus X11 dev packages:
+  ```
+  apt install libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl-dev
+  ```
+
+### Build Commands
+```bash
+# Initialize submodules (if not done)
+git submodule update --init --recursive
+
+# Configure + build (Linux)
+cmake --preset linux-gcc-debug
+cmake --build out/build/linux-gcc-debug
+
+# Configure + build (Windows)
+cmake --preset windows-msvc-debug
+cmake --build out/build/windows-msvc-debug
+```
+
+### Build Presets
+| Preset | Platform | Compiler | Config |
+|--------|----------|----------|--------|
+| `windows-msvc-debug` | Windows x64 | MSVC | Debug |
+| `windows-msvc-release` | Windows x64 | MSVC | Release |
+| `windows-msvc-relwithdebinfo` | Windows x64 | MSVC | RelWithDebInfo |
+| `linux-gcc-debug` | Linux x64 | GCC | Debug |
+| `linux-gcc-release` | Linux x64 | GCC | Release |
+| `linux-gcc-relwithdebinfo` | Linux x64 | GCC | RelWithDebInfo |
+
+### Optional Targets
+```bash
+# Build installer (disabled by default)
+cmake --preset linux-gcc-debug -DWOW_EXPORT_BUILD_INSTALLER=ON
+
+# Build updater (disabled by default)
+cmake --preset linux-gcc-debug -DWOW_EXPORT_BUILD_UPDATER=ON
+```
+
+---
+
+## 7. File Counts Summary
+
+| Category | Count |
+|----------|-------|
+| Original JS source files (in-tree reference) | ~189 |
+| Compiled C++ source files (in CMakeLists.txt) | ~192 |
+| External dependency submodules | 16 |
+| Application tabs/screens | 30 |
+| Reusable UI components | 16 |
+| 3D format loaders | 11 |
+| 3D format renderers | 7 |
+| 3D format exporters | 7 |
+| Output format writers | 8 |
+| Database cache modules | 16 |
+| GLSL shader files | 9 |
+
+---
+
+## 8. Glossary
+
+| Term | Meaning |
+|------|---------|
+| **CASC** | Content Addressable Storage Container — WoW's modern file system |
+| **MPQ** | Mo'PaQ — WoW's legacy archive format (pre-6.0) |
+| **BLTE** | Binary Large Table Entry — container format for CASC files |
+| **BLP** | Blizzard Picture — WoW's texture format |
+| **M2** | WoW model format (characters, creatures, items, doodads) |
+| **WMO** | World Map Object — WoW building/structure format |
+| **ADT** | Area Data Tile — WoW terrain chunk format |
+| **WDT** | World Data Table — WoW world layout format |
+| **DBC/DB2/WDC** | WoW client database formats (items, spells, etc.) |
+| **DBD** | Database Definition — schema files for DBC/DB2 tables |
+| **TACT** | Blizzard encryption key system |
+| **fileDataID** | Unique integer identifier for each file in CASC |
+| **listfile** | Community-maintained mapping of fileDataIDs to file paths |
