@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 38/906 verified (4%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 43/906 verified (5%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -70,27 +70,25 @@
 - **Status**: Verified
 - **Details**: Expected platform difference. JS `showDevTools()` opens Chrome DevTools (NW.js-specific). No C++ equivalent exists. The C++ app has other debug aids (Dear ImGui Demo window, F5 reload, runtime log).
 
-- [ ] 15. [core.cpp] Loading screen updates are deferred to a main-thread queue instead of immediate state writes
+- [x] 15. [core.cpp] Loading screen updates are deferred to a main-thread queue instead of immediate state writes
 - **JS Source**: `src/js/core.js` lines 413–420, 439–443
-- **Details**: JS writes `core.view` loading fields synchronously in `showLoadingScreen()`/`hideLoadingScreen()`, while C++ posts these mutations via `postToMainThread()`, introducing frame-delayed behavior differences.
+- **Details**: Verified. JS writes `core.view` loading fields synchronously because JS is single-threaded. C++ posts these mutations via `postToMainThread()` because `showLoadingScreen`/`hideLoadingScreen` are called from background threads (CASC loading). The one-frame delay is invisible to users and all state changes are identical to JS. This is a necessary platform adaptation for thread safety in multi-threaded C++.
 
-- [ ] 16. [core.cpp] progressLoadingScreen no longer awaits a forced redraw
+- [x] 16. [core.cpp] progressLoadingScreen no longer awaits a forced redraw
 - **JS Source**: `src/js/core.js` lines 426–434
-- **Details**: JS explicitly calls `await generics.redraw()` after updating progress text/percentage; C++ removed the awaited redraw path and only queues state changes.
+- **Details**: Verified. JS calls `await generics.redraw()` to force a synchronous DOM repaint so progress is visible in single-threaded NW.js. In C++/ImGui, the main loop repaints every frame automatically, so a forced redraw is unnecessary. Loading happens on background threads, and state updates via `postToMainThread()` are picked up on the next frame render. This is a necessary platform adaptation for ImGui's immediate-mode rendering model.
 
-- [ ] 17. [core.cpp] Toast payload shape differs from JS `options` object contract
+- [x] 17. [core.cpp] Toast payload shape differs from JS `options` object contract
 - **JS Source**: `src/js/core.js` lines 470–472
-- **Details**: JS stores toast data as `{ type, message, options, closable }`, while C++ `setToast(...)` maps the third field to typed toast actions rather than a generic options object.
+- **Details**: Verified. JS stores `{ type, message, options, closable }` where `options` is an object with string keys (labels) and function values (callbacks), rendered via `v-for="(func, label) in toast.options"`. C++ uses `std::vector<ToastAction>` where each ToastAction has `label` and `callback` fields — a type-safe equivalent. All JS callers pass `{ 'Label': () => fn() }` patterns that map directly to `ToastAction{label, callback}`. Empty vector equals JS `null` options. Functionally identical.
 
-- [ ] 18. [core.cpp] isDev uses NDEBUG instead of JS BUILD_RELEASE flag
+- [x] 18. [core.cpp] isDev uses NDEBUG instead of JS BUILD_RELEASE flag
 - **JS Source**: `src/js/core.js` line 33
-- **Status**: Pending
-- **Details**: JS sets `isDev: !BUILD_RELEASE` using a specific build-pipeline flag. C++ uses `#ifdef NDEBUG` (core.h lines 260–264) which is a standard C++ debug macro tied to CMake build types. The semantics may differ: `NDEBUG` is defined for both Release and RelWithDebInfo configurations, while `BUILD_RELEASE` is a custom flag that may only be set for true production builds. A custom `BUILD_RELEASE` CMake definition would be more faithful.
+- **Details**: Verified. JS sets `isDev: !BUILD_RELEASE` where `BUILD_RELEASE = process.env.BUILD_RELEASE === 'true'`. C++ uses `#ifdef NDEBUG` in core.h (lines 260–264) which gives identical results: Debug → isDev=true, Release → isDev=false. app.cpp (lines 80–84) also maps NDEBUG to a `BUILD_RELEASE` constexpr bool for consistency. NDEBUG is the standard C++ mechanism for the same concept. RelWithDebInfo has NDEBUG defined (isDev=false), which is correct since it's an optimized build.
 
-- [ ] 19. [core.cpp] openInExplorer() is a C++ addition with no direct JS equivalent
+- [x] 19. [core.cpp] openInExplorer() is a C++ addition with no direct JS equivalent
 - **JS Source**: `src/js/core.js` line 485 (`nw.Shell.openItem()`)
-- **Status**: Pending
-- **Details**: C++ core.cpp lines 415–426 defines `openInExplorer(const std::string& path)` as a standalone utility function declared in core.h line 647. The JS source only uses `nw.Shell.openItem(core.view.config.exportDirectory)` inline in `openExportDirectory()`. While `openInExplorer` is a necessary platform adaptation (ShellExecuteW / xdg-open), its existence as a separately exported function is additional API surface not present in the JS module exports.
+- **Details**: Verified. JS uses `nw.Shell.openItem(path)` which is a NW.js built-in that opens files/directories with the OS default handler. C++ extracts the platform-specific logic (ShellExecuteW on Windows, xdg-open on Linux) into `openInExplorer()` as a reusable function. This is a necessary platform adaptation — NW.js provides this built-in; C++ requires explicit platform code. The function correctly handles UTF-8→UTF-16 conversion on Windows via MultiByteToWideChar. `openExportDirectory()` calls `openInExplorer()` matching the JS `openExportDirectory` → `nw.Shell.openItem()` call chain.
 
 - [ ] 20. [config.cpp] Deep config watcher auto-save path from Vue is not equivalent
 - **JS Source**: `src/js/config.js` lines 60–61
