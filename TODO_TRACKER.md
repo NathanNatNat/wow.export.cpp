@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/341 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/342 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1663,3 +1663,8 @@
 - **JS Source**: `src/js/mmap.js` lines 20–23
 - **Status**: Pending
 - **Details**: C++ `MmapObject::map()` explicitly checks for `size == 0` and returns false with `lastError = "File is empty"` (mmap.cpp lines 113–118 on Windows, lines 162–167 on Linux). The JS wrapper in `mmap.js` has no such guard — it delegates entirely to `new mmap_native.MmapObject()` and the native addon's `map()` method. Whether the native `.node` addon rejects empty files is unknown from the JS source alone, making this a potential behavioral divergence where C++ would fail on empty files while JS might succeed (mapping zero bytes).
+
+- [ ] 342. [modules.cpp] `display_label` in `wrap_module` error messages shows module key instead of nav button label
+- **JS Source**: `src/js/modules.js` lines 208–213
+- **Status**: Pending
+- **Details**: In JS `wrap_module`, `display_label` starts as `module_name` but is updated to `label` inside the `registerNavButton` callback (line 213: `display_label = label`). The captured `display_label` is then used in the wrapped `initialize` error messages (line 236–237), producing user-friendly text like "Failed to initialize Maps tab". In C++ `wrap_module` (modules.cpp line 194), `display_label` is set to `mod.name` and never updated from the nav button registration, so error messages show the module key (e.g., "Failed to initialize tab_maps tab") instead of the display label (e.g., "Failed to initialize Maps tab").
