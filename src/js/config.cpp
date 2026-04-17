@@ -13,7 +13,6 @@
 #include <fstream>
 #include <filesystem>
 #include <stdexcept>
-#include <future>
 
 namespace config {
 
@@ -46,7 +45,10 @@ static void doSave() {
 	nlohmann::json configSave = nlohmann::json::object();
 	for (auto it = core::view->config.begin(); it != core::view->config.end(); ++it) {
 		// Only persist configuration values that do not match defaults.
-		if (defaultConfig.contains(it.key()) && defaultConfig[it.key()] == it.value())
+		// JS uses strict reference equality (===), which always fails for arrays
+		// since copyConfig clones them with value.slice(0). To match JS behavior,
+		// always persist array values regardless of whether they match defaults.
+		if (!it.value().is_array() && defaultConfig.contains(it.key()) && defaultConfig[it.key()] == it.value())
 			continue;
 
 		configSave[it.key()] = it.value();
@@ -54,7 +56,9 @@ static void doSave() {
 
 	const std::string out = configSave.dump(1, '\t');
 	std::ofstream file(constants::CONFIG::USER_PATH());
-	if (file.is_open()) {
+	if (!file.is_open()) {
+		logging::write("Failed to write config file: " + constants::CONFIG::USER_PATH().string());
+	} else {
 		file << out;
 		file.close();
 	}
@@ -125,15 +129,14 @@ void resetAllToDefault() {
 
 /**
  * Mark configuration for saving.
- * TODO 70: JS uses setImmediate(doSave) to defer execution to the next event
- * loop tick, preventing synchronous file I/O from blocking UI rendering.
- * C++ uses std::async(std::launch::async, doSave) to replicate this deferred
- * behavior — doSave runs on a separate thread, not blocking the caller.
+ * JS uses setImmediate(doSave) to defer execution to the next event-loop tick.
+ * C++ uses core::postToMainThread(doSave) to defer to the next frame, matching
+ * the JS deferred behavior without blocking the caller.
  */
 void save() {
 	if (!isSaving) {
 		isSaving = true;
-		std::async(std::launch::async, doSave);
+		core::postToMainThread(doSave);
 	} else {
 		// Queue another save.
 		isQueued = true;

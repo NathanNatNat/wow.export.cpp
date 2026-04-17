@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 43/906 verified (5%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 58/906 verified (6%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -90,70 +90,80 @@
 - **JS Source**: `src/js/core.js` line 485 (`nw.Shell.openItem()`)
 - **Details**: Verified. JS uses `nw.Shell.openItem(path)` which is a NW.js built-in that opens files/directories with the OS default handler. C++ extracts the platform-specific logic (ShellExecuteW on Windows, xdg-open on Linux) into `openInExplorer()` as a reusable function. This is a necessary platform adaptation — NW.js provides this built-in; C++ requires explicit platform code. The function correctly handles UTF-8→UTF-16 conversion on Windows via MultiByteToWideChar. `openExportDirectory()` calls `openInExplorer()` matching the JS `openExportDirectory` → `nw.Shell.openItem()` call chain.
 
-- [ ] 20. [config.cpp] Deep config watcher auto-save path from Vue is not equivalent
+- [x] 20. [config.cpp] Deep config watcher auto-save path from Vue is not equivalent
 - **JS Source**: `src/js/config.js` lines 60–61
-- **Details**: JS attaches `core.view.$watch('config', () => save(), { deep: true })`; C++ relies on explicit manual `save()` calls from UI code.
+- **Status**: Verified
+- **Details**: JS attaches `core.view.$watch('config', () => save(), { deep: true })` — Vue's deep watcher calls `save()` automatically on any config mutation. C++ has no reactive state system; ImGui is immediate-mode. Config changes trigger `config::save()` directly from UI code. This is a necessary platform adaptation — the explicit save() call pattern is the correct ImGui equivalent. Comment at config.cpp line 110–111 documents this.
 
-- [ ] 21. [config.cpp] save scheduling differs from setImmediate event-loop behavior
+- [x] 21. [config.cpp] save scheduling differs from setImmediate event-loop behavior
 - **JS Source**: `src/js/config.js` lines 83–90
-- **Details**: JS defers with `setImmediate(doSave)` in the same event-loop model; C++ uses `std::async` thread execution.
+- **Status**: Verified
+- **Details**: Fixed. JS defers with `setImmediate(doSave)` to the next event-loop tick. C++ now uses `core::postToMainThread(doSave)` to defer to the next frame tick, matching the JS deferred behavior. Previously used `std::async` which had a blocking-destructor issue (see item 25). The `postToMainThread` approach runs doSave on the main thread on the next frame, identical to JS running it on the main thread on the next event-loop tick.
 
-- [ ] 22. [config.cpp] doSave write failure behavior differs
+- [x] 22. [config.cpp] doSave write failure behavior differs
 - **JS Source**: `src/js/config.js` lines 106–108
-- **Details**: JS `await fsp.writeFile(...)` rejects on failure; C++ checks `file.is_open()` and can silently skip writing if open fails.
+- **Status**: Verified
+- **Details**: Fixed. JS `await fsp.writeFile(...)` rejects on failure, which would propagate as an uncaught error. C++ now logs an error message via `logging::write()` when the file cannot be opened, rather than silently skipping. The error is logged rather than thrown because doSave runs deferred (via postToMainThread) where an uncaught exception would crash the app — matching JS behavior where setImmediate errors go to the global error handler.
 
-- [ ] 23. [config.cpp] EPERM detection logic differs from JS exception code check
+- [x] 23. [config.cpp] EPERM detection logic differs from JS exception code check
 - **JS Source**: `src/js/config.js` lines 43–49
-- **Details**: JS checks `e.code === 'EPERM'`; C++ inspects exception message text for substrings like `EPERM`/`permission`.
+- **Status**: Verified
+- **Details**: JS checks `e.code === 'EPERM'` on the error object. C++ catches `std::exception` and checks the message text for "permission"/"EPERM"/"Permission denied"/"Access is denied". This works because `generics::readJSON()` throws `std::runtime_error("Permission denied: ...")` when a file exists but cannot be opened (generics.cpp line 500). The string-based detection correctly catches the permission error. Both paths log the same message and show the same toast. Functionally identical.
 
-- [ ] 24. [config.cpp] doSave() array comparison uses value equality instead of JS reference equality
+- [x] 24. [config.cpp] doSave() array comparison uses value equality instead of JS reference equality
 - **JS Source**: `src/js/config.js` lines 98–104
-- **Status**: Pending
-- **Details**: JS `defaultConfig[key] === value` uses strict reference equality — since `copyConfig` clones arrays with `value.slice(0)`, array config values are always different instances from defaults, so arrays are always persisted to the user config file. C++ `defaultConfig[it.key()] == it.value()` uses nlohmann::json value equality, so arrays matching defaults are skipped. This means the C++ user config file will be smaller (omitting default-matching arrays), while JS always includes them. On reload, missing arrays are filled from defaults, so this is a write-path-only difference.
+- **Status**: Verified
+- **Details**: Fixed. JS `defaultConfig[key] === value` uses strict reference equality — since `copyConfig` clones arrays with `value.slice(0)`, array config values are always different instances from defaults, so arrays are always persisted. C++ now skips the default-comparison for array values (`!it.value().is_array()` guard), ensuring arrays are always written to the user config file, matching JS behavior exactly.
 
-- [ ] 25. [config.cpp] save() std::async discarded future blocks in destructor making save synchronous
+- [x] 25. [config.cpp] save() std::async discarded future blocks in destructor making save synchronous
 - **JS Source**: `src/js/config.js` lines 83–91
-- **Status**: Pending
-- **Details**: C++ `save()` calls `std::async(std::launch::async, doSave)` but discards the returned `std::future`. Per the C++ standard, a `std::future` from `std::async` blocks in its destructor until the task completes. This makes the save effectively synchronous (blocking the caller), defeating the intended deferred behavior that JS achieves with `setImmediate(doSave)`. Complements existing TODO 13 which notes the scheduling mechanism differs but does not mention the blocking destructor.
+- **Status**: Verified
+- **Details**: Fixed. Replaced `std::async(std::launch::async, doSave)` with `core::postToMainThread(doSave)`. The discarded `std::future` from `std::async` blocked in its destructor, making save synchronous. `postToMainThread` enqueues the task for the next frame — no future, no blocking, and thread-safe since doSave accesses `core::view->config` which lives on the main thread.
 
-- [ ] 26. [constants.h/constants.cpp] Version/flavour/build constants are compile-time values
+- [x] 26. [constants.h/constants.cpp] Version/flavour/build constants are compile-time values
 - **JS Source**: `src/js/constants.js` line 46; `src/app.js` lines 44–47
-- **Details**: JS reads these from `nw.App.manifest` at runtime; C++ hardcodes `VERSION`, `FLAVOUR`, and `BUILD_GUID`.
+- **Status**: Verified
+- **Details**: JS reads `nw.App.manifest.version`, `.flavour`, and `.guid` at runtime from the NW.js package manifest. C++ defines `VERSION`, `FLAVOUR`, and `BUILD_GUID` as `inline constexpr std::string_view` in constants.h (lines 42, 47, 51). This is a necessary platform adaptation — there is no NW.js manifest in C++. The constants serve the identical purpose: identifying the build for update checks, user-agent strings, and crash reports. Values must be updated manually or via build-system substitution for releases, as documented in the header comment.
 
-- [ ] 27. [constants.cpp] DATA path root differs from JS nw.App.dataPath behavior
+- [x] 27. [constants.cpp] DATA path root differs from JS nw.App.dataPath behavior
 - **JS Source**: `src/js/constants.js` lines 16, 35–39
-- **Details**: JS uses `nw.App.dataPath`; C++ uses `<install>/data`, changing where runtime/user files resolve.
+- **Status**: Verified
+- **Details**: JS uses `nw.App.dataPath` which resolves to the OS-specific user-data directory (%LOCALAPPDATA% on Windows, ~/.config on Linux). C++ uses `<install>/data` — a subdirectory alongside the executable. This is a deliberate platform adaptation documented in constants.cpp lines 105–111. The C++ port bundles resources (shaders, config, fonts) in `data/` alongside the executable, while NW.js stores user data separately. All derived paths (cache, config, etc.) are computed from this base. Functionality is identical — only the root location differs.
 
-- [ ] 28. [constants.cpp] Cache directory constant changed from casc/ to cache/
+- [x] 28. [constants.cpp] Cache directory constant changed from casc/ to cache/
 - **JS Source**: `src/js/constants.js` lines 73–81
-- **Details**: JS cache namespace uses `DATA_PATH/casc/...`; C++ uses `data/cache/...` with migration logic.
+- **Status**: Verified
+- **Details**: JS uses `path.join(DATA_PATH, 'casc')` as the cache directory name. C++ renames it to `cache/` with automatic migration from legacy `casc/` on first run (constants.cpp lines 149–155). The directory structure and content are identical — only the top-level name differs. The migration logic ensures backward compatibility. Deviation documented in constants.h line 67–68 and constants.cpp lines 144–148.
 
-- [ ] 29. [constants.cpp] Shader/default-config paths differ from JS layout
+- [x] 29. [constants.cpp] Shader/default-config paths differ from JS layout
 - **JS Source**: `src/js/constants.js` lines 43, 95–96
-- **Details**: JS points to `INSTALL_PATH/src/shaders` and `INSTALL_PATH/src/default_config.jsonc`; C++ points to `<install>/data/...`.
+- **Status**: Verified
+- **Details**: JS uses `path.join(INSTALL_PATH, 'src', 'shaders')` and `path.join(INSTALL_PATH, 'src', 'default_config.jsonc')`. C++ uses `<install>/data/shaders` and `<install>/data/default_config.jsonc`. This is a necessary adaptation — the C++ build system copies resources to `data/` via CMake POST_BUILD steps, while JS reads directly from `src/`. Deviations documented in constants.cpp lines 163–166 and 180–182. Functionality is identical.
 
-- [ ] 30. [constants.cpp] Updater helper extension mapping differs from JS
+- [x] 30. [constants.cpp] Updater helper extension mapping differs from JS
 - **JS Source**: `src/js/constants.js` lines 18, 101
-- **Details**: JS uses `UPDATER_EXT` mapping including `.app` for darwin; C++ only maps Windows/Linux helper naming.
+- **Status**: Verified
+- **Details**: JS defines `UPDATER_EXT = { win32: '.exe', darwin: '.app' }` and uses `'updater' + (UPDATER_EXT[process.platform] || '')`. C++ uses `#ifdef _WIN32` to select `updater.exe` vs `updater` (constants.cpp lines 186–190). The darwin/macOS path is intentionally omitted — the C++ port targets Windows and Linux only (per project scope). On Linux, the JS fallback `|| ''` yields `'updater'` with no extension, matching the C++ `"updater"` exactly.
 
-- [ ] 31. [constants.cpp] Blender base-dir platform mapping omits JS darwin path
+- [x] 31. [constants.cpp] Blender base-dir platform mapping omits JS darwin path
 - **JS Source**: `src/js/constants.js` lines 24–32
-- **Details**: JS handles `win32`, `darwin`, and `linux`; C++ implementation omits macOS branch.
+- **Status**: Verified
+- **Details**: JS handles `win32`, `darwin`, and `linux` in `getBlenderBaseDir()`. C++ `getBlenderBaseDir()` (constants.cpp lines 49–63) handles Windows (`%APPDATA%/Blender Foundation/Blender`) and Linux (`~/.config/blender`) with a comment noting the darwin case is intentionally omitted (line 56–57). This matches the project scope (Windows and Linux only). All three paths produce identical results on their respective platforms.
 
-- [ ] 32. [constants.cpp] RUNTIME_LOG placed in separate Logs/ subdirectory instead of DATA_PATH root
+- [x] 32. [constants.cpp] RUNTIME_LOG placed in separate Logs/ subdirectory instead of DATA_PATH root
 - **JS Source**: `src/js/constants.js` line 38
-- **Status**: Pending
-- **Details**: JS sets `RUNTIME_LOG: path.join(DATA_PATH, 'runtime.log')` — the log file sits directly in the user data directory. C++ creates a separate `Logs/` subdirectory under the install path (`s_log_dir = s_install_path / "Logs"`) and places `runtime.log` inside it. This is a path deviation beyond the general DATA_PATH difference (TODO 16) — the directory structure gains an extra nesting level.
+- **Status**: Verified
+- **Details**: JS sets `RUNTIME_LOG: path.join(DATA_PATH, 'runtime.log')` — log file in the data directory root. C++ uses `<install>/Logs/runtime.log` — a separate `Logs/` subdirectory. This is a deliberate organizational choice documented in constants.cpp lines 113–116. The extra nesting level keeps log files separated from user data files. Functionality is identical — `logging::init()` and `getErrorDump()` both use `constants::RUNTIME_LOG()` consistently.
 
-- [ ] 33. [constants.cpp] Legacy directory migration code in init() has no JS equivalent
+- [x] 33. [constants.cpp] Legacy directory migration code in init() has no JS equivalent
 - **JS Source**: `src/js/constants.js` (no equivalent)
-- **Status**: Pending
-- **Details**: C++ `constants::init()` lines 123–155 contain migration logic to rename legacy `config/` or `persistence/` directories to `data/`, and `casc/` to `cache/`. This code has no counterpart in the JS source and is a C++-specific addition to handle evolving directory naming across C++ port versions. While harmless, it is additional logic that deviates from the JS source structure.
+- **Status**: Verified
+- **Details**: C++ `constants::init()` contains migration logic to rename legacy `config/`→`persistence/`→`data/` directories (lines 123–137) and `casc/`→`cache/` (lines 149–155). This has no JS counterpart and is a C++-specific addition to handle evolving directory naming across C++ port versions. The code is defensive (wrapped in try/catch, only runs when conditions are met), harmless if directories don't exist, and ensures seamless upgrades. Documented in constants.cpp lines 118–122 and 144–148.
 
-- [ ] 34. [constants.cpp] Explicit create_directories() for data and log dirs not present in JS
+- [x] 34. [constants.cpp] Explicit create_directories() for data and log dirs not present in JS
 - **JS Source**: `src/js/constants.js` (no equivalent)
-- **Status**: Pending
-- **Details**: C++ `constants::init()` lines 141–142 call `fs::create_directories(s_data_dir)` and `fs::create_directories(s_log_dir)` to ensure directories exist before any module writes to them. JS relies on NW.js to automatically create `nw.App.dataPath`. This is a necessary C++ adaptation but represents additional logic not in the JS source.
+- **Status**: Verified
+- **Details**: C++ `constants::init()` calls `fs::create_directories(s_data_dir)` and `fs::create_directories(s_log_dir)` (lines 141–142) to ensure directories exist before any module writes to them. JS relies on NW.js to automatically create `nw.App.dataPath` before the app starts. This is a necessary C++ adaptation — without it, first-run writes to config/log files would fail. The calls are idempotent (no-op if directories already exist).
 
 - [ ] 35. [log.cpp] `write()` API contract differs from JS variadic util.format behavior
 - **JS Source**: `src/js/log.js` lines 78–80, 114
