@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/814 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/864 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -4028,3 +4028,253 @@
 - **JS Source**: `src/js/modules/tab_textures.js` line 312
 - **Status**: Pending
 - **Details**: JS applies max-width/max-height from texture dimensions so preview never upscales beyond native resolution. C++ computes scale = min(avail/tex) which upscales small textures to fill the panel.
+
+- [ ] 815. [tab_videos.cpp] MenuButton export format dropdown completely missing
+- **JS Source**: `src/js/modules/tab_videos.js` line 505
+- **Status**: Pending
+- **Details**: JS uses `<MenuButton :options="menuButtonVideos" :default="config.exportVideoFormat" @change="..." @click="export_selected">` which renders a dropdown to pick MP4/AVI/MP3/SUBTITLES and triggers export. C++ renders a plain `ImGui::Button("Export Selected")` with no format selector. Users cannot change the export format from this tab.
+
+- [ ] 816. [tab_videos.cpp] AVI export corruption fallback is a no-op
+- **JS Source**: `src/js/modules/tab_videos.js` line 697
+- **Status**: Pending
+- **Details**: JS calls `getFileByName(file_name, false, false, true, true)` with extra params (forceFallback). C++ calls `getVirtualFileByName(file_name)` identically to the first attempt, with a comment admitting `// Note: C++ getVirtualFileByName doesn't support forceFallback; retry normally.` The corruption recovery path will always fail the same way twice.
+
+- [ ] 817. [tab_videos.cpp] Video preview is text-only, not an embedded player
+- **JS Source**: `src/js/modules/tab_videos.js` line 493
+- **Status**: Pending
+- **Details**: JS renders a `<video>` element with full controls, autoplay, subtitles overlay via `<track>`. C++ opens the URL in the system's external media player (`core::openInExplorer(url)`) and shows plain text. No inline playback, no controls, no subtitle overlay in the app window.
+
+- [ ] 818. [tab_videos.cpp] No onended/onerror callbacks for video playback
+- **JS Source**: `src/js/modules/tab_videos.js` lines 263–275
+- **Status**: Pending
+- **Details**: JS attaches `video.onended` (resets `is_streaming`/`videoPlayerState`) and `video.onerror` (shows error toast). C++ delegates to external player and has neither callback — `is_streaming` and `videoPlayerState` are never automatically reset when playback finishes; user must manually click "Stop Video."
+
+- [ ] 819. [tab_videos.cpp] build_payload runs on main thread, blocking UI
+- **JS Source**: `src/js/modules/tab_videos.js` line 125
+- **Status**: Pending
+- **Details**: JS `build_payload` is `async`/`await` (non-blocking). In C++, it's called synchronously on the main thread before launching the background thread. DB2 queries + CASC lookups could freeze the UI.
+
+- [ ] 820. [tab_videos.cpp] stop_video does not join/stop background thread
+- **JS Source**: `src/js/modules/tab_videos.js` lines 27–57
+- **Status**: Pending
+- **Details**: JS clears `setTimeout` handle which fully cancels pending work. C++ sets `poll_cancelled = true` but does not `reset()` or join `stream_worker_thread`. The thread may still be running and post results after stop. Only `stream_video` joins it before a new stream.
+
+- [ ] 821. [tab_videos.cpp] MP4 download HTTP error check missing
+- **JS Source**: `src/js/modules/tab_videos.js` lines 631–633
+- **Status**: Pending
+- **Details**: JS explicitly checks `if (!response.ok)` and marks the file with 'Failed to download MP4: ' + response.status. C++ uses `generics::get(*mp4_url)` with no status check — if the server returns a non-200 status, behavior depends on `generics::get()` implementation.
+
+- [ ] 822. [tab_videos.cpp] All helper.mark error calls missing stack trace argument
+- **JS Source**: `src/js/modules/tab_videos.js` lines 642, 690, 702, 763, 822
+- **Status**: Pending
+- **Details**: JS passes `(file, false, e.message, e.stack)` (4 args) for error marking. C++ passes only `(file, false, e.what())` (3 args). Stack traces are lost in every export error path (MP4, AVI×2, MP3, Subtitles).
+
+- [ ] 823. [tab_videos.cpp] stream_video outer catch missing stack trace log
+- **JS Source**: `src/js/modules/tab_videos.js` line 214
+- **Status**: Pending
+- **Details**: JS logs `log.write(e.stack)` separately from the error message. C++ only logs `e.what()`.
+
+- [ ] 824. [tab_videos.cpp] Cancel button missing from kino_processing toast
+- **JS Source**: `src/js/modules/tab_videos.js` line 399
+- **Status**: Pending
+- **Details**: JS passes `{ 'Cancel': cancel_processing }` as toast buttons. C++ passes `{}` — no Cancel button is shown during batch processing, leaving users with no way to cancel.
+
+- [ ] 825. [tab_videos.cpp] Regex tooltip missing on "Regex Enabled" text
+- **JS Source**: `src/js/modules/tab_videos.js` line 489
+- **Status**: Pending
+- **Details**: JS shows `:title="$core.view.regexTooltip"` tooltip on the "Regex Enabled" text. C++ renders `ImGui::TextUnformatted("Regex Enabled")` with no tooltip.
+
+- [ ] 826. [tab_videos.cpp] Spurious "Connecting to video server..." toast not in JS
+- **JS Source**: `src/js/modules/tab_videos.js` (none)
+- **Status**: Pending
+- **Details**: JS shows no toast before the initial HTTP request — it only shows "Video is being processed..." on 202 status. C++ always shows a "Connecting to video server..." progress toast before the request, which is not in the original.
+
+- [ ] 827. [tab_videos.cpp] "View Log" button text capitalization differs from JS
+- **JS Source**: `src/js/modules/tab_videos.js` lines 195, 215
+- **Status**: Pending
+- **Details**: JS uses lowercase `'view log'`. C++ uses title case `"View Log"`.
+
+- [ ] 828. [tab_videos.cpp] Filter input buffer capped at 255 chars
+- **JS Source**: `src/js/modules/tab_videos.js` line 490
+- **Status**: Pending
+- **Details**: JS `v-model` has no character limit. C++ uses `char filter_buf[256]` which truncates filter input at 255 characters.
+
+- [ ] 829. [tab_videos.cpp] kino_post hardcodes hostname and path instead of using constant
+- **JS Source**: `src/js/modules/tab_videos.js` lines 137, 349, 431
+- **Status**: Pending
+- **Details**: JS uses `constants.KINO.API_URL` dynamically via `fetch()`. C++ hardcodes `httplib::SSLClient cli("www.kruithne.net")` and `.Post("/wow.export/v2/get_video", ...)` instead of parsing the constant. If the constant changes, C++ won't reflect it.
+
+- [ ] 830. [tab_videos.cpp] Subtitle loading uses different API path than JS
+- **JS Source**: `src/js/modules/tab_videos.js` lines 226–230
+- **Status**: Pending
+- **Details**: JS calls `subtitles.get_subtitles_vtt(core_ref.view.casc, subtitle_info.file_data_id, subtitle_info.format)` which fetches+converts internally. C++ manually fetches via `casc->getVirtualFileByID()`, reads as string, then calls `subtitles::get_subtitles_vtt(raw_subtitle_text, fmt)`. Different function signature — caller now responsible for fetching.
+
+- [ ] 831. [tab_videos.cpp] MP4 download may lack User-Agent header
+- **JS Source**: `src/js/modules/tab_videos.js` line 628
+- **Status**: Pending
+- **Details**: JS explicitly sets `'User-Agent': constants.USER_AGENT` for the MP4 download fetch. C++ uses `generics::get(*mp4_url)` which may or may not set User-Agent, depending on that function's implementation.
+
+- [ ] 832. [tab_videos.cpp] Dead variable prev_selection_first never read
+- **JS Source**: `src/js/modules/tab_videos.js` (none)
+- **Status**: Pending
+- **Details**: `prev_selection_first` is set on line 953 but never read for any comparison. The selection comparison uses `selected_file` instead. This is dead code.
+
+- [ ] 833. [tab_videos.cpp] Dev-mode trigger_kino_processing not exposed in C++
+- **JS Source**: `src/js/modules/tab_videos.js` lines 468–469
+- **Status**: Pending
+- **Details**: JS exposes `window.trigger_kino_processing = trigger_kino_processing` when `!BUILD_RELEASE`. C++ has only a comment. No equivalent debug hook exists.
+
+- [ ] 834. [tab_zones.cpp] UiMapArtStyleLayer join uses wrong field name
+- **JS Source**: `src/js/modules/tab_zones.js` lines 88–91
+- **Status**: Pending
+- **Details**: JS joins `art_style_layer.UiMapArtStyleID === art_entry.UiMapArtStyleID`. C++ joins on `layer_row["UiMapArtID"]` — a completely different field name. The C++ looks for "UiMapArtID" in UiMapArtStyleLayer table, but JS matches on "UiMapArtStyleID" from both tables. This produces wrong rows or no rows.
+
+- [ ] 835. [tab_zones.cpp] CombinedArtStyle.id stores wrong ID (layer ID vs art ID)
+- **JS Source**: `src/js/modules/tab_zones.js` lines 94–101
+- **Status**: Pending
+- **Details**: JS `combined_style` includes `...art_entry` (spread), so `combined_style.ID` = the UiMapArt row ID (`art_id`). C++ sets `style.id = static_cast<int>(layer_id)` which is the UiMapArtStyleLayer table key. This wrong ID propagates to `getRelationRows()` calls for UiMapArtTile and WorldMapOverlay.
+
+- [ ] 836. [tab_zones.cpp] C++ adds ALL matching style layers; JS keeps only LAST
+- **JS Source**: `src/js/modules/tab_zones.js` lines 86–91
+- **Status**: Pending
+- **Details**: JS declares `let style_layer;` then overwrites in a loop, keeping only the last match. C++ `push_back`s every matching row into `art_styles`. This creates duplicate/extra entries causing redundant or incorrect rendering.
+
+- [ ] 837. [tab_zones.cpp] Phase filter logic differs when phase_id is null
+- **JS Source**: `src/js/modules/tab_zones.js` line 78
+- **Status**: Pending
+- **Details**: JS: `if (phase_id === null || link_entry.PhaseID === phase_id)` — when phase_id is null, ALL entries are included. C++: when `phase_id` is nullopt, only entries with `row_phase == 0` are included. C++ omits non-default phases when no phase is specified, while JS shows all.
+
+- [ ] 838. [tab_zones.cpp] Missing tile OffsetX/OffsetY in render_map_tiles
+- **JS Source**: `src/js/modules/tab_zones.js` lines 181–182
+- **Status**: Pending
+- **Details**: JS: `final_x = pixel_x + (tile.OffsetX || 0); final_y = pixel_y + (tile.OffsetY || 0)`. C++ only uses `pixel_x = col * tile_width; pixel_y = row * tile_height` with no offset. Tiles with non-zero offsets will be mispositioned.
+
+- [ ] 839. [tab_zones.cpp] Tile layer rendering architecture differs from JS
+- **JS Source**: `src/js/modules/tab_zones.js` lines 126–152
+- **Status**: Pending
+- **Details**: JS groups ALL tiles for an art_style by their LayerIndex, then renders each group in sorted order. C++ calls `render_map_tiles(art_style, art_style.layer_index, ...)` which filters tiles to only those matching the single layer_index. Combined with the duplicate style layers issue, rendering pipeline differs significantly.
+
+- [ ] 840. [tab_zones.cpp] parse_zone_entry doesn't throw on bad input
+- **JS Source**: `src/js/modules/tab_zones.js` lines 17–18
+- **Status**: Pending
+- **Details**: JS throws `new Error('unexpected zone entry')` on regex mismatch. C++ returns an empty `ZoneDisplayInfo{}` with `id=0`. Callers add `zone.id > 0` guards, but error propagation differs.
+
+- [ ] 841. [tab_zones.cpp] UiMap row existence not validated
+- **JS Source**: `src/js/modules/tab_zones.js` lines 67–71
+- **Status**: Pending
+- **Details**: JS checks `if (!map_data)` and throws `'UiMap entry not found'`. C++ fetches the row but casts to void: `(void)ui_map_row_opt;` — never checks the result or throws.
+
+- [ ] 842. [tab_zones.cpp] Pixel buffer not cleared at start of render when first layer is non-zero
+- **JS Source**: `src/js/modules/tab_zones.js` line 59
+- **Status**: Pending
+- **Details**: JS calls `ctx.clearRect(0, 0, canvas.width, canvas.height)` at the start. C++ only allocates/clears the pixel buffer inside the `if (art_style.layer_index == 0)` block. If the first art_style has layer_index != 0, stale pixel data remains.
+
+- [ ] 843. [tab_zones.cpp] Listbox copyMode hardcoded instead of from config
+- **JS Source**: `src/js/modules/tab_zones.js` line 315
+- **Status**: Pending
+- **Details**: C++ passes `listbox::CopyMode::Default` instead of reading from `view.config["copyMode"]`.
+
+- [ ] 844. [tab_zones.cpp] Listbox pasteSelection hardcoded false instead of from config
+- **JS Source**: `src/js/modules/tab_zones.js` line 315
+- **Status**: Pending
+- **Details**: C++ hardcodes `false` instead of reading `view.config["pasteSelection"]`.
+
+- [ ] 845. [tab_zones.cpp] Listbox copytrimwhitespace hardcoded false instead of from config
+- **JS Source**: `src/js/modules/tab_zones.js` line 315
+- **Status**: Pending
+- **Details**: C++ hardcodes `false` instead of reading `view.config["removePathSpacesCopy"]`.
+
+- [ ] 846. [tab_zones.cpp] export_zone_map helper.mark missing stack trace
+- **JS Source**: `src/js/modules/tab_zones.js` line 491
+- **Status**: Pending
+- **Details**: JS: `helper.mark(zone_entry, false, e.message, e.stack)` — passes both message and stack. C++: `helper.mark(..., false, e.what())` — only passes message, no stack trace.
+
+- [ ] 847. [tab_zones.cpp] Phase dropdown placed in control bar instead of preview overlay
+- **JS Source**: `src/js/modules/tab_zones.js` lines 341–347
+- **Status**: Pending
+- **Details**: JS puts the phase `<select>` inside `preview-dropdown-overlay` div overlaid on the zone canvas. C++ places the `ImGui::BeginCombo` in the bottom controls bar alongside checkboxes/button. This is a layout difference.
+
+- [ ] 848. [tab_zones.cpp] Missing regex tooltip on "Regex Enabled" text
+- **JS Source**: `src/js/modules/tab_zones.js` line 325
+- **Status**: Pending
+- **Details**: JS shows a tooltip on "Regex Enabled" via `:title="$core.view.regexTooltip"`. C++ renders `ImGui::TextUnformatted("Regex Enabled")` with no tooltip.
+
+- [ ] 849. [tab_zones.cpp] EXPANSION_NAMES static vector is dead code
+- **JS Source**: `src/js/modules/tab_zones.js` (none)
+- **Status**: Pending
+- **Details**: `EXPANSION_NAMES` vector is defined but never referenced. The actual expansion rendering uses `constants::EXPANSIONS`. Should be removed.
+
+- [ ] 850. [tab_zones.cpp] ZoneDisplayInfo vs ZoneEntry naming mismatch with header
+- **JS Source**: `src/js/modules/tab_zones.js` (none)
+- **Status**: Pending
+- **Details**: The header declares `ZoneEntry` struct but the cpp defines a separate `ZoneDisplayInfo` struct for `parse_zone_entry`. The header's `ZoneEntry` appears unused.
+
+- [ ] 851. [tab_zones.cpp] Missing per-tile position logging in render_map_tiles
+- **JS Source**: `src/js/modules/tab_zones.js` lines 184–185
+- **Status**: Pending
+- **Details**: JS logs `'rendering tile FileDataID %d at position (%d,%d) -> (%d,%d) [Layer %d]'` for each tile. C++ has no per-tile log.
+
+- [ ] 852. [tab_zones.cpp] Missing "no tiles found" log for art style
+- **JS Source**: `src/js/modules/tab_zones.js` lines 121–123
+- **Status**: Pending
+- **Details**: JS logs `'no tiles found for UiMapArt ID %d'` and `continue`s. C++ has no equivalent check/log.
+
+- [ ] 853. [tab_zones.cpp] Missing "no overlays found" log
+- **JS Source**: `src/js/modules/tab_zones.js` lines 212–214
+- **Status**: Pending
+- **Details**: JS logs `'no WorldMapOverlay entries found for UiMapArt ID %d'` when overlays array is empty. C++ has no such log.
+
+- [ ] 854. [tab_zones.cpp] Missing "no overlay tiles" log per overlay
+- **JS Source**: `src/js/modules/tab_zones.js` lines 219–222
+- **Status**: Pending
+- **Details**: JS logs `'no tiles found for WorldMapOverlay ID %d'` and `continue`s for empty tile sets. C++ calls `render_overlay_tiles` regardless.
+
+- [ ] 855. [tab_zones.cpp] Unsafe Windows wstring conversion corrupts multi-byte UTF-8 paths
+- **JS Source**: `src/js/modules/tab_zones.js` (none)
+- **Status**: Pending
+- **Details**: `std::wstring wpath(dir.begin(), dir.end())` does byte-by-byte copy which corrupts multi-byte UTF-8 paths. Should use `MultiByteToWideChar` or equivalent.
+
+- [ ] 856. [tab_zones.cpp] Linux shell command injection risk in openInExplorer
+- **JS Source**: `src/js/modules/tab_zones.js` line 393
+- **Status**: Pending
+- **Details**: `"xdg-open \"" + dir + "\" &"` passed to `std::system()`. If `dir` contains shell metacharacters, this is exploitable. JS uses `nw.Shell.openItem` which is safe.
+
+- [ ] 857. [bzip2.cpp] Dead code branch in StrangeCRC::update for negative index
+- **JS Source**: `src/js/mpq/bzip2.js` line 114
+- **Status**: Pending
+- **Details**: In JS, `this.globalCrc` is stored as signed 32-bit via `| 0`, so `(this.globalCrc >> 24)` uses signed right shift and CAN produce negative values, making the `if (index < 0)` branch reachable. In C++, `globalCrc` is `uint32_t`, so `globalCrc >> 24` always yields 0–255 and the `if (index < 0)` branch is dead code. Not a correctness bug but dead code diverging from JS control flow.
+
+- [ ] 858. [bzip2.cpp] Missing default parameters in updateBuffer
+- **JS Source**: `src/js/mpq/bzip2.js` line 121
+- **Status**: Pending
+- **Details**: JS declares `updateBuffer(buf, off = 0, len = buf.length)` with default values for `off` and `len`. C++ declares `void updateBuffer(const uint8_t* buf, int off, int len)` without defaults. Not currently a runtime bug since `updateBuffer` is only called internally with all three args, but the API surface doesn't match the JS.
+
+- [ ] 859. [mpq-install.cpp] _scan_mpq_files sorts entire accumulated vector at every recursion depth
+- **JS Source**: `src/js/mpq/mpq-install.js` lines 25–41
+- **Status**: Pending
+- **Details**: In JS, each recursive call returns a separate local `results` array that is sorted and returned. In C++, all recursion levels share the same `results` vector (passed by reference), and `std::sort` is called at every depth, redundantly re-sorting all previously added entries. Final result is identical but differs in performance characteristics.
+
+- [ ] 860. [mpq-install.cpp] Archive push ordering differs from JS
+- **JS Source**: `src/js/mpq/mpq-install.js` lines 56–75
+- **Status**: Pending
+- **Details**: JS pushes the archive into `this.archives` first, then iterates files and stores `archive_index: this.archives.length - 1`. C++ iterates files first using `archives.size()` as the index, then pushes the archive. Both produce the correct index, but code structure differs — if future code is added between listfile population and archive push, the C++ ordering could break.
+
+- [ ] 861. [mpq.cpp] console.error replaced by logging::write for decompression errors
+- **JS Source**: `src/js/mpq/mpq.js` line 422
+- **Status**: Pending
+- **Details**: JS uses `console.error('decompression error:', e)` in inflateData catch. C++ uses `logging::write` which goes to the log file rather than stderr. Different log destination.
+
+- [ ] 862. [audio-helper.cpp] get_position() has side effects not present in JS
+- **JS Source**: `src/js/ui/audio-helper.js` lines 115–130
+- **Status**: Pending
+- **Details**: In JS, `get_position()` is a pure getter — the browser's `onended` callback independently fires when playback finishes. In C++, `get_position()` polls `ma_sound_at_end()` and fires `on_ended`, resets `is_playing`, calls `stop_source()`, and resets `start_offset`. Consumers MUST poll `get_position()` periodically for end-of-playback detection. Documented in code but architecturally different.
+
+- [ ] 863. [audio-helper.cpp] detectFileType accepts raw bytes instead of BufferWrapper
+- **JS Source**: `src/js/ui/audio-helper.js` lines 163–170
+- **Status**: Pending
+- **Details**: JS `detectFileType(data)` takes a BufferWrapper and calls `data.startsWith(...)` which accepts arrays of prefixes. C++ takes `(const uint8_t* data, size_t size)` — raw pointer and length. Functionally equivalent but different calling convention.
+
+- [ ] 864. [audio-helper.cpp] play() checks !engine in addition to empty data
+- **JS Source**: `src/js/ui/audio-helper.js` lines 43–44
+- **Status**: Pending
+- **Details**: JS `play()` only checks `if (!this.buffer)`. C++ checks `if (audio_data.empty() || !engine)`. If JS `init()` was never called, `this.context.createBufferSource()` would throw at runtime. C++ handles this gracefully with the extra guard — more defensive but different error behavior.
