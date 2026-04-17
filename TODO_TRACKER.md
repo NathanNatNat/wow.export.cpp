@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/524 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/572 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -2578,3 +2578,243 @@
 - **JS Source**: `src/js/components/listbox.js` lines 96–113
 - **Status**: Pending
 - **Details**: JS has `activated()` and `deactivated()` lifecycle hooks that register/unregister paste and keyboard listeners when the component enters/leaves a `<keep-alive>` cache. C++ renders each frame via `render()` calls — there's no keep-alive equivalent. The keyboard and paste handling happens inline each frame. However, if multiple listbox instances exist across different tabs, the C++ version may process keyboard input for all of them simultaneously (since all `render()` calls run every frame), while JS only processes input for the active (non-deactivated) instance. This could cause input to be consumed by the wrong listbox.
+
+- [ ] 525. [map-viewer.cpp] Box-select-mode active color uses NAV_SELECTED (#22B549) instead of CSS #5fdb65
+- **JS Source**: `src/app.css` line 1348–1349
+- **Status**: Pending
+- **Details**: CSS `.ui-map-viewer .info span.active` uses `color: #5fdb65` (RGB 95, 219, 101). C++ line 1178 uses `app::theme::NAV_SELECTED` which maps to `BUTTON_BASE` = `(0.133, 0.710, 0.286)` = RGB(34, 181, 73). The active highlight color is noticeably different — should be a dedicated color constant matching #5fdb65.
+
+- [ ] 526. [map-viewer.cpp] Map-viewer info bar text lacks CSS `text-shadow: black 0 0 6px`
+- **JS Source**: `src/app.css` lines 1326–1328
+- **Status**: Pending
+- **Details**: CSS `.ui-map-viewer div { text-shadow: black 0 0 6px; }` applies a text shadow to all divs inside the map viewer, including the info bar and hover-info. C++ renders these with plain `ImGui::TextUnformatted` (lines 1166–1189) with no text shadow effect. ImGui does not natively support text shadows, so a manual shadow would need to be rendered (draw text offset in black, then draw normal text on top).
+
+- [ ] 527. [map-viewer.cpp] Map-viewer info bar spans missing CSS `margin: 0 10px` horizontal spacing
+- **JS Source**: `src/app.css` lines 1345–1346
+- **Status**: Pending
+- **Details**: CSS `.ui-map-viewer .info span { margin: 0 10px; }` gives each info label 10px left/right margin. C++ uses `ImGui::SameLine()` between items (lines 1167–1175) with default spacing. The default ImGui item spacing is typically ~8px which may not exactly match the 20px total gap (10px + 10px) between spans.
+
+- [ ] 528. [map-viewer.cpp] Map-viewer checkerboard background pattern not implemented
+- **JS Source**: `src/app.css` lines 1300–1306
+- **Status**: Pending
+- **Details**: CSS `.ui-map-viewer` has a complex checkerboard background using `background-image: linear-gradient(45deg, ...)` with `--trans-check-a` and `--trans-check-b` colors, `background-size: 30px 30px`, and `background-position: 0 0, 15px 15px`. C++ `renderWidget` (line 1148) uses `ImGui::BeginChild` with no custom background drawing — the checkerboard transparency pattern is missing entirely. The JS version shows a checkerboard behind transparent map tiles.
+
+- [ ] 529. [map-viewer.cpp] Map-viewer hover-info positioned at top via ImGui layout instead of CSS `bottom: 3px; left: 3px`
+- **JS Source**: `src/app.css` lines 1330–1333
+- **Status**: Pending
+- **Details**: CSS `.ui-map-viewer .hover-info` is positioned `bottom: 3px; left: 3px` (bottom-left corner of the map viewer). C++ renders hover-info at line 1187–1189 via `ImGui::SameLine()` after the info bar spans, placing it inline at the top. It should be rendered at the bottom-left of the map viewer container using `ImGui::SetCursorPos` or overlay drawing.
+
+- [ ] 530. [map-viewer.cpp] Box-select-mode cursor not changed to crosshair
+- **JS Source**: `src/app.css` lines 1351–1353
+- **Status**: Pending
+- **Details**: CSS `.ui-map-viewer.box-select-mode { cursor: crosshair; }` changes the cursor to a crosshair when box-select mode is active. C++ does not call `ImGui::SetMouseCursor(ImGuiMouseCursor_Hand)` or any cursor change when `state.isBoxSelectMode` is true. ImGui does not have a native crosshair cursor, but this should at least document the visual difference.
+
+- [ ] 531. [map-viewer.cpp] Tile rendering to canvas via GL textures not implemented — tiles cached in memory but not displayed
+- **JS Source**: `src/js/components/map-viewer.js` lines 350–500 (loadTile, renderWithDoubleBuffer)
+- **Status**: Pending
+- **Details**: The JS version draws tiles to a `<canvas>` via `context.putImageData()` and `context.drawImage()`. C++ caches tile pixel data in `s_state.tilePixelCache` (map-viewer.cpp line 81) but never uploads it as OpenGL textures or renders it to the screen. The TODO comment at line 1194–1198 acknowledges this. The map overlay (selection highlights, hover) draws over empty space. This is a critical functional gap — the map tiles are invisible.
+
+- [ ] 532. [map-viewer.cpp] `handleTileInteraction` emits selection changes via mutable reference instead of `$emit('update:selection')`
+- **JS Source**: `src/js/components/map-viewer.js` lines 846–874
+- **Status**: Pending
+- **Details**: JS `handleTileInteraction` modifies `this.selection` array directly (splice/push) and Vue reactivity propagates changes via `v-model`. C++ modifies the `selection` vector reference directly (lines 845–848). However, JS Select All (line 812) uses `this.$emit('update:selection', newSelection)` with a new array — the C++ equivalent calls `onSelectionChanged(newSelection)` callback in `handleKeyPress` (line 780) and `finalizeBoxSelection` (line 941). This means `handleTileInteraction` mutates in-place but Select All and box-select create new arrays — potential inconsistency in selection update patterns.
+
+- [ ] 533. [map-viewer.cpp] Map margin `20px 20px 0 10px` from CSS not applied
+- **JS Source**: `src/app.css` line 1307
+- **Status**: Pending
+- **Details**: CSS `.ui-map-viewer { margin: 20px 20px 0 10px; }` adds specific margins around the map viewer. C++ `renderWidget` uses `ImGui::GetContentRegionAvail()` for sizing (line 1144) without adding any padding/margin equivalent. The parent layout is responsible for this in ImGui, but if not handled there, the map viewer will be flush against adjacent elements.
+
+- [ ] 534. [markdown-content.cpp] CSS base font-size 20px not applied — ImGui uses default ~14px font
+- **JS Source**: `src/app.css` lines 236–243
+- **Status**: Pending
+- **Details**: CSS `.markdown-content { font-size: 20px; }` sets the base font size for all markdown content to 20px. C++ `render()` does not call `ImGui::SetWindowFontScale()` to scale up to 20px equivalent. The default ImGui font is ~13-14px, so all markdown text renders significantly smaller than the JS version. Header scales (1.8em, 1.5em, 1.2em) are applied correctly relative to the current font scale, but since the base is wrong, all absolute sizes are too small.
+
+- [ ] 535. [markdown-content.cpp] Link color uses `FONT_ALT` (#57afe2 blue) instead of CSS `--font-highlight` (#ffffff white)
+- **JS Source**: `src/app.css` lines 311–314
+- **Status**: Pending
+- **Details**: CSS `.markdown-content-inner a { color: var(--font-highlight); text-decoration: underline; }` uses pure white (#ffffff) for links with an underline. C++ `renderInlineSegments` line 254 uses `app::theme::FONT_ALT` (blue #57afe2) for links. The link color should be `FONT_HIGHLIGHT` (white) to match the CSS.
+
+- [ ] 536. [markdown-content.cpp] Links rendered without underline decoration
+- **JS Source**: `src/app.css` lines 311–314
+- **Status**: Pending
+- **Details**: CSS `.markdown-content-inner a { text-decoration: underline; }` renders links with an underline. C++ `renderInlineSegments` (lines 253–267) renders link text without any underline decoration. ImGui does not natively support underlined text, but a manual underline can be drawn using `ImGui::GetWindowDrawList()->AddLine()` beneath the text.
+
+- [ ] 537. [markdown-content.cpp] Inline code missing background `rgba(0,0,0,0.3)` with `padding: 2px 6px` and `border-radius: 3px`
+- **JS Source**: `src/app.css` lines 283–288
+- **Status**: Pending
+- **Details**: CSS `.markdown-content-inner code` has a dark background, padding, and rounded corners. C++ `renderInlineSegments` (lines 248–251) only changes the text color to `(0.9, 0.7, 0.5)` for inline code, without any background rectangle. The background color should be `IM_COL32(0, 0, 0, 77)` with a rounded rect behind the text.
+
+- [ ] 538. [markdown-content.cpp] Inline code color `(0.9, 0.7, 0.5)` has no CSS basis — CSS uses monospace font, not a special color
+- **JS Source**: `src/app.css` lines 283–289
+- **Status**: Pending
+- **Details**: CSS `.markdown-content-inner code` uses `font-family: monospace` but inherits the parent text color (white). C++ applies `ImVec4(0.9f, 0.7f, 0.5f, 1.0f)` (orange-ish) which has no equivalent in the CSS. The text color should remain the same as surrounding text; only the font family should change (which ImGui can't easily do for inline segments).
+
+- [ ] 539. [markdown-content.cpp] Bold text rendered with white color instead of bold font weight
+- **JS Source**: `src/app.css` lines 303–305
+- **Status**: Pending
+- **Details**: CSS `.markdown-content-inner strong { font-weight: bold; }` makes bold text heavier. C++ `renderInlineSegments` (lines 237–240) pushes white color `(1,1,1,1)` for bold, which is the same as normal text on a dark background. The visual difference from normal text is imperceptible. ImGui doesn't support inline bold without loading a separate bold font face and switching to it.
+
+- [ ] 540. [markdown-content.cpp] Italic text rendered with dim blue `(0.8, 0.8, 0.9)` instead of italic font style
+- **JS Source**: `src/app.css` lines 307–309
+- **Status**: Pending
+- **Details**: CSS `.markdown-content-inner em { font-style: italic; }` renders text in italic. C++ `renderInlineSegments` (lines 243–246) uses a dimmed blue-white color `(0.8, 0.8, 0.9)` which has no CSS basis. ImGui doesn't support italic text natively, but the color chosen doesn't match any CSS variable.
+
+- [ ] 541. [markdown-content.cpp] h1 header missing bottom separator matching CSS `border-bottom`
+- **JS Source**: `src/app.css` lines 249–253
+- **Status**: Pending
+- **Details**: CSS `.markdown-content-inner h1` has `margin: 0` but standard HTML h1 elements typically render with a bottom margin. C++ adds `ImGui::Separator()` after h1 (line 347) which draws a full-width horizontal line. The JS HTML rendering does not add a separator after h1 — the `<h1>` tag simply has larger text. The `ImGui::Separator()` is not present in the CSS and creates a visual difference.
+
+- [ ] 542. [markdown-content.cpp] Scrollbar thumb uses hardcoded gray colors instead of CSS `var(--border)` and `var(--font-highlight)`
+- **JS Source**: `src/app.css` lines 322–346
+- **Status**: Pending
+- **Details**: CSS `.vscroller > div` uses `background: var(--border)` (#6c757d) default and `background: var(--font-highlight)` (#ffffff) on hover/active. C++ uses hardcoded `IM_COL32(120, 120, 120, 150)` default and `IM_COL32(180, 180, 180, 200)` for active (lines 457–459). Neither color matches the CSS variables. Default should be `BORDER_U32` and active should be `FONT_HIGHLIGHT_U32`.
+
+- [ ] 543. [markdown-content.cpp] Scrollbar thumb missing `border: 1px solid var(--border)` and `border-radius: 5px` from CSS
+- **JS Source**: `src/app.css` lines 332–341
+- **Status**: Pending
+- **Details**: CSS `.vscroller > div` has `border: 1px solid var(--border)` and `border-radius: 5px`. C++ draws the thumb with `AddRectFilled` with 4px rounding (line 461) but no border outline. Should add `AddRect` with `BORDER_U32` and use 5px rounding.
+
+- [ ] 544. [markdown-content.cpp] Scrollbar track `right: 3px` positioning and `opacity: 0.7` not matched
+- **JS Source**: `src/app.css` lines 322–330
+- **Status**: Pending
+- **Details**: CSS `.vscroller { right: 3px; opacity: 0.7; }` positions the scrollbar 3px from the right edge with 70% opacity. C++ positions the scrollbar at `containerSize.x - scrollbar_width - 2.0f` (line 451, using 2px instead of 3px) and uses full opacity for the thumb colors. The alpha values in the thumb colors partially compensate but don't match the 70% opacity overlay.
+
+- [ ] 545. [markdown-content.cpp] `parseInline` processes text before HTML escaping, while JS escapes first then applies regex
+- **JS Source**: `src/js/components/markdown-content.js` lines 204–237
+- **Status**: Pending
+- **Details**: JS `parseInline` calls `this.escapeHtml(text)` first (line 205) before applying regex replacements for bold, italic, code, links, and images. This means the regex patterns match against HTML-escaped text (e.g., `&amp;` instead of `&`). C++ `parseInline` processes raw text directly without escaping. While ImGui doesn't need HTML escaping, if markdown content contains `&`, `<`, or `>` characters, the parsing behavior could differ because the JS regex operates on escaped text while C++ operates on raw text.
+
+- [ ] 546. [markdown-content.cpp] List items use `•` bullet with 16px indent instead of CSS `padding-left: 2em` with disc marker
+- **JS Source**: `src/app.css` lines 272–276
+- **Status**: Pending
+- **Details**: CSS `.markdown-content-inner ul { padding-left: 2em; list-style-type: disc; }` uses standard disc bullets with 2em left padding. At 20px base font, 2em = 40px. C++ uses `ImGui::Indent(16.0f)` with a manual `•` character (lines 369–373). 16px vs 40px indent is a significant visual difference, and the bullet character may render differently than the CSS disc marker.
+
+- [ ] 547. [menu-button.cpp] Arrow width 20px instead of CSS 29px
+- **JS Source**: `src/app.css` lines 1005–1022
+- **Status**: Pending
+- **Details**: CSS `.ui-menu-button .arrow { width: 29px; }` defines the arrow/caret button as 29px wide. C++ uses `const float arrowWidth = 20.0f` (line 125). The arrow area is 9px narrower than the original. The main button also uses `padding-right: 40px` in CSS (line 958) to reserve space for the arrow overlay, but in C++ the layout is side-by-side so the padding approach differs.
+
+- [ ] 548. [menu-button.cpp] Arrow uses `ICON_FA_CARET_DOWN` text instead of CSS `caret-down.svg` background image
+- **JS Source**: `src/app.css` lines 1017–1020
+- **Status**: Pending
+- **Details**: CSS `.arrow` uses `background-image: url(./fa-icons/caret-down.svg)` with `background-size: 10px` centered. C++ uses `ImGui::Button(ICON_FA_CARET_DOWN, ...)` (line 136). If `ICON_FA_CARET_DOWN` is not defined or not a valid FontAwesome codepoint, the button will show garbled text or nothing. Even if defined, the icon rendering may differ from the SVG.
+
+- [ ] 549. [menu-button.cpp] Arrow missing left border `border-left: 1px solid rgba(255, 255, 255, 0.32)`
+- **JS Source**: `src/app.css` line 1021
+- **Status**: Pending
+- **Details**: CSS `.arrow` has `border-left: 1px solid rgba(255, 255, 255, 0.3215686275)` separating the arrow from the main button. C++ places the arrow button with `ImGui::SameLine(0.0f, 0.0f)` (line 135) with no visual separator. A thin line should be drawn between the main button and the arrow.
+
+- [ ] 550. [menu-button.cpp] Dropdown menu uses ImGui popup window instead of CSS-styled `<ul>` with `--form-button-menu` background
+- **JS Source**: `src/app.css` lines 964–994
+- **Status**: Pending
+- **Details**: CSS `.ui-menu-button .menu` uses `background: var(--form-button-menu)`, `padding: 8px 10px` per item, rounded bottom corners (`border-radius: 5px`), and positions at `top: 85%` with `padding-top: 5%`. C++ uses `ImGui::Begin` with `ImGuiWindowFlags_AlwaysAutoResize` (lines 153–180) which uses ImGui's default popup styling. The background color, item padding, corner rounding, and position offset may all differ from the CSS.
+
+- [ ] 551. [menu-button.cpp] Dropdown menu items missing hover `background: var(--form-button-menu-hover)`
+- **JS Source**: `src/app.css` lines 976–978
+- **Status**: Pending
+- **Details**: CSS `.ui-menu-button .menu li:hover { background: var(--form-button-menu-hover); }` provides a specific hover color. C++ uses `ImGui::Selectable` (line 169) which uses ImGui's default `ImGuiCol_HeaderHovered` color, which may not match `--form-button-menu-hover`.
+
+- [ ] 552. [menu-button.cpp] Menu close behavior uses `IsMouseClicked(0)` outside check instead of JS `@close` mouse-leave
+- **JS Source**: `src/js/components/menu-button.js` line 78
+- **Status**: Pending
+- **Details**: JS `<context-menu>` component closes on mouse-leave (`@close="open = false"`) and also on click-outside. C++ (lines 175–178) only closes on click-outside via `!IsWindowHovered && IsMouseClicked(0)`. If the user moves the mouse away from the menu without clicking, the JS version closes the menu but the C++ version keeps it open.
+
+- [ ] 553. [model-viewer-gl.cpp] JS `controls.update()` called unconditionally but C++ splits into orbit/char controls with null checks
+- **JS Source**: `src/js/components/model-viewer-gl.js` line 250
+- **Status**: Pending
+- **Details**: JS line 250 calls `this.controls.update()` unconditionally — `this.controls` is always set to either `CameraControlsGL` or `CharacterCameraControlsGL`. C++ (lines 434–441) splits this into `if (use_character_controls && char_controls)` and `else if (orbit_controls)`, which is functionally equivalent. However, the JS also calls `sync_camera_*` before update implicitly via the camera adapter pattern, while C++ manually calls `sync_camera_to_gl`/`sync_camera_to_char_gl`. This is correct but diverges structurally.
+
+- [ ] 554. [model-viewer-gl.cpp] JS `context.controls = this.controls` stores single reference; C++ splits into `controls_orbit` and `controls_character`
+- **JS Source**: `src/js/components/model-viewer-gl.js` line 395
+- **Status**: Pending
+- **Details**: JS `recreate_controls` sets `this.context.controls = this.controls` (line 395) — a single duck-typed reference. C++ sets `context.controls_orbit` and `context.controls_character` separately (lines 625–636). Any code that accesses `context.controls` in JS would need to check both in C++. This structural difference could cause issues if external code expects a single controls reference.
+
+- [ ] 555. [model-viewer-gl.cpp] JS `activeRenderer.animation_paused` is a property but C++ uses `is_animation_paused()` method
+- **JS Source**: `src/js/components/model-viewer-gl.js` line 228
+- **Status**: Pending
+- **Details**: JS checks `!activeRenderer.animation_paused` (line 228) as a property access. C++ calls `!activeRenderer->is_animation_paused()` (line 408) as a method. This is functionally equivalent if `is_animation_paused()` returns the same value, but if the M2RendererGL interface ever changes the method name or semantics, this could diverge.
+
+- [ ] 556. [model-viewer-gl.cpp] JS `beforeUnmount` cleans up watcher array but C++ has no equivalent watcher disposal
+- **JS Source**: `src/js/components/model-viewer-gl.js` lines 509–512
+- **Status**: Pending
+- **Details**: JS `beforeUnmount` iterates `this.watchers` and calls each watcher function to unsubscribe (lines 509–512). C++ `dispose()` (lines 725–757) does not have an equivalent watcher cleanup — instead it uses polling in `renderWidget` (lines 798–820) which stops automatically when rendering stops. This is functionally equivalent since polling ceases, but the patterns differ.
+
+- [ ] 557. [model-viewer-gl.cpp] JS `window.addEventListener('resize', this.onResize)` but C++ FBO resize is implicit via ImGui layout
+- **JS Source**: `src/js/components/model-viewer-gl.js` lines 477–494
+- **Status**: Pending
+- **Details**: JS registers a `window.resize` event handler that reads `container.getBoundingClientRect()`, sets canvas size to `width * devicePixelRatio`, and updates viewport/camera aspect. C++ checks `fbo_width != width || fbo_height != height` each frame (line 783) and recreates the FBO. Both achieve the same result but C++ never calls `window.removeEventListener` cleanup (handled implicitly by stopping renders).
+
+- [ ] 558. [model-viewer-gl.cpp] `handle_input` only processes events when `IsItemHovered` — JS events are document-level
+- **JS Source**: `src/js/components/model-viewer-gl.js` lines 9 (CameraControlsGL constructor adds document listeners)
+- **Status**: Pending
+- **Details**: JS `CameraControlsGL` and `CharacterCameraControlsGL` register mousemove/mouseup on `document`, meaning mouse drag continues even when the cursor leaves the canvas. C++ `handle_input` (line 318) returns early if `!ImGui::IsItemHovered()`, which means dragging the camera and moving the mouse outside the widget area will stop the camera update. The comment on line 359 says "always forward, regardless of hover, since panning may extend outside" but the early return on line 318 contradicts this.
+
+- [ ] 559. [resize-layer.cpp] Fully ported — no issues found
+- **JS Source**: `src/js/components/resize-layer.js` lines 1–26
+- **Status**: Pending
+- **Details**: The resize-layer component is a simple wrapper that emits a 'resize' event when the element width changes. JS uses `ResizeObserver` and `beforeUnmount` cleanup. C++ uses `ImGui::GetContentRegionAvail().x` polling each frame and compares against previous width. The conversion is functionally complete and correct. No deviations found.
+
+- [ ] 560. [slider.cpp] Slider fill color uses `SLIDER_FILL_U32` but CSS uses `var(--font-alt)` (#57afe2)
+- **JS Source**: `src/app.css` lines 1267–1274
+- **Status**: Pending
+- **Details**: CSS `.ui-slider .fill { background: var(--font-alt); }` uses `--font-alt` (#57afe2, blue). C++ uses `app::theme::SLIDER_FILL_U32` (line 142). If `SLIDER_FILL_U32` does not map to #57afe2 / `FONT_ALT_U32`, the fill color will differ. Verify that `SLIDER_FILL_U32` matches `FONT_ALT_U32`.
+
+- [ ] 561. [slider.cpp] Slider track background uses `SLIDER_TRACK_U32` but CSS uses `var(--background-dark)` (#2c3136)
+- **JS Source**: `src/app.css` lines 1259–1266
+- **Status**: Pending
+- **Details**: CSS `.ui-slider { background: var(--background-dark); }` uses `--background-dark` (#2c3136). C++ uses `app::theme::SLIDER_TRACK_U32` (line 131). If this constant doesn't map to #2c3136, the track color will differ.
+
+- [ ] 562. [slider.cpp] Handle position uses `left: (modelValue * 100)%` without `translateX(-50%)` centering
+- **JS Source**: `src/app.css` lines 1275–1286
+- **Status**: Pending
+- **Details**: CSS `.handle { left: 50%; top: 50%; transform: translateY(-50%); }` — wait, the template uses `:style="{ left: (modelValue * 100) + '%' }"` which overrides the CSS `left: 50%`. The CSS `transform: translateY(-50%)` only vertically centers. C++ positions handle at `handleX = winPos.x + fillWidth` (line 148) without centering the handle horizontally on the value position. In JS, the handle's left edge is at the value position, so in C++ this is correct. No issue here — CSS comment on line 146 is accurate.
+
+- [ ] 563. [DBCReader.cpp] `loadSchema` is synchronous in C++ but `async` in JS — caching uses filesystem instead of CASC cache
+- **JS Source**: `src/js/db/DBCReader.js` lines 162–209
+- **Status**: Pending
+- **Details**: JS `loadSchema` is `async` and uses `core.view.casc?.cache.getFile()` / `cache.storeFile()` for DBD caching via the CASC cache system. C++ `loadSchema` (lines 156–236) is synchronous, uses `std::filesystem::exists` / `BufferWrapper::readFile` / `writeToFile` for filesystem-based caching. The C++ approach bypasses the CASC cache entirely — if the CASC cache has different behavior (e.g., automatic cleanup, shared across sessions), the C++ version won't benefit from it.
+
+- [ ] 564. [DBCReader.cpp] `parse` is synchronous in C++ but `async` in JS
+- **JS Source**: `src/js/db/DBCReader.js` line 244
+- **Status**: Pending
+- **Details**: JS `parse` is declared `async` (line 244) because it calls `await this.loadSchema()`. C++ `parse` (line 275) is synchronous. This means that in JS, DBC parsing yields to the event loop during schema loading (allowing UI updates), while C++ blocks the calling thread until parsing completes. For large tables or slow network downloads, this could freeze the UI.
+
+- [ ] 565. [DBCReader.cpp] `getRow` returns `std::optional<DataRecord>` but JS returns the row directly or `undefined`
+- **JS Source**: `src/js/db/DBCReader.js` lines 114–121
+- **Status**: Pending
+- **Details**: JS `getRow` returns `this.rows.get(index)` which returns `undefined` if the key doesn't exist in the Map. C++ (line 105) returns `std::nullopt` if the key doesn't exist. This is semantically equivalent, but callers must handle `std::optional` correctly. Also, JS uses `Map.get(index)` which does key lookup, while C++ uses `rows.value().at(static_cast<uint32_t>(index))` which uses `std::map::at` — both are O(log n) lookups.
+
+- [ ] 566. [DBCReader.cpp] `getAllRows` returns `std::map` (sorted by key) but JS returns `Map` (insertion order)
+- **JS Source**: `src/js/db/DBCReader.js` lines 127–143
+- **Status**: Pending
+- **Details**: JS `getAllRows` returns a `new Map()` which preserves insertion order (rows are inserted in index order 0..N). C++ returns `std::map<uint32_t, DataRecord>` which sorts by key. Since the ID is `record.ID ?? i`, the order could differ if record IDs are not sequential. If iteration order matters to callers, this could cause behavioral differences.
+
+- [ ] 567. [DBCReader.cpp] Int64/UInt64 field types read as 32-bit values — JS also reads 32-bit for DBC
+- **JS Source**: `src/js/db/DBCReader.js` lines 389–408
+- **Status**: Pending
+- **Details**: JS `_read_field` handles `FieldType.Int64` and `FieldType.UInt64` but the switch cases only exist for 8/16/32-bit types and Float — there are no Int64/UInt64 cases. The default reads `readUInt32LE()`. C++ `_read_field` (lines 458–479) also lacks Int64/UInt64 cases and falls through to the default `readUInt32LE()`. Both are equivalent, but 64-bit DBC fields would be read incorrectly (only lower 32 bits). This matches the JS behavior but is worth documenting.
+
+- [ ] 568. [DBDParser.cpp] `PATTERN_BUILD_ID` regex uses `.` instead of `\.` for literal dots
+- **JS Source**: `src/js/db/DBDParser.js` line 48
+- **Status**: Pending
+- **Details**: JS `PATTERN_BUILD_ID = /(\d+).(\d+).(\d+).(\d+)/` uses unescaped `.` which matches any character (not just literal dots). C++ `PATTERN_BUILD_ID(R"((\d+).(\d+).(\d+).(\d+))")` (line 51) also uses unescaped `.`. Both have the same bug — `1a2b3c4d` would match when it shouldn't. However since both JS and C++ have the same regex, behavior is identical.
+
+- [ ] 569. [DBDParser.cpp] `isBuildInRange` comparison logic has known bug matching JS — compares each component independently
+- **JS Source**: `src/js/db/DBDParser.js` lines 76–94
+- **Status**: Pending
+- **Details**: Both JS and C++ `isBuildInRange` compare major/minor/patch/rev independently (e.g., `build.minor < min.minor || build.minor > max.minor`). This is incorrect for ranges like `1.5.0.0 - 2.3.0.0` — build `1.8.0.0` would fail because `minor 8 > max.minor 3`. A correct implementation would compare tuples lexicographically. Both versions have the same bug, so behavior is identical.
+
+- [ ] 570. [DBDParser.cpp] `isValidFor` checks empty layoutHash against `layoutHashes` set — could match unintended entries
+- **JS Source**: `src/js/db/DBDParser.js` lines 161–177
+- **Status**: Pending
+- **Details**: JS `isValidFor` checks `this.layoutHashes.has(layoutHash)` — if `layoutHash` is `null` (which it is when called from DBCReader line 182), `Set.has(null)` returns false unless null was explicitly added. C++ `isValidFor` checks `layoutHashes.count(layoutHash)` — if `layoutHash` is an empty string `""`, and if any DBD entry has an empty string in its layoutHashes set, it would incorrectly match. The C++ call from DBCReader line 194 passes `""` (empty string) which should be safe since no valid layout hash is empty, but it's a subtle behavioral difference from JS null.
+
+- [ ] 571. [CompressionType.cpp] Fully ported — no issues found
+- **JS Source**: `src/js/db/CompressionType.js` lines 1–8
+- **Status**: Pending
+- **Details**: JS defines 6 compression type constants (None=0 through BitpackedSigned=5) as a plain object export. C++ defines them as `enum CompressionType : uint32_t` in the header with matching values. The .cpp file is a placeholder that includes the header. All values match exactly. No deviations found.
+
+- [ ] 572. [FieldType.cpp] Fully ported — no issues found
+- **JS Source**: `src/js/db/FieldType.js` lines 1–13
+- **Status**: Pending
+- **Details**: JS defines 12 field types using `Symbol()` for unique identity. C++ defines them as `enum class FieldType : uint32_t` in the header with matching names (String, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float, Relation, NonInlineID). All types are present and correctly mapped. The .cpp file is a placeholder. No deviations found.
