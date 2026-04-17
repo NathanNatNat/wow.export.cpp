@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/883 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/906 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 
@@ -1768,3 +1768,118 @@
 - [ ] 882. [STLWriter.cpp] Header string says `wow.export.cpp` while JS says `wow.export` — intentional branding difference
 
 - [ ] 883. [STLWriter.cpp] `appendGeometry` simplified — C++ doesn't handle `Float32Array` vs `Array` distinction
+
+- [ ] 884. [tab_models.cpp] Quick filters not passed to listbox — JS passes `modelQuickFilters` (M2/M3/WMO) but C++ passes empty `{}`
+- **JS Source**: `src/js/modules/tab_models.js` line 286 (`:quickfilters="$core.view.modelQuickFilters"`)
+- **Status**: Pending
+- **Details**: The reference screenshot shows "Quick filter: M2 / M3 / WMO" links at the bottom-right of the list status bar. The C++ code at line 809 passes `{}` (empty) for quickfilters. `core.h` line 303 defines `modelQuickFilters = {"m2", "m3", "wmo"}` but it is not wired to the listbox render call.
+
+- [ ] 885. [tab_models.cpp] Filter input missing placeholder text "Filter models..."
+- **JS Source**: `src/js/modules/tab_models.js` line 297 (`placeholder="Filter models..."`)
+- **Status**: Pending
+- **Details**: The JS template has `<input ... placeholder="Filter models..."/>`. The C++ code at line 876 uses `ImGui::InputText("##FilterModels", ...)` without a hint/placeholder. Should use `ImGui::InputTextWithHint("##FilterModels", "Filter models...", ...)` to match the original.
+
+- [ ] 886. [tab_models.cpp] Regex Enabled indicator missing from filter bar
+- **JS Source**: `src/js/modules/tab_models.js` lines 296–297 (`<div class="regex-info" v-if="config.regexFilters">Regex Enabled</div>`)
+- **Status**: Pending
+- **Details**: When `regexFilters` is enabled in config, the JS shows a "Regex Enabled" badge in the filter bar (styled via `.filter > .regex-info` in app.css line 2441: positioned absolute right, background `--border`, rounded, 0.8em font). The C++ filter bar at lines 872–879 has no equivalent indicator.
+
+- [ ] 887. [tab_models.cpp] Preview container missing checkerboard background pattern
+- **JS Source**: `src/js/modules/tab_models.js` line 332 (`<div class="preview-background" id="model-preview">`)
+- **Status**: Pending
+- **Details**: The CSS `.preview-container .preview-background` (app.css lines 1951–1964) defines a checkerboard pattern using `background-image: linear-gradient(45deg, var(--trans-check-a) 25%, ...)`, `background-size: 30px 30px`, border `1px solid var(--border)`, and `box-shadow: black 0 0 3px 0`. The C++ `BeginPreviewContainer` creates a plain ImGui child window with no border, no shadow, and no checkerboard background. The 3D viewport background is rendered by the model-viewer-gl FBO, but the surrounding container should have the styled border and box-shadow.
+
+- [ ] 888. [tab_models.cpp] Background color picker position/style differs from CSS
+- **JS Source**: `src/js/modules/tab_models.js` line 333 (`<input type="color" id="background-color-input">`)
+- **Status**: Pending
+- **Details**: The CSS `#background-color-input` (app.css lines 1975–1990) positions the color picker absolute top-right (top: 10px, right: 10px), 24×24px, with border `2px solid var(--border)`, border-radius 4px, z-index 100, box-shadow. The C++ at line 1028–1035 uses `ImGui::ColorEdit3` with `ImGuiColorEditFlags_NoInputs`, which renders an inline color swatch in the flow rather than overlaid at the top-right corner of the preview.
+
+- [ ] 889. [tab_models.cpp] Texture preview "Close Preview" button style differs from CSS toast overlay
+- **JS Source**: `src/js/modules/tab_models.js` lines 314–315 (`<div id="model-texture-preview">`, `<div id="model-texture-preview-toast">Close Preview</div>`)
+- **Status**: Pending
+- **Details**: The CSS `#model-texture-preview-toast` (app.css lines 2049–2062) positions the "Close Preview" button absolute top-right with semi-transparent black background, small border, 12px font, hover transition. The C++ at line 986 uses a standard `ImGui::Button("Close Preview")` which has default ImGui button styling (solid color, no transparency, no position override). The entire `#model-texture-preview` should be an absolute overlay (z-index 1) covering the preview area, but in C++ it's rendered inline.
+
+- [ ] 890. [tab_models.cpp] UV layer buttons style differs from CSS `.uv-layer-button`
+- **JS Source**: `src/js/modules/tab_models.js` lines 321–330 (`class="uv-layer-button"`)
+- **Status**: Pending
+- **Details**: The CSS `.uv-layer-button` (app.css lines 2141–2161) uses semi-transparent black background `rgba(0,0,0,0.7)`, border `1px solid var(--border)`, padding `5px 10px`, font-size 12px. Active state uses green border/text (`#00ff00`). The C++ at lines 1008–1024 uses standard ImGui buttons with `ImGui::PushStyleColor(ImGuiCol_Button, ButtonActive)` for active state, which doesn't match the green color scheme or the semi-transparent styling.
+
+- [ ] 891. [tab_models.cpp] UV overlay positioned inline instead of absolute over texture preview
+- **JS Source**: `src/js/modules/tab_models.js` lines 316–319 (`.image` and `.uv-overlay` divs)
+- **Status**: Pending
+- **Details**: The CSS `.uv-overlay` (app.css lines 2121–2131) is positioned absolute over the texture image (top/left/right/bottom 0, pointer-events none). The C++ at lines 999–1001 uses `ImGui::SetCursorScreenPos` to overlay the UV texture, which is correct in approach, but the `#uv-layer-buttons` (app.css lines 2133–2139) should be positioned absolute top-left (top: 10px, left: 10px) — the C++ renders them inline below the image.
+
+- [ ] 892. [tab_models.cpp] Texture ribbon positioned inline instead of absolute bottom overlay
+- **JS Source**: `src/js/modules/tab_models.js` lines 300–313 (`id="texture-ribbon"`)
+- **Status**: Pending
+- **Details**: The CSS `#texture-ribbon` (app.css lines 1898–1906) positions the ribbon absolute at `bottom: 10px`, centered horizontally (`justify-content: center`), with `z-index: 2` overlaying the 3D preview. The C++ at lines 884–983 renders the texture ribbon inline at the top of the preview container, pushing the model viewer down, instead of floating it over the 3D viewport.
+
+- [ ] 893. [tab_models.cpp] Texture ribbon slot styling differs — no border/shadow/background-color
+- **JS Source**: `src/js/modules/tab_models.js` line 302 (`class="slot"`)
+- **Status**: Pending
+- **Details**: The CSS `#texture-ribbon .slot` (app.css lines 1926–1940) has width/height 64px, margin `0 5px`, border `1px solid var(--border)`, box-shadow `black 0 0 3px 0`, background-size contain, background-color `#232323`, and hover border-color white. The C++ uses `ImGui::ImageButton` at lines 914–918 with default ImGui styling, missing the custom border color, dark background, and shadow.
+
+- [ ] 894. [tab_models.cpp] Texture ribbon prev/next buttons style differs — should use `‹`/`›` glyphs
+- **JS Source**: `src/js/modules/tab_models.js` lines 301/303 (`#texture-ribbon-prev`, `#texture-ribbon-next`)
+- **Status**: Pending
+- **Details**: The CSS `#texture-ribbon-next::before`/`#texture-ribbon-prev::before` (app.css lines 1913–1924) use `content: "›"` and `content: "‹"` glyphs at font-size 4em, positioned absolutely within a 30px-wide element. The C++ at lines 895/932 uses `ImGui::SmallButton("<##ribbon_prev")` and `ImGui::SmallButton(">##ribbon_next")`, which are small default-styled buttons with ASCII characters.
+
+- [ ] 895. [tab_models.cpp] Animation controls use text buttons instead of icon buttons with SVG backgrounds
+- **JS Source**: `src/js/modules/tab_models.js` lines 342–344 (`class="anim-btn anim-play"`, etc.)
+- **Status**: Pending
+- **Details**: The CSS `.anim-btn` (app.css lines 3405–3441) defines 24×24px buttons with SVG background images (play.svg, pause.svg, arrow-left.svg, arrow-right.svg), border `1px solid var(--border)`, background-color `var(--background)`. The C++ at lines 1074–1086 uses `ImGui::Button("<<")`, `ImGui::Button("Play"/"Pause")`, `ImGui::Button(">>")` — text labels instead of icon images. The disabled state (`.anim-btn.disabled` opacity 0.5) is handled correctly via `ImGui::BeginDisabled()`/`EndDisabled()`.
+
+- [ ] 896. [tab_models.cpp] Animation scrubber uses ImGui::SliderInt instead of styled range input
+- **JS Source**: `src/js/modules/tab_models.js` lines 345–348 (`class="anim-scrubber"`, `<input type="range">`)
+- **Status**: Pending
+- **Details**: The CSS `.anim-scrubber input[type="range"]` (app.css lines 3450–3473) defines a custom-styled range slider with 6px height, dark background, rounded border, custom 14×14 thumb. The frame display (`.anim-frame-display`, app.css lines 3475–3484) has min-width 32px, padding, dark background, border, border-radius, 11px font, centered text. The C++ at lines 1091–1104 uses `ImGui::SliderInt` and `ImGui::Text` which use default ImGui styling.
+
+- [ ] 897. [tab_models.cpp] Animation dropdown positioned inline instead of absolute top-left overlay
+- **JS Source**: `src/js/modules/tab_models.js` line 335 (`class="preview-dropdown-overlay"`)
+- **Status**: Pending
+- **Details**: The CSS `.preview-dropdown-overlay` (app.css lines 3375–3390) positions the animation dropdown absolute at `top: 10px`, `left: 10px`, `z-index: 1` — floating over the 3D viewport. The select element uses `background-color: var(--background)`, `color: var(--font-primary)`, `border: 1px solid var(--border)`, `border-radius: 3px`, `padding: 5px 8px`, `font-size: 12px`, `min-width: 150px`. The C++ at lines 1041–1067 renders the combo and controls inline below the model viewer, not overlaid.
+
+- [ ] 898. [tab_models.cpp] Sidebar section headers use `ImGui::SeparatorText` instead of styled `<span class="header">`
+- **JS Source**: `src/js/modules/tab_models.js` lines 357/386/428/434/438/439/444 (`<span class="header">Preview</span>`, etc.)
+- **Status**: Pending
+- **Details**: The CSS `.sidebar span.header` (app.css lines 1457–1460) styles section headers as `display: block; margin: 5px 0` — simple bold text labels with vertical spacing, no horizontal rule. The C++ at lines 1127/1169/1226/1245/1280/1301 uses `ImGui::SeparatorText("Preview")`, etc., which renders text centered within a horizontal separator line. This visually differs from the original — there should be no separator line, just a text label.
+
+- [ ] 899. [tab_models.cpp] Sidebar checkbox labels font-size not set to 16px
+- **JS Source**: `src/js/modules/tab_models.js` lines 358–385 (`<label class="ui-checkbox">`, `<span>`)
+- **Status**: Pending
+- **Details**: The CSS `.sidebar label span` (app.css line 1461–1463) sets `font-size: 16px` for checkbox label text. The CSS `.ui-checkbox` (app.css lines 941–951) sets `font-size: 18px`, `display: flex`, `margin: 0 15px`, checkbox 18×18px with 5px right margin. The C++ uses default `ImGui::Checkbox` which inherits the global font size and spacing, without matching these specific dimensions.
+
+- [ ] 900. [tab_models.cpp] Sidebar "Enable All / Disable All" links styled as ImGui::SmallButton instead of `<a>` links
+- **JS Source**: `src/js/modules/tab_models.js` lines 431–432, 441–442
+- **Status**: Pending
+- **Details**: The CSS `#tab-models #model-sidebar .list-toggles` (app.css lines 1649–1653) sets `font-size: 14px`, `text-align: center`, `margin-top: 5px`. The links are `<a>` tags styled with `color: var(--font-primary)` (white 80%), hover underline + `var(--font-highlight)`. The C++ at lines 1232–1242 uses `ImGui::SmallButton("Enable All")` and `ImGui::SmallButton("Disable All")` which appear as framed buttons, not clickable text links.
+
+- [ ] 901. [tab_models.cpp] WMO Groups section uses raw `ImGui::Checkbox` loop instead of `Checkboxlist` component
+- **JS Source**: `src/js/modules/tab_models.js` lines 439–440 (`<component :is="$components.Checkboxlist" :items="$core.view.modelViewerWMOGroups">`)
+- **Status**: Pending
+- **Details**: The JS uses the `Checkboxlist` component for WMO Groups, which provides virtual scrolling, a custom scrollbar, and a fixed 156px height (CSS `#tab-models #model-sidebar .ui-checkboxlist { height: 156px }`). The C++ at lines 1282–1287 uses a raw `for` loop with `ImGui::Checkbox` per group — no virtual scrolling, no custom scrollbar, no fixed height constraint. Should use `checkboxlist::render()` like the M2 geosets section does at line 1228.
+
+- [ ] 902. [tab_models.cpp] WMO Doodad Sets section uses raw `ImGui::Checkbox` loop instead of `Checkboxlist` component
+- **JS Source**: `src/js/modules/tab_models.js` line 445 (`<component :is="$components.Checkboxlist" :items="$core.view.modelViewerWMOSets">`)
+- **Status**: Pending
+- **Details**: Same as WMO Groups — the JS uses the `Checkboxlist` component for Doodad Sets but the C++ at lines 1303–1308 uses raw `ImGui::Checkbox` calls without virtual scrolling or fixed height.
+
+- [ ] 903. [tab_models.cpp] WMO Groups section missing "Enable All / Disable All" links with correct styling
+- **JS Source**: `src/js/modules/tab_models.js` lines 441–442 (`<a @click="setAllWMOGroups(true)">Enable All</a>`)
+- **Status**: Pending
+- **Details**: The WMO Groups "Enable All / Disable All" links at C++ lines 1289–1299 use `ImGui::SmallButton` (same issue as entry 900), but the JS also wraps them in a `<div class="list-toggles">` with centered 14px text. Additionally, the C++ buttons are functionally correct but visually wrong.
+
+- [ ] 904. [tab_models.cpp] Sidebar geoset/skin/WMO checkboxlist height not constrained to 156px
+- **JS Source**: CSS `#tab-models #model-sidebar .ui-checkboxlist, #tab-models #model-sidebar .ui-listbox { height: 156px }` (app.css lines 1646–1648)
+- **Status**: Pending
+- **Details**: The CSS constrains all `.ui-checkboxlist` and `.ui-listbox` elements within `#model-sidebar` to a fixed 156px height. The C++ `checkboxlist::render` and `listboxb::render` calls at lines 1228 and 1266 do not pass any explicit height constraint, relying on ImGui's default sizing. This may cause the sidebar to overflow or have incorrect proportions.
+
+- [ ] 905. [tab_models.cpp] Preview controls export button not right-aligned
+- **JS Source**: `src/js/modules/tab_models.js` line 354 (`<component :is="$components.MenuButton" ... class="upward">`)
+- **Status**: Pending
+- **Details**: The CSS `.preview-controls` (app.css lines 1885–1892) uses `display: flex; justify-content: flex-end; align-items: center; margin-right: 20px`. This right-aligns the export button. The C++ `BeginPreviewControls` only vertically centers content but the caller at lines 1113–1122 does not explicitly right-align the `menu_button::render` call. The button should be pushed to the right edge of the controls area.
+
+- [ ] 906. [tab_models.cpp] MenuButton export button missing "upward" dropdown direction class
+- **JS Source**: `src/js/modules/tab_models.js` line 354 (`class="upward"`)
+- **Status**: Pending
+- **Details**: The JS template specifies `class="upward"` on the MenuButton, which causes the dropdown to open upward (CSS `.ui-menu-button.upward .menu { bottom: 85% }`, app.css lines 987–994). The C++ `menu_button::render` call at line 1117 does not specify upward direction — verify the menu_button component honors this for proper visual parity.
