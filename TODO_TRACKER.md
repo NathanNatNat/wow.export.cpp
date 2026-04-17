@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/415 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/454 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -2033,3 +2033,198 @@
 - **JS Source**: `src/js/3D/writers/CSVWriter.js` line 57
 - **Status**: Pending
 - **Details**: JS `async write(overwrite = true)` defaults to overwriting. C++ `void write(bool overwrite)` has no default value. Callers must always explicitly pass the overwrite flag in C++.
+
+- [ ] 416. [GLBWriter.cpp] GLB JSON chunk padding fills with NUL (0x00) instead of spaces (0x20) as required by the glTF 2.0 spec
+- **JS Source**: `src/js/3D/writers/GLBWriter.js` lines 20–28
+- **Status**: Pending
+- **Details**: The glTF 2.0 spec requires that the JSON chunk be padded with trailing space characters (0x20) to maintain 4-byte alignment. C++ `BufferWrapper::alloc(size, true)` zero-fills the buffer, so JSON padding bytes are 0x00. JS `Buffer.alloc(size)` also zero-fills, so JS has the same issue. However, this should be documented as a potential spec compliance issue for both versions.
+
+- [ ] 417. [GLBWriter.cpp] Binary chunk padding uses zero bytes, matching JS behavior correctly
+- **JS Source**: `src/js/3D/writers/GLBWriter.js` lines 29–36
+- **Status**: Pending
+- **Details**: Both JS and C++ use zero bytes (0x00) for BIN chunk padding. The glTF 2.0 spec requires BIN chunks to be padded with NUL (0x00), so this is correct. No issue here, verified as correct.
+
+- [ ] 418. [GLTFWriter.cpp] `add_scene_node` returns size_t index in C++ but the JS function returns the node object itself
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 276–280
+- **Status**: Pending
+- **Details**: JS `add_scene_node` returns the pushed node object reference (used for `skeleton.children.push()` later). C++ returns the index (size_t) instead, and uses index-based access to modify nodes later. This is functionally equivalent but bone parent lookup uses `bone_lookup_map[bone.parentBone]` to store the node index in C++ vs. storing the node object reference in JS. This difference means C++ accesses `nodes[parent_node_idx]` while JS mutates the object directly.
+
+- [ ] 419. [GLTFWriter.cpp] `add_buffered_accessor` lambda omits `target` from bufferView when `buffer_target < 0` in C++, JS passes `undefined` which is serialized differently
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 282–296
+- **Status**: Pending
+- **Details**: JS `add_buffered_accessor` always includes `target: buffer_target` in the bufferView. When `buffer_target` is `undefined`, JSON.stringify omits the key entirely. C++ explicitly checks `if (buffer_target >= 0)` before adding the target key. This produces identical JSON output since JS `undefined` values are omitted by JSON.stringify, matching C++ not adding the key at all. Functionally equivalent.
+
+- [ ] 420. [GLTFWriter.cpp] Animation channel target node uses `actual_node_idx` (variable per prefix setting) but JS always uses `nodeIndex + 1`
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 620–628, 757–765, 887–895
+- **Status**: Pending
+- **Details**: In JS, animation channel target node is always `nodeIndex + 1` regardless of prefix setting. In C++, `actual_node_idx` is used, which varies based on `usePrefix`. When `usePrefix` is true, C++ sets `actual_node_idx = nodes.size()` after pushing prefix_node (so it points to the real bone node, matching JS `nodeIndex + 1`). When `usePrefix` is false, `actual_node_idx = nodes.size()` before pushing the node, so it points to the same node. The JS code always does `nodeIndex + 1` which is only correct when prefix nodes exist. C++ correctly handles both cases. This is a JS bug that C++ fixes intentionally.
+
+- [ ] 421. [GLTFWriter.cpp] `bone_lookup_map` stores index-to-index mapping using `std::map<int, size_t>` instead of JS Map storing index-to-object
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` line 464
+- **Status**: Pending
+- **Details**: JS `bone_lookup_map.set(bi, node)` stores the node object, which is then mutated later when children are added. C++ `bone_lookup_map[bi] = actual_node_idx` stores the index into the `nodes` array, and children are added via `nodes[parent_node_idx]["children"]`. This is functionally equivalent — JS mutates the object reference in the map and C++ indexes into the JSON array.
+
+- [ ] 422. [GLTFWriter.cpp] Mesh primitive always includes `material` property in JS even when `materialMap.get()` returns `undefined`, C++ conditionally omits it
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1110–1119
+- **Status**: Pending
+- **Details**: JS always sets `material: materialMap.get(mesh.matName)` in the primitive, even if the material isn't found (result is `undefined`, which gets stripped by JSON.stringify). C++ uses `auto mat_it = materialMap.find(mesh.matName)` and only sets `primitive["material"]` if found. The final JSON output is identical since JS undefined is omitted, but the approach differs.
+
+- [ ] 423. [GLTFWriter.cpp] Equipment mesh primitive always includes `material` in JS; C++ conditionally includes it
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1404–1411
+- **Status**: Pending
+- **Details**: Same pattern as entry 422 but for equipment meshes. JS sets `material: materialMap.get(mesh.matName)` which may be `undefined`. C++ checks `eq_mat_it != materialMap.end()` before setting material. Functionally equivalent in JSON output.
+
+- [ ] 424. [GLTFWriter.cpp] `addTextureBuffer` method does not exist in JS — C++ addition
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` (no equivalent)
+- **Status**: Pending
+- **Details**: C++ adds `addTextureBuffer(uint32_t fileDataID, BufferWrapper buffer)` method (lines 113–115) which has no JS counterpart. JS only has `setTextureBuffers()` to set the entire map at once. The C++ addition allows incrementally adding individual texture buffers, which changes the API surface.
+
+- [ ] 425. [GLTFWriter.cpp] Animation buffer name extraction in glb mode uses `rfind('_')` to extract `anim_idx`, but JS uses `split('_')` to get index at position 3
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1468–1470
+- **Status**: Pending
+- **Details**: JS extracts animation index from bufferView name via `name_parts = bufferView.name.split('_'); anim_idx = name_parts[3]`. C++ uses `bv_name.rfind('_')` and then `std::stoi(bv_name.substr(last_underscore + 1))` to get the animation index. For names like `TRANS_TIMESTAMPS_0_1`, JS gets `name_parts[3] = "1"`, C++ gets substring after last underscore = `"1"`. These produce the same result. However, for `SCALE_TIMESTAMPS_0_1`, both work the same. Functionally equivalent.
+
+- [ ] 426. [GLTFWriter.cpp] `skeleton` variable in JS is a node object reference, C++ is a node index
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 344–347, 449
+- **Status**: Pending
+- **Details**: JS `const skeleton = add_scene_node({name: ..., children: []})` returns the actual node object. Later, `skeleton.children.push(nodeIndex)` mutates it directly. C++ `size_t skeleton_idx = add_scene_node(...)` gets an index, and later accesses `nodes[skeleton_idx]["children"].push_back(...)`. Functionally equivalent.
+
+- [ ] 427. [GLTFWriter.cpp] `usePrefix` is read inside the bone loop instead of outside like JS
+- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 460, 466
+- **Status**: Pending
+- **Details**: JS checks `core.view.config.modelsExportWithBonePrefix` outside the bone loop at line 460 (const is evaluated once). C++ reads `core::view->config.value("modelsExportWithBonePrefix", false)` inside the loop at line 470, which re-reads the config for every bone. Since config shouldn't change during export, this is functionally equivalent but slightly less efficient.
+
+- [ ] 428. [JSONWriter.cpp] `write()` uses `dump(1, '\t')` for pretty-printing; JS uses `JSON.stringify(data, null, '\t')`
+- **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 37–42
+- **Status**: Pending
+- **Details**: Both produce tab-indented JSON, but nlohmann `dump(1, '\t')` uses indent width of 1 with tab character, while JS `JSON.stringify` with `'\t'` uses tab for each indent level. The output should be identical for well-formed JSON.
+
+- [ ] 429. [JSONWriter.cpp] `write()` default parameter correctly matches JS `overwrite = true`
+- **JS Source**: `src/js/3D/writers/JSONWriter.js` line 30
+- **Status**: Pending
+- **Details**: Both JS and C++ default `overwrite` to `true`. Verified as correct.
+
+- [ ] 430. [MTLWriter.cpp] `material.name` extraction uses `std::filesystem::path(name).stem().string()` but JS uses `path.basename(name, path.extname(name))`
+- **JS Source**: `src/js/3D/writers/MTLWriter.js` lines 35–37
+- **Status**: Pending
+- **Details**: C++ line 30 uses `std::filesystem::path(name).stem().string()` to extract the filename without extension. JS uses `path.basename(name, path.extname(name))`. These should produce identical results for typical filenames. However, if `name` contains multiple dots (e.g., `texture.v2.png`), `stem()` returns `texture.v2` while `basename('texture.v2.png', '.png')` also returns `texture.v2`. Functionally equivalent.
+
+- [ ] 431. [MTLWriter.cpp] MTL file uses `map_Kd` texture directive correctly matching JS
+- **JS Source**: `src/js/3D/writers/MTLWriter.js` lines 38–39
+- **Status**: Pending
+- **Details**: Both JS and C++ write `map_Kd <file>` for diffuse texture mapping in material definitions. Verified as correct.
+
+- [ ] 432. [OBJWriter.cpp] `appendGeometry` UV handling differs — JS uses `Array.isArray`/spread, C++ uses `insert`
+- **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 84–99
+- **Status**: Pending
+- **Details**: JS `appendGeometry` handles multiple UV arrays and uses `Array.isArray` + spread operator for concatenation. C++ uses `std::vector::insert` for appending. Functionally equivalent.
+
+- [ ] 433. [OBJWriter.cpp] Face output format uses 1-based indexing with `v[i+1]//vn[i+1]` or `v[i+1]/vt[i+1]/vn[i+1]` — matches JS correctly
+- **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 119–142
+- **Status**: Pending
+- **Details**: Both JS and C++ output 1-based vertex indices in OBJ face format (e.g., `f v//vn v//vn v//vn` when no UVs, `f v/vt/vn v/vt/vn v/vt/vn` when UVs present). Vertex offset is added correctly in both implementations. Verified as correct.
+
+- [ ] 434. [OBJWriter.cpp] Only first UV set is written in OBJ faces; JS `this.uvs[0]` matches C++ `uvs[0]`
+- **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 119, 130–131
+- **Status**: Pending
+- **Details**: Both JS and C++ check `this.uvs[0]` / `uvs[0]` for the first UV set when determining whether to include UV indices in face output. Only the first UV set is used in OBJ face references. Verified as matching.
+
+- [ ] 435. [SQLWriter.cpp] `addField()` overloaded — JS uses variadic `...fields`, C++ has two overloads (single string and vector)
+- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 48–49
+- **Status**: Pending
+- **Details**: JS `addField(...fields)` accepts any number of arguments via rest parameters and pushes all. C++ provides `addField(const std::string&)` for single fields and `addField(const std::vector<std::string>&)` for multiple. Same pattern as CSVWriter entry 413.
+
+- [ ] 436. [SQLWriter.cpp] `generateDDL()` output format differs slightly — C++ builds strings directly, JS uses `lines.join('\n')`
+- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 141–177
+- **Status**: Pending
+- **Details**: JS builds an array of `lines` and joins with `\n` at the end. The output includes `DROP TABLE IF EXISTS ...\n\nCREATE TABLE ... (\n<columns>\n);\n\n`. C++ builds the result string directly with `+= "\n"`. The C++ version outputs `DROP TABLE IF EXISTS ...;\n\nCREATE TABLE ... (\n<columns joined with ,\n>\n);\n` which should match. However, JS `lines.push('')` creates an empty element that adds an extra `\n` when joined, and the column_defs are joined separately with `,\n`. The overall output may have subtle whitespace differences in the final string.
+
+- [ ] 437. [SQLWriter.cpp] `toSQL()` format differs — JS uses `lines.join('\n')` with `value_rows.join(',\n') + ';'`, C++ concatenates directly
+- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 183–204
+- **Status**: Pending
+- **Details**: JS's `toSQL()` builds lines array and joins with `\n`. Each batch creates `INSERT INTO ... VALUES\n` then `(vals),(vals),...(vals);\n\n`. C++ directly concatenates: `INSERT INTO ... VALUES\n(vals),\n(vals);\n\n`. The difference is that JS joins value_rows with `,\n` (so no leading newline on first row), while C++ adds `,\n` as a separator between rows within the loop. The output format may differ — JS produces `(vals),(vals)\n(vals);` while C++ produces `(vals),\n(vals),\n(vals);\n`. Minor formatting difference in output.
+
+- [ ] 438. [STLWriter.cpp] Header string says `wow.export.cpp` while JS says `wow.export` — intentional branding difference
+- **JS Source**: `src/js/3D/writers/STLWriter.js` line 147
+- **Status**: Pending
+- **Details**: JS: `'Exported using wow.export v' + constants.VERSION`. C++: `"Exported using wow.export.cpp v" + std::string(constants::VERSION)`. This is an intentional branding change per project conventions (user-facing text should say wow.export.cpp). Verified as correct.
+
+- [ ] 439. [STLWriter.cpp] `appendGeometry` simplified — C++ doesn't handle `Float32Array` vs `Array` distinction
+- **JS Source**: `src/js/3D/writers/STLWriter.js` lines 66–86
+- **Status**: Pending
+- **Details**: JS `appendGeometry` checks `Array.isArray(this.verts)` to decide between spread and `Float32Array.from()` for concatenation. C++ always uses `std::vector::insert`, which works correctly regardless. The JS type distinction is a JS-specific concern that doesn't apply to C++. Functionally equivalent.
+
+- [ ] 440. [blp.cpp] `getDataURL()` implementation differs — JS uses `toCanvas().toDataURL()`, C++ uses `toPNG()` then `BufferWrapper::getDataURL()`
+- **JS Source**: `src/js/casc/blp.js` lines 94–96
+- **Status**: Pending
+- **Details**: JS `getDataURL()` creates an HTML canvas, draws the BLP to it, and calls `canvas.toDataURL()` which produces a `data:image/png;base64,...` string. C++ `getDataURL()` calls `toPNG()` to get PNG data, then `BufferWrapper::getDataURL()` to encode it as a data URL. The C++ approach produces the same data URL format but bypasses the canvas entirely. This is a documented deviation (comment at lines 100–103).
+
+- [ ] 441. [blp.cpp] `toCanvas()` and `drawToCanvas()` methods not ported — browser-specific
+- **JS Source**: `src/js/casc/blp.js` lines 103–117, 221–234
+- **Status**: Pending
+- **Details**: JS `toCanvas()` creates an HTML `<canvas>` element and draws the BLP onto it. `drawToCanvas()` takes an existing canvas and draws the BLP pixels using 2D context methods (`createImageData`, `putImageData`). These are browser-specific APIs with no C++ equivalent. The C++ port replaces these with `toPNG()`, `toBuffer()`, and `toUInt8Array()` which provide the same pixel data without canvas.
+
+- [ ] 442. [blp.cpp] `dataURL` property initialized to `null` in JS constructor, C++ uses `std::optional<std::string>`
+- **JS Source**: `src/js/casc/blp.js` line 86
+- **Status**: Pending
+- **Details**: JS sets `this.dataURL = null` in the BLPImage constructor. C++ declares `std::optional<std::string> dataURL` in the header which defaults to `std::nullopt`. The C++ `getDataURL()` method doesn't cache to this field (it relies on `BufferWrapper::getDataURL()` caching instead). The JS `getDataURL()` also doesn't set this field — it returns from `toCanvas().toDataURL()`. The `dataURL` field appears to be unused caching infrastructure in both versions.
+
+- [ ] 443. [blp.cpp] `toWebP()` uses libwebp C API directly instead of JS `webp-wasm` module
+- **JS Source**: `src/js/casc/blp.js` lines 157–182
+- **Status**: Pending
+- **Details**: JS uses `webp-wasm` npm module with `webp.encode(imgData, options)` for WebP encoding. C++ uses libwebp's C API directly (`WebPEncodeLosslessRGBA` / `WebPEncodeRGBA`). The JS `options` object `{ lossless: true }` or `{ quality: N }` maps to C++ separate code paths for quality == 100 (lossless) vs lossy. Functionally equivalent.
+
+- [ ] 444. [blp.cpp] `_getCompressed()` DXT color interpolation uses integer division in C++ which may produce different rounding vs JS floating-point division
+- **JS Source**: `src/js/casc/blp.js` lines 341–346
+- **Status**: Pending
+- **Details**: JS `colours[i + 8] = (c + d) / 2` and `colours[i + 8] = (2 * c + d) / 3` use JS number (float64) division. C++ uses integer division since `colours` is `int[]`. For even sums, `/2` is exact; for odd sums, C++ truncates toward zero while JS keeps the decimal. For `/3`, C++ truncates while JS produces exact fraction. When these float values are eventually stored as uint8 pixel values, JS truncates via typed array assignment while C++ truncates at division. The difference is at most 1 LSB for some pixel values.
+
+- [ ] 445. [blp.cpp] DXT5 alpha interpolation uses `| 0` (bitwise OR zero) in JS to floor, C++ uses integer division which truncates toward zero
+- **JS Source**: `src/js/casc/blp.js` lines 389, 395
+- **Status**: Pending
+- **Details**: JS `colours[i + 1] = (((5 - i) * a0 + i * a1) / 5) | 0` uses `| 0` to convert float to int32 (truncates toward zero). C++ uses plain integer division `alphaColours[i + 1] = ((5 - i) * a0 + i * a1) / 5` which also truncates toward zero (all values are int). These should produce identical results since all operands are non-negative integers.
+
+- [ ] 446. [blte-reader.cpp] `_handleBlock` encrypted block catch-all swallows all non-EncryptionError exceptions silently
+- **JS Source**: `src/js/casc/blte-reader.js` lines 203–216
+- **Status**: Pending
+- **Details**: JS encrypted block handler catches `EncryptionError` specifically and re-throws for other exceptions (the catch block only handles `e instanceof EncryptionError`). C++ has `catch (const EncryptionError&)` for encryption errors, but also has a bare `catch (...)` on line 197–198 that silently swallows all other exceptions. This means C++ silently ignores errors like decompression failures inside encrypted blocks, while JS would propagate them.
+
+- [ ] 447. [blte-reader.cpp] `decodeAudio()` not ported — browser-specific Web Audio API
+- **JS Source**: `src/js/casc/blte-reader.js` lines 337–340
+- **Status**: Pending
+- **Details**: JS `decodeAudio(context)` calls `this.processAllBlocks()` then `super.decodeAudio(context)` using the Web Audio API's `AudioContext.decodeAudioData()`. C++ has a comment (lines 279–281) noting this is browser-specific and uses miniaudio instead. The method is not implemented in C++ BLTEReader.
+
+- [ ] 448. [blte-reader.cpp] `getDataURL()` caching differs — JS checks `this.dataURL` first, C++ always processes blocks
+- **JS Source**: `src/js/casc/blte-reader.js` lines 346–353
+- **Status**: Pending
+- **Details**: JS `getDataURL()` checks `if (!this.dataURL)` first, and only processes blocks if no cached value exists. The `dataURL` property could be set externally. C++ always calls `processAllBlocks()` first, relying on `BufferWrapper::getDataURL()` for internal caching. If an external caller sets `dataURL` before calling `getDataURL()`, JS would return the externally-set value without processing blocks, while C++ always processes blocks first.
+
+- [ ] 449. [blte-reader.cpp] `_decompressBlock` passes two bools to `readBuffer()` in JS but only one in C++
+- **JS Source**: `src/js/casc/blte-reader.js` line 242
+- **Status**: Pending
+- **Details**: JS: `data.readBuffer(blockEnd - data.offset, true, true)` — passes two `true` flags (decompress=true, copy=true). C++ line 220: `data.readBuffer(blockEnd - data.offset(), true)` — passes only one `true` flag (decompress=true). The second flag in JS may control whether the data is copied. If C++'s `readBuffer` implementation doesn't need a copy flag (e.g., always copies), this is functionally equivalent. Otherwise, there could be a difference in memory ownership.
+
+- [ ] 450. [blte-stream-reader.cpp] `createReadableStream()` not ported — Web Streams API specific
+- **JS Source**: `src/js/casc/blte-stream-reader.js` lines 168–193
+- **Status**: Pending
+- **Details**: JS `createReadableStream()` returns a `ReadableStream` (Web Streams API) that progressively pulls blocks on demand and supports cancellation. This is browser-specific and has no direct C++ equivalent. The C++ header documents this deviation. The `streamBlocks()` callback-based approach provides similar functionality.
+
+- [ ] 451. [blte-stream-reader.cpp] `streamBlocks()` changed from async generator to synchronous callback
+- **JS Source**: `src/js/casc/blte-stream-reader.js` lines 199–202
+- **Status**: Pending
+- **Details**: JS `async *streamBlocks()` is an async generator that yields decoded blocks lazily. Consumers use `for await (const block of reader.streamBlocks())`. C++ `streamBlocks()` takes a callback `std::function<void(BufferWrapper&)>` and iterates eagerly through all blocks, invoking the callback for each. This changes the consumption pattern from lazy to eager.
+
+- [ ] 452. [blte-stream-reader.cpp] `createBlobURL()` returns BufferWrapper instead of string URL
+- **JS Source**: `src/js/casc/blte-stream-reader.js` lines 208–218
+- **Status**: Pending
+- **Details**: JS `createBlobURL()` creates a `Blob` with MIME type `'video/x-msvideo'` from all decoded blocks, then returns a URL string via `URLPolyfill.createObjectURL(blob)`. C++ `createBlobURL()` concatenates all decoded blocks into a single `BufferWrapper` and returns it (raw data, no URL, no MIME type). This is a significant API difference — callers expecting a URL string will not work with the C++ version.
+
+- [ ] 453. [blte-stream-reader.cpp] Cache eviction uses `std::deque` for FIFO ordering vs JS `Map` insertion order
+- **JS Source**: `src/js/casc/blte-stream-reader.js` lines 71–77
+- **Status**: Pending
+- **Details**: JS uses `Map.keys().next().value` to get the oldest entry (Maps maintain insertion order in JS). C++ uses a separate `std::deque<size_t> cacheOrder` alongside `std::unordered_map` because `std::unordered_map` doesn't maintain insertion order. Functionally equivalent LRU eviction.
+
+- [ ] 454. [blte-stream-reader.cpp] `_decodeBlock` for compressed blocks passes one bool in C++ vs two in JS
+- **JS Source**: `src/js/casc/blte-stream-reader.js` lines 109–110
+- **Status**: Pending
+- **Details**: JS: `blockData.readBuffer(blockData.remainingBytes, true, true)` passes two `true` args to `readBuffer`. C++ line 75: `blockData.readBuffer(blockData.remainingBytes(), true)` passes only one. Same issue as entry 449 — the second bool flag for copy behavior may or may not be needed depending on BufferWrapper implementation.
