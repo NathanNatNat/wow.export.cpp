@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/454 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/457 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -2228,3 +2228,18 @@
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 109–110
 - **Status**: Pending
 - **Details**: JS: `blockData.readBuffer(blockData.remainingBytes, true, true)` passes two `true` args to `readBuffer`. C++ line 75: `blockData.readBuffer(blockData.remainingBytes(), true)` passes only one. Same issue as entry 449 — the second bool flag for copy behavior may or may not be needed depending on BufferWrapper implementation.
+
+- [ ] 455. [build-cache.cpp] `saveCacheIntegrity()` silently ignores file write failures
+- **JS Source**: `src/js/casc/build-cache.js` line 144
+- **Status**: Pending
+- **Details**: JS `await fsp.writeFile(constants.CACHE.INTEGRITY_FILE, JSON.stringify(cacheIntegrity), 'utf8')` throws if the file cannot be written (e.g., disk full, permission denied). C++ `saveCacheIntegrity()` (line 149–153) checks `ofs.is_open()` and silently does nothing if the file cannot be opened. This means integrity data could be lost without any error or log message in C++, whereas JS would propagate the error to the caller.
+
+- [ ] 456. [casc-source-local.cpp] `getProductList()` handles missing Branch field gracefully instead of throwing like JS
+- **JS Source**: `src/js/casc/casc-source-local.js` line 152
+- **Status**: Pending
+- **Details**: JS `entry.Branch.toUpperCase()` accesses `entry.Branch` directly. If the build info entry has no `Branch` field, JS would access `undefined` and `.toUpperCase()` would throw a TypeError, causing that product to fail to be listed. C++ (lines 223–229) checks `branchIt != entry.end()` first and uses an empty string as the fallback. This means C++ would include the product with empty parentheses in the label (e.g., `"Retail () 10.2.7"`), while JS would crash and omit it (or propagate the error). In practice, the Branch field is always present in `.build.info` files, so this is a theoretical difference.
+
+- [ ] 457. [db2.cpp] Extra `clearCache()` function added that does not exist in original JS module
+- **JS Source**: `src/js/casc/db2.js` (entire file)
+- **Status**: Pending
+- **Details**: C++ `db2::clearCache()` (line 85–87 in db2.cpp, declared in db2.h line 58) clears the entire table cache, releasing all WDCReader instances. The original JS module exports only `db2_proxy` (the Proxy object) with its `.preload` property — there is no `clearCache` or equivalent cleanup function. This is additional API surface not present in the JS source.
