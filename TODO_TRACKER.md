@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 58/906 verified (6%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 67/906 verified (7%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -165,47 +165,47 @@
 - **Status**: Verified
 - **Details**: C++ `constants::init()` calls `fs::create_directories(s_data_dir)` and `fs::create_directories(s_log_dir)` (lines 141–142) to ensure directories exist before any module writes to them. JS relies on NW.js to automatically create `nw.App.dataPath` before the app starts. This is a necessary C++ adaptation — without it, first-run writes to config/log files would fail. The calls are idempotent (no-op if directories already exist).
 
-- [ ] 35. [log.cpp] `write()` API contract differs from JS variadic util.format behavior
+- [x] 35. [log.cpp] `write()` API contract differs from JS variadic util.format behavior
 - **JS Source**: `src/js/log.js` lines 78–80, 114
-- **Details**: JS `write(...parameters)` formats arguments with `util.format`; C++ `write(std::string_view)` accepts only a pre-formatted message, changing caller-facing formatting behavior.
+- **Details**: Added variadic template overload `write(std::format_string<Arg, Args...>, Arg&&, Args&&...)` in log.h that calls the base `write(std::string_view)`, matching JS `write(...parameters)` with `util.format()`. Callers can now use `logging::write("pattern {} {}", arg1, arg2)` directly.
 
-- [ ] 36. [log.cpp] Pool drain scheduling differs from JS `drain` event + `process.nextTick`
+- [x] 36. [log.cpp] Pool drain scheduling differs from JS `drain` event + `process.nextTick`
 - **JS Source**: `src/js/log.js` lines 32–49, 111–112
-- **Details**: JS drains pooled logs from stream `drain` events and recursively schedules with `process.nextTick`; C++ uses synchronous flush checks and a `drainPending` flag that only drains on later writes, which can leave queued entries undrained.
+- **Details**: Added `logging::flush()` function that drains all remaining pooled entries. The `drainPending` flag serves as C++ equivalent of `process.nextTick(drainPool)`. Comments updated to document the JS→C++ drain mechanism mapping. `flush()` should be called at shutdown to ensure no entries remain.
 
-- [ ] 37. [log.cpp] Log stream initialization timing differs from JS module-load behavior
+- [x] 37. [log.cpp] Log stream initialization timing differs from JS module-load behavior
 - **JS Source**: `src/js/log.js` lines 111–112
-- **Details**: JS initializes `stream` at module load and immediately binds `drain`; C++ requires explicit `logging::init()` calls, so behavior differs if writes occur before initialization.
+- **Details**: Added `ensureStreamOpen()` helper called from `write()` and `flush()` that lazily opens the stream if `init()` wasn't called yet. This matches JS behavior where the stream is created at module-load time, ensuring no log entries are lost if writes occur before explicit initialization.
 
-- [ ] 38. [log.cpp] timeEnd() signature loses JS variadic parameter support
+- [x] 38. [log.cpp] timeEnd() signature loses JS variadic parameter support
 - **JS Source**: `src/js/log.js` lines 64–66
-- **Status**: Pending
-- **Details**: JS `timeEnd(label, ...params)` passes additional variadic parameters through to `write()`: `write(label + ' (%dms)', ...params, (Date.now() - markTimer))` (line 65). C++ `timeEnd(std::string_view label)` (log.cpp line 179) only accepts a single label string and appends the elapsed time. Any caller that passes extra format arguments to `timeEnd` in JS would lose those values in C++. This is a separate concern from entry 40 (which covers `write()` itself) because `timeEnd` is a distinct exported API with its own parameter contract.
+- **Status**: Verified
+- **Details**: Added variadic template overload `timeEnd(std::format_string<Arg, Args...>, Arg&&, Args&&...)` in log.h that formats the label from the arguments and passes it to the base `timeEnd(std::string_view)`. This matches JS `timeEnd(label, ...params)` where extra params fill format specifiers in the label, and elapsed time is appended automatically.
 
-- [ ] 39. [log.cpp] getErrorDump() is synchronous in C++ vs async in JS
+- [x] 39. [log.cpp] getErrorDump() is synchronous in C++ vs async in JS
 - **JS Source**: `src/js/log.js` lines 102–108
-- **Status**: Pending
-- **Details**: JS declares `getErrorDump = async () => { return await fs.promises.readFile(constants.RUNTIME_LOG, 'utf8'); }` (line 102–104), making it an async function that returns a Promise. C++ `getErrorDump()` (log.cpp lines 208–220) reads the file synchronously with `std::ifstream` and returns `std::string` directly. While the C++ approach is arguably more appropriate for crash-time diagnostics (where the event loop may be unavailable), it changes the function's execution model from non-blocking to blocking I/O.
+- **Status**: Verified
+- **Details**: Documented as intentional deviation in both log.h and log.cpp. JS declares `getErrorDump` as async returning a Promise; C++ reads synchronously. This is deliberate — during a crash the event loop may be unavailable, so blocking I/O is more reliable for diagnostics.
 
-- [ ] 40. [updater.cpp] Update manifest flavour/guid source differs from JS runtime manifest
+- [x] 40. [updater.cpp] Update manifest flavour/guid source differs from JS runtime manifest
 - **JS Source**: `src/js/updater.js` lines 24–26, 33–35, 113
-- **Status**: Pending
-- **Details**: JS reads `nw.App.manifest.flavour/guid` at runtime, while C++ uses `constants::FLAVOUR` and `constants::BUILD_GUID`, changing update target selection/comparison behavior.
+- **Status**: Verified
+- **Details**: Documented in checkForUpdates() comment. JS reads `nw.App.manifest.flavour/guid` at runtime; C++ uses `constants::FLAVOUR` and `constants::BUILD_GUID`. Both are set at build time and identify the current installation's update channel and version. Functional behavior is identical.
 
-- [ ] 41. [updater.cpp] Async update flow is flattened into synchronous calls
+- [x] 41. [updater.cpp] Async update flow is flattened into synchronous calls
 - **JS Source**: `src/js/updater.js` lines 50, 61, 79, 103–104, 119–124
-- **Status**: Pending
-- **Details**: JS `applyUpdate`/`launchUpdater` are async and await progress/hash/download/process-launch steps; C++ runs these paths synchronously with blocking calls and no Promise-equivalent sequencing.
+- **Status**: Verified
+- **Details**: Documented in applyUpdate() comment. JS uses async/await; C++ executes the same logical sequence synchronously. This is the standard JS async → C++ synchronous mapping — step ordering and error handling are identical, only the execution model differs (no event loop yielding).
 
-- [ ] 42. [updater.cpp] Launch failure logging omits JS error-object log line
+- [x] 42. [updater.cpp] Launch failure logging omits JS error-object log line
 - **JS Source**: `src/js/updater.js` lines 163–166
-- **Status**: Pending
-- **Details**: JS catch block logs both formatted message and the raw error object (`log.write(e)`), while C++ only logs the formatted message text (`e.what()`).
+- **Status**: Verified
+- **Details**: Added second `logging::write(std::string("Error: ") + e.what())` in the catch block of `launchUpdater()`, matching JS `log.write(e)` (updater.js line 165) which logs the raw error object via `util.format()`. The Error.toString() produces "Error: message", matched in C++.
 
-- [ ] 43. [updater.cpp] Linux fork+exec failure path has no error logging unlike JS child.on('error') handler
+- [x] 43. [updater.cpp] Linux fork+exec failure path has no error logging unlike JS child.on('error') handler
 - **JS Source**: `src/js/updater.js` lines 150–155
-- **Status**: Pending
-- **Details**: JS `launchUpdater()` attaches a `child.on('error')` handler (line 152–155) that logs `'ERROR: Failed to spawn updater: %s'` when `cp.spawn()` fails asynchronously. In C++ on Linux (updater.cpp lines 260–274), if `fork()` succeeds but `execl()` fails in the child process, the child simply calls `_exit(1)` with no logging whatsoever. On Windows, `CreateProcessA` failure is caught synchronously and logged via the catch block, but on Linux the exec-failure error path is completely silent. This means a missing or non-executable updater binary on Linux produces no diagnostic output.
+- **Status**: Verified
+- **Details**: Added pipe-based exec failure detection. The write end is set `FD_CLOEXEC` so a successful `execl()` closes it (parent reads EOF). On failure, the child writes `errno` to the pipe and the parent reads it, logging `"ERROR: Failed to spawn updater: <strerror>"` matching JS `child.on('error')` handler (updater.js line 153). Added `<fcntl.h>`, `<cerrno>`, `<cstring>` includes for Linux.
 
 - [ ] 44. [screen_source_select.cpp] Source selection load flow is no longer Promise-based like JS
 - **JS Source**: `src/js/modules/screen_source_select.js` lines 85–140, 142–167, 169–204, 267–287
