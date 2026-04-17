@@ -54,8 +54,20 @@ struct MenuButtonState {
  */
 void render(const char* id, const std::vector<MenuOption>& options,
             const std::string& defaultVal, bool disabled, bool dropdown,
+            bool upward,
             MenuButtonState& state,
             const std::function<void(const std::string&)>& onChange,
             const std::function<void()>& onClick);
+
+/**
+ * Overload without upward parameter (defaults to false).
+ */
+inline void render(const char* id, const std::vector<MenuOption>& options,
+            const std::string& defaultVal, bool disabled, bool dropdown,
+            MenuButtonState& state,
+            const std::function<void(const std::string&)>& onChange,
+            const std::function<void()>& onClick) {
+	render(id, options, defaultVal, disabled, dropdown, false, state, onChange, onClick);
+}
 
 } // namespace menu_button
