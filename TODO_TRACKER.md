@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/345 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/359 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1683,3 +1683,73 @@
 - **JS Source**: `src/js/3D/Shaders.js` lines 56–72
 - **Status**: Pending
 - **Details**: C++ `create_program()` (Shaders.cpp lines 79–83) installs a static `_unregister_fn` callback on `gl::ShaderProgram` that automatically calls `shaders::unregister()` when a ShaderProgram is destroyed. JS has no equivalent auto-cleanup mechanism — callers must explicitly call `unregister(program)` (Shaders.js line 78–86). This means in C++, a program is automatically removed from `active_programs` on destruction, while in JS a disposed program remains in the set until manually unregistered. This changes `reload_all()` behavior: JS could attempt to recompile stale programs that were not explicitly unregistered, while C++ never encounters this scenario.
+
+- [ ] 346. [ADTExporter.cpp] Scale factor check `!= 0` instead of `!== undefined` changes behavior for scale=0
+- **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1270
+- **Status**: Pending
+- **Details**: JS checks `model.scale !== undefined ? model.scale / 1024 : 1`. C++ (ADTExporter.cpp ~line 1521) checks `model.scale != 0 ? model.scale / 1024.0f : 1.0f`. In JS, a `scale` of `0` would produce `0 / 1024 = 0` (a valid zero-scale value). In C++, a `scale` of `0` triggers the else branch and returns `1.0f`. This is a behavioral difference — a model with scale=0 would be invisible in JS but normal-sized in C++, affecting M2 doodad CSV export and placement transforms.
+
+- [ ] 347. [ADTExporter.cpp] GL index buffer uses GL_UNSIGNED_INT (uint32) instead of JS GL_UNSIGNED_SHORT (uint16)
+- **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1117–1118
+- **Status**: Pending
+- **Details**: JS creates `new Uint16Array(indices)` and uses `gl.UNSIGNED_SHORT` for the index element buffer when rendering alpha map tiles. C++ (ADTExporter.cpp ~lines 1327–1328) uses `sizeof(uint32_t)` and `GL_UNSIGNED_INT`. For the 16×16×145 = 37120 vertex terrain grid the indices fit in uint16, so both work, but the GPU draws with different index types. This is a minor fidelity deviation in the GL pipeline even though the visual output is identical.
+
+- [ ] 348. [ADTExporter.cpp] Liquid JSON serialization uses explicit fields instead of JS spread operator
+- **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1428–1438
+- **Status**: Pending
+- **Details**: JS uses `{ ...chunk, instances: enhancedInstances }` and `{ ...instance, worldPosition, terrainChunkPosition }` which copies *all* fields from the chunk/instance objects via the spread operator. C++ (ADTExporter.cpp ~lines 1744–1780) manually enumerates specific fields for JSON serialization. If the ADTLoader's liquid chunk or instance structs have any additional fields not listed in the C++ serialization, those fields would appear in the JS JSON output but be missing in the C++ output. This is a fragile pattern that could silently omit data if new fields are added to the loader structs.
+
+- [ ] 349. [ADTExporter.cpp] STB_IMAGE_RESIZE_IMPLEMENTATION defined at file scope risks ODR violation
+- **JS Source**: N/A (C++ build concern)
+- **Status**: Pending
+- **Details**: ADTExporter.cpp (line 10) defines `#define STB_IMAGE_RESIZE_IMPLEMENTATION` before including `<stb_image_resize2.h>`. If any other translation unit in the project also defines this macro, the linker will encounter duplicate symbol definitions (ODR violation). STB implementation macros should typically be isolated in a single dedicated .cpp file (like stb-impl.cpp already exists for stb_image/stb_image_write) to avoid this risk.
+
+- [ ] 350. [CharacterExporter.cpp] remap_bone_indices truncates remap_table.size() to uint8_t causing incorrect comparison
+- **JS Source**: `src/js/3D/exporters/CharacterExporter.js` lines 126–138
+- **Status**: Pending
+- **Details**: C++ `remap_bone_indices()` (CharacterExporter.cpp line 147) compares `original_idx < static_cast<uint8_t>(remap_table.size())`. If `remap_table` has 256 or more entries, `static_cast<uint8_t>(256)` wraps to `0`, making the comparison `original_idx < 0` always false for unsigned types — no indices would be remapped at all. For tables with 257–511 entries, the truncated size wraps to small values, skipping valid remap entries for higher indices. JS has no such issue since `original_idx < remap_table.length` uses normal number comparison. The fix should be `static_cast<size_t>(original_idx) < remap_table.size()` or simply removing the cast.
+
+- [ ] 351. [M2Exporter.cpp] Data textures silently dropped from GLTF/GLB texture maps and buffers
+- **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 357–366
+- **Status**: Pending
+- **Details**: In JS, `textureMap` is a `Map` with mixed key types — numeric fileDataIDs and string keys like `"data-5"` for data textures (canvas-composited textures). These are passed directly to `gltf.setTextureMap()`. In C++ (M2Exporter.cpp ~lines 610–636), the string-keyed `textureMap` is converted to a `uint32_t`-keyed `gltfTexMap` via `std::stoul()`. Keys like `"data-5"` fail parsing and are silently dropped in the `catch (...)` block. The same happens for `texture_buffers` in GLB mode. This means data textures (canvas-composited textures for character models) are lost in GLTF/GLB exports — meshes will reference material names that have no corresponding texture entry.
+
+- [ ] 352. [M2Exporter.cpp] uint16_t loop variable for triangle iteration risks overflow/infinite loop
+- **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 375, 496, 638, 701, 850, 936
+- **Status**: Pending
+- **Details**: All triangle iteration loops in M2Exporter.cpp use `for (uint16_t vI = 0; vI < mesh.triangleCount; vI++)`. If `mesh.triangleCount` is 65535, incrementing `vI` from 65534 to 65535 works, but then `vI++` wraps to 0, causing an infinite loop. If `triangleCount` exceeds 65535 (stored as uint32_t in the struct), the loop would also be incorrect since `uint16_t` can never reach the termination condition. JS uses `let vI` which is a double-precision float with no overflow. Should use `uint32_t` for the loop variable.
+
+- [ ] 353. [M2Exporter.cpp] addURITexture accepts BufferWrapper instead of data URI string
+- **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59–61
+- **Status**: Pending
+- **Details**: JS `addURITexture(out, dataURI)` stores a raw base64 data URI string, which is decoded later in `exportTextures()` via `BufferWrapper.fromBase64(dataTexture.replace(...))`. C++ `addURITexture(uint32_t textureType, BufferWrapper pngData)` accepts already-decoded PNG data, shifting the decoding responsibility to the caller. This is a contract change that alters the interface boundary — callers must now pre-decode the data URI before passing it. While not a bug if all callers are adapted, it changes the API surface compared to the original JS.
+
+- [ ] 354. [M2Exporter.cpp] JSON submesh serialization uses fixed field enumeration instead of JS Object.assign
+- **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 794
+- **Status**: Pending
+- **Details**: JS uses `Object.assign({ enabled: subMeshEnabled }, skin.subMeshes[i])` which dynamically copies *all* properties from the submesh object. C++ (M2Exporter.cpp ~lines 1111–1126) manually enumerates a fixed set of properties (submeshID, level, vertexStart, vertexCount, triangleStart, triangleCount, boneCount, boneStart, boneInfluences, centerBoneIndex, centerPosition, sortCenterPosition, sortRadius). If the Skin's SubMesh struct gains new fields, they would automatically appear in JS JSON output but would be missing in C++ JSON output. This is a fragile pattern that could silently omit metadata.
+
+- [ ] 355. [M2Exporter.cpp] Data texture file manifest entries get fileDataID=0 instead of string key
+- **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 748
+- **Status**: Pending
+- **Details**: In JS, `texFileDataID` for data textures is the string key `"data-X"`, which gets stored as-is in the file manifest. In C++ (~line 1059), `std::stoul(texKey)` fails for `"data-X"` keys and `texID` defaults to 0 in the `catch (...)` block. This means data textures in the file manifest will have `fileDataID = 0` instead of a meaningful identifier, losing the ability to correlate manifest entries with specific data texture types.
+
+- [ ] 356. [M2Exporter.cpp] formatUnknownFile call signature differs from JS
+- **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 194
+- **Status**: Pending
+- **Details**: JS calls `listfile.formatUnknownFile(texFile)` where `texFile` is a string like `"12345.png"`. C++ (~line 410) calls `casc::listfile::formatUnknownFile(texFileDataID, raw ? ".blp" : ".png")` passing the numeric ID and extension separately. The C++ call passes `raw ? ".blp" : ".png"` but this code appears in the `!raw` branch (line 406 checks `!raw`), so the `raw` ternary would always evaluate to `.png`. While not necessarily a bug (depends on `formatUnknownFile` implementation), the call signature divergence means the output filename format may differ.
+
+- [ ] 357. [M2LegacyExporter.cpp] uint16_t loop variable for triangle iteration risks overflow
+- **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 164, 289
+- **Status**: Pending
+- **Details**: Same issue as M2Exporter: triangle iteration loops in M2LegacyExporter.cpp (exportAsOBJ ~line 212, exportAsSTL ~line 401) use `for (uint16_t vI = 0; vI < mesh.triangleCount; vI++)`. If `mesh.triangleCount` reaches or exceeds 65535, `uint16_t` overflow causes an infinite loop or incorrect iteration. JS uses `let vI` with no overflow limit. Should use `uint32_t` for the loop variable.
+
+- [ ] 358. [M3Exporter.cpp] addURITexture accepts BufferWrapper instead of data URI string
+- **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 49–51
+- **Status**: Pending
+- **Details**: Same issue as M2Exporter: JS `addURITexture(out, dataURI)` stores a raw base64 data URI string keyed by output path. C++ `addURITexture(const std::string& out, BufferWrapper pngData)` accepts already-decoded PNG data. This is an API contract change that shifts decoding responsibility to the caller.
+
+- [ ] 359. [M3Exporter.cpp] exportTextures returns map<uint32_t, string> instead of JS Map with mixed key types
+- **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 62–65
+- **Status**: Pending
+- **Details**: While the JS `exportTextures()` currently returns an empty Map (texture export not yet implemented), the C++ return type `std::map<uint32_t, std::string>` constrains future implementation to numeric-only keys. If M3 texture export is later implemented following M2Exporter's pattern (which uses string keys like `"data-X"` for data textures), the uint32_t key type would need to change. The JS Map supports mixed key types natively. This is a forward-compatibility concern rather than a current bug.
