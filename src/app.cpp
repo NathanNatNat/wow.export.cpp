@@ -388,13 +388,18 @@ static void renderCrashScreen() {
 	// CSS: #crash-screen-text-code { font-weight: bold; margin-right: 5px; }
 	// Note: JS CSS does NOT apply red color to the error code — it uses default (inherited) color.
 	// The bold weight and inline layout are the only special styling.
-	ImGui::Spacing();
-	ImGui::TextUnformatted(crashErrorCode.c_str());
-	ImGui::SameLine();
+	ImGui::Dummy(ImVec2(0.0f, 20.0f)); // margin: 20px 0 (top)
+	{
+		ImFont* bold = app::theme::getBoldFont();
+		if (bold) ImGui::PushFont(bold);
+		ImGui::TextUnformatted(crashErrorCode.c_str());
+		if (bold) ImGui::PopFont();
+	}
+	ImGui::SameLine(0.0f, 5.0f); // margin-right: 5px
 	ImGui::TextWrapped("%s", crashErrorText.c_str());
+	ImGui::Dummy(ImVec2(0.0f, 20.0f)); // margin: 20px 0 (bottom)
 
 	// Action buttons matching JS: <div class="form-tray"> with 4 buttons.
-	ImGui::Spacing();
 
 	// JS: <input type="button" value="Report Issue" data-external="::ISSUE_TRACKER"/>
 	if (ImGui::Button("Report Issue"))
@@ -1151,7 +1156,7 @@ static void renderAppShell() {
 			try {
 				active->render();
 			} catch (const std::exception& e) {
-				crash("ERR_RENDER", e.what());
+				crash("ERR_VUE", e.what());
 			}
 		}
 
@@ -2668,7 +2673,10 @@ int main(int argc, char* argv[]) {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
-	ImGui::GetStyle().ScaleAllSizes(1.5f);
+	// Note: No ScaleAllSizes() call — the JS app does not apply a global 1.5x
+	// scale multiplier to UI metrics. Sizes are defined in app.css and replicated
+	// via app::theme. Dynamic scaling for small displays is handled separately
+	// (see update_container_scale equivalent below).
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
 	// Apply the app theme.
