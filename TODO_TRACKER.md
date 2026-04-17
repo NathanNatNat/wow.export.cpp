@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/365 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/381 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1783,3 +1783,83 @@
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 187–234
 - **Status**: Pending
 - **Details**: JS `set_uniform_3fv(name, value)` calls `gl.uniform3fv(loc, value)` where the WebGL2 API infers the count from the typed array length. C++ `set_uniform_3fv(name, value, count=1)` takes an explicit `count` parameter (defaulting to 1) because OpenGL's `glUniform3fv(loc, count, value)` requires it. Same applies to `set_uniform_4fv` and `set_uniform_mat4_array`. While single-value calls work identically (count defaults to 1), callers passing arrays of multiple vec3/vec4/mat4 values must specify the correct count in C++. This is a necessary C++ adaptation but changes the API contract.
+
+- [ ] 366. [M2Generics.cpp] Error message text differs in useAnims branch ("Unhandled" vs "Unknown")
+- **JS Source**: `src/js/3D/loaders/M2Generics.js` lines 78, 101
+- **Status**: Pending
+- **Details**: JS `read_m2_array_array` has two separate switch blocks — the useAnims branch (line 78) throws `"Unhandled data type: ${dataType}"` while the non-useAnims branch (line 101) throws `"Unknown data type: ${dataType}"`. C++ collapses both branches into a single `read_value()` helper that always throws `"Unknown data type: "` for both paths. The error message for the useAnims branch differs from the original JS.
+
+- [ ] 367. [M2Loader.cpp] `loadAnimsForIndex()` catch block logs fileDataID instead of animation.id
+- **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 199–201
+- **Status**: Pending
+- **Details**: JS catch block logs `"Failed to load .anim file for animation " + animation.id + ": " + e.message`, identifying the animation by its `id` field. C++ catch block logs `"Failed to load .anim file (fileDataID={}): {}"` using the CASC `fileDataID` and `e.what()`. The logged identifier differs — JS reports the animation's logical `id`, C++ reports the file data ID. Message format also differs.
+
+- [ ] 368. [M2Loader.cpp] `parseChunk_SFID` guard check uses `viewCount == 0` instead of undefined-check
+- **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 272–273
+- **Status**: Pending
+- **Details**: JS checks `if (this.viewCount === undefined)` — true only when MD21 hasn't been parsed yet (property never assigned). C++ checks `if (this->viewCount == 0)`. Since the C++ member is default-initialized to 0, this would throw even AFTER MD21 sets viewCount to a legitimate 0 (a model with no views). The JS would NOT throw in that case because viewCount would be defined as 0 (`0 !== undefined`). The guard should track whether MD21 has been parsed (e.g., using a bool flag), not check for `viewCount == 0`.
+
+- [ ] 369. [M2Loader.cpp] `parseChunk_TXID` guard check uses `textures.empty()` instead of undefined-check
+- **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 290–291
+- **Status**: Pending
+- **Details**: JS checks `if (this.textures === undefined)` — true only when MD21 hasn't been parsed (textures array never created). C++ checks `if (this->textures.empty())`. If MD21 parses 0 textures, JS would NOT throw (textures is a defined empty array), but C++ WOULD throw. Same semantic issue as the SFID check — should track MD21 parse state rather than vector emptiness.
+
+- [ ] 370. [MDXLoader.cpp] ATCH handler fixes JS `readUInt32LE(-4)` bug without TODO_TRACKER documentation
+- **JS Source**: `src/js/3D/loaders/MDXLoader.js` line 404
+- **Status**: Pending
+- **Details**: JS ATCH handler has `this.data.readUInt32LE(-4)` which is a bug — `BufferWrapper._readInt` passes `_checkBounds(-16)` (always passes since remainingBytes >= 0 > -16), but `new Array(-4)` throws a `RangeError`. C++ correctly fixes this by using a saved `attachmentSize` variable. The fix has a code comment but per project conventions, deviations from the original JS should also be tracked in TODO_TRACKER.md.
+
+- [ ] 371. [MDXLoader.cpp] Node registration deferred to post-parsing (structural deviation)
+- **JS Source**: `src/js/3D/loaders/MDXLoader.js` lines 208–209
+- **Status**: Pending
+- **Details**: In JS, `_read_node()` immediately assigns `this.nodes[node.objectId] = node` (line 209). In C++, this is deferred to `load()` because objects are moved into their final vectors after `_read_node` returns, invalidating any earlier pointers. This is correctly documented with a code comment and is functionally equivalent — all 9 node-bearing types (bones, helpers, attachments, eventObjects, hitTestShapes, particleEmitters, particleEmitters2, lights, ribbonEmitters) are properly registered. This is a structural deviation that should be tracked.
+
+- [ ] 372. [SKELLoader.cpp] Extra bounds check in `loadAnimsForIndex()` not present in JS
+- **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 308–312
+- **Status**: Pending
+- **Details**: C++ adds `if (animation_index >= this->animations.size()) return false;` that does not exist in JS. In JS, accessing an out-of-bounds index on `this.animations` returns `undefined`, and `animation.flags` would throw a TypeError. C++ silently returns false instead of throwing, changing error behavior.
+
+- [ ] 373. [SKELLoader.cpp] `skeletonBoneData` existence check uses `.empty()` instead of `!== undefined`
+- **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 335–338, 441–444
+- **Status**: Pending
+- **Details**: JS checks `loader.skeletonBoneData !== undefined` — the property only exists if a SKID chunk was parsed. C++ checks `!loader->skeletonBoneData.empty()`. If ANIMLoader ever sets `skeletonBoneData` to a valid but empty buffer, JS would use it (property exists), but C++ would skip it (empty). This is a potential semantic difference depending on ANIMLoader behavior.
+
+- [ ] 374. [SKELLoader.cpp] `loadAnims()` doesn't guard against missing `animFileIDs` like `loadAnimsForIndex()` does
+- **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 319, 425
+- **Status**: Pending
+- **Details**: JS `loadAnimsForIndex()` has `if (!this.animFileIDs) return false;` (line 319) to guard against undefined `animFileIDs`. However, JS `loadAnims()` does NOT have this guard — it directly iterates `this.animFileIDs` (line 425), which would throw a TypeError if undefined. In C++, `animFileIDs` is always a default-constructed empty vector, so the for-loop is a no-op. The C++ is more robust but produces different behavior (graceful no-op vs JS crash).
+
+- [ ] 375. [WDTLoader.cpp] `worldModelPlacement`/`worldModel`/MPHD fields not optional — cannot distinguish "chunk absent" from "chunk with zeros"
+- **JS Source**: `src/js/3D/loaders/WDTLoader.js` lines 52–103
+- **Status**: Pending
+- **Details**: In JS, `this.worldModelPlacement` is only assigned when MODF is encountered. If MODF is absent, the property is `undefined` and `if (wdt.worldModelPlacement)` is false. In C++, `WDTWorldModelPlacement worldModelPlacement` is always default-constructed with zeroed fields, making it impossible to distinguish "MODF absent" from "MODF with zeros." Same for `worldModel` (always empty string vs. JS `undefined`) and MPHD fields (always 0 vs. JS `undefined`). Consider `std::optional<T>` for these fields.
+
+- [ ] 376. [WMOLegacyLoader.cpp] MOGP `flags` field renamed to `groupFlags`, diverging from JS property name
+- **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` line 453
+- **Status**: Pending
+- **Details**: JS MOGP handler stores `this.flags = data.readUInt32LE()`. C++ stores this as `this->groupFlags` (header line 124, MOGP parser line 527) because the C++ class already has `uint16_t flags` from MOHD. Any downstream JS-ported code accessing `group.flags` for MOGP flags must use `group.groupFlags` in C++, which is a naming deviation that could cause porting bugs.
+
+- [ ] 377. [WMOLegacyLoader.cpp] `getGroup` empty-check differs for `groupCount == 0` edge case
+- **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 117–118
+- **Status**: Pending
+- **Details**: JS checks `if (!this.groups)` — tests whether the `groups` property was ever set (by MOHD handler). An empty JS array `new Array(0)` is truthy, so `!this.groups` is false when `groupCount == 0` — `getGroup` proceeds to the index check. C++ uses `if (this->groups.empty())` which returns true for `groupCount == 0`, incorrectly throwing the exception. A separate bool flag (e.g., `groupsInitialized`) would replicate JS semantics more faithfully.
+
+- [ ] 378. [WMOLoader.cpp] `getGroup()` passes `groupFileID` to child constructor instead of no fileID
+- **JS Source**: `src/js/3D/loaders/WMOLoader.js` line 80
+- **Status**: Pending
+- **Details**: JS creates group `WMOLoader` with `undefined` as fileID: `new WMOLoader(data, undefined, this.renderingOnly)`. The group's `fileDataID` and `fileName` are intentionally unset. C++ passes the actual `groupFileID`, triggering an unnecessary `casc::listfile::getByID()` lookup in the constructor and setting `fileDataID`/`fileName` on the group. The constructor should use fileID=0 (C++ sentinel for "undefined") to match JS.
+
+- [ ] 379. [WMOLoader.cpp] MOGP `flags` field renamed to `groupFlags`, diverging from JS property name
+- **JS Source**: `src/js/3D/loaders/WMOLoader.js` line 361
+- **Status**: Pending
+- **Details**: JS MOGP handler stores `this.flags = data.readUInt32LE()`. C++ stores this as `this->groupFlags` (header line 218, MOGP parser line 426) because the C++ class already has `uint16_t flags` from MOHD. Any downstream code porting JS that accesses `wmoGroup.flags` for MOGP flags must use `groupFlags` in C++. This naming deviation matches the same issue found in WMOLegacyLoader.cpp (entry 376).
+
+- [ ] 380. [WMOLoader.cpp] `hasLiquid` boolean is a C++ addition not present in JS
+- **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 328–338
+- **Status**: Pending
+- **Details**: JS simply assigns `this.liquid = { ... }` in the MLIQ handler. Consumer code checks `if (this.liquid)` for existence. In C++, the `WMOLiquid liquid` member is always default-constructed, so a `bool hasLiquid = false` flag (header line 209) was added and set to `true` in `parse_MLIQ`. This is a reasonable C++ adaptation, but all downstream JS code that checks `if (this.liquid)` must be ported to check `if (this.hasLiquid)` instead — all consumers need verification.
+
+- [ ] 381. [WMOLoader.cpp] MOPR filler skip uses `data.move(4)` but per wowdev.wiki entry is 8 bytes total
+- **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 208–216
+- **Status**: Pending
+- **Details**: MOPR entry count is calculated as `chunkSize / 8` (8 bytes per entry). Fields read: `portalIndex(2) + groupIndex(2) + side(2)` = 6 bytes, then `data.move(4)` skips 4 more = 10 bytes per entry. Per wowdev.wiki, `SMOPortalRef` has a 2-byte `filler` (uint16_t), making entries 8 bytes. `data.move(2)` would be correct, not `data.move(4)`. Both JS and C++ match (C++ faithfully ports the JS), but both overread by 2 bytes per entry. The outer `data.seek(nextChunkPos)` corrects the position so parsing doesn't break, but this is a latent bug in both codebases.
