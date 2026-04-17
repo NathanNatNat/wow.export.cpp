@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/580 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/585 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -2858,3 +2858,28 @@
 - **JS Source**: `src/js/db/caches/DBDecor.js` lines 9, 46–48
 - **Status**: Pending
 - **Details**: JS `decorItems` is a `Map` preserving insertion order from `HouseDecor.db2` iteration. C++ uses `std::unordered_map<uint32_t, DecorItem>`. Code iterating all decor items (e.g., `getAllDecorItems()` return value or `getDecorItemByModelFileDataID()` linear scan) may encounter items in different order, potentially affecting UI list order for decor items.
+
+- [ ] 581. [DBGuildTabard.cpp] Color maps use `unordered_map` — iteration order differs from JS `Map` for UI color pickers
+- **JS Source**: `src/js/db/caches/DBGuildTabard.js` lines 22–25, 75–82
+- **Status**: Pending
+- **Details**: JS `background_colors`, `border_colors`, and `emblem_colors` are `Map` instances (preserving insertion order from `GuildColorBackground`/`GuildColorBorder`/`GuildColorEmblem` DB2 iteration). C++ `getBackgroundColors()`, `getBorderColors()`, `getEmblemColors()` return `const std::unordered_map<uint32_t, ColorRGB>&` with hash-based ordering. If any caller iterates these maps to build a tabard color picker UI, the color presentation order will differ from the JS original. Note: prior entry 215 stated the .cpp file was still unconverted JS — this is no longer the case; the file is now properly ported to C++.
+
+- [ ] 582. [DBItemCharTextures.cpp] `value_or` fallback in `getTexturesByDisplayId` is redundant (prior entry 217 is inaccurate)
+- **JS Source**: `src/js/db/caches/DBItemCharTextures.js` lines 129–135; `src/js/db/caches/DBComponentTextureFileData.js` lines 51–97
+- **Status**: Pending
+- **Details**: Entry 217 states that C++ `value_or((*file_data_ids)[0])` at line 127 changes file-data selection behavior compared to JS's `fileDataID: bestFileDataID`. However, the JS `getTextureForRaceGender` function (DBComponentTextureFileData.js line 97) already falls back to `file_data_ids[0]` as its final return when no race/gender match is found, and it only returns `null` when the input array is empty — which is already guarded by the `if (file_data_ids && !file_data_ids->empty())` check at line 115 of the C++ code. The `value_or` in C++ therefore never triggers in practice, and the actual behavior is identical to JS. Entry 217 should be reconsidered.
+
+- [ ] 583. [DBItemDisplays.cpp] `ItemDisplay::textures` is a deep copy per entry, not a shared reference as in JS
+- **JS Source**: `src/js/db/caches/DBItemDisplays.js` lines 40–41
+- **Status**: Pending
+- **Details**: JS line 41 stores `textures: textureFileDataIDs` where `textureFileDataIDs` is the array reference returned by `DBTextureFileData.getTextureFDIDsByMatID(matResIDs[0])`. Multiple `ItemDisplay` objects that share the same `matResIDs[0]` will reference the same textures array in memory. C++ line 85 copies via `display.textures = *textureFileDataIDs`, so each `ItemDisplay` holds an independent vector. This is functionally equivalent since textures are never mutated after initialization, but the memory semantics differ (JS shares, C++ copies).
+
+- [ ] 584. [DBItems.cpp] `items_by_id` uses `unordered_map` (hash order) vs JS `Map` (insertion order)
+- **JS Source**: `src/js/db/caches/DBItems.js` lines 10, 36–46
+- **Status**: Pending
+- **Details**: JS `items_by_id` is a `Map` preserving insertion order from `ItemSparse` DB2 iteration. C++ uses `std::unordered_map<uint32_t, ItemInfo>` with hash-based ordering. While current accessors (`getItemById`, `getItemSlotId`, `isItemBow`) only perform key lookups, any future code that iterates all items (e.g., for item list display or filtering) would produce a different ordering than the JS original.
+
+- [ ] 585. [DBNpcEquipment.cpp] Inner equipment slot map uses `unordered_map` vs JS `Map` (insertion order)
+- **JS Source**: `src/js/db/caches/DBNpcEquipment.js` lines 25, 49–52
+- **Status**: Pending
+- **Details**: JS `equipment_map` maps `CreatureDisplayInfoExtraID -> Map<slot_id, item_display_info_id>` where the inner `Map` preserves insertion order from `NPCModelItemSlotDisplayInfo` DB2 iteration. C++ uses `std::unordered_map<uint32_t, std::unordered_map<int, uint32_t>>` — both levels have hash-based ordering. If a caller iterates equipment slots for a creature (e.g., to process items in slot order for equipping), the iteration order differs from JS.
