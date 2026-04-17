@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/462 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/524 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -2268,3 +2268,313 @@
 - **JS Source**: `src/app.css` lines 1065–1068
 - **Status**: Pending
 - **Details**: CSS `.ui-checkboxlist .item span` has `margin: 0 0 1px 5px` giving the label text 5px left margin and 1px bottom margin relative to the checkbox. C++ (line 260) uses `ImGui::SameLine()` between the checkbox and selectable label with default ImGui spacing (typically 4px item spacing), which may not exactly match the 5px CSS margin. The 1px bottom margin is also not replicated.
+
+- [ ] 463. [combobox.cpp] Dropdown `z-index: 5` and `position: absolute; top: 100%` not replicated
+- **JS Source**: `src/js/components/combobox.js` template line 90, `src/app.css` lines 1355–1366
+- **Status**: Pending
+- **Details**: CSS `.ui-combobox` is `position: relative` and `.ui-combobox ul` has `position: absolute; top: 100%; z-index: 5`. C++ uses `ImGui::BeginChild("##dropdown", ...)` which is an inline child window, not a floating overlay. This means the dropdown may be clipped by the parent window boundaries, doesn't layer over other UI elements, and doesn't position at `top: 100%` of the input field. A proper ImGui equivalent would use a popup or a separate window.
+
+- [ ] 464. [combobox.cpp] Dropdown list does not have `list-style: none` equivalent — no bullet points but uses Selectable
+- **JS Source**: `src/app.css` line 1359
+- **Status**: Pending
+- **Details**: CSS `list-style: none` removes bullet points from the `<ul>`. C++ uses `ImGui::Selectable()` which doesn't have bullets, but the Selectable widget has its own hover highlighting behavior that differs from the CSS `li:hover { background: #353535; cursor: pointer; }`. The C++ pushes `ImGuiCol_HeaderHovered` to match, which is correct for the background color, but the cursor change is not possible in ImGui (ImGui does not support custom cursor-on-hover per widget).
+
+- [ ] 465. [combobox.cpp] Missing `box-shadow: black 0 0 3px 0` on dropdown
+- **JS Source**: `src/app.css` line 1363
+- **Status**: Pending
+- **Details**: CSS `.ui-combobox ul` has `box-shadow: black 0 0 3px 0`. ImGui does not support box-shadow on child windows. The C++ dropdown (line 215–216) uses `ImGui::BeginChild` with borders but no shadow, resulting in a flatter visual appearance compared to the JS version.
+
+- [ ] 466. [combobox.cpp] `filteredSource` uses `startsWith` (JS) but C++ uses `find(...) == 0` which is functionally equivalent but `std::string::starts_with` is available in C++20/23
+- **JS Source**: `src/js/components/combobox.js` line 38
+- **Status**: Pending
+- **Details**: JS uses `item.label.toLowerCase().startsWith(currentTextLower)`. C++ (line 34) uses `labelLower.find(currentTextLower) == 0`. While functionally identical, the C++23 `std::string::starts_with()` method would be cleaner and more idiomatic for the project's C++23 standard. Minor style issue, not a behavioral difference.
+
+- [ ] 467. [context-menu.cpp] JS uses `window.innerHeight/innerWidth` but C++ uses `io.DisplaySize` which may differ with multi-viewport
+- **JS Source**: `src/js/components/context-menu.js` lines 35–36
+- **Status**: Pending
+- **Details**: JS `reposition()` compares `positionY > window.innerHeight / 2` and `positionX > window.innerWidth / 2` using the browser window dimensions. C++ (lines 30–31) uses `io.DisplaySize.y / 2.0f` and `io.DisplaySize.x / 2.0f`. With ImGui multi-viewport enabled, `io.DisplaySize` represents the main viewport size, not the actual monitor or display size. If the context menu is triggered from a secondary viewport, the comparison may be incorrect because `io.DisplaySize` doesn't account for multi-viewport positioning.
+
+- [ ] 468. [context-menu.cpp] JS uses `clientMouseX`/`clientMouseY` from global mousemove listener but C++ uses `io.MousePos` at time of activation
+- **JS Source**: `src/js/components/context-menu.js` lines 7–14, 33–34
+- **Status**: Pending
+- **Details**: JS tracks mouse position via a global `window.addEventListener('mousemove', ...)` that updates `clientMouseX`/`clientMouseY` on every mouse move. When `reposition()` is called (on `node` watch, via `$nextTick`), it reads the latest tracked mouse position. C++ (line 28) reads `io.MousePos` which is the current frame's mouse position. In JS, the `$nextTick` delay means the position is read one tick after the node change. In C++, the position is read the same frame the node becomes active. This could cause a subtle positioning difference if the mouse moves between frames.
+
+- [ ] 469. [context-menu.cpp] `mounted()` initial reposition is not ported
+- **JS Source**: `src/js/components/context-menu.js` lines 48–52
+- **Status**: Pending
+- **Details**: JS `mounted()` calls `this.reposition()` to set initial position. C++ does not have a mounted equivalent — the first frame when `nodeActive` transitions to true triggers `reposition()` via the watch logic (line 55), which covers the primary use case. However, if the context menu renders with `node` already truthy on the first frame, JS would have called `reposition()` in both `mounted()` AND the watch handler, while C++ only calls it in the watch handler. The mounted call is a safety net in JS.
+
+- [ ] 470. [context-menu.cpp] CSS `span` items use `padding: 8px`, `border-bottom: 1px solid var(--border)`, `text-overflow: ellipsis` — not enforced by C++ rendering
+- **JS Source**: `src/app.css` lines 900–913
+- **Status**: Pending
+- **Details**: CSS `.context-menu > span` has `padding: 8px`, `border-bottom: 1px solid var(--border)`, `text-overflow: ellipsis`, `white-space: nowrap`, `overflow: hidden`. The last child has `border-bottom: 0`. C++ `contentCallback` renders the menu items but does not enforce these CSS rules — the callback is responsible for rendering, and the context-menu component does not apply per-item padding, separators, or text truncation. This means the visual appearance depends entirely on how callers render items, potentially deviating from the JS styling.
+
+- [ ] 471. [context-menu.cpp] CSS `span:hover` background `#353535` with `cursor: pointer` not enforced on menu items
+- **JS Source**: `src/app.css` lines 907–910
+- **Status**: Pending
+- **Details**: CSS `.context-menu > span:hover` sets `background: #353535; cursor: pointer`. C++ delegates item rendering to the `contentCallback`, which may or may not apply hover highlighting. The context-menu component itself does not apply per-item hover effects, unlike the JS CSS which applies them universally to all `span` children.
+
+- [ ] 472. [data-table.cpp] JS sort uses `Array.prototype.sort()` (unstable in some engines) but C++ uses `std::stable_sort`
+- **JS Source**: `src/js/components/data-table.js` line 170
+- **Status**: Pending
+- **Details**: JS uses `sorted.sort(...)` which in modern engines (V8, SpiderMonkey) uses TimSort (stable). C++ (line 296) uses `std::stable_sort` which is guaranteed stable. The comment in C++ (line 295) notes this intention. While functionally equivalent in modern engines, the JS spec doesn't guarantee stability, so the C++ version is technically more deterministic. This is a minor difference — practically identical behavior.
+
+- [ ] 473. [data-table.cpp] JS `localeCompare()` for string sorting vs C++ `std::string::compare()` after toLower
+- **JS Source**: `src/js/components/data-table.js` line 192
+- **Status**: Pending
+- **Details**: JS uses `aStr.localeCompare(bStr)` which is locale-aware and handles Unicode collation. C++ (lines 319–323) uses `aStr.compare(bStr)` after `toLower()` which is a byte-wise comparison after ASCII lowercasing. This means non-ASCII characters (accented letters, etc.) sort differently: JS respects locale-specific ordering (e.g., 'é' sorts near 'e'), while C++ uses raw byte values. For WoW data that may contain localized strings, this could produce different sort orders.
+
+- [ ] 474. [data-table.cpp] `preventMiddleMousePan` from JS is not ported
+- **JS Source**: `src/js/components/data-table.js` lines 52–53, mounted
+- **Status**: Pending
+- **Details**: JS registers an `onMiddleMouseDown` handler to `this.preventMiddleMousePan(e)` on the root element, preventing the browser's default middle-mouse-button scroll/pan behavior. C++ does not need this since ImGui doesn't have browser-like middle-click pan, but the handler is mentioned in the JS `mounted()` and `beforeUnmount()` hooks. No behavioral difference expected, but the JS source code is not represented in C++ comments.
+
+- [ ] 475. [data-table.cpp] `syncScrollPosition` is intentionally omitted but JS uses it to sync native+custom scroll
+- **JS Source**: `src/js/components/data-table.js` lines 51, 56
+- **Status**: Pending
+- **Details**: JS registers `this.onScroll = e => this.syncScrollPosition(e)` on the root element's `scroll` event, syncing the custom scrollbar position with the browser's native scroll. C++ (lines 422–430) correctly documents this as unnecessary since ImGui has no native scroll. The JS `syncScrollPosition` method reads `this.$refs.root.scrollLeft` and updates `horizontalScrollRel` accordingly. This is covered in C++ by direct scroll management. Correctly omitted.
+
+- [ ] 476. [data-table.cpp] `list-status` text uses `ImGui::TextDisabled` but CSS `.list-status` may have different styling
+- **JS Source**: `src/js/components/data-table.js` template line 1017–1020, `src/app.css` lines 2506+
+- **Status**: Pending
+- **Details**: C++ (line 1380) uses `ImGui::TextDisabled("%s", ...)` for the status line, which applies a dimmed text color. The JS template uses a plain `<div class="list-status">` with `<span>` text. CSS `.list-status` styling should be checked — it may have specific font size, color, or padding that differs from ImGui's disabled text appearance. The `toLocaleString()` formatting is correctly replicated with `formatWithThousandsSep()`.
+
+- [ ] 477. [data-table.cpp] Missing CSS container `border: 1px solid var(--border)` and `box-shadow: black 0 0 3px 0px`
+- **JS Source**: `src/app.css` lines 1074–1079
+- **Status**: Pending
+- **Details**: CSS `.ui-datatable` inherits from `.ui-listbox, .ui-checkboxlist, .ui-datatable` which sets `border: 1px solid var(--border); box-shadow: black 0 0 3px 0px`. C++ (line 994) uses `ImGui::BeginChild("##datatable_root", availSize, ImGuiChildFlags_Borders, ...)` which draws a border but ImGui borders use default border color, not `var(--border)`. Box-shadow is not supported in ImGui. The border color and shadow provide visual separation in the JS version.
+
+- [ ] 478. [data-table.cpp] Row alternating colors use `BG_ALT_U32` / `BG_DARK_U32` but CSS uses `--background-dark` (default) and `--background-alt` (even)
+- **JS Source**: `src/app.css` lines 1081–1093
+- **Status**: Pending
+- **Details**: CSS sets all rows to `background: var(--background-dark)` with even rows overriding to `background: var(--background-alt)`. C++ (lines 1240–1246) sets odd rows (displayRow % 2 == 0) to `BG_DARK_U32` and even rows (displayRow % 2 == 1) to `BG_ALT_U32`. The parity is based on `displayRow` (visual position) not the absolute row index. JS CSS `:nth-child(even)` is based on DOM position which corresponds to visual position, so this should match. However, the C++ maps `displayRow % 2 == 0` to dark and `displayRow % 2 == 1` to alt, while CSS uses `nth-child(even)` (1-indexed, so positions 2,4,6...) for alt. Since `displayRow` is 0-indexed, `displayRow == 0` is the first row (CSS odd/1st child = dark), `displayRow == 1` is second row (CSS even = alt). This mapping is correct.
+
+- [ ] 479. [data-table.cpp] Cell padding is `5px` in C++ but CSS uses `padding: 5px 10px` for `td`
+- **JS Source**: `src/app.css` lines 1225–1231
+- **Status**: Pending
+- **Details**: CSS `.ui-datatable table tr td` has `padding: 5px 10px` (5px top/bottom, 10px left/right). C++ (line 1293) uses `const float cellPadding = 5.0f` which is applied as left padding only. The right padding and top/bottom padding are not explicitly applied — the text is vertically centered via `(rowHeight - ImGui::GetTextLineHeight()) / 2.0f` but horizontal padding should be 10px left, not 5px.
+
+- [ ] 480. [file-field.cpp] JS opens dialog on `@focus` but C++ opens on button click
+- **JS Source**: `src/js/components/file-field.js` lines 33–40, template line 46
+- **Status**: Pending
+- **Details**: JS template uses `@focus="openDialog"` on the text input — when the input receives focus, the directory picker opens immediately. C++ (lines 128–132) uses a separate "..." button next to the input to trigger the dialog. The JS behavior is: clicking the text field opens the dialog, and the field never actually receives text focus for editing. C++ allows direct text editing in the field AND has a browse button. This is a significant UX difference — in JS, the field is effectively read-only (clicking always opens picker), while in C++ it's editable with an optional browse button.
+
+- [ ] 481. [file-field.cpp] JS `mounted()` creates hidden `<input type="file" nwdirectory>` element — C++ uses portable-file-dialogs
+- **JS Source**: `src/js/components/file-field.js` lines 14–23
+- **Status**: Pending
+- **Details**: JS creates a hidden file input with `nwdirectory` attribute (NW.js specific for directory selection), listens for `change` event, and emits the selected value. C++ uses `pfd::select_folder()` which opens a native folder dialog. The underlying mechanism differs (NW.js DOM file input vs. native OS dialog) but the user-facing behavior should be equivalent — both present a directory picker. C++ implementation correctly replaces the NW.js-specific API.
+
+- [ ] 482. [file-field.cpp] JS `openDialog()` clears file input value before opening — C++ does not clear state
+- **JS Source**: `src/js/components/file-field.js` lines 34–39
+- **Status**: Pending
+- **Details**: JS `openDialog()` sets `this.fileSelector.value = ''` before calling `click()` and then calls `this.$el.blur()`. This ensures the `change` event fires even if the user selects the same directory again. C++ `openDialog()` (line 74–81) calls `openDirectoryDialog()` directly without any pre-clear. Since `pfd::select_folder()` returns the result directly (not via an event), re-selecting the same directory works fine — the result is always returned. The `blur()` call is unnecessary in C++ since the dialog is modal.
+
+- [ ] 483. [file-field.cpp] Missing placeholder rendering position uses hardcoded offsets
+- **JS Source**: `src/js/components/file-field.js` template line 46
+- **Status**: Pending
+- **Details**: C++ (lines 120–126) renders placeholder text with `ImVec2(textPos.x + 4.0f, textPos.y + 2.0f)` using hardcoded offsets. The JS template uses the browser's native placeholder rendering via `:placeholder="placeholder"` which automatically positions and styles the placeholder text. The C++ offsets may not match the actual input text baseline, causing misalignment.
+
+- [ ] 484. [file-field.cpp] Extra `openFileDialog()` and `saveFileDialog()` functions not in JS source
+- **JS Source**: `src/js/components/file-field.js` (entire file)
+- **Status**: Pending
+- **Details**: C++ adds `openFileDialog()` (lines 44–53) and `saveFileDialog()` (lines 60–73) as public utility functions. The JS file-field component only provides directory selection via `nwdirectory`. These extra functions may be useful for other parts of the C++ app but are not present in the original JS component source. They are additional API surface.
+
+- [ ] 485. [home-showcase.cpp] `build_background_style()` function not ported — no background image layers
+- **JS Source**: `src/js/components/home-showcase.js` lines 15–29
+- **Status**: Pending
+- **Details**: JS `build_background_style(showcase)` constructs a CSS background-image style from `BASE_LAYERS` + `showcase.layers`, building comma-separated `backgroundImage`, `backgroundSize`, `backgroundPosition`, and `backgroundRepeat` values. C++ (line 127–129) has a comment noting that background image layers have no ImGui equivalent, but the function is entirely missing. The showcase visual identity relies heavily on these layered background images. The C++ version only shows text, losing the visual showcase entirely.
+
+- [ ] 486. [home-showcase.cpp] `BASE_LAYERS` stored as single `ShowcaseLayer` instead of array
+- **JS Source**: `src/js/components/home-showcase.js` lines 3–9
+- **Status**: Pending
+- **Details**: JS `BASE_LAYERS` is an array: `[{ image: './images/logo.png', size: '50px', position: 'bottom 10px right 10px' }]`. C++ (line 22) stores `BASE_LAYER` as a single `ShowcaseLayer` object, not a `std::vector`. While there's only one base layer in the JS source, the JS code uses array spread `[...BASE_LAYERS, ...showcase.layers]` which would support multiple base layers if added. The C++ naming (`BASE_LAYER` singular) and type differ from the JS plural array pattern.
+
+- [ ] 487. [home-showcase.cpp] Video playback (`<video>` element) not implemented
+- **JS Source**: `src/js/components/home-showcase.js` template line 34
+- **Status**: Pending
+- **Details**: JS template: `<video v-if="current.video" :src="current.video" autoplay loop muted playsinline></video>`. This renders an auto-playing, looping, muted video overlay on the showcase. C++ (line 126–129) notes this in a comment but does not implement any video rendering. ImGui does not natively support video playback; a custom texture upload with a video decoder (e.g., via miniaudio for audio, FFmpeg for video) would be needed.
+
+- [ ] 488. [home-showcase.cpp] `computed: background_style()` not ported
+- **JS Source**: `src/js/components/home-showcase.js` lines 55–57
+- **Status**: Pending
+- **Details**: JS computed property `background_style()` calls `build_background_style(this.current)` and the result is bound to the `<a>` element's `:style`. This creates the visual showcase appearance with layered background images. C++ does not compute or apply any background styling. The showcase area appears as plain text instead of an image showcase.
+
+- [ ] 489. [home-showcase.cpp] Title text says "Made with wow.export.cpp" but JS says "Made with wow.export"
+- **JS Source**: `src/js/components/home-showcase.js` template line 33
+- **Status**: Pending
+- **Details**: JS template: `<h1 id="home-showcase-header">Made with wow.export</h1>`. C++ (line 107): `ImGui::Text("Made with wow.export.cpp")`. Per the project conventions in copilot-instructions.md, user-facing text should say `wow.export.cpp`, so this is intentionally different. However, the JS source file says `wow.export`, so this is a documented deviation from the JS source.
+
+- [ ] 490. [home-showcase.cpp] Showcase rendering is plain text instead of styled grid layout
+- **JS Source**: `src/app.css` lines 3580–3633
+- **Status**: Pending
+- **Details**: CSS `#home-showcase-header` is in a grid layout (`grid-column: 1; grid-row: 1`), `#home-showcase` has `border: 1px solid var(--border); border-radius: 10px; cursor: pointer; overflow: hidden`, and `#home-showcase-links > a` has `font-size: 12px; color: #888`. C++ uses `ImGui::Text()`, `ImGui::SmallButton()`, and `ImGui::Separator()` without any grid layout, border-radius, or matching font sizes. The visual appearance is completely different from the styled JS version.
+
+- [ ] 491. [home-showcase.cpp] Feedback link opens "KB011" directly instead of resolving via `data-kb-link` attribute
+- **JS Source**: `src/js/components/home-showcase.js` template line 41
+- **Status**: Pending
+- **Details**: JS template: `<a data-kb-link="KB011">Feedback</a>`. The `data-kb-link` attribute is processed by the app's global link handler which resolves KB article IDs to URLs. C++ (line 142) calls `ExternalLinks::open("KB011")` directly with the raw string. If `ExternalLinks::open()` doesn't resolve KB article IDs (and only handles URLs), this would fail to open the correct link. The JS version relies on a global click handler that intercepts `data-kb-link` attributes.
+
+- [ ] 492. [home-showcase.cpp] `.showcase-title` CSS uses Gambler font at 40px — not replicated
+- **JS Source**: `src/app.css` lines 3607–3614
+- **Status**: Pending
+- **Details**: CSS `.showcase-title` uses `font-family: "Gambler", sans-serif; font-size: 40px; color: white` positioned absolutely at `top: 15px; left: 20px`. C++ (line 123–124) uses `ImGui::Text("%s", current->title.c_str())` with default ImGui font — no custom font, no large size, no absolute positioning. The showcase title should be a large overlay text in a specific font.
+
+- [ ] 493. [itemlistbox.cpp] JS `emits: ['update:selection', 'equip']` but C++ header declares `onOptions` callback
+- **JS Source**: `src/js/components/itemlistbox.js` line 20
+- **Status**: Pending
+- **Details**: JS declares `emits: ['update:selection', 'equip']` — only two events. The JS template has `<li @click.self="$emit('options', item)">Options</li>` but 'options' is NOT in the emits array (it should be). C++ header (itemlistbox.h lines 85–86) declares both `onEquip` and `onOptions` callbacks. The C++ adds the `onOptions` callback that the JS template uses but doesn't formally declare in emits. This is technically a JS bug that C++ correctly accounts for, but the JS source discrepancy should be noted.
+
+- [ ] 494. [itemlistbox.cpp] `handleKey` copies `displayName` but JS copies `displayName` via `e.displayName` from selection objects
+- **JS Source**: `src/js/components/itemlistbox.js` lines 226–228
+- **Status**: Pending
+- **Details**: JS `handleKey` copies: `nw.Clipboard.get().set(this.selection.map(e => e.displayName).join('\n'), 'text')` — maps selection items (which are full item objects) to their `displayName`. C++ (lines 272–284) looks up each selected ID in `filteredItems` via `indexOfItemById()` and copies `displayName`. The JS maps directly from `this.selection` (which contains item object references), while C++ must look up by ID since selection stores IDs not objects. Functionally equivalent if all selected IDs exist in filteredItems, but could produce different results if a selected ID is no longer in the filtered list (C++ skips it, JS would still have the object reference).
+
+- [ ] 495. [itemlistbox.cpp] Item row height uses `46px` but JS CSS uses `height: 26px` in `.ui-listbox .item`
+- **JS Source**: `src/app.css` line 1089, `src/js/components/itemlistbox.js` line 155
+- **Status**: Pending
+- **Details**: CSS `.ui-listbox .item` has `height: 26px`. However, C++ (line 81) uses `46.0f` for item height and (line 439) uses `itemHeightVal = 46.0f`. The comment on line 80 references `#tab-items #listbox-items .item { height: 46px }` — this is a tab-specific CSS override. Need to verify that `#tab-items #listbox-items .item` actually overrides to 46px in app.css. If so, 46px is correct for item listboxes specifically.
+
+- [ ] 496. [itemlistbox.cpp] Missing container `border`, `box-shadow`, and `background` from CSS `.ui-listbox`
+- **JS Source**: `src/app.css` lines 1074–1079
+- **Status**: Pending
+- **Details**: CSS `.ui-listbox` has `background: var(--background); border: 1px solid var(--border); box-shadow: black 0 0 3px 0px; overflow: hidden`. C++ (line 453, based on BeginChild call) likely uses default ImGui child window styling without explicit border color, box-shadow, or background matching the CSS. The listbox container should have a visible border and shadow for visual separation.
+
+- [ ] 497. [itemlistbox.cpp] Quality 7 and 8 both map to Heirloom color but CSS may define separate classes
+- **JS Source**: `src/js/components/itemlistbox.js` template line 335
+- **Status**: Pending
+- **Details**: C++ `getQualityColor()` (lines 400–401) maps both quality 7 and 8 to the same color `#00ccff`. The JS template uses `'item-quality-' + item.quality` as a CSS class, so quality 7 and 8 would use `.item-quality-7` and `.item-quality-8` respectively. If the CSS defines different colors for these two classes, the C++ would be incorrect. Need to check app.css for `.item-quality-7` and `.item-quality-8` definitions.
+
+- [ ] 498. [itemlistbox.cpp] `.item-icon` rendering not implemented — icon placeholder only
+- **JS Source**: `src/js/components/itemlistbox.js` template line 334
+- **Status**: Pending
+- **Details**: JS template: `<div :class="['item-icon', 'icon-' + item.icon ]"></div>`. This renders the item icon using CSS background-image from the `icon-{fileDataID}` class. C++ `render()` does load icons via `IconRender::loadIcon()` but the actual icon texture rendering in the list rows needs verification — the code should render the icon texture at the correct size and position matching the CSS `.item-icon` dimensions.
+
+- [ ] 499. [listbox-maps.cpp] Missing `recalculateBounds()` call after resetting scroll on expansion filter change
+- **JS Source**: `src/js/components/listbox-maps.js` lines 27–31
+- **Status**: Pending
+- **Details**: JS `watch: { expansionFilter: function() { this.scroll = 0; this.scrollRel = 0; this.recalculateBounds(); } }` calls `recalculateBounds()` after resetting scroll values. C++ (lines 91–95) sets `scroll = 0.0f` and `scrollRel = 0.0f` but does NOT call `recalculateBounds()`. The JS `recalculateBounds()` ensures scroll values are clamped and relative values are consistent. While setting both to 0 should be inherently valid, it differs from the JS behavior and could miss persist-scroll-key saving that happens in `recalculateBounds()`.
+
+- [ ] 500. [listbox-maps.cpp] JS `filteredItems` has inline text filtering + selection pruning, C++ delegates to base listbox
+- **JS Source**: `src/js/components/listbox-maps.js` lines 43–88
+- **Status**: Pending
+- **Details**: JS `filteredItems` computed property applies expansion filtering, THEN text filtering (debounced filter + regex), THEN selection pruning — all inline in the computed property. C++ pre-filters by expansion (line 103) then delegates to `listbox::render()` which handles text filtering internally. The order of operations should be equivalent (expansion first, then text), but the text filtering and selection pruning happen inside the base listbox's `computeFilteredItems()` which is called within `render()`. The JS version computes the full filtered list as a reactive computed property, while C++ recomputes each frame. Functionally equivalent.
+
+- [ ] 501. [listbox-zones.cpp] Missing `recalculateBounds()` call after resetting scroll on expansion filter change
+- **JS Source**: `src/js/components/listbox-zones.js` lines 27–31
+- **Status**: Pending
+- **Details**: Same issue as entry 499 but for listbox-zones. JS calls `this.recalculateBounds()` after resetting scroll to 0 on expansion filter change. C++ (lines 91–95) only sets values to 0 without calling `recalculateBounds()`. Missing persist-scroll-key saving opportunity and bounds validation.
+
+- [ ] 502. [listbox-zones.cpp] Identical implementation to listbox-maps.cpp — shared code could be refactored
+- **JS Source**: `src/js/components/listbox-zones.js` (entire file — identical structure to listbox-maps.js)
+- **Status**: Pending
+- **Details**: `listbox-zones.cpp` is a near-identical copy of `listbox-maps.cpp` with only the namespace name and comment text differing (maps→zones). The JS sources are also structurally identical. This is not a bug but a code duplication opportunity — both could share a common `listbox-expansion-filter` utility. This matches the JS source's structure (both extend `listboxComponent` identically).
+
+- [ ] 503. [listbox.cpp] `wheelMouse` uses `core.view.config.scrollSpeed` from JS but C++ reads from `core::view->config`
+- **JS Source**: `src/js/components/listbox.js` lines 330–336
+- **Status**: Pending
+- **Details**: JS: `const scrollCount = core.view.config.scrollSpeed === 0 ? Math.floor(this.$refs.root.clientHeight / child.clientHeight) : core.view.config.scrollSpeed`. C++ (lines 216–222) reads `core::view->config.value("scrollSpeed", 0)` using `nlohmann::json::value()`. If `core::view` is null (line 217 checks), it defaults to `scrollSpeed = 0`. The JSON access pattern (`config.value("scrollSpeed", 0)`) differs from the JS direct property access (`config.scrollSpeed`). If the config object uses a different key name or nested structure, the value might not be found.
+
+- [ ] 504. [listbox.cpp] `handlePaste` creates new selection instead of clearing existing and pushing entries
+- **JS Source**: `src/js/components/listbox.js` lines 305–318
+- **Status**: Pending
+- **Details**: JS: `const newSelection = this.selection.slice(); newSelection.splice(0); newSelection.push(...entries);` — creates a copy of current selection, clears it, then pushes clipboard entries. This effectively replaces the selection with clipboard entries. C++ (lines 196–203) creates `entries` vector from clipboard text and calls `onSelectionChanged(entries)` directly. The JS code creates the new array from `selection.slice()` then `splice(0)` to clear — the intermediate copy is unnecessary but the end result is the same: the selection is replaced with the clipboard entries. Functionally equivalent.
+
+- [ ] 505. [listbox.cpp] `activeQuickFilter` toggle logic matches JS but CSS pattern regex differs
+- **JS Source**: `src/js/components/listbox.js` lines 213–216
+- **Status**: Pending
+- **Details**: JS quick filter: `const pattern = new RegExp('\\.${this.activeQuickFilter.toLowerCase()}(\\s\\[\\d+\\])?$', 'i')`. C++ `computeFilteredItems()` should apply the same regex pattern for quick filtering. Need to verify the C++ implements the quick filter regex pattern identically — specifically the `(\s\[\d+\])?$` suffix which handles optional file data ID suffixes like ` [12345]` at end of filenames.
+
+- [ ] 506. [listbox.cpp] Missing container `border`, `box-shadow`, and `background` from CSS `.ui-listbox`
+- **JS Source**: `src/app.css` lines 1074–1079
+- **Status**: Pending
+- **Details**: CSS `.ui-listbox` has `background: var(--background); border: 1px solid var(--border); box-shadow: black 0 0 3px 0px; overflow: hidden`. C++ uses `ImGui::BeginChild()` for the container but may not apply explicit border color matching `var(--border)` or the box-shadow. The container should have a visible border and shadow.
+
+- [ ] 507. [listbox.cpp] `.item:hover` uses `var(--font-alt) !important` in CSS but C++ hover effect may differ
+- **JS Source**: `src/app.css` lines 1070–1072
+- **Status**: Pending
+- **Details**: CSS `.ui-listbox .item:hover { background: var(--font-alt) !important; }` applies `--font-alt` (#57afe2) as hover background with `!important` overriding even selected items. C++ hover rendering (if implemented) should use the same color. Need to verify the C++ listbox render function applies hover highlighting with the correct color.
+
+- [ ] 508. [listbox.cpp] `contextmenu` event not emitted in base listbox JS but C++ has `onContextMenu` support
+- **JS Source**: `src/js/components/listbox.js` line 41
+- **Status**: Pending
+- **Details**: JS declares `emits: ['update:selection', 'update:filter', 'contextmenu']` but the JS template does not have any `@contextmenu` event handler on the items. The `contextmenu` event is declared but never emitted in the base listbox template code. C++ (lines 449–476) has a full `handleContextMenu` implementation that fires on right-click. This C++ feature goes beyond what the JS base listbox actually does (though it's declared in emits). The JS may handle context menu at a parent level instead.
+
+- [ ] 509. [listbox.cpp] Scroller thumb color uses `FONT_PRIMARY_U32` / `FONT_HIGHLIGHT_U32` but CSS uses `var(--border)` / `var(--font-highlight)`
+- **JS Source**: `src/app.css` lines 1106–1118
+- **Status**: Pending
+- **Details**: CSS `.scroller > div` default background is `var(--border)` with `border: 1px solid var(--border)`. On hover/active (`.scroller:hover > div, .scroller.using > div`), it changes to `var(--font-highlight)`. C++ should use `BORDER_U32` for default state and `FONT_HIGHLIGHT_U32` for hover/active, not `FONT_PRIMARY_U32` for the default state. `FONT_PRIMARY_U32` is white with alpha, while `--border` is a different color.
+
+- [ ] 510. [listboxb.cpp] JS `selection` stores item objects but C++ stores item indices
+- **JS Source**: `src/js/components/listboxb.js` lines 14, 230–231, 208–214, 281
+- **Status**: Pending
+- **Details**: JS `selection` prop stores item objects (e.g., `this.selection.indexOf(item)` where `item` is an object from `this.items`). The JS template uses `selection.includes(item)` for object identity comparison. C++ uses `std::vector<int>` for selection (indices into items array). This means C++ selection is index-based while JS is identity-based. If items are reordered or filtered, the indices in C++ could point to wrong items, while JS object references remain valid. The C++ approach is documented in the header.
+
+- [ ] 511. [listboxb.cpp] JS `handleKey` Ctrl+C copies `this.selection.join('\n')` (object labels) but C++ copies `items[idx].label`
+- **JS Source**: `src/js/components/listboxb.js` lines 179–181
+- **Status**: Pending
+- **Details**: JS: `nw.Clipboard.get().set(this.selection.join('\n'), 'text')` — joins selection items (which are objects with `.label`) using `join('\n')`. When JS objects are joined, they call `toString()` which returns `[object Object]` unless overridden. This is likely a JS bug — the code should probably join labels. C++ (lines 166–175) correctly copies `items[idx].label` for each selected index. C++ behavior is more correct than the JS source.
+
+- [ ] 512. [listboxb.cpp] Alternating row color parity may not match CSS `:nth-child(even)` due to 0-indexed `startIdx`
+- **JS Source**: `src/app.css` lines 1091–1092
+- **Status**: Pending
+- **Details**: CSS `.ui-listbox .item:nth-child(even)` uses 1-indexed DOM position to determine even rows. C++ (line 373) uses `(i - startIdx) % 2 == 0` to determine the visual position parity. When `startIdx` changes due to scrolling, the parity flips — row 0 is always "even" in C++ regardless of its actual index in the data. In JS, `:nth-child` is based on the rendered DOM elements (displayItems), so scrolling changes which items are at even positions. Since both C++ and JS re-render from `displayItems`, the visual parity should match for the visible items. However, the C++ uses `(i - startIdx) % 2 == 0` as alt (even visual position), while CSS even is the 2nd, 4th, etc. DOM child (also 0-indexed). This mapping should be verified.
+
+- [ ] 513. [listboxb.cpp] Missing container `border`, `box-shadow` from CSS `.ui-listbox`
+- **JS Source**: `src/app.css` lines 1074–1079
+- **Status**: Pending
+- **Details**: CSS `.ui-listbox` has `border: 1px solid var(--border); box-shadow: black 0 0 3px 0px`. C++ (line 305) uses `ImGui::BeginChild("##listboxb_container", availSize, ImGuiChildFlags_None, ...)` with `ImGuiChildFlags_None` which does NOT draw a border. The container should have `ImGuiChildFlags_Borders` and matching border color to replicate the CSS appearance.
+
+- [ ] 514. [listboxb.cpp] Scroller thumb uses `TEXT_ACTIVE_U32` / `TEXT_IDLE_U32` but CSS uses `var(--border)` / `var(--font-highlight)`
+- **JS Source**: `src/app.css` lines 1106–1118
+- **Status**: Pending
+- **Details**: CSS `.scroller > div` uses `background: var(--border)` default and `var(--font-highlight)` on hover. C++ (lines 347–349) uses `app::theme::TEXT_ACTIVE_U32` and `app::theme::TEXT_IDLE_U32` which may not match the CSS variables. Should use `BORDER_U32` for default and `FONT_HIGHLIGHT_U32` for hover to match CSS.
+
+- [ ] 515. [listboxb.cpp] Row width uses `availSize.x - 10.0f` but CSS doesn't subtract 10px
+- **JS Source**: `src/js/components/listboxb.js` template line 281
+- **Status**: Pending
+- **Details**: C++ (lines 372, 387) uses `availSize.x - 10.0f` for row max width and selectable width, presumably to leave room for the scrollbar (8px wide). However, the CSS `.ui-listbox .item` has no explicit width reduction — items fill the full container width and the scroller overlaps via `position: absolute`. The 10px subtraction in C++ could cause items to be narrower than expected.
+
+- [ ] 516. [listboxb.cpp] `displayItems` computed as `items.slice(scrollIndex, scrollIndex + slotCount)` — C++ iterates directly with indices
+- **JS Source**: `src/js/components/listboxb.js` lines 89–91
+- **Status**: Pending
+- **Details**: JS creates `displayItems` as a computed property returning a slice of the items array. The template iterates `displayItems` and uses `selectItem(item, $event)` passing the item object. C++ iterates from `startIdx` to `endIdx` directly and passes the index to `selectItem`. This is equivalent but the selection model difference (objects vs indices) means the selection semantics differ as noted in entry 510.
+
+- [ ] 517. [listbox.cpp] Quick filter links use `ImGui::SmallButton` but CSS uses `<a>` tags with specific styling
+- **JS Source**: `src/app.css` (quick-filters styling)
+- **Status**: Pending
+- **Details**: The C++ quick filter rendering (lines 801–827) uses `ImGui::SmallButton()` for filter links and `ImGui::Text("/")` for separators. The JS version uses `<a>` anchor tags with CSS styling including `color: #888` for inactive and `color: #ffffff; font-weight: bold` for active filters. `ImGui::SmallButton` has button styling (background, border) that doesn't match the CSS anchor link appearance. Should use styled text or selectable to match the link-like appearance.
+
+- [ ] 518. [listbox.cpp] `includefilecount` prop exists in JS but C++ doesn't use it — counter is always shown when `unittype` is non-empty
+- **JS Source**: `src/js/components/listbox.js` line 40
+- **Status**: Pending
+- **Details**: JS has `includefilecount` prop that, when true, includes a file counter. The counter display is conditional on `unittype` in the template (`v-if="unittype"`). C++ header declares the render function without an `includefilecount` parameter — it only checks `unittype` for showing the counter. The `includefilecount` prop may control additional behavior in the JS version that isn't captured by just checking `unittype`.
+
+- [ ] 519. [data-table.cpp] Missing `Number(val)` equivalence check in `escape_value` — JS `isNaN(val)` checks the original value type
+- **JS Source**: `src/js/components/data-table.js` lines 950–958
+- **Status**: Pending
+- **Details**: JS `escape_value` checks `if (val === null || val === undefined) return 'NULL'` then `if (!isNaN(val) && str.trim() !== '') return str`. The `!isNaN(val)` check tests if the ORIGINAL value (not string) is numeric. C++ (lines 874–879) uses `tryParseNumber(val, num)` which parses the string representation. In JS, `!isNaN(Number(""))` is `false` (Number("") is 0 but isNaN(0) is false, so !isNaN is true) — wait, `Number("")` is `0` and `isNaN(0)` is `false`, so `!isNaN(Number(""))` is `true`. But the JS also checks `str.trim() !== ''` to exclude empty strings. C++ `tryParseNumber` checks `pos == s.size()` which would fail for empty string since `stod("")` throws. So both handle empty strings correctly (treated as non-numeric). Functionally equivalent.
+
+- [ ] 520. [data-table.cpp] `formatWithThousandsSep` needs to match JS `toLocaleString()` thousands separator
+- **JS Source**: `src/js/components/data-table.js` template lines 1018–1019
+- **Status**: Pending
+- **Details**: JS uses `filteredItems.length.toLocaleString()` and `rows.length.toLocaleString()` which formats numbers with locale-appropriate thousands separators. C++ uses `formatWithThousandsSep()` (line 1374–1377). The C++ function should produce comma-separated thousands (e.g., "1,234") to match the default English locale used in most WoW installations. If the function uses a different separator or format, the status text would differ visually.
+
+- [ ] 521. [data-table.cpp] Header height hardcoded to `40px` but CSS uses `padding: 10px` top/bottom on `th`
+- **JS Source**: `src/app.css` lines 1163–1168
+- **Status**: Pending
+- **Details**: C++ (line 971) hardcodes `const float headerHeight = 40.0f` with comment "padding 10px top/bottom + ~20px text". CSS `.ui-datatable table tr th` has `padding: 10px` (all sides). The actual header height depends on the font size — CSS text is typically ~14px default, so 10px + 14px + 10px = 34px, not 40px. If the CSS font size is different or the browser computes differently, the hardcoded 40px may not match.
+
+- [ ] 522. [data-table.cpp] `handleFilterIconClick` not fully visible but CSS filter icon uses specific SVG styling
+- **JS Source**: `src/app.css` lines 1176–1191
+- **Status**: Pending
+- **Details**: CSS `.filter-icon` uses a background SVG image (`background-image: url(./fa-icons/funnel.svg)`) with `background-size: contain; width: 18px; height: 14px`. C++ (lines 1101–1113) draws a custom triangle + rectangle shape as a funnel icon approximation. The custom drawing may not match the SVG icon's exact shape and proportions. The CSS also specifies `opacity: 0.5` default and `opacity: 1.0` on hover, while C++ uses `ICON_DEFAULT_U32` and `FONT_HIGHLIGHT_U32` colors.
+
+- [ ] 523. [data-table.cpp] Sort icon CSS uses SVG background images but C++ draws triangles
+- **JS Source**: `src/app.css` lines 1198–1224
+- **Status**: Pending
+- **Details**: CSS `.sort-icon` uses `background-image: url(./fa-icons/sort.svg)` for the default state, with `.sort-icon-up` and `.sort-icon-down` using different SVG files. The icons have `width: 12px; height: 18px; opacity: 0.5`. C++ (lines 1119–1157) draws triangle shapes to approximate sort icons. The triangle approximation may not match the SVG icon's exact appearance — SVGs typically have more refined shapes with anti-aliasing.
+
+- [ ] 524. [listbox.cpp] `activated()` / `deactivated()` Vue lifecycle hooks for keep-alive not ported
+- **JS Source**: `src/js/components/listbox.js` lines 96–113
+- **Status**: Pending
+- **Details**: JS has `activated()` and `deactivated()` lifecycle hooks that register/unregister paste and keyboard listeners when the component enters/leaves a `<keep-alive>` cache. C++ renders each frame via `render()` calls — there's no keep-alive equivalent. The keyboard and paste handling happens inline each frame. However, if multiple listbox instances exist across different tabs, the C++ version may process keyboard input for all of them simultaneously (since all `render()` calls run every frame), while JS only processes input for the active (non-deactivated) instance. This could cause input to be consumed by the wrong listbox.
