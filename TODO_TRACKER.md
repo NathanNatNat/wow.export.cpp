@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/342 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/345 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1668,3 +1668,18 @@
 - **JS Source**: `src/js/modules.js` lines 208–213
 - **Status**: Pending
 - **Details**: In JS `wrap_module`, `display_label` starts as `module_name` but is updated to `label` inside the `registerNavButton` callback (line 213: `display_label = label`). The captured `display_label` is then used in the wrapped `initialize` error messages (line 236–237), producing user-friendly text like "Failed to initialize Maps tab". In C++ `wrap_module` (modules.cpp line 194), `display_label` is set to `mod.name` and never updated from the nav button registration, so error messages show the module key (e.g., "Failed to initialize tab_maps tab") instead of the display label (e.g., "Failed to initialize Maps tab").
+
+- [ ] 343. [updater.cpp] Linux fork+exec failure path has no error logging unlike JS child.on('error') handler
+- **JS Source**: `src/js/updater.js` lines 150–155
+- **Status**: Pending
+- **Details**: JS `launchUpdater()` attaches a `child.on('error')` handler (line 152–155) that logs `'ERROR: Failed to spawn updater: %s'` when `cp.spawn()` fails asynchronously. In C++ on Linux (updater.cpp lines 260–274), if `fork()` succeeds but `execl()` fails in the child process, the child simply calls `_exit(1)` with no logging whatsoever. On Windows, `CreateProcessA` failure is caught synchronously and logged via the catch block, but on Linux the exec-failure error path is completely silent. This means a missing or non-executable updater binary on Linux produces no diagnostic output.
+
+- [ ] 344. [wmv.cpp] safe_parse_int returns 0 for fully non-numeric strings while JS parseInt returns NaN
+- **JS Source**: `src/js/wmv.js` lines 44, 57–58, 87–91
+- **Status**: Pending
+- **Details**: JS `parseInt('abc')` returns `NaN`, which propagates through the parsed result (e.g., in v1 `legacy_values` or v2 `customizations`/`equipment`). C++ `safe_parse_int()` (wmv.cpp lines 26–43) catches `std::stoi` exceptions for non-numeric strings and returns `std::nullopt`, which callers convert to 0 via `value_or(0)`. For .chr files with non-numeric `@_value` attributes, JS would store `NaN` while C++ stores `0`, potentially causing different downstream behavior in character customization or equipment application.
+
+- [ ] 345. [Shaders.cpp] C++ adds automatic _unregister_fn callback on ShaderProgram not present in JS
+- **JS Source**: `src/js/3D/Shaders.js` lines 56–72
+- **Status**: Pending
+- **Details**: C++ `create_program()` (Shaders.cpp lines 79–83) installs a static `_unregister_fn` callback on `gl::ShaderProgram` that automatically calls `shaders::unregister()` when a ShaderProgram is destroyed. JS has no equivalent auto-cleanup mechanism — callers must explicitly call `unregister(program)` (Shaders.js line 78–86). This means in C++, a program is automatically removed from `active_programs` on destruction, while in JS a disposed program remains in the set until manually unregistered. This changes `reload_all()` behavior: JS could attempt to recompile stale programs that were not explicitly unregistered, while C++ never encounters this scenario.
