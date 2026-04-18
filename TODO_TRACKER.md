@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 99/906 verified (11%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 104/906 verified (11%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -2081,9 +2081,9 @@
 - **Status**: Verified
 - **Details**: Ported to non-blocking staged execution in C++: `preview_model()` now queues a background CASC file read and completes renderer initialization when the future resolves, and `export_files()` now runs as a frame-pumped task instead of a monolithic blocking loop.
 
-- [ ] 424. [tab_models.cpp] create_renderer last parameter is file_data_id instead of file_name
+- [x] 424. [tab_models.cpp] create_renderer last parameter is file_data_id instead of file_name
 - **JS Source**: `src/js/modules/tab_models.js` line 99
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS passes file_name as last argument. C++ passes file_data_id (uint32_t). If renderer uses this for name-based logic (e.g. fallback texture paths), it would fail.
 
 - [ ] 425. [tab_models.cpp] M3 has_content hardcoded to true instead of checking draw_calls/groups
@@ -2096,9 +2096,9 @@
 - **Status**: Pending
 - **Details**: JS passes { 'View Log': () => log.openRuntimeLog() } as toast buttons on preview failure. C++ passes empty {}, so user has no way to open the runtime log from error toast.
 
-- [ ] 427. [tab_models.cpp] path.basename strips differently than C++ extension removal
+- [x] 427. [tab_models.cpp] path.basename strips differently than C++ extension removal
 - **JS Source**: `src/js/modules/tab_models.js` line 107
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS path.basename(model_name, 'm2') strips literal 'm2' leaving trailing dot (e.g. 'creature.'). C++ strips at last dot giving 'creature' (no trailing dot). Affects skin name replacement results.
 
 - [ ] 428. [tab_models.cpp] Drop handler prompt lambda missing count parameter
@@ -2131,14 +2131,14 @@
 - **Status**: Pending
 - **Details**: JS uses Checkboxlist component for doodad sets. C++ uses individual ImGui::Checkbox in a loop instead of checkboxlist::render().
 
-- [ ] 434. [tab_models.cpp] getActiveRenderer() only returns M2, not polymorphic like JS
+- [x] 434. [tab_models.cpp] getActiveRenderer() only returns M2, not polymorphic like JS
 - **JS Source**: `src/js/modules/tab_models.js` line 652
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS returns active_renderer regardless of type (M2/M3/WMO). C++ always returns active_renderer_result.m2.get() which is nullptr for M3/WMO. External callers get nullptr for non-M2 models.
 
-- [ ] 435. [tab_models.cpp] enableM2Skins config default may differ
+- [x] 435. [tab_models.cpp] enableM2Skins config default may differ
 - **JS Source**: `src/js/modules/tab_models.js` line 548
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS checks config.enableM2Skins with truthiness (undefined = false). C++ uses view.config.value("enableM2Skins", true) defaulting to true. Different behavior on first run when key not set.
 
 - [ ] 436. [tab_models.cpp] helper.mark on failure missing stack trace parameter
@@ -2151,9 +2151,9 @@
 - **Status**: Pending
 - **Details**: JS MenuButton has class="upward" making dropdown open upward. C++ menu_button::render doesn't pass any upward/direction flag, so dropdown may render downward and overlap content.
 
-- [ ] 438. [tab_models.cpp] Texture ribbon slot click behavior differs from JS
+- [x] 438. [tab_models.cpp] Texture ribbon slot click behavior differs from JS
 - **JS Source**: `src/js/modules/tab_models.js` line 302
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses @click (left-click) to open context menu. C++ uses both right-click and left-click to open the same popup. JS only uses left-click for texture ribbon — right-click is not handled.
 
 - [ ] 439. [tab_models_legacy.cpp] Regex indicator tooltip metadata from JS template is missing

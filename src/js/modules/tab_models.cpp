@@ -243,7 +243,8 @@ static void pump_preview_model_task() {
 		active_renderer_result = model_viewer_utils::create_renderer(
 			file, model_type, *gl_ctx,
 			view.config.value("modelViewerShowTextures", true),
-			task.file_data_id
+			task.file_data_id,
+			task.file_name
 		);
 
 		if (active_renderer_result.m2)
@@ -263,8 +264,8 @@ static void pump_preview_model_task() {
 				if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
 				pos = model_name.rfind('\\');
 				if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
-				auto ext_pos = model_name.rfind('.');
-				if (ext_pos != std::string::npos) model_name = model_name.substr(0, ext_pos);
+				if (model_name.size() >= 2 && model_name.compare(model_name.size() - 2, 2, "m2") == 0)
+					model_name = model_name.substr(0, model_name.size() - 2);
 			}
 
 			for (const auto& display : displays) {
@@ -440,7 +441,7 @@ static void initialize() {
 
 	int step_count = 2;
 	if (view.config.value("enableUnknownFiles", false)) step_count++;
-	if (view.config.value("enableM2Skins", true)) step_count += 2;
+	if (view.config.value("enableM2Skins", false)) step_count += 2;
 
 	core::showLoadingScreen(step_count);
 
@@ -452,7 +453,7 @@ static void initialize() {
 		casc::listfile::loadUnknownModels();
 	}
 
-	if (view.config.value("enableM2Skins", true)) {
+	if (view.config.value("enableM2Skins", false)) {
 		core::progressLoadingScreen("Loading item displays...");
 		db::caches::DBItemDisplays::initializeItemDisplays();
 
@@ -791,8 +792,14 @@ static void pump_export_task() {
 	}
 }
 
-M2RendererGL* getActiveRenderer() {
-	return active_renderer_result.m2.get();
+std::variant<std::monostate, M2RendererGL*, M3RendererGL*, WMORendererGL*> getActiveRenderer() {
+	if (active_renderer_result.m2)
+		return active_renderer_result.m2.get();
+	if (active_renderer_result.m3)
+		return active_renderer_result.m3.get();
+	if (active_renderer_result.wmo)
+		return active_renderer_result.wmo.get();
+	return std::monostate{};
 }
 
 void render() {
@@ -1351,7 +1358,7 @@ void render() {
 
 					if (ImGui::IsItemHovered())
 						ImGui::SetTooltip("%s", slotDisplayName.c_str());
-					if (ImGui::IsItemClicked(ImGuiMouseButton_Right) || clicked) {
+					if (clicked) {
 						view.contextMenus.nodeTextureRibbon = slot;
 						ImGui::OpenPopup("ModelsTextureRibbonContextMenu");
 					}

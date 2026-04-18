@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -67,12 +68,8 @@ void export_files(const std::vector<nlohmann::json>& files, bool is_local = fals
 /**
  * Get the active model renderer (if any).
  * JS equivalent: getActiveRenderer: () => active_renderer
- * @returns Pointer to active M2RendererGL, or nullptr.
- *
- * Note: The active renderer may also be M3 or WMO.
- * This returns the M2 renderer specifically; use getActiveRendererType()
- * to determine the actual type.
+ * @returns Active renderer pointer variant (M2/M3/WMO), or std::monostate when none.
  */
-M2RendererGL* getActiveRenderer();
+std::variant<std::monostate, M2RendererGL*, M3RendererGL*, WMORendererGL*> getActiveRenderer();
 
 } // namespace tab_models
