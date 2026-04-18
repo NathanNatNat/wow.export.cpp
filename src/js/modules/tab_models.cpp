@@ -33,10 +33,13 @@
 #include "../../app.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <format>
+#include <future>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -86,6 +89,29 @@ static menu_button::MenuButtonState menu_button_models_state;
 static model_viewer_gl::State viewer_state;
 static model_viewer_gl::Context viewer_context;
 
+struct PendingPreviewTask {
+	std::string file_name;
+	uint32_t file_data_id = 0;
+	std::future<BufferWrapper> file_future;
+	std::unique_ptr<BusyLock> busy_lock;
+};
+
+static std::optional<PendingPreviewTask> pending_preview_task;
+
+struct PendingExportTask {
+	bool is_local = false;
+	int export_id = -1;
+	std::vector<nlohmann::json> files;
+	size_t next_index = 0;
+	std::string format;
+	nlohmann::json manifest;
+	std::optional<FileWriter> export_paths;
+	std::optional<casc::ExportHelper> helper;
+	bool preview_only = false;
+};
+
+static std::optional<PendingExportTask> pending_export_task;
+
 // --- Internal helpers ---
 
 static M2RendererGL* get_active_m2_renderer() {
@@ -126,7 +152,9 @@ static std::vector<DisplayVariant> get_model_displays(uint32_t file_data_id) {
 }
 
 static void preview_model(const std::string& file_name) {
-	auto _lock = core::create_busy_lock();
+	if (pending_preview_task.has_value())
+		return;
+
 	core::setToast("progress", std::format("Loading {}, please wait...", file_name), {}, -1, false);
 	logging::write(std::format("Previewing model {}", file_name));
 
@@ -157,17 +185,51 @@ static void preview_model(const std::string& file_name) {
 			core::setToast("error", std::format("Unable to find file data ID for {}", file_name), {}, -1);
 			return;
 		}
-		uint32_t file_data_id = file_data_id_opt.value();
+		auto* casc = core::view->casc;
+		if (!casc) {
+			core::setToast("error", "CASC source is not available.", {}, -1);
+			return;
+		}
 
-		BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
+		PendingPreviewTask task;
+		task.file_name = file_name;
+		task.file_data_id = file_data_id_opt.value();
+		task.busy_lock = std::make_unique<BusyLock>(core::create_busy_lock());
+		task.file_future = std::async(std::launch::async, [casc, file_data_id = task.file_data_id]() {
+			return casc->getVirtualFileByID(file_data_id);
+		});
+		pending_preview_task = std::move(task);
+	} catch (const std::exception& e) {
+		core::setToast("error", "Unable to preview model " + file_name, {}, -1);
+		logging::write(std::format("Failed to queue model preview: {}", e.what()));
+	}
+}
+
+static void pump_preview_model_task() {
+	if (!pending_preview_task.has_value())
+		return;
+
+	auto& task = *pending_preview_task;
+	if (task.file_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		return;
+
+	auto clear_task = [&]() {
+		task.busy_lock.reset();
+		pending_preview_task.reset();
+	};
+
+	try {
+		BufferWrapper file = task.file_future.get();
+		auto& view = *core::view;
 
 		gl::GLContext* gl_ctx = viewer_context.gl_context;
 		if (!gl_ctx) {
 			core::setToast("error", "GL context not available — model viewer not initialized.", {}, -1);
+			clear_task();
 			return;
 		}
 
-		auto model_type = model_viewer_utils::detect_model_type_by_name(file_name);
+		auto model_type = model_viewer_utils::detect_model_type_by_name(task.file_name);
 		if (model_type == model_viewer_utils::ModelType::Unknown)
 			model_type = model_viewer_utils::detect_model_type(file);
 
@@ -181,7 +243,7 @@ static void preview_model(const std::string& file_name) {
 		active_renderer_result = model_viewer_utils::create_renderer(
 			file, model_type, *gl_ctx,
 			view.config.value("modelViewerShowTextures", true),
-			file_data_id
+			task.file_data_id
 		);
 
 		if (active_renderer_result.m2)
@@ -192,16 +254,15 @@ static void preview_model(const std::string& file_name) {
 			active_renderer_result.wmo->load();
 
 		if (model_type == model_viewer_utils::ModelType::M2) {
-			const auto displays = get_model_displays(file_data_id);
+			const auto displays = get_model_displays(task.file_data_id);
 
 			std::vector<nlohmann::json> skin_list;
-			std::string model_name = casc::listfile::getByID(file_data_id);
+			std::string model_name = casc::listfile::getByID(task.file_data_id);
 			{
 				auto pos = model_name.rfind('/');
 				if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
 				pos = model_name.rfind('\\');
 				if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
-				// Strip extension — JS uses path.basename(name, 'm2') which strips trailing 'm2'
 				auto ext_pos = model_name.rfind('.');
 				if (ext_pos != std::string::npos) model_name = model_name.substr(0, ext_pos);
 			}
@@ -221,7 +282,6 @@ static void preview_model(const std::string& file_name) {
 						if (pos != std::string::npos) skin_name = skin_name.substr(pos + 1);
 						pos = skin_name.rfind('\\');
 						if (pos != std::string::npos) skin_name = skin_name.substr(pos + 1);
-						// Strip .blp extension
 						if (skin_name.size() > 4 && skin_name.substr(skin_name.size() - 4) == ".blp")
 							skin_name = skin_name.substr(0, skin_name.size() - 4);
 					}
@@ -275,18 +335,18 @@ static void preview_model(const std::string& file_name) {
 			view.modelViewerAnimSelection = "none";
 		}
 
-		active_path = file_name;
+		active_path = task.file_name;
 
 		bool has_content = false;
 		if (active_renderer_result.m2)
 			has_content = !active_renderer_result.m2->get_draw_calls().empty();
 		else if (active_renderer_result.m3)
-			has_content = true; // M3 always has content if loaded
+			has_content = true;
 		else if (active_renderer_result.wmo)
 			has_content = !active_renderer_result.wmo->get_groups().empty();
 
 		if (!has_content) {
-			core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", file_name), {}, 4000);
+			core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", task.file_name), {}, 4000);
 		} else {
 			core::hideToast();
 
@@ -294,12 +354,14 @@ static void preview_model(const std::string& file_name) {
 				viewer_context.fitCamera();
 		}
 	} catch (const casc::EncryptionError& e) {
-		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", file_name, e.key), {}, -1);
-		logging::write(std::format("Failed to decrypt model {} ({})", file_name, e.key));
+		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", task.file_name, e.key), {}, -1);
+		logging::write(std::format("Failed to decrypt model {} ({})", task.file_name, e.key));
 	} catch (const std::exception& e) {
-		core::setToast("error", "Unable to preview model " + file_name, {}, -1);
+		core::setToast("error", "Unable to preview model " + task.file_name, {}, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
+
+	clear_task();
 }
 
 static std::vector<uint32_t> get_variant_texture_ids(const std::string& file_name) {
@@ -572,131 +634,161 @@ void mounted() {
 }
 
 void export_files(const std::vector<nlohmann::json>& files, bool is_local, int export_id) {
+	if (pending_export_task.has_value())
+		return;
+
 	auto& view = *core::view;
 
-	FileWriter export_paths_writer = core::openLastExportStream();
-	FileWriter* export_paths = &export_paths_writer;
-
-	std::string format = view.config.value("exportModelFormat", std::string("OBJ"));
-
-	nlohmann::json manifest = {
+	PendingExportTask task;
+	task.is_local = is_local;
+	task.export_id = export_id;
+	task.files = files;
+	task.format = view.config.value("exportModelFormat", std::string("OBJ"));
+	task.export_paths.emplace(core::openLastExportStream());
+	task.manifest = {
 		{"type", "MODELS"},
 		{"exportID", export_id},
 		{"succeeded", nlohmann::json::array()},
 		{"failed", nlohmann::json::array()}
 	};
+	task.preview_only = (task.format == "PNG" || task.format == "CLIPBOARD");
 
-	if (format == "PNG" || format == "CLIPBOARD") {
+	if (!task.preview_only)
+		task.helper.emplace(static_cast<int>(files.size()), "model");
+
+	pending_export_task = std::move(task);
+}
+
+static void finish_pending_export_task() {
+	pending_export_task.reset();
+}
+
+static void pump_export_task() {
+	if (!pending_export_task.has_value())
+		return;
+
+	auto& task = *pending_export_task;
+	auto& view = *core::view;
+	FileWriter* export_paths = task.export_paths.has_value() ? &task.export_paths.value() : nullptr;
+
+	if (task.preview_only) {
 		if (!active_path.empty()) {
 			gl::GLContext* gl_ctx = viewer_context.gl_context;
 			if (gl_ctx && viewer_state.fbo != 0) {
 				glBindFramebuffer(GL_FRAMEBUFFER, viewer_state.fbo);
-				model_viewer_utils::export_preview(format, *gl_ctx, active_path);
+				model_viewer_utils::export_preview(task.format, *gl_ctx, active_path);
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			}
 		} else {
 			core::setToast("error", "The selected export option only works for model previews. Preview something first!", {}, -1);
 		}
 
+		finish_pending_export_task();
+		return;
+	}
+
+	auto& helper = task.helper.value();
+	if (task.next_index == 0)
+		helper.start();
+
+	if (helper.isCancelled()) {
+		finish_pending_export_task();
+		return;
+	}
+
+	if (task.next_index >= task.files.size()) {
+		helper.finish();
+		finish_pending_export_task();
 		return;
 	}
 
 	auto* casc = view.casc;
+	const auto& file_entry = task.files[task.next_index++];
 
-	casc::ExportHelper helper(static_cast<int>(files.size()), "model");
-	helper.start();
+	std::string file_name;
+	uint32_t file_data_id = 0;
 
-	for (const auto& file_entry : files) {
-		if (helper.isCancelled())
-			break;
-
-		std::string file_name;
-		uint32_t file_data_id = 0;
-
-		if (file_entry.is_number()) {
-			file_data_id = file_entry.get<uint32_t>();
-			file_name = casc::listfile::getByID(file_data_id);
-		} else {
-			file_name = casc::listfile::stripFileEntry(file_entry.get<std::string>());
-			auto opt = casc::listfile::getByFilename(file_name);
-			if (opt.has_value())
-				file_data_id = opt.value();
-		}
-
-		std::vector<nlohmann::json> file_manifest;
-
-		try {
-			BufferWrapper data = is_local ? BufferWrapper::readFile(file_name) : casc->getVirtualFileByID(file_data_id);
-
-			if (file_name.empty()) {
-				auto detected_type = model_viewer_utils::detect_model_type(data);
-				file_name = casc::listfile::formatUnknownFile(file_data_id, model_viewer_utils::get_model_extension(detected_type));
-			}
-
-			std::string export_path;
-			std::string mark_file_name = file_name;
-
-			bool is_active = (file_name == active_path);
-
-			auto model_type = model_viewer_utils::detect_model_type_by_name(file_name);
-			if (model_type == model_viewer_utils::ModelType::Unknown)
-				model_type = model_viewer_utils::detect_model_type(data);
-
-			if (is_local) {
-				export_path = file_name;
-			} else if (model_type == model_viewer_utils::ModelType::M2 && has_selected_skin_name && is_active && format != "RAW") {
-				std::filesystem::path fp(file_name);
-				std::string base_file_name = fp.stem().string();
-
-				std::string skinned_name;
-				if (selected_skin_name.starts_with(base_file_name))
-					skinned_name = casc::ExportHelper::replaceBaseName(file_name, selected_skin_name);
-				else
-					skinned_name = casc::ExportHelper::replaceBaseName(file_name, base_file_name + "_" + selected_skin_name);
-
-				export_path = casc::ExportHelper::getExportPath(skinned_name);
-				mark_file_name = skinned_name;
-			} else {
-				export_path = casc::ExportHelper::getExportPath(file_name);
-			}
-
-			model_viewer_utils::ExportModelOptions opts;
-			opts.data = &data;
-			opts.file_data_id = file_data_id;
-			opts.file_name = file_name;
-			opts.format = format;
-			opts.export_path = export_path;
-			opts.helper = &helper;
-			opts.casc = casc;
-			opts.file_manifest = &file_manifest;
-
-			auto vtids = get_variant_texture_ids(file_name);
-			for (uint32_t id : vtids)
-				opts.variant_textures.push_back(id);
-
-			if (is_active) {
-				opts.geoset_mask = &view.modelViewerGeosets;
-				opts.wmo_group_mask = &view.modelViewerWMOGroups;
-				opts.wmo_set_mask = &view.modelViewerWMOSets;
-			}
-
-			opts.export_paths = export_paths;
-
-			std::string mark_name = model_viewer_utils::export_model(opts);
-
-			helper.mark(mark_name, true);
-
-			manifest["succeeded"].push_back({
-				{"fileDataID", file_data_id},
-				{"files", file_manifest}
-			});
-		} catch (const std::exception& e) {
-			helper.mark(file_name, false, e.what());
-			manifest["failed"].push_back({ {"fileDataID", file_data_id} });
-		}
+	if (file_entry.is_number()) {
+		file_data_id = file_entry.get<uint32_t>();
+		file_name = casc::listfile::getByID(file_data_id);
+	} else {
+		file_name = casc::listfile::stripFileEntry(file_entry.get<std::string>());
+		auto opt = casc::listfile::getByFilename(file_name);
+		if (opt.has_value())
+			file_data_id = opt.value();
 	}
 
-	helper.finish();
+	std::vector<nlohmann::json> file_manifest;
+
+	try {
+		BufferWrapper data = task.is_local ? BufferWrapper::readFile(file_name) : casc->getVirtualFileByID(file_data_id);
+
+		if (file_name.empty()) {
+			auto detected_type = model_viewer_utils::detect_model_type(data);
+			file_name = casc::listfile::formatUnknownFile(file_data_id, model_viewer_utils::get_model_extension(detected_type));
+		}
+
+		std::string export_path;
+		std::string mark_file_name = file_name;
+
+		bool is_active = (file_name == active_path);
+
+		auto model_type = model_viewer_utils::detect_model_type_by_name(file_name);
+		if (model_type == model_viewer_utils::ModelType::Unknown)
+			model_type = model_viewer_utils::detect_model_type(data);
+
+		if (task.is_local) {
+			export_path = file_name;
+		} else if (model_type == model_viewer_utils::ModelType::M2 && has_selected_skin_name && is_active && task.format != "RAW") {
+			std::filesystem::path fp(file_name);
+			std::string base_file_name = fp.stem().string();
+
+			std::string skinned_name;
+			if (selected_skin_name.starts_with(base_file_name))
+				skinned_name = casc::ExportHelper::replaceBaseName(file_name, selected_skin_name);
+			else
+				skinned_name = casc::ExportHelper::replaceBaseName(file_name, base_file_name + "_" + selected_skin_name);
+
+			export_path = casc::ExportHelper::getExportPath(skinned_name);
+			mark_file_name = skinned_name;
+		} else {
+			export_path = casc::ExportHelper::getExportPath(file_name);
+		}
+
+		model_viewer_utils::ExportModelOptions opts;
+		opts.data = &data;
+		opts.file_data_id = file_data_id;
+		opts.file_name = file_name;
+		opts.format = task.format;
+		opts.export_path = export_path;
+		opts.helper = &helper;
+		opts.casc = casc;
+		opts.file_manifest = &file_manifest;
+
+		auto vtids = get_variant_texture_ids(file_name);
+		for (uint32_t id : vtids)
+			opts.variant_textures.push_back(id);
+
+		if (is_active) {
+			opts.geoset_mask = &view.modelViewerGeosets;
+			opts.wmo_group_mask = &view.modelViewerWMOGroups;
+			opts.wmo_set_mask = &view.modelViewerWMOSets;
+		}
+
+		opts.export_paths = export_paths;
+
+		std::string mark_name = model_viewer_utils::export_model(opts);
+
+		helper.mark(mark_name, true);
+
+		task.manifest["succeeded"].push_back({
+			{"fileDataID", file_data_id},
+			{"files", file_manifest}
+		});
+	} catch (const std::exception& e) {
+		helper.mark(file_name, false, e.what());
+		task.manifest["failed"].push_back({ {"fileDataID", file_data_id} });
+	}
 }
 
 M2RendererGL* getActiveRenderer() {
@@ -709,6 +801,8 @@ void render() {
 	if (!is_initialized)
 		return;
 
+	pump_preview_model_task();
+	pump_export_task();
 
 	// Watch: modelViewerSkinsSelection → apply skin textures and geosets
 	{

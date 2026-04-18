@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 98/906 verified (11%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 99/906 verified (11%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -2076,10 +2076,10 @@
 - **Status**: Pending
 - **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ renders plain `Regex Enabled` text without tooltip behavior.
 
-- [ ] 423. [tab_models.cpp] preview_model and export_files are synchronous instead of async
+- [x] 423. [tab_models.cpp] preview_model and export_files are synchronous instead of async
 - **JS Source**: `src/js/modules/tab_models.js` lines 61, 180
-- **Status**: Pending
-- **Details**: JS preview_model and export_files are async using await for CASC reads and renderer operations. C++ versions are fully synchronous, blocking UI thread.
+- **Status**: Verified
+- **Details**: Ported to non-blocking staged execution in C++: `preview_model()` now queues a background CASC file read and completes renderer initialization when the future resolves, and `export_files()` now runs as a frame-pumped task instead of a monolithic blocking loop.
 
 - [ ] 424. [tab_models.cpp] create_renderer last parameter is file_data_id instead of file_name
 - **JS Source**: `src/js/modules/tab_models.js` line 99
