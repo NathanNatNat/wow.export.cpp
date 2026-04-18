@@ -22,8 +22,10 @@ License: MIT
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <exception>
 #include <format>
 #include <functional>
+#include <future>
 #include <optional>
 #include <unordered_map>
 
@@ -101,6 +103,20 @@ static constexpr std::array<float, 16> M2_IDENTITY_MAT4 = {
 0, 0, 1, 0,
 0, 0, 0, 1
 };
+
+static const auto M2_PERFORMANCE_BASELINE = std::chrono::steady_clock::now();
+
+template<typename Fn>
+static std::future<void> as_async_compat(Fn&& fn) {
+	std::promise<void> p;
+	try {
+		fn();
+		p.set_value();
+	} catch (...) {
+		p.set_exception(std::current_exception());
+	}
+	return p.get_future();
+}
 
 // -----------------------------------------------------------------------
 // Free-function math helpers (matching JS module-level functions exactly)
@@ -474,30 +490,40 @@ return shaders::create_program(ctx, "m2");
 // load
 // -----------------------------------------------------------------------
 
-void M2RendererGL::load() {
-// parse M2 data
-m2 = std::make_unique<M2Loader>(*data_ptr);
-m2->load().get();
+std::future<void> M2RendererGL::load() {
+return as_async_compat([this]() {
+	// parse M2 data
+	m2 = std::make_unique<M2Loader>(*data_ptr);
+	m2->load().get();
 
-// load shader program
-shader = M2RendererGL::load_shaders(ctx);
+	// load shader program
+	shader = M2RendererGL::load_shaders(ctx);
 
-// create default texture
-_create_default_texture();
+	// create default texture
+	_create_default_texture();
 
-// load textures
-_load_textures();
+	// load textures
+	_load_textures().get();
 
-// load first skin
-if (!m2->vertices.empty()) {
-loadSkin(0);
+	// load first skin
+	if (!m2->vertices.empty()) {
+		loadSkin(0).get();
 
-if (reactive) {
-}
-}
+		if (reactive) {
+			auto& geosets = _get_geoset_view();
+			watcher_geoset_checked.resize(geosets.size());
+			for (size_t i = 0; i < geosets.size(); i++)
+				watcher_geoset_checked[i] = geosets[i].value("checked", false);
 
-// drop reference to raw data
-data_ptr = nullptr;
+			watcher_wireframe = core::view->config.value("modelViewerWireframe", false);
+			watcher_show_bones = core::view->config.value("modelViewerShowBones", false);
+			watcher_state_initialized = true;
+		}
+	}
+
+	// drop reference to raw data
+	data_ptr = nullptr;
+});
 }
 
 // -----------------------------------------------------------------------
@@ -516,7 +542,8 @@ default_texture->set_rgba(pixels, 1, 1, opts);
 // _load_textures
 // -----------------------------------------------------------------------
 
-void M2RendererGL::_load_textures() {
+std::future<void> M2RendererGL::_load_textures() {
+return as_async_compat([this]() {
 auto& tex_list = m2->textures;
 
 if (useRibbon)
@@ -548,19 +575,21 @@ logging::write(std::format("Failed to load texture {}: {}", texture.fileDataID, 
 }
 }
 }
+});
 }
 
 // -----------------------------------------------------------------------
 // loadSkin
 // -----------------------------------------------------------------------
 
-void M2RendererGL::loadSkin(int index) {
+std::future<void> M2RendererGL::loadSkin(int index) {
+return as_async_compat([this, index]() {
 _dispose_skin();
 
 auto& skin = *m2->getSkin(static_cast<uint32_t>(index)).get();
 
 // create skeleton
-_create_skeleton();
+_create_skeleton().get();
 
 // build interleaved vertex buffer
 // format: position(3f) + normal(3f) + bone_idx(4ub) + bone_weight(4ub) + uv(2f) = 40 bytes
@@ -754,13 +783,15 @@ geosets[i]["label"] = mapper_geosets[i].label;
 }
 
 updateGeosets();
+});
 }
 
 // -----------------------------------------------------------------------
 // _create_skeleton
 // -----------------------------------------------------------------------
 
-void M2RendererGL::_create_skeleton() {
+std::future<void> M2RendererGL::_create_skeleton() {
+return as_async_compat([this]() {
 // reset bone pointers
 bones_m2 = nullptr;
 bones_skel = nullptr;
@@ -784,6 +815,7 @@ for (const auto& entry : skel->animFileIDs) {
 if (entry.fileDataID > 0) {
 child_anim_keys.insert(
 std::to_string(entry.animID) + "-" + std::to_string(entry.subAnimID));
+}
 }
 }
 
@@ -844,13 +876,15 @@ break;
 }
 }
 }
+});
 }
 
 // -----------------------------------------------------------------------
 // playAnimation
 // -----------------------------------------------------------------------
 
-void M2RendererGL::playAnimation(int index) {
+std::future<void> M2RendererGL::playAnimation(int index) {
+return as_async_compat([this, index]() {
 // determine animation source: default to skelLoader or m2
 bool use_skel = (skelLoader != nullptr);
 bool use_child = false;
@@ -915,6 +949,7 @@ current_anim_from_child = use_child;
 current_anim_index = anim_index;
 current_animation = index;
 animation_time = 0;
+});
 }
 
 // -----------------------------------------------------------------------
@@ -1360,11 +1395,24 @@ dc.visible = false;
 // -----------------------------------------------------------------------
 
 void M2RendererGL::updateGeosets() {
-if (!reactive || geosetArray.empty() || draw_calls.empty())
+if (!reactive || draw_calls.empty())
 return;
 
-for (size_t i = 0; i < draw_calls.size() && i < geosetArray.size(); i++)
-draw_calls[i].visible = geosetArray[i].checked;
+auto& geosets = _get_geoset_view();
+const bool has_view_geosets = !geosets.empty();
+const size_t source_size = has_view_geosets ? geosets.size() : geosetArray.size();
+const size_t count = std::min(draw_calls.size(), source_size);
+
+for (size_t i = 0; i < count; i++) {
+	const bool checked = has_view_geosets
+		? geosets[i].value("checked", (i < geosetArray.size() ? geosetArray[i].checked : false))
+		: geosetArray[i].checked;
+
+	if (i < geosetArray.size())
+		geosetArray[i].checked = checked;
+
+	draw_calls[i].visible = checked;
+}
 }
 
 // -----------------------------------------------------------------------
@@ -1460,6 +1508,37 @@ void M2RendererGL::render(const float* view_matrix, const float* projection_matr
 if (!shader || draw_calls.empty())
 return;
 
+if (reactive) {
+	auto& geosets = _get_geoset_view();
+	bool geosets_changed = !watcher_state_initialized || geosets.size() != watcher_geoset_checked.size();
+	if (!geosets_changed) {
+		for (size_t i = 0; i < geosets.size(); i++) {
+			if (geosets[i].value("checked", false) != watcher_geoset_checked[i]) {
+				geosets_changed = true;
+				break;
+			}
+		}
+	}
+	if (geosets_changed) {
+		updateGeosets();
+		watcher_geoset_checked.resize(geosets.size());
+		for (size_t i = 0; i < geosets.size(); i++)
+			watcher_geoset_checked[i] = geosets[i].value("checked", false);
+	}
+
+	const bool curr_wireframe = core::view->config.value("modelViewerWireframe", false);
+	if (!watcher_state_initialized || curr_wireframe != watcher_wireframe) {
+		updateWireframe();
+		watcher_wireframe = curr_wireframe;
+	}
+
+	const bool curr_show_bones = core::view->config.value("modelViewerShowBones", false);
+	if (!watcher_state_initialized || curr_show_bones != watcher_show_bones)
+		watcher_show_bones = curr_show_bones;
+
+	watcher_state_initialized = true;
+}
+
 const bool wireframe = core::view->config.value("modelViewerWireframe", false);
 
 shader->use();
@@ -1470,28 +1549,15 @@ shader->set_uniform_mat4("u_projection_matrix", false, projection_matrix);
 shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
 shader->set_uniform_3f("u_view_up", 0, 1, 0);
 
-// JS: performance.now() * 0.001 — seconds since page load.
-// C++: use a static app-start time and compute elapsed seconds.
-// NOTE: JS measures from page load, C++ from first render call.
-// Both produce small-valued monotonic floats suitable for shader animation.
-static const auto s_render_start = std::chrono::steady_clock::now();
-auto now = std::chrono::steady_clock::now();
-float time_sec = std::chrono::duration<float>(now - s_render_start).count();
+float time_sec = std::chrono::duration<float>(std::chrono::steady_clock::now() - M2_PERFORMANCE_BASELINE).count();
 shader->set_uniform_1f("u_time", time_sec);
 
-// bone matrices — uploaded via SSBO to avoid uniform register limits
-// (desktop OpenGL 4.6 core profile; shader uses layout(std430, binding = 0))
+// bone matrices (JS: gl.uniformMatrix4fv for u_bone_matrices uniform array)
 shader->set_uniform_1i("u_bone_count", static_cast<int>(bones_count()));
 if (has_bones() && !bone_matrices.empty()) {
-if (bone_ssbo == 0)
-glGenBuffers(1, &bone_ssbo);
-
-glBindBuffer(GL_SHADER_STORAGE_BUFFER, bone_ssbo);
-glBufferData(GL_SHADER_STORAGE_BUFFER,
-             static_cast<GLsizeiptr>(bone_matrices.size() * sizeof(float)),
-             bone_matrices.data(), GL_DYNAMIC_DRAW);
-glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, bone_ssbo);
-glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	const GLint loc = shader->get_uniform_location("u_bone_matrices");
+	if (loc >= 0)
+		glUniformMatrix4fv(loc, static_cast<GLsizei>(bone_matrices.size() / 16), GL_FALSE, bone_matrices.data());
 }
 
 // texture matrix defaults
@@ -1607,7 +1673,8 @@ ctx.set_cull_face(false);
 // overrideTextureType
 // -----------------------------------------------------------------------
 
-void M2RendererGL::overrideTextureType(uint32_t type, uint32_t fileDataID) {
+std::future<void> M2RendererGL::overrideTextureType(uint32_t type, uint32_t fileDataID) {
+return as_async_compat([this, type, fileDataID]() {
 if (!casc_source_)
 return;
 
@@ -1640,6 +1707,7 @@ texture_ribbon::setSlotSrc(static_cast<int>(i), blp.getDataURL(0b0111), syncID);
 logging::write(std::format("Failed to override texture: {}", e.what()));
 }
 }
+});
 }
 
 // -----------------------------------------------------------------------
@@ -1647,7 +1715,8 @@ logging::write(std::format("Failed to override texture: {}", e.what()));
 // (Browser API systemic translation — no HTML canvas in desktop GL)
 // -----------------------------------------------------------------------
 
-void M2RendererGL::overrideTextureTypeWithCanvas(uint32_t type, const uint8_t* pixels, int width, int height) {
+std::future<void> M2RendererGL::overrideTextureTypeWithCanvas(uint32_t type, const uint8_t* pixels, int width, int height) {
+return as_async_compat([this, type, pixels, width, height]() {
 const auto& textureTypes = m2->textureTypes;
 
 for (size_t i = 0; i < textureTypes.size(); i++) {
@@ -1669,13 +1738,15 @@ it->second->dispose();
 
 textures[static_cast<int>(i)] = std::move(gl_tex);
 }
+});
 }
 
 // -----------------------------------------------------------------------
 // overrideTextureTypeWithPixels
 // -----------------------------------------------------------------------
 
-void M2RendererGL::overrideTextureTypeWithPixels(uint32_t type, int width, int height, const uint8_t* pixels) {
+std::future<void> M2RendererGL::overrideTextureTypeWithPixels(uint32_t type, int width, int height, const uint8_t* pixels) {
+return as_async_compat([this, type, width, height, pixels]() {
 const auto& textureTypes = m2->textureTypes;
 
 for (size_t i = 0; i < textureTypes.size(); i++) {
@@ -1697,25 +1768,28 @@ it->second->dispose();
 
 textures[static_cast<int>(i)] = std::move(gl_tex);
 }
+});
 }
 
 // -----------------------------------------------------------------------
 // applyReplaceableTextures
 // -----------------------------------------------------------------------
 
-void M2RendererGL::applyReplaceableTextures(const M2DisplayInfo& displays) {
+std::future<void> M2RendererGL::applyReplaceableTextures(const M2DisplayInfo& displays) {
+return as_async_compat([this, displays]() {
 for (size_t i = 0; i < m2->textureTypes.size(); i++) {
 const uint32_t textureType = m2->textureTypes[i];
 if (textureType >= 11 && textureType < 14) {
 const uint32_t slot = textureType - 11;
 if (slot < displays.textures.size())
-overrideTextureType(textureType, displays.textures[slot]);
+overrideTextureType(textureType, displays.textures[slot]).get();
 } else if (textureType > 1 && textureType < 5) {
 const uint32_t slot = textureType - 2;
 if (slot < displays.textures.size())
-overrideTextureType(textureType, displays.textures[slot]);
+overrideTextureType(textureType, displays.textures[slot]).get();
 }
 }
+});
 }
 
 // -----------------------------------------------------------------------
@@ -1952,12 +2026,6 @@ void M2RendererGL::dispose() {
 
 _dispose_skin();
 
-// dispose bone SSBO
-if (bone_ssbo != 0) {
-glDeleteBuffers(1, &bone_ssbo);
-bone_ssbo = 0;
-}
-
 // dispose textures
 for (auto& [key, tex] : textures)
 tex->dispose();
@@ -1968,6 +2036,11 @@ if (default_texture) {
 default_texture->dispose();
 default_texture.reset();
 }
+
+watcher_geoset_checked.clear();
+watcher_wireframe = false;
+watcher_show_bones = false;
+watcher_state_initialized = false;
 }
 
 // -----------------------------------------------------------------------
