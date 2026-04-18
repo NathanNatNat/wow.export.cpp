@@ -792,90 +792,89 @@ updateGeosets();
 
 std::future<void> M2RendererGL::_create_skeleton() {
 return as_async_compat([this]() {
-// reset bone pointers
-bones_m2 = nullptr;
-bones_skel = nullptr;
+	// reset bone pointers
+	bones_m2 = nullptr;
+	bones_skel = nullptr;
 
-// load external skeleton if present
-if (m2->skeletonFileID > 0 && casc_source_) {
-try {
-auto skel_buf = std::make_unique<BufferWrapper>(casc_source_->getVirtualFileByID(m2->skeletonFileID));
-auto skel = std::make_unique<SKELLoader>(*skel_buf);
-skel->load();
+	// load external skeleton if present
+	if (m2->skeletonFileID > 0 && casc_source_) {
+		try {
+			auto skel_buf = std::make_unique<BufferWrapper>(casc_source_->getVirtualFileByID(m2->skeletonFileID));
+			auto skel = std::make_unique<SKELLoader>(*skel_buf);
+			skel->load();
 
-if (skel->parent_skel_file_id > 0) {
-auto parent_buf = std::make_unique<BufferWrapper>(casc_source_->getVirtualFileByID(skel->parent_skel_file_id));
-auto parent_skel = std::make_unique<SKELLoader>(*parent_buf);
-parent_skel->load();
+			if (skel->parent_skel_file_id > 0) {
+				auto parent_buf = std::make_unique<BufferWrapper>(casc_source_->getVirtualFileByID(skel->parent_skel_file_id));
+				auto parent_skel = std::make_unique<SKELLoader>(*parent_buf);
+				parent_skel->load();
 
-// track which animations come from child vs parent
-// child skeleton's .anim files have different data layouts than parent's bone offsets expect
-std::set<std::string> child_anim_keys;
-for (const auto& entry : skel->animFileIDs) {
-if (entry.fileDataID > 0) {
-child_anim_keys.insert(
-std::to_string(entry.animID) + "-" + std::to_string(entry.subAnimID));
-}
-}
-}
+				// track which animations come from child vs parent
+				// child skeleton's .anim files have different data layouts than parent's bone offsets expect
+				std::set<std::string> child_anim_keys;
+				for (const auto& entry : skel->animFileIDs) {
+					if (entry.fileDataID > 0) {
+						child_anim_keys.insert(
+							std::to_string(entry.animID) + "-" + std::to_string(entry.subAnimID));
+					}
+				}
 
-// store child skeleton for animations that need it
-if (!child_anim_keys.empty()) {
-skel_buffers_.push_back(std::move(skel_buf));
-childSkelLoader = std::move(skel);
-childAnimKeys = std::move(child_anim_keys);
-}
+				// store child skeleton for animations that need it
+				if (!child_anim_keys.empty()) {
+					skel_buffers_.push_back(std::move(skel_buf));
+					childSkelLoader = std::move(skel);
+					childAnimKeys = std::move(child_anim_keys);
+				}
 
-// don't merge child AFIDs into parent - they use incompatible bone offsets
-// parent skeleton handles its own animations, child handles its own
-skel_buffers_.push_back(std::move(parent_buf));
-skelLoader = std::move(parent_skel);
-bones_skel = &skelLoader->bones;
-} else {
-skel_buffers_.push_back(std::move(skel_buf));
-skelLoader = std::move(skel);
-bones_skel = &skelLoader->bones;
-}
-} catch (const std::exception& e) {
-logging::write(std::format("Failed to load skeleton: {}", e.what()));
-}
-}
+				// don't merge child AFIDs into parent - they use incompatible bone offsets
+				// parent skeleton handles its own animations, child handles its own
+				skel_buffers_.push_back(std::move(parent_buf));
+				skelLoader = std::move(parent_skel);
+				bones_skel = &skelLoader->bones;
+			} else {
+				skel_buffers_.push_back(std::move(skel_buf));
+				skelLoader = std::move(skel);
+				bones_skel = &skelLoader->bones;
+			}
+		} catch (const std::exception& e) {
+			logging::write(std::format("Failed to load skeleton: {}", e.what()));
+		}
+	}
 
-// fall back to m2->bones if no skel loaded
-if (!bones_skel && !m2->bones.empty())
-bones_m2 = &m2->bones;
+	// fall back to m2->bones if no skel loaded
+	if (!bones_skel && !m2->bones.empty())
+		bones_m2 = &m2->bones;
 
-const size_t bc = bones_count();
-if (bc == 0) {
-bone_matrices.assign(16, 0.0f);
-return;
-}
+	const size_t bc = bones_count();
+	if (bc == 0) {
+		bone_matrices.assign(16, 0.0f);
+		return;
+	}
 
-bone_matrices.resize(bc * 16);
+	bone_matrices.resize(bc * 16);
 
-// initialize to identity
-for (size_t i = 0; i < bc; i++) {
-std::copy(M2_IDENTITY_MAT4.begin(), M2_IDENTITY_MAT4.end(),
-bone_matrices.begin() + static_cast<ptrdiff_t>(i * 16));
-}
+	// initialize to identity
+	for (size_t i = 0; i < bc; i++) {
+		std::copy(M2_IDENTITY_MAT4.begin(), M2_IDENTITY_MAT4.end(),
+			bone_matrices.begin() + static_cast<ptrdiff_t>(i * 16));
+	}
 
-// find HandsClosed animation (ID 15) for hand grip
-hands_closed_anim_idx = -1;
-if (skelLoader) {
-for (size_t i = 0; i < skelLoader->animations.size(); i++) {
-if (skelLoader->animations[i].id == 15) {
-hands_closed_anim_idx = static_cast<int>(i);
-break;
-}
-}
-} else {
-for (size_t i = 0; i < m2->animations.size(); i++) {
-if (m2->animations[i].id == 15) {
-hands_closed_anim_idx = static_cast<int>(i);
-break;
-}
-}
-}
+	// find HandsClosed animation (ID 15) for hand grip
+	hands_closed_anim_idx = -1;
+	if (skelLoader) {
+		for (size_t i = 0; i < skelLoader->animations.size(); i++) {
+			if (skelLoader->animations[i].id == 15) {
+				hands_closed_anim_idx = static_cast<int>(i);
+				break;
+			}
+		}
+	} else {
+		for (size_t i = 0; i < m2->animations.size(); i++) {
+			if (m2->animations[i].id == 15) {
+				hands_closed_anim_idx = static_cast<int>(i);
+				break;
+			}
+		}
+	}
 });
 }
 
