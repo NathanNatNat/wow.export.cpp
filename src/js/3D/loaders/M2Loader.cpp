@@ -32,7 +32,8 @@ M2Loader::M2Loader(BufferWrapper& data)
 /**
  * Load the M2 model.
  */
-void M2Loader::load() {
+std::future<void> M2Loader::load() {
+return std::async(std::launch::deferred, [this]() {
 // Prevent multiple loading of the same M2.
 if (this->isLoaded == true)
 return;
@@ -43,7 +44,7 @@ const uint32_t chunkSize = this->data.readUInt32LE();
 const size_t nextChunkPos = this->data.offset() + chunkSize;
 
 switch (chunkID) {
-case constants::MAGIC::MD21: this->parseChunk_MD21(); break;
+case constants::MAGIC::MD21: this->parseChunk_MD21().get(); break;
 case CHUNK_SFID: this->parseChunk_SFID(chunkSize); break;
 case CHUNK_TXID: this->parseChunk_TXID(); break;
 case CHUNK_SKID: this->parseChunk_SKID(); break;
@@ -56,17 +57,20 @@ this->data.seek(nextChunkPos);
 }
 
 this->isLoaded = true;
+});
 }
 
 /**
  * Get a skin at a given index from this->skins.
  */
-Skin& M2Loader::getSkin(uint32_t index) {
+std::future<Skin*> M2Loader::getSkin(uint32_t index) {
+return std::async(std::launch::deferred, [this, index]() -> Skin* {
 Skin& skin = this->skins[index];
 if (!skin.isLoaded)
 skin.load();
 
-return skin;
+return &skin;
+});
 }
 
 /**
@@ -80,7 +84,8 @@ return this->skins;
 /**
  * Load and apply .anim files to loaded M2 model.
  */
-void M2Loader::loadAnims(bool load_all) {
+std::future<void> M2Loader::loadAnims(bool load_all) {
+return std::async(std::launch::deferred, [this, load_all]() {
 if (!load_all)
 return;
 
@@ -110,8 +115,6 @@ continue;
 }
 
 logging::write(std::format("Loading .anim file for animation: {} ({}) - {}", entry.animID, get_anim_name(entry.animID), entry.subAnimID));
-
-try {
 BufferWrapper animData = core::view->casc->getVirtualFileByID(fileDataID);
 auto ownedBuf = std::make_unique<BufferWrapper>(std::move(animData));
 BufferWrapper* bufPtr = ownedBuf.get();
@@ -137,21 +140,20 @@ this->animFiles[static_cast<uint32_t>(i)] = parsedPtr;
 
 // patch this animation into bones
 this->_patch_bone_animation(static_cast<uint32_t>(i));
-} catch (const std::exception& e) {
-logging::write(std::format("Failed to load .anim file (fileDataID={}): {}", fileDataID, e.what()));
-}
 }
 }
 
 if (!this->animFiles.count(static_cast<uint32_t>(i)))
 logging::write("Failed to load .anim file for animation: " + std::to_string(animation->id) + " (" + get_anim_name(animation->id) + ") - " + std::to_string(animation->variationIndex));
 }
+});
 }
 
 /**
  * Load .anim file for a specific animation index (lazy loading).
  */
-bool M2Loader::loadAnimsForIndex(uint32_t animationIndex) {
+std::future<bool> M2Loader::loadAnimsForIndex(uint32_t animationIndex) {
+return std::async(std::launch::deferred, [this, animationIndex]() -> bool {
 // check if already loaded
 if (this->animFiles.count(animationIndex))
 return true;
@@ -222,6 +224,7 @@ return false;
 
 logging::write("No .anim file found for animation: " + std::to_string(animation->id) + " (" + get_anim_name(animation->id) + ") - " + std::to_string(animation->variationIndex));
 return false;
+});
 }
 
 /**
@@ -287,7 +290,7 @@ v[1] = dz;
  * Parse SFID chunk for skin file data IDs.
  */
 void M2Loader::parseChunk_SFID(uint32_t chunkSize) {
-if (this->viewCount == 0)
+if (!this->md21Parsed)
 throw std::runtime_error("Cannot parse SFID chunk in M2 before MD21 chunk!");
 
 const uint32_t lodSkinCount = (chunkSize / 4) - this->viewCount;
@@ -305,7 +308,7 @@ this->lodSkins.emplace_back(this->data.readUInt32LE());
  * Parse TXID chunk for texture file data IDs.
  */
 void M2Loader::parseChunk_TXID() {
-if (this->textures.empty())
+if (!this->md21Parsed)
 throw std::runtime_error("Cannot parse TXID chunk in M2 before MD21 chunk!");
 
 for (size_t i = 0; i < this->textures.size(); i++)
@@ -344,7 +347,8 @@ entry.fileDataID = this->data.readUInt32LE();
 /**
  * Parse MD21 chunk.
  */
-void M2Loader::parseChunk_MD21() {
+std::future<void> M2Loader::parseChunk_MD21() {
+return std::async(std::launch::deferred, [this]() {
 const uint32_t ofs = static_cast<uint32_t>(this->data.offset());
 
 const uint32_t magic = this->data.readUInt32LE();
@@ -375,6 +379,8 @@ this->parseChunk_MD21_textureTransformLookup(ofs);
 this->parseChunk_MD21_collision(ofs);
 this->parseChunk_MD21_attachments(ofs);
 this->parseChunk_MD21_attachmentLookup(ofs);
+this->md21Parsed = true;
+});
 }
 
 void M2Loader::parseChunk_MD21_bones(uint32_t ofs) {

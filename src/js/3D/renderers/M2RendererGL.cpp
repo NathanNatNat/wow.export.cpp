@@ -477,7 +477,7 @@ return shaders::create_program(ctx, "m2");
 void M2RendererGL::load() {
 // parse M2 data
 m2 = std::make_unique<M2Loader>(*data_ptr);
-m2->load();
+m2->load().get();
 
 // load shader program
 shader = M2RendererGL::load_shaders(ctx);
@@ -557,7 +557,7 @@ logging::write(std::format("Failed to load texture {}: {}", texture.fileDataID, 
 void M2RendererGL::loadSkin(int index) {
 _dispose_skin();
 
-auto& skin = m2->getSkin(static_cast<uint32_t>(index));
+auto& skin = *m2->getSkin(static_cast<uint32_t>(index)).get();
 
 // create skeleton
 _create_skeleton();
@@ -903,7 +903,7 @@ childSkelLoader->loadAnimsForIndex(static_cast<uint32_t>(anim_index));
 } else if (use_skel) {
 skelLoader->loadAnimsForIndex(static_cast<uint32_t>(anim_index));
 } else {
-m2->loadAnimsForIndex(static_cast<uint32_t>(anim_index));
+m2->loadAnimsForIndex(static_cast<uint32_t>(anim_index)).get();
 }
 } catch (const std::exception& e) {
 logging::write(std::format("Failed to load animation data: {}", e.what()));
