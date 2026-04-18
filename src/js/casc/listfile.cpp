@@ -905,15 +905,43 @@ void applyPreload(const std::unordered_set<uint32_t>& rootEntries) {
 			// TODO 199: JS filter_and_format returns string[], but core::view members
 			// are typed as std::vector<nlohmann::json>. nlohmann::json implicitly
 			// wraps strings, so this produces semantically equivalent results.
-			auto filter_and_format = [&rootEntries](std::unordered_map<uint32_t, std::string>& preload_map)
+			//
+			// In JS, preload_* are Map objects (insertion order) filled from the binary
+			// pf files which are stored in sorted order, so the list comes out sorted.
+			// In C++, preload_*_map are std::unordered_map (hash order = random), so we
+			// must sort explicitly here, mirroring the formatEntries logic for legacy mode.
+			bool sort_by_id = core::view->config.value("listfileSortByID", false);
+			auto filter_and_format = [&rootEntries, sort_by_id](std::unordered_map<uint32_t, std::string>& preload_map)
 				-> std::vector<nlohmann::json>
 			{
-				std::vector<nlohmann::json> formatted;
+				// Collect (fid, filename) pairs that pass the rootEntries filter.
+				std::vector<std::pair<uint32_t, std::string>> pairs;
+				pairs.reserve(preload_map.size());
 				for (const auto& [fid, filename] : preload_map) {
 					if (rootEntries.contains(fid))
-						formatted.emplace_back(filename + " [" + std::to_string(fid) + "]");
+						pairs.emplace_back(fid, filename);
 				}
 				preload_map.clear();
+
+				// Mirror formatEntries: sort by file ID numerically if requested.
+				if (sort_by_id) {
+					std::sort(pairs.begin(), pairs.end(),
+						[](const auto& a, const auto& b) { return a.first < b.first; });
+				}
+
+				std::vector<nlohmann::json> formatted;
+				formatted.reserve(pairs.size());
+				for (const auto& [fid, filename] : pairs)
+					formatted.emplace_back(filename + " [" + std::to_string(fid) + "]");
+
+				// Mirror formatEntries: sort alphabetically by formatted entry if not sorting by ID.
+				if (!sort_by_id) {
+					std::sort(formatted.begin(), formatted.end(),
+						[](const nlohmann::json& a, const nlohmann::json& b) {
+							return a.get<std::string>() < b.get<std::string>();
+						});
+				}
+
 				return formatted;
 			};
 
