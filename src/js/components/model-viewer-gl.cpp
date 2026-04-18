@@ -315,18 +315,16 @@ static void setup_camera_gl_callbacks(State& state) {
 //   canvas.addEventListener('wheel', ...)
 //   document.addEventListener('keydown', ...)
 static void handle_input(State& state) {
-	if (!ImGui::IsItemHovered())
-		return;
-
 	ImGuiIO& io = ImGui::GetIO();
+	const bool is_hovered = ImGui::IsItemHovered();
 
 	// Mouse position relative to widget
 	ImVec2 widget_pos = ImGui::GetItemRectMin();
 	int mouse_x = static_cast<int>(io.MousePos.x - widget_pos.x);
 	int mouse_y = static_cast<int>(io.MousePos.y - widget_pos.y);
 
-	// Mouse wheel
-	if (io.MouseWheel != 0.0f) {
+	// Mouse wheel (canvas-level in JS)
+	if (is_hovered && io.MouseWheel != 0.0f) {
 		if (state.use_character_controls && state.char_controls) {
 			state.char_controls->on_mouse_wheel(-io.MouseWheel * 100.0f);
 		} else if (state.orbit_controls) {
@@ -334,9 +332,9 @@ static void handle_input(State& state) {
 		}
 	}
 
-	// Mouse down
+	// Mouse down (canvas-level in JS)
 	for (int btn = 0; btn < 3; btn++) {
-		if (ImGui::IsMouseClicked(btn)) {
+		if (is_hovered && ImGui::IsMouseClicked(btn)) {
 			if (state.use_character_controls && state.char_controls) {
 				state.char_controls->on_mouse_down(btn, mouse_x, mouse_y);
 			} else if (state.orbit_controls) {
@@ -365,7 +363,7 @@ static void handle_input(State& state) {
 		}
 	}
 
-	// Mouse up
+	// Mouse up (document-level in JS)
 	for (int btn = 0; btn < 3; btn++) {
 		if (ImGui::IsMouseReleased(btn)) {
 			if (state.use_character_controls && state.char_controls) {
@@ -425,6 +423,13 @@ static void render_scene(State& state, Context& context) {
 	if (rotation_speed != 0 && activeRenderer && !state.use_character_controls) {
 		state.model_rotation_y += static_cast<float>(rotation_speed) * deltaTime;
 		activeRenderer->setTransform(
+			{0, 0, 0},
+			{0, state.model_rotation_y, 0},
+			{1, 1, 1}
+		);
+	} else if (rotation_speed != 0 && !state.use_character_controls && context.setActiveModelTransform) {
+		state.model_rotation_y += static_cast<float>(rotation_speed) * deltaTime;
+		context.setActiveModelTransform(
 			{0, 0, 0},
 			{0, state.model_rotation_y, 0},
 			{1, 1, 1}
@@ -521,9 +526,10 @@ static void render_scene(State& state, Context& context) {
 
 	// render model
 	// JS: if (activeRenderer && activeRenderer.render) activeRenderer.render(...)
-	// No fallback to context.renderActiveModel in JS.
 	if (activeRenderer) {
 		activeRenderer->render(view_mat, proj_mat);
+	} else if (context.renderActiveModel) {
+		context.renderActiveModel(view_mat, proj_mat);
 	}
 
 	if (equipment_renderers && activeRenderer) {
@@ -648,28 +654,68 @@ void update_shadow_visibility(State& state, const Context& context) {
 	state.shadow_renderer->visible = should_show;
 }
 
+static void setup_character_watchers(State& state, Context& context) {
+	state.watchers.clear();
+
+	if (!context.useCharacterControls)
+		return;
+
+	state.watchers.push_back(State::BoolWatcher{
+		.get = []() { return core::view->config.value("chrUse3DCamera", true); },
+		.callback = [&state, &context]() { recreate_controls(state, context); },
+		.previous = core::view->config.value("chrUse3DCamera", true)
+	});
+
+	state.watchers.push_back(State::BoolWatcher{
+		.get = []() { return core::view->config.value("chrRenderShadow", false); },
+		.callback = [&state, &context]() { update_shadow_visibility(state, context); },
+		.previous = core::view->config.value("chrRenderShadow", false)
+	});
+
+	state.watchers.push_back(State::BoolWatcher{
+		.get = []() { return core::view->chrModelLoading; },
+		.callback = [&state, &context]() { update_shadow_visibility(state, context); },
+		.previous = core::view->chrModelLoading
+	});
+}
+
+static void poll_watchers(State& state) {
+	for (auto& watcher : state.watchers) {
+		const bool value = watcher.get ? watcher.get() : watcher.previous;
+		if (value != watcher.previous) {
+			watcher.previous = value;
+			if (watcher.callback)
+				watcher.callback();
+		}
+	}
+}
+
 void fit_camera(State& state, Context& context) {
 	// JS: const active_renderer = this.context.getActiveRenderer?.();
 	//     if (!active_renderer || !active_renderer.getBoundingBox) return;
 	//     const bounding_box = active_renderer.getBoundingBox();
-	// C++ also tries getActiveBoundingBox as a fallback for non-M2 renderer types,
-	// but this is an extension not present in the original JS.
 	M2RendererGL* active_renderer = context.getActiveRenderer ? context.getActiveRenderer() : nullptr;
-	if (!active_renderer)
-		return;
+	std::optional<BoundingBox> bounding_box;
 
-	auto m2_bb = active_renderer->getBoundingBox();
-	if (!m2_bb)
+	if (active_renderer) {
+		auto m2_bb = active_renderer->getBoundingBox();
+		if (!m2_bb)
+			return;
+		bounding_box = BoundingBox{ m2_bb->min, m2_bb->max };
+	} else if (context.getActiveBoundingBox) {
+		bounding_box = context.getActiveBoundingBox();
+		if (!bounding_box)
+			return;
+	} else {
 		return;
-
-	BoundingBox bounding_box{ m2_bb->min, m2_bb->max };
+	}
 
 	if (context.useCharacterControls) {
-		fit_camera_for_character(&bounding_box, state.camera,
+		fit_camera_for_character(&(*bounding_box), state.camera,
 			state.orbit_controls.get(),
 			state.char_controls.get());
 	} else {
-		fit_camera_to_bounding_box(&bounding_box, state.camera, state.orbit_controls.get());
+		fit_camera_to_bounding_box(&(*bounding_box), state.camera, state.orbit_controls.get());
 	}
 }
 
@@ -708,12 +754,7 @@ void init(State& state, Context& context) {
 	state.shadow_renderer = std::make_unique<ShadowPlaneRenderer>(*state.gl_context, 2.0f);
 	state.shadow_renderer->visible = false;
 	update_shadow_visibility(state, context);
-
-	if (context.useCharacterControls) {
-		state.prev_chrUse3DCamera = core::view->config.value("chrUse3DCamera", true);
-		state.prev_chrRenderShadow = core::view->config.value("chrRenderShadow", false);
-		state.prev_chrModelLoading = core::view->chrModelLoading;
-	}
+	setup_character_watchers(state, context);
 
 	// start render loop
 	// isRendering controls whether render_scene() executes.
@@ -752,6 +793,7 @@ void dispose(State& state) {
 
 	// Destroy FBO
 	destroy_fbo(state);
+	state.watchers.clear();
 
 	state.initialized = false;
 }
@@ -795,29 +837,8 @@ void renderWidget(const char* id, State& state, Context& context) {
 		state.char_dom_element.clientHeight = height;
 	}
 
-	// Watcher change detection (character mode only)
-	//     core.view.$watch('config.chrRenderShadow', () => this.update_shadow_visibility())
-	//     core.view.$watch('chrModelLoading', () => this.update_shadow_visibility())
-	if (context.useCharacterControls) {
-		bool cur_chrUse3DCamera = core::view->config.value("chrUse3DCamera", true);
-		bool cur_chrRenderShadow = core::view->config.value("chrRenderShadow", false);
-		bool cur_chrModelLoading = core::view->chrModelLoading;
-
-		if (cur_chrUse3DCamera != state.prev_chrUse3DCamera) {
-			state.prev_chrUse3DCamera = cur_chrUse3DCamera;
-			recreate_controls(state, context);
-		}
-
-		if (cur_chrRenderShadow != state.prev_chrRenderShadow) {
-			state.prev_chrRenderShadow = cur_chrRenderShadow;
-			update_shadow_visibility(state, context);
-		}
-
-		if (cur_chrModelLoading != state.prev_chrModelLoading) {
-			state.prev_chrModelLoading = cur_chrModelLoading;
-			update_shadow_visibility(state, context);
-		}
-	}
+	// JS parity: execute mounted character-mode watchers.
+	poll_watchers(state);
 
 	// Render 3D scene to FBO
 	render_scene(state, context);

@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 104/906 verified (11%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 107/906 verified (12%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -3566,12 +3566,12 @@
 - **Status**: Pending
 - **Details**: JS uses Canvas 2D `ctx.strokeStyle`, `ctx.lineWidth = 0.5`, `ctx.beginPath/moveTo/lineTo/stroke` with all triangles in a single path (overlapping edges drawn at same alpha). C++ uses Xiaolin Wu's anti-aliased line algorithm drawing each segment individually with alpha compositing. Visual results will differ at edge overlaps and anti-aliasing quality — not pixel-identical to the JS version.
 
-- [ ] 721. [model-viewer-gl.cpp] Character-mode reactive watchers are replaced with render-time polling
+- [x] 721. [model-viewer-gl.cpp] Character-mode reactive watchers are replaced with render-time polling
 - **JS Source**: `src/js/components/model-viewer-gl.js` lines 469–473
 - **Status**: Pending
 - **Details**: JS registers Vue `$watch` handlers for `chrUse3DCamera`, `chrRenderShadow`, and `chrModelLoading`. C++ polls these values each frame in `renderWidget`, changing update/lifecycle behavior.
 
-- [ ] 722. [model-viewer-gl.cpp] Active renderer contract is narrowed from JS duck-typed renderer to `M2RendererGL`
+- [x] 722. [model-viewer-gl.cpp] Active renderer contract is narrowed from JS duck-typed renderer to `M2RendererGL`
 - **JS Source**: `src/js/components/model-viewer-gl.js` lines 223–226, 304–307, 409–416
 - **Status**: Pending
 - **Details**: JS uses optional/duck-typed renderer checks (`getActiveRenderer?.()` + method checks). C++ hard-types active renderer as `M2RendererGL*`, reducing parity with the original renderer-agnostic method contract.
@@ -3601,7 +3601,7 @@
 - **Status**: Pending
 - **Details**: JS registers a `window.resize` event handler that reads `container.getBoundingClientRect()`, sets canvas size to `width * devicePixelRatio`, and updates viewport/camera aspect. C++ checks `fbo_width != width || fbo_height != height` each frame (line 783) and recreates the FBO. Both achieve the same result but C++ never calls `window.removeEventListener` cleanup (handled implicitly by stopping renders).
 
-- [ ] 728. [model-viewer-gl.cpp] `handle_input` only processes events when `IsItemHovered` — JS events are document-level
+- [x] 728. [model-viewer-gl.cpp] `handle_input` only processes events when `IsItemHovered` — JS events are document-level
 - **JS Source**: `src/js/components/model-viewer-gl.js` lines 9 (CameraControlsGL constructor adds document listeners)
 - **Status**: Pending
 - **Details**: JS `CameraControlsGL` and `CharacterCameraControlsGL` register mousemove/mouseup on `document`, meaning mouse drag continues even when the cursor leaves the canvas. C++ `handle_input` (line 318) returns early if `!ImGui::IsItemHovered()`, which means dragging the camera and moving the mouse outside the widget area will stop the camera update. The comment on line 359 says "always forward, regardless of hover, since panning may extend outside" but the early return on line 318 contradicts this.

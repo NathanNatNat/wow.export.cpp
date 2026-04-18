@@ -235,10 +235,14 @@ struct State {
 	int fbo_width = 0;
 	int fbo_height = 0;
 
-	// Change detection for watchers
-	bool prev_chrUse3DCamera = true;
-	bool prev_chrRenderShadow = false;
-	bool prev_chrModelLoading = false;
+	struct BoolWatcher {
+		std::function<bool()> get;
+		std::function<void()> callback;
+		bool previous = false;
+	};
+
+	// Character-mode watchers (JS mounted: this.watchers.push(core.view.$watch(...)))
+	std::vector<BoolWatcher> watchers;
 
 	bool initialized = false;
 };
