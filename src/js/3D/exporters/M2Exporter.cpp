@@ -297,7 +297,7 @@ M2ExportTextureResult result;
 if (!config.value("modelsExportTextures", false))
 return result;
 
-m2->load();
+m2->load().get();
 
 const bool useAlpha = config.value("modelsExportAlpha", false);
 const bool usePosix = config.value("pathFormat", std::string("")) == "posix";
@@ -477,8 +477,8 @@ logging::write(std::format("Skipping {} export of {} (already exists, overwrite 
 return;
 }
 
-m2->load();
-auto& skin = m2->getSkin(0);
+m2->load().get();
+auto& skin = *m2->getSkin(0).get();
 
 const auto model_name = std::filesystem::path(outGLTF).stem().string();
 GLTFWriter gltf(out, model_name);
@@ -587,7 +587,7 @@ gltf.setBonesArray(convertSkelBonesToGLTF(skel.bones));
 
 } else {
 if (core::view->config.value("modelsExportAnimations", false)) {
-m2->loadAnims();
+m2->loadAnims().get();
 gltf.setAnimations(convertM2AnimsToGLTF(m2->animations));
 }
 
@@ -695,12 +695,12 @@ if (!renderer || !renderer->m2)
 return;
 
 auto& equipM2 = *renderer->m2;
-equipM2.load();
+equipM2.load().get();
 
 // JS: const skin = await m2.getSkin(0); if (!skin) return;
 if (equipM2.getSkinList().empty())
 	return;
-auto& equipSkin = equipM2.getSkin(0);
+auto& equipSkin = *equipM2.getSkin(0).get();
 
 auto slotNameOpt = wow::get_slot_name(slot_id);
 std::string slot_name = slotNameOpt.has_value() ? std::string(slotNameOpt.value()) : std::format("Slot{}", slot_id);
@@ -845,12 +845,12 @@ if (!renderer || !renderer->m2)
 return;
 
 auto& equipM2 = *renderer->m2;
-equipM2.load();
+equipM2.load().get();
 
 // JS: const skin = await m2.getSkin(0); if (!skin) return;
 if (equipM2.getSkinList().empty())
 	return;
-auto& equipSkin = equipM2.getSkin(0);
+auto& equipSkin = *equipM2.getSkin(0).get();
 
 // build UV arrays
 std::vector<std::vector<float>> uvArrays;
@@ -981,12 +981,12 @@ if (!renderer || !renderer->m2)
 return;
 
 auto& equipM2 = *renderer->m2;
-equipM2.load();
+equipM2.load().get();
 
 // JS: const skin = await m2.getSkin(0); if (!skin) return;
 if (equipM2.getSkinList().empty())
 	return;
-auto& equipSkin = equipM2.getSkin(0);
+auto& equipSkin = *equipM2.getSkin(0).get();
 
 // append geometry to STL
 stl.appendGeometry(vertices, normals);
@@ -1024,8 +1024,8 @@ logging::write(std::format("Added equipment STL meshes for slot {} (item {})", s
 void M2Exporter::exportAsOBJ(const std::filesystem::path& out, bool exportCollision,
 casc::ExportHelper* helper, std::vector<M2ExportFileManifest>* fileManifest)
 {
-m2->load();
-auto& skin = m2->getSkin(0);
+m2->load().get();
+auto& skin = *m2->getSkin(0).get();
 
 const auto& config = core::view->config;
 const bool exportMeta = config.value("exportM2Meta", false);
@@ -1290,8 +1290,8 @@ fileManifest->push_back({ "PHYS_OBJ", fileDataID, std::filesystem::path(casc::Ex
 void M2Exporter::exportAsSTL(const std::filesystem::path& out, bool exportCollision,
 casc::ExportHelper* helper, std::vector<M2ExportFileManifest>* fileManifest)
 {
-m2->load();
-auto& skin = m2->getSkin(0);
+m2->load().get();
+auto& skin = *m2->getSkin(0).get();
 
 const auto& config = core::view->config;
 
@@ -1374,7 +1374,7 @@ fileManifest->push_back({ "M2", fileDataID, out });
 // Only load M2 data if we need to export related files.
 if (config.value("modelsExportSkin", false) || config.value("modelsExportSkel", false) ||
 config.value("modelsExportBone", false) || config.value("modelsExportAnim", false))
-m2->load();
+m2->load().get();
 
 // Directory that relative files should be exported to.
 const auto outDir = out.parent_path();

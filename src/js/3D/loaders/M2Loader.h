@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstdint>
+#include <future>
 #include <map>
 #include <memory>
 #include <string>
@@ -97,13 +98,13 @@ public:
 	/**
 	 * Load the M2 model.
 	 */
-	void load();
+	std::future<void> load();
 
 	/**
 	 * Get a skin at a given index from this->skins.
 	 * @param index
 	 */
-	Skin& getSkin(uint32_t index);
+	std::future<Skin*> getSkin(uint32_t index);
 
 	/**
 	 * Returns the internal array of Skin objects.
@@ -114,14 +115,14 @@ public:
 	/**
 	 * Load and apply .anim files to loaded M2 model.
 	 */
-	void loadAnims(bool load_all = true);
+	std::future<void> loadAnims(bool load_all = true);
 
 	/**
 	 * Load .anim file for a specific animation index (lazy loading).
 	 * @param animationIndex
 	 * @returns true if loaded successfully, false otherwise
 	 */
-	bool loadAnimsForIndex(uint32_t animationIndex);
+	std::future<bool> loadAnimsForIndex(uint32_t animationIndex);
 
 	/**
 	 * Get attachment by attachment ID (e.g., 11 for helmet).
@@ -180,6 +181,7 @@ public:
 private:
 	BufferWrapper& data;
 	uint32_t md21Ofs = 0;
+	bool md21Parsed = false;
 
 	// Owned anim buffers
 	std::vector<std::unique_ptr<BufferWrapper>> ownedAnimBuffers;
@@ -191,7 +193,7 @@ private:
 	void parseChunk_SKID();
 	void parseChunk_BFID(uint32_t chunkSize);
 	void parseChunk_AFID(uint32_t chunkSize);
-	void parseChunk_MD21();
+	std::future<void> parseChunk_MD21();
 
 	void parseChunk_MD21_modelName(uint32_t ofs);
 	void parseChunk_MD21_globalLoops(uint32_t ofs);

@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 107/906 verified (12%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 111/906 verified (12%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -3651,15 +3651,15 @@
 - **Status**: Pending
 - **Details**: JS exports an actual `Map` subclass with standard `Map` behavior/interop, while C++ exposes a template wrapper (header implementation) returning `std::variant` pointers and not `Map`-equivalent runtime semantics.
 
-- [ ] 738. [M2Loader.cpp] Primary loader methods are synchronous instead of JS Promise-based async methods
+- [x] 738. [M2Loader.cpp] Primary loader methods are synchronous instead of JS Promise-based async methods
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 37, 67, 87, 146, 332
-- **Status**: Pending
-- **Details**: JS exposes async `load`, `getSkin`, `loadAnims`, `loadAnimsForIndex`, and `parseChunk_MD21`; C++ ports these as synchronous methods, altering call/await semantics.
+- **Status**: Verified
+- **Details**: Ported `load`, `getSkin`, `loadAnims`, `loadAnimsForIndex`, and `parseChunk_MD21` to async-returning APIs (`std::future<...>`) and updated M2 loader call sites to await via `.get()`, matching JS await-based sequencing semantics.
 
-- [ ] 739. [M2Loader.cpp] `loadAnims` error propagation differs from JS
+- [x] 739. [M2Loader.cpp] `loadAnims` error propagation differs from JS
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 87–138
-- **Status**: Pending
-- **Details**: JS `loadAnims` does not catch loader/CASC failures (Promise rejects). C++ wraps per-entry loads in `try/catch` and continues, swallowing errors and changing failure behavior.
+- **Status**: Verified
+- **Details**: Removed per-entry `try/catch` swallowing in `loadAnims`; loader/CASC failures now propagate out of the method (via the returned future), matching JS rejection behavior.
 
 - [ ] 740. [M2Loader.cpp] Model-name null stripping differs from original JS behavior
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` line 792
@@ -3671,15 +3671,15 @@
 - **Status**: Pending
 - **Details**: JS catch block logs `"Failed to load .anim file for animation " + animation.id + ": " + e.message`, identifying the animation by its `id` field. C++ catch block logs `"Failed to load .anim file (fileDataID={}): {}"` using the CASC `fileDataID` and `e.what()`. The logged identifier differs — JS reports the animation's logical `id`, C++ reports the file data ID. Message format also differs.
 
-- [ ] 742. [M2Loader.cpp] `parseChunk_SFID` guard check uses `viewCount == 0` instead of undefined-check
+- [x] 742. [M2Loader.cpp] `parseChunk_SFID` guard check uses `viewCount == 0` instead of undefined-check
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 272–273
-- **Status**: Pending
-- **Details**: JS checks `if (this.viewCount === undefined)` — true only when MD21 hasn't been parsed yet (property never assigned). C++ checks `if (this->viewCount == 0)`. Since the C++ member is default-initialized to 0, this would throw even AFTER MD21 sets viewCount to a legitimate 0 (a model with no views). The JS would NOT throw in that case because viewCount would be defined as 0 (`0 !== undefined`). The guard should track whether MD21 has been parsed (e.g., using a bool flag), not check for `viewCount == 0`.
+- **Status**: Verified
+- **Details**: Guard now checks explicit MD21 parse-state (`md21Parsed`) instead of `viewCount == 0`, so valid zero-view models no longer trigger false pre-MD21 errors.
 
-- [ ] 743. [M2Loader.cpp] `parseChunk_TXID` guard check uses `textures.empty()` instead of undefined-check
+- [x] 743. [M2Loader.cpp] `parseChunk_TXID` guard check uses `textures.empty()` instead of undefined-check
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 290–291
-- **Status**: Pending
-- **Details**: JS checks `if (this.textures === undefined)` — true only when MD21 hasn't been parsed (textures array never created). C++ checks `if (this->textures.empty())`. If MD21 parses 0 textures, JS would NOT throw (textures is a defined empty array), but C++ WOULD throw. Same semantic issue as the SFID check — should track MD21 parse state rather than vector emptiness.
+- **Status**: Verified
+- **Details**: Guard now checks explicit MD21 parse-state (`md21Parsed`) instead of `textures.empty()`, preserving JS behavior where an empty but defined texture array is valid.
 
 - [ ] 744. [M2LegacyLoader.cpp] `load`/`getSkin` APIs are synchronous instead of JS Promise-based async methods
 - **JS Source**: `src/js/3D/loaders/M2LegacyLoader.js` lines 34, 819
