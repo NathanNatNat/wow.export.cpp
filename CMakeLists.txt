@@ -108,6 +108,61 @@ if(_MISSING_SUBMODULES)
     endif()
 endif()
 
+# ── Linux system package check ─────────────────────────────────
+# On Linux, GLFW requires X11/GL development headers that are not
+# bundled as submodules.  Detect them via pkg-config / find_path
+# and, on Debian/Ubuntu systems, attempt automatic installation
+# via apt-get if any are missing.
+if(UNIX AND NOT APPLE)
+    find_package(PkgConfig QUIET)
+
+    # Map each required package to a representative header.
+    set(_LINUX_PKG_CHECKS
+        "libx11-dev        X11/Xlib.h"
+        "libxrandr-dev     X11/extensions/Xrandr.h"
+        "libxinerama-dev   X11/extensions/Xinerama.h"
+        "libxcursor-dev    X11/Xcursor/Xcursor.h"
+        "libxi-dev         X11/extensions/XInput.h"
+        "libgl-dev         GL/gl.h"
+    )
+
+    set(_MISSING_LINUX_PKGS "")
+    foreach(_entry IN LISTS _LINUX_PKG_CHECKS)
+        string(REGEX MATCH "^([^ ]+)" _pkg  "${_entry}")
+        string(REGEX REPLACE "^[^ ]+[ ]+" "" _hdr "${_entry}")
+        find_path(_hdr_path "${_hdr}" QUIET)
+        if(NOT _hdr_path)
+            list(APPEND _MISSING_LINUX_PKGS "${_pkg}")
+        endif()
+        unset(_hdr_path CACHE)
+    endforeach()
+
+    if(_MISSING_LINUX_PKGS)
+        string(REPLACE ";" " " _pkg_list "${_MISSING_LINUX_PKGS}")
+        message(STATUS
+            "The following Linux system packages appear to be missing:\n"
+            "    ${_pkg_list}\n"
+            "Attempting automatic installation via apt-get ..."
+        )
+        execute_process(
+            COMMAND sudo apt-get install -y ${_MISSING_LINUX_PKGS}
+            RESULT_VARIABLE _apt_result
+            OUTPUT_VARIABLE _apt_output
+            ERROR_VARIABLE  _apt_error
+        )
+        if(NOT _apt_result EQUAL 0)
+            message(FATAL_ERROR
+                "Automatic apt-get install failed (exit code ${_apt_result}).\n"
+                "${_apt_error}\n"
+                "Please install the required packages manually:\n"
+                "    sudo apt-get install -y ${_pkg_list}\n"
+                "then re-run CMake."
+            )
+        endif()
+        message(STATUS "Linux system packages installed successfully.")
+    endif()
+endif()
+
 # ════════════════════════════════════════════════════════════════
 #  Dependencies (all from extern/ git submodules)
 # ════════════════════════════════════════════════════════════════
