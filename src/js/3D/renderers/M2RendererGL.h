@@ -8,6 +8,7 @@
 #include <glad/gl.h>
 #include <array>
 #include <cstdint>
+#include <future>
 #include <map>
 #include <memory>
 #include <optional>
@@ -87,16 +88,16 @@ public:
 	 */
 	void setCASCSource(casc::CASC* source) { casc_source_ = source; }
 
-	void load();
+	std::future<void> load();
 
 	void _create_default_texture();
-	void _load_textures();
+	std::future<void> _load_textures();
 
-	void loadSkin(int index);
+	std::future<void> loadSkin(int index);
 
-	void _create_skeleton();
+	std::future<void> _create_skeleton();
 
-	void playAnimation(int index);
+	std::future<void> playAnimation(int index);
 	void stopAnimation();
 	void updateAnimation(float delta_time);
 
@@ -175,7 +176,7 @@ public:
 	 * @param type - texture type (textureTypes[i])
 	 * @param fileDataID - CASC file data ID
 	 */
-	void overrideTextureType(uint32_t type, uint32_t fileDataID);
+	std::future<void> overrideTextureType(uint32_t type, uint32_t fileDataID);
 
 	/**
 	 * Override texture with raw pixel data (adapted from JS canvas override)
@@ -184,7 +185,7 @@ public:
 	 * @param width - texture width
 	 * @param height - texture height
 	 */
-	void overrideTextureTypeWithCanvas(uint32_t type, const uint8_t* pixels, int width, int height);
+	std::future<void> overrideTextureTypeWithCanvas(uint32_t type, const uint8_t* pixels, int width, int height);
 
 	/**
 	 * Override texture with raw RGBA pixel data
@@ -193,13 +194,13 @@ public:
 	 * @param height - texture height
 	 * @param pixels - RGBA pixel data
 	 */
-	void overrideTextureTypeWithPixels(uint32_t type, int width, int height, const uint8_t* pixels);
+	std::future<void> overrideTextureTypeWithPixels(uint32_t type, int width, int height, const uint8_t* pixels);
 
 	/**
 	 * Apply replaceable textures from display info
 	 * @param displays - display info with textures array
 	 */
-	void applyReplaceableTextures(const M2DisplayInfo& displays);
+	std::future<void> applyReplaceableTextures(const M2DisplayInfo& displays);
 
 	/**
 	 * UV layer data entry.
@@ -329,7 +330,6 @@ private:
 	bool current_anim_from_child = false;
 
 	std::vector<float> bone_matrices;
-	GLuint bone_ssbo = 0;  // SSBO for bone matrices (avoids uniform register limits)
 	int current_animation = -1;   // -1 = null (no animation playing)
 	int current_anim_index = -1;  // index within the source skeleton
 	float animation_time = 0;
@@ -347,6 +347,10 @@ private:
 	// reactive state
 	std::string geosetKey = "modelViewerGeosets";
 	std::vector<M2GeosetEntry> geosetArray;
+	std::vector<bool> watcher_geoset_checked;
+	bool watcher_wireframe = false;
+	bool watcher_show_bones = false;
+	bool watcher_state_initialized = false;
 
 	// transforms
 	std::array<float, 16> model_matrix;

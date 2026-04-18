@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 111/906 verified (12%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 116/906 verified (13%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -3881,35 +3881,35 @@
 - **Status**: Pending
 - **Details**: C++ `remap_bone_indices()` (CharacterExporter.cpp line 147) compares `original_idx < static_cast<uint8_t>(remap_table.size())`. If `remap_table` has 256 or more entries, `static_cast<uint8_t>(256)` wraps to `0`, making the comparison `original_idx < 0` always false for unsigned types — no indices would be remapped at all. For tables with 257–511 entries, the truncated size wraps to small values, skipping valid remap entries for higher indices. JS has no such issue since `original_idx < remap_table.length` uses normal number comparison. The fix should be `static_cast<size_t>(original_idx) < remap_table.size()` or simply removing the cast.
 
-- [ ] 784. [M2RendererGL.cpp] Multiple texture/skeleton/animation methods are synchronous instead of JS async methods
+- [x] 784. [M2RendererGL.cpp] Multiple texture/skeleton/animation methods are synchronous instead of JS async methods
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 362, 401, 431, 587, 663, 1336, 1371, 1399, 1424
-- **Status**: Pending
-- **Details**: JS keeps `load`, `_load_textures`, `loadSkin`, `_create_skeleton`, `playAnimation`, `overrideTextureType*`, and `applyReplaceableTextures` asynchronous; C++ ports them synchronously, changing promise timing and exception propagation behavior.
+- **Status**: Verified
+- **Details**: Ported JS async API shape by converting `load`, `_load_textures`, `loadSkin`, `_create_skeleton`, `playAnimation`, `overrideTextureType*`, and `applyReplaceableTextures` to return `std::future<void>`, with sequential `.get()` awaits where JS uses `await`, preserving call ordering and rejection/exception propagation points.
 
-- [ ] 785. [M2RendererGL.cpp] Shader time uniform start-point differs from JS `performance.now()` baseline
+- [x] 785. [M2RendererGL.cpp] Shader time uniform start-point differs from JS `performance.now()` baseline
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` line 1224
-- **Status**: Pending
-- **Details**: JS feeds `u_time` from `performance.now() * 0.001` (seconds since page load). C++ computes time from a static timestamp initialized on first render call, shifting animation phase baseline relative to JS.
+- **Status**: Verified
+- **Details**: `u_time` now uses a file-scope steady-clock baseline (`M2_PERFORMANCE_BASELINE`) rather than first-render initialization, matching JS intent of a stable app/runtime baseline for `performance.now() * 0.001`.
 
-- [ ] 786. [M2RendererGL.cpp] Reactive watchers not set up — `geosetWatcher`, `wireframeWatcher`, `bonesWatcher` completely missing
+- [x] 786. [M2RendererGL.cpp] Reactive watchers not set up — `geosetWatcher`, `wireframeWatcher`, `bonesWatcher` completely missing
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 381–383
-- **Status**: Pending
-- **Details**: JS `load()` sets up three Vue watchers for geoset, wireframe, and bone visibility. C++ has empty braces at lines 495–496 with no watcher registration. UI changes to geosets won't trigger `updateGeosets()` automatically.
+- **Status**: Verified
+- **Details**: Added watcher-equivalent C++ behavior: watcher state is initialized during `load()`, then `render()` polls geoset/wireframe/bones reactive values and triggers `updateGeosets()`/`updateWireframe()` on changes, matching JS watcher effects without Vue.
 
 - [ ] 787. [M2RendererGL.cpp] `dispose()` missing watcher cleanup — no `geosetWatcher`, `wireframeWatcher`, `bonesWatcher` unregister
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1629–1633
 - **Status**: Pending
 - **Details**: JS `dispose()` calls `this.geosetWatcher?.()`, `this.wireframeWatcher?.()`, `this.bonesWatcher?.()` to unregister watchers. C++ has no equivalent cleanup because watchers were never created.
 
-- [ ] 788. [M2RendererGL.cpp] Bone matrix upload uses SSBO instead of uniform array
+- [x] 788. [M2RendererGL.cpp] Bone matrix upload uses SSBO instead of uniform array
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1228–1231
-- **Status**: Pending
-- **Details**: JS uploads bone matrices via `gl.uniformMatrix4fv(loc, false, this.bone_matrices)` (uniform array). C++ uses Shader Storage Buffer Objects (SSBOs) at lines 1482–1495 (`glBindBuffer(GL_SHADER_STORAGE_BUFFER, ...)`, `glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ...)`). This is a valid modern OpenGL optimization but requires the shader to declare an SSBO binding instead of a uniform array. If the shader still expects a uniform array, bone animation will not work.
+- **Status**: Verified
+- **Details**: Replaced SSBO upload path with JS-equivalent uniform upload (`u_bone_matrices` via `glUniformMatrix4fv`), aligned with shader uniform declaration and original JS behavior.
 
-- [ ] 789. [M2RendererGL.cpp] `u_time` uniform calculation uses relative time instead of `performance.now()`
+- [x] 789. [M2RendererGL.cpp] `u_time` uniform calculation uses relative time instead of `performance.now()`
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` line 1224
-- **Status**: Pending
-- **Details**: Same issue as M2LegacyRendererGL — JS uses `performance.now() * 0.001`, C++ uses elapsed time from first render call (lines 1477–1480).
+- **Status**: Verified
+- **Details**: Fixed alongside item 785: `u_time` now derives from a stable renderer file-scope performance baseline instead of first-render-relative elapsed time.
 
 - [ ] 790. [M2RendererGL.cpp] `overrideTextureTypeWithCanvas()` takes raw pixel data instead of canvas element
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1371–1390
