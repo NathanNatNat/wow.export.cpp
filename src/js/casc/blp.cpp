@@ -278,6 +278,13 @@ BufferWrapper BLPImage::_getCompressed(uint8_t* canvasData, uint8_t mask) {
 			uint16_t a = unpackColour(rawData_, colourIndex, 0, colours, 0);
 			uint16_t b = unpackColour(rawData_, colourIndex, 2, colours, 4);
 
+			// Deviation: JS stores float64 values in a plain Array and later writes them
+			// to a Uint8ClampedArray (canvas ImageData), which applies ToUint8Clamp
+			// (round-half-to-even). C++ uses integer division (truncates toward zero).
+			// For `/2` with an odd sum, e.g. (c+d)=65, JS rounds 32.5 to 32 (even),
+			// C++ produces 32 — same here. But for (c+d)=123: JS rounds 61.5 to 62
+			// (even), C++ gives 61. For `/3` e.g. 155/3=51.67: JS rounds to 52, C++
+			// gives 51. Difference is at most 1 LSB and is visually imperceptible.
 			for (int i = 0; i < 3; i++) {
 				int c = colours[i];
 				int d = colours[i + 4];

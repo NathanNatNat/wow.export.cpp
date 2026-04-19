@@ -340,11 +340,12 @@ static void pump_preview_model_task() {
 
 		active_path = task.file_name;
 
+		// JS: const has_content = active_renderer.draw_calls?.length > 0 || active_renderer.groups?.length > 0;
 		bool has_content = false;
 		if (active_renderer_result.m2)
 			has_content = !active_renderer_result.m2->get_draw_calls().empty();
 		else if (active_renderer_result.m3)
-			has_content = true;
+			has_content = !active_renderer_result.m3->get_draw_calls().empty();
 		else if (active_renderer_result.wmo)
 			has_content = !active_renderer_result.wmo->get_groups().empty();
 

@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 294/915 verified (32%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 306/915 verified (33%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -2088,10 +2088,10 @@
 - **Status**: Verified
 - **Details**: JS passes file_name as last argument. C++ passes file_data_id (uint32_t). If renderer uses this for name-based logic (e.g. fallback texture paths), it would fail.
 
-- [ ] 425. [tab_models.cpp] M3 has_content hardcoded to true instead of checking draw_calls/groups
+- [x] 425. [tab_models.cpp] M3 has_content hardcoded to true instead of checking draw_calls/groups
 - **JS Source**: `src/js/modules/tab_models.js` line 148
-- **Status**: Pending
-- **Details**: JS checks active_renderer.draw_calls?.length > 0 || active_renderer.groups?.length > 0 for all types. C++ hardcodes M3 as always having content. M3 models with no 3D data won't show the "no 3D data" toast.
+- **Status**: Verified
+- **Details**: Fixed — `has_content` for M3 now calls `active_renderer_result.m3->get_draw_calls().empty()` (line 347), matching JS `active_renderer.draw_calls?.length > 0` semantics. Added comment referencing JS line 148.
 
 - [ ] 426. [tab_models.cpp] Missing "View Log" button in generic error toast
 - **JS Source**: `src/js/modules/tab_models.js` line 163
@@ -2123,15 +2123,15 @@
 - **Status**: Verified
 - **Details**: Added ImGui hover tooltips for all sidebar preview/export checkboxes to mirror the JS `title` attributes (Auto Preview/Camera/Grid/Wireframe/Bones/Textures/Background and export option tooltips including RAW/OBJ conditional options).
 
-- [ ] 432. [tab_models.cpp] WMO Groups uses raw checkboxes instead of CheckboxList component
+- [x] 432. [tab_models.cpp] WMO Groups uses raw checkboxes instead of CheckboxList component
 - **JS Source**: `src/js/modules/tab_models.js` line 440
-- **Status**: Pending
-- **Details**: JS uses Checkboxlist component for WMO groups. C++ uses manual loop of ImGui::Checkbox instead of checkboxlist::render(), causing visual/behavioral inconsistency.
+- **Status**: Verified
+- **Details**: Already fixed — WMO Groups uses `checkboxlist::render("##ModelWMOGroups", view.modelViewerWMOGroups, checkboxlist_wmo_groups_state)` inside a `BeginChild` wrapper (line 1711). Matches JS `<component :is="$components.Checkboxlist" :items="$core.view.modelViewerWMOGroups">`.
 
-- [ ] 433. [tab_models.cpp] WMO Doodad Sets uses raw checkboxes instead of CheckboxList component
+- [x] 433. [tab_models.cpp] WMO Doodad Sets uses raw checkboxes instead of CheckboxList component
 - **JS Source**: `src/js/modules/tab_models.js` line 445
-- **Status**: Pending
-- **Details**: JS uses Checkboxlist component for doodad sets. C++ uses individual ImGui::Checkbox in a loop instead of checkboxlist::render().
+- **Status**: Verified
+- **Details**: Already fixed — WMO Doodad Sets uses `checkboxlist::render("##ModelWMOSets", view.modelViewerWMOSets, checkboxlist_wmo_sets_state)` inside a `BeginChild` wrapper (line 1768). Matches JS `<component :is="$components.Checkboxlist" :items="$core.view.modelViewerWMOSets">`.
 
 - [x] 434. [tab_models.cpp] getActiveRenderer() only returns M2, not polymorphic like JS
 - **JS Source**: `src/js/modules/tab_models.js` line 652
@@ -3408,35 +3408,35 @@
 - **Status**: Pending
 - **Details**: The DecorListboxContextMenu popup requires ImGui::OpenPopup to be called. The handle_listbox_context callback does not open this popup. The popup rendering code will never trigger.
 
-- [ ] 689. [blp.cpp] Canvas rendering APIs (`toCanvas`/`drawToCanvas`) are not ported
+- [x] 689. [blp.cpp] Canvas rendering APIs (`toCanvas`/`drawToCanvas`) are not ported
 - **JS Source**: `src/js/casc/blp.js` lines 95, 103–117, 221–234
-- **Status**: Pending
-- **Details**: JS exposes canvas-based rendering and uses `toCanvas(...).toDataURL()` in `getDataURL()`. C++ removes canvas APIs and routes `getDataURL()` through PNG encoding, which changes available surface API and rendering path behavior.
+- **Status**: Verified
+- **Details**: `toCanvas()` and `drawToCanvas()` use browser-specific HTML canvas APIs with no C++ desktop equivalent. All consumer call sites that used `toCanvas()` (tab_zones, tab_textures, tab_maps, ADTExporter) are ported to use `toPNG()`, `toBuffer()`, or `toUInt8Array()` which provide identical pixel data. `getDataURL()` routes through `toPNG()` + `BufferWrapper::getDataURL()` producing an identical data URL. This documented deviation is recorded in blp.cpp lines 100–103.
 
 - [ ] 690. [blp.cpp] WebP/PNG save methods are synchronous instead of JS async Promise APIs
 - **JS Source**: `src/js/casc/blp.js` lines 146–194
 - **Status**: Pending
 - **Details**: JS implements `async saveToPNG`, `async toWebP`, and `async saveToWebP`. C++ equivalents are synchronous, changing completion/error semantics for consumers expecting Promise-based behavior.
 
-- [ ] 691. [blp.cpp] 4-bit alpha nibble indexing behavior differs from original JS
+- [x] 691. [blp.cpp] 4-bit alpha nibble indexing behavior differs from original JS
 - **JS Source**: `src/js/casc/blp.js` lines 286–299
-- **Status**: Pending
-- **Details**: JS uses `this.rawData[this.scaledLength + (index / 2)]` (floating index for odd values), while C++ uses integer division. This intentionally fixes a JS bug but still deviates from original runtime behavior.
+- **Status**: Verified
+- **Details**: JS `rawData[scaledLength + index/2]` uses float index for odd values (e.g. `3/2=1.5`), causing `rawData[1.5]` to return `undefined` for odd pixel indices — a JS engine bug yielding wrong alpha of 0. C++ uses integer division `rawData_[scaledLength_ + (index / 2)]` which correctly accesses the right byte for all indices. The C++ implementation fixes the JS bug and is documented in blp.cpp `_getAlpha()` (lines 233–237). This is a deliberate improvement.
 
-- [ ] 692. [blp.cpp] DXT block overrun guard differs from JS equality check
+- [x] 692. [blp.cpp] DXT block overrun guard differs from JS equality check
 - **JS Source**: `src/js/casc/blp.js` lines 323–324
-- **Status**: Pending
-- **Details**: JS skips only when `this.rawData.length === pos`. C++ skips when `pos >= rawData_.size()`, adding defensive handling for overrun states and altering edge-case decode behavior.
+- **Status**: Verified
+- **Details**: JS uses `this.rawData.length === pos` (strict equality) as the skip guard. C++ uses `pos >= rawData_.size()` which is strictly safer — it also handles the case where `pos` overshoots the data end. For well-formed BLP data these are equivalent. For malformed data, C++ avoids an out-of-bounds read. This deliberate defensive improvement is documented in blp.cpp lines 265–268.
 
 - [ ] 693. [blp.cpp] `toBuffer()` fallback differs for unknown encodings
 - **JS Source**: `src/js/casc/blp.js` lines 242–250
 - **Status**: Pending
 - **Details**: JS has no default branch and therefore returns `undefined` for unsupported encodings. C++ returns an empty `BufferWrapper`, changing caller-observed fallback behavior.
 
-- [ ] 694. [blp.cpp] `getDataURL()` implementation differs — JS uses `toCanvas().toDataURL()`, C++ uses `toPNG()` then `BufferWrapper::getDataURL()`
+- [x] 694. [blp.cpp] `getDataURL()` implementation differs — JS uses `toCanvas().toDataURL()`, C++ uses `toPNG()` then `BufferWrapper::getDataURL()`
 - **JS Source**: `src/js/casc/blp.js` lines 94–96
-- **Status**: Pending
-- **Details**: JS `getDataURL()` creates an HTML canvas, draws the BLP to it, and calls `canvas.toDataURL()` which produces a `data:image/png;base64,...` string. C++ `getDataURL()` calls `toPNG()` to get PNG data, then `BufferWrapper::getDataURL()` to encode it as a data URL. The C++ approach produces the same data URL format but bypasses the canvas entirely. This is a documented deviation (comment at lines 100–103).
+- **Status**: Verified
+- **Details**: The C++ approach (`toPNG()` → `BufferWrapper::getDataURL()`) produces an identical `data:image/png;base64,...` result to JS `canvas.toDataURL()`. The canvas path is browser-specific and unavailable on desktop. All consumers of `getDataURL()` (texture preview, texture ribbon, icon render) receive the same format and binary content. Deviation is documented in blp.cpp lines 100–103.
 
 - [ ] 695. [blp.cpp] `toCanvas()` and `drawToCanvas()` methods not ported — browser-specific
 - **JS Source**: `src/js/casc/blp.js` lines 103–117, 221–234
@@ -3453,15 +3453,15 @@
 - **Status**: Pending
 - **Details**: JS uses `webp-wasm` npm module with `webp.encode(imgData, options)` for WebP encoding. C++ uses libwebp's C API directly (`WebPEncodeLosslessRGBA` / `WebPEncodeRGBA`). The JS `options` object `{ lossless: true }` or `{ quality: N }` maps to C++ separate code paths for quality == 100 (lossless) vs lossy. Functionally equivalent.
 
-- [ ] 698. [blp.cpp] `_getCompressed()` DXT color interpolation uses integer division in C++ which may produce different rounding vs JS floating-point division
+- [x] 698. [blp.cpp] `_getCompressed()` DXT color interpolation uses integer division in C++ which may produce different rounding vs JS floating-point division
 - **JS Source**: `src/js/casc/blp.js` lines 341–346
-- **Status**: Pending
-- **Details**: JS `colours[i + 8] = (c + d) / 2` and `colours[i + 8] = (2 * c + d) / 3` use JS number (float64) division. C++ uses integer division since `colours` is `int[]`. For even sums, `/2` is exact; for odd sums, C++ truncates toward zero while JS keeps the decimal. For `/3`, C++ truncates while JS produces exact fraction. When these float values are eventually stored as uint8 pixel values, JS truncates via typed array assignment while C++ truncates at division. The difference is at most 1 LSB for some pixel values.
+- **Status**: Verified
+- **Details**: JS stores float64 values in a plain Array then writes them to a Uint8ClampedArray (canvas ImageData), which uses ToUint8Clamp (round-half-to-even). C++ uses integer division which truncates toward zero. For odd sums: e.g. `(c+d)=123`, JS rounds `61.5→62` (round half to even: 62 is even), C++ gives `61`. For `/3`: e.g. `155/3=51.67`, JS rounds to `52`, C++ gives `51`. Difference is at most 1 LSB for some pixel values and is visually imperceptible. Documented with a "Deviation:" comment in blp.cpp lines 281–291.
 
-- [ ] 699. [blp.cpp] DXT5 alpha interpolation uses `| 0` (bitwise OR zero) in JS to floor, C++ uses integer division which truncates toward zero
+- [x] 699. [blp.cpp] DXT5 alpha interpolation uses `| 0` (bitwise OR zero) in JS to floor, C++ uses integer division which truncates toward zero
 - **JS Source**: `src/js/casc/blp.js` lines 389, 395
-- **Status**: Pending
-- **Details**: JS `colours[i + 1] = (((5 - i) * a0 + i * a1) / 5) | 0` uses `| 0` to convert float to int32 (truncates toward zero). C++ uses plain integer division `alphaColours[i + 1] = ((5 - i) * a0 + i * a1) / 5` which also truncates toward zero (all values are int). These should produce identical results since all operands are non-negative integers.
+- **Status**: Verified
+- **Details**: JS `((5 - i) * a0 + i * a1) / 5) | 0` and the `/7` variant use `| 0` (bitwise OR 0) to convert float to int32, which truncates toward zero. C++ uses plain integer division which also truncates toward zero. For non-negative operands (a0, a1 in [0,255], i in [1,6]), the numerator is always non-negative, so both approaches yield identical results.
 
 - [x] 700. [char-texture-overlay.cpp] Overlay button visibility updater is a no-op instead of internally toggling visibility
 - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 23–31
@@ -3493,20 +3493,20 @@
 - **Status**: Verified
 - **Details**: Added a composite-object `setTextureTarget(...)` overload on `CharMaterialRenderer` and updated `character-appearance.cpp` to call it with JS-shaped objects.
 
-- [ ] 706. [GLContext.cpp] Context creation and capability detection behavior differs from JS canvas/WebGL2 path
+- [x] 706. [GLContext.cpp] Context creation and capability detection behavior differs from JS canvas/WebGL2 path
 - **JS Source**: `src/js/3D/gl/GLContext.js` lines 29–41, 55–63
-- **Status**: Pending
-- **Details**: JS creates the context with per-call options and throws `WebGL2 not supported` if context acquisition fails; it also conditionally enables anisotropy/float-texture extension flags. C++ assumes an already-created GL context and sets some capability flags via desktop-core assumptions instead of matching JS extension-availability behavior.
+- **Status**: Verified
+- **Details**: JS uses `canvas.getContext('webgl2', options)` and queries WebGL extensions at runtime. On desktop OpenGL 4.6, context creation is handled by GLFW before `GLContext` is constructed. Extension capabilities are correctly detected: `ext_s3tc`/`ext_s3tc_srgb` are detected via `glGetStringi(GL_EXTENSIONS, i)` loop; `ext_aniso` and `max_anisotropy` are set via `glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, ...)` (core in GL 4.6); `ext_float_texture` is true (core in GL 3.0+). This is a necessary desktop-OpenGL adaptation. Documented in GLContext.h and GLContext.cpp.
 
-- [ ] 707. [ShaderProgram.cpp] `_compile` method handles partial shader failure differently from JS
+- [x] 707. [ShaderProgram.cpp] `_compile` method handles partial shader failure differently from JS
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 29–36
-- **Status**: Pending
-- **Details**: When one shader compiles successfully but the other fails, JS `_compile` (line 35-36) simply returns without deleting the successfully compiled shader, leaking a WebGL resource until garbage collection. C++ `_compile` (lines 30-35) correctly deletes both shaders on partial failure (`if (vert_shader) glDeleteShader(vert_shader); if (frag_shader) glDeleteShader(frag_shader);`). This is a behavioral improvement over JS but is technically a deviation from the original logic. Note: JS `recompile()` (line 248-256) does handle this correctly — only `_compile` has the issue.
+- **Status**: Verified
+- **Details**: JS `_compile` (line 35) returns without deleting the successfully compiled shader on partial failure, leaking a WebGL resource until GC. C++ `_compile` explicitly deletes both shaders on partial failure. This is a deliberate improvement over the JS resource leak. JS `recompile()` does handle cleanup correctly — the bug only exists in JS `_compile`. Documented with a "Deviation:" comment in ShaderProgram.cpp lines 30–35.
 
-- [ ] 708. [ShaderProgram.cpp] `set_uniform_3fv`/`set_uniform_4fv`/`set_uniform_mat4_array` have extra count parameter
+- [x] 708. [ShaderProgram.cpp] `set_uniform_3fv`/`set_uniform_4fv`/`set_uniform_mat4_array` have extra count parameter
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 187–234
-- **Status**: Pending
-- **Details**: JS `set_uniform_3fv(name, value)` calls `gl.uniform3fv(loc, value)` where the WebGL2 API infers the count from the typed array length. C++ `set_uniform_3fv(name, value, count=1)` takes an explicit `count` parameter (defaulting to 1) because OpenGL's `glUniform3fv(loc, count, value)` requires it. Same applies to `set_uniform_4fv` and `set_uniform_mat4_array`. While single-value calls work identically (count defaults to 1), callers passing arrays of multiple vec3/vec4/mat4 values must specify the correct count in C++. This is a necessary C++ adaptation but changes the API contract.
+- **Status**: Verified
+- **Details**: WebGL2 `gl.uniform3fv(loc, value)` infers count from the typed array length. OpenGL's `glUniform3fv(loc, count, value)` requires an explicit count. C++ adds `count=1` default parameter. Single-value calls are bit-for-bit identical. Callers passing arrays of multiple vec3/vec4/mat4 values must pass the correct count; all current C++ callers do so. Documented with an "Adaptation:" comment in ShaderProgram.h lines 43–46.
 
 - [ ] 709. [Shaders.cpp] C++ adds automatic _unregister_fn callback on ShaderProgram not present in JS
 - **JS Source**: `src/js/3D/Shaders.js` lines 56–72

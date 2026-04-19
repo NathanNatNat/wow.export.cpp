@@ -28,6 +28,9 @@ void ShaderProgram::_compile(const std::string& vert_source,
 	GLuint frag_shader = _compile_shader(GL_FRAGMENT_SHADER, frag_source);
 
 	if (!vert_shader || !frag_shader) {
+		// Deviation: JS _compile (ShaderProgram.js line 35) returns here without
+		// deleting the successfully compiled shader, leaking a WebGL resource until
+		// GC. C++ explicitly deletes both to avoid the resource leak.
 		if (vert_shader)
 			glDeleteShader(vert_shader);
 		if (frag_shader)
