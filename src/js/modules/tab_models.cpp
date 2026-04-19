@@ -72,8 +72,6 @@ static std::unique_ptr<model_viewer_utils::AnimationMethods> anim_methods;
 static std::vector<nlohmann::json> prev_skins_selection;
 static std::optional<std::string> prev_anim_selection;
 static std::vector<nlohmann::json> prev_selection_models;
-static bool tab_initialized = false;
-
 static bool is_initialized = false;
 
 static listbox::ListboxState listbox_models_state;
@@ -883,7 +881,7 @@ void render() {
 		if (view.selectionModels != prev_selection_models) {
 			prev_selection_models = view.selectionModels;
 
-			if (tab_initialized && view.config.value("modelsAutoPreview", false)) {
+			if (is_initialized && view.config.value("modelsAutoPreview", false)) {
 				if (!view.selectionModels.empty()) {
 					std::string first;
 					if (view.selectionModels[0].is_string())
