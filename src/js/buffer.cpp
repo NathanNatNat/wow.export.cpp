@@ -6,12 +6,17 @@ License: MIT
 
 #include "buffer.h"
 #include "crc32.h"
+#include "blob.h"
 
 #include <cstring>
 #include <stdexcept>
 #include <algorithm>
 #include <fstream>
 #include <array>
+#include <random>
+#include <chrono>
+#include <thread>
+#include <format>
 
 #include <zlib.h>
 
@@ -21,6 +26,13 @@ License: MIT
 
 #include <webp/encode.h>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
+#include <miniaudio.h>
+
 // stb_image_write for PNG encoding in fromPixelData
 #ifndef STB_IMAGE_WRITE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -28,9 +40,6 @@ License: MIT
 #include <stb_image_write.h>
 
 #ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
 #include <windows.h>
 #else
 #include <sys/mman.h>
@@ -167,6 +176,72 @@ result.push_back(static_cast<uint8_t>((val >> bits) & 0xff));
 }
 
 return result;
+}
+
+void fill_unsafe_bytes(std::vector<uint8_t>& bytes) {
+	const uint64_t now = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+	const uint64_t tid = std::hash<std::thread::id>{}(std::this_thread::get_id());
+	uint64_t state = now ^ (tid << 1) ^ static_cast<uint64_t>(bytes.size() * 0x9E3779B97F4A7C15ULL);
+
+	for (auto& b : bytes) {
+		state ^= (state << 13);
+		state ^= (state >> 7);
+		state ^= (state << 17);
+		b = static_cast<uint8_t>(state & 0xFF);
+	}
+}
+
+std::string bytes_to_hex_string(const uint8_t* data, size_t length) {
+	constexpr char hex_chars[] = "0123456789abcdef";
+	std::string out;
+	out.reserve(length * 2);
+	for (size_t i = 0; i < length; ++i) {
+		const uint8_t v = data[i];
+		out.push_back(hex_chars[v >> 4]);
+		out.push_back(hex_chars[v & 0x0F]);
+	}
+	return out;
+}
+
+void append_utf8_from_codepoint(std::string& out, uint32_t cp) {
+	if (cp < 0x80) {
+		out.push_back(static_cast<char>(cp));
+	} else if (cp < 0x800) {
+		out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+		out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+	} else if (cp < 0x10000) {
+		out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+		out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+		out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+	} else {
+		out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+		out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+		out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+		out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+	}
+}
+
+std::string decode_utf16le_to_utf8(const uint8_t* data, size_t length) {
+	std::string out;
+	out.reserve(length);
+	size_t i = 0;
+	while (i + 1 < length) {
+		const uint16_t w1 = static_cast<uint16_t>(data[i] | (static_cast<uint16_t>(data[i + 1]) << 8));
+		i += 2;
+
+		if (w1 >= 0xD800 && w1 <= 0xDBFF && i + 1 < length) {
+			const uint16_t w2 = static_cast<uint16_t>(data[i] | (static_cast<uint16_t>(data[i + 1]) << 8));
+			if (w2 >= 0xDC00 && w2 <= 0xDFFF) {
+				i += 2;
+				const uint32_t cp = 0x10000 + (((w1 - 0xD800) << 10) | (w2 - 0xDC00));
+				append_utf8_from_codepoint(out, cp);
+				continue;
+			}
+		}
+
+		append_utf8_from_codepoint(out, w1);
+	}
+	return out;
 }
 
 
@@ -330,10 +405,9 @@ _ofs += N; \
 // =====================================================================
 
 BufferWrapper BufferWrapper::alloc(size_t length, bool secure) {
-// TODO 65: JS uses Buffer.allocUnsafe(length) when !secure to skip zeroing.
-// C++ std::vector<uint8_t>(length) always value-initializes (zeroes).
-// This is a harmless performance-only difference — no functional impact.
-std::vector<uint8_t> buf(length);
+std::vector<uint8_t> buf(length, 0);
+if (!secure)
+	fill_unsafe_bytes(buf);
 return BufferWrapper(std::move(buf));
 }
 
@@ -362,18 +436,14 @@ combined.insert(combined.end(), b._buf.begin(), b._buf.end());
 return BufferWrapper(std::move(combined));
 }
 
-// TODO 59: C++ equivalent of JS fromCanvas(). The JS method converts an
-// HTMLCanvasElement/OffscreenCanvas to a BufferWrapper using browser Blob APIs
-// and webp-wasm for lossless WebP. Since C++ has no canvas/Blob browser APIs,
-// this method takes raw RGBA pixel data and encodes it using libwebp/stb.
-BufferWrapper BufferWrapper::fromPixelData(const uint8_t* rgba, int width, int height,
-                                           std::string_view mimeType, int quality) {
+BufferWrapper BufferWrapper::fromCanvas(const uint8_t* rgba, int width, int height,
+                                        std::string_view mimeType, int quality) {
 if (mimeType == "image/webp" && quality == 100) {
 // Lossless WebP encoding — matches JS webp.encode(imageData, { lossless: true })
 uint8_t* output = nullptr;
 size_t outputSize = WebPEncodeLosslessRGBA(rgba, width, height, width * 4, &output);
 if (outputSize == 0 || output == nullptr)
-throw std::runtime_error("fromPixelData: WebP lossless encoding failed");
+throw std::runtime_error("fromCanvas: WebP lossless encoding failed");
 
 std::vector<uint8_t> buf(output, output + outputSize);
 WebPFree(output);
@@ -386,7 +456,7 @@ uint8_t* output = nullptr;
 size_t outputSize = WebPEncodeRGBA(rgba, width, height, width * 4,
                                     static_cast<float>(quality), &output);
 if (outputSize == 0 || output == nullptr)
-throw std::runtime_error("fromPixelData: WebP lossy encoding failed");
+throw std::runtime_error("fromCanvas: WebP lossy encoding failed");
 
 std::vector<uint8_t> buf(output, output + outputSize);
 WebPFree(output);
@@ -403,12 +473,17 @@ vec->insert(vec->end(), bytes, bytes + size);
 };
 int ret = stbi_write_png_to_func(writeFunc, &pngBuf, width, height, 4, rgba, width * 4);
 if (ret == 0)
-throw std::runtime_error("fromPixelData: PNG encoding failed");
+throw std::runtime_error("fromCanvas: PNG encoding failed");
 
 return BufferWrapper(std::move(pngBuf));
 }
 
-throw std::runtime_error("fromPixelData: unsupported mimeType '" + std::string(mimeType) + "'");
+throw std::runtime_error("fromCanvas: unsupported mimeType '" + std::string(mimeType) + "'");
+}
+
+BufferWrapper BufferWrapper::fromPixelData(const uint8_t* rgba, int width, int height,
+                                           std::string_view mimeType, int quality) {
+	return fromCanvas(rgba, width, height, mimeType, quality);
 }
 
 BufferWrapper BufferWrapper::readFile(const std::filesystem::path& file) {
@@ -772,6 +847,12 @@ buf = zlib_inflate(buf.data(), buf.size());
 return BufferWrapper(std::move(buf));
 }
 
+std::variant<BufferWrapper, std::vector<uint8_t>> BufferWrapper::readBuffer(size_t length, bool wrap, bool inflate) {
+	if (wrap)
+		return readBuffer(length, inflate);
+	return readBufferRaw(length, inflate);
+}
+
 std::vector<uint8_t> BufferWrapper::readBufferRaw(size_t length, bool doInflate) {
 _checkBounds(length);
 
@@ -788,17 +869,26 @@ std::string BufferWrapper::readString() {
 return readString(remainingBytes());
 }
 
-std::string BufferWrapper::readString(size_t length, [[maybe_unused]] std::string_view encoding) {
-// TODO 61: JS readString() accepts an encoding parameter (default 'utf8') that
-// is passed to Buffer.toString(encoding, ...). In practice, all callers in the
-// JS source use 'utf8' (the default). For utf8/ascii/latin1, the raw byte copy
-// produces identical results. The encoding parameter is accepted for API
-// compatibility but does not change behavior.
+std::string BufferWrapper::readString(size_t length, std::string_view encoding) {
 if (length == 0)
 return "";
 
 _checkBounds(length);
-std::string str(reinterpret_cast<const char*>(_buf.data() + _ofs), length);
+const uint8_t* ptr = _buf.data() + _ofs;
+std::string str;
+
+if (encoding == "utf8" || encoding == "utf-8" || encoding == "ascii" || encoding == "latin1" || encoding == "binary") {
+	str.assign(reinterpret_cast<const char*>(ptr), length);
+} else if (encoding == "base64") {
+	str = base64_encode(ptr, length);
+} else if (encoding == "hex") {
+	str = bytes_to_hex_string(ptr, length);
+} else if (encoding == "utf16le" || encoding == "utf-16le" || encoding == "ucs2" || encoding == "ucs-2") {
+	str = decode_utf16le_to_utf8(ptr, length);
+} else {
+	throw std::runtime_error(std::format("readString: unsupported encoding '{}'", encoding));
+}
+
 _ofs += length;
 return str;
 }
@@ -1006,25 +1096,16 @@ return -1;
 // Utility
 // =====================================================================
 
-// TODO 62: JS creates blob: URLs via URL.createObjectURL(new Blob([data])).
-// C++ has no Blob/URL API, so we produce data: URLs with inline base64 encoding
-// instead. This is a platform-specific deviation that is functionally equivalent
-// for the purpose of embedding buffer content in URLs. The format differs
-// (blob:... vs data:application/octet-stream;base64,...) but consumers in the
-// C++ port use this for texture/image data display which works with data: URLs.
 const std::string& BufferWrapper::getDataURL() {
 if (!dataURL)
-dataURL = "data:application/octet-stream;base64," + toBase64();
+dataURL = URLPolyfill::createObjectURL(_buf, "application/octet-stream");
 
 return *dataURL;
 }
 
-// TODO 63: JS calls URL.revokeObjectURL() to free blob URL resources.
-// Since C++ uses data: URLs (not blob: URLs), there is no external resource to
-// revoke. Resetting the optional string is the correct C++ equivalent — it frees
-// the memory used by the base64 string. This matches the JS lifecycle semantics
-// (after revokeDataURL, getDataURL will regenerate a new URL).
 void BufferWrapper::revokeDataURL() {
+	if (dataURL)
+		URLPolyfill::revokeObjectURL(*dataURL);
 dataURL.reset();
 }
 
@@ -1032,15 +1113,36 @@ std::string BufferWrapper::toBase64() const {
 return base64_encode(_buf.data(), _buf.size());
 }
 
+BufferWrapper::DecodedAudioData BufferWrapper::decodeAudio() const {
+	DecodedAudioData decoded;
+
+	ma_decoder decoder;
+	ma_decoder_config decoderConfig = ma_decoder_config_init(ma_format_f32, 0, 0);
+	if (ma_decoder_init_memory(_buf.data(), _buf.size(), &decoderConfig, &decoder) != MA_SUCCESS)
+		throw std::runtime_error("decodeAudio: failed to initialize decoder");
+
+	decoded.channels = decoder.outputChannels;
+	decoded.sampleRate = decoder.outputSampleRate;
+
+	ma_uint64 frameCount = 0;
+	ma_decoder_get_length_in_pcm_frames(&decoder, &frameCount);
+	if (frameCount > 0 && decoded.channels > 0) {
+		decoded.samples.resize(static_cast<size_t>(frameCount) * decoded.channels);
+		const ma_uint64 framesRead = ma_decoder_read_pcm_frames(&decoder, decoded.samples.data(), frameCount, nullptr);
+		decoded.samples.resize(static_cast<size_t>(framesRead) * decoded.channels);
+	}
+
+	ma_decoder_uninit(&decoder);
+	return decoded;
+}
+
 void BufferWrapper::setCapacity(size_t capacity, bool secure) {
 if (capacity == byteLength())
 return;
 
 std::vector<uint8_t> buf(capacity, 0);
-if (!secure) {
-// In JS, Buffer.allocUnsafe doesn't zero. std::vector always zeroes
-// with value initialization. This is a harmless difference.
-}
+if (!secure)
+	fill_unsafe_bytes(buf);
 
 size_t copyLen = std::min(capacity, byteLength());
 std::memcpy(buf.data(), _buf.data(), copyLen);

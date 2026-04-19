@@ -17,6 +17,7 @@
 #include <optional>
 
 class BlobPolyfill;
+class BlobReadableStream;
 
 /**
  * Represents a part of a Blob, enabling implicit construction
@@ -113,6 +114,7 @@ public:
 	 *
 	 * @param callback Called once per chunk with a span of the chunk data.
 	 */
+	BlobReadableStream stream() const;
 	void stream(std::function<void(std::span<const uint8_t>)> callback) const;
 
 	/**
@@ -139,6 +141,21 @@ private:
 };
 
 /**
+ * Lazy pull-based blob stream.
+ * JS equivalent: ReadableStream returned by BlobPolyfill.stream().
+ */
+class BlobReadableStream {
+public:
+	explicit BlobReadableStream(const BlobPolyfill* blob);
+	std::optional<std::vector<uint8_t>> pull();
+	bool closed() const;
+
+private:
+	const BlobPolyfill* _blob = nullptr;
+	std::size_t _position = 0;
+};
+
+/**
  * URLPolyfill class — creates/revokes data URLs from BlobPolyfill objects.
  *
  * In JS, this wraps native URL API with Blob polyfill support.
@@ -157,6 +174,8 @@ public:
 	 * @return Base64 data URL string.
 	 */
 	static std::string createObjectURL(const BlobPolyfill& blob);
+	static std::string createObjectURL(std::span<const uint8_t> bytes, std::string_view type = "application/octet-stream");
+	static std::optional<BlobPolyfill> resolveObjectURL(const std::string& url);
 
 	/**
 	 * Revoke a previously created URL.

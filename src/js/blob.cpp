@@ -10,6 +10,10 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <format>
+#include <mutex>
+#include <unordered_map>
+#include <atomic>
 
 // --- Internal helpers (JS module-private functions) ---
 
@@ -199,6 +203,15 @@ static std::string stringDecode(std::span<const uint8_t> buf) {
 static auto& textEncode = stringEncode;
 static auto& textDecode = stringDecode;
 
+struct ObjectUrlEntry {
+	std::vector<uint8_t> bytes;
+	std::string type;
+};
+
+std::mutex g_objectUrlMutex;
+std::unordered_map<std::string, ObjectUrlEntry> g_objectUrls;
+std::atomic<uint64_t> g_objectUrlCounter = 0;
+
 /**
  * Creates a byte-by-byte copy of a buffer.
  *
@@ -295,7 +308,8 @@ std::string BlobPolyfill::text() const {
 BlobPolyfill BlobPolyfill::slice(std::size_t start,
                                  std::optional<std::size_t> end,
                                  const std::string& type) const {
-	std::size_t actual_end = end.value_or(_buffer.size());
+	// JS uses `end || this._buffer.length` so end=0 falls back to full length.
+	std::size_t actual_end = (!end.has_value() || end.value() == 0) ? _buffer.size() : end.value();
 	if (actual_end > _buffer.size())
 		actual_end = _buffer.size();
 	if (start > actual_end)
@@ -328,15 +342,14 @@ std::string BlobPolyfill::toString() const {
  * The semantic difference (async/lazy vs sync/eager) does not affect functionality
  * because the blob data is already fully in memory in both implementations.
  */
-void BlobPolyfill::stream(std::function<void(std::span<const uint8_t>)> callback) const {
-	constexpr std::size_t CHUNK_SIZE = 524288; // 512KB, matching JS
-	std::size_t position = 0;
+BlobReadableStream BlobPolyfill::stream() const {
+	return BlobReadableStream(this);
+}
 
-	while (position < _buffer.size()) {
-		std::size_t chunk_end = std::min(position + CHUNK_SIZE, _buffer.size());
-		callback(std::span<const uint8_t>(_buffer.data() + position, chunk_end - position));
-		position = chunk_end;
-	}
+void BlobPolyfill::stream(std::function<void(std::span<const uint8_t>)> callback) const {
+	BlobReadableStream readable = stream();
+	while (auto chunk = readable.pull())
+		callback(std::span<const uint8_t>(chunk->data(), chunk->size()));
 }
 
 std::size_t BlobPolyfill::size() const {
@@ -345,6 +358,26 @@ std::size_t BlobPolyfill::size() const {
 
 const std::string& BlobPolyfill::type() const {
 	return _type;
+}
+
+BlobReadableStream::BlobReadableStream(const BlobPolyfill* blob)
+	: _blob(blob), _position(0) {}
+
+std::optional<std::vector<uint8_t>> BlobReadableStream::pull() {
+	constexpr std::size_t CHUNK_SIZE = 524288; // 512KB, matching JS
+	if (_blob == nullptr || _position >= _blob->size())
+		return std::nullopt;
+
+	const auto& source = _blob->arrayBuffer();
+	const std::size_t chunk_end = std::min(_position + CHUNK_SIZE, source.size());
+	std::vector<uint8_t> chunk(source.begin() + static_cast<std::ptrdiff_t>(_position),
+	                           source.begin() + static_cast<std::ptrdiff_t>(chunk_end));
+	_position = chunk_end;
+	return chunk;
+}
+
+bool BlobReadableStream::closed() const {
+	return _blob == nullptr || _position >= _blob->size();
 }
 
 // --- URLPolyfill ---
@@ -365,6 +398,25 @@ std::string URLPolyfill::createObjectURL(const BlobPolyfill& blob) {
 	return "data:" + blob.type() + ";base64," + array2base64(blob.arrayBuffer());
 }
 
+std::string URLPolyfill::createObjectURL(std::span<const uint8_t> bytes, std::string_view type) {
+	const std::string url = std::format("blob:wow.export.cpp/{}", g_objectUrlCounter.fetch_add(1, std::memory_order_relaxed));
+	ObjectUrlEntry entry;
+	entry.bytes.assign(bytes.begin(), bytes.end());
+	entry.type = std::string(type);
+
+	std::lock_guard<std::mutex> lock(g_objectUrlMutex);
+	g_objectUrls[url] = std::move(entry);
+	return url;
+}
+
+std::optional<BlobPolyfill> URLPolyfill::resolveObjectURL(const std::string& url) {
+	std::lock_guard<std::mutex> lock(g_objectUrlMutex);
+	const auto it = g_objectUrls.find(url);
+	if (it == g_objectUrls.end())
+		return std::nullopt;
+	return BlobPolyfill({BlobPart(it->second.bytes)}, BlobOptions{it->second.type});
+}
+
 /**
  * Revoke a previously created URL.
  *
@@ -382,8 +434,7 @@ std::string URLPolyfill::createObjectURL(const BlobPolyfill& blob) {
  */
 void URLPolyfill::revokeObjectURL(const std::string& url) {
 	if (!url.starts_with("data:")) {
-		// In JS: URL.revokeObjectURL(url);
-		// In C++: no native URL object store exists to revoke from.
+		std::lock_guard<std::mutex> lock(g_objectUrlMutex);
+		g_objectUrls.erase(url);
 	}
 }
-

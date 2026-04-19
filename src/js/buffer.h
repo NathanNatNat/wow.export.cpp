@@ -13,6 +13,7 @@
 #include <span>
 #include <optional>
 #include <filesystem>
+#include <variant>
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -25,6 +26,12 @@
  */
 class BufferWrapper {
 public:
+	struct DecodedAudioData {
+		std::vector<float> samples;
+		uint32_t channels = 0;
+		uint32_t sampleRate = 0;
+	};
+
 	// -----------------------------------------------------------------------
 	// Static factory methods
 	// -----------------------------------------------------------------------
@@ -65,6 +72,8 @@ public:
 	 */
 	static BufferWrapper fromPixelData(const uint8_t* rgba, int width, int height,
 	                                   std::string_view mimeType, int quality = 90);
+	static BufferWrapper fromCanvas(const uint8_t* rgba, int width, int height,
+	                                std::string_view mimeType, int quality = 90);
 
 	/**
 	 * Load a file from disk at the given path into a wrapped buffer.
@@ -294,18 +303,14 @@ public:
 	/** Read a portion of this buffer as a hex string. */
 	std::string readHexString(size_t length);
 
-	// TODO 68: JS readBuffer() has a `wrap` parameter: readBuffer(length, wrap=true, inflate=false).
-	// When wrap=false, it returns a raw Buffer; when wrap=true, it returns a BufferWrapper.
-	// C++ splits this into two methods: readBuffer() (returns BufferWrapper, equivalent to wrap=true)
-	// and readBufferRaw() (returns std::vector<uint8_t>, equivalent to wrap=false).
-	// JS callers using readBuffer(length, false) must use readBufferRaw(length) in C++.
-
 	/**
 	 * Read a buffer from this buffer (wrapped).
 	 * Reads remaining bytes when called with no arguments.
 	 */
 	BufferWrapper readBuffer();
 	BufferWrapper readBuffer(size_t length, bool inflate = false);
+	/** JS-parity overload: readBuffer(length, wrap, inflate). */
+	std::variant<BufferWrapper, std::vector<uint8_t>> readBuffer(size_t length, bool wrap, bool inflate);
 
 	/** Read a buffer from this buffer (raw, unwrapped). */
 	std::vector<uint8_t> readBufferRaw(size_t length, bool inflate = false);
@@ -436,23 +441,19 @@ public:
 	// -----------------------------------------------------------------------
 
 	/**
-	 * Assign a data URL for this buffer.
+	 * Assign an object URL for this buffer.
 	 * Creates one if it doesn't already exist.
 	 */
 	const std::string& getDataURL();
 
-	/** Revoke the data URL assigned to this buffer. */
+	/** Revoke the object URL assigned to this buffer. */
 	void revokeDataURL();
 
 	/** Returns the entire buffer encoded as base64. */
 	std::string toBase64() const;
 
-	// TODO 60: JS has decodeAudio(context) that decodes the buffer using Web Audio
-	// API's AudioContext.decodeAudioData(). In C++, audio decoding is handled by
-	// miniaudio with a fundamentally different paradigm — audio data is decoded
-	// through the miniaudio engine/decoder API rather than through BufferWrapper.
-	// This method is intentionally not ported; audio decoding in C++ is performed
-	// directly via miniaudio where needed (see audio-helper.cpp/tab_audio.cpp).
+	/** Decode audio data (miniaudio equivalent of JS decodeAudio(context)). */
+	DecodedAudioData decodeAudio() const;
 
 	/**
 	 * Replace the internal buffer with a different capacity.

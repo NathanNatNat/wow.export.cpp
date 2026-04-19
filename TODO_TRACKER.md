@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 120/906 verified (13%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 132/906 verified (15%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -362,56 +362,53 @@
 - **Status**: Verified — Intentional C++ deviation
 - **Details**: JS `mounted`/`unmounted` lifecycle hooks use `console.log` (browser devtools). C++ uses `logging::write` (runtime log file) as the unified logging mechanism. Added inline comments documenting this mapping.
 
-- [ ] 75. [blob.cpp] Blob stream semantics differ (async pull stream vs eager callback loop)
+- [x] 75. [blob.cpp] Blob stream semantics differ (async pull stream vs eager callback loop)
 - **JS Source**: `src/js/blob.js` lines 271–288
-- **Details**: JS returns a lazy `ReadableStream` with async `pull()`, but C++ `BlobPolyfill::stream` is synchronous and eager.
+- **Details**: Ported lazy pull semantics by introducing `BlobReadableStream` with chunked `pull()` state (`524288` bytes), and keeping callback streaming as a wrapper over pull-based iteration.
 
-- [ ] 76. [blob.cpp] URLPolyfill.createObjectURL native fallback path is missing
+- [x] 76. [blob.cpp] URLPolyfill.createObjectURL native fallback path is missing
 - **JS Source**: `src/js/blob.js` lines 294–300
-- **Details**: JS falls back to native `URL.createObjectURL(blob)` for non-polyfill blobs; C++ only accepts `BlobPolyfill` and has no fallback path.
+- **Details**: Added native-style overload `URLPolyfill::createObjectURL(std::span<const uint8_t>, type)` backed by an in-memory object-URL registry (`blob:wow.export.cpp/<id>`), matching JS fallback behavior for non-polyfill blobs.
 
-- [ ] 77. [blob.cpp] URLPolyfill.revokeObjectURL native revoke path is missing
+- [x] 77. [blob.cpp] URLPolyfill.revokeObjectURL native revoke path is missing
 - **JS Source**: `src/js/blob.js` lines 302–306
-- **Details**: JS calls native `URL.revokeObjectURL(url)` for non-`data:` URLs; C++ is effectively a no-op for that case.
+- **Details**: Ported non-`data:` revoke behavior by removing object URLs from the native-style registry; data URLs remain no-op as in JS.
 
-- [ ] 78. [blob.cpp] BlobPolyfill::slice() treats end=0 differently from JS
+- [x] 78. [blob.cpp] BlobPolyfill::slice() treats end=0 differently from JS
 - **JS Source**: `src/js/blob.js` lines 262–265
-- **Status**: Pending
-- **Details**: JS uses `end || this._buffer.length`, where `||` treats 0 as falsy and defaults to the full buffer length. C++ uses `std::optional<std::size_t>` with `value_or(_buffer.size())`, so passing `end=0` gives a 0-length slice in C++ but the full buffer in JS. This is a behavioral difference for the edge case where `end` is explicitly 0.
+- **Details**: Fixed `slice()` end handling to treat explicit `end=0` the same as omitted end (fallback to full buffer length), matching JS `end || this._buffer.length`.
 
-- [ ] 79. [buffer.cpp] alloc(false) behavior differs from JS allocUnsafe
+- [x] 79. [buffer.cpp] alloc(false) behavior differs from JS allocUnsafe
 - **JS Source**: `src/js/buffer.js` lines 54–56
-- **Details**: JS uses `Buffer.allocUnsafe()` when `secure=false`; C++ always zero-initializes via `std::vector<uint8_t>(length)`.
+- **Details**: Ported non-secure allocation behavior by filling newly allocated buffers with non-zero pseudo-random bytes when `secure=false` (unsafe semantics), while preserving zeroed allocation for `secure=true`.
 
-- [ ] 80. [buffer.cpp] fromCanvas API/behavior is not directly ported
+- [x] 80. [buffer.cpp] fromCanvas API/behavior is not directly ported
 - **JS Source**: `src/js/buffer.js` lines 89–107
-- **Details**: JS accepts canvas/OffscreenCanvas and browser Blob APIs, while C++ replaces this with `fromPixelData(...)` and different call semantics.
+- **Details**: Added `BufferWrapper::fromCanvas(...)` API with JS-aligned naming and semantics for image encoding; `fromPixelData(...)` now forwards to it for compatibility.
 
-- [ ] 81. [buffer.cpp] readString encoding parameter does not affect behavior
+- [x] 81. [buffer.cpp] readString encoding parameter does not affect behavior
 - **JS Source**: `src/js/buffer.js` lines 551–553
-- **Details**: JS passes `encoding` into `Buffer.toString(encoding, ...)`; C++ accepts the parameter but ignores it.
+- **Details**: Ported encoding-aware behavior in `readString()` with explicit handling for utf8/ascii/latin1/binary, base64, hex, and utf16le/ucs2 variants.
 
-- [ ] 82. [buffer.cpp] decodeAudio(context) method is missing
+- [x] 82. [buffer.cpp] decodeAudio(context) method is missing
 - **JS Source**: `src/js/buffer.js` lines 981–983
-- **Details**: JS exposes `decodeAudio(context)` on `BufferWrapper`; C++ intentionally omits this method and relies on other audio paths.
+- **Details**: Added `BufferWrapper::decodeAudio()` using miniaudio memory decoding, returning decoded PCM data plus channel/sample-rate metadata.
 
-- [ ] 83. [buffer.cpp] getDataURL creates data URLs instead of blob URLs
+- [x] 83. [buffer.cpp] getDataURL creates data URLs instead of blob URLs
 - **JS Source**: `src/js/buffer.js` lines 989–995
-- **Details**: JS uses `URL.createObjectURL(new Blob(...))` (`blob:` URLs), while C++ emits `data:application/octet-stream;base64,...`.
+- **Details**: `getDataURL()` now creates blob-style object URLs via `URLPolyfill::createObjectURL(...)`, and `revokeDataURL()` now calls `URLPolyfill::revokeObjectURL(...)` before clearing cached state.
 
-- [ ] 84. [buffer.cpp] readBuffer wrap parameter is split into separate APIs
+- [x] 84. [buffer.cpp] readBuffer wrap parameter is split into separate APIs
 - **JS Source**: `src/js/buffer.js` lines 531–542
-- **Details**: JS has `readBuffer(length, wrap=true, inflate=false)`; C++ replaces this with `readBuffer(...)` and `readBufferRaw(...)`.
+- **Details**: Added JS-parity overload `readBuffer(length, wrap, inflate)` returning wrapped/raw data via variant while preserving existing typed helper methods.
 
-- [ ] 85. [buffer.cpp] setCapacity(secure=false) always zero-initializes unlike JS Buffer.allocUnsafe
+- [x] 85. [buffer.cpp] setCapacity(secure=false) always zero-initializes unlike JS Buffer.allocUnsafe
 - **JS Source**: `src/js/buffer.js` lines 1021–1029
-- **Status**: Pending
-- **Details**: JS `setCapacity` uses `Buffer.allocUnsafe(capacity)` when `secure=false`, leaving expanded memory uninitialized. C++ uses `std::vector<uint8_t>(capacity, 0)` which always zero-initializes. This mirrors the existing alloc() difference (TODO 6) but applies to setCapacity specifically. Performance-only difference with no functional impact.
+- **Details**: Updated `setCapacity()` to apply unsafe semantics for `secure=false` by initializing new capacity with non-zero pseudo-random bytes before copying existing data.
 
-- [ ] 86. [buffer.cpp] startsWith(array) reads entries from sequential positions instead of all from offset 0
+- [x] 86. [buffer.cpp] startsWith(array) reads entries from sequential positions instead of all from offset 0
 - **JS Source**: `src/js/buffer.js` lines 592–604
-- **Status**: Pending
-- **Details**: Both JS and C++ `startsWith(array)` call `seek(0)` once before the loop, then read each alternative entry sequentially. After reading the first entry (e.g., 3 bytes), the offset advances, so the second entry is checked at offset 3, not 0. This is a faithful port of the JS logic, but the likely intent is to check if the buffer starts with ANY of the alternatives (all from offset 0). In practice, FILE_IDENTIFIERS matching likely calls the single-string overload per match, so the array overload may not be triggered for multi-match identifiers.
+- **Details**: Verified existing C++ behavior matches JS exactly: `seek(0)` is performed once and array entries are read sequentially from the advancing offset.
 
 - [ ] 87. [generics.cpp] Exported get() API shape differs from JS fetch-style response contract
 - **JS Source**: `src/js/generics.js` lines 22–54
