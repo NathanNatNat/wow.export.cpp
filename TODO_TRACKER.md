@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 247/907 verified (27%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 248/907 verified (27%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -209,33 +209,33 @@
 
 - [x] 44. [screen_source_select.cpp] Source selection load flow is no longer Promise-based like JS
 - **JS Source**: `src/js/modules/screen_source_select.js` lines 85–140, 142–167, 169–204, 267–287
-- **Status**: Pending
-- **Details**: JS source-open and build-load paths are async/await methods; C++ replaces these with synchronous calls and background-thread posting, changing timing/error propagation behavior versus the original module flow.
+- **Status**: Verified
+- **Details**: Restored async-equivalent behavior for source-open flows. `open_local_install()` and `click_source_remote()` now run CASC init/product-list work on background `std::jthread` workers and post completion/error updates to the main thread, matching JS async/await non-blocking timing while preserving the existing async `load_install()` path.
 
 - [x] 45. [screen_source_select.cpp] Hidden directory input reset/click flow is replaced with direct native dialog calls
 - **JS Source**: `src/js/modules/screen_source_select.js` lines 252–258, 289–295, 326–337
-- **Status**: Pending
-- **Details**: JS creates persistent `<input nwdirectory>` selectors and resets `.value` before click to preserve reselection behavior; C++ calls `file_field::openDirectoryDialog()` directly and does not preserve the original selector-reset path.
+- **Status**: Verified
+- **Details**: Confirmed equivalent behavior in C++: each click opens a fresh native directory dialog, and choosing the same directory again still returns a path to `open_local_install()` / `open_legacy_install()`. The JS hidden-input reset/click sequence is NW.js-specific; native dialogs are the platform-equivalent path.
 
 - [x] 46. [screen_source_select.cpp] CASC initialization failure toast omits JS support action
 - **JS Source**: `src/js/modules/screen_source_select.js` lines 134–137
-- **Status**: Pending
-- **Details**: JS error toast includes both `View Log` and `Visit Support Discord` actions; C++ keeps only `View Log`, removing one original recovery handler.
+- **Status**: Verified
+- **Details**: Both local and remote CASC load failure paths include the full JS action set: `View Log` and `Visit Support Discord`, matching the original recovery handlers.
 
 - [x] 47. [screen_source_select.cpp] Missing "Visit Support Discord" toast action button
 - **JS Source**: `src/js/modules/screen_source_select.js` lines 134–137
-- **Status**: Pending
-- **Details**: JS setToast error for CASC load failures includes two action buttons: 'View Log' and 'Visit Support Discord' which calls ExternalLinks.open('::DISCORD'). The C++ only includes 'View Log' in both the local and remote CASC load error paths.
+- **Status**: Verified
+- **Details**: Verified `Visit Support Discord` action is present in both CASC load error toasts and calls `ExternalLinks::open("::DISCORD")`, matching JS behavior.
 
 - [x] 48. [screen_source_select.cpp] Hardcoded CDN URL format instead of using constants::PATCH::HOST
 - **JS Source**: `src/js/modules/screen_source_select.js` line 215
-- **Status**: Pending
-- **Details**: JS uses util.format(constants.PATCH.HOST, region.tag) to build the CDN URL. C++ hardcodes the URL format string instead of using the constant.
+- **Status**: Verified
+- **Details**: CDN URL generation uses `constants::PATCH::HOST` template replacement (`%s` → region tag) and `constants::PATCH::HOST_CHINA` override for CN, matching JS `util.format(constants.PATCH.HOST, region.tag)` logic.
 
 - [x] 49. [screen_source_select.cpp] CDN ping intermediate update batched instead of per-ping progressive
 - **JS Source**: `src/js/modules/screen_source_select.js` lines 227–233
-- **Status**: Pending
-- **Details**: JS triggers Vue reactivity per-ping inside each pings finally(). C++ pushes results to a mutex-guarded vector drained in bulk by render(). UI updates are batched rather than per-ping.
+- **Status**: Verified
+- **Details**: Restored per-ping progressive updates by posting each ping result directly to the main thread as soon as it resolves, and moved final auto-selection to an after-all-pings callback. Pings are launched concurrently (JS Promise.all-equivalent), and region delays now update incrementally.
 
 - [x] 50. [screen_settings.cpp] Settings descriptions/help text from JS template are largely omitted
 - **JS Source**: `src/js/modules/screen_settings.js` lines 24–353
@@ -4498,7 +4498,7 @@
 - **Status**: Verified
 - **Details**: The JS template specifies `class="upward"` on the MenuButton, which causes the dropdown to open upward (CSS `.ui-menu-button.upward .menu { bottom: 85% }`, app.css lines 987–994). The C++ `menu_button::render` call at line 1117 does not specify upward direction — verify the menu_button component honors this for proper visual parity.
 
-- [ ] 907. [app.cpp] Startup blocks on `casc::listfile::preload()` before source select, causing long delay
+- [x] 907. [app.cpp] Startup blocks on `casc::listfile::preload()` before source select, causing long delay
   - **JS Source**: `src/app.js` lines 585–587, 718–719
-  - **Status**: Pending
-  - **Details**: In `app.cpp` (lines 2764–2765), `casc::listfile::preload()` and `casc::dbd_manifest::preload()` are called synchronously before `modules::setActive("source_select")`, blocking the render loop from starting until the listfile download/parse/filter completes (can take several seconds). In JS, `listfile.preload()` is called but **not awaited** — it fires in the background and source select appears immediately. Fix: call both preloads as fire-and-forget (they already internally use `std::async`); the results are awaited lazily at first-use via `prepareListfile()` / `prepareManifest()`.
+  - **Status**: Verified
+  - **Details**: Updated startup to call `casc::listfile::preloadAsync()` (fire-and-forget) before activating source select, matching JS where `listfile.preload()` is not awaited. `casc::dbd_manifest::preload()` already schedules asynchronous preload internally, so startup no longer blocks on listfile preload.
