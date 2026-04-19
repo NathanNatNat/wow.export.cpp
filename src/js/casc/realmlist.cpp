@@ -18,6 +18,7 @@
 #include <format>
 #include <string>
 #include <stdexcept>
+#include <future>
 
 namespace {
 
@@ -50,6 +51,37 @@ void parseRealmList(const nlohmann::json& data) {
 	core::view->realmList = std::move(realms);
 }
 
+std::string jsStringCoerce(const nlohmann::json* value) {
+	if (value == nullptr)
+		return "undefined";
+
+	if (value->is_null())
+		return "null";
+	if (value->is_string())
+		return value->get<std::string>();
+	if (value->is_boolean())
+		return value->get<bool>() ? "true" : "false";
+	if (value->is_number_integer())
+		return std::to_string(value->get<long long>());
+	if (value->is_number_unsigned())
+		return std::to_string(value->get<unsigned long long>());
+	if (value->is_number_float())
+		return std::to_string(value->get<double>());
+	if (value->is_array()) {
+		std::string out;
+		bool first = true;
+		for (const auto& elem : *value) {
+			if (!first)
+				out += ",";
+			first = false;
+			out += jsStringCoerce(&elem);
+		}
+		return out;
+	}
+
+	return "[object Object]";
+}
+
 } // anonymous namespace
 
 namespace casc {
@@ -58,20 +90,10 @@ namespace realmlist {
 void load() {
 	logging::write("Loading realmlist...");
 
-	// TODO 194: Match JS behavior — JS does `String(core.view.config.realmListURL)`
-	// which converts any value (including undefined) to a string. We match by
-	// accepting any JSON type and converting to string.
-	std::string url;
-	if (core::view->config.contains("realmListURL")) {
-		const auto& val = core::view->config["realmListURL"];
-		if (val.is_string())
-			url = val.get<std::string>();
-		else if (!val.is_null())
-			url = val.dump(); // converts number/bool/etc. to string like JS String()
-	}
-
-	if (url.empty())
-		throw std::runtime_error("Missing/malformed realmListURL in configuration!");
+	const nlohmann::json* realmListURL = nullptr;
+	if (core::view->config.contains("realmListURL"))
+		realmListURL = &core::view->config["realmListURL"];
+	const std::string url = jsStringCoerce(realmListURL);
 
 	// Try loading cached realmlist from disk.
 	try {
@@ -105,6 +127,12 @@ void load() {
 	} catch (const std::exception& e) {
 		logging::write(std::format("Failed to retrieve realmlist from {}: {}", url, e.what()));
 	}
+}
+
+std::future<void> loadAsync() {
+	return std::async(std::launch::async, []() {
+		load();
+	});
 }
 
 } // namespace realmlist

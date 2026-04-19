@@ -12,6 +12,7 @@
 #include <optional>
 #include <memory>
 #include <mutex>
+#include <future>
 
 #include "casc-source.h"
 #include "build-cache.h"
@@ -84,7 +85,7 @@ public:
 	// TODO: This could do with being an interface.
 	BLTEReader getFileAsBLTE(uint32_t fileDataID, bool partialDecrypt = false,
 		bool suppressLog = false, bool supportFallback = true,
-		bool forceFallback = false, const std::string& contentKey = "");
+		bool forceFallback = false, const std::string& contentKey = "") override;
 
 	/**
 	 * Get a streaming reader for a file by its fileDataID.
@@ -205,6 +206,31 @@ public:
 	 * @returns build key string
 	 */
 	std::string getBuildKey() override;
+
+	// Async-equivalent API surface mirroring JS Promise methods.
+	std::future<void> initAsync();
+	std::future<std::vector<std::unordered_map<std::string, std::string>>> getVersionConfigAsync(const std::string& product);
+	std::future<std::vector<std::unordered_map<std::string, std::string>>> getConfigAsync(const std::string& product, const std::string& file);
+	std::future<std::unordered_map<std::string, std::string>> getCDNConfigAsync(const std::string& key,
+		const std::vector<std::string>& cdnHosts = {});
+	std::future<BLTEReader> getFileAsBLTEAsync(uint32_t fileDataID, bool partialDecrypt = false,
+		bool suppressLog = false, bool supportFallback = true,
+		bool forceFallback = false, const std::string& contentKey = "");
+	std::future<BLTEStreamReader> getFileStreamAsync(uint32_t fileDataID, bool partialDecrypt = false,
+		bool suppressLog = false, const std::string& contentKey = "");
+	std::future<void> preloadAsync(int buildIndex, BuildCache* cache = nullptr);
+	std::future<void> loadAsync(int buildIndex);
+	std::future<void> loadEncodingAsync();
+	std::future<void> loadRootAsync();
+	std::future<void> loadArchivesAsync();
+	std::future<void> loadServerConfigAsync();
+	std::future<void> parseArchiveIndexAsync(const std::string& key);
+	std::future<BufferWrapper> getDataFileAsync(const std::string& file);
+	std::future<BufferWrapper> getDataFilePartialAsync(const std::string& file, int64_t ofs, int64_t len);
+	std::future<void> loadConfigsAsync();
+	std::future<void> resolveCDNHostAsync();
+	std::future<std::string> ensureFileInCacheAsync(const std::string& encodingKey, uint32_t fileDataID, bool suppressLog);
+	std::future<std::optional<FileEncodingInfo>> getFileEncodingInfoAsync(uint32_t fileDataID);
 
 	// Data members
 	struct ArchiveEntry {

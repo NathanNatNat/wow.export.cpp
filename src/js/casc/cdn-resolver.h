@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <future>
 
 namespace casc {
 namespace cdn_resolver {
@@ -40,6 +41,12 @@ namespace cdn_resolver {
 	 * @return Array of host URL strings ranked by speed
 	 */
 	std::vector<std::string> getRankedHosts(const std::string& region, const std::unordered_map<std::string, std::string>& serverConfig);
+
+	/**
+	 * Async-equivalent wrappers mirroring JS Promise-returning API.
+	 */
+	std::future<std::string> getBestHostAsync(const std::string& region, const std::unordered_map<std::string, std::string>& serverConfig);
+	std::future<std::vector<std::string>> getRankedHostsAsync(const std::string& region, const std::unordered_map<std::string, std::string>& serverConfig);
 
 	/**
 	 * Mark a host as failed (e.g., due to censorship or invalid responses).

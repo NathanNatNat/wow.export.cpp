@@ -311,6 +311,18 @@ std::vector<std::string> getRankedHosts(const std::string& region, const std::un
 	return result;
 }
 
+std::future<std::string> getBestHostAsync(const std::string& region, const std::unordered_map<std::string, std::string>& serverConfig) {
+	return std::async(std::launch::async, [region, serverConfig]() {
+		return getBestHost(region, serverConfig);
+	});
+}
+
+std::future<std::vector<std::string>> getRankedHostsAsync(const std::string& region, const std::unordered_map<std::string, std::string>& serverConfig) {
+	return std::async(std::launch::async, [region, serverConfig]() {
+		return getRankedHosts(region, serverConfig);
+	});
+}
+
 void markHostFailed(const std::string& host) {
 	logging::write(std::format("Marking CDN host as failed: {}", host));
 	std::lock_guard lock(cacheMutex);

@@ -11,6 +11,7 @@
 #include <optional>
 #include <memory>
 #include <filesystem>
+#include <future>
 
 #include "casc-source.h"
 #include "casc-source-remote.h"
@@ -65,7 +66,7 @@ public:
 	 */
 	BLTEReader getFileAsBLTE(uint32_t fileDataID, bool partialDecryption = false,
 		bool suppressLog = false, bool supportFallback = true,
-		bool forceFallback = false, const std::string& contentKey = "");
+		bool forceFallback = false, const std::string& contentKey = "") override;
 
 	/**
 	 * Get a streaming reader for a file by its fileDataID.
@@ -198,6 +199,27 @@ public:
 	 * @returns build key string
 	 */
 	std::string getBuildKey() override;
+
+	// Async-equivalent API surface mirroring JS Promise methods.
+	std::future<void> initAsync();
+	std::future<BLTEReader> getFileAsBLTEAsync(uint32_t fileDataID, bool partialDecryption = false,
+		bool suppressLog = false, bool supportFallback = true,
+		bool forceFallback = false, const std::string& contentKey = "");
+	std::future<BLTEStreamReader> getFileStreamAsync(uint32_t fileDataID, bool partialDecrypt = false,
+		bool suppressLog = false, bool supportFallback = true,
+		bool forceFallback = false, const std::string& contentKey = "");
+	std::future<void> loadAsync(int buildIndex);
+	std::future<void> loadConfigsAsync();
+	std::future<std::unordered_map<std::string, std::string>> getConfigFileWithRemoteFallbackAsync(const std::string& key);
+	std::future<void> loadIndexesAsync();
+	std::future<void> parseIndexAsync(const std::filesystem::path& file);
+	std::future<void> loadEncodingAsync();
+	std::future<void> loadRootAsync();
+	std::future<void> initializeRemoteCASCAsync();
+	std::future<BufferWrapper> getDataFileWithRemoteFallbackAsync(const std::string& key, bool forceFallback = false);
+	std::future<BufferWrapper> getDataFileAsync(const std::string& key);
+	std::future<std::string> ensureFileInCacheAsync(const std::string& encodingKey, uint32_t fileDataID, bool suppressLog);
+	std::future<std::optional<FileEncodingInfo>> getFileEncodingInfoAsync(uint32_t fileDataID);
 
 	// Data members
 	std::string dir;

@@ -4,6 +4,7 @@
 	License: MIT
  */
 #pragma once
+#include <future>
 
 namespace casc {
 namespace realmlist {
@@ -16,6 +17,7 @@ namespace realmlist {
  * and populates core::view->realmList.
  */
 void load();
+std::future<void> loadAsync();
 
 } // namespace realmlist
 } // namespace casc

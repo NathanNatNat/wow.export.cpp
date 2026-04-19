@@ -694,4 +694,124 @@ std::string CASCRemote::getBuildKey() {
 	return (it != build.end()) ? it->second : "";
 }
 
+std::future<void> CASCRemote::initAsync() {
+	return std::async(std::launch::async, [this]() {
+		init();
+	});
+}
+
+std::future<std::vector<std::unordered_map<std::string, std::string>>> CASCRemote::getVersionConfigAsync(const std::string& product) {
+	return std::async(std::launch::async, [this, product]() {
+		return getVersionConfig(product);
+	});
+}
+
+std::future<std::vector<std::unordered_map<std::string, std::string>>> CASCRemote::getConfigAsync(const std::string& product, const std::string& file) {
+	return std::async(std::launch::async, [this, product, file]() {
+		return getConfig(product, file);
+	});
+}
+
+std::future<std::unordered_map<std::string, std::string>> CASCRemote::getCDNConfigAsync(const std::string& key,
+	const std::vector<std::string>& cdnHosts)
+{
+	return std::async(std::launch::async, [this, key, cdnHosts]() {
+		return getCDNConfig(key, cdnHosts);
+	});
+}
+
+std::future<BLTEReader> CASCRemote::getFileAsBLTEAsync(uint32_t fileDataID, bool partialDecrypt,
+	bool suppressLog, bool supportFallback, bool forceFallback, const std::string& contentKey)
+{
+	return std::async(std::launch::async, [this, fileDataID, partialDecrypt, suppressLog, supportFallback, forceFallback, contentKey]() {
+		return getFileAsBLTE(fileDataID, partialDecrypt, suppressLog, supportFallback, forceFallback, contentKey);
+	});
+}
+
+std::future<BLTEStreamReader> CASCRemote::getFileStreamAsync(uint32_t fileDataID, bool partialDecrypt,
+	bool suppressLog, const std::string& contentKey)
+{
+	return std::async(std::launch::async, [this, fileDataID, partialDecrypt, suppressLog, contentKey]() {
+		return getFileStream(fileDataID, partialDecrypt, suppressLog, contentKey);
+	});
+}
+
+std::future<void> CASCRemote::preloadAsync(int buildIndex, BuildCache* sharedCache) {
+	return std::async(std::launch::async, [this, buildIndex, sharedCache]() {
+		preload(buildIndex, sharedCache);
+	});
+}
+
+std::future<void> CASCRemote::loadAsync(int buildIndex) {
+	return std::async(std::launch::async, [this, buildIndex]() {
+		load(buildIndex);
+	});
+}
+
+std::future<void> CASCRemote::loadEncodingAsync() {
+	return std::async(std::launch::async, [this]() {
+		loadEncoding();
+	});
+}
+
+std::future<void> CASCRemote::loadRootAsync() {
+	return std::async(std::launch::async, [this]() {
+		loadRoot();
+	});
+}
+
+std::future<void> CASCRemote::loadArchivesAsync() {
+	return std::async(std::launch::async, [this]() {
+		loadArchives();
+	});
+}
+
+std::future<void> CASCRemote::loadServerConfigAsync() {
+	return std::async(std::launch::async, [this]() {
+		loadServerConfig();
+	});
+}
+
+std::future<void> CASCRemote::parseArchiveIndexAsync(const std::string& key) {
+	return std::async(std::launch::async, [this, key]() {
+		parseArchiveIndex(key);
+	});
+}
+
+std::future<BufferWrapper> CASCRemote::getDataFileAsync(const std::string& file) {
+	return std::async(std::launch::async, [this, file]() {
+		return getDataFile(file);
+	});
+}
+
+std::future<BufferWrapper> CASCRemote::getDataFilePartialAsync(const std::string& file, int64_t ofs, int64_t len) {
+	return std::async(std::launch::async, [this, file, ofs, len]() {
+		return getDataFilePartial(file, ofs, len);
+	});
+}
+
+std::future<void> CASCRemote::loadConfigsAsync() {
+	return std::async(std::launch::async, [this]() {
+		loadConfigs();
+	});
+}
+
+std::future<void> CASCRemote::resolveCDNHostAsync() {
+	return std::async(std::launch::async, [this]() {
+		resolveCDNHost();
+	});
+}
+
+std::future<std::string> CASCRemote::ensureFileInCacheAsync(const std::string& encodingKey, uint32_t fileDataID, bool suppressLog) {
+	return std::async(std::launch::async, [this, encodingKey, fileDataID, suppressLog]() {
+		return _ensureFileInCache(encodingKey, fileDataID, suppressLog);
+	});
+}
+
+std::future<std::optional<FileEncodingInfo>> CASCRemote::getFileEncodingInfoAsync(uint32_t fileDataID) {
+	return std::async(std::launch::async, [this, fileDataID]() {
+		return getFileEncodingInfo(fileDataID);
+	});
+}
+
 } // namespace casc
