@@ -1465,45 +1465,56 @@ void render() {
 			// CSS: .sidebar label span { font-size: 16px; }
 			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5.0f, 4.0f));
 			ImGui::Indent(15.0f);
+			auto show_checkbox_tooltip = [](const char* tooltip) {
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("%s", tooltip);
+			};
 
 			//         <input type="checkbox" v-model="config.modelsAutoPreview"/> <span>Auto Preview</span>
 			{
 				bool auto_preview = view.config.value("modelsAutoPreview", false);
 				if (ImGui::Checkbox("Auto Preview", &auto_preview))
 					view.config["modelsAutoPreview"] = auto_preview;
+				show_checkbox_tooltip("Automatically preview a model when selecting it");
 			}
 
 			//         <input type="checkbox" v-model="modelViewerAutoAdjust"/> <span>Auto Camera</span>
 			ImGui::Checkbox("Auto Camera", &view.modelViewerAutoAdjust);
+			show_checkbox_tooltip("Automatically adjust camera when selecting a new model");
 
 			{
 				bool show_grid = view.config.value("modelViewerShowGrid", true);
 				if (ImGui::Checkbox("Show Grid", &show_grid))
 					view.config["modelViewerShowGrid"] = show_grid;
+				show_checkbox_tooltip("Show a grid in the 3D viewport");
 			}
 
 			{
 				bool wireframe = view.config.value("modelViewerWireframe", false);
 				if (ImGui::Checkbox("Show Wireframe", &wireframe))
 					view.config["modelViewerWireframe"] = wireframe;
+				show_checkbox_tooltip("Render the preview model as a wireframe");
 			}
 
 			{
 				bool show_bones = view.config.value("modelViewerShowBones", false);
 				if (ImGui::Checkbox("Show Bones", &show_bones))
 					view.config["modelViewerShowBones"] = show_bones;
+				show_checkbox_tooltip("Show the model's bone structure");
 			}
 
 			{
 				bool show_textures = view.config.value("modelViewerShowTextures", true);
 				if (ImGui::Checkbox("Show Textures", &show_textures))
 					view.config["modelViewerShowTextures"] = show_textures;
+				show_checkbox_tooltip("Show model textures in the preview pane");
 			}
 
 			{
 				bool show_bg = view.config.value("modelViewerShowBackground", false);
 				if (ImGui::Checkbox("Show Background", &show_bg))
 					view.config["modelViewerShowBackground"] = show_bg;
+				show_checkbox_tooltip("Show a background color in the 3D viewport");
 			}
 
 			ImGui::Unindent(15.0f);
@@ -1519,12 +1530,14 @@ void render() {
 				bool export_tex = view.config.value("modelsExportTextures", true);
 				if (ImGui::Checkbox("Textures", &export_tex))
 					view.config["modelsExportTextures"] = export_tex;
+				show_checkbox_tooltip("Include textures when exporting models");
 			}
 
 			if (view.config.value("modelsExportTextures", true)) {
 				bool export_alpha = view.config.value("modelsExportAlpha", true);
 				if (ImGui::Checkbox("Texture Alpha", &export_alpha))
 					view.config["modelsExportAlpha"] = export_alpha;
+				show_checkbox_tooltip("Include alpha channel in exported model textures");
 			}
 
 			//         <input type="checkbox" v-model="config.modelsExportAnimations"/> <span>Export animations</span>
@@ -1533,6 +1546,7 @@ void render() {
 				bool export_anims = view.config.value("modelsExportAnimations", false);
 				if (ImGui::Checkbox("Export animations", &export_anims))
 					view.config["modelsExportAnimations"] = export_anims;
+				show_checkbox_tooltip("Include animations in export");
 			}
 
 			if (export_format == "RAW") {
@@ -1540,26 +1554,31 @@ void render() {
 					bool v = view.config.value("modelsExportSkin", false);
 					if (ImGui::Checkbox("M2 .skin Files", &v))
 						view.config["modelsExportSkin"] = v;
+					show_checkbox_tooltip("Export raw .skin files with M2 exports");
 				}
 				{
 					bool v = view.config.value("modelsExportSkel", false);
 					if (ImGui::Checkbox("M2 .skel Files", &v))
 						view.config["modelsExportSkel"] = v;
+					show_checkbox_tooltip("Export raw .skel files with M2 exports");
 				}
 				{
 					bool v = view.config.value("modelsExportBone", false);
 					if (ImGui::Checkbox("M2 .bone Files", &v))
 						view.config["modelsExportBone"] = v;
+					show_checkbox_tooltip("Export raw .bone files with M2 exports");
 				}
 				{
 					bool v = view.config.value("modelsExportAnim", false);
 					if (ImGui::Checkbox("M2 .anim files", &v))
 						view.config["modelsExportAnim"] = v;
+					show_checkbox_tooltip("Export raw .anim files with M2 exports");
 				}
 				{
 					bool v = view.config.value("modelsExportWMOGroups", false);
 					if (ImGui::Checkbox("WMO Groups##export", &v))
 						view.config["modelsExportWMOGroups"] = v;
+					show_checkbox_tooltip("Export WMO group files");
 				}
 			}
 
@@ -1567,6 +1586,7 @@ void render() {
 				bool v = view.config.value("modelsExportSplitWMOGroups", false);
 				if (ImGui::Checkbox("Split WMO Groups", &v))
 					view.config["modelsExportSplitWMOGroups"] = v;
+				show_checkbox_tooltip("Export each WMO group as a separate OBJ file");
 			}
 
 			ImGui::Unindent(15.0f);
