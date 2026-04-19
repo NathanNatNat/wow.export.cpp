@@ -676,10 +676,7 @@ std::shared_future<bool> preloadAsync() {
 		return makeReadySharedFuture(true);
 
 	preload_future = std::async(std::launch::async, []() {
-		const bool result = listfile_preload_impl();
-		std::lock_guard<std::mutex> lock(preload_mutex);
-		preload_future.reset();
-		return result;
+		return listfile_preload_impl();
 	}).share();
 
 	return *preload_future;

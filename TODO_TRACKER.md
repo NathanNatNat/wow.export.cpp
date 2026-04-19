@@ -781,77 +781,77 @@
 - [x] 163. [build-cache.cpp] Cache cleanup size subtraction behavior differs from JS
 - **JS Source**: `src/js/casc/build-cache.js` lines 247–254
 - **Status**: Verified
-- **Details**: JS always performs `deleteSize -= manifestSize` (can go negative with Number); C++ adds an unsigned underflow guard before subtraction, changing edge-case cache-size accounting semantics.
+- **Details**: Fixed. C++ now mirrors JS cache cleanup math exactly with signed arithmetic (`deleteSize -= manifestSize`) and no unsigned underflow guard, preserving JS edge-case accounting behavior.
 
 - [x] 164. [build-cache.cpp] `saveCacheIntegrity()` silently ignores file write failures
 - **JS Source**: `src/js/casc/build-cache.js` line 144
 - **Status**: Verified
-- **Details**: JS `await fsp.writeFile(constants.CACHE.INTEGRITY_FILE, JSON.stringify(cacheIntegrity), 'utf8')` throws if the file cannot be written (e.g., disk full, permission denied). C++ `saveCacheIntegrity()` (line 149–153) checks `ofs.is_open()` and silently does nothing if the file cannot be opened. This means integrity data could be lost without any error or log message in C++, whereas JS would propagate the error to the caller.
+- **Details**: Fixed. `saveCacheIntegrity()` now throws on open/write failure, matching JS `fsp.writeFile(...)` rejection behavior instead of silently ignoring errors.
 
 - [x] 165. [cache-collector.cpp] Hand-rolled MD5 and SHA256 instead of using mbedTLS
 - **JS Source**: `src/js/workers/cache-collector.js` lines 5–10
 - **Status**: Verified
-- **Details**: JS uses Node.js `crypto.createHash('md5')` and `crypto.createHash('sha256')`. C++ implements MD5 and SHA256 from scratch in `md5_impl` and `sha256_impl` namespaces (~200 lines each). Project convention specifies mbedTLS (`mbedtls/md.h`) for crypto hashing. Hand-rolled implementations increase maintenance burden and risk of subtle correctness bugs.
+- **Details**: Fixed. Cache collector hashing now uses mbedTLS MD APIs for both MD5 (binary hashing) and SHA-256 (cache file checksums), matching project crypto conventions and JS hash behavior.
 
 - [x] 166. [cache-collector.cpp] upload_chunks converts binary multipart body through std::string
 - **JS Source**: `src/js/workers/cache-collector.js` lines 95–115
 - **Status**: Verified
-- **Details**: JS handles multipart body as Buffer objects preserving binary integrity. C++ converts `std::vector<uint8_t>` to `std::string(body_bytes.begin(), body_bytes.end())` before passing to `https_request`. While `std::string` can hold embedded null bytes, this conversion path is fragile — httplib's content_type/body API must handle binary strings correctly or data may be corrupted.
+- **Details**: Fixed. Multipart upload now keeps binary payloads as `std::vector<uint8_t>` end-to-end and sends raw bytes directly through `https_request`, matching JS Buffer-based behavior.
 
 - [x] 167. [cache-collector.cpp] random_hex uses std::mt19937 instead of cryptographically secure random
 - **JS Source**: `src/js/workers/cache-collector.js` lines 85–90
 - **Status**: Verified
-- **Details**: JS uses `crypto.randomBytes(16).toString('hex')` which is cryptographically secure. C++ uses `std::random_device` + `std::mt19937` which is NOT guaranteed to be cryptographic on all platforms (MSVC's `std::random_device` uses CryptGenRandom but GCC/Linux may use `/dev/urandom` or a PRNG). Used only for multipart boundary generation so security impact is minimal, but it deviates from JS behavior.
+- **Details**: Fixed. Multipart boundaries are now generated with mbedTLS CTR-DRBG secure random bytes, matching JS `crypto.randomBytes(...).toString('hex')` semantics.
 
 - [x] 168. [listfile.cpp] Public listfile APIs are synchronous instead of JS Promise-based async methods
 - **JS Source**: `src/js/casc/listfile.js` lines 478–500, 603–620, 710–756
 - **Status**: Verified
-- **Details**: JS exposes async `preload`, `prepareListfile`, `loadUnknownTextures`, `loadUnknownModels`, `loadUnknowns`, and `renderListfile`; C++ ports these as synchronous/blocking methods.
+- **Details**: Fixed. C++ now exposes async-equivalent APIs for JS Promise-based methods (`preloadAsync`, `prepareListfileAsync`, `loadUnknownTexturesAsync`, `loadUnknownModelsAsync`, `loadUnknownsAsync`, `renderListfileAsync`) while retaining sync wrappers.
 
 - [x] 169. [listfile.cpp] Shared preload promise semantics differ from JS
 - **JS Source**: `src/js/casc/listfile.js` lines 478–500
 - **Status**: Verified
-- **Details**: JS stores and returns `preload_promise` so all callers can await the same Promise result; C++ uses `void` entrypoints with internal future state and does not expose equivalent awaitable API behavior.
+- **Details**: Fixed. `preloadAsync()` now preserves and reuses a shared preload future (JS `preload_promise` equivalent) instead of clearing it after completion, so callers observe consistent shared await semantics.
 
 - [x] 170. [listfile.cpp] `applyPreload` return contract differs from JS
 - **JS Source**: `src/js/casc/listfile.js` lines 528–532, 591–601
 - **Status**: Verified
-- **Details**: JS returns `0` in fallback/no-match paths and otherwise returns `undefined`; C++ changes this API to `void`, removing JS return-value semantics.
+- **Details**: Fixed. `applyPreload` now preserves JS contract semantics: returns `0` for fallback/no-match paths and `undefined`-equivalent (`std::nullopt`) on success/error paths.
 
 - [x] 171. [listfile.cpp] `getByID` not-found sentinel differs from JS
 - **JS Source**: `src/js/casc/listfile.js` lines 778–794
 - **Status**: Verified
-- **Details**: JS returns `undefined` when ID lookup fails; C++ returns empty string, changing not-found representation and call-site semantics.
+- **Details**: Fixed. `getByID` now returns `std::optional<std::string>` and uses `std::nullopt` for not-found, matching JS `undefined` semantics.
 
 - [x] 172. [listfile.cpp] `getFilteredEntries` search contract differs from JS
 - **JS Source**: `src/js/casc/listfile.js` lines 832–857
 - **Status**: Verified
-- **Details**: JS auto-detects regex via `search instanceof RegExp` and propagates regex errors; C++ requires explicit `is_regex` flag and swallows invalid regex by returning empty results.
+- **Details**: Fixed. `getFilteredEntries` now provides string and regex overloads to mirror JS string-vs-RegExp behavior, and invalid regex errors propagate from regex construction instead of being swallowed.
 
 - [x] 173. [listfile.cpp] Binary preload list ordering can differ from JS Map insertion order
 - **JS Source**: `src/js/casc/listfile.js` lines 563–588
 - **Status**: Verified
-- **Details**: JS iterates `Map` keys in insertion order when building filtered preloaded lists; C++ iterates `std::unordered_map` in non-deterministic hash order, which can reorder displayed list entries.
+- **Details**: Fixed. Binary preload filtering now tracks and uses explicit insertion-order vectors when formatting filtered preload lists, matching JS `Map` insertion-order output.
 
 - [x] 174. [tact-keys.cpp] Tact key lifecycle APIs are synchronous instead of JS async methods
 - **JS Source**: `src/js/casc/tact-keys.js` lines 65–137
 - **Status**: Verified
-- **Details**: JS `load`, `save`, and `doSave` are Promise-based/async; C++ ports to synchronous methods and immediate file I/O.
+- **Details**: Fixed. C++ now exposes async-equivalent tact-key lifecycle APIs (`loadAsync`) and keeps save behavior scheduled rather than immediate, preserving JS async lifecycle semantics.
 
 - [x] 175. [tact-keys.cpp] Save scheduling differs from JS `setImmediate` batching behavior
 - **JS Source**: `src/js/casc/tact-keys.js` lines 122–135
 - **Status**: Verified
-- **Details**: JS coalesces multiple save requests into a next-tick `setImmediate(doSave)` write; C++ runs `doSave()` immediately, changing batching/timing semantics.
+- **Details**: Fixed. Save requests are coalesced and deferred through main-thread scheduling (`postToMainThread`) so multiple calls in one tick batch into a single `doSave`, matching JS `setImmediate` behavior.
 
 - [x] 176. [tact-keys.cpp] Remote update error contract differs from JS HTTP status error path
 - **JS Source**: `src/js/casc/tact-keys.js` lines 89–93
 - **Status**: Verified
-- **Details**: JS throws `Unable to update tactKeys, HTTP ${res.status}` when response is non-OK; C++ throws a generic `Unable to update tactKeys: ...` message from caught exceptions without preserving JS status-based error contract.
+- **Details**: Fixed. Non-OK remote tact-key responses now throw `Unable to update tactKeys, HTTP <status>`, preserving JS status-based error contract.
 
 - [x] 177. [tact-keys.cpp] `getKey` returns empty string instead of JS `undefined` when key not found
 - **JS Source**: `src/js/casc/tact-keys.js` lines 19–21
 - **Status**: Verified
-- **Details**: JS `getKey` returns `KEY_RING[keyName.toLowerCase()]` which evaluates to `undefined` when the key is not in the object. C++ `getKey` (line 130) returns `{}` (empty string) when not found. Callers that compare the result against `undefined` (JS) vs checking `.empty()` (C++) should be functionally equivalent, but the sentinel value difference could cause issues if any code path checks for empty string vs non-existent key, or if a key legitimately has an empty value (not possible for TACT keys but differs in contract).
+- **Details**: Fixed. `getKey` now returns `std::optional<std::string>` and uses `std::nullopt` when absent, matching JS `undefined` semantics.
 
 - [x] 178. [content-flags.cpp] Sibling `.cpp` translation unit does not contain line-by-line ported JS constant exports
 - **JS Source**: `src/js/casc/content-flags.js` lines 4–15
