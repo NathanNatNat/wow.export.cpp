@@ -351,6 +351,9 @@ private:
 	bool watcher_wireframe = false;
 	bool watcher_show_bones = false;
 	bool watcher_state_initialized = false;
+	std::function<void()> geosetWatcher;
+	std::function<void()> wireframeWatcher;
+	std::function<void()> bonesWatcher;
 
 	// transforms
 	std::array<float, 16> model_matrix;

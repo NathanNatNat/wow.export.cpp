@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstdint>
+#include <future>
 #include <string>
 #include <variant>
 #include <vector>
@@ -246,13 +247,13 @@ public:
 	/**
 	 * Load the M2 model.
 	 */
-	void load();
+	std::future<void> load();
 
 	/**
 	 * Get a skin by index.
 	 * @param index
 	 */
-	LegacyM2Skin& getSkin(int index);
+	std::future<LegacyM2Skin*> getSkin(int index);
 
 	/**
 	 * Get all skins.

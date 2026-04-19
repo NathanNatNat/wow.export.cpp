@@ -11,6 +11,7 @@
 #include <format>
 #include <set>
 #include <span>
+#include <stdexcept>
 #include <string>
 
 #include "../../core.h"
@@ -88,7 +89,7 @@ std::map<std::string, TextureExportInfo> M2LegacyExporter::exportTextures(
 	if (!config.value("modelsExportTextures", false))
 		return validTextures;
 
-	m2->load();
+	m2->load().get();
 
 	const bool useAlpha = config.value("modelsExportAlpha", false);
 	const bool usePosix = config.value("pathFormat", std::string("")) == "posix";
@@ -167,9 +168,12 @@ void M2LegacyExporter::exportAsOBJ(
 
 	data.seek(0);
 	m2 = std::make_unique<M2LegacyLoader>(data);
-	m2->load();
+	m2->load().get();
 
-	auto& skin = m2->getSkin(0);
+	auto* skin_ptr = m2->getSkin(0).get();
+	if (!skin_ptr)
+		throw std::runtime_error("Failed to load legacy skin 0");
+	auto& skin = *skin_ptr;
 
 	OBJWriter obj(out);
 	auto mtlPath = casc::ExportHelper::replaceExtension(out.string(), ".mtl");
@@ -375,9 +379,12 @@ void M2LegacyExporter::exportAsSTL(
 
 	data.seek(0);
 	m2 = std::make_unique<M2LegacyLoader>(data);
-	m2->load();
+	m2->load().get();
 
-	auto& skin = m2->getSkin(0);
+	auto* skin_ptr = m2->getSkin(0).get();
+	if (!skin_ptr)
+		throw std::runtime_error("Failed to load legacy skin 0");
+	auto& skin = *skin_ptr;
 
 	STLWriter stl(out);
 	auto modelName = out.stem().string();
@@ -433,7 +440,7 @@ void M2LegacyExporter::exportRaw(
 	if (config.value("modelsExportTextures", false)) {
 		data.seek(0);
 		m2 = std::make_unique<M2LegacyLoader>(data);
-		m2->load();
+		m2->load().get();
 
 		nlohmann::json texturesManifest = nlohmann::json::array();
 		std::set<std::string> exportedTextures;

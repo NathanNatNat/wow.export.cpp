@@ -186,6 +186,8 @@ struct Context {
 	// corresponds to the current mode (useCharacterControls → controls_character, else → controls_orbit).
 	CameraControlsGL* controls_orbit = nullptr;
 	CharacterCameraControlsGL* controls_character = nullptr;
+	// Unified controls update callback (JS-equivalent duck-typed `context.controls.update()` target).
+	std::function<void()> controls_update;
 
 	// Fit camera callback. Exposed so the parent can trigger camera fitting.
 	std::function<void()> fitCamera;
