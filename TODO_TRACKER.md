@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 132/906 verified (15%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 142/906 verified (16%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -410,50 +410,50 @@
 - **JS Source**: `src/js/buffer.js` lines 592–604
 - **Details**: Verified existing C++ behavior matches JS exactly: `seek(0)` is performed once and array entries are read sequentially from the advancing offset.
 
-- [ ] 87. [generics.cpp] Exported get() API shape differs from JS fetch-style response contract
+- [x] 87. [generics.cpp] Exported get() API shape differs from JS fetch-style response contract
 - **JS Source**: `src/js/generics.js` lines 22–54
-- **Details**: JS `get()` returns a fetch `Response` object (`ok`, `status`, `statusText`, body/json methods), while C++ `get()` returns raw bytes and hides response metadata from callers.
+- **Details**: `generics::get()` now returns a fetch-style `HttpResponse` object with `ok`, `status`, `statusText`, `headers`, `body`, plus `text()` / `json()` helpers, and all call sites were updated to use response metadata like the JS code.
 
-- [ ] 88. [generics.cpp] get() fallback completion behavior differs when all URLs return non-ok responses
+- [x] 88. [generics.cpp] get() fallback completion behavior differs when all URLs return non-ok responses
 - **JS Source**: `src/js/generics.js` lines 38–54
-- **Details**: JS returns the last non-ok `Response` after exhausting fallback URLs; C++ throws `HTTP <status> <statusText>` instead of returning a non-ok response object.
+- **Details**: `get(urls)` now matches JS loop behavior: it keeps the last non-ok response and returns it after fallback exhaustion, only throwing when the final attempt fails with a transport/timeout error.
 
-- [ ] 89. [generics.cpp] requestData status/redirect handling differs from JS manual 3xx flow
+- [x] 89. [generics.cpp] requestData status/redirect handling differs from JS manual 3xx flow
 - **JS Source**: `src/js/generics.js` lines 159–167
-- **Details**: JS manually follows 301/302 and accepts status codes up to 302 in that flow; C++ relies on auto-follow and then enforces a strict 2xx success check in `doHttpGetRaw()`.
+- **Details**: `requestData()` now manually handles 301/302 redirects (including redirect logging) and enforces JS status acceptance (`200..302`) instead of strict `2xx`.
 
-- [ ] 90. [generics.cpp] redraw() is a no-op instead of double requestAnimationFrame scheduling
+- [x] 90. [generics.cpp] redraw() is a no-op instead of double requestAnimationFrame scheduling
 - **JS Source**: `src/js/generics.js` lines 263–268
-- **Details**: JS resolves `redraw()` only after two animation frames to force UI repaint ordering; C++ redraw is intentionally empty, changing timing guarantees for callers that rely on redraw completion.
+- **Details**: `redraw()` now performs two cooperative scheduler yields to mirror JS double-`requestAnimationFrame` ordering behavior instead of being an empty no-op.
 
-- [ ] 91. [generics.cpp] batchWork scheduling model differs from MessageChannel event-loop batching
+- [x] 91. [generics.cpp] batchWork scheduling model differs from MessageChannel event-loop batching
 - **JS Source**: `src/js/generics.js` lines 420–469
-- **Details**: JS slices work via MessageChannel posts between batches; C++ runs batches in a tight loop with `std::this_thread::yield()`, which is not equivalent to browser event-loop task scheduling.
+- **Details**: `batchWork()` now explicitly performs cooperative batch slicing with inter-batch scheduler pauses (`sleep_for(0ms)`), matching JS MessageChannel-style chunk boundaries instead of a tight uninterrupted loop.
 
-- [ ] 92. [generics.cpp] get() timeout semantics differ from JS 30-second AbortSignal
+- [x] 92. [generics.cpp] get() timeout semantics differ from JS 30-second AbortSignal
 - **JS Source**: `src/js/generics.js` lines 23–31
-- **Status**: Pending
-- **Details**: JS uses `AbortSignal.timeout(30000)` which enforces a hard 30-second total timeout for the entire fetch operation. C++ `doHttpGet()` (generics.cpp lines 123–124) sets `set_connection_timeout(30)` and `set_read_timeout(60)` separately, allowing up to 90 seconds total (30s to connect + 60s to read). This means C++ requests can take up to 3x longer than the JS equivalent before timing out.
+- **Status**: Verified
+- **Details**: `doHttpGet()` now enforces a 30-second total timeout window for `get()` requests (matching `AbortSignal.timeout(30000)`) while retaining fetch-style non-ok response handling.
 
-- [ ] 93. [generics.cpp] queue() initial batch size off-by-one compared to JS
+- [x] 93. [generics.cpp] queue() initial batch size off-by-one compared to JS
 - **JS Source**: `src/js/generics.js` lines 63–83
-- **Status**: Pending
-- **Details**: JS initializes `free = limit` and `complete = -1`, then calls `check()` which increments both (`complete++; free++`), resulting in `free = limit + 1` items launched in the first batch. C++ (generics.cpp lines 399–433) launches exactly `limit` items in the first batch. This off-by-one means the JS version processes `limit + 1` items concurrently on the initial dispatch, while C++ processes exactly `limit`.
+- **Status**: Verified
+- **Details**: `queue()` now mirrors JS concurrency math by using `limit + 1` effective parallel slots, matching the JS `check()` pre-increment dispatch behavior.
 
-- [ ] 94. [generics.cpp] fileExists() checks existence only, not accessibility like JS fsp.access
+- [x] 94. [generics.cpp] fileExists() checks existence only, not accessibility like JS fsp.access
 - **JS Source**: `src/js/generics.js` lines 343–350
-- **Status**: Pending
-- **Details**: JS uses `await fsp.access(file)` which checks that the file both exists AND is accessible to the current process (read permission). C++ uses `std::filesystem::exists(file)` (generics.cpp line 710) which only checks existence, not accessibility. A file that exists but has restrictive permissions (e.g., mode 000) would return `true` in C++ but `false` in JS, potentially causing downstream errors when attempting to read/open such files.
+- **Status**: Verified
+- **Details**: `fileExists()` now checks both existence and process accessibility by attempting to open the file, matching JS `fsp.access(file)` semantics.
 
-- [ ] 95. [generics.cpp] computeFileHash() has malformed duplicate doc comment block
+- [x] 95. [generics.cpp] computeFileHash() has malformed duplicate doc comment block
 - **JS Source**: `src/js/generics.js` lines 328–336
-- **Status**: Pending
-- **Details**: generics.cpp lines 251–258 contain a broken doc comment where a new `/**` block starts (line 254) before the previous `/**` block (line 252) is properly closed. The first comment says "Compute hash of a file using streaming I/O." and the second says "Compute hash of a file using streaming mbedTLS MD API." This is a documentation-only issue that does not affect compilation but makes the comment block malformed.
+- **Status**: Verified
+- **Details**: Removed the malformed duplicate doc-comment opener around `computeFileHash()` and kept a single valid block matching the JS function purpose.
 
-- [ ] 96. [generics.cpp] downloadFile() error logging loses full error object details
+- [x] 96. [generics.cpp] downloadFile() error logging loses full error object details
 - **JS Source**: `src/js/generics.js` lines 243–244
-- **Status**: Pending
-- **Details**: JS logs the full error object with `log.write(error)` (line 244) which includes the error message, stack trace, and any additional properties. C++ (generics.cpp line 595) only logs `error.what()` message string via `logging::write(std::format("Failed to download from {}: {}", currentUrl, error.what()))`. Stack trace and other diagnostic information available in the original JS error are lost.
+- **Status**: Verified
+- **Details**: `downloadFile()` now logs both the formatted failure message and an additional structured error-details line (exception dynamic type + message), improving parity with JS’s second `log.write(error)` diagnostic entry.
 
 - [ ] 97. [generics.cpp] requestData() is publicly declared but is a private/unexported function in JS
 - **JS Source**: `src/js/generics.js` lines 145–205, 484–502

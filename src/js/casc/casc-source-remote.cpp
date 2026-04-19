@@ -121,12 +121,10 @@ std::vector<std::unordered_map<std::string, std::string>> CASCRemote::getConfig(
 	const std::string url = host + product + file;
 	auto res = generics::get(url);
 
-	// JS: if (!res.ok) throw new Error(util.format('HTTP %d from remote CASC endpoint: %s', res.status, url));
-	// generics::get() already returns empty on non-OK HTTP responses, so empty check is equivalent.
-	if (res.empty())
-		throw std::runtime_error(std::format("HTTP error from remote CASC endpoint: {}", url));
+	if (!res.ok)
+		throw std::runtime_error(std::format("HTTP {} from remote CASC endpoint: {}", res.status, url));
 
-	std::string text(res.begin(), res.end());
+	std::string text = res.text();
 	return parseVersionConfig(text);
 }
 
@@ -149,12 +147,10 @@ std::unordered_map<std::string, std::string> CASCRemote::getCDNConfig(const std:
 			logging::write("Attempting to retrieve CDN config from: " + url);
 			auto res = generics::get(url);
 
-			// JS: if (!res.ok) throw new Error(util.format('HTTP %d from CDN config endpoint', res.status));
-			// generics::get() already returns empty on non-OK HTTP responses, so empty check is equivalent.
-			if (res.empty())
-				throw std::runtime_error("HTTP error from CDN config endpoint");
+			if (!res.ok)
+				throw std::runtime_error(std::format("HTTP {} from CDN config endpoint", res.status));
 
-			std::string configText(res.begin(), res.end());
+			std::string configText = res.text();
 			auto config = parseCDNConfig(configText);
 
 			if (h != host) {

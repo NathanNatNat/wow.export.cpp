@@ -693,13 +693,15 @@ static void export_mp4() {
 				continue;
 			}
 
-			std::vector<uint8_t> mp4_data = generics::get(*mp4_url);
+			auto mp4_response = generics::get(*mp4_url);
+			if (!mp4_response.ok)
+				throw std::runtime_error(std::format("Failed to download MP4 (HTTP {})", mp4_response.status));
 
 			namespace fs = std::filesystem;
 			fs::create_directories(fs::path(export_path).parent_path());
 
 			std::ofstream out(export_path, std::ios::binary);
-			out.write(reinterpret_cast<const char*>(mp4_data.data()), static_cast<std::streamsize>(mp4_data.size()));
+			out.write(reinterpret_cast<const char*>(mp4_response.body.data()), static_cast<std::streamsize>(mp4_response.body.size()));
 			out.close();
 
 			helper.mark(export_file_name, true);

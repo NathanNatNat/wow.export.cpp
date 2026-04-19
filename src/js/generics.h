@@ -12,6 +12,7 @@
 #include <functional>
 #include <filesystem>
 #include <optional>
+#include <unordered_map>
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -28,13 +29,27 @@ class BufferWrapper;
 namespace generics {
 
 /**
+ * HTTP response structure — C++ equivalent of the JS fetch Response object.
+ */
+struct HttpResponse {
+	int status = 0;
+	std::string statusText;
+	std::vector<uint8_t> body;
+	std::unordered_map<std::string, std::string> headers;
+	bool ok = false; // true if status is 200–299
+
+	std::string text() const;
+	nlohmann::json json() const;
+};
+
+/**
  * Async wrapper for HTTP GET.
  * Supports URL fallback chains (tries each URL in order).
  * @param url Single URL or list of fallback URLs.
- * @returns Raw response body as a vector of bytes.
+ * @returns Fetch-style response object.
  */
-std::vector<uint8_t> get(const std::string& url);
-std::vector<uint8_t> get(const std::vector<std::string>& urls);
+HttpResponse get(const std::string& url);
+HttpResponse get(const std::vector<std::string>& urls);
 
 /**
  * Dispatch an async handler for an array of items with a limit to how
@@ -170,8 +185,8 @@ std::string formatPlaybackSeconds(double seconds);
 
 /**
  * Returns after a redraw.
- * No-op in C++: CASC loading runs on a background std::jthread, so the
- * main ImGui loop keeps rendering.  See generics.cpp for full rationale.
+ * Uses two cooperative scheduling yields, matching JS's double
+ * requestAnimationFrame ordering guarantee.
  */
 void redraw();
 

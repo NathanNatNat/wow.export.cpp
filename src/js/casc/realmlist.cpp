@@ -90,20 +90,18 @@ void load() {
 
 	// Fetch latest realmlist from remote URL.
 	try {
-		std::vector<uint8_t> res = generics::get(url);
+		auto res = generics::get(url);
+		if (res.ok) {
+			std::string json_text = res.text();
+			nlohmann::json json = nlohmann::json::parse(json_text);
+			parseRealmList(json);
 
-		// TODO 193: The JS checks `if (res.ok)` for HTTP status. generics::get()
-		// in C++ throws on HTTP errors, so if we reach here the response was OK.
-		// If the HTTP library returns error pages as data without throwing, the
-		// JSON parse below will fail with a clear error. This matches the JS
-		// behavior where a non-ok response is logged and the remote update is skipped.
-		std::string json_text(res.begin(), res.end());
-		nlohmann::json json = nlohmann::json::parse(json_text);
-		parseRealmList(json);
-
-		std::ofstream ofs(constants::CACHE::REALMLIST(), std::ios::trunc);
-		if (ofs.is_open())
-			ofs << json_text;
+			std::ofstream ofs(constants::CACHE::REALMLIST(), std::ios::trunc);
+			if (ofs.is_open())
+				ofs << json_text;
+		} else {
+			logging::write(std::format("Failed to retrieve realmlist from {} ({})", url, res.status));
+		}
 	} catch (const std::exception& e) {
 		logging::write(std::format("Failed to retrieve realmlist from {}: {}", url, e.what()));
 	}

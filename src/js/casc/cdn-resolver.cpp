@@ -171,14 +171,11 @@ void _resolveRegionProduct(const std::string& region, const std::string& product
 		}
 
 		std::string url = host + product + std::string(constants::PATCH::SERVER_CONFIG);
-		auto data = generics::get(url);
+		auto response = generics::get(url);
+		if (!response.ok)
+			throw std::runtime_error(std::format("HTTP {} from server config endpoint: {}", response.status, url));
 
-		// JS: if (!res.ok) throw new Error(util.format('HTTP %d from server config endpoint: %s', res.status, url));
-		// generics::get() returns empty on non-OK responses, so empty check is equivalent.
-		if (data.empty())
-			throw std::runtime_error(std::format("HTTP error from server config endpoint: {}", url));
-
-		std::string text(data.begin(), data.end());
+		std::string text = response.text();
 		auto serverConfigs = casc::parseVersionConfig(text);
 		auto serverConfig = std::find_if(serverConfigs.begin(), serverConfigs.end(),
 			[&region](const std::unordered_map<std::string, std::string>& e) {
