@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 170/906 verified (19%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 171/906 verified (19%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -583,10 +583,10 @@
 - **Status**: Verified
 - **Details**: Rewrote the namespace documentation to remove the orphaned fragment and clearly describe JS stylesheet behavior versus C++ in-memory rule + texture caching adaptation.
 
-- [ ] 124. [stb-impl.cpp] Required sibling JS source file is missing, blocking parity verification
+- [x] 124. [stb-impl.cpp] Required sibling JS source file is missing — N/A
 - **JS Source**: `src/js/stb-impl.js` lines N/A (file missing)
-- **Status**: Blocked
-- **Details**: `src/js/stb-impl.cpp` exists, but `src/js/stb-impl.js` is absent, so line-by-line comparison against an original JS sibling cannot be completed.
+- **Status**: N/A
+- **Details**: `src/js/stb-impl.js` does not exist in the upstream JS source tree. `stb-impl.cpp` is a C++-only glue file with no JS equivalent to compare against, so parity verification is not applicable.
 
 - [x] 125. [png-writer.cpp] `write()` call contract differs from JS async behavior
 - **JS Source**: `src/js/png-writer.js` lines 243–249
