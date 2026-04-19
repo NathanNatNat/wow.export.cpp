@@ -30,6 +30,9 @@ namespace casc {
  */
 class BLTEStreamReader {
 public:
+	using BlockFetcher = std::function<BufferWrapper(size_t)>;
+	using BlockFetcherAsync = std::function<std::future<BufferWrapper>(size_t)>;
+
 	class ReadableStream {
 	public:
 		explicit ReadableStream(BLTEStreamReader* owner);
@@ -49,7 +52,9 @@ public:
 	 * @param partialDecrypt If true, allow partial decryption (leave zeroed data).
 	 */
 	BLTEStreamReader(const std::string& hash, const BLTEMetadata& metadata,
-		std::function<BufferWrapper(size_t)> blockFetcher, bool partialDecrypt = false);
+		BlockFetcher blockFetcher, bool partialDecrypt = false);
+	BLTEStreamReader(const std::string& hash, const BLTEMetadata& metadata,
+		BlockFetcherAsync blockFetcherAsync, bool partialDecrypt = false);
 
 	/**
 	 * Fetch and decode a single block on demand.
@@ -101,6 +106,7 @@ private:
 	 * @returns Decoded block data.
 	 */
 	BufferWrapper _decodeBlock(BufferWrapper blockData, size_t index);
+	std::future<BufferWrapper> _decodeBlockAsync(BufferWrapper blockData, size_t index);
 
 	/**
 	 * Decrypt an encrypted BLTE block.
@@ -112,10 +118,11 @@ private:
 
 	std::string hash;
 	BLTEMetadata metadata;
-	std::function<BufferWrapper(size_t)> blockFetcher;
+	BlockFetcher blockFetcher;
+	BlockFetcherAsync blockFetcherAsync;
 	bool partialDecrypt;
 
-	// LRU block cache: unordered_map for O(1) lookup, deque for insertion order.
+	// FIFO block cache: unordered_map for O(1) lookup, deque for insertion order.
 	std::unordered_map<size_t, BufferWrapper> blockCache;
 	std::deque<size_t> cacheOrder;
 	size_t maxCacheSize = 10;

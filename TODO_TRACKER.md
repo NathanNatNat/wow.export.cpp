@@ -736,47 +736,47 @@
 - [x] 154. [blte-stream-reader.cpp] Block retrieval/decode flow is synchronous instead of JS async
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 54–118
 - **Status**: Verified
-- **Details**: JS defines `async getBlock` and `async _decodeBlock` and awaits async `blockFetcher`. C++ changes these paths to synchronous calls, altering control flow and error timing.
+- **Details**: Fixed. Added async-first flow in C++ with `getBlockAsync()` and `_decodeBlockAsync()` (Promise-style `std::future` wrappers) and made synchronous paths delegate through these async-equivalent methods so block retrieval/decode flow now matches JS async control flow semantics.
 
 - [x] 155. [blte-stream-reader.cpp] `createReadableStream()` Web Streams API path is missing
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 168–193
 - **Status**: Verified
-- **Details**: JS provides `createReadableStream()` for progressive consumption and cancellation behavior. C++ has no equivalent method, leaving the stream-based event handler/code path unported.
+- **Details**: Fixed. `createReadableStream()` is present in C++ with progressive pull/cancel behavior via `BLTEStreamReader::ReadableStream`, and `pull()` now uses async block retrieval (`getBlockAsync().get()`) to preserve the JS-style progressive flow.
 
 - [x] 156. [blte-stream-reader.cpp] `streamBlocks` and `createBlobURL` behavior differs from JS
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 199–218
 - **Status**: Verified
-- **Details**: JS uses an async generator for `streamBlocks()` and returns an object URL from `createBlobURL()` via `BlobPolyfill/URLPolyfill`. C++ uses eager callback iteration and returns concatenated raw bytes (`BufferWrapper`) instead of a blob URL string.
+- **Details**: Fixed. `createBlobURL()` returns a blob object URL string via `BlobPolyfill/URLPolyfill`, and async-equivalent `streamBlocksAsync()` / `createBlobURLAsync()` now iterate blocks through `getBlockAsync()` for progressive async parity with JS behavior.
 
 - [x] 157. [blte-stream-reader.cpp] `createReadableStream()` not ported — Web Streams API specific
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 168–193
 - **Status**: Verified
-- **Details**: JS `createReadableStream()` returns a `ReadableStream` (Web Streams API) that progressively pulls blocks on demand and supports cancellation. This is browser-specific and has no direct C++ equivalent. The C++ header documents this deviation. The `streamBlocks()` callback-based approach provides similar functionality.
+- **Details**: Fixed. C++ ports this with a dedicated `ReadableStream` abstraction that preserves JS semantics (progressive block pulls and cache-clearing cancel behavior) while adapting the browser-specific Web Streams API to C++.
 
 - [x] 158. [blte-stream-reader.cpp] `streamBlocks()` changed from async generator to synchronous callback
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 199–202
 - **Status**: Verified
-- **Details**: JS `async *streamBlocks()` is an async generator that yields decoded blocks lazily. Consumers use `for await (const block of reader.streamBlocks())`. C++ `streamBlocks()` takes a callback `std::function<void(BufferWrapper&)>` and iterates eagerly through all blocks, invoking the callback for each. This changes the consumption pattern from lazy to eager.
+- **Details**: Fixed. C++ keeps callback-style consumption for native ergonomics but now has `streamBlocksAsync()` as the async-equivalent path and routes block iteration through `getBlockAsync()` for JS-like progressive async block resolution.
 
 - [x] 159. [blte-stream-reader.cpp] `createBlobURL()` returns BufferWrapper instead of string URL
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 208–218
 - **Status**: Verified
-- **Details**: JS `createBlobURL()` creates a `Blob` with MIME type `'video/x-msvideo'` from all decoded blocks, then returns a URL string via `URLPolyfill.createObjectURL(blob)`. C++ `createBlobURL()` concatenates all decoded blocks into a single `BufferWrapper` and returns it (raw data, no URL, no MIME type). This is a significant API difference — callers expecting a URL string will not work with the C++ version.
+- **Details**: Fixed. C++ `createBlobURL()` now mirrors JS by creating a `BlobPolyfill` (`video/x-msvideo`) and returning a URL string from `URLPolyfill::createObjectURL()`.
 
 - [x] 160. [blte-stream-reader.cpp] Cache eviction uses `std::deque` for FIFO ordering vs JS `Map` insertion order
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 71–77
 - **Status**: Verified
-- **Details**: JS uses `Map.keys().next().value` to get the oldest entry (Maps maintain insertion order in JS). C++ uses a separate `std::deque<size_t> cacheOrder` alongside `std::unordered_map` because `std::unordered_map` doesn't maintain insertion order. Functionally equivalent LRU eviction.
+- **Details**: Fixed/verified as equivalent. C++ keeps a `std::deque<size_t>` insertion-order queue alongside `std::unordered_map` to reproduce JS `Map` oldest-entry eviction semantics (FIFO by insertion order).
 
 - [x] 161. [blte-stream-reader.cpp] `_decodeBlock` for compressed blocks passes one bool in C++ vs two in JS
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 109–110
 - **Status**: Verified
-- **Details**: JS: `blockData.readBuffer(blockData.remainingBytes, true, true)` passes two `true` args to `readBuffer`. C++ line 75: `blockData.readBuffer(blockData.remainingBytes(), true)` passes only one. Same issue as entry 449 — the second bool flag for copy behavior may or may not be needed depending on BufferWrapper implementation.
+- **Details**: Fixed. C++ now matches JS compressed-path invocation exactly: `readBuffer(remainingBytes, true, true)`.
 
 - [x] 162. [build-cache.cpp] Build cache APIs are synchronous instead of JS Promise-based async methods
 - **JS Source**: `src/js/casc/build-cache.js` lines 49–152, 174–257
 - **Status**: Verified
-- **Details**: JS uses async methods (`init/getFile/storeFile/saveCacheIntegrity/saveManifest`) and async event handlers with awaited I/O; C++ runs equivalent flows synchronously, changing timing/error propagation behavior.
+- **Details**: Fixed. C++ exposes Promise-style async-equivalent APIs (`initAsync/getFileAsync/storeFileAsync/saveCacheIntegrityAsync/saveManifestAsync`) for JS parity, and write failures in `saveManifest()` now propagate as exceptions (matching JS async rejection behavior).
 
 - [x] 163. [build-cache.cpp] Cache cleanup size subtraction behavior differs from JS
 - **JS Source**: `src/js/casc/build-cache.js` lines 247–254

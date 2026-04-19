@@ -177,8 +177,11 @@ std::future<void> BuildCache::saveCacheIntegrityAsync() {
 
 void BuildCache::saveManifest() {
 	std::ofstream ofs(manifestPath);
-	if (ofs.is_open())
-		ofs << meta.dump();
+	if (!ofs.is_open())
+		throw std::runtime_error("Failed to open cache manifest file for writing");
+	ofs << meta.dump();
+	if (!ofs.good())
+		throw std::runtime_error("Failed to write cache manifest file");
 }
 
 std::future<void> BuildCache::saveManifestAsync() {
