@@ -8,12 +8,13 @@
 #include <cstdint>
 
 /**
- * Icon loading and texture caching for item icons.
+ * Icon loading for item icons with JS-style dynamic rule lifecycle.
  *
  * In the JS version, icons were loaded as BLP files, converted to data URLs,
  * and set as CSS background-image properties on dynamic stylesheet rules.
  *
- * in a cache. The queue mechanism with priority ordering is preserved.
+ * In C++, rule objects are tracked in memory and map to OpenGL textures
+ * cached by fileDataID. The queue mechanism with priority ordering is preserved.
  *
  * JS equivalent: module.exports = { loadIcon }
  */

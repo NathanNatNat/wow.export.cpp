@@ -61,7 +61,8 @@ static void* load_font(const std::string& file_name) {
 			return nullptr;
 		}
 
-		void* font = font_helpers::inject_font_face(font_id, data->data(), data->size());
+		font_helpers::inject_font_face(font_id, data->data(), data->size());
+		void* font = font_helpers::get_injected_font(font_id);
 
 		if (font) {
 			loaded_fonts[font_id] = font;
@@ -129,7 +130,11 @@ void render() {
 			void* font = load_font(first);
 			if (font) {
 				view.fontPreviewFontFamily = get_font_id(first);
-				font_helpers::detect_glyphs_async(font, glyph_state);
+				font_helpers::detect_glyphs_async(
+					font,
+					glyph_state,
+					[&view](const std::string& ch) { view.fontPreviewText += ch; }
+				);
 			}
 			prev_selection_first = first;
 		}
@@ -267,7 +272,7 @@ void render() {
 			// Each glyph cell is a small selectable button.
 			ImGui::PushID(static_cast<int>(codepoint));
 			if (ImGui::Selectable(utf8_buf, false, 0, ImVec2(24, 24))) {
-				view.fontPreviewText += utf8_buf;
+				font_helpers::trigger_glyph_click(glyph_state, codepoint);
 			}
 			if (ImGui::IsItemHovered()) {
 				char tooltip[32];

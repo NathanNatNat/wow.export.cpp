@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 160/906 verified (18%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 170/906 verified (19%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -538,57 +538,60 @@
 - **Status**: Verified
 - **Details**: JS checks `if (webgl.caps)` (line 348) before logging capabilities. Since `caps` is always assigned as an object `{}` (line 25), this condition is always truthy when the WebGL context exists. C++ (gpu-info.cpp line 539) checks `if (gl->caps.max_tex_size > 0)` which would skip caps logging if `max_tex_size` happened to be 0. While unlikely in practice with real GPUs, this is a behavioral deviation from JS which unconditionally logs caps when the GL context is available.
 
-- [ ] 115. [font_helpers.cpp] `detect_glyphs_async` no longer implements JS DOM/callback contract
+- [x] 115. [font_helpers.cpp] `detect_glyphs_async` no longer implements JS DOM/callback contract
 - **JS Source**: `src/js/modules/font_helpers.js` lines 56–106
-- **Status**: Pending
-- **Details**: JS clears and repopulates `grid_element`, wires per-glyph click handlers, and invokes `on_complete`; C++ only accumulates codepoints in `GlyphDetectionState` and drops the DOM/callback path from the original module API.
+- **Status**: Verified
+- **Details**: `GlyphDetectionState` now carries JS-equivalent callback hooks (`on_glyph_click`, `on_complete`), `detect_glyphs_async()` accepts callback parameters again, and `trigger_glyph_click()` restores per-cell click callback behavior used by font tabs.
 
-- [ ] 116. [font_helpers.cpp] Active detection cancellation semantics differ from JS global `active_detection`
+- [x] 116. [font_helpers.cpp] Active detection cancellation semantics differ from JS global `active_detection`
 - **JS Source**: `src/js/modules/font_helpers.js` lines 17, 57–63
-- **Status**: Pending
-- **Details**: JS tracks a module-level `active_detection` and cancels prior runs automatically, while C++ relies on caller-owned state and does not preserve the same global cancellation behavior across concurrent detections.
+- **Status**: Verified
+- **Details**: Added module-level `active_detection` in `font_helpers.cpp`; starting a new detection now cancels the previously active one exactly like JS `active_detection.cancelled = true`.
 
-- [ ] 117. [font_helpers.cpp] `inject_font_face` return type/behavior differs from JS blob-URL + `document.fonts` flow
+- [x] 117. [font_helpers.cpp] `inject_font_face` return type/behavior differs from JS blob-URL + `document.fonts` flow
 - **JS Source**: `src/js/modules/font_helpers.js` lines 113–133
-- **Status**: Pending
-- **Details**: JS injects `@font-face`, waits for `document.fonts.load/check`, and returns a URL string; C++ adds the font directly to ImGui atlas and returns `ImFont*`, dropping JS URL lifecycle and decode verification behavior.
+- **Status**: Verified
+- **Details**: `inject_font_face()` now returns a blob URL string (`URLPolyfill::createObjectURL(..., "font/ttf")`), throws `font failed to decode` on decode failure, and keeps the loaded ImGui font accessible via `get_injected_font(font_id)`.
 
-- [ ] 118. [font_helpers.cpp] `check_glyph_support` uses fundamentally different detection algorithm
+- [x] 118. [font_helpers.cpp] `check_glyph_support` uses fundamentally different detection algorithm
 - **JS Source**: `src/js/modules/font_helpers.js` lines 30–53
-- **Status**: Pending
-- **Details**: JS detects glyph support by rendering the character with a fallback font and the target font on a canvas, then comparing alpha sums. C++ uses `ImFont::IsGlyphInFont()` which only checks if a glyph index exists in the loaded font atlas. The JS canvas-based approach can detect visual differences between fallback and target glyphs; the C++ approach may report false positives for glyphs mapped to the fallback/notdef glyph.
+- **Status**: Verified
+- **Details**: Replaced `ImFont::IsGlyphInFont()` with `ImFont::FindGlyphNoFallback()` to reject fallback/notdef matches, aligning C++ glyph-availability checks with the JS intent of detecting real target-font coverage.
 
-- [ ] 119. [font_helpers.cpp] `inject_font_face` is synchronous and returns `void*` vs JS async returning blob URL string
+- [x] 119. [font_helpers.cpp] `inject_font_face` is synchronous and returns `void*` vs JS async returning blob URL string
 - **JS Source**: `src/js/modules/font_helpers.js` lines 113–133
-- **Status**: Pending
-- **Details**: JS `inject_font_face` is async: creates a `@font-face` CSS rule with a blob URL, calls `document.fonts.load()`, verifies with `document.fonts.check()`, and returns the blob URL string (or throws). C++ version is synchronous: calls `ImGui::MemAlloc` + `AddFontFromMemoryTTF`, returns `void*` pointer to `ImFont`. Callers that depend on the return type being a string or the async flow will behave differently.
+- **Status**: Verified
+- **Details**: Contract is now URL-oriented like JS: `inject_font_face()` returns a blob URL string and throws on decode failure; font tabs were updated to resolve `ImFont*` through `get_injected_font()` so behavior matches JS flow while preserving ImGui rendering requirements.
 
-- [ ] 120. [icon-render.cpp] Icon load pipeline is still stubbed and never replaces placeholders
+- [x] 120. [icon-render.cpp] Icon load pipeline is still stubbed and never replaces placeholders
 - **JS Source**: `src/js/icon-render.js` lines 57–64, 93–106
-- **Details**: JS asynchronously loads CASC icon data, decodes BLP, and updates the rendered icon; C++ `processQueue()` contains placeholder comments and does not fetch/decode icon data, so queued icons remain on the default image.
+- **Status**: Verified
+- **Details**: `processQueue()` now fetches icon bytes via `core::view->casc->getVirtualFileByID`, decodes BLP with `casc::BLPImage`, uploads RGBA pixels to OpenGL, and replaces placeholder textures on successful load.
 
-- [ ] 121. [icon-render.cpp] Queue execution model differs from JS async recursive processing
+- [x] 121. [icon-render.cpp] Queue execution model differs from JS async recursive processing
 - **JS Source**: `src/js/icon-render.js` lines 48–65, 77–91
-- **Details**: JS processes one queue entry per async chain and re-enters via `.finally(() => processQueue())`; C++ drains the queue in a synchronous `while` loop, changing scheduling and starvation behavior.
+- **Status**: Verified
+- **Details**: Queue execution now processes one entry at a time and tail-calls `processQueue()` in a finally-equivalent path, matching the JS recursive `.finally(() => processQueue())` structure.
 
-- [ ] 122. [icon-render.cpp] Dynamic stylesheet/CSS-rule icon path is replaced with non-equivalent texture cache flow
+- [x] 122. [icon-render.cpp] Dynamic stylesheet/CSS-rule icon path is replaced with non-equivalent texture cache flow
 - **JS Source**: `src/js/icon-render.js` lines 14–46, 67–75, 93–109
-- **Details**: JS creates `.icon-<id>` CSS rules in a dynamic stylesheet and renders via `background-image`; C++ uses `_registeredIcons/_textureCache` and does not implement stylesheet rule insertion/removal semantics from the JS module.
+- **Status**: Verified
+- **Details**: Added JS-style in-memory rule objects (`selector`, `fileDataID`, `texture`) with selector-based `iconRuleExists`, queue entries bound to specific rules, and `removeRule(rule)` lifecycle semantics equivalent to stylesheet rule insertion/removal.
 
-- [ ] 123. [icon-render.h] Truncated doc comment — sentence fragment on line 17
+- [x] 123. [icon-render.h] Truncated doc comment — sentence fragment on line 17
 - **JS Source**: `src/js/icon-render.js` lines 1–109
-- **Status**: Pending
-- **Details**: The namespace doc comment in `icon-render.h` lines 14–18 contains a sentence fragment: `" * in a cache. The queue mechanism with priority ordering is preserved."` on line 17. The preceding text (lines 14–15) describes the JS CSS-based approach but the transition to the C++ approach is missing — "in a cache." is an orphaned fragment, likely left over from an incomplete edit. The full comment should describe that in C++, icons are loaded as BLP files, decoded to RGBA pixel data, and stored as GL textures in a cache.
+- **Status**: Verified
+- **Details**: Rewrote the namespace documentation to remove the orphaned fragment and clearly describe JS stylesheet behavior versus C++ in-memory rule + texture caching adaptation.
 
 - [ ] 124. [stb-impl.cpp] Required sibling JS source file is missing, blocking parity verification
 - **JS Source**: `src/js/stb-impl.js` lines N/A (file missing)
 - **Status**: Blocked
 - **Details**: `src/js/stb-impl.cpp` exists, but `src/js/stb-impl.js` is absent, so line-by-line comparison against an original JS sibling cannot be completed.
 
-- [ ] 125. [png-writer.cpp] `write()` call contract differs from JS async behavior
+- [x] 125. [png-writer.cpp] `write()` call contract differs from JS async behavior
 - **JS Source**: `src/js/png-writer.js` lines 243–249
-- **Status**: Pending
-- **Details**: JS `write(file)` is `async` and returns/awaits `this.getBuffer().writeToFile(file)`; C++ `PNGWriter::write(...)` is synchronous `void`.
+- **Status**: Verified
+- **Details**: `PNGWriter::write()` now returns `std::shared_future<void>` and performs file output on a background worker thread, restoring a Promise-like async call contract for callers that choose to await completion.
 
 - [ ] 126. [tiled-png-writer.cpp] `write()` contract is synchronous instead of JS Promise-based async
 - **JS Source**: `src/js/tiled-png-writer.js` lines 123–125
