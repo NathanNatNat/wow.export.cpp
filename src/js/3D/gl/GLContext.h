@@ -25,6 +25,13 @@ namespace gl {
  *
  * JS equivalent: const BlendMode = { ... };  GLContext.BlendMode = BlendMode;
  */
+
+// wingdi.h (included via <Windows.h>) defines OPAQUE as a GDI background-style constant.
+// Undefine it here so the BlendMode enum member below is not macro-expanded to a literal.
+#ifdef OPAQUE
+#undef OPAQUE
+#endif
+
 enum BlendMode : int {
 	OPAQUE = 0,
 	ALPHA_KEY = 1,
