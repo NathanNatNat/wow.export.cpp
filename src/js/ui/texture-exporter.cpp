@@ -151,7 +151,7 @@ FileInfoPair getFileInfoPair(const nlohmann::json& input) {
 
 	if (input.is_number()) {
 		pair.fileDataID = input.get<uint32_t>();
-		std::string name = casc::listfile::getByID(pair.fileDataID.value().value_or(""));
+		std::string name = casc::listfile::getByID(pair.fileDataID.value()).value_or("");
 		pair.fileName = name.empty()
 			? casc::listfile::formatUnknownFile(pair.fileDataID.value(), ".blp")
 			: name;
