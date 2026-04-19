@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 171/906 verified (19%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 181/906 verified (20%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -593,53 +593,55 @@
 - **Status**: Verified
 - **Details**: `PNGWriter::write()` now returns `std::shared_future<void>` and performs file output on a background worker thread, restoring a Promise-like async call contract for callers that choose to await completion.
 
-- [ ] 126. [tiled-png-writer.cpp] `write()` contract is synchronous instead of JS Promise-based async
+- [x] 126. [tiled-png-writer.cpp] `write()` contract is synchronous instead of JS Promise-based async
 - **JS Source**: `src/js/tiled-png-writer.js` lines 123–125
-- **Status**: Pending
-- **Details**: JS exposes `async write(file)` and returns `await this.getBuffer().writeToFile(file)`, while C++ `TiledPNGWriter::write(...)` is `void` and synchronous.
+- **Status**: Verified
+- **Details**: `TiledPNGWriter::write(...)` now returns `std::shared_future<void>` and writes on a background worker thread, matching the Promise-like async call contract; call sites that need JS-like await semantics now `.get()` the returned future.
 
-- [ ] 127. [file-writer.cpp] writeLine backpressure/await behavior differs from JS stream semantics
+- [x] 127. [file-writer.cpp] writeLine backpressure/await behavior differs from JS stream semantics
 - **JS Source**: `src/js/file-writer.js` lines 24–33, 35–38
-- **Details**: JS `writeLine()` is async and waits on resolver/drain when `stream.write()` backpressures; C++ writes synchronously and keeps blocked/drain as structural no-ops.
+- **Status**: Verified
+- **Details**: `FileWriter::writeLine()` now returns `std::shared_future<void>`, uses a resolver future chain, and applies blocked/drain gating so callers can await write completion in the same pattern as JS stream backpressure handling.
 
-- [ ] 128. [file-writer.cpp] Closed-stream writes are silently ignored unlike JS stream-end behavior
+- [x] 128. [file-writer.cpp] Closed-stream writes are silently ignored unlike JS stream-end behavior
 - **JS Source**: `src/js/file-writer.js` lines 24–33, 40–42
-- **Details**: C++ guards `writeLine()`/`close()` with `is_open()` and returns early; JS writes to a stream that has been `end()`ed follow Node stream error semantics rather than a silent no-op guard.
+- **Status**: Verified
+- **Details**: Closed-stream `writeLine()` no longer silently no-ops; it now throws `write after end`, matching JS stream-end error behavior instead of swallowing invalid writes.
 
-- [ ] 129. [audio-helper.cpp] AudioPlayer::load does not return decoded buffer like JS
+- [x] 129. [audio-helper.cpp] AudioPlayer::load does not return decoded buffer like JS
 - **JS Source**: `src/js/ui/audio-helper.js` lines 31–35
-- **Status**: Pending
-- **Details**: JS `load()` returns the decoded `AudioBuffer`; C++ `AudioPlayer::load(...)` returns `void`, changing function contract.
+- **Status**: Verified
+- **Details**: `AudioPlayer::load(...)` now returns the loaded audio buffer reference, restoring the JS-style return-value contract where `load()` returns the loaded buffer.
 
-- [ ] 130. [audio-helper.cpp] End-of-playback callback is polling-driven instead of event-driven
+- [x] 130. [audio-helper.cpp] End-of-playback callback is polling-driven instead of event-driven
 - **JS Source**: `src/js/ui/audio-helper.js` lines 57–67, 115–127
-- **Status**: Pending
-- **Details**: JS triggers completion via `source.onended`; C++ checks `ma_sound_at_end()` inside `get_position()` and invokes `on_ended` there, requiring polling and adding side effects to position queries.
+- **Status**: Verified
+- **Details**: Playback completion now uses `ma_sound_set_end_callback(...)` to fire `on_ended` from the sound-end event path, replacing position polling as the completion trigger.
 
-- [ ] 131. [audio-helper.cpp] get_position() has side effects not present in JS
+- [x] 131. [audio-helper.cpp] get_position() has side effects not present in JS
 - **JS Source**: `src/js/ui/audio-helper.js` lines 115–130
-- **Status**: Pending
-- **Details**: In JS, `get_position()` is a pure getter — the browser's `onended` callback independently fires when playback finishes. In C++, `get_position()` polls `ma_sound_at_end()` and fires `on_ended`, resets `is_playing`, calls `stop_source()`, and resets `start_offset`. Consumers MUST poll `get_position()` periodically for end-of-playback detection. Documented in code but architecturally different.
+- **Status**: Verified
+- **Details**: `get_position()` is now side-effect free and only reports playback position; end-of-playback state transitions moved to the event callback path to match JS behavior.
 
-- [ ] 132. [audio-helper.cpp] detectFileType accepts raw bytes instead of BufferWrapper
+- [x] 132. [audio-helper.cpp] detectFileType accepts raw bytes instead of BufferWrapper
 - **JS Source**: `src/js/ui/audio-helper.js` lines 163–170
-- **Status**: Pending
-- **Details**: JS `detectFileType(data)` takes a BufferWrapper and calls `data.startsWith(...)` which accepts arrays of prefixes. C++ takes `(const uint8_t* data, size_t size)` — raw pointer and length. Functionally equivalent but different calling convention.
+- **Status**: Verified
+- **Details**: `detectFileType(...)` now takes `const BufferWrapper&` (JS-equivalent call surface), and callers were updated to pass BufferWrapper instances.
 
-- [ ] 133. [audio-helper.cpp] play() checks !engine in addition to empty data
+- [x] 133. [audio-helper.cpp] play() checks !engine in addition to empty data
 - **JS Source**: `src/js/ui/audio-helper.js` lines 43–44
-- **Status**: Pending
-- **Details**: JS `play()` only checks `if (!this.buffer)`. C++ checks `if (audio_data.empty() || !engine)`. If JS `init()` was never called, `this.context.createBufferSource()` would throw at runtime. C++ handles this gracefully with the extra guard — more defensive but different error behavior.
+- **Status**: Verified
+- **Details**: `play()` now only short-circuits on empty buffer data; missing initialization now throws runtime error, matching JS behavior where using an uninitialized context faults at playback setup.
 
-- [ ] 134. [wowhead.cpp] Parse result field name differs from JS API (`class` vs `player_class`)
+- [x] 134. [wowhead.cpp] Parse result field name differs from JS API (`class` vs `player_class`)
 - **JS Source**: `src/js/wowhead.js` lines 172, 226
-- **Status**: Pending
-- **Details**: JS returns `class` in parsed output objects; C++ stores this value in `ParseResult::player_class`, changing the exported result shape.
+- **Status**: Verified
+- **Details**: Parse output field was aligned away from `player_class`; C++ now stores class id in `ParseResult::class_`, matching JS naming intent for the returned class field.
 
-- [ ] 135. [xxhash64.cpp] Public API contract differs from JS callable-export behavior
+- [x] 135. [xxhash64.cpp] Public API contract differs from JS callable-export behavior
 - **JS Source**: `src/js/hashing/xxhash64.js` lines 64–75, 286–288
-- **Status**: Pending
-- **Details**: JS exports a callable function that doubles as constructor/state prototype (`module.exports = XXH64`), while C++ exposes a class/static-method API only, changing the original module’s call surface semantics.
+- **Status**: Verified
+- **Details**: Added JS-style callable helpers (`hashing::xxh64(...)`) for one-shot hashing plus `hashing::xxh64(seed)` constructor-like state creation, preserving callable-export semantics alongside the class API.
 
 - [ ] 136. [casc-source.cpp] `getFileByName` no longer forwards to subclass file-reader path like JS
 - **JS Source**: `src/js/casc/casc-source.js` lines 169–191
