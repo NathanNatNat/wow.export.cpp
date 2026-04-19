@@ -53,7 +53,8 @@ static void* load_font(const std::string& file_name) {
 
 	try {
 		BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
-		void* font = font_helpers::inject_font_face(font_id, data.raw().data(), data.byteLength());
+		font_helpers::inject_font_face(font_id, data.raw().data(), data.byteLength());
+		void* font = font_helpers::get_injected_font(font_id);
 
 		if (font) {
 			loaded_fonts[font_id] = font;
@@ -100,7 +101,11 @@ void render() {
 			void* font = load_font(first);
 			if (font) {
 				view.fontPreviewFontFamily = get_font_id(*casc::listfile::getByFilename(first));
-				font_helpers::detect_glyphs_async(font, glyph_state);
+				font_helpers::detect_glyphs_async(
+					font,
+					glyph_state,
+					[&view](const std::string& ch) { view.fontPreviewText += ch; }
+				);
 			}
 			prev_selection_first = first;
 		}
@@ -243,7 +248,7 @@ void render() {
 			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, app::theme::FONT_ALT);   // hover bg (#57afe2)
 			ImGui::PushStyleColor(ImGuiCol_HeaderActive, app::theme::FONT_ALT);    // active bg
 			if (ImGui::Selectable(utf8_buf, false, 0, ImVec2(32, 32))) {
-				view.fontPreviewText += utf8_buf;
+				font_helpers::trigger_glyph_click(glyph_state, codepoint);
 			}
 			ImGui::PopStyleColor(3);
 			if (ImGui::IsItemHovered()) {

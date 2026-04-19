@@ -9,6 +9,7 @@
 #include <string>
 #include <filesystem>
 #include <vector>
+#include <future>
 
 #include "buffer.h"
 
@@ -41,8 +42,9 @@ public:
 	/**
 	 * Write this PNG to a file.
 	 * @param file Path to write the PNG file to.
+	 * @returns Shared future that resolves when file writing completes.
 	 */
-	void write(const std::filesystem::path& file);
+	std::shared_future<void> write(const std::filesystem::path& file);
 
 	uint32_t width;
 	uint32_t height;

@@ -6,11 +6,14 @@
 
 #include "icon-render.h"
 #include "core.h"
+#include "casc/blp.h"
 
 #include <cstdint>
 #include <vector>
 #include <unordered_map>
-#include <unordered_set>
+#include <memory>
+#include <string>
+#include <algorithm>
 
 #include <glad/gl.h>
 
@@ -160,13 +163,22 @@ constexpr int QUEUE_LIMIT = 20;
  */
 struct QueueEntry {
 	uint32_t fileDataID;
+	std::weak_ptr<struct IconRule> rule;
 };
 
-// Texture cache: fileDataID -> OpenGL texture handle.
-std::unordered_map<uint32_t, uint32_t> _textureCache;
+/**
+ * JS stylesheet rule analogue used by the C++ renderer.
+ * selector maps to ".icon-<id>" and backgroundImage maps to texture.
+ */
+struct IconRule {
+	std::string selector;
+	uint32_t fileDataID = 0;
+	uint32_t texture = 0;
+};
 
-// Set of fileDataIDs that have been registered (equivalent to iconRuleExists).
-std::unordered_set<uint32_t> _registeredIcons;
+// Dynamic rule store and lookup by fileDataID.
+std::vector<std::shared_ptr<IconRule>> _rules;
+std::unordered_map<uint32_t, std::shared_ptr<IconRule>> _rulesByFileDataID;
 
 bool _loading = false;
 std::vector<QueueEntry> _queue;
@@ -177,26 +189,45 @@ std::vector<QueueEntry> _queue;
  * @param fileDataID The icon's file data ID.
  * @returns true if the icon is already registered.
  */
-bool iconRuleExists(uint32_t fileDataID) {
-	return _registeredIcons.count(fileDataID) > 0;
+bool iconRuleExists(const std::string& selector) {
+	return std::any_of(_rules.begin(), _rules.end(), [&](const std::shared_ptr<IconRule>& rule) {
+		return rule && rule->selector == selector;
+	});
 }
 
 /**
  * Remove a registered icon from the cache.
  * JS equivalent: removeRule(rule) — removed a CSS rule from the stylesheet.
- * @param fileDataID The icon's file data ID to remove.
+ * @param rule Rule to remove.
  */
-void removeRule(uint32_t fileDataID) {
-	auto it = _textureCache.find(fileDataID);
-	if (it != _textureCache.end()) {
-		// Don't delete the shared default placeholder texture.
-		if (it->second != 0 && it->second != _defaultTexture) {
-			GLuint tex = it->second;
-			glDeleteTextures(1, &tex);
-		}
-		_textureCache.erase(it);
+void removeRule(const std::shared_ptr<IconRule>& rule) {
+	if (!rule)
+		return;
+
+	if (rule->texture != 0 && rule->texture != _defaultTexture) {
+		GLuint tex = rule->texture;
+		glDeleteTextures(1, &tex);
 	}
-	_registeredIcons.erase(fileDataID);
+
+	_rulesByFileDataID.erase(rule->fileDataID);
+	_rules.erase(std::remove_if(_rules.begin(), _rules.end(),
+		[&](const std::shared_ptr<IconRule>& entry) { return entry == rule; }), _rules.end());
+}
+
+uint32_t createTextureFromRGBA(const std::vector<uint8_t>& pixels, int width, int height) {
+	if (pixels.empty() || width <= 0 || height <= 0)
+		return 0;
+
+	GLuint tex = 0;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+	glBindTexture(GL_TEXTURE_2D, 0);
+	return tex;
 }
 
 /**
@@ -213,33 +244,46 @@ void removeRule(uint32_t fileDataID) {
  *       entry.rule.style.backgroundImage = 'url(' + blp.getDataURL(0b0111) + ')';
  *   }).catch(() => {}).finally(() => processQueue());
  *
- * The C++ implementation uses a synchronous loop since the CASC file retrieval
- * and BLP decoder are not yet asynchronous. When CASC/BLP are fully ported,
- * this should be converted to process one item at a time with yielding between
- * items to match the JS async recursive pattern.
+ * C++ processes one queue entry per call and recursively re-enters in a
+ * finally-equivalent tail call to preserve JS scheduling semantics.
  */
 void processQueue() {
-	_loading = true;
-
-	while (!_queue.empty()) {
-		QueueEntry entry = _queue.back();
-		_queue.pop_back();
-
-		try {
-			// JS: core.view.casc.getFile(entry.fileDataID).then(data => {
-			//         const blp = new BLPFile(data);
-			//         entry.rule.style.backgroundImage = 'url(' + blp.getDataURL(0b0111) + ')';
-			//     })
-			//
-			// CASC file retrieval and BLP texture loading will be implemented
-			// here when the CASC source and BLP decoder modules are fully ported.
-			// The loaded BLP texture would be stored as a GL texture in _textureCache.
-		} catch (...) {
-			// Icon failed to load — keep the default placeholder texture.
-		}
+	if (_queue.empty()) {
+		_loading = false;
+		return;
 	}
 
-	_loading = false;
+	_loading = true;
+
+	QueueEntry entry = _queue.back();
+	_queue.pop_back();
+
+	try {
+		auto rule = entry.rule.lock();
+		if (rule) {
+			BufferWrapper data = core::view->casc->getVirtualFileByID(entry.fileDataID, true);
+			casc::BLPImage blp(std::move(data));
+			const std::vector<uint8_t> pixels = blp.toUInt8Array(0, 0b0111);
+			const uint32_t tex = createTextureFromRGBA(
+				pixels,
+				static_cast<int>(blp.getScaledWidth()),
+				static_cast<int>(blp.getScaledHeight())
+			);
+
+			if (tex != 0) {
+				if (rule->texture != 0 && rule->texture != _defaultTexture) {
+					GLuint oldTex = rule->texture;
+					glDeleteTextures(1, &oldTex);
+				}
+				rule->texture = tex;
+			}
+		}
+	} catch (...) {
+		// Icon failed to load. Keep placeholder texture.
+	}
+
+	// finally(() => processQueue())
+	processQueue();
 }
 
 /**
@@ -247,8 +291,8 @@ void processQueue() {
  * JS equivalent: queueItem(fileDataID, rule) — rule was a CSSStyleRule.
  * @param fileDataID The icon's file data ID.
  */
-void queueItem(uint32_t fileDataID) {
-	_queue.push_back({fileDataID});
+void queueItem(uint32_t fileDataID, const std::shared_ptr<IconRule>& rule) {
+	_queue.push_back({fileDataID, rule});
 
 	// If the queue is full, remove an element from the front rather than the back
 	// since we want to prioritize the most recently requested icons, as they're
@@ -257,7 +301,13 @@ void queueItem(uint32_t fileDataID) {
 		// Since we're dropping the entry, we need to make sure to remove the icon itself.
 		QueueEntry removed = _queue.front();
 		_queue.erase(_queue.begin());
-		removeRule(removed.fileDataID);
+		if (auto removedRule = removed.rule.lock())
+			removeRule(removedRule);
+		else {
+			const auto it = _rulesByFileDataID.find(removed.fileDataID);
+			if (it != _rulesByFileDataID.end())
+				removeRule(it->second);
+		}
 	}
 
 	if (!_loading)
@@ -269,15 +319,19 @@ void queueItem(uint32_t fileDataID) {
 namespace icon_render {
 
 void loadIcon(uint32_t fileDataID) {
-	if (!iconRuleExists(fileDataID)) {
-		// Register the icon with a default/placeholder texture.
-		_registeredIcons.insert(fileDataID);
-		_textureCache[fileDataID] = getDefaultTexture();
+	const std::string selector = ".icon-" + std::to_string(fileDataID);
+	if (!iconRuleExists(selector)) {
+		auto rule = std::make_shared<IconRule>();
+		rule->selector = selector;
+		rule->fileDataID = fileDataID;
+		rule->texture = getDefaultTexture();
+		_rules.push_back(rule);
+		_rulesByFileDataID[fileDataID] = rule;
 
 		if (fileDataID == 0)
 			return;
 
-		queueItem(fileDataID);
+		queueItem(fileDataID, rule);
 	}
 }
 
@@ -295,9 +349,9 @@ void loadIcon(uint32_t fileDataID) {
  * @returns OpenGL texture handle, or 0 if unavailable.
  */
 uint32_t getIconTexture(uint32_t fileDataID) {
-	auto it = _textureCache.find(fileDataID);
-	if (it != _textureCache.end())
-		return it->second;
+	auto it = _rulesByFileDataID.find(fileDataID);
+	if (it != _rulesByFileDataID.end() && it->second)
+		return it->second->texture;
 	return 0;
 }
 
