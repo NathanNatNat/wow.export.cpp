@@ -17,6 +17,7 @@
 #include <stdexcept>
 #include <format>
 #include <numeric>
+#include <iostream>
 
 #ifdef _WIN32
 #include <io.h>
@@ -27,8 +28,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #endif
-
-#include "../log.h"
 
 namespace mpq {
 
@@ -508,7 +507,7 @@ std::vector<uint8_t> MPQArchive::inflateData(std::span<const uint8_t> data) {
 		inflateEnd(&strm);
 		return result;
 	} catch (const std::exception& e) {
-		logging::write(std::format("decompression error: {}", e.what()));
+		std::cerr << "decompression error: " << e.what() << '\n';
 		throw;
 	}
 }

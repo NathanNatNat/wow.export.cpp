@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 213/906 verified (24%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 226/906 verified (25%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -803,69 +803,69 @@
 - **Status**: Verified
 - **Details**: JS uses `crypto.randomBytes(16).toString('hex')` which is cryptographically secure. C++ uses `std::random_device` + `std::mt19937` which is NOT guaranteed to be cryptographic on all platforms (MSVC's `std::random_device` uses CryptGenRandom but GCC/Linux may use `/dev/urandom` or a PRNG). Used only for multipart boundary generation so security impact is minimal, but it deviates from JS behavior.
 
-- [ ] 168. [listfile.cpp] Public listfile APIs are synchronous instead of JS Promise-based async methods
+- [x] 168. [listfile.cpp] Public listfile APIs are synchronous instead of JS Promise-based async methods
 - **JS Source**: `src/js/casc/listfile.js` lines 478–500, 603–620, 710–756
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS exposes async `preload`, `prepareListfile`, `loadUnknownTextures`, `loadUnknownModels`, `loadUnknowns`, and `renderListfile`; C++ ports these as synchronous/blocking methods.
 
-- [ ] 169. [listfile.cpp] Shared preload promise semantics differ from JS
+- [x] 169. [listfile.cpp] Shared preload promise semantics differ from JS
 - **JS Source**: `src/js/casc/listfile.js` lines 478–500
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS stores and returns `preload_promise` so all callers can await the same Promise result; C++ uses `void` entrypoints with internal future state and does not expose equivalent awaitable API behavior.
 
-- [ ] 170. [listfile.cpp] `applyPreload` return contract differs from JS
+- [x] 170. [listfile.cpp] `applyPreload` return contract differs from JS
 - **JS Source**: `src/js/casc/listfile.js` lines 528–532, 591–601
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS returns `0` in fallback/no-match paths and otherwise returns `undefined`; C++ changes this API to `void`, removing JS return-value semantics.
 
-- [ ] 171. [listfile.cpp] `getByID` not-found sentinel differs from JS
+- [x] 171. [listfile.cpp] `getByID` not-found sentinel differs from JS
 - **JS Source**: `src/js/casc/listfile.js` lines 778–794
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS returns `undefined` when ID lookup fails; C++ returns empty string, changing not-found representation and call-site semantics.
 
-- [ ] 172. [listfile.cpp] `getFilteredEntries` search contract differs from JS
+- [x] 172. [listfile.cpp] `getFilteredEntries` search contract differs from JS
 - **JS Source**: `src/js/casc/listfile.js` lines 832–857
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS auto-detects regex via `search instanceof RegExp` and propagates regex errors; C++ requires explicit `is_regex` flag and swallows invalid regex by returning empty results.
 
-- [ ] 173. [listfile.cpp] Binary preload list ordering can differ from JS Map insertion order
+- [x] 173. [listfile.cpp] Binary preload list ordering can differ from JS Map insertion order
 - **JS Source**: `src/js/casc/listfile.js` lines 563–588
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS iterates `Map` keys in insertion order when building filtered preloaded lists; C++ iterates `std::unordered_map` in non-deterministic hash order, which can reorder displayed list entries.
 
-- [ ] 174. [tact-keys.cpp] Tact key lifecycle APIs are synchronous instead of JS async methods
+- [x] 174. [tact-keys.cpp] Tact key lifecycle APIs are synchronous instead of JS async methods
 - **JS Source**: `src/js/casc/tact-keys.js` lines 65–137
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `load`, `save`, and `doSave` are Promise-based/async; C++ ports to synchronous methods and immediate file I/O.
 
-- [ ] 175. [tact-keys.cpp] Save scheduling differs from JS `setImmediate` batching behavior
+- [x] 175. [tact-keys.cpp] Save scheduling differs from JS `setImmediate` batching behavior
 - **JS Source**: `src/js/casc/tact-keys.js` lines 122–135
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS coalesces multiple save requests into a next-tick `setImmediate(doSave)` write; C++ runs `doSave()` immediately, changing batching/timing semantics.
 
-- [ ] 176. [tact-keys.cpp] Remote update error contract differs from JS HTTP status error path
+- [x] 176. [tact-keys.cpp] Remote update error contract differs from JS HTTP status error path
 - **JS Source**: `src/js/casc/tact-keys.js` lines 89–93
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS throws `Unable to update tactKeys, HTTP ${res.status}` when response is non-OK; C++ throws a generic `Unable to update tactKeys: ...` message from caught exceptions without preserving JS status-based error contract.
 
-- [ ] 177. [tact-keys.cpp] `getKey` returns empty string instead of JS `undefined` when key not found
+- [x] 177. [tact-keys.cpp] `getKey` returns empty string instead of JS `undefined` when key not found
 - **JS Source**: `src/js/casc/tact-keys.js` lines 19–21
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `getKey` returns `KEY_RING[keyName.toLowerCase()]` which evaluates to `undefined` when the key is not in the object. C++ `getKey` (line 130) returns `{}` (empty string) when not found. Callers that compare the result against `undefined` (JS) vs checking `.empty()` (C++) should be functionally equivalent, but the sentinel value difference could cause issues if any code path checks for empty string vs non-existent key, or if a key legitimately has an empty value (not possible for TACT keys but differs in contract).
 
-- [ ] 178. [content-flags.cpp] Sibling `.cpp` translation unit does not contain line-by-line ported JS constant exports
+- [x] 178. [content-flags.cpp] Sibling `.cpp` translation unit does not contain line-by-line ported JS constant exports
 - **JS Source**: `src/js/casc/content-flags.js` lines 4–15
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS sibling exports all content-flag constants in the module body, while `content-flags.cpp` only includes the header and comments; parity exists only via header constants, not in the sibling `.cpp` implementation.
 
-- [ ] 179. [locale-flags.cpp] Sibling `.cpp` translation unit does not contain line-by-line JS exports
+- [x] 179. [locale-flags.cpp] Sibling `.cpp` translation unit does not contain line-by-line JS exports
 - **JS Source**: `src/js/casc/locale-flags.js` lines 4–40
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS sibling exports `flags` and `names` objects in module body, while `locale-flags.cpp` only includes the header and comments; parity lives in header constants rather than `.cpp` implementation.
 
-- [ ] 180. [mpq.cpp] console.error replaced by logging::write for decompression errors
+- [x] 180. [mpq.cpp] console.error replaced by logging::write for decompression errors
 - **JS Source**: `src/js/mpq/mpq.js` line 422
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `console.error('decompression error:', e)` in inflateData catch. C++ uses `logging::write` which goes to the log file rather than stderr. Different log destination.
 
 - [ ] 181. [mpq-install.cpp] _scan_mpq_files sorts entire accumulated vector at every recursion depth

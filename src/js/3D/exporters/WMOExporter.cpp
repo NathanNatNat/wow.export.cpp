@@ -283,7 +283,7 @@ WMOExportTextureResult WMOExporter::exportTextures(const std::filesystem::path& 
 
 				// Attempt to get the file name if we don't already have it.
 				if (fileName.empty())
-					fileName = casc::listfile::getByID(texFileDataID);
+					fileName = casc::listfile::getByID(texFileDataID).value_or("");
 
 				// If we have a valid file name, use it for the material name.
 				if (!fileName.empty()) {
@@ -697,7 +697,7 @@ void WMOExporter::exportAsOBJ(const std::filesystem::path& out, casc::ExportHelp
 				if (!wmo->fileDataIDs.empty()) {
 					// Retail, use fileDataID and lookup the filename.
 					doodadFileDataID = wmo->fileDataIDs[doodad.offset];
-					doodadFileName = casc::listfile::getByID(doodadFileDataID);
+					doodadFileName = casc::listfile::getByID(doodadFileDataID).value_or("");
 				} else {
 					// Classic, use fileName and lookup the fileDataID.
 					auto dnIt = wmo->doodadNames.find(doodad.offset);
@@ -934,7 +934,7 @@ void WMOExporter::exportAsOBJ(const std::filesystem::path& out, casc::ExportHelp
 
 					nlohmann::json texEntry;
 					texEntry["fileDataID"] = materialTexture;
-					std::string internalName = casc::listfile::getByID(materialTexture);
+					std::string internalName = casc::listfile::getByID(materialTexture).value_or("");
 					texEntry["fileNameInternal"] = internalName.empty() ? nlohmann::json(nullptr) : nlohmann::json(internalName);
 
 					auto texIt = textureMap.find(materialTexture);
@@ -1257,7 +1257,7 @@ void WMOExporter::exportGroupsAsSeparateOBJ(const std::filesystem::path& out, ca
 
 				if (!wmo->fileDataIDs.empty()) {
 					doodadFileDataID = wmo->fileDataIDs[doodad.offset];
-					doodadFileName = casc::listfile::getByID(doodadFileDataID);
+					doodadFileName = casc::listfile::getByID(doodadFileDataID).value_or("");
 				} else {
 					auto dnIt = wmo->doodadNames.find(doodad.offset);
 					if (dnIt != wmo->doodadNames.end())
@@ -1466,7 +1466,7 @@ void WMOExporter::exportGroupsAsSeparateOBJ(const std::filesystem::path& out, ca
 
 					nlohmann::json texEntry;
 					texEntry["fileDataID"] = materialTexture;
-					std::string internalName = casc::listfile::getByID(materialTexture);
+					std::string internalName = casc::listfile::getByID(materialTexture).value_or("");
 					texEntry["fileNameInternal"] = internalName.empty() ? nlohmann::json(nullptr) : nlohmann::json(internalName);
 
 					auto texIt = textureMap.find(materialTexture);
@@ -1636,7 +1636,7 @@ void WMOExporter::exportRaw(const std::filesystem::path& out, casc::ExportHelper
 			if (!wmo->fileDataIDs.empty()) {
 				// Retail, use fileDataID and lookup the filename.
 				doodadFileDataID = wmo->fileDataIDs[doodad.offset];
-				doodadFileName = casc::listfile::getByID(doodadFileDataID);
+				doodadFileName = casc::listfile::getByID(doodadFileDataID).value_or("");
 			} else {
 				// Classic, use fileName and lookup the fileDataID.
 				auto dnIt = wmo->doodadNames.find(doodad.offset);

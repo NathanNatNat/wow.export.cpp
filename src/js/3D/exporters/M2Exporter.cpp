@@ -386,7 +386,7 @@ auto texPath = out / texFile;
 
 // Default MTL name to the file ID (prefixed for Maya).
 std::string matName = "mat_" + std::to_string(texFileDataID);
-std::string fileName = casc::listfile::getByID(texFileDataID);
+std::string fileName = casc::listfile::getByID(texFileDataID).value_or("");
 
 if (!fileName.empty()) {
 std::string baseName = std::filesystem::path(fileName).stem().string();
@@ -723,7 +723,7 @@ continue;
 }
 
 try {
-std::string fileName = casc::listfile::getByID(texFileDataID);
+std::string fileName = casc::listfile::getByID(texFileDataID).value_or("");
 std::string matName = "mat_equip_" + std::to_string(texFileDataID);
 std::string texFile = std::to_string(texFileDataID) + ".png";
 auto texPath = outDir / texFile;
@@ -883,7 +883,7 @@ std::string texFile = std::to_string(texFileDataID) + ".png";
 auto texPath = outDir / texFile;
 std::string matName = "mat_equip_" + std::to_string(texFileDataID);
 
-std::string fileName = casc::listfile::getByID(texFileDataID);
+std::string fileName = casc::listfile::getByID(texFileDataID).value_or("");
 if (!fileName.empty()) {
 std::string baseName = std::filesystem::path(fileName).stem().string();
 std::transform(baseName.begin(), baseName.end(), baseName.begin(),
@@ -1142,7 +1142,7 @@ if (!texture.fileName.empty())
 // JS: listfile.getByID() returns undefined when not found;
 // use null in JSON to match JS behavior instead of empty string.
 {
-	auto internalName = casc::listfile::getByID(texture.fileDataID);
+	auto internalName = casc::listfile::getByID(texture.fileDataID).value_or("");
 	if (!internalName.empty())
 		texObj["fileNameInternal"] = internalName;
 	else
@@ -1160,7 +1160,7 @@ texturesJson.push_back(texObj);
 
 json.addProperty("fileType", "m2");
 json.addProperty("fileDataID", fileDataID);
-json.addProperty("fileName", casc::listfile::getByID(fileDataID));
+json.addProperty("fileName", casc::listfile::getByID(fileDataID).value_or(""));
 json.addProperty("internalName", m2->name);
 json.addProperty("textures", texturesJson);
 json.addProperty("textureTypes", nlohmann::json(m2->textureTypes));
@@ -1431,7 +1431,7 @@ exportSkins(m2->lodSkins, "LOD_SKIN", "lodSkins");
 // Write relative skeleton files.
 if (config.value("modelsExportSkel", false) && m2->skeletonFileID) {
 auto skelData = casc->getVirtualFileByID(m2->skeletonFileID);
-std::string skelFileName = casc::listfile::getByID(m2->skeletonFileID);
+std::string skelFileName = casc::listfile::getByID(m2->skeletonFileID).value_or("");
 
 std::string skelFile;
 if (config.value("enableSharedChildren", false))
@@ -1510,7 +1510,7 @@ manifest.addProperty("skelBones", boneManifest);
 
 if (skel.parent_skel_file_id > 0) {
 auto parentSkelData = casc->getVirtualFileByID(skel.parent_skel_file_id);
-std::string parentSkelFileName = casc::listfile::getByID(skel.parent_skel_file_id);
+std::string parentSkelFileName = casc::listfile::getByID(skel.parent_skel_file_id).value_or("");
 
 std::string parentSkelFile;
 if (config.value("enableSharedChildren", false))

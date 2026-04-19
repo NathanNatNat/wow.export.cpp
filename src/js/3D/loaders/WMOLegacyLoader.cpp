@@ -66,7 +66,7 @@ WMOLegacyLoader::WMOLegacyLoader(BufferWrapper& data, uint32_t fileID, bool rend
 	: loaded(false), renderingOnly(renderingOnly), data(&data) {
 	if (fileID != 0) {
 		this->fileDataID = fileID;
-		this->fileName = casc::listfile::getByID(fileID);
+		this->fileName = casc::listfile::getByID(fileID).value_or("");
 	}
 }
 

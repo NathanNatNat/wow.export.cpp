@@ -258,7 +258,7 @@ static void pump_preview_model_task() {
 			const auto displays = get_model_displays(task.file_data_id);
 
 			std::vector<nlohmann::json> skin_list;
-			std::string model_name = casc::listfile::getByID(task.file_data_id);
+			std::string model_name = casc::listfile::getByID(task.file_data_id).value_or("");
 			{
 				auto pos = model_name.rfind('/');
 				if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
@@ -275,7 +275,7 @@ static void pump_preview_model_task() {
 				uint32_t texture = display.textures[0];
 
 				std::string clean_skin_name;
-				std::string skin_name = casc::listfile::getByID(texture);
+				std::string skin_name = casc::listfile::getByID(texture).value_or("");
 
 				if (!skin_name.empty()) {
 					{
@@ -711,7 +711,7 @@ static void pump_export_task() {
 
 	if (file_entry.is_number()) {
 		file_data_id = file_entry.get<uint32_t>();
-		file_name = casc::listfile::getByID(file_data_id);
+		file_name = casc::listfile::getByID(file_data_id).value_or("");
 	} else {
 		file_name = casc::listfile::stripFileEntry(file_entry.get<std::string>());
 		auto opt = casc::listfile::getByFilename(file_name);

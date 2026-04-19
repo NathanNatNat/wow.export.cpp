@@ -458,7 +458,7 @@ static void load_video_listfile() {
 	entries.reserve(video_file_data_ids->size());
 
 	for (const uint32_t fid : *video_file_data_ids) {
-		std::string filename = casc::listfile::getByID(fid);
+		std::string filename = casc::listfile::getByID(fid).value_or("");
 
 		if (filename.empty()) {
 			filename = "interface/cinematics/unk_" + std::to_string(fid) + ".avi";

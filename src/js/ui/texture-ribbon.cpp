@@ -68,7 +68,7 @@ void setSlotFile(int slotIndex, uint32_t fileDataID, int syncID) {
 	auto& slot = stack[slotIndex];
 	slot["fileDataID"] = fileDataID;
 
-	std::string fileName = casc::listfile::getByID(fileDataID);
+	std::string fileName = casc::listfile::getByID(fileDataID).value_or("");
 	if (fileName.empty())
 		fileName = std::to_string(fileDataID);
 

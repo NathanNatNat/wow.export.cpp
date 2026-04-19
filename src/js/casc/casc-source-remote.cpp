@@ -186,7 +186,7 @@ BLTEReader CASCRemote::getFileAsBLTE(uint32_t fileDataID, bool partialDecrypt,
 	bool suppressLog, bool supportFallback, bool forceFallback, const std::string& contentKey)
 {
 	if (!suppressLog)
-		logging::write(std::format("Loading remote CASC file {} ({})", fileDataID, listfile::getByID(fileDataID)));
+		logging::write(std::format("Loading remote CASC file {} ({})", fileDataID, listfile::getByID(fileDataID).value_or("")));
 
 	const std::string encodingKey = !contentKey.empty() ? CASC::getEncodingKeyForContentKey(contentKey) : CASC::getFile(fileDataID);
 	auto cachedData = cache->getFile(encodingKey, constants::CACHE::DIR_DATA().string());
@@ -231,7 +231,7 @@ BLTEStreamReader CASCRemote::getFileStream(uint32_t fileDataID, bool partialDecr
 	bool suppressLog, const std::string& contentKey)
 {
 	if (!suppressLog)
-		logging::write(std::format("Creating stream for remote CASC file {} ({})", fileDataID, listfile::getByID(fileDataID)));
+		logging::write(std::format("Creating stream for remote CASC file {} ({})", fileDataID, listfile::getByID(fileDataID).value_or("")));
 
 	const std::string encodingKey = !contentKey.empty() ? CASC::getEncodingKeyForContentKey(contentKey) : CASC::getFile(fileDataID);
 	auto archIt = archives.find(encodingKey);
@@ -638,7 +638,7 @@ std::string CASCRemote::_ensureFileInCache(const std::string& encodingKey, uint3
 
 	// retrieve and unwrap from BLTE
 	if (!suppressLog)
-		logging::write(std::format("caching file {} ({}) for mmap", fileDataID, listfile::getByID(fileDataID)));
+		logging::write(std::format("caching file {} ({}) for mmap", fileDataID, listfile::getByID(fileDataID).value_or("")));
 
 	auto archIt = archives.find(encodingKey);
 	BufferWrapper data;
