@@ -37,6 +37,8 @@ struct Parser {
 
 		while (pos < xml.size()) {
 			skip_whitespace();
+			if (pos >= xml.size())
+				break;
 
 			if (xml[pos] == '>' || xml[pos] == '/' || xml[pos] == '?')
 				break;
@@ -55,10 +57,14 @@ struct Parser {
 			std::string name(xml.substr(name_start, pos - name_start));
 
 			skip_whitespace();
+			if (pos >= xml.size())
+				break;
 
 			if (xml[pos] == '=') {
 				pos++;
 				skip_whitespace();
+				if (pos >= xml.size())
+					break;
 
 				char quote = xml[pos];
 				pos++;
@@ -68,7 +74,8 @@ struct Parser {
 					pos++;
 
 				std::string value(xml.substr(value_start, pos - value_start));
-				pos++;
+				if (pos < xml.size())
+					pos++;
 
 				attrs["@_" + name] = value;
 			}
@@ -95,18 +102,21 @@ struct Parser {
 			return {};
 
 		pos++;
+		if (pos >= xml.size())
+			return {};
 
 		// closing tag
 		if (xml[pos] == '/') {
 			while (pos < xml.size() && xml[pos] != '>')
 				pos++;
 
-			pos++;
+			if (pos < xml.size())
+				pos++;
 			return {};
 		}
 
 		// processing instruction or xml declaration
-		bool is_declaration = (xml[pos] == '?');
+		bool is_declaration = (pos < xml.size() && xml[pos] == '?');
 		if (is_declaration)
 			pos++;
 
@@ -114,15 +124,15 @@ struct Parser {
 		nlohmann::json attrs = parse_attributes();
 
 		// self-closing or declaration
-		if (xml[pos] == '/' || xml[pos] == '?') {
+		if (pos < xml.size() && (xml[pos] == '/' || xml[pos] == '?')) {
 			pos++;
-			if (xml[pos] == '>')
+			if (pos < xml.size() && xml[pos] == '>')
 				pos++;
 
 			return { tag_name, attrs, {}, true, true };
 		}
 
-		if (xml[pos] == '>')
+		if (pos < xml.size() && xml[pos] == '>')
 			pos++;
 
 		std::vector<Node> children;
@@ -147,7 +157,8 @@ struct Parser {
 			while (pos < xml.size() && xml[pos] != '>')
 				pos++;
 
-			pos++;
+			if (pos < xml.size())
+				pos++;
 		}
 
 		return { tag_name, attrs, std::move(children), false, true };

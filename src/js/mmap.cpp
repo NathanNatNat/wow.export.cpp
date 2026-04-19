@@ -111,10 +111,13 @@ bool MmapObject::map(const std::filesystem::path& path) {
 	size = static_cast<size_t>(fileSize.QuadPart);
 
 	if (size == 0) {
-		lastError = "File is empty";
-		CloseHandle(fileHandle);
-		fileHandle = nullptr;
-		return false;
+		// JS wrapper does not reject empty files. Keep the file handle open so
+		// unmap() can close it, and treat this as a successful zero-length map.
+		data = nullptr;
+		mappingHandle = nullptr;
+		isMapped = true;
+		lastError.clear();
+		return true;
 	}
 
 	mappingHandle = CreateFileMappingW(
@@ -160,10 +163,12 @@ bool MmapObject::map(const std::filesystem::path& path) {
 	size = static_cast<size_t>(st.st_size);
 
 	if (size == 0) {
-		lastError = "File is empty";
-		close(fd);
-		fd = -1;
-		return false;
+		// JS wrapper does not reject empty files. Keep fd open so unmap() can
+		// close it, and treat this as a successful zero-length map.
+		data = nullptr;
+		isMapped = true;
+		lastError.clear();
+		return true;
 	}
 
 	data = ::mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -251,12 +256,6 @@ void release_virtual_files() {
 					mmap_obj->unmap();
 			} catch (...) {
 				// swallow individual unmap errors
-			}
-
-			try {
-				delete mmap_obj;
-			} catch (...) {
-				// swallow individual delete errors to ensure all objects are attempted
 			}
 		}
 

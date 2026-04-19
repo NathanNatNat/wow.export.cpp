@@ -273,11 +273,8 @@ static void play_streaming_video(const std::string& url, const std::optional<Sub
 	// always load subtitles if available, toggle visibility based on config
 	if (subtitle_info.has_value()) {
 		try {
-			//     core_ref.view.casc, subtitle_info.file_data_id, subtitle_info.format);
-			BufferWrapper subtitle_data = core::view->casc->getVirtualFileByID(subtitle_info->file_data_id);
-			std::string raw_subtitle_text = subtitle_data.readString();
 			subtitles::SubtitleFormat fmt = static_cast<subtitles::SubtitleFormat>(subtitle_info->format);
-			current_subtitle_vtt = subtitles::get_subtitles_vtt(raw_subtitle_text, fmt);
+			current_subtitle_vtt = subtitles::get_subtitles_vtt(core::view->casc, subtitle_info->file_data_id, fmt);
 			has_subtitle_track = true;
 
 			logging::write(std::format("loaded subtitles for video (fdid: {}, format: {})",

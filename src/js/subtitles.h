@@ -9,6 +9,10 @@
 #include <string>
 #include <string_view>
 
+namespace casc {
+class CASC;
+}
+
 /**
  * Subtitle format conversion utilities.
  */
@@ -28,15 +32,14 @@ enum class SubtitleFormat : int {
  * and passing the decoded text. The CASC integration happens at the
  * call site.
  *
- * @param text Raw subtitle text content (UTF-8, may contain BOM).
+ * @param casc CASC source used to load subtitle file contents.
+ * @param file_data_id File data ID of subtitle payload.
  * @param format The subtitle format (SRT or SBT).
  * @return WebVTT formatted subtitle string.
  */
-std::string get_subtitles_vtt(std::string_view text, SubtitleFormat format);
+std::string get_subtitles_vtt(casc::CASC* casc, uint32_t file_data_id, SubtitleFormat format);
 
-// Note: The following functions are internal implementation details and
-// are not exported in the JS module. They are kept file-local in
-// subtitles.cpp. Only SUBTITLE_FORMAT and get_subtitles_vtt are
-// part of the public API (matching JS: module.exports = { SUBTITLE_FORMAT, get_subtitles_vtt }).
+// Internal helper used by the public API above.
+std::string get_subtitles_vtt_from_text(std::string_view text, SubtitleFormat format);
 
 } // namespace subtitles
