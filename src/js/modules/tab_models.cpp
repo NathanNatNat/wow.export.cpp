@@ -97,6 +97,7 @@ struct PendingPreviewTask {
 };
 
 static std::optional<PendingPreviewTask> pending_preview_task;
+static std::optional<std::string> queued_preview_file_name;
 
 struct PendingExportTask {
 	bool is_local = false;
@@ -116,6 +117,18 @@ static std::optional<PendingExportTask> pending_export_task;
 
 static M2RendererGL* get_active_m2_renderer() {
 	return active_renderer_result.m2.get();
+}
+
+static void dispose_active_renderer() {
+	if (active_renderer_result.m2)
+		active_renderer_result.m2->dispose();
+	if (active_renderer_result.m3)
+		active_renderer_result.m3->dispose();
+	if (active_renderer_result.wmo)
+		active_renderer_result.wmo->dispose();
+
+	active_renderer_result = model_viewer_utils::RendererResult{};
+	active_path.clear();
 }
 
 static model_viewer_utils::ViewStateProxy* get_view_state_ptr() {
@@ -154,8 +167,12 @@ static std::vector<DisplayVariant> get_model_displays(uint32_t file_data_id) {
 }
 
 static void preview_model(const std::string& file_name) {
-	if (pending_preview_task.has_value())
+	if (pending_preview_task.has_value()) {
+		queued_preview_file_name = file_name;
 		return;
+	}
+
+	queued_preview_file_name.reset();
 
 	core::setToast("progress", std::format("Loading {}, please wait...", file_name), {}, -1, false);
 	logging::write(std::format("Previewing model {}", file_name));
@@ -172,8 +189,7 @@ static void preview_model(const std::string& file_name) {
 
 	try {
 		if (active_renderer_result.type != model_viewer_utils::ModelType::Unknown) {
-			active_renderer_result = model_viewer_utils::RendererResult{};
-			active_path.clear();
+			dispose_active_renderer();
 		}
 
 		active_skins_creature.clear();
@@ -220,6 +236,17 @@ static void pump_preview_model_task() {
 		pending_preview_task.reset();
 	};
 
+	auto queue_next_preview = [&]() {
+		if (!queued_preview_file_name.has_value())
+			return;
+
+		const std::string next_file = *queued_preview_file_name;
+		queued_preview_file_name.reset();
+
+		if (!next_file.empty())
+			preview_model(next_file);
+	};
+
 	try {
 		BufferWrapper file = task.file_future.get();
 		auto& view = *core::view;
@@ -228,6 +255,7 @@ static void pump_preview_model_task() {
 		if (!gl_ctx) {
 			core::setToast("error", "GL context not available — model viewer not initialized.", {}, -1);
 			clear_task();
+			queue_next_preview();
 			return;
 		}
 
@@ -366,6 +394,7 @@ static void pump_preview_model_task() {
 	}
 
 	clear_task();
+	queue_next_preview();
 }
 
 static std::vector<uint32_t> get_variant_texture_ids(const std::string& file_name) {
@@ -517,6 +546,8 @@ static void handle_skins_selection_change(const std::vector<nlohmann::json>& sel
 		return;
 	const auto& selected = selection[0];
 	std::string sel_id = selected.value("id", std::string(""));
+	if (sel_id.empty())
+		return;
 
 	selected_skin_name = sel_id;
 	has_selected_skin_name = true;
@@ -525,8 +556,11 @@ static void handle_skins_selection_change(const std::vector<nlohmann::json>& sel
 	bool has_extra_geosets = false;
 	std::vector<uint32_t> extra_geosets;
 	std::vector<uint32_t> display_textures;
-
 	auto it_creature = active_skins_creature.find(sel_id);
+	auto it_item = active_skins_item.find(sel_id);
+	if (it_creature == active_skins_creature.end() && it_item == active_skins_item.end())
+		return;
+
 	if (it_creature != active_skins_creature.end()) {
 		const auto& display = it_creature->second;
 		if (display.extraGeosets.has_value()) {
@@ -535,11 +569,8 @@ static void handle_skins_selection_change(const std::vector<nlohmann::json>& sel
 		}
 		display_textures = display.textures;
 	} else {
-		auto it_item = active_skins_item.find(sel_id);
-		if (it_item != active_skins_item.end()) {
-			const auto& display = it_item->second;
-			display_textures = display.textures;
-		}
+		const auto& display = it_item->second;
+		display_textures = display.textures;
 	}
 
 	auto& curr_geosets = view.modelViewerGeosets;
@@ -846,18 +877,14 @@ void render() {
 		if (view.selectionModels != prev_selection_models) {
 			prev_selection_models = view.selectionModels;
 
-			if (!tab_initialized) {
-				tab_initialized = true;
-			} else {
-				if (view.config.value("modelsAutoPreview", false)) {
-					if (!view.selectionModels.empty()) {
-						std::string first;
-						if (view.selectionModels[0].is_string())
-							first = casc::listfile::stripFileEntry(view.selectionModels[0].get<std::string>());
+			if (tab_initialized && view.config.value("modelsAutoPreview", false)) {
+				if (!view.selectionModels.empty()) {
+					std::string first;
+					if (view.selectionModels[0].is_string())
+						first = casc::listfile::stripFileEntry(view.selectionModels[0].get<std::string>());
 
-						if (view.isBusy == 0 && !first.empty() && active_path != first)
-							preview_model(first);
-					}
+					if (view.isBusy == 0 && !first.empty() && active_path != first)
+						preview_model(first);
 				}
 			}
 		}
