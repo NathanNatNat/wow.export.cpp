@@ -26,11 +26,20 @@
 // -----------------------------------------------------------------------
 
 AudioType detectFileType(const BufferWrapper& data) {
-	if (data.startsWith("OggS"))
+	const auto& raw = data.raw();
+
+	if (raw.size() >= 4 && std::memcmp(raw.data(), "OggS", 4) == 0)
 		return AudioType::OGG;
 
-	if (data.startsWith(std::vector<std::string_view>{ "ID3", "\xFF\xFB", "\xFF\xF3", "\xFF\xF2" }))
+	if (raw.size() >= 3 && std::memcmp(raw.data(), "ID3", 3) == 0)
 		return AudioType::MP3;
+
+	if (raw.size() >= 2) {
+		if ((raw[0] == 0xFF && raw[1] == 0xFB) ||
+		    (raw[0] == 0xFF && raw[1] == 0xF3) ||
+		    (raw[0] == 0xFF && raw[1] == 0xF2))
+			return AudioType::MP3;
+	}
 
 	return AudioType::Unknown;
 }
