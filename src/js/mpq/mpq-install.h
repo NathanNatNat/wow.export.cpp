@@ -84,7 +84,7 @@ public:
 	std::string build_id;
 
 private:
-	void _scan_mpq_files(const std::string& dir, std::vector<std::string>& results);
+	std::vector<std::string> _scan_mpq_files(const std::string& dir);
 
 	std::string directory;
 	std::vector<ArchiveEntry> archives;

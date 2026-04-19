@@ -52,10 +52,5 @@ db::WDCReader& getTable(const std::string& table_name);
  */
 db::WDCReader& preloadTable(const std::string& table_name);
 
-/**
- * Clear the entire table cache, releasing all readers.
- */
-void clearCache();
-
 } // namespace db2
 } // namespace casc

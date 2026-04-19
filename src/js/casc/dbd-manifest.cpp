@@ -34,6 +34,29 @@ std::mutex manifest_mutex;
 // TODO 192: Protect preload() from concurrent calls with std::once_flag.
 std::once_flag preload_once_flag;
 
+bool jsonTruthy(const nlohmann::json& value) {
+	if (value.is_null())
+		return false;
+
+	if (value.is_boolean())
+		return value.get<bool>();
+
+	if (value.is_number_float())
+		return value.get<double>() != 0.0;
+
+	if (value.is_number_integer())
+		return value.get<int64_t>() != 0;
+
+	if (value.is_number_unsigned())
+		return value.get<uint64_t>() != 0;
+
+	if (value.is_string())
+		return !value.get<std::string>().empty();
+
+	// JS objects/arrays are always truthy.
+	return true;
+}
+
 } // anonymous namespace
 
 namespace casc {
@@ -58,37 +81,24 @@ void preload() {
 				{
 					std::lock_guard<std::mutex> lock(manifest_mutex);
 					for (const auto& entry : manifest_data) {
-						// TODO 190: Match JS truthiness: `if (entry.tableName && entry.db2FileDataID)`.
-						// JS truthiness accepts any truthy value. We check that the fields exist
-						// and are non-null/non-false/non-zero/non-empty, matching JS semantics.
 						if (!entry.contains("tableName") || !entry.contains("db2FileDataID"))
 							continue;
 
 						const auto& tn = entry["tableName"];
 						const auto& fid = entry["db2FileDataID"];
 
-						// JS: any truthy value for tableName (non-empty string, number, etc.)
-						// JS: any truthy value for db2FileDataID (non-zero number, non-empty string, etc.)
-						bool tn_truthy = false;
-						if (tn.is_string())
-							tn_truthy = !tn.get<std::string>().empty();
-						else if (tn.is_number())
-							tn_truthy = tn.get<double>() != 0.0;
-						else if (tn.is_boolean())
-							tn_truthy = tn.get<bool>();
-						// null/object/array are falsy in JS
+						if (jsonTruthy(tn) && jsonTruthy(fid)) {
+							if (!(tn.is_string() || tn.is_number() || tn.is_boolean()))
+								continue;
+							if (!(fid.is_string() || fid.is_number() || fid.is_boolean()))
+								continue;
 
-						bool fid_truthy = false;
-						if (fid.is_number())
-							fid_truthy = fid.get<double>() != 0.0;
-						else if (fid.is_string())
-							fid_truthy = !fid.get<std::string>().empty();
-						else if (fid.is_boolean())
-							fid_truthy = fid.get<bool>();
-
-						if (tn_truthy && fid_truthy) {
-							const std::string table_name = tn.is_string() ? tn.get<std::string>() : std::to_string(tn.get<int>());
-							const int file_data_id = fid.is_number() ? fid.get<int>() : std::stoi(fid.get<std::string>());
+							const std::string table_name = tn.is_string()
+								? tn.get<std::string>()
+								: (tn.is_boolean() ? (tn.get<bool>() ? "true" : "false") : std::to_string(tn.get<int>()));
+							const int file_data_id = fid.is_number()
+								? fid.get<int>()
+								: (fid.is_boolean() ? (fid.get<bool>() ? 1 : 0) : std::stoi(fid.get<std::string>()));
 							table_to_id[table_name] = file_data_id;
 							id_to_table[file_data_id] = table_name;
 						}
