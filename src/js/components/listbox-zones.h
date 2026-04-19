@@ -28,6 +28,12 @@ namespace listbox_zones {
 struct ListboxZonesState {
 	listbox::ListboxState base;
 	int prevExpansionFilter = -1;  // For change detection on expansionFilter.
+
+	// Cached expansion-filtered items — rebuilt only when inputs change.
+	std::vector<std::string> cachedExpansionFiltered;
+	const std::string* cachedExpItemsData   = nullptr;
+	size_t             cachedExpItemsSize    = ~size_t(0);
+	int                cachedExpansionFilter = -2; // -2 = sentinel "never built"
 };
 
 /**

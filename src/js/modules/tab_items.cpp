@@ -167,6 +167,10 @@ static bool is_initialized = false;
 static context_menu::ContextMenuState context_menu_item_state;
 static itemlistbox::ItemListboxState itemlistbox_items_state;
 
+// Cached ItemEntry vector — only rebuilt when the source JSON changes.
+static std::vector<itemlistbox::ItemEntry> s_item_entries_cache;
+static size_t s_item_entries_cache_size = ~size_t(0);
+
 // --- Internal functions ---
 
 static void view_item_models(const Item& item) {
@@ -611,18 +615,22 @@ void render() {
 		ImVec2(listW - app::layout::LIST_MARGIN_LEFT - app::layout::LIST_MARGIN_RIGHT,
 		       topH - app::layout::LIST_MARGIN_TOP));
 	{
-		// Convert json items to ItemEntry array.
-		std::vector<itemlistbox::ItemEntry> item_entries;
-		item_entries.reserve(view.listfileItems.size());
-		for (const auto& j : view.listfileItems) {
-			itemlistbox::ItemEntry entry;
-			entry.id = j.value("id", 0);
-			entry.name = j.value("name", std::string(""));
-			entry.displayName = j.value("displayName", std::string(""));
-			entry.icon = j.value("icon", 0u);
-			entry.quality = j.value("quality", 0);
-			item_entries.push_back(std::move(entry));
+		// Convert json items to ItemEntry array — only when the source changes.
+		if (view.listfileItems.size() != s_item_entries_cache_size) {
+			s_item_entries_cache_size = view.listfileItems.size();
+			s_item_entries_cache.clear();
+			s_item_entries_cache.reserve(s_item_entries_cache_size);
+			for (const auto& j : view.listfileItems) {
+				itemlistbox::ItemEntry entry;
+				entry.id = j.value("id", 0);
+				entry.name = j.value("name", std::string(""));
+				entry.displayName = j.value("displayName", std::string(""));
+				entry.icon = j.value("icon", 0u);
+				entry.quality = j.value("quality", 0);
+				s_item_entries_cache.push_back(std::move(entry));
+			}
 		}
+		const auto& item_entries = s_item_entries_cache;
 
 		// Build selection as item IDs.
 		std::vector<int> sel_ids;

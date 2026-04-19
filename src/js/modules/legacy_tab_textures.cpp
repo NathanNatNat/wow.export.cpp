@@ -60,6 +60,10 @@ static listbox::ListboxState legacy_tex_listbox_state;
 static context_menu::ContextMenuState legacy_tex_ctx_state;
 static menu_button::MenuButtonState legacy_tex_menu_state;
 
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
+
 // --- Forward declarations ---
 static void handle_listbox_context(const nlohmann::json& data);
 
@@ -265,10 +269,7 @@ void render() {
 	//   Listbox with selectionTextures, listfileTextures, filter, context menu
 	if (app::layout::BeginListContainer("legacy-tex-list", regions)) {
 		// Convert json items to string array.
-		std::vector<std::string> tex_strings;
-		tex_strings.reserve(view.listfileTextures.size());
-		for (const auto& t : view.listfileTextures)
-			tex_strings.push_back(t.get<std::string>());
+		const auto& tex_strings = core::cached_json_strings(view.listfileTextures, s_items_cache, s_items_cache_size);
 
 		// Build selection as string array.
 		std::vector<std::string> sel_strings;

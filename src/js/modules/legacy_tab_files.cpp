@@ -31,6 +31,10 @@ static bool files_loaded = false;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
+
 // --- Internal functions ---
 
 static void load_files() {
@@ -124,10 +128,7 @@ void render() {
 	ImGui::BeginChild("legacy-files-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2), ImGuiChildFlags_Borders);
 	{
 		// Convert JSON items/selection to string vectors.
-		std::vector<std::string> items_str;
-		items_str.reserve(view.listfileRaw.size());
-		for (const auto& item : view.listfileRaw)
-			items_str.push_back(item.get<std::string>());
+		const auto& items_str = core::cached_json_strings(view.listfileRaw, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
 		for (const auto& s : view.selectionRaw)

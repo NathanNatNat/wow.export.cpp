@@ -78,6 +78,12 @@ static bool is_initialized = false;
 
 static listbox::ListboxState listbox_models_state;
 
+// Cached items string vectors — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
+static std::vector<std::string> s_override_cache;
+static size_t s_override_cache_size = ~size_t(0);
+
 // Component states for CheckboxList, ListboxB, and MenuButton.
 static checkboxlist::CheckboxListState checkboxlist_geosets_state;
 static checkboxlist::CheckboxListState checkboxlist_wmo_groups_state;
@@ -899,10 +905,7 @@ void render() {
 		//         :items="listfileModels" :override="overrideModelList" :keyinput="true"
 		//         :regex="config.regexFilters" :copymode="config.copyMode" ... @contextmenu="handle_listbox_context" />
 		if (app::layout::BeginListContainer("models-list-container", regions)) {
-			std::vector<std::string> items_str;
-			items_str.reserve(view.listfileModels.size());
-			for (const auto& item : view.listfileModels)
-				items_str.push_back(item.get<std::string>());
+			const auto& items_str = core::cached_json_strings(view.listfileModels, s_items_cache, s_items_cache_size);
 
 			std::vector<std::string> selection_str;
 			for (const auto& s : view.selectionModels)
@@ -915,13 +918,8 @@ void render() {
 				else if (cm == "FID") copy_mode = listbox::CopyMode::FID;
 			}
 
-			// Convert override list.
-			std::vector<std::string> override_str;
-			if (!view.overrideModelList.empty()) {
-				override_str.reserve(view.overrideModelList.size());
-				for (const auto& item : view.overrideModelList)
-					override_str.push_back(item.get<std::string>());
-			}
+			// Convert override list (cached — usually empty).
+			const auto& override_str = core::cached_json_strings(view.overrideModelList, s_override_cache, s_override_cache_size);
 
 			listbox::render(
 				"listbox-models",

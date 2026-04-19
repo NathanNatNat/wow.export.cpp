@@ -178,6 +178,10 @@ static bool prev_show_zone_overlays = true;
 static context_menu::ContextMenuState context_menu_zone_state;
 static listbox_zones::ListboxZonesState listbox_zones_state;
 
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
+
 // --- Internal functions ---
 
 static ZoneDisplayInfo parse_zone_entry(const std::string& entry) {
@@ -772,10 +776,7 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 		       topRowH - app::layout::LIST_MARGIN_TOP));
 
 	// Convert json items to string array.
-	std::vector<std::string> zone_strings;
-	zone_strings.reserve(view.zoneViewerZones.size());
-	for (const auto& z : view.zoneViewerZones)
-		zone_strings.push_back(z.get<std::string>());
+	const auto& zone_strings = core::cached_json_strings(view.zoneViewerZones, s_items_cache, s_items_cache_size);
 
 	// Build selection as string array.
 	std::vector<std::string> sel_strings;

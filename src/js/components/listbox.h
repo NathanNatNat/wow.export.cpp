@@ -77,6 +77,15 @@ struct ListboxState {
 	// Cached counts from last render (for external status bar rendering).
 	int lastFilteredCount = 0;
 	int lastSelectionCount = 0;
+
+	// Cached filtered items — rebuilt only when inputs change, not every frame.
+	std::vector<std::string> cachedFilteredItems;
+	const std::string* cachedItemsData = nullptr;   // items.data() when cache was built
+	size_t             cachedItemsSize  = ~size_t(0); // items.size() when cache was built
+	std::string        cachedDebouncedFilter;
+	bool               cachedRegexMode     = false;
+	std::string        cachedActiveQuickFilter;
+	bool               filteredItemsCacheValid = false;
 };
 
 /**

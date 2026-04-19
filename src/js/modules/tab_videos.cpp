@@ -97,7 +97,9 @@ static bool prev_video_player_show_subtitles = false;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
-// --- Subtitle info struct ---
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
 
 struct SubtitleInfo {
 	uint32_t file_data_id = 0;
@@ -974,10 +976,7 @@ void render() {
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	if (app::layout::BeginListContainer("videos-list-container", regions)) {
 		// Convert JSON items/selection to string vectors.
-		std::vector<std::string> items_str;
-		items_str.reserve(view.listfileVideos.size());
-		for (const auto& item : view.listfileVideos)
-			items_str.push_back(item.get<std::string>());
+		const auto& items_str = core::cached_json_strings(view.listfileVideos, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
 		for (const auto& s : view.selectionVideos)
