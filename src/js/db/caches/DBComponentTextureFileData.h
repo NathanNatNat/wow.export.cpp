@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <vector>
 #include <optional>
+#include <future>
 
 namespace db::caches::DBComponentTextureFileData {
 
@@ -21,6 +22,7 @@ struct ComponentTextureInfo {
  * Initialize ComponentTextureFileData from DB2.
  */
 void initialize();
+std::future<void> initializeAsync();
 
 /**
  * Filter a list of FileDataIDs to find the best texture match for race/gender.

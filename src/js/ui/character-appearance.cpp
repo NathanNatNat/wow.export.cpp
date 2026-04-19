@@ -199,6 +199,8 @@ std::optional<uint32_t> apply_customization_textures(
 				continue;
 
 			const uint32_t chr_model_texture_target = chr_cust_mat->ChrModelTextureTargetID;
+			if (!chr_cust_mat->FileDataID.has_value())
+				continue;
 
 			const db::DataRecord* chr_model_texture_layer = db::caches::DBCharacterCustomization::get_model_texture_layer(layout_id, chr_model_texture_target);
 			if (!chr_model_texture_layer)
@@ -260,7 +262,7 @@ std::optional<uint32_t> apply_customization_textures(
 
 			chr_material->setTextureTarget(
 				static_cast<int>(chr_cust_mat->ChrModelTextureTargetID),
-				chr_cust_mat->FileDataID,
+				*chr_cust_mat->FileDataID,
 				sectionX, sectionY, sectionWidth, sectionHeight,
 				static_cast<int>(get_field_int(*chr_model_material, "TextureType")),
 				static_cast<int>(get_field_int(*chr_model_material, "Width")),

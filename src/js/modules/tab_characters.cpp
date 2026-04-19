@@ -977,7 +977,7 @@ if (!available_options)
 return;
 
 // update texture layout for the new model
-current_char_component_texture_layout_id = db::caches::DBCharacterCustomization::get_texture_layout_id(selected_id);
+current_char_component_texture_layout_id = db::caches::DBCharacterCustomization::get_texture_layout_id(selected_id).value_or(0);
 
 // clear materials for new model
 clear_materials();
@@ -1020,7 +1020,7 @@ if (!state.chrCustOptions.empty())
 state.chrCustOptionSelection = { state.chrCustOptions[0] };
 
 // load the model
-uint32_t file_data_id = db::caches::DBCharacterCustomization::get_model_file_data_id(selected_id);
+uint32_t file_data_id = db::caches::DBCharacterCustomization::get_model_file_data_id(selected_id).value_or(0);
 load_character_model(file_data_id);
 }
 

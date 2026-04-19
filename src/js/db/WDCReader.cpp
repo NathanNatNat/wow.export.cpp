@@ -15,6 +15,9 @@
 #include "../buffer.h"
 #include "../casc/export-helper.h"
 #include "../casc/casc-source.h"
+#include "../casc/casc-source-local.h"
+#include "../casc/casc-source-remote.h"
+#include "../casc/build-cache.h"
 
 #include <cstdint>
 #include <cassert>
@@ -24,6 +27,8 @@
 #include <sstream>
 #include <iomanip>
 #include <memory>
+#include <limits>
+#include <cctype>
 
 namespace db {
 
@@ -72,6 +77,51 @@ static int64_t fieldValueToInt64(const FieldValue& val) {
 	if (auto* p = std::get_if<float>(&val))
 		return static_cast<int64_t>(*p);
 	return 0;
+}
+
+static std::optional<uint32_t> parseIntCoerceUint32(std::string_view input) {
+	size_t i = 0;
+	while (i < input.size() && std::isspace(static_cast<unsigned char>(input[i])))
+		i++;
+
+	if (i >= input.size())
+		return std::nullopt;
+
+	int sign = 1;
+	if (input[i] == '+' || input[i] == '-') {
+		if (input[i] == '-')
+			sign = -1;
+		i++;
+	}
+
+	if (i >= input.size() || !std::isdigit(static_cast<unsigned char>(input[i])))
+		return std::nullopt;
+
+	uint64_t value = 0;
+	while (i < input.size() && std::isdigit(static_cast<unsigned char>(input[i]))) {
+		value = value * 10 + static_cast<uint64_t>(input[i] - '0');
+		if (value > std::numeric_limits<uint32_t>::max())
+			value = std::numeric_limits<uint32_t>::max();
+		i++;
+	}
+
+	if (sign < 0)
+		return static_cast<uint32_t>(-static_cast<int64_t>(value));
+
+	return static_cast<uint32_t>(value);
+}
+
+static casc::BuildCache* getActiveCascCache() {
+	if (!core::view || !core::view->casc)
+		return nullptr;
+
+	if (auto* local = dynamic_cast<casc::CASCLocal*>(core::view->casc))
+		return local->cache;
+
+	if (auto* remote = dynamic_cast<casc::CASCRemote*>(core::view->casc))
+		return remote->cache;
+
+	return nullptr;
 }
 
 /**
@@ -146,20 +196,29 @@ std::optional<DataRecord> WDCReader::getRow(uint32_t recordID) {
 	return _readRecord(recordID);
 }
 
+std::optional<DataRecord> WDCReader::getRow(std::string_view recordID) {
+	auto coerced = parseIntCoerceUint32(recordID);
+	if (!coerced.has_value())
+		return std::nullopt;
+
+	return getRow(*coerced);
+}
+
 /**
  * Returns all available rows in the table.
  * If preload() was called, returns cached rows. Otherwise computes fresh.
  * Iterates sequentially through all sections for efficient paging with mmap.
  */
-std::map<uint32_t, DataRecord> WDCReader::getAllRows() {
+const std::map<uint32_t, DataRecord>& WDCReader::getAllRows() {
 	if (!isLoaded)
 		throw std::runtime_error("Attempted to read a data table rows before table was loaded.");
 
 	// return preloaded cache if available
 	if (rows.has_value())
-		return rows.value();
+		return *rows;
 
-	std::map<uint32_t, DataRecord> result;
+	transientRows.clear();
+	auto& result = transientRows;
 
 	// iterate through all sections sequentially
 	for (size_t sectionIndex = 0; sectionIndex < sections.size(); sectionIndex++) {
@@ -193,7 +252,13 @@ std::map<uint32_t, DataRecord> WDCReader::getAllRows() {
 				if (hasKnownID) {
 					finalRecordID = recordID;
 				} else {
-					finalRecordID = static_cast<uint32_t>(fieldValueToInt64(record.value().at(idField)));
+					if (!idField.has_value())
+						continue;
+
+					auto idIt = record.value().find(*idField);
+					if (idIt == record.value().end())
+						continue;
+					finalRecordID = static_cast<uint32_t>(fieldValueToInt64(idIt->second));
 				}
 				result[finalRecordID] = std::move(record.value());
 			}
@@ -257,6 +322,14 @@ std::vector<DataRecord> WDCReader::getRelationRows(uint32_t foreignKeyValue) {
 	return results;
 }
 
+std::vector<DataRecord> WDCReader::getRelationRows(std::string_view foreignKeyValue) {
+	auto coerced = parseIntCoerceUint32(foreignKeyValue);
+	if (!coerced.has_value())
+		return {};
+
+	return getRelationRows(*coerced);
+}
+
 /**
  * Load the schema for this table.
  * @param layoutHash The layout hash string.
@@ -273,13 +346,18 @@ void WDCReader::loadSchema(const std::string& layoutHash) {
 	const DBDEntry* structure = nullptr;
 	logging::write("Loading table definitions " + dbdName + " (" + buildID + " " + layoutHash + ")...");
 
-	// check cached dbd
-	// casc.cache is accessed via JSON; in C++ we use the BuildCache directly
-	// For now, try to load from the DBD cache directory
+	// check cached dbd through active CASC cache (JS: casc.cache.getFile)
 	std::filesystem::path dbdCachePath = constants::CACHE::DIR_DBD() / dbdName;
 	std::unique_ptr<DBDParser> dbdParser;
+	casc::BuildCache* cache = getActiveCascCache();
 
-	if (std::filesystem::exists(dbdCachePath)) {
+	if (cache != nullptr) {
+		auto cachedRaw = cache->getFile(dbdName, constants::CACHE::DIR_DBD().string());
+		if (cachedRaw.has_value()) {
+			dbdParser = std::make_unique<DBDParser>(cachedRaw.value());
+			structure = dbdParser->getStructure(buildID, layoutHash);
+		}
+	} else if (std::filesystem::exists(dbdCachePath)) {
 		BufferWrapper rawDbd = BufferWrapper::readFile(dbdCachePath);
 		dbdParser = std::make_unique<DBDParser>(rawDbd);
 		structure = dbdParser->getStructure(buildID, layoutHash);
@@ -306,9 +384,13 @@ void WDCReader::loadSchema(const std::string& layoutHash) {
 			logging::write("No cached DBD, downloading new from " + dbd_url);
 			BufferWrapper rawDbd = generics::downloadFile({ dbd_url, dbd_url_fallback });
 
-			// Store to cache
-			std::filesystem::create_directories(constants::CACHE::DIR_DBD());
-			rawDbd.writeToFile(dbdCachePath);
+			// Store to cache (JS: casc.cache.storeFile)
+			if (cache != nullptr) {
+				cache->storeFile(dbdName, rawDbd, constants::CACHE::DIR_DBD().string());
+			} else {
+				std::filesystem::create_directories(constants::CACHE::DIR_DBD());
+				rawDbd.writeToFile(dbdCachePath);
+			}
 
 			dbdParser = std::make_unique<DBDParser>(rawDbd);
 			structure = dbdParser->getStructure(buildID, layoutHash);
@@ -732,7 +814,10 @@ std::optional<RecordLocation> WDCReader::_findSectionForRecord(uint32_t recordID
 			for (uint32_t recordIndex = 0; recordIndex < headerRecordCount; recordIndex++) {
 				auto record = _readRecordFromSection(sectionIndex, recordIndex, 0, false);
 				if (record.has_value()) {
-					auto idIt = record.value().find(idField);
+					if (!idField.has_value())
+						continue;
+
+					auto idIt = record.value().find(*idField);
 					if (idIt != record.value().end() && static_cast<uint32_t>(fieldValueToInt64(idIt->second)) == recordID)
 						return RecordLocation{ sectionIndex, recordIndex, recordID };
 				}
@@ -1051,8 +1136,11 @@ std::optional<DataRecord> WDCReader::_readRecordFromSection(size_t sectionIndex,
 				}
 
 				const uint64_t bitOffset = recordFieldInfo.fieldOffsetBits & 7;
-				const uint64_t bitSize = 1ULL << recordFieldInfo.fieldSizeBits;
-				const uint64_t bitpackedValue = (rawValue >> bitOffset) & (bitSize - 1ULL);
+				const uint32_t fieldSizeBits = recordFieldInfo.fieldSizeBits;
+				const uint64_t bitMask = fieldSizeBits >= 64
+					? std::numeric_limits<uint64_t>::max()
+					: ((1ULL << fieldSizeBits) - 1ULL);
+				const uint64_t bitpackedValue = (rawValue >> bitOffset) & bitMask;
 
 				if (recordFieldInfo.fieldCompression == CompressionType::BitpackedIndexedArray) {
 					uint32_t arrSize = recordFieldInfo.fieldCompressionPacking[2];
@@ -1070,10 +1158,16 @@ std::optional<DataRecord> WDCReader::_readRecordFromSection(size_t sectionIndex,
 				}
 
 				if (recordFieldInfo.fieldCompression == CompressionType::BitpackedSigned) {
-					// Sign-extend: reinterpret bitpackedValue as signed with fieldSizeBits width
-					uint64_t signBit = 1ULL << (recordFieldInfo.fieldSizeBits - 1);
-					int64_t signedVal = static_cast<int64_t>((bitpackedValue ^ signBit) - signBit);
-					out[prop] = signedVal;
+					// JS uses BigInt.asIntN(fieldSizeBits, bitpackedValue). Clamp to 64-bit host integer width.
+					if (fieldSizeBits == 0) {
+						out[prop] = static_cast<int64_t>(0);
+					} else if (fieldSizeBits >= 64) {
+						out[prop] = static_cast<int64_t>(bitpackedValue);
+					} else {
+						uint64_t signBit = 1ULL << (fieldSizeBits - 1);
+						int64_t signedVal = static_cast<int64_t>((bitpackedValue ^ signBit) - signBit);
+						out[prop] = signedVal;
+					}
 				}
 
 				break;
@@ -1190,6 +1284,40 @@ std::optional<DataRecord> WDCReader::_readRecordFromSection(size_t sectionIndex,
 	}
 
 	return out;
+}
+
+std::future<std::optional<DataRecord>> WDCReader::getRowAsync(uint32_t recordID) {
+	return std::async(std::launch::async, [this, recordID]() { return getRow(recordID); });
+}
+
+std::future<std::optional<DataRecord>> WDCReader::getRowAsync(std::string recordID) {
+	return std::async(std::launch::async, [this, recordID = std::move(recordID)]() { return getRow(recordID); });
+}
+
+std::future<std::map<uint32_t, DataRecord>> WDCReader::getAllRowsAsync() {
+	return std::async(std::launch::async, [this]() { return getAllRows(); });
+}
+
+std::future<void> WDCReader::preloadAsync() {
+	return std::async(std::launch::async, [this]() { preload(); });
+}
+
+std::future<std::vector<DataRecord>> WDCReader::getRelationRowsAsync(uint32_t foreignKeyValue) {
+	return std::async(std::launch::async, [this, foreignKeyValue]() { return getRelationRows(foreignKeyValue); });
+}
+
+std::future<std::vector<DataRecord>> WDCReader::getRelationRowsAsync(std::string foreignKeyValue) {
+	return std::async(std::launch::async, [this, foreignKeyValue = std::move(foreignKeyValue)]() {
+		return getRelationRows(foreignKeyValue);
+	});
+}
+
+std::future<void> WDCReader::loadSchemaAsync(std::string layoutHash) {
+	return std::async(std::launch::async, [this, layoutHash = std::move(layoutHash)]() { loadSchema(layoutHash); });
+}
+
+std::future<void> WDCReader::parseAsync() {
+	return std::async(std::launch::async, [this]() { parse(); });
 }
 
 } // namespace db

@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <future>
 
 namespace db::caches::DBCreatureDisplayExtra {
 
@@ -27,6 +28,7 @@ struct CustomizationOption {
  * Ensure creature display extra data is initialized.
  */
 void ensureInitialized();
+std::future<void> ensureInitializedAsync();
 
 /**
  * Get extra display info by ID.
