@@ -39,6 +39,17 @@ static constexpr std::array<float, 16> WMO_IDENTITY_MAT4 = {
 WMORendererGL::WMORendererGL(BufferWrapper& data, uint32_t fileID, gl::GLContext& gl_context, bool useRibbon)
 	: data_ptr(&data)
 	, fileID(fileID)
+	, fileName(casc::listfile::getByID(fileID).value_or(""))
+	, ctx(gl_context)
+	, useRibbon(useRibbon)
+{
+	model_matrix = WMO_IDENTITY_MAT4;
+}
+
+WMORendererGL::WMORendererGL(BufferWrapper& data, const std::string& fileName, gl::GLContext& gl_context, bool useRibbon)
+	: data_ptr(&data)
+	, fileID(casc::listfile::getByFilename(fileName).value_or(0))
+	, fileName(fileName)
 	, ctx(gl_context)
 	, useRibbon(useRibbon)
 {
@@ -75,7 +86,10 @@ std::vector<nlohmann::json>& WMORendererGL::get_wmo_sets_view() {
 
 void WMORendererGL::load() {
 	// parse WMO data
-	wmo = std::make_unique<WMOLoader>(*data_ptr, fileID, true);
+	if (!fileName.empty())
+		wmo = std::make_unique<WMOLoader>(*data_ptr, fileName, true);
+	else
+		wmo = std::make_unique<WMOLoader>(*data_ptr, fileID, true);
 	wmo->load();
 
 	// load shader program

@@ -52,6 +52,7 @@ License: MIT
 #include <fstream>
 #include <map>
 #include <memory>
+#include <optional>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -183,7 +184,7 @@ static std::vector<nlohmann::json> prev_choice_selection;
 static std::vector<nlohmann::json> prev_active_choices;
 static nlohmann::json prev_equipped_items;
 static nlohmann::json prev_guild_tabard_config;
-static std::string prev_anim_selection;
+static std::optional<std::string> prev_anim_selection;
 static bool prev_include_base_clothing = true;
 static bool prev_chr_import_region_inited = false;
 static std::string prev_chr_import_region;
@@ -2407,7 +2408,7 @@ update_realm_list();
 
 // watch chrModelViewerAnimSelection
 {
-std::string current_anim;
+std::optional<std::string> current_anim;
 if (view.chrModelViewerAnimSelection.is_string())
 current_anim = view.chrModelViewerAnimSelection.get<std::string>();
 

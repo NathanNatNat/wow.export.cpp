@@ -75,6 +75,7 @@ public:
 	 * @param casc CASC source for file loading
 	 */
 	WMOExporter(BufferWrapper data, uint32_t fileDataID, casc::CASC* casc);
+	WMOExporter(BufferWrapper data, const std::string& fileName, casc::CASC* casc);
 
 	/**
 	 * Set the mask used for group control.
@@ -167,6 +168,7 @@ private:
 	BufferWrapper data;
 	std::unique_ptr<WMOLoader> wmo;
 	uint32_t fileDataID;
+	std::string fileName;
 	casc::CASC* casc;
 	std::vector<WMOExportGroupMask> groupMask;
 	std::vector<WMOExportDoodadSetMask> doodadSetMask;

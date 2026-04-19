@@ -174,9 +174,21 @@ namespace {
  * @param casc CASC source for file loading
  */
 WMOExporter::WMOExporter(BufferWrapper data, uint32_t fileDataID, casc::CASC* casc)
-	: data(std::move(data)), fileDataID(fileDataID), casc(casc)
+	: data(std::move(data))
+	, fileDataID(fileDataID)
+	, fileName(casc::listfile::getByID(fileDataID).value_or(""))
+	, casc(casc)
 {
 	wmo = std::make_unique<WMOLoader>(this->data, fileDataID);
+}
+
+WMOExporter::WMOExporter(BufferWrapper data, const std::string& fileName, casc::CASC* casc)
+	: data(std::move(data))
+	, fileDataID(casc::listfile::getByFilename(fileName).value_or(0))
+	, fileName(fileName)
+	, casc(casc)
+{
+	wmo = std::make_unique<WMOLoader>(this->data, fileName);
 }
 
 /**

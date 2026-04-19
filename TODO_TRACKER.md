@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 267/907 verified (29%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 278/907 verified (31%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1729,10 +1729,10 @@
 - **Status**: Pending
 - **Details**: CSS `.markdown-content-inner ul { padding-left: 2em; list-style-type: disc; }` uses standard disc bullets with 2em left padding. At 20px base font, 2em = 40px. C++ uses `ImGui::Indent(16.0f)` with a manual `•` character (lines 369–373). 16px vs 40px indent is a significant visual difference, and the bullet character may render differently than the CSS disc marker.
 
-- [ ] 353. [texture-ribbon.cpp] Additional GL texture management functions not present in JS
+- [x] 353. [texture-ribbon.cpp] Additional GL texture management functions not present in JS
 - **JS Source**: `src/js/ui/texture-ribbon.js` (entire file)
-- **Status**: Pending
-- **Details**: C++ adds `clearSlotTextures()`, `getSlotTexture()`, `s_slotTextures` map, and `s_slotSrcCache` map for OpenGL texture lifecycle management. JS uses DOM img elements with `.src` assignment which handles image loading/display natively. C++ `reset()` additionally calls `clearSlotTextures()` to delete GL resources. These are expected platform additions but expand the API surface beyond the JS module exports.
+- **Status**: Verified
+- **Details**: Verified as required platform adaptation. JS relies on DOM image lifecycle; C++/ImGui requires explicit GPU texture upload/cache/free (`getSlotTexture`, `clearSlotTextures`) to render slot previews and avoid GL leaks. Core exported behavior (`reset`, `setSlotFile`, `setSlotFileLegacy`, `setSlotSrc`, `onResize`, `addSlot`) remains aligned.
 - [ ] 354. [home-showcase.cpp] Showcase card/video/background layer rendering is not ported
 - **JS Source**: `src/js/components/home-showcase.js` lines 15–29, 32–42, 55–57
 - **Status**: Pending
@@ -3608,40 +3608,40 @@
 - **Status**: Pending
 - **Details**: JS `CameraControlsGL` and `CharacterCameraControlsGL` register mousemove/mouseup on `document`, meaning mouse drag continues even when the cursor leaves the canvas. C++ `handle_input` (line 318) returns early if `!ImGui::IsItemHovered()`, which means dragging the camera and moving the mouse outside the widget area will stop the camera update. The comment on line 359 says "always forward, regardless of hover, since panning may extend outside" but the early return on line 318 contradicts this.
 
-- [ ] 729. [model-viewer-utils.cpp] Clipboard preview export copies base64 text instead of PNG image data
+- [x] 729. [model-viewer-utils.cpp] Clipboard preview export copies base64 text instead of PNG image data
 - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 299–303
-- **Status**: Pending
-- **Details**: JS writes PNG binary payload to the clipboard (`clipboard.set(..., 'png', true)`), while C++ uses `ImGui::SetClipboardText(buf.toBase64().c_str())`, resulting in text clipboard content rather than image clipboard content.
+- **Status**: Verified
+- **Details**: Ported PNG clipboard behavior to native image clipboard paths (Windows CF_DIB, Linux `xclip -target image/png`) with text fallback only when native image transfer fails, matching JS `clipboard.set(..., 'png', true)` intent.
 
-- [ ] 730. [model-viewer-utils.cpp] Animation selection guard treats empty string as null/undefined
+- [x] 730. [model-viewer-utils.cpp] Animation selection guard treats empty string as null/undefined
 - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 251–253
-- **Status**: Pending
-- **Details**: JS exits only for `null`/`undefined`; C++ exits for `selected_animation_id.empty()`, which changes behavior for explicit empty-string IDs.
+- **Status**: Verified
+- **Details**: Updated `handle_animation_change` to accept `std::optional<std::string>` and early-return only for `nullopt` (JS null/undefined), while allowing explicit empty-string IDs to continue through the same path as JS.
 
-- [ ] 731. [model-viewer-utils.cpp] WMO renderer/export constructor inputs differ from JS filename-based path
+- [x] 731. [model-viewer-utils.cpp] WMO renderer/export constructor inputs differ from JS filename-based path
 - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 208, 405
-- **Status**: Pending
-- **Details**: JS constructs `WMORendererGL`/`WMOExporter` with `file_name`; C++ uses `file_data_id`-based constructors and ignores the filename parameter in these paths.
+- **Status**: Verified
+- **Details**: Added filename-based constructor paths and switched model-viewer-utils WMO renderer/non-RAW exporter flows to pass `file_name`, matching JS constructor usage while retaining ID fallback where needed.
 
-- [ ] 732. [model-viewer-utils.cpp] View-state proxy is hardcoded to three prefixes instead of dynamic property resolution
+- [x] 732. [model-viewer-utils.cpp] View-state proxy is hardcoded to three prefixes instead of dynamic property resolution
 - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 503–528
-- **Status**: Pending
-- **Details**: JS proxy resolves fields dynamically via `core.view[prefix + ...]`; C++ only maps `"model"`, `"decor"`, and `"creature"` with explicit branches, removing generic-prefix behavior.
+- **Status**: Verified
+- **Details**: Reworked `create_view_state` to resolve fields by computed key names (`prefix + suffix`) via property maps instead of hardcoded 3-prefix branching, restoring JS-style dynamic key resolution semantics across supported AppState fields.
 
-- [ ] 733. [model-viewer-utils.cpp] export_preview CLIPBOARD copies base64 text instead of PNG image data
+- [x] 733. [model-viewer-utils.cpp] export_preview CLIPBOARD copies base64 text instead of PNG image data
 - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 115–120
-- **Status**: Pending
-- **Details**: JS `clipboard.set(buf.toBase64(), 'png', true)` copies actual PNG image data to the system clipboard so pasting in an image editor shows the screenshot. C++ `ImGui::SetClipboardText(buf.toBase64().c_str())` copies base64-encoded text. Pasting in an image editor produces text, not an image. A platform-specific clipboard API (Win32 CF_DIB, X11 image/png) is needed for parity.
+- **Status**: Verified
+- **Details**: `export_preview(..., "CLIPBOARD", ...)` now writes native PNG image payloads to clipboard paths instead of base64 text, matching JS image clipboard behavior with platform fallback only when unavailable.
 
-- [ ] 734. [model-viewer-utils.cpp] WMO renderer and exporter pass file_data_id instead of file_name
+- [x] 734. [model-viewer-utils.cpp] WMO renderer and exporter pass file_data_id instead of file_name
 - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 85–95, 190–210
-- **Status**: Pending
-- **Details**: JS `WMORendererGL(data, file_name, gl_context, show_textures)` and `WMOExporter(data, file_name)` use the file name string. C++ passes `file_data_id` (uint32_t) to both `WMORendererGL(data, file_data_id, ctx, show_textures)` and `WMOExporter(data, file_data_id, casc)`. The `file_name` parameter is explicitly discarded via `(void)file_name`. This is a documented API adaptation but changes how WMO resources are resolved internally.
+- **Status**: Verified
+- **Details**: Implemented filename constructor overloads for `WMORendererGL` and `WMOExporter` and updated model-viewer-utils call sites to pass `file_name` in the same paths as JS.
 
-- [ ] 735. [model-viewer-utils.cpp] create_view_state only supports 3 hardcoded prefixes
+- [x] 735. [model-viewer-utils.cpp] create_view_state only supports 3 hardcoded prefixes
 - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 235–270
-- **Status**: Pending
-- **Details**: JS uses dynamic property access `core.view[prefix + 'TexturePreviewURL']` supporting any prefix string. C++ hardcodes only "model", "decor", "creature" — any other prefix silently returns a ViewStateProxy with all nullptr fields. This matches current runtime usage but would break if new tab types are added without updating the if/else chain.
+- **Status**: Verified
+- **Details**: `create_view_state` now performs key-based dynamic binding using `prefix + ...` field names and supports additional existing prefixes (e.g., legacy/character animation fields) without explicit branch chains.
 
 - [ ] 736. [MultiMap.cpp] MultiMap logic is not ported in the `.cpp` sibling translation unit
 - **JS Source**: `src/js/MultiMap.js` lines 6–32
@@ -4083,20 +4083,20 @@
 - **Status**: Pending
 - **Details**: JS writes stack traces with `console.log(stackTrace)` in `mark(...)`; C++ routes stack trace strings through `logging::write(...)`, changing where detailed error output appears.
 
-- [ ] 824. [texture-exporter.cpp] overwriteFiles config default is true in C++ vs undefined (falsy) in JS
+- [x] 824. [texture-exporter.cpp] overwriteFiles config default is true in C++ vs undefined (falsy) in JS
 - **JS Source**: `src/js/ui/texture-exporter.js` lines 100–105
-- **Status**: Pending
-- **Details**: JS reads `core.view.config.overwriteFiles` which is undefined if not set (falsy → no overwrite). C++ uses `.value("overwriteFiles", true)` defaulting to `true`. If the config key is absent, C++ overwrites existing files by default while JS would not. Behavioral difference in default export behavior.
+- **Status**: Verified
+- **Details**: Changed C++ default to `false` when `overwriteFiles` is missing so absent config now behaves as JS-falsy (no overwrite).
 
-- [ ] 825. [texture-exporter.cpp] Added .jpeg extension handling not present in JS
+- [x] 825. [texture-exporter.cpp] Added .jpeg extension handling not present in JS
 - **JS Source**: `src/js/ui/texture-exporter.js` lines 145–150
-- **Status**: Pending
-- **Details**: JS only checks `file_ext === '.jpg'` for JPG detection. C++ additionally checks `file_ext == ".jpeg"`. Minor deviation: C++ handles an extra extension that JS does not recognize, so a file named "foo.jpeg" would be processed as JPG in C++ but treated as unknown in JS.
+- **Status**: Verified
+- **Details**: Removed `.jpeg` special-case detection; C++ now mirrors JS by only recognizing `.jpg` in the raw JPG passthrough branch.
 
-- [ ] 826. [texture-exporter.cpp] markFileName declared outside try-catch, fixing JS let-scoping bug
+- [x] 826. [texture-exporter.cpp] markFileName declared outside try-catch, fixing JS let-scoping bug
 - **JS Source**: `src/js/ui/texture-exporter.js` lines 124–180
-- **Status**: Pending
-- **Details**: JS declares `let markFileName` inside the try block, then references it in the catch block. Because `let` is block-scoped, `markFileName` is NOT accessible in the catch, which would cause a ReferenceError if an error occurs. C++ declares `markFileName` before the try block, avoiding the issue. This is a deviation from JS that actually fixes a latent JS scoping bug.
+- **Status**: Verified
+- **Details**: Moved `markFileName` back into try-scope and adjusted catch-path marking to avoid relying on the try-local variable, removing the prior cross-scope fix and keeping behavior closer to the JS scoping contract.
 
 - [ ] 827. [M2Exporter.cpp] `addURITexture` input contract differs from JS (data URI string vs decoded PNG buffer)
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59–61, 111–112
