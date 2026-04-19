@@ -10,8 +10,10 @@
 #include <vector>
 #include <unordered_map>
 #include <optional>
+#include <future>
 
 #include "../buffer.h"
+#include "blte-reader.h"
 #include "install-manifest.h"
 #include "listfile.h"
 
@@ -86,6 +88,14 @@ public:
 	virtual std::string getFile(uint32_t fileDataID);
 
 	/**
+	 * Obtain a file by it's fileDataID as a BLTE reader.
+	 * Sub-classes should override to provide JS-equivalent file reader behavior.
+	 */
+	virtual BLTEReader getFileAsBLTE(uint32_t fileDataID, bool partialDecrypt = false,
+		bool suppressLog = false, bool supportFallback = true,
+		bool forceFallback = false, const std::string& contentKey = "");
+
+	/**
 	 * @param contentKey
 	 * @returns encoding key string
 	 */
@@ -107,7 +117,7 @@ public:
 	 * @param supportFallback
 	 * @param forceFallback
 	 */
-	std::string getFileByName(const std::string& fileName, bool partialDecrypt = false,
+	BLTEReader getFileByName(const std::string& fileName, bool partialDecrypt = false,
 		bool suppressLog = false, bool supportFallback = true, bool forceFallback = false);
 
 	/**
@@ -216,6 +226,20 @@ public:
 	 * @returns build key string
 	 */
 	virtual std::string getBuildKey() = 0;
+
+	// Async-equivalent API surface mirroring JS Promise methods.
+	std::future<InstallManifest> getInstallManifestAsync();
+	std::future<std::string> getFileAsync(uint32_t fileDataID);
+	std::future<std::optional<FileEncodingInfo>> getFileEncodingInfoAsync(uint32_t fileDataID);
+	std::future<BLTEReader> getFileByNameAsync(const std::string& fileName, bool partialDecrypt = false,
+		bool suppressLog = false, bool supportFallback = true, bool forceFallback = false);
+	std::future<BufferWrapper> getVirtualFileByIDAsync(uint32_t fileDataID, bool suppressLog = false);
+	std::future<BufferWrapper> getVirtualFileByNameAsync(const std::string& fileName, bool suppressLog = false);
+	std::future<void> prepareListfileAsync();
+	std::future<void> prepareDBDManifestAsync();
+	std::future<void> loadListfileAsync(const std::string& buildKey);
+	std::future<size_t> parseRootFileAsync(BufferWrapper data, const std::string& hash);
+	std::future<void> parseEncodingFileAsync(BufferWrapper data, const std::string& hash);
 
 	// Data members
 	std::unordered_map<std::string, int64_t> encodingSizes;

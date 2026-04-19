@@ -20,6 +20,7 @@
 #include <string>
 #include <format>
 #include <unordered_set>
+#include <future>
 
 namespace casc {
 
@@ -170,6 +171,12 @@ std::string CASC::getFile(uint32_t fileDataID) {
 	return encIt->second;
 }
 
+BLTEReader CASC::getFileAsBLTE(uint32_t fileDataID, bool partialDecrypt,
+	bool suppressLog, bool supportFallback, bool forceFallback, const std::string& contentKey)
+{
+	throw std::runtime_error("CASC::getFileAsBLTE must be implemented by subclasses");
+}
+
 /**
  * @param contentKey
  * @returns encoding key string
@@ -207,7 +214,7 @@ std::optional<FileEncodingInfo> CASC::getFileEncodingInfo(uint32_t fileDataID) {
  * @param supportFallback
  * @param forceFallback
  */
-std::string CASC::getFileByName(const std::string& fileName, bool partialDecrypt,
+BLTEReader CASC::getFileByName(const std::string& fileName, bool partialDecrypt,
 	bool suppressLog, bool supportFallback, bool forceFallback)
 {
 	std::optional<uint32_t> fileDataID;
@@ -234,11 +241,7 @@ std::string CASC::getFileByName(const std::string& fileName, bool partialDecrypt
 	if (!fileDataID.has_value())
 		throw std::runtime_error("File not mapping in listfile: " + fileName);
 
-	// NOTE: In JS, this.getFile() dispatches polymorphically to CASCLocal.getFile()
-	// or CASCRemote.getFile() which accept (fileDataID, partialDecrypt, suppressLog,
-	// supportFallback, forceFallback). In C++, getFile() returns the encoding key only;
-	// callers needing a BLTEReader should use getFileAsBLTE() on the subclass directly.
-	return getFile(fileDataID.value());
+	return getFileAsBLTE(fileDataID.value(), partialDecrypt, suppressLog, supportFallback, forceFallback);
 }
 
 /**
@@ -531,6 +534,74 @@ void CASC::parseEncodingFile(BufferWrapper data, const std::string& hash) {
 			encoding.move(hashSizeEKey * (keysCount - 1));
 		}
 	}
+}
+
+std::future<InstallManifest> CASC::getInstallManifestAsync() {
+	return std::async(std::launch::async, [this]() {
+		return getInstallManifest();
+	});
+}
+
+std::future<std::string> CASC::getFileAsync(uint32_t fileDataID) {
+	return std::async(std::launch::async, [this, fileDataID]() {
+		return getFile(fileDataID);
+	});
+}
+
+std::future<std::optional<FileEncodingInfo>> CASC::getFileEncodingInfoAsync(uint32_t fileDataID) {
+	return std::async(std::launch::async, [this, fileDataID]() {
+		return getFileEncodingInfo(fileDataID);
+	});
+}
+
+std::future<BLTEReader> CASC::getFileByNameAsync(const std::string& fileName, bool partialDecrypt,
+	bool suppressLog, bool supportFallback, bool forceFallback)
+{
+	return std::async(std::launch::async, [this, fileName, partialDecrypt, suppressLog, supportFallback, forceFallback]() {
+		return getFileByName(fileName, partialDecrypt, suppressLog, supportFallback, forceFallback);
+	});
+}
+
+std::future<BufferWrapper> CASC::getVirtualFileByIDAsync(uint32_t fileDataID, bool suppressLog) {
+	return std::async(std::launch::async, [this, fileDataID, suppressLog]() {
+		return getVirtualFileByID(fileDataID, suppressLog);
+	});
+}
+
+std::future<BufferWrapper> CASC::getVirtualFileByNameAsync(const std::string& fileName, bool suppressLog) {
+	return std::async(std::launch::async, [this, fileName, suppressLog]() {
+		return getVirtualFileByName(fileName, suppressLog);
+	});
+}
+
+std::future<void> CASC::prepareListfileAsync() {
+	return std::async(std::launch::async, [this]() {
+		prepareListfile();
+	});
+}
+
+std::future<void> CASC::prepareDBDManifestAsync() {
+	return std::async(std::launch::async, [this]() {
+		prepareDBDManifest();
+	});
+}
+
+std::future<void> CASC::loadListfileAsync(const std::string& buildKey) {
+	return std::async(std::launch::async, [this, buildKey]() {
+		loadListfile(buildKey);
+	});
+}
+
+std::future<size_t> CASC::parseRootFileAsync(BufferWrapper data, const std::string& hash) {
+	return std::async(std::launch::async, [this, data = std::move(data), hash]() mutable {
+		return parseRootFile(std::move(data), hash);
+	});
+}
+
+std::future<void> CASC::parseEncodingFileAsync(BufferWrapper data, const std::string& hash) {
+	return std::async(std::launch::async, [this, data = std::move(data), hash]() mutable {
+		parseEncodingFile(std::move(data), hash);
+	});
 }
 
 /**

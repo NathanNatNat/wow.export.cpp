@@ -27,6 +27,7 @@
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+#include <future>
 #include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
@@ -207,7 +208,6 @@ std::vector<ProductEntry> CASCLocal::getProductList() {
 
 		auto productIt = entry.find("Product");
 		auto versionIt = entry.find("Version");
-		auto branchIt = entry.find("Branch");
 		if (productIt == entry.end() || versionIt == entry.end())
 			continue;
 
@@ -220,13 +220,10 @@ std::vector<ProductEntry> CASCLocal::getProductList() {
 			}
 		}
 
-		std::string branchStr;
-		if (branchIt != entry.end()) {
-			branchStr = branchIt->second;
-			// Convert to uppercase.
-			for (auto& c : branchStr)
-				c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-		}
+		std::string branchStr = entry.at("Branch");
+		// Convert to uppercase.
+		for (auto& c : branchStr)
+			c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 
 		const std::string label = std::format("{} ({}) {}", title, branchStr, versionIt->second);
 
@@ -325,13 +322,7 @@ std::unordered_map<std::string, std::string> CASCLocal::getConfigFileWithRemoteF
 		if (!remote)
 			initializeRemoteCASC();
 
-		const auto& selectedRegion = core::view->selectedCDNRegion;
-		std::string regionTag;
-		if (selectedRegion.contains("tag"))
-			regionTag = selectedRegion["tag"].get<std::string>();
-		else
-			regionTag = std::string(constants::PATCH::DEFAULT_REGION);
-
+		const std::string regionTag = core::view->selectedCDNRegion.at("tag").get<std::string>();
 		auto cdnHosts = cdn_resolver::getRankedHosts(regionTag, remote->serverConfig);
 		return remote->getCDNConfig(key, cdnHosts);
 	} else {
@@ -443,13 +434,7 @@ void CASCLocal::loadRoot() {
  * files needed during local initialization.
  */
 void CASCLocal::initializeRemoteCASC() {
-	const auto& selectedRegion = core::view->selectedCDNRegion;
-	std::string regionTag;
-	if (selectedRegion.contains("tag"))
-		regionTag = selectedRegion["tag"].get<std::string>();
-	else
-		regionTag = std::string(constants::PATCH::DEFAULT_REGION);
-
+	const std::string regionTag = core::view->selectedCDNRegion.at("tag").get<std::string>();
 	remote = std::make_unique<CASCRemote>(regionTag);
 	remote->init();
 
@@ -654,6 +639,100 @@ std::string CASCLocal::getBuildName() {
 std::string CASCLocal::getBuildKey() {
 	auto it = build.find("BuildKey");
 	return (it != build.end()) ? it->second : "";
+}
+
+std::future<void> CASCLocal::initAsync() {
+	return std::async(std::launch::async, [this]() {
+		init();
+	});
+}
+
+std::future<BLTEReader> CASCLocal::getFileAsBLTEAsync(uint32_t fileDataID, bool partialDecryption,
+	bool suppressLog, bool supportFallback, bool forceFallback, const std::string& contentKey)
+{
+	return std::async(std::launch::async, [this, fileDataID, partialDecryption, suppressLog, supportFallback, forceFallback, contentKey]() {
+		return getFileAsBLTE(fileDataID, partialDecryption, suppressLog, supportFallback, forceFallback, contentKey);
+	});
+}
+
+std::future<BLTEStreamReader> CASCLocal::getFileStreamAsync(uint32_t fileDataID, bool partialDecrypt,
+	bool suppressLog, bool supportFallback, bool forceFallback, const std::string& contentKey)
+{
+	return std::async(std::launch::async, [this, fileDataID, partialDecrypt, suppressLog, supportFallback, forceFallback, contentKey]() {
+		return getFileStream(fileDataID, partialDecrypt, suppressLog, supportFallback, forceFallback, contentKey);
+	});
+}
+
+std::future<void> CASCLocal::loadAsync(int buildIndex) {
+	return std::async(std::launch::async, [this, buildIndex]() {
+		load(buildIndex);
+	});
+}
+
+std::future<void> CASCLocal::loadConfigsAsync() {
+	return std::async(std::launch::async, [this]() {
+		loadConfigs();
+	});
+}
+
+std::future<std::unordered_map<std::string, std::string>> CASCLocal::getConfigFileWithRemoteFallbackAsync(const std::string& key) {
+	return std::async(std::launch::async, [this, key]() {
+		return getConfigFileWithRemoteFallback(key);
+	});
+}
+
+std::future<void> CASCLocal::loadIndexesAsync() {
+	return std::async(std::launch::async, [this]() {
+		loadIndexes();
+	});
+}
+
+std::future<void> CASCLocal::parseIndexAsync(const fs::path& file) {
+	return std::async(std::launch::async, [this, file]() {
+		parseIndex(file);
+	});
+}
+
+std::future<void> CASCLocal::loadEncodingAsync() {
+	return std::async(std::launch::async, [this]() {
+		loadEncoding();
+	});
+}
+
+std::future<void> CASCLocal::loadRootAsync() {
+	return std::async(std::launch::async, [this]() {
+		loadRoot();
+	});
+}
+
+std::future<void> CASCLocal::initializeRemoteCASCAsync() {
+	return std::async(std::launch::async, [this]() {
+		initializeRemoteCASC();
+	});
+}
+
+std::future<BufferWrapper> CASCLocal::getDataFileWithRemoteFallbackAsync(const std::string& key, bool forceFallback) {
+	return std::async(std::launch::async, [this, key, forceFallback]() {
+		return getDataFileWithRemoteFallback(key, forceFallback);
+	});
+}
+
+std::future<BufferWrapper> CASCLocal::getDataFileAsync(const std::string& key) {
+	return std::async(std::launch::async, [this, key]() {
+		return getDataFile(key);
+	});
+}
+
+std::future<std::string> CASCLocal::ensureFileInCacheAsync(const std::string& encodingKey, uint32_t fileDataID, bool suppressLog) {
+	return std::async(std::launch::async, [this, encodingKey, fileDataID, suppressLog]() {
+		return _ensureFileInCache(encodingKey, fileDataID, suppressLog);
+	});
+}
+
+std::future<std::optional<FileEncodingInfo>> CASCLocal::getFileEncodingInfoAsync(uint32_t fileDataID) {
+	return std::async(std::launch::async, [this, fileDataID]() {
+		return getFileEncodingInfo(fileDataID);
+	});
 }
 
 } // namespace casc

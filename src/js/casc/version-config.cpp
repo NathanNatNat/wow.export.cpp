@@ -85,12 +85,13 @@ std::vector<std::unordered_map<std::string, std::string>> parseVersionConfig(std
 		std::size_t pos = 0;
 		std::size_t fi = 0;
 
-		while (pos <= entry.size() && fi < fields.size()) {
+		while (pos <= entry.size()) {
 			std::size_t pipe = entry.find('|', pos);
 			if (pipe == std::string_view::npos)
 				pipe = entry.size();
 
-			node[fields[fi]] = std::string(entry.substr(pos, pipe - pos));
+			const std::string key = fi < fields.size() ? fields[fi] : "undefined";
+			node[key] = std::string(entry.substr(pos, pipe - pos));
 			fi++;
 			pos = pipe + 1;
 		}

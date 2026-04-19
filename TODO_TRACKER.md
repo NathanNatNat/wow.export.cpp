@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 181/906 verified (20%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 193/906 verified (21%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -643,65 +643,65 @@
 - **Status**: Verified
 - **Details**: Added JS-style callable helpers (`hashing::xxh64(...)`) for one-shot hashing plus `hashing::xxh64(seed)` constructor-like state creation, preserving callable-export semantics alongside the class API.
 
-- [ ] 136. [casc-source.cpp] `getFileByName` no longer forwards to subclass file-reader path like JS
+- [x] 136. [casc-source.cpp] `getFileByName` no longer forwards to subclass file-reader path like JS
 - **JS Source**: `src/js/casc/casc-source.js` lines 169–191
-- **Status**: Pending
-- **Details**: JS `getFileByName(...)` forwards all read flags to polymorphic `this.getFile(...)` on subclass implementations; C++ `CASC::getFileByName(...)` returns only the encoding key from base `getFile`, changing behavior and API contract.
+- **Status**: Verified
+- **Details**: `CASC::getFileByName(...)` now forwards resolved `fileDataID` and all read flags to virtual `getFileAsBLTE(...)`, restoring polymorphic subclass dispatch (local/remote reader path) like JS `return await this.getFile(...)`.
 
-- [ ] 137. [casc-source.cpp] Base CASC APIs are synchronous instead of JS async methods
+- [x] 137. [casc-source.cpp] Base CASC APIs are synchronous instead of JS async methods
 - **JS Source**: `src/js/casc/casc-source.js` lines 70–275, 312–444
-- **Status**: Pending
-- **Details**: JS methods (`getInstallManifest/getFile/getFileEncodingInfo/getFileByName/getVirtualFileByID/getVirtualFileByName/prepareListfile/prepareDBDManifest/loadListfile/parseRootFile/parseEncodingFile`) are Promise-based; C++ equivalents are synchronous.
+- **Status**: Verified
+- **Details**: Added async-equivalent CASC API wrappers (`*Async`) for JS Promise parity over install/file lookup/virtual-file/listfile/parse flows while preserving existing synchronous call sites.
 
-- [ ] 138. [casc-source-remote.cpp] Remote CASC lifecycle and data-access methods are synchronous instead of JS async methods
+- [x] 138. [casc-source-remote.cpp] Remote CASC lifecycle and data-access methods are synchronous instead of JS async methods
 - **JS Source**: `src/js/casc/casc-source-remote.js` lines 37–556
-- **Status**: Pending
-- **Details**: JS uses async Promise-based control flow for initialization/config/archive loading and file access (`init/getVersionConfig/getConfig/getCDNConfig/getFile/getFileStream/preload/load/loadEncoding/loadRoot/loadArchives/loadServerConfig/parseArchiveIndex/getDataFile/getDataFilePartial/loadConfigs/resolveCDNHost/_ensureFileInCache/getFileEncodingInfo`); C++ is synchronous.
+- **Status**: Verified
+- **Details**: Added async-equivalent CASCRemote API wrappers (`*Async`) for lifecycle/config/archive/file operations to mirror JS Promise-based control flow while keeping synchronous behavior available for current callers.
 
-- [ ] 139. [casc-source-remote.cpp] HTTP error detail from remote config requests differs from JS
+- [x] 139. [casc-source-remote.cpp] HTTP error detail from remote config requests differs from JS
 - **JS Source**: `src/js/casc/casc-source-remote.js` lines 75–79, 98–102, 121
-- **Status**: Pending
-- **Details**: JS includes HTTP status codes in thrown messages for `getConfig/getCDNConfig`; C++ checks only for empty `generics::get()` payload and throws generic HTTP error strings without the JS status payload.
+- **Status**: Verified
+- **Details**: Remote config request failures now match JS contract with status-bearing errors (`HTTP <status> ...`) for `getConfig/getCDNConfig`, and fallback-chain reporting preserves the final detailed failure message.
 
-- [ ] 140. [casc-source-local.cpp] Local CASC public/file-loading methods are synchronous instead of JS async methods
+- [x] 140. [casc-source-local.cpp] Local CASC public/file-loading methods are synchronous instead of JS async methods
 - **JS Source**: `src/js/casc/casc-source-local.js` lines 42–517
-- **Status**: Pending
-- **Details**: JS methods (`init/getFile/getFileStream/load/loadConfigs/loadIndexes/parseIndex/loadEncoding/loadRoot/initializeRemoteCASC/getDataFileWithRemoteFallback/getDataFile/_ensureFileInCache/getFileEncodingInfo`) are Promise-based; C++ equivalents are synchronous.
+- **Status**: Verified
+- **Details**: Added async-equivalent CASCLocal API wrappers (`*Async`) for init/file-loading/config/index/encoding/root/remote-fallback operations to provide Promise-style parity with JS while preserving synchronous call compatibility.
 
-- [ ] 141. [casc-source-local.cpp] Remote CASC initialization region fallback differs from JS behavior
+- [x] 141. [casc-source-local.cpp] Remote CASC initialization region fallback differs from JS behavior
 - **JS Source**: `src/js/casc/casc-source-local.js` lines 324–332
-- **Status**: Pending
-- **Details**: JS directly constructs `new CASCRemote(core.view.selectedCDNRegion.tag)`; C++ silently falls back to `constants::PATCH::DEFAULT_REGION` when `selectedCDNRegion.tag` is missing, altering failure/selection behavior.
+- **Status**: Verified
+- **Details**: Removed silent default-region fallback; local remote-init/config fallback now reads `core.view.selectedCDNRegion.tag` directly (throws if missing), matching JS failure/selection semantics.
 
-- [ ] 142. [casc-source-local.cpp] `getProductList()` handles missing Branch field gracefully instead of throwing like JS
+- [x] 142. [casc-source-local.cpp] `getProductList()` handles missing Branch field gracefully instead of throwing like JS
 - **JS Source**: `src/js/casc/casc-source-local.js` line 152
-- **Status**: Pending
-- **Details**: JS `entry.Branch.toUpperCase()` accesses `entry.Branch` directly. If the build info entry has no `Branch` field, JS would access `undefined` and `.toUpperCase()` would throw a TypeError, causing that product to fail to be listed. C++ (lines 223–229) checks `branchIt != entry.end()` first and uses an empty string as the fallback. This means C++ would include the product with empty parentheses in the label (e.g., `"Retail () 10.2.7"`), while JS would crash and omit it (or propagate the error). In practice, the Branch field is always present in `.build.info` files, so this is a theoretical difference.
+- **Status**: Verified
+- **Details**: `getProductList()` now accesses `Branch` directly and uppercases it without graceful fallback, matching JS `entry.Branch.toUpperCase()` throw behavior when `Branch` is missing.
 
-- [ ] 143. [cdn-resolver.cpp] Resolver API and internal host-resolution flow are synchronous instead of JS async Promise flow
+- [x] 143. [cdn-resolver.cpp] Resolver API and internal host-resolution flow are synchronous instead of JS async Promise flow
 - **JS Source**: `src/js/casc/cdn-resolver.js` lines 43–116, 143–217
-- **Status**: Pending
-- **Details**: JS `getBestHost/getRankedHosts/_resolveRegionProduct/_resolveHosts` are async and await Promise pipelines; C++ resolves through blocking waits/futures and synchronous return APIs.
+- **Status**: Verified
+- **Details**: Added async-equivalent resolver wrappers (`getBestHostAsync/getRankedHostsAsync`) to expose Promise-style asynchronous API parity while retaining existing synchronous resolver behavior.
 
-- [ ] 144. [version-config.cpp] Extra data fields beyond header count silently discarded instead of creating JS `undefined` key
+- [x] 144. [version-config.cpp] Extra data fields beyond header count silently discarded instead of creating JS `undefined` key
 - **JS Source**: `src/js/casc/version-config.js` lines 26–29
-- **Status**: Pending
-- **Details**: JS iterates `entryFields.length` (the pipe-split data values) which may exceed `fields.length` (the header field count). When there are more data values than header fields, JS creates node entries with key `"undefined"` (since `fields[i]` is `undefined` for excess indices). C++ (line 88) loops `while (pos <= entry.size() && fi < fields.size())`, stopping at the header field count and silently discarding extra data values. In practice, WoW CASC version configs always have matching field counts, but the edge-case behavior differs.
+- **Status**: Verified
+- **Details**: Version-config parsing now iterates all entry fields and maps overflow values to key `"undefined"` once header fields are exhausted, matching JS `node[fields[i]] = entryFields[i]` semantics.
 
-- [ ] 145. [realmlist.cpp] `load` API is synchronous instead of JS Promise-based async method
+- [x] 145. [realmlist.cpp] `load` API is synchronous instead of JS Promise-based async method
 - **JS Source**: `src/js/casc/realmlist.js` lines 36–65
-- **Status**: Pending
-- **Details**: JS exposes `async load()` with awaited cache/network I/O; C++ ports `load()` as synchronous blocking flow, changing timing/error propagation semantics.
+- **Status**: Verified
+- **Details**: Added `realmlist::loadAsync()` as an async-equivalent API wrapper over `load()` to mirror JS Promise usage while retaining current synchronous integration points.
 
-- [ ] 146. [realmlist.cpp] `realmListURL` coercion semantics differ from JS `String(...)` behavior
+- [x] 146. [realmlist.cpp] `realmListURL` coercion semantics differ from JS `String(...)` behavior
 - **JS Source**: `src/js/casc/realmlist.js` lines 39–42
-- **Status**: Pending
-- **Details**: JS converts any value with `String(core.view.config.realmListURL)` (including `undefined`), while C++ treats missing/null as empty and throws `Missing/malformed realmListURL`, changing edge-case behavior.
+- **Status**: Verified
+- **Details**: Realm-list URL handling now uses JS-like string coercion semantics (`undefined/null/number/bool/array/object` conversions) instead of throwing on missing/null, matching `String(core.view.config.realmListURL)`.
 
-- [ ] 147. [realmlist.cpp] Remote non-OK handling/logging path differs from JS response contract
+- [x] 147. [realmlist.cpp] Remote non-OK handling/logging path differs from JS response contract
 - **JS Source**: `src/js/casc/realmlist.js` lines 51–63
-- **Status**: Pending
-- **Details**: JS branches on `res.ok` and logs `Failed to retrieve ... (${res.status})` for non-OK responses; C++ uses byte-returning `generics::get()` and exception-based failure handling, removing explicit JS `res.ok/res.status` behavior.
+- **Status**: Verified
+- **Details**: Remote realm-list fetch follows JS response contract by branching on `res.ok` and logging explicit non-OK status (`Failed to retrieve realmlist from <url> (<status>)`) with exception logging reserved for thrown transport/parsing errors.
 
 - [ ] 148. [blte-reader.cpp] `decodeAudio(context)` API from JS is missing
 - **JS Source**: `src/js/casc/blte-reader.js` lines 337–340
