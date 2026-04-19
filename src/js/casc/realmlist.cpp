@@ -19,6 +19,8 @@
 #include <string>
 #include <stdexcept>
 #include <future>
+#include <charconv>
+#include <cmath>
 
 namespace {
 
@@ -66,7 +68,22 @@ std::string jsStringCoerce(const nlohmann::json* value) {
 	if (value->is_number_unsigned())
 		return std::to_string(value->get<unsigned long long>());
 	if (value->is_number_float())
-		return std::to_string(value->get<double>());
+	{
+		const double v = value->get<double>();
+		if (std::isnan(v))
+			return "NaN";
+		if (!std::isfinite(v))
+			return v < 0 ? "-Infinity" : "Infinity";
+		if (v == 0.0)
+			return "0";
+
+		char buf[128];
+		auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), v, std::chars_format::general);
+		if (ec == std::errc())
+			return std::string(buf, ptr);
+
+		return value->dump();
+	}
 	if (value->is_array()) {
 		std::string out;
 		bool first = true;
@@ -74,7 +91,8 @@ std::string jsStringCoerce(const nlohmann::json* value) {
 			if (!first)
 				out += ",";
 			first = false;
-			out += jsStringCoerce(&elem);
+			if (!elem.is_null())
+				out += jsStringCoerce(&elem);
 		}
 		return out;
 	}
