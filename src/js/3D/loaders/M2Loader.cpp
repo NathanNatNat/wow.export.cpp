@@ -217,7 +217,7 @@ this->_patch_bone_animation(animationIndex);
 
 return true;
 } catch (const std::exception& e) {
-logging::write(std::format("Failed to load .anim file (fileDataID={}): {}", fileDataID, e.what()));
+logging::write(std::format("Failed to load .anim file for animation {}: {}", animation->id, e.what()));
 return false;
 }
 }
@@ -808,10 +808,7 @@ const size_t pos = this->data.offset();
 
 this->data.seek(nameOfs);
 std::string fileName = this->data.readString(nameLength);
-// Remove NULL characters.
-// Note: JS uses fileName.replace('\0', '') which only removes the FIRST null (string replace, not regex).
-// C++ std::remove removes ALL nulls, which is more correct behavior for null-terminated strings.
-fileName.erase(std::remove(fileName.begin(), fileName.end(), '\0'), fileName.end());
+// JS calls fileName.replace('\0', '') without assignment, so fileName is left unchanged.
 
 if (!fileName.empty())
 texture.setFileName(fileName);

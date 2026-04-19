@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <format>
+#include <future>
 #include <stdexcept>
 
 /**
@@ -23,23 +24,25 @@ M2LegacyLoader::M2LegacyLoader(BufferWrapper& data)
 /**
  * Load the M2 model.
  */
-void M2LegacyLoader::load() {
-	if (this->isLoaded)
-		return;
+std::future<void> M2LegacyLoader::load() {
+	return std::async(std::launch::deferred, [this]() {
+		if (this->isLoaded)
+			return;
 
-	auto& data = this->data;
+		auto& data = this->data;
 
-	const uint32_t magic = data.readUInt32LE();
-	if (magic != MAGIC_MD20)
-		throw std::runtime_error("Invalid M2 magic: 0x" + std::format("{:x}", magic));
+		const uint32_t magic = data.readUInt32LE();
+		if (magic != MAGIC_MD20)
+			throw std::runtime_error("Invalid M2 magic: 0x" + std::format("{:x}", magic));
 
-	this->version = data.readUInt32LE();
+		this->version = data.readUInt32LE();
 
-	if (this->version < M2_VER_VANILLA_MIN || this->version > M2_VER_WOTLK)
-		throw std::runtime_error("Unsupported M2 version: " + std::to_string(this->version));
+		if (this->version < M2_VER_VANILLA_MIN || this->version > M2_VER_WOTLK)
+			throw std::runtime_error("Unsupported M2 version: " + std::to_string(this->version));
 
-	this->_parse_header();
-	this->isLoaded = true;
+		this->_parse_header();
+		this->isLoaded = true;
+	});
 }
 
 void M2LegacyLoader::_parse_header() {
@@ -814,14 +817,18 @@ LegacyTrackValue M2LegacyLoader::_read_data_type(BufferWrapper& data, LegacyData
 	}
 }
 
-LegacyM2Skin& M2LegacyLoader::getSkin(int index) {
-	if (this->version < M2_VER_WOTLK) {
-		// pre-wotlk: skins are already loaded inline
-		return this->skins[index];
-	}
+std::future<LegacyM2Skin*> M2LegacyLoader::getSkin(int index) {
+	return std::async(std::launch::deferred, [this, index]() -> LegacyM2Skin* {
+		if (this->version < M2_VER_WOTLK) {
+			// pre-wotlk: skins are already loaded inline
+			if (index < 0 || static_cast<size_t>(index) >= this->skins.size())
+				return nullptr;
+			return &this->skins[static_cast<size_t>(index)];
+		}
 
-	// wotlk: would need external skin loading (not implemented for legacy)
-	throw std::runtime_error("External skin loading not implemented for legacy WotLK M2");
+		// wotlk: would need external skin loading (not implemented for legacy)
+		throw std::runtime_error("External skin loading not implemented for legacy WotLK M2");
+	});
 }
 
 std::vector<LegacyM2Skin>& M2LegacyLoader::getSkinList() {

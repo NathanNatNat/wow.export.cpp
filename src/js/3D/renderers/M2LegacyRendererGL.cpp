@@ -203,7 +203,7 @@ std::unique_ptr<gl::ShaderProgram> M2LegacyRendererGL::load_shaders(gl::GLContex
 
 void M2LegacyRendererGL::load() {
 	m2 = std::make_unique<M2LegacyLoader>(*data_ptr);
-	m2->load();
+	m2->load().get();
 
 	shader = M2LegacyRendererGL::load_shaders(ctx);
 
@@ -345,7 +345,10 @@ void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& textu
 void M2LegacyRendererGL::loadSkin(int index) {
 	_dispose_skin();
 
-	auto& skin = m2->getSkin(index);
+	auto* skin_ptr = m2->getSkin(index).get();
+	if (!skin_ptr)
+		throw std::runtime_error(std::format("Invalid legacy skin index: {}", index));
+	auto& skin = *skin_ptr;
 
 	_create_skeleton();
 

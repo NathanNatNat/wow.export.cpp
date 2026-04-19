@@ -518,6 +518,18 @@ return as_async_compat([this]() {
 			watcher_wireframe = core::view->config.value("modelViewerWireframe", false);
 			watcher_show_bones = core::view->config.value("modelViewerShowBones", false);
 			watcher_state_initialized = true;
+			geosetWatcher = [this]() {
+				watcher_geoset_checked.clear();
+				watcher_state_initialized = false;
+			};
+			wireframeWatcher = [this]() {
+				watcher_wireframe = false;
+				watcher_state_initialized = false;
+			};
+			bonesWatcher = [this]() {
+				watcher_show_bones = false;
+				watcher_state_initialized = false;
+			};
 		}
 	}
 
@@ -2022,6 +2034,15 @@ geosetArray.clear();
 // -----------------------------------------------------------------------
 
 void M2RendererGL::dispose() {
+	if (geosetWatcher)
+		geosetWatcher();
+	if (wireframeWatcher)
+		wireframeWatcher();
+	if (bonesWatcher)
+		bonesWatcher();
+	geosetWatcher = nullptr;
+	wireframeWatcher = nullptr;
+	bonesWatcher = nullptr;
 
 _dispose_skin();
 

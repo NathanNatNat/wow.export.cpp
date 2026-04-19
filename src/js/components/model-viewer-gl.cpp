@@ -436,14 +436,9 @@ static void render_scene(State& state, Context& context) {
 		);
 	}
 
-	// update controls
-	if (state.use_character_controls && state.char_controls) {
-		sync_camera_to_char_gl(state);
-		state.char_controls->update();
-	} else if (state.orbit_controls) {
-		sync_camera_to_gl(state);
-		state.orbit_controls->update();
-	}
+	// update controls (JS: this.controls.update())
+	if (context.controls_update)
+		context.controls_update();
 
 	// Bind FBO for 3D rendering
 	glBindFramebuffer(GL_FRAMEBUFFER, state.fbo);
@@ -630,6 +625,11 @@ void recreate_controls(State& state, Context& context) {
 		// Update context outputs
 		context.controls_character = state.char_controls.get();
 		context.controls_orbit = nullptr;
+		context.controls_update = [&state]() {
+			sync_camera_to_char_gl(state);
+			if (state.char_controls)
+				state.char_controls->update();
+		};
 	} else {
 		// Orbit camera controls
 		sync_camera_to_gl(state);
@@ -640,6 +640,11 @@ void recreate_controls(State& state, Context& context) {
 		// Update context outputs
 		context.controls_orbit = state.orbit_controls.get();
 		context.controls_character = nullptr;
+		context.controls_update = [&state]() {
+			sync_camera_to_gl(state);
+			if (state.orbit_controls)
+				state.orbit_controls->update();
+		};
 	}
 }
 

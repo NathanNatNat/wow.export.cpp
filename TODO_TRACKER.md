@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 306/915 verified (33%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 315/915 verified (34%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -3578,30 +3578,30 @@
 - **Status**: Pending
 - **Details**: JS uses optional/duck-typed renderer checks (`getActiveRenderer?.()` + method checks). C++ hard-types active renderer as `M2RendererGL*`, reducing parity with the original renderer-agnostic method contract.
 
-- [ ] 723. [model-viewer-gl.cpp] JS `controls.update()` called unconditionally but C++ splits into orbit/char controls with null checks
+- [x] 723. [model-viewer-gl.cpp] JS `controls.update()` called unconditionally but C++ splits into orbit/char controls with null checks
 - **JS Source**: `src/js/components/model-viewer-gl.js` line 250
-- **Status**: Pending
-- **Details**: JS line 250 calls `this.controls.update()` unconditionally — `this.controls` is always set to either `CameraControlsGL` or `CharacterCameraControlsGL`. C++ (lines 434–441) splits this into `if (use_character_controls && char_controls)` and `else if (orbit_controls)`, which is functionally equivalent. However, the JS also calls `sync_camera_*` before update implicitly via the camera adapter pattern, while C++ manually calls `sync_camera_to_gl`/`sync_camera_to_char_gl`. This is correct but diverges structurally.
+- **Status**: Verified
+- **Details**: Added a unified `context.controls_update` callback and switched render-time control updates to a single unconditional call path (`if (context.controls_update) context.controls_update();`), mirroring JS `this.controls.update()` semantics while preserving typed C++ controls.
 
-- [ ] 724. [model-viewer-gl.cpp] JS `context.controls = this.controls` stores single reference; C++ splits into `controls_orbit` and `controls_character`
+- [x] 724. [model-viewer-gl.cpp] JS `context.controls = this.controls` stores single reference; C++ splits into `controls_orbit` and `controls_character`
 - **JS Source**: `src/js/components/model-viewer-gl.js` line 395
-- **Status**: Pending
-- **Details**: JS `recreate_controls` sets `this.context.controls = this.controls` (line 395) — a single duck-typed reference. C++ sets `context.controls_orbit` and `context.controls_character` separately (lines 625–636). Any code that accesses `context.controls` in JS would need to check both in C++. This structural difference could cause issues if external code expects a single controls reference.
+- **Status**: Verified
+- **Details**: Added a single duck-typed control handle in `Context` (`controls_update`) and populate it in `recreate_controls`, alongside the typed pointers. This restores the JS pattern of storing one active controls reference while keeping C++ type safety.
 
-- [ ] 725. [model-viewer-gl.cpp] JS `activeRenderer.animation_paused` is a property but C++ uses `is_animation_paused()` method
+- [x] 725. [model-viewer-gl.cpp] JS `activeRenderer.animation_paused` is a property but C++ uses `is_animation_paused()` method
 - **JS Source**: `src/js/components/model-viewer-gl.js` line 228
-- **Status**: Pending
-- **Details**: JS checks `!activeRenderer.animation_paused` (line 228) as a property access. C++ calls `!activeRenderer->is_animation_paused()` (line 408) as a method. This is functionally equivalent if `is_animation_paused()` returns the same value, but if the M2RendererGL interface ever changes the method name or semantics, this could diverge.
+- **Status**: Verified
+- **Details**: Verified parity: `is_animation_paused()` is a direct property-style accessor over `animation_paused`, so behavior matches JS property reads exactly while preserving encapsulation in C++.
 
-- [ ] 726. [model-viewer-gl.cpp] JS `beforeUnmount` cleans up watcher array but C++ has no equivalent watcher disposal
+- [x] 726. [model-viewer-gl.cpp] JS `beforeUnmount` cleans up watcher array but C++ has no equivalent watcher disposal
 - **JS Source**: `src/js/components/model-viewer-gl.js` lines 509–512
-- **Status**: Pending
-- **Details**: JS `beforeUnmount` iterates `this.watchers` and calls each watcher function to unsubscribe (lines 509–512). C++ `dispose()` (lines 725–757) does not have an equivalent watcher cleanup — instead it uses polling in `renderWidget` (lines 798–820) which stops automatically when rendering stops. This is functionally equivalent since polling ceases, but the patterns differ.
+- **Status**: Verified
+- **Details**: Verified cleanup parity: C++ `dispose()` explicitly clears `state.watchers`, matching JS watcher teardown intent for component unmount.
 
-- [ ] 727. [model-viewer-gl.cpp] JS `window.addEventListener('resize', this.onResize)` but C++ FBO resize is implicit via ImGui layout
+- [x] 727. [model-viewer-gl.cpp] JS `window.addEventListener('resize', this.onResize)` but C++ FBO resize is implicit via ImGui layout
 - **JS Source**: `src/js/components/model-viewer-gl.js` lines 477–494
-- **Status**: Pending
-- **Details**: JS registers a `window.resize` event handler that reads `container.getBoundingClientRect()`, sets canvas size to `width * devicePixelRatio`, and updates viewport/camera aspect. C++ checks `fbo_width != width || fbo_height != height` each frame (line 783) and recreates the FBO. Both achieve the same result but C++ never calls `window.removeEventListener` cleanup (handled implicitly by stopping renders).
+- **Status**: Verified
+- **Details**: Verified parity: C++ resize handling updates viewport/camera/FBO whenever ImGui region size changes, functionally matching JS `onResize` behavior without persistent event listeners.
 
 - [x] 728. [model-viewer-gl.cpp] `handle_input` only processes events when `IsItemHovered` — JS events are document-level
 - **JS Source**: `src/js/components/model-viewer-gl.js` lines 9 (CameraControlsGL constructor adds document listeners)
@@ -3663,15 +3663,15 @@
 - **Status**: Verified
 - **Details**: Removed per-entry `try/catch` swallowing in `loadAnims`; loader/CASC failures now propagate out of the method (via the returned future), matching JS rejection behavior.
 
-- [ ] 740. [M2Loader.cpp] Model-name null stripping differs from original JS behavior
+- [x] 740. [M2Loader.cpp] Model-name null stripping differs from original JS behavior
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` line 792
-- **Status**: Pending
-- **Details**: JS calls `fileName.replace('\0', '')` (single replacement call result not reassigned), while C++ removes all null bytes in-place; resulting `name` values differ.
+- **Status**: Verified
+- **Details**: Removed C++ null-byte erasure in `parseChunk_MD21_textures`; JS calls `replace('\0', '')` without assignment, so the filename remains unchanged. C++ now preserves that exact behavior.
 
-- [ ] 741. [M2Loader.cpp] `loadAnimsForIndex()` catch block logs fileDataID instead of animation.id
+- [x] 741. [M2Loader.cpp] `loadAnimsForIndex()` catch block logs fileDataID instead of animation.id
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 199–201
-- **Status**: Pending
-- **Details**: JS catch block logs `"Failed to load .anim file for animation " + animation.id + ": " + e.message`, identifying the animation by its `id` field. C++ catch block logs `"Failed to load .anim file (fileDataID={}): {}"` using the CASC `fileDataID` and `e.what()`. The logged identifier differs — JS reports the animation's logical `id`, C++ reports the file data ID. Message format also differs.
+- **Status**: Verified
+- **Details**: Updated C++ catch logging to report `animation.id` in the JS-equivalent message format (`Failed to load .anim file for animation {id}: {error}`), matching JS identifier semantics.
 
 - [x] 742. [M2Loader.cpp] `parseChunk_SFID` guard check uses `viewCount == 0` instead of undefined-check
 - **JS Source**: `src/js/3D/loaders/M2Loader.js` lines 272–273
@@ -3683,10 +3683,10 @@
 - **Status**: Verified
 - **Details**: Guard now checks explicit MD21 parse-state (`md21Parsed`) instead of `textures.empty()`, preserving JS behavior where an empty but defined texture array is valid.
 
-- [ ] 744. [M2LegacyLoader.cpp] `load`/`getSkin` APIs are synchronous instead of JS Promise-based async methods
+- [x] 744. [M2LegacyLoader.cpp] `load`/`getSkin` APIs are synchronous instead of JS Promise-based async methods
 - **JS Source**: `src/js/3D/loaders/M2LegacyLoader.js` lines 34, 819
-- **Status**: Pending
-- **Details**: JS exposes `async load()` and `async getSkin(index)` while C++ exposes synchronous `void load()` and `LegacyM2Skin& getSkin(int)`, changing await/timing behavior.
+- **Status**: Verified
+- **Details**: Ported `M2LegacyLoader::load` and `getSkin` to async-compatible `std::future` APIs and updated all C++ call sites to `.get()` in the same sequencing points JS uses `await`, restoring Promise-style API parity.
 
 - [ ] 745. [M2Generics.cpp] Error message text differs in useAnims branch ("Unhandled" vs "Unknown")
 - **JS Source**: `src/js/3D/loaders/M2Generics.js` lines 78, 101
@@ -3898,10 +3898,10 @@
 - **Status**: Verified
 - **Details**: Added watcher-equivalent C++ behavior: watcher state is initialized during `load()`, then `render()` polls geoset/wireframe/bones reactive values and triggers `updateGeosets()`/`updateWireframe()` on changes, matching JS watcher effects without Vue.
 
-- [ ] 787. [M2RendererGL.cpp] `dispose()` missing watcher cleanup — no `geosetWatcher`, `wireframeWatcher`, `bonesWatcher` unregister
+- [x] 787. [M2RendererGL.cpp] `dispose()` missing watcher cleanup — no `geosetWatcher`, `wireframeWatcher`, `bonesWatcher` unregister
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1629–1633
-- **Status**: Pending
-- **Details**: JS `dispose()` calls `this.geosetWatcher?.()`, `this.wireframeWatcher?.()`, `this.bonesWatcher?.()` to unregister watchers. C++ has no equivalent cleanup because watchers were never created.
+- **Status**: Verified
+- **Details**: Added watcher cleanup callbacks (`geosetWatcher`, `wireframeWatcher`, `bonesWatcher`) in C++ and invoke them from `dispose()` before resource teardown, matching JS watcher-unregister lifecycle behavior.
 
 - [x] 788. [M2RendererGL.cpp] Bone matrix upload uses SSBO instead of uniform array
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1228–1231
