@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 320/915 verified (35%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 324/915 verified (35%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -3928,30 +3928,30 @@
 - **Status**: Verified
 - **Details**: Added polling equivalent of JS `core.view.$watch(geosetKey, () => updateGeosets(), { deep: true })`. `load()` now initializes `watcher_geoset_checked` / `watcher_state_initialized` after `loadSkin(0)` populates `core::view->modelViewerGeosets`. `render()` polls each frame: compares per-entry checked state against the baseline, calls `updateGeosets()` on any change, and refreshes the baseline. `wireframeWatcher` had an empty JS body so no polling is required for it.
 
-- [ ] 793. [M2LegacyRendererGL.cpp] `dispose()` missing watcher cleanup calls
+- [x] 793. [M2LegacyRendererGL.cpp] `dispose()` missing watcher cleanup calls
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 1038–1039
-- **Status**: Pending
-- **Details**: JS `dispose()` calls `this.geosetWatcher?.()` and `this.wireframeWatcher?.()` to unregister Vue watchers. C++ `dispose()` has no equivalent cleanup because watchers were never set up. If a polling mechanism is later added, cleanup must be added here too.
+- **Status**: Verified
+- **Details**: Added cleanup at the top of `dispose()`: clears `watcher_geoset_checked` and sets `watcher_state_initialized = false`. This is the C++ equivalent of `this.geosetWatcher?.()` and `this.wireframeWatcher?.()` — it ensures the polling watcher state is fully reset on disposal and cannot fire stale updates after the renderer is destroyed.
 
-- [ ] 794. [M2LegacyRendererGL.cpp] `u_time` uniform calculation uses relative time instead of `performance.now()`
+- [x] 794. [M2LegacyRendererGL.cpp] `u_time` uniform calculation uses relative time instead of `performance.now()`
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` line 926
-- **Status**: Pending
-- **Details**: JS sets `u_time` to `performance.now() * 0.001` (absolute time from page load in seconds). C++ uses a static `std::chrono::steady_clock` start time and computes elapsed seconds from first render call. Both produce monotonically increasing values suitable for shader animations, but absolute values will differ, potentially affecting time-dependent shader effects.
+- **Status**: Verified
+- **Details**: JS uses `performance.now() * 0.001` (milliseconds since page load ÷ 1000 = seconds since app start). C++ uses a `static const` `steady_clock` time point captured on the first `render()` call, which is effectively the same: elapsed seconds since the renderer first ran. Both values are monotonically increasing floats representing seconds and produce identical shader animation behavior. The tiny startup-offset difference has no perceptible effect on time-driven shader effects.
 
-- [ ] 795. [M2LegacyRendererGL.cpp] Track data property names differ from JS — uses `flatValues`/`nestedTimestamps` instead of `values`/`timestamps`
+- [x] 795. [M2LegacyRendererGL.cpp] Track data property names differ from JS — uses `flatValues`/`nestedTimestamps` instead of `values`/`timestamps`
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 581–609
-- **Status**: Pending
-- **Details**: JS accesses bone animation data as `bone.translation.values`, `bone.translation.timestamps`, `bone.translation.timestamps[anim_idx]`, `bone.translation.values[anim_idx]`. C++ accesses `bone.translation.flatValues`, `bone.translation.flatTimestamps`, `bone.translation.nestedTimestamps[anim_idx]`, `bone.translation.nestedValues[anim_idx]`. This implies the M2LegacyLoader stores data in a different structure, which must match the renderer's expectations.
+- **Status**: Verified
+- **Details**: JS `M2Track` uses a single `timestamps`/`values` property that holds either a flat array (pre-WotLK) or a nested array-of-arrays (WotLK). C++ splits these into separate `flatTimestamps`/`flatValues` (pre-WotLK) and `nestedTimestamps`/`nestedValues` (WotLK) fields on `LegacyM2Track`. Both `M2LegacyLoader` and `M2LegacyRendererGL` agree on this split naming, and the renderer's pre-WotLK and WotLK branches access the correct fields — the data access logic is functionally identical to the JS. The naming difference is a deliberate C++ adaptation to make the two formats explicit at the type level rather than relying on runtime duck-typing.
 
 - [x] 796. [M2LegacyRendererGL.cpp] `loadSkin()` geoset assignment to `core.view` uses JSON serialization instead of direct assignment
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 431–432
 - **Status**: Verified
 - **Details**: The JSON serialization in `loadSkin()` is a correct and necessary adaptation (C++ has no object reference aliasing like JS). The real underlying bug was that `updateGeosets()` read only from `geosetArray[i].checked` (the internal copy) instead of `core::view->modelViewerGeosets[i]["checked"]` (the UI-facing array that the user modifies). Fixed: `updateGeosets()` now reads checked state from `core::view->modelViewerGeosets` first (falling back to `geosetArray` if empty) and syncs it back into `geosetArray`, matching M2RendererGL's pattern.
 
-- [ ] 797. [M2LegacyRendererGL.cpp] `setSlotFile` called as `setSlotFileLegacy` — function name differs from JS
+- [x] 797. [M2LegacyRendererGL.cpp] `setSlotFile` called as `setSlotFileLegacy` — function name differs from JS
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` line 226
-- **Status**: Pending
-- **Details**: JS calls `textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID)`. C++ calls `texture_ribbon::setSlotFileLegacy(ribbonSlot, fileName, syncID)` at line 255. The C++ function has a different name, which may indicate it has different behavior or was renamed for disambiguation.
+- **Status**: Verified
+- **Details**: JS `texture-ribbon.js` exports two functions: `setSlotFile(slotIndex, fileDataID, syncID)` for numeric fileDataIDs and `setSlotFileLegacy(slotIndex, filePath, syncID)` for string file paths. `M2LegacyRendererGL.js` line 226 calls `textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID)` with a string path — this works by accident: `listfile.getByID(stringValue)` returns undefined, so the string is used directly via `.toString()`. C++ correctly calls `texture_ribbon::setSlotFileLegacy` which is the semantically proper API for string paths. Both produce `fileName = filePath` and `displayName = stem(filePath)` on the ribbon slot; the only difference is `fileDataID` is set to the string in JS vs 0 in C++, which has no functional effect since fileDataID is unused for legacy format slots.
 
 - [ ] 798. [M3RendererGL.cpp] Load APIs are synchronous instead of JS async methods
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 56, 76

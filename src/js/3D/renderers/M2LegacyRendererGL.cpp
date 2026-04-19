@@ -1327,6 +1327,10 @@ void M2LegacyRendererGL::_dispose_skin() {
 // -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::dispose() {
+	// JS: this.geosetWatcher?.(); this.wireframeWatcher?.();
+	// C++ equivalent: clear polling watcher state so it cannot fire after disposal.
+	watcher_geoset_checked.clear();
+	watcher_state_initialized = false;
 
 	_dispose_skin();
 
