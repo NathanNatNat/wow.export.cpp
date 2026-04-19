@@ -2761,7 +2761,7 @@ int main(int argc, char* argv[]) {
 		logging::write(std::format("No export directory set, setting to {}", defaultExportDir));
 	}
 
-	casc::listfile::preload();
+	casc::listfile::preloadAsync();
 	casc::dbd_manifest::preload();
 
 	// Set-up proper drag/drop handlers.

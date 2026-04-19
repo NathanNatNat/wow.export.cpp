@@ -175,16 +175,8 @@ static std::unique_ptr<std::jthread> cache_worker_thread;
 
 // Background thread for CASC loading (prevents main-thread blocking).
 static std::unique_ptr<std::jthread> casc_load_thread;
-
-// CDN ping results collected by the background thread.
-struct CdnPingResult {
-	size_t index;     // region index in cdnRegions array
-	int64_t delay;    // ping delay in ms, or -1 on failure
-};
-
-static std::mutex cdn_ping_mutex;
-static std::vector<CdnPingResult> cdn_ping_results;
-static std::atomic<bool> cdn_pings_complete{false};
+// Background thread for source open/init operations (mirrors JS async methods).
+static std::unique_ptr<std::jthread> source_open_thread;
 static std::unique_ptr<std::jthread> cdn_ping_thread;
 
 /**
@@ -366,52 +358,69 @@ void open_local_install(const std::string& install_path, const std::string& prod
 	// Ensure any in-progress CASC loading thread is finished before
 	// replacing the source pointers it may reference.
 	casc_load_thread.reset();
+	source_open_thread.reset();
 
 	auto& recent_local = core::view->config["recentLocal"];
 	if (!recent_local.is_array())
 		recent_local = nlohmann::json::array();
 
-	try {
-		casc_local_source = std::make_unique<casc::CASCLocal>(install_path);
-		casc_remote_source.reset();
-		active_source_type = SourceType::Local;
+	casc_local_source = std::make_unique<casc::CASCLocal>(install_path);
+	casc_remote_source.reset();
+	active_source_type = SourceType::Local;
+	casc::CASCLocal* src = casc_local_source.get();
 
-		casc_local_source->init();
+	source_open_thread = std::make_unique<std::jthread>([src, install_path, product]() {
+		try {
+			src->init();
 
-		if (!product.empty()) {
-			// Find the build index matching the product.
-			int build_index = -1;
-			for (size_t i = 0; i < casc_local_source->builds.size(); i++) {
-				if (casc_local_source->builds[i].count("Product") &&
-					casc_local_source->builds[i].at("Product") == product) {
-					build_index = static_cast<int>(i);
-					break;
+			if (!product.empty()) {
+				int build_index = -1;
+				for (size_t i = 0; i < src->builds.size(); i++) {
+					if (src->builds[i].count("Product") && src->builds[i].at("Product") == product) {
+						build_index = static_cast<int>(i);
+						break;
+					}
 				}
-			}
-			load_install(build_index);
-		} else {
-			core::view->availableLocalBuilds = nlohmann::json::array();
-			auto product_list = casc_local_source->getProductList();
-			for (const auto& entry : product_list) {
-				nlohmann::json obj;
-				obj["label"] = entry.label;
-				obj["expansionId"] = entry.expansionId;
-				obj["buildIndex"] = entry.buildIndex;
-				core::view->availableLocalBuilds.push_back(obj);
-			}
-			core::view->sourceSelectShowBuildSelect = true;
-		}
-	} catch (const std::exception& e) {
-		core::setToast("error", std::format("It looks like {} is not a valid World of Warcraft installation.", install_path), {}, -1);
-		logging::write(std::format("Failed to initialize local CASC source: {}", e.what()));
 
-		// Remove matching entries from recent list.
-		for (int i = static_cast<int>(recent_local.size()) - 1; i >= 0; i--) {
-			const auto& entry = recent_local[static_cast<size_t>(i)];
-			if (entry["path"] == install_path && (product.empty() || entry.value("product", "") == product))
-				recent_local.erase(static_cast<size_t>(i));
+				core::postToMainThread([src, build_index]() {
+					if (active_source_type == SourceType::Local && casc_local_source && casc_local_source.get() == src)
+						load_install(build_index);
+				});
+				return;
+			}
+
+			auto product_list = src->getProductList();
+			core::postToMainThread([src, product_list = std::move(product_list)]() mutable {
+				if (!(active_source_type == SourceType::Local && casc_local_source && casc_local_source.get() == src))
+					return;
+
+				core::view->availableLocalBuilds = nlohmann::json::array();
+				for (const auto& entry : product_list) {
+					nlohmann::json obj;
+					obj["label"] = entry.label;
+					obj["expansionId"] = entry.expansionId;
+					obj["buildIndex"] = entry.buildIndex;
+					core::view->availableLocalBuilds.push_back(obj);
+				}
+				core::view->sourceSelectShowBuildSelect = true;
+			});
+		} catch (const std::exception& e) {
+			std::string err = e.what();
+			core::postToMainThread([install_path, product, err = std::move(err)]() {
+				core::setToast("error", std::format("It looks like {} is not a valid World of Warcraft installation.", install_path), {}, -1);
+				logging::write(std::format("Failed to initialize local CASC source: {}", err));
+
+				auto& recent_local = core::view->config["recentLocal"];
+				if (recent_local.is_array()) {
+					for (int i = static_cast<int>(recent_local.size()) - 1; i >= 0; i--) {
+						const auto& entry = recent_local[static_cast<size_t>(i)];
+						if (entry["path"] == install_path && (product.empty() || entry.value("product", "") == product))
+							recent_local.erase(static_cast<size_t>(i));
+					}
+				}
+			});
 		}
-	}
+	});
 }
 
 void open_legacy_install(const std::string& install_path) {
@@ -477,6 +486,7 @@ void open_legacy_install(const std::string& install_path) {
 
 static void init_cdn_pings() {
 	auto& regions = core::view->cdnRegions;
+	regions = nlohmann::json::array();
 	std::string user_region;
 	auto it = core::view->config.find("sourceSelectUserRegion");
 	if (it != core::view->config.end() && it->is_string())
@@ -514,39 +524,65 @@ static void init_cdn_pings() {
 		}
 	}
 
-	// Ping all regions asynchronously.
-	// Background thread pings all regions, stores results via mutex.
-	// Results are applied to core::view from the main thread in render().
-	{
-		std::lock_guard<std::mutex> lock(cdn_ping_mutex);
-		cdn_ping_results.clear();
-	}
-	cdn_pings_complete.store(false);
-
-	// Build a list of (index, url) pairs to ping — captured by value for thread safety.
+	// Build a list of (index, url) pairs to ping — captured by value for async tasks.
 	struct PingTarget { size_t index; std::string url; };
 	std::vector<PingTarget> targets;
 	for (size_t i = 0; i < regions.size(); i++)
 		targets.push_back({i, regions[i]["url"].get<std::string>()});
 
+	cdn_ping_thread.reset();
 	cdn_ping_thread = std::make_unique<std::jthread>([targets = std::move(targets)]() {
-		for (const auto& target : targets) {
-			int64_t delay = -1;
-			try {
-				delay = generics::ping(target.url);
-			} catch (const std::exception& e) {
-				logging::write(std::format("Failed ping to {}: {}", target.url, e.what()));
-			}
+		std::vector<std::future<void>> ping_tasks;
+		ping_tasks.reserve(targets.size());
 
-			// Push each result immediately so the UI updates progressively per-ping.
-			// JS equivalent: .finally(() => { this.$core.view.cdnRegions = [...regions]; })
-			{
-				std::lock_guard<std::mutex> lock(cdn_ping_mutex);
-				cdn_ping_results.push_back({target.index, delay});
+		for (const auto& target : targets) {
+			ping_tasks.emplace_back(std::async(std::launch::async, [target]() {
+				int64_t delay = -1;
+				try {
+					delay = generics::ping(target.url);
+				} catch (const std::exception& e) {
+					logging::write(std::format("Failed ping to {}: {}", target.url, e.what()));
+				}
+
+				core::postToMainThread([index = target.index, delay]() {
+					auto& regions = core::view->cdnRegions;
+					if (index < regions.size())
+						regions[index]["delay"] = delay;
+				});
+			}));
+		}
+
+		for (auto& task : ping_tasks) {
+			try {
+				task.get();
+			} catch (...) {
+				// per-ping task already logs and posts delay fallback.
 			}
 		}
 
-		cdn_pings_complete.store(true);
+		core::postToMainThread([]() {
+			if (core::view->lockCDNRegion)
+				return;
+
+			auto& regions = core::view->cdnRegions;
+			nlohmann::json selected_region = core::view->selectedCDNRegion;
+
+			for (const auto& region : regions) {
+				if (!region.contains("delay") || region["delay"].is_null() || !region["delay"].is_number())
+					continue;
+
+				const int64_t delay = region["delay"].get<int64_t>();
+				if (delay < 0)
+					continue;
+
+				if (selected_region.contains("delay") && selected_region["delay"].is_number() &&
+					delay < selected_region["delay"].get<int64_t>()) {
+					core::view->selectedCDNRegion = region;
+					casc::cdn_resolver::startPreResolution(region["tag"].get<std::string>());
+					selected_region = region;
+				}
+			}
+		});
 	});
 }
 
@@ -573,36 +609,52 @@ static void click_source_remote() {
 	// Ensure any in-progress CASC loading thread is finished before
 	// replacing the source pointers it may reference.
 	casc_load_thread.reset();
+	source_open_thread.reset();
 
-	BusyLock _lock = core::create_busy_lock();
 	std::string tag = core::view->selectedCDNRegion.value("tag", "us");
+	auto busy_lock = std::make_shared<BusyLock>(core::create_busy_lock());
 
-	try {
-		casc_remote_source = std::make_unique<casc::CASCRemote>(tag);
-		casc_local_source.reset();
-		active_source_type = SourceType::Remote;
+	casc_remote_source = std::make_unique<casc::CASCRemote>(tag);
+	casc_local_source.reset();
+	active_source_type = SourceType::Remote;
+	casc::CASCRemote* src = casc_remote_source.get();
 
-		casc_remote_source->init();
+	source_open_thread = std::make_unique<std::jthread>([src, tag, busy_lock = std::move(busy_lock)]() mutable {
+		try {
+			src->init();
 
-		if (casc_remote_source->builds.empty())
-			throw std::runtime_error("No builds available.");
+			auto product_list = src->getProductList();
+			if (product_list.empty())
+				throw std::runtime_error("No builds available.");
 
-		core::view->availableRemoteBuilds = nlohmann::json::array();
-		auto product_list = casc_remote_source->getProductList();
-		for (const auto& entry : product_list) {
-			nlohmann::json obj;
-			obj["label"] = entry.label;
-			obj["expansionId"] = entry.expansionId;
-			obj["buildIndex"] = entry.buildIndex;
-			core::view->availableRemoteBuilds.push_back(obj);
+			core::postToMainThread([src, product_list = std::move(product_list), busy_lock = std::move(busy_lock)]() mutable {
+				if (!(active_source_type == SourceType::Remote && casc_remote_source && casc_remote_source.get() == src)) {
+					busy_lock.reset();
+					return;
+				}
+
+				core::view->availableRemoteBuilds = nlohmann::json::array();
+				for (const auto& entry : product_list) {
+					nlohmann::json obj;
+					obj["label"] = entry.label;
+					obj["expansionId"] = entry.expansionId;
+					obj["buildIndex"] = entry.buildIndex;
+					core::view->availableRemoteBuilds.push_back(obj);
+				}
+				core::view->sourceSelectShowBuildSelect = true;
+				busy_lock.reset();
+			});
+		} catch (const std::exception& e) {
+			std::string err = e.what();
+			core::postToMainThread([tag, err = std::move(err), busy_lock = std::move(busy_lock)]() mutable {
+				std::string upper_tag = tag;
+				std::transform(upper_tag.begin(), upper_tag.end(), upper_tag.begin(), ::toupper);
+				core::setToast("error", std::format("There was an error connecting to Blizzard's {} CDN, try another region!", upper_tag), {}, -1);
+				logging::write(std::format("Failed to initialize remote CASC source: {}", err));
+				busy_lock.reset();
+			});
 		}
-		core::view->sourceSelectShowBuildSelect = true;
-	} catch (const std::exception& e) {
-		std::string upper_tag = tag;
-		std::transform(upper_tag.begin(), upper_tag.end(), upper_tag.begin(), ::toupper);
-		core::setToast("error", std::format("There was an error connecting to Blizzard's {} CDN, try another region!", upper_tag), {}, -1);
-		logging::write(std::format("Failed to initialize remote CASC source: {}", e.what()));
-	}
+	});
 }
 
 static void click_source_legacy() {
@@ -705,45 +757,6 @@ void mounted() {
 }
 
 void render() {
-	// Apply CDN ping results from the background thread (main-thread only).
-	{
-		std::lock_guard<std::mutex> lock(cdn_ping_mutex);
-		if (!cdn_ping_results.empty()) {
-			auto& regions = core::view->cdnRegions;
-			for (const auto& result : cdn_ping_results) {
-				if (result.index < regions.size())
-					regions[result.index]["delay"] = result.delay;
-			}
-			cdn_ping_results.clear();
-		}
-	}
-
-	// After all pings complete, auto-select the fastest region if not locked.
-	if (cdn_pings_complete.exchange(false)) {
-		if (!core::view->lockCDNRegion) {
-			auto& regions = core::view->cdnRegions;
-			int64_t best_delay = std::numeric_limits<int64_t>::max();
-			const nlohmann::json* best_region = nullptr;
-
-			for (const auto& region : regions) {
-				if (!region.contains("delay") || region["delay"].is_null() || !region["delay"].is_number())
-					continue;
-				int64_t delay = region["delay"].get<int64_t>();
-				if (delay < 0)
-					continue;
-				if (delay < best_delay) {
-					best_delay = delay;
-					best_region = &region;
-				}
-			}
-
-			if (best_region) {
-				core::view->selectedCDNRegion = *best_region;
-				casc::cdn_resolver::startPreResolution((*best_region)["tag"].get<std::string>());
-			}
-		}
-	}
-
 	// Ensure source icon textures are loaded.
 	ensureSourceTextures();
 
