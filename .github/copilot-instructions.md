@@ -41,7 +41,7 @@ All dependencies should be git submodules integrated via CMake where possible.
 
 ## Reference Sources
 - The **original JavaScript/NW.js source code** (wow.export) is included **directly in this repository** under `src/js/` (and `src/installer/`). These are the authoritative JS source files — always refer to them locally when making changes or reviewing code to ensure fidelity with the original application. The upstream repo is at **https://github.com/Kruithne/wow.export** for historical reference.
-- When converting or verifying a C++ file, **open the corresponding JS file from `src/js/`** (e.g., for `src/casc/casc-source-remote.cpp`, refer to `src/js/casc/casc-source-remote.js`). Use the `view` tool to read the local JS source — do not rely solely on external URLs.
+- When converting or verifying a C++ file, **open the corresponding JS file from `src/js/`** (e.g., for `src/casc/casc-source-remote.cpp`, refer to `src/js/casc/casc-source-remote.js`). Read the local JS source directly — do not rely solely on external URLs.
 - This C++ port (wow.export.cpp) is at **https://github.com/NathanNatNat/wow.export.cpp**.
 - **Reference screenshots** of the original app are in [`UI_REFERENCE.md`](../UI_REFERENCE.md) — always compare against these screenshots when making UI changes to ensure visual fidelity.
 
