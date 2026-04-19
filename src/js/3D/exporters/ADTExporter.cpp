@@ -722,7 +722,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				auto saveLayerTexture = [&](uint32_t fileDataID) -> std::string {
 					auto blpData = casc->getVirtualFileByID(fileDataID);
 					casc::BLPImage blp(std::move(blpData));
-					std::string fileName = casc::listfile::getByID(fileDataID);
+					std::string fileName = casc::listfile::getByID(fileDataID).value_or("");
 					if (!fileName.empty())
 						fileName = casc::ExportHelper::replaceExtension(fileName, ".png");
 					else
@@ -1411,7 +1411,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 
 			auto blpData = casc->getVirtualFileByID(fileDataID);
 
-			std::string fileName = casc::listfile::getByID(fileDataID);
+			std::string fileName = casc::listfile::getByID(fileDataID).value_or("");
 			if (!fileName.empty())
 				fileName = casc::ExportHelper::replaceExtension(fileName, ".blp");
 			else
@@ -1465,7 +1465,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 						fileDataID = model.mmidEntry;
 					}
 
-					std::string fileName = casc::listfile::getByID(fileDataID);
+					std::string fileName = casc::listfile::getByID(fileDataID).value_or("");
 
 					if (!isRawExport) {
 						if (!fileName.empty()) {
@@ -1587,7 +1587,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 							fileDataID = casc::listfile::getByFilename(fileName).value_or(0);
 						} else {
 							fileDataID = model.mwidEntry;
-							fileName = casc::listfile::getByID(fileDataID);
+							fileName = casc::listfile::getByID(fileDataID).value_or("");
 						}
 
 						if (!isRawExport) {
@@ -1873,7 +1873,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 					// Map fileDataID to the exported OBJ file names.
 					for (auto& [key, entry] : doodadModelIDs.items()) {
 						uint32_t entryFDID = entry["fileDataID"].get<uint32_t>();
-						std::string entryFileName = casc::listfile::getByID(entryFDID);
+						std::string entryFileName = casc::listfile::getByID(entryFDID).value_or("");
 
 						if (isRawExport)
 							entry["fileName"] = fs::path(entryFileName).filename().string();
@@ -1895,7 +1895,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 		for (const auto modelID : foliageExportCache) {
 			helper->setCurrentTaskValue(foliageIndex++);
 
-			const std::string modelName = fs::path(casc::listfile::getByID(modelID)).filename().string();
+			const std::string modelName = fs::path(casc::listfile::getByID(modelID).value_or("")).filename().string();
 
 			auto data = casc->getVirtualFileByID(modelID);
 			M2Exporter m2(std::move(data), {}, modelID, casc);

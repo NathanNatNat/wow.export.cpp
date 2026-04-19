@@ -943,7 +943,7 @@ if (placement.id == 0)
 throw std::runtime_error("map does not define a valid world model.");
 
 file_data_id = placement.id;
-auto name = casc::listfile::getByID(file_data_id);
+auto name = casc::listfile::getByID(file_data_id).value_or("");
 file_name = !name.empty() ? name : ("unknown_" + std::to_string(file_data_id) + ".wmo");
 }
 

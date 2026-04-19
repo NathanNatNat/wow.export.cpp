@@ -1993,7 +1993,7 @@ if (format == "PNG" || format == "CLIPBOARD") {
 if (active_model != 0) {
 gl::GLContext* gl_ctx = viewer_context.gl_context;
 if (gl_ctx && viewer_state.fbo != 0) {
-std::string file_name = casc::listfile::getByID(active_model);
+std::string file_name = casc::listfile::getByID(active_model).value_or("");
 // Bind the model viewer FBO so export_preview can read its pixels
 glBindFramebuffer(GL_FRAMEBUFFER, viewer_state.fbo);
 model_viewer_utils::export_preview(format, *gl_ctx, file_name);
@@ -2014,7 +2014,7 @@ if (helper.isCancelled())
 return;
 
 uint32_t file_data_id = active_model;
-std::string file_name = casc::listfile::getByID(file_data_id);
+std::string file_name = casc::listfile::getByID(file_data_id).value_or("");
 
 try {
 if (format == "OBJ" || format == "STL") {
@@ -2094,7 +2094,7 @@ if (!chr_material) {
 	return;
 }
 
-std::string file_name = casc::listfile::getByID(active_model);
+std::string file_name = casc::listfile::getByID(active_model).value_or("");
 namespace fs = std::filesystem;
 fs::path p(file_name);
 std::string base_name = p.stem().string();

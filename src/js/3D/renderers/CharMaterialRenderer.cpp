@@ -141,7 +141,7 @@ void CharMaterialRenderer::setTextureTarget(
 	// ChrCustomizationMaterial: ChrModelTextureTargetID, FileDataID (this is actually MaterialResourceID but we translate it before here)
 
 	// For debug purposes
-	std::string filename = casc::listfile::getByID(fileDataID);
+	std::string filename = casc::listfile::getByID(fileDataID).value_or("");
 	spdlog::info("Loading texture {} for target {} with alpha {}", filename, chrModelTextureTargetID, useAlpha);
 
 	GLuint textureID;

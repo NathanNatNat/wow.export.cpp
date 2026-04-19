@@ -164,7 +164,7 @@ static void update_texture_atlas_overlay() {
 static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string& texture_name) {
 	std::string texture = texture_name;
 	if (texture.empty()) {
-		texture = casc::listfile::getByID(file_data_id);
+		texture = casc::listfile::getByID(file_data_id).value_or("");
 		if (texture.empty())
 			texture = casc::listfile::formatUnknownFile(file_data_id);
 	}
@@ -324,7 +324,7 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 
 	const auto& atlas = atlas_it->second;
 
-	const std::string file_name = casc::listfile::getByID(file_data_id);
+	const std::string file_name = casc::listfile::getByID(file_data_id).value_or("");
 	const std::string export_dir = casc::ExportHelper::replaceExtension(file_name);
 
 	casc::ExportHelper helper(static_cast<int>(atlas.regions.size()), "texture");

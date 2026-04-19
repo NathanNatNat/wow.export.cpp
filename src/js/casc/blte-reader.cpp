@@ -256,15 +256,15 @@ BufferWrapper BLTEReader::_decryptBlock(BufferWrapper& data, size_t blockEnd, si
 	for (int shift = 0, i = 0; i < 4; shift += 8, i++)
 		ivShort[i] = (ivShort[i] ^ ((index >> shift) & 0xFF)) & 0xFF;
 
-	const std::string key = tact_keys::getKey(keyName);
-	if (key.empty())
+	const auto key = tact_keys::getKey(keyName);
+	if (!key.has_value())
 		throw EncryptionError(keyName);
 
 	std::vector<uint8_t> nonce(8, 0);
 	for (size_t i = 0; i < 8; i++)
 		nonce[i] = (i < ivShort.size() ? ivShort[i] : 0x0);
 
-	Salsa20 instance(std::span<const uint8_t>(nonce), key);
+	Salsa20 instance(std::span<const uint8_t>(nonce), *key);
 	BufferWrapper encData = data.readBuffer(blockEnd - data.offset());
 	return instance.process(encData);
 }

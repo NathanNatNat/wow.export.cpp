@@ -14,6 +14,8 @@
 #include <optional>
 #include <regex>
 #include <utility>
+#include <future>
+#include <variant>
 
 namespace casc {
 
@@ -71,18 +73,28 @@ struct ExtFilter {
 /**
  * Begin preloading the master listfile (binary or legacy format).
  */
-void preload();
+bool preload();
+
+/**
+ * Async-equivalent API mirroring JS Promise-based preload().
+ */
+std::shared_future<bool> preloadAsync();
 
 /**
  * Prepare the listfile, waiting for any in-progress preload.
  */
-void prepareListfile();
+bool prepareListfile();
+
+/**
+ * Async-equivalent API mirroring JS Promise-based prepareListfile().
+ */
+std::shared_future<bool> prepareListfileAsync();
 
 /**
  * Apply preloaded listfile data, filtering against the root entries.
  * @param rootEntries Set of valid file data IDs from the CASC root.
  */
-void applyPreload(const std::unordered_set<uint32_t>& rootEntries);
+std::optional<int> applyPreload(const std::unordered_set<uint32_t>& rootEntries);
 
 // --- Unknown file loading ---
 
@@ -91,17 +103,20 @@ void applyPreload(const std::unordered_set<uint32_t>& rootEntries);
  * @returns Number of unknown BLP textures added.
  */
 size_t loadUnknownTextures();
+std::future<size_t> loadUnknownTexturesAsync();
 
 /**
  * Load unknown models from ModelFileData.db2.
  * @returns Number of unknown M2 models added.
  */
 size_t loadUnknownModels();
+std::future<size_t> loadUnknownModelsAsync();
 
 /**
  * Load all unknown file types.
  */
 void loadUnknowns();
+std::future<void> loadUnknownsAsync();
 
 // --- Lookup ---
 
@@ -114,7 +129,7 @@ bool existsByID(uint32_t id);
  * Get a filename from a given file data ID.
  * @returns The filename or empty string if not found.
  */
-std::string getByID(uint32_t id);
+std::optional<std::string> getByID(uint32_t id);
 
 /**
  * Get a filename from a given file data ID or format it as an unknown file.
@@ -142,7 +157,8 @@ std::vector<std::string> getFilenamesByExtension(const std::vector<ExtFilter>& e
  * @param is_regex Whether to treat search as a regex.
  * @returns Vector of matching entries.
  */
-std::vector<FilteredEntry> getFilteredEntries(const std::string& search, bool is_regex = false);
+std::vector<FilteredEntry> getFilteredEntries(const std::string& search);
+std::vector<FilteredEntry> getFilteredEntries(const std::regex& search);
 
 // --- Formatting ---
 
@@ -191,6 +207,8 @@ void addEntry(uint32_t fileDataID, const std::string& fileName,
  */
 std::vector<std::string> renderListfile(const std::optional<std::vector<uint32_t>>& file_data_ids = std::nullopt,
                                          bool include_main_index = false);
+std::future<std::vector<std::string>> renderListfileAsync(const std::optional<std::vector<uint32_t>>& file_data_ids = std::nullopt,
+                                                          bool include_main_index = false);
 
 // --- State ---
 

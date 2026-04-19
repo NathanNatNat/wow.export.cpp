@@ -7,6 +7,8 @@
 
 #include <string>
 #include <string_view>
+#include <optional>
+#include <future>
 
 namespace casc {
 namespace tact_keys {
@@ -14,9 +16,9 @@ namespace tact_keys {
 /**
  * Retrieve a registered decryption key.
  * @param keyName 16-character hex key name.
- * @returns The key value (32-character hex) or empty string if not found.
+ * @returns The key value (32-character hex) or std::nullopt if not found.
  */
-std::string getKey(std::string_view keyName);
+std::optional<std::string> getKey(std::string_view keyName);
 
 /**
  * Add a decryption key. Subject to validation.
@@ -32,6 +34,7 @@ bool addKey(std::string_view keyName, std::string_view key);
  * keys from remote server.
  */
 void load();
+std::future<void> loadAsync();
 
 } // namespace tact_keys
 } // namespace casc

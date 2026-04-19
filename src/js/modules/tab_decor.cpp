@@ -151,7 +151,7 @@ static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 
 		auto model_type = model_viewer_utils::detect_model_type(file);
 
-		std::string file_name = casc::listfile::getByID(file_data_id);
+		std::string file_name = casc::listfile::getByID(file_data_id).value_or("");
 		if (file_name.empty())
 			file_name = casc::listfile::formatUnknownFile(file_data_id, model_viewer_utils::get_model_extension(model_type));
 
@@ -262,7 +262,7 @@ static void export_files(const std::vector<const db::caches::DBDecor::DecorItem*
 			auto model_type = model_viewer_utils::detect_model_type(data);
 			auto file_ext = model_viewer_utils::get_model_extension(model_type);
 
-			std::string file_name = casc::listfile::getByID(file_data_id);
+			std::string file_name = casc::listfile::getByID(file_data_id).value_or("");
 			if (file_name.empty())
 			    file_name = casc::listfile::formatUnknownFile(file_data_id, file_ext);
 

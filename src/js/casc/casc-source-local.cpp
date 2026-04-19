@@ -112,7 +112,7 @@ BLTEReader CASCLocal::getFileAsBLTE(uint32_t fileDataID, bool partialDecryption,
 	bool suppressLog, bool supportFallback, bool forceFallback, const std::string& contentKey)
 {
 	if (!suppressLog)
-		logging::write(std::format("Loading local CASC file {} ({})", fileDataID, listfile::getByID(fileDataID)));
+		logging::write(std::format("Loading local CASC file {} ({})", fileDataID, listfile::getByID(fileDataID).value_or("")));
 
 	const std::string encodingKey = !contentKey.empty() ? CASC::getEncodingKeyForContentKey(contentKey) : CASC::getFile(fileDataID);
 	BufferWrapper data = supportFallback ? getDataFileWithRemoteFallback(encodingKey, forceFallback) : getDataFile(encodingKey);
@@ -133,7 +133,7 @@ BLTEStreamReader CASCLocal::getFileStream(uint32_t fileDataID, bool partialDecry
 	bool suppressLog, bool supportFallback, bool forceFallback, const std::string& contentKey)
 {
 	if (!suppressLog)
-		logging::write(std::format("Creating stream for local CASC file {} ({})", fileDataID, listfile::getByID(fileDataID)));
+		logging::write(std::format("Creating stream for local CASC file {} ({})", fileDataID, listfile::getByID(fileDataID).value_or("")));
 
 	// if fallback forced or not supported, use remote streaming
 	if (forceFallback || !supportFallback) {
@@ -586,7 +586,7 @@ std::string CASCLocal::_ensureFileInCache(const std::string& encodingKey, uint32
 
 	// retrieve and unwrap from BLTE
 	if (!suppressLog)
-		logging::write(std::format("caching file {} ({}) for mmap", fileDataID, listfile::getByID(fileDataID)));
+		logging::write(std::format("caching file {} ({}) for mmap", fileDataID, listfile::getByID(fileDataID).value_or("")));
 
 	BufferWrapper data = getDataFileWithRemoteFallback(encodingKey);
 	BLTEReader blte(std::move(data), encodingKey, true);

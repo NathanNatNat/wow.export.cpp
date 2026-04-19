@@ -180,7 +180,7 @@ static void view_item_models(const Item& item) {
 			continue;
 
 		for (const uint32_t file_data_id : *file_data_ids) {
-			std::string entry = casc::listfile::getByID(file_data_id);
+			std::string entry = casc::listfile::getByID(file_data_id).value_or("");
 
 			if (!entry.empty())
 				list.insert(std::format("{} [{}]", entry, file_data_id));
@@ -211,7 +211,7 @@ static void view_item_textures(const Item& item) {
 			continue;
 
 		for (const uint32_t file_data_id : *file_data_ids) {
-			std::string entry = casc::listfile::getByID(file_data_id);
+			std::string entry = casc::listfile::getByID(file_data_id).value_or("");
 
 			if (!entry.empty())
 				list.insert(std::format("{} [{}]", entry, file_data_id));

@@ -18,12 +18,14 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <mutex>
+#include <future>
 
 namespace {
 
 std::unordered_map<std::string, std::string> KEY_RING;
 bool isSaving = false;
 std::mutex keyRingMutex;
+std::mutex saveMutex;
 
 /**
  * Convert a string to lowercase in-place.
@@ -62,10 +64,16 @@ void doSave() {
 	}
 
 	std::ofstream ofs(constants::CACHE::TACT_KEYS());
-	if (ofs.is_open()) {
-		ofs << j.dump(1, '\t');
-		ofs.close();
+	if (!ofs.is_open()) {
+		std::lock_guard<std::mutex> lock(saveMutex);
+		isSaving = false;
+		throw std::runtime_error(std::format("Unable to save tact keys cache: {}", constants::CACHE::TACT_KEYS().string()));
 	}
+
+	ofs << j.dump(1, '\t');
+	ofs.close();
+
+	std::lock_guard<std::mutex> lock(saveMutex);
 	isSaving = false;
 }
 
@@ -74,10 +82,23 @@ void doSave() {
  * Multiple calls can be chained in the same tick.
  */
 void save() {
-	if (!isSaving) {
-		isSaving = true;
-		// In JS this was setImmediate(doSave). In C++ we save immediately.
-		doSave();
+	bool shouldSchedule = false;
+	{
+		std::lock_guard<std::mutex> lock(saveMutex);
+		if (!isSaving) {
+			isSaving = true;
+			shouldSchedule = true;
+		}
+	}
+
+	if (shouldSchedule) {
+		core::postToMainThread([]() {
+			try {
+				doSave();
+			} catch (const std::exception& e) {
+				logging::write(std::format("Failed saving tact keys: {}", e.what()));
+			}
+		});
 	}
 }
 
@@ -121,13 +142,13 @@ std::string_view trim(std::string_view sv) {
 namespace casc {
 namespace tact_keys {
 
-std::string getKey(std::string_view keyName) {
+std::optional<std::string> getKey(std::string_view keyName) {
 	std::string lower = toLower(keyName);
 	std::lock_guard<std::mutex> lock(keyRingMutex);
 	auto it = KEY_RING.find(lower);
 	if (it != KEY_RING.end())
 		return it->second;
-	return {};
+	return std::nullopt;
 }
 
 bool addKey(std::string_view keyName, std::string_view key) {
@@ -155,6 +176,11 @@ bool addKey(std::string_view keyName, std::string_view key) {
 }
 
 void load() {
+	loadAsync().get();
+}
+
+std::future<void> loadAsync() {
+	return std::async(std::launch::async, []() {
 	// Load from local cache.
 	try {
 		std::ifstream ifs(constants::CACHE::TACT_KEYS());
@@ -225,6 +251,7 @@ void load() {
 
 	if (remoteAdded > 0)
 		logging::write(std::format("Added {} tact keys from {}", remoteAdded, tact_url));
+	});
 }
 
 } // namespace tact_keys

@@ -915,7 +915,7 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			}
 
 			auto model_type = model_viewer_utils::detect_model_type(file);
-			std::string file_name = casc::listfile::getByID(file_data_id);
+			std::string file_name = casc::listfile::getByID(file_data_id).value_or("");
 			if (file_name.empty())
 				file_name = casc::listfile::formatUnknownFile(file_data_id, model_viewer_utils::get_model_extension(model_type));
 
@@ -951,7 +951,7 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 				auto displays = get_creature_displays(file_data_id);
 
 				std::vector<nlohmann::json> skin_list;
-				std::string model_name = casc::listfile::getByID(file_data_id);
+				std::string model_name = casc::listfile::getByID(file_data_id).value_or("");
 				// basename — strip path
 				{
 					auto pos = model_name.rfind('/');
@@ -969,7 +969,7 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 					uint32_t texture = display.textures[0];
 
 					std::string clean_skin_name;
-					std::string skin_name = casc::listfile::getByID(texture);
+					std::string skin_name = casc::listfile::getByID(texture).value_or("");
 					if (!skin_name.empty()) {
 						// basename + strip .blp
 						{
@@ -1127,7 +1127,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 				}
 
 				BufferWrapper data = casc->getVirtualFileByID(file_data_id);
-				std::string file_name = casc::listfile::getByID(file_data_id);
+				std::string file_name = casc::listfile::getByID(file_data_id).value_or("");
 				if (file_name.empty())
 					file_name = casc::listfile::formatUnknownFile(file_data_id, ".m2");
 
@@ -1343,7 +1343,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 			BufferWrapper data = casc->getVirtualFileByID(file_data_id);
 			auto model_type = model_viewer_utils::detect_model_type(data);
 			std::string file_ext = model_viewer_utils::get_model_extension(model_type);
-			std::string file_name = casc::listfile::getByID(file_data_id);
+			std::string file_name = casc::listfile::getByID(file_data_id).value_or("");
 			if (file_name.empty())
 				file_name = casc::listfile::formatUnknownFile(file_data_id, file_ext);
 			std::string export_path = casc::ExportHelper::getExportPath("creatures/" + creature_name + file_ext);

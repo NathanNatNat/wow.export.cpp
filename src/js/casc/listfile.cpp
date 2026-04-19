@@ -80,6 +80,11 @@ static std::unordered_map<uint32_t, std::string> preload_sounds_map;
 static std::unordered_map<uint32_t, std::string> preload_text_map;
 static std::unordered_map<uint32_t, std::string> preload_fonts_map;
 static std::unordered_map<uint32_t, std::string> preload_models_map;
+static std::vector<uint32_t> preload_textures_order;
+static std::vector<uint32_t> preload_sounds_order;
+static std::vector<uint32_t> preload_text_order;
+static std::vector<uint32_t> preload_fonts_order;
+static std::vector<uint32_t> preload_models_order;
 
 static std::vector<uint32_t> preload_textures_ids;
 static std::vector<uint32_t> preload_sounds_ids;
@@ -88,9 +93,7 @@ static std::vector<uint32_t> preload_fonts_ids;
 static std::vector<uint32_t> preload_models_ids;
 
 static bool is_preloaded = false;
-// TODO 195/196: Use a shared_future so concurrent callers can wait on the
-// same preload operation, matching JS's shared promise semantics.
-static std::optional<std::shared_future<void>> preload_future;
+static std::optional<std::shared_future<bool>> preload_future;
 static std::mutex preload_mutex;
 
 // --- Internal helper: getFileDataIDsByExtension (legacy mode) ---
@@ -118,6 +121,12 @@ static std::vector<uint32_t> getFileDataIDsByExtension(const std::vector<ExtFilt
 		}, 1000);
 
 	return entries;
+}
+
+static std::shared_future<bool> makeReadySharedFuture(bool value) {
+	std::promise<bool> promise;
+	promise.set_value(value);
+	return promise.get_future().share();
 }
 
 // --- Internal: listfile_check_cache_expiry ---
@@ -397,18 +406,27 @@ static bool listfile_preload_binary() {
 		preload_sounds_map.clear();
 		preload_text_map.clear();
 		preload_fonts_map.clear();
+		preload_models_order.clear();
+		preload_textures_order.clear();
+		preload_sounds_order.clear();
+		preload_text_order.clear();
+		preload_fonts_order.clear();
 
 		// null = skip preloading (videos loaded dynamically from MovieVariation)
 		// Index: 0=null(strings), 1=models, 2=textures, 3=sounds, 4=null(videos), 5=text, 6=fonts
-		std::array<std::unordered_map<uint32_t, std::string>*, 7> pf_preload_map = {
-			nullptr,              // 0: STRINGS (main)
-			&preload_models_map,  // 1: PF_MODELS
-			&preload_textures_map,// 2: PF_TEXTURES
-			&preload_sounds_map,  // 3: PF_SOUNDS
-			nullptr,              // 4: PF_VIDEOS (skip)
-			&preload_text_map,    // 5: PF_TEXT
-			&preload_fonts_map    // 6: PF_FONTS
+		struct PreloadContainer {
+			std::unordered_map<uint32_t, std::string>* map;
+			std::vector<uint32_t>* order;
 		};
+		std::array<PreloadContainer, 7> pf_preload_map = {{
+			{nullptr, nullptr},                            // 0: STRINGS (main)
+			{&preload_models_map, &preload_models_order}, // 1: PF_MODELS
+			{&preload_textures_map, &preload_textures_order}, // 2: PF_TEXTURES
+			{&preload_sounds_map, &preload_sounds_order}, // 3: PF_SOUNDS
+			{nullptr, nullptr},                            // 4: PF_VIDEOS (skip)
+			{&preload_text_map, &preload_text_order},     // 5: PF_TEXT
+			{&preload_fonts_map, &preload_fonts_order}    // 6: PF_FONTS
+		}};
 
 		constexpr std::array<std::string_view, 7> pf_files = {
 			BIN_LF_COMPONENTS::STRINGS,
@@ -439,8 +457,10 @@ static bool listfile_preload_binary() {
 		}
 
 		for (size_t i = 1; i < pf_files.size(); i++) {
-			auto* preload_map = pf_preload_map[i];
-			if (preload_map == nullptr)
+			auto& preload_container = pf_preload_map[i];
+			auto* preload_map = preload_container.map;
+			auto* preload_order = preload_container.order;
+			if (preload_map == nullptr || preload_order == nullptr)
 				continue;
 
 			auto file_path = constants::CACHE::DIR_LISTFILE() / std::string(pf_files[i]);
@@ -452,7 +472,12 @@ static bool listfile_preload_binary() {
 			for (uint32_t j = 0; j < pf_entry_count; j++) {
 				const uint32_t file_data_id = file_buffer.readUInt32BE();
 				const std::string fn = file_buffer.readNullTerminatedString();
-				preload_map->emplace(file_data_id, fn);
+				auto [it, inserted] = preload_map->emplace(file_data_id, fn);
+				if (inserted) {
+					preload_order->push_back(file_data_id);
+				} else {
+					it->second = fn;
+				}
 			}
 
 			logging::write(std::format("Preloaded {} entries from pf file {}", preload_map->size(), i));
@@ -620,7 +645,7 @@ static bool listfile_preload_legacy() {
 }
 
 // --- Internal: listfile_preload ---
-static void listfile_preload_impl() {
+static bool listfile_preload_impl() {
 	is_preloaded = false;
 	logging::write("Preloading master listfile...");
 
@@ -631,54 +656,57 @@ static void listfile_preload_impl() {
 	if (enable_binary) {
 		if (listfile_preload_binary()) {
 			logging::write("Binary listfile loaded successfully"); // todo: some info?
-			is_preloaded = true; // todo: is this right?
-			return;
+			is_preloaded = true;
+			return true;
 		}
 
 		logging::write("Failed to download binary listfile, falling back to legacy format");
 	}
 
-	listfile_preload_legacy();
+	return listfile_preload_legacy();
 }
 
-void preload() {
-	// TODO 195: Deduplicate concurrent calls by storing and returning a shared future.
-	// JS stores a preload_promise that multiple callers can await.
+std::shared_future<bool> preloadAsync() {
 	std::lock_guard<std::mutex> guard(preload_mutex);
 
 	if (preload_future.has_value())
-		return; // already started (or completed)
+		return *preload_future;
 
 	if (is_preloaded)
-		return;
+		return makeReadySharedFuture(true);
 
-	// Launch synchronously (JS is single-threaded so preload runs inline).
-	// Store a future so prepareListfile can wait on it.
-	preload_future = std::async(std::launch::deferred, []() {
-		listfile_preload_impl();
+	preload_future = std::async(std::launch::async, []() {
+		const bool result = listfile_preload_impl();
+		std::lock_guard<std::mutex> lock(preload_mutex);
+		preload_future.reset();
+		return result;
 	}).share();
 
-	// Execute immediately (deferred future executes on first .get()/.wait())
-	preload_future->wait();
+	return *preload_future;
 }
 
-void prepareListfile() {
+bool preload() {
+	return preloadAsync().get();
+}
+
+std::shared_future<bool> prepareListfileAsync() {
 	if (is_preloaded)
-		return;
+		return makeReadySharedFuture(true);
 
 	{
 		std::lock_guard<std::mutex> guard(preload_mutex);
 		if (preload_future.has_value()) {
-			// TODO 196: Wait for in-progress preload to complete,
-			// matching JS's `return await preload_promise`.
 			logging::write("Waiting for listfile preload to complete...");
-			preload_future->wait();
-			return;
+			return *preload_future;
 		}
 	}
 
 	logging::write("Starting listfile preload...");
-	preload();
+	return preloadAsync();
+}
+
+bool prepareListfile() {
+	return prepareListfileAsync().get();
 }
 
 // --- Internal: loadIDTable ---
@@ -706,6 +734,12 @@ size_t loadUnknownTextures() {
 	return unkBlp;
 }
 
+std::future<size_t> loadUnknownTexturesAsync() {
+	return std::async(std::launch::async, []() {
+		return loadUnknownTextures();
+	});
+}
+
 size_t loadUnknownModels() {
 	// TODO 198: JS calls DBModelFileData.getFileDataIDs() directly without explicit
 	// initialization. Removed the extra initializeModelFileData() call that had no
@@ -716,8 +750,20 @@ size_t loadUnknownModels() {
 	return unkM2;
 }
 
+std::future<size_t> loadUnknownModelsAsync() {
+	return std::async(std::launch::async, []() {
+		return loadUnknownModels();
+	});
+}
+
 void loadUnknowns() {
 	loadUnknownModels();
+}
+
+std::future<void> loadUnknownsAsync() {
+	return std::async(std::launch::async, []() {
+		loadUnknowns();
+	});
 }
 
 bool existsByID(uint32_t id) {
@@ -730,12 +776,7 @@ bool existsByID(uint32_t id) {
 	return false;
 }
 
-// TODO 202: JS returns `undefined` when a file data ID is not found.
-// C++ returns empty string "" instead. getByIDOrUnknown uses `!result.empty()`
-// which is equivalent to JS's nullish coalescing `result ?? formatUnknownFile(...)`.
-// If a file legitimately has an empty filename, the behavior would differ,
-// but in practice WoW file entries always have non-empty names.
-std::string getByID(uint32_t id) {
+std::optional<std::string> getByID(uint32_t id) {
 	if (is_binary_mode) {
 		auto it = legacy_id_lookup.find(id);
 		if (it != legacy_id_lookup.end())
@@ -743,9 +784,11 @@ std::string getByID(uint32_t id) {
 
 		auto ofs_it = binary_id_to_offset.find(id);
 		if (ofs_it == binary_id_to_offset.end())
-			return {};
+			return std::nullopt;
 
 		auto pf_it = binary_id_to_pf_index.find(id);
+		if (pf_it == binary_id_to_pf_index.end())
+			return std::nullopt;
 		return binary_read_string_at_offset(pf_it->second, ofs_it->second);
 	}
 
@@ -753,13 +796,13 @@ std::string getByID(uint32_t id) {
 	if (it != legacy_id_lookup.end())
 		return it->second;
 
-	return {};
+	return std::nullopt;
 }
 
 std::string getByIDOrUnknown(uint32_t id, const std::string& ext) {
-	std::string result = getByID(id);
-	if (!result.empty())
-		return result;
+	auto result = getByID(id);
+	if (result.has_value())
+		return *result;
 
 	return formatUnknownFile(id, ext);
 }
@@ -852,10 +895,10 @@ std::vector<std::string> formatEntries(std::vector<uint32_t>& file_data_ids) {
 	return entries;
 }
 
-void applyPreload(const std::unordered_set<uint32_t>& rootEntries) {
+std::optional<int> applyPreload(const std::unordered_set<uint32_t>& rootEntries) {
 	if (!is_preloaded) {
 		logging::write("No preloaded listfile available, falling back to normal loading");
-		return;
+		return 0;
 	}
 
 	try {
@@ -902,59 +945,43 @@ void applyPreload(const std::unordered_set<uint32_t>& rootEntries) {
 				}
 			}
 
-			// TODO 199: JS filter_and_format returns string[], but core::view members
-			// are typed as std::vector<nlohmann::json>. nlohmann::json implicitly
-			// wraps strings, so this produces semantically equivalent results.
-			//
-			// In JS, preload_* are Map objects (insertion order) filled from the binary
-			// pf files which are stored in sorted order, so the list comes out sorted.
-			// In C++, preload_*_map are std::unordered_map (hash order = random), so we
-			// must sort explicitly here, mirroring the formatEntries logic for legacy mode.
-			bool sort_by_id = core::view->config.value("listfileSortByID", false);
-			auto filter_and_format = [&rootEntries, sort_by_id](std::unordered_map<uint32_t, std::string>& preload_map)
+			auto filter_and_format = [&rootEntries](std::unordered_map<uint32_t, std::string>& preload_map,
+				const std::vector<uint32_t>& preload_order)
 				-> std::vector<nlohmann::json>
 			{
-				// Collect (fid, filename) pairs that pass the rootEntries filter.
-				std::vector<std::pair<uint32_t, std::string>> pairs;
-				pairs.reserve(preload_map.size());
-				for (const auto& [fid, filename] : preload_map) {
-					if (rootEntries.contains(fid))
-						pairs.emplace_back(fid, filename);
-				}
-				preload_map.clear();
-
-				// Mirror formatEntries: sort by file ID numerically if requested.
-				if (sort_by_id) {
-					std::sort(pairs.begin(), pairs.end(),
-						[](const auto& a, const auto& b) { return a.first < b.first; });
-				}
-
 				std::vector<nlohmann::json> formatted;
-				formatted.reserve(pairs.size());
-				for (const auto& [fid, filename] : pairs)
-					formatted.emplace_back(filename + " [" + std::to_string(fid) + "]");
+				formatted.reserve(preload_order.size());
 
-				// Mirror formatEntries: sort alphabetically by formatted entry if not sorting by ID.
-				if (!sort_by_id) {
-					std::sort(formatted.begin(), formatted.end(),
-						[](const nlohmann::json& a, const nlohmann::json& b) {
-							return a.get<std::string>() < b.get<std::string>();
-						});
+				for (const uint32_t fid : preload_order) {
+					if (!rootEntries.contains(fid))
+						continue;
+
+					const auto it = preload_map.find(fid);
+					if (it == preload_map.end())
+						continue;
+
+					formatted.emplace_back(it->second + " [" + std::to_string(fid) + "]");
 				}
 
+				preload_map.clear();
 				return formatted;
 			};
 
-			core::view->listfileTextures = filter_and_format(preload_textures_map);
-			core::view->listfileSounds = filter_and_format(preload_sounds_map);
-			core::view->listfileText = filter_and_format(preload_text_map);
-			core::view->listfileFonts = filter_and_format(preload_fonts_map);
-			core::view->listfileModels = filter_and_format(preload_models_map);
+			core::view->listfileTextures = filter_and_format(preload_textures_map, preload_textures_order);
+			core::view->listfileSounds = filter_and_format(preload_sounds_map, preload_sounds_order);
+			core::view->listfileText = filter_and_format(preload_text_map, preload_text_order);
+			core::view->listfileFonts = filter_and_format(preload_fonts_map, preload_fonts_order);
+			core::view->listfileModels = filter_and_format(preload_models_map, preload_models_order);
+			preload_textures_order.clear();
+			preload_sounds_order.clear();
+			preload_text_order.clear();
+			preload_fonts_order.clear();
+			preload_models_order.clear();
 		}
 
 		if (valid_entries == 0) {
 			logging::write("No preloaded entries matched rootEntries");
-			return;
+			return 0;
 		}
 
 		loaded = true;
@@ -962,28 +989,17 @@ void applyPreload(const std::unordered_set<uint32_t>& rootEntries) {
 	} catch (const std::exception& e) {
 		logging::write(std::format("Error applying preloaded listfile: {}", e.what()));
 	}
+
+	return std::nullopt;
 }
 
-// TODO 203: JS auto-detects regex via `search instanceof RegExp`. C++ requires
-// explicit `is_regex` parameter since there's no runtime type detection for strings.
-// Also, C++ silently returns empty results on invalid regex (catch block),
-// while JS would propagate the error. This is an acceptable C++ adaptation.
-std::vector<FilteredEntry> getFilteredEntries(const std::string& search, bool is_regex) {
+static std::vector<FilteredEntry> getFilteredEntriesImpl(const std::string* search, const std::regex* re) {
 	std::vector<FilteredEntry> results;
 
-	std::regex re;
-	if (is_regex) {
-		try {
-			re = std::regex(search);
-		} catch (...) {
-			return results;
-		}
-	}
-
 	auto matches = [&](const std::string& fileName) -> bool {
-		if (is_regex)
-			return std::regex_search(fileName, re);
-		return fileName.find(search) != std::string::npos;
+		if (re != nullptr)
+			return std::regex_search(fileName, *re);
+		return fileName.find(*search) != std::string::npos;
 	};
 
 	if (is_binary_mode) {
@@ -1006,6 +1022,14 @@ std::vector<FilteredEntry> getFilteredEntries(const std::string& search, bool is
 	}
 
 	return results;
+}
+
+std::vector<FilteredEntry> getFilteredEntries(const std::string& search) {
+	return getFilteredEntriesImpl(&search, nullptr);
+}
+
+std::vector<FilteredEntry> getFilteredEntries(const std::regex& search) {
+	return getFilteredEntriesImpl(nullptr, &search);
 }
 
 // TODO 200: Use std::optional to distinguish between "no filter" (nullopt = include everything)
@@ -1062,6 +1086,13 @@ std::vector<std::string> renderListfile(const std::optional<std::vector<uint32_t
 	}
 
 	return result;
+}
+
+std::future<std::vector<std::string>> renderListfileAsync(const std::optional<std::vector<uint32_t>>& file_data_ids,
+                                                          bool include_main_index) {
+	return std::async(std::launch::async, [file_data_ids, include_main_index]() {
+		return renderListfile(file_data_ids, include_main_index);
+	});
 }
 
 std::string stripFileEntry(const std::string& entry) {

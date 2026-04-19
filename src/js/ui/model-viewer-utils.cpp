@@ -285,7 +285,7 @@ void toggle_uv_layer(ViewStateProxy& state, M2RendererGL* renderer, const std::s
 void preview_texture_by_id(ViewStateProxy& state, M2RendererGL* renderer,
 	uint32_t file_data_id, const std::string& name, casc::CASC* casc)
 {
-	std::string texture = casc::listfile::getByID(file_data_id);
+	std::string texture = casc::listfile::getByID(file_data_id).value_or("");
 	if (texture.empty())
 		texture = casc::listfile::formatUnknownFile(file_data_id);
 
