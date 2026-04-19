@@ -214,6 +214,14 @@ void M2LegacyRendererGL::load() {
 		loadSkin(0);
 
 		if (reactive) {
+			// JS: this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true })
+			// JS: this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true })
+			// C++: initialize polling baseline after loadSkin() populates core::view->modelViewerGeosets
+			auto& geosets = core::view->modelViewerGeosets;
+			watcher_geoset_checked.resize(geosets.size());
+			for (size_t i = 0; i < geosets.size(); i++)
+				watcher_geoset_checked[i] = geosets[i].value("checked", false);
+			watcher_state_initialized = true;
 		}
 	}
 
@@ -1030,11 +1038,27 @@ std::array<float, 4> M2LegacyRendererGL::_sample_quat(const std::vector<LegacyTr
 // -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::updateGeosets() {
-	if (!reactive || geosetArray.empty() || draw_calls.empty())
+	if (!reactive || draw_calls.empty())
 		return;
 
-	for (size_t i = 0; i < draw_calls.size() && i < geosetArray.size(); i++)
-		draw_calls[i].visible = geosetArray[i].checked;
+	// JS: this.geosetArray is the same reference as core.view[this.geosetKey].
+	// C++: read checked state from core::view->modelViewerGeosets (the UI-facing array) and
+	//      sync it back into geosetArray so both stay in agreement.
+	auto& geosets = core::view->modelViewerGeosets;
+	const bool has_view_geosets = !geosets.empty();
+	const size_t source_size = has_view_geosets ? geosets.size() : geosetArray.size();
+	const size_t count = std::min(draw_calls.size(), source_size);
+
+	for (size_t i = 0; i < count; i++) {
+		const bool checked = has_view_geosets
+			? geosets[i].value("checked", (i < geosetArray.size() ? geosetArray[i].checked : false))
+			: geosetArray[i].checked;
+
+		if (i < geosetArray.size())
+			geosetArray[i].checked = checked;
+
+		draw_calls[i].visible = checked;
+	}
 }
 
 // -----------------------------------------------------------------------
@@ -1123,6 +1147,27 @@ void M2LegacyRendererGL::_update_model_matrix() {
 void M2LegacyRendererGL::render(const float* view_matrix, const float* projection_matrix) {
 	if (!shader || draw_calls.empty())
 		return;
+
+	// JS: geosetWatcher — poll core::view->modelViewerGeosets for checked state changes
+	if (reactive) {
+		auto& geosets = core::view->modelViewerGeosets;
+		bool geosets_changed = !watcher_state_initialized || geosets.size() != watcher_geoset_checked.size();
+		if (!geosets_changed) {
+			for (size_t i = 0; i < geosets.size(); i++) {
+				if (geosets[i].value("checked", false) != watcher_geoset_checked[i]) {
+					geosets_changed = true;
+					break;
+				}
+			}
+		}
+		if (geosets_changed) {
+			updateGeosets();
+			watcher_geoset_checked.resize(geosets.size());
+			for (size_t i = 0; i < geosets.size(); i++)
+				watcher_geoset_checked[i] = geosets[i].value("checked", false);
+		}
+		watcher_state_initialized = true;
+	}
 
 	const bool wireframe = core::view->config.value("modelViewerWireframe", false);
 
