@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 315/915 verified (34%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 320/915 verified (35%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -3533,30 +3533,30 @@
 - **Status**: Pending
 - **Details**: Same issue as GridRenderer — C++ uses desktop GL 4.6 shaders, JS uses WebGL 2.0 shaders. Logic is identical but version/precision declarations differ. Expected platform adaptation.
 
-- [ ] 714. [CameraControlsGL.cpp] Event listener lifecycle from JS `init()/dispose()` is not ported equivalently
+- [x] 714. [CameraControlsGL.cpp] Event listener lifecycle from JS `init()/dispose()` is not ported equivalently
 - **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 198–221
-- **Status**: Pending
-- **Details**: JS `init()` registers DOM/document listeners and `dispose()` removes document listeners, but C++ relies on externally forwarded events and only resets state, changing ownership/lifecycle semantics.
+- **Status**: Verified
+- **Details**: init() and dispose() comments now precisely document the JS→C++ lifecycle adaptation: init() registers 6 listeners in JS (contextmenu/mousedown/wheel/keydown on dom_element, mousemove/mouseup on document via stored refs); C++ relies on caller-forwarded events and is_hovered gating. dispose() in JS only removes the two document-level listeners; C++ resets state = STATE_NONE so stale forwarded events are no-ops. The model-viewer-gl handle_input() already matches the JS document-listener pattern (always forwarding move/up regardless of hover).
 
-- [ ] 715. [CameraControlsGL.cpp] Input default-handling behavior differs from JS browser event flow
+- [x] 715. [CameraControlsGL.cpp] Input default-handling behavior differs from JS browser event flow
 - **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 223–248, 257–262, 309–329
-- **Status**: Pending
-- **Details**: JS calls `preventDefault()` (and wheel `stopPropagation()`), while C++ handler methods have no equivalent suppression path, so browser-default behavior parity is not represented.
+- **Status**: Verified
+- **Details**: on_mouse_down/on_mouse_wheel/on_mouse_move/on_key_down now return bool (true = event consumed, equivalent to calling preventDefault). on_mouse_wheel returns false on early return (JS also returns before preventDefault in that path), true when zoom is applied. on_mouse_move returns false when STATE_NONE (JS also returns before preventDefault), true otherwise. on_key_down returns false for unhandled keys, true after handling (matching JS preventDefault placement). model-viewer-gl handle_input() uses the wheel return value to zero io.MouseWheel when consumed — this is the stopPropagation equivalent that prevents ImGui parent windows from scrolling.
 
-- [ ] 716. [CameraControlsGL.cpp] Mouse-down focus fallback differs from JS
+- [x] 716. [CameraControlsGL.cpp] Mouse-down focus fallback differs from JS
 - **JS Source**: `src/js/3D/camera/CameraControlsGL.js` line 226
-- **Status**: Pending
-- **Details**: JS falls back to `window.focus()` when `dom_element.focus` is unavailable; C++ only invokes `dom_element.focus` if present and has no fallback focus path.
+- **Status**: Verified
+- **Details**: Added `window_focus` callback to DomElementGL struct. on_mouse_down now implements the full JS fallback: `dom_element.focus ? dom_element.focus() : window.focus()` → `if (dom_element.focus) dom_element.focus(); else if (dom_element.window_focus) dom_element.window_focus();`. Callers can set dom_element.window_focus to glfwFocusWindow (or equivalent) as the fallback when dom_element.focus is not configured.
 
-- [ ] 717. [CharacterCameraControlsGL.cpp] DOM/document listener registration-removal flow differs from JS
+- [x] 717. [CharacterCameraControlsGL.cpp] DOM/document listener registration-removal flow differs from JS
 - **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` lines 27–35, 42–43, 51–52, 122–129, 170–175
-- **Status**: Pending
-- **Details**: JS stores handler refs, registers mousedown/wheel/contextmenu listeners in constructor, dynamically attaches/removes document mousemove/mouseup listeners, and removes listeners in `dispose()`; C++ omits this lifecycle and depends on caller-forwarded events.
+- **Status**: Verified
+- **Details**: Constructor and dispose() comments now precisely document the JS lifecycle: constructor registers mousedown/wheel/contextmenu on dom_element and stores four handler refs; on_mouse_down dynamically adds mousemove/mouseup to document; on_mouse_up removes them; dispose() removes all four. In C++, the is_rotating/is_panning flags serve as the precise equivalent of the dynamic document-listener attach/detach — move/up events are only processed while those flags are set, exactly when JS would have the document listeners attached. dispose() resets both flags.
 
-- [ ] 718. [CharacterCameraControlsGL.cpp] Event suppression parity is missing in mouse handlers
+- [x] 718. [CharacterCameraControlsGL.cpp] Event suppression parity is missing in mouse handlers
 - **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` lines 45, 54, 68, 114, 133–135
-- **Status**: Pending
-- **Details**: JS calls `preventDefault()` during rotate/pan interactions and both `preventDefault()`/`stopPropagation()` on wheel; C++ has no equivalent event suppression behavior.
+- **Status**: Verified
+- **Details**: on_mouse_down/on_mouse_move/on_mouse_wheel now return bool. on_mouse_down returns true for button 0 and 2 (both call preventDefault in JS), false otherwise. on_mouse_move returns true when is_rotating or is_panning (JS calls preventDefault in both branches), false if neither. on_mouse_wheel returns true unconditionally (JS calls preventDefault+stopPropagation before any branching, including the deltaY==0 early return). model-viewer-gl handle_input() zeros io.MouseWheel when on_mouse_wheel returns true, implementing the stopPropagation equivalent.
 
 - [x] 719. [uv-drawer.cpp] Output format changed from data URL string to raw RGBA pixels
 - **JS Source**: `src/js/ui/uv-drawer.js` lines 1–5, 45–50

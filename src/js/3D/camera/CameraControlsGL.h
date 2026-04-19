@@ -34,6 +34,9 @@ struct DomElementGL {
 	int tabIndex = -1;
 
 	std::function<void()> focus;
+	// JS: window.focus() — fallback when dom_element.focus is unavailable (CameraControlsGL line 226).
+	// Caller should set this to glfwFocusWindow (or equivalent) when dom_element.focus is not set.
+	std::function<void()> window_focus;
 };
 
 struct Spherical {
@@ -49,12 +52,12 @@ public:
 	void init();
 	void dispose();
 
-	void on_mouse_down(int button, int clientX, int clientY,
+	bool on_mouse_down(int button, int clientX, int clientY,
 	                   bool ctrlKey, bool metaKey, bool shiftKey);
-	void on_mouse_wheel(float deltaY);
-	void on_mouse_move(int clientX, int clientY);
+	bool on_mouse_wheel(float deltaY);
+	bool on_mouse_move(int clientX, int clientY);
 	void on_mouse_up();
-	void on_key_down(int keyCode, bool shiftKey, bool altKey);
+	bool on_key_down(int keyCode, bool shiftKey, bool altKey);
 
 	void dolly_out(float scale);
 	void dolly_in(float scale);
