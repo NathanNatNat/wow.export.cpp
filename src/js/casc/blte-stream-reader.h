@@ -8,11 +8,14 @@
 #include <cstdint>
 #include <string>
 #include <functional>
+#include <future>
 #include <unordered_map>
 #include <deque>
 #include <vector>
+#include <optional>
 
 #include "../buffer.h"
+#include "../blob.h"
 #include "blte-reader.h"
 
 namespace casc {
@@ -22,20 +25,22 @@ namespace casc {
  *
  * JS equivalent: class BLTEStreamReader — module.exports = BLTEStreamReader
  *
- * Deviations from JS:
- * - JS blockFetcher is async; C++ is synchronous (blocks the calling thread).
- * - JS getBlock(), _decodeBlock(), streamBlocks(), createBlobURL() are all async;
- *   C++ equivalents are synchronous.
- * - JS createReadableStream() returns a Web Streams API ReadableStream for
- *   progressive block consumption — browser-specific, not ported.
- * - JS streamBlocks() is an async generator (async *streamBlocks()) yielding
- *   blocks lazily; C++ uses a synchronous callback that iterates eagerly.
- * - JS createBlobURL() creates a Blob with MIME type 'video/x-msvideo' and
- *   returns an object URL string; C++ concatenates blocks into a BufferWrapper
- *   (raw data, no URL or MIME type).
+ * C++ exposes synchronous methods used by existing call sites plus
+ * Promise-style async-equivalent wrappers (*Async) for JS API parity.
  */
 class BLTEStreamReader {
 public:
+	class ReadableStream {
+	public:
+		explicit ReadableStream(BLTEStreamReader* owner);
+		std::optional<std::vector<uint8_t>> pull();
+		void cancel();
+
+	private:
+		BLTEStreamReader* owner = nullptr;
+		size_t currentBlock = 0;
+	};
+
 	/**
 	 * Construct a new BLTEStreamReader instance.
 	 * @param hash Expected MD5 hash.
@@ -52,18 +57,24 @@ public:
 	 * @returns Decoded block data.
 	 */
 	BufferWrapper getBlock(size_t blockIndex);
+	std::future<BufferWrapper> getBlockAsync(size_t blockIndex);
+
+	/** C++ equivalent of JS createReadableStream() progressive pull/cancel API. */
+	ReadableStream createReadableStream();
 
 	/**
 	 * Iterate all blocks, invoking callback for each decoded block.
 	 * @param callback Function called with each decoded block.
 	 */
 	void streamBlocks(const std::function<void(BufferWrapper&)>& callback);
+	std::future<void> streamBlocksAsync(const std::function<void(BufferWrapper&)>& callback);
 
 	/**
 	 * Concatenate all decoded blocks into a single BufferWrapper.
 	 * @returns BufferWrapper containing all decoded block data.
 	 */
-	BufferWrapper createBlobURL();
+	std::string createBlobURL();
+	std::future<std::string> createBlobURLAsync();
 
 	/**
 	 * Get total decompressed size.

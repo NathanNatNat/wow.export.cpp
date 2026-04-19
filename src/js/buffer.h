@@ -446,6 +446,12 @@ public:
 	 */
 	const std::string& getDataURL();
 
+	/** Returns true if this buffer already has a cached/assigned object URL. */
+	bool hasDataURL() const;
+
+	/** Assign a precomputed object URL (JS-equivalent of setting this.dataURL). */
+	void setDataURL(std::string url);
+
 	/** Revoke the object URL assigned to this buffer. */
 	void revokeDataURL();
 

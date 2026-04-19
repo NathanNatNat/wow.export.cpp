@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <cstring>
+#include <future>
 
 namespace casc {
 
@@ -50,6 +51,10 @@ BufferWrapper BLTEStreamReader::getBlock(size_t blockIndex) {
 	return decoded;
 }
 
+std::future<BufferWrapper> BLTEStreamReader::getBlockAsync(size_t blockIndex) {
+	return std::async(std::launch::async, [this, blockIndex]() { return getBlock(blockIndex); });
+}
+
 BufferWrapper BLTEStreamReader::_decodeBlock(BufferWrapper blockData, size_t index) {
 	const uint8_t flag = blockData.readUInt8();
 
@@ -72,7 +77,7 @@ BufferWrapper BLTEStreamReader::_decodeBlock(BufferWrapper blockData, size_t ind
 			return blockData.readBuffer(blockData.remainingBytes());
 
 		case 0x5a: // Compressed.
-			return blockData.readBuffer(blockData.remainingBytes(), true);
+			return std::get<BufferWrapper>(blockData.readBuffer(blockData.remainingBytes(), true, true));
 
 		case 0x46: // Frame (recursive).
 			throw std::runtime_error("[BLTE] No frame decoder implemented!");
@@ -125,6 +130,10 @@ BufferWrapper BLTEStreamReader::_decryptBlock(BufferWrapper& data, size_t index)
 	return instance.process(encData);
 }
 
+BLTEStreamReader::ReadableStream BLTEStreamReader::createReadableStream() {
+	return ReadableStream(this);
+}
+
 void BLTEStreamReader::streamBlocks(const std::function<void(BufferWrapper&)>& callback) {
 	for (size_t i = 0; i < metadata.blocks.size(); i++) {
 		BufferWrapper block = getBlock(i);
@@ -132,13 +141,26 @@ void BLTEStreamReader::streamBlocks(const std::function<void(BufferWrapper&)>& c
 	}
 }
 
-BufferWrapper BLTEStreamReader::createBlobURL() {
-	std::vector<BufferWrapper> chunks;
+std::future<void> BLTEStreamReader::streamBlocksAsync(const std::function<void(BufferWrapper&)>& callback) {
+	return std::async(std::launch::async, [this, callback]() {
+		streamBlocks(callback);
+	});
+}
 
-	for (size_t i = 0; i < metadata.blocks.size(); i++)
-		chunks.push_back(getBlock(i));
+std::string BLTEStreamReader::createBlobURL() {
+	std::vector<BlobPart> chunks;
 
-	return BufferWrapper::concat(chunks);
+	for (size_t i = 0; i < metadata.blocks.size(); i++) {
+		BufferWrapper block = getBlock(i);
+		chunks.emplace_back(block.raw());
+	}
+
+	const BlobPolyfill blob(std::move(chunks), BlobOptions{.type = "video/x-msvideo"});
+	return URLPolyfill::createObjectURL(blob);
+}
+
+std::future<std::string> BLTEStreamReader::createBlobURLAsync() {
+	return std::async(std::launch::async, [this]() { return createBlobURL(); });
 }
 
 size_t BLTEStreamReader::getTotalSize() const {
@@ -152,6 +174,23 @@ size_t BLTEStreamReader::getBlockCount() const {
 void BLTEStreamReader::clearCache() {
 	blockCache.clear();
 	cacheOrder.clear();
+}
+
+BLTEStreamReader::ReadableStream::ReadableStream(BLTEStreamReader* owner)
+	: owner(owner) {}
+
+std::optional<std::vector<uint8_t>> BLTEStreamReader::ReadableStream::pull() {
+	if (owner == nullptr || currentBlock >= owner->metadata.blocks.size())
+		return std::nullopt;
+
+	BufferWrapper decodedBlock = owner->getBlock(currentBlock);
+	currentBlock++;
+	return decodedBlock.raw();
+}
+
+void BLTEStreamReader::ReadableStream::cancel() {
+	if (owner != nullptr)
+		owner->clearCache();
 }
 
 } // namespace casc

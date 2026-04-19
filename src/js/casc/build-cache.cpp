@@ -21,6 +21,7 @@
 #include <format>
 #include <string>
 #include <stdexcept>
+#include <future>
 
 namespace fs = std::filesystem;
 
@@ -73,6 +74,10 @@ void BuildCache::init() {
 	saveManifest();
 }
 
+std::future<void> BuildCache::initAsync() {
+	return std::async(std::launch::async, [this]() { init(); });
+}
+
 std::optional<BufferWrapper> BuildCache::getFile(const std::string& file, const std::string& dir) {
 	try {
 		const fs::path filePath = getFilePath(file, dir);
@@ -111,6 +116,10 @@ std::optional<BufferWrapper> BuildCache::getFile(const std::string& file, const 
 	}
 }
 
+std::future<std::optional<BufferWrapper>> BuildCache::getFileAsync(const std::string& file, const std::string& dir) {
+	return std::async(std::launch::async, [this, file, dir]() { return getFile(file, dir); });
+}
+
 std::filesystem::path BuildCache::getFilePath(const std::string& file, const std::string& dir) const {
 	if (!dir.empty())
 		return fs::path(dir) / file;
@@ -146,17 +155,34 @@ void BuildCache::storeFile(const std::string& file, BufferWrapper& data, const s
 	saveCacheIntegrity();
 }
 
+std::future<void> BuildCache::storeFileAsync(const std::string& file, BufferWrapper data, const std::string& dir) {
+	return std::async(std::launch::async, [this, file, data = std::move(data), dir]() mutable {
+		storeFile(file, data, dir);
+	});
+}
+
 void BuildCache::saveCacheIntegrity() {
 	std::lock_guard<std::mutex> lock(cacheIntegrityMutex);
 	std::ofstream ofs(constants::CACHE::INTEGRITY_FILE());
-	if (ofs.is_open())
-		ofs << cacheIntegrity.dump();
+	if (!ofs.is_open())
+		throw std::runtime_error("Failed to open cache integrity file for writing");
+	ofs << cacheIntegrity.dump();
+	if (!ofs.good())
+		throw std::runtime_error("Failed to write cache integrity file");
+}
+
+std::future<void> BuildCache::saveCacheIntegrityAsync() {
+	return std::async(std::launch::async, [this]() { saveCacheIntegrity(); });
 }
 
 void BuildCache::saveManifest() {
 	std::ofstream ofs(manifestPath);
 	if (ofs.is_open())
 		ofs << meta.dump();
+}
+
+std::future<void> BuildCache::saveManifestAsync() {
+	return std::async(std::launch::async, [this]() { saveManifest(); });
 }
 
 // -- Module initialization --
@@ -255,7 +281,7 @@ void registerBuildCacheEvents() {
 				continue;
 
 			bool deleteEntry = false;
-			uintmax_t manifestSize = 0;
+			int64_t manifestSize = 0;
 			const fs::path entryDir = constants::CACHE::DIR_BUILDS() / entryName;
 			const fs::path entryManifest = entryDir / std::string(constants::CACHE::BUILD_MANIFEST);
 
@@ -267,7 +293,7 @@ void registerBuildCacheEvents() {
 				std::string manifestRaw((std::istreambuf_iterator<char>(ifs)),
 				                         std::istreambuf_iterator<char>());
 				nlohmann::json manifest = nlohmann::json::parse(manifestRaw);
-				manifestSize = manifestRaw.size();
+				manifestSize = static_cast<int64_t>(manifestRaw.size());
 
 				if (manifest.contains("lastAccess") && manifest["lastAccess"].is_number()) {
 					const int64_t delta = ts - manifest["lastAccess"].get<int64_t>();
@@ -287,15 +313,9 @@ void registerBuildCacheEvents() {
 			}
 
 			if (deleteEntry) {
-				uintmax_t deleteSize = generics::deleteDirectory(entryDir);
-
-				// Deviation: JS `deleteSize -= manifestSize` has no underflow guard since
-				// JS numbers are doubles that can go negative. C++ uses uintmax_t (unsigned),
-				// so we guard against wraparound. This is a defensive fix.
-				if (deleteSize >= manifestSize)
-					deleteSize -= manifestSize;
-
-				core::view->cacheSize -= static_cast<int64_t>(deleteSize);
+				int64_t deleteSize = static_cast<int64_t>(generics::deleteDirectory(entryDir));
+				deleteSize -= manifestSize;
+				core::view->cacheSize -= deleteSize;
 			}
 		}
 	});

@@ -12,9 +12,9 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
-#include <random>
 #include <regex>
 #include <sstream>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -22,17 +22,9 @@
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
-
-// below (md5_impl / sha256_impl namespaces). No external dependency required.
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#include <wincrypt.h>
-#else
-// Linux: platform-independent md5_impl/sha256_impl used for all hashing.
-#endif
+#include <mbedtls/md.h>
+#include <mbedtls/entropy.h>
+#include <mbedtls/ctr_drbg.h>
 
 namespace cache_collector {
 
@@ -106,16 +98,59 @@ static std::string to_hex(const std::vector<uint8_t>& data) {
 	return result;
 }
 
-static std::string random_hex(size_t num_bytes) {
-	std::random_device rd;
-	std::mt19937 gen(rd());
-	std::uniform_int_distribution<int> dist(0, 255);
+static std::vector<uint8_t> secure_random_bytes(size_t num_bytes) {
+	mbedtls_entropy_context entropy;
+	mbedtls_ctr_drbg_context ctr_drbg;
+	mbedtls_entropy_init(&entropy);
+	mbedtls_ctr_drbg_init(&ctr_drbg);
+
+	const char* personalization = "wow.export.cpp.cache-collector";
+	if (mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
+		reinterpret_cast<const unsigned char*>(personalization), std::strlen(personalization)) != 0) {
+		mbedtls_ctr_drbg_free(&ctr_drbg);
+		mbedtls_entropy_free(&entropy);
+		throw std::runtime_error("Failed to initialize secure RNG");
+	}
 
 	std::vector<uint8_t> bytes(num_bytes);
-	for (auto& b : bytes)
-		b = static_cast<uint8_t>(dist(gen));
+	if (mbedtls_ctr_drbg_random(&ctr_drbg, bytes.data(), bytes.size()) != 0) {
+		mbedtls_ctr_drbg_free(&ctr_drbg);
+		mbedtls_entropy_free(&entropy);
+		throw std::runtime_error("Failed to generate secure random bytes");
+	}
 
-	return to_hex(bytes);
+	mbedtls_ctr_drbg_free(&ctr_drbg);
+	mbedtls_entropy_free(&entropy);
+	return bytes;
+}
+
+static std::string mbedtls_hash_hex(std::span<const uint8_t> data, mbedtls_md_type_t type) {
+	const mbedtls_md_info_t* info = mbedtls_md_info_from_type(type);
+	if (info == nullptr)
+		throw std::runtime_error("Unsupported hash type");
+
+	mbedtls_md_context_t ctx;
+	mbedtls_md_init(&ctx);
+
+	if (mbedtls_md_setup(&ctx, info, 0) != 0 ||
+		mbedtls_md_starts(&ctx) != 0 ||
+		mbedtls_md_update(&ctx, data.data(), data.size()) != 0) {
+		mbedtls_md_free(&ctx);
+		throw std::runtime_error("Failed to initialize hash context");
+	}
+
+	std::vector<uint8_t> digest(mbedtls_md_get_size(info));
+	if (mbedtls_md_finish(&ctx, digest.data()) != 0) {
+		mbedtls_md_free(&ctx);
+		throw std::runtime_error("Failed to finalize hash");
+	}
+
+	mbedtls_md_free(&ctx);
+	return to_hex(digest);
+}
+
+static std::string random_hex(size_t num_bytes) {
+	return to_hex(secure_random_bytes(num_bytes));
 }
 
 // Self-contained implementation matching JS crypto.createHash('md5').
@@ -416,7 +451,7 @@ static std::vector<std::string> split(const std::string& s, char delimiter) {
 HttpResponse https_request(const std::string& url,
                            const std::string& method,
                            const std::unordered_map<std::string, std::string>& headers,
-                           const std::string& body) {
+                           const std::vector<uint8_t>& body) {
 	auto parsed = parse_url(url);
 
 	// Extract Content-Type from headers (if present) so it can be passed as
@@ -437,14 +472,16 @@ HttpResponse https_request(const std::string& url,
 		httplib::SSLClient cli(parsed.host, parsed.port);
 
 		if (method == "POST")
-			res = cli.Post(parsed.path, hdr, body, content_type);
+			res = cli.Post(parsed.path, hdr,
+				reinterpret_cast<const char*>(body.data()), body.size(), content_type);
 		else
 			res = cli.Get(parsed.path, hdr);
 	} else {
 		httplib::Client cli(parsed.host, parsed.port);
 
 		if (method == "POST")
-			res = cli.Post(parsed.path, hdr, body, content_type);
+			res = cli.Post(parsed.path, hdr,
+				reinterpret_cast<const char*>(body.data()), body.size(), content_type);
 		else
 			res = cli.Get(parsed.path, hdr);
 	}
@@ -463,6 +500,7 @@ HttpResponse https_request(const std::string& url,
 
 JsonPostResponse json_post(const std::string& url, const nlohmann::json& payload, const std::string& user_agent) {
 	std::string body = payload.dump();
+	std::vector<uint8_t> bodyBytes(body.begin(), body.end());
 
 	// JS: json_post calls https_request() with method/headers/body.
 	std::unordered_map<std::string, std::string> headers;
@@ -470,7 +508,7 @@ JsonPostResponse json_post(const std::string& url, const nlohmann::json& payload
 	headers["User-Agent"] = user_agent;
 	headers["Content-Length"] = std::to_string(body.size());
 
-	auto res = https_request(url, "POST", headers, body);
+	auto res = https_request(url, "POST", headers, bodyBytes);
 
 	JsonPostResponse response;
 	response.status = res.status;
@@ -527,14 +565,12 @@ void upload_chunks(const std::string& url, const std::vector<uint8_t>& buffer) {
 		std::vector<uint8_t> body_bytes = build_multipart(boundary, chunk, offset);
 
 		std::string content_type = std::format("multipart/form-data; boundary={}", boundary);
-		std::string body_str(body_bytes.begin(), body_bytes.end());
-
 		// JS: upload_chunks calls https_request() with method/headers/body.
 		std::unordered_map<std::string, std::string> headers;
 		headers["Content-Type"] = content_type;
 		headers["Content-Length"] = std::to_string(body_bytes.size());
 
-		auto res = https_request(url, "POST", headers, body_str);
+		auto res = https_request(url, "POST", headers, body_bytes);
 
 		if (!res.ok)
 			throw std::runtime_error(std::format("upload chunk failed: {}", res.status));
@@ -580,22 +616,8 @@ std::vector<std::unordered_map<std::string, std::string>> parse_build_info(const
 }
 
 std::string hash_file(const fs::path& file_path) {
-	std::ifstream ifs(file_path, std::ios::binary);
-	if (!ifs)
-		throw std::runtime_error(std::format("Cannot open file for hashing: {}", file_path.string()));
-
-	md5_impl::MD5Context ctx;
-	md5_impl::md5_init(ctx);
-
-	uint8_t buf[8192];
-	while (ifs.read(reinterpret_cast<char*>(buf), sizeof(buf)))
-		md5_impl::md5_update(ctx, buf, sizeof(buf));
-
-	if (ifs.gcount() > 0)
-		md5_impl::md5_update(ctx, buf, static_cast<size_t>(ifs.gcount()));
-
-	auto digest = md5_impl::md5_final(ctx);
-	return to_hex(digest);
+	const std::vector<uint8_t> bytes = read_file_bytes(file_path);
+	return mbedtls_hash_hex(bytes, MBEDTLS_MD_MD5);
 }
 
 std::vector<fs::path> find_binaries(const fs::path& flavor_dir) {
@@ -758,7 +780,7 @@ void upload_flavor(const FlavorResult& result, nlohmann::json& state, const Work
 			}
 
 			std::string key = std::format("{}/{}", wdb.locale, wdb.name);
-			std::string hash = sha256_impl::sha256(buffer);
+			std::string hash = mbedtls_hash_hex(buffer, MBEDTLS_MD_SHA256);
 
 			file_hashes[key] = hash;
 
