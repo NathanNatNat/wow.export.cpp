@@ -10,6 +10,7 @@
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
+#include <optional>
 
 class BufferWrapper;
 
@@ -107,7 +108,7 @@ public:
 	 * @param layoutHash Layout hash string
 	 * @returns true if valid
 	 */
-	bool isValidFor(const std::string& buildID, const std::string& layoutHash) const;
+	bool isValidFor(const std::string& buildID, const std::optional<std::string>& layoutHash) const;
 
 	std::unordered_set<std::string> builds;
 	std::vector<BuildRange> buildRanges;
@@ -132,7 +133,7 @@ public:
 	 * @param layoutHash Layout hash string
 	 * @returns Pointer to matching DBDEntry, or nullptr
 	 */
-	const DBDEntry* getStructure(const std::string& buildID, const std::string& layoutHash) const;
+	const DBDEntry* getStructure(const std::string& buildID, const std::optional<std::string>& layoutHash = std::nullopt) const;
 
 	std::vector<DBDEntry> entries;
 	std::unordered_map<std::string, std::string> columns;

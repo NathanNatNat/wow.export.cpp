@@ -23,8 +23,8 @@ namespace db2 {
  * the reader with a mutex-protected parse-once guard.
  *
  * The JS Proxy also enforces that getRelationRows() requires preload() to have
- * been called. In C++, WDCReader::getRelationRows() itself validates this
- * (returns empty if rows are not preloaded).
+ * been called. In C++, WDCReader::getRelationRows() enforces the same preload
+ * requirement and throws with a matching message.
  */
 struct CacheEntry {
 	std::unique_ptr<db::WDCReader> reader;
@@ -80,10 +80,6 @@ db::WDCReader& preloadTable(const std::string& table_name) {
 	auto& ref = *entry->reader;
 	cache.emplace(table_name, std::move(entry));
 	return ref;
-}
-
-void clearCache() {
-	cache.clear();
 }
 
 } // namespace db2

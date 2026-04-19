@@ -27,12 +27,15 @@ void MPQInstall::close() {
 		entry.archive->close();
 }
 
-void MPQInstall::_scan_mpq_files(const std::string& dir, std::vector<std::string>& results) {
+std::vector<std::string> MPQInstall::_scan_mpq_files(const std::string& dir) {
+	std::vector<std::string> results;
+
 	for (const auto& entry : fs::directory_iterator(dir)) {
 		const auto full_path = entry.path().string();
 
 		if (entry.is_directory()) {
-			_scan_mpq_files(full_path, results);
+			auto sub_results = _scan_mpq_files(full_path);
+			results.insert(results.end(), sub_results.begin(), sub_results.end());
 		} else {
 			std::string filename = entry.path().filename().string();
 			std::transform(filename.begin(), filename.end(), filename.begin(),
@@ -44,13 +47,13 @@ void MPQInstall::_scan_mpq_files(const std::string& dir, std::vector<std::string
 	}
 
 	std::sort(results.begin(), results.end());
+	return results;
 }
 
 void MPQInstall::loadInstall() {
 	core::progressLoadingScreen("Scanning for MPQ Archives");
 
-	std::vector<std::string> mpq_files;
-	_scan_mpq_files(directory, mpq_files);
+	std::vector<std::string> mpq_files = _scan_mpq_files(directory);
 
 	if (mpq_files.empty())
 		throw std::runtime_error("No MPQ archives found in directory");
@@ -67,22 +70,22 @@ void MPQInstall::loadInstall() {
 		logging::write(std::format("Loaded {}: format v{}, {} files, {} hash entries, {} block entries",
 			mpq_name, info.formatVersion, info.fileCount, info.hashTableEntries, info.blockTableEntries));
 
-		for (const auto& filename : archive->files) {
+		archives.push_back(ArchiveEntry{
+			mpq_name,
+			std::move(archive),
+		});
+
+		for (const auto& filename : archives.back().archive->files) {
 			std::string lower_filename = filename;
 			std::transform(lower_filename.begin(), lower_filename.end(), lower_filename.begin(),
 			               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
 			listfile[lower_filename] = ListfileEntry{
-				archives.size(),
+				archives.size() - 1,
 				mpq_name,
 				filename
 			};
 		}
-
-		archives.push_back(ArchiveEntry{
-			mpq_name,
-			std::move(archive),
-		});
 	}
 
 	core::progressLoadingScreen("MPQ Archives Loaded");

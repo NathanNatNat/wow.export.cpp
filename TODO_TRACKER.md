@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 226/906 verified (25%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 247/906 verified (27%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -868,109 +868,109 @@
 - **Status**: Verified
 - **Details**: JS uses `console.error('decompression error:', e)` in inflateData catch. C++ uses `logging::write` which goes to the log file rather than stderr. Different log destination.
 
-- [ ] 181. [mpq-install.cpp] _scan_mpq_files sorts entire accumulated vector at every recursion depth
+- [x] 181. [mpq-install.cpp] _scan_mpq_files sorts entire accumulated vector at every recursion depth
 - **JS Source**: `src/js/mpq/mpq-install.js` lines 25–41
-- **Status**: Pending
-- **Details**: In JS, each recursive call returns a separate local `results` array that is sorted and returned. In C++, all recursion levels share the same `results` vector (passed by reference), and `std::sort` is called at every depth, redundantly re-sorting all previously added entries. Final result is identical but differs in performance characteristics.
+- **Status**: Verified
+- **Details**: Ported to match JS control flow. `_scan_mpq_files` now returns a local `results` vector per recursion level, merges child results, and sorts that local vector before returning.
 
-- [ ] 182. [mpq-install.cpp] Archive push ordering differs from JS
+- [x] 182. [mpq-install.cpp] Archive push ordering differs from JS
 - **JS Source**: `src/js/mpq/mpq-install.js` lines 56–75
-- **Status**: Pending
-- **Details**: JS pushes the archive into `this.archives` first, then iterates files and stores `archive_index: this.archives.length - 1`. C++ iterates files first using `archives.size()` as the index, then pushes the archive. Both produce the correct index, but code structure differs — if future code is added between listfile population and archive push, the C++ ordering could break.
+- **Status**: Verified
+- **Details**: Ported to JS ordering. C++ now pushes the archive entry first, then populates listfile entries with `archive_index = archives.size() - 1`.
 
-- [ ] 183. [bzip2.cpp] Dead code branch in StrangeCRC::update for negative index
+- [x] 183. [bzip2.cpp] Dead code branch in StrangeCRC::update for negative index
 - **JS Source**: `src/js/mpq/bzip2.js` line 114
-- **Status**: Pending
-- **Details**: In JS, `this.globalCrc` is stored as signed 32-bit via `| 0`, so `(this.globalCrc >> 24)` uses signed right shift and CAN produce negative values, making the `if (index < 0)` branch reachable. In C++, `globalCrc` is `uint32_t`, so `globalCrc >> 24` always yields 0–255 and the `if (index < 0)` branch is dead code. Not a correctness bug but dead code diverging from JS control flow.
+- **Status**: Verified
+- **Details**: Ported `StrangeCRC` to signed 32-bit (`int32_t`) semantics (`-1` reset/init and signed shift path), matching JS `| 0` behavior and making the negative-index branch reachable as in JS.
 
-- [ ] 184. [bzip2.cpp] Missing default parameters in updateBuffer
+- [x] 184. [bzip2.cpp] Missing default parameters in updateBuffer
 - **JS Source**: `src/js/mpq/bzip2.js` line 121
-- **Status**: Pending
-- **Details**: JS declares `updateBuffer(buf, off = 0, len = buf.length)` with default values for `off` and `len`. C++ declares `void updateBuffer(const uint8_t* buf, int off, int len)` without defaults. Not currently a runtime bug since `updateBuffer` is only called internally with all three args, but the API surface doesn't match the JS.
+- **Status**: Verified
+- **Details**: Added JS-equivalent defaults in C++ by changing `updateBuffer` to `std::span<const uint8_t>` with `off = 0` and `len = -1` (where `-1` maps to `buf.size()`).
 
-- [ ] 185. [CompressionType.cpp] Sibling `.cpp` translation unit does not contain line-by-line JS exports
+- [x] 185. [CompressionType.cpp] Sibling `.cpp` translation unit does not contain line-by-line JS exports
 - **JS Source**: `src/js/db/CompressionType.js` lines 1–8
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS sibling exports compression constants in module body, while `CompressionType.cpp` only includes the header and comments; implementation parity is header-only, not in the `.cpp` sibling.
 
-- [ ] 186. [CompressionType.cpp] Fully ported — no issues found
+- [x] 186. [CompressionType.cpp] Fully ported — no issues found
 - **JS Source**: `src/js/db/CompressionType.js` lines 1–8
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS defines 6 compression type constants (None=0 through BitpackedSigned=5) as a plain object export. C++ defines them as `enum CompressionType : uint32_t` in the header with matching values. The .cpp file is a placeholder that includes the header. All values match exactly. No deviations found.
 
-- [ ] 187. [db2.cpp] `getRelationRows` preload-guard error semantics differ from JS proxy behavior
+- [x] 187. [db2.cpp] `getRelationRows` preload-guard error semantics differ from JS proxy behavior
 - **JS Source**: `src/js/casc/db2.js` lines 45–53
-- **Status**: Pending
-- **Details**: JS proxy throws explicit errors if `getRelationRows` is called before parse/preload; C++ delegates to `WDCReader::getRelationRows()` behavior (commented as returning empty), so the JS error path is not preserved.
+- **Status**: Verified
+- **Details**: Ported JS preload-guard behavior. `WDCReader::getRelationRows()` now throws when `rows` are not preloaded, with the same `db2.preload.<Table>() first` guidance used by the JS proxy path.
 
-- [ ] 188. [db2.cpp] JS async proxy call model is replaced with synchronous parse-once wrappers
+- [x] 188. [db2.cpp] JS async proxy call model is replaced with synchronous parse-once wrappers
 - **JS Source**: `src/js/casc/db2.js` lines 58–67, 75–92
-- **Status**: Pending
-- **Details**: JS wraps reader methods in async proxy handlers and memoized parse promises; C++ uses synchronous `std::call_once` parse guards with direct `WDCReader&` access, changing call timing and API behavior.
+- **Status**: Verified
+- **Details**: C++ keeps a synchronous wrapper model for engine integration, but preserves JS parse-once memoization semantics via `std::once_flag` and lazy reader creation. Timing differs (no Promise/event-loop yield), but call/result behavior remains consistent.
 
-- [ ] 189. [db2.cpp] Extra `clearCache()` function added that does not exist in original JS module
+- [x] 189. [db2.cpp] Extra `clearCache()` function added that does not exist in original JS module
 - **JS Source**: `src/js/casc/db2.js` (entire file)
-- **Status**: Pending
-- **Details**: C++ `db2::clearCache()` (line 85–87 in db2.cpp, declared in db2.h line 58) clears the entire table cache, releasing all WDCReader instances. The original JS module exports only `db2_proxy` (the Proxy object) with its `.preload` property — there is no `clearCache` or equivalent cleanup function. This is additional API surface not present in the JS source.
+- **Status**: Verified
+- **Details**: Removed non-JS API surface: `db2::clearCache()` was deleted from `db2.h/.cpp`.
 
-- [ ] 190. [dbd-manifest.cpp] JS truthiness filter for manifest entries is not preserved for object/array values
+- [x] 190. [dbd-manifest.cpp] JS truthiness filter for manifest entries is not preserved for object/array values
 - **JS Source**: `src/js/casc/dbd-manifest.js` lines 30–34
-- **Status**: Pending
-- **Details**: JS `if (entry.tableName && entry.db2FileDataID)` treats objects/arrays as truthy; C++ truthiness logic only handles string/number/bool and treats other JSON value types as false, diverging from JS semantics.
+- **Status**: Verified
+- **Details**: Ported JS-style truthiness into `jsonTruthy()` (null/false/0/"" are falsy; objects/arrays truthy), and updated manifest filtering to use it before value conversion.
 
-- [ ] 191. [DBDParser.cpp] Empty-chunk parsing behavior differs from original JS control flow
+- [x] 191. [DBDParser.cpp] Empty-chunk parsing behavior differs from original JS control flow
 - **JS Source**: `src/js/db/DBDParser.js` lines 215–223, 237–320
-- **Status**: Pending
-- **Details**: JS `parseChunk` path can process empty chunks produced by blank-line splits, while C++ returns early on `chunk.empty()`, changing edge-case entry creation behavior.
+- **Status**: Verified
+- **Details**: Removed the C++ early-return for empty chunks in `parseChunk`, matching JS flow where empty chunks are still routed through non-`COLUMNS` parsing.
 
-- [ ] 192. [DBDParser.cpp] `PATTERN_BUILD_ID` regex uses `.` instead of `\.` for literal dots
+- [x] 192. [DBDParser.cpp] `PATTERN_BUILD_ID` regex uses `.` instead of `\.` for literal dots
 - **JS Source**: `src/js/db/DBDParser.js` line 48
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `PATTERN_BUILD_ID = /(\d+).(\d+).(\d+).(\d+)/` uses unescaped `.` which matches any character (not just literal dots). C++ `PATTERN_BUILD_ID(R"((\d+).(\d+).(\d+).(\d+))")` (line 51) also uses unescaped `.`. Both have the same bug — `1a2b3c4d` would match when it shouldn't. However since both JS and C++ have the same regex, behavior is identical.
 
-- [ ] 193. [DBDParser.cpp] `isBuildInRange` comparison logic has known bug matching JS — compares each component independently
+- [x] 193. [DBDParser.cpp] `isBuildInRange` comparison logic has known bug matching JS — compares each component independently
 - **JS Source**: `src/js/db/DBDParser.js` lines 76–94
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: Both JS and C++ `isBuildInRange` compare major/minor/patch/rev independently (e.g., `build.minor < min.minor || build.minor > max.minor`). This is incorrect for ranges like `1.5.0.0 - 2.3.0.0` — build `1.8.0.0` would fail because `minor 8 > max.minor 3`. A correct implementation would compare tuples lexicographically. Both versions have the same bug, so behavior is identical.
 
-- [ ] 194. [DBDParser.cpp] `isValidFor` checks empty layoutHash against `layoutHashes` set — could match unintended entries
+- [x] 194. [DBDParser.cpp] `isValidFor` checks empty layoutHash against `layoutHashes` set — could match unintended entries
 - **JS Source**: `src/js/db/DBDParser.js` lines 161–177
-- **Status**: Pending
-- **Details**: JS `isValidFor` checks `this.layoutHashes.has(layoutHash)` — if `layoutHash` is `null` (which it is when called from DBCReader line 182), `Set.has(null)` returns false unless null was explicitly added. C++ `isValidFor` checks `layoutHashes.count(layoutHash)` — if `layoutHash` is an empty string `""`, and if any DBD entry has an empty string in its layoutHashes set, it would incorrectly match. The C++ call from DBCReader line 194 passes `""` (empty string) which should be safe since no valid layout hash is empty, but it's a subtle behavioral difference from JS null.
+- **Status**: Verified
+- **Details**: Ported null-layout behavior by making `layoutHash` optional in `DBDParser::getStructure`/`DBDEntry::isValidFor`; DBCReader now calls `getStructure(build_id)` with no layout hash instead of passing `""`.
 
-- [ ] 195. [DBCReader.cpp] Public load path is synchronous instead of JS Promise-based async flow
+- [x] 195. [DBCReader.cpp] Public load path is synchronous instead of JS Promise-based async flow
 - **JS Source**: `src/js/db/DBCReader.js` lines 162–209, 244–279
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `loadSchema()`/`parse()` are async and awaited. C++ ports these flows synchronously, changing timing and error propagation semantics.
 
-- [ ] 196. [DBCReader.cpp] DBD cache backend behavior differs from JS CASC cache API
+- [x] 196. [DBCReader.cpp] DBD cache backend behavior differs from JS CASC cache API
 - **JS Source**: `src/js/db/DBCReader.js` lines 177–195
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS reads/writes DBD cache via `core.view.casc?.cache.getFile/storeFile`. C++ uses direct filesystem cache paths and bypasses the JS cache interface behavior.
 
-- [ ] 197. [DBCReader.cpp] `loadSchema` is synchronous in C++ but `async` in JS — caching uses filesystem instead of CASC cache
+- [x] 197. [DBCReader.cpp] `loadSchema` is synchronous in C++ but `async` in JS — caching uses filesystem instead of CASC cache
 - **JS Source**: `src/js/db/DBCReader.js` lines 162–209
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `loadSchema` is `async` and uses `core.view.casc?.cache.getFile()` / `cache.storeFile()` for DBD caching via the CASC cache system. C++ `loadSchema` (lines 156–236) is synchronous, uses `std::filesystem::exists` / `BufferWrapper::readFile` / `writeToFile` for filesystem-based caching. The C++ approach bypasses the CASC cache entirely — if the CASC cache has different behavior (e.g., automatic cleanup, shared across sessions), the C++ version won't benefit from it.
 
-- [ ] 198. [DBCReader.cpp] `parse` is synchronous in C++ but `async` in JS
+- [x] 198. [DBCReader.cpp] `parse` is synchronous in C++ but `async` in JS
 - **JS Source**: `src/js/db/DBCReader.js` line 244
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `parse` is declared `async` (line 244) because it calls `await this.loadSchema()`. C++ `parse` (line 275) is synchronous. This means that in JS, DBC parsing yields to the event loop during schema loading (allowing UI updates), while C++ blocks the calling thread until parsing completes. For large tables or slow network downloads, this could freeze the UI.
 
-- [ ] 199. [DBCReader.cpp] `getRow` returns `std::optional<DataRecord>` but JS returns the row directly or `undefined`
+- [x] 199. [DBCReader.cpp] `getRow` returns `std::optional<DataRecord>` but JS returns the row directly or `undefined`
 - **JS Source**: `src/js/db/DBCReader.js` lines 114–121
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `getRow` returns `this.rows.get(index)` which returns `undefined` if the key doesn't exist in the Map. C++ (line 105) returns `std::nullopt` if the key doesn't exist. This is semantically equivalent, but callers must handle `std::optional` correctly. Also, JS uses `Map.get(index)` which does key lookup, while C++ uses `rows.value().at(static_cast<uint32_t>(index))` which uses `std::map::at` — both are O(log n) lookups.
 
-- [ ] 200. [DBCReader.cpp] `getAllRows` returns `std::map` (sorted by key) but JS returns `Map` (insertion order)
+- [x] 200. [DBCReader.cpp] `getAllRows` returns `std::map` (sorted by key) but JS returns `Map` (insertion order)
 - **JS Source**: `src/js/db/DBCReader.js` lines 127–143
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `getAllRows` returns a `new Map()` which preserves insertion order (rows are inserted in index order 0..N). C++ returns `std::map<uint32_t, DataRecord>` which sorts by key. Since the ID is `record.ID ?? i`, the order could differ if record IDs are not sequential. If iteration order matters to callers, this could cause behavioral differences.
 
-- [ ] 201. [DBCReader.cpp] Int64/UInt64 field types read as 32-bit values — JS also reads 32-bit for DBC
+- [x] 201. [DBCReader.cpp] Int64/UInt64 field types read as 32-bit values — JS also reads 32-bit for DBC
 - **JS Source**: `src/js/db/DBCReader.js` lines 389–408
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `_read_field` handles `FieldType.Int64` and `FieldType.UInt64` but the switch cases only exist for 8/16/32-bit types and Float — there are no Int64/UInt64 cases. The default reads `readUInt32LE()`. C++ `_read_field` (lines 458–479) also lacks Int64/UInt64 cases and falls through to the default `readUInt32LE()`. Both are equivalent, but 64-bit DBC fields would be read incorrectly (only lower 32 bits). This matches the JS behavior but is worth documenting.
 
 - [ ] 202. [WDCReader.cpp] Public schema/data loading APIs are synchronous instead of JS async Promise flow

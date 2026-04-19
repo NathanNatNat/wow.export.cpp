@@ -147,9 +147,9 @@ void DBDEntry::addField(const DBDField& field) {
  * @param layoutHash Layout hash string
  * @returns true if valid
  */
-bool DBDEntry::isValidFor(const std::string& buildID, const std::string& layoutHash) const {
+bool DBDEntry::isValidFor(const std::string& buildID, const std::optional<std::string>& layoutHash) const {
 	// Layout hash takes priority, being the quickest to check.
-	if (layoutHashes.count(layoutHash))
+	if (layoutHash.has_value() && layoutHashes.count(*layoutHash))
 		return true;
 
 	// Check for a single build ID.
@@ -180,7 +180,7 @@ DBDParser::DBDParser(BufferWrapper& data) {
  * @param layoutHash Layout hash string
  * @returns Pointer to matching DBDEntry, or nullptr
  */
-const DBDEntry* DBDParser::getStructure(const std::string& buildID, const std::string& layoutHash) const {
+const DBDEntry* DBDParser::getStructure(const std::string& buildID, const std::optional<std::string>& layoutHash) const {
 	for (const auto& entry : entries) {
 		if (entry.isValidFor(buildID, layoutHash))
 			return &entry;
@@ -225,10 +225,7 @@ void DBDParser::parse(BufferWrapper& data) {
  * @param chunk Lines of the chunk
  */
 void DBDParser::parseChunk(std::vector<std::string>& chunk) {
-	if (chunk.empty())
-		return;
-
-	if (chunk[0] == "COLUMNS") {
+	if (!chunk.empty() && chunk[0] == "COLUMNS") {
 		parseColumnChunk(chunk);
 	} else {
 		DBDEntry entry;

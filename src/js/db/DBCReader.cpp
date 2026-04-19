@@ -191,7 +191,7 @@ void DBCReader::loadSchema() {
 	if (std::filesystem::exists(dbdCachePath)) {
 		BufferWrapper raw_dbd = BufferWrapper::readFile(dbdCachePath);
 		dbdParser = std::make_unique<DBDParser>(raw_dbd);
-		structure = dbdParser->getStructure(build_id, "");
+		structure = dbdParser->getStructure(build_id);
 	}
 
 	// download if not cached or structure not found
@@ -220,7 +220,7 @@ void DBCReader::loadSchema() {
 			raw_dbd.writeToFile(dbdCachePath);
 
 			dbdParser = std::make_unique<DBDParser>(raw_dbd);
-			structure = dbdParser->getStructure(build_id, "");
+			structure = dbdParser->getStructure(build_id);
 		} catch (const std::exception& e) {
 			logging::write(std::string("Failed to download DBD for ") + table_name + ": " + e.what());
 		}

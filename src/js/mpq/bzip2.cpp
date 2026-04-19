@@ -106,31 +106,34 @@ static constexpr int NO_RAND_PART_C_STATE = 7;
 
 class StrangeCRC {
 public:
-	StrangeCRC() : globalCrc(0xFFFFFFFF) {}
+	StrangeCRC() : globalCrc(-1) {}
 
 	void reset() {
-		globalCrc = 0xFFFFFFFF;
+		globalCrc = -1;
 	}
 
 	uint32_t value() const {
-		return ~globalCrc;
+		return static_cast<uint32_t>(~globalCrc);
 	}
 
 	void update(int value) {
-		int index = (static_cast<int>(globalCrc >> 24)) ^ value;
+		int index = (globalCrc >> 24) ^ value;
 		if (index < 0)
 			index = 256 + index;
 
-		globalCrc = (globalCrc << 8) ^ CRC32_TABLE[index];
+		globalCrc = static_cast<int32_t>((globalCrc << 8) ^ static_cast<int32_t>(CRC32_TABLE[index]));
 	}
 
-	void updateBuffer(const uint8_t* buf, int off, int len) {
+	void updateBuffer(std::span<const uint8_t> buf, int off = 0, int len = -1) {
+		if (len < 0)
+			len = static_cast<int>(buf.size());
+
 		for (int i = 0; i < len; i++)
 			update(buf[off + i]);
 	}
 
 private:
-	uint32_t globalCrc;
+	int32_t globalCrc;
 };
 
 class BZip2Exception : public std::runtime_error {
