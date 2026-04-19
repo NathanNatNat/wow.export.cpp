@@ -4,17 +4,42 @@
 	License: MIT
  */
 #include "subtitles.h"
+#include "casc/casc-source.h"
 
 #include <cmath>
 #include <regex>
 #include <sstream>
 #include <iomanip>
 #include <optional>
+#include <stdexcept>
 #include <vector>
 
 namespace subtitles {
 
 static constexpr int FRAMES_PER_SECOND = 24;
+
+static std::optional<int> parse_sbt_int_js(std::string_view sv) {
+	std::size_t i = 0;
+	while (i < sv.size() && (sv[i] == ' ' || sv[i] == '\t' || sv[i] == '\r' || sv[i] == '\n'))
+		++i;
+
+	bool negative = false;
+	if (i < sv.size() && (sv[i] == '+' || sv[i] == '-')) {
+		negative = (sv[i] == '-');
+		++i;
+	}
+
+	if (i >= sv.size() || sv[i] < '0' || sv[i] > '9')
+		return std::nullopt;
+
+	int value = 0;
+	while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9') {
+		value = value * 10 + (sv[i] - '0');
+		++i;
+	}
+
+	return negative ? -value : value;
+}
 
 static int64_t parse_sbt_timestamp(std::string_view timestamp) {
 	// Split by ':'
@@ -30,22 +55,16 @@ static int64_t parse_sbt_timestamp(std::string_view timestamp) {
 	if (parts.size() != 4)
 		return 0;
 
-	auto parse_int = [](std::string_view sv) -> int {
-		int result = 0;
-		for (char ch : sv) {
-			if (ch >= '0' && ch <= '9')
-				result = result * 10 + (ch - '0');
-		}
-		return result;
-	};
+	auto hours = parse_sbt_int_js(parts[0]);
+	auto minutes = parse_sbt_int_js(parts[1]);
+	auto seconds = parse_sbt_int_js(parts[2]);
+	auto frames = parse_sbt_int_js(parts[3]);
 
-	int hours = parse_int(parts[0]);
-	int minutes = parse_int(parts[1]);
-	int seconds = parse_int(parts[2]);
-	int frames = parse_int(parts[3]);
+	if (!hours.has_value() || !minutes.has_value() || !seconds.has_value() || !frames.has_value())
+		return 0;
 
-	int64_t total_ms = static_cast<int64_t>(hours * 3600 + minutes * 60 + seconds) * 1000;
-	int64_t frame_ms = std::llround((static_cast<double>(frames) / FRAMES_PER_SECOND) * 1000.0);
+	int64_t total_ms = static_cast<int64_t>(hours.value() * 3600 + minutes.value() * 60 + seconds.value()) * 1000;
+	int64_t frame_ms = std::llround((static_cast<double>(frames.value()) / FRAMES_PER_SECOND) * 1000.0);
 
 	return total_ms + frame_ms;
 }
@@ -314,14 +333,12 @@ static std::string srt_to_vtt(std::string_view srt) {
  * JS BOM check: charCodeAt(0) === 0xFEFF (UTF-16 BOM).
  * C++ BOM check: UTF-8 BOM (EF BB BF) since text is stored as UTF-8.
  */
-std::string get_subtitles_vtt(std::string_view text, SubtitleFormat format) {
+std::string get_subtitles_vtt_from_text(std::string_view text, SubtitleFormat format) {
 	std::string str(text);
 
-	// strip BOM if present (UTF-8 BOM: EF BB BF)
-	if (str.size() >= 3 &&
-		static_cast<unsigned char>(str[0]) == 0xEF &&
-		static_cast<unsigned char>(str[1]) == 0xBB &&
-		static_cast<unsigned char>(str[2]) == 0xBF) {
+	// JS: if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+	// UTF-8 representation of U+FEFF is EF BB BF.
+	if (str.rfind("\xEF\xBB\xBF", 0) == 0) {
 		str = str.substr(3);
 	}
 
@@ -332,6 +349,15 @@ std::string get_subtitles_vtt(std::string_view text, SubtitleFormat format) {
 		srt = str;
 
 	return srt_to_vtt(srt);
+}
+
+std::string get_subtitles_vtt(casc::CASC* casc, uint32_t file_data_id, SubtitleFormat format) {
+	if (casc == nullptr)
+		throw std::runtime_error("casc is null");
+
+	BufferWrapper data = casc->getVirtualFileByID(file_data_id);
+	std::string text = data.readString();
+	return get_subtitles_vtt_from_text(text, format);
 }
 
 } // namespace subtitles

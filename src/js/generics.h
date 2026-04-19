@@ -91,16 +91,6 @@ nlohmann::json getJSON(const std::string& url);
 std::optional<nlohmann::json> readJSON(const std::filesystem::path& file, bool ignoreComments = false);
 
 /**
- * Request data from a URL with optional partial content (Range header).
- * Handles redirects (301/302) and logs download progress.
- * @param url        URL to request data from.
- * @param partialOfs Partial content start offset (-1 to disable).
- * @param partialLen Partial content length (-1 to disable).
- * @returns Raw response body.
- */
-std::vector<uint8_t> requestData(const std::string& url, int64_t partialOfs, int64_t partialLen);
-
-/**
  * Download a file (optionally to a local file).
  * Zlib inflation will be applied if deflate is true.
  * Data is always returned even if `out` is provided.

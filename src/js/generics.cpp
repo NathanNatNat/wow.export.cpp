@@ -543,7 +543,7 @@ std::optional<nlohmann::json> readJSON(const std::filesystem::path& file, bool i
  * @param partialLen Partial content length (-1 to disable).
  * @returns Raw response body.
  */
-std::vector<uint8_t> requestData(const std::string& url, int64_t partialOfs, int64_t partialLen) {
+static std::vector<uint8_t> requestData(const std::string& url, int64_t partialOfs, int64_t partialLen) {
 	logging::write(std::format("Requesting data from {} (offset: {}, length: {})", url, partialOfs, partialLen));
 
 	auto response = doHttpGetRaw(url, partialOfs, partialLen);

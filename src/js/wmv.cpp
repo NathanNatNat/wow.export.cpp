@@ -211,8 +211,10 @@ ParseResultV1 wmv_parse_v1(const nlohmann::json& data) {
 
 	auto get_legacy_value = [&](const std::string& key) -> int {
 		const auto& val = safe_navigate(char_details, { key, "@_value" });
+		if (val.is_null())
+			return 0; // JS: parseInt(undefined ?? '0') => 0
 		auto parsed = safe_parse_int(val);
-		return parsed.value_or(0);
+		return parsed.value_or(-1); // JS NaN sentinel for non-numeric strings
 	};
 
 	LegacyValues legacy_values;

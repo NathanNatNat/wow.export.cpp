@@ -18,6 +18,7 @@
 #include <optional>
 #include <regex>
 #include <stdexcept>
+#include <sstream>
 
 #include <glad/gl.h>
 
@@ -76,33 +77,76 @@ struct PlatformGPUInfo {
  * @returns Trimmed stdout output.
  */
 std::string exec_cmd(const std::string& cmd) {
-	// JS uses { timeout: 5000 } which kills the child process after 5 seconds.
-	// We use 'timeout' command on Linux and a simple popen with a time limit
-	// on Windows. For simplicity, on Linux we wrap with 'timeout 5' command.
+	// JS uses { timeout: 5000 } and terminates the child process on timeout.
+	std::string result;
 #ifdef _WIN32
-	FILE* pipe = _popen(cmd.c_str(), "r");
+	SECURITY_ATTRIBUTES sa{};
+	sa.nLength = sizeof(sa);
+	sa.bInheritHandle = TRUE;
+
+	HANDLE readPipe = nullptr;
+	HANDLE writePipe = nullptr;
+	if (!CreatePipe(&readPipe, &writePipe, &sa, 0))
+		throw std::runtime_error("Failed to create stdout pipe");
+
+	SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
+
+	STARTUPINFOA si{};
+	si.cb = sizeof(si);
+	si.dwFlags = STARTF_USESTDHANDLES;
+	si.hStdOutput = writePipe;
+	si.hStdError = writePipe;
+
+	PROCESS_INFORMATION pi{};
+	std::string command = "cmd.exe /C " + cmd;
+	std::vector<char> commandBuffer(command.begin(), command.end());
+	commandBuffer.push_back('\0');
+
+	if (!CreateProcessA(nullptr, commandBuffer.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+		CloseHandle(readPipe);
+		CloseHandle(writePipe);
+		throw std::runtime_error("Failed to execute command");
+	}
+
+	CloseHandle(writePipe);
+
+	DWORD waitStatus = WaitForSingleObject(pi.hProcess, 5000);
+	if (waitStatus == WAIT_TIMEOUT) {
+		TerminateProcess(pi.hProcess, 1);
+		CloseHandle(pi.hThread);
+		CloseHandle(pi.hProcess);
+		CloseHandle(readPipe);
+		throw std::runtime_error("Command timed out after 5 seconds");
+	}
+
+	char buffer[256];
+	DWORD bytesRead = 0;
+	while (ReadFile(readPipe, buffer, sizeof(buffer), &bytesRead, nullptr) && bytesRead > 0)
+		result.append(buffer, buffer + bytesRead);
+
+	DWORD exitCode = 1;
+	GetExitCodeProcess(pi.hProcess, &exitCode);
+	CloseHandle(pi.hThread);
+	CloseHandle(pi.hProcess);
+	CloseHandle(readPipe);
+
+	if (exitCode != 0)
+		throw std::runtime_error("Command failed with exit code " + std::to_string(exitCode));
 #else
 	// Wrap command with timeout(1) to enforce 5-second limit, matching JS behavior
 	std::string timed_cmd = "timeout 5 " + cmd;
 	FILE* pipe = popen(timed_cmd.c_str(), "r");
-#endif
 	if (!pipe)
 		throw std::runtime_error("Failed to execute command");
 
-	std::string result;
 	std::array<char, 256> buffer;
-
 	while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr)
 		result += buffer.data();
 
-#ifdef _WIN32
-	int status = _pclose(pipe);
-#else
 	int status = pclose(pipe);
-#endif
-
 	if (status != 0)
 		throw std::runtime_error("Command failed with exit code " + std::to_string(status));
+#endif
 
 	// trim whitespace
 	auto start = result.find_first_not_of(" \t\n\r");
@@ -140,20 +184,6 @@ std::optional<GLInfo> get_gl_info() {
 	GLInfo result;
 
 	try {
-		// vendor/renderer
-		const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
-		const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-
-		if (!vendor && !renderer) {
-			// GL context not properly initialized
-			return std::nullopt;
-		}
-
-		if (vendor)
-			result.vendor = vendor;
-		if (renderer)
-			result.renderer = renderer;
-
 		// capability limits — using VECTORS (not COMPONENTS) to match JS WebGL queries
 		glGetIntegerv(GL_MAX_TEXTURE_SIZE, &result.caps.max_tex_size);
 		glGetIntegerv(GL_MAX_CUBE_MAP_TEXTURE_SIZE, &result.caps.max_cube_size);
@@ -176,6 +206,24 @@ std::optional<GLInfo> get_gl_info() {
 			const char* ext = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i)));
 			if (ext)
 				result.extensions.emplace_back(ext);
+		}
+
+		// JS only exposes vendor/renderer when WEBGL_debug_renderer_info is available.
+		bool has_debug_renderer_info = false;
+		for (const auto& ext : result.extensions) {
+			if (ext == "WEBGL_debug_renderer_info" || ext == "GL_WEBGL_debug_renderer_info") {
+				has_debug_renderer_info = true;
+				break;
+			}
+		}
+
+		if (has_debug_renderer_info) {
+			const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+			const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+			if (vendor)
+				result.vendor = vendor;
+			if (renderer)
+				result.renderer = renderer;
 		}
 	} catch (const std::exception& e) {
 		result.error = e.what();
@@ -350,6 +398,34 @@ std::optional<PlatformGPUInfo> get_linux_gpu_info() {
 }
 #endif // __linux__
 
+#ifdef __APPLE__
+/**
+ * Get GPU info on macOS via system_profiler.
+ * @returns PlatformGPUInfo with available information.
+ */
+std::optional<PlatformGPUInfo> get_macos_gpu_info() {
+	try {
+		std::string output = exec_cmd("system_profiler SPDisplaysDataType");
+		PlatformGPUInfo result;
+
+		std::smatch match;
+		if (std::regex_search(output, match, std::regex(R"(Chipset Model: (.+))")))
+			result.name = match[1].str();
+
+		if (std::regex_search(output, match, std::regex(R"(VRAM \([^)]+\): (.+))")))
+			result.vram = match[1].str();
+
+		if (std::regex_search(output, match, std::regex(R"(Metal.*: (.+))")))
+			result.driver = "Metal " + match[1].str();
+
+		return result;
+	} catch (const std::exception& e) {
+		logging::write(std::format("GPU: macOS system_profiler query failed: {}", e.what()));
+		return std::nullopt;
+	}
+}
+#endif // __APPLE__
+
 /**
  * Get platform-specific GPU info (VRAM, driver version).
  * @returns PlatformGPUInfo or std::nullopt on failure.
@@ -359,6 +435,8 @@ std::optional<PlatformGPUInfo> get_platform_gpu_info() {
 	return get_windows_gpu_info();
 #elif defined(__linux__)
 	return get_linux_gpu_info();
+#elif defined(__APPLE__)
+	return get_macos_gpu_info();
 #else
 	return std::nullopt;
 #endif
@@ -381,43 +459,26 @@ std::string format_extensions(const std::vector<std::string>& extensions) {
 	for (const auto& ext : extensions) {
 		if (ext.find("compressed_texture") != std::string::npos) {
 			std::string name = ext;
-			// strip common GL extension prefixes
-			auto pos = name.find("GL_ARB_compressed_texture_");
-			if (pos != std::string::npos) { name = name.substr(pos + 26); }
-			else {
-				pos = name.find("GL_EXT_texture_compression_");
-				if (pos != std::string::npos) { name = name.substr(pos + 27); }
-				else {
-					pos = name.find("compressed_texture_");
-					if (pos != std::string::npos) { name = name.substr(pos + 19); }
-				}
-			}
+			if (name.rfind("WEBGL_compressed_texture_", 0) == 0)
+				name = name.substr(25);
+			else if (name.rfind("EXT_texture_compression_", 0) == 0)
+				name = name.substr(24);
 			compressed.push_back(name);
 		} else if (ext.find("float") != std::string::npos || ext.find("half_float") != std::string::npos) {
 			std::string name = ext;
-			auto pos = name.find("GL_ARB_");
-			if (pos != std::string::npos) { name = name.substr(pos + 7); }
-			else {
-				pos = name.find("GL_EXT_");
-				if (pos != std::string::npos) { name = name.substr(pos + 7); }
-				else {
-					pos = name.find("GL_OES_");
-					if (pos != std::string::npos) { name = name.substr(pos + 7); }
-				}
-			}
-			// abbreviate color_buffer to cb_
-			auto cb_pos = name.find("color_buffer_");
-			if (cb_pos != std::string::npos)
-				name = "cb_" + name.substr(cb_pos + 13);
+			if (name.rfind("OES_texture_", 0) == 0)
+				name = name.substr(12);
+			if (name.rfind("WEBGL_color_buffer_", 0) == 0)
+				name = "cb_" + name.substr(19);
+			if (name.rfind("EXT_color_buffer_", 0) == 0)
+				name = "cb_" + name.substr(17);
 			float_exts.push_back(name);
 		} else if (ext.find("depth") != std::string::npos) {
 			std::string name = ext;
-			auto pos = name.find("GL_ARB_");
-			if (pos != std::string::npos) { name = name.substr(pos + 7); }
-			else {
-				pos = name.find("GL_EXT_");
-				if (pos != std::string::npos) { name = name.substr(pos + 7); }
-			}
+			if (name.rfind("WEBGL_", 0) == 0)
+				name = name.substr(7);
+			else if (name.rfind("EXT_", 0) == 0)
+				name = name.substr(4);
 			depth.push_back(name);
 		} else if (ext.find("instanced") != std::string::npos) {
 			instanced = true;
@@ -526,18 +587,17 @@ void log_gpu_info() {
 	// JS: if (webgl?.error) ... else if (webgl) ... else ... "GPU: WebGL unavailable"
 	if (!gl.has_value()) {
 		// JS: webgl === null — no GL context
-		logging::write("GPU: GL unavailable");
+		logging::write("GPU: WebGL unavailable");
 	} else if (!gl->error.empty()) {
 		// JS: webgl.error — exception occurred
-		logging::write(std::format("GPU: GL query failed: {}", gl->error));
+		logging::write(std::format("GPU: WebGL query failed: {}", gl->error));
 	} else {
 		if (!gl->renderer.empty())
 			logging::write(std::format("GPU: {} ({})", gl->renderer, gl->vendor));
 		else
-			logging::write("GPU: GL debug info unavailable");
+			logging::write("GPU: WebGL debug info unavailable");
 
-		if (gl->caps.max_tex_size > 0)
-			logging::write(std::format("GPU caps: {}", format_caps(gl->caps)));
+		logging::write(std::format("GPU caps: {}", format_caps(gl->caps)));
 
 		if (!gl->extensions.empty())
 			logging::write(std::format("GPU ext ({}): {}", gl->extensions.size(), format_extensions(gl->extensions)));

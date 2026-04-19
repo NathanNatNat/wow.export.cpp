@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 142/906 verified (16%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 160/906 verified (18%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -455,87 +455,87 @@
 - **Status**: Verified
 - **Details**: `downloadFile()` now logs both the formatted failure message and an additional structured error-details line (exception dynamic type + message), improving parity with JS’s second `log.write(error)` diagnostic entry.
 
-- [ ] 97. [generics.cpp] requestData() is publicly declared but is a private/unexported function in JS
+- [x] 97. [generics.cpp] requestData() is publicly declared but is a private/unexported function in JS
 - **JS Source**: `src/js/generics.js` lines 145–205, 484–502
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `requestData()` is a file-scoped function that is NOT included in `module.exports` (lines 484–502). C++ declares `requestData()` in `generics.h` line 86 as a public function in the `generics` namespace, making it part of the public API. While this doesn't break functionality, it exposes an internal implementation detail that JS keeps private, and external callers could depend on this function when they shouldn't.
 
-- [ ] 98. [mmap.cpp] Module architecture differs from JS wrapper around `mmap.node`
+- [x] 98. [mmap.cpp] Module architecture differs from JS wrapper around `mmap.node`
 - **JS Source**: `src/js/mmap.js` lines 8–23, 49–52
 - **Details**: JS delegates mapping behavior to native addon object construction (`new mmap_native.MmapObject()`); C++ reimplements mapping logic directly in this module, changing parity with the original JS/native boundary.
 
-- [ ] 99. [mmap.cpp] Virtual-file ownership semantics differ from JS object-lifetime model
+- [x] 99. [mmap.cpp] Virtual-file ownership semantics differ from JS object-lifetime model
 - **JS Source**: `src/js/mmap.js` lines 14–24, 30–43
 - **Details**: JS tracks objects in a `Set` and only calls `unmap()`/`clear()`; C++ tracks raw pointers in a global set and deletes them in `release_virtual_files()`, introducing different lifetime/aliasing behavior versus JS-managed object references.
 
-- [ ] 100. [mmap.cpp] C++ map() explicitly rejects empty files which JS wrapper does not handle
+- [x] 100. [mmap.cpp] C++ map() explicitly rejects empty files which JS wrapper does not handle
 - **JS Source**: `src/js/mmap.js` lines 20–23
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: C++ `MmapObject::map()` explicitly checks for `size == 0` and returns false with `lastError = "File is empty"` (mmap.cpp lines 113–118 on Windows, lines 162–167 on Linux). The JS wrapper in `mmap.js` has no such guard — it delegates entirely to `new mmap_native.MmapObject()` and the native addon's `map()` method. Whether the native `.node` addon rejects empty files is unknown from the JS source alone, making this a potential behavioral divergence where C++ would fail on empty files while JS might succeed (mapping zero bytes).
 
-- [ ] 101. [xml.cpp] End-of-input handling can dereference past bounds unlike JS parser semantics
+- [x] 101. [xml.cpp] End-of-input handling can dereference past bounds unlike JS parser semantics
 - **JS Source**: `src/js/xml.js` lines 25–29, 39, 89, 97
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS safely reads `xml[pos]` as `undefined` at end-of-input, but C++ reads `xml[pos]` in `parse_attributes()`/`parse_node()` without guarding `pos < xml.size()` at several checks, which can trigger out-of-bounds access on malformed/truncated XML.
 
-- [ ] 102. [subtitles.cpp] `get_subtitles_vtt` API and data-loading path differ from JS
+- [x] 102. [subtitles.cpp] `get_subtitles_vtt` API and data-loading path differ from JS
 - **JS Source**: `src/js/subtitles.js` lines 172–175
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `get_subtitles_vtt(casc, file_data_id, format)` loads file data internally via CASC; C++ takes preloaded subtitle text and format only.
 
-- [ ] 103. [subtitles.cpp] BOM stripping behavior differs from original JS
+- [x] 103. [subtitles.cpp] BOM stripping behavior differs from original JS
 - **JS Source**: `src/js/subtitles.js` lines 176–178
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS removes leading UTF-16 BOM codepoint (`0xFEFF`) via `charCodeAt`; C++ strips UTF-8 byte-order mark bytes (`EF BB BF`) instead.
 
-- [ ] 104. [subtitles.cpp] Invalid SBT timestamp parsing semantics differ from JS `parseInt` behavior
+- [x] 104. [subtitles.cpp] Invalid SBT timestamp parsing semantics differ from JS `parseInt` behavior
 - **JS Source**: `src/js/subtitles.js` lines 13–20
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `parseInt(...)` and can propagate `NaN` for malformed timestamp segments, while C++ digit-filter parsing can still produce numeric output from mixed/invalid strings.
 
-- [ ] 105. [wmv.cpp] safe_parse_int returns 0 for fully non-numeric strings while JS parseInt returns NaN
+- [x] 105. [wmv.cpp] safe_parse_int returns 0 for fully non-numeric strings while JS parseInt returns NaN
 - **JS Source**: `src/js/wmv.js` lines 44, 57–58, 87–91
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `parseInt('abc')` returns `NaN`, which propagates through the parsed result (e.g., in v1 `legacy_values` or v2 `customizations`/`equipment`). C++ `safe_parse_int()` (wmv.cpp lines 26–43) catches `std::stoi` exceptions for non-numeric strings and returns `std::nullopt`, which callers convert to 0 via `value_or(0)`. For .chr files with non-numeric `@_value` attributes, JS would store `NaN` while C++ stores `0`, potentially causing different downstream behavior in character customization or equipment application.
 
-- [ ] 106. [external-links.h] Windows open() uses naive wstring conversion instead of proper MultiByteToWideChar
+- [x] 106. [external-links.h] Windows open() uses naive wstring conversion instead of proper MultiByteToWideChar
 - **JS Source**: `src/js/external-links.js` lines 31–35
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: `ExternalLinks::open()` in external-links.h line 75 converts URL to wstring via `std::wstring(url.begin(), url.end())`, a naive char-by-char copy that only works for ASCII characters. This is inconsistent with `core::openInExplorer()` (core.cpp lines 418–420) which properly uses `MultiByteToWideChar(CP_UTF8, ...)` for correct UTF-8 to UTF-16 conversion. While URLs are typically ASCII, this is a correctness bug for any URL containing non-ASCII bytes.
 
-- [ ] 107. [external-links.h] wowHead_viewItem() hardcodes URL string instead of using WOWHEAD_ITEM constant
+- [x] 107. [external-links.h] wowHead_viewItem() hardcodes URL string instead of using WOWHEAD_ITEM constant
 - **JS Source**: `src/js/external-links.js` lines 24, 42–43
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS defines `const WOWHEAD_ITEM = 'https://www.wowhead.com/item=%d'` and uses it via `util.format(WOWHEAD_ITEM, itemID)`. C++ defines `WOWHEAD_ITEM` as `"https://www.wowhead.com/item={}"` (external-links.h line 48) but `wowHead_viewItem()` (line 89) hardcodes `std::format("https://www.wowhead.com/item={}", itemID)` instead of using the constant. The constant is effectively dead code.
 
-- [ ] 108. [external-links.h] renderLink() missing CSS a:hover visual effects (color change and underline)
+- [x] 108. [external-links.h] renderLink() missing CSS a:hover visual effects (color change and underline)
 - **JS Source**: `src/app.css` lines 93–101 (a tag styling, a:hover)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: `ExternalLinks::renderLink()` (external-links.h lines 107–117) only changes the cursor to a hand on hover. The original CSS defines `a:hover { color: var(--font-highlight); text-decoration: underline; }` which means links should change to pure white (#ffffff) and show an underline on hover. The C++ renderLink() is missing both the hover color change and the underline decoration, causing a visual fidelity difference from the original JS app.
 
-- [ ] 109. [external-links.cpp] JS logic is not implemented in the .cpp translation unit
+- [x] 109. [external-links.cpp] JS logic is not implemented in the .cpp translation unit
 - **JS Source**: `src/js/external-links.js` lines 12–44
 - **Details**: `external-links.cpp` only includes `external-links.h`; the sibling `.cpp` file does not contain line-by-line equivalents of JS constants/methods (`STATIC_LINKS`, `WOWHEAD_ITEM`, `open`, `wowHead_viewItem`).
 
-- [ ] 110. [gpu-info.cpp] macOS GPU info path from JS is missing in C++
+- [x] 110. [gpu-info.cpp] macOS GPU info path from JS is missing in C++
 - **JS Source**: `src/js/gpu-info.js` lines 199–243
 - **Details**: JS implements `get_macos_gpu_info()` and a `darwin` branch in `get_platform_gpu_info()`, but C++ only handles Windows/Linux and returns `nullopt` for all other platforms.
 
-- [ ] 111. [gpu-info.cpp] WebGL debug renderer detection logic differs from JS extension-gated behavior
+- [x] 111. [gpu-info.cpp] WebGL debug renderer detection logic differs from JS extension-gated behavior
 - **JS Source**: `src/js/gpu-info.js` lines 30–34, 340–347
 - **Details**: JS only populates vendor/renderer when `WEBGL_debug_renderer_info` is available and otherwise logs `WebGL debug info unavailable`; C++ reads `GL_VENDOR/GL_RENDERER` directly, changing the fallback path and emitted diagnostics.
 
-- [ ] 112. [gpu-info.cpp] `exec_cmd` timeout behavior is not equivalent on Windows
+- [x] 112. [gpu-info.cpp] `exec_cmd` timeout behavior is not equivalent on Windows
 - **JS Source**: `src/js/gpu-info.js` lines 65–73
 - **Details**: JS enforces `{ timeout: 5000 }` through `child_process.exec`; C++ only wraps Linux commands with `timeout 5` and does not enforce the same timeout semantics on Windows `_popen`.
 
-- [ ] 113. [gpu-info.cpp] Extension category normalization diverges from JS WebGL formatting
+- [x] 113. [gpu-info.cpp] Extension category normalization diverges from JS WebGL formatting
 - **JS Source**: `src/js/gpu-info.js` lines 250–303
 - **Details**: JS normalizes `WEBGL_/EXT_/OES_` extension names for compact logging, while C++ uses different `GL_ARB_/GL_EXT_/GL_OES_` stripping rules and produces different category labels/content.
 
-- [ ] 114. [gpu-info.cpp] Caps logging condition differs from JS — C++ uses `max_tex_size > 0` while JS always logs caps
+- [x] 114. [gpu-info.cpp] Caps logging condition differs from JS — C++ uses `max_tex_size > 0` while JS always logs caps
 - **JS Source**: `src/js/gpu-info.js` lines 348–349
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS checks `if (webgl.caps)` (line 348) before logging capabilities. Since `caps` is always assigned as an object `{}` (line 25), this condition is always truthy when the WebGL context exists. C++ (gpu-info.cpp line 539) checks `if (gl->caps.max_tex_size > 0)` which would skip caps logging if `max_tex_size` happened to be 0. While unlikely in practice with real GPUs, this is a behavioral deviation from JS which unconditionally logs caps when the GL context is available.
 
 - [ ] 115. [font_helpers.cpp] `detect_glyphs_async` no longer implements JS DOM/callback contract
