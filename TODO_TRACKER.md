@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 116/906 verified (13%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 120/906 verified (13%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -2106,20 +2106,20 @@
 - **Status**: Pending
 - **Details**: JS prompt receives count parameter: count => util.format('Export %d models as %s', count, ...). C++ lambda returns string without using/accepting a count, so prompt won't show number of files.
 
-- [ ] 429. [tab_models.cpp] Model quick filters not passed to listbox
+- [x] 429. [tab_models.cpp] Model quick filters not passed to listbox
 - **JS Source**: `src/js/modules/tab_models.js` line 286
-- **Status**: Pending
-- **Details**: JS passes :quickfilters="$core.view.modelQuickFilters" to Listbox. C++ passes empty {}. Quick filter buttons won't appear.
+- **Status**: Verified
+- **Details**: `listbox::render()` now receives `view.modelQuickFilters` and the status bar uses the same quick filter source (`listbox::renderStatusBar("model", view.modelQuickFilters, ...)`), matching the JS `:quickfilters` binding.
 
-- [ ] 430. [tab_models.cpp] Missing "Regex Enabled" indicator in filter bar
+- [x] 430. [tab_models.cpp] Missing "Regex Enabled" indicator in filter bar
 - **JS Source**: `src/js/modules/tab_models.js` line 296
-- **Status**: Pending
-- **Details**: JS renders regex-info div with tooltip when config.regexFilters is true. C++ filter bar only renders the text input, completely omitting the regex indicator and tooltip.
+- **Status**: Verified
+- **Details**: Filter bar now renders a `Regex Enabled` badge when `config.regexFilters` is true, with tooltip text from `view.regexTooltip`, matching JS behavior.
 
-- [ ] 431. [tab_models.cpp] Sidebar checkboxes missing tooltip text
+- [x] 431. [tab_models.cpp] Sidebar checkboxes missing tooltip text
 - **JS Source**: `src/js/modules/tab_models.js` lines 358–425
-- **Status**: Pending
-- **Details**: Every JS checkbox has a title attribute for contextual help. C++ checkboxes have no ImGui tooltip equivalents, losing all tooltip help text.
+- **Status**: Verified
+- **Details**: Added ImGui hover tooltips for all sidebar preview/export checkboxes to mirror the JS `title` attributes (Auto Preview/Camera/Grid/Wireframe/Bones/Textures/Background and export option tooltips including RAW/OBJ conditional options).
 
 - [ ] 432. [tab_models.cpp] WMO Groups uses raw checkboxes instead of CheckboxList component
 - **JS Source**: `src/js/modules/tab_models.js` line 440
@@ -2146,10 +2146,10 @@
 - **Status**: Pending
 - **Details**: JS calls helper.mark(file_name, false, e.message, e.stack) with 4 args. C++ calls helper.mark(file_name, false, e.what()) with only 3, losing stack trace.
 
-- [ ] 437. [tab_models.cpp] MenuButton missing "upward" class styling
+- [x] 437. [tab_models.cpp] MenuButton missing "upward" class styling
 - **JS Source**: `src/js/modules/tab_models.js` line 354
-- **Status**: Pending
-- **Details**: JS MenuButton has class="upward" making dropdown open upward. C++ menu_button::render doesn't pass any upward/direction flag, so dropdown may render downward and overlap content.
+- **Status**: Verified
+- **Details**: `menu_button::render()` now supports an `upward` parameter and tab-models passes `true` for the export `MenuButton`, so the popup opens upward like JS `class="upward"`.
 
 - [x] 438. [tab_models.cpp] Texture ribbon slot click behavior differs from JS
 - **JS Source**: `src/js/modules/tab_models.js` line 302
