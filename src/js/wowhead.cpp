@@ -128,7 +128,7 @@ static ParseResult parse_v15(const std::vector<std::string>& segments, int versi
 	// segment 1 is: gender (char 0) + class (char 1) + spec (char 2) + level (rest)
 	const std::string combined = safe_segment(segments, 1);
 	result.gender = charset_index(safe_char(combined, 0));
-	result.player_class = charset_index(safe_char(combined, 1));
+	result.class_ = charset_index(safe_char(combined, 1));
 	result.spec = charset_index(safe_char(combined, 2));
 	result.level = decode(safe_substr(combined, 3));
 
@@ -224,7 +224,7 @@ static ParseResult parse_legacy(const std::vector<std::string>& segments, int ve
 
 	const std::string seg1 = safe_segment(segments, 1);
 	result.gender = charset_index(safe_char(seg1, 0));
-	result.player_class = charset_index(safe_char(seg1, 1));
+	result.class_ = charset_index(safe_char(seg1, 1));
 	result.spec = charset_index(safe_char(seg1, 2));
 	result.level = decode(safe_substr(seg1, 3));
 

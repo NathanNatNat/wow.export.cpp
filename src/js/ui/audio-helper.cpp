@@ -19,26 +19,18 @@
 #include <algorithm>
 #include <cstring>
 #include <cmath>
+#include <stdexcept>
 
 // -----------------------------------------------------------------------
-// detectFileType — detect audio format from raw bytes.
+// detectFileType — detect audio format from BufferWrapper.
 // -----------------------------------------------------------------------
 
-AudioType detectFileType(const uint8_t* data, size_t size) {
-	// OGG: starts with "OggS"
-	if (size >= 4 && std::memcmp(data, "OggS", 4) == 0)
+AudioType detectFileType(const BufferWrapper& data) {
+	if (data.startsWith("OggS"))
 		return AudioType::OGG;
 
-	// MP3: starts with "ID3" or common sync bytes 0xFFFB / 0xFFF3 / 0xFFF2
-	if (size >= 3 && std::memcmp(data, "ID3", 3) == 0)
+	if (data.startsWith(std::vector<std::string_view>{ "ID3", "\xFF\xFB", "\xFF\xF3", "\xFF\xF2" }))
 		return AudioType::MP3;
-
-	if (size >= 2) {
-		if ((data[0] == 0xFF && data[1] == 0xFB) ||
-		    (data[0] == 0xFF && data[1] == 0xF3) ||
-		    (data[0] == 0xFF && data[1] == 0xF2))
-			return AudioType::MP3;
-	}
 
 	return AudioType::Unknown;
 }
@@ -105,10 +97,7 @@ void AudioPlayer::init() {
 	}
 }
 
-// Deviation from JS: returns void instead of the decoded buffer.
-// JS `async load()` returns `this.buffer` (AudioBuffer) but no caller uses the return value.
-// miniaudio decodes on-the-fly during playback, so there is no decoded buffer to return.
-void AudioPlayer::load(const std::vector<uint8_t>& data) {
+const std::vector<uint8_t>& AudioPlayer::load(const std::vector<uint8_t>& data) {
 	stop();
 
 	// Keep a copy of the data so the decoder can read from it.
@@ -125,6 +114,8 @@ void AudioPlayer::load(const std::vector<uint8_t>& data) {
 			duration_cache = static_cast<double>(frameCount) / static_cast<double>(tempDecoder.outputSampleRate);
 		ma_decoder_uninit(&tempDecoder);
 	}
+
+	return audio_data;
 }
 
 void AudioPlayer::unload() {
@@ -135,8 +126,11 @@ void AudioPlayer::unload() {
 }
 
 void AudioPlayer::play(double from_offset) {
-	if (audio_data.empty() || !engine)
+	if (audio_data.empty())
 		return;
+
+	if (!engine)
+		throw std::runtime_error("AudioPlayer not initialized");
 
 	stop_source();
 
@@ -172,11 +166,20 @@ void AudioPlayer::play(double from_offset) {
 	ma_sound_set_looping(sound, loop ? MA_TRUE : MA_FALSE);
 	ma_sound_set_volume(sound, volume);
 
-	// Deviation from JS: miniaudio has no per-sound "onended" callback like Web Audio API.
-	// In JS, the browser fires source.onended automatically when playback completes.
-	// In C++, on_ended is fired from get_position() by polling ma_sound_at_end().
-	// This means get_position() has side effects (fires on_ended, resets state) not present in JS.
-	// Consumers must call get_position() periodically for end-of-playback detection.
+	ma_sound_set_end_callback(sound, [](void* user_data, ma_sound* /*pSound*/) {
+		auto* self = static_cast<AudioPlayer*>(user_data);
+		if (!self)
+			return;
+
+		// only handle natural completion (not stopped programmatically)
+		if (self->is_playing && !self->loop) {
+			self->is_playing = false;
+			self->start_offset = 0.0;
+
+			if (self->on_ended)
+				self->on_ended();
+		}
+	}, this);
 
 	ma_sound_start(sound);
 	is_playing = true;
@@ -200,6 +203,7 @@ void AudioPlayer::stop() {
 void AudioPlayer::stop_source() {
 	if (sound) {
 		// ignore errors during cleanup
+		ma_sound_set_end_callback(sound, nullptr, nullptr);
 		ma_sound_stop(sound);
 		ma_sound_uninit(sound);
 		delete sound;
@@ -233,19 +237,6 @@ double AudioPlayer::get_position() {
 		float cursor = 0.0f;
 		ma_sound_get_cursor_in_seconds(sound, &cursor);
 		double position = start_offset + static_cast<double>(cursor);
-
-		// Check for natural end of playback.
-		if (ma_sound_at_end(sound) && !loop) {
-			double final_pos = std::min(position, duration_cache);
-			is_playing = false;
-			start_offset = 0;
-			stop_source();
-
-			if (on_ended)
-				on_ended();
-
-			return final_pos;
-		}
 
 		if (loop && duration_cache > 0.0)
 			return std::fmod(position, duration_cache);

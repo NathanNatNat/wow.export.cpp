@@ -9,6 +9,8 @@
 #include <vector>
 #include <functional>
 
+#include "../buffer.h"
+
 struct ma_engine;
 struct ma_sound;
 struct ma_decoder;
@@ -26,12 +28,10 @@ enum class AudioType {
 /**
  * Detect the audio file type from raw data.
  * JS equivalent: detectFileType(data)
- * @param data BufferWrapper (or similar) whose startsWith() method is used in JS.
- *             Here we accept raw bytes.
- * @param size Number of bytes available.
+ * @param data BufferWrapper whose startsWith() method is used in JS.
  * @returns AudioType enum value.
  */
-AudioType detectFileType(const uint8_t* data, size_t size);
+AudioType detectFileType(const BufferWrapper& data);
 
 /**
  * AudioPlayer — C++ equivalent of the JS AudioPlayer class.
@@ -60,8 +60,9 @@ public:
 	 * Load audio data from a raw byte buffer.
 	 * JS equivalent: async load(array_buffer)
 	 * @param data Raw audio bytes (OGG, MP3, etc.).
+	 * @returns Loaded audio data buffer.
 	 */
-	void load(const std::vector<uint8_t>& data);
+	const std::vector<uint8_t>& load(const std::vector<uint8_t>& data);
 
 	/**
 	 * Unload the current audio buffer.

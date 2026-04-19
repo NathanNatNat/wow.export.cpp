@@ -100,4 +100,13 @@ private:
 	std::array<uint8_t, 32> memory_;
 };
 
+/**
+ * JS-style callable helpers mirroring module.exports = XXH64 function behavior.
+ * - xxh64(input, seed?) => one-shot hash
+ * - xxh64(seed) => stateful hasher (constructor-like)
+ */
+uint64_t xxh64(std::span<const uint8_t> input, uint64_t seed = 0);
+uint64_t xxh64(std::string_view input, uint64_t seed = 0);
+XXH64 xxh64(uint64_t seed);
+
 } // namespace hashing

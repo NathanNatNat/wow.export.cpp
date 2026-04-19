@@ -1045,7 +1045,7 @@ const std::string filename = selected_map_dir + "_wmo_minimap.png";
 const std::string relative_path = (std::filesystem::path("maps") / selected_map_dir / filename).string();
 const std::string out_path = casc::ExportHelper::getExportPath(relative_path);
 
-writer.write(out_path);
+writer.write(out_path).get();
 
 auto export_paths = core::openLastExportStream();
 export_paths.writeLine("png:" + out_path);
@@ -1294,7 +1294,7 @@ const std::string filename = selected_map_dir + "_" + tile_hash + ".png";
 const std::string out_path = casc::ExportHelper::getExportPath(
 (std::filesystem::path("maps") / selected_map_dir / filename).string());
 
-writer.write(out_path);
+writer.write(out_path).get();
 
 auto stats = writer.getStats();
 logging::write(std::format("map export complete: {} ({} tiles)", out_path, stats.totalTiles));
@@ -1466,7 +1466,7 @@ pixel_data[j] = static_cast<uint8_t>(std::floor(normalized_height * 255));
 }
 }
 
-writer.write(out_path);
+writer.write(out_path).get();
 
 export_paths.writeLine("png:" + out_path);
 
