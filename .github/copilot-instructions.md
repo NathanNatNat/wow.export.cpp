@@ -3,7 +3,7 @@
 ## Project Overview
 - Project: **wow.export.cpp** - a C++ port of the original JavaScript/NW.js application **wow.export** (https://github.com/Kruithne/wow.export).
 - Convert the JavaScript code to C++ IN PLACE.
-- DO NOT create extra files except for .h header files that pair with an existing .cpp file.
+- Prefer keeping code in the corresponding `.cpp`/`.h` pair. New `.cpp` source files are allowed when a JS module cannot faithfully map to an existing file (e.g., a JS file that has no corresponding C++ file yet, or a helper module that is clearly separate). Do NOT create speculative or utility files that have no direct JS counterpart.
 - The C++ entry point is app.cpp.
 - The C++ Version should be 100% functionally identical to the original JavaScript code. The goal is a line-by-line port, with the same code structure and logic, but in C++.
 - The C++ Version should be 100% visually identical to the original JavaScript app. Use the same colors, fonts, layout, and styling as defined in app.css and the reference screenshots in UI_REFERENCE.md.
@@ -41,7 +41,7 @@ All dependencies should be git submodules integrated via CMake where possible.
 
 ## Reference Sources
 - The **original JavaScript/NW.js source code** (wow.export) is included **directly in this repository** under `src/js/` (and `src/installer/`). These are the authoritative JS source files — always refer to them locally when making changes or reviewing code to ensure fidelity with the original application. The upstream repo is at **https://github.com/Kruithne/wow.export** for historical reference.
-- When converting or verifying a C++ file, **open the corresponding JS file from `src/js/`** (e.g., for `src/casc/casc-source-remote.cpp`, refer to `src/js/casc/casc-source-remote.js`). Use `get_file` to read the local JS source — do not rely solely on external URLs.
+- When converting or verifying a C++ file, **open the corresponding JS file from `src/js/`** (e.g., for `src/casc/casc-source-remote.cpp`, refer to `src/js/casc/casc-source-remote.js`). Use the `view` tool to read the local JS source — do not rely solely on external URLs.
 - This C++ port (wow.export.cpp) is at **https://github.com/NathanNatNat/wow.export.cpp**.
 - **Reference screenshots** of the original app are in [`UI_REFERENCE.md`](../UI_REFERENCE.md) — always compare against these screenshots when making UI changes to ensure visual fidelity.
 
@@ -91,28 +91,28 @@ Map Node.js built-in modules to project dependencies as follows:
 ## Fidelity Rules
 
 ### General Conversion Fidelity
-- Conversions must be fully comprehensive — every line, every function, method, constant, code path, and UI element from the JS source must be ported.
-- The C++ conversion MUST be 100% identical in functionality and visual appearance to the original JavaScript code. Nothing may be left as a stub or omitted.
+- Conversions must be fully comprehensive — every function, method, constant, code path, and UI element from the JS source must be ported.
+- The C++ conversion must be functionally and visually identical to the original JavaScript code. Nothing may be left as a permanent stub or silently omitted.
 - Always do a thorough comparison against the original JS source when making changes or reviewing code.
 - **Existing C++ code is not assumed correct.** Much of the codebase has already been converted, but previous conversions may contain errors, omissions, or deviations from the original JS source. When working on any file, always verify the existing C++ code against the original JS and fix any issues found.
-- Deviations from the original JS Source are NOT ACCEPTABLE unless impossible to implement in C++. In such cases, the deviation must be documented with a comment in the code explaining why it was necessary and how it differs from the original JS behavior.
-- Things that need to be done should be documented in TODO_TRACKER.md with a reference to the original JS source line(s) that require attention.
+- Deviations from the original JS source are strongly discouraged. Only deviate when a direct port is genuinely impossible in C++ (e.g., a JS runtime feature with no C++ equivalent). In such cases, document the deviation with a comment in the code explaining why it was necessary and how it differs from the original JS behavior.
+- Things that cannot be completed immediately should be documented in TODO_TRACKER.md with a reference to the original JS source line(s) that require attention. Do not let documentation overhead block forward progress — implement what you can, then document what remains.
 
 ### Visual Fidelity
-- The C++ app must be **pixel-perfect** compared to the original JavaScript app. Every color, font size, spacing, alignment, icon, and animation must match.
+- The C++ app must closely match the original JavaScript app visually. Every color, font size, spacing, alignment, and icon should replicate the original as faithfully as Dear ImGui allows.
 - Always reference [`UI_REFERENCE.md`](../UI_REFERENCE.md) and `app.css` when implementing or modifying any UI element.
-- Dear ImGui styling must replicate the original HTML/CSS appearance — use custom styling, colors, and layout to match the original exactly.
+- Dear ImGui styling must replicate the original HTML/CSS appearance — use custom styling, colors, and layout to match the original as closely as possible.
 - If a visual element cannot be replicated exactly in Dear ImGui, document the limitation in a code comment and in `TODO_TRACKER.md`, and get as close as possible.
 
 ### TODO_TRACKER.md Format
-Entries in `TODO_TRACKER.md` must be **numbered sequentially** and **ordered by number** (no section headers or groupings). When adding a new entry, increment from the last existing number and append it at the end. The format is:
+Entries in `TODO_TRACKER.md` are **numbered sequentially** and **ordered by number** (no section headers or groupings). When adding a new entry, increment from the last existing number and append it at the end. The format is:
 ```
-### N. [filename.cpp] Brief description
-- **JS Source**: `src/js/original-file.js` lines XX–YY
-- **Status**: Pending | In Progress | Blocked
-- **Details**: What needs to be done and why it could not be completed inline.
+- [ ] N. [filename.cpp] Brief description
+  - **JS Source**: `src/js/original-file.js` lines XX–YY
+  - **Status**: Pending | In Progress | Blocked
+  - **Details**: What needs to be done and why it could not be completed inline.
 ```
-where `N` is the next sequential number after the last entry in the file.
+where `N` is the next sequential number after the last entry in the file. Use `- [x]` (checked) for completed/verified entries and `- [ ]` (unchecked) for pending ones.
 
 ### TODO_TRACKER.md Totals
 The progress summary line at the top of `TODO_TRACKER.md` must always be kept up to date:
