@@ -11,6 +11,7 @@
 #include <map>
 #include <variant>
 #include <filesystem>
+#include <optional>
 
 #include "../../db/FieldType.h"
 
@@ -20,6 +21,8 @@ namespace db {
 
 class SQLWriter {
 public:
+	using SQLValue = std::optional<std::string>;
+
 	/**
 	 * Construct a new SQLWriter instance.
 	 * @param out Output path to write to.
@@ -55,14 +58,14 @@ public:
 	 * Add a row to this SQL.
 	 * @param row Map of field name to value.
 	 */
-	void addRow(const std::unordered_map<std::string, std::string>& row);
+	void addRow(const std::unordered_map<std::string, SQLValue>& row);
 
 	/**
 	 * Escape a SQL value for safe insertion.
 	 * @param value The value to escape.
 	 * @returns The escaped value.
 	 */
-	std::string escapeSQLValue(const std::string& value) const;
+	std::string escapeSQLValue(const SQLValue& value) const;
 
 	/**
 	 * Escape a SQL identifier (table/column name).
@@ -103,7 +106,7 @@ private:
 	std::filesystem::path out;
 	std::string table_name;
 	std::vector<std::string> fields;
-	std::vector<std::unordered_map<std::string, std::string>> rows;
+	std::vector<std::unordered_map<std::string, SQLValue>> rows;
 	const std::map<std::string, db::SchemaField>* schema;
 	bool include_ddl;
 };

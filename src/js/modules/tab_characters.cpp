@@ -3053,14 +3053,19 @@ export_char_model();
 // Texture preview panel
 ImGui::Text("[Texture Preview]");
 
+const bool show_overlay_buttons = char_texture_overlay::areButtonsVisible();
+if (show_overlay_buttons) {
 if (ImGui::Button("<##chr_tex"))
-char_texture_overlay::prevOverlay();
+core::events.emit("click-chr-prev-overlay");
 ImGui::SameLine();
+}
 if (ImGui::Button("Export Texture##chr"))
 export_chr_texture();
+if (show_overlay_buttons) {
 ImGui::SameLine();
 if (ImGui::Button(">##chr_tex"))
-char_texture_overlay::nextOverlay();
+core::events.emit("click-chr-next-overlay");
+}
 
 } else if (export_tab == 2) {
 // Settings panel
@@ -3333,7 +3338,7 @@ update_chr_race_list();
 
 core::hideLoadingScreen();
 
-char_texture_overlay::ensureActiveLayerAttached();
+core::events.emit("screen-tab-characters");
 }
 
 //endregion
