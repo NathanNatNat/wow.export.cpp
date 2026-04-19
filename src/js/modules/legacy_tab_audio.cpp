@@ -99,7 +99,7 @@ static bool load_track() {
 		if (ext == ".wav_") {
 			core::view->soundPlayerTitle += " (WAV)";
 		} else {
-			const AudioType file_type = detectFileType(raw_data->data(), raw_data->size());
+			const AudioType file_type = detectFileType(data);
 			if (file_type == AudioType::OGG)
 				core::view->soundPlayerTitle += " (OGG)";
 			else if (file_type == AudioType::MP3)
@@ -212,7 +212,7 @@ static void export_sounds() {
 				std::optional<std::vector<uint8_t>> raw_data = mpq ? mpq->getFile(file_name) : std::nullopt;
 
 				if (raw_data) {
-					const AudioType file_type = detectFileType(raw_data->data(), raw_data->size());
+					const AudioType file_type = detectFileType(BufferWrapper(*raw_data));
 
 					if (file_type == AudioType::OGG)
 						export_file_name = casc::ExportHelper::replaceExtension(file_name, ".ogg");

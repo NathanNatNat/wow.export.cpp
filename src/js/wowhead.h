@@ -18,7 +18,7 @@ struct ParseResult {
 	int version = 0;
 	int race = 0;
 	int gender = 0;
-	int player_class = 0;
+	int class_ = 0;
 	int spec = 0;
 	int level = 0;
 	int npc_options = 0;

@@ -4,6 +4,7 @@
 	License: MIT
  */
 #include "file-writer.h"
+#include <stdexcept>
 
 /**
  * Construct a new FileWriter instance.
@@ -12,33 +13,53 @@
  */
 FileWriter::FileWriter(const std::filesystem::path& file, std::string_view /*encoding*/)
 	: stream(file, std::ios::out | std::ios::trunc),
-	  blocked(false) {}
+	  blocked(false) {
+	write_mutex = std::make_shared<std::mutex>();
+	auto ready = std::make_shared<std::promise<void>>();
+	ready->set_value();
+	resolver = ready->get_future().share();
+}
+
+FileWriter::~FileWriter() {
+	try {
+		close();
+	} catch (...) {
+		// no-op
+	}
+}
 
 /**
  * Write a line to the file.
  * @param line The line to write (newline appended automatically).
  *
- * JS uses Node.js stream backpressure: stream.write() returns false when
- * the internal buffer is full, and the 'drain' event fires when it can
- * accept more data. std::ofstream is synchronous and does not need
- * backpressure — writes block until the OS buffer accepts the data.
- * The blocked/_drain mechanism is preserved for structural fidelity but
- * is effectively a no-op in the C++ implementation.
+ * JS uses Node.js stream backpressure (write() + drain + await).
+ * C++ mirrors this contract with an async write future chain.
  */
-void FileWriter::writeLine(std::string_view line) {
-	// Guard: JS uses exportPaths?.writeLine(...) — silently ignore when stream isn't open.
-	if (!stream.is_open())
-		return;
+std::shared_future<void> FileWriter::writeLine(std::string_view line) {
+	if (blocked && resolver.valid())
+		resolver.wait();
 
-	// In JS: if (this.blocked) await new Promise(resolve => this.resolver = resolve);
-	// std::ofstream is synchronous, so no waiting is needed.
+	if (closed || !stream.is_open())
+		throw std::runtime_error("write after end");
 
-	stream << line << '\n';
+	blocked = true;
 
-	// In JS: if (!result) { this.blocked = true; stream.once('drain', () => this._drain()); }
-	// std::ofstream does not have backpressure. If stream.fail() is true, it indicates
-	// a real I/O error (disk full, permissions), not a recoverable backpressure condition.
-	// We do not set blocked on I/O error as clearing error flags would mask real problems.
+	std::string line_copy(line);
+	std::shared_ptr<std::mutex> mutex = write_mutex;
+	resolver = std::async(std::launch::async, [this, mutex, line_copy = std::move(line_copy)] {
+		std::lock_guard lock(*mutex);
+
+		if (closed || !stream.is_open())
+			throw std::runtime_error("write after end");
+
+		stream << line_copy << '\n';
+		if (!stream)
+			throw std::runtime_error("failed to write line");
+
+		_drain();
+	}).share();
+
+	return resolver;
 }
 
 void FileWriter::_drain() {
@@ -46,8 +67,11 @@ void FileWriter::_drain() {
 }
 
 void FileWriter::close() {
-	// Guard: JS uses exportPaths?.close() — silently ignore when stream isn't open.
-	if (!stream.is_open())
-		return;
-	stream.close();
+	if (blocked && resolver.valid())
+		resolver.wait();
+
+	closed = true;
+
+	if (stream.is_open())
+		stream.close();
 }

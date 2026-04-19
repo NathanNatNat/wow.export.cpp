@@ -242,4 +242,16 @@ uint64_t XXH64::hash(std::string_view input, uint64_t seed) {
 	return XXH64(seed).update(input).digest();
 }
 
+uint64_t xxh64(std::span<const uint8_t> input, uint64_t seed) {
+	return XXH64::hash(input, seed);
+}
+
+uint64_t xxh64(std::string_view input, uint64_t seed) {
+	return XXH64::hash(input, seed);
+}
+
+XXH64 xxh64(uint64_t seed) {
+	return XXH64(seed);
+}
+
 } // namespace hashing

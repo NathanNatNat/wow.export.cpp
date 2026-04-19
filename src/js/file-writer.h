@@ -9,9 +9,18 @@
 #include <string>
 #include <string_view>
 #include <filesystem>
+#include <future>
+#include <mutex>
+#include <memory>
 
 class FileWriter {
 public:
+	~FileWriter();
+	FileWriter(const FileWriter&) = delete;
+	FileWriter& operator=(const FileWriter&) = delete;
+	FileWriter(FileWriter&&) noexcept = default;
+	FileWriter& operator=(FileWriter&&) noexcept = default;
+
 	/**
 	 * Construct a new FileWriter instance.
 	 * @param file Path to the file to write.
@@ -28,9 +37,9 @@ public:
 	/**
 	 * Write a line to the file.
 	 * @param line The line to write (newline appended automatically).
-	 * Safe to call when !isOpen() — the call is silently ignored (matches JS ?. behavior).
+	 * @returns Shared future that resolves when the write operation completes.
 	 */
-	void writeLine(std::string_view line);
+	std::shared_future<void> writeLine(std::string_view line);
 
 	/**
 	 * Close the file stream.
@@ -43,4 +52,7 @@ private:
 
 	std::ofstream stream;
 	bool blocked;
+	bool closed = false;
+	std::shared_future<void> resolver;
+	std::shared_ptr<std::mutex> write_mutex;
 };

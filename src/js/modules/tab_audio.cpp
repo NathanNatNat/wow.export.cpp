@@ -95,7 +95,7 @@ static bool load_track() {
 		const auto& audio_data = file_data_buf.raw();
 
 		if (selected_file.ends_with(".unk_sound")) {
-			const AudioType file_type = detectFileType(audio_data.data(), audio_data.size());
+			const AudioType file_type = detectFileType(file_data_buf);
 			if (file_type == AudioType::OGG)
 				core::view->soundPlayerTitle += " (OGG Auto Detected)";
 			else if (file_type == AudioType::MP3)
@@ -178,7 +178,7 @@ static void export_sounds() {
 			export_data = std::move(export_buf.raw());
 			has_export_data = true;
 
-			const AudioType file_type = detectFileType(export_data.data(), export_data.size());
+			const AudioType file_type = detectFileType(BufferWrapper(export_data));
 
 			if (file_type == AudioType::OGG)
 				file_name = casc::ExportHelper::replaceExtension(file_name, ".ogg");

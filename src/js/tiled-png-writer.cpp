@@ -9,6 +9,8 @@
 #include <cmath>
 #include <cstddef>
 #include <format>
+#include <future>
+#include <thread>
 
 /**
  * Construct a new TiledPNGWriter instance.
@@ -105,13 +107,22 @@ void TiledPNGWriter::_writeTileToPixelData(const Tile& tile, std::vector<uint8_t
 
 /**
  * Write this PNG to a file.
- *
- * Deviation: JS version is async (returns a Promise). C++ version is synchronous
- * since file I/O in this codebase is handled synchronously. The caller should wrap
- * in std::async if non-blocking behavior is needed.
  */
-void TiledPNGWriter::write(const std::filesystem::path& file) {
-	getBuffer().writeToFile(file);
+std::shared_future<void> TiledPNGWriter::write(const std::filesystem::path& file) {
+	BufferWrapper buffer = getBuffer();
+	auto promise = std::make_shared<std::promise<void>>();
+	std::shared_future<void> result = promise->get_future().share();
+
+	std::thread([promise, file, buffer = std::move(buffer)]() mutable {
+		try {
+			buffer.writeToFile(file);
+			promise->set_value();
+		} catch (...) {
+			promise->set_exception(std::current_exception());
+		}
+	}).detach();
+
+	return result;
 }
 
 /**
