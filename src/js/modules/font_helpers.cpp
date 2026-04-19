@@ -31,13 +31,35 @@ const std::vector<GlyphRange> GLYPH_RANGES = {
 static GlyphDetectionState* active_detection = nullptr;
 static std::unordered_map<std::string, ImFont*> loaded_font_faces;
 
+std::string codepoint_to_utf8(uint32_t cp) {
+	std::string out;
+	if (cp <= 0x7F) {
+		out.push_back(static_cast<char>(cp));
+	} else if (cp <= 0x7FF) {
+		out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+		out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+	} else if (cp <= 0xFFFF) {
+		out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+		out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+		out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+	} else if (cp <= 0x10FFFF) {
+		out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+		out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+		out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+		out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+	}
+	return out;
+}
+
 bool check_glyph_support(void* font, uint32_t codepoint) {
 	auto* im_font = static_cast<ImFont*>(font);
 	if (!im_font)
 		im_font = ImGui::GetFont();
 
-	// Use non-fallback lookup so missing glyphs that map to fallback are rejected.
-	return im_font->FindGlyphNoFallback(static_cast<ImWchar>(codepoint)) != nullptr;
+	// Use non-fallback baked lookup so missing glyphs that map to fallback are rejected.
+	const float baked_size = (im_font == ImGui::GetFont()) ? ImGui::GetFontSize() : im_font->LegacySize;
+	ImFontBaked* baked = im_font->GetFontBaked(baked_size);
+	return baked && baked->FindGlyphNoFallback(static_cast<ImWchar>(codepoint)) != nullptr;
 }
 
 void detect_glyphs_async(void* /*font*/, GlyphDetectionState& state,
@@ -111,12 +133,11 @@ void trigger_glyph_click(GlyphDetectionState& state, uint32_t codepoint) {
 	if (!state.on_glyph_click)
 		return;
 
-	char utf8_buf[5] = {};
-	const int bytes = ImTextCharToUtf8(utf8_buf, static_cast<unsigned int>(codepoint));
-	if (bytes <= 0)
+	const std::string utf8 = codepoint_to_utf8(codepoint);
+	if (utf8.empty())
 		return;
 
-	state.on_glyph_click(std::string(utf8_buf, utf8_buf + bytes));
+	state.on_glyph_click(utf8);
 }
 
 std::string get_random_quote() {
@@ -149,12 +170,6 @@ std::string inject_font_face(const std::string& font_id, const uint8_t* data, si
 	ImFont* font = io.Fonts->AddFontFromMemoryTTF(font_data_copy, static_cast<int>(data_size), 16.0f, &config);
 	if (!font) {
 		ImGui::MemFree(font_data_copy);
-		URLPolyfill::revokeObjectURL(url);
-		throw std::runtime_error("font failed to decode");
-	}
-
-	if (font->FindGlyphNoFallback(static_cast<ImWchar>('A')) == nullptr &&
-		font->FindGlyphNoFallback(static_cast<ImWchar>('a')) == nullptr) {
 		URLPolyfill::revokeObjectURL(url);
 		throw std::runtime_error("font failed to decode");
 	}

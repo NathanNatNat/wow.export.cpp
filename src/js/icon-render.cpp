@@ -7,6 +7,7 @@
 #include "icon-render.h"
 #include "core.h"
 #include "casc/blp.h"
+#include "casc/casc-source.h"
 
 #include <cstdint>
 #include <vector>
