@@ -40,6 +40,9 @@ public:
 	void set_uniform_3f(const std::string& name, float x, float y, float z);
 	void set_uniform_4f(const std::string& name, float x, float y,
 	                    float z, float w);
+	// Adaptation: JS WebGL2 gl.uniform3fv/4fv/uniformMatrix4fv infer array
+	// length from the typed array automatically; OpenGL glUniform*fv requires
+	// an explicit element count. count defaults to 1 for the single-value case.
 	void set_uniform_3fv(const std::string& name, const float* value,
 	                     GLsizei count = 1);
 	void set_uniform_4fv(const std::string& name, const float* value,

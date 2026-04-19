@@ -3456,7 +3456,7 @@
 - [x] 698. [blp.cpp] `_getCompressed()` DXT color interpolation uses integer division in C++ which may produce different rounding vs JS floating-point division
 - **JS Source**: `src/js/casc/blp.js` lines 341–346
 - **Status**: Verified
-- **Details**: For non-negative integer operands (color components 0–255), C++ integer division `(c+d)/2` and `(2*c+d)/3` truncate toward zero, which is identical to JS float64 division followed by uint8 typed-array truncation. For `/2`: when `c+d` is odd, JS yields `x.5` → truncated to `x` on uint8 store; C++ yields `x` directly. For `/3`: both truncate toward zero for non-negative values. The results are bit-for-bit identical for all valid DXT color component values.
+- **Details**: JS stores float64 values in a plain Array then writes them to a Uint8ClampedArray (canvas ImageData), which uses ToUint8Clamp (round-half-to-even). C++ uses integer division which truncates toward zero. For odd sums: e.g. `(c+d)=123`, JS rounds `61.5→62` (round half to even: 62 is even), C++ gives `61`. For `/3`: e.g. `155/3=51.67`, JS rounds to `52`, C++ gives `51`. Difference is at most 1 LSB for some pixel values and is visually imperceptible. Documented with a "Deviation:" comment in blp.cpp lines 281–291.
 
 - [x] 699. [blp.cpp] DXT5 alpha interpolation uses `| 0` (bitwise OR zero) in JS to floor, C++ uses integer division which truncates toward zero
 - **JS Source**: `src/js/casc/blp.js` lines 389, 395
@@ -3501,12 +3501,12 @@
 - [x] 707. [ShaderProgram.cpp] `_compile` method handles partial shader failure differently from JS
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 29–36
 - **Status**: Verified
-- **Details**: JS `_compile` returns without deleting the successfully compiled shader on partial failure, leaking a WebGL resource. C++ `_compile` (lines 30–35) correctly deletes both shaders on partial failure. This is a deliberate improvement over the JS resource leak. JS `recompile()` does handle cleanup correctly — the bug only exists in JS `_compile`. This intentional improvement is documented in ShaderProgram.cpp.
+- **Details**: JS `_compile` (line 35) returns without deleting the successfully compiled shader on partial failure, leaking a WebGL resource until GC. C++ `_compile` explicitly deletes both shaders on partial failure. This is a deliberate improvement over the JS resource leak. JS `recompile()` does handle cleanup correctly — the bug only exists in JS `_compile`. Documented with a "Deviation:" comment in ShaderProgram.cpp lines 30–35.
 
 - [x] 708. [ShaderProgram.cpp] `set_uniform_3fv`/`set_uniform_4fv`/`set_uniform_mat4_array` have extra count parameter
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 187–234
 - **Status**: Verified
-- **Details**: WebGL2 `gl.uniform3fv(loc, value)` infers count from the typed array length. OpenGL's `glUniform3fv(loc, count, value)` requires an explicit count. C++ adds `count=1` default parameter. Single-value calls (the overwhelmingly common case) are bit-for-bit identical. Callers passing arrays of multiple vec3/vec4/mat4 values must pass the correct count; all current C++ callers do so correctly. This is a necessary, documented OpenGL API adaptation.
+- **Details**: WebGL2 `gl.uniform3fv(loc, value)` infers count from the typed array length. OpenGL's `glUniform3fv(loc, count, value)` requires an explicit count. C++ adds `count=1` default parameter. Single-value calls are bit-for-bit identical. Callers passing arrays of multiple vec3/vec4/mat4 values must pass the correct count; all current C++ callers do so. Documented with an "Adaptation:" comment in ShaderProgram.h lines 43–46.
 
 - [ ] 709. [Shaders.cpp] C++ adds automatic _unregister_fn callback on ShaderProgram not present in JS
 - **JS Source**: `src/js/3D/Shaders.js` lines 56–72
