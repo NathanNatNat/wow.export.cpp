@@ -186,19 +186,11 @@ void load() {
 	const std::string tact_url = core::view->config.value("tactKeysURL", "");
 	const std::string tact_url_fallback = core::view->config.value("tactKeysFallbackURL", "");
 
-	std::vector<uint8_t> resData;
-	try {
-		resData = generics::get({tact_url, tact_url_fallback});
-	} catch (const std::exception& e) {
-		// TODO 206: Preserve error details (including HTTP status if available)
-		// to match JS's `throw new Error('Unable to update tactKeys, HTTP ${res.status}')`.
-		throw std::runtime_error(std::format("Unable to update tactKeys: {}", e.what()));
-	}
+	auto res = generics::get({tact_url, tact_url_fallback});
+	if (!res.ok)
+		throw std::runtime_error(std::format("Unable to update tactKeys, HTTP {}", res.status));
 
-	// Note: JS does not have an explicit empty-response check; it would just
-	// parse 0 keys from an empty body. We match that behavior by proceeding
-	// with an empty data set rather than throwing.
-	std::string_view dataView(reinterpret_cast<const char*>(resData.data()), resData.size());
+	std::string_view dataView(reinterpret_cast<const char*>(res.body.data()), res.body.size());
 	auto lines = splitLines(dataView);
 	int remoteAdded = 0;
 

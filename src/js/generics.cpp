@@ -22,6 +22,7 @@
 #include <future>
 #include <functional>
 #include <array>
+#include <typeinfo>
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -84,29 +85,18 @@ ParsedURL parseURL(const std::string& url) {
 }
 
 /**
- * HTTP response structure — C++ equivalent of the JS fetch Response object.
- * JS get() returns a Response with .ok, .status, .statusText, .json(), etc.
- * This struct provides the same information for C++ callers.
- */
-struct HttpResponse {
-	int status = 0;
-	std::string statusText;
-	std::vector<uint8_t> body;
-	bool ok = false; // true if status is 200–299
-
-	/** Returns true if the response has a successful status code. */
-	explicit operator bool() const { return ok; }
-};
-
-/**
  * Perform a single HTTP GET request and return the full response.
  * Handles HTTPS vs HTTP via cpp-httplib.
  * Unlike the previous version, this does NOT throw on non-2xx status,
  * matching JS fetch() behavior where non-ok responses are returned.
  */
 HttpResponse doHttpGet(const std::string& url,
-                               int64_t partialOfs = -1,
-                               int64_t partialLen = -1) {
+                      int64_t partialOfs = -1,
+                      int64_t partialLen = -1,
+                      bool followLocation = true,
+                      int connectionTimeoutSeconds = 30,
+                      int readTimeoutSeconds = 30,
+                      int totalTimeoutSeconds = 30) {
 	auto parsed = parseURL(url);
 
 	httplib::Headers headers;
@@ -116,20 +106,43 @@ HttpResponse doHttpGet(const std::string& url,
 		headers.emplace("Range", std::format("bytes={}-{}", partialOfs, partialOfs + partialLen - 1));
 	}
 
-	httplib::Result res;
+	auto performGet = [parsed, headers, followLocation, connectionTimeoutSeconds, readTimeoutSeconds]() -> httplib::Result {
+		if (parsed.scheme == "https") {
+			httplib::SSLClient cli(parsed.host, parsed.port);
+			cli.set_connection_timeout(connectionTimeoutSeconds);
+			cli.set_read_timeout(readTimeoutSeconds);
+			cli.set_follow_location(followLocation);
+			return cli.Get(parsed.path, headers);
+		}
 
-	if (parsed.scheme == "https") {
-		httplib::SSLClient cli(parsed.host, parsed.port);
-		cli.set_connection_timeout(30);
-		cli.set_read_timeout(60);
-		cli.set_follow_location(true);
-		res = cli.Get(parsed.path, headers);
-	} else {
 		httplib::Client cli(parsed.host, parsed.port);
-		cli.set_connection_timeout(30);
-		cli.set_read_timeout(60);
-		cli.set_follow_location(true);
-		res = cli.Get(parsed.path, headers);
+		cli.set_connection_timeout(connectionTimeoutSeconds);
+		cli.set_read_timeout(readTimeoutSeconds);
+		cli.set_follow_location(followLocation);
+		return cli.Get(parsed.path, headers);
+	};
+
+	httplib::Result res;
+	if (totalTimeoutSeconds > 0) {
+		auto promise = std::make_shared<std::promise<httplib::Result>>();
+		auto future = promise->get_future();
+		std::thread worker([promise, performGet = std::move(performGet)]() mutable {
+			try {
+				promise->set_value(performGet());
+			} catch (...) {
+				promise->set_exception(std::current_exception());
+			}
+		});
+
+		if (future.wait_for(std::chrono::seconds(totalTimeoutSeconds)) == std::future_status::ready) {
+			worker.join();
+			res = future.get();
+		} else {
+			worker.detach();
+			throw std::runtime_error("The operation was aborted due to timeout");
+		}
+	} else {
+		res = performGet();
 	}
 
 	if (!res)
@@ -139,6 +152,8 @@ HttpResponse doHttpGet(const std::string& url,
 	response.status = res->status;
 	response.statusText = res->reason;
 	response.ok = (res->status >= 200 && res->status < 300);
+	for (const auto& [key, value] : res->headers)
+		response.headers[key] = value;
 	const auto& body = res->body;
 	response.body = std::vector<uint8_t>(body.begin(), body.end());
 	return response;
@@ -149,9 +164,9 @@ HttpResponse doHttpGet(const std::string& url,
  * This variant throws on non-2xx status and logs download progress,
  * matching the JS requestData() behavior.
  */
-std::vector<uint8_t> doHttpGetRaw(const std::string& url,
-                                  int64_t partialOfs = -1,
-                                  int64_t partialLen = -1) {
+HttpResponse doHttpGetRaw(const std::string& url,
+                          int64_t partialOfs = -1,
+                          int64_t partialLen = -1) {
 	auto parsed = parseURL(url);
 
 	httplib::Headers headers;
@@ -189,30 +204,30 @@ std::vector<uint8_t> doHttpGetRaw(const std::string& url,
 
 	if (parsed.scheme == "https") {
 		httplib::SSLClient cli(parsed.host, parsed.port);
-		cli.set_connection_timeout(30);
+		cli.set_connection_timeout(60);
 		cli.set_read_timeout(60);
-		cli.set_follow_location(true);
+		cli.set_follow_location(false);
 		res = cli.Get(parsed.path, headers, progressCallback);
 	} else {
 		httplib::Client cli(parsed.host, parsed.port);
-		cli.set_connection_timeout(30);
+		cli.set_connection_timeout(60);
 		cli.set_read_timeout(60);
-		cli.set_follow_location(true);
+		cli.set_follow_location(false);
 		res = cli.Get(parsed.path, headers, progressCallback);
 	}
 
 	if (!res)
 		throw std::runtime_error(std::format("HTTP request failed for {}: {}", url, httplib::to_string(res.error())));
 
-	// JS: if (res.statusCode < 200 || res.statusCode > 302) reject(...)
-	// Note: redirects are handled by set_follow_location(true), so we only
-	// check for non-success codes here. JS also logged "Got redirect to ..."
-	// but cpp-httplib handles redirects internally.
-	if (res->status < 200 || res->status >= 300)
-		throw std::runtime_error(std::format("Status Code: {}", res->status));
-
+	HttpResponse response;
+	response.status = res->status;
+	response.statusText = res->reason;
+	response.ok = (res->status >= 200 && res->status < 300);
+	for (const auto& [key, value] : res->headers)
+		response.headers[key] = value;
 	const auto& body = res->body;
-	return std::vector<uint8_t>(body.begin(), body.end());
+	response.body = std::vector<uint8_t>(body.begin(), body.end());
+	return response;
 }
 
 /**
@@ -248,9 +263,6 @@ std::vector<uint8_t> inflateData(const std::vector<uint8_t>& input) {
 	return output;
 }
 
-/**
- * Compute hash of a file using streaming I/O.
- * JS: fs.createReadStream(file) piped to crypto hash.
 /**
  * Compute hash of a file using streaming mbedTLS MD API.
  * JS: fs.createReadStream(file) piped to crypto.createHash().
@@ -324,59 +336,59 @@ std::string computeFileHash(const std::filesystem::path& file,
 
 } // anonymous namespace
 
+std::string HttpResponse::text() const {
+	return std::string(body.begin(), body.end());
+}
+
+nlohmann::json HttpResponse::json() const {
+	std::string_view sv(reinterpret_cast<const char*>(body.data()), body.size());
+	auto parsed = nlohmann::json::parse(sv, nullptr, false);
+	if (parsed.is_discarded())
+		throw std::runtime_error("Unable to parse response body as JSON");
+	return parsed;
+}
+
 /**
  * Async wrapper for HTTP GET.
  * Supports URL fallback chains (tries each URL in order).
  * @param url Single URL.
- * @returns Raw response body as a vector of bytes.
+ * @returns Fetch-style response object.
  */
-std::vector<uint8_t> get(const std::string& url) {
+HttpResponse get(const std::string& url) {
 	return get(std::vector<std::string>{url});
 }
 
 /**
  * Async wrapper for HTTP GET.
  * Supports URL fallback chains (tries each URL in order).
- * JS: returns a Response object; C++ returns raw bytes for compatibility
- * with existing callers. The response status is logged as in JS.
+ * JS: returns a Response object.
  * @param urls List of fallback URLs.
- * @returns Raw response body as a vector of bytes.
+ * @returns Fetch-style response object.
  */
-std::vector<uint8_t> get(const std::vector<std::string>& urls) {
+HttpResponse get(const std::vector<std::string>& urls) {
 	size_t index = 1;
-	HttpResponse lastResponse;
-	bool gotResponse = false;
+	HttpResponse res;
 
 	for (const auto& url : urls) {
 		logging::write(std::format("get -> [{}/{}]: {}", index, urls.size(), url));
 
 		try {
-			auto response = doHttpGet(url);
+			res = doHttpGet(url);
 			// Log with actual status code, matching JS: `get -> [${index++}][${res.status}] ${url}`
-			logging::write(std::format("get -> [{}][{}] {}", index, response.status, url));
+			logging::write(std::format("get -> [{}][{}] {}", index, res.status, url));
 			index++;
 
-			if (response.ok) {
-				return response.body;
-			}
-
-			// Non-ok response: continue to next URL (matches JS behavior
-			// where non-ok responses don't throw, they just try next URL)
-			lastResponse = std::move(response);
-			gotResponse = true;
+			if (res.ok)
+				break;
 		} catch (const std::exception& error) {
 			logging::write(std::format("fetch failed {}: {}", url, error.what()));
 			index++;
-			if (index > urls.size())
+			if (index > urls.size()) // last URL failed with network/timeout error
 				throw;
 		}
 	}
 
-	// If we had a non-ok response but no ok response, throw with status details
-	if (gotResponse)
-		throw std::runtime_error(std::format("HTTP {} {}", lastResponse.status, lastResponse.statusText));
-
-	throw std::runtime_error("All URLs failed");
+	return res;
 }
 
 /**
@@ -396,13 +408,13 @@ template <typename T>
 void queue(const std::vector<T>& items,
            const std::function<void(const T&)>& handler,
            size_t limit) {
+	size_t maxConcurrent = limit + 1; // JS check() pre-increment causes limit+1 concurrency.
 	size_t index = 0;
 	size_t complete = 0;
 	std::vector<std::future<void>> futures;
 
 	while (complete < items.size()) {
-		// Launch up to 'limit' concurrent tasks
-		while (futures.size() < limit && index < items.size()) {
+		while (futures.size() < maxConcurrent && index < items.size()) {
 			futures.push_back(std::async(std::launch::async, [&handler, item = items[index]]() {
 				handler(item);
 			}));
@@ -468,16 +480,11 @@ nlohmann::json getJSON(const std::string& url) {
 	// JS: const res = await get(url);
 	//     if (!res.ok) throw new Error(`Unable to request JSON from end-point. HTTP ${res.status} ${res.statusText}`);
 	//     return res.json();
-	auto response = doHttpGet(url);
+	auto response = get(url);
 	if (!response.ok)
 		throw std::runtime_error(std::format("Unable to request JSON from end-point. HTTP {} {}", response.status, response.statusText));
 
-	std::string_view sv(reinterpret_cast<const char*>(response.body.data()), response.body.size());
-	auto json = nlohmann::json::parse(sv, nullptr, false);
-	if (json.is_discarded())
-		throw std::runtime_error(std::format("Unable to request JSON from end-point. HTTP {} {}", response.status, response.statusText));
-
-	return json;
+	return response.json();
 }
 
 /**
@@ -538,14 +545,26 @@ std::optional<nlohmann::json> readJSON(const std::filesystem::path& file, bool i
  */
 std::vector<uint8_t> requestData(const std::string& url, int64_t partialOfs, int64_t partialLen) {
 	logging::write(std::format("Requesting data from {} (offset: {}, length: {})", url, partialOfs, partialLen));
-	// JS uses a manual redirect-following http.get() with progress logging.
-	// cpp-httplib handles redirects internally via set_follow_location(true).
-	// Note: JS logged "Got redirect to " + location for 301/302 redirects;
-	// cpp-httplib does not expose intermediate redirect URLs, so redirect
-	// logging is omitted. This is a necessary platform adaptation.
-	auto data = doHttpGetRaw(url, partialOfs, partialLen);
-	logging::write(std::format("Download complete: {} bytes received", data.size()));
-	return data;
+
+	auto response = doHttpGetRaw(url, partialOfs, partialLen);
+
+	// Manual 301/302 redirect handling to mirror JS requestData().
+	if (response.status == 301 || response.status == 302) {
+		auto locationIt = response.headers.find("Location");
+		if (locationIt == response.headers.end())
+			locationIt = response.headers.find("location");
+		if (locationIt == response.headers.end())
+			throw std::runtime_error(std::format("Status Code: {}", response.status));
+
+		logging::write("Got redirect to " + locationIt->second);
+		return requestData(locationIt->second, partialOfs, partialLen);
+	}
+
+	if (response.status < 200 || response.status > 302)
+		throw std::runtime_error(std::format("Status Code: {}", response.status));
+
+	logging::write(std::format("Download complete: {} bytes received", response.body.size()));
+	return std::move(response.body);
 }
 
 /**
@@ -593,6 +612,7 @@ BufferWrapper downloadFile(const std::vector<std::string>& urls, const std::stri
 			return wrapped;
 		} catch (const std::exception& error) {
 			logging::write(std::format("Failed to download from {}: {}", currentUrl, error.what()));
+			logging::write(std::format("Error details: type={} what={}", typeid(error).name(), error.what()));
 		}
 	}
 
@@ -615,8 +635,10 @@ void createDirectory(const std::filesystem::path& dir) {
  * core::drainMainThreadQueue().
  */
 void redraw() {
-	// No-op — the main ImGui loop redraws every frame while background
-	// threads handle heavy work (CASC loading, listfile scanning, etc.).
+	// JS schedules two requestAnimationFrame callbacks before resolving.
+	// C++ equivalent: wait across two scheduling slices.
+	std::this_thread::yield();
+	std::this_thread::yield();
 }
 
 /**
@@ -707,7 +729,12 @@ std::string getFileHash(const std::filesystem::path& file, std::string_view meth
  */
 bool fileExists(const std::filesystem::path& file) {
 	try {
-		return std::filesystem::exists(file);
+		// Match JS fsp.access(file): existence + accessibility.
+		if (!std::filesystem::exists(file))
+			return false;
+
+		std::ifstream ifs(file, std::ios::binary);
+		return ifs.is_open();
 	} catch (const std::exception&) {
 		return false;
 	}
@@ -830,10 +857,9 @@ void batchWork(std::string_view name,
 			lastProgressPercent = progressPercent;
 		}
 
-		// Yield between batches to allow UI thread to render, matching JS
-		// MessageChannel scheduling behavior.
+		// MessageChannel-like cooperative scheduling between batches.
 		if (index < total)
-			std::this_thread::yield();
+			std::this_thread::sleep_for(std::chrono::milliseconds(0));
 	}
 
 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
