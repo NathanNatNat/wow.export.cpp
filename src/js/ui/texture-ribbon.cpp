@@ -8,6 +8,7 @@
 #include "../core.h"
 #include "../casc/listfile.h"
 #include "../buffer.h"
+#include "../blob.h"
 
 #include <filesystem>
 #include <unordered_map>
@@ -169,19 +170,31 @@ GLuint getSlotTexture(int slotIndex) {
 	if (texIt != s_slotTextures.end() && texIt->second != 0)
 		glDeleteTextures(1, &texIt->second);
 
-	// Strip the data-URL header to get the base64 payload.
-	// Format: "data:<mime>;base64,<payload>"
-	std::string_view sv(src);
-	auto commaPos = sv.find(',');
-	if (commaPos == std::string_view::npos) {
-		s_slotTextures[slotIndex] = 0;
-		s_slotSrcCache[slotIndex] = src;
-		return 0;
-	}
-	std::string_view b64 = sv.substr(commaPos + 1);
+	BufferWrapper pngBuf;
+	if (src.starts_with("blob:")) {
+		auto blob = URLPolyfill::resolveObjectURL(src);
+		if (!blob.has_value()) {
+			s_slotTextures[slotIndex] = 0;
+			s_slotSrcCache[slotIndex] = src;
+			return 0;
+		}
+		pngBuf = BufferWrapper::from(blob->arrayBuffer());
+	} else {
+		// Strip the data-URL header to get the base64 payload.
+		// Format: "data:<mime>;base64,<payload>"
+		std::string_view sv(src);
+		auto commaPos = sv.find(',');
+		if (commaPos == std::string_view::npos) {
+			s_slotTextures[slotIndex] = 0;
+			s_slotSrcCache[slotIndex] = src;
+			return 0;
+		}
+		std::string_view b64 = sv.substr(commaPos + 1);
 
-	// Decode base64 → PNG bytes.
-	BufferWrapper pngBuf = BufferWrapper::fromBase64(b64);
+		// Decode base64 → PNG bytes.
+		pngBuf = BufferWrapper::fromBase64(b64);
+	}
+
 	if (pngBuf.byteLength() == 0) {
 		s_slotTextures[slotIndex] = 0;
 		s_slotSrcCache[slotIndex] = src;
