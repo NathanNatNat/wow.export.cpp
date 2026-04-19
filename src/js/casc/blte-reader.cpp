@@ -194,7 +194,6 @@ void BLTEReader::_handleBlock(BufferWrapper& block, size_t blockEnd, size_t inde
 					move(static_cast<int64_t>(blocks[index].DecompSize));
 				else
 					throw;
-			} catch (...) {
 			}
 
 			break;
@@ -217,7 +216,7 @@ void BLTEReader::_handleBlock(BufferWrapper& block, size_t blockEnd, size_t inde
 }
 
 void BLTEReader::_decompressBlock(BufferWrapper& data, size_t blockEnd, size_t index) {
-	BufferWrapper decomp = data.readBuffer(blockEnd - data.offset(), true);
+	BufferWrapper decomp = std::get<BufferWrapper>(data.readBuffer(blockEnd - data.offset(), true, true));
 	const size_t expectedSize = static_cast<size_t>(blocks[index].DecompSize);
 
 	// Reallocate buffer to compensate.
@@ -276,9 +275,11 @@ void BLTEReader::_writeBufferBLTE(BufferWrapper& buf, size_t blockEnd) {
 	move(static_cast<int64_t>(length));
 }
 
-// Deviation: JS decodeAudio(context) calls processAllBlocks() then
-// super.decodeAudio(context) using the Web Audio API. This is browser-specific
-// and cannot be directly ported. Audio decoding in C++ uses miniaudio instead.
+BufferWrapper::DecodedAudioData BLTEReader::decodeAudio(void* context) {
+	(void)context;
+	processAllBlocks();
+	return BufferWrapper::decodeAudio();
+}
 
 void BLTEReader::writeToFile(const std::filesystem::path& file) {
 	processAllBlocks();
@@ -286,10 +287,11 @@ void BLTEReader::writeToFile(const std::filesystem::path& file) {
 }
 
 const std::string& BLTEReader::getDataURL() {
-	// JS checks if this.dataURL is already set (could be assigned externally)
-	// and skips block processing in that case. Since C++ dataURL is private and
-	// handled by BufferWrapper::getDataURL() with internal caching, we always
-	// process blocks first — BufferWrapper::getDataURL() will cache the result.
+	// JS: if (!this.dataURL) { this.processAllBlocks(); return super.getDataURL(); }
+	// else return this.dataURL;
+	if (hasDataURL())
+		return BufferWrapper::getDataURL();
+
 	processAllBlocks();
 	return BufferWrapper::getDataURL();
 }

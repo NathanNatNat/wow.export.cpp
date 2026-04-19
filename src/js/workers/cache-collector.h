@@ -107,7 +107,7 @@ using LogCallback = std::function<void(const std::string&)>;
 HttpResponse https_request(const std::string& url,
                            const std::string& method,
                            const std::unordered_map<std::string, std::string>& headers,
-                           const std::string& body = "");
+                           const std::vector<uint8_t>& body = {});
 
 /**
  * POST JSON to a URL and parse the response.

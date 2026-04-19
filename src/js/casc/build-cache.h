@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <optional>
 #include <mutex>
+#include <future>
 
 #include <nlohmann/json.hpp>
 
@@ -34,6 +35,7 @@ public:
 	 * Creates the cache directory and loads the manifest.
 	 */
 	void init();
+	std::future<void> initAsync();
 
 	/**
 	 * Attempt to get a file from this build cache.
@@ -42,6 +44,7 @@ public:
 	 * @param dir  Optional override directory.
 	 */
 	std::optional<BufferWrapper> getFile(const std::string& file, const std::string& dir = "");
+	std::future<std::optional<BufferWrapper>> getFileAsync(const std::string& file, const std::string& dir = "");
 
 	/**
 	 * Get a direct path to a cached file.
@@ -57,16 +60,19 @@ public:
 	 * @param dir  Optional override directory.
 	 */
 	void storeFile(const std::string& file, BufferWrapper& data, const std::string& dir = "");
+	std::future<void> storeFileAsync(const std::string& file, BufferWrapper data, const std::string& dir = "");
 
 	/**
 	 * Save the cache integrity to disk.
 	 */
 	void saveCacheIntegrity();
+	std::future<void> saveCacheIntegrityAsync();
 
 	/**
 	 * Save the manifest for this build cache.
 	 */
 	void saveManifest();
+	std::future<void> saveManifestAsync();
 
 	/**
 	 * Get the build key.

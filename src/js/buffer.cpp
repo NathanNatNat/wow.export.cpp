@@ -1103,6 +1103,14 @@ dataURL = URLPolyfill::createObjectURL(_buf, "application/octet-stream");
 return *dataURL;
 }
 
+bool BufferWrapper::hasDataURL() const {
+	return dataURL.has_value();
+}
+
+void BufferWrapper::setDataURL(std::string url) {
+	dataURL = std::move(url);
+}
+
 void BufferWrapper::revokeDataURL() {
 	if (dataURL)
 		URLPolyfill::revokeObjectURL(*dataURL);

@@ -83,6 +83,12 @@ public:
 	void writeToFile(const std::filesystem::path& file);
 
 	/**
+	 * Decode this buffer using the given audio context.
+	 * Context parameter is preserved for JS API parity.
+	 */
+	BufferWrapper::DecodedAudioData decodeAudio(void* context = nullptr);
+
+	/**
 	 * Assign a data URL for this buffer.
 	 * @returns Data URL string.
 	 */

@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 193/906 verified (21%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 213/906 verified (24%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -703,104 +703,104 @@
 - **Status**: Verified
 - **Details**: Remote realm-list fetch follows JS response contract by branching on `res.ok` and logging explicit non-OK status (`Failed to retrieve realmlist from <url> (<status>)`) with exception logging reserved for thrown transport/parsing errors.
 
-- [ ] 148. [blte-reader.cpp] `decodeAudio(context)` API from JS is missing
+- [x] 148. [blte-reader.cpp] `decodeAudio(context)` API from JS is missing
 - **JS Source**: `src/js/casc/blte-reader.js` lines 337–340
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS exposes `async decodeAudio(context)` after block processing. C++ removes this method entirely, so the sibling port is missing a public API/code path present in the original module.
 
-- [ ] 149. [blte-reader.cpp] `getDataURL()` no longer honors pre-populated `dataURL` short-circuit
+- [x] 149. [blte-reader.cpp] `getDataURL()` no longer honors pre-populated `dataURL` short-circuit
 - **JS Source**: `src/js/casc/blte-reader.js` lines 346–353
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS returns existing `this.dataURL` without forcing `processAllBlocks()`. C++ always processes blocks before delegating to `BufferWrapper::getDataURL()`, changing caching/override behavior.
 
-- [ ] 150. [blte-reader.cpp] `_handleBlock` encrypted block catch-all swallows all non-EncryptionError exceptions silently
+- [x] 150. [blte-reader.cpp] `_handleBlock` encrypted block catch-all swallows all non-EncryptionError exceptions silently
 - **JS Source**: `src/js/casc/blte-reader.js` lines 203–216
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS encrypted block handler catches `EncryptionError` specifically and re-throws for other exceptions (the catch block only handles `e instanceof EncryptionError`). C++ has `catch (const EncryptionError&)` for encryption errors, but also has a bare `catch (...)` on line 197–198 that silently swallows all other exceptions. This means C++ silently ignores errors like decompression failures inside encrypted blocks, while JS would propagate them.
 
-- [ ] 151. [blte-reader.cpp] `decodeAudio()` not ported — browser-specific Web Audio API
+- [x] 151. [blte-reader.cpp] `decodeAudio()` not ported — browser-specific Web Audio API
 - **JS Source**: `src/js/casc/blte-reader.js` lines 337–340
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `decodeAudio(context)` calls `this.processAllBlocks()` then `super.decodeAudio(context)` using the Web Audio API's `AudioContext.decodeAudioData()`. C++ has a comment (lines 279–281) noting this is browser-specific and uses miniaudio instead. The method is not implemented in C++ BLTEReader.
 
-- [ ] 152. [blte-reader.cpp] `getDataURL()` caching differs — JS checks `this.dataURL` first, C++ always processes blocks
+- [x] 152. [blte-reader.cpp] `getDataURL()` caching differs — JS checks `this.dataURL` first, C++ always processes blocks
 - **JS Source**: `src/js/casc/blte-reader.js` lines 346–353
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `getDataURL()` checks `if (!this.dataURL)` first, and only processes blocks if no cached value exists. The `dataURL` property could be set externally. C++ always calls `processAllBlocks()` first, relying on `BufferWrapper::getDataURL()` for internal caching. If an external caller sets `dataURL` before calling `getDataURL()`, JS would return the externally-set value without processing blocks, while C++ always processes blocks first.
 
-- [ ] 153. [blte-reader.cpp] `_decompressBlock` passes two bools to `readBuffer()` in JS but only one in C++
+- [x] 153. [blte-reader.cpp] `_decompressBlock` passes two bools to `readBuffer()` in JS but only one in C++
 - **JS Source**: `src/js/casc/blte-reader.js` line 242
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS: `data.readBuffer(blockEnd - data.offset, true, true)` — passes two `true` flags (decompress=true, copy=true). C++ line 220: `data.readBuffer(blockEnd - data.offset(), true)` — passes only one `true` flag (decompress=true). The second flag in JS may control whether the data is copied. If C++'s `readBuffer` implementation doesn't need a copy flag (e.g., always copies), this is functionally equivalent. Otherwise, there could be a difference in memory ownership.
 
-- [ ] 154. [blte-stream-reader.cpp] Block retrieval/decode flow is synchronous instead of JS async
+- [x] 154. [blte-stream-reader.cpp] Block retrieval/decode flow is synchronous instead of JS async
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 54–118
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS defines `async getBlock` and `async _decodeBlock` and awaits async `blockFetcher`. C++ changes these paths to synchronous calls, altering control flow and error timing.
 
-- [ ] 155. [blte-stream-reader.cpp] `createReadableStream()` Web Streams API path is missing
+- [x] 155. [blte-stream-reader.cpp] `createReadableStream()` Web Streams API path is missing
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 168–193
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS provides `createReadableStream()` for progressive consumption and cancellation behavior. C++ has no equivalent method, leaving the stream-based event handler/code path unported.
 
-- [ ] 156. [blte-stream-reader.cpp] `streamBlocks` and `createBlobURL` behavior differs from JS
+- [x] 156. [blte-stream-reader.cpp] `streamBlocks` and `createBlobURL` behavior differs from JS
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 199–218
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses an async generator for `streamBlocks()` and returns an object URL from `createBlobURL()` via `BlobPolyfill/URLPolyfill`. C++ uses eager callback iteration and returns concatenated raw bytes (`BufferWrapper`) instead of a blob URL string.
 
-- [ ] 157. [blte-stream-reader.cpp] `createReadableStream()` not ported — Web Streams API specific
+- [x] 157. [blte-stream-reader.cpp] `createReadableStream()` not ported — Web Streams API specific
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 168–193
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `createReadableStream()` returns a `ReadableStream` (Web Streams API) that progressively pulls blocks on demand and supports cancellation. This is browser-specific and has no direct C++ equivalent. The C++ header documents this deviation. The `streamBlocks()` callback-based approach provides similar functionality.
 
-- [ ] 158. [blte-stream-reader.cpp] `streamBlocks()` changed from async generator to synchronous callback
+- [x] 158. [blte-stream-reader.cpp] `streamBlocks()` changed from async generator to synchronous callback
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 199–202
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `async *streamBlocks()` is an async generator that yields decoded blocks lazily. Consumers use `for await (const block of reader.streamBlocks())`. C++ `streamBlocks()` takes a callback `std::function<void(BufferWrapper&)>` and iterates eagerly through all blocks, invoking the callback for each. This changes the consumption pattern from lazy to eager.
 
-- [ ] 159. [blte-stream-reader.cpp] `createBlobURL()` returns BufferWrapper instead of string URL
+- [x] 159. [blte-stream-reader.cpp] `createBlobURL()` returns BufferWrapper instead of string URL
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 208–218
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `createBlobURL()` creates a `Blob` with MIME type `'video/x-msvideo'` from all decoded blocks, then returns a URL string via `URLPolyfill.createObjectURL(blob)`. C++ `createBlobURL()` concatenates all decoded blocks into a single `BufferWrapper` and returns it (raw data, no URL, no MIME type). This is a significant API difference — callers expecting a URL string will not work with the C++ version.
 
-- [ ] 160. [blte-stream-reader.cpp] Cache eviction uses `std::deque` for FIFO ordering vs JS `Map` insertion order
+- [x] 160. [blte-stream-reader.cpp] Cache eviction uses `std::deque` for FIFO ordering vs JS `Map` insertion order
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 71–77
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `Map.keys().next().value` to get the oldest entry (Maps maintain insertion order in JS). C++ uses a separate `std::deque<size_t> cacheOrder` alongside `std::unordered_map` because `std::unordered_map` doesn't maintain insertion order. Functionally equivalent LRU eviction.
 
-- [ ] 161. [blte-stream-reader.cpp] `_decodeBlock` for compressed blocks passes one bool in C++ vs two in JS
+- [x] 161. [blte-stream-reader.cpp] `_decodeBlock` for compressed blocks passes one bool in C++ vs two in JS
 - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 109–110
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS: `blockData.readBuffer(blockData.remainingBytes, true, true)` passes two `true` args to `readBuffer`. C++ line 75: `blockData.readBuffer(blockData.remainingBytes(), true)` passes only one. Same issue as entry 449 — the second bool flag for copy behavior may or may not be needed depending on BufferWrapper implementation.
 
-- [ ] 162. [build-cache.cpp] Build cache APIs are synchronous instead of JS Promise-based async methods
+- [x] 162. [build-cache.cpp] Build cache APIs are synchronous instead of JS Promise-based async methods
 - **JS Source**: `src/js/casc/build-cache.js` lines 49–152, 174–257
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses async methods (`init/getFile/storeFile/saveCacheIntegrity/saveManifest`) and async event handlers with awaited I/O; C++ runs equivalent flows synchronously, changing timing/error propagation behavior.
 
-- [ ] 163. [build-cache.cpp] Cache cleanup size subtraction behavior differs from JS
+- [x] 163. [build-cache.cpp] Cache cleanup size subtraction behavior differs from JS
 - **JS Source**: `src/js/casc/build-cache.js` lines 247–254
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS always performs `deleteSize -= manifestSize` (can go negative with Number); C++ adds an unsigned underflow guard before subtraction, changing edge-case cache-size accounting semantics.
 
-- [ ] 164. [build-cache.cpp] `saveCacheIntegrity()` silently ignores file write failures
+- [x] 164. [build-cache.cpp] `saveCacheIntegrity()` silently ignores file write failures
 - **JS Source**: `src/js/casc/build-cache.js` line 144
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `await fsp.writeFile(constants.CACHE.INTEGRITY_FILE, JSON.stringify(cacheIntegrity), 'utf8')` throws if the file cannot be written (e.g., disk full, permission denied). C++ `saveCacheIntegrity()` (line 149–153) checks `ofs.is_open()` and silently does nothing if the file cannot be opened. This means integrity data could be lost without any error or log message in C++, whereas JS would propagate the error to the caller.
 
-- [ ] 165. [cache-collector.cpp] Hand-rolled MD5 and SHA256 instead of using mbedTLS
+- [x] 165. [cache-collector.cpp] Hand-rolled MD5 and SHA256 instead of using mbedTLS
 - **JS Source**: `src/js/workers/cache-collector.js` lines 5–10
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses Node.js `crypto.createHash('md5')` and `crypto.createHash('sha256')`. C++ implements MD5 and SHA256 from scratch in `md5_impl` and `sha256_impl` namespaces (~200 lines each). Project convention specifies mbedTLS (`mbedtls/md.h`) for crypto hashing. Hand-rolled implementations increase maintenance burden and risk of subtle correctness bugs.
 
-- [ ] 166. [cache-collector.cpp] upload_chunks converts binary multipart body through std::string
+- [x] 166. [cache-collector.cpp] upload_chunks converts binary multipart body through std::string
 - **JS Source**: `src/js/workers/cache-collector.js` lines 95–115
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS handles multipart body as Buffer objects preserving binary integrity. C++ converts `std::vector<uint8_t>` to `std::string(body_bytes.begin(), body_bytes.end())` before passing to `https_request`. While `std::string` can hold embedded null bytes, this conversion path is fragile — httplib's content_type/body API must handle binary strings correctly or data may be corrupted.
 
-- [ ] 167. [cache-collector.cpp] random_hex uses std::mt19937 instead of cryptographically secure random
+- [x] 167. [cache-collector.cpp] random_hex uses std::mt19937 instead of cryptographically secure random
 - **JS Source**: `src/js/workers/cache-collector.js` lines 85–90
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `crypto.randomBytes(16).toString('hex')` which is cryptographically secure. C++ uses `std::random_device` + `std::mt19937` which is NOT guaranteed to be cryptographic on all platforms (MSVC's `std::random_device` uses CryptGenRandom but GCC/Linux may use `/dev/urandom` or a PRNG). Used only for multipart boundary generation so security impact is minimal, but it deviates from JS behavior.
 
 - [ ] 168. [listfile.cpp] Public listfile APIs are synchronous instead of JS Promise-based async methods
