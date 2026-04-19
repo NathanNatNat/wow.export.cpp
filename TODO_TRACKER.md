@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 247/906 verified (27%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 247/907 verified (27%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -4497,3 +4497,8 @@
 - **JS Source**: `src/js/modules/tab_models.js` line 354 (`class="upward"`)
 - **Status**: Verified
 - **Details**: The JS template specifies `class="upward"` on the MenuButton, which causes the dropdown to open upward (CSS `.ui-menu-button.upward .menu { bottom: 85% }`, app.css lines 987–994). The C++ `menu_button::render` call at line 1117 does not specify upward direction — verify the menu_button component honors this for proper visual parity.
+
+- [ ] 907. [app.cpp] Startup blocks on `casc::listfile::preload()` before source select, causing long delay
+  - **JS Source**: `src/app.js` lines 585–587, 718–719
+  - **Status**: Pending
+  - **Details**: In `app.cpp` (lines 2764–2765), `casc::listfile::preload()` and `casc::dbd_manifest::preload()` are called synchronously before `modules::setActive("source_select")`, blocking the render loop from starting until the listfile download/parse/filter completes (can take several seconds). In JS, `listfile.preload()` is called but **not awaited** — it fires in the background and source select appears immediately. Fix: call both preloads as fire-and-forget (they already internally use `std::async`); the results are awaited lazily at first-use via `prepareListfile()` / `prepareManifest()`.
