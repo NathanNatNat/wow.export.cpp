@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 /**
@@ -14,16 +15,24 @@
  * JS equivalent: module.exports = { generateUVLayerDataURL }
  *
  * In the JS version, this renders UV wireframe overlays to a <canvas> element
- * and returns a PNG data URL. In the C++ version, we render to an RGBA pixel
- * buffer instead, which can be uploaded as an OpenGL texture or encoded to PNG.
+ * and returns a PNG data URL.
  */
 namespace uv_drawer {
 
 /**
- * Generate an RGBA pixel buffer containing UV wireframe lines.
- * White lines on a transparent background, matching the JS behavior.
- *
+ * Generate a PNG data URL containing UV wireframe lines.
  * JS equivalent: generateUVLayerDataURL(uvCoords, textureWidth, textureHeight, indices)
+ */
+std::string generateUVLayerDataURL(
+	const std::vector<float>& uvCoords,
+	int textureWidth,
+	int textureHeight,
+	const std::vector<uint16_t>& indices
+);
+
+/**
+ * Generate an RGBA pixel buffer containing UV wireframe lines.
+ * This is the C++ helper used for GL texture upload.
  *
  * @param uvCoords       Flat array of UV coordinates (pairs of u,v values 0-1).
  * @param textureWidth   Width of the texture.

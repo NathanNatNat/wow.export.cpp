@@ -7,7 +7,6 @@
 
 #include <cstdint>
 #include <vector>
-#include <functional>
 
 /**
  * Character texture overlay layer management.
@@ -52,21 +51,9 @@ void ensureActiveLayerAttached();
 uint32_t getActiveLayer();
 
 /**
- * Switch to the next overlay layer (wraps around).
- * JS equivalent: core.events.on('click-chr-next-overlay', ...)
+ * Return whether the overlay next/prev button group should be visible.
+ * JS equivalent: update_button_visibility() toggling #chr-overlay-btn display.
  */
-void nextOverlay();
-
-/**
- * Switch to the previous overlay layer (wraps around).
- * JS equivalent: core.events.on('click-chr-prev-overlay', ...)
- */
-void prevOverlay();
-
-/**
- * Get the number of layers.
- * @returns Number of registered layers.
- */
-size_t getLayerCount();
+bool areButtonsVisible();
 
 } // namespace char_texture_overlay

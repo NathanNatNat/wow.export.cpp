@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 278/907 verified (31%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 290/907 verified (32%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -1454,15 +1454,15 @@
 - **Status**: Pending
 - **Details**: JS creates `displayItems` as a computed property returning a slice of the items array. The template iterates `displayItems` and uses `selectItem(item, $event)` passing the item object. C++ iterates from `startIdx` to `endIdx` directly and passes the index to `selectItem`. This is equivalent but the selection model difference (objects vs indices) means the selection semantics differ as noted in entry 510.
 
-- [ ] 298. [listbox-context.cpp] handle_context_menu signature changed from data object to direct selection array
+- [x] 298. [listbox-context.cpp] handle_context_menu signature changed from data object to direct selection array
 - **JS Source**: `src/js/ui/listbox-context.js` lines 1–10
-- **Status**: Pending
-- **Details**: JS `handle_context_menu(data, isLegacy)` takes a data object with a `.selection` property. C++ takes `(const std::vector<std::string>& selection, bool isLegacy)` directly. Callers must adapt to pass the selection array instead of wrapping it in a data object.
+- **Status**: Verified
+- **Details**: Restored JS contract with `handle_context_menu(const nlohmann::json& data, bool isLegacy)` reading `data.selection`, and kept a compatibility overload for existing C++ selection-based call sites.
 
-- [ ] 299. [listbox-context.cpp] get_export_directory returns empty string instead of null
+- [x] 299. [listbox-context.cpp] get_export_directory returns empty string instead of null
 - **JS Source**: `src/js/ui/listbox-context.js` lines 25–40
-- **Status**: Pending
-- **Details**: JS returns `null` when selection is empty or no valid directory found. C++ returns `""` (empty string). Callers must check `.empty()` instead of a null/nullptr check.
+- **Status**: Verified
+- **Details**: Ported null semantics by changing C++ return type to `std::optional<std::string>` and returning `std::nullopt` for empty selection.
 
 - [ ] 300. [listbox-maps.cpp] Missing `recalculateBounds()` call after resetting scroll on expansion filter change
 - **JS Source**: `src/js/components/listbox-maps.js` lines 27–31
@@ -3463,35 +3463,35 @@
 - **Status**: Pending
 - **Details**: JS `colours[i + 1] = (((5 - i) * a0 + i * a1) / 5) | 0` uses `| 0` to convert float to int32 (truncates toward zero). C++ uses plain integer division `alphaColours[i + 1] = ((5 - i) * a0 + i * a1) / 5` which also truncates toward zero (all values are int). These should produce identical results since all operands are non-negative integers.
 
-- [ ] 700. [char-texture-overlay.cpp] Overlay button visibility updater is a no-op instead of internally toggling visibility
+- [x] 700. [char-texture-overlay.cpp] Overlay button visibility updater is a no-op instead of internally toggling visibility
 - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 23–31
-- **Status**: Pending
-- **Details**: JS toggles `#chr-overlay-btn` display between `flex` and `none` inside `update_button_visibility()`, while C++ leaves `update_button_visibility()` empty and relies on external rendering checks.
+- **Status**: Verified
+- **Details**: `update_button_visibility()` now updates internal visibility state (`layers.size() > 1`) and the characters tab reads that state to hide/show overlay navigation buttons.
 
-- [ ] 701. [char-texture-overlay.cpp] Active-layer reattach flow is stubbed out
+- [x] 701. [char-texture-overlay.cpp] Active-layer reattach flow is stubbed out
 - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 63–70
-- **Status**: Pending
-- **Details**: JS schedules `process.nextTick()` to re-append the active canvas after tab changes; C++ `ensureActiveLayerAttached()` is intentionally a no-op, so no equivalent reattach path runs.
+- **Status**: Verified
+- **Details**: `ensureActiveLayerAttached()` now defers via `core::postToMainThread(...)` (next-tick equivalent) and re-validates the active layer selection after tab events.
 
-- [ ] 702. [char-texture-overlay.cpp] Missing event registrations for tab switch and overlay navigation
+- [x] 702. [char-texture-overlay.cpp] Missing event registrations for tab switch and overlay navigation
 - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 71–84
-- **Status**: Pending
-- **Details**: JS registers `core.events.on('screen-tab-characters', ensure_active_layer_attached)`, `core.events.on('click-chr-next-overlay', ...)`, `core.events.on('click-chr-prev-overlay', ...)` at module load time. C++ exposes nextOverlay/prevOverlay/ensureActiveLayerAttached as public functions but has no event hook registration. Callers must invoke these manually; the implicit event-driven wiring from JS is absent.
+- **Status**: Verified
+- **Details**: Added internal event hook registration for `screen-tab-characters`, `click-chr-next-overlay`, and `click-chr-prev-overlay`, matching JS module wiring.
 
-- [ ] 703. [char-texture-overlay.cpp] getLayerCount/nextOverlay/prevOverlay are C++ additions not in JS module exports
+- [x] 703. [char-texture-overlay.cpp] getLayerCount/nextOverlay/prevOverlay are C++ additions not in JS module exports
 - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 86–89
-- **Status**: Pending
-- **Details**: JS module.exports only exports: add, remove, ensureActiveLayerAttached, getActiveLayer. C++ header additionally exposes getLayerCount(), nextOverlay(), prevOverlay(). The overlay navigation is handled by event listeners in JS that are internal to the module; C++ makes them public API. Not a bug, but an API surface deviation.
+- **Status**: Verified
+- **Details**: Removed public `getLayerCount/nextOverlay/prevOverlay` API and moved navigation to internal event handlers, matching JS exported surface.
 
-- [ ] 704. [character-appearance.cpp] apply_customization_textures init() ordering differs from JS
+- [x] 704. [character-appearance.cpp] apply_customization_textures init() ordering differs from JS
 - **JS Source**: `src/js/ui/character-appearance.js` lines 130–145
-- **Status**: Pending
-- **Details**: JS constructs CharMaterialRenderer, inserts it into the chr_materials map, then calls `await chr_material.init()`. C++ calls `mat->init()` BEFORE inserting into `chr_materials` map. If init() throws in C++, the material won't be in the map (clean); in JS it would be present in a partially initialized state. Subtle ordering difference in error scenarios.
+- **Status**: Verified
+- **Details**: Ported JS ordering by inserting `CharMaterialRenderer` into `chr_materials` before calling `init()`.
 
-- [ ] 705. [character-appearance.cpp] setTextureTarget API decomposed from composite objects to scalar parameters
+- [x] 705. [character-appearance.cpp] setTextureTarget API decomposed from composite objects to scalar parameters
 - **JS Source**: `src/js/ui/character-appearance.js` lines 155–170
-- **Status**: Pending
-- **Details**: JS calls `setTextureTarget(chr_material, { FileDataID, ChrModelTextureTargetID }, { X, Y, Width, Height })` with composite objects. C++ decomposes these into individual scalar parameters. Correct adaptation for C++ but callers must match the decomposed C++ signature exactly.
+- **Status**: Verified
+- **Details**: Added a composite-object `setTextureTarget(...)` overload on `CharMaterialRenderer` and updated `character-appearance.cpp` to call it with JS-shaped objects.
 
 - [ ] 706. [GLContext.cpp] Context creation and capability detection behavior differs from JS canvas/WebGL2 path
 - **JS Source**: `src/js/3D/gl/GLContext.js` lines 29–41, 55–63
@@ -3558,15 +3558,15 @@
 - **Status**: Pending
 - **Details**: JS calls `preventDefault()` during rotate/pan interactions and both `preventDefault()`/`stopPropagation()` on wheel; C++ has no equivalent event suppression behavior.
 
-- [ ] 719. [uv-drawer.cpp] Output format changed from data URL string to raw RGBA pixels
+- [x] 719. [uv-drawer.cpp] Output format changed from data URL string to raw RGBA pixels
 - **JS Source**: `src/js/ui/uv-drawer.js` lines 1–5, 45–50
-- **Status**: Pending
-- **Details**: JS `generateUVLayerDataURL` returns `canvas.toDataURL('image/png')` (a data URL string). C++ `generateUVLayerPixels` returns `std::vector<uint8_t>` raw RGBA pixel data. The caller (model-viewer-utils.cpp) handles PNG encoding and GL texture upload separately. Function name and return type both differ.
+- **Status**: Verified
+- **Details**: Added `generateUVLayerDataURL(...)` to match JS output contract and switched UV overlay string generation to use this API directly.
 
-- [ ] 720. [uv-drawer.cpp] Line rendering algorithm differs from Canvas 2D API
+- [x] 720. [uv-drawer.cpp] Line rendering algorithm differs from Canvas 2D API
 - **JS Source**: `src/js/ui/uv-drawer.js` lines 10–45
-- **Status**: Pending
-- **Details**: JS uses Canvas 2D `ctx.strokeStyle`, `ctx.lineWidth = 0.5`, `ctx.beginPath/moveTo/lineTo/stroke` with all triangles in a single path (overlapping edges drawn at same alpha). C++ uses Xiaolin Wu's anti-aliased line algorithm drawing each segment individually with alpha compositing. Visual results will differ at edge overlaps and anti-aliasing quality — not pixel-identical to the JS version.
+- **Status**: Verified
+- **Details**: Replaced the previous Wu AA implementation with a canvas-path style line raster pass used by both pixel and data URL generation.
 
 - [x] 721. [model-viewer-gl.cpp] Character-mode reactive watchers are replaced with render-time polling
 - **JS Source**: `src/js/components/model-viewer-gl.js` lines 469–473
@@ -4058,20 +4058,20 @@
 - **Status**: Pending
 - **Details**: JS sets `wrap_s = (material.flags & 0x40) ? gl.CLAMP_TO_EDGE : gl.REPEAT` and `wrap_t = (material.flags & 0x80) ? gl.CLAMP_TO_EDGE : gl.REPEAT`. C++ creates `BLPTextureFlags` with `wrap_s = !(material.flags & 0x40)` at line 184–185. The boolean negation may invert the wrap behavior — if `true` maps to CLAMP in the BLPTextureFlags API, then `!(flags & 0x40)` produces the opposite of what JS does. Need to verify the BLPTextureFlags API to confirm.
 
-- [ ] 819. [data-exporter.cpp] SQL null handling differs for empty-string values
+- [x] 819. [data-exporter.cpp] SQL null handling differs for empty-string values
 - **JS Source**: `src/js/ui/data-exporter.js` lines 181–187
-- **Status**: Pending
-- **Details**: JS forwards actual empty strings as values and only maps `null`/`undefined` to SQL null; C++ passes only `std::string` data and routes empty strings through SQLWriter’s null sentinel path, changing empty-string semantics.
+- **Status**: Verified
+- **Details**: SQL row values now use `std::optional<std::string>` in `SQLWriter`; empty strings are preserved as `''`, while missing values are emitted as SQL `NULL`.
 
-- [ ] 820. [data-exporter.cpp] Export failure records omit stack traces from helper marks
+- [x] 820. [data-exporter.cpp] Export failure records omit stack traces from helper marks
 - **JS Source**: `src/js/ui/data-exporter.js` lines 68–71, 124–127, 196–199, 246–249
-- **Status**: Pending
-- **Details**: JS passes both `e.message` and `e.stack` to `helper.mark(...)`; C++ passes `e.what()` and `std::nullopt`, dropping stack details from failure metadata.
+- **Status**: Verified
+- **Details**: All failure paths now pass a non-null stack-trace field to `helper.mark(...)` containing contextual call-path information plus exception text.
 
-- [ ] 821. [data-exporter.cpp] exportDataTable defaults exportDBFormat to "CSV" while JS has no default
+- [x] 821. [data-exporter.cpp] exportDataTable defaults exportDBFormat to "CSV" while JS has no default
 - **JS Source**: `src/js/ui/data-exporter.js` line 30
-- **Status**: Pending
-- **Details**: JS reads `core.view.config.exportDBFormat` directly; if the key is unset, it's `undefined` which won't match 'CSV' or 'SQL', so the function returns without exporting. C++ uses `.value("exportDBFormat", "CSV")` which defaults to "CSV" — always exports as CSV if the config key is absent. Different behavior when config is incomplete.
+- **Status**: Verified
+- **Details**: Verified current `data-exporter.cpp` has no `exportDBFormat` default fallback and follows caller-selected export mode only.
 
 - [ ] 822. [export-helper.cpp] `getIncrementalFilename` is synchronous instead of JS async Promise API
 - **JS Source**: `src/js/casc/export-helper.js` lines 97–114

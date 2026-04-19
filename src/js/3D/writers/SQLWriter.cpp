@@ -29,26 +29,24 @@ void SQLWriter::addField(const std::vector<std::string>& fields) {
 	this->fields.insert(this->fields.end(), fields.begin(), fields.end());
 }
 
-void SQLWriter::addRow(const std::unordered_map<std::string, std::string>& row) {
+void SQLWriter::addRow(const std::unordered_map<std::string, SQLValue>& row) {
 	rows.push_back(row);
 }
 
-std::string SQLWriter::escapeSQLValue(const std::string& value) const {
-	// In C++, empty string is used as the sentinel for null/undefined values,
-	// since the API uses std::string (not std::optional). Callers (e.g. data-exporter)
-	// map null/undefined JS values to empty strings. This matches the JS behavior
-	// where `value === null || value === undefined` returns 'NULL'.
-	if (value.empty())
+std::string SQLWriter::escapeSQLValue(const SQLValue& value) const {
+	if (!value.has_value())
 		return "NULL";
+
+	const std::string& str_value = *value;
 
 	// numeric values don't need quotes
 	// Match JS isNaN() behavior: supports integers, decimals, scientific notation (1e5),
 	// and hexadecimal (0xFF). JS isNaN() coerces the value and returns false if numeric.
 	const std::string trimmed = [&]() {
-		size_t start = value.find_first_not_of(" \t");
+		size_t start = str_value.find_first_not_of(" \t");
 		if (start == std::string::npos) return std::string();
-		size_t end = value.find_last_not_of(" \t");
-		return value.substr(start, end - start + 1);
+		size_t end = str_value.find_last_not_of(" \t");
+		return str_value.substr(start, end - start + 1);
 	}();
 
 	if (!trimmed.empty()) {
@@ -57,14 +55,14 @@ std::string SQLWriter::escapeSQLValue(const std::string& value) const {
 		char* endptr = nullptr;
 		std::strtod(trimmed.c_str(), &endptr);
 		if (endptr == trimmed.c_str() + trimmed.size())
-			return value;
+			return str_value;
 	}
 
 	// escape single quotes and wrap in quotes
 	std::string escaped;
-	escaped.reserve(value.size() + 2);
+	escaped.reserve(str_value.size() + 2);
 	escaped += '\'';
-	for (char c : value) {
+	for (char c : str_value) {
 		if (c == '\'')
 			escaped += "''";
 		else
@@ -201,7 +199,7 @@ std::string SQLWriter::toSQL() const {
 				if (k > 0)
 					values += ", ";
 				auto it = row.find(fields[k]);
-				values += escapeSQLValue(it != row.end() ? it->second : "");
+				values += escapeSQLValue(it != row.end() ? it->second : SQLValue(std::nullopt));
 			}
 
 			result += "(" + values + ")";

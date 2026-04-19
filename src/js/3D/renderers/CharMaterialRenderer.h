@@ -71,6 +71,28 @@ struct CharTextureTarget {
  */
 class CharMaterialRenderer {
 public:
+	struct TextureTargetInput {
+		uint32_t FileDataID = 0;
+		int ChrModelTextureTargetID = 0;
+	};
+
+	struct TextureSectionInput {
+		int X = 0;
+		int Y = 0;
+		int Width = 0;
+		int Height = 0;
+	};
+
+	struct ModelMaterialInput {
+		int TextureType = 0;
+		int Width = 0;
+		int Height = 0;
+	};
+
+	struct TextureLayerInput {
+		int BlendMode = 0;
+	};
+
 	/**
 	 * Construct a new CharMaterialRenderer instance.
 	 */
@@ -114,6 +136,15 @@ public:
 		int sectionX, int sectionY, int sectionWidth, int sectionHeight,
 		int materialTextureType, int materialWidth, int materialHeight,
 		int textureLayerBlendMode,
+		bool useAlpha = true,
+		casc::BLPImage* blpOverride = nullptr
+	);
+
+	void setTextureTarget(
+		const TextureTargetInput& chr_cust_mat,
+		const TextureSectionInput& char_component_texture_section,
+		const ModelMaterialInput& chr_model_material,
+		const TextureLayerInput& chr_model_texture_layer,
 		bool useAlpha = true,
 		casc::BLPImage* blpOverride = nullptr
 	);

@@ -116,11 +116,11 @@ std::vector<std::string> get_export_paths(const std::vector<std::string>& select
 /**
  * Get export directory for the first selected entry.
  * @param selection
- * @returns Export directory path, or empty string if no selection.
+ * @returns Export directory path, or nullopt if no selection.
  */
-std::string get_export_directory(const std::vector<std::string>& selection) {
+std::optional<std::string> get_export_directory(const std::vector<std::string>& selection) {
 	if (selection.empty())
-		return "";
+		return std::nullopt;
 
 	const std::string file_path = casc::listfile::stripFileEntry(selection[0]);
 	const std::string export_path = casc::ExportHelper::getExportPath(file_path);
@@ -188,22 +188,22 @@ void copy_export_paths(const std::vector<std::string>& selection) {
  * @param selection
  */
 void open_export_directory(const std::vector<std::string>& selection) {
-	const std::string dir = get_export_directory(selection);
-	if (dir.empty())
+	const auto dir = get_export_directory(selection);
+	if (!dir.has_value())
 		return;
 
 #ifdef _WIN32
 	// Use MultiByteToWideChar for correct UTF-8 to UTF-16 conversion (not naive byte copy).
-	int wlen = MultiByteToWideChar(CP_UTF8, 0, dir.c_str(), -1, nullptr, 0);
+	int wlen = MultiByteToWideChar(CP_UTF8, 0, dir->c_str(), -1, nullptr, 0);
 	std::wstring wpath(wlen, L'\0');
-	MultiByteToWideChar(CP_UTF8, 0, dir.c_str(), -1, wpath.data(), wlen);
+	MultiByteToWideChar(CP_UTF8, 0, dir->c_str(), -1, wpath.data(), wlen);
 	ShellExecuteW(nullptr, L"open", wpath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #else
 	// Use fork/execvp to avoid command injection from shell metacharacters in dir.
 	pid_t pid = fork();
 	if (pid == 0) {
 		// Child process
-		execlp("xdg-open", "xdg-open", dir.c_str(), nullptr);
+		execlp("xdg-open", "xdg-open", dir->c_str(), nullptr);
 		_exit(127); // exec failed
 	}
 	// Parent: no need to waitpid — child runs independently
@@ -225,16 +225,26 @@ bool has_file_data_ids(const std::vector<std::string>& selection) {
 
 /**
  * Handle context menu event from listbox.
- * @param selection - List of selected entry strings.
+ * @param data - Context menu event data { item, selection, event }.
  * @param isLegacy - If true, this is a legacy (MPQ) tab without file data IDs.
  */
-void handle_context_menu(const std::vector<std::string>& selection, bool isLegacy) {
+void handle_context_menu(const nlohmann::json& data, bool isLegacy) {
+	std::vector<std::string> selection;
+	if (data.contains("selection") && data["selection"].is_array())
+		selection = data["selection"].get<std::vector<std::string>>();
+
 	nlohmann::json node;
 	node["selection"] = selection;
 	node["count"] = selection.size();
 	node["hasFileDataIDs"] = !isLegacy && has_file_data_ids(selection);
 
 	core::view->contextMenus.nodeListbox = std::move(node);
+}
+
+void handle_context_menu(const std::vector<std::string>& selection, bool isLegacy) {
+	nlohmann::json data;
+	data["selection"] = selection;
+	handle_context_menu(data, isLegacy);
 }
 
 /**

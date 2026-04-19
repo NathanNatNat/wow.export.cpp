@@ -79,9 +79,9 @@ std::vector<std::string> get_export_paths(const std::vector<std::string>& select
  * Get export directory for the first selected entry.
  * JS equivalent: get_export_directory(selection)
  * @param selection List of entry strings.
- * @returns Export directory path, or empty string if no selection.
+ * @returns Export directory path, or nullopt if no selection.
  */
-std::string get_export_directory(const std::vector<std::string>& selection);
+std::optional<std::string> get_export_directory(const std::vector<std::string>& selection);
 
 /**
  * Check if selection has file data IDs.
@@ -129,8 +129,14 @@ void open_export_directory(const std::vector<std::string>& selection);
 /**
  * Handle context menu event from listbox.
  * JS equivalent: handle_context_menu(data, isLegacy)
- * @param selection List of selected entry strings.
+ * @param data Context menu event data { item, selection, event }.
  * @param isLegacy If true, this is a legacy (MPQ) tab without file data IDs.
+ */
+void handle_context_menu(const nlohmann::json& data, bool isLegacy = false);
+
+/**
+ * Compatibility overload for existing C++ call-sites that pass a selection list.
+ * Internally adapts to the JS-style data object contract.
  */
 void handle_context_menu(const std::vector<std::string>& selection, bool isLegacy = false);
 

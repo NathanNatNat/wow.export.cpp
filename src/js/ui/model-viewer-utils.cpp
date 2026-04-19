@@ -353,11 +353,8 @@ void toggle_uv_layer(ViewStateProxy& state, M2RendererGL* renderer, const std::s
 				pixels.data(), tw, th, *state.texturePreviewUVTexID);
 		}
 
-		// Encode as PNG data URL for UI display
-		PNGWriter png_writer(static_cast<uint32_t>(tw), static_cast<uint32_t>(th));
-		png_writer.getPixelData() = pixels;
-		BufferWrapper buf = png_writer.getBuffer();
-		*state.texturePreviewUVOverlay = "data:image/png;base64," + buf.toBase64();
+		*state.texturePreviewUVOverlay = uv_drawer::generateUVLayerDataURL(
+			layer_data, tw, th, *uv_layer_data.indices);
 	}
 }
 

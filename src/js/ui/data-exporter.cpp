@@ -25,6 +25,10 @@ namespace data_exporter {
 
 namespace fs = std::filesystem;
 
+static std::optional<std::string> build_stack_trace(const char* function_name, const std::exception& e) {
+	return std::format("{}: {}", function_name, e.what());
+}
+
 /**
  * Export data table to CSV format.
  * @param headers Column header names.
@@ -92,8 +96,7 @@ void exportDataTable(
 			logging::write(std::format("Successfully exported data table to {}", exportPath));
 		}
 	} catch (const std::exception& e) {
-		// C++ exceptions do not carry stack traces like JS e.stack; pass std::nullopt.
-		h->mark(fileName, false, e.what(), std::nullopt);
+		h->mark(fileName, false, e.what(), build_stack_trace("exportDataTable", e));
 		logging::write(std::format("Failed to export data table: {}", e.what()));
 	}
 
@@ -162,8 +165,7 @@ void exportRawDB2(
 			logging::write(std::format("Successfully exported raw DB2 file to {}", exportPath));
 		}
 	} catch (const std::exception& e) {
-		// C++ exceptions do not carry stack traces like JS e.stack; pass std::nullopt.
-		h->mark(fileName, false, e.what(), std::nullopt);
+		h->mark(fileName, false, e.what(), build_stack_trace("exportRawDB2", e));
 		logging::write(std::format("Failed to export raw DB2 file: {}", e.what()));
 	}
 
@@ -234,14 +236,12 @@ void exportDataTableSQL(
 			sqlWriter.addField(headers);
 
 			for (const auto& row : rows) {
-				std::unordered_map<std::string, std::string> rowObject;
+				std::unordered_map<std::string, SQLWriter::SQLValue> rowObject;
 				for (size_t i = 0; i < headers.size(); i++) {
-					// JS: value !== null && value !== undefined ? value : null
-					// In C++, rows are pre-converted to strings. Empty string maps to
-					// NULL in SQLWriter, preserving the JS behavior where null/undefined
-					// values become SQL NULL. Numeric vs string quoting is handled by
-					// SQLWriter's numeric detection logic.
-					rowObject[headers[i]] = (i < row.size()) ? row[i] : "";
+					if (i < row.size())
+						rowObject[headers[i]] = row[i];
+					else
+						rowObject[headers[i]] = std::nullopt;
 				}
 				sqlWriter.addRow(rowObject);
 			}
@@ -253,8 +253,7 @@ void exportDataTableSQL(
 			logging::write(std::format("Successfully exported data table to {}", exportPath));
 		}
 	} catch (const std::exception& e) {
-		// C++ exceptions do not carry stack traces like JS e.stack; pass std::nullopt.
-		h->mark(fileName, false, e.what(), std::nullopt);
+		h->mark(fileName, false, e.what(), build_stack_trace("exportDataTableSQL", e));
 		logging::write(std::format("Failed to export data table: {}", e.what()));
 	}
 
@@ -319,8 +318,7 @@ void exportRawDBC(
 			logging::write(std::format("Successfully exported raw DBC file to {}", exportPath));
 		}
 	} catch (const std::exception& e) {
-		// C++ exceptions do not carry stack traces like JS e.stack; pass std::nullopt.
-		helper.mark(fileName, false, e.what(), std::nullopt);
+		helper.mark(fileName, false, e.what(), build_stack_trace("exportRawDBC", e));
 		logging::write(std::format("Failed to export raw DBC file: {}", e.what()));
 	}
 

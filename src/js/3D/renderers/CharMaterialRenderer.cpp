@@ -172,6 +172,30 @@ void CharMaterialRenderer::setTextureTarget(
 	update();
 }
 
+void CharMaterialRenderer::setTextureTarget(
+	const TextureTargetInput& chr_cust_mat,
+	const TextureSectionInput& char_component_texture_section,
+	const ModelMaterialInput& chr_model_material,
+	const TextureLayerInput& chr_model_texture_layer,
+	bool useAlpha,
+	casc::BLPImage* blpOverride)
+{
+	setTextureTarget(
+		chr_cust_mat.ChrModelTextureTargetID,
+		chr_cust_mat.FileDataID,
+		char_component_texture_section.X,
+		char_component_texture_section.Y,
+		char_component_texture_section.Width,
+		char_component_texture_section.Height,
+		chr_model_material.TextureType,
+		chr_model_material.Width,
+		chr_model_material.Height,
+		chr_model_texture_layer.BlendMode,
+		useAlpha,
+		blpOverride
+	);
+}
+
 /**
  * Disposes of all the things
  */
