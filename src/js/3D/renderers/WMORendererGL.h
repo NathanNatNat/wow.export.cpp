@@ -80,11 +80,12 @@ class WMORendererGL {
 public:
 	/**
 	 * @param data
-	 * @param fileID File name or fileDataID
+	 * @param fileID File data ID
 	 * @param gl_context
 	 * @param useRibbon
 	 */
 	WMORendererGL(BufferWrapper& data, uint32_t fileID, gl::GLContext& gl_context, bool useRibbon = true);
+	WMORendererGL(BufferWrapper& data, const std::string& fileName, gl::GLContext& gl_context, bool useRibbon = true);
 
 	static std::unique_ptr<gl::ShaderProgram> load_shaders(gl::GLContext& ctx);
 
@@ -165,6 +166,7 @@ private:
 
 	BufferWrapper* data_ptr;
 	uint32_t fileID;
+	std::string fileName;
 	gl::GLContext& ctx;
 	bool useRibbon;
 

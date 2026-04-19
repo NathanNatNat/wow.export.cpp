@@ -242,7 +242,7 @@ void exportFiles(
 
 	FileWriter exportPaths = core::openLastExportStream();
 
-	const bool overwriteFiles = isLocal || core::view->config.value("overwriteFiles", true);
+	const bool overwriteFiles = isLocal || core::view->config.value("overwriteFiles", false);
 	const bool exportMeta = core::view->config.value("exportBLPMeta", false);
 
 	nlohmann::json manifest = {
@@ -259,10 +259,9 @@ void exportFiles(
 
 		const auto [fileName, fileDataID] = getFileInfoPair(fileEntry);
 
-		std::string markFileName = fileName;
-
 		try {
 			std::string exportFileName = fileName;
+			std::string markFileName = exportFileName;
 
 			// Use fileDataID as filename if exportNamedFiles is disabled
 			if (!isLocal && !core::view->config.value("exportNamedFiles", true) && fileDataID) {
@@ -302,7 +301,7 @@ void exportFiles(
 				// Determine file extension — JS: fileName.slice(fileName.lastIndexOf('.')).toLowerCase()
 				const std::string file_ext = getExtensionLower(fileName);
 				const bool is_png = (file_ext == ".png");
-				const bool is_jpg = (file_ext == ".jpg" || file_ext == ".jpeg");
+				const bool is_jpg = (file_ext == ".jpg");
 
 				if (is_png || is_jpg) {
 					// Raw export for png/jpg (no BLP conversion)
@@ -342,9 +341,10 @@ void exportFiles(
 			if (fileDataID) entry["fileDataID"] = *fileDataID;
 			manifest["succeeded"].push_back(std::move(entry));
 		} catch (const std::exception& e) {
-			// JS: helper.mark(markFileName, false, e.message, e.stack)
+			// JS uses a block-scoped let markFileName in try and references it here.
+			// Keep failure marking on the original fileName path when try-scope name is unavailable.
 			// C++ std::exception has no .stack equivalent; pass std::nullopt for stackTrace.
-			helper.mark(markFileName, false, e.what(), std::nullopt);
+			helper.mark(fileName, false, e.what(), std::nullopt);
 			nlohmann::json entry = {{"type", format}};
 			if (fileDataID) entry["fileDataID"] = *fileDataID;
 			manifest["failed"].push_back(std::move(entry));

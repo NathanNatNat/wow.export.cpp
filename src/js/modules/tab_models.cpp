@@ -70,7 +70,7 @@ static std::unique_ptr<model_viewer_utils::AnimationMethods> anim_methods;
 
 // Change-detection for watches (replaces Vue $watch).
 static std::vector<nlohmann::json> prev_skins_selection;
-static std::string prev_anim_selection;
+static std::optional<std::string> prev_anim_selection;
 static std::vector<nlohmann::json> prev_selection_models;
 static bool tab_initialized = false;
 
@@ -624,7 +624,7 @@ void mounted() {
 	if (view.modelViewerAnimSelection.is_string())
 		prev_anim_selection = view.modelViewerAnimSelection.get<std::string>();
 	else
-		prev_anim_selection.clear();
+		prev_anim_selection.reset();
 
 	prev_selection_models = view.selectionModels;
 
@@ -823,7 +823,7 @@ void render() {
 
 	// Watch: modelViewerAnimSelection → handle_animation_change
 	{
-		std::string current_anim;
+		std::optional<std::string> current_anim;
 		if (view.modelViewerAnimSelection.is_string())
 			current_anim = view.modelViewerAnimSelection.get<std::string>();
 

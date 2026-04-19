@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
+#include <optional>
 #include <regex>
 #include <string>
 #include <unordered_set>
@@ -84,7 +85,7 @@ static std::vector<CategoryGroup> category_groups;
 
 // Change-detection for watches (replaces Vue $watch).
 static std::vector<bool> prev_category_mask_checked;
-static std::string prev_anim_selection;
+static std::optional<std::string> prev_anim_selection;
 static std::vector<nlohmann::json> prev_selection_decor;
 
 // View state proxy (created once in mounted()).
@@ -624,7 +625,7 @@ void mounted() {
 	if (view.decorViewerAnimSelection.is_string())
 		prev_anim_selection = view.decorViewerAnimSelection.get<std::string>();
 	else
-		prev_anim_selection.clear();
+		prev_anim_selection.reset();
 
 	prev_selection_decor = view.selectionDecor;
 
@@ -671,7 +672,7 @@ void render() {
 
 	// Watch: decorViewerAnimSelection → handle_animation_change
 	{
-		std::string current_anim;
+		std::optional<std::string> current_anim;
 		if (view.decorViewerAnimSelection.is_string())
 			current_anim = view.decorViewerAnimSelection.get<std::string>();
 

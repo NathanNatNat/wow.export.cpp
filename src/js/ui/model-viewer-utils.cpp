@@ -6,13 +6,25 @@
 #include "model-viewer-utils.h"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <format>
+#include <optional>
 #include <stdexcept>
+#include <unordered_map>
 #include <vector>
 
 #include <glad/gl.h>
 #include <imgui.h>
+#include <stb_image.h>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#endif
 
 #include "../core.h"
 #include "../log.h"
@@ -40,6 +52,76 @@
 namespace model_viewer_utils {
 
 namespace fs = std::filesystem;
+
+/**
+ * Copy PNG image data to the system clipboard.
+ * JS equivalent: nw.Clipboard.get().set(buf.toBase64(), 'png', true)
+ */
+static void copyPNGToClipboard(const BufferWrapper& png) {
+#ifdef _WIN32
+	int w = 0, h = 0, channels = 0;
+	unsigned char* pixels = stbi_load_from_memory(
+		png.internalArrayBuffer(), static_cast<int>(png.byteLength()),
+		&w, &h, &channels, 4);
+	if (!pixels) {
+		ImGui::SetClipboardText(png.toBase64().c_str());
+		return;
+	}
+
+	const int stride = w * 4;
+	const size_t pixelBytes = static_cast<size_t>(h) * static_cast<size_t>(stride);
+	const size_t dibSize = sizeof(BITMAPINFOHEADER) + pixelBytes;
+	HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, dibSize);
+	if (!hMem) {
+		stbi_image_free(pixels);
+		ImGui::SetClipboardText(png.toBase64().c_str());
+		return;
+	}
+
+	void* mem = GlobalLock(hMem);
+	auto* bmi = reinterpret_cast<BITMAPINFOHEADER*>(mem);
+	std::memset(bmi, 0, sizeof(BITMAPINFOHEADER));
+	bmi->biSize = sizeof(BITMAPINFOHEADER);
+	bmi->biWidth = w;
+	bmi->biHeight = h;
+	bmi->biPlanes = 1;
+	bmi->biBitCount = 32;
+	bmi->biCompression = BI_RGB;
+
+	auto* dst = reinterpret_cast<uint8_t*>(mem) + sizeof(BITMAPINFOHEADER);
+	for (int row = 0; row < h; ++row) {
+		const uint8_t* src = pixels + static_cast<size_t>(h - 1 - row) * stride;
+		for (int col = 0; col < w; ++col) {
+			dst[col * 4 + 0] = src[col * 4 + 2];
+			dst[col * 4 + 1] = src[col * 4 + 1];
+			dst[col * 4 + 2] = src[col * 4 + 0];
+			dst[col * 4 + 3] = src[col * 4 + 3];
+		}
+		dst += stride;
+	}
+
+	GlobalUnlock(hMem);
+	stbi_image_free(pixels);
+
+	if (OpenClipboard(nullptr)) {
+		EmptyClipboard();
+		if (!SetClipboardData(CF_DIB, hMem))
+			GlobalFree(hMem);
+		CloseClipboard();
+	} else {
+		GlobalFree(hMem);
+		ImGui::SetClipboardText(png.toBase64().c_str());
+	}
+#else
+	FILE* proc = popen("xclip -selection clipboard -target image/png 2>/dev/null", "w");
+	if (proc) {
+		std::fwrite(png.internalArrayBuffer(), 1, png.byteLength(), proc);
+		pclose(proc);
+	} else {
+		ImGui::SetClipboardText(png.toBase64().c_str());
+	}
+#endif
+}
 
 
 AnimationMethods::AnimationMethods(
@@ -341,12 +423,10 @@ RendererResult create_renderer(BufferWrapper& data, ModelType model_type,
 	} else if (model_type == ModelType::M3) {
 		result.m3 = std::make_unique<M3RendererGL>(data, ctx, true, show_textures);
 	} else {
-		// JS: new WMORendererGL(data, file_name, gl_context, show_textures)
-		// C++ WMORendererGL constructor takes uint32_t fileID — using file_data_id.
-		// The file_name parameter is accepted for API parity with JS but not used here
-		// because the C++ WMORendererGL is designed around numeric file data IDs for CASC lookup.
-		(void)file_name;
-		result.wmo = std::make_unique<WMORendererGL>(data, file_data_id, ctx, show_textures);
+		if (!file_name.empty())
+			result.wmo = std::make_unique<WMORendererGL>(data, file_name, ctx, show_textures);
+		else
+			result.wmo = std::make_unique<WMORendererGL>(data, file_data_id, ctx, show_textures);
 	}
 
 	return result;
@@ -398,7 +478,7 @@ std::vector<nlohmann::json> extract_animations(const M2RendererGL& renderer) {
  * Handle animation selection change.
  */
 void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
-	const std::string& selected_animation_id)
+	const std::optional<std::string>& selected_animation_id)
 {
 	// JS: if (!renderer || !renderer.playAnimation) — checks method existence.
 	// C++: M2RendererGL always has playAnimation, so null check suffices.
@@ -412,13 +492,10 @@ void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
 	if (state.animFrameCount) *state.animFrameCount = 0;
 
 	// JS: if (selected_animation_id === null || selected_animation_id === undefined) return;
-	// C++: empty string is the equivalent of JS null/undefined for std::string parameters.
-	// In JS, empty string "" would pass through — but callers never pass "" in practice;
-	// they pass null/undefined (no selection) or a valid ID string.
-	if (selected_animation_id.empty())
+	if (!selected_animation_id.has_value())
 		return;
 
-	if (selected_animation_id == "none") {
+	if (*selected_animation_id == "none") {
 		renderer->stopAnimation();
 		return;
 	}
@@ -429,13 +506,13 @@ void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
 	const auto& anims = *state.anims;
 	const auto it = std::find_if(anims.begin(), anims.end(),
 		[&](const nlohmann::json& anim) {
-			return anim.value("id", "") == selected_animation_id;
+			return anim.value("id", "") == *selected_animation_id;
 		});
 
 	if (it != anims.end()) {
 		const int m2_index = (*it).value("m2Index", -1);
 		if (m2_index >= 0) {
-			logging::write(std::format("Playing animation {} at M2 index {}", selected_animation_id, m2_index));
+			logging::write(std::format("Playing animation {} at M2 index {}", *selected_animation_id, m2_index));
 			renderer->playAnimation(m2_index);
 
 			if (state.animFrameCount)
@@ -497,11 +574,7 @@ bool export_preview(const std::string& format, gl::GLContext& ctx,
 			std::format("Successfully exported preview to {}", out_file),
 			{ {"View in Explorer", [out_dir]() { core::openInExplorer(out_dir); }} }, -1);
 	} else if (format == "CLIPBOARD") {
-		// JS: clipboard.set(buf.toBase64(), 'png', true) — copies actual PNG image data.
-		// C++ limitation: ImGui only supports text clipboard. Platform-specific PNG clipboard
-		// APIs (e.g., Win32 CF_DIB, X11 image/png) would be needed for true image copy.
-		// For now, copies base64-encoded PNG text as a fallback.
-		ImGui::SetClipboardText(buf.toBase64().c_str());
+		copyPNGToClipboard(buf);
 
 		logging::write(std::format("Copied 3D preview to clipboard ({})", export_name));
 		core::setToast("success", "3D preview has been copied to the clipboard", {}, -1, true);
@@ -692,11 +765,7 @@ std::string export_model(const ExportModelOptions& options) {
 			}
 		} else {
 			// WMO
-			// JS: new WMOExporter(data, file_name) — passes file_name string for non-RAW.
-			// C++ WMOExporter constructor takes (data, uint32_t fileDataID, CASC*) — using
-			// file_data_id because the C++ WMOExporter is designed around numeric IDs for
-			// CASC-based group/doodad file lookup.
-			WMOExporter exporter(data, file_data_id, casc);
+			WMOExporter exporter(data, file_name, casc);
 
 			if (options.wmo_group_mask)
 				exporter.setGroupMask(make_wmo_group_mask());
@@ -740,63 +809,120 @@ AnimationMethods create_animation_methods(
 	return AnimationMethods(std::move(get_renderer), std::move(get_state));
 }
 
-/**
- * Create a view state proxy for a model viewer tab.
- * JS uses dynamic property access (core.view[prefix + 'TexturePreviewURL']) which works for
- * any prefix. C++ uses explicit field mapping. Only "model", "decor", and "creature" prefixes
- * are supported because AppState only defines fields for these three tab types. This matches
- * all actual callers — no other prefixes are used at runtime.
- */
 ViewStateProxy create_view_state(const std::string& prefix) {
 	ViewStateProxy proxy;
 	AppState* s = core::view;
+	static const std::unordered_map<std::string, std::string AppState::*> stringFields = {
+		{"modelTexturePreviewURL", &AppState::modelTexturePreviewURL},
+		{"modelTexturePreviewUVOverlay", &AppState::modelTexturePreviewUVOverlay},
+		{"modelTexturePreviewName", &AppState::modelTexturePreviewName},
+		{"decorTexturePreviewURL", &AppState::decorTexturePreviewURL},
+		{"decorTexturePreviewUVOverlay", &AppState::decorTexturePreviewUVOverlay},
+		{"decorTexturePreviewName", &AppState::decorTexturePreviewName},
+		{"creatureTexturePreviewURL", &AppState::creatureTexturePreviewURL},
+		{"creatureTexturePreviewUVOverlay", &AppState::creatureTexturePreviewUVOverlay},
+		{"creatureTexturePreviewName", &AppState::creatureTexturePreviewName},
+		{"legacyModelTexturePreviewURL", &AppState::legacyModelTexturePreviewURL}
+	};
 
-	if (prefix == "model") {
-		proxy.texturePreviewURL      = &s->modelTexturePreviewURL;
-		proxy.texturePreviewUVOverlay = &s->modelTexturePreviewUVOverlay;
-		proxy.texturePreviewWidth    = &s->modelTexturePreviewWidth;
-		proxy.texturePreviewHeight   = &s->modelTexturePreviewHeight;
-		proxy.texturePreviewName     = &s->modelTexturePreviewName;
-		proxy.texturePreviewTexID    = &s->modelTexturePreviewTexID;
-		proxy.texturePreviewUVTexID  = &s->modelTexturePreviewUVTexID;
-		proxy.uvLayers               = &s->modelViewerUVLayers;
-		proxy.anims                  = &s->modelViewerAnims;
-		proxy.animSelection          = &s->modelViewerAnimSelection;
-		proxy.animPaused             = &s->modelViewerAnimPaused;
-		proxy.animFrame              = &s->modelViewerAnimFrame;
-		proxy.animFrameCount         = &s->modelViewerAnimFrameCount;
-		proxy.autoAdjust             = &s->modelViewerAutoAdjust;
-	} else if (prefix == "decor") {
-		proxy.texturePreviewURL      = &s->decorTexturePreviewURL;
-		proxy.texturePreviewUVOverlay = &s->decorTexturePreviewUVOverlay;
-		proxy.texturePreviewWidth    = &s->decorTexturePreviewWidth;
-		proxy.texturePreviewHeight   = &s->decorTexturePreviewHeight;
-		proxy.texturePreviewName     = &s->decorTexturePreviewName;
-		proxy.texturePreviewTexID    = &s->decorTexturePreviewTexID;
-		proxy.texturePreviewUVTexID  = &s->decorTexturePreviewUVTexID;
-		proxy.uvLayers               = &s->decorViewerUVLayers;
-		proxy.anims                  = &s->decorViewerAnims;
-		proxy.animSelection          = &s->decorViewerAnimSelection;
-		proxy.animPaused             = &s->decorViewerAnimPaused;
-		proxy.animFrame              = &s->decorViewerAnimFrame;
-		proxy.animFrameCount         = &s->decorViewerAnimFrameCount;
-		proxy.autoAdjust             = &s->decorViewerAutoAdjust;
-	} else if (prefix == "creature") {
-		proxy.texturePreviewURL      = &s->creatureTexturePreviewURL;
-		proxy.texturePreviewUVOverlay = &s->creatureTexturePreviewUVOverlay;
-		proxy.texturePreviewWidth    = &s->creatureTexturePreviewWidth;
-		proxy.texturePreviewHeight   = &s->creatureTexturePreviewHeight;
-		proxy.texturePreviewName     = &s->creatureTexturePreviewName;
-		proxy.texturePreviewTexID    = &s->creatureTexturePreviewTexID;
-		proxy.texturePreviewUVTexID  = &s->creatureTexturePreviewUVTexID;
-		proxy.uvLayers               = &s->creatureViewerUVLayers;
-		proxy.anims                  = &s->creatureViewerAnims;
-		proxy.animSelection          = &s->creatureViewerAnimSelection;
-		proxy.animPaused             = &s->creatureViewerAnimPaused;
-		proxy.animFrame              = &s->creatureViewerAnimFrame;
-		proxy.animFrameCount         = &s->creatureViewerAnimFrameCount;
-		proxy.autoAdjust             = &s->creatureViewerAutoAdjust;
-	}
+	static const std::unordered_map<std::string, int AppState::*> intFields = {
+		{"modelTexturePreviewWidth", &AppState::modelTexturePreviewWidth},
+		{"modelTexturePreviewHeight", &AppState::modelTexturePreviewHeight},
+		{"modelViewerAnimFrame", &AppState::modelViewerAnimFrame},
+		{"modelViewerAnimFrameCount", &AppState::modelViewerAnimFrameCount},
+		{"decorTexturePreviewWidth", &AppState::decorTexturePreviewWidth},
+		{"decorTexturePreviewHeight", &AppState::decorTexturePreviewHeight},
+		{"decorViewerAnimFrame", &AppState::decorViewerAnimFrame},
+		{"decorViewerAnimFrameCount", &AppState::decorViewerAnimFrameCount},
+		{"creatureTexturePreviewWidth", &AppState::creatureTexturePreviewWidth},
+		{"creatureTexturePreviewHeight", &AppState::creatureTexturePreviewHeight},
+		{"creatureViewerAnimFrame", &AppState::creatureViewerAnimFrame},
+		{"creatureViewerAnimFrameCount", &AppState::creatureViewerAnimFrameCount},
+		{"legacyModelViewerAnimFrame", &AppState::legacyModelViewerAnimFrame},
+		{"legacyModelViewerAnimFrameCount", &AppState::legacyModelViewerAnimFrameCount},
+		{"chrModelViewerAnimFrame", &AppState::chrModelViewerAnimFrame},
+		{"chrModelViewerAnimFrameCount", &AppState::chrModelViewerAnimFrameCount}
+	};
+
+	static const std::unordered_map<std::string, uint32_t AppState::*> texIDFields = {
+		{"modelTexturePreviewTexID", &AppState::modelTexturePreviewTexID},
+		{"modelTexturePreviewUVTexID", &AppState::modelTexturePreviewUVTexID},
+		{"decorTexturePreviewTexID", &AppState::decorTexturePreviewTexID},
+		{"decorTexturePreviewUVTexID", &AppState::decorTexturePreviewUVTexID},
+		{"creatureTexturePreviewTexID", &AppState::creatureTexturePreviewTexID},
+		{"creatureTexturePreviewUVTexID", &AppState::creatureTexturePreviewUVTexID}
+	};
+
+	static const std::unordered_map<std::string, std::vector<nlohmann::json> AppState::*> vectorFields = {
+		{"modelViewerUVLayers", &AppState::modelViewerUVLayers},
+		{"modelViewerAnims", &AppState::modelViewerAnims},
+		{"decorViewerUVLayers", &AppState::decorViewerUVLayers},
+		{"decorViewerAnims", &AppState::decorViewerAnims},
+		{"creatureViewerUVLayers", &AppState::creatureViewerUVLayers},
+		{"creatureViewerAnims", &AppState::creatureViewerAnims},
+		{"legacyModelViewerAnims", &AppState::legacyModelViewerAnims},
+		{"chrModelViewerAnims", &AppState::chrModelViewerAnims}
+	};
+
+	static const std::unordered_map<std::string, nlohmann::json AppState::*> jsonFields = {
+		{"modelViewerAnimSelection", &AppState::modelViewerAnimSelection},
+		{"decorViewerAnimSelection", &AppState::decorViewerAnimSelection},
+		{"creatureViewerAnimSelection", &AppState::creatureViewerAnimSelection},
+		{"legacyModelViewerAnimSelection", &AppState::legacyModelViewerAnimSelection},
+		{"chrModelViewerAnimSelection", &AppState::chrModelViewerAnimSelection}
+	};
+
+	static const std::unordered_map<std::string, bool AppState::*> boolFields = {
+		{"modelViewerAnimPaused", &AppState::modelViewerAnimPaused},
+		{"modelViewerAutoAdjust", &AppState::modelViewerAutoAdjust},
+		{"decorViewerAnimPaused", &AppState::decorViewerAnimPaused},
+		{"decorViewerAutoAdjust", &AppState::decorViewerAutoAdjust},
+		{"creatureViewerAnimPaused", &AppState::creatureViewerAnimPaused},
+		{"creatureViewerAutoAdjust", &AppState::creatureViewerAutoAdjust},
+		{"legacyModelViewerAnimPaused", &AppState::legacyModelViewerAnimPaused},
+		{"legacyModelViewerAutoAdjust", &AppState::legacyModelViewerAutoAdjust},
+		{"chrModelViewerAnimPaused", &AppState::chrModelViewerAnimPaused}
+	};
+
+	auto bindString = [&](const std::string& key) -> std::string* {
+		const auto it = stringFields.find(key);
+		return it == stringFields.end() ? nullptr : &(s->*(it->second));
+	};
+	auto bindInt = [&](const std::string& key) -> int* {
+		const auto it = intFields.find(key);
+		return it == intFields.end() ? nullptr : &(s->*(it->second));
+	};
+	auto bindTexID = [&](const std::string& key) -> uint32_t* {
+		const auto it = texIDFields.find(key);
+		return it == texIDFields.end() ? nullptr : &(s->*(it->second));
+	};
+	auto bindVector = [&](const std::string& key) -> std::vector<nlohmann::json>* {
+		const auto it = vectorFields.find(key);
+		return it == vectorFields.end() ? nullptr : &(s->*(it->second));
+	};
+	auto bindJson = [&](const std::string& key) -> nlohmann::json* {
+		const auto it = jsonFields.find(key);
+		return it == jsonFields.end() ? nullptr : &(s->*(it->second));
+	};
+	auto bindBool = [&](const std::string& key) -> bool* {
+		const auto it = boolFields.find(key);
+		return it == boolFields.end() ? nullptr : &(s->*(it->second));
+	};
+
+	proxy.texturePreviewURL = bindString(prefix + "TexturePreviewURL");
+	proxy.texturePreviewUVOverlay = bindString(prefix + "TexturePreviewUVOverlay");
+	proxy.texturePreviewWidth = bindInt(prefix + "TexturePreviewWidth");
+	proxy.texturePreviewHeight = bindInt(prefix + "TexturePreviewHeight");
+	proxy.texturePreviewName = bindString(prefix + "TexturePreviewName");
+	proxy.texturePreviewTexID = bindTexID(prefix + "TexturePreviewTexID");
+	proxy.texturePreviewUVTexID = bindTexID(prefix + "TexturePreviewUVTexID");
+	proxy.uvLayers = bindVector(prefix + "ViewerUVLayers");
+	proxy.anims = bindVector(prefix + "ViewerAnims");
+	proxy.animSelection = bindJson(prefix + "ViewerAnimSelection");
+	proxy.animPaused = bindBool(prefix + "ViewerAnimPaused");
+	proxy.animFrame = bindInt(prefix + "ViewerAnimFrame");
+	proxy.animFrameCount = bindInt(prefix + "ViewerAnimFrameCount");
+	proxy.autoAdjust = bindBool(prefix + "ViewerAutoAdjust");
 
 	return proxy;
 }

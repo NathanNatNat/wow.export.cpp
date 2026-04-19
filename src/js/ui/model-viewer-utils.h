@@ -215,10 +215,10 @@ std::vector<nlohmann::json> extract_animations(const M2RendererGL& renderer);
  * Handle animation selection change.
  * @param renderer             Active M2 renderer (may be nullptr).
  * @param state                View state with animation properties.
- * @param selected_animation_id Selected animation ID string (or empty/"none").
+ * @param selected_animation_id Selected animation ID string, or nullopt for JS null/undefined.
  */
 void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
-	const std::string& selected_animation_id);
+	const std::optional<std::string>& selected_animation_id);
 
 /**
  * Export 3D preview as PNG (to disk) or to clipboard.
