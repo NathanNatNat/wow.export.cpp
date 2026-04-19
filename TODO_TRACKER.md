@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 324/915 verified (35%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 332/915 verified (36%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -4503,42 +4503,42 @@
   - **Status**: Verified
   - **Details**: Updated startup to call `casc::listfile::preloadAsync()` (fire-and-forget) before activating source select, matching JS where `listfile.preload()` is not awaited. `casc::dbd_manifest::preload()` already schedules asynchronous preload internally, so startup no longer blocks on listfile preload.
 
-- [ ] 908. [M2RendererGL.cpp / tab_models.cpp] GPU resource leak: renderer `dispose()` not called when switching models
+- [x] 908. [M2RendererGL.cpp / tab_models.cpp] GPU resource leak: renderer `dispose()` not called when switching models
   - **JS Source**: `src/js/modules/tab_models.js` lines 76–80; `src/js/3D/renderers/M2RendererGL.js` (dispose method)
-  - **Status**: Pending
-  - **Details**: JS calls `active_renderer.dispose()` explicitly before nulling it (tab_models.js line 77). In C++, `tab_models.cpp` line 175 resets the renderer by assigning a default-constructed `RendererResult`, destroying the `unique_ptr` via the default destructor. None of M2RendererGL, M3RendererGL, or WMORendererGL define a destructor that calls `dispose()`, so all OpenGL objects (VAOs, VBOs, EBOs, textures, shader programs) are leaked every time the user previews a different model. Fix: add a destructor to each renderer that calls `dispose()`, or explicitly call `dispose()` on each non-null renderer before resetting the RendererResult.
+  - **Status**: Verified
+  - **Details**: Added explicit renderer cleanup in `tab_models.cpp` before resetting renderer state. New helper `dispose_active_renderer()` calls `dispose()` on active M2/M3/WMO renderers and then clears `active_renderer_result`/`active_path`, matching JS `active_renderer.dispose(); active_renderer = null; active_path = null` behavior and preventing GPU object leaks during model switches.
 
-- [ ] 909. [tab_models.cpp] `selectionModels` auto-preview behavioral deviation from JS
+- [x] 909. [tab_models.cpp] `selectionModels` auto-preview behavioral deviation from JS
   - **JS Source**: `src/js/modules/tab_models.js` lines 634–644
-  - **Status**: Pending
-  - **Details**: In JS, `this._tab_initialized` is never assigned anywhere (not in `data()`, `methods`, or `mounted()`), so the `selectionModels` watcher at line 635 (`if (!this._tab_initialized) return;`) always returns early — auto-preview on selection change never fires in the original JS. In C++, `tab_initialized` is set to `true` on the first `selectionModels` change (tab_models.cpp lines 848–850), so auto-preview does fire after the first selection change. This is a behavioral deviation from the original JS (where the feature is silently broken). Per fidelity rules the C++ should match JS, but the JS behavior is likely an accidental omission (the flag is referenced but never set). Resolution: either replicate the JS bug or keep the C++ fix with an explanatory comment; document which was chosen here.
+  - **Status**: Verified
+  - **Details**: Updated C++ watcher logic to stop auto-setting `tab_initialized` on first selection change. This restores JS parity where `_tab_initialized` is never assigned and the watcher short-circuits, so auto-preview from `selectionModels` changes does not fire.
 
-- [ ] 910. [tab_models.cpp] `preview_model` silently drops new requests while a prior preview is in-flight
+- [x] 910. [tab_models.cpp] `preview_model` silently drops new requests while a prior preview is in-flight
   - **JS Source**: `src/js/modules/tab_models.js` lines 61–167
-  - **Status**: Pending
-  - **Details**: C++ `preview_model()` (line 157) immediately returns if `pending_preview_task.has_value()`. In JS `preview_model` is an async function — rapid model selection starts a new load each time with no inter-lock. C++ therefore silently ignores any preview request that arrives while one is already in-progress, meaning a quick second selection is never previewed unless the user selects again. Consider replacing the "drop" policy with a "supersede" policy: cancel/discard the in-flight task and start the new one, which matches the JS behavior and is more user-friendly.
+  - **Status**: Verified
+  - **Details**: Replaced the drop behavior with latest-request supersede semantics. When a preview is in-flight, C++ now stores the newest requested file name and automatically starts that preview after the current task completes, instead of silently discarding the request.
 
-- [ ] 911. [M2RendererGL.cpp] `_create_skeleton()` child-skeleton code path verification needed
+- [x] 911. [M2RendererGL.cpp] `_create_skeleton()` child-skeleton code path verification needed
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 598–630
-  - **Status**: Pending
-  - **Details**: After loading a parent+child skeleton pair, JS sets `bone_data = parent_skel.bones` and `this.bones = bone_data` (line 638). C++ sets `bones_skel = &skelLoader->bones` where `skelLoader` holds the parent. The mapping of `childSkelLoader` animations through the `childAnimKeys` set should work, but the combined paths (bones from parent skel, anim tracks from child skel) in `_update_bone_matrices()` need a full walkthrough against the JS to verify correctness. In particular: JS uses a single `this.bones` for hierarchy/pivots and `anim_bones = this.current_anim_source?.bones || this.bones` for animation data; C++ dispatches over four structural×animation type combinations in `calc_all_bones`. Verify all four branches produce results identical to the JS single-path approach.
+  - **Status**: Verified
+  - **Details**: Verified parity with JS: parent/child skeleton loading, child animation key routing, and structural-vs-animation bone source handling are equivalent. C++’s `calc_all_bones` branch matrix is a type-safe split of JS’s single-path `bones` + `anim_bones` logic and preserves the same effective data flow.
 
-- [ ] 912. [tab_models.cpp] `handle_skins_selection_change` does not guard against unknown `selected.id`
+- [x] 912. [tab_models.cpp] `handle_skins_selection_change` does not guard against unknown `selected.id`
   - **JS Source**: `src/js/modules/tab_models.js` lines 586–619
-  - **Status**: Pending
-  - **Details**: In JS, `const display = active_skins.get(selected.id)` returns `undefined` when the key is absent. The guard `if (!active_renderer || active_skins.size === 0)` (line 587) only prevents the issue when the map is completely empty. If the map is non-empty but the specific skin ID is missing, JS would throw on `display.extraGeosets` (line 596). C++ handles the missing-key case gracefully (lines 528–542): if neither `active_skins_creature` nor `active_skins_item` contains the ID, `display_textures` stays empty and nothing bad happens. The C++ handling is safer than JS, but note that the two code paths may produce silently different results (C++ resets geoset visibility using the no-`extraGeosets` branch rather than throwing). Document this intentional improvement.
+  - **Status**: Verified
+  - **Details**: Added explicit guards for empty/unknown `selected.id` before geoset/texture application. This intentionally keeps the safer C++ behavior (no throw on missing map key) and avoids unintended geoset reset side-effects when a stale/unknown skin selection arrives.
 
-- [ ] 913. [M2RendererGL.cpp] `loadSkin()` geoset label sync uses copy instead of in-place map
+- [x] 913. [M2RendererGL.cpp] `loadSkin()` geoset label sync uses copy instead of in-place map
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 579–582
-  - **Status**: Pending
-  - **Details**: JS calls `GeosetMapper.map(this.geosetArray)` which mutates `geosetArray` labels in-place, then does one assignment `core.view[this.geosetKey] = this.geosetArray`. C++ (lines 767–782) creates a separate `mapper_geosets` copy, maps labels on the copy, then syncs labels back to `geosetArray` and the JSON view in two separate loops, each bounded by `i < mapper_geosets.size() && i < target.size()`. If `geoset_mapper::map()` can expand or shrink the vector (adding/removing entries), the label sync loops may not cover all elements. Verify that `geoset_mapper::map()` is always a pure label-rename of the same-length vector, or add an assertion to catch size divergence.
+  - **Status**: Verified
+  - **Details**: Updated `loadSkin()` flow to map labels back into `geosetArray` first, then copy the mapped array into the reactive JSON view in one pass. This aligns with JS sequencing (`GeosetMapper.map(this.geosetArray)` then assign/view exposure) and removes split label-sync paths.
 
-- [ ] 914. [M2RendererGL.cpp] `updateGeosets()` reads from JSON view instead of directly from `geosetArray`
+- [x] 914. [M2RendererGL.cpp] `updateGeosets()` reads from JSON view instead of directly from `geosetArray`
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1112–1118
-  - **Status**: Pending
-  - **Details**: JS `updateGeosets()` line 1116 reads `this.geosetArray[i].checked` as the sole source of truth. C++ (lines 1400–1415) reads from `_get_geoset_view()` (the JSON vector) when non-empty, and only falls back to `geosetArray`. C++ also writes `geosetArray[i].checked` back from the view. If the JSON view and `geosetArray` ever diverge (e.g. partial update, concurrent modification), C++ will use the view's state while JS would use `geosetArray`. Verify that there is no code path that modifies the JSON view without also updating `geosetArray`, and vice versa, to ensure the two stay in sync.
+  - **Status**: Verified
+  - **Details**: `updateGeosets()` now uses `geosetArray` as the sole visibility source, matching JS. Reactive view changes are synchronized into `geosetArray` in the render watch path before `updateGeosets()` is called, preserving JS-equivalent source-of-truth behavior.
 
-- [ ] 915. [M2RendererGL.cpp] `stopAnimation()` JS dead-code (save-but-never-restore) not carried into C++
+- [x] 915. [M2RendererGL.cpp] `stopAnimation()` JS dead-code (save-but-never-restore) not carried into C++
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 697–716
-  - **Status**: Pending
-  - **Details**: JS `stopAnimation()` (lines 703–705) saves `prev_anim`, `prev_anim_idx`, and `prev_source` into local variables, then sets `current_animation`, `current_anim_index`, and `current_anim_source` to `null` — the saved values are never restored, making them dead code. C++ `stopAnimation()` does not save these values, which is functionally identical. No code change is needed, but this confirms the C++ omission of the save step is intentional and matches the effective JS behavior.
+  - **Status**: Verified
+  - **Details**: Verified no code change required. JS local save of previous animation/source in `stopAnimation()` is dead code (never restored), so C++’s direct reset path is functionally identical.

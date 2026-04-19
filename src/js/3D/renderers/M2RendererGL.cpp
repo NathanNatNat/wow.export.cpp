@@ -765,7 +765,20 @@ draw_calls.push_back(draw_call);
 }
 
 if (reactive) {
-// JS: core.view[this.geosetKey] = this.geosetArray — uses dynamic property key
+std::vector<geoset_mapper::Geoset> mapper_geosets;
+mapper_geosets.reserve(geosetArray.size());
+for (const auto& entry : geosetArray) {
+geoset_mapper::Geoset g;
+g.id = entry.id;
+g.label = entry.label;
+mapper_geosets.push_back(g);
+}
+geoset_mapper::map(mapper_geosets);
+
+for (size_t i = 0; i < mapper_geosets.size() && i < geosetArray.size(); i++)
+geosetArray[i].label = mapper_geosets[i].label;
+
+// JS: core.view[this.geosetKey] = this.geosetArray — copy full mapped array into view.
 auto& geosets = _get_geoset_view();
 geosets.clear();
 for (const auto& entry : geosetArray) {
@@ -775,23 +788,6 @@ j["checked"] = entry.checked;
 j["id"] = entry.id;
 geosets.push_back(j);
 }
-
-std::vector<geoset_mapper::Geoset> mapper_geosets;
-for (const auto& entry : geosetArray) {
-geoset_mapper::Geoset g;
-g.id = entry.id;
-g.label = entry.label;
-mapper_geosets.push_back(g);
-}
-geoset_mapper::map(mapper_geosets);
-
-// update labels back
-for (size_t i = 0; i < mapper_geosets.size() && i < geosetArray.size(); i++)
-geosetArray[i].label = mapper_geosets[i].label;
-
-// update core state labels too
-for (size_t i = 0; i < mapper_geosets.size() && i < geosets.size(); i++)
-geosets[i]["label"] = mapper_geosets[i].label;
 }
 
 updateGeosets();
@@ -1406,23 +1402,13 @@ dc.visible = false;
 // -----------------------------------------------------------------------
 
 void M2RendererGL::updateGeosets() {
-if (!reactive || draw_calls.empty())
+if (!reactive || geosetArray.empty() || draw_calls.empty())
 return;
 
-auto& geosets = _get_geoset_view();
-const bool has_view_geosets = !geosets.empty();
-const size_t source_size = has_view_geosets ? geosets.size() : geosetArray.size();
-const size_t count = std::min(draw_calls.size(), source_size);
+const size_t count = std::min(draw_calls.size(), geosetArray.size());
 
 for (size_t i = 0; i < count; i++) {
-	const bool checked = has_view_geosets
-		? geosets[i].value("checked", (i < geosetArray.size() ? geosetArray[i].checked : false))
-		: geosetArray[i].checked;
-
-	if (i < geosetArray.size())
-		geosetArray[i].checked = checked;
-
-	draw_calls[i].visible = checked;
+	draw_calls[i].visible = geosetArray[i].checked;
 }
 }
 
@@ -1531,6 +1517,10 @@ if (reactive) {
 		}
 	}
 	if (geosets_changed) {
+		const size_t geoset_sync_count = std::min(geosets.size(), geosetArray.size());
+		for (size_t i = 0; i < geoset_sync_count; i++)
+			geosetArray[i].checked = geosets[i].value("checked", geosetArray[i].checked);
+
 		updateGeosets();
 		watcher_geoset_checked.resize(geosets.size());
 		for (size_t i = 0; i < geosets.size(); i++)
