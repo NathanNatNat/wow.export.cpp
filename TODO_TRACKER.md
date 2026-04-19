@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 290/907 verified (32%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 294/907 verified (32%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -3913,20 +3913,20 @@
 - **Status**: Verified
 - **Details**: Fixed alongside item 785: `u_time` now derives from a stable renderer file-scope performance baseline instead of first-render-relative elapsed time.
 
-- [ ] 790. [M2RendererGL.cpp] `overrideTextureTypeWithCanvas()` takes raw pixel data instead of canvas element
+- [x] 790. [M2RendererGL.cpp] `overrideTextureTypeWithCanvas()` takes raw pixel data instead of canvas element
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1371–1390
-- **Status**: Pending
-- **Details**: JS takes `HTMLCanvasElement canvas` and calls `gl_tex.set_canvas(canvas, {...})`. C++ takes `const uint8_t* pixels, int width, int height` and calls `gl_tex->set_canvas(pixels, width, height, opts)`. This is an expected platform adaptation but the interface change means all callers must provide raw pixel data instead of a canvas reference.
+- **Status**: Verified
+- **Details**: Expected platform adaptation — C++ has no HTMLCanvasElement. `gl::GLTexture::set_canvas(pixels, w, h, opts)` wraps `set_rgba` with `has_alpha = true`, matching JS canvas RGBA upload semantics. `overrideTextureTypeWithCanvas` correctly uses `set_canvas` (forced alpha) while `overrideTextureTypeWithPixels` uses `set_rgba` (caller-controlled alpha), matching the two separate JS methods. All callers must supply raw RGBA pixel data instead of a canvas reference.
 
-- [ ] 791. [M2LegacyRendererGL.cpp] Loader/skin/animation entrypoints are synchronous instead of JS async methods
+- [x] 791. [M2LegacyRendererGL.cpp] Loader/skin/animation entrypoints are synchronous instead of JS async methods
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 183, 210, 252, 294, 455
-- **Status**: Pending
-- **Details**: JS exposes async `load`, `_load_textures`, `applyCreatureSkin`, `loadSkin`, and `playAnimation`; C++ ports these execution paths as synchronous methods, altering await behavior and scheduling.
+- **Status**: Verified
+- **Details**: Expected platform adaptation. The JS `async` keyword is a Promise wrapper with no concurrent work — all `await` calls inside (`m2.load()`, `_load_textures()`, `loadSkin()`) resolve synchronously. In C++, all callers in `tab_models_legacy.cpp` invoke these synchronously (`active_renderer_m2->load()`, `->playAnimation()`, `->applyCreatureSkin()`). Behavior is functionally identical.
 
-- [ ] 792. [M2LegacyRendererGL.cpp] Reactive watchers not set up — `geosetWatcher` and `wireframeWatcher` completely missing
+- [x] 792. [M2LegacyRendererGL.cpp] Reactive watchers not set up — `geosetWatcher` and `wireframeWatcher` completely missing
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 196–197
-- **Status**: Pending
-- **Details**: JS `load()` sets up Vue reactive watchers: `this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true })` and `this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true })`. C++ has an empty `if (reactive) {}` block at lines 216–217. Geoset changes from the UI will not trigger `updateGeosets()`. No polling replacement exists.
+- **Status**: Verified
+- **Details**: Added polling equivalent of JS `core.view.$watch(geosetKey, () => updateGeosets(), { deep: true })`. `load()` now initializes `watcher_geoset_checked` / `watcher_state_initialized` after `loadSkin(0)` populates `core::view->modelViewerGeosets`. `render()` polls each frame: compares per-entry checked state against the baseline, calls `updateGeosets()` on any change, and refreshes the baseline. `wireframeWatcher` had an empty JS body so no polling is required for it.
 
 - [ ] 793. [M2LegacyRendererGL.cpp] `dispose()` missing watcher cleanup calls
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 1038–1039
@@ -3943,10 +3943,10 @@
 - **Status**: Pending
 - **Details**: JS accesses bone animation data as `bone.translation.values`, `bone.translation.timestamps`, `bone.translation.timestamps[anim_idx]`, `bone.translation.values[anim_idx]`. C++ accesses `bone.translation.flatValues`, `bone.translation.flatTimestamps`, `bone.translation.nestedTimestamps[anim_idx]`, `bone.translation.nestedValues[anim_idx]`. This implies the M2LegacyLoader stores data in a different structure, which must match the renderer's expectations.
 
-- [ ] 796. [M2LegacyRendererGL.cpp] `loadSkin()` geoset assignment to `core.view` uses JSON serialization instead of direct assignment
+- [x] 796. [M2LegacyRendererGL.cpp] `loadSkin()` geoset assignment to `core.view` uses JSON serialization instead of direct assignment
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 431–432
-- **Status**: Pending
-- **Details**: JS directly assigns `core.view[this.geosetKey] = this.geosetArray` and passes `this.geosetArray` to `GeosetMapper.map()`. C++ builds nlohmann::json objects manually from `geosetArray` entries (lines 490–498) and constructs a separate `mapper_geosets` vector for GeosetMapper (lines 500–507), then updates labels back. This indirect approach may not synchronize correctly if core.view expects the raw array reference.
+- **Status**: Verified
+- **Details**: The JSON serialization in `loadSkin()` is a correct and necessary adaptation (C++ has no object reference aliasing like JS). The real underlying bug was that `updateGeosets()` read only from `geosetArray[i].checked` (the internal copy) instead of `core::view->modelViewerGeosets[i]["checked"]` (the UI-facing array that the user modifies). Fixed: `updateGeosets()` now reads checked state from `core::view->modelViewerGeosets` first (falling back to `geosetArray` if empty) and syncs it back into `geosetArray`, matching M2RendererGL's pattern.
 
 - [ ] 797. [M2LegacyRendererGL.cpp] `setSlotFile` called as `setSlotFileLegacy` — function name differs from JS
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` line 226
