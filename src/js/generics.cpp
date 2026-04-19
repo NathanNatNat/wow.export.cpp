@@ -367,7 +367,7 @@ std::vector<uint8_t> get(const std::vector<std::string>& urls) {
 		} catch (const std::exception& error) {
 			logging::write(std::format("fetch failed {}: {}", url, error.what()));
 			index++;
-			if (index > urls.size() + 1)
+			if (index > urls.size())
 				throw;
 		}
 	}
@@ -630,7 +630,7 @@ std::string filesize(double input) {
 
 	const bool isNegative = input < 0;
 
-	// Flipping a negative number to determine the size.
+	// Flipping a negative number to determining the size.
 	if (isNegative)
 		input = -input;
 
