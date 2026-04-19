@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <vector>
 #include <optional>
+#include <functional>
+#include <future>
 
 namespace db::caches::DBCreatures {
 
@@ -23,13 +25,14 @@ struct CreatureDisplayInfo {
  * Initialize creature data.
  */
 void initializeCreatureData();
+std::future<void> initializeCreatureDataAsync();
 
 /**
  * Gets creature skins from a given file data ID.
  * @param fileDataID File data ID of the model.
  * @returns Pointer to vector of displays, or nullptr if not found.
  */
-const std::vector<CreatureDisplayInfo>* getCreatureDisplaysByFileDataID(uint32_t fileDataID);
+const std::vector<std::reference_wrapper<const CreatureDisplayInfo>>* getCreatureDisplaysByFileDataID(uint32_t fileDataID);
 
 /**
  * Gets the file data ID for a given display ID.

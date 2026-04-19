@@ -12,6 +12,8 @@
 
 #include <format>
 #include <unordered_map>
+#include <mutex>
+#include <condition_variable>
 
 namespace db::caches::DBCreatures {
 
@@ -39,19 +41,31 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 	return result;
 }
 
-static std::unordered_map<uint32_t, std::vector<CreatureDisplayInfo>> creatureDisplays;
+static std::unordered_map<uint32_t, std::vector<std::reference_wrapper<const CreatureDisplayInfo>>> creatureDisplays;
 static std::unordered_map<uint32_t, CreatureDisplayInfo> creatureDisplayInfoMap;
 static std::unordered_map<uint32_t, uint32_t> displayIDToFileDataID;
 static bool isInitialized = false;
+static bool isInitializing = false;
+static std::mutex init_mutex;
+static std::condition_variable init_cv;
 
 /**
  * Initialize creature data.
  */
 void initializeCreatureData() {
-	if (isInitialized)
-		return;
+	{
+		std::unique_lock lock(init_mutex);
+		if (isInitialized)
+			return;
+		if (isInitializing) {
+			init_cv.wait(lock, [] { return isInitialized || !isInitializing; });
+			return;
+		}
+		isInitializing = true;
+	}
 
-	logging::write("Loading creature textures...");
+	try {
+		logging::write("Loading creature textures...");
 
 	std::unordered_map<uint32_t, std::vector<uint32_t>> creatureGeosetMap;
 
@@ -92,33 +106,50 @@ void initializeCreatureData() {
 	}
 
 	auto modelRows = casc::db2::preloadTable("CreatureModelData").getAllRows();
-	for (const auto& [modelID, modelRow] : modelRows) {
-		auto it = modelIDToDisplayInfoMap.find(modelID);
-		if (it != modelIDToDisplayInfoMap.end()) {
-			uint32_t fileDataID = fieldToUint32(modelRow.at("FileDataID"));
-			uint32_t creatureGeosetDataID = fieldToUint32(modelRow.at("CreatureGeosetDataID"));
-			bool modelIDHasExtraGeosets = creatureGeosetDataID > 0;
-			const auto& displayIDs = it->second;
+		for (const auto& [modelID, modelRow] : modelRows) {
+			auto it = modelIDToDisplayInfoMap.find(modelID);
+			if (it != modelIDToDisplayInfoMap.end()) {
+				uint32_t fileDataID = fieldToUint32(modelRow.at("FileDataID"));
+				uint32_t creatureGeosetDataID = fieldToUint32(modelRow.at("CreatureGeosetDataID"));
+				bool modelIDHasExtraGeosets = creatureGeosetDataID > 0;
+				const auto& displayIDs = it->second;
 
-			for (const auto displayID : displayIDs) {
-				displayIDToFileDataID.emplace(displayID, fileDataID);
+				for (const auto displayID : displayIDs) {
+					displayIDToFileDataID.emplace(displayID, fileDataID);
 
-				auto& display = creatureDisplayInfoMap.at(displayID);
+					auto& display = creatureDisplayInfoMap.at(displayID);
 
-				if (modelIDHasExtraGeosets) {
-					display.extraGeosets.emplace();
-					auto geoIt = creatureGeosetMap.find(displayID);
-					if (geoIt != creatureGeosetMap.end())
-						display.extraGeosets = geoIt->second;
+					if (modelIDHasExtraGeosets) {
+						display.extraGeosets.emplace();
+						auto geoIt = creatureGeosetMap.find(displayID);
+						if (geoIt != creatureGeosetMap.end())
+							display.extraGeosets = geoIt->second;
+					}
+
+					creatureDisplays[fileDataID].push_back(std::cref(display));
 				}
-
-				creatureDisplays[fileDataID].push_back(display);
 			}
 		}
-	}
 
-	logging::write(std::format("Loaded textures for {} creatures", creatureDisplays.size()));
-	isInitialized = true;
+		logging::write(std::format("Loaded textures for {} creatures", creatureDisplays.size()));
+		{
+			std::scoped_lock lock(init_mutex);
+			isInitialized = true;
+			isInitializing = false;
+		}
+		init_cv.notify_all();
+	} catch (...) {
+		{
+			std::scoped_lock lock(init_mutex);
+			isInitializing = false;
+		}
+		init_cv.notify_all();
+		throw;
+	}
+}
+
+std::future<void> initializeCreatureDataAsync() {
+	return std::async(std::launch::async, [] { initializeCreatureData(); });
 }
 
 /**
@@ -126,7 +157,7 @@ void initializeCreatureData() {
  * @param fileDataID File data ID.
  * @returns Pointer to vector of displays, or nullptr if not found.
  */
-const std::vector<CreatureDisplayInfo>* getCreatureDisplaysByFileDataID(uint32_t fileDataID) {
+const std::vector<std::reference_wrapper<const CreatureDisplayInfo>>* getCreatureDisplaysByFileDataID(uint32_t fileDataID) {
 	auto it = creatureDisplays.find(fileDataID);
 	if (it != creatureDisplays.end())
 		return &it->second;

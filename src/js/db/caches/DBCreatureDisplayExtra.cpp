@@ -12,6 +12,8 @@
 
 #include <format>
 #include <unordered_map>
+#include <mutex>
+#include <condition_variable>
 
 namespace db::caches::DBCreatureDisplayExtra {
 
@@ -30,6 +32,8 @@ static std::unordered_map<uint32_t, std::vector<CustomizationOption>> option_map
 
 static bool is_initialized = false;
 static bool is_initializing = false;
+static std::mutex init_mutex;
+static std::condition_variable init_cv;
 
 // Empty vector for returning when no customization choices found
 static const std::vector<CustomizationOption> empty_options;
@@ -61,19 +65,40 @@ static void _initialize() {
 	}
 
 	logging::write(std::format("Loaded {} creature display extras, {} with customization options", extra_map.size(), option_map.size()));
-	is_initialized = true;
-	is_initializing = false;
+	{
+		std::scoped_lock lock(init_mutex);
+		is_initialized = true;
+		is_initializing = false;
+	}
+	init_cv.notify_all();
 }
 
 void ensureInitialized() {
-	if (is_initialized)
-		return;
+	{
+		std::unique_lock lock(init_mutex);
+		if (is_initialized)
+			return;
+		if (is_initializing) {
+			init_cv.wait(lock, [] { return is_initialized || !is_initializing; });
+			return;
+		}
+		is_initializing = true;
+	}
 
-	if (is_initializing)
-		return;
+	try {
+		_initialize();
+	} catch (...) {
+		{
+			std::scoped_lock lock(init_mutex);
+			is_initializing = false;
+		}
+		init_cv.notify_all();
+		throw;
+	}
+}
 
-	is_initializing = true;
-	_initialize();
+std::future<void> ensureInitializedAsync() {
+	return std::async(std::launch::async, [] { ensureInitialized(); });
 }
 
 const ExtraInfo* get_extra(uint32_t id) {

@@ -13,6 +13,8 @@
 #include <optional>
 #include <variant>
 #include <memory>
+#include <future>
+#include <string_view>
 
 #include "FieldType.h"
 #include "CompressionType.h"
@@ -156,13 +158,14 @@ public:
 	 * @param recordID The record ID to look up.
 	 */
 	std::optional<DataRecord> getRow(uint32_t recordID);
+	std::optional<DataRecord> getRow(std::string_view recordID);
 
 	/**
 	 * Returns all available rows in the table.
 	 * If preload() was called, returns cached rows. Otherwise computes fresh.
 	 * Iterates sequentially through all sections for efficient paging with mmap.
 	 */
-	std::map<uint32_t, DataRecord> getAllRows();
+	const std::map<uint32_t, DataRecord>& getAllRows();
 
 	/**
 	 * Preload all rows into memory cache.
@@ -177,6 +180,7 @@ public:
 	 * @param foreignKeyValue The FK value to search for.
 	 */
 	std::vector<DataRecord> getRelationRows(uint32_t foreignKeyValue);
+	std::vector<DataRecord> getRelationRows(std::string_view foreignKeyValue);
 
 	/**
 	 * Load the schema for this table.
@@ -200,13 +204,23 @@ public:
 	 */
 	void parse();
 
+	// Async-equivalent API surface mirroring JS Promise methods.
+	std::future<std::optional<DataRecord>> getRowAsync(uint32_t recordID);
+	std::future<std::optional<DataRecord>> getRowAsync(std::string recordID);
+	std::future<std::map<uint32_t, DataRecord>> getAllRowsAsync();
+	std::future<void> preloadAsync();
+	std::future<std::vector<DataRecord>> getRelationRowsAsync(uint32_t foreignKeyValue);
+	std::future<std::vector<DataRecord>> getRelationRowsAsync(std::string foreignKeyValue);
+	std::future<void> loadSchemaAsync(std::string layoutHash);
+	std::future<void> parseAsync();
+
 	std::string fileName;
 	std::map<uint32_t, uint32_t> copyTable;
 	std::map<std::string, SchemaField> schema;
 	// Ordered list of schema keys to preserve insertion order
 	std::vector<std::string> schemaOrder;
 	bool isLoaded = false;
-	std::string idField;
+	std::optional<std::string> idField;
 	uint16_t idFieldIndex = 0;
 	std::unordered_map<uint32_t, std::vector<uint32_t>> relationshipLookup;
 
@@ -241,6 +255,7 @@ private:
 
 	// preloaded rows cache (empty map = not preloaded)
 	std::optional<std::map<uint32_t, DataRecord>> rows;
+	std::map<uint32_t, DataRecord> transientRows;
 
 	// lazy-loading metadata
 	BufferWrapper* data = nullptr;

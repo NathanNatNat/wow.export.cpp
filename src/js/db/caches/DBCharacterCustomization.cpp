@@ -15,6 +15,9 @@
 #include <format>
 #include <iomanip>
 #include <sstream>
+#include <mutex>
+#include <condition_variable>
+#include <map>
 
 namespace db::caches::DBCharacterCustomization {
 
@@ -64,15 +67,15 @@ static std::unordered_map<uint32_t, std::vector<ChrCustMaterialRef>> choice_to_c
 static std::unordered_map<uint32_t, uint32_t> choice_to_skinned_model;
 static std::vector<uint32_t> unsupported_choices;
 
-static std::unordered_map<uint32_t, std::vector<OptionEntry>> options_by_chr_model;
-static std::unordered_map<uint32_t, std::vector<ChoiceEntry>> option_to_choices;
+static std::map<uint32_t, std::vector<OptionEntry>> options_by_chr_model;
+static std::map<uint32_t, std::vector<ChoiceEntry>> option_to_choices;
 static std::vector<uint32_t> default_options;
 
 static std::unordered_map<uint32_t, uint32_t> chr_model_id_to_file_data_id;
 static std::unordered_map<uint32_t, uint32_t> chr_model_id_to_texture_layout_id;
 
-static std::unordered_map<uint32_t, ChrRaceInfo> chr_race_map_data;
-static std::unordered_map<uint32_t, std::unordered_map<uint32_t, uint32_t>> chr_race_x_chr_model_map_data;
+static std::map<uint32_t, ChrRaceInfo> chr_race_map_data;
+static std::map<uint32_t, std::map<uint32_t, uint32_t>> chr_race_x_chr_model_map_data;
 
 static std::unordered_map<std::string, db::DataRecord> chr_model_material_map_data;
 static std::unordered_map<uint32_t, std::vector<db::DataRecord>> char_component_texture_section_map;
@@ -83,6 +86,9 @@ static std::unordered_map<uint32_t, ChrCustMaterialInfo> chr_cust_mat_map;
 static std::unordered_map<uint32_t, db::DataRecord> chr_cust_skinned_model_map;
 
 static bool is_initialized = false;
+static bool is_initializing = false;
+static std::mutex init_mutex;
+static std::condition_variable init_cv;
 
 static void _initialize() {
 	logging::write("Loading character customization data...");
@@ -142,15 +148,16 @@ static void _initialize() {
 				mat_info.ChrModelTextureTargetID = fieldToUint32(mat_row.at("ChrModelTextureTargetID"));
 				uint32_t matResID = fieldToUint32(mat_row.at("MaterialResourcesID"));
 				auto tfd_it = tfd_map.find(matResID);
-				mat_info.FileDataID = (tfd_it != tfd_map.end()) ? tfd_it->second : 0;
+				if (tfd_it != tfd_map.end())
+					mat_info.FileDataID = tfd_it->second;
 				chr_cust_mat_map[materialID] = mat_info;
 			}
 		}
 	}
 
 	// customization options + choices
-	std::unordered_map<uint32_t, std::vector<std::pair<uint32_t, db::DataRecord>>> options_by_model_temp;
-	std::unordered_map<uint32_t, std::vector<std::pair<uint32_t, db::DataRecord>>> choices_by_option_temp;
+	std::map<uint32_t, std::vector<std::pair<uint32_t, db::DataRecord>>> options_by_model_temp;
+	std::map<uint32_t, std::vector<std::pair<uint32_t, db::DataRecord>>> choices_by_option_temp;
 
 	for (const auto& [opt_id, opt_row] : casc::db2::preloadTable("ChrCustomizationOption").getAllRows())
 		options_by_model_temp[fieldToUint32(opt_row.at("ChrModelID"))].push_back({opt_id, opt_row});
@@ -288,32 +295,53 @@ static void _initialize() {
 		chr_cust_skinned_model_map[chr_customization_skinned_model_id] = chr_customization_skinned_model_row;
 
 	logging::write("Character customization data loaded");
-	is_initialized = true;
+	{
+		std::scoped_lock lock(init_mutex);
+		is_initialized = true;
+		is_initializing = false;
+	}
+	init_cv.notify_all();
 }
 
 void ensureInitialized() {
-	if (is_initialized)
-		return;
+	{
+		std::unique_lock lock(init_mutex);
+		if (is_initialized)
+			return;
 
-	// Guard against re-entrant/concurrent calls (matches JS init_promise pattern)
-	static bool is_initializing = false;
-	if (is_initializing)
-		return;
-	is_initializing = true;
+		if (is_initializing) {
+			init_cv.wait(lock, [] { return is_initialized || !is_initializing; });
+			return;
+		}
 
-	_initialize();
-	is_initializing = false;
+		is_initializing = true;
+	}
+
+	try {
+		_initialize();
+	} catch (...) {
+		{
+			std::scoped_lock lock(init_mutex);
+			is_initializing = false;
+		}
+		init_cv.notify_all();
+		throw;
+	}
 }
 
 // getters
-uint32_t get_model_file_data_id(uint32_t model_id) {
+std::optional<uint32_t> get_model_file_data_id(uint32_t model_id) {
 	auto it = chr_model_id_to_file_data_id.find(model_id);
-	return (it != chr_model_id_to_file_data_id.end()) ? it->second : 0;
+	if (it != chr_model_id_to_file_data_id.end())
+		return it->second;
+	return std::nullopt;
 }
 
-uint32_t get_texture_layout_id(uint32_t model_id) {
+std::optional<uint32_t> get_texture_layout_id(uint32_t model_id) {
 	auto it = chr_model_id_to_texture_layout_id.find(model_id);
-	return (it != chr_model_id_to_texture_layout_id.end()) ? it->second : 0;
+	if (it != chr_model_id_to_texture_layout_id.end())
+		return it->second;
+	return std::nullopt;
 }
 
 const std::vector<OptionEntry>* get_options_for_model(uint32_t model_id) {
@@ -334,7 +362,7 @@ const std::vector<uint32_t>& get_default_options() {
 	return default_options;
 }
 
-const std::unordered_map<uint32_t, std::vector<ChoiceEntry>>& get_option_to_choices_map() {
+const std::map<uint32_t, std::vector<ChoiceEntry>>& get_option_to_choices_map() {
 	return option_to_choices;
 }
 
@@ -349,18 +377,18 @@ std::optional<uint32_t> get_chr_model_id(uint32_t race_id, uint32_t sex) {
 	return std::nullopt;
 }
 
-const std::unordered_map<uint32_t, uint32_t>* get_race_models(uint32_t race_id) {
+const std::map<uint32_t, uint32_t>* get_race_models(uint32_t race_id) {
 	auto it = chr_race_x_chr_model_map_data.find(race_id);
 	if (it != chr_race_x_chr_model_map_data.end())
 		return &it->second;
 	return nullptr;
 }
 
-const std::unordered_map<uint32_t, ChrRaceInfo>& get_chr_race_map() {
+const std::map<uint32_t, ChrRaceInfo>& get_chr_race_map() {
 	return chr_race_map_data;
 }
 
-const std::unordered_map<uint32_t, std::unordered_map<uint32_t, uint32_t>>& get_chr_race_x_chr_model_map() {
+const std::map<uint32_t, std::map<uint32_t, uint32_t>>& get_chr_race_x_chr_model_map() {
 	return chr_race_x_chr_model_map_data;
 }
 
@@ -434,9 +462,11 @@ const std::unordered_map<std::string, db::DataRecord>& get_model_texture_layer_m
 	return chr_model_texture_layer_map_data;
 }
 
-uint32_t get_texture_file_data_id(uint32_t material_resources_id) {
+std::optional<uint32_t> get_texture_file_data_id(uint32_t material_resources_id) {
 	auto it = tfd_map.find(material_resources_id);
-	return (it != tfd_map.end()) ? it->second : 0;
+	if (it != tfd_map.end())
+		return it->second;
+	return std::nullopt;
 }
 
 std::optional<uint32_t> get_choice_skinned_model(uint32_t choice_id) {

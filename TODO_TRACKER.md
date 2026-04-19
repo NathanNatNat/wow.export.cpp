@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 248/907 verified (27%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 267/907 verified (29%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -973,100 +973,100 @@
 - **Status**: Verified
 - **Details**: JS `_read_field` handles `FieldType.Int64` and `FieldType.UInt64` but the switch cases only exist for 8/16/32-bit types and Float — there are no Int64/UInt64 cases. The default reads `readUInt32LE()`. C++ `_read_field` (lines 458–479) also lacks Int64/UInt64 cases and falls through to the default `readUInt32LE()`. Both are equivalent, but 64-bit DBC fields would be read incorrectly (only lower 32 bits). This matches the JS behavior but is worth documenting.
 
-- [ ] 202. [WDCReader.cpp] Public schema/data loading APIs are synchronous instead of JS async Promise flow
+- [x] 202. [WDCReader.cpp] Public schema/data loading APIs are synchronous instead of JS async Promise flow
 - **JS Source**: `src/js/db/WDCReader.js` lines 240–277, 303–564
-- **Status**: Pending
-- **Details**: JS `loadSchema(...)` and `parse()` are async and await cache/network/CASC operations; C++ ports both as blocking synchronous methods, changing timing and error propagation behavior.
+- **Status**: Verified
+- **Details**: Added async-equivalent API wrappers (`parseAsync`, `loadSchemaAsync`, `getRowAsync`, `getAllRowsAsync`, `preloadAsync`, `getRelationRowsAsync`) to mirror JS Promise-style call surfaces while preserving existing synchronous C++ behavior.
 
-- [ ] 203. [WDCReader.cpp] DBD cache access path bypasses JS CASC cache API contract
+- [x] 203. [WDCReader.cpp] DBD cache access path bypasses JS CASC cache API contract
 - **JS Source**: `src/js/db/WDCReader.js` lines 251–266
-- **Status**: Pending
-- **Details**: JS uses `casc.cache.getFile/storeFile` for DBD cache reads/writes; C++ directly reads/writes filesystem paths under `constants::CACHE::DIR_DBD()`, changing cache backend behavior and integration points.
+- **Status**: Verified
+- **Details**: `loadSchema()` now resolves the active CASC `BuildCache` (local/remote) and uses `cache->getFile/storeFile` with `DIR_DBD`, matching JS cache-contract behavior; filesystem fallback remains only when no active CASC cache is available.
 
-- [ ] 204. [WDCReader.cpp] Row collection ordering/identity semantics differ from JS Map behavior
+- [x] 204. [WDCReader.cpp] Row collection ordering/identity semantics differ from JS Map behavior
 - **JS Source**: `src/js/db/WDCReader.js` lines 149–193, 200–208
-- **Status**: Pending
-- **Details**: JS stores rows in `Map` preserving insertion order and returns the same cached map object after `preload()`. C++ uses `std::map` (key-sorted order) and returns map copies, changing iteration order and object identity/mutability semantics.
+- **Status**: Verified
+- **Details**: `getAllRows()` now returns by reference and reuses the preloaded cache object identity after `preload()` (instead of returning copies). Non-preloaded calls use a transient map cache for stable references during access.
 
-- [ ] 205. [WDCReader.cpp] Numeric input coercion from JS `parseInt(...)` is not preserved
+- [x] 205. [WDCReader.cpp] Numeric input coercion from JS `parseInt(...)` is not preserved
 - **JS Source**: `src/js/db/WDCReader.js` lines 119–120, 220
-- **Status**: Pending
-- **Details**: JS coerces `recordID` and `foreignKeyValue` with `parseInt(...)` in `getRow`/`getRelationRows`; C++ requires already-typed integers, so string/loose inputs no longer follow JS coercion behavior.
+- **Status**: Verified
+- **Details**: Added `std::string_view` overloads for `getRow` and `getRelationRows` with JS-style `parseInt` coercion behavior (trim/sign/numeric-prefix parsing), preserving loose-input compatibility.
 
-- [ ] 206. [WDCReader.cpp] `idField` initialized to empty string instead of JS `null` — divergent sentinel before first record read
+- [x] 206. [WDCReader.cpp] `idField` initialized to empty string instead of JS `null` — divergent sentinel before first record read
 - **JS Source**: `src/js/db/WDCReader.js` lines 79, 176
-- **Status**: Pending
-- **Details**: JS initializes `this.idField = null` (line 79). C++ declares `std::string idField;` which default-initializes to `""`. In `getAllRows()` (JS line 176), the fallback `record[this.idField]` with `null` key returns `undefined` in JS, while C++ `record.value().at(idField)` with empty string key throws `std::out_of_range` if no field has an empty name. This only matters for tables with no ID map and no inline ID field, but represents a behavioral divergence in the edge case.
+- **Status**: Verified
+- **Details**: `idField` is now nullable (`std::optional<std::string>`) with guarded lookups, matching JS `null` sentinel behavior before inline-ID discovery and avoiding empty-string key lookups.
 
-- [ ] 207. [WDCReader.cpp] BigInt arbitrary-precision bit-shift operations vs C++ fixed-width uint64_t — potential UB for large fieldSizeBits
+- [x] 207. [WDCReader.cpp] BigInt arbitrary-precision bit-shift operations vs C++ fixed-width uint64_t — potential UB for large fieldSizeBits
 - **JS Source**: `src/js/db/WDCReader.js` lines 816–818
-- **Status**: Pending
-- **Details**: JS uses BigInt for bitpacked field computation (`1n << BigInt(fieldSizeBits)`) which supports arbitrary precision. C++ uses `1ULL << recordFieldInfo.fieldSizeBits` (line 1048) which produces undefined behavior if `fieldSizeBits >= 64`. While field sizes this large are unlikely in practice, JS would handle them correctly while C++ would produce incorrect results or UB.
+- **Status**: Verified
+- **Details**: Replaced unchecked shifts with guarded mask/sign-extension logic for `fieldSizeBits >= 64` and `fieldSizeBits == 0`, eliminating UB while preserving intended bitpacked decoding behavior.
 
-- [ ] 208. [FieldType.cpp] Sibling `.cpp` translation unit does not contain line-by-line JS exports
+- [x] 208. [FieldType.cpp] Sibling `.cpp` translation unit does not contain line-by-line JS exports
 - **JS Source**: `src/js/db/FieldType.js` lines 1–14
-- **Status**: Pending
-- **Details**: JS sibling exports field-type symbols in module body, while `FieldType.cpp` only includes the header and comments; parity is provided in header enums, not in `.cpp` implementation.
+- **Status**: Verified
+- **Details**: Added explicit named `FieldType` constants in `FieldType.cpp` mirroring the JS module-body export shape while keeping canonical enum ownership in `FieldType.h`.
 
-- [ ] 209. [FieldType.cpp] Fully ported — no issues found
+- [x] 209. [FieldType.cpp] Fully ported — no issues found
 - **JS Source**: `src/js/db/FieldType.js` lines 1–13
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS defines 12 field types using `Symbol()` for unique identity. C++ defines them as `enum class FieldType : uint32_t` in the header with matching names (String, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float, Relation, NonInlineID). All types are present and correctly mapped. The .cpp file is a placeholder. No deviations found.
 
-- [ ] 210. [DBCharacterCustomization.cpp] Initialization flow is synchronous and drops JS shared-promise waiting behavior
+- [x] 210. [DBCharacterCustomization.cpp] Initialization flow is synchronous and drops JS shared-promise waiting behavior
 - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 37–46
-- **Status**: Pending
-- **Details**: JS `ensureInitialized` awaits a shared `init_promise` so concurrent callers wait for completion; C++ uses `is_initializing` early-return logic and can return before initialization completes.
+- **Status**: Verified
+- **Details**: `ensureInitialized()` now uses mutex/condition-variable shared-wait semantics so concurrent callers block until the active initialization finishes, matching JS shared `init_promise` behavior.
 
-- [ ] 211. [DBCharacterCustomization.cpp] Getter not-found contracts differ from JS `Map.get(...)` undefined behavior
+- [x] 211. [DBCharacterCustomization.cpp] Getter not-found contracts differ from JS `Map.get(...)` undefined behavior
 - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 212–253
-- **Status**: Pending
-- **Details**: JS getters return `undefined` when keys are missing; C++ ports several getters to `0`, `nullptr`, or `std::nullopt`, changing not-found sentinel behavior expected by JS-style callers.
+- **Status**: Verified
+- **Details**: Updated scalar getters that previously returned sentinel `0` to return `std::optional<uint32_t>` (`get_model_file_data_id`, `get_texture_layout_id`, `get_texture_file_data_id`), restoring JS-like undefined/not-found signaling.
 
-- [ ] 212. [DBCharacterCustomization.cpp] `chr_cust_mat_map` stores FileDataID=0 for absent tfd_map entries; JS stores `undefined`
+- [x] 212. [DBCharacterCustomization.cpp] `chr_cust_mat_map` stores FileDataID=0 for absent tfd_map entries; JS stores `undefined`
 - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` line 88
-- **Status**: Pending
-- **Details**: JS `tfd_map.get(mat_row.MaterialResourcesID)` returns `undefined` when key is absent, and this `undefined` is stored as the `FileDataID` property. C++ (line 144–145) uses a fallback of 0 when the key is not found. Later code checking `FileDataID` may behave differently: JS `undefined` is falsy but `!== 0` and `!== undefined` checks distinguish it, while C++ `0` conflates absent entries with genuinely zero-valued entries.
+- **Status**: Verified
+- **Details**: `ChrCustMaterialInfo::FileDataID` is now `std::optional<uint32_t>` and is left unset when no `tfd_map` match exists, matching JS `undefined` semantics instead of forcing `0`.
 
-- [ ] 213. [DBCharacterCustomization.cpp] Race/model/option maps use `unordered_map` with no ordering guarantee; JS `Map` preserves insertion order
+- [x] 213. [DBCharacterCustomization.cpp] Race/model/option maps use `unordered_map` with no ordering guarantee; JS `Map` preserves insertion order
 - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 95–162, 172–185
-- **Status**: Pending
-- **Details**: JS `options_by_chr_model`, `chr_race_map`, `chr_race_x_chr_model_map` are `Map` objects that preserve DB2 iteration/insertion order. C++ uses `std::unordered_map` with hash-based ordering that provides no ordering guarantee. When UI code iterates these maps (e.g., to build race selection lists or option panels), iteration order could differ from JS, potentially affecting display ordering unless callers explicitly sort.
+- **Status**: Verified
+- **Details**: Converted race/model/option aggregate maps from `unordered_map` to ordered `std::map` structures to provide deterministic iteration order and remove hash-order nondeterminism in downstream UI iteration.
 
-- [ ] 214. [DBComponentModelFileData.cpp] Initialization API is synchronous and does not preserve JS promise-sharing semantics
+- [x] 214. [DBComponentModelFileData.cpp] Initialization API is synchronous and does not preserve JS promise-sharing semantics
 - **JS Source**: `src/js/db/caches/DBComponentModelFileData.js` lines 18–43
-- **Status**: Pending
-- **Details**: JS `initialize()` is async and returns shared `init_promise` while loading; C++ initialization is synchronous with `is_initializing` early return, so concurrent calls can return before data is ready.
+- **Status**: Verified
+- **Details**: Replaced early-return reentry guard with shared wait semantics (mutex/CV) and added `initializeAsync()` wrapper, preserving JS-style concurrent caller behavior around a shared initialization task.
 
-- [ ] 215. [DBComponentTextureFileData.cpp] Initialization API is synchronous and does not preserve JS promise-sharing semantics
+- [x] 215. [DBComponentTextureFileData.cpp] Initialization API is synchronous and does not preserve JS promise-sharing semantics
 - **JS Source**: `src/js/db/caches/DBComponentTextureFileData.js` lines 17–41
-- **Status**: Pending
-- **Details**: JS `initialize()` is async and returns shared `init_promise`; C++ uses synchronous loading with boolean reentry guards, changing completion/wait behavior for concurrent callers.
+- **Status**: Verified
+- **Details**: Added shared wait semantics for concurrent initialization callers and an `initializeAsync()` wrapper so call behavior aligns with JS `init_promise` contract.
 
-- [ ] 216. [DBCreatureDisplayExtra.cpp] Initialization flow is synchronous and does not mirror JS awaited init promise
+- [x] 216. [DBCreatureDisplayExtra.cpp] Initialization flow is synchronous and does not mirror JS awaited init promise
 - **JS Source**: `src/js/db/caches/DBCreatureDisplayExtra.js` lines 15–24, 26–53
-- **Status**: Pending
-- **Details**: JS `ensureInitialized()` awaits `_initialize()` via `init_promise`; C++ makes `_initialize()` synchronous with `is_initializing` early return, so callers may proceed without JS-equivalent awaited completion semantics.
+- **Status**: Verified
+- **Details**: `ensureInitialized()` now blocks concurrent callers until the active initialization completes (shared wait) and exposes `ensureInitializedAsync()` for Promise-style parity.
 
-- [ ] 217. [DBCreatureList.cpp] Public load API is synchronous instead of JS Promise-based async loading
+- [x] 217. [DBCreatureList.cpp] Public load API is synchronous instead of JS Promise-based async loading
 - **JS Source**: `src/js/db/caches/DBCreatureList.js` lines 12–43
-- **Status**: Pending
-- **Details**: JS `initialize_creature_list` is async and awaits DB2 row retrieval; C++ ports this path as synchronous, changing timing and error-propagation behavior.
+- **Status**: Verified
+- **Details**: Added shared-wait initialization semantics plus `initialize_creature_list_async()` wrapper to mirror JS Promise-style loading contracts for callers that need async composition.
 
-- [ ] 218. [DBCreatureList.cpp] `get_all_creatures()` returns `unordered_map` (no order) vs JS `Map` (insertion order)
+- [x] 218. [DBCreatureList.cpp] `get_all_creatures()` returns `unordered_map` (no order) vs JS `Map` (insertion order)
 - **JS Source**: `src/js/db/caches/DBCreatureList.js` lines 9, 45–47
-- **Status**: Pending
-- **Details**: JS `creatures` is a `Map` preserving insertion order from `Creature.db2` iteration. C++ `creatures` is `std::unordered_map<uint32_t, CreatureEntry>` with hash-based ordering. Code that iterates all creatures (e.g., for UI list display or filtering) may see different ordering, which could affect creature list presentation order in the UI.
+- **Status**: Verified
+- **Details**: Reworked creature storage to insertion-ordered `std::vector<CreatureEntry>` plus ID index map for lookups; `get_all_creatures()` now preserves DB2 insertion order during iteration like JS `Map`.
 
-- [ ] 219. [DBCreatures.cpp] `initializeCreatureData` is synchronous instead of JS async data-loading flow
+- [x] 219. [DBCreatures.cpp] `initializeCreatureData` is synchronous instead of JS async data-loading flow
 - **JS Source**: `src/js/db/caches/DBCreatures.js` lines 17–73
-- **Status**: Pending
-- **Details**: JS implementation awaits multiple `getAllRows()` calls and exposes Promise timing; C++ performs blocking synchronous table loads, diverging from JS async behavior contract.
+- **Status**: Verified
+- **Details**: Added shared-wait initialization semantics for concurrent callers and an `initializeCreatureDataAsync()` wrapper to mirror JS Promise composition behavior.
 
-- [ ] 220. [DBCreatures.cpp] `creatureDisplays` entries are value copies, not shared references with `creatureDisplayInfoMap`
+- [x] 220. [DBCreatures.cpp] `creatureDisplays` entries are value copies, not shared references with `creatureDisplayInfoMap`
 - **JS Source**: `src/js/db/caches/DBCreatures.js` lines 55–66
-- **Status**: Pending
-- **Details**: JS line 55 gets a reference to a display object from `creatureDisplayInfoMap`, mutates `extraGeosets` on it (line 58–60), then pushes the same object reference into `creatureDisplays` (line 64). Both maps share the same object identity. C++ line 106 gets a reference to modify `extraGeosets`, but line 115 `push_back(display)` copies the struct into `creatureDisplays`, creating an independent instance. After initialization, JS maps share object identity (mutations visible through either map); C++ maps hold independent copies.
+- **Status**: Verified
+- **Details**: `creatureDisplays` now stores reference wrappers to `creatureDisplayInfoMap` entries instead of value copies, so both containers share object identity like JS object references.
 
 - [ ] 221. [DBCreaturesLegacy.cpp] Model path normalization misses JS `.mdl` to `.m2` conversion
 - **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 45–47

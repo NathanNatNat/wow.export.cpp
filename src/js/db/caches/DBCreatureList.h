@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <future>
 
 namespace db::caches::DBCreatureList {
 
@@ -23,12 +24,13 @@ struct CreatureEntry {
  * Initialize creature list from Creature.db2
  */
 void initialize_creature_list();
+std::future<void> initialize_creature_list_async();
 
 /**
  * Get all creatures.
  * @returns Reference to the creature map.
  */
-const std::unordered_map<uint32_t, CreatureEntry>& get_all_creatures();
+const std::vector<CreatureEntry>& get_all_creatures();
 
 /**
  * Get a creature by its ID.

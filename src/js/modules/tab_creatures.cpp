@@ -200,8 +200,13 @@ static model_viewer_utils::ViewStateProxy* get_view_state_ptr() {
 
 static std::vector<db::caches::DBCreatures::CreatureDisplayInfo> get_creature_displays(uint32_t file_data_id) {
 	const auto* displays = db::caches::DBCreatures::getCreatureDisplaysByFileDataID(file_data_id);
-	if (displays)
-		return *displays;
+	if (displays) {
+		std::vector<db::caches::DBCreatures::CreatureDisplayInfo> out;
+		out.reserve(displays->size());
+		for (const auto& display_ref : *displays)
+			out.push_back(display_ref.get());
+		return out;
+	}
 	return {};
 }
 
@@ -733,7 +738,7 @@ static void refresh_creature_equipment() {
 		bake_id = creature_extra_info->BakeMaterialResourcesID;
 
 	if (bake_id > 0) {
-		uint32_t bake_fdid = db::caches::DBCharacterCustomization::get_texture_file_data_id(bake_id);
+		uint32_t bake_fdid = db::caches::DBCharacterCustomization::get_texture_file_data_id(bake_id).value_or(0);
 		if (bake_fdid != 0) {
 			try {
 				BufferWrapper bake_data = core::view->casc->getVirtualFileByID(bake_fdid);
@@ -804,7 +809,7 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 				return;
 			}
 
-			uint32_t file_data_id = db::caches::DBCharacterCustomization::get_model_file_data_id(chr_model_id.value());
+			uint32_t file_data_id = db::caches::DBCharacterCustomization::get_model_file_data_id(chr_model_id.value()).value_or(0);
 			if (file_data_id == 0) {
 				core::setToast("error", std::format("No model file found for creature {}.", creature.name), {}, -1);
 				return;
@@ -843,7 +848,7 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			uint32_t bake_id = extra->HDBakeMaterialResourcesID;
 			if (bake_id == 0) bake_id = extra->BakeMaterialResourcesID;
 			if (bake_id > 0) {
-				uint32_t bake_fdid = db::caches::DBCharacterCustomization::get_texture_file_data_id(bake_id);
+				uint32_t bake_fdid = db::caches::DBCharacterCustomization::get_texture_file_data_id(bake_id).value_or(0);
 				if (bake_fdid != 0) {
 					try {
 						BufferWrapper bake_data = view.casc->getVirtualFileByID(bake_fdid);
@@ -855,7 +860,7 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			}
 
 			// apply customization textures + baked NPC texture
-			uint32_t layout_id = db::caches::DBCharacterCustomization::get_texture_layout_id(chr_model_id.value());
+			uint32_t layout_id = db::caches::DBCharacterCustomization::get_texture_layout_id(chr_model_id.value()).value_or(0);
 			character_appearance::apply_customization_textures(
 				active_renderer_result.m2.get(),
 				customization_choices,
@@ -1120,7 +1125,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 				}
 
 				auto chr_model_id = db::caches::DBCharacterCustomization::get_chr_model_id(extra->DisplayRaceID, extra->DisplaySexID);
-				uint32_t file_data_id = chr_model_id.has_value() ? db::caches::DBCharacterCustomization::get_model_file_data_id(chr_model_id.value()) : 0;
+				uint32_t file_data_id = chr_model_id.has_value() ? db::caches::DBCharacterCustomization::get_model_file_data_id(chr_model_id.value()).value_or(0) : 0;
 				if (file_data_id == 0) {
 					helper.mark(creature_name, false, "No character model found");
 					continue;
@@ -1174,13 +1179,13 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 							customization_choices.push_back(std::move(j));
 						}
 
-						uint32_t layout_id = db::caches::DBCharacterCustomization::get_texture_layout_id(chr_model_id.value());
+						uint32_t layout_id = db::caches::DBCharacterCustomization::get_texture_layout_id(chr_model_id.value()).value_or(0);
 
 						std::unique_ptr<casc::BLPImage> baked_npc_blp;
 						uint32_t bake_id_val = extra->HDBakeMaterialResourcesID;
 						if (bake_id_val == 0) bake_id_val = extra->BakeMaterialResourcesID;
 						if (bake_id_val > 0) {
-							uint32_t bake_fdid = db::caches::DBCharacterCustomization::get_texture_file_data_id(bake_id_val);
+							uint32_t bake_fdid = db::caches::DBCharacterCustomization::get_texture_file_data_id(bake_id_val).value_or(0);
 							if (bake_fdid != 0) {
 								try {
 									BufferWrapper bake_data = casc->getVirtualFileByID(bake_fdid);
@@ -1511,8 +1516,8 @@ static void initialize() {
 	const auto& creatures = db::caches::DBCreatureList::get_all_creatures();
 	std::vector<nlohmann::json> entries;
 
-	for (const auto& [id, creature] : creatures)
-		entries.push_back(std::format("{} [{}]", creature.name, id));
+	for (const auto& creature : creatures)
+		entries.push_back(std::format("{} [{}]", creature.name, creature.id));
 
 	std::sort(entries.begin(), entries.end(), [](const nlohmann::json& a, const nlohmann::json& b) {
 		static const std::regex id_suffix(R"(\s+\[\d+\]$)");

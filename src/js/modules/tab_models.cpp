@@ -134,8 +134,10 @@ static std::vector<DisplayVariant> get_model_displays(uint32_t file_data_id) {
 	if (creature_displays) {
 		std::vector<DisplayVariant> result;
 		result.reserve(creature_displays->size());
-		for (const auto& d : *creature_displays)
+		for (const auto& d_ref : *creature_displays) {
+			const auto& d = d_ref.get();
 			result.push_back({ d.ID, d.textures, d.extraGeosets, true });
+		}
 		return result;
 	}
 

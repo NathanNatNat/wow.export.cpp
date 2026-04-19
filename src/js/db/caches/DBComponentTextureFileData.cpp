@@ -12,6 +12,8 @@ License: MIT
 
 #include <format>
 #include <unordered_map>
+#include <mutex>
+#include <condition_variable>
 
 namespace db::caches::DBComponentTextureFileData {
 
@@ -31,16 +33,22 @@ static std::unordered_map<uint32_t, ComponentTextureInfo> file_data_to_info;
 
 static bool is_initialized = false;
 static bool is_initializing = false;
+static std::mutex init_mutex;
+static std::condition_variable init_cv;
 
 void initialize() {
+{
+std::unique_lock lock(init_mutex);
 if (is_initialized)
 return;
-
-if (is_initializing)
+if (is_initializing) {
+init_cv.wait(lock, [] { return is_initialized || !is_initializing; });
 return;
-
+}
 is_initializing = true;
+}
 
+try {
 logging::write("Loading ComponentTextureFileData...");
 
 auto allRows = casc::db2::preloadTable("ComponentTextureFileData").getAllRows();
@@ -53,8 +61,24 @@ file_data_to_info.emplace(id, info);
 }
 
 logging::write(std::format("Loaded ComponentTextureFileData for {} textures", file_data_to_info.size()));
+{
+std::scoped_lock lock(init_mutex);
 is_initialized = true;
 is_initializing = false;
+}
+init_cv.notify_all();
+} catch (...) {
+{
+std::scoped_lock lock(init_mutex);
+is_initializing = false;
+}
+init_cv.notify_all();
+throw;
+}
+}
+
+std::future<void> initializeAsync() {
+return std::async(std::launch::async, [] { initialize(); });
 }
 
 std::optional<uint32_t> getTextureForRaceGender(const std::vector<uint32_t>& file_data_ids, std::optional<uint32_t> race_id, std::optional<uint32_t> gender_index, uint32_t fallback_race_id) {
