@@ -175,4 +175,8 @@ private:
 
 	// material data
 	std::map<int, M2LegacyMaterialProps> material_props;
+
+	// watcher state — polling equivalent for JS Vue geoset watcher (see item 792)
+	std::vector<bool> watcher_geoset_checked;
+	bool watcher_state_initialized = false;
 };
