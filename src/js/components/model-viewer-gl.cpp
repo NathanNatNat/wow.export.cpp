@@ -314,6 +314,8 @@ static void setup_camera_gl_callbacks(State& state) {
 //   document.addEventListener('mouseup', ...)
 //   canvas.addEventListener('wheel', ...)
 //   document.addEventListener('keydown', ...)
+// Handlers return bool to indicate event consumption (JS preventDefault/stopPropagation).
+// Consumed wheel events zero io.MouseWheel to prevent parent window scrolling (stopPropagation).
 static void handle_input(State& state) {
 	ImGuiIO& io = ImGui::GetIO();
 	const bool is_hovered = ImGui::IsItemHovered();
@@ -324,12 +326,17 @@ static void handle_input(State& state) {
 	int mouse_y = static_cast<int>(io.MousePos.y - widget_pos.y);
 
 	// Mouse wheel (canvas-level in JS)
+	// JS: on_mouse_wheel calls preventDefault() + stopPropagation() when consumed.
+	// stopPropagation equivalent: zero io.MouseWheel to prevent ImGui parent scroll.
 	if (is_hovered && io.MouseWheel != 0.0f) {
+		bool consumed = false;
 		if (state.use_character_controls && state.char_controls) {
-			state.char_controls->on_mouse_wheel(-io.MouseWheel * 100.0f);
+			consumed = state.char_controls->on_mouse_wheel(-io.MouseWheel * 100.0f);
 		} else if (state.orbit_controls) {
-			state.orbit_controls->on_mouse_wheel(-io.MouseWheel * 100.0f);
+			consumed = state.orbit_controls->on_mouse_wheel(-io.MouseWheel * 100.0f);
 		}
+		if (consumed)
+			io.MouseWheel = 0.0f;  // stopPropagation: prevent parent window from scrolling
 	}
 
 	// Mouse down (canvas-level in JS)
@@ -344,9 +351,8 @@ static void handle_input(State& state) {
 		}
 	}
 
-	// Key down
+	// Key down — on_key_down returns true only for handled keys (JS preventDefault)
 	if (state.orbit_controls && !state.use_character_controls) {
-		// Forward relevant key presses
 		for (int key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_NamedKey_END; key++) {
 			if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(key))) {
 				state.orbit_controls->on_key_down(key, io.KeyShift, io.KeyAlt);

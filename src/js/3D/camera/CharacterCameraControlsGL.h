@@ -14,10 +14,10 @@ class CharacterCameraControlsGL {
 public:
 	CharacterCameraControlsGL(CameraGL& camera, DomElementGL& dom_element);
 
-	void on_mouse_down(int button, int clientX, int clientY);
-	void on_mouse_move(int clientX, int clientY);
+	bool on_mouse_down(int button, int clientX, int clientY);
+	bool on_mouse_move(int clientX, int clientY);
 	void on_mouse_up(int button);
-	void on_mouse_wheel(float deltaY);
+	bool on_mouse_wheel(float deltaY);
 	void update();
 	void dispose();
 

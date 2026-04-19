@@ -204,13 +204,16 @@ CameraControlsGL::CameraControlsGL(CameraGL& camera, DomElementGL& dom_element)
 }
 
 void CameraControlsGL::init() {
-	// JS init() registers six event listeners:
-	//   contextmenu (preventDefault) on dom_element,
-	//   mousedown, wheel, keydown on dom_element,
-	//   mousemove, mouseup on document (stored as move_listener/up_listener).
-	// In C++/GLFW, the caller is responsible for forwarding input events
-	// to the on_mouse_down/on_mouse_move/on_mouse_up/on_mouse_wheel/on_key_down methods.
-	// GLFW does not have a context menu, so contextmenu prevention is unnecessary.
+	// JS init() registers six event listeners on dom_element / document:
+	//   dom_element: contextmenu (preventDefault), mousedown, wheel, keydown
+	//   document:    mousemove (stored as move_listener), mouseup (stored as up_listener)
+	// It also sets dom_element.tabIndex = 0 if it was -1, then calls update().
+	//
+	// In C++/GLFW there is no DOM event system. The caller is responsible for
+	// forwarding input to on_mouse_down/move/up/wheel/key_down at the appropriate
+	// times. contextmenu prevention is unnecessary (GLFW has no context menu).
+	// document-level move/up forwarding is handled by model-viewer-gl handle_input()
+	// which always forwards move/up regardless of hover, matching JS document listeners.
 
 	if (dom_element.tabIndex == -1)
 		dom_element.tabIndex = 0;
@@ -219,19 +222,26 @@ void CameraControlsGL::init() {
 }
 
 void CameraControlsGL::dispose() {
-	// JS dispose() removes mousemove and mouseup event listeners from document.
-	// In C++/GLFW, the caller must stop forwarding input events to this instance.
-	// Reset state to prevent stale input processing if events are still forwarded.
+	// JS dispose() only removes the two document-level listeners (mousemove, mouseup).
+	// The dom_element listeners (contextmenu, mousedown, wheel, keydown) are NOT removed —
+	// they remain attached to the element for its lifetime.
+	//
+	// In C++/GLFW the caller must stop forwarding events to this instance.
+	// We reset state here so that any stale forwarded events are ignored.
 	state = STATE_NONE;
 }
 
-void CameraControlsGL::on_mouse_down(int button, int clientX, int clientY,
+bool CameraControlsGL::on_mouse_down(int button, int clientX, int clientY,
                                       bool ctrlKey, bool metaKey, bool shiftKey) {
+	// JS: event.preventDefault() — unconditional; prevents text selection / focus steal.
+	// C++/GLFW equivalent: not applicable (no DOM default behaviors to suppress).
+
 	// JS: this.dom_element.focus ? this.dom_element.focus() : window.focus()
-	// In GLFW, dom_element.focus should be set to call glfwFocusWindow().
-	// If not set, there is no fallback — the caller must ensure focus is configured.
+	// Falls back to window.focus() when the element has no own focus method.
 	if (dom_element.focus)
 		dom_element.focus();
+	else if (dom_element.window_focus)
+		dom_element.window_focus();
 
 	if (button == MOUSE_BUTTON_LEFT || button == MOUSE_BUTTON_MIDDLE) {
 		if (ctrlKey || metaKey || shiftKey) {
@@ -245,11 +255,17 @@ void CameraControlsGL::on_mouse_down(int button, int clientX, int clientY,
 		vec3_set(transform_start, static_cast<float>(clientX), static_cast<float>(clientY), 0);
 		state = STATE_PANNING;
 	}
+
+	// JS called preventDefault() → return true so the caller can suppress further processing.
+	return true;
 }
 
-void CameraControlsGL::on_mouse_wheel(float deltaY) {
+bool CameraControlsGL::on_mouse_wheel(float deltaY) {
 	if (state != STATE_NONE && state != STATE_ROTATING)
-		return;
+		return false;  // JS: early return before preventDefault — not consumed
+
+	// JS: event.preventDefault(); event.stopPropagation();
+	// stopPropagation is handled by the caller zeroing io.MouseWheel when we return true.
 
 	if (deltaY < 0)
 		dolly_out(ZOOM_SCALE);
@@ -257,11 +273,15 @@ void CameraControlsGL::on_mouse_wheel(float deltaY) {
 		dolly_in(ZOOM_SCALE);
 
 	update();
+	return true;  // consumed — caller should suppress wheel propagation
 }
 
-void CameraControlsGL::on_mouse_move(int clientX, int clientY) {
+bool CameraControlsGL::on_mouse_move(int clientX, int clientY) {
 	if (state == STATE_NONE)
-		return;
+		return false;  // JS: early return before preventDefault — not consumed
+
+	// JS: event.preventDefault() — prevents text selection during drag.
+	// C++/GLFW equivalent: not applicable; return true so caller knows event was consumed.
 
 	if (state == STATE_ROTATING) {
 		vec3_set(transform_end, static_cast<float>(clientX), static_cast<float>(clientY), 0);
@@ -296,6 +316,8 @@ void CameraControlsGL::on_mouse_move(int clientX, int clientY) {
 		vec3_copy(transform_start, transform_end);
 		update();
 	}
+
+	return true;  // JS called preventDefault() for any active state
 }
 
 float CameraControlsGL::get_pan_scale() {
@@ -310,7 +332,7 @@ void CameraControlsGL::on_mouse_up() {
 	state = STATE_NONE;
 }
 
-void CameraControlsGL::on_key_down(int keyCode, bool shiftKey, bool altKey) {
+bool CameraControlsGL::on_key_down(int keyCode, bool shiftKey, bool altKey) {
 	const float key_speed = shiftKey ? KEY_PAN_SPEED_SHIFT : (altKey ? KEY_PAN_SPEED_ALT : KEY_PAN_SPEED);
 
 	if (keyCode == KEY_S)
@@ -326,9 +348,11 @@ void CameraControlsGL::on_key_down(int keyCode, bool shiftKey, bool altKey) {
 	else if (keyCode == KEY_E)
 		pan(0, 0, -key_speed);
 	else
-		return;
+		return false;  // unhandled key — JS: early return before preventDefault
 
+	// JS: event.preventDefault() — prevents browser default key actions (e.g. W scrolling page).
 	update();
+	return true;
 }
 
 void CameraControlsGL::dolly_out(float scale_val) {
