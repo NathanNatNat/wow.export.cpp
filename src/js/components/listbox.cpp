@@ -606,10 +606,29 @@ void render(const char* id,
 	// Get the active item list (override or items).
 	const auto& sourceItems = itemList(items, overrideItems);
 
-	// Compute filtered items.
-	const std::vector<std::string> filteredItems = computeFilteredItems(
-		sourceItems, state.debouncedFilter, regex, state.activeQuickFilter,
-		selection, onSelectionChanged);
+	// Compute filtered items — only when inputs have actually changed.
+	{
+		const std::string* curData = sourceItems.empty() ? nullptr : sourceItems.data();
+		const bool needRecompute = !state.filteredItemsCacheValid
+			|| curData           != state.cachedItemsData
+			|| sourceItems.size() != state.cachedItemsSize
+			|| state.debouncedFilter    != state.cachedDebouncedFilter
+			|| regex                    != state.cachedRegexMode
+			|| state.activeQuickFilter  != state.cachedActiveQuickFilter;
+
+		if (needRecompute) {
+			state.cachedFilteredItems = computeFilteredItems(
+				sourceItems, state.debouncedFilter, regex, state.activeQuickFilter,
+				selection, onSelectionChanged);
+			state.cachedItemsData          = curData;
+			state.cachedItemsSize          = sourceItems.size();
+			state.cachedDebouncedFilter    = state.debouncedFilter;
+			state.cachedRegexMode          = regex;
+			state.cachedActiveQuickFilter  = state.activeQuickFilter;
+			state.filteredItemsCacheValid  = true;
+		}
+	}
+	const std::vector<std::string>& filteredItems = state.cachedFilteredItems;
 
 	// --- mounted/watch: persistscrollkey scroll position restoration ---
 	if (!persistscrollkey.empty() && !filteredItems.empty() && !state.scrollPositionRestored) {

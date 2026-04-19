@@ -99,8 +99,22 @@ void render(const char* id,
 	const auto& resolvedItems = (overrideItems != nullptr && !overrideItems->empty())
 		? *overrideItems : items;
 
-	// Pre-filter resolved items by expansion before passing to base listbox.
-	const std::vector<std::string> expansionFiltered = filterByExpansion(resolvedItems, expansionFilter);
+	// Pre-filter resolved items by expansion — only when inputs change.
+	{
+		const std::string* curData = resolvedItems.empty() ? nullptr : resolvedItems.data();
+		const bool needRecompute =
+			curData                   != state.cachedExpItemsData
+			|| resolvedItems.size()   != state.cachedExpItemsSize
+			|| expansionFilter        != state.cachedExpansionFilter;
+
+		if (needRecompute) {
+			state.cachedExpansionFiltered = filterByExpansion(resolvedItems, expansionFilter);
+			state.cachedExpItemsData    = curData;
+			state.cachedExpItemsSize    = resolvedItems.size();
+			state.cachedExpansionFilter = expansionFilter;
+		}
+	}
+	const std::vector<std::string>& expansionFiltered = state.cachedExpansionFiltered;
 
 	// Delegate to the base listbox render with expansion-filtered items (no override,
 	// since we already resolved it above).

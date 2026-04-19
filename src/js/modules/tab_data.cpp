@@ -53,6 +53,10 @@ static data_table::DataTableState data_table_state;
 static context_menu::ContextMenuState data_table_ctx_state;
 static menu_button::MenuButtonState menu_button_data_state;
 
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
+
 // --- Forward declarations ---
 static void copy_rows_csv();
 static void copy_rows_sql();
@@ -243,10 +247,7 @@ void render() {
 	//     <Listbox v-model:selection="selectionDB2s" :items="dbdManifest" ...>
 	// </div>
 	if (app::layout::BeginListContainer("db2-list-container", regions)) {
-		std::vector<std::string> items_str;
-		items_str.reserve(view.dbdManifest.size());
-		for (const auto& item : view.dbdManifest)
-			items_str.push_back(item.get<std::string>());
+		const auto& items_str = core::cached_json_strings(view.dbdManifest, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
 		for (const auto& s : view.selectionDB2s)

@@ -106,7 +106,9 @@ static bool prev_show_texture_atlas = false;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
-// Upload RGBA pixel data to an OpenGL texture, returning the texture ID.
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
 // Deletes the previous texture if old_tex != 0.
 static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t old_tex = 0) {
 	if (old_tex != 0) {
@@ -552,10 +554,7 @@ void render() {
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	if (app::layout::BeginListContainer("textures-list-container", regions)) {
 		// Convert JSON items/selection to string vectors.
-		std::vector<std::string> items_str;
-		items_str.reserve(view.listfileTextures.size());
-		for (const auto& item : view.listfileTextures)
-			items_str.push_back(item.get<std::string>());
+		const auto& items_str = core::cached_json_strings(view.listfileTextures, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
 		for (const auto& s : view.selectionTextures)

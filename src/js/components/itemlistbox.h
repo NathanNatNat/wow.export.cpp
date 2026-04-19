@@ -53,6 +53,14 @@ struct ItemListboxState {
 	// Mouse drag tracking (equivalent to JS instance vars set in startMouse).
 	float scrollStartY = 0.0f;
 	float scrollStart = 0.0f;
+
+	// Cached filtered items — rebuilt only when inputs change, not every frame.
+	std::vector<ItemEntry> cachedFilteredItems;
+	const ItemEntry* cachedItemsData      = nullptr;
+	size_t           cachedItemsSize      = ~size_t(0);
+	std::string      cachedFilter;
+	bool             cachedRegexMode      = false;
+	bool             filteredItemsCacheValid = false;
 };
 
 /**

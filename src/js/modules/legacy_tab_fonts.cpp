@@ -35,6 +35,10 @@ static std::unordered_map<std::string, void*> loaded_fonts;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
+
 static std::string get_font_id(const std::string& file_name) {
 	// Use uint32_t for the computation to avoid signed overflow UB,
 	// then cast to int32_t at the end to match JS `| 0` (ToInt32) semantics.
@@ -162,10 +166,7 @@ void render() {
 	//       copy_file_paths, copy_export_paths, open_export_directory
 	if (app::layout::BeginListContainer("legacy-fonts-list-container", regions)) {
 		// Convert JSON items/selection to string vectors.
-		std::vector<std::string> items_str;
-		items_str.reserve(view.listfileFonts.size());
-		for (const auto& item : view.listfileFonts)
-			items_str.push_back(item.get<std::string>());
+		const auto& items_str = core::cached_json_strings(view.listfileFonts, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
 		for (const auto& s : view.selectionFonts)

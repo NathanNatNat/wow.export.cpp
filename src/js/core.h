@@ -693,4 +693,28 @@ void postToMainThread(std::function<void()> task);
  */
 void drainMainThreadQueue();
 
+/**
+ * Return a cached std::vector<std::string> built from a JSON vector.
+ * Only rebuilds when the source vector's size changes (O(1) check on hot path).
+ * Use a per-caller pair of (cache, cached_size) as persistent state.
+ *
+ * @param arr         Source vector of nlohmann::json string elements.
+ * @param cache       Persistent cache vector (modified in-place when stale).
+ * @param cached_size Persistent size of last build (initialize to ~size_t(0)).
+ * @returns           Const reference to the (possibly freshly rebuilt) cache.
+ */
+inline const std::vector<std::string>& cached_json_strings(
+	const std::vector<nlohmann::json>& arr,
+	std::vector<std::string>& cache,
+	size_t& cached_size) {
+	if (arr.size() != cached_size) {
+		cached_size = arr.size();
+		cache.clear();
+		cache.reserve(cached_size);
+		for (const auto& item : arr)
+			cache.push_back(item.get<std::string>());
+	}
+	return cache;
+}
+
 } // namespace core

@@ -212,6 +212,10 @@ static menu_button::MenuButtonState menu_button_quality_state;
 static menu_button::MenuButtonState menu_button_heightmap_res_state;
 static menu_button::MenuButtonState menu_button_heightmap_depth_state;
 
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
+
 // --- Field value helpers (same as other tab modules) ---
 
 static uint32_t fieldToUint32(const db::FieldValue& val) {
@@ -1627,10 +1631,7 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 		       topRowH - app::layout::LIST_MARGIN_TOP));
 
 	// Convert JSON items to string vector for listbox
-	std::vector<std::string> map_items;
-	map_items.reserve(view.mapViewerMaps.size());
-	for (const auto& item : view.mapViewerMaps)
-		map_items.push_back(item.get<std::string>());
+	const auto& map_items = core::cached_json_strings(view.mapViewerMaps, s_items_cache, s_items_cache_size);
 
 	// Convert JSON selection to string vector
 	std::vector<std::string> selection_strs;

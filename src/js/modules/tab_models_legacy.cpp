@@ -80,6 +80,10 @@ static bool is_initialized = false;
 
 static listbox::ListboxState listbox_legacy_models_state;
 
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
+
 // Component states for CheckboxList, ListboxB, and MenuButton.
 static checkboxlist::CheckboxListState checkboxlist_legacy_geosets_state;
 static listboxb::ListboxBState listboxb_legacy_skins_state;
@@ -748,10 +752,7 @@ void render() {
 		//         :items="listfileLegacyModels" :keyinput="true" :regex="config.regexFilters" ...
 		//         @contextmenu="handle_listbox_context" />
 		if (app::layout::BeginListContainer("legacy-models-list-container", regions)) {
-			std::vector<std::string> items_str;
-			items_str.reserve(view.listfileLegacyModels.size());
-			for (const auto& item : view.listfileLegacyModels)
-				items_str.push_back(item.get<std::string>());
+			const auto& items_str = core::cached_json_strings(view.listfileLegacyModels, s_items_cache, s_items_cache_size);
 
 			std::vector<std::string> selection_str;
 			for (const auto& s : view.selectionLegacyModels)

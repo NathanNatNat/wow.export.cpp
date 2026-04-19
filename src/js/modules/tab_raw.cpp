@@ -40,6 +40,10 @@ static uint32_t prev_cascLocale = 0;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
+
 // --- Internal functions ---
 
 static void compute_raw_files() {
@@ -233,10 +237,7 @@ void render() {
 		ImVec2(avail.x - listLeftM - listRightM, topH - listTopM));
 	{
 		// Convert JSON items/selection to string vectors.
-		std::vector<std::string> items_str;
-		items_str.reserve(view.listfileRaw.size());
-		for (const auto& item : view.listfileRaw)
-			items_str.push_back(item.get<std::string>());
+		const auto& items_str = core::cached_json_strings(view.listfileRaw, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
 		for (const auto& s : view.selectionRaw)

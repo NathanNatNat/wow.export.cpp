@@ -98,7 +98,9 @@ static bool is_initialized = false;
 
 static listbox::ListboxState listbox_decor_state;
 
-// Component states for CheckboxList and MenuButton.
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
 static checkboxlist::CheckboxListState checkboxlist_decor_geosets_state;
 static checkboxlist::CheckboxListState checkboxlist_decor_wmo_groups_state;
 static checkboxlist::CheckboxListState checkboxlist_decor_wmo_sets_state;
@@ -722,10 +724,7 @@ void render() {
 	//     <Listbox v-model:selection="selectionDecor" v-model:filter="userInputFilterDecor"
 	//         :items="listfileDecor" ... @contextmenu="handle_listbox_context" />
 	if (app::layout::BeginListContainer("decor-list-container", regions)) {
-		std::vector<std::string> items_str;
-		items_str.reserve(view.listfileDecor.size());
-		for (const auto& item : view.listfileDecor)
-			items_str.push_back(item.get<std::string>());
+		const auto& items_str = core::cached_json_strings(view.listfileDecor, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
 		for (const auto& s : view.selectionDecor)

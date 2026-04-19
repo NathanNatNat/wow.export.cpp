@@ -157,6 +157,10 @@ static bool is_initialized = false;
 static listbox::ListboxState listbox_creatures_state;
 static menu_button::MenuButtonState menu_button_creatures_state;
 
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
+
 // Model viewer GL state/context (replaces Vue <ModelViewerGL :context="creatureViewerContext"/>).
 static model_viewer_gl::State viewer_state;
 static model_viewer_gl::Context viewer_context;
@@ -1761,10 +1765,7 @@ void render() {
 		// --- Left panel: List container (row 1, col 1) ---
 		//     <Listbox v-model:selection="selectionCreatures" ... @contextmenu="handle_listbox_context" />
 		if (app::layout::BeginListContainer("creatures-list-container", regions)) {
-			std::vector<std::string> items_str;
-			items_str.reserve(view.listfileCreatures.size());
-			for (const auto& item : view.listfileCreatures)
-				items_str.push_back(item.get<std::string>());
+			const auto& items_str = core::cached_json_strings(view.listfileCreatures, s_items_cache, s_items_cache_size);
 
 			std::vector<std::string> selection_str;
 			for (const auto& s : view.selectionCreatures)

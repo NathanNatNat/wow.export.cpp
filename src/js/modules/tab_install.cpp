@@ -42,6 +42,10 @@ static constexpr int MIN_STRING_LENGTH = 4;
 static listbox::ListboxState listbox_install_state;
 static listbox::ListboxState listbox_install_strings_state;
 
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
+
 // --- Internal functions ---
 
 /**
@@ -316,10 +320,7 @@ void render() {
 		ImGui::BeginChild("install-list-container",
 			ImVec2(gridW - listLeftM - listRightM, topH - listTopM));
 		{
-			std::vector<std::string> items_str;
-			items_str.reserve(view.listfileInstall.size());
-			for (const auto& item : view.listfileInstall)
-				items_str.push_back(item.get<std::string>());
+			const auto& items_str = core::cached_json_strings(view.listfileInstall, s_items_cache, s_items_cache_size);
 
 			std::vector<std::string> selection_str;
 			for (const auto& s : view.selectionInstall)

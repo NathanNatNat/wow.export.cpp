@@ -45,6 +45,10 @@ static std::string prev_selection_first;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
+// Cached items string vector — only rebuilt when the source JSON changes.
+static std::vector<std::string> s_items_cache;
+static size_t s_items_cache_size = ~size_t(0);
+
 // --- Internal functions ---
 
 static void update_seek() {
@@ -335,10 +339,7 @@ void render() {
 	//       copy_file_paths, copy_export_paths, open_export_directory
 	if (app::layout::BeginListContainer("legacy-sounds-list-container", regions)) {
 		// Convert JSON items/selection to string vectors.
-		std::vector<std::string> items_str;
-		items_str.reserve(view.listfileSounds.size());
-		for (const auto& item : view.listfileSounds)
-			items_str.push_back(item.get<std::string>());
+		const auto& items_str = core::cached_json_strings(view.listfileSounds, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
 		for (const auto& s : view.selectionSounds)

@@ -426,9 +426,25 @@ void render(const char* id,
             const std::function<void(const ItemEntry&)>& onOptions) {
 	ImGui::PushID(id);
 
-	// Compute filtered items.
-	const std::vector<ItemEntry> filteredItems = computeFilteredItems(
-		items, filter, regex, selection, onSelectionChanged);
+	// Compute filtered items — only when inputs have actually changed.
+	{
+		const ItemEntry* curData = items.empty() ? nullptr : items.data();
+		const bool needRecompute = !state.filteredItemsCacheValid
+			|| curData         != state.cachedItemsData
+			|| items.size()    != state.cachedItemsSize
+			|| filter          != state.cachedFilter
+			|| regex           != state.cachedRegexMode;
+
+		if (needRecompute) {
+			state.cachedFilteredItems  = computeFilteredItems(items, filter, regex, selection, onSelectionChanged);
+			state.cachedItemsData      = curData;
+			state.cachedItemsSize      = items.size();
+			state.cachedFilter         = filter;
+			state.cachedRegexMode      = regex;
+			state.filteredItemsCacheValid = true;
+		}
+	}
+	const std::vector<ItemEntry>& filteredItems = state.cachedFilteredItems;
 
 	// Get the available content region as the container dimensions.
 	const ImVec2 availSize = ImGui::GetContentRegionAvail();
