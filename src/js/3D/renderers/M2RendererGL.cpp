@@ -503,6 +503,9 @@ return as_async_compat([this]() {
 	// load shader program
 	shader = M2RendererGL::load_shaders(ctx);
 
+	// create bone SSBO (avoids uniform register limits for bone matrices)
+	glGenBuffers(1, &bone_ssbo);
+
 	// create default texture
 	_create_default_texture();
 
@@ -1557,12 +1560,15 @@ shader->set_uniform_3f("u_view_up", 0, 1, 0);
 float time_sec = std::chrono::duration<float>(std::chrono::steady_clock::now() - M2_PERFORMANCE_BASELINE).count();
 shader->set_uniform_1f("u_time", time_sec);
 
-// bone matrices
+// bone matrices — upload via SSBO
 shader->set_uniform_1i("u_bone_count", static_cast<int>(bones_count()));
-if (has_bones() && !bone_matrices.empty()) {
-	GLint loc = shader->get_uniform_location("u_bone_matrices");
-	if (loc != -1)
-		glUniformMatrix4fv(loc, static_cast<GLsizei>(bones_count()), GL_FALSE, bone_matrices.data());
+if (has_bones() && !bone_matrices.empty() && bone_ssbo) {
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, bone_ssbo);
+	glBufferData(GL_SHADER_STORAGE_BUFFER,
+		static_cast<GLsizeiptr>(bones_count() * 16 * sizeof(float)),
+		bone_matrices.data(), GL_DYNAMIC_DRAW);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, bone_ssbo);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
 // texture matrix defaults
@@ -2042,6 +2048,12 @@ void M2RendererGL::dispose() {
 	bonesWatcher = nullptr;
 
 _dispose_skin();
+
+// dispose bone SSBO
+if (bone_ssbo) {
+	glDeleteBuffers(1, &bone_ssbo);
+	bone_ssbo = 0;
+}
 
 // dispose textures
 for (auto& [key, tex] : textures)

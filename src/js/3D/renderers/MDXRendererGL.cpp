@@ -208,6 +208,9 @@ void MDXRendererGL::load() {
 
 	shader = MDXRendererGL::load_shaders(ctx);
 
+	// create bone SSBO (avoids uniform register limits for bone matrices)
+	glGenBuffers(1, &bone_ssbo);
+
 	_create_default_texture();
 	_load_textures();
 	_create_skeleton();
@@ -824,12 +827,15 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 	float time_sec = std::chrono::duration<float>(now - s_render_start).count();
 	shader->set_uniform_1f("u_time", time_sec);
 
-	// bone matrices (mdx uses node-based skeleton)
+	// bone matrices (mdx uses node-based skeleton) — upload via SSBO
 	shader->set_uniform_1i("u_bone_count", !nodes.empty() ? static_cast<int>(nodes.size()) : 0);
-	if (!nodes.empty() && !node_matrices.empty()) {
-		const GLint loc = shader->get_uniform_location("u_bone_matrices");
-		if (loc >= 0)
-			glUniformMatrix4fv(loc, static_cast<GLsizei>(node_matrices.size() / 16), GL_FALSE, node_matrices.data());
+	if (!nodes.empty() && !node_matrices.empty() && bone_ssbo) {
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, bone_ssbo);
+		glBufferData(GL_SHADER_STORAGE_BUFFER,
+			static_cast<GLsizeiptr>(node_matrices.size() * sizeof(float)),
+			node_matrices.data(), GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, bone_ssbo);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	}
 
 	shader->set_uniform_1i("u_has_tex_matrix1", 0);
@@ -942,6 +948,12 @@ void MDXRendererGL::dispose() {
 
 	for (auto buf : buffers)
 		glDeleteBuffers(1, &buf);
+
+	// dispose bone SSBO
+	if (bone_ssbo) {
+		glDeleteBuffers(1, &bone_ssbo);
+		bone_ssbo = 0;
+	}
 
 	for (auto& [key, tex] : textures)
 		tex->dispose();

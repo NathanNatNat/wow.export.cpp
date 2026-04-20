@@ -125,6 +125,7 @@ private:
 	std::unique_ptr<gl::GLTexture> default_texture;
 	std::vector<GLuint> buffers;
 	std::vector<MDXDrawCall> draw_calls;
+	GLuint bone_ssbo = 0; // SSBO for bone matrices (avoids uniform register limits)
 
 	// animation state (node-based skeleton)
 	std::vector<MDXNode*> nodes;        // flattened non-null nodes

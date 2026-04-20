@@ -299,6 +299,7 @@ private:
 	std::vector<GLuint> buffers;
 	std::vector<M2DrawCall> draw_calls;
 	std::vector<uint16_t> indices_data;
+	GLuint bone_ssbo = 0; // SSBO for bone matrices (avoids uniform register limits)
 
 	// skeleton loaders
 	std::unique_ptr<SKELLoader> skelLoader;
