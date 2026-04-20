@@ -27,9 +27,11 @@
 
 #include <webp/encode.h>
 
+#include <chrono>
 #include <cstring>
 #include <format>
 #include <filesystem>
+#include <future>
 #include <unordered_map>
 #include <vector>
 #include <optional>
@@ -163,7 +165,21 @@ static void update_texture_atlas_overlay() {
 	}
 }
 
+// --- Async texture preview (follows tab_models pattern) ---
+
+struct PendingTexturePreview {
+	uint32_t file_data_id = 0;
+	std::string texture_name;
+	std::future<BufferWrapper> file_future;
+	std::unique_ptr<BusyLock> busy_lock;
+};
+
+static std::optional<PendingTexturePreview> pending_texture_preview;
+
 static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string& texture_name) {
+	// Cancel any pending preview.
+	pending_texture_preview.reset();
+
 	std::string texture = texture_name;
 	if (texture.empty()) {
 		texture = casc::listfile::getByID(file_data_id).value_or("");
@@ -171,12 +187,35 @@ static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string&
 			texture = casc::listfile::formatUnknownFile(file_data_id);
 	}
 
-	BusyLock _lock = core::create_busy_lock();
 	core::setToast("progress", std::format("Loading {}, please wait...", texture), {}, -1, false);
 	logging::write(std::format("Previewing texture file {}", texture));
 
+	auto* casc = core::view->casc;
+	if (!casc) {
+		core::setToast("error", "CASC source is not available.", {}, -1);
+		return;
+	}
+
+	PendingTexturePreview task;
+	task.file_data_id = file_data_id;
+	task.texture_name = texture;
+	task.busy_lock = std::make_unique<BusyLock>(core::create_busy_lock());
+	task.file_future = std::async(std::launch::async, [casc, file_data_id]() {
+		return casc->getVirtualFileByID(file_data_id);
+	});
+	pending_texture_preview = std::move(task);
+}
+
+static void pump_texture_preview() {
+	if (!pending_texture_preview.has_value())
+		return;
+
+	auto& task = *pending_texture_preview;
+	if (task.file_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		return;
+
 	try {
-		BufferWrapper file_data = core::view->casc->getVirtualFileByID(file_data_id);
+		BufferWrapper file_data = task.file_future.get();
 		casc::BLPImage blp(file_data);
 
 		const uint8_t channel_mask = static_cast<uint8_t>(core::view->config.value("exportChannelMask", 0b1111));
@@ -207,20 +246,22 @@ static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string&
 
 		namespace fs = std::filesystem;
 		core::view->texturePreviewInfo = std::format("{} {} x {} ({})",
-			fs::path(texture).filename().string(), blp.width, blp.height, info);
-		selected_file_data_id = file_data_id;
+			fs::path(task.texture_name).filename().string(), blp.width, blp.height, info);
+		selected_file_data_id = task.file_data_id;
 
 		update_texture_atlas_overlay();
 
 		core::hideToast();
 	} catch (const casc::EncryptionError& e) {
-		core::setToast("error", std::format("The texture {} is encrypted with an unknown key ({}).", texture, e.key), {}, -1);
-		logging::write(std::format("Failed to decrypt texture {} ({})", texture, e.key));
+		core::setToast("error", std::format("The texture {} is encrypted with an unknown key ({}).", task.texture_name, e.key), {}, -1);
+		logging::write(std::format("Failed to decrypt texture {} ({})", task.texture_name, e.key));
 	} catch (const std::exception& e) {
-		core::setToast("error", "Unable to preview texture " + texture,
+		core::setToast("error", "Unable to preview texture " + task.texture_name,
 			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
+
+	pending_texture_preview.reset();
 }
 
 static void load_texture_atlas_data() {
@@ -502,6 +543,9 @@ static void renderCheckerboard(ImDrawList* dl, ImVec2 pos, ImVec2 size, float ce
 
 void render() {
 	auto& view = *core::view;
+
+	// Poll for pending async texture preview completion.
+	pump_texture_preview();
 
 	// --- Change-detection for config watches ---
 

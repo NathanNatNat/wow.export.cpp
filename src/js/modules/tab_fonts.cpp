@@ -19,9 +19,11 @@
 #include "../modules.h"
 #include "../../app.h"
 
+#include <chrono>
 #include <cstring>
 #include <format>
 #include <filesystem>
+#include <future>
 #include <unordered_map>
 
 #include <imgui.h>
@@ -44,37 +46,98 @@ static std::string get_font_id(uint32_t file_data_id) {
 	return "font_id_" + std::to_string(file_data_id);
 }
 
-static void* load_font(const std::string& file_name) {
+// Synchronous load_font for cached fonts (returns immediately if cached).
+static void* load_font_cached(const std::string& file_name) {
 	auto file_data_id = casc::listfile::getByFilename(file_name);
 	if (!file_data_id)
 		return nullptr;
 
 	const std::string font_id = get_font_id(*file_data_id);
-
 	auto it = loaded_fonts.find(font_id);
 	if (it != loaded_fonts.end())
 		return it->second;
 
-	try {
-		BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
-		font_helpers::inject_font_face(font_id, data.raw().data(), data.byteLength());
-		void* font = font_helpers::get_injected_font(font_id);
-
-		if (font) {
-			loaded_fonts[font_id] = font;
-			logging::write(std::format("loaded font {} as {}", file_name, font_id));
-		}
-
-		return font;
-	} catch (const std::exception& e) {
-		logging::write(std::format("failed to load font {}: {}", file_name, e.what()));
-		core::setToast("error", std::string("Failed to load font: ") + e.what());
-		return nullptr;
-	}
+	return nullptr;
 }
 
-// Glyph detection state for current font.
+// --- Async font loading (follows tab_models pattern) ---
+
+// Glyph detection state for current font (declared early for pump_font_load).
 static font_helpers::GlyphDetectionState glyph_state;
+
+struct PendingFontLoad {
+	std::string file_name;
+	uint32_t file_data_id = 0;
+	std::string font_id;
+	std::future<BufferWrapper> file_future;
+	std::unique_ptr<BusyLock> busy_lock;
+};
+
+static std::optional<PendingFontLoad> pending_font_load;
+
+static void load_font_async(const std::string& file_name) {
+	// Cancel any pending font load.
+	pending_font_load.reset();
+
+	auto file_data_id = casc::listfile::getByFilename(file_name);
+	if (!file_data_id)
+		return;
+
+	const std::string font_id = get_font_id(*file_data_id);
+
+	// If already cached, skip async load.
+	auto it = loaded_fonts.find(font_id);
+	if (it != loaded_fonts.end())
+		return; // Already loaded; render() will use the cached version.
+
+	auto* casc = core::view->casc;
+	if (!casc)
+		return;
+
+	PendingFontLoad task;
+	task.file_name = file_name;
+	task.file_data_id = *file_data_id;
+	task.font_id = font_id;
+	task.busy_lock = std::make_unique<BusyLock>(core::create_busy_lock());
+	task.file_future = std::async(std::launch::async, [casc, file_name]() {
+		return casc->getVirtualFileByName(file_name);
+	});
+	pending_font_load = std::move(task);
+}
+
+static void pump_font_load() {
+	if (!pending_font_load.has_value())
+		return;
+
+	auto& task = *pending_font_load;
+	if (task.file_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		return;
+
+	try {
+		BufferWrapper data = task.file_future.get();
+		font_helpers::inject_font_face(task.font_id, data.raw().data(), data.byteLength());
+		void* font = font_helpers::get_injected_font(task.font_id);
+
+		if (font) {
+			loaded_fonts[task.font_id] = font;
+			logging::write(std::format("loaded font {} as {}", task.file_name, task.font_id));
+
+			// Set up font preview and glyph detection now that the font is loaded.
+			auto& view = *core::view;
+			view.fontPreviewFontFamily = task.font_id;
+			font_helpers::detect_glyphs_async(
+				font,
+				glyph_state,
+				[](const std::string& ch) { core::view->fontPreviewText += ch; }
+			);
+		}
+	} catch (const std::exception& e) {
+		logging::write(std::format("failed to load font {}: {}", task.file_name, e.what()));
+		core::setToast("error", std::string("Failed to load font: ") + e.what());
+	}
+
+	pending_font_load.reset();
+}
 
 // Change-detection for selectionFonts.
 static std::string prev_selection_first;
@@ -95,21 +158,33 @@ void mounted() {
 	// Change-detection is handled in render() by comparing selectionFonts[0] each frame.
 }
 
+// Forward declaration for pump_font_export (defined after render).
+static void pump_font_export();
+
 void render() {
 	auto& view = *core::view;
+
+	// Poll for pending async font load completion.
+	pump_font_load();
+	// Poll for pending async font export (one file per frame).
+	pump_font_export();
 
 	// --- Change-detection for selection (equivalent to watch on selectionFonts) ---
 	if (!view.selectionFonts.empty()) {
 		const std::string first = casc::listfile::stripFileEntry(view.selectionFonts[0].get<std::string>());
 		if (!first.empty() && view.isBusy == 0 && first != prev_selection_first) {
-			void* font = load_font(first);
+			void* font = load_font_cached(first);
 			if (font) {
+				// Font already cached — use it directly.
 				view.fontPreviewFontFamily = get_font_id(*casc::listfile::getByFilename(first));
 				font_helpers::detect_glyphs_async(
 					font,
 					glyph_state,
 					[&view](const std::string& ch) { view.fontPreviewText += ch; }
 				);
+			} else {
+				// Need to load from CASC — do it asynchronously.
+				load_font_async(first);
 			}
 			prev_selection_first = first;
 		}
@@ -302,7 +377,74 @@ void render() {
 	app::layout::EndTab();
 }
 
+// --- Async export (one-file-per-frame, follows tab_models pattern) ---
+
+struct PendingFontExport {
+	std::vector<nlohmann::json> files;
+	size_t next_index = 0;
+	bool overwrite_files = false;
+	std::optional<casc::ExportHelper> helper;
+};
+
+static std::optional<PendingFontExport> pending_font_export;
+
+static void pump_font_export() {
+	if (!pending_font_export.has_value())
+		return;
+
+	auto& task = *pending_font_export;
+	auto& helper = task.helper.value();
+
+	if (task.next_index == 0)
+		helper.start();
+
+	if (helper.isCancelled()) {
+		pending_font_export.reset();
+		return;
+	}
+
+	if (task.next_index >= task.files.size()) {
+		helper.finish();
+		pending_font_export.reset();
+		return;
+	}
+
+	// Process one file per frame.
+	const auto& sel_entry = task.files[task.next_index++];
+	std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
+	std::string export_file_name = file_name;
+
+	auto& view = *core::view;
+	if (!view.config.value("exportNamedFiles", true)) {
+		auto file_data_id = casc::listfile::getByFilename(file_name);
+		if (file_data_id) {
+			namespace fs = std::filesystem;
+			const std::string ext = fs::path(file_name).extension().string();
+			const std::string dir = fs::path(file_name).parent_path().string();
+			const std::string file_data_id_name = std::to_string(*file_data_id) + ext;
+			export_file_name = dir == "." ? file_data_id_name : (fs::path(dir) / file_data_id_name).string();
+		}
+	}
+
+	try {
+		const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
+		if (task.overwrite_files || !generics::fileExists(export_path)) {
+			BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
+			data.writeToFile(export_path);
+		} else {
+			logging::write(std::format("Skipping font export {} (file exists, overwrite disabled)", export_path));
+		}
+
+		helper.mark(export_file_name, true);
+	} catch (const std::exception& e) {
+		helper.mark(export_file_name, false, e.what());
+	}
+}
+
 void export_fonts() {
+	if (pending_font_export.has_value())
+		return;
+
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionFonts;
 	if (user_selection.empty()) {
@@ -310,44 +452,12 @@ void export_fonts() {
 		return;
 	}
 
-	casc::ExportHelper helper(static_cast<int>(user_selection.size()), "file");
-	helper.start();
+	PendingFontExport task;
+	task.files = std::vector<nlohmann::json>(user_selection.begin(), user_selection.end());
+	task.overwrite_files = view.config.value("overwriteFiles", false);
+	task.helper.emplace(static_cast<int>(user_selection.size()), "file");
 
-	const bool overwrite_files = view.config.value("overwriteFiles", false);
-	for (const auto& sel_entry : user_selection) {
-		if (helper.isCancelled())
-			return;
-
-		std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
-		std::string export_file_name = file_name;
-
-		if (!view.config.value("exportNamedFiles", true)) {
-			auto file_data_id = casc::listfile::getByFilename(file_name);
-			if (file_data_id) {
-				namespace fs = std::filesystem;
-				const std::string ext = fs::path(file_name).extension().string();
-				const std::string dir = fs::path(file_name).parent_path().string();
-				const std::string file_data_id_name = std::to_string(*file_data_id) + ext;
-				export_file_name = dir == "." ? file_data_id_name : (fs::path(dir) / file_data_id_name).string();
-			}
-		}
-
-		try {
-			const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
-			if (overwrite_files || !generics::fileExists(export_path)) {
-				BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
-				data.writeToFile(export_path);
-			} else {
-				logging::write(std::format("Skipping font export {} (file exists, overwrite disabled)", export_path));
-			}
-
-			helper.mark(export_file_name, true);
-		} catch (const std::exception& e) {
-			helper.mark(export_file_name, false, e.what());
-		}
-	}
-
-	helper.finish();
+	pending_font_export = std::move(task);
 }
 
 } // namespace tab_fonts
