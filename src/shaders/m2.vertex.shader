@@ -15,9 +15,11 @@ uniform mat4 u_model_matrix;
 uniform vec3 u_view_up;
 uniform float u_time;
 
-// bone matrices (max 256 bones — matching JS original)
-#define MAX_BONES 256
-uniform mat4 u_bone_matrices[MAX_BONES];
+// bone matrices — stored in an SSBO to avoid uniform register limits
+// (uniform mat4[256] alone exhausts the 1024 vec4 NVIDIA register cap)
+layout(std430, binding = 0) readonly buffer BoneMatrices {
+	mat4 u_bone_matrices[];
+};
 uniform int u_bone_count;
 
 // texture transform matrices

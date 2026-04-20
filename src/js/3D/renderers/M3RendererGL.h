@@ -84,6 +84,7 @@ private:
 	std::vector<GLuint> buffers;
 	std::vector<M3DrawCall> draw_calls;
 	std::unique_ptr<gl::GLTexture> default_texture;
+	GLuint bone_ssbo = 0; // SSBO for bone matrices (avoids uniform register limits)
 
 	// transforms
 	std::array<float, 16> model_matrix;

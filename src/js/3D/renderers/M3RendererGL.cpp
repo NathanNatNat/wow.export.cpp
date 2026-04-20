@@ -54,6 +54,9 @@ void M3RendererGL::load() {
 
 	shader = M3RendererGL::load_shaders(ctx);
 
+	// create bone SSBO (avoids uniform register limits for bone matrices)
+	glGenBuffers(1, &bone_ssbo);
+
 	_create_default_texture();
 
 	if (!m3->vertices.empty())
@@ -245,11 +248,16 @@ void M3RendererGL::render(const float* view_matrix, const float* projection_matr
 	).count();
 	shader->set_uniform_1f("u_time", time);
 
-	// set identity bone matrix for bone 0 (M3 has no skeleton)
+	// set identity bone matrix for bone 0 (M3 has no skeleton) — upload via SSBO
 	shader->set_uniform_1i("u_bone_count", 1);
-	const GLint loc = shader->get_uniform_location("u_bone_matrices");
-	if (loc != -1)
-		glUniformMatrix4fv(loc, 1, GL_FALSE, M3_IDENTITY_MAT4.data());
+	if (bone_ssbo) {
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, bone_ssbo);
+		glBufferData(GL_SHADER_STORAGE_BUFFER,
+			static_cast<GLsizeiptr>(16 * sizeof(float)),
+			M3_IDENTITY_MAT4.data(), GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, bone_ssbo);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	}
 
 	// texture matrix defaults
 	shader->set_uniform_1i("u_has_tex_matrix1", 0);
@@ -338,6 +346,12 @@ void M3RendererGL::_dispose_geometry() {
 
 void M3RendererGL::dispose() {
 	_dispose_geometry();
+
+	// dispose bone SSBO
+	if (bone_ssbo) {
+		glDeleteBuffers(1, &bone_ssbo);
+		bone_ssbo = 0;
+	}
 
 	if (default_texture) {
 		default_texture->dispose();
