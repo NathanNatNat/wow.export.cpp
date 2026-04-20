@@ -85,6 +85,10 @@ std::vector<nlohmann::json>& WMORendererGL::get_wmo_sets_view() {
 // -----------------------------------------------------------------------
 
 void WMORendererGL::load() {
+	// JS accesses core.view.casc directly; auto-resolve when setCASCSource() was not called.
+	if (!casc_source_ && core::view && core::view->casc)
+		casc_source_ = core::view->casc;
+
 	// parse WMO data
 	if (!fileName.empty())
 		wmo = std::make_unique<WMOLoader>(*data_ptr, fileName, true);
@@ -503,8 +507,8 @@ void WMORendererGL::loadDoodadSet(uint32_t index) {
 				if (magic == constants::MAGIC::MD21) {
 					auto r = std::make_unique<M2RendererGL>(*data_buf, ctx, false, false);
 					r->setCASCSource(casc_source_);
-					r->load();
-					r->loadSkin(0);
+					r->load().get();
+					r->loadSkin(0).get();
 					renderer = r.get();
 					m2_renderers[fileDataID] = std::move(r);
 					m2_data_buffers_.push_back(std::move(data_buf));

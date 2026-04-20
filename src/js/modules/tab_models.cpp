@@ -282,7 +282,7 @@ static void pump_preview_model_task() {
 		);
 
 		if (active_renderer_result.m2)
-			active_renderer_result.m2->load();
+			active_renderer_result.m2->load().get();
 		else if (active_renderer_result.m3)
 			active_renderer_result.m3->load();
 		else if (active_renderer_result.wmo)
@@ -608,7 +608,7 @@ static void handle_skins_selection_change(const std::vector<nlohmann::json>& sel
 	if (active_renderer_result.m2 && !display_textures.empty()) {
 		M2DisplayInfo info;
 		info.textures = display_textures;
-		active_renderer_result.m2->applyReplaceableTextures(info);
+		active_renderer_result.m2->applyReplaceableTextures(info).get();
 	}
 }
 

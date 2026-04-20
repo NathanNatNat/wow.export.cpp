@@ -755,7 +755,7 @@ int attachment_id = attachment_ids[i];
 try {
 BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
 auto renderer = std::make_unique<M2RendererGL>(file, *viewer_context.gl_context, false, false);
-renderer->load();
+renderer->load().get();
 EquipmentModelEntry::RendererInfo ri;
 ri.renderer = std::move(renderer);
 ri.attachment_id = attachment_id;
@@ -782,7 +782,7 @@ uint32_t file_data_id = display->models[i];
 try {
 BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id);
 auto renderer = std::make_unique<M2RendererGL>(file, *viewer_context.gl_context, false, false);
-renderer->load();
+renderer->load().get();
 if (active_renderer && active_renderer->get_bones_m2())
 renderer->buildBoneRemapTable(*active_renderer->get_bones_m2());
 entry.renderers.push_back(std::move(renderer));
@@ -838,7 +838,7 @@ return;
 }
 active_renderer = std::make_unique<M2RendererGL>(file, *gl_ctx, true, false);
 active_renderer->setGeosetKey("chrCustGeosets");
-active_renderer->load();
+active_renderer->load().get();
 fit_camera();
 
 active_model = file_data_id;
@@ -1655,7 +1655,7 @@ active_renderer->setTransform(
 );
 }
 
-active_renderer->playAnimation(0);
+active_renderer->playAnimation(0).get();
 active_renderer->set_animation_frame(0);
 active_renderer->set_animation_paused(true);
 
@@ -1704,7 +1704,7 @@ active_renderer->setTransform(
 {0, saved_rotation, 0},
 {1, 1, 1}
 );
-active_renderer->playAnimation(saved_animation);
+active_renderer->playAnimation(saved_animation).get();
 active_renderer->set_animation_frame(saved_frame);
 active_renderer->set_animation_paused(saved_paused);
 
