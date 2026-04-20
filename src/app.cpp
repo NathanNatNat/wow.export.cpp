@@ -188,27 +188,27 @@ static GLuint loadSvgTexture(const std::filesystem::path& path, int size) {
  * Called once after OpenGL context is ready.
  */
 static void initAppShellTextures() {
-	std::filesystem::path dataDir = constants::DATA_DIR();
+	std::filesystem::path srcDir = constants::SRC_DIR();
 
 	// Load logo.png (32px display size, but load at full resolution)
-	s_logoTexture = loadImageTexture(dataDir / "images" / "logo.png", &s_logoWidth, &s_logoHeight);
+	s_logoTexture = loadImageTexture(srcDir / "images" / "logo.png", &s_logoWidth, &s_logoHeight);
 	if (!s_logoTexture)
 		logging::write("warning: failed to load logo.png for header");
 	// Header icons (help, hamburger) now rendered via Font Awesome icon font.
 
 	// Loading screen background images (first frame of GIF via stb_image)
-	s_loadingBgTexture = loadImageTexture(dataDir / "images" / "loading.gif",
+	s_loadingBgTexture = loadImageTexture(srcDir / "images" / "loading.gif",
 	                                      &s_loadingBgWidth, &s_loadingBgHeight);
 	if (!s_loadingBgTexture)
 		logging::write("warning: failed to load loading.gif for loading screen");
 
-	s_loadingXmasBgTexture = loadImageTexture(dataDir / "images" / "loading-xmas.gif",
+	s_loadingXmasBgTexture = loadImageTexture(srcDir / "images" / "loading-xmas.gif",
 	                                          &s_loadingXmasBgWidth, &s_loadingXmasBgHeight);
 	if (!s_loadingXmasBgTexture)
 		logging::write("warning: failed to load loading-xmas.gif for loading screen");
 
 	// Gear icon SVG for loading screen spinner (100px render)
-	s_gearTexture = loadSvgTexture(dataDir / "fa-icons" / "gear.svg", 100);
+	s_gearTexture = loadSvgTexture(srcDir / "fa-icons" / "gear.svg", 100);
 	if (s_gearTexture) {
 		s_gearTexWidth = 100;
 		s_gearTexHeight = 100;
@@ -238,7 +238,7 @@ static GLuint getNavIconTexture(const std::string& icon_filename) {
 	if (it != s_navIconTextures.end())
 		return it->second;
 
-	std::filesystem::path path = constants::DATA_DIR() / "fa-icons" / icon_filename;
+	std::filesystem::path path = constants::SRC_DIR() / "fa-icons" / icon_filename;
 	GLuint tex = loadSvgTexture(path, 44);
 	s_navIconTextures[icon_filename] = tex;
 	return tex;
@@ -2057,7 +2057,7 @@ void loadFonts(float dpiScale) {
 	const float scaledDefault = DEFAULT_FONT_SIZE * dpiScale;
 	const float scaledIcon    = 48.0f * dpiScale;
 
-	std::filesystem::path fontsDir = constants::DATA_DIR() / "fonts";
+	std::filesystem::path fontsDir = constants::SRC_DIR() / "fonts";
 	std::string regularPath = (fontsDir / "selawk.ttf").string();
 	std::string boldPath    = (fontsDir / "selawkb.ttf").string();
 	std::string gamblerPath = (fontsDir / "gmblr.ttf").string();
@@ -2256,7 +2256,7 @@ static void loadExpansionIcons() {
 		return;
 	s_expansionIconsLoaded = true;
 
-	std::filesystem::path iconDir = constants::DATA_DIR() / "images" / "expansion";
+	std::filesystem::path iconDir = constants::SRC_DIR() / "images" / "expansion";
 	for (int i = 0; i < s_expansionIconCount; ++i) {
 		s_expansionIconTextures[i] = loadWebPTexture(iconDir / s_expansionIconFiles[i]);
 	}
@@ -2828,7 +2828,7 @@ int main(int argc, char* argv[]) {
 	// Load what's new HTML on app start
 	// JS: app.js lines 707-716
 	{
-		auto whatsNewPath = constants::DATA_DIR() / "whats-new.html";
+		auto whatsNewPath = constants::SRC_DIR() / "whats-new.html";
 		try {
 			std::ifstream ifs(whatsNewPath, std::ios::in);
 			if (ifs.is_open()) {
