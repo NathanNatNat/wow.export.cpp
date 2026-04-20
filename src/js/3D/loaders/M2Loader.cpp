@@ -293,7 +293,8 @@ void M2Loader::parseChunk_SFID(uint32_t chunkSize) {
 if (!this->md21Parsed)
 throw std::runtime_error("Cannot parse SFID chunk in M2 before MD21 chunk!");
 
-const uint32_t lodSkinCount = (chunkSize / 4) - this->viewCount;
+const uint32_t totalEntries = chunkSize / 4;
+const uint32_t lodSkinCount = (totalEntries >= this->viewCount) ? (totalEntries - this->viewCount) : 0;
 this->skins.reserve(this->viewCount);
 this->lodSkins.reserve(lodSkinCount);
 
@@ -622,8 +623,9 @@ const size_t base = this->data.offset();
 this->data.seek(modelNameOfs + ofs);
 
 // Always followed by single 0x0 character, -1 to trim).
+// Guard against modelNameLength == 0 to avoid uint32_t underflow (0 - 1 = 0xFFFFFFFF).
 this->data.seek(modelNameOfs + ofs);
-this->name = this->data.readString(modelNameLength - 1);
+this->name = this->data.readString(modelNameLength > 0 ? modelNameLength - 1 : 0);
 
 this->data.seek(base);
 }
