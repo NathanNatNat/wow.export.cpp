@@ -15,8 +15,10 @@ uniform mat4 u_model_matrix;
 uniform vec3 u_view_up;
 uniform float u_time;
 
-// bone matrices (max 256 bones)
-#define MAX_BONES 256
+// bone matrices — capped at 220 to fit within GL 3.3 uniform register limit (1024 vec4).
+// 220 bones × 4 vec4/bone = 880 vec4, leaving ~144 vec4 for other uniforms.
+// The original JS shader declares 256, but WebGL2 uses GL 4.x internally with higher limits.
+#define MAX_BONES 220
 uniform mat4 u_bone_matrices[MAX_BONES];
 uniform int u_bone_count;
 
