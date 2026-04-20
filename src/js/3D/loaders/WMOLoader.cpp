@@ -120,13 +120,28 @@ WMOLoader& WMOLoader::getGroup(uint32_t index) {
 	if (index < this->groups.size() && this->groups[index] != nullptr)
 		return *this->groups[index];
 
-	if (index >= this->groupIDs.size())
-		throw std::runtime_error("Group index out of range: " + std::to_string(index));
+	// JS: if (this.groupIDs) data = await casc.getFile(this.groupIDs[index]);
+	//     else data = await casc.getFileByName(this.fileName.replace('.wmo', '_XXX.wmo'));
+	BufferWrapper groupData;
+	if (!this->groupIDs.empty() && index < this->groupIDs.size()) {
+		groupData = core::view->casc->getVirtualFileByID(this->groupIDs[index]);
+	} else if (!this->fileName.empty()) {
+		// Filename-based fallback: replace .wmo with _NNN.wmo
+		std::string groupFileName = this->fileName;
+		auto dotPos = groupFileName.rfind(".wmo");
+		if (dotPos != std::string::npos) {
+			std::string suffix = "_" + std::format("{:03}", index) + ".wmo";
+			groupFileName.replace(dotPos, 4, suffix);
+		}
+		groupData = core::view->casc->getVirtualFileByName(groupFileName);
+	} else {
+		throw std::runtime_error("Cannot load WMO group " + std::to_string(index) + ": no groupIDs and no fileName");
+	}
 
-	const uint32_t groupFileID = this->groupIDs[index];
-	BufferWrapper groupData = core::view->casc->getVirtualFileByID(groupFileID);
 	auto ownedBuf = std::make_unique<BufferWrapper>(std::move(groupData));
-	auto group = std::make_unique<WMOLoader>(*ownedBuf, groupFileID, this->renderingOnly);
+	// JS: new WMOLoader(data, undefined, this.renderingOnly) — group WMO has no fileID/fileName.
+	// Pass 0 (C++ sentinel for undefined) to match JS behavior.
+	auto group = std::make_unique<WMOLoader>(*ownedBuf, static_cast<uint32_t>(0), this->renderingOnly);
 	group->load();
 
 	// Ensure groups vector is large enough
