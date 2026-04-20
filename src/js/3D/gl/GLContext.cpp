@@ -290,4 +290,22 @@ void GLContext::dispose() {
 	// context is automatically cleaned up when the GLFW window is destroyed
 }
 
+void GLContext::invalidate_cache() {
+	// Reset all cached state so subsequent set_*() / bind_*() calls always
+	// issue the real GL commands.  This is necessary after an external system
+	// (e.g. ImGui's OpenGL3 backend) has modified GL state behind our back.
+	_depth_test = false;
+	_depth_write = true;
+	_depth_func = GL_LEQUAL;
+	_cull_face = false;
+	_cull_mode = GL_BACK;
+	_blend = false;
+	_blend_src = GL_ONE;
+	_blend_dst = GL_ZERO;
+	_current_program = 0;
+	_current_vao = 0;
+	_bound_textures.fill(0);
+	_active_texture_unit = -1; // force re-issue of glActiveTexture
+}
+
 } // namespace gl

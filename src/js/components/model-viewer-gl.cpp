@@ -448,6 +448,13 @@ static void render_scene(State& state, Context& context) {
 
 	// Bind FBO for 3D rendering
 	glBindFramebuffer(GL_FRAMEBUFFER, state.fbo);
+
+	// ImGui's OpenGL3 backend modifies GL state (program, VAO, textures,
+	// blend, depth, etc.) between frames without going through our GLContext
+	// cache.  Invalidate the cache so all subsequent set_*/bind_* calls
+	// actually issue the real GL commands.
+	state.gl_context->invalidate_cache();
+
 	state.gl_context->set_viewport(state.fbo_width, state.fbo_height);
 
 	// clear with appropriate background

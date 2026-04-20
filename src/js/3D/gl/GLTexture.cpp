@@ -29,7 +29,10 @@ void GLTexture::set_rgba(const uint8_t* pixels, int w, int h,
 	height = h;
 	has_alpha = options.has_alpha;
 
+	// Bind directly — invalidate cache entry for active unit so subsequent
+	// bind_texture() calls won't skip the real glBindTexture.
 	glBindTexture(GL_TEXTURE_2D, texture);
+	ctx_.invalidate_cache();
 
 	// flip Y to match Three.js / WebGL UNPACK_FLIP_Y_WEBGL behaviour.
 	// Desktop GL has no UNPACK_FLIP_Y state, so we flip the rows manually.
@@ -70,6 +73,7 @@ void GLTexture::set_compressed(std::span<const CompressedMipmap> mipmaps,
 		throw std::runtime_error("S3TC compression not supported");
 
 	glBindTexture(GL_TEXTURE_2D, texture);
+	ctx_.invalidate_cache();
 
 	for (size_t i = 0; i < mipmaps.size(); ++i) {
 		const auto& mip = mipmaps[i];
@@ -105,6 +109,7 @@ void GLTexture::_apply_filter(GLenum min_filter, GLenum mag_filter) {
 
 void GLTexture::set_wrap(GLenum wrap_s, GLenum wrap_t) {
 	glBindTexture(GL_TEXTURE_2D, texture);
+	ctx_.invalidate_cache();
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_s);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_t);
 }
