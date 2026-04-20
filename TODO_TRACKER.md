@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 45/578 verified (8%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 51/578 verified (9%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -720,7 +720,7 @@
 - **Status**: Pending
 - **Details**: JS draws loaded tiles to canvas via `putImageData(...)` on main/double-buffer contexts. C++ caches tile pixels but does not upload/draw them, so only overlays render and map tiles are not visually equivalent.
 
-- [ ] 142. [map-viewer.cpp] Tile loading flow is synchronous instead of JS Promise-based async queueing
+- [x] 142. [map-viewer.cpp] Tile loading flow is synchronous instead of JS Promise-based async queueing
 - **JS Source**: `src/js/components/map-viewer.js` lines 192–197, 380–414
 - **Status**: Pending
 - **Details**: JS tile loader is async (`loader(...).then(...)`) with Promise completion timing. C++ calls loader synchronously in `loadTile(...)`, changing queue timing and behavior during panning/zoom updates.
@@ -918,7 +918,7 @@
 - **Status**: Pending
 - **Details**: JS compares version strings lexicographically. C++ converts to double via std::stod() and compares numerically. Versions like 2.80 vs 2.8 would compare differently.
 
-- [ ] 181. [tab_blender.cpp] start_automatic_install and checkLocalVersion are synchronous
+- [x] 181. [tab_blender.cpp] start_automatic_install and checkLocalVersion are synchronous
 - **JS Source**: `src/js/modules/tab_blender.js` lines 81, 127
 - **Status**: Pending
 - **Details**: Both JS functions are async with await. C++ implementations are synchronous, blocking the render thread.
@@ -933,7 +933,7 @@
 - **Status**: Pending
 - **Details**: JS renders `Regex Enabled` with `:title="$core.view.regexTooltip"`; C++ renders plain text without the tooltip contract, changing UI affordance.
 
-- [ ] 184. [tab_install.cpp] Async operations converted to synchronous calls
+- [x] 184. [tab_install.cpp] Async operations converted to synchronous calls
 - **JS Source**: `src/js/modules/tab_install.js` lines 52–146
 - **Status**: Pending
 - **Details**: JS export_install_files(), view_strings(), and export_strings() are all async functions that await CASC file I/O. C++ versions are fully synchronous, blocking the UI thread.
@@ -1111,7 +1111,7 @@
 - **Status**: Pending
 - **Details**: JS returns active_renderer which could be M2, WMO, or MDX. C++ always returns active_renderer_m2.get(), returning nullptr when active model is WMO or MDX.
 
-- [ ] 219. [tab_models_legacy.cpp] preview_model and export_files are synchronous instead of async
+- [x] 219. [tab_models_legacy.cpp] preview_model and export_files are synchronous instead of async
 - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 42, 191
 - **Status**: Pending
 - **Details**: JS preview_model and export_files are async with await. C++ versions are fully synchronous, blocking UI thread for expensive operations.
@@ -1694,7 +1694,7 @@
 - **Status**: Pending
 - **Details**: JS has :title="$core.view.regexTooltip" showing tooltip on hover. C++ has no tooltip.
 
-- [ ] 332. [tab_raw.cpp] All async functions converted to synchronous — blocks UI thread
+- [x] 332. [tab_raw.cpp] All async functions converted to synchronous — blocks UI thread
 - **JS Source**: `src/js/modules/tab_raw.js` lines 12, 31, 91
 - **Status**: Pending
 - **Details**: JS compute_raw_files, detect_raw_files, and export_raw_files are all async. C++ versions are synchronous, blocking render thread during CASC I/O and disk operations.
@@ -1772,7 +1772,7 @@
 - **Status**: Pending
 - **Details**: JS passes both e.message and e.stack to helper.mark. C++ only passes e.what(), omitting stack trace. Affects 6 export functions.
 
-- [ ] 347. [tab_maps.cpp] All async functions converted to synchronous — UI will block
+- [x] 347. [tab_maps.cpp] All async functions converted to synchronous — UI will block
 - **JS Source**: `src/js/modules/tab_maps.js` lines 49–980
 - **Status**: Pending
 - **Details**: Every async function (load_map_tile, load_wmo_minimap_tile, collect_game_objects, extract_height_data_from_tile, load_map, setup_wmo_minimap, all export functions, initialize) is synchronous C++. Long exports freeze the UI.
