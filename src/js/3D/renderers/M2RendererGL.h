@@ -300,6 +300,9 @@ private:
 	std::vector<M2DrawCall> draw_calls;
 	std::vector<uint16_t> indices_data;
 
+	// SSBO for bone matrices (shader uses layout(std430, binding = 0) buffer)
+	GLuint bone_ssbo = 0;
+
 	// skeleton loaders
 	std::unique_ptr<SKELLoader> skelLoader;
 	std::unique_ptr<SKELLoader> childSkelLoader;
