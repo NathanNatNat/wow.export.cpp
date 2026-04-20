@@ -11,7 +11,7 @@
 #include <cmath>
 #include <vector>
 
-static const char* GRID_VERT_SHADER = R"(#version 460 core
+static const char* GRID_VERT_SHADER = R"(#version 330 core
 
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_color;
@@ -27,7 +27,7 @@ void main() {
 }
 )";
 
-static const char* GRID_FRAG_SHADER = R"(#version 460 core
+static const char* GRID_FRAG_SHADER = R"(#version 330 core
 
 in vec3 v_color;
 out vec4 frag_color;

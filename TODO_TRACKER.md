@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 336/917 verified (37%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 339/917 verified (37%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -3496,7 +3496,7 @@
 - [x] 706. [GLContext.cpp] Context creation and capability detection behavior differs from JS canvas/WebGL2 path
 - **JS Source**: `src/js/3D/gl/GLContext.js` lines 29–41, 55–63
 - **Status**: Verified
-- **Details**: JS uses `canvas.getContext('webgl2', options)` and queries WebGL extensions at runtime. On desktop OpenGL 4.6, context creation is handled by GLFW before `GLContext` is constructed. Extension capabilities are correctly detected: `ext_s3tc`/`ext_s3tc_srgb` are detected via `glGetStringi(GL_EXTENSIONS, i)` loop; `ext_aniso` and `max_anisotropy` are set via `glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, ...)` (core in GL 4.6); `ext_float_texture` is true (core in GL 3.0+). This is a necessary desktop-OpenGL adaptation. Documented in GLContext.h and GLContext.cpp.
+- **Details**: JS uses `canvas.getContext('webgl2', options)` and queries WebGL extensions at runtime. On desktop OpenGL 3.3, context creation is handled by GLFW before `GLContext` is constructed. Extension capabilities are correctly detected: `ext_s3tc`/`ext_s3tc_srgb` are detected via `glGetStringi(GL_EXTENSIONS, i)` loop; `ext_aniso` is detected via `GL_EXT_texture_filter_anisotropic`/`GL_ARB_texture_filter_anisotropic` extension check, and `max_anisotropy` queried only when present; `ext_float_texture` is true (core in GL 3.0+). This is a necessary desktop-OpenGL adaptation. Documented in GLContext.h and GLContext.cpp.
 
 - [x] 707. [ShaderProgram.cpp] `_compile` method handles partial shader failure differently from JS
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 29–36
@@ -3523,15 +3523,15 @@
 - **Status**: Pending
 - **Details**: JS exposes `async load()` and awaits CASC file retrieval (`await core.view.casc.getFile(...)`), while C++ `Skin::load()` is synchronous and throws directly, changing caller timing/error-propagation semantics.
 
-- [ ] 712. [GridRenderer.cpp] GLSL shader version differs — C++ uses `#version 460 core`, JS uses `#version 300 es`
+- [x] 712. [GridRenderer.cpp] GLSL shader version differs — C++ uses `#version 330 core`, JS uses `#version 300 es`
 - **JS Source**: `src/js/3D/renderers/GridRenderer.js` lines 9–35
-- **Status**: Pending
-- **Details**: C++ vertex/fragment shaders use `#version 460 core` (desktop OpenGL 4.6). JS uses `#version 300 es` with `precision highp float;` (WebGL 2.0/OpenGL ES 3.0). The shader logic is identical but the version/precision declarations differ. This is an expected platform adaptation but should be documented.
+- **Status**: Verified
+- **Details**: C++ vertex/fragment shaders now use `#version 330 core` (desktop OpenGL 3.3 core profile, closest desktop equivalent to WebGL 2.0/GLSL ES 300). JS uses `#version 300 es` with `precision highp float;`. The shader logic is identical; version/precision declarations differ as expected platform adaptation.
 
-- [ ] 713. [ShadowPlaneRenderer.cpp] GLSL shader version differs — C++ uses `#version 460 core`, JS uses `#version 300 es`
+- [x] 713. [ShadowPlaneRenderer.cpp] GLSL shader version differs — C++ uses `#version 330 core`, JS uses `#version 300 es`
 - **JS Source**: `src/js/3D/renderers/ShadowPlaneRenderer.js` lines 9–40
-- **Status**: Pending
-- **Details**: Same issue as GridRenderer — C++ uses desktop GL 4.6 shaders, JS uses WebGL 2.0 shaders. Logic is identical but version/precision declarations differ. Expected platform adaptation.
+- **Status**: Verified
+- **Details**: Same as GridRenderer — C++ now uses `#version 330 core` (desktop OpenGL 3.3, closest desktop equivalent to WebGL 2.0/GLSL ES 300). Logic is identical; version/precision declarations differ as expected platform adaptation.
 
 - [x] 714. [CameraControlsGL.cpp] Event listener lifecycle from JS `init()/dispose()` is not ported equivalently
 - **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 198–221
