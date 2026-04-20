@@ -9,6 +9,8 @@
 
 #include <filesystem>
 #include <cstdlib>
+#include <random>
+#include <format>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -64,22 +66,24 @@ static fs::path getBlenderBaseDir() {
 
 
 // Returns the OS-specific user-data directory, equivalent to nw.App.dataPath.
-// Windows: %LOCALAPPDATA%/wow.export.cpp
-// Linux:   $XDG_DATA_HOME/wow.export.cpp  (or ~/.local/share/wow.export.cpp)
+// Intentionally shares the original wow.export data directory so caches,
+// config and listfiles are reused between the JS and C++ versions.
+// Windows: %LOCALAPPDATA%/wow.export/User Data/Default
+// Linux:   $XDG_DATA_HOME/wow.export/User Data/Default  (or ~/.local/share/wow.export/User Data/Default)
 static fs::path getUserDataPath() {
 #ifdef _WIN32
 	const char* localAppData = std::getenv("LOCALAPPDATA");
 	if (localAppData && localAppData[0])
-		return fs::path(localAppData) / "wow.export.cpp";
+		return fs::path(localAppData) / "wow.export" / "User Data" / "Default";
 	// Fallback: use exe directory
 	return getExecutablePath().parent_path() / "data";
 #else
 	const char* xdgData = std::getenv("XDG_DATA_HOME");
 	if (xdgData && xdgData[0])
-		return fs::path(xdgData) / "wow.export.cpp";
+		return fs::path(xdgData) / "wow.export" / "User Data" / "Default";
 	const char* home = std::getenv("HOME");
 	if (home && home[0])
-		return fs::path(home) / ".local" / "share" / "wow.export.cpp";
+		return fs::path(home) / ".local" / "share" / "wow.export" / "User Data" / "Default";
 	return getExecutablePath().parent_path() / "data";
 #endif
 }
@@ -220,6 +224,29 @@ namespace UPDATE {
 }
 
 const std::string& USER_AGENT() { return s_user_agent; }
+
+const std::string& BUILD_GUID() {
+	static const std::string guid = [] {
+		std::random_device rd;
+		std::mt19937_64 gen(rd());
+		std::uniform_int_distribution<uint64_t> dist;
+
+		uint64_t a = dist(gen);
+		uint64_t b = dist(gen);
+
+		// Set UUID version 4 bits
+		a = (a & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;
+		b = (b & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;
+
+		return std::format("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+			static_cast<uint32_t>(a >> 32),
+			static_cast<uint16_t>((a >> 16) & 0xFFFF),
+			static_cast<uint16_t>(a & 0xFFFF),
+			static_cast<uint16_t>(b >> 48),
+			b & 0x0000FFFFFFFFFFFFULL);
+	}();
+	return guid;
+}
 
 const std::regex& LISTFILE_MODEL_FILTER() {
 	static const std::regex re(R"((_\d\d\d_)|(_\d\d\d.wmo$)|(lod\d.wmo$))");

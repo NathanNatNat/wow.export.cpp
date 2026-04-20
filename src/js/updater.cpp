@@ -83,7 +83,7 @@ bool checkForUpdates() {
 			throw std::runtime_error("Update manifest does not contain a valid contents list");
 
 		const std::string remoteGuid = manifest["guid"].get<std::string>();
-		const std::string localGuid(constants::BUILD_GUID);
+		const std::string localGuid(constants::BUILD_GUID());
 
 		if (remoteGuid != localGuid) {
 			updateManifest = std::move(manifest);

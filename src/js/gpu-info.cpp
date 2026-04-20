@@ -208,23 +208,14 @@ std::optional<GLInfo> get_gl_info() {
 				result.extensions.emplace_back(ext);
 		}
 
-		// JS only exposes vendor/renderer when WEBGL_debug_renderer_info is available.
-		bool has_debug_renderer_info = false;
-		for (const auto& ext : result.extensions) {
-			if (ext == "WEBGL_debug_renderer_info" || ext == "GL_WEBGL_debug_renderer_info") {
-				has_debug_renderer_info = true;
-				break;
-			}
-		}
-
-		if (has_debug_renderer_info) {
-			const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
-			const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-			if (vendor)
-				result.vendor = vendor;
-			if (renderer)
-				result.renderer = renderer;
-		}
+		// JS checks for WEBGL_debug_renderer_info extension to get vendor/renderer.
+		// In native OpenGL, GL_VENDOR and GL_RENDERER are always available.
+		const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+		const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+		if (vendor)
+			result.vendor = vendor;
+		if (renderer)
+			result.renderer = renderer;
 	} catch (const std::exception& e) {
 		result.error = e.what();
 	}
@@ -553,7 +544,7 @@ std::string format_extensions(const std::vector<std::string>& extensions) {
  * @returns Formatted compact string.
  */
 std::string format_caps(const GLCaps& caps) {
-	std::string viewport = std::to_string(caps.max_viewport[0]) + "x" + std::to_string(caps.max_viewport[1]);
+	std::string viewport = std::to_string(caps.max_viewport[0]) + "," + std::to_string(caps.max_viewport[1]);
 
 	return std::format("tex:{} cube:{} varyings:{} uniforms:{}v/{}f attribs:{} texunits:{}/{} rb:{} vp:{}",
 		caps.max_tex_size,

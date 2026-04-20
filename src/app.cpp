@@ -381,7 +381,7 @@ static void renderCrashScreen() {
 	ImGui::SameLine();
 	ImGui::TextColored(app::theme::BORDER, "%s", std::string(constants::FLAVOUR).c_str());
 	ImGui::SameLine();
-	ImGui::TextColored(app::theme::BORDER, "[%s]", std::string(constants::BUILD_GUID).c_str());
+	ImGui::TextColored(app::theme::BORDER, "[%s]", constants::BUILD_GUID().c_str());
 
 	// Display our error code/text.
 	// CSS: #crash-screen-text { font-weight: normal; font-size: 20px; margin: 20px 0; }
@@ -2732,7 +2732,7 @@ int main(int argc, char* argv[]) {
 
 	// Log some basic information for potential diagnostics.
 	logging::write(std::format("wow.export.cpp has started v{} {} [{}]",
-		constants::VERSION, constants::FLAVOUR, constants::BUILD_GUID));
+		constants::VERSION, constants::FLAVOUR, constants::BUILD_GUID()));
 	logging::write(std::format("Host {} ({}), CPU {} ({} cores), Memory {} / {}",
 		getPlatformName(), getArchName(), getCPUModel(), getCPUCoreCount(),
 		generics::filesize(static_cast<double>(getFreeMemory())),
@@ -2790,7 +2790,12 @@ int main(int argc, char* argv[]) {
 	casc::registerBuildCacheEvents();
 
 	// Load/update BLTE decryption keys.
-	casc::tact_keys::load();
+	// JS: tactKeys.load() returns a promise that is never awaited — failures are silently ignored.
+	try {
+		casc::tact_keys::load();
+	} catch (const std::exception& e) {
+		logging::write(std::format("Failed to load tact keys: {}", e.what()));
+	}
 
 	// Auto-updater logic.
 	// JS: app.js lines 688-705

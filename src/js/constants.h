@@ -39,13 +39,32 @@ const std::filesystem::path& SHADER_PATH();
 inline constexpr std::string_view VERSION = "0.1.0";
 
 // Build flavour identifier (JS: nw.App.manifest.flavour).
-// In the JS version this comes from the NW.js package manifest.
-// For the C++ port we define it as a compile-time constant.
-inline constexpr std::string_view FLAVOUR = "win-x64";
+// In the JS version this comes from the NW.js package manifest (e.g. "win-x64-debug").
+// For the C++ port this is derived from compile-time platform + build config.
+#ifdef _WIN32
+  #define WOW_EXPORT_PLATFORM "win"
+#else
+  #define WOW_EXPORT_PLATFORM "linux"
+#endif
+
+#if defined(__x86_64__) || defined(_M_X64)
+  #define WOW_EXPORT_ARCH "x64"
+#elif defined(__aarch64__) || defined(_M_ARM64)
+  #define WOW_EXPORT_ARCH "arm64"
+#else
+  #define WOW_EXPORT_ARCH "x86"
+#endif
+
+#ifndef WOW_EXPORT_BUILD_TYPE
+  #define WOW_EXPORT_BUILD_TYPE "unknown"
+#endif
+
+inline constexpr std::string_view FLAVOUR = WOW_EXPORT_PLATFORM "-" WOW_EXPORT_ARCH "-" WOW_EXPORT_BUILD_TYPE;
 
 // Build GUID (JS: nw.App.manifest.guid).
-// In the JS version this is a unique build identifier from the NW.js manifest.
-inline constexpr std::string_view BUILD_GUID = "cpp-dev";
+// In the JS version this is a unique build identifier per session.
+// Generated at runtime as a UUID v4 string.
+const std::string& BUILD_GUID();
 
 // Filter used to filter out WMO LOD files.
 const std::regex& LISTFILE_MODEL_FILTER();

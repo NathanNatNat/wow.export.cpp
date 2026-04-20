@@ -5,6 +5,7 @@
  */
 
 #include "cache-collector.h"
+#include "../generics.h"
 
 #include <algorithm>
 #include <chrono>
