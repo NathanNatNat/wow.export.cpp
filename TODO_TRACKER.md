@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 332/915 verified (36%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 334/915 verified (37%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -3753,12 +3753,12 @@
 - **Status**: Pending
 - **Details**: JS exposes async `load()` and `getGroup(index)` while C++ ports both as synchronous methods, changing await/timing behavior.
 
-- [ ] 758. [WMOLoader.cpp] `getGroup` omits JS filename-based fallback when `groupIDs` are missing
+- [x] 758. [WMOLoader.cpp] `getGroup` omits JS filename-based fallback when `groupIDs` are missing
 - **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 75–79
 - **Status**: Pending
 - **Details**: JS loads by `groupIDs[index]` when present, otherwise falls back to `getFileByName(this.fileName.replace(...))`; C++ hard-requires `groupIDs` and throws out-of-range instead of performing the filename fallback.
 
-- [ ] 759. [WMOLoader.cpp] `getGroup()` passes `groupFileID` to child constructor instead of no fileID
+- [x] 759. [WMOLoader.cpp] `getGroup()` passes `groupFileID` to child constructor instead of no fileID
 - **JS Source**: `src/js/3D/loaders/WMOLoader.js` line 80
 - **Status**: Pending
 - **Details**: JS creates group `WMOLoader` with `undefined` as fileID: `new WMOLoader(data, undefined, this.renderingOnly)`. The group's `fileDataID` and `fileName` are intentionally unset. C++ passes the actual `groupFileID`, triggering an unnecessary `casc::listfile::getByID()` lookup in the constructor and setting `fileDataID`/`fileName` on the group. The constructor should use fileID=0 (C++ sentinel for "undefined") to match JS.
