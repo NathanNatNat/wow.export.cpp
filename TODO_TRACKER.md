@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/578 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 51/578 verified (9%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -10,7 +10,7 @@
 - **Status**: Pending
 - **Details**: JS normalizes both `.mdl` and `.mdx` model extensions to `.m2` during model map build; C++ `normalizePath` converts only `.mdx`, so `.mdl` model rows resolve differently.
 
-- [ ] 2. [DBCreaturesLegacy.cpp] Legacy load API is synchronous instead of JS Promise-based async parse flow
+- [x] 2. [DBCreaturesLegacy.cpp] Legacy load API is synchronous instead of JS Promise-based async parse flow
 - **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 19–112
 - **Status**: Pending
 - **Details**: JS uses async initialization and awaits DBC parsing operations; C++ performs synchronous parsing and loading, altering timing/error behavior relative to original Promise flow.
@@ -25,7 +25,7 @@
 - **Status**: Pending
 - **Details**: JS `creatureDisplays` is a `Map` keyed by lowercase model path that preserves insertion order from DBC iteration. C++ uses `std::unordered_map<std::string, std::vector<LegacyCreatureDisplay>>` with string-hash ordering. Iteration over all creature displays may produce different ordering, though this is less impactful since lookups are typically by specific model path.
 
-- [ ] 5. [DBDecor.cpp] Decor cache initialization is synchronous instead of JS async table load
+- [x] 5. [DBDecor.cpp] Decor cache initialization is synchronous instead of JS async table load
 - **JS Source**: `src/js/db/caches/DBDecor.js` lines 15–40
 - **Status**: Pending
 - **Details**: JS `initializeDecorData` is async and awaits DB2 reads; C++ uses a synchronous blocking initializer, changing API timing behavior.
@@ -50,7 +50,7 @@
 - **Status**: Pending
 - **Details**: JS `background_colors`, `border_colors`, and `emblem_colors` are `Map` instances (preserving insertion order from `GuildColorBackground`/`GuildColorBorder`/`GuildColorEmblem` DB2 iteration). C++ `getBackgroundColors()`, `getBorderColors()`, `getEmblemColors()` return `const std::unordered_map<uint32_t, ColorRGB>&` with hash-based ordering. If any caller iterates these maps to build a tabard color picker UI, the color presentation order will differ from the JS original. Note: prior entry 215 stated the .cpp file was still unconverted JS — this is no longer the case; the file is now properly ported to C++.
 
-- [ ] 10. [DBItemCharTextures.cpp] Initialization flow is synchronous and drops JS shared-promise semantics
+- [x] 10. [DBItemCharTextures.cpp] Initialization flow is synchronous and drops JS shared-promise semantics
 - **JS Source**: `src/js/db/caches/DBItemCharTextures.js` lines 34–88
 - **Status**: Pending
 - **Details**: JS uses `init_promise` and async `initialize/ensureInitialized` so concurrent callers await the same in-flight work; C++ uses synchronous initialization with no promise-sharing behavior.
@@ -65,7 +65,7 @@
 - **Status**: Pending
 - **Details**: Entry 217 states that C++ `value_or((*file_data_ids)[0])` at line 127 changes file-data selection behavior compared to JS's `fileDataID: bestFileDataID`. However, the JS `getTextureForRaceGender` function (DBComponentTextureFileData.js line 97) already falls back to `file_data_ids[0]` as its final return when no race/gender match is found, and it only returns `null` when the input array is empty — which is already guarded by the `if (file_data_ids && !file_data_ids->empty())` check at line 115 of the C++ code. The `value_or` in C++ therefore never triggers in practice, and the actual behavior is identical to JS. Entry 217 should be reconsidered.
 
-- [ ] 13. [DBItemDisplays.cpp] Item display cache initialization is synchronous instead of JS async flow
+- [x] 13. [DBItemDisplays.cpp] Item display cache initialization is synchronous instead of JS async flow
 - **JS Source**: `src/js/db/caches/DBItemDisplays.js` lines 18–53
 - **Status**: Pending
 - **Details**: JS `initializeItemDisplays` is Promise-based and awaits DB2/cache calls; C++ ports this path as synchronous blocking logic.
@@ -75,7 +75,7 @@
 - **Status**: Pending
 - **Details**: JS line 41 stores `textures: textureFileDataIDs` where `textureFileDataIDs` is the array reference returned by `DBTextureFileData.getTextureFDIDsByMatID(matResIDs[0])`. Multiple `ItemDisplay` objects that share the same `matResIDs[0]` will reference the same textures array in memory. C++ line 85 copies via `display.textures = *textureFileDataIDs`, so each `ItemDisplay` holds an independent vector. This is functionally equivalent since textures are never mutated after initialization, but the memory semantics differ (JS shares, C++ copies).
 
-- [ ] 15. [DBItemGeosets.cpp] Initialization lifecycle is synchronous and omits JS `init_promise` contract
+- [x] 15. [DBItemGeosets.cpp] Initialization lifecycle is synchronous and omits JS `init_promise` contract
 - **JS Source**: `src/js/db/caches/DBItemGeosets.js` lines 154–220
 - **Status**: Pending
 - **Details**: JS uses async initialization with `init_promise` deduplication; C++ uses a synchronous one-shot initializer and cannot preserve awaitable initialization semantics.
@@ -85,12 +85,12 @@
 - **Status**: Pending
 - **Details**: JS accepts plain objects keyed by strings and parses slot IDs with `parseInt`; C++ requires `std::unordered_map<int, uint32_t>` inputs, removing JS key-coercion behavior.
 
-- [ ] 17. [DBItemModels.cpp] Item model cache initialization is synchronous instead of JS Promise-based flow
+- [x] 17. [DBItemModels.cpp] Item model cache initialization is synchronous instead of JS Promise-based flow
 - **JS Source**: `src/js/db/caches/DBItemModels.js` lines 22–103
 - **Status**: Pending
 - **Details**: JS uses async `initialize` with shared `init_promise` and awaited dependent caches; C++ performs the entire load synchronously with no async/promise contract.
 
-- [ ] 18. [DBItems.cpp] Item cache initialization is synchronous and does not preserve JS shared `init_promise`
+- [x] 18. [DBItems.cpp] Item cache initialization is synchronous and does not preserve JS shared `init_promise`
 - **JS Source**: `src/js/db/caches/DBItems.js` lines 14–59
 - **Status**: Pending
 - **Details**: JS deduplicates concurrent initialization via `init_promise` and async functions; C++ uses synchronous initialization and lacks equivalent awaitable behavior.
@@ -100,12 +100,12 @@
 - **Status**: Pending
 - **Details**: JS `items_by_id` is a `Map` preserving insertion order from `ItemSparse` DB2 iteration. C++ uses `std::unordered_map<uint32_t, ItemInfo>` with hash-based ordering. While current accessors (`getItemById`, `getItemSlotId`, `isItemBow`) only perform key lookups, any future code that iterates all items (e.g., for item list display or filtering) would produce a different ordering than the JS original.
 
-- [ ] 20. [DBModelFileData.cpp] Model mapping loader is synchronous instead of JS async API
+- [x] 20. [DBModelFileData.cpp] Model mapping loader is synchronous instead of JS async API
 - **JS Source**: `src/js/db/caches/DBModelFileData.js` lines 17–35
 - **Status**: Pending
 - **Details**: JS exposes `initializeModelFileData` as an async Promise-based loader; C++ implementation is synchronous blocking code.
 
-- [ ] 21. [DBNpcEquipment.cpp] NPC equipment cache initialization is synchronous and drops JS `init_promise`
+- [x] 21. [DBNpcEquipment.cpp] NPC equipment cache initialization is synchronous and drops JS `init_promise`
 - **JS Source**: `src/js/db/caches/DBNpcEquipment.js` lines 30–66
 - **Status**: Pending
 - **Details**: JS uses async initialization with in-flight promise reuse; C++ initialization is synchronous and does not retain the JS async concurrency contract.
@@ -115,7 +115,7 @@
 - **Status**: Pending
 - **Details**: JS `equipment_map` maps `CreatureDisplayInfoExtraID -> Map<slot_id, item_display_info_id>` where the inner `Map` preserves insertion order from `NPCModelItemSlotDisplayInfo` DB2 iteration. C++ uses `std::unordered_map<uint32_t, std::unordered_map<int, uint32_t>>` — both levels have hash-based ordering. If a caller iterates equipment slots for a creature (e.g., to process items in slot order for equipping), the iteration order differs from JS.
 
-- [ ] 23. [DBTextureFileData.cpp] Texture mapping loader/ensure APIs are synchronous instead of JS async APIs
+- [x] 23. [DBTextureFileData.cpp] Texture mapping loader/ensure APIs are synchronous instead of JS async APIs
 - **JS Source**: `src/js/db/caches/DBTextureFileData.js` lines 16–52
 - **Status**: Pending
 - **Details**: JS defines async `initializeTextureFileData` and `ensureInitialized`; C++ ports both as synchronous methods.
@@ -720,7 +720,7 @@
 - **Status**: Pending
 - **Details**: JS draws loaded tiles to canvas via `putImageData(...)` on main/double-buffer contexts. C++ caches tile pixels but does not upload/draw them, so only overlays render and map tiles are not visually equivalent.
 
-- [ ] 142. [map-viewer.cpp] Tile loading flow is synchronous instead of JS Promise-based async queueing
+- [x] 142. [map-viewer.cpp] Tile loading flow is synchronous instead of JS Promise-based async queueing
 - **JS Source**: `src/js/components/map-viewer.js` lines 192–197, 380–414
 - **Status**: Pending
 - **Details**: JS tile loader is async (`loader(...).then(...)`) with Promise completion timing. C++ calls loader synchronously in `loadTile(...)`, changing queue timing and behavior during panning/zoom updates.
@@ -893,7 +893,7 @@
 - **Status**: Pending
 - **Details**: JS renders each article with visible title and tags divs inline. C++ renders KB_ID and title as a single Selectable with tags only in hover tooltip. Tags and KB ID badge are not visually inline.
 
-- [ ] 176. [tab_help.cpp] load_help_docs is synchronous instead of async
+- [x] 176. [tab_help.cpp] load_help_docs is synchronous instead of async
 - **JS Source**: `src/js/modules/tab_help.js` line 8
 - **Status**: Pending
 - **Details**: JS load_help_docs is async. C++ is synchronous blocking the main thread during file reads.
@@ -918,7 +918,7 @@
 - **Status**: Pending
 - **Details**: JS compares version strings lexicographically. C++ converts to double via std::stod() and compares numerically. Versions like 2.80 vs 2.8 would compare differently.
 
-- [ ] 181. [tab_blender.cpp] start_automatic_install and checkLocalVersion are synchronous
+- [x] 181. [tab_blender.cpp] start_automatic_install and checkLocalVersion are synchronous
 - **JS Source**: `src/js/modules/tab_blender.js` lines 81, 127
 - **Status**: Pending
 - **Details**: Both JS functions are async with await. C++ implementations are synchronous, blocking the render thread.
@@ -933,7 +933,7 @@
 - **Status**: Pending
 - **Details**: JS renders `Regex Enabled` with `:title="$core.view.regexTooltip"`; C++ renders plain text without the tooltip contract, changing UI affordance.
 
-- [ ] 184. [tab_install.cpp] Async operations converted to synchronous calls
+- [x] 184. [tab_install.cpp] Async operations converted to synchronous calls
 - **JS Source**: `src/js/modules/tab_install.js` lines 52–146
 - **Status**: Pending
 - **Details**: JS export_install_files(), view_strings(), and export_strings() are all async functions that await CASC file I/O. C++ versions are fully synchronous, blocking the UI thread.
@@ -1111,7 +1111,7 @@
 - **Status**: Pending
 - **Details**: JS returns active_renderer which could be M2, WMO, or MDX. C++ always returns active_renderer_m2.get(), returning nullptr when active model is WMO or MDX.
 
-- [ ] 219. [tab_models_legacy.cpp] preview_model and export_files are synchronous instead of async
+- [x] 219. [tab_models_legacy.cpp] preview_model and export_files are synchronous instead of async
 - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 42, 191
 - **Status**: Pending
 - **Details**: JS preview_model and export_files are async with await. C++ versions are fully synchronous, blocking UI thread for expensive operations.
@@ -1189,7 +1189,7 @@
 - **Status**: Pending
 - **Details**: JS calls helper.mark(export_file_name, false, e.message, e.stack). C++ passes only e.what(), omitting stack trace.
 
-- [ ] 234. [tab_textures.cpp] All async operations are synchronous — blocks UI thread
+- [x] 234. [tab_textures.cpp] All async operations are synchronous — blocks UI thread
 - **JS Source**: `src/js/modules/tab_textures.js` lines 23–413
 - **Status**: Pending
 - **Details**: JS preview_texture_by_id, load_texture_atlas_data, reload_texture_atlas_data, export_texture_atlas_regions, export_textures, initialize, and apply_baked_npc_texture are all async. C++ equivalents all run synchronously on UI thread.
@@ -1272,7 +1272,7 @@
 - **Status**: Pending
 - **Details**: JS passes e.message and e.stack to helper.mark(). C++ only passes e.what().
 
-- [ ] 250. [tab_audio.cpp] load_track play_track and export_sounds are synchronous blocking main thread
+- [x] 250. [tab_audio.cpp] load_track play_track and export_sounds are synchronous blocking main thread
 - **JS Source**: `src/js/modules/tab_audio.js` lines 47, 99, 122
 - **Status**: Pending
 - **Details**: All three JS functions are async with await. C++ implementations are synchronous, blocking the render thread.
@@ -1375,7 +1375,7 @@
 - **Status**: Pending
 - **Details**: JS attaches `video.onended` (resets `is_streaming`/`videoPlayerState`) and `video.onerror` (shows error toast). C++ delegates to external player and has neither callback — `is_streaming` and `videoPlayerState` are never automatically reset when playback finishes; user must manually click "Stop Video."
 
-- [ ] 270. [tab_videos.cpp] build_payload runs on main thread, blocking UI
+- [x] 270. [tab_videos.cpp] build_payload runs on main thread, blocking UI
 - **JS Source**: `src/js/modules/tab_videos.js` line 125
 - **Status**: Pending
 - **Details**: JS `build_payload` is `async`/`await` (non-blocking). In C++, it's called synchronously on the main thread before launching the background thread. DB2 queries + CASC lookups could freeze the UI.
@@ -1488,7 +1488,7 @@
 - **Status**: Pending
 - **Details**: JS has placeholder="Filter text files...". C++ uses ImGui::InputText with no hint text.
 
-- [ ] 292. [tab_text.cpp] export_text is synchronous instead of async
+- [x] 292. [tab_text.cpp] export_text is synchronous instead of async
 - **JS Source**: `src/js/modules/tab_text.js` lines 77–121
 - **Status**: Pending
 - **Details**: JS export_text is async with await for generics.fileExists(), casc.getFileByName(), and data.writeToFile(). C++ runs entirely synchronously, freezing UI during multi-file export.
@@ -1528,7 +1528,7 @@
 - **Status**: Pending
 - **Details**: JS passes e.message and e.stack. C++ only passes e.what().
 
-- [ ] 300. [tab_fonts.cpp] load_font and export_fonts are synchronous blocking main thread
+- [x] 300. [tab_fonts.cpp] load_font and export_fonts are synchronous blocking main thread
 - **JS Source**: `src/js/modules/tab_fonts.js` lines 16, 102
 - **Status**: Pending
 - **Details**: Both JS functions are async. C++ implementations are synchronous blocking the render thread.
@@ -1694,7 +1694,7 @@
 - **Status**: Pending
 - **Details**: JS has :title="$core.view.regexTooltip" showing tooltip on hover. C++ has no tooltip.
 
-- [ ] 332. [tab_raw.cpp] All async functions converted to synchronous — blocks UI thread
+- [x] 332. [tab_raw.cpp] All async functions converted to synchronous — blocks UI thread
 - **JS Source**: `src/js/modules/tab_raw.js` lines 12, 31, 91
 - **Status**: Pending
 - **Details**: JS compute_raw_files, detect_raw_files, and export_raw_files are all async. C++ versions are synchronous, blocking render thread during CASC I/O and disk operations.
@@ -1772,7 +1772,7 @@
 - **Status**: Pending
 - **Details**: JS passes both e.message and e.stack to helper.mark. C++ only passes e.what(), omitting stack trace. Affects 6 export functions.
 
-- [ ] 347. [tab_maps.cpp] All async functions converted to synchronous — UI will block
+- [x] 347. [tab_maps.cpp] All async functions converted to synchronous — UI will block
 - **JS Source**: `src/js/modules/tab_maps.js` lines 49–980
 - **Status**: Pending
 - **Details**: Every async function (load_map_tile, load_wmo_minimap_tile, collect_game_objects, extract_height_data_from_tile, load_map, setup_wmo_minimap, all export functions, initialize) is synchronous C++. Long exports freeze the UI.
@@ -2008,7 +2008,7 @@
 - **Status**: Pending
 - **Details**: JS adds :class="{ selected: item.checked }" to checklist items. CSS gives .sidebar-checklist-item.selected a background of rgba(255,255,255,0.05). C++ uses plain ImGui::Checkbox with no highlight.
 
-- [ ] 393. [tab_items.cpp] All async operations converted to synchronous — UI may block
+- [x] 393. [tab_items.cpp] All async operations converted to synchronous — UI may block
 - **JS Source**: `src/js/modules/tab_items.js` lines 104, 129, 277, 345–346
 - **Status**: Pending
 - **Details**: JS initialize_items, view_item_textures, and the mounted initialize flow are all async with await. C++ converts all to synchronous blocking calls, freezing the ImGui render loop.
@@ -2038,7 +2038,7 @@
 - **Status**: Pending
 - **Details**: JS has :title="$core.view.regexTooltip" showing tooltip on hover. C++ just renders ImGui::TextUnformatted("Regex Enabled") with no tooltip.
 
-- [ ] 399. [tab_item_sets.cpp] Async initialization converted to synchronous blocking calls
+- [x] 399. [tab_item_sets.cpp] Async initialization converted to synchronous blocking calls
 - **JS Source**: `src/js/modules/tab_item_sets.js` lines 23–65
 - **Status**: Pending
 - **Details**: JS initialize_item_sets is async with await for progressLoadingScreen(), DBItems.ensureInitialized(), db2 getAllRows(). C++ calls all synchronously, blocking the UI thread and preventing loading screen updates.
@@ -2312,7 +2312,7 @@
 
 ## 3D Engine, File Loaders & Core Systems
 
-- [ ] 452. [blp.cpp] WebP/PNG save methods are synchronous instead of JS async Promise APIs
+- [x] 452. [blp.cpp] WebP/PNG save methods are synchronous instead of JS async Promise APIs
 - **JS Source**: `src/js/casc/blp.js` lines 146–194
 - **Status**: Pending
 - **Details**: JS implements `async saveToPNG`, `async toWebP`, and `async saveToWebP`. C++ equivalents are synchronous, changing completion/error semantics for consumers expecting Promise-based behavior.
@@ -2342,12 +2342,12 @@
 - **Status**: Pending
 - **Details**: C++ `create_program()` (Shaders.cpp lines 79–83) installs a static `_unregister_fn` callback on `gl::ShaderProgram` that automatically calls `shaders::unregister()` when a ShaderProgram is destroyed. JS has no equivalent auto-cleanup mechanism — callers must explicitly call `unregister(program)` (Shaders.js line 78–86). This means in C++, a program is automatically removed from `active_programs` on destruction, while in JS a disposed program remains in the set until manually unregistered. This changes `reload_all()` behavior: JS could attempt to recompile stale programs that were not explicitly unregistered, while C++ never encounters this scenario.
 
-- [ ] 458. [Texture.cpp] `getTextureFile()` return contract differs from JS async/null behavior
+- [x] 458. [Texture.cpp] `getTextureFile()` return contract differs from JS async/null behavior
 - **JS Source**: `src/js/3D/Texture.js` lines 32–41
 - **Status**: Pending
 - **Details**: JS returns a Promise from `async getTextureFile()` and yields `null` when unset; C++ returns `std::optional<BufferWrapper>` synchronously, changing both async behavior and API shape.
 
-- [ ] 459. [Skin.cpp] `load()` API timing differs from JS Promise-based async flow
+- [x] 459. [Skin.cpp] `load()` API timing differs from JS Promise-based async flow
 - **JS Source**: `src/js/3D/Skin.js` lines 20–23, 96–100
 - **Status**: Pending
 - **Details**: JS exposes `async load()` and awaits CASC file retrieval (`await core.view.casc.getFile(...)`), while C++ `Skin::load()` is synchronous and throws directly, changing caller timing/error-propagation semantics.
@@ -2367,12 +2367,12 @@
 - **Status**: Pending
 - **Details**: JS `read_m2_array_array` has two separate switch blocks — the useAnims branch (line 78) throws `"Unhandled data type: ${dataType}"` while the non-useAnims branch (line 101) throws `"Unknown data type: ${dataType}"`. C++ collapses both branches into a single `read_value()` helper that always throws `"Unknown data type: "` for both paths. The error message for the useAnims branch differs from the original JS.
 
-- [ ] 463. [M3Loader.cpp] Loader methods are synchronous instead of JS Promise-based async methods
+- [x] 463. [M3Loader.cpp] Loader methods are synchronous instead of JS Promise-based async methods
 - **JS Source**: `src/js/3D/loaders/M3Loader.js` lines 67, 104, 269, 277, 299, 315
 - **Status**: Pending
 - **Details**: JS exposes async `load`, `parseChunk_M3DT`, and async sub-chunk parsers; C++ ports these paths as synchronous calls, changing API timing/await semantics.
 
-- [ ] 464. [MDXLoader.cpp] `load` API is synchronous instead of JS async Promise-based method
+- [x] 464. [MDXLoader.cpp] `load` API is synchronous instead of JS async Promise-based method
 - **JS Source**: `src/js/3D/loaders/MDXLoader.js` line 28
 - **Status**: Pending
 - **Details**: JS exposes `async load()` while C++ exposes synchronous `void load()`, changing await/timing behavior.
@@ -2387,7 +2387,7 @@
 - **Status**: Pending
 - **Details**: In JS, `_read_node()` immediately assigns `this.nodes[node.objectId] = node` (line 209). In C++, this is deferred to `load()` because objects are moved into their final vectors after `_read_node` returns, invalidating any earlier pointers. This is correctly documented with a code comment and is functionally equivalent — all 9 node-bearing types (bones, helpers, attachments, eventObjects, hitTestShapes, particleEmitters, particleEmitters2, lights, ribbonEmitters) are properly registered. This is a structural deviation that should be tracked.
 
-- [ ] 467. [SKELLoader.cpp] Loader animation APIs are synchronous instead of JS Promise-based async methods
+- [x] 467. [SKELLoader.cpp] Loader animation APIs are synchronous instead of JS Promise-based async methods
 - **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 36, 308, 407
 - **Status**: Pending
 - **Details**: JS exposes async `load`, `loadAnimsForIndex`, and `loadAnims`; C++ ports all three as synchronous methods, altering call/await behavior.
@@ -2412,17 +2412,17 @@
 - **Status**: Pending
 - **Details**: JS `loadAnimsForIndex()` has `if (!this.animFileIDs) return false;` (line 319) to guard against undefined `animFileIDs`. However, JS `loadAnims()` does NOT have this guard — it directly iterates `this.animFileIDs` (line 425), which would throw a TypeError if undefined. In C++, `animFileIDs` is always a default-constructed empty vector, so the for-loop is a no-op. The C++ is more robust but produces different behavior (graceful no-op vs JS crash).
 
-- [ ] 472. [BONELoader.cpp] `load` API is synchronous instead of JS async Promise-based method
+- [x] 472. [BONELoader.cpp] `load` API is synchronous instead of JS async Promise-based method
 - **JS Source**: `src/js/3D/loaders/BONELoader.js` line 24
 - **Status**: Pending
 - **Details**: JS exposes `async load()` while C++ exposes synchronous `void load()`, changing API timing/await semantics.
 
-- [ ] 473. [ANIMLoader.cpp] `load` API is synchronous instead of JS async Promise-based method
+- [x] 473. [ANIMLoader.cpp] `load` API is synchronous instead of JS async Promise-based method
 - **JS Source**: `src/js/3D/loaders/ANIMLoader.js` line 25
 - **Status**: Pending
 - **Details**: JS exposes `async load(isChunked = true)` while C++ exposes synchronous `void load(bool isChunked)`, changing API timing/await semantics.
 
-- [ ] 474. [WMOLoader.cpp] `load`/`getGroup` APIs are synchronous instead of JS async methods
+- [x] 474. [WMOLoader.cpp] `load`/`getGroup` APIs are synchronous instead of JS async methods
 - **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 37, 64
 - **Status**: Pending
 - **Details**: JS exposes async `load()` and `getGroup(index)` while C++ ports both as synchronous methods, changing await/timing behavior.
@@ -2442,7 +2442,7 @@
 - **Status**: Pending
 - **Details**: MOPR entry count is calculated as `chunkSize / 8` (8 bytes per entry). Fields read: `portalIndex(2) + groupIndex(2) + side(2)` = 6 bytes, then `data.move(4)` skips 4 more = 10 bytes per entry. Per wowdev.wiki, `SMOPortalRef` has a 2-byte `filler` (uint16_t), making entries 8 bytes. `data.move(2)` would be correct, not `data.move(4)`. Both JS and C++ match (C++ faithfully ports the JS), but both overread by 2 bytes per entry. The outer `data.seek(nextChunkPos)` corrects the position so parsing doesn't break, but this is a latent bug in both codebases.
 
-- [ ] 478. [WMOLegacyLoader.cpp] `load`/internal load helpers/`getGroup` are synchronous instead of JS async methods
+- [x] 478. [WMOLegacyLoader.cpp] `load`/internal load helpers/`getGroup` are synchronous instead of JS async methods
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 33, 54, 86, 116
 - **Status**: Pending
 - **Details**: JS uses async `load`, `_load_alpha_format`, `_load_standard_format`, and `getGroup`; C++ ports these paths synchronously, changing await/timing behavior.
@@ -2477,7 +2477,7 @@
 - **Status**: Pending
 - **Details**: JS only skips when `chunk`/`chunk.vertices` is missing; an empty typed array is still truthy and processing continues. C++ adds `chunk.vertices.empty()` as an additional skip condition, changing edge-case behavior.
 
-- [ ] 485. [ADTExporter.cpp] Export API flow is synchronous instead of JS Promise-based `async export()`
+- [x] 485. [ADTExporter.cpp] Export API flow is synchronous instead of JS Promise-based `async export()`
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 309–367
 - **Status**: Pending
 - **Details**: JS `export()` is asynchronous and yields between CASC/file operations; C++ `exportTile()` performs the flow synchronously, changing timing/cancellation behavior relative to the original async path.
@@ -2507,7 +2507,7 @@
 - **Status**: Pending
 - **Details**: JS exports `WMOPixelShader.MapObjParallax`, while C++ renames this constant to `MapObjParallax_PS`; numeric mapping is preserved but exported identifier parity differs from the original module.
 
-- [ ] 491. [CharMaterialRenderer.cpp] Core renderer methods are synchronous instead of JS Promise-based async methods
+- [x] 491. [CharMaterialRenderer.cpp] Core renderer methods are synchronous instead of JS Promise-based async methods
 - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 49, 105, 114, 170, 189, 231, 282
 - **Status**: Pending
 - **Details**: JS defines `init`, `reset`, `setTextureTarget`, `loadTexture`, `loadTextureFromBLP`, `compileShaders`, and `update` as async/await flows. C++ ports these methods synchronously, changing timing/error-propagation behavior expected by async call sites.
@@ -2547,7 +2547,7 @@
 - **Status**: Pending
 - **Details**: C++ `remap_bone_indices()` (CharacterExporter.cpp line 147) compares `original_idx < static_cast<uint8_t>(remap_table.size())`. If `remap_table` has 256 or more entries, `static_cast<uint8_t>(256)` wraps to `0`, making the comparison `original_idx < 0` always false for unsigned types — no indices would be remapped at all. For tables with 257–511 entries, the truncated size wraps to small values, skipping valid remap entries for higher indices. JS has no such issue since `original_idx < remap_table.length` uses normal number comparison. The fix should be `static_cast<size_t>(original_idx) < remap_table.size()` or simply removing the cast.
 
-- [ ] 499. [M3RendererGL.cpp] Load APIs are synchronous instead of JS async methods
+- [x] 499. [M3RendererGL.cpp] Load APIs are synchronous instead of JS async methods
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 56, 76
 - **Status**: Pending
 - **Details**: JS defines async `load` and `loadLOD`; C++ ports both as synchronous calls, changing await/timing semantics.
@@ -2562,7 +2562,7 @@
 - **Status**: Pending
 - **Details**: Same issue as M2RendererGL/M2LegacyRendererGL — C++ uses `std::chrono::steady_clock` elapsed time (lines 242–246) instead of `performance.now() * 0.001`.
 
-- [ ] 502. [MDXRendererGL.cpp] Load and texture/animation paths are synchronous instead of JS async methods
+- [x] 502. [MDXRendererGL.cpp] Load and texture/animation paths are synchronous instead of JS async methods
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 174, 200, 407
 - **Status**: Pending
 - **Details**: JS uses async `load`, `_load_textures`, and `playAnimation`; C++ ports these paths synchronously, changing asynchronous control flow and failure timing.
@@ -2602,7 +2602,7 @@
 - **Status**: Pending
 - **Details**: JS calls `vao.setup_m2_separate_buffers(vbo, nbo, uvo, bibo, bwbo, null)` with 6 parameters (last is null for index buffer). C++ calls `vao->setup_m2_separate_buffers(vbo, nbo, uvo, bibo, bwbo)` with only 5 parameters. The 6th parameter (index/element buffer) is missing in C++.
 
-- [ ] 510. [WMORendererGL.cpp] Load/update-set paths are synchronous instead of JS async methods
+- [x] 510. [WMORendererGL.cpp] Load/update-set paths are synchronous instead of JS async methods
 - **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 81, 119, 206, 353, 434
 - **Status**: Pending
 - **Details**: JS defines async `load`, `_load_textures`, `_load_groups`, `loadDoodadSet`, and `updateSets`; C++ ports these methods synchronously, changing await/timing behavior.
@@ -2627,7 +2627,7 @@
 - **Status**: Pending
 - **Details**: JS uses `view[this.wmoGroupKey]` and `view[this.wmoSetKey]` for dynamic property access. C++ implements `get_wmo_groups_view()` and `get_wmo_sets_view()` methods (lines 60–69) that return references to the appropriate core::view member based on the key string, supporting `modelViewerWMOGroups`, `creatureViewerWMOGroups`, and `decorViewerWMOGroups`. This is a valid C++ adaptation of JS's dynamic property access.
 
-- [ ] 515. [WMOLegacyRendererGL.cpp] Load/update-set paths are synchronous instead of JS async methods
+- [x] 515. [WMOLegacyRendererGL.cpp] Load/update-set paths are synchronous instead of JS async methods
 - **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 77, 104, 168, 270, 353
 - **Status**: Pending
 - **Details**: JS exposes async `load`, `_load_textures`, `_load_groups`, `loadDoodadSet`, and `updateSets`; C++ ports these paths as synchronous methods, altering Promise scheduling and error propagation behavior.
@@ -2652,7 +2652,7 @@
 - **Status**: Pending
 - **Details**: JS sets `wrap_s = (material.flags & 0x40) ? gl.CLAMP_TO_EDGE : gl.REPEAT` and `wrap_t = (material.flags & 0x80) ? gl.CLAMP_TO_EDGE : gl.REPEAT`. C++ creates `BLPTextureFlags` with `wrap_s = !(material.flags & 0x40)` at line 184–185. The boolean negation may invert the wrap behavior — if `true` maps to CLAMP in the BLPTextureFlags API, then `!(flags & 0x40)` produces the opposite of what JS does. Need to verify the BLPTextureFlags API to confirm.
 
-- [ ] 520. [export-helper.cpp] `getIncrementalFilename` is synchronous instead of JS async Promise API
+- [x] 520. [export-helper.cpp] `getIncrementalFilename` is synchronous instead of JS async Promise API
 - **JS Source**: `src/js/casc/export-helper.js` lines 97–114
 - **Status**: Pending
 - **Details**: JS exposes `static async getIncrementalFilename(...)` and awaits `generics.fileExists`; C++ implementation is synchronous, changing timing/error behavior expected by Promise-style callers.
@@ -2707,7 +2707,7 @@
 - **Status**: Pending
 - **Details**: JS checks `this.skinTextures` truthiness (empty array is truthy) and may overwrite to `undefined`, then skip texture. C++ requires `!skinTextures.empty()`, so it keeps original texture paths in that edge case.
 
-- [ ] 531. [M2LegacyExporter.cpp] Export API flow is synchronous instead of JS Promise-based async methods
+- [x] 531. [M2LegacyExporter.cpp] Export API flow is synchronous instead of JS Promise-based async methods
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 39, 123, 262, 299
 - **Status**: Pending
 - **Details**: JS export methods (`exportTextures`, `exportAsOBJ`, `exportAsSTL`, `exportRaw`) are async and yield during I/O. C++ runs these paths synchronously, altering timing/cancellation behavior versus JS.
@@ -2737,7 +2737,7 @@
 - **Status**: Pending
 - **Details**: While the JS `exportTextures()` currently returns an empty Map (texture export not yet implemented), the C++ return type `std::map<uint32_t, std::string>` constrains future implementation to numeric-only keys. If M3 texture export is later implemented following M2Exporter's pattern (which uses string keys like `"data-X"` for data textures), the uint32_t key type would need to change. The JS Map supports mixed key types natively. This is a forward-compatibility concern rather than a current bug.
 
-- [ ] 537. [WMOExporter.cpp] Export methods are synchronous instead of JS Promise-based async flow
+- [x] 537. [WMOExporter.cpp] Export methods are synchronous instead of JS Promise-based async flow
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 62, 219, 360, 739, 841, 1179
 - **Status**: Pending
 - **Details**: JS uses async export methods (`exportTextures`, `exportAsGLTF`, `exportAsOBJ`, `exportAsSTL`, `exportGroupsAsSeparateOBJ`, `exportRaw`) with awaited CASC/file operations, while C++ executes these paths synchronously.
@@ -2757,7 +2757,7 @@
 - **Status**: Pending
 - **Details**: C++ adds `loadWMO()` (line 1698) and `getDoodadSetNames()` (line 1702) methods that do not exist in the JS WMOExporter class. In JS, `this.wmo` is a public property accessed directly by callers. In C++, `wmo` is a private `std::unique_ptr<WMOLoader>`, so these accessor methods were added to expose the loader. This is a necessary C++ adaptation but changes the public API surface.
 
-- [ ] 541. [WMOLegacyExporter.cpp] Export methods are synchronous instead of JS Promise-based async flow
+- [x] 541. [WMOLegacyExporter.cpp] Export methods are synchronous instead of JS Promise-based async flow
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 47, 130, 392, 478
 - **Status**: Pending
 - **Details**: JS legacy WMO export methods are async and await texture/model I/O; C++ methods (`exportTextures`, `exportAsOBJ`, `exportAsSTL`, `exportRaw`) are synchronous, changing timing/cancellation semantics.
@@ -2767,12 +2767,12 @@
 - **Status**: Pending
 - **Details**: Two face iteration loops in WMOLegacyExporter.cpp (lines 288, 603) use `for (uint16_t i = 0; i < batch.numFaces; i++)`. If `batch.numFaces` reaches or exceeds 65535, the `uint16_t` loop variable wraps to 0, causing an infinite loop or incorrect iteration. JS uses `let i` with no overflow risk. Should use `uint32_t` for the loop variable. Same issue as entries 352, 357, 360.
 
-- [ ] 543. [vp9-avi-demuxer.cpp] Parsing/extraction flow is synchronous callback-based instead of JS async APIs
+- [x] 543. [vp9-avi-demuxer.cpp] Parsing/extraction flow is synchronous callback-based instead of JS async APIs
 - **JS Source**: `src/js/casc/vp9-avi-demuxer.js` lines 22–23, 83–126
 - **Status**: Pending
 - **Details**: JS exposes `async parse_header()` and `async* extract_frames()` generator semantics; C++ ports these to synchronous methods with callback iteration, changing consumption and scheduling behavior.
 
-- [ ] 544. [OBJWriter.cpp] `write()` is synchronous instead of JS Promise-based async method
+- [x] 544. [OBJWriter.cpp] `write()` is synchronous instead of JS Promise-based async method
 - **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 129–225
 - **Status**: Pending
 - **Details**: JS implements asynchronous writes (`await writer.writeLine(...)` and async filesystem calls). C++ `write()` is synchronous, which changes ordering and error propagation relative to the original Promise API.
@@ -2792,7 +2792,7 @@
 - **Status**: Pending
 - **Details**: Both JS and C++ check `this.uvs[0]` / `uvs[0]` for the first UV set when determining whether to include UV indices in face output. Only the first UV set is used in OBJ face references. Verified as matching.
 
-- [ ] 548. [MTLWriter.cpp] `write()` is synchronous instead of JS Promise-based async method
+- [x] 548. [MTLWriter.cpp] `write()` is synchronous instead of JS Promise-based async method
 - **JS Source**: `src/js/3D/writers/MTLWriter.js` lines 41–68
 - **Status**: Pending
 - **Details**: JS awaits file existence checks, directory creation, and line writes in `async write()`. C++ performs the same work synchronously, so behavior differs for call sites that rely on async completion semantics.
@@ -2807,7 +2807,7 @@
 - **Status**: Pending
 - **Details**: Both JS and C++ write `map_Kd <file>` for diffuse texture mapping in material definitions. Verified as correct.
 
-- [ ] 551. [GLTFWriter.cpp] Export entrypoint is synchronous instead of JS Promise-based async flow
+- [x] 551. [GLTFWriter.cpp] Export entrypoint is synchronous instead of JS Promise-based async flow
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 194–1504
 - **Status**: Pending
 - **Details**: JS defines `async write(overwrite, format)` and awaits filesystem/export operations throughout. C++ exposes `void write(...)` and executes all I/O synchronously, changing call timing/error propagation semantics for callers expecting Promise behavior.
@@ -2872,7 +2872,7 @@
 - **Status**: Pending
 - **Details**: Both JS and C++ use zero bytes (0x00) for BIN chunk padding. The glTF 2.0 spec requires BIN chunks to be padded with NUL (0x00), so this is correct. No issue here, verified as correct.
 
-- [ ] 564. [JSONWriter.cpp] `write()` is synchronous and BigInt-stringify behavior differs from JS
+- [x] 564. [JSONWriter.cpp] `write()` is synchronous and BigInt-stringify behavior differs from JS
 - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 33–43
 - **Status**: Pending
 - **Details**: JS uses `async write()` and a `JSON.stringify` replacer that converts `bigint` values to strings. C++ `write()` is synchronous and writes `nlohmann::json::dump()` directly, which changes both async semantics and JS BigInt serialization parity.
@@ -2907,7 +2907,7 @@
 - **Status**: Pending
 - **Details**: JS `async write(overwrite = true)` defaults to overwriting. C++ `void write(bool overwrite)` has no default value. Callers must always explicitly pass the overwrite flag in C++.
 
-- [ ] 571. [SQLWriter.cpp] `write()` is synchronous instead of JS Promise-based async method
+- [x] 571. [SQLWriter.cpp] `write()` is synchronous instead of JS Promise-based async method
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 210–229
 - **Status**: Pending
 - **Details**: JS `async write()` awaits file checks, directory creation, and output writes. C++ performs the same operations synchronously, diverging from JS caller-visible async behavior.
@@ -2932,7 +2932,7 @@
 - **Status**: Pending
 - **Details**: JS's `toSQL()` builds lines array and joins with `\n`. Each batch creates `INSERT INTO ... VALUES\n` then `(vals),(vals),...(vals);\n\n`. C++ directly concatenates: `INSERT INTO ... VALUES\n(vals),\n(vals);\n\n`. The difference is that JS joins value_rows with `,\n` (so no leading newline on first row), while C++ adds `,\n` as a separator between rows within the loop. The output format may differ — JS produces `(vals),(vals)\n(vals);` while C++ produces `(vals),\n(vals),\n(vals);\n`. Minor formatting difference in output.
 
-- [ ] 576. [STLWriter.cpp] `write()` is synchronous instead of JS Promise-based async method
+- [x] 576. [STLWriter.cpp] `write()` is synchronous instead of JS Promise-based async method
 - **JS Source**: `src/js/3D/writers/STLWriter.js` lines 131–249
 - **Status**: Pending
 - **Details**: JS writer path is asynchronous and awaited by callers. C++ `write()` runs synchronously, changing API timing semantics compared to the original implementation.
