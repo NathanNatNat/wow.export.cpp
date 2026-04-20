@@ -1,4 +1,4 @@
-#version 330 core
+#version 430 core
 
 // inputs from vertex shader
 in vec2 v_texcoord;
