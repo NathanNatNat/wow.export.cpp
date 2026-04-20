@@ -8,7 +8,7 @@
 #include "../gl/GLContext.h"
 #include "../gl/ShaderProgram.h"
 
-static const char* SHADOW_VERT_SHADER = R"(#version 330 core
+static const char* SHADOW_VERT_SHADER = R"(#version 430 core
 
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec2 a_uv;
@@ -24,7 +24,7 @@ void main() {
 }
 )";
 
-static const char* SHADOW_FRAG_SHADER = R"(#version 330 core
+static const char* SHADOW_FRAG_SHADER = R"(#version 430 core
 
 in vec2 v_uv;
 out vec4 frag_color;

@@ -1,4 +1,4 @@
-#version 330 core
+#version 430 core
 in vec2 v_texCoord;
 uniform sampler2D u_baseTexture;
 uniform sampler2D u_texture;
