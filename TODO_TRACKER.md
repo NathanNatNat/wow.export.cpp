@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 334/915 verified (37%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 336/917 verified (37%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [app.cpp] Auto-updater flow from app.js is not ported
 - **JS Source**: `src/app.js` lines 691–704
@@ -4542,3 +4542,13 @@
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 697–716
   - **Status**: Verified
   - **Details**: Verified no code change required. JS local save of previous animation/source in `stopAnimation()` is dead code (never restored), so C++’s direct reset path is functionally identical.
+
+- [x] 916. [M2Loader.cpp] `parseChunk_MD21_modelName` uint32_t underflow when `modelNameLength == 0`
+  - **JS Source**: `src/js/3D/loaders/M2Loader.js` line 616
+  - **Status**: Verified
+  - **Details**: `readString(modelNameLength - 1)` underflows to `0xFFFFFFFF` when `modelNameLength == 0` (uint32_t). In JS, `0 - 1 = -1` is handled gracefully (empty string). Fixed with ternary guard matching M2LegacyLoader pattern: `modelNameLength > 0 ? modelNameLength - 1 : 0`.
+
+- [x] 917. [M2Loader.cpp] `parseChunk_SFID` uint32_t underflow when `viewCount > chunkSize/4`
+  - **JS Source**: `src/js/3D/loaders/M2Loader.js` line 275
+  - **Status**: Verified
+  - **Details**: `(chunkSize / 4) - viewCount` underflows when viewCount exceeds total entries. Added defensive guard with `totalEntries >= viewCount` check before subtraction.
