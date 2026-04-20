@@ -373,62 +373,13 @@ elseif(UNIX)
     target_link_libraries(wow_export_cpp PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
 endif()
 
-# ── Copy runtime resources to the build output directory ───────
-# The application locates resources relative to the executable directory
-# under a "data" subdirectory (constants::DATA_DIR = <exe_dir>/data).
-# After every build, mirror the project's resource files next to the binary.
-add_custom_command(TARGET wow_export_cpp POST_BUILD
-    # src/shaders/  →  <exe_dir>/data/shaders/
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:wow_export_cpp>/data/shaders"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/src/shaders"
-        "$<TARGET_FILE_DIR:wow_export_cpp>/data/shaders"
-
-    # src/fa-icons/  →  <exe_dir>/data/fa-icons/
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:wow_export_cpp>/data/fa-icons"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/src/fa-icons"
-        "$<TARGET_FILE_DIR:wow_export_cpp>/data/fa-icons"
-
-    # src/images/  →  <exe_dir>/data/images/
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:wow_export_cpp>/data/images"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/src/images"
-        "$<TARGET_FILE_DIR:wow_export_cpp>/data/images"
-
-    # src/fonts/  →  <exe_dir>/data/fonts/
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:wow_export_cpp>/data/fonts"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/src/fonts"
-        "$<TARGET_FILE_DIR:wow_export_cpp>/data/fonts"
-
-    # resources/  →  <exe_dir>/data/icons/
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:wow_export_cpp>/data/icons"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources"
-        "$<TARGET_FILE_DIR:wow_export_cpp>/data/icons"
-
-    # src/default_config.jsonc  →  <exe_dir>/data/
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/src/default_config.jsonc"
-        "$<TARGET_FILE_DIR:wow_export_cpp>/data/default_config.jsonc"
-
-    # src/app.css  →  <exe_dir>/data/
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/src/app.css"
-        "$<TARGET_FILE_DIR:wow_export_cpp>/data/app.css"
-
-    # src/whats-new.html  →  <exe_dir>/data/
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/src/whats-new.html"
-        "$<TARGET_FILE_DIR:wow_export_cpp>/data/whats-new.html"
-
-    COMMENT "Copying runtime resources to data/ directory"
+# ── Source directory compile definition ─────────────────────────
+# Like NW.js, the application reads bundled resources (shaders, images, fonts,
+# etc.) directly from the source tree at INSTALL_PATH/src/.  A compile-time
+# definition tells constants.cpp where the source tree is located so that no
+# post-build copy step is needed.
+target_compile_definitions(wow_export_cpp PRIVATE
+    WOW_EXPORT_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
 )
 
 # ── Converted source files (added incrementally) ───────────────

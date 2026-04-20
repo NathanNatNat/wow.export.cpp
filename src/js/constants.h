@@ -20,19 +20,16 @@ void init();
 
 
 const std::filesystem::path& INSTALL_PATH(); // Path to the application installation.
-// Deviation: JS uses `DATA_PATH = nw.App.dataPath` (OS-specific user data dir).
-const std::filesystem::path& DATA_DIR(); // Path to the application data directory.
-// Deviation: JS has no LOG_DIR; C++ adds a separate Logs directory.
+const std::filesystem::path& DATA_DIR(); // Path to the user data directory (JS: nw.App.dataPath).
 const std::filesystem::path& LOG_DIR(); // Path to the application logs directory.
-// Deviation: JS stores runtime.log in DATA_PATH directly.
-const std::filesystem::path& RUNTIME_LOG(); // Path to the runtime log.
+const std::filesystem::path& RUNTIME_LOG(); // Path to the runtime log (JS: DATA_PATH/runtime.log).
 const std::filesystem::path& LAST_EXPORT(); // Location of the last export.
+const std::filesystem::path& SRC_DIR(); // Path to bundled resources (JS: INSTALL_PATH/src/).
 
 // Maximum recent local installations to remember.
 inline constexpr int MAX_RECENT_LOCAL = 3;
 
-// Deviation: JS uses `INSTALL_PATH/src/shaders`. C++ uses `<install>/data/shaders`
-// because resources are bundled in the data/ directory in the C++ port.
+// JS: path.join(INSTALL_PATH, 'src', 'shaders')
 const std::filesystem::path& SHADER_PATH();
 
 // Current version of wow.export.
@@ -64,8 +61,7 @@ namespace GAME {
 	inline constexpr int MAP_OFFSET = 17066;
 }
 
-// Deviation: JS uses `DATA_PATH/casc/` as cache directory. C++ renames
-// it to `cache/` with a migration from legacy `casc/` on first run.
+// JS: cache paths are under DATA_PATH/casc/.
 namespace CACHE {
 	const std::filesystem::path& DIR(); // Cache directory.
 	const std::filesystem::path& SIZE(); // Cache size.

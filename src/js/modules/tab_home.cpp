@@ -43,7 +43,7 @@ static void loadBackgroundTexture() {
 		return;
 	s_bgLoaded = true;
 
-	std::filesystem::path path = constants::DATA_DIR() / "images" / "home-background.webp";
+	std::filesystem::path path = constants::SRC_DIR() / "images" / "home-background.webp";
 	std::ifstream file(path, std::ios::binary | std::ios::ate);
 	if (!file.is_open())
 		return;
@@ -81,7 +81,7 @@ static void loadHelpIcons() {
 		return;
 	s_helpIconsLoaded = true;
 
-	std::filesystem::path faDir = constants::DATA_DIR() / "fa-icons";
+	std::filesystem::path faDir = constants::SRC_DIR() / "fa-icons";
 	s_discordIconTex = app::theme::loadSvgTexture(faDir / "discord.svg", 80);
 	s_githubIconTex  = app::theme::loadSvgTexture(faDir / "github.svg", 80);
 	s_patreonIconTex = app::theme::loadSvgTexture(faDir / "patreon.svg", 80);

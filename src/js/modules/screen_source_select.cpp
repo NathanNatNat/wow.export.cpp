@@ -68,7 +68,7 @@ static bool s_texturesLoaded = false;
 static void ensureSourceTextures() {
 	if (s_texturesLoaded) return;
 	s_texturesLoaded = true;
-	std::filesystem::path imgDir = constants::DATA_DIR() / "images";
+	std::filesystem::path imgDir = constants::SRC_DIR() / "images";
 	// Load at 160px so we have crisp icons at both 80px and 50px display sizes.
 	s_texWowLogo   = app::theme::loadSvgTexture(imgDir / "wow_logo.svg", 160);
 	s_texBattlenet = app::theme::loadSvgTexture(imgDir / "import_battlenet.svg", 160);
@@ -145,7 +145,7 @@ static GLuint getExpansionIconTexture(int expansionId) {
 	if (it != s_expansionIconTextures.end())
 		return it->second;
 
-	std::filesystem::path path = constants::DATA_DIR() / "images" / "expansion" / EXPANSION_ICON_FILES[static_cast<size_t>(expansionId)];
+	std::filesystem::path path = constants::SRC_DIR() / "images" / "expansion" / EXPANSION_ICON_FILES[static_cast<size_t>(expansionId)];
 	GLuint tex = loadWebpTexture(path);
 	s_expansionIconTextures[expansionId] = tex;
 	if (!tex)

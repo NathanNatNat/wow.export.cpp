@@ -51,9 +51,9 @@
 - **Details**: Both call sites are present in C++: line ~2804 inside the commented-out updater block (matching JS line 696), and line ~2839 unconditionally (matching JS line 719). Since the updater is disabled, only the unconditional call runs — matching JS behavior when `BUILD_RELEASE` is false.
 
 - [x] 11. [app.cpp] whats-new.html path resolution differs from JS
-- **JS Source**: `src/app.js` lines 710–711
-- **Status**: Verified
-- **Details**: C++ `DATA_DIR() / "whats-new.html"` follows the established convention where JS `src/` maps to C++ `data/` (same pattern as shaders: JS `src/shaders` → C++ `data/shaders`, and config: JS `src/default_config.jsonc` → C++ `data/default_config.jsonc`). Path is correct.
+  - **JS Source**: `src/app.js` lines 710–711
+  - **Status**: Verified
+  - **Details**: C++ now uses `SRC_DIR() / "whats-new.html"` which resolves to `<source_tree>/src/whats-new.html`, matching JS `path.join(INSTALL_PATH, 'src', 'whats-new.html')` exactly.
 
 - [x] 12. [app.cpp] Vue error handler uses 'ERR_VUE' error code; C++ render catch uses 'ERR_RENDER'
 - **JS Source**: `src/app.js` line 514
@@ -125,20 +125,20 @@
 - **Status**: Verified
 - **Details**: JS reads `nw.App.manifest.version`, `.flavour`, and `.guid` at runtime from the NW.js package manifest. C++ defines `VERSION`, `FLAVOUR`, and `BUILD_GUID` as `inline constexpr std::string_view` in constants.h (lines 42, 47, 51). This is a necessary platform adaptation — there is no NW.js manifest in C++. The constants serve the identical purpose: identifying the build for update checks, user-agent strings, and crash reports. Values must be updated manually or via build-system substitution for releases, as documented in the header comment.
 
-- [x] 27. [constants.cpp] DATA path root differs from JS nw.App.dataPath behavior
-- **JS Source**: `src/js/constants.js` lines 16, 35–39
-- **Status**: Verified
-- **Details**: JS uses `nw.App.dataPath` which resolves to the OS-specific user-data directory (%LOCALAPPDATA% on Windows, ~/.config on Linux). C++ uses `<install>/data` — a subdirectory alongside the executable. This is a deliberate platform adaptation documented in constants.cpp lines 105–111. The C++ port bundles resources (shaders, config, fonts) in `data/` alongside the executable, while NW.js stores user data separately. All derived paths (cache, config, etc.) are computed from this base. Functionality is identical — only the root location differs.
+- [x] 27. [constants.cpp] DATA path root now matches JS nw.App.dataPath behavior
+  - **JS Source**: `src/js/constants.js` lines 16, 35–39
+  - **Status**: Verified
+  - **Details**: C++ `DATA_DIR()` now resolves to the OS-specific user-data directory (`%LOCALAPPDATA%/wow.export.cpp` on Windows, `~/.local/share/wow.export.cpp` on Linux), matching JS `nw.App.dataPath`. Bundled resources (shaders, fonts, images, etc.) are read from `SRC_DIR()` (`<source_tree>/src/`), matching JS `INSTALL_PATH/src/`. No post-build copy step needed.
 
-- [x] 28. [constants.cpp] Cache directory constant changed from casc/ to cache/
-- **JS Source**: `src/js/constants.js` lines 73–81
-- **Status**: Verified
-- **Details**: JS uses `path.join(DATA_PATH, 'casc')` as the cache directory name. C++ renames it to `cache/` with automatic migration from legacy `casc/` on first run (constants.cpp lines 149–155). The directory structure and content are identical — only the top-level name differs. The migration logic ensures backward compatibility. Deviation documented in constants.h line 67–68 and constants.cpp lines 144–148.
+- [x] 28. [constants.cpp] Cache directory now matches JS casc/ naming
+  - **JS Source**: `src/js/constants.js` lines 73–81
+  - **Status**: Verified
+  - **Details**: C++ cache directory now uses `casc/` under `DATA_DIR()`, matching JS `path.join(DATA_PATH, 'casc')` exactly. Legacy `cache/` → `casc/` migration code removed.
 
-- [x] 29. [constants.cpp] Shader/default-config paths differ from JS layout
-- **JS Source**: `src/js/constants.js` lines 43, 95–96
-- **Status**: Verified
-- **Details**: JS uses `path.join(INSTALL_PATH, 'src', 'shaders')` and `path.join(INSTALL_PATH, 'src', 'default_config.jsonc')`. C++ uses `<install>/data/shaders` and `<install>/data/default_config.jsonc`. This is a necessary adaptation — the C++ build system copies resources to `data/` via CMake POST_BUILD steps, while JS reads directly from `src/`. Deviations documented in constants.cpp lines 163–166 and 180–182. Functionality is identical.
+- [x] 29. [constants.cpp] Shader/default-config paths now match JS layout
+  - **JS Source**: `src/js/constants.js` lines 43, 95–96
+  - **Status**: Verified
+  - **Details**: C++ now uses `SRC_DIR() / "shaders"` and `SRC_DIR() / "default_config.jsonc"`, resolving to `<source_tree>/src/shaders` and `<source_tree>/src/default_config.jsonc`. This matches JS `path.join(INSTALL_PATH, 'src', 'shaders')` and `path.join(INSTALL_PATH, 'src', 'default_config.jsonc')` exactly. No post-build copy step needed.
 
 - [x] 30. [constants.cpp] Updater helper extension mapping differs from JS
 - **JS Source**: `src/js/constants.js` lines 18, 101
@@ -150,20 +150,20 @@
 - **Status**: Verified
 - **Details**: JS handles `win32`, `darwin`, and `linux` in `getBlenderBaseDir()`. C++ `getBlenderBaseDir()` (constants.cpp lines 49–63) handles Windows (`%APPDATA%/Blender Foundation/Blender`) and Linux (`~/.config/blender`) with a comment noting the darwin case is intentionally omitted (line 56–57). This matches the project scope (Windows and Linux only). All three paths produce identical results on their respective platforms.
 
-- [x] 32. [constants.cpp] RUNTIME_LOG placed in separate Logs/ subdirectory instead of DATA_PATH root
-- **JS Source**: `src/js/constants.js` line 38
-- **Status**: Verified
-- **Details**: JS sets `RUNTIME_LOG: path.join(DATA_PATH, 'runtime.log')` — log file in the data directory root. C++ uses `<install>/Logs/runtime.log` — a separate `Logs/` subdirectory. This is a deliberate organizational choice documented in constants.cpp lines 113–116. The extra nesting level keeps log files separated from user data files. Functionality is identical — `logging::init()` and `getErrorDump()` both use `constants::RUNTIME_LOG()` consistently.
+- [x] 32. [constants.cpp] RUNTIME_LOG now in DATA_DIR root matching JS
+  - **JS Source**: `src/js/constants.js` line 38
+  - **Status**: Verified
+  - **Details**: C++ now uses `DATA_DIR() / "runtime.log"`, matching JS `path.join(DATA_PATH, 'runtime.log')` exactly. LOG_DIR is set to DATA_DIR (no separate Logs/ subdirectory).
 
-- [x] 33. [constants.cpp] Legacy directory migration code in init() has no JS equivalent
-- **JS Source**: `src/js/constants.js` (no equivalent)
-- **Status**: Verified
-- **Details**: C++ `constants::init()` contains migration logic to rename legacy `config/`→`persistence/`→`data/` directories (lines 123–137) and `casc/`→`cache/` (lines 149–155). This has no JS counterpart and is a C++-specific addition to handle evolving directory naming across C++ port versions. The code is defensive (wrapped in try/catch, only runs when conditions are met), harmless if directories don't exist, and ensures seamless upgrades. Documented in constants.cpp lines 118–122 and 144–148.
+- [x] 33. [constants.cpp] Legacy directory migration code removed
+  - **JS Source**: `src/js/constants.js` (no equivalent)
+  - **Status**: Verified
+  - **Details**: Legacy migration logic (`config/`→`persistence/`→`data/` and `casc/`→`cache/`) has been removed. C++ paths now match JS exactly, so no migration is needed.
 
-- [x] 34. [constants.cpp] Explicit create_directories() for data and log dirs not present in JS
-- **JS Source**: `src/js/constants.js` (no equivalent)
-- **Status**: Verified
-- **Details**: C++ `constants::init()` calls `fs::create_directories(s_data_dir)` and `fs::create_directories(s_log_dir)` (lines 141–142) to ensure directories exist before any module writes to them. JS relies on NW.js to automatically create `nw.App.dataPath` before the app starts. This is a necessary C++ adaptation — without it, first-run writes to config/log files would fail. The calls are idempotent (no-op if directories already exist).
+- [x] 34. [constants.cpp] Explicit create_directories() for data dir not present in JS
+  - **JS Source**: `src/js/constants.js` (no equivalent)
+  - **Status**: Verified
+  - **Details**: C++ `constants::init()` calls `fs::create_directories(s_data_dir)` to ensure the user-data directory exists before any module writes to it. JS relies on NW.js to automatically create `nw.App.dataPath` before the app starts. This is a necessary C++ adaptation — without it, first-run writes to config/log/cache files would fail. The call is idempotent (no-op if directory already exists).
 
 - [x] 35. [log.cpp] `write()` API contract differs from JS variadic util.format behavior
 - **JS Source**: `src/js/log.js` lines 78–80, 114

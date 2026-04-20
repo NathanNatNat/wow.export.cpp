@@ -63,9 +63,31 @@ static fs::path getBlenderBaseDir() {
 }
 
 
+// Returns the OS-specific user-data directory, equivalent to nw.App.dataPath.
+// Windows: %LOCALAPPDATA%/wow.export.cpp
+// Linux:   $XDG_DATA_HOME/wow.export.cpp  (or ~/.local/share/wow.export.cpp)
+static fs::path getUserDataPath() {
+#ifdef _WIN32
+	const char* localAppData = std::getenv("LOCALAPPDATA");
+	if (localAppData && localAppData[0])
+		return fs::path(localAppData) / "wow.export.cpp";
+	// Fallback: use exe directory
+	return getExecutablePath().parent_path() / "data";
+#else
+	const char* xdgData = std::getenv("XDG_DATA_HOME");
+	if (xdgData && xdgData[0])
+		return fs::path(xdgData) / "wow.export.cpp";
+	const char* home = std::getenv("HOME");
+	if (home && home[0])
+		return fs::path(home) / ".local" / "share" / "wow.export.cpp";
+	return getExecutablePath().parent_path() / "data";
+#endif
+}
+
 namespace {
 	fs::path s_install_path;
 	fs::path s_data_dir;
+	fs::path s_src_dir;
 	fs::path s_log_dir;
 	fs::path s_runtime_log;
 	fs::path s_last_export;
@@ -97,75 +119,35 @@ namespace {
 
 
 void init() {
-	// on macOS, process.execPath points to the renderer helper binary deep inside
-	// the framework, not the app root. use __dirname (app.nw/src/) instead.
+	// JS: const INSTALL_PATH = path.dirname(process.execPath);
 	// macOS is not supported in the C++ port — only Windows and Linux.
 	s_install_path = getExecutablePath().parent_path();
 
-	// Deviation from JS: JS uses `DATA_PATH = nw.App.dataPath` which is the
-	// OS-specific user-data directory (e.g., %LOCALAPPDATA% on Windows,
-	// ~/.config on Linux). C++ uses `<install>/data` — a subdirectory of the
-	// install path. This is a deliberate platform adaptation: the C++ port
-	// bundles resources (shaders, config, fonts) in data/ alongside the
-	// executable, whereas NW.js stores user data separately from install data.
-	s_data_dir = s_install_path / "data";
+	// JS: const DATA_PATH = nw.App.dataPath;
+	// OS-specific user-data directory for caches, config, logs, etc.
+	s_data_dir = getUserDataPath();
 
-	// Deviation from JS: JS stores runtime.log in DATA_PATH directly.
-	// C++ uses a separate Logs/ directory. This does not affect functionality
-	// — only the log file location.
-	s_log_dir = s_install_path / "Logs";
+	// JS: Resources are at INSTALL_PATH/src/ (shaders, images, fonts, etc.)
+	// In C++, WOW_EXPORT_SOURCE_DIR is set by CMake to CMAKE_SOURCE_DIR.
+	s_src_dir = fs::path(WOW_EXPORT_SOURCE_DIR) / "src";
 
-	// Deviation from JS: Legacy directory migration logic below does not exist
-	// in the JS source. This is C++-specific code to handle migration from
-	// earlier C++ port directory layouts (config/ → persistence/ → data/).
-	// This is a safe addition — it only runs once on first launch after upgrade
-	// and does not affect any JS-equivalent behavior.
-	const fs::path legacyDirs[] = {
-		s_install_path / "config",      // Original name
-		s_install_path / "persistence"  // Previous rename
-	};
-	try {
-		if (!fs::exists(s_data_dir)) {
-			for (const auto& legacyDir : legacyDirs) {
-				if (fs::exists(legacyDir)) {
-					fs::rename(legacyDir, s_data_dir);
-					break;
-				}
-			}
-		}
-	} catch (...) {
-	}
+	// JS: RUNTIME_LOG = path.join(DATA_PATH, 'runtime.log')
+	s_log_dir = s_data_dir;
 
-	// Ensure data and log directories exist before any module attempts to
-	// write to them (e.g. log.cpp creates a stream at require-time).
+	// Ensure data directory exists before any module attempts to write to it.
 	fs::create_directories(s_data_dir);
-	fs::create_directories(s_log_dir);
-
-	// Deviation from JS: Legacy casc/ → cache/ migration does not exist in JS.
-	// JS uses `path.join(DATA_PATH, 'casc')` for the cache directory name.
-	// C++ renames it to `cache/` with a migration from legacy `casc/` on first
-	// run. This is a C++-specific change; the directory content and structure
-	// are identical. See also constants.h CACHE namespace.
-	const auto legacyCascDir = s_data_dir / "casc";
-	const auto newCacheDir = s_data_dir / "cache";
-	try {
-		if (fs::exists(legacyCascDir) && !fs::exists(newCacheDir))
-			fs::rename(legacyCascDir, newCacheDir);
-	} catch (...) {
-	}
 
 	// Compute derived paths.
-	// Deviation from JS: JS RUNTIME_LOG is `path.join(DATA_PATH, 'runtime.log')`.
-	// C++ uses LOG_DIR/runtime.log (separate Logs/ directory).
-	s_runtime_log = s_log_dir / "runtime.log";
+	// JS: path.join(DATA_PATH, 'runtime.log')
+	s_runtime_log = s_data_dir / "runtime.log";
+	// JS: path.join(DATA_PATH, 'last_export')
 	s_last_export = s_data_dir / "last_export";
 
-	// Deviation from JS: JS SHADER_PATH is `path.join(INSTALL_PATH, 'src', 'shaders')`.
-	// C++ uses `<install>/data/shaders` because resources are bundled in the
-	// data/ directory in the C++ port (POST_BUILD copy step in CMakeLists.txt).
-	s_shader_path = s_data_dir / "shaders";
+	// JS: path.join(INSTALL_PATH, 'src', 'shaders')
+	s_shader_path = s_src_dir / "shaders";
 
-	s_cache_dir = s_data_dir / "cache";
+	// JS: Cache paths are under DATA_PATH/casc/
+	s_cache_dir = s_data_dir / "casc";
 	s_cache_size = s_cache_dir / "cachesize";
 	s_cache_integrity_file = s_cache_dir / "cacheintegrity";
 	s_cache_dir_builds = s_cache_dir / "builds";
@@ -173,15 +155,19 @@ void init() {
 	s_cache_dir_data = s_cache_dir / "data";
 	s_cache_dir_dbd = s_cache_dir / "dbd";
 	s_cache_dir_listfile = s_cache_dir / "listfile";
+	// JS: path.join(DATA_PATH, 'tact.json')
 	s_cache_tact_keys = s_data_dir / "tact.json";
+	// JS: path.join(DATA_PATH, 'realmlist.json')
 	s_cache_realmlist = s_data_dir / "realmlist.json";
+	// JS: path.join(DATA_PATH, 'cache_state.json')
 	s_cache_state_file = s_data_dir / "cache_state.json";
 
-	// Deviation from JS: CONFIG.DEFAULT_PATH is `path.join(INSTALL_PATH, 'src', 'default_config.jsonc')`.
-	// C++ uses `<install>/data/default_config.jsonc` — same resource layout as SHADER_PATH.
-	s_config_default_path = s_data_dir / "default_config.jsonc";
+	// JS: CONFIG.DEFAULT_PATH = path.join(INSTALL_PATH, 'src', 'default_config.jsonc')
+	s_config_default_path = s_src_dir / "default_config.jsonc";
+	// JS: CONFIG.USER_PATH = path.join(DATA_PATH, 'config.json')
 	s_config_user_path = s_data_dir / "config.json";
 
+	// JS: UPDATE.DIRECTORY = path.join(INSTALL_PATH, '.update')
 	s_update_directory = s_install_path / ".update";
 #ifdef _WIN32
 	s_update_helper = "updater.exe";
@@ -198,6 +184,7 @@ void init() {
 
 const fs::path& INSTALL_PATH() { return s_install_path; }
 const fs::path& DATA_DIR() { return s_data_dir; }
+const fs::path& SRC_DIR() { return s_src_dir; }
 const fs::path& LOG_DIR() { return s_log_dir; }
 const fs::path& RUNTIME_LOG() { return s_runtime_log; }
 const fs::path& LAST_EXPORT() { return s_last_export; }
