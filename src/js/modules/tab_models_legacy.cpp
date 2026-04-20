@@ -531,7 +531,7 @@ struct PendingLegacyExport {
 	size_t next_index = 0;
 	std::string format;
 	int export_id = 0;
-	FileWriter export_paths_writer;
+	std::optional<FileWriter> export_paths_writer;
 	nlohmann::json manifest;
 	std::optional<casc::ExportHelper> helper;
 	bool helper_started = false;
@@ -570,7 +570,7 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 		task.files = files;
 		task.format = format;
 		task.export_id = export_id;
-		task.export_paths_writer = core::openLastExportStream();
+		task.export_paths_writer.emplace(core::openLastExportStream());
 		task.manifest = {
 			{"type", "LEGACY_MODELS"},
 			{"exportID", export_id},
@@ -611,7 +611,7 @@ static void pump_legacy_export() {
 
 	// Process one file per frame.
 	const auto& file_entry_json = task.files[task.next_index++];
-	FileWriter* export_paths = &task.export_paths_writer;
+	FileWriter* export_paths = task.export_paths_writer.has_value() ? &task.export_paths_writer.value() : nullptr;
 	mpq::MPQInstall* mpq = view.mpq.get();
 
 	std::string file_name;

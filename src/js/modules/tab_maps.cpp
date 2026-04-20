@@ -1091,7 +1091,7 @@ struct PendingMapTileExport {
 	int export_quality = 512;
 	std::string dir;
 	std::string mark_path;
-	FileWriter export_paths;
+	std::optional<FileWriter> export_paths;
 	std::optional<casc::ExportHelper> helper;
 	bool helper_started = false;
 };
@@ -1112,14 +1112,14 @@ static void pump_map_export() {
 	}
 
 	if (helper.isCancelled()) {
-		task.export_paths.close();
+		if (task.export_paths) task.export_paths->close();
 		ADTExporter::clearCache();
 		pending_map_export.reset();
 		return;
 	}
 
 	if (task.next_index >= task.tile_indices.size()) {
-		task.export_paths.close();
+		if (task.export_paths) task.export_paths->close();
 		ADTExporter::clearCache();
 		helper.finish();
 		pending_map_export.reset();
@@ -1169,7 +1169,7 @@ static void pump_map_export() {
 			auto out = adt.exportTile(task.dir, task.export_quality,
 				export_game_objects.empty() ? nullptr : &export_game_objects,
 				&helper, core::view->casc);
-			task.export_paths.writeLine(out.type + ":" + out.path.string());
+			if (task.export_paths) task.export_paths->writeLine(out.type + ":" + out.path.string());
 			helper.mark(task.mark_path, true);
 		} catch (const std::exception& e) {
 			helper.mark(task.mark_path, false, e.what());
@@ -1178,7 +1178,7 @@ static void pump_map_export() {
 		// RAW format
 		try {
 			auto out = adt.exportTile(task.dir, 0, nullptr, &helper, core::view->casc);
-			task.export_paths.writeLine(out.type + ":" + out.path.string());
+			if (task.export_paths) task.export_paths->writeLine(out.type + ":" + out.path.string());
 			helper.mark(task.mark_path, true);
 		} catch (const std::exception& e) {
 			helper.mark(task.mark_path, false, e.what());
@@ -1209,7 +1209,7 @@ static void export_selected_map() {
 	task.export_quality = export_quality;
 	task.dir = casc::ExportHelper::getExportPath(
 		(std::filesystem::path("maps") / selected_map_dir).string());
-	task.export_paths = core::openLastExportStream();
+	task.export_paths.emplace(core::openLastExportStream());
 	task.mark_path = (std::filesystem::path("maps") / selected_map_dir / selected_map_dir).string();
 	task.helper.emplace(static_cast<int>(task.tile_indices.size()), "tile");
 	pending_map_export = std::move(task);
@@ -1236,7 +1236,7 @@ static void export_selected_map_as_raw() {
 	task.format = MapExportFormat::RAW;
 	task.dir = casc::ExportHelper::getExportPath(
 		(std::filesystem::path("maps") / selected_map_dir).string());
-	task.export_paths = core::openLastExportStream();
+	task.export_paths.emplace(core::openLastExportStream());
 	task.mark_path = (std::filesystem::path("maps") / selected_map_dir / selected_map_dir).string();
 	task.helper.emplace(static_cast<int>(task.tile_indices.size()), "tile");
 	pending_map_export = std::move(task);

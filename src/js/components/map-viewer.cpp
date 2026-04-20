@@ -91,14 +91,20 @@ void clearTileState() {
 }
 
 /**
- * Process tiles in the loading queue up to the concurrency limit.
+ * Process tiles in the loading queue, limited per frame to keep the UI responsive.
+ * In JS, tiles are loaded asynchronously (Promises), so multiple can be in-flight
+ * while the event loop handles repaints. In C++, loading is synchronous, so we
+ * limit to a few tiles per frame to avoid freezing the UI during map panning.
  */
+static constexpr int MAX_TILES_PER_FRAME = 3;
+
 void checkTileQueue(MapViewerState& state, const TileLoader& loader) {
-	// Process multiple tiles up to the concurrency limit
-	while (!s_state.tileQueue.empty() && s_state.activeTileRequests < s_state.maxConcurrentTiles) {
+	int tiles_processed = 0;
+	while (!s_state.tileQueue.empty() && tiles_processed < MAX_TILES_PER_FRAME) {
 		TileQueueNode tile = s_state.tileQueue.front();
 		s_state.tileQueue.erase(s_state.tileQueue.begin());
 		loadTile(state, tile, loader);
+		tiles_processed++;
 	}
 
 	// Check if we're done processing all tiles
