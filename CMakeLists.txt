@@ -175,10 +175,10 @@ set(GLFW_INSTALL        OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_WAYLAND  OFF CACHE BOOL "" FORCE)
 add_subdirectory(extern/glfw EXCLUDE_FROM_ALL)
 
-# ── GLAD2 (OpenGL 4.6 core loader, regenerated every build) ───
+# ── GLAD2 (OpenGL 3.3 core loader, regenerated every build) ───
 set(GLAD_SOURCES_DIR "${CMAKE_SOURCE_DIR}/extern/glad" CACHE STRING "" FORCE)
 add_subdirectory(extern/glad/cmake EXCLUDE_FROM_ALL)
-glad_add_library(glad_gl_core_46 STATIC REPRODUCIBLE API gl:core=4.6)
+glad_add_library(glad_gl_core_33 STATIC REPRODUCIBLE API gl:core=3.3)
 
 # ── Dear ImGui (docking branch, compiled as a static library) ──
 add_library(imgui STATIC
@@ -194,7 +194,7 @@ target_include_directories(imgui PUBLIC
     extern/imgui
     extern/imgui/backends
 )
-target_link_libraries(imgui PUBLIC glfw glad_gl_core_46)
+target_link_libraries(imgui PUBLIC glfw glad_gl_core_33)
 # Enable docking and multiviewport support
 target_compile_definitions(imgui PUBLIC
     IMGUI_IMPL_OPENGL_LOADER_GLAD2
@@ -339,7 +339,7 @@ target_include_directories(wow_export_cpp PRIVATE
 target_link_libraries(wow_export_cpp PRIVATE
     # Windowing & rendering
     glfw
-    glad_gl_core_46
+    glad_gl_core_33
     imgui
     # Math
     glm::glm

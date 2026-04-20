@@ -29,11 +29,14 @@ void GLContext::_init_extensions() {
 			ext_s3tc = true;
 		else if (ext == "GL_EXT_texture_compression_s3tc_srgb")
 			ext_s3tc_srgb = true;
+		else if (ext == "GL_EXT_texture_filter_anisotropic" ||
+		         ext == "GL_ARB_texture_filter_anisotropic")
+			ext_aniso = true;
 	}
 
-	// anisotropic filtering (core in GL 4.6 via ARB_texture_filter_anisotropic)
-	ext_aniso = true;
-	glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &max_anisotropy);
+	// anisotropic filtering — query max if extension is present
+	if (ext_aniso)
+		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &max_anisotropy);
 
 	// float textures (core in GL 3.0+)
 	ext_float_texture = true;

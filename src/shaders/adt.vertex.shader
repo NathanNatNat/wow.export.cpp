@@ -1,4 +1,4 @@
-#version 460 core
+#version 330 core
 in vec3 aVertexPosition;
 in vec2 aTextureCoord;
 in vec4 aVertexColor;
