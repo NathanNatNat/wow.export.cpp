@@ -2933,9 +2933,12 @@ int main(int argc, char* argv[]) {
 
 				io.DisplaySize = ImVec2(logical_w, logical_h);
 
-				io.DisplayFramebufferScale = ImVec2(
-					static_cast<float>(fb_w) / logical_w,
-					static_cast<float>(fb_h) / logical_h);
+				// Guard against zero framebuffer size (e.g. minimized window)
+				// to prevent FontRasterizerDensity from becoming 0, which
+				// triggers an assertion in ImGui's font baking code.
+				float fb_scale_x = (fb_w > 0) ? static_cast<float>(fb_w) / logical_w : 1.0f;
+				float fb_scale_y = (fb_h > 0) ? static_cast<float>(fb_h) / logical_h : 1.0f;
+				io.DisplayFramebufferScale = ImVec2(fb_scale_x, fb_scale_y);
 
 				if (io.MousePos.x != -FLT_MAX && win_w > 0 && win_h > 0) {
 					io.MousePos.x *= (logical_w / static_cast<float>(win_w));
