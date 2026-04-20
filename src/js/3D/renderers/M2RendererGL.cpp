@@ -1557,19 +1557,12 @@ shader->set_uniform_3f("u_view_up", 0, 1, 0);
 float time_sec = std::chrono::duration<float>(std::chrono::steady_clock::now() - M2_PERFORMANCE_BASELINE).count();
 shader->set_uniform_1f("u_time", time_sec);
 
-// bone matrices — uploaded via SSBO (shader uses layout(std430, binding = 0) buffer)
-// JS uses gl.uniformMatrix4fv for a uniform array; C++ uses SSBO to avoid uniform size limits.
+// bone matrices
 shader->set_uniform_1i("u_bone_count", static_cast<int>(bones_count()));
 if (has_bones() && !bone_matrices.empty()) {
-	if (bone_ssbo == 0)
-		glGenBuffers(1, &bone_ssbo);
-
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, bone_ssbo);
-	glBufferData(GL_SHADER_STORAGE_BUFFER,
-		static_cast<GLsizeiptr>(bone_matrices.size() * sizeof(float)),
-		bone_matrices.data(), GL_DYNAMIC_DRAW);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, bone_ssbo);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	GLint loc = shader->get_uniform_location("u_bone_matrices");
+	if (loc != -1)
+		glUniformMatrix4fv(loc, static_cast<GLsizei>(bones_count()), GL_FALSE, bone_matrices.data());
 }
 
 // texture matrix defaults
@@ -2049,12 +2042,6 @@ void M2RendererGL::dispose() {
 	bonesWatcher = nullptr;
 
 _dispose_skin();
-
-// dispose bone SSBO
-if (bone_ssbo != 0) {
-	glDeleteBuffers(1, &bone_ssbo);
-	bone_ssbo = 0;
-}
 
 // dispose textures
 for (auto& [key, tex] : textures)

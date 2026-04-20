@@ -11,7 +11,7 @@
 
 namespace gl {
 
-// Anisotropy constants — core in GL 4.6 (ARB_texture_filter_anisotropic).
+// Anisotropy constants — available via GL_EXT_texture_filter_anisotropic extension.
 // Provide fallback defines in case GLAD2 does not include them.
 #ifndef GL_TEXTURE_MAX_ANISOTROPY
 #define GL_TEXTURE_MAX_ANISOTROPY 0x84FE
