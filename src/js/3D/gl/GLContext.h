@@ -87,6 +87,13 @@ public:
 	void draw_elements(GLenum mode, GLsizei count, GLenum type, GLintptr offset);
 	void draw_arrays(GLenum mode, GLint first, GLsizei count);
 
+	/**
+	 * Invalidate all cached GL state.  Call this before rendering when an
+	 * external system (e.g. ImGui's OpenGL backend) may have modified GL
+	 * state behind the cache's back.
+	 */
+	void invalidate_cache();
+
 	void dispose();
 
 	// Extension / capability flags (public — read by GLTexture etc.)
