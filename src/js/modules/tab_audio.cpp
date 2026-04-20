@@ -22,10 +22,12 @@
 #include "../components/context-menu.h"
 #include "../../app.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <format>
 #include <filesystem>
+#include <future>
 #include <optional>
 
 #include <imgui.h>
@@ -82,23 +84,70 @@ static void stop_seek_loop() {
 	seek_loop_active = false;
 }
 
+// --- Async audio loading (follows tab_models pattern) ---
+
+struct PendingAudioLoad {
+	std::string file_name;
+	std::optional<uint32_t> file_data_id;
+	std::future<BufferWrapper> file_future;
+	std::unique_ptr<BusyLock> busy_lock;
+	bool auto_play = false;
+};
+
+static std::optional<PendingAudioLoad> pending_audio_load;
+
 static bool load_track() {
 	if (selected_file.empty())
 		return false;
 
-	BusyLock _lock = core::create_busy_lock();
+	// Cancel any pending async load.
+	pending_audio_load.reset();
+
 	core::setToast("progress", std::format("Loading {}, please wait...", selected_file), {}, -1, false);
 	logging::write(std::format("Previewing sound file {}", selected_file));
 
-	try {
-		BufferWrapper file_data_buf;
-		if (selected_file_data_id.has_value())
-			file_data_buf = core::view->casc->getVirtualFileByID(selected_file_data_id.value());
-		else
-			file_data_buf = core::view->casc->getVirtualFileByName(selected_file);
-		const auto& audio_data = file_data_buf.raw();
+	auto* casc = core::view->casc;
+	if (!casc) {
+		core::setToast("error", "CASC source is not available.", {}, -1);
+		return false;
+	}
 
-		if (selected_file.ends_with(".unk_sound")) {
+	PendingAudioLoad task;
+	task.file_name = selected_file;
+	task.file_data_id = selected_file_data_id;
+	task.busy_lock = std::make_unique<BusyLock>(core::create_busy_lock());
+	task.auto_play = false;
+
+	if (selected_file_data_id.has_value()) {
+		uint32_t fdid = selected_file_data_id.value();
+		task.file_future = std::async(std::launch::async, [casc, fdid]() {
+			return casc->getVirtualFileByID(fdid);
+		});
+	} else {
+		std::string fname = selected_file;
+		task.file_future = std::async(std::launch::async, [casc, fname]() {
+			return casc->getVirtualFileByName(fname);
+		});
+	}
+
+	pending_audio_load = std::move(task);
+	return false; // Not loaded yet; pump will handle it.
+}
+
+static void pump_audio_load() {
+	if (!pending_audio_load.has_value())
+		return;
+
+	auto& task = *pending_audio_load;
+	if (task.file_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		return;
+
+	bool should_play = task.auto_play;
+
+	try {
+		BufferWrapper file_data_buf = task.file_future.get();
+
+		if (task.file_name.ends_with(".unk_sound")) {
 			const AudioType file_type = detectFileType(file_data_buf);
 			if (file_type == AudioType::OGG)
 				core::view->soundPlayerTitle += " (OGG Auto Detected)";
@@ -107,23 +156,30 @@ static bool load_track() {
 		}
 
 		player.stop();
-		player.load(audio_data);
+		player.load(file_data_buf.raw());
 		core::view->soundPlayerDuration = player.get_duration();
 		core::hideToast();
-		return true;
+
+		// Auto-play if requested (from play_track).
+		if (should_play) {
+			player.play();
+			core::view->soundPlayerState = true;
+			start_seek_loop();
+		}
 	} catch (const casc::EncryptionError& e) {
-		core::setToast("error", std::format("The audio file {} is encrypted with an unknown key ({}).", selected_file, e.key), {}, -1);
-		logging::write(std::format("Failed to decrypt audio file {} ({})", selected_file, e.key));
-		return false;
+		core::setToast("error", std::format("The audio file {} is encrypted with an unknown key ({}).", task.file_name, e.key), {}, -1);
+		logging::write(std::format("Failed to decrypt audio file {} ({})", task.file_name, e.key));
 	} catch (const std::exception& e) {
-		core::setToast("error", "Unable to preview audio " + selected_file,
+		core::setToast("error", "Unable to preview audio " + task.file_name,
 			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
-		return false;
 	}
+
+	pending_audio_load.reset();
 }
 
 static void unload_track() {
+	pending_audio_load.reset();
 	stop_seek_loop();
 	player.unload();
 
@@ -140,9 +196,11 @@ static void play_track() {
 			return;
 		}
 
-		const bool loaded = load_track();
-		if (!loaded)
-			return;
+		// Launch async load with auto-play.
+		load_track();
+		if (pending_audio_load.has_value())
+			pending_audio_load->auto_play = true;
+		return;
 	}
 
 	player.play();
@@ -156,7 +214,96 @@ static void pause_track() {
 	core::view->soundPlayerState = false;
 }
 
+// --- Async export (one-file-per-frame, follows tab_models pattern) ---
+
+struct PendingAudioExport {
+	std::vector<nlohmann::json> files;
+	size_t next_index = 0;
+	bool overwrite_files = false;
+	std::optional<casc::ExportHelper> helper;
+};
+
+static std::optional<PendingAudioExport> pending_audio_export;
+
+static void pump_audio_export() {
+	if (!pending_audio_export.has_value())
+		return;
+
+	auto& task = *pending_audio_export;
+	auto& helper = task.helper.value();
+
+	if (task.next_index == 0)
+		helper.start();
+
+	if (helper.isCancelled()) {
+		pending_audio_export.reset();
+		return;
+	}
+
+	if (task.next_index >= task.files.size()) {
+		helper.finish();
+		pending_audio_export.reset();
+		return;
+	}
+
+	// Process one file per frame.
+	const auto& sel_entry = task.files[task.next_index++];
+	bool has_export_data = false;
+	std::vector<uint8_t> export_data;
+
+	std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
+
+	if (file_name.ends_with(".unk_sound")) {
+		BufferWrapper export_buf = core::view->casc->getVirtualFileByName(file_name);
+		export_data = std::move(export_buf.raw());
+		has_export_data = true;
+
+		const AudioType file_type = detectFileType(BufferWrapper(export_data));
+
+		if (file_type == AudioType::OGG)
+			file_name = casc::ExportHelper::replaceExtension(file_name, ".ogg");
+		else if (file_type == AudioType::MP3)
+			file_name = casc::ExportHelper::replaceExtension(file_name, ".mp3");
+	}
+
+	std::string export_file_name = file_name;
+	auto& view = *core::view;
+
+	if (!view.config.value("exportNamedFiles", true)) {
+		auto file_data_id = casc::listfile::getByFilename(file_name);
+		if (file_data_id) {
+			namespace fs = std::filesystem;
+			const std::string ext = fs::path(file_name).extension().string();
+			const std::string dir = fs::path(file_name).parent_path().string();
+			const std::string file_data_id_name = std::to_string(*file_data_id) + ext;
+			export_file_name = dir == "." ? file_data_id_name : (fs::path(dir) / file_data_id_name).string();
+		}
+	}
+
+	try {
+		const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
+		if (task.overwrite_files || !generics::fileExists(export_path)) {
+			if (!has_export_data) {
+				BufferWrapper export_buf = core::view->casc->getVirtualFileByName(file_name);
+				export_data = std::move(export_buf.raw());
+			}
+
+			BufferWrapper out_buf(std::move(export_data));
+			out_buf.writeToFile(export_path);
+		} else {
+			logging::write(std::format("Skipping audio export {} (file exists, overwrite disabled)", export_path));
+		}
+
+		helper.mark(export_file_name, true);
+	} catch (const std::exception& e) {
+		helper.mark(export_file_name, false, e.what());
+	}
+}
+
 static void export_sounds() {
+	if (pending_audio_export.has_value())
+		return;
+
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionSounds;
 	if (user_selection.empty()) {
@@ -164,66 +311,12 @@ static void export_sounds() {
 		return;
 	}
 
-	casc::ExportHelper helper(static_cast<int>(user_selection.size()), "sound files");
-	helper.start();
+	PendingAudioExport task;
+	task.files = std::vector<nlohmann::json>(user_selection.begin(), user_selection.end());
+	task.overwrite_files = view.config.value("overwriteFiles", false);
+	task.helper.emplace(static_cast<int>(user_selection.size()), "sound files");
 
-	const bool overwrite_files = view.config.value("overwriteFiles", false);
-	for (const auto& sel_entry : user_selection) {
-		if (helper.isCancelled())
-			return;
-
-		bool has_export_data = false;
-		std::vector<uint8_t> export_data;
-
-		std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
-
-		if (file_name.ends_with(".unk_sound")) {
-			BufferWrapper export_buf = core::view->casc->getVirtualFileByName(file_name);
-			export_data = std::move(export_buf.raw());
-			has_export_data = true;
-
-			const AudioType file_type = detectFileType(BufferWrapper(export_data));
-
-			if (file_type == AudioType::OGG)
-				file_name = casc::ExportHelper::replaceExtension(file_name, ".ogg");
-			else if (file_type == AudioType::MP3)
-				file_name = casc::ExportHelper::replaceExtension(file_name, ".mp3");
-		}
-
-		std::string export_file_name = file_name;
-
-		if (!view.config.value("exportNamedFiles", true)) {
-			auto file_data_id = casc::listfile::getByFilename(file_name);
-			if (file_data_id) {
-				namespace fs = std::filesystem;
-				const std::string ext = fs::path(file_name).extension().string();
-				const std::string dir = fs::path(file_name).parent_path().string();
-				const std::string file_data_id_name = std::to_string(*file_data_id) + ext;
-				export_file_name = dir == "." ? file_data_id_name : (fs::path(dir) / file_data_id_name).string();
-			}
-		}
-
-		try {
-			const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
-			if (overwrite_files || !generics::fileExists(export_path)) {
-				if (!has_export_data) {
-					BufferWrapper export_buf = core::view->casc->getVirtualFileByName(file_name);
-					export_data = std::move(export_buf.raw());
-				}
-
-				BufferWrapper out_buf(std::move(export_data));
-				out_buf.writeToFile(export_path);
-			} else {
-				logging::write(std::format("Skipping audio export {} (file exists, overwrite disabled)", export_path));
-			}
-
-			helper.mark(export_file_name, true);
-		} catch (const std::exception& e) {
-			helper.mark(export_file_name, false, e.what());
-		}
-	}
-
-	helper.finish();
+	pending_audio_export = std::move(task);
 }
 
 // --- Helper: format seconds as MM:SS ---
@@ -305,6 +398,11 @@ void mounted() {
 
 void render() {
 	auto& view = *core::view;
+
+	// Poll for pending async audio load completion.
+	pump_audio_load();
+	// Poll for pending async audio export (one file per frame).
+	pump_audio_export();
 
 	// --- Change-detection for config watches ---
 

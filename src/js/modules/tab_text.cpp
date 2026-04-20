@@ -19,9 +19,11 @@
 #include "../modules.h"
 #include "../../app.h"
 
+#include <chrono>
 #include <cstring>
 #include <format>
 #include <filesystem>
+#include <future>
 
 #include <imgui.h>
 #include <spdlog/spdlog.h>
@@ -41,6 +43,57 @@ static context_menu::ContextMenuState context_menu_state;
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 
+// --- Async text preview (follows tab_models pattern) ---
+
+struct PendingTextPreview {
+	std::string file_name;
+	std::future<BufferWrapper> file_future;
+	std::unique_ptr<BusyLock> busy_lock;
+};
+
+static std::optional<PendingTextPreview> pending_text_preview;
+
+static void preview_text(const std::string& file_name) {
+	// Cancel any pending preview.
+	pending_text_preview.reset();
+
+	auto* casc = core::view->casc;
+	if (!casc)
+		return;
+
+	PendingTextPreview task;
+	task.file_name = file_name;
+	task.busy_lock = std::make_unique<BusyLock>(core::create_busy_lock());
+	task.file_future = std::async(std::launch::async, [casc, file_name]() {
+		return casc->getVirtualFileByName(file_name);
+	});
+	pending_text_preview = std::move(task);
+}
+
+static void pump_text_preview() {
+	if (!pending_text_preview.has_value())
+		return;
+
+	auto& task = *pending_text_preview;
+	if (task.file_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		return;
+
+	try {
+		BufferWrapper file = task.file_future.get();
+		core::view->textViewerSelectedText = file.readString();
+		selected_file = task.file_name;
+		prev_selection_first = task.file_name;
+	} catch (const casc::EncryptionError& e) {
+		core::setToast("error", std::format("The text file {} is encrypted with an unknown key ({}).", task.file_name, e.key), {}, -1);
+		logging::write(std::format("Failed to decrypt texture {} ({})", task.file_name, e.key));
+	} catch (const std::exception& e) {
+		core::setToast("error", "Unable to preview text file " + task.file_name, {}, -1);
+		logging::write(std::format("Failed to open CASC file: {}", e.what()));
+	}
+
+	pending_text_preview.reset();
+}
+
 void registerTab() {
 	modules::register_nav_button("tab_text", "Text", "file-lines.svg", install_type::CASC);
 }
@@ -49,25 +102,22 @@ void mounted() {
 	// Change-detection is handled in render() by comparing selectionText[0] each frame.
 }
 
+// Forward declaration for pump_text_export (defined after render).
+static void pump_text_export();
+
 void render() {
 	auto& view = *core::view;
+
+	// Poll for pending async text preview completion.
+	pump_text_preview();
+	// Poll for pending async text export (one file per frame).
+	pump_text_export();
 
 	// --- Change-detection for selection preview (equivalent to watch on selectionText) ---
 	if (!view.selectionText.empty()) {
 		const std::string first = casc::listfile::stripFileEntry(view.selectionText[0].get<std::string>());
 		if (view.isBusy == 0 && !first.empty() && first != prev_selection_first) {
-			try {
-				BufferWrapper file = core::view->casc->getVirtualFileByName(first);
-				core::view->textViewerSelectedText = file.readString();
-				selected_file = first;
-				prev_selection_first = first;
-			} catch (const casc::EncryptionError& e) {
-				core::setToast("error", std::format("The text file {} is encrypted with an unknown key ({}).", first, e.key), {}, -1);
-				logging::write(std::format("Failed to decrypt texture {} ({})", first, e.key));
-			} catch (const std::exception& e) {
-				core::setToast("error", "Unable to preview text file " + first, {}, -1);
-				logging::write(std::format("Failed to open CASC file: {}", e.what()));
-			}
+			preview_text(first);
 		}
 	}
 
@@ -213,7 +263,74 @@ void copy_text() {
 	core::setToast("success", std::format("Copied contents of {} to the clipboard.", selected_file), {}, -1, true);
 }
 
+// --- Async export (one-file-per-frame, follows tab_models pattern) ---
+
+struct PendingTextExport {
+	std::vector<nlohmann::json> files;
+	size_t next_index = 0;
+	bool overwrite_files = false;
+	std::optional<casc::ExportHelper> helper;
+};
+
+static std::optional<PendingTextExport> pending_text_export;
+
+static void pump_text_export() {
+	if (!pending_text_export.has_value())
+		return;
+
+	auto& task = *pending_text_export;
+	auto& helper = task.helper.value();
+
+	if (task.next_index == 0)
+		helper.start();
+
+	if (helper.isCancelled()) {
+		pending_text_export.reset();
+		return;
+	}
+
+	if (task.next_index >= task.files.size()) {
+		helper.finish();
+		pending_text_export.reset();
+		return;
+	}
+
+	// Process one file per frame.
+	const auto& sel_entry = task.files[task.next_index++];
+	std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
+	std::string export_file_name = file_name;
+
+	auto& view = *core::view;
+	if (!view.config.value("exportNamedFiles", true)) {
+		auto file_data_id = casc::listfile::getByFilename(file_name);
+		if (file_data_id) {
+			namespace fs = std::filesystem;
+			const std::string ext = fs::path(file_name).extension().string();
+			const std::string dir = fs::path(file_name).parent_path().string();
+			const std::string file_data_id_name = std::to_string(*file_data_id) + ext;
+			export_file_name = dir == "." ? file_data_id_name : (fs::path(dir) / file_data_id_name).string();
+		}
+	}
+
+	try {
+		const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
+		if (task.overwrite_files || !generics::fileExists(export_path)) {
+			BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
+			data.writeToFile(export_path);
+		} else {
+			logging::write(std::format("Skipping text export {} (file exists, overwrite disabled)", export_path));
+		}
+
+		helper.mark(export_file_name, true);
+	} catch (const std::exception& e) {
+		helper.mark(export_file_name, false, e.what());
+	}
+}
+
 void export_text() {
+	if (pending_text_export.has_value())
+		return;
+
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionText;
 	if (user_selection.empty()) {
@@ -221,44 +338,12 @@ void export_text() {
 		return;
 	}
 
-	casc::ExportHelper helper(static_cast<int>(user_selection.size()), "file");
-	helper.start();
+	PendingTextExport task;
+	task.files = std::vector<nlohmann::json>(user_selection.begin(), user_selection.end());
+	task.overwrite_files = view.config.value("overwriteFiles", false);
+	task.helper.emplace(static_cast<int>(user_selection.size()), "file");
 
-	const bool overwrite_files = view.config.value("overwriteFiles", false);
-	for (const auto& sel_entry : user_selection) {
-		if (helper.isCancelled())
-			return;
-
-		std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
-		std::string export_file_name = file_name;
-
-		if (!view.config.value("exportNamedFiles", true)) {
-			auto file_data_id = casc::listfile::getByFilename(file_name);
-			if (file_data_id) {
-				namespace fs = std::filesystem;
-				const std::string ext = fs::path(file_name).extension().string();
-				const std::string dir = fs::path(file_name).parent_path().string();
-				const std::string file_data_id_name = std::to_string(*file_data_id) + ext;
-				export_file_name = dir == "." ? file_data_id_name : (fs::path(dir) / file_data_id_name).string();
-			}
-		}
-
-		try {
-			const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
-			if (overwrite_files || !generics::fileExists(export_path)) {
-				BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
-				data.writeToFile(export_path);
-			} else {
-				logging::write(std::format("Skipping text export {} (file exists, overwrite disabled)", export_path));
-			}
-
-			helper.mark(export_file_name, true);
-		} catch (const std::exception& e) {
-			helper.mark(export_file_name, false, e.what());
-		}
-	}
-
-	helper.finish();
+	pending_text_export = std::move(task);
 }
 
 } // namespace tab_text
