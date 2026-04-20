@@ -32,9 +32,11 @@
 #include "../../app.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <format>
+#include <future>
 #include <map>
 #include <memory>
 #include <regex>
@@ -107,30 +109,30 @@ static void dispose_active_renderer() {
 	active_renderer_type = LegacyModelType::Unknown;
 }
 
-static void preview_model(const std::string& file_name) {
-	auto _lock = core::create_busy_lock();
-	core::setToast("progress", std::format("Loading {}, please wait...", file_name), {}, -1, false);
-	logging::write(std::format("Previewing legacy model {}", file_name));
+// --- Async preview model (background MPQ fetch, GL setup on main thread) ---
 
-	texture_ribbon::reset();
-	clear_texture_preview();
+struct PendingLegacyPreview {
+	std::string file_name;
+	std::future<std::optional<std::vector<uint8_t>>> file_future;
+	std::unique_ptr<BusyLock> busy_lock;
+};
 
+static std::optional<PendingLegacyPreview> pending_legacy_preview;
+
+static void pump_legacy_preview() {
+	if (!pending_legacy_preview.has_value())
+		return;
+
+	auto& task = *pending_legacy_preview;
+	if (task.file_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		return;
+
+	// File data is ready — process on main thread (GL operations).
+	const std::string file_name = task.file_name;
 	auto& view = *core::view;
-	view.legacyModelViewerAnims.clear();
-	view.legacyModelViewerAnimSelection = nullptr;
-	view.legacyModelViewerSkins.clear();
-	view.legacyModelViewerSkinsSelection.clear();
-	active_skins.clear();
 
 	try {
-		if (active_renderer_type != LegacyModelType::Unknown) {
-			dispose_active_renderer();
-			active_path.clear();
-		}
-
-		mpq::MPQInstall* mpq = view.mpq.get();
-
-		auto file_data_opt = mpq->getFile(file_name);
+		auto file_data_opt = task.file_future.get();
 		if (!file_data_opt.has_value())
 			throw std::runtime_error("File not found in MPQ: " + file_name);
 
@@ -179,7 +181,6 @@ static void preview_model(const std::string& file_name) {
 				const auto& animations = active_renderer_m2->m2->animations;
 				for (size_t i = 0; i < animations.size(); ++i) {
 					const auto& animation = animations[i];
-					//         label: AnimMapper.get_anim_name(animation.id) + ' (' + animation.id + '.' + animation.variationIndex + ')' });
 					anim_list.push_back({
 						{"id", std::format("{}.{}", animation.id, animation.variationIndex)},
 						{"animationId", animation.id},
@@ -188,7 +189,6 @@ static void preview_model(const std::string& file_name) {
 					});
 				}
 			} else if (view.legacyModelViewerActiveType == "mdx" && active_renderer_mdx && active_renderer_mdx->mdx) {
-				// MDXLoader uses 'sequences' not 'animations'
 				const auto& sequences = active_renderer_mdx->mdx->sequences;
 				for (size_t i = 0; i < sequences.size(); ++i) {
 					const auto& seq = sequences[i];
@@ -281,6 +281,41 @@ static void preview_model(const std::string& file_name) {
 		core::setToast("error", "Unable to preview model " + file_name, {}, -1);
 		logging::write(std::format("Failed to load legacy model: {}", e.what()));
 	}
+
+	pending_legacy_preview.reset();
+}
+
+static void preview_model(const std::string& file_name) {
+	// Cancel any pending preview.
+	pending_legacy_preview.reset();
+
+	core::setToast("progress", std::format("Loading {}, please wait...", file_name), {}, -1, false);
+	logging::write(std::format("Previewing legacy model {}", file_name));
+
+	texture_ribbon::reset();
+	clear_texture_preview();
+
+	auto& view = *core::view;
+	view.legacyModelViewerAnims.clear();
+	view.legacyModelViewerAnimSelection = nullptr;
+	view.legacyModelViewerSkins.clear();
+	view.legacyModelViewerSkinsSelection.clear();
+	active_skins.clear();
+
+	if (active_renderer_type != LegacyModelType::Unknown) {
+		dispose_active_renderer();
+		active_path.clear();
+	}
+
+	mpq::MPQInstall* mpq = view.mpq.get();
+
+	PendingLegacyPreview task;
+	task.file_name = file_name;
+	task.busy_lock = std::make_unique<BusyLock>(core::create_busy_lock());
+	task.file_future = std::async(std::launch::async, [mpq, file_name]() {
+		return mpq->getFile(file_name);
+	});
+	pending_legacy_preview = std::move(task);
 }
 
 // --- Template methods (mapped from Vue methods) ---
@@ -489,26 +524,37 @@ void mounted() {
 	is_initialized = true;
 }
 
-void export_files(const std::vector<nlohmann::json>& files, int export_id) {
-	auto& view = *core::view;
+// --- Async export (one-file-per-frame, follows tab_models pattern) ---
 
-	FileWriter export_paths_writer = core::openLastExportStream();
-	FileWriter* export_paths = &export_paths_writer;
+struct PendingLegacyExport {
+	std::vector<nlohmann::json> files;
+	size_t next_index = 0;
+	std::string format;
+	int export_id = 0;
+	FileWriter export_paths_writer;
+	nlohmann::json manifest;
+	std::optional<casc::ExportHelper> helper;
+	bool helper_started = false;
+};
+
+static std::optional<PendingLegacyExport> pending_legacy_export;
+
+// Forward declaration
+static void pump_legacy_export();
+
+void export_files(const std::vector<nlohmann::json>& files, int export_id) {
+	if (pending_legacy_export.has_value())
+		return;
+
+	auto& view = *core::view;
 
 	std::string format = view.config.value("exportLegacyModelFormat", std::string("OBJ"));
 
-	nlohmann::json manifest = {
-		{"type", "LEGACY_MODELS"},
-		{"exportID", export_id},
-		{"succeeded", nlohmann::json::array()},
-		{"failed", nlohmann::json::array()}
-	};
-
 	if (format == "PNG" || format == "CLIPBOARD") {
+		// Single operation — no loop needed.
 		if (!active_path.empty()) {
 			gl::GLContext* gl_ctx = viewer_context.gl_context;
 			if (gl_ctx && viewer_state.fbo != 0) {
-				// Bind the model viewer FBO so export_preview can read its pixels
 				glBindFramebuffer(GL_FRAMEBUFFER, viewer_state.fbo);
 				model_viewer_utils::export_preview(format, *gl_ctx, active_path);
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -516,137 +562,167 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 		} else {
 			core::setToast("error", "The selected export option only works for model previews. Preview something first!", {}, -1);
 		}
-	} else if (format == "OBJ" || format == "STL" || format == "RAW") {
-		mpq::MPQInstall* mpq = view.mpq.get();
+		return;
+	}
 
-		casc::ExportHelper helper(static_cast<int>(files.size()), "model");
-		helper.start();
-
-		WMOLegacyExporter::clearCache();
-
-		for (const auto& file_entry_json : files) {
-			if (helper.isCancelled())
-				return;
-
-			std::string file_name;
-			if (file_entry_json.is_string())
-				file_name = file_entry_json.get<std::string>();
-			else
-				continue;
-
-			std::vector<FileManifestEntry> file_manifest;
-
-			try {
-				auto file_data_opt = mpq->getFile(file_name);
-				if (!file_data_opt.has_value())
-					throw std::runtime_error("File not found in MPQ");
-
-				std::string export_path = casc::ExportHelper::getExportPath(file_name);
-
-				BufferWrapper data(std::move(file_data_opt.value()));
-
-				std::string file_name_lower = file_name;
-				std::transform(file_name_lower.begin(), file_name_lower.end(), file_name_lower.begin(), ::tolower);
-
-				if (file_name_lower.ends_with(".wmo")) {
-					WMOLegacyExporter exporter(std::move(data), file_name, mpq);
-
-					if (file_name == active_path) {
-						// Convert JSON group/set masks to typed vectors.
-						{
-							std::vector<WMOGroupMaskEntry> group_mask;
-							for (const auto& entry : view.modelViewerWMOGroups) {
-								WMOGroupMaskEntry e;
-								e.checked = entry.value("checked", false);
-								e.groupIndex = entry.value("groupIndex", 0u);
-								group_mask.push_back(e);
-							}
-							exporter.setGroupMask(group_mask);
-						}
-						{
-							std::vector<WMODoodadSetMaskEntry> set_mask;
-							for (const auto& entry : view.modelViewerWMOSets) {
-								WMODoodadSetMaskEntry e;
-								e.checked = entry.value("checked", false);
-								set_mask.push_back(e);
-							}
-							exporter.setDoodadSetMask(set_mask);
-						}
-					}
-
-					if (format == "OBJ") {
-						export_path = casc::ExportHelper::replaceExtension(export_path, ".obj");
-						exporter.exportAsOBJ(export_path, &helper, &file_manifest);
-						if (export_paths) export_paths->writeLine("WMO_OBJ:" + export_path);
-					} else if (format == "STL") {
-						export_path = casc::ExportHelper::replaceExtension(export_path, ".stl");
-						exporter.exportAsSTL(export_path, &helper, &file_manifest);
-						if (export_paths) export_paths->writeLine("WMO_STL:" + export_path);
-					} else {
-						exporter.exportRaw(export_path, &helper, &file_manifest);
-						if (export_paths) export_paths->writeLine("WMO_RAW:" + export_path);
-					}
-				} else if (file_name_lower.ends_with(".m2")) {
-					M2LegacyExporter exporter(std::move(data), file_name, mpq);
-
-					if (file_name == active_path) {
-						const auto& skin_selection = view.legacyModelViewerSkinsSelection;
-						if (!skin_selection.empty()) {
-							const auto& selected_skin = skin_selection[0];
-							std::string sel_id = selected_skin.value("id", std::string(""));
-							auto it = active_skins.find(sel_id);
-							if (it != active_skins.end() && !it->second.textures.empty())
-								exporter.setSkinTextures(it->second.textures);
-						}
-
-						// Convert JSON geoset mask to typed vector.
-						{
-							std::vector<GeosetMaskEntry> geo_mask;
-							for (const auto& entry : view.modelViewerGeosets) {
-								GeosetMaskEntry e;
-								e.checked = entry.value("checked", false);
-								geo_mask.push_back(e);
-							}
-							exporter.setGeosetMask(geo_mask);
-						}
-					}
-
-					if (format == "OBJ") {
-						export_path = casc::ExportHelper::replaceExtension(export_path, ".obj");
-						exporter.exportAsOBJ(export_path, &helper, &file_manifest);
-						if (export_paths) export_paths->writeLine("M2_OBJ:" + export_path);
-					} else if (format == "STL") {
-						export_path = casc::ExportHelper::replaceExtension(export_path, ".stl");
-						exporter.exportAsSTL(export_path, &helper, &file_manifest);
-						if (export_paths) export_paths->writeLine("M2_STL:" + export_path);
-					} else {
-						exporter.exportRaw(export_path, &helper, &file_manifest);
-						if (export_paths) export_paths->writeLine("M2_RAW:" + export_path);
-					}
-				} else {
-					data.writeToFile(export_path);
-					file_manifest.push_back({ "RAW", export_path });
-					if (export_paths) export_paths->writeLine("RAW:" + export_path);
-				}
-
-				helper.mark(file_name, true);
-
-				// Convert FileManifestEntry vector to JSON for the manifest.
-				nlohmann::json files_json = nlohmann::json::array();
-				for (const auto& entry : file_manifest)
-					files_json.push_back({ {"type", entry.type}, {"file", entry.file.string()} });
-				manifest["succeeded"].push_back({ {"file", file_name}, {"files", files_json} });
-			} catch (const std::exception& e) {
-				helper.mark(file_name, false, e.what());
-				manifest["failed"].push_back({ {"file", file_name} });
-			}
-		}
-
-		helper.finish();
+	if (format == "OBJ" || format == "STL" || format == "RAW") {
+		PendingLegacyExport task;
+		task.files = files;
+		task.format = format;
+		task.export_id = export_id;
+		task.export_paths_writer = core::openLastExportStream();
+		task.manifest = {
+			{"type", "LEGACY_MODELS"},
+			{"exportID", export_id},
+			{"succeeded", nlohmann::json::array()},
+			{"failed", nlohmann::json::array()}
+		};
+		task.helper.emplace(static_cast<int>(files.size()), "model");
+		pending_legacy_export = std::move(task);
 	} else {
 		core::setToast("error", "Export format not yet implemented for legacy models: " + format, {}, -1);
 	}
+}
 
+static void pump_legacy_export() {
+	if (!pending_legacy_export.has_value())
+		return;
+
+	auto& task = *pending_legacy_export;
+	auto& helper = task.helper.value();
+	auto& view = *core::view;
+
+	if (!task.helper_started) {
+		helper.start();
+		WMOLegacyExporter::clearCache();
+		task.helper_started = true;
+	}
+
+	if (helper.isCancelled()) {
+		pending_legacy_export.reset();
+		return;
+	}
+
+	if (task.next_index >= task.files.size()) {
+		helper.finish();
+		pending_legacy_export.reset();
+		return;
+	}
+
+	// Process one file per frame.
+	const auto& file_entry_json = task.files[task.next_index++];
+	FileWriter* export_paths = &task.export_paths_writer;
+	mpq::MPQInstall* mpq = view.mpq.get();
+
+	std::string file_name;
+	if (file_entry_json.is_string())
+		file_name = file_entry_json.get<std::string>();
+	else
+		return;
+
+	std::vector<FileManifestEntry> file_manifest;
+
+	try {
+		auto file_data_opt = mpq->getFile(file_name);
+		if (!file_data_opt.has_value())
+			throw std::runtime_error("File not found in MPQ");
+
+		std::string export_path = casc::ExportHelper::getExportPath(file_name);
+
+		BufferWrapper data(std::move(file_data_opt.value()));
+
+		std::string file_name_lower = file_name;
+		std::transform(file_name_lower.begin(), file_name_lower.end(), file_name_lower.begin(), ::tolower);
+
+		if (file_name_lower.ends_with(".wmo")) {
+			WMOLegacyExporter exporter(std::move(data), file_name, mpq);
+
+			if (file_name == active_path) {
+				{
+					std::vector<WMOGroupMaskEntry> group_mask;
+					for (const auto& entry : view.modelViewerWMOGroups) {
+						WMOGroupMaskEntry e;
+						e.checked = entry.value("checked", false);
+						e.groupIndex = entry.value("groupIndex", 0u);
+						group_mask.push_back(e);
+					}
+					exporter.setGroupMask(group_mask);
+				}
+				{
+					std::vector<WMODoodadSetMaskEntry> set_mask;
+					for (const auto& entry : view.modelViewerWMOSets) {
+						WMODoodadSetMaskEntry e;
+						e.checked = entry.value("checked", false);
+						set_mask.push_back(e);
+					}
+					exporter.setDoodadSetMask(set_mask);
+				}
+			}
+
+			if (task.format == "OBJ") {
+				export_path = casc::ExportHelper::replaceExtension(export_path, ".obj");
+				exporter.exportAsOBJ(export_path, &helper, &file_manifest);
+				if (export_paths) export_paths->writeLine("WMO_OBJ:" + export_path);
+			} else if (task.format == "STL") {
+				export_path = casc::ExportHelper::replaceExtension(export_path, ".stl");
+				exporter.exportAsSTL(export_path, &helper, &file_manifest);
+				if (export_paths) export_paths->writeLine("WMO_STL:" + export_path);
+			} else {
+				exporter.exportRaw(export_path, &helper, &file_manifest);
+				if (export_paths) export_paths->writeLine("WMO_RAW:" + export_path);
+			}
+		} else if (file_name_lower.ends_with(".m2")) {
+			M2LegacyExporter exporter(std::move(data), file_name, mpq);
+
+			if (file_name == active_path) {
+				const auto& skin_selection = view.legacyModelViewerSkinsSelection;
+				if (!skin_selection.empty()) {
+					const auto& selected_skin = skin_selection[0];
+					std::string sel_id = selected_skin.value("id", std::string(""));
+					auto it = active_skins.find(sel_id);
+					if (it != active_skins.end() && !it->second.textures.empty())
+						exporter.setSkinTextures(it->second.textures);
+				}
+
+				{
+					std::vector<GeosetMaskEntry> geo_mask;
+					for (const auto& entry : view.modelViewerGeosets) {
+						GeosetMaskEntry e;
+						e.checked = entry.value("checked", false);
+						geo_mask.push_back(e);
+					}
+					exporter.setGeosetMask(geo_mask);
+				}
+			}
+
+			if (task.format == "OBJ") {
+				export_path = casc::ExportHelper::replaceExtension(export_path, ".obj");
+				exporter.exportAsOBJ(export_path, &helper, &file_manifest);
+				if (export_paths) export_paths->writeLine("M2_OBJ:" + export_path);
+			} else if (task.format == "STL") {
+				export_path = casc::ExportHelper::replaceExtension(export_path, ".stl");
+				exporter.exportAsSTL(export_path, &helper, &file_manifest);
+				if (export_paths) export_paths->writeLine("M2_STL:" + export_path);
+			} else {
+				exporter.exportRaw(export_path, &helper, &file_manifest);
+				if (export_paths) export_paths->writeLine("M2_RAW:" + export_path);
+			}
+		} else {
+			data.writeToFile(export_path);
+			file_manifest.push_back({ "RAW", export_path });
+			if (export_paths) export_paths->writeLine("RAW:" + export_path);
+		}
+
+		helper.mark(file_name, true);
+
+		nlohmann::json files_json = nlohmann::json::array();
+		for (const auto& entry : file_manifest)
+			files_json.push_back({ {"type", entry.type}, {"file", entry.file.string()} });
+		task.manifest["succeeded"].push_back({ {"file", file_name}, {"files", files_json} });
+	} catch (const std::exception& e) {
+		helper.mark(file_name, false, e.what());
+		task.manifest["failed"].push_back({ {"file", file_name} });
+	}
 }
 
 M2LegacyRendererGL* getActiveRenderer() {
@@ -655,6 +731,10 @@ M2LegacyRendererGL* getActiveRenderer() {
 
 void render() {
 	auto& view = *core::view;
+
+	// Poll for pending async preview/export.
+	pump_legacy_preview();
+	pump_legacy_export();
 
 	if (!is_initialized)
 		return;

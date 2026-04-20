@@ -20,9 +20,11 @@
 #include "../buffer.h"
 #include "../../app.h"
 
+#include <chrono>
 #include <cstring>
 #include <format>
 #include <filesystem>
+#include <future>
 #include <regex>
 #include <unordered_map>
 
@@ -76,7 +78,72 @@ static void compute_raw_files() {
 	core::setToast("success", std::format("Found {} files in the game client", view.listfileRaw.size()));
 }
 
+// --- Async detect (follows tab_models pattern) ---
+
+struct PendingDetectTask {
+	std::vector<uint32_t> file_ids;
+	size_t next_index = 0;
+	std::unordered_map<uint32_t, std::string> extension_map;
+	std::unique_ptr<BusyLock> busy_lock;
+};
+
+static std::optional<PendingDetectTask> pending_detect_task;
+
+static void pump_detect_task() {
+	if (!pending_detect_task.has_value())
+		return;
+
+	auto& task = *pending_detect_task;
+
+	if (task.next_index >= task.file_ids.size()) {
+		// Done detecting — process results.
+		if (!task.extension_map.empty()) {
+			std::vector<std::pair<uint32_t, std::string>> entries(task.extension_map.begin(), task.extension_map.end());
+			casc::listfile::ingestIdentifiedFiles(entries);
+			is_dirty = true;
+			compute_raw_files();
+
+			if (task.extension_map.size() == 1) {
+				auto it = task.extension_map.begin();
+				core::setToast("success", std::format("{} has been identified as a {} file", it->first, it->second));
+			} else {
+				core::setToast("success", std::format("Successfully identified {} files", task.extension_map.size()));
+			}
+
+			core::setToast("success", std::format("{} of the {} selected files have been identified and added to relevant file lists",
+				task.extension_map.size(), task.file_ids.size()));
+		} else {
+			core::setToast("info", "Unable to identify any of the selected files.");
+		}
+		pending_detect_task.reset();
+		return;
+	}
+
+	// Process one file per frame.
+	const uint32_t file_data_id = task.file_ids[task.next_index++];
+	core::setToast("progress", std::format("Identifying file {} ({} / {})",
+		file_data_id, task.next_index, task.file_ids.size()));
+
+	try {
+		BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
+
+		for (const auto& check : constants::FILE_IDENTIFIERS) {
+			std::vector<std::string_view> patterns(check.matches.begin(), check.matches.begin() + std::min(static_cast<size_t>(check.match_count), check.matches.size()));
+			if (data.startsWith(patterns)) {
+				task.extension_map[file_data_id] = std::string(check.ext);
+				logging::write(std::format("Successfully identified file {} as {}", file_data_id, check.ext));
+				break;
+			}
+		}
+	} catch (const std::exception&) {
+		logging::write(std::format("Failed to identify file {} due to CASC error", file_data_id));
+	}
+}
+
 static void detect_raw_files() {
+	if (pending_detect_task.has_value())
+		return;
+
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionRaw;
 	if (user_selection.empty()) {
@@ -100,52 +167,82 @@ static void detect_raw_files() {
 		return;
 	}
 
-	BusyLock _lock = core::create_busy_lock();
+	PendingDetectTask task;
+	task.file_ids = std::move(filtered_selection);
+	task.busy_lock = std::make_unique<BusyLock>(core::create_busy_lock());
+	pending_detect_task = std::move(task);
+}
 
-	std::unordered_map<uint32_t, std::string> extension_map;
-	int current_index = 1;
+// --- Async export (one-file-per-frame, follows tab_models pattern) ---
 
-	for (const uint32_t file_data_id : filtered_selection) {
-		core::setToast("progress", std::format("Identifying file {} ({} / {})",
-			file_data_id, current_index++, filtered_selection.size()));
+struct PendingRawExport {
+	std::vector<nlohmann::json> files;
+	size_t next_index = 0;
+	bool overwrite_files = false;
+	std::optional<casc::ExportHelper> helper;
+};
 
-		try {
-			BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
+static std::optional<PendingRawExport> pending_raw_export;
 
-			for (const auto& check : constants::FILE_IDENTIFIERS) {
-				std::vector<std::string_view> patterns(check.matches.begin(), check.matches.begin() + std::min(static_cast<size_t>(check.match_count), check.matches.size()));
-				if (data.startsWith(patterns)) {
-					extension_map[file_data_id] = std::string(check.ext);
-					logging::write(std::format("Successfully identified file {} as {}", file_data_id, check.ext));
-					break;
-				}
-			}
-		} catch (const std::exception&) {
-			logging::write(std::format("Failed to identify file {} due to CASC error", file_data_id));
+static void pump_raw_export() {
+	if (!pending_raw_export.has_value())
+		return;
+
+	auto& task = *pending_raw_export;
+	auto& helper = task.helper.value();
+
+	if (task.next_index == 0)
+		helper.start();
+
+	if (helper.isCancelled()) {
+		pending_raw_export.reset();
+		return;
+	}
+
+	if (task.next_index >= task.files.size()) {
+		helper.finish();
+		pending_raw_export.reset();
+		return;
+	}
+
+	// Process one file per frame.
+	const auto& sel_entry = task.files[task.next_index++];
+
+	std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
+	std::string export_file_name = file_name;
+
+	auto& view = *core::view;
+	if (!view.config.value("exportNamedFiles", true)) {
+		auto file_data_id = casc::listfile::getByFilename(file_name);
+		if (file_data_id) {
+			namespace fs = std::filesystem;
+			const std::string ext = fs::path(file_name).extension().string();
+			const std::string dir = fs::path(file_name).parent_path().string();
+			const std::string file_data_id_name = std::to_string(*file_data_id) + ext;
+			export_file_name = dir == "." ? file_data_id_name : (fs::path(dir) / file_data_id_name).string();
 		}
 	}
 
-	if (!extension_map.empty()) {
-		std::vector<std::pair<uint32_t, std::string>> entries(extension_map.begin(), extension_map.end());
-		casc::listfile::ingestIdentifiedFiles(entries);
-		is_dirty = true;
-		compute_raw_files();
+	const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
 
-		if (extension_map.size() == 1) {
-			auto it = extension_map.begin();
-			core::setToast("success", std::format("{} has been identified as a {} file", it->first, it->second));
-		} else {
-			core::setToast("success", std::format("Successfully identified {} files", extension_map.size()));
+	if (task.overwrite_files || !generics::fileExists(export_path)) {
+		try {
+			BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
+			data.writeToFile(export_path);
+			helper.mark(export_file_name, true);
+		} catch (const std::exception& e) {
+			helper.mark(export_file_name, false, e.what());
 		}
-
-		core::setToast("success", std::format("{} of the {} selected files have been identified and added to relevant file lists",
-			extension_map.size(), filtered_selection.size()));
 	} else {
-		core::setToast("info", "Unable to identify any of the selected files.");
+		helper.mark(export_file_name, true);
+		logging::write(std::format("Skipping file export {} (file exists, overwrite disabled)", export_path));
 	}
 }
 
 static void export_raw_files() {
+	if (pending_raw_export.has_value())
+		return;
+
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionRaw;
 	if (user_selection.empty()) {
@@ -153,45 +250,11 @@ static void export_raw_files() {
 		return;
 	}
 
-	casc::ExportHelper helper(static_cast<int>(user_selection.size()), "file");
-	helper.start();
-
-	const bool overwrite_files = view.config.value("overwriteFiles", false);
-	for (const auto& sel_entry : user_selection) {
-		if (helper.isCancelled())
-			return;
-
-		std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
-		std::string export_file_name = file_name;
-
-		if (!view.config.value("exportNamedFiles", true)) {
-			auto file_data_id = casc::listfile::getByFilename(file_name);
-			if (file_data_id) {
-				namespace fs = std::filesystem;
-				const std::string ext = fs::path(file_name).extension().string();
-				const std::string dir = fs::path(file_name).parent_path().string();
-				const std::string file_data_id_name = std::to_string(*file_data_id) + ext;
-				export_file_name = dir == "." ? file_data_id_name : (fs::path(dir) / file_data_id_name).string();
-			}
-		}
-
-		const std::string export_path = casc::ExportHelper::getExportPath(export_file_name);
-
-		if (overwrite_files || !generics::fileExists(export_path)) {
-			try {
-				BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
-				data.writeToFile(export_path);
-				helper.mark(export_file_name, true);
-			} catch (const std::exception& e) {
-				helper.mark(export_file_name, false, e.what());
-			}
-		} else {
-			helper.mark(export_file_name, true);
-			logging::write(std::format("Skipping file export {} (file exists, overwrite disabled)", export_path));
-		}
-	}
-
-	helper.finish();
+	PendingRawExport task;
+	task.files = std::vector<nlohmann::json>(user_selection.begin(), user_selection.end());
+	task.overwrite_files = view.config.value("overwriteFiles", false);
+	task.helper.emplace(static_cast<int>(user_selection.size()), "file");
+	pending_raw_export = std::move(task);
 }
 
 // --- Public API ---
@@ -210,6 +273,10 @@ void mounted() {
 
 void render() {
 	auto& view = *core::view;
+
+	// Poll for pending async detect/export tasks (one file per frame).
+	pump_detect_task();
+	pump_raw_export();
 
 	// --- Change-detection for cascLocale config (equivalent to watch on config.cascLocale) ---
 	const uint32_t current_cascLocale = view.config.value("cascLocale", static_cast<uint32_t>(casc::locale_flags::enUS));

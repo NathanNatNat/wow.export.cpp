@@ -36,11 +36,13 @@ License: MIT
 #include "../../app.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <format>
 #include <functional>
+#include <future>
 #include <limits>
 #include <map>
 #include <optional>
@@ -1078,124 +1080,166 @@ else if (format == "HEIGHTMAPS")
 export_selected_map_as_heightmaps();
 }
 
+// --- Async map tile export (one-tile-per-frame, follows tab_models pattern) ---
+
+enum class MapExportFormat { OBJ, RAW };
+
+struct PendingMapTileExport {
+	std::vector<int> tile_indices;
+	size_t next_index = 0;
+	MapExportFormat format;
+	int export_quality = 512;
+	std::string dir;
+	std::string mark_path;
+	FileWriter export_paths;
+	std::optional<casc::ExportHelper> helper;
+	bool helper_started = false;
+};
+
+static std::optional<PendingMapTileExport> pending_map_export;
+
+static void pump_map_export() {
+	if (!pending_map_export.has_value())
+		return;
+
+	auto& task = *pending_map_export;
+	auto& helper = task.helper.value();
+	auto& view = *core::view;
+
+	if (!task.helper_started) {
+		helper.start();
+		task.helper_started = true;
+	}
+
+	if (helper.isCancelled()) {
+		task.export_paths.close();
+		ADTExporter::clearCache();
+		pending_map_export.reset();
+		return;
+	}
+
+	if (task.next_index >= task.tile_indices.size()) {
+		task.export_paths.close();
+		ADTExporter::clearCache();
+		helper.finish();
+		pending_map_export.reset();
+		return;
+	}
+
+	// Process one tile per frame.
+	int index = task.tile_indices[task.next_index++];
+
+	ADTExporter adt(selected_map_id.value_or(0), selected_map_dir, static_cast<uint32_t>(index));
+
+	if (task.format == MapExportFormat::OBJ) {
+		uint32_t tile_x = static_cast<uint32_t>(index) / constants::GAME::MAP_SIZE;
+		uint32_t tile_y = static_cast<uint32_t>(index) % constants::GAME::MAP_SIZE;
+
+		std::vector<ADTGameObject> game_objects_vec;
+
+		if (view.config.value("mapsIncludeGameObjects", false)) {
+			double start_x = MAP_OFFSET - (tile_x * TILE_SIZE) - TILE_SIZE;
+			double start_y = MAP_OFFSET - (tile_y * TILE_SIZE) - TILE_SIZE;
+			double end_x = start_x + TILE_SIZE;
+			double end_y = start_y + TILE_SIZE;
+
+			game_objects_vec = collect_game_objects(selected_map_id.value_or(0), [&](const db::DataRecord& obj) -> bool {
+				auto pos_it = obj.find("Pos");
+				if (pos_it == obj.end())
+					return false;
+				auto pos = fieldToFloatVec(pos_it->second);
+				if (pos.size() < 2)
+					return false;
+				float posX = pos[0];
+				float posY = pos[1];
+				return posX > start_x && posX < end_x && posY > start_y && posY < end_y;
+			});
+		}
+
+		try {
+			std::vector<::ADTGameObject> export_game_objects;
+			for (const auto& go : game_objects_vec) {
+				::ADTGameObject ego;
+				ego.FileDataID = go.FileDataID;
+				ego.Position = go.Position;
+				ego.Rotation = go.Rotation;
+				ego.scale = go.scale;
+				export_game_objects.push_back(std::move(ego));
+			}
+			auto out = adt.exportTile(task.dir, task.export_quality,
+				export_game_objects.empty() ? nullptr : &export_game_objects,
+				&helper, core::view->casc);
+			task.export_paths.writeLine(out.type + ":" + out.path.string());
+			helper.mark(task.mark_path, true);
+		} catch (const std::exception& e) {
+			helper.mark(task.mark_path, false, e.what());
+		}
+	} else {
+		// RAW format
+		try {
+			auto out = adt.exportTile(task.dir, 0, nullptr, &helper, core::view->casc);
+			task.export_paths.writeLine(out.type + ":" + out.path.string());
+			helper.mark(task.mark_path, true);
+		} catch (const std::exception& e) {
+			helper.mark(task.mark_path, false, e.what());
+		}
+	}
+}
+
 static void export_selected_map() {
-auto& view = *core::view;
-const auto& export_tiles = view.mapViewerSelection;
-int export_quality = view.config.value("exportMapQuality", 512);
+	if (pending_map_export.has_value())
+		return;
 
-if (export_tiles.empty()) {
-core::setToast("error", "You haven't selected any tiles; hold shift and click on a map tile to select it.", {}, -1);
-return;
-}
+	auto& view = *core::view;
+	const auto& export_tiles = view.mapViewerSelection;
+	int export_quality = view.config.value("exportMapQuality", 512);
 
-// Convert JSON selection to int vector
-std::vector<int> tile_indices;
-for (const auto& t : export_tiles)
-tile_indices.push_back(t.get<int>());
+	if (export_tiles.empty()) {
+		core::setToast("error", "You haven't selected any tiles; hold shift and click on a map tile to select it.", {}, -1);
+		return;
+	}
 
-casc::ExportHelper helper(static_cast<int>(tile_indices.size()), "tile");
-helper.start();
+	std::vector<int> tile_indices;
+	for (const auto& t : export_tiles)
+		tile_indices.push_back(t.get<int>());
 
-const std::string dir = casc::ExportHelper::getExportPath(
-(std::filesystem::path("maps") / selected_map_dir).string());
-auto export_paths = core::openLastExportStream();
-const std::string mark_path = (std::filesystem::path("maps") / selected_map_dir / selected_map_dir).string();
-
-for (int index : tile_indices) {
-if (helper.isCancelled())
-break;
-
-ADTExporter adt(selected_map_id.value_or(0), selected_map_dir, static_cast<uint32_t>(index));
-
-uint32_t tile_x = static_cast<uint32_t>(index) / constants::GAME::MAP_SIZE;
-uint32_t tile_y = static_cast<uint32_t>(index) % constants::GAME::MAP_SIZE;
-
-std::vector<ADTGameObject> game_objects_vec;
-
-if (view.config.value("mapsIncludeGameObjects", false)) {
-double start_x = MAP_OFFSET - (tile_x * TILE_SIZE) - TILE_SIZE;
-double start_y = MAP_OFFSET - (tile_y * TILE_SIZE) - TILE_SIZE;
-double end_x = start_x + TILE_SIZE;
-double end_y = start_y + TILE_SIZE;
-
-game_objects_vec = collect_game_objects(selected_map_id.value_or(0), [&](const db::DataRecord& obj) -> bool {
-auto pos_it = obj.find("Pos");
-if (pos_it == obj.end())
-return false;
-auto pos = fieldToFloatVec(pos_it->second);
-if (pos.size() < 2)
-return false;
-float posX = pos[0];
-float posY = pos[1];
-return posX > start_x && posX < end_x && posY > start_y && posY < end_y;
-});
-}
-
-try {
-// Convert tab_maps::ADTGameObject to ::ADTGameObject for ADTExporter API
-std::vector<::ADTGameObject> export_game_objects;
-for (const auto& go : game_objects_vec) {
-	::ADTGameObject ego;
-	ego.FileDataID = go.FileDataID;
-	ego.Position = go.Position;
-	ego.Rotation = go.Rotation;
-	ego.scale = go.scale;
-	export_game_objects.push_back(std::move(ego));
-}
-auto out = adt.exportTile(dir, export_quality,
-	export_game_objects.empty() ? nullptr : &export_game_objects,
-	&helper, core::view->casc);
-export_paths.writeLine(out.type + ":" + out.path.string());
-helper.mark(mark_path, true);
-} catch (const std::exception& e) {
-helper.mark(mark_path, false, e.what());
-}
-}
-
-export_paths.close();
-ADTExporter::clearCache();
-helper.finish();
+	PendingMapTileExport task;
+	task.tile_indices = std::move(tile_indices);
+	task.format = MapExportFormat::OBJ;
+	task.export_quality = export_quality;
+	task.dir = casc::ExportHelper::getExportPath(
+		(std::filesystem::path("maps") / selected_map_dir).string());
+	task.export_paths = core::openLastExportStream();
+	task.mark_path = (std::filesystem::path("maps") / selected_map_dir / selected_map_dir).string();
+	task.helper.emplace(static_cast<int>(task.tile_indices.size()), "tile");
+	pending_map_export = std::move(task);
 }
 
 static void export_selected_map_as_raw() {
-auto& view = *core::view;
-const auto& export_tiles = view.mapViewerSelection;
+	if (pending_map_export.has_value())
+		return;
 
-if (export_tiles.empty()) {
-core::setToast("error", "You haven't selected any tiles; hold shift and click on a map tile to select it.", {}, -1);
-return;
-}
+	auto& view = *core::view;
+	const auto& export_tiles = view.mapViewerSelection;
 
-std::vector<int> tile_indices;
-for (const auto& t : export_tiles)
-tile_indices.push_back(t.get<int>());
+	if (export_tiles.empty()) {
+		core::setToast("error", "You haven't selected any tiles; hold shift and click on a map tile to select it.", {}, -1);
+		return;
+	}
 
-casc::ExportHelper helper(static_cast<int>(tile_indices.size()), "tile");
-helper.start();
+	std::vector<int> tile_indices;
+	for (const auto& t : export_tiles)
+		tile_indices.push_back(t.get<int>());
 
-const std::string dir = casc::ExportHelper::getExportPath(
-(std::filesystem::path("maps") / selected_map_dir).string());
-auto export_paths = core::openLastExportStream();
-const std::string mark_path = (std::filesystem::path("maps") / selected_map_dir / selected_map_dir).string();
-
-for (int index : tile_indices) {
-if (helper.isCancelled())
-break;
-
-ADTExporter adt(selected_map_id.value_or(0), selected_map_dir, static_cast<uint32_t>(index));
-
-try {
-auto out = adt.exportTile(dir, 0, nullptr, &helper, core::view->casc);
-export_paths.writeLine(out.type + ":" + out.path.string());
-helper.mark(mark_path, true);
-} catch (const std::exception& e) {
-helper.mark(mark_path, false, e.what());
-}
-}
-
-export_paths.close();
-ADTExporter::clearCache();
-helper.finish();
+	PendingMapTileExport task;
+	task.tile_indices = std::move(tile_indices);
+	task.format = MapExportFormat::RAW;
+	task.dir = casc::ExportHelper::getExportPath(
+		(std::filesystem::path("maps") / selected_map_dir).string());
+	task.export_paths = core::openLastExportStream();
+	task.mark_path = (std::filesystem::path("maps") / selected_map_dir / selected_map_dir).string();
+	task.helper.emplace(static_cast<int>(task.tile_indices.size()), "tile");
+	pending_map_export = std::move(task);
 }
 
 static void export_selected_map_as_png() {
@@ -1570,6 +1614,9 @@ prev_selection_first.clear();
  */
 void render() {
 auto& view = *core::view;
+
+// Poll for pending async export (one tile per frame).
+pump_map_export();
 
 // Lazy initialization (equivalent of mounted() calling initialize())
 if (!tab_initialized) {

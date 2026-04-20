@@ -13,10 +13,12 @@
 
 #include <string>
 #include <vector>
+#include <chrono>
 #include <format>
 #include <regex>
 #include <fstream>
 #include <filesystem>
+#include <future>
 #include <algorithm>
 
 #include <imgui.h>
@@ -85,18 +87,54 @@ static std::vector<std::string> get_blender_installations() {
 	return installs;
 }
 
+// --- Async install (background thread for file copies) ---
+
+struct PendingBlenderInstall {
+	std::future<std::string> result_future; // returns success message or throws
+	std::unique_ptr<BusyLock> busy_lock;
+};
+
+static std::optional<PendingBlenderInstall> pending_install;
+
+static void pump_blender_install() {
+	if (!pending_install.has_value())
+		return;
+
+	auto& task = *pending_install;
+	if (task.result_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		return;
+
+	try {
+		std::string result = task.result_future.get();
+		if (result.empty()) {
+			logging::write("No valid Blender installation found, add-on install failed.");
+			core::setToast("error", "Sorry, a valid Blender 2.8+ installation was not be detected on your system.", {}, -1);
+		} else {
+			core::setToast("success", result);
+		}
+	} catch (const std::exception& e) {
+		logging::write(std::format("Installation failed due to exception: {}", e.what()));
+		core::setToast("error", "Sorry, an unexpected error occurred trying to install the add-on.", {}, -1);
+	}
+
+	pending_install.reset();
+}
+
 static void start_automatic_install() {
-	BusyLock _lock = core::create_busy_lock();
+	if (pending_install.has_value())
+		return;
+
 	core::setToast("progress", "Installing Blender add-on, please wait...", {}, -1, false);
 	logging::write("Starting automatic installation of Blender add-on...");
 
-	try {
+	PendingBlenderInstall task;
+	task.busy_lock = std::make_unique<BusyLock>(core::create_busy_lock());
+	task.result_future = std::async(std::launch::async, []() -> std::string {
 		namespace fs = std::filesystem;
 		const auto versions = get_blender_installations();
 		bool installed = false;
 
 		for (const auto& version : versions) {
-			// Compare version string against minimum.
 			double ver_num = 0;
 			try { ver_num = std::stod(version); } catch (...) { continue; }
 
@@ -126,15 +164,10 @@ static void start_automatic_install() {
 		}
 
 		if (installed)
-			core::setToast("success", "The latest add-on version has been installed! (You will need to restart Blender)");
-		else {
-			logging::write("No valid Blender installation found, add-on install failed.");
-			core::setToast("error", "Sorry, a valid Blender 2.8+ installation was not be detected on your system.", {}, -1);
-		}
-	} catch (const std::exception& e) {
-		logging::write(std::format("Installation failed due to exception: {}", e.what()));
-		core::setToast("error", "Sorry, an unexpected error occurred trying to install the add-on.", {}, -1);
-	}
+			return "The latest add-on version has been installed! (You will need to restart Blender)";
+		return "";
+	});
+	pending_install = std::move(task);
 }
 
 static void open_addon_directory() {
@@ -148,6 +181,9 @@ void registerTab() {
 }
 
 void render() {
+	// Poll for pending async install.
+	pump_blender_install();
+
 	ImGui::Text("Installing the wow.export.cpp Add-on for Blender 2.8+");
 	ImGui::Separator();
 

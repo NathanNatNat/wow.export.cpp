@@ -16,9 +16,11 @@
 #include "../components/listbox.h"
 #include "../../app.h"
 
+#include <chrono>
 #include <format>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <algorithm>
 
 #include <imgui.h>
@@ -116,7 +118,79 @@ void update_install_listfile() {
 	view.listfileInstall = std::move(filtered);
 }
 
+// --- Async export (one-file-per-frame, follows tab_models pattern) ---
+
+struct PendingInstallExport {
+	std::vector<nlohmann::json> files;
+	size_t next_index = 0;
+	bool overwrite_files = false;
+	std::optional<casc::ExportHelper> helper;
+};
+
+static std::optional<PendingInstallExport> pending_install_export;
+
+static void pump_install_export() {
+	if (!pending_install_export.has_value())
+		return;
+
+	auto& task = *pending_install_export;
+	auto& helper = task.helper.value();
+
+	if (task.next_index == 0)
+		helper.start();
+
+	if (helper.isCancelled()) {
+		pending_install_export.reset();
+		return;
+	}
+
+	if (task.next_index >= task.files.size()) {
+		helper.finish();
+		pending_install_export.reset();
+		return;
+	}
+
+	// Process one file per frame.
+	const auto& sel_entry = task.files[task.next_index++];
+	std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
+
+	// Find the file in the manifest.
+	const casc::InstallFile* file = nullptr;
+	for (const auto& f : manifest->files) {
+		if (f.name == file_name) {
+			file = &f;
+			break;
+		}
+	}
+
+	if (!file) {
+		helper.mark(file_name, false, "File not found in manifest");
+		return;
+	}
+
+	const std::string export_path = casc::ExportHelper::getExportPath(file_name);
+
+	if (task.overwrite_files || !generics::fileExists(export_path)) {
+		try {
+			std::string enc_key = core::view->casc->getEncodingKeyForContentKey(file->hash);
+			std::string cached_path = core::view->casc->_ensureFileInCache(enc_key, 0, false);
+			BufferWrapper data = BufferWrapper::readFile(cached_path);
+			data.writeToFile(export_path);
+
+			helper.mark(file_name, true);
+		} catch (const std::exception& e) {
+			helper.mark(file_name, false, e.what());
+		}
+	} else {
+		helper.mark(file_name, true);
+		logging::write(std::format("Skipping file export {} (file exists, overwrite disabled)", export_path));
+	}
+}
+
 static void export_install_files() {
+	if (pending_install_export.has_value())
+		return;
+
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionInstall;
 	if (user_selection.empty()) {
@@ -124,53 +198,58 @@ static void export_install_files() {
 		return;
 	}
 
-	casc::ExportHelper helper(static_cast<int>(user_selection.size()), "file");
-	helper.start();
+	PendingInstallExport task;
+	task.files = std::vector<nlohmann::json>(user_selection.begin(), user_selection.end());
+	task.overwrite_files = view.config.value("overwriteFiles", false);
+	task.helper.emplace(static_cast<int>(user_selection.size()), "file");
+	pending_install_export = std::move(task);
+}
 
-	const bool overwrite_files = view.config.value("overwriteFiles", false);
-	for (const auto& sel_entry : user_selection) {
-		if (helper.isCancelled())
-			return;
+// --- Async view strings (background CASC fetch) ---
 
-		std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
+struct PendingViewStrings {
+	std::string file_name;
+	std::future<BufferWrapper> file_future;
+	std::unique_ptr<BusyLock> busy_lock;
+};
 
-		// Find the file in the manifest.
-		const casc::InstallFile* file = nullptr;
-		for (const auto& f : manifest->files) {
-			if (f.name == file_name) {
-				file = &f;
-				break;
-			}
-		}
+static std::optional<PendingViewStrings> pending_view_strings;
 
-		if (!file) {
-			helper.mark(file_name, false, "File not found in manifest");
-			continue;
-		}
+static void pump_view_strings() {
+	if (!pending_view_strings.has_value())
+		return;
 
-		const std::string export_path = casc::ExportHelper::getExportPath(file_name);
+	auto& task = *pending_view_strings;
+	if (task.file_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		return;
 
-		if (overwrite_files || !generics::fileExists(export_path)) {
-			try {
-				std::string enc_key = core::view->casc->getEncodingKeyForContentKey(file->hash);
-				std::string cached_path = core::view->casc->_ensureFileInCache(enc_key, 0, false);
-				BufferWrapper data = BufferWrapper::readFile(cached_path);
-				data.writeToFile(export_path);
+	auto& view = *core::view;
 
-				helper.mark(file_name, true);
-			} catch (const std::exception& e) {
-				helper.mark(file_name, false, e.what());
-			}
-		} else {
-			helper.mark(file_name, true);
-			logging::write(std::format("Skipping file export {} (file exists, overwrite disabled)", export_path));
-		}
+	try {
+		BufferWrapper data = task.file_future.get();
+		const auto& raw = data.raw();
+		std::vector<std::string> strings = extract_strings(raw.data(), raw.size());
+
+		view.installStrings = strings;
+		view.installStringsFileName = task.file_name;
+		view.selectionInstallStrings.clear();
+		view.userInputFilterInstallStrings.clear();
+		view.installStringsView = true;
+
+		logging::write(std::format("Extracted {} strings from {}", strings.size(), task.file_name));
+		core::hideToast();
+	} catch (const std::exception& e) {
+		core::setToast("error", std::string("Failed to analyze binary: ") + e.what());
+		logging::write(std::format("Failed to extract strings from {}: {}", task.file_name, e.what()));
 	}
 
-	helper.finish();
+	pending_view_strings.reset();
 }
 
 static void view_strings_impl() {
+	if (pending_view_strings.has_value())
+		return;
+
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionInstall;
 	if (user_selection.size() != 1) {
@@ -195,31 +274,19 @@ static void view_strings_impl() {
 	}
 
 	core::setToast("progress", "Analyzing binary for strings...", {}, -1, false);
-	view.isBusy++;
 
-	try {
-		std::string enc_key = core::view->casc->getEncodingKeyForContentKey(file->hash);
-		std::string cached_path = core::view->casc->_ensureFileInCache(enc_key, 0, false);
-		BufferWrapper data = BufferWrapper::readFile(cached_path);
-		const auto& raw = data.raw();
-		std::vector<std::string> strings = extract_strings(raw.data(), raw.size());
+	auto* casc = core::view->casc;
+	std::string hash = file->hash;
 
-		view.installStrings = strings;
-		view.installStringsFileName = file_name;
-		view.selectionInstallStrings.clear();
-		view.userInputFilterInstallStrings.clear();
-		view.installStringsView = true;
-
-		logging::write(std::format("Extracted {} strings from {}", strings.size(), file_name));
-	} catch (const std::exception& e) {
-		core::setToast("error", std::string("Failed to analyze binary: ") + e.what());
-		logging::write(std::format("Failed to extract strings from {}: {}", file_name, e.what()));
-		view.isBusy--;
-		return;
-	}
-
-	view.isBusy--;
-	core::hideToast();
+	PendingViewStrings task_data;
+	task_data.file_name = file_name;
+	task_data.busy_lock = std::make_unique<BusyLock>(core::create_busy_lock());
+	task_data.file_future = std::async(std::launch::async, [casc, hash]() {
+		std::string enc_key = casc->getEncodingKeyForContentKey(hash);
+		std::string cached_path = casc->_ensureFileInCache(enc_key, 0, false);
+		return BufferWrapper::readFile(cached_path);
+	});
+	pending_view_strings = std::move(task_data);
 }
 
 static void export_strings_impl() {
@@ -297,6 +364,10 @@ void mounted() {
 
 void render() {
 	auto& view = *core::view;
+
+	// Poll for pending async tasks (one file per frame).
+	pump_install_export();
+	pump_view_strings();
 
 	if (app::layout::BeginTab("tab-install")) {
 
