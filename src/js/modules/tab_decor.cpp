@@ -179,7 +179,7 @@ static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 		}
 
 		if (active_renderer_result.m2)
-			active_renderer_result.m2->load();
+			active_renderer_result.m2->load().get();
 		else if (active_renderer_result.m3)
 			active_renderer_result.m3->load();
 		else if (active_renderer_result.wmo)

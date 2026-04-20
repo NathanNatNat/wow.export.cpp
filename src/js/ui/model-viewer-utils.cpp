@@ -510,7 +510,7 @@ void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
 		const int m2_index = (*it).value("m2Index", -1);
 		if (m2_index >= 0) {
 			logging::write(std::format("Playing animation {} at M2 index {}", *selected_animation_id, m2_index));
-			renderer->playAnimation(m2_index);
+			renderer->playAnimation(m2_index).get();
 
 			if (state.animFrameCount)
 				*state.animFrameCount = renderer->get_animation_frame_count();

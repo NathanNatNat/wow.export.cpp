@@ -492,6 +492,10 @@ return shaders::create_program(ctx, "m2");
 
 std::future<void> M2RendererGL::load() {
 return as_async_compat([this]() {
+	// JS accesses core.view.casc directly; auto-resolve when setCASCSource() was not called.
+	if (!casc_source_ && core::view && core::view->casc)
+		casc_source_ = core::view->casc;
+
 	// parse M2 data
 	m2 = std::make_unique<M2Loader>(*data_ptr);
 	m2->load().get();
@@ -1676,6 +1680,9 @@ ctx.set_cull_face(false);
 
 std::future<void> M2RendererGL::overrideTextureType(uint32_t type, uint32_t fileDataID) {
 return as_async_compat([this, type, fileDataID]() {
+// JS accesses core.view.casc directly; auto-resolve if not set.
+if (!casc_source_ && core::view && core::view->casc)
+	casc_source_ = core::view->casc;
 if (!casc_source_)
 return;
 

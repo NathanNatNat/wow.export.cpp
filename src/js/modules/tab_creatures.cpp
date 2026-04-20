@@ -619,12 +619,12 @@ static void apply_creature_equipment_models() {
 				try {
 					BufferWrapper file = core::view->casc->getVirtualFileByID(fdid);
 					auto renderer = std::make_unique<M2RendererGL>(file, *gl_ctx, false, false);
-					renderer->load();
+					renderer->load().get();
 					//     await renderer.applyReplaceableTextures({ textures: [display.textures[i]] });
 					if (!display->textures.empty() && display->textures.size() > i) {
 						M2DisplayInfo disp_info;
 						disp_info.textures = { display->textures[i] };
-						renderer->applyReplaceableTextures(disp_info);
+						renderer->applyReplaceableTextures(disp_info).get();
 					}
 					EquipmentModelEntry::RendererInfo ri;
 					ri.renderer = std::move(renderer);
@@ -651,7 +651,7 @@ static void apply_creature_equipment_models() {
 				try {
 					BufferWrapper file = core::view->casc->getVirtualFileByID(fdid);
 					auto renderer = std::make_unique<M2RendererGL>(file, *gl_ctx, false, false);
-					renderer->load();
+					renderer->load().get();
 					if (active_renderer_result.m2 && active_renderer_result.m2->get_bones_m2())
 						renderer->buildBoneRemapTable(*active_renderer_result.m2->get_bones_m2());
 					auto sgit = SLOT_TO_GEOSET_GROUPS.find(slot_id);
@@ -667,7 +667,7 @@ static void apply_creature_equipment_models() {
 					if (texture_idx < display->textures.size() && display->textures[texture_idx] != 0) {
 						M2DisplayInfo disp_info;
 						disp_info.textures = { display->textures[texture_idx] };
-						renderer->applyReplaceableTextures(disp_info);
+						renderer->applyReplaceableTextures(disp_info).get();
 					}
 					coll_entry.renderers.push_back(std::move(renderer));
 					logging::write(std::format("Loaded creature collection model {} for slot {}", fdid, slot_id));
@@ -833,7 +833,7 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			active_renderer_result.type = model_viewer_utils::ModelType::M2;
 			active_renderer_result.m2 = std::make_unique<M2RendererGL>(file, *gl_ctx, true, true);
 			active_renderer_result.m2->setGeosetKey("creatureViewerGeosets");
-			active_renderer_result.m2->load();
+			active_renderer_result.m2->load().get();
 
 			// apply customization geosets
 			auto& geosets = view.creatureViewerGeosets;
@@ -951,7 +951,7 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 
 			// load renderer
 			if (active_renderer_result.m2)
-				active_renderer_result.m2->load();
+				active_renderer_result.m2->load().get();
 			else if (active_renderer_result.m3)
 				active_renderer_result.m3->load();
 			else if (active_renderer_result.wmo)
@@ -1677,7 +1677,7 @@ void render() {
 							if (active_renderer_result.m2) {
 								M2DisplayInfo disp_info;
 								disp_info.textures = display.textures;
-								active_renderer_result.m2->applyReplaceableTextures(disp_info);
+								active_renderer_result.m2->applyReplaceableTextures(disp_info).get();
 							}
 						}
 					}
