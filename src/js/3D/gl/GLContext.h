@@ -81,6 +81,7 @@ public:
 
 	void use_program(GLuint program);
 	void bind_vao(GLuint vao);
+	void unbind_vao(GLuint vao);
 	void active_texture(int unit);
 	void bind_texture(int unit, GLuint texture, GLenum target = GL_TEXTURE_2D);
 

@@ -263,6 +263,13 @@ void GLContext::bind_vao(GLuint vao) {
 	_current_vao = vao;
 }
 
+void GLContext::unbind_vao(GLuint vao) {
+	if (_current_vao == vao) {
+		glBindVertexArray(0);
+		_current_vao = 0;
+	}
+}
+
 void GLContext::active_texture(int unit) {
 	if (_active_texture_unit == unit)
 		return;
