@@ -7,6 +7,12 @@
 // This file defines constants used throughout the application.
 #include "constants.h"
 
+// WOW_EXPORT_SOURCE_DIR is injected by CMake (target_compile_definitions).
+// Provide a fallback so IntelliSense and non-CMake tooling don't report errors.
+#ifndef WOW_EXPORT_SOURCE_DIR
+#define WOW_EXPORT_SOURCE_DIR "."
+#endif
+
 #include <filesystem>
 #include <cstdlib>
 #include <random>
