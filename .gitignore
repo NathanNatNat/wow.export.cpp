@@ -130,6 +130,14 @@ $RECYCLE.BIN/
 *.lnk
 
 # =====================
+# OpenSSL prebuilt exceptions (these ARE intentionally tracked)
+# =====================
+!extern/openssl-prebuilt/bin/
+!extern/openssl-prebuilt/bin/**
+!extern/openssl-prebuilt/lib/
+!extern/openssl-prebuilt/lib/**
+
+# =====================
 # Linux
 # =====================
 *~
