@@ -35,7 +35,7 @@ set_target_properties(OpenSSL::SSL PROPERTIES
 
 # Set OPENSSL_FOUND and version so find_package consumers are satisfied
 set(OPENSSL_FOUND TRUE CACHE BOOL "" FORCE)
-set(OPENSSL_VERSION "3.6.2" CACHE STRING "" FORCE)
+set(OPENSSL_VERSION "3.3.2" CACHE STRING "" FORCE)
 set(OPENSSL_INCLUDE_DIR "${_OPENSSL_ROOT}/include" CACHE PATH "" FORCE)
 
 # ── Copy DLLs to output dir at build time ─────────────────────────────────────
