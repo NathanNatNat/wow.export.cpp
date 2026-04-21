@@ -889,7 +889,9 @@ void WMOExporter::exportAsOBJ(const std::filesystem::path& out, casc::ExportHelp
 					gj["renderBatches"] = rbArr;
 				}
 				gj["vertexColours"] = nlohmann::json(grp->vertexColours);
-				gj["liquid"] = liquidToJson(grp->liquid);
+				// JS: liquid: group.liquid — undefined when MLIQ absent, omitted from JSON
+				if (grp->hasLiquid)
+					gj["liquid"] = liquidToJson(grp->liquid);
 
 				groupsArr.push_back(gj);
 			}
@@ -1434,7 +1436,9 @@ void WMOExporter::exportGroupsAsSeparateOBJ(const std::filesystem::path& out, ca
 					gj["renderBatches"] = rbArr;
 				}
 				gj["vertexColours"] = nlohmann::json(grp->vertexColours);
-				gj["liquid"] = liquidToJson(grp->liquid);
+				// JS: liquid: group.liquid — undefined when MLIQ absent, omitted from JSON
+				if (grp->hasLiquid)
+					gj["liquid"] = liquidToJson(grp->liquid);
 
 				groupsArr.push_back(gj);
 			}
