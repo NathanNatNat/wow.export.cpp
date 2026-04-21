@@ -1113,8 +1113,8 @@
 
 - [x] 219. [tab_models_legacy.cpp] preview_model and export_files are synchronous instead of async
 - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 42, 191
-- **Status**: Pending
-- **Details**: JS preview_model and export_files are async with await. C++ versions are fully synchronous, blocking UI thread for expensive operations.
+- **Status**: Verified
+- **Details**: Both functions use proper async pump patterns. `preview_model` uses `PendingLegacyPreview` with a `std::async` background file fetch and `pump_legacy_preview()` for GL work on the main thread. `export_files` uses `PendingLegacyExport` with a one-file-per-frame `pump_legacy_export()` pattern. Both pumps are called from `render()`, matching the JS async model.
 
 - [x] 220. [tab_models_legacy.cpp] MenuButton missing "upward" class/direction
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 373
