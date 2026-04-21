@@ -10,3 +10,8 @@
 // should include it without this macro.
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+
+// STB_IMAGE_RESIZE_IMPLEMENTATION is defined here (not in ADTExporter.cpp)
+// to avoid ODR violations if any other TU also includes stb_image_resize2.h.
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include <stb_image_resize2.h>

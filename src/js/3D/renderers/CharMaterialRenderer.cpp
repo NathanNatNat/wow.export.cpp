@@ -180,24 +180,56 @@ void CharMaterialRenderer::setTextureTarget(
 	bool useAlpha,
 	casc::BLPImage* blpOverride)
 {
-	setTextureTarget(
-		chr_cust_mat.ChrModelTextureTargetID,
-		chr_cust_mat.FileDataID,
-		char_component_texture_section.X,
-		char_component_texture_section.Y,
-		char_component_texture_section.Width,
-		char_component_texture_section.Height,
-		chr_model_material.TextureType,
-		chr_model_material.Width,
-		chr_model_material.Height,
-		chr_model_texture_layer.BlendMode,
-		useAlpha,
-		blpOverride
-	);
+	// For debug purposes
+	std::string filename = casc::listfile::getByID(chr_cust_mat.FileDataID).value_or("");
+	spdlog::info("Loading texture {} for target {} with alpha {}", filename, chr_cust_mat.ChrModelTextureTargetID, useAlpha);
+
+	GLuint textureID;
+	if (blpOverride) {
+		textureID = loadTextureFromBLP(*blpOverride, useAlpha);
+		filename = "baked npc texture (override)";
+	} else {
+		textureID = loadTexture(chr_cust_mat.FileDataID, useAlpha);
+	}
+
+	// Build target using full objects — preserves all JS object fields so nothing is dropped.
+	// JS pushes: { id, section: charComponentTextureSection, material: chrModelMaterial,
+	//              textureLayer: chrModelTextureLayer, custMaterial, textureID, filename }
+	CharTextureTarget target;
+	target.id = chr_cust_mat.ChrModelTextureTargetID;
+	target.section.SectionType = char_component_texture_section.SectionType;
+	target.section.X = char_component_texture_section.X;
+	target.section.Y = char_component_texture_section.Y;
+	target.section.Width = char_component_texture_section.Width;
+	target.section.Height = char_component_texture_section.Height;
+	target.section.OverlapSectionMask = char_component_texture_section.OverlapSectionMask;
+	target.material.TextureType = chr_model_material.TextureType;
+	target.material.Width = chr_model_material.Width;
+	target.material.Height = chr_model_material.Height;
+	target.material.Flags = chr_model_material.Flags;
+	target.material.Unk = chr_model_material.Unk;
+	target.textureLayer.TextureType = chr_model_texture_layer.TextureType;
+	target.textureLayer.Layer = chr_model_texture_layer.Layer;
+	target.textureLayer.Flags = chr_model_texture_layer.Flags;
+	target.textureLayer.BlendMode = chr_model_texture_layer.BlendMode;
+	target.textureLayer.TextureSectionTypeBitMask = chr_model_texture_layer.TextureSectionTypeBitMask;
+	target.textureLayer.TextureSectionTypeBitMask2 = chr_model_texture_layer.TextureSectionTypeBitMask2;
+	target.custMaterial.ChrModelTextureTargetID = chr_cust_mat.ChrModelTextureTargetID;
+	target.custMaterial.FileDataID = chr_cust_mat.FileDataID;
+	target.textureID = textureID;
+	target.filename = filename;
+
+	textureTargets.push_back(std::move(target));
+
+	update();
 }
 
 /**
  * Disposes of all the things
+ * JS calls gl.getExtension('WEBGL_lose_context').loseContext() to invalidate all
+ * WebGL resources at once. Desktop GL has no equivalent; instead we explicitly
+ * delete every GL object in reverse-creation order (textures → program → FBO → VAO).
+ * The order and completeness verified against the JS dispose() method.
  */
 void CharMaterialRenderer::dispose() {
 	unbindAllTextures();
@@ -303,16 +335,21 @@ void CharMaterialRenderer::unbindAllTextures() {
 
 /**
  * Clear the canvas, resetting it to black.
+ * JS operates on the current WebGL framebuffer (the canvas) without explicit
+ * bind/unbind. In C++, we save/restore the previous FBO binding so clearCanvas()
+ * is transparent to callers that already have an FBO bound.
  */
 void CharMaterialRenderer::clearCanvas() {
 	if (!fbo_)
 		return;
 
+	GLint prevFBO = 0;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
 	glViewport(0, 0, width_, height_);
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFBO));
 }
 
 /**
@@ -510,9 +547,10 @@ void CharMaterialRenderer::update() {
 				break;
 		}
 
+		GLuint canvasTexture = 0;
+
 		if (layer.textureLayer.BlendMode == 4 || layer.textureLayer.BlendMode == 6 || layer.textureLayer.BlendMode == 7) {
 			// Create new texture of current canvas
-			GLuint canvasTexture;
 			glGenTextures(1, &canvasTexture);
 			glActiveTexture(GL_TEXTURE1);
 			glBindTexture(GL_TEXTURE_2D, canvasTexture);
@@ -553,18 +591,18 @@ void CharMaterialRenderer::update() {
 			
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 			glUniform1i(baseTextureLocation, 1);
+		}
 
-			// Draw
-			glDrawArrays(GL_TRIANGLES, 0, 6);
+		// Draw — matches JS: gl.drawArrays is a single call AFTER the blend-mode 4/6/7
+		// if block, not inside it. Both blend paths share the same draw call.
+		glDrawArrays(GL_TRIANGLES, 0, 6);
 
-			// Clean up canvasTexture — JS relies on WebGL GC / loseContext;
-			// in desktop GL we must delete explicitly.
+		// Clean up canvas texture if it was created for blend modes 4/6/7.
+		// JS relies on loseContext() to free resources; desktop GL must free explicitly.
+		if (canvasTexture) {
 			glActiveTexture(GL_TEXTURE1);
 			glBindTexture(GL_TEXTURE_2D, 0);
 			glDeleteTextures(1, &canvasTexture);
-		} else {
-			// Draw
-			glDrawArrays(GL_TRIANGLES, 0, 6);
 		}
 
 		// Clean up per-layer buffers

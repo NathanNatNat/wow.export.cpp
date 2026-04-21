@@ -71,26 +71,45 @@ struct CharTextureTarget {
  */
 class CharMaterialRenderer {
 public:
+	/**
+	 * Input structs that mirror the JS object shapes passed to setTextureTarget.
+	 * JS signature: setTextureTarget(chrCustomizationMaterial, charComponentTextureSection,
+	 *                                 chrModelMaterial, chrModelTextureLayer, useAlpha, blpOverride)
+	 * All fields from the JS objects are captured so nothing is silently dropped.
+	 */
 	struct TextureTargetInput {
 		uint32_t FileDataID = 0;
 		int ChrModelTextureTargetID = 0;
 	};
 
+	// ChrComponentTextureSection: SectionType, X, Y, Width, Height, OverlapSectionMask
 	struct TextureSectionInput {
+		int SectionType = 0;
 		int X = 0;
 		int Y = 0;
 		int Width = 0;
 		int Height = 0;
+		int OverlapSectionMask = 0;
 	};
 
+	// ChrModelMaterial: TextureType, Width, Height, Flags, Unk
 	struct ModelMaterialInput {
 		int TextureType = 0;
 		int Width = 0;
 		int Height = 0;
+		int Flags = 0;
+		int Unk = 0;
 	};
 
+	// ChrModelTextureLayer: TextureType, Layer, Flags, BlendMode,
+	//                        TextureSectionTypeBitMask, TextureSectionTypeBitMask2
 	struct TextureLayerInput {
+		int TextureType = 0;
+		int Layer = 0;
+		int Flags = 0;
 		int BlendMode = 0;
+		int TextureSectionTypeBitMask = 0;
+		int TextureSectionTypeBitMask2 = 0;
 	};
 
 	/**

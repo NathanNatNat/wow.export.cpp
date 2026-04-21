@@ -7,7 +7,7 @@
 
 #include <glad/gl.h>
 
-#define STB_IMAGE_RESIZE_IMPLEMENTATION
+// stb_image_resize2 implementation is emitted in stb-impl.cpp to avoid ODR violations.
 #include <stb_image_resize2.h>
 
 #include <cmath>
@@ -1324,8 +1324,10 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 							GLuint indexBuffer;
 							glGenBuffers(1, &indexBuffer);
 							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
-							glBufferData(GL_ELEMENT_ARRAY_BUFFER, bakeIndices.size() * sizeof(uint32_t), bakeIndices.data(), GL_STATIC_DRAW);
-							glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(bakeIndices.size()), GL_UNSIGNED_INT, nullptr);
+							// JS uses new Uint16Array(indices) + gl.UNSIGNED_SHORT. Convert uint32 → uint16.
+							std::vector<uint16_t> bakeIndices16(bakeIndices.begin(), bakeIndices.end());
+							glBufferData(GL_ELEMENT_ARRAY_BUFFER, bakeIndices16.size() * sizeof(uint16_t), bakeIndices16.data(), GL_STATIC_DRAW);
+							glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(bakeIndices16.size()), GL_UNSIGNED_SHORT, nullptr);
 
 							// cleanup alpha textures
 							for (const auto tex : alphaTextures) {
@@ -1518,7 +1520,9 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 							if (model.Rotation.size() >= 4) {
 								rotX = model.Rotation[0]; rotY = model.Rotation[1]; rotZ = model.Rotation[2]; rotW = model.Rotation[3];
 							}
-							scaleFactor = model.scale != 0 ? model.scale / 1024.0f : 1.0f;
+							// ADTGameObject.scale defaults to 0.0f when absent (JS: model.scale === undefined).
+							// JS: model.scale !== undefined ? model.scale / 1024 : 1
+							scaleFactor = model.scale != 0.0f ? model.scale / 1024.0f : 1.0f;
 							modelId = model.uniqueId;
 						} else {
 							if (model.position.size() >= 3) {
@@ -1527,7 +1531,10 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 							if (model.rotation.size() >= 4) {
 								rotX = model.rotation[0]; rotY = model.rotation[1]; rotZ = model.rotation[2]; rotW = model.rotation[3];
 							}
-							scaleFactor = model.scale != 0 ? model.scale / 1024.0f : 1.0f;
+							// Binary ADT models (ADTModelEntry/ADTWorldModelEntry) always have scale read from
+							// the file. JS: model.scale !== undefined is always true here, so use scale / 1024
+							// unconditionally (a scale of 0 in the binary produces 0.0 scale, matching JS).
+							scaleFactor = static_cast<float>(model.scale) / 1024.0f;
 							modelId = model.uniqueId;
 						}
 
@@ -1742,6 +1749,10 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				const float worldZ = chunkX2 - (centerY * static_cast<float>(UNIT_SIZE));
 
 				nlohmann::json inst;
+				// JS uses {...instance, worldPosition, terrainChunkPosition} (spread operator).
+				// C++ explicitly enumerates all fields of LiquidInstance and LiquidVertexData
+				// to produce identical JSON output. If new fields are added to these structs,
+				// they must also be added here to maintain fidelity with the JS spread behavior.
 				inst["chunkIndex"] = instance.chunkIndex;
 				inst["instanceIndex"] = instance.instanceIndex;
 				inst["liquidType"] = instance.liquidType;
@@ -1773,6 +1784,8 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 			}
 
 			enhancedChunk["instances"] = enhancedInstances;
+			// JS uses {...chunk, instances: enhancedInstances} (spread operator).
+			// LiquidChunk has only 'attributes' and 'instances'; both are serialized here.
 			nlohmann::json attrs;
 			attrs["fishable"] = chunk.attributes.fishable;
 			attrs["deep"] = chunk.attributes.deep;
