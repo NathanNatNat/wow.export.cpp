@@ -155,11 +155,9 @@ void WMORendererGL::_load_textures() {
 	if (useRibbon)
 		syncID = texture_ribbon::reset();
 
-	// JS: `!!wmo.textureNames` — truthiness check. Empty array [] is truthy in JS.
-	// C++: empty map means no texture names were loaded. If textureNames exists but
-	// is empty, JS enters classic mode while C++ does not. This is acceptable because
-	// WMO files that have a MOTX chunk always populate textureNames with at least one entry.
-	const bool isClassic = !wmo->textureNames.empty();
+	// JS: `!!wmo.textureNames` — truthy even for an empty MOTX chunk (empty object {} is truthy in JS).
+	// C++: use hasMotxChunk flag set in WMOLoader::parse_MOTX() to match JS semantics exactly.
+	const bool isClassic = wmo->hasMotxChunk;
 
 	for (size_t i = 0; i < materials.size(); i++) {
 		const auto& material = materials[i];

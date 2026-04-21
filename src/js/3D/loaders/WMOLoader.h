@@ -166,6 +166,9 @@ public:
 	uint16_t lodCount = 0;
 
 	// MOTX (Textures)
+	// JS: `!!wmo.textureNames` (truthiness) — true even for empty chunk.
+	// C++: track presence of MOTX chunk separately so isClassic check matches JS.
+	bool hasMotxChunk = false;
 	std::map<uint32_t, std::string> textureNames;
 
 	// MFOG (Fog)

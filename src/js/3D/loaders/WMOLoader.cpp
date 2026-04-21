@@ -216,6 +216,9 @@ void WMOLoader::parse_MOHD(BufferWrapper& data) {
 
 // MOTX (Textures) [Classic, WMO Root]
 void WMOLoader::parse_MOTX(BufferWrapper& data, uint32_t chunkSize) {
+	// JS: `!!wmo.textureNames` is truthy even for an empty MOTX chunk ({} is truthy).
+	// Track presence of the chunk so isClassic matches JS behaviour.
+	this->hasMotxChunk = true;
 	this->textureNames = ReadStringBlock(data, chunkSize);
 }
 
