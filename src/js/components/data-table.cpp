@@ -264,9 +264,11 @@ static std::vector<std::vector<std::string>> filteredItems(
 
 /**
  * Helper: try to parse a string as a double. Returns success and the value.
+ * Matches JS Number() semantics: Number("") === 0 (treated as numeric).
  */
 static bool tryParseNumber(const std::string& s, double& out) {
-	if (s.empty()) return false;
+	// JS: Number("") === 0, !isNaN(0) is true — empty string is treated as 0.
+	if (s.empty()) { out = 0.0; return true; }
 	try {
 		size_t pos = 0;
 		out = std::stod(s, &pos);
@@ -1290,7 +1292,8 @@ void render(const char* id,
 
 				// Clip: only render if visible
 				if (cellX + cw > winPos.x && cellX < winPos.x + containerWidth) {
-					const float cellPadding = 5.0f;
+					// CSS: .ui-datatable table tr td { padding: 5px 10px } — 10px left/right padding
+					const float cellPadding = 10.0f;
 					ImVec2 textPos(cellX + cellPadding, rowY + (rowHeight - ImGui::GetTextLineHeight()) / 2.0f);
 
 					drawList->PushClipRect(ImVec2(cellX, rowY), ImVec2(cellX + cw, rowY + rowHeight), true);
