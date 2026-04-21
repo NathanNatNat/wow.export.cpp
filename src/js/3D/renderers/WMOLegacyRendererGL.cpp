@@ -68,6 +68,16 @@ WMOLegacyRendererGL::WMOLegacyRendererGL(BufferWrapper& data, uint32_t fileID, g
 	model_matrix = WMO_LEGACY_IDENTITY_MAT4;
 }
 
+WMOLegacyRendererGL::WMOLegacyRendererGL(BufferWrapper& data, const std::string& fileName, gl::GLContext& gl_context, bool useRibbon)
+	: data_ptr(&data)
+	, fileID(0)
+	, fileName(fileName)
+	, ctx(gl_context)
+	, useRibbon(useRibbon)
+{
+	model_matrix = WMO_LEGACY_IDENTITY_MAT4;
+}
+
 // -----------------------------------------------------------------------
 // load_shaders
 // -----------------------------------------------------------------------
@@ -81,7 +91,10 @@ std::unique_ptr<gl::ShaderProgram> WMOLegacyRendererGL::load_shaders(gl::GLConte
 // -----------------------------------------------------------------------
 
 void WMOLegacyRendererGL::load() {
-	wmo = std::make_unique<WMOLegacyLoader>(*data_ptr, fileID, true);
+	if (!fileName.empty())
+		wmo = std::make_unique<WMOLegacyLoader>(*data_ptr, fileName, true);
+	else
+		wmo = std::make_unique<WMOLegacyLoader>(*data_ptr, fileID, true);
 	wmo->load();
 
 	shader = WMOLegacyRendererGL::load_shaders(ctx);

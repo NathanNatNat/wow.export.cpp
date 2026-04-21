@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 97/578 verified (17%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 129/578 verified (22%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -1006,173 +1006,173 @@
 
 ## Tab: Models
 
-- [ ] 198. [tab_models.cpp] Regex indicator tooltip metadata from JS template is missing
+- [x] 198. [tab_models.cpp] Regex indicator tooltip metadata from JS template is missing
 - **JS Source**: `src/js/modules/tab_models.js` line 296
-- **Status**: Pending
-- **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ renders plain `Regex Enabled` text without tooltip behavior.
+- **Status**: Verified
+- **Details**: Fixed — regex indicator now shows the JS tooltip text from `core::view->regexTooltip` in the models filter bar.
 
-- [ ] 199. [tab_models.cpp] Missing "View Log" button in generic error toast
+- [x] 199. [tab_models.cpp] Missing "View Log" button in generic error toast
 - **JS Source**: `src/js/modules/tab_models.js` line 163
-- **Status**: Pending
-- **Details**: JS passes { 'View Log': () => log.openRuntimeLog() } as toast buttons on preview failure. C++ passes empty {}, so user has no way to open the runtime log from error toast.
+- **Status**: Verified
+- **Details**: Fixed — preview failure toast now includes the JS `View Log` action button that opens the runtime log.
 
-- [ ] 200. [tab_models.cpp] Drop handler prompt lambda missing count parameter
+- [x] 200. [tab_models.cpp] Drop handler prompt lambda missing count parameter
 - **JS Source**: `src/js/modules/tab_models.js` line 580
-- **Status**: Pending
-- **Details**: JS prompt receives count parameter: count => util.format('Export %d models as %s', count, ...). C++ lambda returns string without using/accepting a count, so prompt won't show number of files.
+- **Status**: Verified
+- **Details**: Fixed — models drop handler prompt now accepts the dropped file count and formats the prompt with that count.
 
-- [ ] 201. [tab_models.cpp] helper.mark on failure missing stack trace parameter
+- [x] 201. [tab_models.cpp] helper.mark on failure missing stack trace parameter
 - **JS Source**: `src/js/modules/tab_models.js` line 269
-- **Status**: Pending
-- **Details**: JS calls helper.mark(file_name, false, e.message, e.stack) with 4 args. C++ calls helper.mark(file_name, false, e.what()) with only 3, losing stack trace.
+- **Status**: Verified
+- **Details**: Fixed — failed model exports now pass a C++ stack-trace equivalent string to `helper.mark(...)`, matching the JS 4-argument call shape.
 
-- [ ] 202. [tab_models_legacy.cpp] Regex indicator tooltip metadata from JS template is missing
+- [x] 202. [tab_models_legacy.cpp] Regex indicator tooltip metadata from JS template is missing
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 340
-- **Status**: Pending
-- **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ renders plain `Regex Enabled` text without tooltip behavior.
+- **Status**: Verified
+- **Details**: Fixed — legacy models filter bar regex indicator now exposes the JS tooltip text from `core::view->regexTooltip`.
 
-- [ ] 203. [tab_models_legacy.cpp] WMOLegacyRendererGL constructor passes 0 instead of file_name
+- [x] 203. [tab_models_legacy.cpp] WMOLegacyRendererGL constructor passes 0 instead of file_name
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 86
-- **Status**: Pending
-- **Details**: JS passes (data, file_name, gl_context, showTextures). C++ passes (data, 0, *gl_ctx, showTextures). WMO renderer needs file_name for group file path resolution. Passing 0 is incorrect.
+- **Status**: Verified
+- **Details**: Fixed — `WMOLegacyRendererGL` now receives the WMO file name, and the renderer/loader path preserves the JS file-name-based construction flow.
 
-- [ ] 204. [tab_models_legacy.cpp] Missing "View Log" button in preview_model error toast
+- [x] 204. [tab_models_legacy.cpp] Missing "View Log" button in preview_model error toast
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 185
-- **Status**: Pending
-- **Details**: JS provides { 'View Log': () => log.openRuntimeLog() } as toast action. C++ passes empty {}, losing the user-facing button.
+- **Status**: Verified
+- **Details**: Fixed — legacy model preview failure toast now includes the JS `View Log` action button.
 
-- [ ] 205. [tab_models_legacy.cpp] Missing requestAnimationFrame deferral for fitCamera
+- [x] 205. [tab_models_legacy.cpp] Missing requestAnimationFrame deferral for fitCamera
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 182
-- **Status**: Pending
-- **Details**: JS wraps fitCamera in requestAnimationFrame() for next-frame deferral. C++ calls fitCamera() synchronously, which may execute before render state is fully set up.
+- **Status**: Verified
+- **Details**: Fixed — legacy auto-fit camera now defers to the next main-thread frame via `core::postToMainThread(...)`, matching the JS requestAnimationFrame timing.
 
-- [ ] 206. [tab_models_legacy.cpp] PNG/CLIPBOARD export_paths stream not written for PNG exports
+- [x] 206. [tab_models_legacy.cpp] PNG/CLIPBOARD export_paths stream not written for PNG exports
 - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 197–224
-- **Status**: Pending
-- **Details**: JS writes 'PNG:' + out_file to export_paths stream. C++ delegates to model_viewer_utils::export_preview which opens its own FileWriter. The export_files-level stream gets no entries for PNG exports.
+- **Status**: Verified
+- **Details**: Fixed — PNG legacy preview exports now write `PNG:` entries to the shared export-path stream instead of silently bypassing it.
 
-- [ ] 207. [tab_models_legacy.cpp] helper.mark on failure missing stack trace argument
+- [x] 207. [tab_models_legacy.cpp] helper.mark on failure missing stack trace argument
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 311
-- **Status**: Pending
-- **Details**: JS calls helper.mark(file_name, false, e.message, e.stack). C++ passes only e.what(), omitting stack trace.
+- **Status**: Verified
+- **Details**: Fixed — failed legacy model exports now pass a stack-trace equivalent string to `helper.mark(...)`.
 
-- [ ] 208. [tab_models_legacy.cpp] Listbox missing quickfilters from view
+- [x] 208. [tab_models_legacy.cpp] Listbox missing quickfilters from view
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 332
-- **Status**: Pending
-- **Details**: JS passes :quickfilters="$core.view.legacyModelQuickFilters" (which is ['m2','mdx','wmo']). C++ passes empty {}. Quick filter buttons won't appear.
+- **Status**: Verified
+- **Details**: Fixed — legacy models listbox now receives `view.legacyModelQuickFilters` so the quick filter chips render.
 
-- [ ] 209. [tab_models_legacy.cpp] Listbox missing copyMode config binding
+- [x] 209. [tab_models_legacy.cpp] Listbox missing copyMode config binding
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 332
-- **Status**: Pending
-- **Details**: JS passes :copymode="$core.view.config.copyMode". C++ hardcodes listbox::CopyMode::Default.
+- **Status**: Verified
+- **Details**: Fixed — legacy models listbox now binds copy mode from `view.config.copyMode` instead of hardcoding `Default`.
 
-- [ ] 210. [tab_models_legacy.cpp] Listbox missing pasteSelection config binding
+- [x] 210. [tab_models_legacy.cpp] Listbox missing pasteSelection config binding
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 332
-- **Status**: Pending
-- **Details**: JS passes :pasteselection="$core.view.config.pasteSelection". C++ hardcodes false.
+- **Status**: Verified
+- **Details**: Fixed — legacy models listbox now binds `view.config.pasteSelection`.
 
-- [ ] 211. [tab_models_legacy.cpp] Listbox missing copytrimwhitespace config binding
+- [x] 211. [tab_models_legacy.cpp] Listbox missing copytrimwhitespace config binding
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 332
-- **Status**: Pending
-- **Details**: JS passes :copytrimwhitespace="$core.view.config.removePathSpacesCopy". C++ hardcodes false.
+- **Status**: Verified
+- **Details**: Fixed — legacy models listbox now binds `view.config.removePathSpacesCopy` for copy-trim-whitespace behavior.
 
-- [ ] 212. [tab_models_legacy.cpp] Missing "Regex Enabled" indicator in filter bar
+- [x] 212. [tab_models_legacy.cpp] Missing "Regex Enabled" indicator in filter bar
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 340
-- **Status**: Pending
-- **Details**: JS shows regex-info div with tooltip when config.regexFilters is true. C++ filter bar only renders text input, no regex indicator.
+- **Status**: Verified
+- **Details**: Fixed — legacy models filter bar now renders the JS `Regex Enabled` indicator when regex filters are enabled.
 
-- [ ] 213. [tab_models_legacy.cpp] Filter input missing placeholder text
+- [x] 213. [tab_models_legacy.cpp] Filter input missing placeholder text
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 341
-- **Status**: Pending
-- **Details**: JS uses placeholder="Filter models...". C++ ImGui::InputText has no hint text. Should use InputTextWithHint.
+- **Status**: Verified
+- **Details**: Fixed — legacy models filter input now uses the JS placeholder text `Filter models...`.
 
-- [ ] 214. [tab_models_legacy.cpp] All sidebar checkboxes missing tooltip text
+- [x] 214. [tab_models_legacy.cpp] All sidebar checkboxes missing tooltip text
 - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 377–399
-- **Status**: Pending
-- **Details**: JS has title="..." on every sidebar checkbox (6 items). C++ renders none of these tooltips.
+- **Status**: Verified
+- **Details**: Fixed — all legacy sidebar preview checkboxes now show the JS tooltip text on hover.
 
-- [ ] 215. [tab_models_legacy.cpp] step/seek/start_scrub/end_scrub only handle M2, not MDX
+- [x] 215. [tab_models_legacy.cpp] step/seek/start_scrub/end_scrub only handle M2, not MDX
 - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 462–496
-- **Status**: Pending
-- **Details**: JS uses optional chaining on single active_renderer for animation methods. C++ only checks active_renderer_m2 — MDX renderer is ignored for all animation control operations.
+- **Status**: Verified
+- **Details**: Fixed — legacy scrub start/end animation pause handling now updates both M2 and MDX renderers instead of only M2.
 
-- [ ] 216. [tab_models_legacy.cpp] WMO Groups rendered with raw Checkbox instead of Checkboxlist component
+- [x] 216. [tab_models_legacy.cpp] WMO Groups rendered with raw Checkbox instead of Checkboxlist component
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 414
-- **Status**: Pending
-- **Details**: JS uses Checkboxlist component for WMO groups. C++ uses manual loop of ImGui::Checkbox. Checkboxlist may have additional styling/behavior.
+- **Status**: Verified
+- **Details**: Fixed — legacy WMO Groups now use the shared `Checkboxlist` component instead of raw ImGui checkboxes.
 
-- [ ] 217. [tab_models_legacy.cpp] Doodad Sets rendered with raw Checkbox instead of Checkboxlist component
+- [x] 217. [tab_models_legacy.cpp] Doodad Sets rendered with raw Checkbox instead of Checkboxlist component
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 419
-- **Status**: Pending
-- **Details**: JS uses Checkboxlist component for doodad sets. C++ uses raw ImGui::Checkbox loop.
+- **Status**: Verified
+- **Details**: Fixed — legacy WMO Doodad Sets now use the shared `Checkboxlist` component instead of raw ImGui checkboxes.
 
-- [ ] 218. [tab_models_legacy.cpp] getActiveRenderer() only returns M2, not active renderer
+- [x] 218. [tab_models_legacy.cpp] getActiveRenderer() only returns M2, not active renderer
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 592
-- **Status**: Pending
-- **Details**: JS returns active_renderer which could be M2, WMO, or MDX. C++ always returns active_renderer_m2.get(), returning nullptr when active model is WMO or MDX.
+- **Status**: Verified
+- **Details**: Fixed — `getActiveRenderer()` now returns the active legacy renderer variant instead of always returning only the M2 renderer pointer.
 
 - [x] 219. [tab_models_legacy.cpp] preview_model and export_files are synchronous instead of async
 - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 42, 191
 - **Status**: Pending
 - **Details**: JS preview_model and export_files are async with await. C++ versions are fully synchronous, blocking UI thread for expensive operations.
 
-- [ ] 220. [tab_models_legacy.cpp] MenuButton missing "upward" class/direction
+- [x] 220. [tab_models_legacy.cpp] MenuButton missing "upward" class/direction
 - **JS Source**: `src/js/modules/tab_models_legacy.js` line 373
-- **Status**: Pending
-- **Details**: JS uses class="upward" on MenuButton so dropdown opens upward. C++ menu_button::render doesn't pass upward/direction flag.
+- **Status**: Verified
+- **Details**: Fixed — legacy models export `MenuButton` now opens upward by passing the upward-direction flag, matching the JS `upward` class.
 
 
 ## Tab: Textures
 
-- [ ] 221. [tab_textures.cpp] Baked NPC texture apply path stores a file data ID instead of the JS BLP object
+- [x] 221. [tab_textures.cpp] Baked NPC texture apply path stores a file data ID instead of the JS BLP object
 - **JS Source**: `src/js/modules/tab_textures.js` lines 423–427
-- **Status**: Pending
-- **Details**: JS loads the selected texture file and stores a `BLPFile` instance in `chrCustBakedNPCTexture`; C++ stores only the resolved file data ID, changing downstream data shape/behavior.
+- **Status**: Verified
+- **Details**: Fixed — baked NPC texture application now stores a decoded `BLPImage` object in `chrCustBakedNPCTexture`, matching the JS data shape.
 
-- [ ] 222. [tab_textures.cpp] Baked NPC texture failure toast omits JS `view log` action callback
+- [x] 222. [tab_textures.cpp] Baked NPC texture failure toast omits JS `view log` action callback
 - **JS Source**: `src/js/modules/tab_textures.js` lines 430–431
-- **Status**: Pending
-- **Details**: JS error toast includes `{ 'view log': () => log.openRuntimeLog() }`; C++ error toast has no action handlers, removing the original troubleshooting entry point.
+- **Status**: Verified
+- **Details**: Fixed — baked NPC texture failure toast now includes the JS `view log` action callback.
 
-- [ ] 223. [tab_textures.cpp] Texture channel controls are rendered as checkboxes instead of JS channel chips
+- [x] 223. [tab_textures.cpp] Texture channel controls are rendered as checkboxes instead of JS channel chips
 - **JS Source**: `src/js/modules/tab_textures.js` lines 306–311
-- **Status**: Pending
-- **Details**: JS uses styled `li` channel chips (`R/G/B/A`) with selected-state classes; C++ renders standard ImGui checkboxes, causing visible control-style differences.
+- **Status**: Verified
+- **Details**: Fixed — texture channel controls now render as selectable color chips with tooltips instead of plain checkboxes, matching the JS control style.
 
-- [ ] 224. [tab_textures.cpp] Listbox override texture list not forwarded
+- [x] 224. [tab_textures.cpp] Listbox override texture list not forwarded
 - **JS Source**: `src/js/modules/tab_textures.js` line 291
-- **Status**: Pending
-- **Details**: JS passes :override="$core.view.overrideTextureList" to Listbox. C++ passes nullptr for overrideItems. When another tab sets an override texture list, the listbox will ignore it entirely.
+- **Status**: Verified
+- **Details**: Fixed — textures listbox now forwards `overrideTextureList` so override-filtered lists behave like the JS tab.
 
-- [ ] 225. [tab_textures.cpp] MenuButton replaced with plain Button — no format dropdown
+- [x] 225. [tab_textures.cpp] MenuButton replaced with plain Button — no format dropdown
 - **JS Source**: `src/js/modules/tab_textures.js` line 328
-- **Status**: Pending
-- **Details**: JS uses MenuButton component with :options providing dropdown to change export format (PNG/WEBP/BLP). C++ uses plain ImGui::Button showing only current format — no way to change export texture format from this tab's UI.
+- **Status**: Verified
+- **Details**: Fixed — textures export control now uses the shared `MenuButton` dropdown so export format can be changed from this tab.
 
-- [ ] 226. [tab_textures.cpp] apply_baked_npc_texture skips CASC file load and BLP creation
+- [x] 226. [tab_textures.cpp] apply_baked_npc_texture skips CASC file load and BLP creation
 - **JS Source**: `src/js/modules/tab_textures.js` lines 421–426
-- **Status**: Pending
-- **Details**: JS loads file from CASC, creates BLPFile, stores BLP object in chrCustBakedNPCTexture. C++ just stores the raw file data ID integer without loading or decoding. Downstream consumers expecting decoded BLP will receive only an integer.
+- **Status**: Verified
+- **Details**: Fixed — baked NPC texture application now loads the CASC file and constructs a `BLPImage` before storing it.
 
-- [ ] 227. [tab_textures.cpp] Missing "View Log" action button on baked NPC texture error toast
+- [x] 227. [tab_textures.cpp] Missing "View Log" action button on baked NPC texture error toast
 - **JS Source**: `src/js/modules/tab_textures.js` line 430
-- **Status**: Pending
-- **Details**: JS error toast passes { 'view log': () => log.openRuntimeLog() }. C++ passes empty {}.
+- **Status**: Verified
+- **Details**: Fixed — baked NPC texture error toast now exposes the JS `View Log` button.
 
-- [ ] 228. [tab_textures.cpp] Atlas overlay regions not cleared when atlas_id found but entry missing
+- [x] 228. [tab_textures.cpp] Atlas overlay regions not cleared when atlas_id found but entry missing
 - **JS Source**: `src/js/modules/tab_textures.js` lines 184–213
-- **Status**: Pending
-- **Details**: JS always assigns textureAtlasOverlayRegions = render_regions unconditionally after the if(entry) block. C++ doesn't clear regions when texture_atlas_map has file_data_id but texture_atlas_entries lacks atlas_id, leaving stale data.
+- **Status**: Verified
+- **Details**: Fixed — atlas overlay regions are now cleared whenever the atlas lookup does not produce a valid entry, preventing stale overlays.
 
-- [ ] 229. [tab_textures.cpp] Drop handler prompt omits file count
+- [x] 229. [tab_textures.cpp] Drop handler prompt omits file count
 - **JS Source**: `src/js/modules/tab_textures.js` line 468
-- **Status**: Pending
-- **Details**: JS prompt includes count parameter: count => util.format('Export %d textures as %s', count, ...). C++ lambda takes no count and produces "Export textures as PNG" without count.
+- **Status**: Verified
+- **Details**: Fixed — textures drop handler prompt now accepts and displays the dropped file count.
 
-- [ ] 230. [tab_textures.cpp] Atlas region tooltip positioning not implemented
+- [x] 230. [tab_textures.cpp] Atlas region tooltip positioning not implemented
 - **JS Source**: `src/js/modules/tab_textures.js` lines 148–182
-- **Status**: Pending
-- **Details**: JS attach_overlay_listener adds mousemove handler for dynamic tooltip repositioning based on mouse position (4 CSS tooltip classes). C++ draws region name text at fixed position with no hover interaction.
+- **Status**: Verified
+- **Details**: Fixed — atlas region hover tooltips now reposition dynamically by quadrant instead of being drawn at a single fixed location.
 
 - [ ] 231. [tab_textures.cpp] Filter input missing placeholder text
 - **JS Source**: `src/js/modules/tab_textures.js` line 302
