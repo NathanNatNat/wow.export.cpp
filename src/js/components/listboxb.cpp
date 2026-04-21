@@ -302,7 +302,9 @@ void render(const char* id, const std::vector<ListboxBItem>& items,
 
 	// Begin a child region to contain the list.
 	// <div class="ui-listbox" @wheel="wheelMouse">
-	ImGui::BeginChild("##listboxb_container", availSize, ImGuiChildFlags_None,
+	// CSS: .ui-listbox { border: 1px solid var(--border); box-shadow: black 0 0 3px 0px; }
+	// ImGuiChildFlags_Borders draws the CSS border. Box-shadow cannot be replicated in Dear ImGui.
+	ImGui::BeginChild("##listboxb_container", availSize, ImGuiChildFlags_Borders,
 	                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 	// Handle mouse wheel on the container.
@@ -343,10 +345,16 @@ void render(const char* id, const std::vector<ListboxBItem>& items,
 		const ImVec2 thumbMax(scrollbarX + scrollbarWidth, thumbY + scrollerHeight);
 
 		// Determine if mouse is over the thumb for hover effect.
+		// CSS: .scroller > div { background: var(--border); }
+		// CSS: .scroller:hover > div, .scroller.using > div { background: var(--font-highlight); }
+		// CSS: .scroller { opacity: 0.7; }
 		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
-		const ImU32 thumbColor = thumbHovered
-			? app::theme::TEXT_ACTIVE_U32
-			: app::theme::TEXT_IDLE_U32;
+		const ImU32 baseColor = thumbHovered
+			? app::theme::FONT_HIGHLIGHT_U32
+			: app::theme::BORDER_U32;
+		// Apply CSS opacity: 0.7 from .scroller { opacity: 0.7; }
+		const ImU32 thumbColor = (baseColor & 0x00FFFFFF) |
+			(static_cast<ImU32>(static_cast<float>((baseColor >> 24) & 0xFF) * 0.7f) << 24);
 
 		drawList->AddRectFilled(thumbMin, thumbMax, thumbColor, 4.0f);
 
@@ -360,24 +368,26 @@ void render(const char* id, const std::vector<ListboxBItem>& items,
 	// <div v-for="(item, i) in displayItems" class="item" @click="selectItem(item, $event)" :class="{ selected: selection.includes(item) }">
 	//     <span class="sub sub-0">{{ item.label }}</span>
 	// </div>
+
+	// Suppress ImGui's built-in header/hover colors — we draw all row backgrounds manually.
+	ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+	ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+
 	for (int i = startIdx; i < endIdx; ++i) {
 		const ListboxBItem& item = items[static_cast<size_t>(i)];
 		const bool itemSelected = isSelected(selection, i);
 
 		// Alternating row background + selected highlight.
+		//      .ui-listbox .item { background: var(--background-dark); }
 		//      .ui-listbox .item:nth-child(even) { background: var(--background-alt); }
 		//      .ui-listbox .item.selected { background: var(--font-alt); }
-		{
-			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
-			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
-			const ImU32 rowBg = ((i - startIdx) % 2 == 0)
-				? app::theme::BG_ALT_U32
-				: app::theme::BG_DARK_U32;
-			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, rowBg);
-
-			if (itemSelected)
-				ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::ROW_SELECTED_U32);
-		}
+		const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+		const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
+		const ImU32 rowBg = itemSelected
+			? app::theme::ROW_SELECTED_U32
+			: ((i - startIdx) % 2 == 0) ? app::theme::BG_ALT_U32 : app::theme::BG_DARK_U32;
+		ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, rowBg);
 
 		ImGui::PushID(i);
 
@@ -390,6 +400,8 @@ void render(const char* id, const std::vector<ListboxBItem>& items,
 
 		ImGui::PopID();
 	}
+
+	ImGui::PopStyleColor(3); // ImGuiCol_Header, HeaderHovered, HeaderActive
 
 	ImGui::EndChild();
 	ImGui::PopID();
