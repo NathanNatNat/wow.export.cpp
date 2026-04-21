@@ -144,7 +144,7 @@ std::vector<uint8_t> remap_bone_indices(const std::vector<uint8_t>& bone_indices
 
 	for (size_t i = 0; i < bone_indices.size(); i++) {
 		const uint8_t original_idx = bone_indices[i];
-		if (original_idx < static_cast<uint8_t>(remap_table.size()))
+		if (static_cast<size_t>(original_idx) < remap_table.size())
 			remapped[i] = static_cast<uint8_t>(remap_table[original_idx]);
 		else
 			remapped[i] = original_idx;

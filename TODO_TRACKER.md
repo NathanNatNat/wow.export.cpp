@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 71/578 verified (12%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 77/578 verified (13%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -2542,10 +2542,10 @@
 - **Status**: Pending
 - **Details**: JS uses `a || b || null`, so a slot `item_id` of `0` falls through to collection/null. C++ returns the first found `item_id` directly (including `0`), which differs for falsy-ID edge cases.
 
-- [ ] 498. [CharacterExporter.cpp] remap_bone_indices truncates remap_table.size() to uint8_t causing incorrect comparison
+- [x] 498. [CharacterExporter.cpp] remap_bone_indices truncates remap_table.size() to uint8_t causing incorrect comparison
 - **JS Source**: `src/js/3D/exporters/CharacterExporter.js` lines 126–138
-- **Status**: Pending
-- **Details**: C++ `remap_bone_indices()` (CharacterExporter.cpp line 147) compares `original_idx < static_cast<uint8_t>(remap_table.size())`. If `remap_table` has 256 or more entries, `static_cast<uint8_t>(256)` wraps to `0`, making the comparison `original_idx < 0` always false for unsigned types — no indices would be remapped at all. For tables with 257–511 entries, the truncated size wraps to small values, skipping valid remap entries for higher indices. JS has no such issue since `original_idx < remap_table.length` uses normal number comparison. The fix should be `static_cast<size_t>(original_idx) < remap_table.size()` or simply removing the cast.
+- **Status**: Verified
+- **Details**: Fixed — changed `original_idx < static_cast<uint8_t>(remap_table.size())` to `static_cast<size_t>(original_idx) < remap_table.size()`. This prevents the uint8_t truncation overflow where tables of 256+ entries would cast to 0, silently skipping all remapping.
 
 - [x] 499. [M3RendererGL.cpp] Load APIs are synchronous instead of JS async methods
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 56, 76
@@ -2677,10 +2677,10 @@
 - **Status**: Pending
 - **Details**: In JS, `textureMap` is a `Map` with mixed key types — numeric fileDataIDs and string keys like `"data-5"` for data textures (canvas-composited textures). These are passed directly to `gltf.setTextureMap()`. In C++ (M2Exporter.cpp ~lines 610–636), the string-keyed `textureMap` is converted to a `uint32_t`-keyed `gltfTexMap` via `std::stoul()`. Keys like `"data-5"` fail parsing and are silently dropped in the `catch (...)` block. The same happens for `texture_buffers` in GLB mode. This means data textures (canvas-composited textures for character models) are lost in GLTF/GLB exports — meshes will reference material names that have no corresponding texture entry.
 
-- [ ] 525. [M2Exporter.cpp] uint16_t loop variable for triangle iteration risks overflow/infinite loop
+- [x] 525. [M2Exporter.cpp] uint16_t loop variable for triangle iteration risks overflow/infinite loop
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 375, 496, 638, 701, 850, 936
-- **Status**: Pending
-- **Details**: All triangle iteration loops in M2Exporter.cpp use `for (uint16_t vI = 0; vI < mesh.triangleCount; vI++)`. If `mesh.triangleCount` is 65535, incrementing `vI` from 65534 to 65535 works, but then `vI++` wraps to 0, causing an infinite loop. If `triangleCount` exceeds 65535 (stored as uint32_t in the struct), the loop would also be incorrect since `uint16_t` can never reach the termination condition. JS uses `let vI` which is a double-precision float with no overflow. Should use `uint32_t` for the loop variable.
+- **Status**: Verified
+- **Details**: Analysis was incorrect. `SubMesh::triangleCount` is declared as `uint16_t` (Skin.h line 19), so the loop `for (uint16_t vI = 0; vI < mesh.triangleCount; vI++)` compares two `uint16_t` values and terminates correctly for all values 0–65535. When both the counter and limit are `uint16_t`, the loop exits when vI reaches triangleCount (not after wrapping). The infinite-loop scenario described requires triangleCount > 65535 which is impossible with a `uint16_t` field. No bug.
 
 - [ ] 526. [M2Exporter.cpp] addURITexture accepts BufferWrapper instead of data URI string
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59–61
@@ -2712,10 +2712,10 @@
 - **Status**: Pending
 - **Details**: JS export methods (`exportTextures`, `exportAsOBJ`, `exportAsSTL`, `exportRaw`) are async and yield during I/O. C++ runs these paths synchronously, altering timing/cancellation behavior versus JS.
 
-- [ ] 532. [M2LegacyExporter.cpp] uint16_t loop variable for triangle iteration risks overflow
+- [x] 532. [M2LegacyExporter.cpp] uint16_t loop variable for triangle iteration risks overflow
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 164, 289
-- **Status**: Pending
-- **Details**: Same issue as M2Exporter: triangle iteration loops in M2LegacyExporter.cpp (exportAsOBJ ~line 212, exportAsSTL ~line 401) use `for (uint16_t vI = 0; vI < mesh.triangleCount; vI++)`. If `mesh.triangleCount` reaches or exceeds 65535, `uint16_t` overflow causes an infinite loop or incorrect iteration. JS uses `let vI` with no overflow limit. Should use `uint32_t` for the loop variable.
+- **Status**: Verified
+- **Details**: Analysis was incorrect. `LegacySubMesh::triangleCount` is `uint16_t` (M2LegacyLoader.h line 140). The loops `for (uint16_t vI = 0; vI < mesh.triangleCount; vI++)` compare two `uint16_t` values and terminate correctly for all 0–65535 values. No infinite loop is possible since the limit itself is uint16_t and can never exceed 65535. No bug.
 
 - [ ] 533. [M3Exporter.cpp] `addURITexture` input contract differs from JS (data URI string vs decoded PNG buffer)
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 49–50
@@ -2742,10 +2742,10 @@
 - **Status**: Pending
 - **Details**: JS uses async export methods (`exportTextures`, `exportAsGLTF`, `exportAsOBJ`, `exportAsSTL`, `exportGroupsAsSeparateOBJ`, `exportRaw`) with awaited CASC/file operations, while C++ executes these paths synchronously.
 
-- [ ] 538. [WMOExporter.cpp] uint16_t loop variable for face iteration risks overflow/infinite loop (4 locations)
+- [x] 538. [WMOExporter.cpp] uint16_t loop variable for face iteration risks overflow/infinite loop (4 locations)
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 385, 551, 862, 1004 (batch.numFaces iteration)
-- **Status**: Pending
-- **Details**: Four face iteration loops in WMOExporter.cpp (lines 484, 643, 1077, 1202) use `for (uint16_t fi = 0; fi < batch.numFaces; fi++)`. If `batch.numFaces` reaches or exceeds 65535, the `uint16_t` loop variable wraps to 0, causing an infinite loop or incorrect iteration. JS uses `let i` which is a double-precision float with no overflow at these magnitudes. Should use `uint32_t` for the loop variable. Same issue as entry 352 (M2Exporter) and entry 357 (M2LegacyExporter).
+- **Status**: Verified
+- **Details**: Analysis was incorrect. `WMORenderBatch::numFaces` is `uint16_t` (WMOLoader.h line 106). All four loops `for (uint16_t fi = 0; fi < batch.numFaces; fi++)` compare two `uint16_t` values and terminate correctly for all 0–65535 values. No infinite loop is possible since numFaces is also uint16_t. No bug.
 
 - [ ] 539. [WMOExporter.cpp] Constructor takes explicit casc::CASC* parameter not present in JS
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 34–36
@@ -2762,10 +2762,10 @@
 - **Status**: Pending
 - **Details**: JS legacy WMO export methods are async and await texture/model I/O; C++ methods (`exportTextures`, `exportAsOBJ`, `exportAsSTL`, `exportRaw`) are synchronous, changing timing/cancellation semantics.
 
-- [ ] 542. [WMOLegacyExporter.cpp] uint16_t loop variable for face iteration risks overflow/infinite loop (2 locations)
+- [x] 542. [WMOLegacyExporter.cpp] uint16_t loop variable for face iteration risks overflow/infinite loop (2 locations)
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 202, 425 (batch.numFaces iteration)
-- **Status**: Pending
-- **Details**: Two face iteration loops in WMOLegacyExporter.cpp (lines 288, 603) use `for (uint16_t i = 0; i < batch.numFaces; i++)`. If `batch.numFaces` reaches or exceeds 65535, the `uint16_t` loop variable wraps to 0, causing an infinite loop or incorrect iteration. JS uses `let i` with no overflow risk. Should use `uint32_t` for the loop variable. Same issue as entries 352, 357, 360.
+- **Status**: Verified
+- **Details**: Analysis was incorrect. `WMORenderBatch::numFaces` is `uint16_t` (WMOLoader.h line 106). Both loops `for (uint16_t i = 0; i < batch.numFaces; i++)` compare two `uint16_t` values and terminate correctly for all 0–65535 values. No infinite loop is possible. No bug.
 
 - [x] 543. [vp9-avi-demuxer.cpp] Parsing/extraction flow is synchronous callback-based instead of JS async APIs
 - **JS Source**: `src/js/casc/vp9-avi-demuxer.js` lines 22–23, 83–126
@@ -2887,10 +2887,10 @@
 - **Status**: Pending
 - **Details**: Both JS and C++ default `overwrite` to `true`. Verified as correct.
 
-- [ ] 567. [CSVWriter.cpp] `.cpp`/`.js` sibling contents are swapped, leaving `.cpp` as unconverted JavaScript
+- [x] 567. [CSVWriter.cpp] `.cpp`/`.js` sibling contents are swapped, leaving `.cpp` as unconverted JavaScript
 - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 1–86
-- **Status**: Pending
-- **Details**: `CSVWriter.cpp` currently contains JavaScript (`require`, `class`, `module.exports`) while `CSVWriter.js` contains C++ (`#include`, `CSVWriter::...`). This violates expected source pairing and leaves the `.cpp` translation unit unconverted.
+- **Status**: Verified
+- **Details**: The alleged swap does not exist. `CSVWriter.cpp` contains correct C++ (`#include`, class methods, namespace-free implementation) and `CSVWriter.js` contains the original JavaScript (`require`, `class`, `module.exports`). Files are correctly paired. The entry was stale from an earlier state of the codebase.
 
 - [ ] 568. [CSVWriter.cpp] `addField()` overloaded — JS uses variadic `...fields`, C++ has two overloads (single string and vector)
 - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 25–27
