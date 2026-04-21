@@ -224,28 +224,27 @@ set(SPDLOG_BUILD_ALL        OFF CACHE BOOL "" FORCE)
 set(SPDLOG_INSTALL          OFF CACHE BOOL "" FORCE)
 add_subdirectory(extern/spdlog EXCLUDE_FROM_ALL)
 
-# ── mbedTLS (bundled TLS/crypto — no system OpenSSL required) ──
-# Provides HTTPS for cpp-httplib AND the MD (hash) API used by buffer.cpp
-# and generics.cpp.  Pins to the 3.6.x LTS branch for compatibility with
-# cpp-httplib's CPPHTTPLIB_MBEDTLS_SUPPORT code path.
+# ── mbedTLS (bundled crypto — MD hash API only, not used for TLS) ──
+# Used by buffer.cpp and generics.cpp for MD5/SHA1/SHA256.
+# TLS/HTTPS is handled by OpenSSL (prebuilt binaries) instead.
 set(ENABLE_PROGRAMS        OFF CACHE BOOL "" FORCE)
 set(ENABLE_TESTING         OFF CACHE BOOL "" FORCE)
 set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
 add_subdirectory(extern/mbedtls EXCLUDE_FROM_ALL)
 
+# ── OpenSSL (prebuilt x64-windows binaries, committed to repo) ────────────────
+add_subdirectory(extern/openssl-prebuilt EXCLUDE_FROM_ALL)
+
 # ── cpp-httplib (HTTP client/server, header-only) ─────────────
-# Enable HTTPS/TLS via bundled mbedTLS — requires no system packages.
+# Enable HTTPS/TLS via the prebuilt OpenSSL above.
 set(HTTPLIB_COMPILE OFF CACHE BOOL "" FORCE)
 set(HTTPLIB_TEST    OFF CACHE BOOL "" FORCE)
 set(HTTPLIB_INSTALL OFF CACHE BOOL "" FORCE)
-# Disable OpenSSL auto-detection — we use bundled mbedTLS instead.
-set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
-set(HTTPLIB_REQUIRE_OPENSSL          OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE ON  CACHE BOOL "" FORCE)
+set(HTTPLIB_REQUIRE_OPENSSL          ON  CACHE BOOL "" FORCE)
 set(HTTPLIB_USE_MBEDTLS_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
 set(HTTPLIB_REQUIRE_MBEDTLS          OFF CACHE BOOL "" FORCE)
 add_subdirectory(extern/cpp-httplib EXCLUDE_FROM_ALL)
-target_compile_definitions(httplib INTERFACE CPPHTTPLIB_MBEDTLS_SUPPORT)
-target_link_libraries(httplib INTERFACE mbedtls mbedx509 mbedcrypto)
 
 # ── zlib (compression) ────────────────────────────────────────
 set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -359,7 +358,7 @@ target_link_libraries(wow_export_cpp PRIVATE
     nanosvg
     # Audio
     miniaudio
-    # HTTP + TLS (mbedTLS pulled in transitively via httplib INTERFACE)
+    # HTTP + TLS (OpenSSL via vcpkg, linked transitively via httplib)
     httplib::httplib
     # Crypto hashing (mbedTLS MD API — replaces hand-rolled MD5/SHA1/SHA256)
     mbedcrypto
@@ -372,6 +371,17 @@ target_link_libraries(wow_export_cpp PRIVATE
 # Platform-specific link dependencies
 if(WIN32)
     target_link_libraries(wow_export_cpp PRIVATE ws2_32 crypt32 dwmapi)
+
+    # Copy OpenSSL DLLs next to the exe at build time
+    add_custom_command(TARGET wow_export_cpp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<IF:$<CONFIG:Debug>,${CMAKE_SOURCE_DIR}/extern/openssl-prebuilt/bin/debug/libssl-3-x64.dll,${CMAKE_SOURCE_DIR}/extern/openssl-prebuilt/bin/release/libssl-3-x64.dll>"
+            "$<TARGET_FILE_DIR:wow_export_cpp>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<IF:$<CONFIG:Debug>,${CMAKE_SOURCE_DIR}/extern/openssl-prebuilt/bin/debug/libcrypto-3-x64.dll,${CMAKE_SOURCE_DIR}/extern/openssl-prebuilt/bin/release/libcrypto-3-x64.dll>"
+            "$<TARGET_FILE_DIR:wow_export_cpp>"
+        COMMENT "Copying OpenSSL DLLs to output directory"
+    )
 elseif(UNIX)
     find_package(Threads REQUIRED)
     target_link_libraries(wow_export_cpp PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
