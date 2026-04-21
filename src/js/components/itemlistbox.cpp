@@ -467,7 +467,9 @@ void render(const char* id,
 
 	// Begin a child region to contain the list.
 	// <div ref="root" class="ui-listbox" @wheel="wheelMouse">
-	ImGui::BeginChild("##itemlistbox_container", availSize, ImGuiChildFlags_None,
+	// CSS: .ui-listbox { border: 1px solid var(--border); box-shadow: black 0 0 3px 0px; }
+	// Box-shadow cannot be replicated in Dear ImGui; border is provided by ImGuiChildFlags_Borders.
+	ImGui::BeginChild("##itemlistbox_container", availSize, ImGuiChildFlags_Borders,
 	                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 	// Handle mouse wheel on the container.
