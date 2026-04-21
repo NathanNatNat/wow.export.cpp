@@ -161,7 +161,7 @@
 - [x] 31. [menu-button.cpp] Context-menu close behavior differs from original component flow
 - **JS Source**: `src/js/components/menu-button.js` lines 75–80; `src/js/components/context-menu.js` line 54
 - **Status**: Verified
-- **Details**: Fixed — `menu-button.cpp` now renders its dropdown through the C++ `context_menu::render()` port instead of a bespoke anchored popup. That restores the original close flow from `menu-button.js`/`context-menu.js`: the menu closes via the shared context-menu `close` callback on leave/click, matching the JS component contract.
+- **Details**: Fixed — `menu-button.cpp` now closes its anchored popup with the same event semantics as the JS `context-menu`: any click inside the menu closes it, and moving the mouse outside the menu plus the 20px hover buffer closes it as well. This preserves the original close flow while keeping the existing anchored/upward menu positioning used by C++ callers.
 
 - [x] 32. [menu-button.cpp] Arrow width 20px instead of CSS 29px
 - **JS Source**: `src/app.css` lines 1005–1022
@@ -191,7 +191,7 @@
 - [x] 37. [menu-button.cpp] Menu close behavior uses `IsMouseClicked(0)` outside check instead of JS `@close` mouse-leave
 - **JS Source**: `src/js/components/menu-button.js` line 78
 - **Status**: Verified
-- **Details**: Fixed — by routing menu-button through `context_menu::render()`, mouse-leave close behavior is now handled by the shared context-menu hover-zone logic instead of a click-outside-only check.
+- **Details**: Fixed — the menu now uses explicit hover-zone tracking with the same 20px buffer as `context-menu.js`, so mouse-leave closes the popup without requiring a click.
 
 - [x] 38. [combobox.cpp] Blur-close timing is frame-based instead of JS 200ms timeout
 - **JS Source**: `src/js/components/combobox.js` lines 67–72
@@ -251,7 +251,7 @@
 - [x] 49. [checkboxlist.cpp] Scroll bound edge-case behavior differs for zero scrollbar range
 - **JS Source**: `src/js/components/checkboxlist.js` lines 102–106
 - **Status**: Verified
-- **Details**: Verified — when JS hits `max === 0`, its `NaN`/`Infinity` values are only an artifact of browser number semantics; downstream DOM slicing still resolves to the first visible rows. The C++ zero-range clamp to `0.0f` preserves the same visible/resulting behavior without propagating invalid floating-point state through the renderer.
+- **Details**: Verified — when JS hits `max === 0`, its `NaN`/`Infinity` values are only an artifact of browser number semantics; downstream DOM slicing still resolves to the first visible rows. The C++ zero-range clamp to `0.0f` preserves the same visible/resulting behavior without propagating invalid floating-point state through the renderer, and wheel scrolling now also correctly no-ops when no items/visible rows exist, matching the JS `querySelector('.item') !== null` guard.
 
 - [x] 50. [checkboxlist.cpp] Scrollbar height behavior differs from original CSS
 - **JS Source**: `src/js/components/checkboxlist.js` lines 93–94; `src/app.css` lines 1097–1103

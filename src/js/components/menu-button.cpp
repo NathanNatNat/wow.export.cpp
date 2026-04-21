@@ -6,7 +6,6 @@
 #include "menu-button.h"
 
 #include <imgui.h>
-#include <nlohmann/json.hpp>
 
 #include "../../app.h"
 
@@ -179,39 +178,69 @@ void render(const char* id, const std::vector<MenuOption>& options,
 	//     <span v-for="option in options" @click="select(option)">{{ option.label ?? option.value }}</span>
 	// </context-menu>
 	if (state.open) {
-		context_menu::render(
-			(std::string("menu_button_") + id).c_str(),
-			nlohmann::json(true),
-			state.contextMenu,
-			[&]() { state.open = false; },
-			[&](const nlohmann::json&) {
-				ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-				ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
-				ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
-				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 8.0f));
-				ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const ImVec2 buttonMin = buttonGroupMin;
+		const ImVec2 buttonMax = ImVec2(buttonGroupMin.x + totalWidth, buttonGroupMin.y + ImGui::GetFrameHeight());
+		const float popupY = upward ? buttonMin.y : buttonMax.y;
 
-				for (size_t i = 0; i < options.size(); ++i) {
-					const std::string& optLabel = options[i].label.empty() ? options[i].value : options[i].label;
-					if (ImGui::Selectable(optLabel.c_str(), false, ImGuiSelectableFlags_None,
-					                      ImVec2(ImGui::CalcTextSize(optLabel.c_str()).x + 16.0f, 0.0f))) {
-						select(static_cast<int>(i), state, options, onChange);
-					}
+		ImGui::SetNextWindowPos(ImVec2(buttonMin.x, popupY), ImGuiCond_Always, upward ? ImVec2(0.0f, 1.0f) : ImVec2(0.0f, 0.0f));
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.137f, 0.137f, 0.137f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
+		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 
-					if (i + 1 < options.size()) {
-						const ImVec2 separatorPos = ImGui::GetCursorScreenPos();
-						drawList->AddLine(
-							separatorPos,
-							ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, separatorPos.y),
-							app::theme::BORDER_U32
-						);
-					}
+		ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+		                               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+		                               ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+		                               ImGuiWindowFlags_NoMove;
+
+		if (ImGui::Begin((std::string("##menu_button_popup_") + id).c_str(), nullptr, windowFlags)) {
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 8.0f));
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+			for (size_t i = 0; i < options.size(); ++i) {
+				const std::string& optLabel = options[i].label.empty() ? options[i].value : options[i].label;
+				if (ImGui::Selectable(optLabel.c_str(), false, ImGuiSelectableFlags_None,
+				                      ImVec2(ImGui::CalcTextSize(optLabel.c_str()).x + 16.0f, 0.0f))) {
+					select(static_cast<int>(i), state, options, onChange);
 				}
 
-				ImGui::PopStyleVar();
-				ImGui::PopStyleColor(3);
+				if (i + 1 < options.size()) {
+					const ImVec2 separatorPos = ImGui::GetCursorScreenPos();
+					drawList->AddLine(
+						separatorPos,
+						ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, separatorPos.y),
+						app::theme::BORDER_U32
+					);
+				}
 			}
-		);
+
+			constexpr float hoverZonePadding = 20.0f;
+			const ImVec2 mousePos = ImGui::GetIO().MousePos;
+			ImVec2 zoneMin = ImGui::GetWindowPos();
+			ImVec2 zoneMax(zoneMin.x + ImGui::GetWindowSize().x, zoneMin.y + ImGui::GetWindowSize().y);
+			zoneMin.x -= hoverZonePadding;
+			zoneMin.y -= hoverZonePadding;
+			zoneMax.x += hoverZonePadding;
+			zoneMax.y += hoverZonePadding;
+			const bool insideHoverZone = mousePos.x >= zoneMin.x && mousePos.x <= zoneMax.x &&
+			                             mousePos.y >= zoneMin.y && mousePos.y <= zoneMax.y;
+
+			if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+			    ImGui::IsMouseClicked(0)) {
+				state.open = false;
+			} else if (!insideHoverZone) {
+				state.open = false;
+			}
+
+			ImGui::PopStyleVar();
+		}
+		ImGui::End();
+
+		ImGui::PopStyleVar(2);
+		ImGui::PopStyleColor(5);
 	}
 
 	ImGui::PopID();
