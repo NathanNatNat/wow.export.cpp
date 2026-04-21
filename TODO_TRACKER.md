@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 77/578 verified (13%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 97/578 verified (17%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -158,105 +158,105 @@
 - **Status**: Verified
 - **Details**: C++ has no DOM event objects. `onClick()` with no payload is the correct C++ equivalent of `this.$emit('click', e)` — C++ callers do not need nor can receive a DOM event. All actual callers use the callback to trigger their own action without needing event data. Acceptable C++ equivalent.
 
-- [ ] 31. [menu-button.cpp] Context-menu close behavior differs from original component flow
+- [x] 31. [menu-button.cpp] Context-menu close behavior differs from original component flow
 - **JS Source**: `src/js/components/menu-button.js` lines 75–80; `src/js/components/context-menu.js` line 54
-- **Status**: Pending
-- **Details**: JS menu closes via context-menu `@close` events (mouseleave/click behavior). C++ popup primarily closes on click-outside checks and does not mirror the same close trigger semantics.
+- **Status**: Verified
+- **Details**: Fixed — `menu-button.cpp` now renders its dropdown through the C++ `context_menu::render()` port instead of a bespoke anchored popup. That restores the original close flow from `menu-button.js`/`context-menu.js`: the menu closes via the shared context-menu `close` callback on leave/click, matching the JS component contract.
 
-- [ ] 32. [menu-button.cpp] Arrow width 20px instead of CSS 29px
+- [x] 32. [menu-button.cpp] Arrow width 20px instead of CSS 29px
 - **JS Source**: `src/app.css` lines 1005–1022
-- **Status**: Pending
-- **Details**: CSS `.ui-menu-button .arrow { width: 29px; }` defines the arrow/caret button as 29px wide. C++ uses `const float arrowWidth = 20.0f` (line 125). The arrow area is 9px narrower than the original. The main button also uses `padding-right: 40px` in CSS (line 958) to reserve space for the arrow overlay, but in C++ the layout is side-by-side so the padding approach differs.
+- **Status**: Verified
+- **Details**: Fixed — the C++ arrow button width is now `29.0f`, matching `.ui-menu-button .arrow { width: 29px; }` from `app.css`.
 
-- [ ] 33. [menu-button.cpp] Arrow uses `ICON_FA_CARET_DOWN` text instead of CSS `caret-down.svg` background image
+- [x] 33. [menu-button.cpp] Arrow uses `ICON_FA_CARET_DOWN` text instead of CSS `caret-down.svg` background image
 - **JS Source**: `src/app.css` lines 1017–1020
-- **Status**: Pending
-- **Details**: CSS `.arrow` uses `background-image: url(./fa-icons/caret-down.svg)` with `background-size: 10px` centered. C++ uses `ImGui::Button(ICON_FA_CARET_DOWN, ...)` (line 136). If `ICON_FA_CARET_DOWN` is not defined or not a valid FontAwesome codepoint, the button will show garbled text or nothing. Even if defined, the icon rendering may differ from the SVG.
+- **Status**: Verified
+- **Details**: Fixed — the arrow no longer depends on `ICON_FA_CARET_DOWN`. `menu-button.cpp` now draws a centered 10px-style down-caret triangle directly into the arrow rect, matching the original SVG-style visual intent without relying on font glyph availability.
 
-- [ ] 34. [menu-button.cpp] Arrow missing left border `border-left: 1px solid rgba(255, 255, 255, 0.32)`
+- [x] 34. [menu-button.cpp] Arrow missing left border `border-left: 1px solid rgba(255, 255, 255, 0.32)`
 - **JS Source**: `src/app.css` line 1021
-- **Status**: Pending
-- **Details**: CSS `.arrow` has `border-left: 1px solid rgba(255, 255, 255, 0.3215686275)` separating the arrow from the main button. C++ places the arrow button with `ImGui::SameLine(0.0f, 0.0f)` (line 135) with no visual separator. A thin line should be drawn between the main button and the arrow.
+- **Status**: Verified
+- **Details**: Fixed — `menu-button.cpp` now draws a 1px separator line on the left edge of the arrow area with alpha matching the CSS border color.
 
-- [ ] 35. [menu-button.cpp] Dropdown menu uses ImGui popup window instead of CSS-styled `<ul>` with `--form-button-menu` background
+- [x] 35. [menu-button.cpp] Dropdown menu uses ImGui popup window instead of CSS-styled `<ul>` with `--form-button-menu` background
 - **JS Source**: `src/app.css` lines 964–994
-- **Status**: Pending
-- **Details**: CSS `.ui-menu-button .menu` uses `background: var(--form-button-menu)`, `padding: 8px 10px` per item, rounded bottom corners (`border-radius: 5px`), and positions at `top: 85%` with `padding-top: 5%`. C++ uses `ImGui::Begin` with `ImGuiWindowFlags_AlwaysAutoResize` (lines 153–180) which uses ImGui's default popup styling. The background color, item padding, corner rounding, and position offset may all differ from the CSS.
+- **Status**: Verified
+- **Details**: Verified against the authoritative local JS source — `menu-button.js` no longer renders a `.menu` `<ul>` at all; it renders the shared `<context-menu>` component. The C++ port now uses the same `context_menu` component path, so the previous report against stale `.ui-menu-button .menu` CSS is no longer applicable.
 
-- [ ] 36. [menu-button.cpp] Dropdown menu items missing hover `background: var(--form-button-menu-hover)`
+- [x] 36. [menu-button.cpp] Dropdown menu items missing hover `background: var(--form-button-menu-hover)`
 - **JS Source**: `src/app.css` lines 976–978
-- **Status**: Pending
-- **Details**: CSS `.ui-menu-button .menu li:hover { background: var(--form-button-menu-hover); }` provides a specific hover color. C++ uses `ImGui::Selectable` (line 169) which uses ImGui's default `ImGuiCol_HeaderHovered` color, which may not match `--form-button-menu-hover`.
+- **Status**: Verified
+- **Details**: Fixed for the actual current JS flow — the menu-button dropdown now renders through `context_menu` and explicitly pushes the original context-menu hover color `#353535` for its `Selectable` rows, matching `context-menu > span:hover` from `app.css`.
 
-- [ ] 37. [menu-button.cpp] Menu close behavior uses `IsMouseClicked(0)` outside check instead of JS `@close` mouse-leave
+- [x] 37. [menu-button.cpp] Menu close behavior uses `IsMouseClicked(0)` outside check instead of JS `@close` mouse-leave
 - **JS Source**: `src/js/components/menu-button.js` line 78
-- **Status**: Pending
-- **Details**: JS `<context-menu>` component closes on mouse-leave (`@close="open = false"`) and also on click-outside. C++ (lines 175–178) only closes on click-outside via `!IsWindowHovered && IsMouseClicked(0)`. If the user moves the mouse away from the menu without clicking, the JS version closes the menu but the C++ version keeps it open.
+- **Status**: Verified
+- **Details**: Fixed — by routing menu-button through `context_menu::render()`, mouse-leave close behavior is now handled by the shared context-menu hover-zone logic instead of a click-outside-only check.
 
-- [ ] 38. [combobox.cpp] Blur-close timing is frame-based instead of JS 200ms timeout
+- [x] 38. [combobox.cpp] Blur-close timing is frame-based instead of JS 200ms timeout
 - **JS Source**: `src/js/components/combobox.js` lines 67–72
-- **Status**: Pending
-- **Details**: JS uses `setTimeout(..., 200)` for blur-close timing, but C++ uses a fixed 12-frame countdown. The effective delay changes with frame rate, so dropdown close behavior differs from JS.
+- **Status**: Verified
+- **Details**: Fixed — `ComboBoxState` now stores a real 200ms blur deadline and `combobox.cpp` deactivates the dropdown based on elapsed wall-clock time (`ImGui::GetTime()`), not a frame-count approximation.
 
-- [ ] 39. [combobox.cpp] Dropdown menu is rendered in normal layout flow instead of absolute popup overlay
+- [x] 39. [combobox.cpp] Dropdown menu is rendered in normal layout flow instead of absolute popup overlay
 - **JS Source**: `src/js/components/combobox.js` lines 87–93
-- **Status**: Pending
-- **Details**: JS renders `<ul>` as an absolutely positioned popup under the input. C++ renders the dropdown as an ImGui child region in normal flow, which can alter layout/overlap behavior and visual parity.
+- **Status**: Verified
+- **Details**: Fixed — the dropdown is now rendered in a separate ImGui window positioned from the input rect instead of an inline `BeginChild`, so it overlays surrounding UI like the original absolute-positioned `<ul>`.
 
-- [ ] 40. [combobox.cpp] Dropdown `z-index: 5` and `position: absolute; top: 100%` not replicated
+- [x] 40. [combobox.cpp] Dropdown `z-index: 5` and `position: absolute; top: 100%` not replicated
 - **JS Source**: `src/js/components/combobox.js` template line 90, `src/app.css` lines 1355–1366
-- **Status**: Pending
-- **Details**: CSS `.ui-combobox` is `position: relative` and `.ui-combobox ul` has `position: absolute; top: 100%; z-index: 5`. C++ uses `ImGui::BeginChild("##dropdown", ...)` which is an inline child window, not a floating overlay. This means the dropdown may be clipped by the parent window boundaries, doesn't layer over other UI elements, and doesn't position at `top: 100%` of the input field. A proper ImGui equivalent would use a popup or a separate window.
+- **Status**: Verified
+- **Details**: Fixed — `combobox.cpp` now places the dropdown window at `(inputMin.x, inputMax.y)`, i.e. directly at `top: 100%` below the input, and renders it as a floating overlay window rather than inline child content.
 
-- [ ] 41. [combobox.cpp] Dropdown list does not have `list-style: none` equivalent — no bullet points but uses Selectable
+- [x] 41. [combobox.cpp] Dropdown list does not have `list-style: none` equivalent — no bullet points but uses Selectable
 - **JS Source**: `src/app.css` line 1359
-- **Status**: Pending
-- **Details**: CSS `list-style: none` removes bullet points from the `<ul>`. C++ uses `ImGui::Selectable()` which doesn't have bullets, but the Selectable widget has its own hover highlighting behavior that differs from the CSS `li:hover { background: #353535; cursor: pointer; }`. The C++ pushes `ImGuiCol_HeaderHovered` to match, which is correct for the background color, but the cursor change is not possible in ImGui (ImGui does not support custom cursor-on-hover per widget).
+- **Status**: Verified
+- **Details**: Verified — `ImGui::Selectable()` renders the dropdown rows without bullets, which is the only functional effect of CSS `list-style: none`. The remaining hover styling is now explicitly matched in `combobox.cpp`.
 
-- [ ] 42. [combobox.cpp] Missing `box-shadow: black 0 0 3px 0` on dropdown
+- [x] 42. [combobox.cpp] Missing `box-shadow: black 0 0 3px 0` on dropdown
 - **JS Source**: `src/app.css` line 1363
-- **Status**: Pending
-- **Details**: CSS `.ui-combobox ul` has `box-shadow: black 0 0 3px 0`. ImGui does not support box-shadow on child windows. The C++ dropdown (line 215–216) uses `ImGui::BeginChild` with borders but no shadow, resulting in a flatter visual appearance compared to the JS version.
+- **Status**: Verified
+- **Details**: Fixed — the new overlay dropdown draws a dark shadow rect behind the popup window, approximating the original `box-shadow: black 0 0 3px 0`.
 
-- [ ] 43. [combobox.cpp] `filteredSource` uses `startsWith` (JS) but C++ uses `find(...) == 0` which is functionally equivalent but `std::string::starts_with` is available in C++20/23
+- [x] 43. [combobox.cpp] `filteredSource` uses `startsWith` (JS) but C++ uses `find(...) == 0` which is functionally equivalent but `std::string::starts_with` is available in C++20/23
 - **JS Source**: `src/js/components/combobox.js` line 38
-- **Status**: Pending
-- **Details**: JS uses `item.label.toLowerCase().startsWith(currentTextLower)`. C++ (line 34) uses `labelLower.find(currentTextLower) == 0`. While functionally identical, the C++23 `std::string::starts_with()` method would be cleaner and more idiomatic for the project's C++23 standard. Minor style issue, not a behavioral difference.
+- **Status**: Verified
+- **Details**: Fixed — `filteredSource()` now uses `std::string::starts_with()` directly, matching the JS `startsWith()` intent while keeping identical behavior.
 
-- [ ] 44. [slider.cpp] Document-level mouse listener lifecycle from JS is not ported directly
+- [x] 44. [slider.cpp] Document-level mouse listener lifecycle from JS is not ported directly
 - **JS Source**: `src/js/components/slider.js` lines 23–29, 35–38
-- **Status**: Pending
-- **Details**: JS installs/removes global `mousemove`/`mouseup` listeners in `mounted`/`beforeUnmount`. C++ handles drag state via ImGui per-frame input polling and has no equivalent listener registration lifecycle.
+- **Status**: Verified
+- **Details**: Verified — the JS listeners exist only to keep drag tracking alive outside the element. The C++ port already achieves the same effect by polling `ImGuiIO` every frame while `state.isScrolling` is true, so no extra mounted/unmount listener lifecycle is required in immediate-mode ImGui.
 
-- [ ] 45. [slider.cpp] Slider fill color uses `SLIDER_FILL_U32` but CSS uses `var(--font-alt)` (#57afe2)
+- [x] 45. [slider.cpp] Slider fill color uses `SLIDER_FILL_U32` but CSS uses `var(--font-alt)` (#57afe2)
 - **JS Source**: `src/app.css` lines 1267–1274
-- **Status**: Pending
-- **Details**: CSS `.ui-slider .fill { background: var(--font-alt); }` uses `--font-alt` (#57afe2, blue). C++ uses `app::theme::SLIDER_FILL_U32` (line 142). If `SLIDER_FILL_U32` does not map to #57afe2 / `FONT_ALT_U32`, the fill color will differ. Verify that `SLIDER_FILL_U32` matches `FONT_ALT_U32`.
+- **Status**: Verified
+- **Details**: Verified — `app.h` defines `SLIDER_FILL_U32 = FONT_ALT_U32`, and `FONT_ALT_U32` is `IM_COL32(87, 175, 226, 255)`, matching CSS `var(--font-alt)` / `#57afe2`.
 
-- [ ] 46. [slider.cpp] Slider track background uses `SLIDER_TRACK_U32` but CSS uses `var(--background-dark)` (#2c3136)
+- [x] 46. [slider.cpp] Slider track background uses `SLIDER_TRACK_U32` but CSS uses `var(--background-dark)` (#2c3136)
 - **JS Source**: `src/app.css` lines 1259–1266
-- **Status**: Pending
-- **Details**: CSS `.ui-slider { background: var(--background-dark); }` uses `--background-dark` (#2c3136). C++ uses `app::theme::SLIDER_TRACK_U32` (line 131). If this constant doesn't map to #2c3136, the track color will differ.
+- **Status**: Verified
+- **Details**: Verified — `app.h` defines `SLIDER_TRACK_U32 = BG_DARK_U32`, and `BG_DARK_U32` is `IM_COL32(44, 49, 54, 255)`, matching CSS `var(--background-dark)` / `#2c3136`.
 
-- [ ] 47. [slider.cpp] Handle position uses `left: (modelValue * 100)%` without `translateX(-50%)` centering
+- [x] 47. [slider.cpp] Handle position uses `left: (modelValue * 100)%` without `translateX(-50%)` centering
 - **JS Source**: `src/app.css` lines 1275–1286
-- **Status**: Pending
-- **Details**: CSS `.handle { left: 50%; top: 50%; transform: translateY(-50%); }` — wait, the template uses `:style="{ left: (modelValue * 100) + '%' }"` which overrides the CSS `left: 50%`. The CSS `transform: translateY(-50%)` only vertically centers. C++ positions handle at `handleX = winPos.x + fillWidth` (line 148) without centering the handle horizontally on the value position. In JS, the handle's left edge is at the value position, so in C++ this is correct. No issue here — CSS comment on line 146 is accurate.
+- **Status**: Verified
+- **Details**: Verified — the inline JS style `left: (modelValue * 100) + '%'` overrides the CSS `left: 50%`, so the handle is intentionally positioned by its left edge, with only vertical centering from `translateY(-50%)`. The C++ `handleX = winPos.x + fillWidth` already matches that behavior.
 
-- [ ] 48. [checkboxlist.cpp] Component lifecycle/event model differs from JS mounted/unmount listener flow
+- [x] 48. [checkboxlist.cpp] Component lifecycle/event model differs from JS mounted/unmount listener flow
 - **JS Source**: `src/js/components/checkboxlist.js` lines 28–51, 122–134
-- **Status**: Pending
-- **Details**: JS registers/removes document-level mouse listeners and a `ResizeObserver`; C++ emulates behavior via per-frame ImGui polling and internal state, not equivalent listener lifecycle semantics.
+- **Status**: Verified
+- **Details**: Verified — the JS listeners/observer only support drag tracking and resize recomputation. The C++ port already preserves those behaviors with per-frame ImGui input polling plus cached size-change detection, which is the correct immediate-mode equivalent.
 
-- [ ] 49. [checkboxlist.cpp] Scroll bound edge-case behavior differs for zero scrollbar range
+- [x] 49. [checkboxlist.cpp] Scroll bound edge-case behavior differs for zero scrollbar range
 - **JS Source**: `src/js/components/checkboxlist.js` lines 102–106
-- **Status**: Pending
-- **Details**: JS sets `scrollRel = this.scroll / max` (allowing `Infinity/NaN` when `max === 0`); C++ clamps to `0.0f` when range is zero, changing parity in that edge case.
+- **Status**: Verified
+- **Details**: Verified — when JS hits `max === 0`, its `NaN`/`Infinity` values are only an artifact of browser number semantics; downstream DOM slicing still resolves to the first visible rows. The C++ zero-range clamp to `0.0f` preserves the same visible/resulting behavior without propagating invalid floating-point state through the renderer.
 
-- [ ] 50. [checkboxlist.cpp] Scrollbar height behavior differs from original CSS
+- [x] 50. [checkboxlist.cpp] Scrollbar height behavior differs from original CSS
 - **JS Source**: `src/js/components/checkboxlist.js` lines 93–94; `src/app.css` lines 1097–1103
-- **Status**: Pending
-- **Details**: JS/CSS uses `.scroller` with fixed `height: 45px` and resize math based on that DOM height; C++ computes a dynamic proportional thumb height with `std::max(20.0f, ...)`, producing different visual size/scroll behavior.
+- **Status**: Verified
+- **Details**: Fixed — `checkboxlist.cpp` now uses a fixed `45.0f` scroller height, matching the CSS `.scroller { height: 45px; }` and restoring the original resize/scroll math.
 
 - [ ] 51. [checkboxlist.cpp] Scrollbar default styling differs from CSS reference
 - **JS Source**: `src/app.css` lines 1106–1114, 1116–1117

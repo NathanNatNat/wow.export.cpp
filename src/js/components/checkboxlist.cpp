@@ -149,10 +149,8 @@ void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListStat
 	const float itemHeight = std::max(ImGui::GetFrameHeightWithSpacing(), 26.0f);
 	const int totalItems = static_cast<int>(items.size());
 
-	// The scroller thumb height is proportional to visible vs total items.
-	const float scrollerHeight = (totalItems > 0)
-		? std::max(20.0f, containerHeight * (static_cast<float>(state.slotCount) / static_cast<float>(totalItems)))
-		: containerHeight;
+	// CSS: .scroller { height: 45px; } — fixed thumb height in the original component.
+	const float scrollerHeight = 45.0f;
 
 	// Only call resize() when container/scroller dimensions actually change (ResizeObserver equivalent).
 	if (state.prevContainerHeight != containerHeight || state.prevScrollerHeight != scrollerHeight || !state.initialized) {

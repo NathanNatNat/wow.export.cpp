@@ -31,7 +31,7 @@ static std::vector<const nlohmann::json*> filteredSource(const std::string& curr
 		std::transform(labelLower.begin(), labelLower.end(), labelLower.begin(),
 		               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
-		if (labelLower.find(currentTextLower) == 0) {
+		if (labelLower.starts_with(currentTextLower)) {
 			items.push_back(&item);
 		}
 	}
@@ -143,6 +143,8 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 
 	ImGui::SetNextItemWidth(-FLT_MIN);
 	bool inputActive = false;
+	bool dropdownHovered = false;
+	const double now = ImGui::GetTime();
 
 	// Ensure currentText has capacity for InputText to write into.
 	// Reserve at least some space to avoid UB when string is empty.
@@ -180,6 +182,7 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 	// onFocus equivalent.
 	if (ImGui::IsItemActivated()) {
 		state.isActive = true;
+		state.blurPending = false;
 	}
 
 	// Handle Enter key.
@@ -188,12 +191,13 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 	}
 
 	inputActive = ImGui::IsItemActive();
+	const ImVec2 inputMin = ImGui::GetItemRectMin();
+	const ImVec2 inputMax = ImGui::GetItemRectMax();
+	const float inputWidth = inputMax.x - inputMin.x;
 
-	// onBlur equivalent — JS uses setTimeout(() => { this.isActive = false; }, 200)
-	// to delay deactivation by 200ms, allowing dropdown clicks to register.
-	// We use a frame counter (~12 frames at 60fps ≈ 200ms).
 	if (ImGui::IsItemDeactivated() && !inputActive) {
-		state.blurDelayFrames = 12;
+		state.blurPending = true;
+		state.blurDeadline = now + 0.2;
 	}
 
 	// <ul v-if="isActive && currentText.length > 0">
@@ -201,57 +205,64 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 	// </ul>
 	if (state.isActive && !state.currentText.empty()) {
 		auto matches = filteredSource(state.currentText, source, maxheight);
-		// CSS: .ui-combobox ul { background: #232323; border: 1px solid var(--border); box-shadow: black 0 0 3px 0; }
 		if (!matches.empty()) {
-			// CSS: <ul> has no explicit max-height in template; controlled by CSS.
-			// Use calculated height based on item count (no arbitrary cap).
-			// CSS: .ui-combobox ul li { padding: 10px 15px; border-bottom: 1px solid var(--border); }
-			const float itemPaddingY = 10.0f * 2.0f;
-			const float dropdownHeight = static_cast<float>(matches.size()) * (ImGui::GetTextLineHeight() + itemPaddingY);
+			ImGui::SetNextWindowPos(ImVec2(inputMin.x, inputMax.y), ImGuiCond_Always);
+			ImGui::SetNextWindowSize(ImVec2(inputWidth, 0.0f), ImGuiCond_Always);
 
-			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.137f, 0.137f, 0.137f, 1.0f)); // #232323
+			ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.137f, 0.137f, 0.137f, 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
+			ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
 			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-			ImGui::BeginChild("##dropdown", ImVec2(0.0f, dropdownHeight),
-			                  ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+			ImGuiWindowFlags dropdownFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+			                                 ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove |
+			                                 ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+			                                 ImGuiWindowFlags_AlwaysAutoResize;
 
-			for (const auto* item : matches) {
-				const std::string label = item->value("label", std::string(""));
-				// CSS: .ui-combobox ul li { padding: 10px 15px; }
-				ImGui::SetCursorPosX(15.0f);
-				ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
-				// CSS: .ui-combobox ul li:hover { background: #353535; }
-				ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.208f, 0.208f, 0.208f, 1.0f)); // #353535
-				if (ImGui::Selectable(label.c_str())) {
-					selectOption(item, value, state, onChange);
-					state.blurDelayFrames = 0; // Cancel pending blur
+			if (ImGui::Begin((std::string("##combobox_dropdown_") + id).c_str(), nullptr, dropdownFlags)) {
+				const ImVec2 shadowMin = ImVec2(ImGui::GetWindowPos().x - 1.0f, ImGui::GetWindowPos().y - 1.0f);
+				const ImVec2 shadowMax = ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x + 1.0f,
+				                                ImGui::GetWindowPos().y + ImGui::GetWindowSize().y + 1.0f);
+				ImGui::GetBackgroundDrawList()->AddRectFilled(shadowMin, shadowMax, IM_COL32(0, 0, 0, 96));
+
+				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(15.0f, 10.0f));
+				for (size_t i = 0; i < matches.size(); ++i) {
+					const auto* item = matches[i];
+					const std::string label = item->value("label", std::string(""));
+					if (ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_None, ImVec2(inputWidth, 0.0f))) {
+						selectOption(item, value, state, onChange);
+						state.blurPending = false;
+					}
+
+					if (i + 1 < matches.size()) {
+						ImDrawList* dl = ImGui::GetWindowDrawList();
+						const ImVec2 p = ImGui::GetCursorScreenPos();
+						dl->AddLine(p, ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, p.y), app::theme::BORDER_U32);
+					}
 				}
-				ImGui::PopStyleColor();
-				ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
-				// CSS: border-bottom: 1px solid var(--border) — draw separator between items.
-				ImDrawList* dl = ImGui::GetWindowDrawList();
-				ImVec2 p = ImGui::GetCursorScreenPos();
-				dl->AddLine(p, ImVec2(p.x + ImGui::GetContentRegionAvail().x, p.y), app::theme::BORDER_U32);
-			}
+				ImGui::PopStyleVar();
 
-			// Keep active while hovering dropdown.
-			if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None)) {
-				inputActive = true;
-				state.blurDelayFrames = 0; // Cancel pending blur while hovering dropdown
+				if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None)) {
+					dropdownHovered = true;
+					state.blurPending = false;
+				}
 			}
+			ImGui::End();
 
-			ImGui::EndChild();
-			ImGui::PopStyleVar();
-			ImGui::PopStyleColor(2);
+			ImGui::PopStyleVar(2);
+			ImGui::PopStyleColor(5);
 		}
 	}
 
-	// Deactivate after blur delay expires (200ms equivalent).
-	if (state.blurDelayFrames > 0) {
-		state.blurDelayFrames--;
-		if (state.blurDelayFrames == 0 && !inputActive) {
-			state.isActive = false;
-		}
+	if (dropdownHovered) {
+		inputActive = true;
+	}
+
+	if (state.blurPending && now >= state.blurDeadline && !inputActive) {
+		state.isActive = false;
+		state.blurPending = false;
 	}
 
 	ImGui::PopID();

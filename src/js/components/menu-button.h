@@ -9,6 +9,8 @@
 #include <vector>
 #include <functional>
 
+#include "context-menu.h"
+
 /**
  * Menu button component (ImGui immediate-mode equivalent).
  *
@@ -38,6 +40,7 @@ struct MenuButtonState {
 	                            // making it immune to array reordering. Using the value string
 	                            // achieves the same effect.
 	bool open = false;          // If the menu is open or not.
+	context_menu::ContextMenuState contextMenu;
 };
 
 /**

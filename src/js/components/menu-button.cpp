@@ -6,6 +6,8 @@
 #include "menu-button.h"
 
 #include <imgui.h>
+#include <nlohmann/json.hpp>
+
 #include "../../app.h"
 
 namespace menu_button {
@@ -84,6 +86,37 @@ static void handleClick(bool dropdownMode, bool disabled, MenuButtonState& state
 		onClick();
 }
 
+static void drawArrowButton(float width, bool hoveredOrOpen, bool disabled) {
+	ImGui::PushStyleColor(ImGuiCol_Button,
+		hoveredOrOpen ? app::theme::BUTTON_HOVER : ImGui::GetStyleColorVec4(ImGuiCol_Button));
+	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, app::theme::BUTTON_HOVER);
+	ImGui::PushStyleColor(ImGuiCol_ButtonActive, app::theme::BUTTON_HOVER);
+	ImGui::Button("##arrow", ImVec2(width, 0.0f));
+	ImGui::PopStyleColor(3);
+
+	const ImVec2 arrowMin = ImGui::GetItemRectMin();
+	const ImVec2 arrowMax = ImGui::GetItemRectMax();
+	const ImVec2 arrowCenter((arrowMin.x + arrowMax.x) * 0.5f, (arrowMin.y + arrowMax.y) * 0.5f);
+
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	drawList->AddLine(
+		ImVec2(arrowMin.x, arrowMin.y),
+		ImVec2(arrowMin.x, arrowMax.y),
+		IM_COL32(255, 255, 255, 82),
+		1.0f
+	);
+
+	const float halfWidth = 5.0f;
+	const float halfHeight = 2.5f;
+	const ImU32 arrowColor = disabled ? app::theme::FONT_DISABLED_U32 : app::theme::FONT_HIGHLIGHT_U32;
+	drawList->AddTriangleFilled(
+		ImVec2(arrowCenter.x - halfWidth, arrowCenter.y - halfHeight),
+		ImVec2(arrowCenter.x + halfWidth, arrowCenter.y - halfHeight),
+		ImVec2(arrowCenter.x, arrowCenter.y + halfHeight),
+		arrowColor
+	);
+}
+
 /**
  * HTML mark-up to render for this component.
  */
@@ -112,34 +145,31 @@ void render(const char* id, const std::vector<MenuOption>& options,
 		ImGui::BeginDisabled(true);
 	}
 
-	// CSS class states: dropdown mode and open state both apply hover background
-	// to the entire button+arrow area. In ImGui, we push a highlight button color
-	// when the menu is open or when hovered in dropdown mode.
-	bool pushed_style = false;
-	if (!disabled && state.open) {
-		// .open state: both button and arrow get hover background
-		ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
-		pushed_style = true;
-	}
-
 	// <input type="button" :value="this.selected.label ?? this.selected.value" @click="handleClick"/>
-	const float arrowWidth = 20.0f;
+	const float arrowWidth = 29.0f;
 	const float totalWidth = ImGui::GetContentRegionAvail().x;
 	const float buttonWidth = totalWidth - arrowWidth;
+	const ImVec2 buttonGroupMin = ImGui::GetCursorScreenPos();
+	const ImVec2 buttonGroupMax(buttonGroupMin.x + totalWidth, buttonGroupMin.y + ImGui::GetFrameHeight());
+	const bool hoveredButtonGroup = !disabled && (state.open || (dropdown && ImGui::IsMouseHoveringRect(buttonGroupMin, buttonGroupMax)));
+
+	ImGui::PushStyleColor(ImGuiCol_Button,
+		hoveredButtonGroup ? app::theme::BUTTON_HOVER : ImGui::GetStyleColorVec4(ImGuiCol_Button));
+	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, app::theme::BUTTON_HOVER);
+	ImGui::PushStyleColor(ImGuiCol_ButtonActive, app::theme::BUTTON_HOVER);
 
 	if (ImGui::Button(displayLabel.c_str(), ImVec2(buttonWidth, 0.0f))) {
 		handleClick(dropdown, disabled, state, onClick);
 	}
 
-	// <div class="arrow" @click.stop="openMenu"></div>
-	// CSS uses caret-down.svg icon centered in a 29px-wide area.
 	ImGui::SameLine(0.0f, 0.0f);
-	if (ImGui::Button(ICON_FA_CARET_DOWN, ImVec2(arrowWidth, 0.0f))) {
+	ImGui::PopStyleColor(3);
+	drawArrowButton(arrowWidth, hoveredButtonGroup, disabled);
+	if (!disabled && ImGui::IsItemHovered())
+		ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+	if (ImGui::IsItemClicked()) {
 		openMenu(disabled, state);
 	}
-
-	if (pushed_style)
-		ImGui::PopStyleColor();
 
 	if (disabled) {
 		ImGui::EndDisabled();
@@ -148,43 +178,40 @@ void render(const char* id, const std::vector<MenuOption>& options,
 	// <context-menu :node="open" @close="open = false">
 	//     <span v-for="option in options" @click="select(option)">{{ option.label ?? option.value }}</span>
 	// </context-menu>
-	// JS uses the context-menu child component which positions based on mouse cursor
-	// and closes on mouse-leave. In ImGui, we use a positioned window below the button
-	// with click-outside-to-close behavior, which provides equivalent UX.
 	if (state.open) {
-		ImGui::SetNextWindowBgAlpha(0.95f);
+		context_menu::render(
+			(std::string("menu_button_") + id).c_str(),
+			nlohmann::json(true),
+			state.contextMenu,
+			[&]() { state.open = false; },
+			[&](const nlohmann::json&) {
+				ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+				ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
+				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 8.0f));
+				ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-		ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-		                                ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
-		                                ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-		                                ImGuiWindowFlags_NoMove;
+				for (size_t i = 0; i < options.size(); ++i) {
+					const std::string& optLabel = options[i].label.empty() ? options[i].value : options[i].label;
+					if (ImGui::Selectable(optLabel.c_str(), false, ImGuiSelectableFlags_None,
+					                      ImVec2(ImGui::CalcTextSize(optLabel.c_str()).x + 16.0f, 0.0f))) {
+						select(static_cast<int>(i), state, options, onChange);
+					}
 
-		// Position the popup below or above the button.
-		const ImVec2 buttonMin = ImGui::GetItemRectMin();
-		const ImVec2 buttonMax = ImGui::GetItemRectMax();
-		if (upward) {
-			// CSS: .ui-menu-button.upward .menu { bottom: 85% }
-			// Position popup above the button.
-			ImGui::SetNextWindowPos(ImVec2(buttonMin.x, buttonMin.y), ImGuiCond_Always, ImVec2(0.0f, 1.0f));
-		} else {
-			ImGui::SetNextWindowPos(ImVec2(buttonMin.x, buttonMax.y), ImGuiCond_Always);
-		}
-
-		if (ImGui::Begin((std::string("##menu_button_popup_") + id).c_str(), nullptr, windowFlags)) {
-			for (size_t i = 0; i < options.size(); ++i) {
-				const std::string& optLabel = options[i].label.empty() ? options[i].value : options[i].label;
-				if (ImGui::Selectable(optLabel.c_str())) {
-					select(static_cast<int>(i), state, options, onChange);
+					if (i + 1 < options.size()) {
+						const ImVec2 separatorPos = ImGui::GetCursorScreenPos();
+						drawList->AddLine(
+							separatorPos,
+							ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, separatorPos.y),
+							app::theme::BORDER_U32
+						);
+					}
 				}
-			}
 
-			// Close when clicking outside the menu.
-			if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_RectOnly) &&
-			    ImGui::IsMouseClicked(0)) {
-				state.open = false;
+				ImGui::PopStyleVar();
+				ImGui::PopStyleColor(3);
 			}
-		}
-		ImGui::End();
+		);
 	}
 
 	ImGui::PopID();
