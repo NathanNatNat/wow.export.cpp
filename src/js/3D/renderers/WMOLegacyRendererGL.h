@@ -74,6 +74,7 @@ struct WMOLegacyDoodadSet {
 class WMOLegacyRendererGL {
 public:
 	WMOLegacyRendererGL(BufferWrapper& data, uint32_t fileID, gl::GLContext& gl_context, bool useRibbon = true);
+	WMOLegacyRendererGL(BufferWrapper& data, const std::string& fileName, gl::GLContext& gl_context, bool useRibbon = true);
 
 	static std::unique_ptr<gl::ShaderProgram> load_shaders(gl::GLContext& ctx);
 
@@ -113,6 +114,7 @@ public:
 private:
 	BufferWrapper* data_ptr;
 	uint32_t fileID;
+	std::string fileName;
 	gl::GLContext& ctx;
 	bool useRibbon;
 
