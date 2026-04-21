@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <unordered_map>
 #include <vector>
 
@@ -84,16 +85,16 @@ int getEmblemColorCount();
 /**
  * Get background color map (color_id -> {r, g, b}).
  */
-const std::unordered_map<uint32_t, ColorRGB>& getBackgroundColors();
+const std::map<uint32_t, ColorRGB>& getBackgroundColors();
 
 /**
  * Get border color map (color_id -> {r, g, b}).
  */
-const std::unordered_map<uint32_t, ColorRGB>& getBorderColors();
+const std::map<uint32_t, ColorRGB>& getBorderColors();
 
 /**
  * Get emblem color map (color_id -> {r, g, b}).
  */
-const std::unordered_map<uint32_t, ColorRGB>& getEmblemColors();
+const std::map<uint32_t, ColorRGB>& getEmblemColors();
 
 } // namespace db::caches::DBGuildTabard

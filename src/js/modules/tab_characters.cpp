@@ -2287,7 +2287,7 @@ if (key == "background") color_id = cfg.background;
 else if (key == "border_color") color_id = cfg.border_color;
 else if (key == "emblem_color") color_id = cfg.emblem_color;
 
-const std::unordered_map<uint32_t, db::caches::DBGuildTabard::ColorRGB>* color_map = nullptr;
+const std::map<uint32_t, db::caches::DBGuildTabard::ColorRGB>* color_map = nullptr;
 if (key == "background") color_map = &db::caches::DBGuildTabard::getBackgroundColors();
 else if (key == "border_color") color_map = &db::caches::DBGuildTabard::getBorderColors();
 else if (key == "emblem_color") color_map = &db::caches::DBGuildTabard::getEmblemColors();
@@ -2303,7 +2303,7 @@ return IM_COL32(it->second.r, it->second.g, it->second.b, 255);
 }
 
 // get_tabard_color_list_for_key(key)
-static const std::unordered_map<uint32_t, db::caches::DBGuildTabard::ColorRGB>* get_tabard_color_list_for_key(const std::string& key) {
+static const std::map<uint32_t, db::caches::DBGuildTabard::ColorRGB>* get_tabard_color_list_for_key(const std::string& key) {
 if (key == "background") return &db::caches::DBGuildTabard::getBackgroundColors();
 if (key == "border_color") return &db::caches::DBGuildTabard::getBorderColors();
 if (key == "emblem_color") return &db::caches::DBGuildTabard::getEmblemColors();
