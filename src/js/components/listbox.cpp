@@ -659,7 +659,9 @@ void render(const char* id,
 
 	// Begin a child region to contain the list.
 	// <div ref="root" class="ui-listbox" @wheel="wheelMouse">
-	ImGui::BeginChild("##listbox_container", ImVec2(availSize.x, containerHeight), ImGuiChildFlags_None,
+	// CSS: .ui-listbox { border: 1px solid var(--border); box-shadow: black 0 0 3px 0px; }
+	// ImGuiChildFlags_Borders draws the CSS border. Box-shadow cannot be replicated in Dear ImGui.
+	ImGui::BeginChild("##listbox_container", ImVec2(availSize.x, containerHeight), ImGuiChildFlags_Borders,
 	                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 	// Handle mouse wheel on the container.
@@ -706,10 +708,16 @@ void render(const char* id,
 		const ImVec2 thumbMax(scrollbarX + scrollbarWidth, thumbY + scrollerHeight);
 
 		// Determine if mouse is over the thumb for hover effect.
+		// CSS: .scroller > div { background: var(--border); }
+		// CSS: .scroller:hover > div, .scroller.using > div { background: var(--font-highlight); }
+		// CSS: .scroller { opacity: 0.7; }
 		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
-		const ImU32 thumbColor = thumbHovered
-			? app::theme::TEXT_ACTIVE_U32
-			: app::theme::TEXT_IDLE_U32;
+		const ImU32 baseColor = thumbHovered
+			? app::theme::FONT_HIGHLIGHT_U32
+			: app::theme::BORDER_U32;
+		// Apply CSS opacity: 0.7 from .scroller { opacity: 0.7; }
+		const ImU32 thumbColor = (baseColor & 0x00FFFFFF) |
+			(static_cast<ImU32>(static_cast<float>((baseColor >> 24) & 0xFF) * 0.7f) << 24);
 
 		drawList->AddRectFilled(thumbMin, thumbMax, thumbColor, 4.0f);
 
@@ -723,31 +731,43 @@ void render(const char* id,
 	// <div v-for="(item, i) in displayItems" class="item" @click="selectItem(item, $event)" @contextmenu="handleContextMenu(item, $event)" :class="{ selected: selection.includes(item) }">
 	//     <span v-for="(sub, si) in item.split('\\31')" :class="'sub sub-' + si" :data-item="sub">{{ sub }}</span>
 	// </div>
+
+	// Suppress ImGui's built-in header/hover colors — we draw all row backgrounds manually
+	// to correctly implement the CSS priority: hover > selected > even/odd.
+	ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+	ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+
 	for (int i = startIdx; i < endIdx; ++i) {
 		const std::string& item = filteredItems[static_cast<size_t>(i)];
 		const bool itemSelected = isSelected(selection, item);
 
-		// Alternating row background + selected highlight.
-		//      .ui-listbox .item:nth-child(even) { background: var(--background-alt); }
-		//      .ui-listbox .item.selected { background: var(--font-alt); }
-		{
-			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
-			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
-			// nth-child(even) in the JS DOM: scroller is child 1, first item is child 2 (even).
-			const ImU32 rowBg = ((i - startIdx) % 2 == 0)
-				? app::theme::BG_ALT_U32
-				: app::theme::BG_DARK_U32;
-			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, rowBg);
+		// Determine row rect before rendering (needed for hover check and background).
+		const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+		const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
 
-			if (itemSelected)
-				ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::ROW_SELECTED_U32);
-		}
+		// CSS background priority (highest to lowest):
+		//   .item:hover { background: var(--font-alt) !important; }  — hover always wins
+		//   .item.selected { background: var(--font-alt); }
+		//   .item:nth-child(even) { background: var(--background-alt); }
+		//   .item { background: var(--background-dark); }
+		// nth-child(even): scroller is child 1, first item is child 2 (even) → di=0 gets BG_ALT.
+		const bool rowHovered = ImGui::IsMouseHoveringRect(rowMin, rowMax) &&
+		                        ImGui::IsWindowHovered(ImGuiHoveredFlags_None);
+		const int di = i - startIdx;
+		const ImU32 rowBg = rowHovered   ? app::theme::FONT_ALT_U32
+		                  : itemSelected ? app::theme::ROW_SELECTED_U32
+		                  : (di % 2 == 0) ? app::theme::BG_ALT_U32
+		                  : app::theme::BG_DARK_U32;
+		ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, rowBg);
 
 		ImGui::PushID(i);
 
 		// Split item by '\x19' (character 0x19, used as sub-field separator).
 		// <span v-for="(sub, si) in item.split('\\31')" :class="'sub sub-' + si" :data-item="sub">{{ sub }}</span>
 		// Note: JS '\\31' is octal for char 0x19 (ASCII 25).
+		// Each sub-field is rendered in a separate CSS span; C++ concatenates with spaces
+		// (Dear ImGui cannot render styled sub-spans inline). Known visual approximation.
 		std::string displayText;
 		{
 			size_t pos = 0;
@@ -779,6 +799,8 @@ void render(const char* id,
 
 		ImGui::PopID();
 	}
+
+	ImGui::PopStyleColor(3); // ImGuiCol_Header, HeaderHovered, HeaderActive
 
 	ImGui::EndChild();
 
@@ -828,6 +850,10 @@ void renderStatusBar(const std::string& unittype,
 	ImGui::TextUnformatted(statusText.c_str());
 
 	// Quick filters.
+	// CSS: .quick-filters a { color: #57afe2; } — inactive link color (FONT_ALT)
+	// CSS: .quick-filters a.active { color: #ffffff; font-weight: bold; } — active link color
+	// CSS: .quick-filters a:hover { text-decoration: underline; } — hover underline (not supported in Dear ImGui)
+	// Use transparent-background clickable text to approximate CSS <a> link appearance.
 	if (!quickfilters.empty()) {
 		ImGui::SameLine();
 		ImGui::Text("Quick filter:");
@@ -839,14 +865,22 @@ void renderStatusBar(const std::string& unittype,
 						   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
 
 			const bool isActive = (state.activeQuickFilter == ext);
-			if (isActive)
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+			// Inactive: #57afe2 (font-alt). Active: #ffffff (font-highlight / white).
+			const ImVec4 linkColor = isActive
+				? ImVec4(1.0f, 1.0f, 1.0f, 1.0f)
+				: ImVec4(87.0f/255.0f, 175.0f/255.0f, 226.0f/255.0f, 1.0f);
 
-			if (ImGui::SmallButton(upperExt.c_str()))
+			// Render as transparent-background selectable text to look like a CSS <a> link.
+			ImGui::PushStyleColor(ImGuiCol_Text,          linkColor);
+			ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+			ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+			const std::string selId = upperExt + "##qf" + std::to_string(qi);
+			if (ImGui::Selectable(selId.c_str(), isActive,
+			                      ImGuiSelectableFlags_None,
+			                      ImVec2(ImGui::CalcTextSize(upperExt.c_str()).x, 0.0f)))
 				applyQuickFilter(ext, state);
-
-			if (isActive)
-				ImGui::PopStyleColor();
+			ImGui::PopStyleColor(4);
 
 			if (qi < quickfilters.size() - 1) {
 				ImGui::SameLine();

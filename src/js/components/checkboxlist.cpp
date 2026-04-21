@@ -166,7 +166,10 @@ void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListStat
 	const int endIdx = std::min(totalItems, startIdx + state.slotCount);
 
 	// Begin a child region to contain the list.
-	ImGui::BeginChild("##checkboxlist_container", availSize, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	// CSS: .ui-checkboxlist { border: 1px solid var(--border); box-shadow: black 0 0 3px 0px; }
+	// ImGuiChildFlags_Borders draws the border using ImGuiCol_Border (already set to --border in theme).
+	// Box-shadow cannot be replicated in Dear ImGui; omitted as a known limitation.
+	ImGui::BeginChild("##checkboxlist_container", availSize, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 	// Handle mouse wheel on the container.
 	if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None)) {
@@ -208,11 +211,12 @@ void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListStat
 		// Determine if mouse is over the thumb for hover effect.
 		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
 
-		// CSS: default background: var(--font-primary) at 0.7 opacity
-		// CSS: hover/using: background: var(--font-highlight) at 0.7 opacity
+		// CSS: .scroller > div { background: var(--border); border: 1px solid var(--border); }
+		// CSS: .scroller:hover > div, .scroller.using > div { background: var(--font-highlight); }
+		// CSS: .scroller { opacity: 0.7; }
 		const ImU32 baseColor = thumbHovered
 			? app::theme::FONT_HIGHLIGHT_U32
-			: app::theme::FONT_PRIMARY_U32;
+			: app::theme::BORDER_U32;
 		// Apply 0.7 opacity
 		const ImU32 thumbColor = (baseColor & 0x00FFFFFF) |
 			(static_cast<ImU32>(static_cast<float>((baseColor >> 24) & 0xFF) * 0.7f) << 24);
@@ -234,34 +238,45 @@ void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListStat
 		auto& item = items[static_cast<size_t>(i)];
 		bool checked = item.value("checked", false);
 		const std::string label = item.value("label", std::string(""));
+		const int di = i - startIdx;
 
+		// CSS: .item { background: var(--background-dark); }
 		// CSS: .item:nth-child(even) { background: var(--background-alt); }
-		if ((i - startIdx) % 2 == 1) {
-			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
-			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
-			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::BG_ALT_U32);
-		}
-
+		// The scroller div is DOM child 1; the first item is child 2 (even).
+		// So display index 0, 2, 4 (di%2==0) map to even DOM children → BG_ALT.
 		// CSS: .item.selected { background: var(--font-alt); }
-		if (checked) {
+		{
 			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
 			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
-			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::FONT_ALT_U32);
+			const ImU32 rowBg = (di % 2 == 0) ? app::theme::BG_ALT_U32 : app::theme::BG_DARK_U32;
+			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, rowBg);
+			if (checked)
+				ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::FONT_ALT_U32);
 		}
 
 		ImGui::PushID(i);
+
+		// CSS: .item { padding: 2px 8px } → 8px left padding for checkbox and label.
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8.0f);
+
+		// Suppress ImGui's built-in header/hover colors since we draw backgrounds manually.
+		ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 
 		// Checkbox + label — clicking anywhere on the row toggles the checkbox.
 		if (ImGui::Checkbox(("##cb" + std::to_string(i)).c_str(), &checked)) {
 			item["checked"] = checked;
 		}
-		ImGui::SameLine();
+		// CSS: .item span { margin: 0 0 1px 5px } → 5px left margin from checkbox to label.
+		ImGui::SameLine(0.0f, 5.0f);
 		// Clicking the label text also toggles the checkbox (propagateClick equivalent).
-		if (ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_None, ImVec2(availSize.x - 30.0f, 0.0f))) {
+		if (ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_None, ImVec2(availSize.x - 38.0f, 0.0f))) {
 			checked = !checked;
 			item["checked"] = checked;
 		}
 
+		ImGui::PopStyleColor(3);
 		ImGui::PopID();
 	}
 
