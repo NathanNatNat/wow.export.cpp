@@ -118,7 +118,7 @@ static void wheelMouse(float wheelDelta, float containerHeight, float scrollerHe
                         const std::vector<nlohmann::json>& items, CheckboxListState& state) {
 	const float weight = containerHeight - scrollerHeight;
 
-	if (itemHeight > 0.0f) {
+	if (itemHeight > 0.0f && !items.empty() && state.slotCount > 0) {
 		const int scrollCount = static_cast<int>(std::floor(containerHeight / itemHeight));
 		const float direction = wheelDelta > 0.0f ? 1.0f : -1.0f;
 		state.scroll += ((static_cast<float>(scrollCount) * itemWeight(items)) * weight) * direction;
