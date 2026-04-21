@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 194/578 verified (34%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 206/578 verified (36%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -2777,12 +2777,12 @@
 - **Status**: Pending
 - **Details**: JS implements asynchronous writes (`await writer.writeLine(...)` and async filesystem calls). C++ `write()` is synchronous, which changes ordering and error propagation relative to the original Promise API.
 
-- [ ] 545. [OBJWriter.cpp] `appendGeometry` UV handling differs — JS uses `Array.isArray`/spread, C++ uses `insert`
+- [x] 545. [OBJWriter.cpp] `appendGeometry` UV handling differs — JS uses `Array.isArray`/spread, C++ uses `insert`
 - **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 84–99
 - **Status**: Pending
 - **Details**: JS `appendGeometry` handles multiple UV arrays and uses `Array.isArray` + spread operator for concatenation. C++ uses `std::vector::insert` for appending. Functionally equivalent.
 
-- [ ] 546. [OBJWriter.cpp] Face output format uses 1-based indexing with `v[i+1]//vn[i+1]` or `v[i+1]/vt[i+1]/vn[i+1]` — matches JS correctly
+- [x] 546. [OBJWriter.cpp] Face output format uses 1-based indexing with `v[i+1]//vn[i+1]` or `v[i+1]/vt[i+1]/vn[i+1]` — matches JS correctly
 - **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 119–142
 - **Status**: Pending
 - **Details**: Both JS and C++ output 1-based vertex indices in OBJ face format (e.g., `f v//vn v//vn v//vn` when no UVs, `f v/vt/vn v/vt/vn v/vt/vn` when UVs present). Vertex offset is added correctly in both implementations. Verified as correct.
@@ -2797,7 +2797,7 @@
 - **Status**: Pending
 - **Details**: JS awaits file existence checks, directory creation, and line writes in `async write()`. C++ performs the same work synchronously, so behavior differs for call sites that rely on async completion semantics.
 
-- [ ] 549. [MTLWriter.cpp] `material.name` extraction uses `std::filesystem::path(name).stem().string()` but JS uses `path.basename(name, path.extname(name))`
+- [x] 549. [MTLWriter.cpp] `material.name` extraction uses `std::filesystem::path(name).stem().string()` but JS uses `path.basename(name, path.extname(name))`
 - **JS Source**: `src/js/3D/writers/MTLWriter.js` lines 35–37
 - **Status**: Pending
 - **Details**: C++ line 30 uses `std::filesystem::path(name).stem().string()` to extract the filename without extension. JS uses `path.basename(name, path.extname(name))`. These should produce identical results for typical filenames. However, if `name` contains multiple dots (e.g., `texture.v2.png`), `stem()` returns `texture.v2` while `basename('texture.v2.png', '.png')` also returns `texture.v2`. Functionally equivalent.
@@ -2862,7 +2862,7 @@
 - **Status**: Pending
 - **Details**: JS checks `core.view.config.modelsExportWithBonePrefix` outside the bone loop at line 460 (const is evaluated once). C++ reads `core::view->config.value("modelsExportWithBonePrefix", false)` inside the loop at line 470, which re-reads the config for every bone. Since config shouldn't change during export, this is functionally equivalent but slightly less efficient.
 
-- [ ] 562. [GLBWriter.cpp] GLB JSON chunk padding fills with NUL (0x00) instead of spaces (0x20) as required by the glTF 2.0 spec
+- [x] 562. [GLBWriter.cpp] GLB JSON chunk padding fills with NUL (0x00) instead of spaces (0x20) as required by the glTF 2.0 spec
 - **JS Source**: `src/js/3D/writers/GLBWriter.js` lines 20–28
 - **Status**: Pending
 - **Details**: The glTF 2.0 spec requires that the JSON chunk be padded with trailing space characters (0x20) to maintain 4-byte alignment. C++ `BufferWrapper::alloc(size, true)` zero-fills the buffer, so JSON padding bytes are 0x00. JS `Buffer.alloc(size)` also zero-fills, so JS has the same issue. However, this should be documented as a potential spec compliance issue for both versions.
@@ -2877,7 +2877,7 @@
 - **Status**: Pending
 - **Details**: JS uses `async write()` and a `JSON.stringify` replacer that converts `bigint` values to strings. C++ `write()` is synchronous and writes `nlohmann::json::dump()` directly, which changes both async semantics and JS BigInt serialization parity.
 
-- [ ] 565. [JSONWriter.cpp] `write()` uses `dump(1, '\t')` for pretty-printing; JS uses `JSON.stringify(data, null, '\t')`
+- [x] 565. [JSONWriter.cpp] `write()` uses `dump(1, '\t')` for pretty-printing; JS uses `JSON.stringify(data, null, '\t')`
 - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 37–42
 - **Status**: Pending
 - **Details**: Both produce tab-indented JSON, but nlohmann `dump(1, '\t')` uses indent width of 1 with tab character, while JS `JSON.stringify` with `'\t'` uses tab for each indent level. The output should be identical for well-formed JSON.
@@ -2892,12 +2892,12 @@
 - **Status**: Verified
 - **Details**: The alleged swap does not exist. `CSVWriter.cpp` contains correct C++ (`#include`, class methods, namespace-free implementation) and `CSVWriter.js` contains the original JavaScript (`require`, `class`, `module.exports`). Files are correctly paired. The entry was stale from an earlier state of the codebase.
 
-- [ ] 568. [CSVWriter.cpp] `addField()` overloaded — JS uses variadic `...fields`, C++ has two overloads (single string and vector)
+- [x] 568. [CSVWriter.cpp] `addField()` overloaded — JS uses variadic `...fields`, C++ has two overloads (single string and vector)
 - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 25–27
 - **Status**: Pending
 - **Details**: JS `addField(...fields)` accepts any number of arguments via rest parameters and pushes all. C++ provides `addField(const std::string&)` for single fields and `addField(const std::vector<std::string>&)` for multiple. Callers must adapt to one of these two signatures instead of passing multiple individual arguments.
 
-- [ ] 569. [CSVWriter.cpp] `escapeCSVField()` handles `null`/`undefined` differently — JS converts via `.toString()`, C++ returns empty for empty string
+- [x] 569. [CSVWriter.cpp] `escapeCSVField()` handles `null`/`undefined` differently — JS converts via `.toString()`, C++ returns empty for empty string
 - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 42–51
 - **Status**: Pending
 - **Details**: JS `escapeCSVField()` handles `null`/`undefined` by returning empty string (line 43–44), then calls `value.toString()` for other types. C++ only accepts `const std::string&` and returns empty for empty strings (line 28–29). JS could receive numbers/booleans and stringify them; C++ requires pre-conversion to string by the caller.
@@ -2912,17 +2912,17 @@
 - **Status**: Pending
 - **Details**: JS `async write()` awaits file checks, directory creation, and output writes. C++ performs the same operations synchronously, diverging from JS caller-visible async behavior.
 
-- [ ] 572. [SQLWriter.cpp] Empty-string SQL value handling differs from JS null/undefined checks
+- [x] 572. [SQLWriter.cpp] Empty-string SQL value handling differs from JS null/undefined checks
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 66–76
 - **Status**: Pending
 - **Details**: JS returns `NULL` only for `null`/`undefined`; an empty string serializes to `''`. C++ maps `value.empty()` to `NULL`, so genuine empty-string field values are emitted as SQL `NULL`, changing exported data.
 
-- [ ] 573. [SQLWriter.cpp] `addField()` overloaded — JS uses variadic `...fields`, C++ has two overloads (single string and vector)
+- [x] 573. [SQLWriter.cpp] `addField()` overloaded — JS uses variadic `...fields`, C++ has two overloads (single string and vector)
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 48–49
 - **Status**: Pending
 - **Details**: JS `addField(...fields)` accepts any number of arguments via rest parameters and pushes all. C++ provides `addField(const std::string&)` for single fields and `addField(const std::vector<std::string>&)` for multiple. Same pattern as CSVWriter entry 413.
 
-- [ ] 574. [SQLWriter.cpp] `generateDDL()` output format differs slightly — C++ builds strings directly, JS uses `lines.join('\n')`
+- [x] 574. [SQLWriter.cpp] `generateDDL()` output format differs slightly — C++ builds strings directly, JS uses `lines.join('\n')`
 - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 141–177
 - **Status**: Pending
 - **Details**: JS builds an array of `lines` and joins with `\n` at the end. The output includes `DROP TABLE IF EXISTS ...\n\nCREATE TABLE ... (\n<columns>\n);\n\n`. C++ builds the result string directly with `+= "\n"`. The C++ version outputs `DROP TABLE IF EXISTS ...;\n\nCREATE TABLE ... (\n<columns joined with ,\n>\n);\n` which should match. However, JS `lines.push('')` creates an empty element that adds an extra `\n` when joined, and the column_defs are joined separately with `,\n`. The overall output may have subtle whitespace differences in the final string.
@@ -2937,12 +2937,12 @@
 - **Status**: Pending
 - **Details**: JS writer path is asynchronous and awaited by callers. C++ `write()` runs synchronously, changing API timing semantics compared to the original implementation.
 
-- [ ] 577. [STLWriter.cpp] Header string says `wow.export.cpp` while JS says `wow.export` — intentional branding difference
+- [x] 577. [STLWriter.cpp] Header string says `wow.export.cpp` while JS says `wow.export` — intentional branding difference
 - **JS Source**: `src/js/3D/writers/STLWriter.js` line 147
 - **Status**: Pending
 - **Details**: JS: `'Exported using wow.export v' + constants.VERSION`. C++: `"Exported using wow.export.cpp v" + std::string(constants::VERSION)`. This is an intentional branding change per project conventions (user-facing text should say wow.export.cpp). Verified as correct.
 
-- [ ] 578. [STLWriter.cpp] `appendGeometry` simplified — C++ doesn't handle `Float32Array` vs `Array` distinction
+- [x] 578. [STLWriter.cpp] `appendGeometry` simplified — C++ doesn't handle `Float32Array` vs `Array` distinction
 - **JS Source**: `src/js/3D/writers/STLWriter.js` lines 66–86
 - **Status**: Pending
 - **Details**: JS `appendGeometry` checks `Array.isArray(this.verts)` to decide between spread and `Float32Array.from()` for concatenation. C++ always uses `std::vector::insert`, which works correctly regardless. The JS type distinction is a JS-specific concern that doesn't apply to C++. Functionally equivalent.
