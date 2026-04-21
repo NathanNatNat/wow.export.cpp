@@ -24,6 +24,7 @@
 
 namespace casc {
 	class CASC;
+	class BLPImage;
 	namespace locale_flags {
 		struct LocaleEntry;
 	}
@@ -224,7 +225,7 @@ struct ScrollPosition {
  */
 struct DropHandler {
 	std::vector<std::string> ext;
-	std::function<std::string()> prompt;
+	std::function<std::string(int)> prompt;
 	std::function<void(const std::vector<std::string>&)> process;
 };
 
@@ -520,7 +521,7 @@ struct AppState {
 	nlohmann::json realmList = nlohmann::json::object();
 	bool exportCancelled = false;
 	bool isXmas = false; // Set at runtime based on current month.
-	nlohmann::json chrCustBakedNPCTexture;
+	std::shared_ptr<casc::BLPImage> chrCustBakedNPCTexture;
 	std::string regexTooltip =
 		".* - Matches anything\n"
 		"(a|b) - Matches either a or b.\n"
