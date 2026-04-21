@@ -42,17 +42,17 @@ static std::vector<std::string> fieldToStringVec(const db::FieldValue& val) {
 static std::unordered_map<std::string, std::vector<LegacyCreatureDisplay>> creatureDisplays;
 static bool isInitialized = false;
 
-// Helper: normalize path (lowercase, forward slashes, .mdx to .m2)
+// Helper: normalize path (lowercase, forward slashes, .mdl/.mdx to .m2)
 static std::string normalizePath(const std::string& path) {
 	std::string normalized = path;
 	std::transform(normalized.begin(), normalized.end(), normalized.begin(),
 		[](unsigned char c) { return std::tolower(c); });
 	std::replace(normalized.begin(), normalized.end(), '\\', '/');
 
-	// Convert .mdx to .m2
+	// Convert .mdl/.mdx to .m2
 	if (normalized.size() >= 4) {
 		std::string ext = normalized.substr(normalized.size() - 4);
-		if (ext == ".mdx")
+		if (ext == ".mdl" || ext == ".mdx")
 			normalized = normalized.substr(0, normalized.size() - 4) + ".m2";
 	}
 
@@ -238,10 +238,10 @@ const std::vector<LegacyCreatureDisplay>* getCreatureDisplaysByPath(const std::s
 	if (std::regex_search(normalized, match, mpq_regex))
 		normalized = match[1].str();
 
-	// convert .mdx to .m2 (already done in normalizePath but be safe)
+	// convert .mdl/.mdx to .m2 (already done in normalizePath but be safe)
 	if (normalized.size() >= 4) {
 		std::string ext = normalized.substr(normalized.size() - 4);
-		if (ext == ".mdx")
+		if (ext == ".mdl" || ext == ".mdx")
 			normalized = normalized.substr(0, normalized.size() - 4) + ".m2";
 	}
 
