@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 234/578 verified (40%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 251/578 verified (43%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -2317,22 +2317,22 @@
 - **Status**: Pending
 - **Details**: JS implements `async saveToPNG`, `async toWebP`, and `async saveToWebP`. C++ equivalents are synchronous, changing completion/error semantics for consumers expecting Promise-based behavior.
 
-- [ ] 453. [blp.cpp] `toBuffer()` fallback differs for unknown encodings
+- [x] 453. [blp.cpp] `toBuffer()` fallback differs for unknown encodings
 - **JS Source**: `src/js/casc/blp.js` lines 242–250
 - **Status**: Pending
 - **Details**: JS has no default branch and therefore returns `undefined` for unsupported encodings. C++ returns an empty `BufferWrapper`, changing caller-observed fallback behavior.
 
-- [ ] 454. [blp.cpp] `toCanvas()` and `drawToCanvas()` methods not ported — browser-specific
+- [x] 454. [blp.cpp] `toCanvas()` and `drawToCanvas()` methods not ported — browser-specific
 - **JS Source**: `src/js/casc/blp.js` lines 103–117, 221–234
 - **Status**: Pending
 - **Details**: JS `toCanvas()` creates an HTML `<canvas>` element and draws the BLP onto it. `drawToCanvas()` takes an existing canvas and draws the BLP pixels using 2D context methods (`createImageData`, `putImageData`). These are browser-specific APIs with no C++ equivalent. The C++ port replaces these with `toPNG()`, `toBuffer()`, and `toUInt8Array()` which provide the same pixel data without canvas.
 
-- [ ] 455. [blp.cpp] `dataURL` property initialized to `null` in JS constructor, C++ uses `std::optional<std::string>`
+- [x] 455. [blp.cpp] `dataURL` property initialized to `null` in JS constructor, C++ uses `std::optional<std::string>`
 - **JS Source**: `src/js/casc/blp.js` line 86
 - **Status**: Pending
 - **Details**: JS sets `this.dataURL = null` in the BLPImage constructor. C++ declares `std::optional<std::string> dataURL` in the header which defaults to `std::nullopt`. The C++ `getDataURL()` method doesn't cache to this field (it relies on `BufferWrapper::getDataURL()` caching instead). The JS `getDataURL()` also doesn't set this field — it returns from `toCanvas().toDataURL()`. The `dataURL` field appears to be unused caching infrastructure in both versions.
 
-- [ ] 456. [blp.cpp] `toWebP()` uses libwebp C API directly instead of JS `webp-wasm` module
+- [x] 456. [blp.cpp] `toWebP()` uses libwebp C API directly instead of JS `webp-wasm` module
 - **JS Source**: `src/js/casc/blp.js` lines 157–182
 - **Status**: Pending
 - **Details**: JS uses `webp-wasm` npm module with `webp.encode(imgData, options)` for WebP encoding. C++ uses libwebp's C API directly (`WebPEncodeLosslessRGBA` / `WebPEncodeRGBA`). The JS `options` object `{ lossless: true }` or `{ quality: N }` maps to C++ separate code paths for quality == 100 (lossless) vs lossy. Functionally equivalent.
@@ -2352,12 +2352,12 @@
 - **Status**: Pending
 - **Details**: JS exposes `async load()` and awaits CASC file retrieval (`await core.view.casc.getFile(...)`), while C++ `Skin::load()` is synchronous and throws directly, changing caller timing/error-propagation semantics.
 
-- [ ] 460. [MultiMap.cpp] MultiMap logic is not ported in the `.cpp` sibling translation unit
+- [x] 460. [MultiMap.cpp] MultiMap logic is not ported in the `.cpp` sibling translation unit
 - **JS Source**: `src/js/MultiMap.js` lines 6–32
 - **Status**: Pending
 - **Details**: The JS sibling contains the full `MultiMap extends Map` implementation, but `src/js/MultiMap.cpp` only includes `MultiMap.h` and comments; line-by-line implementation parity is not present in the `.cpp` file itself.
 
-- [ ] 461. [MultiMap.cpp] Public API model differs from JS `Map` subclass contract
+- [x] 461. [MultiMap.cpp] Public API model differs from JS `Map` subclass contract
 - **JS Source**: `src/js/MultiMap.js` lines 6, 20–28, 32
 - **Status**: Pending
 - **Details**: JS exports an actual `Map` subclass with standard `Map` behavior/interop, while C++ exposes a template wrapper (header implementation) returning `std::variant` pointers and not `Map`-equivalent runtime semantics.
@@ -2377,7 +2377,7 @@
 - **Status**: Pending
 - **Details**: JS exposes `async load()` while C++ exposes synchronous `void load()`, changing await/timing behavior.
 
-- [ ] 465. [MDXLoader.cpp] ATCH handler fixes JS `readUInt32LE(-4)` bug without TODO_TRACKER documentation
+- [x] 465. [MDXLoader.cpp] ATCH handler fixes JS `readUInt32LE(-4)` bug without TODO_TRACKER documentation
 - **JS Source**: `src/js/3D/loaders/MDXLoader.js` line 404
 - **Status**: Pending
 - **Details**: JS ATCH handler has `this.data.readUInt32LE(-4)` which is a bug — `BufferWrapper._readInt` passes `_checkBounds(-16)` (always passes since remainingBytes >= 0 > -16), but `new Array(-4)` throws a `RangeError`. C++ correctly fixes this by using a saved `attachmentSize` variable. The fix has a code comment but per project conventions, deviations from the original JS should also be tracked in TODO_TRACKER.md.
@@ -2392,17 +2392,17 @@
 - **Status**: Pending
 - **Details**: JS exposes async `load`, `loadAnimsForIndex`, and `loadAnims`; C++ ports all three as synchronous methods, altering call/await behavior.
 
-- [ ] 468. [SKELLoader.cpp] Animation-load failure handling differs from JS
+- [x] 468. [SKELLoader.cpp] Animation-load failure handling differs from JS
 - **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 332–344, 438–448
 - **Status**: Pending
 - **Details**: JS does not catch ANIM/CASC load failures in `loadAnimsForIndex`/`loadAnims` (Promise rejects). C++ catches exceptions, logs, and returns/continues, changing failure propagation.
 
-- [ ] 469. [SKELLoader.cpp] Extra bounds check in `loadAnimsForIndex()` not present in JS
+- [x] 469. [SKELLoader.cpp] Extra bounds check in `loadAnimsForIndex()` not present in JS
 - **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 308–312
 - **Status**: Pending
 - **Details**: C++ adds `if (animation_index >= this->animations.size()) return false;` that does not exist in JS. In JS, accessing an out-of-bounds index on `this.animations` returns `undefined`, and `animation.flags` would throw a TypeError. C++ silently returns false instead of throwing, changing error behavior.
 
-- [ ] 470. [SKELLoader.cpp] `skeletonBoneData` existence check uses `.empty()` instead of `!== undefined`
+- [x] 470. [SKELLoader.cpp] `skeletonBoneData` existence check uses `.empty()` instead of `!== undefined`
 - **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 335–338, 441–444
 - **Status**: Pending
 - **Details**: JS checks `loader.skeletonBoneData !== undefined` — the property only exists if a SKID chunk was parsed. C++ checks `!loader->skeletonBoneData.empty()`. If ANIMLoader ever sets `skeletonBoneData` to a valid but empty buffer, JS would use it (property exists), but C++ would skip it (empty). This is a potential semantic difference depending on ANIMLoader behavior.
@@ -2427,12 +2427,12 @@
 - **Status**: Pending
 - **Details**: JS exposes async `load()` and `getGroup(index)` while C++ ports both as synchronous methods, changing await/timing behavior.
 
-- [ ] 475. [WMOLoader.cpp] MOGP `flags` field renamed to `groupFlags`, diverging from JS property name
+- [x] 475. [WMOLoader.cpp] MOGP `flags` field renamed to `groupFlags`, diverging from JS property name
 - **JS Source**: `src/js/3D/loaders/WMOLoader.js` line 361
 - **Status**: Pending
 - **Details**: JS MOGP handler stores `this.flags = data.readUInt32LE()`. C++ stores this as `this->groupFlags` (header line 218, MOGP parser line 426) because the C++ class already has `uint16_t flags` from MOHD. Any downstream code porting JS that accesses `wmoGroup.flags` for MOGP flags must use `groupFlags` in C++. This naming deviation matches the same issue found in WMOLegacyLoader.cpp (entry 376).
 
-- [ ] 476. [WMOLoader.cpp] `hasLiquid` boolean is a C++ addition not present in JS
+- [x] 476. [WMOLoader.cpp] `hasLiquid` boolean is a C++ addition not present in JS
 - **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 328–338
 - **Status**: Pending
 - **Details**: JS simply assigns `this.liquid = { ... }` in the MLIQ handler. Consumer code checks `if (this.liquid)` for existence. In C++, the `WMOLiquid liquid` member is always default-constructed, so a `bool hasLiquid = false` flag (header line 209) was added and set to `true` in `parse_MLIQ`. This is a reasonable C++ adaptation, but all downstream JS code that checks `if (this.liquid)` must be ported to check `if (this.hasLiquid)` instead — all consumers need verification.
@@ -2447,27 +2447,27 @@
 - **Status**: Pending
 - **Details**: JS uses async `load`, `_load_alpha_format`, `_load_standard_format`, and `getGroup`; C++ ports these paths synchronously, changing await/timing behavior.
 
-- [ ] 479. [WMOLegacyLoader.cpp] Group-loader initialization differs from JS in `getGroup`
+- [x] 479. [WMOLegacyLoader.cpp] Group-loader initialization differs from JS in `getGroup`
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 146–149
 - **Status**: Pending
 - **Details**: JS creates group loaders with `fileID` undefined and explicitly seeds `group.version = this.version` before `await group.load()`. C++ does not pre-seed `version`, changing legacy group parse assumptions.
 
-- [ ] 480. [WMOLegacyLoader.cpp] MOGP `flags` field renamed to `groupFlags`, diverging from JS property name
+- [x] 480. [WMOLegacyLoader.cpp] MOGP `flags` field renamed to `groupFlags`, diverging from JS property name
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` line 453
 - **Status**: Pending
 - **Details**: JS MOGP handler stores `this.flags = data.readUInt32LE()`. C++ stores this as `this->groupFlags` (header line 124, MOGP parser line 527) because the C++ class already has `uint16_t flags` from MOHD. Any downstream JS-ported code accessing `group.flags` for MOGP flags must use `group.groupFlags` in C++, which is a naming deviation that could cause porting bugs.
 
-- [ ] 481. [WMOLegacyLoader.cpp] `getGroup` empty-check differs for `groupCount == 0` edge case
+- [x] 481. [WMOLegacyLoader.cpp] `getGroup` empty-check differs for `groupCount == 0` edge case
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 117–118
 - **Status**: Pending
 - **Details**: JS checks `if (!this.groups)` — tests whether the `groups` property was ever set (by MOHD handler). An empty JS array `new Array(0)` is truthy, so `!this.groups` is false when `groupCount == 0` — `getGroup` proceeds to the index check. C++ uses `if (this->groups.empty())` which returns true for `groupCount == 0`, incorrectly throwing the exception. A separate bool flag (e.g., `groupsInitialized`) would replicate JS semantics more faithfully.
 
-- [ ] 482. [WDTLoader.cpp] `MWMO` string null handling differs from JS
+- [x] 482. [WDTLoader.cpp] `MWMO` string null handling differs from JS
 - **JS Source**: `src/js/3D/loaders/WDTLoader.js` line 86
 - **Status**: Pending
 - **Details**: JS uses `.replace('\0', '')` (first match only), while C++ removes all `'\0'` bytes from the string, producing different `worldModel` values in edge cases.
 
-- [ ] 483. [WDTLoader.cpp] `worldModelPlacement`/`worldModel`/MPHD fields not optional — cannot distinguish "chunk absent" from "chunk with zeros"
+- [x] 483. [WDTLoader.cpp] `worldModelPlacement`/`worldModel`/MPHD fields not optional — cannot distinguish "chunk absent" from "chunk with zeros"
 - **JS Source**: `src/js/3D/loaders/WDTLoader.js` lines 52–103
 - **Status**: Pending
 - **Details**: In JS, `this.worldModelPlacement` is only assigned when MODF is encountered. If MODF is absent, the property is `undefined` and `if (wdt.worldModelPlacement)` is false. In C++, `WDTWorldModelPlacement worldModelPlacement` is always default-constructed with zeroed fields, making it impossible to distinguish "MODF absent" from "MODF with zeros." Same for `worldModel` (always empty string vs. JS `undefined`) and MPHD fields (always 0 vs. JS `undefined`). Consider `std::optional<T>` for these fields.

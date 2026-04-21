@@ -50,6 +50,9 @@ public:
 
 	bool loaded = false;
 	bool renderingOnly = false;
+	// JS: `if (!this.groups)` checks if MOHD was ever parsed (groups property set).
+	// C++ uses this flag to distinguish "MOHD not yet parsed" from "groupCount == 0".
+	bool groupsInitialized = false;
 
 	uint32_t fileDataID = 0;
 	std::string fileName;

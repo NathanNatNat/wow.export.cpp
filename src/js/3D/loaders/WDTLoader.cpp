@@ -93,14 +93,12 @@ void WDTLoader::parse_chunk_maid(BufferWrapper& data) {
 // MWMO (World WMO)
 void WDTLoader::parse_chunk_mwmo(BufferWrapper& data, uint32_t chunkSize) {
 	std::string raw = data.readString(chunkSize);
-	// Remove null terminator(s) — JS: .replace('\0', '')
-	std::string result;
-	result.reserve(raw.size());
-	for (char c : raw) {
-		if (c != '\0')
-			result += c;
-	}
-	this->worldModel = std::move(result);
+	// JS: data.readString(chunkSize).replace('\0', '') — removes only the FIRST null byte.
+	// String.prototype.replace() with a string pattern replaces the first occurrence only.
+	auto null_pos = raw.find('\0');
+	if (null_pos != std::string::npos)
+		raw.erase(null_pos, 1);
+	this->worldModel = std::move(raw);
 }
 
 // MODF (World WMO Placement)

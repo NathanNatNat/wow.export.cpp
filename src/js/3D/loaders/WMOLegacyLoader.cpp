@@ -157,7 +157,11 @@ void WMOLegacyLoader::_parse_alpha_group(BufferWrapper& data, uint32_t chunkSize
 }
 
 WMOLegacyLoader& WMOLegacyLoader::getGroup(uint32_t index) {
-	if (this->groups.empty())
+	// JS: if (!this.groups) — checks that the groups property was ever set (by MOHD).
+	// C++ uses groupsInitialized to distinguish "MOHD not yet parsed" (root WMO)
+	// from "groupCount == 0" (MOHD parsed but zero groups). An empty array [] is
+	// truthy in JS so !this.groups is false even when groupCount == 0.
+	if (!this->groupsInitialized)
 		throw std::runtime_error("Attempted to obtain group from a root WMO.");
 
 	if (index < this->groups.size() && this->groups[index] != nullptr)
@@ -199,6 +203,10 @@ WMOLegacyLoader& WMOLegacyLoader::getGroup(uint32_t index) {
 
 	auto ownedBuf = std::make_unique<BufferWrapper>(std::move(fileData.value()));
 	auto group = std::make_unique<WMOLegacyLoader>(*ownedBuf, groupPath, this->renderingOnly);
+	// JS: group.version = this.version; — pre-seed version from parent before loading.
+	// The group MVER chunk will override this, but pre-seeding ensures correct
+	// parsing behavior for files where MVER may be absent.
+	group->version = this->version;
 	group->load();
 
 	// Ensure groups vector is large enough
@@ -287,6 +295,8 @@ void WMOLegacyLoader::parse_MOHD(BufferWrapper& data, uint32_t chunkSize) {
 	}
 
 	this->groups.resize(this->groupCount, nullptr);
+	// JS: this.groups = new Array(this.groupCount) — marks groups as initialized (even for 0).
+	this->groupsInitialized = true;
 }
 
 // MOTX (Textures)
