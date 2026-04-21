@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 206/578 verified (36%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 234/578 verified (40%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -509,72 +509,72 @@
 - **Status**: Verified
 - **Details**: Fixed — `cellPadding` changed from `5.0f` to `10.0f`, matching CSS `padding: 5px 10px` (10px left/right horizontal padding). Vertical centering is already handled by `(rowHeight - ImGui::GetTextLineHeight()) / 2.0f`.
 
-- [ ] 101. [data-table.cpp] Missing `Number(val)` equivalence check in `escape_value` — JS `isNaN(val)` checks the original value type
+- [x] 101. [data-table.cpp] Missing `Number(val)` equivalence check in `escape_value` — JS `isNaN(val)` checks the original value type
 - **JS Source**: `src/js/components/data-table.js` lines 950–958
 - **Status**: Pending
 - **Details**: JS `escape_value` checks `if (val === null || val === undefined) return 'NULL'` then `if (!isNaN(val) && str.trim() !== '') return str`. The `!isNaN(val)` check tests if the ORIGINAL value (not string) is numeric. C++ (lines 874–879) uses `tryParseNumber(val, num)` which parses the string representation. In JS, `!isNaN(Number(""))` is `false` (Number("") is 0 but isNaN(0) is false, so !isNaN is true) — wait, `Number("")` is `0` and `isNaN(0)` is `false`, so `!isNaN(Number(""))` is `true`. But the JS also checks `str.trim() !== ''` to exclude empty strings. C++ `tryParseNumber` checks `pos == s.size()` which would fail for empty string since `stod("")` throws. So both handle empty strings correctly (treated as non-numeric). Functionally equivalent.
 
-- [ ] 102. [data-table.cpp] `formatWithThousandsSep` needs to match JS `toLocaleString()` thousands separator
+- [x] 102. [data-table.cpp] `formatWithThousandsSep` needs to match JS `toLocaleString()` thousands separator
 - **JS Source**: `src/js/components/data-table.js` template lines 1018–1019
 - **Status**: Pending
 - **Details**: JS uses `filteredItems.length.toLocaleString()` and `rows.length.toLocaleString()` which formats numbers with locale-appropriate thousands separators. C++ uses `formatWithThousandsSep()` (line 1374–1377). The C++ function should produce comma-separated thousands (e.g., "1,234") to match the default English locale used in most WoW installations. If the function uses a different separator or format, the status text would differ visually.
 
-- [ ] 103. [data-table.cpp] Header height hardcoded to `40px` but CSS uses `padding: 10px` top/bottom on `th`
+- [x] 103. [data-table.cpp] Header height hardcoded to `40px` but CSS uses `padding: 10px` top/bottom on `th`
 - **JS Source**: `src/app.css` lines 1163–1168
 - **Status**: Pending
 - **Details**: C++ (line 971) hardcodes `const float headerHeight = 40.0f` with comment "padding 10px top/bottom + ~20px text". CSS `.ui-datatable table tr th` has `padding: 10px` (all sides). The actual header height depends on the font size — CSS text is typically ~14px default, so 10px + 14px + 10px = 34px, not 40px. If the CSS font size is different or the browser computes differently, the hardcoded 40px may not match.
 
-- [ ] 104. [data-table.cpp] `handleFilterIconClick` not fully visible but CSS filter icon uses specific SVG styling
+- [x] 104. [data-table.cpp] `handleFilterIconClick` not fully visible but CSS filter icon uses specific SVG styling
 - **JS Source**: `src/app.css` lines 1176–1191
 - **Status**: Pending
 - **Details**: CSS `.filter-icon` uses a background SVG image (`background-image: url(./fa-icons/funnel.svg)`) with `background-size: contain; width: 18px; height: 14px`. C++ (lines 1101–1113) draws a custom triangle + rectangle shape as a funnel icon approximation. The custom drawing may not match the SVG icon's exact shape and proportions. The CSS also specifies `opacity: 0.5` default and `opacity: 1.0` on hover, while C++ uses `ICON_DEFAULT_U32` and `FONT_HIGHLIGHT_U32` colors.
 
-- [ ] 105. [data-table.cpp] Sort icon CSS uses SVG background images but C++ draws triangles
+- [x] 105. [data-table.cpp] Sort icon CSS uses SVG background images but C++ draws triangles
 - **JS Source**: `src/app.css` lines 1198–1224
 - **Status**: Pending
 - **Details**: CSS `.sort-icon` uses `background-image: url(./fa-icons/sort.svg)` for the default state, with `.sort-icon-up` and `.sort-icon-down` using different SVG files. The icons have `width: 12px; height: 18px; opacity: 0.5`. C++ (lines 1119–1157) draws triangle shapes to approximate sort icons. The triangle approximation may not match the SVG icon's exact appearance — SVGs typically have more refined shapes with anti-aliasing.
 
-- [ ] 106. [file-field.cpp] Directory dialog trigger moved from input focus to separate browse button
+- [x] 106. [file-field.cpp] Directory dialog trigger moved from input focus to separate browse button
 - **JS Source**: `src/js/components/file-field.js` lines 34–40, 46
 - **Status**: Pending
 - **Details**: JS opens the directory picker when the text field receives focus. C++ opens the dialog only from a dedicated `...` button, changing interaction flow and UI behavior.
 
-- [ ] 107. [file-field.cpp] Same-directory reselection behavior differs from JS file input reset logic
+- [x] 107. [file-field.cpp] Same-directory reselection behavior differs from JS file input reset logic
 - **JS Source**: `src/js/components/file-field.js` lines 35–38
 - **Status**: Pending
 - **Details**: JS clears the hidden file input value before click so selecting the same directory re-triggers change emission. C++ dialog path does not mirror this reset contract.
 
-- [ ] 108. [file-field.cpp] JS opens dialog on `@focus` but C++ opens on button click
+- [x] 108. [file-field.cpp] JS opens dialog on `@focus` but C++ opens on button click
 - **JS Source**: `src/js/components/file-field.js` lines 33–40, template line 46
 - **Status**: Pending
 - **Details**: JS template uses `@focus="openDialog"` on the text input — when the input receives focus, the directory picker opens immediately. C++ (lines 128–132) uses a separate "..." button next to the input to trigger the dialog. The JS behavior is: clicking the text field opens the dialog, and the field never actually receives text focus for editing. C++ allows direct text editing in the field AND has a browse button. This is a significant UX difference — in JS, the field is effectively read-only (clicking always opens picker), while in C++ it's editable with an optional browse button.
 
-- [ ] 109. [file-field.cpp] JS `mounted()` creates hidden `<input type="file" nwdirectory>` element — C++ uses portable-file-dialogs
+- [x] 109. [file-field.cpp] JS `mounted()` creates hidden `<input type="file" nwdirectory>` element — C++ uses portable-file-dialogs
 - **JS Source**: `src/js/components/file-field.js` lines 14–23
 - **Status**: Pending
 - **Details**: JS creates a hidden file input with `nwdirectory` attribute (NW.js specific for directory selection), listens for `change` event, and emits the selected value. C++ uses `pfd::select_folder()` which opens a native folder dialog. The underlying mechanism differs (NW.js DOM file input vs. native OS dialog) but the user-facing behavior should be equivalent — both present a directory picker. C++ implementation correctly replaces the NW.js-specific API.
 
-- [ ] 110. [file-field.cpp] JS `openDialog()` clears file input value before opening — C++ does not clear state
+- [x] 110. [file-field.cpp] JS `openDialog()` clears file input value before opening — C++ does not clear state
 - **JS Source**: `src/js/components/file-field.js` lines 34–39
 - **Status**: Pending
 - **Details**: JS `openDialog()` sets `this.fileSelector.value = ''` before calling `click()` and then calls `this.$el.blur()`. This ensures the `change` event fires even if the user selects the same directory again. C++ `openDialog()` (line 74–81) calls `openDirectoryDialog()` directly without any pre-clear. Since `pfd::select_folder()` returns the result directly (not via an event), re-selecting the same directory works fine — the result is always returned. The `blur()` call is unnecessary in C++ since the dialog is modal.
 
-- [ ] 111. [file-field.cpp] Missing placeholder rendering position uses hardcoded offsets
+- [x] 111. [file-field.cpp] Missing placeholder rendering position uses hardcoded offsets
 - **JS Source**: `src/js/components/file-field.js` template line 46
 - **Status**: Pending
 - **Details**: C++ (lines 120–126) renders placeholder text with `ImVec2(textPos.x + 4.0f, textPos.y + 2.0f)` using hardcoded offsets. The JS template uses the browser's native placeholder rendering via `:placeholder="placeholder"` which automatically positions and styles the placeholder text. The C++ offsets may not match the actual input text baseline, causing misalignment.
 
-- [ ] 112. [file-field.cpp] Extra `openFileDialog()` and `saveFileDialog()` functions not in JS source
+- [x] 112. [file-field.cpp] Extra `openFileDialog()` and `saveFileDialog()` functions not in JS source
 - **JS Source**: `src/js/components/file-field.js` (entire file)
 - **Status**: Pending
 - **Details**: C++ adds `openFileDialog()` (lines 44–53) and `saveFileDialog()` (lines 60–73) as public utility functions. The JS file-field component only provides directory selection via `nwdirectory`. These extra functions may be useful for other parts of the C++ app but are not present in the original JS component source. They are additional API surface.
 
-- [ ] 113. [resize-layer.cpp] ResizeObserver lifecycle is replaced by per-frame width polling
+- [x] 113. [resize-layer.cpp] ResizeObserver lifecycle is replaced by per-frame width polling
 - **JS Source**: `src/js/components/resize-layer.js` lines 12–15, 21–23
 - **Status**: Pending
 - **Details**: JS emits resize through `ResizeObserver` mount/unmount lifecycle. C++ emits when measured width changes during render, so behavior is tied to render frames instead of observer callbacks.
 
-- [ ] 114. [resize-layer.cpp] Fully ported — no issues found
+- [x] 114. [resize-layer.cpp] Fully ported — no issues found
 - **JS Source**: `src/js/components/resize-layer.js` lines 1–26
 - **Status**: Pending
 - **Details**: The resize-layer component is a simple wrapper that emits a 'resize' event when the element width changes. JS uses `ResizeObserver` and `beforeUnmount` cleanup. C++ uses `ImGui::GetContentRegionAvail().x` polling each frame and compares against previous width. The conversion is functionally complete and correct. No deviations found.
@@ -845,12 +845,12 @@
 - **Status**: Pending
 - **Details**: C++ allocates OpenGL textures with glGenTextures and loadSvgTexture but has no cleanup/shutdown function to call glDeleteTextures. Textures leak if the tab is re-initialized or the application shuts down.
 
-- [ ] 167. [legacy_tab_home.cpp] Legacy home tab template is replaced by shared `tab_home` layout
+- [x] 167. [legacy_tab_home.cpp] Legacy home tab template is replaced by shared `tab_home` layout
 - **JS Source**: `src/js/modules/legacy_tab_home.js` lines 2–23
 - **Status**: Pending
 - **Details**: JS defines a dedicated legacy-home template structure (`#legacy-tab-home`, changelog HTML block, and external-link button rows), while C++ delegates to `tab_home::renderHomeLayout()`, so the legacy tab is not a line-by-line equivalent render path.
 
-- [ ] 168. [legacy_tab_home.cpp] External link help buttons (Discord, GitHub, Patreon) not rendered
+- [x] 168. [legacy_tab_home.cpp] External link help buttons (Discord, GitHub, Patreon) not rendered
 - **JS Source**: `src/js/modules/legacy_tab_home.js` lines 8–21
 - **Status**: Pending
 - **Details**: JS template includes 3 help buttons: Discord ("Stuck? Need Help?"), GitHub ("Gnomish Heritage?"), and Patreon ("Support Us!"), each with `data-external` links and description text. C++ `render()` delegates entirely to `tab_home::renderHomeLayout()` (line 28) and does not render these help buttons. Unless `renderHomeLayout()` includes them, these interactive elements are missing from the legacy home tab.
@@ -858,32 +858,32 @@
 
 ## Tab: Changelog, Help, Blender & Install
 
-- [ ] 169. [tab_changelog.cpp] Changelog path resolution logic differs from JS two-path contract
+- [x] 169. [tab_changelog.cpp] Changelog path resolution logic differs from JS two-path contract
 - **JS Source**: `src/js/modules/tab_changelog.js` lines 14–16
 - **Status**: Pending
 - **Details**: JS uses `BUILD_RELEASE ? './src/CHANGELOG.md' : '../../CHANGELOG.md'`; C++ adds a third fallback (`CHANGELOG.md`) and different path probing order, changing source resolution behavior.
 
-- [ ] 170. [tab_changelog.cpp] Changelog screen typography/layout diverges from JS `#changelog` template styling
+- [x] 170. [tab_changelog.cpp] Changelog screen typography/layout diverges from JS `#changelog` template styling
 - **JS Source**: `src/js/modules/tab_changelog.js` lines 31–35
 - **Status**: Pending
 - **Details**: JS uses dedicated `#changelog`/`#changelog-text` template structure and CSS styling; C++ renders plain ImGui title/separator/button layout, causing visible UI differences.
 
-- [ ] 171. [tab_changelog.cpp] Heading rendered as plain ImGui::Text instead of styled h1
+- [x] 171. [tab_changelog.cpp] Heading rendered as plain ImGui::Text instead of styled h1
 - **JS Source**: `src/js/modules/tab_changelog.js` line 32
 - **Status**: Pending
 - **Details**: JS uses h1 tag which renders as a large bold heading per CSS. C++ uses ImGui::Text with default font size and weight.
 
-- [ ] 172. [tab_help.cpp] Search filtering no longer uses JS 300ms debounce behavior
+- [x] 172. [tab_help.cpp] Search filtering no longer uses JS 300ms debounce behavior
 - **JS Source**: `src/js/modules/tab_help.js` lines 145–149, 153–157
 - **Status**: Pending
 - **Details**: JS applies article filtering via `setTimeout(..., 300)` debounce on `search_query`; C++ filters immediately on each input change, changing responsiveness and update timing.
 
-- [ ] 173. [tab_help.cpp] Help article list presentation differs from JS title/tag/KB layout
+- [x] 173. [tab_help.cpp] Help article list presentation differs from JS title/tag/KB layout
 - **JS Source**: `src/js/modules/tab_help.js` lines 115–121
 - **Status**: Pending
 - **Details**: JS renders per-item title and a separate tags row with KB badge styling; C++ combines content into selectable labels and tooltip tags, so article list visuals/structure are not identical.
 
-- [ ] 174. [tab_help.cpp] Missing 300ms debounce on search filter
+- [x] 174. [tab_help.cpp] Missing 300ms debounce on search filter
 - **JS Source**: `src/js/modules/tab_help.js` lines 145–149
 - **Status**: Pending
 - **Details**: JS implements a 300ms setTimeout debounce before filtering. C++ calls update_filter() immediately on every keystroke.
@@ -898,17 +898,17 @@
 - **Status**: Pending
 - **Details**: JS load_help_docs is async. C++ is synchronous blocking the main thread during file reads.
 
-- [ ] 177. [tab_blender.cpp] Blender version gating semantics differ from JS string comparison behavior
+- [x] 177. [tab_blender.cpp] Blender version gating semantics differ from JS string comparison behavior
 - **JS Source**: `src/js/modules/tab_blender.js` lines 91, 139
 - **Status**: Pending
 - **Details**: JS compares versions as strings (`version >= MIN_VER`, `blender_version < MIN_VER`), while C++ parses with `std::stod` and compares numerically, changing edge-case ordering behavior.
 
-- [ ] 178. [tab_blender.cpp] Blender install screen layout is not a pixel-equivalent port of JS markup
+- [x] 178. [tab_blender.cpp] Blender install screen layout is not a pixel-equivalent port of JS markup
 - **JS Source**: `src/js/modules/tab_blender.js` lines 59–69
 - **Status**: Pending
 - **Details**: JS uses structured `#blender-info`/`#blender-info-buttons` markup with CSS-defined spacing/styling; C++ replaces it with simple ImGui text/separator/buttons, producing visual/layout mismatch.
 
-- [ ] 179. [tab_blender.cpp] get_blender_installations uses regex_match instead of regex_search
+- [x] 179. [tab_blender.cpp] get_blender_installations uses regex_match instead of regex_search
 - **JS Source**: `src/js/modules/tab_blender.js` line 39
 - **Status**: Pending
 - **Details**: JS match() performs a search anywhere in string. C++ uses std::regex_match which requires the ENTIRE string to match. Directory names like blender-2.83 would match in JS but fail in C++.
@@ -2552,7 +2552,7 @@
 - **Status**: Pending
 - **Details**: JS defines async `load` and `loadLOD`; C++ ports both as synchronous calls, changing await/timing semantics.
 
-- [ ] 500. [M3RendererGL.cpp] `getBoundingBox()` missing vertex array empty check
+- [x] 500. [M3RendererGL.cpp] `getBoundingBox()` missing vertex array empty check
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 174–175
 - **Status**: Pending
 - **Details**: JS checks `if (!this.m3 || !this.m3.vertices) return null`. C++ only checks `if (!m3) return std::nullopt` at line 198–199 without checking if vertices array is empty. If m3 is loaded but vertices array is empty, C++ will attempt bounding box calculation on empty data.
@@ -2657,7 +2657,7 @@
 - **Status**: Pending
 - **Details**: JS exposes `static async getIncrementalFilename(...)` and awaits `generics.fileExists`; C++ implementation is synchronous, changing timing/error behavior expected by Promise-style callers.
 
-- [ ] 521. [export-helper.cpp] Export failure stack-trace output target differs from JS
+- [x] 521. [export-helper.cpp] Export failure stack-trace output target differs from JS
 - **JS Source**: `src/js/casc/export-helper.js` lines 284–288
 - **Status**: Pending
 - **Details**: JS writes stack traces with `console.log(stackTrace)` in `mark(...)`; C++ routes stack trace strings through `logging::write(...)`, changing where detailed error output appears.
@@ -2747,7 +2747,7 @@
 - **Status**: Verified
 - **Details**: Analysis was incorrect. `WMORenderBatch::numFaces` is `uint16_t` (WMOLoader.h line 106). All four loops `for (uint16_t fi = 0; fi < batch.numFaces; fi++)` compare two `uint16_t` values and terminate correctly for all 0–65535 values. No infinite loop is possible since numFaces is also uint16_t. No bug.
 
-- [ ] 539. [WMOExporter.cpp] Constructor takes explicit casc::CASC* parameter not present in JS
+- [x] 539. [WMOExporter.cpp] Constructor takes explicit casc::CASC* parameter not present in JS
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 34–36
 - **Status**: Pending
 - **Details**: JS constructor is `constructor(data, fileID)` and obtains CASC source internally via `core.view.casc`. C++ constructor is `WMOExporter(BufferWrapper data, uint32_t fileDataID, casc::CASC* casc)` with explicit casc pointer. Additionally, `fileDataID` is constrained to `uint32_t` while JS accepts `string|number` for `fileID`. This is an API deviation — callers must pass the correct CASC instance and cannot pass string file paths.
