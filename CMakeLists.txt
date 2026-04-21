@@ -226,17 +226,23 @@ add_subdirectory(extern/spdlog EXCLUDE_FROM_ALL)
 
 # ── mbedTLS (bundled crypto — MD hash API only, not used for TLS) ──
 # Used by buffer.cpp and generics.cpp for MD5/SHA1/SHA256.
-# TLS/HTTPS is handled by OpenSSL (prebuilt binaries) instead.
+# TLS/HTTPS is handled by OpenSSL (prebuilt on Windows, system on Linux).
 set(ENABLE_PROGRAMS        OFF CACHE BOOL "" FORCE)
 set(ENABLE_TESTING         OFF CACHE BOOL "" FORCE)
 set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
 add_subdirectory(extern/mbedtls EXCLUDE_FROM_ALL)
 
-# ── OpenSSL (prebuilt x64-windows binaries, committed to repo) ────────────────
-add_subdirectory(extern/openssl-prebuilt EXCLUDE_FROM_ALL)
+# ── OpenSSL for HTTPS ─────────────────────────────────────────────────────────
+# On Windows: use our committed prebuilt x64 DLLs (no system package needed).
+# On Linux: use the system OpenSSL (libssl-dev must be installed).
+if(WIN32)
+    add_subdirectory(extern/openssl-prebuilt EXCLUDE_FROM_ALL)
+else()
+    find_package(OpenSSL REQUIRED)
+endif()
 
 # ── cpp-httplib (HTTP client/server, header-only) ─────────────
-# Enable HTTPS/TLS via the prebuilt OpenSSL above.
+# Enable HTTPS/TLS via OpenSSL (prebuilt on Windows, system on Linux).
 set(HTTPLIB_COMPILE OFF CACHE BOOL "" FORCE)
 set(HTTPLIB_TEST    OFF CACHE BOOL "" FORCE)
 set(HTTPLIB_INSTALL OFF CACHE BOOL "" FORCE)
