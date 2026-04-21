@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 179/578 verified (31%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 186/578 verified (32%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -2567,37 +2567,37 @@
 - **Status**: Pending
 - **Details**: JS uses async `load`, `_load_textures`, and `playAnimation`; C++ ports these paths synchronously, changing asynchronous control flow and failure timing.
 
-- [ ] 503. [MDXRendererGL.cpp] Skeleton node flattening changes JS undefined/NaN behavior for `objectId`
+- [x] 503. [MDXRendererGL.cpp] Skeleton node flattening changes JS undefined/NaN behavior for `objectId`
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 256–264
 - **Status**: Pending
 - **Details**: JS compares raw `nodes[i].objectId` and can propagate undefined/NaN semantics. C++ uses `std::optional<int>` checks and skips undefined IDs, which changes edge-case matrix-index behavior from JS.
 
-- [ ] 504. [MDXRendererGL.cpp] Reactive watchers not set up — `geosetWatcher` and `wireframeWatcher` completely missing
+- [x] 504. [MDXRendererGL.cpp] Reactive watchers not set up — `geosetWatcher` and `wireframeWatcher` completely missing
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 187–188
 - **Status**: Pending
 - **Details**: JS `load()` sets up Vue watchers: `this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true })` and `this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true })`. C++ completely omits these watchers. Comment at lines 228–229 states "polling is handled in render()." but no polling code exists.
 
-- [ ] 505. [MDXRendererGL.cpp] `dispose()` missing watcher cleanup calls
+- [x] 505. [MDXRendererGL.cpp] `dispose()` missing watcher cleanup calls
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 780–781
 - **Status**: Pending
 - **Details**: JS `dispose()` calls `this.geosetWatcher?.()` and `this.wireframeWatcher?.()`. C++ has no equivalent cleanup because watchers were never created.
 
-- [ ] 506. [MDXRendererGL.cpp] `_create_skeleton()` doesn't initialize `node_matrices` to identity when nodes are empty
+- [x] 506. [MDXRendererGL.cpp] `_create_skeleton()` doesn't initialize `node_matrices` to identity when nodes are empty
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 252
 - **Status**: Pending
 - **Details**: JS sets `this.node_matrices = new Float32Array(16)` which creates a zero-filled 16-element array (single identity-sized buffer). C++ does `node_matrices.resize(16)` at line 313 which leaves elements uninitialized. Should zero-initialize or set to identity to match JS behavior.
 
-- [ ] 507. [MDXRendererGL.cpp] `u_time` uniform calculation uses relative time instead of `performance.now()`
+- [x] 507. [MDXRendererGL.cpp] `u_time` uniform calculation uses relative time instead of `performance.now()`
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 681
 - **Status**: Pending
 - **Details**: Same issue as other renderers — C++ uses elapsed time from first render call instead of `performance.now() * 0.001`.
 
-- [ ] 508. [MDXRendererGL.cpp] Interpolation constants `INTERP_NONE/LINEAR/HERMITE/BEZIER` defined but never used in either JS or C++
+- [x] 508. [MDXRendererGL.cpp] Interpolation constants `INTERP_NONE/LINEAR/HERMITE/BEZIER` defined but never used in either JS or C++
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 27–30
 - **Status**: Pending
 - **Details**: Both files define `INTERP_NONE=0`, `INTERP_LINEAR=1`, `INTERP_HERMITE=2`, `INTERP_BEZIER=3` but neither uses them. The `_sample_vec3()` and `_sample_quat()` methods only implement linear interpolation (lerp/slerp), never checking interpolation type. Hermite and Bezier interpolation are not implemented in either codebase.
 
-- [ ] 509. [MDXRendererGL.cpp] `_build_geometry()` VAO setup passes 5 params instead of 6 — JS passes `null` as 6th parameter
+- [x] 509. [MDXRendererGL.cpp] `_build_geometry()` VAO setup passes 5 params instead of 6 — JS passes `null` as 6th parameter
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 368
 - **Status**: Pending
 - **Details**: JS calls `vao.setup_m2_separate_buffers(vbo, nbo, uvo, bibo, bwbo, null)` with 6 parameters (last is null for index buffer). C++ calls `vao->setup_m2_separate_buffers(vbo, nbo, uvo, bibo, bwbo)` with only 5 parameters. The 6th parameter (index/element buffer) is missing in C++.
