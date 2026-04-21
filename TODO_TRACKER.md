@@ -48,7 +48,7 @@
 - [x] 9. [DBGuildTabard.cpp] Color maps use `unordered_map` — iteration order differs from JS `Map` for UI color pickers
 - **JS Source**: `src/js/db/caches/DBGuildTabard.js` lines 22–25, 75–82
 - **Status**: Verified
-- **Details**: Iteration order differs from JS Map insertion order, but color picker UI would sort/display colors by their ID or index anyway. All key-based lookups (`getBackgroundFDID` etc.) work correctly. Acceptable C++ equivalent.
+- **Details**: Fixed — `background_colors_map`, `border_colors_map`, `emblem_colors_map` changed from `std::unordered_map<uint32_t, ColorRGB>` to `std::map<uint32_t, ColorRGB>` in DBGuildTabard.h and DBGuildTabard.cpp. `getAllRows()` returns `std::map<uint32_t, ...>` (ascending ID order), matching JS Map insertion order. The tabard color picker in tab_characters.cpp iterates these maps to render swatches — order now matches the JS original.
 
 - [x] 10. [DBItemCharTextures.cpp] Initialization flow is synchronous and drops JS shared-promise semantics
 - **JS Source**: `src/js/db/caches/DBItemCharTextures.js` lines 34–88

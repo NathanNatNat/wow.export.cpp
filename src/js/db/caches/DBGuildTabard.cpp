@@ -47,10 +47,10 @@ static std::unordered_map<std::string, uint32_t> border_map;
 // component-emblemID-color -> FileDataID
 static std::unordered_map<std::string, uint32_t> emblem_map;
 
-// color_id -> { r, g, b }
-static std::unordered_map<uint32_t, ColorRGB> background_colors_map;
-static std::unordered_map<uint32_t, ColorRGB> border_colors_map;
-static std::unordered_map<uint32_t, ColorRGB> emblem_colors_map;
+// color_id -> { r, g, b }  (std::map preserves ascending-ID iteration order, matching JS Map insertion order)
+static std::map<uint32_t, ColorRGB> background_colors_map;
+static std::map<uint32_t, ColorRGB> border_colors_map;
+static std::map<uint32_t, ColorRGB> emblem_colors_map;
 
 static int background_color_count = 0;
 static int border_style_counts[3] = {0, 0, 0}; // per tier
@@ -184,15 +184,15 @@ int getEmblemColorCount() {
 	return emblem_color_count;
 }
 
-const std::unordered_map<uint32_t, ColorRGB>& getBackgroundColors() {
+const std::map<uint32_t, ColorRGB>& getBackgroundColors() {
 	return background_colors_map;
 }
 
-const std::unordered_map<uint32_t, ColorRGB>& getBorderColors() {
+const std::map<uint32_t, ColorRGB>& getBorderColors() {
 	return border_colors_map;
 }
 
-const std::unordered_map<uint32_t, ColorRGB>& getEmblemColors() {
+const std::map<uint32_t, ColorRGB>& getEmblemColors() {
 	return emblem_colors_map;
 }
 
