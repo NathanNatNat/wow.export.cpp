@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 251/578 verified (43%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 260/578 verified (45%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -2482,25 +2482,25 @@
 - **Status**: Pending
 - **Details**: JS `export()` is asynchronous and yields between CASC/file operations; C++ `exportTile()` performs the flow synchronously, changing timing/cancellation behavior relative to the original async path.
 
-- [ ] 486. [ADTExporter.cpp] Scale factor check `!= 0` instead of `!== undefined` changes behavior for scale=0
+- [x] 486. [ADTExporter.cpp] Scale factor check `!= 0` instead of `!== undefined` changes behavior for scale=0
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1270
-- **Status**: Pending
-- **Details**: JS checks `model.scale !== undefined ? model.scale / 1024 : 1`. C++ (ADTExporter.cpp ~line 1521) checks `model.scale != 0 ? model.scale / 1024.0f : 1.0f`. In JS, a `scale` of `0` would produce `0 / 1024 = 0` (a valid zero-scale value). In C++, a `scale` of `0` triggers the else branch and returns `1.0f`. This is a behavioral difference — a model with scale=0 would be invisible in JS but normal-sized in C++, affecting M2 doodad CSV export and placement transforms.
+- **Status**: Verified
+- **Details**: Fixed. Binary models (ADTModelEntry/ADTWorldModelEntry) now unconditionally compute `scale / 1024.0f`, matching JS where `scale !== undefined` is always true for binary data. ADTGameObject keeps the `!= 0.0f` guard since its default `0.0f` represents JS `undefined`.
 
-- [ ] 487. [ADTExporter.cpp] GL index buffer uses GL_UNSIGNED_INT (uint32) instead of JS GL_UNSIGNED_SHORT (uint16)
+- [x] 487. [ADTExporter.cpp] GL index buffer uses GL_UNSIGNED_INT (uint32) instead of JS GL_UNSIGNED_SHORT (uint16)
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1117–1118
-- **Status**: Pending
-- **Details**: JS creates `new Uint16Array(indices)` and uses `gl.UNSIGNED_SHORT` for the index element buffer when rendering alpha map tiles. C++ (ADTExporter.cpp ~lines 1327–1328) uses `sizeof(uint32_t)` and `GL_UNSIGNED_INT`. For the 16×16×145 = 37120 vertex terrain grid the indices fit in uint16, so both work, but the GPU draws with different index types. This is a minor fidelity deviation in the GL pipeline even though the visual output is identical.
+- **Status**: Verified
+- **Details**: Fixed. Added conversion from `std::vector<uint32_t>` to `std::vector<uint16_t>` before the `glBufferData` call, and changed `GL_UNSIGNED_INT` to `GL_UNSIGNED_SHORT`, matching JS `new Uint16Array(indices)` + `gl.UNSIGNED_SHORT`.
 
-- [ ] 488. [ADTExporter.cpp] Liquid JSON serialization uses explicit fields instead of JS spread operator
+- [x] 488. [ADTExporter.cpp] Liquid JSON serialization uses explicit fields instead of JS spread operator
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1428–1438
-- **Status**: Pending
-- **Details**: JS uses `{ ...chunk, instances: enhancedInstances }` and `{ ...instance, worldPosition, terrainChunkPosition }` which copies *all* fields from the chunk/instance objects via the spread operator. C++ (ADTExporter.cpp ~lines 1744–1780) manually enumerates specific fields for JSON serialization. If the ADTLoader's liquid chunk or instance structs have any additional fields not listed in the C++ serialization, those fields would appear in the JS JSON output but be missing in the C++ output. This is a fragile pattern that could silently omit data if new fields are added to the loader structs.
+- **Status**: Verified
+- **Details**: Verified that all fields of `LiquidInstance` (chunkIndex, instanceIndex, liquidType, liquidObject, minHeightLevel, maxHeightLevel, xOffset, yOffset, width, height, offsetExistsBitmap, offsetVertexData, bitmap, vertexData) and `LiquidChunk` (attributes, instances) are explicitly serialized, matching JS spread output. Added comments noting the fragility of manual enumeration vs. the JS spread operator.
 
-- [ ] 489. [ADTExporter.cpp] STB_IMAGE_RESIZE_IMPLEMENTATION defined at file scope risks ODR violation
+- [x] 489. [ADTExporter.cpp] STB_IMAGE_RESIZE_IMPLEMENTATION defined at file scope risks ODR violation
 - **JS Source**: N/A (C++ build concern)
-- **Status**: Pending
-- **Details**: ADTExporter.cpp (line 10) defines `#define STB_IMAGE_RESIZE_IMPLEMENTATION` before including `<stb_image_resize2.h>`. If any other translation unit in the project also defines this macro, the linker will encounter duplicate symbol definitions (ODR violation). STB implementation macros should typically be isolated in a single dedicated .cpp file (like stb-impl.cpp already exists for stb_image/stb_image_write) to avoid this risk.
+- **Status**: Verified
+- **Details**: Fixed. Moved `#define STB_IMAGE_RESIZE_IMPLEMENTATION` from ADTExporter.cpp into stb-impl.cpp alongside the existing `STB_IMAGE_IMPLEMENTATION` define. ADTExporter.cpp now includes `<stb_image_resize2.h>` without the define.
 
 - [ ] 490. [WMOShaderMapper.cpp] Pixel shader enum naming deviates from JS export contract
 - **JS Source**: `src/js/3D/WMOShaderMapper.js` lines 35, 90, 94
@@ -2512,30 +2512,30 @@
 - **Status**: Pending
 - **Details**: JS defines `init`, `reset`, `setTextureTarget`, `loadTexture`, `loadTextureFromBLP`, `compileShaders`, and `update` as async/await flows. C++ ports these methods synchronously, changing timing/error-propagation behavior expected by async call sites.
 
-- [ ] 492. [CharMaterialRenderer.cpp] `getCanvas()` method missing — JS returns `this.glCanvas` for external use
+- [x] 492. [CharMaterialRenderer.cpp] `getCanvas()` method missing — JS returns `this.glCanvas` for external use
 - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 55–59
-- **Status**: Pending
-- **Details**: JS `getCanvas()` returns the canvas element so external code can access the rendered character material texture. C++ has no equivalent method. Any code that calls `getCanvas()` will fail.
+- **Status**: Verified
+- **Details**: Already implemented. `getCanvas()` is declared inline in CharMaterialRenderer.h returning `fbo_texture_` (the FBO color-attachment texture ID), which is the C++ equivalent of the JS canvas element.
 
-- [ ] 493. [CharMaterialRenderer.cpp] `update()` draw call placement differs — C++ draws inside blend-mode conditional instead of after it
+- [x] 493. [CharMaterialRenderer.cpp] `update()` draw call placement differs — C++ draws inside blend-mode conditional instead of after it
 - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 382–417
-- **Status**: Pending
-- **Details**: JS draws ONCE per layer at line 417 (`this.gl.drawArrays(this.gl.TRIANGLES, 0, 6)`) OUTSIDE the blend-mode 4/6/7 if block. C++ has the draw call INSIDE the if block (for blend modes 4/6/7) at line ~534 AND inside the else block at line ~543. This means the draw happens in both branches but the pre-draw setup is different, which could lead to incorrect rendering for certain blend modes.
+- **Status**: Verified
+- **Details**: Fixed. Restructured `update()` to match JS structure: `canvasTexture` is declared before the if block, the if block sets up the canvas texture (no draw inside), and a single `glDrawArrays` call follows the if block. Canvas texture cleanup is deferred until after the draw (using `if (canvasTexture)` guard).
 
-- [ ] 494. [CharMaterialRenderer.cpp] `setTextureTarget()` signature completely changed — JS takes full objects, C++ takes individual scalar parameters
+- [x] 494. [CharMaterialRenderer.cpp] `setTextureTarget()` signature completely changed — JS takes full objects, C++ takes individual scalar parameters
 - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 114–144
-- **Status**: Pending
-- **Details**: JS signature is `setTextureTarget(chrCustomizationMaterial, charComponentTextureSection, chrModelMaterial, chrModelTextureLayer, useAlpha, blpOverride)` receiving full objects. C++ takes individual fields: `setTextureTarget(chrModelTextureTargetID, fileDataID, sectionX, sectionY, sectionWidth, sectionHeight, materialTextureType, materialWidth, materialHeight, textureLayerBlendMode, useAlpha, blpOverride)`. If JS objects contain additional fields used downstream, C++ will lose them.
+- **Status**: Verified
+- **Details**: Fixed. Expanded `TextureSectionInput` to add `SectionType`, `OverlapSectionMask`; `ModelMaterialInput` to add `Flags`, `Unk`; `TextureLayerInput` to add `TextureType`, `Layer`, `Flags`, `TextureSectionTypeBitMask`, `TextureSectionTypeBitMask2`. The struct-based `setTextureTarget` overload now directly builds `CharTextureTarget` with all fields populated (no longer delegates to the scalar overload), matching JS which stores full objects.
 
-- [ ] 495. [CharMaterialRenderer.cpp] `clearCanvas()` binds/unbinds FBO in C++ but JS does not
+- [x] 495. [CharMaterialRenderer.cpp] `clearCanvas()` binds/unbinds FBO in C++ but JS does not
 - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 218–225
-- **Status**: Pending
-- **Details**: JS `clearCanvas()` operates on the current WebGL framebuffer (the canvas) without explicit bind/unbind. C++ explicitly binds `fbo_` before clearing and unbinds after. This is architecturally correct for desktop GL but represents a behavioral difference if called while another FBO is bound.
+- **Status**: Verified
+- **Details**: Fixed. `clearCanvas()` now saves the previous FBO binding with `glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO)` and restores it after clearing. This makes `clearCanvas()` transparent to callers with a different FBO bound, matching JS behavior where the WebGL canvas is always the target without changing any other state.
 
-- [ ] 496. [CharMaterialRenderer.cpp] `dispose()` missing WebGL context loss equivalent
+- [x] 496. [CharMaterialRenderer.cpp] `dispose()` missing WebGL context loss equivalent
 - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` line 160
-- **Status**: Pending
-- **Details**: JS calls `gl.getExtension('WEBGL_lose_context').loseContext()` to invalidate all WebGL resources at once. C++ manually deletes each GL resource individually (FBO, textures, depth buffer, VAO). The C++ approach is correct for desktop GL but the order and completeness of cleanup should be verified.
+- **Status**: Verified
+- **Details**: Verified. Desktop GL has no `loseContext()` equivalent; instead all GL objects are deleted explicitly in dependency order (layer textures → shader program → FBO color texture → depth renderbuffer → FBO → VAO). Order and completeness verified against JS `dispose()`. Added comment explaining the desktop GL approach.
 
 - [ ] 497. [CharacterExporter.cpp] `get_item_id_for_slot` does not preserve JS falsy fallback semantics
 - **JS Source**: `src/js/3D/exporters/CharacterExporter.js` lines 342–345
