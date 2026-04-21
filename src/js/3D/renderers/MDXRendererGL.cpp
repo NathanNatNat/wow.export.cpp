@@ -128,6 +128,9 @@ static void quat_slerp(float* out, float ax, float ay, float az, float aw, float
 	out[3] = scale0 * aw + scale1 * bw;
 }
 
+// JS: performance.now() baseline — initialized at module load time (same as JS page load)
+static const auto MDX_PERFORMANCE_BASELINE = std::chrono::steady_clock::now();
+
 // -----------------------------------------------------------------------
 // -----------------------------------------------------------------------
 static std::array<float, 3> anim_value_to_vec3(const MDXAnimValue& val) {
@@ -228,8 +231,14 @@ void MDXRendererGL::load() {
 			j["id"] = entry.id;
 			core::view->modelViewerGeosets.push_back(j);
 		}
-		// NOTE: Vue $watch for geosets and wireframe cannot be implemented in C++;
-		// polling is handled in render() via updateGeosets() checks.
+		// JS: this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true })
+		// JS: this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true })
+		// C++: initialize polling baseline after populating core::view->modelViewerGeosets
+		auto& geosets = core::view->modelViewerGeosets;
+		watcher_geoset_checked.resize(geosets.size());
+		for (size_t i = 0; i < geosets.size(); i++)
+			watcher_geoset_checked[i] = geosets[i].value("checked", false);
+		watcher_state_initialized = true;
 	}
 
 	data_ptr = nullptr;
@@ -717,11 +726,24 @@ std::array<float, 4> MDXRendererGL::_sample_quat(const MDXAnimVector& track, flo
 // -----------------------------------------------------------------------
 
 void MDXRendererGL::updateGeosets() {
-	if (!reactive || geosetArray.empty() || draw_calls.empty())
+	if (!reactive || draw_calls.empty())
 		return;
 
-	for (size_t i = 0; i < draw_calls.size() && i < geosetArray.size(); i++)
-		draw_calls[i].visible = geosetArray[i].checked;
+	// JS: this.geosetArray is the same reference as core.view[this.geosetKey].
+	// C++: read checked state from core::view->modelViewerGeosets (the UI-facing array) and
+	//      sync it back into geosetArray so both stay in agreement.
+	auto& geosets = core::view->modelViewerGeosets;
+	const bool has_view_geosets = !geosets.empty();
+	const size_t source_size = has_view_geosets ? geosets.size() : geosetArray.size();
+
+	for (size_t i = 0; i < source_size && i < draw_calls.size(); i++) {
+		const bool checked = has_view_geosets
+			? geosets[i].value("checked", (i < geosetArray.size() ? geosetArray[i].checked : false))
+			: geosetArray[i].checked;
+		if (i < geosetArray.size())
+			geosetArray[i].checked = checked;
+		draw_calls[i].visible = checked;
+	}
 }
 
 // -----------------------------------------------------------------------
@@ -811,6 +833,27 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 	if (!shader || draw_calls.empty())
 		return;
 
+	// JS: geosetWatcher — poll core::view->modelViewerGeosets for checked state changes
+	if (reactive) {
+		auto& geosets = core::view->modelViewerGeosets;
+		bool geosets_changed = !watcher_state_initialized || geosets.size() != watcher_geoset_checked.size();
+		if (!geosets_changed) {
+			for (size_t i = 0; i < geosets.size(); i++) {
+				if (geosets[i].value("checked", false) != watcher_geoset_checked[i]) {
+					geosets_changed = true;
+					break;
+				}
+			}
+		}
+		if (geosets_changed) {
+			updateGeosets();
+			watcher_geoset_checked.resize(geosets.size());
+			for (size_t i = 0; i < geosets.size(); i++)
+				watcher_geoset_checked[i] = geosets[i].value("checked", false);
+		}
+		watcher_state_initialized = true;
+	}
+
 	const bool wireframe = core::view->config.value("modelViewerWireframe", false);
 
 	shader->use();
@@ -821,10 +864,8 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 	shader->set_uniform_3f("u_view_up", 0, 1, 0);
 
 	// JS: performance.now() * 0.001 — seconds since page load.
-	// Use static start time for small-valued monotonic floats, avoiding epoch precision loss.
-	static const auto s_render_start = std::chrono::steady_clock::now();
-	auto now = std::chrono::steady_clock::now();
-	float time_sec = std::chrono::duration<float>(now - s_render_start).count();
+	// C++: use module-level baseline (initialized at startup) matching JS performance.now() semantics.
+	float time_sec = std::chrono::duration<float>(std::chrono::steady_clock::now() - MDX_PERFORMANCE_BASELINE).count();
 	shader->set_uniform_1f("u_time", time_sec);
 
 	// bone matrices (mdx uses node-based skeleton) — upload via SSBO
@@ -942,6 +983,10 @@ std::optional<MDXRendererGL::BoundingBoxResult> MDXRendererGL::getBoundingBox() 
 // -----------------------------------------------------------------------
 
 void MDXRendererGL::dispose() {
+	// JS: this.geosetWatcher?.() and this.wireframeWatcher?.()
+	// C++: reset polling state (equivalent of unregistering the Vue watchers)
+	watcher_geoset_checked.clear();
+	watcher_state_initialized = false;
 
 	for (auto& vao : vaos)
 		vao->dispose();

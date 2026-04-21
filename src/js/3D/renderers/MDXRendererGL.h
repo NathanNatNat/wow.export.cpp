@@ -138,6 +138,10 @@ private:
 	std::string geosetKey = "modelViewerGeosets";
 	std::vector<MDXGeosetEntry> geosetArray;
 
+	// polling watcher state (C++ equivalent of JS Vue $watch)
+	std::vector<bool> watcher_geoset_checked;
+	bool watcher_state_initialized = false;
+
 	// transforms
 	std::array<float, 16> model_matrix;
 	std::array<float, 3> position = {0, 0, 0};
