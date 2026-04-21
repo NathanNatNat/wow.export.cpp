@@ -522,7 +522,8 @@ void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
  * Export 3D preview as PNG (to disk) or to clipboard.
  */
 bool export_preview(const std::string& format, gl::GLContext& ctx,
-	const std::string& export_name, const std::string& export_subdir)
+	const std::string& export_name, const std::string& export_subdir,
+	FileWriter* export_paths)
 {
 	core::setToast("progress", "Saving preview, hold on...", {}, -1, false);
 
@@ -546,10 +547,11 @@ bool export_preview(const std::string& format, gl::GLContext& ctx,
 	BufferWrapper buf = png_writer.getBuffer();
 
 	if (format == "PNG") {
-		// JS: const export_paths = core.openLastExportStream(); with optional chaining (?.)
-		// C++: FileWriter is a value type — always valid. core::openLastExportStream() creates
-		// the file; if it fails, the stream methods are no-ops (ofstream in failed state).
-		FileWriter export_paths = core::openLastExportStream();
+		std::optional<FileWriter> standalone_export_paths;
+		if (!export_paths) {
+			standalone_export_paths.emplace(core::openLastExportStream());
+			export_paths = &standalone_export_paths.value();
+		}
 
 		const std::string base_path = export_subdir.empty()
 			? export_name
@@ -563,8 +565,9 @@ bool export_preview(const std::string& format, gl::GLContext& ctx,
 		const std::string out_dir = fs::path(out_file).parent_path().string();
 
 		buf.writeToFile(fs::path(out_file));
-		export_paths.writeLine("PNG:" + out_file);
-		export_paths.close();
+		export_paths->writeLine("PNG:" + out_file);
+		if (standalone_export_paths.has_value())
+			export_paths->close();
 
 		logging::write(std::format("Saved 3D preview screenshot to {}", out_file));
 		core::setToast("success",

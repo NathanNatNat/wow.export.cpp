@@ -21,6 +21,7 @@
 #include "../ui/listbox-context.h"
 #include "../components/listbox.h"
 #include "../components/context-menu.h"
+#include "../components/menu-button.h"
 #include "../install-type.h"
 #include "../modules.h"
 #include "../../app.h"
@@ -41,6 +42,10 @@
 #include <spdlog/spdlog.h>
 
 namespace tab_textures {
+
+static std::optional<std::string> build_stack_trace(const char* function_name, const std::exception& e) {
+	return std::format("{}: {}", function_name, e.what());
+}
 
 static uint32_t fieldToUint32(const db::FieldValue& val) {
 	if (auto* p = std::get_if<int64_t>(&val))
@@ -107,10 +112,13 @@ static bool prev_export_texture_alpha = false;
 static bool prev_show_texture_atlas = false;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
+static menu_button::MenuButtonState menu_button_textures_state;
 
 // Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
+static std::vector<std::string> s_override_cache;
+static size_t s_override_cache_size = ~size_t(0);
 // Deletes the previous texture if old_tex != 0.
 static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t old_tex = 0) {
 	if (old_tex != 0) {
@@ -159,10 +167,11 @@ static void update_texture_atlas_overlay() {
 			core::view->textureAtlasOverlayRegions.clear();
 			for (auto& r : render_regions)
 				core::view->textureAtlasOverlayRegions.push_back(std::move(r));
+			return;
 		}
-	} else {
-		core::view->textureAtlasOverlayRegions.clear();
 	}
+
+	core::view->textureAtlasOverlayRegions.clear();
 }
 
 // --- Async texture preview (follows tab_models pattern) ---
@@ -443,7 +452,7 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 			helper.mark(export_file_name, true);
 		}
 	} catch (const std::exception& e) {
-		helper.mark(export_file_name, false, e.what());
+		helper.mark(export_file_name, false, e.what(), build_stack_trace("export_texture_atlas_regions", e));
 	}
 
 	helper.finish();
@@ -507,8 +516,8 @@ void mounted() {
 
 	core::registerDropHandler({
 		{".blp"},
-		[&view]() -> std::string {
-			return std::format("Export textures as {}", view.config.value("exportTextureFormat", std::string("PNG")));
+		[&view](int count) -> std::string {
+			return std::format("Export {} textures as {}", count, view.config.value("exportTextureFormat", std::string("PNG")));
 		},
 		[](const std::vector<std::string>& files) {
 			// JS: process: files => textureExporter.exportFiles(files, true)
@@ -623,7 +632,7 @@ void render() {
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
 			"texture", // unittype
-			nullptr, // overrideItems
+			view.overrideTextureList.empty() ? nullptr : &core::cached_json_strings(view.overrideTextureList, s_override_cache, s_override_cache_size),
 			false,   // disable
 			"textures", // persistscrollkey
 			{},      // quickfilters
@@ -699,30 +708,46 @@ void render() {
 		// Channel mask toggles.
 		if (!view.texturePreviewURL.empty()) {
 			int mask = view.config.value("exportChannelMask", 0b1111);
+			struct ChannelChip {
+				const char* id;
+				const char* label;
+				int bit;
+				const char* tooltip;
+				ImVec4 border;
+				ImVec4 selected;
+				ImVec4 text;
+			};
+			static const ChannelChip channels[] = {
+				{"channel-red", "R", 0b0001, "Toggle red colour channel.", ImVec4(0.55f, 0.10f, 0.10f, 1.0f), ImVec4(0.75f, 0.18f, 0.18f, 1.0f), ImVec4(1.0f, 0.92f, 0.92f, 1.0f)},
+				{"channel-green", "G", 0b0010, "Toggle green colour channel.", ImVec4(0.10f, 0.45f, 0.10f, 1.0f), ImVec4(0.18f, 0.60f, 0.18f, 1.0f), ImVec4(0.92f, 1.0f, 0.92f, 1.0f)},
+				{"channel-blue", "B", 0b0100, "Toggle blue colour channel.", ImVec4(0.10f, 0.20f, 0.55f, 1.0f), ImVec4(0.18f, 0.30f, 0.75f, 1.0f), ImVec4(0.92f, 0.95f, 1.0f, 1.0f)},
+				{"channel-alpha", "A", 0b1000, "Toggle alpha channel.", ImVec4(0.45f, 0.45f, 0.45f, 1.0f), ImVec4(0.70f, 0.70f, 0.70f, 1.0f), ImVec4(1.0f, 1.0f, 1.0f, 1.0f)}
+			};
+			const size_t channel_count = sizeof(channels) / sizeof(channels[0]);
 
-			bool r = (mask & 0b0001) != 0;
-			bool g = (mask & 0b0010) != 0;
-			bool b = (mask & 0b0100) != 0;
-			bool a = (mask & 0b1000) != 0;
-
-			ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(1, 0, 0, 1));
-			if (ImGui::Checkbox("R", &r)) { mask ^= 0b0001; view.config["exportChannelMask"] = mask; }
-			ImGui::PopStyleColor();
-			ImGui::SameLine();
-
-			ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0, 1, 0, 1));
-			if (ImGui::Checkbox("G", &g)) { mask ^= 0b0010; view.config["exportChannelMask"] = mask; }
-			ImGui::PopStyleColor();
-			ImGui::SameLine();
-
-			ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.3f, 0.3f, 1, 1));
-			if (ImGui::Checkbox("B", &b)) { mask ^= 0b0100; view.config["exportChannelMask"] = mask; }
-			ImGui::PopStyleColor();
-			ImGui::SameLine();
-
-			ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(1, 1, 1, 1));
-			if (ImGui::Checkbox("A", &a)) { mask ^= 0b1000; view.config["exportChannelMask"] = mask; }
-			ImGui::PopStyleColor();
+			for (size_t i = 0; i < channel_count; ++i) {
+				const auto& channel = channels[i];
+				const bool selected = (mask & channel.bit) != 0;
+				ImGui::PushID(channel.id);
+				ImGui::PushStyleColor(ImGuiCol_Button, selected ? channel.selected : ImVec4(0.16f, 0.16f, 0.16f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, selected ? channel.selected : ImVec4(0.22f, 0.22f, 0.22f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonActive, channel.selected);
+				ImGui::PushStyleColor(ImGuiCol_Border, channel.border);
+				ImGui::PushStyleColor(ImGuiCol_Text, channel.text);
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+				if (ImGui::Button(channel.label, ImVec2(28.0f, 24.0f))) {
+					mask ^= channel.bit;
+					view.config["exportChannelMask"] = mask;
+				}
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("%s", channel.tooltip);
+				ImGui::PopStyleVar(2);
+				ImGui::PopStyleColor(5);
+				ImGui::PopID();
+				if (i + 1 < channel_count)
+					ImGui::SameLine();
+			}
 		}
 
 		if (view.texturePreviewTexID != 0) {
@@ -766,7 +791,24 @@ void render() {
 
 					draw_list->AddRect(rect_min, rect_max, IM_COL32(255, 255, 0, 200), 0.0f, 0, 1.0f);
 					const std::string name = region["name"].get<std::string>();
-					draw_list->AddText(ImVec2(rect_min.x + 2, rect_min.y + 1), IM_COL32(255, 255, 0, 255), name.c_str());
+
+					if (ImGui::IsMouseHoveringRect(rect_min, rect_max)) {
+						const ImVec2 mouse = ImGui::GetIO().MousePos;
+						const float rel_x = mouse.x - rect_min.x;
+						const float rel_y = mouse.y - rect_min.y;
+						const bool is_bottom = rel_y > ((rect_max.y - rect_min.y) * 0.5f);
+						const bool is_right = rel_x > ((rect_max.x - rect_min.x) * 0.5f);
+						const ImVec2 tooltip_pos = is_bottom
+							? (is_right ? rect_max : ImVec2(rect_min.x, rect_max.y))
+							: (is_right ? ImVec2(rect_max.x, rect_min.y) : rect_min);
+						const ImVec2 pivot = is_bottom
+							? (is_right ? ImVec2(1.0f, 1.0f) : ImVec2(0.0f, 1.0f))
+							: (is_right ? ImVec2(1.0f, 0.0f) : ImVec2(0.0f, 0.0f));
+						ImGui::SetNextWindowPos(tooltip_pos, ImGuiCond_Always, pivot);
+						ImGui::BeginTooltip();
+						ImGui::TextUnformatted(name.c_str());
+						ImGui::EndTooltip();
+					}
 				}
 			}
 		} else if (!view.texturePreviewURL.empty()) {
@@ -794,12 +836,14 @@ void render() {
 					const std::string first = casc::listfile::stripFileEntry(view.selectionTextures[0].get<std::string>());
 					const auto file_data_id_opt = casc::listfile::getByFilename(first);
 					if (file_data_id_opt.has_value()) {
-						core::view->chrCustBakedNPCTexture = file_data_id_opt.value();
+						BufferWrapper file = core::view->casc->getVirtualFileByID(file_data_id_opt.value());
+						core::view->chrCustBakedNPCTexture = std::make_shared<casc::BLPImage>(std::move(file));
 						core::setToast("success", "baked npc texture applied to character", {}, 3000);
 						logging::write(std::format("applied baked npc texture {} to character", first));
 					}
 				} catch (const std::exception& e) {
-					core::setToast("error", "failed to load baked npc texture", {}, -1);
+					core::setToast("error", "failed to load baked npc texture",
+						{ {"view log", []() { logging::openRuntimeLog(); }} }, -1);
 					logging::write(std::format("failed to load baked npc texture: {}", e.what()));
 				}
 			}
@@ -819,9 +863,14 @@ void render() {
 		{
 			const bool busy = view.isBusy > 0;
 			if (busy) app::theme::BeginDisabledButton();
-			const std::string export_format = view.config.value("exportTextureFormat", std::string("PNG"));
-			if (ImGui::Button(std::format("Export as {}", export_format).c_str()))
-				export_textures();
+			std::vector<menu_button::MenuOption> mb_options;
+			for (const auto& opt : view.menuButtonTextures)
+				mb_options.push_back({ opt.label, opt.value });
+			menu_button::render("##MenuButtonTextures", mb_options,
+				view.config.value("exportTextureFormat", std::string("PNG")),
+				busy, false, menu_button_textures_state,
+				[&](const std::string& val) { view.config["exportTextureFormat"] = val; },
+				[&]() { export_textures(); });
 			if (busy) app::theme::EndDisabledButton();
 		}
 	}

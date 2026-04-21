@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -70,6 +71,6 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id = -1);
  * This returns a generic void pointer; callers need
  * legacyModelViewerActiveType to determine actual type.
  */
-M2LegacyRendererGL* getActiveRenderer();
+std::variant<std::monostate, M2LegacyRendererGL*, MDXRendererGL*, WMOLegacyRendererGL*> getActiveRenderer();
 
 } // namespace tab_models_legacy

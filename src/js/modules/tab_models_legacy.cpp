@@ -88,6 +88,8 @@ static size_t s_items_cache_size = ~size_t(0);
 
 // Component states for CheckboxList, ListboxB, and MenuButton.
 static checkboxlist::CheckboxListState checkboxlist_legacy_geosets_state;
+static checkboxlist::CheckboxListState checkboxlist_legacy_wmo_groups_state;
+static checkboxlist::CheckboxListState checkboxlist_legacy_wmo_sets_state;
 static listboxb::ListboxBState listboxb_legacy_skins_state;
 static menu_button::MenuButtonState menu_button_legacy_models_state;
 
@@ -160,7 +162,7 @@ static void pump_legacy_preview() {
 			active_renderer_type = LegacyModelType::M2;
 		} else if (file_name_lower.ends_with(".wmo")) {
 			view.legacyModelViewerActiveType = "wmo";
-			active_renderer_wmo = std::make_unique<WMOLegacyRendererGL>(data, 0, *gl_ctx,
+			active_renderer_wmo = std::make_unique<WMOLegacyRendererGL>(data, file_name, *gl_ctx,
 				view.config.value("modelViewerShowTextures", true));
 			active_renderer_type = LegacyModelType::WMO;
 		} else {
@@ -274,11 +276,16 @@ static void pump_legacy_preview() {
 		} else {
 			core::hideToast();
 
-			if (view.legacyModelViewerAutoAdjust && viewer_context.fitCamera)
-				viewer_context.fitCamera();
+			if (view.legacyModelViewerAutoAdjust && viewer_context.fitCamera) {
+				core::postToMainThread([]() {
+					if (viewer_context.fitCamera)
+						viewer_context.fitCamera();
+				});
+			}
 		}
 	} catch (const std::exception& e) {
-		core::setToast("error", "Unable to preview model " + file_name, {}, -1);
+		core::setToast("error", "Unable to preview model " + file_name,
+			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to load legacy model: {}", e.what()));
 	}
 
@@ -377,8 +384,9 @@ static void step_animation(int delta) {
 	if (active_renderer_m2) {
 		active_renderer_m2->step_animation_frame(delta);
 		view.legacyModelViewerAnimFrame = active_renderer_m2->get_animation_frame();
+	} else if (active_renderer_mdx) {
+		view.legacyModelViewerAnimFrame = 0;
 	}
-	// MDX renderer may not support frame stepping
 }
 
 static void seek_animation(int frame) {
@@ -389,6 +397,8 @@ static void seek_animation(int frame) {
 
 	if (active_renderer_m2) {
 		active_renderer_m2->set_animation_frame(frame);
+		view.legacyModelViewerAnimFrame = frame;
+	} else if (active_renderer_mdx) {
 		view.legacyModelViewerAnimFrame = frame;
 	}
 }
@@ -402,6 +412,8 @@ static void start_scrub() {
 		view.legacyModelViewerAnimPaused = true;
 		if (active_renderer_m2)
 			active_renderer_m2->set_animation_paused(true);
+		else if (active_renderer_mdx)
+			active_renderer_mdx->set_animation_paused(true);
 	}
 }
 
@@ -412,6 +424,8 @@ static void end_scrub() {
 		view.legacyModelViewerAnimPaused = false;
 		if (active_renderer_m2)
 			active_renderer_m2->set_animation_paused(false);
+		else if (active_renderer_mdx)
+			active_renderer_mdx->set_animation_paused(false);
 	}
 }
 
@@ -539,6 +553,15 @@ struct PendingLegacyExport {
 
 static std::optional<PendingLegacyExport> pending_legacy_export;
 
+static std::optional<std::string> build_stack_trace(const char* function_name, const std::exception& e) {
+	return std::format("{}: {}", function_name, e.what());
+}
+
+static void show_tooltip_if_hovered(const char* text) {
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("%s", text);
+}
+
 // Forward declaration
 static void pump_legacy_export();
 
@@ -555,9 +578,15 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 		if (!active_path.empty()) {
 			gl::GLContext* gl_ctx = viewer_context.gl_context;
 			if (gl_ctx && viewer_state.fbo != 0) {
+				std::optional<FileWriter> export_paths_writer;
+				if (format == "PNG")
+					export_paths_writer.emplace(core::openLastExportStream());
 				glBindFramebuffer(GL_FRAMEBUFFER, viewer_state.fbo);
-				model_viewer_utils::export_preview(format, *gl_ctx, active_path);
+				model_viewer_utils::export_preview(format, *gl_ctx, active_path, "",
+					export_paths_writer.has_value() ? &export_paths_writer.value() : nullptr);
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+				if (export_paths_writer.has_value())
+					export_paths_writer->close();
 			}
 		} else {
 			core::setToast("error", "The selected export option only works for model previews. Preview something first!", {}, -1);
@@ -720,13 +749,19 @@ static void pump_legacy_export() {
 			files_json.push_back({ {"type", entry.type}, {"file", entry.file.string()} });
 		task.manifest["succeeded"].push_back({ {"file", file_name}, {"files", files_json} });
 	} catch (const std::exception& e) {
-		helper.mark(file_name, false, e.what());
+		helper.mark(file_name, false, e.what(), build_stack_trace("export_files", e));
 		task.manifest["failed"].push_back({ {"file", file_name} });
 	}
 }
 
-M2LegacyRendererGL* getActiveRenderer() {
-	return active_renderer_m2.get();
+std::variant<std::monostate, M2LegacyRendererGL*, MDXRendererGL*, WMOLegacyRendererGL*> getActiveRenderer() {
+	if (active_renderer_m2)
+		return active_renderer_m2.get();
+	if (active_renderer_mdx)
+		return active_renderer_mdx.get();
+	if (active_renderer_wmo)
+		return active_renderer_wmo.get();
+	return std::monostate{};
 }
 
 void render() {
@@ -846,14 +881,21 @@ void render() {
 				false,    // single
 				true,     // keyinput
 				view.config.value("regexFilters", false),
-				listbox::CopyMode::Default,
-				false,    // pasteselection
-				false,    // copytrimwhitespace
+				[&]() {
+					std::string cm = view.config.value("copyMode", std::string("Default"));
+					if (cm == "DIR")
+						return listbox::CopyMode::DIR;
+					if (cm == "FID")
+						return listbox::CopyMode::FID;
+					return listbox::CopyMode::Default;
+				}(),
+				view.config.value("pasteSelection", false),
+				view.config.value("removePathSpacesCopy", false),
 				"model",  // unittype
 				nullptr,  // overrideItems
 				false,    // disable
 				"legacy-models", // persistscrollkey
-				{},       // quickfilters
+				view.legacyModelQuickFilters,
 				false,    // nocopy
 				listbox_legacy_models_state,
 				[&](const std::vector<std::string>& new_sel) {
@@ -907,10 +949,31 @@ void render() {
 
 		// --- Filter bar (row 2, col 1) ---
 		if (app::layout::BeginFilterBar("legacy-models-filter", regions)) {
-			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+			bool regexEnabled = view.config.value("regexFilters", false);
+			float inputWidth = ImGui::GetContentRegionAvail().x;
+			if (regexEnabled) {
+				const char* regexLabel = "Regex Enabled";
+				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
+				float badgeWidth = ImGui::CalcTextSize(regexLabel).x + 12.0f;
+				float rightPad = 10.0f;
+				float badgeX = ImGui::GetContentRegionAvail().x - badgeWidth - rightPad;
+				inputWidth = badgeX - 5.0f;
+				ImGui::SameLine(ImGui::GetCursorPosX() + badgeX);
+				ImGui::PushStyleColor(ImGuiCol_Button, app::theme::BORDER);
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, app::theme::BORDER);
+				ImGui::PushStyleColor(ImGuiCol_ButtonActive, app::theme::BORDER);
+				ImGui::SmallButton(regexLabel);
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+				ImGui::PopStyleColor(3);
+				ImGui::PopStyleVar();
+				ImGui::SameLine(0.0f, 0.0f);
+				ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMin().x);
+			}
+			ImGui::SetNextItemWidth(inputWidth);
 			char filter_buf[256] = {};
 			std::strncpy(filter_buf, view.userInputFilterLegacyModels.c_str(), sizeof(filter_buf) - 1);
-			if (ImGui::InputText("##FilterLegacyModels", filter_buf, sizeof(filter_buf)))
+			if (ImGui::InputTextWithHint("##FilterLegacyModels", "Filter models...", filter_buf, sizeof(filter_buf)))
 				view.userInputFilterLegacyModels = filter_buf;
 		}
 		app::layout::EndFilterBar();
@@ -1000,7 +1063,7 @@ void render() {
 				mb_options.push_back({ opt.label, opt.value });
 			menu_button::render("##MenuButtonLegacyModels", mb_options,
 				view.config.value("exportLegacyModelFormat", std::string("OBJ")),
-				view.isBusy > 0, false, menu_button_legacy_models_state,
+				view.isBusy > 0, false, true, menu_button_legacy_models_state,
 				[&](const std::string& val) { view.config["exportLegacyModelFormat"] = val; },
 				[&]() { export_model_action(); });
 		}
@@ -1014,32 +1077,38 @@ void render() {
 				bool auto_preview = view.config.value("legacyModelsAutoPreview", false);
 				if (ImGui::Checkbox("Auto Preview##Legacy", &auto_preview))
 					view.config["legacyModelsAutoPreview"] = auto_preview;
+				show_tooltip_if_hovered("Automatically preview a model when selecting it");
 			}
 
 			ImGui::Checkbox("Auto Camera##Legacy", &view.legacyModelViewerAutoAdjust);
+			show_tooltip_if_hovered("Automatically adjust camera when selecting a new model");
 
 			{
 				bool show_grid = view.config.value("modelViewerShowGrid", true);
 				if (ImGui::Checkbox("Show Grid##Legacy", &show_grid))
 					view.config["modelViewerShowGrid"] = show_grid;
+				show_tooltip_if_hovered("Show a grid in the 3D viewport");
 			}
 
 			{
 				bool wireframe = view.config.value("modelViewerWireframe", false);
 				if (ImGui::Checkbox("Show Wireframe##Legacy", &wireframe))
 					view.config["modelViewerWireframe"] = wireframe;
+				show_tooltip_if_hovered("Render the preview model as a wireframe");
 			}
 
 			{
 				bool show_textures = view.config.value("modelViewerShowTextures", true);
 				if (ImGui::Checkbox("Show Textures##Legacy", &show_textures))
 					view.config["modelViewerShowTextures"] = show_textures;
+				show_tooltip_if_hovered("Show model textures in the preview pane");
 			}
 
 			{
 				bool show_bg = view.config.value("modelViewerShowBackground", false);
 				if (ImGui::Checkbox("Show Background##Legacy", &show_bg))
 					view.config["modelViewerShowBackground"] = show_bg;
+				show_tooltip_if_hovered("Show a background color in the 3D viewport");
 			}
 
 			if (view.legacyModelViewerActiveType == "m2" && !view.legacyModelViewerSkins.empty()) {
@@ -1097,12 +1166,7 @@ void render() {
 			if (view.legacyModelViewerActiveType == "wmo") {
 				ImGui::SeparatorText("WMO Groups");
 
-				for (auto& group : view.modelViewerWMOGroups) {
-					std::string label = group.value("label", std::string("Group"));
-					bool checked = group.value("checked", true);
-					if (ImGui::Checkbox(label.c_str(), &checked))
-						group["checked"] = checked;
-				}
+				checkboxlist::render("##LegacyWMOGroups", view.modelViewerWMOGroups, checkboxlist_legacy_wmo_groups_state);
 
 				if (ImGui::SmallButton("Enable All##LegacyWMOGroups")) {
 					for (auto& g : view.modelViewerWMOGroups)
@@ -1118,12 +1182,7 @@ void render() {
 
 				ImGui::SeparatorText("Doodad Sets");
 
-				for (auto& set : view.modelViewerWMOSets) {
-					std::string label = set.value("label", std::string("Set"));
-					bool checked = set.value("checked", true);
-					if (ImGui::Checkbox(label.c_str(), &checked))
-						set["checked"] = checked;
-				}
+				checkboxlist::render("##LegacyWMOSets", view.modelViewerWMOSets, checkboxlist_legacy_wmo_sets_state);
 			}
 		}
 		app::layout::EndSidebar();

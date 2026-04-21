@@ -430,25 +430,12 @@ return;
 auto& view = *core::view;
 
 // steps 1-3: reset, apply baked NPC texture, apply customization textures
-std::unique_ptr<casc::BLPImage> baked_npc_blp;
-if (!view.chrCustBakedNPCTexture.is_null() && view.chrCustBakedNPCTexture.is_number_unsigned()) {
-	uint32_t bake_fdid = view.chrCustBakedNPCTexture.get<uint32_t>();
-	if (bake_fdid != 0) {
-		try {
-			BufferWrapper bake_data = core::view->casc->getVirtualFileByID(bake_fdid);
-			baked_npc_blp = std::make_unique<casc::BLPImage>(bake_data);
-		} catch (const std::exception& e) {
-			logging::write(std::format("Failed to load baked NPC texture {}: {}", bake_fdid, e.what()));
-		}
-	}
-}
-
 character_appearance::apply_customization_textures(
 active_renderer.get(),
 view.chrCustActiveChoices,
 current_char_component_texture_layout_id,
 chr_materials,
-baked_npc_blp.get()
+view.chrCustBakedNPCTexture.get()
 );
 
 // step 4: apply equipment textures
@@ -2963,9 +2950,9 @@ model_viewer_gl::renderWidget("##chr_model_viewer", viewer_state, viewer_context
 }
 
 // Remove baked texture button
-if (!view.chrCustBakedNPCTexture.is_null()) {
+if (view.chrCustBakedNPCTexture) {
 if (ImGui::Button("Remove Baked Texture")) {
-view.chrCustBakedNPCTexture = nullptr;
+view.chrCustBakedNPCTexture.reset();
 refresh_character_appearance();
 }
 }

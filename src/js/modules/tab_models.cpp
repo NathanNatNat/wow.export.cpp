@@ -48,6 +48,10 @@
 
 namespace tab_models {
 
+static std::optional<std::string> build_stack_trace(const char* function_name, const std::exception& e) {
+	return std::format("{}: {}", function_name, e.what());
+}
+
 // --- File-local state ---
 
 static std::map<std::string, db::caches::DBCreatures::CreatureDisplayInfo> active_skins_creature;
@@ -393,7 +397,8 @@ static void pump_preview_model_task() {
 		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", task.file_name, e.key), {}, -1);
 		logging::write(std::format("Failed to decrypt model {} ({})", task.file_name, e.key));
 	} catch (const std::exception& e) {
-		core::setToast("error", "Unable to preview model " + task.file_name, {}, -1);
+		core::setToast("error", "Unable to preview model " + task.file_name,
+			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 
@@ -629,8 +634,8 @@ void mounted() {
 	//     });
 	core::registerDropHandler({
 		{".m2"},
-		[]() -> std::string {
-			return std::format("Export models as {}", core::view->config.value("exportModelFormat", std::string("OBJ")));
+		[](int count) -> std::string {
+			return std::format("Export {} models as {}", count, core::view->config.value("exportModelFormat", std::string("OBJ")));
 		},
 		[](const std::vector<std::string>& files) {
 			// JS: process: files => export_files(this.$core, files, true)
@@ -715,7 +720,7 @@ static void pump_export_task() {
 			gl::GLContext* gl_ctx = viewer_context.gl_context;
 			if (gl_ctx && viewer_state.fbo != 0) {
 				glBindFramebuffer(GL_FRAMEBUFFER, viewer_state.fbo);
-				model_viewer_utils::export_preview(task.format, *gl_ctx, active_path);
+				model_viewer_utils::export_preview(task.format, *gl_ctx, active_path, "", export_paths);
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			}
 		} else {
@@ -825,7 +830,7 @@ static void pump_export_task() {
 			{"files", file_manifest}
 		});
 	} catch (const std::exception& e) {
-		helper.mark(file_name, false, e.what());
+		helper.mark(file_name, false, e.what(), build_stack_trace("export_files", e));
 		task.manifest["failed"].push_back({ {"fileDataID", file_data_id} });
 	}
 }

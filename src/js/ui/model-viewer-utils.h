@@ -229,7 +229,8 @@ void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
  * @returns true on success.
  */
 bool export_preview(const std::string& format, gl::GLContext& ctx,
-	const std::string& export_name, const std::string& export_subdir = "");
+	const std::string& export_name, const std::string& export_subdir = "",
+	FileWriter* export_paths = nullptr);
 
 /**
  * Export a model file.
