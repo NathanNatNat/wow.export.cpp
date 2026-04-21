@@ -73,7 +73,7 @@ static std::vector<std::string> get_blender_installations() {
 				continue;
 
 			const std::string name = entry.path().filename().string();
-			if (!std::regex_match(name, PATTERN_BLENDER_VER)) {
+			if (!std::regex_search(name, PATTERN_BLENDER_VER)) {
 				logging::write(std::format("Skipping invalid Blender installation dir: {}", name));
 				continue;
 			}

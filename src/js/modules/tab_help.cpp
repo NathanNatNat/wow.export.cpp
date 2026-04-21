@@ -42,6 +42,9 @@ static char search_query[256] = "";
 static std::vector<const HelpArticle*> filtered_articles;
 static const HelpArticle* selected_article = nullptr;
 static markdown_content::MarkdownContentState md_state;
+// JS: clearTimeout(filter_timeout); filter_timeout = setTimeout(() => {...}, 300)
+// Tracks when search_query was last modified, for 300ms debounce.
+static double filter_debounce_start = -1.0;
 
 // --- Internal functions ---
 
@@ -261,8 +264,15 @@ void render() {
 		ImGui::Separator();
 
 		// Search bar.
+		// JS: debounced_filter(value) uses clearTimeout/setTimeout(..., 300) for 300ms debounce.
 		if (ImGui::InputText("##search", search_query, sizeof(search_query)))
+			filter_debounce_start = ImGui::GetTime(); // restart debounce timer on keystroke
+
+		// Apply debounce: update filter 300ms after last keystroke (matches JS setTimeout 300).
+		if (filter_debounce_start >= 0.0 && ImGui::GetTime() - filter_debounce_start >= 0.3) {
 			update_filter();
+			filter_debounce_start = -1.0;
+		}
 
 		ImGui::Separator();
 
