@@ -441,10 +441,13 @@ void WMOLegacyRendererGL::loadDoodadSet(uint32_t index) {
 // -----------------------------------------------------------------------
 
 void WMOLegacyRendererGL::updateGroups() {
-	// JS: reads from this.groupArray (local member), not view state.
-	const auto& groups_arr = groupArray;
-	for (size_t i = 0; i < groups.size() && i < groups_arr.size(); i++)
-		groups[i].visible = groups_arr[i].value("checked", true);
+	// JS: this.groupArray === view.modelViewerWMOGroups (shared reference).
+	// C++: view state is a separate copy; read from view to reflect UI-driven changes.
+	if (!core::view)
+		return;
+	const auto& gv = core::view->modelViewerWMOGroups;
+	for (size_t i = 0; i < groups.size() && i < gv.size(); i++)
+		groups[i].visible = gv[i].value("checked", true);
 }
 
 // -----------------------------------------------------------------------
@@ -452,13 +455,14 @@ void WMOLegacyRendererGL::updateGroups() {
 // -----------------------------------------------------------------------
 
 void WMOLegacyRendererGL::updateSets() {
-	if (!wmo)
+	if (!wmo || !core::view)
 		return;
 
-	// JS: reads from this.setArray (local member), not view state.
-	const auto& sets_arr = setArray;
-	for (size_t i = 0; i < sets_arr.size(); i++) {
-		const bool state = sets_arr[i].value("checked", false);
+	// JS: this.setArray === view.modelViewerWMOSets (shared reference).
+	// C++: view state is a separate copy; read from view to reflect UI-driven changes.
+	const auto& sv = core::view->modelViewerWMOSets;
+	for (size_t i = 0; i < sv.size(); i++) {
+		const bool state = sv[i].value("checked", false);
 		if (i < doodadSets.size() && doodadSets[i].has_value()) {
 			doodadSets[i]->visible = state;
 		} else if (state) {
@@ -716,8 +720,15 @@ void WMOLegacyRendererGL::dispose() {
 
 	m2_renderers.clear();
 
+	// JS: this.groupArray.splice(0) / this.setArray.splice(0).
+	// In JS, groupArray/setArray are the same reference as view.modelViewerWMOGroups/Sets,
+	// so splice(0) also empties the view property. C++ must explicitly clear view state.
 	groupArray.clear();
 	setArray.clear();
+	if (core::view) {
+		core::view->modelViewerWMOGroups.clear();
+		core::view->modelViewerWMOSets.clear();
+	}
 
 	groups.clear();
 	buffers.clear();

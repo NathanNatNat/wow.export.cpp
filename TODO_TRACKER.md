@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 186/578 verified (32%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 194/578 verified (34%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -2607,22 +2607,22 @@
 - **Status**: Pending
 - **Details**: JS defines async `load`, `_load_textures`, `_load_groups`, `loadDoodadSet`, and `updateSets`; C++ ports these methods synchronously, changing await/timing behavior.
 
-- [ ] 511. [WMORendererGL.cpp] Reactive view binding/watcher lifecycle differs from JS
+- [x] 511. [WMORendererGL.cpp] Reactive view binding/watcher lifecycle differs from JS
 - **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 101–107, 637–639
 - **Status**: Pending
 - **Details**: JS stores `groupArray`/`setArray` by reference in `core.view` and updates via Vue `$watch` callbacks with explicit unregister in `dispose`. C++ copies arrays into view state and replaces watcher callbacks with polling logic, changing reactivity/update timing semantics.
 
-- [ ] 512. [WMORendererGL.cpp] Reactive watchers replaced with polling — `groupWatcher`, `setWatcher`, `wireframeWatcher` not created
+- [x] 512. [WMORendererGL.cpp] Reactive watchers replaced with polling — `groupWatcher`, `setWatcher`, `wireframeWatcher` not created
 - **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 105–107
 - **Status**: Pending
 - **Details**: Same approach as WMOLegacyRendererGL — JS uses Vue watchers, C++ uses per-frame polling in `render()` (lines 643–676). Architecturally different but functionally equivalent with potential one-frame delay.
 
-- [ ] 513. [WMORendererGL.cpp] `_load_textures()` `isClassic` check differs — JS tests `!!wmo.textureNames` (truthiness), C++ tests `!wmo->textureNames.empty()`
+- [x] 513. [WMORendererGL.cpp] `_load_textures()` `isClassic` check differs — JS tests `!!wmo.textureNames` (truthiness), C++ tests `!wmo->textureNames.empty()`
 - **JS Source**: `src/js/3D/renderers/WMORendererGL.js` line 126
 - **Status**: Pending
 - **Details**: JS `!!wmo.textureNames` is true if the property exists and is truthy (even an empty array `[]` is truthy). C++ `!wmo->textureNames.empty()` is only true if the map has entries. If a WMO has the texture names chunk but it's empty, JS enters classic mode but C++ does not. Comment at C++ line 140–143 acknowledges this.
 
-- [ ] 514. [WMORendererGL.cpp] `get_wmo_groups_view()`/`get_wmo_sets_view()` accessor methods don't exist in JS — C++ addition for multi-viewer support
+- [x] 514. [WMORendererGL.cpp] `get_wmo_groups_view()`/`get_wmo_sets_view()` accessor methods don't exist in JS — C++ addition for multi-viewer support
 - **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 64–65, 103–104
 - **Status**: Pending
 - **Details**: JS uses `view[this.wmoGroupKey]` and `view[this.wmoSetKey]` for dynamic property access. C++ implements `get_wmo_groups_view()` and `get_wmo_sets_view()` methods (lines 60–69) that return references to the appropriate core::view member based on the key string, supporting `modelViewerWMOGroups`, `creatureViewerWMOGroups`, and `decorViewerWMOGroups`. This is a valid C++ adaptation of JS's dynamic property access.
@@ -2632,22 +2632,22 @@
 - **Status**: Pending
 - **Details**: JS exposes async `load`, `_load_textures`, `_load_groups`, `loadDoodadSet`, and `updateSets`; C++ ports these paths as synchronous methods, altering Promise scheduling and error propagation behavior.
 
-- [ ] 516. [WMOLegacyRendererGL.cpp] Doodad-set iteration adds bounds guard not present in JS
+- [x] 516. [WMOLegacyRendererGL.cpp] Doodad-set iteration adds bounds guard not present in JS
 - **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 287–289
 - **Status**: Pending
 - **Details**: JS directly accesses `wmo.doodads[firstIndex + i]` without a pre-check. C++ introduces explicit range guarding/continue behavior, changing edge-case handling when doodad counts/indices are inconsistent.
 
-- [ ] 517. [WMOLegacyRendererGL.cpp] Vue watcher-based reactive updates are replaced with render-time polling
+- [x] 517. [WMOLegacyRendererGL.cpp] Vue watcher-based reactive updates are replaced with render-time polling
 - **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 88–93, 519–521
 - **Status**: Pending
 - **Details**: JS wires `$watch` callbacks and unregisters them in `dispose`. C++ removes watcher registration and uses per-frame state polling, which changes update trigger timing and reactivity semantics.
 
-- [ ] 518. [WMOLegacyRendererGL.cpp] Reactive watchers replaced with polling — `groupWatcher`, `setWatcher`, `wireframeWatcher` not created
+- [x] 518. [WMOLegacyRendererGL.cpp] Reactive watchers replaced with polling — `groupWatcher`, `setWatcher`, `wireframeWatcher` not created
 - **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 91–93
 - **Status**: Pending
 - **Details**: JS sets up three Vue watchers in `load()`. C++ replaces these with manual per-frame polling in `render()` (lines 517–551), comparing current state against `prev_group_checked`/`prev_set_checked` arrays. This is functionally equivalent but architecturally different — watchers are event-driven, polling is frame-driven with potential one-frame delay.
 
-- [ ] 519. [WMOLegacyRendererGL.cpp] Texture wrap flag logic potentially inverted
+- [x] 519. [WMOLegacyRendererGL.cpp] Texture wrap flag logic potentially inverted
 - **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 146–147
 - **Status**: Pending
 - **Details**: JS sets `wrap_s = (material.flags & 0x40) ? gl.CLAMP_TO_EDGE : gl.REPEAT` and `wrap_t = (material.flags & 0x80) ? gl.CLAMP_TO_EDGE : gl.REPEAT`. C++ creates `BLPTextureFlags` with `wrap_s = !(material.flags & 0x40)` at line 184–185. The boolean negation may invert the wrap behavior — if `true` maps to CLAMP in the BLPTextureFlags API, then `!(flags & 0x40)` produces the opposite of what JS does. Need to verify the BLPTextureFlags API to confirm.
