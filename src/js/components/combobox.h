@@ -34,9 +34,9 @@ struct ComboBoxState {
 	// Initialization flag (mounted() equivalent).
 	bool initialized = false;
 
-	// Blur delay: frames remaining before deactivation.
-	// JS uses setTimeout(..., 200ms). We approximate with a frame counter.
-	int blurDelayFrames = 0;
+	// Blur delay state matching JS setTimeout(..., 200).
+	bool blurPending = false;
+	double blurDeadline = 0.0;
 };
 
 /**
