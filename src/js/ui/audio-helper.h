@@ -111,6 +111,13 @@ public:
 	double get_duration();
 
 	/**
+	 * Check whether audio data has been loaded.
+	 * JS equivalent: !!player.buffer
+	 * @returns True if audio data is loaded.
+	 */
+	bool is_loaded() const;
+
+	/**
 	 * Set playback volume.
 	 * JS equivalent: set_volume(value)
 	 * @param value Volume level (0.0 – 1.0).

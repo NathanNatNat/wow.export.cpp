@@ -260,6 +260,10 @@ double AudioPlayer::get_duration() {
 	return duration_cache;
 }
 
+bool AudioPlayer::is_loaded() const {
+	return !audio_data.empty();
+}
+
 void AudioPlayer::set_volume(float value) {
 	// JS: if (this.gain) this.gain.gain.value = value;
 	// Only apply if engine has been initialized (gain node exists in JS).

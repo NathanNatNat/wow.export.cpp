@@ -133,7 +133,9 @@ static void preview_texture(const std::string& filename) {
 				stbi_image_free(pixels);
 
 				view.texturePreviewURL = "loaded";
-				view.texturePreviewInfo = std::format("{}x{} ({})", img_w, img_h, ext.substr(1));
+				std::string ext_upper = ext.substr(1);
+				std::transform(ext_upper.begin(), ext_upper.end(), ext_upper.begin(), ::toupper);
+				view.texturePreviewInfo = std::format("{}x{} ({})", img_w, img_h, ext_upper);
 			}
 		}
 
@@ -281,9 +283,14 @@ void render() {
 			false,    // single
 			true,     // keyinput
 			view.config.value("regexFilters", false),
-			listbox::CopyMode::Default,
-			false,    // pasteselection
-			false,    // copytrimwhitespace
+			[&]() -> listbox::CopyMode {
+				std::string cm = view.config.value("copyMode", std::string("Default"));
+				if (cm == "DIR") return listbox::CopyMode::DIR;
+				if (cm == "FID") return listbox::CopyMode::FID;
+				return listbox::CopyMode::Default;
+			}(),
+			view.config.value("pasteSelection", false),
+			view.config.value("removePathSpacesCopy", false),
 			"texture",// unittype
 			nullptr,  // overrideItems
 			false,    // disable
@@ -305,6 +312,29 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
+	// Context menu — JS: <ContextMenu :node="contextMenus.nodeListbox" ...>
+	context_menu::render(
+		"ctx-legacy-textures",
+		view.contextMenus.nodeListbox,
+		legacy_tex_ctx_state,
+		[&]() { view.contextMenus.nodeListbox = nullptr; },
+		[](const nlohmann::json& node) {
+			std::vector<std::string> sel;
+			if (node.contains("selection") && node["selection"].is_array())
+				for (const auto& s : node["selection"])
+					sel.push_back(s.get<std::string>());
+			int count = node.value("count", 0);
+			std::string plural = count > 1 ? "s" : "";
+
+			if (ImGui::Selectable(std::format("Copy file path{}", plural).c_str()))
+				listbox_context::copy_file_paths(sel);
+			if (ImGui::Selectable(std::format("Copy export path{}", plural).c_str()))
+				listbox_context::copy_export_paths(sel);
+			if (ImGui::Selectable("Open export directory"))
+				listbox_context::open_export_directory(sel);
+		}
+	);
+
 	// --- Status bar ---
 	if (app::layout::BeginStatusBar("legacy-tex-status", regions)) {
 		listbox::renderStatusBar("texture", {".blp", ".png", ".jpg"}, legacy_tex_listbox_state);
@@ -314,13 +344,16 @@ void render() {
 	// --- Filter bar (row 2, col 1) ---
 	//   Regex info + filter input
 	if (app::layout::BeginFilterBar("legacy-tex-filter", regions)) {
-		if (view.config.value("regexFilters", false))
+		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+		}
 
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterTextures.c_str(), sizeof(filter_buf) - 1);
-		if (ImGui::InputText("##FilterLegacyTextures", filter_buf, sizeof(filter_buf)))
+		if (ImGui::InputTextWithHint("##FilterLegacyTextures", "Filter textures...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterTextures = filter_buf;
 	}
 	app::layout::EndFilterBar();
@@ -332,28 +365,49 @@ void render() {
 		if (!view.texturePreviewInfo.empty())
 			ImGui::Text("%s", view.texturePreviewInfo.c_str());
 
-		// Channel mask toggles (R/G/B/A).
-		uint8_t mask = static_cast<uint8_t>(view.config.value("exportChannelMask", 0b1111));
-		bool r_on = (mask & 0b0001) != 0;
-		bool g_on = (mask & 0b0010) != 0;
-		bool b_on = (mask & 0b0100) != 0;
-		bool a_on = (mask & 0b1000) != 0;
-		bool changed = false;
-		if (ImGui::Checkbox("R##channel", &r_on)) { changed = true; }
-		ImGui::SameLine();
-		if (ImGui::Checkbox("G##channel", &g_on)) { changed = true; }
-		ImGui::SameLine();
-		if (ImGui::Checkbox("B##channel", &b_on)) { changed = true; }
-		ImGui::SameLine();
-		if (ImGui::Checkbox("A##channel", &a_on)) { changed = true; }
+		// Channel mask toggles (R/G/B/A) — JS: v-if="texturePreviewURL.length > 0"
+		if (!view.texturePreviewURL.empty()) {
+			int mask = static_cast<int>(view.config.value("exportChannelMask", 0b1111));
+			struct ChannelChip {
+				const char* id;
+				const char* label;
+				int bit;
+				const char* tooltip;
+				ImVec4 border;
+				ImVec4 selected;
+				ImVec4 text;
+			};
+			static const ChannelChip channels[] = {
+				{"channel-red",   "R", 0b0001, "Toggle red colour channel.",   ImVec4(0.55f, 0.10f, 0.10f, 1.0f), ImVec4(0.75f, 0.18f, 0.18f, 1.0f), ImVec4(1.0f, 0.92f, 0.92f, 1.0f)},
+				{"channel-green", "G", 0b0010, "Toggle green colour channel.", ImVec4(0.10f, 0.45f, 0.10f, 1.0f), ImVec4(0.18f, 0.60f, 0.18f, 1.0f), ImVec4(0.92f, 1.0f, 0.92f, 1.0f)},
+				{"channel-blue",  "B", 0b0100, "Toggle blue colour channel.",  ImVec4(0.10f, 0.20f, 0.55f, 1.0f), ImVec4(0.18f, 0.30f, 0.75f, 1.0f), ImVec4(0.92f, 0.95f, 1.0f, 1.0f)},
+				{"channel-alpha", "A", 0b1000, "Toggle alpha channel.",        ImVec4(0.45f, 0.45f, 0.45f, 1.0f), ImVec4(0.70f, 0.70f, 0.70f, 1.0f), ImVec4(1.0f, 1.0f, 1.0f, 1.0f)}
+			};
+			const size_t channel_count = sizeof(channels) / sizeof(channels[0]);
 
-		if (changed) {
-			uint8_t new_mask = 0;
-			if (r_on) new_mask |= 0b0001;
-			if (g_on) new_mask |= 0b0010;
-			if (b_on) new_mask |= 0b0100;
-			if (a_on) new_mask |= 0b1000;
-			view.config["exportChannelMask"] = new_mask;
+			for (size_t i = 0; i < channel_count; ++i) {
+				const auto& channel = channels[i];
+				const bool sel = (mask & channel.bit) != 0;
+				ImGui::PushID(channel.id);
+				ImGui::PushStyleColor(ImGuiCol_Button,        sel ? channel.selected : ImVec4(0.16f, 0.16f, 0.16f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, sel ? channel.selected : ImVec4(0.22f, 0.22f, 0.22f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonActive,  channel.selected);
+				ImGui::PushStyleColor(ImGuiCol_Border,        channel.border);
+				ImGui::PushStyleColor(ImGuiCol_Text,          channel.text);
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+				if (ImGui::Button(channel.label, ImVec2(28.0f, 24.0f))) {
+					mask ^= channel.bit;
+					view.config["exportChannelMask"] = mask;
+				}
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("%s", channel.tooltip);
+				ImGui::PopStyleVar(2);
+				ImGui::PopStyleColor(5);
+				ImGui::PopID();
+				if (i + 1 < channel_count)
+					ImGui::SameLine();
+			}
 		}
 
 		// Texture preview image display.
@@ -362,7 +416,8 @@ void render() {
 			const float tex_w = static_cast<float>(view.texturePreviewWidth);
 			const float tex_h = static_cast<float>(view.texturePreviewHeight);
 			if (tex_w > 0 && tex_h > 0) {
-				const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
+				// JS: max-width/max-height from texture dimensions — never upscale beyond native size.
+				const float scale = std::min({avail.x / tex_w, avail.y / tex_h, 1.0f});
 				const ImVec2 img_size(tex_w * scale, tex_h * scale);
 
 				// Draw checkerboard transparency pattern behind texture.
