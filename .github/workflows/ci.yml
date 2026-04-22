@@ -2,8 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ 'copilot/**' ]
-    # branches: [ main, 'copilot/**' ]
+    branches: [ main, 'copilot/**' ]
   workflow_dispatch:
 
 permissions:
@@ -14,9 +13,6 @@ jobs:
   windows:
     name: Windows MSVC Debug
     runs-on: windows-latest
-
-    env:
-      SCCACHE_DIR: D:\a\sccache
 
     steps:
       - name: Checkout (with submodules)
@@ -42,14 +38,6 @@ jobs:
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
 
-      - name: Restore sccache cache
-        uses: actions/cache@v4
-        with:
-          path: D:\a\sccache
-          key: sccache-msvc-debug-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json') }}
-          restore-keys: |
-            sccache-msvc-debug-
-
       - name: "Configure (preset: windows-msvc-debug)"
         run: cmake --preset windows-msvc-debug -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_C_FLAGS_DEBUG="/Z7 /Od /RTC1" -DCMAKE_CXX_FLAGS_DEBUG="/Z7 /Od /RTC1"
 
@@ -64,9 +52,6 @@ jobs:
   linux:
     name: Linux GCC Debug
     runs-on: ubuntu-latest
-
-    env:
-      SCCACHE_DIR: /home/runner/sccache
 
     steps:
       - name: Checkout (with submodules)
@@ -92,14 +77,6 @@ jobs:
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
 
-      - name: Restore sccache cache
-        uses: actions/cache@v4
-        with:
-          path: /home/runner/sccache
-          key: sccache-gcc-debug-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json') }}
-          restore-keys: |
-            sccache-gcc-debug-
-
       - name: "Configure (preset: linux-gcc-debug)"
         run: cmake --preset linux-gcc-debug -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
@@ -109,4 +86,3 @@ jobs:
       - name: Show sccache stats
         if: always()
         run: sccache --show-stats
-

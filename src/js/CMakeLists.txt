@@ -193,7 +193,4 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/stb-impl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/external-links.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/updater.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/wmv.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/wowhead.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/updater.cpp
 )

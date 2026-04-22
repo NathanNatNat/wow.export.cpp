@@ -38,15 +38,9 @@
 [submodule "extern/json"]
 	path = extern/json
 	url = https://github.com/nlohmann/json.git
-[submodule "extern/mbedtls"]
-	path = extern/mbedtls
-	url = https://github.com/Mbed-TLS/mbedtls.git
 [submodule "extern/minizip-ng"]
 	path = extern/minizip-ng
 	url = https://github.com/zlib-ng/minizip-ng.git
 [submodule "extern/portable-file-dialogs"]
 	path = extern/portable-file-dialogs
 	url = https://github.com/samhocevar/portable-file-dialogs.git
-[submodule "extern/wolfssl"]
-	path = extern/wolfssl
-	url = https://github.com/wolfSSL/wolfssl.git
