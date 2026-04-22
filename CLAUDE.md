@@ -21,46 +21,21 @@
 
 ## Building (Windows)
 
-The project uses the **CMake Tools** VS Code extension (`ms-vscode.cmake-tools`), which reads
-`CMakePresets.json` natively and handles MSVC environment setup automatically via `vswhere`.
+**Terminal requirement**: cmake must run from the **"Developer Command Prompt (x64)"** terminal — `cl.exe` is not available in bash, PowerShell, or any other terminal type. This profile is already configured in `.vscode/settings.json` and set as the default; any new terminal opened in VS Code will have the correct MSVC environment automatically.
 
-### VS Code (recommended)
-
-Use the status bar at the bottom of the window:
-
-| Control | Purpose |
-|---------|---------|
-| **Preset selector** | Choose configure preset (e.g. `windows-msvc-debug`) |
-| **Build button** (wrench icon) | Incremental build of the active preset |
-| **Debug button** (play icon) | Build then launch under the MSVC debugger |
-
-- **Ctrl+Shift+B** — incremental build (active preset)
-- **F5** — build and debug (active preset)
-
-Command palette (`Ctrl+Shift+P`):
-- `CMake: Configure` — re-run CMake configuration
-- `CMake: Build` — incremental build
-- `CMake: Clean` — delete compiled output
-- `CMake: Clean Rebuild` — clean then full rebuild
-- `CMake: Select Configure Preset` — switch between debug/release/relwithdebinfo
-
-### Manual terminal
-
-Open the **"Developer Command Prompt (x64)"** terminal profile (click `+` in the terminal
-panel dropdown), then run cmake directly:
+**Do NOT** attempt to build using `make`, `msbuild`, `ninja` directly, `gcc`/`g++`, or plain `cmake` from bash/PowerShell — these will all fail.
 
 ```
-cmake --preset windows-msvc-debug                    # configure
-cmake --build --preset windows-debug --parallel      # build
+cmake --preset windows-msvc-debug                    # configure (first time or after CMakeLists changes)
+cmake --build --preset windows-debug --parallel      # incremental build
 cmake --build --preset windows-debug --target clean  # clean
 ```
-
-The `.vscode\msvc_build.bat` wrapper is also available for scripts or CI that need cmake
-without an activated developer prompt.
 
 **CMake presets:**
 - Configure: `windows-msvc-debug`, `windows-msvc-release`, `windows-msvc-relwithdebinfo`
 - Build: `windows-debug`, `windows-release`, `windows-relwithdebinfo`
+
+The build must compile without errors before any task is considered done.
 
 ## Dependencies
 

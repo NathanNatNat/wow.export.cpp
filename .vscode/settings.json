@@ -7,6 +7,9 @@
     // IntelliSense: use the compile_commands.json from the Debug build
     "C_Cpp.default.compileCommands": "${workspaceFolder}/out/build/windows-msvc-debug/compile_commands.json",
 
+    // Terminal: default to Developer Command Prompt so cmake/cl.exe work without extra setup
+    "terminal.integrated.defaultProfile.windows": "Developer Command Prompt (x64)",
+
     // Terminal profile: open a VS Developer Command Prompt from the + dropdown
     "terminal.integrated.profiles.windows": {
         "Developer Command Prompt (x64)": {
