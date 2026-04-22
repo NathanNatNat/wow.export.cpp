@@ -258,6 +258,15 @@ void render() {
 
 	// --- Right panel: Preview container (row 1, col 2) ---
 	if (app::layout::BeginPreviewContainer("legacy-fonts-preview-container", regions)) {
+		// Resolve the currently loaded ImGui font for rendering glyphs and preview.
+		// JS: cell.style.fontFamily = '"${font_family}", monospace' and textarea fontFamily binding.
+		void* active_font = nullptr;
+		{
+			auto fit = loaded_fonts.find(view.fontPreviewFontFamily);
+			if (fit != loaded_fonts.end())
+				active_font = fit->second;
+		}
+
 		// Glyph grid.
 		ImGui::BeginChild("font-character-grid", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.5f), ImGuiChildFlags_Borders);
 
@@ -266,13 +275,18 @@ void render() {
 		float avail_width = ImGui::GetContentRegionAvail().x;
 		float cursor_x = 0.0f;
 
+		// JS: cell.style.fontFamily = '"${font_family}", monospace' — glyphs display in loaded font.
+		if (active_font)
+			ImGui::PushFont(static_cast<ImFont*>(active_font));
+
 		for (const auto& codepoint : glyph_state.detected_codepoints) {
 			char utf8_buf[5] = {};
 			ImTextCharToUtf8(utf8_buf, static_cast<unsigned int>(codepoint));
 
 			// Each glyph cell is a small selectable button.
+			// CSS: .font-glyph-cell { width: 32px; height: 32px; }
 			ImGui::PushID(static_cast<int>(codepoint));
-			if (ImGui::Selectable(utf8_buf, false, 0, ImVec2(24, 24))) {
+			if (ImGui::Selectable(utf8_buf, false, 0, ImVec2(32, 32))) {
 				font_helpers::trigger_glyph_click(glyph_state, codepoint);
 			}
 			if (ImGui::IsItemHovered()) {
@@ -283,26 +297,44 @@ void render() {
 			ImGui::PopID();
 
 			// Manual wrap: continue on same line if next button fits.
-			cursor_x += 24.0f + 2.0f;
-			if (cursor_x + 24.0f <= avail_width) {
+			cursor_x += 32.0f + 2.0f;
+			if (cursor_x + 32.0f <= avail_width) {
 				ImGui::SameLine();
 			} else {
 				cursor_x = 0.0f;
 			}
 		}
+
+		if (active_font)
+			ImGui::PopFont();
+
 		ImGui::NewLine();
 		ImGui::PopStyleVar();
 		ImGui::EndChild();
 
 		// Font preview text input.
+		// JS: <textarea :style="{ fontFamily: $core.view.fontPreviewFontFamily }"> — render in loaded font.
+		if (active_font)
+			ImGui::PushFont(static_cast<ImFont*>(active_font));
+
 		char preview_buf[4096] = {};
 		std::strncpy(preview_buf, view.fontPreviewText.c_str(), sizeof(preview_buf) - 1);
 		if (ImGui::InputTextMultiline("##FontPreviewText", preview_buf, sizeof(preview_buf),
 			ImVec2(-1, ImGui::GetContentRegionAvail().y)))
 			view.fontPreviewText = preview_buf;
 
-		if (view.fontPreviewText.empty())
-			ImGui::SetItemTooltip("%s", view.fontPreviewPlaceholder.c_str());
+		if (active_font)
+			ImGui::PopFont();
+
+		// JS: <textarea :placeholder="fontPreviewPlaceholder"> — show placeholder inside empty input.
+		// ImGui InputTextMultiline has no built-in placeholder, so draw it manually.
+		if (view.fontPreviewText.empty() && !ImGui::IsItemActive()) {
+			const ImVec2 min = ImGui::GetItemRectMin();
+			ImGui::GetWindowDrawList()->AddText(
+				ImVec2(min.x + ImGui::GetStyle().FramePadding.x, min.y + ImGui::GetStyle().FramePadding.y),
+				ImGui::GetColorU32(ImGuiCol_TextDisabled),
+				view.fontPreviewPlaceholder.c_str());
+		}
 	}
 	app::layout::EndPreviewContainer();
 
