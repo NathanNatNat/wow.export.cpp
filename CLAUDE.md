@@ -21,32 +21,46 @@
 
 ## Building (Windows)
 
-All cmake commands require the MSVC environment. Use the provided wrapper:
+The project uses the **CMake Tools** VS Code extension (`ms-vscode.cmake-tools`), which reads
+`CMakePresets.json` natively and handles MSVC environment setup automatically via `vswhere`.
+
+### VS Code (recommended)
+
+Use the status bar at the bottom of the window:
+
+| Control | Purpose |
+|---------|---------|
+| **Preset selector** | Choose configure preset (e.g. `windows-msvc-debug`) |
+| **Build button** (wrench icon) | Incremental build of the active preset |
+| **Debug button** (play icon) | Build then launch under the MSVC debugger |
+
+- **Ctrl+Shift+B** — incremental build (active preset)
+- **F5** — build and debug (active preset)
+
+Command palette (`Ctrl+Shift+P`):
+- `CMake: Configure` — re-run CMake configuration
+- `CMake: Build` — incremental build
+- `CMake: Clean` — delete compiled output
+- `CMake: Clean Rebuild` — clean then full rebuild
+- `CMake: Select Configure Preset` — switch between debug/release/relwithdebinfo
+
+### Manual terminal
+
+Open the **"Developer Command Prompt (x64)"** terminal profile (click `+` in the terminal
+panel dropdown), then run cmake directly:
 
 ```
-# From the project root
-.vscode\msvc_build.bat cmake --preset windows-msvc-debug        # configure
-.vscode\msvc_build.bat cmake --build --preset windows-debug --parallel  # build
-.vscode\msvc_build.bat cmake --build --preset windows-debug --target clean  # clean
+cmake --preset windows-msvc-debug                    # configure
+cmake --build --preset windows-debug --parallel      # build
+cmake --build --preset windows-debug --target clean  # clean
 ```
 
-The wrapper calls `vcvarsall.bat amd64` before forwarding arguments to cmake.
-
-**VS Code tasks** (`Ctrl+Shift+B`):
-| Task | When to use |
-|---|---|
-| **CMake: Build (Debug)** | Default — incremental build |
-| **CMake: Configure (Debug)** | After changing `CMakeLists.txt` or `CMakePresets.json` |
-| **CMake: Rebuild (Debug)** | Clean + Build — when objects seem stale |
-| **CMake: Clean (Debug)** | Delete compiled output for this config |
-
-Release equivalents exist for all tasks. Press **F5** to build and launch under the MSVC debugger.
+The `.vscode\msvc_build.bat` wrapper is also available for scripts or CI that need cmake
+without an activated developer prompt.
 
 **CMake presets:**
 - Configure: `windows-msvc-debug`, `windows-msvc-release`, `windows-msvc-relwithdebinfo`
 - Build: `windows-debug`, `windows-release`, `windows-relwithdebinfo`
-
-For a manual terminal with MSVC tools, open **"Developer Command Prompt (x64)"** from the `+` dropdown in VS Code's terminal panel.
 
 ## Dependencies
 

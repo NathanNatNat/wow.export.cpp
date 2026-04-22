@@ -5,13 +5,12 @@
             "name": "Debug (MSVC)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out/build/windows-msvc-debug/wow_export_cpp.exe",
+            "program": "${command:cmake.launchTargetPath}",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
-            "console": "externalTerminal",
-            "preLaunchTask": "CMake: Build (Debug)"
+            "console": "externalTerminal"
         },
         {
             "name": "Attach (MSVC)",

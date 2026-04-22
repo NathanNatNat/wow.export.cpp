@@ -1,4 +1,9 @@
 {
+    // CMake Tools: use CMakePresets.json natively; auto-detects MSVC environment via vswhere
+    "cmake.useCMakePresets": "always",
+    "cmake.options.statusBarVisibility": "visible",
+    "cmake.buildBeforeRun": true,
+
     // IntelliSense: use the compile_commands.json from the Debug build
     "C_Cpp.default.compileCommands": "${workspaceFolder}/out/build/windows-msvc-debug/compile_commands.json",
 

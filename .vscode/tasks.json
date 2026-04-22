@@ -1,95 +1,12 @@
 {
     "version": "2.0.0",
     "tasks": [
-        // ── Configure ────────────────────────────────────────────────────────
         {
-            "label": "CMake: Configure (Debug)",
-            "type": "shell",
-            "options": { "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] } },
-            "command": ".vscode\\msvc_build.bat cmake --preset windows-msvc-debug",
-            "group": "build",
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "CMake: Configure (Release)",
-            "type": "shell",
-            "options": { "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] } },
-            "command": ".vscode\\msvc_build.bat cmake --preset windows-msvc-release",
-            "group": "build",
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "CMake: Configure (RelWithDebInfo)",
-            "type": "shell",
-            "options": { "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] } },
-            "command": ".vscode\\msvc_build.bat cmake --preset windows-msvc-relwithdebinfo",
-            "group": "build",
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": "$msCompile"
-        },
-        // ── Build ────────────────────────────────────────────────────────────
-        {
-            "label": "CMake: Build (Debug)",
-            "type": "shell",
-            "options": { "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] } },
-            "command": ".vscode\\msvc_build.bat cmake --build --preset windows-debug --parallel",
+            "type": "cmake",
+            "command": "build",
+            "label": "CMake: Build",
             "group": { "kind": "build", "isDefault": true },
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "CMake: Build (Release)",
-            "type": "shell",
-            "options": { "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] } },
-            "command": ".vscode\\msvc_build.bat cmake --build --preset windows-release --parallel",
-            "group": "build",
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "CMake: Build (RelWithDebInfo)",
-            "type": "shell",
-            "options": { "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] } },
-            "command": ".vscode\\msvc_build.bat cmake --build --preset windows-relwithdebinfo --parallel",
-            "group": "build",
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": "$msCompile"
-        },
-        // ── Clean ────────────────────────────────────────────────────────────
-        {
-            "label": "CMake: Clean (Debug)",
-            "type": "shell",
-            "options": { "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] } },
-            "command": ".vscode\\msvc_build.bat cmake --build --preset windows-debug --target clean",
-            "group": "build",
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": []
-        },
-        {
-            "label": "CMake: Clean (Release)",
-            "type": "shell",
-            "options": { "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] } },
-            "command": ".vscode\\msvc_build.bat cmake --build --preset windows-release --target clean",
-            "group": "build",
-            "presentation": { "reveal": "always", "panel": "shared" },
-            "problemMatcher": []
-        },
-        // ── Rebuild = Clean → Build ──────────────────────────────────────────
-        {
-            "label": "CMake: Rebuild (Debug)",
-            "dependsOn": ["CMake: Clean (Debug)", "CMake: Build (Debug)"],
-            "dependsOrder": "sequence",
-            "group": "build",
-            "presentation": { "reveal": "always", "panel": "shared" }
-        },
-        {
-            "label": "CMake: Rebuild (Release)",
-            "dependsOn": ["CMake: Clean (Release)", "CMake: Build (Release)"],
-            "dependsOrder": "sequence",
-            "group": "build",
-            "presentation": { "reveal": "always", "panel": "shared" }
+            "detail": "Build the active CMake preset"
         }
     ]
 }
