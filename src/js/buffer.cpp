@@ -67,7 +67,10 @@ return val;
 template<size_t N>
 int64_t sign_extend(uint64_t val) {
 constexpr uint64_t sign_bit = 1ULL << (N * 8 - 1);
-constexpr uint64_t mask = (N < 8) ? ((1ULL << (N * 8)) - 1) : ~0ULL;
+constexpr uint64_t mask = []() constexpr -> uint64_t {
+    if constexpr (N < 8) return (1ULL << (N * 8)) - 1;
+    else return ~0ULL;
+}();
 val &= mask;
 if (val & sign_bit)
 val |= ~mask;
