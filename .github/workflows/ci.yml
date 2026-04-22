@@ -10,12 +10,16 @@ permissions:
 
 jobs:
   # Windows x64 — GitHub-hosted (MSVC + Ninja)
+  # sccache uses a filesystem cache persisted via actions/cache because the
+  # GHA cache backend produces different MSVC input hashes each run (MSVC
+  # preprocessing non-determinism), causing 0% hit rates and unbounded cache
+  # entry growth when SCCACHE_GHA_ENABLED is used.
   windows:
     name: Windows MSVC Debug
     runs-on: windows-latest
 
     env:
-      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_DIR: D:\a\sccache
 
     steps:
       - name: Checkout (with submodules)
@@ -38,6 +42,14 @@ jobs:
       - name: Ensure Jinja2 is installed
         run: pip install --quiet jinja2
 
+      - name: Restore sccache cache
+        uses: actions/cache@v4
+        with:
+          path: D:\a\sccache
+          key: sccache-msvc-debug-${{ hashFiles('src/**', 'CMakeLists.txt', 'CMakePresets.json') }}
+          restore-keys: |
+            sccache-msvc-debug-
+
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
 
@@ -52,6 +64,8 @@ jobs:
         run: sccache --show-stats
 
   # Linux x64 — GitHub-hosted (GCC + Ninja)
+  # sccache uses the GHA cache API directly (SCCACHE_GHA_ENABLED) for
+  # fine-grained per-translation-unit caching; this works correctly on Linux.
   linux:
     name: Linux GCC Debug
     runs-on: ubuntu-latest
