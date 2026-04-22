@@ -658,9 +658,11 @@ std::string export_model(const ExportModelOptions& options) {
 	auto append_m2_manifest = [&](const std::vector<M2ExportFileManifest>& typed) {
 		if (options.file_manifest) {
 			for (const auto& entry : typed) {
+				nlohmann::json fid_json;
+				std::visit([&fid_json](const auto& v) { fid_json = v; }, entry.fileDataID);
 				options.file_manifest->push_back({
 					{"type", entry.type},
-					{"fileDataID", entry.fileDataID},
+					{"fileDataID", fid_json},
 					{"file", entry.file.string()}
 				});
 			}
