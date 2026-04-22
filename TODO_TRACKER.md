@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 260/578 verified (45%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 283/578 verified (49%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -2066,120 +2066,120 @@
 
 ## Tab: Characters
 
-- [ ] 404. [tab_characters.cpp] Saved-character thumbnail card rendering is replaced by a placeholder button path
+- [x] 404. [tab_characters.cpp] Saved-character thumbnail card rendering is replaced by a placeholder button path
 - **JS Source**: `src/js/modules/tab_characters.js` lines 1928–1934
-- **Status**: Pending
-- **Details**: JS renders thumbnail backgrounds and overlay action buttons in `.saved-character-card`; C++ renders a generic button with a `// thumbnail placeholder` path, so card visuals and thumbnail behavior diverge.
+- **Status**: Verified
+- **Details**: Implemented thumbnail texture loading via stb_image from saved .png files. GLuint textures cached in thumbnail_textures map, cleaned up in reset_module_state(). Renders with ImGui::ImageButton when texture is available, falls back to text button. Thumbnail is now captured and stored when saving characters.
 
-- [ ] 405. [tab_characters.cpp] Main-screen quick-save flow skips JS thumbnail capture step
+- [x] 405. [tab_characters.cpp] Main-screen quick-save flow skips JS thumbnail capture step
 - **JS Source**: `src/js/modules/tab_characters.js` lines 1973, 2328–2333
-- **Status**: Pending
-- **Details**: JS quick-save button routes through `open_save_prompt()` which captures `chrPendingThumbnail` before prompting; C++ main `Save` button only toggles prompt state and does not capture a fresh thumbnail first.
+- **Status**: Verified
+- **Details**: Save button now calls capture_character_thumbnail() and sets chrPendingThumbnail before setting chrSaveCharacterPrompt = true, matching JS open_save_prompt() behavior.
 
-- [ ] 406. [tab_characters.cpp] Outside-click handlers for import/color popups from JS mounted lifecycle are missing
+- [x] 406. [tab_characters.cpp] Outside-click handlers for import/color popups from JS mounted lifecycle are missing
 - **JS Source**: `src/js/modules/tab_characters.js` lines 2668–2685
-- **Status**: Pending
-- **Details**: JS registers a document click listener to close color pickers and floating import panels when clicking elsewhere; C++ has no equivalent mounted/unmounted document-listener path, changing panel-dismiss behavior.
+- **Status**: Verified
+- **Details**: Added IsMouseClicked check at top of render() that clears color_picker_open_for and character_import_mode when left mouse is clicked and no item is hovered, approximating the JS document click handler.
 
-- [ ] 407. [tab_characters.cpp] import_wmv_character() is completely stubbed
+- [x] 407. [tab_characters.cpp] import_wmv_character() is completely stubbed
 - **JS Source**: `src/js/modules/tab_characters.js` lines 988–1021
-- **Status**: Pending
-- **Details**: JS creates a file input, reads a .chr file, passes it to wmv_parse(), and calls apply_import_data(). C++ just does return. Also missing wmv_parse import and lastWMVImportPath config persistence.
+- **Status**: Verified
+- **Details**: Implemented using pfd::open_file dialog to select .chr file, wmv::wmv_parse(), ParseResult→JSON conversion (both V1 legacy_values and V2 customizations formats), equipment unordered_map→JSON object conversion, lastWMVImportPath config persistence, and apply_import_data("wmv").
 
-- [ ] 408. [tab_characters.cpp] import_wowhead_character() is completely stubbed
+- [x] 408. [tab_characters.cpp] import_wowhead_character() is completely stubbed
 - **JS Source**: `src/js/modules/tab_characters.js` lines 1023–1044
-- **Status**: Pending
-- **Details**: JS validates URL contains dressing-room, calls wowhead_parse(), then apply_import_data(). C++ just does return. Also missing wowhead_parse import.
+- **Status**: Verified
+- **Details**: Implemented with URL validation (must contain 'dressing-room'), wowhead::wowhead_parse(), ParseResult→JSON conversion (customizations array, equipment object), and apply_import_data("wowhead").
 
-- [ ] 409. [tab_characters.cpp] Missing texture application on attachment equipment models
+- [x] 409. [tab_characters.cpp] Missing texture application on attachment equipment models
 - **JS Source**: `src/js/modules/tab_characters.js` lines 620–622
-- **Status**: Pending
-- **Details**: JS applies replaceable textures to each attachment model via applyReplaceableTextures(). C++ loads the attachment model but never calls applyReplaceableTextures().
+- **Status**: Verified
+- **Details**: Added M2DisplayInfo construction and applyReplaceableTextures().get() call after renderer->load().get() for attachment models, using display->textures[i] if available.
 
-- [ ] 410. [tab_characters.cpp] Missing texture application on collection equipment models
+- [x] 410. [tab_characters.cpp] Missing texture application on collection equipment models
 - **JS Source**: `src/js/modules/tab_characters.js` lines 664–668
-- **Status**: Pending
-- **Details**: JS selects correct texture index and applies it to collection models. C++ loads the collection model but never applies textures.
+- **Status**: Verified
+- **Details**: Added texture index selection (i < textures.size() ? i : 0) and applyReplaceableTextures().get() call for collection models with non-zero texture fileDataIDs.
 
-- [ ] 411. [tab_characters.cpp] Missing geoset visibility for collection models
+- [x] 411. [tab_characters.cpp] Missing geoset visibility for collection models
 - **JS Source**: `src/js/modules/tab_characters.js` lines 652–661
-- **Status**: Pending
-- **Details**: JS calls renderer.hideAllGeosets() then renderer.setGeosetGroupDisplay() using display.attachmentGeosetGroup and SLOT_TO_GEOSET_GROUPS mapping. C++ has the mapping defined but never uses it.
+- **Status**: Verified
+- **Details**: Added get_slot_geoset_mapping() call, hideAllGeosets(), and setGeosetGroupDisplay() loop using display->attachmentGeosetGroup and the slot geoset mapping table.
 
-- [ ] 412. [tab_characters.cpp] OBJ/STL export missing chr_materials URI textures geoset mask and pose application
+- [x] 412. [tab_characters.cpp] OBJ/STL export missing chr_materials URI textures geoset mask and pose application
 - **JS Source**: `src/js/modules/tab_characters.js` lines 1712–1722
-- **Status**: Pending
-- **Details**: JS iterates chr_materials for URI textures, sets geoset mask, and applies posed geometry. C++ does none of these for OBJ/STL export.
+- **Status**: Verified
+- **Details**: Added chr_materials iteration with getRawPixels()+PNGWriter→addURITexture(), chrCustGeosets→M2ExportGeosetMask vector for setGeosetMask(), and chrExportApplyPose config check with getBakedGeometry()→setPosedGeometry(). Same for GLTF format.
 
-- [ ] 413. [tab_characters.cpp] OBJ/STL/GLTF export missing CharacterExporter equipment models
+- [x] 413. [tab_characters.cpp] OBJ/STL/GLTF export missing CharacterExporter equipment models
 - **JS Source**: `src/js/modules/tab_characters.js` lines 1725–1811
-- **Status**: Pending
-- **Details**: JS creates CharacterExporter, collects equipment geometry with textures/bones, and passes to exporter. C++ skips equipment model export entirely for all formats.
+- **Status**: Verified
+- **Details**: Added CharacterExporter construction from equipment_model_renderers/collection_model_renderers adapter maps. For OBJ/STL: collects EquipmentModel with textures from getItemDisplay, calls setEquipmentModels(). For GLTF: same but with bone data using EquipmentModelGLTF, setEquipmentModelsGLTF(). Format lowercased for exportAsGLTF.
 
-- [ ] 414. [tab_characters.cpp] load_character_model always sets animation to none instead of auto-selecting stand
+- [x] 414. [tab_characters.cpp] load_character_model always sets animation to none instead of auto-selecting stand
 - **JS Source**: `src/js/modules/tab_characters.js` lines 744–745
-- **Status**: Pending
-- **Details**: JS finds stand animation (id 0.0) and auto-selects it. C++ always sets none so the character has no animation after load.
+- **Status**: Verified
+- **Details**: After extract_animations(), now searches for entry with id "0.0" and selects it; falls back to "none" if not found.
 
-- [ ] 415. [tab_characters.cpp] load_character_model missing on_model_rotate callback
+- [x] 415. [tab_characters.cpp] load_character_model missing on_model_rotate callback
 - **JS Source**: `src/js/modules/tab_characters.js` lines 719–722
-- **Status**: Pending
-- **Details**: JS calls controls.on_model_rotate after loading. C++ does not invoke any rotation callback after model load.
+- **Status**: Verified
+- **Details**: Added call to viewer_context.controls_character->on_model_rotate(model_rotation_y) immediately after fit_camera() if on_model_rotate is set.
 
-- [ ] 416. [tab_characters.cpp] import_character does not lowercase character name in URL
+- [x] 416. [tab_characters.cpp] import_character does not lowercase character name in URL
 - **JS Source**: `src/js/modules/tab_characters.js` line 965
-- **Status**: Pending
-- **Details**: JS uses encodeURIComponent(character_name.toLowerCase()). C++ uses url_encode(character_name) without lowercasing. Battle.net API may be case-sensitive.
+- **Status**: Verified
+- **Details**: Added std::transform to lowercase character_name before url_encode(), matching JS encodeURIComponent(character_name.toLowerCase()).
 
-- [ ] 417. [tab_characters.cpp] import_character error handling uses string search instead of HTTP status
+- [x] 417. [tab_characters.cpp] import_character error handling uses string search instead of HTTP status
 - **JS Source**: `src/js/modules/tab_characters.js` lines 969–983
-- **Status**: Pending
-- **Details**: JS separately handles HTTP 404 vs other errors. C++ catches all exceptions and does err_msg.find(404) string search which may not match actual HTTP 404 responses.
+- **Status**: Verified
+- **Details**: Replaced getJSON()+catch with generics::get() and check res.ok / res.status == 404 for proper HTTP status-based error handling.
 
-- [ ] 418. [tab_characters.cpp] import_json_character save-to-my-characters preserves guild_tabard (JS does not)
+- [x] 418. [tab_characters.cpp] import_json_character save-to-my-characters preserves guild_tabard (JS does not)
 - **JS Source**: `src/js/modules/tab_characters.js` lines 1545–1553
-- **Status**: Pending
-- **Details**: JS save_data only includes race_id, model_id, choices, equipment. C++ also copies guild_tabard if present. Behavioral deviation from JS.
+- **Status**: Verified
+- **Details**: Removed the guild_tabard copy block. save_data now only contains race_id, model_id, choices, equipment, matching JS exactly.
 
-- [ ] 419. [tab_characters.cpp] Missing getEquipmentRenderers and getCollectionRenderers callbacks on viewer context
+- [x] 419. [tab_characters.cpp] Missing getEquipmentRenderers and getCollectionRenderers callbacks on viewer context
 - **JS Source**: `src/js/modules/tab_characters.js` lines 2608–2609
-- **Status**: Pending
-- **Details**: JS context includes getEquipmentRenderers and getCollectionRenderers callbacks. C++ only sets getActiveRenderer. Equipment models may not render in the viewport.
+- **Status**: Verified
+- **Details**: Added equip_adapter_map and coll_adapter_map static maps, rebuild_renderer_adapter_maps() helper, and set viewer_context.getEquipmentRenderers/getCollectionRenderers lambdas in mounted().
 
-- [ ] 420. [tab_characters.cpp] Equipment slot items missing quality color styling
+- [x] 420. [tab_characters.cpp] Equipment slot items missing quality color styling
 - **JS Source**: `src/js/modules/tab_characters.js` line 2192
-- **Status**: Pending
-- **Details**: JS applies item-quality-X CSS class based on item quality. C++ renders equipment item names as plain text without quality-based coloring.
+- **Status**: Verified
+- **Details**: Added quality_colors array matching JS CSS quality classes (Poor=grey through Heirloom=cyan). Push/pop ImGuiCol_Text for each equipped item based on item->quality.
 
-- [ ] 421. [tab_characters.cpp] navigate_to_items_for_slot missing type mask filtering
+- [x] 421. [tab_characters.cpp] navigate_to_items_for_slot missing type mask filtering
 - **JS Source**: `src/js/modules/tab_characters.js` lines 2400–2414
-- **Status**: Pending
-- **Details**: JS sets itemViewerTypeMask to filter items tab by slot name. C++ just calls tab_items::setActive() with no filtering.
+- **Status**: Verified
+- **Details**: Now sets view.pendingItemSlotFilter = slot_label before tab_items::setActive() for both left-click-empty-slot and Replace Item context menu entry.
 
-- [ ] 422. [tab_characters.cpp] Saved characters grid missing thumbnail rendering
+- [x] 422. [tab_characters.cpp] Saved characters grid missing thumbnail rendering
 - **JS Source**: `src/js/modules/tab_characters.js` lines 1928–1935
-- **Status**: Pending
-- **Details**: JS renders actual thumbnail images via backgroundImage CSS. C++ uses ImGui::Button with no image rendering.
+- **Status**: Verified
+- **Details**: See entry 404 — both cover the same implementation.
 
-- [ ] 423. [tab_characters.cpp] Texture preview panel is placeholder text
+- [x] 423. [tab_characters.cpp] Texture preview panel is placeholder text
 - **JS Source**: `src/js/modules/tab_characters.js` lines 2121–2123
-- **Status**: Pending
-- **Details**: JS has a DOM node where charTextureOverlay attaches canvas layers. C++ has ImGui::Text placeholder.
+- **Status**: Verified
+- **Details**: Replaced placeholder text with ImGui::Image rendering of char_texture_overlay::getActiveLayer() texture ID, sized to fill available content region. Shows disabled text if no texture loaded.
 
-- [ ] 424. [tab_characters.cpp] Color picker uses ImGui Tooltip instead of positioned popup
+- [x] 424. [tab_characters.cpp] Color picker uses ImGui Tooltip instead of positioned popup
 - **JS Source**: `src/js/modules/tab_characters.js` lines 2051–2068
-- **Status**: Pending
-- **Details**: JS positions the color picker popup at event.clientX/Y with absolute CSS positioning. C++ uses ImGui::BeginTooltip() which follows the mouse cursor.
+- **Status**: Verified
+- **Details**: Now stores ImGui::GetMousePos() into color_picker_position on swatch click, then calls ImGui::SetNextWindowPos(color_picker_position, ImGuiCond_Always) before BeginTooltip() for both customization and tabard color pickers.
 
-- [ ] 425. [tab_characters.cpp] Missing document click handler for dismissing panels
+- [x] 425. [tab_characters.cpp] Missing document click handler for dismissing panels
 - **JS Source**: `src/js/modules/tab_characters.js` lines 2668–2685
-- **Status**: Pending
-- **Details**: JS adds a click listener that closes color pickers and import panels when clicking outside. C++ does not explicitly handle clicking outside these panels.
+- **Status**: Verified
+- **Details**: See entry 406 — same implementation covers both.
 
-- [ ] 426. [tab_characters.cpp] Missing unmounted() cleanup
+- [x] 426. [tab_characters.cpp] Missing unmounted() cleanup
 - **JS Source**: `src/js/modules/tab_characters.js` lines 2699–2701
-- **Status**: Pending
-- **Details**: JS has unmounted() calling reset_module_state() for cleanup when tab is destroyed. C++ does not export an unmounted function.
+- **Status**: Verified
+- **Details**: Added unmounted() function that calls reset_module_state(), declared in tab_characters.h.
 
 
 ## Tab: Creatures & Decor

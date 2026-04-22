@@ -55,6 +55,12 @@ void registerTab();
 void mounted();
 
 /**
+ * Tear down the characters tab (release GL resources, clear state).
+ * JS equivalent: unmounted() { reset_module_state(); }
+ */
+void unmounted();
+
+/**
  * Render the characters tab widget using ImGui.
  * Equivalent to the Vue component's template rendering.
  */
