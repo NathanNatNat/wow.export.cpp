@@ -21,21 +21,22 @@
 
 ## Building (Windows)
 
-**Terminal requirement**: cmake must run from the **"Developer Command Prompt (x64)"** terminal — `cl.exe` is not available in bash, PowerShell, or any other terminal type. This profile is already configured in `.vscode/settings.json` and set as the default; any new terminal opened in VS Code will have the correct MSVC environment automatically.
+**Use the VS Code CMake Tools extension** — this is the only supported way to build from Claude Code. The extension handles MSVC environment setup automatically.
 
-**Do NOT** attempt to build using `make`, `msbuild`, `ninja` directly, `gcc`/`g++`, or plain `cmake` from bash/PowerShell — these will all fail.
+**Do NOT** attempt to run `cmake`, `cl.exe`, `make`, `msbuild`, `ninja`, or any compiler from bash, PowerShell, or any shell — the MSVC environment (`INCLUDE`, `LIB`, etc.) is not available in those shells and all such attempts will fail.
 
+To trigger a build, use the VS Code task runner:
 ```
-cmake --preset windows-msvc-debug                    # configure (first time or after CMakeLists changes)
-cmake --build --preset windows-debug --parallel      # incremental build
-cmake --build --preset windows-debug --target clean  # clean
+Ctrl+Shift+P → Tasks: Run Build Task
 ```
+Or use the CMake Tools status bar buttons in VS Code (Build / Configure).
 
-**CMake presets:**
+**CMake presets (for reference — CMake Tools picks these up automatically):**
 - Configure: `windows-msvc-debug`, `windows-msvc-release`, `windows-msvc-relwithdebinfo`
 - Build: `windows-debug`, `windows-release`, `windows-relwithdebinfo`
+- Build output: `out/build/<preset-name>/`
 
-The build must compile without errors before any task is considered done.
+The build must compile without errors before any task is considered done. If you cannot trigger a build directly, state that a build verification is needed and ask the user to build and report any errors.
 
 ## Dependencies
 
