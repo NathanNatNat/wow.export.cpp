@@ -19,24 +19,43 @@
 - Build output: `out/build/<preset-name>/` (e.g. `out/build/windows-msvc-debug/`).
 - **Build prerequisites**: Python 3 and Jinja2 (`pip install jinja2`) are required at build time for GLAD2 OpenGL loader generation. CMake finds Python automatically; only Jinja2 needs manual installation.
 
-## Building (Windows)
+## Building
 
-**Use the VS Code CMake Tools extension** — this is the only supported way to build from Claude Code. The extension handles MSVC environment setup automatically.
+Use `scripts/build.ps1` (Windows) or `scripts/build.sh` (Linux). These scripts handle all environment setup and run configure + build in one step.
 
-**Do NOT** attempt to run `cmake`, `cl.exe`, `make`, `msbuild`, `ninja`, or any compiler from bash, PowerShell, or any shell — the MSVC environment (`INCLUDE`, `LIB`, etc.) is not available in those shells and all such attempts will fail.
+### Windows (MSVC x64)
 
-To trigger a build, use the VS Code task runner:
+Run from the Bash tool (or any shell with `pwsh` on PATH):
+
+```bash
+pwsh scripts/build.ps1                   # configure + build (debug)
+pwsh scripts/build.ps1 -Clean            # delete build dir, then configure + build
+pwsh scripts/build.ps1 -Config release   # release build
 ```
-Ctrl+Shift+P → Tasks: Run Build Task
-```
-Or use the CMake Tools status bar buttons in VS Code (Build / Configure).
 
-**CMake presets (for reference — CMake Tools picks these up automatically):**
+The script locates Visual Studio automatically via `vswhere.exe`, activates the MSVC x64 environment (`VsDevCmd.bat`), then runs `cmake --preset` + `cmake --build` in a single `cmd /c` chain. No manual environment setup needed.
+
+**CMake presets used:**
 - Configure: `windows-msvc-debug`, `windows-msvc-release`, `windows-msvc-relwithdebinfo`
 - Build: `windows-debug`, `windows-release`, `windows-relwithdebinfo`
-- Build output: `out/build/<preset-name>/`
+- Build output: `out/build/windows-msvc-<config>/`
 
-The build must compile without errors before any task is considered done. If you cannot trigger a build directly, state that a build verification is needed and ask the user to build and report any errors.
+**VS Code:** Use `Ctrl+Shift+P → Tasks: Run Build Task` — this runs the same script.
+
+### Linux (GCC x64)
+
+```bash
+bash scripts/build.sh              # configure + build (debug)
+CLEAN=1 bash scripts/build.sh      # delete build dir, then configure + build
+bash scripts/build.sh release      # release build
+```
+
+**CMake presets used:**
+- Configure: `linux-gcc-debug`, `linux-gcc-release`, `linux-gcc-relwithdebinfo`
+- Build: `linux-debug`, `linux-release`, `linux-relwithdebinfo`
+- Build output: `out/build/linux-gcc-<config>/`
+
+The build must compile without errors before any task is considered done.
 
 ## Dependencies
 
