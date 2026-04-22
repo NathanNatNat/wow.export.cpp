@@ -1056,9 +1056,14 @@ auto texResult = exportTextures(outDir, false, &mtl, helper);
 auto& validTextures = texResult.validTextures;
 for (const auto& [texKey, texInfo] : validTextures) {
 if (fileManifest) {
+// JS: texFileDataID is a number for regular textures, "data-X" string for data textures.
 uint32_t texID = 0;
-try { texID = std::stoul(texKey); } catch (...) {}
+bool is_numeric = false;
+try { texID = std::stoul(texKey); is_numeric = true; } catch (...) {}
+if (is_numeric)
 fileManifest->push_back({ "PNG", texID, texInfo.matPath });
+else
+fileManifest->push_back({ "PNG", texKey, texInfo.matPath });
 }
 }
 
@@ -1385,13 +1390,18 @@ auto texResult = exportTextures(outDir, true, nullptr, helper);
 nlohmann::json texturesManifest = nlohmann::json::array();
 for (const auto& [texKey, texInfo] : texResult.validTextures) {
 uint32_t texID = 0;
-try { texID = std::stoul(texKey); } catch (...) {}
+bool is_numeric = false;
+try { texID = std::stoul(texKey); is_numeric = true; } catch (...) {}
 texturesManifest.push_back({
-{ "fileDataID", texID },
+{ "fileDataID", is_numeric ? nlohmann::json(texID) : nlohmann::json(texKey) },
 { "file", std::filesystem::relative(texInfo.matPath, outDir).string() }
 });
-if (fileManifest)
+if (fileManifest) {
+if (is_numeric)
 fileManifest->push_back({ "BLP", texID, texInfo.matPath });
+else
+fileManifest->push_back({ "BLP", texKey, texInfo.matPath });
+}
 }
 
 manifest.addProperty("textures", texturesManifest);

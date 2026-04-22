@@ -444,6 +444,9 @@ root["animations"].push_back({
 }
 
 // Add bone nodes.
+// JS reads modelsExportWithBonePrefix once outside the loop (const at line 460 of GLTFWriter.js).
+const bool usePrefix = core::view->config.value("modelsExportWithBonePrefix", false);
+
 for (size_t bi = 0; bi < bones_ref.size(); bi++) {
 const size_t nodeIndex = nodes.size();
 const auto& bone = bones_ref[bi];
@@ -466,8 +469,6 @@ nodes[skeleton_idx]["children"].push_back(static_cast<int>(nodeIndex));
 }
 
 const std::string bone_name = get_bone_name(bone.boneID, static_cast<int>(bi), bone.boneNameCRC);
-
-const bool usePrefix = core::view->config.value("modelsExportWithBonePrefix", false);
 
 json prefix_node = {
 {"name", bone_name + "_p"},

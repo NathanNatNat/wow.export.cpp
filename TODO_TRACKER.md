@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 283/578 verified (49%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 302/578 verified (52%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -2662,12 +2662,12 @@
 - **Status**: Pending
 - **Details**: JS writes stack traces with `console.log(stackTrace)` in `mark(...)`; C++ routes stack trace strings through `logging::write(...)`, changing where detailed error output appears.
 
-- [ ] 522. [M2Exporter.cpp] `addURITexture` input contract differs from JS (data URI string vs decoded PNG buffer)
+- [x] 522. [M2Exporter.cpp] `addURITexture` input contract differs from JS (data URI string vs decoded PNG buffer)
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59–61, 111–112
 - **Status**: Pending
 - **Details**: JS stores a data-URI string and decodes it inside `exportTextures()`. C++ `addURITexture` accepts `BufferWrapper` PNG bytes directly, changing caller-facing behavior and where decoding occurs.
 
-- [ ] 523. [M2Exporter.cpp] Equipment UV2 export guard differs from JS truthy check
+- [x] 523. [M2Exporter.cpp] Equipment UV2 export guard differs from JS truthy check
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 568
 - **Status**: Pending
 - **Details**: JS exports UV2 when `config.modelsExportUV2 && uv2` (empty arrays are truthy). C++ requires `!uv2.empty()`, so empty-but-present UV2 buffers are not exported.
@@ -2682,22 +2682,22 @@
 - **Status**: Verified
 - **Details**: Analysis was incorrect. `SubMesh::triangleCount` is declared as `uint16_t` (Skin.h line 19), so the loop `for (uint16_t vI = 0; vI < mesh.triangleCount; vI++)` compares two `uint16_t` values and terminates correctly for all values 0–65535. When both the counter and limit are `uint16_t`, the loop exits when vI reaches triangleCount (not after wrapping). The infinite-loop scenario described requires triangleCount > 65535 which is impossible with a `uint16_t` field. No bug.
 
-- [ ] 526. [M2Exporter.cpp] addURITexture accepts BufferWrapper instead of data URI string
+- [x] 526. [M2Exporter.cpp] addURITexture accepts BufferWrapper instead of data URI string
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59–61
 - **Status**: Pending
 - **Details**: JS `addURITexture(out, dataURI)` stores a raw base64 data URI string, which is decoded later in `exportTextures()` via `BufferWrapper.fromBase64(dataTexture.replace(...))`. C++ `addURITexture(uint32_t textureType, BufferWrapper pngData)` accepts already-decoded PNG data, shifting the decoding responsibility to the caller. This is a contract change that alters the interface boundary — callers must now pre-decode the data URI before passing it. While not a bug if all callers are adapted, it changes the API surface compared to the original JS.
 
-- [ ] 527. [M2Exporter.cpp] JSON submesh serialization uses fixed field enumeration instead of JS Object.assign
+- [x] 527. [M2Exporter.cpp] JSON submesh serialization uses fixed field enumeration instead of JS Object.assign
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 794
 - **Status**: Pending
 - **Details**: JS uses `Object.assign({ enabled: subMeshEnabled }, skin.subMeshes[i])` which dynamically copies *all* properties from the submesh object. C++ (M2Exporter.cpp ~lines 1111–1126) manually enumerates a fixed set of properties (submeshID, level, vertexStart, vertexCount, triangleStart, triangleCount, boneCount, boneStart, boneInfluences, centerBoneIndex, centerPosition, sortCenterPosition, sortRadius). If the Skin's SubMesh struct gains new fields, they would automatically appear in JS JSON output but would be missing in C++ JSON output. This is a fragile pattern that could silently omit metadata.
 
-- [ ] 528. [M2Exporter.cpp] Data texture file manifest entries get fileDataID=0 instead of string key
+- [x] 528. [M2Exporter.cpp] Data texture file manifest entries get fileDataID=0 instead of string key
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 748
 - **Status**: Pending
 - **Details**: In JS, `texFileDataID` for data textures is the string key `"data-X"`, which gets stored as-is in the file manifest. In C++ (~line 1059), `std::stoul(texKey)` fails for `"data-X"` keys and `texID` defaults to 0 in the `catch (...)` block. This means data textures in the file manifest will have `fileDataID = 0` instead of a meaningful identifier, losing the ability to correlate manifest entries with specific data texture types.
 
-- [ ] 529. [M2Exporter.cpp] formatUnknownFile call signature differs from JS
+- [x] 529. [M2Exporter.cpp] formatUnknownFile call signature differs from JS
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 194
 - **Status**: Pending
 - **Details**: JS calls `listfile.formatUnknownFile(texFile)` where `texFile` is a string like `"12345.png"`. C++ (~line 410) calls `casc::listfile::formatUnknownFile(texFileDataID, raw ? ".blp" : ".png")` passing the numeric ID and extension separately. The C++ call passes `raw ? ".blp" : ".png"` but this code appears in the `!raw` branch (line 406 checks `!raw`), so the `raw` ternary would always evaluate to `.png`. While not necessarily a bug (depends on `formatUnknownFile` implementation), the call signature divergence means the output filename format may differ.
@@ -2717,17 +2717,17 @@
 - **Status**: Verified
 - **Details**: Analysis was incorrect. `LegacySubMesh::triangleCount` is `uint16_t` (M2LegacyLoader.h line 140). The loops `for (uint16_t vI = 0; vI < mesh.triangleCount; vI++)` compare two `uint16_t` values and terminate correctly for all 0–65535 values. No infinite loop is possible since the limit itself is uint16_t and can never exceed 65535. No bug.
 
-- [ ] 533. [M3Exporter.cpp] `addURITexture` input contract differs from JS (data URI string vs decoded PNG buffer)
+- [x] 533. [M3Exporter.cpp] `addURITexture` input contract differs from JS (data URI string vs decoded PNG buffer)
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 49–50
 - **Status**: Pending
 - **Details**: JS stores raw data-URI strings in `dataTextures`; C++ stores `BufferWrapper` PNG bytes, changing caller contract and data normalization stage.
 
-- [ ] 534. [M3Exporter.cpp] UV2 export condition checks non-empty instead of JS defined-ness
+- [x] 534. [M3Exporter.cpp] UV2 export condition checks non-empty instead of JS defined-ness
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 88–89, 141–142
 - **Status**: Pending
 - **Details**: JS exports UV1 whenever it is defined (`!== undefined`), including empty arrays. C++ requires `!m3->uv1.empty()`, which changes behavior for defined-but-empty UV sets.
 
-- [ ] 535. [M3Exporter.cpp] addURITexture accepts BufferWrapper instead of data URI string
+- [x] 535. [M3Exporter.cpp] addURITexture accepts BufferWrapper instead of data URI string
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 49–51
 - **Status**: Pending
 - **Details**: Same issue as M2Exporter: JS `addURITexture(out, dataURI)` stores a raw base64 data URI string keyed by output path. C++ `addURITexture(const std::string& out, BufferWrapper pngData)` accepts already-decoded PNG data. This is an API contract change that shifts decoding responsibility to the caller.
@@ -2812,52 +2812,52 @@
 - **Status**: Pending
 - **Details**: JS defines `async write(overwrite, format)` and awaits filesystem/export operations throughout. C++ exposes `void write(...)` and executes all I/O synchronously, changing call timing/error propagation semantics for callers expecting Promise behavior.
 
-- [ ] 552. [GLTFWriter.cpp] `add_scene_node` returns size_t index in C++ but the JS function returns the node object itself
+- [x] 552. [GLTFWriter.cpp] `add_scene_node` returns size_t index in C++ but the JS function returns the node object itself
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 276–280
 - **Status**: Pending
 - **Details**: JS `add_scene_node` returns the pushed node object reference (used for `skeleton.children.push()` later). C++ returns the index (size_t) instead, and uses index-based access to modify nodes later. This is functionally equivalent but bone parent lookup uses `bone_lookup_map[bone.parentBone]` to store the node index in C++ vs. storing the node object reference in JS. This difference means C++ accesses `nodes[parent_node_idx]` while JS mutates the object directly.
 
-- [ ] 553. [GLTFWriter.cpp] `add_buffered_accessor` lambda omits `target` from bufferView when `buffer_target < 0` in C++, JS passes `undefined` which is serialized differently
+- [x] 553. [GLTFWriter.cpp] `add_buffered_accessor` lambda omits `target` from bufferView when `buffer_target < 0` in C++, JS passes `undefined` which is serialized differently
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 282–296
 - **Status**: Pending
 - **Details**: JS `add_buffered_accessor` always includes `target: buffer_target` in the bufferView. When `buffer_target` is `undefined`, JSON.stringify omits the key entirely. C++ explicitly checks `if (buffer_target >= 0)` before adding the target key. This produces identical JSON output since JS `undefined` values are omitted by JSON.stringify, matching C++ not adding the key at all. Functionally equivalent.
 
-- [ ] 554. [GLTFWriter.cpp] Animation channel target node uses `actual_node_idx` (variable per prefix setting) but JS always uses `nodeIndex + 1`
+- [x] 554. [GLTFWriter.cpp] Animation channel target node uses `actual_node_idx` (variable per prefix setting) but JS always uses `nodeIndex + 1`
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 620–628, 757–765, 887–895
 - **Status**: Pending
 - **Details**: In JS, animation channel target node is always `nodeIndex + 1` regardless of prefix setting. In C++, `actual_node_idx` is used, which varies based on `usePrefix`. When `usePrefix` is true, C++ sets `actual_node_idx = nodes.size()` after pushing prefix_node (so it points to the real bone node, matching JS `nodeIndex + 1`). When `usePrefix` is false, `actual_node_idx = nodes.size()` before pushing the node, so it points to the same node. The JS code always does `nodeIndex + 1` which is only correct when prefix nodes exist. C++ correctly handles both cases. This is a JS bug that C++ fixes intentionally.
 
-- [ ] 555. [GLTFWriter.cpp] `bone_lookup_map` stores index-to-index mapping using `std::map<int, size_t>` instead of JS Map storing index-to-object
+- [x] 555. [GLTFWriter.cpp] `bone_lookup_map` stores index-to-index mapping using `std::map<int, size_t>` instead of JS Map storing index-to-object
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` line 464
 - **Status**: Pending
 - **Details**: JS `bone_lookup_map.set(bi, node)` stores the node object, which is then mutated later when children are added. C++ `bone_lookup_map[bi] = actual_node_idx` stores the index into the `nodes` array, and children are added via `nodes[parent_node_idx]["children"]`. This is functionally equivalent — JS mutates the object reference in the map and C++ indexes into the JSON array.
 
-- [ ] 556. [GLTFWriter.cpp] Mesh primitive always includes `material` property in JS even when `materialMap.get()` returns `undefined`, C++ conditionally omits it
+- [x] 556. [GLTFWriter.cpp] Mesh primitive always includes `material` property in JS even when `materialMap.get()` returns `undefined`, C++ conditionally omits it
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1110–1119
 - **Status**: Pending
 - **Details**: JS always sets `material: materialMap.get(mesh.matName)` in the primitive, even if the material isn't found (result is `undefined`, which gets stripped by JSON.stringify). C++ uses `auto mat_it = materialMap.find(mesh.matName)` and only sets `primitive["material"]` if found. The final JSON output is identical since JS undefined is omitted, but the approach differs.
 
-- [ ] 557. [GLTFWriter.cpp] Equipment mesh primitive always includes `material` in JS; C++ conditionally includes it
+- [x] 557. [GLTFWriter.cpp] Equipment mesh primitive always includes `material` in JS; C++ conditionally includes it
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1404–1411
 - **Status**: Pending
 - **Details**: Same pattern as entry 422 but for equipment meshes. JS sets `material: materialMap.get(mesh.matName)` which may be `undefined`. C++ checks `eq_mat_it != materialMap.end()` before setting material. Functionally equivalent in JSON output.
 
-- [ ] 558. [GLTFWriter.cpp] `addTextureBuffer` method does not exist in JS — C++ addition
+- [x] 558. [GLTFWriter.cpp] `addTextureBuffer` method does not exist in JS — C++ addition
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` (no equivalent)
 - **Status**: Pending
 - **Details**: C++ adds `addTextureBuffer(uint32_t fileDataID, BufferWrapper buffer)` method (lines 113–115) which has no JS counterpart. JS only has `setTextureBuffers()` to set the entire map at once. The C++ addition allows incrementally adding individual texture buffers, which changes the API surface.
 
-- [ ] 559. [GLTFWriter.cpp] Animation buffer name extraction in glb mode uses `rfind('_')` to extract `anim_idx`, but JS uses `split('_')` to get index at position 3
+- [x] 559. [GLTFWriter.cpp] Animation buffer name extraction in glb mode uses `rfind('_')` to extract `anim_idx`, but JS uses `split('_')` to get index at position 3
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1468–1470
 - **Status**: Pending
 - **Details**: JS extracts animation index from bufferView name via `name_parts = bufferView.name.split('_'); anim_idx = name_parts[3]`. C++ uses `bv_name.rfind('_')` and then `std::stoi(bv_name.substr(last_underscore + 1))` to get the animation index. For names like `TRANS_TIMESTAMPS_0_1`, JS gets `name_parts[3] = "1"`, C++ gets substring after last underscore = `"1"`. These produce the same result. However, for `SCALE_TIMESTAMPS_0_1`, both work the same. Functionally equivalent.
 
-- [ ] 560. [GLTFWriter.cpp] `skeleton` variable in JS is a node object reference, C++ is a node index
+- [x] 560. [GLTFWriter.cpp] `skeleton` variable in JS is a node object reference, C++ is a node index
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 344–347, 449
 - **Status**: Pending
 - **Details**: JS `const skeleton = add_scene_node({name: ..., children: []})` returns the actual node object. Later, `skeleton.children.push(nodeIndex)` mutates it directly. C++ `size_t skeleton_idx = add_scene_node(...)` gets an index, and later accesses `nodes[skeleton_idx]["children"].push_back(...)`. Functionally equivalent.
 
-- [ ] 561. [GLTFWriter.cpp] `usePrefix` is read inside the bone loop instead of outside like JS
+- [x] 561. [GLTFWriter.cpp] `usePrefix` is read inside the bone loop instead of outside like JS
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 460, 466
 - **Status**: Pending
 - **Details**: JS checks `core.view.config.modelsExportWithBonePrefix` outside the bone loop at line 460 (const is evaluated once). C++ reads `core::view->config.value("modelsExportWithBonePrefix", false)` inside the loop at line 470, which re-reads the config for every bone. Since config shouldn't change during export, this is functionally equivalent but slightly less efficient.

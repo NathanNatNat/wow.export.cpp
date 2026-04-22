@@ -10,6 +10,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "../../buffer.h"
@@ -38,7 +39,7 @@ struct M2ExportGeosetMask {
  */
 struct M2ExportFileManifest {
 	std::string type;
-	uint32_t fileDataID = 0;
+	std::variant<uint32_t, std::string> fileDataID;
 	std::filesystem::path file;
 };
 
