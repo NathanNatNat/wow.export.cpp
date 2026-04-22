@@ -686,13 +686,16 @@ void render() {
 
 	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("textures-filter", regions)) {
-		if (view.config.value("regexFilters", false))
+		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+		}
 
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterTextures.c_str(), sizeof(filter_buf) - 1);
-		if (ImGui::InputText("##FilterTextures", filter_buf, sizeof(filter_buf)))
+		if (ImGui::InputTextWithHint("##FilterTextures", "Filter textures...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterTextures = filter_buf;
 	}
 	app::layout::EndFilterBar();
@@ -752,10 +755,11 @@ void render() {
 
 		if (view.texturePreviewTexID != 0) {
 			// Fit the texture into the available area while preserving aspect ratio.
+			// JS: max-width/max-height from texture dimensions — never upscale beyond native size.
 			const ImVec2 avail = ImGui::GetContentRegionAvail();
 			const float tex_w = static_cast<float>(view.texturePreviewWidth);
 			const float tex_h = static_cast<float>(view.texturePreviewHeight);
-			const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
+			const float scale = std::min({avail.x / tex_w, avail.y / tex_h, 1.0f});
 			const ImVec2 img_size(tex_w * scale, tex_h * scale);
 
 			// Draw checkerboard transparency pattern behind texture.

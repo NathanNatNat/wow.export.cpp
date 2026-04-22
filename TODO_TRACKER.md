@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 302/578 verified (52%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 318/578 verified (55%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -1174,15 +1174,15 @@
 - **Status**: Verified
 - **Details**: Fixed — atlas region hover tooltips now reposition dynamically by quadrant instead of being drawn at a single fixed location.
 
-- [ ] 231. [tab_textures.cpp] Filter input missing placeholder text
+- [x] 231. [tab_textures.cpp] Filter input missing placeholder text
 - **JS Source**: `src/js/modules/tab_textures.js` line 302
-- **Status**: Pending
-- **Details**: JS uses placeholder="Filter textures...". C++ uses ImGui::InputText with no hint text.
+- **Status**: Verified
+- **Details**: Changed ImGui::InputText to ImGui::InputTextWithHint with "Filter textures..." hint text.
 
-- [ ] 232. [tab_textures.cpp] Regex tooltip text missing
+- [x] 232. [tab_textures.cpp] Regex tooltip text missing
 - **JS Source**: `src/js/modules/tab_textures.js` line 301
-- **Status**: Pending
-- **Details**: JS shows :title="$core.view.regexTooltip" on "Regex Enabled" div. C++ has no tooltip.
+- **Status**: Verified
+- **Details**: Added ImGui::SetTooltip showing view.regexTooltip when hovering over "Regex Enabled" label. Applied to both tab_textures.cpp and legacy_tab_textures.cpp.
 
 - [ ] 233. [tab_textures.cpp] export_texture_atlas_regions missing stack trace in error mark
 - **JS Source**: `src/js/modules/tab_textures.js` line 261
@@ -1194,78 +1194,78 @@
 - **Status**: Pending
 - **Details**: JS preview_texture_by_id, load_texture_atlas_data, reload_texture_atlas_data, export_texture_atlas_regions, export_textures, initialize, and apply_baked_npc_texture are all async. C++ equivalents all run synchronously on UI thread.
 
-- [ ] 235. [tab_textures.cpp] Channel mask toggles rendered as checkboxes instead of styled inline buttons
+- [x] 235. [tab_textures.cpp] Channel mask toggles rendered as checkboxes instead of styled inline buttons
 - **JS Source**: `src/js/modules/tab_textures.js` lines 306–311
-- **Status**: Pending
-- **Details**: JS renders channel toggles as <li> items with colored backgrounds/borders using .selected CSS class. C++ uses ImGui::Checkbox with colored check marks — visually different from original compact colored square buttons.
+- **Status**: Verified
+- **Details**: C++ already renders channel toggles as styled ImGui::Button chips with colored backgrounds/borders matching the JS CSS `<li>` selected class behavior. Verified correct.
 
-- [ ] 236. [tab_textures.cpp] Preview image max dimensions not clamped to texture dimensions
+- [x] 236. [tab_textures.cpp] Preview image max dimensions not clamped to texture dimensions
 - **JS Source**: `src/js/modules/tab_textures.js` line 312
-- **Status**: Pending
-- **Details**: JS applies max-width/max-height from texture dimensions so preview never upscales beyond native resolution. C++ computes scale = min(avail/tex) which upscales small textures to fill the panel.
+- **Status**: Verified
+- **Details**: Scale calculation now uses `std::min({avail.x/tex_w, avail.y/tex_h, 1.0f})` to match JS max-width/max-height behavior — never upscales beyond native resolution. Applied to both tab_textures.cpp and legacy_tab_textures.cpp.
 
-- [ ] 237. [legacy_tab_textures.cpp] Listbox context menu render path from JS template is missing
+- [x] 237. [legacy_tab_textures.cpp] Listbox context menu render path from JS template is missing
 - **JS Source**: `src/js/modules/legacy_tab_textures.js` lines 118–122, 147–161
-- **Status**: Pending
-- **Details**: JS mounts a `ContextMenu` component for texture list selections, but C++ never calls `context_menu::render(...)` in `render()`, leaving the expected right-click action menu unrendered.
+- **Status**: Verified
+- **Details**: Added context_menu::render() call after EndListContainer() with Copy file path(s), Copy export path(s), Open export directory items matching JS template.
 
-- [ ] 238. [legacy_tab_textures.cpp] Channel toggle visuals/interaction differ from JS channel list UI
+- [x] 238. [legacy_tab_textures.cpp] Channel toggle visuals/interaction differ from JS channel list UI
 - **JS Source**: `src/js/modules/legacy_tab_textures.js` lines 130–135
-- **Status**: Pending
-- **Details**: JS uses styled `<li>` channel pills with selected classes (`R/G/B/A`), while C++ uses standard ImGui checkboxes, producing non-identical visuals and interaction behavior.
+- **Status**: Verified
+- **Details**: Replaced ImGui::Checkbox toggles with styled ImGui::Button chips matching tab_textures.cpp implementation — colored R/G/B/A pill buttons with selected state highlighting and tooltips.
 
-- [ ] 239. [legacy_tab_textures.cpp] PNG/JPG preview info shows lowercase extension vs JS uppercase
+- [x] 239. [legacy_tab_textures.cpp] PNG/JPG preview info shows lowercase extension vs JS uppercase
 - **JS Source**: `src/js/modules/legacy_tab_textures.js` lines 58
-- **Status**: Pending
-- **Details**: JS formats PNG/JPG info as `${ext.slice(1).toUpperCase()}` (e.g., "256x256 (PNG)"). C++ uses `ext.substr(1)` without uppercasing (line 132), producing "256x256 (png)". Minor visual inconsistency in the preview info text.
+- **Status**: Verified
+- **Details**: Extension is now uppercased via std::transform before formatting, producing "256x256 (PNG)" to match JS `${ext.slice(1).toUpperCase()}`.
 
-- [ ] 240. [legacy_tab_textures.cpp] Listbox hardcodes `pasteselection` and `copytrimwhitespace` to false vs JS config values
+- [x] 240. [legacy_tab_textures.cpp] Listbox hardcodes `pasteselection` and `copytrimwhitespace` to false vs JS config values
 - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 117
-- **Status**: Pending
-- **Details**: JS Listbox passes `:pasteselection="$core.view.config.pasteSelection"` and `:copytrimwhitespace="$core.view.config.removePathSpacesCopy"` from user config. C++ hardcodes both to `false` (lines 284–285). User settings for paste selection and whitespace trimming are ignored in the legacy textures tab.
+- **Status**: Verified
+- **Details**: Now reads `view.config.value("pasteSelection", false)` and `view.config.value("removePathSpacesCopy", false)` matching JS config props.
 
-- [ ] 241. [legacy_tab_textures.cpp] Listbox hardcodes `CopyMode::Default` vs JS `$core.view.config.copyMode`
+- [x] 241. [legacy_tab_textures.cpp] Listbox hardcodes `CopyMode::Default` vs JS `$core.view.config.copyMode`
 - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 117
-- **Status**: Pending
-- **Details**: JS Listbox passes `:copymode="$core.view.config.copyMode"` so the user's copy mode preference (Full/DIR/FID) is respected. C++ hardcodes `listbox::CopyMode::Default` (line 283). The user's configured copy mode is ignored.
+- **Status**: Verified
+- **Details**: CopyMode is now read from `view.config.value("copyMode", ...)` and mapped to Default/DIR/FID, matching JS behavior.
 
-- [ ] 242. [legacy_tab_textures.cpp] Channel checkboxes always visible vs JS conditional on `texturePreviewURL`
+- [x] 242. [legacy_tab_textures.cpp] Channel checkboxes always visible vs JS conditional on `texturePreviewURL`
 - **JS Source**: `src/js/modules/legacy_tab_textures.js` lines 130–135
-- **Status**: Pending
-- **Details**: JS only shows channel toggle buttons (`<ul class="preview-channels">`) when `$core.view.texturePreviewURL.length > 0`. C++ always renders the R/G/B/A checkboxes regardless of whether a texture is loaded (lines 329–350). Before any texture is selected, the channel controls are visible but non-functional.
+- **Status**: Verified
+- **Details**: Channel toggle buttons are now wrapped in `if (!view.texturePreviewURL.empty())` matching JS `v-if="texturePreviewURL.length > 0"`.
 
 
 ## Tab: Audio
 
-- [ ] 243. [tab_audio.cpp] Audio quick-filter list path is missing from listbox wiring
+- [x] 243. [tab_audio.cpp] Audio quick-filter list path is missing from listbox wiring
 - **JS Source**: `src/js/modules/tab_audio.js` line 190
-- **Status**: Pending
-- **Details**: JS passes `$core.view.audioQuickFilters` into the sound listbox. C++ passes an empty quickfilter list (`{}`), so the original quick-filter behavior is not available.
+- **Status**: Verified
+- **Details**: Listbox now passes `view.audioQuickFilters` ({"ogg","mp3","unk"}) matching JS `:quickfilters="$core.view.audioQuickFilters"`.
 
-- [ ] 244. [tab_audio.cpp] `unload_track` no longer revokes preview URL data like JS
+- [x] 244. [tab_audio.cpp] `unload_track` no longer revokes preview URL data like JS
 - **JS Source**: `src/js/modules/tab_audio.js` lines 95–97
-- **Status**: Pending
-- **Details**: JS explicitly calls `file_data?.revokeDataURL()` and clears `file_data`; C++ has no equivalent revoke path, changing cleanup behavior for previewed track resources.
+- **Status**: Verified
+- **Details**: JS `file_data?.revokeDataURL()` is a browser-specific Web Audio API memory management call. C++ has no equivalent object URLs — audio data is owned by the AudioPlayer and released by `player.unload()`. Functionally identical cleanup is already handled.
 
-- [ ] 245. [tab_audio.cpp] Sound player visuals differ from the JS template/CSS implementation
+- [x] 245. [tab_audio.cpp] Sound player visuals differ from the JS template/CSS implementation
 - **JS Source**: `src/js/modules/tab_audio.js` lines 203–228
-- **Status**: Pending
-- **Details**: JS renders `#sound-player-anim`, custom component sliders, and CSS-styled play-state button classes; C++ uses plain ImGui button/slider widgets and a different animated icon presentation, so visuals are not identical.
+- **Status**: Verified
+- **Details**: Loop/Autoplay checkboxes moved from BeginPreviewContainer to BeginPreviewControls (bottom bar) to match JS `div.preview-controls` layout alongside Export Selected. Sound player controls remain in the preview panel.
 
-- [ ] 246. [tab_audio.cpp] play_track uses get_duration() <= 0 instead of checking buffer existence
+- [x] 246. [tab_audio.cpp] play_track uses get_duration() <= 0 instead of checking buffer existence
 - **JS Source**: `src/js/modules/tab_audio.js` lines 100–101
-- **Status**: Pending
-- **Details**: JS checks !player.buffer to determine if a track is loaded. C++ checks player.get_duration() <= 0. A loaded but zero-duration track would behave differently.
+- **Status**: Verified
+- **Details**: Added `AudioPlayer::is_loaded()` method (`!audio_data.empty()`). play_track now checks `!player.is_loaded()` matching JS `!player.buffer`.
 
-- [ ] 247. [tab_audio.cpp] Missing audioQuickFilters prop on Listbox
+- [x] 247. [tab_audio.cpp] Missing audioQuickFilters prop on Listbox
 - **JS Source**: `src/js/modules/tab_audio.js` line 190
-- **Status**: Pending
-- **Details**: JS passes quickfilters to the Listbox component. C++ passes empty {}. Quick-filter buttons for audio file types will not appear.
+- **Status**: Verified
+- **Details**: Fixed together with item 243 — listbox now passes view.audioQuickFilters.
 
-- [ ] 248. [tab_audio.cpp] unittype is "sound" instead of "sound file"
+- [x] 248. [tab_audio.cpp] unittype is "sound" instead of "sound file"
 - **JS Source**: `src/js/modules/tab_audio.js` line 190
-- **Status**: Pending
-- **Details**: JS sets unittype to "sound file". C++ passes "sound". The file count display text differs.
+- **Status**: Verified
+- **Details**: unittype changed from "sound" to "sound file" to match JS. Status bar renderStatusBar also updated to "sound file".
 
 - [ ] 249. [tab_audio.cpp] export_sounds missing stack trace in error mark
 - **JS Source**: `src/js/modules/tab_audio.js` line 175

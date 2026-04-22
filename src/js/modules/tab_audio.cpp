@@ -190,7 +190,7 @@ static void unload_track() {
 }
 
 static void play_track() {
-	if (player.get_duration() <= 0) {
+	if (!player.is_loaded()) {
 		if (selected_file.empty()) {
 			core::setToast("info", "You need to select an audio track first!", {}, -1, true);
 			return;
@@ -475,11 +475,11 @@ void render() {
 			copy_mode,
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
-			"sound", // unittype
+			"sound file", // unittype — JS: unittype="sound file"
 			nullptr, // overrideItems
 			false,   // disable
 			"sounds", // persistscrollkey
-			{},      // quickfilters
+			view.audioQuickFilters, // quickfilters — JS: :quickfilters="audioQuickFilters"
 			false,   // nocopy
 			listbox_state,
 			[&](const std::vector<std::string>& new_sel) {
@@ -524,7 +524,7 @@ void render() {
 
 	// --- Status bar ---
 	if (app::layout::BeginStatusBar("sounds-status", regions)) {
-		listbox::renderStatusBar("sound", {}, listbox_state);
+		listbox::renderStatusBar("sound file", view.audioQuickFilters, listbox_state);
 	}
 	app::layout::EndStatusBar();
 
@@ -589,8 +589,12 @@ void render() {
 		if (ImGui::SliderFloat("##VolumeSlider", &vol, 0.0f, 1.0f, "Vol: %.0f%%")) {
 			view.config["soundPlayerVolume"] = vol;
 		}
+	}
+	app::layout::EndPreviewContainer();
 
-		// Loop / Autoplay checkboxes.
+	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
+	// JS: div.preview-controls — Loop, Autoplay, Export Selected
+	if (app::layout::BeginPreviewControls("sounds-preview-controls", regions)) {
 		bool loop_val = view.config.value("soundPlayerLoop", false);
 		if (ImGui::Checkbox("Loop", &loop_val))
 			view.config["soundPlayerLoop"] = loop_val;
@@ -600,11 +604,9 @@ void render() {
 		bool autoplay_val = view.config.value("soundPlayerAutoPlay", false);
 		if (ImGui::Checkbox("Autoplay", &autoplay_val))
 			view.config["soundPlayerAutoPlay"] = autoplay_val;
-	}
-	app::layout::EndPreviewContainer();
 
-	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
-	if (app::layout::BeginPreviewControls("sounds-preview-controls", regions)) {
+		ImGui::SameLine();
+
 		const bool busy = view.isBusy > 0;
 		if (busy) app::theme::BeginDisabledButton();
 		if (ImGui::Button("Export Selected"))
