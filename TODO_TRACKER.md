@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 318/578 verified (55%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 335/578 verified (58%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -1453,35 +1453,35 @@
 
 ## Tab: Text & Fonts
 
-- [ ] 285. [tab_text.cpp] Text preview failure toast omits JS `View Log` action callback
+- [x] 285. [tab_text.cpp] Text preview failure toast omits JS `View Log` action callback
 - **JS Source**: `src/js/modules/tab_text.js` lines 138–139
-- **Status**: Pending
-- **Details**: JS preview failure toast provides `{ 'View Log': () => log.openRuntimeLog() }`; C++ passes empty toast actions, removing the original recovery handler.
+- **Status**: Verified
+- **Details**: Fixed. Error toast now passes `{ {"View Log", []() { logging::openRuntimeLog(); }} }` matching JS `{ 'View Log': () => log.openRuntimeLog() }`.
 
-- [ ] 286. [tab_text.cpp] Regex indicator tooltip metadata from JS template is missing
+- [x] 286. [tab_text.cpp] Regex indicator tooltip metadata from JS template is missing
 - **JS Source**: `src/js/modules/tab_text.js` line 31
-- **Status**: Pending
-- **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ renders plain `Regex Enabled` text without tooltip behavior.
+- **Status**: Verified
+- **Details**: Fixed. Added `if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", view.regexTooltip.c_str());` after "Regex Enabled" text.
 
-- [ ] 287. [tab_text.cpp] getFileByName vs getVirtualFileByName in preview and export
+- [x] 287. [tab_text.cpp] getFileByName vs getVirtualFileByName in preview and export
 - **JS Source**: `src/js/modules/tab_text.js` lines 129, 108
-- **Status**: Pending
-- **Details**: JS calls casc.getFileByName(first) for preview and export. C++ calls getVirtualFileByName which is a different method with different behavior (extra DBD manifest logic, unknown/ path handling).
+- **Status**: Verified
+- **Details**: Both C++ methods share identical name-resolution logic (DBD manifest, unknown/ prefix, listfile lookup). `getVirtualFileByName` returns fully decoded data from the virtual file cache; functionally equivalent to `getFileByName` for text files.
 
-- [ ] 288. [tab_text.cpp] readString() encoding parameter missing
+- [x] 288. [tab_text.cpp] readString() encoding parameter missing
 - **JS Source**: `src/js/modules/tab_text.js` line 130
-- **Status**: Pending
-- **Details**: JS calls file.readString(undefined, 'utf8') passing explicit utf8 encoding. C++ calls file.readString() with no encoding argument. May produce different output for non-ASCII content.
+- **Status**: Verified
+- **Details**: `file.readString(undefined, 'utf8')` in JS reads raw bytes as UTF-8. C++ `std::string` is byte-based, so `readString()` returns identical content. No functional difference for UTF-8 text files.
 
-- [ ] 289. [tab_text.cpp] Missing 'View Log' button in error toast
+- [x] 289. [tab_text.cpp] Missing 'View Log' button in error toast
 - **JS Source**: `src/js/modules/tab_text.js` lines 138–139
-- **Status**: Pending
-- **Details**: JS passes { 'View Log': () => log.openRuntimeLog() } as toast action. C++ passes empty {}. User has no way to open runtime log from error toast.
+- **Status**: Verified
+- **Details**: Fixed together with item 285. Same code location.
 
-- [ ] 290. [tab_text.cpp] Regex tooltip missing on "Regex Enabled" text
+- [x] 290. [tab_text.cpp] Regex tooltip missing on "Regex Enabled" text
 - **JS Source**: `src/js/modules/tab_text.js` line 31
-- **Status**: Pending
-- **Details**: JS has :title="$core.view.regexTooltip" showing tooltip on hover. C++ renders text with no tooltip.
+- **Status**: Verified
+- **Details**: Fixed together with item 286. Same code location.
 
 - [ ] 291. [tab_text.cpp] Filter input missing placeholder text
 - **JS Source**: `src/js/modules/tab_text.js` line 32
@@ -1493,35 +1493,35 @@
 - **Status**: Pending
 - **Details**: JS export_text is async with await for generics.fileExists(), casc.getFileByName(), and data.writeToFile(). C++ runs entirely synchronously, freezing UI during multi-file export.
 
-- [ ] 293. [tab_text.cpp] export_text error handler missing stack trace parameter
+- [x] 293. [tab_text.cpp] export_text error handler missing stack trace parameter
 - **JS Source**: `src/js/modules/tab_text.js` line 116
-- **Status**: Pending
-- **Details**: JS calls helper.mark(export_file_name, false, e.message, e.stack). C++ passes only e.what(), omitting stack trace.
+- **Status**: Verified
+- **Details**: `std::exception` has no `stack` property; C++ passes `e.what()` for the error message and omits stack trace (std::nullopt default). This is a known C++ limitation with no workaround using standard exceptions.
 
-- [ ] 294. [tab_text.cpp] Text preview child window padding differs from CSS
+- [x] 294. [tab_text.cpp] Text preview child window padding differs from CSS
 - **JS Source**: `src/js/modules/tab_text.js` line 36
-- **Status**: Pending
-- **Details**: CSS padding: 15px adds padding on all four sides. C++ sets ImGui::SetCursorPos(15, 15) for top-left only — no bottom/right padding. Content scrolls to exact end of text with no margin.
+- **Status**: Verified
+- **Details**: Fixed. Replaced `SetCursorPos(15, 15)` with `PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(15, 15))` before `BeginChild`, applying 15px padding on all four sides to match CSS `padding: 15px`.
 
-- [ ] 295. [tab_fonts.cpp] Font preview textarea is not rendered with the selected loaded font family
+- [x] 295. [tab_fonts.cpp] Font preview textarea is not rendered with the selected loaded font family
 - **JS Source**: `src/js/modules/tab_fonts.js` lines 67, 159–163
-- **Status**: Pending
-- **Details**: JS binds preview textarea style `fontFamily` to the loaded font id; C++ updates `fontPreviewFontFamily` state but renders `InputTextMultiline` without switching ImGui font, so preview text does not reflect selected font family.
+- **Status**: Verified
+- **Details**: Fixed. Added `ImGui::PushFont(static_cast<ImFont*>(preview_font))` / `PopFont()` around `InputTextMultiline` when a loaded font is available, matching JS `fontFamily` style binding.
 
-- [ ] 296. [tab_fonts.cpp] Loaded font cache contract differs from JS URL-based font-face lifecycle
+- [x] 296. [tab_fonts.cpp] Loaded font cache contract differs from JS URL-based font-face lifecycle
 - **JS Source**: `src/js/modules/tab_fonts.js` lines 10, 30–32
-- **Status**: Pending
-- **Details**: JS caches `font_id -> blob URL` from `inject_font_face`, preserving URL/font-face lifecycle; C++ caches `font_id -> void*` ImGui font pointer, changing resource model and API behavior.
+- **Status**: Verified
+- **Details**: Deliberate C++ deviation. JS caches `font_id -> blob URL` for CSS font-face; C++ caches `font_id -> ImFont*` for ImGui. The behavior (load once, reuse on subsequent selections) is functionally identical. Blob URLs have no C++ equivalent.
 
-- [ ] 297. [tab_fonts.cpp] Font preview textarea does not render in the loaded font
+- [x] 297. [tab_fonts.cpp] Font preview textarea does not render in the loaded font
 - **JS Source**: `src/js/modules/tab_fonts.js` line 67
-- **Status**: Pending
-- **Details**: JS applies fontFamily style to the preview textarea. C++ uses InputTextMultiline without pushing the loaded ImGui font. Preview renders in default font.
+- **Status**: Verified
+- **Details**: Fixed together with item 295. Same code location.
 
-- [ ] 298. [tab_fonts.cpp] Missing data.processAllBlocks() call in load_font
+- [x] 298. [tab_fonts.cpp] Missing data.processAllBlocks() call in load_font
 - **JS Source**: `src/js/modules/tab_fonts.js` lines 28–29
-- **Status**: Pending
-- **Details**: JS explicitly calls data.processAllBlocks() to ensure all BLTE blocks are decompressed. C++ calls getVirtualFileByName() without explicit processAllBlocks(). Font data may be incomplete.
+- **Status**: Verified
+- **Details**: `getVirtualFileByName()` returns a `BufferWrapper` wrapping fully decoded (decompressed) file content from the virtual file cache. All BLTE blocks are already decoded at this point. The explicit `processAllBlocks()` in JS is required because `getFileByName()` returns a lazy BLTE reader; the C++ equivalent is not needed.
 
 - [ ] 299. [tab_fonts.cpp] export_fonts missing stack trace in error mark
 - **JS Source**: `src/js/modules/tab_fonts.js` line 141
@@ -1533,30 +1533,30 @@
 - **Status**: Pending
 - **Details**: Both JS functions are async. C++ implementations are synchronous blocking the render thread.
 
-- [ ] 301. [legacy_tab_fonts.cpp] Preview text is not rendered with the selected font family
+- [x] 301. [legacy_tab_fonts.cpp] Preview text is not rendered with the selected font family
 - **JS Source**: `src/js/modules/legacy_tab_fonts.js` lines 78, 165–169
-- **Status**: Pending
-- **Details**: JS binds textarea `fontFamily` to `fontPreviewFontFamily`, but C++ renders `InputTextMultiline` without switching to the loaded `ImFont`, so font preview output does not use the selected legacy font.
+- **Status**: Verified
+- **Details**: Fixed. Added `ImGui::PushFont(active_font)` / `PopFont()` around `InputTextMultiline` when a loaded font is available, matching JS `fontFamily` textarea style binding.
 
-- [ ] 302. [legacy_tab_fonts.cpp] Font loading contract differs from JS URL-based `loaded_fonts` cache
+- [x] 302. [legacy_tab_fonts.cpp] Font loading contract differs from JS URL-based `loaded_fonts` cache
 - **JS Source**: `src/js/modules/legacy_tab_fonts.js` lines 18–41
-- **Status**: Pending
-- **Details**: JS caches `font_id -> blob URL` and reuses CSS font-family identifiers; C++ caches `font_id -> void*` ImGui font pointers, changing the original module’s data model and font-resource lifecycle behavior.
+- **Status**: Verified
+- **Details**: Deliberate C++ deviation. JS caches `font_id -> blob URL` for CSS font-face; C++ caches `font_id -> ImFont*` for ImGui. The behavior (load once, reuse on subsequent selections) is functionally identical. Blob URLs have no C++ equivalent. font-family identifiers; C++ caches `font_id -> void*` ImGui font pointers, changing the original module’s data model and font-resource lifecycle behavior.
 
-- [ ] 303. [legacy_tab_fonts.cpp] Glyph cells rendered in default ImGui font, not the selected font family
+- [x] 303. [legacy_tab_fonts.cpp] Glyph cells rendered in default ImGui font, not the selected font family
 - **JS Source**: `src/js/modules/legacy_tab_fonts.js` lines 88–91
-- **Status**: Pending
-- **Details**: JS glyph cells have `cell.style.fontFamily = '"${font_family}", monospace'` so each cell displays in the loaded font. C++ uses `ImGui::Selectable(utf8_buf, ...)` (line 263) which renders in the default ImGui font. Glyphs from the inspected font (e.g., decorative characters) will appear as the default UI font instead, making the glyph grid useless for visual font inspection.
+- **Status**: Verified
+- **Details**: Fixed. Added `ImGui::PushFont(active_font)` / `PopFont()` around the glyph grid loop so each cell renders in the loaded WoW font, matching JS `cell.style.fontFamily = '"${font_family}", monospace'` so each cell displays in the loaded font. C++ uses `ImGui::Selectable(utf8_buf, ...)` (line 263) which renders in the default ImGui font. Glyphs from the inspected font (e.g., decorative characters) will appear as the default UI font instead, making the glyph grid useless for visual font inspection.
 
-- [ ] 304. [legacy_tab_fonts.cpp] Font preview placeholder shown as tooltip vs JS textarea placeholder
+- [x] 304. [legacy_tab_fonts.cpp] Font preview placeholder shown as tooltip vs JS textarea placeholder
 - **JS Source**: `src/js/modules/legacy_tab_fonts.js` line 78
-- **Status**: Pending
-- **Details**: JS uses `<textarea :placeholder="$core.view.fontPreviewPlaceholder">` which shows ghost placeholder text inside the text area when empty. C++ uses `ImGui::SetItemTooltip(...)` (line 293) which only shows the text on mouse hover as a tooltip popup. The visual behavior differs — JS shows persistent in-field hint text; C++ shows nothing until hover.
+- **Status**: Verified
+- **Details**: Fixed. Replaced `ImGui::SetItemTooltip` with a manual draw-list text call over the empty input when not focused, matching JS textarea placeholder behavior (persistent ghost text inside empty field). Original said: JS uses `<textarea :placeholder="$core.view.fontPreviewPlaceholder">` which shows ghost placeholder text inside the text area when empty. C++ uses `ImGui::SetItemTooltip(...)` (line 293) which only shows the text on mouse hover as a tooltip popup. The visual behavior differs — JS shows persistent in-field hint text; C++ shows nothing until hover.
 
-- [ ] 305. [legacy_tab_fonts.cpp] Glyph cell size hardcoded 24x24 may not match JS CSS
+- [x] 305. [legacy_tab_fonts.cpp] Glyph cell size hardcoded 24x24 may not match JS CSS
 - **JS Source**: `src/js/modules/legacy_tab_fonts.js` line 76
-- **Status**: Pending
-- **Details**: C++ glyph cells use `ImVec2(24, 24)` (line 263) for the Selectable size. JS uses CSS class `font-glyph-cell` whose dimensions are defined in `app.css`. The CSS may define different sizing, padding, or font-size for glyph cells, causing a visual mismatch.
+- **Status**: Verified
+- **Details**: Fixed. Changed glyph cell size from `ImVec2(24, 24)` to `ImVec2(32, 32)` and updated wrap threshold to match CSS `.font-glyph-cell { width: 32px; height: 32px; }`. Original: C++ glyph cells use `ImVec2(24, 24)` (line 263) for the Selectable size. JS uses CSS class `font-glyph-cell` whose dimensions are defined in `app.css`. The CSS may define different sizing, padding, or font-size for glyph cells, causing a visual mismatch.
 
 
 ## Tab: Data

@@ -351,11 +351,27 @@ void render() {
 		// CSS: .font-preview-input { height: 120px; font-size: 32px; background: var(--background-dark); border: 1px solid var(--border); }
 		const float previewInputHeight = std::min(120.0f, ImGui::GetContentRegionAvail().y);
 		ImGui::PushStyleColor(ImGuiCol_FrameBg, app::theme::BG_DARK);
+
+		// JS: <textarea :style="{ fontFamily: $core.view.fontPreviewFontFamily }">
+		// Push the loaded ImGui font so the preview textarea renders in the selected WoW font.
+		void* preview_font = nullptr;
+		{
+			auto fit = loaded_fonts.find(view.fontPreviewFontFamily);
+			if (fit != loaded_fonts.end())
+				preview_font = fit->second;
+		}
+		if (preview_font)
+			ImGui::PushFont(static_cast<ImFont*>(preview_font));
+
 		char preview_buf[4096] = {};
 		std::strncpy(preview_buf, view.fontPreviewText.c_str(), sizeof(preview_buf) - 1);
 		if (ImGui::InputTextMultiline("##FontPreviewText", preview_buf, sizeof(preview_buf),
 			ImVec2(-1, previewInputHeight)))
 			view.fontPreviewText = preview_buf;
+
+		if (preview_font)
+			ImGui::PopFont();
+
 		ImGui::PopStyleColor();
 
 		if (view.fontPreviewText.empty())

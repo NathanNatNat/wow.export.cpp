@@ -87,7 +87,9 @@ static void pump_text_preview() {
 		core::setToast("error", std::format("The text file {} is encrypted with an unknown key ({}).", task.file_name, e.key), {}, -1);
 		logging::write(std::format("Failed to decrypt texture {} ({})", task.file_name, e.key));
 	} catch (const std::exception& e) {
-		core::setToast("error", "Unable to preview text file " + task.file_name, {}, -1);
+		// JS: this.$core.setToast('error', 'Unable to preview text file ' + first, { 'View Log': () => log.openRuntimeLog() }, -1);
+		core::setToast("error", "Unable to preview text file " + task.file_name,
+		               { {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 
@@ -209,8 +211,12 @@ void render() {
 
 	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("text-filter", regions)) {
-		if (view.config.value("regexFilters", false))
+		if (view.config.value("regexFilters", false)) {
+			// JS: <div class="regex-info" :title="$core.view.regexTooltip">Regex Enabled</div>
 			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+		}
 
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[256] = {};
@@ -225,16 +231,16 @@ void render() {
 	if (app::layout::BeginPreviewContainer("text-preview-container", regions)) {
 		// CSS: #tab-text .preview-container .preview-background { background: var(--background-dark); }
 		// CSS: #tab-text .preview-container .preview-background pre { overflow: scroll; padding: 15px; }
+		// WindowPadding applies 15px on all four sides, matching CSS padding: 15px.
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, app::theme::BG_DARK);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(15.0f, 15.0f));
 		ImGui::BeginChild("text-preview-background", ImVec2(0, 0), ImGuiChildFlags_None,
 		                  ImGuiWindowFlags_HorizontalScrollbar);
-
-		// Apply 15px padding inside the child region.
-		ImGui::SetCursorPos(ImVec2(15.0f, 15.0f));
 		// Pre-formatted text: no wrapping, monospace-style output.
 		ImGui::TextUnformatted(view.textViewerSelectedText.c_str());
 
 		ImGui::EndChild();
+		ImGui::PopStyleVar();
 		ImGui::PopStyleColor();
 	}
 	app::layout::EndPreviewContainer();
