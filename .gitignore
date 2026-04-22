@@ -110,6 +110,7 @@ TestResult.xml
 !.vscode/launch.json
 !.vscode/extensions.json
 !.vscode/c_cpp_properties.json
+!.vscode/msvc_build.bat
 *.code-workspace
 
 # =====================

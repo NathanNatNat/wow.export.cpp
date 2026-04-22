@@ -20,7 +20,7 @@ License: MIT
 
 #include <zlib.h>
 
-#include <mbedtls/md.h>
+#include <openssl/evp.h>
 
 #include <nlohmann/json.hpp>
 
@@ -246,44 +246,35 @@ std::string decode_utf16le_to_utf8(const uint8_t* data, size_t length) {
 
 
 
-/**
- * Compute a cryptographic hash using the mbedTLS MD (message digest) API.
- * Supports all algorithms mbedTLS provides: md5, sha1, sha224, sha256,
- * sha384, sha512 — matching Node.js crypto.createHash() flexibility.
- * Returns raw digest bytes.
- */
-static std::vector<uint8_t> mbedtls_hash(const uint8_t* data, size_t len,
-                                          mbedtls_md_type_t type) {
-	const mbedtls_md_info_t* info = mbedtls_md_info_from_type(type);
-	if (!info)
-		throw std::runtime_error("Unsupported mbedTLS hash algorithm");
-
-	mbedtls_md_context_t ctx;
-	mbedtls_md_init(&ctx);
-	if (mbedtls_md_setup(&ctx, info, 0) != 0 ||
-	    mbedtls_md_starts(&ctx) != 0 ||
-	    mbedtls_md_update(&ctx, data, len) != 0) {
-		mbedtls_md_free(&ctx);
-		throw std::runtime_error("mbedTLS hash computation failed");
+static std::vector<uint8_t> evp_hash(const uint8_t* data, size_t len,
+                                      const EVP_MD* md) {
+	EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+	if (!ctx)
+		throw std::runtime_error("EVP_MD_CTX_new failed");
+	if (EVP_DigestInit_ex(ctx, md, nullptr) != 1 ||
+	    EVP_DigestUpdate(ctx, data, len) != 1) {
+		EVP_MD_CTX_free(ctx);
+		throw std::runtime_error("Hash computation failed");
 	}
-
-	std::vector<uint8_t> digest(mbedtls_md_get_size(info));
-	if (mbedtls_md_finish(&ctx, digest.data()) != 0) {
-		mbedtls_md_free(&ctx);
-		throw std::runtime_error("mbedTLS hash finalization failed");
+	std::vector<uint8_t> digest(EVP_MD_size(md));
+	unsigned int digest_len = 0;
+	if (EVP_DigestFinal_ex(ctx, digest.data(), &digest_len) != 1) {
+		EVP_MD_CTX_free(ctx);
+		throw std::runtime_error("Hash finalization failed");
 	}
-	mbedtls_md_free(&ctx);
+	EVP_MD_CTX_free(ctx);
+	digest.resize(digest_len);
 	return digest;
 }
 
-static mbedtls_md_type_t hash_name_to_type(std::string_view name) {
-	if (name == "md5")    return MBEDTLS_MD_MD5;
-	if (name == "sha1")   return MBEDTLS_MD_SHA1;
-	if (name == "sha224") return MBEDTLS_MD_SHA224;
-	if (name == "sha256") return MBEDTLS_MD_SHA256;
-	if (name == "sha384") return MBEDTLS_MD_SHA384;
-	if (name == "sha512") return MBEDTLS_MD_SHA512;
-	return MBEDTLS_MD_NONE;
+static const EVP_MD* hash_name_to_md(std::string_view name) {
+	if (name == "md5")    return EVP_md5();
+	if (name == "sha1")   return EVP_sha1();
+	if (name == "sha224") return EVP_sha224();
+	if (name == "sha256") return EVP_sha256();
+	if (name == "sha384") return EVP_sha384();
+	if (name == "sha512") return EVP_sha512();
+	return nullptr;
 }
 
 static std::string digest_to_hex(const std::vector<uint8_t>& digest) {
@@ -1158,13 +1149,11 @@ _buf = std::move(buf);
 }
 
 std::string BufferWrapper::calculateHash(std::string_view hash, std::string_view encoding) {
-// Uses mbedTLS MD API — supports md5, sha1, sha224, sha256, sha384, sha512,
-// matching Node.js crypto.createHash() flexibility.
-mbedtls_md_type_t type = hash_name_to_type(hash);
-if (type == MBEDTLS_MD_NONE)
+const EVP_MD* md = hash_name_to_md(hash);
+if (!md)
 throw std::runtime_error("calculateHash: unsupported hash algorithm '" + std::string(hash) + "'");
 
-auto digest = mbedtls_hash(_buf.data(), _buf.size(), type);
+auto digest = evp_hash(_buf.data(), _buf.size(), md);
 
 if (encoding == "hex")
 return digest_to_hex(digest);

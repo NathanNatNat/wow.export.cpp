@@ -1,0 +1,18 @@
+{
+    // IntelliSense: use the compile_commands.json from the Debug build
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/out/build/windows-msvc-debug/compile_commands.json",
+
+    // Terminal profile: open a VS Developer Command Prompt from the + dropdown
+    "terminal.integrated.profiles.windows": {
+        "Developer Command Prompt (x64)": {
+            "path": "${env:COMSPEC}",
+            "args": [
+                "/k",
+                "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\Tools\\VsDevCmd.bat",
+                "-arch=amd64",
+                "-no_logo"
+            ],
+            "icon": "terminal-cmd"
+        }
+    }
+}

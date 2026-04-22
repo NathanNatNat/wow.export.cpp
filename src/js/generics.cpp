@@ -32,7 +32,7 @@
 #include <httplib.h>
 
 #include <zlib.h>
-#include <mbedtls/md.h>
+#include <openssl/evp.h>
 
 namespace generics {
 
@@ -267,7 +267,7 @@ std::vector<uint8_t> inflateData(const std::vector<uint8_t>& input) {
 /**
  * Compute hash of a file using streaming mbedTLS MD API.
  * JS: fs.createReadStream(file) piped to crypto.createHash().
- * C++ feeds the file in 64KB chunks to mbedtls_md_update(), so the entire
+ * C++ feeds the file in 64KB chunks to EVP_DigestUpdate(), so the entire
  * file is never loaded into memory — identical streaming semantics to JS.
  */
 std::string computeFileHash(const std::filesystem::path& file,
@@ -277,26 +277,25 @@ std::string computeFileHash(const std::filesystem::path& file,
 	if (!ifs.is_open())
 		throw std::runtime_error("Failed to open file for hashing: " + file.string());
 
-	// Map JS algorithm name to mbedTLS type
-	const auto nameToType = [](std::string_view name) {
-		if (name == "md5")    return MBEDTLS_MD_MD5;
-		if (name == "sha1")   return MBEDTLS_MD_SHA1;
-		if (name == "sha224") return MBEDTLS_MD_SHA224;
-		if (name == "sha256") return MBEDTLS_MD_SHA256;
-		if (name == "sha384") return MBEDTLS_MD_SHA384;
-		if (name == "sha512") return MBEDTLS_MD_SHA512;
-		return MBEDTLS_MD_NONE;
+	const auto nameToMD = [](std::string_view name) -> const EVP_MD* {
+		if (name == "md5")    return EVP_md5();
+		if (name == "sha1")   return EVP_sha1();
+		if (name == "sha224") return EVP_sha224();
+		if (name == "sha256") return EVP_sha256();
+		if (name == "sha384") return EVP_sha384();
+		if (name == "sha512") return EVP_sha512();
+		return nullptr;
 	};
 
-	mbedtls_md_type_t type = nameToType(method);
-	if (type == MBEDTLS_MD_NONE)
+	const EVP_MD* md = nameToMD(method);
+	if (!md)
 		throw std::runtime_error("computeFileHash: unsupported algorithm '" + std::string(method) + "'");
 
-	const mbedtls_md_info_t* info = mbedtls_md_info_from_type(type);
-	mbedtls_md_context_t ctx;
-	mbedtls_md_init(&ctx);
-	if (mbedtls_md_setup(&ctx, info, 0) != 0 || mbedtls_md_starts(&ctx) != 0) {
-		mbedtls_md_free(&ctx);
+	EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+	if (!ctx)
+		throw std::runtime_error("computeFileHash: EVP_MD_CTX_new failed");
+	if (EVP_DigestInit_ex(ctx, md, nullptr) != 1) {
+		EVP_MD_CTX_free(ctx);
 		throw std::runtime_error("computeFileHash: failed to initialize hash");
 	}
 
@@ -304,19 +303,21 @@ std::string computeFileHash(const std::filesystem::path& file,
 	std::array<char, CHUNK> buf;
 	while (ifs.read(buf.data(), CHUNK) || ifs.gcount() > 0) {
 		auto n = static_cast<size_t>(ifs.gcount());
-		if (mbedtls_md_update(&ctx, reinterpret_cast<const uint8_t*>(buf.data()), n) != 0) {
-			mbedtls_md_free(&ctx);
+		if (EVP_DigestUpdate(ctx, buf.data(), n) != 1) {
+			EVP_MD_CTX_free(ctx);
 			throw std::runtime_error("computeFileHash: hash update failed");
 		}
 		if (ifs.eof()) break;
 	}
 
-	std::vector<uint8_t> digest(mbedtls_md_get_size(info));
-	if (mbedtls_md_finish(&ctx, digest.data()) != 0) {
-		mbedtls_md_free(&ctx);
+	std::vector<uint8_t> digest(EVP_MD_size(md));
+	unsigned int digest_len = 0;
+	if (EVP_DigestFinal_ex(ctx, digest.data(), &digest_len) != 1) {
+		EVP_MD_CTX_free(ctx);
 		throw std::runtime_error("computeFileHash: hash finalization failed");
 	}
-	mbedtls_md_free(&ctx);
+	EVP_MD_CTX_free(ctx);
+	digest.resize(digest_len);
 
 	if (encoding == "hex") {
 		constexpr char hex_chars[] = "0123456789abcdef";

@@ -51,7 +51,6 @@ set(_REQUIRED_SUBMODULES
     "extern/imgui                 imgui.cpp"
     "extern/json                  CMakeLists.txt"
     "extern/libwebp               CMakeLists.txt"
-    "extern/mbedtls               CMakeLists.txt"
     "extern/miniaudio             miniaudio.h"
     "extern/minizip-ng            CMakeLists.txt"
     "extern/nanosvg               CMakeLists.txt"
@@ -224,15 +223,7 @@ set(SPDLOG_BUILD_ALL        OFF CACHE BOOL "" FORCE)
 set(SPDLOG_INSTALL          OFF CACHE BOOL "" FORCE)
 add_subdirectory(extern/spdlog EXCLUDE_FROM_ALL)
 
-# ── mbedTLS (bundled crypto — MD hash API only, not used for TLS) ──
-# Used by buffer.cpp and generics.cpp for MD5/SHA1/SHA256.
-# TLS/HTTPS is handled by OpenSSL (prebuilt on Windows, system on Linux).
-set(ENABLE_PROGRAMS        OFF CACHE BOOL "" FORCE)
-set(ENABLE_TESTING         OFF CACHE BOOL "" FORCE)
-set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
-add_subdirectory(extern/mbedtls EXCLUDE_FROM_ALL)
-
-# ── OpenSSL for HTTPS ─────────────────────────────────────────────────────────
+#── OpenSSL for HTTPS ─────────────────────────────────────────────────────────
 # On Windows: use our committed prebuilt x64 DLLs (no system package needed).
 # On Linux: use the system OpenSSL (libssl-dev must be installed).
 if(WIN32)
@@ -366,8 +357,8 @@ target_link_libraries(wow_export_cpp PRIVATE
     miniaudio
     # HTTP + TLS (OpenSSL via vcpkg, linked transitively via httplib)
     httplib::httplib
-    # Crypto hashing (mbedTLS MD API — replaces hand-rolled MD5/SHA1/SHA256)
-    mbedcrypto
+    # Crypto hashing (OpenSSL EVP — libcrypto already linked for HTTPS)
+    OpenSSL::Crypto
     # Native file dialogs
     portable_file_dialogs
     # Logging (bundles fmt)
