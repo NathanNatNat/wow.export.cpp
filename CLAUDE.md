@@ -75,7 +75,6 @@ Most dependencies are git submodules in `extern/`. CMake manages them automatica
 | Archive I/O | minizip-ng (ZIP read/write — C++ equivalent of JS adm-zip) |
 | Image I/O | stb_image / stb_image_write, libwebp, nanosvg |
 | Audio | miniaudio |
-| Video | FFmpeg LGPL shared (prebuilt x64 DLLs in `extern/ffmpeg-prebuilt/`, downloaded by `scripts/setup-ffmpeg.ps1`; provides WebM/VP9 decoding for home showcase; avformat + avcodec + avutil + swscale) |
 | File Dialogs | portable-file-dialogs (cross-platform native open/save/folder dialogs) |
 | Threading | `std::jthread`, `std::async` (standard library) |
 
@@ -126,9 +125,17 @@ Most dependencies are git submodules in `extern/`. CMake manages them automatica
 
 ## Fidelity Rules
 
+### Intentional Stubs
+The following files are intentionally left as documented stubs and do **not** need to be implemented:
+- **`src/js/components/home-showcase.cpp`** — `render()` is a no-op. The JS component renders a rotating image showcase with background-layer compositing, optional video playback, and Refresh/Feedback links. The full JS template is documented in the file header.
+- **`src/js/modules/tab_home.cpp`** — `renderHomeLayout()` is a no-op. The JS template renders a two-column grid: HomeShowcase on the left, whatsNewHTML panel on the right, and Discord/GitHub/Patreon help-button cards at the bottom. The full JS layout is documented in the file header.
+
+Do **not** add TODO entries for these files. Do **not** implement them unless explicitly asked.
+
 ### General Conversion Fidelity
 - Conversions must be fully comprehensive — every function, method, constant, code path, and UI element from the JS source must be ported.
 - The C++ conversion must be functionally and visually identical to the original JavaScript code. Nothing may be left as a permanent stub or silently omitted.
+- The intentional stubs listed under **Intentional Stubs** above are exceptions to this rule.
 - Always do a thorough comparison against the original JS source when making changes or reviewing code.
 - **Existing C++ code is not assumed correct.** Much of the codebase has already been converted, but previous conversions may contain errors, omissions, or deviations from the original JS source. When working on any file, always verify the existing C++ code against the original JS and fix any issues found.
 - Deviations from the original JS source are strongly discouraged. Only deviate when a direct port is genuinely impossible in C++. In such cases, document the deviation with a comment explaining why it was necessary and how it differs from the original JS behavior.

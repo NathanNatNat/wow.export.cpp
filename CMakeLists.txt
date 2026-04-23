@@ -231,26 +231,6 @@ else()
     find_package(OpenSSL REQUIRED)
 endif()
 
-#── FFmpeg for WebM/VP9 video decoding ────────────────────────────────────────
-# On Windows: use our prebuilt LGPL shared x64 binaries (populated by setup-ffmpeg.ps1).
-# On Linux:   use system FFmpeg libraries (libavcodec-dev etc. must be installed).
-if(WIN32)
-    add_subdirectory(extern/ffmpeg-prebuilt EXCLUDE_FROM_ALL)
-else()
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(LIBAVCODEC  REQUIRED libavcodec)
-    pkg_check_modules(LIBAVFORMAT REQUIRED libavformat)
-    pkg_check_modules(LIBAVUTIL   REQUIRED libavutil)
-    pkg_check_modules(LIBSWSCALE  REQUIRED libswscale)
-
-    foreach(_lib avcodec avformat avutil swscale)
-        string(TOUPPER "${_lib}" _LIB)
-        add_library(FFmpeg::${_lib} INTERFACE IMPORTED GLOBAL)
-        target_compile_options(FFmpeg::${_lib}  INTERFACE ${LIB${_LIB}_CFLAGS_OTHER})
-        target_include_directories(FFmpeg::${_lib} INTERFACE ${LIB${_LIB}_INCLUDE_DIRS})
-        target_link_libraries(FFmpeg::${_lib}   INTERFACE ${LIB${_LIB}_LINK_LIBRARIES})
-    endforeach()
-endif()
 
 # ── cpp-httplib (HTTP client/server, header-only) ─────────────
 # Enable HTTPS/TLS via OpenSSL (prebuilt on Windows, system on Linux).
@@ -378,11 +358,6 @@ target_link_libraries(wow_export_cpp PRIVATE
     portable_file_dialogs
     # Logging (bundles fmt)
     spdlog::spdlog
-    # Video decoding (WebM/VP9 for home showcase)
-    FFmpeg::avformat
-    FFmpeg::avcodec
-    FFmpeg::avutil
-    FFmpeg::swscale
 )
 
 # Platform-specific link dependencies

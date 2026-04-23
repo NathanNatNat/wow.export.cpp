@@ -44,4 +44,11 @@ void renderHomeLayout();
  */
 void navigate(const char* module_name);
 
+/**
+ * Free all GL textures held by the home tab (background, icons, showcase cache).
+ * Should be called on application shutdown.
+ * TODO #166: Call this during app teardown once a shutdown hook is in place.
+ */
+void cleanup();
+
 } // namespace tab_home
