@@ -36,6 +36,7 @@
 #include <optional>
 #include <regex>
 #include <string>
+#include <thread>
 #include <unordered_set>
 #include <vector>
 
@@ -95,6 +96,7 @@ static model_viewer_utils::ViewStateProxy view_state;
 static std::unique_ptr<model_viewer_utils::AnimationMethods> anim_methods;
 
 static bool is_initialized = false;
+static bool is_initializing = false;
 
 static listbox::ListboxState listbox_decor_state;
 
@@ -336,8 +338,6 @@ static void apply_filters() {
 
 // --- initialize ---
 static void initialize() {
-	auto& view = *core::view;
-
 	core::showLoadingScreen(3);
 
 	core::progressLoadingScreen("Loading model file data...");
@@ -444,43 +444,50 @@ static void initialize() {
 
 	// Category mask/groups are stored module-locally and synced to view as JSON in apply_filters.
 
-	apply_filters();
+	core::postToMainThread([]() {
+		apply_filters();
 
-	//     this.$core.view.decorViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
-	if (view.decorViewerContext.is_null()) {
-		view.decorViewerContext = nlohmann::json::object();
+		//     this.$core.view.decorViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
+		if (core::view->decorViewerContext.is_null()) {
+			core::view->decorViewerContext = nlohmann::json::object();
 
-		// Wire model viewer context callbacks.
-		viewer_context.getActiveRenderer = []() -> M2RendererGL* {
-			return get_active_m2_renderer();
-		};
-		viewer_context.renderActiveModel = [](const float* view_mat, const float* proj_mat) {
-			if (active_renderer_result.m3)
-				active_renderer_result.m3->render(view_mat, proj_mat);
-			else if (active_renderer_result.wmo)
-				active_renderer_result.wmo->render(view_mat, proj_mat);
-		};
-		viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
-													const std::array<float, 3>& rot,
-													const std::array<float, 3>& scale) {
-			if (active_renderer_result.wmo)
-				active_renderer_result.wmo->setTransform(pos, rot, scale);
-		};
-		viewer_context.getActiveBoundingBox = []() -> std::optional<model_viewer_gl::BoundingBox> {
-			if (active_renderer_result.m2) {
-				auto bb = active_renderer_result.m2->getBoundingBox();
-				if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
-			} else if (active_renderer_result.m3) {
-				auto bb = active_renderer_result.m3->getBoundingBox();
-				if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
-			} else if (active_renderer_result.wmo) {
-				auto bb = active_renderer_result.wmo->getBoundingBox();
-				if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
-			}
-			return std::nullopt;
-		};
-	}
+			viewer_context.getActiveRenderer = []() -> M2RendererGL* {
+				return get_active_m2_renderer();
+			};
+			viewer_context.renderActiveModel = [](const float* view_mat, const float* proj_mat) {
+				if (active_renderer_result.m3)
+					active_renderer_result.m3->render(view_mat, proj_mat);
+				else if (active_renderer_result.wmo)
+					active_renderer_result.wmo->render(view_mat, proj_mat);
+			};
+			viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
+														const std::array<float, 3>& rot,
+														const std::array<float, 3>& scale) {
+				if (active_renderer_result.wmo)
+					active_renderer_result.wmo->setTransform(pos, rot, scale);
+			};
+			viewer_context.getActiveBoundingBox = []() -> std::optional<model_viewer_gl::BoundingBox> {
+				if (active_renderer_result.m2) {
+					auto bb = active_renderer_result.m2->getBoundingBox();
+					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+				} else if (active_renderer_result.m3) {
+					auto bb = active_renderer_result.m3->getBoundingBox();
+					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+				} else if (active_renderer_result.wmo) {
+					auto bb = active_renderer_result.wmo->getBoundingBox();
+					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+				}
+				return std::nullopt;
+			};
+		}
 
+		prev_category_mask_checked.clear();
+		for (const auto& e : category_mask)
+			prev_category_mask_checked.push_back(e.checked);
+
+		is_initialized = true;
+		is_initializing = false;
+	});
 	core::hideLoadingScreen();
 }
 
@@ -608,20 +615,16 @@ void registerTab() {
 }
 
 void mounted() {
-	view_state = model_viewer_utils::create_view_state("decor");
+	if (is_initializing) return;
+	is_initializing = true;
 
-	initialize();
+	view_state = model_viewer_utils::create_view_state("decor");
 
 	// Create animation methods helper.
 	anim_methods = std::make_unique<model_viewer_utils::AnimationMethods>(
 		get_active_m2_renderer,
 		get_view_state_ptr
 	);
-
-	// Store initial category mask state for change-detection.
-	prev_category_mask_checked.clear();
-	for (const auto& e : category_mask)
-		prev_category_mask_checked.push_back(e.checked);
 
 	auto& view = *core::view;
 	if (view.decorViewerAnimSelection.is_string())
@@ -636,7 +639,9 @@ void mounted() {
 		model_viewer_utils::toggle_uv_layer(view_state, get_active_m2_renderer(), layer_name);
 	}));
 
-	is_initialized = true;
+	// Launch heavy DB initialization on background thread so the loading screen is visible.
+	// prev_category_mask_checked, is_initialized, and is_initializing are set in initialize()'s postToMainThread lambda.
+	std::thread(initialize).detach();
 }
 
 M2RendererGL* getActiveRenderer() {

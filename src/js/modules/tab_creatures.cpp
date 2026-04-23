@@ -55,6 +55,7 @@
 #include <optional>
 #include <regex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -153,6 +154,7 @@ static std::vector<nlohmann::json> prev_selection_creatures;
 static std::vector<bool> prev_equipment_checked;
 
 static bool is_initialized = false;
+static bool is_initializing = false;
 
 static listbox::ListboxState listbox_creatures_state;
 static menu_button::MenuButtonState menu_button_creatures_state;
@@ -1488,8 +1490,6 @@ static void export_creatures() {
 
 // --- initialize ---
 static void initialize() {
-	auto& view = *core::view;
-
 	core::showLoadingScreen(8);
 
 	core::progressLoadingScreen("Loading model file data...");
@@ -1534,51 +1534,54 @@ static void initialize() {
 		return name_a < name_b;
 	});
 
-	view.listfileCreatures = std::move(entries);
+	core::postToMainThread([entries = std::move(entries)]() mutable {
+		core::view->listfileCreatures = std::move(entries);
 
-	if (view.creatureViewerContext.is_null()) {
-		view.creatureViewerContext = nlohmann::json::object();
+		if (core::view->creatureViewerContext.is_null()) {
+			core::view->creatureViewerContext = nlohmann::json::object();
 
-		// Wire model viewer context callbacks.
-		viewer_context.getActiveRenderer = []() -> M2RendererGL* {
-			return get_active_m2_renderer();
-		};
-		viewer_context.renderActiveModel = [](const float* view_mat, const float* proj_mat) {
-			if (active_renderer_result.m3)
-				active_renderer_result.m3->render(view_mat, proj_mat);
-			else if (active_renderer_result.wmo)
-				active_renderer_result.wmo->render(view_mat, proj_mat);
-		};
-		viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
-													const std::array<float, 3>& rot,
-													const std::array<float, 3>& scale) {
-			if (active_renderer_result.wmo)
-				active_renderer_result.wmo->setTransform(pos, rot, scale);
-		};
-		viewer_context.getActiveBoundingBox = []() -> std::optional<model_viewer_gl::BoundingBox> {
-			if (active_renderer_result.m2) {
-				auto bb = active_renderer_result.m2->getBoundingBox();
-				if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
-			} else if (active_renderer_result.m3) {
-				auto bb = active_renderer_result.m3->getBoundingBox();
-				if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
-			} else if (active_renderer_result.wmo) {
-				auto bb = active_renderer_result.wmo->getBoundingBox();
-				if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
-			}
-			return std::nullopt;
-		};
-		viewer_context.useCharacterControls = true;
-		viewer_context.getEquipmentRenderers = []() -> std::unordered_map<int, model_viewer_gl::EquipmentSlotRenderers>* {
-			rebuild_renderer_adapter_maps();
-			return equip_adapter_map.empty() ? nullptr : &equip_adapter_map;
-		};
-		viewer_context.getCollectionRenderers = []() -> std::unordered_map<int, model_viewer_gl::CollectionSlotRenderers>* {
-			rebuild_renderer_adapter_maps();
-			return coll_adapter_map.empty() ? nullptr : &coll_adapter_map;
-		};
-	}
+			viewer_context.getActiveRenderer = []() -> M2RendererGL* {
+				return get_active_m2_renderer();
+			};
+			viewer_context.renderActiveModel = [](const float* view_mat, const float* proj_mat) {
+				if (active_renderer_result.m3)
+					active_renderer_result.m3->render(view_mat, proj_mat);
+				else if (active_renderer_result.wmo)
+					active_renderer_result.wmo->render(view_mat, proj_mat);
+			};
+			viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
+														const std::array<float, 3>& rot,
+														const std::array<float, 3>& scale) {
+				if (active_renderer_result.wmo)
+					active_renderer_result.wmo->setTransform(pos, rot, scale);
+			};
+			viewer_context.getActiveBoundingBox = []() -> std::optional<model_viewer_gl::BoundingBox> {
+				if (active_renderer_result.m2) {
+					auto bb = active_renderer_result.m2->getBoundingBox();
+					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+				} else if (active_renderer_result.m3) {
+					auto bb = active_renderer_result.m3->getBoundingBox();
+					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+				} else if (active_renderer_result.wmo) {
+					auto bb = active_renderer_result.wmo->getBoundingBox();
+					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+				}
+				return std::nullopt;
+			};
+			viewer_context.useCharacterControls = true;
+			viewer_context.getEquipmentRenderers = []() -> std::unordered_map<int, model_viewer_gl::EquipmentSlotRenderers>* {
+				rebuild_renderer_adapter_maps();
+				return equip_adapter_map.empty() ? nullptr : &equip_adapter_map;
+			};
+			viewer_context.getCollectionRenderers = []() -> std::unordered_map<int, model_viewer_gl::CollectionSlotRenderers>* {
+				rebuild_renderer_adapter_maps();
+				return coll_adapter_map.empty() ? nullptr : &coll_adapter_map;
+			};
+		}
 
+		is_initialized = true;
+		is_initializing = false;
+	});
 	core::hideLoadingScreen();
 }
 
@@ -1589,9 +1592,10 @@ void registerTab() {
 }
 
 void mounted() {
-	view_state = model_viewer_utils::create_view_state("creature");
+	if (is_initializing) return;
+	is_initializing = true;
 
-	initialize();
+	view_state = model_viewer_utils::create_view_state("creature");
 
 	// Create animation methods helper.
 	anim_methods = std::make_unique<model_viewer_utils::AnimationMethods>(
@@ -1619,7 +1623,9 @@ void mounted() {
 		model_viewer_utils::toggle_uv_layer(view_state, get_active_m2_renderer(), layer_name);
 	}));
 
-	is_initialized = true;
+	// Launch heavy DB initialization on background thread so the loading screen is visible.
+	// is_initialized and is_initializing are set in initialize()'s postToMainThread lambda.
+	std::thread(initialize).detach();
 }
 
 M2RendererGL* getActiveRenderer() {

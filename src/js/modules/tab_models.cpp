@@ -41,6 +41,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <imgui.h>
@@ -77,6 +78,7 @@ static std::vector<nlohmann::json> prev_skins_selection;
 static std::optional<std::string> prev_anim_selection;
 static std::vector<nlohmann::json> prev_selection_models;
 static bool is_initialized = false;
+static bool is_initializing = false;
 
 static listbox::ListboxState listbox_models_state;
 
@@ -478,23 +480,24 @@ static void export_model_action() {
 }
 
 static void initialize() {
-	auto& view = *core::view;
+	bool enable_unknown = core::view->config.value("enableUnknownFiles", false);
+	bool enable_skins = core::view->config.value("enableM2Skins", false);
 
 	int step_count = 2;
-	if (view.config.value("enableUnknownFiles", false)) step_count++;
-	if (view.config.value("enableM2Skins", false)) step_count += 2;
+	if (enable_unknown) step_count++;
+	if (enable_skins) step_count += 2;
 
 	core::showLoadingScreen(step_count);
 
 	core::progressLoadingScreen("Loading model file data...");
 	db::caches::DBModelFileData::initializeModelFileData();
 
-	if (view.config.value("enableUnknownFiles", false)) {
+	if (enable_unknown) {
 		core::progressLoadingScreen("Loading unknown models...");
 		casc::listfile::loadUnknownModels();
 	}
 
-	if (view.config.value("enableM2Skins", false)) {
+	if (enable_skins) {
 		core::progressLoadingScreen("Loading item displays...");
 		db::caches::DBItemDisplays::initializeItemDisplays();
 
@@ -504,41 +507,44 @@ static void initialize() {
 
 	core::progressLoadingScreen("Initializing 3D preview...");
 
-	//     this.$core.view.modelViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
-	if (view.modelViewerContext.is_null()) {
-		view.modelViewerContext = nlohmann::json::object();
+	core::postToMainThread([]() {
+		//     this.$core.view.modelViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
+		if (core::view->modelViewerContext.is_null()) {
+			core::view->modelViewerContext = nlohmann::json::object();
 
-		// Wire model viewer context callbacks.
-		viewer_context.getActiveRenderer = []() -> M2RendererGL* {
-			return get_active_m2_renderer();
-		};
-		viewer_context.renderActiveModel = [](const float* view_mat, const float* proj_mat) {
-			if (active_renderer_result.m3)
-				active_renderer_result.m3->render(view_mat, proj_mat);
-			else if (active_renderer_result.wmo)
-				active_renderer_result.wmo->render(view_mat, proj_mat);
-		};
-		viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
-													const std::array<float, 3>& rot,
-													const std::array<float, 3>& scale) {
-			if (active_renderer_result.wmo)
-				active_renderer_result.wmo->setTransform(pos, rot, scale);
-		};
-		viewer_context.getActiveBoundingBox = []() -> std::optional<model_viewer_gl::BoundingBox> {
-			if (active_renderer_result.m2) {
-				auto bb = active_renderer_result.m2->getBoundingBox();
-				if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
-			} else if (active_renderer_result.m3) {
-				auto bb = active_renderer_result.m3->getBoundingBox();
-				if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
-			} else if (active_renderer_result.wmo) {
-				auto bb = active_renderer_result.wmo->getBoundingBox();
-				if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
-			}
-			return std::nullopt;
-		};
-	}
+			viewer_context.getActiveRenderer = []() -> M2RendererGL* {
+				return get_active_m2_renderer();
+			};
+			viewer_context.renderActiveModel = [](const float* view_mat, const float* proj_mat) {
+				if (active_renderer_result.m3)
+					active_renderer_result.m3->render(view_mat, proj_mat);
+				else if (active_renderer_result.wmo)
+					active_renderer_result.wmo->render(view_mat, proj_mat);
+			};
+			viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
+														const std::array<float, 3>& rot,
+														const std::array<float, 3>& scale) {
+				if (active_renderer_result.wmo)
+					active_renderer_result.wmo->setTransform(pos, rot, scale);
+			};
+			viewer_context.getActiveBoundingBox = []() -> std::optional<model_viewer_gl::BoundingBox> {
+				if (active_renderer_result.m2) {
+					auto bb = active_renderer_result.m2->getBoundingBox();
+					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+				} else if (active_renderer_result.m3) {
+					auto bb = active_renderer_result.m3->getBoundingBox();
+					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+				} else if (active_renderer_result.wmo) {
+					auto bb = active_renderer_result.wmo->getBoundingBox();
+					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+				}
+				return std::nullopt;
+			};
+		}
 
+		is_initialized = true;
+		is_initializing = false;
+	});
 	core::hideLoadingScreen();
 }
 
@@ -624,6 +630,9 @@ void registerTab() {
 }
 
 void mounted() {
+	if (is_initializing) return;
+	is_initializing = true;
+
 	auto& view = *core::view;
 
 	view_state = model_viewer_utils::create_view_state("model");
@@ -650,8 +659,6 @@ void mounted() {
 		}
 	});
 
-	initialize();
-
 	// Create animation methods helper.
 	anim_methods = std::make_unique<model_viewer_utils::AnimationMethods>(
 		get_active_m2_renderer,
@@ -674,7 +681,9 @@ void mounted() {
 		model_viewer_utils::toggle_uv_layer(view_state, get_active_m2_renderer(), layer_name);
 	}));
 
-	is_initialized = true;
+	// Launch heavy DB initialization on background thread so the loading screen is visible.
+	// is_initialized and is_initializing are set in initialize()'s postToMainThread lambda.
+	std::thread(initialize).detach();
 }
 
 void export_files(const std::vector<nlohmann::json>& files, bool is_local, int export_id) {

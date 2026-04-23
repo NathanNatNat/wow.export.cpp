@@ -32,6 +32,7 @@ License: MIT
 #include <filesystem>
 #include <algorithm>
 #include <optional>
+#include <thread>
 #include <unordered_map>
 #include <set>
 #include <regex>
@@ -583,81 +584,81 @@ modules::register_nav_button("tab_zones", "Zones", "mountain-castle.svg", instal
 }
 
 void mounted() {
-auto& view = *core::view;
+// Store initial config values for change-detection (fast read, main thread).
+prev_show_zone_base_map = core::view->config.value("showZoneBaseMap", true);
+prev_show_zone_overlays = core::view->config.value("showZoneOverlays", true);
 
-core::showLoadingScreen(3);
+// Launch heavy DB initialization on background thread so the loading screen is visible.
+std::thread([]() {
+	core::showLoadingScreen(3);
 
-core::progressLoadingScreen("Loading map tiles...");
-casc::db2::preloadTable("UiMapArtTile");
+	core::progressLoadingScreen("Loading map tiles...");
+	casc::db2::preloadTable("UiMapArtTile");
 
-core::progressLoadingScreen("Loading map overlays...");
-casc::db2::preloadTable("WorldMapOverlay");
-casc::db2::preloadTable("WorldMapOverlayTile");
+	core::progressLoadingScreen("Loading map overlays...");
+	casc::db2::preloadTable("WorldMapOverlay");
+	casc::db2::preloadTable("WorldMapOverlayTile");
 
-core::progressLoadingScreen("Loading zone data...");
+	core::progressLoadingScreen("Loading zone data...");
 
-//         expansion_map.set(id, entry.ExpansionID);
-std::unordered_map<int, int> expansion_map;
-auto& map_table = casc::db2::getTable("Map");
-if (!map_table.isLoaded)
-	map_table.parse();
+	std::unordered_map<int, int> expansion_map;
+	auto& map_table = casc::db2::getTable("Map");
+	if (!map_table.isLoaded)
+		map_table.parse();
 
-for (const auto& [id, row] : map_table.getAllRows()) {
-	auto exp_it = row.find("ExpansionID");
-	if (exp_it != row.end())
-		expansion_map[static_cast<int>(id)] = fieldToInt(exp_it->second);
-}
+	for (const auto& [id, row] : map_table.getAllRows()) {
+		auto exp_it = row.find("ExpansionID");
+		if (exp_it != row.end())
+			expansion_map[static_cast<int>(id)] = fieldToInt(exp_it->second);
+	}
 
-logging::write(std::format("loaded {} maps for expansion mapping", expansion_map.size()));
+	logging::write(std::format("loaded {} maps for expansion mapping", expansion_map.size()));
 
-//         available_zones.add(entry.AreaID);
-std::set<int> available_zones;
-auto& ui_map_assignment = casc::db2::getTable("UiMapAssignment");
-if (!ui_map_assignment.isLoaded)
-	ui_map_assignment.parse();
+	std::set<int> available_zones;
+	auto& ui_map_assignment = casc::db2::getTable("UiMapAssignment");
+	if (!ui_map_assignment.isLoaded)
+		ui_map_assignment.parse();
 
-for (const auto& [id, row] : ui_map_assignment.getAllRows()) {
-	auto area_it = row.find("AreaID");
-	if (area_it != row.end())
-		available_zones.insert(fieldToInt(area_it->second));
-}
+	for (const auto& [id, row] : ui_map_assignment.getAllRows()) {
+		auto area_it = row.find("AreaID");
+		if (area_it != row.end())
+			available_zones.insert(fieldToInt(area_it->second));
+	}
 
-logging::write(std::format("loaded {} zones from UiMapAssignment", available_zones.size()));
+	logging::write(std::format("loaded {} zones from UiMapAssignment", available_zones.size()));
 
-auto& area_table = casc::db2::getTable("AreaTable");
-if (!area_table.isLoaded)
-	area_table.parse();
+	auto& area_table = casc::db2::getTable("AreaTable");
+	if (!area_table.isLoaded)
+		area_table.parse();
 
-std::vector<std::string> zone_entries;
-for (const auto& [id, row] : area_table.getAllRows()) {
-	if (!available_zones.contains(static_cast<int>(id)))
-		continue;
+	std::vector<std::string> zone_entries;
+	for (const auto& [id, row] : area_table.getAllRows()) {
+		if (!available_zones.contains(static_cast<int>(id)))
+			continue;
 
-	auto cont_it = row.find("ContinentID");
-	int continent_id = (cont_it != row.end()) ? fieldToInt(cont_it->second) : 0;
-	int expansion_id = expansion_map.count(continent_id) ? expansion_map[continent_id] : 0;
+		auto cont_it = row.find("ContinentID");
+		int continent_id = (cont_it != row.end()) ? fieldToInt(cont_it->second) : 0;
+		int expansion_id = expansion_map.count(continent_id) ? expansion_map[continent_id] : 0;
 
-	auto name_it = row.find("AreaName_lang");
-	std::string area_name = (name_it != row.end()) ? fieldToString(name_it->second) : "";
+		auto name_it = row.find("AreaName_lang");
+		std::string area_name = (name_it != row.end()) ? fieldToString(name_it->second) : "";
 
-	auto zone_it = row.find("ZoneName");
-	std::string zone_name = (zone_it != row.end()) ? fieldToString(zone_it->second) : "";
+		auto zone_it = row.find("ZoneName");
+		std::string zone_name = (zone_it != row.end()) ? fieldToString(zone_it->second) : "";
 
-	zone_entries.push_back(std::format("{}\x19[{}]\x19{}\x19({})",
-		expansion_id, id, area_name, zone_name));
-}
+		zone_entries.push_back(std::format("{}\x19[{}]\x19{}\x19({})",
+			expansion_id, id, area_name, zone_name));
+	}
 
-view.zoneViewerZones.clear();
-for (const auto& entry : zone_entries)
-view.zoneViewerZones.push_back(entry);
+	logging::write(std::format("loaded {} zones from AreaTable", zone_entries.size()));
 
-logging::write(std::format("loaded {} zones from AreaTable", zone_entries.size()));
-
-core::hideLoadingScreen();
-
-// Store initial config values for change-detection.
-prev_show_zone_base_map = view.config.value("showZoneBaseMap", true);
-prev_show_zone_overlays = view.config.value("showZoneOverlays", true);
+	core::postToMainThread([zone_entries = std::move(zone_entries)]() mutable {
+		core::view->zoneViewerZones.clear();
+		for (const auto& entry : zone_entries)
+			core::view->zoneViewerZones.push_back(entry);
+	});
+	core::hideLoadingScreen();
+}).detach();
 }
 
 static void copy_zone_names(const std::vector<std::string>& selection);

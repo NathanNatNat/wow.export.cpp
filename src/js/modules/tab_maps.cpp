@@ -49,6 +49,7 @@ License: MIT
 #include <regex>
 #include <set>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -204,6 +205,7 @@ static std::optional<WMOMinimapData> current_wmo_minimap;
 // Change-detection for watches
 static std::string prev_selection_first;
 static bool tab_initialized = false;
+static bool tab_initializing = false;
 
 // Component states
 static listbox_maps::ListboxMapsState listbox_state;
@@ -1591,10 +1593,13 @@ maps.push_back(std::format("{}\x19[{}]\x19{}\x19({})", expansion_id, id, map_nam
 }
 }
 
-core::view->mapViewerMaps.clear();
-for (const auto& m : maps)
-core::view->mapViewerMaps.push_back(m);
-
+core::postToMainThread([maps = std::move(maps)]() mutable {
+	core::view->mapViewerMaps.clear();
+	for (const auto& m : maps)
+		core::view->mapViewerMaps.push_back(m);
+	tab_initialized = true;
+	tab_initializing = false;
+});
 core::hideLoadingScreen();
 }
 
@@ -1618,11 +1623,13 @@ auto& view = *core::view;
 // Poll for pending async export (one tile per frame).
 pump_map_export();
 
-// Lazy initialization (equivalent of mounted() calling initialize())
-if (!tab_initialized) {
-tab_initialized = true;
-initialize();
+// Lazy initialization on background thread so the loading screen is visible.
+if (!tab_initialized && !tab_initializing) {
+tab_initializing = true;
+std::thread(initialize).detach();
 }
+if (!tab_initialized)
+return;
 
 // --- Watch: selectionMaps ---
 std::string current_selection_first;
