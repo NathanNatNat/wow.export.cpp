@@ -205,7 +205,7 @@ void render() {
 
 	char filter_buf[256] = {};
 	std::strncpy(filter_buf, view.userInputFilterRaw.c_str(), sizeof(filter_buf) - 1);
-	if (ImGui::InputText("##FilterFiles", filter_buf, sizeof(filter_buf)))
+	if (ImGui::InputTextWithHint("##FilterFiles", "Filter files...", filter_buf, sizeof(filter_buf)))
 		view.userInputFilterRaw = filter_buf;
 
 	ImGui::SameLine();

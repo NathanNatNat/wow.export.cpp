@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 333/550 verified (61%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 349/550 verified (63%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -772,10 +772,10 @@
 - **Status**: Pending
 - **Details**: JS match() performs a search anywhere in string. C++ uses std::regex_match which requires the ENTIRE string to match. Directory names like blender-2.83 would match in JS but fail in C++.
 
-- [ ] 180. [tab_blender.cpp] Blender version comparison uses numeric instead of string comparison
+- [x] 180. [tab_blender.cpp] Blender version comparison uses numeric instead of string comparison
 - **JS Source**: `src/js/modules/tab_blender.js` lines 91, 139
-- **Status**: Pending
-- **Details**: JS compares version strings lexicographically. C++ converts to double via std::stod() and compares numerically. Versions like 2.80 vs 2.8 would compare differently.
+- **Status**: Verified
+- **Details**: The original assessment was incorrect. JS `version >= constants.BLENDER.MIN_VER` where `version` is a string and `MIN_VER = 2.8` (a number) performs numeric coercion in JS, not lexicographic comparison. C++ `std::stod(version) >= constants::BLENDER::MIN_VER` produces identical results. The numeric comparison is actually more correct for future versions (e.g., Blender 10.x would fail string comparison). No change needed.
 
 - [x] 181. [tab_blender.cpp] start_automatic_install and checkLocalVersion are synchronous
 - **JS Source**: `src/js/modules/tab_blender.js` lines 81, 127
@@ -832,15 +832,15 @@
 - **Status**: Pending
 - **Details**: JS passes :copymode="$core.view.config.copyMode" to the strings Listbox. C++ hardcodes listbox::CopyMode::Default.
 
-- [ ] 192. [tab_install.cpp] First listbox unittype should be "install file" not "file"
+- [x] 192. [tab_install.cpp] First listbox unittype should be "install file" not "file"
 - **JS Source**: `src/js/modules/tab_install.js` line 165
-- **Status**: Pending
-- **Details**: JS template has unittype="install file". C++ passes "file". The status bar will show "X files found" instead of "X install files found".
+- **Status**: Verified
+- **Details**: Fixed — changed `"file"` to `"install file"` in the listbox::render call for the install files listbox.
 
-- [ ] 193. [tab_install.cpp] Strings listbox nocopy incorrectly set to true
+- [x] 193. [tab_install.cpp] Strings listbox nocopy incorrectly set to true
 - **JS Source**: `src/js/modules/tab_install.js` line 184
-- **Status**: Pending
-- **Details**: The JS strings Listbox does NOT pass :nocopy (defaults to false). C++ passes true for nocopy, incorrectly disabling copy functionality in the strings list view.
+- **Status**: Verified
+- **Details**: Fixed — changed nocopy from `true` to `false` for the strings listbox, matching JS default (no :nocopy attribute).
 
 - [ ] 194. [tab_install.cpp] Strings sidebar missing CSS styling equivalents
 - **JS Source**: `src/js/modules/tab_install.js` lines 194–197
@@ -857,10 +857,10 @@
 - **Status**: Pending
 - **Details**: JS "Regex Enabled" div has :title="$core.view.regexTooltip" showing tooltip on hover. C++ has no tooltip implementation.
 
-- [ ] 197. [tab_install.cpp] extract_strings and update_install_listfile exposed in header but should be file-local
+- [x] 197. [tab_install.cpp] extract_strings and update_install_listfile exposed in header but should be file-local
 - **JS Source**: `src/js/modules/tab_install.js` lines 16, 41
-- **Status**: Pending
-- **Details**: In JS, extract_strings and update_install_listfile are file-local (not exported). C++ header exposes them publicly. They should be static in the .cpp and removed from the header.
+- **Status**: Verified
+- **Details**: Fixed — removed both declarations from tab_install.h and added `static` to both function definitions in tab_install.cpp. Also removed the now-unused `<string>`, `<vector>`, `<cstdint>` includes from the header.
 
 
 ## Tab: Models
@@ -1181,10 +1181,10 @@
 - **Status**: Pending
 - **Details**: JS calls `helper.mark(export_file_name, false, e.message, e.stack)` with 4 arguments including the stack trace. C++ calls `helper.mark(export_file_name, false, e.what())` with only 3 arguments (line 239). Error stack information is lost in C++ export failure reports.
 
-- [ ] 260. [legacy_tab_audio.cpp] Filter input missing placeholder text "Filter sound files..."
+- [x] 260. [legacy_tab_audio.cpp] Filter input missing placeholder text "Filter sound files..."
 - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 213
-- **Status**: Pending
-- **Details**: JS filter input has `placeholder="Filter sound files..."`. C++ `ImGui::InputText("##FilterLegacySounds", ...)` (line 420) has no placeholder/hint text. The empty filter field won't show the helpful hint.
+- **Status**: Verified
+- **Details**: Fixed — changed `ImGui::InputText` to `ImGui::InputTextWithHint` with hint `"Filter sound files..."` to match JS placeholder.
 
 
 ## Tab: Video
@@ -1274,10 +1274,10 @@
 - **Status**: Pending
 - **Details**: JS shows no toast before the initial HTTP request — it only shows "Video is being processed..." on 202 status. C++ always shows a "Connecting to video server..." progress toast before the request, which is not in the original.
 
-- [ ] 278. [tab_videos.cpp] "View Log" button text capitalization differs from JS
+- [x] 278. [tab_videos.cpp] "View Log" button text capitalization differs from JS
 - **JS Source**: `src/js/modules/tab_videos.js` lines 195, 215
-- **Status**: Pending
-- **Details**: JS uses lowercase `'view log'`. C++ uses title case `"View Log"`.
+- **Status**: Verified
+- **Details**: Fixed — changed `"View Log"` to `"view log"` in the setToast action to match JS.
 
 - [ ] 279. [tab_videos.cpp] Filter input buffer capped at 255 chars
 - **JS Source**: `src/js/modules/tab_videos.js` line 490
@@ -1299,10 +1299,10 @@
 - **Status**: Pending
 - **Details**: JS explicitly sets `'User-Agent': constants.USER_AGENT` for the MP4 download fetch. C++ uses `generics::get(*mp4_url)` which may or may not set User-Agent, depending on that function's implementation.
 
-- [ ] 283. [tab_videos.cpp] Dead variable prev_selection_first never read
+- [x] 283. [tab_videos.cpp] Dead variable prev_selection_first never read
 - **JS Source**: `src/js/modules/tab_videos.js` (none)
-- **Status**: Pending
-- **Details**: `prev_selection_first` is set on line 953 but never read for any comparison. The selection comparison uses `selected_file` instead. This is dead code.
+- **Status**: Verified
+- **Details**: Fixed — removed the `prev_selection_first` static variable declaration and its assignment site.
 
 - [ ] 284. [tab_videos.cpp] Dev-mode trigger_kino_processing not exposed in C++
 - **JS Source**: `src/js/modules/tab_videos.js` lines 468–469
@@ -1342,10 +1342,10 @@
 - **Status**: Verified
 - **Details**: Fixed together with item 286. Same code location.
 
-- [ ] 291. [tab_text.cpp] Filter input missing placeholder text
+- [x] 291. [tab_text.cpp] Filter input missing placeholder text
 - **JS Source**: `src/js/modules/tab_text.js` line 32
-- **Status**: Pending
-- **Details**: JS has placeholder="Filter text files...". C++ uses ImGui::InputText with no hint text.
+- **Status**: Verified
+- **Details**: Fixed — changed `ImGui::InputText` to `ImGui::InputTextWithHint` with hint `"Filter text files..."` to match JS placeholder.
 
 - [x] 292. [tab_text.cpp] export_text is synchronous instead of async
 - **JS Source**: `src/js/modules/tab_text.js` lines 77–121
@@ -1430,20 +1430,20 @@
 - **Status**: Pending
 - **Details**: JS error toast includes `{'View Log': () => log.openRuntimeLog()}`; C++ error toast uses empty actions, removing the original recovery handler.
 
-- [ ] 308. [tab_data.cpp] Listbox single parameter is true should be false (multi-select broken)
+- [x] 308. [tab_data.cpp] Listbox single parameter is true should be false (multi-select broken)
 - **JS Source**: `src/js/modules/tab_data.js` lines 97–99
-- **Status**: Pending
-- **Details**: JS Listbox does not pass single, enabling multi-selection. C++ passes true restricting to single-entry mode. This breaks all multi-table export logic.
+- **Status**: Verified
+- **Details**: Fixed — changed single from `true` to `false` in the db2 listbox render call, restoring multi-selection to match JS default.
 
-- [ ] 309. [tab_data.cpp] Listbox nocopy is false should be true
+- [x] 309. [tab_data.cpp] Listbox nocopy is false should be true
 - **JS Source**: `src/js/modules/tab_data.js` line 99
-- **Status**: Pending
-- **Details**: JS passes nocopy true to disable Ctrl+C. C++ passes false leaving Ctrl+C enabled.
+- **Status**: Verified
+- **Details**: Fixed — changed nocopy from `false` to `true` in the db2 listbox render call to match JS `:nocopy="true"`.
 
-- [ ] 310. [tab_data.cpp] Listbox unittype is "table" should be "db2 file"
+- [x] 310. [tab_data.cpp] Listbox unittype is "table" should be "db2 file"
 - **JS Source**: `src/js/modules/tab_data.js` line 99
-- **Status**: Pending
-- **Details**: JS uses unittype "db2 file". C++ passes "table". The file count display text differs.
+- **Status**: Verified
+- **Details**: Fixed — changed unittype from `"table"` to `"db2 file"` to match JS template.
 
 - [ ] 311. [tab_data.cpp] Listbox pasteselection and copytrimwhitespace hardcoded false
 - **JS Source**: `src/js/modules/tab_data.js` lines 98–99
@@ -1500,15 +1500,15 @@
 - **Status**: Pending
 - **Details**: JS uses `full_path.split('\\')` to extract the DBC filename from backslash-delimited MPQ paths. C++ uses `std::filesystem::path(full_path).filename()` (line 81). On Linux, `std::filesystem::path` treats `\` as a regular character, not a separator, so `filename()` would return the entire path string instead of just the filename. This would cause the table name extraction to fail for MPQ paths like `DBFilesClient\Achievement.dbc`.
 
-- [ ] 322. [legacy_tab_data.cpp] Listbox `unittype` is "table" vs JS "dbc file"
+- [x] 322. [legacy_tab_data.cpp] Listbox `unittype` is "table" vs JS "dbc file"
 - **JS Source**: `src/js/modules/legacy_tab_data.js` line 131
-- **Status**: Pending
-- **Details**: JS Listbox uses `unittype="dbc file"` for the file count display. C++ uses `"table"` (line 293). The status bar will show "X tables" instead of "X dbc files", which is a user-facing text difference.
+- **Status**: Verified
+- **Details**: Fixed — changed unittype from `"table"` to `"dbc file"` to match JS template.
 
-- [ ] 323. [legacy_tab_data.cpp] Listbox `nocopy` is `false` vs JS `:nocopy="true"`
+- [x] 323. [legacy_tab_data.cpp] Listbox `nocopy` is `false` vs JS `:nocopy="true"`
 - **JS Source**: `src/js/modules/legacy_tab_data.js` line 131
-- **Status**: Pending
-- **Details**: JS DBC listbox has `:nocopy="true"` which disables CTRL+C copy functionality. C++ passes `false` for nocopy (line 297), allowing copy. This is a behavioral difference — users can copy DBC table names in C++ but not in JS.
+- **Status**: Verified
+- **Details**: Fixed — changed nocopy from `false` to `true` to match JS `:nocopy="true"`.
 
 - [ ] 324. [legacy_tab_data.cpp] Missing regex info display in DBC filter bar
 - **JS Source**: `src/js/modules/legacy_tab_data.js` lines 134–135
@@ -1538,10 +1538,10 @@
 - **Status**: Pending
 - **Details**: JS calls helper.mark(export_file_name, false, e.message, e.stack). C++ passes only e.what(), omitting stack trace.
 
-- [ ] 329. [tab_raw.cpp] parent_path() returns "" not "." for bare filenames
+- [x] 329. [tab_raw.cpp] parent_path() returns "" not "." for bare filenames
 - **JS Source**: `src/js/modules/tab_raw.js` lines 113–115
-- **Status**: Pending
-- **Details**: JS path.dirname returns "." for bare filenames, then checks dir === ".". C++ parent_path() returns "" for bare filenames, then checks dir == "." which never matches. Functionally similar result but fragile — should check dir.empty() || dir == ".".
+- **Status**: Verified
+- **Details**: Fixed — changed `dir == "."` to `(dir.empty() || dir == ".")` so bare filenames (where parent_path returns "") correctly fall through to the no-directory path.
 
 - [ ] 330. [tab_raw.cpp] Missing placeholder text on filter input
 - **JS Source**: `src/js/modules/tab_raw.js` line 159
@@ -1573,10 +1573,10 @@
 - **Status**: Pending
 - **Details**: Other legacy tabs (audio, fonts, textures, data) use `app::layout::BeginTab/EndTab`, `CalcListTabRegions`, `BeginListContainer`, etc. for consistent layout. `legacy_tab_files.cpp` uses raw `ImGui::BeginChild("legacy-files-list-container", ...)` (line 124) without the layout system. This will produce inconsistent sizing and positioning compared to sibling legacy tabs.
 
-- [ ] 336. [legacy_tab_files.cpp] Filter input missing placeholder text "Filter files..."
+- [x] 336. [legacy_tab_files.cpp] Filter input missing placeholder text "Filter files..."
 - **JS Source**: `src/js/modules/legacy_tab_files.js` line 85
-- **Status**: Pending
-- **Details**: JS filter input has `placeholder="Filter files..."`. C++ `ImGui::InputText("##FilterFiles", ...)` (line 207) has no placeholder/hint text.
+- **Status**: Verified
+- **Details**: Fixed — changed `ImGui::InputText` to `ImGui::InputTextWithHint` with hint `"Filter files..."` to match JS placeholder.
 
 - [ ] 337. [legacy_tab_files.cpp] Tray layout structure differs from JS
 - **JS Source**: `src/js/modules/legacy_tab_files.js` lines 82–88
@@ -1641,10 +1641,10 @@
 - **Status**: Pending
 - **Details**: JS uses optional chaining export_paths?.writeLine() and export_paths?.close(). C++ calls directly without null checks. If openLastExportStream returns invalid object, C++ will crash.
 
-- [ ] 349. [tab_maps.cpp] Missing "Filter maps..." placeholder text
+- [x] 349. [tab_maps.cpp] Missing "Filter maps..." placeholder text
 - **JS Source**: `src/js/modules/tab_maps.js` line 303
-- **Status**: Pending
-- **Details**: JS filter input has placeholder="Filter maps...". C++ uses ImGui::InputText without placeholder text.
+- **Status**: Verified
+- **Details**: Fixed — changed `ImGui::InputText` to `ImGui::InputTextWithHint` with hint `"Filter maps..."` to match JS placeholder.
 
 - [ ] 350. [tab_maps.cpp] Missing regex tooltip
 - **JS Source**: `src/js/modules/tab_maps.js` line 302

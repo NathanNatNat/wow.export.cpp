@@ -288,12 +288,12 @@ void render() {
 			listbox::CopyMode::Default,
 			false,   // pasteselection
 			false,   // copytrimwhitespace
-			"table", // unittype
+			"dbc file", // unittype
 			nullptr, // overrideItems
 			false,   // disable
 			"dbc",   // persistscrollkey
 			{},      // quickfilters
-			false,   // nocopy
+			true,    // nocopy
 			listbox_dbc_state,
 			[&](const std::vector<std::string>& new_sel) {
 				view.selectionDB2s.clear();

@@ -221,7 +221,7 @@ void render() {
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterText.c_str(), sizeof(filter_buf) - 1);
-		if (ImGui::InputText("##FilterText", filter_buf, sizeof(filter_buf)))
+		if (ImGui::InputTextWithHint("##FilterText", "Filter text files...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterText = filter_buf;
 	}
 	app::layout::EndFilterBar();

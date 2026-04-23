@@ -258,18 +258,18 @@ void render() {
 			items_str,
 			view.userInputFilterDB2s,
 			selection_str,
-			true,    // single
+			false,   // single
 			true,    // keyinput
 			view.config.value("regexFilters", false),
 			listbox::CopyMode::Default,
 			false,   // pasteselection
 			false,   // copytrimwhitespace
-			"table", // unittype
+			"db2 file", // unittype
 			nullptr, // overrideItems
 			false,   // disable
 			"db2",   // persistscrollkey
 			{},      // quickfilters
-			false,   // nocopy
+			true,    // nocopy
 			listbox_db2_state,
 			[&](const std::vector<std::string>& new_sel) {
 				view.selectionDB2s.clear();

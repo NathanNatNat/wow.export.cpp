@@ -55,7 +55,7 @@ static size_t s_items_cache_size = ~size_t(0);
  * @param {Buffer} data
  * @returns {string[]}
  */
-std::vector<std::string> extract_strings(const uint8_t* data, size_t size) {
+static std::vector<std::string> extract_strings(const uint8_t* data, size_t size) {
 	std::vector<std::string> strings;
 	std::string current;
 
@@ -80,7 +80,7 @@ std::vector<std::string> extract_strings(const uint8_t* data, size_t size) {
 	return strings;
 }
 
-void update_install_listfile() {
+static void update_install_listfile() {
 	if (!manifest)
 		return;
 
@@ -408,7 +408,7 @@ void render() {
 				listbox::CopyMode::Default,
 				false,    // pasteselection
 				false,    // copytrimwhitespace
-				"file",   // unittype
+				"install file", // unittype
 				nullptr,  // overrideItems
 				false,    // disable
 				"install", // persistscrollkey
@@ -521,7 +521,7 @@ void render() {
 				false,    // disable
 				"install-strings", // persistscrollkey
 				{},       // quickfilters
-				true,     // nocopy
+				false,    // nocopy
 				listbox_install_strings_state,
 				[&](const std::vector<std::string>& new_sel) {
 					view.selectionInstallStrings.clear();

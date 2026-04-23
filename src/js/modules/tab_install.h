@@ -5,10 +5,6 @@
  */
 #pragma once
 
-#include <string>
-#include <vector>
-#include <cstdint>
-
 /**
  * Install manifest tab module (ImGui immediate-mode equivalent).
  *
@@ -61,22 +57,5 @@ void export_strings();
  * JS equivalent: methods.back_to_manifest() → back_to_manifest(core)
  */
 void back_to_manifest();
-
-// --- Internal helpers (file-local in JS, exposed in namespace for header) ---
-
-/**
- * Extract printable strings from binary data.
- * JS equivalent: extract_strings(data)
- * @param data Raw binary data.
- * @param size Size of the data.
- * @returns Vector of extracted strings.
- */
-std::vector<std::string> extract_strings(const uint8_t* data, size_t size);
-
-/**
- * Update the install listfile based on currently enabled tags.
- * JS equivalent: update_install_listfile(core)
- */
-void update_install_listfile();
 
 } // namespace tab_install

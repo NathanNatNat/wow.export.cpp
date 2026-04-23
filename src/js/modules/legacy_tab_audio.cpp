@@ -424,7 +424,7 @@ void render() {
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterSounds.c_str(), sizeof(filter_buf) - 1);
-		if (ImGui::InputText("##FilterLegacySounds", filter_buf, sizeof(filter_buf)))
+		if (ImGui::InputTextWithHint("##FilterLegacySounds", "Filter sound files...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterSounds = filter_buf;
 	}
 	app::layout::EndFilterBar();

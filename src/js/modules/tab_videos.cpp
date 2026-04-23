@@ -92,7 +92,6 @@ static std::unique_ptr<std::jthread> stream_worker_thread;
 static std::mutex stream_result_mutex;
 
 // Change-detection for selection and config watches.
-static std::string prev_selection_first;
 static bool prev_video_player_show_subtitles = false;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
@@ -933,7 +932,7 @@ void render() {
 				is_streaming = false;
 				core::view->videoPlayerState = false;
 				core::setToast("error", result.error_message,
-					{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
+					{ {"view log", []() { logging::openRuntimeLog(); }} }, -1);
 			}
 		}
 	}
@@ -950,8 +949,6 @@ void render() {
 
 			if (view.config.value("videoPlayerAutoPlay", false))
 				stream_video(first);
-
-			prev_selection_first = first;
 		}
 	}
 
