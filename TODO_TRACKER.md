@@ -2,105 +2,10 @@
 
 > **Progress: 0/193 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
+
 ## Data Caches & Database
 
-- **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 19–112
-- **Status**: Pending
-- **Details**: JS uses async initialization and awaits DBC parsing operations; C++ performs synchronous parsing and loading, altering timing/error behavior relative to original Promise flow.
-
-- **JS Source**: `src/js/db/caches/DBDecor.js` lines 15–40
-- **Status**: Pending
-- **Details**: JS `initializeDecorData` is async and awaits DB2 reads; C++ uses a synchronous blocking initializer, changing API timing behavior.
-
-- **JS Source**: `src/js/db/caches/DBItemCharTextures.js` lines 34–88
-- **Status**: Pending
-- **Details**: JS uses `init_promise` and async `initialize/ensureInitialized` so concurrent callers await the same in-flight work; C++ uses synchronous initialization with no promise-sharing behavior.
-
-- **JS Source**: `src/js/db/caches/DBItemDisplays.js` lines 18–53
-- **Status**: Pending
-- **Details**: JS `initializeItemDisplays` is Promise-based and awaits DB2/cache calls; C++ ports this path as synchronous blocking logic.
-
-- **JS Source**: `src/js/db/caches/DBItemGeosets.js` lines 154–220
-- **Status**: Pending
-- **Details**: JS uses async initialization with `init_promise` deduplication; C++ uses a synchronous one-shot initializer and cannot preserve awaitable initialization semantics.
-
-- **JS Source**: `src/js/db/caches/DBItemModels.js` lines 22–103
-- **Status**: Pending
-- **Details**: JS uses async `initialize` with shared `init_promise` and awaited dependent caches; C++ performs the entire load synchronously with no async/promise contract.
-
-- **JS Source**: `src/js/db/caches/DBItems.js` lines 14–59
-- **Status**: Pending
-- **Details**: JS deduplicates concurrent initialization via `init_promise` and async functions; C++ uses synchronous initialization and lacks equivalent awaitable behavior.
-
-- **JS Source**: `src/js/db/caches/DBModelFileData.js` lines 17–35
-- **Status**: Pending
-- **Details**: JS exposes `initializeModelFileData` as an async Promise-based loader; C++ implementation is synchronous blocking code.
-
-- **JS Source**: `src/js/db/caches/DBNpcEquipment.js` lines 30–66
-- **Status**: Pending
-- **Details**: JS uses async initialization with in-flight promise reuse; C++ initialization is synchronous and does not retain the JS async concurrency contract.
-
-- **JS Source**: `src/js/db/caches/DBTextureFileData.js` lines 16–52
-- **Status**: Pending
-- **Details**: JS defines async `initializeTextureFileData` and `ensureInitialized`; C++ ports both as synchronous methods.
-
 ## UI Components
-
-- **JS Source**: `src/js/components/data-table.js` lines 950–958
-- **Status**: Pending
-- **Details**: JS `escape_value` checks `if (val === null || val === undefined) return 'NULL'` then `if (!isNaN(val) && str.trim() !== '') return str`. The `!isNaN(val)` check tests if the ORIGINAL value (not string) is numeric. C++ (lines 874–879) uses `tryParseNumber(val, num)` which parses the string representation. In JS, `!isNaN(Number(""))` is `false` (Number("") is 0 but isNaN(0) is false, so !isNaN is true) — wait, `Number("")` is `0` and `isNaN(0)` is `false`, so `!isNaN(Number(""))` is `true`. But the JS also checks `str.trim() !== ''` to exclude empty strings. C++ `tryParseNumber` checks `pos == s.size()` which would fail for empty string since `stod("")` throws. So both handle empty strings correctly (treated as non-numeric). Functionally equivalent.
-
-- **JS Source**: `src/js/components/data-table.js` template lines 1018–1019
-- **Status**: Pending
-- **Details**: JS uses `filteredItems.length.toLocaleString()` and `rows.length.toLocaleString()` which formats numbers with locale-appropriate thousands separators. C++ uses `formatWithThousandsSep()` (line 1374–1377). The C++ function should produce comma-separated thousands (e.g., "1,234") to match the default English locale used in most WoW installations. If the function uses a different separator or format, the status text would differ visually.
-
-- **JS Source**: `src/app.css` lines 1163–1168
-- **Status**: Pending
-- **Details**: C++ (line 971) hardcodes `const float headerHeight = 40.0f` with comment "padding 10px top/bottom + ~20px text". CSS `.ui-datatable table tr th` has `padding: 10px` (all sides). The actual header height depends on the font size — CSS text is typically ~14px default, so 10px + 14px + 10px = 34px, not 40px. If the CSS font size is different or the browser computes differently, the hardcoded 40px may not match.
-
-- **JS Source**: `src/app.css` lines 1176–1191
-- **Status**: Pending
-- **Details**: CSS `.filter-icon` uses a background SVG image (`background-image: url(./fa-icons/funnel.svg)`) with `background-size: contain; width: 18px; height: 14px`. C++ (lines 1101–1113) draws a custom triangle + rectangle shape as a funnel icon approximation. The custom drawing may not match the SVG icon's exact shape and proportions. The CSS also specifies `opacity: 0.5` default and `opacity: 1.0` on hover, while C++ uses `ICON_DEFAULT_U32` and `FONT_HIGHLIGHT_U32` colors.
-
-- **JS Source**: `src/app.css` lines 1198–1224
-- **Status**: Pending
-- **Details**: CSS `.sort-icon` uses `background-image: url(./fa-icons/sort.svg)` for the default state, with `.sort-icon-up` and `.sort-icon-down` using different SVG files. The icons have `width: 12px; height: 18px; opacity: 0.5`. C++ (lines 1119–1157) draws triangle shapes to approximate sort icons. The triangle approximation may not match the SVG icon's exact appearance — SVGs typically have more refined shapes with anti-aliasing.
-
-- **JS Source**: `src/js/components/file-field.js` lines 34–40, 46
-- **Status**: Pending
-- **Details**: JS opens the directory picker when the text field receives focus. C++ opens the dialog only from a dedicated `...` button, changing interaction flow and UI behavior.
-
-- **JS Source**: `src/js/components/file-field.js` lines 35–38
-- **Status**: Pending
-- **Details**: JS clears the hidden file input value before click so selecting the same directory re-triggers change emission. C++ dialog path does not mirror this reset contract.
-
-- **JS Source**: `src/js/components/file-field.js` lines 33–40, template line 46
-- **Status**: Pending
-- **Details**: JS template uses `@focus="openDialog"` on the text input — when the input receives focus, the directory picker opens immediately. C++ (lines 128–132) uses a separate "..." button next to the input to trigger the dialog. The JS behavior is: clicking the text field opens the dialog, and the field never actually receives text focus for editing. C++ allows direct text editing in the field AND has a browse button. This is a significant UX difference — in JS, the field is effectively read-only (clicking always opens picker), while in C++ it's editable with an optional browse button.
-
-- **JS Source**: `src/js/components/file-field.js` lines 14–23
-- **Status**: Pending
-- **Details**: JS creates a hidden file input with `nwdirectory` attribute (NW.js specific for directory selection), listens for `change` event, and emits the selected value. C++ uses `pfd::select_folder()` which opens a native folder dialog. The underlying mechanism differs (NW.js DOM file input vs. native OS dialog) but the user-facing behavior should be equivalent — both present a directory picker. C++ implementation correctly replaces the NW.js-specific API.
-
-- **JS Source**: `src/js/components/file-field.js` lines 34–39
-- **Status**: Pending
-- **Details**: JS `openDialog()` sets `this.fileSelector.value = ''` before calling `click()` and then calls `this.$el.blur()`. This ensures the `change` event fires even if the user selects the same directory again. C++ `openDialog()` (line 74–81) calls `openDirectoryDialog()` directly without any pre-clear. Since `pfd::select_folder()` returns the result directly (not via an event), re-selecting the same directory works fine — the result is always returned. The `blur()` call is unnecessary in C++ since the dialog is modal.
-
-- **JS Source**: `src/js/components/file-field.js` template line 46
-- **Status**: Pending
-- **Details**: C++ (lines 120–126) renders placeholder text with `ImVec2(textPos.x + 4.0f, textPos.y + 2.0f)` using hardcoded offsets. The JS template uses the browser's native placeholder rendering via `:placeholder="placeholder"` which automatically positions and styles the placeholder text. The C++ offsets may not match the actual input text baseline, causing misalignment.
-
-- **JS Source**: `src/js/components/file-field.js` (entire file)
-- **Status**: Pending
-- **Details**: C++ adds `openFileDialog()` (lines 44–53) and `saveFileDialog()` (lines 60–73) as public utility functions. The JS file-field component only provides directory selection via `nwdirectory`. These extra functions may be useful for other parts of the C++ app but are not present in the original JS component source. They are additional API surface.
-
-- **JS Source**: `src/js/components/resize-layer.js` lines 12–15, 21–23
-- **Status**: Pending
-- **Details**: JS emits resize through `ResizeObserver` mount/unmount lifecycle. C++ emits when measured width changes during render, so behavior is tied to render frames instead of observer callbacks.
-
-- **JS Source**: `src/js/components/resize-layer.js` lines 1–26
-- **Status**: Pending
-- **Details**: The resize-layer component is a simple wrapper that emits a 'resize' event when the element width changes. JS uses `ResizeObserver` and `beforeUnmount` cleanup. C++ uses `ImGui::GetContentRegionAvail().x` polling each frame and compares against previous width. The conversion is functionally complete and correct. No deviations found.
 
 ## Markdown & Content Rendering
 
@@ -179,16 +84,13 @@
 - **Status**: Pending
 - **Details**: CSS `.markdown-content-inner ul { padding-left: 2em; list-style-type: disc; }` uses standard disc bullets with 2em left padding. At 20px base font, 2em = 40px. C++ uses `ImGui::Indent(16.0f)` with a manual `•` character (lines 369–373). 16px vs 40px indent is a significant visual difference, and the bullet character may render differently than the CSS disc marker.
 
+
 ## Map Viewer
 
 - [ ] 141. [map-viewer.cpp] Tile image drawing path is still unimplemented
 - **JS Source**: `src/js/components/map-viewer.js` lines 380–402, 1111–1113
 - **Status**: Pending
 - **Details**: JS draws loaded tiles to canvas via `putImageData(...)` on main/double-buffer contexts. C++ caches tile pixels but does not upload/draw them, so only overlays render and map tiles are not visually equivalent.
-
-- **JS Source**: `src/js/components/map-viewer.js` lines 192–197, 380–414
-- **Status**: Pending
-- **Details**: JS tile loader is async (`loader(...).then(...)`) with Promise completion timing. C++ calls loader synchronously in `loadTile(...)`, changing queue timing and behavior during panning/zoom updates.
 
 - [ ] 143. [map-viewer.cpp] Box-select-mode active color uses NAV_SELECTED (#22B549) instead of CSS #5fdb65
 - **JS Source**: `src/app.css` line 1348–1349
@@ -237,54 +139,10 @@
 
 ## Tab: Changelog, Help, Blender & Install
 
-- **JS Source**: `src/js/modules/tab_changelog.js` lines 14–16
-- **Status**: Pending
-- **Details**: JS uses `BUILD_RELEASE ? './src/CHANGELOG.md' : '../../CHANGELOG.md'`; C++ adds a third fallback (`CHANGELOG.md`) and different path probing order, changing source resolution behavior.
-
-- **JS Source**: `src/js/modules/tab_changelog.js` lines 31–35
-- **Status**: Pending
-- **Details**: JS uses dedicated `#changelog`/`#changelog-text` template structure and CSS styling; C++ renders plain ImGui title/separator/button layout, causing visible UI differences.
-
-- **JS Source**: `src/js/modules/tab_changelog.js` line 32
-- **Status**: Pending
-- **Details**: JS uses h1 tag which renders as a large bold heading per CSS. C++ uses ImGui::Text with default font size and weight.
-
-- **JS Source**: `src/js/modules/tab_help.js` lines 145–149, 153–157
-- **Status**: Pending
-- **Details**: JS applies article filtering via `setTimeout(..., 300)` debounce on `search_query`; C++ filters immediately on each input change, changing responsiveness and update timing.
-
-- **JS Source**: `src/js/modules/tab_help.js` lines 115–121
-- **Status**: Pending
-- **Details**: JS renders per-item title and a separate tags row with KB badge styling; C++ combines content into selectable labels and tooltip tags, so article list visuals/structure are not identical.
-
-- **JS Source**: `src/js/modules/tab_help.js` lines 145–149
-- **Status**: Pending
-- **Details**: JS implements a 300ms setTimeout debounce before filtering. C++ calls update_filter() immediately on every keystroke.
-
 - [ ] 175. [tab_help.cpp] Article list layout differs tags shown in tooltip instead of inline
 - **JS Source**: `src/js/modules/tab_help.js` lines 115–121
 - **Status**: Pending
 - **Details**: JS renders each article with visible title and tags divs inline. C++ renders KB_ID and title as a single Selectable with tags only in hover tooltip. Tags and KB ID badge are not visually inline.
-
-- **JS Source**: `src/js/modules/tab_help.js` line 8
-- **Status**: Pending
-- **Details**: JS load_help_docs is async. C++ is synchronous blocking the main thread during file reads.
-
-- **JS Source**: `src/js/modules/tab_blender.js` lines 91, 139
-- **Status**: Pending
-- **Details**: JS compares versions as strings (`version >= MIN_VER`, `blender_version < MIN_VER`), while C++ parses with `std::stod` and compares numerically, changing edge-case ordering behavior.
-
-- **JS Source**: `src/js/modules/tab_blender.js` lines 59–69
-- **Status**: Pending
-- **Details**: JS uses structured `#blender-info`/`#blender-info-buttons` markup with CSS-defined spacing/styling; C++ replaces it with simple ImGui text/separator/buttons, producing visual/layout mismatch.
-
-- **JS Source**: `src/js/modules/tab_blender.js` line 39
-- **Status**: Pending
-- **Details**: JS match() performs a search anywhere in string. C++ uses std::regex_match which requires the ENTIRE string to match. Directory names like blender-2.83 would match in JS but fail in C++.
-
-- **JS Source**: `src/js/modules/tab_blender.js` lines 81, 127
-- **Status**: Pending
-- **Details**: Both JS functions are async with await. C++ implementations are synchronous, blocking the render thread.
 
 - [ ] 182. [tab_install.cpp] Install listbox copy/paste options are hardcoded instead of using JS config-driven behavior
 - **JS Source**: `src/js/modules/tab_install.js` lines 165, 184
@@ -295,10 +153,6 @@
 - **JS Source**: `src/js/modules/tab_install.js` lines 169, 188
 - **Status**: Pending
 - **Details**: JS renders `Regex Enabled` with `:title="$core.view.regexTooltip"`; C++ renders plain text without the tooltip contract, changing UI affordance.
-
-- **JS Source**: `src/js/modules/tab_install.js` lines 52–146
-- **Status**: Pending
-- **Details**: JS export_install_files(), view_strings(), and export_strings() are all async functions that await CASC file I/O. C++ versions are fully synchronous, blocking the UI thread.
 
 - [ ] 185. [tab_install.cpp] CASC getFile replaced with low-level two-step call, losing BLTE decoding
 - **JS Source**: `src/js/modules/tab_install.js` lines 73–74
@@ -359,20 +213,12 @@
 - **Status**: Pending
 - **Details**: JS calls helper.mark(export_file_name, false, e.message, e.stack). C++ passes only e.what(), omitting stack trace.
 
-- **JS Source**: `src/js/modules/tab_textures.js` lines 23–413
-- **Status**: Pending
-- **Details**: JS preview_texture_by_id, load_texture_atlas_data, reload_texture_atlas_data, export_texture_atlas_regions, export_textures, initialize, and apply_baked_npc_texture are all async. C++ equivalents all run synchronously on UI thread.
-
 ## Tab: Audio
 
 - [ ] 249. [tab_audio.cpp] export_sounds missing stack trace in error mark
 - **JS Source**: `src/js/modules/tab_audio.js` line 175
 - **Status**: Pending
 - **Details**: JS passes e.message and e.stack to helper.mark(). C++ only passes e.what().
-
-- **JS Source**: `src/js/modules/tab_audio.js` lines 47, 99, 122
-- **Status**: Pending
-- **Details**: All three JS functions are async with await. C++ implementations are synchronous, blocking the render thread.
 
 - [ ] 251. [legacy_tab_audio.cpp] Playback UI visuals diverge from JS template/CSS
 - **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 201–241
@@ -466,10 +312,6 @@
 - **Status**: Pending
 - **Details**: JS attaches `video.onended` (resets `is_streaming`/`videoPlayerState`) and `video.onerror` (shows error toast). C++ delegates to external player and has neither callback — `is_streaming` and `videoPlayerState` are never automatically reset when playback finishes; user must manually click "Stop Video."
 
-- **JS Source**: `src/js/modules/tab_videos.js` line 125
-- **Status**: Pending
-- **Details**: JS `build_payload` is `async`/`await` (non-blocking). In C++, it's called synchronously on the main thread before launching the background thread. DB2 queries + CASC lookups could freeze the UI.
-
 - [ ] 271. [tab_videos.cpp] stop_video does not join/stop background thread
 - **JS Source**: `src/js/modules/tab_videos.js` lines 27–57
 - **Status**: Pending
@@ -530,20 +372,13 @@
 - **Status**: Pending
 - **Details**: JS exposes `window.trigger_kino_processing = trigger_kino_processing` when `!BUILD_RELEASE`. C++ has only a comment. No equivalent debug hook exists.
 
-## Tab: Text & Fonts
 
-- **JS Source**: `src/js/modules/tab_text.js` lines 77–121
-- **Status**: Pending
-- **Details**: JS export_text is async with await for generics.fileExists(), casc.getFileByName(), and data.writeToFile(). C++ runs entirely synchronously, freezing UI during multi-file export.
+## Tab: Text & Fonts
 
 - [ ] 299. [tab_fonts.cpp] export_fonts missing stack trace in error mark
 - **JS Source**: `src/js/modules/tab_fonts.js` line 141
 - **Status**: Pending
 - **Details**: JS passes e.message and e.stack. C++ only passes e.what().
-
-- **JS Source**: `src/js/modules/tab_fonts.js` lines 16, 102
-- **Status**: Pending
-- **Details**: Both JS functions are async. C++ implementations are synchronous blocking the render thread.
 
 ## Tab: Data
 
@@ -622,6 +457,7 @@
 - **Status**: Pending
 - **Details**: JS uses the custom `ContextMenu` component with slot-based content rendering and a close event. C++ uses native `ImGui::BeginPopupContextItem` (line 368) which has different popup behavior, positioning, and styling compared to the custom ContextMenu component used elsewhere in the app.
 
+
 ## Tab: Raw Files & Legacy Files
 
 - [ ] 326. [tab_raw.cpp] Regex indicator tooltip metadata from JS template is missing
@@ -649,10 +485,6 @@
 - **Status**: Pending
 - **Details**: JS has :title="$core.view.regexTooltip" showing tooltip on hover. C++ has no tooltip.
 
-- **JS Source**: `src/js/modules/tab_raw.js` lines 12, 31, 91
-- **Status**: Pending
-- **Details**: JS compute_raw_files, detect_raw_files, and export_raw_files are all async. C++ versions are synchronous, blocking render thread during CASC I/O and disk operations.
-
 - [ ] 333. [tab_raw.cpp] detect_raw_files manually sets is_dirty=true — deviates from JS
 - **JS Source**: `src/js/modules/tab_raw.js` lines 75–76
 - **Status**: Pending
@@ -672,6 +504,7 @@
 - **JS Source**: `src/js/modules/legacy_tab_files.js` lines 82–88
 - **Status**: Pending
 - **Details**: JS wraps the filter and export button in a `#tab-legacy-files-tray` div with its own layout (likely flex row). C++ renders filter input, then `ImGui::SameLine()`, then the export button (lines 206–216). The proportions and alignment of filter vs button may not match the JS CSS-defined tray layout.
+
 
 ## Tab: Maps
 
@@ -720,10 +553,6 @@
 - **Status**: Pending
 - **Details**: JS passes both e.message and e.stack to helper.mark. C++ only passes e.what(), omitting stack trace. Affects 6 export functions.
 
-- **JS Source**: `src/js/modules/tab_maps.js` lines 49–980
-- **Status**: Pending
-- **Details**: Every async function (load_map_tile, load_wmo_minimap_tile, collect_game_objects, extract_height_data_from_tile, load_map, setup_wmo_minimap, all export functions, initialize) is synchronous C++. Long exports freeze the UI.
-
 - [ ] 348. [tab_maps.cpp] Missing optional chaining for export_paths
 - **JS Source**: `src/js/modules/tab_maps.js` lines 752–853
 - **Status**: Pending
@@ -748,6 +577,7 @@
 - **JS Source**: `src/js/modules/tab_maps.js` lines 1135–1143
 - **Status**: Pending
 - **Details**: JS Vue $watch triggers on any reactive change. C++ only compares the first element string between frames. If selection changes and reverts within same frame, or changes to different item with same first entry, C++ misses it.
+
 
 ## Tab: Zones
 
@@ -896,6 +726,7 @@
 - **Status**: Pending
 - **Details**: `"xdg-open \"" + dir + "\" &"` passed to `std::system()`. If `dir` contains shell metacharacters, this is exploitable. JS uses `nw.Shell.openItem` which is safe.
 
+
 ## Tab: Items & Item Sets
 
 - [ ] 383. [tab_items.cpp] Wowhead item handler is stubbed out
@@ -948,10 +779,6 @@
 - **Status**: Pending
 - **Details**: JS adds :class="{ selected: item.checked }" to checklist items. CSS gives .sidebar-checklist-item.selected a background of rgba(255,255,255,0.05). C++ uses plain ImGui::Checkbox with no highlight.
 
-- **JS Source**: `src/js/modules/tab_items.js` lines 104, 129, 277, 345–346
-- **Status**: Pending
-- **Details**: JS initialize_items, view_item_textures, and the mounted initialize flow are all async with await. C++ converts all to synchronous blocking calls, freezing the ImGui render loop.
-
 - [ ] 394. [tab_items.cpp] Quality color applied only to CheckMark, not to label text
 - **JS Source**: `src/js/modules/tab_items.js` lines 264–265
 - **Status**: Pending
@@ -977,10 +804,6 @@
 - **Status**: Pending
 - **Details**: JS has :title="$core.view.regexTooltip" showing tooltip on hover. C++ just renders ImGui::TextUnformatted("Regex Enabled") with no tooltip.
 
-- **JS Source**: `src/js/modules/tab_item_sets.js` lines 23–65
-- **Status**: Pending
-- **Details**: JS initialize_item_sets is async with await for progressLoadingScreen(), DBItems.ensureInitialized(), db2 getAllRows(). C++ calls all synchronously, blocking the UI thread and preventing loading screen updates.
-
 - [ ] 400. [tab_item_sets.cpp] apply_filter converts ItemSet structs to JSON objects unnecessarily
 - **JS Source**: `src/js/modules/tab_item_sets.js` lines 67–69
 - **Status**: Pending
@@ -1000,6 +823,7 @@
 - **JS Source**: `src/js/modules/tab_item_sets.js` line 38
 - **Status**: Pending
 - **Details**: JS set_row.ItemID is expected to be an array with .filter(id => id !== 0). C++ fieldToUint32Vec only handles vector variants. If a DB2 reader returns a single scalar, the function returns an empty vector, silently dropping data.
+
 
 ## Tab: Characters
 
@@ -1130,384 +954,13 @@
 - **Status**: Pending
 - **Details**: The DecorListboxContextMenu popup requires ImGui::OpenPopup to be called. The handle_listbox_context callback does not open this popup. The popup rendering code will never trigger.
 
+
 ## 3D Engine, File Loaders & Core Systems
-
-- **JS Source**: `src/js/casc/blp.js` lines 146–194
-- **Status**: Pending
-- **Details**: JS implements `async saveToPNG`, `async toWebP`, and `async saveToWebP`. C++ equivalents are synchronous, changing completion/error semantics for consumers expecting Promise-based behavior.
-
-- **JS Source**: `src/js/casc/blp.js` lines 242–250
-- **Status**: Pending
-- **Details**: JS has no default branch and therefore returns `undefined` for unsupported encodings. C++ returns an empty `BufferWrapper`, changing caller-observed fallback behavior.
-
-- **JS Source**: `src/js/casc/blp.js` lines 103–117, 221–234
-- **Status**: Pending
-- **Details**: JS `toCanvas()` creates an HTML `<canvas>` element and draws the BLP onto it. `drawToCanvas()` takes an existing canvas and draws the BLP pixels using 2D context methods (`createImageData`, `putImageData`). These are browser-specific APIs with no C++ equivalent. The C++ port replaces these with `toPNG()`, `toBuffer()`, and `toUInt8Array()` which provide the same pixel data without canvas.
-
-- **JS Source**: `src/js/casc/blp.js` line 86
-- **Status**: Pending
-- **Details**: JS sets `this.dataURL = null` in the BLPImage constructor. C++ declares `std::optional<std::string> dataURL` in the header which defaults to `std::nullopt`. The C++ `getDataURL()` method doesn't cache to this field (it relies on `BufferWrapper::getDataURL()` caching instead). The JS `getDataURL()` also doesn't set this field — it returns from `toCanvas().toDataURL()`. The `dataURL` field appears to be unused caching infrastructure in both versions.
-
-- **JS Source**: `src/js/casc/blp.js` lines 157–182
-- **Status**: Pending
-- **Details**: JS uses `webp-wasm` npm module with `webp.encode(imgData, options)` for WebP encoding. C++ uses libwebp's C API directly (`WebPEncodeLosslessRGBA` / `WebPEncodeRGBA`). The JS `options` object `{ lossless: true }` or `{ quality: N }` maps to C++ separate code paths for quality == 100 (lossless) vs lossy. Functionally equivalent.
 
 - [ ] 457. [Shaders.cpp] C++ adds automatic _unregister_fn callback on ShaderProgram not present in JS
 - **JS Source**: `src/js/3D/Shaders.js` lines 56–72
 - **Status**: Pending
 - **Details**: C++ `create_program()` (Shaders.cpp lines 79–83) installs a static `_unregister_fn` callback on `gl::ShaderProgram` that automatically calls `shaders::unregister()` when a ShaderProgram is destroyed. JS has no equivalent auto-cleanup mechanism — callers must explicitly call `unregister(program)` (Shaders.js line 78–86). This means in C++, a program is automatically removed from `active_programs` on destruction, while in JS a disposed program remains in the set until manually unregistered. This changes `reload_all()` behavior: JS could attempt to recompile stale programs that were not explicitly unregistered, while C++ never encounters this scenario.
-
-- **JS Source**: `src/js/3D/Texture.js` lines 32–41
-- **Status**: Pending
-- **Details**: JS returns a Promise from `async getTextureFile()` and yields `null` when unset; C++ returns `std::optional<BufferWrapper>` synchronously, changing both async behavior and API shape.
-
-- **JS Source**: `src/js/3D/Skin.js` lines 20–23, 96–100
-- **Status**: Pending
-- **Details**: JS exposes `async load()` and awaits CASC file retrieval (`await core.view.casc.getFile(...)`), while C++ `Skin::load()` is synchronous and throws directly, changing caller timing/error-propagation semantics.
-
-- **JS Source**: `src/js/MultiMap.js` lines 6–32
-- **Status**: Pending
-- **Details**: The JS sibling contains the full `MultiMap extends Map` implementation, but `src/js/MultiMap.cpp` only includes `MultiMap.h` and comments; line-by-line implementation parity is not present in the `.cpp` file itself.
-
-- **JS Source**: `src/js/MultiMap.js` lines 6, 20–28, 32
-- **Status**: Pending
-- **Details**: JS exports an actual `Map` subclass with standard `Map` behavior/interop, while C++ exposes a template wrapper (header implementation) returning `std::variant` pointers and not `Map`-equivalent runtime semantics.
-
-- **JS Source**: `src/js/3D/loaders/M3Loader.js` lines 67, 104, 269, 277, 299, 315
-- **Status**: Pending
-- **Details**: JS exposes async `load`, `parseChunk_M3DT`, and async sub-chunk parsers; C++ ports these paths as synchronous calls, changing API timing/await semantics.
-
-- **JS Source**: `src/js/3D/loaders/MDXLoader.js` line 28
-- **Status**: Pending
-- **Details**: JS exposes `async load()` while C++ exposes synchronous `void load()`, changing await/timing behavior.
-
-- **JS Source**: `src/js/3D/loaders/MDXLoader.js` line 404
-- **Status**: Pending
-- **Details**: JS ATCH handler has `this.data.readUInt32LE(-4)` which is a bug — `BufferWrapper._readInt` passes `_checkBounds(-16)` (always passes since remainingBytes >= 0 > -16), but `new Array(-4)` throws a `RangeError`. C++ correctly fixes this by using a saved `attachmentSize` variable. The fix has a code comment but per project conventions, deviations from the original JS should also be tracked in TODO_TRACKER.md.
-
-- **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 36, 308, 407
-- **Status**: Pending
-- **Details**: JS exposes async `load`, `loadAnimsForIndex`, and `loadAnims`; C++ ports all three as synchronous methods, altering call/await behavior.
-
-- **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 332–344, 438–448
-- **Status**: Pending
-- **Details**: JS does not catch ANIM/CASC load failures in `loadAnimsForIndex`/`loadAnims` (Promise rejects). C++ catches exceptions, logs, and returns/continues, changing failure propagation.
-
-- **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 308–312
-- **Status**: Pending
-- **Details**: C++ adds `if (animation_index >= this->animations.size()) return false;` that does not exist in JS. In JS, accessing an out-of-bounds index on `this.animations` returns `undefined`, and `animation.flags` would throw a TypeError. C++ silently returns false instead of throwing, changing error behavior.
-
-- **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 335–338, 441–444
-- **Status**: Pending
-- **Details**: JS checks `loader.skeletonBoneData !== undefined` — the property only exists if a SKID chunk was parsed. C++ checks `!loader->skeletonBoneData.empty()`. If ANIMLoader ever sets `skeletonBoneData` to a valid but empty buffer, JS would use it (property exists), but C++ would skip it (empty). This is a potential semantic difference depending on ANIMLoader behavior.
-
-- **JS Source**: `src/js/3D/loaders/BONELoader.js` line 24
-- **Status**: Pending
-- **Details**: JS exposes `async load()` while C++ exposes synchronous `void load()`, changing API timing/await semantics.
-
-- **JS Source**: `src/js/3D/loaders/ANIMLoader.js` line 25
-- **Status**: Pending
-- **Details**: JS exposes `async load(isChunked = true)` while C++ exposes synchronous `void load(bool isChunked)`, changing API timing/await semantics.
-
-- **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 37, 64
-- **Status**: Pending
-- **Details**: JS exposes async `load()` and `getGroup(index)` while C++ ports both as synchronous methods, changing await/timing behavior.
-
-- **JS Source**: `src/js/3D/loaders/WMOLoader.js` line 361
-- **Status**: Pending
-- **Details**: JS MOGP handler stores `this.flags = data.readUInt32LE()`. C++ stores this as `this->groupFlags` (header line 218, MOGP parser line 426) because the C++ class already has `uint16_t flags` from MOHD. Any downstream code porting JS that accesses `wmoGroup.flags` for MOGP flags must use `groupFlags` in C++. This naming deviation matches the same issue found in WMOLegacyLoader.cpp (entry 376).
-
-- **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 328–338
-- **Status**: Pending
-- **Details**: JS simply assigns `this.liquid = { ... }` in the MLIQ handler. Consumer code checks `if (this.liquid)` for existence. In C++, the `WMOLiquid liquid` member is always default-constructed, so a `bool hasLiquid = false` flag (header line 209) was added and set to `true` in `parse_MLIQ`. This is a reasonable C++ adaptation, but all downstream JS code that checks `if (this.liquid)` must be ported to check `if (this.hasLiquid)` instead — all consumers need verification.
-
-- **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 33, 54, 86, 116
-- **Status**: Pending
-- **Details**: JS uses async `load`, `_load_alpha_format`, `_load_standard_format`, and `getGroup`; C++ ports these paths synchronously, changing await/timing behavior.
-
-- **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 146–149
-- **Status**: Pending
-- **Details**: JS creates group loaders with `fileID` undefined and explicitly seeds `group.version = this.version` before `await group.load()`. C++ does not pre-seed `version`, changing legacy group parse assumptions.
-
-- **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` line 453
-- **Status**: Pending
-- **Details**: JS MOGP handler stores `this.flags = data.readUInt32LE()`. C++ stores this as `this->groupFlags` (header line 124, MOGP parser line 527) because the C++ class already has `uint16_t flags` from MOHD. Any downstream JS-ported code accessing `group.flags` for MOGP flags must use `group.groupFlags` in C++, which is a naming deviation that could cause porting bugs.
-
-- **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 117–118
-- **Status**: Pending
-- **Details**: JS checks `if (!this.groups)` — tests whether the `groups` property was ever set (by MOHD handler). An empty JS array `new Array(0)` is truthy, so `!this.groups` is false when `groupCount == 0` — `getGroup` proceeds to the index check. C++ uses `if (this->groups.empty())` which returns true for `groupCount == 0`, incorrectly throwing the exception. A separate bool flag (e.g., `groupsInitialized`) would replicate JS semantics more faithfully.
-
-- **JS Source**: `src/js/3D/loaders/WDTLoader.js` line 86
-- **Status**: Pending
-- **Details**: JS uses `.replace('\0', '')` (first match only), while C++ removes all `'\0'` bytes from the string, producing different `worldModel` values in edge cases.
-
-- **JS Source**: `src/js/3D/loaders/WDTLoader.js` lines 52–103
-- **Status**: Pending
-- **Details**: In JS, `this.worldModelPlacement` is only assigned when MODF is encountered. If MODF is absent, the property is `undefined` and `if (wdt.worldModelPlacement)` is false. In C++, `WDTWorldModelPlacement worldModelPlacement` is always default-constructed with zeroed fields, making it impossible to distinguish "MODF absent" from "MODF with zeros." Same for `worldModel` (always empty string vs. JS `undefined`) and MPHD fields (always 0 vs. JS `undefined`). Consider `std::optional<T>` for these fields.
-
-- **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 309–367
-- **Status**: Pending
-- **Details**: JS `export()` is asynchronous and yields between CASC/file operations; C++ `exportTile()` performs the flow synchronously, changing timing/cancellation behavior relative to the original async path.
-
-- **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` lines 49, 105, 114, 170, 189, 231, 282
-- **Status**: Pending
-- **Details**: JS defines `init`, `reset`, `setTextureTarget`, `loadTexture`, `loadTextureFromBLP`, `compileShaders`, and `update` as async/await flows. C++ ports these methods synchronously, changing timing/error-propagation behavior expected by async call sites.
-
-- **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 56, 76
-- **Status**: Pending
-- **Details**: JS defines async `load` and `loadLOD`; C++ ports both as synchronous calls, changing await/timing semantics.
-
-- **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 174–175
-- **Status**: Pending
-- **Details**: JS checks `if (!this.m3 || !this.m3.vertices) return null`. C++ only checks `if (!m3) return std::nullopt` at line 198–199 without checking if vertices array is empty. If m3 is loaded but vertices array is empty, C++ will attempt bounding box calculation on empty data.
-
-- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 174, 200, 407
-- **Status**: Pending
-- **Details**: JS uses async `load`, `_load_textures`, and `playAnimation`; C++ ports these paths synchronously, changing asynchronous control flow and failure timing.
-
-- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 256–264
-- **Status**: Pending
-- **Details**: JS compares raw `nodes[i].objectId` and can propagate undefined/NaN semantics. C++ uses `std::optional<int>` checks and skips undefined IDs, which changes edge-case matrix-index behavior from JS.
-
-- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 187–188
-- **Status**: Pending
-- **Details**: JS `load()` sets up Vue watchers: `this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true })` and `this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true })`. C++ completely omits these watchers. Comment at lines 228–229 states "polling is handled in render()." but no polling code exists.
-
-- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 780–781
-- **Status**: Pending
-- **Details**: JS `dispose()` calls `this.geosetWatcher?.()` and `this.wireframeWatcher?.()`. C++ has no equivalent cleanup because watchers were never created.
-
-- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 252
-- **Status**: Pending
-- **Details**: JS sets `this.node_matrices = new Float32Array(16)` which creates a zero-filled 16-element array (single identity-sized buffer). C++ does `node_matrices.resize(16)` at line 313 which leaves elements uninitialized. Should zero-initialize or set to identity to match JS behavior.
-
-- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 681
-- **Status**: Pending
-- **Details**: Same issue as other renderers — C++ uses elapsed time from first render call instead of `performance.now() * 0.001`.
-
-- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 27–30
-- **Status**: Pending
-- **Details**: Both files define `INTERP_NONE=0`, `INTERP_LINEAR=1`, `INTERP_HERMITE=2`, `INTERP_BEZIER=3` but neither uses them. The `_sample_vec3()` and `_sample_quat()` methods only implement linear interpolation (lerp/slerp), never checking interpolation type. Hermite and Bezier interpolation are not implemented in either codebase.
-
-- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 368
-- **Status**: Pending
-- **Details**: JS calls `vao.setup_m2_separate_buffers(vbo, nbo, uvo, bibo, bwbo, null)` with 6 parameters (last is null for index buffer). C++ calls `vao->setup_m2_separate_buffers(vbo, nbo, uvo, bibo, bwbo)` with only 5 parameters. The 6th parameter (index/element buffer) is missing in C++.
-
-- **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 81, 119, 206, 353, 434
-- **Status**: Pending
-- **Details**: JS defines async `load`, `_load_textures`, `_load_groups`, `loadDoodadSet`, and `updateSets`; C++ ports these methods synchronously, changing await/timing behavior.
-
-- **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 101–107, 637–639
-- **Status**: Pending
-- **Details**: JS stores `groupArray`/`setArray` by reference in `core.view` and updates via Vue `$watch` callbacks with explicit unregister in `dispose`. C++ copies arrays into view state and replaces watcher callbacks with polling logic, changing reactivity/update timing semantics.
-
-- **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 105–107
-- **Status**: Pending
-- **Details**: Same approach as WMOLegacyRendererGL — JS uses Vue watchers, C++ uses per-frame polling in `render()` (lines 643–676). Architecturally different but functionally equivalent with potential one-frame delay.
-
-- **JS Source**: `src/js/3D/renderers/WMORendererGL.js` line 126
-- **Status**: Pending
-- **Details**: JS `!!wmo.textureNames` is true if the property exists and is truthy (even an empty array `[]` is truthy). C++ `!wmo->textureNames.empty()` is only true if the map has entries. If a WMO has the texture names chunk but it's empty, JS enters classic mode but C++ does not. Comment at C++ line 140–143 acknowledges this.
-
-- **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 64–65, 103–104
-- **Status**: Pending
-- **Details**: JS uses `view[this.wmoGroupKey]` and `view[this.wmoSetKey]` for dynamic property access. C++ implements `get_wmo_groups_view()` and `get_wmo_sets_view()` methods (lines 60–69) that return references to the appropriate core::view member based on the key string, supporting `modelViewerWMOGroups`, `creatureViewerWMOGroups`, and `decorViewerWMOGroups`. This is a valid C++ adaptation of JS's dynamic property access.
-
-- **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 77, 104, 168, 270, 353
-- **Status**: Pending
-- **Details**: JS exposes async `load`, `_load_textures`, `_load_groups`, `loadDoodadSet`, and `updateSets`; C++ ports these paths as synchronous methods, altering Promise scheduling and error propagation behavior.
-
-- **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 287–289
-- **Status**: Pending
-- **Details**: JS directly accesses `wmo.doodads[firstIndex + i]` without a pre-check. C++ introduces explicit range guarding/continue behavior, changing edge-case handling when doodad counts/indices are inconsistent.
-
-- **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 88–93, 519–521
-- **Status**: Pending
-- **Details**: JS wires `$watch` callbacks and unregisters them in `dispose`. C++ removes watcher registration and uses per-frame state polling, which changes update trigger timing and reactivity semantics.
-
-- **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 91–93
-- **Status**: Pending
-- **Details**: JS sets up three Vue watchers in `load()`. C++ replaces these with manual per-frame polling in `render()` (lines 517–551), comparing current state against `prev_group_checked`/`prev_set_checked` arrays. This is functionally equivalent but architecturally different — watchers are event-driven, polling is frame-driven with potential one-frame delay.
-
-- **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js` lines 146–147
-- **Status**: Pending
-- **Details**: JS sets `wrap_s = (material.flags & 0x40) ? gl.CLAMP_TO_EDGE : gl.REPEAT` and `wrap_t = (material.flags & 0x80) ? gl.CLAMP_TO_EDGE : gl.REPEAT`. C++ creates `BLPTextureFlags` with `wrap_s = !(material.flags & 0x40)` at line 184–185. The boolean negation may invert the wrap behavior — if `true` maps to CLAMP in the BLPTextureFlags API, then `!(flags & 0x40)` produces the opposite of what JS does. Need to verify the BLPTextureFlags API to confirm.
-
-- **JS Source**: `src/js/casc/export-helper.js` lines 97–114
-- **Status**: Pending
-- **Details**: JS exposes `static async getIncrementalFilename(...)` and awaits `generics.fileExists`; C++ implementation is synchronous, changing timing/error behavior expected by Promise-style callers.
-
-- **JS Source**: `src/js/casc/export-helper.js` lines 284–288
-- **Status**: Pending
-- **Details**: JS writes stack traces with `console.log(stackTrace)` in `mark(...)`; C++ routes stack trace strings through `logging::write(...)`, changing where detailed error output appears.
-
-- **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59–61, 111–112
-- **Status**: Pending
-- **Details**: JS stores a data-URI string and decodes it inside `exportTextures()`. C++ `addURITexture` accepts `BufferWrapper` PNG bytes directly, changing caller-facing behavior and where decoding occurs.
-
-- **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 568
-- **Status**: Pending
-- **Details**: JS exports UV2 when `config.modelsExportUV2 && uv2` (empty arrays are truthy). C++ requires `!uv2.empty()`, so empty-but-present UV2 buffers are not exported.
-
-- **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59–61
-- **Status**: Pending
-- **Details**: JS `addURITexture(out, dataURI)` stores a raw base64 data URI string, which is decoded later in `exportTextures()` via `BufferWrapper.fromBase64(dataTexture.replace(...))`. C++ `addURITexture(uint32_t textureType, BufferWrapper pngData)` accepts already-decoded PNG data, shifting the decoding responsibility to the caller. This is a contract change that alters the interface boundary — callers must now pre-decode the data URI before passing it. While not a bug if all callers are adapted, it changes the API surface compared to the original JS.
-
-- **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 794
-- **Status**: Pending
-- **Details**: JS uses `Object.assign({ enabled: subMeshEnabled }, skin.subMeshes[i])` which dynamically copies *all* properties from the submesh object. C++ (M2Exporter.cpp ~lines 1111–1126) manually enumerates a fixed set of properties (submeshID, level, vertexStart, vertexCount, triangleStart, triangleCount, boneCount, boneStart, boneInfluences, centerBoneIndex, centerPosition, sortCenterPosition, sortRadius). If the Skin's SubMesh struct gains new fields, they would automatically appear in JS JSON output but would be missing in C++ JSON output. This is a fragile pattern that could silently omit metadata.
-
-- **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 748
-- **Status**: Pending
-- **Details**: In JS, `texFileDataID` for data textures is the string key `"data-X"`, which gets stored as-is in the file manifest. In C++ (~line 1059), `std::stoul(texKey)` fails for `"data-X"` keys and `texID` defaults to 0 in the `catch (...)` block. This means data textures in the file manifest will have `fileDataID = 0` instead of a meaningful identifier, losing the ability to correlate manifest entries with specific data texture types.
-
-- **JS Source**: `src/js/3D/exporters/M2Exporter.js` line 194
-- **Status**: Pending
-- **Details**: JS calls `listfile.formatUnknownFile(texFile)` where `texFile` is a string like `"12345.png"`. C++ (~line 410) calls `casc::listfile::formatUnknownFile(texFileDataID, raw ? ".blp" : ".png")` passing the numeric ID and extension separately. The C++ call passes `raw ? ".blp" : ".png"` but this code appears in the `!raw` branch (line 406 checks `!raw`), so the `raw` ternary would always evaluate to `.png`. While not necessarily a bug (depends on `formatUnknownFile` implementation), the call signature divergence means the output filename format may differ.
-
-- **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 39, 123, 262, 299
-- **Status**: Pending
-- **Details**: JS export methods (`exportTextures`, `exportAsOBJ`, `exportAsSTL`, `exportRaw`) are async and yield during I/O. C++ runs these paths synchronously, altering timing/cancellation behavior versus JS.
-
-- **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 49–50
-- **Status**: Pending
-- **Details**: JS stores raw data-URI strings in `dataTextures`; C++ stores `BufferWrapper` PNG bytes, changing caller contract and data normalization stage.
-
-- **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 88–89, 141–142
-- **Status**: Pending
-- **Details**: JS exports UV1 whenever it is defined (`!== undefined`), including empty arrays. C++ requires `!m3->uv1.empty()`, which changes behavior for defined-but-empty UV sets.
-
-- **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 49–51
-- **Status**: Pending
-- **Details**: Same issue as M2Exporter: JS `addURITexture(out, dataURI)` stores a raw base64 data URI string keyed by output path. C++ `addURITexture(const std::string& out, BufferWrapper pngData)` accepts already-decoded PNG data. This is an API contract change that shifts decoding responsibility to the caller.
-
-- **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 62, 219, 360, 739, 841, 1179
-- **Status**: Pending
-- **Details**: JS uses async export methods (`exportTextures`, `exportAsGLTF`, `exportAsOBJ`, `exportAsSTL`, `exportGroupsAsSeparateOBJ`, `exportRaw`) with awaited CASC/file operations, while C++ executes these paths synchronously.
-
-- **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 34–36
-- **Status**: Pending
-- **Details**: JS constructor is `constructor(data, fileID)` and obtains CASC source internally via `core.view.casc`. C++ constructor is `WMOExporter(BufferWrapper data, uint32_t fileDataID, casc::CASC* casc)` with explicit casc pointer. Additionally, `fileDataID` is constrained to `uint32_t` while JS accepts `string|number` for `fileID`. This is an API deviation — callers must pass the correct CASC instance and cannot pass string file paths.
-
-- **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 47, 130, 392, 478
-- **Status**: Pending
-- **Details**: JS legacy WMO export methods are async and await texture/model I/O; C++ methods (`exportTextures`, `exportAsOBJ`, `exportAsSTL`, `exportRaw`) are synchronous, changing timing/cancellation semantics.
-
-- **JS Source**: `src/js/casc/vp9-avi-demuxer.js` lines 22–23, 83–126
-- **Status**: Pending
-- **Details**: JS exposes `async parse_header()` and `async* extract_frames()` generator semantics; C++ ports these to synchronous methods with callback iteration, changing consumption and scheduling behavior.
-
-- **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 129–225
-- **Status**: Pending
-- **Details**: JS implements asynchronous writes (`await writer.writeLine(...)` and async filesystem calls). C++ `write()` is synchronous, which changes ordering and error propagation relative to the original Promise API.
-
-- **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 84–99
-- **Status**: Pending
-- **Details**: JS `appendGeometry` handles multiple UV arrays and uses `Array.isArray` + spread operator for concatenation. C++ uses `std::vector::insert` for appending. Functionally equivalent.
-
-- **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 119–142
-- **Status**: Pending
-- **Details**: Both JS and C++ output 1-based vertex indices in OBJ face format (e.g., `f v//vn v//vn v//vn` when no UVs, `f v/vt/vn v/vt/vn v/vt/vn` when UVs present). Vertex offset is added correctly in both implementations. Verified as correct.
-
-- **JS Source**: `src/js/3D/writers/MTLWriter.js` lines 41–68
-- **Status**: Pending
-- **Details**: JS awaits file existence checks, directory creation, and line writes in `async write()`. C++ performs the same work synchronously, so behavior differs for call sites that rely on async completion semantics.
-
-- **JS Source**: `src/js/3D/writers/MTLWriter.js` lines 35–37
-- **Status**: Pending
-- **Details**: C++ line 30 uses `std::filesystem::path(name).stem().string()` to extract the filename without extension. JS uses `path.basename(name, path.extname(name))`. These should produce identical results for typical filenames. However, if `name` contains multiple dots (e.g., `texture.v2.png`), `stem()` returns `texture.v2` while `basename('texture.v2.png', '.png')` also returns `texture.v2`. Functionally equivalent.
-
-- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 194–1504
-- **Status**: Pending
-- **Details**: JS defines `async write(overwrite, format)` and awaits filesystem/export operations throughout. C++ exposes `void write(...)` and executes all I/O synchronously, changing call timing/error propagation semantics for callers expecting Promise behavior.
-
-- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 276–280
-- **Status**: Pending
-- **Details**: JS `add_scene_node` returns the pushed node object reference (used for `skeleton.children.push()` later). C++ returns the index (size_t) instead, and uses index-based access to modify nodes later. This is functionally equivalent but bone parent lookup uses `bone_lookup_map[bone.parentBone]` to store the node index in C++ vs. storing the node object reference in JS. This difference means C++ accesses `nodes[parent_node_idx]` while JS mutates the object directly.
-
-- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 282–296
-- **Status**: Pending
-- **Details**: JS `add_buffered_accessor` always includes `target: buffer_target` in the bufferView. When `buffer_target` is `undefined`, JSON.stringify omits the key entirely. C++ explicitly checks `if (buffer_target >= 0)` before adding the target key. This produces identical JSON output since JS `undefined` values are omitted by JSON.stringify, matching C++ not adding the key at all. Functionally equivalent.
-
-- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 620–628, 757–765, 887–895
-- **Status**: Pending
-- **Details**: In JS, animation channel target node is always `nodeIndex + 1` regardless of prefix setting. In C++, `actual_node_idx` is used, which varies based on `usePrefix`. When `usePrefix` is true, C++ sets `actual_node_idx = nodes.size()` after pushing prefix_node (so it points to the real bone node, matching JS `nodeIndex + 1`). When `usePrefix` is false, `actual_node_idx = nodes.size()` before pushing the node, so it points to the same node. The JS code always does `nodeIndex + 1` which is only correct when prefix nodes exist. C++ correctly handles both cases. This is a JS bug that C++ fixes intentionally.
-
-- **JS Source**: `src/js/3D/writers/GLTFWriter.js` line 464
-- **Status**: Pending
-- **Details**: JS `bone_lookup_map.set(bi, node)` stores the node object, which is then mutated later when children are added. C++ `bone_lookup_map[bi] = actual_node_idx` stores the index into the `nodes` array, and children are added via `nodes[parent_node_idx]["children"]`. This is functionally equivalent — JS mutates the object reference in the map and C++ indexes into the JSON array.
-
-- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1110–1119
-- **Status**: Pending
-- **Details**: JS always sets `material: materialMap.get(mesh.matName)` in the primitive, even if the material isn't found (result is `undefined`, which gets stripped by JSON.stringify). C++ uses `auto mat_it = materialMap.find(mesh.matName)` and only sets `primitive["material"]` if found. The final JSON output is identical since JS undefined is omitted, but the approach differs.
-
-- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1404–1411
-- **Status**: Pending
-- **Details**: Same pattern as entry 422 but for equipment meshes. JS sets `material: materialMap.get(mesh.matName)` which may be `undefined`. C++ checks `eq_mat_it != materialMap.end()` before setting material. Functionally equivalent in JSON output.
-
-- **JS Source**: `src/js/3D/writers/GLTFWriter.js` (no equivalent)
-- **Status**: Pending
-- **Details**: C++ adds `addTextureBuffer(uint32_t fileDataID, BufferWrapper buffer)` method (lines 113–115) which has no JS counterpart. JS only has `setTextureBuffers()` to set the entire map at once. The C++ addition allows incrementally adding individual texture buffers, which changes the API surface.
-
-- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1468–1470
-- **Status**: Pending
-- **Details**: JS extracts animation index from bufferView name via `name_parts = bufferView.name.split('_'); anim_idx = name_parts[3]`. C++ uses `bv_name.rfind('_')` and then `std::stoi(bv_name.substr(last_underscore + 1))` to get the animation index. For names like `TRANS_TIMESTAMPS_0_1`, JS gets `name_parts[3] = "1"`, C++ gets substring after last underscore = `"1"`. These produce the same result. However, for `SCALE_TIMESTAMPS_0_1`, both work the same. Functionally equivalent.
-
-- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 344–347, 449
-- **Status**: Pending
-- **Details**: JS `const skeleton = add_scene_node({name: ..., children: []})` returns the actual node object. Later, `skeleton.children.push(nodeIndex)` mutates it directly. C++ `size_t skeleton_idx = add_scene_node(...)` gets an index, and later accesses `nodes[skeleton_idx]["children"].push_back(...)`. Functionally equivalent.
-
-- **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 460, 466
-- **Status**: Pending
-- **Details**: JS checks `core.view.config.modelsExportWithBonePrefix` outside the bone loop at line 460 (const is evaluated once). C++ reads `core::view->config.value("modelsExportWithBonePrefix", false)` inside the loop at line 470, which re-reads the config for every bone. Since config shouldn't change during export, this is functionally equivalent but slightly less efficient.
-
-- **JS Source**: `src/js/3D/writers/GLBWriter.js` lines 20–28
-- **Status**: Pending
-- **Details**: The glTF 2.0 spec requires that the JSON chunk be padded with trailing space characters (0x20) to maintain 4-byte alignment. C++ `BufferWrapper::alloc(size, true)` zero-fills the buffer, so JSON padding bytes are 0x00. JS `Buffer.alloc(size)` also zero-fills, so JS has the same issue. However, this should be documented as a potential spec compliance issue for both versions.
-
-- **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 33–43
-- **Status**: Pending
-- **Details**: JS uses `async write()` and a `JSON.stringify` replacer that converts `bigint` values to strings. C++ `write()` is synchronous and writes `nlohmann::json::dump()` directly, which changes both async semantics and JS BigInt serialization parity.
-
-- **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 37–42
-- **Status**: Pending
-- **Details**: Both produce tab-indented JSON, but nlohmann `dump(1, '\t')` uses indent width of 1 with tab character, while JS `JSON.stringify` with `'\t'` uses tab for each indent level. The output should be identical for well-formed JSON.
-
-- **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 25–27
-- **Status**: Pending
-- **Details**: JS `addField(...fields)` accepts any number of arguments via rest parameters and pushes all. C++ provides `addField(const std::string&)` for single fields and `addField(const std::vector<std::string>&)` for multiple. Callers must adapt to one of these two signatures instead of passing multiple individual arguments.
-
-- **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 42–51
-- **Status**: Pending
-- **Details**: JS `escapeCSVField()` handles `null`/`undefined` by returning empty string (line 43–44), then calls `value.toString()` for other types. C++ only accepts `const std::string&` and returns empty for empty strings (line 28–29). JS could receive numbers/booleans and stringify them; C++ requires pre-conversion to string by the caller.
-
-- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 210–229
-- **Status**: Pending
-- **Details**: JS `async write()` awaits file checks, directory creation, and output writes. C++ performs the same operations synchronously, diverging from JS caller-visible async behavior.
-
-- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 66–76
-- **Status**: Pending
-- **Details**: JS returns `NULL` only for `null`/`undefined`; an empty string serializes to `''`. C++ maps `value.empty()` to `NULL`, so genuine empty-string field values are emitted as SQL `NULL`, changing exported data.
-
-- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 48–49
-- **Status**: Pending
-- **Details**: JS `addField(...fields)` accepts any number of arguments via rest parameters and pushes all. C++ provides `addField(const std::string&)` for single fields and `addField(const std::vector<std::string>&)` for multiple. Same pattern as CSVWriter entry 413.
-
-- **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 141–177
-- **Status**: Pending
-- **Details**: JS builds an array of `lines` and joins with `\n` at the end. The output includes `DROP TABLE IF EXISTS ...\n\nCREATE TABLE ... (\n<columns>\n);\n\n`. C++ builds the result string directly with `+= "\n"`. The C++ version outputs `DROP TABLE IF EXISTS ...;\n\nCREATE TABLE ... (\n<columns joined with ,\n>\n);\n` which should match. However, JS `lines.push('')` creates an empty element that adds an extra `\n` when joined, and the column_defs are joined separately with `,\n`. The overall output may have subtle whitespace differences in the final string.
-
-- **JS Source**: `src/js/3D/writers/STLWriter.js` lines 131–249
-- **Status**: Pending
-- **Details**: JS writer path is asynchronous and awaited by callers. C++ `write()` runs synchronously, changing API timing semantics compared to the original implementation.
-
-- **JS Source**: `src/js/3D/writers/STLWriter.js` line 147
-- **Status**: Pending
-- **Details**: JS: `'Exported using wow.export v' + constants.VERSION`. C++: `"Exported using wow.export.cpp v" + std::string(constants::VERSION)`. This is an intentional branding change per project conventions (user-facing text should say wow.export.cpp). Verified as correct.
-
-- **JS Source**: `src/js/3D/writers/STLWriter.js` lines 66–86
-- **Status**: Pending
-- **Details**: JS `appendGeometry` checks `Array.isArray(this.verts)` to decide between spread and `Float32Array.from()` for concatenation. C++ always uses `std::vector::insert`, which works correctly regardless. The JS type distinction is a JS-specific concern that doesn't apply to C++. Functionally equivalent.
 
 - [ ] 591. [app.cpp] Header `shadowed` class (box-shadow when toast active) not implemented
   - **JS Source**: `src/index.html` line 11; `src/app.css` lines 212–214
@@ -1558,4 +1011,3 @@
   - **JS Source**: N/A (build system only)
   - **Status**: Pending
   - **Details**: MSVC debug builds have two major sources of runtime overhead beyond `/Od` (no optimisation) that do not affect debugability at all: (1) `_ITERATOR_DEBUG_LEVEL=2` (default) adds bounds checking and iterator invalidation detection to every STL operation — responsible for most of the CASC loading slowdown (encoding table 1.85×, root file 1.54× even in release hints at some debug-only calls, but in a pure debug build this is the primary cost on all `std::vector`/`std::unordered_map` access); (2) `/JMC` (Just My Code, on by default) adds a function-entry probe to every function for the debugger's "Step Into User Code" button, adding overhead to every function call. Fix: in `CMakeLists.txt`, add `$<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>` via `add_compile_definitions` (applied globally so all compiled targets in the build are consistent — mixing `_ITERATOR_DEBUG_LEVEL` values across translation units in the same binary causes ODR violations), and `/JMC-` via `target_compile_options` for MSVC debug. Full debugability is preserved: breakpoints, step-through, variable inspection, call stack, and watch expressions are all unaffected. The only things lost are runtime STL iterator validation and the "Step Into User Code" filtering — both of which release builds also omit. Expected: debug CASC load time drops from 5–12× to roughly 2–3× of release.
-
