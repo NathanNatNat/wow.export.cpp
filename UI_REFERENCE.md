@@ -7,6 +7,51 @@ When making UI changes to the C++ ImGui conversion, **always compare against the
 
 ---
 
+## Style Reference
+
+The original app's styling was defined in `src/app.css` (now removed — fully audited and ported). The C++ equivalents live in `src/app.cpp` and `src/app.h`. Key values for quick reference:
+
+| CSS Variable | Value | C++ Constant |
+|---|---|---|
+| `--background` | `#343a40` | `COLOR_BG` |
+| `--background-dark` | `#2c3136` | `COLOR_BG_DARK` |
+| `--background-alt` | `#3c4147` | `COLOR_BG_ALT` |
+| `--background-trans` | `#343a40b3` | `COLOR_BG_TRANS` |
+| `--border` | `#6c757d` | `COLOR_BORDER` |
+| `--nav-option-selected` | `#22b549` | `COLOR_NAV_ACTIVE` |
+| `--font-primary` | `#ffffffcc` | `FONT_PRIMARY` |
+| `--font-highlight` | `#ffffff` | `FONT_HIGHLIGHT` |
+| `--font-faded` | `#6c757d` | `FONT_FADED` |
+| `--font-alt` | `#57afe2` | `FONT_ALT` |
+| `--font-alt-highlight` | `#9ff1a1` | `FONT_ALT_HIGHLIGHT` |
+| `--font-toast` | `black` | `FONT_TOAST` |
+| `--font-toast-link` | `#0300bf` | `FONT_TOAST_LINK` |
+| `--toast-progress` | `#dcba90` | `TOAST_PROGRESS` |
+| `--toast-error` | `#dc9090` | `TOAST_ERROR` |
+| `--toast-success` | `#a6dc90` | `TOAST_SUCCESS` |
+| `--toast-info` | `#90bcdc` | `TOAST_INFO` |
+| `--form-button-base` | `#22b549` | `BUTTON_BASE` |
+| `--form-button-hover` | `#2665d2` | `BUTTON_HOVER` |
+| `--form-button-menu` | `#389451` | `BUTTON_MENU` |
+| `--form-button-menu-hover` | `#3e6bb9` | `BUTTON_MENU_HOVER` |
+| `--form-button-disabled` | `#696969` | `BUTTON_DISABLED` |
+| `--progress-bar` | `linear-gradient(#57afe2, #35759a)` | `PROGRESS_BAR_TOP` / `PROGRESS_BAR_BOTTOM` |
+| `--trans-check-a` | `#303030` | `TRANS_CHECK_A` |
+| `--trans-check-b` | `#272727` | `TRANS_CHECK_B` |
+
+**Fonts:** Selawik regular + bold (`fonts/selawk.woff2` / `selawkb.woff2`) and Gambler (`fonts/gmblr.woff2`) are loaded at startup in `src/app.cpp`.
+
+**Layout:** Header 53 px · Content area (flex) · Footer 73 px (grid rows defined in `renderAppShell()`).
+
+**Known ImGui limitations** (cannot be replicated exactly; see `TODO_TRACKER.md` for entries):
+- CSS `box-shadow` / `drop-shadow` — no native ImGui support; approximated with semi-transparent quads where critical
+- CSS `filter: brightness()` / `hue-rotate()` — nav icon active/hover states use direct color tinting instead
+- CSS `@keyframes` transitions and `transition:` properties — not applicable; state changes are immediate
+- CSS `text-shadow` — not supported in ImGui
+- `@media (max-height: N px)` responsive breakpoints — not yet implemented (TODO #593)
+
+---
+
 ## Source Select Screen
 
 The initial screen where the user chooses how to open a World of Warcraft installation (local, CDN, or legacy MPQ).

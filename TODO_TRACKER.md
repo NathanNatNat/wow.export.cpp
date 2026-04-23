@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 379/562 verified (67%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 379/566 verified (67%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -2865,3 +2865,23 @@
   - **JS Source**: `src/js/modules/screen_settings.js` lines 24, 29, etc.; `src/app.css` line 1403–1405
   - **Status**: Pending
   - **Details**: CSS sets `#config > div h1 { font-size: 18px; }` without removing the browser's default `font-weight: bold` for `<h1>`. The reference screenshots show section headings (e.g. "Export Directory", "Scroll Speed") rendered in a visibly heavier/bolder weight than the description paragraphs beneath them. C++ `SectionHeading()` uses `ImGui::SetWindowFontScale(18.0f / DEFAULT_FONT_SIZE)` which only scales the font size — Dear ImGui's default font has no bold variant loaded. Fix: load a bold font variant and push/pop it in `SectionHeading()`, or use `ImGui::PushFont(boldFont)` if a bold font is available.
+
+- [ ] 591. [app.cpp] Header `shadowed` class (box-shadow when toast active) not implemented
+  - **JS Source**: `src/index.html` line 11; `src/app.css` lines 212–214
+  - **Status**: Pending
+  - **Details**: HTML applies `:class="{ shadowed: toast !== null }"` to `#header`. CSS: `#container #header.shadowed { box-shadow: var(--widget-shadow); }` where `--widget-shadow: black 0 0 5px`. When a toast is visible the header should cast a downward black blur shadow. Dear ImGui has no native box-shadow; approximate by drawing a few semi-transparent filled rectangles below the header bottom border when `core::view->toast` is non-null.
+
+- [ ] 592. [tab_characters.cpp] Import/export button brand colors not implemented
+  - **JS Source**: `src/app.css` lines 3053–3112
+  - **Status**: Pending
+  - **Details**: CSS defines specific background-color overrides for character import/export buttons: `.character-bnet-button` (#148eff blue), `.character-wmv-button` (#d22c1e red), `.character-wowhead-button` (#e02020 red), `.character-save-button` (#5865f2 purple). These brand colors do not appear anywhere in the C++ code — the buttons likely render with the default green `--form-button-base` instead. Fix: define the four brand colors as constants and apply them when rendering the respective buttons via `ImGui::PushStyleColor(ImGuiCol_Button, ...)`.
+
+- [ ] 593. [screen_source_select.cpp, screen_build_select.cpp] CSS media-query responsive breakpoints not implemented
+  - **JS Source**: `src/app.css` lines 3736–3790
+  - **Status**: Pending
+  - **Details**: Three `@media (max-height: N px)` breakpoints adjust layout at small screen heights: (1) `max-height: 899px` — hide `#home-help-buttons`; (2) `max-height: 799px` — compress `#source-select` (icons shrink from 80px→50px, reduced gaps and font sizes); (3) `max-height: 849px` — change `#build-select .build-select-buttons` from column to wrapping row. C++ uses fixed layouts and ignores viewport height. Fix: read `ImGui::GetMainViewport()->WorkSize.y` and switch layouts at the same pixel thresholds.
+
+- [ ] 594. [tab_audio.cpp] Sound player audiobox sprite animation not implemented
+  - **JS Source**: `src/app.css` lines 2513–2537
+  - **Status**: Pending
+  - **Details**: CSS animates `#sound-player-anim` as a horizontal sprite strip: `@keyframes sound-audiobox-anim { to { background-position-x: -4326px; } }` at `0.7s steps(14, end) infinite`, playing/paused based on state. The sprite image is `images/audiobox.png` (309×397px per frame, 14 frames = 4326px total width). C++ renders the audio tab without this animated audiobox graphic. Fix: load `audiobox.png` as a texture, compute the current frame from elapsed time (frame = floor(elapsed / 0.7s * 14) % 14 when playing), and render the correct UV sub-region (frame * 309 / total_width → (frame+1) * 309 / total_width).
