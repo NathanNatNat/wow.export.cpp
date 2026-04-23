@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/178 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 6/178 verified (3%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -899,32 +899,32 @@
   - **Status**: Pending
   - **Details**: CSS animates `#sound-player-anim` as a horizontal sprite strip: `@keyframes sound-audiobox-anim { to { background-position-x: -4326px; } }` at `0.7s steps(14, end) infinite`, playing/paused based on state. The sprite image is `images/audiobox.png` (309×397px per frame, 14 frames = 4326px total width). C++ renders the audio tab without this animated audiobox graphic. Fix: load `audiobox.png` as a texture, compute the current frame from elapsed time (frame = floor(elapsed / 0.7s * 14) % 14 when playing), and render the correct UV sub-region (frame * 309 / total_width → (frame+1) * 309 / total_width).
 
-- [ ] 597. [casc/casc-source-local.cpp] CASC journal index loading 1.27× slower than JS in release (1074ms vs 848ms for 2M entries)
+- [x] 597. [casc/casc-source-local.cpp] CASC journal index loading 1.27× slower than JS in release (1074ms vs 848ms for 2M entries)
   - **JS Source**: `src/js/casc/casc-source-local.js` (journal index loading)
   - **Status**: Pending
   - **Details**: Debug: 4029ms. Release: 1074ms vs 848ms JS (1.27×). The gap is marginal and may reflect real algorithmic overhead: likely insufficient pre-allocation of the index map (`reserve()`) or sequential small reads per `.idx` entry rather than bulk-reading each file into memory first. Investigate but low priority given the small gap.
 
-- [ ] 598. [casc/encoding.cpp] Encoding table parsing 1.85× slower than JS in release (3811ms vs 2057ms for 2.8M entries)
+- [x] 598. [casc/encoding.cpp] Encoding table parsing 1.85× slower than JS in release (3811ms vs 2057ms for 2.8M entries)
   - **JS Source**: `src/js/casc/encoding.js`
   - **Status**: Pending
   - **Details**: Debug: 12292ms. Release: 3811ms vs 2057ms JS (1.85×). This is the single remaining significant CASC bottleneck in release. Likely causes: (1) per-entry `std::unordered_map` inserts without `reserve()` — 2.8M insertions with multiple rehash cycles; (2) MD5 keys stored as `std::string` or `std::vector<uint8_t>` rather than `std::array<uint8_t, 16>` with a flat hash — avoids heap allocation per key; (3) file not read into a single buffer before parsing. Fix: `reserve(3'000'000)`, bulk-read the file, use fixed-size key arrays.
 
-- [ ] 599. [casc/root.cpp] Root file parsing 1.54× slower than JS in release (1431ms vs 928ms for 1.9M entries)
+- [x] 599. [casc/root.cpp] Root file parsing 1.54× slower than JS in release (1431ms vs 928ms for 1.9M entries)
   - **JS Source**: `src/js/casc/root.js`
   - **Status**: Pending
   - **Details**: Debug: 7222ms. Release: 1431ms vs 928ms JS (1.54×). Similar to entry 598: likely missing `reserve()` on the root map and/or per-entry copies in the hot parse loop. Fix: `reserve()` before filling, load the full root blob into memory and parse in-place, avoid temporaries.
 
-- [ ] 601. [casc/tact-keys.cpp / app.cpp] TACTKeys download runs before source_select — should fire async in parallel with CDN resolution
+- [x] 601. [casc/tact-keys.cpp / app.cpp] TACTKeys download runs before source_select — should fire async in parallel with CDN resolution
   - **JS Source**: `src/js/casc/tact-keys.js`; `src/js/casc/casc-source-remote.js`
   - **Status**: Pending
   - **Details**: In JS, TACTKeys are fetched async during CDN pre-resolution. In C++ release, TACTKeys download completes at 19:35:37 before `set active module: source_select` (also 19:35:37) — in release this is invisible since the download is fast, but the structure is wrong. In slower network conditions the blocking download would delay the UI appearing. Fix: fire TACTKeys as a background `std::async` task concurrent with CDN pre-resolution, join only when a CASC source is opened.
 
-- [ ] 602. [app.cpp / screen_source_select.cpp] "failed to load whats-new.html" error on startup — file missing from C++ build
+- [x] 602. [app.cpp / screen_source_select.cpp] "failed to load whats-new.html" error on startup — file missing from C++ build
   - **JS Source**: `src/js/components/whats-new.js`; `src/whats-new.html`
   - **Status**: Pending
   - **Details**: C++ log shows: `failed to load whats-new.html: could not open D:/Repositories/wow.export.cpp\src\whats-new.html`. The `whats-new.html` file was removed from the C++ repo (audited and ported per commit `012b8cde`), but something still attempts to load it at runtime. The `tab_home` stub intentionally omits the whats-new panel (see Intentional Stubs in CLAUDE.md), so this load attempt should be removed or guarded. Locate the call site that tries to open `whats-new.html` and remove it, or suppress the error since the tab_home stub is intentional.
 
-- [ ] 603. [CMakeLists.txt] MSVC debug build is 5–12× slower at runtime than release — add `_ITERATOR_DEBUG_LEVEL=0` and `/JMC-` for debug
+- [x] 603. [CMakeLists.txt] MSVC debug build is 5–12× slower at runtime than release — add `_ITERATOR_DEBUG_LEVEL=0` and `/JMC-` for debug
   - **JS Source**: N/A (build system only)
   - **Status**: Pending
   - **Details**: MSVC debug builds have two major sources of runtime overhead beyond `/Od` (no optimisation) that do not affect debugability at all: (1) `_ITERATOR_DEBUG_LEVEL=2` (default) adds bounds checking and iterator invalidation detection to every STL operation — responsible for most of the CASC loading slowdown (encoding table 1.85×, root file 1.54× even in release hints at some debug-only calls, but in a pure debug build this is the primary cost on all `std::vector`/`std::unordered_map` access); (2) `/JMC` (Just My Code, on by default) adds a function-entry probe to every function for the debugger's "Step Into User Code" button, adding overhead to every function call. Fix: in `CMakeLists.txt`, add `$<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>` via `add_compile_definitions` (applied globally so all compiled targets in the build are consistent — mixing `_ITERATOR_DEBUG_LEVEL` values across translation units in the same binary causes ODR violations), and `/JMC-` via `target_compile_options` for MSVC debug. Full debugability is preserved: breakpoints, step-through, variable inspection, call stack, and watch expressions are all unaffected. The only things lost are runtime STL iterator validation and the "Step Into User Code" filtering — both of which release builds also omit. Expected: debug CASC load time drops from 5–12× to roughly 2–3× of release.

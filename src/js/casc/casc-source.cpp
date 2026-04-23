@@ -385,6 +385,8 @@ size_t CASC::parseRootFile(BufferWrapper data, const std::string& hash) {
 
 	const uint32_t magic = root.readUInt32LE();
 
+	rootEntries.reserve(2'000'000);
+
 	if (magic == ROOT_MAGIC) { // 8.2
 		uint32_t headerSize = root.readUInt32LE();
 		uint32_t version = root.readUInt32LE();
@@ -514,6 +516,9 @@ void CASC::parseEncodingFile(BufferWrapper data, const std::string& hash) {
 	const int32_t specBlockSize = encoding.readInt32BE();
 
 	encoding.move(specBlockSize + (cKeyPageCount * (hashSizeCKey + 16)));
+
+	encodingKeys.reserve(3'000'000);
+	encodingSizes.reserve(3'000'000);
 
 	const size_t pagesStart = encoding.offset();
 	for (int32_t i = 0; i < cKeyPageCount; i++) {

@@ -18,6 +18,7 @@
 #include "../generics.h"
 #include "casc-source-remote.h"
 #include "cdn-resolver.h"
+#include "tact-keys.h"
 
 #include <stdexcept>
 #include <string>
@@ -246,6 +247,8 @@ std::vector<ProductEntry> CASCLocal::getProductList() {
  * @param buildIndex
  */
 void CASCLocal::load(int buildIndex) {
+	tact_keys::waitForLoad();
+
 	build = builds[buildIndex];
 	logging::write("Loading local CASC build: " + dumpMap(build));
 
@@ -339,6 +342,7 @@ void CASCLocal::loadIndexes() {
 	logging::timeLog();
 	core::progressLoadingScreen("Loading indexes");
 
+	localIndexes.reserve(2'500'000);
 	int indexCount = 0;
 
 	for (const auto& entry : fs::directory_iterator(storageDir)) {

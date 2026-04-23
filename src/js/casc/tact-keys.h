@@ -31,9 +31,22 @@ bool addKey(std::string_view keyName, std::string_view key);
 
 /**
  * Load tact keys from disk cache and request updated
- * keys from remote server.
+ * keys from remote server. Blocks until complete.
  */
 void load();
+
+/**
+ * Fire tact key loading as a background task (mirrors JS non-awaited
+ * tactKeys.load() call). Call waitForLoad() before any CASC file access.
+ */
+void loadBackground();
+
+/**
+ * Join the background load started by loadBackground().
+ * No-op if load() was called instead, or if already waited.
+ */
+void waitForLoad();
+
 std::future<void> loadAsync();
 
 } // namespace tact_keys

@@ -139,6 +139,11 @@ std::string_view trim(std::string_view sv) {
 
 } // anonymous namespace
 
+namespace {
+std::shared_future<void> g_backgroundLoad;
+std::mutex g_backgroundMutex;
+} // anonymous namespace
+
 namespace casc {
 namespace tact_keys {
 
@@ -177,6 +182,21 @@ bool addKey(std::string_view keyName, std::string_view key) {
 
 void load() {
 	loadAsync().get();
+}
+
+void loadBackground() {
+	std::lock_guard<std::mutex> lock(g_backgroundMutex);
+	g_backgroundLoad = loadAsync().share();
+}
+
+void waitForLoad() {
+	std::shared_future<void> f;
+	{
+		std::lock_guard<std::mutex> lock(g_backgroundMutex);
+		f = g_backgroundLoad;
+	}
+	if (f.valid())
+		f.get();
 }
 
 std::future<void> loadAsync() {

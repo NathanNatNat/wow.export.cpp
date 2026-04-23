@@ -36,6 +36,17 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type" FORCE)
 endif()
 
+# ── MSVC debug performance ──────────────────────────────────────
+# Disable iterator debug overhead and Just-My-Code instrumentation in debug
+# builds to bring debug runtime perf closer to release without affecting
+# debuggability (breakpoints, variable inspection, call stacks all work).
+# Applied globally so all TUs in the binary are consistent —
+# mixing _ITERATOR_DEBUG_LEVEL values across TUs causes ODR violations.
+if(MSVC)
+    add_compile_definitions($<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>)
+    add_compile_options($<$<CONFIG:Debug>:/JMC->)
+endif()
+
 # ── Visual Studio: set wow_export_cpp as the startup project ──────
 set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT wow_export_cpp)
 

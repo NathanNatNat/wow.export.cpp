@@ -2786,13 +2786,10 @@ int main(int argc, char* argv[]) {
 	// JS: build-cache.js lines 174-240 run at module load time.
 	casc::registerBuildCacheEvents();
 
-	// Load/update BLTE decryption keys.
-	// JS: tactKeys.load() returns a promise that is never awaited — failures are silently ignored.
-	try {
-		casc::tact_keys::load();
-	} catch (const std::exception& e) {
-		logging::write(std::format("Failed to load tact keys: {}", e.what()));
-	}
+	// Load/update BLTE decryption keys in background — mirrors JS where tactKeys.load()
+	// is called without await so source_select appears without waiting for the download.
+	// waitForLoad() is called at the start of each CASC load() before file access begins.
+	casc::tact_keys::loadBackground();
 
 	// Auto-updater logic.
 	// JS: app.js lines 688-705
@@ -2826,24 +2823,6 @@ int main(int argc, char* argv[]) {
 	// debug mode or auto-update disabled, skip to blender add-on check.
 	// JS: app.js line 704
 	tab_blender::checkLocalVersion();
-
-	// Load what's new HTML on app start
-	// JS: app.js lines 707-716
-	{
-		auto whatsNewPath = constants::SRC_DIR() / "whats-new.html";
-		try {
-			std::ifstream ifs(whatsNewPath, std::ios::in);
-			if (ifs.is_open()) {
-				std::string html((std::istreambuf_iterator<char>(ifs)),
-				                  std::istreambuf_iterator<char>());
-				core::view->whatsNewHTML = std::move(html);
-			} else {
-				logging::write(std::format("failed to load whats-new.html: could not open {}", whatsNewPath.string()));
-			}
-		} catch (const std::exception& e) {
-			logging::write(std::format("failed to load whats-new.html: {}", e.what()));
-		}
-	}
 
 	// Set source select as the currently active interface screen.
 	modules::setActive("source_select");

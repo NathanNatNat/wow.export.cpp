@@ -16,6 +16,7 @@
 #include "blte-reader.h"
 #include "blte-stream-reader.h"
 #include "cdn-resolver.h"
+#include "tact-keys.h"
 
 #include <stdexcept>
 #include <string>
@@ -364,6 +365,8 @@ void CASCRemote::preload(int buildIndex, BuildCache* sharedCache) {
  * @param buildIndex
  */
 void CASCRemote::load(int buildIndex) {
+	tact_keys::waitForLoad();
+
 	core::showLoadingScreen(12);
 	preload(buildIndex);
 
