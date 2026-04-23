@@ -231,6 +231,27 @@ else()
     find_package(OpenSSL REQUIRED)
 endif()
 
+#── FFmpeg for WebM/VP9 video decoding ────────────────────────────────────────
+# On Windows: use our prebuilt LGPL shared x64 binaries (populated by setup-ffmpeg.ps1).
+# On Linux:   use system FFmpeg libraries (libavcodec-dev etc. must be installed).
+if(WIN32)
+    add_subdirectory(extern/ffmpeg-prebuilt EXCLUDE_FROM_ALL)
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBAVCODEC  REQUIRED libavcodec)
+    pkg_check_modules(LIBAVFORMAT REQUIRED libavformat)
+    pkg_check_modules(LIBAVUTIL   REQUIRED libavutil)
+    pkg_check_modules(LIBSWSCALE  REQUIRED libswscale)
+
+    foreach(_lib avcodec avformat avutil swscale)
+        string(TOUPPER "${_lib}" _LIB)
+        add_library(FFmpeg::${_lib} INTERFACE IMPORTED GLOBAL)
+        target_compile_options(FFmpeg::${_lib}  INTERFACE ${LIB${_LIB}_CFLAGS_OTHER})
+        target_include_directories(FFmpeg::${_lib} INTERFACE ${LIB${_LIB}_INCLUDE_DIRS})
+        target_link_libraries(FFmpeg::${_lib}   INTERFACE ${LIB${_LIB}_LINK_LIBRARIES})
+    endforeach()
+endif()
+
 # ── cpp-httplib (HTTP client/server, header-only) ─────────────
 # Enable HTTPS/TLS via OpenSSL (prebuilt on Windows, system on Linux).
 set(HTTPLIB_COMPILE OFF CACHE BOOL "" FORCE)
@@ -357,6 +378,11 @@ target_link_libraries(wow_export_cpp PRIVATE
     portable_file_dialogs
     # Logging (bundles fmt)
     spdlog::spdlog
+    # Video decoding (WebM/VP9 for home showcase)
+    FFmpeg::avformat
+    FFmpeg::avcodec
+    FFmpeg::avutil
+    FFmpeg::swscale
 )
 
 # Platform-specific link dependencies
@@ -373,6 +399,16 @@ if(WIN32)
             "$<TARGET_FILE_DIR:wow_export_cpp>"
         COMMENT "Copying OpenSSL DLLs to output directory"
     )
+
+    # Copy FFmpeg DLLs next to the exe at build time
+    foreach(_dll ${FFMPEG_RUNTIME_DLLS})
+        add_custom_command(TARGET wow_export_cpp POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${_dll}"
+                "$<TARGET_FILE_DIR:wow_export_cpp>"
+            COMMENT "Copying FFmpeg DLL: ${_dll}"
+        )
+    endforeach()
 elseif(UNIX)
     find_package(Threads REQUIRED)
     target_link_libraries(wow_export_cpp PRIVATE Threads::Threads ${CMAKE_DL_LIBS})

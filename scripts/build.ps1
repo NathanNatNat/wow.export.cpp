@@ -7,6 +7,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Ensure FFmpeg prebuilt is present before configuring CMake.
+$ffmpegMarker = Join-Path $PSScriptRoot "..\extern\ffmpeg-prebuilt\lib\avcodec.lib"
+if (-not (Test-Path $ffmpegMarker)) {
+    Write-Host "[build] FFmpeg prebuilt not found — running setup-ffmpeg.ps1..." -ForegroundColor Yellow
+    & (Join-Path $PSScriptRoot "setup-ffmpeg.ps1")
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) {
     Write-Error "vswhere.exe not found — Visual Studio is not installed"

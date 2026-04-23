@@ -59,7 +59,7 @@ The build must compile without errors before any task is considered done.
 
 ## Dependencies
 
-All dependencies are git submodules in `extern/`. CMake manages them automatically — do not introduce system-installed libraries.
+Most dependencies are git submodules in `extern/`. CMake manages them automatically — do not introduce system-installed libraries.
 
 | Purpose | Library |
 |---------|---------|
@@ -75,6 +75,7 @@ All dependencies are git submodules in `extern/`. CMake manages them automatical
 | Archive I/O | minizip-ng (ZIP read/write — C++ equivalent of JS adm-zip) |
 | Image I/O | stb_image / stb_image_write, libwebp, nanosvg |
 | Audio | miniaudio |
+| Video | FFmpeg LGPL shared (prebuilt x64 DLLs in `extern/ffmpeg-prebuilt/`, downloaded by `scripts/setup-ffmpeg.ps1`; provides WebM/VP9 decoding for home showcase; avformat + avcodec + avutil + swscale) |
 | File Dialogs | portable-file-dialogs (cross-platform native open/save/folder dialogs) |
 | Threading | `std::jthread`, `std::async` (standard library) |
 
