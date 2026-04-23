@@ -81,22 +81,22 @@ public:
 
 	/**
 	 * Set the texture map used for this writer.
-	 * @param textures Texture map
+	 * @param textures Texture map (string key: numeric ID as string or "data-N" for data textures)
 	 */
-	void setTextureMap(const std::map<uint32_t, GLTFTextureEntry>& textures);
+	void setTextureMap(const std::map<std::string, GLTFTextureEntry>& textures);
 
 	/**
 	 * Set the texture buffers for embedding in GLB.
-	 * @param texture_buffers Texture buffer map
+	 * @param texture_buffers Texture buffer map (same key scheme as texture map)
 	 */
-	void setTextureBuffers(const std::map<uint32_t, BufferWrapper>& texture_buffers);
+	void setTextureBuffers(std::map<std::string, BufferWrapper> texture_buffers);
 
 	/**
 	 * Add a single texture buffer for embedding in GLB.
-	 * @param fileDataID Texture file data ID
+	 * @param key Texture key (numeric ID as string or "data-N" for data textures)
 	 * @param buffer PNG data buffer
 	 */
-	void addTextureBuffer(uint32_t fileDataID, BufferWrapper buffer);
+	void addTextureBuffer(std::string key, BufferWrapper buffer);
 
 	/**
 	 * Set the bones array for this writer.
@@ -170,8 +170,8 @@ private:
 	std::vector<float> inverseBindMatrices;
 	std::vector<GLTFAnimation> animations;
 
-	std::map<uint32_t, GLTFTextureEntry> textures;
-	std::map<uint32_t, BufferWrapper> texture_buffers;
+	std::map<std::string, GLTFTextureEntry> textures;
+	std::map<std::string, BufferWrapper> texture_buffers;
 	std::vector<GLTFMesh> meshes;
 
 	// equipment models to append

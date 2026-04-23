@@ -26,7 +26,7 @@ M2Track::M2Track(uint16_t globalSeq, uint16_t interpolation,
 /**
  * Read a single M2 value element from a BufferWrapper.
  */
-static M2Value read_value(BufferWrapper& buf, M2DataType dataType) {
+static M2Value read_value(BufferWrapper& buf, M2DataType dataType, const char* errorPrefix = "Unknown") {
 	switch (dataType) {
 		case M2DataType::uint32:
 			return buf.readUInt32LE();
@@ -46,7 +46,7 @@ static M2Value read_value(BufferWrapper& buf, M2DataType dataType) {
 		case M2DataType::uint8:
 			return buf.readUInt8();
 		default:
-			throw std::runtime_error("Unknown data type: " + std::to_string(static_cast<int>(dataType)));
+			throw std::runtime_error(std::string(errorPrefix) + " data type: " + std::to_string(static_cast<int>(dataType)));
 	}
 }
 
@@ -107,7 +107,7 @@ static std::vector<std::vector<M2Value>> read_m2_array_array_internal(
 				auto* animBuf = animFiles[i];
 				const uint32_t elemSize = value_size(dataType);
 				animBuf->seek(subArrOfs + (j * elemSize));
-				arr[i][j] = read_value(*animBuf, dataType);
+				arr[i][j] = read_value(*animBuf, dataType, "Unhandled");
 			} else {
 				arr[i][j] = read_value(data, dataType);
 			}

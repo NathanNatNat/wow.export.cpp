@@ -96,10 +96,10 @@ gltf.addUVArray(m3->uv1);
 
 const auto outDir = out.parent_path();
 auto textureMap = exportTextures(outDir, false, nullptr, helper, true);
-// JS: gltf.setTextureMap(textureMap) — convert map<uint32_t, string> to GLTFTextureEntry map
-std::map<uint32_t, GLTFTextureEntry> gltfTexMap;
+// JS: gltf.setTextureMap(textureMap) — convert map<uint32_t, string> to string-keyed GLTFTextureEntry map
+std::map<std::string, GLTFTextureEntry> gltfTexMap;
 for (const auto& [key, path] : textureMap)
-	gltfTexMap[key] = { path, "" };
+	gltfTexMap[std::to_string(key)] = { path, "" };
 gltf.setTextureMap(gltfTexMap);
 
 const int index = 0;

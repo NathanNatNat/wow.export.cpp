@@ -48,7 +48,7 @@ std::string CSVWriter::escapeCSVField(const std::string& value) const {
 	return value;
 }
 
-void CSVWriter::write(bool overwrite) {
+void CSVWriter::write(bool overwrite /* = true */) {
 	// Don't bother writing an empty CSV file.
 	if (rows.empty())
 		return;

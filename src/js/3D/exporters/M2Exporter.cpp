@@ -606,33 +606,16 @@ std::map<std::string, M2TextureExportInfo> textureMap;
 if (format == "glb") {
 auto texResult = exportTextures(outDir, false, nullptr, helper, true, true);
 textureMap = std::move(texResult.validTextures);
-
-// Convert string-keyed texture_buffers to uint32_t-keyed for GLTF writer
-std::map<uint32_t, BufferWrapper> gltfTexBufs;
-for (auto& [key, buf] : texResult.texture_buffers) {
-try {
-uint32_t numKey = std::stoul(key);
-gltfTexBufs.emplace(numKey, std::move(buf));
-} catch (...) {
-// data texture keys like "data-5" - use synthetic ID
-}
-}
-gltf.setTextureBuffers(gltfTexBufs);
+gltf.setTextureBuffers(std::move(texResult.texture_buffers));
 } else {
 auto texResult = exportTextures(outDir, false, nullptr, helper, true, false);
 textureMap = std::move(texResult.validTextures);
 }
 
-// Convert string-keyed textureMap to uint32_t-keyed for GLTF writer
-std::map<uint32_t, GLTFTextureEntry> gltfTexMap;
-for (const auto& [key, info] : textureMap) {
-try {
-uint32_t numKey = std::stoul(key);
-gltfTexMap[numKey] = { info.matPathRelative, info.matName };
-} catch (...) {
-// data texture keys like "data-5" - skip for GLTF uint32 map
-}
-}
+// Build string-keyed GLTF texture map (preserves "data-N" keys for data textures).
+std::map<std::string, GLTFTextureEntry> gltfTexMap;
+for (const auto& [key, info] : textureMap)
+gltfTexMap[key] = { info.matPathRelative, info.matName };
 gltf.setTextureMap(gltfTexMap);
 
 for (size_t mI = 0, mC = skin.subMeshes.size(); mI < mC; mI++) {
@@ -749,7 +732,7 @@ auto fileData = casc->getVirtualFileByID(texFileDataID);
 casc::BLPImage blp(fileData);
 auto png_buffer = blp.toPNG(config.value("modelsExportAlpha", false) ? 0b1111 : 0b0111);
 
-gltf.addTextureBuffer(texFileDataID, std::move(png_buffer));
+gltf.addTextureBuffer(std::to_string(texFileDataID), std::move(png_buffer));
 } else if (config.value("overwriteFiles", true) || !generics::fileExists(texPath)) {
 auto fileData = casc->getVirtualFileByID(texFileDataID);
 casc::BLPImage blp(fileData);

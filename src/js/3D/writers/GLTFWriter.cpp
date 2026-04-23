@@ -93,7 +93,7 @@ GLTFWriter::GLTFWriter(const std::filesystem::path& out, const std::string& name
  * Set the texture map used for this writer.
  * @param textures
  */
-void GLTFWriter::setTextureMap(const std::map<uint32_t, GLTFTextureEntry>& textures) {
+void GLTFWriter::setTextureMap(const std::map<std::string, GLTFTextureEntry>& textures) {
 this->textures = textures;
 }
 
@@ -101,17 +101,17 @@ this->textures = textures;
  * Set the texture buffers for embedding in GLB.
  * @param texture_buffers
  */
-void GLTFWriter::setTextureBuffers(const std::map<uint32_t, BufferWrapper>& texture_buffers) {
-this->texture_buffers = texture_buffers;
+void GLTFWriter::setTextureBuffers(std::map<std::string, BufferWrapper> texture_buffers) {
+this->texture_buffers = std::move(texture_buffers);
 }
 
 /**
  * Add a single texture buffer for embedding in GLB.
- * @param fileDataID
+ * @param key
  * @param buffer
  */
-void GLTFWriter::addTextureBuffer(uint32_t fileDataID, BufferWrapper buffer) {
-texture_buffers.emplace(fileDataID, std::move(buffer));
+void GLTFWriter::addTextureBuffer(std::string key, BufferWrapper buffer) {
+texture_buffers.emplace(std::move(key), std::move(buffer));
 }
 
 /**
@@ -906,17 +906,17 @@ root["materials"] = json::array();
 }
 
 std::map<std::string, int> materialMap;
-struct TextureBufferView { uint32_t fileDataID; BufferWrapper buffer; };
+struct TextureBufferView { BufferWrapper buffer; };
 std::vector<TextureBufferView> texture_buffer_views;
 
-for (const auto& [fileDataID, texFile] : textures) {
+for (const auto& [texKey, texFile] : textures) {
 const int imageIndex = static_cast<int>(root["images"].size());
 const int textureIndex = static_cast<int>(root["textures"].size());
 const int materialIndex = static_cast<int>(root["materials"].size());
 
-if (format == "glb" && texture_buffers.count(fileDataID)) {
+if (format == "glb" && texture_buffers.count(texKey)) {
 // glb mode with embedded textures: use bufferView reference
-texture_buffer_views.push_back({fileDataID, texture_buffers.at(fileDataID)});
+texture_buffer_views.push_back({texture_buffers.at(texKey)});
 root["images"].push_back({
 {"bufferView", -1},
 {"mimeType", "image/png"}

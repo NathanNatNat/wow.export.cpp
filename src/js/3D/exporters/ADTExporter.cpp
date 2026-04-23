@@ -370,7 +370,6 @@ UVBounds ADTExporter::calculateUVBounds(const ADTLoader& rootAdt, float firstChu
 				continue;
 
 			const auto& chunk = rootAdt.chunks[ci];
-			if (chunk.vertices.empty()) continue;
 
 			const float chunkX = chunk.position[0];
 			const float chunkY = chunk.position[1];

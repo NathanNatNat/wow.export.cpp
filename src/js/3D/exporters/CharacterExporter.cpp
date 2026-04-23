@@ -373,12 +373,13 @@ std::vector<int> CharacterExporter::get_equipped_slots() const {
  * Get item ID for a slot
  */
 std::optional<int> CharacterExporter::get_item_id_for_slot(int slot_id) const {
+	// JS uses || chaining: a falsy (0) item_id falls through to the next source.
 	auto it = equipment_renderers.find(slot_id);
-	if (it != equipment_renderers.end())
+	if (it != equipment_renderers.end() && it->second.item_id)
 		return it->second.item_id;
 
 	auto it2 = collection_renderers.find(slot_id);
-	if (it2 != collection_renderers.end())
+	if (it2 != collection_renderers.end() && it2->second.item_id)
 		return it2->second.item_id;
 
 	return std::nullopt;

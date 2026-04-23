@@ -405,15 +405,18 @@ void WMOExporter::exportAsGLTF(const std::filesystem::path& out, casc::ExportHel
 	if (helper->isCancelled())
 		return;
 
-	// Build GLTF texture lookup
-	std::map<uint32_t, GLTFTextureEntry> gltfTextureMap;
-	for (const auto& [fid, texInfo] : texMaps.textureMap) {
-		gltfTextureMap[fid] = { texInfo.matPathRelative, texInfo.matName };
-	}
+	// Build GLTF texture lookup (string-keyed to match GLTFWriter API)
+	std::map<std::string, GLTFTextureEntry> gltfTextureMap;
+	for (const auto& [fid, texInfo] : texMaps.textureMap)
+		gltfTextureMap[std::to_string(fid)] = { texInfo.matPathRelative, texInfo.matName };
 
 	gltf.setTextureMap(gltfTextureMap);
-	if (format == "glb")
-		gltf.setTextureBuffers(texMaps.texture_buffers);
+	if (format == "glb") {
+		std::map<std::string, BufferWrapper> strBufs;
+		for (auto& [fid, buf] : texMaps.texture_buffers)
+			strBufs.emplace(std::to_string(fid), std::move(buf));
+		gltf.setTextureBuffers(strBufs);
+	}
 
 	std::vector<WMOLoader*> groups;
 	size_t nInd = 0;
