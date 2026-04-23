@@ -57,6 +57,7 @@ License: MIT
 #include <optional>
 #include <random>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -175,6 +176,7 @@ static std::map<int, CollectionModelEntry> collection_model_renderers;
 static uint32_t current_char_component_texture_layout_id = 0;
 
 static bool is_importing = false;
+static bool is_mounting = false;
 
 // Animation state proxy for model_viewer_utils
 static model_viewer_utils::ViewStateProxy view_state;
@@ -2668,6 +2670,9 @@ static std::string character_import_mode = "none";
  * JS equivalent: the Vue component's template rendering.
  */
 void render() {
+if (is_mounting)
+	return;
+
 auto& view = *core::view;
 const auto& option_to_choices = db::caches::DBCharacterCustomization::get_option_to_choices_map();
 
@@ -3695,95 +3700,104 @@ ImGui::EndChild();
  * JS equivalent: mounted()
  */
 void mounted() {
-auto& state = *core::view;
+if (is_mounting) return;
+is_mounting = true;
 
+// GL teardown (glDeleteTextures etc.) must run on the main thread.
 reset_module_state();
 
-core::showLoadingScreen(8);
+const bool region_empty = core::view->chrImportSelectedRegion.empty();
 
-core::progressLoadingScreen("Retrieving realmlist...");
-casc::realmlist::load();
+std::thread([region_empty]() {
+	core::showLoadingScreen(8);
 
-// preserve region/realm selection across module reloads
-if (state.chrImportSelectedRegion.empty())
-state.chrImportSelectedRegion = "us";
-else
-update_realm_list();
+	core::progressLoadingScreen("Retrieving realmlist...");
+	casc::realmlist::load();
 
-core::progressLoadingScreen("Loading character customization data...");
-db::caches::DBCharacterCustomization::ensureInitialized();
+	core::progressLoadingScreen("Loading character customization data...");
+	db::caches::DBCharacterCustomization::ensureInitialized();
 
-core::progressLoadingScreen("Loading item data...");
-db::caches::DBItems::ensureInitialized();
+	core::progressLoadingScreen("Loading item data...");
+	db::caches::DBItems::ensureInitialized();
 
-core::progressLoadingScreen("Loading item character textures...");
-db::caches::DBItemCharTextures::ensureInitialized();
+	core::progressLoadingScreen("Loading item character textures...");
+	db::caches::DBItemCharTextures::ensureInitialized();
 
-core::progressLoadingScreen("Loading item geosets...");
-db::caches::DBItemGeosets::ensureInitialized();
+	core::progressLoadingScreen("Loading item geosets...");
+	db::caches::DBItemGeosets::ensureInitialized();
 
-core::progressLoadingScreen("Loading item models...");
-db::caches::DBItemModels::ensureInitialized();
+	core::progressLoadingScreen("Loading item models...");
+	db::caches::DBItemModels::ensureInitialized();
 
-core::progressLoadingScreen("Loading guild tabard data...");
-db::caches::DBGuildTabard::ensureInitialized();
+	core::progressLoadingScreen("Loading guild tabard data...");
+	db::caches::DBGuildTabard::ensureInitialized();
 
-core::progressLoadingScreen("Loading character shaders...");
+	core::progressLoadingScreen("Loading character shaders...");
 
-// set up model viewer context
-state.chrModelViewerContext = nlohmann::json{
-{ "gl_context", nullptr },
-{ "controls", nullptr },
-{ "useCharacterControls", true },
-{ "fitCamera", nullptr }
-};
+	core::postToMainThread([region_empty]() {
+		auto& state = *core::view;
 
-// Wire model viewer context callbacks (character mode).
-viewer_context.useCharacterControls = true;
-viewer_context.getActiveRenderer = []() -> M2RendererGL* {
-	return active_renderer.get();
-};
-// JS: context.getEquipmentRenderers = () => equipment_model_renderers
-viewer_context.getEquipmentRenderers = []() -> std::unordered_map<int, model_viewer_gl::EquipmentSlotRenderers>* {
-	rebuild_renderer_adapter_maps();
-	return equip_adapter_map.empty() ? nullptr : &equip_adapter_map;
-};
-// JS: context.getCollectionRenderers = () => collection_model_renderers
-viewer_context.getCollectionRenderers = []() -> std::unordered_map<int, model_viewer_gl::CollectionSlotRenderers>* {
-	rebuild_renderer_adapter_maps();
-	return coll_adapter_map.empty() ? nullptr : &coll_adapter_map;
-};
+		// preserve region/realm selection across module reloads
+		if (region_empty)
+			state.chrImportSelectedRegion = "us";
+		else
+			update_realm_list();
 
-// Set up animation ViewStateProxy
-view_state.anims = &state.chrModelViewerAnims;
-view_state.animSelection = &state.chrModelViewerAnimSelection;
-view_state.animPaused = &state.chrModelViewerAnimPaused;
-view_state.animFrame = &state.chrModelViewerAnimFrame;
-view_state.animFrameCount = &state.chrModelViewerAnimFrameCount;
-view_state.autoAdjust = nullptr; // Characters don't have an auto-adjust toggle in the JS source.
+		// set up model viewer context
+		state.chrModelViewerContext = nlohmann::json{
+			{ "gl_context", nullptr },
+			{ "controls", nullptr },
+			{ "useCharacterControls", true },
+			{ "fitCamera", nullptr }
+		};
 
-anim_methods = std::make_unique<model_viewer_utils::AnimationMethods>(
-[]() -> M2RendererGL* { return active_renderer.get(); },
-[]() -> model_viewer_utils::ViewStateProxy* { return &view_state; }
-);
+		// Wire model viewer context callbacks (character mode).
+		viewer_context.useCharacterControls = true;
+		viewer_context.getActiveRenderer = []() -> M2RendererGL* {
+			return active_renderer.get();
+		};
+		viewer_context.getEquipmentRenderers = []() -> std::unordered_map<int, model_viewer_gl::EquipmentSlotRenderers>* {
+			rebuild_renderer_adapter_maps();
+			return equip_adapter_map.empty() ? nullptr : &equip_adapter_map;
+		};
+		viewer_context.getCollectionRenderers = []() -> std::unordered_map<int, model_viewer_gl::CollectionSlotRenderers>* {
+			rebuild_renderer_adapter_maps();
+			return coll_adapter_map.empty() ? nullptr : &coll_adapter_map;
+		};
 
-// Initialize change detection state
-prev_race_selection = state.chrCustRaceSelection;
-prev_model_selection = state.chrCustModelSelection;
-prev_option_selection = state.chrCustOptionSelection;
-prev_choice_selection = state.chrCustChoiceSelection;
-prev_active_choices = state.chrCustActiveChoices;
-prev_equipped_items = state.chrEquippedItems;
-prev_include_base_clothing = state.config.value("chrIncludeBaseClothing", true);
-prev_chr_import_region = state.chrImportSelectedRegion;
-prev_chr_import_classic_realms = state.chrImportClassicRealms;
+		// Set up animation ViewStateProxy
+		view_state.anims = &state.chrModelViewerAnims;
+		view_state.animSelection = &state.chrModelViewerAnimSelection;
+		view_state.animPaused = &state.chrModelViewerAnimPaused;
+		view_state.animFrame = &state.chrModelViewerAnimFrame;
+		view_state.animFrameCount = &state.chrModelViewerAnimFrameCount;
+		view_state.autoAdjust = nullptr;
 
-// trigger initial race/model load
-update_chr_race_list();
+		anim_methods = std::make_unique<model_viewer_utils::AnimationMethods>(
+			[]() -> M2RendererGL* { return active_renderer.get(); },
+			[]() -> model_viewer_utils::ViewStateProxy* { return &view_state; }
+		);
 
-core::hideLoadingScreen();
+		// Initialize change detection state
+		prev_race_selection = state.chrCustRaceSelection;
+		prev_model_selection = state.chrCustModelSelection;
+		prev_option_selection = state.chrCustOptionSelection;
+		prev_choice_selection = state.chrCustChoiceSelection;
+		prev_active_choices = state.chrCustActiveChoices;
+		prev_equipped_items = state.chrEquippedItems;
+		prev_include_base_clothing = state.config.value("chrIncludeBaseClothing", true);
+		prev_chr_import_region = state.chrImportSelectedRegion;
+		prev_chr_import_classic_realms = state.chrImportClassicRealms;
 
-core::events.emit("screen-tab-characters");
+		// trigger initial race/model load
+		update_chr_race_list();
+
+		core::events.emit("screen-tab-characters");
+		is_mounting = false;
+	});
+
+	core::hideLoadingScreen();
+}).detach();
 }
 
 //endregion
