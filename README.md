@@ -38,4 +38,3 @@ The C++ conversion is built upon the following libraries:
 | [libwebp](https://github.com/webmproject/libwebp) | WebP image encoding/decoding |
 | [nanosvg](https://github.com/memononen/nanosvg) | SVG parsing and rasterization |
 | [miniaudio](https://github.com/mackron/miniaudio) | Audio playback |
-| [pugixml](https://github.com/zeux/pugixml) | XML parsing |

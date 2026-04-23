@@ -55,7 +55,6 @@ set(_REQUIRED_SUBMODULES
     "extern/minizip-ng            CMakeLists.txt"
     "extern/nanosvg               CMakeLists.txt"
     "extern/portable-file-dialogs portable-file-dialogs.h"
-    "extern/pugixml               CMakeLists.txt"
     "extern/spdlog                CMakeLists.txt"
     "extern/stb                   stb_image.h"
     "extern/zlib                  CMakeLists.txt"
@@ -276,10 +275,6 @@ set(WEBP_BUILD_WEBP_JS    OFF CACHE BOOL "" FORCE)
 set(WEBP_BUILD_FUZZTEST   OFF CACHE BOOL "" FORCE)
 add_subdirectory(extern/libwebp EXCLUDE_FROM_ALL)
 
-# ── pugixml (XML parsing) ────────────────────────────────────
-set(PUGIXML_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-add_subdirectory(extern/pugixml EXCLUDE_FROM_ALL)
-
 # ── stb (stb_image / stb_image_write, header-only) ───────────
 add_library(stb INTERFACE)
 target_include_directories(stb INTERFACE extern/stb)
@@ -345,7 +340,6 @@ target_link_libraries(wow_export_cpp PRIVATE
     glm::glm
     # Data formats
     nlohmann_json::nlohmann_json
-    pugixml::pugixml
     # Compression & archive I/O
     zlibstatic
     minizip

@@ -26,9 +26,6 @@
 [submodule "extern/miniaudio"]
 	path = extern/miniaudio
 	url = https://github.com/mackron/miniaudio.git
-[submodule "extern/pugixml"]
-	path = extern/pugixml
-	url = https://github.com/zeux/pugixml.git
 [submodule "extern/glad"]
 	path = extern/glad
 	url = https://github.com/Dav1dde/glad.git
