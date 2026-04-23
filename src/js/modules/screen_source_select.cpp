@@ -18,6 +18,7 @@
 #include "../components/file-field.h"
 #include "../workers/cache-collector.h"
 #include "../external-links.h"
+#include "../config.h"
 #include "../../app.h"
 
 #include <atomic>
@@ -217,6 +218,7 @@ static void set_selected_cdn(const nlohmann::json& region) {
 	core::view->selectedCDNRegion = region;
 	core::view->lockCDNRegion = true;
 	core::view->config["sourceSelectUserRegion"] = region["tag"];
+	config::save();
 	casc::cdn_resolver::startPreResolution(region["tag"].get<std::string>());
 }
 
@@ -882,8 +884,11 @@ void render() {
 			float card_h = card_heights[ci];
 
 			// Position an invisible button covering the card area for click detection.
+			// SetNextItemAllowOverlap lets the link sub-buttons submitted later claim
+			// hover/click priority over this card button within their own rects.
 			ImGui::SetCursorPos(ImVec2(start_x, cur_y));
 			std::string btn_id = std::format("##source_card_{}", ci);
+			ImGui::SetNextItemAllowOverlap();
 			bool clicked = ImGui::InvisibleButton(btn_id.c_str(), ImVec2(card_width, card_h));
 			bool hovered = ImGui::IsItemHovered();
 
@@ -1007,8 +1012,11 @@ void render() {
 
 				// CDN region context menu popup.
 				// CSS: .context-menu { background: #232323 }
+				ImGui::SetNextWindowSize(ImVec2(260.0f, 0.0f), ImGuiCond_Always);
 				ImGui::PushStyleColor(ImGuiCol_PopupBg, IM_COL32(0x23, 0x23, 0x23, 0xFF));
+				ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
 				if (ImGui::BeginPopup("##cdn_region_menu")) {
+					ImDrawList* popup_draw = ImGui::GetWindowDrawList();
 					for (auto& region : core::view->cdnRegions) {
 						std::string name = region.value("name", std::string("Unknown"));
 						int64_t delay = region.value("delay", static_cast<int64_t>(-1));
@@ -1028,7 +1036,7 @@ void render() {
 						// Draw region name.
 						ImVec2 name_sz = font->CalcTextSizeA(normal_size, FLT_MAX, 0.0f, name.c_str());
 						float text_center_y = item_min.y + (item_h - name_sz.y) * 0.5f;
-						draw->AddText(font, normal_size, ImVec2(item_min.x, text_center_y),
+						popup_draw->AddText(font, normal_size, ImVec2(item_min.x, text_center_y),
 							app::theme::FONT_PRIMARY_U32, name.c_str());
 
 						// Draw delay string with reduced opacity and smaller font.
@@ -1037,12 +1045,13 @@ void render() {
 							ImU32 delay_color = IM_COL32(255, 255, 255, 143); // opacity: 0.7 * --font-primary alpha
 							ImVec2 delay_sz = font->CalcTextSizeA(delay_font_size, FLT_MAX, 0.0f, delay_text.c_str());
 							float delay_y = item_min.y + (item_h - delay_sz.y) * 0.5f;
-							draw->AddText(font, delay_font_size, ImVec2(item_min.x + name_sz.x, delay_y),
+							popup_draw->AddText(font, delay_font_size, ImVec2(item_min.x + name_sz.x, delay_y),
 								delay_color, delay_text.c_str());
 						}
 					}
 					ImGui::EndPopup();
 				}
+				ImGui::PopStyleVar();
 				ImGui::PopStyleColor();
 			} else if (card.card_id == 2 && card.has_link) {
 				// Legacy "Last Opened: path" — clickable link
