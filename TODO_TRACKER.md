@@ -1,89 +1,11 @@
 # TODO Tracker
 
-> **Progress: 0/193 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/178 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
 
 ## UI Components
-
-## Markdown & Content Rendering
-
-- [ ] 115. [markdown-content.cpp] Inline image markdown is not rendered as images
-- **JS Source**: `src/js/components/markdown-content.js` lines 208–216, 251–253
-- **Status**: Pending
-- **Details**: JS converts `![alt](src)` to `<img ...>` in `v-html` output. C++ renders image segments as placeholder text (`[Image: ...]`), causing functional and visual mismatch.
-
-- [ ] 116. [markdown-content.cpp] Inline bold/italic formatting behavior differs from JS HTML rendering
-- **JS Source**: `src/js/components/markdown-content.js` lines 219–224
-- **Status**: Pending
-- **Details**: JS emits `<strong>`/`<em>` markup; C++ substitutes color-only text rendering because ImGui has no inline bold/italic in this path, so typography does not match original styling.
-
-- [ ] 117. [markdown-content.cpp] CSS base font-size 20px not applied — ImGui uses default ~14px font
-- **JS Source**: `src/app.css` lines 236–243
-- **Status**: Pending
-- **Details**: CSS `.markdown-content { font-size: 20px; }` sets the base font size for all markdown content to 20px. C++ `render()` does not call `ImGui::SetWindowFontScale()` to scale up to 20px equivalent. The default ImGui font is ~13-14px, so all markdown text renders significantly smaller than the JS version. Header scales (1.8em, 1.5em, 1.2em) are applied correctly relative to the current font scale, but since the base is wrong, all absolute sizes are too small.
-
-- [ ] 118. [markdown-content.cpp] Link color uses `FONT_ALT` (#57afe2 blue) instead of CSS `--font-highlight` (#ffffff white)
-- **JS Source**: `src/app.css` lines 311–314
-- **Status**: Pending
-- **Details**: CSS `.markdown-content-inner a { color: var(--font-highlight); text-decoration: underline; }` uses pure white (#ffffff) for links with an underline. C++ `renderInlineSegments` line 254 uses `app::theme::FONT_ALT` (blue #57afe2) for links. The link color should be `FONT_HIGHLIGHT` (white) to match the CSS.
-
-- [ ] 119. [markdown-content.cpp] Links rendered without underline decoration
-- **JS Source**: `src/app.css` lines 311–314
-- **Status**: Pending
-- **Details**: CSS `.markdown-content-inner a { text-decoration: underline; }` renders links with an underline. C++ `renderInlineSegments` (lines 253–267) renders link text without any underline decoration. ImGui does not natively support underlined text, but a manual underline can be drawn using `ImGui::GetWindowDrawList()->AddLine()` beneath the text.
-
-- [ ] 120. [markdown-content.cpp] Inline code missing background `rgba(0,0,0,0.3)` with `padding: 2px 6px` and `border-radius: 3px`
-- **JS Source**: `src/app.css` lines 283–288
-- **Status**: Pending
-- **Details**: CSS `.markdown-content-inner code` has a dark background, padding, and rounded corners. C++ `renderInlineSegments` (lines 248–251) only changes the text color to `(0.9, 0.7, 0.5)` for inline code, without any background rectangle. The background color should be `IM_COL32(0, 0, 0, 77)` with a rounded rect behind the text.
-
-- [ ] 121. [markdown-content.cpp] Inline code color `(0.9, 0.7, 0.5)` has no CSS basis — CSS uses monospace font, not a special color
-- **JS Source**: `src/app.css` lines 283–289
-- **Status**: Pending
-- **Details**: CSS `.markdown-content-inner code` uses `font-family: monospace` but inherits the parent text color (white). C++ applies `ImVec4(0.9f, 0.7f, 0.5f, 1.0f)` (orange-ish) which has no equivalent in the CSS. The text color should remain the same as surrounding text; only the font family should change (which ImGui can't easily do for inline segments).
-
-- [ ] 122. [markdown-content.cpp] Bold text rendered with white color instead of bold font weight
-- **JS Source**: `src/app.css` lines 303–305
-- **Status**: Pending
-- **Details**: CSS `.markdown-content-inner strong { font-weight: bold; }` makes bold text heavier. C++ `renderInlineSegments` (lines 237–240) pushes white color `(1,1,1,1)` for bold, which is the same as normal text on a dark background. The visual difference from normal text is imperceptible. ImGui doesn't support inline bold without loading a separate bold font face and switching to it.
-
-- [ ] 123. [markdown-content.cpp] Italic text rendered with dim blue `(0.8, 0.8, 0.9)` instead of italic font style
-- **JS Source**: `src/app.css` lines 307–309
-- **Status**: Pending
-- **Details**: CSS `.markdown-content-inner em { font-style: italic; }` renders text in italic. C++ `renderInlineSegments` (lines 243–246) uses a dimmed blue-white color `(0.8, 0.8, 0.9)` which has no CSS basis. ImGui doesn't support italic text natively, but the color chosen doesn't match any CSS variable.
-
-- [ ] 124. [markdown-content.cpp] h1 header missing bottom separator matching CSS `border-bottom`
-- **JS Source**: `src/app.css` lines 249–253
-- **Status**: Pending
-- **Details**: CSS `.markdown-content-inner h1` has `margin: 0` but standard HTML h1 elements typically render with a bottom margin. C++ adds `ImGui::Separator()` after h1 (line 347) which draws a full-width horizontal line. The JS HTML rendering does not add a separator after h1 — the `<h1>` tag simply has larger text. The `ImGui::Separator()` is not present in the CSS and creates a visual difference.
-
-- [ ] 125. [markdown-content.cpp] Scrollbar thumb uses hardcoded gray colors instead of CSS `var(--border)` and `var(--font-highlight)`
-- **JS Source**: `src/app.css` lines 322–346
-- **Status**: Pending
-- **Details**: CSS `.vscroller > div` uses `background: var(--border)` (#6c757d) default and `background: var(--font-highlight)` (#ffffff) on hover/active. C++ uses hardcoded `IM_COL32(120, 120, 120, 150)` default and `IM_COL32(180, 180, 180, 200)` for active (lines 457–459). Neither color matches the CSS variables. Default should be `BORDER_U32` and active should be `FONT_HIGHLIGHT_U32`.
-
-- [ ] 126. [markdown-content.cpp] Scrollbar thumb missing `border: 1px solid var(--border)` and `border-radius: 5px` from CSS
-- **JS Source**: `src/app.css` lines 332–341
-- **Status**: Pending
-- **Details**: CSS `.vscroller > div` has `border: 1px solid var(--border)` and `border-radius: 5px`. C++ draws the thumb with `AddRectFilled` with 4px rounding (line 461) but no border outline. Should add `AddRect` with `BORDER_U32` and use 5px rounding.
-
-- [ ] 127. [markdown-content.cpp] Scrollbar track `right: 3px` positioning and `opacity: 0.7` not matched
-- **JS Source**: `src/app.css` lines 322–330
-- **Status**: Pending
-- **Details**: CSS `.vscroller { right: 3px; opacity: 0.7; }` positions the scrollbar 3px from the right edge with 70% opacity. C++ positions the scrollbar at `containerSize.x - scrollbar_width - 2.0f` (line 451, using 2px instead of 3px) and uses full opacity for the thumb colors. The alpha values in the thumb colors partially compensate but don't match the 70% opacity overlay.
-
-- [ ] 128. [markdown-content.cpp] `parseInline` processes text before HTML escaping, while JS escapes first then applies regex
-- **JS Source**: `src/js/components/markdown-content.js` lines 204–237
-- **Status**: Pending
-- **Details**: JS `parseInline` calls `this.escapeHtml(text)` first (line 205) before applying regex replacements for bold, italic, code, links, and images. This means the regex patterns match against HTML-escaped text (e.g., `&amp;` instead of `&`). C++ `parseInline` processes raw text directly without escaping. While ImGui doesn't need HTML escaping, if markdown content contains `&`, `<`, or `>` characters, the parsing behavior could differ because the JS regex operates on escaped text while C++ operates on raw text.
-
-- [ ] 129. [markdown-content.cpp] List items use `•` bullet with 16px indent instead of CSS `padding-left: 2em` with disc marker
-- **JS Source**: `src/app.css` lines 272–276
-- **Status**: Pending
-- **Details**: CSS `.markdown-content-inner ul { padding-left: 2em; list-style-type: disc; }` uses standard disc bullets with 2em left padding. At 20px base font, 2em = 40px. C++ uses `ImGui::Indent(16.0f)` with a manual `•` character (lines 369–373). 16px vs 40px indent is a significant visual difference, and the bullet character may render differently than the CSS disc marker.
-
 
 ## Map Viewer
 
@@ -137,12 +59,7 @@
 - **Status**: Pending
 - **Details**: CSS `.ui-map-viewer { margin: 20px 20px 0 10px; }` adds specific margins around the map viewer. C++ `renderWidget` uses `ImGui::GetContentRegionAvail()` for sizing (line 1144) without adding any padding/margin equivalent. The parent layout is responsible for this in ImGui, but if not handled there, the map viewer will be flush against adjacent elements.
 
-## Tab: Changelog, Help, Blender & Install
-
-- [ ] 175. [tab_help.cpp] Article list layout differs tags shown in tooltip instead of inline
-- **JS Source**: `src/js/modules/tab_help.js` lines 115–121
-- **Status**: Pending
-- **Details**: JS renders each article with visible title and tags divs inline. C++ renders KB_ID and title as a single Selectable with tags only in hover tooltip. Tags and KB ID badge are not visually inline.
+## Tab: Blender & Install
 
 - [ ] 182. [tab_install.cpp] Install listbox copy/paste options are hardcoded instead of using JS config-driven behavior
 - **JS Source**: `src/js/modules/tab_install.js` lines 165, 184
@@ -1011,3 +928,8 @@
   - **JS Source**: N/A (build system only)
   - **Status**: Pending
   - **Details**: MSVC debug builds have two major sources of runtime overhead beyond `/Od` (no optimisation) that do not affect debugability at all: (1) `_ITERATOR_DEBUG_LEVEL=2` (default) adds bounds checking and iterator invalidation detection to every STL operation — responsible for most of the CASC loading slowdown (encoding table 1.85×, root file 1.54× even in release hints at some debug-only calls, but in a pure debug build this is the primary cost on all `std::vector`/`std::unordered_map` access); (2) `/JMC` (Just My Code, on by default) adds a function-entry probe to every function for the debugger's "Step Into User Code" button, adding overhead to every function call. Fix: in `CMakeLists.txt`, add `$<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>` via `add_compile_definitions` (applied globally so all compiled targets in the build are consistent — mixing `_ITERATOR_DEBUG_LEVEL` values across translation units in the same binary causes ODR violations), and `/JMC-` via `target_compile_options` for MSVC debug. Full debugability is preserved: breakpoints, step-through, variable inspection, call stack, and watch expressions are all unaffected. The only things lost are runtime STL iterator validation and the "Step Into User Code" filtering — both of which release builds also omit. Expected: debug CASC load time drops from 5–12× to roughly 2–3× of release.
+
+- [ ] 604. [tab_help.cpp / tab_changelog.cpp / markdown-content.cpp] tab_help, tab_changelog, and markdown-content removed from C++ build
+  - **JS Source**: `src/js/modules/tab_help.js`, `src/js/modules/tab_changelog.js`, `src/js/components/markdown-content.js`
+  - **Status**: Pending
+  - **Details**: These three files were removed from the C++ codebase at user request. JS originals remain under `src/js/` for reference. What was removed: `tab_help` rendered a searchable knowledge-base article browser with a scrollable markdown viewer; `tab_changelog` displayed the app changelog as markdown; `markdown-content` was the shared ImGui markdown renderer used by both. Their registrations were removed from `modules.cpp`, their entries removed from `CONTEXT_MENU_ORDER` in `constants.h`, and the help-button click in `app.cpp` now does nothing. To re-add: restore the six source files, re-register in `modules.cpp`, re-add "tab_help"/"tab_changelog" to `CONTEXT_MENU_ORDER` (size 10 → 12), and restore the help-button click handler in `app.cpp`.

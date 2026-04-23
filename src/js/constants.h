@@ -220,9 +220,8 @@ inline constexpr std::array<std::string_view, 20> NAV_BUTTON_ORDER = {{
 	"legacy_tab_files"
 }};
 
-inline constexpr std::array<std::string_view, 12> CONTEXT_MENU_ORDER = {{
+inline constexpr std::array<std::string_view, 10> CONTEXT_MENU_ORDER = {{
 	"tab_blender",
-	"tab_changelog",
 	"runtime-log",
 	"tab_raw",
 	"tab_install",
@@ -231,8 +230,7 @@ inline constexpr std::array<std::string_view, 12> CONTEXT_MENU_ORDER = {{
 	"reload-shaders",
 	"reload-style",
 	"reload-active",
-	"reload-all",
-	"tab_help"
+	"reload-all"
 }};
 
 inline constexpr std::array<std::string_view, 14> FONT_PREVIEW_QUOTES = {{

@@ -41,9 +41,7 @@
 #include "modules/tab_item_sets.h"
 #include "modules/tab_characters.h"
 #include "modules/tab_textures.h"
-#include "modules/tab_help.h"
 #include "modules/tab_blender.h"
-#include "modules/tab_changelog.h"
 #include "modules/legacy_tab_home.h"
 #include "modules/legacy_tab_audio.h"
 #include "modules/legacy_tab_textures.h"
@@ -474,20 +472,10 @@ void initialize() {
 		[]() { tab_textures::mounted(); },
 		[]() { tab_textures::registerTab(); });
 
-	add_module("tab_help",
-		[]() { tab_help::render(); },
-		[]() { tab_help::mounted(); },
-		[]() { tab_help::registerTab(); });
-
 	add_module("tab_blender",
 		[]() { tab_blender::render(); },
 		nullptr,
 		[]() { tab_blender::registerTab(); });
-
-	add_module("tab_changelog",
-		[]() { tab_changelog::render(); },
-		[]() { tab_changelog::mounted(); },
-		[]() { tab_changelog::registerTab(); });
 
 	add_module("legacy_tab_home",
 		[]() { legacy_tab_home::render(); },
@@ -705,22 +693,6 @@ const std::vector<NavButton>& getNavButtons() {
 
 const std::vector<ContextMenuOption>& getContextMenuOptions() {
 	return sorted_context_menu_options;
-}
-
-// Pending knowledge-base article ID for tab_help.
-// JS equivalent: let pending_kb_id = null; in tab_help.js
-static std::string s_pending_kb_id;
-
-void openHelpArticle(const std::string& kb_id) {
-	// JS: open_article(kb_id) { pending_kb_id = kb_id; this.setActive(); }
-	s_pending_kb_id = kb_id;
-	setActive("tab_help");
-}
-
-std::string consumePendingKbId() {
-	std::string id = std::move(s_pending_kb_id);
-	s_pending_kb_id.clear();
-	return id;
 }
 
 } // namespace modules

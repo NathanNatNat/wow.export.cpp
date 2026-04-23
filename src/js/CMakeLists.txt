@@ -147,7 +147,6 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/components/data-table.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/file-field.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/listboxb.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/components/markdown-content.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/menu-button.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/resize-layer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/slider.cpp
@@ -183,9 +182,7 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_characters.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/module_test_a.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/module_test_b.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_help.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_blender.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_changelog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/legacy_tab_textures.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/screen_settings.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/screen_source_select.cpp

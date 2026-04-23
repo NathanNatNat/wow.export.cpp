@@ -24,7 +24,7 @@
 //   background_style: CSS background-image compositing of BASE_LAYERS + current.layers.
 //   Video: autoplay/loop/muted <video> element (not implemented).
 //   Title font: CSS font-family "Gambler" 40px white (not available in ImGui; TODO #140).
-//   Feedback: data-kb-link="KB011" → modules.tab_help.open_article("KB011"); TODO #132.
+//   Feedback: data-kb-link="KB011" → open KB011 help article (tab_help removed; see TODO_TRACKER.md).
 //
 // See TODO entries 130-140 in TODO_TRACKER.md.
 

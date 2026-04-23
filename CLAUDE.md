@@ -132,6 +132,14 @@ The following files are intentionally left as documented stubs and do **not** ne
 
 Do **not** add TODO entries for these files. Do **not** implement them unless explicitly asked.
 
+### Removed Files
+The following files have been deliberately removed from the C++ build and do **not** need to be re-added unless explicitly asked:
+- **`src/js/modules/tab_help.cpp`** / **`tab_help.h`** — Removed. JS original: `src/js/modules/tab_help.js`. Rendered a searchable knowledge-base article browser backed by a markdown viewer.
+- **`src/js/modules/tab_changelog.cpp`** / **`tab_changelog.h`** — Removed. JS original: `src/js/modules/tab_changelog.js`. Rendered the app changelog as scrollable markdown.
+- **`src/js/components/markdown-content.cpp`** / **`markdown-content.h`** — Removed. JS original: `src/js/components/markdown-content.js`. Shared ImGui markdown renderer used by tab_help and tab_changelog.
+
+These removals also entailed: unregistering both modules from `modules.cpp`; removing `"tab_help"` and `"tab_changelog"` from `CONTEXT_MENU_ORDER` in `constants.h` (size reduced 12→10); removing the help-button click handler from `app.cpp`. See TODO entry 604 for restoration instructions.
+
 ### General Conversion Fidelity
 - Conversions must be fully comprehensive — every function, method, constant, code path, and UI element from the JS source must be ported.
 - The C++ conversion must be functionally and visually identical to the original JavaScript code. Nothing may be left as a permanent stub or silently omitted.

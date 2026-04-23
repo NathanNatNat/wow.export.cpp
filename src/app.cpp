@@ -724,9 +724,6 @@ static void renderAppShell() {
 						ImGui::GetWindowDrawList()->AddText(icon_font, icon_size, icon_pos,
 							app::theme::FONT_PRIMARY_U32, ICON_FA_CIRCLE_QUESTION);
 					}
-					// JS: @click="setActiveModule('tab_help')"
-					if (ImGui::IsItemClicked())
-						modules::setActive("tab_help");
 					if (ImGui::IsItemHovered()) {
 						ImGui::BeginTooltip();
 						ImGui::TextUnformatted("Help");
