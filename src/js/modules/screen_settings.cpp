@@ -9,6 +9,7 @@
 #include "tab_characters.h"
 #include "../log.h"
 #include "../core.h"
+#include "../config.h"
 #include "../generics.h"
 #include "../constants.h"
 #include "../casc/tact-keys.h"
@@ -40,16 +41,50 @@ static file_field::FileFieldState char_save_dir_state;
 static menu_button::MenuButtonState locale_menu_state;
 
 /**
- * Render a settings section heading as bold text at 18px font size.
- * CSS: #config > div h1 { font-size: 18px; }
- * Replaces SectionHeading() to match the original JS heading style.
+ * Render a settings section heading: bold font at 18px, with 20px top spacing.
+ * CSS: #config > div h1 { font-size: 18px; font-weight: bold (browser default for h1) }
+ * CSS: #config > div { padding-top: 20px }
  */
 static void SectionHeading(const char* label) {
-	// CSS: #config > div { padding: 20px; padding-bottom: 0; }
 	ImGui::Dummy(ImVec2(0.0f, 20.0f));
-	ImGui::SetWindowFontScale(18.0f / app::theme::DEFAULT_FONT_SIZE);
+	ImFont* bold = app::theme::getBoldFont();
+	ImGui::PushFont(bold, 18.0f);
 	ImGui::TextUnformatted(label);
-	ImGui::SetWindowFontScale(1.0f);
+	ImGui::PopFont();
+}
+
+/**
+ * Render a single segment of a .ui-multi-button bar.
+ * Uses InvisibleButton for hit detection + manual drawing for correct per-corner rounding.
+ * CSS: .ui-multi-button li { background: var(--form-button-base); padding: 10px; display: inline-block }
+ * CSS: .ui-multi-button li:hover, .selected { background: var(--form-button-hover) }
+ * CSS: first-child { border-radius: 5px on left corners }, last-child { right corners }
+ */
+static bool multiButtonSegment(int idx, const char* label, bool selected, bool is_first, bool is_last) {
+	ImGui::PushID(idx);
+	const float pad_x = 10.0f, pad_y = 10.0f;
+	ImVec2 label_size = ImGui::CalcTextSize(label);
+	ImVec2 size(label_size.x + pad_x * 2.0f, label_size.y + pad_y * 2.0f);
+
+	bool clicked = ImGui::InvisibleButton("##seg", size);
+	bool hovered = ImGui::IsItemHovered();
+
+	ImU32 bg = (selected || hovered) ? app::theme::BUTTON_HOVER_U32 : app::theme::BUTTON_BASE_U32;
+
+	constexpr float r = 5.0f;
+	ImDrawFlags flags = ImDrawFlags_RoundCornersNone;
+	if (is_first && is_last)  flags = ImDrawFlags_RoundCornersAll;
+	else if (is_first)        flags = ImDrawFlags_RoundCornersLeft;
+	else if (is_last)         flags = ImDrawFlags_RoundCornersRight;
+
+	ImVec2 p0 = ImGui::GetItemRectMin();
+	ImVec2 p1 = ImGui::GetItemRectMax();
+	ImGui::GetWindowDrawList()->AddRectFilled(p0, p1, bg, r, flags);
+	ImGui::GetWindowDrawList()->AddText(ImVec2(p0.x + pad_x, p0.y + pad_y),
+		app::theme::FONT_PRIMARY_U32, label);
+
+	ImGui::PopID();
+	return clicked;
 }
 
 // --- Forward declarations ---
@@ -169,13 +204,19 @@ void render() {
 	auto& view = *core::view;
 	auto& cfg = view.configEdit;
 
-	// --- Template rendering ---
-
 	// CSS: #config-wrapper fills the entire screen. #config has flex: 1 filling available width.
 	const float availW = ImGui::GetContentRegionAvail().x;
 	ImGui::BeginChild("settings-content", ImVec2(availW, 0));
 
-	ImGui::BeginChild("##config-scroll", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2));
+	// CSS: #config > div { padding: 20px; padding-bottom: 0 }
+	// Apply 20px left/right padding by offsetting the scroll child.
+	const float pad = 20.0f;
+	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+	ImGui::BeginChild("##config-scroll", ImVec2(-pad, -ImGui::GetFrameHeightWithSpacing() * 2));
+
+	// CSS: #config.toastgap { margin-top: 20px } — extra top space when toast is visible.
+	if (core::view->toast.has_value())
+		ImGui::Dummy(ImVec2(0.0f, 20.0f));
 
 	SectionHeading("Export Directory");
 	ImGui::TextWrapped("Local directory where files will be exported to.");
@@ -198,8 +239,10 @@ void render() {
 	SectionHeading("Scroll Speed");
 	ImGui::TextWrapped("How many lines at a time you scroll down in the results view (leave at 0 for default scroll amount)");
 	{
+		// CSS: input[type=number] { width: 50px } — no spin buttons (CSS hides them).
 		int scroll_speed = cfg.value("scrollSpeed", 2);
-		if (ImGui::InputInt("##ScrollSpeed", &scroll_speed))
+		ImGui::SetNextItemWidth(80.0f);
+		if (ImGui::InputScalar("##ScrollSpeed", ImGuiDataType_S32, &scroll_speed, nullptr, nullptr))
 			cfg["scrollSpeed"] = scroll_speed;
 	}
 
@@ -274,17 +317,18 @@ void render() {
 
 	SectionHeading("Path Separator Format");
 	ImGui::TextWrapped("Sets the path separator format used in exported files.");
-	// Note: JS uses .ui-multi-button grouped toggles; C++ uses ImGui radio buttons
-	// which provide equivalent toggle functionality with a different visual style.
+	// CSS: .ui-multi-button — green segmented toggle buttons (radio: only one selected at a time).
 	{
 		std::string path_fmt = cfg.value("pathFormat", std::string("win32"));
-		bool is_win = (path_fmt == "win32");
-		bool is_posix = (path_fmt == "posix");
-		if (ImGui::RadioButton("Windows", is_win))
-			cfg["pathFormat"] = "win32";
-		ImGui::SameLine();
-		if (ImGui::RadioButton("POSIX", is_posix))
-			cfg["pathFormat"] = "posix";
+		const char* opts[] = { "Windows", "POSIX" };
+		const char* vals[] = { "win32", "posix" };
+		ImGui::PushID("##PathFormat");
+		for (int i = 0; i < 2; i++) {
+			if (i > 0) ImGui::SameLine(0, 1.0f);
+			if (multiButtonSegment(i, opts[i], path_fmt == vals[i], i == 0, i == 1))
+				cfg["pathFormat"] = vals[i];
+		}
+		ImGui::PopID();
 	}
 
 	{
@@ -319,16 +363,15 @@ void render() {
 	SectionHeading("CASC Locale");
 	ImGui::TextWrapped("Which locale to use for file reading. This only affects game files.");
 	ImGui::TextWrapped("This should match the locale of your client when using local installations.");
+	// CSS: #config > div .spaced { margin: 10px } — MenuButton has class="spaced" in JS.
+	ImGui::Dummy(ImVec2(0.0f, 10.0f));
 	{
 		auto keys = available_locale_keys();
 		std::string current_key = selected_locale_key();
 
 		std::vector<menu_button::MenuOption> locale_options;
-		for (const auto& key : keys) {
-			// JS: available_locale_keys returns { value: e } where e is the short key.
-			// The MenuButton displays the short key (e.g. "enUS"), not the full name.
+		for (const auto& key : keys)
 			locale_options.push_back({ key, key });
-		}
 
 		menu_button::render("##LocaleMenuButton", locale_options,
 			current_key, false, true, locale_menu_state,
@@ -338,13 +381,15 @@ void render() {
 			},
 			nullptr);
 	}
+	ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
 	SectionHeading("WebP Quality");
 	ImGui::TextWrapped("Quality setting for WebP exports. Range is 1-100 (100 is lossless)");
 	{
-		// JS: <input type="number" min="1" max="100">
+		// CSS: input[type=number] { width: 50px } — no spin buttons.
 		int val = cfg.value("exportWebPQuality", 75);
-		if (ImGui::InputInt("##WebPQuality", &val)) {
+		ImGui::SetNextItemWidth(80.0f);
+		if (ImGui::InputScalar("##WebPQuality", ImGuiDataType_S32, &val, nullptr, nullptr)) {
 			if (val < 1) val = 1;
 			if (val > 100) val = 100;
 			cfg["exportWebPQuality"] = val;
@@ -370,24 +415,22 @@ void render() {
 
 	SectionHeading("Export Meta Data");
 	ImGui::TextWrapped("If enabled, verbose data will be exported for enabled formats into relative .json files.");
-	// Note: JS uses .ui-multi-button grouped toggles; C++ uses checkboxes on SameLine
-	// which provide equivalent toggle functionality with a different visual style.
+	// CSS: .ui-multi-button — each button independently toggleable (not mutually exclusive).
 	{
-		bool m2_meta = cfg.value("exportM2Meta", false);
-		if (ImGui::Checkbox("M2##meta", &m2_meta))
-			cfg["exportM2Meta"] = m2_meta;
-		ImGui::SameLine();
-		bool wmo_meta = cfg.value("exportWMOMeta", false);
-		if (ImGui::Checkbox("WMO##meta", &wmo_meta))
-			cfg["exportWMOMeta"] = wmo_meta;
-		ImGui::SameLine();
-		bool blp_meta = cfg.value("exportBLPMeta", false);
-		if (ImGui::Checkbox("BLP##meta", &blp_meta))
-			cfg["exportBLPMeta"] = blp_meta;
-		ImGui::SameLine();
+		bool m2_meta      = cfg.value("exportM2Meta",      false);
+		bool wmo_meta     = cfg.value("exportWMOMeta",     false);
+		bool blp_meta     = cfg.value("exportBLPMeta",     false);
 		bool foliage_meta = cfg.value("exportFoliageMeta", false);
-		if (ImGui::Checkbox("Foliage##meta", &foliage_meta))
-			cfg["exportFoliageMeta"] = foliage_meta;
+
+		ImGui::PushID("##ExportMeta");
+		if (multiButtonSegment(0, "M2",      m2_meta,      true,  false)) cfg["exportM2Meta"]      = !m2_meta;
+		ImGui::SameLine(0, 1.0f);
+		if (multiButtonSegment(1, "WMO",     wmo_meta,     false, false)) cfg["exportWMOMeta"]     = !wmo_meta;
+		ImGui::SameLine(0, 1.0f);
+		if (multiButtonSegment(2, "BLP",     blp_meta,     false, false)) cfg["exportBLPMeta"]     = !blp_meta;
+		ImGui::SameLine(0, 1.0f);
+		if (multiButtonSegment(3, "Foliage", foliage_meta, false, true))  cfg["exportFoliageMeta"] = !foliage_meta;
+		ImGui::PopID();
 	}
 
 	{
@@ -436,18 +479,18 @@ void render() {
 	ImGui::TextWrapped("By default, using CTRL + C on a file list will copy the full entry to your clipboard.");
 	ImGui::TextWrapped("Setting this to Directory will instead only copy the directory of the given entry.");
 	ImGui::TextWrapped("Setting this to FileDataID will instead only copy the FID of the entry (must have FIDs enabled).");
-	// Note: JS uses .ui-multi-button grouped toggles; C++ uses radio buttons
-	// which provide equivalent toggle functionality with a different visual style.
+	// CSS: .ui-multi-button — green segmented toggle buttons (radio: only one selected at a time).
 	{
 		std::string copy_mode = cfg.value("copyMode", std::string("FULL"));
-		if (ImGui::RadioButton("Full##copymode", copy_mode == "FULL"))
-			cfg["copyMode"] = "FULL";
-		ImGui::SameLine();
-		if (ImGui::RadioButton("Directory##copymode", copy_mode == "DIR"))
-			cfg["copyMode"] = "DIR";
-		ImGui::SameLine();
-		if (ImGui::RadioButton("FileDataID##copymode", copy_mode == "FID"))
-			cfg["copyMode"] = "FID";
+		const char* opts[] = { "Full", "Directory", "FileDataID" };
+		const char* vals[] = { "FULL", "DIR", "FID" };
+		ImGui::PushID("##CopyMode");
+		for (int i = 0; i < 3; i++) {
+			if (i > 0) ImGui::SameLine(0, 1.0f);
+			if (multiButtonSegment(i, opts[i], copy_mode == vals[i], i == 0, i == 2))
+				cfg["copyMode"] = vals[i];
+		}
+		ImGui::PopID();
 	}
 
 	{
@@ -482,67 +525,78 @@ void render() {
 			cfg["itemViewerShowAll"] = val;
 	}
 
-	// Item 51: JS labels this as "Cache Expiry" with description "After how many days..."
 	SectionHeading("Cache Expiry");
 	ImGui::TextWrapped("After how many days of inactivity is cached data deleted. Setting to zero disables cache clean-up (not recommended).");
 	{
+		// CSS: input[type=number] { width: 50px } — no spin buttons.
 		int val = cfg.value("cacheExpiry", 168);
-		if (ImGui::InputInt("##CacheExpiry", &val))
+		ImGui::SetNextItemWidth(80.0f);
+		if (ImGui::InputScalar("##CacheExpiry", ImGuiDataType_S32, &val, nullptr, nullptr))
 			cfg["cacheExpiry"] = val;
 	}
 
 	SectionHeading("CDN Fallback Hosts");
 	ImGui::TextWrapped("Comma-separated list of additional CDN hostnames to try when official CDN servers are unavailable or slow.");
 	ImGui::TextWrapped("These are pinged alongside official servers and used based on speed and availability.");
+	// CSS: input[type=text].long { width: 600px }
+	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##CDNFallbackHosts", cdn_fallback_state, cfg, "cdnFallbackHosts");
 
-	// Item 53: JS heading is "Manually Clear Cache (Requires Restart)"
 	SectionHeading("Manually Clear Cache (Requires Restart)");
 	ImGui::TextWrapped("While housekeeping on the cache is mostly automatic, sometimes clearing manually can resolve issues.");
+	// CSS: #config > div .spaced { margin: 10px } — the button has class="spaced" in JS.
 	{
-		// JS: :class="{ disabled: $core.view.isBusy }" — visually disable when busy
 		bool busy = view.isBusy;
-		if (busy) {
-			ImGui::BeginDisabled();
-		}
+		if (busy) ImGui::BeginDisabled();
+		ImGui::Dummy(ImVec2(0.0f, 10.0f));
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f);
 		std::string btn_label = std::format("Clear Cache ({})", cache_size_formatted());
 		if (ImGui::Button(btn_label.c_str()))
 			handle_cache_clear();
-		if (busy) {
-			ImGui::EndDisabled();
-		}
+		if (busy) ImGui::EndDisabled();
 	}
 
 	SectionHeading("Encryption Keys");
 	ImGui::TextWrapped("Remote URL used to update keys for encrypted files.");
-	ImGui::Text("Primary");
+	// JS: <p>Primary <input type="text" class="long" .../></p> — label and input inline on same line.
+	ImGui::Text("Primary"); ImGui::SameLine();
+	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##TactKeysURL", tact_url_state, cfg, "tactKeysURL");
-	ImGui::Text("Fallback");
+	ImGui::Text("Fallback"); ImGui::SameLine();
+	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##TactKeysFallbackURL", tact_fallback_url_state, cfg, "tactKeysFallbackURL");
 
 	SectionHeading("Add Encryption Key");
 	ImGui::TextWrapped("Manually add a BLTE encryption key.");
 	{
-		// Item 56: JS maxlength="16" for key name, maxlength="32" for key value
-		static char key_name_buf[17] = {}; // 16 chars + null terminator
-		static char key_val_buf[33] = {};  // 32 chars + null terminator
-		ImGui::InputText("Key Name (16 hex)##addkey", key_name_buf, sizeof(key_name_buf));
-		ImGui::InputText("Key Value (32 hex)##addkey", key_val_buf, sizeof(key_val_buf));
+		// JS: maxlength="16" / maxlength="32"; placeholder text from JS template.
+		// JS width="140" / width="280" — these are HTML attributes applied as pixel widths in NW.js.
+		static char key_name_buf[17] = {};
+		static char key_val_buf[33]  = {};
+		ImGui::SetNextItemWidth(140.0f);
+		ImGui::InputTextWithHint("##tactKeyName", "e.g 8F4098E2470FE0C8",         key_name_buf, sizeof(key_name_buf));
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(280.0f);
+		ImGui::InputTextWithHint("##tactKeyValue", "e.g AA718D1F1A23078D49AD0C606A72F3D5", key_val_buf,  sizeof(key_val_buf));
+		ImGui::SameLine();
 		if (ImGui::Button("Add##tactkey")) {
 			view.userInputTactKeyName = key_name_buf;
-			view.userInputTactKey = key_val_buf;
+			view.userInputTactKey     = key_val_buf;
 			handle_tact_key();
 			key_name_buf[0] = '\0';
-			key_val_buf[0] = '\0';
+			key_val_buf[0]  = '\0';
 		}
 	}
 
 	SectionHeading("Realm List Source");
 	ImGui::TextWrapped("Remote URL used for retrieving the realm list. (Must use same format)");
+	// JS: <p><input type="text" class="long" .../></p> — input alone in paragraph (no inline label).
+	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##RealmListURL", realm_url_state, cfg, "realmListURL");
 
 	SectionHeading("Character Appearance API Endpoint");
 	ImGui::TextWrapped("Remote URL used for retrieving data from the Battle.net Character Appearance API. (Must use same format)");
+	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##ArmoryURL", armory_url_state, cfg, "armoryURL");
 
 	{
@@ -555,37 +609,44 @@ void render() {
 
 	SectionHeading("Listfile Binary Source");
 	ImGui::TextWrapped("Remote URL used for downloading the optimized binary listfile format. (Must use same format)");
+	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##ListfileBinSrc", listfile_bin_state, cfg, "listfileBinarySource");
 
-	// Item 57: JS heading is "Listfile Source (Legacy)"
 	SectionHeading("Listfile Source (Legacy)");
 	ImGui::TextWrapped("Remote URL or local path used for updating the CASC listfile. (Must use same format)");
-	ImGui::Text("Primary");
+	ImGui::Text("Primary"); ImGui::SameLine();
+	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##ListfileURL", listfile_url_state, cfg, "listfileURL");
-	ImGui::Text("Fallback");
+	ImGui::Text("Fallback"); ImGui::SameLine();
+	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##ListfileFallbackURL", listfile_fb_url_state, cfg, "listfileFallbackURL");
 
-	// Item 51: JS heading is "Listfile Update Frequency" with description "How often (in days)..."
 	SectionHeading("Listfile Update Frequency");
 	ImGui::TextWrapped("How often (in days) the listfile is updated. Set to zero to always re-download the listfile.");
 	{
+		// CSS: input[type=number] { width: 50px } — no spin buttons.
 		int val = cfg.value("listfileCacheRefresh", 168);
-		if (ImGui::InputInt("##ListfileCacheRefresh", &val))
+		ImGui::SetNextItemWidth(80.0f);
+		if (ImGui::InputScalar("##ListfileCacheRefresh", ImGuiDataType_S32, &val, nullptr, nullptr))
 			cfg["listfileCacheRefresh"] = val;
 	}
 
 	SectionHeading("Data Table Definition Repository");
 	ImGui::TextWrapped("Remote URL used to update DBD definitions. (Must use same format)");
-	ImGui::Text("Primary");
+	ImGui::Text("Primary"); ImGui::SameLine();
+	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##DBDURL", dbd_url_state, cfg, "dbdURL");
-	ImGui::Text("Fallback");
+	ImGui::Text("Fallback"); ImGui::SameLine();
+	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##DBDFallbackURL", dbd_fb_url_state, cfg, "dbdFallbackURL");
 
 	SectionHeading("DBD Manifest Repository");
 	ImGui::TextWrapped("Remote URL used to obtain DBD manifest information. (Must use same format)");
-	ImGui::Text("Primary");
+	ImGui::Text("Primary"); ImGui::SameLine();
+	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##DBDFilenameURL", dbdf_url_state, cfg, "dbdFilenameURL");
-	ImGui::Text("Fallback");
+	ImGui::Text("Fallback"); ImGui::SameLine();
+	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##DBDFilenameFallbackURL", dbdf_fb_url_state, cfg, "dbdFilenameFallbackURL");
 
 	{
@@ -598,41 +659,43 @@ void render() {
 
 	ImGui::EndChild(); // config-scroll
 
-	// CSS: #config-buttons { display: flex; flex-direction: row-reverse; padding: 15px 0; border-top: 1px solid var(--border); background: var(--background); }
-	// row-reverse puts the first button on the right. Order in HTML: Discard, Apply, Reset.
-	// Visually: [Reset to Defaults (far left)] ... [Apply] [Discard (far right)]
+	// CSS: #config-buttons { display: flex; flex-direction: row-reverse; padding: 15px 0;
+	//                         border-top: 1px solid var(--border); background: var(--background); }
 	ImGui::Spacing();
 	{
 		ImDrawList* dl = ImGui::GetWindowDrawList();
 		ImVec2 curPos = ImGui::GetCursorScreenPos();
-		float availW = ImGui::GetContentRegionAvail().x;
-		// border-top: 1px solid var(--border)
-		dl->AddLine(ImVec2(curPos.x, curPos.y), ImVec2(curPos.x + availW, curPos.y), app::theme::BORDER_U32);
+		float lineW = ImGui::GetContentRegionAvail().x;
+		dl->AddLine(ImVec2(curPos.x, curPos.y), ImVec2(curPos.x + lineW, curPos.y), app::theme::BORDER_U32);
 	}
 	ImGui::Dummy(ImVec2(0.0f, 15.0f));
 
-	// CSS: row-reverse — "Reset to Defaults" has margin-right: auto (pushes it to the left),
-	// "Discard" and "Apply" are on the right side.
-	// CSS: #config-buttons #config-reset { margin-right: auto; margin-left: 20px; }
-	// Item 55: JS applies :class="{ disabled: $core.view.isBusy }" to all 3 buttons
+	// CSS: #config-buttons #config-reset { margin-left: 20px } — Reset sits at far left.
+	// CSS: #config-buttons input { margin-right: 20px } — Apply/Discard sit at far right with 20px margin.
 	bool busy = view.isBusy;
-	if (busy)
-		ImGui::BeginDisabled();
+	if (busy) ImGui::BeginDisabled();
 
+	ImGui::SetCursorPosX(20.0f);
 	if (ImGui::Button("Reset to Defaults"))
 		handle_reset();
-	ImGui::SameLine();
-	// Push remaining buttons to the right.
-	const float buttonWidth = ImGui::CalcTextSize("Discard").x + ImGui::CalcTextSize("Apply").x + ImGui::GetStyle().FramePadding.x * 4 + 20.0f * 2;
-	ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - buttonWidth);
-	if (ImGui::Button("Apply"))
-		handle_apply();
-	ImGui::SameLine();
-	if (ImGui::Button("Discard"))
-		handle_discard();
 
-	if (busy)
-		ImGui::EndDisabled();
+	{
+		// Position Apply and Discard at the right with 20px right margin.
+		const float right_margin = 20.0f;
+		const float spacing      = ImGui::GetStyle().ItemSpacing.x;
+		const float apply_w      = ImGui::CalcTextSize("Apply").x   + ImGui::GetStyle().FramePadding.x * 2;
+		const float discard_w    = ImGui::CalcTextSize("Discard").x + ImGui::GetStyle().FramePadding.x * 2;
+		float buttons_start = ImGui::GetContentRegionMax().x - right_margin - discard_w - spacing - apply_w;
+		ImGui::SameLine();
+		ImGui::SetCursorPosX(buttons_start);
+		if (ImGui::Button("Apply"))
+			handle_apply();
+		ImGui::SameLine();
+		if (ImGui::Button("Discard"))
+			handle_discard();
+	}
+
+	if (busy) ImGui::EndDisabled();
 
 	ImGui::Dummy(ImVec2(0.0f, 15.0f));
 
@@ -640,7 +703,6 @@ void render() {
 }
 
 static void handle_cache_clear() {
-	//     this.$core.events.emit('click-cache-clear');
 	if (!core::view->isBusy)
 		core::events.emit("click-cache-clear");
 }
@@ -726,6 +788,7 @@ void handle_apply() {
 	}
 
 	core::view->config = cfg;
+	config::save();  // Persist to disk — JS equivalent: Vue $watch triggers save() on config change.
 
 	go_home();
 

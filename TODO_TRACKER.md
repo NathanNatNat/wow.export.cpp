@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 367/550 verified (67%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 379/562 verified (67%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -2805,3 +2805,63 @@
 - **JS Source**: `src/js/3D/writers/STLWriter.js` lines 66–86
 - **Status**: Pending
 - **Details**: JS `appendGeometry` checks `Array.isArray(this.verts)` to decide between spread and `Float32Array.from()` for concatenation. C++ always uses `std::vector::insert`, which works correctly regardless. The JS type distinction is a JS-specific concern that doesn't apply to C++. Functionally equivalent.
+
+- [x] 579. [screen_settings.cpp] `handle_apply()` does not call `config::save()` — settings are not persisted to disk
+  - **JS Source**: `src/js/config.js` line 60, `src/js/modules/screen_settings.js` lines 447–449
+  - **Status**: Pending
+  - **Details**: The JS config module installs a deep Vue watcher (`core.view.$watch('config', () => save(), { deep: true })`) that automatically saves to disk whenever `view.config` changes. The C++ config.cpp comment says this is replaced by explicit `config::save()` calls from the UI layer. However, `handle_apply()` sets `core::view->config = cfg` and calls `go_home()` without ever calling `config::save()`. This means every Apply click saves to the in-memory config but never writes `config.json` to disk — changes are lost on restart. Fix: call `config::save()` after `core::view->config = cfg` in `handle_apply()`.
+
+- [x] 580. [screen_settings.cpp] "Add Encryption Key" inputs missing placeholder text
+  - **JS Source**: `src/js/modules/screen_settings.js` lines 295–296
+  - **Status**: Pending
+  - **Details**: JS has `placeholder="e.g 8F4098E2470FE0C8"` on the key name input and `placeholder="e.g AA718D1F1A23078D49AD0C606A72F3D5"` on the key value input. C++ uses plain `ImGui::InputText` with label text only ("Key Name (16 hex)##addkey" / "Key Value (32 hex)##addkey"), losing the example placeholder text. Fix: use `ImGui::InputTextWithHint` with the hint strings from JS.
+
+- [x] 581. [screen_settings.cpp] "Path Separator Format" uses `ImGui::RadioButton` instead of `.ui-multi-button` segmented buttons
+  - **JS Source**: `src/js/modules/screen_settings.js` lines 111–114; `src/app.css` lines 915–939
+  - **Status**: Pending
+  - **Details**: JS renders a `.ui-multi-button` with two `<li>` elements (Windows / POSIX) styled as green pill buttons with highlighted selected state. C++ uses `ImGui::RadioButton` side-by-side which is functionally equivalent but visually wrong — reference screenshots show green segmented toggle buttons, not radio buttons. Needs a custom segmented-button widget matching `.ui-multi-button` CSS: `background: var(--form-button-base)` (#22b549), `padding: 10px`, `display: inline-block`, first/last child rounded corners (border-radius 5px), selected/hover uses `var(--form-button-hover)` (#2665d2).
+
+- [x] 582. [screen_settings.cpp] "Copy Mode" uses `ImGui::RadioButton` instead of `.ui-multi-button` segmented buttons
+  - **JS Source**: `src/js/modules/screen_settings.js` lines 232–236; `src/app.css` lines 915–939
+  - **Status**: Pending
+  - **Details**: Same issue as entry 581. JS renders a `.ui-multi-button` with three `<li>` elements (Full / Directory / FileDataID). C++ uses three `ImGui::RadioButton` widgets. Reference screenshot 4 shows three green segmented buttons. Needs the same segmented-button widget solution as entry 581.
+
+- [x] 583. [screen_settings.cpp] "Export Meta Data" uses inline `ImGui::Checkbox` instead of `.ui-multi-button` toggle buttons
+  - **JS Source**: `src/js/modules/screen_settings.js` lines 178–183; `src/app.css` lines 915–939
+  - **Status**: Pending
+  - **Details**: JS renders a `.ui-multi-button` with four independently-toggleable `<li>` elements (M2 / WMO / BLP / Foliage). Each click toggles its boolean independently (not mutually exclusive like radio buttons). C++ uses four `ImGui::Checkbox` widgets on `SameLine` — functionally equivalent toggle behavior but wrong visual style. Reference screenshot 3 shows four green segmented toggle buttons. Needs the same segmented-button widget as entries 581–582, but with independent toggle semantics (not radio).
+
+- [x] 584. [screen_settings.cpp] Section content lacks left/right padding — CSS `#config > div { padding: 20px }` not replicated
+  - **JS Source**: `src/app.css` lines 1399–1402
+  - **Status**: Pending
+  - **Details**: CSS `#config > div { padding: 20px; padding-bottom: 0; }` gives every settings section 20px of left, right, and top padding. In C++, `SectionHeading()` only adds top spacing via `ImGui::Dummy(ImVec2(0.0f, 20.0f))`; there is no left/right padding, so all content sits flush against the window edge. Reference screenshots show clear left/right margins. Fix: use `ImGui::SetCursorPosX(20.0f)` / `ImGui::Indent` or set a content region inset to add 20px left/right margins.
+
+- [x] 585. [screen_settings.cpp] "Primary"/"Fallback" labels rendered on separate lines instead of inline with inputs
+  - **JS Source**: `src/js/modules/screen_settings.js` lines 289–290, 325–326, 336–337, 342–343
+  - **Status**: Pending
+  - **Details**: JS places labels inline with inputs using `<p>Primary <input type="text" class="long" .../></p>` — the label and input appear on the same row. C++ uses `ImGui::Text("Primary")` followed by `configTextInput(...)` on the next line, making them stack vertically. Affects: Encryption Keys (Primary/Fallback), Listfile Source Legacy (Primary/Fallback), Data Table Definition Repository (Primary/Fallback), DBD Manifest Repository (Primary/Fallback). Fix: use `ImGui::Text("Primary"); ImGui::SameLine(); configTextInput(...)` to render inline.
+
+- [x] 586. [screen_settings.cpp] Input field widths do not match CSS spec
+  - **JS Source**: `src/app.css` lines 1035–1053
+  - **Status**: Pending
+  - **Details**: CSS defines: `input[type=text] { width: 300px; }`, `input[type=text].long { width: 600px; }`, `input[type=number] { width: 50px; }`. All URL/text fields using `class="long"` in the JS template should be 600px wide; plain number inputs 50px wide. C++ URL inputs use `ImGui::SetNextItemWidth(-40.0f)` (near full-width) via `file_field::render`, and `configTextInput` uses default ImGui full-width. Number inputs (`ImGui::InputInt`) use ImGui default width (~120px). None of these match the CSS-defined widths. Fix: constrain text inputs to 600px and number inputs to ~50px using `ImGui::SetNextItemWidth`.
+
+- [x] 587. [screen_settings.cpp] Number inputs show +/− stepper buttons — CSS hides them
+  - **JS Source**: `src/app.css` lines 1055–1058
+  - **Status**: Pending
+  - **Details**: CSS explicitly hides the browser spin buttons: `input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { display: none; }`. The JS number inputs are plain boxes with no visible step controls. C++ uses `ImGui::InputInt` which renders with visible `+` and `-` stepper buttons on the right side, deviating from the original appearance. Fix: use `ImGuiInputTextFlags_None` with a plain `ImGui::InputFloat`/`InputText` approach, or use `ImGui::InputScalar` with `ImGuiSliderFlags_NoRoundToFormat` and hide steppers.
+
+- [x] 588. [screen_settings.cpp] "Clear Cache" button missing `.spaced` margin
+  - **JS Source**: `src/js/modules/screen_settings.js` line 284; `src/app.css` line 1409–1411
+  - **Status**: Pending
+  - **Details**: JS applies `class="spaced"` to the "Clear Cache" button. CSS: `#config > div .spaced { margin: 10px; }` — 10px margin on all sides. C++ renders the button without extra spacing. Fix: add `ImGui::Dummy(ImVec2(0, 10.0f))` before the button, and use `ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f)` for left indent, or wrap in a small child window with padding.
+
+- [x] 589. [screen_settings.cpp] `#config.toastgap` top-margin not implemented
+  - **JS Source**: `src/js/modules/screen_settings.js` line 22; `src/app.css` lines 1393–1395
+  - **Status**: Pending
+  - **Details**: JS template applies `:class="{ toastgap: $core.view.toast !== null }"` to the `#config` div. CSS: `#config.toastgap { margin-top: 20px; }`. When a toast notification is visible, the settings scroll area should gain an extra 20px top margin to prevent the toast from overlapping content. C++ does not implement this. Fix: check `core::view->toast` and add `ImGui::Dummy(ImVec2(0, 20.0f))` at the top of the scroll area when a toast is active.
+
+- [x] 590. [screen_settings.cpp] Section headings not bold — `<h1>` browser default is bold, C++ only scales font size
+  - **JS Source**: `src/js/modules/screen_settings.js` lines 24, 29, etc.; `src/app.css` line 1403–1405
+  - **Status**: Pending
+  - **Details**: CSS sets `#config > div h1 { font-size: 18px; }` without removing the browser's default `font-weight: bold` for `<h1>`. The reference screenshots show section headings (e.g. "Export Directory", "Scroll Speed") rendered in a visibly heavier/bolder weight than the description paragraphs beneath them. C++ `SectionHeading()` uses `ImGui::SetWindowFontScale(18.0f / DEFAULT_FONT_SIZE)` which only scales the font size — Dear ImGui's default font has no bold variant loaded. Fix: load a bold font variant and push/pop it in `SectionHeading()`, or use `ImGui::PushFont(boldFont)` if a bold font is available.
