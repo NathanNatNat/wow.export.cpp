@@ -1,61 +1,99 @@
 # Copilot Instructions
 
 ## Project Overview
-- Project: **wow.export.cpp** - a C++ port of the original JavaScript/NW.js application **wow.export** (https://github.com/Kruithne/wow.export).
+- Project: **wow.export.cpp** — a C++ port of the original JavaScript/NW.js application **wow.export**.
 - Convert the JavaScript code to C++ IN PLACE.
-- Prefer keeping code in the corresponding `.cpp`/`.h` pair. New `.cpp` source files are allowed when a JS module cannot faithfully map to an existing file (e.g., a JS file that has no corresponding C++ file yet, or a helper module that is clearly separate). Do NOT create speculative or utility files that have no direct JS counterpart.
-- The C++ entry point is app.cpp.
-- The C++ Version should be 100% functionally identical to the original JavaScript code. The goal is a line-by-line port, with the same code structure and logic, but in C++.
-- The C++ Version should be 100% visually identical to the original JavaScript app. Use the same colors, fonts, layout, and styling as defined in app.css and the reference screenshots in UI_REFERENCE.md.
+- Prefer keeping code in the corresponding `.cpp`/`.h` pair. New `.cpp` source files are allowed when a JS module cannot faithfully map to an existing file. Do NOT create speculative or utility files that have no direct JS counterpart.
+- The C++ entry point is `src/app.cpp`.
+- The C++ version must be **100% functionally identical** to the original JavaScript code — a line-by-line port with the same structure and logic, but in C++.
+- The C++ version must be **100% visually identical** to the original JavaScript app. Use the same colors, fonts, layout, and styling as defined in `app.css` and the reference screenshots in `UI_REFERENCE.md`.
 - User-facing text (window title, crash screen, logs, context menus) should say **wow.export.cpp**, not wow.export.
 - The **original JS source files** (**192** in total) are included in the repo under `src/js/` (and `src/installer/`), sitting alongside the C++ files. Always read these local JS files as the authoritative reference when converting or verifying C++ code.
 
 ## Platform & Toolchain
-- Platforms: Windows x64 and Linux x64 ONLY. No macOS.
+- Platforms: **Windows x64** and **Linux x64** ONLY. No macOS.
 - Compilers: MSVC (Windows), GCC (Linux).
 - Build configurations: Debug, Release, RelWithDebInfo.
-- Language standard: C++23.
-- Build system: CMake with presets for Windows MSVC and Linux GCC.
-- Build prerequisites: Python 3 and Jinja2 (`pip install jinja2`) are required at build time for GLAD2 OpenGL loader generation.
-- CI/CD will be done later.
+- Language standard: **C++23**.
+- Build system: CMake with presets (`CMakePresets.json`) for Windows MSVC and Linux GCC.
+- Build output: `out/build/<preset-name>/` (e.g. `out/build/windows-msvc-debug/`).
+- **Build prerequisites**: Python 3 and Jinja2 (`pip install jinja2`) are required at build time for GLAD2 OpenGL loader generation. CMake finds Python automatically; only Jinja2 needs manual installation.
+
+## Building
+
+Use `scripts/build.ps1` (Windows) or `scripts/build.sh` (Linux). These scripts handle all environment setup and run configure + build in one step.
+
+### Windows (MSVC x64)
+
+Run from the Bash tool (or any shell with `pwsh` on PATH):
+
+```bash
+pwsh scripts/build.ps1                   # configure + build (debug)
+pwsh scripts/build.ps1 -Clean            # delete build dir, then configure + build
+pwsh scripts/build.ps1 -Config release   # release build
+```
+
+The script locates Visual Studio automatically via `vswhere.exe`, activates the MSVC x64 environment (`VsDevCmd.bat`), then runs `cmake --preset` + `cmake --build` in a single `cmd /c` chain. No manual environment setup needed.
+
+**CMake presets used:**
+- Configure: `windows-msvc-debug`, `windows-msvc-release`, `windows-msvc-relwithdebinfo`
+- Build: `windows-debug`, `windows-release`, `windows-relwithdebinfo`
+- Build output: `out/build/windows-msvc-<config>/`
+
+**VS Code:** Use `Ctrl+Shift+P → Tasks: Run Build Task` — this runs the same script.
+
+### Linux (GCC x64)
+
+```bash
+bash scripts/build.sh              # configure + build (debug)
+CLEAN=1 bash scripts/build.sh      # delete build dir, then configure + build
+bash scripts/build.sh release      # release build
+```
+
+**CMake presets used:**
+- Configure: `linux-gcc-debug`, `linux-gcc-release`, `linux-gcc-relwithdebinfo`
+- Build: `linux-debug`, `linux-release`, `linux-relwithdebinfo`
+- Build output: `out/build/linux-gcc-<config>/`
+
+The build must compile without errors before any task is considered done.
 
 ## Dependencies
-All dependencies should be git submodules integrated via CMake where possible.
+
+Most dependencies are git submodules in `extern/`. CMake manages them automatically — do not introduce system-installed libraries.
 
 | Purpose | Library |
 |---------|---------|
 | Windowing | GLFW |
-| UI | Dear ImGui (docking branch, multiviewport support enabled, docking disabled for now) |
-| Rendering | OpenGL 4.6 core profile via GLAD2 (regenerated every build, not pre-committed) |
+| UI | Dear ImGui (docking branch; multiviewport enabled, docking disabled for now) |
+| Rendering | OpenGL 4.3 core via GLAD2 (sources regenerated every build via `python -m glad` from `extern/glad/`; not pre-committed) |
 | Math | GLM |
 | JSON | nlohmann/json |
 | Logging | spdlog |
-| HTTP / HTTPS | cpp-httplib (HTTPS enabled via bundled mbedTLS — no system OpenSSL required) |
-| TLS / Crypto | mbedTLS v3.6.x LTS (bundled submodule; provides HTTPS for cpp-httplib and MD hash APIs replacing hand-rolled MD5/SHA1/SHA256) |
+| HTTP / HTTPS | cpp-httplib (HTTPS enabled via OpenSSL) |
+| TLS / Crypto | OpenSSL (prebuilt x64 DLLs in `extern/openssl-prebuilt/`; provides HTTPS for cpp-httplib and hash APIs via `<openssl/evp.h>`) |
 | Compression | zlib |
-| Archive I/O | minizip-ng 4.0.x (bundled submodule; ZIP read/write — C++ equivalent of JS adm-zip) |
+| Archive I/O | minizip-ng (ZIP read/write — C++ equivalent of JS adm-zip) |
 | Image I/O | stb_image / stb_image_write, libwebp, nanosvg |
 | Audio | miniaudio |
-| File Dialogs | portable-file-dialogs 0.1.0 (bundled submodule; cross-platform native open/save/folder dialogs — replaces platform-specific COM/zenity code) |
-| Threading | std::jthread, std::async (standard library — no external dependency) |
+| File Dialogs | portable-file-dialogs (cross-platform native open/save/folder dialogs) |
+| Threading | `std::jthread`, `std::async` (standard library) |
 
 ## Reference Sources
-- The **original JavaScript/NW.js source code** (wow.export) is included **directly in this repository** under `src/js/` (and `src/installer/`). These are the authoritative JS source files — always refer to them locally when making changes or reviewing code to ensure fidelity with the original application. The upstream repo is at **https://github.com/Kruithne/wow.export** for historical reference.
-- When converting or verifying a C++ file, **open the corresponding JS file from `src/js/`** (e.g., for `src/casc/casc-source-remote.cpp`, refer to `src/js/casc/casc-source-remote.js`). The local copy is the primary reference; the upstream repo at **https://github.com/Kruithne/wow.export** can also be consulted when needed.
-- This C++ port (wow.export.cpp) is at **https://github.com/NathanNatNat/wow.export.cpp**.
-- **Reference screenshots** of the original app are in [`UI_REFERENCE.md`](../UI_REFERENCE.md) — always compare against these screenshots when making UI changes to ensure visual fidelity.
+- **JS source files** in `src/js/` are the authoritative reference for all conversions. Always open the corresponding `.js` file when working on any `.cpp` file.
+- When converting or verifying a C++ file, open the corresponding JS file (e.g. for `src/js/casc/casc-source-remote.cpp`, refer to `src/js/casc/casc-source-remote.js`).
+- Upstream JS repo (historical reference only): **https://github.com/Kruithne/wow.export**
+- This C++ port: **https://github.com/NathanNatNat/wow.export.cpp**
+- **UI reference screenshots**: [`UI_REFERENCE.md`](UI_REFERENCE.md) — always compare against these when making UI changes.
 
 ## C++ Conventions
-- **Naming & formatting** — Mirror the naming conventions and formatting style of the original JS source as closely as C++ allows (e.g., `camelCase` functions/variables, `PascalCase` classes if the JS uses constructor functions). Do not invent a new style.
-- **Error handling** — Use whichever C++ error-handling mechanism (exceptions, `std::expected`, error codes, etc.) best preserves identical functionality to the original JS code path.
-- **String types** — Use whichever string types (`std::string`, `std::string_view`, `std::wstring`, etc.) best fit the context, as long as functionality is identical to the original JS behavior.
-- **Memory management** — Use whichever ownership model (`std::unique_ptr`, `std::shared_ptr`, raw pointers, value types, etc.) best fits the context, as long as functionality is identical and there are no leaks.
-- **Async model** — Map JS async/promise patterns to whichever C++ concurrency mechanism (`std::async`, `std::jthread`, coroutines, futures, etc.) best preserves identical behavior.
-- **Include style** — Use whichever include ordering and guard style (`#pragma once`, include guards, etc.) best fits the context. Consistency within the codebase is preferred.
-- **Testing** — Testing will be added later. No test framework is required at this time.
+- **Naming & formatting** — Mirror the naming conventions and formatting of the original JS source (e.g. `camelCase` functions/variables, `PascalCase` classes). Do not invent a new style.
+- **Error handling** — Use whichever C++ mechanism best preserves identical functionality to the original JS code path.
+- **String types** — Use whichever string type (`std::string`, `std::string_view`, `std::wstring`, etc.) best fits the context while matching original JS behavior.
+- **Memory management** — Use whichever ownership model best fits the context; no leaks.
+- **Async model** — Map JS async/promise patterns to whichever C++ concurrency mechanism best preserves identical behavior.
+- **Testing** — No test framework required at this time.
 
 ### JS → C++ Idiom Mapping
-When converting JS patterns, use the following C++ equivalents (or the closest fit for the context):
 
 | JS Idiom | C++ Equivalent |
 |----------|----------------|
@@ -67,22 +105,19 @@ When converting JS patterns, use the following C++ equivalents (or the closest f
 | Template literals | `std::format` (C++23) |
 | `JSON.parse` / `JSON.stringify` | `nlohmann::json::parse` / `.dump()` |
 | `Array` | `std::vector` |
-| `typeof` / `instanceof` checks | `std::holds_alternative`, `dynamic_cast`, or compile-time checks |
+| `typeof` / `instanceof` | `std::holds_alternative`, `dynamic_cast`, or compile-time checks |
 | `try`/`catch`/`finally` | `try`/`catch` + RAII for cleanup |
 | Spread operator (`...args`) | Parameter packs or `std::initializer_list` |
 
-These are guidelines — use whatever produces functionally identical behavior to the original JS.
-
 ### Node.js API → C++ Library Mapping
-Map Node.js built-in modules to project dependencies as follows:
 
 | Node.js Module | C++ Replacement |
-|----------------|------------------|
+|----------------|-----------------|
 | `fs` | `std::filesystem`, standard file I/O |
 | `path` | `std::filesystem::path` |
-| `http` / `https` | cpp-httplib (with mbedTLS for HTTPS) |
+| `http` / `https` | cpp-httplib (with OpenSSL for HTTPS) |
 | `zlib` | zlib |
-| `crypto` | mbedTLS MD API (`mbedtls/md.h` — `mbedtls_md_info_from_type`, `mbedtls_md_update`, etc.) |
+| `crypto` | OpenSSL EVP API (`<openssl/evp.h>` — `EVP_MD_CTX_new`, `EVP_DigestUpdate`, etc.) |
 | `events` (EventEmitter) | Custom callback/signal mechanism preserving identical behavior |
 | `child_process` | `std::system`, platform process APIs |
 | `os` | `std::filesystem`, platform APIs |
@@ -90,34 +125,41 @@ Map Node.js built-in modules to project dependencies as follows:
 
 ## Fidelity Rules
 
+### Intentional Stubs
+The following files are intentionally left as documented stubs and do **not** need to be implemented:
+- **`src/js/components/home-showcase.cpp`** — `render()` is a no-op. The JS component renders a rotating image showcase with background-layer compositing, optional video playback, and Refresh/Feedback links. The full JS template is documented in the file header.
+- **`src/js/modules/tab_home.cpp`** — `renderHomeLayout()` is a no-op. The JS template renders a two-column grid: HomeShowcase on the left, whatsNewHTML panel on the right, and Discord/GitHub/Patreon help-button cards at the bottom. The full JS layout is documented in the file header.
+
+Do **not** add TODO entries for these files. Do **not** implement them unless explicitly asked.
+
 ### General Conversion Fidelity
 - Conversions must be fully comprehensive — every function, method, constant, code path, and UI element from the JS source must be ported.
 - The C++ conversion must be functionally and visually identical to the original JavaScript code. Nothing may be left as a permanent stub or silently omitted.
+- The intentional stubs listed under **Intentional Stubs** above are exceptions to this rule.
 - Always do a thorough comparison against the original JS source when making changes or reviewing code.
 - **Existing C++ code is not assumed correct.** Much of the codebase has already been converted, but previous conversions may contain errors, omissions, or deviations from the original JS source. When working on any file, always verify the existing C++ code against the original JS and fix any issues found.
-- Deviations from the original JS source are strongly discouraged. Only deviate when a direct port is genuinely impossible in C++ (e.g., a JS runtime feature with no C++ equivalent). In such cases, document the deviation with a comment in the code explaining why it was necessary and how it differs from the original JS behavior.
-- Things that cannot be completed immediately should be documented in TODO_TRACKER.md with a reference to the original JS source line(s) that require attention. Do not let documentation overhead block forward progress — implement what you can, then document what remains.
+- Deviations from the original JS source are strongly discouraged. Only deviate when a direct port is genuinely impossible in C++. In such cases, document the deviation with a comment explaining why it was necessary and how it differs from the original JS behavior.
+- Things that cannot be completed immediately should be documented in `TODO_TRACKER.md`. Do not let documentation overhead block forward progress — implement what you can, then document what remains.
 
 ### Visual Fidelity
 - The C++ app must closely match the original JavaScript app visually. Every color, font size, spacing, alignment, and icon should replicate the original as faithfully as Dear ImGui allows.
-- Always reference [`UI_REFERENCE.md`](../UI_REFERENCE.md) and `app.css` when implementing or modifying any UI element.
-- Dear ImGui styling must replicate the original HTML/CSS appearance — use custom styling, colors, and layout to match the original as closely as possible.
+- Always reference [`UI_REFERENCE.md`](UI_REFERENCE.md) and `app.css` when implementing or modifying any UI element.
 - If a visual element cannot be replicated exactly in Dear ImGui, document the limitation in a code comment and in `TODO_TRACKER.md`, and get as close as possible.
 
 ### TODO_TRACKER.md Format
-Entries in `TODO_TRACKER.md` are **numbered sequentially** and **ordered by number** (no section headers or groupings). When adding a new entry, increment from the last existing number and append it at the end. The format is:
+Entries are **numbered sequentially** and **ordered by number** (no section headers). When adding a new entry, increment from the last existing number and append at the end:
 ```
 - [ ] N. [filename.cpp] Brief description
   - **JS Source**: `src/js/original-file.js` lines XX–YY
   - **Status**: Pending | In Progress | Blocked
   - **Details**: What needs to be done and why it could not be completed inline.
 ```
-where `N` is the next sequential number after the last entry in the file. Use `- [x]` (checked) for completed/verified entries and `- [ ]` (unchecked) for pending ones.
+Use `- [x]` for completed/verified entries and `- [ ]` for pending ones.
 
-### TODO_TRACKER.md Totals
-The progress summary line at the top of `TODO_TRACKER.md` must always be kept up to date:
+### TODO_TRACKER.md Progress Line
+The progress summary at the top of `TODO_TRACKER.md` must always be kept up to date:
 ```
 > **Progress: X/Y verified (Z%)** — ✅ = Verified, ⬜ = Pending
 ```
-- `X` = number of `✅` entries, `Y` = total entries, `Z` = percentage (`round(X/Y * 100)`).
-- **Update this line whenever you add, remove, or change the status of any entry** (e.g., marking ⬜ → ✅ or adding new entries).
+- `X` = number of `✅` entries, `Y` = total entries, `Z` = `round(X/Y * 100)`.
+- **Update this line whenever you add, remove, or change the status of any entry.**
