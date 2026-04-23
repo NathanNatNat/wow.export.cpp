@@ -181,10 +181,7 @@ void write(std::string_view message) {
 		}
 	}
 
-	// Mirror output to debugger.
-#ifndef NDEBUG
 	std::fputs(line.c_str(), stdout);
-#endif
 }
 
 /**
