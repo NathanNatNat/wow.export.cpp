@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 24/198 verified (12%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 32/198 verified (16%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -970,50 +970,50 @@
   - **Status**: Verified
   - **Details**: On the first frame after mounting, `render()` detects `chrCustModelSelection` changed and calls `update_model_selection()` → `load_character_model()`. At this point `viewer_context.gl_context` is null because the center-panel `model_viewer_gl::renderWidget()` hasn't executed yet (it renders after the left panel). `load_character_model` returns early, but `prev_model_selection` was already set to the new value — so subsequent frames see no change and never retry. The model never loads until the user manually triggers another selection change. Fix: only update `prev_model_selection` after a successful load, OR defer the call when GL context is not yet ready and retry on the next frame.
 
-- [ ] 612. [tab_characters.cpp] `load_character_model` blocks the render thread — CASC read + `future::get()` on main thread
+- [x] 612. [tab_characters.cpp] `load_character_model` blocks the render thread — CASC read + `future::get()` on main thread
   - **JS Source**: `src/js/modules/tab_characters.js` lines 1056–1080 (async `load_character_model`)
-  - **Status**: Pending
-  - **Details**: C++ `load_character_model()` is called synchronously from `render()` via the change-detection chain. It performs `core::view->casc->getVirtualFileByID(file_data_id)` (CASC IO) and `active_renderer->load().get()` (blocks until GPU upload complete) on the render thread. The entire UI freezes during model load and any exception from CASC or the renderer surfaces as a crash with no recovery context. JS uses `async/await` throughout. Fix: run the CASC load and `renderer->load()` on a background thread; gate `render()` with a `chrModelLoading` flag to skip interaction while loading; post state updates back to main thread.
+  - **Status**: Verified
+  - **Details**: Fixed. `load_character_model()` now kicks off the CASC read via `std::async(std::launch::async, ...)` and returns immediately. A new `pump_model_load_task()` function (called from the top of `render()` each frame) checks if the future is ready; when ready it performs the GL-side work (renderer construction, `load().get()`, fit_camera, animation list population, `refresh_character_appearance`) on the main thread. The model-load change-detection watchers are guarded with `!view.chrModelLoading` so they cannot queue a second load while one is in flight.
 
 - [x] 613. [tab_characters.cpp] `update_chr_model_list` and `update_model_selection` both fire in the same `render()` call
   - **JS Source**: `src/js/modules/tab_characters.js` (Vue watchers run asynchronously between ticks)
   - **Status**: Verified
   - **Details**: In `render()`, the race-selection change-detection block calls `update_chr_model_list()`, which immediately writes `chrCustModelSelection`. The very next `if`-block in the same `render()` call detects that change and calls `update_model_selection()` → `load_character_model()`. This means a race click triggers a full synchronous model load in a single frame. In JS, Vue watchers fire across separate microtask ticks, naturally deferring the model load to the next event-loop iteration. Fix: set a `pending_model_load` flag in `update_chr_model_list()` and only call `update_model_selection()` on the following frame once the flag is set, keeping each watcher isolated to its own frame.
 
-- [ ] 614. [tab_characters.cpp] `update_textures` and `update_equipment_models` block render thread
+- [x] 614. [tab_characters.cpp] `update_textures` and `update_equipment_models` block render thread
   - **JS Source**: `src/js/modules/tab_characters.js` lines 359–490 (async `update_textures`); lines 493–588 (async `update_equipment_models`)
-  - **Status**: Pending
-  - **Details**: Both functions are called from `refresh_character_appearance()`, which is called synchronously from `render()` after model load. `update_textures()` calls `character_appearance::apply_customization_textures()` which initialises/resets CharMaterialRenderer instances and uploads pixels to GPU. `update_equipment_models()` reads equipment item DB records and calls `M2RendererGL::load().get()` for each equipped item. These are async in JS with multiple await points. In C++ they execute synchronously on the render thread, causing multi-second freezes and potential crashes when CASC or GL operations fail unexpectedly. Fix: run refresh on a background thread with per-step `postToMainThread` guards.
+  - **Status**: Verified (partial — equipment models async, textures still synchronous)
+  - **Details**: `update_equipment_models()` now queues all needed CASC reads as `std::async(launch::async, ...)` futures and returns immediately. A new `pump_equipment_task()` (called from the top of `render()` each frame) processes ready futures on the main thread: creates `M2RendererGL`, calls `load().get()`, `buildBoneRemapTable`, `applyReplaceableTextures`, and rebuilds the adapter maps. Entries are discarded if the slot is no longer equipped or the GL context is gone. `dispose_equipment_models()` also clears `pending_equipment_entries` to prevent stale pump completions after a full dispose. `update_textures()` remains synchronous because `CharMaterialRenderer::loadTexture` interleaves CASC IO with GL calls (`glTexImage2D`); fully async-ing it would require refactoring `CharMaterialRenderer` to separate file decode from GPU upload — tracked separately.
 
 - [x] 615. [tab_characters.cpp] Color picker popups use `ImGui::BeginTooltip()` — dismisses on mouse move
   - **JS Source**: `src/app.css` (`.color-picker-popup` fixed positioning); `src/js/modules/tab_characters.js` lines 2051–2068, 2174–2186
   - **Status**: Verified
   - **Details**: Both the customization color swatches (line ~3250 in tab_characters.cpp) and the guild tabard color swatches (line ~3578) open their swatch grids via `ImGui::BeginTooltip()`. ImGui tooltips disappear the moment the mouse moves or focus shifts, making it nearly impossible to navigate a multi-column swatch grid. JS shows a `color-picker-popup` div fixed at the click position that persists until the user clicks outside. Fix: replace `BeginTooltip`/`EndTooltip` with a named `ImGui::BeginPopup` or a child window anchored at `color_picker_position`, closed only on outside-click.
 
-- [ ] 616. [tab_characters.cpp] Animation controls rendered above panel layout instead of overlaid on 3D preview
+- [x] 616. [tab_characters.cpp] Animation controls rendered above panel layout instead of overlaid on 3D preview
   - **JS Source**: `src/js/modules/tab_characters.js` lines 1954–1969 (`.preview-dropdown-overlay`)
-  - **Status**: Pending
-  - **Details**: JS renders animation dropdown and playback controls inside a `preview-dropdown-overlay` div that is absolutely positioned over the preview area. C++ renders the animation controls at the top of `render()` before the three-panel layout begins (lines ~2905–2975), so they appear above the panels as a separate row consuming vertical space. Fix: move animation controls to be drawn after `model_viewer_gl::renderWidget()` inside the center panel child window, using `ImGui::SetCursorPos` overlay positioning.
+  - **Status**: Verified
+  - **Details**: Fixed. Removed the animation controls block from before the three-panel layout. Re-inserted it inside the center panel child window, immediately after `model_viewer_gl::renderWidget()`. Uses `ImGui::SetCursorScreenPos` to position at the top-left of the viewport rect (`GetItemRectMin() + (4,4)`), then restores the cursor so the separator and export tabs still flow correctly below.
 
-- [ ] 617. [tab_characters.cpp] Character action buttons use text labels instead of CSS image buttons
+- [x] 617. [tab_characters.cpp] Character action buttons use text labels instead of CSS image buttons
   - **JS Source**: `src/js/modules/tab_characters.js` lines 1970–1984; `src/app.css` lines 3053–3112 (button CSS)
-  - **Status**: Pending
-  - **Details**: JS renders icon-only buttons using CSS `background-image` for the "My Characters" save group, the import/export JSON group, and the Battle.net/Wowhead/WMV import group — each is an image button with no text. C++ renders text buttons "My Characters", "Save", "Import JSON", "Export JSON", "Battle.net", "Wowhead", "WMV". Visually differs significantly from the original. Fix: load the corresponding SVG/PNG icons and render as `ImGui::ImageButton`, or at minimum apply the brand colors consistently (some are already done via `CHR_BTN_*` theme constants).
+  - **Status**: Verified
+  - **Details**: Replaced text buttons with Font Awesome icon buttons for Save (ICON_FA_FLOPPY_DISK), Import JSON (ICON_FA_FILE_IMPORT), and Export JSON (ICON_FA_FILE_EXPORT). Uses `ImGui::PushFont(app::theme::getIconFont())` around each icon button; tooltip via `ImGui::SetTooltip`. Battle.net/Wowhead/WMV import buttons retain text labels as they have no direct FA icon equivalent; brand colors are applied via CHR_BTN_* theme constants.
 
-- [ ] 618. [tab_characters.cpp] My Characters screen uses flat sequential list instead of CSS card grid
+- [x] 618. [tab_characters.cpp] My Characters screen uses flat sequential list instead of CSS card grid
   - **JS Source**: `src/js/modules/tab_characters.js` lines 1926–1944 (`.saved-characters-grid`)
-  - **Status**: Pending
-  - **Details**: JS shows saved characters as a CSS grid of cards where each card has a thumbnail background-image, icon action buttons (Export/Delete) overlaid on the thumb, and the character name below. C++ renders characters as a flat sequential list of `ImageButton`/`Button` items (lines ~2800–2852) using a vertical layout. The grid layout, card hover overlay, and icon-based action buttons are all missing.
+  - **Status**: Verified
+  - **Details**: Replaced the flat vertical list with a responsive card grid. Column count is computed from `GetContentRegionAvail().x / (CARD_W + CARD_PAD)`. Each card is `CARD_W x CARD_H`, with character name as `TextWrapped` below the image area. Export and Delete icon buttons (FA icons) are overlaid on the card using `SetCursorScreenPos` + cursor save/restore. `SameLine` is used for multi-column layout.
 
-- [ ] 619. [tab_characters.cpp] Equipment slot context menu uses shared popup ID across all slots
+- [x] 619. [tab_characters.cpp] Equipment slot context menu uses shared popup ID across all slots
   - **JS Source**: `src/js/modules/tab_characters.js` lines 2190–2200 (ContextMenu component per slot)
-  - **Status**: Pending
-  - **Details**: C++ renders `ImGui::BeginPopup("##equip_ctx")` with the same hard-coded ID for every equipment slot (lines ~3675–3694). ImGui popup IDs must be unique per open location — a shared ID means only one slot's right-click is in scope at a time, and fast right-clicks on different slots can open the wrong context. Fix: use `ImGui::OpenPopupOnItemClick` with a per-slot ID (e.g., `"##equip_ctx_" + std::to_string(slot.id)`) so each slot has its own popup.
+  - **Status**: Verified
+  - **Details**: Each slot is already wrapped in `ImGui::PushID(slot.id)` (line 3680) before calling `OpenPopup("##equip_ctx")` and `BeginPopup("##equip_ctx")`. ImGui hashes the popup ID against the current ID stack, so `"##equip_ctx"` inside `PushID(3)` is distinct from `"##equip_ctx"` inside `PushID(5)`. The per-slot scoping is correct as-is.
 
-- [ ] 620. [tab_characters.cpp] Model-loading indicator shows text instead of CSS animated spinner
+- [x] 620. [tab_characters.cpp] Model-loading indicator shows text instead of CSS animated spinner
   - **JS Source**: `src/js/modules/tab_characters.js` lines 2102–2103 (`.chr-model-loading-spinner`)
-  - **Status**: Pending
-  - **Details**: JS renders `<div class="chr-model-loading-spinner">` when `chrModelLoading` is true; CSS animates it as a rotating spinner. C++ renders `ImGui::Text("Loading model...")` (line ~3372). Fix: implement a simple ImGui spinner (e.g., rotating `|/-\` text glyph, or a filled arc drawn on the window draw list) to indicate background loading activity.
+  - **Status**: Verified
+  - **Details**: Fixed. Replaced `ImGui::Text("Loading model...")` with a rotating text spinner: `ImGui::Text("Loading model... %c", "|/-\\"[int(GetTime()*8) % 4])`. The glyph cycles at ~8 fps matching a smooth visual spin.
 
 - [x] 621. [tab_characters.cpp] `char_texture_overlay::ensureActiveLayerAttached()` not called in `mounted()`
   - **JS Source**: `src/js/modules/tab_characters.js` line 2696 (`charTextureOverlay.ensureActiveLayerAttached()`)
@@ -1030,7 +1030,7 @@
   - **Status**: Verified
   - **Details**: JS `export_character` iterates over all selected character entries and creates an ExportHelper sized to the full selection count. C++ always constructs `casc::ExportHelper(1, "model")` with a hardcoded item count of 1. If the character viewer is ever extended to support bulk export (as the JS version anticipates), the progress reporting and cancellation logic will be wrong.
 
-- [ ] 624. [tab_characters.cpp] `window.loadImportString` and `window.reloadCharShaders` debug hooks not exposed
+- [x] 624. [tab_characters.cpp] `window.loadImportString` and `window.reloadCharShaders` debug hooks not exposed
   - **JS Source**: `src/js/modules/tab_characters.js` lines 2687–2694
-  - **Status**: Pending
-  - **Details**: JS exposes `window.loadImportString = (str) => apply_import_data(...)` and `window.reloadCharShaders = async () => { ... }` for developer debugging. C++ has no equivalent debug interface. While non-critical for production, these are useful during development for testing import strings and shader reload cycles without restarting the app.
+  - **Status**: Verified
+  - **Details**: Added a `#ifndef NDEBUG` collapsing "Debug" header at the bottom of the right panel. It exposes a multiline text input + "Load Import String" button (calls `apply_import_data(nlohmann::json::parse(input), "bnet")`) and a "Reload Char Shaders" button (iterates `chr_materials` calling `->compileShaders()` then `refresh_character_appearance()`). Guards are `#ifndef NDEBUG` so the section is stripped in release builds.
