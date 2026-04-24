@@ -108,10 +108,8 @@ std::optional<uint32_t> apply_customization_textures(
 	casc::BLPImage* baked_npc_blp)
 {
 	// reset all existing materials
-	for (auto& [type, chr_material] : chr_materials) {
+	for (auto& [type, chr_material] : chr_materials)
 		chr_material->reset();
-		chr_material->update();
-	}
 
 	std::optional<uint32_t> baked_npc_texture_type;
 
@@ -158,10 +156,11 @@ std::optional<uint32_t> apply_customization_textures(
 			chr_material->setTextureTarget(
 				{ 0, 0 },
 				{
-					0,
-					0,
-					static_cast<int>(get_field_int(*chr_model_material, "Width")),
-					static_cast<int>(get_field_int(*chr_model_material, "Height"))
+					0,                                                                 // SectionType
+					0,                                                                 // X
+					0,                                                                 // Y
+					static_cast<int>(get_field_int(*chr_model_material, "Width")),    // Width
+					static_cast<int>(get_field_int(*chr_model_material, "Height"))    // Height
 				},
 				{
 					static_cast<int>(get_field_int(*chr_model_material, "TextureType")),
@@ -269,13 +268,19 @@ std::optional<uint32_t> apply_customization_textures(
 					*chr_cust_mat->FileDataID,
 					static_cast<int>(chr_cust_mat->ChrModelTextureTargetID)
 				},
-				{ sectionX, sectionY, sectionWidth, sectionHeight },
+				{
+					0,                 // SectionType
+					sectionX,          // X
+					sectionY,          // Y
+					sectionWidth,      // Width
+					sectionHeight      // Height
+				},
 				{
 					static_cast<int>(get_field_int(*chr_model_material, "TextureType")),
 					static_cast<int>(get_field_int(*chr_model_material, "Width")),
 					static_cast<int>(get_field_int(*chr_model_material, "Height"))
 				},
-				{ static_cast<int>(get_field_int(*chr_model_texture_layer, "BlendMode")) },
+				{ 0, 0, 0, static_cast<int>(get_field_int(*chr_model_texture_layer, "BlendMode")) },
 				true
 			);
 		}

@@ -168,8 +168,6 @@ void CharMaterialRenderer::setTextureTarget(
 	target.filename = filename;
 
 	textureTargets.push_back(std::move(target));
-
-	update();
 }
 
 void CharMaterialRenderer::setTextureTarget(
@@ -220,8 +218,6 @@ void CharMaterialRenderer::setTextureTarget(
 	target.filename = filename;
 
 	textureTargets.push_back(std::move(target));
-
-	update();
 }
 
 /**
@@ -282,6 +278,13 @@ void CharMaterialRenderer::dispose() {
  * @param useAlpha
  */
 GLuint CharMaterialRenderer::loadTexture(uint32_t fileDataID, bool useAlpha) {
+	// Auto-resolve CASC source (mirrors M2RendererGL / WMORendererGL pattern).
+	if (!casc_source_ && core::view && core::view->casc)
+		casc_source_ = core::view->casc;
+
+	if (!casc_source_)
+		return 0;
+
 	GLuint texture;
 	glGenTextures(1, &texture);
 
