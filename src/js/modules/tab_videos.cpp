@@ -7,6 +7,7 @@
 #include "tab_videos.h"
 #include "../log.h"
 #include "../core.h"
+#include <thread>
 #include "../generics.h"
 #include "../constants.h"
 #include "../subtitles.h"
@@ -425,7 +426,8 @@ static void stream_video(const std::string& file_name) {
 	});
 }
 
-static void load_video_listfile() {
+// Build the video entry list (safe to call from a background thread — does not touch view state).
+static std::vector<std::string> build_video_entries(bool sort_by_id) {
 	logging::write("loading MovieVariation table...");
 	auto& movie_variation = casc::db2::preloadTable("MovieVariation");
 
@@ -469,7 +471,7 @@ static void load_video_listfile() {
 		entries.push_back(std::format("{} [{}]", filename, fid));
 	}
 
-	if (core::view->config.value("listfileSortByID", false)) {
+	if (sort_by_id) {
 		std::sort(entries.begin(), entries.end(), [](const std::string& a, const std::string& b) {
 			const auto fa = casc::listfile::getByFilename(casc::listfile::stripFileEntry(a));
 			const auto fb = casc::listfile::getByFilename(casc::listfile::stripFileEntry(b));
@@ -479,12 +481,16 @@ static void load_video_listfile() {
 		std::sort(entries.begin(), entries.end());
 	}
 
+	logging::write(std::format("built video listfile with {} entries", entries.size()));
+	return entries;
+}
+
+static void load_video_listfile() {
+	auto entries = build_video_entries(core::view->config.value("listfileSortByID", false));
 	core::view->listfileVideos.clear();
 	core::view->listfileVideos.reserve(entries.size());
 	for (auto& e : entries)
 		core::view->listfileVideos.push_back(std::move(e));
-
-	logging::write(std::format("built video listfile with {} entries", core::view->listfileVideos.size()));
 }
 
 static std::optional<MovieData> get_movie_data(uint32_t file_data_id) {
@@ -906,13 +912,25 @@ void registerTab() {
 void mounted() {
 	auto& view = *core::view;
 
-	core::showLoadingScreen(1);
-	core::progressLoadingScreen("Loading video metadata...");
-	load_video_listfile();
-	core::hideLoadingScreen();
-
-	// Store initial config values for change-detection.
+	// Store initial config values for change-detection (read before launching thread).
 	prev_video_player_show_subtitles = view.config.value("videoPlayerShowSubtitles", false);
+	const bool sort_by_id = view.config.value("listfileSortByID", false);
+
+	std::thread([sort_by_id]() {
+		core::showLoadingScreen(1);
+		core::progressLoadingScreen("Loading video metadata...");
+
+		auto entries = build_video_entries(sort_by_id);
+
+		core::postToMainThread([entries = std::move(entries)]() mutable {
+			core::view->listfileVideos.clear();
+			core::view->listfileVideos.reserve(entries.size());
+			for (auto& e : entries)
+				core::view->listfileVideos.push_back(std::move(e));
+		});
+
+		core::hideLoadingScreen();
+	}).detach();
 }
 
 void render() {

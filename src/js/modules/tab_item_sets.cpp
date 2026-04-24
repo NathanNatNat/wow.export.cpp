@@ -7,6 +7,7 @@
 #include "tab_item_sets.h"
 #include "../log.h"
 #include "../core.h"
+#include <thread>
 #include "../casc/db2.h"
 #include "../db/caches/DBItems.h"
 #include "../db/WDCReader.h"
@@ -82,6 +83,7 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 static std::vector<ItemSet> item_sets;
 
 static bool is_initialized = false;
+static bool is_mounting = false;
 static itemlistbox::ItemListboxState itemlistbox_item_sets_state;
 
 // Cached ItemEntry vector — only rebuilt when the source JSON changes.
@@ -224,15 +226,22 @@ void registerTab() {
 }
 
 void mounted() {
-	core::showLoadingScreen(3);
+	if (is_mounting) return;
+	is_mounting = true;
 
-	initialize_item_sets();
+	std::thread([]() {
+		core::showLoadingScreen(3);
 
-	core::hideLoadingScreen();
+		initialize_item_sets();
 
-	apply_filter();
+		core::postToMainThread([]() {
+			apply_filter();
+			is_initialized = true;
+			is_mounting = false;
+		});
 
-	is_initialized = true;
+		core::hideLoadingScreen();
+	}).detach();
 }
 
 void render() {

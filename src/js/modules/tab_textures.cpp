@@ -7,6 +7,7 @@
 #include "tab_textures.h"
 #include "../log.h"
 #include "../core.h"
+#include <thread>
 #include "../generics.h"
 #include "../buffer.h"
 #include "../png-writer.h"
@@ -485,28 +486,6 @@ void mounted() {
 	const bool needs_unknown_textures = view.config.value("enableUnknownFiles", false) && !has_loaded_unknown_textures;
 	const bool needs_atlas_data = !has_loaded_atlas_table && view.config.value("showTextureAtlas", false);
 
-	if (needs_unknown_textures || needs_atlas_data) {
-		int step_count = 0;
-		if (needs_unknown_textures)
-			step_count += 2;
-		if (needs_atlas_data)
-			step_count += 1;
-
-		core::showLoadingScreen(step_count);
-
-		if (needs_unknown_textures) {
-			core::progressLoadingScreen("Loading texture file data...");
-			core::progressLoadingScreen("Loading unknown textures...");
-			casc::listfile::loadUnknownTextures();
-			has_loaded_unknown_textures = true;
-		}
-
-		if (needs_atlas_data)
-			load_texture_atlas_data();
-
-		core::hideLoadingScreen();
-	}
-
 	// In ImGui, overlay listeners are not needed (immediate mode).
 
 	// Store initial config values for change-detection.
@@ -516,8 +495,8 @@ void mounted() {
 
 	core::registerDropHandler({
 		{".blp"},
-		[&view](int count) -> std::string {
-			return std::format("Export {} textures as {}", count, view.config.value("exportTextureFormat", std::string("PNG")));
+		[](int count) -> std::string {
+			return std::format("Export {} textures as {}", count, core::view->config.value("exportTextureFormat", std::string("PNG")));
 		},
 		[](const std::vector<std::string>& files) {
 			// JS: process: files => textureExporter.exportFiles(files, true)
@@ -531,6 +510,30 @@ void mounted() {
 			texture_exporter::exportFiles(entries, core::view->casc, nullptr, true);
 		}
 	});
+
+	if (needs_unknown_textures || needs_atlas_data) {
+		int step_count = 0;
+		if (needs_unknown_textures)
+			step_count += 2;
+		if (needs_atlas_data)
+			step_count += 1;
+
+		std::thread([needs_unknown_textures, needs_atlas_data, step_count]() {
+			core::showLoadingScreen(step_count);
+
+			if (needs_unknown_textures) {
+				core::progressLoadingScreen("Loading texture file data...");
+				core::progressLoadingScreen("Loading unknown textures...");
+				casc::listfile::loadUnknownTextures();
+				has_loaded_unknown_textures = true;
+			}
+
+			if (needs_atlas_data)
+				load_texture_atlas_data();
+
+			core::hideLoadingScreen();
+		}).detach();
+	}
 }
 
 // Render checkerboard behind texture to show transparency.

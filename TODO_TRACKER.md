@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 6/185 verified (3%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 18/184 verified (10%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -874,27 +874,27 @@
 
 ## 3D Engine, File Loaders & Core Systems
 
-- [ ] 457. [Shaders.cpp] C++ adds automatic _unregister_fn callback on ShaderProgram not present in JS
+- [x] 457. [Shaders.cpp] C++ adds automatic _unregister_fn callback on ShaderProgram not present in JS
 - **JS Source**: `src/js/3D/Shaders.js` lines 56–72
 - **Status**: Pending
 - **Details**: C++ `create_program()` (Shaders.cpp lines 79–83) installs a static `_unregister_fn` callback on `gl::ShaderProgram` that automatically calls `shaders::unregister()` when a ShaderProgram is destroyed. JS has no equivalent auto-cleanup mechanism — callers must explicitly call `unregister(program)` (Shaders.js line 78–86). This means in C++, a program is automatically removed from `active_programs` on destruction, while in JS a disposed program remains in the set until manually unregistered. This changes `reload_all()` behavior: JS could attempt to recompile stale programs that were not explicitly unregistered, while C++ never encounters this scenario.
 
-- [ ] 591. [app.cpp] Header `shadowed` class (box-shadow when toast active) not implemented
+- [x] 591. [app.cpp] Header `shadowed` class (box-shadow when toast active) not implemented
   - **JS Source**: `src/index.html` line 11; `src/app.css` lines 212–214
   - **Status**: Pending
   - **Details**: HTML applies `:class="{ shadowed: toast !== null }"` to `#header`. CSS: `#container #header.shadowed { box-shadow: var(--widget-shadow); }` where `--widget-shadow: black 0 0 5px`. When a toast is visible the header should cast a downward black blur shadow. Dear ImGui has no native box-shadow; approximate by drawing a few semi-transparent filled rectangles below the header bottom border when `core::view->toast` is non-null.
 
-- [ ] 592. [tab_characters.cpp] Import/export button brand colors not implemented
+- [x] 592. [tab_characters.cpp] Import/export button brand colors not implemented
   - **JS Source**: `src/app.css` lines 3053–3112
   - **Status**: Pending
   - **Details**: CSS defines specific background-color overrides for character import/export buttons: `.character-bnet-button` (#148eff blue), `.character-wmv-button` (#d22c1e red), `.character-wowhead-button` (#e02020 red), `.character-save-button` (#5865f2 purple). These brand colors do not appear anywhere in the C++ code — the buttons likely render with the default green `--form-button-base` instead. Fix: define the four brand colors as constants and apply them when rendering the respective buttons via `ImGui::PushStyleColor(ImGuiCol_Button, ...)`.
 
-- [ ] 593. [screen_source_select.cpp, screen_build_select.cpp] CSS media-query responsive breakpoints not implemented
+- [x] 593. [screen_source_select.cpp, screen_build_select.cpp] CSS media-query responsive breakpoints not implemented
   - **JS Source**: `src/app.css` lines 3736–3790
   - **Status**: Pending
   - **Details**: Three `@media (max-height: N px)` breakpoints adjust layout at small screen heights: (1) `max-height: 899px` — hide `#home-help-buttons`; (2) `max-height: 799px` — compress `#source-select` (icons shrink from 80px→50px, reduced gaps and font sizes); (3) `max-height: 849px` — change `#build-select .build-select-buttons` from column to wrapping row. C++ uses fixed layouts and ignores viewport height. Fix: read `ImGui::GetMainViewport()->WorkSize.y` and switch layouts at the same pixel thresholds.
 
-- [ ] 594. [tab_audio.cpp] Sound player audiobox sprite animation not implemented
+- [x] 594. [tab_audio.cpp] Sound player audiobox sprite animation not implemented
   - **JS Source**: `src/app.css` lines 2513–2537
   - **Status**: Pending
   - **Details**: CSS animates `#sound-player-anim` as a horizontal sprite strip: `@keyframes sound-audiobox-anim { to { background-position-x: -4326px; } }` at `0.7s steps(14, end) infinite`, playing/paused based on state. The sprite image is `images/audiobox.png` (309×397px per frame, 14 frames = 4326px total width). C++ renders the audio tab without this animated audiobox graphic. Fix: load `audiobox.png` as a texture, compute the current frame from elapsed time (frame = floor(elapsed / 0.7s * 14) % 14 when playing), and render the correct UV sub-region (frame * 309 / total_width → (frame+1) * 309 / total_width).
@@ -929,37 +929,37 @@
   - **Status**: Pending
   - **Details**: MSVC debug builds have two major sources of runtime overhead beyond `/Od` (no optimisation) that do not affect debugability at all: (1) `_ITERATOR_DEBUG_LEVEL=2` (default) adds bounds checking and iterator invalidation detection to every STL operation — responsible for most of the CASC loading slowdown (encoding table 1.85×, root file 1.54× even in release hints at some debug-only calls, but in a pure debug build this is the primary cost on all `std::vector`/`std::unordered_map` access); (2) `/JMC` (Just My Code, on by default) adds a function-entry probe to every function for the debugger's "Step Into User Code" button, adding overhead to every function call. Fix: in `CMakeLists.txt`, add `$<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>` via `add_compile_definitions` (applied globally so all compiled targets in the build are consistent — mixing `_ITERATOR_DEBUG_LEVEL` values across translation units in the same binary causes ODR violations), and `/JMC-` via `target_compile_options` for MSVC debug. Full debugability is preserved: breakpoints, step-through, variable inspection, call stack, and watch expressions are all unaffected. The only things lost are runtime STL iterator validation and the "Step Into User Code" filtering — both of which release builds also omit. Expected: debug CASC load time drops from 5–12× to roughly 2–3× of release.
 
-- [ ] 604. [tab_characters.cpp] Loading screen invisible when switching to Characters tab — mounted() runs synchronously on main thread
+- [x] 604. [tab_characters.cpp] Loading screen invisible when switching to Characters tab — mounted() runs synchronously on main thread
   - **JS Source**: `src/js/modules/tab_characters.js` lines 2545–2666
   - **Status**: In Progress
   - **Details**: JS `mounted()` is `async` with 8 `await progressLoadingScreen(...)` yield points before each DB cache load (`realmlist.load`, `DBCharacterCustomization`, `DBItems`, `DBItemCharTextures`, `DBItemGeosets`, `DBItemModels`, `DBGuildTabard`, shader setup). In C++, `showLoadingScreen`/`hideLoadingScreen` both use `postToMainThread` internally; when called synchronously on the main thread they queue together and process in the same `drainMainThreadQueue()` call — no render frame fires between them, so the loading screen never appears. Fix: run the heavy DB work (`realmlist::load`, all `ensureInitialized` calls) on a `std::thread`; wrap all `state.*` writes and final setup (`chrModelViewerContext`, `viewer_context`, `view_state`, `anim_methods`, `update_chr_race_list`) in `postToMainThread`; call `hideLoadingScreen` from the background thread so the main thread renders the overlay across multiple frames.
 
-- [ ] 605. [tab_audio.cpp] Loading screen invisible when processing unknown sound files — runs synchronously on main thread
+- [x] 605. [tab_audio.cpp] Loading screen invisible when processing unknown sound files — runs synchronously on main thread
   - **JS Source**: `src/js/modules/tab_audio.js` lines 282–295
   - **Status**: Pending
   - **Details**: JS `mounted()` shows a loading screen (`showLoadingScreen(1)`) while processing unknown sound files, with an `await progressLoadingScreen(...)` yield. In C++, `showLoadingScreen`/`hideLoadingScreen` are called synchronously (lines 357–390), so both queue into the same `drainMainThreadQueue()` drain — the overlay never renders. Fix: run the unknown-file processing on a `std::thread`, wrap the `state.*` mutations in `postToMainThread`, call `hideLoadingScreen` from the background thread.
 
-- [ ] 606. [tab_items.cpp] Loading screen invisible when switching to Items tab — initialize() runs synchronously on main thread
+- [x] 606. [tab_items.cpp] Loading screen invisible when switching to Items tab — initialize() runs synchronously on main thread
   - **JS Source**: `src/js/modules/tab_items.js` lines 132–135, 278–281
   - **Status**: Pending
   - **Details**: JS `mounted()` calls `showLoadingScreen(2)` and awaits two `progressLoadingScreen` steps (Loading model file data, Loading item data) before `hideLoadingScreen`. C++ `initialize()` calls both synchronously (lines 473–477 in mounted, 240–243 in initialize), so show and hide queue together — loading screen never visible. Fix: run `initialize()` on a `std::thread`; wrap `state.*` writes (`listfileItems` population, viewer context setup) in `postToMainThread`; call `hideLoadingScreen` from background thread. Tab already has `is_initialized` guard.
 
-- [ ] 607. [tab_item_sets.cpp] Loading screen invisible when switching to Item Sets tab — initialize() runs synchronously on main thread
+- [x] 607. [tab_item_sets.cpp] Loading screen invisible when switching to Item Sets tab — initialize() runs synchronously on main thread
   - **JS Source**: `src/js/modules/tab_item_sets.js` lines 26–34, 90–92
   - **Status**: Pending
   - **Details**: JS `mounted()` calls `showLoadingScreen(3)` and awaits three `progressLoadingScreen` steps (item data, item appearance data, item sets) before `hideLoadingScreen`. C++ calls all synchronously (lines 227–231 in mounted, 96–108 in initialize), so show and hide queue together — overlay never visible. Fix: run `initialize()` on a `std::thread`; wrap `state.*` writes in `postToMainThread`; call `hideLoadingScreen` from background thread. Tab already has `is_initialized` guard.
 
-- [ ] 608. [tab_data.cpp] Loading screen invisible when switching to Data tab — mounted() runs synchronously on main thread
+- [x] 608. [tab_data.cpp] Loading screen invisible when switching to Data tab — mounted() runs synchronously on main thread
   - **JS Source**: `src/js/modules/tab_data.js` lines 180–183
   - **Status**: Pending
   - **Details**: JS `mounted()` calls `showLoadingScreen(1)` and awaits one `progressLoadingScreen` step (Loading data table manifest) before `hideLoadingScreen`. C++ calls all synchronously (lines 219–222), so show and hide queue together — overlay never visible. Fix: run the manifest load on a `std::thread`; wrap `state.*` writes in `postToMainThread`; call `hideLoadingScreen` from background thread.
 
-- [ ] 609. [tab_textures.cpp] Loading screen invisible during atlas parse and texture list load — runs synchronously on main thread
+- [x] 609. [tab_textures.cpp] Loading screen invisible during atlas parse and texture list load — runs synchronously on main thread
   - **JS Source**: `src/js/modules/tab_textures.js` lines 107–113, 397–409
   - **Status**: Pending
   - **Details**: JS shows a loading screen during `initialize()` (atlas parsing) and again in `mounted()` (loading texture file data + unknown textures). Both call sequences are synchronous in C++ (lines 348–354 in initialize, 495–507 in mounted), so show/hide queue together in the same `drainMainThreadQueue()` — overlay never renders. Fix: run the heavy atlas and listfile work on a `std::thread`; wrap `state.*` writes in `postToMainThread`; call `hideLoadingScreen` from background thread.
 
-- [ ] 610. [tab_videos.cpp] Loading screen invisible when switching to Videos tab — mounted() runs synchronously on main thread
+- [x] 610. [tab_videos.cpp] Loading screen invisible when switching to Videos tab — mounted() runs synchronously on main thread
   - **JS Source**: `src/js/modules/tab_videos.js` lines 536–539
   - **Status**: Pending
   - **Details**: JS `mounted()` calls `showLoadingScreen(1)` and awaits one `progressLoadingScreen` step (Loading video metadata) before `hideLoadingScreen`. C++ calls all synchronously (lines 909–912), so show and hide queue together — overlay never visible. Fix: run the video metadata load on a `std::thread`; wrap `state.*` writes in `postToMainThread`; call `hideLoadingScreen` from background thread.

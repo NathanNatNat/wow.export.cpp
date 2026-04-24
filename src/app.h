@@ -83,6 +83,23 @@ inline constexpr ImU32  BUTTON_MENU_HOVER_U32 = IM_COL32(62, 107, 185, 255);
 inline constexpr ImVec4 NAV_SELECTED     = BUTTON_BASE;
 inline constexpr ImU32  NAV_SELECTED_U32 = BUTTON_BASE_U32;
 
+// Character-import button brand colors (CSS: .character-bnet-button / -wmv- / -wowhead- / -save-)
+inline constexpr ImVec4 CHR_BTN_BNET        = ImVec4(0.078f, 0.557f, 1.000f, 1.0f); // #148eff
+inline constexpr ImVec4 CHR_BTN_BNET_HOVER  = ImVec4(0.150f, 0.620f, 1.000f, 1.0f);
+inline constexpr ImVec4 CHR_BTN_BNET_ACTIVE = ImVec4(0.050f, 0.500f, 0.900f, 1.0f);
+
+inline constexpr ImVec4 CHR_BTN_WMV        = ImVec4(0.824f, 0.173f, 0.118f, 1.0f); // #d22c1e
+inline constexpr ImVec4 CHR_BTN_WMV_HOVER  = ImVec4(0.880f, 0.250f, 0.180f, 1.0f);
+inline constexpr ImVec4 CHR_BTN_WMV_ACTIVE = ImVec4(0.720f, 0.120f, 0.080f, 1.0f);
+
+inline constexpr ImVec4 CHR_BTN_WOWHEAD        = ImVec4(0.878f, 0.125f, 0.125f, 1.0f); // #e02020
+inline constexpr ImVec4 CHR_BTN_WOWHEAD_HOVER  = ImVec4(0.930f, 0.200f, 0.200f, 1.0f);
+inline constexpr ImVec4 CHR_BTN_WOWHEAD_ACTIVE = ImVec4(0.780f, 0.080f, 0.080f, 1.0f);
+
+inline constexpr ImVec4 CHR_BTN_SAVE        = ImVec4(0.345f, 0.396f, 0.949f, 1.0f); // #5865f2
+inline constexpr ImVec4 CHR_BTN_SAVE_HOVER  = ImVec4(0.420f, 0.460f, 1.000f, 1.0f);
+inline constexpr ImVec4 CHR_BTN_SAVE_ACTIVE = ImVec4(0.280f, 0.320f, 0.860f, 1.0f);
+
 inline constexpr ImVec4 TOAST_ERROR     = ImVec4(0.863f, 0.565f, 0.565f, 1.0f);
 inline constexpr ImU32  TOAST_ERROR_U32 = IM_COL32(220, 144, 144, 255);
 

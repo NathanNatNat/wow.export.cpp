@@ -512,6 +512,21 @@ static void renderAppShell() {
 			ImVec2(vp_pos.x + vp_size.x, vp_pos.y + HEADER_HEIGHT - 1.0f),
 			ImGui::ColorConvertFloat4ToU32(COLOR_BORDER), 1.0f);
 
+		// CSS: #container #header.shadowed { box-shadow: black 0 0 5px; }
+		// Applied when a toast is visible. Approximate with a black opacity gradient below the header.
+		if (core::view && core::view->toast.has_value()) {
+			ImDrawList* fg = ImGui::GetForegroundDrawList();
+			const float shadow_y = vp_pos.y + HEADER_HEIGHT;
+			const float x0 = vp_pos.x, x1 = vp_pos.x + vp_size.x;
+			static constexpr ImU32 shadow_alphas[] = { 80, 55, 35, 18, 7 };
+			for (int i = 0; i < 5; ++i) {
+				fg->AddRectFilled(
+					ImVec2(x0, shadow_y + i),
+					ImVec2(x1, shadow_y + i + 1.0f),
+					IM_COL32(0, 0, 0, shadow_alphas[i]));
+			}
+		}
+
 		float cursor_x = 15.0f;
 		ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - 32.0f) * 0.5f));
 		if (s_logoTexture) {

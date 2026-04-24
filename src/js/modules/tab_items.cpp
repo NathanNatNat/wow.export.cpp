@@ -7,6 +7,7 @@
 #include "tab_items.h"
 #include "../log.h"
 #include "../core.h"
+#include <thread>
 #include "../MultiMap.h"
 #include "../casc/listfile.h"
 #include "../casc/db2.h"
@@ -164,6 +165,7 @@ static std::vector<bool> prev_type_mask_checked;
 static std::vector<bool> prev_quality_mask_checked;
 
 static bool is_initialized = false;
+static bool is_mounting = false;
 static context_menu::ContextMenuState context_menu_item_state;
 static itemlistbox::ItemListboxState itemlistbox_items_state;
 
@@ -468,80 +470,87 @@ void registerTab() {
 }
 
 void mounted() {
-	auto& view = *core::view;
+	if (is_mounting) return;
+	is_mounting = true;
 
-	core::showLoadingScreen(2);
+	std::thread([]() {
+		core::showLoadingScreen(2);
 
-	initialize_items();
+		initialize_items();
 
-	core::hideLoadingScreen();
+		core::postToMainThread([]() {
+			auto& view = *core::view;
 
-	nlohmann::json enabled_types_json = view.config.value("itemViewerEnabledTypes", nlohmann::json::array());
+			nlohmann::json enabled_types_json = view.config.value("itemViewerEnabledTypes", nlohmann::json::array());
+			const std::string pending_slot = view.pendingItemSlotFilter;
 
-	const std::string pending_slot = view.pendingItemSlotFilter;
+			type_mask_entries.clear();
+			for (const auto& merged : ITEM_SLOTS_MERGED) {
+				TypeMaskEntry entry;
+				entry.label = merged.label;
 
-	type_mask_entries.clear();
-	for (const auto& merged : ITEM_SLOTS_MERGED) {
-		TypeMaskEntry entry;
-		entry.label = merged.label;
-
-		if (!pending_slot.empty()) {
-			entry.checked = (entry.label == pending_slot);
-		} else {
-			entry.checked = false;
-			for (const auto& et : enabled_types_json) {
-				if (et.is_string() && et.get<std::string>() == entry.label) {
-					entry.checked = true;
-					break;
+				if (!pending_slot.empty()) {
+					entry.checked = (entry.label == pending_slot);
+				} else {
+					entry.checked = false;
+					for (const auto& et : enabled_types_json) {
+						if (et.is_string() && et.get<std::string>() == entry.label) {
+							entry.checked = true;
+							break;
+						}
+					}
 				}
+
+				type_mask_entries.push_back(std::move(entry));
 			}
-		}
 
-		type_mask_entries.push_back(std::move(entry));
-	}
+			view.pendingItemSlotFilter.clear();
 
-	view.pendingItemSlotFilter.clear();
+			nlohmann::json enabled_qualities_json = view.config.value("itemViewerEnabledQualities", nlohmann::json());
 
-	nlohmann::json enabled_qualities_json = view.config.value("itemViewerEnabledQualities", nlohmann::json());
+			//         id: q.id, label: q.label,
+			//         checked: enabled_qualities === undefined || enabled_qualities.includes(q.id)
+			//     }));
+			quality_mask_entries.clear();
+			for (const auto& q : ITEM_QUALITIES) {
+				QualityMaskEntry entry;
+				entry.id = q.id;
+				entry.label = q.label;
 
-	//         id: q.id, label: q.label,
-	//         checked: enabled_qualities === undefined || enabled_qualities.includes(q.id)
-	//     }));
-	quality_mask_entries.clear();
-	for (const auto& q : ITEM_QUALITIES) {
-		QualityMaskEntry entry;
-		entry.id = q.id;
-		entry.label = q.label;
-
-		if (enabled_qualities_json.is_null() || !enabled_qualities_json.is_array()) {
-			entry.checked = true;
-		} else {
-			entry.checked = false;
-			for (const auto& eq : enabled_qualities_json) {
-				if (eq.is_number_integer() && eq.get<int>() == q.id) {
+				if (enabled_qualities_json.is_null() || !enabled_qualities_json.is_array()) {
 					entry.checked = true;
-					break;
+				} else {
+					entry.checked = false;
+					for (const auto& eq : enabled_qualities_json) {
+						if (eq.is_number_integer() && eq.get<int>() == q.id) {
+							entry.checked = true;
+							break;
+						}
+					}
 				}
+
+				quality_mask_entries.push_back(std::move(entry));
 			}
-		}
 
-		quality_mask_entries.push_back(std::move(entry));
-	}
+			// Store initial state for change-detection (replaces Vue $watch).
+			prev_type_mask_checked.clear();
+			for (const auto& e : type_mask_entries)
+				prev_type_mask_checked.push_back(e.checked);
 
-	// Store initial state for change-detection (replaces Vue $watch).
-	prev_type_mask_checked.clear();
-	for (const auto& e : type_mask_entries)
-		prev_type_mask_checked.push_back(e.checked);
+			prev_quality_mask_checked.clear();
+			for (const auto& e : quality_mask_entries)
+				prev_quality_mask_checked.push_back(e.checked);
 
-	prev_quality_mask_checked.clear();
-	for (const auto& e : quality_mask_entries)
-		prev_quality_mask_checked.push_back(e.checked);
+			// Initial filter application.
+			// (Vue watches fire immediately on assignment — replicate by calling apply_filters.)
+			apply_filters();
 
-	// Initial filter application.
-	// (Vue watches fire immediately on assignment — replicate by calling apply_filters.)
-	apply_filters();
+			is_initialized = true;
+			is_mounting = false;
+		});
 
-	is_initialized = true;
+		core::hideLoadingScreen();
+	}).detach();
 }
 
 void setActive() {

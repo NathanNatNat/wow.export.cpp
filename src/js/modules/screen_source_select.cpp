@@ -762,10 +762,12 @@ void render() {
 	// Ensure source icon textures are loaded.
 	ensureSourceTextures();
 
-	// --- Responsiveness: determine layout parameters based on window height ---
+	// --- Responsiveness: CSS @media (max-height: N px) breakpoints ---
+	// Use viewport height (matches CSS media-query semantics), not content window height.
 	ImVec2 content_size = ImGui::GetContentRegionAvail();
-	float win_height = ImGui::GetWindowHeight();
-	bool compact = (win_height < 800.0f);
+	float vp_height = ImGui::GetMainViewport()->WorkSize.y;
+	bool compact = (vp_height <= 799.0f); // CSS: @media (max-height: 799px) — compress source-select icons/gaps
+	bool build_compact = (vp_height <= 849.0f); // CSS: @media (max-height: 849px) — row-wrap build-select buttons
 
 	float card_width    = 700.0f;
 	float card_min_h    = compact ? 60.0f : 120.0f;
@@ -1103,8 +1105,8 @@ void render() {
 		if (!builds.is_null() && builds.is_array())
 			build_count = static_cast<int>(builds.size());
 
-		// Layout: centered vertically and horizontally.
-		float btn_min_width = 450.0f;
+		// CSS: @media (max-height: 849px) — row-wrap layout; otherwise column layout.
+		// build_compact is derived from vp_height above.
 		float btn_height = 50.0f;
 		float btn_gap = 10.0f;
 		float title_h = 28.0f;
@@ -1113,36 +1115,55 @@ void render() {
 		float return_h = 16.0f;
 		float btn_border_radius = 10.0f;
 
-		float total_h = title_h + title_mb + build_count * btn_height + (build_count > 0 ? (build_count - 1) * btn_gap : 0) + return_mt + return_h;
+		// In row-wrap mode buttons are smaller and arranged in a wrapping grid.
+		float btn_min_width = build_compact ? 200.0f : 450.0f;
+		float btn_h = build_compact ? 40.0f : btn_height;
+		float row_gap = btn_gap;
+		int cols = build_compact ? std::max(1, static_cast<int>(content_size.x / (btn_min_width + btn_gap))) : 1;
+		int rows = build_compact && build_count > 0 ? (build_count + cols - 1) / cols : build_count;
+
+		float grid_width = build_compact ? (cols * btn_min_width + (cols - 1) * btn_gap) : btn_min_width;
+		float total_h = title_h + title_mb + rows * btn_h + (rows > 0 ? (rows - 1) * row_gap : 0) + return_mt + return_h;
 		float start_y = ImGui::GetCursorPosY() + (content_size.y - total_h) * 0.5f;
 		if (start_y < ImGui::GetCursorPosY()) start_y = ImGui::GetCursorPosY();
-		float start_x = ImGui::GetCursorPosX() + (content_size.x - btn_min_width) * 0.5f;
+		float start_x = ImGui::GetCursorPosX() + (content_size.x - grid_width) * 0.5f;
 		if (start_x < ImGui::GetCursorPosX()) start_x = ImGui::GetCursorPosX();
 
 		float cur_y = start_y;
 
 		// Title: "Select Build"
 		ImGui::SetCursorPos(ImVec2(start_x, cur_y));
-		ImGui::Dummy(ImVec2(btn_min_width, title_h));
+		ImGui::Dummy(ImVec2(grid_width, title_h));
 		{
 			const char* title_text = "Select Build";
 			ImVec2 title_sz = bold_font->CalcTextSizeA(title_h, FLT_MAX, 0.0f, title_text);
 			ImVec2 rect_min = ImGui::GetItemRectMin();
-			float title_cx = rect_min.x + (btn_min_width - title_sz.x) * 0.5f;
+			float title_cx = rect_min.x + (grid_width - title_sz.x) * 0.5f;
 			draw->AddText(bold_font, title_h, ImVec2(title_cx, rect_min.y), app::theme::FONT_HIGHLIGHT_U32, title_text);
 		}
 		cur_y += title_h + title_mb;
 
-		// Build buttons.
+		// Build buttons (column layout or row-wrap at small heights).
 		if (!builds.is_null() && builds.is_array()) {
 			for (size_t i = 0; i < builds.size(); ++i) {
 				const auto& build = builds[i];
 				std::string label = build.value("label", std::format("Build {}", i));
 				int buildIndex = build.value("buildIndex", static_cast<int>(i));
 
-				ImGui::SetCursorPos(ImVec2(start_x, cur_y));
+				float cell_x, cell_y;
+				if (build_compact) {
+					int col = static_cast<int>(i) % cols;
+					int row = static_cast<int>(i) / cols;
+					cell_x = start_x + col * (btn_min_width + btn_gap);
+					cell_y = cur_y + row * (btn_h + row_gap);
+				} else {
+					cell_x = start_x;
+					cell_y = cur_y;
+				}
+
+				ImGui::SetCursorPos(ImVec2(cell_x, cell_y));
 				std::string btn_id = std::format("##build_btn_{}", i);
-				bool btn_clicked = ImGui::InvisibleButton(btn_id.c_str(), ImVec2(btn_min_width, btn_height));
+				bool btn_clicked = ImGui::InvisibleButton(btn_id.c_str(), ImVec2(btn_min_width, btn_h));
 				bool btn_hovered = ImGui::IsItemHovered();
 
 				ImVec2 btn_min = ImGui::GetItemRectMin();
@@ -1150,7 +1171,6 @@ void render() {
 
 				// Border and hover effect.
 				if (btn_hovered) {
-					// Green tinted background.
 					draw->AddRectFilled(btn_min, btn_max, IM_COL32(34, 181, 73, 25), btn_border_radius);
 					drawDashedRoundedRect(draw, btn_min, btn_max, app::theme::NAV_SELECTED_U32, btn_border_radius, border_thick, 8.0f, 6.0f);
 				} else {
@@ -1161,24 +1181,27 @@ void render() {
 				int expansionId = build.value("expansionId", 0);
 				GLuint iconTex = getExpansionIconTexture(expansionId);
 				if (iconTex) {
-					float icon_size = 32.0f;
+					float icon_sz = std::min(32.0f, btn_h - 8.0f);
 					float icon_x = btn_min.x + 10.0f;
-					float icon_y = btn_min.y + (btn_height - icon_size) * 0.5f;
+					float icon_y = btn_min.y + (btn_h - icon_sz) * 0.5f;
 					draw->AddImage(ImTextureRef(static_cast<ImTextureID>(iconTex)),
-						ImVec2(icon_x, icon_y), ImVec2(icon_x + icon_size, icon_y + icon_size));
+						ImVec2(icon_x, icon_y), ImVec2(icon_x + icon_sz, icon_y + icon_sz));
 				}
 
-				// Build label text (padding: 15px 15px 15px 50px in CSS).
+				// Build label text.
 				ImU32 text_color = btn_hovered ? app::theme::NAV_SELECTED_U32 : app::theme::FONT_HIGHLIGHT_U32;
 				float text_x_off = btn_min.x + 50.0f;
-				float text_y_off = btn_min.y + (btn_height - 16.0f) * 0.5f;
+				float text_y_off = btn_min.y + (btn_h - 16.0f) * 0.5f;
 				draw->AddText(ImGui::GetFont(), 16.0f, ImVec2(text_x_off, text_y_off), text_color, label.c_str());
 
 				if (btn_clicked && !core::view->isBusy)
 					click_source_build(buildIndex);
 
-				cur_y += btn_height + btn_gap;
+				if (!build_compact)
+					cur_y += btn_h + btn_gap;
 			}
+			if (build_compact && build_count > 0)
+				cur_y += rows * (btn_h + row_gap) - row_gap;
 		}
 
 		// "Return to Installations" link.
@@ -1186,7 +1209,7 @@ void render() {
 		{
 			const char* return_text = "Return to Installations";
 			ImVec2 return_sz = ImGui::GetFont()->CalcTextSizeA(return_h, FLT_MAX, 0.0f, return_text);
-			float return_cx = start_x + (btn_min_width - return_sz.x) * 0.5f;
+			float return_cx = start_x + (grid_width - return_sz.x) * 0.5f;
 
 			ImGui::SetCursorPos(ImVec2(return_cx, cur_y));
 			if (ImGui::InvisibleButton("##return_to_source", return_sz)) {

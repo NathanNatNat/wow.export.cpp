@@ -45,6 +45,7 @@ License: MIT
 #include "../wow/EquipmentSlots.h"
 #include "../wmv.h"
 #include "../wowhead.h"
+#include "../../app.h"
 
 #include <algorithm>
 #include <cmath>
@@ -2974,12 +2975,16 @@ ImGui::Text("%d", frame);
 }
 }
 
-// Import buttons row
+// Import buttons row  (.character-bnet-button / -wmv- / -wowhead- / -save- brand colors from app.css)
 {
+ImGui::PushStyleColor(ImGuiCol_Button,        app::theme::CHR_BTN_SAVE);
+ImGui::PushStyleColor(ImGuiCol_ButtonHovered, app::theme::CHR_BTN_SAVE_HOVER);
+ImGui::PushStyleColor(ImGuiCol_ButtonActive,  app::theme::CHR_BTN_SAVE_ACTIVE);
 if (ImGui::Button("My Characters")) {
 load_saved_characters();
 view.chrSavedCharactersScreen = true;
 }
+ImGui::PopStyleColor(3);
 ImGui::SameLine();
 if (ImGui::Button("Save")) {
 // JS: async open_save_prompt() { this.$core.view.chrPendingThumbnail = await capture_character_thumbnail(...); ... }
@@ -2997,21 +3002,29 @@ export_json_character();
 
 ImGui::SameLine();
 bool bnet_active = (character_import_mode == "BNET");
-if (bnet_active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+ImGui::PushStyleColor(ImGuiCol_Button,        bnet_active ? app::theme::CHR_BTN_BNET_ACTIVE : app::theme::CHR_BTN_BNET);
+ImGui::PushStyleColor(ImGuiCol_ButtonHovered, app::theme::CHR_BTN_BNET_HOVER);
+ImGui::PushStyleColor(ImGuiCol_ButtonActive,  app::theme::CHR_BTN_BNET_ACTIVE);
 if (ImGui::Button("Battle.net"))
 character_import_mode = bnet_active ? "none" : "BNET";
-if (bnet_active) ImGui::PopStyleColor();
+ImGui::PopStyleColor(3);
 
 ImGui::SameLine();
 bool whead_active = (character_import_mode == "WHEAD");
-if (whead_active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+ImGui::PushStyleColor(ImGuiCol_Button,        whead_active ? app::theme::CHR_BTN_WOWHEAD_ACTIVE : app::theme::CHR_BTN_WOWHEAD);
+ImGui::PushStyleColor(ImGuiCol_ButtonHovered, app::theme::CHR_BTN_WOWHEAD_HOVER);
+ImGui::PushStyleColor(ImGuiCol_ButtonActive,  app::theme::CHR_BTN_WOWHEAD_ACTIVE);
 if (ImGui::Button("Wowhead"))
 character_import_mode = whead_active ? "none" : "WHEAD";
-if (whead_active) ImGui::PopStyleColor();
+ImGui::PopStyleColor(3);
 
 ImGui::SameLine();
+ImGui::PushStyleColor(ImGuiCol_Button,        app::theme::CHR_BTN_WMV);
+ImGui::PushStyleColor(ImGuiCol_ButtonHovered, app::theme::CHR_BTN_WMV_HOVER);
+ImGui::PushStyleColor(ImGuiCol_ButtonActive,  app::theme::CHR_BTN_WMV_ACTIVE);
 if (ImGui::Button("WMV"))
 import_wmv_character();
+ImGui::PopStyleColor(3);
 }
 
 // Battle.net import panel

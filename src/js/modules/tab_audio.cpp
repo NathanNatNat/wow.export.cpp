@@ -7,6 +7,7 @@
 #include "tab_audio.h"
 #include "../log.h"
 #include "../core.h"
+#include <thread>
 #include "../generics.h"
 #include "../casc/export-helper.h"
 #include "../casc/listfile.h"
@@ -16,6 +17,7 @@
 #include "../db/WDCReader.h"
 #include "../ui/audio-helper.h"
 #include "../ui/listbox-context.h"
+#include "../constants.h"
 #include "../install-type.h"
 #include "../modules.h"
 #include "../components/listbox.h"
@@ -56,6 +58,13 @@ static context_menu::ContextMenuState context_menu_state;
 // Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
+
+// CSS: #sound-player-anim — 14-frame horizontal sprite strip, 309×397px per frame, 0.7s cycle.
+static GLuint s_audiobox_tex = 0;
+static constexpr int AUDIOBOX_FRAMES = 14;
+static constexpr float AUDIOBOX_FRAME_W = 309.0f;
+static constexpr float AUDIOBOX_FRAME_H = 397.0f;
+static constexpr float AUDIOBOX_ANIM_DURATION = 0.7f;
 
 // --- Internal functions ---
 
@@ -334,6 +343,10 @@ static std::string format_time(double seconds) {
 
 void registerTab() {
 	modules::register_nav_button("tab_audio", "Audio", "music.svg", install_type::CASC);
+
+	// Load the audiobox sprite sheet on first registration.
+	if (!s_audiobox_tex)
+		s_audiobox_tex = app::theme::loadImageTexture(constants::SRC_DIR() / "images" / "audiobox.png");
 }
 
 void mounted() {
@@ -353,47 +366,56 @@ void mounted() {
 		core::view->soundPlayerSeek = 0;
 	};
 
-	if (view.config.value("enableUnknownFiles", false)) {
-		core::showLoadingScreen(1);
-		core::progressLoadingScreen("Processing unknown sound files...");
-
-		int unknown_count = 0;
-		auto& sound_kit_entry = casc::db2::getTable("SoundKitEntry");
-		if (!sound_kit_entry.isLoaded)
-			sound_kit_entry.parse();
-
-		for (const auto& [id, row] : sound_kit_entry.getAllRows()) {
-			auto it = row.find("FileDataID");
-			if (it == row.end())
-				continue;
-
-			uint32_t file_data_id = 0;
-			if (auto* p = std::get_if<int64_t>(&it->second))
-				file_data_id = static_cast<uint32_t>(*p);
-			else if (auto* p = std::get_if<uint64_t>(&it->second))
-				file_data_id = static_cast<uint32_t>(*p);
-
-			if (file_data_id == 0)
-				continue;
-
-			if (!casc::listfile::existsByID(file_data_id)) {
-				const std::string file_name = "unknown/" + std::to_string(file_data_id) + ".unk_sound";
-				std::vector<std::string> listfile_vec;
-				casc::listfile::addEntry(file_data_id, file_name, &listfile_vec);
-				for (auto& s : listfile_vec)
-					view.listfileSounds.push_back(std::move(s));
-				unknown_count++;
-			}
-		}
-
-		logging::write(std::format("Added {} unknown sound files from SoundKitEntry to listfile", unknown_count));
-		core::hideLoadingScreen();
-	}
-
 	core::events.on("crash", []() {
 		unload_track();
 		player.destroy();
 	});
+
+	if (view.config.value("enableUnknownFiles", false)) {
+		std::thread([]() {
+			core::showLoadingScreen(1);
+			core::progressLoadingScreen("Processing unknown sound files...");
+
+			int unknown_count = 0;
+			auto& sound_kit_entry = casc::db2::getTable("SoundKitEntry");
+			if (!sound_kit_entry.isLoaded)
+				sound_kit_entry.parse();
+
+			std::vector<std::string> new_entries;
+			for (const auto& [id, row] : sound_kit_entry.getAllRows()) {
+				auto it = row.find("FileDataID");
+				if (it == row.end())
+					continue;
+
+				uint32_t file_data_id = 0;
+				if (auto* p = std::get_if<int64_t>(&it->second))
+					file_data_id = static_cast<uint32_t>(*p);
+				else if (auto* p = std::get_if<uint64_t>(&it->second))
+					file_data_id = static_cast<uint32_t>(*p);
+
+				if (file_data_id == 0)
+					continue;
+
+				if (!casc::listfile::existsByID(file_data_id)) {
+					const std::string file_name = "unknown/" + std::to_string(file_data_id) + ".unk_sound";
+					std::vector<std::string> listfile_vec;
+					casc::listfile::addEntry(file_data_id, file_name, &listfile_vec);
+					for (auto& s : listfile_vec)
+						new_entries.push_back(std::move(s));
+					unknown_count++;
+				}
+			}
+
+			logging::write(std::format("Added {} unknown sound files from SoundKitEntry to listfile", unknown_count));
+
+			core::postToMainThread([entries = std::move(new_entries)]() mutable {
+				for (auto& s : entries)
+					core::view->listfileSounds.push_back(std::move(s));
+			});
+
+			core::hideLoadingScreen();
+		}).detach();
+	}
 }
 
 void render() {
@@ -544,21 +566,25 @@ void render() {
 	// --- Right panel: Preview container (row 1, col 2) ---
 	if (app::layout::BeginPreviewContainer("sounds-preview-container", regions)) {
 
-		// Animated music icon when playing.
-		if (player.is_playing) {
-			float t = static_cast<float>(ImGui::GetTime());
-			float scale = 1.0f + 0.08f * std::sin(t * 3.0f);
-			ImFont* iconFont = app::theme::getIconFont();
-			if (iconFont) {
-				float baseSize = 48.0f;
-				float animSize = baseSize * scale;
-				ImVec2 iconTextSize = iconFont->CalcTextSizeA(animSize, FLT_MAX, 0.0f, ICON_FA_MUSIC);
-				float availW = ImGui::GetContentRegionAvail().x;
-				ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availW - iconTextSize.x) * 0.5f);
-				ImVec2 pos = ImGui::GetCursorScreenPos();
-				ImGui::GetWindowDrawList()->AddText(iconFont, animSize, pos, app::theme::FONT_PRIMARY_U32, ICON_FA_MUSIC);
-				ImGui::Dummy(iconTextSize);
+		// CSS: #sound-player-anim — audiobox sprite strip animated at 14 fps / 0.7s cycle.
+		// Plays when soundPlayerState is true; shows frame 0 when paused.
+		if (s_audiobox_tex) {
+			int frame = 0;
+			if (view.soundPlayerState) {
+				float t = std::fmod(static_cast<float>(ImGui::GetTime()), AUDIOBOX_ANIM_DURATION);
+				frame = static_cast<int>(t / AUDIOBOX_ANIM_DURATION * AUDIOBOX_FRAMES) % AUDIOBOX_FRAMES;
 			}
+			float uv_x0 = frame / static_cast<float>(AUDIOBOX_FRAMES);
+			float uv_x1 = (frame + 1) / static_cast<float>(AUDIOBOX_FRAMES);
+
+			float avail_w = ImGui::GetContentRegionAvail().x;
+			float disp_w = std::min(AUDIOBOX_FRAME_W, avail_w);
+			float disp_h = disp_w * (AUDIOBOX_FRAME_H / AUDIOBOX_FRAME_W);
+			float off_x = (avail_w - disp_w) * 0.5f;
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + off_x);
+			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(s_audiobox_tex)),
+				ImVec2(disp_w, disp_h),
+				ImVec2(uv_x0, 0.0f), ImVec2(uv_x1, 1.0f));
 		}
 
 		ImGui::Spacing();

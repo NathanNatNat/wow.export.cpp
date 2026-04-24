@@ -7,6 +7,7 @@
 #include "tab_data.h"
 #include "../log.h"
 #include "../core.h"
+#include <thread>
 #include "../../app.h"
 #include "../casc/export-helper.h"
 #include "../casc/listfile.h"
@@ -214,12 +215,26 @@ void registerTab() {
 }
 
 void mounted() {
-	auto& view = *core::view;
+	if (core::view->dbdManifest.empty()) {
+		std::thread([]() {
+			core::showLoadingScreen(1);
+			core::progressLoadingScreen("Loading data table manifest...");
 
-	core::showLoadingScreen(1);
-	core::progressLoadingScreen("Loading data table manifest...");
-	initialize_available_tables();
-	core::hideLoadingScreen();
+			casc::dbd_manifest::prepareManifest();
+			auto table_names = casc::dbd_manifest::getAllTableNames();
+			logging::write("initialized available db2 tables from dbd manifest");
+
+			core::postToMainThread([names = std::move(table_names)]() {
+				auto& view = *core::view;
+				if (!view.dbdManifest.empty())
+					return;
+				for (const auto& name : names)
+					view.dbdManifest.push_back(name);
+			});
+
+			core::hideLoadingScreen();
+		}).detach();
+	}
 
 	// Change-detection is handled in render() by comparing selectionDB2s.back() each frame.
 }
