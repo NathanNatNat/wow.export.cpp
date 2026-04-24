@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 18/198 verified (9%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 24/198 verified (12%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -965,9 +965,9 @@
 
 ## Tab: Characters
 
-- [ ] 611. [tab_characters.cpp] Model silently fails to load on initial race selection — GL context null, no retry
+- [x] 611. [tab_characters.cpp] Model silently fails to load on initial race selection — GL context null, no retry
   - **JS Source**: `src/js/modules/tab_characters.js` lines 1061–1109 (`update_model_selection`)
-  - **Status**: Pending
+  - **Status**: Verified
   - **Details**: On the first frame after mounting, `render()` detects `chrCustModelSelection` changed and calls `update_model_selection()` → `load_character_model()`. At this point `viewer_context.gl_context` is null because the center-panel `model_viewer_gl::renderWidget()` hasn't executed yet (it renders after the left panel). `load_character_model` returns early, but `prev_model_selection` was already set to the new value — so subsequent frames see no change and never retry. The model never loads until the user manually triggers another selection change. Fix: only update `prev_model_selection` after a successful load, OR defer the call when GL context is not yet ready and retry on the next frame.
 
 - [ ] 612. [tab_characters.cpp] `load_character_model` blocks the render thread — CASC read + `future::get()` on main thread
@@ -975,9 +975,9 @@
   - **Status**: Pending
   - **Details**: C++ `load_character_model()` is called synchronously from `render()` via the change-detection chain. It performs `core::view->casc->getVirtualFileByID(file_data_id)` (CASC IO) and `active_renderer->load().get()` (blocks until GPU upload complete) on the render thread. The entire UI freezes during model load and any exception from CASC or the renderer surfaces as a crash with no recovery context. JS uses `async/await` throughout. Fix: run the CASC load and `renderer->load()` on a background thread; gate `render()` with a `chrModelLoading` flag to skip interaction while loading; post state updates back to main thread.
 
-- [ ] 613. [tab_characters.cpp] `update_chr_model_list` and `update_model_selection` both fire in the same `render()` call
+- [x] 613. [tab_characters.cpp] `update_chr_model_list` and `update_model_selection` both fire in the same `render()` call
   - **JS Source**: `src/js/modules/tab_characters.js` (Vue watchers run asynchronously between ticks)
-  - **Status**: Pending
+  - **Status**: Verified
   - **Details**: In `render()`, the race-selection change-detection block calls `update_chr_model_list()`, which immediately writes `chrCustModelSelection`. The very next `if`-block in the same `render()` call detects that change and calls `update_model_selection()` → `load_character_model()`. This means a race click triggers a full synchronous model load in a single frame. In JS, Vue watchers fire across separate microtask ticks, naturally deferring the model load to the next event-loop iteration. Fix: set a `pending_model_load` flag in `update_chr_model_list()` and only call `update_model_selection()` on the following frame once the flag is set, keeping each watcher isolated to its own frame.
 
 - [ ] 614. [tab_characters.cpp] `update_textures` and `update_equipment_models` block render thread
@@ -985,9 +985,9 @@
   - **Status**: Pending
   - **Details**: Both functions are called from `refresh_character_appearance()`, which is called synchronously from `render()` after model load. `update_textures()` calls `character_appearance::apply_customization_textures()` which initialises/resets CharMaterialRenderer instances and uploads pixels to GPU. `update_equipment_models()` reads equipment item DB records and calls `M2RendererGL::load().get()` for each equipped item. These are async in JS with multiple await points. In C++ they execute synchronously on the render thread, causing multi-second freezes and potential crashes when CASC or GL operations fail unexpectedly. Fix: run refresh on a background thread with per-step `postToMainThread` guards.
 
-- [ ] 615. [tab_characters.cpp] Color picker popups use `ImGui::BeginTooltip()` — dismisses on mouse move
+- [x] 615. [tab_characters.cpp] Color picker popups use `ImGui::BeginTooltip()` — dismisses on mouse move
   - **JS Source**: `src/app.css` (`.color-picker-popup` fixed positioning); `src/js/modules/tab_characters.js` lines 2051–2068, 2174–2186
-  - **Status**: Pending
+  - **Status**: Verified
   - **Details**: Both the customization color swatches (line ~3250 in tab_characters.cpp) and the guild tabard color swatches (line ~3578) open their swatch grids via `ImGui::BeginTooltip()`. ImGui tooltips disappear the moment the mouse moves or focus shifts, making it nearly impossible to navigate a multi-column swatch grid. JS shows a `color-picker-popup` div fixed at the click position that persists until the user clicks outside. Fix: replace `BeginTooltip`/`EndTooltip` with a named `ImGui::BeginPopup` or a child window anchored at `color_picker_position`, closed only on outside-click.
 
 - [ ] 616. [tab_characters.cpp] Animation controls rendered above panel layout instead of overlaid on 3D preview
@@ -1015,19 +1015,19 @@
   - **Status**: Pending
   - **Details**: JS renders `<div class="chr-model-loading-spinner">` when `chrModelLoading` is true; CSS animates it as a rotating spinner. C++ renders `ImGui::Text("Loading model...")` (line ~3372). Fix: implement a simple ImGui spinner (e.g., rotating `|/-\` text glyph, or a filled arc drawn on the window draw list) to indicate background loading activity.
 
-- [ ] 621. [tab_characters.cpp] `char_texture_overlay::ensureActiveLayerAttached()` not called in `mounted()`
+- [x] 621. [tab_characters.cpp] `char_texture_overlay::ensureActiveLayerAttached()` not called in `mounted()`
   - **JS Source**: `src/js/modules/tab_characters.js` line 2696 (`charTextureOverlay.ensureActiveLayerAttached()`)
-  - **Status**: Pending
+  - **Status**: Verified
   - **Details**: JS calls `charTextureOverlay.ensureActiveLayerAttached()` at the end of `mounted()` to ensure the texture overlay canvas is wired to the preview panel. C++ `mounted()` (line ~3808) omits this call. As a result the Textures export tab may show nothing and the texture overlay may not bind when the character tab first loads.
 
-- [ ] 622. [tab_characters.cpp] Character model export missing `export_paths.writeLine()` calls — export path log empty
+- [x] 622. [tab_characters.cpp] Character model export missing `export_paths.writeLine()` calls — export path log empty
   - **JS Source**: `src/js/modules/tab_characters.js` lines 1762–1826 (`export_character`)
-  - **Status**: Pending
+  - **Status**: Verified
   - **Details**: JS calls `export_paths?.writeLine(export_path)` for each successfully exported file (OBJ, STL, GLTF, GLB, texture). C++ `export_char_model()` opens `export_paths` via `core::openLastExportStream()` but only calls `export_paths.close()` without ever calling `export_paths.writeLine(...)`. The export path log file will be empty for all character model/texture exports, breaking any downstream tooling that reads this file.
 
-- [ ] 623. [tab_characters.cpp] `export_char_model` uses hardcoded `ExportHelper(1, "model")` regardless of multi-item selection
+- [x] 623. [tab_characters.cpp] `export_char_model` uses hardcoded `ExportHelper(1, "model")` regardless of multi-item selection
   - **JS Source**: `src/js/modules/tab_characters.js` lines 1755–1759 (`export_character`)
-  - **Status**: Pending
+  - **Status**: Verified
   - **Details**: JS `export_character` iterates over all selected character entries and creates an ExportHelper sized to the full selection count. C++ always constructs `casc::ExportHelper(1, "model")` with a hardcoded item count of 1. If the character viewer is ever extended to support bulk export (as the JS version anticipates), the progress reporting and cancellation logic will be wrong.
 
 - [ ] 624. [tab_characters.cpp] `window.loadImportString` and `window.reloadCharShaders` debug hooks not exposed

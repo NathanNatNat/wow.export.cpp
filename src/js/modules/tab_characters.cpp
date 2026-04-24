@@ -196,6 +196,7 @@ static bool prev_include_base_clothing = true;
 static bool prev_chr_import_region_inited = false;
 static std::string prev_chr_import_region;
 static bool prev_chr_import_classic_realms = false;
+static bool pending_model_load = false;
 
 // Scrubber state for animation controls
 static bool _was_paused_before_scrub = false;
@@ -338,6 +339,7 @@ return std::nullopt;
 // --- reset_module_state ---
 
 static void reset_module_state() {
+pending_model_load = false;
 active_skins.clear();
 skinned_model_renderers.clear();
 skinned_model_meshes.clear();
@@ -1036,8 +1038,12 @@ if (static_cast<int>(view.chrCustModels.size()) <= selection_index || selection_
 selection_index = 0;
 }
 
-if (!view.chrCustModels.empty())
+if (!view.chrCustModels.empty()) {
 view.chrCustModelSelection = { view.chrCustModels[selection_index] };
+// Advance prev so the model watcher does not fire in the same frame; set flag to trigger load next frame.
+prev_model_selection = view.chrCustModelSelection;
+pending_model_load = true;
+}
 }
 
 /**
@@ -2296,8 +2302,10 @@ if (apply_pose) {
 
 if (format == "STL") {
 exporter.exportAsSTL(export_path, false, &helper, nullptr);
+export_paths.writeLine("M2_STL:" + export_path);
 } else {
 exporter.exportAsOBJ(export_path, false, &helper, nullptr);
+export_paths.writeLine("M2_OBJ:" + export_path);
 }
 
 logging::write(std::format("Character OBJ/STL export completed for {}", file_name));
@@ -2390,6 +2398,7 @@ for (auto& [chr_model_texture_target, chr_material] : chr_materials) {
 std::string format_lower = format;
 std::transform(format_lower.begin(), format_lower.end(), format_lower.begin(), ::tolower);
 exporter.exportAsGLTF(export_path, &helper, format_lower);
+export_paths.writeLine("M2_" + format + ":" + export_path);
 
 logging::write(std::format("Character GLTF export completed for {}", file_name));
 
@@ -2661,8 +2670,7 @@ return db::caches::DBItems::getItemById(item_id);
 
 //region render
 
-// Color picker state
-static std::string color_picker_open_for;
+// Color picker state (color_picker_open_for removed — ImGui BeginPopup manages popup lifetime)
 static ImVec2 color_picker_position;
 static std::string character_import_mode = "none";
 
@@ -2677,14 +2685,10 @@ if (is_mounting)
 auto& view = *core::view;
 const auto& option_to_choices = db::caches::DBCharacterCustomization::get_option_to_choices_map();
 
-// --- Outside-click handler for color pickers and import panels ---
-// JS: document.addEventListener('click', ...) that closes color picker / import panel when clicking outside
+// --- Outside-click handler for import panels ---
+// JS: document.addEventListener('click', ...) that closes import panel when clicking outside.
+// Color picker popups are managed by ImGui::BeginPopup/EndPopup and need no manual tracking.
 if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-	// Close color picker if mouse click is not on a tooltip/popup window
-	// In Dear ImGui, IsTooltipHovered is not available, but we can check if no item was hovered
-	if (!color_picker_open_for.empty() && !ImGui::IsAnyItemHovered())
-		color_picker_open_for.clear();
-
 	// Close import panel if clicking outside any import-related widget
 	// (JS: if (!import_panel && !bnet_button && !wowhead_button && !wmv_button) characterImportMode = 'none')
 	if (character_import_mode != "none" && !ImGui::IsAnyItemHovered())
@@ -2693,14 +2697,22 @@ if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
 
 // --- Change detection (Vue watch equivalents) ---
 
+// Deferred model load: update_chr_model_list sets pending_model_load after a race change so that
+// the model-selection watcher and race watcher don't both fire in the same render frame (JS Vue
+// watchers run across separate microtask ticks).
+if (pending_model_load && viewer_context.gl_context != nullptr) {
+pending_model_load = false;
+update_model_selection();
+}
+
 // watch chrCustRaceSelection
 if (view.chrCustRaceSelection != prev_race_selection) {
 prev_race_selection = view.chrCustRaceSelection;
-update_chr_model_list();
+update_chr_model_list(); // advances prev_model_selection + sets pending_model_load
 }
 
-// watch chrCustModelSelection (deep)
-if (view.chrCustModelSelection != prev_model_selection) {
+// watch chrCustModelSelection (deep) — handles user-initiated changes only (race-change is deferred above)
+if (view.chrCustModelSelection != prev_model_selection && viewer_context.gl_context != nullptr) {
 prev_model_selection = view.chrCustModelSelection;
 update_model_selection();
 }
@@ -3236,22 +3248,17 @@ ImVec2(cursor.x + swatch_size.x, cursor.y + swatch_size.y), col0);
 
 ImGui::InvisibleButton("##swatch", swatch_size);
 if (ImGui::IsItemClicked()) {
-if (color_picker_open_for == std::to_string(option_id)) {
-color_picker_open_for.clear();
-} else {
 // JS: event.clientX/Y stored for popup position
 color_picker_position = ImGui::GetMousePos();
-color_picker_open_for = std::to_string(option_id);
-}
+ImGui::OpenPopup("##chr_color_popup");
 }
 }
 
-// Color picker popup — positioned at click position (JS: style left/top = event.clientX/Y)
-if (color_picker_open_for == std::to_string(option_id)) {
+// Color picker popup — persistent popup positioned at click (JS: .color-picker-popup fixed div)
+ImGui::SetNextWindowPos(color_picker_position, ImGuiCond_Appearing);
+if (ImGui::BeginPopup("##chr_color_popup")) {
 auto choices_it = option_to_choices.find(option_id);
 if (choices_it != option_to_choices.end()) {
-ImGui::SetNextWindowPos(color_picker_position, ImGuiCond_Always);
-ImGui::BeginTooltip();
 int cols = 8;
 int col_idx = 0;
 for (const auto& choice : choices_it->second) {
@@ -3295,13 +3302,13 @@ IM_COL32(255, 255, 255, 255), 0.0f, 0, 2.0f);
 ImGui::InvisibleButton(("##color_" + std::to_string(choice.id)).c_str(), swatch_sz);
 if (ImGui::IsItemClicked()) {
 update_choice_for_option(option_id, choice.id);
-color_picker_open_for.clear();
+ImGui::CloseCurrentPopup();
 }
 
 col_idx++;
 }
-ImGui::EndTooltip();
 }
+ImGui::EndPopup();
 }
 }
 
@@ -3564,22 +3571,16 @@ ImVec2 cursor = ImGui::GetCursorScreenPos();
 ImGui::GetWindowDrawList()->AddRectFilled(cursor,
 ImVec2(cursor.x + sz.x, cursor.y + sz.y), col);
 
-std::string picker_key = "tabard_" + opt.key;
 ImGui::InvisibleButton("##tabswatch", sz);
 if (ImGui::IsItemClicked()) {
-if (color_picker_open_for == picker_key)
-color_picker_open_for.clear();
-else {
 color_picker_position = ImGui::GetMousePos();
-color_picker_open_for = picker_key;
-}
+ImGui::OpenPopup("##tab_color_popup");
 }
 
-if (color_picker_open_for == picker_key) {
+ImGui::SetNextWindowPos(color_picker_position, ImGuiCond_Appearing);
+if (ImGui::BeginPopup("##tab_color_popup")) {
 const auto* colors = get_tabard_color_list_for_key(opt.key);
 if (colors) {
-ImGui::SetNextWindowPos(color_picker_position, ImGuiCond_Always);
-ImGui::BeginTooltip();
 int cols = 8;
 int col_idx = 0;
 auto& cfg = view.chrGuildTabardConfig;
@@ -3607,13 +3608,13 @@ IM_COL32(255, 255, 255, 255), 0.0f, 0, 2.0f);
 ImGui::InvisibleButton(("##tc_" + std::to_string(cid)).c_str(), ss);
 if (ImGui::IsItemClicked()) {
 set_tabard_config(opt.key, static_cast<int>(cid));
-color_picker_open_for.clear();
+ImGui::CloseCurrentPopup();
 }
 
 col_idx++;
 }
-ImGui::EndTooltip();
 }
+ImGui::EndPopup();
 }
 }
 
@@ -3804,6 +3805,8 @@ std::thread([region_empty]() {
 
 		// trigger initial race/model load
 		update_chr_race_list();
+
+		char_texture_overlay::ensureActiveLayerAttached();
 
 		core::events.emit("screen-tab-characters");
 		is_mounting = false;
