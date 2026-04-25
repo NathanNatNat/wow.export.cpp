@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 32/198 verified (16%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 32/210 verified (15%)** — ✅ = Verified, ⬜ = Pending
 
 
 ## Data Caches & Database
@@ -1034,3 +1034,63 @@
   - **JS Source**: `src/js/modules/tab_characters.js` lines 2687–2694
   - **Status**: Verified
   - **Details**: Added a `#ifndef NDEBUG` collapsing "Debug" header at the bottom of the right panel. It exposes a multiline text input + "Load Import String" button (calls `apply_import_data(nlohmann::json::parse(input), "bnet")`) and a "Reload Char Shaders" button (iterates `chr_materials` calling `->compileShaders()` then `refresh_character_appearance()`). Guards are `#ifndef NDEBUG` so the section is stripped in release builds.
+
+- [ ] 625. [app.cpp] Toast notification bars use raw ImDrawList rendering instead of native ImGui widgets
+  - **JS Source**: `src/index.html` (toast `<div id="toast">` template); `src/app.css` lines 220–280
+  - **Status**: Pending
+  - **Details**: Three near-identical toast bars (primary toast lines ~904–997, model-override lines ~1008–1080, texture-override lines ~1089–1161) manually render every element — background via `AddRectFilled`, icon and text via `AddText`, action links via `AddText`+`AddLine`, close button via `InvisibleButton`+`AddText`. This is ~250 lines of duplicated raw DrawList code. Refactor into a single `renderToastBar()` helper that uses native widgets: `BeginChild` (or `SetNextWindowSize`/`BeginGroup`) for the container, `TextUnformatted` for message/icon text, `Selectable` or `Button` for action links and the close button. The gradient-free background can remain as `AddRectFilled` (no native equivalent for a full-width flush background), but all text and interactive elements should use native widgets.
+
+- [ ] 626. [app.cpp] Footer link hover uses overdraw anti-pattern instead of conditional color push
+  - **JS Source**: `src/app.css` lines 744–751 (`#footer a:hover { color: var(--font-highlight); text-decoration: underline; }`)
+  - **Status**: Pending
+  - **Details**: Lines 825–843 render each link with `ImGui::TextUnformatted`, then on hover re-render the same text via `footer_draw->AddText` with a highlight colour and draw an underline via `AddLine` on top. This double-render is an anti-pattern. Native equivalent: before calling `TextUnformatted`, check `ImGui::IsItemHovered()` on the *previous* item or wrap in an `InvisibleButton` + manual text, pushing `ImGuiCol_Text` to the highlight colour when hovered. For the underline, `ImDrawList::AddLine` is acceptable (ImGui has no native underline), but the text itself should not be drawn twice.
+
+- [ ] 627. [app.cpp] Drop-overlay icon and text rendered via AddText instead of SetCursorScreenPos + TextUnformatted
+  - **JS Source**: `src/index.html` (`#drop-overlay`); `src/app.css` lines 310–340
+  - **Status**: Pending
+  - **Details**: Lines 1341–1351 place the Font Awesome copy icon and the formatted prompt string via `dl->AddText(...)` with manually computed centered positions. Since the overlay is a standard `ImGui::Begin` window, `ImGui::SetCursorScreenPos` + `ImGui::PushFont` + `ImGui::TextUnformatted` achieves identical placement with proper ImGui item registration (hover, tooltip, etc. would work). Only edge case: `PushFont` with the icon font at an oversized point would need `ImGui::SetWindowFontScale` or explicit size override, but this is standard practice.
+
+- [ ] 628. [app.cpp] Loading screen title and progress text rendered via AddText instead of native text widgets
+  - **JS Source**: `src/index.html` (`#loading-title`, `#loading-progress`); `src/app.css` lines 380–420
+  - **Status**: Pending
+  - **Details**: Lines 1255–1273 position loading title and progress strings via `dl->AddText(bold/font, size, pos, colour, str)` with manual CalcTextSizeA centering. The loading overlay is a standard `ImGui::Begin` window that already mixes raw DrawList (for the background image and rotating gear, which have no native equivalent) with text. The text lines could be replaced with `ImGui::SetCursorScreenPos` + `ImGui::PushFont(bold, size)` + `ImGui::TextUnformatted`, which would also allow wrapping and future tooltip/interaction without DrawList coordination.
+
+- [ ] 629. [app.h / app.cpp] Remove `applyTheme()` and all CSS-color constants; replace with `ImGui::StyleColorsDark()`
+  - **JS Source**: `src/app.css` (CSS variables — all `:root` color definitions)
+  - **Status**: Pending
+  - **Details**: `app::theme::applyTheme()` (app.cpp) sets every `ImGuiStyle` color, rounding, padding, and scrollbar value to match the JS app's CSS. The `app::theme` namespace in `app.h` defines ~50 color constants (`BG`, `FONT_PRIMARY`, `BUTTON_BASE`, `TOAST_*`, etc.) derived from CSS variables. Per the new rendering policy, the goal is native ImGui styling, not CSS replication. Replace `applyTheme()` call with `ImGui::StyleColorsDark()` (standard dark theme). Remove all CSS-color constant definitions from `app::theme`. Any remaining constants that genuinely carry semantic meaning beyond color-matching (e.g. `BUTTON_ROUNDING`, `SCROLLBAR_SIZE`) may be retained. This is a prerequisite for all per-file style cleanup entries below (630–636).
+
+- [ ] 630. [app.cpp] Nav-bar module buttons rendered via `InvisibleButton`+`AddText`/`AddImage` instead of native `ImGui::Button`
+  - **JS Source**: `src/index.html` (nav `<div id="nav">` template); `src/app.css` lines 150–200
+  - **Status**: Pending
+  - **Details**: Lines ~568–645: each navigation tab icon is rendered as an `InvisibleButton` for hit-testing, with the icon glyph/texture drawn separately via `GetWindowDrawList()->AddText` or `AddImage`. Active/hover tints are applied manually by computing `tint_u32` and passing it to `AddText`/`AddImage`. Replace with `ImGui::Button` (containing an icon label via `PushFont(getIconFont())`) or `ImGui::Selectable`. Active state can be expressed via a `PushStyleColor(ImGuiCol_Button, ...)` when `is_active`, using standard ImGui hover/pressed colors otherwise. The hamburger and help icons (lines ~651–748) also use `InvisibleButton`+`AddImage`/`AddText` and should be replaced with native `ImGui::SmallButton` or `ImGui::Button`.
+
+- [ ] 631. [slider.cpp] Fully custom-drawn slider should be replaced with native `ImGui::SliderFloat`/`SliderInt`
+  - **JS Source**: `src/js/components/slider.js`
+  - **Status**: Pending
+  - **Details**: `slider::render()` (slider.cpp lines 83–197) draws an entirely custom track, fill bar, handle, shadow, and hover effects using `ImDrawList::AddRectFilled`/`AddRect`. It also implements its own mouse drag logic via manual `ImGuiIO::MousePos` tracking. All of this can be replaced with a single `ImGui::SliderFloat(id, &value, 0.0f, 1.0f)` call with default ImGui styling. Custom slider geometry (`SliderGrab`, `SliderGrabActive`, `FrameBg` colors) would be set globally by `StyleColorsDark()` without per-call overrides. The `SliderState` struct and all manual drag/click logic become unnecessary.
+
+- [ ] 632. [tab_models.cpp] Strip CSS-matching style overrides — largest single file (72 occurrences)
+  - **JS Source**: `src/js/modules/tab_models.js`
+  - **Status**: Pending
+  - **Details**: `tab_models.cpp` has 72 occurrences of `PushStyleColor`/`PushStyleVar`/`AddRectFilled`/`AddText` calls that exist to match CSS colors and layout. These include: custom list-row highlight colors, button background overrides, custom separator colors, and manual text coloring. All should be removed, falling back to the `StyleColorsDark()` defaults applied globally after entry 629 is resolved.
+
+- [ ] 633. [screen_source_select.cpp] Strip CSS-matching style overrides (20 occurrences)
+  - **JS Source**: `src/js/modules/screen_source_select.js`
+  - **Status**: Pending
+  - **Details**: 20 `PushStyleColor`/`PushStyleVar` calls exist to match the source-select screen's CSS styling (background colors, button colors, text colors, padding). Remove all and rely on `StyleColorsDark()` defaults.
+
+- [ ] 634. [tab_characters.cpp] Strip CSS-matching style overrides (36 occurrences)
+  - **JS Source**: `src/js/modules/tab_characters.js`
+  - **Status**: Pending
+  - **Details**: 36 occurrences of `PushStyleColor`/`PushStyleVar` across the character tab. These cover brand-color import buttons (`CHR_BTN_*`), list-row colors, panel background overrides, and custom input styling. Strip all and use `StyleColorsDark()` defaults. The brand colors for Battle.net/WMV/Wowhead/Save buttons (TODO 592) become unnecessary under the new policy.
+
+- [ ] 635. [shared UI components] Strip CSS-matching style overrides from all shared components
+  - **JS Source**: `src/js/components/combobox.js`, `listbox.js`, `listboxb.js`, `itemlistbox.js`, `menu-button.js`, `checkboxlist.js`, `data-table.js`
+  - **Status**: Pending
+  - **Details**: The following shared component files each have custom `PushStyleColor`/`PushStyleVar` blocks that override ImGui defaults to match CSS: `combobox.cpp` (11), `listbox.cpp` (10), `listboxb.cpp` (5), `itemlistbox.cpp` (5), `menu-button.cpp` (16), `checkboxlist.cpp` (6), `data-table.cpp` (8). Strip all CSS-color overrides across these files. The `context-menu.cpp` (4), `file-field.cpp` (1), and `map-viewer.cpp` (8) also have style overrides and should be cleaned up in the same pass.
+
+- [ ] 636. [remaining modules] Strip CSS-matching style overrides from all remaining tab/screen files
+  - **JS Source**: Various `src/js/modules/*.js`
+  - **Status**: Pending
+  - **Details**: The following module files have custom style overrides to remove: `legacy_tab_textures.cpp` (8), `legacy_tab_fonts.cpp` (2), `screen_settings.cpp` (3), `tab_fonts.cpp` (6), `tab_items.cpp` (2), `tab_install.cpp` (3), `tab_maps.cpp` (1), `tab_decor.cpp` (1), `tab_creatures.cpp` (1), `tab_zones.cpp` (2), `tab_text.cpp` (2), `tab_raw.cpp` (1), `tab_textures.cpp` (8), `tab_models_legacy.cpp` (4). Remove all `PushStyleColor`/`PushStyleVar` calls that exist solely to replicate CSS values.

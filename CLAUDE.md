@@ -92,6 +92,7 @@ Most dependencies are git submodules in `extern/`. CMake manages them automatica
 - **Memory management** — Use whichever ownership model best fits the context; no leaks.
 - **Async model** — Map JS async/promise patterns to whichever C++ concurrency mechanism best preserves identical behavior.
 - **Testing** — No test framework required at this time.
+- **ImGui rendering** — Use native ImGui widgets (`Text`, `Button`, `Selectable`, `ProgressBar`, `BeginTable`, `BeginChild`, etc.) for all UI elements. Do **not** use raw `ImDrawList` calls (`AddText`, `AddRectFilled`, `AddLine`, `AddImage`, etc.) for anything a native widget handles. Reserve `ImDrawList` exclusively for effects with no native equivalent: image rotation, multi-colour gradient fills, and custom OpenGL overlays (3D viewports, map tiles). The `app::theme` color constants and `applyTheme()` should be progressively removed; do not reference them in new code.
 
 ### JS → C++ Idiom Mapping
 
@@ -150,9 +151,14 @@ These removals also entailed: unregistering both modules from `modules.cpp`; rem
 - Things that cannot be completed immediately should be documented in `TODO_TRACKER.md`. Do not let documentation overhead block forward progress — implement what you can, then document what remains.
 
 ### Visual Fidelity
-- The C++ app must closely match the original JavaScript app visually. Every color, font size, spacing, alignment, and icon should replicate the original as faithfully as Dear ImGui allows.
-- Always reference [`UI_REFERENCE.md`](UI_REFERENCE.md) and `app.css` when implementing or modifying any UI element.
-- If a visual element cannot be replicated exactly in Dear ImGui, document the limitation in a code comment and in `TODO_TRACKER.md`, and get as close as possible.
+
+**Layout and functional fidelity is required. Aesthetic fidelity is not.**
+
+- The C++ app must be **layout-identical** to the original JS app: every panel, tab, column, control, list, filter, button, context menu, and interactive element must be present, positioned correctly, and behave identically.
+- The **exact colors, shadows, gradients, fonts, and pixel-level styling** of the JS app do **not** need to be replicated. Use ImGui's default rendering and standard widget appearance throughout. The goal is a clean, natively-styled ImGui application that is easy to theme later — not a CSS replica.
+- Do **not** add `PushStyleColor`/`PushStyleVar`/`ImDrawList` calls solely to match specific CSS values from `app.css`. Remove existing ones progressively as files are touched.
+- [`UI_REFERENCE.md`](UI_REFERENCE.md) is useful for understanding the **layout structure** (what controls exist, in what order) but should **not** be used as a color or style target.
+- If a **layout element** cannot be replicated in Dear ImGui, document the deviation in a code comment and in `TODO_TRACKER.md`.
 
 ### TODO_TRACKER.md Format
 Entries are **numbered sequentially** and **ordered by number** (no section headers). When adding a new entry, increment from the last existing number and append at the end:
