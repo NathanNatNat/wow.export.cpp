@@ -236,9 +236,15 @@ static model_viewer_gl::Context viewer_context;
 // JS equivalent: context.getEquipmentRenderers / context.getCollectionRenderers
 static std::unordered_map<int, model_viewer_gl::EquipmentSlotRenderers> equip_adapter_map;
 static std::unordered_map<int, model_viewer_gl::CollectionSlotRenderers> coll_adapter_map;
+static bool renderers_dirty = false;
 
 // Rebuild adapter maps from owned equipment/collection renderer storage.
+// Only rebuilds when renderers_dirty is true; both callbacks share the flag so the
+// rebuild happens at most once per frame even when both are called.
 static void rebuild_renderer_adapter_maps() {
+	if (!renderers_dirty)
+		return;
+	renderers_dirty = false;
 	equip_adapter_map.clear();
 	for (auto& [slot_id, entry] : equipment_model_renderers) {
 		model_viewer_gl::EquipmentSlotRenderers slot;
@@ -370,6 +376,9 @@ skinned_model_meshes.clear();
 clear_materials();
 dispose_equipment_models();
 dispose_collection_models();
+equip_adapter_map.clear();
+coll_adapter_map.clear();
+renderers_dirty = false;
 current_char_component_texture_layout_id = 0;
 
 if (active_renderer) {
@@ -732,6 +741,7 @@ for (auto& ri : it->second.renderers)
 ri.renderer->dispose();
 logging::write(std::format("Disposed equipment models for slot {}", it->first));
 it = equipment_model_renderers.erase(it);
+renderers_dirty = true;
 } else {
 ++it;
 }
@@ -744,6 +754,7 @@ for (auto& r : it->second.renderers)
 r->dispose();
 logging::write(std::format("Disposed collection models for slot {}", it->first));
 it = collection_model_renderers.erase(it);
+renderers_dirty = true;
 } else {
 ++it;
 }
@@ -783,11 +794,13 @@ if (existing_eq_it != equipment_model_renderers.end()) {
 for (auto& ri : existing_eq_it->second.renderers)
 ri.renderer->dispose();
 equipment_model_renderers.erase(existing_eq_it);
+renderers_dirty = true;
 }
 if (existing_col_it != collection_model_renderers.end()) {
 for (auto& r : existing_col_it->second.renderers)
 r->dispose();
 collection_model_renderers.erase(existing_col_it);
+renderers_dirty = true;
 }
 
 auto char_info = get_current_race_gender();
@@ -889,6 +902,7 @@ ri.renderer = std::move(renderer);
 ri.attachment_id = entry.attachment_id;
 equipment_model_renderers[entry.slot_id].item_id = entry.item_id;
 equipment_model_renderers[entry.slot_id].renderers.push_back(std::move(ri));
+renderers_dirty = true;
 logging::write(std::format("Loaded attachment model {} for slot {} attachment {} (item {})",
 	entry.file_data_id, entry.slot_id, entry.attachment_id, entry.item_id));
 } else {
@@ -922,6 +936,7 @@ if (!entry.textures.empty()) {
 
 collection_model_renderers[entry.slot_id].item_id = entry.item_id;
 collection_model_renderers[entry.slot_id].renderers.push_back(std::move(renderer));
+renderers_dirty = true;
 logging::write(std::format("Loaded collection model {} for slot {} (item {})",
 	entry.file_data_id, entry.slot_id, entry.item_id));
 }
@@ -1070,6 +1085,7 @@ for (auto& ri : entry.renderers)
 ri.renderer->dispose();
 }
 equipment_model_renderers.clear();
+renderers_dirty = true;
 }
 
 static void dispose_collection_models() {
@@ -1078,6 +1094,7 @@ for (auto& r : entry.renderers)
 r->dispose();
 }
 collection_model_renderers.clear();
+renderers_dirty = true;
 }
 
 static void clear_materials() {
@@ -3938,23 +3955,16 @@ std::thread([region_empty]() {
 	core::progressLoadingScreen("Retrieving realmlist...");
 	casc::realmlist::load();
 
-	core::progressLoadingScreen("Loading character customization data...");
-	db::caches::DBCharacterCustomization::ensureInitialized();
-
-	core::progressLoadingScreen("Loading item data...");
-	db::caches::DBItems::ensureInitialized();
-
-	core::progressLoadingScreen("Loading item character textures...");
-	db::caches::DBItemCharTextures::ensureInitialized();
-
-	core::progressLoadingScreen("Loading item geosets...");
-	db::caches::DBItemGeosets::ensureInitialized();
-
-	core::progressLoadingScreen("Loading item models...");
-	db::caches::DBItemModels::ensureInitialized();
-
-	core::progressLoadingScreen("Loading guild tabard data...");
-	db::caches::DBGuildTabard::ensureInitialized();
+	core::progressLoadingScreen("Loading character data...");
+	{
+		auto f1 = std::async(std::launch::async, [] { db::caches::DBCharacterCustomization::ensureInitialized(); });
+		auto f2 = std::async(std::launch::async, [] { db::caches::DBItems::ensureInitialized(); });
+		auto f3 = std::async(std::launch::async, [] { db::caches::DBItemCharTextures::ensureInitialized(); });
+		auto f4 = std::async(std::launch::async, [] { db::caches::DBItemGeosets::ensureInitialized(); });
+		auto f5 = std::async(std::launch::async, [] { db::caches::DBItemModels::ensureInitialized(); });
+		auto f6 = std::async(std::launch::async, [] { db::caches::DBGuildTabard::ensureInitialized(); });
+		f1.get(); f2.get(); f3.get(); f4.get(); f5.get(); f6.get();
+	}
 
 	core::progressLoadingScreen("Loading character shaders...");
 

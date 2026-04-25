@@ -38,48 +38,48 @@ struct CacheEntry {
 };
 
 static std::unordered_map<std::string, std::unique_ptr<CacheEntry>> cache;
+static std::mutex cache_mutex;
 
 db::WDCReader& getTable(const std::string& table_name) {
-	auto it = cache.find(table_name);
-	if (it != cache.end()) {
-		// JS Proxy auto-parses on first method call; ensureParsed() is the C++ equivalent.
-		it->second->ensureParsed();
-		return *it->second->reader;
+	CacheEntry* entry_ptr = nullptr;
+	{
+		std::unique_lock lock(cache_mutex);
+		auto it = cache.find(table_name);
+		if (it != cache.end()) {
+			entry_ptr = it->second.get();
+		} else {
+			const std::string file_path = "DBFilesClient/" + table_name + ".db2";
+			auto entry = std::make_unique<CacheEntry>();
+			entry->reader = std::make_unique<db::WDCReader>(file_path);
+			entry_ptr = entry.get();
+			cache.emplace(table_name, std::move(entry));
+		}
 	}
-
-	const std::string file_path = "DBFilesClient/" + table_name + ".db2";
-
-	auto entry = std::make_unique<CacheEntry>();
-	entry->reader = std::make_unique<db::WDCReader>(file_path);
-
-	// JS Proxy auto-parses on first method call.
-	entry->ensureParsed();
-
-	auto& ref = *entry->reader;
-	cache.emplace(table_name, std::move(entry));
-	return ref;
+	// JS Proxy auto-parses on first method call; ensureParsed() is the C++ equivalent.
+	// call_once ensures safe concurrent calls for the same table.
+	entry_ptr->ensureParsed();
+	return *entry_ptr->reader;
 }
 
 db::WDCReader& preloadTable(const std::string& table_name) {
-	auto it = cache.find(table_name);
-
-	if (it != cache.end()) {
-		it->second->ensureParsed();
-		it->second->reader->preload();
-		return *it->second->reader;
+	CacheEntry* entry_ptr = nullptr;
+	{
+		std::unique_lock lock(cache_mutex);
+		auto it = cache.find(table_name);
+		if (it != cache.end()) {
+			entry_ptr = it->second.get();
+		} else {
+			const std::string file_path = "DBFilesClient/" + table_name + ".db2";
+			auto entry = std::make_unique<CacheEntry>();
+			entry->reader = std::make_unique<db::WDCReader>(file_path);
+			entry_ptr = entry.get();
+			cache.emplace(table_name, std::move(entry));
+		}
 	}
-
-	const std::string file_path = "DBFilesClient/" + table_name + ".db2";
-
-	auto entry = std::make_unique<CacheEntry>();
-	entry->reader = std::make_unique<db::WDCReader>(file_path);
-
-	entry->ensureParsed();
-	entry->reader->preload();
-
-	auto& ref = *entry->reader;
-	cache.emplace(table_name, std::move(entry));
-	return ref;
+	// Parse and preload outside the lock so other threads can proceed with different tables.
+	entry_ptr->ensureParsed();
+	entry_ptr->reader->preload();
+	return *entry_ptr->reader;
 }
 
 } // namespace db2
