@@ -1,11 +1,6 @@
-# TODO Tracker
+﻿# TODO Tracker
 
-> **Progress: 32/210 verified (15%)** — ✅ = Verified, ⬜ = Pending
-
-
-## Data Caches & Database
-
-## UI Components
+> **Progress: 0/178 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ## Map Viewer
 
@@ -120,8 +115,6 @@
 - **JS Source**: `src/js/modules/tab_install.js` lines 169, 188
 - **Status**: Pending
 - **Details**: JS "Regex Enabled" div has :title="$core.view.regexTooltip" showing tooltip on hover. C++ has no tooltip implementation.
-
-## Tab: Models
 
 ## Tab: Textures
 
@@ -289,7 +282,6 @@
 - **Status**: Pending
 - **Details**: JS exposes `window.trigger_kino_processing = trigger_kino_processing` when `!BUILD_RELEASE`. C++ has only a comment. No equivalent debug hook exists.
 
-
 ## Tab: Text & Fonts
 
 - [ ] 299. [tab_fonts.cpp] export_fonts missing stack trace in error mark
@@ -374,7 +366,6 @@
 - **Status**: Pending
 - **Details**: JS uses the custom `ContextMenu` component with slot-based content rendering and a close event. C++ uses native `ImGui::BeginPopupContextItem` (line 368) which has different popup behavior, positioning, and styling compared to the custom ContextMenu component used elsewhere in the app.
 
-
 ## Tab: Raw Files & Legacy Files
 
 - [ ] 326. [tab_raw.cpp] Regex indicator tooltip metadata from JS template is missing
@@ -421,7 +412,6 @@
 - **JS Source**: `src/js/modules/legacy_tab_files.js` lines 82–88
 - **Status**: Pending
 - **Details**: JS wraps the filter and export button in a `#tab-legacy-files-tray` div with its own layout (likely flex row). C++ renders filter input, then `ImGui::SameLine()`, then the export button (lines 206–216). The proportions and alignment of filter vs button may not match the JS CSS-defined tray layout.
-
 
 ## Tab: Maps
 
@@ -494,7 +484,6 @@
 - **JS Source**: `src/js/modules/tab_maps.js` lines 1135–1143
 - **Status**: Pending
 - **Details**: JS Vue $watch triggers on any reactive change. C++ only compares the first element string between frames. If selection changes and reverts within same frame, or changes to different item with same first entry, C++ misses it.
-
 
 ## Tab: Zones
 
@@ -643,7 +632,6 @@
 - **Status**: Pending
 - **Details**: `"xdg-open \"" + dir + "\" &"` passed to `std::system()`. If `dir` contains shell metacharacters, this is exploitable. JS uses `nw.Shell.openItem` which is safe.
 
-
 ## Tab: Items & Item Sets
 
 - [ ] 383. [tab_items.cpp] Wowhead item handler is stubbed out
@@ -740,7 +728,6 @@
 - **JS Source**: `src/js/modules/tab_item_sets.js` line 38
 - **Status**: Pending
 - **Details**: JS set_row.ItemID is expected to be an array with .filter(id => id !== 0). C++ fieldToUint32Vec only handles vector variants. If a DB2 reader returns a single scalar, the function returns an empty vector, silently dropping data.
-
 
 ## Tab: Creatures & Decor
 
@@ -869,171 +856,7 @@
 - **Status**: Pending
 - **Details**: The DecorListboxContextMenu popup requires ImGui::OpenPopup to be called. The handle_listbox_context callback does not open this popup. The popup rendering code will never trigger.
 
-
-## 3D Engine, File Loaders & Core Systems
-
-- [x] 457. [Shaders.cpp] C++ adds automatic _unregister_fn callback on ShaderProgram not present in JS
-- **JS Source**: `src/js/3D/Shaders.js` lines 56–72
-- **Status**: Pending
-- **Details**: C++ `create_program()` (Shaders.cpp lines 79–83) installs a static `_unregister_fn` callback on `gl::ShaderProgram` that automatically calls `shaders::unregister()` when a ShaderProgram is destroyed. JS has no equivalent auto-cleanup mechanism — callers must explicitly call `unregister(program)` (Shaders.js line 78–86). This means in C++, a program is automatically removed from `active_programs` on destruction, while in JS a disposed program remains in the set until manually unregistered. This changes `reload_all()` behavior: JS could attempt to recompile stale programs that were not explicitly unregistered, while C++ never encounters this scenario.
-
-- [x] 591. [app.cpp] Header `shadowed` class (box-shadow when toast active) not implemented
-  - **JS Source**: `src/index.html` line 11; `src/app.css` lines 212–214
-  - **Status**: Pending
-  - **Details**: HTML applies `:class="{ shadowed: toast !== null }"` to `#header`. CSS: `#container #header.shadowed { box-shadow: var(--widget-shadow); }` where `--widget-shadow: black 0 0 5px`. When a toast is visible the header should cast a downward black blur shadow. Dear ImGui has no native box-shadow; approximate by drawing a few semi-transparent filled rectangles below the header bottom border when `core::view->toast` is non-null.
-
-- [x] 592. [tab_characters.cpp] Import/export button brand colors not implemented
-  - **JS Source**: `src/app.css` lines 3053–3112
-  - **Status**: Pending
-  - **Details**: CSS defines specific background-color overrides for character import/export buttons: `.character-bnet-button` (#148eff blue), `.character-wmv-button` (#d22c1e red), `.character-wowhead-button` (#e02020 red), `.character-save-button` (#5865f2 purple). These brand colors do not appear anywhere in the C++ code — the buttons likely render with the default green `--form-button-base` instead. Fix: define the four brand colors as constants and apply them when rendering the respective buttons via `ImGui::PushStyleColor(ImGuiCol_Button, ...)`.
-
-- [x] 593. [screen_source_select.cpp, screen_build_select.cpp] CSS media-query responsive breakpoints not implemented
-  - **JS Source**: `src/app.css` lines 3736–3790
-  - **Status**: Pending
-  - **Details**: Three `@media (max-height: N px)` breakpoints adjust layout at small screen heights: (1) `max-height: 899px` — hide `#home-help-buttons`; (2) `max-height: 799px` — compress `#source-select` (icons shrink from 80px→50px, reduced gaps and font sizes); (3) `max-height: 849px` — change `#build-select .build-select-buttons` from column to wrapping row. C++ uses fixed layouts and ignores viewport height. Fix: read `ImGui::GetMainViewport()->WorkSize.y` and switch layouts at the same pixel thresholds.
-
-- [x] 594. [tab_audio.cpp] Sound player audiobox sprite animation not implemented
-  - **JS Source**: `src/app.css` lines 2513–2537
-  - **Status**: Pending
-  - **Details**: CSS animates `#sound-player-anim` as a horizontal sprite strip: `@keyframes sound-audiobox-anim { to { background-position-x: -4326px; } }` at `0.7s steps(14, end) infinite`, playing/paused based on state. The sprite image is `images/audiobox.png` (309×397px per frame, 14 frames = 4326px total width). C++ renders the audio tab without this animated audiobox graphic. Fix: load `audiobox.png` as a texture, compute the current frame from elapsed time (frame = floor(elapsed / 0.7s * 14) % 14 when playing), and render the correct UV sub-region (frame * 309 / total_width → (frame+1) * 309 / total_width).
-
-- [x] 597. [casc/casc-source-local.cpp] CASC journal index loading 1.27× slower than JS in release (1074ms vs 848ms for 2M entries)
-  - **JS Source**: `src/js/casc/casc-source-local.js` (journal index loading)
-  - **Status**: Pending
-  - **Details**: Debug: 4029ms. Release: 1074ms vs 848ms JS (1.27×). The gap is marginal and may reflect real algorithmic overhead: likely insufficient pre-allocation of the index map (`reserve()`) or sequential small reads per `.idx` entry rather than bulk-reading each file into memory first. Investigate but low priority given the small gap.
-
-- [x] 598. [casc/encoding.cpp] Encoding table parsing 1.85× slower than JS in release (3811ms vs 2057ms for 2.8M entries)
-  - **JS Source**: `src/js/casc/encoding.js`
-  - **Status**: Pending
-  - **Details**: Debug: 12292ms. Release: 3811ms vs 2057ms JS (1.85×). This is the single remaining significant CASC bottleneck in release. Likely causes: (1) per-entry `std::unordered_map` inserts without `reserve()` — 2.8M insertions with multiple rehash cycles; (2) MD5 keys stored as `std::string` or `std::vector<uint8_t>` rather than `std::array<uint8_t, 16>` with a flat hash — avoids heap allocation per key; (3) file not read into a single buffer before parsing. Fix: `reserve(3'000'000)`, bulk-read the file, use fixed-size key arrays.
-
-- [x] 599. [casc/root.cpp] Root file parsing 1.54× slower than JS in release (1431ms vs 928ms for 1.9M entries)
-  - **JS Source**: `src/js/casc/root.js`
-  - **Status**: Pending
-  - **Details**: Debug: 7222ms. Release: 1431ms vs 928ms JS (1.54×). Similar to entry 598: likely missing `reserve()` on the root map and/or per-entry copies in the hot parse loop. Fix: `reserve()` before filling, load the full root blob into memory and parse in-place, avoid temporaries.
-
-- [x] 601. [casc/tact-keys.cpp / app.cpp] TACTKeys download runs before source_select — should fire async in parallel with CDN resolution
-  - **JS Source**: `src/js/casc/tact-keys.js`; `src/js/casc/casc-source-remote.js`
-  - **Status**: Pending
-  - **Details**: In JS, TACTKeys are fetched async during CDN pre-resolution. In C++ release, TACTKeys download completes at 19:35:37 before `set active module: source_select` (also 19:35:37) — in release this is invisible since the download is fast, but the structure is wrong. In slower network conditions the blocking download would delay the UI appearing. Fix: fire TACTKeys as a background `std::async` task concurrent with CDN pre-resolution, join only when a CASC source is opened.
-
-- [x] 602. [app.cpp / screen_source_select.cpp] "failed to load whats-new.html" error on startup — file missing from C++ build
-  - **JS Source**: `src/js/components/whats-new.js`; `src/whats-new.html`
-  - **Status**: Pending
-  - **Details**: C++ log shows: `failed to load whats-new.html: could not open D:/Repositories/wow.export.cpp\src\whats-new.html`. The `whats-new.html` file was removed from the C++ repo (audited and ported per commit `012b8cde`), but something still attempts to load it at runtime. The `tab_home` stub intentionally omits the whats-new panel (see Intentional Stubs in CLAUDE.md), so this load attempt should be removed or guarded. Locate the call site that tries to open `whats-new.html` and remove it, or suppress the error since the tab_home stub is intentional.
-
-- [x] 603. [CMakeLists.txt] MSVC debug build is 5–12× slower at runtime than release — add `_ITERATOR_DEBUG_LEVEL=0` and `/JMC-` for debug
-  - **JS Source**: N/A (build system only)
-  - **Status**: Pending
-  - **Details**: MSVC debug builds have two major sources of runtime overhead beyond `/Od` (no optimisation) that do not affect debugability at all: (1) `_ITERATOR_DEBUG_LEVEL=2` (default) adds bounds checking and iterator invalidation detection to every STL operation — responsible for most of the CASC loading slowdown (encoding table 1.85×, root file 1.54× even in release hints at some debug-only calls, but in a pure debug build this is the primary cost on all `std::vector`/`std::unordered_map` access); (2) `/JMC` (Just My Code, on by default) adds a function-entry probe to every function for the debugger's "Step Into User Code" button, adding overhead to every function call. Fix: in `CMakeLists.txt`, add `$<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>` via `add_compile_definitions` (applied globally so all compiled targets in the build are consistent — mixing `_ITERATOR_DEBUG_LEVEL` values across translation units in the same binary causes ODR violations), and `/JMC-` via `target_compile_options` for MSVC debug. Full debugability is preserved: breakpoints, step-through, variable inspection, call stack, and watch expressions are all unaffected. The only things lost are runtime STL iterator validation and the "Step Into User Code" filtering — both of which release builds also omit. Expected: debug CASC load time drops from 5–12× to roughly 2–3× of release.
-
-- [x] 604. [tab_characters.cpp] Loading screen invisible when switching to Characters tab — mounted() runs synchronously on main thread
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 2545–2666
-  - **Status**: In Progress
-  - **Details**: JS `mounted()` is `async` with 8 `await progressLoadingScreen(...)` yield points before each DB cache load (`realmlist.load`, `DBCharacterCustomization`, `DBItems`, `DBItemCharTextures`, `DBItemGeosets`, `DBItemModels`, `DBGuildTabard`, shader setup). In C++, `showLoadingScreen`/`hideLoadingScreen` both use `postToMainThread` internally; when called synchronously on the main thread they queue together and process in the same `drainMainThreadQueue()` call — no render frame fires between them, so the loading screen never appears. Fix: run the heavy DB work (`realmlist::load`, all `ensureInitialized` calls) on a `std::thread`; wrap all `state.*` writes and final setup (`chrModelViewerContext`, `viewer_context`, `view_state`, `anim_methods`, `update_chr_race_list`) in `postToMainThread`; call `hideLoadingScreen` from the background thread so the main thread renders the overlay across multiple frames.
-
-- [x] 605. [tab_audio.cpp] Loading screen invisible when processing unknown sound files — runs synchronously on main thread
-  - **JS Source**: `src/js/modules/tab_audio.js` lines 282–295
-  - **Status**: Pending
-  - **Details**: JS `mounted()` shows a loading screen (`showLoadingScreen(1)`) while processing unknown sound files, with an `await progressLoadingScreen(...)` yield. In C++, `showLoadingScreen`/`hideLoadingScreen` are called synchronously (lines 357–390), so both queue into the same `drainMainThreadQueue()` drain — the overlay never renders. Fix: run the unknown-file processing on a `std::thread`, wrap the `state.*` mutations in `postToMainThread`, call `hideLoadingScreen` from the background thread.
-
-- [x] 606. [tab_items.cpp] Loading screen invisible when switching to Items tab — initialize() runs synchronously on main thread
-  - **JS Source**: `src/js/modules/tab_items.js` lines 132–135, 278–281
-  - **Status**: Pending
-  - **Details**: JS `mounted()` calls `showLoadingScreen(2)` and awaits two `progressLoadingScreen` steps (Loading model file data, Loading item data) before `hideLoadingScreen`. C++ `initialize()` calls both synchronously (lines 473–477 in mounted, 240–243 in initialize), so show and hide queue together — loading screen never visible. Fix: run `initialize()` on a `std::thread`; wrap `state.*` writes (`listfileItems` population, viewer context setup) in `postToMainThread`; call `hideLoadingScreen` from background thread. Tab already has `is_initialized` guard.
-
-- [x] 607. [tab_item_sets.cpp] Loading screen invisible when switching to Item Sets tab — initialize() runs synchronously on main thread
-  - **JS Source**: `src/js/modules/tab_item_sets.js` lines 26–34, 90–92
-  - **Status**: Pending
-  - **Details**: JS `mounted()` calls `showLoadingScreen(3)` and awaits three `progressLoadingScreen` steps (item data, item appearance data, item sets) before `hideLoadingScreen`. C++ calls all synchronously (lines 227–231 in mounted, 96–108 in initialize), so show and hide queue together — overlay never visible. Fix: run `initialize()` on a `std::thread`; wrap `state.*` writes in `postToMainThread`; call `hideLoadingScreen` from background thread. Tab already has `is_initialized` guard.
-
-- [x] 608. [tab_data.cpp] Loading screen invisible when switching to Data tab — mounted() runs synchronously on main thread
-  - **JS Source**: `src/js/modules/tab_data.js` lines 180–183
-  - **Status**: Pending
-  - **Details**: JS `mounted()` calls `showLoadingScreen(1)` and awaits one `progressLoadingScreen` step (Loading data table manifest) before `hideLoadingScreen`. C++ calls all synchronously (lines 219–222), so show and hide queue together — overlay never visible. Fix: run the manifest load on a `std::thread`; wrap `state.*` writes in `postToMainThread`; call `hideLoadingScreen` from background thread.
-
-- [x] 609. [tab_textures.cpp] Loading screen invisible during atlas parse and texture list load — runs synchronously on main thread
-  - **JS Source**: `src/js/modules/tab_textures.js` lines 107–113, 397–409
-  - **Status**: Pending
-  - **Details**: JS shows a loading screen during `initialize()` (atlas parsing) and again in `mounted()` (loading texture file data + unknown textures). Both call sequences are synchronous in C++ (lines 348–354 in initialize, 495–507 in mounted), so show/hide queue together in the same `drainMainThreadQueue()` — overlay never renders. Fix: run the heavy atlas and listfile work on a `std::thread`; wrap `state.*` writes in `postToMainThread`; call `hideLoadingScreen` from background thread.
-
-- [x] 610. [tab_videos.cpp] Loading screen invisible when switching to Videos tab — mounted() runs synchronously on main thread
-  - **JS Source**: `src/js/modules/tab_videos.js` lines 536–539
-  - **Status**: Pending
-  - **Details**: JS `mounted()` calls `showLoadingScreen(1)` and awaits one `progressLoadingScreen` step (Loading video metadata) before `hideLoadingScreen`. C++ calls all synchronously (lines 909–912), so show and hide queue together — overlay never visible. Fix: run the video metadata load on a `std::thread`; wrap `state.*` writes in `postToMainThread`; call `hideLoadingScreen` from background thread.
-
-
 ## Tab: Characters
-
-- [x] 611. [tab_characters.cpp] Model silently fails to load on initial race selection — GL context null, no retry
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 1061–1109 (`update_model_selection`)
-  - **Status**: Verified
-  - **Details**: On the first frame after mounting, `render()` detects `chrCustModelSelection` changed and calls `update_model_selection()` → `load_character_model()`. At this point `viewer_context.gl_context` is null because the center-panel `model_viewer_gl::renderWidget()` hasn't executed yet (it renders after the left panel). `load_character_model` returns early, but `prev_model_selection` was already set to the new value — so subsequent frames see no change and never retry. The model never loads until the user manually triggers another selection change. Fix: only update `prev_model_selection` after a successful load, OR defer the call when GL context is not yet ready and retry on the next frame.
-
-- [x] 612. [tab_characters.cpp] `load_character_model` blocks the render thread — CASC read + `future::get()` on main thread
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 1056–1080 (async `load_character_model`)
-  - **Status**: Verified
-  - **Details**: Fixed. `load_character_model()` now kicks off the CASC read via `std::async(std::launch::async, ...)` and returns immediately. A new `pump_model_load_task()` function (called from the top of `render()` each frame) checks if the future is ready; when ready it performs the GL-side work (renderer construction, `load().get()`, fit_camera, animation list population, `refresh_character_appearance`) on the main thread. The model-load change-detection watchers are guarded with `!view.chrModelLoading` so they cannot queue a second load while one is in flight.
-
-- [x] 613. [tab_characters.cpp] `update_chr_model_list` and `update_model_selection` both fire in the same `render()` call
-  - **JS Source**: `src/js/modules/tab_characters.js` (Vue watchers run asynchronously between ticks)
-  - **Status**: Verified
-  - **Details**: In `render()`, the race-selection change-detection block calls `update_chr_model_list()`, which immediately writes `chrCustModelSelection`. The very next `if`-block in the same `render()` call detects that change and calls `update_model_selection()` → `load_character_model()`. This means a race click triggers a full synchronous model load in a single frame. In JS, Vue watchers fire across separate microtask ticks, naturally deferring the model load to the next event-loop iteration. Fix: set a `pending_model_load` flag in `update_chr_model_list()` and only call `update_model_selection()` on the following frame once the flag is set, keeping each watcher isolated to its own frame.
-
-- [x] 614. [tab_characters.cpp] `update_textures` and `update_equipment_models` block render thread
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 359–490 (async `update_textures`); lines 493–588 (async `update_equipment_models`)
-  - **Status**: Verified (partial — equipment models async, textures still synchronous)
-  - **Details**: `update_equipment_models()` now queues all needed CASC reads as `std::async(launch::async, ...)` futures and returns immediately. A new `pump_equipment_task()` (called from the top of `render()` each frame) processes ready futures on the main thread: creates `M2RendererGL`, calls `load().get()`, `buildBoneRemapTable`, `applyReplaceableTextures`, and rebuilds the adapter maps. Entries are discarded if the slot is no longer equipped or the GL context is gone. `dispose_equipment_models()` also clears `pending_equipment_entries` to prevent stale pump completions after a full dispose. `update_textures()` remains synchronous because `CharMaterialRenderer::loadTexture` interleaves CASC IO with GL calls (`glTexImage2D`); fully async-ing it would require refactoring `CharMaterialRenderer` to separate file decode from GPU upload — tracked separately.
-
-- [x] 615. [tab_characters.cpp] Color picker popups use `ImGui::BeginTooltip()` — dismisses on mouse move
-  - **JS Source**: `src/app.css` (`.color-picker-popup` fixed positioning); `src/js/modules/tab_characters.js` lines 2051–2068, 2174–2186
-  - **Status**: Verified
-  - **Details**: Both the customization color swatches (line ~3250 in tab_characters.cpp) and the guild tabard color swatches (line ~3578) open their swatch grids via `ImGui::BeginTooltip()`. ImGui tooltips disappear the moment the mouse moves or focus shifts, making it nearly impossible to navigate a multi-column swatch grid. JS shows a `color-picker-popup` div fixed at the click position that persists until the user clicks outside. Fix: replace `BeginTooltip`/`EndTooltip` with a named `ImGui::BeginPopup` or a child window anchored at `color_picker_position`, closed only on outside-click.
-
-- [x] 616. [tab_characters.cpp] Animation controls rendered above panel layout instead of overlaid on 3D preview
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 1954–1969 (`.preview-dropdown-overlay`)
-  - **Status**: Verified
-  - **Details**: Fixed. Removed the animation controls block from before the three-panel layout. Re-inserted it inside the center panel child window, immediately after `model_viewer_gl::renderWidget()`. Uses `ImGui::SetCursorScreenPos` to position at the top-left of the viewport rect (`GetItemRectMin() + (4,4)`), then restores the cursor so the separator and export tabs still flow correctly below.
-
-- [x] 617. [tab_characters.cpp] Character action buttons use text labels instead of CSS image buttons
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 1970–1984; `src/app.css` lines 3053–3112 (button CSS)
-  - **Status**: Verified
-  - **Details**: Replaced text buttons with Font Awesome icon buttons for Save (ICON_FA_FLOPPY_DISK), Import JSON (ICON_FA_FILE_IMPORT), and Export JSON (ICON_FA_FILE_EXPORT). Uses `ImGui::PushFont(app::theme::getIconFont())` around each icon button; tooltip via `ImGui::SetTooltip`. Battle.net/Wowhead/WMV import buttons retain text labels as they have no direct FA icon equivalent; brand colors are applied via CHR_BTN_* theme constants.
-
-- [x] 618. [tab_characters.cpp] My Characters screen uses flat sequential list instead of CSS card grid
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 1926–1944 (`.saved-characters-grid`)
-  - **Status**: Verified
-  - **Details**: Replaced the flat vertical list with a responsive card grid. Column count is computed from `GetContentRegionAvail().x / (CARD_W + CARD_PAD)`. Each card is `CARD_W x CARD_H`, with character name as `TextWrapped` below the image area. Export and Delete icon buttons (FA icons) are overlaid on the card using `SetCursorScreenPos` + cursor save/restore. `SameLine` is used for multi-column layout.
-
-- [x] 619. [tab_characters.cpp] Equipment slot context menu uses shared popup ID across all slots
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 2190–2200 (ContextMenu component per slot)
-  - **Status**: Verified
-  - **Details**: Each slot is already wrapped in `ImGui::PushID(slot.id)` (line 3680) before calling `OpenPopup("##equip_ctx")` and `BeginPopup("##equip_ctx")`. ImGui hashes the popup ID against the current ID stack, so `"##equip_ctx"` inside `PushID(3)` is distinct from `"##equip_ctx"` inside `PushID(5)`. The per-slot scoping is correct as-is.
-
-- [x] 620. [tab_characters.cpp] Model-loading indicator shows text instead of CSS animated spinner
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 2102–2103 (`.chr-model-loading-spinner`)
-  - **Status**: Verified
-  - **Details**: Fixed. Replaced `ImGui::Text("Loading model...")` with a rotating text spinner: `ImGui::Text("Loading model... %c", "|/-\\"[int(GetTime()*8) % 4])`. The glyph cycles at ~8 fps matching a smooth visual spin.
-
-- [x] 621. [tab_characters.cpp] `char_texture_overlay::ensureActiveLayerAttached()` not called in `mounted()`
-  - **JS Source**: `src/js/modules/tab_characters.js` line 2696 (`charTextureOverlay.ensureActiveLayerAttached()`)
-  - **Status**: Verified
-  - **Details**: JS calls `charTextureOverlay.ensureActiveLayerAttached()` at the end of `mounted()` to ensure the texture overlay canvas is wired to the preview panel. C++ `mounted()` (line ~3808) omits this call. As a result the Textures export tab may show nothing and the texture overlay may not bind when the character tab first loads.
-
-- [x] 622. [tab_characters.cpp] Character model export missing `export_paths.writeLine()` calls — export path log empty
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 1762–1826 (`export_character`)
-  - **Status**: Verified
-  - **Details**: JS calls `export_paths?.writeLine(export_path)` for each successfully exported file (OBJ, STL, GLTF, GLB, texture). C++ `export_char_model()` opens `export_paths` via `core::openLastExportStream()` but only calls `export_paths.close()` without ever calling `export_paths.writeLine(...)`. The export path log file will be empty for all character model/texture exports, breaking any downstream tooling that reads this file.
-
-- [x] 623. [tab_characters.cpp] `export_char_model` uses hardcoded `ExportHelper(1, "model")` regardless of multi-item selection
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 1755–1759 (`export_character`)
-  - **Status**: Verified
-  - **Details**: JS `export_character` iterates over all selected character entries and creates an ExportHelper sized to the full selection count. C++ always constructs `casc::ExportHelper(1, "model")` with a hardcoded item count of 1. If the character viewer is ever extended to support bulk export (as the JS version anticipates), the progress reporting and cancellation logic will be wrong.
-
-- [x] 624. [tab_characters.cpp] `window.loadImportString` and `window.reloadCharShaders` debug hooks not exposed
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 2687–2694
-  - **Status**: Verified
-  - **Details**: Added a `#ifndef NDEBUG` collapsing "Debug" header at the bottom of the right panel. It exposes a multiline text input + "Load Import String" button (calls `apply_import_data(nlohmann::json::parse(input), "bnet")`) and a "Reload Char Shaders" button (iterates `chr_materials` calling `->compileShaders()` then `refresh_character_appearance()`). Guards are `#ifndef NDEBUG` so the section is stripped in release builds.
 
 - [ ] 625. [app.cpp] Toast notification bars use raw ImDrawList rendering instead of native ImGui widgets
   - **JS Source**: `src/index.html` (toast `<div id="toast">` template); `src/app.css` lines 220–280
