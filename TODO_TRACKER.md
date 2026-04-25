@@ -856,8 +856,6 @@
 - **Status**: Pending
 - **Details**: The DecorListboxContextMenu popup requires ImGui::OpenPopup to be called. The handle_listbox_context callback does not open this popup. The popup rendering code will never trigger.
 
-## Tab: Characters
-
 - [ ] 625. [app.cpp] Toast notification bars use raw ImDrawList rendering instead of native ImGui widgets
   - **JS Source**: `src/index.html` (toast `<div id="toast">` template); `src/app.css` lines 220–280
   - **Status**: Pending
