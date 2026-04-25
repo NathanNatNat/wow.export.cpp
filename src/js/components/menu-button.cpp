@@ -58,31 +58,11 @@ static int selected(const MenuButtonState& state, const std::vector<MenuOption>&
 static void select(int optionIndex, MenuButtonState& state,
                     const std::vector<MenuOption>& options,
                     const std::function<void(const std::string&)>& onChange) {
-	state.open = false;
 	if (optionIndex >= 0 && optionIndex < static_cast<int>(options.size())) {
 		state.selectedValue = options[static_cast<size_t>(optionIndex)].value;
 		if (onChange)
 			onChange(options[static_cast<size_t>(optionIndex)].value);
 	}
-}
-
-/**
- * Attempt to open the menu.
- * Respects component disabled state.
- */
-static void openMenu(bool disabled, MenuButtonState& state) {
-	state.open = !state.open && !disabled;
-}
-
-/**
- * Handle clicks onto the button node.
- */
-static void handleClick(bool dropdownMode, bool disabled, MenuButtonState& state,
-                         const std::function<void()>& onClick) {
-	if (dropdownMode)
-		openMenu(disabled, state);
-	else if (onClick)
-		onClick();
 }
 
 static void drawArrowButton(float width, bool hoveredOrOpen, bool disabled) {
@@ -132,6 +112,9 @@ void render(const char* id, const std::vector<MenuOption>& options,
 
 	ImGui::PushID(id);
 
+	const std::string popupId = std::string("##mbp_") + id;
+	const bool popupOpen = ImGui::IsPopupOpen(popupId.c_str());
+
 	// <div class="ui-menu-button" :class="{ disabled, dropdown, open }">
 	const int selectedIdx = selected(state, options, defaultVal);
 	const MenuOption& selectedOpt = options[static_cast<size_t>(selectedIdx)];
@@ -139,10 +122,8 @@ void render(const char* id, const std::vector<MenuOption>& options,
 	// Determine the display label: this.selected.label ?? this.selected.value
 	const std::string& displayLabel = selectedOpt.label.empty() ? selectedOpt.value : selectedOpt.label;
 
-	// Disable visual style if disabled.
-	if (disabled) {
+	if (disabled)
 		ImGui::BeginDisabled(true);
-	}
 
 	// <input type="button" :value="this.selected.label ?? this.selected.value" @click="handleClick"/>
 	const float arrowWidth = 29.0f;
@@ -150,7 +131,7 @@ void render(const char* id, const std::vector<MenuOption>& options,
 	const float buttonWidth = totalWidth - arrowWidth;
 	const ImVec2 buttonGroupMin = ImGui::GetCursorScreenPos();
 	const ImVec2 buttonGroupMax(buttonGroupMin.x + totalWidth, buttonGroupMin.y + ImGui::GetFrameHeight());
-	const bool hoveredButtonGroup = !disabled && (state.open || (dropdown && ImGui::IsMouseHoveringRect(buttonGroupMin, buttonGroupMax)));
+	const bool hoveredButtonGroup = !disabled && (popupOpen || (dropdown && ImGui::IsMouseHoveringRect(buttonGroupMin, buttonGroupMax)));
 
 	ImGui::PushStyleColor(ImGuiCol_Button,
 		hoveredButtonGroup ? app::theme::BUTTON_HOVER : ImGui::GetStyleColorVec4(ImGuiCol_Button));
@@ -158,90 +139,73 @@ void render(const char* id, const std::vector<MenuOption>& options,
 	ImGui::PushStyleColor(ImGuiCol_ButtonActive, app::theme::BUTTON_HOVER);
 
 	if (ImGui::Button(displayLabel.c_str(), ImVec2(buttonWidth, 0.0f))) {
-		handleClick(dropdown, disabled, state, onClick);
+		if (dropdown) {
+			if (!disabled)
+				ImGui::OpenPopup(popupId.c_str());
+		} else if (onClick) {
+			onClick();
+		}
 	}
 
 	ImGui::SameLine(0.0f, 0.0f);
 	ImGui::PopStyleColor(3);
+
+	// <div class="arrow" @click.stop="openMenu"></div>
 	drawArrowButton(arrowWidth, hoveredButtonGroup, disabled);
 	if (!disabled && ImGui::IsItemHovered())
 		ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-	if (ImGui::IsItemClicked()) {
-		openMenu(disabled, state);
-	}
+	if (!disabled && ImGui::IsItemClicked())
+		ImGui::OpenPopup(popupId.c_str());
 
-	if (disabled) {
+	if (disabled)
 		ImGui::EndDisabled();
-	}
 
 	// <context-menu :node="open" @close="open = false">
 	//     <span v-for="option in options" @click="select(option)">{{ option.label ?? option.value }}</span>
 	// </context-menu>
-	if (state.open) {
-		const ImVec2 buttonMin = buttonGroupMin;
-		const ImVec2 buttonMax = ImVec2(buttonGroupMin.x + totalWidth, buttonGroupMin.y + ImGui::GetFrameHeight());
-		const float popupY = upward ? buttonMin.y : buttonMax.y;
+	//
+	// Use ImGui's proper popup API so input is always routed to the popup window.
+	const float popupY = upward ? buttonGroupMin.y : buttonGroupMax.y;
+	const ImVec2 pivot = upward ? ImVec2(0.0f, 1.0f) : ImVec2(0.0f, 0.0f);
+	ImGui::SetNextWindowPos(ImVec2(buttonGroupMin.x, popupY), ImGuiCond_Always, pivot);
 
-		ImGui::SetNextWindowPos(ImVec2(buttonMin.x, popupY), ImGuiCond_Always, upward ? ImVec2(0.0f, 1.0f) : ImVec2(0.0f, 0.0f));
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.137f, 0.137f, 0.137f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
-		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.137f, 0.137f, 0.137f, 1.0f));
+	ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
+	ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
+	ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 
-		ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-		                               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
-		                               ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-		                               ImGuiWindowFlags_NoMove;
+	if (ImGui::BeginPopup(popupId.c_str(), ImGuiWindowFlags_NoNav)) {
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 8.0f));
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-		if (ImGui::Begin((std::string("##menu_button_popup_") + id).c_str(), nullptr, windowFlags)) {
-			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 8.0f));
-			ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-			for (size_t i = 0; i < options.size(); ++i) {
-				const std::string& optLabel = options[i].label.empty() ? options[i].value : options[i].label;
-				if (ImGui::Selectable(optLabel.c_str(), false, ImGuiSelectableFlags_None,
-				                      ImVec2(ImGui::CalcTextSize(optLabel.c_str()).x + 16.0f, 0.0f))) {
-					select(static_cast<int>(i), state, options, onChange);
-				}
-
-				if (i + 1 < options.size()) {
-					const ImVec2 separatorPos = ImGui::GetCursorScreenPos();
-					drawList->AddLine(
-						separatorPos,
-						ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, separatorPos.y),
-						app::theme::BORDER_U32
-					);
-				}
+		for (size_t i = 0; i < options.size(); ++i) {
+			const std::string& optLabel = options[i].label.empty() ? options[i].value : options[i].label;
+			if (ImGui::Selectable(optLabel.c_str(), false, ImGuiSelectableFlags_None, ImVec2(0.0f, 0.0f))) {
+				select(static_cast<int>(i), state, options, onChange);
+				ImGui::CloseCurrentPopup();
 			}
 
-			constexpr float hoverZonePadding = 20.0f;
-			const ImVec2 mousePos = ImGui::GetIO().MousePos;
-			ImVec2 zoneMin = ImGui::GetWindowPos();
-			ImVec2 zoneMax(zoneMin.x + ImGui::GetWindowSize().x, zoneMin.y + ImGui::GetWindowSize().y);
-			zoneMin.x -= hoverZonePadding;
-			zoneMin.y -= hoverZonePadding;
-			zoneMax.x += hoverZonePadding;
-			zoneMax.y += hoverZonePadding;
-			const bool insideHoverZone = mousePos.x >= zoneMin.x && mousePos.x <= zoneMax.x &&
-			                             mousePos.y >= zoneMin.y && mousePos.y <= zoneMax.y;
-
-			if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
-			    ImGui::IsMouseClicked(0)) {
-				state.open = false;
-			} else if (!insideHoverZone) {
-				state.open = false;
+			if (i + 1 < options.size()) {
+				const ImVec2 separatorPos = ImGui::GetCursorScreenPos();
+				drawList->AddLine(
+					separatorPos,
+					ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, separatorPos.y),
+					app::theme::BORDER_U32
+				);
 			}
-
-			ImGui::PopStyleVar();
 		}
-		ImGui::End();
 
-		ImGui::PopStyleVar(2);
-		ImGui::PopStyleColor(5);
+		ImGui::PopStyleVar();
+		ImGui::EndPopup();
 	}
+
+	ImGui::PopStyleVar(2);
+	ImGui::PopStyleColor(5);
+
+	state.open = popupOpen;
 
 	ImGui::PopID();
 }
