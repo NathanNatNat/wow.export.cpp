@@ -444,7 +444,6 @@ static constexpr float NAV_ICON_HEIGHT = 52.0f;
 static constexpr ImVec4 COLOR_BG_DARK    = app::theme::BG_DARK;
 static constexpr ImVec4 COLOR_BORDER     = app::theme::BORDER;
 static constexpr ImVec4 COLOR_FONT_FADED = app::theme::FONT_FADED;
-static constexpr ImVec4 COLOR_NAV_ACTIVE = app::theme::NAV_SELECTED;
 
 /**
  * Invoked when a toast option is clicked.
@@ -487,6 +486,51 @@ static void removeOverrideTextures() {
 	core::view->overrideTextureName.clear();
 }
 
+// Renders one full-width toast bar using native ImGui widgets.
+// actions: (label, callback) pairs rendered as SmallButtons.
+// on_close: invoked when the close button is clicked.
+static void renderToastBar(
+	float bar_width,
+	const ImVec4& bg_color,
+	const char* icon_glyph,
+	const std::string& message,
+	const std::vector<std::pair<std::string, std::function<void()>>>& actions,
+	bool closable,
+	const std::function<void()>& on_close)
+{
+	ImGui::PushStyleColor(ImGuiCol_ChildBg, bg_color);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
+	ImGui::BeginChild("##toast", ImVec2(bar_width, TOAST_HEIGHT),
+		ImGuiChildFlags_None,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+	ImGui::PushFont(app::theme::getIconFont());
+	ImGui::TextUnformatted(icon_glyph);
+	ImGui::PopFont();
+	ImGui::SameLine(0.0f, 6.0f);
+	ImGui::TextUnformatted(message.c_str());
+
+	for (size_t i = 0; i < actions.size(); ++i) {
+		ImGui::PushID(static_cast<int>(i));
+		ImGui::SameLine(0.0f, 8.0f);
+		if (ImGui::SmallButton(actions[i].first.c_str()))
+			actions[i].second();
+		ImGui::PopID();
+	}
+
+	if (closable) {
+		ImGui::SameLine(bar_width - 32.0f, 0.0f);
+		ImGui::PushFont(app::theme::getIconFont());
+		if (ImGui::SmallButton(ICON_FA_XMARK "##close"))
+			on_close();
+		ImGui::PopFont();
+	}
+
+	ImGui::EndChild();
+	ImGui::PopStyleVar();
+	ImGui::PopStyleColor();
+}
+
 static void renderAppShell() {
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 	const ImVec2 vp_pos = viewport->WorkPos;
@@ -495,8 +539,6 @@ static void renderAppShell() {
 	{
 		ImGui::SetNextWindowPos(vp_pos);
 		ImGui::SetNextWindowSize(ImVec2(vp_size.x, HEADER_HEIGHT));
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, COLOR_BG_DARK);
-		ImGui::PushStyleColor(ImGuiCol_Border, COLOR_BORDER);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 		ImGui::Begin("##AppHeader", nullptr,
@@ -506,11 +548,11 @@ static void renderAppShell() {
 			ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing);
 
 		ImDrawList* draw = ImGui::GetWindowDrawList();
-		// Draw 1px bottom border (border-bottom: 1px solid --border)
+		// Draw 1px bottom border separating header from content.
 		draw->AddLine(
 			ImVec2(vp_pos.x, vp_pos.y + HEADER_HEIGHT - 1.0f),
 			ImVec2(vp_pos.x + vp_size.x, vp_pos.y + HEADER_HEIGHT - 1.0f),
-			ImGui::ColorConvertFloat4ToU32(COLOR_BORDER), 1.0f);
+			ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 
 		// CSS: #container #header.shadowed { box-shadow: black 0 0 5px; }
 		// Applied when a toast is visible. Approximate with a black opacity gradient below the header.
@@ -568,190 +610,115 @@ static void renderAppShell() {
 				if (!(btn.installTypes & static_cast<uint32_t>(core::view->installType)))
 					continue;
 
-				bool is_active = false;
-				if (core::view->activeModule.is_object() &&
+				const bool is_active = core::view->activeModule.is_object() &&
 					core::view->activeModule.contains("__name") &&
-					core::view->activeModule["__name"].get<std::string>() == btn.module) {
-					is_active = true;
-				}
+					core::view->activeModule["__name"].get<std::string>() == btn.module;
 
 				ImGui::PushID(btn.module.c_str());
-
-				// Use InvisibleButton for hit testing, then draw icon with correct tint.
 				ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - NAV_ICON_HEIGHT) * 0.5f));
-				ImGui::InvisibleButton("##nav", ImVec2(NAV_ICON_WIDTH, NAV_ICON_HEIGHT));
-				bool hovered = ImGui::IsItemHovered();
-				bool clicked = ImGui::IsItemClicked();
 
-				// Tint: active = green (#22b549), hover = brightness(2), default = dim white
-				ImU32 tint_u32;
 				if (is_active)
-					tint_u32 = ImGui::ColorConvertFloat4ToU32(COLOR_NAV_ACTIVE);
-				else if (hovered)
-					tint_u32 = IM_COL32(255, 255, 255, 255); // Full opacity on hover
-				else
-					tint_u32 = IM_COL32(255, 255, 255, 204); // 0.8 alpha default
+					ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
 
-				// Try icon font first, fall back to SVG texture for custom icons
+				bool clicked = false;
 				const char* icon_glyph = app::theme::getIconForFilename(btn.icon);
 				if (icon_glyph) {
-					// Render icon using Font Awesome icon font
-					ImVec2 btn_min = ImGui::GetItemRectMin();
-					float icon_font_size = NAV_ICON_HEIGHT - 16.0f; // ~36px icon within 52px button
-					ImFont* icon_font = app::theme::getIconFont();
-					ImVec2 text_size = icon_font->CalcTextSizeA(icon_font_size, FLT_MAX, 0.0f, icon_glyph);
-					ImVec2 icon_pos(btn_min.x + (NAV_ICON_WIDTH - text_size.x) * 0.5f,
-					                btn_min.y + (NAV_ICON_HEIGHT - text_size.y) * 0.5f);
-					ImGui::GetWindowDrawList()->AddText(icon_font, icon_font_size, icon_pos, tint_u32, icon_glyph);
+					ImGui::PushFont(app::theme::getIconFont());
+					clicked = ImGui::Button(icon_glyph, ImVec2(NAV_ICON_WIDTH, NAV_ICON_HEIGHT));
+					ImGui::PopFont();
 				} else {
-					// Fallback: render custom icon via SVG texture
 					GLuint icon_tex = getNavIconTexture(btn.icon);
 					if (icon_tex) {
-						ImVec2 icon_size(NAV_ICON_WIDTH, NAV_ICON_HEIGHT - 8.0f);
-						ImVec2 btn_min = ImGui::GetItemRectMin();
-						ImVec2 icon_min(btn_min.x, btn_min.y + (NAV_ICON_HEIGHT - icon_size.y) * 0.5f);
-						ImVec2 icon_max(icon_min.x + icon_size.x, icon_min.y + icon_size.y);
-						ImGui::GetWindowDrawList()->AddImage(
+						ImVec4 tint = is_active ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f) : ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+						clicked = ImGui::ImageButton("##nav",
 							static_cast<ImTextureID>(static_cast<uintptr_t>(icon_tex)),
-							icon_min, icon_max, ImVec2(0, 0), ImVec2(1, 1), tint_u32);
+							ImVec2(NAV_ICON_WIDTH - 8.0f, NAV_ICON_HEIGHT - 16.0f),
+							ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), tint);
 					}
 				}
+
+				if (is_active)
+					ImGui::PopStyleColor();
 
 				if (clicked)
 					modules::setActive(btn.module);
 
-				// Tooltip label on hover: white text on dark background, to the right of the icon
-				//      background: var(--background-dark); height: 52px; }
-				if (hovered) {
-					ImVec2 tooltip_pos(ImGui::GetItemRectMax().x + 8.0f, ImGui::GetItemRectMin().y);
-					ImGui::SetNextWindowPos(tooltip_pos);
-					ImGui::PushStyleColor(ImGuiCol_PopupBg, COLOR_BG_DARK);
-					ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_PRIMARY);
-					ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 0.0f));
-					ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-					ImGui::BeginTooltip();
-					// Vertically center text within 52px height
-					float text_h = ImGui::GetTextLineHeight();
-					ImGui::SetCursorPosY((NAV_ICON_HEIGHT - text_h) * 0.5f);
-					ImGui::TextUnformatted(btn.label.c_str());
-					ImGui::EndTooltip();
-					ImGui::PopStyleVar(2);
-					ImGui::PopStyleColor(2);
-				}
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("%s", btn.label.c_str());
 
 				ImGui::PopID();
-
 				cursor_x += NAV_ICON_WIDTH;
 			}
 
 			// These are positioned from the right edge of the header.
-
 			float right_x = vp_size.x;
 
 			// Hamburger menu icon (rightmost, 15px right margin)
 			if (!core::view->isBusy) {
 				right_x -= 15.0f + 20.0f;
 				ImGui::SetCursorPos(ImVec2(right_x, (HEADER_HEIGHT - 20.0f) * 0.5f));
-				{
-					ImGui::PushID("##nav-extra");
-					ImGui::InvisibleButton("##hamburger", ImVec2(20.0f, 20.0f));
-					// JS: @click="contextMenus.stateNavExtra = true" — always opens (not toggle)
-					if (ImGui::IsItemClicked())
-						ImGui::OpenPopup("##MenuExtraPopup");
-					// Render hamburger icon using custom SVG texture (line-columns.svg)
-					GLuint hamburger_tex = getNavIconTexture("line-columns.svg");
-					ImVec2 btn_min = ImGui::GetItemRectMin();
-					if (hamburger_tex) {
-						float icon_display = 18.0f;
-						ImVec2 icon_pos(btn_min.x + (20.0f - icon_display) * 0.5f,
-						                btn_min.y + (20.0f - icon_display) * 0.5f);
-						ImGui::GetWindowDrawList()->AddImage(
-							static_cast<ImTextureID>(static_cast<uintptr_t>(hamburger_tex)),
-							icon_pos,
-							ImVec2(icon_pos.x + icon_display, icon_pos.y + icon_display),
-							ImVec2(0, 0), ImVec2(1, 1),
-							app::theme::FONT_PRIMARY_U32);
-					} else {
-						// Fallback to Font Awesome glyph if SVG failed to load
-						ImFont* icon_font = app::theme::getIconFont();
-						float icon_size = 18.0f;
-						ImVec2 text_sz = icon_font->CalcTextSizeA(icon_size, FLT_MAX, 0.0f, ICON_FA_BARS);
-						ImVec2 icon_pos(btn_min.x + (20.0f - text_sz.x) * 0.5f,
-						                btn_min.y + (20.0f - text_sz.y) * 0.5f);
-						ImGui::GetWindowDrawList()->AddText(icon_font, icon_size, icon_pos,
-							app::theme::FONT_PRIMARY_U32, ICON_FA_BARS);
-					}
+				ImGui::PushID("##nav-extra");
 
-					// Context menu popup for hamburger button
-					// Uses ImGui popup API for correct z-ordering (always on top) and
-					// automatic close-on-click-outside, matching JS <context-menu> behavior.
-					ImGui::SetNextWindowPos(ImVec2(vp_pos.x + right_x + 20.0f, vp_pos.y + HEADER_HEIGHT), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-					ImGui::PushStyleColor(ImGuiCol_PopupBg, COLOR_BG_DARK);
-					if (ImGui::BeginPopup("##MenuExtraPopup",
-						ImGuiWindowFlags_AlwaysAutoResize)) {
-
-						const auto& contextOpts = modules::getContextMenuOptions();
-						for (const auto& opt : contextOpts) {
-							if (opt.dev_only && !(core::view->isDev))
-								continue;
-
-							if (ImGui::MenuItem(opt.label.c_str())) {
-								if (opt.handler)
-									opt.handler();
-								else
-									modules::setActive(opt.id);
-							}
-						}
-
-						ImGui::EndPopup();
-					}
-					ImGui::PopStyleColor();
-
-					ImGui::PopID();
+				GLuint hamburger_tex = getNavIconTexture("line-columns.svg");
+				bool hamburger_clicked = false;
+				if (hamburger_tex) {
+					hamburger_clicked = ImGui::ImageButton("##hamburger",
+						static_cast<ImTextureID>(static_cast<uintptr_t>(hamburger_tex)),
+						ImVec2(18.0f, 18.0f));
+				} else {
+					ImGui::PushFont(app::theme::getIconFont());
+					hamburger_clicked = ImGui::Button(ICON_FA_BARS, ImVec2(20.0f, 20.0f));
+					ImGui::PopFont();
 				}
+
+				// JS: @click="contextMenus.stateNavExtra = true" — always opens (not toggle)
+				if (hamburger_clicked)
+					ImGui::OpenPopup("##MenuExtraPopup");
+
+				// Context menu popup — uses ImGui popup API for correct z-ordering and
+				// automatic close-on-click-outside, matching JS <context-menu> behavior.
+				ImGui::SetNextWindowPos(ImVec2(vp_pos.x + right_x + 20.0f, vp_pos.y + HEADER_HEIGHT), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+				if (ImGui::BeginPopup("##MenuExtraPopup", ImGuiWindowFlags_AlwaysAutoResize)) {
+					const auto& contextOpts = modules::getContextMenuOptions();
+					for (const auto& opt : contextOpts) {
+						if (opt.dev_only && !(core::view->isDev))
+							continue;
+						if (ImGui::MenuItem(opt.label.c_str())) {
+							if (opt.handler)
+								opt.handler();
+							else
+								modules::setActive(opt.id);
+						}
+					}
+					ImGui::EndPopup();
+				}
+				ImGui::PopID();
 
 				// Help icon (left of hamburger, 10px right margin)
 				right_x -= 10.0f + 20.0f;
 				ImGui::SetCursorPos(ImVec2(right_x, (HEADER_HEIGHT - 20.0f) * 0.5f));
-				{
-					ImGui::PushID("##nav-help");
-					ImGui::InvisibleButton("##help", ImVec2(20.0f, 20.0f));
-					// Render help icon using custom SVG texture (help.svg)
-					GLuint help_tex = getNavIconTexture("help.svg");
-					ImVec2 btn_min = ImGui::GetItemRectMin();
-					if (help_tex) {
-						float icon_display = 18.0f;
-						ImVec2 icon_pos(btn_min.x + (20.0f - icon_display) * 0.5f,
-						                btn_min.y + (20.0f - icon_display) * 0.5f);
-						ImGui::GetWindowDrawList()->AddImage(
-							static_cast<ImTextureID>(static_cast<uintptr_t>(help_tex)),
-							icon_pos,
-							ImVec2(icon_pos.x + icon_display, icon_pos.y + icon_display),
-							ImVec2(0, 0), ImVec2(1, 1),
-							app::theme::FONT_PRIMARY_U32);
-					} else {
-						// Fallback to Font Awesome glyph if SVG failed to load
-						ImFont* icon_font = app::theme::getIconFont();
-						float icon_size = 18.0f;
-						ImVec2 text_sz = icon_font->CalcTextSizeA(icon_size, FLT_MAX, 0.0f, ICON_FA_CIRCLE_QUESTION);
-						ImVec2 icon_pos(btn_min.x + (20.0f - text_sz.x) * 0.5f,
-						                btn_min.y + (20.0f - text_sz.y) * 0.5f);
-						ImGui::GetWindowDrawList()->AddText(icon_font, icon_size, icon_pos,
-							app::theme::FONT_PRIMARY_U32, ICON_FA_CIRCLE_QUESTION);
-					}
-					if (ImGui::IsItemHovered()) {
-						ImGui::BeginTooltip();
-						ImGui::TextUnformatted("Help");
-						ImGui::EndTooltip();
-					}
-					ImGui::PopID();
+				ImGui::PushID("##nav-help");
+
+				GLuint help_tex = getNavIconTexture("help.svg");
+				if (help_tex) {
+					ImGui::ImageButton("##help",
+						static_cast<ImTextureID>(static_cast<uintptr_t>(help_tex)),
+						ImVec2(18.0f, 18.0f));
+				} else {
+					ImGui::PushFont(app::theme::getIconFont());
+					ImGui::Button(ICON_FA_CIRCLE_QUESTION, ImVec2(20.0f, 20.0f));
+					ImGui::PopFont();
 				}
+
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("Help");
+
+				ImGui::PopID();
 			}
 		}
 
 		ImGui::End();
 		ImGui::PopStyleVar(2);
-		ImGui::PopStyleColor(2);
 	}
 
 	{
@@ -906,97 +873,19 @@ static void renderAppShell() {
 			const auto& toast = core::view->toast.value();
 			toast_h = TOAST_HEIGHT;
 
-			// Determine background color and icon based on toast type
-			ImU32 bg_color = app::theme::TOAST_INFO_U32;
-			const char* icon_glyph = ICON_FA_CIRCLE_INFO;
-			if (toast.type == "error") {
-				bg_color = app::theme::TOAST_ERROR_U32;
-				icon_glyph = ICON_FA_TRIANGLE_EXCLAMATION;
-			} else if (toast.type == "success") {
-				bg_color = app::theme::TOAST_SUCCESS_U32;
-				icon_glyph = ICON_FA_CHECK;
-			} else if (toast.type == "progress") {
-				bg_color = app::theme::TOAST_PROGRESS_U32;
-				icon_glyph = ICON_FA_STOPWATCH;
-			}
+			ImVec4 bg_color;
+			const char* icon_glyph;
+			if      (toast.type == "error")    { bg_color = ImVec4(0.60f, 0.18f, 0.18f, 1.0f); icon_glyph = ICON_FA_TRIANGLE_EXCLAMATION; }
+			else if (toast.type == "success")  { bg_color = ImVec4(0.18f, 0.52f, 0.18f, 1.0f); icon_glyph = ICON_FA_CHECK; }
+			else if (toast.type == "progress") { bg_color = ImVec4(0.52f, 0.40f, 0.10f, 1.0f); icon_glyph = ICON_FA_STOPWATCH; }
+			else                               { bg_color = ImVec4(0.18f, 0.36f, 0.60f, 1.0f); icon_glyph = ICON_FA_CIRCLE_INFO; }
 
-			// Draw the toast bar background (full width, 30px tall)
-			ImVec2 toast_min = ImGui::GetCursorScreenPos();
-			ImVec2 toast_max(toast_min.x + vp_size.x, toast_min.y + TOAST_HEIGHT);
-			ImDrawList* dl = ImGui::GetWindowDrawList();
-			dl->AddRectFilled(toast_min, toast_max, bg_color);
+			std::vector<std::pair<std::string, std::function<void()>>> acts;
+			for (const auto& act : toast.actions)
+				acts.emplace_back(act.label, [cb = act.callback]() { handleToastOptionClick(cb); });
 
-			// Icon: 15px, positioned at 10px from left, vertically centered
-			constexpr float ICON_SIZE = 15.0f;
-			constexpr float ICON_LEFT = 10.0f;
-			ImFont* icon_font = app::theme::getIconFont();
-			ImVec2 icon_text_size = icon_font->CalcTextSizeA(ICON_SIZE, FLT_MAX, 0.0f, icon_glyph);
-			ImVec2 icon_pos(toast_min.x + ICON_LEFT,
-			                toast_min.y + (TOAST_HEIGHT - icon_text_size.y) * 0.5f);
-			dl->AddText(icon_font, ICON_SIZE, icon_pos, app::theme::FONT_TOAST_U32, icon_glyph);
-
-			// Message text: starts at padding-left: 30px
-			constexpr float TEXT_LEFT = 30.0f;
-			constexpr float TEXT_FONT_SIZE = 15.0f;
-			ImFont* font = ImGui::GetFont();
-			ImVec2 msg_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, toast.message.c_str());
-			ImVec2 msg_pos(toast_min.x + TEXT_LEFT,
-			               toast_min.y + (TOAST_HEIGHT - msg_size.y) * 0.5f);
-			dl->AddText(font, TEXT_FONT_SIZE, msg_pos, app::theme::FONT_TOAST_U32, toast.message.c_str());
-
-			// Action links
-			float action_x = msg_pos.x + msg_size.x;
-			for (size_t i = 0; i < toast.actions.size(); ++i) {
-				const auto& action = toast.actions[i];
-				action_x += 5.0f; // left margin
-				ImVec2 act_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, action.label.c_str());
-				ImVec2 act_pos(action_x, toast_min.y + (TOAST_HEIGHT - act_size.y) * 0.5f);
-
-				// Invisible button for click detection
-				ImGui::SetCursorScreenPos(act_pos);
-				std::string act_id = "##toast_action_" + std::to_string(i);
-				ImGui::InvisibleButton(act_id.c_str(), act_size);
-				if (ImGui::IsItemClicked()) {
-					handleToastOptionClick(action.callback);
-				}
-				if (ImGui::IsItemHovered())
-					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-
-				// Draw text and underline
-				dl->AddText(font, TEXT_FONT_SIZE, act_pos, app::theme::FONT_TOAST_LINK_U32, action.label.c_str());
-				dl->AddLine(ImVec2(act_pos.x, act_pos.y + act_size.y),
-				            ImVec2(act_pos.x + act_size.x, act_pos.y + act_size.y),
-				            app::theme::FONT_TOAST_LINK_U32, 1.0f);
-
-				action_x += act_size.x + 5.0f; // right margin
-			}
-
-			// Close button: xmark icon at the right edge
-			if (toast.closable) {
-				constexpr float CLOSE_WIDTH = 30.0f;
-				constexpr float CLOSE_ICON_SIZE = 10.0f;
-				ImVec2 close_pos(toast_max.x - CLOSE_WIDTH,
-				                 toast_min.y);
-				ImGui::SetCursorScreenPos(close_pos);
-				ImGui::InvisibleButton("##toast_close", ImVec2(CLOSE_WIDTH, TOAST_HEIGHT));
-				if (ImGui::IsItemClicked()) {
-					hideToast(true);
-				}
-				if (ImGui::IsItemHovered())
-					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-
-				// Draw xmark icon centered in the close area
-				const char* close_glyph = ICON_FA_XMARK;
-				ImVec2 close_icon_size = icon_font->CalcTextSizeA(CLOSE_ICON_SIZE, FLT_MAX, 0.0f, close_glyph);
-				ImVec2 close_icon_pos(
-					close_pos.x + (CLOSE_WIDTH - close_icon_size.x) * 0.5f,
-					close_pos.y + (TOAST_HEIGHT - close_icon_size.y) * 0.5f);
-				dl->AddText(icon_font, CLOSE_ICON_SIZE, close_icon_pos,
-				            app::theme::FONT_TOAST_U32, close_glyph);
-			}
-
-			// Advance cursor past the toast bar
-			ImGui::SetCursorScreenPos(ImVec2(toast_min.x, toast_max.y));
+			renderToastBar(vp_size.x, bg_color, icon_glyph, toast.message, acts,
+			               toast.closable, []() { hideToast(true); });
 		}
 
 		// Secondary toast: model override filter bar.
@@ -1009,73 +898,11 @@ static void renderAppShell() {
 			modules::ModuleDef* cur = modules::getActive();
 			if (cur && cur->name == "tab_models" && !core::view->overrideModelList.empty()) {
 				toast_h = TOAST_HEIGHT;
-
-				ImU32 bg_color = app::theme::TOAST_PROGRESS_U32;
-				const char* icon_glyph = ICON_FA_STOPWATCH;
-
-				ImVec2 toast_min = ImGui::GetCursorScreenPos();
-				ImVec2 toast_max(toast_min.x + vp_size.x, toast_min.y + TOAST_HEIGHT);
-				ImDrawList* dl = ImGui::GetWindowDrawList();
-				dl->AddRectFilled(toast_min, toast_max, bg_color);
-
-				// Icon
-				constexpr float ICON_SIZE = 15.0f;
-				constexpr float ICON_LEFT = 10.0f;
-				ImFont* icon_font = app::theme::getIconFont();
-				ImVec2 icon_text_size = icon_font->CalcTextSizeA(ICON_SIZE, FLT_MAX, 0.0f, icon_glyph);
-				ImVec2 icon_pos(toast_min.x + ICON_LEFT,
-				                toast_min.y + (TOAST_HEIGHT - icon_text_size.y) * 0.5f);
-				dl->AddText(icon_font, ICON_SIZE, icon_pos, app::theme::FONT_TOAST_U32, icon_glyph);
-
-				// Message: "Filtering models for item: {overrideModelName}"
-				constexpr float TEXT_LEFT = 30.0f;
-				constexpr float TEXT_FONT_SIZE = 15.0f;
-				ImFont* font = ImGui::GetFont();
 				std::string msg = std::format("Filtering models for item: {}", core::view->overrideModelName);
-				ImVec2 msg_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, msg.c_str());
-				ImVec2 msg_pos(toast_min.x + TEXT_LEFT,
-				               toast_min.y + (TOAST_HEIGHT - msg_size.y) * 0.5f);
-				dl->AddText(font, TEXT_FONT_SIZE, msg_pos, app::theme::FONT_TOAST_U32, msg.c_str());
-
-				// "Remove" action link
-				float action_x = msg_pos.x + msg_size.x + 5.0f;
-				const char* remove_label = "Remove";
-				ImVec2 act_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, remove_label);
-				ImVec2 act_pos(action_x, toast_min.y + (TOAST_HEIGHT - act_size.y) * 0.5f);
-
-				ImGui::SetCursorScreenPos(act_pos);
-				ImGui::InvisibleButton("##override_remove", act_size);
-				if (ImGui::IsItemClicked())
-					removeOverrideModels();
-				if (ImGui::IsItemHovered())
-					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-
-				dl->AddText(font, TEXT_FONT_SIZE, act_pos, app::theme::FONT_TOAST_LINK_U32, remove_label);
-				dl->AddLine(ImVec2(act_pos.x, act_pos.y + act_size.y),
-				            ImVec2(act_pos.x + act_size.x, act_pos.y + act_size.y),
-				            app::theme::FONT_TOAST_LINK_U32, 1.0f);
-
-				// Close button (also calls removeOverrideModels)
-				constexpr float CLOSE_WIDTH = 30.0f;
-				constexpr float CLOSE_ICON_SIZE = 10.0f;
-				ImVec2 close_pos(toast_max.x - CLOSE_WIDTH, toast_min.y);
-				ImGui::SetCursorScreenPos(close_pos);
-				ImGui::InvisibleButton("##override_close", ImVec2(CLOSE_WIDTH, TOAST_HEIGHT));
-				if (ImGui::IsItemClicked())
-					removeOverrideModels();
-				if (ImGui::IsItemHovered())
-					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-
-				const char* close_glyph = ICON_FA_XMARK;
-				ImVec2 close_icon_size = icon_font->CalcTextSizeA(CLOSE_ICON_SIZE, FLT_MAX, 0.0f, close_glyph);
-				ImVec2 close_icon_pos(
-					close_pos.x + (CLOSE_WIDTH - close_icon_size.x) * 0.5f,
-					close_pos.y + (TOAST_HEIGHT - close_icon_size.y) * 0.5f);
-				dl->AddText(icon_font, CLOSE_ICON_SIZE, close_icon_pos,
-				            app::theme::FONT_TOAST_U32, close_glyph);
-
-				// Advance cursor past the override toast bar
-				ImGui::SetCursorScreenPos(ImVec2(toast_min.x, toast_max.y));
+				std::vector<std::pair<std::string, std::function<void()>>> acts;
+				acts.emplace_back("Remove", removeOverrideModels);
+				renderToastBar(vp_size.x, ImVec4(0.52f, 0.40f, 0.10f, 1.0f), ICON_FA_STOPWATCH,
+				               msg, acts, true, removeOverrideModels);
 			}
 		}
 
@@ -1090,73 +917,11 @@ static void renderAppShell() {
 			modules::ModuleDef* cur = modules::getActive();
 			if (cur && cur->name == "tab_textures" && !core::view->overrideTextureList.empty()) {
 				toast_h = TOAST_HEIGHT;
-
-				ImU32 bg_color = app::theme::TOAST_PROGRESS_U32;
-				const char* icon_glyph = ICON_FA_STOPWATCH;
-
-				ImVec2 toast_min = ImGui::GetCursorScreenPos();
-				ImVec2 toast_max(toast_min.x + vp_size.x, toast_min.y + TOAST_HEIGHT);
-				ImDrawList* dl = ImGui::GetWindowDrawList();
-				dl->AddRectFilled(toast_min, toast_max, bg_color);
-
-				// Icon
-				constexpr float ICON_SIZE = 15.0f;
-				constexpr float ICON_LEFT = 10.0f;
-				ImFont* icon_font = app::theme::getIconFont();
-				ImVec2 icon_text_size = icon_font->CalcTextSizeA(ICON_SIZE, FLT_MAX, 0.0f, icon_glyph);
-				ImVec2 icon_pos(toast_min.x + ICON_LEFT,
-				                toast_min.y + (TOAST_HEIGHT - icon_text_size.y) * 0.5f);
-				dl->AddText(icon_font, ICON_SIZE, icon_pos, app::theme::FONT_TOAST_U32, icon_glyph);
-
-				// Message: "Filtering textures for item: {overrideTextureName}"
-				constexpr float TEXT_LEFT = 30.0f;
-				constexpr float TEXT_FONT_SIZE = 15.0f;
-				ImFont* font = ImGui::GetFont();
 				std::string msg = std::format("Filtering textures for item: {}", core::view->overrideTextureName);
-				ImVec2 msg_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, msg.c_str());
-				ImVec2 msg_pos(toast_min.x + TEXT_LEFT,
-				               toast_min.y + (TOAST_HEIGHT - msg_size.y) * 0.5f);
-				dl->AddText(font, TEXT_FONT_SIZE, msg_pos, app::theme::FONT_TOAST_U32, msg.c_str());
-
-				// "Remove" action link
-				float action_x = msg_pos.x + msg_size.x + 5.0f;
-				const char* remove_label = "Remove";
-				ImVec2 act_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, remove_label);
-				ImVec2 act_pos(action_x, toast_min.y + (TOAST_HEIGHT - act_size.y) * 0.5f);
-
-				ImGui::SetCursorScreenPos(act_pos);
-				ImGui::InvisibleButton("##tex_override_remove", act_size);
-				if (ImGui::IsItemClicked())
-					removeOverrideTextures();
-				if (ImGui::IsItemHovered())
-					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-
-				dl->AddText(font, TEXT_FONT_SIZE, act_pos, app::theme::FONT_TOAST_LINK_U32, remove_label);
-				dl->AddLine(ImVec2(act_pos.x, act_pos.y + act_size.y),
-				            ImVec2(act_pos.x + act_size.x, act_pos.y + act_size.y),
-				            app::theme::FONT_TOAST_LINK_U32, 1.0f);
-
-				// Close button (also calls removeOverrideTextures)
-				constexpr float CLOSE_WIDTH = 30.0f;
-				constexpr float CLOSE_ICON_SIZE = 10.0f;
-				ImVec2 close_pos(toast_max.x - CLOSE_WIDTH, toast_min.y);
-				ImGui::SetCursorScreenPos(close_pos);
-				ImGui::InvisibleButton("##tex_override_close", ImVec2(CLOSE_WIDTH, TOAST_HEIGHT));
-				if (ImGui::IsItemClicked())
-					removeOverrideTextures();
-				if (ImGui::IsItemHovered())
-					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-
-				const char* close_glyph = ICON_FA_XMARK;
-				ImVec2 close_icon_size = icon_font->CalcTextSizeA(CLOSE_ICON_SIZE, FLT_MAX, 0.0f, close_glyph);
-				ImVec2 close_icon_pos(
-					close_pos.x + (CLOSE_WIDTH - close_icon_size.x) * 0.5f,
-					close_pos.y + (TOAST_HEIGHT - close_icon_size.y) * 0.5f);
-				dl->AddText(icon_font, CLOSE_ICON_SIZE, close_icon_pos,
-				            app::theme::FONT_TOAST_U32, close_glyph);
-
-				// Advance cursor past the texture override toast bar
-				ImGui::SetCursorScreenPos(ImVec2(toast_min.x, toast_max.y));
+				std::vector<std::pair<std::string, std::function<void()>>> acts;
+				acts.emplace_back("Remove", removeOverrideTextures);
+				renderToastBar(vp_size.x, ImVec4(0.52f, 0.40f, 0.10f, 1.0f), ICON_FA_STOPWATCH,
+				               msg, acts, true, removeOverrideTextures);
 			}
 		}
 
@@ -1591,7 +1356,7 @@ static void openRuntimeLog() {
  * JS equivalent: reloads <link> tags. C++ equivalent: re-applies the
  */
 static void reloadStylesheet() {
-	app::theme::applyTheme();
+	ImGui::StyleColorsDark();
 }
 
 /**
@@ -1938,112 +1703,6 @@ static float clampDpiScale(float raw) {
 
 namespace app::theme {
 
-void applyTheme() {
-	ImGuiStyle& style = ImGui::GetStyle();
-
-	ImVec4* colors = style.Colors;
-
-	// Window backgrounds
-	colors[ImGuiCol_WindowBg]  = BG;
-	colors[ImGuiCol_ChildBg]   = BG_ALT;
-	colors[ImGuiCol_PopupBg]   = BG_DARK;
-	colors[ImGuiCol_MenuBarBg] = BG_DARK;
-
-	// Borders
-	colors[ImGuiCol_Border]       = BORDER;
-	colors[ImGuiCol_BorderShadow] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-
-	// Text
-	colors[ImGuiCol_Text]         = FONT_PRIMARY;
-	colors[ImGuiCol_TextDisabled] = FONT_FADED;
-
-	// Frame (input fields, checkboxes, sliders)
-	colors[ImGuiCol_FrameBg]        = BG_ALT;
-	colors[ImGuiCol_FrameBgHovered] = ImVec4(BG_ALT.x * 1.2f, BG_ALT.y * 1.2f, BG_ALT.z * 1.2f, 1.0f);
-	colors[ImGuiCol_FrameBgActive]  = ImVec4(BG_ALT.x * 1.4f, BG_ALT.y * 1.4f, BG_ALT.z * 1.4f, 1.0f);
-
-	// Title bar
-	colors[ImGuiCol_TitleBg]          = BG_DARK;
-	colors[ImGuiCol_TitleBgActive]    = BG_DARK;
-	colors[ImGuiCol_TitleBgCollapsed] = BG_DARK;
-
-	// Scrollbar
-	colors[ImGuiCol_ScrollbarBg]          = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-	colors[ImGuiCol_ScrollbarGrab]        = BORDER;
-	colors[ImGuiCol_ScrollbarGrabHovered] = FONT_HIGHLIGHT;
-	colors[ImGuiCol_ScrollbarGrabActive]  = FONT_HIGHLIGHT;
-
-	colors[ImGuiCol_Button]        = BUTTON_BASE;
-	colors[ImGuiCol_ButtonHovered] = BUTTON_HOVER;
-	colors[ImGuiCol_ButtonActive]  = BUTTON_HOVER;
-
-	// Headers (collapsible headers, selectable highlights)
-	colors[ImGuiCol_Header]        = ImVec4(BUTTON_BASE.x, BUTTON_BASE.y, BUTTON_BASE.z, 0.3f);
-	colors[ImGuiCol_HeaderHovered] = ImVec4(BUTTON_BASE.x, BUTTON_BASE.y, BUTTON_BASE.z, 0.5f);
-	colors[ImGuiCol_HeaderActive]  = ImVec4(BUTTON_BASE.x, BUTTON_BASE.y, BUTTON_BASE.z, 0.7f);
-
-	// Separator
-	colors[ImGuiCol_Separator]        = BORDER;
-	colors[ImGuiCol_SeparatorHovered] = FONT_ALT;
-	colors[ImGuiCol_SeparatorActive]  = FONT_ALT;
-
-	// Resize grip
-	colors[ImGuiCol_ResizeGrip]        = ImVec4(BORDER.x, BORDER.y, BORDER.z, 0.5f);
-	colors[ImGuiCol_ResizeGripHovered] = FONT_ALT;
-	colors[ImGuiCol_ResizeGripActive]  = FONT_ALT;
-
-	// Tabs
-	colors[ImGuiCol_Tab]                = BG_DARK;
-	colors[ImGuiCol_TabHovered]         = BUTTON_BASE;
-	colors[ImGuiCol_TabSelected]        = BUTTON_BASE;
-	colors[ImGuiCol_TabSelectedOverline]= NAV_SELECTED;
-	colors[ImGuiCol_TabDimmed]          = BG_DARK;
-	colors[ImGuiCol_TabDimmedSelected]  = BG_ALT;
-
-	// Check mark
-	colors[ImGuiCol_CheckMark] = BUTTON_BASE;
-
-	// Slider grab
-	colors[ImGuiCol_SliderGrab]       = BUTTON_BASE;
-	colors[ImGuiCol_SliderGrabActive] = FONT_HIGHLIGHT;
-
-	// Table
-	colors[ImGuiCol_TableHeaderBg]     = BG_DARK;
-	colors[ImGuiCol_TableBorderStrong] = BORDER;
-	colors[ImGuiCol_TableBorderLight]  = ImVec4(BORDER.x, BORDER.y, BORDER.z, 0.5f);
-	colors[ImGuiCol_TableRowBg]        = BG;
-	colors[ImGuiCol_TableRowBgAlt]     = BG_DARK;
-
-	// Nav highlight
-	colors[ImGuiCol_NavHighlight] = BUTTON_BASE;
-
-	// Text selection
-	colors[ImGuiCol_TextSelectedBg] = ImVec4(FONT_ALT.x, FONT_ALT.y, FONT_ALT.z, 0.35f);
-
-	// Drag-drop target
-	colors[ImGuiCol_DragDropTarget] = FONT_ALT;
-
-	style.WindowRounding    = WINDOW_ROUNDING;  // 0 — sharp corners
-	style.FrameRounding     = FRAME_ROUNDING;   // 5px input border-radius
-	style.GrabRounding      = FRAME_ROUNDING;
-	style.PopupRounding     = POPUP_ROUNDING;   // 0 — sharp popup corners
-	style.ScrollbarRounding = SCROLLBAR_ROUNDING; // 5px thumb rounding
-	style.TabRounding       = 0.0f;
-	style.ChildRounding     = 0.0f;
-
-	style.ScrollbarSize     = SCROLLBAR_SIZE;   // 8px width
-	style.FramePadding      = ImVec2(6.0f, 4.0f);
-	style.ItemSpacing       = ImVec2(8.0f, 6.0f);
-	style.WindowPadding     = ImVec2(8.0f, 8.0f);
-
-	// Button-specific padding is applied via PushStyleVar where needed,
-
-	style.WindowBorderSize  = 1.0f;
-	style.FrameBorderSize   = 0.0f;
-	style.PopupBorderSize   = 1.0f;
-
-	style.DisabledAlpha     = 0.5f;
-}
 
 // Loads Selawik (regular + bold), Gambler, and Font Awesome icon fonts from data/fonts/.
 // @font-face { font-family: "Selawik"; font-weight: bold; src: url("fonts/selawkb.woff2"); }
@@ -2691,8 +2350,8 @@ int main(int argc, char* argv[]) {
 	// (see update_container_scale equivalent below).
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-	// Apply the app theme.
-	app::theme::applyTheme();
+	// Apply the default ImGui dark theme.
+	ImGui::StyleColorsDark();
 
 	// Query the initial display content scale for high-DPI support.
 	// On standard displays this is 1.0; on Retina / 200% displays it is 2.0.
@@ -2964,7 +2623,7 @@ int main(int argc, char* argv[]) {
 		int display_w, display_h;
 		glfwGetFramebufferSize(window, &display_w, &display_h);
 		glViewport(0, 0, display_w, display_h);
-		glClearColor(app::theme::BG_CLEAR_R, app::theme::BG_CLEAR_G, app::theme::BG_CLEAR_B, app::theme::BG_CLEAR_A);
+		glClearColor(0.06f, 0.06f, 0.06f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 

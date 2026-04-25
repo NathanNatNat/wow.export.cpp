@@ -71,14 +71,6 @@ inline constexpr ImU32  BUTTON_BASE_U32 = IM_COL32(34, 181, 73, 255);
 inline constexpr ImVec4 BUTTON_HOVER     = ImVec4(0.149f, 0.396f, 0.824f, 1.0f);
 inline constexpr ImU32  BUTTON_HOVER_U32 = IM_COL32(38, 101, 210, 255);
 
-inline constexpr ImVec4 BUTTON_DISABLED     = ImVec4(0.412f, 0.412f, 0.412f, 1.0f);
-inline constexpr ImU32  BUTTON_DISABLED_U32 = IM_COL32(105, 105, 105, 255);
-
-inline constexpr ImVec4 BUTTON_MENU     = ImVec4(0.220f, 0.580f, 0.318f, 1.0f);
-inline constexpr ImU32  BUTTON_MENU_U32 = IM_COL32(56, 148, 81, 255);
-
-inline constexpr ImVec4 BUTTON_MENU_HOVER     = ImVec4(0.243f, 0.420f, 0.725f, 1.0f);
-inline constexpr ImU32  BUTTON_MENU_HOVER_U32 = IM_COL32(62, 107, 185, 255);
 
 inline constexpr ImVec4 NAV_SELECTED     = BUTTON_BASE;
 inline constexpr ImU32  NAV_SELECTED_U32 = BUTTON_BASE_U32;
@@ -155,44 +147,10 @@ inline constexpr ImU32 PROGRESS_BAR_BOTTOM_U32 = IM_COL32(53, 117, 154, 255);  /
 // Loading bar background: rgba(0, 0, 0, 0.22)
 inline constexpr ImU32 LOADING_BAR_BG_U32 = IM_COL32(0, 0, 0, 56);
 
-inline constexpr float BG_CLEAR_R = 0.204f;
-inline constexpr float BG_CLEAR_G = 0.227f;
-inline constexpr float BG_CLEAR_B = 0.251f;
-inline constexpr float BG_CLEAR_A = 1.0f;
+inline constexpr float SCROLLBAR_ROUNDING = 5.0f;
 
-inline constexpr float BUTTON_ROUNDING    = 5.0f;     // input[type=button] border-radius: 5px
-inline constexpr float SCROLLBAR_SIZE     = 8.0f;     // ::-webkit-scrollbar width: 8px
-inline constexpr float SCROLLBAR_ROUNDING = 5.0f;     // scrollbar-thumb border-radius: 5px
-inline constexpr float WINDOW_ROUNDING    = 0.0f;     // sharp corners (no CSS border-radius on main panels)
-inline constexpr float FRAME_ROUNDING     = 5.0f;     // input field border-radius
-inline constexpr float POPUP_ROUNDING     = 0.0f;     // context menus have sharp corners
-inline constexpr ImVec2 BUTTON_PADDING    = ImVec2(13.0f, 9.0f); // input[type=button] padding: 9px 13px
-
-/**
- * Apply the app.css theme to the current ImGui context.
- * Sets all ImGuiStyle colors, rounding, padding, and scrollbar sizes
- * to match the CSS variables defined in data/app.css.
- *
- * Called once at startup and again from reloadStylesheet().
- */
-void applyTheme();
-
-/**
- * Push disabled-button styling: gray (#696969) background + ImGui::BeginDisabled().
- * Must be paired with EndDisabledButton().
- */
-inline void BeginDisabledButton() {
-	ImGui::PushStyleColor(ImGuiCol_Button, BUTTON_DISABLED);
-	ImGui::BeginDisabled();
-}
-
-/**
- * Pop disabled-button styling pushed by BeginDisabledButton().
- */
-inline void EndDisabledButton() {
-	ImGui::EndDisabled();
-	ImGui::PopStyleColor();
-}
+inline void BeginDisabledButton() { ImGui::BeginDisabled(); }
+inline void EndDisabledButton()   { ImGui::EndDisabled(); }
 
 inline constexpr float DEFAULT_FONT_SIZE = 16.0f;
 
