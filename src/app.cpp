@@ -364,7 +364,7 @@ static void renderCrashScreen() {
 			ImVec2 cursorPos = ImGui::GetCursorScreenPos();
 			ImGui::GetWindowDrawList()->AddText(icon_font, iconSize,
 				ImVec2(cursorPos.x, cursorPos.y + 2.0f),
-				app::theme::FONT_HIGHLIGHT_U32, ICON_FA_TRIANGLE_EXCLAMATION);
+				ImGui::GetColorU32(ImGuiCol_Text), ICON_FA_TRIANGLE_EXCLAMATION);
 			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 50.0f);
 		}
 	}
@@ -377,11 +377,11 @@ static void renderCrashScreen() {
 	// JS: setText('#crash-screen-flavour', manifest.flavour);
 	// JS: setText('#crash-screen-build', manifest.guid);
 	// CSS: #crash-screen-versions span { margin: 0 5px; color: var(--border); }
-	ImGui::TextColored(app::theme::BORDER, "v%s", std::string(constants::VERSION).c_str());
+	ImGui::TextDisabled("v%s", std::string(constants::VERSION).c_str());
 	ImGui::SameLine();
-	ImGui::TextColored(app::theme::BORDER, "%s", std::string(constants::FLAVOUR).c_str());
+	ImGui::TextDisabled("%s", std::string(constants::FLAVOUR).c_str());
 	ImGui::SameLine();
-	ImGui::TextColored(app::theme::BORDER, "[%s]", constants::BUILD_GUID().c_str());
+	ImGui::TextDisabled("[%s]", constants::BUILD_GUID().c_str());
 
 	// Display our error code/text.
 	// CSS: #crash-screen-text { font-weight: normal; font-size: 20px; margin: 20px 0; }
@@ -441,9 +441,6 @@ static constexpr float TOAST_HEIGHT   = 30.0f;
 static constexpr float NAV_ICON_WIDTH = 45.0f;
 static constexpr float NAV_ICON_HEIGHT = 52.0f;
 
-static constexpr ImVec4 COLOR_BG_DARK    = app::theme::BG_DARK;
-static constexpr ImVec4 COLOR_BORDER     = app::theme::BORDER;
-static constexpr ImVec4 COLOR_FONT_FADED = app::theme::FONT_FADED;
 
 /**
  * Invoked when a toast option is clicked.
@@ -725,8 +722,6 @@ static void renderAppShell() {
 		float footer_y = vp_pos.y + vp_size.y - FOOTER_HEIGHT;
 		ImGui::SetNextWindowPos(ImVec2(vp_pos.x, footer_y));
 		ImGui::SetNextWindowSize(ImVec2(vp_size.x, FOOTER_HEIGHT));
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, COLOR_BG_DARK);
-		ImGui::PushStyleColor(ImGuiCol_Border, COLOR_BORDER);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 		ImGui::Begin("##AppFooter", nullptr,
@@ -740,7 +735,7 @@ static void renderAppShell() {
 		draw->AddLine(
 			ImVec2(vp_pos.x, footer_y),
 			ImVec2(vp_pos.x + vp_size.x, footer_y),
-			ImGui::ColorConvertFloat4ToU32(COLOR_BORDER), 1.0f);
+			ImGui::GetColorU32(ImGuiCol_Separator), 1.0f);
 
 		//       <a data-external="::WEBSITE">Website</a> -
 		//       <a data-external="::DISCORD">Discord</a> -
@@ -749,12 +744,10 @@ static void renderAppShell() {
 		//     </span>
 		// Footer content: centered text (flex column, align-items: center, justify-content: center)
 		{
-			ImGui::PushStyleColor(ImGuiCol_Text, COLOR_FONT_FADED);
-
-			// Links line — render each link as a clickable item
+			// Links line — render each link as an InvisibleButton + AddText (single draw, no overdraw)
 			struct FooterLink {
 				const char* label;
-				const char* externalId; // ExternalLinks static link identifier
+				const char* externalId;
 			};
 			static constexpr FooterLink links[] = {
 				{ "Website", "::WEBSITE" },
@@ -763,7 +756,7 @@ static void renderAppShell() {
 				{ "GitHub",  "::GITHUB" }
 			};
 
-			// Calculate total width of links line for centering (use bold font for accurate sizing)
+			// Calculate total width for centering (use bold font for accurate sizing)
 			ImFont* bold_font = app::theme::getBoldFont();
 			ImGui::PushFont(bold_font);
 			float total_w = 0;
@@ -782,39 +775,31 @@ static void renderAppShell() {
 			for (int i = 0; i < 4; i++) {
 				if (i > 0) {
 					ImGui::SameLine(0, 0);
-					ImGui::PushStyleColor(ImGuiCol_Text, COLOR_FONT_FADED);
-					ImGui::TextUnformatted(" - ");
-					ImGui::PopStyleColor();
+					ImGui::TextDisabled(" - ");
 					ImGui::SameLine(0, 0);
 				}
-				// CSS: a { font-weight: bold; color: var(--font-primary) }
 				// CSS: a:hover { color: var(--font-highlight); text-decoration: underline }
-				ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_PRIMARY);
-				ImGui::TextUnformatted(links[i].label);
-				ImGui::PopStyleColor();
+				// Use InvisibleButton for hit-testing so hover state is known before drawing text.
+				ImVec2 lbl_size = ImGui::CalcTextSize(links[i].label);
+				ImGui::InvisibleButton(links[i].externalId, lbl_size);
 				bool link_hovered = ImGui::IsItemHovered();
+				bool link_clicked = ImGui::IsItemClicked();
+				ImVec2 item_min = ImGui::GetItemRectMin();
+				ImVec2 item_max = ImGui::GetItemRectMax();
+				// Draw text once with the hover-dependent color (no overdraw)
+				ImU32 link_color = link_hovered ? IM_COL32_WHITE : ImGui::GetColorU32(ImGuiCol_Text);
+				footer_draw->AddText(bold_font, ImGui::GetFontSize(), item_min, link_color, links[i].label);
 				if (link_hovered) {
+					footer_draw->AddLine(ImVec2(item_min.x, item_max.y), item_max, link_color, 1.0f);
 					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-					// Re-draw text in highlight color on hover
-					ImVec2 item_min = ImGui::GetItemRectMin();
-					ImVec2 item_max = ImGui::GetItemRectMax();
-					// Overdraw with highlight color
-					footer_draw->AddText(bold_font, ImGui::GetFontSize(), item_min,
-						app::theme::FONT_HIGHLIGHT_U32, links[i].label);
-					// Draw underline
-					float underline_y = item_max.y;
-					footer_draw->AddLine(
-						ImVec2(item_min.x, underline_y),
-						ImVec2(item_max.x, underline_y),
-						app::theme::FONT_HIGHLIGHT_U32, 1.0f);
 				}
-				if (ImGui::IsItemClicked())
+				if (link_clicked)
 					ExternalLinks::open(links[i].externalId);
 				ImGui::SameLine(0, 0);
 			}
 			// End the SameLine sequence
 			ImGui::NewLine();
-			ImGui::PopFont(); // pop bold font
+			ImGui::PopFont();
 
 			//       World of Warcraft and related trademarks are registered trademarks of
 			//       Blizzard Entertainment whom this application is not affiliated with.
@@ -822,14 +807,11 @@ static void renderAppShell() {
 			const char* copyright_text = "World of Warcraft and related trademarks are registered trademarks of Blizzard Entertainment whom this application is not affiliated with.";
 			ImVec2 copy_size = ImGui::CalcTextSize(copyright_text);
 			ImGui::SetCursorPos(ImVec2((vp_size.x - copy_size.x) * 0.5f, links_y + line_h + 4.0f));
-			ImGui::TextUnformatted(copyright_text);
-
-			ImGui::PopStyleColor();
+			ImGui::TextDisabled("%s", copyright_text);
 		}
 
 		ImGui::End();
 		ImGui::PopStyleVar(2);
-		ImGui::PopStyleColor(2);
 	}
 
 	{
@@ -952,7 +934,6 @@ static void renderAppShell() {
 		ImGui::SetNextWindowSize(vp_size);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, app::theme::BG);
 		ImGui::Begin("##LoadingOverlay", nullptr,
 			ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
 			ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
@@ -1020,22 +1001,21 @@ static void renderAppShell() {
 		float text_y = gear_y + GEAR_SIZE + GEAR_MARGIN_BOTTOM;
 		{
 			ImFont* bold = app::theme::getBoldFont();
-			ImVec2 title_size = bold->CalcTextSizeA(TITLE_FONT_SIZE, FLT_MAX, 0.0f,
-				core::view->loadingTitle.c_str());
-			ImVec2 title_pos(center_x - title_size.x * 0.5f, text_y);
-			dl->AddText(bold, TITLE_FONT_SIZE, title_pos,
-				app::theme::FONT_PRIMARY_U32, core::view->loadingTitle.c_str());
+			ImGui::PushFont(bold, TITLE_FONT_SIZE);
+			ImVec2 title_size = ImGui::CalcTextSize(core::view->loadingTitle.c_str());
+			ImGui::SetCursorScreenPos(ImVec2(center_x - title_size.x * 0.5f, text_y));
+			ImGui::TextUnformatted(core::view->loadingTitle.c_str());
 			text_y += title_size.y;
+			ImGui::PopFont();
 		}
 
 		{
-			ImFont* font = ImGui::GetFont();
-			ImVec2 prog_size = font->CalcTextSizeA(PROGRESS_FONT_SIZE, FLT_MAX, 0.0f,
-				core::view->loadingProgress.c_str());
-			ImVec2 prog_pos(center_x - prog_size.x * 0.5f, text_y);
-			dl->AddText(font, PROGRESS_FONT_SIZE, prog_pos,
-				app::theme::FONT_PRIMARY_U32, core::view->loadingProgress.c_str());
+			ImGui::PushFont(nullptr, PROGRESS_FONT_SIZE);
+			ImVec2 prog_size = ImGui::CalcTextSize(core::view->loadingProgress.c_str());
+			ImGui::SetCursorScreenPos(ImVec2(center_x - prog_size.x * 0.5f, text_y));
+			ImGui::TextUnformatted(core::view->loadingProgress.c_str());
 			text_y += prog_size.y;
+			ImGui::PopFont();
 		}
 
 		if (core::view->loadPct >= 0.0) {
@@ -1045,12 +1025,12 @@ static void renderAppShell() {
 			dl->AddRectFilled(
 				ImVec2(bar_x, bar_y),
 				ImVec2(bar_x + BAR_WIDTH, bar_y + BAR_HEIGHT),
-				app::theme::LOADING_BAR_BG_U32);
+				IM_COL32(0, 0, 0, 56));
 
 			dl->AddRect(
 				ImVec2(bar_x, bar_y),
 				ImVec2(bar_x + BAR_WIDTH, bar_y + BAR_HEIGHT),
-				app::theme::BORDER_U32, 0.0f, 0, 1.0f);
+				ImGui::GetColorU32(ImGuiCol_Separator), 0.0f, 0, 1.0f);
 
 			float fill_w = static_cast<float>(std::clamp(core::view->loadPct, 0.0, 1.0) * BAR_WIDTH);
 			if (fill_w > 0.0f) {
@@ -1058,15 +1038,14 @@ static void renderAppShell() {
 				dl->AddRectFilledMultiColor(
 					ImVec2(bar_x, bar_y),
 					ImVec2(bar_x + fill_w, bar_y + BAR_HEIGHT),
-					app::theme::PROGRESS_BAR_TOP_U32,     // top-left
-					app::theme::PROGRESS_BAR_TOP_U32,     // top-right
-					app::theme::PROGRESS_BAR_BOTTOM_U32,  // bottom-right
-					app::theme::PROGRESS_BAR_BOTTOM_U32); // bottom-left
+					IM_COL32(87, 175, 226, 255),  // top-left
+					IM_COL32(87, 175, 226, 255),  // top-right
+					IM_COL32(53, 117, 154, 255),  // bottom-right
+					IM_COL32(53, 117, 154, 255)); // bottom-left
 			}
 		}
 
 		ImGui::End();
-		ImGui::PopStyleColor();
 		ImGui::PopStyleVar(2);
 	}
 
@@ -1080,14 +1059,12 @@ static void renderAppShell() {
 			ImGui::SetNextWindowSize(vp_size);
 			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-			ImGui::PushStyleColor(ImGuiCol_WindowBg, app::theme::BG_TRANS);
 			ImGui::Begin("##DropOverlay", nullptr,
 				ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
 				ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
 				ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
 				ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
 
-			ImDrawList* dl = ImGui::GetWindowDrawList();
 			float center_x = vp_pos.x + vp_size.x * 0.5f;
 			float center_y = vp_pos.y + vp_size.y * 0.5f;
 
@@ -1096,27 +1073,36 @@ static void renderAppShell() {
 			constexpr float ICON_MARGIN_BOTTOM = 20.0f;
 			constexpr float TEXT_FONT_SIZE = 25.0f;
 
-			// Calculate total height for vertical centering: icon(100) + margin(20) + text
-			ImFont* font = ImGui::GetFont();
 			std::string formatted = std::string("\xc2\xbb ") + prompt_text + " \xc2\xab";
-			ImVec2 text_size = font->CalcTextSizeA(TEXT_FONT_SIZE, FLT_MAX, 0.0f, formatted.c_str());
+
+			// Pre-calculate text size for centering
+			ImVec2 text_size;
+			{
+				ImGui::PushFont(nullptr, TEXT_FONT_SIZE);
+				text_size = ImGui::CalcTextSize(formatted.c_str());
+				ImGui::PopFont();
+			}
+
 			float total_h = ICON_SIZE + ICON_MARGIN_BOTTOM + text_size.y;
 			float start_y = center_y - total_h * 0.5f;
 
 			// Render copy icon using Font Awesome icon font
 			ImFont* icon_font = app::theme::getIconFont();
 			if (icon_font) {
-				ImVec2 icon_text_size = icon_font->CalcTextSizeA(ICON_SIZE, FLT_MAX, 0.0f, ICON_FA_COPY);
-				ImVec2 icon_pos(center_x - icon_text_size.x * 0.5f, start_y);
-				dl->AddText(icon_font, ICON_SIZE, icon_pos, app::theme::FONT_PRIMARY_U32, ICON_FA_COPY);
+				ImGui::PushFont(icon_font, ICON_SIZE);
+				ImVec2 icon_sz = ImGui::CalcTextSize(ICON_FA_COPY);
+				ImGui::SetCursorScreenPos(ImVec2(center_x - icon_sz.x * 0.5f, start_y));
+				ImGui::TextUnformatted(ICON_FA_COPY);
+				ImGui::PopFont();
 			}
 
 			// Render prompt text: » {prompt} «
-			ImVec2 text_pos(center_x - text_size.x * 0.5f, start_y + ICON_SIZE + ICON_MARGIN_BOTTOM);
-			dl->AddText(font, TEXT_FONT_SIZE, text_pos, app::theme::FONT_PRIMARY_U32, formatted.c_str());
+			ImGui::PushFont(nullptr, TEXT_FONT_SIZE);
+			ImGui::SetCursorScreenPos(ImVec2(center_x - text_size.x * 0.5f, start_y + ICON_SIZE + ICON_MARGIN_BOTTOM));
+			ImGui::TextUnformatted(formatted.c_str());
+			ImGui::PopFont();
 
 			ImGui::End();
-			ImGui::PopStyleColor();
 			ImGui::PopStyleVar(2);
 		}
 	}

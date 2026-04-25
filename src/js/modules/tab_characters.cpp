@@ -3097,9 +3097,6 @@ return; // don't render main UI when saved characters screen is active
 // Import buttons row  (.character-bnet-button / -wmv- / -wowhead- / -save- brand colors from app.css)
 // JS: icon-only ui-image-button elements with CSS background-image; C++ uses FA icon font glyphs.
 {
-ImGui::PushStyleColor(ImGuiCol_Button,        app::theme::CHR_BTN_SAVE);
-ImGui::PushStyleColor(ImGuiCol_ButtonHovered, app::theme::CHR_BTN_SAVE_HOVER);
-ImGui::PushStyleColor(ImGuiCol_ButtonActive,  app::theme::CHR_BTN_SAVE_ACTIVE);
 if (ImGui::Button("My Characters")) {
 load_saved_characters();
 view.chrSavedCharactersScreen = true;
@@ -3114,7 +3111,6 @@ view.chrSaveCharacterPrompt = true;
 }
 ImGui::PopFont();
 if (ImGui::IsItemHovered()) ImGui::SetTooltip("Save Character");
-ImGui::PopStyleColor(3);
 
 ImGui::SameLine();
 ImGui::PushFont(app::theme::getIconFont());

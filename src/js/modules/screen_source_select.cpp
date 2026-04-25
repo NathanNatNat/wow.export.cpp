@@ -1013,10 +1013,7 @@ void render() {
 				}
 
 				// CDN region context menu popup.
-				// CSS: .context-menu { background: #232323 }
 				ImGui::SetNextWindowSize(ImVec2(260.0f, 0.0f), ImGuiCond_Always);
-				ImGui::PushStyleColor(ImGuiCol_PopupBg, IM_COL32(0x23, 0x23, 0x23, 0xFF));
-				ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
 				if (ImGui::BeginPopup("##cdn_region_menu")) {
 					ImDrawList* popup_draw = ImGui::GetWindowDrawList();
 					for (auto& region : core::view->cdnRegions) {
@@ -1053,8 +1050,6 @@ void render() {
 					}
 					ImGui::EndPopup();
 				}
-				ImGui::PopStyleVar();
-				ImGui::PopStyleColor();
 			} else if (card.card_id == 2 && card.has_link) {
 				// Legacy "Last Opened: path" — clickable link
 				text_y += 5.0f;

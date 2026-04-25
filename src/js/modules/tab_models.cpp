@@ -1033,13 +1033,9 @@ void render() {
 				inputWidth = badgeX - 5.0f; // leave gap before badge
 				// Render the badge at the right
 				ImGui::SameLine(ImGui::GetCursorPosX() + badgeX);
-				ImGui::PushStyleColor(ImGuiCol_Button, app::theme::BORDER);
-				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, app::theme::BORDER);
-				ImGui::PushStyleColor(ImGuiCol_ButtonActive, app::theme::BORDER);
 				ImGui::SmallButton(regexLabel);
 				if (ImGui::IsItemHovered())
 					ImGui::SetTooltip("%s", view.regexTooltip.c_str());
-				ImGui::PopStyleColor(3);
 				ImGui::PopStyleVar();
 				ImGui::SameLine(0.0f, 0.0f);
 				ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMin().x);
@@ -1124,19 +1120,21 @@ void render() {
 								ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.8f));
 								ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
 								ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
+								ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+
+								if (ImGui::Button(layer_name.c_str()))
+									toggle_uv_layer(layer_name);
+
+								ImGui::PopStyleVar(2);
+								ImGui::PopStyleColor(4);
 							} else {
-								ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.7f));
-								ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.8f));
-								ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
-								ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_PRIMARY);
+								ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+
+								if (ImGui::Button(layer_name.c_str()))
+									toggle_uv_layer(layer_name);
+
+								ImGui::PopStyleVar(2);
 							}
-							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-
-							if (ImGui::Button(layer_name.c_str()))
-								toggle_uv_layer(layer_name);
-
-							ImGui::PopStyleVar(2);
-							ImGui::PopStyleColor(4);
 
 							ImGui::SameLine();
 						}
@@ -1166,12 +1164,11 @@ void render() {
 					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
 					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.7f));
 					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.0f, 0.0f, 0.8f));
-					ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
 
 					if (ImGui::Button(closeLabel))
 						view.modelTexturePreviewURL.clear();
 
-					ImGui::PopStyleColor(4);
+					ImGui::PopStyleColor(3);
 					ImGui::PopStyleVar(3);
 				}
 			} else {
@@ -1195,11 +1192,9 @@ void render() {
 						previewOrigin.y + 10.0f));
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2.0f);
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-					ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
 					if (ImGui::ColorEdit3("##bg_color_models", color, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
 						view.config["modelViewerBackgroundColor"] = std::format("#{:02x}{:02x}{:02x}",
 							static_cast<int>(color[0] * 255.0f), static_cast<int>(color[1] * 255.0f), static_cast<int>(color[2] * 255.0f));
-					ImGui::PopStyleColor();
 					ImGui::PopStyleVar(2);
 				}
 
@@ -1227,8 +1222,6 @@ void render() {
 					ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-					ImGui::PushStyleColor(ImGuiCol_FrameBg, app::theme::BG);
-					ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
 					ImGui::SetNextItemWidth(std::max(150.0f, ImGui::CalcTextSize(current_label.c_str()).x + 40.0f));
 
 					if (ImGui::BeginCombo("##ModelAnimSelect", current_label.c_str())) {
@@ -1246,7 +1239,6 @@ void render() {
 						ImGui::EndCombo();
 					}
 
-					ImGui::PopStyleColor(2);
 					ImGui::PopStyleVar(3);
 
 					// --- 895, 896: Animation controls ---
@@ -1257,8 +1249,6 @@ void render() {
 						ImGui::SetCursorScreenPos(ImVec2(previewOrigin.x + 10.0f, ImGui::GetCursorScreenPos().y + 5.0f));
 
 						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-						ImGui::PushStyleColor(ImGuiCol_Button, app::theme::BG);
-						ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
 
 						bool anim_paused = view.modelViewerAnimPaused;
 
@@ -1281,7 +1271,6 @@ void render() {
 							if (anim_methods) anim_methods->step_animation(1);
 						if (!anim_paused) ImGui::EndDisabled();
 
-						ImGui::PopStyleColor(2);
 						ImGui::PopStyleVar();
 
 						// --- 896: Animation scrubber ---
@@ -1298,8 +1287,6 @@ void render() {
 						ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 7.0f);
 						ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
 						ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
-						ImGui::PushStyleColor(ImGuiCol_FrameBg, app::theme::BG_DARK);
-						ImGui::PushStyleColor(ImGuiCol_SliderGrab, app::theme::FONT_PRIMARY);
 						float scrubberWidth = std::max(80.0f, previewSize.x - 160.0f);
 						ImGui::SetNextItemWidth(scrubberWidth);
 						if (ImGui::SliderInt("##ModelAnimFrame", &frame, 0, frame_max, "")) {
@@ -1311,7 +1298,6 @@ void render() {
 						if (ImGui::IsItemDeactivatedAfterEdit()) {
 							if (anim_methods) anim_methods->end_scrub();
 						}
-						ImGui::PopStyleColor(2);
 						ImGui::PopStyleVar(4);
 
 						// Frame display
@@ -1319,13 +1305,10 @@ void render() {
 						ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f));
 						ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
 						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-						ImGui::PushStyleColor(ImGuiCol_FrameBg, app::theme::BG_DARK);
-						ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
 						char frameBuf[16];
 						std::snprintf(frameBuf, sizeof(frameBuf), "%d", view.modelViewerAnimFrame);
 						ImGui::SetNextItemWidth(std::max(32.0f, ImGui::CalcTextSize(frameBuf).x + 8.0f));
 						ImGui::InputText("##anim_frame_display", frameBuf, sizeof(frameBuf), ImGuiInputTextFlags_ReadOnly);
-						ImGui::PopStyleColor(2);
 						ImGui::PopStyleVar(3);
 					}
 				}
@@ -1380,7 +1363,6 @@ void render() {
 					//       border: 1px solid var(--border); box-shadow: black 0 0 3px 0;
 					//       background-color: #232323; background-size: contain; }
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-					ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
 					ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(35, 35, 35, 255));
 
 					GLuint slotTex = texture_ribbon::getSlotTexture(si);
@@ -1393,7 +1375,7 @@ void render() {
 						clicked = ImGui::Button(slotDisplayName.c_str(), ImVec2(slotSize, slotSize));
 					}
 
-					ImGui::PopStyleColor(2);
+					ImGui::PopStyleColor(1);
 					ImGui::PopStyleVar();
 
 					if (ImGui::IsItemHovered())
@@ -1661,7 +1643,6 @@ void render() {
 					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
 					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
 					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-					ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_PRIMARY);
 					if (ImGui::SmallButton("Enable All##Geosets")) {
 						for (auto& g : view.modelViewerGeosets)
 							g["checked"] = true;
@@ -1672,7 +1653,7 @@ void render() {
 						ImVec2 mx = ImGui::GetItemRectMax();
 						ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y), mx, app::theme::FONT_HIGHLIGHT_U32);
 					}
-					ImGui::PopStyleColor(4);
+					ImGui::PopStyleColor(3);
 
 					ImGui::SameLine(0.0f, 0.0f);
 					ImGui::TextUnformatted(" / ");
@@ -1681,7 +1662,6 @@ void render() {
 					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
 					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
 					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-					ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_PRIMARY);
 					if (ImGui::SmallButton("Disable All##Geosets")) {
 						for (auto& g : view.modelViewerGeosets)
 							g["checked"] = false;
@@ -1691,7 +1671,7 @@ void render() {
 						ImVec2 mx = ImGui::GetItemRectMax();
 						ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y), mx, app::theme::FONT_HIGHLIGHT_U32);
 					}
-					ImGui::PopStyleColor(4);
+					ImGui::PopStyleColor(3);
 				}
 
 				if (view.config.value("modelsExportTextures", true)) {
@@ -1762,7 +1742,6 @@ void render() {
 					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
 					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
 					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-					ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_PRIMARY);
 					if (ImGui::SmallButton("Enable All##WMOGroups")) {
 						for (auto& g : view.modelViewerWMOGroups)
 							g["checked"] = true;
@@ -1772,7 +1751,7 @@ void render() {
 						ImVec2 mx = ImGui::GetItemRectMax();
 						ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y), mx, app::theme::FONT_HIGHLIGHT_U32);
 					}
-					ImGui::PopStyleColor(4);
+					ImGui::PopStyleColor(3);
 
 					ImGui::SameLine(0.0f, 0.0f);
 					ImGui::TextUnformatted(" / ");
@@ -1781,7 +1760,6 @@ void render() {
 					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
 					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
 					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-					ImGui::PushStyleColor(ImGuiCol_Text, app::theme::FONT_PRIMARY);
 					if (ImGui::SmallButton("Disable All##WMOGroups")) {
 						for (auto& g : view.modelViewerWMOGroups)
 							g["checked"] = false;
@@ -1791,7 +1769,7 @@ void render() {
 						ImVec2 mx = ImGui::GetItemRectMax();
 						ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y), mx, app::theme::FONT_HIGHLIGHT_U32);
 					}
-					ImGui::PopStyleColor(4);
+					ImGui::PopStyleColor(3);
 				}
 
 				// --- 898: Doodad Sets header ---

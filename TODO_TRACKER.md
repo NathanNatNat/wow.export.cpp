@@ -1,6 +1,6 @@
 ﻿# TODO Tracker
 
-> **Progress: 0/178 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 6/178 verified (3%)** — ✅ = Verified, ⬜ = Pending
 
 ## Map Viewer
 
@@ -856,40 +856,40 @@
 - **Status**: Pending
 - **Details**: The DecorListboxContextMenu popup requires ImGui::OpenPopup to be called. The handle_listbox_context callback does not open this popup. The popup rendering code will never trigger.
 
-- [ ] 625. [app.cpp] Toast notification bars use raw ImDrawList rendering instead of native ImGui widgets
+- [x] 625. [app.cpp] Toast notification bars use raw ImDrawList rendering instead of native ImGui widgets
   - **JS Source**: `src/index.html` (toast `<div id="toast">` template); `src/app.css` lines 220–280
-  - **Status**: Pending
-  - **Details**: Three near-identical toast bars (primary toast lines ~904–997, model-override lines ~1008–1080, texture-override lines ~1089–1161) manually render every element — background via `AddRectFilled`, icon and text via `AddText`, action links via `AddText`+`AddLine`, close button via `InvisibleButton`+`AddText`. This is ~250 lines of duplicated raw DrawList code. Refactor into a single `renderToastBar()` helper that uses native widgets: `BeginChild` (or `SetNextWindowSize`/`BeginGroup`) for the container, `TextUnformatted` for message/icon text, `Selectable` or `Button` for action links and the close button. The gradient-free background can remain as `AddRectFilled` (no native equivalent for a full-width flush background), but all text and interactive elements should use native widgets.
+  - **Status**: Verified
+  - **Details**: Refactored into `renderToastBar()` helper using `BeginChild`, `TextUnformatted` (with icon font), `SmallButton` for actions and close — all native widgets. Background uses a single `AddRectFilled` (no native equivalent for a full-width flush background).
 
-- [ ] 626. [app.cpp] Footer link hover uses overdraw anti-pattern instead of conditional color push
+- [x] 626. [app.cpp] Footer link hover uses overdraw anti-pattern instead of conditional color push
   - **JS Source**: `src/app.css` lines 744–751 (`#footer a:hover { color: var(--font-highlight); text-decoration: underline; }`)
-  - **Status**: Pending
-  - **Details**: Lines 825–843 render each link with `ImGui::TextUnformatted`, then on hover re-render the same text via `footer_draw->AddText` with a highlight colour and draw an underline via `AddLine` on top. This double-render is an anti-pattern. Native equivalent: before calling `TextUnformatted`, check `ImGui::IsItemHovered()` on the *previous* item or wrap in an `InvisibleButton` + manual text, pushing `ImGuiCol_Text` to the highlight colour when hovered. For the underline, `ImDrawList::AddLine` is acceptable (ImGui has no native underline), but the text itself should not be drawn twice.
+  - **Status**: Verified
+  - **Details**: Replaced double-render with `InvisibleButton` for hit-testing + single `AddText` call using hover-dependent color. `AddLine` underline on hover retained (no native equivalent).
 
-- [ ] 627. [app.cpp] Drop-overlay icon and text rendered via AddText instead of SetCursorScreenPos + TextUnformatted
+- [x] 627. [app.cpp] Drop-overlay icon and text rendered via AddText instead of SetCursorScreenPos + TextUnformatted
   - **JS Source**: `src/index.html` (`#drop-overlay`); `src/app.css` lines 310–340
-  - **Status**: Pending
-  - **Details**: Lines 1341–1351 place the Font Awesome copy icon and the formatted prompt string via `dl->AddText(...)` with manually computed centered positions. Since the overlay is a standard `ImGui::Begin` window, `ImGui::SetCursorScreenPos` + `ImGui::PushFont` + `ImGui::TextUnformatted` achieves identical placement with proper ImGui item registration (hover, tooltip, etc. would work). Only edge case: `PushFont` with the icon font at an oversized point would need `ImGui::SetWindowFontScale` or explicit size override, but this is standard practice.
+  - **Status**: Verified
+  - **Details**: Replaced `dl->AddText` calls with `SetCursorScreenPos` + `PushFont(size)` + `TextUnformatted` for both the icon glyph and prompt text. `ImDrawList* dl` removed from drop-overlay block.
 
-- [ ] 628. [app.cpp] Loading screen title and progress text rendered via AddText instead of native text widgets
+- [x] 628. [app.cpp] Loading screen title and progress text rendered via AddText instead of native text widgets
   - **JS Source**: `src/index.html` (`#loading-title`, `#loading-progress`); `src/app.css` lines 380–420
-  - **Status**: Pending
-  - **Details**: Lines 1255–1273 position loading title and progress strings via `dl->AddText(bold/font, size, pos, colour, str)` with manual CalcTextSizeA centering. The loading overlay is a standard `ImGui::Begin` window that already mixes raw DrawList (for the background image and rotating gear, which have no native equivalent) with text. The text lines could be replaced with `ImGui::SetCursorScreenPos` + `ImGui::PushFont(bold, size)` + `ImGui::TextUnformatted`, which would also allow wrapping and future tooltip/interaction without DrawList coordination.
+  - **Status**: Verified
+  - **Details**: Replaced `dl->AddText(bold, size, pos, color, str)` with `PushFont(bold, size)` + `CalcTextSize` + `SetCursorScreenPos` + `TextUnformatted` + `PopFont`. Progress bar DrawList calls retained (gradient fill has no native equivalent). Loading bar colors inlined; `PushStyleColor(WindowBg)` removed.
 
 - [ ] 629. [app.h / app.cpp] Remove `applyTheme()` and all CSS-color constants; replace with `ImGui::StyleColorsDark()`
   - **JS Source**: `src/app.css` (CSS variables — all `:root` color definitions)
-  - **Status**: Pending
-  - **Details**: `app::theme::applyTheme()` (app.cpp) sets every `ImGuiStyle` color, rounding, padding, and scrollbar value to match the JS app's CSS. The `app::theme` namespace in `app.h` defines ~50 color constants (`BG`, `FONT_PRIMARY`, `BUTTON_BASE`, `TOAST_*`, etc.) derived from CSS variables. Per the new rendering policy, the goal is native ImGui styling, not CSS replication. Replace `applyTheme()` call with `ImGui::StyleColorsDark()` (standard dark theme). Remove all CSS-color constant definitions from `app::theme`. Any remaining constants that genuinely carry semantic meaning beyond color-matching (e.g. `BUTTON_ROUNDING`, `SCROLLBAR_SIZE`) may be retained. This is a prerequisite for all per-file style cleanup entries below (630–636).
+  - **Status**: In Progress
+  - **Details**: `applyTheme()` call replaced with `ImGui::StyleColorsDark()` (done in prior session). All CSS-color push/pop calls and color constant aliases removed from `app.cpp`. The `app::theme` namespace color constants in `app.h` remain and are still referenced by entries 631–636 files. Full removal of the constants from `app.h` is blocked on entries 631–636.
 
-- [ ] 630. [app.cpp] Nav-bar module buttons rendered via `InvisibleButton`+`AddText`/`AddImage` instead of native `ImGui::Button`
+- [x] 630. [app.cpp] Nav-bar module buttons rendered via `InvisibleButton`+`AddText`/`AddImage` instead of native `ImGui::Button`
   - **JS Source**: `src/index.html` (nav `<div id="nav">` template); `src/app.css` lines 150–200
-  - **Status**: Pending
-  - **Details**: Lines ~568–645: each navigation tab icon is rendered as an `InvisibleButton` for hit-testing, with the icon glyph/texture drawn separately via `GetWindowDrawList()->AddText` or `AddImage`. Active/hover tints are applied manually by computing `tint_u32` and passing it to `AddText`/`AddImage`. Replace with `ImGui::Button` (containing an icon label via `PushFont(getIconFont())`) or `ImGui::Selectable`. Active state can be expressed via a `PushStyleColor(ImGuiCol_Button, ...)` when `is_active`, using standard ImGui hover/pressed colors otherwise. The hamburger and help icons (lines ~651–748) also use `InvisibleButton`+`AddImage`/`AddText` and should be replaced with native `ImGui::SmallButton` or `ImGui::Button`.
+  - **Status**: Verified
+  - **Details**: Nav buttons already use `ImGui::Button` (with icon font push) and `ImGui::ImageButton` (for SVG textures). Active state uses `PushStyleColor(ImGuiCol_Button, ImGuiCol_ButtonActive)` — a native style color, not a CSS constant. Hamburger and help icons also use `ImageButton`/`Button`.
 
-- [ ] 631. [slider.cpp] Fully custom-drawn slider should be replaced with native `ImGui::SliderFloat`/`SliderInt`
+- [x] 631. [slider.cpp] Fully custom-drawn slider should be replaced with native `ImGui::SliderFloat`/`SliderInt`
   - **JS Source**: `src/js/components/slider.js`
-  - **Status**: Pending
-  - **Details**: `slider::render()` (slider.cpp lines 83–197) draws an entirely custom track, fill bar, handle, shadow, and hover effects using `ImDrawList::AddRectFilled`/`AddRect`. It also implements its own mouse drag logic via manual `ImGuiIO::MousePos` tracking. All of this can be replaced with a single `ImGui::SliderFloat(id, &value, 0.0f, 1.0f)` call with default ImGui styling. Custom slider geometry (`SliderGrab`, `SliderGrabActive`, `FrameBg` colors) would be set globally by `StyleColorsDark()` without per-call overrides. The `SliderState` struct and all manual drag/click logic become unnecessary.
+  - **Status**: Verified
+  - **Details**: All custom DrawList track/fill/handle rendering and manual mouse-drag logic removed. `slider::render()` now calls `ImGui::SliderFloat("##slider", &v, 0.0f, 1.0f, "")` with `SetNextItemWidth(-FLT_MIN)`. `SliderState` retained in slider.h as a trivial struct (no breaking change for callers).
 
 - [ ] 632. [tab_models.cpp] Strip CSS-matching style overrides — largest single file (72 occurrences)
   - **JS Source**: `src/js/modules/tab_models.js`
