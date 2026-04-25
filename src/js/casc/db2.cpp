@@ -29,10 +29,18 @@ namespace db2 {
 struct CacheEntry {
 	std::unique_ptr<db::WDCReader> reader;
 	std::once_flag parseFlag;
+	std::once_flag preloadFlag;
 
 	void ensureParsed() {
 		std::call_once(parseFlag, [this]() {
 			reader->parse();
+		});
+	}
+
+	void ensurePreloaded() {
+		std::call_once(preloadFlag, [this]() {
+			ensureParsed();
+			reader->preload();
 		});
 	}
 };
@@ -77,8 +85,8 @@ db::WDCReader& preloadTable(const std::string& table_name) {
 		}
 	}
 	// Parse and preload outside the lock so other threads can proceed with different tables.
-	entry_ptr->ensureParsed();
-	entry_ptr->reader->preload();
+	// ensurePreloaded() uses call_once so concurrent callers for the same table are safe.
+	entry_ptr->ensurePreloaded();
 	return *entry_ptr->reader;
 }
 
