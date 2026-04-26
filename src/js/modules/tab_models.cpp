@@ -1075,7 +1075,7 @@ void render() {
 				}
 				// Border: 1px solid var(--border)
 				dl->AddRect(previewOrigin, ImVec2(previewOrigin.x + previewSize.x, previewOrigin.y + previewSize.y),
-					app::theme::BORDER_U32, 0.0f, 0, 1.0f);
+					ImGui::GetColorU32(ImGuiCol_Border), 0.0f, 0, 1.0f);
 			}
 
 			// Render the texture preview overlay if active (z-index: 1 over 3D viewport).
@@ -1115,26 +1115,14 @@ void render() {
 							//       padding: 5px 10px; font-size: 12px; }
 							// CSS: .uv-layer-button.active { border-color: #00ff00; color: #00ff00; }
 							ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 5.0f));
-							if (is_active) {
-								ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.7f));
-								ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.8f));
-								ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
-								ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
-								ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-
-								if (ImGui::Button(layer_name.c_str()))
-									toggle_uv_layer(layer_name);
-
-								ImGui::PopStyleVar(2);
-								ImGui::PopStyleColor(4);
-							} else {
-								ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-
-								if (ImGui::Button(layer_name.c_str()))
-									toggle_uv_layer(layer_name);
-
-								ImGui::PopStyleVar(2);
-							}
+							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+							if (is_active)
+								ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+							if (ImGui::Button(layer_name.c_str()))
+								toggle_uv_layer(layer_name);
+							if (is_active)
+								ImGui::PopStyleColor();
+							ImGui::PopStyleVar(2);
 
 							ImGui::SameLine();
 						}
@@ -1161,14 +1149,10 @@ void render() {
 					ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 5.0f));
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.7f));
-					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.0f, 0.0f, 0.8f));
 
 					if (ImGui::Button(closeLabel))
 						view.modelTexturePreviewURL.clear();
 
-					ImGui::PopStyleColor(3);
 					ImGui::PopStyleVar(3);
 				}
 			} else {
@@ -1345,11 +1329,8 @@ void render() {
 				// --- 894: Prev button with ‹ glyph ---
 				// CSS: #texture-ribbon-prev::before { content: "‹"; font-size: 4em; }
 				if (hasPrev) {
-					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.1f));
 					if (ImGui::Button("\xe2\x80\xb9##ribbon_prev", ImVec2(prevNextWidth, slotSize)))
 						view.textureRibbonPage--;
-					ImGui::PopStyleColor(2);
 					ImGui::SameLine(0.0f, 0.0f);
 				}
 
@@ -1363,7 +1344,6 @@ void render() {
 					//       border: 1px solid var(--border); box-shadow: black 0 0 3px 0;
 					//       background-color: #232323; background-size: contain; }
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-					ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(35, 35, 35, 255));
 
 					GLuint slotTex = texture_ribbon::getSlotTexture(si);
 					bool clicked = false;
@@ -1375,7 +1355,6 @@ void render() {
 						clicked = ImGui::Button(slotDisplayName.c_str(), ImVec2(slotSize, slotSize));
 					}
 
-					ImGui::PopStyleColor(1);
 					ImGui::PopStyleVar();
 
 					if (ImGui::IsItemHovered())
@@ -1390,11 +1369,8 @@ void render() {
 
 				// --- 894: Next button with › glyph ---
 				if (hasNext) {
-					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.1f));
 					if (ImGui::Button("\xe2\x80\xba##ribbon_next", ImVec2(prevNextWidth, slotSize)))
 						view.textureRibbonPage++;
-					ImGui::PopStyleColor(2);
 				}
 
 				// Texture ribbon context menu (unchanged logic).
@@ -1640,28 +1616,20 @@ void render() {
 					if (startX > 0.0f)
 						ImGui::SetCursorPosX(ImGui::GetCursorPosX() + startX);
 
-					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
 					if (ImGui::SmallButton("Enable All##Geosets")) {
 						for (auto& g : view.modelViewerGeosets)
 							g["checked"] = true;
 					}
-					// Underline on hover
 					if (ImGui::IsItemHovered()) {
 						ImVec2 mn = ImGui::GetItemRectMin();
 						ImVec2 mx = ImGui::GetItemRectMax();
-						ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y), mx, app::theme::FONT_HIGHLIGHT_U32);
+						ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y), mx, ImGui::GetColorU32(ImGuiCol_Text));
 					}
-					ImGui::PopStyleColor(3);
 
 					ImGui::SameLine(0.0f, 0.0f);
 					ImGui::TextUnformatted(" / ");
 					ImGui::SameLine(0.0f, 0.0f);
 
-					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
 					if (ImGui::SmallButton("Disable All##Geosets")) {
 						for (auto& g : view.modelViewerGeosets)
 							g["checked"] = false;
@@ -1669,9 +1637,8 @@ void render() {
 					if (ImGui::IsItemHovered()) {
 						ImVec2 mn = ImGui::GetItemRectMin();
 						ImVec2 mx = ImGui::GetItemRectMax();
-						ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y), mx, app::theme::FONT_HIGHLIGHT_U32);
+						ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y), mx, ImGui::GetColorU32(ImGuiCol_Text));
 					}
-					ImGui::PopStyleColor(3);
 				}
 
 				if (view.config.value("modelsExportTextures", true)) {
@@ -1739,9 +1706,6 @@ void render() {
 					if (startX > 0.0f)
 						ImGui::SetCursorPosX(ImGui::GetCursorPosX() + startX);
 
-					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
 					if (ImGui::SmallButton("Enable All##WMOGroups")) {
 						for (auto& g : view.modelViewerWMOGroups)
 							g["checked"] = true;
@@ -1749,17 +1713,13 @@ void render() {
 					if (ImGui::IsItemHovered()) {
 						ImVec2 mn = ImGui::GetItemRectMin();
 						ImVec2 mx = ImGui::GetItemRectMax();
-						ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y), mx, app::theme::FONT_HIGHLIGHT_U32);
+						ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y), mx, ImGui::GetColorU32(ImGuiCol_Text));
 					}
-					ImGui::PopStyleColor(3);
 
 					ImGui::SameLine(0.0f, 0.0f);
 					ImGui::TextUnformatted(" / ");
 					ImGui::SameLine(0.0f, 0.0f);
 
-					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
 					if (ImGui::SmallButton("Disable All##WMOGroups")) {
 						for (auto& g : view.modelViewerWMOGroups)
 							g["checked"] = false;
@@ -1767,9 +1727,8 @@ void render() {
 					if (ImGui::IsItemHovered()) {
 						ImVec2 mn = ImGui::GetItemRectMin();
 						ImVec2 mx = ImGui::GetItemRectMax();
-						ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y), mx, app::theme::FONT_HIGHLIGHT_U32);
+						ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y), mx, ImGui::GetColorU32(ImGuiCol_Text));
 					}
-					ImGui::PopStyleColor(3);
 				}
 
 				// --- 898: Doodad Sets header ---

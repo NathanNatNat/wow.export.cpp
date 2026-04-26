@@ -458,13 +458,13 @@ void render() {
 			view.userInputFilterInstall = filter_buf;
 
 		ImGui::SameLine(0.0f, 5.0f);
-		if (busy) app::theme::BeginDisabledButton();
+		if (busy) ImGui::BeginDisabled();
 		if (ImGui::Button("View Strings"))
 			view_strings_impl();
 		ImGui::SameLine(0.0f, 5.0f);
 		if (ImGui::Button("Export Selected"))
 			export_install_files();
-		if (busy) app::theme::EndDisabledButton();
+		if (busy) ImGui::EndDisabled();
 
 		ImGui::EndChild();
 		ImGui::PopStyleVar(); // WindowPadding
@@ -567,10 +567,10 @@ void render() {
 		if (ImGui::Button("Back to Manifest"))
 			back_to_manifest_impl();
 		ImGui::SameLine(0.0f, 5.0f);
-		if (busy) app::theme::BeginDisabledButton();
+		if (busy) ImGui::BeginDisabled();
 		if (ImGui::Button("Export Strings"))
 			export_strings_impl();
-		if (busy) app::theme::EndDisabledButton();
+		if (busy) ImGui::EndDisabled();
 
 		ImGui::EndChild();
 		ImGui::PopStyleVar(); // WindowPadding
@@ -582,10 +582,7 @@ void render() {
 		ImGui::BeginChild("install-strings-info",
 			ImVec2(SIDEBAR_W - sidebarPadR, avail.y - sidebarTopM));
 		{
-			ImGui::PushStyleColor(ImGuiCol_Text,
-				ImVec4(1.0f, 1.0f, 1.0f, 0.7f));
-			ImGui::TextUnformatted("Strings from:");
-			ImGui::PopStyleColor();
+			ImGui::TextDisabled("Strings from:");
 
 			ImGui::Spacing();
 

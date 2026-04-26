@@ -512,8 +512,8 @@ void render(const char* id,
 		// Determine if mouse is over the thumb for hover effect.
 		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
 		const ImU32 thumbColor = thumbHovered
-			? app::theme::TEXT_ACTIVE_U32
-			: app::theme::TEXT_IDLE_U32;
+			? ImGui::GetColorU32(ImGuiCol_Text)
+			: ImGui::GetColorU32(ImGuiCol_TextDisabled);
 
 		drawList->AddRectFilled(thumbMin, thumbMax, thumbColor, 4.0f);
 
@@ -539,20 +539,6 @@ void render(const char* id,
 		// watch: displayItems — load icons for visible items.
 		icon_render::loadIcon(item.icon);
 
-		// Alternating row background + selected highlight.
-		//      .ui-listbox .item:nth-child(even) { background: var(--background-alt); }
-		//      .ui-listbox .item.selected { background: var(--font-alt); }
-		{
-			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
-			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeightVal);
-			const ImU32 rowBg = ((i - startIdx) % 2 == 0)
-				? app::theme::BG_ALT_U32
-				: app::theme::BG_DARK_U32;
-			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, rowBg);
-
-			if (itemSelected)
-				ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::ROW_SELECTED_U32);
-		}
 
 		ImGui::PushID(i);
 

@@ -215,13 +215,12 @@ void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListStat
 		// CSS: .scroller:hover > div, .scroller.using > div { background: var(--font-highlight); }
 		// CSS: .scroller { opacity: 0.7; }
 		const ImU32 baseColor = thumbHovered
-			? app::theme::FONT_HIGHLIGHT_U32
-			: app::theme::BORDER_U32;
-		// Apply 0.7 opacity
+			? ImGui::GetColorU32(ImGuiCol_Text)
+			: ImGui::GetColorU32(ImGuiCol_ScrollbarGrab);
 		const ImU32 thumbColor = (baseColor & 0x00FFFFFF) |
 			(static_cast<ImU32>(static_cast<float>((baseColor >> 24) & 0xFF) * 0.7f) << 24);
 
-		drawList->AddRectFilled(innerMin, innerMax, thumbColor, app::theme::SCROLLBAR_ROUNDING);
+		drawList->AddRectFilled(innerMin, innerMax, thumbColor, 5.0f);
 
 		// Handle mouse-down on the scroller thumb.
 		if (ImGui::IsMouseHoveringRect(thumbMin, thumbMax) && ImGui::IsMouseClicked(0)) {
@@ -240,29 +239,10 @@ void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListStat
 		const std::string label = item.value("label", std::string(""));
 		const int di = i - startIdx;
 
-		// CSS: .item { background: var(--background-dark); }
-		// CSS: .item:nth-child(even) { background: var(--background-alt); }
-		// The scroller div is DOM child 1; the first item is child 2 (even).
-		// So display index 0, 2, 4 (di%2==0) map to even DOM children → BG_ALT.
-		// CSS: .item.selected { background: var(--font-alt); }
-		{
-			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
-			const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
-			const ImU32 rowBg = (di % 2 == 0) ? app::theme::BG_ALT_U32 : app::theme::BG_DARK_U32;
-			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, rowBg);
-			if (checked)
-				ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, app::theme::FONT_ALT_U32);
-		}
-
 		ImGui::PushID(i);
 
 		// CSS: .item { padding: 2px 8px } → 8px left padding for checkbox and label.
 		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8.0f);
-
-		// Suppress ImGui's built-in header/hover colors since we draw backgrounds manually.
-		ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-		ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 
 		// Checkbox + label — clicking anywhere on the row toggles the checkbox.
 		if (ImGui::Checkbox(("##cb" + std::to_string(i)).c_str(), &checked)) {
@@ -276,7 +256,6 @@ void render(const char* id, std::vector<nlohmann::json>& items, CheckboxListStat
 			item["checked"] = checked;
 		}
 
-		ImGui::PopStyleColor(3);
 		ImGui::PopID();
 	}
 

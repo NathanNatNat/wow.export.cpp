@@ -1932,45 +1932,31 @@ void renderExpansionFilterButtons(int& selectedFilter, int expansionCount) {
 	constexpr float BTN_SIZE = 30.0f;
 	constexpr float GAP = 8.0f;
 
-	const ImU32 normalBg   = IM_COL32(0, 0, 0, 71);   // rgb(0 0 0 / 28%)
-	const ImU32 activeBg   = IM_COL32(0, 0, 0, 204);   // rgba(0,0,0,0.8)
-	const ImU32 hoveredBg  = IM_COL32(0, 0, 0, 204);
-
 	ImGui::Dummy(ImVec2(0, 10.0f));
 
-	// Center the row: total width = (count+1) * BTN_SIZE + count * GAP
-	int totalBtns = 1 + expansionCount; // "All" + per-expansion
+	int totalBtns = 1 + expansionCount;
 	float totalWidth = totalBtns * BTN_SIZE + (totalBtns - 1) * GAP;
 	float indent = (ImGui::GetContentRegionAvail().x - totalWidth) * 0.5f;
 	if (indent > 0.0f)
 		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indent);
 
-	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(GAP, 0));
 
-	// "Show All" button — uses a ban/slash icon.
+	// "Show All" button
 	{
 		bool isActive = (selectedFilter == -1);
-		ImU32 bg = isActive ? activeBg : normalBg;
-		ImGui::PushStyleColor(ImGuiCol_Button,        ImGui::ColorConvertU32ToFloat4(bg));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImGui::ColorConvertU32ToFloat4(hoveredBg));
-		ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImGui::ColorConvertU32ToFloat4(activeBg));
-
+		if (isActive) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
 		if (ImGui::Button(ICON_FA_BAN "##exp_all_icon", ImVec2(BTN_SIZE, BTN_SIZE)))
 			selectedFilter = -1;
-
-		ImGui::PopStyleColor(3);
+		if (isActive) ImGui::PopStyleColor();
 	}
 
 	// Per-expansion buttons
 	for (int i = 0; i < expansionCount; ++i) {
 		ImGui::SameLine();
 		bool isActive = (selectedFilter == i);
-		ImU32 bg = isActive ? activeBg : normalBg;
-		ImGui::PushStyleColor(ImGuiCol_Button,        ImGui::ColorConvertU32ToFloat4(bg));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImGui::ColorConvertU32ToFloat4(hoveredBg));
-		ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImGui::ColorConvertU32ToFloat4(activeBg));
+		if (isActive) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
 
 		GLuint tex = getExpansionIconTexture(i);
 		if (tex != 0) {
@@ -1981,15 +1967,14 @@ void renderExpansionFilterButtons(int& selectedFilter, int expansionCount) {
 			}
 			ImGui::PopID();
 		} else {
-			// Fallback text button if icon texture failed to load.
 			if (ImGui::Button(std::format("E{}##exp_{}", i, i).c_str(), ImVec2(BTN_SIZE, BTN_SIZE)))
 				selectedFilter = i;
 		}
 
-		ImGui::PopStyleColor(3);
+		if (isActive) ImGui::PopStyleColor();
 	}
 
-	ImGui::PopStyleVar(3);
+	ImGui::PopStyleVar(2);
 }
 
 } // namespace app::theme

@@ -713,9 +713,8 @@ void render(const char* id,
 		// CSS: .scroller { opacity: 0.7; }
 		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
 		const ImU32 baseColor = thumbHovered
-			? app::theme::FONT_HIGHLIGHT_U32
-			: app::theme::BORDER_U32;
-		// Apply CSS opacity: 0.7 from .scroller { opacity: 0.7; }
+			? ImGui::GetColorU32(ImGuiCol_Text)
+			: ImGui::GetColorU32(ImGuiCol_ScrollbarGrab);
 		const ImU32 thumbColor = (baseColor & 0x00FFFFFF) |
 			(static_cast<ImU32>(static_cast<float>((baseColor >> 24) & 0xFF) * 0.7f) << 24);
 
@@ -732,34 +731,9 @@ void render(const char* id,
 	//     <span v-for="(sub, si) in item.split('\\31')" :class="'sub sub-' + si" :data-item="sub">{{ sub }}</span>
 	// </div>
 
-	// Suppress ImGui's built-in header/hover colors — we draw all row backgrounds manually
-	// to correctly implement the CSS priority: hover > selected > even/odd.
-	ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-	ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-
 	for (int i = startIdx; i < endIdx; ++i) {
 		const std::string& item = filteredItems[static_cast<size_t>(i)];
 		const bool itemSelected = isSelected(selection, item);
-
-		// Determine row rect before rendering (needed for hover check and background).
-		const ImVec2 rowMin = ImGui::GetCursorScreenPos();
-		const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
-
-		// CSS background priority (highest to lowest):
-		//   .item:hover { background: var(--font-alt) !important; }  — hover always wins
-		//   .item.selected { background: var(--font-alt); }
-		//   .item:nth-child(even) { background: var(--background-alt); }
-		//   .item { background: var(--background-dark); }
-		// nth-child(even): scroller is child 1, first item is child 2 (even) → di=0 gets BG_ALT.
-		const bool rowHovered = ImGui::IsMouseHoveringRect(rowMin, rowMax) &&
-		                        ImGui::IsWindowHovered(ImGuiHoveredFlags_None);
-		const int di = i - startIdx;
-		const ImU32 rowBg = rowHovered   ? app::theme::FONT_ALT_U32
-		                  : itemSelected ? app::theme::ROW_SELECTED_U32
-		                  : (di % 2 == 0) ? app::theme::BG_ALT_U32
-		                  : app::theme::BG_DARK_U32;
-		ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, rowBg);
 
 		ImGui::PushID(i);
 
@@ -799,8 +773,6 @@ void render(const char* id,
 
 		ImGui::PopID();
 	}
-
-	ImGui::PopStyleColor(3); // ImGuiCol_Header, HeaderHovered, HeaderActive
 
 	ImGui::EndChild();
 
@@ -870,17 +842,13 @@ void renderStatusBar(const std::string& unittype,
 				? ImVec4(1.0f, 1.0f, 1.0f, 1.0f)
 				: ImVec4(87.0f/255.0f, 175.0f/255.0f, 226.0f/255.0f, 1.0f);
 
-			// Render as transparent-background selectable text to look like a CSS <a> link.
-			ImGui::PushStyleColor(ImGuiCol_Text,          linkColor);
-			ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-			ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+			ImGui::PushStyleColor(ImGuiCol_Text, linkColor);
 			const std::string selId = upperExt + "##qf" + std::to_string(qi);
 			if (ImGui::Selectable(selId.c_str(), isActive,
 			                      ImGuiSelectableFlags_None,
 			                      ImVec2(ImGui::CalcTextSize(upperExt.c_str()).x, 0.0f)))
 				applyQuickFilter(ext, state);
-			ImGui::PopStyleColor(4);
+			ImGui::PopStyleColor();
 
 			if (qi < quickfilters.size() - 1) {
 				ImGui::SameLine();

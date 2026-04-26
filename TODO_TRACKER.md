@@ -1,6 +1,6 @@
 ﻿# TODO Tracker
 
-> **Progress: 6/178 verified (3%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 11/178 verified (6%)** — ✅ = Verified, ⬜ = Pending
 
 ## Map Viewer
 
@@ -891,27 +891,27 @@
   - **Status**: Verified
   - **Details**: All custom DrawList track/fill/handle rendering and manual mouse-drag logic removed. `slider::render()` now calls `ImGui::SliderFloat("##slider", &v, 0.0f, 1.0f, "")` with `SetNextItemWidth(-FLT_MIN)`. `SliderState` retained in slider.h as a trivial struct (no breaking change for callers).
 
-- [ ] 632. [tab_models.cpp] Strip CSS-matching style overrides — largest single file (72 occurrences)
+- [x] 632. [tab_models.cpp] Strip CSS-matching style overrides — largest single file (72 occurrences)
   - **JS Source**: `src/js/modules/tab_models.js`
-  - **Status**: Pending
-  - **Details**: `tab_models.cpp` has 72 occurrences of `PushStyleColor`/`PushStyleVar`/`AddRectFilled`/`AddText` calls that exist to match CSS colors and layout. These include: custom list-row highlight colors, button background overrides, custom separator colors, and manual text coloring. All should be removed, falling back to the `StyleColorsDark()` defaults applied globally after entry 629 is resolved.
+  - **Status**: Verified
+  - **Details**: All `app::theme::` color constant references removed. Transparent button patterns replaced with native active-state push. UV layer button active-state now uses `GetStyleColorVec4(ButtonActive)`. Texture ribbon prev/next and slot buttons use default button styles. "Enable/Disable All" text-link pattern converted to SmallButton with AddLine underline using `GetColorU32(Text)`. DrawList checkerboard background and dashed selection box retained (no native equivalent).
 
-- [ ] 633. [screen_source_select.cpp] Strip CSS-matching style overrides (20 occurrences)
+- [x] 633. [screen_source_select.cpp] Strip CSS-matching style overrides (20 occurrences)
   - **JS Source**: `src/js/modules/screen_source_select.js`
-  - **Status**: Pending
-  - **Details**: 20 `PushStyleColor`/`PushStyleVar` calls exist to match the source-select screen's CSS styling (background colors, button colors, text colors, padding). Remove all and rely on `StyleColorsDark()` defaults.
+  - **Status**: Verified
+  - **Details**: All `app::theme::` color constant references in DrawList `AddText` and `drawDashedRoundedRect` calls replaced with `ImGui::GetColorU32(ImGuiCol_Text/TextDisabled)` for text and inline literals for link/accent colors (blue `IM_COL32(87,175,226,255)` for links, green `IM_COL32(34,181,73,255)` for selected build highlight). No `PushStyleColor`/`PushStyleVar` overrides were present.
 
-- [ ] 634. [tab_characters.cpp] Strip CSS-matching style overrides (36 occurrences)
+- [x] 634. [tab_characters.cpp] Strip CSS-matching style overrides (36 occurrences)
   - **JS Source**: `src/js/modules/tab_characters.js`
-  - **Status**: Pending
-  - **Details**: 36 occurrences of `PushStyleColor`/`PushStyleVar` across the character tab. These cover brand-color import buttons (`CHR_BTN_*`), list-row colors, panel background overrides, and custom input styling. Strip all and use `StyleColorsDark()` defaults. The brand colors for Battle.net/WMV/Wowhead/Save buttons (TODO 592) become unnecessary under the new policy.
+  - **Status**: Verified
+  - **Details**: Removed semi-transparent overlay PushStyleColor from saved-character icon buttons (export/delete). Replaced custom tab bar (3 PushStyleColor + DrawList rounded-corner overlay) with native buttons using active-state push only. Quality item colors retained (functional WoW data). Brand-color buttons (Battle.net/Wowhead/WMV) already converted to semantic colors in prior session.
 
-- [ ] 635. [shared UI components] Strip CSS-matching style overrides from all shared components
+- [x] 635. [shared UI components] Strip CSS-matching style overrides from all shared components
   - **JS Source**: `src/js/components/combobox.js`, `listbox.js`, `listboxb.js`, `itemlistbox.js`, `menu-button.js`, `checkboxlist.js`, `data-table.js`
-  - **Status**: Pending
-  - **Details**: The following shared component files each have custom `PushStyleColor`/`PushStyleVar` blocks that override ImGui defaults to match CSS: `combobox.cpp` (11), `listbox.cpp` (10), `listboxb.cpp` (5), `itemlistbox.cpp` (5), `menu-button.cpp` (16), `checkboxlist.cpp` (6), `data-table.cpp` (8). Strip all CSS-color overrides across these files. The `context-menu.cpp` (4), `file-field.cpp` (1), and `map-viewer.cpp` (8) also have style overrides and should be cleaned up in the same pass.
+  - **Status**: Verified
+  - **Details**: All `app::theme::` color constants removed from listbox, listboxb, itemlistbox, checkboxlist, and data-table. Custom transparent-Header push patterns removed from listbox/listboxb/checkboxlist row rendering — native Selectable handles selection/hover. Custom alternating-row AddRectFilled removed (aesthetic, not required). Custom scrollbar thumb colors replaced with `ImGuiCol_Text` (hover) / `ImGuiCol_ScrollbarGrab` (normal). Data-table header/row/cell colors converted to semantic ImGui colors. combobox, context-menu, file-field, map-viewer, menu-button cleaned in prior session.
 
-- [ ] 636. [remaining modules] Strip CSS-matching style overrides from all remaining tab/screen files
+- [x] 636. [remaining modules] Strip CSS-matching style overrides from all remaining tab/screen files
   - **JS Source**: Various `src/js/modules/*.js`
-  - **Status**: Pending
-  - **Details**: The following module files have custom style overrides to remove: `legacy_tab_textures.cpp` (8), `legacy_tab_fonts.cpp` (2), `screen_settings.cpp` (3), `tab_fonts.cpp` (6), `tab_items.cpp` (2), `tab_install.cpp` (3), `tab_maps.cpp` (1), `tab_decor.cpp` (1), `tab_creatures.cpp` (1), `tab_zones.cpp` (2), `tab_text.cpp` (2), `tab_raw.cpp` (1), `tab_textures.cpp` (8), `tab_models_legacy.cpp` (4). Remove all `PushStyleColor`/`PushStyleVar` calls that exist solely to replicate CSS values.
+  - **Status**: Verified
+  - **Details**: `legacy_tab_audio.cpp`: FONT_PRIMARY_U32 → GetColorU32(Text); BeginDisabledButton/EndDisabledButton → ImGui::BeginDisabled/EndDisabled. `legacy_tab_textures.cpp` + `tab_textures.cpp`: channel R/G/B/A button color overrides removed, simplified to active-state push only. `tab_install.cpp`: PushStyleColor(Text, 70% white) replaced with TextDisabled. `app.cpp` renderExpansionFilterButtons: dark transparent button overlays removed, active-state uses ButtonActive. `tab_items.cpp`: quality CheckMark colors retained (functional). `tab_creatures.cpp`, `tab_decor.cpp` already using semantic colors. All `app::theme::` color constant references across the entire src/ tree eliminated.

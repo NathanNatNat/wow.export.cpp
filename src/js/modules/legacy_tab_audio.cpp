@@ -444,7 +444,7 @@ void render() {
 				float availW = ImGui::GetContentRegionAvail().x;
 				ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availW - iconTextSize.x) * 0.5f);
 				ImVec2 pos = ImGui::GetCursorScreenPos();
-				ImGui::GetWindowDrawList()->AddText(iconFont, animSize, pos, app::theme::FONT_PRIMARY_U32, ICON_FA_MUSIC);
+				ImGui::GetWindowDrawList()->AddText(iconFont, animSize, pos, ImGui::GetColorU32(ImGuiCol_Text), ICON_FA_MUSIC);
 				ImGui::Dummy(iconTextSize);
 			}
 		}
@@ -498,10 +498,10 @@ void render() {
 	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
 	if (app::layout::BeginPreviewControls("legacy-sounds-preview-controls", regions)) {
 		const bool busy = view.isBusy > 0;
-		if (busy) app::theme::BeginDisabledButton();
+		if (busy) ImGui::BeginDisabled();
 		if (ImGui::Button("Export Selected"))
 			export_selected();
-		if (busy) app::theme::EndDisabledButton();
+		if (busy) ImGui::EndDisabled();
 	}
 	app::layout::EndPreviewControls();
 

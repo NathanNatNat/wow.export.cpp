@@ -634,10 +634,10 @@ void render() {
 		ImGui::SameLine();
 
 		const bool busy = view.isBusy > 0;
-		if (busy) app::theme::BeginDisabledButton();
+		if (busy) ImGui::BeginDisabled();
 		if (ImGui::Button("Export Selected"))
 			export_selected();
-		if (busy) app::theme::EndDisabledButton();
+		if (busy) ImGui::EndDisabled();
 	}
 	app::layout::EndPreviewControls();
 

@@ -910,7 +910,7 @@ void render() {
 				anim = std::min(anim + dt * anim_speed, 1.0f);
 			else
 				anim = std::max(anim - dt * anim_speed, 0.0f);
-			ImU32 border_color = lerpColor(app::theme::FONT_FADED_U32, app::theme::FONT_HIGHLIGHT_U32, anim);
+			ImU32 border_color = lerpColor(ImGui::GetColorU32(ImGuiCol_TextDisabled), ImGui::GetColorU32(ImGuiCol_Text), anim);
 			drawDashedRoundedRect(draw, card_min, card_max, border_color, border_radius, border_thick, 8.0f, 6.0f);
 
 			// Draw icon.
@@ -939,7 +939,7 @@ void render() {
 			float text_y = card_min.y + (card_h - text_block_h) * 0.5f;
 
 			// Title (bold, highlight color).
-			draw->AddText(bold_font, title_size, ImVec2(text_x, text_y), app::theme::FONT_HIGHLIGHT_U32, card.title);
+			draw->AddText(bold_font, title_size, ImVec2(text_x, text_y), ImGui::GetColorU32(ImGuiCol_Text), card.title);
 			text_y += title_size + content_gap;
 
 			// Subtitle (opacity 0.7).
@@ -971,7 +971,7 @@ void render() {
 				text_y += 5.0f;
 				std::string label_prefix = "Last Opened: ";
 				ImVec2 prefix_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, label_prefix.c_str());
-				draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), app::theme::FONT_PRIMARY_U32, label_prefix.c_str());
+				draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), ImGui::GetColorU32(ImGuiCol_Text), label_prefix.c_str());
 
 				// Clickable link part.
 				std::string link_part = card.link_text.substr(label_prefix.size());
@@ -988,7 +988,7 @@ void render() {
 					}
 				}
 				bool link_hovered = ImGui::IsItemHovered();
-				ImU32 link_color = link_hovered ? app::theme::FONT_ALT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
+				ImU32 link_color = link_hovered ? IM_COL32(159, 241, 161, 255) : IM_COL32(87, 175, 226, 255);
 				draw->AddText(ImGui::GetFont(), link_size, link_pos, link_color, link_part.c_str());
 			} else if (card.card_id == 1) {
 				// CDN region: "Region: NAME (Change)" with context menu.
@@ -996,7 +996,7 @@ void render() {
 				if (!core::view->selectedCDNRegion.is_null()) {
 					std::string region_label = std::format("Region: {} ", core::view->selectedCDNRegion.value("name", std::string("...")));
 					ImVec2 region_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, region_label.c_str());
-					draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), app::theme::FONT_PRIMARY_U32, region_label.c_str());
+					draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), ImGui::GetColorU32(ImGuiCol_Text), region_label.c_str());
 
 					// "(Change)" link
 					const char* change_text = "(Change)";
@@ -1008,7 +1008,7 @@ void render() {
 						ImGui::OpenPopup("##cdn_region_menu");
 					}
 					bool change_hovered = ImGui::IsItemHovered();
-					ImU32 change_color = change_hovered ? app::theme::FONT_ALT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
+					ImU32 change_color = change_hovered ? IM_COL32(159, 241, 161, 255) : IM_COL32(87, 175, 226, 255);
 					draw->AddText(ImGui::GetFont(), link_size, change_pos, change_color, change_text);
 				}
 
@@ -1036,7 +1036,7 @@ void render() {
 						ImVec2 name_sz = font->CalcTextSizeA(normal_size, FLT_MAX, 0.0f, name.c_str());
 						float text_center_y = item_min.y + (item_h - name_sz.y) * 0.5f;
 						popup_draw->AddText(font, normal_size, ImVec2(item_min.x, text_center_y),
-							app::theme::FONT_PRIMARY_U32, name.c_str());
+							ImGui::GetColorU32(ImGuiCol_Text), name.c_str());
 
 						// Draw delay string with reduced opacity and smaller font.
 						if (!region["delay"].is_null()) {
@@ -1055,7 +1055,7 @@ void render() {
 				text_y += 5.0f;
 				std::string label_prefix = "Last Opened: ";
 				ImVec2 prefix_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, label_prefix.c_str());
-				draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), app::theme::FONT_PRIMARY_U32, label_prefix.c_str());
+				draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), ImGui::GetColorU32(ImGuiCol_Text), label_prefix.c_str());
 
 				std::string link_part = card.link_text.substr(label_prefix.size());
 				ImVec2 link_pos(text_x + prefix_sz.x, text_y);
@@ -1070,7 +1070,7 @@ void render() {
 					}
 				}
 				bool link_hovered_l = ImGui::IsItemHovered();
-				ImU32 link_color_l = link_hovered_l ? app::theme::FONT_ALT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
+				ImU32 link_color_l = link_hovered_l ? IM_COL32(159, 241, 161, 255) : IM_COL32(87, 175, 226, 255);
 				draw->AddText(ImGui::GetFont(), link_size, link_pos, link_color_l, link_part.c_str());
 			}
 
@@ -1134,7 +1134,7 @@ void render() {
 			ImVec2 title_sz = bold_font->CalcTextSizeA(title_h, FLT_MAX, 0.0f, title_text);
 			ImVec2 rect_min = ImGui::GetItemRectMin();
 			float title_cx = rect_min.x + (grid_width - title_sz.x) * 0.5f;
-			draw->AddText(bold_font, title_h, ImVec2(title_cx, rect_min.y), app::theme::FONT_HIGHLIGHT_U32, title_text);
+			draw->AddText(bold_font, title_h, ImVec2(title_cx, rect_min.y), ImGui::GetColorU32(ImGuiCol_Text), title_text);
 		}
 		cur_y += title_h + title_mb;
 
@@ -1167,9 +1167,9 @@ void render() {
 				// Border and hover effect.
 				if (btn_hovered) {
 					draw->AddRectFilled(btn_min, btn_max, IM_COL32(34, 181, 73, 25), btn_border_radius);
-					drawDashedRoundedRect(draw, btn_min, btn_max, app::theme::NAV_SELECTED_U32, btn_border_radius, border_thick, 8.0f, 6.0f);
+					drawDashedRoundedRect(draw, btn_min, btn_max, IM_COL32(34, 181, 73, 255), btn_border_radius, border_thick, 8.0f, 6.0f);
 				} else {
-					drawDashedRoundedRect(draw, btn_min, btn_max, app::theme::FONT_FADED_U32, btn_border_radius, border_thick, 8.0f, 6.0f);
+					drawDashedRoundedRect(draw, btn_min, btn_max, ImGui::GetColorU32(ImGuiCol_TextDisabled), btn_border_radius, border_thick, 8.0f, 6.0f);
 				}
 
 				// Expansion icon (32px, at 10px from left, vertically centered).
@@ -1184,7 +1184,7 @@ void render() {
 				}
 
 				// Build label text.
-				ImU32 text_color = btn_hovered ? app::theme::NAV_SELECTED_U32 : app::theme::FONT_HIGHLIGHT_U32;
+				ImU32 text_color = btn_hovered ? IM_COL32(34, 181, 73, 255) : ImGui::GetColorU32(ImGuiCol_Text);
 				float text_x_off = btn_min.x + 50.0f;
 				float text_y_off = btn_min.y + (btn_h - 16.0f) * 0.5f;
 				draw->AddText(ImGui::GetFont(), 16.0f, ImVec2(text_x_off, text_y_off), text_color, label.c_str());
@@ -1211,7 +1211,7 @@ void render() {
 				click_return_to_source_select();
 			}
 			bool return_hovered = ImGui::IsItemHovered();
-			ImU32 return_color = return_hovered ? app::theme::FONT_HIGHLIGHT_U32 : app::theme::FONT_ALT_U32;
+			ImU32 return_color = return_hovered ? ImGui::GetColorU32(ImGuiCol_Text) : IM_COL32(87, 175, 226, 255);
 			draw->AddText(ImGui::GetFont(), return_h, ImGui::GetItemRectMin(), return_color, return_text);
 		}
 	}

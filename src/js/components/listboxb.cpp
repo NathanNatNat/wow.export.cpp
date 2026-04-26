@@ -350,9 +350,8 @@ void render(const char* id, const std::vector<ListboxBItem>& items,
 		// CSS: .scroller { opacity: 0.7; }
 		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
 		const ImU32 baseColor = thumbHovered
-			? app::theme::FONT_HIGHLIGHT_U32
-			: app::theme::BORDER_U32;
-		// Apply CSS opacity: 0.7 from .scroller { opacity: 0.7; }
+			? ImGui::GetColorU32(ImGuiCol_Text)
+			: ImGui::GetColorU32(ImGuiCol_ScrollbarGrab);
 		const ImU32 thumbColor = (baseColor & 0x00FFFFFF) |
 			(static_cast<ImU32>(static_cast<float>((baseColor >> 24) & 0xFF) * 0.7f) << 24);
 
@@ -369,25 +368,9 @@ void render(const char* id, const std::vector<ListboxBItem>& items,
 	//     <span class="sub sub-0">{{ item.label }}</span>
 	// </div>
 
-	// Suppress ImGui's built-in header/hover colors — we draw all row backgrounds manually.
-	ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-	ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-
 	for (int i = startIdx; i < endIdx; ++i) {
 		const ListboxBItem& item = items[static_cast<size_t>(i)];
 		const bool itemSelected = isSelected(selection, i);
-
-		// Alternating row background + selected highlight.
-		//      .ui-listbox .item { background: var(--background-dark); }
-		//      .ui-listbox .item:nth-child(even) { background: var(--background-alt); }
-		//      .ui-listbox .item.selected { background: var(--font-alt); }
-		const ImVec2 rowMin = ImGui::GetCursorScreenPos();
-		const ImVec2 rowMax(rowMin.x + availSize.x - 10.0f, rowMin.y + itemHeight);
-		const ImU32 rowBg = itemSelected
-			? app::theme::ROW_SELECTED_U32
-			: ((i - startIdx) % 2 == 0) ? app::theme::BG_ALT_U32 : app::theme::BG_DARK_U32;
-		ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, rowBg);
 
 		ImGui::PushID(i);
 
@@ -400,8 +383,6 @@ void render(const char* id, const std::vector<ListboxBItem>& items,
 
 		ImGui::PopID();
 	}
-
-	ImGui::PopStyleColor(3); // ImGuiCol_Header, HeaderHovered, HeaderActive
 
 	ImGui::EndChild();
 	ImGui::PopID();

@@ -714,46 +714,28 @@ void render() {
 		// Channel mask toggles.
 		if (!view.texturePreviewURL.empty()) {
 			int mask = view.config.value("exportChannelMask", 0b1111);
-			struct ChannelChip {
-				const char* id;
-				const char* label;
-				int bit;
-				const char* tooltip;
-				ImVec4 border;
-				ImVec4 selected;
-				ImVec4 text;
-			};
+			struct ChannelChip { const char* id; const char* label; int bit; const char* tooltip; };
 			static const ChannelChip channels[] = {
-				{"channel-red", "R", 0b0001, "Toggle red colour channel.", ImVec4(0.55f, 0.10f, 0.10f, 1.0f), ImVec4(0.75f, 0.18f, 0.18f, 1.0f), ImVec4(1.0f, 0.92f, 0.92f, 1.0f)},
-				{"channel-green", "G", 0b0010, "Toggle green colour channel.", ImVec4(0.10f, 0.45f, 0.10f, 1.0f), ImVec4(0.18f, 0.60f, 0.18f, 1.0f), ImVec4(0.92f, 1.0f, 0.92f, 1.0f)},
-				{"channel-blue", "B", 0b0100, "Toggle blue colour channel.", ImVec4(0.10f, 0.20f, 0.55f, 1.0f), ImVec4(0.18f, 0.30f, 0.75f, 1.0f), ImVec4(0.92f, 0.95f, 1.0f, 1.0f)},
-				{"channel-alpha", "A", 0b1000, "Toggle alpha channel.", ImVec4(0.45f, 0.45f, 0.45f, 1.0f), ImVec4(0.70f, 0.70f, 0.70f, 1.0f), ImVec4(1.0f, 1.0f, 1.0f, 1.0f)}
+				{"channel-red",   "R", 0b0001, "Toggle red colour channel."},
+				{"channel-green", "G", 0b0010, "Toggle green colour channel."},
+				{"channel-blue",  "B", 0b0100, "Toggle blue colour channel."},
+				{"channel-alpha", "A", 0b1000, "Toggle alpha channel."},
 			};
-			const size_t channel_count = sizeof(channels) / sizeof(channels[0]);
-
-			for (size_t i = 0; i < channel_count; ++i) {
-				const auto& channel = channels[i];
-				const bool selected = (mask & channel.bit) != 0;
+			for (const auto& channel : channels) {
+				const bool sel = (mask & channel.bit) != 0;
 				ImGui::PushID(channel.id);
-				ImGui::PushStyleColor(ImGuiCol_Button, selected ? channel.selected : ImVec4(0.16f, 0.16f, 0.16f, 1.0f));
-				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, selected ? channel.selected : ImVec4(0.22f, 0.22f, 0.22f, 1.0f));
-				ImGui::PushStyleColor(ImGuiCol_ButtonActive, channel.selected);
-				ImGui::PushStyleColor(ImGuiCol_Border, channel.border);
-				ImGui::PushStyleColor(ImGuiCol_Text, channel.text);
-				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-				ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+				if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
 				if (ImGui::Button(channel.label, ImVec2(28.0f, 24.0f))) {
 					mask ^= channel.bit;
 					view.config["exportChannelMask"] = mask;
 				}
+				if (sel) ImGui::PopStyleColor();
 				if (ImGui::IsItemHovered())
 					ImGui::SetTooltip("%s", channel.tooltip);
-				ImGui::PopStyleVar(2);
-				ImGui::PopStyleColor(5);
 				ImGui::PopID();
-				if (i + 1 < channel_count)
-					ImGui::SameLine();
+				ImGui::SameLine();
 			}
+			ImGui::NewLine();
 		}
 
 		if (view.texturePreviewTexID != 0) {
