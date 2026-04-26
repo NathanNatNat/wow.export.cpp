@@ -304,7 +304,6 @@ void render() {
 		// Glyph grid.
 		// CSS: .font-character-grid { bottom: 140px; } — fills all space except bottom 140px for preview input.
 		const float gridHeight = std::max(50.0f, ImGui::GetContentRegionAvail().y - 140.0f);
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, app::theme::BG_DARK);
 		ImGui::BeginChild("font-character-grid", ImVec2(0, gridHeight), ImGuiChildFlags_Borders);
 
 		// Set 2px spacing to match CSS: flex-wrap: wrap; gap: 2px
@@ -320,13 +319,9 @@ void render() {
 			// CSS: .font-glyph-cell { width: 32px; height: 32px; background: var(--background-alt); border-radius: 3px; }
 			// CSS: .font-glyph-cell:hover { background: var(--font-alt); }
 			ImGui::PushID(static_cast<int>(codepoint));
-			ImGui::PushStyleColor(ImGuiCol_Header, app::theme::BG_ALT);           // normal bg
-			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, app::theme::FONT_ALT);   // hover bg (#57afe2)
-			ImGui::PushStyleColor(ImGuiCol_HeaderActive, app::theme::FONT_ALT);    // active bg
 			if (ImGui::Selectable(utf8_buf, false, 0, ImVec2(32, 32))) {
 				font_helpers::trigger_glyph_click(glyph_state, codepoint);
 			}
-			ImGui::PopStyleColor(3);
 			if (ImGui::IsItemHovered()) {
 				char tooltip[32];
 				std::snprintf(tooltip, sizeof(tooltip), "U+%04X", codepoint);
@@ -345,12 +340,10 @@ void render() {
 		ImGui::NewLine();
 		ImGui::PopStyleVar();
 		ImGui::EndChild();
-		ImGui::PopStyleColor(); // BG_DARK child background
 
 		// Font preview text input.
 		// CSS: .font-preview-input { height: 120px; font-size: 32px; background: var(--background-dark); border: 1px solid var(--border); }
 		const float previewInputHeight = std::min(120.0f, ImGui::GetContentRegionAvail().y);
-		ImGui::PushStyleColor(ImGuiCol_FrameBg, app::theme::BG_DARK);
 
 		// JS: <textarea :style="{ fontFamily: $core.view.fontPreviewFontFamily }">
 		// Push the loaded ImGui font so the preview textarea renders in the selected WoW font.
@@ -371,8 +364,6 @@ void render() {
 
 		if (preview_font)
 			ImGui::PopFont();
-
-		ImGui::PopStyleColor();
 
 		if (view.fontPreviewText.empty())
 			ImGui::SetItemTooltip("%s", view.fontPreviewPlaceholder.c_str());

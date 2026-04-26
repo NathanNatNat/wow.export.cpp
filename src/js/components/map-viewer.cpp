@@ -670,7 +670,7 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 				drawList->AddRectFilled(
 					ImVec2(screenX, screenY),
 					ImVec2(screenX + static_cast<float>(tileSize), screenY + static_cast<float>(tileSize)),
-					(app::theme::FONT_ALT_HIGHLIGHT_U32 & 0x00FFFFFFu) | 0x80000000u);
+					(IM_COL32(159, 241, 161, 255) & 0x00FFFFFFu) | 0x80000000u);
 			}
 
 			// Draw box selection preview highlight
@@ -681,14 +681,14 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 				drawList->AddRectFilled(
 					ImVec2(screenX, screenY),
 					ImVec2(screenX + static_cast<float>(tileSize), screenY + static_cast<float>(tileSize)),
-					(app::theme::FONT_ALT_U32 & 0x00FFFFFFu) | 0x80000000u);
+					(IM_COL32(87, 175, 226, 255) & 0x00FFFFFFu) | 0x80000000u);
 			} else if (!state.isBoxSelectMode && state.hoverTile == index) {
 				// Draw the hover overlay only when not in box select mode
 				// JS: overlayCtx.fillStyle = 'rgba(87, 175, 226, 0.5)';
 				drawList->AddRectFilled(
 					ImVec2(screenX, screenY),
 					ImVec2(screenX + static_cast<float>(tileSize), screenY + static_cast<float>(tileSize)),
-					(app::theme::FONT_ALT_U32 & 0x00FFFFFFu) | 0x80000000u);
+					(IM_COL32(87, 175, 226, 255) & 0x00FFFFFFu) | 0x80000000u);
 			}
 		}
 	}
@@ -718,7 +718,7 @@ void renderOverlay(MapViewerState& state, int tileSize_prop, int gridSize,
 		// overlayCtx.strokeRect(rectX, rectY, rectW, rectH);
 		// overlayCtx.setLineDash([]);
 		// Dashed line rendering: draw individual dash segments along each edge.
-		const ImU32 dashColor = app::theme::DASH_COLOR_U32;
+		const ImU32 dashColor = IM_COL32(255, 255, 255, 230);
 		const float dashLen = 5.0f;
 		const float gapLen = 5.0f;
 		const float thickness = 2.0f;
@@ -1149,7 +1149,6 @@ void renderWidget(const char* id,
 	// <div class="ui-map-viewer" :class="{ 'box-select-mode': isBoxSelectMode }">
 	ImVec2 avail = ImGui::GetContentRegionAvail();
 	// CSS: .ui-map-viewer { border: 1px solid var(--border); box-shadow: black 0 0 3px 0; }
-	ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
 	ImGui::BeginChild("##map_viewer_container", avail, ImGuiChildFlags_Borders,
 	                   ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -1181,7 +1180,7 @@ void renderWidget(const char* id,
 	ImGui::SameLine();
 	// <span :class="{ active: isBoxSelectMode }">Box Select: B</span>
 	if (state.isBoxSelectMode) {
-		ImGui::PushStyleColor(ImGuiCol_Text, app::theme::NAV_SELECTED); // active highlight
+		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
 		ImGui::TextUnformatted("Box Select: B");
 		ImGui::PopStyleColor();
 	} else {
@@ -1273,7 +1272,6 @@ void renderWidget(const char* id,
 
 	ImGui::EndChild();
 	ImGui::PopStyleVar();
-	ImGui::PopStyleColor();
 	ImGui::PopID();
 }
 

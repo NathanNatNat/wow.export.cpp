@@ -78,8 +78,6 @@ void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
 
 	ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always, windowPivot);
 	// CSS: .context-menu { background: #232323; border: 1px solid var(--border); box-shadow: black 0 0 3px 0; }
-	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.137f, 0.137f, 0.137f, 1.0f));  // #232323
-	ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 
@@ -128,7 +126,6 @@ void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
 	ImGui::End();
 
 	ImGui::PopStyleVar(2);
-	ImGui::PopStyleColor(2);
 
 	ImGui::PopID();
 }

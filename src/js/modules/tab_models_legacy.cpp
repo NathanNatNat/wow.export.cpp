@@ -959,13 +959,9 @@ void render() {
 				float badgeX = ImGui::GetContentRegionAvail().x - badgeWidth - rightPad;
 				inputWidth = badgeX - 5.0f;
 				ImGui::SameLine(ImGui::GetCursorPosX() + badgeX);
-				ImGui::PushStyleColor(ImGuiCol_Button, app::theme::BORDER);
-				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, app::theme::BORDER);
-				ImGui::PushStyleColor(ImGuiCol_ButtonActive, app::theme::BORDER);
 				ImGui::SmallButton(regexLabel);
 				if (ImGui::IsItemHovered())
 					ImGui::SetTooltip("%s", view.regexTooltip.c_str());
-				ImGui::PopStyleColor(3);
 				ImGui::PopStyleVar();
 				ImGui::SameLine(0.0f, 0.0f);
 				ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMin().x);

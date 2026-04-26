@@ -174,7 +174,7 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 		const float textY = itemMin.y + (itemMax.y - itemMin.y - ImGui::GetTextLineHeight()) * 0.5f;
 		ImGui::GetWindowDrawList()->AddText(
 			ImVec2(itemMin.x + ImGui::GetStyle().FramePadding.x, textY),
-			app::theme::FIELD_PLACEHOLDER_U32,
+			ImGui::GetColorU32(ImGuiCol_TextDisabled),
 			placeholder
 		);
 	}
@@ -209,8 +209,6 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 			ImGui::SetNextWindowPos(ImVec2(inputMin.x, inputMax.y), ImGuiCond_Always);
 			ImGui::SetNextWindowSize(ImVec2(inputWidth, 0.0f), ImGuiCond_Always);
 
-			ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.137f, 0.137f, 0.137f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
 			ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
@@ -239,7 +237,7 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 					if (i + 1 < matches.size()) {
 						ImDrawList* dl = ImGui::GetWindowDrawList();
 						const ImVec2 p = ImGui::GetCursorScreenPos();
-						dl->AddLine(p, ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, p.y), app::theme::BORDER_U32);
+						dl->AddLine(p, ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, p.y), ImGui::GetColorU32(ImGuiCol_Separator));
 					}
 				}
 				ImGui::PopStyleVar();
@@ -252,7 +250,7 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 			ImGui::End();
 
 			ImGui::PopStyleVar(2);
-			ImGui::PopStyleColor(5);
+			ImGui::PopStyleColor(3);
 		}
 	}
 

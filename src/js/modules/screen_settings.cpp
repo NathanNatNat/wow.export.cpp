@@ -69,7 +69,7 @@ static bool multiButtonSegment(int idx, const char* label, bool selected, bool i
 	bool clicked = ImGui::InvisibleButton("##seg", size);
 	bool hovered = ImGui::IsItemHovered();
 
-	ImU32 bg = (selected || hovered) ? app::theme::BUTTON_HOVER_U32 : app::theme::BUTTON_BASE_U32;
+	ImU32 bg = (selected || hovered) ? ImGui::GetColorU32(ImGuiCol_ButtonHovered) : ImGui::GetColorU32(ImGuiCol_Button);
 
 	constexpr float r = 5.0f;
 	ImDrawFlags flags = ImDrawFlags_RoundCornersNone;
@@ -81,7 +81,7 @@ static bool multiButtonSegment(int idx, const char* label, bool selected, bool i
 	ImVec2 p1 = ImGui::GetItemRectMax();
 	ImGui::GetWindowDrawList()->AddRectFilled(p0, p1, bg, r, flags);
 	ImGui::GetWindowDrawList()->AddText(ImVec2(p0.x + pad_x, p0.y + pad_y),
-		app::theme::FONT_PRIMARY_U32, label);
+		ImGui::GetColorU32(ImGuiCol_Text), label);
 
 	ImGui::PopID();
 	return clicked;
@@ -666,7 +666,7 @@ void render() {
 		ImDrawList* dl = ImGui::GetWindowDrawList();
 		ImVec2 curPos = ImGui::GetCursorScreenPos();
 		float lineW = ImGui::GetContentRegionAvail().x;
-		dl->AddLine(ImVec2(curPos.x, curPos.y), ImVec2(curPos.x + lineW, curPos.y), app::theme::BORDER_U32);
+		dl->AddLine(ImVec2(curPos.x, curPos.y), ImVec2(curPos.x + lineW, curPos.y), ImGui::GetColorU32(ImGuiCol_Separator));
 	}
 	ImGui::Dummy(ImVec2(0.0f, 15.0f));
 

@@ -66,12 +66,11 @@ static void select(int optionIndex, MenuButtonState& state,
 }
 
 static void drawArrowButton(float width, bool hoveredOrOpen, bool disabled) {
-	ImGui::PushStyleColor(ImGuiCol_Button,
-		hoveredOrOpen ? app::theme::BUTTON_HOVER : ImGui::GetStyleColorVec4(ImGuiCol_Button));
-	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, app::theme::BUTTON_HOVER);
-	ImGui::PushStyleColor(ImGuiCol_ButtonActive, app::theme::BUTTON_HOVER);
+	if (hoveredOrOpen)
+		ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
 	ImGui::Button("##arrow", ImVec2(width, 0.0f));
-	ImGui::PopStyleColor(3);
+	if (hoveredOrOpen)
+		ImGui::PopStyleColor();
 
 	const ImVec2 arrowMin = ImGui::GetItemRectMin();
 	const ImVec2 arrowMax = ImGui::GetItemRectMax();
@@ -87,7 +86,7 @@ static void drawArrowButton(float width, bool hoveredOrOpen, bool disabled) {
 
 	const float halfWidth = 5.0f;
 	const float halfHeight = 2.5f;
-	const ImU32 arrowColor = disabled ? app::theme::FONT_DISABLED_U32 : app::theme::FONT_HIGHLIGHT_U32;
+	const ImU32 arrowColor = disabled ? ImGui::GetColorU32(ImGuiCol_TextDisabled) : ImGui::GetColorU32(ImGuiCol_Text);
 	drawList->AddTriangleFilled(
 		ImVec2(arrowCenter.x - halfWidth, arrowCenter.y - halfHeight),
 		ImVec2(arrowCenter.x + halfWidth, arrowCenter.y - halfHeight),
@@ -133,10 +132,8 @@ void render(const char* id, const std::vector<MenuOption>& options,
 	const ImVec2 buttonGroupMax(buttonGroupMin.x + totalWidth, buttonGroupMin.y + ImGui::GetFrameHeight());
 	const bool hoveredButtonGroup = !disabled && (popupOpen || (dropdown && ImGui::IsMouseHoveringRect(buttonGroupMin, buttonGroupMax)));
 
-	ImGui::PushStyleColor(ImGuiCol_Button,
-		hoveredButtonGroup ? app::theme::BUTTON_HOVER : ImGui::GetStyleColorVec4(ImGuiCol_Button));
-	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, app::theme::BUTTON_HOVER);
-	ImGui::PushStyleColor(ImGuiCol_ButtonActive, app::theme::BUTTON_HOVER);
+	if (hoveredButtonGroup)
+		ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
 
 	if (ImGui::Button(displayLabel.c_str(), ImVec2(buttonWidth, 0.0f))) {
 		if (dropdown) {
@@ -148,7 +145,8 @@ void render(const char* id, const std::vector<MenuOption>& options,
 	}
 
 	ImGui::SameLine(0.0f, 0.0f);
-	ImGui::PopStyleColor(3);
+	if (hoveredButtonGroup)
+		ImGui::PopStyleColor();
 
 	// <div class="arrow" @click.stop="openMenu"></div>
 	drawArrowButton(arrowWidth, hoveredButtonGroup, disabled);
@@ -169,8 +167,6 @@ void render(const char* id, const std::vector<MenuOption>& options,
 	const ImVec2 pivot = upward ? ImVec2(0.0f, 1.0f) : ImVec2(0.0f, 0.0f);
 	ImGui::SetNextWindowPos(ImVec2(buttonGroupMin.x, popupY), ImGuiCond_Always, pivot);
 
-	ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.137f, 0.137f, 0.137f, 1.0f));
-	ImGui::PushStyleColor(ImGuiCol_Border, app::theme::BORDER);
 	ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
 	ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
@@ -193,7 +189,7 @@ void render(const char* id, const std::vector<MenuOption>& options,
 				drawList->AddLine(
 					separatorPos,
 					ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, separatorPos.y),
-					app::theme::BORDER_U32
+					ImGui::GetColorU32(ImGuiCol_Separator)
 				);
 			}
 		}
@@ -203,7 +199,7 @@ void render(const char* id, const std::vector<MenuOption>& options,
 	}
 
 	ImGui::PopStyleVar(2);
-	ImGui::PopStyleColor(5);
+	ImGui::PopStyleColor(3);
 
 	state.open = popupOpen;
 

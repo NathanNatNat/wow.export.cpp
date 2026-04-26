@@ -232,7 +232,6 @@ void render() {
 		// CSS: #tab-text .preview-container .preview-background { background: var(--background-dark); }
 		// CSS: #tab-text .preview-container .preview-background pre { overflow: scroll; padding: 15px; }
 		// WindowPadding applies 15px on all four sides, matching CSS padding: 15px.
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, app::theme::BG_DARK);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(15.0f, 15.0f));
 		ImGui::BeginChild("text-preview-background", ImVec2(0, 0), ImGuiChildFlags_None,
 		                  ImGuiWindowFlags_HorizontalScrollbar);
@@ -241,7 +240,6 @@ void render() {
 
 		ImGui::EndChild();
 		ImGui::PopStyleVar();
-		ImGui::PopStyleColor();
 	}
 	app::layout::EndPreviewContainer();
 
