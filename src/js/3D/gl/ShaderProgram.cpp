@@ -112,6 +112,33 @@ GLuint ShaderProgram::get_uniform_block_index(const std::string& name) {
 	return index;
 }
 
+GLint ShaderProgram::get_uniform_block_param(const std::string& name, GLenum pname) {
+	GLuint index = get_uniform_block_index(name);
+	if (index == GL_INVALID_INDEX)
+		return -1;
+
+	GLint result = 0;
+	glGetActiveUniformBlockiv(program, index, pname, &result);
+	return result;
+}
+
+std::vector<GLint> ShaderProgram::get_active_uniform_offsets(
+    const std::vector<std::string>& names) {
+	std::vector<const char*> c_names;
+	c_names.reserve(names.size());
+	for (const auto& n : names)
+		c_names.push_back(n.c_str());
+
+	std::vector<GLuint> indices(names.size());
+	glGetUniformIndices(program, static_cast<GLsizei>(names.size()),
+	                    c_names.data(), indices.data());
+
+	std::vector<GLint> offsets(names.size());
+	glGetActiveUniformsiv(program, static_cast<GLsizei>(indices.size()),
+	                      indices.data(), GL_UNIFORM_OFFSET, offsets.data());
+	return offsets;
+}
+
 void ShaderProgram::bind_uniform_block(const std::string& name,
                                         GLuint binding_point) {
 	GLuint index = get_uniform_block_index(name);

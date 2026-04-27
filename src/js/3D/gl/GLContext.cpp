@@ -167,22 +167,27 @@ void GLContext::apply_blend_mode(int blend_mode) {
 			break;
 
 		case BlendMode::ALPHA_KEY:
-			// alpha test handled in shader, depth write enabled since discarded pixels don't write depth
-			set_blend(true);
-			set_blend_func(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			// alpha test handled in shader via discard, no blending needed
+			set_blend(false);
 			set_depth_write(true);
 			break;
 
 		case BlendMode::ALPHA:
 			set_blend(true);
-			set_blend_func(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			set_blend_func_separate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
+			                        GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 			set_depth_write(false);
 			break;
 
 		case BlendMode::ADD:
+			set_blend(true);
+			set_blend_func_separate(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+			set_depth_write(false);
+			break;
+
 		case BlendMode::NO_ALPHA_ADD:
 			set_blend(true);
-			set_blend_func(GL_SRC_ALPHA, GL_ONE);
+			set_blend_func_separate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE);
 			set_depth_write(false);
 			break;
 

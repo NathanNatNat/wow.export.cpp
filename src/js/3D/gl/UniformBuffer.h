@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <span>
 #include <vector>
 
 namespace gl {
@@ -43,6 +44,15 @@ public:
 	void set_mat4_array(size_t offset, const float* matrices, size_t count);
 	void set_float_array(size_t offset, const float* values, size_t count);
 	void set_vec4_array(size_t offset, const float* values, size_t count);
+
+	/**
+	 * Returns a view into the CPU shadow buffer as floats.
+	 * Equivalent to JS: new Float32Array(this.data, offset, length)
+	 * The caller must call upload_range() after writing through this span.
+	 * @param byte_offset byte offset into the buffer
+	 * @param float_count number of floats in the view
+	 */
+	std::span<float> get_float32_view(size_t byte_offset, size_t float_count);
 
 	void upload();
 	void upload_range(size_t offset, size_t size);

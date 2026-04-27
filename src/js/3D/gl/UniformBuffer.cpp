@@ -90,6 +90,12 @@ void UniformBuffer::set_vec4_array(size_t offset, const float* values,
 	dirty = true;
 }
 
+std::span<float> UniformBuffer::get_float32_view(size_t byte_offset,
+                                                   size_t float_count) {
+	return std::span<float>(
+	    reinterpret_cast<float*>(data_.data() + byte_offset), float_count);
+}
+
 void UniformBuffer::upload() {
 	if (!dirty)
 		return;

@@ -10,6 +10,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace gl {
 
@@ -32,6 +33,8 @@ public:
 
 	GLint get_uniform_location(const std::string& name);
 	GLuint get_uniform_block_index(const std::string& name);
+	GLint get_uniform_block_param(const std::string& name, GLenum pname);
+	std::vector<GLint> get_active_uniform_offsets(const std::vector<std::string>& names);
 	void bind_uniform_block(const std::string& name, GLuint binding_point);
 
 	void set_uniform_1i(const std::string& name, int value);
