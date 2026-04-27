@@ -191,10 +191,10 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 185. `src/js/ui/character-appearance.cpp`
 - [x] 186. `src/js/ui/data-exporter.cpp`
 - [x] 187. `src/js/ui/listbox-context.cpp`
-- [ ] 188. `src/js/ui/model-viewer-utils.cpp`
-- [ ] 189. `src/js/ui/texture-exporter.cpp`
-- [ ] 190. `src/js/ui/texture-ribbon.cpp`
-- [ ] 191. `src/js/ui/uv-drawer.cpp`
+- [x] 188. `src/js/ui/model-viewer-utils.cpp`
+- [x] 189. `src/js/ui/texture-exporter.cpp`
+- [x] 190. `src/js/ui/texture-ribbon.cpp`
+- [x] 191. `src/js/ui/uv-drawer.cpp`
 - [ ] 192. `src/js/workers/cache-collector.cpp`
 - [ ] 193. `src/js/wow/equip-item.cpp`
 - [ ] 194. `src/js/wow/EquipmentSlots.cpp`
