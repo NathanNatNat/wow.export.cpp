@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/70 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/94 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/app.cpp ─────────────────────────────────────────────────────────── -->
 
@@ -385,3 +385,139 @@
   - **JS Source**: `src/js/subtitles.js` line 173
   - **Status**: Pending
   - **Details**: JS uses `await casc.getFile(file_data_id)`. C++ (line 358) calls `casc->getVirtualFileByID(file_data_id)`. The method names differ — verify both resolve the same data for a given file data ID and return an equivalent buffer/stream object.
+
+<!-- ─── src/js/tiled-png-writer.cpp ──────────────────────────────────────────── -->
+
+- [ ] 71. [tiled-png-writer.cpp] `write()` uses detached thread; exceptions silently lost if caller discards future
+  - **JS Source**: `src/js/tiled-png-writer.js` lines 123–125
+  - **Status**: Pending
+  - **Details**: JS `write()` is `async` and propagates write errors to the awaiting caller. C++ spawns a detached `std::thread` and returns a `std::shared_future<void>`. If the caller discards the future, any exception thrown by `buffer.writeToFile` is silently lost. Callers must call `.get()` to observe errors. Verify all call sites retain the future.
+
+- [ ] 72. [tiled-png-writer.cpp] `std::map` lexicographic order differs from JS `Map` insertion order — breaks Porter-Duff alpha blending for overlapping tiles
+  - **JS Source**: `src/js/tiled-png-writer.js` lines 25, 58–59
+  - **Status**: Pending
+  - **Details**: JS `this.tiles` is a `Map()` (insertion-ordered). C++ uses `std::map<std::string, Tile>` (lexicographic key order on `"tileX,tileY"` strings). For fully-opaque pixels the order is irrelevant, but for semi-transparent overlapping tiles the Porter-Duff "over" composite is order-dependent and the two implementations may produce different pixel outputs. The existing header comment notes the deviation but omits the alpha-blending caveat.
+
+- [ ] 73. [tiled-png-writer.cpp] `getStats()` `expectedTiles` field uses `uint32_t` — can overflow on large images
+  - **JS Source**: `src/js/tiled-png-writer.js` lines 131–140
+  - **Status**: Pending
+  - **Details**: JS computes `this.tileCols * this.tileRows` as a 64-bit Number. C++ computes the same product as `uint32_t * uint32_t`, which overflows silently for large tile grids (e.g., 65536×65536 tiles). `Stats::expectedTiles` should be `size_t` or `uint64_t`.
+
+<!-- ─── src/js/updater.cpp ───────────────────────────────────────────────────── -->
+
+- [ ] 74. [updater.cpp] `BUILD_GUID()` generates a random UUID each run instead of a fixed build GUID — update check almost always triggers
+  - **JS Source**: `src/js/updater.js` lines 24, 33–36
+  - **Status**: Pending
+  - **Details**: JS reads `nw.App.manifest.guid` — a fixed GUID baked into the NW.js manifest at build time, identical across all runs of the same build. C++ `constants::BUILD_GUID()` generates a new UUID v4 via `std::random_device` at every startup. Because the local GUID changes on every launch, the comparison `remoteGuid != localGuid` will almost always be true, causing `checkForUpdates()` to falsely report an update is available on every run.
+
+- [ ] 75. [updater.cpp] `applyUpdate()` omits `permissions` from `downloadFile` call; `FileNode` struct has no `permissions` field
+  - **JS Source**: `src/js/updater.js` lines 59–64, 120
+  - **Status**: Pending
+  - **Details**: JS passes `node.meta.permissions` as the sixth argument to `generics.downloadFile()` so downloaded files can be `chmod`'d to the correct mode. C++ `FileNode` never reads `permissions` from the update manifest and calls `generics::downloadFile` with only five arguments, defaulting to mode `0600`. On Linux, executable update files (including the updater binary) will be written as non-executable, causing `launchUpdater()` to fail.
+
+- [ ] 76. [updater.cpp] `utilFormat()` replaces only the first `%s`; Node.js `util.format` replaces all occurrences
+  - **JS Source**: `src/js/updater.js` lines 25, 113
+  - **Status**: Pending
+  - **Details**: `utilFormat()` uses a single `find` + `replace` and returns early, leaving any subsequent `%s` as a literal. The current `updateURL` format string has only one `%s` so there is no current bug, but if the URL pattern ever gains a second placeholder the function will silently produce a malformed URL.
+
+- [ ] 77. [updater.cpp] `applyUpdate()` is fully synchronous, blocking the render thread for the entire update process
+  - **JS Source**: `src/js/updater.js` lines 50–125
+  - **Status**: Pending
+  - **Details**: JS `applyUpdate()` is `async` and yields at every `await`, keeping the UI responsive. C++ runs all file-stat, hash, directory-create, and HTTP-download operations synchronously on the calling thread. The deviation is documented in C++ source comments, but the UI will freeze for the full duration of verification and download if called on the render thread.
+
+- [ ] 78. [updater.cpp] `launchUpdater()` calls `std::exit(0)`, skipping destructors for stack objects
+  - **JS Source**: `src/js/updater.js` lines 161–162
+  - **Status**: Pending
+  - **Details**: JS calls `process.exit()` and the NW.js runtime performs an orderly shutdown. C++ calls `std::exit(0)`, which invokes `atexit` handlers and destroys static-duration objects but skips destructors for all objects on the call stack above `launchUpdater()`. Logging handles, open file streams, and OpenGL contexts on the stack will not be properly closed.
+
+<!-- ─── src/js/wmv.cpp ────────────────────────────────────────────────────────── -->
+
+- [ ] 79. [wmv.cpp] `get_legacy_value` comment conflates null-path and non-numeric-string path without explaining the `-1` / unsigned wrap-around sentinel
+  - **JS Source**: `src/js/wmv.js` lines 87–91
+  - **Status**: Pending
+  - **Details**: JS `parseInt(val ?? '0')` returns `NaN` for non-numeric strings; C++ returns `-1` as a sentinel. The downstream consumer in `tab_characters.cpp` guards with `static_cast<size_t>(value) < choices->size()`, so `-1` wraps to `SIZE_MAX` and is always out-of-range — matching JS `choices[NaN] === undefined`. The functional outcome is correct, but the in-code comments conflate the null path and the non-numeric-string path without documenting the wrap-around mechanism.
+
+- [ ] 80. [wmv.cpp] `ParseResultV1`/`ParseResultV2` as `std::variant` — all callers must dispatch via `std::visit` or `std::get<>`
+  - **JS Source**: `src/js/wmv.js` lines 69–75, 113–120
+  - **Status**: Pending
+  - **Details**: JS `wmv_parse` returns plain objects with different shapes (V1 has `legacy_values`, V2 has `customizations`). C++ models this as `std::variant<ParseResultV1, ParseResultV2>`. Any new caller site must use `std::visit` or `std::get<>` for dispatch; direct member access without dispatch is a compile error. Verify all existing call sites are correct.
+
+<!-- ─── src/js/wowhead.cpp ───────────────────────────────────────────────────── -->
+
+- [ ] 81. [wowhead.cpp] `wowhead_parse_hash` accesses `hash[0]` without an internal empty-string guard
+  - **JS Source**: `src/js/wowhead.js` line 64
+  - **Status**: Pending
+  - **Details**: `wowhead_parse_hash` is only called from `wowhead_parse`, which throws before calling it if the hash is empty — the external guard is sufficient. However the function itself has no internal assertion or check, diverging from defensive C++ practice. The JS function has the same implicit reliance on the caller.
+
+<!-- ─── src/js/xml.cpp ────────────────────────────────────────────────────────── -->
+
+- [ ] 82. [xml.cpp] `build_object` uses `std::unordered_map` where JS uses insertion-order `Object.entries` — child property order may differ
+  - **JS Source**: `src/js/xml.js` lines 148–153
+  - **Status**: Pending
+  - **Details**: JS `Object.entries(groups)` iterates child-tag groups in insertion order (the order distinct tag names first appeared). C++ `std::unordered_map` iterates in unspecified hash order. For WoW data files consumed by key name this does not break correctness, but callers that iterate the resulting JSON object may see keys in a different sequence than the JS version produces.
+
+- [ ] 83. [xml.cpp] `parse_attributes` and `parse_node` contain extra out-of-bounds guards not present in the JS source
+  - **JS Source**: `src/js/xml.js` lines 39–54, 60–98
+  - **Status**: Pending
+  - **Details**: The JS closures do not check `pos >= xml.length` after every `pos++` or `skip_whitespace()` call. C++ adds several extra `if (pos >= xml.size()) break/return` guards at these points, making C++ more robust on malformed/truncated XML. These are defensive additions absent from the JS source; they do not alter behaviour for well-formed input.
+
+- [ ] 84. [xml.cpp] `build_object` null guard present in JS but omitted in C++ — dead code in both versions, no functional difference
+  - **JS Source**: `src/js/xml.js` lines 129–131
+  - **Status**: Pending
+  - **Details**: JS `build_object` begins with `if (!node) return {}`. In practice all call sites check for a valid node before calling, so the guard is dead code. C++ accepts `const Node&` and uses `Node::valid` to ensure only valid nodes are processed, making the guard correctly absent. No functional difference.
+
+- [ ] 85. [xml.cpp] Text-content nodes cause an infinite loop in the children parse loop — shared limitation in JS and C++
+  - **JS Source**: `src/js/xml.js` lines 102–115
+  - **Status**: Pending
+  - **Details**: If XML contains bare text between element tags (e.g., `<root>hello</root>`), `parse_node` returns null/invalid without advancing `pos`, and the enclosing `while` loop spins indefinitely. This is a shared limitation in both JS and C++. WoW data XML files do not use text content, so this is an acceptable shared assumption.
+
+<!-- ─── src/js/3D/AnimMapper.cpp ──────────────────────────────────────────────── -->
+
+- [ ] 86. [AnimMapper.cpp] `get_anim_name` bounds check syntactically differs from JS `in` operator but is semantically equivalent for integer inputs
+  - **JS Source**: `src/js/3D/AnimMapper.js` lines 1792–1797
+  - **Status**: Pending
+  - **Details**: JS uses `anim_id in ANIM_NAMES` (property-existence check on a dense array). C++ uses `anim_id >= 0 && static_cast<size_t>(anim_id) < ANIM_NAMES.size()`. The only theoretical divergence is a non-integer `anim_id` (e.g., `1.5`): JS returns false, C++ truncates to index 1. `anim_id` is always an integer in practice (read from binary WoW data), so there is no real concern.
+
+- [ ] 87. [AnimMapper.cpp] JS uses `module.exports` (CommonJS), not an ES module `export`; C++ free-function export is correct regardless
+  - **JS Source**: `src/js/3D/AnimMapper.js` line 1799
+  - **Status**: Pending
+  - **Details**: `AnimMapper.js` ends with `module.exports = { get_anim_name };` (CommonJS), not an ES module export. The C++ free function in `AnimMapper.h` correctly replaces either module system. No action needed; noted for accuracy.
+
+<!-- ─── src/js/3D/ShaderMapper.cpp ────────────────────────────────────────────── -->
+
+- [ ] 88. [ShaderMapper.cpp] SHADER_ARRAY index 35 has wrong pixel shader name — `"Combiners_Mod_Mod"` should be `"Combiners_Mod_Mod_Depth"`
+  - **JS Source**: `src/js/3D/ShaderMapper.js` line 45
+  - **Status**: Pending
+  - **Details**: The last entry in SHADER_ARRAY (index 35) has `PS = "Combiners_Mod_Mod"` in C++ (`ShaderMapper.cpp` line 60) but should be `"Combiners_Mod_Mod_Depth"` per the JS source. The `_Depth` suffix is missing, causing incorrect pixel shader lookups for any M2 material whose shader ID maps to index 35 via the `0x8000` flag path.
+
+- [ ] 89. [ShaderMapper.cpp] All four shader functions missing a terminal `return` after the non-0x8000 branch — undefined behaviour
+  - **JS Source**: `src/js/3D/ShaderMapper.js` lines 52–90, 95–141, 146–161, 166–181
+  - **Status**: Pending
+  - **Details**: `getVertexShader`, `getPixelShader`, `getHullShader`, and `getDomainShader` are all declared returning `std::optional<std::string>`. In the non-0x8000 branch the if/else tree covers all practical code paths and always returns, but there is no final `return std::nullopt;` after the outer else block closes. Falling off the end of a non-void function is undefined behaviour in C++. The JS equivalents have an explicit return in every branch.
+
+<!-- ─── src/js/3D/Shaders.cpp ──────────────────────────────────────────────────── -->
+
+- [ ] 90. [Shaders.cpp] `create_program` exposes a dangling-pointer hazard — `active_programs` stores raw pointers but caller owns the `unique_ptr`
+  - **JS Source**: `src/js/3D/Shaders.js` lines 56–72
+  - **Status**: Pending
+  - **Details**: JS `active_programs` is a `Map<name, Set<ShaderProgram>>` holding strong references that keep programs alive. C++ `active_programs` stores raw `gl::ShaderProgram*` pointers while `create_program` returns `std::unique_ptr<gl::ShaderProgram>` transferring ownership to the caller. If the caller destroys the `unique_ptr` without first calling `dispose()`, the raw pointer in `active_programs` becomes dangling; any subsequent `reload_all()` will dereference it (undefined behaviour). Should store `shared_ptr` in both `active_programs` and the return value, or enforce that callers call `dispose()` before destroying the returned `unique_ptr`.
+
+- [ ] 91. [Shaders.cpp] `_unregister_fn` set lazily inside `create_program` — programs constructed by any other path silently skip unregistration
+  - **JS Source**: `src/js/3D/Shaders.js` lines 56–72
+  - **Status**: Pending
+  - **Details**: JS resolves the circular dependency via a lazy `require('../Shaders')` call inside `dispose()`, which always works regardless of construction path. C++ sets `gl::ShaderProgram::_unregister_fn` only on the first call to `shaders::create_program()`. A `ShaderProgram` constructed via any other path will have `_unregister_fn` unset and `dispose()` will silently skip unregistration. The extra `_unregister_fn` guard in `dispose()` masks this omission.
+
+- [ ] 92. [Shaders.cpp] `unregister` null-pointer guard has no JS equivalent — silently suppresses programming errors
+  - **JS Source**: `src/js/3D/Shaders.js` lines 78–86
+  - **Status**: Pending
+  - **Details**: JS `unregister(program)` receives the full `ShaderProgram` object and has no null guard. C++ `unregister(gl::ShaderProgram* program)` adds `if (!program) return;` which silently suppresses a programming error in the caller. The C++ should assert or throw on a null input rather than silently returning, to match JS behaviour.
+
+- [ ] 93. [Shaders.cpp] `reload_all` iterates `active_programs` while `get_source` may insert into `source_cache` — safe now, but iterator invalidation risk if code changes
+  - **JS Source**: `src/js/3D/Shaders.js` lines 91–122
+  - **Status**: Pending
+  - **Details**: `reload_all()` iterates `active_programs` with a range-for and calls `get_source(name)` inside the loop. `get_source` may insert into `source_cache` (a separate map) but never touches `active_programs`, so there is no iterator invalidation currently. Future modifications that cause `get_source` to touch `active_programs` would introduce undefined behaviour.
+
+- [ ] 94. [Shaders.cpp] `SHADER_MANIFEST` uses `std::unordered_map` — insertion order not preserved; JS object has guaranteed ES2015 insertion order
+  - **JS Source**: `src/js/3D/Shaders.js` lines 13–19
+  - **Status**: Pending
+  - **Details**: JS `SHADER_MANIFEST` is a plain object literal with guaranteed ES2015+ insertion-order property enumeration. C++ uses `const std::unordered_map` with unspecified iteration order. The manifest is currently only accessed by key lookup (never iterated), so there is no observable difference. If future code iterates the manifest expecting a specific order, behaviour will differ from JS.
