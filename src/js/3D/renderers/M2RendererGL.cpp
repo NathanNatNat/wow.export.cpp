@@ -1946,8 +1946,6 @@ const float light_view_y = view_matrix[1] * lx + view_matrix[5] * ly + view_matr
 const float light_view_z = view_matrix[2] * lx + view_matrix[6] * ly + view_matrix[10] * lz;
 
 shader->set_uniform_1i("u_apply_lighting", 1);
-shader->set_uniform_3f("u_ambient_color", 0.5f, 0.5f, 0.5f);
-shader->set_uniform_3f("u_diffuse_color", 0.7f, 0.7f, 0.7f);
 shader->set_uniform_3f("u_light_dir", light_view_x, light_view_y, light_view_z);
 
 // wireframe
