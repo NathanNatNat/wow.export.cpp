@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/323 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/402 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/app.cpp ─────────────────────────────────────────────────────────── -->
 
@@ -1822,3 +1822,461 @@
   - **JS Source**: `src/js/db/DBCReader.js` lines 417–423
   - **Status**: Pending
   - **Details**: In `_read_record`, when the post-processing loop encounters a `vector<FieldValue>` whose first element holds none of the four checked types, the field is silently omitted from `out`. JS always stores the array regardless. An `else` fallback should store an empty or raw vector to match JS behavior.
+
+<!-- ─── src/js/db/DBDParser.cpp ─────────────────────────────── -->
+
+- [ ] 324. [DBDParser.cpp] Column name `?` replacement removes only the last `?` instead of all `?` characters
+  - **JS Source**: `src/js/db/DBDParser.js` line 339
+  - **Status**: Pending
+  - **Details**: JS uses `match[3].replace('?', '')` which replaces **all** occurrences of `?` in the column name string. The C++ only removes the trailing `?` with `if (!columnName.empty() && columnName.back() == '?') columnName.pop_back();`. If a column name contains a `?` anywhere other than the end (e.g. `"Field?Test?"`), the JS produces `"FieldTest"` while C++ produces `"Field?Test"`. In practice DBD column names only have a trailing `?`, but the logic is not a faithful port.
+
+- [ ] 325. [DBDParser.cpp] Annotation parsing uses substring search instead of exact token match
+  - **JS Source**: `src/js/db/DBDParser.js` lines 286–294
+  - **Status**: Pending
+  - **Details**: JS splits annotations string by comma and uses `Array.includes()` for exact token matching: `fieldMatch[2].split(',').includes('id')`. The C++ uses `annotations.find("id") != std::string::npos`, which is a substring search. If a future annotation contained `"id"` as a substring (e.g. `"validid"`), the C++ would incorrectly set `field.isID = true`. The same applies to `"noninline"` and `"relation"`. The current known annotation values (`id`, `noninline`, `relation`) do not overlap as substrings, so there is no current breakage, but this is a deviation from the JS semantics.
+
+- [ ] 326. [DBDParser.cpp] Empty chunks passed to `parseChunk()` are silently skipped in C++ but generate empty `DBDEntry` objects in JS
+  - **JS Source**: `src/js/db/DBDParser.js` lines 216–221, 238–242
+  - **Status**: Pending
+  - **Details**: In the JS `parse()` loop, `parseChunk(chunk)` is called every time an empty line is encountered, even when `chunk` is still an empty array (e.g. consecutive blank lines at the start of the file). When `chunk` is `[]`, `chunk[0]` is `undefined`, so `parseChunk` falls into the `else` branch and pushes an empty `DBDEntry` with no fields into `this.entries`. The C++ guards with `if (!chunk.empty() && chunk[0] == "COLUMNS")` and only processes non-empty chunks. In the else branch, `entries.push_back(std::move(entry))` is only reached when `chunk` is non-empty. The empty `DBDEntry` objects in JS are harmless (they never match anything in `isValidFor()`), so there is no functional impact, but the structural behavior differs.
+
+<!-- ─── src/js/db/FieldType.cpp ─────────────────────────────── -->
+<!-- No issues found -->
+
+<!-- ─── src/js/db/WDCReader.cpp ─────────────────────────────── -->
+
+- [ ] 327. [WDCReader.cpp] `getRelationRows()` incorrectly requires preload; JS does not
+  - **JS Source**: `src/js/db/WDCReader.js` lines 216–234
+  - **Status**: Pending
+  - **Details**: The JS `getRelationRows()` only requires the table to be loaded (`isLoaded`). It reads each record directly via `_readRecord()` without requiring `preload()`. The C++ version at lines 305–309 throws a `std::runtime_error` if `rows` is not preloaded: `"Table must be preloaded before calling getRelationRows. Use db2.preload.<TableName>() first."` This is a behavioral deviation — callers that call `getRelationRows()` without first calling `preload()` will work in JS but throw in C++. The JS comment `Required for getRelationRows() to work properly` appears to be advisory; it does not enforce it. The C++ should remove the preload requirement and instead call `_readRecord()` directly for each record ID in the lookup, matching JS behavior.
+
+- [ ] 328. [WDCReader.cpp] `getAllRowsAsync()` returns `std::map` by value instead of by reference, inconsistent with `getAllRows()` which returns a const reference
+  - **JS Source**: `src/js/db/WDCReader.js` lines 141–193
+  - **Status**: Pending
+  - **Details**: The synchronous `getAllRows()` returns `const std::map<uint32_t, DataRecord>&` — a reference to either `rows` or `transientRows`. The async version `getAllRowsAsync()` at line 1297–1299 returns `std::future<std::map<uint32_t, DataRecord>>` (by value, making a copy). While making a copy is safe, there is a subtle threading issue: if `preload()` has not been called, `getAllRows()` fills `transientRows` (a member variable) and returns a reference to it. A concurrent call to `getAllRowsAsync()` could race with `getAllRows()` filling `transientRows` from another thread. The JS original is single-threaded so this risk does not exist in JS. The async methods are C++-only additions, but the `transientRows` approach is not thread-safe.
+
+- [ ] 329. [WDCReader.cpp] `idFieldIndex` is initialized to `0` instead of `null`; `idField` is `optional<string>` instead of `null` — minor behavioral difference in unloaded state
+  - **JS Source**: `src/js/db/WDCReader.js` lines 79–80
+  - **Status**: Pending
+  - **Details**: The JS constructor sets `this.idField = null` and `this.idFieldIndex = null`. The C++ has `idFieldIndex = 0` (uint16_t) and `idField` as `std::optional<std::string>` (empty). The value `0` for `idFieldIndex` before loading is indistinguishable from a valid index of `0`, whereas JS `null` is clearly uninitialized. The `getIDIndex()` method in both JS and C++ guards with `isLoaded`, so callers should not access these before loading. However, the C++ `_readRecordFromSection` references `idFieldIndex` at line 1269 without checking `isLoaded` (it is called internally after loading starts), so the uninitialized `0` is never used incorrectly in practice. This is a low-severity deviation.
+
+- [ ] 330. [WDCReader.cpp] BitpackedIndexedArray index arithmetic uses integer multiplication instead of BigInt, potential overflow for large `bitpackedValue`
+  - **JS Source**: `src/js/db/WDCReader.js` lines 820–822
+  - **Status**: Pending
+  - **Details**: The JS computes the pallet data index as `bitpackedValue * BigInt(recordFieldInfo.fieldCompressionPacking[2]) + BigInt(i)` using BigInt arithmetic which is arbitrary-precision and cannot overflow. The C++ computes `static_cast<size_t>(bitpackedValue * arrSize + i)` at line 1149 where `bitpackedValue` is `uint64_t` and `arrSize` is `uint32_t`. The multiplication `bitpackedValue * arrSize` is done in uint64_t, which could theoretically overflow for pathologically large values, though in practice DB2 pallet data indices are small. This is a theoretical deviation.
+
+<!-- ─── src/js/db/caches/DBCharacterCustomization.cpp ─────────────────────────────── -->
+
+- [ ] 331. [DBCharacterCustomization.cpp] `chr_cust_mat_map` is keyed by `materialID` (the lookup key) instead of `mat_row.ID` (the row's own ID field)
+  - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` line 102
+  - **Status**: Pending
+  - **Details**: JS keys `chr_cust_mat_map` by `mat_row.ID`, the row's own `ID` field from the `ChrCustomizationMaterial` DB2 table: `chr_cust_mat_map.set(mat_row.ID, {...})`. The C++ uses `materialID` (the value from `ChrCustomizationMaterialID` in the element row): `chr_cust_mat_map[materialID] = mat_info`. Since the row is retrieved via `getRow(materialID)`, the row's own `ID` should equal `materialID` for direct (non-copy-table) rows. However, if the row was accessed via the copy table (JS `getRow` sets `tempCopy.ID = recordID` which would be the destination copy ID), the row's `ID` field would differ from the original source `materialID`. This is an edge case but represents a semantic deviation from the JS source.
+
+- [ ] 332. [DBCharacterCustomization.cpp] `ensureInitialized()` uses a synchronous blocking pattern with mutex instead of the JS async promise-caching pattern
+  - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 39–48
+  - **Status**: Pending
+  - **Details**: The JS uses a promise-caching pattern: if `init_promise` is set, it `await`s the same promise, ensuring all concurrent async callers share a single initialization pass. The C++ uses `is_initializing` with a `std::condition_variable` wait. Both achieve the same goal of single-initialization with concurrent waiter support. The C++ also runs `_initialize()` synchronously on the calling thread (blocking), whereas JS runs it asynchronously. This is an intentional C++ adaptation since `std::async`/`std::future` equivalents are not used here. The functional behavior is preserved. No fix required, but worth noting as a structural deviation.
+
+<!-- ─── src/js/db/caches/DBComponentModelFileData.cpp ─────────────────────────────── -->
+
+- [ ] 333. [DBComponentModelFileData.cpp] `initialize()` does not implement the promise-deduplication pattern from JS — async concurrent callers would each block instead of sharing one init
+  - **JS Source**: `src/js/db/caches/DBComponentModelFileData.js` lines 18–43
+  - **Status**: Pending
+  - **Details**: The JS `initialize()` caches an `init_promise` and returns it to all concurrent callers, ensuring the initialization IIFE runs only once even under concurrent async calls. The C++ `initialize()` uses a mutex and `is_initializing` flag with a `std::condition_variable` to prevent double-initialization and wait for completion. This is functionally equivalent for the concurrency case (second caller blocks until initialization completes). The structure is different but the observable behavior is preserved. Low-severity deviation.
+
+- [ ] 334. [DBComponentModelFileData.cpp] `initializeAsync()` is a C++-only addition with no JS counterpart
+  - **JS Source**: `src/js/db/caches/DBComponentModelFileData.js` (no equivalent)
+  - **Status**: Pending
+  - **Details**: The C++ exposes `initializeAsync()` which wraps `initialize()` in `std::async`. This has no equivalent in the JS source. The JS `initialize()` itself is already async (returns a Promise). This is an intentional addition for the C++ async model and is not a bug, but it is an addition beyond the JS API surface.
+<!-- ─── src/js/db/caches/DBComponentTextureFileData.cpp ─────────────────────────────── -->
+
+- [ ] 335. [DBComponentTextureFileData.cpp] `getTextureForRaceGender` wraps all race/gender-specific loops inside `if (race_id.has_value() && gender_index.has_value())`, diverging from JS logic
+  - **JS Source**: `src/js/db/caches/DBComponentTextureFileData.js` lines 59–87
+  - **Status**: Pending
+  - **Details**: In JS, `getTextureForRaceGender` always executes the exact-match loop, the race+any-gender loop, the fallback-race loop, and the race=0+specific-gender loop regardless of whether `race_id`/`gender_index` are null. A null comparison like `info.raceID === null` simply never matches, so those loops silently produce no result. In C++, when either `race_id` or `gender_index` is `std::nullopt`, all four loops are skipped entirely and execution jumps directly to the race=0 (any race) loop. The functional outcome is the same (null never matches), but the structure deviates from the original JS — a future change to any of those inner loops could inadvertently rely on the JS always-execute behaviour. The C++ guard should either be removed (relying on the nullopt comparison never matching) or the code should be clearly documented as a deliberate structural deviation.
+
+- [ ] 336. [DBComponentTextureFileData.cpp] `initialize` uses mutex/condvar concurrency guard, but JS uses a single `init_promise` singleton guard
+  - **JS Source**: `src/js/db/caches/DBComponentTextureFileData.js` lines 17–41
+  - **Status**: Pending
+  - **Details**: The JS `initialize` uses `init_promise` to coalesce concurrent callers onto a single in-flight Promise. The C++ implementation uses `is_initializing` + `std::condition_variable` to serialize concurrent calls: the first caller runs initialization while subsequent callers block waiting on the condvar. This is a structural deviation, but the behaviour is functionally equivalent — only one initialization runs and all concurrent callers receive the result. Documented here for completeness; it is an acceptable C++ adaptation.
+
+- [ ] 337. [DBComponentTextureFileData.cpp] `db2.ComponentTextureFileData.getAllRows()` replaced by `casc::db2::preloadTable("ComponentTextureFileData").getAllRows()` — table name must match exactly
+  - **JS Source**: `src/js/db/caches/DBComponentTextureFileData.js` line 27
+  - **Status**: Pending
+  - **Details**: Minor: the JS accesses `db2.ComponentTextureFileData` (a named property). The C++ calls `casc::db2::preloadTable("ComponentTextureFileData")`. The string key must match the actual DB2 table name. If `preloadTable` is case-sensitive this is fine; just flagging for completeness.
+
+<!-- ─── src/js/db/caches/DBCreatureDisplayExtra.cpp ─────────────────────────────── -->
+
+- [ ] 338. [DBCreatureDisplayExtra.cpp] JS `_initialize` iterates `CreatureDisplayInfoOption` rows via `.values()` (ignoring the row ID key), but C++ iterates via `[_optId, row]` key-value pairs and discards the key with `(void)_optId`
+  - **JS Source**: `src/js/db/caches/DBCreatureDisplayExtra.js` lines 39–48
+  - **Status**: Pending
+  - **Details**: The JS iterates `(await db2.CreatureDisplayInfoOption.getAllRows()).values()` — it only uses the row value, not the key. The C++ iterates `const auto& [_optId, row]` and silences the unused key with `(void)_optId`. The result is functionally identical, but it is worth noting since `_optId` is the row's own DB ID; the JS code explicitly discards it. No functional bug here.
+
+- [ ] 339. [DBCreatureDisplayExtra.cpp] JS `get_extra` returns `undefined` when not found; C++ returns `nullptr`
+  - **JS Source**: `src/js/db/caches/DBCreatureDisplayExtra.js` line 55
+  - **Status**: Pending
+  - **Details**: JS: `const get_extra = (id) => extra_map.get(id)` — returns `undefined` when the key is absent. C++ returns `nullptr` (a pointer). All call sites must check for `nullptr` rather than truthiness. This is a necessary C++ adaptation; callers must be verified to handle `nullptr` correctly.
+
+- [ ] 340. [DBCreatureDisplayExtra.cpp] JS `get_customization_choices` returns a new empty array `[]` (via nullish coalescing `?? []`) when not found; C++ returns a `const&` to a static empty vector
+  - **JS Source**: `src/js/db/caches/DBCreatureDisplayExtra.js` line 57
+  - **Status**: Pending
+  - **Details**: JS: `option_map.get(extra_id) ?? []` — each call for a missing key yields a fresh empty array. C++ returns a const reference to a static `empty_options` vector. Callers that hold onto the returned reference after a `reset()` or re-initialization would observe a stale reference; however, since there is no `reset()` function in this module, this is practically safe. The interface diverges (reference vs. value) and callers must not store the returned reference.
+
+<!-- ─── src/js/db/caches/DBCreatureList.cpp ─────────────────────────────── -->
+
+- [ ] 341. [DBCreatureList.cpp] JS `get_all_creatures` returns a `Map` (keyed by creature ID); C++ returns a `const std::vector<CreatureEntry>&`
+  - **JS Source**: `src/js/db/caches/DBCreatureList.js` lines 45–47
+  - **Status**: Pending
+  - **Details**: In JS, `creatures` is a `Map` and `get_all_creatures()` returns that Map directly. Callers iterate it with `for (const [id, entry] of creatures)`. In C++, `creatures` is a `std::vector<CreatureEntry>` and `get_all_creatures()` returns a const reference to it. Callers must iterate with range-for over the vector. This is a structural change that all call sites must account for — any caller that uses Map-style iteration (by key) will break if not updated accordingly.
+
+- [ ] 342. [DBCreatureList.cpp] JS `get_creature_by_id` returns `undefined` when not found; C++ returns `nullptr`
+  - **JS Source**: `src/js/db/caches/DBCreatureList.js` lines 49–51
+  - **Status**: Pending
+  - **Details**: JS: `creatures.get(id)` — returns `undefined` when absent. C++ returns `nullptr`. All callers must check for `nullptr`. Acceptable C++ adaptation, but callers must be verified.
+
+- [ ] 343. [DBCreatureList.h] Header documents `get_all_creatures` as returning "reference to the creature map" but it actually returns a vector
+  - **JS Source**: `src/js/db/caches/DBCreatureList.js` lines 45–47
+  - **Status**: Pending
+  - **Details**: The comment in `DBCreatureList.h` line 32 says "Reference to the creature map." but the function returns `const std::vector<CreatureEntry>&`. The comment is stale and misleading, though not a functional defect.
+
+<!-- ─── src/js/db/caches/DBCreatures.cpp ─────────────────────────────── -->
+
+- [ ] 344. [DBCreatures.cpp] Indentation inconsistency inside `initializeCreatureData`: the outer `try` block and the `creatureGeosetMap`/`modelIDToDisplayInfoMap` section use different indent levels
+  - **JS Source**: `src/js/db/caches/DBCreatures.js` lines 18–76
+  - **Status**: Pending
+  - **Details**: Lines 71–82 inside `initializeCreatureData` are indented with one less tab level than the surrounding `try` block (lines 70–135). This is a cosmetic/style issue but it could mask structural logic errors when reviewing the code. Not a functional bug.
+
+- [ ] 345. [DBCreatures.cpp] JS `initializeCreatureData` checks `isInitialized` at the start and returns early; C++ uses a mutex guard instead
+  - **JS Source**: `src/js/db/caches/DBCreatures.js` lines 18–20
+  - **Status**: Pending
+  - **Details**: The JS function begins with `if (isInitialized) return;`. The C++ version uses a mutex+condvar pattern (shared with other DB cache files) that handles concurrent callers. This is a structural difference but functionally equivalent and is an acceptable C++ adaptation.
+
+- [ ] 346. [DBCreatures.cpp] JS `extraGeosets` is only present on `display` objects that need it (property does not exist otherwise); C++ uses `std::optional<std::vector<uint32_t>>` which defaults to `std::nullopt` — minor structural deviation
+  - **JS Source**: `src/js/db/caches/DBCreatures.js` lines 60–63
+  - **Status**: Pending
+  - **Details**: In JS, `display.extraGeosets` is only assigned if `modelIDHasExtraGeosets` is true — otherwise the property does not exist on the object at all. In C++, `extraGeosets` is a member of `CreatureDisplayInfo` and defaults to `std::nullopt`. The check `display.extraGeosets.has_value()` (or checking for `std::nullopt`) is therefore the correct C++ equivalent of `display.extraGeosets !== undefined`. All callers must use `.has_value()` rather than a truthiness check. This is an acceptable C++ adaptation.
+
+- [ ] 347. [DBCreatures.cpp] JS stores all `creatureDisplays`, `creatureDisplayInfoMap`, `displayIDToFileDataID`, `modelDataIDToFileDataID` as `Map`; C++ uses `std::unordered_map` with `std::reference_wrapper` for `creatureDisplays`
+  - **JS Source**: `src/js/db/caches/DBCreatures.js` lines 9–12
+  - **Status**: Pending
+  - **Details**: The C++ `creatureDisplays` map stores `std::vector<std::reference_wrapper<const CreatureDisplayInfo>>` referencing entries in `creatureDisplayInfoMap`. This means `creatureDisplayInfoMap` must not be rehashed or cleared after population, otherwise the references become dangling. Since `initializeCreatureData` fills both maps in one pass and they are static globals, this is safe at runtime — but it is a fragile design that does not exist in the JS version (which stores direct object references). Documented for future maintainability.
+
+<!-- ─── src/js/db/caches/DBCreaturesLegacy.cpp ─────────────────────────────── -->
+
+- [ ] 348. [DBCreaturesLegacy.cpp] JS `initializeCreatureData` takes an `mpq` object and calls `mpq.getFile(path)`; C++ takes a `std::function<std::vector<uint8_t>(const std::string&)>` callback
+  - **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 19–112
+  - **Status**: Pending
+  - **Details**: The JS interface is `initializeCreatureData(mpq, build_id)` where `mpq` is an MPQInstall object with a `getFile` method. The C++ interface is `initializeCreatureData(std::function<...> getFile, build_id)` — the MPQ object is abstracted away as a callback. This is a valid C++ adaptation (the MPQ type doesn't exist directly in C++), but all call sites must pass a lambda wrapping the MPQ getFile call.
+
+- [ ] 349. [DBCreaturesLegacy.cpp] JS `getCreatureDisplaysByPath` only converts `.mdx` to `.m2` (not `.mdl`); C++ `getCreatureDisplaysByPath` converts both `.mdl` and `.mdx` to `.m2`
+  - **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 119–132
+  - **Status**: Pending
+  - **Details**: In JS, `getCreatureDisplaysByPath` normalizes the incoming path with `normalized.replace(/\.mdx$/i, '.m2')` — only `.mdx`. The JS `initializeCreatureData` function also normalizes to `.m2` for both `.mdl` and `.mdx` when building the `model_id_to_path` map. However at lookup time, if a caller passes a `.mdl` path, JS would NOT convert it to `.m2` and would find no match. In C++, both `normalizePath` (used in both init and lookup) convert `.mdl` and `.mdx`, so a `.mdl` path at lookup time would match. This is a behavioural divergence from the JS — the C++ is more permissive in `getCreatureDisplaysByPath`. Whether this is intentional or a bug needs review.
+
+- [ ] 350. [DBCreaturesLegacy.cpp] JS `getCreatureDisplaysByPath` returns `undefined` when not found; C++ returns `nullptr`
+  - **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 119–132
+  - **Status**: Pending
+  - **Details**: JS: `creatureDisplays.get(normalized)` — returns `undefined` when absent. C++ returns `nullptr`. All callers must check for `nullptr`. Acceptable C++ adaptation.
+
+- [ ] 351. [DBCreaturesLegacy.cpp] JS error handler logs `e.stack` in addition to `e.message`; C++ only logs `e.what()` and has a comment noting the omission
+  - **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 108–111
+  - **Status**: Pending
+  - **Details**: JS logs both `e.message` and `e.stack` on error. C++ only logs `e.what()` and acknowledges the omission with a comment: "Note: JS also logs e.stack here, but C++ exceptions do not carry stack traces by default". This is an acceptable limitation (C++ has no standard stack-trace mechanism), but it means less diagnostic information on error. The comment is present so this is documented.
+
+- [ ] 352. [DBCreaturesLegacy.cpp] JS `model_path` field lookup is `row.ModelName || row.ModelPath || row.field_2` (short-circuit OR); C++ uses sequential `if`-chain with separate `empty()` checks
+  - **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` lines 42–48
+  - **Status**: Pending
+  - **Details**: In JS, `row.ModelName || row.ModelPath || row.field_2` returns the first truthy value, falling through only on empty string, `0`, `null`, or `undefined`. The C++ code checks `model_path.empty()` after each field read, which only falls through on empty string. If a field exists and has a non-string value (e.g. a number 0 returned as a string "0"), JS would skip it while C++ would not (since "0" is non-empty). This is a minor edge-case discrepancy for unusual DBC schemas, but is practically safe since these fields are always strings.
+
+- [ ] 353. [DBCreaturesLegacy.cpp] JS `model_id` lookup falls back to `row.field_1` via nullish coalescing `?? row.field_1`; C++ uses sequential `model_id_found` flag with `row.find("field_1")` fallback
+  - **JS Source**: `src/js/db/caches/DBCreaturesLegacy.js` line 69
+  - **Status**: Pending
+  - **Details**: In JS: `const model_id = row.ModelID ?? row.field_1` — this falls back to `field_1` only when `ModelID` is `null` or `undefined`. The C++ uses a `model_id_found` flag and falls back to `"field_1"` only when `"ModelID"` is not found in the row map. The semantic is slightly different: in JS, a `ModelID` that exists but equals `0` would NOT fall back to `field_1` (since `0 ?? x` = `0`). In C++, if `"ModelID"` is present in the row and evaluates to `0`, `model_id` becomes 0 (correct). Both paths then proceed to look up `model_id_to_path.get(model_id)` / `model_id_to_path.find(model_id)`. Functionally equivalent in the expected data range.
+<!-- ─── src/js/db/caches/DBDecor.cpp ─────────────────────────────── -->
+
+- [ ] 354. [DBDecor.cpp] `initializeDecorData` is synchronous; JS original is async with `await`
+  - **JS Source**: `src/js/db/caches/DBDecor.js` lines 15–40
+  - **Status**: Pending
+  - **Details**: The JS `initializeDecorData` is declared `async` and uses `await db2.HouseDecor.getAllRows()`. The C++ version is a plain synchronous function calling `casc::db2::preloadTable("HouseDecor").getAllRows()`. This is a deliberate architectural change (all DB2 loading is synchronous in C++), but it should be verified that callers have been updated to not `await` the result.
+
+- [ ] 355. [DBDecor.cpp] Log format uses `std::format` `{}` instead of JS `%d` printf-style
+  - **JS Source**: `src/js/db/caches/DBDecor.js` line 38
+  - **Status**: Pending
+  - **Details**: JS logs `'Loaded %d house decor items', decorItems.size` using a variadic log signature. C++ logs `std::format("Loaded {} house decor items", decorItems.size())`. While the output text is equivalent, the calling convention differs — `logging::write` receives a pre-formatted string in C++ rather than a format+args pair. This is consistent with the rest of the C++ codebase but is a deviation from the JS API.
+
+<!-- ─── src/js/db/caches/DBDecorCategories.cpp ───────────────────── -->
+
+- [ ] 356. [DBDecorCategories.cpp] `get_subcategories_for_decor` returns `nullptr` instead of JS `null`; return type should convey "null or set"
+  - **JS Source**: `src/js/db/caches/DBDecorCategories.js` line 55
+  - **Status**: Pending
+  - **Details**: JS returns `decor_subcategory_map.get(decor_id) ?? null`. In C++ the function returns `const std::unordered_set<uint32_t>*` and returns `nullptr` when not found. This is an acceptable C++ idiom, but callers must be checked to handle `nullptr` correctly since JS callers would receive `null` (not a JS Set), which they test with `if (!result)`.
+
+- [ ] 357. [DBDecorCategories.cpp] `initialize_categories` is synchronous; JS original is async
+  - **JS Source**: `src/js/db/caches/DBDecorCategories.js` lines 10–51
+  - **Status**: Pending
+  - **Details**: The JS `initialize_categories` is `async` and uses `await` on all three `getAllRows()` calls. The C++ version is synchronous. Same architectural note as finding 1 — callers must be confirmed to not `await`.
+
+- [ ] 358. [DBDecorCategories.cpp] `Name_lang` field accessed via `row.at()` without guard, may throw if field is absent
+  - **JS Source**: `src/js/db/caches/DBDecorCategories.js` lines 17–19, 25–29
+  - **Status**: Pending
+  - **Details**: In `initialize_categories`, both the categories and subcategories loops call `fieldToString(row.at("Name_lang"))` using `at()` which throws `std::out_of_range` if the key is missing. The JS code accesses `row.Name_lang` with optional chaining fallback (`row.Name_lang || ...`), meaning a missing field is handled gracefully. The C++ should use `row.find("Name_lang")` with a fallback (as `DBDecor.cpp` does for the same field) to avoid potential crashes.
+
+- [ ] 359. [DBDecorCategories.cpp] `DecorXDecorSubcategory` loop: `decor_id_found` check does not replicate JS `undefined` check correctly when `HouseDecorID` is present but zero
+  - **JS Source**: `src/js/db/caches/DBDecorCategories.js` lines 33–47
+  - **Status**: Pending
+  - **Details**: JS checks `if (decor_id === undefined || sub_id === undefined) continue;`. A value of `0` would NOT skip the record. In C++, the code tracks whether the field was found at all (`decor_id_found`), meaning `decor_id = 0` from a present field is kept — this matches JS. However, there is no equivalent guard for `sub_id == 0`: JS skips only if `sub_id === undefined`, not if it is 0. The C++ code also does not skip when `sub_id == 0`, so for the sub_id side this is correct. The logic is functionally equivalent, but the comment on line 98–99 is slightly misleading.
+
+<!-- ─── src/js/db/caches/DBGuildTabard.cpp ────────────────────────── -->
+
+- [ ] 360. [DBGuildTabard.cpp] Missing `init_promise` deduplication: concurrent calls to `initialize()` may run the body multiple times
+  - **JS Source**: `src/js/db/caches/DBGuildTabard.js` lines 36–89
+  - **Status**: Pending
+  - **Details**: The JS `initialize` uses `init_promise` to ensure that if the async function is called concurrently before `is_initialized` is set, all callers await the same in-flight promise rather than starting duplicate work. The C++ `initialize()` and `ensureInitialized()` are synchronous and single-threaded in this context, but if they are ever called from multiple threads the `is_initialized` check is not protected by a mutex. This is a potential thread-safety gap. The JS deduplication pattern should either be replicated or documented as not needed.
+
+- [ ] 361. [DBGuildTabard.cpp] `GuildColorBackground/Border/Emblem` getAllRows use `.entries()` in JS vs structured binding in C++
+  - **JS Source**: `src/js/db/caches/DBGuildTabard.js` lines 75–82
+  - **Status**: Pending
+  - **Details**: The JS loads background/border/emblem colors using `(await db2.GuildColorBackground.getAllRows()).entries()` which yields `[id, row]` pairs using the Map's id as key. The C++ uses structured bindings `for (const auto& [id, row] : ...)` which should also yield the table's row ID as `id`. This is functionally equivalent, but should be confirmed that `casc::db2::preloadTable(...).getAllRows()` returns pairs with the DB2 record ID as the first element (matching the JS Map key from `getAllRows()`).
+
+- [ ] 362. [DBGuildTabard.cpp] `ColorRGB` struct stores `uint32_t` for r/g/b but JS stores plain numbers (likely 0–255 byte values)
+  - **JS Source**: `src/js/db/caches/DBGuildTabard.js` lines 75–82
+  - **Status**: Pending
+  - **Details**: The JS stores `{ r: row.Red, g: row.Green, b: row.Blue }` where these are raw DB2 field values. C++ uses `uint32_t` for each channel. The DB2 color fields are typically 8-bit byte values (0–255). Using `uint32_t` is wider than necessary but does not cause data loss for values in 0–255 range. However, callers that expect byte-range RGB should be aware. This is a minor type mismatch.
+
+- [ ] 363. [DBGuildTabard.cpp] `initialize` is synchronous; JS original is async with init_promise deduplication
+  - **JS Source**: `src/js/db/caches/DBGuildTabard.js` lines 36–90
+  - **Status**: Pending
+  - **Details**: The JS `initialize` is `async` and wraps its body in an inner IIFE assigned to `init_promise`, then returns `init_promise`. The C++ version is a plain synchronous function. Callers must be verified to not `await` the result.
+
+<!-- ─── src/js/db/caches/DBItemCharTextures.cpp ──────────────────── -->
+
+- [ ] 364. [DBItemCharTextures.cpp] Missing `init_promise` deduplication for concurrent initialization calls
+  - **JS Source**: `src/js/db/caches/DBItemCharTextures.js` lines 34–93
+  - **Status**: Pending
+  - **Details**: The JS `initialize` uses an `init_promise` variable so that concurrent async callers await the same in-flight initialization. The C++ `initialize()` is synchronous and has no equivalent deduplication or mutex guard. Same concern as finding 7.
+
+- [ ] 365. [DBItemCharTextures.cpp] `resolve_display_id` uses `std::map<uint32_t, uint32_t>` sorted iteration but JS sorts an array of keys; behavior is equivalent only if key type and sort order match
+  - **JS Source**: `src/js/db/caches/DBItemCharTextures.js` lines 106–119
+  - **Status**: Pending
+  - **Details**: JS does `[...modifiers.keys()].sort((a, b) => a - b)` to get the lowest modifier key. C++ stores modifiers in `std::map<uint32_t, uint32_t>` which is sorted in ascending order, so `modifiers.begin()` yields the lowest key. Since `uint32_t` sorts the same as numeric ascending this is functionally equivalent. However the C++ uses `uint32_t` keys while JS Map keys are numbers (signed). If any modifier IDs are negative in the DB2 data, `uint32_t` would wrap them, changing sort order. Recommend verifying modifier IDs are always non-negative.
+
+- [ ] 366. [DBItemCharTextures.cpp] `DBComponentTextureFileData::initialize()` called synchronously; JS awaits it
+  - **JS Source**: `src/js/db/caches/DBItemCharTextures.js` lines 44–45
+  - **Status**: Pending
+  - **Details**: JS calls `await DBTextureFileData.ensureInitialized()` and `await DBComponentTextureFileData.initialize()`. The C++ calls them synchronously. This is consistent with the general architectural shift but should be verified that these dependencies are always initialized before `DBItemCharTextures::initialize()` is called.
+
+- [ ] 367. [DBItemCharTextures.cpp] `getTexturesByDisplayId` default parameter for `race_id` and `gender_index` is `null` in JS but `-1` in C++
+  - **JS Source**: `src/js/db/caches/DBItemCharTextures.js` lines 155, 130
+  - **Status**: Pending
+  - **Details**: JS declares `get_item_textures = (item_id, race_id = null, gender_index = null, modifier_id)` and `get_textures_by_display_id = (display_id, race_id = null, gender_index = null)`. C++ uses `-1` as the sentinel for "no preference". The C++ code then maps `race_id >= 0` to `std::optional<uint32_t>` and otherwise passes `std::nullopt`. This correctly maps `-1` (C++ "null") to `null` (JS). Functionally equivalent provided callers always pass `-1` or a valid non-negative race/gender ID, never `0` intending "no preference" (since `0` would be passed as a real value).
+
+<!-- ─── src/js/db/caches/DBItemDisplayInfoModelMatRes.cpp ──────────── -->
+
+- [ ] 368. [DBItemDisplayInfoModelMatRes.cpp] `fieldToUint32` does not handle `float` variant unlike other files in this directory
+  - **JS Source**: `src/js/db/caches/DBItemDisplayInfoModelMatRes.js` lines 26–28
+  - **Status**: Pending
+  - **Details**: The `fieldToUint32` helper in `DBItemDisplayInfoModelMatRes.cpp` only handles `int64_t` and `uint64_t` variants of `db::FieldValue`, returning 0 for all others including `float`. Other files in the same directory (e.g. `DBDecor.cpp`, `DBGuildTabard.cpp`, `DBDecorCategories.cpp`) include a `float` branch: `if (auto* p = std::get_if<float>(&val)) return static_cast<uint32_t>(*p);`. If `ItemDisplayInfoID` or `MaterialResourcesID` are stored as floats in the DB2 variant, this helper would silently return 0, causing data to be dropped without any diagnostic.
+
+- [ ] 369. [DBItemDisplayInfoModelMatRes.cpp] `initialize` is synchronous; JS original (`initializeIDIMMR`) is async
+  - **JS Source**: `src/js/db/caches/DBItemDisplayInfoModelMatRes.js` lines 15–40
+  - **Status**: Pending
+  - **Details**: The JS `initializeIDIMMR` is `async` and uses `await DBTextureFileData.ensureInitialized()` and `await db2.ItemDisplayInfoModelMatRes.getAllRows()`. The C++ version is a plain synchronous function. Same architectural note as findings 1, 4, and 10.
+
+- [ ] 370. [DBItemDisplayInfoModelMatRes.cpp] `ensureInitialized` does not guard against concurrent calls (no `init_promise` equivalent)
+  - **JS Source**: `src/js/db/caches/DBItemDisplayInfoModelMatRes.js` lines 42–45
+  - **Status**: Pending
+  - **Details**: The JS `ensure_initialized` is `async` and simply calls `await initializeIDIMMR()` which itself has no concurrent deduplication. The C++ equivalent is synchronous with a simple `is_initialized` guard — same level of protection. No additional concern beyond finding 16.
+<!-- ─── src/js/db/caches/DBItemDisplays.cpp ─────────────────────────────── -->
+
+- [ ] 371. [DBItemDisplays.cpp] Extra function `getTexturesByDisplayId` has no JS counterpart in DBItemDisplays.js
+  - **JS Source**: `src/js/db/caches/DBItemDisplays.js` lines 66–68 (module.exports)
+  - **Status**: Pending
+  - **Details**: The JS module only exports `initializeItemDisplays` and `getItemDisplaysByFileDataID`. The C++ adds a third function `getTexturesByDisplayId` (defined at line 117–119 of DBItemDisplays.cpp, declared in DBItemDisplays.h line 35) that delegates to `DBItemDisplayInfoModelMatRes::getItemDisplayIdTextureFileIds`. This function does not exist in the JS source and represents an undocumented addition with no JS counterpart.
+
+- [ ] 372. [DBItemDisplays.cpp] `getItemDisplayIdTextureFileIds` is called outside the per-modelFileDataID loop, changing the skip behaviour
+  - **JS Source**: `src/js/db/caches/DBItemDisplays.js` lines 39–49
+  - **Status**: Pending
+  - **Details**: In the JS, `DBItemDisplayInfoModelMatRes.getItemDisplayIdTextureFileIds(itemDisplayInfoID)` is called inside the `for (const modelFileDataID of modelFileDataIDs)` loop, and a `continue` there skips only that single iteration. In the C++ (lines 83–93), the call is hoisted outside the loop and an early `continue` exits the entire display row if the result is null. In practice the result is the same for all iterations of the inner loop (same displayInfoID → same texture IDs), so the final map content is identical. However, the control-flow structure deviates from the JS original.
+
+<!-- ─── src/js/db/caches/DBItemGeosets.cpp ─────────────────────────────── -->
+
+- [ ] 373. [DBItemGeosets.cpp] `init_promise` concurrent-initialization guard is not ported
+  - **JS Source**: `src/js/db/caches/DBItemGeosets.js` lines 20, 162–163, 225–226
+  - **Status**: Pending
+  - **Details**: The JS `initialize()` function stores an in-flight promise in `init_promise` and returns it immediately on re-entry to prevent double-initialization when called concurrently from multiple async contexts. The C++ `initialize()` (line 145) only checks `is_initialized` before proceeding. If C++ ever calls `initialize()` from multiple threads simultaneously before the flag is set, both could run the full initialization body. The JS pattern also resets `init_promise = null` after completion. While this may not cause issues in the current single-threaded call sites, it is a structural deviation from the JS original.
+
+- [ ] 374. [DBItemGeosets.cpp] `ensure_initialized` / `ensureInitialized` missing async semantics — structural deviation
+  - **JS Source**: `src/js/db/caches/DBItemGeosets.js` lines 231–234
+  - **Status**: Pending
+  - **Details**: The JS `ensure_initialized` is `async` and awaits `initialize()`, which itself returns the shared `init_promise`. The C++ `ensureInitialized()` (line 224) is synchronous. This is a known and acceptable adaptation for C++, but it should be noted as a deviation from the JS async model.
+
+<!-- ─── src/js/db/caches/DBItemModels.cpp ─────────────────────────────── -->
+
+- [ ] 375. [DBItemModels.cpp] `init_promise` concurrent-initialization guard is not ported
+  - **JS Source**: `src/js/db/caches/DBItemModels.js` lines 19, 27–28, 102–103
+  - **Status**: Pending
+  - **Details**: Same pattern as DBItemGeosets: the JS `initialize()` uses `init_promise` to guard against concurrent calls and sets it to `null` after completion. The C++ `initialize()` (line 132) only checks `is_initialized`. The structural deviation is the same as finding 3 above.
+
+- [ ] 376. [DBItemModels.cpp] `ensure_initialized` / `ensureInitialized` missing async semantics — structural deviation
+  - **JS Source**: `src/js/db/caches/DBItemModels.js` lines 108–111
+  - **Status**: Pending
+  - **Details**: The JS `ensure_initialized` is `async` and awaits `initialize()`. The C++ `ensureInitialized()` (line 219) is synchronous. Acceptable C++ adaptation but a noted structural deviation.
+
+<!-- ─── src/js/db/caches/DBItems.cpp ─────────────────────────────── -->
+
+- [ ] 377. [DBItems.cpp] `init_promise` concurrent-initialization guard is not ported
+  - **JS Source**: `src/js/db/caches/DBItems.js` lines 16, 18–19, 50–51
+  - **Status**: Pending
+  - **Details**: Same pattern as findings 3 and 5: the JS `initialize_items()` uses an `init_promise` to coalesce concurrent async callers and resets it to `null` after completion. The C++ `initialize()` (line 42) only checks `is_initialized_flag`. Structural deviation from the JS original.
+
+- [ ] 378. [DBItems.cpp] `Display_lang` empty-string case not handled as a fallback for the item name
+  - **JS Source**: `src/js/db/caches/DBItems.js` lines 40–41
+  - **Status**: Pending
+  - **Details**: The JS uses `item_row.Display_lang ?? 'Unknown item #' + item_id`. The nullish-coalescing operator `??` triggers on `null` or `undefined` but not on an empty string `""`. The C++ (lines 65–69) uses `item_row.find("Display_lang")` — if the field is present but the variant holds a non-string type (e.g., `int64_t`), `fieldToString` returns `""` and the empty string is silently stored as the name without applying the fallback. If the DB2 field is present but empty or zero-typed, the C++ will silently store an empty name instead of the `"Unknown item #N"` fallback, whereas the JS would use the fallback for `null`/`undefined` values. The check should also apply the fallback when `fieldToString` returns an empty string.
+
+<!-- ─── src/js/db/caches/DBModelFileData.cpp ─────────────────────────────── -->
+<!-- No issues found -->
+<!-- ─── src/js/db/caches/DBNpcEquipment.cpp ─────────────────────────────── -->
+
+- [ ] 379. [DBNpcEquipment.cpp] Missing concurrent-initialization guard (`init_promise`)
+  - **JS Source**: `src/js/db/caches/DBNpcEquipment.js` lines 28–60
+  - **Status**: Pending
+  - **Details**: The JS implementation tracks an `init_promise` so that if `initialize()` is called a second time while the first call is still in progress, the second caller awaits the already-running promise instead of starting a duplicate load. The C++ implementation only checks `is_initialized` (line 58–60), which is set *after* the loop completes. If `initialize()` is called concurrently from multiple threads before the flag is set, the table could be loaded multiple times. The C++ needs either a mutex or a `std::future`/`std::atomic` guard equivalent to `init_promise`.
+
+<!-- ─── src/js/db/caches/DBTextureFileData.cpp ────────────────────────────── -->
+<!-- No issues found -->
+
+<!-- ─── src/js/hashing/xxhash64.cpp ──────────────────────────────────────── -->
+
+- [ ] 380. [xxhash64.cpp] `check_glyph_support` note: `update()` memory lazy-init differs but is harmless — actual issue is JS `toUTF8Array` vs C++ raw-byte treatment of `std::string_view`
+  - **JS Source**: `src/js/hashing/xxhash64.js` lines 20–39
+  - **Status**: Pending
+  - **Details**: The JS `update()` method converts a JS string argument via `toUTF8Array(input)`, which performs a full Unicode-aware UTF-16 → UTF-8 transcoding (handling surrogate pairs at lines 33–36). The C++ `update(std::string_view)` overload (xxhash64.cpp line 153–156) reinterprets the string view's bytes directly without any transcoding. In practice C++ string literals and `std::string` values are already UTF-8, so for typical WoW file paths the results are identical. However, if a caller passes a string containing non-ASCII characters that were originally represented as UTF-16 in the JS layer (e.g., Korean or Chinese locale display names), the hash computed by C++ would differ from the hash computed by JS. This is a latent interoperability hazard that should be documented.
+
+- [ ] 381. [xxhash64.cpp] `digest()` — JS BigInt arithmetic applies `& MASK_64` after every multiply/add; C++ relies on `uint64_t` natural overflow
+  - **JS Source**: `src/js/hashing/xxhash64.js` lines 201–284
+  - **Status**: Pending
+  - **Details**: The JS implementation uses native BigInt and explicitly truncates to 64 bits after every operation via `& MASK_64` (e.g., lines 213–239). C++ uses `uint64_t` arithmetic which wraps naturally at 2^64. For the same operations on 64-bit unsigned integers this produces identical bit patterns, so the hashes are functionally equivalent. No code change is needed, but this should be explicitly noted in a comment in xxhash64.cpp to explain the equivalence, as it is a non-obvious deviation from the JS source.
+
+- [ ] 382. [xxhash64.cpp] `update()` large-block loop entry condition differs in form from JS
+  - **JS Source**: `src/js/hashing/xxhash64.js` line 161
+  - **Status**: Pending
+  - **Details**: JS uses `if (p <= bEnd - 32)` (line 161) as the guard before the main 32-byte block loop. C++ uses `if (p + 32 <= bEnd)` (line 113). Both expressions are mathematically equivalent for non-negative values and produce the same result. However, the JS form is the authoritative guard and the C++ form deviates in style from the source. More importantly, the JS condition is `<=` (enters loop when exactly 32 bytes remain), and the C++ condition `p + 32 <= bEnd` also enters when exactly 32 bytes remain. These are identical. The deviation is purely cosmetic but worth noting for line-by-line fidelity audits.
+
+<!-- ─── src/js/modules/font_helpers.cpp ──────────────────────────────────── -->
+
+- [ ] 383. [font_helpers.cpp] `check_glyph_support` uses fundamentally different detection logic from JS
+  - **JS Source**: `src/js/modules/font_helpers.js` lines 19–54
+  - **Status**: Pending
+  - **Details**: The JS `check_glyph_support(ctx, font_family, char)` works by rendering the character twice to an off-screen canvas — once with a fallback font (`32px monospace`) and once with the target font — and comparing the total alpha channel sum of the two renders (lines 38–53). A character is considered supported if the rendered output differs from the fallback. This approach detects whether the *target font* actually has a glyph for the codepoint, even when the font is not loaded into ImGui. The C++ implementation (font_helpers.cpp lines 54–63) instead calls `ImFont::FindGlyphNoFallback()` on an already-loaded ImGui font. These are not equivalent: the JS detects support in *any* font family loaded in the browser, while the C++ detects support only in an *already-loaded ImGui font*. For glyphs that exist in the OS font but were not baked into the ImGui atlas (e.g., because the atlas only baked a subset of codepoints), the C++ will incorrectly report the glyph as not supported. This is an unavoidable architectural difference between browser/DOM and ImGui, but the deviation should be documented.
+
+- [ ] 384. [font_helpers.cpp] `detect_glyphs_async` signature differs from JS — `grid_element` parameter replaced with `GlyphDetectionState&`
+  - **JS Source**: `src/js/modules/font_helpers.js` lines 56–106
+  - **Status**: Pending
+  - **Details**: JS signature is `detect_glyphs_async(font_family, grid_element, on_glyph_click, on_complete)`. The second parameter `grid_element` is a DOM element that the function populates with `<span>` cells for each detected glyph. In the C++ port, this DOM manipulation is replaced by storing detected codepoints into `GlyphDetectionState::detected_codepoints` and deferring UI rendering to the caller. The JS builds the UI incrementally inside the async batch loop (creating DOM nodes immediately when each glyph is found). The C++ collects all codepoints first, then lets the caller iterate `detected_codepoints` during the ImGui render loop. This means the C++ port does not populate the glyph grid incrementally during detection — the grid only appears after `state.complete == true`, rather than growing batch-by-batch as in JS. Callers that rely on incremental grid population will see a different UX.
+
+- [ ] 385. [font_helpers.cpp] `inject_font_face` — missing font load verification equivalent to JS `document.fonts.load` + `document.fonts.check`
+  - **JS Source**: `src/js/modules/font_helpers.js` lines 113–133
+  - **Status**: Pending
+  - **Details**: After injecting the CSS `@font-face` rule, the JS awaits `document.fonts.load('16px "' + font_id + '"')` (line 124) and then checks `document.fonts.check('16px "' + font_id + '"')` (line 125). If the check returns false, the style node is removed from the DOM and an error is thrown (lines 127–130). The C++ implementation calls `io.Fonts->AddFontFromMemoryTTF(...)` and checks for a null return (line 171), but there is no equivalent to the post-load verification step. If ImGui accepts the font data but it is internally corrupt or unusable, the C++ will not detect this and will not clean up, whereas the JS would detect it and throw. This is a minor error-recovery gap.
+
+- [ ] 386. [font_helpers.cpp] `inject_font_face` — JS accepts `log` and `on_error` callback parameters that have no C++ equivalent
+  - **JS Source**: `src/js/modules/font_helpers.js` lines 113–133
+  - **Status**: Pending
+  - **Details**: JS signature is `inject_font_face(font_id, blob_data, log, on_error)`. The `on_error` parameter is never called in the JS body (errors are thrown), so its absence in C++ does not cause a behavioral difference. The `log` parameter is also unused in the JS body (logging is not called inside `inject_font_face` in the JS). The C++ signature correctly omits both unused parameters. This is not a bug but is documented for completeness.
+
+- [ ] 387. [font_helpers.cpp] `get_detection_canvas()` helper and `glyph_detection_canvas`/`glyph_detection_ctx` state have no C++ equivalent
+  - **JS Source**: `src/js/modules/font_helpers.js` lines 15–28
+  - **Status**: Pending
+  - **Details**: The JS maintains a singleton off-screen canvas (`glyph_detection_canvas`) and its 2D context (`glyph_detection_ctx`) for pixel-level glyph detection. The `get_detection_canvas()` helper lazily creates this canvas on first use. The C++ omits this entirely because it replaced the canvas-based detection with an ImGui atlas lookup. This is an expected consequence of the `check_glyph_support` deviation documented in finding 5, but the absence of any canvas state is explicitly noted here for completeness.
+
+<!-- ─── src/js/modules/legacy_tab_audio.cpp ──────────────────────────────── -->
+
+- [ ] 388. [legacy_tab_audio.cpp] `export_sounds` passes only message+function to `helper.mark()`, not the full stack trace
+  - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 189
+  - **Status**: Pending
+  - **Details**: JS calls `helper.mark(export_file_name, false, e.message, e.stack)` where `e.stack` is the full JavaScript stack trace string. C++ calls `helper.mark(export_file_name, false, e.what(), build_stack_trace("export_sounds", e))` where `build_stack_trace` (lines 33–35) returns only `"export_sounds: <exception message>"`. The C++ never captures a real C++ stack trace (e.g., via `std::stacktrace` from C++23 or a platform API). The export helper's `mark()` function receives a weaker error context string than the JS version provides to users in the export report.
+
+- [ ] 389. [legacy_tab_audio.cpp] Animated music icon uses `ImDrawList::AddText` raw draw call instead of a native ImGui widget
+  - **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 216–216 (template `sound-player-anim` div)
+  - **Status**: Pending
+  - **Details**: The JS template renders `<div id="sound-player-anim" :style="{ 'animation-play-state': ... }">` — a CSS-animated element. The C++ replacement (lines 440–449) uses `ImGui::GetWindowDrawList()->AddText(iconFont, animSize, pos, ...)` which is a raw `ImDrawList` call. Per CLAUDE.md, `ImDrawList` calls should be reserved exclusively for effects with no native equivalent such as image rotation, multi-colour gradient fills, or custom OpenGL overlays. A pulsating text icon does not fall into any of those categories; `ImGui::Text` with a scaled font (via `ImGui::PushFont`/`ImGui::PopFont` or by setting the font size) would be a closer match using a native widget approach. The current use of `AddText` violates the ImGui rendering guideline.
+
+- [ ] 390. [legacy_tab_audio.cpp] `start_seek_loop` vs JS — C++ does not pass `core` parameter to `update_seek()`
+  - **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 32–35
+  - **Status**: Pending
+  - **Details**: This is a structural note rather than a bug. JS `update_seek(core)` and `start_seek_loop(core)` receive the `core` object as a parameter because the JS module functions are stateless closures. C++ functions access `core::view` via a global, so the parameter is omitted. This is the correct adaptation for C++. No fix needed, but documented for completeness.
+
+- [ ] 391. [legacy_tab_audio.cpp] `load_sound_list` condition differs: JS checks `!core.view.isBusy` (falsy), C++ checks `view.isBusy > 0`
+  - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 124
+  - **Status**: Pending
+  - **Details**: JS guard is `if (core.view.listfileSounds.length === 0 && !core.view.isBusy)`. C++ guard is `if (!view.listfileSounds.empty() || view.isBusy > 0) return;` (lines 169–170), which is the logical negation of the JS entry condition. If `isBusy` is an integer counter (which it is based on `BusyLock` usage), `isBusy > 0` correctly mirrors JS's `!isBusy` (falsy when 0). However, if `isBusy` could theoretically be negative (e.g., due to a lock mismatch), JS would still proceed but C++ would not. This is a minor robustness note and not a real bug under normal operation.
+
+- [ ] 392. [legacy_tab_audio.cpp] Sound player UI renders seek/title/duration on one `ImGui::Text` line rather than in three separate labelled spans
+  - **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 219–221 (template)
+  - **Status**: Pending
+  - **Details**: JS template renders three separate `<span>` elements: one for seek time (left-aligned), one for the track title (centre, with class `title`), and one for duration (right-aligned), all within a flex-row `#sound-player-info` div. The C++ renders all three concatenated in a single `ImGui::Text("%s  %s  %s", ...)` call (line 460). The layout is compressed onto one line with no alignment differentiation between the three fields. The JS gives the title a `class="title"` style (typically larger/bolder text and centred within the flex row). The C++ does not replicate the three-column flex alignment or the title styling. This is a UI layout deviation.
+<!-- ─── src/js/modules/legacy_tab_data.cpp ──────────────────────────────── -->
+
+- [ ] 393. [legacy_tab_data.cpp] DBC listbox passes non-empty unittype despite JS using `:includefilecount="false"`
+  - **JS Source**: `src/js/modules/legacy_tab_data.js` line 131
+  - **Status**: Pending
+  - **Details**: The JS Listbox prop `:includefilecount="false"` disables the file counter. The C++ `listbox::render` call passes `"dbc file"` as `unittype`, which enables the file count display in the C++ implementation. To match the JS behaviour the unittype should be `""` (empty string) so that `listbox::renderStatusBar` shows nothing. The existing `renderStatusBar("table", {}, listbox_dbc_state)` call on the DBC list also renders an unwanted status bar not present in the JS template.
+
+- [ ] 394. [legacy_tab_data.cpp] DBC listbox passes `persistscrollkey="dbc"` but JS template has no `persistscrollkey`
+  - **JS Source**: `src/js/modules/legacy_tab_data.js` line 131
+  - **Status**: Pending
+  - **Details**: The JS `<Listbox>` for the DBC list does not set the `persistscrollkey` prop. The C++ call passes `"dbc"` as the persist scroll key. This causes scroll position to be saved/restored across tab switches when it should not be. The argument should be `""` (empty string) to disable scroll persistence.
+
+- [ ] 395. [legacy_tab_data.cpp] Options checkboxes are missing hover tooltips present in the JS template
+  - **JS Source**: `src/js/modules/legacy_tab_data.js` lines 146–157
+  - **Status**: Pending
+  - **Details**: Three checkbox labels in the `tab-data-options` section carry `title` attributes in the JS template, which render as browser hover tooltips:
+    - "Copy Header" → `title="Include header row when copying"`
+    - "Create Table" → `title="Include DROP/CREATE TABLE statements"`
+    - "Export all rows" → `title="Export all rows"`
+    The C++ renders these checkboxes (`ImGui::Checkbox`) without any `ImGui::IsItemHovered()` + `ImGui::SetTooltip()` call after each one. Each checkbox should have a corresponding tooltip.
+
+<!-- ─── src/js/modules/legacy_tab_files.cpp ─────────────────────────────── -->
+
+- [ ] 396. [legacy_tab_files.cpp] "Regex Enabled" label is missing hover tooltip and `SameLine` before filter input
+  - **JS Source**: `src/js/modules/legacy_tab_files.js` line 84
+  - **Status**: Pending
+  - **Details**: The JS template places `<div class="regex-info" :title="$core.view.regexTooltip">Regex Enabled</div>` and the filter `<input>` together inline. The C++ renders `ImGui::TextUnformatted("Regex Enabled")` without calling `ImGui::IsItemHovered()` + `ImGui::SetTooltip(view.regexTooltip.c_str())` and without `ImGui::SameLine()` afterwards, so the filter input falls onto a new line. Both the tooltip and the `SameLine()` call are required to match the JS layout and behaviour.
+
+- [ ] 397. [legacy_tab_files.cpp] Missing `renderStatusBar` call — file count not displayed despite JS using `:includefilecount="true"`
+  - **JS Source**: `src/js/modules/legacy_tab_files.js` line 75
+  - **Status**: Pending
+  - **Details**: The JS Listbox prop `:includefilecount="true"` enables a visible file counter below the list. The C++ call correctly passes `unittype = "file"` to `listbox::render`, but no `listbox::renderStatusBar(...)` call is made and no `BeginStatusBar`/`EndStatusBar` region is opened. As a result the file count is never shown. A `BeginStatusBar` / `renderStatusBar("file", {}, listbox_state)` / `EndStatusBar` block must be added between `EndListContainer` and `BeginFilterBar` to match JS behaviour.
+
+<!-- ─── src/js/modules/legacy_tab_fonts.cpp ─────────────────────────────── -->
+
+- [ ] 398. [legacy_tab_fonts.cpp] Filter input uses `ImGui::InputText` instead of `ImGui::InputTextWithHint` — placeholder text missing
+  - **JS Source**: `src/js/modules/legacy_tab_fonts.js` line 72
+  - **Status**: Pending
+  - **Details**: The JS template has `<input type="text" placeholder="Filter fonts..."/>`. The C++ filter bar uses `ImGui::InputText("##FilterFonts", ...)` which has no placeholder. It should be `ImGui::InputTextWithHint("##FilterFonts", "Filter fonts...", ...)` to display the placeholder hint when the field is empty, matching the JS behaviour.
+
+- [ ] 399. [legacy_tab_fonts.cpp] "Regex Enabled" label is missing hover tooltip and `SameLine` before filter input
+  - **JS Source**: `src/js/modules/legacy_tab_fonts.js` line 71
+  - **Status**: Pending
+  - **Details**: The JS template has `<div class="regex-info" :title="$core.view.regexTooltip">Regex Enabled</div>` inline with the filter input. The C++ (lines 248–255) renders `ImGui::TextUnformatted("Regex Enabled")` without `ImGui::IsItemHovered()` + `ImGui::SetTooltip(view.regexTooltip.c_str())` and without `ImGui::SameLine()`, so the filter input is placed on a new line. Both the tooltip and `SameLine()` are required.
+
+- [ ] 400. [legacy_tab_fonts.cpp] Context menu contains extra items not present in the JS template
+  - **JS Source**: `src/js/modules/legacy_tab_fonts.js` lines 64–68
+  - **Status**: Pending
+  - **Details**: The JS context menu for the fonts listbox has exactly three items: "Copy file path(s)", "Copy export path(s)", "Open export directory". The C++ context menu lambda (lines 217–235) adds two additional items guarded by `hasFileDataIDs`: "Copy file path(s) (listfile format)" and "Copy file data ID(s)". These items do not exist in the JS template and should be removed. Because MPQ-sourced font files never have file data IDs, `hasFileDataIDs` will always be false, so they never appear in practice — but the code is still a deviation from the JS source.
+
+- [ ] 401. [legacy_tab_fonts.cpp] Export button uses deprecated `app::theme::BeginDisabledButton`/`EndDisabledButton` instead of `ImGui::BeginDisabled`/`EndDisabled`
+  - **JS Source**: `src/js/modules/legacy_tab_fonts.js` line 83
+  - **Status**: Pending
+  - **Details**: Lines 345–348 in legacy_tab_fonts.cpp use `app::theme::BeginDisabledButton()` and `app::theme::EndDisabledButton()` to disable the Export button when busy. Per CLAUDE.md, `app::theme` APIs should be progressively removed and not used in new code. The correct approach is `if (busy) ImGui::BeginDisabled(); ... if (busy) ImGui::EndDisabled();` as used in the files and textures tabs.
+
+<!-- ─── src/js/modules/legacy_tab_home.cpp ──────────────────────────────── -->
+<!-- No issues found -->
+
+<!-- ─── src/js/modules/legacy_tab_textures.cpp ──────────────────────────── -->
+
+- [ ] 402. [legacy_tab_textures.cpp] "Regex Enabled" label is missing `SameLine` before filter input
+  - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 125
+  - **Status**: Pending
+  - **Details**: The JS template renders the regex info div and the filter input together inline inside `<div class="filter">`. The C++ filter bar (lines 347–358) renders `ImGui::TextUnformatted("Regex Enabled")` with an `IsItemHovered` + `SetTooltip` (correct) but does NOT call `ImGui::SameLine()` afterwards. This means the filter input is placed on a new line below "Regex Enabled" instead of on the same line, deviating from the JS layout. An `ImGui::SameLine()` call must be added after the closing brace of the `if (view.config.value("regexFilters", false))` block, before `ImGui::SetNextItemWidth`.

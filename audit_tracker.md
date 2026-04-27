@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 120/195 audited (62%)**
+**Progress: 150/195 audited (77%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -124,36 +124,36 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 118. `src/js/components/slider.cpp`
 - [x] 119. `src/js/db/CompressionType.cpp`
 - [x] 120. `src/js/db/DBCReader.cpp`
-- [ ] 121. `src/js/db/DBDParser.cpp`
-- [ ] 122. `src/js/db/FieldType.cpp`
-- [ ] 123. `src/js/db/WDCReader.cpp`
-- [ ] 124. `src/js/db/caches/DBCharacterCustomization.cpp`
-- [ ] 125. `src/js/db/caches/DBComponentModelFileData.cpp`
-- [ ] 126. `src/js/db/caches/DBComponentTextureFileData.cpp`
-- [ ] 127. `src/js/db/caches/DBCreatureDisplayExtra.cpp`
-- [ ] 128. `src/js/db/caches/DBCreatureList.cpp`
-- [ ] 129. `src/js/db/caches/DBCreatures.cpp`
-- [ ] 130. `src/js/db/caches/DBCreaturesLegacy.cpp`
-- [ ] 131. `src/js/db/caches/DBDecor.cpp`
-- [ ] 132. `src/js/db/caches/DBDecorCategories.cpp`
-- [ ] 133. `src/js/db/caches/DBGuildTabard.cpp`
-- [ ] 134. `src/js/db/caches/DBItemCharTextures.cpp`
-- [ ] 135. `src/js/db/caches/DBItemDisplayInfoModelMatRes.cpp`
-- [ ] 136. `src/js/db/caches/DBItemDisplays.cpp`
-- [ ] 137. `src/js/db/caches/DBItemGeosets.cpp`
-- [ ] 138. `src/js/db/caches/DBItemModels.cpp`
-- [ ] 139. `src/js/db/caches/DBItems.cpp`
-- [ ] 140. `src/js/db/caches/DBModelFileData.cpp`
-- [ ] 141. `src/js/db/caches/DBNpcEquipment.cpp`
-- [ ] 142. `src/js/db/caches/DBTextureFileData.cpp`
-- [ ] 143. `src/js/hashing/xxhash64.cpp`
-- [ ] 144. `src/js/modules/font_helpers.cpp`
-- [ ] 145. `src/js/modules/legacy_tab_audio.cpp`
-- [ ] 146. `src/js/modules/legacy_tab_data.cpp`
-- [ ] 147. `src/js/modules/legacy_tab_files.cpp`
-- [ ] 148. `src/js/modules/legacy_tab_fonts.cpp`
-- [ ] 149. `src/js/modules/legacy_tab_home.cpp`
-- [ ] 150. `src/js/modules/legacy_tab_textures.cpp`
+- [x] 121. `src/js/db/DBDParser.cpp`
+- [x] 122. `src/js/db/FieldType.cpp`
+- [x] 123. `src/js/db/WDCReader.cpp`
+- [x] 124. `src/js/db/caches/DBCharacterCustomization.cpp`
+- [x] 125. `src/js/db/caches/DBComponentModelFileData.cpp`
+- [x] 126. `src/js/db/caches/DBComponentTextureFileData.cpp`
+- [x] 127. `src/js/db/caches/DBCreatureDisplayExtra.cpp`
+- [x] 128. `src/js/db/caches/DBCreatureList.cpp`
+- [x] 129. `src/js/db/caches/DBCreatures.cpp`
+- [x] 130. `src/js/db/caches/DBCreaturesLegacy.cpp`
+- [x] 131. `src/js/db/caches/DBDecor.cpp`
+- [x] 132. `src/js/db/caches/DBDecorCategories.cpp`
+- [x] 133. `src/js/db/caches/DBGuildTabard.cpp`
+- [x] 134. `src/js/db/caches/DBItemCharTextures.cpp`
+- [x] 135. `src/js/db/caches/DBItemDisplayInfoModelMatRes.cpp`
+- [x] 136. `src/js/db/caches/DBItemDisplays.cpp`
+- [x] 137. `src/js/db/caches/DBItemGeosets.cpp`
+- [x] 138. `src/js/db/caches/DBItemModels.cpp`
+- [x] 139. `src/js/db/caches/DBItems.cpp`
+- [x] 140. `src/js/db/caches/DBModelFileData.cpp`
+- [x] 141. `src/js/db/caches/DBNpcEquipment.cpp`
+- [x] 142. `src/js/db/caches/DBTextureFileData.cpp`
+- [x] 143. `src/js/hashing/xxhash64.cpp`
+- [x] 144. `src/js/modules/font_helpers.cpp`
+- [x] 145. `src/js/modules/legacy_tab_audio.cpp`
+- [x] 146. `src/js/modules/legacy_tab_data.cpp`
+- [x] 147. `src/js/modules/legacy_tab_files.cpp`
+- [x] 148. `src/js/modules/legacy_tab_fonts.cpp`
+- [x] 149. `src/js/modules/legacy_tab_home.cpp`
+- [x] 150. `src/js/modules/legacy_tab_textures.cpp`
 - [ ] 151. `src/js/modules/module_test_a.cpp`
 - [ ] 152. `src/js/modules/module_test_b.cpp`
 - [ ] 153. `src/js/modules/screen_settings.cpp`
