@@ -49,9 +49,6 @@ static constexpr const char* DBC_EXTENSION = ".dbc";
 
 static std::vector<std::string> local_dbc_listfile;
 
-// Change-detection for selectionDB2s.
-static std::string prev_selection_first;
-
 static listbox::ListboxState listbox_dbc_state;
 static data_table::DataTableState legacy_data_table_state;
 static context_menu::ContextMenuState legacy_data_table_ctx_state;
@@ -96,7 +93,9 @@ static void initialize_dbc_listfile() {
 	logging::write(std::format("initialized {} dbc files from mpq archives", dbc_listfile.size()));
 }
 
-static void load_table(const std::string& table_name) {
+// Returns true on success. On failure selected_file is NOT updated so the
+// Vue-equivalent watch (selected_file comparison) can permit a retry on re-selection.
+static bool load_table(const std::string& table_name) {
 	auto& view = *core::view;
 
 	try {
@@ -105,7 +104,7 @@ static void load_table(const std::string& table_name) {
 		auto it = dbc_path_map.find(table_name);
 		if (it == dbc_path_map.end()) {
 			core::setToast("error", std::format("Unable to find DBC file: {}", table_name), {}, -1);
-			return;
+			return false;
 		}
 		const std::string& full_path = it->second;
 
@@ -113,7 +112,7 @@ static void load_table(const std::string& table_name) {
 
 		if (!raw_data) {
 			core::setToast("error", std::format("Unable to load DBC file: {}", full_path), {}, -1);
-			return;
+			return false;
 		}
 
 		BufferWrapper data(*raw_data);
@@ -215,10 +214,12 @@ static void load_table(const std::string& table_name) {
 		selected_file = table_name;
 		selected_file_path = full_path;
 		selected_file_schema = dbc_reader.schema;
+		return true;
 	} catch (const std::exception& e) {
 		core::setToast("error", "Unable to open DBC file " + table_name,
 			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open DBC file: {}", e.what()));
+		return false;
 	}
 }
 
@@ -248,19 +249,19 @@ void mounted() {
 		core::setToast("error", "Failed to load DBC files. Check the log for details.");
 	}
 
-	// Change-detection is handled in render() by comparing selectionDB2s[0] each frame.
+	// Change-detection is handled in render() by comparing selectionDB2s[0] against selected_file.
 }
 
 void render() {
 	auto& view = *core::view;
 
-	// --- Change-detection for selection (equivalent to watch on selectionDB2s) ---
+	// --- Change-detection for selection (equivalent to $watch('selectionDB2s') in JS) ---
+	// JS: if (!core.view.isBusy && first && selected_file !== first)
+	// selected_file is only updated inside load_table() on success, so failed loads can be retried.
 	if (!view.selectionDB2s.empty()) {
 		const std::string first = view.selectionDB2s[0].get<std::string>();
-		if (view.isBusy == 0 && !first.empty() && first != prev_selection_first) {
+		if (view.isBusy == 0 && !first.empty() && first != selected_file)
 			load_table(first);
-			prev_selection_first = first;
-		}
 	}
 
 	// --- Template rendering ---
@@ -286,8 +287,8 @@ void render() {
 			true,    // keyinput
 			view.config.value("regexFilters", false),
 			listbox::CopyMode::Default,
-			false,   // pasteselection
-			false,   // copytrimwhitespace
+			view.config.value("pasteSelection", false),          // pasteselection (JS: config.pasteSelection)
+			view.config.value("removePathSpacesCopy", false),    // copytrimwhitespace (JS: config.removePathSpacesCopy)
 			"dbc file", // unittype
 			nullptr, // overrideItems
 			false,   // disable
@@ -312,11 +313,19 @@ void render() {
 	app::layout::EndStatusBar();
 
 	// --- Filter bar (row 2, col 1) ---
+	// JS: <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
+	//     <input type="text" v-model="userInputFilterDB2s" placeholder="Filter DBCs.."/>
 	if (app::layout::BeginFilterBar("dbc-filter", regions)) {
+		if (view.config.value("regexFilters", false)) {
+			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+			ImGui::SameLine();
+		}
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_db2_buf[256] = {};
 		std::strncpy(filter_db2_buf, view.userInputFilterDB2s.c_str(), sizeof(filter_db2_buf) - 1);
-		if (ImGui::InputText("##FilterDBCs", filter_db2_buf, sizeof(filter_db2_buf)))
+		if (ImGui::InputTextWithHint("##FilterDBCs", "Filter DBCs..", filter_db2_buf, sizeof(filter_db2_buf)))
 			view.userInputFilterDB2s = filter_db2_buf;
 	}
 	app::layout::EndFilterBar();
@@ -420,11 +429,18 @@ void render() {
 	app::layout::EndPreviewContainer();
 
 	// --- Bottom: Preview controls (row 2, col 2) ---
-	//     <input> filter + <MenuButton> export
+	// JS: <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
+	//     <input type="text" v-model="userInputFilterDataTable" placeholder="Filter data table rows..."/>
 	if (app::layout::BeginPreviewControls("legacy-data-preview-controls", regions)) {
+		if (view.config.value("regexFilters", false)) {
+			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+			ImGui::SameLine();
+		}
 		char filter_data_buf[256] = {};
 		std::strncpy(filter_data_buf, view.userInputFilterDataTable.c_str(), sizeof(filter_data_buf) - 1);
-		if (ImGui::InputText("##FilterDataTable", filter_data_buf, sizeof(filter_data_buf)))
+		if (ImGui::InputTextWithHint("##FilterDataTable", "Filter data table rows...", filter_data_buf, sizeof(filter_data_buf)))
 			view.userInputFilterDataTable = filter_data_buf;
 
 		ImGui::SameLine();

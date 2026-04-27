@@ -134,6 +134,8 @@ static std::string fieldToString(const db::FieldValue& val) {
 // --- File-local structures ---
 
 // The zone entry format is: expansion_id \x19 [zone_id] \x19 area_name \x19 (zone_name)
+// Note: tab_zones.h declares ZoneEntry (id, zone_name, area_name) — ZoneDisplayInfo extends it
+// with the expansion field used for filtering. The header's ZoneEntry is currently unused.
 struct ZoneDisplayInfo {
 int id = 0;
 std::string zone_name;
@@ -154,19 +156,8 @@ int tile_height = 0;
 
 // --- File-local state ---
 
-static const std::vector<std::string> EXPANSION_NAMES = {
-	"Classic",
-	"The Burning Crusade",
-	"Wrath of the Lich King",
-	"Cataclysm",
-	"Mists of Pandaria",
-	"Warlords of Draenor",
-	"Legion",
-	"Battle for Azeroth",
-	"Shadowlands",
-	"Dragonflight",
-	"The War Within"
-};
+// Note: EXPANSION_NAMES was removed — it was dead code (never referenced).
+// The actual expansion rendering uses constants::EXPANSIONS.
 
 static std::optional<int> selected_zone_id;
 
@@ -191,6 +182,8 @@ static ZoneDisplayInfo parse_zone_entry(const std::string& entry) {
 	std::regex re(R"((\d+)\x19\[(\d+)\]\x19([^\x19]+)\x19\(([^)]+)\))");
 	std::smatch match;
 	if (!std::regex_match(entry, match, re))
+		// JS: throw new Error('unexpected zone entry')
+		// C++: return {} with id=0; callers guard with zone.id > 0, equivalent behavior.
 		return {};
 
 	ZoneDisplayInfo info;
@@ -267,8 +260,11 @@ auto& ui_map = casc::db2::getTable("UiMap");
 if (!ui_map.isLoaded)
 	ui_map.parse();
 auto ui_map_row_opt = ui_map.getRow(static_cast<uint32_t>(*ui_map_id));
-// map_data is used for context/logging in JS; the key data comes from UiMapXMapArt and UiMapArt.
-(void)ui_map_row_opt;
+// JS: if (!map_data) { log.write('UiMap entry not found for ID %d', ui_map_id); throw new Error('UiMap entry not found'); }
+if (!ui_map_row_opt.has_value()) {
+	logging::write(std::format("UiMap entry not found for ID {}", *ui_map_id));
+	throw std::runtime_error("UiMap entry not found");
+}
 
 std::vector<int> linked_art_ids;
 auto& ui_map_x_map_art = casc::db2::getTable("UiMapXMapArt");
@@ -283,14 +279,11 @@ for (const auto& [id, row] : ui_map_x_map_art.getAllRows()) {
 	auto phase_it = row.find("PhaseID");
 	int row_phase = (phase_it != row.end()) ? fieldToInt(phase_it->second) : 0;
 
-	// If phase_id is specified, only include matching phases; otherwise include phase 0 (default).
-	if (phase_id.has_value()) {
-		if (row_phase != *phase_id)
-			continue;
-	} else {
-		if (row_phase != 0)
-			continue;
-	}
+	// JS: if (phase_id === null || link_entry.PhaseID === phase_id)
+	// When phase_id is null (nullopt), ALL entries are included regardless of phase.
+	// When phase_id is specified, only matching phases are included.
+	if (phase_id.has_value() && row_phase != *phase_id)
+		continue;
 
 	auto art_it = row.find("UiMapArtID");
 	if (art_it != row.end())
@@ -369,6 +362,11 @@ return a.layer_index < b.layer_index;
 
 int map_width = 0, map_height = 0;
 
+// JS: ctx.clearRect(0, 0, canvas.width, canvas.height) — always clear at the start of render,
+// even if the first art_style has a non-zero LayerIndex (entry 72).
+if (!core::view->zoneMapPixels.empty())
+	std::fill(core::view->zoneMapPixels.begin(), core::view->zoneMapPixels.end(), 0u);
+
 for (const auto& art_style : art_styles) {
 	// UiMapArtTile is preloaded during initialize(); getRelationRows is called inside render_map_tiles.
 
@@ -383,7 +381,30 @@ for (const auto& art_style : art_styles) {
 	}
 
 	if (core::view->config.value("showZoneBaseMap", true)) {
-		render_map_tiles(art_style, art_style.layer_index, zone_id, skip_zone_check);
+		// JS groups ALL tiles for this art_style by their LayerIndex, then renders each group in
+		// sorted order. C++ previously passed art_style.layer_index as a filter, rendering only
+		// tiles matching that single layer. Now we replicate the JS tile-by-layer approach (entry 69).
+		auto& ui_map_art_tile = casc::db2::getTable("UiMapArtTile");
+		auto all_tiles = ui_map_art_tile.getRelationRows(art_style.id);
+
+		if (all_tiles.empty()) {
+			// JS: log.write('no tiles found for UiMapArt ID %d', art_style.ID); continue;
+			logging::write(std::format("no tiles found for UiMapArt ID {}", art_style.id));
+		} else {
+			// Group tiles by LayerIndex.
+			std::map<int, std::vector<db::DataRecord>> tiles_by_layer;
+			for (const auto& tile : all_tiles) {
+				auto layer_it = tile.find("LayerIndex");
+				int tile_layer = (layer_it != tile.end()) ? fieldToInt(layer_it->second) : 0;
+				tiles_by_layer[tile_layer].push_back(tile);
+			}
+
+			// Render each layer group in sorted order (JS: layer_indices.sort(...) then forEach).
+			for (const auto& [layer_num, layer_tiles] : tiles_by_layer) {
+				logging::write(std::format("rendering layer {} with {} tiles", layer_num, layer_tiles.size()));
+				render_map_tiles(art_style, layer_num, zone_id, skip_zone_check);
+			}
+		}
 	}
 
 	if (core::view->config.value("showZoneOverlays", true)) {
@@ -459,6 +480,8 @@ static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index,
 
 		int col = get_field_int("ColIndex");
 		int row = get_field_int("RowIndex");
+		int offset_x = get_field_int("OffsetX");
+		int offset_y = get_field_int("OffsetY");
 		uint32_t file_data_id = static_cast<uint32_t>(get_field_int("FileDataID"));
 
 		if (file_data_id == 0) continue;
@@ -466,12 +489,22 @@ static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index,
 		int pixel_x = col * art_style.tile_width;
 		int pixel_y = row * art_style.tile_height;
 
+		// JS: final_x = pixel_x + (tile.OffsetX || 0); final_y = pixel_y + (tile.OffsetY || 0);
+		// (entry 66/68 — apply OffsetX/OffsetY per tile)
+		int final_x = pixel_x + offset_x;
+		int final_y = pixel_y + offset_y;
+
+		// JS: log.write('rendering tile FileDataID %d at position (%d,%d) -> (%d,%d) [Layer %d]', ...)
+		// (entry 173 — per-tile position logging)
+		logging::write(std::format("rendering tile FileDataID {} at position ({},{}) -> ({},{}) [Layer {}]",
+			file_data_id, col, row, final_x, final_y, layer_index));
+
 		try {
 			// c. Load BLP from CASC via tile.FileDataID
 			BufferWrapper blp_data = core::view->casc->getVirtualFileByID(file_data_id, true);
 			casc::BLPImage blp(blp_data);
-			// Composite BLP tile pixels onto zone map texture at (pixel_x, pixel_y).
-			composite_blp_tile(blp, pixel_x, pixel_y,
+			// Composite BLP tile pixels onto zone map texture at (final_x, final_y).
+			composite_blp_tile(blp, final_x, final_y,
 				core::view->zoneMapWidth, core::view->zoneMapHeight,
 				core::view->zoneMapPixels);
 			successful++;
@@ -498,6 +531,12 @@ static void render_world_map_overlays(const CombinedArtStyle& art_style, int exp
 		}, it->second);
 	};
 
+	if (overlays.empty()) {
+		// JS: log.write('no WorldMapOverlay entries found for UiMapArt ID %d', art_style.ID);
+		logging::write(std::format("no WorldMapOverlay entries found for UiMapArt ID {}", art_style.id));
+		return;
+	}
+
 	// 2. For each overlay, get tiles and call render_overlay_tiles
 	for (const auto& overlay : overlays) {
 		int overlay_id = get_field_int(overlay, "ID");
@@ -506,6 +545,12 @@ static void render_world_map_overlays(const CombinedArtStyle& art_style, int exp
 
 		auto& world_map_overlay_tile = casc::db2::getTable("WorldMapOverlayTile");
 		auto overlay_tiles = world_map_overlay_tile.getRelationRows(overlay_id);
+
+		if (overlay_tiles.empty()) {
+			// JS: log.write('no tiles found for WorldMapOverlay ID %d', overlay.ID); continue;
+			logging::write(std::format("no tiles found for WorldMapOverlay ID {}", overlay_id));
+			continue;
+		}
 
 		logging::write(std::format("rendering WorldMapOverlay ID {} with {} tiles at offset ({},{})",
 			overlay_id, overlay_tiles.size(), offset_x, offset_y));
