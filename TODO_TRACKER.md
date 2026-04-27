@@ -237,13 +237,13 @@
 
 - [ ] 127. [tab_item_sets.cpp] apply_filter converts ItemSet structs to JSON objects unnecessarily
 - **JS Source**: `src/js/modules/tab_item_sets.js` lines 67–69
-- **Status**: Pending
-- **Details**: JS simply assigns the array of ItemSet objects directly. C++ iterates every ItemSet, constructs nlohmann::json objects, and pushes them. Eliminating JSON requires changing view.listfileItemSets type in core.h — architectural change deferred.
+- **Status**: Blocked
+- **Details**: JS simply assigns the array of ItemSet objects directly. C++ iterates every ItemSet, constructs nlohmann::json objects, and pushes them. Eliminating JSON requires changing view.listfileItemSets type in core.h — architectural change deferred. `view.listfileItemSets` is used in the listbox render via `cached_json_strings` and potentially elsewhere; changing its type requires auditing all consumers.
 
 - [ ] 128. [tab_item_sets.cpp] render() re-creates item_entries vector from JSON every frame
 - **JS Source**: `src/js/modules/tab_item_sets.js` lines 76–86
-- **Status**: Pending
-- **Details**: Cache already exists (size-guarded). Proper fix requires bypassing JSON entirely (see TODO 127).
+- **Status**: Blocked
+- **Details**: Cache already exists (size-guarded). Proper fix requires bypassing JSON entirely (see TODO 127). Blocked on TODO 127.
 
 - [ ] 130. [tab_creatures.cpp] Creature list context actions are not equivalent to JS copy-name/copy-ID menu
 - **JS Source**: `src/js/modules/tab_creatures.js` lines 983–986, 1179–1203
