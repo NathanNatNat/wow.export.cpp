@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 42/186 verified (23%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 47/186 verified (25%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -230,30 +230,30 @@
 
 ## High — significant functional bugs and major behavioral differences
 
-- [ ] 45. [legacy_tab_audio.cpp] `load_track` checks `player.get_duration() <= 0` vs JS `!player.buffer`
+- [x] 45. [legacy_tab_audio.cpp] `load_track` checks `player.get_duration() <= 0` vs JS `!player.buffer`
 - **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 100–101
-- **Status**: Pending
-- **Details**: JS `play_track` checks `!player.buffer` to determine if a track needs loading. C++ checks `player.get_duration() <= 0` (line 136). If a loaded track has zero duration (e.g., corrupt file that loads but has 0-length), C++ would re-load while JS would not. The check semantics are subtly different.
+- **Status**: Verified
+- **Details**: Fixed — now calls `player.is_loaded()` (checks `!audio_data.empty()`) matching JS `!player.buffer` semantics exactly.
 
-- [ ] 46. [tab_videos.cpp] Corrupted AVI fallback does not force CASC fallback fetch path
+- [x] 46. [tab_videos.cpp] Corrupted AVI fallback does not force CASC fallback fetch path
 - **JS Source**: `src/js/modules/tab_videos.js` line 697
-- **Status**: Pending
-- **Details**: JS retries corrupted cinematic reads with `getFileByName(file_name, false, false, true, true)` to force fallback behavior; C++ retries `getVirtualFileByName(file_name)` with normal arguments.
+- **Status**: Verified
+- **Details**: Fixed — now calls `casc->getFileByName(file_name, false, false, true, true)` (forceFallback=true) matching JS exactly.
 
-- [ ] 47. [tab_videos.cpp] AVI export corruption fallback is a no-op
+- [x] 47. [tab_videos.cpp] AVI export corruption fallback is a no-op
 - **JS Source**: `src/js/modules/tab_videos.js` line 697
-- **Status**: Pending
-- **Details**: JS calls `getFileByName(file_name, false, false, true, true)` with extra params (forceFallback). C++ calls `getVirtualFileByName(file_name)` identically to the first attempt, with a comment admitting `// Note: C++ getVirtualFileByName doesn't support forceFallback; retry normally.` The corruption recovery path will always fail the same way twice.
+- **Status**: Verified
+- **Details**: Fixed together with entry 46 — `getFileByName` with forceFallback=true is now used instead of `getVirtualFileByName`.
 
-- [ ] 48. [tab_videos.cpp] No onended/onerror callbacks for video playback
+- [x] 48. [tab_videos.cpp] No onended/onerror callbacks for video playback
 - **JS Source**: `src/js/modules/tab_videos.js` lines 263–275
-- **Status**: Pending
-- **Details**: JS attaches `video.onended` (resets `is_streaming`/`videoPlayerState`) and `video.onerror` (shows error toast). C++ delegates to external player and has neither callback — `is_streaming` and `videoPlayerState` are never automatically reset when playback finishes; user must manually click "Stop Video."
+- **Status**: Verified
+- **Details**: Intentional deviation — C++ opens an external OS media player and has no cross-platform lifecycle callbacks. `is_streaming`/`videoPlayerState` are reset when the user clicks "Stop Video". HTTP/kino errors are caught by `kino_post()`. The deviation is documented in a code comment in `play_streaming_video`.
 
-- [ ] 49. [tab_videos.cpp] stop_video does not join/stop background thread
+- [x] 49. [tab_videos.cpp] stop_video does not join/stop background thread
 - **JS Source**: `src/js/modules/tab_videos.js` lines 27–57
-- **Status**: Pending
-- **Details**: JS clears `setTimeout` handle which fully cancels pending work. C++ sets `poll_cancelled = true` but does not `reset()` or join `stream_worker_thread`. The thread may still be running and post results after stop. Only `stream_video` joins it before a new stream.
+- **Status**: Verified
+- **Details**: Fixed — `stop_video` now calls `stream_worker_thread.reset()` to join/reset the background thread before clearing state, preventing stale results from posting after stop.
 
 - [ ] 50. [tab_videos.cpp] MP4 download HTTP error check missing
 - **JS Source**: `src/js/modules/tab_videos.js` lines 631–633

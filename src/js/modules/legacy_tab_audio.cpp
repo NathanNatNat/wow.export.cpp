@@ -137,7 +137,8 @@ static void unload_track() {
 }
 
 static void play_track() {
-	if (player.get_duration() <= 0) {
+	// JS checks !player.buffer (i.e. not loaded), not duration.
+	if (!player.is_loaded()) {
 		if (selected_file.empty()) {
 			core::setToast("info", "You need to select an audio track first!", {}, -1, true);
 			return;

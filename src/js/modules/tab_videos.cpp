@@ -186,6 +186,11 @@ static void stop_video() {
 
 	poll_active = false;
 
+	// Join/reset the background streaming thread so it cannot post results after stop.
+	// JS equivalent: clearTimeout(poll_timer) which fully cancels pending work.
+	if (stream_worker_thread)
+		stream_worker_thread.reset();
+
 	// Video element pause/unload is a browser API; in C++ we reset state.
 	// The video was opened externally via the platform shell; we clear the URL.
 	current_video_url.clear();
@@ -290,12 +295,12 @@ static void play_streaming_video(const std::string& url, const std::optional<Sub
 	core::openInExplorer(url);
 	logging::write(std::format("opened video URL in system handler: {}", url));
 
-	// With external playback there is no direct "ended" callback.
-	// The user stops playback via stop_video() which resets:
-	//   is_streaming = false; core::view->videoPlayerState = false;
-
-	// With external playback there is no direct "error" callback.
-	// HTTP errors are caught by kino_post(); launch errors are logged above.
+	// Deviation from JS: JS attaches video.onended (resets is_streaming/videoPlayerState) and
+	// video.onerror (shows error toast) on the <video> element. C++ opens an external player
+	// via the OS shell and has no process lifecycle callbacks. The user must click "Stop Video"
+	// to reset is_streaming/videoPlayerState. HTTP/kino errors are caught by kino_post().
+	// This is an intentional deviation — there is no cross-platform way to detect when an
+	// externally-launched media player closes.
 }
 
 static void stream_video(const std::string& file_name) {
@@ -766,9 +771,9 @@ static void export_avi() {
 				try {
 					logging::write("Local cinematic file is corrupted, forcing fallback.");
 
-					// Note: C++ getVirtualFileByName doesn't support forceFallback; retry normally.
-					BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
-					data.writeToFile(export_path);
+					// JS: casc.getFileByName(file_name, false, false, true, true) — forceFallback=true
+					casc::BLTEReader fallback_data = core::view->casc->getFileByName(file_name, false, false, true, true);
+					fallback_data.writeToFile(export_path);
 
 					helper.mark(export_file_name, true);
 				} catch (const std::exception& e) {
