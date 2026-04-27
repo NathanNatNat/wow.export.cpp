@@ -150,4 +150,21 @@ std::string getSelectedRowsAsSQL(const std::vector<std::string>& headers,
                                   const std::vector<int>& selection,
                                   const std::string& tablename);
 
+/**
+ * Apply filter and sort to a rows array using the given DataTableState.
+ * Returns the filtered+sorted rows in the same order the table displays them.
+ * @param rows     Full unfiltered rows array.
+ * @param headers  Column header names (used for column-filter parsing).
+ * @param filter   Current filter string.
+ * @param regex    Whether to use regex matching.
+ * @param state    DataTableState providing the current sort column/direction.
+ * @returns Filtered and sorted rows.
+ */
+std::vector<std::vector<std::string>> getFilteredSortedRows(
+        const std::vector<std::vector<std::string>>& rows,
+        const std::vector<std::string>& headers,
+        const std::string& filter,
+        bool regex,
+        const DataTableState& state);
+
 } // namespace data_table
