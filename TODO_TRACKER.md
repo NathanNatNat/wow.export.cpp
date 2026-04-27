@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/56 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/70 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/app.cpp ─────────────────────────────────────────────────────────── -->
 
@@ -299,3 +299,89 @@
   - **JS Source**: `src/js/generics.js` lines 40–41
   - **Status**: Pending
   - **Details**: JS logs `[${index}/${url_stack.length + index}]` where `url_stack.length` decreases as URLs are consumed, so the total changes. C++ logs `[${index}/${urls.size()}]` where the total is always fixed. Log output is misleading when multiple URLs are in the list.
+
+<!-- ─── src/js/gpu-info.cpp ───────────────────────────────────────────────────── -->
+
+- [ ] 57. [gpu-info.cpp] Viewport capability string uses comma separator; JS uses 'x'
+  - **JS Source**: `src/js/gpu-info.js` lines 294–295
+  - **Status**: Pending
+  - **Details**: JS formats viewport dimensions with `Array.join('x')`, e.g. `"1024x768"`. C++ (line 502 of gpu-info.cpp) concatenates with a comma, e.g. `"1024,768"`. The capability log string differs from JS output.
+
+- [ ] 58. [gpu-info.cpp] macOS VRAM regex match not trimmed
+  - **JS Source**: `src/js/gpu-info.js` line 198
+  - **Status**: Pending
+  - **Details**: JS calls `.trim()` on the regex match result before returning the macOS VRAM string. C++ (line 362) returns the raw match without trimming. Trailing whitespace may appear in the GPU info log on macOS.
+
+<!-- ─── src/js/icon-render.cpp ───────────────────────────────────────────────── -->
+
+- [ ] 59. [icon-render.cpp] `processQueue()` is synchronous; JS implementation is an async promise chain
+  - **JS Source**: `src/js/icon-render.js` lines 48–65
+  - **Status**: Pending
+  - **Details**: JS calls `.then().catch().finally(() => processQueue())`, returning to the event loop between each icon load so other I/O can interleave. C++ (lines 251–288) processes the queue via synchronous tail recursion, blocking the calling thread until the entire queue is drained. Large queues may freeze the UI.
+
+<!-- ─── src/js/install-type.cpp ──────────────────────────────────────────────── -->
+
+- [ ] 60. [install-type.cpp] C++ file is an empty stub; verify install-type.h defines MPQ and CASC with correct values
+  - **JS Source**: `src/js/install-type.js` lines 1–6
+  - **Status**: Pending
+  - **Details**: JS defines `InstallType = { MPQ: 1 << 0, CASC: 1 << 1 }`. The C++ .cpp file contains only a comment stating the enum is in the header. Verify that install-type.h declares `MPQ = 1 << 0` and `CASC = 1 << 1` with identical numeric values.
+
+<!-- ─── src/js/log.cpp ────────────────────────────────────────────────────────── -->
+
+- [ ] 61. [log.cpp] `write()` signature changed from variadic `...parameters` + `util.format()` to pre-formatted `std::string_view`
+  - **JS Source**: `src/js/log.js` lines 78–95
+  - **Status**: Pending
+  - **Details**: JS `write(...parameters)` calls `util.format(...parameters)` internally, so callers may pass a format string and arguments. C++ `write(std::string_view message)` requires a fully pre-formatted string. All C++ callers must format manually; any caller expecting internal format substitution will silently get the raw format string.
+
+- [ ] 62. [log.cpp] `getErrorDump()` is synchronous; JS version is `async` returning `Promise<string>`
+  - **JS Source**: `src/js/log.js` lines 102–108
+  - **Status**: Pending
+  - **Details**: JS marks the function `async` and callers use `await`. C++ (lines 259–270) returns `std::string` synchronously. The deviation is acknowledged in a C++ comment, but callers that relied on the async contract must be adapted.
+
+- [ ] 63. [log.cpp] Stdout logging is unconditional; JS only logs to console when `!BUILD_RELEASE`
+  - **JS Source**: `src/js/log.js` lines 93–94
+  - **Status**: Pending
+  - **Details**: JS guards `console.log(line)` behind `if (!BUILD_RELEASE)`. C++ always calls `std::fputs(line.c_str(), stdout)`. Release builds should suppress stdout output to match JS behaviour.
+
+<!-- ─── src/js/modules.cpp ────────────────────────────────────────────────────── -->
+
+- [ ] 64. [modules.cpp] `reload_module()` component reload is a no-op; JS invalidates require cache and re-requires the module
+  - **JS Source**: `src/js/modules.js` lines 321–362
+  - **Status**: Pending
+  - **Details**: JS deletes the module from `require.cache` and re-requires it so a fresh copy is used. C++ (lines 583–619) has a comment stating "Components are statically linked — this is a no-op." Hot-reloading of module code is not possible without a dynamic module system.
+
+- [ ] 65. [modules.cpp] Module `initialize()` wrapper is synchronous; JS wraps as an `async` function
+  - **JS Source**: `src/js/modules.js` lines 224–254
+  - **Status**: Pending
+  - **Details**: JS wraps each module's `initialize` with an `async` function and calls `await original_initialize.call(this)`, so module init can perform async I/O before the app proceeds. C++ (lines 226–246) calls the function pointer synchronously. Modules that need async startup must block on internal thread primitives instead.
+
+<!-- ─── src/js/MultiMap.cpp ───────────────────────────────────────────────────── -->
+
+- [ ] 66. [MultiMap.cpp] C++ file is a stub; verify MultiMap.h template replicates JS `set()` collision semantics
+  - **JS Source**: `src/js/MultiMap.js` lines 19–29
+  - **Status**: Pending
+  - **Details**: JS `set()` wraps values in arrays on key collision: if the existing value is already an Array it pushes, otherwise it converts the single value to `[existing, new]`. The C++ .cpp file contains only a comment deferring to the header. Verify MultiMap.h implements exactly the same collision behaviour.
+
+<!-- ─── src/js/png-writer.cpp ─────────────────────────────────────────────────── -->
+
+- [ ] 67. [png-writer.cpp] `write()` uses a detached thread + `std::shared_future`; JS uses `async/await`
+  - **JS Source**: `src/js/png-writer.js` lines 247–249
+  - **Status**: Pending
+  - **Details**: JS marks `write()` as `async` and directly `await`s `getBuffer().writeToFile(file)`. C++ (lines 283–298) spawns a detached thread, sets a promise inside it, and returns a `shared_future`. Callers must call `.get()` to block until completion. Unhandled exceptions in the detached thread will terminate the process if the future is abandoned.
+
+<!-- ─── src/js/subtitles.cpp ──────────────────────────────────────────────────── -->
+
+- [ ] 68. [subtitles.cpp] BOM detection mismatch: C++ strips UTF-8 BOM (3 bytes), JS strips UTF-16 BOM (U+FEFF char)
+  - **JS Source**: `src/js/subtitles.js` lines 177–178
+  - **Status**: Pending
+  - **Details**: JS checks `text.charCodeAt(0) === 0xFEFF` (the UTF-16/UCS-2 BOM as a single code point). C++ (line 341) checks for the 3-byte UTF-8 BOM `\xEF\xBB\xBF`. WoW subtitle files are almost certainly UTF-8 so the C++ check is likely more correct, but the mismatch should be verified against real files.
+
+- [ ] 69. [subtitles.cpp] `SUBTITLE_FORMAT` numeric values must match in C++ enum (SRT=118, SBT=7)
+  - **JS Source**: `src/js/subtitles.js` lines 3–6
+  - **Status**: Pending
+  - **Details**: JS defines `SUBTITLE_FORMAT = { SRT: 118, SBT: 7 }`. C++ uses a `SubtitleFormat` enum declared in the header. Verify the C++ enum values are exactly 118 for SRT and 7 for SBT, as these are wire-format identifiers read from CASC files.
+
+- [ ] 70. [subtitles.cpp] `get_subtitles_vtt()` calls `casc->getVirtualFileByID()`; JS calls `casc.getFile()`
+  - **JS Source**: `src/js/subtitles.js` line 173
+  - **Status**: Pending
+  - **Details**: JS uses `await casc.getFile(file_data_id)`. C++ (line 358) calls `casc->getVirtualFileByID(file_data_id)`. The method names differ — verify both resolve the same data for a given file data ID and return an equivalent buffer/stream object.
