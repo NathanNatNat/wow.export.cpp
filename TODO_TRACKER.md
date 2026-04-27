@@ -664,10 +664,10 @@
 - **Status**: Pending
 - **Details**: view_item_models and view_item_textures use JS Set which preserves insertion order. C++ uses std::set<std::string> which sorts lexicographically. Should use std::vector with uniqueness check.
 
-- [ ] 389. [tab_items.cpp] Second loop (itemViewerShowAll) retrieves item name from wrong source
-- **JS Source**: `src/js/modules/tab_items.js` lines 181–211
+- [ ] 389. [tab_items.cpp] itemViewerShowAll second loop superseded by upstream DBItemList refactor
+- **JS Source**: `src/js/modules/tab_items.js`
 - **Status**: Pending
-- **Details**: JS constructs new Item(item_id, item_row, null, null, null) where Item constructor reads item_row.Display_lang. C++ looks up name via DBItems::getItemById(item_id), a different data source.
+- **Details**: The original bug (C++ using DBItems::getItemById instead of Item constructor reading item_row.Display_lang) is now moot — upstream commit d0d847f5 removed the entire second loop and replaced item loading with DBItemList.initialize() / DBItemList.loadShowAllItems(). The C++ implementation needs to be redone to match the new DBItemList-based approach. See entry 647 for the full item equipping rework scope.
 
 - [ ] 390. [tab_items.cpp] Regex tooltip not rendered
 - **JS Source**: `src/js/modules/tab_items.js` line 248
@@ -752,9 +752,9 @@
 - **Details**: C++ calls IsItemActivated() before SliderInt() renders. IsItemActivated checks the last widget (Step-Right button) not the slider. start_scrub() will never fire correctly.
 
 - [ ] 431. [tab_creatures.cpp] Missing export_paths.writeLine calls in multiple export paths
-- **JS Source**: `src/js/modules/tab_creatures.js` lines 747, 792, 923
+- **JS Source**: `src/js/modules/tab_creatures.js` lines 792, 929 (approx — shifted by upstream changes)
 - **Status**: Pending
-- **Details**: JS writes to export_paths for RAW and non-RAW character-model export and standard export. C++ omits all writeLine calls and does not pass export_paths to export_model.
+- **Details**: JS writes to export_paths for RAW character-model export (line 792) and non-RAW character-model export (line 929). C++ omits all writeLine calls and does not pass export_paths to export_model. Scope expanded by upstream commit 7dfca145 (entry 653) which added a posed export path via modelViewerUtils.export_preview — verify that path also handles export_paths correctly (currently returns early at line 747 via export_paths?.close() without writing).
 
 - [ ] 432. [tab_creatures.cpp] GLTF format.toLowerCase() not applied
 - **JS Source**: `src/js/modules/tab_creatures.js` line 921
