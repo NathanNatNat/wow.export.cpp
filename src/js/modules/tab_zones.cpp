@@ -845,14 +845,21 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 	for (const auto& s : view.selectionZones)
 		sel_strings.push_back(s.get<std::string>());
 
+	listbox::CopyMode copy_mode = listbox::CopyMode::Default;
+	{
+		std::string cm = view.config.value("copyMode", std::string("Default"));
+		if (cm == "DIR") copy_mode = listbox::CopyMode::DIR;
+		else if (cm == "FID") copy_mode = listbox::CopyMode::FID;
+	}
+
 	listbox_zones::render("##ZoneListbox", zone_strings,
 		view.userInputFilterZones, sel_strings,
 		false,   // single
 		true,    // keyinput
 		view.config.value("regexFilters", false),
-		listbox::CopyMode::Default,
-		false,   // pasteselection
-		false,   // copytrimwhitespace
+		copy_mode,
+		view.config.value("pasteSelection", false),
+		view.config.value("removePathSpacesCopy", false),
 		"zone",  // unittype
 		nullptr, // overrideItems
 		false,   // disable
@@ -926,6 +933,42 @@ context_menu::render(
 		ImGui::TextUnformatted("Select a zone to preview its map");
 	}
 
+	// Phase dropdown overlay — JS: preview-dropdown-overlay div positioned over the zone canvas.
+	// Rendered inside the canvas child so it overlays the map image at the bottom-right corner.
+	if (view.zonePhases.size() > 1) {
+		const ImVec2 canvas_size = ImGui::GetWindowSize();
+		const float combo_w = 140.0f;
+		const float combo_h = ImGui::GetFrameHeight();
+		const float pad = 6.0f;
+		ImGui::SetCursorPos(ImVec2(canvas_size.x - combo_w - pad, canvas_size.y - combo_h - pad));
+
+		std::string current_label = "Default";
+		if (view.zonePhaseSelection.is_number()) {
+			int current_id = view.zonePhaseSelection.get<int>();
+			for (const auto& phase : view.zonePhases) {
+				if (phase.value("id", -99) == current_id) {
+					current_label = phase.value("label", std::string("Unknown"));
+					break;
+				}
+			}
+		}
+
+		ImGui::SetNextItemWidth(combo_w);
+		if (ImGui::BeginCombo("##PhaseOverlay", current_label.c_str())) {
+			for (const auto& phase : view.zonePhases) {
+				const std::string label = phase.value("label", std::string("Unknown"));
+				const int phase_id = phase.value("id", -99);
+				const bool is_selected = view.zonePhaseSelection.is_number() &&
+					view.zonePhaseSelection.get<int>() == phase_id;
+				if (ImGui::Selectable(label.c_str(), is_selected))
+					view.zonePhaseSelection = phase_id;
+				if (is_selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+	}
+
 	ImGui::EndChild(); // zone-canvas-area
 }
 
@@ -985,35 +1028,6 @@ context_menu::render(
 		if (ImGui::Button("Export Map"))
 			export_zone_map();
 		if (busy || no_selection) app::theme::EndDisabledButton();
-
-		// Phase dropdown.
-		if (view.zonePhases.size() > 1) {
-			ImGui::SameLine();
-			std::string current_label = "Default";
-			if (view.zonePhaseSelection.is_number()) {
-				int current_id = view.zonePhaseSelection.get<int>();
-				for (const auto& phase : view.zonePhases) {
-					if (phase.value("id", -99) == current_id) {
-						current_label = phase.value("label", std::string("Unknown"));
-						break;
-					}
-				}
-			}
-
-			if (ImGui::BeginCombo("Phase", current_label.c_str())) {
-				for (const auto& phase : view.zonePhases) {
-					const std::string label = phase.value("label", std::string("Unknown"));
-					const int phase_id = phase.value("id", -99);
-					const bool is_selected = view.zonePhaseSelection.is_number() &&
-						view.zonePhaseSelection.get<int>() == phase_id;
-					if (ImGui::Selectable(label.c_str(), is_selected))
-						view.zonePhaseSelection = phase_id;
-					if (is_selected)
-						ImGui::SetItemDefaultFocus();
-				}
-				ImGui::EndCombo();
-			}
-		}
 	}
 	ImGui::EndChild();
 }
