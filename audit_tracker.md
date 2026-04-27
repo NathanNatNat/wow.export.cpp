@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 30/195 audited (15%)**
+**Progress: 60/195 audited (31%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -34,36 +34,36 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 28. `src/js/3D/GeosetMapper.cpp`
 - [x] 29. `src/js/3D/ShaderMapper.cpp`
 - [x] 30. `src/js/3D/Shaders.cpp`
-- [ ] 31. `src/js/3D/Skin.cpp`
-- [ ] 32. `src/js/3D/Texture.cpp`
-- [ ] 33. `src/js/3D/WMOShaderMapper.cpp`
-- [ ] 34. `src/js/3D/camera/CameraControlsGL.cpp`
-- [ ] 35. `src/js/3D/camera/CharacterCameraControlsGL.cpp`
-- [ ] 36. `src/js/3D/exporters/ADTExporter.cpp`
-- [ ] 37. `src/js/3D/exporters/CharacterExporter.cpp`
-- [ ] 38. `src/js/3D/exporters/M2Exporter.cpp`
-- [ ] 39. `src/js/3D/exporters/M2LegacyExporter.cpp`
-- [ ] 40. `src/js/3D/exporters/M3Exporter.cpp`
-- [ ] 41. `src/js/3D/exporters/WMOExporter.cpp`
-- [ ] 42. `src/js/3D/exporters/WMOLegacyExporter.cpp`
-- [ ] 43. `src/js/3D/gl/GLContext.cpp`
-- [ ] 44. `src/js/3D/gl/GLTexture.cpp`
-- [ ] 45. `src/js/3D/gl/ShaderProgram.cpp`
-- [ ] 46. `src/js/3D/gl/UniformBuffer.cpp`
-- [ ] 47. `src/js/3D/gl/VertexArray.cpp`
-- [ ] 48. `src/js/3D/loaders/ADTLoader.cpp`
-- [ ] 49. `src/js/3D/loaders/ANIMLoader.cpp`
-- [ ] 50. `src/js/3D/loaders/BONELoader.cpp`
-- [ ] 51. `src/js/3D/loaders/LoaderGenerics.cpp`
-- [ ] 52. `src/js/3D/loaders/M2Generics.cpp`
-- [ ] 53. `src/js/3D/loaders/M2LegacyLoader.cpp`
-- [ ] 54. `src/js/3D/loaders/M2Loader.cpp`
-- [ ] 55. `src/js/3D/loaders/M3Loader.cpp`
-- [ ] 56. `src/js/3D/loaders/MDXLoader.cpp`
-- [ ] 57. `src/js/3D/loaders/SKELLoader.cpp`
-- [ ] 58. `src/js/3D/loaders/WDTLoader.cpp`
-- [ ] 59. `src/js/3D/loaders/WMOLegacyLoader.cpp`
-- [ ] 60. `src/js/3D/loaders/WMOLoader.cpp`
+- [x] 31. `src/js/3D/Skin.cpp`
+- [x] 32. `src/js/3D/Texture.cpp`
+- [x] 33. `src/js/3D/WMOShaderMapper.cpp`
+- [x] 34. `src/js/3D/camera/CameraControlsGL.cpp`
+- [x] 35. `src/js/3D/camera/CharacterCameraControlsGL.cpp`
+- [x] 36. `src/js/3D/exporters/ADTExporter.cpp`
+- [x] 37. `src/js/3D/exporters/CharacterExporter.cpp`
+- [x] 38. `src/js/3D/exporters/M2Exporter.cpp`
+- [x] 39. `src/js/3D/exporters/M2LegacyExporter.cpp`
+- [x] 40. `src/js/3D/exporters/M3Exporter.cpp`
+- [x] 41. `src/js/3D/exporters/WMOExporter.cpp`
+- [x] 42. `src/js/3D/exporters/WMOLegacyExporter.cpp`
+- [x] 43. `src/js/3D/gl/GLContext.cpp`
+- [x] 44. `src/js/3D/gl/GLTexture.cpp`
+- [x] 45. `src/js/3D/gl/ShaderProgram.cpp`
+- [x] 46. `src/js/3D/gl/UniformBuffer.cpp`
+- [x] 47. `src/js/3D/gl/VertexArray.cpp`
+- [x] 48. `src/js/3D/loaders/ADTLoader.cpp`
+- [x] 49. `src/js/3D/loaders/ANIMLoader.cpp`
+- [x] 50. `src/js/3D/loaders/BONELoader.cpp`
+- [x] 51. `src/js/3D/loaders/LoaderGenerics.cpp`
+- [x] 52. `src/js/3D/loaders/M2Generics.cpp`
+- [x] 53. `src/js/3D/loaders/M2LegacyLoader.cpp`
+- [x] 54. `src/js/3D/loaders/M2Loader.cpp`
+- [x] 55. `src/js/3D/loaders/M3Loader.cpp`
+- [x] 56. `src/js/3D/loaders/MDXLoader.cpp`
+- [x] 57. `src/js/3D/loaders/SKELLoader.cpp`
+- [x] 58. `src/js/3D/loaders/WDTLoader.cpp`
+- [x] 59. `src/js/3D/loaders/WMOLegacyLoader.cpp`
+- [x] 60. `src/js/3D/loaders/WMOLoader.cpp`
 - [ ] 61. `src/js/3D/renderers/CharMaterialRenderer.cpp`
 - [ ] 62. `src/js/3D/renderers/GridRenderer.cpp`
 - [ ] 63. `src/js/3D/renderers/M2LegacyRendererGL.cpp`
