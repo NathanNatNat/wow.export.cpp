@@ -1,33 +1,8 @@
 # TODO Tracker
 
-> **Progress: 0/16 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/11 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
-
-- [ ] 6. [GLContext.cpp / ShaderProgram.cpp / UniformBuffer.cpp / VertexArray.cpp] Port upstream GL subsystem fixes
-  - **JS Source**: `src/js/3D/gl/GLContext.js`, `ShaderProgram.js`, `UniformBuffer.js`, `VertexArray.js`
-  - **Status**: Pending
-  - **Details**: Commits to port: fix blendmode.add in GLContext (f9e8f606); fix get_uniform_block_param passing name instead of index to getActiveUniformBlockParameter in ShaderProgram (aea65174); UniformBuffer + ShaderProgram rework for bones/tex_matrices UBO layout (a1689641 — shared with renderer entries); VertexArray: always emit uv2/texcoord2 attribute (4cc75854); VertexArray: generate dedicated line index buffers for wireframe (1715ee16).
-
-- [ ] 7. [M2Loader.cpp / M2LegacyLoader.cpp / M3Loader.cpp / SKELLoader.cpp / WMOLoader.cpp / WMOLegacyLoader.cpp] Port upstream loader changes
-  - **JS Source**: `src/js/3D/loaders/M2Loader.js`, `M2LegacyLoader.js`, `M3Loader.js`, `SKELLoader.js`, `WMOLoader.js`, `WMOLegacyLoader.js`
-  - **Status**: Pending
-  - **Details**: Commits to port: fix globalloops stored as 32-bit integers not 16-bit (9b403861 — M2Loader + SKELLoader); WMO UV improvements affecting UV data in WMOLoader, WMOLegacyLoader, M2LegacyLoader, M2Loader, M3Loader (7d57f471).
-
-- [ ] 8. [WMOExporter.cpp / WMOLegacyExporter.cpp / OBJWriter.cpp] Port upstream WMO exporter changes
-  - **JS Source**: `src/js/3D/exporters/WMOExporter.js`, `WMOLegacyExporter.js`, `src/js/3D/writers/OBJWriter.js`
-  - **Status**: Pending
-  - **Details**: Commits to port: implement WMO shader 20 OBJ/Blender export support (4ccde240 — WMOExporter + OBJWriter); improve WMO S20 OBJ exporting (a1b9d984 — WMOExporter); fix legacy WMO export skipping texture at MOTX offset 0 (73668717 — WMOLegacyExporter).
-
-- [ ] 9. [M2Exporter.cpp / CharacterExporter.cpp / GLTFWriter.cpp] Port upstream M2/Character exporter and writer changes
-  - **JS Source**: `src/js/3D/exporters/M2Exporter.js`, `CharacterExporter.js`, `src/js/3D/writers/GLTFWriter.js`
-  - **Status**: Pending
-  - **Details**: Commits to port: fix UV flipping for OBJ exports in M2Exporter (1022cd8d); fix item model exports missing material textures — requires new DBItemDisplayInfoModelMatRes cache (a71487d6); GLTFWriter UV/texcoord changes from WMO UV improvements batch (7d57f471); CharacterExporter item variant support (8fcce02e — coordinate with entry 11).
-
-- [ ] 10. [tab_characters.cpp] Port extensive upstream character tab changes
-  - **JS Source**: `src/js/modules/tab_characters.js`
-  - **Status**: Pending
-  - **Details**: Commits to port: apply guild crest from Battle.net character import (0b6923bf); apply item appearance modifiers from Battle.net character import (909aad0d); item variant support for character customization (8fcce02e); conditional character model support (3b5aed51); fix Earthen race import using Race_related fallback (512cb4e9); fix crash when copying item IDs in character tab (7f8d4f87); add support for independent shoulderpads (377aea87); streamline item equipping workflow (d0d847f5 — see entry 11 for new supporting files).
 
 - [ ] 11. [tab_items.cpp / tab_item_sets.cpp / equip-item.cpp / item-picker-modal.cpp] Port item equipping rework and new files
   - **JS Source**: `src/js/modules/tab_items.js`, `tab_item_sets.js`, `src/js/wow/equip-item.js` (new), `src/js/components/item-picker-modal.js` (new)
