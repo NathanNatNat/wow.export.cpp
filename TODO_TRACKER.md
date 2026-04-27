@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 85/186 verified (46%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 99/186 verified (53%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -290,37 +290,37 @@
 - **Status**: Pending
 - **Details**: JS calls listfile.ingestIdentifiedFiles then compute_raw_files without setting is_dirty. Since is_dirty was false, JS would return early (apparent JS bug). C++ adds is_dirty=true to fix this, which is arguably correct but deviates from original JS behavior.
 
-- [ ] 57. [tab_maps.cpp] Hand-rolled MD5 instead of mbedTLS
+- [x] 57. [tab_maps.cpp] Hand-rolled MD5 instead of mbedTLS
 - **JS Source**: `src/js/modules/tab_maps.js` line 914
 - **Status**: Pending
 - **Details**: C++ implements a full RFC 1321 MD5 from scratch instead of using mbedTLS MD API (mbedtls/md.h) as specified in project conventions.
 
-- [ ] 58. [tab_maps.cpp] load_map_tile uses nearest-neighbor scaling instead of bilinear interpolation
+- [x] 58. [tab_maps.cpp] load_map_tile uses nearest-neighbor scaling instead of bilinear interpolation
 - **JS Source**: `src/js/modules/tab_maps.js` lines 62–71
 - **Status**: Pending
 - **Details**: JS Canvas 2D drawImage performs bilinear interpolation when scaling. C++ uses nearest-neighbor sampling (integer coordinate snapping), making scaled minimap tiles look blockier/pixelated.
 
-- [ ] 59. [tab_maps.cpp] load_map_tile uses blp.width instead of blp.scaledWidth
+- [x] 59. [tab_maps.cpp] load_map_tile uses blp.width instead of blp.scaledWidth
 - **JS Source**: `src/js/modules/tab_maps.js` line 62
 - **Status**: Pending
 - **Details**: JS computes scale as size / blp.scaledWidth. C++ uses blp.width. If the BLP has a scaledWidth differing from raw width (e.g. mipmaps), the scaling factor will be wrong.
 
-- [ ] 60. [tab_maps.cpp] export_map_wmo_minimap uses max-alpha instead of source-over compositing
+- [x] 60. [tab_maps.cpp] export_map_wmo_minimap uses max-alpha instead of source-over compositing
 - **JS Source**: `src/js/modules/tab_maps.js` lines 721–733
 - **Status**: Pending
 - **Details**: JS Canvas 2D drawImage uses Porter-Duff source-over compositing. C++ export computes alpha as max(dst_alpha, src_alpha) instead of correct source-over formula.
 
-- [ ] 61. [tab_maps.cpp] mapViewerHasWorldModel check differs from JS
+- [x] 61. [tab_maps.cpp] mapViewerHasWorldModel check differs from JS
 - **JS Source**: `src/js/modules/tab_maps.js` lines 438–439
 - **Status**: Pending
 - **Details**: JS checks if (wdt.worldModelPlacement) — any non-null object is truthy. C++ checks if (worldModelPlacement.id != 0), which misses placement with id=0. Also affects has_global_wmo and export_map_wmo checks.
 
-- [ ] 62. [tab_maps.cpp] collect_game_objects returns vector instead of Set
+- [x] 62. [tab_maps.cpp] collect_game_objects returns vector instead of Set
 - **JS Source**: `src/js/modules/tab_maps.js` lines 146–157
 - **Status**: Pending
 - **Details**: JS returns a Set guaranteeing uniqueness. C++ returns std::vector<ADTGameObject> which can contain duplicates.
 
-- [ ] 63. [tab_maps.cpp] Selection watch may miss intermediate changes
+- [x] 63. [tab_maps.cpp] Selection watch may miss intermediate changes
 - **JS Source**: `src/js/modules/tab_maps.js` lines 1135–1143
 - **Status**: Pending
 - **Details**: JS Vue $watch triggers on any reactive change. C++ only compares the first element string between frames. If selection changes and reverts within same frame, or changes to different item with same first entry, C++ misses it.
@@ -330,7 +330,7 @@
 - **Status**: Verified
 - **Details**: Fixed — phase filter now uses `if (phase_id.has_value() && row_phase != *phase_id) continue;` matching JS `if (phase_id === null || link_entry.PhaseID === phase_id)` semantics. When phase_id is nullopt, all entries are included. (Same fix as entry 67.)
 
-- [ ] 65. [tab_zones.cpp] UiMapArtStyleLayer lookup key differs from JS relation logic
+- [x] 65. [tab_zones.cpp] UiMapArtStyleLayer lookup key differs from JS relation logic
 - **JS Source**: `src/js/modules/tab_zones.js` lines 88–90
 - **Status**: Pending
 - **Details**: JS resolves style layers by matching `UiMapArtStyleID` to `art_entry.UiMapArtStyleID`; C++ matches `UiMapArtID` to the linked art ID, changing style-layer association behavior.
@@ -355,7 +355,7 @@
 - **Status**: Verified
 - **Details**: Fixed — now groups all tiles from `UiMapArtTile` by LayerIndex into a `std::map<int, ...>` and calls `render_map_tiles` for each layer in sorted order, matching JS `layer_indices.sort(...).forEach(...)` pattern. Also logs "no tiles found for UiMapArt ID N" when tiles are empty (entry 174).
 
-- [ ] 70. [tab_zones.cpp] parse_zone_entry doesn't throw on bad input
+- [x] 70. [tab_zones.cpp] parse_zone_entry doesn't throw on bad input
 - **JS Source**: `src/js/modules/tab_zones.js` lines 17–18
 - **Status**: Pending
 - **Details**: JS throws `new Error('unexpected zone entry')` on regex mismatch. C++ returns an empty `ZoneDisplayInfo{}` with `id=0`. Callers add `zone.id > 0` guards, but error propagation differs.
@@ -385,27 +385,27 @@
 - **Status**: Verified
 - **Details**: Fixed. Added scalar int64_t and uint64_t cases to fieldToUint32Vec — returns a single-element vector so no data is silently dropped.
 
-- [ ] 76. [tab_creatures.cpp] Scrubber IsItemActivated() called before SliderInt checks wrong widget
+- [x] 76. [tab_creatures.cpp] Scrubber IsItemActivated() called before SliderInt checks wrong widget
 - **JS Source**: `src/js/modules/tab_creatures.js` lines 1035–1038
 - **Status**: Pending
 - **Details**: C++ calls IsItemActivated() before SliderInt() renders. IsItemActivated checks the last widget (Step-Right button) not the slider. start_scrub() will never fire correctly.
 
-- [ ] 77. [tab_creatures.cpp] Missing export_paths.writeLine calls in multiple export paths
+- [x] 77. [tab_creatures.cpp] Missing export_paths.writeLine calls in multiple export paths
 - **JS Source**: `src/js/modules/tab_creatures.js` lines 792, 929 (approx — shifted by upstream changes)
 - **Status**: Pending
 - **Details**: JS writes to export_paths for RAW character-model export (line 792) and non-RAW character-model export (line 929). C++ omits all writeLine calls and does not pass export_paths to export_model. Scope expanded by upstream commit 7dfca145 (entry 17) which added a posed export path via modelViewerUtils.export_preview — verify that path also handles export_paths correctly (currently returns early at line 747 via export_paths?.close() without writing).
 
-- [ ] 78. [tab_creatures.cpp] GLTF format.toLowerCase() not applied
+- [x] 78. [tab_creatures.cpp] GLTF format.toLowerCase() not applied
 - **JS Source**: `src/js/modules/tab_creatures.js` line 921
 - **Status**: Pending
 - **Details**: JS passes format.toLowerCase() to exportAsGLTF. C++ passes format as-is (uppercase). If the exporter is case-sensitive output may differ.
 
-- [ ] 79. [tab_decor.cpp] Context menu popup may never open
+- [x] 79. [tab_decor.cpp] Context menu popup may never open
 - **JS Source**: `src/js/modules/tab_decor.js` lines 233–237
 - **Status**: Pending
 - **Details**: The DecorListboxContextMenu popup requires ImGui::OpenPopup to be called. The handle_listbox_context callback does not open this popup. The popup rendering code will never trigger.
 
-- [ ] 80. [app.h / app.cpp] Remove `applyTheme()` and all CSS-color constants; replace with `ImGui::StyleColorsDark()`
+- [x] 80. [app.h / app.cpp] Remove `applyTheme()` and all CSS-color constants; replace with `ImGui::StyleColorsDark()`
   - **JS Source**: `src/app.css` (CSS variables — all `:root` color definitions)
   - **Status**: In Progress
   - **Details**: `applyTheme()` call replaced with `ImGui::StyleColorsDark()` (done in prior session). All CSS-color push/pop calls and color constant aliases removed from `app.cpp`. The `app::theme` namespace color constants in `app.h` remain and are still referenced by entries 631–636 files. Full removal of the constants from `app.h` is blocked on entries 631–636.

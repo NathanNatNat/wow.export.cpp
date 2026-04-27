@@ -498,6 +498,7 @@ static void initialize() {
 
 static void handle_listbox_context(const std::vector<std::string>& selection) {
 	listbox_context::handle_context_menu(selection);
+	ImGui::OpenPopup("DecorListboxContextMenu");
 }
 
 static void copy_decor_names(const std::vector<nlohmann::json>& selection) {

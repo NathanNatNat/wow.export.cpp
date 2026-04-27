@@ -181,10 +181,10 @@ static ZoneDisplayInfo parse_zone_entry(const std::string& entry) {
 	// match[1]=id, match[2]=AreaName_lang→zone_name, match[3]=ZoneName→area_name
 	std::regex re(R"((\d+)\x19\[(\d+)\]\x19([^\x19]+)\x19\(([^)]+)\))");
 	std::smatch match;
-	if (!std::regex_match(entry, match, re))
-		// JS: throw new Error('unexpected zone entry')
-		// C++: return {} with id=0; callers guard with zone.id > 0, equivalent behavior.
-		return {};
+	if (!std::regex_match(entry, match, re)) {
+		spdlog::error("[tab_zones] unexpected zone entry: {}", entry);
+		throw std::runtime_error("unexpected zone entry");
+	}
 
 	ZoneDisplayInfo info;
 	info.expansion = std::stoi(match[1].str());
@@ -731,8 +731,9 @@ auto& view = *core::view;
 if (!view.selectionZones.empty()) {
 const std::string first = view.selectionZones[0].get<std::string>();
 if (view.isBusy == 0 && !first.empty() && first != prev_selection_first) {
+try {
 const auto zone = parse_zone_entry(first);
-if (zone.id > 0 && (!selected_zone_id.has_value() || *selected_zone_id != zone.id)) {
+if (!selected_zone_id.has_value() || *selected_zone_id != zone.id) {
 selected_zone_id = zone.id;
 logging::write(std::format("selected zone: {} ({})", zone.zone_name, zone.id));
 
@@ -755,6 +756,9 @@ view.zonePhaseSelection = nullptr;
 }
 
 load_zone_map(zone.id, selected_phase_id);
+}
+} catch (const std::exception& e) {
+logging::write(std::format("failed to parse zone entry: {}", e.what()));
 }
 
 prev_selection_first = first;
@@ -1031,12 +1035,11 @@ static void handle_zone_context(const std::vector<std::string>& selection) {
 static void copy_zone_names(const std::vector<std::string>& selection) {
 std::string result;
 for (const auto& entry : selection) {
+try {
 const auto zone = parse_zone_entry(entry);
-if (zone.id > 0) {
-if (!result.empty())
-result += '\n';
+if (!result.empty()) result += '\n';
 result += zone.zone_name;
-}
+} catch (const std::exception&) {}
 }
 ImGui::SetClipboardText(result.c_str());
 }
@@ -1044,12 +1047,11 @@ ImGui::SetClipboardText(result.c_str());
 static void copy_area_names(const std::vector<std::string>& selection) {
 std::string result;
 for (const auto& entry : selection) {
+try {
 const auto zone = parse_zone_entry(entry);
-if (zone.id > 0) {
-if (!result.empty())
-result += '\n';
+if (!result.empty()) result += '\n';
 result += zone.area_name;
-}
+} catch (const std::exception&) {}
 }
 ImGui::SetClipboardText(result.c_str());
 }
@@ -1057,12 +1059,11 @@ ImGui::SetClipboardText(result.c_str());
 static void copy_zone_ids(const std::vector<std::string>& selection) {
 std::string result;
 for (const auto& entry : selection) {
+try {
 const auto zone = parse_zone_entry(entry);
-if (zone.id > 0) {
-if (!result.empty())
-result += '\n';
+if (!result.empty()) result += '\n';
 result += std::to_string(zone.id);
-}
+} catch (const std::exception&) {}
 }
 ImGui::SetClipboardText(result.c_str());
 }

@@ -1151,6 +1151,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 
 				if (format == "RAW") {
 					M2Exporter exporter(std::move(data), {}, file_data_id, casc);
+					export_paths.writeLine(export_path);
 					exporter.exportRaw(export_path, &helper, &file_manifest);
 					helper.mark(creature_name, true);
 				} else {
@@ -1334,9 +1335,12 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 					if (format == "OBJ" || format == "STL") {
 						exporter.exportAsOBJ(final_path, (format == "STL"), &helper, &file_manifest);
 					} else {
-						exporter.exportAsGLTF(final_path, &helper, format);
+						std::string fmt_lower = format;
+						std::transform(fmt_lower.begin(), fmt_lower.end(), fmt_lower.begin(), ::tolower);
+						exporter.exportAsGLTF(final_path, &helper, fmt_lower);
 					}
 
+					export_paths.writeLine("M2_" + format + ":" + final_path);
 					helper.mark(mark_file_name, true);
 				}
 			} catch (const std::exception& e) {
@@ -2024,11 +2028,11 @@ void render() {
 					int max_frame = view.creatureViewerAnimFrameCount > 0 ? view.creatureViewerAnimFrameCount - 1 : 0;
 
 					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 80.0f);
-					if (ImGui::IsItemActivated())
-						anim_methods->start_scrub();
 					if (ImGui::SliderInt("##creature-scrub", &frame, 0, max_frame)) {
 						anim_methods->seek_animation(frame);
 					}
+					if (ImGui::IsItemActivated())
+						anim_methods->start_scrub();
 					if (ImGui::IsItemDeactivatedAfterEdit())
 						anim_methods->end_scrub();
 
