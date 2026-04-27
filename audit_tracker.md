@@ -174,11 +174,11 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 168. `src/js/modules/tab_maps.cpp`
 - [x] 169. `src/js/modules/tab_models.cpp`
 - [x] 170. `src/js/modules/tab_models_legacy.cpp`
-- [ ] 171. `src/js/modules/tab_raw.cpp`
-- [ ] 172. `src/js/modules/tab_text.cpp`
-- [ ] 173. `src/js/modules/tab_textures.cpp`
-- [ ] 174. `src/js/modules/tab_videos.cpp`
-- [ ] 175. `src/js/modules/tab_zones.cpp`
+- [x] 171. `src/js/modules/tab_raw.cpp`
+- [x] 172. `src/js/modules/tab_text.cpp`
+- [x] 173. `src/js/modules/tab_textures.cpp`
+- [x] 174. `src/js/modules/tab_videos.cpp`
+- [x] 175. `src/js/modules/tab_zones.cpp`
 - [ ] 176. `src/js/mpq/bitstream.cpp`
 - [ ] 177. `src/js/mpq/build-version.cpp`
 - [ ] 178. `src/js/mpq/bzip2.cpp`
@@ -186,11 +186,11 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [ ] 180. `src/js/mpq/mpq-install.cpp`
 - [ ] 181. `src/js/mpq/mpq.cpp`
 - [ ] 182. `src/js/mpq/pkware.cpp`
-- [ ] 183. `src/js/ui/audio-helper.cpp`
-- [ ] 184. `src/js/ui/char-texture-overlay.cpp`
-- [ ] 185. `src/js/ui/character-appearance.cpp`
-- [ ] 186. `src/js/ui/data-exporter.cpp`
-- [ ] 187. `src/js/ui/listbox-context.cpp`
+- [x] 183. `src/js/ui/audio-helper.cpp`
+- [x] 184. `src/js/ui/char-texture-overlay.cpp`
+- [x] 185. `src/js/ui/character-appearance.cpp`
+- [x] 186. `src/js/ui/data-exporter.cpp`
+- [x] 187. `src/js/ui/listbox-context.cpp`
 - [ ] 188. `src/js/ui/model-viewer-utils.cpp`
 - [ ] 189. `src/js/ui/texture-exporter.cpp`
 - [ ] 190. `src/js/ui/texture-ribbon.cpp`
