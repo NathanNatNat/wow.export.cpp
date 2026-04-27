@@ -826,6 +826,7 @@ static void pump_export_task() {
 			opts.geoset_mask = &view.modelViewerGeosets;
 			opts.wmo_group_mask = &view.modelViewerWMOGroups;
 			opts.wmo_set_mask = &view.modelViewerWMOSets;
+			opts.active_renderer = active_renderer_result.m2.get();
 		}
 
 		opts.export_paths = export_paths;
@@ -1545,6 +1546,13 @@ void render() {
 				if (ImGui::Checkbox("Export animations", &export_anims))
 					view.config["modelsExportAnimations"] = export_anims;
 				show_checkbox_tooltip("Include animations in export");
+			}
+
+			if ((export_format == "OBJ" || export_format == "STL") && view.modelViewerActiveType == "m2") {
+				bool apply_pose = view.config.value("modelsExportApplyPose", false);
+				if (ImGui::Checkbox("Apply pose", &apply_pose))
+					view.config["modelsExportApplyPose"] = apply_pose;
+				show_checkbox_tooltip("Apply current animation pose to exported geometry");
 			}
 
 			if (export_format == "RAW") {
