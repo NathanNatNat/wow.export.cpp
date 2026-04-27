@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 150/195 audited (77%)**
+**Progress: 170/195 audited (87%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -158,22 +158,22 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 152. `src/js/modules/module_test_b.cpp`
 - [x] 153. `src/js/modules/screen_settings.cpp`
 - [x] 154. `src/js/modules/screen_source_select.cpp`
-- [ ] 155. `src/js/modules/tab_audio.cpp`
-- [ ] 156. `src/js/modules/tab_blender.cpp`
-- [ ] 157. `src/js/modules/tab_changelog.cpp`
-- [ ] 158. `src/js/modules/tab_characters.cpp`
-- [ ] 159. `src/js/modules/tab_creatures.cpp`
-- [ ] 160. `src/js/modules/tab_data.cpp`
-- [ ] 161. `src/js/modules/tab_decor.cpp`
-- [ ] 162. `src/js/modules/tab_fonts.cpp`
+- [x] 155. `src/js/modules/tab_audio.cpp`
+- [x] 156. `src/js/modules/tab_blender.cpp`
+- [x] 157. `src/js/modules/tab_changelog.cpp`
+- [x] 158. `src/js/modules/tab_characters.cpp`
+- [x] 159. `src/js/modules/tab_creatures.cpp`
+- [x] 160. `src/js/modules/tab_data.cpp`
+- [x] 161. `src/js/modules/tab_decor.cpp`
+- [x] 162. `src/js/modules/tab_fonts.cpp`
 - [x] 163. `src/js/modules/tab_help.cpp`
 - [x] 164. `src/js/modules/tab_home.cpp`
 - [x] 165. `src/js/modules/tab_install.cpp`
 - [x] 166. `src/js/modules/tab_item_sets.cpp`
-- [ ] 167. `src/js/modules/tab_items.cpp`
-- [ ] 168. `src/js/modules/tab_maps.cpp`
-- [ ] 169. `src/js/modules/tab_models.cpp`
-- [ ] 170. `src/js/modules/tab_models_legacy.cpp`
+- [x] 167. `src/js/modules/tab_items.cpp`
+- [x] 168. `src/js/modules/tab_maps.cpp`
+- [x] 169. `src/js/modules/tab_models.cpp`
+- [x] 170. `src/js/modules/tab_models_legacy.cpp`
 - [ ] 171. `src/js/modules/tab_raw.cpp`
 - [ ] 172. `src/js/modules/tab_text.cpp`
 - [ ] 173. `src/js/modules/tab_textures.cpp`
