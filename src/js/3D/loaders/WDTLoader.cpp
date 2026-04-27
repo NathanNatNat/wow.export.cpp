@@ -103,6 +103,7 @@ void WDTLoader::parse_chunk_mwmo(BufferWrapper& data, uint32_t chunkSize) {
 
 // MODF (World WMO Placement)
 void WDTLoader::parse_chunk_modf(BufferWrapper& data) {
+	this->hasWorldModelPlacement = true;
 	this->worldModelPlacement.id = data.readUInt32LE();
 	this->worldModelPlacement.uid = data.readUInt32LE();
 	this->worldModelPlacement.position = data.readFloatLE(3);

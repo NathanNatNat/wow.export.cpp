@@ -57,6 +57,7 @@ License: MIT
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 
+#include <openssl/evp.h>
 #include <cstring>
 
 #ifdef _WIN32
@@ -66,116 +67,25 @@ License: MIT
 
 namespace tab_maps {
 
-// Same RFC 1321 implementation used in cache-collector.cpp.
-namespace md5_detail {
-
-struct MD5Context {
-	uint32_t state[4];
-	uint64_t count;
-	uint8_t buffer[64];
-};
-
-static constexpr uint32_t S[64] = {
-	7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,
-	5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,
-	4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23,
-	6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21
-};
-
-static constexpr uint32_t K[64] = {
-	0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee,
-	0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
-	0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be,
-	0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821,
-	0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa,
-	0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
-	0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed,
-	0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a,
-	0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c,
-	0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70,
-	0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05,
-	0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
-	0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039,
-	0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
-	0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
-	0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391
-};
-
-static uint32_t left_rotate(uint32_t x, uint32_t c) {
-	return (x << c) | (x >> (32 - c));
-}
-
-static void md5_transform(uint32_t state[4], const uint8_t block[64]) {
-	uint32_t a = state[0], b = state[1], c = state[2], d = state[3];
-	uint32_t M[16];
-	for (int i = 0; i < 16; i++)
-		M[i] = static_cast<uint32_t>(block[i * 4]) |
-		       (static_cast<uint32_t>(block[i * 4 + 1]) << 8) |
-		       (static_cast<uint32_t>(block[i * 4 + 2]) << 16) |
-		       (static_cast<uint32_t>(block[i * 4 + 3]) << 24);
-	for (uint32_t i = 0; i < 64; i++) {
-		uint32_t f, g;
-		if (i < 16) { f = (b & c) | (~b & d); g = i; }
-		else if (i < 32) { f = (d & b) | (~d & c); g = (5 * i + 1) % 16; }
-		else if (i < 48) { f = b ^ c ^ d; g = (3 * i + 5) % 16; }
-		else { f = c ^ (b | ~d); g = (7 * i) % 16; }
-		uint32_t temp = d; d = c; c = b;
-		b = b + left_rotate(a + f + K[i] + M[g], S[i]); a = temp;
-	}
-	state[0] += a; state[1] += b; state[2] += c; state[3] += d;
-}
-
-static void md5_init(MD5Context& ctx) {
-	ctx.state[0] = 0x67452301; ctx.state[1] = 0xefcdab89;
-	ctx.state[2] = 0x98badcfe; ctx.state[3] = 0x10325476;
-	ctx.count = 0; std::memset(ctx.buffer, 0, sizeof(ctx.buffer));
-}
-
-static void md5_update(MD5Context& ctx, const uint8_t* data, size_t len) {
-	size_t index = static_cast<size_t>(ctx.count % 64);
-	ctx.count += len;
-	size_t i = 0;
-	if (index) {
-		size_t part_len = 64 - index;
-		if (len >= part_len) {
-			std::memcpy(ctx.buffer + index, data, part_len);
-			md5_transform(ctx.state, ctx.buffer); i = part_len;
-		} else { std::memcpy(ctx.buffer + index, data, len); return; }
-	}
-	for (; i + 63 < len; i += 64) md5_transform(ctx.state, data + i);
-	if (i < len) std::memcpy(ctx.buffer, data + i, len - i);
-}
-
-static std::string md5_final_hex(MD5Context& ctx) {
-	uint8_t padding[64] = { 0x80 };
-	uint64_t bits = ctx.count * 8;
-	size_t index = static_cast<size_t>(ctx.count % 64);
-	size_t pad_len = (index < 56) ? (56 - index) : (120 - index);
-	md5_update(ctx, padding, pad_len);
-	uint8_t bits_buf[8];
-	for (int i = 0; i < 8; i++) bits_buf[i] = static_cast<uint8_t>(bits >> (i * 8));
-	md5_update(ctx, bits_buf, 8);
-	static constexpr char hex_chars[] = "0123456789abcdef";
-	std::string result;
-	result.reserve(32);
-	for (int i = 0; i < 4; i++) {
-		for (int j = 0; j < 4; j++) {
-			uint8_t byte = static_cast<uint8_t>(ctx.state[i] >> (j * 8));
-			result.push_back(hex_chars[(byte >> 4) & 0x0F]);
-			result.push_back(hex_chars[byte & 0x0F]);
-		}
-	}
-	return result;
-}
-
-} // namespace md5_detail
-
 /// Compute MD5 hex digest of a string. Matches JS crypto.createHash('md5').update(str).digest('hex').
 static std::string md5_hex(const std::string& input) {
-	md5_detail::MD5Context ctx;
-	md5_detail::md5_init(ctx);
-	md5_detail::md5_update(ctx, reinterpret_cast<const uint8_t*>(input.data()), input.size());
-	return md5_detail::md5_final_hex(ctx);
+	EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+	if (!ctx)
+		return {};
+	EVP_DigestInit_ex(ctx, EVP_md5(), nullptr);
+	EVP_DigestUpdate(ctx, input.data(), input.size());
+	uint8_t digest[EVP_MAX_MD_SIZE];
+	unsigned int digest_len = 0;
+	EVP_DigestFinal_ex(ctx, digest, &digest_len);
+	EVP_MD_CTX_free(ctx);
+	static constexpr char hex_chars[] = "0123456789abcdef";
+	std::string result;
+	result.reserve(digest_len * 2);
+	for (unsigned int i = 0; i < digest_len; i++) {
+		result.push_back(hex_chars[(digest[i] >> 4) & 0x0F]);
+		result.push_back(hex_chars[digest[i] & 0x0F]);
+	}
+	return result;
 }
 
 // --- Constants ---
@@ -202,8 +112,8 @@ static std::unordered_map<uint32_t, std::vector<db::DataRecord>> wmo_minimap_tex
 
 static std::optional<WMOMinimapData> current_wmo_minimap;
 
-// Change-detection for watches
-static std::string prev_selection_first;
+// Change-detection for watches — store full serialized selection to detect any change.
+static std::string prev_selection_str;
 static bool tab_initialized = false;
 static bool tab_initializing = false;
 
@@ -312,27 +222,36 @@ BufferWrapper data = core::view->casc->getVirtualFileByName(tile_path, true);
 casc::BLPImage blp(data);
 auto rgba = blp.toUInt8Array(0, 0b0111);
 
-uint32_t blp_width = blp.width;
-uint32_t blp_height = blp.height;
+// JS uses blp.scaledWidth (mipmap-adjusted), not blp.width.
+uint32_t blp_width = blp.getScaledWidth();
+uint32_t blp_height = blp.getScaledHeight();
 
 if (static_cast<int>(blp_width) == size && static_cast<int>(blp_height) == size)
 return rgba;
 
-// Scale the image to the requested size
+// Scale using bilinear interpolation, matching JS Canvas 2D drawImage behaviour.
 std::vector<uint8_t> scaled(size * size * 4, 0);
-float scale_x = static_cast<float>(blp_width) / static_cast<float>(size);
-float scale_y = static_cast<float>(blp_height) / static_cast<float>(size);
+const float scale_x = static_cast<float>(blp_width) / static_cast<float>(size);
+const float scale_y = static_cast<float>(blp_height) / static_cast<float>(size);
 
 for (int py = 0; py < size; py++) {
 for (int px = 0; px < size; px++) {
-int src_x = (std::min)(static_cast<int>(px * scale_x), static_cast<int>(blp_width) - 1);
-int src_y = (std::min)(static_cast<int>(py * scale_y), static_cast<int>(blp_height) - 1);
-int src_idx = (src_y * blp_width + src_x) * 4;
-int dst_idx = (py * size + px) * 4;
-scaled[dst_idx + 0] = rgba[src_idx + 0];
-scaled[dst_idx + 1] = rgba[src_idx + 1];
-scaled[dst_idx + 2] = rgba[src_idx + 2];
-scaled[dst_idx + 3] = rgba[src_idx + 3];
+const float src_xf = (px + 0.5f) * scale_x - 0.5f;
+const float src_yf = (py + 0.5f) * scale_y - 0.5f;
+const int x0 = (std::max)(0, static_cast<int>(std::floor(src_xf)));
+const int y0 = (std::max)(0, static_cast<int>(std::floor(src_yf)));
+const int x1 = (std::min)(static_cast<int>(blp_width) - 1, x0 + 1);
+const int y1 = (std::min)(static_cast<int>(blp_height) - 1, y0 + 1);
+const float fx = src_xf - x0;
+const float fy = src_yf - y0;
+const int dst_idx = (py * size + px) * 4;
+for (int c = 0; c < 4; c++) {
+const float top = rgba[(y0 * blp_width + x0) * 4 + c] * (1.0f - fx)
+                + rgba[(y0 * blp_width + x1) * 4 + c] * fx;
+const float bot = rgba[(y1 * blp_width + x0) * 4 + c] * (1.0f - fx)
+                + rgba[(y1 * blp_width + x1) * 4 + c] * fx;
+scaled[dst_idx + c] = static_cast<uint8_t>(std::round(top * (1.0f - fy) + bot * fy));
+}
 }
 }
 
@@ -466,6 +385,22 @@ game_objects_db2[owner_id].push_back(row);
 }
 }
 
+// JS uses a Set for the result, guaranteeing uniqueness.
+// Deduplicate by (FileDataID, Position[0], Position[1]) to match Set semantics.
+struct GameObjectKey {
+uint32_t fid;
+float x, y;
+bool operator==(const GameObjectKey& o) const { return fid == o.fid && x == o.x && y == o.y; }
+};
+struct GameObjectKeyHash {
+size_t operator()(const GameObjectKey& k) const {
+size_t h = std::hash<uint32_t>{}(k.fid);
+h ^= std::hash<float>{}(k.x) + 0x9e3779b9 + (h << 6) + (h >> 2);
+h ^= std::hash<float>{}(k.y) + 0x9e3779b9 + (h << 6) + (h >> 2);
+return h;
+}
+};
+std::unordered_set<GameObjectKey, GameObjectKeyHash> seen;
 std::vector<ADTGameObject> result;
 auto it = game_objects_db2.find(mapID);
 if (it != game_objects_db2.end()) {
@@ -486,6 +421,10 @@ go.Rotation = fieldToFloatVec(rot_it->second);
 if (scale_it != obj.end())
 go.scale = fieldToFloat(scale_it->second);
 
+GameObjectKey key{ go.FileDataID,
+go.Position.size() > 0 ? go.Position[0] : 0.0f,
+go.Position.size() > 1 ? go.Position[1] : 0.0f };
+if (seen.insert(key).second)
 result.push_back(go);
 }
 }
@@ -900,14 +839,16 @@ selected_wdt_data = std::move(wdt_data);
 selected_wdt = std::make_unique<WDTLoader>(selected_wdt_data);
 selected_wdt->load();
 
-if (selected_wdt->worldModelPlacement.id != 0)
+// JS: if (wdt.worldModelPlacement) — truthy for any non-undefined placement object.
+if (selected_wdt->hasWorldModelPlacement)
 	core::view->mapViewerHasWorldModel = true;
 
 const bool has_terrain = !selected_wdt->tiles.empty() &&
 	std::any_of(selected_wdt->tiles.begin(), selected_wdt->tiles.end(),
 		[](uint32_t t) { return t == 1; });
 
-const bool has_global_wmo = (selected_wdt->worldModelPlacement.id != 0);
+// JS: wdt.worldModelPlacement !== undefined
+const bool has_global_wmo = selected_wdt->hasWorldModelPlacement;
 
 if (!has_terrain && has_global_wmo) {
 	setup_wmo_minimap(*selected_wdt);
@@ -951,7 +892,7 @@ casc::ExportHelper helper(1, "WMO");
 helper.start();
 
 try {
-if (!selected_wdt || (selected_wdt->worldModelPlacement.id == 0 && selected_wdt->worldModel.empty()))
+if (!selected_wdt || (!selected_wdt->hasWorldModelPlacement && selected_wdt->worldModel.empty()))
 throw std::runtime_error("map does not contain a world model.");
 
 const auto& placement = selected_wdt->worldModelPlacement;
@@ -1003,7 +944,7 @@ helper.start();
 
 try {
 if (!current_wmo_minimap) {
-if (!selected_wdt || (selected_wdt->worldModelPlacement.id == 0 && selected_wdt->worldModel.empty()))
+if (!selected_wdt || (!selected_wdt->hasWorldModelPlacement && selected_wdt->worldModel.empty()))
 throw std::runtime_error("map does not contain a world model.");
 
 setup_wmo_minimap(*selected_wdt);
@@ -1046,19 +987,23 @@ for (const auto& [coord_key, tile_list] : tiles_by_coord) {
 					int src_y = (std::min)(static_cast<int>(py * th / output_tile_size), static_cast<int>(th) - 1);
 					int src_idx = (src_y * tw + src_x) * 4;
 					int dst_idx = (py * output_tile_size + px) * 4;
-					uint8_t a = rgba[src_idx + 3];
-					if (a == 0) continue;
-					if (a == 255) {
+					uint8_t src_a = rgba[src_idx + 3];
+					if (src_a == 0) continue;
+					if (src_a == 255) {
 						composite[dst_idx + 0] = rgba[src_idx + 0];
 						composite[dst_idx + 1] = rgba[src_idx + 1];
 						composite[dst_idx + 2] = rgba[src_idx + 2];
 						composite[dst_idx + 3] = 255;
 					} else {
-						float af = a / 255.0f;
-						composite[dst_idx + 0] = static_cast<uint8_t>(composite[dst_idx + 0] * (1 - af) + rgba[src_idx + 0] * af);
-						composite[dst_idx + 1] = static_cast<uint8_t>(composite[dst_idx + 1] * (1 - af) + rgba[src_idx + 1] * af);
-						composite[dst_idx + 2] = static_cast<uint8_t>(composite[dst_idx + 2] * (1 - af) + rgba[src_idx + 2] * af);
-						composite[dst_idx + 3] = (std::max)(composite[dst_idx + 3], a);
+						// Porter-Duff source-over compositing.
+						uint8_t dst_a = composite[dst_idx + 3];
+						uint8_t out_a = static_cast<uint8_t>(src_a + dst_a * (255 - src_a) / 255);
+						if (out_a > 0) {
+							composite[dst_idx + 0] = static_cast<uint8_t>((rgba[src_idx + 0] * src_a + composite[dst_idx + 0] * dst_a * (255 - src_a) / 255) / out_a);
+							composite[dst_idx + 1] = static_cast<uint8_t>((rgba[src_idx + 1] * src_a + composite[dst_idx + 1] * dst_a * (255 - src_a) / 255) / out_a);
+							composite[dst_idx + 2] = static_cast<uint8_t>((rgba[src_idx + 2] * src_a + composite[dst_idx + 2] * dst_a * (255 - src_a) / 255) / out_a);
+						}
+						composite[dst_idx + 3] = out_a;
 					}
 				}
 			}
@@ -1634,7 +1579,7 @@ core::view->mapViewerTileLoader = "terrain";
 
 // Initialize will be called after tab is shown (lazy init in render)
 tab_initialized = false;
-prev_selection_first.clear();
+prev_selection_str.clear();
 }
 
 // --- ImGui render ---
@@ -1658,16 +1603,21 @@ if (!tab_initialized)
 return;
 
 // --- Watch: selectionMaps ---
-std::string current_selection_first;
-if (!view.selectionMaps.empty()) {
-current_selection_first = view.selectionMaps[0].get<std::string>();
+// Compare full selection to detect any change, matching JS Vue $watch reactive behaviour.
+std::string current_selection_str;
+for (const auto& s : view.selectionMaps) {
+current_selection_str += s.get<std::string>();
+current_selection_str += '\0';
 }
 
-if (current_selection_first != prev_selection_first) {
-prev_selection_first = current_selection_first;
-if (!view.isBusy && !current_selection_first.empty()) {
+if (current_selection_str != prev_selection_str) {
+prev_selection_str = current_selection_str;
+const std::string first = view.selectionMaps.empty()
+    ? std::string{}
+    : view.selectionMaps[0].get<std::string>();
+if (!view.isBusy && !first.empty()) {
 try {
-auto map = parse_map_entry(current_selection_first);
+auto map = parse_map_entry(first);
 if (!selected_map_id || *selected_map_id != map.id)
 load_map(map.id, map.dir);
 } catch (...) {}

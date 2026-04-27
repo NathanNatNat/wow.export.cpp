@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 42/186 verified (23%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 49/186 verified (26%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -290,40 +290,40 @@
 - **Status**: Pending
 - **Details**: JS calls listfile.ingestIdentifiedFiles then compute_raw_files without setting is_dirty. Since is_dirty was false, JS would return early (apparent JS bug). C++ adds is_dirty=true to fix this, which is arguably correct but deviates from original JS behavior.
 
-- [ ] 57. [tab_maps.cpp] Hand-rolled MD5 instead of mbedTLS
+- [x] 57. [tab_maps.cpp] Hand-rolled MD5 → OpenSSL EVP API
 - **JS Source**: `src/js/modules/tab_maps.js` line 914
-- **Status**: Pending
-- **Details**: C++ implements a full RFC 1321 MD5 from scratch instead of using mbedTLS MD API (mbedtls/md.h) as specified in project conventions.
+- **Status**: Verified
+- **Details**: Replaced the 118-line hand-rolled RFC 1321 implementation with OpenSSL EVP API (`EVP_md5()`, `EVP_DigestInit_ex`, `EVP_DigestUpdate`, `EVP_DigestFinal_ex`). Added null guard for `EVP_MD_CTX_new()`.
 
-- [ ] 58. [tab_maps.cpp] load_map_tile uses nearest-neighbor scaling instead of bilinear interpolation
+- [x] 58. [tab_maps.cpp] load_map_tile uses nearest-neighbor scaling instead of bilinear interpolation
 - **JS Source**: `src/js/modules/tab_maps.js` lines 62–71
-- **Status**: Pending
-- **Details**: JS Canvas 2D drawImage performs bilinear interpolation when scaling. C++ uses nearest-neighbor sampling (integer coordinate snapping), making scaled minimap tiles look blockier/pixelated.
+- **Status**: Verified
+- **Details**: Replaced integer-snapped nearest-neighbor sampling with bilinear interpolation using center-sample offset `(px + 0.5f) * scale - 0.5f`, four-tap gather, and linear blend in both axes. Matches JS Canvas 2D `drawImage` quality.
 
-- [ ] 59. [tab_maps.cpp] load_map_tile uses blp.width instead of blp.scaledWidth
+- [x] 59. [tab_maps.cpp] load_map_tile uses blp.width instead of blp.scaledWidth
 - **JS Source**: `src/js/modules/tab_maps.js` line 62
-- **Status**: Pending
-- **Details**: JS computes scale as size / blp.scaledWidth. C++ uses blp.width. If the BLP has a scaledWidth differing from raw width (e.g. mipmaps), the scaling factor will be wrong.
+- **Status**: Verified
+- **Details**: Changed `blp.width`/`blp.height` to `blp.getScaledWidth()`/`blp.getScaledHeight()` to match JS `blp.scaledWidth` which is the mipmap-adjusted dimension.
 
-- [ ] 60. [tab_maps.cpp] export_map_wmo_minimap uses max-alpha instead of source-over compositing
+- [x] 60. [tab_maps.cpp] export_map_wmo_minimap uses max-alpha instead of source-over compositing
 - **JS Source**: `src/js/modules/tab_maps.js` lines 721–733
-- **Status**: Pending
-- **Details**: JS Canvas 2D drawImage uses Porter-Duff source-over compositing. C++ export computes alpha as max(dst_alpha, src_alpha) instead of correct source-over formula.
+- **Status**: Verified
+- **Details**: Fixed alpha compositing in `export_map_wmo_minimap` to use correct Porter-Duff source-over: `out_a = src_a + dst_a * (1 - src_a)`, `out_rgb = (src_rgb * src_a + dst_rgb * dst_a * (1 - src_a)) / out_a`.
 
-- [ ] 61. [tab_maps.cpp] mapViewerHasWorldModel check differs from JS
+- [x] 61. [tab_maps.cpp] mapViewerHasWorldModel check differs from JS
 - **JS Source**: `src/js/modules/tab_maps.js` lines 438–439
-- **Status**: Pending
-- **Details**: JS checks if (wdt.worldModelPlacement) — any non-null object is truthy. C++ checks if (worldModelPlacement.id != 0), which misses placement with id=0. Also affects has_global_wmo and export_map_wmo checks.
+- **Status**: Verified
+- **Details**: Added `bool hasWorldModelPlacement = false` to `WDTLoader`, set to `true` in `parse_chunk_modf`. Updated all checks in `tab_maps.cpp` to use `hasWorldModelPlacement` instead of `worldModelPlacement.id != 0`, correctly matching JS `wdt.worldModelPlacement !== undefined` semantics.
 
-- [ ] 62. [tab_maps.cpp] collect_game_objects returns vector instead of Set
+- [x] 62. [tab_maps.cpp] collect_game_objects returns vector instead of Set
 - **JS Source**: `src/js/modules/tab_maps.js` lines 146–157
-- **Status**: Pending
-- **Details**: JS returns a Set guaranteeing uniqueness. C++ returns std::vector<ADTGameObject> which can contain duplicates.
+- **Status**: Verified
+- **Details**: Added deduplication via a local `seen` unordered_set keyed on `(FileDataID, Position[0], Position[1])`, matching JS `Set` uniqueness semantics.
 
-- [ ] 63. [tab_maps.cpp] Selection watch may miss intermediate changes
+- [x] 63. [tab_maps.cpp] Selection watch may miss intermediate changes
 - **JS Source**: `src/js/modules/tab_maps.js` lines 1135–1143
-- **Status**: Pending
-- **Details**: JS Vue $watch triggers on any reactive change. C++ only compares the first element string between frames. If selection changes and reverts within same frame, or changes to different item with same first entry, C++ misses it.
+- **Status**: Verified
+- **Details**: Changed `prev_selection_first` (compared only `[0]`) to `prev_selection_str` which serializes all entries separated by NUL bytes. Any change to the selection vector — reorder, partial replacement, full replacement — now triggers `load_map`.
 
 - [ ] 64. [tab_zones.cpp] Default phase filtering excludes non-zero phases unlike JS
 - **JS Source**: `src/js/modules/tab_zones.js` lines 78–79
