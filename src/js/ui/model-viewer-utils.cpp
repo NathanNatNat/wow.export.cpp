@@ -729,6 +729,14 @@ std::string export_model(const ExportModelOptions& options) {
 			if (options.geoset_mask)
 				exporter.setGeosetMask(make_m2_geoset_mask());
 
+			if (options.active_renderer && (format == "OBJ" || format == "STL")) {
+				if (core::view->config.value("modelsExportApplyPose", false)) {
+					auto baked = options.active_renderer->getBakedGeometry();
+					if (baked.has_value())
+						exporter.setPosedGeometry(std::move(baked->vertices), std::move(baked->normals));
+				}
+			}
+
 			if (format == "OBJ") {
 				std::vector<M2ExportFileManifest> typed_manifest;
 				exporter.exportAsOBJ(fs::path(final_export_path), exportCollision, helper, &typed_manifest);

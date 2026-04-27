@@ -116,6 +116,7 @@ struct ExportModelOptions {
 	const std::vector<nlohmann::json>* wmo_group_mask = nullptr;
 	const std::vector<nlohmann::json>* wmo_set_mask   = nullptr;
 	FileWriter*                  export_paths   = nullptr;
+	M2RendererGL*                active_renderer = nullptr;
 };
 
 /**

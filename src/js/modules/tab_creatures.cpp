@@ -1179,6 +1179,14 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 							mask.push_back({g.value("checked", false)});
 						}
 						exporter.setGeosetMask(std::move(mask));
+
+						if (active_renderer_result.m2 && (format == "OBJ" || format == "STL")) {
+							if (view.config.value("modelsExportApplyPose", false)) {
+								auto baked = active_renderer_result.m2->getBakedGeometry();
+								if (baked.has_value())
+									exporter.setPosedGeometry(std::move(baked->vertices), std::move(baked->normals));
+							}
+						}
 					} else {
 						// build textures for export
 						std::map<uint32_t, std::unique_ptr<CharMaterialRenderer>> export_materials;
@@ -1387,6 +1395,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 			opts.geoset_mask = is_active ? &view.creatureViewerGeosets : nullptr;
 			opts.wmo_group_mask = is_active ? &view.creatureViewerWMOGroups : nullptr;
 			opts.wmo_set_mask = is_active ? &view.creatureViewerWMOSets : nullptr;
+			opts.active_renderer = is_active ? active_renderer_result.m2.get() : nullptr;
 			std::string mark_name = model_viewer_utils::export_model(opts);
 
 			helper.mark(creature_name, true);
@@ -2149,6 +2158,14 @@ void render() {
 					bool export_anims = view.config.value("modelsExportAnimations", false);
 					if (ImGui::Checkbox("Export animations##creature", &export_anims))
 						view.config["modelsExportAnimations"] = export_anims;
+				}
+
+				if ((fmt == "OBJ" || fmt == "STL") && view.creatureViewerActiveType == "m2") {
+					bool apply_pose = view.config.value("modelsExportApplyPose", false);
+					if (ImGui::Checkbox("Apply pose##creature", &apply_pose))
+						view.config["modelsExportApplyPose"] = apply_pose;
+					if (ImGui::IsItemHovered())
+						ImGui::SetTooltip("Apply current animation pose to exported geometry");
 				}
 			}
 
