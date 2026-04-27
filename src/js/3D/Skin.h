@@ -28,7 +28,7 @@ struct SubMesh {
 
 struct TextureUnit {
 	uint8_t flags;
-	uint8_t priority;
+	int8_t priority;
 	uint16_t shaderID;
 	uint16_t skinSectionIndex;
 	uint16_t flags2;

@@ -65,7 +65,7 @@ static constexpr std::array<ShaderEntry, 36> SHADER_ARRAY = {{
  * Gets Vertex shader name from shader ID
  */
 std::optional<std::string> getVertexShader(int textureCount, int shaderID) {
-	if (shaderID < 0) {
+	if (shaderID & 0x8000) {
 		const int vertexShaderId = shaderID & 0x7FFF;
 		if (vertexShaderId >= static_cast<int>(SHADER_ARRAY.size())) {
 			logging::write("Unknown vertex shader ID: " + std::to_string(vertexShaderId));

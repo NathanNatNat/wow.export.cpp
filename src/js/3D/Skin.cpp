@@ -93,7 +93,7 @@ void Skin::load() {
 		for (uint32_t i = 0; i < textureUnitsCount; i++) {
 			TextureUnit& tu = this->textureUnits[i];
 			tu.flags = data.readUInt8();
-			tu.priority = data.readUInt8();
+			tu.priority = data.readInt8();
 			tu.shaderID = data.readUInt16LE();
 			tu.skinSectionIndex = data.readUInt16LE();
 			tu.flags2 = data.readUInt16LE();
