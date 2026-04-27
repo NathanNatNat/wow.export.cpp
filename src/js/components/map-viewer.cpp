@@ -1285,12 +1285,6 @@ void renderWidget(const char* id,
 	}
 	ImGui::EndGroup();
 
-	// <div class="hover-info">{{ hoverInfo }}</div>
-	if (!state.hoverInfo.empty()) {
-		ImGui::SameLine();
-		ImGui::TextUnformatted(state.hoverInfo.c_str());
-	}
-
 	// <canvas ref="canvas"></canvas>
 	// <canvas ref="overlayCanvas" class="overlay-canvas"></canvas>
 	// Tiles are rendered via GL textures (renderTiles) and overlays via ImDrawList (renderOverlay).
@@ -1362,6 +1356,15 @@ void renderWidget(const char* id,
 		// (In ImGui, overlay is redrawn every frame automatically)
 		renderTiles(state, tileSize_prop);
 		renderOverlay(state, tileSize_prop, gridSize, mask, selection);
+	}
+
+	// <div class="hover-info">{{ hoverInfo }}</div>
+	// CSS: position: absolute; bottom: 3px; left: 3px
+	// Drawn after tiles/overlay so it appears on top.
+	if (!state.hoverInfo.empty()) {
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		const float textY = canvasPos.y + canvasAvail.y - ImGui::GetFontSize() - 3.0f;
+		dl->AddText(ImVec2(canvasPos.x + 3.0f, textY), IM_COL32_WHITE, state.hoverInfo.c_str());
 	}
 
 	ImGui::EndChild();
