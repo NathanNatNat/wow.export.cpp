@@ -1,6 +1,8 @@
-#version 430 core
+#version 300 es
+precision highp float;
+precision highp sampler2DArray;
 
-in vec2 vTextureCoord;
+in highp vec2 vTextureCoord;
 in vec4 vVertexColor;
 
 out vec4 fragColor;

@@ -1,9 +1,9 @@
-#version 430 core
+#version 300 es
 in vec3 aVertexPosition;
 in vec2 aTextureCoord;
 in vec4 aVertexColor;
 
-out vec2 vTextureCoord;
+out highp vec2 vTextureCoord;
 out vec4 vVertexColor;
 
 uniform vec2 uTranslation;
