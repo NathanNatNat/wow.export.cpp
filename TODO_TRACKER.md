@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 42/186 verified (23%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 51/186 verified (27%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -325,50 +325,50 @@
 - **Status**: Pending
 - **Details**: JS Vue $watch triggers on any reactive change. C++ only compares the first element string between frames. If selection changes and reverts within same frame, or changes to different item with same first entry, C++ misses it.
 
-- [ ] 64. [tab_zones.cpp] Default phase filtering excludes non-zero phases unlike JS
+- [x] 64. [tab_zones.cpp] Default phase filtering excludes non-zero phases unlike JS
 - **JS Source**: `src/js/modules/tab_zones.js` lines 78–79
-- **Status**: Pending
-- **Details**: JS includes all `UiMapXMapArt` links when `phase_id === null`; C++ filters to `PhaseID == 0` when no phase is selected.
+- **Status**: Verified
+- **Details**: Fixed. Changed `if (!phase_id) include only phase==0` to `if (phase_id.has_value() && row_phase != *phase_id) continue` — matching JS `if (phase_id === null || link_entry.PhaseID === phase_id)`.
 
-- [ ] 65. [tab_zones.cpp] UiMapArtStyleLayer lookup key differs from JS relation logic
+- [x] 65. [tab_zones.cpp] UiMapArtStyleLayer lookup key differs from JS relation logic
 - **JS Source**: `src/js/modules/tab_zones.js` lines 88–90
-- **Status**: Pending
-- **Details**: JS resolves style layers by matching `UiMapArtStyleID` to `art_entry.UiMapArtStyleID`; C++ matches `UiMapArtID` to the linked art ID, changing style-layer association behavior.
+- **Status**: Verified
+- **Details**: Already correct — C++ matches by `UiMapArtStyleID` to `art_entry.UiMapArtStyleID` as JS does. TODO description was inaccurate about the current state of the code.
 
-- [ ] 66. [tab_zones.cpp] Base map tile OffsetX/OffsetY offsets are ignored
+- [x] 66. [tab_zones.cpp] Base map tile OffsetX/OffsetY offsets are ignored
 - **JS Source**: `src/js/modules/tab_zones.js` lines 181–182
-- **Status**: Pending
-- **Details**: JS applies `tile.OffsetX`/`tile.OffsetY` when placing map tiles; C++ calculates tile position from row/column and tile dimensions only.
+- **Status**: Verified
+- **Details**: Fixed. `render_map_tiles` now applies `recordFieldInt(tile, "OffsetX")` and `recordFieldInt(tile, "OffsetY")` to the pixel positions, matching `final_x = pixel_x + (tile.OffsetX || 0)`.
 
-- [ ] 67. [tab_zones.cpp] Phase filter logic differs when phase_id is null
+- [x] 67. [tab_zones.cpp] Phase filter logic differs when phase_id is null
 - **JS Source**: `src/js/modules/tab_zones.js` line 78
-- **Status**: Pending
-- **Details**: JS: `if (phase_id === null || link_entry.PhaseID === phase_id)` — when phase_id is null, ALL entries are included. C++: when `phase_id` is nullopt, only entries with `row_phase == 0` are included. C++ omits non-default phases when no phase is specified, while JS shows all.
+- **Status**: Verified
+- **Details**: Fixed together with entry 64 — same code location. Single condition now correctly includes all entries when phase_id is nullopt.
 
-- [ ] 68. [tab_zones.cpp] Missing tile OffsetX/OffsetY in render_map_tiles
+- [x] 68. [tab_zones.cpp] Missing tile OffsetX/OffsetY in render_map_tiles
 - **JS Source**: `src/js/modules/tab_zones.js` lines 181–182
-- **Status**: Pending
-- **Details**: JS: `final_x = pixel_x + (tile.OffsetX || 0); final_y = pixel_y + (tile.OffsetY || 0)`. C++ only uses `pixel_x = col * tile_width; pixel_y = row * tile_height` with no offset. Tiles with non-zero offsets will be mispositioned.
+- **Status**: Verified
+- **Details**: Fixed together with entry 66 — same fix location in `render_map_tiles`.
 
-- [ ] 69. [tab_zones.cpp] Tile layer rendering architecture differs from JS
+- [x] 69. [tab_zones.cpp] Tile layer rendering architecture differs from JS
 - **JS Source**: `src/js/modules/tab_zones.js` lines 126–152
-- **Status**: Pending
-- **Details**: JS groups ALL tiles for an art_style by their LayerIndex, then renders each group in sorted order. C++ calls `render_map_tiles(art_style, art_style.layer_index, ...)` which filters tiles to only those matching the single layer_index. Combined with the duplicate style layers issue, rendering pipeline differs significantly.
+- **Status**: Verified
+- **Details**: Fixed. `render_zone_to_canvas` now groups all tiles by `LayerIndex` into `tiles_by_layer`, sorts layer indices, and calls `render_map_tiles` for each group — matching JS's `tiles_by_layer` reduce+sort pattern. `render_map_tiles` signature changed to accept pre-grouped tiles.
 
-- [ ] 70. [tab_zones.cpp] parse_zone_entry doesn't throw on bad input
+- [x] 70. [tab_zones.cpp] parse_zone_entry doesn't throw on bad input
 - **JS Source**: `src/js/modules/tab_zones.js` lines 17–18
-- **Status**: Pending
-- **Details**: JS throws `new Error('unexpected zone entry')` on regex mismatch. C++ returns an empty `ZoneDisplayInfo{}` with `id=0`. Callers add `zone.id > 0` guards, but error propagation differs.
+- **Status**: Verified
+- **Details**: Fixed. `parse_zone_entry` now logs with `spdlog::error` and throws `std::runtime_error("unexpected zone entry")` on mismatch. All callers updated to use try/catch instead of `zone.id > 0` guards.
 
-- [ ] 71. [tab_zones.cpp] UiMap row existence not validated
+- [x] 71. [tab_zones.cpp] UiMap row existence not validated
 - **JS Source**: `src/js/modules/tab_zones.js` lines 67–71
-- **Status**: Pending
-- **Details**: JS checks `if (!map_data)` and throws `'UiMap entry not found'`. C++ fetches the row but casts to void: `(void)ui_map_row_opt;` — never checks the result or throws.
+- **Status**: Verified
+- **Details**: Fixed. Added `if (!ui_map_row_opt.has_value())` check; logs error and throws `std::runtime_error("UiMap entry not found")` matching JS behavior.
 
-- [ ] 72. [tab_zones.cpp] Pixel buffer not cleared at start of render when first layer is non-zero
+- [x] 72. [tab_zones.cpp] Pixel buffer not cleared at start of render when first layer is non-zero
 - **JS Source**: `src/js/modules/tab_zones.js` line 59
-- **Status**: Pending
-- **Details**: JS calls `ctx.clearRect(0, 0, canvas.width, canvas.height)` at the start. C++ only allocates/clears the pixel buffer inside the `if (art_style.layer_index == 0)` block. If the first art_style has layer_index != 0, stale pixel data remains.
+- **Status**: Verified
+- **Details**: Fixed. `core::view->zoneMapPixels.clear()` now called before the art_styles loop, equivalent to `ctx.clearRect(0, 0, canvas.width, canvas.height)` in JS. The `assign(..., 0)` inside `if (art_style.layer_index == 0)` still correctly sets the buffer size when dimensions become known.
 
 - [x] 73. [tab_items.cpp] std::set ordering differs from JS Set insertion order
 - **JS Source**: `src/js/modules/tab_items.js` lines 85–127

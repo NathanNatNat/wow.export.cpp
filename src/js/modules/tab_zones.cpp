@@ -131,6 +131,11 @@ static std::string fieldToString(const db::FieldValue& val) {
 	return "";
 }
 
+static int recordFieldInt(const db::DataRecord& r, const std::string& key) {
+	auto it = r.find(key);
+	return (it != r.end()) ? fieldToInt(it->second) : 0;
+}
+
 // --- File-local structures ---
 
 // The zone entry format is: expansion_id \x19 [zone_id] \x19 area_name \x19 (zone_name)
@@ -190,8 +195,10 @@ static ZoneDisplayInfo parse_zone_entry(const std::string& entry) {
 	// match[1]=id, match[2]=AreaName_lang→zone_name, match[3]=ZoneName→area_name
 	std::regex re(R"((\d+)\x19\[(\d+)\]\x19([^\x19]+)\x19\(([^)]+)\))");
 	std::smatch match;
-	if (!std::regex_match(entry, match, re))
-		return {};
+	if (!std::regex_match(entry, match, re)) {
+		spdlog::error("unexpected zone entry: {}", entry);
+		throw std::runtime_error("unexpected zone entry");
+	}
 
 	ZoneDisplayInfo info;
 	info.expansion = std::stoi(match[1].str());
@@ -252,7 +259,7 @@ return a.id < b.id;
 return phases;
 }
 
-static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index, int expected_zone_id, bool skip_zone_check);
+static void render_map_tiles(const std::vector<db::DataRecord>& tiles, const CombinedArtStyle& art_style, int layer_index, int expected_zone_id, bool skip_zone_check);
 static void render_world_map_overlays(const CombinedArtStyle& art_style, int expected_zone_id, bool skip_zone_check);
 static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const CombinedArtStyle& art_style, int overlay_offset_x, int overlay_offset_y, int expected_zone_id, bool skip_zone_check);
 
@@ -267,8 +274,10 @@ auto& ui_map = casc::db2::getTable("UiMap");
 if (!ui_map.isLoaded)
 	ui_map.parse();
 auto ui_map_row_opt = ui_map.getRow(static_cast<uint32_t>(*ui_map_id));
-// map_data is used for context/logging in JS; the key data comes from UiMapXMapArt and UiMapArt.
-(void)ui_map_row_opt;
+if (!ui_map_row_opt.has_value()) {
+	logging::write(std::format("UiMap entry not found for ID {}", *ui_map_id));
+	throw std::runtime_error("UiMap entry not found");
+}
 
 std::vector<int> linked_art_ids;
 auto& ui_map_x_map_art = casc::db2::getTable("UiMapXMapArt");
@@ -283,14 +292,10 @@ for (const auto& [id, row] : ui_map_x_map_art.getAllRows()) {
 	auto phase_it = row.find("PhaseID");
 	int row_phase = (phase_it != row.end()) ? fieldToInt(phase_it->second) : 0;
 
-	// If phase_id is specified, only include matching phases; otherwise include phase 0 (default).
-	if (phase_id.has_value()) {
-		if (row_phase != *phase_id)
-			continue;
-	} else {
-		if (row_phase != 0)
-			continue;
-	}
+	// JS: if (phase_id === null || link_entry.PhaseID === phase_id)
+	// When no phase is selected, ALL entries are included. When a phase is specified, filter to that phase.
+	if (phase_id.has_value() && row_phase != *phase_id)
+		continue;
 
 	auto art_it = row.find("UiMapArtID");
 	if (art_it != row.end())
@@ -369,8 +374,23 @@ return a.layer_index < b.layer_index;
 
 int map_width = 0, map_height = 0;
 
+// JS: ctx.clearRect(0, 0, canvas.width, canvas.height) — clear pixel buffer before any rendering.
+// This must happen before the layer loop so stale data is never composited even if first layer_index != 0.
+core::view->zoneMapPixels.clear();
+
 for (const auto& art_style : art_styles) {
-	// UiMapArtTile is preloaded during initialize(); getRelationRows is called inside render_map_tiles.
+	auto& ui_map_art_tile = casc::db2::getTable("UiMapArtTile");
+	auto all_tiles = ui_map_art_tile.getRelationRows(art_style.id);
+
+	if (all_tiles.empty()) {
+		logging::write(std::format("no tiles found for UiMapArt ID {}", art_style.id));
+		continue;
+	}
+
+	// JS: group all tiles by LayerIndex, then render each group in sorted order.
+	std::unordered_map<int, std::vector<db::DataRecord>> tiles_by_layer;
+	for (const auto& tile : all_tiles)
+		tiles_by_layer[recordFieldInt(tile, "LayerIndex")].push_back(tile);
 
 	if (art_style.layer_index == 0) {
 		map_width = art_style.layer_width;
@@ -383,7 +403,17 @@ for (const auto& art_style : art_styles) {
 	}
 
 	if (core::view->config.value("showZoneBaseMap", true)) {
-		render_map_tiles(art_style, art_style.layer_index, zone_id, skip_zone_check);
+		// Sort layer indices and render each group in order.
+		std::vector<int> layer_indices;
+		for (const auto& [k, _] : tiles_by_layer)
+			layer_indices.push_back(k);
+		std::sort(layer_indices.begin(), layer_indices.end());
+
+		for (int layer_num : layer_indices) {
+			const auto& layer_tiles = tiles_by_layer[layer_num];
+			logging::write(std::format("rendering layer {} with {} tiles", layer_num, layer_tiles.size()));
+			render_map_tiles(layer_tiles, art_style, layer_num, zone_id, skip_zone_check);
+		}
 	}
 
 	if (core::view->config.value("showZoneOverlays", true)) {
@@ -397,112 +427,61 @@ zone_id, *ui_map_id));
 return { map_width, map_height, *ui_map_id };
 }
 
-// Tile render result for Promise.all equivalent tracking.
-struct TileRenderResult {
-	bool success = false;
-	bool skipped = false;
-	std::string error;
-};
-
-static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index, int expected_zone_id, bool skip_zone_check = false) {
-	// 1. Get tiles from UiMapArtTile for the given art_style, filtered by layer_index.
-	auto& ui_map_art_tile = casc::db2::getTable("UiMapArtTile");
-	auto all_tiles = ui_map_art_tile.getRelationRows(art_style.id);
-
-	// Filter tiles by LayerIndex
-	std::vector<db::DataRecord> tiles;
-	for (const auto& tile : all_tiles) {
-		auto layer_it = tile.find("LayerIndex");
-		if (layer_it != tile.end()) {
-			int tile_layer = std::visit([](const auto& v) -> int {
-				using T = std::decay_t<decltype(v)>;
-				if constexpr (std::is_arithmetic_v<T>) return static_cast<int>(v);
-				return 0;
-			}, layer_it->second);
-			if (tile_layer == layer_index)
-				tiles.push_back(tile);
-		}
-	}
-
-	// 2. Sort tiles by RowIndex, then ColIndex.
-	std::sort(tiles.begin(), tiles.end(), [](const db::DataRecord& a, const db::DataRecord& b) {
-		auto get_int = [](const db::DataRecord& r, const std::string& key) -> int {
-			auto it = r.find(key);
-			if (it == r.end()) return 0;
-			return std::visit([](const auto& v) -> int {
-				using T = std::decay_t<decltype(v)>;
-				if constexpr (std::is_arithmetic_v<T>) return static_cast<int>(v);
-				return 0;
-			}, it->second);
-		};
-		int ra = get_int(a, "RowIndex"), rb = get_int(b, "RowIndex");
+static void render_map_tiles(const std::vector<db::DataRecord>& tiles, const CombinedArtStyle& art_style, int layer_index, int expected_zone_id, bool skip_zone_check = false) {
+	// Sort tiles by RowIndex, then ColIndex.
+	std::vector<db::DataRecord> sorted_tiles(tiles.begin(), tiles.end());
+	std::sort(sorted_tiles.begin(), sorted_tiles.end(), [](const db::DataRecord& a, const db::DataRecord& b) {
+		int ra = recordFieldInt(a, "RowIndex"), rb = recordFieldInt(b, "RowIndex");
 		if (ra != rb) return ra < rb;
-		return get_int(a, "ColIndex") < get_int(b, "ColIndex");
+		return recordFieldInt(a, "ColIndex") < recordFieldInt(b, "ColIndex");
 	});
 
-	// 3. For each tile, load BLP from CASC and composite
+	// For each tile, load BLP from CASC and composite.
 	int successful = 0;
-	for (const auto& tile : tiles) {
+	for (const auto& tile : sorted_tiles) {
 		// Check if zone changed
 		if (!skip_zone_check && selected_zone_id.has_value() && *selected_zone_id != expected_zone_id)
 			break;
 
-		auto get_field_int = [&](const std::string& key) -> int {
-			auto it = tile.find(key);
-			if (it == tile.end()) return 0;
-			return std::visit([](const auto& v) -> int {
-				using T = std::decay_t<decltype(v)>;
-				if constexpr (std::is_arithmetic_v<T>) return static_cast<int>(v);
-				return 0;
-			}, it->second);
-		};
-
-		int col = get_field_int("ColIndex");
-		int row = get_field_int("RowIndex");
-		uint32_t file_data_id = static_cast<uint32_t>(get_field_int("FileDataID"));
+		int col = recordFieldInt(tile, "ColIndex");
+		int row = recordFieldInt(tile, "RowIndex");
+		uint32_t file_data_id = static_cast<uint32_t>(recordFieldInt(tile, "FileDataID"));
 
 		if (file_data_id == 0) continue;
 
 		int pixel_x = col * art_style.tile_width;
 		int pixel_y = row * art_style.tile_height;
 
+		// JS: final_x = pixel_x + (tile.OffsetX || 0); final_y = pixel_y + (tile.OffsetY || 0)
+		int final_x = pixel_x + recordFieldInt(tile, "OffsetX");
+		int final_y = pixel_y + recordFieldInt(tile, "OffsetY");
+
+		logging::write(std::format("rendering tile FileDataID {} at position ({},{}) -> ({},{}) [Layer {}]",
+			file_data_id, col, row, final_x, final_y, layer_index));
+
 		try {
-			// c. Load BLP from CASC via tile.FileDataID
 			BufferWrapper blp_data = core::view->casc->getVirtualFileByID(file_data_id, true);
 			casc::BLPImage blp(blp_data);
-			// Composite BLP tile pixels onto zone map texture at (pixel_x, pixel_y).
-			composite_blp_tile(blp, pixel_x, pixel_y,
+			composite_blp_tile(blp, final_x, final_y,
 				core::view->zoneMapWidth, core::view->zoneMapHeight,
 				core::view->zoneMapPixels);
 			successful++;
 		} catch (const std::exception& e) {
-			logging::write(std::format("Failed to load zone tile {}: {}", file_data_id, e.what()));
+			logging::write(std::format("failed to render tile FileDataID {}: {}", file_data_id, e.what()));
 		}
 	}
 
-	logging::write(std::format("rendered {}/{} tiles successfully", successful, tiles.size()));
+	logging::write(std::format("rendered {}/{} tiles successfully", successful, sorted_tiles.size()));
 }
 
 static void render_world_map_overlays(const CombinedArtStyle& art_style, int expected_zone_id, bool skip_zone_check = false) {
-	// 1. Get WorldMapOverlay relation rows for the given art_style.ID
 	auto& world_map_overlay = casc::db2::getTable("WorldMapOverlay");
 	auto overlays = world_map_overlay.getRelationRows(art_style.id);
 
-	auto get_field_int = [](const db::DataRecord& r, const std::string& key) -> int {
-		auto it = r.find(key);
-		if (it == r.end()) return 0;
-		return std::visit([](const auto& v) -> int {
-			using T = std::decay_t<decltype(v)>;
-			if constexpr (std::is_arithmetic_v<T>) return static_cast<int>(v);
-			return 0;
-		}, it->second);
-	};
-
-	// 2. For each overlay, get tiles and call render_overlay_tiles
 	for (const auto& overlay : overlays) {
-		int overlay_id = get_field_int(overlay, "ID");
-		int offset_x = get_field_int(overlay, "OffsetX");
-		int offset_y = get_field_int(overlay, "OffsetY");
+		int overlay_id = recordFieldInt(overlay, "ID");
+		int offset_x = recordFieldInt(overlay, "OffsetX");
+		int offset_y = recordFieldInt(overlay, "OffsetY");
 
 		auto& world_map_overlay_tile = casc::db2::getTable("WorldMapOverlayTile");
 		auto overlay_tiles = world_map_overlay_tile.getRelationRows(overlay_id);
@@ -515,41 +494,27 @@ static void render_world_map_overlays(const CombinedArtStyle& art_style, int exp
 }
 
 static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const CombinedArtStyle& art_style, int overlay_offset_x, int overlay_offset_y, int expected_zone_id, bool skip_zone_check = false) {
-	// Check if zone changed or overlays disabled
 	if (!skip_zone_check && selected_zone_id.has_value() && *selected_zone_id != expected_zone_id)
 		return;
 
 	if (!core::view->config.value("showZoneOverlays", true))
 		return;
 
-	// 1. Sort tiles by RowIndex, then ColIndex.
 	std::vector<db::DataRecord> sorted_tiles(tiles.begin(), tiles.end());
-
-	auto get_field_int = [](const db::DataRecord& r, const std::string& key) -> int {
-		auto it = r.find(key);
-		if (it == r.end()) return 0;
-		return std::visit([](const auto& v) -> int {
-			using T = std::decay_t<decltype(v)>;
-			if constexpr (std::is_arithmetic_v<T>) return static_cast<int>(v);
-			return 0;
-		}, it->second);
-	};
-
-	std::sort(sorted_tiles.begin(), sorted_tiles.end(), [&](const db::DataRecord& a, const db::DataRecord& b) {
-		int ra = get_field_int(a, "RowIndex"), rb = get_field_int(b, "RowIndex");
+	std::sort(sorted_tiles.begin(), sorted_tiles.end(), [](const db::DataRecord& a, const db::DataRecord& b) {
+		int ra = recordFieldInt(a, "RowIndex"), rb = recordFieldInt(b, "RowIndex");
 		if (ra != rb) return ra < rb;
-		return get_field_int(a, "ColIndex") < get_field_int(b, "ColIndex");
+		return recordFieldInt(a, "ColIndex") < recordFieldInt(b, "ColIndex");
 	});
 
-	// 2. For each tile, load BLP from CASC
 	int successful = 0;
 	for (const auto& tile : sorted_tiles) {
 		if (!skip_zone_check && selected_zone_id.has_value() && *selected_zone_id != expected_zone_id)
 			break;
 
-		int col = get_field_int(tile, "ColIndex");
-		int row = get_field_int(tile, "RowIndex");
-		uint32_t file_data_id = static_cast<uint32_t>(get_field_int(tile, "FileDataID"));
+		int col = recordFieldInt(tile, "ColIndex");
+		int row = recordFieldInt(tile, "RowIndex");
+		uint32_t file_data_id = static_cast<uint32_t>(recordFieldInt(tile, "FileDataID"));
 
 		if (file_data_id == 0) continue;
 
@@ -557,16 +522,14 @@ static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const
 		int base_y = overlay_offset_y + row * art_style.tile_height;
 
 		try {
-			// b. Load BLP from CASC via tile.FileDataID
 			BufferWrapper blp_data = core::view->casc->getVirtualFileByID(file_data_id, true);
 			casc::BLPImage blp(blp_data);
-			// Composite overlay BLP tile pixels onto zone map texture at (base_x, base_y).
 			composite_blp_tile(blp, base_x, base_y,
 				core::view->zoneMapWidth, core::view->zoneMapHeight,
 				core::view->zoneMapPixels);
 			successful++;
 		} catch (const std::exception& e) {
-			logging::write(std::format("Failed to load overlay tile {}: {}", file_data_id, e.what()));
+			logging::write(std::format("failed to render overlay tile FileDataID {}: {}", file_data_id, e.what()));
 		}
 	}
 
@@ -686,8 +649,9 @@ auto& view = *core::view;
 if (!view.selectionZones.empty()) {
 const std::string first = view.selectionZones[0].get<std::string>();
 if (view.isBusy == 0 && !first.empty() && first != prev_selection_first) {
+try {
 const auto zone = parse_zone_entry(first);
-if (zone.id > 0 && (!selected_zone_id.has_value() || *selected_zone_id != zone.id)) {
+if (!selected_zone_id.has_value() || *selected_zone_id != zone.id) {
 selected_zone_id = zone.id;
 logging::write(std::format("selected zone: {} ({})", zone.zone_name, zone.id));
 
@@ -710,6 +674,9 @@ view.zonePhaseSelection = nullptr;
 }
 
 load_zone_map(zone.id, selected_phase_id);
+}
+} catch (const std::exception& e) {
+logging::write(std::format("failed to parse zone entry: {}", e.what()));
 }
 
 prev_selection_first = first;
@@ -986,12 +953,11 @@ static void handle_zone_context(const std::vector<std::string>& selection) {
 static void copy_zone_names(const std::vector<std::string>& selection) {
 std::string result;
 for (const auto& entry : selection) {
+try {
 const auto zone = parse_zone_entry(entry);
-if (zone.id > 0) {
-if (!result.empty())
-result += '\n';
+if (!result.empty()) result += '\n';
 result += zone.zone_name;
-}
+} catch (const std::exception&) {}
 }
 ImGui::SetClipboardText(result.c_str());
 }
@@ -999,12 +965,11 @@ ImGui::SetClipboardText(result.c_str());
 static void copy_area_names(const std::vector<std::string>& selection) {
 std::string result;
 for (const auto& entry : selection) {
+try {
 const auto zone = parse_zone_entry(entry);
-if (zone.id > 0) {
-if (!result.empty())
-result += '\n';
+if (!result.empty()) result += '\n';
 result += zone.area_name;
-}
+} catch (const std::exception&) {}
 }
 ImGui::SetClipboardText(result.c_str());
 }
@@ -1012,12 +977,11 @@ ImGui::SetClipboardText(result.c_str());
 static void copy_zone_ids(const std::vector<std::string>& selection) {
 std::string result;
 for (const auto& entry : selection) {
+try {
 const auto zone = parse_zone_entry(entry);
-if (zone.id > 0) {
-if (!result.empty())
-result += '\n';
+if (!result.empty()) result += '\n';
 result += std::to_string(zone.id);
-}
+} catch (const std::exception&) {}
 }
 ImGui::SetClipboardText(result.c_str());
 }
