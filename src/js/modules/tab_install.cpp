@@ -395,6 +395,14 @@ void render() {
 			for (const auto& s : view.selectionInstall)
 				selection_str.push_back(s.get<std::string>());
 
+			// JS: :copymode="config.copyMode" :pasteselection="config.pasteSelection" :copytrimwhitespace="config.removePathSpacesCopy"
+			listbox::CopyMode copy_mode_install = listbox::CopyMode::Default;
+			{
+				const std::string cm = view.config.value("copyMode", std::string("Default"));
+				if (cm == "DIR") copy_mode_install = listbox::CopyMode::DIR;
+				else if (cm == "FID") copy_mode_install = listbox::CopyMode::FID;
+			}
+
 			listbox::render(
 				"listbox-install",
 				items_str,
@@ -403,9 +411,9 @@ void render() {
 				false,    // single
 				true,     // keyinput
 				view.config.value("regexFilters", false),
-				listbox::CopyMode::Default,
-				false,    // pasteselection
-				false,    // copytrimwhitespace
+				copy_mode_install,
+				view.config.value("pasteSelection", false),          // pasteselection (JS: config.pasteSelection)
+				view.config.value("removePathSpacesCopy", false),    // copytrimwhitespace (JS: config.removePathSpacesCopy)
 				"install file", // unittype
 				nullptr,  // overrideItems
 				false,    // disable
@@ -435,8 +443,11 @@ void render() {
 		if (padY > 0.0f)
 			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
 
+		// JS: <div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
 			ImGui::SameLine();
 		}
 
@@ -452,7 +463,8 @@ void render() {
 		ImGui::SetNextItemWidth(filterW);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterInstall.c_str(), sizeof(filter_buf) - 1);
-		if (ImGui::InputText("##FilterInstall", filter_buf, sizeof(filter_buf)))
+		// JS: placeholder="Filter install files..."
+		if (ImGui::InputTextWithHint("##FilterInstall", "Filter install files...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterInstall = filter_buf;
 
 		ImGui::SameLine(0.0f, 5.0f);
@@ -503,6 +515,14 @@ void render() {
 			for (const auto& s : view.selectionInstallStrings)
 				selection_str.push_back(s.get<std::string>());
 
+			// JS: :copymode="$core.view.config.copyMode" — strings tray inherits same copyMode
+			listbox::CopyMode copy_mode_strings = listbox::CopyMode::Default;
+			{
+				const std::string cm = view.config.value("copyMode", std::string("Default"));
+				if (cm == "DIR") copy_mode_strings = listbox::CopyMode::DIR;
+				else if (cm == "FID") copy_mode_strings = listbox::CopyMode::FID;
+			}
+
 			listbox::render(
 				"listbox-install-strings",
 				view.installStrings,
@@ -511,9 +531,9 @@ void render() {
 				false,    // single
 				true,     // keyinput
 				view.config.value("regexFilters", false),
-				listbox::CopyMode::Default,
-				false,    // pasteselection
-				false,    // copytrimwhitespace
+				copy_mode_strings,
+				false,    // pasteselection (strings listbox has no :pasteselection in JS)
+				false,    // copytrimwhitespace (strings listbox has no :copytrimwhitespace in JS)
 				"string", // unittype
 				nullptr,  // overrideItems
 				false,    // disable
@@ -542,8 +562,11 @@ void render() {
 		if (padY > 0.0f)
 			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
 
+		// JS: <div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
 			ImGui::SameLine();
 		}
 
@@ -558,7 +581,8 @@ void render() {
 		ImGui::SetNextItemWidth(filterW);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterInstallStrings.c_str(), sizeof(filter_buf) - 1);
-		if (ImGui::InputText("##FilterInstallStrings", filter_buf, sizeof(filter_buf)))
+		// JS: placeholder="Filter strings..."
+		if (ImGui::InputTextWithHint("##FilterInstallStrings", "Filter strings...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterInstallStrings = filter_buf;
 
 		ImGui::SameLine(0.0f, 5.0f);

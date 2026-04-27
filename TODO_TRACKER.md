@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 74/186 verified (40%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 85/186 verified (46%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -458,25 +458,25 @@
 - **Status**: Pending
 - **Details**: JS listbox wiring uses `$core.view.config.copyMode`, `pasteSelection`, and `removePathSpacesCopy`; C++ passes `CopyMode::Default` with `pasteselection=false` and `copytrimwhitespace=false`, changing list interaction behavior.
 
-- [ ] 90. [tab_install.cpp] First listbox missing copyMode from config
+- [x] 90. [tab_install.cpp] First listbox missing copyMode from config
 - **JS Source**: `src/js/modules/tab_install.js` line 165
-- **Status**: Pending
-- **Details**: JS passes :copymode="$core.view.config.copyMode" to the main install Listbox. C++ hardcodes listbox::CopyMode::Default instead of reading from view.config.
+- **Status**: Verified
+- **Details**: Fixed — first listbox now reads copyMode from view.config and sets copy_mode_install accordingly.
 
-- [ ] 91. [tab_install.cpp] First listbox missing pasteSelection from config
+- [x] 91. [tab_install.cpp] First listbox missing pasteSelection from config
 - **JS Source**: `src/js/modules/tab_install.js` line 165
-- **Status**: Pending
-- **Details**: JS passes :pasteselection="$core.view.config.pasteSelection". C++ hardcodes false instead of reading from view.config.
+- **Status**: Verified
+- **Details**: Fixed — first listbox now passes view.config.value("pasteSelection", false) instead of hardcoded false.
 
-- [ ] 92. [tab_install.cpp] First listbox missing copytrimwhitespace from config
+- [x] 92. [tab_install.cpp] First listbox missing copytrimwhitespace from config
 - **JS Source**: `src/js/modules/tab_install.js` line 165
-- **Status**: Pending
-- **Details**: JS passes :copytrimwhitespace="$core.view.config.removePathSpacesCopy". C++ hardcodes false, disabling the remove-path-spaces-on-copy feature.
+- **Status**: Verified
+- **Details**: Fixed — first listbox now passes view.config.value("removePathSpacesCopy", false) instead of hardcoded false.
 
-- [ ] 93. [tab_install.cpp] Second listbox (strings) missing copyMode from config
+- [x] 93. [tab_install.cpp] Second listbox (strings) missing copyMode from config
 - **JS Source**: `src/js/modules/tab_install.js` line 184
-- **Status**: Pending
-- **Details**: JS passes :copymode="$core.view.config.copyMode" to the strings Listbox. C++ hardcodes listbox::CopyMode::Default.
+- **Status**: Verified
+- **Details**: Fixed — strings listbox now reads copyMode from view.config via copy_mode_strings, matching JS :copymode="$core.view.config.copyMode".
 
 - [ ] 94. [legacy_tab_audio.cpp] Seek-loop scheduling differs from JS `requestAnimationFrame` lifecycle
 - **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 19–42
@@ -726,10 +726,10 @@
 
 ## Low — aesthetic differences, missing tooltips, and error stack traces
 
-- [ ] 143. [tab_install.cpp] Regex indicator tooltip metadata from JS template is missing
+- [x] 143. [tab_install.cpp] Regex indicator tooltip metadata from JS template is missing
 - **JS Source**: `src/js/modules/tab_install.js` lines 169, 188
-- **Status**: Pending
-- **Details**: JS renders `Regex Enabled` with `:title="$core.view.regexTooltip"`; C++ renders plain text without the tooltip contract, changing UI affordance.
+- **Status**: Verified
+- **Details**: Fixed — both trays now call ImGui::SetTooltip with view.regexTooltip on hover, matching JS :title="$core.view.regexTooltip".
 
 - [ ] 144. [tab_install.cpp] export_install_files missing stack trace in error mark
 - **JS Source**: `src/js/modules/tab_install.js` line 78
@@ -741,15 +741,15 @@
 - **Status**: Pending
 - **Details**: CSS defines .strings-header font-size 14px opacity 0.7, .strings-filename font-size 12px word-break: break-all, 5px gap. C++ uses default font sizes and ImGui::Spacing() which may not match.
 
-- [ ] 146. [tab_install.cpp] Input placeholder text not rendered
+- [x] 146. [tab_install.cpp] Input placeholder text not rendered
 - **JS Source**: `src/js/modules/tab_install.js` lines 170, 189
-- **Status**: Pending
-- **Details**: JS filter inputs have placeholder="Filter install files..." and "Filter strings...". C++ uses plain ImGui::InputText without hint/placeholder.
+- **Status**: Verified
+- **Details**: Fixed — both filter inputs now use InputTextWithHint with "Filter install files..." and "Filter strings..." placeholders, matching JS placeholder attributes.
 
-- [ ] 147. [tab_install.cpp] Regex tooltip not rendered
+- [x] 147. [tab_install.cpp] Regex tooltip not rendered
 - **JS Source**: `src/js/modules/tab_install.js` lines 169, 188
-- **Status**: Pending
-- **Details**: JS "Regex Enabled" div has :title="$core.view.regexTooltip" showing tooltip on hover. C++ has no tooltip implementation.
+- **Status**: Verified
+- **Details**: Fixed — covered by entry 143; both trays now show tooltip on hover for "Regex Enabled" text.
 
 - [ ] 148. [tab_textures.cpp] export_texture_atlas_regions missing stack trace in error mark
 - **JS Source**: `src/js/modules/tab_textures.js` line 261
@@ -821,30 +821,30 @@
 - **Status**: Pending
 - **Details**: JS passes both e.message and e.stack. C++ only passes e.what().
 
-- [ ] 162. [legacy_tab_data.cpp] Missing regex info display in DBC filter bar
+- [x] 162. [legacy_tab_data.cpp] Missing regex info display in DBC filter bar
 - **JS Source**: `src/js/modules/legacy_tab_data.js` lines 134–135
-- **Status**: Pending
-- **Details**: JS has `<div class="regex-info" v-if="$core.view.config.regexFilters">Regex Enabled</div>` in the DBC listbox filter section. C++ DBC filter bar (lines 309–316) does not show the regex enabled indicator.
+- **Status**: Verified
+- **Details**: Fixed — DBC filter bar and data-table tray filter both now show "Regex Enabled" with tooltip when `config.regexFilters` is true, matching JS `<div class="regex-info">` elements.
 
-- [ ] 163. [tab_raw.cpp] Regex indicator tooltip metadata from JS template is missing
+- [x] 163. [tab_raw.cpp] Regex indicator tooltip metadata from JS template is missing
 - **JS Source**: `src/js/modules/tab_raw.js` line 158
-- **Status**: Pending
-- **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ renders plain `Regex Enabled` text without tooltip behavior.
+- **Status**: Verified
+- **Details**: Fixed — "Regex Enabled" text now calls ImGui::SetTooltip with view.regexTooltip on hover, matching JS :title="$core.view.regexTooltip".
 
 - [ ] 164. [tab_raw.cpp] export_raw_files error mark missing stack trace argument
 - **JS Source**: `src/js/modules/tab_raw.js` line 128
 - **Status**: Pending
 - **Details**: JS calls helper.mark(export_file_name, false, e.message, e.stack). C++ passes only e.what(), omitting stack trace.
 
-- [ ] 165. [tab_raw.cpp] Missing placeholder text on filter input
+- [x] 165. [tab_raw.cpp] Missing placeholder text on filter input
 - **JS Source**: `src/js/modules/tab_raw.js` line 159
-- **Status**: Pending
-- **Details**: JS has placeholder="Filter raw files...". C++ uses ImGui::InputText with no hint text.
+- **Status**: Verified
+- **Details**: Fixed — filter input now uses InputTextWithHint with "Filter raw files..." hint, matching JS placeholder attribute.
 
-- [ ] 166. [tab_raw.cpp] Missing tooltip on "Regex Enabled" text
+- [x] 166. [tab_raw.cpp] Missing tooltip on "Regex Enabled" text
 - **JS Source**: `src/js/modules/tab_raw.js` line 158
-- **Status**: Pending
-- **Details**: JS has :title="$core.view.regexTooltip" showing tooltip on hover. C++ has no tooltip.
+- **Status**: Verified
+- **Details**: Fixed — covered by entry 163; "Regex Enabled" now shows SetTooltip on hover.
 
 - [ ] 167. [tab_maps.cpp] Regex indicator tooltip metadata from JS template is missing
 - **JS Source**: `src/js/modules/tab_maps.js` line 302

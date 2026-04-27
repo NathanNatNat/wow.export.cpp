@@ -387,8 +387,11 @@ void render() {
 	if (padY > 0.0f)
 		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
 
+	// JS: <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
 	if (view.config.value("regexFilters", false)) {
 		ImGui::TextUnformatted("Regex Enabled");
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("%s", view.regexTooltip.c_str());
 		ImGui::SameLine();
 	}
 
@@ -404,7 +407,8 @@ void render() {
 	ImGui::SetNextItemWidth(filterW);
 	char filter_buf[256] = {};
 	std::strncpy(filter_buf, view.userInputFilterRaw.c_str(), sizeof(filter_buf) - 1);
-	if (ImGui::InputText("##FilterRaw", filter_buf, sizeof(filter_buf)))
+	// JS: placeholder="Filter raw files..."
+	if (ImGui::InputTextWithHint("##FilterRaw", "Filter raw files...", filter_buf, sizeof(filter_buf)))
 		view.userInputFilterRaw = filter_buf;
 
 	ImGui::SameLine(0.0f, 5.0f);
