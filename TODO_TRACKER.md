@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 99/186 verified (53%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 101/186 verified (54%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -255,10 +255,10 @@
 - **Status**: Verified
 - **Details**: Fixed — `stop_video` now calls `stream_worker_thread.reset()` to join/reset the background thread before clearing state, preventing stale results from posting after stop.
 
-- [ ] 50. [tab_videos.cpp] MP4 download HTTP error check missing
+- [x] 50. [tab_videos.cpp] MP4 download HTTP error check missing
 - **JS Source**: `src/js/modules/tab_videos.js` lines 631–633
-- **Status**: Pending
-- **Details**: JS explicitly checks `if (!response.ok)` and marks the file with 'Failed to download MP4: ' + response.status. C++ uses `generics::get(*mp4_url)` with no status check — if the server returns a non-200 status, behavior depends on `generics::get()` implementation.
+- **Status**: Verified
+- **Details**: Fixed — `generics::get(*mp4_url)` returns a response object; C++ checks `mp4_response.ok` and throws on failure, caught by the outer `try/catch` which calls `helper.mark(export_file_name, false, e.what())`. Functionally identical to JS `if (!response.ok) { helper.mark(...); continue; }`.
 
 - [x] 51. [tab_data.cpp] Data-table cell copy stringification differs from JS `String(value)` behavior
 - **JS Source**: `src/js/modules/tab_data.js` lines 172–177
@@ -285,10 +285,10 @@
 - **Status**: Verified
 - **Details**: Fixed — removed early return on `value.empty()`; now copies any value (including empty string) matching JS `if (value === null || value === undefined) return` semantics.
 
-- [ ] 56. [tab_raw.cpp] detect_raw_files manually sets is_dirty=true — deviates from JS
+- [x] 56. [tab_raw.cpp] detect_raw_files manually sets is_dirty=true — deviates from JS
 - **JS Source**: `src/js/modules/tab_raw.js` lines 75–76
-- **Status**: Pending
-- **Details**: JS calls listfile.ingestIdentifiedFiles then compute_raw_files without setting is_dirty. Since is_dirty was false, JS would return early (apparent JS bug). C++ adds is_dirty=true to fix this, which is arguably correct but deviates from original JS behavior.
+- **Status**: Verified
+- **Details**: Intentional deviation — JS has a bug where `is_dirty` was never set before the `compute_raw_files()` call in `detect_raw_files`, causing the list to never refresh after detection. C++ sets `is_dirty = true` to fix this; the deviation is documented in a code comment in `tab_raw.cpp`.
 
 - [x] 57. [tab_maps.cpp] Hand-rolled MD5 instead of mbedTLS
 - **JS Source**: `src/js/modules/tab_maps.js` line 914
