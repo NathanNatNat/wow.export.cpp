@@ -23,9 +23,7 @@ uniform vec4 u_mesh_color;        // vertex color + alpha
 uniform vec3 u_tex_sample_alpha;  // texture weight values
 uniform float u_alpha_test;       // alpha test threshold (0.502 for mode 1)
 
-// lighting (simplified for preview)
-uniform vec3 u_ambient_color;
-uniform vec3 u_diffuse_color;
+// lighting
 uniform vec3 u_light_dir;
 uniform int u_apply_lighting;
 
@@ -42,12 +40,12 @@ vec3 calc_lighting(vec3 color, vec3 normal) {
 		return color;
 
 	vec3 n = normalize(normal);
-	float n_dot_l = max(dot(n, normalize(-u_light_dir)), 0.0);
+	float n_dot_l = max(dot(n, normalize(u_light_dir)), 0.0);
 
-	vec3 ambient = u_ambient_color * color;
-	vec3 diffuse = u_diffuse_color * color * n_dot_l;
+	float ambient_strength = 0.3;
+	vec3 lighting = vec3(ambient_strength) + vec3(n_dot_l);
 
-	return ambient + diffuse;
+	return color * lighting;
 }
 
 void main() {
