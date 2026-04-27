@@ -138,7 +138,7 @@ public:
 	uint32_t flags = 0;
 	std::string name;
 
-	std::vector<int16_t> globalLoops;
+	std::vector<int32_t> globalLoops;
 	std::vector<M2Animation> animations;
 	std::vector<int16_t> animationLookup;
 	std::vector<M2Bone> bones;

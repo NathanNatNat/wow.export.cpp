@@ -495,7 +495,7 @@ void WMOLoader::parse_MOTV(BufferWrapper& data, uint32_t chunkSize) {
 	std::vector<float> uv(count);
 	for (uint32_t i = 0; i < count; i += 2) {
 		uv[i] = data.readFloatLE();
-		uv[i + 1] = (data.readFloatLE() - 1) * -1;
+		uv[i + 1] = data.readFloatLE();
 	}
 
 	this->uvs.push_back(std::move(uv));

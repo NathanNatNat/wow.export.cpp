@@ -364,13 +364,11 @@ void M2LegacyLoader::_parse_vertices(uint32_t ofs) {
 		this->normals[i * 3 + 2] = data.readFloatLE() * -1;
 		this->normals[i * 3 + 1] = data.readFloatLE();
 
-		// uv (flip v)
 		this->uv[i * 2] = data.readFloatLE();
-		this->uv[i * 2 + 1] = (data.readFloatLE() - 1) * -1;
+		this->uv[i * 2 + 1] = data.readFloatLE();
 
-		// uv2 (flip v)
 		this->uv2[i * 2] = data.readFloatLE();
-		this->uv2[i * 2 + 1] = (data.readFloatLE() - 1) * -1;
+		this->uv2[i * 2 + 1] = data.readFloatLE();
 	}
 
 	data.seek(base);

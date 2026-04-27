@@ -202,12 +202,7 @@ void M3Loader::parseBufferChunk(uint32_t chunkSize, uint32_t chunkID, uint32_t p
 			if (format != "2F32")
 				throw std::runtime_error(std::format("M3Loader: Unexpected {} format {}", chunkName, format));
 
-			auto floatArray = this->ReadBufferAsFormat(format, chunkSize);
-			std::vector<float> fixedUVs(floatArray.size());
-			for (size_t i = 0; i < floatArray.size(); i += 2) {
-				fixedUVs[i] = floatArray[i];
-				fixedUVs[i + 1] = (floatArray[i + 1] - 1) * -1;
-			}
+			auto fixedUVs = this->ReadBufferAsFormat(format, chunkSize);
 
 			if (chunkID == CHUNK_VUV0)
 				this->uv = std::move(fixedUVs);

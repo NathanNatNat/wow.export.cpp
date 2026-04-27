@@ -664,10 +664,10 @@ this->normals[i * 3 + 2] = this->data.readFloatLE() * -1;
 this->normals[i * 3 + 1] = this->data.readFloatLE();
 
 this->uv[i * 2] = this->data.readFloatLE();
-this->uv[i * 2 + 1] = (this->data.readFloatLE() - 1) * -1;
+this->uv[i * 2 + 1] = this->data.readFloatLE();
 
 this->uv2[i * 2] = this->data.readFloatLE();
-this->uv2[i * 2 + 1] = (this->data.readFloatLE() - 1) * -1;
+this->uv2[i * 2 + 1] = this->data.readFloatLE();
 }
 
 this->data.seek(base);
@@ -896,7 +896,7 @@ const uint32_t globalLoopOfs = this->data.readUInt32LE();
 const size_t base = this->data.offset();
 this->data.seek(globalLoopOfs + ofs);
 
-this->globalLoops = this->data.readInt16LE(globalLoopCount);
+this->globalLoops = this->data.readInt32LE(globalLoopCount);
 
 this->data.seek(base);
 }

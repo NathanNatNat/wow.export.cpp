@@ -1036,7 +1036,7 @@ current_animation = index;
 animation_time = 0;
 
 // reset global sequence times from the animation source's globalLoops
-const std::vector<int16_t>* gl_loops = nullptr;
+const std::vector<int32_t>* gl_loops = nullptr;
 if (use_child && childSkelLoader)
 gl_loops = &childSkelLoader->globalLoops;
 else if (use_skel && skelLoader)
@@ -1114,7 +1114,7 @@ if (!animation_paused) {
 animation_time += delta_time;
 
 // advance global sequence timers
-const std::vector<int16_t>* gl_loops = nullptr;
+const std::vector<int32_t>* gl_loops = nullptr;
 if (current_anim_from_child && childSkelLoader)
 gl_loops = &childSkelLoader->globalLoops;
 else if (current_anim_from_skel && skelLoader)
@@ -1327,7 +1327,7 @@ size_t ai = static_cast<size_t>(current_anim_index >= 0 ? current_anim_index : 0
 const uint16_t gs = animblock.globalSeq;
 if (gs < static_cast<uint16_t>(global_seq_times.size())) {
 at = global_seq_times[gs];
-const std::vector<int16_t>* gl_loops = nullptr;
+const std::vector<int32_t>* gl_loops = nullptr;
 if (current_anim_from_child && childSkelLoader) gl_loops = &childSkelLoader->globalLoops;
 else if (current_anim_from_skel && skelLoader)  gl_loops = &skelLoader->globalLoops;
 else gl_loops = &m2->globalLoops;
@@ -1384,7 +1384,7 @@ size_t ai = static_cast<size_t>(current_anim_index >= 0 ? current_anim_index : 0
 const uint16_t gs = animblock.globalSeq;
 if (gs < static_cast<uint16_t>(global_seq_times.size())) {
 at = global_seq_times[gs];
-const std::vector<int16_t>* gl_loops = nullptr;
+const std::vector<int32_t>* gl_loops = nullptr;
 if (current_anim_from_child && childSkelLoader) gl_loops = &childSkelLoader->globalLoops;
 else if (current_anim_from_skel && skelLoader)  gl_loops = &skelLoader->globalLoops;
 else gl_loops = &m2->globalLoops;

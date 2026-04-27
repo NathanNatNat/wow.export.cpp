@@ -107,7 +107,7 @@ public:
 	uint32_t parent_skel_file_id = 0;
 	size_t boneOffset = 0;
 
-	std::vector<int16_t> globalLoops;
+	std::vector<int32_t> globalLoops;
 	std::vector<SKELAnimation> animations;
 	std::vector<int16_t> animationLookup;
 	std::vector<SKELBone> bones;

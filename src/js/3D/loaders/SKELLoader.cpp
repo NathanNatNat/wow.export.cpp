@@ -169,7 +169,7 @@ void SKELLoader::parse_chunk_sks1() {
 	size_t prevPos = this->data.offset();
 	this->data.seek(globalLoopOfs + chunk_ofs);
 
-	this->globalLoops = this->data.readInt16LE(globalLoopCount);
+	this->globalLoops = this->data.readInt32LE(globalLoopCount);
 
 	this->data.seek(prevPos);
 
