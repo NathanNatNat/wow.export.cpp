@@ -365,24 +365,35 @@ void render() {
 				node["cellValue"] = ev.cellValue;
 				node["selectedCount"] = ev.selectedCount;
 				view.contextMenus.nodeDataTable = node;
+				// Open the popup immediately on right-click (JS: ContextMenu opens on @contextmenu).
+				ImGui::OpenPopup("##LegacyDataTableContextMenu");
 			},
 			[&]() { copy_rows_csv(); },
 			nullptr);
 
 		// Context menu for data table.
-		if (!view.contextMenus.nodeDataTable.is_null()) {
-			if (ImGui::BeginPopupContextItem("##LegacyDataTableContextMenu")) {
-				if (ImGui::MenuItem("Copy selected rows as CSV"))
+		// JS: <ContextMenu :node="contextMenus.nodeDataTable" @close="contextMenus.nodeDataTable = null">
+		if (ImGui::BeginPopup("##LegacyDataTableContextMenu")) {
+			if (!view.contextMenus.nodeDataTable.is_null()) {
+				const int selected_count = view.contextMenus.nodeDataTable.value("selectedCount", 0);
+				const std::string csv_label = std::format("Copy {} row{} as CSV", selected_count, selected_count != 1 ? "s" : "");
+				const std::string sql_label = std::format("Copy {} row{} as SQL", selected_count, selected_count != 1 ? "s" : "");
+				if (ImGui::MenuItem(csv_label.c_str()))
 					copy_rows_csv();
-				if (ImGui::MenuItem("Copy selected rows as SQL"))
+				if (ImGui::MenuItem(sql_label.c_str()))
 					copy_rows_sql();
 				if (view.contextMenus.nodeDataTable.contains("cellValue")) {
-					std::string cell_val = view.contextMenus.nodeDataTable["cellValue"].get<std::string>();
-					if (ImGui::MenuItem(std::format("Copy cell: {}", cell_val.substr(0, 30)).c_str()))
+					std::string cell_val = view.contextMenus.nodeDataTable["cellValue"].is_string()
+						? view.contextMenus.nodeDataTable["cellValue"].get<std::string>()
+						: view.contextMenus.nodeDataTable["cellValue"].dump();
+					if (ImGui::MenuItem("Copy cell contents"))
 						copy_cell(cell_val);
 				}
-				ImGui::EndPopup();
 			}
+			ImGui::EndPopup();
+		} else if (!view.contextMenus.nodeDataTable.is_null()) {
+			// @close event: clear nodeDataTable when popup closes (JS: @close="nodeDataTable = null").
+			view.contextMenus.nodeDataTable = nullptr;
 		}
 
 		// Options row.
@@ -419,9 +430,11 @@ void render() {
 		ImGui::SameLine();
 
 		{
-			// Legacy data only supports CSV export.
+			// JS menuButtonDataLegacy: CSV, SQL, DBC (Raw).
 			static const std::vector<menu_button::MenuOption> legacy_data_opts = {
-				{ "Export as CSV", "CSV" }
+				{ "Export as CSV", "CSV" },
+				{ "Export as SQL", "SQL" },
+				{ "Export DBC (Raw)", "DBC" }
 			};
 			const bool busy = view.isBusy > 0;
 			const bool no_headers = view.tableBrowserHeaders.empty();
@@ -505,9 +518,7 @@ static void copy_rows_sql() {
 }
 
 static void copy_cell(const std::string& value) {
-	if (value.empty())
-		return;
-
+	// JS: if (value === null || value === undefined) return; — copies empty strings.
 	ImGui::SetClipboardText(value.c_str());
 }
 
