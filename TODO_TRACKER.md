@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 1/186 pending (1%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 20/186 verified (11%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -112,99 +112,99 @@
 - **Status**: Pending
 - **Details**: The JS version draws tiles to a `<canvas>` via `context.putImageData()` and `context.drawImage()`. C++ caches tile pixel data in `s_state.tilePixelCache` (map-viewer.cpp line 81) but never uploads it as OpenGL textures or renders it to the screen. The TODO comment at line 1194–1198 acknowledges this. The map overlay (selection highlights, hover) draws over empty space. This is a critical functional gap — the map tiles are invisible.
 
-- [ ] 22. [tab_install.cpp] CASC getFile replaced with low-level two-step call, losing BLTE decoding
+- [x] 22. [tab_install.cpp] CASC getFile replaced with low-level two-step call, losing BLTE decoding
 - **JS Source**: `src/js/modules/tab_install.js` lines 73–74
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS calls core.view.casc.getFile() which returns a BLTEReader for BLTE block decompression. C++ calls getEncodingKeyForContentKey then _ensureFileInCache then BufferWrapper::readFile, skipping BLTE decompression entirely. Exported files may be corrupt.
 
-- [ ] 23. [tab_install.cpp] processAllBlocks() call missing in view_strings_impl
+- [x] 23. [tab_install.cpp] processAllBlocks() call missing in view_strings_impl
 - **JS Source**: `src/js/modules/tab_install.js` lines 103–105
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS calls data.processAllBlocks() after getFile() to force all BLTE blocks decompressed before extract_strings. C++ skips this step because it uses plain BufferWrapper instead of BLTEReader.
 
-- [ ] 24. [tab_videos.cpp] Video preview playback is opened externally instead of using an embedded player
+- [x] 24. [tab_videos.cpp] Video preview playback is opened externally instead of using an embedded player
 - **JS Source**: `src/js/modules/tab_videos.js` lines 219–276, 493
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS renders and controls an in-tab `<video>` element with `onended`/`onerror` and subtitle track attachment, while C++ opens the stream URL in an external handler and shows status text in the preview area.
 
-- [ ] 25. [tab_videos.cpp] Video export format selector from MenuButton is missing
+- [x] 25. [tab_videos.cpp] Video export format selector from MenuButton is missing
 - **JS Source**: `src/js/modules/tab_videos.js` lines 505, 559–571
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses a `MenuButton` bound to `config.exportVideoFormat` and dispatches format-specific export via selection; C++ renders a single `Export Selected` button with no in-UI format picker.
 
-- [ ] 26. [tab_videos.cpp] MenuButton export format dropdown completely missing
+- [x] 26. [tab_videos.cpp] MenuButton export format dropdown completely missing
 - **JS Source**: `src/js/modules/tab_videos.js` line 505
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `<MenuButton :options="menuButtonVideos" :default="config.exportVideoFormat" @change="..." @click="export_selected">` which renders a dropdown to pick MP4/AVI/MP3/SUBTITLES and triggers export. C++ renders a plain `ImGui::Button("Export Selected")` with no format selector. Users cannot change the export format from this tab.
 
-- [ ] 27. [tab_videos.cpp] Video preview is text-only, not an embedded player
+- [x] 27. [tab_videos.cpp] Video preview is text-only, not an embedded player
 - **JS Source**: `src/js/modules/tab_videos.js` line 493
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS renders a `<video>` element with full controls, autoplay, subtitles overlay via `<track>`. C++ opens the URL in the system's external media player (`core::openInExplorer(url)`) and shows plain text. No inline playback, no controls, no subtitle overlay in the app window.
 
-- [ ] 28. [legacy_tab_data.cpp] DBC filename extraction uses `std::filesystem::path` which won't split backslash-delimited MPQ paths on Linux
+- [x] 28. [legacy_tab_data.cpp] DBC filename extraction uses `std::filesystem::path` which won't split backslash-delimited MPQ paths on Linux
 - **JS Source**: `src/js/modules/legacy_tab_data.js` lines 33–36
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses `full_path.split('\\')` to extract the DBC filename from backslash-delimited MPQ paths. C++ uses `std::filesystem::path(full_path).filename()` (line 81). On Linux, `std::filesystem::path` treats `\` as a regular character, not a separator, so `filename()` would return the entire path string instead of just the filename. This would cause the table name extraction to fail for MPQ paths like `DBFilesClient\Achievement.dbc`.
 
-- [ ] 29. [tab_raw.cpp] export_raw_files uses getVirtualFileByName and drops partialDecrypt=true
+- [x] 29. [tab_raw.cpp] export_raw_files uses getVirtualFileByName and drops partialDecrypt=true
 - **JS Source**: `src/js/modules/tab_raw.js` line 123
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS calls core.view.casc.getFileByName(file_name, true) passing partialDecrypt=true. C++ calls getVirtualFileByName(file_name) without partialDecrypt parameter, silently dropping partial decryption capability for encrypted files.
 
-- [ ] 30. [tab_maps.cpp] load_wmo_minimap_tile ignores drawX/drawY and scaleX/scaleY positioning
+- [x] 30. [tab_maps.cpp] load_wmo_minimap_tile ignores drawX/drawY and scaleX/scaleY positioning
 - **JS Source**: `src/js/modules/tab_maps.js` lines 107–112
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS draws each tile at its specific offset (tile.drawX * output_scale, tile.drawY * output_scale) with scaled dimensions. C++ ignores drawX, drawY, scaleX, scaleY entirely — stretching all tiles to fill the full cell. Multi-tile compositing within a grid cell is completely broken.
 
-- [ ] 31. [tab_maps.cpp] WDT file load is outside try-catch block
+- [x] 31. [tab_maps.cpp] WDT file load is outside try-catch block
 - **JS Source**: `src/js/modules/tab_maps.js` lines 433–434
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, getFileByName(wdt_path) is inside the try block. In C++, getVirtualFileByName(wdt_path) is BEFORE the try block. If WDT file doesn't exist, exception propagates uncaught.
 
-- [ ] 32. [tab_maps.cpp] Missing optional chaining for export_paths
+- [x] 32. [tab_maps.cpp] Missing optional chaining for export_paths
 - **JS Source**: `src/js/modules/tab_maps.js` lines 752–853
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS uses optional chaining export_paths?.writeLine() and export_paths?.close(). C++ calls directly without null checks. If openLastExportStream returns invalid object, C++ will crash.
 
-- [ ] 33. [tab_zones.cpp] Base tile relation lookup uses layer-row ID instead of UiMapArt ID
+- [x] 33. [tab_zones.cpp] Base tile relation lookup uses layer-row ID instead of UiMapArt ID
 - **JS Source**: `src/js/modules/tab_zones.js` lines 120–121
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS fetches `UiMapArtTile` relation rows with `art_style.ID` from the UiMapArt entry; C++ stores `CombinedArtStyle::id` as the UiMapArtStyleLayer row ID and uses that in `getRelationRows`, altering tile resolution.
 
-- [ ] 34. [tab_zones.cpp] UiMapArtStyleLayer join uses wrong field name
+- [x] 34. [tab_zones.cpp] UiMapArtStyleLayer join uses wrong field name
 - **JS Source**: `src/js/modules/tab_zones.js` lines 88–91
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS joins `art_style_layer.UiMapArtStyleID === art_entry.UiMapArtStyleID`. C++ joins on `layer_row["UiMapArtID"]` — a completely different field name. The C++ looks for "UiMapArtID" in UiMapArtStyleLayer table, but JS matches on "UiMapArtStyleID" from both tables. This produces wrong rows or no rows.
 
-- [ ] 35. [tab_zones.cpp] CombinedArtStyle.id stores wrong ID (layer ID vs art ID)
+- [x] 35. [tab_zones.cpp] CombinedArtStyle.id stores wrong ID (layer ID vs art ID)
 - **JS Source**: `src/js/modules/tab_zones.js` lines 94–101
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS `combined_style` includes `...art_entry` (spread), so `combined_style.ID` = the UiMapArt row ID (`art_id`). C++ sets `style.id = static_cast<int>(layer_id)` which is the UiMapArtStyleLayer table key. This wrong ID propagates to `getRelationRows()` calls for UiMapArtTile and WorldMapOverlay.
 
-- [ ] 36. [tab_zones.cpp] C++ adds ALL matching style layers; JS keeps only LAST
+- [x] 36. [tab_zones.cpp] C++ adds ALL matching style layers; JS keeps only LAST
 - **JS Source**: `src/js/modules/tab_zones.js` lines 86–91
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: JS declares `let style_layer;` then overwrites in a loop, keeping only the last match. C++ `push_back`s every matching row into `art_styles`. This creates duplicate/extra entries causing redundant or incorrect rendering.
 
-- [ ] 37. [tab_zones.cpp] Unsafe Windows wstring conversion corrupts multi-byte UTF-8 paths
+- [x] 37. [tab_zones.cpp] Unsafe Windows wstring conversion corrupts multi-byte UTF-8 paths
 - **JS Source**: `src/js/modules/tab_zones.js` (none)
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: `std::wstring wpath(dir.begin(), dir.end())` does byte-by-byte copy which corrupts multi-byte UTF-8 paths. Should use `MultiByteToWideChar` or equivalent.
 
-- [ ] 38. [tab_zones.cpp] Linux shell command injection risk in openInExplorer
+- [x] 38. [tab_zones.cpp] Linux shell command injection risk in openInExplorer
 - **JS Source**: `src/js/modules/tab_zones.js` line 393
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: `"xdg-open \"" + dir + "\" &"` passed to `std::system()`. If `dir` contains shell metacharacters, this is exploitable. JS uses `nw.Shell.openItem` which is safe.
 
-- [ ] 39. [tab_creatures.cpp] has_content check and toast/camera logic scoped incorrectly
+- [x] 39. [tab_creatures.cpp] has_content check and toast/camera logic scoped incorrectly
 - **JS Source**: `src/js/modules/tab_creatures.js` lines 713–722
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: In JS, the has_content check, hideToast, and fitCamera are outside the if/else running for both character and standard models. In C++ this block is inside the else (standard-model only). For character-model creatures, the loading toast is never dismissed.
 
-- [ ] 40. [tab_creatures.cpp] Collection model geoset logic has three bugs
+- [x] 40. [tab_creatures.cpp] Collection model geoset logic has three bugs
 - **JS Source**: `src/js/modules/tab_creatures.js` lines 421–429
-- **Status**: Pending
+- **Status**: Verified
 - **Details**: (1) JS calls hideAllGeosets() before applying - C++ never does. (2) JS uses mapping.group_index for lookup - C++ uses coll_idx. (3) JS uses mapping.char_geoset for setGeosetGroupDisplay - C++ uses mapping.group_index.
 
 - [ ] 41. [tab_decor.cpp] PNG/CLIPBOARD export branch does not short-circuit like JS
