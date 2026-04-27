@@ -75,6 +75,11 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 			result.push_back(static_cast<uint32_t>(v));
 		return result;
 	}
+	// Handle single-value fields — JS always treats ItemID as an array.
+	if (auto* p = std::get_if<int64_t>(&val))
+		return { static_cast<uint32_t>(*p) };
+	if (auto* p = std::get_if<uint64_t>(&val))
+		return { static_cast<uint32_t>(*p) };
 	return {};
 }
 
@@ -311,14 +316,21 @@ void render() {
 
 	ImGui::EndChild(); // item-sets-list-container
 
-	//     <div class="regex-info" v-if="$core.view.config.regexFilters" ...>Regex Enabled</div>
-	//     <input type="text" v-model="$core.view.userInputFilterItemSets" placeholder="Filter item sets..."/>
-	if (view.config.value("regexFilters", false))
+	// <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
+	// <input type="text" v-model="userInputFilterItemSets" placeholder="Filter item sets..."/>
+	bool regexEnabled = view.config.value("regexFilters", false);
+	float inputWidth = ImGui::GetContentRegionAvail().x;
+	if (regexEnabled) {
 		ImGui::TextUnformatted("Regex Enabled");
-
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+		ImGui::SameLine();
+		inputWidth = ImGui::GetContentRegionAvail().x;
+	}
 	char filter_buf[256] = {};
 	std::strncpy(filter_buf, view.userInputFilterItemSets.c_str(), sizeof(filter_buf) - 1);
-	if (ImGui::InputText("##FilterItemSets", filter_buf, sizeof(filter_buf)))
+	ImGui::SetNextItemWidth(inputWidth);
+	if (ImGui::InputTextWithHint("##FilterItemSets", "Filter item sets...", filter_buf, sizeof(filter_buf)))
 		view.userInputFilterItemSets = filter_buf;
 }
 

@@ -18,6 +18,7 @@
 #include "../wow/ItemSlot.h"
 #include "../wow/EquipmentSlots.h"
 #include "../install-type.h"
+#include "../external-links.h"
 #include "../modules.h"
 #include "../components/context-menu.h"
 #include "../components/itemlistbox.h"
@@ -26,7 +27,6 @@
 #include <cstring>
 #include <algorithm>
 #include <format>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -178,7 +178,8 @@ static size_t s_item_entries_cache_size = ~size_t(0);
 static void view_item_models(const Item& item) {
 	modules::set_active("tab_models");
 
-	std::set<std::string> list;
+	// JS uses Set which preserves insertion order; use vector with uniqueness check.
+	std::vector<std::string> list;
 
 	for (const uint32_t model_id : item.models) {
 		const auto* file_data_ids = db::caches::DBModelFileData::getModelFileDataID(model_id);
@@ -188,8 +189,11 @@ static void view_item_models(const Item& item) {
 		for (const uint32_t file_data_id : *file_data_ids) {
 			std::string entry = casc::listfile::getByID(file_data_id).value_or("");
 
-			if (!entry.empty())
-				list.insert(std::format("{} [{}]", entry, file_data_id));
+			if (!entry.empty()) {
+				std::string s = std::format("{} [{}]", entry, file_data_id);
+				if (std::find(list.begin(), list.end(), s) == list.end())
+					list.push_back(std::move(s));
+			}
 		}
 	}
 
@@ -209,7 +213,8 @@ static void view_item_textures(const Item& item) {
 	modules::set_active("tab_textures");
 	db::caches::DBTextureFileData::ensureInitialized();
 
-	std::set<std::string> list;
+	// JS uses Set which preserves insertion order; use vector with uniqueness check.
+	std::vector<std::string> list;
 
 	for (const uint32_t texture_id : item.textures) {
 		const auto* file_data_ids = db::caches::DBTextureFileData::getTextureFDIDsByMatID(texture_id);
@@ -219,8 +224,11 @@ static void view_item_textures(const Item& item) {
 		for (const uint32_t file_data_id : *file_data_ids) {
 			std::string entry = casc::listfile::getByID(file_data_id).value_or("");
 
-			if (!entry.empty())
-				list.insert(std::format("{} [{}]", entry, file_data_id));
+			if (!entry.empty()) {
+				std::string s = std::format("{} [{}]", entry, file_data_id);
+				if (std::find(list.begin(), list.end(), s) == list.end())
+					list.push_back(std::move(s));
+			}
 		}
 	}
 
@@ -438,8 +446,8 @@ static void copy_to_clipboard(const std::string& value) {
 	ImGui::SetClipboardText(value.c_str());
 }
 
-static void view_on_wowhead([[maybe_unused]] uint32_t item_id) {
-	return;
+static void view_on_wowhead(uint32_t item_id) {
+	ExternalLinks::wowHead_viewItem(static_cast<int>(item_id));
 }
 
 static void equip_item(const nlohmann::json& item_json) {
@@ -690,14 +698,25 @@ void render() {
 		ImVec2(SIDEBAR_W - app::layout::SIDEBAR_PADDING_RIGHT,
 		       avail.y - app::layout::SIDEBAR_MARGIN_TOP));
 
-	ImGui::SeparatorText("Item Types");
+	// JS: <span class="header">Item Types</span>
+	ImGui::TextUnformatted("Item Types");
 
-	//     <div v-for="item in $core.view.itemViewerTypeMask" ...>
+	//     <div v-for="item in $core.view.itemViewerTypeMask" class="sidebar-checklist-item"
+	//          :class="{ selected: item.checked }" @click="toggle_checklist_item(item)">
 	//         <input type="checkbox" v-model="item.checked" @click.stop/>
 	//         <span>{{ item.label }}</span>
 	//     </div>
-	for (auto& entry : type_mask_entries)
-		ImGui::Checkbox(entry.label.c_str(), &entry.checked);
+	for (auto& entry : type_mask_entries) {
+		ImVec2 pos = ImGui::GetCursorPos();
+		// Full-width selectable provides .selected-class highlight and whole-row click.
+		bool row_toggled = ImGui::Selectable(
+			std::format("##rowtype_{}", entry.label).c_str(),
+			entry.checked, ImGuiSelectableFlags_AllowOverlap);
+		ImGui::SetCursorPos(pos);
+		bool cb_changed = ImGui::Checkbox(entry.label.c_str(), &entry.checked);
+		if (row_toggled && !cb_changed)
+			entry.checked = !entry.checked;
+	}
 
 	//     <a @click="setAllItemTypes(true)">Enable All</a> / <a @click="setAllItemTypes(false)">Disable All</a>
 	if (ImGui::SmallButton("Enable All##types")) {
@@ -714,13 +733,15 @@ void render() {
 
 	ImGui::Spacing();
 
-	ImGui::SeparatorText("Quality");
+	// JS: <span class="header">Quality</span>
+	ImGui::TextUnformatted("Quality");
 
-	//     <div v-for="item in $core.view.itemViewerQualityMask" ...>
+	//     <div v-for="item in $core.view.itemViewerQualityMask" class="sidebar-checklist-item"
+	//          :class="{ selected: item.checked }" @click="toggle_checklist_item(item)">
 	//         <input type="checkbox" v-model="item.checked" :class="'quality-' + item.id" @click.stop/>
 	//         <span>{{ item.label }}</span>
 	//     </div>
-	// Quality color mapping (matching WoW quality colors from app.css).
+	// WoW quality colors — applied to both the checkmark and the label text.
 	static const ImVec4 quality_colors[] = {
 		ImVec4(0.62f, 0.62f, 0.62f, 1.0f), // 0 = Poor (grey)
 		ImVec4(1.00f, 1.00f, 1.00f, 1.0f), // 1 = Common (white)
@@ -734,13 +755,24 @@ void render() {
 
 	for (auto& entry : quality_mask_entries) {
 		int idx = entry.id;
-		if (idx >= 0 && idx < static_cast<int>(std::size(quality_colors)))
+		bool has_color = (idx >= 0 && idx < static_cast<int>(std::size(quality_colors)));
+
+		ImVec2 pos = ImGui::GetCursorPos();
+		bool row_toggled = ImGui::Selectable(
+			std::format("##rowquality_{}", entry.label).c_str(),
+			entry.checked, ImGuiSelectableFlags_AllowOverlap);
+		ImGui::SetCursorPos(pos);
+
+		if (has_color) {
 			ImGui::PushStyleColor(ImGuiCol_CheckMark, quality_colors[idx]);
+			ImGui::PushStyleColor(ImGuiCol_Text, quality_colors[idx]);
+		}
+		bool cb_changed = ImGui::Checkbox(std::format("{}##quality", entry.label).c_str(), &entry.checked);
+		if (has_color)
+			ImGui::PopStyleColor(2);
 
-		ImGui::Checkbox(std::format("{}##quality", entry.label).c_str(), &entry.checked);
-
-		if (idx >= 0 && idx < static_cast<int>(std::size(quality_colors)))
-			ImGui::PopStyleColor();
+		if (row_toggled && !cb_changed)
+			entry.checked = !entry.checked;
 	}
 
 	//     <a @click="setAllItemQualities(true)">Enable All</a> / <a @click="setAllItemQualities(false)">Disable All</a>
@@ -772,15 +804,19 @@ void render() {
 		if (padY > 0.0f)
 			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
 
+		// <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
 			ImGui::SameLine();
 		}
 
+		// <input type="text" v-model="userInputFilterItems" placeholder="Filter items..."/>
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterItems.c_str(), sizeof(filter_buf) - 1);
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-		if (ImGui::InputText("##FilterItems", filter_buf, sizeof(filter_buf)))
+		if (ImGui::InputTextWithHint("##FilterItems", "Filter items...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterItems = filter_buf;
 	}
 	ImGui::EndChild();

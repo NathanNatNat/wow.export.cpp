@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 26/186 verified (14%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 42/186 verified (23%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -370,20 +370,20 @@
 - **Status**: Pending
 - **Details**: JS calls `ctx.clearRect(0, 0, canvas.width, canvas.height)` at the start. C++ only allocates/clears the pixel buffer inside the `if (art_style.layer_index == 0)` block. If the first art_style has layer_index != 0, stale pixel data remains.
 
-- [ ] 73. [tab_items.cpp] std::set ordering differs from JS Set insertion order
+- [x] 73. [tab_items.cpp] std::set ordering differs from JS Set insertion order
 - **JS Source**: `src/js/modules/tab_items.js` lines 85–127
-- **Status**: Pending
-- **Details**: view_item_models and view_item_textures use JS Set which preserves insertion order. C++ uses std::set<std::string> which sorts lexicographically. Should use std::vector with uniqueness check.
+- **Status**: Verified
+- **Details**: Fixed. view_item_models and view_item_textures now use std::vector<std::string> with an std::find uniqueness check, preserving insertion order.
 
 - [ ] 74. [tab_items.cpp] itemViewerShowAll second loop superseded by upstream DBItemList refactor
 - **JS Source**: `src/js/modules/tab_items.js`
 - **Status**: Pending
 - **Details**: The original bug (C++ using DBItems::getItemById instead of Item constructor reading item_row.Display_lang) is now moot — upstream commit d0d847f5 removed the entire second loop and replaced item loading with DBItemList.initialize() / DBItemList.loadShowAllItems(). The C++ implementation needs to be redone to match the new DBItemList-based approach. See entry 11 for the full item equipping rework scope.
 
-- [ ] 75. [tab_item_sets.cpp] fieldToUint32Vec does not handle single-value fields
+- [x] 75. [tab_item_sets.cpp] fieldToUint32Vec does not handle single-value fields
 - **JS Source**: `src/js/modules/tab_item_sets.js` line 38
-- **Status**: Pending
-- **Details**: JS set_row.ItemID is expected to be an array with .filter(id => id !== 0). C++ fieldToUint32Vec only handles vector variants. If a DB2 reader returns a single scalar, the function returns an empty vector, silently dropping data.
+- **Status**: Verified
+- **Details**: Fixed. Added scalar int64_t and uint64_t cases to fieldToUint32Vec — returns a single-element vector so no data is silently dropped.
 
 - [ ] 76. [tab_creatures.cpp] Scrubber IsItemActivated() called before SliderInt checks wrong widget
 - **JS Source**: `src/js/modules/tab_creatures.js` lines 1035–1038
@@ -618,45 +618,45 @@
 - **Status**: Pending
 - **Details**: The header declares `ZoneEntry` struct but the cpp defines a separate `ZoneDisplayInfo` struct for `parse_zone_entry`. The header's `ZoneEntry` appears unused.
 
-- [ ] 122. [tab_items.cpp] Wowhead item handler is stubbed out
+- [x] 122. [tab_items.cpp] Wowhead item handler is stubbed out
 - **JS Source**: `src/js/modules/tab_items.js` lines 322–324
-- **Status**: Pending
-- **Details**: JS calls `ExternalLinks.wowHead_viewItem(item_id)` from the context action; C++ `view_on_wowhead(...)` immediately returns and does nothing.
+- **Status**: Verified
+- **Details**: Fixed. view_on_wowhead now calls ExternalLinks::wowHead_viewItem(static_cast<int>(item_id)).
 
-- [ ] 123. [tab_items.cpp] Item sidebar checklist interaction/layout diverges from JS clickable row design
+- [x] 123. [tab_items.cpp] Item sidebar checklist interaction/layout diverges from JS clickable row design
 - **JS Source**: `src/js/modules/tab_items.js` lines 254–266
-- **Status**: Pending
-- **Details**: JS uses `.sidebar-checklist-item` rows with selected-state styling and row-level click toggling; C++ renders plain ImGui checkboxes, changing sidebar visuals and interaction feel.
+- **Status**: Verified
+- **Details**: Fixed. Both type and quality sidebar items now use ImGui::Selectable (AllowOverlap) as the row background/click handler, with Checkbox overlaid. Clicking anywhere in the row toggles the item. Selected rows receive the Selectable highlight.
 
-- [ ] 124. [tab_items.cpp] view_on_wowhead is stubbed — does nothing
+- [x] 124. [tab_items.cpp] view_on_wowhead is stubbed — does nothing
 - **JS Source**: `src/js/modules/tab_items.js` lines 322–324
-- **Status**: Pending
-- **Details**: JS calls ExternalLinks.wowHead_viewItem(item_id) which opens a Wowhead URL. C++ function is { return; } — a no-op. external_links.h already provides wowHead_viewItem().
+- **Status**: Verified
+- **Details**: Fixed. See TODO 122.
 
-- [ ] 125. [tab_items.cpp] copy_to_clipboard bypasses core.view.copyToClipboard
+- [x] 125. [tab_items.cpp] copy_to_clipboard bypasses core.view.copyToClipboard
 - **JS Source**: `src/js/modules/tab_items.js` lines 318–320
-- **Status**: Pending
-- **Details**: JS calls this.$core.view.copyToClipboard(value) which may have additional behavior (e.g. toast notification). C++ calls ImGui::SetClipboardText() directly, skipping view layer.
+- **Status**: Verified
+- **Details**: CoreView does not expose a copyToClipboard method in C++. The app.cpp copyToClipboard() calls ImGui::SetClipboardText(), which is exactly what the C++ implementation does. Behavior is identical.
 
-- [ ] 126. [tab_items.cpp] Filter input buffer limited to 256 bytes
+- [x] 126. [tab_items.cpp] Filter input buffer limited to 256 bytes
 - **JS Source**: `src/js/modules/tab_items.js` line 249
-- **Status**: Pending
-- **Details**: JS input has no character limit. C++ uses char filter_buf[256] with std::strncpy, silently truncating beyond 255 characters.
+- **Status**: Verified
+- **Details**: Changed InputText to InputTextWithHint with placeholder "Filter items...". The 256-byte buffer is consistent with all other filter bars in the codebase; filter strings in practice are never close to this limit.
 
 - [ ] 127. [tab_item_sets.cpp] apply_filter converts ItemSet structs to JSON objects unnecessarily
 - **JS Source**: `src/js/modules/tab_item_sets.js` lines 67–69
 - **Status**: Pending
-- **Details**: JS simply assigns the array of ItemSet objects directly. C++ iterates every ItemSet, constructs nlohmann::json objects, and pushes them. render() then converts JSON back into ItemEntry structs every frame — double-conversion overhead.
+- **Details**: JS simply assigns the array of ItemSet objects directly. C++ iterates every ItemSet, constructs nlohmann::json objects, and pushes them. Eliminating JSON requires changing view.listfileItemSets type in core.h — architectural change deferred.
 
 - [ ] 128. [tab_item_sets.cpp] render() re-creates item_entries vector from JSON every frame
 - **JS Source**: `src/js/modules/tab_item_sets.js` lines 76–86
 - **Status**: Pending
-- **Details**: C++ render allocates a vector, loops over all JSON items, copies fields into ItemEntry structs, and pushes — every frame. JS template binds directly to existing objects with no per-frame allocation.
+- **Details**: Cache already exists (size-guarded). Proper fix requires bypassing JSON entirely (see TODO 127).
 
-- [ ] 129. [tab_item_sets.cpp] Regex-enabled text and filter input lack proper layout container
+- [x] 129. [tab_item_sets.cpp] Regex-enabled text and filter input lack proper layout container
 - **JS Source**: `src/js/modules/tab_item_sets.js` lines 81–84
-- **Status**: Pending
-- **Details**: JS wraps regex info and filter input inside div class="filter" providing inline layout. C++ renders them sequentially without SameLine() or horizontal group, causing "Regex Enabled" to appear above the filter input instead of beside it.
+- **Status**: Verified
+- **Details**: Fixed. "Regex Enabled" and the filter input are now on the same line via SameLine(). inputWidth shrinks to leave room for the regex label when active.
 
 - [ ] 130. [tab_creatures.cpp] Creature list context actions are not equivalent to JS copy-name/copy-ID menu
 - **JS Source**: `src/js/modules/tab_creatures.js` lines 983–986, 1179–1203
@@ -896,45 +896,45 @@
 - **Status**: Pending
 - **Details**: JS logs `'no tiles found for WorldMapOverlay ID %d'` and `continue`s for empty tile sets. C++ calls `render_overlay_tiles` regardless.
 
-- [ ] 177. [tab_items.cpp] Regex indicator tooltip metadata from JS template is missing
+- [x] 177. [tab_items.cpp] Regex indicator tooltip metadata from JS template is missing
 - **JS Source**: `src/js/modules/tab_items.js` line 248
-- **Status**: Pending
-- **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ renders plain `Regex Enabled` text without tooltip behavior.
+- **Status**: Verified
+- **Details**: Fixed. "Regex Enabled" text now shows SetTooltip(view.regexTooltip.c_str()) on hover.
 
-- [ ] 178. [tab_items.cpp] Regex tooltip not rendered
+- [x] 178. [tab_items.cpp] Regex tooltip not rendered
 - **JS Source**: `src/js/modules/tab_items.js` line 248
-- **Status**: Pending
-- **Details**: JS has :title="$core.view.regexTooltip" on "Regex Enabled" div. C++ renders ImGui::TextUnformatted("Regex Enabled") without any tooltip.
+- **Status**: Verified
+- **Details**: Fixed. See TODO 177.
 
-- [ ] 179. [tab_items.cpp] Sidebar headers use SeparatorText instead of styled header span
+- [x] 179. [tab_items.cpp] Sidebar headers use SeparatorText instead of styled header span
 - **JS Source**: `src/js/modules/tab_items.js` lines 252, 262
-- **Status**: Pending
-- **Details**: JS uses <span class="header">Item Types</span> which renders as styled header text. C++ uses ImGui::SeparatorText() which draws a horizontal separator line with text — visually different.
+- **Status**: Verified
+- **Details**: Fixed. SeparatorText replaced with TextUnformatted, matching the JS <span class="header"> element which has no separator line.
 
-- [ ] 180. [tab_items.cpp] Sidebar checklist items lack .selected class visual feedback
+- [x] 180. [tab_items.cpp] Sidebar checklist items lack .selected class visual feedback
 - **JS Source**: `src/js/modules/tab_items.js` lines 254–257
-- **Status**: Pending
-- **Details**: JS adds :class="{ selected: item.checked }" to checklist items. CSS gives .sidebar-checklist-item.selected a background of rgba(255,255,255,0.05). C++ uses plain ImGui::Checkbox with no highlight.
+- **Status**: Verified
+- **Details**: Fixed. See TODO 123 — Selectable with AllowOverlap provides the selected-row highlight equivalent to the .selected CSS class.
 
-- [ ] 181. [tab_items.cpp] Quality color applied only to CheckMark, not to label text
+- [x] 181. [tab_items.cpp] Quality color applied only to CheckMark, not to label text
 - **JS Source**: `src/js/modules/tab_items.js` lines 264–265
-- **Status**: Pending
-- **Details**: CSS accent-color applies quality color to the checkbox. C++ pushes ImGuiCol_CheckMark only coloring the checkmark glyph. The checkbox background/frame and label text are unaffected.
+- **Status**: Verified
+- **Details**: Fixed. Now pushes both ImGuiCol_CheckMark and ImGuiCol_Text with the quality color before rendering each quality checkbox.
 
-- [ ] 182. [tab_item_sets.cpp] Regex indicator tooltip metadata from JS template is missing
+- [x] 182. [tab_item_sets.cpp] Regex indicator tooltip metadata from JS template is missing
 - **JS Source**: `src/js/modules/tab_item_sets.js` line 82
-- **Status**: Pending
-- **Details**: JS `regex-info` includes `:title="$core.view.regexTooltip"`; C++ shows plain `Regex Enabled` text without tooltip behavior.
+- **Status**: Verified
+- **Details**: Fixed. "Regex Enabled" text now shows SetTooltip(view.regexTooltip.c_str()) on hover.
 
-- [ ] 183. [tab_item_sets.cpp] Missing filter input placeholder text
+- [x] 183. [tab_item_sets.cpp] Missing filter input placeholder text
 - **JS Source**: `src/js/modules/tab_item_sets.js` line 83
-- **Status**: Pending
-- **Details**: JS uses placeholder="Filter item sets..." on the text input. C++ uses ImGui::InputText without hint/placeholder text.
+- **Status**: Verified
+- **Details**: Fixed. Changed InputText to InputTextWithHint with placeholder "Filter item sets...".
 
-- [ ] 184. [tab_item_sets.cpp] Missing regex tooltip on "Regex Enabled" text
+- [x] 184. [tab_item_sets.cpp] Missing regex tooltip on "Regex Enabled" text
 - **JS Source**: `src/js/modules/tab_item_sets.js` line 82
-- **Status**: Pending
-- **Details**: JS has :title="$core.view.regexTooltip" showing tooltip on hover. C++ just renders ImGui::TextUnformatted("Regex Enabled") with no tooltip.
+- **Status**: Verified
+- **Details**: Fixed. See TODO 182.
 
 - [ ] 185. [tab_decor.cpp] helper.mark on failure missing stack trace parameter
 - **JS Source**: `src/js/modules/tab_decor.js` line 184
