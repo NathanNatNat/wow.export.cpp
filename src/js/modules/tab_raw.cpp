@@ -34,6 +34,10 @@
 
 namespace tab_raw {
 
+static std::optional<std::string> build_stack_trace(const char* function_name, const std::exception& e) {
+	return std::format("{}: {}", function_name, e.what());
+}
+
 // --- File-local state ---
 
 static bool is_dirty = true;
@@ -235,7 +239,7 @@ static void pump_raw_export() {
 			data.writeToFile(export_path);
 			helper.mark(export_file_name, true);
 		} catch (const std::exception& e) {
-			helper.mark(export_file_name, false, e.what());
+			helper.mark(export_file_name, false, e.what(), build_stack_trace("export_raw_files", e));
 		}
 	} else {
 		helper.mark(export_file_name, true);

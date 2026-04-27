@@ -36,6 +36,10 @@
 
 namespace tab_install {
 
+static std::optional<std::string> build_stack_trace(const char* function_name, const std::exception& e) {
+	return std::format("{}: {}", function_name, e.what());
+}
+
 // --- File-local state ---
 
 static std::unique_ptr<casc::InstallManifest> manifest;
@@ -178,7 +182,7 @@ static void pump_install_export() {
 
 			helper.mark(file_name, true);
 		} catch (const std::exception& e) {
-			helper.mark(file_name, false, e.what());
+			helper.mark(file_name, false, e.what(), build_stack_trace("pump_install_export", e));
 		}
 	} else {
 		helper.mark(file_name, true);

@@ -30,6 +30,10 @@
 
 namespace legacy_tab_audio {
 
+static std::optional<std::string> build_stack_trace(const char* function_name, const std::exception& e) {
+	return std::format("{}: {}", function_name, e.what());
+}
+
 // --- File-local state ---
 
 static std::string selected_file;
@@ -241,7 +245,7 @@ static void export_sounds() {
 
 			helper.mark(export_file_name, true);
 		} catch (const std::exception& e) {
-			helper.mark(export_file_name, false, e.what());
+			helper.mark(export_file_name, false, e.what(), build_stack_trace("export_sounds", e));
 		}
 	}
 

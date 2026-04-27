@@ -46,6 +46,10 @@
 
 namespace tab_decor {
 
+static std::optional<std::string> build_stack_trace(const char* function_name, const std::exception& e) {
+	return std::format("{}: {}", function_name, e.what());
+}
+
 // --- File-local constants ---
 
 static constexpr int UNCATEGORIZED_ID = -1;
@@ -300,7 +304,7 @@ static void export_files(const std::vector<const db::caches::DBDecor::DecorItem*
 
 			helper.mark(mark_name, true);
 		} catch (const std::exception& e) {
-			helper.mark(decor_name, false, e.what());
+			helper.mark(decor_name, false, e.what(), build_stack_trace("export_files", e));
 		}
 	}
 
@@ -1095,38 +1099,45 @@ void render() {
 		bool auto_preview = view.config.value("decorAutoPreview", false);
 		if (ImGui::Checkbox("Auto Preview##decor", &auto_preview))
 			view.config["decorAutoPreview"] = auto_preview;
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Automatically preview a decor item when selecting it");
 	}
 
 	ImGui::Checkbox("Auto Camera##decor", &view.decorViewerAutoAdjust);
+	if (ImGui::IsItemHovered()) ImGui::SetTooltip("Automatically adjust camera when selecting a new item");
 
 	{
 		bool show_grid = view.config.value("modelViewerShowGrid", false);
 		if (ImGui::Checkbox("Show Grid##decor", &show_grid))
 			view.config["modelViewerShowGrid"] = show_grid;
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Show a grid in the 3D viewport");
 	}
 
 	{
 		bool wireframe = view.config.value("modelViewerWireframe", false);
 		if (ImGui::Checkbox("Show Wireframe##decor", &wireframe))
 			view.config["modelViewerWireframe"] = wireframe;
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Render the preview model as a wireframe");
 	}
 
 	{
 		bool show_bones = view.config.value("modelViewerShowBones", false);
 		if (ImGui::Checkbox("Show Bones##decor", &show_bones))
 			view.config["modelViewerShowBones"] = show_bones;
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Show the model's bone structure");
 	}
 
 	{
 		bool show_textures = view.config.value("modelViewerShowTextures", true);
 		if (ImGui::Checkbox("Show Textures##decor", &show_textures))
 			view.config["modelViewerShowTextures"] = show_textures;
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Show model textures in the preview pane");
 	}
 
 	{
 		bool show_bg = view.config.value("modelViewerShowBackground", false);
 		if (ImGui::Checkbox("Show Background##decor", &show_bg))
 			view.config["modelViewerShowBackground"] = show_bg;
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Show a background color in the 3D viewport");
 	}
 
 	ImGui::SeparatorText("Export");
@@ -1135,11 +1146,13 @@ void render() {
 		bool export_tex = view.config.value("modelsExportTextures", true);
 		if (ImGui::Checkbox("Textures##decor-export", &export_tex))
 			view.config["modelsExportTextures"] = export_tex;
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Include textures when exporting models");
 
 		if (export_tex) {
 			bool export_alpha = view.config.value("modelsExportAlpha", true);
 			if (ImGui::Checkbox("Texture Alpha##decor", &export_alpha))
 				view.config["modelsExportAlpha"] = export_alpha;
+			if (ImGui::IsItemHovered()) ImGui::SetTooltip("Include alpha channel in exported model textures");
 		}
 	}
 
@@ -1150,6 +1163,7 @@ void render() {
 			bool export_anims = view.config.value("modelsExportAnimations", false);
 			if (ImGui::Checkbox("Export animations##decor", &export_anims))
 				view.config["modelsExportAnimations"] = export_anims;
+			if (ImGui::IsItemHovered()) ImGui::SetTooltip("Include animations in export");
 		}
 	}
 

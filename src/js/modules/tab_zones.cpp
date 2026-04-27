@@ -52,6 +52,10 @@ License: MIT
 
 namespace tab_zones {
 
+static std::optional<std::string> build_stack_trace(const char* function_name, const std::exception& e) {
+	return std::format("{}: {}", function_name, e.what());
+}
+
 // Upload RGBA pixel data to an OpenGL texture, returning the texture ID.
 // Deletes the previous texture if old_tex != 0.
 static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t old_tex = 0) {
@@ -984,6 +988,7 @@ context_menu::render(
 
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", view.regexTooltip.c_str());
 			ImGui::SameLine();
 		}
 
@@ -1197,7 +1202,7 @@ helper.mark((fs::path("zones") / filename).string(), true);
 logging::write(std::format("successfully exported zone map to: {}", export_path));
 } catch (const std::exception& e) {
 logging::write(std::format("failed to export zone map: {}", e.what()));
-helper.mark(zone_entry.get<std::string>(), false, e.what());
+helper.mark(zone_entry.get<std::string>(), false, e.what(), build_stack_trace("export_zone_map", e));
 }
 }
 

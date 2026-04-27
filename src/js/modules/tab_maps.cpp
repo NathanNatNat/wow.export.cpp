@@ -67,6 +67,10 @@ License: MIT
 
 namespace tab_maps {
 
+static std::optional<std::string> build_stack_trace(const char* function_name, const std::exception& e) {
+	return std::format("{}: {}", function_name, e.what());
+}
+
 /// Compute MD5 hex digest of a string. Matches JS crypto.createHash('md5').update(str).digest('hex').
 static std::string md5_hex(const std::string& input) {
 	EVP_MD_CTX* ctx = EVP_MD_CTX_new();
@@ -931,7 +935,7 @@ return;
 
 helper.mark(mark_file_name, true);
 } catch (const std::exception& e) {
-helper.mark("world model", false, e.what());
+helper.mark("world model", false, e.what(), build_stack_trace("export_map_wmo", e));
 }
 
 WMOExporter::clearCache();
@@ -1030,7 +1034,7 @@ helper.mark(relative_path, true);
 logging::write(std::format("WMO minimap exported: {}", out_path));
 
 } catch (const std::exception& e) {
-helper.mark("WMO minimap", false, e.what());
+helper.mark("WMO minimap", false, e.what(), build_stack_trace("export_map_wmo_minimap", e));
 }
 
 helper.finish();
@@ -1141,7 +1145,7 @@ static void pump_map_export() {
 			if (task.export_paths) task.export_paths->writeLine(out.type + ":" + out.path.string());
 			helper.mark(task.mark_path, true);
 		} catch (const std::exception& e) {
-			helper.mark(task.mark_path, false, e.what());
+			helper.mark(task.mark_path, false, e.what(), build_stack_trace("pump_map_export", e));
 		}
 	} else {
 		// RAW format
@@ -1150,7 +1154,7 @@ static void pump_map_export() {
 			if (task.export_paths) task.export_paths->writeLine(out.type + ":" + out.path.string());
 			helper.mark(task.mark_path, true);
 		} catch (const std::exception& e) {
-			helper.mark(task.mark_path, false, e.what());
+			helper.mark(task.mark_path, false, e.what(), build_stack_trace("pump_map_export", e));
 		}
 	}
 }
@@ -1325,7 +1329,7 @@ export_paths.close();
 helper.mark((std::filesystem::path("maps") / selected_map_dir / filename).string(), true);
 
 } catch (const std::exception& e) {
-helper.mark("PNG export", false, e.what());
+helper.mark("PNG export", false, e.what(), build_stack_trace("export_selected_map_as_png", e));
 logging::write(std::format("PNG export failed: {}", e.what()));
 }
 
@@ -1494,7 +1498,7 @@ helper.mark((std::filesystem::path("maps") / selected_map_dir / "heightmaps" / f
 logging::write(std::format("exported heightmap: {}", out_path));
 
 } catch (const std::exception& e) {
-helper.mark(filename, false, e.what());
+helper.mark(filename, false, e.what(), build_stack_trace("export_selected_map_as_heightmaps", e));
 logging::write(std::format("failed to export heightmap for tile {}: {}", tile_index, e.what()));
 }
 }
@@ -1775,6 +1779,7 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 		bool regex_enabled = view.config.value("regexFilters", false);
 		if (regex_enabled) {
 			ImGui::TextDisabled("Regex Enabled");
+			if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", view.regexTooltip.c_str());
 			ImGui::SameLine();
 		}
 

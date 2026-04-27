@@ -45,6 +45,10 @@
 
 namespace tab_videos {
 
+static std::optional<std::string> build_stack_trace(const char* function_name, const std::exception& e) {
+	return std::format("{}: {}", function_name, e.what());
+}
+
 static uint32_t fieldToUint32(const db::FieldValue& val) {
 	if (auto* p = std::get_if<int64_t>(&val))
 		return static_cast<uint32_t>(*p);
@@ -435,6 +439,7 @@ static void stream_video(const std::string& file_name) {
 			}
 		} catch (const std::exception& e) {
 			logging::write(std::format("failed to stream video {}: {}", file_name, e.what()));
+			if (const auto trace = build_stack_trace("stream_video", e)) logging::write(*trace);
 			std::lock_guard<std::mutex> lock(stream_result_mutex);
 			pending_stream_result = StreamResult{false, {}, {}, std::string("Failed to stream video: ") + e.what()};
 		}
@@ -731,7 +736,7 @@ static void export_mp4() {
 
 			helper.mark(export_file_name, true);
 		} catch (const std::exception& e) {
-			helper.mark(export_file_name, false, e.what());
+			helper.mark(export_file_name, false, e.what(), build_stack_trace("export_mp4", e));
 		}
 	}
 
@@ -780,7 +785,7 @@ static void export_avi() {
 			} catch (const casc::BLTEIntegrityError&) {
 				is_corrupted = true;
 			} catch (const std::exception& e) {
-				helper.mark(export_file_name, false, e.what());
+				helper.mark(export_file_name, false, e.what(), build_stack_trace("export_avi", e));
 			}
 
 			if (is_corrupted) {
@@ -793,7 +798,7 @@ static void export_avi() {
 
 					helper.mark(export_file_name, true);
 				} catch (const std::exception& e) {
-					helper.mark(export_file_name, false, e.what());
+					helper.mark(export_file_name, false, e.what(), build_stack_trace("export_avi", e));
 				}
 			}
 		} else {
@@ -856,7 +861,7 @@ static void export_mp3() {
 			data.writeToFile(export_path);
 			helper.mark(export_file_name, true);
 		} catch (const std::exception& e) {
-			helper.mark(export_file_name, false, e.what());
+			helper.mark(export_file_name, false, e.what(), build_stack_trace("export_mp3", e));
 		}
 	}
 
@@ -917,7 +922,7 @@ static void export_subtitles() {
 			data.writeToFile(export_path);
 			helper.mark(export_file_name, true);
 		} catch (const std::exception& e) {
-			helper.mark(export_file_name, false, e.what());
+			helper.mark(export_file_name, false, e.what(), build_stack_trace("export_subtitles", e));
 		}
 	}
 
