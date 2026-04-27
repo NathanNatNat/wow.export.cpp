@@ -97,9 +97,10 @@ void ensureInitialized();
 /**
  * Get geoset data for an item's display.
  * @param item_id Item ID.
+ * @param modifier_id Optional item appearance modifier (-1 for default).
  * @returns Pointer to GeosetData, or nullptr if not found.
  */
-const GeosetData* getItemGeosetData(uint32_t item_id);
+const GeosetData* getItemGeosetData(uint32_t item_id, int modifier_id = -1);
 
 /**
  * Get ItemDisplayInfoID for an item.

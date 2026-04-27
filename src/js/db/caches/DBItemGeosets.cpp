@@ -57,8 +57,12 @@ const std::unordered_map<int, std::vector<SlotGeosetEntry>> SLOT_GEOSET_MAPPING 
 		{0, CG::HELM, false},
 		{1, CG::SKULL, false}
 	}},
-	// Shoulder: geosetGroup[0] = SHOULDERS
+	// Shoulder (L): geosetGroup[0] = SHOULDERS
 	{3, {
+		{0, CG::SHOULDERS, false}
+	}},
+	// Shoulder (R): same geoset group as left
+	{30, {
 		{0, CG::SHOULDERS, false}
 	}},
 	// Shirt: geosetGroup[0] = CG_SLEEVES, geosetGroup[1] = CG_CHEST
@@ -120,7 +124,7 @@ const std::unordered_map<int, std::vector<int>> GEOSET_PRIORITY = {
 	{CG::HELM, {1}},                // head only
 	{CG::ARM_UPPER, {5}},           // chest only
 	{CG::SKULL, {1}},               // head only
-	{CG::SHOULDERS, {3}},           // shoulder only
+	{CG::SHOULDERS, {3, 30}},       // shoulder (L or R)
 	{CG::BOOTS, {8}},               // boots only
 	{CG::GLOVES, {10}},             // gloves only
 	{CG::PANTS, {7}},               // pants only
@@ -263,10 +267,10 @@ static const GeosetData* getItemGeosetDataWithModifier(uint32_t item_id, int mod
 }
 
 /**
- * Get geoset data for an item's display.
+ * Get geoset data for an item's display (with optional modifier).
  */
-const GeosetData* getItemGeosetData(uint32_t item_id) {
-	return getItemGeosetDataWithModifier(item_id, -1);
+const GeosetData* getItemGeosetData(uint32_t item_id, int modifier_id) {
+	return getItemGeosetDataWithModifier(item_id, modifier_id);
 }
 
 /**

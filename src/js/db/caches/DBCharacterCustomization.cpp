@@ -144,7 +144,6 @@ static void _initialize() {
 				else
 					logging::write(std::format("ChrCustomizationCondModel {} references unknown CreatureModelData {}", condModelID, cond_it->second));
 			}
-			unsupported_choices.push_back(choiceID);
 		}
 
 		if (displayInfoID != 0)

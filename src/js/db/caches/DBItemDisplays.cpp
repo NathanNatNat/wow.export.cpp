@@ -11,7 +11,7 @@
 #include "../WDCReader.h"
 
 #include "DBModelFileData.h"
-#include "DBTextureFileData.h"
+#include "DBItemDisplayInfoModelMatRes.h"
 
 #include <format>
 #include <unordered_map>
@@ -52,10 +52,11 @@ void initializeItemDisplays() {
 	if (initialized)
 		return;
 
-	DBTextureFileData::ensureInitialized();
+	DBItemDisplayInfoModelMatRes::ensureInitialized();
 
 	logging::write("Loading item textures...");
 
+	// Using the texture mapping, map all model fileDataIDs to used textures.
 	for (const auto& [itemDisplayInfoID, itemDisplayInfoRow] : casc::db2::preloadTable("ItemDisplayInfo").getAllRows()) {
 		auto allModelResIDs = fieldToUint32Vec(itemDisplayInfoRow.at("ModelResourcesID"));
 		std::vector<uint32_t> modelResIDs;
@@ -76,16 +77,19 @@ void initializeItemDisplays() {
 			continue;
 
 		const auto* modelFileDataIDs = DBModelFileData::getModelFileDataID(modelResIDs[0]);
-		const auto* textureFileDataIDs = DBTextureFileData::getTextureFDIDsByMatID(matResIDs[0]);
+		if (modelFileDataIDs == nullptr)
+			continue;
 
-		if (modelFileDataIDs != nullptr && textureFileDataIDs != nullptr) {
-			for (uint32_t modelFileDataID : *modelFileDataIDs) {
-				ItemDisplay display;
-				display.ID = itemDisplayInfoID;
-				display.textures = *textureFileDataIDs;
+		const auto* itemDisplayTexFileDataIDs = DBItemDisplayInfoModelMatRes::getItemDisplayIdTextureFileIds(itemDisplayInfoID);
+		if (itemDisplayTexFileDataIDs == nullptr)
+			continue;
 
-				itemDisplays[modelFileDataID].push_back(std::move(display));
-			}
+		for (uint32_t modelFileDataID : *modelFileDataIDs) {
+			ItemDisplay display;
+			display.ID = itemDisplayInfoID;
+			display.textures = *itemDisplayTexFileDataIDs;
+
+			itemDisplays[modelFileDataID].push_back(std::move(display));
 		}
 	}
 
@@ -103,6 +107,15 @@ const std::vector<ItemDisplay>* getItemDisplaysByFileDataID(uint32_t fileDataID)
 	if (it != itemDisplays.end())
 		return &it->second;
 	return nullptr;
+}
+
+/**
+ * Gets textures from a display ID directly.
+ * @param displayId ItemDisplayInfoID.
+ * @returns Pointer to vector of texture file data IDs, or nullptr if not found.
+ */
+const std::vector<uint32_t>* getTexturesByDisplayId(uint32_t displayId) {
+	return DBItemDisplayInfoModelMatRes::getItemDisplayIdTextureFileIds(displayId);
 }
 
 } // namespace db::caches::DBItemDisplays

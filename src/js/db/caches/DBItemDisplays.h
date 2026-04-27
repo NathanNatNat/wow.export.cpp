@@ -27,4 +27,11 @@ void initializeItemDisplays();
  */
 const std::vector<ItemDisplay>* getItemDisplaysByFileDataID(uint32_t fileDataID);
 
+/**
+ * Gets textures from a display ID directly.
+ * @param displayId ItemDisplayInfoID.
+ * @returns Pointer to vector of texture file data IDs, or nullptr if not found.
+ */
+const std::vector<uint32_t>* getTexturesByDisplayId(uint32_t displayId);
+
 } // namespace db::caches::DBItemDisplays
