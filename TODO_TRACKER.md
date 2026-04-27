@@ -1,28 +1,8 @@
 # TODO Tracker
 
-> **Progress: 0/20 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/16 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
-
-- [ ] 2. [WMORendererGL.cpp] Port upstream WMO renderer changes
-  - **JS Source**: `src/js/3D/renderers/WMORendererGL.js`
-  - **Status**: Pending
-  - **Details**: Commits to port: implement WMO shader changes — shader selection/dispatch overhaul (e27b4d63); fix semi-transparent textures via blend mode alpha control (590c2bb3); fix missing WMO rendering flags (3c68fefb); WMO UV improvements (7d57f471 — shared with loaders); wireframe via dedicated line index buffers (1715ee16).
-
-- [ ] 3. [MDXRendererGL.cpp] Port upstream MDX renderer changes
-  - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js`
-  - **Status**: Pending
-  - **Details**: Commits to port: dispose bone UBOs to fix GPU memory leak (c962fdcb); move bone UBO creation outside geoset loop to avoid duplicate allocations (7a35d7e2); bone/tex_matrix UBO rework (a1689641 — shared); tex_mat_idx/tex_matrices (4bb373ab — shared); pre-allocate scratch matrices (93782b4c — shared); MAX_BONES reduction/clamp (d9d48d8a — shared); WMO UV improvements partial (7d57f471); wireframe via dedicated line index buffers (1715ee16).
-
-- [ ] 4. [M2LegacyRendererGL.cpp / M3RendererGL.cpp / WMOLegacyRendererGL.cpp] Port shared upstream renderer changes to legacy renderers
-  - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js`, `M3RendererGL.js`, `WMOLegacyRendererGL.js`
-  - **Status**: Pending
-  - **Details**: Commits to port across legacy renderers: UV2 Y-flip for OpenGL origin consistency (189fb5a2 — M2Legacy + M3); tex_mat_idx/tex_matrices (4bb373ab — M2Legacy, M3, MDX); always emit uv2/texcoord2 (4cc75854 — M2Legacy, M3); bone UBO rework (a1689641 — M2Legacy, M3, MDX); pre-allocate scratch matrices (93782b4c — M2Legacy, MDX); wireframe via line index buffers (1715ee16 — all four); create_bones_ubo shared helper extraction (92f6e7a4 — see entry 5).
-
-- [ ] 5. [renderer_utils.cpp / renderer_utils.h] Create new renderer_utils translation unit
-  - **JS Source**: `src/js/3D/renderers/renderer_utils.js` (new file upstream)
-  - **Status**: Pending
-  - **Details**: Upstream commit 92f6e7a4 extracted a shared `create_bones_ubo` helper used by M2Renderer, M2LegacyRenderer, M3Renderer, and MDXRenderer into a new `renderer_utils.js`. Port as a new `renderer_utils.cpp`/`renderer_utils.h` pair and update all four renderers to call it instead of inlining UBO setup.
 
 - [ ] 6. [GLContext.cpp / ShaderProgram.cpp / UniformBuffer.cpp / VertexArray.cpp] Port upstream GL subsystem fixes
   - **JS Source**: `src/js/3D/gl/GLContext.js`, `ShaderProgram.js`, `UniformBuffer.js`, `VertexArray.js`
