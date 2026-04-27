@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/148 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/257 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/app.cpp ─────────────────────────────────────────────────────────── -->
 
@@ -839,3 +839,608 @@
   - **JS Source**: `src/js/3D/loaders/WMOLoader.js` line 131
   - **Status**: Pending
   - **Details**: JS `exportTextures` checks `!!wmo.textureNames` (truthy — `{}` is truthy even when empty). C++ cannot use truthiness on a `std::map`, so `hasMotxChunk = true` is set in `parse_MOTX` (even for empty MOTX chunks) to replicate JS truthy semantics. Necessary C++ adaptation; documented in a code comment.
+
+<!-- ─── src/js/3D/renderers/CharMaterialRenderer.cpp ──────────────────────────────── -->
+
+- [ ] 149. [CharMaterialRenderer.cpp] `setTextureTarget()` does not call `update()` after adding a texture target — bug
+  - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` line 143
+  - **Status**: Pending
+  - **Details**: JS `setTextureTarget()` ends with `await this.update()`. C++ `setTextureTarget()` adds the texture target and returns without calling `update()`. Adding a texture target will not trigger an FBO redraw until the next explicit `update()` call.
+
+- [ ] 150. [CharMaterialRenderer.cpp] `init()` is synchronous in C++; JS original is `async`
+  - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js` line 41
+  - **Status**: Pending
+  - **Details**: JS `async init()` returns a Promise. C++ `init()` is `void`. Necessary adaptation (no JS Promise system in C++). Callers must not await a return value.
+
+- [ ] 151. [CharMaterialRenderer.cpp] `getCanvas()` returns `GLuint` FBO texture handle; JS returns HTML canvas element
+  - **JS Source**: `src/js/3D/renderers/CharMaterialRenderer.js`
+  - **Status**: Pending
+  - **Details**: Necessary adaptation — C++ replaces the HTML canvas with an FBO texture. `getCanvas()` returns the `fbo_texture_` GLuint handle instead of an HTML canvas element.
+
+<!-- ─── src/js/3D/renderers/GridRenderer.cpp ──────────────────────────────── -->
+
+- [ ] 152. [GridRenderer.cpp] Shader GLSL version changed from `#version 300 es` (WebGL2) to `#version 430 core` (desktop OpenGL 4.3)
+  - **JS Source**: `src/js/3D/renderers/GridRenderer.js`
+  - **Status**: Pending
+  - **Details**: Necessary adaptation (desktop OpenGL 4.3 core profile). No functional impact on rendering behaviour.
+
+<!-- ─── src/js/3D/renderers/M2LegacyRendererGL.cpp ──────────────────────────────── -->
+
+- [ ] 153. [M2LegacyRendererGL.cpp] Bone skinning is a documented stub — `u_bone_count` always set to 0
+  - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js`
+  - **Status**: Pending
+  - **Details**: JS `_create_bones_ubo()` builds a live UBO and `render()` binds and uploads bone data per draw call. C++ `render()` sets `shader->set_uniform_1i("u_bone_count", 0)` with a TODO comment. Legacy M2 models will render without bone skinning — character poses and animations will be incorrect until the animation system is fixed.
+
+- [ ] 154. [M2LegacyRendererGL.cpp] `loadSkin()` does not initialize any GPU bone buffer — stub
+  - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js`
+  - **Status**: Pending
+  - **Details**: JS `_create_bones_ubo()` is called from `loadSkin()` (via `load()`). C++ `loadSkin()` stores `std::vector<float> bone_matrices` in CPU memory only — no SSBO or UBO is created. Related to entry 153.
+
+- [ ] 155. [M2LegacyRendererGL.cpp] `texture_ribbon::setSlotFileLegacy()` used where JS uses `textureRibbon.setSlotFile()`
+  - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js`
+  - **Status**: Pending
+  - **Details**: JS uses `textureRibbon.setSlotFile(ribbonSlot, fileName, syncID)` for all texture types. C++ uses `texture_ribbon::setSlotFileLegacy()` for file-path-based slots. If `setSlotFileLegacy()` has different behaviour, ribbon display may differ. Requires verification.
+
+- [ ] 156. [M2LegacyRendererGL.cpp] `current_animation` uses sentinel value `-1`; JS uses `null`
+  - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js`
+  - **Status**: Pending
+  - **Details**: Necessary adaptation. JS `this.current_animation = null`; C++ uses `-1` as sentinel. Functionally equivalent.
+
+<!-- ─── src/js/3D/renderers/M2RendererGL.cpp ──────────────────────────────── -->
+
+- [ ] 157. [M2RendererGL.cpp] UBO (WebGL2 Uniform Buffer Object) replaced by SSBO for bone matrices
+  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js`
+  - **Status**: Pending
+  - **Details**: Necessary architectural adaptation — desktop OpenGL 4.3 SSBO preferred over UBO for large bone arrays. JS uses `create_bones_ubo()` and uploads via `ubo.ubo.upload_range()`; C++ uses `bone_ssbo` (GLuint) with `glBufferData`. Functionally equivalent.
+
+- [ ] 158. [M2RendererGL.cpp] `stopAnimation()` uses `-1` sentinels instead of JS `null`
+  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js`
+  - **Status**: Pending
+  - **Details**: JS sets `this.current_animation = null`, `this.anim_index = null`, `this.anim_source = null`. C++ uses `-1` sentinels. Necessary adaptation; functionally equivalent.
+
+- [ ] 159. [M2RendererGL.cpp] `_animate_track()` split into typed overloads
+  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js`
+  - **Status**: Pending
+  - **Details**: JS has single `_animate_track(animblock, def, lerpfunc)` with a generic lerp callback. C++ splits into `_animate_track_vec4()` and `_animate_track_scalar()`. Necessary adaptation (C++ requires typed function signatures); functionally equivalent.
+
+- [ ] 160. [M2RendererGL.cpp] `find_keyframe()` free function in JS mapped to `_find_time_index()` static member in C++
+  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js`
+  - **Status**: Pending
+  - **Details**: Necessary adaptation; functionally equivalent.
+
+<!-- ─── src/js/3D/renderers/M3RendererGL.cpp ──────────────────────────────── -->
+
+- [ ] 161. [M3RendererGL.cpp] UBO replaced by SSBO for bone matrices
+  - **JS Source**: `src/js/3D/renderers/M3RendererGL.js`
+  - **Status**: Pending
+  - **Details**: Same architectural change as M2RendererGL (entry 157). JS `_create_bones_ubo()` with `bone_count = 1`; C++ uses `bone_ssbo` SSBO. Necessary adaptation; functionally equivalent.
+
+- [ ] 162. [M3RendererGL.cpp] JS `loadLOD()` calls `_create_bones_ubo()`; C++ `loadLOD()` does not
+  - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` line 147
+  - **Status**: Pending
+  - **Details**: In JS, `loadLOD()` calls `this._create_bones_ubo()`. In C++, the SSBO is created once in `load()` — `loadLOD()` does not call any SSBO creation. Necessary adaptation (SSBO lifecycle differs from UBO lifecycle). Functionally equivalent if SSBO is always created before first LOD render.
+
+- [ ] 163. [M3RendererGL.cpp] `getBoundingBox()` returns `std::nullopt` when `m3` is null; JS returns `{min:[Inf...], max:[-Inf...]}` for empty vertices
+  - **JS Source**: `src/js/3D/renderers/M3RendererGL.js`
+  - **Status**: Pending
+  - **Details**: Documented deviation in a code comment. Callers treat both as "no bounding box". Functionally equivalent for current use cases.
+
+- [ ] 164. [M3RendererGL.cpp] `dispose()` deletes `bone_ssbo` with `glDeleteBuffers`; JS disposes UBOs with `for (const ubo of this.ubos) ubo.ubo.dispose()`
+  - **JS Source**: `src/js/3D/renderers/M3RendererGL.js`
+  - **Status**: Pending
+  - **Details**: Necessary adaptation. Functionally equivalent resource cleanup.
+
+<!-- ─── src/js/3D/renderers/MDXRendererGL.cpp ──────────────────────────────── -->
+
+- [ ] 165. [MDXRendererGL.cpp] UV v-coordinate is flipped in `_build_geometry()` — not present in JS source
+  - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js`
+  - **Status**: Pending
+  - **Details**: JS stores raw UVs from `geoset.tVertices[0]` directly with no flip. C++ applies `flippedUvs[i * 2 + 1] = 1.0f - uvs[i * 2 + 1]` (v-coordinate Y-axis flip). This operation does not exist in the JS source and is likely a porting bug — UV-mapped textures may appear vertically mirrored.
+
+- [ ] 166. [MDXRendererGL.cpp] UBO replaced by SSBO for node matrices
+  - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js`
+  - **Status**: Pending
+  - **Details**: Same architectural change as M2RendererGL (entry 157). Necessary adaptation; functionally equivalent.
+
+- [ ] 167. [MDXRendererGL.cpp] `stopAnimation()` resets ALL node matrices to identity; JS only resets first matrix
+  - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js`
+  - **Status**: Pending
+  - **Details**: JS `this.node_matrices.set(IDENTITY_MAT4)` sets only the first 16 floats. C++ iterates all matrices and resets each to identity. C++ behaviour is arguably more correct but deviates from JS. May be intentional.
+
+- [ ] 168. [MDXRendererGL.cpp] Vue `$watch` reactive watchers replaced by per-frame polling
+  - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js`
+  - **Status**: Pending
+  - **Details**: Necessary adaptation (no reactive framework in C++). Polling in `render()` with `prev_geoset_checked` / `prev_wireframe` comparisons. Functionally equivalent.
+
+- [ ] 169. [MDXRendererGL.cpp] `_scratch_calculated` is a JS `Set`; C++ uses `std::set<int>`
+  - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js`
+  - **Status**: Pending
+  - **Details**: Necessary adaptation. Functionally equivalent.
+
+<!-- ─── src/js/3D/renderers/renderer_utils.cpp ──────────────────────────────── -->
+
+- [ ] 170. [renderer_utils.cpp] Complete API redesign: JS `create_bones_ubo()` returns `Float32Array`; C++ `create_bones_ssbo()` returns `GLuint`
+  - **JS Source**: `src/js/3D/renderers/renderer_utils.js` lines 10–23
+  - **Status**: Pending
+  - **Details**: JS `create_bones_ubo(shader, gl, ctx, ubos, bone_count)` binds a uniform block, creates a UniformBuffer, pushes to `ubos` array, and returns a Float32Array view. C++ `renderer_utils::create_bones_ssbo(bone_count)` creates an SSBO, fills with identity matrices, and returns a GLuint. Necessary architectural adaptation (WebGL2 UBO → desktop OpenGL SSBO).
+
+- [ ] 171. [renderer_utils.cpp] `renderer_utils::create_bones_ssbo()` is dead code — no callers in current codebase
+  - **JS Source**: `src/js/3D/renderers/renderer_utils.js` lines 10–23
+  - **Status**: Pending
+  - **Details**: All renderers (M2RendererGL, M3RendererGL, MDXRendererGL) create their own SSBOs directly via `glGenBuffers`. `create_bones_ssbo` is declared and defined but has no call sites. Should be removed or used consistently.
+
+<!-- ─── src/js/3D/renderers/ShadowPlaneRenderer.cpp ──────────────────────────────── -->
+
+- [ ] 172. [ShadowPlaneRenderer.cpp] Shader GLSL version changed from `#version 300 es` to `#version 430 core`
+  - **JS Source**: `src/js/3D/renderers/ShadowPlaneRenderer.js`
+  - **Status**: Pending
+  - **Details**: Necessary adaptation (desktop OpenGL 4.3 core profile). No functional impact.
+
+<!-- ─── src/js/3D/renderers/WMOLegacyRendererGL.cpp ──────────────────────────────── -->
+
+- [ ] 173. [WMOLegacyRendererGL.cpp] Texture loading uses `set_blp()` — may not pass `generate_mipmaps = true`
+  - **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js`
+  - **Status**: Pending
+  - **Details**: JS explicitly calls `gl_tex.set_rgba(pixels, w, h, { ..., generate_mipmaps: true })`. C++ calls `gl_tex->set_blp(blp, blp_flags)`. If `set_blp()` does not internally set `generate_mipmaps = true`, WMO legacy textures will lack mipmaps, causing rendering quality differences at distance. Verify `set_blp()` flags.
+
+- [ ] 174. [WMOLegacyRendererGL.cpp] `updateSets()` is synchronous in C++; JS original is `async`
+  - **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js`
+  - **Status**: Pending
+  - **Details**: JS `async updateSets()` defers doodad set loading. C++ `updateSets()` is synchronous, potentially causing a frame stall during doodad loading on the render thread.
+
+- [ ] 175. [WMOLegacyRendererGL.cpp] `texture_ribbon::setSlotFileLegacy()` used where JS uses `textureRibbon.setSlotFile()`
+  - **JS Source**: `src/js/3D/renderers/WMOLegacyRendererGL.js`
+  - **Status**: Pending
+  - **Details**: Same concern as entry 155 for M2LegacyRendererGL. Requires verification of `setSlotFileLegacy` behaviour relative to `setSlotFile`.
+
+<!-- ─── src/js/3D/renderers/WMORendererGL.cpp ──────────────────────────────── -->
+
+- [ ] 176. [WMORendererGL.cpp] `load()` and all sub-methods synchronous in C++; JS uses `async/await` throughout
+  - **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 81–111
+  - **Status**: Pending
+  - **Details**: JS `load()`, `_load_textures()`, `_load_groups()`, `loadDoodadSet()`, and `updateSets()` are all async. C++ versions are synchronous. Doodad set loading runs on the render thread and may cause frame stalls for large WMOs.
+
+- [ ] 177. [WMORendererGL.cpp] Vue `$watch` replaced by per-frame polling for groups, sets, and wireframe
+  - **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 105–107
+  - **Status**: Pending
+  - **Details**: Necessary adaptation (no reactive framework in C++). Polling in `render()` via `prev_group_checked` / `prev_set_checked` vectors. Functionally equivalent.
+
+- [ ] 178. [WMORendererGL.cpp] C++ constructor adds `fileName`-based overload not present in JS
+  - **JS Source**: `src/js/3D/renderers/WMORendererGL.js`
+  - **Status**: Pending
+  - **Details**: JS constructor takes `(data, fileID, gl_context, useRibbon)`. C++ adds a second constructor taking `const std::string& fileName`. This is a C++ extension — not a deviation from JS semantics (both resolve to the same loading path).
+
+- [ ] 179. [WMORendererGL.cpp] `isClassic` detection: JS uses `!!wmo.textureNames`; C++ uses `wmo->hasMotxChunk`
+  - **JS Source**: `src/js/3D/renderers/WMORendererGL.js` line 126
+  - **Status**: Pending
+  - **Details**: JS checks `const isClassic = !!wmo.textureNames` (truthy for non-null object). C++ checks `const bool isClassic = wmo->hasMotxChunk`. Edge cases where `hasMotxChunk` is not set correctly in `WMOLoader::parse_MOTX()` would cause classic WMO texture name resolution to fail. Verify `WMOLoader::hasMotxChunk` semantics match JS truthy behaviour (see also entry 148).
+
+- [ ] 180. [WMORendererGL.cpp] `dispose()` explicit clear differs from JS `splice(0)` array-reference semantics
+  - **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 666–667
+  - **Status**: Pending
+  - **Details**: JS `this.groupArray.splice(0)` / `this.setArray.splice(0)` clears the shared array reference. C++ explicitly calls `.clear()` on both local and view arrays. Necessary adaptation (C++ value semantics vs JS reference semantics); functionally equivalent.
+
+<!-- ─── src/js/3D/writers/CSVWriter.cpp ──────────────────────────────── -->
+
+- [ ] 181. [CSVWriter.cpp] `escapeCSVField` does not handle null/undefined — uses `empty()` instead
+  - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 42–51
+  - **Status**: Pending
+  - **Details**: JS explicitly checks `value === null || value === undefined` and returns `''`. C++ checks `value.empty()` only (handles empty string, not a null-like sentinel). Since C++ `addRow` uses `unordered_map<string, string>`, callers must pre-convert nulls to `""`. The differing check is undocumented.
+
+- [ ] 182. [CSVWriter.cpp] `addField` variadic split undocumented
+  - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 24–27
+  - **Status**: Pending
+  - **Details**: JS `addField(...fields)` accepts variadic arguments. C++ splits into `addField(const std::string&)` and `addField(const std::vector<std::string>&)`. Functional adaptation without a documentation comment.
+
+- [ ] 183. [CSVWriter.cpp] `write()` is synchronous; JS original is `async`
+  - **JS Source**: `src/js/3D/writers/CSVWriter.js` lines 57–83
+  - **Status**: Pending
+  - **Details**: JS `async write(overwrite = true)` returns a Promise. C++ is synchronous and blocks the calling thread. Deviation undocumented in the file.
+
+<!-- ─── src/js/3D/writers/GLBWriter.cpp ──────────────────────────────── -->
+
+- [ ] 184. [GLBWriter.cpp] `bin_buffer` stored as reference without lifetime documentation
+  - **JS Source**: `src/js/3D/writers/GLBWriter.js` lines 22–25
+  - **Status**: Pending
+  - **Details**: JS stores `bin_buffer` by value semantics. C++ stores it as `BufferWrapper&` (reference), meaning the GLBWriter cannot outlive the passed-in buffer. The lifetime constraint is not documented with a comment.
+
+<!-- ─── src/js/3D/writers/GLTFWriter.cpp ──────────────────────────────── -->
+
+- [ ] 185. [GLTFWriter.cpp] Spurious UV Y-axis flip applied to main model UVs — not present in JS
+  - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1026–1050
+  - **Status**: Pending
+  - **Details**: C++ `write()` flips all main model UV arrays on the Y axis: `uv[i + 1] = (uv[i + 1] - 1) * -1`. This operation does NOT exist in the JS source. JS writes UV arrays directly without any flip. This is a porting bug that produces different UV coordinates in exported GLTF/GLB files.
+
+- [ ] 186. [GLTFWriter.cpp] Spurious UV Y-axis flip applied to equipment UVs — not present in JS
+  - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 1219–1257
+  - **Status**: Pending
+  - **Details**: Same issue as entry 185 — C++ flips equipment UV arrays on the Y axis. JS source writes `equip.uv` directly without any flip. Produces incorrect UV coordinates for exported equipment meshes.
+
+- [ ] 187. [GLTFWriter.cpp] `asset.generator` uses `"wow.export.cpp"` instead of `"wow.export"` — intentional deviation
+  - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 208–212
+  - **Status**: Pending
+  - **Details**: JS builds `asset.generator` as `util.format('wow.export v%s %s [%s]', ...)`. C++ uses `std::format("wow.export.cpp v{} {} [{}]", ...)`. Per CLAUDE.md this is intentional, but it is a functional change in exported GLTF metadata that third-party tools may inspect.
+
+- [ ] 188. [GLTFWriter.cpp] `write()` is synchronous; JS original is `async`
+  - **JS Source**: `src/js/3D/writers/GLTFWriter.js` line 194
+  - **Status**: Pending
+  - **Details**: JS `async write(overwrite = true, format = 'gltf')` uses `await` throughout. C++ is synchronous. Deviation undocumented in the file.
+
+- [ ] 189. [GLTFWriter.cpp] `textures` map uses `std::map` (alphabetical order) instead of JS `Map` (insertion order)
+  - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 86–100
+  - **Status**: Pending
+  - **Details**: JS `Map` for `textures` preserves insertion order. C++ `std::map<std::string, GLTFTextureEntry>` is alphabetically ordered. Iteration order determines `materialIndex` assignment — C++ may assign different indices from JS, producing different GLTF output when textures are not inserted in alphabetical order.
+
+- [ ] 190. [GLTFWriter.cpp] `texture_buffer_views` drops `fileDataID` tracking
+  - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 909–919
+  - **Status**: Pending
+  - **Details**: JS `texture_buffer_views` is `[{fileDataID, buffer: ...}]`. C++ `struct TextureBufferView { BufferWrapper buffer; }` omits `fileDataID`. Currently `fileDataID` is not used after push (images are found by iteration index), so this is functionally correct but diverges from the JS structure.
+
+- [ ] 191. [GLTFWriter.cpp] `animationBufferMap` uses `std::map` (alphabetical order) vs JS `Map` (insertion order)
+  - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 304, 404
+  - **Status**: Pending
+  - **Details**: JS `Map` preserves insertion order for `animationBufferMap`. C++ `std::map<std::string, BufferWrapper>` sorts alphabetically by key. In GLB mode, animation buffers are packed in iteration order. Keys like `"10-0"` and `"2-0"` have different alphabetical vs insertion order, potentially producing different byte offsets in GLB animation data.
+
+- [ ] 192. [GLTFWriter.cpp] `animation_buffer_lookup_map` uses `std::map` instead of JS `Map`
+  - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 351, 407–416
+  - **Status**: Pending
+  - **Details**: Same ordering issue as entry 191. C++ `std::map<std::string, int>` vs JS `Map`. Affects lookup correctness only when key ordering matters; functionally correct for present usage.
+
+<!-- ─── src/js/3D/writers/JSONWriter.cpp ──────────────────────────────── -->
+
+- [ ] 193. [JSONWriter.cpp] `write()` is synchronous; JS original is `async`
+  - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 33–45
+  - **Status**: Pending
+  - **Details**: JS `async write(overwrite = true)` returns a Promise. C++ is synchronous. Deviation undocumented.
+
+- [ ] 194. [JSONWriter.cpp] BigInt serialization comment is inaccurate
+  - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40–43
+  - **Status**: Pending
+  - **Details**: JS uses a custom replacer to handle BigInt serialization. C++ comment claims "nlohmann::json handles all types natively including large integers; no special BigInt serialization needed." However nlohmann/json does not handle arbitrary-precision integers beyond `UINT64_MAX`. If callers store values that were JS BigInts, pre-conversion to strings is required. Comment is misleading.
+
+<!-- ─── src/js/3D/writers/MTLWriter.cpp ──────────────────────────────── -->
+
+- [ ] 195. [MTLWriter.cpp] `isEmpty()` is a method; JS defines it as a getter property
+  - **JS Source**: `src/js/3D/writers/MTLWriter.js` lines 32–34
+  - **Status**: Pending
+  - **Details**: JS `get isEmpty()` is a getter property. C++ `bool isEmpty() const` is a regular method. Necessary adaptation (no property getters in C++). Callers must use `isEmpty()` with parentheses. Functionally equivalent.
+
+- [ ] 196. [MTLWriter.cpp] `write()` is synchronous; JS original is `async`
+  - **JS Source**: `src/js/3D/writers/MTLWriter.js` lines 41–67
+  - **Status**: Pending
+  - **Details**: JS `async write(overwrite = true)` returns a Promise. C++ is synchronous. Deviation undocumented.
+
+- [ ] 197. [MTLWriter.cpp] `path.resolve` vs `std::filesystem::weakly_canonical` for absolute path resolution
+  - **JS Source**: `src/js/3D/writers/MTLWriter.js` lines 60–63
+  - **Status**: Pending
+  - **Details**: JS `path.resolve(mtlDir, materialFile)` is a pure string operation. C++ `std::filesystem::weakly_canonical(mtlDir / materialFile).string()` touches the filesystem to resolve symlinks and on Windows converts forward slashes to backslashes, potentially producing Windows-style paths in the MTL output unlike the JS version which uses forward slashes.
+
+<!-- ─── src/js/3D/writers/OBJWriter.cpp ──────────────────────────────── -->
+
+- [ ] 198. [OBJWriter.cpp] `float_to_string` uses `%.17g` — produces more digits than JS `Number.toString()`
+  - **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 170, 179, 188, 211
+  - **Status**: Pending
+  - **Details**: JS uses `Number.prototype.toString()` (Grisu/Dragon4 — shortest decimal that round-trips). C++ uses `snprintf(buf, size, "%.17g", ...)` always outputting up to 17 significant digits (e.g., `0.1` → `"0.10000000000000001"`). Produces larger OBJ files with longer number strings.
+
+- [ ] 199. [OBJWriter.cpp] `write()` is synchronous; JS original is `async`
+  - **JS Source**: `src/js/3D/writers/OBJWriter.js` lines 138–243
+  - **Status**: Pending
+  - **Details**: JS `async write(overwrite = true)`. C++ is synchronous. Deviation undocumented.
+
+<!-- ─── src/js/3D/writers/SQLWriter.cpp ──────────────────────────────── -->
+
+- [ ] 200. [SQLWriter.cpp] `addField` variadic split undocumented
+  - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 47–49
+  - **Status**: Pending
+  - **Details**: Same pattern as CSVWriter (entry 182). JS `addField(...fields)` is variadic; C++ splits into two overloads without a documentation comment.
+
+- [ ] 201. [SQLWriter.cpp] `write()` is synchronous; JS original is `async`
+  - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 210–230
+  - **Status**: Pending
+  - **Details**: JS `async write(overwrite = true)`. C++ is synchronous. Undocumented.
+
+- [ ] 202. [SQLWriter.cpp] `generateDDL()` trailing blank line differs from JS output
+  - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 141–177
+  - **Status**: Pending
+  - **Details**: JS `generateDDL()` pushes an empty string at the end, joining with `'\n'` to produce a trailing `\n\n` (double newline after `);`). C++ output ends with a single `\n`. This is a minor formatting difference in generated DDL output.
+
+- [ ] 203. [SQLWriter.cpp] `escapeSQLValue` uses `strtod` for numeric detection; JS uses `isNaN()`
+  - **JS Source**: `src/js/3D/writers/SQLWriter.js` lines 65–77
+  - **Status**: Pending
+  - **Details**: JS `!isNaN(value) && str.trim() !== ''` is the numeric check. C++ uses `strtod` on the trimmed string. Both correctly reject whitespace-only strings. Hex strings like `"0xFF"` may be handled differently depending on platform `strtod` behaviour. Noted in a code comment; functionally equivalent for expected manifest data.
+
+<!-- ─── src/js/3D/writers/STLWriter.cpp ──────────────────────────────── -->
+
+- [ ] 204. [STLWriter.cpp] STL binary header uses `"wow.export.cpp"` instead of `"wow.export"` — intentional
+  - **JS Source**: `src/js/3D/writers/STLWriter.js` line 147
+  - **Status**: Pending
+  - **Details**: JS writes `'Exported using wow.export v' + constants.VERSION` into the 80-byte STL header. C++ writes `"Exported using wow.export.cpp v" + constants::VERSION`. Per CLAUDE.md this is intentional but is a functional change in the exported binary file.
+
+- [ ] 205. [STLWriter.cpp] `write()` is synchronous; JS original is `async`
+  - **JS Source**: `src/js/3D/writers/STLWriter.js` lines 131–249
+  - **Status**: Pending
+  - **Details**: JS `async write(overwrite = true)`. C++ is synchronous. Undocumented.
+
+- [ ] 206. [STLWriter.cpp] `calculate_normal` is `public` in C++; should be `private`
+  - **JS Source**: `src/js/3D/writers/STLWriter.js` lines 101–125
+  - **Status**: Pending
+  - **Details**: `calculate_normal` is an internal helper called only from `write()`. C++ header declares it `public`. Should be `private` to match JS intent (instance method not intended for external use).
+
+<!-- ─── src/js/casc/blp.cpp ──────────────────────────────── -->
+
+- [ ] 207. [blp.cpp] Missing `toCanvas()` and `drawToCanvas()` methods — undocumented deviation
+  - **JS Source**: `src/js/casc/blp.js` lines 103–234
+  - **Status**: Pending
+  - **Details**: JS `BLPImage` has `toCanvas(mask, mipmap)` and `drawToCanvas(canvas, mipmap, mask)` for browser canvas rendering. These browser-specific methods cannot be ported. The C++ deviation comment only explains `getDataURL()`, not the missing canvas methods themselves. The absence should be documented in TODO_TRACKER.
+
+- [ ] 208. [blp.cpp] `getDataURL()` never writes to `dataURL` cache field — always recomputes
+  - **JS Source**: `src/js/casc/blp.js` lines 94–96
+  - **Status**: Pending
+  - **Details**: JS `getDataURL()` calls `this.toCanvas(mask, mipmap).toDataURL()` and callers can cache in `this.dataURL`. C++ has a `dataURL` optional member in `blp.h` but `getDataURL()` never writes to it. Every call regenerates the PNG unconditionally. The cache field exists but is never populated.
+
+- [ ] 209. [blp.cpp] `_getCompressed`: uses `>=` instead of strict `===` for rawData length check
+  - **JS Source**: `src/js/casc/blp.js` line 323
+  - **Status**: Pending
+  - **Details**: JS: `if (this.rawData.length === pos) continue;`. C++: `if (static_cast<size_t>(pos) >= rawData_.size()) continue;`. C++ is more defensive (handles `pos > size`), whereas JS uses strict equality. Documented in a code comment. Intentional and safe deviation.
+
+- [ ] 210. [blp.cpp] DXT5 alpha block uses `alphaColours[8]` array; JS uses shadowed `colours` variable
+  - **JS Source**: `src/js/casc/blp.js` lines 383–395
+  - **Status**: Pending
+  - **Details**: JS re-declares `let colours = []` inside the DXT5 block, shadowing the outer `colours` array. C++ uses a separate `int alphaColours[8]` array with a more explicit name. Functionally correct adaptation.
+
+- [ ] 211. [blp.cpp] DXT5 alpha-interpolation truncation comment is incomplete
+  - **JS Source**: `src/js/casc/blp.js` lines 388–395
+  - **Status**: Pending
+  - **Details**: JS uses `| 0` (bitwise-OR truncation) for alpha interpolation. C++ uses integer division (also truncates, equivalent). The existing deviation comment covers DXT colour truncation but does not explicitly mention the DXT5 alpha case. No functional issue — the comment should be extended for completeness.
+
+<!-- ─── src/js/casc/blte-reader.cpp ──────────────────────────────── -->
+
+- [ ] 212. [blte-reader.cpp] `getDataURL()` comment documents inverted condition — potentially confusing
+  - **JS Source**: `src/js/casc/blte-reader.js` lines 346–353
+  - **Status**: Pending
+  - **Details**: C++ comment says `// JS: if (!this.dataURL)` but the code checks `hasDataURL()` to return early (same semantics). The comment documents the JS negative condition while the C++ code uses the positive form. No functional bug but may confuse readers.
+
+- [ ] 213. [blte-reader.cpp] `_processBlock()` return value adaptation
+  - **JS Source**: `src/js/casc/blte-reader.js` lines 163–192
+  - **Status**: Pending
+  - **Details**: JS `_processBlock()` returns `false` when no more blocks remain, `undefined` otherwise. C++ returns `false` when no blocks remain, `true` otherwise. Correct adaptation (C++ requires explicit return type). Functionally equivalent for the `_checkBounds` loop.
+
+- [ ] 214. [blte-reader.cpp] `_writeBufferBLTE` implementation diverges from JS raw buffer copy pattern
+  - **JS Source**: `src/js/casc/blte-reader.js` lines 302–305
+  - **Status**: Pending
+  - **Details**: JS: `buf.raw.copy(this._buf, this._ofs, buf.offset, blockEnd)`. C++: `std::memcpy(raw().data() + offset(), buf.raw().data() + buf.offset(), length)` where `length = blockEnd - buf.offset()`. Semantics are equivalent (copy `blockEnd - buf.offset` bytes). Correct adaptation.
+
+<!-- ─── src/js/casc/blte-stream-reader.cpp ──────────────────────────────── -->
+
+- [ ] 215. [blte-stream-reader.cpp] `streamBlocks()` uses callback pattern; JS original is `async *` generator
+  - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 199–202
+  - **Status**: Pending
+  - **Details**: JS `async *streamBlocks()` yields each decoded block. C++ uses `streamBlocks(callback)` with a callback parameter. Callers cannot `break` early or use range-for semantics. Necessary C++ adaptation (C++20 coroutines not used here). Undocumented in TODO_TRACKER.
+
+- [ ] 216. [blte-stream-reader.cpp] `createReadableStream()` missing error/close signalling from Web Streams API
+  - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 168–193
+  - **Status**: Pending
+  - **Details**: JS `ReadableStream` uses `controller.enqueue()`, `controller.close()`, and `controller.error(e)`. C++ `ReadableStream` only provides `pull()` returning `std::optional<std::vector<uint8_t>>` and `cancel()`. The error and close signals from the JS API are not replicated, so callers relying on those signals need adaptation.
+
+- [ ] 217. [blte-stream-reader.cpp] Block cache eviction uses `std::deque` for insertion order; JS `Map` iteration order is insertion order
+  - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 72–74
+  - **Status**: Pending
+  - **Details**: JS evicts via `this.blockCache.keys().next().value` using Map insertion order. C++ uses `std::unordered_map` (no insertion order) plus a `std::deque<size_t> cacheOrder` to maintain insertion order. Necessary and functionally correct adaptation.
+
+- [ ] 218. [blte-stream-reader.cpp] `_decodeBlock` catches only `EncryptionError`; JS rethrows all non-EncryptionError exceptions
+  - **JS Source**: `src/js/casc/blte-stream-reader.js` lines 92–104
+  - **Status**: Pending
+  - **Details**: JS catch block checks `if (e instanceof EncryptionError)` then has `throw e` for other errors. C++ catches `const EncryptionError&` only — other exceptions propagate naturally. Correct C++ idiom; functionally equivalent.
+
+<!-- ─── src/js/casc/build-cache.cpp ──────────────────────────────── -->
+
+- [ ] 219. [build-cache.cpp] `storeFile()` runtime type check replaced by compile-time type guarantee
+  - **JS Source**: `src/js/casc/build-cache.js` lines 119–120
+  - **Status**: Pending
+  - **Details**: JS throws if `!(data instanceof BufferWrapper)`. C++ omits this check since the type is guaranteed at compile time. Necessary and correct adaptation.
+
+- [ ] 220. [build-cache.cpp] `storeFile()` calls `data.writeToFile(filePath)` vs JS `fsp.writeFile(filePath, data.raw)`
+  - **JS Source**: `src/js/casc/build-cache.js` line 134
+  - **Status**: Pending
+  - **Details**: JS writes `data.raw` (raw Node.js Buffer) directly. C++ calls `data.writeToFile(filePath)`. Functionally equivalent if `writeToFile` writes the entire raw buffer. No issue in practice.
+
+- [ ] 221. [build-cache.cpp] Module IIFE initialization uses `cacheIntegrityReady` event in JS; C++ uses `condition_variable`
+  - **JS Source**: `src/js/casc/build-cache.js` lines 156–171
+  - **Status**: Pending
+  - **Details**: JS IIFE loads cache integrity then emits `'cache-integrity-ready'`. C++ uses `cacheIntegrityLoaded` flag + `cacheIntegrityCV` condition variable. C++ still emits `"cache-integrity-ready"` after signalling the CV for event-based waiter compatibility. Necessary adaptation.
+
+- [ ] 222. [build-cache.cpp] `casc-source-changed` cleanup: JS uses `!isNaN(manifest.lastAccess)`; C++ uses `json.contains() && is_number()`
+  - **JS Source**: `src/js/casc/build-cache.js` line 230
+  - **Status**: Pending
+  - **Details**: JS `!isNaN(manifest.lastAccess)` returns true for any numeric value. C++ uses `.contains("lastAccess") && .is_number()`. Semantically equivalent. No functional issue.
+
+- [ ] 223. [build-cache.cpp] `manifestSize` uses `std::string::size()` vs JS `Buffer.byteLength(str, 'utf8')`
+  - **JS Source**: `src/js/casc/build-cache.js` line 228
+  - **Status**: Pending
+  - **Details**: JS `Buffer.byteLength(manifestRaw, 'utf8')` returns the UTF-8 byte count. C++ `manifestRaw.size()` returns the character count of `std::string`. For ASCII-only JSON manifest data (hex strings and numbers) these are identical. No functional issue in practice.
+
+- [ ] 224. [build-cache.cpp] `cacheExpiry` config reading: JS uses `Number(value) || 0`; C++ handles string and number types separately
+  - **JS Source**: `src/js/casc/build-cache.js` line 200
+  - **Status**: Pending
+  - **Details**: JS `Number(core.view.config.cacheExpiry) || 0` handles both string and number in one coercion. C++ explicitly checks JSON type and calls `std::stoll()` for strings, falling back to 0 on exception. Functionally equivalent but more verbose.
+
+<!-- ─── src/js/casc/casc-source-local.cpp ──────────────────────────────── -->
+
+- [ ] 225. [casc-source-local.cpp] `init()` is synchronous in C++; JS is `async`
+  - **JS Source**: `src/js/casc/casc-source-local.js` lines 42–52
+  - **Status**: Pending
+  - **Details**: JS `init()` is async with Promise-based initialization. C++ handles async via `initAsync()`. Main `init()` is synchronous. Necessary adaptation.
+
+- [ ] 226. [casc-source-local.cpp] `getProductList()` branch/version formatting — minor implementation difference
+  - **JS Source**: `src/js/casc/casc-source-local.js` lines 148–158
+  - **Status**: Pending
+  - **Details**: JS accesses `entry.Branch.toUpperCase()` and `entry.Version` as direct Map properties then calls `util.format`. C++ uses `.find()` on `unordered_map` and `std::format`. JS and C++ produce the same formatted output. No functional deviation.
+
+- [ ] 227. [casc-source-local.cpp] `load()` calls `tact_keys::waitForLoad()` — JS `load()` does not
+  - **JS Source**: `src/js/casc/casc-source-local.js` lines 165–186
+  - **Status**: Pending
+  - **Details**: C++ `load()` calls `tact_keys::waitForLoad()` before proceeding. The JS counterpart does not. This undocumented deviation ensures encryption keys are available before decryption but diverges from JS behaviour.
+
+- [ ] 228. [casc-source-local.cpp] `loadEncoding()` encoding key extraction
+  - **JS Source**: `src/js/casc/casc-source-local.js` lines 292–299
+  - **Status**: Pending
+  - **Details**: JS: `const encKeys = this.buildConfig.encoding.split(' '); ... getDataFileWithRemoteFallback(encKeys[1])` — uses index 1 of space-split array. C++ finds the first space and takes everything after it, equivalent to `split(' ')[1]` for a two-element split. Functionally equivalent.
+
+- [ ] 229. [casc-source-local.cpp] `initializeRemoteCASC()`: `this->remote` assigned before `preload()` completes — partial state on failure
+  - **JS Source**: `src/js/casc/casc-source-local.js` lines 324–332
+  - **Status**: Pending
+  - **Details**: JS assigns `this.remote = remote` only AFTER `await remote.preload()` completes successfully. C++ assigns `this->remote = std::make_unique<CASCRemote>(...)` before calling `remote->preload()`. If `preload()` throws, `this->remote` is already set to a partially-initialized state, which may cause re-initialization to skip on a subsequent call.
+
+- [ ] 230. [casc-source-local.cpp] `_ensureFileInCache()` casts `BLTEReader` to `BufferWrapper` via move before `storeFile`
+  - **JS Source**: `src/js/casc/casc-source-local.js` lines 466–470
+  - **Status**: Pending
+  - **Details**: JS passes `BLTEReader` (extends `BufferWrapper`) directly to `storeFile`. C++ must `static_cast<BufferWrapper&>(blte)` then move before passing to `storeFile(BufferWrapper&)`. Requires all blocks to be processed first. Necessary adaptation.
+
+<!-- ─── src/js/casc/casc-source-remote.cpp ──────────────────────────────── -->
+
+- [ ] 231. [casc-source-remote.cpp] `init()` uses `Promise.allSettled` in JS; C++ uses futures that may differ for fulfilled-but-no-region-match case
+  - **JS Source**: `src/js/casc/casc-source-remote.js` lines 47–55
+  - **Status**: Pending
+  - **Details**: JS `Promise.allSettled` pushes `undefined` for a fulfilled-but-no-matching-region result. C++ pushes an empty map `{}` for the same case. The `entry.empty()` check in `getProductList()` handles this. Functionally equivalent.
+
+- [ ] 232. [casc-source-remote.cpp] `getFile()` null check: JS checks `data === null`; C++ checks `data.byteLength() == 0`
+  - **JS Source**: `src/js/casc/casc-source-remote.js` lines 148–156
+  - **Status**: Pending
+  - **Details**: JS `generics.downloadFile` returns `null` on failure; C++ `generics::downloadFile` returns an empty `BufferWrapper`. If `downloadFile` can return a non-empty but invalid buffer on failure, this check would differ. Depends on `generics::downloadFile` behaviour.
+
+- [ ] 233. [casc-source-remote.cpp] `parseArchiveIndex()` reads `offset` and `size` in reversed order — critical bug
+  - **JS Source**: `src/js/casc/casc-source-remote.js` line 427
+  - **Status**: Pending
+  - **Details**: JS line 427: `{ key, size: data.readInt32BE(), offset: data.readInt32BE() }` — reads size first, then offset. C++ `ArchiveEntry` struct has fields `{ key, offset, size }` and the initializer `ArchiveEntry{ key, data.readInt32BE(), data.readInt32BE() }` reads into `offset` first, `size` second. This reversal is a critical bug: `offset` will contain the binary `size` field value and vice versa. Archive file lookups will use wrong offsets and sizes.
+
+- [ ] 234. [casc-source-remote.cpp] `loadArchives()` total size: JS `.reduce()`; C++ `std::stoll()` iteration
+  - **JS Source**: `src/js/casc/casc-source-remote.js` lines 375–376
+  - **Status**: Pending
+  - **Details**: JS `archivesIndexSize.split(' ').reduce((sum, e) => sum + Number(e), 0)`. C++ iterates tokens adding with `std::stoll()`. Functionally equivalent.
+
+- [ ] 235. [casc-source-remote.cpp] `load()` calls `tact_keys::waitForLoad()` — JS `load()` does not
+  - **JS Source**: `src/js/casc/casc-source-remote.js` lines 283–296
+  - **Status**: Pending
+  - **Details**: Same undocumented deviation as entry 227 for `CASCLocal`. C++ `load()` calls `tact_keys::waitForLoad()` before `core::showLoadingScreen(12)`. JS does not.
+
+- [ ] 236. [casc-source-remote.cpp] `_ensureFileInCache()` casts `BLTEReader` to `BufferWrapper` via move
+  - **JS Source**: `src/js/casc/casc-source-remote.js` lines 513–517
+  - **Status**: Pending
+  - **Details**: Same pattern as entry 230 for `CASCLocal`. Necessary adaptation.
+
+<!-- ─── src/js/casc/casc-source.cpp ──────────────────────────────── -->
+
+- [ ] 237. [casc-source.cpp] `parseEncodingFile()` inner loop uses `cKeyPageSize` where JS uses `pagesStart` — C++ fixes JS bug
+  - **JS Source**: `src/js/casc/casc-source.js` line 470
+  - **Status**: Pending
+  - **Details**: JS line 470: `while (encoding.offset < (pageStart + pagesStart))` — a JS bug (should be `cKeyPageSize`, not `pagesStart`). C++ correctly uses `cKeyPageSize`. This is a case where C++ is more correct than the JS original. Documented as a known bug-fix deviation.
+
+- [ ] 238. [casc-source.cpp] `getFileByName()` calls `getFileAsBLTE()` instead of virtual `getFile()`
+  - **JS Source**: `src/js/casc/casc-source.js` line 190
+  - **Status**: Pending
+  - **Details**: JS `this.getFile(...)` dispatches polymorphically to subclass override. C++ `getFileAsBLTE()` is the correct virtual dispatch equivalent. Necessary and correct adaptation.
+
+- [ ] 239. [casc-source.cpp] `loadListfile()` passes `unordered_set<uint32_t>` of IDs; JS passes full `Map` of root entries
+  - **JS Source**: `src/js/casc/casc-source.js` line 284
+  - **Status**: Pending
+  - **Details**: JS `listfile.applyPreload(this.rootEntries)` passes the entire Map of `fileDataID → content entries`. C++ builds `std::unordered_set<uint32_t>` of just the fileDataIDs and passes that. Verify against `listfile.cpp` that `listfile::applyPreload` only needs the IDs — if it accesses content values the implementations diverge.
+
+- [ ] 240. [casc-source.cpp] CASC constructor uses `$watch` with `immediate:true` in JS; C++ reads config once and registers event
+  - **JS Source**: `src/js/casc/casc-source.js` lines 31–38
+  - **Status**: Pending
+  - **Details**: JS `core.view.$watch('config.cascLocale', handler, { immediate: true })` fires immediately and on each change to `cascLocale`. C++ reads the current config once in the constructor then registers a `"config-change"` event handler. The `immediate: true` is replicated by the initial read. However the C++ `"config-change"` event fires for any config change (not just `cascLocale`), so locale is re-read more often than necessary.
+
+- [ ] 241. [casc-source.cpp] `getValidRootEntries()` iterates key-value pairs; JS uses `entry.keys()` (keys only)
+  - **JS Source**: `src/js/casc/casc-source.js` lines 51–53
+  - **Status**: Pending
+  - **Details**: JS `for (const rootTypeIdx of entry.keys())` iterates only keys. C++ `for (const auto& [rootTypeIdx, _key] : entry)` iterates pairs but discards the value. Functionally equivalent.
+
+- [ ] 242. [casc-source.cpp] `rootEntries` uses `std::unordered_map` (no insertion order); JS uses `Map` (insertion order preserved)
+  - **JS Source**: `src/js/casc/casc-source.js` line 27
+  - **Status**: Pending
+  - **Details**: JS `this.rootEntries = new Map()` preserves insertion order. C++ `std::unordered_map<uint32_t, std::unordered_map<size_t, std::string>>` does not. For current `getFile()` and `getValidRootEntries()` uses (key lookups), ordering does not matter. No functional issue for present use cases.
+
+- [ ] 243. [casc-source.cpp] `getFileAsBLTE()` base implementation throws at runtime instead of being pure virtual
+  - **JS Source**: `src/js/casc/casc-source.js`
+  - **Status**: Pending
+  - **Details**: C++ `CASC::getFileAsBLTE()` throws `std::runtime_error` if called on the base class but is not declared `= 0` (pure virtual), meaning subclasses are not forced to override it at compile time. Making it pure virtual would be safer and match the JS polymorphic intent.
+
+<!-- ─── src/js/casc/cdn-config.cpp ──────────────────────────────── -->
+
+- [ ] 244. [cdn-config.cpp] Comment-skip check applied to untrimmed line — minor note
+  - **JS Source**: `src/js/casc/cdn-config.js` lines 40–41
+  - **Status**: Pending
+  - **Details**: JS `line.startsWith('#')` is called on the original untrimmed line. C++ mirrors this with `lineView.front() == '#'`. The empty-line check uses `trim(lineView).empty()` in C++, matching JS `line.trim().length === 0`. Both checks are logically equivalent. No functional issue; minor code-style note.
+
+- [ ] 245. [cdn-config.cpp] `std::regex` usage is a performance concern vs. JS V8 regex
+  - **JS Source**: `src/js/casc/cdn-config.js` lines 6, 43–45
+  - **Status**: Pending
+  - **Details**: C++ uses `std::regex` (compiled once as a static) to match `KEY_VAR_PATTERN`. JS uses a V8-compiled regex which is significantly faster. `std::regex` can be much slower on large config files. The logic is correct — this is a necessary C++ adaptation but may impact performance.
+
+<!-- ─── src/js/casc/cdn-resolver.cpp ──────────────────────────────── -->
+
+- [ ] 246. [cdn-resolver.cpp] `backgroundFutures` vector not mutex-protected against concurrent `startPreResolution` calls — data race
+  - **JS Source**: `src/js/casc/cdn-resolver.js` lines 32–35
+  - **Status**: Pending
+  - **Details**: `backgroundFutures` vector is accessed in `startPreResolution()` without holding `cacheMutex`. Concurrent calls from multiple threads could cause a data race on the vector's erase/push_back. `cacheMutex` only guards `resolutionCache` and `failedHosts`. A separate mutex or extended `cacheMutex` coverage is needed.
+
+- [ ] 247. [cdn-resolver.cpp] `getBestHostAsync` / `getRankedHostsAsync` have no JS counterpart — C++-only additions
+  - **JS Source**: `src/js/casc/cdn-resolver.js` lines 43–73, 83–116
+  - **Status**: Pending
+  - **Details**: Two C++-only functions `getBestHostAsync` and `getRankedHostsAsync` wrap the synchronous functions in `std::async`. These are not direct ports of any JS method. They should be documented as C++-only additions or removed if unused.
+
+- [ ] 248. [cdn-resolver.cpp] `_resolveRegionProduct` calls `getBestHost` synchronously; JS `await`s it as a Promise
+  - **JS Source**: `src/js/casc/cdn-resolver.js` line 162
+  - **Status**: Pending
+  - **Details**: JS `await this.getBestHost(region, serverConfig)`. C++ calls `getBestHost` synchronously inside a `std::async` background thread. C++ `getBestHost` may internally fire another `std::async` and block on `existingFuture.get()`, resulting in a nested async-inside-async pattern that allocates an extra thread. Necessary adaptation.
+
+<!-- ─── src/js/casc/content-flags.cpp ──────────────────────────────── -->
+
+- [ ] 249. [content-flags.cpp] Static `exports` array in `.cpp` file is unused dead code
+  - **JS Source**: `src/js/casc/content-flags.js` lines 4–14
+  - **Status**: Pending
+  - **Details**: The `.cpp` file defines a `[[maybe_unused]] static constexpr` array of `{name, value}` pairs mirroring the JS `module.exports` shape. This array is never referenced anywhere in the codebase. Actual constants are correctly declared in `content-flags.h`. The array should be removed or replaced with a runtime lookup function if dynamic name→value lookup is needed.
+
+<!-- ─── src/js/casc/db2.cpp ──────────────────────────────── -->
+
+- [ ] 250. [db2.cpp] `getTable()` eagerly parses on every call; JS Proxy only parses on first method invocation
+  - **JS Source**: `src/js/casc/db2.js` lines 58–67
+  - **Status**: Pending
+  - **Details**: JS `db2.SomeTable` returns a Proxy without parsing; parsing begins only when a method is called. C++ `getTable()` calls `entry_ptr->ensureParsed()` immediately before returning. Even unused table references trigger parsing. `std::call_once` ensures parse runs only once but it is initiated earlier than in JS.
+
+- [ ] 251. [db2.cpp] JS `preload_proxy` returns an `async` function (Promise); C++ `preloadTable()` is synchronous/blocking
+  - **JS Source**: `src/js/casc/db2.js` lines 10–35
+  - **Status**: Pending
+  - **Details**: JS `db2.preload.SomeTable` returns `async () => { ... }` — calling it returns a `Promise<wrapper>`. C++ `preloadTable()` blocks until parse + preload complete. Callers requiring async preloading must manually wrap `preloadTable()` in `std::async`. Necessary adaptation.
+
+- [ ] 252. [db2.cpp] JS `create_wrapper` enforces `getRelationRows` requires preload; C++ delegates to WDCReader
+  - **JS Source**: `src/js/casc/db2.js` lines 46–55
+  - **Status**: Pending
+  - **Details**: JS Proxy intercepts `getRelationRows` and throws with a detailed message if not preloaded. C++ code comment states "WDCReader::getRelationRows() enforces the same preload requirement." Verify against `WDCReader.cpp` that the error messages match. If they differ, callers relying on error text for diagnostics will see different output.
+
+- [ ] 253. [db2.cpp] `CacheEntry::ensureParsed` / `ensurePreloaded` `once_flag` interaction — note only
+  - **JS Source**: `src/js/casc/db2.js` lines 19–23
+  - **Status**: Pending
+  - **Details**: `ensurePreloaded()` calls `ensureParsed()` inside its `call_once` lambda. The interaction of two separate `once_flag`s is correct. This note documents the pattern for future maintainers — no bug exists.
+
+<!-- ─── src/js/casc/dbd-manifest.cpp ──────────────────────────────── -->
+
+- [ ] 254. [dbd-manifest.cpp] `prepareManifest()` is synchronous/blocking; JS original is `async` returning `Promise<boolean>`
+  - **JS Source**: `src/js/casc/dbd-manifest.js` lines 50–59
+  - **Status**: Pending
+  - **Details**: JS `async prepareManifest()` is awaited by callers. C++ returns `bool` synchronously, blocking the calling thread until `preload_promise->wait()` completes. Callers requiring non-blocking behaviour must run on a background thread. Necessary adaptation documented in the file.
+
+- [ ] 255. [dbd-manifest.cpp] `jsonTruthy()` helper is over-engineered for the actual manifest data format
+  - **JS Source**: `src/js/casc/dbd-manifest.js` line 31
+  - **Status**: Pending
+  - **Details**: JS `if (entry.tableName && entry.db2FileDataID)` is a simple truthy check. C++ `jsonTruthy()` replicates full JS truthiness semantics for float/int/bool/string/object. Manifest data always has string `tableName` and integer `db2FileDataID`. The boolean/float/object branches are dead code adding unnecessary complexity. A simpler check would be more correct for the expected data format.
+
+- [ ] 256. [dbd-manifest.cpp] `table_to_id` and `id_to_table` use `int` — may overflow for large FileDataIDs
+  - **JS Source**: `src/js/casc/dbd-manifest.js` lines 32–34
+  - **Status**: Pending
+  - **Details**: Maps `table_to_id` and `id_to_table` use `int` as the key/value type. WoW FileDataIDs are 32-bit unsigned integers. IDs above 2,147,483,647 (0x7FFFFFFF) would overflow a signed `int`. Should use `uint32_t` or `int64_t` to match JS number semantics.
+
+- [ ] 257. [dbd-manifest.cpp] Pre-existing `TODO 191` and `TODO 192` comments already implemented in code — stale
+  - **JS Source**: `src/js/casc/dbd-manifest.js` lines 10–13
+  - **Status**: Pending
+  - **Details**: C++ file contains `// TODO 191:` and `// TODO 192:` comments describing threading concerns. The code already implements `std::atomic<bool>` (for TODO 191) and `std::call_once` (for TODO 192) as the solutions. The TODO comments say what needs to be done but the code already does it. They are stale and should be removed or converted to completion notes.
