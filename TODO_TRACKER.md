@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 47/186 verified (25%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 48/186 verified (26%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -275,10 +275,10 @@
 - **Status**: Pending
 - **Details**: JS uses String(value) producing unquoted output. C++ uses value.dump() adding extra quotes for strings.
 
-- [ ] 54. [tab_data.cpp] Selection watcher prevents retry after failed load
+- [x] 54. [tab_data.cpp] Selection watcher prevents retry after failed load
 - **JS Source**: `src/js/modules/tab_data.js` lines 371–377
-- **Status**: Pending
-- **Details**: JS compares selected_file which is not updated on failure allowing retry. C++ compares prev_selection_last updated unconditionally preventing retry.
+- **Status**: Verified
+- **Details**: Fixed — removed `prev_selection_last`; change-detection now compares against `selected_file` which is only updated on successful load, matching JS behavior and allowing retry after failure.
 
 - [ ] 55. [legacy_tab_data.cpp] `copy_cell` empty-string handling differs from JS
 - **JS Source**: `src/js/modules/legacy_tab_data.js` lines 215–220
@@ -528,20 +528,20 @@
 - **Status**: Pending
 - **Details**: JS explicitly sets `'User-Agent': constants.USER_AGENT` for the MP4 download fetch. C++ uses `generics::get(*mp4_url)` which may or may not set User-Agent, depending on that function's implementation.
 
-- [ ] 104. [tab_data.cpp] DB2 load error toast omits JS `View Log` action callback
+- [x] 104. [tab_data.cpp] DB2 load error toast omits JS `View Log` action callback
 - **JS Source**: `src/js/modules/tab_data.js` lines 80–82
-- **Status**: Pending
-- **Details**: JS error toast includes `{'View Log': () => log.openRuntimeLog()}`; C++ error toast uses empty actions, removing the original recovery handler.
+- **Status**: Verified
+- **Details**: Fixed — now passes `casc::ExportHelper::TOAST_OPT_LOG` matching JS `{'View Log': () => log.openRuntimeLog()}`.
 
 - [ ] 105. [tab_data.cpp] Listbox pasteselection and copytrimwhitespace hardcoded false
 - **JS Source**: `src/js/modules/tab_data.js` lines 98–99
 - **Status**: Pending
 - **Details**: JS binds pasteselection to config.pasteSelection and copytrimwhitespace to config.removePathSpacesCopy. C++ hardcodes both to false.
 
-- [ ] 106. [tab_data.cpp] load_table error toast missing View Log action button
+- [x] 106. [tab_data.cpp] load_table error toast missing View Log action button
 - **JS Source**: `src/js/modules/tab_data.js` line 80
-- **Status**: Pending
-- **Details**: JS includes View Log action. C++ passes empty map.
+- **Status**: Verified
+- **Details**: Fixed together with entry 104 — `TOAST_OPT_LOG` is now passed, adding the View Log button.
 
 - [ ] 107. [tab_data.cpp] Context menu labels are static instead of dynamic row count
 - **JS Source**: `src/js/modules/tab_data.js` lines 108–110

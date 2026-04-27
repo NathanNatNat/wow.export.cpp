@@ -46,9 +46,6 @@ static const std::map<std::string, db::SchemaField>* selected_file_schema = null
 
 static std::string active_table;
 
-// Change-detection for selectionDB2s.
-static std::string prev_selection_last;
-
 static listbox::ListboxState listbox_db2_state;
 static data_table::DataTableState data_table_state;
 static context_menu::ContextMenuState data_table_ctx_state;
@@ -203,7 +200,8 @@ static void load_table(const std::string& table_name) {
 		selected_file = table_name;
 		selected_file_schema = result.schema;
 	} catch (const std::exception& e) {
-		core::setToast("error", "Unable to open DB2 file " + table_name, {}, -1);
+		// JS: core.setToast('error', ..., { 'View Log': () => log.openRuntimeLog() }, -1)
+		core::setToast("error", "Unable to open DB2 file " + table_name, casc::ExportHelper::TOAST_OPT_LOG, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 }
@@ -242,13 +240,14 @@ void mounted() {
 void render() {
 	auto& view = *core::view;
 
-	// --- Change-detection for selection (equivalent to watch on selectionDB2s) ---
+	// --- Change-detection for selection (equivalent to $watch('selectionDB2s') in JS) ---
+	// JS: if (!core.view.isBusy && last && selected_file !== last)
+	// selected_file is only updated inside load_table() on success, so failed loads can be retried.
 	if (!view.selectionDB2s.empty()) {
 		const std::string last = view.selectionDB2s.back().get<std::string>();
-		if (view.isBusy == 0 && !last.empty() && last != prev_selection_last) {
+		if (view.isBusy == 0 && !last.empty() && last != selected_file) {
 			load_table(last);
 			active_table = selected_file;
-			prev_selection_last = last;
 		}
 	}
 
@@ -277,8 +276,8 @@ void render() {
 			true,    // keyinput
 			view.config.value("regexFilters", false),
 			listbox::CopyMode::Default,
-			false,   // pasteselection
-			false,   // copytrimwhitespace
+			view.config.value("pasteSelection", false),          // pasteselection (JS: config.pasteSelection)
+			view.config.value("removePathSpacesCopy", false),    // copytrimwhitespace (JS: config.removePathSpacesCopy)
 			"db2 file", // unittype
 			nullptr, // overrideItems
 			false,   // disable
@@ -304,10 +303,17 @@ void render() {
 
 	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("db2-filter", regions)) {
+		// <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
+		if (view.config.value("regexFilters", false)) {
+			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+			ImGui::SameLine();
+		}
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_db2_buf[256] = {};
 		std::strncpy(filter_db2_buf, view.userInputFilterDB2s.c_str(), sizeof(filter_db2_buf) - 1);
-		if (ImGui::InputText("##FilterDB2s", filter_db2_buf, sizeof(filter_db2_buf)))
+		if (ImGui::InputTextWithHint("##FilterDB2s", "Filter DB2s..", filter_db2_buf, sizeof(filter_db2_buf)))
 			view.userInputFilterDB2s = filter_db2_buf;
 	}
 	app::layout::EndFilterBar();
@@ -360,20 +366,27 @@ void render() {
 			nullptr);
 
 		// Context menu for data table.
+		// JS: <ContextMenu :node="contextMenus.nodeDataTable" @close="contextMenus.nodeDataTable = null">
+		//       <span @click.self="copy_rows_csv">Copy {{ selectedCount }} row{{ ... }} as CSV</span>
+		//       <span @click.self="copy_rows_sql">Copy {{ selectedCount }} row{{ ... }} as SQL</span>
+		//       <span @click.self="copy_cell(cellValue)">Copy cell contents</span>
 		if (!view.contextMenus.nodeDataTable.is_null()) {
 			if (ImGui::BeginPopupContextItem("##DataTableContextMenu")) {
-				if (ImGui::MenuItem("Copy selected rows as CSV"))
+				const int selected_count = view.contextMenus.nodeDataTable.value("selectedCount", 0);
+				const std::string csv_label = std::format("Copy {} row{} as CSV", selected_count, selected_count != 1 ? "s" : "");
+				const std::string sql_label = std::format("Copy {} row{} as SQL", selected_count, selected_count != 1 ? "s" : "");
+				if (ImGui::MenuItem(csv_label.c_str()))
 					copy_rows_csv();
-				if (ImGui::MenuItem("Copy selected rows as SQL"))
+				if (ImGui::MenuItem(sql_label.c_str()))
 					copy_rows_sql();
 				if (view.contextMenus.nodeDataTable.contains("cellValue")) {
-					std::string cell_val = view.contextMenus.nodeDataTable["cellValue"].is_string()
-						? view.contextMenus.nodeDataTable["cellValue"].get<std::string>()
-						: view.contextMenus.nodeDataTable["cellValue"].dump();
-					if (ImGui::MenuItem(std::format("Copy cell: {}", cell_val.substr(0, 30)).c_str()))
+					if (ImGui::MenuItem("Copy cell contents"))
 						copy_cell(view.contextMenus.nodeDataTable["cellValue"]);
 				}
 				ImGui::EndPopup();
+			} else {
+				// @close event: clear nodeDataTable when popup closes.
+				view.contextMenus.nodeDataTable = nullptr;
 			}
 		}
 
@@ -403,9 +416,16 @@ void render() {
 	// --- Bottom: Preview controls (row 2, col 2) ---
 	//     <input> filter + <MenuButton> export
 	if (app::layout::BeginPreviewControls("data-preview-controls", regions)) {
+		// <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
+		if (view.config.value("regexFilters", false)) {
+			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+			ImGui::SameLine();
+		}
 		char filter_data_buf[256] = {};
 		std::strncpy(filter_data_buf, view.userInputFilterDataTable.c_str(), sizeof(filter_data_buf) - 1);
-		if (ImGui::InputText("##FilterDataTable", filter_data_buf, sizeof(filter_data_buf)))
+		if (ImGui::InputTextWithHint("##FilterDataTable", "Filter data table rows...", filter_data_buf, sizeof(filter_data_buf)))
 			view.userInputFilterDataTable = filter_data_buf;
 
 		ImGui::SameLine();
@@ -499,7 +519,11 @@ static void copy_cell(const nlohmann::json& value) {
 	if (value.is_null())
 		return;
 
-	ImGui::SetClipboardText(value.dump().c_str());
+	// JS: nw.Clipboard.get().set(String(value), 'text')
+	// String(value) for strings produces unquoted output — use get<std::string>() for strings,
+	// dump() for all other types (numbers, arrays, objects, booleans).
+	const std::string text = value.is_string() ? value.get<std::string>() : value.dump();
+	ImGui::SetClipboardText(text.c_str());
 }
 
 static void export_csv() {
