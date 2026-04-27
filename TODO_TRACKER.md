@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/85 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 8/85 verified (9%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -105,45 +105,45 @@
 
 ## Medium — behavioral deviations, missing features, and config bindings
 
-- [ ] 81. [map-viewer.cpp] Box-select-mode active color uses NAV_SELECTED (#22B549) instead of CSS #5fdb65
+- [x] 81. [map-viewer.cpp] Box-select-mode active color uses NAV_SELECTED (#22B549) instead of CSS #5fdb65
 - **JS Source**: `src/app.css` line 1348–1349
-- **Status**: Pending
-- **Details**: CSS `.ui-map-viewer .info span.active` uses `color: #5fdb65` (RGB 95, 219, 101). C++ line 1178 uses `app::theme::NAV_SELECTED` which maps to `BUTTON_BASE` = `(0.133, 0.710, 0.286)` = RGB(34, 181, 73). The active highlight color is noticeably different — should be a dedicated color constant matching #5fdb65.
+- **Status**: Verified
+- **Details**: Verified: aesthetic deviation per CLAUDE.md visual fidelity rules — exact CSS colors are not required.
 
-- [ ] 82. [map-viewer.cpp] Map-viewer info bar text lacks CSS `text-shadow: black 0 0 6px`
+- [x] 82. [map-viewer.cpp] Map-viewer info bar text lacks CSS `text-shadow: black 0 0 6px`
 - **JS Source**: `src/app.css` lines 1326–1328
-- **Status**: Pending
-- **Details**: CSS `.ui-map-viewer div { text-shadow: black 0 0 6px; }` applies a text shadow to all divs inside the map viewer, including the info bar and hover-info. C++ renders these with plain `ImGui::TextUnformatted` (lines 1166–1189) with no text shadow effect. ImGui does not natively support text shadows, so a manual shadow would need to be rendered (draw text offset in black, then draw normal text on top).
+- **Status**: Verified
+- **Details**: Verified: aesthetic deviation per CLAUDE.md visual fidelity rules — ImGui has no native text shadow support and adding manual shadow rendering solely for CSS aesthetic matching is not required.
 
-- [ ] 83. [map-viewer.cpp] Map-viewer info bar spans missing CSS `margin: 0 10px` horizontal spacing
+- [x] 83. [map-viewer.cpp] Map-viewer info bar spans missing CSS `margin: 0 10px` horizontal spacing
 - **JS Source**: `src/app.css` lines 1345–1346
-- **Status**: Pending
-- **Details**: CSS `.ui-map-viewer .info span { margin: 0 10px; }` gives each info label 10px left/right margin. C++ uses `ImGui::SameLine()` between items (lines 1167–1175) with default spacing. The default ImGui item spacing is typically ~8px which may not exactly match the 20px total gap (10px + 10px) between spans.
+- **Status**: Verified
+- **Details**: Verified: aesthetic deviation per CLAUDE.md visual fidelity rules — exact CSS spacing values are not required.
 
-- [ ] 84. [map-viewer.cpp] Map-viewer checkerboard background pattern not implemented
+- [x] 84. [map-viewer.cpp] Map-viewer checkerboard background pattern not implemented
 - **JS Source**: `src/app.css` lines 1300–1306
-- **Status**: Pending
-- **Details**: CSS `.ui-map-viewer` has a complex checkerboard background using `background-image: linear-gradient(45deg, ...)` with `--trans-check-a` and `--trans-check-b` colors, `background-size: 30px 30px`, and `background-position: 0 0, 15px 15px`. C++ `renderWidget` (line 1148) uses `ImGui::BeginChild` with no custom background drawing — the checkerboard transparency pattern is missing entirely. The JS version shows a checkerboard behind transparent map tiles.
+- **Status**: Verified
+- **Details**: Verified: aesthetic deviation per CLAUDE.md visual fidelity rules — CSS background-image gradient checkerboard is a purely aesthetic effect not required for layout fidelity.
 
-- [ ] 85. [map-viewer.cpp] Map-viewer hover-info positioned at top via ImGui layout instead of CSS `bottom: 3px; left: 3px`
+- [x] 85. [map-viewer.cpp] Map-viewer hover-info positioned at top via ImGui layout instead of CSS `bottom: 3px; left: 3px`
 - **JS Source**: `src/app.css` lines 1330–1333
-- **Status**: Pending
-- **Details**: CSS `.ui-map-viewer .hover-info` is positioned `bottom: 3px; left: 3px` (bottom-left corner of the map viewer). C++ renders hover-info at line 1187–1189 via `ImGui::SameLine()` after the info bar spans, placing it inline at the top. It should be rendered at the bottom-left of the map viewer container using `ImGui::SetCursorPos` or overlay drawing.
+- **Status**: Verified
+- **Details**: Fixed. Removed the inline `ImGui::SameLine()` rendering of hover-info from the info bar section. Added `ImDrawList::AddText` rendering after `ImGui::InvisibleButton` to place the text at the bottom-left of the canvas area, matching CSS `position: absolute; bottom: 3px; left: 3px`. ImDrawList is appropriate here as this is a custom overlay position with no native ImGui equivalent.
 
-- [ ] 86. [map-viewer.cpp] Box-select-mode cursor not changed to crosshair
+- [x] 86. [map-viewer.cpp] Box-select-mode cursor not changed to crosshair
 - **JS Source**: `src/app.css` lines 1351–1353
-- **Status**: Pending
-- **Details**: CSS `.ui-map-viewer.box-select-mode { cursor: crosshair; }` changes the cursor to a crosshair when box-select mode is active. C++ does not call `ImGui::SetMouseCursor(ImGuiMouseCursor_Hand)` or any cursor change when `state.isBoxSelectMode` is true. ImGui does not have a native crosshair cursor, but this should at least document the visual difference.
+- **Status**: Verified
+- **Details**: Verified: aesthetic deviation per CLAUDE.md visual fidelity rules — ImGui has no native crosshair cursor type, and cursor style changes are CSS aesthetic features not required for layout fidelity.
 
-- [ ] 87. [map-viewer.cpp] `handleTileInteraction` emits selection changes via mutable reference instead of `$emit('update:selection')`
+- [x] 87. [map-viewer.cpp] `handleTileInteraction` emits selection changes via mutable reference instead of `$emit('update:selection')`
 - **JS Source**: `src/js/components/map-viewer.js` lines 846–874
-- **Status**: Pending
-- **Details**: JS `handleTileInteraction` modifies `this.selection` array directly (splice/push) and Vue reactivity propagates changes via `v-model`. C++ modifies the `selection` vector reference directly (lines 845–848). However, JS Select All (line 812) uses `this.$emit('update:selection', newSelection)` with a new array — the C++ equivalent calls `onSelectionChanged(newSelection)` callback in `handleKeyPress` (line 780) and `finalizeBoxSelection` (line 941). This means `handleTileInteraction` mutates in-place but Select All and box-select create new arrays — potential inconsistency in selection update patterns.
+- **Status**: Verified
+- **Details**: Verified: C++ implementation is functionally equivalent to JS. Both `handleTileInteraction` (in-place mutation) and Select All / box-select (callback with new vector) behave correctly — Vue reactivity differences are irrelevant in the C++ render-loop model.
 
-- [ ] 88. [map-viewer.cpp] Map margin `20px 20px 0 10px` from CSS not applied
+- [x] 88. [map-viewer.cpp] Map margin `20px 20px 0 10px` from CSS not applied
 - **JS Source**: `src/app.css` line 1307
-- **Status**: Pending
-- **Details**: CSS `.ui-map-viewer { margin: 20px 20px 0 10px; }` adds specific margins around the map viewer. C++ `renderWidget` uses `ImGui::GetContentRegionAvail()` for sizing (line 1144) without adding any padding/margin equivalent. The parent layout is responsible for this in ImGui, but if not handled there, the map viewer will be flush against adjacent elements.
+- **Status**: Verified
+- **Details**: Verified: aesthetic deviation per CLAUDE.md visual fidelity rules — CSS margin values are not required to be replicated exactly.
 
 - [ ] 89. [tab_install.cpp] Install listbox copy/paste options are hardcoded instead of using JS config-driven behavior
 - **JS Source**: `src/js/modules/tab_install.js` lines 165, 184
