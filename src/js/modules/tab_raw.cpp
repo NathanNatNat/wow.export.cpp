@@ -18,6 +18,7 @@
 #include "../components/listbox.h"
 #include "../components/context-menu.h"
 #include "../buffer.h"
+#include "../casc/blte-reader.h"
 #include "../../app.h"
 
 #include <chrono>
@@ -227,7 +228,7 @@ static void pump_raw_export() {
 
 	if (task.overwrite_files || !generics::fileExists(export_path)) {
 		try {
-			BufferWrapper data = core::view->casc->getVirtualFileByName(file_name);
+			BLTEReader data = core::view->casc->getFileByName(file_name, true);
 			data.writeToFile(export_path);
 			helper.mark(export_file_name, true);
 		} catch (const std::exception& e) {

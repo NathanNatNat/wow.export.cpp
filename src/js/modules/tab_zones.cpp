@@ -310,35 +310,47 @@ for (int linked_art_id : linked_art_ids) {
 	if (!art_row_opt.has_value())
 		continue;
 
-	// Find matching UiMapArtStyleLayer rows for this art ID.
+	const auto& art_row = art_row_opt.value();
+	auto art_style_id_it = art_row.find("UiMapArtStyleID");
+	if (art_style_id_it == art_row.end())
+		continue;
+	const int art_style_id = fieldToInt(art_style_id_it->second);
+
+	// JS keeps only the LAST matching UiMapArtStyleLayer row.
+	const db::DataRecord* style_layer = nullptr;
 	for (const auto& [layer_id, layer_row] : ui_map_art_style_layer.getAllRows()) {
-		auto art_ref_it = layer_row.find("UiMapArtID");
-		if (art_ref_it == layer_row.end() || fieldToInt(art_ref_it->second) != linked_art_id)
-			continue;
-
-		CombinedArtStyle style;
-		style.id = static_cast<int>(layer_id);
 		auto sid_it = layer_row.find("UiMapArtStyleID");
-		if (sid_it != layer_row.end())
-			style.ui_map_art_style_id = fieldToInt(sid_it->second);
-		auto li_it = layer_row.find("LayerIndex");
-		if (li_it != layer_row.end())
-			style.layer_index = fieldToInt(li_it->second);
-		auto lw_it = layer_row.find("LayerWidth");
-		if (lw_it != layer_row.end())
-			style.layer_width = fieldToInt(lw_it->second);
-		auto lh_it = layer_row.find("LayerHeight");
-		if (lh_it != layer_row.end())
-			style.layer_height = fieldToInt(lh_it->second);
-		auto tw_it = layer_row.find("TileWidth");
-		if (tw_it != layer_row.end())
-			style.tile_width = fieldToInt(tw_it->second);
-		auto th_it = layer_row.find("TileHeight");
-		if (th_it != layer_row.end())
-			style.tile_height = fieldToInt(th_it->second);
-
-		art_styles.push_back(style);
+		if (sid_it == layer_row.end() || fieldToInt(sid_it->second) != art_style_id)
+			continue;
+		style_layer = &layer_row;
 	}
+
+	if (!style_layer) {
+		logging::write(std::format("no style layer found for UiMapArtStyleID {}", art_style_id));
+		continue;
+	}
+
+	// JS combined_style spreads ...art_entry, so combined_style.ID = UiMapArt row ID (linked_art_id).
+	CombinedArtStyle style;
+	style.id = linked_art_id;
+	style.ui_map_art_style_id = art_style_id;
+	auto li_it = style_layer->find("LayerIndex");
+	if (li_it != style_layer->end())
+		style.layer_index = fieldToInt(li_it->second);
+	auto lw_it = style_layer->find("LayerWidth");
+	if (lw_it != style_layer->end())
+		style.layer_width = fieldToInt(lw_it->second);
+	auto lh_it = style_layer->find("LayerHeight");
+	if (lh_it != style_layer->end())
+		style.layer_height = fieldToInt(lh_it->second);
+	auto tw_it = style_layer->find("TileWidth");
+	if (tw_it != style_layer->end())
+		style.tile_width = fieldToInt(tw_it->second);
+	auto th_it = style_layer->find("TileHeight");
+	if (th_it != style_layer->end())
+		style.tile_height = fieldToInt(th_it->second);
+
+	art_styles.push_back(style);
 }
 
 if (art_styles.empty()) {
@@ -1017,13 +1029,7 @@ ImGui::SetClipboardText(dir.c_str());
 
 static void open_zone_export_directory() {
 	const std::string dir = casc::ExportHelper::getExportPath("zones");
-#ifdef _WIN32
-	const std::wstring wpath(dir.begin(), dir.end());
-	ShellExecuteW(nullptr, L"open", wpath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-#else
-	std::string cmd = "xdg-open \"" + dir + "\" &";
-	std::system(cmd.c_str());
-#endif
+	core::openInExplorer(dir);
 }
 
 void export_zone_map() {

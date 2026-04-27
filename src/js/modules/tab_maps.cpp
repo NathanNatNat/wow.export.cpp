@@ -368,11 +368,32 @@ auto rgba = blp.toUInt8Array(0, 0b1111);
 uint32_t blp_w = blp.width;
 uint32_t blp_h = blp.height;
 
-// Alpha-composite tile onto the output buffer
-for (int py = 0; py < size; py++) {
-for (int px = 0; px < size; px++) {
-int src_x = (std::min)(static_cast<int>(px * output_scale), static_cast<int>(blp_w) - 1);
-int src_y = (std::min)(static_cast<int>(py * output_scale), static_cast<int>(blp_h) - 1);
+// JS draws each tile via ctx.drawImage(canvas, 0, 0, blp_w, blp_h,
+//   tile.drawX * output_scale, tile.drawY * output_scale,
+//   blp_w * tile.scaleX * output_scale, blp_h * tile.scaleY * output_scale).
+// Replicate destination-rect blit + alpha compositing.
+const float draw_x = tile.drawX * output_scale;
+const float draw_y = tile.drawY * output_scale;
+const float draw_w = blp_w * tile.scaleX * output_scale;
+const float draw_h = blp_h * tile.scaleY * output_scale;
+
+const int dst_x0 = (std::max)(0, static_cast<int>(std::floor(draw_x)));
+const int dst_y0 = (std::max)(0, static_cast<int>(std::floor(draw_y)));
+const int dst_x1 = (std::min)(size, static_cast<int>(std::ceil(draw_x + draw_w)));
+const int dst_y1 = (std::min)(size, static_cast<int>(std::ceil(draw_y + draw_h)));
+
+if (draw_w <= 0.0f || draw_h <= 0.0f)
+continue;
+
+const float inv_scale_x = static_cast<float>(blp_w) / draw_w;
+const float inv_scale_y = static_cast<float>(blp_h) / draw_h;
+
+for (int py = dst_y0; py < dst_y1; py++) {
+for (int px = dst_x0; px < dst_x1; px++) {
+int src_x = (std::min)(static_cast<int>((px - draw_x) * inv_scale_x), static_cast<int>(blp_w) - 1);
+int src_y = (std::min)(static_cast<int>((py - draw_y) * inv_scale_y), static_cast<int>(blp_h) - 1);
+if (src_x < 0 || src_y < 0)
+continue;
 int src_idx = (src_y * blp_w + src_x) * 4;
 int dst_idx = (py * size + px) * 4;
 
@@ -873,9 +894,8 @@ core::view->mapViewerSelection.clear();
 const std::string wdt_path = std::format("world/maps/{}/{}.wdt", map_dir_lower, map_dir_lower);
 logging::write(std::format("loading map preview for {} ({})", map_dir_lower, mapID));
 
-BufferWrapper wdt_data = core::view->casc->getVirtualFileByName(wdt_path);
-
 try {
+BufferWrapper wdt_data = core::view->casc->getVirtualFileByName(wdt_path);
 selected_wdt_data = std::move(wdt_data);
 selected_wdt = std::make_unique<WDTLoader>(selected_wdt_data);
 selected_wdt->load();
@@ -1056,8 +1076,10 @@ const std::string out_path = casc::ExportHelper::getExportPath(relative_path);
 writer.write(out_path).get();
 
 auto export_paths = core::openLastExportStream();
+if (export_paths.isOpen()) {
 export_paths.writeLine("png:" + out_path);
 export_paths.close();
+}
 
 helper.mark(relative_path, true);
 logging::write(std::format("WMO minimap exported: {}", out_path));
@@ -1350,8 +1372,10 @@ auto stats = writer.getStats();
 logging::write(std::format("map export complete: {} ({} tiles)", out_path, stats.totalTiles));
 
 auto export_paths = core::openLastExportStream();
+if (export_paths.isOpen()) {
 export_paths.writeLine("png:" + out_path);
 export_paths.close();
+}
 
 helper.mark((std::filesystem::path("maps") / selected_map_dir / filename).string(), true);
 
@@ -1518,6 +1542,7 @@ pixel_data[j] = static_cast<uint8_t>(std::floor(normalized_height * 255));
 
 writer.write(out_path).get();
 
+if (export_paths.isOpen())
 export_paths.writeLine("png:" + out_path);
 
 helper.mark((std::filesystem::path("maps") / selected_map_dir / "heightmaps" / filename).string(), true);
@@ -1529,6 +1554,7 @@ logging::write(std::format("failed to export heightmap for tile {}: {}", tile_in
 }
 }
 
+if (export_paths.isOpen())
 export_paths.close();
 helper.finish();
 }

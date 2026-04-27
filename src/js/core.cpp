@@ -420,7 +420,18 @@ void openInExplorer(const std::string& path) {
 	MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wpath.data(), wlen);
 	ShellExecuteW(nullptr, L"open", wpath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #else
-	std::string cmd = "xdg-open \"" + path + "\" &";
+	// Single-quote escape for shell safety. Replace ' with '\'' inside a single-quoted string.
+	std::string escaped;
+	escaped.reserve(path.size() + 2);
+	escaped.push_back('\'');
+	for (char c : path) {
+		if (c == '\'')
+			escaped.append("'\\''");
+		else
+			escaped.push_back(c);
+	}
+	escaped.push_back('\'');
+	std::string cmd = "xdg-open " + escaped + " &";
 	std::system(cmd.c_str());
 #endif
 }

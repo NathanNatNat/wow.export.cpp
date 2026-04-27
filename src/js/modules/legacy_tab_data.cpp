@@ -77,8 +77,8 @@ static void initialize_dbc_listfile() {
 	std::set<std::string> table_names;
 
 	for (const auto& full_path : all_dbc_files) {
-		namespace fs = std::filesystem;
-		std::string dbc_file = fs::path(full_path).filename().string();
+		const auto sep_pos = full_path.find_last_of('\\');
+		std::string dbc_file = (sep_pos != std::string::npos) ? full_path.substr(sep_pos + 1) : full_path;
 		std::string table_name = dbc_file;
 		const auto dot_pos = table_name.rfind('.');
 		if (dot_pos != std::string::npos)

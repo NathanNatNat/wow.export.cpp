@@ -12,6 +12,7 @@
 #include "../casc/export-helper.h"
 #include "../casc/listfile.h"
 #include "../casc/casc-source.h"
+#include "../casc/blte-reader.h"
 #include "../casc/install-manifest.h"
 #include "../components/listbox.h"
 #include "../../app.h"
@@ -172,9 +173,7 @@ static void pump_install_export() {
 
 	if (task.overwrite_files || !generics::fileExists(export_path)) {
 		try {
-			std::string enc_key = core::view->casc->getEncodingKeyForContentKey(file->hash);
-			std::string cached_path = core::view->casc->_ensureFileInCache(enc_key, 0, false);
-			BufferWrapper data = BufferWrapper::readFile(cached_path);
+			BLTEReader data = core::view->casc->getFileAsBLTE(0, false, false, true, false, file->hash);
 			data.writeToFile(export_path);
 
 			helper.mark(file_name, true);
@@ -209,7 +208,7 @@ static void export_install_files() {
 
 struct PendingViewStrings {
 	std::string file_name;
-	std::future<BufferWrapper> file_future;
+	std::future<BLTEReader> file_future;
 	std::unique_ptr<BusyLock> busy_lock;
 };
 
@@ -226,7 +225,8 @@ static void pump_view_strings() {
 	auto& view = *core::view;
 
 	try {
-		BufferWrapper data = task.file_future.get();
+		BLTEReader data = task.file_future.get();
+		data.processAllBlocks();
 		const auto& raw = data.raw();
 		std::vector<std::string> strings = extract_strings(raw.data(), raw.size());
 
@@ -282,9 +282,7 @@ static void view_strings_impl() {
 	task_data.file_name = file_name;
 	task_data.busy_lock = std::make_unique<BusyLock>(core::create_busy_lock());
 	task_data.file_future = std::async(std::launch::async, [casc, hash]() {
-		std::string enc_key = casc->getEncodingKeyForContentKey(hash);
-		std::string cached_path = casc->_ensureFileInCache(enc_key, 0, false);
-		return BufferWrapper::readFile(cached_path);
+		return casc->getFileAsBLTE(0, false, false, true, false, hash);
 	});
 	pending_view_strings = std::move(task_data);
 }

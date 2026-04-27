@@ -658,11 +658,13 @@ static void apply_creature_equipment_models() {
 						renderer->buildBoneRemapTable(*active_renderer_result.m2->get_bones_m2());
 					auto sgit = SLOT_TO_GEOSET_GROUPS.find(slot_id);
 					if (sgit != SLOT_TO_GEOSET_GROUPS.end() && !display->attachmentGeosetGroup.empty()) {
-						size_t coll_idx = i - collection_start_index;
-						if (coll_idx < display->attachmentGeosetGroup.size()) {
-							int geo_group_val = display->attachmentGeosetGroup[coll_idx];
-							for (const auto& mapping : sgit->second)
-								renderer->setGeosetGroupDisplay(mapping.group_index, 1 + geo_group_val);
+						renderer->hideAllGeosets();
+						for (const auto& mapping : sgit->second) {
+							size_t lookup = static_cast<size_t>(mapping.group_index);
+							if (lookup < display->attachmentGeosetGroup.size()) {
+								int value = display->attachmentGeosetGroup[lookup];
+								renderer->setGeosetGroupDisplay(mapping.char_geoset, 1 + value);
+							}
 						}
 					}
 					size_t texture_idx = (i < display->textures.size()) ? i : 0;
@@ -1053,23 +1055,23 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 
 			active_file_data_id = file_data_id;
 			active_creature = &creature;
+		}
 
-			bool has_content = false;
-			if (active_renderer_result.m2)
-				has_content = !active_renderer_result.m2->get_draw_calls().empty();
-			else if (active_renderer_result.m3)
-				has_content = !active_renderer_result.m3->get_draw_calls().empty();
-			else if (active_renderer_result.wmo)
-				has_content = !active_renderer_result.wmo->get_groups().empty();
+		bool has_content = false;
+		if (active_renderer_result.m2)
+			has_content = !active_renderer_result.m2->get_draw_calls().empty();
+		else if (active_renderer_result.m3)
+			has_content = !active_renderer_result.m3->get_draw_calls().empty();
+		else if (active_renderer_result.wmo)
+			has_content = !active_renderer_result.wmo->get_groups().empty();
 
-			if (!has_content) {
-				core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", creature.name), {}, 4000);
-			} else {
-				core::hideToast();
+		if (!has_content) {
+			core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", creature.name), {}, 4000);
+		} else {
+			core::hideToast();
 
-				if (view.creatureViewerAutoAdjust && viewer_context.fitCamera)
-					viewer_context.fitCamera();
-			}
+			if (view.creatureViewerAutoAdjust && viewer_context.fitCamera)
+				viewer_context.fitCamera();
 		}
 	} catch (const casc::EncryptionError& e) {
 		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", creature.name, e.key), {}, -1);
