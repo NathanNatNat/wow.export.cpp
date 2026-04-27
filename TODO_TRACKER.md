@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 42/186 verified (23%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 43/186 verified (23%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -285,10 +285,10 @@
 - **Status**: Pending
 - **Details**: JS copies any non-null/undefined value (including empty string), while C++ returns early on `value.empty()`, so empty-cell clipboard behavior is not equivalent.
 
-- [ ] 56. [tab_raw.cpp] detect_raw_files manually sets is_dirty=true — deviates from JS
+- [x] 56. [tab_raw.cpp] detect_raw_files manually sets is_dirty=true — deviates from JS
 - **JS Source**: `src/js/modules/tab_raw.js` lines 75–76
-- **Status**: Pending
-- **Details**: JS calls listfile.ingestIdentifiedFiles then compute_raw_files without setting is_dirty. Since is_dirty was false, JS would return early (apparent JS bug). C++ adds is_dirty=true to fix this, which is arguably correct but deviates from original JS behavior.
+- **Status**: Verified (intentional deviation — JS bug fix, documented inline)
+- **Details**: JS calls listfile.ingestIdentifiedFiles then compute_raw_files without setting is_dirty. Since is_dirty was false after mounted(), JS would return early — a confirmed JS bug causing the list to not refresh after file identification. C++ intentionally sets is_dirty=true before the call to fix this. Deviation documented with an inline comment in tab_raw.cpp.
 
 - [ ] 57. [tab_maps.cpp] Hand-rolled MD5 instead of mbedTLS
 - **JS Source**: `src/js/modules/tab_maps.js` line 914

@@ -101,6 +101,9 @@ static void pump_detect_task() {
 		if (!task.extension_map.empty()) {
 			std::vector<std::pair<uint32_t, std::string>> entries(task.extension_map.begin(), task.extension_map.end());
 			casc::listfile::ingestIdentifiedFiles(entries);
+			// JS bug: is_dirty was never set to true here, causing compute_raw_files() to
+			// return early without refreshing the list after new files were identified.
+			// C++ intentionally deviates from JS to fix this so the list actually updates.
 			is_dirty = true;
 			compute_raw_files();
 
