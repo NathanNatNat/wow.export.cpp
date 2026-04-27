@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 20/85 verified (24%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 32/85 verified (38%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -205,34 +205,34 @@
 - **Status**: Fixed
 - **Details**: Filter input now placed inside `BeginFilterBar/EndFilterBar` with `SetNextItemWidth(GetContentRegionAvail().x)`. Export button placed inside `BeginPreviewControls/EndPreviewControls` with `ImGui::BeginDisabled/EndDisabled`. Removed old `SameLine()` tray layout.
 
-- [ ] 114. [tab_zones.cpp] Zone listbox copy/paste trim options are hardcoded instead of config-bound
+- [x] 114. [tab_zones.cpp] Zone listbox copy/paste trim options are hardcoded instead of config-bound
 - **JS Source**: `src/js/modules/tab_zones.js` line 315
-- **Status**: Pending
+- **Status**: Fixed: reads copyMode/pasteSelection/removePathSpacesCopy from view.config, matching the JS binding.
 - **Details**: JS binds `copymode`, `pasteselection`, and `copytrimwhitespace` to config values; C++ hardcodes `CopyMode::Default`, `pasteselection=false`, and `copytrimwhitespace=false`.
 
-- [ ] 115. [tab_zones.cpp] Phase selector placement differs from JS preview overlay layout
+- [x] 115. [tab_zones.cpp] Phase selector placement differs from JS preview overlay layout
 - **JS Source**: `src/js/modules/tab_zones.js` lines 341–349
-- **Status**: Pending
+- **Status**: Fixed: phase combo moved into the zone-canvas-area child window as an overlay at the bottom-right, matching the JS `preview-dropdown-overlay` placement.
 - **Details**: JS renders the phase dropdown in a `preview-dropdown-overlay` inside the preview background; C++ renders phase selection in the bottom control bar.
 
-- [ ] 116. [tab_zones.cpp] Listbox copyMode hardcoded instead of from config
+- [x] 116. [tab_zones.cpp] Listbox copyMode hardcoded instead of from config
 - **JS Source**: `src/js/modules/tab_zones.js` line 315
-- **Status**: Pending
+- **Status**: Fixed: reads copyMode from view.config using same pattern as tab_audio.cpp.
 - **Details**: C++ passes `listbox::CopyMode::Default` instead of reading from `view.config["copyMode"]`.
 
-- [ ] 117. [tab_zones.cpp] Listbox pasteSelection hardcoded false instead of from config
+- [x] 117. [tab_zones.cpp] Listbox pasteSelection hardcoded false instead of from config
 - **JS Source**: `src/js/modules/tab_zones.js` line 315
-- **Status**: Pending
+- **Status**: Fixed: passes `view.config.value("pasteSelection", false)`.
 - **Details**: C++ hardcodes `false` instead of reading `view.config["pasteSelection"]`.
 
-- [ ] 118. [tab_zones.cpp] Listbox copytrimwhitespace hardcoded false instead of from config
+- [x] 118. [tab_zones.cpp] Listbox copytrimwhitespace hardcoded false instead of from config
 - **JS Source**: `src/js/modules/tab_zones.js` line 315
-- **Status**: Pending
+- **Status**: Fixed: passes `view.config.value("removePathSpacesCopy", false)`.
 - **Details**: C++ hardcodes `false` instead of reading `view.config["removePathSpacesCopy"]`.
 
-- [ ] 119. [tab_zones.cpp] Phase dropdown placed in control bar instead of preview overlay
+- [x] 119. [tab_zones.cpp] Phase dropdown placed in control bar instead of preview overlay
 - **JS Source**: `src/js/modules/tab_zones.js` lines 341–347
-- **Status**: Pending
+- **Status**: Fixed: phase combo removed from preview-controls bar and rendered inside zone-canvas-area child as a bottom-right overlay using SetCursorPos, matching JS layout.
 - **Details**: JS puts the phase `<select>` inside `preview-dropdown-overlay` div overlaid on the zone canvas. C++ places the `ImGui::BeginCombo` in the bottom controls bar alongside checkboxes/button. This is a layout difference.
 
 - [ ] 127. [tab_item_sets.cpp] apply_filter converts ItemSet structs to JSON objects unnecessarily
