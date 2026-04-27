@@ -21,6 +21,7 @@
 #include <sstream>
 
 #include <glad/gl.h>
+#include <nlohmann/json.hpp>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -256,80 +257,34 @@ int64_t get_windows_registry_vram() {
 }
 
 /**
- * Get GPU info on Windows via WMIC/PowerShell.
+ * Get GPU info on Windows via PowerShell CIM.
+ * Replaces WMIC which was removed in Windows 11 24H2.
+ * JS equivalent: Get-CimInstance Win32_VideoController | ConvertTo-Json
  * @returns PlatformGPUInfo or std::nullopt on failure.
  */
 std::optional<PlatformGPUInfo> get_windows_gpu_info() {
 	try {
-		std::string output = exec_cmd("wmic path win32_VideoController get Name,AdapterRAM,DriverVersion /format:csv");
+		std::string output = exec_cmd(
+			"powershell -NoProfile -Command "
+			"\"Get-CimInstance Win32_VideoController | Select-Object -First 1 Name,AdapterRAM,DriverVersion | ConvertTo-Json\""
+		);
 
-		// split by both \r\n and \n, filter empty lines
-		std::vector<std::string> lines;
-		std::string line;
-		for (char c : output) {
-			if (c == '\n') {
-				// trim \r
-				if (!line.empty() && line.back() == '\r')
-					line.pop_back();
-				// trim whitespace
-				auto s = line.find_first_not_of(" \t");
-				if (s != std::string::npos)
-					lines.push_back(line.substr(s));
-				line.clear();
-			} else {
-				line += c;
-			}
-		}
-		if (!line.empty()) {
-			auto s = line.find_first_not_of(" \t");
-			if (s != std::string::npos)
-				lines.push_back(line.substr(s));
-		}
+		auto gpu = nlohmann::json::parse(output);
 
-		if (lines.size() < 2) {
-			logging::write(std::format("GPU: WMIC returned insufficient data ({} lines)", lines.size()));
-			return std::nullopt;
-		}
+		int64_t adapter_ram = gpu.value("AdapterRAM", int64_t{0});
 
-		// csv format: Node,AdapterRAM,DriverVersion,Name
-		const std::string& data_line = lines[1];
-		std::vector<std::string> parts;
-		std::string part;
-		for (char c : data_line) {
-			if (c == ',') {
-				parts.push_back(part);
-				part.clear();
-			} else {
-				part += c;
-			}
-		}
-		parts.push_back(part);
-
-		if (parts.size() < 4) {
-			logging::write(std::format("GPU: WMIC CSV parse failed, expected 4 fields, got {}", parts.size()));
-			return std::nullopt;
-		}
-
-		int64_t adapter_ram = 0;
-		try {
-			adapter_ram = std::stoll(parts[1]);
-		} catch (...) {}
-
-		const std::string& driver_version = parts[2];
-		const std::string& name = parts[3];
-
-		// wmi AdapterRAM is 32-bit, try registry for accurate value on >4GB GPUs
+		// CIM AdapterRAM is 32-bit, try registry for accurate value on >4GB GPUs
 		int64_t registry_vram = get_windows_registry_vram();
 		if (registry_vram > 0)
 			adapter_ram = registry_vram;
 
 		PlatformGPUInfo info;
-		info.name = name.empty() ? "Unknown" : name;
+		info.name = gpu.value("Name", std::string("Unknown"));
 		info.vram = format_vram(adapter_ram);
-		info.driver = driver_version.empty() ? "Unknown" : driver_version;
+		info.driver = gpu.value("DriverVersion", std::string("Unknown"));
 		return info;
 	} catch (const std::exception& e) {
-		logging::write(std::format("GPU: Windows WMIC query failed: {}", e.what()));
+		logging::write(std::format("GPU: Windows CIM query failed: {}", e.what()));
 		return std::nullopt;
 	}
 }

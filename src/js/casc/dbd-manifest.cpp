@@ -123,9 +123,10 @@ bool prepareManifest() {
 	if (is_preloaded.load())
 		return true;
 
-	if (preload_promise.has_value())
-		preload_promise->wait();
+	if (!preload_promise.has_value())
+		preload();
 
+	preload_promise->wait();
 	return true;
 }
 

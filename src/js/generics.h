@@ -101,9 +101,11 @@ std::optional<nlohmann::json> readJSON(const std::filesystem::path& file, bool i
  * @param deflate    If true, will inflate (decompress) the data.
  */
 BufferWrapper downloadFile(const std::string& url, const std::string& out = "",
-                           int64_t partialOfs = -1, int64_t partialLen = -1, bool deflate = false);
+                           int64_t partialOfs = -1, int64_t partialLen = -1, bool deflate = false,
+                           int mode = 0600);
 BufferWrapper downloadFile(const std::vector<std::string>& urls, const std::string& out = "",
-                           int64_t partialOfs = -1, int64_t partialLen = -1, bool deflate = false);
+                           int64_t partialOfs = -1, int64_t partialLen = -1, bool deflate = false,
+                           int mode = 0600);
 
 /**
  * Create all directories in a given path if they do not exist.

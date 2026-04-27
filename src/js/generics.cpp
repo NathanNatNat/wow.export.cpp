@@ -25,6 +25,7 @@
 #include <typeinfo>
 
 #ifndef _WIN32
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -580,8 +581,8 @@ static std::vector<uint8_t> requestData(const std::string& url, int64_t partialO
  * @param deflate    If true, will inflate (decompress) the data.
  */
 BufferWrapper downloadFile(const std::string& url, const std::string& out,
-                           int64_t partialOfs, int64_t partialLen, bool doDeflate) {
-	return downloadFile(std::vector<std::string>{url}, out, partialOfs, partialLen, doDeflate);
+                           int64_t partialOfs, int64_t partialLen, bool doDeflate, int mode) {
+	return downloadFile(std::vector<std::string>{url}, out, partialOfs, partialLen, doDeflate, mode);
 }
 
 /**
@@ -594,7 +595,8 @@ BufferWrapper downloadFile(const std::string& url, const std::string& out,
  * @param deflate    If true, will inflate (decompress) the data.
  */
 BufferWrapper downloadFile(const std::vector<std::string>& urls, const std::string& out,
-                           int64_t partialOfs, int64_t partialLen, bool doDeflate) {
+                           int64_t partialOfs, int64_t partialLen, bool doDeflate, int mode) {
+	mode &= 07777;
 	for (const auto& currentUrl : urls) {
 		try {
 			logging::write(std::format("downloadFile -> {}", currentUrl));
@@ -609,6 +611,9 @@ BufferWrapper downloadFile(const std::vector<std::string>& urls, const std::stri
 			if (!out.empty()) {
 				createDirectory(std::filesystem::path(out).parent_path());
 				wrapped.writeToFile(out);
+#ifndef _WIN32
+				::chmod(out.c_str(), static_cast<mode_t>(mode));
+#endif
 			}
 
 			return wrapped;

@@ -1,33 +1,8 @@
 # TODO Tracker
 
-> **Progress: 0/11 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/6 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
-
-- [ ] 11. [tab_items.cpp / tab_item_sets.cpp / equip-item.cpp / item-picker-modal.cpp] Port item equipping rework and new files
-  - **JS Source**: `src/js/modules/tab_items.js`, `tab_item_sets.js`, `src/js/wow/equip-item.js` (new), `src/js/components/item-picker-modal.js` (new)
-  - **Status**: Pending
-  - **Details**: Upstream commit d0d847f5 reworked item equipping, extracting logic into a new `equip-item.js` module and a new `item-picker-modal.js` UI component. Port these as new .cpp/.h pairs. Also port: item variant support changes to tab_items + tab_item_sets (8fcce02e); independent shoulderpad support in tab_items (377aea87).
-
-- [ ] 12. [DB cache files] Port upstream DB cache additions and changes
-  - **JS Source**: `src/js/db/caches/DBItemDisplays.js`, `DBItemGeosets.js`, `DBItemModels.js`, `DBItemCharTextures.js`, `DBCharacterCustomization.js`, `DBCreatures.js`, `DBItemDisplayInfoModelMatRes.js` (new), `DBItemList.js` (new)
-  - **Status**: Pending
-  - **Details**: New cache files to create as .cpp/.h pairs: `DBItemDisplayInfoModelMatRes` (addf146c, a71487d6 — maps ItemDisplayInfo model material resources); `DBItemList` (d0d847f5 — item list for the picker modal). Existing caches to update: DBItemDisplays — get textures from displayid (addf146c); DBItemGeosets — item variant + shoulderpad support (8fcce02e, 377aea87); DBItemModels — item variant + shoulderpad + displayid texture changes (8fcce02e, 377aea87, addf146c); DBItemCharTextures — item variant support (8fcce02e); DBCharacterCustomization + DBCreatures — conditional character model support (3b5aed51).
-
-- [ ] 13. [listfile.cpp / dbd-manifest.cpp] Port upstream CASC subsystem fixes
-  - **JS Source**: `src/js/casc/listfile.js`, `src/js/casc/dbd-manifest.js`
-  - **Status**: Pending
-  - **Details**: Commits to port: validate binary listfile index/data consistency on load and raise an error on mismatch (afa5d762); fix unnamed files missing from raw client files list (fba07dda); ensure DBD manifest is preloaded when prepareManifest is called early (a7425f7c). Note: several other CASC files also changed upstream (blp.js, blte-reader.js, build-cache.js, cdn-config.js, content-flags.js, export-helper.js, install-manifest.js, jenkins96.js, locale-flags.js, salsa20.js, tact-keys.js, version-config.js) — diff each against the corresponding C++ file and port any logic changes found.
-
-- [ ] 14. [core.cpp / file-writer.cpp / generics.cpp] Port upstream core and utility fixes
-  - **JS Source**: `src/js/core.js`, `src/js/file-writer.js`, `src/js/generics.js`
-  - **Status**: Pending
-  - **Details**: Commits to port: guard against last_export being a directory instead of a file in core + file-writer (3d8af3fc); fix downloadFile using synchronous chmod callback instead of async promise in generics (57fbdf05 — Linux-applicable); mask file-type bits from stored permissions in generics (67ecc5b8). Commits 6918ae93, 398a9f68, fe0be525, 20e899b2 touch updater.js, constants.js, and mmap.js for macOS-specific fixes — review each diff for any Windows/Linux-applicable logic before skipping.
-
-- [ ] 15. [gpu-info.cpp] Port Windows GPU info fix — WMIC replaced with PowerShell CIM
-  - **JS Source**: `src/js/gpu-info.js`
-  - **Status**: Pending
-  - **Details**: Commit 5c11b474 replaced the WMIC command with PowerShell CIM (`Get-CimInstance Win32_VideoController`) for querying GPU info on Windows, fixing broken GPU detection after WMIC was removed in Windows 11 24H2. Verify which Win32 API or shell command our C++ gpu-info implementation uses and apply the equivalent fix if needed.
 
 - [ ] 16. [data-table.cpp / tab_data.cpp / legacy_tab_data.cpp] Port data table copy/export active-filter fix
   - **JS Source**: `src/js/components/data-table.js`, `src/js/modules/tab_data.js`, `src/js/modules/legacy_tab_data.js`

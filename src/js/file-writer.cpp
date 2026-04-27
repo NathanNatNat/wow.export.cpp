@@ -10,11 +10,19 @@
  * Construct a new FileWriter instance.
  * @param file Path to the file to write.
  * @param encoding Encoding hint (unused in C++ — streams write raw bytes).
+ *
+ * If the path is a directory (EISDIR in JS), removes it and retries.
  */
 FileWriter::FileWriter(const std::filesystem::path& file, std::string_view /*encoding*/)
-	: stream(file, std::ios::out | std::ios::trunc),
-	  blocked(false) {
+	: blocked(false) {
 	write_mutex = std::make_shared<std::mutex>();
+
+	stream.open(file, std::ios::out | std::ios::trunc);
+	if (!stream.is_open() && std::filesystem::is_directory(file)) {
+		std::filesystem::remove_all(file);
+		stream.open(file, std::ios::out | std::ios::trunc);
+	}
+
 	auto ready = std::make_shared<std::promise<void>>();
 	ready->set_value();
 	resolver = ready->get_future().share();

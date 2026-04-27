@@ -25,6 +25,7 @@
 #include <atomic>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 #include <format>
 #include <memory>
 #include <thread>
@@ -294,9 +295,18 @@ AppState makeNewView() {
 
 /**
  * Open a stream to the last export file.
+ * If the path is a directory (left over from a previous interrupted export),
+ * remove it recursively before opening.
  */
 FileWriter openLastExportStream() {
-	return FileWriter(constants::LAST_EXPORT(), "utf8");
+	const auto& path = constants::LAST_EXPORT();
+	std::error_code ec;
+	auto status = std::filesystem::status(path, ec);
+	if (!ec && std::filesystem::is_directory(status)) {
+		logging::write("last_export path is a directory, removing it");
+		std::filesystem::remove_all(path, ec);
+	}
+	return FileWriter(path, "utf8");
 }
 
 /**

@@ -440,6 +440,7 @@ static bool listfile_preload_binary() {
 
 		binary_strings_mmap = {};
 
+		std::array<size_t, 7> pf_file_sizes = {};
 		for (size_t i = 0; i < pf_files.size(); i++) {
 			try {
 				auto* mmap_obj = mmap_util::create_virtual_file();
@@ -450,11 +451,34 @@ static bool listfile_preload_binary() {
 					throw std::runtime_error("Failed to map pf file: " + file_path.string());
 
 				binary_strings_mmap[i] = mmap_obj;
+				pf_file_sizes[i] = mmap_obj->size;
 			} catch (const std::exception& e) {
 				logging::write(std::format("Error mapping pf file {}: {}", i, e.what()));
 				throw;
 			}
 		}
+
+		// validate index-to-data consistency by checking all offsets are in bounds
+		for (const auto& [id, string_offset] : binary_id_to_offset) {
+			const uint8_t pf_index = binary_id_to_pf_index.at(id);
+			const size_t file_size = pf_file_sizes[pf_index];
+
+			if (pf_index >= pf_file_sizes.size() || string_offset >= file_size) {
+				logging::write(std::format("Binary listfile consistency check failed: ID {} offset {} out of bounds for pf {} (size {})",
+					id, string_offset, pf_index, file_size));
+				logging::write("Purging cached binary listfile...");
+
+				for (const auto& file : BIN_LF_COMPONENT_VALUES) {
+					try {
+						fs::remove(constants::CACHE::DIR_LISTFILE() / std::string(file));
+					} catch (...) {}
+				}
+
+				throw std::runtime_error("Binary listfile index/data mismatch detected, falling back to legacy");
+			}
+		}
+
+		logging::write("Binary listfile consistency check passed");
 
 		for (size_t i = 1; i < pf_files.size(); i++) {
 			auto& preload_container = pf_preload_map[i];
@@ -1037,6 +1061,13 @@ std::vector<std::string> renderListfile(const std::optional<std::vector<uint32_t
 	// has_id_filter is true when file_data_ids is provided (even if empty)
 	const bool has_id_filter = file_data_ids.has_value();
 
+	// Build the filter set once and reuse across both binary and legacy paths.
+	// seen_ids tracks which filtered IDs were resolved (for the unknown-append pass).
+	std::unordered_set<uint32_t> id_set;
+	std::unordered_set<uint32_t> seen_ids;
+	if (has_id_filter)
+		id_set.insert(file_data_ids->begin(), file_data_ids->end());
+
 	if (is_binary_mode) {
 		constexpr std::array<std::string_view, 7> pf_files = {
 			BIN_LF_COMPONENTS::STRINGS,
@@ -1049,9 +1080,6 @@ std::vector<std::string> renderListfile(const std::optional<std::vector<uint32_t
 		};
 
 		const size_t start_index = include_main_index ? 0 : 1;
-		std::unordered_set<uint32_t> id_set;
-		if (has_id_filter)
-			id_set.insert(file_data_ids->begin(), file_data_ids->end());
 
 		for (size_t i = start_index; i < pf_files.size(); i++) {
 			auto file_path = constants::CACHE::DIR_LISTFILE() / std::string(pf_files[i]);
@@ -1062,8 +1090,11 @@ std::vector<std::string> renderListfile(const std::optional<std::vector<uint32_t
 				const uint32_t file_data_id = file_buffer.readUInt32BE();
 				const std::string fn = file_buffer.readNullTerminatedString();
 
-				if (!has_id_filter || id_set.contains(file_data_id))
+				if (!has_id_filter || id_set.contains(file_data_id)) {
 					result.push_back(fn + " [" + std::to_string(file_data_id) + "]");
+					if (has_id_filter)
+						seen_ids.insert(file_data_id);
+				}
 			}
 		}
 	}
@@ -1075,10 +1106,19 @@ std::vector<std::string> renderListfile(const std::optional<std::vector<uint32_t
 			result.push_back(fn + " [" + std::to_string(file_data_id) + "]");
 		}
 	} else {
-		std::unordered_set<uint32_t> id_set(file_data_ids->begin(), file_data_ids->end());
 		for (const auto& [file_data_id, fn] : legacy_id_lookup) {
-			if (id_set.contains(file_data_id))
+			if (id_set.contains(file_data_id)) {
 				result.push_back(fn + " [" + std::to_string(file_data_id) + "]");
+				seen_ids.insert(file_data_id);
+			}
+		}
+	}
+
+	// append unnamed entries for IDs not found in any data source
+	if (has_id_filter) {
+		for (const uint32_t id : *file_data_ids) {
+			if (!seen_ids.contains(id))
+				result.push_back("unknown/" + std::to_string(id) + " [" + std::to_string(id) + "]");
 		}
 	}
 
