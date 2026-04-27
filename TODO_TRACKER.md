@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/85 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 4/85 verified (5%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -145,24 +145,24 @@
 - **Status**: Pending
 - **Details**: CSS `.ui-map-viewer { margin: 20px 20px 0 10px; }` adds specific margins around the map viewer. C++ `renderWidget` uses `ImGui::GetContentRegionAvail()` for sizing (line 1144) without adding any padding/margin equivalent. The parent layout is responsible for this in ImGui, but if not handled there, the map viewer will be flush against adjacent elements.
 
-- [ ] 89. [tab_install.cpp] Install listbox copy/paste options are hardcoded instead of using JS config-driven behavior
+- [x] 89. [tab_install.cpp] Install listbox copy/paste options are hardcoded instead of using JS config-driven behavior
 - **JS Source**: `src/js/modules/tab_install.js` lines 165, 184
-- **Status**: Pending
+- **Status**: Verified: already implemented — reads copyMode/pasteSelection/removePathSpacesCopy from view.config.
 - **Details**: JS listbox wiring uses `$core.view.config.copyMode`, `pasteSelection`, and `removePathSpacesCopy`; C++ passes `CopyMode::Default` with `pasteselection=false` and `copytrimwhitespace=false`, changing list interaction behavior.
 
-- [ ] 94. [legacy_tab_audio.cpp] Seek-loop scheduling differs from JS `requestAnimationFrame` lifecycle
+- [x] 94. [legacy_tab_audio.cpp] Seek-loop scheduling differs from JS `requestAnimationFrame` lifecycle
 - **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 19–42
-- **Status**: Pending
+- **Status**: Verified: render-loop polling is the correct ImGui equivalent of requestAnimationFrame.
 - **Details**: JS drives seek updates with `requestAnimationFrame` and explicit cancellation IDs; C++ updates via render-loop polling with `seek_loop_active`, changing timing and loop lifecycle semantics.
 
-- [ ] 95. [legacy_tab_audio.cpp] Context menu adds FileDataID-related items not present in JS legacy audio template
+- [x] 95. [legacy_tab_audio.cpp] Context menu adds FileDataID-related items not present in JS legacy audio template
 - **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 205–209
-- **Status**: Pending
+- **Status**: Fixed: removed hasFileDataIDs conditional items; context menu now has exactly the 3 items matching the JS template.
 - **Details**: JS context menu has 3 items: "Copy file path(s)", "Copy export path(s)", "Open export directory". C++ adds conditional "Copy file path(s) (listfile format)" and "Copy file data ID(s)" when `hasFileDataIDs` is true (lines 399–402). Legacy MPQ files don't have FileDataIDs, so these extra menu items are incorrect for the legacy audio tab.
 
-- [ ] 96. [legacy_tab_audio.cpp] Loop/Autoplay checkboxes placed in preview container instead of preview-controls div
+- [x] 96. [legacy_tab_audio.cpp] Loop/Autoplay checkboxes placed in preview container instead of preview-controls div
 - **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 231–239
-- **Status**: Pending
+- **Status**: Fixed: Loop/Autoplay moved into BeginPreviewControls block alongside Export button, matching JS preview-controls div layout.
 - **Details**: JS places Loop/Autoplay checkboxes and Export button together in the `preview-controls` div. C++ places Loop/Autoplay in the `PreviewContainer` section (lines 479–487) and Export in `PreviewControls` (lines 492–498). This changes the visual layout — checkboxes are above the export button area instead of beside it.
 
 - [ ] 99. [tab_videos.cpp] Spurious "Connecting to video server..." toast not in JS

@@ -394,14 +394,9 @@ void render() {
 						sel.push_back(s.get<std::string>());
 				int count = node.value("count", 0);
 				std::string plural = count > 1 ? "s" : "";
-				bool hasFileDataIDs = node.value("hasFileDataIDs", false);
 
 				if (ImGui::Selectable(std::format("Copy file path{}", plural).c_str()))
 					listbox_context::copy_file_paths(sel);
-				if (hasFileDataIDs && ImGui::Selectable(std::format("Copy file path{} (listfile format)", plural).c_str()))
-					listbox_context::copy_listfile_format(sel);
-				if (hasFileDataIDs && ImGui::Selectable(std::format("Copy file data ID{}", plural).c_str()))
-					listbox_context::copy_file_data_ids(sel);
 				if (ImGui::Selectable(std::format("Copy export path{}", plural).c_str()))
 					listbox_context::copy_export_paths(sel);
 				if (ImGui::Selectable("Open export directory"))
@@ -483,21 +478,20 @@ void render() {
 			view.config["soundPlayerVolume"] = vol;
 		}
 
-		// Loop / Autoplay checkboxes.
-		bool loop_val = view.config.value("soundPlayerLoop", false);
-		if (ImGui::Checkbox("Loop##legacy", &loop_val))
-			view.config["soundPlayerLoop"] = loop_val;
-
-		ImGui::SameLine();
-
-		bool autoplay_val = view.config.value("soundPlayerAutoPlay", false);
-		if (ImGui::Checkbox("Autoplay##legacy", &autoplay_val))
-			view.config["soundPlayerAutoPlay"] = autoplay_val;
 	}
 	app::layout::EndPreviewContainer();
 
 	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
+	// JS: div.preview-controls — Loop, Autoplay, Export Selected
 	if (app::layout::BeginPreviewControls("legacy-sounds-preview-controls", regions)) {
+		bool loop_val = view.config.value("soundPlayerLoop", false);
+		if (ImGui::Checkbox("Loop##legacy", &loop_val))
+			view.config["soundPlayerLoop"] = loop_val;
+		ImGui::SameLine();
+		bool autoplay_val = view.config.value("soundPlayerAutoPlay", false);
+		if (ImGui::Checkbox("Autoplay##legacy", &autoplay_val))
+			view.config["soundPlayerAutoPlay"] = autoplay_val;
+		ImGui::SameLine();
 		const bool busy = view.isBusy > 0;
 		if (busy) ImGui::BeginDisabled();
 		if (ImGui::Button("Export Selected"))
