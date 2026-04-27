@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 90/195 audited (46%)**
+**Progress: 120/195 audited (62%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -94,36 +94,36 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 88. `src/js/casc/content-flags.cpp`
 - [x] 89. `src/js/casc/db2.cpp`
 - [x] 90. `src/js/casc/dbd-manifest.cpp`
-- [ ] 91. `src/js/casc/export-helper.cpp`
-- [ ] 92. `src/js/casc/install-manifest.cpp`
-- [ ] 93. `src/js/casc/jenkins96.cpp`
-- [ ] 94. `src/js/casc/listfile.cpp`
-- [ ] 95. `src/js/casc/locale-flags.cpp`
-- [ ] 96. `src/js/casc/realmlist.cpp`
-- [ ] 97. `src/js/casc/salsa20.cpp`
-- [ ] 98. `src/js/casc/tact-keys.cpp`
-- [ ] 99. `src/js/casc/version-config.cpp`
-- [ ] 100. `src/js/casc/vp9-avi-demuxer.cpp`
-- [ ] 101. `src/js/components/checkboxlist.cpp`
-- [ ] 102. `src/js/components/combobox.cpp`
-- [ ] 103. `src/js/components/context-menu.cpp`
-- [ ] 104. `src/js/components/data-table.cpp`
-- [ ] 105. `src/js/components/file-field.cpp`
-- [ ] 106. `src/js/components/home-showcase.cpp`
-- [ ] 107. `src/js/components/item-picker-modal.cpp`
-- [ ] 108. `src/js/components/itemlistbox.cpp`
-- [ ] 109. `src/js/components/listbox-maps.cpp`
-- [ ] 110. `src/js/components/listbox-zones.cpp`
-- [ ] 111. `src/js/components/listbox.cpp`
-- [ ] 112. `src/js/components/listboxb.cpp`
-- [ ] 113. `src/js/components/map-viewer.cpp`
-- [ ] 114. `src/js/components/markdown-content.cpp`
-- [ ] 115. `src/js/components/menu-button.cpp`
-- [ ] 116. `src/js/components/model-viewer-gl.cpp`
-- [ ] 117. `src/js/components/resize-layer.cpp`
-- [ ] 118. `src/js/components/slider.cpp`
-- [ ] 119. `src/js/db/CompressionType.cpp`
-- [ ] 120. `src/js/db/DBCReader.cpp`
+- [x] 91. `src/js/casc/export-helper.cpp`
+- [x] 92. `src/js/casc/install-manifest.cpp`
+- [x] 93. `src/js/casc/jenkins96.cpp`
+- [x] 94. `src/js/casc/listfile.cpp`
+- [x] 95. `src/js/casc/locale-flags.cpp`
+- [x] 96. `src/js/casc/realmlist.cpp`
+- [x] 97. `src/js/casc/salsa20.cpp`
+- [x] 98. `src/js/casc/tact-keys.cpp`
+- [x] 99. `src/js/casc/version-config.cpp`
+- [x] 100. `src/js/casc/vp9-avi-demuxer.cpp`
+- [x] 101. `src/js/components/checkboxlist.cpp`
+- [x] 102. `src/js/components/combobox.cpp`
+- [x] 103. `src/js/components/context-menu.cpp`
+- [x] 104. `src/js/components/data-table.cpp`
+- [x] 105. `src/js/components/file-field.cpp`
+- [x] 106. `src/js/components/home-showcase.cpp`
+- [x] 107. `src/js/components/item-picker-modal.cpp`
+- [x] 108. `src/js/components/itemlistbox.cpp`
+- [x] 109. `src/js/components/listbox-maps.cpp`
+- [x] 110. `src/js/components/listbox-zones.cpp`
+- [x] 111. `src/js/components/listbox.cpp`
+- [x] 112. `src/js/components/listboxb.cpp`
+- [x] 113. `src/js/components/map-viewer.cpp`
+- [x] 114. `src/js/components/markdown-content.cpp`
+- [x] 115. `src/js/components/menu-button.cpp`
+- [x] 116. `src/js/components/model-viewer-gl.cpp`
+- [x] 117. `src/js/components/resize-layer.cpp`
+- [x] 118. `src/js/components/slider.cpp`
+- [x] 119. `src/js/db/CompressionType.cpp`
+- [x] 120. `src/js/db/DBCReader.cpp`
 - [ ] 121. `src/js/db/DBDParser.cpp`
 - [ ] 122. `src/js/db/FieldType.cpp`
 - [ ] 123. `src/js/db/WDCReader.cpp`

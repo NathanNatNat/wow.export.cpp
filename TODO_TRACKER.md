@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/257 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/323 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/app.cpp ─────────────────────────────────────────────────────────── -->
 
@@ -1444,3 +1444,381 @@
   - **JS Source**: `src/js/casc/dbd-manifest.js` lines 10–13
   - **Status**: Pending
   - **Details**: C++ file contains `// TODO 191:` and `// TODO 192:` comments describing threading concerns. The code already implements `std::atomic<bool>` (for TODO 191) and `std::call_once` (for TODO 192) as the solutions. The TODO comments say what needs to be done but the code already does it. They are stale and should be removed or converted to completion notes.
+
+<!-- ─── src/js/casc/export-helper.cpp ──────────────────────────────── -->
+
+- [ ] 258. [export-helper.cpp] `mark()` logs stack trace to app log file instead of stdout like JS
+  - **JS Source**: `src/js/casc/export-helper.js` lines 286–287
+  - **Status**: Pending
+  - **Details**: JS uses `console.log(stackTrace)` which goes to stdout/NW.js devtools, bypassing the log system. C++ uses `logging::write(stackTrace.value())`, sending it to the log file. Callers relying on stdout for stack trace output will not see it in C++.
+
+<!-- ─── src/js/casc/listfile.cpp ──────────────────────────────────────── -->
+
+- [ ] 259. [listfile.cpp] `listfile_check_cache_expiry` may throw on malformed config value
+  - **JS Source**: `src/js/casc/listfile.js` lines 65–66
+  - **Status**: Pending
+  - **Details**: JS uses `Number(core.view.config.listfileCacheRefresh) || 0`, coercing non-numeric/null values to 0. C++ uses `config["listfileCacheRefresh"].get<int64_t>()` which throws `nlohmann::json::type_error` on malformed values. Should guard with try/catch or use `.value()` with a fallback.
+
+- [ ] 260. [listfile.cpp] `getFilenamesByExtension` binary mode does not guard against missing map key
+  - **JS Source**: `src/js/casc/listfile.js` lines 661–680
+  - **Status**: Pending
+  - **Details**: In the binary mode path, `binary_id_to_pf_index.find(fileDataID)` is called without checking if the iterator equals `end()`. Dereferencing a past-end iterator is undefined behavior. JS uses `Map.get()` which safely returns `undefined` on miss.
+
+- [ ] 261. [listfile.cpp] TOCTOU race in `prepareListfileAsync()` — `is_preloaded` checked outside mutex
+  - **JS Source**: `src/js/casc/listfile.js` lines 498–507
+  - **Status**: Pending
+  - **Details**: `is_preloaded` is read without holding the mutex, then the mutex is acquired for the `preload_future` check. On a multi-core system another thread could set `is_preloaded` between the two checks. JS is single-threaded and has no equivalent race.
+
+<!-- ─── src/js/casc/locale-flags.cpp ─────────────────────────────────── -->
+
+- [ ] 262. [locale-flags.cpp] `flags_exports` and `names_exports` static arrays in .cpp are dead code
+  - **JS Source**: `src/js/casc/locale-flags.js` lines 4–40
+  - **Status**: Pending
+  - **Details**: Two `[[maybe_unused]]` static constexpr arrays mirror JS `module.exports.flags` and `module.exports.names` but are never used. All actual usage goes through the `entries` array in the header. These duplicate data already in `locale-flags.h` and should be removed.
+
+<!-- ─── src/js/casc/realmlist.cpp ─────────────────────────────────────── -->
+
+- [ ] 263. [realmlist.cpp] Missing/malformed `realmListURL` config silently produces "undefined" URL instead of throwing
+  - **JS Source**: `src/js/casc/realmlist.js` lines 39–41
+  - **Status**: Pending
+  - **Details**: JS converts the config value via `String()` then has an explicit throw for malformed values. C++ `jsStringCoerce` returns the string "undefined" for null and proceeds silently, using an invalid URL. Should validate the config value and throw/log an error if missing.
+
+- [ ] 264. [realmlist.cpp] `jsStringCoerce` helper is over-engineered for a single config URL lookup
+  - **JS Source**: `src/js/casc/realmlist.js` line 39
+  - **Status**: Pending
+  - **Details**: JS simply calls `String(...)`. C++ implements full JS-style string coercion (null, bool, number, float, array, object), most of which is dead code for this single use case. A simpler string extraction with a null/empty check would be more readable and faithful.
+
+<!-- ─── src/js/casc/tact-keys.cpp ─────────────────────────────────────── -->
+
+- [ ] 265. [tact-keys.cpp] Stale TODO 205 comment in `loadAsync()` describes already-correct logic
+  - **JS Source**: `src/js/casc/tact-keys.js` lines 99–101
+  - **Status**: Pending
+  - **Details**: The TODO 205 comment claims the line-splitting logic needs to match JS `split(' ')` with `parts.length !== 2`. The implementation already correctly handles this. The comment is misleading and should be removed.
+
+<!-- ─── src/js/casc/vp9-avi-demuxer.cpp ──────────────────────────────── -->
+
+- [ ] 266. [vp9-avi-demuxer.cpp] Stale TODO 207 comment in `find_chunk()` describes already-correct loop bound
+  - **JS Source**: `src/js/casc/vp9-avi-demuxer.js` line 69
+  - **Status**: Pending
+  - **Details**: TODO 207 claims `i < data.length - 4` needs fixing. C++ already uses `i + 4 < data.size()`, which is mathematically identical. The comment should be removed.
+
+- [ ] 267. [vp9-avi-demuxer.cpp] `extract_frames()` async generator converted to synchronous callback — deviation undocumented
+  - **JS Source**: `src/js/casc/vp9-avi-demuxer.js` lines 83–126
+  - **Status**: Pending
+  - **Details**: JS uses `async*` generator; callers use `for await`. C++ uses a synchronous `std::function<void(const FrameInfo&)>` callback. This is a necessary adaptation but differs structurally. The deviation should be documented with a comment in the source.
+
+- [ ] 268. [vp9-avi-demuxer.cpp] `find_chunk()` `const char fourcc[4]` parameter decays to pointer — unsafe signature
+  - **JS Source**: `src/js/casc/vp9-avi-demuxer.js` lines 67–77
+  - **Status**: Pending
+  - **Details**: The array parameter decays to `const char*` with no length information. Calling with a string shorter than 4 chars reads past the end. Should use `std::string_view` or `const char (&)[5]` for a null-terminated literal.
+
+<!-- ─── src/js/components/checkboxlist.cpp ───────────────────────────── -->
+
+- [ ] 269. [checkboxlist.cpp] `scrollIndex()` can return negative value before caller clamps it
+  - **JS Source**: `src/js/components/checkboxlist.js` lines 67–69
+  - **Status**: Pending
+  - **Details**: JS computed property never goes negative because `scrollRel` is clamped to [0,1]. C++ `scrollIndex()` can return a negative rounded value when `items.size() < state.slotCount`. The caller guards with `std::max(0, idx)` but the function's own contract differs from the JS property.
+
+- [ ] 270. [checkboxlist.cpp] Scrollbar thumb rendered with raw `ImDrawList::AddRectFilled` (CLAUDE.md violation)
+  - **JS Source**: `src/js/components/checkboxlist.js` lines 170–171
+  - **Status**: Pending
+  - **Details**: Per CLAUDE.md, `ImDrawList` calls should be reserved for effects with no native equivalent. The custom scrollbar thumb is rendered entirely with `AddRectFilled` calls. A native ImGui child window scrollbar or styled region should be used instead.
+
+- [ ] 271. [checkboxlist.cpp] Checked items do not receive a highlighted row background
+  - **JS Source**: `src/js/components/checkboxlist.js` line 172
+  - **Status**: Pending
+  - **Details**: JS applies a `selected` CSS class to each item row when `item.checked` is true, giving a visual highlight. The C++ render loop does not change the row background for checked items — only the checkbox widget itself reflects the checked state.
+
+<!-- ─── src/js/components/combobox.cpp ────────────────────────────────── -->
+
+- [ ] 272. [combobox.cpp] Extra `PushStyleVar(FramePadding, {15,10})` for dropdown items not in JS source
+  - **JS Source**: `src/js/components/combobox.js` lines 91–92
+  - **Status**: Pending
+  - **Details**: The JS component defines no explicit padding for dropdown `<li>` items. C++ applies `ImGuiStyleVar_FramePadding = {15, 10}` which is a CSS approximation not derived from the JS component definition.
+
+- [ ] 273. [combobox.cpp] Hard-coded `PushStyleColor` calls for dropdown hover colors violate CLAUDE.md
+  - **JS Source**: `src/js/components/combobox.js` lines 87–93
+  - **Status**: Pending
+  - **Details**: Lines 212–214 push hard-coded RGBA color `{0.208, 0.208, 0.208, 1.0}` for `ImGuiCol_HeaderHovered` and `ImGuiCol_HeaderActive`. Per CLAUDE.md, `PushStyleColor` calls solely to match CSS values should not be added and should be progressively removed.
+
+<!-- ─── src/js/components/context-menu.cpp ──────────────────────────── -->
+
+- [ ] 274. [context-menu.cpp] JS repositions via `$nextTick` (deferred); C++ repositions synchronously
+  - **JS Source**: `src/js/components/context-menu.js` lines 40–44
+  - **Status**: Pending
+  - **Details**: JS uses `this.$nextTick(() => this.reposition())` to defer until after DOM update. C++ calls `reposition(state)` synchronously when the node becomes active. In practice no visible difference, but the timing differs structurally.
+
+- [ ] 275. [context-menu.cpp] Close-on-click only fires for left mouse button; JS `@click` fires for all buttons
+  - **JS Source**: `src/js/components/context-menu.js` line 54
+  - **Status**: Pending
+  - **Details**: C++ checks only `ImGui::IsMouseClicked(0)` (left button). JS `@click` fires for any mouse button by default, which would also close the menu on right/middle click.
+
+- [ ] 276. [context-menu.cpp] `context-menu-zone` hover buffer uses fixed 20px padding on all sides; JS CSS is asymmetric
+  - **JS Source**: `src/js/components/context-menu.js` lines 54–57
+  - **Status**: Pending
+  - **Details**: The JS hover zone extends -20px from top/left/right with a different downward extent. C++ inflates by `contextMenuZonePadding = 20.0f` uniformly on all sides. The geometry may not match the JS CSS positioning exactly.
+
+<!-- ─── src/js/components/data-table.cpp ─────────────────────────────── -->
+
+- [ ] 277. [data-table.cpp] Selection tracks integer indices instead of row object references — fundamental semantic difference
+  - **JS Source**: `src/js/components/data-table.js` lines 129–159, 836–868
+  - **Status**: Pending
+  - **Details**: JS `selection` stores actual row objects (reference identity). `filteredItems`, `handleKey`, and `selectRow` all use object identity checks. C++ stores integer indices into `sortedItems`. After a filter change, an index may refer to a different row than the JS would track, breaking multi-select semantics across filter changes.
+
+- [ ] 278. [data-table.cpp] String sort uses byte comparison (`std::string::compare`) instead of locale-aware `localeCompare`
+  - **JS Source**: `src/js/components/data-table.js` lines 193–197
+  - **Status**: Pending
+  - **Details**: JS sort calls `aStr.localeCompare(bStr)` which is locale-aware. C++ uses `aStr.compare(bStr)` — a simple lexicographic byte comparison. For Unicode content or locale-specific sort order the results differ.
+
+- [ ] 279. [data-table.cpp] `wheelMouse` cannot call `e.preventDefault()` for horizontal scroll — event propagates
+  - **JS Source**: `src/js/components/data-table.js` line 650
+  - **Status**: Pending
+  - **Details**: JS calls `e.preventDefault()` when handling horizontal scroll (shift+wheel) to prevent browser page scroll. C++ cannot prevent the underlying GLFW/OS scroll event from propagating.
+
+- [ ] 280. [data-table.cpp] `resize()` called every frame; JS only calls on ResizeObserver events
+  - **JS Source**: `src/js/components/data-table.js` lines 436–444
+  - **Status**: Pending
+  - **Details**: C++ calls `resize(...)` every frame unconditionally. JS fires only when the ResizeObserver detects a layout change. Calling every frame may cause subtle scroll position drift from floating-point accumulation.
+
+- [ ] 281. [data-table.cpp] Header and body rendered with raw `ImDrawList` calls instead of `ImGui::BeginTable` (CLAUDE.md violation)
+  - **JS Source**: `src/js/components/data-table.js` lines 976–1020
+  - **Status**: Pending
+  - **Details**: The entire table header and body are rendered via `drawList->AddRectFilled`, `drawList->AddText`, `drawList->AddRect`, etc. Per CLAUDE.md, native `ImGui::BeginTable`/`TableNextRow`/`TableSetColumnIndex` widgets must be used for table rendering.
+
+- [ ] 282. [data-table.cpp] Selection lookup is O(n) per rendered row; JS uses O(1) `Set`
+  - **JS Source**: `src/js/components/data-table.js` lines 120–122
+  - **Status**: Pending
+  - **Details**: JS computes `new Set(this.selection)` for O(1) `has()` lookups in the template. C++ uses `std::find` on a `std::vector<int>` for each rendered row — O(n) per row, O(n^2) total. Affects performance on large tables.
+
+<!-- ─── src/js/components/file-field.cpp ─────────────────────────────── -->
+
+- [ ] 283. [file-field.cpp] JS opens dialog on text field focus; C++ adds a separate `...` button (UI deviation)
+  - **JS Source**: `src/js/components/file-field.js` lines 34–39, 46
+  - **Status**: Pending
+  - **Details**: JS template uses `<input @focus="openDialog">` — the file dialog opens automatically when the input is focused. C++ adds a separate `...` button that must be clicked to open the dialog. The JS has no such button. This changes the user interaction model and visual layout significantly.
+
+- [ ] 284. [file-field.cpp] Extra utility functions `openDirectoryDialog`, `openFileDialog`, `saveFileDialog` beyond JS component scope
+  - **JS Source**: `src/js/components/file-field.js` (entire file)
+  - **Status**: Pending
+  - **Details**: The JS component only exposes `openDialog()`. C++ additionally exposes three standalone utility functions with no JS counterparts in this file. These are C++ additions that extend the API surface beyond the original component.
+
+<!-- ─── src/js/components/home-showcase.cpp ──────────────────────────── -->
+
+- [ ] 285. [home-showcase.cpp] Stub comment says index "chosen randomly at startup" but `HomeShowcaseState.index` defaults to -1
+  - **JS Source**: `src/js/components/home-showcase.js` lines 12–13
+  - **Status**: Pending
+  - **Details**: JS `data()` initializes `index: get_random_index()`. C++ `HomeShowcaseState` initializes `index = -1`. The stub comment is inaccurate — callers must explicitly randomize `state.index` before rendering. The comment should note this requirement.
+
+<!-- ─── src/js/components/item-picker-modal.cpp ──────────────────────── -->
+
+- [ ] 286. [item-picker-modal.cpp] Missing `is_loading`/`load_error` state and `DBItemList.initialize()` async lazy-load
+  - **JS Source**: `src/js/components/item-picker-modal.js` lines 37–38, 107–119
+  - **Status**: Pending
+  - **Details**: JS tracks `is_loading` and `load_error` flags and calls `await DBItemList.initialize()` when `slot_id` changes and `all_items` is empty. C++ reads `tab_items::getAllItems()` every frame with no lazy load trigger and never renders the "Failed to load items." error branch.
+
+- [ ] 287. [item-picker-modal.cpp] Filter text not trimmed before search — JS trims, C++ does not
+  - **JS Source**: `src/js/components/item-picker-modal.js` line 65
+  - **Status**: Pending
+  - **Details**: JS `filtered_items` trims before lowercasing: `this.filter_text.trim().toLowerCase()`. C++ `rebuild_filtered` lowercases `s_filter_buf` directly. A filter of "  sword  " would not match "sword" in C++ but would in JS.
+
+- [ ] 288. [item-picker-modal.cpp] Item rows display `item->name` instead of `displayName`
+  - **JS Source**: `src/js/components/item-picker-modal.js` line 173
+  - **Status**: Pending
+  - **Details**: JS template renders `{{ item.name }}` which is the display name field. C++ Selectable uses `item->name` (the raw DB name). The filter correctly searches `item->displayName` but displays `item->name`. These fields may differ; display should use `displayName`.
+
+- [ ] 289. [item-picker-modal.cpp] Icon image not rendered per item row in Selectable list
+  - **JS Source**: `src/js/components/item-picker-modal.js` lines 171–172
+  - **Status**: Pending
+  - **Details**: JS template renders `<div :class="['item-icon', 'icon-' + item.icon]">` for each row. C++ preloads icons via `icon_render::loadIcon()` but does not render them (no `ImGui::Image`) alongside the item name. The icon column is missing from the layout.
+
+- [ ] 290. [item-picker-modal.cpp] `open_items_tab` directly calls `modules::set_active` instead of emitting an event
+  - **JS Source**: `src/js/components/item-picker-modal.js` lines 143–145
+  - **Status**: Pending
+  - **Details**: JS emits `'open-items-tab'` and lets the parent handle tab switching. C++ calls `modules::set_active("tab_items")` directly inside the modal, coupling the component to the module system.
+
+- [ ] 291. [item-picker-modal.cpp] Escape key only closes when popup has ImGui focus; JS handler is global
+  - **JS Source**: `src/js/components/item-picker-modal.js` lines 138–140, 148–151
+  - **Status**: Pending
+  - **Details**: JS mounts a `keydown` listener on `document` that fires for Escape at any time. C++ checks `ImGui::IsKeyPressed(ImGuiKey_Escape)` inside the popup window, so Escape only works when that window has ImGui focus.
+
+- [ ] 292. [item-picker-modal.cpp] Overlay backdrop dimming not rendered
+  - **JS Source**: `src/js/components/item-picker-modal.js` line 161
+  - **Status**: Pending
+  - **Details**: JS wraps the modal in `<div class="item-picker-overlay">` which provides a full-screen semi-transparent backdrop. C++ uses `ImGui::BeginPopupModal` which does not draw a dimming overlay. The visual backdrop effect is absent.
+
+<!-- ─── src/js/components/itemlistbox.cpp ───────────────────────────── -->
+
+- [ ] 293. [itemlistbox.cpp] Extra `onOptions` callback and "Options" button not present in JS source
+  - **JS Source**: `src/js/components/itemlistbox.js` line 20
+  - **Status**: Pending
+  - **Details**: JS `emits` is `['update:selection', 'equip']` — no `'options'` event. C++ declares `onOptions` callback and renders an "Options" button. This extra button and callback are not in the JS source.
+
+- [ ] 294. [itemlistbox.cpp] Item slot height hardcoded at 46px; JS `resize()` uses 26px
+  - **JS Source**: `src/js/components/itemlistbox.js` line 155
+  - **Status**: Pending
+  - **Details**: JS `resize()` uses `Math.floor(clientHeight / 26)` (26px slot height, matching base listbox). C++ uses 46px for `itemHeightVal` and the slot count divisor. The actual ImGui rendered row height matches neither, causing incorrect slot count calculations.
+
+- [ ] 295. [itemlistbox.cpp] Font scaling via `ImGui::GetFont()->Scale` mutation is fragile and not thread-safe
+  - **JS Source**: `src/js/components/itemlistbox.js` line 335
+  - **Status**: Pending
+  - **Details**: C++ modifies `ImGui::GetFont()->Scale` directly on the shared font object before calling `ImGui::PushFont(ImGui::GetFont())`. Mutating the shared font affects all subsequent text until restored and is not thread-safe. The correct approach is to push a separately-sized font or accept uniform font size.
+
+- [ ] 296. [itemlistbox.cpp] `includefilecount` prop declared in JS but not implemented in C++
+  - **JS Source**: `src/js/components/itemlistbox.js` line 19
+  - **Status**: Pending
+  - **Details**: JS `props` includes `'includefilecount'` which conditionally shows the file counter alongside `unittype`. C++ `render()` does not include this parameter; `unittype` alone drives the status line, and the `includefilecount` gate is absent.
+
+- [ ] 297. [itemlistbox.cpp] Selectable width subtracts hardcoded 120px magic number for button space
+  - **JS Source**: `src/js/components/itemlistbox.js` lines 333–338
+  - **Status**: Pending
+  - **Details**: C++ gives Selectable `ImVec2(availSize.x - 120.0f, 0.0f)` as a fixed offset for Equip/Options buttons. JS layout is CSS-driven and auto-sizes. The hardcoded value may not match actual button widths.
+
+<!-- ─── src/js/components/listbox-maps.cpp ───────────────────────────── -->
+
+- [ ] 298. [listbox-maps.cpp] `expansionFilter` watch does not call `recalculateBounds()` — `persistscrollkey` not cleared on filter change
+  - **JS Source**: `src/js/components/listbox-maps.js` lines 27–30
+  - **Status**: Pending
+  - **Details**: JS watcher calls `this.recalculateBounds()` after zeroing scroll. C++ only resets `state.base.scroll` and `state.base.scrollRel` without calling `recalculateBounds`. When a `persistscrollkey` is set, the stored scroll position is not cleared in storage when the filter changes.
+
+<!-- ─── src/js/components/listbox-zones.cpp ─────────────────────────── -->
+
+- [ ] 299. [listbox-zones.cpp] `expansionFilter` watch does not call `recalculateBounds()` — `persistscrollkey` not cleared on filter change
+  - **JS Source**: `src/js/components/listbox-zones.js` lines 27–30
+  - **Status**: Pending
+  - **Details**: Same deviation as listbox-maps.cpp entry 298: C++ does not call `recalculateBounds()` after zeroing scroll on filter change, so `persistscrollkey` position is not cleared in storage.
+
+<!-- ─── src/js/components/listbox.cpp ────────────────────────────────── -->
+
+- [ ] 300. [listbox.cpp] `renderStatusBar` uses raw `ImDrawList::AddRectFilled` for background (CLAUDE.md violation)
+  - **JS Source**: `src/js/components/listbox.js` lines 510–514
+  - **Status**: Pending
+  - **Details**: The status bar background is drawn with `AddRectFilled`. Per CLAUDE.md, raw `ImDrawList` calls should not be used for things a native widget can handle. A child window or styled ImGui region should be used instead.
+
+- [ ] 301. [listbox.cpp] Quick filter hover underline not implemented; JS applies CSS `text-decoration: underline` on hover
+  - **JS Source**: `src/js/components/listbox.js` lines 512–513
+  - **Status**: Pending
+  - **Details**: JS renders quick filters as `<a>` elements with CSS hover underline. C++ uses `ImGui::Selectable` styled with `PushStyleColor` to simulate link appearance but does not draw an underline on hover.
+
+- [ ] 302. [listbox.cpp] Status bar bold font not implemented; comment says bold but uses regular font
+  - **JS Source**: `src/js/components/listbox.js` line 510
+  - **Status**: Pending
+  - **Details**: CSS `.list-status` has `font-weight: bold`. C++ `renderStatusBar` comments "Render bold status text" but calls `ImGui::TextUnformatted` without pushing a bold font variant.
+
+<!-- ─── src/js/components/listboxb.cpp ───────────────────────────────── -->
+
+- [ ] 303. [listboxb.cpp] Ctrl+C copies object references in JS (produces `[object Object]`); C++ copies labels — C++ is more correct but deviates
+  - **JS Source**: `src/js/components/listboxb.js` lines 179–181
+  - **Status**: Pending
+  - **Details**: JS `this.selection.join('\n')` on item objects produces `[object Object]` per item unless items have a custom `toString()`. C++ looks up each selected index and copies `items[idx].label`. The C++ behavior is more useful but diverges from the literal JS behavior.
+
+- [ ] 304. [listboxb.cpp] `lastSelectItem` sentinel -1 in C++ vs `null` in JS — JS bug blocks navigation at index 0
+  - **JS Source**: `src/js/components/listboxb.js` lines 175–177
+  - **Status**: Pending
+  - **Details**: JS checks `if (!this.lastSelectItem)` which is also true for index 0 (`!0 === true`), blocking arrow-key navigation when item 0 was last selected. C++ checks `state.lastSelectItem < 0`, which correctly allows navigation when item 0 is selected. C++ behavior is more correct but intentionally deviates from the JS.
+
+- [ ] 305. [listboxb.cpp] Fundamental model difference: C++ stores item indices; JS stores item objects in selection and `lastSelectItem`
+  - **JS Source**: `src/js/components/listboxb.js` lines 192–215, 230–270
+  - **Status**: Pending
+  - **Details**: JS stores actual item objects in `this.selection` and uses `.indexOf(item)` for reference equality. C++ stores integer indices and uses `std::find`. Shift-range selection, `selectItem`, and all callers of the C++ API must use indices rather than item references, breaking the JS component contract.
+
+<!-- ─── src/js/components/map-viewer.cpp ─────────────────────────────── -->
+
+- [ ] 306. [map-viewer.cpp] `checkTileQueue` uses per-frame tile cap (3) instead of JS concurrency limit (up to 4 in-flight)
+  - **JS Source**: `src/js/components/map-viewer.js` lines 192–215
+  - **Status**: Pending
+  - **Details**: JS drains the queue while `activeTileRequests < maxConcurrentTiles` (up to 4 concurrent async requests). C++ uses `MAX_TILES_PER_FRAME=3` per synchronous frame, never gating on in-flight request counts. The semantics of tile loading throughput differ from the JS.
+
+- [ ] 307. [map-viewer.cpp] `tileHasUnexpectedTransparency` samples full tile instead of canvas-clamped sub-region
+  - **JS Source**: `src/js/components/map-viewer.js` lines 287–331
+  - **Status**: Pending
+  - **Details**: JS calls `ctx.getImageData(left, top, width, height)` clamped to the canvas rectangle, checking only the on-screen portion. C++ reads full cached tile pixel data from `tilePixelCache[index]`. A tile partially off-canvas may return incorrect transparency results in C++.
+
+- [ ] 308. [map-viewer.cpp] `setToDefaultPosition` does not internally call `render()` as JS does
+  - **JS Source**: `src/js/components/map-viewer.js` lines 421–462
+  - **Status**: Pending
+  - **Details**: JS `setToDefaultPosition` calls `this.render()` in all code paths including the fallback. C++ never calls `render()` inside `setToDefaultPosition`; callers must invoke `render()` separately. Direct callers that rely on implicit render will not get a render.
+
+- [ ] 309. [map-viewer.cpp] Double-buffer blit-back step not implemented (GL structural difference)
+  - **JS Source**: `src/js/components/map-viewer.js` lines 554–627
+  - **Status**: Pending
+  - **Details**: JS lines 624–626 clear the main canvas and blit the double-buffer onto it. C++ acknowledges this in a comment but does not implement the pixel-level copy; GL textures are repositioned by offset instead. The double-buffer blit behavior is not replicated.
+
+- [ ] 310. [map-viewer.cpp] Map watcher defers `setToDefaultPosition` by one frame (ImGui adaptation)
+  - **JS Source**: `src/js/components/map-viewer.js` lines 143–150
+  - **Status**: Pending
+  - **Details**: JS `map` watcher calls `setToDefaultPosition()` immediately. C++ sets `state.initialized = false` and defers until `viewportWidth > 0.0f && viewportHeight > 0.0f` in the next `renderWidget` call. There is a one-frame delay before the default position is applied.
+
+<!-- ─── src/js/components/menu-button.cpp ───────────────────────────── -->
+
+- [ ] 311. [menu-button.cpp] `openMenu` toggle-disable guard logic missing — clicking again while open does not close
+  - **JS Source**: `src/js/components/menu-button.js` lines 37–40
+  - **Status**: Pending
+  - **Details**: JS `openMenu` does `this.open = !this.open && !this.disabled`, toggling the menu closed if already open. C++ always calls `ImGui::OpenPopup()` on click (a no-op if popup is already open), losing the toggle-close behavior.
+
+- [ ] 312. [menu-button.cpp] `upward` prop not present in JS source — C++ addition with no JS counterpart
+  - **JS Source**: `src/js/components/menu-button.js` (entire file)
+  - **Status**: Pending
+  - **Details**: JS `props` has `['options', 'default', 'disabled', 'dropdown']` — no `upward`. C++ `render()` takes `bool upward` to control popup direction. This is a C++ addition that deviates from the JS component interface.
+
+- [ ] 313. [menu-button.cpp] Arrow triangle rendered with raw `ImDrawList::AddTriangleFilled` (CLAUDE.md violation)
+  - **JS Source**: `src/js/components/menu-button.js` lines 75–82
+  - **Status**: Pending
+  - **Details**: The JS arrow is a CSS-styled `<div class="arrow">`. C++ uses `ImDrawList::AddTriangleFilled` in `drawArrowButton`. Per CLAUDE.md, `ImGui::ArrowButton` or a text character should be used instead of raw ImDrawList for a standard arrow.
+
+- [ ] 314. [menu-button.cpp] Option separator lines use raw `ImDrawList::AddLine` instead of `ImGui::Separator()`
+  - **JS Source**: `src/js/components/menu-button.js` lines 78–80
+  - **Status**: Pending
+  - **Details**: C++ draws separator lines between popup options via `drawList->AddLine(...)`. Per CLAUDE.md, `ImGui::Separator()` should be preferred over raw ImDrawList calls for separator rendering.
+
+<!-- ─── src/js/components/model-viewer-gl.cpp ──────────────────────── -->
+
+- [ ] 315. [model-viewer-gl.cpp] Extra auto-rotation branch via `context.setActiveModelTransform` has no JS counterpart
+  - **JS Source**: `src/js/components/model-viewer-gl.js` lines 239–247
+  - **Status**: Pending
+  - **Details**: JS auto-rotation only goes through `activeRenderer.setTransform`. C++ has an additional `else if` branch that uses `context.setActiveModelTransform` when `activeRenderer` is null. This extension is not present in the JS source.
+
+- [ ] 316. [model-viewer-gl.cpp] Vue reactive watchers replaced by frame-polling — one-frame latency on config changes
+  - **JS Source**: `src/js/components/model-viewer-gl.js` lines 468–474
+  - **Status**: Pending
+  - **Details**: JS uses `core.view.$watch('config.chrUse3DCamera', ...)` for immediate reactive callbacks. C++ polls each bool each frame via `poll_watchers`, comparing previous vs current value, introducing one-frame latency.
+
+- [ ] 317. [model-viewer-gl.cpp] `context.controls` split into two typed C++ pointers breaks JS API contract for external callers
+  - **JS Source**: `src/js/components/model-viewer-gl.js` line 395
+  - **Status**: Pending
+  - **Details**: JS sets `this.context.controls = this.controls` after `recreate_controls`. External JS code calls `this.context.controls.someMethod()`. C++ callers must know to use `context.controls_orbit` vs `context.controls_character`. This is a breaking interface change relative to JS, documented in the header but not in code comments.
+
+<!-- ─── src/js/components/resize-layer.cpp ──────────────────────────── -->
+
+- [ ] 318. [resize-layer.cpp] Resize callback receives float width from ImGui instead of integer `clientWidth` like JS
+  - **JS Source**: `src/js/components/resize-layer.js` lines 13–15
+  - **Status**: Pending
+  - **Details**: JS `clientWidth` is always an integer (pixels, rounded down). C++ passes `currentWidth` (float from `GetContentRegionAvail().x`) to the callback. Callers expecting an integer may round differently.
+
+<!-- ─── src/js/components/slider.cpp ─────────────────────────────────── -->
+
+- [ ] 319. [slider.cpp] Entire custom drag/click slider replaced by `ImGui::SliderFloat` — structural deviation undocumented in source
+  - **JS Source**: `src/js/components/slider.js` lines 41–99
+  - **Status**: Pending
+  - **Details**: JS implements a fully custom slider with mousedown/mousemove/mouseup document listeners, a fill bar, and a handle element. C++ replaces all of this with `ImGui::SliderFloat`. Per CLAUDE.md Visual Fidelity rules the appearance need not match exactly, but the structural deviation should be documented with a comment in the source file.
+
+- [ ] 320. [slider.cpp] `SliderState` parameter in `render()` is unused/vestigial
+  - **JS Source**: `src/js/components/slider.js` (entire file)
+  - **Status**: Pending
+  - **Details**: C++ `render()` takes `SliderState& /*state*/` but never uses it. The JS `isScrolling` reactive state is managed internally by `ImGui::SliderFloat`. The `SliderState` struct and parameter are vestigial dead code.
+
+<!-- ─── src/js/db/DBCReader.cpp ───────────────────────────────────────── -->
+
+- [ ] 321. [DBCReader.cpp] `loadSchema()` bypasses CASC BuildCache; should use `getActiveCascCache()` like `WDCReader.cpp`
+  - **JS Source**: `src/js/db/DBCReader.js` lines 177–194
+  - **Status**: Pending
+  - **Details**: JS `loadSchema()` uses `core.view.casc?.cache` (a `BuildCache` object) with `cache.getFile()` / `cache.storeFile()` for DBD caching with null-safe fallback. C++ always uses `std::filesystem` directly. `WDCReader.cpp` correctly implements `getActiveCascCache()` with proper fallback — `DBCReader.cpp` should use the same pattern.
+
+- [ ] 322. [DBCReader.cpp] `_read_field()` missing `FieldType::Int64` and `FieldType::UInt64` switch cases
+  - **JS Source**: `src/js/db/DBCReader.js` lines 390–408
+  - **Status**: Pending
+  - **Details**: `convert_dbd_to_schema_type` can return `FieldType::Int64` and `FieldType::UInt64` for 64-bit fields. Neither JS nor C++ handles these in `_read_field` — both fall through to `readUInt32LE()` default, silently truncating 64-bit values. The cases should be handled or explicitly documented.
+
+- [ ] 323. [DBCReader.cpp] `_read_field_array()` silently drops fields of unexpected variant type
+  - **JS Source**: `src/js/db/DBCReader.js` lines 417–423
+  - **Status**: Pending
+  - **Details**: In `_read_record`, when the post-processing loop encounters a `vector<FieldValue>` whose first element holds none of the four checked types, the field is silently omitted from `out`. JS always stores the array regardless. An `else` fallback should store an empty or raw vector to match JS behavior.
