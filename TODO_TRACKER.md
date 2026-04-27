@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 59/186 verified (32%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 61/186 verified (33%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
