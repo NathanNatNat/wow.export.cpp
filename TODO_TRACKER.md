@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/21 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/18 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -93,24 +93,3 @@
   - **JS Source**: `src/js/modules.js`, `src/js/mmap.js`, `src/js/MultiMap.js`, `src/js/buffer.js`, `src/js/wow/ItemSlot.js`, `src/js/wow/EquipmentSlots.js`, `src/js/ui/texture-ribbon.js`, `src/js/3D/writers/CSVWriter.js`, `src/js/3D/writers/JSONWriter.js`, `src/js/3D/writers/MTLWriter.js`
   - **Status**: Pending
   - **Details**: Remaining files changed upstream not covered by other entries. Key items: modules.js registers the new item-picker-modal component (d0d847f5); mmap.js deduplicates INSTALL_PATH (5203828a); EquipmentSlots.js adds independent shoulderpad slots (377aea87). Diff CSVWriter, JSONWriter, MTLWriter, texture-ribbon, MultiMap, buffer, and ItemSlot against their C++ counterparts and port any logic changes found.
-
-
-## High — significant functional bugs and major behavioral differences
-
-- [ ] 74. [tab_items.cpp] itemViewerShowAll second loop superseded by upstream DBItemList refactor
-- **JS Source**: `src/js/modules/tab_items.js`
-- **Status**: Blocked
-- **Details**: Blocked on entry 11 — DBItemList is not yet implemented in C++ (only exists as `src/js/db/caches/DBItemList.js`). The original bug (C++ using DBItems::getItemById instead of Item constructor reading item_row.Display_lang) is now moot — upstream commit d0d847f5 removed the entire second loop and replaced item loading with DBItemList.initialize() / DBItemList.loadShowAllItems(). Once DBItemList.cpp/.h are implemented (entry 12) and the item equipping rework is ported (entry 11), rework itemViewerShowAll to call DBItemList::initialize() and DBItemList::loadShowAllItems() to match the current JS implementation.
-
-
-## Medium — behavioral deviations, missing features, and config bindings
-
-- [ ] 127. [tab_item_sets.cpp] apply_filter converts ItemSet structs to JSON objects unnecessarily
-- **JS Source**: `src/js/modules/tab_item_sets.js` lines 67–69
-- **Status**: Blocked
-- **Details**: JS simply assigns the array of ItemSet objects directly. C++ iterates every ItemSet, constructs nlohmann::json objects, and pushes them. Eliminating JSON requires changing view.listfileItemSets type in core.h — architectural change deferred. `view.listfileItemSets` is used in the listbox render via `cached_json_strings` and potentially elsewhere; changing its type requires auditing all consumers.
-
-- [ ] 128. [tab_item_sets.cpp] render() re-creates item_entries vector from JSON every frame
-- **JS Source**: `src/js/modules/tab_item_sets.js` lines 76–86
-- **Status**: Blocked
-- **Details**: Cache already exists (size-guarded). Proper fix requires bypassing JSON entirely (see TODO 127). Blocked on TODO 127.
