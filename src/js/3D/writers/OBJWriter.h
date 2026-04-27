@@ -48,6 +48,12 @@ public:
 	void addUVArray(const std::vector<float>& uv);
 
 	/**
+	 * Set the vertex color array (RGBA floats, 4 per vertex).
+	 * @param colors Color array (r,g,b,a quads).
+	 */
+	void setColorArray(const std::vector<float>& colors);
+
+	/**
 	 * Add a mesh to this writer.
 	 * @param name Mesh name.
 	 * @param triangles Index array.
@@ -83,6 +89,7 @@ private:
 	std::vector<float> verts;
 	std::vector<float> normals;
 	std::vector<std::vector<float>> uvs;
+	std::vector<float> colors;
 
 	std::vector<Mesh> meshes;
 	std::string name;

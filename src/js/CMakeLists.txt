@@ -82,6 +82,7 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBNpcEquipment.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBItems.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBItemDisplays.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBItemDisplayInfoModelMatRes.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBItemModels.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBItemCharTextures.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBCharacterCustomization.cpp

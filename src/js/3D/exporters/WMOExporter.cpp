@@ -244,18 +244,17 @@ WMOExportTextureResult WMOExporter::exportTextures(const std::filesystem::path& 
 
 		std::vector<uint32_t> materialTextures = { material.texture1, material.texture2, material.texture3 };
 
-		// Variable that purely exists to not handle the first texture as the main one for shader23
-		bool dontUseFirstTexture = false;
-
-		if (material.shader == 23) {
+		// shader 23 (pixel shader 20): competitive 4-layer blend using
+		// texture2..flags3 as diffuse and runtimeData[0..3] as height maps.
+		// texture2 is the first diffuse layer sampled at UV0.
+		const bool is_shader23 = (material.shader == 23);
+		if (is_shader23) {
 			materialTextures.push_back(material.flags3);
 			materialTextures.push_back(material.color3);
 			materialTextures.push_back(material.runtimeData[0]);
 			materialTextures.push_back(material.runtimeData[1]);
 			materialTextures.push_back(material.runtimeData[2]);
 			materialTextures.push_back(material.runtimeData[3]);
-
-			dontUseFirstTexture = true;
 		}
 
 		for (const auto materialTexture : materialTextures) {
@@ -359,12 +358,10 @@ WMOExportTextureResult WMOExporter::exportTextures(const std::filesystem::path& 
 					mtl->addMaterial(matName, texFile);
 				result.textureMap[texFileDataID] = { texFile, texPath, matName };
 
-				// MTL only supports one texture per material, only link the first unless we only want the second one (e.g. for shader 23).
-				if (result.materialMap.find(static_cast<int>(i)) == result.materialMap.end() && !dontUseFirstTexture)
+				// shader 23: use texture2 (first competitive diffuse layer at UV0)
+				// other shaders: use the first available texture
+				if (result.materialMap.find(static_cast<int>(i)) == result.materialMap.end() && (!is_shader23 || materialTexture == material.texture2))
 					result.materialMap[static_cast<int>(i)] = matName;
-
-				// Unset skip here so we always pick the next texture in line
-				dontUseFirstTexture = false;
 			} catch (const std::exception& e) {
 				logging::write(std::format("Failed to export texture {} for WMO: {}", texFileDataID, e.what()));
 			}
@@ -619,6 +616,12 @@ void WMOExporter::exportAsOBJ(const std::filesystem::path& out, casc::ExportHelp
 	for (size_t i = 0; i < maxLayerCount; i++)
 		uvArrays[i].resize(nInd * 2, 0.0f);
 
+	// colors2 provides vertex blend weights for shader 20.
+	const bool hasColors2 = std::any_of(validGroups.begin(), validGroups.end(), [](const WMOLoader* g) { return !g->colors2.empty(); });
+	std::vector<float> colorsArray;
+	if (hasColors2)
+		colorsArray.resize(nInd * 4, 0.0f);
+
 	// Iterate over groups again and fill the allocated arrays.
 	size_t indOfs = 0;
 	for (const auto* group : validGroups) {
@@ -642,6 +645,19 @@ void WMOExporter::exportAsOBJ(const std::filesystem::path& out, casc::ExportHelp
 				if (li < group->uvs.size() && j < group->uvs[li].size())
 					val = group->uvs[li][j];
 				uvArrays[li][uvsOfs + j] = val;
+			}
+		}
+
+		// colors2 (BGRA uint8) -> RGBA float for shader 20 blend weights.
+		if (!colorsArray.empty() && !group->colors2.empty()) {
+			const size_t colorOfs = indOfs * 4;
+			const auto& src = group->colors2;
+			for (size_t i = 0; i < indCount; i++) {
+				const size_t si = i * 4, di = colorOfs + i * 4;
+				colorsArray[di]     = src[si + 2] / 255.0f;
+				colorsArray[di + 1] = src[si + 1] / 255.0f;
+				colorsArray[di + 2] = src[si]     / 255.0f;
+				colorsArray[di + 3] = src[si + 3] / 255.0f;
 			}
 		}
 
@@ -674,6 +690,9 @@ void WMOExporter::exportAsOBJ(const std::filesystem::path& out, casc::ExportHelp
 
 	for (const auto& arr : uvArrays)
 		obj.addUVArray(arr);
+
+	if (!colorsArray.empty())
+		obj.setColorArray(colorsArray);
 
 	const std::string csvPathStr = casc::ExportHelper::replaceExtension(out.string(), "_ModelPlacementInformation.csv");
 	const std::filesystem::path csvPath(csvPathStr);
@@ -1210,6 +1229,20 @@ void WMOExporter::exportGroupsAsSeparateOBJ(const std::filesystem::path& out, ca
 
 		for (const auto& arr : uvArrays)
 			obj.addUVArray(arr);
+
+		// colors2 (BGRA uint8) -> RGBA float for shader 20 blend weights.
+		if (!group.colors2.empty()) {
+			std::vector<float> groupColorsArray(indCount * 4);
+			const auto& src = group.colors2;
+			for (size_t j = 0; j < indCount; j++) {
+				const size_t ci = j * 4;
+				groupColorsArray[ci]     = src[ci + 2] / 255.0f;
+				groupColorsArray[ci + 1] = src[ci + 1] / 255.0f;
+				groupColorsArray[ci + 2] = src[ci]     / 255.0f;
+				groupColorsArray[ci + 3] = src[ci + 3] / 255.0f;
+			}
+			obj.setColorArray(groupColorsArray);
+		}
 
 		// add render batches
 		for (size_t bI = 0; bI < group.renderBatches.size(); bI++) {

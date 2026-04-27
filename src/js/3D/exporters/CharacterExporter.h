@@ -28,6 +28,7 @@ struct EquipmentRendererEntry {
 struct EquipmentSlotEntry {
 	std::vector<EquipmentRendererEntry> renderers;
 	int item_id = 0;
+	int modifier_id = 0;
 };
 
 /**
@@ -36,6 +37,7 @@ struct EquipmentSlotEntry {
 struct CollectionSlotEntry {
 	std::vector<M2RendererGL*> renderers;
 	int item_id = 0;
+	int modifier_id = 0;
 };
 
 /**
@@ -44,6 +46,7 @@ struct CollectionSlotEntry {
 struct EquipmentGeometry {
 	int slot_id = 0;
 	int item_id = 0;
+	int modifier_id = 0;
 	std::optional<uint32_t> attachment_id;
 	bool is_collection_style = false;
 	M2RendererGL* renderer = nullptr;

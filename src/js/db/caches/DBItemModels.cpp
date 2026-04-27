@@ -11,10 +11,11 @@
 #include "../WDCReader.h"
 
 #include "DBModelFileData.h"
-#include "DBTextureFileData.h"
+#include "DBItemDisplayInfoModelMatRes.h"
 #include "DBComponentModelFileData.h"
 
 #include <format>
+#include <map>
 #include <unordered_map>
 #include <algorithm>
 
@@ -58,8 +59,8 @@ static std::vector<int> fieldToIntVec(const db::FieldValue& val) {
 	return result;
 }
 
-// maps ItemID -> ItemDisplayInfoID
-static std::unordered_map<uint32_t, uint32_t> item_to_display_id;
+// maps ItemID -> Map<modifier_id, ItemDisplayInfoID>
+static std::unordered_map<uint32_t, std::map<uint32_t, uint32_t>> item_to_display_ids;
 
 // maps ItemDisplayInfoID -> internal display data
 struct InternalDisplayData {
@@ -128,16 +129,21 @@ void initialize() {
 	logging::write("Loading item models...");
 
 	DBModelFileData::initializeModelFileData();
-	DBTextureFileData::ensureInitialized();
 	DBComponentModelFileData::initialize();
+	DBItemDisplayInfoModelMatRes::ensureInitialized();
 
-	// build item -> appearance -> display chain
-	std::unordered_map<uint32_t, uint32_t> appearance_map;
+	// build item -> modifier -> appearance -> display chain
+	// appearance_map: item_id -> Map<modifier_id, appearance_id>
+	std::unordered_map<uint32_t, std::map<uint32_t, uint32_t>> appearance_map;
 	for (const auto& [_id, row] : casc::db2::preloadTable("ItemModifiedAppearance").getAllRows()) {
 		(void)_id;
 		uint32_t itemID = fieldToUint32(row.at("ItemID"));
 		uint32_t appearanceID = fieldToUint32(row.at("ItemAppearanceID"));
-		appearance_map[itemID] = appearanceID;
+		uint32_t modifierID = 0;
+		auto mod_it = row.find("ItemAppearanceModifierID");
+		if (mod_it != row.end())
+			modifierID = fieldToUint32(mod_it->second);
+		appearance_map[itemID][modifierID] = appearanceID;
 	}
 
 	std::unordered_map<uint32_t, uint32_t> appearance_to_display;
@@ -146,11 +152,13 @@ void initialize() {
 		appearance_to_display[id] = displayID;
 	}
 
-	// map item id to display id
-	for (const auto& [item_id, appearance_id] : appearance_map) {
-		auto it = appearance_to_display.find(appearance_id);
-		if (it != appearance_to_display.end() && it->second != 0)
-			item_to_display_id[item_id] = it->second;
+	// map item id -> modifier_id -> display id
+	for (const auto& [item_id, modifiers] : appearance_map) {
+		for (const auto& [modifier_id, appearance_id] : modifiers) {
+			auto it = appearance_to_display.find(appearance_id);
+			if (it != appearance_to_display.end() && it->second != 0)
+				item_to_display_ids[item_id][modifier_id] = it->second;
+		}
 	}
 
 	// load model and texture file data IDs from ItemDisplayInfo
@@ -178,16 +186,11 @@ void initialize() {
 			[](const std::vector<uint32_t>& arr) { return arr.empty(); }))
 			continue;
 
-		// get texture file data IDs from material resources
-		auto allMatResIDs = fieldToUint32Vec(row.at("ModelMaterialResourcesID"));
+		// get texture file data IDs from display id
 		std::vector<uint32_t> texture_file_data_ids;
-		for (uint32_t mat_res_id : allMatResIDs) {
-			if (mat_res_id == 0)
-				continue;
-			const auto* tex_fdids = DBTextureFileData::getTextureFDIDsByMatID(mat_res_id);
-			if (tex_fdids && !tex_fdids->empty())
-				texture_file_data_ids.push_back((*tex_fdids)[0]);
-		}
+		const auto* itemDisplayTexFileDataIDs = DBItemDisplayInfoModelMatRes::getItemDisplayIdTextureFileIds(display_id);
+		if (itemDisplayTexFileDataIDs != nullptr)
+			texture_file_data_ids.insert(texture_file_data_ids.end(), itemDisplayTexFileDataIDs->begin(), itemDisplayTexFileDataIDs->end());
 
 		// geoset groups for character model and attachment/collection models
 		auto geoGrpIt = row.find("GeosetGroup");
@@ -212,14 +215,40 @@ void ensureInitialized() {
 }
 
 /**
+ * Resolve display ID for an item with optional modifier.
+ * Mirrors JS: resolve_display_id(item_id, modifier_id)
+ */
+static std::optional<uint32_t> resolve_display_id(uint32_t item_id, int modifier_id = -1) {
+	auto mods_it = item_to_display_ids.find(item_id);
+	if (mods_it == item_to_display_ids.end())
+		return std::nullopt;
+
+	const auto& modifiers = mods_it->second;
+	if (modifier_id >= 0) {
+		auto it = modifiers.find(static_cast<uint32_t>(modifier_id));
+		if (it != modifiers.end())
+			return it->second;
+		return std::nullopt;
+	}
+
+	// default: prefer modifier 0, else lowest available
+	auto it0 = modifiers.find(0);
+	if (it0 != modifiers.end())
+		return it0->second;
+	if (!modifiers.empty())
+		return modifiers.begin()->second;
+	return std::nullopt;
+}
+
+/**
  * Get model file data IDs for an item (first option per model resource).
  */
 std::optional<std::vector<uint32_t>> getItemModels(uint32_t item_id) {
-	auto disp_it = item_to_display_id.find(item_id);
-	if (disp_it == item_to_display_id.end())
+	auto disp_id = resolve_display_id(item_id);
+	if (!disp_id)
 		return std::nullopt;
 
-	auto data_it = display_to_data.find(disp_it->second);
+	auto data_it = display_to_data.find(*disp_id);
 	if (data_it == display_to_data.end())
 		return std::nullopt;
 
@@ -238,26 +267,38 @@ std::optional<std::vector<uint32_t>> getItemModels(uint32_t item_id) {
 /**
  * Get display data for an item (models and textures).
  */
-std::optional<ItemDisplayData> getItemDisplay(uint32_t item_id, int race_id, int gender_index) {
-	auto disp_it = item_to_display_id.find(item_id);
-	if (disp_it == item_to_display_id.end())
+std::optional<ItemDisplayData> getItemDisplay(uint32_t item_id, int race_id, int gender_index, int modifier_id) {
+	auto disp_id = resolve_display_id(item_id, modifier_id);
+	if (!disp_id)
 		return std::nullopt;
 
-	auto data_it = display_to_data.find(disp_it->second);
+	auto data_it = display_to_data.find(*disp_id);
 	if (data_it == display_to_data.end())
 		return std::nullopt;
 
-	return resolveDisplayData(disp_it->second, data_it->second, race_id, gender_index);
+	return resolveDisplayData(*disp_id, data_it->second, race_id, gender_index);
 }
 
 /**
  * Get ItemDisplayInfoID for an item.
  */
-std::optional<uint32_t> getDisplayId(uint32_t item_id) {
-	auto it = item_to_display_id.find(item_id);
-	if (it != item_to_display_id.end())
-		return it->second;
-	return std::nullopt;
+std::optional<uint32_t> getDisplayId(uint32_t item_id, int modifier_id) {
+	return resolve_display_id(item_id, modifier_id);
+}
+
+/**
+ * Get available modifier IDs for an item.
+ */
+std::vector<uint32_t> getItemModifiers(uint32_t item_id) {
+	auto mods_it = item_to_display_ids.find(item_id);
+	if (mods_it == item_to_display_ids.end())
+		return {};
+
+	std::vector<uint32_t> result;
+	result.reserve(mods_it->second.size());
+	for (const auto& [modifier_id, _] : mods_it->second)
+		result.push_back(modifier_id);
+	return result;
 }
 
 /**

@@ -42,16 +42,25 @@ std::optional<std::vector<uint32_t>> getItemModels(uint32_t item_id);
  * @param item_id Item ID.
  * @param race_id Character race ID for filtering (optional, -1 to skip).
  * @param gender_index 0=male, 1=female (optional, -1 to skip).
+ * @param modifier_id Item appearance modifier ID (optional, -1 to use default).
  * @returns ItemDisplayData, or std::nullopt if not found.
  */
-std::optional<ItemDisplayData> getItemDisplay(uint32_t item_id, int race_id = -1, int gender_index = -1);
+std::optional<ItemDisplayData> getItemDisplay(uint32_t item_id, int race_id = -1, int gender_index = -1, int modifier_id = -1);
 
 /**
  * Get ItemDisplayInfoID for an item.
  * @param item_id Item ID.
+ * @param modifier_id Item appearance modifier ID (optional, -1 to use default).
  * @returns Display ID, or std::nullopt if not found.
  */
-std::optional<uint32_t> getDisplayId(uint32_t item_id);
+std::optional<uint32_t> getDisplayId(uint32_t item_id, int modifier_id = -1);
+
+/**
+ * Get available modifier IDs for an item.
+ * @param item_id Item ID.
+ * @returns Sorted vector of modifier IDs.
+ */
+std::vector<uint32_t> getItemModifiers(uint32_t item_id);
 
 /**
  * Get display data directly by ItemDisplayInfoID (skips item->display lookup).

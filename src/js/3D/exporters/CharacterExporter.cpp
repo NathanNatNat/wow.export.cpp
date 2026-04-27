@@ -238,6 +238,7 @@ std::vector<EquipmentGeometry> CharacterExporter::get_equipment_geometry(bool ap
 				EquipmentGeometry eg;
 				eg.slot_id = slot_id;
 				eg.item_id = entry.item_id;
+				eg.modifier_id = entry.modifier_id;
 				eg.attachment_id = re.attachment_id;
 				eg.is_collection_style = re.is_collection_style;
 				eg.renderer = re.renderer;
@@ -270,6 +271,7 @@ std::vector<EquipmentGeometry> CharacterExporter::get_equipment_geometry(bool ap
 				EquipmentGeometry eg;
 				eg.slot_id = slot_id;
 				eg.item_id = entry.item_id;
+				eg.modifier_id = entry.modifier_id;
 				eg.is_collection_style = true;
 				eg.renderer = renderer;
 				eg.vertices = std::move(geometry->vertices);

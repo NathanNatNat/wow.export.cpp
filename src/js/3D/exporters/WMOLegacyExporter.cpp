@@ -104,9 +104,7 @@ WMOTextureExportResult WMOLegacyExporter::exportTextures(
 		const uint32_t materialTextures[] = { material.texture1, material.texture2, material.texture3 };
 
 		for (const auto materialTexture : materialTextures) {
-			if (materialTexture == 0)
-				continue;
-
+			// Do not skip materialTexture == 0 here — MOTX offset 0 is a valid texture entry.
 			auto texNameIt = wmo->textureNames.find(materialTexture);
 			if (texNameIt == wmo->textureNames.end() || texNameIt->second.empty())
 				continue;

@@ -50,6 +50,10 @@ void OBJWriter::addUVArray(const std::vector<float>& uv) {
 	uvs.push_back(uv);
 }
 
+void OBJWriter::setColorArray(const std::vector<float>& colors) {
+	this->colors = colors;
+}
+
 void OBJWriter::addMesh(const std::string& name, const std::vector<uint32_t>& triangles, const std::string& matName) {
 	meshes.push_back({ name, triangles, matName, vertex_offset });
 }
@@ -122,6 +126,14 @@ void OBJWriter::write(bool overwrite) {
 		}
 	}
 
+	// Write vertex colors (non-standard, used by wow.export Blender addon).
+	if (!colors.empty()) {
+		for (size_t i = 0, j = 0, n = colors.size(); i < n; j++, i += 4) {
+			if (usedIndices.count(j))
+				writer.writeLine("vc " + float_to_string(colors[i]) + " " + float_to_string(colors[i + 1]) + " " + float_to_string(colors[i + 2]) + " " + float_to_string(colors[i + 3]));
+		}
+	}
+
 	// Write UVs
 	const size_t layerCount = uvs.size();
 	const bool hasUV = layerCount > 0;
@@ -142,7 +154,7 @@ void OBJWriter::write(bool overwrite) {
 					if (uvIndex == 0)
 						uvMap[j] = u++;
 
-					writer.writeLine(prefix + " " + float_to_string(uv[i]) + " " + float_to_string(uv[i + 1]));
+					writer.writeLine(prefix + " " + float_to_string(uv[i]) + " " + float_to_string(1.0f - uv[i + 1]));
 				}
 			}
 		}
