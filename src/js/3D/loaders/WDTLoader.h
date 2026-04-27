@@ -68,6 +68,8 @@ public:
 	std::string worldModel;
 
 	// MODF (World WMO Placement)
+	// hasWorldModelPlacement is true only when the MODF chunk was present (mirrors JS worldModelPlacement !== undefined).
+	bool hasWorldModelPlacement = false;
 	WDTWorldModelPlacement worldModelPlacement;
 
 private:
