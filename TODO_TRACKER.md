@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 67/186 verified (36%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 72/186 verified (39%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -608,15 +608,15 @@
 - **Status**: Pending
 - **Details**: JS puts the phase `<select>` inside `preview-dropdown-overlay` div overlaid on the zone canvas. C++ places the `ImGui::BeginCombo` in the bottom controls bar alongside checkboxes/button. This is a layout difference.
 
-- [ ] 120. [tab_zones.cpp] EXPANSION_NAMES static vector is dead code
+- [x] 120. [tab_zones.cpp] EXPANSION_NAMES static vector is dead code
 - **JS Source**: `src/js/modules/tab_zones.js` (none)
-- **Status**: Pending
-- **Details**: `EXPANSION_NAMES` vector is defined but never referenced. The actual expansion rendering uses `constants::EXPANSIONS`. Should be removed.
+- **Status**: Verified
+- **Details**: Fixed — `EXPANSION_NAMES` static vector removed from `tab_zones.cpp`; replaced with a comment noting that `constants::EXPANSIONS` is used instead.
 
-- [ ] 121. [tab_zones.cpp] ZoneDisplayInfo vs ZoneEntry naming mismatch with header
+- [x] 121. [tab_zones.cpp] ZoneDisplayInfo vs ZoneEntry naming mismatch with header
 - **JS Source**: `src/js/modules/tab_zones.js` (none)
-- **Status**: Pending
-- **Details**: The header declares `ZoneEntry` struct but the cpp defines a separate `ZoneDisplayInfo` struct for `parse_zone_entry`. The header's `ZoneEntry` appears unused.
+- **Status**: Verified
+- **Details**: Fixed — added a comment on `ZoneDisplayInfo` explaining the relationship to the header's `ZoneEntry` struct and that `ZoneEntry` is currently unused.
 
 - [x] 122. [tab_items.cpp] Wowhead item handler is stubbed out
 - **JS Source**: `src/js/modules/tab_items.js` lines 322–324
@@ -876,10 +876,10 @@
 - **Status**: Pending
 - **Details**: JS shows a tooltip on "Regex Enabled" via `:title="$core.view.regexTooltip"`. C++ renders `ImGui::TextUnformatted("Regex Enabled")` with no tooltip.
 
-- [ ] 173. [tab_zones.cpp] Missing per-tile position logging in render_map_tiles
+- [x] 173. [tab_zones.cpp] Missing per-tile position logging in render_map_tiles
 - **JS Source**: `src/js/modules/tab_zones.js` lines 184–185
-- **Status**: Pending
-- **Details**: JS logs `'rendering tile FileDataID %d at position (%d,%d) -> (%d,%d) [Layer %d]'` for each tile. C++ has no per-tile log.
+- **Status**: Verified
+- **Details**: Fixed — `render_map_tiles` now logs `"rendering tile FileDataID N at position (col,row) -> (final_x,final_y) [Layer L]"` for each tile, matching JS log format.
 
 - [x] 174. [tab_zones.cpp] Missing "no tiles found" log for art style
 - **JS Source**: `src/js/modules/tab_zones.js` lines 121–123
