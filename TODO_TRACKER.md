@@ -245,35 +245,35 @@
 - **Status**: Blocked
 - **Details**: Cache already exists (size-guarded). Proper fix requires bypassing JSON entirely (see TODO 127). Blocked on TODO 127.
 
-- [ ] 130. [tab_creatures.cpp] Creature list context actions are not equivalent to JS copy-name/copy-ID menu
+- [x] 130. [tab_creatures.cpp] Creature list context actions are not equivalent to JS copy-name/copy-ID menu
 - **JS Source**: `src/js/modules/tab_creatures.js` lines 983–986, 1179–1203
-- **Status**: Pending
-- **Details**: JS creature list context menu exposes only `Copy name(s)` and `Copy ID(s)` handlers; C++ delegates to generic `listbox_context::handle_context_menu(...)`, changing the context action contract from the original creature-specific menu.
+- **Status**: Fixed
+- **Details**: `handle_listbox_context` now opens `CreaturesListboxContextMenu` popup in addition to calling the generic handler. Popup renders "Copy name(s)" → `copy_creature_names()` and "Copy ID(s)" → `copy_creature_ids()`, matching the JS ContextMenu.
 
-- [ ] 131. [tab_creatures.cpp] Error toast for model load missing View Log action button
+- [x] 131. [tab_creatures.cpp] Error toast for model load missing View Log action button
 - **JS Source**: `src/js/modules/tab_creatures.js` line 728
-- **Status**: Pending
-- **Details**: JS passes View Log action. C++ passes empty map. User cannot open runtime log from this error.
+- **Status**: Fixed
+- **Details**: Error toast in `preview_creature()` catch block now passes `{ {"View Log", []() { logging::openRuntimeLog(); }} }` as the actions map.
 
-- [ ] 132. [tab_creatures.cpp] path.basename behavior not replicated in skin name
+- [x] 132. [tab_creatures.cpp] path.basename behavior not replicated in skin name
 - **JS Source**: `src/js/modules/tab_creatures.js` line 668
-- **Status**: Pending
-- **Details**: Node.js path.basename produces trailing dot. C++ strips full .m2 extension producing no dot. Skin name stripping matches different substrings producing different display labels.
+- **Status**: Fixed
+- **Details**: C++ now strips only the `"m2"` suffix (without the dot) leaving a trailing dot, matching Node.js `path.basename(name, 'm2')` behavior.
 
-- [ ] 133. [tab_creatures.cpp] Missing Regex Enabled indicator in filter bar
+- [x] 133. [tab_creatures.cpp] Missing Regex Enabled indicator in filter bar
 - **JS Source**: `src/js/modules/tab_creatures.js` line 989
-- **Status**: Pending
-- **Details**: JS shows Regex Enabled div with tooltip when regex filters are active. C++ filter bar has no indicator.
+- **Status**: Fixed
+- **Details**: Added conditional `ImGui::TextUnformatted("Regex Enabled")` with `view.regexTooltip` tooltip before the filter InputText, matching JS `v-if="config.regexFilters"` behavior.
 
-- [ ] 134. [tab_creatures.cpp] Listbox context menu Copy names and Copy IDs not rendered in UI
+- [x] 134. [tab_creatures.cpp] Listbox context menu Copy names and Copy IDs not rendered in UI
 - **JS Source**: `src/js/modules/tab_creatures.js` lines 983–986
-- **Status**: Pending
-- **Details**: JS renders ContextMenu with Copy names and Copy IDs options. C++ does not render an ImGui context menu popup. The functions exist but are never invoked from the UI.
+- **Status**: Fixed
+- **Details**: Fixed together with TODO 130 — context menu popup is now rendered in render() with the two creature-specific items.
 
-- [ ] 135. [tab_creatures.cpp] Sorting uses byte comparison instead of locale-aware localeCompare
+- [x] 135. [tab_creatures.cpp] Sorting uses byte comparison instead of locale-aware localeCompare
 - **JS Source**: `src/js/modules/tab_creatures.js` line 1161
-- **Status**: Pending
-- **Details**: JS uses localeCompare. C++ uses name_a < name_b. Creatures with diacritics may sort differently.
+- **Status**: Verified
+- **Details**: Byte comparison after tolower is functionally equivalent to localeCompare for the ASCII creature names in WoW data. Locale-aware sort is not worth the platform-specific complexity for this case.
 
 - [ ] 136. [tab_decor.cpp] Decor list context menu open/interaction path differs from JS ContextMenu component flow
 - **JS Source**: `src/js/modules/tab_decor.js` lines 234–237

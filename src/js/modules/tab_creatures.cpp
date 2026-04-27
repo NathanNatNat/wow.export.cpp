@@ -966,14 +966,16 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 
 				std::vector<nlohmann::json> skin_list;
 				std::string model_name = casc::listfile::getByID(file_data_id).value_or("");
-				// basename — strip path
+				// JS: path.basename(model_name, 'm2') — strips path and removes the 'm2' suffix
+				// (without the dot), leaving a trailing dot. E.g. "path/creature.m2" -> "creature."
 				{
 					auto pos = model_name.rfind('/');
 					if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
 					pos = model_name.rfind('\\');
 					if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
-					auto ext_pos = model_name.rfind('.');
-					if (ext_pos != std::string::npos) model_name = model_name.substr(0, ext_pos);
+					// Strip 'm2' suffix (not '.m2'), leaving the trailing dot
+					if (model_name.size() >= 2 && model_name.substr(model_name.size() - 2) == "m2")
+						model_name = model_name.substr(0, model_name.size() - 2);
 				}
 
 				for (const auto& display : displays) {
@@ -1077,7 +1079,8 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", creature.name, e.key), {}, -1);
 		logging::write(std::format("Failed to decrypt model {} ({})", creature.name, e.key));
 	} catch (const std::exception& e) {
-		core::setToast("error", "Unable to preview creature " + creature.name, {}, -1);
+		core::setToast("error", "Unable to preview creature " + creature.name,
+			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 }
@@ -1400,6 +1403,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 
 static void handle_listbox_context(const std::vector<std::string>& selection) {
 	listbox_context::handle_context_menu(selection);
+	ImGui::OpenPopup("CreaturesListboxContextMenu");
 }
 
 static void copy_creature_names(const std::vector<nlohmann::json>& selection) {
@@ -1820,6 +1824,26 @@ void render() {
 		}
 		app::layout::EndListContainer();
 
+		// Creature listbox context menu — Copy name(s) / Copy ID(s).
+		if (!view.contextMenus.nodeListbox.is_null()) {
+			if (ImGui::BeginPopup("CreaturesListboxContextMenu")) {
+				const auto& node = view.contextMenus.nodeListbox;
+				int count = node.value("count", 0);
+				const std::string plural = count > 1 ? "s" : "";
+				if (ImGui::MenuItem(std::format("Copy name{}", plural).c_str())) {
+					if (node.contains("selection") && node["selection"].is_array())
+						copy_creature_names(node["selection"].get<std::vector<nlohmann::json>>());
+					view.contextMenus.nodeListbox = nullptr;
+				}
+				if (ImGui::MenuItem(std::format("Copy ID{}", plural).c_str())) {
+					if (node.contains("selection") && node["selection"].is_array())
+						copy_creature_ids(node["selection"].get<std::vector<nlohmann::json>>());
+					view.contextMenus.nodeListbox = nullptr;
+				}
+				ImGui::EndPopup();
+			}
+		}
+
 		// --- Status bar ---
 		if (app::layout::BeginStatusBar("creatures-status", regions)) {
 			listbox::renderStatusBar("creature", {}, listbox_creatures_state);
@@ -1828,6 +1852,12 @@ void render() {
 
 		// --- Filter bar (row 2, col 1) ---
 		if (app::layout::BeginFilterBar("creatures-filter", regions)) {
+			if (view.config.value("regexFilters", false)) {
+				ImGui::TextUnformatted("Regex Enabled");
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+				ImGui::SameLine();
+			}
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 			char filter_buf[256] = {};
 			std::strncpy(filter_buf, view.userInputFilterCreatures.c_str(), sizeof(filter_buf) - 1);
