@@ -8,6 +8,7 @@
 #include <glad/gl.h>
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <future>
 #include <map>
 #include <memory>
@@ -43,6 +44,11 @@ struct M2DrawCall {
 	int blend_mode = 0;
 	uint16_t flags = 0;
 	bool visible = true;
+	std::array<int, 2> tex_matrix_idxs = { -1, -1 };
+	int prio = 0;
+	int layer = 0;
+	int color_idx = -1;
+	int tex_weight_idx = -1;
 };
 
 /**
@@ -109,6 +115,26 @@ public:
 	void step_animation_frame(int delta);
 
 	void _update_bone_matrices();
+
+	void _create_tex_matrices();
+	void _update_tex_matrices();
+	void _update_submesh_colors();
+	void _update_tex_weights();
+
+	// Animate a float3/float4 track at the current animation time.
+	std::array<float, 4> _animate_track_vec4(
+		const M2Track& animblock,
+		const std::array<float, 4>& def,
+		const std::function<std::array<float,4>(const std::array<float,4>&, const std::array<float,4>&, float)>& lerpfunc);
+
+	// Animate a scalar (int16) track at the current animation time.
+	float _animate_track_scalar(
+		const M2Track& animblock,
+		float def,
+		const std::function<float(float, float, float)>& lerpfunc);
+
+	// Binary search: largest i where times[i] <= currtime. Returns SIZE_MAX if times empty.
+	static size_t _find_time_index(float currtime, const std::vector<M2Value>& times);
 
 	// M2 modern format: direct per-animation keyframe arrays (M2Value variant)
 	std::array<float, 3> _sample_raw_vec3(
@@ -307,6 +333,21 @@ private:
 	std::set<std::string> childAnimKeys;
 	// owned buffers for skeleton files loaded from CASC
 	std::vector<std::unique_ptr<BufferWrapper>> skel_buffers_;
+
+	// texture animation state
+	std::vector<float> tex_matrices;      // tex transform matrices, 16 floats each
+	std::vector<float> global_seq_times;  // current time (ms) per global sequence
+	std::vector<float> submesh_colors;    // color animation, 4 floats (r,g,b,a) per entry
+	std::vector<float> tex_weights;       // texture weight animation, 1 float per entry
+
+	// pre-allocated scratch matrices to avoid per-frame heap allocations
+	float _scratch_local[16];
+	float _scratch_trans[16];
+	float _scratch_rot[16];
+	float _scratch_scale[16];
+	float _scratch_pivot[16];
+	float _scratch_neg_pivot[16];
+	float _scratch_result[16];
 
 	// animation state
 	// structural bones (hierarchy/pivot) — only one of these will be non-null at a time

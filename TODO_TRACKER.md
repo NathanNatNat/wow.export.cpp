@@ -1,12 +1,12 @@
 # TODO Tracker
 
-> **Progress: 0/186 pending (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 1/186 pending (1%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
-- [ ] 637. [M2RendererGL.cpp] Port extensive upstream M2 renderer changes
+- [x] 637. [M2RendererGL.cpp] Port extensive upstream M2 renderer changes
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js`
-  - **Status**: Pending
+  - **Status**: Verified
   - **Details**: Large batch of upstream commits rewrote the M2 renderer. Port: tex_matrices animation (469f3e2a); bone/tex_matrix UBO rework (a1689641); draw-call sorting by texunit prio/layer (201a7e0e); global_seq_times handling (f20a995c); tex_mat_idx/tex_matrices use (4bb373ab); always emit uv2/texcoord2 (4cc75854); blend mode mapping fix (09589e16); submesh colour animation/render (85264d30); lighting from render flag (8d40c107); conditional character model support (3b5aed51); texture weight transparency + skip zero-alpha draw calls (1cec313b); null guard for tex_matrices (85371a6e); UV2 Y-flip for OpenGL origin consistency (189fb5a2); division-by-zero guard on duplicate keyframe timestamps (0ac68161); fix redundant guard clause in _animate_track (4ea0c757); binary search for keyframe lookup (b2a70489); pre-allocate scratch matrices (93782b4c); wireframe via dedicated line index buffers (1715ee16); WMO doodad zero-initialized texture weight fix (52fea2af); MAX_BONES reduction and clamp (d9d48d8a).
 
 - [ ] 638. [WMORendererGL.cpp] Port upstream WMO renderer changes

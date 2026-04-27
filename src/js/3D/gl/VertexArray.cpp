@@ -73,7 +73,9 @@ void VertexArray::set_attribute_i(GLuint location, GLint size, GLenum type,
 }
 
 void VertexArray::setup_m2_vertex_format() {
-	constexpr GLsizei stride = 40;
+	// layout: position(3f) + normal(3f) + bone_indices(4ub) + bone_weights(4ub) + uv1(2f) + uv2(2f)
+	// stride = 48 bytes
+	constexpr GLsizei stride = 48;
 
 	bind();
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -103,7 +105,10 @@ void VertexArray::setup_m2_vertex_format() {
 	glVertexAttribPointer(AttributeLocation::TEXCOORD, 2, GL_FLOAT,
 	                      GL_FALSE, stride, reinterpret_cast<const void*>(32));
 
-	// texcoord2 uses separate buffer or not present for simple models
+	// texcoord2: vec2 at offset 40 (y-flipped for OpenGL bottom-left origin)
+	glEnableVertexAttribArray(AttributeLocation::TEXCOORD2);
+	glVertexAttribPointer(AttributeLocation::TEXCOORD2, 2, GL_FLOAT,
+	                      GL_FALSE, stride, reinterpret_cast<const void*>(40));
 }
 
 void VertexArray::setup_m2_separate_buffers(GLuint pos_buffer,
@@ -248,6 +253,32 @@ void VertexArray::setup_wmo_separate_buffers(GLuint pos_buffer,
 	}
 }
 
+void VertexArray::set_wireframe_index_buffer(const uint16_t* data, size_t count, GLenum usage) {
+	if (!wireframe_ebo)
+		glGenBuffers(1, &wireframe_ebo);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wireframe_ebo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+	             static_cast<GLsizeiptr>(count * sizeof(uint16_t)),
+	             data, usage);
+
+	// restore triangle EBO in VAO state
+	if (ebo)
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+}
+
+std::vector<uint16_t> VertexArray::triangles_to_lines(const uint16_t* indices, size_t count) {
+	std::vector<uint16_t> lines(count * 2);
+	size_t j = 0;
+	for (size_t i = 0; i < count; i += 3) {
+		const uint16_t a = indices[i], b = indices[i + 1], c = indices[i + 2];
+		lines[j++] = a; lines[j++] = b;
+		lines[j++] = b; lines[j++] = c;
+		lines[j++] = c; lines[j++] = a;
+	}
+	return lines;
+}
+
 void VertexArray::draw(GLenum mode, GLsizei count, GLsizei offset) {
 	if (count < 0)
 		count = index_count;
@@ -272,6 +303,11 @@ void VertexArray::dispose() {
 	if (ebo) {
 		glDeleteBuffers(1, &ebo);
 		ebo = 0;
+	}
+
+	if (wireframe_ebo) {
+		glDeleteBuffers(1, &wireframe_ebo);
+		wireframe_ebo = 0;
 	}
 }
 

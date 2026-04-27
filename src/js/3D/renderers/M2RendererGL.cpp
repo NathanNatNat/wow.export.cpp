@@ -96,6 +96,21 @@ static const std::unordered_map<std::string_view, int> PIXEL_SHADER_IDS = {
 {"Combiners_Mod_Mod_Depth", 36}
 };
 
+// must match MAX_BONES in m2.vertex.shader
+static constexpr int MAX_BONES = 220;
+
+// M2 blend mode index → EGX blend mode (GLContext::BlendMode)
+static constexpr std::array<int, 8> M2BLEND_TO_EGX = {
+	gl::BlendMode::OPAQUE,       // M2 blend 0
+	gl::BlendMode::ALPHA_KEY,    // M2 blend 1
+	gl::BlendMode::ALPHA,        // M2 blend 2
+	gl::BlendMode::NO_ALPHA_ADD, // M2 blend 3
+	gl::BlendMode::ADD,          // M2 blend 4
+	gl::BlendMode::MOD,          // M2 blend 5
+	gl::BlendMode::MOD2X,        // M2 blend 6
+	gl::BlendMode::BLEND_ADD     // M2 blend 7
+};
+
 // identity matrix
 static constexpr std::array<float, 16> M2_IDENTITY_MAT4 = {
 1, 0, 0, 0,
@@ -506,11 +521,18 @@ return as_async_compat([this]() {
 	// create bone SSBO (avoids uniform register limits for bone matrices)
 	glGenBuffers(1, &bone_ssbo);
 
+	// create texture transform matrices
+	_create_tex_matrices();
+
 	// create default texture
 	_create_default_texture();
 
 	// load textures
 	_load_textures().get();
+
+	global_seq_times.assign(m2->globalLoops.size(), 0.0f);
+	submesh_colors.assign(m2->colors.size() * 4, 1.0f);
+	tex_weights.assign(m2->textureWeights.size(), 1.0f);
 
 	// load first skin
 	if (!m2->vertices.empty()) {
@@ -611,9 +633,9 @@ auto& skin = *m2->getSkin(static_cast<uint32_t>(index)).get();
 _create_skeleton().get();
 
 // build interleaved vertex buffer
-// format: position(3f) + normal(3f) + bone_idx(4ub) + bone_weight(4ub) + uv(2f) = 40 bytes
+// format: position(3f) + normal(3f) + bone_idx(4ub) + bone_weight(4ub) + uv1(2f) + uv2(2f) = 48 bytes
 const size_t vertex_count = m2->vertices.size() / 3;
-const size_t stride = 40;
+const size_t stride = 48;
 std::vector<uint8_t> vertex_data(vertex_count * stride);
 
 for (size_t i = 0; i < vertex_count; i++) {
@@ -644,9 +666,15 @@ vertex_data[offset + 29] = m2->boneWeights[bone_idx + 1];
 vertex_data[offset + 30] = m2->boneWeights[bone_idx + 2];
 vertex_data[offset + 31] = m2->boneWeights[bone_idx + 3];
 
-// texcoord
+// texcoord1
 std::memcpy(&vertex_data[offset + 32], &m2->uv[uv_idx], sizeof(float));
 std::memcpy(&vertex_data[offset + 36], &m2->uv[uv_idx + 1], sizeof(float));
+
+// texcoord2 (y-flipped for OpenGL bottom-left origin)
+const float uv2_u = (uv_idx < m2->uv2.size()) ? m2->uv2[uv_idx] : 0.0f;
+const float uv2_v = (uv_idx + 1 < m2->uv2.size()) ? (1.0f - m2->uv2[uv_idx + 1]) : 0.0f;
+std::memcpy(&vertex_data[offset + 40], &uv2_u, sizeof(float));
+std::memcpy(&vertex_data[offset + 44], &uv2_v, sizeof(float));
 }
 
 // map triangle indices
@@ -674,6 +702,12 @@ vao->ebo = ebo;
 
 // set up vertex attributes
 vao->setup_m2_vertex_format();
+
+// wireframe index buffer (line pairs from triangles)
+{
+const auto wireframe_data = gl::VertexArray::triangles_to_lines(indices_data.data(), indices_data.size());
+vao->set_wireframe_index_buffer(wireframe_data.data(), wireframe_data.size());
+}
 
 gl::VertexArray* vao_raw = vao.get();
 vaos.push_back(std::move(vao));
@@ -703,9 +737,18 @@ int pixel_shader = 0;
 int blend_mode = 0;
 uint16_t flags = 0;
 uint16_t texture_count = 1;
+int prio = 0;
+int layer = 0;
+int coloridx = -1;
+int tex_weight_idx = -1;
+std::array<int, 2> tex_mtx_idxs = { -1, -1 };
 
 if (tex_unit) {
 texture_count = tex_unit->textureCount;
+prio = tex_unit->priority;
+layer = tex_unit->materialLayer;
+if (tex_unit->colorIndex < static_cast<uint16_t>(m2->colors.size()))
+coloridx = tex_unit->colorIndex;
 
 // get all texture indices for multi-texture shaders
 for (uint16_t j = 0; j < std::min(texture_count, static_cast<uint16_t>(4)); j++) {
@@ -732,9 +775,32 @@ pixel_shader = it->second;
 
 if (tex_unit->materialIndex < m2->materials.size()) {
 const auto& mat = m2->materials[tex_unit->materialIndex];
+// apply M2 blend mode index → EGX blend mode mapping
+if (mat.blendingMode < static_cast<uint16_t>(M2BLEND_TO_EGX.size()))
+blend_mode = M2BLEND_TO_EGX[mat.blendingMode];
+else
 blend_mode = mat.blendingMode;
 flags = mat.flags;
 material_props[tex_indices[0]] = { blend_mode, flags };
+}
+
+// texture transform combo indices
+if (tex_unit->textureTransformComboIndex < m2->textureTransformsLookup.size()) {
+const int idx0 = m2->textureTransformsLookup[tex_unit->textureTransformComboIndex];
+if (idx0 >= 0 && static_cast<size_t>(idx0) < m2->textureTransforms.size())
+tex_mtx_idxs[0] = idx0;
+}
+if (tex_unit->textureTransformComboIndex + 1 < m2->textureTransformsLookup.size()) {
+const int idx1 = m2->textureTransformsLookup[tex_unit->textureTransformComboIndex + 1];
+if (idx1 >= 0 && static_cast<size_t>(idx1) < m2->textureTransforms.size())
+tex_mtx_idxs[1] = idx1;
+}
+
+// texture weight combo index
+if (tex_unit->textureWeightComboIndex < m2->transparencyLookup.size()) {
+const int idx = m2->transparencyLookup[tex_unit->textureWeightComboIndex];
+if (idx >= 0 && static_cast<size_t>(idx) < m2->textureWeights.size())
+tex_weight_idx = idx;
 }
 }
 
@@ -749,6 +815,11 @@ draw_call.pixel_shader = pixel_shader;
 draw_call.blend_mode = blend_mode;
 draw_call.flags = flags;
 draw_call.visible = true;
+draw_call.tex_matrix_idxs = tex_mtx_idxs;
+draw_call.prio = prio;
+draw_call.layer = layer;
+draw_call.color_idx = coloridx;
+draw_call.tex_weight_idx = tex_weight_idx;
 
 // reactive geoset
 if (reactive) {
@@ -963,6 +1034,16 @@ current_anim_from_child = use_child;
 current_anim_index = anim_index;
 current_animation = index;
 animation_time = 0;
+
+// reset global sequence times from the animation source's globalLoops
+const std::vector<int16_t>* gl_loops = nullptr;
+if (use_child && childSkelLoader)
+gl_loops = &childSkelLoader->globalLoops;
+else if (use_skel && skelLoader)
+gl_loops = &skelLoader->globalLoops;
+else
+gl_loops = &m2->globalLoops;
+global_seq_times.assign(gl_loops->size(), 0.0f);
 });
 }
 
@@ -973,6 +1054,9 @@ animation_time = 0;
 void M2RendererGL::stopAnimation() {
 animation_time = 0;
 animation_paused = false;
+global_seq_times.assign(global_seq_times.size(), 0.0f);
+submesh_colors.assign(submesh_colors.size(), 1.0f);
+tex_weights.assign(tex_weights.size(), 1.0f);
 
 // calculate bone matrices using animation 0 (stand) at time 0 for rest pose
 if (has_bones()) {
@@ -981,6 +1065,9 @@ current_anim_index = 0;
 current_anim_from_skel = (skelLoader != nullptr);
 current_anim_from_child = false;
 _update_bone_matrices();
+_update_tex_matrices();
+_update_submesh_colors();
+_update_tex_weights();
 
 current_animation = -1; // null
 current_anim_index = -1;
@@ -1023,16 +1110,36 @@ return;
 // _update_bone_matrices(). Match that behavior.
 const uint32_t duration_ms = _get_anim_duration_ms();
 
-if (!animation_paused)
+if (!animation_paused) {
 animation_time += delta_time;
+
+// advance global sequence timers
+const std::vector<int16_t>* gl_loops = nullptr;
+if (current_anim_from_child && childSkelLoader)
+gl_loops = &childSkelLoader->globalLoops;
+else if (current_anim_from_skel && skelLoader)
+gl_loops = &skelLoader->globalLoops;
+else
+gl_loops = &m2->globalLoops;
+
+for (size_t i = 0; i < global_seq_times.size() && i < gl_loops->size(); ++i) {
+global_seq_times[i] += delta_time * 1000.0f;
+const float ts = static_cast<float>((*gl_loops)[i]);
+if (ts > 0.0f)
+global_seq_times[i] = std::fmod(global_seq_times[i], ts);
+}
+}
 
 // wrap animation (duration is in milliseconds)
 const float duration_sec = static_cast<float>(duration_ms) / 1000.0f;
 if (duration_sec > 0)
 animation_time = std::fmod(animation_time, duration_sec);
 
-// update bone matrices
+// update bone matrices and animated tracks
 _update_bone_matrices();
+_update_tex_matrices();
+_update_submesh_colors();
+_update_tex_weights();
 }
 
 // -----------------------------------------------------------------------
@@ -1080,6 +1187,9 @@ return;
 const float duration = get_animation_duration();
 animation_time = (static_cast<float>(frame) / static_cast<float>(frame_count)) * duration;
 _update_bone_matrices();
+_update_tex_matrices();
+_update_submesh_colors();
+_update_tex_weights();
 }
 
 // -----------------------------------------------------------------------
@@ -1160,6 +1270,278 @@ hands_closed_anim_idx, close_r, close_l, bone_matrices, sample_vec3, sample_quat
 }
 
 // -----------------------------------------------------------------------
+// _create_tex_matrices
+// -----------------------------------------------------------------------
+
+void M2RendererGL::_create_tex_matrices() {
+const auto& tt = m2->textureTransforms;
+if (tt.empty())
+return;
+
+tex_matrices.resize(tt.size() * 16);
+for (size_t i = 0; i < tt.size(); i++) {
+std::copy(M2_IDENTITY_MAT4.begin(), M2_IDENTITY_MAT4.end(),
+tex_matrices.begin() + static_cast<ptrdiff_t>(i * 16));
+}
+}
+
+// -----------------------------------------------------------------------
+// _find_time_index: binary search for largest i where times[i] <= currtime.
+// Returns SIZE_MAX for empty input (guards prevent that case in callers).
+// -----------------------------------------------------------------------
+
+size_t M2RendererGL::_find_time_index(float currtime, const std::vector<M2Value>& times) {
+if (times.size() > 1) {
+const float last_t = static_cast<float>(m2value_to_uint32(times.back()));
+if (currtime > last_t)
+return times.size() - 1;
+size_t lo = 0, hi = times.size() - 1;
+while (lo < hi) {
+const size_t mid = (lo + hi + 1) / 2;
+if (static_cast<float>(m2value_to_uint32(times[mid])) <= currtime)
+lo = mid;
+else
+hi = mid - 1;
+}
+return lo;
+} else if (times.size() == 1) {
+return 0;
+}
+return SIZE_MAX;
+}
+
+// -----------------------------------------------------------------------
+// _animate_track_vec4: sample a float3/float4 track at the current time.
+// Returns std::array<float,4> (float3 tracks leave extra elements from def).
+// -----------------------------------------------------------------------
+
+std::array<float, 4> M2RendererGL::_animate_track_vec4(
+const M2Track& animblock,
+const std::array<float, 4>& def,
+const std::function<std::array<float,4>(const std::array<float,4>&, const std::array<float,4>&, float)>& lerpfunc)
+{
+float at = animation_time * 1000.0f;
+float maxtime = static_cast<float>(_get_anim_duration_ms());
+size_t ai = static_cast<size_t>(current_anim_index >= 0 ? current_anim_index : 0);
+
+const uint16_t gs = animblock.globalSeq;
+if (gs < static_cast<uint16_t>(global_seq_times.size())) {
+at = global_seq_times[gs];
+const std::vector<int16_t>* gl_loops = nullptr;
+if (current_anim_from_child && childSkelLoader) gl_loops = &childSkelLoader->globalLoops;
+else if (current_anim_from_skel && skelLoader)  gl_loops = &skelLoader->globalLoops;
+else gl_loops = &m2->globalLoops;
+maxtime = (gs < gl_loops->size()) ? static_cast<float>((*gl_loops)[gs]) : 0.0f;
+}
+
+if (animblock.timestamps.empty()) return def;
+if (ai >= animblock.timestamps.size()) ai = 0;
+if (animblock.timestamps[ai].empty()) return def;
+
+const auto& times  = animblock.timestamps[ai];
+const auto& values = animblock.values[ai];
+const uint16_t intertype = animblock.interpolation;
+
+auto extract_vec4 = [&](size_t idx) -> std::array<float, 4> {
+const auto& v = m2value_to_vec(values[idx]);
+std::array<float, 4> out = def;
+for (size_t k = 0; k < std::min(v.size(), size_t(4)); k++) out[k] = v[k];
+return out;
+};
+
+size_t ti = 0;
+if (maxtime != 0.0f)
+ti = _find_time_index(at, times);
+
+if (ti == times.size() - 1)
+return extract_vec4(ti);
+else if (ti < times.size()) {
+const auto v1 = extract_vec4(ti);
+const auto v2 = extract_vec4(ti + 1);
+const float t1 = static_cast<float>(m2value_to_uint32(times[ti]));
+const float t2 = static_cast<float>(m2value_to_uint32(times[ti + 1]));
+const float dt = t2 - t1;
+if (intertype == 0 || dt <= 0.0f) return v1;
+return lerpfunc(v1, v2, std::min((at - t1) / dt, 1.0f));
+} else {
+return extract_vec4(0);
+}
+}
+
+// -----------------------------------------------------------------------
+// _animate_track_scalar: sample an int16 scalar track at the current time.
+// -----------------------------------------------------------------------
+
+float M2RendererGL::_animate_track_scalar(
+const M2Track& animblock,
+float def,
+const std::function<float(float, float, float)>& lerpfunc)
+{
+float at = animation_time * 1000.0f;
+float maxtime = static_cast<float>(_get_anim_duration_ms());
+size_t ai = static_cast<size_t>(current_anim_index >= 0 ? current_anim_index : 0);
+
+const uint16_t gs = animblock.globalSeq;
+if (gs < static_cast<uint16_t>(global_seq_times.size())) {
+at = global_seq_times[gs];
+const std::vector<int16_t>* gl_loops = nullptr;
+if (current_anim_from_child && childSkelLoader) gl_loops = &childSkelLoader->globalLoops;
+else if (current_anim_from_skel && skelLoader)  gl_loops = &skelLoader->globalLoops;
+else gl_loops = &m2->globalLoops;
+maxtime = (gs < gl_loops->size()) ? static_cast<float>((*gl_loops)[gs]) : 0.0f;
+}
+
+if (animblock.timestamps.empty()) return def;
+if (ai >= animblock.timestamps.size()) ai = 0;
+if (animblock.timestamps[ai].empty()) return def;
+
+const auto& times  = animblock.timestamps[ai];
+const auto& values = animblock.values[ai];
+const uint16_t intertype = animblock.interpolation;
+
+auto extract_scalar = [&](size_t idx) -> float {
+const M2Value& v = values[idx];
+if (auto* i16 = std::get_if<int16_t>(&v)) return static_cast<float>(*i16);
+if (auto* u8  = std::get_if<uint8_t>(&v)) return static_cast<float>(*u8);
+if (auto* u32 = std::get_if<uint32_t>(&v)) return static_cast<float>(*u32);
+const auto& vec = m2value_to_vec(v);
+return vec.empty() ? def : vec[0];
+};
+
+size_t ti = 0;
+if (maxtime != 0.0f)
+ti = _find_time_index(at, times);
+
+if (ti == times.size() - 1)
+return extract_scalar(ti);
+else if (ti < times.size()) {
+const float v1 = extract_scalar(ti);
+const float v2 = extract_scalar(ti + 1);
+const float t1 = static_cast<float>(m2value_to_uint32(times[ti]));
+const float t2 = static_cast<float>(m2value_to_uint32(times[ti + 1]));
+const float dt = t2 - t1;
+if (intertype == 0 || dt <= 0.0f) return v1;
+return lerpfunc(v1, v2, std::min((at - t1) / dt, 1.0f));
+} else {
+return extract_scalar(0);
+}
+}
+
+// -----------------------------------------------------------------------
+// _update_tex_matrices
+// -----------------------------------------------------------------------
+
+void M2RendererGL::_update_tex_matrices() {
+if (tex_matrices.empty() || current_animation < 0)
+return;
+
+const size_t anim_idx_sz = static_cast<size_t>(current_anim_index >= 0 ? current_anim_index : 0);
+size_t anim_count = 0;
+if (current_anim_from_child && childSkelLoader) anim_count = childSkelLoader->animations.size();
+else if (current_anim_from_skel && skelLoader)  anim_count = skelLoader->animations.size();
+else if (m2) anim_count = m2->animations.size();
+if (anim_idx_sz >= anim_count) return;
+
+float local_mat[16], temp_result[16];
+
+for (size_t i = 0; i < m2->textureTransforms.size(); ++i) {
+const auto& tt = m2->textureTransforms[i];
+std::copy(M2_IDENTITY_MAT4.begin(), M2_IDENTITY_MAT4.end(), local_mat);
+
+static constexpr float transmat[3]   = { 0.5f, 0.5f, 0.0f };
+static constexpr float pivotpoint[3] = { -0.5f, -0.5f, 0.0f };
+
+if (!tt.rotation.values.empty()) {
+const auto result = _animate_track_vec4(tt.rotation, {1,0,0,0},
+[](const std::array<float,4>& a, const std::array<float,4>& b, float c) {
+std::array<float,4> out = {0,0,0,1};
+quat_slerp(out.data(), a[0],a[1],a[2],a[3], b[0],b[1],b[2],b[3], c);
+return out;
+});
+mat4_from_translation(temp_result, transmat[0], transmat[1], transmat[2]);
+mat4_multiply(local_mat, local_mat, temp_result);
+mat4_from_quat(temp_result, result[0], result[1], result[2], result[3]);
+mat4_multiply(local_mat, local_mat, temp_result);
+mat4_from_translation(temp_result, pivotpoint[0], pivotpoint[1], pivotpoint[2]);
+mat4_multiply(local_mat, local_mat, temp_result);
+}
+if (!tt.scaling.values.empty()) {
+const auto result = _animate_track_vec4(tt.scaling, {1,1,1,1},
+[](const std::array<float,4>& a, const std::array<float,4>& b, float c) {
+return std::array<float,4>{ lerp(a[0],b[0],c), lerp(a[1],b[1],c), lerp(a[2],b[2],c), lerp(a[3],b[3],c) };
+});
+mat4_from_translation(temp_result, transmat[0], transmat[1], transmat[2]);
+mat4_multiply(local_mat, local_mat, temp_result);
+mat4_from_scale(temp_result, result[0], result[1], result[2]);
+mat4_multiply(local_mat, local_mat, temp_result);
+mat4_from_translation(temp_result, pivotpoint[0], pivotpoint[1], pivotpoint[2]);
+mat4_multiply(local_mat, local_mat, temp_result);
+}
+if (!tt.translation.values.empty()) {
+const auto result = _animate_track_vec4(tt.translation, {0,0,0,0},
+[](const std::array<float,4>& a, const std::array<float,4>& b, float c) {
+return std::array<float,4>{ lerp(a[0],b[0],c), lerp(a[1],b[1],c), lerp(a[2],b[2],c), lerp(a[3],b[3],c) };
+});
+mat4_from_translation(temp_result, result[0], result[1], result[2]);
+mat4_multiply(local_mat, local_mat, temp_result);
+}
+
+std::copy(local_mat, local_mat + 16,
+tex_matrices.begin() + static_cast<ptrdiff_t>(i * 16));
+}
+}
+
+// -----------------------------------------------------------------------
+// _update_submesh_colors
+// -----------------------------------------------------------------------
+
+void M2RendererGL::_update_submesh_colors() {
+if (current_animation < 0) return;
+
+const size_t anim_idx_sz = static_cast<size_t>(current_anim_index >= 0 ? current_anim_index : 0);
+size_t anim_count = 0;
+if (current_anim_from_child && childSkelLoader) anim_count = childSkelLoader->animations.size();
+else if (current_anim_from_skel && skelLoader)  anim_count = skelLoader->animations.size();
+else if (m2) anim_count = m2->animations.size();
+if (anim_idx_sz >= anim_count) return;
+
+for (size_t i = 0; i < m2->colors.size(); ++i) {
+const auto rgb = _animate_track_vec4(m2->colors[i].color, {1,1,1,1},
+[](const std::array<float,4>& a, const std::array<float,4>& b, float c) {
+return std::array<float,4>{ lerp(a[0],b[0],c), lerp(a[1],b[1],c), lerp(a[2],b[2],c), lerp(a[3],b[3],c) };
+});
+submesh_colors[i*4 + 0] = rgb[0];
+submesh_colors[i*4 + 1] = rgb[1];
+submesh_colors[i*4 + 2] = rgb[2];
+
+const float alpha_raw = _animate_track_scalar(m2->colors[i].alpha, 32767.0f,
+[](float a, float b, float t) { return lerp(a, b, t); });
+submesh_colors[i*4 + 3] = alpha_raw / 32768.0f;
+}
+}
+
+// -----------------------------------------------------------------------
+// _update_tex_weights
+// -----------------------------------------------------------------------
+
+void M2RendererGL::_update_tex_weights() {
+if (current_animation < 0) return;
+
+const size_t anim_idx_sz = static_cast<size_t>(current_anim_index >= 0 ? current_anim_index : 0);
+size_t anim_count = 0;
+if (current_anim_from_child && childSkelLoader) anim_count = childSkelLoader->animations.size();
+else if (current_anim_from_skel && skelLoader)  anim_count = skelLoader->animations.size();
+else if (m2) anim_count = m2->animations.size();
+if (anim_idx_sz >= anim_count) return;
+
+for (size_t i = 0; i < m2->textureWeights.size(); ++i) {
+const float w_raw = _animate_track_scalar(m2->textureWeights[i], 32767.0f,
+[](float a, float b, float t) { return lerp(a, b, t); });
+tex_weights[i] = w_raw / 32768.0f;
+}
+}
+
+// -----------------------------------------------------------------------
 // _sample_raw_vec3
 // M2 modern format: direct per-animation keyframe arrays (M2Value variant)
 // timestamps[i] = uint32_t ms, values[i] = std::vector<float> (3 elements)
@@ -1188,20 +1570,13 @@ return {v[0], v[1], v[2]};
 return default_value;
 }
 
-// find keyframe
-size_t frame = 0;
-for (size_t i = 0; i < timestamps.size() - 1; i++) {
-const float t_i = static_cast<float>(m2value_to_uint32(timestamps[i]));
-const float t_next = static_cast<float>(m2value_to_uint32(timestamps[i + 1]));
-if (time_ms >= t_i && time_ms < t_next) {
-frame = i;
-break;
-}
-}
+// binary search for keyframe
+const size_t frame = _find_time_index(time_ms, timestamps);
 
 const float t0 = static_cast<float>(m2value_to_uint32(timestamps[frame]));
 const float t1 = static_cast<float>(m2value_to_uint32(timestamps[frame + 1]));
-const float alpha = (t1 > t0) ? (time_ms - t0) / (t1 - t0) : 0.0f;
+const float dt = t1 - t0;
+const float alpha = dt > 0.0f ? std::min((time_ms - t0) / dt, 1.0f) : 0.0f;
 
 const auto& v0 = m2value_to_vec(values[frame]);
 const auto& v1 = m2value_to_vec(values[frame + 1]);
@@ -1243,20 +1618,13 @@ return {v[0], v[1], v[2], v[3]};
 return {0, 0, 0, 1};
 }
 
-// find keyframe
-size_t frame = 0;
-for (size_t i = 0; i < timestamps.size() - 1; i++) {
-const float t_i = static_cast<float>(m2value_to_uint32(timestamps[i]));
-const float t_next = static_cast<float>(m2value_to_uint32(timestamps[i + 1]));
-if (time_ms >= t_i && time_ms < t_next) {
-frame = i;
-break;
-}
-}
+// binary search for keyframe
+const size_t frame = _find_time_index(time_ms, timestamps);
 
 const float t0 = static_cast<float>(m2value_to_uint32(timestamps[frame]));
 const float t1 = static_cast<float>(m2value_to_uint32(timestamps[frame + 1]));
-const float alpha = (t1 > t0) ? (time_ms - t0) / (t1 - t0) : 0.0f;
+const float dt = t1 - t0;
+const float alpha = dt > 0.0f ? std::min((time_ms - t0) / dt, 1.0f) : 0.0f;
 
 const auto& q0 = m2value_to_vec(values[frame]);
 const auto& q1 = m2value_to_vec(values[frame + 1]);
@@ -1571,12 +1939,6 @@ if (has_bones() && !bone_matrices.empty() && bone_ssbo) {
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
-// texture matrix defaults
-shader->set_uniform_1i("u_has_tex_matrix1", 0);
-shader->set_uniform_1i("u_has_tex_matrix2", 0);
-shader->set_uniform_mat4("u_tex_matrix1", false, M2_IDENTITY_MAT4.data());
-shader->set_uniform_mat4("u_tex_matrix2", false, M2_IDENTITY_MAT4.data());
-
 // lighting - transform light direction to view space
 const float lx = 3, ly = -0.7f, lz = -2;
 const float light_view_x = view_matrix[0] * lx + view_matrix[4] * ly + view_matrix[8] * lz;
@@ -1611,11 +1973,9 @@ for (const auto& dc : draw_calls)
 sorted_calls.push_back(&dc);
 
 std::stable_sort(sorted_calls.begin(), sorted_calls.end(), [](const M2DrawCall* a, const M2DrawCall* b) {
-const bool a_opaque = a->blend_mode == 0 || a->blend_mode == 1;
-const bool b_opaque = b->blend_mode == 0 || b->blend_mode == 1;
-if (a_opaque != b_opaque)
-return a_opaque;
-
+if (a->prio != b->prio) return a->prio < b->prio;
+if (a->layer != b->layer) return a->layer < b->layer;
+if (a->blend_mode != b->blend_mode) return a->blend_mode < b->blend_mode;
 return false;
 });
 
@@ -1629,8 +1989,36 @@ shader->set_uniform_1i("u_vertex_shader", dc->vertex_shader);
 shader->set_uniform_1i("u_pixel_shader", dc->pixel_shader);
 shader->set_uniform_1i("u_blend_mode", dc->blend_mode);
 
-// mesh color (white for now)
-shader->set_uniform_4f("u_mesh_color", 1, 1, 1, 1);
+// per-draw-call texture matrices
+{
+const int tmi0 = dc->tex_matrix_idxs[0];
+const int tmi1 = dc->tex_matrix_idxs[1];
+const float* tm1 = (tmi0 != -1 && tmi0 * 16 + 16 <= static_cast<int>(tex_matrices.size()))
+	? &tex_matrices[tmi0 * 16] : M2_IDENTITY_MAT4.data();
+const float* tm2 = (tmi1 != -1 && tmi1 * 16 + 16 <= static_cast<int>(tex_matrices.size()))
+	? &tex_matrices[tmi1 * 16] : M2_IDENTITY_MAT4.data();
+shader->set_uniform_mat4("u_tex_matrix1", false, tm1);
+shader->set_uniform_mat4("u_tex_matrix2", false, tm2);
+}
+
+// per-draw-call mesh color and alpha
+{
+float cr = 1, cg = 1, cb = 1, ca = 1;
+if (dc->color_idx != -1 && dc->color_idx * 4 + 4 <= static_cast<int>(submesh_colors.size())) {
+cr = submesh_colors[dc->color_idx * 4 + 0];
+cg = submesh_colors[dc->color_idx * 4 + 1];
+cb = submesh_colors[dc->color_idx * 4 + 2];
+ca = submesh_colors[dc->color_idx * 4 + 3];
+}
+float alpha = ca;
+if (dc->tex_weight_idx != -1 && dc->tex_weight_idx < static_cast<int>(tex_weights.size()))
+alpha *= tex_weights[dc->tex_weight_idx];
+if (alpha <= 0)
+continue;
+shader->set_uniform_4f("u_mesh_color", cr, cg, cb, alpha);
+}
+
+shader->set_uniform_1i("u_apply_lighting", (dc->flags & 0x1) ? 0 : 1);
 
 // apply blend mode
 ctx.apply_blend_mode(dc->blend_mode);
@@ -1649,6 +2037,11 @@ ctx.set_depth_test(false);
 else
 ctx.set_depth_test(true);
 
+if (dc->flags & 0x10)
+ctx.set_depth_write(false);
+else
+ctx.set_depth_write(true);
+
 // bind textures (up to 4 for multi-texture shaders)
 for (int t = 0; t < 4; t++) {
 const int tex_idx = dc->tex_indices[t];
@@ -1665,12 +2058,15 @@ texture->bind(t);
 
 // draw
 dc->vao->bind();
-glDrawElements(
-wireframe ? GL_LINES : GL_TRIANGLES,
-static_cast<GLsizei>(dc->count),
-GL_UNSIGNED_SHORT,
-reinterpret_cast<void*>(static_cast<uintptr_t>(dc->start * 2))
-);
+if (wireframe) {
+glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, dc->vao->wireframe_ebo);
+glDrawElements(GL_LINES, static_cast<GLsizei>(dc->count * 2), GL_UNSIGNED_SHORT,
+	reinterpret_cast<void*>(static_cast<uintptr_t>(dc->start * 4)));
+} else {
+glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, dc->vao->ebo);
+glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(dc->count), GL_UNSIGNED_SHORT,
+	reinterpret_cast<void*>(static_cast<uintptr_t>(dc->start * 2)));
+}
 }
 
 // reset state

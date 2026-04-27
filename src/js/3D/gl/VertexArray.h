@@ -8,6 +8,7 @@
 #include <glad/gl.h>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace gl {
 
@@ -57,6 +58,11 @@ public:
 	void set_attribute_i(GLuint location, GLint size, GLenum type,
 	                     GLsizei stride, GLsizei offset);
 
+	void set_wireframe_index_buffer(const uint16_t* data, size_t count,
+	                                GLenum usage = GL_STATIC_DRAW);
+
+	static std::vector<uint16_t> triangles_to_lines(const uint16_t* indices, size_t count);
+
 	void setup_m2_vertex_format();
 	void setup_m2_separate_buffers(GLuint pos_buffer, GLuint norm_buffer,
 	                               GLuint uv_buffer, GLuint bone_idx_buffer,
@@ -76,6 +82,7 @@ public:
 	GLuint vao = 0;
 	GLuint vbo = 0;
 	GLuint ebo = 0;
+	GLuint wireframe_ebo = 0;
 	GLsizei index_count = 0;
 	GLenum index_type = GL_UNSIGNED_SHORT;
 
