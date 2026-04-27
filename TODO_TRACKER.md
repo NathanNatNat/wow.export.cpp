@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 48/186 verified (26%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 54/186 verified (29%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -265,25 +265,25 @@
 - **Status**: Pending
 - **Details**: JS copies with `String(value)`, while C++ uses `value.dump()`; for string JSON values this includes JSON quoting/escaping, changing clipboard output.
 
-- [ ] 52. [tab_data.cpp] Context menu node not cleared on close
+- [x] 52. [tab_data.cpp] Context menu node not cleared on close
 - **JS Source**: `src/js/modules/tab_data.js` line 107
-- **Status**: Pending
-- **Details**: JS resets nodeDataTable to null on close. C++ never resets it so the condition stays true permanently.
+- **Status**: Verified
+- **Details**: Fixed — popup now opened via `ImGui::OpenPopup` on right-click, uses `BeginPopup` (not ContextItem), and clears `nodeDataTable` in the `else` branch when the popup is closed.
 
-- [ ] 53. [tab_data.cpp] copy_cell uses value.dump() producing JSON-quoted strings
+- [x] 53. [tab_data.cpp] copy_cell uses value.dump() producing JSON-quoted strings
 - **JS Source**: `src/js/modules/tab_data.js` lines 172–177
-- **Status**: Pending
-- **Details**: JS uses String(value) producing unquoted output. C++ uses value.dump() adding extra quotes for strings.
+- **Status**: Verified
+- **Details**: Fixed — `copy_cell` now uses `value.get<std::string>()` for string values and `value.dump()` for all other types, matching JS `String(value)` semantics.
 
 - [x] 54. [tab_data.cpp] Selection watcher prevents retry after failed load
 - **JS Source**: `src/js/modules/tab_data.js` lines 371–377
 - **Status**: Verified
 - **Details**: Fixed — removed `prev_selection_last`; change-detection now compares against `selected_file` which is only updated on successful load, matching JS behavior and allowing retry after failure.
 
-- [ ] 55. [legacy_tab_data.cpp] `copy_cell` empty-string handling differs from JS
+- [x] 55. [legacy_tab_data.cpp] `copy_cell` empty-string handling differs from JS
 - **JS Source**: `src/js/modules/legacy_tab_data.js` lines 215–220
-- **Status**: Pending
-- **Details**: JS copies any non-null/undefined value (including empty string), while C++ returns early on `value.empty()`, so empty-cell clipboard behavior is not equivalent.
+- **Status**: Verified
+- **Details**: Fixed — removed early return on `value.empty()`; now copies any value (including empty string) matching JS `if (value === null || value === undefined) return` semantics.
 
 - [ ] 56. [tab_raw.cpp] detect_raw_files manually sets is_dirty=true — deviates from JS
 - **JS Source**: `src/js/modules/tab_raw.js` lines 75–76
@@ -493,15 +493,15 @@
 - **Status**: Pending
 - **Details**: JS places Loop/Autoplay checkboxes and Export button together in the `preview-controls` div. C++ places Loop/Autoplay in the `PreviewContainer` section (lines 479–487) and Export in `PreviewControls` (lines 492–498). This changes the visual layout — checkboxes are above the export button area instead of beside it.
 
-- [ ] 97. [tab_videos.cpp] Kino processing toast omits the explicit Cancel action payload
+- [x] 97. [tab_videos.cpp] Kino processing toast omits the explicit Cancel action payload
 - **JS Source**: `src/js/modules/tab_videos.js` lines 394–400
-- **Status**: Pending
-- **Details**: JS updates progress toast with `{ 'Cancel': cancel_processing }`; C++ calls `setToast(..., {}, ...)`, removing the explicit cancel action binding from the toast configuration.
+- **Status**: Verified
+- **Details**: Fixed — `cancel_processing` is now a named lambda passed as `{"Cancel", cancel_processing}` in the toast action map, matching JS `{ 'Cancel': cancel_processing }`.
 
-- [ ] 98. [tab_videos.cpp] Cancel button missing from kino_processing toast
+- [x] 98. [tab_videos.cpp] Cancel button missing from kino_processing toast
 - **JS Source**: `src/js/modules/tab_videos.js` line 399
-- **Status**: Pending
-- **Details**: JS passes `{ 'Cancel': cancel_processing }` as toast buttons. C++ passes `{}` — no Cancel button is shown during batch processing, leaving users with no way to cancel.
+- **Status**: Verified
+- **Details**: Fixed together with entry 97 — Cancel button is now present in the progress toast action map.
 
 - [ ] 99. [tab_videos.cpp] Spurious "Connecting to video server..." toast not in JS
 - **JS Source**: `src/js/modules/tab_videos.js` (none)
@@ -553,10 +553,10 @@
 - **Status**: Pending
 - **Details**: JS shows Regex Enabled div in both the DB2 filter bar and data table tray filter. C++ has no regex indicators.
 
-- [ ] 109. [legacy_tab_data.cpp] Export format menu omits JS SQL/DBC options
+- [x] 109. [legacy_tab_data.cpp] Export format menu omits JS SQL/DBC options
 - **JS Source**: `src/js/modules/legacy_tab_data.js` lines 172–176, 222–231
-- **Status**: Pending
-- **Details**: JS menu exposes `CSV`, `SQL`, and `DBC` export actions, but C++ `legacy_data_opts` only includes `Export as CSV`, making SQL/DBC exports unavailable through the settings menu path.
+- **Status**: Verified
+- **Details**: Fixed — `legacy_data_opts` now includes `Export as CSV`, `Export as SQL`, and `Export DBC (Raw)` matching JS `menuButtonDataLegacy`.
 
 - [ ] 110. [legacy_tab_data.cpp] Context menu uses `ImGui::BeginPopupContextItem` vs JS ContextMenu component
 - **JS Source**: `src/js/modules/legacy_tab_data.js` lines 139–143

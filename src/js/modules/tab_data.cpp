@@ -234,7 +234,7 @@ void mounted() {
 		}).detach();
 	}
 
-	// Change-detection is handled in render() by comparing selectionDB2s.back() each frame.
+	// Change-detection is handled in render() by comparing against selected_file each frame.
 }
 
 void render() {
@@ -361,6 +361,8 @@ void render() {
 				node["cellValue"] = ev.cellValue;
 				node["selectedCount"] = ev.selectedCount;
 				view.contextMenus.nodeDataTable = node;
+				// Open the popup immediately on right-click (JS: ContextMenu opens on @contextmenu).
+				ImGui::OpenPopup("##DataTableContextMenu");
 			},
 			[&]() { copy_rows_csv(); },
 			nullptr);
@@ -370,8 +372,8 @@ void render() {
 		//       <span @click.self="copy_rows_csv">Copy {{ selectedCount }} row{{ ... }} as CSV</span>
 		//       <span @click.self="copy_rows_sql">Copy {{ selectedCount }} row{{ ... }} as SQL</span>
 		//       <span @click.self="copy_cell(cellValue)">Copy cell contents</span>
-		if (!view.contextMenus.nodeDataTable.is_null()) {
-			if (ImGui::BeginPopupContextItem("##DataTableContextMenu")) {
+		if (ImGui::BeginPopup("##DataTableContextMenu")) {
+			if (!view.contextMenus.nodeDataTable.is_null()) {
 				const int selected_count = view.contextMenus.nodeDataTable.value("selectedCount", 0);
 				const std::string csv_label = std::format("Copy {} row{} as CSV", selected_count, selected_count != 1 ? "s" : "");
 				const std::string sql_label = std::format("Copy {} row{} as SQL", selected_count, selected_count != 1 ? "s" : "");
@@ -383,11 +385,11 @@ void render() {
 					if (ImGui::MenuItem("Copy cell contents"))
 						copy_cell(view.contextMenus.nodeDataTable["cellValue"]);
 				}
-				ImGui::EndPopup();
-			} else {
-				// @close event: clear nodeDataTable when popup closes.
-				view.contextMenus.nodeDataTable = nullptr;
 			}
+			ImGui::EndPopup();
+		} else if (!view.contextMenus.nodeDataTable.is_null()) {
+			// @close event: clear nodeDataTable when popup closes (JS: @close="nodeDataTable = null").
+			view.contextMenus.nodeDataTable = nullptr;
 		}
 
 		// Options row.

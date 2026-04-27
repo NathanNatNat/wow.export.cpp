@@ -332,19 +332,9 @@ static void stream_video(const std::string& file_name) {
 	std::optional<SubtitleInfo> subtitle = build_result->subtitle;
 	logging::write(std::format("sending kino request: {}", payload.dump()));
 
-	// Show a progress toast on the main thread; it will be hidden when the result arrives.
-	core::setToast("progress", "Connecting to video server...", {}, -1, true);
-
-	// Register cancellation handler on the main thread (toast-cancelled is emitted on main thread).
-	// Only set the atomic flag here; main-thread state (is_streaming, videoPlayerState) is
-	// cleaned up in the result-consumption block in render() to avoid races with the background thread.
-	core::events.once("toast-cancelled", []() {
-		poll_cancelled.store(true);
-		poll_active.store(false);
-		is_streaming = false;
-		core::view->videoPlayerState = false;
-		logging::write("video streaming cancelled by user");
-	});
+	// JS shows no toast before the initial HTTP request. Only when a 202 response is received
+	// does it show "Video is being processed, please wait..." (TODO 99: spurious pre-request
+	// "Connecting..." toast removed). The cancellation handler is registered when 202 arrives.
 
 	// Ensure any previous background thread is completed before launching a new one.
 	if (stream_worker_thread)
@@ -376,6 +366,22 @@ static void stream_video(const std::string& file_name) {
 					constants::KINO::POLL_INTERVAL));
 
 				poll_active = true;
+
+				// JS: core_ref.setToast('progress', 'Video is being processed, please wait...', null, -1, true)
+				// JS: core_ref.events.once('toast-cancelled', cancel_handler)
+				// Post to main thread so we can call setToast and register the cancel handler.
+				core::postToMainThread([]() {
+					if (!poll_cancelled.load()) {
+						core::setToast("progress", "Video is being processed, please wait...", {}, -1, true);
+						core::events.once("toast-cancelled", []() {
+							poll_cancelled.store(true);
+							poll_active.store(false);
+							is_streaming = false;
+							core::view->videoPlayerState = false;
+							logging::write("video processing cancelled by user");
+						});
+					}
+				});
 
 				bool poll_done = false;
 				while (!poll_done && !poll_cancelled.load()) {
@@ -577,19 +583,25 @@ static void trigger_kino_processing() {
 
 	logging::write(std::format("kino_processing: starting processing of {} videos", total));
 
+	// JS: cancel_processing is a named function referenced by both the Cancel button and
+	// the toast-cancelled event. In C++ kino_processing runs synchronously on the main thread,
+	// so neither callback can fire mid-loop — but we replicate the JS API contract structurally.
+	auto cancel_processing = [&]() {
+		kino_processing_cancelled = true;
+		logging::write(std::format("kino_processing: cancelled by user at {}/{}", processed, total));
+		core::setToast("info", std::format("Video processing cancelled. Processed {}/{} videos.", processed, total));
+	};
+
 	auto update_toast = [&]() {
 		if (kino_processing_cancelled)
 			return;
 
 		const std::string msg = std::format("Processing videos: {}/{} ({} errors)", processed, total, errors);
-		core::setToast("progress", msg, {}, -1, true);
+		// JS: core.setToast('progress', msg, { 'Cancel': cancel_processing }, -1, true)
+		core::setToast("progress", msg, { {"Cancel", cancel_processing} }, -1, true);
 	};
 
-	size_t cancel_listener_id = core::events.once("toast-cancelled", [&]() {
-		kino_processing_cancelled = true;
-		logging::write(std::format("kino_processing: cancelled by user at {}/{}", processed, total));
-		core::setToast("info", std::format("Video processing cancelled. Processed {}/{} videos.", processed, total));
-	});
+	size_t cancel_listener_id = core::events.once("toast-cancelled", cancel_processing);
 
 	update_toast();
 
@@ -1079,14 +1091,18 @@ void render() {
 	// </div>
 	if (app::layout::BeginFilterBar("videos-filter", regions)) {
 		if (view.config.value("regexFilters", false)) {
+			// JS: <div class="regex-info" :title="$core.view.regexTooltip">Regex Enabled</div>
 			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered() && !view.regexTooltip.empty())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
 			ImGui::SameLine();
 		}
 
+		// JS: placeholder="Filter videos..."
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterVideos.c_str(), sizeof(filter_buf) - 1);
-		if (ImGui::InputText("##FilterVideos", filter_buf, sizeof(filter_buf)))
+		if (ImGui::InputTextWithHint("##FilterVideos", "Filter videos...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterVideos = filter_buf;
 	}
 	app::layout::EndFilterBar();
