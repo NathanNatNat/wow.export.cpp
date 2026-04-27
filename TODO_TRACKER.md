@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 15/85 verified (18%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 20/85 verified (24%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -165,30 +165,30 @@
 - **Status**: Fixed: Loop/Autoplay moved into BeginPreviewControls block alongside Export button, matching JS preview-controls div layout.
 - **Details**: JS places Loop/Autoplay checkboxes and Export button together in the `preview-controls` div. C++ places Loop/Autoplay in the `PreviewContainer` section (lines 479–487) and Export in `PreviewControls` (lines 492–498). This changes the visual layout — checkboxes are above the export button area instead of beside it.
 
-- [ ] 99. [tab_videos.cpp] Spurious "Connecting to video server..." toast not in JS
+- [x] 99. [tab_videos.cpp] Spurious "Connecting to video server..." toast not in JS
 - **JS Source**: `src/js/modules/tab_videos.js` (none)
-- **Status**: Pending
-- **Details**: JS shows no toast before the initial HTTP request — it only shows "Video is being processed..." on 202 status. C++ always shows a "Connecting to video server..." progress toast before the request, which is not in the original.
+- **Status**: Verified
+- **Details**: Confirmed no pre-request toast is shown. The "Connecting to video server..." text in the preview panel (line ~1136) is an in-UI status label shown only when `is_streaming && !poll_active && current_video_url.empty()` — it is not a `core::setToast()` call. The comment at line 336 documents this correctly. No fix needed.
 
-- [ ] 100. [tab_videos.cpp] Filter input buffer capped at 255 chars
+- [x] 100. [tab_videos.cpp] Filter input buffer capped at 255 chars
 - **JS Source**: `src/js/modules/tab_videos.js` line 490
-- **Status**: Pending
-- **Details**: JS `v-model` has no character limit. C++ uses `char filter_buf[256]` which truncates filter input at 255 characters.
+- **Status**: Fixed
+- **Details**: Changed `char filter_buf[256]` to `char filter_buf[4096]` in the render() filter bar, matching the JS v-model which has no character limit.
 
-- [ ] 101. [tab_videos.cpp] kino_post hardcodes hostname and path instead of using constant
+- [x] 101. [tab_videos.cpp] kino_post hardcodes hostname and path instead of using constant
 - **JS Source**: `src/js/modules/tab_videos.js` lines 137, 349, 431
-- **Status**: Pending
-- **Details**: JS uses `constants.KINO.API_URL` dynamically via `fetch()`. C++ hardcodes `httplib::SSLClient cli("www.kruithne.net")` and `.Post("/wow.export/v2/get_video", ...)` instead of parsing the constant. If the constant changes, C++ won't reflect it.
+- **Status**: Fixed
+- **Details**: kino_post now parses host and path from `constants::KINO::API_URL` at runtime using `std::string_view` operations (strip "https://", find first '/'), replacing the hardcoded `"www.kruithne.net"` and `"/wow.export/v2/get_video"` strings.
 
-- [ ] 102. [tab_videos.cpp] Subtitle loading uses different API path than JS
+- [x] 102. [tab_videos.cpp] Subtitle loading uses different API path than JS
 - **JS Source**: `src/js/modules/tab_videos.js` lines 226–230
-- **Status**: Pending
-- **Details**: JS calls `subtitles.get_subtitles_vtt(core_ref.view.casc, subtitle_info.file_data_id, subtitle_info.format)` which fetches+converts internally. C++ manually fetches via `casc->getVirtualFileByID()`, reads as string, then calls `subtitles::get_subtitles_vtt(raw_subtitle_text, fmt)`. Different function signature — caller now responsible for fetching.
+- **Status**: Verified
+- **Details**: `subtitles::get_subtitles_vtt(casc::CASC*, uint32_t, SubtitleFormat)` in subtitles.h/.cpp takes casc + file_data_id + format and fetches internally via `casc->getVirtualFileByID()`. The call in play_streaming_video matches this signature exactly. The TODO description was based on an outdated version of the code. No fix needed.
 
-- [ ] 103. [tab_videos.cpp] MP4 download may lack User-Agent header
+- [x] 103. [tab_videos.cpp] MP4 download may lack User-Agent header
 - **JS Source**: `src/js/modules/tab_videos.js` line 628
-- **Status**: Pending
-- **Details**: JS explicitly sets `'User-Agent': constants.USER_AGENT` for the MP4 download fetch. C++ uses `generics::get(*mp4_url)` which may or may not set User-Agent, depending on that function's implementation.
+- **Status**: Verified
+- **Details**: `generics::get()` calls `doHttpGet()` which unconditionally adds `headers.emplace("User-Agent", std::string(constants::USER_AGENT()))` (generics.cpp line 104). The User-Agent header is always set, matching JS behavior. No fix needed.
 
 - [x] 111. [legacy_tab_files.cpp] Listbox context menu includes extra FileDataID actions absent in JS
 - **JS Source**: `src/js/modules/legacy_tab_files.js` lines 76–80
