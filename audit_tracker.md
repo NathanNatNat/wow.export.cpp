@@ -154,10 +154,10 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 148. `src/js/modules/legacy_tab_fonts.cpp`
 - [x] 149. `src/js/modules/legacy_tab_home.cpp`
 - [x] 150. `src/js/modules/legacy_tab_textures.cpp`
-- [ ] 151. `src/js/modules/module_test_a.cpp`
-- [ ] 152. `src/js/modules/module_test_b.cpp`
-- [ ] 153. `src/js/modules/screen_settings.cpp`
-- [ ] 154. `src/js/modules/screen_source_select.cpp`
+- [x] 151. `src/js/modules/module_test_a.cpp`
+- [x] 152. `src/js/modules/module_test_b.cpp`
+- [x] 153. `src/js/modules/screen_settings.cpp`
+- [x] 154. `src/js/modules/screen_source_select.cpp`
 - [ ] 155. `src/js/modules/tab_audio.cpp`
 - [ ] 156. `src/js/modules/tab_blender.cpp`
 - [ ] 157. `src/js/modules/tab_changelog.cpp`
@@ -166,10 +166,10 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [ ] 160. `src/js/modules/tab_data.cpp`
 - [ ] 161. `src/js/modules/tab_decor.cpp`
 - [ ] 162. `src/js/modules/tab_fonts.cpp`
-- [ ] 163. `src/js/modules/tab_help.cpp`
-- [ ] 164. `src/js/modules/tab_home.cpp`
-- [ ] 165. `src/js/modules/tab_install.cpp`
-- [ ] 166. `src/js/modules/tab_item_sets.cpp`
+- [x] 163. `src/js/modules/tab_help.cpp`
+- [x] 164. `src/js/modules/tab_home.cpp`
+- [x] 165. `src/js/modules/tab_install.cpp`
+- [x] 166. `src/js/modules/tab_item_sets.cpp`
 - [ ] 167. `src/js/modules/tab_items.cpp`
 - [ ] 168. `src/js/modules/tab_maps.cpp`
 - [ ] 169. `src/js/modules/tab_models.cpp`
