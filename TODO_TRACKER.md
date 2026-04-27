@@ -377,8 +377,8 @@
 
 - [ ] 74. [tab_items.cpp] itemViewerShowAll second loop superseded by upstream DBItemList refactor
 - **JS Source**: `src/js/modules/tab_items.js`
-- **Status**: Pending
-- **Details**: The original bug (C++ using DBItems::getItemById instead of Item constructor reading item_row.Display_lang) is now moot — upstream commit d0d847f5 removed the entire second loop and replaced item loading with DBItemList.initialize() / DBItemList.loadShowAllItems(). The C++ implementation needs to be redone to match the new DBItemList-based approach. See entry 11 for the full item equipping rework scope.
+- **Status**: Blocked
+- **Details**: Blocked on entry 11 — DBItemList is not yet implemented in C++ (only exists as `src/js/db/caches/DBItemList.js`). The original bug (C++ using DBItems::getItemById instead of Item constructor reading item_row.Display_lang) is now moot — upstream commit d0d847f5 removed the entire second loop and replaced item loading with DBItemList.initialize() / DBItemList.loadShowAllItems(). Once DBItemList.cpp/.h are implemented (entry 12) and the item equipping rework is ported (entry 11), rework itemViewerShowAll to call DBItemList::initialize() and DBItemList::loadShowAllItems() to match the current JS implementation.
 
 - [x] 75. [tab_item_sets.cpp] fieldToUint32Vec does not handle single-value fields
 - **JS Source**: `src/js/modules/tab_item_sets.js` line 38
