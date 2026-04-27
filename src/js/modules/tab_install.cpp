@@ -173,7 +173,7 @@ static void pump_install_export() {
 
 	if (task.overwrite_files || !generics::fileExists(export_path)) {
 		try {
-			BLTEReader data = core::view->casc->getFileAsBLTE(0, false, false, true, false, file->hash);
+			casc::BLTEReader data = core::view->casc->getFileAsBLTE(0, false, false, true, false, file->hash);
 			data.writeToFile(export_path);
 
 			helper.mark(file_name, true);
@@ -208,7 +208,7 @@ static void export_install_files() {
 
 struct PendingViewStrings {
 	std::string file_name;
-	std::future<BLTEReader> file_future;
+	std::future<casc::BLTEReader> file_future;
 	std::unique_ptr<BusyLock> busy_lock;
 };
 
@@ -225,7 +225,7 @@ static void pump_view_strings() {
 	auto& view = *core::view;
 
 	try {
-		BLTEReader data = task.file_future.get();
+		casc::BLTEReader data = task.file_future.get();
 		data.processAllBlocks();
 		const auto& raw = data.raw();
 		std::vector<std::string> strings = extract_strings(raw.data(), raw.size());

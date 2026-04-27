@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <unordered_map>
 #include <unordered_set>
 #include <cmath>
 #include <algorithm>
@@ -85,6 +86,8 @@ struct MapViewerPersistedState {
 	std::unordered_map<int, std::vector<uint8_t>> tilePixelCache;
 	int tilePixelCacheTileSize = 0; // tileSize when cache was populated (invalidated on zoom change)
 	int lastGridSize = 64;           // last effective grid size, for coordinate→index mapping
+	/// GL texture handles keyed by tile index (uint32_t = GLuint, avoid including GL headers here).
+	std::unordered_map<int, uint32_t> tileTextures;
 };
 
 /**
@@ -256,6 +259,12 @@ void renderWithDoubleBuffer(MapViewerState& state, float canvasW, float canvasH,
 void renderFullRedraw(MapViewerState& state, float canvasW, float canvasH,
                       int tileSize, int gridSize, const std::vector<int>& mask,
                       const TileLoader& loader);
+
+/**
+ * Draw loaded tile textures via ImDrawList::AddImage().
+ * Must be called before renderOverlay so overlays appear on top.
+ */
+void renderTiles(const MapViewerState& state, int tileSize_prop);
 
 /**
  * Render only the overlay canvas with selection and hover states.

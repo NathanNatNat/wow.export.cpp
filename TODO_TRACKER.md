@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 20/186 verified (11%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 22/186 verified (12%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -102,15 +102,15 @@
 
 ## Critical — crashes, data corruption, and completely broken core features
 
-- [ ] 20. [map-viewer.cpp] Tile image drawing path is still unimplemented
+- [x] 20. [map-viewer.cpp] Tile image drawing path is still unimplemented
 - **JS Source**: `src/js/components/map-viewer.js` lines 380–402, 1111–1113
-- **Status**: Pending
-- **Details**: JS draws loaded tiles to canvas via `putImageData(...)` on main/double-buffer contexts. C++ caches tile pixels but does not upload/draw them, so only overlays render and map tiles are not visually equivalent.
+- **Status**: Verified
+- **Details**: Implemented. `loadTile()` now uploads RGBA pixel data as a GL texture (`glGenTextures`/`glTexImage2D`) and stores the handle in `s_state.tileTextures`. A new `renderTiles()` function iterates the rendered set and draws each tile via `ImDrawList::AddImage()`, clipped to the viewport. Called before `renderOverlay()` so overlays appear on top. GL textures are deleted on tile eviction (`renderWithDoubleBuffer` cleanup), full redraw, and `clearTileState()`.
 
-- [ ] 21. [map-viewer.cpp] Tile rendering to canvas via GL textures not implemented — tiles cached in memory but not displayed
+- [x] 21. [map-viewer.cpp] Tile rendering to canvas via GL textures not implemented — tiles cached in memory but not displayed
 - **JS Source**: `src/js/components/map-viewer.js` lines 350–500 (loadTile, renderWithDoubleBuffer)
-- **Status**: Pending
-- **Details**: The JS version draws tiles to a `<canvas>` via `context.putImageData()` and `context.drawImage()`. C++ caches tile pixel data in `s_state.tilePixelCache` (map-viewer.cpp line 81) but never uploads it as OpenGL textures or renders it to the screen. The TODO comment at line 1194–1198 acknowledges this. The map overlay (selection highlights, hover) draws over empty space. This is a critical functional gap — the map tiles are invisible.
+- **Status**: Verified
+- **Details**: Resolved together with entry 20. `MapViewerPersistedState` gained a `tileTextures: unordered_map<int, uint32_t>` member. `loadTile` uploads each tile to a GL texture. `renderTiles` draws all rendered tiles each frame via `AddImage`. Proper GL lifetime management: textures deleted in `clearTileState`, `renderFullRedraw`, and per-tile eviction in `renderWithDoubleBuffer`.
 
 - [x] 22. [tab_install.cpp] CASC getFile replaced with low-level two-step call, losing BLTE decoding
 - **JS Source**: `src/js/modules/tab_install.js` lines 73–74

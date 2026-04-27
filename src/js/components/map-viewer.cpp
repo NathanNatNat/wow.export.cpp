@@ -6,6 +6,7 @@
 #include "map-viewer.h"
 
 #include <imgui.h>
+#include <glad/gl.h>
 #include "../../app.h"
 #include <cmath>
 #include <algorithm>
@@ -80,6 +81,13 @@ void clearTileState() {
 	s_state.rendered.clear();
 	s_state.tilePixelCache.clear();
 	s_state.tilePixelCacheTileSize = 0;
+	for (auto& [idx, tex] : s_state.tileTextures) {
+		if (tex != 0) {
+			GLuint gl_tex = static_cast<GLuint>(tex);
+			glDeleteTextures(1, &gl_tex);
+		}
+	}
+	s_state.tileTextures.clear();
 	s_state.prevOffsetsValid = false;
 	s_state.prevZoomFactor = 0;
 	s_state.needsFinalPass = false;
@@ -326,6 +334,28 @@ void loadTile(MapViewerState& state, const TileQueueNode& tile, const TileLoader
 			s_state.tilePixelCache[index] = std::move(data);
 			s_state.tilePixelCacheTileSize = tileSize;
 
+			// Delete any existing texture for this index (e.g., re-queued from final pass)
+			auto existingTexIt = s_state.tileTextures.find(index);
+			if (existingTexIt != s_state.tileTextures.end() && existingTexIt->second != 0) {
+				GLuint old_gl = static_cast<GLuint>(existingTexIt->second);
+				glDeleteTextures(1, &old_gl);
+				existingTexIt->second = 0;
+			}
+
+			// Upload RGBA pixel data as a GL texture for ImDrawList::AddImage rendering.
+			// Equivalent to JS: context.putImageData(data, drawX, drawY) on the canvas.
+			GLuint tex = 0;
+			glGenTextures(1, &tex);
+			glBindTexture(GL_TEXTURE_2D, tex);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tileSize, tileSize, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+			             s_state.tilePixelCache[index].data());
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			s_state.tileTextures[index] = static_cast<uint32_t>(tex);
+
 			// Mark this tile as rendered
 			s_state.rendered.insert(index);
 		}
@@ -533,6 +563,14 @@ void renderWithDoubleBuffer(MapViewerState& state, float canvasW, float canvasH,
 	for (int i = 0; i < static_cast<int>(tilesToRemove.size()); i++) {
 		s_state.tilePixelCache.erase(tilesToRemove[i]);
 		s_state.rendered.erase(tilesToRemove[i]);
+		auto texIt = s_state.tileTextures.find(tilesToRemove[i]);
+		if (texIt != s_state.tileTextures.end()) {
+			if (texIt->second != 0) {
+				GLuint gl_tex = static_cast<GLuint>(texIt->second);
+				glDeleteTextures(1, &gl_tex);
+			}
+			s_state.tileTextures.erase(texIt);
+		}
 	}
 
 	// Copy double-buffer back to main canvas
@@ -555,6 +593,13 @@ void renderFullRedraw(MapViewerState& state, float canvasW, float canvasH,
 	// Clear the entire canvas and rendered set
 	// In JS, this calls ctx.clearRect(0, 0, canvas.width, canvas.height).
 	// In ImGui, the draw list is rebuilt each frame, so clearing is implicit.
+	for (auto& [idx, tex] : s_state.tileTextures) {
+		if (tex != 0) {
+			GLuint gl_tex = static_cast<GLuint>(tex);
+			glDeleteTextures(1, &gl_tex);
+		}
+	}
+	s_state.tileTextures.clear();
 	s_state.rendered.clear();
 	s_state.tilePixelCache.clear();
 	s_state.tilePixelCacheTileSize = 0;
@@ -593,6 +638,58 @@ void renderFullRedraw(MapViewerState& state, float canvasW, float canvasH,
 		}
 	}
 	spdlog::debug("[map-viewer] queued {} tiles", queued);
+}
+
+/**
+ * Draw all loaded tile textures to the screen via ImDrawList::AddImage().
+ * Called before renderOverlay so selection/hover overlays appear on top.
+ * Equivalent to JS context.putImageData() calls that draw tiles onto the canvas.
+ */
+void renderTiles(const MapViewerState& state, int tileSize_prop) {
+	if (state.canvasWidth <= 0.0f || state.canvasHeight <= 0.0f)
+		return;
+
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	if (!drawList)
+		return;
+
+	const int tileSize = static_cast<int>(std::floor(static_cast<float>(tileSize_prop) / static_cast<float>(s_state.zoomFactor)));
+	const int grid_size = s_state.lastGridSize;
+
+	const float bufferX = (state.canvasWidth - state.viewportWidth) / 2.0f;
+	const float bufferY = (state.canvasHeight - state.viewportHeight) / 2.0f;
+
+	const ImVec2 contentOrigin(state.canvasOriginX, state.canvasOriginY);
+
+	// Clip tile drawing to the viewport so tiles don't overdraw adjacent UI
+	drawList->PushClipRect(
+		contentOrigin,
+		ImVec2(contentOrigin.x + state.viewportWidth, contentOrigin.y + state.viewportHeight),
+		true);
+
+	for (const int index : s_state.rendered) {
+		auto texIt = s_state.tileTextures.find(index);
+		if (texIt == s_state.tileTextures.end() || texIt->second == 0)
+			continue;
+
+		const int x = index / grid_size;
+		const int y = index % grid_size;
+
+		const float drawX = static_cast<float>(x * tileSize) + s_state.offsetX;
+		const float drawY = static_cast<float>(y * tileSize) + s_state.offsetY;
+
+		const float screenX = contentOrigin.x + drawX - bufferX;
+		const float screenY = contentOrigin.y + drawY - bufferY;
+
+		drawList->AddImage(
+			static_cast<ImTextureID>(static_cast<uintptr_t>(texIt->second)),
+			ImVec2(screenX, screenY),
+			ImVec2(screenX + static_cast<float>(tileSize), screenY + static_cast<float>(tileSize)),
+			ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
+			IM_COL32(255, 255, 255, 255));
+	}
+
+	drawList->PopClipRect();
 }
 
 /**
@@ -1196,11 +1293,7 @@ void renderWidget(const char* id,
 
 	// <canvas ref="canvas"></canvas>
 	// <canvas ref="overlayCanvas" class="overlay-canvas"></canvas>
-	// TODO: Tile texture rendering is not yet implemented. In JS, tiles are drawn
-	// to a <canvas> via context.putImageData(). In C++/ImGui, the tile pixel data
-	// is cached in tilePixelCache but not yet uploaded as GL textures for rendering.
-	// The overlay (selection/hover highlights) draws over empty space. Tile rendering
-	// needs GL texture upload and ImDrawList::AddImage() calls to display tiles.
+	// Tiles are rendered via GL textures (renderTiles) and overlays via ImDrawList (renderOverlay).
 	ImVec2 canvasAvail = ImGui::GetContentRegionAvail();
 	ImVec2 canvasPos = ImGui::GetCursorScreenPos();
 
@@ -1267,6 +1360,7 @@ void renderWidget(const char* id,
 		// Watch: hoverTile change → renderOverlay()
 		// Watch: selection change → renderOverlay()
 		// (In ImGui, overlay is redrawn every frame automatically)
+		renderTiles(state, tileSize_prop);
 		renderOverlay(state, tileSize_prop, gridSize, mask, selection);
 	}
 
