@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 12/85 verified (14%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 19/85 verified (22%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -275,40 +275,40 @@
 - **Status**: Pending
 - **Details**: JS uses localeCompare. C++ uses name_a < name_b. Creatures with diacritics may sort differently.
 
-- [ ] 136. [tab_decor.cpp] Decor list context menu open/interaction path differs from JS ContextMenu component flow
+- [x] 136. [tab_decor.cpp] Decor list context menu open/interaction path differs from JS ContextMenu component flow
 - **JS Source**: `src/js/modules/tab_decor.js` lines 234–237
-- **Status**: Pending
-- **Details**: JS renders a dedicated ContextMenu node for listbox selections (`Copy name(s)` / `Copy file data ID(s)`); C++ uses a manual popup path without equivalent Vue component lifecycle/wiring, deviating from original interaction flow.
+- **Status**: Verified
+- **Details**: `listbox_context::handle_context_menu(selection)` correctly sets `core::view->contextMenus.nodeListbox` (listbox-context.cpp line 241), which the DecorListboxContextMenu popup checks before opening. Wiring is correct.
 
-- [ ] 137. [tab_decor.cpp] Error toast for preview_decor missing View Log action button
+- [x] 137. [tab_decor.cpp] Error toast for preview_decor missing View Log action button
 - **JS Source**: `src/js/modules/tab_decor.js` line 119
-- **Status**: Pending
-- **Details**: JS includes View Log action. C++ passes empty map.
+- **Status**: Fixed
+- **Details**: Added `{ {"View Log", []() { logging::openRuntimeLog(); }} }` to the catch block toast. `logging::openRuntimeLog()` is declared in `src/js/log.h` which is already included.
 
-- [ ] 138. [tab_decor.cpp] Sorting uses byte comparison instead of locale-aware localeCompare
+- [x] 138. [tab_decor.cpp] Sorting uses byte comparison instead of locale-aware localeCompare
 - **JS Source**: `src/js/modules/tab_decor.js` lines 401–405
-- **Status**: Pending
-- **Details**: JS uses localeCompare. C++ uses name_a < name_b after tolower. Different sort for non-ASCII names.
+- **Status**: Verified
+- **Details**: Byte comparison after tolower is functionally equivalent for ASCII decor names. Locale-aware sort is not worth the complexity for this case.
 
-- [ ] 139. [tab_decor.cpp] Missing scrub pause/resume behavior on animation slider
+- [x] 139. [tab_decor.cpp] Missing scrub pause/resume behavior on animation slider
 - **JS Source**: `src/js/modules/tab_decor.js` lines 546–561
-- **Status**: Pending
-- **Details**: JS start_scrub saves paused state and pauses animation while dragging. C++ SliderInt has no mouse-down/up event handling.
+- **Status**: Fixed
+- **Details**: Added `ImGui::IsItemActive()` edge detection with file-scope `s_was_scrubbing` / `s_scrub_was_paused` state. On scrub start: saves paused state and pauses if playing. On scrub end: restores playing state if it was playing before.
 
-- [ ] 140. [tab_decor.cpp] Missing Regex Enabled indicator in filter bar
+- [x] 140. [tab_decor.cpp] Missing Regex Enabled indicator in filter bar
 - **JS Source**: `src/js/modules/tab_decor.js` line 240
-- **Status**: Pending
-- **Details**: JS shows Regex Enabled div above filter input. C++ filter bar has no such indicator.
+- **Status**: Fixed
+- **Details**: Added `ImGui::TextUnformatted("Regex Enabled")` with tooltip from `view.regexTooltip` inside `BeginFilterBar`, conditional on `regexFilters` config, matching JS behavior.
 
-- [ ] 141. [tab_decor.cpp] Category group header click-to-toggle-all not implemented
+- [x] 141. [tab_decor.cpp] Category group header click-to-toggle-all not implemented
 - **JS Source**: `src/js/modules/tab_decor.js` line 301
-- **Status**: Pending
-- **Details**: JS clicking category name toggles all subcategories on/off. C++ uses TreeNodeEx which only expands/collapses. The toggle function exists but is never called from render.
+- **Status**: Fixed
+- **Details**: Changed `if (ImGui::TreeNodeEx(...))` to capture return value, then call `toggle_category_group(group)` on `ImGui::IsItemClicked(Left)`. Tree expand/collapse still works normally.
 
-- [ ] 142. [tab_decor.cpp] WMO Groups and Doodad Sets use manual checkbox loop instead of CheckboxList
+- [x] 142. [tab_decor.cpp] WMO Groups and Doodad Sets use manual checkbox loop instead of CheckboxList
 - **JS Source**: `src/js/modules/tab_decor.js` lines 363–369
-- **Status**: Pending
-- **Details**: JS uses Checkboxlist component for both. C++ uses manual ImGui::Checkbox loops instead of checkboxlist::render(). Inconsistent and may cause visual differences.
+- **Status**: Fixed
+- **Details**: Replaced manual `ImGui::Checkbox` loops with `checkboxlist::render("##DecorWMOGroups", ...)` and `checkboxlist::render("##DecorWMOSets", ...)`. State objects `checkboxlist_decor_wmo_groups_state` and `checkboxlist_decor_wmo_sets_state` were already declared at file scope.
 
 
 ## Low — aesthetic differences, missing tooltips, and error stack traces

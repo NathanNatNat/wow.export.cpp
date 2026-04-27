@@ -109,6 +109,10 @@ static checkboxlist::CheckboxListState checkboxlist_decor_wmo_groups_state;
 static checkboxlist::CheckboxListState checkboxlist_decor_wmo_sets_state;
 static menu_button::MenuButtonState menu_button_decor_state;
 
+// Scrub state: saved paused state across slider drag frames (JS start_scrub / end_scrub).
+static bool s_scrub_was_paused = false;
+static bool s_was_scrubbing = false;
+
 // Model viewer GL state/context (replaces Vue <ModelViewerGL :context="decorViewerContext"/>).
 static model_viewer_gl::State viewer_state;
 static model_viewer_gl::Context viewer_context;
@@ -217,7 +221,8 @@ static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 		core::setToast("error", std::format("The model {} is encrypted with an unknown key ({}).", decor_item.name, e.key), {}, -1);
 		logging::write(std::format("Failed to decrypt model {} ({})", decor_item.name, e.key));
 	} catch (const std::exception& e) {
-		core::setToast("error", "Unable to preview model " + decor_item.name, {}, -1);
+		core::setToast("error", "Unable to preview model " + decor_item.name,
+			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 }
@@ -790,6 +795,12 @@ void render() {
 
 	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("decor-filter", regions)) {
+		if (view.config.value("regexFilters", false)) {
+			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+			ImGui::SameLine();
+		}
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterDecor.c_str(), sizeof(filter_buf) - 1);
@@ -1003,6 +1014,18 @@ void render() {
 				anim_methods->seek_animation(frame);
 			}
 
+			bool is_scrubbing = ImGui::IsItemActive();
+			if (is_scrubbing && !s_was_scrubbing) {
+				s_scrub_was_paused = view.decorViewerAnimPaused;
+				if (!view.decorViewerAnimPaused)
+					anim_methods->toggle_animation_pause();
+			}
+			if (!is_scrubbing && s_was_scrubbing) {
+				if (!s_scrub_was_paused && view.decorViewerAnimPaused)
+					anim_methods->toggle_animation_pause();
+			}
+			s_was_scrubbing = is_scrubbing;
+
 			ImGui::SameLine();
 			ImGui::Text("%d", view.decorViewerAnimFrame);
 		}
@@ -1034,7 +1057,11 @@ void render() {
 	//     <div v-for="group in decorCategoryGroups" :key="group.id">
 	ImGui::BeginChild("decor-category-list", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.4f), ImGuiChildFlags_Borders);
 	for (auto& group : category_groups) {
-		if (ImGui::TreeNodeEx(group.name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+		bool node_open = ImGui::TreeNodeEx(group.name.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+		// JS: clicking the category name calls toggle_category_group(group).
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+			toggle_category_group(group);
+		if (node_open) {
 			//     <div v-for="sub in group.subcategories" :key="sub.subcategoryID" ...>
 			for (auto* sub : group.subcategories) {
 				ImGui::Checkbox(sub->label.c_str(), &sub->checked);
@@ -1157,12 +1184,7 @@ void render() {
 	if (view.decorViewerActiveType == "wmo") {
 		ImGui::SeparatorText("WMO Groups");
 
-		for (auto& group : view.decorViewerWMOGroups) {
-			std::string label = group.value("label", std::string("Group"));
-			bool checked = group.value("checked", true);
-			if (ImGui::Checkbox(label.c_str(), &checked))
-				group["checked"] = checked;
-		}
+		checkboxlist::render("##DecorWMOGroups", view.decorViewerWMOGroups, checkboxlist_decor_wmo_groups_state);
 
 		if (ImGui::SmallButton("Enable All##decor-wmo")) {
 			for (auto& g : view.decorViewerWMOGroups)
@@ -1178,12 +1200,7 @@ void render() {
 
 		ImGui::SeparatorText("Doodad Sets");
 
-		for (auto& set : view.decorViewerWMOSets) {
-			std::string label = set.value("label", std::string("Set"));
-			bool checked = set.value("checked", true);
-			if (ImGui::Checkbox(label.c_str(), &checked))
-				set["checked"] = checked;
-		}
+		checkboxlist::render("##DecorWMOSets", view.decorViewerWMOSets, checkboxlist_decor_wmo_sets_state);
 	}
 
 	}
