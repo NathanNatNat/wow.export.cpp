@@ -18,9 +18,9 @@ const std::unordered_map<int, std::string_view> SLOT_ID_TO_NAME = [] {
 
 // maps inventory type id to slot id
 const std::unordered_map<int, int> INVENTORY_TYPE_TO_SLOT_ID = {
-	{1, 1},   // head
-	{2, 2},   // neck
-	{3, 3},   // shoulder
+	{1, 1},              // head
+	{2, 2},              // neck
+	{3, SHOULDER_SLOT_L}, // shoulder -> left shoulder
 	{4, 4},   // shirt
 	{5, 5},   // chest
 	{6, 6},   // waist
@@ -43,8 +43,8 @@ const std::unordered_map<int, int> INVENTORY_TYPE_TO_SLOT_ID = {
 
 // maps WoWModelViewer CharSlots to our slot IDs
 const std::unordered_map<int, int> WMV_SLOT_TO_SLOT_ID = {
-	{0, 1},   // CS_HEAD -> head
-	{1, 3},   // CS_SHOULDER -> shoulder
+	{0, 1},             // CS_HEAD -> head
+	{1, SHOULDER_SLOT_L}, // CS_SHOULDER -> left shoulder
 	{2, 8},   // CS_BOOTS -> feet
 	{3, 6},   // CS_BELT -> waist
 	{4, 4},   // CS_SHIRT -> shirt
@@ -61,30 +61,32 @@ const std::unordered_map<int, int> WMV_SLOT_TO_SLOT_ID = {
 // texture layer priority per slot
 // lower values render first, higher values render on top
 const std::unordered_map<int, int> SLOT_LAYER = {
-	{4, 10},   // shirt
-	{7, 10},   // legs/pants
-	{1, 11},   // head
-	{8, 11},   // feet/boots
-	{3, 13},   // shoulder
-	{5, 13},   // chest
-	{19, 17},  // tabard
-	{6, 18},   // waist/belt
-	{9, 19},   // wrist/bracers
-	{10, 20},  // hands/gloves
-	{16, 21},  // main-hand
-	{17, 22},  // off-hand
-	{15, 23}   // back/cape
+	{4, 10},            // shirt
+	{7, 10},            // legs/pants
+	{1, 11},            // head
+	{8, 11},            // feet/boots
+	{SHOULDER_SLOT_L, 13}, // shoulder (L)
+	{SHOULDER_SLOT_R, 13}, // shoulder (R)
+	{5, 13},            // chest
+	{19, 17},           // tabard
+	{6, 18},            // waist/belt
+	{9, 19},            // wrist/bracers
+	{10, 20},           // hands/gloves
+	{16, 21},           // main-hand
+	{17, 22},           // off-hand
+	{15, 23}            // back/cape
 };
 
 // maps equipment slot ID to M2 attachment ID(s)
 // some slots have multiple attachments (e.g., shoulders have left and right)
 // order matches ItemDisplayInfo.ModelResourcesID order
 const std::unordered_map<int, std::vector<int>> SLOT_TO_ATTACHMENT = {
-	{1, {ATTACHMENT_ID::HELMET}},                                       // head
-	{3, {ATTACHMENT_ID::SHOULDER_LEFT, ATTACHMENT_ID::SHOULDER_RIGHT}}, // shoulder (left first, then right)
-	{15, {ATTACHMENT_ID::BACK}},                                        // back/cape
-	{16, {ATTACHMENT_ID::HAND_RIGHT}},                                  // main-hand weapon
-	{17, {ATTACHMENT_ID::HAND_LEFT, ATTACHMENT_ID::SHIELD}}             // off-hand (weapon or shield)
+	{1, {ATTACHMENT_ID::HELMET}},                              // head
+	{SHOULDER_SLOT_L, {ATTACHMENT_ID::SHOULDER_LEFT}},         // shoulder (L)
+	{SHOULDER_SLOT_R, {ATTACHMENT_ID::SHOULDER_RIGHT}},        // shoulder (R)
+	{15, {ATTACHMENT_ID::BACK}},                               // back/cape
+	{16, {ATTACHMENT_ID::HAND_RIGHT}},                         // main-hand weapon
+	{17, {ATTACHMENT_ID::HAND_LEFT, ATTACHMENT_ID::SHIELD}}    // off-hand (weapon or shield)
 };
 
 std::optional<int> get_slot_id_for_inventory_type(int inventory_type) {

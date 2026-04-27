@@ -15,27 +15,33 @@
 
 namespace wow {
 
+// shoulder slot IDs (JS: SHOULDER_SLOT_L = 3, SHOULDER_SLOT_R = 30)
+inline constexpr int SHOULDER_SLOT_L = 3;
+inline constexpr int SHOULDER_SLOT_R = 30;
+
 // equipment slots with numeric IDs and display names
 struct EquipmentSlotEntry {
 	int id;
 	std::string_view name;
+	std::string_view filter_name; // optional alternative name for slot filter (e.g. both shoulders share "Shoulder")
 };
 
-inline constexpr std::array<EquipmentSlotEntry, 14> EQUIPMENT_SLOTS = {{
-	{ 1, "Head" },
-	{ 2, "Neck" },
-	{ 3, "Shoulder" },
-	{ 15, "Back" },
-	{ 5, "Chest" },
-	{ 4, "Shirt" },
-	{ 19, "Tabard" },
-	{ 9, "Wrist" },
-	{ 10, "Hands" },
-	{ 6, "Waist" },
-	{ 7, "Legs" },
-	{ 8, "Feet" },
-	{ 16, "Main-hand" },
-	{ 17, "Off-hand" }
+inline constexpr std::array<EquipmentSlotEntry, 15> EQUIPMENT_SLOTS = {{
+	{ 1,               "Head",        "Head" },
+	{ 2,               "Neck",        "Neck" },
+	{ SHOULDER_SLOT_L, "Shoulder (L)", "Shoulder" },
+	{ SHOULDER_SLOT_R, "Shoulder (R)", "Shoulder" },
+	{ 15,              "Back",        "Back" },
+	{ 5,               "Chest",       "Chest" },
+	{ 4,               "Shirt",       "Shirt" },
+	{ 19,              "Tabard",      "Tabard" },
+	{ 9,               "Wrist",       "Wrist" },
+	{ 10,              "Hands",       "Hands" },
+	{ 6,               "Waist",       "Waist" },
+	{ 7,               "Legs",        "Legs" },
+	{ 8,               "Feet",        "Feet" },
+	{ 16,              "Main-hand",   "Main-hand" },
+	{ 17,              "Off-hand",    "Off-hand" }
 }};
 
 // maps slot ID to display name

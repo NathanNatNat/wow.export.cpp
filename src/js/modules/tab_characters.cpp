@@ -3989,15 +3989,17 @@ ImGui::OpenPopup("##equip_ctx");
 }
 if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !item) {
 // navigate to items for this slot (JS: navigate_to_items_for_slot(slot_id))
-// set pendingItemSlotFilter so tab_items filters by slot name on mount
-view.pendingItemSlotFilter = slot_label;
+// JS: chrPendingEquipSlot = slot_id; pendingItemSlotFilter = slot.filter_name ?? slot.name
+view.chrPendingEquipSlot = slot.id;
+view.pendingItemSlotFilter = std::string(slot.filter_name.empty() ? slot.name : slot.filter_name);
 tab_items::setActive();
 }
 
 if (ImGui::BeginPopup("##equip_ctx")) {
 if (ImGui::MenuItem("Replace Item")) {
 // JS: replace_slot_item(slot_id) → navigate_to_items_for_slot
-view.pendingItemSlotFilter = slot_label;
+view.chrPendingEquipSlot = slot.id;
+view.pendingItemSlotFilter = std::string(slot.filter_name.empty() ? slot.name : slot.filter_name);
 tab_items::setActive();
 }
 if (ImGui::MenuItem("Remove Item")) {

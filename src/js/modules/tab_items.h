@@ -59,4 +59,24 @@ void setAllItemTypes(bool state);
  */
 void setAllItemQualities(bool state);
 
+/**
+ * Item data accessible to the item picker modal.
+ * Mirrors the fields used by item-picker-modal.js's filtered_items computation.
+ */
+struct ItemData {
+	uint32_t id = 0;
+	std::string name;
+	std::string displayName;
+	uint32_t icon = 0;
+	int quality = 0;
+	int inventoryType = 0;
+};
+
+/**
+ * Returns all loaded items (unfiltered). Used by item-picker-modal.
+ * JS equivalent: DBItemList.getItems() in item-picker-modal.js.
+ * Returns nullptr if items have not been loaded yet.
+ */
+const std::vector<ItemData>* getAllItems();
+
 } // namespace tab_items

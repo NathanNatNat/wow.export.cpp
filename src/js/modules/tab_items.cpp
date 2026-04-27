@@ -17,6 +17,7 @@
 #include "../db/WDCReader.h"
 #include "../wow/ItemSlot.h"
 #include "../wow/EquipmentSlots.h"
+#include "../wow/equip-item.h"
 #include "../install-type.h"
 #include "../external-links.h"
 #include "../modules.h"
@@ -153,6 +154,7 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 // --- File-local state ---
 
 static std::vector<Item> items;
+static std::vector<ItemData> all_item_data_cache; // mirrors items; rebuilt in initialize_items()
 
 // (JS stores these on core.view but they are objects with {label, checked};
 //  core.h declares them as std::vector<int> which is insufficient, so we keep
@@ -378,6 +380,20 @@ static void initialize_items() {
 	}
 
 	logging::write(std::format("Loaded {} items", items.size()));
+
+	// Build the ItemData cache for item-picker-modal (mirrors items vector).
+	all_item_data_cache.clear();
+	all_item_data_cache.reserve(items.size());
+	for (const auto& item : items) {
+		ItemData d;
+		d.id           = item.id;
+		d.name         = item.name;
+		d.displayName  = item.displayName();
+		d.icon         = item.icon;
+		d.quality      = item.quality;
+		d.inventoryType = item.inventoryType;
+		all_item_data_cache.push_back(std::move(d));
+	}
 }
 
 static void apply_filters() {
@@ -451,24 +467,14 @@ static void view_on_wowhead(uint32_t item_id) {
 }
 
 static void equip_item(const nlohmann::json& item_json) {
-	uint32_t item_id = item_json.value("id", 0u);
+	uint32_t item_id    = item_json.value("id", 0u);
 	std::string item_name = item_json.value("name", std::string("Unknown"));
 
-	auto slot_id_opt = db::caches::DBItems::getItemSlotId(item_id);
-	if (!slot_id_opt.has_value()) {
+	int pending_slot = core::view->chrPendingEquipSlot;
+	core::view->chrPendingEquipSlot = 0;
+
+	if (!wow::equip_item(item_id, item_name, pending_slot))
 		core::setToast("info", "This item cannot be equipped.", {}, 2000);
-		return;
-	}
-
-	int slot_id = slot_id_opt.value();
-	auto& view = *core::view;
-
-	view.chrEquippedItems[std::to_string(slot_id)] = item_id;
-
-	auto slot_name_opt = wow::get_slot_name(slot_id);
-	std::string slot_name = slot_name_opt.has_value() ? std::string(slot_name_opt.value()) : "Unknown";
-
-	core::setToast("success", std::format("Equipped {} to {} slot.", item_name, slot_name), {}, 2000);
 }
 
 // --- Public API ---
@@ -878,6 +884,10 @@ void setAllItemTypes(bool state) {
 void setAllItemQualities(bool state) {
 	for (auto& entry : quality_mask_entries)
 		entry.checked = state;
+}
+
+const std::vector<ItemData>* getAllItems() {
+	return all_item_data_cache.empty() ? nullptr : &all_item_data_cache;
 }
 
 } // namespace tab_items

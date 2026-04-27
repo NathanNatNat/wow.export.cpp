@@ -54,6 +54,7 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/casc/casc-source-local.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wow/ItemSlot.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wow/EquipmentSlots.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/wow/equip-item.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBModelFileData.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBTextureFileData.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/db/caches/DBComponentModelFileData.cpp
@@ -156,6 +157,7 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/components/listbox-maps.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/listbox-zones.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/itemlistbox.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/components/item-picker-modal.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/map-viewer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/model-viewer-gl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_home.cpp
