@@ -121,12 +121,16 @@ void mounted() {
 void render() {
 	auto& view = *core::view;
 
-	// List container with context menu.
-	//     <Listbox v-model:selection="selectionRaw" :items="listfileRaw" :filter="userInputFilterRaw" ...>
+	// JS template: <div class="tab list-tab" id="legacy-tab-files">
+	if (app::layout::BeginTab("tab-legacy-files")) {
+
+	auto regions = app::layout::CalcListTabRegions(false);
+
+	// --- List container (row 1) ---
+	//     <Listbox v-model:selection="selectionRaw" :items="listfileRaw" ...>
 	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	//       copy_file_paths, copy_export_paths, open_export_directory
-	ImGui::BeginChild("legacy-files-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2), ImGuiChildFlags_Borders);
-	{
+	if (app::layout::BeginListContainer("legacy-files-list-container", regions)) {
 		// Convert JSON items/selection to string vectors.
 		const auto& items_str = core::cached_json_strings(view.listfileRaw, s_items_cache, s_items_cache_size);
 
@@ -169,7 +173,7 @@ void render() {
 			}
 		);
 
-		// Context menu for generic listbox.
+		// Context menu — matches JS: copy file paths, copy export paths, open export directory.
 		context_menu::render(
 			"ctx-legacy-files",
 			view.contextMenus.nodeListbox,
@@ -182,14 +186,9 @@ void render() {
 						sel.push_back(s.get<std::string>());
 				int count = node.value("count", 0);
 				std::string plural = count > 1 ? "s" : "";
-				bool hasFileDataIDs = node.value("hasFileDataIDs", false);
 
 				if (ImGui::Selectable(std::format("Copy file path{}", plural).c_str()))
 					listbox_context::copy_file_paths(sel);
-				if (hasFileDataIDs && ImGui::Selectable(std::format("Copy file path{} (listfile format)", plural).c_str()))
-					listbox_context::copy_listfile_format(sel);
-				if (hasFileDataIDs && ImGui::Selectable(std::format("Copy file data ID{}", plural).c_str()))
-					listbox_context::copy_file_data_ids(sel);
 				if (ImGui::Selectable(std::format("Copy export path{}", plural).c_str()))
 					listbox_context::copy_export_paths(sel);
 				if (ImGui::Selectable("Open export directory"))
@@ -197,24 +196,35 @@ void render() {
 			}
 		);
 	}
-	ImGui::EndChild();
+	app::layout::EndListContainer();
 
-	// Tray.
-	if (view.config.value("regexFilters", false))
-		ImGui::TextUnformatted("Regex Enabled");
+	// --- Filter bar (row 2, col 1) ---
+	// JS: <div id="tab-legacy-files-tray"><div class="filter">...</div>...
+	if (app::layout::BeginFilterBar("legacy-files-filter", regions)) {
+		if (view.config.value("regexFilters", false))
+			ImGui::TextUnformatted("Regex Enabled");
 
-	char filter_buf[256] = {};
-	std::strncpy(filter_buf, view.userInputFilterRaw.c_str(), sizeof(filter_buf) - 1);
-	if (ImGui::InputTextWithHint("##FilterFiles", "Filter files...", filter_buf, sizeof(filter_buf)))
-		view.userInputFilterRaw = filter_buf;
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		char filter_buf[256] = {};
+		std::strncpy(filter_buf, view.userInputFilterRaw.c_str(), sizeof(filter_buf) - 1);
+		if (ImGui::InputTextWithHint("##FilterFiles", "Filter files...", filter_buf, sizeof(filter_buf)))
+			view.userInputFilterRaw = filter_buf;
+	}
+	app::layout::EndFilterBar();
 
-	ImGui::SameLine();
+	// --- Preview controls (row 2, col 2) — Export Selected button ---
+	// JS: <input type="button" value="Export Selected" :class="{ disabled: $core.view.isBusy || ... }"/>
+	if (app::layout::BeginPreviewControls("legacy-files-preview-controls", regions)) {
+		const bool disabled = view.isBusy > 0 || view.selectionRaw.empty();
+		if (disabled) ImGui::BeginDisabled();
+		if (ImGui::Button("Export Selected"))
+			export_selected();
+		if (disabled) ImGui::EndDisabled();
+	}
+	app::layout::EndPreviewControls();
 
-	const bool disabled = view.isBusy > 0 || view.selectionRaw.empty();
-	if (disabled) app::theme::BeginDisabledButton();
-	if (ImGui::Button("Export Selected"))
-		export_selected();
-	if (disabled) app::theme::EndDisabledButton();
+	} // if BeginTab
+	app::layout::EndTab();
 }
 
 void export_selected() {

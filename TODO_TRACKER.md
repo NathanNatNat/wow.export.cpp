@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 12/85 verified (14%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 15/85 verified (18%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -190,20 +190,20 @@
 - **Status**: Pending
 - **Details**: JS explicitly sets `'User-Agent': constants.USER_AGENT` for the MP4 download fetch. C++ uses `generics::get(*mp4_url)` which may or may not set User-Agent, depending on that function's implementation.
 
-- [ ] 111. [legacy_tab_files.cpp] Listbox context menu includes extra FileDataID actions absent in JS
+- [x] 111. [legacy_tab_files.cpp] Listbox context menu includes extra FileDataID actions absent in JS
 - **JS Source**: `src/js/modules/legacy_tab_files.js` lines 76–80
-- **Status**: Pending
-- **Details**: JS legacy-files menu only provides copy file path, copy export path, and open export directory; C++ conditionally adds listfile-format and fileDataID entries, changing context-menu behavior.
+- **Status**: Fixed
+- **Details**: Removed `hasFileDataIDs`-conditional "Copy file path(s) (listfile format)" and "Copy file data ID(s)" items. Context menu now matches JS exactly: copy file paths, copy export paths, open export directory.
 
-- [ ] 112. [legacy_tab_files.cpp] Layout doesn't use `app::layout` helpers — uses raw `ImGui::BeginChild`
+- [x] 112. [legacy_tab_files.cpp] Layout doesn't use `app::layout` helpers — uses raw `ImGui::BeginChild`
 - **JS Source**: `src/js/modules/legacy_tab_files.js` lines 72–89
-- **Status**: Pending
-- **Details**: Other legacy tabs (audio, fonts, textures, data) use `app::layout::BeginTab/EndTab`, `CalcListTabRegions`, `BeginListContainer`, etc. for consistent layout. `legacy_tab_files.cpp` uses raw `ImGui::BeginChild("legacy-files-list-container", ...)` (line 124) without the layout system. This will produce inconsistent sizing and positioning compared to sibling legacy tabs.
+- **Status**: Fixed
+- **Details**: Refactored `render()` to use `BeginTab/EndTab`, `CalcListTabRegions(false)`, `BeginListContainer/EndListContainer`, `BeginFilterBar/EndFilterBar`, and `BeginPreviewControls/EndPreviewControls`, matching `legacy_tab_audio.cpp` structure.
 
-- [ ] 113. [legacy_tab_files.cpp] Tray layout structure differs from JS
+- [x] 113. [legacy_tab_files.cpp] Tray layout structure differs from JS
 - **JS Source**: `src/js/modules/legacy_tab_files.js` lines 82–88
-- **Status**: Pending
-- **Details**: JS wraps the filter and export button in a `#tab-legacy-files-tray` div with its own layout (likely flex row). C++ renders filter input, then `ImGui::SameLine()`, then the export button (lines 206–216). The proportions and alignment of filter vs button may not match the JS CSS-defined tray layout.
+- **Status**: Fixed
+- **Details**: Filter input now placed inside `BeginFilterBar/EndFilterBar` with `SetNextItemWidth(GetContentRegionAvail().x)`. Export button placed inside `BeginPreviewControls/EndPreviewControls` with `ImGui::BeginDisabled/EndDisabled`. Removed old `SameLine()` tray layout.
 
 - [ ] 114. [tab_zones.cpp] Zone listbox copy/paste trim options are hardcoded instead of config-bound
 - **JS Source**: `src/js/modules/tab_zones.js` line 315
