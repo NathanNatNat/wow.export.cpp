@@ -147,12 +147,16 @@ static nlohmann::json encoding_info_to_json(const casc::FileEncodingInfo& info) 
 // --- HTTP helper: POST JSON to Kino API ---
 // Returns (status_code, response_body_json). Throws on connection error.
 static std::pair<int, nlohmann::json> kino_post(const nlohmann::json& payload) {
-	// The JS uses fetch() with POST; C++ uses cpp-httplib.
-	// Parse the Kino API URL.
+	// The JS uses fetch() with POST to constants.KINO.API_URL; C++ uses cpp-httplib.
+	// Parse host and path from the constant at runtime so changes to the constant are reflected.
 	const std::string api_url(constants::KINO::API_URL);
+	std::string_view sv(constants::KINO::API_URL);
+	sv.remove_prefix(8); // strip "https://"
+	const auto slash = sv.find('/');
+	const std::string host(sv.substr(0, slash));
+	const std::string path(sv.substr(slash));
 
-	// Use generics HTTP infrastructure pattern from generics.cpp.
-	httplib::SSLClient cli("www.kruithne.net");
+	httplib::SSLClient cli(host);
 	cli.set_connection_timeout(30);
 	cli.set_read_timeout(60);
 	cli.set_follow_location(true);
@@ -162,7 +166,7 @@ static std::pair<int, nlohmann::json> kino_post(const nlohmann::json& payload) {
 	headers.emplace("User-Agent", std::string(constants::USER_AGENT()));
 
 	const std::string body = payload.dump();
-	auto res = cli.Post("/wow.export/v2/get_video", headers, body, "application/json");
+	auto res = cli.Post(path, headers, body, "application/json");
 
 	if (!res)
 		throw std::runtime_error(std::format("HTTP request failed for {}: {}", api_url, httplib::to_string(res.error())));
@@ -1098,9 +1102,9 @@ void render() {
 			ImGui::SameLine();
 		}
 
-		// JS: placeholder="Filter videos..."
+		// JS: placeholder="Filter videos..." — v-model has no character limit; use 4096 to match.
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-		char filter_buf[256] = {};
+		char filter_buf[4096] = {};
 		std::strncpy(filter_buf, view.userInputFilterVideos.c_str(), sizeof(filter_buf) - 1);
 		if (ImGui::InputTextWithHint("##FilterVideos", "Filter videos...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterVideos = filter_buf;
