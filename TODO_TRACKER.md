@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 42/186 verified (23%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 43/186 verified (23%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -405,10 +405,10 @@
 - **Status**: Pending
 - **Details**: The DecorListboxContextMenu popup requires ImGui::OpenPopup to be called. The handle_listbox_context callback does not open this popup. The popup rendering code will never trigger.
 
-- [ ] 80. [app.h / app.cpp] Remove `applyTheme()` and all CSS-color constants; replace with `ImGui::StyleColorsDark()`
+- [x] 80. [app.h / app.cpp] Remove `applyTheme()` and all CSS-color constants; replace with `ImGui::StyleColorsDark()`
   - **JS Source**: `src/app.css` (CSS variables — all `:root` color definitions)
-  - **Status**: In Progress
-  - **Details**: `applyTheme()` call replaced with `ImGui::StyleColorsDark()` (done in prior session). All CSS-color push/pop calls and color constant aliases removed from `app.cpp`. The `app::theme` namespace color constants in `app.h` remain and are still referenced by entries 631–636 files. Full removal of the constants from `app.h` is blocked on entries 631–636.
+  - **Status**: Verified
+  - **Details**: `applyTheme()` replaced with `ImGui::StyleColorsDark()`. All CSS-color `inline constexpr` constants removed from `app::theme` namespace in `app.h` (BG, FONT_*, BUTTON_*, NAV_*, CHR_BTN_*, TOAST_*, ROW_*, SLIDER_*, etc.). No remaining references to these constants in any `.cpp` or `.h` file. The `app::theme` namespace is retained for non-color utilities (font loading, icon helpers, texture loaders, BeginDisabledButton/EndDisabledButton).
 
 
 ## Medium — behavioral deviations, missing features, and config bindings

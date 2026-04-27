@@ -26,128 +26,13 @@ void restartApplication();
 } // namespace app
 
 /**
- * Centralized ImGui theme mapped from data/app.css CSS variables.
+ * Utility functions for fonts, textures, icons, and UI helpers used across
+ * the application. These functions are defined in app.cpp.
  *
- * Every color constant here corresponds to a CSS custom property in :root.
- * Components should reference these instead of hardcoding IM_COL32 / ImVec4
- * color literals, so that the entire UI stays consistent with app.css.
+ * CSS-color constants formerly in this namespace have been removed; the app
+ * uses ImGui::StyleColorsDark() as its baseline theme.
  */
 namespace app::theme {
-
-
-inline constexpr ImVec4 BG          = ImVec4(0.204f, 0.227f, 0.251f, 1.0f);
-inline constexpr ImU32  BG_U32      = IM_COL32(52, 58, 64, 255);
-
-inline constexpr ImVec4 BG_TRANS    = ImVec4(0.204f, 0.227f, 0.251f, 0.702f);
-inline constexpr ImU32  BG_TRANS_U32 = IM_COL32(52, 58, 64, 179);
-
-inline constexpr ImVec4 BG_DARK     = ImVec4(0.173f, 0.192f, 0.212f, 1.0f);
-inline constexpr ImU32  BG_DARK_U32 = IM_COL32(44, 49, 54, 255);
-
-inline constexpr ImVec4 BG_ALT      = ImVec4(0.235f, 0.255f, 0.278f, 1.0f);
-inline constexpr ImU32  BG_ALT_U32  = IM_COL32(60, 65, 71, 255);
-
-inline constexpr ImVec4 BORDER      = ImVec4(0.424f, 0.459f, 0.490f, 1.0f);
-inline constexpr ImU32  BORDER_U32  = IM_COL32(108, 117, 125, 255);
-
-inline constexpr ImVec4 FONT_PRIMARY     = ImVec4(1.0f, 1.0f, 1.0f, 0.8f);
-inline constexpr ImU32  FONT_PRIMARY_U32 = IM_COL32(255, 255, 255, 204);
-
-inline constexpr ImVec4 FONT_HIGHLIGHT     = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-inline constexpr ImU32  FONT_HIGHLIGHT_U32 = IM_COL32(255, 255, 255, 255);
-
-inline constexpr ImVec4 FONT_FADED     = ImVec4(0.424f, 0.459f, 0.490f, 1.0f);
-inline constexpr ImU32  FONT_FADED_U32 = IM_COL32(108, 117, 125, 255);
-
-inline constexpr ImVec4 FONT_ALT     = ImVec4(0.341f, 0.686f, 0.886f, 1.0f);
-inline constexpr ImU32  FONT_ALT_U32 = IM_COL32(87, 175, 226, 255);
-
-inline constexpr ImVec4 FONT_ALT_HIGHLIGHT     = ImVec4(0.624f, 0.945f, 0.631f, 1.0f);
-inline constexpr ImU32  FONT_ALT_HIGHLIGHT_U32 = IM_COL32(159, 241, 161, 255);
-
-inline constexpr ImVec4 BUTTON_BASE     = ImVec4(0.133f, 0.710f, 0.286f, 1.0f);
-inline constexpr ImU32  BUTTON_BASE_U32 = IM_COL32(34, 181, 73, 255);
-
-inline constexpr ImVec4 BUTTON_HOVER     = ImVec4(0.149f, 0.396f, 0.824f, 1.0f);
-inline constexpr ImU32  BUTTON_HOVER_U32 = IM_COL32(38, 101, 210, 255);
-
-
-inline constexpr ImVec4 NAV_SELECTED     = BUTTON_BASE;
-inline constexpr ImU32  NAV_SELECTED_U32 = BUTTON_BASE_U32;
-
-// Character-import button brand colors (CSS: .character-bnet-button / -wmv- / -wowhead- / -save-)
-inline constexpr ImVec4 CHR_BTN_BNET        = ImVec4(0.078f, 0.557f, 1.000f, 1.0f); // #148eff
-inline constexpr ImVec4 CHR_BTN_BNET_HOVER  = ImVec4(0.150f, 0.620f, 1.000f, 1.0f);
-inline constexpr ImVec4 CHR_BTN_BNET_ACTIVE = ImVec4(0.050f, 0.500f, 0.900f, 1.0f);
-
-inline constexpr ImVec4 CHR_BTN_WMV        = ImVec4(0.824f, 0.173f, 0.118f, 1.0f); // #d22c1e
-inline constexpr ImVec4 CHR_BTN_WMV_HOVER  = ImVec4(0.880f, 0.250f, 0.180f, 1.0f);
-inline constexpr ImVec4 CHR_BTN_WMV_ACTIVE = ImVec4(0.720f, 0.120f, 0.080f, 1.0f);
-
-inline constexpr ImVec4 CHR_BTN_WOWHEAD        = ImVec4(0.878f, 0.125f, 0.125f, 1.0f); // #e02020
-inline constexpr ImVec4 CHR_BTN_WOWHEAD_HOVER  = ImVec4(0.930f, 0.200f, 0.200f, 1.0f);
-inline constexpr ImVec4 CHR_BTN_WOWHEAD_ACTIVE = ImVec4(0.780f, 0.080f, 0.080f, 1.0f);
-
-inline constexpr ImVec4 CHR_BTN_SAVE        = ImVec4(0.345f, 0.396f, 0.949f, 1.0f); // #5865f2
-inline constexpr ImVec4 CHR_BTN_SAVE_HOVER  = ImVec4(0.420f, 0.460f, 1.000f, 1.0f);
-inline constexpr ImVec4 CHR_BTN_SAVE_ACTIVE = ImVec4(0.280f, 0.320f, 0.860f, 1.0f);
-
-inline constexpr ImVec4 TOAST_ERROR     = ImVec4(0.863f, 0.565f, 0.565f, 1.0f);
-inline constexpr ImU32  TOAST_ERROR_U32 = IM_COL32(220, 144, 144, 255);
-
-inline constexpr ImVec4 TOAST_SUCCESS     = ImVec4(0.651f, 0.863f, 0.565f, 1.0f);
-inline constexpr ImU32  TOAST_SUCCESS_U32 = IM_COL32(166, 220, 144, 255);
-
-inline constexpr ImVec4 TOAST_INFO     = ImVec4(0.565f, 0.737f, 0.863f, 1.0f);
-inline constexpr ImU32  TOAST_INFO_U32 = IM_COL32(144, 188, 220, 255);
-
-inline constexpr ImVec4 TOAST_PROGRESS     = ImVec4(0.863f, 0.729f, 0.565f, 1.0f);
-inline constexpr ImU32  TOAST_PROGRESS_U32 = IM_COL32(220, 186, 144, 255);
-
-inline constexpr ImU32 FONT_TOAST_U32 = IM_COL32(0, 0, 0, 255);
-
-inline constexpr ImU32 FONT_TOAST_LINK_U32 = IM_COL32(3, 0, 191, 255);
-
-inline constexpr ImU32 TRANS_CHECK_A_U32 = IM_COL32(48, 48, 48, 255);
-
-inline constexpr ImU32 TRANS_CHECK_B_U32 = IM_COL32(39, 39, 39, 255);
-
-
-inline constexpr ImU32 ROW_HOVER_U32     = IM_COL32(87, 175, 226, 255); // CSS: var(--font-alt) = #57afe2
-
-inline constexpr ImU32 ROW_SELECTED_U32  = IM_COL32(87, 175, 226, 255); // CSS: var(--font-alt) = #57afe2
-
-inline constexpr ImU32 TEXT_ACTIVE_U32   = IM_COL32(255, 255, 255, 180);
-
-inline constexpr ImU32 TEXT_IDLE_U32     = IM_COL32(255, 255, 255, 80);
-
-inline constexpr ImU32 ICON_DEFAULT_U32  = IM_COL32(255, 255, 255, 128);
-
-inline constexpr ImU32 SLIDER_TRACK_U32  = BG_DARK_U32;               // CSS: var(--background-dark) = #2c3136
-
-inline constexpr ImU32 SLIDER_THUMB_U32        = BORDER_U32;            // CSS: var(--border) = #6c757d
-inline constexpr ImU32 SLIDER_THUMB_ACTIVE_U32 = FONT_ALT_U32;          // CSS: var(--font-alt) = #57afe2
-inline constexpr ImU32 SLIDER_FILL_U32         = FONT_ALT_U32;          // CSS .fill: var(--font-alt) = #57afe2
-
-inline constexpr ImU32 FIELD_PLACEHOLDER_U32 = IM_COL32(255, 255, 255, 100);
-
-// CSS: var(--font-disabled) — used for empty/disabled state text (e.g., slot-empty).
-// Not explicitly defined in :root; falls back to a muted gray similar to --font-faded.
-inline constexpr ImVec4 FONT_DISABLED     = ImVec4(0.424f, 0.459f, 0.490f, 0.6f);
-inline constexpr ImU32  FONT_DISABLED_U32 = IM_COL32(108, 117, 125, 153);
-
-inline constexpr ImU32 DASH_COLOR_U32    = IM_COL32(255, 255, 255, 230);
-
-inline constexpr ImU32 TABLE_ROW_HOVER_U32    = IM_COL32(87, 175, 226, 255); // CSS: var(--font-alt) = #57afe2
-inline constexpr ImU32 TABLE_ROW_SELECTED_U32 = IM_COL32(87, 175, 226, 255); // CSS: var(--font-alt) = #57afe2
-
-inline constexpr ImU32 PROGRESS_BAR_TOP_U32    = IM_COL32(87, 175, 226, 255);  // #57afe2
-inline constexpr ImU32 PROGRESS_BAR_BOTTOM_U32 = IM_COL32(53, 117, 154, 255);  // #35759a
-
-// Loading bar background: rgba(0, 0, 0, 0.22)
-inline constexpr ImU32 LOADING_BAR_BG_U32 = IM_COL32(0, 0, 0, 56);
-
-inline constexpr float SCROLLBAR_ROUNDING = 5.0f;
 
 inline void BeginDisabledButton() { ImGui::BeginDisabled(); }
 inline void EndDisabledButton()   { ImGui::EndDisabled(); }
