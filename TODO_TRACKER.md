@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 72/186 verified (39%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 74/186 verified (40%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -886,15 +886,15 @@
 - **Status**: Verified
 - **Details**: Fixed together with entry 69 — tile-layer loop now logs "no tiles found for UiMapArt ID N" and skips the layer rendering when `all_tiles` is empty.
 
-- [ ] 175. [tab_zones.cpp] Missing "no overlays found" log
+- [x] 175. [tab_zones.cpp] Missing "no overlays found" log
 - **JS Source**: `src/js/modules/tab_zones.js` lines 212–214
-- **Status**: Pending
-- **Details**: JS logs `'no WorldMapOverlay entries found for UiMapArt ID %d'` when overlays array is empty. C++ has no such log.
+- **Status**: Verified
+- **Details**: Fixed — `render_world_map_overlays` now logs "no WorldMapOverlay entries found for UiMapArt ID N" and returns early when `overlays` is empty.
 
-- [ ] 176. [tab_zones.cpp] Missing "no overlay tiles" log per overlay
+- [x] 176. [tab_zones.cpp] Missing "no overlay tiles" log per overlay
 - **JS Source**: `src/js/modules/tab_zones.js` lines 219–222
-- **Status**: Pending
-- **Details**: JS logs `'no tiles found for WorldMapOverlay ID %d'` and `continue`s for empty tile sets. C++ calls `render_overlay_tiles` regardless.
+- **Status**: Verified
+- **Details**: Fixed — the per-overlay loop now logs "no tiles found for WorldMapOverlay ID N" and `continue`s when `overlay_tiles` is empty, matching JS behavior.
 
 - [x] 177. [tab_items.cpp] Regex indicator tooltip metadata from JS template is missing
 - **JS Source**: `src/js/modules/tab_items.js` line 248
