@@ -203,6 +203,7 @@ void WMORendererGL::_load_textures() {
 		} else if (pixelShader == wmo_shader_mapper::MapObjDFShader) {
 			// DF shader with extra runtimeData textures
 			textureFileDataIDs.push_back(material.color3);
+			textureFileDataIDs.push_back(material.flags3);
 			for (const uint32_t rtd : material.runtimeData)
 				textureFileDataIDs.push_back(rtd);
 		}
@@ -366,6 +367,12 @@ void WMORendererGL::_load_groups() {
 				static_cast<GLsizeiptr>(group.indices.size() * sizeof(uint16_t)),
 				group.indices.data(), GL_STATIC_DRAW);
 			grp.vao->ebo = ebo;
+
+			// wireframe index buffer
+			{
+				auto line_indices = gl::VertexArray::triangles_to_lines(group.indices.data(), group.indices.size());
+				grp.vao->set_wireframe_index_buffer(line_indices.data(), line_indices.size());
+			}
 
 			// set up vertex attributes
 			grp.vao->setup_wmo_separate_buffers(vbo, nbo, uvo, cbo, cbo2, cbo3, uv2o, uv3o, uv4o);
@@ -701,16 +708,9 @@ void WMORendererGL::render(const float* view_matrix, const float* projection_mat
 	shader->set_uniform_mat4("u_projection_matrix", false, projection_matrix);
 	shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
 
-	// lighting - transform light direction to view space
-	const float lx = 0.5f, ly = -0.7f, lz = 0.5f;
-	const float light_view_x = view_matrix[0] * lx + view_matrix[4] * ly + view_matrix[8] * lz;
-	const float light_view_y = view_matrix[1] * lx + view_matrix[5] * ly + view_matrix[9] * lz;
-	const float light_view_z = view_matrix[2] * lx + view_matrix[6] * ly + view_matrix[10] * lz;
-
+	// lighting
 	shader->set_uniform_1i("u_apply_lighting", 1);
-	shader->set_uniform_3f("u_ambient_color", 0.5f, 0.5f, 0.5f);
-	shader->set_uniform_3f("u_diffuse_color", 0.7f, 0.7f, 0.7f);
-	shader->set_uniform_3f("u_light_dir", light_view_x, light_view_y, light_view_z);
+	shader->set_uniform_3f("u_light_dir", 0.5f, 1.0f, 0.5f);
 
 	// wireframe
 	shader->set_uniform_1i("u_wireframe", wireframe ? 1 : 0);
@@ -742,14 +742,16 @@ void WMORendererGL::render(const float* view_matrix, const float* projection_mat
 			continue;
 
 		group.vao->bind();
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wireframe ? group.vao->wireframe_ebo : group.vao->ebo);
 
 		for (const auto& dc : group.draw_calls) {
 			// set shader mode
 			shader->set_uniform_1i("u_vertex_shader", static_cast<int>(dc.shader.VertexShader));
 			shader->set_uniform_1i("u_pixel_shader", static_cast<int>(dc.shader.PixelShader));
+			shader->set_uniform_1i("u_blend_mode", static_cast<int>(dc.blendMode));
 
 			// set blend mode
-			shader->set_uniform_1i("u_blend_mode", static_cast<int>(dc.blendMode));
+			ctx.apply_blend_mode(static_cast<int>(dc.blendMode));
 
 			// bind textures
 			auto matIt = materialTextures.find(dc.material_id);
@@ -768,12 +770,16 @@ void WMORendererGL::render(const float* view_matrix, const float* projection_mat
 			}
 
 			// draw
-			glDrawElements(
-				wireframe ? GL_LINES : GL_TRIANGLES,
-				static_cast<GLsizei>(dc.count),
-				GL_UNSIGNED_SHORT,
-				reinterpret_cast<void*>(static_cast<uintptr_t>(dc.start) * 2)
-			);
+			if (wireframe)
+				glDrawElements(GL_LINES,
+				               static_cast<GLsizei>(dc.count * 2),
+				               GL_UNSIGNED_SHORT,
+				               reinterpret_cast<void*>(static_cast<uintptr_t>(dc.start) * 4));
+			else
+				glDrawElements(GL_TRIANGLES,
+				               static_cast<GLsizei>(dc.count),
+				               GL_UNSIGNED_SHORT,
+				               reinterpret_cast<void*>(static_cast<uintptr_t>(dc.start) * 2));
 		}
 	}
 

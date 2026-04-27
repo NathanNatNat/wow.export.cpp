@@ -274,6 +274,12 @@ void WMOLegacyRendererGL::_load_groups() {
 				group.indices.data(), GL_STATIC_DRAW);
 			grp.vao->ebo = ebo;
 
+			// wireframe index buffer
+			{
+				auto line_indices = gl::VertexArray::triangles_to_lines(group.indices.data(), group.indices.size());
+				grp.vao->set_wireframe_index_buffer(line_indices.data(), line_indices.size());
+			}
+
 			grp.vao->setup_wmo_separate_buffers(vbo, nbo, uvo, cbo, 0, 0, 0, 0, 0);
 
 			// build draw calls
@@ -611,6 +617,7 @@ void WMOLegacyRendererGL::render(const float* view_matrix, const float* projecti
 			continue;
 
 		group.vao->bind();
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wireframe ? group.vao->wireframe_ebo : group.vao->ebo);
 
 		for (const auto& dc : group.draw_calls) {
 			shader->set_uniform_1i("u_vertex_shader", dc.vertex_shader);
@@ -631,12 +638,17 @@ void WMOLegacyRendererGL::render(const float* view_matrix, const float* projecti
 				tex->bind(i);
 			}
 
-			glDrawElements(
-				wireframe ? GL_LINES : GL_TRIANGLES,
-				static_cast<GLsizei>(dc.count),
-				GL_UNSIGNED_SHORT,
-				reinterpret_cast<void*>(static_cast<uintptr_t>(dc.start) * 2)
-			);
+			if (wireframe) {
+				glDrawElements(GL_LINES,
+				               static_cast<GLsizei>(dc.count * 2),
+				               GL_UNSIGNED_SHORT,
+				               reinterpret_cast<void*>(static_cast<uintptr_t>(dc.start) * 4));
+			} else {
+				glDrawElements(GL_TRIANGLES,
+				               static_cast<GLsizei>(dc.count),
+				               GL_UNSIGNED_SHORT,
+				               reinterpret_cast<void*>(static_cast<uintptr_t>(dc.start) * 2));
+			}
 		}
 	}
 

@@ -353,9 +353,9 @@ void M2LegacyRendererGL::loadSkin(int index) {
 	_create_skeleton();
 
 	// build interleaved vertex buffer
-	// format: position(3f) + normal(3f) + bone_idx(4ub) + bone_weight(4ub) + uv(2f) = 40 bytes
+	// format: position(3f) + normal(3f) + bone_idx(4ub) + bone_weight(4ub) + uv(2f) + uv2(2f) = 48 bytes
 	const size_t vertex_count = m2->vertices.size() / 3;
-	const size_t stride = 40;
+	const size_t stride = 48;
 	std::vector<uint8_t> vertex_data(vertex_count * stride);
 
 	for (size_t i = 0; i < vertex_count; i++) {
@@ -389,6 +389,17 @@ void M2LegacyRendererGL::loadSkin(int index) {
 		// texcoord
 		std::memcpy(&vertex_data[offset + 32], &m2->uv[uv_idx], sizeof(float));
 		std::memcpy(&vertex_data[offset + 36], &m2->uv[uv_idx + 1], sizeof(float));
+
+		// texcoord2 (already y-flipped by loader)
+		// Note: M2LegacyLoader pre-flips uv2, so copy directly without re-flipping
+		if (!m2->uv2.empty() && uv_idx + 1 < m2->uv2.size()) {
+			std::memcpy(&vertex_data[offset + 40], &m2->uv2[uv_idx], sizeof(float));
+			std::memcpy(&vertex_data[offset + 44], &m2->uv2[uv_idx + 1], sizeof(float));
+		} else {
+			const float zero = 0.0f;
+			std::memcpy(&vertex_data[offset + 40], &zero, sizeof(float));
+			std::memcpy(&vertex_data[offset + 44], &zero, sizeof(float));
+		}
 	}
 
 	// map triangle indices
@@ -413,6 +424,12 @@ void M2LegacyRendererGL::loadSkin(int index) {
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(index_data.size() * sizeof(uint16_t)), index_data.data(), GL_STATIC_DRAW);
 	this->buffers.push_back(ebo);
 	vao->ebo = ebo;
+
+	// wireframe index buffer
+	{
+		auto line_indices = gl::VertexArray::triangles_to_lines(index_data.data(), index_data.size());
+		vao->set_wireframe_index_buffer(line_indices.data(), line_indices.size());
+	}
 
 	vao->setup_m2_vertex_format();
 
@@ -1269,12 +1286,19 @@ void M2LegacyRendererGL::render(const float* view_matrix, const float* projectio
 		}
 
 		dc->vao->bind();
-		glDrawElements(
-			wireframe ? GL_LINES : GL_TRIANGLES,
-			dc->count,
-			GL_UNSIGNED_SHORT,
-			reinterpret_cast<void*>(static_cast<uintptr_t>(dc->start * 2))
-		);
+		if (wireframe) {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, dc->vao->wireframe_ebo);
+			glDrawElements(GL_LINES,
+			               static_cast<GLsizei>(dc->count * 2),
+			               GL_UNSIGNED_SHORT,
+			               reinterpret_cast<void*>(static_cast<uintptr_t>(dc->start) * 4));
+		} else {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, dc->vao->ebo);
+			glDrawElements(GL_TRIANGLES,
+			               static_cast<GLsizei>(dc->count),
+			               GL_UNSIGNED_SHORT,
+			               reinterpret_cast<void*>(static_cast<uintptr_t>(dc->start) * 2));
+		}
 	}
 
 	ctx.set_blend(false);

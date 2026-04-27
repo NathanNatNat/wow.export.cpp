@@ -460,6 +460,12 @@ void MDXRendererGL::_build_geometry() {
 		buffers.push_back(ebo);
 		vao->ebo = ebo;
 
+		// wireframe index buffer
+		{
+			auto line_indices = gl::VertexArray::triangles_to_lines(geoset.faces.data(), geoset.faces.size());
+			vao->set_wireframe_index_buffer(line_indices.data(), line_indices.size());
+		}
+
 		vao->setup_m2_separate_buffers(vbo, nbo, uvo, bibo, bwbo);
 
 		// material/texture
@@ -879,8 +885,6 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	}
 
-	shader->set_uniform_1i("u_has_tex_matrix1", 0);
-	shader->set_uniform_1i("u_has_tex_matrix2", 0);
 	shader->set_uniform_mat4("u_tex_matrix1", false, MDX_IDENTITY_MAT4.data());
 	shader->set_uniform_mat4("u_tex_matrix2", false, MDX_IDENTITY_MAT4.data());
 
@@ -945,12 +949,19 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 		default_texture->bind(3);
 
 		dc.vao->bind();
-		glDrawElements(
-			wireframe ? GL_LINES : GL_TRIANGLES,
-			static_cast<GLsizei>(dc.count),
-			GL_UNSIGNED_SHORT,
-			reinterpret_cast<void*>(static_cast<uintptr_t>(dc.start * 2))
-		);
+		if (wireframe) {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, dc.vao->wireframe_ebo);
+			glDrawElements(GL_LINES,
+			               static_cast<GLsizei>(dc.count * 2),
+			               GL_UNSIGNED_SHORT,
+			               reinterpret_cast<void*>(static_cast<uintptr_t>(dc.start) * 4));
+		} else {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, dc.vao->ebo);
+			glDrawElements(GL_TRIANGLES,
+			               static_cast<GLsizei>(dc.count),
+			               GL_UNSIGNED_SHORT,
+			               reinterpret_cast<void*>(static_cast<uintptr_t>(dc.start) * 2));
+		}
 	}
 
 	ctx.set_blend(false);

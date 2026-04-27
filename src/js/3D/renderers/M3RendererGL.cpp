@@ -85,9 +85,9 @@ void M3RendererGL::loadLOD(int index) {
 	_dispose_geometry();
 
 	// build interleaved vertex buffer matching M2 format
-	// format: position(3f) + normal(3f) + bone_idx(4ub) + bone_weight(4ub) + uv(2f) = 40 bytes
+	// format: position(3f) + normal(3f) + bone_idx(4ub) + bone_weight(4ub) + uv(2f) + uv(2f) = 48 bytes
 	const size_t vertex_count = m3->vertices.size() / 3;
-	const size_t stride = 40;
+	const size_t stride = 48;
 	std::vector<uint8_t> vertex_data(vertex_count * stride, 0);
 
 	for (size_t i = 0; i < vertex_count; i++) {
@@ -125,6 +125,12 @@ void M3RendererGL::loadLOD(int index) {
 		const float v = m3->uv.empty() ? 0.0f : m3->uv[uv_idx + 1];
 		std::memcpy(&vertex_data[offset + 32], &u, sizeof(float));
 		std::memcpy(&vertex_data[offset + 36], &v, sizeof(float));
+
+		// texcoord2 (y-flipped for opengl bottom-left origin)
+		const float u2 = m3->uv2.empty() ? 0.0f : m3->uv2[uv_idx];
+		const float v2 = m3->uv2.empty() ? 0.0f : (1.0f - m3->uv2[uv_idx + 1]);
+		std::memcpy(&vertex_data[offset + 40], &u2, sizeof(float));
+		std::memcpy(&vertex_data[offset + 44], &v2, sizeof(float));
 	}
 
 	// create VAO
@@ -165,9 +171,21 @@ void M3RendererGL::loadLOD(int index) {
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(indices.size() * sizeof(uint16_t)), indices.data(), GL_STATIC_DRAW);
 		buffers.push_back(ebo);
 
+		// wireframe index buffer
+		GLuint wireframe_ebo;
+		{
+			auto line_indices = gl::VertexArray::triangles_to_lines(indices.data(), indices.size());
+			glGenBuffers(1, &wireframe_ebo);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wireframe_ebo);
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(line_indices.size() * sizeof(uint16_t)), line_indices.data(), GL_STATIC_DRAW);
+			buffers.push_back(wireframe_ebo);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+		}
+
 		M3DrawCall dc;
 		dc.vao = vao_raw;
 		dc.ebo = ebo;
+		dc.wireframe_ebo = wireframe_ebo;
 		dc.count = geoset.indexCount;
 		dc.visible = true;
 		draw_calls.push_back(dc);
@@ -312,13 +330,19 @@ void M3RendererGL::render(const float* view_matrix, const float* projection_matr
 			continue;
 
 		dc.vao->bind();
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, dc.ebo);
-		glDrawElements(
-			wireframe ? GL_LINES : GL_TRIANGLES,
-			static_cast<GLsizei>(dc.count),
-			GL_UNSIGNED_SHORT,
-			nullptr
-		);
+		if (wireframe) {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, dc.wireframe_ebo);
+			glDrawElements(GL_LINES,
+			               static_cast<GLsizei>(dc.count * 2),
+			               GL_UNSIGNED_SHORT,
+			               nullptr);
+		} else {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, dc.ebo);
+			glDrawElements(GL_TRIANGLES,
+			               static_cast<GLsizei>(dc.count),
+			               GL_UNSIGNED_SHORT,
+			               nullptr);
+		}
 	}
 
 	ctx.set_cull_face(false);

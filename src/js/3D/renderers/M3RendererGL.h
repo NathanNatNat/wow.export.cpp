@@ -26,6 +26,7 @@ class BufferWrapper;
 struct M3DrawCall {
 	gl::VertexArray* vao = nullptr;
 	GLuint ebo = 0;
+	GLuint wireframe_ebo = 0;
 	uint32_t count = 0;
 	bool visible = true;
 };
