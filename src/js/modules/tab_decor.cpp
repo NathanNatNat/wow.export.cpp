@@ -38,6 +38,7 @@
 #include <string>
 #include <thread>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 #include <imgui.h>
@@ -170,7 +171,8 @@ static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 		active_renderer_result = model_viewer_utils::create_renderer(
 			file, model_type, *gl_ctx,
 			view.config.value("modelViewerShowTextures", true),
-			file_data_id
+			file_data_id,
+			file_name
 		);
 
 		if (model_type == model_viewer_utils::ModelType::M2 && active_renderer_result.m2)
@@ -244,6 +246,7 @@ static void export_files(const std::vector<const db::caches::DBDecor::DecorItem*
 		}
 
 		export_paths.close();
+		return;
 	}
 
 	casc::CASC* casc = core::view->casc;
@@ -644,8 +647,14 @@ void mounted() {
 	std::thread(initialize).detach();
 }
 
-M2RendererGL* getActiveRenderer() {
-	return active_renderer_result.m2.get();
+std::variant<std::monostate, M2RendererGL*, M3RendererGL*, WMORendererGL*> getActiveRenderer() {
+	if (active_renderer_result.m2)
+		return active_renderer_result.m2.get();
+	if (active_renderer_result.m3)
+		return active_renderer_result.m3.get();
+	if (active_renderer_result.wmo)
+		return active_renderer_result.wmo.get();
+	return std::monostate{};
 }
 
 void render() {

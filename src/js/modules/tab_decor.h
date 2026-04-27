@@ -7,9 +7,12 @@
 
 #include <cstdint>
 #include <string>
+#include <variant>
 #include <vector>
 
 class M2RendererGL;
+class M3RendererGL;
+class WMORendererGL;
 
 /**
  * Decor tab module (ImGui immediate-mode equivalent).
@@ -52,8 +55,8 @@ void render();
 /**
  * Get the active model renderer (if any).
  * JS equivalent: getActiveRenderer: () => active_renderer
- * @returns Pointer to active M2RendererGL, or nullptr.
+ * @returns Active renderer pointer variant (M2/M3/WMO), or std::monostate when none.
  */
-M2RendererGL* getActiveRenderer();
+std::variant<std::monostate, M2RendererGL*, M3RendererGL*, WMORendererGL*> getActiveRenderer();
 
 } // namespace tab_decor

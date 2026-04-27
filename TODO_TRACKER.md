@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 22/186 verified (12%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 26/186 verified (14%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -207,25 +207,25 @@
 - **Status**: Verified
 - **Details**: (1) JS calls hideAllGeosets() before applying - C++ never does. (2) JS uses mapping.group_index for lookup - C++ uses coll_idx. (3) JS uses mapping.char_geoset for setGeosetGroupDisplay - C++ uses mapping.group_index.
 
-- [ ] 41. [tab_decor.cpp] PNG/CLIPBOARD export branch does not short-circuit like JS
+- [x] 41. [tab_decor.cpp] PNG/CLIPBOARD export branch does not short-circuit like JS
 - **JS Source**: `src/js/modules/tab_decor.js` lines 129–140
-- **Status**: Pending
-- **Details**: JS returns immediately after preview export for PNG/CLIPBOARD; C++ closes the export stream but continues into full model export logic, changing export behavior for these formats.
+- **Status**: Verified
+- **Details**: Added `return;` after `export_paths.close()` inside the PNG/CLIPBOARD branch so execution no longer falls through into the ExportHelper loop.
 
-- [ ] 42. [tab_decor.cpp] Missing return after PNG/CLIPBOARD export branch falls through
+- [x] 42. [tab_decor.cpp] Missing return after PNG/CLIPBOARD export branch falls through
 - **JS Source**: `src/js/modules/tab_decor.js` lines 138–140
-- **Status**: Pending
-- **Details**: JS does return after PNG/CLIPBOARD block. C++ has no return so execution falls through to the ExportHelper loop redundantly exporting all selected entries as models.
+- **Status**: Verified
+- **Details**: Resolved together with entry 41.
 
-- [ ] 43. [tab_decor.cpp] create_renderer receives file_data_id instead of file_name
+- [x] 43. [tab_decor.cpp] create_renderer receives file_data_id instead of file_name
 - **JS Source**: `src/js/modules/tab_decor.js` line 85
-- **Status**: Pending
-- **Details**: JS passes file_name (string) as 5th argument to create_renderer. C++ passes file_data_id (uint32_t). Parameter type mismatch.
+- **Status**: Verified
+- **Details**: Added `file_name` as the 6th argument to the `create_renderer()` call in `preview_decor()`. The C++ signature takes `file_data_id` as 5th and `file_name` as 6th; the 6th was previously omitted.
 
-- [ ] 44. [tab_decor.cpp] getActiveRenderer() only returns M2 renderer not any active renderer
+- [x] 44. [tab_decor.cpp] getActiveRenderer() only returns M2 renderer not any active renderer
 - **JS Source**: `src/js/modules/tab_decor.js` line 611
-- **Status**: Pending
-- **Details**: JS getActiveRenderer returns the single active_renderer which could be M2, WMO, or M3. C++ returns active_renderer_result.m2.get() returning nullptr when active model is WMO or M3.
+- **Status**: Verified
+- **Details**: Updated `tab_decor::getActiveRenderer()` return type to `std::variant<std::monostate, M2RendererGL*, M3RendererGL*, WMORendererGL*>` matching the `tab_models` pattern. Implementation now returns whichever of m2/m3/wmo is active, or monostate when none. The `viewer_context.getActiveRenderer` lambda intentionally remains M2-only (per the C++ model-viewer-gl architecture which uses `renderActiveModel` for M3/WMO rendering and `getActiveBoundingBox` for bounding box).
 
 
 ## High — significant functional bugs and major behavioral differences
