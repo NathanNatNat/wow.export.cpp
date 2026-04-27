@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 56/186 verified (30%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 59/186 verified (32%)** — ✅ = Verified, ⬜ = Pending
 
 ## Upstream Sync — port from wow.export JS @ d0d847f5
 
@@ -260,10 +260,10 @@
 - **Status**: Pending
 - **Details**: JS explicitly checks `if (!response.ok)` and marks the file with 'Failed to download MP4: ' + response.status. C++ uses `generics::get(*mp4_url)` with no status check — if the server returns a non-200 status, behavior depends on `generics::get()` implementation.
 
-- [ ] 51. [tab_data.cpp] Data-table cell copy stringification differs from JS `String(value)` behavior
+- [x] 51. [tab_data.cpp] Data-table cell copy stringification differs from JS `String(value)` behavior
 - **JS Source**: `src/js/modules/tab_data.js` lines 172–177
-- **Status**: Pending
-- **Details**: JS copies with `String(value)`, while C++ uses `value.dump()`; for string JSON values this includes JSON quoting/escaping, changing clipboard output.
+- **Status**: Verified
+- **Details**: Fixed — `copy_cell` uses `value.get<std::string>()` for string values and `value.dump()` for all other types, matching JS `String(value)` semantics. (Same fix as entry 53.)
 
 - [x] 52. [tab_data.cpp] Context menu node not cleared on close
 - **JS Source**: `src/js/modules/tab_data.js` line 107
@@ -533,35 +533,35 @@
 - **Status**: Verified
 - **Details**: Fixed — now passes `casc::ExportHelper::TOAST_OPT_LOG` matching JS `{'View Log': () => log.openRuntimeLog()}`.
 
-- [ ] 105. [tab_data.cpp] Listbox pasteselection and copytrimwhitespace hardcoded false
+- [x] 105. [tab_data.cpp] Listbox pasteselection and copytrimwhitespace hardcoded false
 - **JS Source**: `src/js/modules/tab_data.js` lines 98–99
-- **Status**: Pending
-- **Details**: JS binds pasteselection to config.pasteSelection and copytrimwhitespace to config.removePathSpacesCopy. C++ hardcodes both to false.
+- **Status**: Verified
+- **Details**: Fixed — listbox::render now passes `view.config.value("pasteSelection", false)` and `view.config.value("removePathSpacesCopy", false)` matching JS config bindings.
 
 - [x] 106. [tab_data.cpp] load_table error toast missing View Log action button
 - **JS Source**: `src/js/modules/tab_data.js` line 80
 - **Status**: Verified
 - **Details**: Fixed together with entry 104 — `TOAST_OPT_LOG` is now passed, adding the View Log button.
 
-- [ ] 107. [tab_data.cpp] Context menu labels are static instead of dynamic row count
+- [x] 107. [tab_data.cpp] Context menu labels are static instead of dynamic row count
 - **JS Source**: `src/js/modules/tab_data.js` lines 108–110
-- **Status**: Pending
-- **Details**: JS renders "Copy N rows as CSV" with actual selectedCount and pluralization. C++ uses static labels losing the count.
+- **Status**: Verified
+- **Details**: Fixed — context menu now uses `std::format("Copy {} row{} as CSV", selected_count, ...)` and `std::format("Copy {} row{} as SQL", ...)` with pluralization, matching JS dynamic labels.
 
-- [ ] 108. [tab_data.cpp] Missing Regex Enabled indicators in both filter bars
+- [x] 108. [tab_data.cpp] Missing Regex Enabled indicators in both filter bars
 - **JS Source**: `src/js/modules/tab_data.js` lines 102–103, 129–130
-- **Status**: Pending
-- **Details**: JS shows Regex Enabled div in both the DB2 filter bar and data table tray filter. C++ has no regex indicators.
+- **Status**: Verified
+- **Details**: Fixed — both filter bars (DB2 list filter and data table tray filter) now show "Regex Enabled" text with a tooltip when `config.regexFilters` is true, matching JS behavior.
 
 - [x] 109. [legacy_tab_data.cpp] Export format menu omits JS SQL/DBC options
 - **JS Source**: `src/js/modules/legacy_tab_data.js` lines 172–176, 222–231
 - **Status**: Verified
 - **Details**: Fixed — `legacy_data_opts` now includes `Export as CSV`, `Export as SQL`, and `Export DBC (Raw)` matching JS `menuButtonDataLegacy`.
 
-- [ ] 110. [legacy_tab_data.cpp] Context menu uses `ImGui::BeginPopupContextItem` vs JS ContextMenu component
+- [x] 110. [legacy_tab_data.cpp] Context menu uses `ImGui::BeginPopupContextItem` vs JS ContextMenu component
 - **JS Source**: `src/js/modules/legacy_tab_data.js` lines 139–143
-- **Status**: Pending
-- **Details**: JS uses the custom `ContextMenu` component with slot-based content rendering and a close event. C++ uses native `ImGui::BeginPopupContextItem` (line 368) which has different popup behavior, positioning, and styling compared to the custom ContextMenu component used elsewhere in the app.
+- **Status**: Verified
+- **Details**: Fixed — context menu now uses `ImGui::OpenPopup` on right-click and `BeginPopup` for rendering; clears `nodeDataTable` in the else branch on close, matching JS ContextMenu @close event behavior.
 
 - [ ] 111. [legacy_tab_files.cpp] Listbox context menu includes extra FileDataID actions absent in JS
 - **JS Source**: `src/js/modules/legacy_tab_files.js` lines 76–80
