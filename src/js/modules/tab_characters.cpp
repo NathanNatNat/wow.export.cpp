@@ -86,11 +86,13 @@ bool is_collection_style = false;
 };
 std::vector<RendererInfo> renderers;
 uint32_t item_id = 0;
+int modifier_id = -1;
 };
 
 struct CollectionModelEntry {
 std::vector<std::unique_ptr<M2RendererGL>> renderers;
 uint32_t item_id = 0;
+int modifier_id = -1;
 };
 
 struct PendingModelLoadTask {
@@ -101,6 +103,7 @@ std::future<BufferWrapper> file_future;
 struct PendingEquipmentLoadEntry {
 int slot_id = 0;
 uint32_t item_id = 0;
+int modifier_id = -1;
 uint32_t file_data_id = 0;
 int attachment_id = -1;   // -1 for collection models
 bool is_collection = false;
@@ -183,6 +186,7 @@ static std::map<std::string, nlohmann::json> active_skins;
 
 static std::unique_ptr<M2RendererGL> active_renderer;
 static uint32_t active_model = 0;
+static uint32_t default_model_file_data_id = 0;
 
 static std::map<uint32_t, std::unique_ptr<M2RendererGL>> skinned_model_renderers;
 static std::unordered_set<uint32_t> skinned_model_meshes;
@@ -212,6 +216,7 @@ static std::vector<nlohmann::json> prev_option_selection;
 static std::vector<nlohmann::json> prev_choice_selection;
 static std::vector<nlohmann::json> prev_active_choices;
 static nlohmann::json prev_equipped_items;
+static nlohmann::json prev_equipped_item_skins;
 static nlohmann::json prev_guild_tabard_config;
 static std::optional<std::string> prev_anim_selection;
 static bool prev_include_base_clothing = true;
@@ -288,6 +293,7 @@ static const std::vector<TabardOptionDef> tabard_options = {
 
 // --- Forward declarations of file-local functions ---
 static void refresh_character_appearance();
+static bool check_cond_model_swap();
 static void update_geosets();
 static void update_textures();
 static void update_equipment_models();
@@ -308,6 +314,7 @@ static void randomize_customization();
 static void import_character();
 static void import_wmv_character();
 static void import_wowhead_character();
+static void expand_shoulder_slots(nlohmann::json& equipment, nlohmann::json& equipment_skins);
 static void apply_import_data(const nlohmann::json& data, const std::string& source);
 static void load_saved_characters();
 static void save_character(const std::string& name, const std::string& thumb_data);
@@ -401,6 +408,10 @@ static void refresh_character_appearance() {
 if (!active_renderer || is_importing)
 return;
 
+// check if a conditional model swap is needed (e.g. upright orc)
+if (check_cond_model_swap())
+return;
+
 logging::write("Refreshing character appearance...");
 
 update_geosets();
@@ -408,6 +419,29 @@ update_textures();
 update_equipment_models();
 
 logging::write("Character appearance refresh complete");
+}
+
+static bool check_cond_model_swap() {
+auto& view = *core::view;
+const auto& active_choices = view.chrCustActiveChoices;
+uint32_t target_file_data_id = default_model_file_data_id;
+
+for (const auto& choice : active_choices) {
+uint32_t choice_id = choice.value("choiceID", 0u);
+auto cond_file_data_id = db::caches::DBCharacterCustomization::get_choice_cond_model_file_data_id(choice_id);
+if (cond_file_data_id.has_value()) {
+target_file_data_id = *cond_file_data_id;
+break;
+}
+}
+
+if (target_file_data_id == 0 || target_file_data_id == active_model)
+return false;
+
+logging::write(std::format("Conditional model swap: {} -> {}", active_model, target_file_data_id));
+active_model = 0;
+load_character_model(target_file_data_id);
+return true;
 }
 
 /**
@@ -428,6 +462,7 @@ character_appearance::apply_customization_geosets(geosets, view.chrCustActiveCho
 
 // step 3: apply equipment geosets (overrides customization where applicable)
 const auto& equipped_items = view.chrEquippedItems;
+const auto& item_skins = view.chrEquippedItemSkins;
 if (equipped_items.is_object() && !equipped_items.empty()) {
 // build int -> uint32_t map for DBItemGeosets
 std::unordered_map<int, uint32_t> equipped_map;
@@ -437,8 +472,8 @@ uint32_t item_id = item_val.get<uint32_t>();
 equipped_map[slot_id] = item_id;
 }
 
-const auto equipment_geosets = db::caches::DBItemGeosets::calculateEquipmentGeosets(equipped_map);
-const auto affected_groups = db::caches::DBItemGeosets::getAffectedCharGeosets(equipped_map);
+const auto equipment_geosets = db::caches::DBItemGeosets::calculateEquipmentGeosets(equipped_map, item_skins);
+const auto affected_groups = db::caches::DBItemGeosets::getAffectedCharGeosets(equipped_map, item_skins);
 
 for (int char_geoset : affected_groups) {
 const int base = char_geoset * 100;
@@ -468,8 +503,11 @@ if (equipped_items.contains("1")) {
 uint32_t head_item = equipped_items["1"].get<uint32_t>();
 auto char_info = get_current_race_gender();
 if (char_info) {
+int head_modifier = -1;
+if (item_skins.is_object() && item_skins.contains("1"))
+head_modifier = item_skins["1"].get<int>();
 auto hide_groups = db::caches::DBItemGeosets::getHelmetHideGeosets(
-head_item, char_info->raceID, char_info->genderIndex);
+head_item, char_info->raceID, char_info->genderIndex, head_modifier);
 for (int cg : hide_groups) {
 const int base = cg * 100;
 const int range_start = base + 1;
@@ -578,6 +616,7 @@ layers_by_section[section_type] = base_layer;
 }
 
 // Apply item textures for each equipped slot
+const auto& item_skins = view.chrEquippedItemSkins;
 for (auto& [slot_str, item_val] : equipped_items.items()) {
 int slot_id = std::stoi(slot_str);
 uint32_t item_id = item_val.get<uint32_t>();
@@ -587,7 +626,10 @@ continue;
 
 int race_id = char_info ? static_cast<int>(char_info->raceID) : -1;
 int gender_idx = char_info ? char_info->genderIndex : -1;
-auto item_textures = db::caches::DBItemCharTextures::getItemTextures(item_id, race_id, gender_idx);
+int modifier_id = -1;
+if (item_skins.is_object() && item_skins.contains(slot_str))
+modifier_id = item_skins[slot_str].get<int>();
+auto item_textures = db::caches::DBItemCharTextures::getItemTextures(item_id, race_id, gender_idx, modifier_id);
 if (!item_textures)
 continue;
 
@@ -766,30 +808,40 @@ rebuild_renderer_adapter_maps();
 if (!equipped_items.is_object())
 return;
 
+const auto& item_skins = view.chrEquippedItemSkins;
 auto* casc = view.casc;
 
 for (auto& [slot_str, item_val] : equipped_items.items()) {
 int slot_id = std::stoi(slot_str);
 uint32_t item_id = item_val.get<uint32_t>();
 
-// check if already loaded
+// get modifier_id for this slot
+int modifier_id = -1;
+if (item_skins.is_object() && item_skins.contains(slot_str))
+modifier_id = item_skins[slot_str].get<int>();
+
+// check if already loaded (item_id + modifier_id must match)
 auto existing_eq_it = equipment_model_renderers.find(slot_id);
 auto existing_col_it = collection_model_renderers.find(slot_id);
-bool eq_ok = (existing_eq_it != equipment_model_renderers.end() && existing_eq_it->second.item_id == item_id);
+bool eq_ok = (existing_eq_it != equipment_model_renderers.end() &&
+              existing_eq_it->second.item_id == item_id &&
+              existing_eq_it->second.modifier_id == modifier_id);
 bool col_ok = (existing_col_it == collection_model_renderers.end()) ||
-              (existing_col_it != collection_model_renderers.end() && existing_col_it->second.item_id == item_id);
+              (existing_col_it != collection_model_renderers.end() &&
+               existing_col_it->second.item_id == item_id &&
+               existing_col_it->second.modifier_id == modifier_id);
 if (eq_ok && col_ok)
 continue;
 
 // skip if already pending
 bool already_pending = std::any_of(pending_equipment_entries.begin(), pending_equipment_entries.end(),
-[slot_id, item_id](const PendingEquipmentLoadEntry& e) {
-return e.slot_id == slot_id && e.item_id == item_id;
+[slot_id, item_id, modifier_id](const PendingEquipmentLoadEntry& e) {
+return e.slot_id == slot_id && e.item_id == item_id && e.modifier_id == modifier_id;
 });
 if (already_pending)
 continue;
 
-// dispose old renderers if item changed
+// dispose old renderers if item/skin changed
 if (existing_eq_it != equipment_model_renderers.end()) {
 for (auto& ri : existing_eq_it->second.renderers)
 ri.renderer->dispose();
@@ -806,7 +858,13 @@ renderers_dirty = true;
 auto char_info = get_current_race_gender();
 int race_id = char_info ? static_cast<int>(char_info->raceID) : -1;
 int gender_idx = char_info ? char_info->genderIndex : -1;
-auto display = db::caches::DBItemModels::getItemDisplay(item_id, race_id, gender_idx);
+
+// select only the matching shoulder side for shoulder-style items (SHOULDER_SLOT_L=3, SHOULDER_SLOT_R=30)
+db::caches::DBItemModels::ShoulderPos shoulder_pos = db::caches::DBItemModels::ShoulderPos::None;
+if (slot_id == 3) shoulder_pos = db::caches::DBItemModels::ShoulderPos::Left;
+else if (slot_id == 30) shoulder_pos = db::caches::DBItemModels::ShoulderPos::Right;
+
+auto display = db::caches::DBItemModels::getItemDisplay(item_id, race_id, gender_idx, modifier_id, shoulder_pos);
 if (!display || display->models.empty())
 continue;
 
@@ -826,6 +884,7 @@ uint32_t file_data_id = display->models[i];
 PendingEquipmentLoadEntry entry;
 entry.slot_id = slot_id;
 entry.item_id = item_id;
+entry.modifier_id = modifier_id;
 entry.file_data_id = file_data_id;
 entry.attachment_id = attachment_ids[i];
 entry.is_collection = false;
@@ -843,6 +902,7 @@ uint32_t file_data_id = display->models[i];
 PendingEquipmentLoadEntry entry;
 entry.slot_id = slot_id;
 entry.item_id = item_id;
+entry.modifier_id = modifier_id;
 entry.file_data_id = file_data_id;
 entry.attachment_id = -1;
 entry.is_collection = true;
@@ -873,10 +933,18 @@ continue;
 
 auto& entry = *it;
 
-// Discard if slot no longer has this item or GL context lost
+// Discard if slot no longer has this item+modifier or GL context lost
+std::string slot_str_check = std::to_string(entry.slot_id);
 bool slot_current = view.chrEquippedItems.is_object() &&
-view.chrEquippedItems.contains(std::to_string(entry.slot_id)) &&
-view.chrEquippedItems[std::to_string(entry.slot_id)].get<uint32_t>() == entry.item_id;
+view.chrEquippedItems.contains(slot_str_check) &&
+view.chrEquippedItems[slot_str_check].get<uint32_t>() == entry.item_id;
+if (slot_current && entry.modifier_id >= 0) {
+// also check modifier matches
+int current_modifier = -1;
+if (view.chrEquippedItemSkins.is_object() && view.chrEquippedItemSkins.contains(slot_str_check))
+current_modifier = view.chrEquippedItemSkins[slot_str_check].get<int>();
+slot_current = (current_modifier == entry.modifier_id);
+}
 
 if (!slot_current || !viewer_context.gl_context) {
 it = pending_equipment_entries.erase(it);
@@ -901,6 +969,7 @@ EquipmentModelEntry::RendererInfo ri;
 ri.renderer = std::move(renderer);
 ri.attachment_id = entry.attachment_id;
 equipment_model_renderers[entry.slot_id].item_id = entry.item_id;
+equipment_model_renderers[entry.slot_id].modifier_id = entry.modifier_id;
 equipment_model_renderers[entry.slot_id].renderers.push_back(std::move(ri));
 renderers_dirty = true;
 logging::write(std::format("Loaded attachment model {} for slot {} attachment {} (item {})",
@@ -935,6 +1004,7 @@ if (!entry.textures.empty()) {
 }
 
 collection_model_renderers[entry.slot_id].item_id = entry.item_id;
+collection_model_renderers[entry.slot_id].modifier_id = entry.modifier_id;
 collection_model_renderers[entry.slot_id].renderers.push_back(std::move(renderer));
 renderers_dirty = true;
 logging::write(std::format("Loaded collection model {} for slot {} (item {})",
@@ -1235,6 +1305,7 @@ state.chrCustOptionSelection = { state.chrCustOptions[0] };
 
 // load the model
 uint32_t file_data_id = db::caches::DBCharacterCustomization::get_model_file_data_id(selected_id).value_or(0);
+default_model_file_data_id = file_data_id;
 load_character_model(file_data_id);
 }
 
@@ -1513,6 +1584,18 @@ view.chrModelLoading = false;
 }
 
 /**
+ * External imports always set both shoulders from a single shoulder slot.
+ * JS: SHOULDER_SLOT_L = 3, SHOULDER_SLOT_R = 30
+ */
+static void expand_shoulder_slots(nlohmann::json& equipment, nlohmann::json& equipment_skins) {
+if (equipment.contains("3")) {
+equipment["30"] = equipment["3"];
+if (equipment_skins.contains("3"))
+equipment_skins["30"] = equipment_skins["3"];
+}
+}
+
+/**
  * Unified import handler - parses import data and applies it.
  */
 static void apply_import_data(const nlohmann::json& data, const std::string& source) {
@@ -1521,6 +1604,7 @@ uint32_t race_id = 0;
 int gender_index = 0;
 std::vector<nlohmann::json> customizations;
 nlohmann::json equipment = nlohmann::json::object();
+nlohmann::json equipment_skins = nlohmann::json::object();
 
 if (source == "bnet") {
 race_id = data["playable_race"]["id"].get<uint32_t>();
@@ -1540,6 +1624,30 @@ if (race_id == 52 && view.chrImportLoadVisage)
 race_id = 75;
 
 gender_index = (data["gender"]["type"].get<std::string>() == "MALE") ? 0 : 1;
+
+// fallback: if resolved model has no customization data, try Race_related
+{
+auto test_model_id = db::caches::DBCharacterCustomization::get_chr_model_id(race_id, gender_index);
+if (!test_model_id || !db::caches::DBCharacterCustomization::get_options_for_model(*test_model_id)) {
+auto& chr_race_table = casc::db2::getTable("ChrRaces");
+if (!chr_race_table.isLoaded)
+chr_race_table.parse();
+auto chr_race_row_opt = chr_race_table.getRow(race_id);
+if (chr_race_row_opt.has_value()) {
+const auto& chr_race_row = *chr_race_row_opt;
+auto related_it = chr_race_row.find("Race_related");
+if (related_it != chr_race_row.end()) {
+uint32_t related_race = 0;
+if (auto* p = std::get_if<int64_t>(&related_it->second))
+related_race = static_cast<uint32_t>(*p);
+else if (auto* p = std::get_if<uint64_t>(&related_it->second))
+related_race = static_cast<uint32_t>(*p);
+if (related_race != 0)
+race_id = related_race;
+}
+}
+}
+}
 
 auto chr_model_id_opt = db::caches::DBCharacterCustomization::get_chr_model_id(race_id, gender_index);
 if (!chr_model_id_opt)
@@ -1568,7 +1676,22 @@ if (data.contains("items") && data["items"].is_array()) {
 for (const auto& item : data["items"]) {
 int slot_id = item["internal_slot_id"].get<int>() + 1;
 equipment[std::to_string(slot_id)] = item["id"].get<uint32_t>();
+
+if (item.contains("item_appearance_modifier_id") && !item["item_appearance_modifier_id"].is_null()) {
+int mod_id = item["item_appearance_modifier_id"].get<int>();
+if (mod_id != 0)
+equipment_skins[std::to_string(slot_id)] = mod_id;
 }
+}
+}
+
+if (data.contains("guild_crest")) {
+const auto& crest = data["guild_crest"];
+view.chrGuildTabardConfig.background = crest.contains("background") && crest["background"].contains("color") ? crest["background"]["color"].value("id", 0) : 0;
+view.chrGuildTabardConfig.border_style = crest.contains("border") ? crest["border"].value("id", 0) : 0;
+view.chrGuildTabardConfig.border_color = crest.contains("border") && crest["border"].contains("color") ? crest["border"]["color"].value("id", 0) : 0;
+view.chrGuildTabardConfig.emblem_design = crest.contains("emblem") ? crest["emblem"].value("id", 0) : 0;
+view.chrGuildTabardConfig.emblem_color = crest.contains("emblem") && crest["emblem"].contains("color") ? crest["emblem"]["color"].value("id", 0) : 0;
 }
 
 } else if (source == "wmv") {
@@ -1681,10 +1804,14 @@ if (data.contains("customizations") && data["customizations"].is_array()) {
 equipment = data.value("equipment", nlohmann::json::object());
 }
 
+// external imports always set both shoulders from a single shoulder slot
+expand_shoulder_slots(equipment, equipment_skins);
+
 is_importing = true;
 
 try {
 view.chrEquippedItems = equipment;
+view.chrEquippedItemSkins = equipment_skins;
 
 view.chrImportChoices.clear();
 view.chrImportChoices = customizations;
@@ -1895,7 +2022,15 @@ view.chrModelLoading = true;
 view.chrSavedCharactersScreen = false;
 
 // apply equipment
-view.chrEquippedItems = data.value("equipment", nlohmann::json::object());
+nlohmann::json load_equipment = data.value("equipment", nlohmann::json::object());
+nlohmann::json load_equipment_skins = data.value("equipment_skins", nlohmann::json::object());
+
+// v1 saves have a single shoulder slot, expand to both
+if (!data.contains("version") || data.value("version", 0) < 2)
+expand_shoulder_slots(load_equipment, load_equipment_skins);
+
+view.chrEquippedItems = load_equipment;
+view.chrEquippedItemSkins = load_equipment_skins;
 
 // apply guild tabard config
 if (data.contains("guild_tabard")) {
@@ -2039,7 +2174,8 @@ race_id = view.chrCustRaceSelection[0].value("id", 0u);
 if (!view.chrCustModelSelection.empty())
 model_id = view.chrCustModelSelection[0].value("id", 0u);
 
-return nlohmann::json{
+nlohmann::json char_data = {
+{ "version", 2 },
 { "race_id", race_id },
 { "model_id", model_id },
 { "choices", view.chrCustActiveChoices },
@@ -2052,6 +2188,12 @@ return nlohmann::json{
 { "emblem_color", view.chrGuildTabardConfig.emblem_color }
 }}
 };
+
+const auto& skins = view.chrEquippedItemSkins;
+if (skins.is_object() && !skins.empty())
+char_data["equipment_skins"] = skins;
+
+return char_data;
 }
 
 static void export_json_character() {
@@ -2138,6 +2280,12 @@ core::setToast("error", "Invalid character file: missing race_id or model_id.", 
 return;
 }
 
+// v1 saves have a single shoulder slot, expand to both
+nlohmann::json import_equipment = data.value("equipment", nlohmann::json::object());
+nlohmann::json import_equipment_skins = data.value("equipment_skins", nlohmann::json::object());
+if (!data.contains("version") || data.value("version", 0) < 2)
+expand_shoulder_slots(import_equipment, import_equipment_skins);
+
 if (save_to_my_characters) {
 // import into My Characters
 std::string name;
@@ -2159,13 +2307,16 @@ while (existing_ids.count(id))
 id = generate_character_id();
 
 // remove name/thumb from data before saving (stored separately)
-// JS save_data only includes race_id, model_id, choices, equipment — guild_tabard is NOT included
 nlohmann::json save_data = {
+{ "version", 2 },
 { "race_id", data.value("race_id", 0u) },
 { "model_id", data.value("model_id", 0u) },
 { "choices", data.value("choices", nlohmann::json::array()) },
-{ "equipment", data.value("equipment", nlohmann::json::object()) }
+{ "equipment", import_equipment }
 };
+
+if (!import_equipment_skins.empty())
+save_data["equipment_skins"] = import_equipment_skins;
 
 std::string save_path = (fs::path(dir) / (name + "-" + id + ".json")).string();
 std::ofstream out(save_path);
@@ -2192,7 +2343,8 @@ core::setToast("success", std::format("Character \"{}\" imported.", name), {}, 3
 view.chrModelLoading = true;
 view.chrSavedCharactersScreen = false;
 
-view.chrEquippedItems = data.value("equipment", nlohmann::json::object());
+view.chrEquippedItems = import_equipment;
+view.chrEquippedItemSkins = import_equipment_skins;
 
 if (data.contains("guild_tabard")) {
 const auto& gt = data["guild_tabard"];
@@ -2868,6 +3020,12 @@ refresh_character_appearance();
 // watch chrEquippedItems (deep)
 if (view.chrEquippedItems != prev_equipped_items) {
 prev_equipped_items = view.chrEquippedItems;
+refresh_character_appearance();
+}
+
+// watch chrEquippedItemSkins (deep)
+if (view.chrEquippedItemSkins != prev_equipped_item_skins) {
+prev_equipped_item_skins = view.chrEquippedItemSkins;
 refresh_character_appearance();
 }
 
@@ -3845,6 +4003,8 @@ tab_items::setActive();
 if (ImGui::MenuItem("Remove Item")) {
 std::string slot_str = std::to_string(slot.id);
 view.chrEquippedItems.erase(slot_str);
+if (view.chrEquippedItemSkins.is_object())
+view.chrEquippedItemSkins.erase(slot_str);
 }
 if (item) {
 std::string copy_id_label = std::format("Copy Item ID ({})", item->id);
@@ -3862,8 +4022,10 @@ ImGui::PopID();
 }
 
 ImGui::Separator();
-if (ImGui::Button("Clear All Equipment"))
+if (ImGui::Button("Clear All Equipment")) {
 view.chrEquippedItems = nlohmann::json::object();
+view.chrEquippedItemSkins = nlohmann::json::object();
+}
 }
 
 #ifndef NDEBUG
@@ -3979,6 +4141,7 @@ std::thread([region_empty]() {
 		prev_choice_selection = state.chrCustChoiceSelection;
 		prev_active_choices = state.chrCustActiveChoices;
 		prev_equipped_items = state.chrEquippedItems;
+		prev_equipped_item_skins = state.chrEquippedItemSkins;
 		prev_include_base_clothing = state.config.value("chrIncludeBaseClothing", true);
 		prev_chr_import_region = state.chrImportSelectedRegion;
 		prev_chr_import_classic_realms = state.chrImportClassicRealms;

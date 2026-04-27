@@ -48,4 +48,11 @@ std::optional<uint32_t> getFileDataIDByDisplayID(uint32_t displayID);
  */
 const CreatureDisplayInfo* getDisplayInfo(uint32_t displayID);
 
+/**
+ * Gets the file data ID for a given CreatureModelData ID.
+ * @param modelDataID CreatureModelData ID.
+ * @returns File data ID, or std::nullopt if not found.
+ */
+std::optional<uint32_t> getFileDataIDByModelDataID(uint32_t modelDataID);
+
 } // namespace db::caches::DBCreatures

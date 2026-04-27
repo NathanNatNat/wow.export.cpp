@@ -73,8 +73,8 @@ static std::unordered_map<uint32_t, InternalDisplayData> display_to_data;
 
 static bool is_initialized = false;
 
-// Helper: resolve models from internal data with optional race/gender filtering
-static ItemDisplayData resolveDisplayData(uint32_t display_id, const InternalDisplayData& data, int race_id, int gender_index) {
+// Helper: resolve models from internal data with optional race/gender/shoulder filtering
+static ItemDisplayData resolveDisplayData(uint32_t display_id, const InternalDisplayData& data, int race_id, int gender_index, ShoulderPos shoulder_pos = ShoulderPos::None) {
 	ItemDisplayData result;
 	result.ID = display_id;
 	result.textures = data.textures;
@@ -92,16 +92,23 @@ static ItemDisplayData resolveDisplayData(uint32_t display_id, const InternalDis
 	}
 
 	if (is_shoulder_style && race_id >= 0 && gender_index >= 0) {
-		// for shoulders, select two models with different PositionIndex values
+		// for shoulders, select models with different PositionIndex values
 		const auto& options = data.modelOptions[0];
 		auto candidates = DBComponentModelFileData::getModelsForRaceGenderByPosition(
 			options, static_cast<uint32_t>(race_id), static_cast<uint32_t>(gender_index));
 
-		if (candidates.left)
-			result.models.push_back(*candidates.left);
-
-		if (candidates.right)
-			result.models.push_back(*candidates.right);
+		if (shoulder_pos == ShoulderPos::Left) {
+			if (candidates.left)
+				result.models.push_back(*candidates.left);
+		} else if (shoulder_pos == ShoulderPos::Right) {
+			if (candidates.right)
+				result.models.push_back(*candidates.right);
+		} else {
+			if (candidates.left)
+				result.models.push_back(*candidates.left);
+			if (candidates.right)
+				result.models.push_back(*candidates.right);
+		}
 	} else {
 		// standard logic for non-shoulder items
 		for (const auto& options : data.modelOptions) {
@@ -267,7 +274,7 @@ std::optional<std::vector<uint32_t>> getItemModels(uint32_t item_id) {
 /**
  * Get display data for an item (models and textures).
  */
-std::optional<ItemDisplayData> getItemDisplay(uint32_t item_id, int race_id, int gender_index, int modifier_id) {
+std::optional<ItemDisplayData> getItemDisplay(uint32_t item_id, int race_id, int gender_index, int modifier_id, ShoulderPos shoulder_pos) {
 	auto disp_id = resolve_display_id(item_id, modifier_id);
 	if (!disp_id)
 		return std::nullopt;
@@ -276,7 +283,7 @@ std::optional<ItemDisplayData> getItemDisplay(uint32_t item_id, int race_id, int
 	if (data_it == display_to_data.end())
 		return std::nullopt;
 
-	return resolveDisplayData(*disp_id, data_it->second, race_id, gender_index);
+	return resolveDisplayData(*disp_id, data_it->second, race_id, gender_index, shoulder_pos);
 }
 
 /**

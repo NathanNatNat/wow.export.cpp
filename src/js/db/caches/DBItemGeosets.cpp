@@ -12,6 +12,7 @@
 
 #include <format>
 #include <algorithm>
+#include <map>
 
 namespace db::caches::DBItemGeosets {
 
@@ -126,8 +127,8 @@ const std::unordered_map<int, std::vector<int>> GEOSET_PRIORITY = {
 	{CG::KNEEPADS, {7}}             // pants only
 };
 
-// maps ItemID -> ItemDisplayInfoID
-static std::unordered_map<uint32_t, uint32_t> item_to_display_id;
+// maps ItemID -> Map<modifier_id, ItemDisplayInfoID>
+static std::unordered_map<uint32_t, std::map<uint32_t, uint32_t>> item_to_display_ids;
 
 // maps ItemDisplayInfoID -> geoset data
 static std::unordered_map<uint32_t, GeosetData> display_to_geosets;
@@ -143,13 +144,17 @@ void initialize() {
 
 	logging::write("Loading item geosets...");
 
-	// build item -> appearance -> display chain
-	std::unordered_map<uint32_t, uint32_t> appearance_map;
+	// build item -> modifier -> appearance -> display chain
+	std::unordered_map<uint32_t, std::map<uint32_t, uint32_t>> appearance_map;
 	for (const auto& [_id, row] : casc::db2::preloadTable("ItemModifiedAppearance").getAllRows()) {
 		(void)_id;
 		uint32_t itemID = fieldToUint32(row.at("ItemID"));
 		uint32_t appearanceID = fieldToUint32(row.at("ItemAppearanceID"));
-		appearance_map[itemID] = appearanceID;
+		uint32_t modifierID = 0;
+		auto mod_it = row.find("ItemAppearanceModifierID");
+		if (mod_it != row.end())
+			modifierID = fieldToUint32(mod_it->second);
+		appearance_map[itemID][modifierID] = appearanceID;
 	}
 
 	std::unordered_map<uint32_t, uint32_t> appearance_to_display;
@@ -158,11 +163,13 @@ void initialize() {
 		appearance_to_display[id] = displayID;
 	}
 
-	// map item id to display id
-	for (const auto& [item_id, appearance_id] : appearance_map) {
-		auto it = appearance_to_display.find(appearance_id);
-		if (it != appearance_to_display.end() && it->second != 0)
-			item_to_display_id[item_id] = it->second;
+	// map item id -> modifier_id -> display id
+	for (const auto& [item_id, modifiers] : appearance_map) {
+		for (const auto& [modifier_id, appearance_id] : modifiers) {
+			auto it = appearance_to_display.find(appearance_id);
+			if (it != appearance_to_display.end() && it->second != 0)
+				item_to_display_ids[item_id][modifier_id] = it->second;
+		}
 	}
 
 	// load geoset groups from ItemDisplayInfo
@@ -216,33 +223,63 @@ void ensureInitialized() {
 }
 
 /**
- * Get geoset data for an item's display.
+ * Resolve display ID for an item with optional modifier.
+ * Prefers modifier 0, then lowest available modifier.
  */
-const GeosetData* getItemGeosetData(uint32_t item_id) {
-	auto disp_it = item_to_display_id.find(item_id);
-	if (disp_it == item_to_display_id.end())
+static std::optional<uint32_t> resolve_display_id(uint32_t item_id, int modifier_id = -1) {
+	auto mods_it = item_to_display_ids.find(item_id);
+	if (mods_it == item_to_display_ids.end())
+		return std::nullopt;
+
+	const auto& modifiers = mods_it->second;
+	if (modifier_id >= 0) {
+		auto it = modifiers.find(static_cast<uint32_t>(modifier_id));
+		if (it != modifiers.end())
+			return it->second;
+		return std::nullopt;
+	}
+
+	// default: prefer modifier 0, else lowest available
+	auto it0 = modifiers.find(0);
+	if (it0 != modifiers.end())
+		return it0->second;
+	if (!modifiers.empty())
+		return modifiers.begin()->second;
+	return std::nullopt;
+}
+
+/**
+ * Get geoset data for an item's display (with optional modifier).
+ */
+static const GeosetData* getItemGeosetDataWithModifier(uint32_t item_id, int modifier_id) {
+	auto disp_id = resolve_display_id(item_id, modifier_id);
+	if (!disp_id)
 		return nullptr;
 
-	auto geo_it = display_to_geosets.find(disp_it->second);
+	auto geo_it = display_to_geosets.find(*disp_id);
 	if (geo_it != display_to_geosets.end())
 		return &geo_it->second;
 	return nullptr;
 }
 
 /**
+ * Get geoset data for an item's display.
+ */
+const GeosetData* getItemGeosetData(uint32_t item_id) {
+	return getItemGeosetDataWithModifier(item_id, -1);
+}
+
+/**
  * Get ItemDisplayInfoID for an item.
  */
 std::optional<uint32_t> getDisplayId(uint32_t item_id) {
-	auto it = item_to_display_id.find(item_id);
-	if (it != item_to_display_id.end())
-		return it->second;
-	return std::nullopt;
+	return resolve_display_id(item_id);
 }
 
 /**
  * Calculate geoset visibility changes for equipped items.
  */
-std::unordered_map<int, int> calculateEquipmentGeosets(const std::unordered_map<int, uint32_t>& equipped_items) {
+std::unordered_map<int, int> calculateEquipmentGeosets(const std::unordered_map<int, uint32_t>& equipped_items, const nlohmann::json& item_skins) {
 	// track values per char_geoset, grouped by slot for priority resolution
 	struct SlotValue {
 		int slot_id;
@@ -255,7 +292,12 @@ std::unordered_map<int, int> calculateEquipmentGeosets(const std::unordered_map<
 		if (mapping_it == SLOT_GEOSET_MAPPING.end())
 			continue;
 
-		const GeosetData* geoset_data = getItemGeosetData(item_id);
+		int modifier_id = -1;
+		std::string slot_str = std::to_string(slot_id);
+		if (item_skins.is_object() && item_skins.contains(slot_str))
+			modifier_id = item_skins[slot_str].get<int>();
+
+		const GeosetData* geoset_data = getItemGeosetDataWithModifier(item_id, modifier_id);
 		if (!geoset_data)
 			continue;
 
@@ -304,8 +346,8 @@ std::unordered_map<int, int> calculateEquipmentGeosets(const std::unordered_map<
 /**
  * Get geoset groups that should be hidden when a helmet is equipped.
  */
-std::vector<int> getHelmetHideGeosets(uint32_t item_id, uint32_t race_id, int gender_index) {
-	const GeosetData* geoset_data = getItemGeosetData(item_id);
+std::vector<int> getHelmetHideGeosets(uint32_t item_id, uint32_t race_id, int gender_index, int modifier_id) {
+	const GeosetData* geoset_data = getItemGeosetDataWithModifier(item_id, modifier_id);
 	if (!geoset_data || geoset_data->helmetGeosetVis.empty())
 		return {};
 
@@ -329,7 +371,7 @@ std::vector<int> getHelmetHideGeosets(uint32_t item_id, uint32_t race_id, int ge
 /**
  * Get the set of char_geosets affected by equipped items.
  */
-std::unordered_set<int> getAffectedCharGeosets(const std::unordered_map<int, uint32_t>& equipped_items) {
+std::unordered_set<int> getAffectedCharGeosets(const std::unordered_map<int, uint32_t>& equipped_items, const nlohmann::json& item_skins) {
 	std::unordered_set<int> affected;
 
 	for (const auto& [slot_id, item_id] : equipped_items) {
@@ -337,8 +379,13 @@ std::unordered_set<int> getAffectedCharGeosets(const std::unordered_map<int, uin
 		if (mapping_it == SLOT_GEOSET_MAPPING.end())
 			continue;
 
+		int modifier_id = -1;
+		std::string slot_str = std::to_string(slot_id);
+		if (item_skins.is_object() && item_skins.contains(slot_str))
+			modifier_id = item_skins[slot_str].get<int>();
+
 		// skip items without display data (hidden items)
-		const GeosetData* geoset_data = getItemGeosetData(item_id);
+		const GeosetData* geoset_data = getItemGeosetDataWithModifier(item_id, modifier_id);
 		if (!geoset_data)
 			continue;
 

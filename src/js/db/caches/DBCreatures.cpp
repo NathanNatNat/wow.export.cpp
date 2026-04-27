@@ -44,6 +44,7 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 static std::unordered_map<uint32_t, std::vector<std::reference_wrapper<const CreatureDisplayInfo>>> creatureDisplays;
 static std::unordered_map<uint32_t, CreatureDisplayInfo> creatureDisplayInfoMap;
 static std::unordered_map<uint32_t, uint32_t> displayIDToFileDataID;
+static std::unordered_map<uint32_t, uint32_t> modelDataIDToFileDataID;
 static bool isInitialized = false;
 static bool isInitializing = false;
 static std::mutex init_mutex;
@@ -107,9 +108,11 @@ void initializeCreatureData() {
 
 	auto modelRows = casc::db2::preloadTable("CreatureModelData").getAllRows();
 		for (const auto& [modelID, modelRow] : modelRows) {
+			uint32_t fileDataID = fieldToUint32(modelRow.at("FileDataID"));
+			modelDataIDToFileDataID.emplace(modelID, fileDataID);
+
 			auto it = modelIDToDisplayInfoMap.find(modelID);
 			if (it != modelIDToDisplayInfoMap.end()) {
-				uint32_t fileDataID = fieldToUint32(modelRow.at("FileDataID"));
 				uint32_t creatureGeosetDataID = fieldToUint32(modelRow.at("CreatureGeosetDataID"));
 				bool modelIDHasExtraGeosets = creatureGeosetDataID > 0;
 				const auto& displayIDs = it->second;
@@ -179,6 +182,16 @@ const CreatureDisplayInfo* getDisplayInfo(uint32_t displayID) {
 	if (it != creatureDisplayInfoMap.end())
 		return &it->second;
 	return nullptr;
+}
+
+/**
+ * Gets the file data ID for a given CreatureModelData ID.
+ */
+std::optional<uint32_t> getFileDataIDByModelDataID(uint32_t modelDataID) {
+	auto it = modelDataIDToFileDataID.find(modelDataID);
+	if (it != modelDataIDToFileDataID.end())
+		return it->second;
+	return std::nullopt;
 }
 
 } // namespace db::caches::DBCreatures

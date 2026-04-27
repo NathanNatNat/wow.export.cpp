@@ -7,6 +7,7 @@
 #include "DBTextureFileData.h"
 #include "../../log.h"
 #include "../../casc/db2.h"
+#include "../WDCReader.h"
 
 #include <format>
 #include <unordered_map>

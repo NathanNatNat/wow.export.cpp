@@ -44,16 +44,18 @@ void ensureInitialized();
  * @param item_id Item ID.
  * @param race_id Character race ID for filtering (optional, -1 to skip).
  * @param gender_index 0=male, 1=female (optional, -1 to skip).
+ * @param modifier_id Item appearance modifier ID (optional, -1 for default).
  * @returns Vector of TextureComponent, or nullptr if not found.
  */
-std::optional<std::vector<TextureComponent>> getItemTextures(uint32_t item_id, int race_id = -1, int gender_index = -1);
+std::optional<std::vector<TextureComponent>> getItemTextures(uint32_t item_id, int race_id = -1, int gender_index = -1, int modifier_id = -1);
 
 /**
  * Get ItemDisplayInfoID for an item.
  * @param item_id Item ID.
+ * @param modifier_id Item appearance modifier ID (optional, -1 for default).
  * @returns Display ID, or std::nullopt if not found.
  */
-std::optional<uint32_t> getDisplayId(uint32_t item_id);
+std::optional<uint32_t> getDisplayId(uint32_t item_id, int modifier_id = -1);
 
 /**
  * Get character texture components directly by ItemDisplayInfoID.

@@ -511,6 +511,7 @@ struct AppState {
 	std::string chrImportWowheadURL;
 	std::string characterImportMode = "none";
 	nlohmann::json chrEquippedItems = nlohmann::json::object();
+	nlohmann::json chrEquippedItemSkins = nlohmann::json::object();
 	GuildTabardConfig chrGuildTabardConfig;
 	nlohmann::json chrEquipmentSlotContext;
 	bool chrSavedCharactersScreen = false;

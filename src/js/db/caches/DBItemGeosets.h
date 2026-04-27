@@ -11,6 +11,8 @@
 #include <vector>
 #include <optional>
 
+#include <nlohmann/json.hpp>
+
 namespace db::caches::DBItemGeosets {
 
 // geoset group enum (matches CharGeosets from WMV)
@@ -109,25 +111,28 @@ std::optional<uint32_t> getDisplayId(uint32_t item_id);
 /**
  * Calculate geoset visibility changes for equipped items.
  * @param equipped_items Map of slot_id -> item_id.
+ * @param item_skins Optional JSON object mapping slot_id_string -> modifier_id.
  * @returns Map of char_geoset -> value.
  */
-std::unordered_map<int, int> calculateEquipmentGeosets(const std::unordered_map<int, uint32_t>& equipped_items);
+std::unordered_map<int, int> calculateEquipmentGeosets(const std::unordered_map<int, uint32_t>& equipped_items, const nlohmann::json& item_skins = nlohmann::json::object());
 
 /**
  * Get the set of char_geosets affected by equipped items.
  * @param equipped_items Map of slot_id -> item_id.
+ * @param item_skins Optional JSON object mapping slot_id_string -> modifier_id.
  * @returns Set of affected CG enum values.
  */
-std::unordered_set<int> getAffectedCharGeosets(const std::unordered_map<int, uint32_t>& equipped_items);
+std::unordered_set<int> getAffectedCharGeosets(const std::unordered_map<int, uint32_t>& equipped_items, const nlohmann::json& item_skins = nlohmann::json::object());
 
 /**
  * Get geoset groups that should be hidden when a helmet is equipped.
  * @param item_id Helmet item ID.
  * @param race_id Character's race ID.
  * @param gender_index 0 for male, 1 for female.
+ * @param modifier_id Optional item appearance modifier ID (-1 for default).
  * @returns Vector of CG enum values to hide.
  */
-std::vector<int> getHelmetHideGeosets(uint32_t item_id, uint32_t race_id, int gender_index);
+std::vector<int> getHelmetHideGeosets(uint32_t item_id, uint32_t race_id, int gender_index, int modifier_id = -1);
 
 /**
  * Get geoset data directly by ItemDisplayInfoID.

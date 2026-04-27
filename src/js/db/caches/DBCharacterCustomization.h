@@ -82,4 +82,6 @@ std::optional<uint32_t> get_texture_file_data_id(uint32_t material_resources_id)
 std::optional<uint32_t> get_choice_skinned_model(uint32_t choice_id);
 const db::DataRecord* get_skinned_model(uint32_t id);
 
+std::optional<uint32_t> get_choice_cond_model_file_data_id(uint32_t choice_id);
+
 } // namespace db::caches::DBCharacterCustomization

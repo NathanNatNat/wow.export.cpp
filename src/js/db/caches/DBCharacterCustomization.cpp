@@ -65,6 +65,7 @@ static std::unordered_map<uint32_t, uint32_t> tfd_map;
 static std::unordered_map<uint32_t, uint32_t> choice_to_geoset;
 static std::unordered_map<uint32_t, std::vector<ChrCustMaterialRef>> choice_to_chr_cust_material_id;
 static std::unordered_map<uint32_t, uint32_t> choice_to_skinned_model;
+static std::unordered_map<uint32_t, uint32_t> choice_to_cond_file_data_id;
 static std::vector<uint32_t> unsupported_choices;
 
 static std::map<uint32_t, std::vector<OptionEntry>> options_by_chr_model;
@@ -106,6 +107,11 @@ static void _initialize() {
 	// creature data (needed for ChrModel -> FileDataID)
 	DBCreatures::initializeCreatureData();
 
+	// conditional model mapping (ChrCustomizationCondModel -> CreatureModelData -> FileDataID)
+	std::unordered_map<uint32_t, uint32_t> cond_model_map;
+	for (const auto& [cond_model_id, cond_model_row] : casc::db2::preloadTable("ChrCustomizationCondModel").getAllRows())
+		cond_model_map[cond_model_id] = fieldToUint32(cond_model_row.at("CreatureModelDataID"));
+
 	// customization elements
 	for (const auto& [_id, elem_row] : casc::db2::preloadTable("ChrCustomizationElement").getAllRows()) {
 		(void)_id;
@@ -129,8 +135,17 @@ static void _initialize() {
 		if (boneSetID != 0)
 			unsupported_choices.push_back(choiceID);
 
-		if (condModelID != 0)
+		if (condModelID != 0) {
+			auto cond_it = cond_model_map.find(condModelID);
+			if (cond_it != cond_model_map.end()) {
+				auto file_data_id = DBCreatures::getFileDataIDByModelDataID(cond_it->second);
+				if (file_data_id.has_value())
+					choice_to_cond_file_data_id[choiceID] = *file_data_id;
+				else
+					logging::write(std::format("ChrCustomizationCondModel {} references unknown CreatureModelData {}", condModelID, cond_it->second));
+			}
 			unsupported_choices.push_back(choiceID);
+		}
 
 		if (displayInfoID != 0)
 			unsupported_choices.push_back(choiceID);
@@ -481,6 +496,13 @@ const db::DataRecord* get_skinned_model(uint32_t id) {
 	if (it != chr_cust_skinned_model_map.end())
 		return &it->second;
 	return nullptr;
+}
+
+std::optional<uint32_t> get_choice_cond_model_file_data_id(uint32_t choice_id) {
+	auto it = choice_to_cond_file_data_id.find(choice_id);
+	if (it != choice_to_cond_file_data_id.end())
+		return it->second;
+	return std::nullopt;
 }
 
 } // namespace db::caches::DBCharacterCustomization

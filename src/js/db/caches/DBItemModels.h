@@ -36,6 +36,9 @@ void ensureInitialized();
  */
 std::optional<std::vector<uint32_t>> getItemModels(uint32_t item_id);
 
+// Shoulder position filter for getItemDisplay (matches JS 'left'/'right'/undefined)
+enum class ShoulderPos { None = 0, Left = 1, Right = 2 };
+
 /**
  * Get display data for an item (models and textures).
  * Filters models by race/gender if provided.
@@ -43,9 +46,10 @@ std::optional<std::vector<uint32_t>> getItemModels(uint32_t item_id);
  * @param race_id Character race ID for filtering (optional, -1 to skip).
  * @param gender_index 0=male, 1=female (optional, -1 to skip).
  * @param modifier_id Item appearance modifier ID (optional, -1 to use default).
+ * @param shoulder_pos For shoulder items, return only Left or Right model (optional).
  * @returns ItemDisplayData, or std::nullopt if not found.
  */
-std::optional<ItemDisplayData> getItemDisplay(uint32_t item_id, int race_id = -1, int gender_index = -1, int modifier_id = -1);
+std::optional<ItemDisplayData> getItemDisplay(uint32_t item_id, int race_id = -1, int gender_index = -1, int modifier_id = -1, ShoulderPos shoulder_pos = ShoulderPos::None);
 
 /**
  * Get ItemDisplayInfoID for an item.
