@@ -455,6 +455,31 @@ void render() {
 	app::layout::EndTab();
 }
 
+// --- Helpers ---
+
+static std::vector<std::vector<std::string>> jsonRowsToStrings(const nlohmann::json& rows_json) {
+	std::vector<std::vector<std::string>> result;
+	result.reserve(rows_json.size());
+	for (const auto& row : rows_json) {
+		std::vector<std::string> str_row;
+		str_row.reserve(row.size());
+		for (const auto& val : row)
+			str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
+		result.push_back(std::move(str_row));
+	}
+	return result;
+}
+
+static std::vector<std::vector<std::string>> getDisplayRows(
+		const std::vector<std::string>& headers) {
+	const auto& view = *core::view;
+	return data_table::getFilteredSortedRows(
+		jsonRowsToStrings(view.tableBrowserRows), headers,
+		view.userInputFilterDataTable,
+		view.config.value("regexFilters", false),
+		data_table_state);
+}
+
 // --- Export methods ---
 
 static void copy_rows_csv() {
@@ -463,21 +488,12 @@ static void copy_rows_csv() {
 	if (count == 0)
 		return;
 
-	// Convert headers to string vector.
 	std::vector<std::string> headers;
 	for (const auto& h : view.tableBrowserHeaders)
 		headers.push_back(h.get<std::string>());
 
-	// Convert all rows to string 2D array (sorted items is the same as rows for now).
-	std::vector<std::vector<std::string>> sorted_rows;
-	for (const auto& row : view.tableBrowserRows) {
-		std::vector<std::string> str_row;
-		for (const auto& val : row)
-			str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
-		sorted_rows.push_back(std::move(str_row));
-	}
+	const auto sorted_rows = getDisplayRows(headers);
 
-	// Convert selection to int indices.
 	std::vector<int> sel_indices;
 	for (const auto& s : view.selectionDataTable)
 		sel_indices.push_back(s.get<int>());
@@ -495,21 +511,12 @@ static void copy_rows_sql() {
 	if (count == 0)
 		return;
 
-	// Convert headers to string vector.
 	std::vector<std::string> headers;
 	for (const auto& h : view.tableBrowserHeaders)
 		headers.push_back(h.get<std::string>());
 
-	// Convert all rows to string 2D array.
-	std::vector<std::vector<std::string>> sorted_rows;
-	for (const auto& row : view.tableBrowserRows) {
-		std::vector<std::string> str_row;
-		for (const auto& val : row)
-			str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
-		sorted_rows.push_back(std::move(str_row));
-	}
+	const auto sorted_rows = getDisplayRows(headers);
 
-	// Convert selection to int indices.
 	std::vector<int> sel_indices;
 	for (const auto& s : view.selectionDataTable)
 		sel_indices.push_back(s.get<int>());
@@ -552,35 +559,24 @@ static void export_csv() {
 			return;
 		}
 
-		// Convert headers to string vector.
 		std::vector<std::string> headers;
 		for (const auto& h : headers_json)
 			headers.push_back(h.get<std::string>());
 
-		// Determine rows to export.
 		std::vector<std::vector<std::string>> rows_to_export;
 		if (export_all_val) {
-			for (const auto& row : all_rows_json) {
-				std::vector<std::string> str_row;
-				for (const auto& val : row)
-					str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
-				rows_to_export.push_back(std::move(str_row));
-			}
+			rows_to_export = jsonRowsToStrings(all_rows_json);
 		} else {
 			if (selection.empty()) {
 				core::setToast("info", "No rows selected. Please select some rows first or enable \"Export all rows\".");
 				return;
 			}
 
+			const auto sorted_rows = getDisplayRows(headers);
 			for (const auto& row_index_json : selection) {
 				const int row_index = row_index_json.get<int>();
-				if (row_index >= 0 && row_index < static_cast<int>(all_rows_json.size())) {
-					const auto& row = all_rows_json[row_index];
-					std::vector<std::string> str_row;
-					for (const auto& val : row)
-						str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
-					rows_to_export.push_back(std::move(str_row));
-				}
+				if (row_index >= 0 && row_index < static_cast<int>(sorted_rows.size()))
+					rows_to_export.push_back(sorted_rows[static_cast<size_t>(row_index)]);
 			}
 
 			if (rows_to_export.empty()) {
@@ -647,27 +643,18 @@ static void export_sql() {
 
 		std::vector<std::vector<std::string>> rows_to_export;
 		if (export_all_val) {
-			for (const auto& row : all_rows_json) {
-				std::vector<std::string> str_row;
-				for (const auto& val : row)
-					str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
-				rows_to_export.push_back(std::move(str_row));
-			}
+			rows_to_export = jsonRowsToStrings(all_rows_json);
 		} else {
 			if (selection.empty()) {
 				core::setToast("info", "No rows selected. Please select some rows first or enable \"Export all rows\".");
 				return;
 			}
 
+			const auto sorted_rows = getDisplayRows(headers);
 			for (const auto& row_index_json : selection) {
 				const int row_index = row_index_json.get<int>();
-				if (row_index >= 0 && row_index < static_cast<int>(all_rows_json.size())) {
-					const auto& row = all_rows_json[row_index];
-					std::vector<std::string> str_row;
-					for (const auto& val : row)
-						str_row.push_back(val.is_string() ? val.get<std::string>() : val.dump());
-					rows_to_export.push_back(std::move(str_row));
-				}
+				if (row_index >= 0 && row_index < static_cast<int>(sorted_rows.size()))
+					rows_to_export.push_back(sorted_rows[static_cast<size_t>(row_index)]);
 			}
 
 			if (rows_to_export.empty()) {

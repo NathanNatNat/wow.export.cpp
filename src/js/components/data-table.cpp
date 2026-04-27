@@ -914,6 +914,16 @@ std::string getSelectedRowsAsSQL(const std::vector<std::string>& headers,
 }
 
 
+std::vector<std::vector<std::string>> getFilteredSortedRows(
+        const std::vector<std::vector<std::string>>& rows,
+        const std::vector<std::string>& headers,
+        const std::string& filter,
+        bool regex,
+        const DataTableState& state) {
+	auto filtered = filteredItems(rows, filter, regex, headers, {}, nullptr);
+	return sortedItems(filtered, state);
+}
+
 /**
  * HTML mark-up to render for this component.
  */
