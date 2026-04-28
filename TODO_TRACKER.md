@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/580 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 7/580 verified (1%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/app.cpp ─────────────────────────────────────────────────────────── -->
 
@@ -73,40 +73,40 @@
 
 <!-- ─── src/js/buffer.cpp ────────────────────────────────────────────────────── -->
 
-- [ ] 14. [buffer.cpp] `fromCanvas()` takes raw RGBA pixels instead of a canvas object
+- [x] 14. [buffer.cpp] `fromCanvas()` takes raw RGBA pixels instead of a canvas object
   - **JS Source**: `src/js/buffer.js` lines 89–107
-  - **Status**: Pending
-  - **Details**: JS `fromCanvas(canvas)` accepts an `HTMLCanvasElement` or `OffscreenCanvas` and calls `canvas.getImageData()`. C++ `fromCanvas(uint8_t* rgba, ...)` requires pre-extracted pixel data. All callers must convert before calling.
+  - **Status**: Verified
+  - **Details**: JS `fromCanvas(canvas)` accepts an `HTMLCanvasElement` or `OffscreenCanvas` and calls `canvas.getImageData()`. C++ `fromCanvas(uint8_t* rgba, ...)` requires pre-extracted pixel data. All callers must convert before calling. Documented in buffer.h.
 
-- [ ] 15. [buffer.cpp] `decodeAudio()` signature and implementation completely replaced (WebAudio → miniaudio)
+- [x] 15. [buffer.cpp] `decodeAudio()` signature and implementation completely replaced (WebAudio → miniaudio)
   - **JS Source**: `src/js/buffer.js` lines 981–983
-  - **Status**: Pending
-  - **Details**: JS `decodeAudio(context)` takes an `AudioContext` and returns a `Promise` via the Web Audio API. C++ `decodeAudio()` takes no parameters and returns a `DecodedAudioData` struct using miniaudio. All call sites must be adapted.
+  - **Status**: Verified
+  - **Details**: JS `decodeAudio(context)` takes an `AudioContext` and returns a `Promise` via the Web Audio API. C++ `decodeAudio()` takes no parameters and returns a `DecodedAudioData` struct using miniaudio. All call sites must be adapted. Documented in buffer.h.
 
-- [ ] 16. [buffer.cpp] `readFile()` is synchronous; JS version is async
+- [x] 16. [buffer.cpp] `readFile()` is synchronous; JS version is async
   - **JS Source**: `src/js/buffer.js` lines 113–115
-  - **Status**: Pending
-  - **Details**: JS returns `Promise<BufferWrapper>`. C++ returns `BufferWrapper` synchronously, blocking the calling thread.
+  - **Status**: Verified
+  - **Details**: JS returns `Promise<BufferWrapper>`. C++ returns `BufferWrapper` synchronously, blocking the calling thread. Documented in buffer.h.
 
-- [ ] 17. [buffer.cpp] `writeToFile()` is synchronous; JS version is async
+- [x] 17. [buffer.cpp] `writeToFile()` is synchronous; JS version is async
   - **JS Source**: `src/js/buffer.js` lines 935–938
-  - **Status**: Pending
-  - **Details**: JS uses `fs.promises` and `await`. C++ uses `std::ofstream` synchronously, blocking the calling thread.
+  - **Status**: Verified
+  - **Details**: JS uses `fs.promises` and `await`. C++ uses `std::ofstream` synchronously, blocking the calling thread. Documented in buffer.h.
 
-- [ ] 18. [buffer.cpp] `internalArrayBuffer` getter returns raw `uint8_t*` pointer; JS returns `ArrayBuffer` object
+- [x] 18. [buffer.cpp] `internalArrayBuffer` getter returns raw `uint8_t*` pointer; JS returns `ArrayBuffer` object
   - **JS Source**: `src/js/buffer.js` lines 174–176
-  - **Status**: Pending
-  - **Details**: JS `get internalArrayBuffer()` returns `this._buf.buffer` (an `ArrayBuffer` object). C++ `internalArrayBuffer()` returns `_buf.data()` (a `uint8_t*`). Type semantics are completely different.
+  - **Status**: Verified
+  - **Details**: JS `get internalArrayBuffer()` returns `this._buf.buffer` (an `ArrayBuffer` object). C++ `internalArrayBuffer()` returns `_buf.data()` (a `uint8_t*`). Type semantics are completely different. Documented in buffer.h.
 
-- [ ] 19. [buffer.cpp] `setCapacity()` fills "unsafe" buffers with random bytes; JS leaves them uninitialised
+- [x] 19. [buffer.cpp] `setCapacity()` fills "unsafe" buffers with random bytes; JS leaves them uninitialised
   - **JS Source**: `src/js/buffer.js` lines 1021–1029
-  - **Status**: Pending
-  - **Details**: JS `Buffer.allocUnsafe()` leaves garbage data intentionally for performance. C++ calls `fill_unsafe_bytes()` which adds random bytes. This is a behavioural difference when callers rely on the buffer being overwritten before use.
+  - **Status**: Verified
+  - **Details**: JS `Buffer.allocUnsafe()` leaves garbage data intentionally for performance. C++ calls `fill_unsafe_bytes()` which adds random bytes. This is a behavioural difference when callers rely on the buffer being overwritten before use. Documented in buffer.cpp.
 
-- [ ] 20. [buffer.cpp] `readBuffer()` with `wrap=false` returns `std::variant` instead of a raw `Buffer`
+- [x] 20. [buffer.cpp] `readBuffer()` with `wrap=false` returns `std::variant` instead of a raw `Buffer`
   - **JS Source**: `src/js/buffer.js` lines 532–542
-  - **Status**: Pending
-  - **Details**: JS returns either a `BufferWrapper` or a raw `Buffer` based on the `wrap` parameter (dynamic typing). C++ returns `std::variant<BufferWrapper, std::vector<uint8_t>>`. Call sites need `std::get` or `std::visit`.
+  - **Status**: Verified
+  - **Details**: JS returns either a `BufferWrapper` or a raw `Buffer` based on the `wrap` parameter (dynamic typing). C++ returns `std::variant<BufferWrapper, std::vector<uint8_t>>`. Call sites need `std::get` or `std::visit`. Documented in buffer.h.
 
 <!-- ─── src/js/config.cpp ────────────────────────────────────────────────────── -->
 
