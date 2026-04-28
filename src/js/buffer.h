@@ -60,10 +60,10 @@ public:
 	static BufferWrapper concat(const std::vector<BufferWrapper>& buffers);
 
 	/**
-	 * C++ equivalent of JS fromCanvas(). The JS method converts an
-	 * HTMLCanvasElement/OffscreenCanvas to a BufferWrapper. Since C++ has
-	 * no canvas/Blob browser APIs, this method takes raw RGBA pixel data
-	 * and encodes it to the requested image format.
+	 * C++ equivalent of JS fromCanvas(). The JS method accepts an HTMLCanvasElement or
+	 * OffscreenCanvas and internally calls canvas.getImageData() to extract pixels.
+	 * C++ has no browser canvas API, so callers must extract RGBA pixel data first and
+	 * pass it directly.
 	 * @param rgba   Pointer to RGBA pixel data (4 bytes per pixel).
 	 * @param width  Image width in pixels.
 	 * @param height Image height in pixels.
@@ -75,10 +75,7 @@ public:
 	static BufferWrapper fromCanvas(const uint8_t* rgba, int width, int height,
 	                                std::string_view mimeType, int quality = 90);
 
-	/**
-	 * Load a file from disk at the given path into a wrapped buffer.
-	 * @param file Path to the file.
-	 */
+	// JS readFile() is async and returns Promise<BufferWrapper>. C++ is synchronous and blocks the calling thread.
 	static BufferWrapper readFile(const std::filesystem::path& file);
 
 	/**
@@ -139,7 +136,8 @@ public:
 	const std::vector<uint8_t>& raw() const;
 	std::vector<uint8_t>& raw();
 
-	/** Get a pointer to the underlying data (JS: internalArrayBuffer). */
+	// JS get internalArrayBuffer() returns this._buf.buffer (an ArrayBuffer object).
+	// C++ returns _buf.data() (a raw uint8_t*) — a different type with different semantics.
 	const uint8_t* internalArrayBuffer() const;
 
 	// -----------------------------------------------------------------------
@@ -309,7 +307,8 @@ public:
 	 */
 	BufferWrapper readBuffer();
 	BufferWrapper readBuffer(size_t length, bool inflate = false);
-	/** JS-parity overload: readBuffer(length, wrap, inflate). */
+	// JS readBuffer(length, wrap, inflate) returns either a BufferWrapper or a raw Buffer via
+	// dynamic typing. C++ uses std::variant; call sites must use std::get<> or std::visit.
 	std::variant<BufferWrapper, std::vector<uint8_t>> readBuffer(size_t length, bool wrap, bool inflate);
 
 	/** Read a buffer from this buffer (raw, unwrapped). */
@@ -412,10 +411,7 @@ public:
 	 */
 	void writeBuffer(std::span<const uint8_t> buf, size_t copyLength = 0);
 
-	/**
-	 * Write the contents of this buffer to a file.
-	 * Directory path will be created if needed.
-	 */
+	// JS writeToFile() is async (fs.promises + await). C++ uses std::ofstream synchronously, blocking the calling thread.
 	void writeToFile(const std::filesystem::path& file);
 
 	// -----------------------------------------------------------------------
@@ -458,7 +454,8 @@ public:
 	/** Returns the entire buffer encoded as base64. */
 	std::string toBase64() const;
 
-	/** Decode audio data (miniaudio equivalent of JS decodeAudio(context)). */
+	// JS decodeAudio(context) takes an AudioContext and returns a Promise via the Web Audio API.
+	// C++ takes no parameters and returns DecodedAudioData synchronously using miniaudio.
 	DecodedAudioData decodeAudio() const;
 
 	/**

@@ -181,6 +181,8 @@ result.push_back(static_cast<uint8_t>((val >> bits) & 0xff));
 return result;
 }
 
+// JS Buffer.allocUnsafe() leaves the buffer with whatever garbage was in memory (true uninitialized).
+// C++ fills with pseudo-random bytes for determinism; the result is still non-zero "unsafe" data.
 void fill_unsafe_bytes(std::vector<uint8_t>& bytes) {
 	const uint64_t now = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
 	const uint64_t tid = std::hash<std::thread::id>{}(std::this_thread::get_id());
