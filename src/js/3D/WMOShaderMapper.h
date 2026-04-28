@@ -44,6 +44,8 @@ enum WMOPixelShader : int {
 	MapObjTwoLayerDiffuseMod2xNA = 16,
 	MapObjTwoLayerDiffuseAlpha = 17,
 	MapObjLod = 18,
+	// JS calls this `MapObjParallax`. Renamed here because `WMOVertexShader::MapObjParallax = 8`
+	// shares the same namespace and the unsuffixed names would collide. Numeric value is unchanged.
 	MapObjParallax_PS = 19,
 	MapObjDFShader = 20
 };

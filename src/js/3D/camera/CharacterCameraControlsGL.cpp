@@ -181,6 +181,7 @@ bool CharacterCameraControlsGL::on_mouse_wheel(float deltaY) {
 }
 
 void CharacterCameraControlsGL::update() {
+	// no-op for compatibility
 }
 
 void CharacterCameraControlsGL::dispose() {

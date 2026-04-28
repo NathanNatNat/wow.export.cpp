@@ -185,6 +185,8 @@ CameraControlsGL::CameraControlsGL(CameraGL& camera, DomElementGL& dom_element)
 	offset = vec3_create();
 
 	// quaternion to rotate to y-up space
+	// JS uses `camera.up || [0, 1, 0]` defensively. CameraGL::up is always initialized to
+	// {0, 1, 0}, so the fallback can never trigger here — direct use is equivalent.
 	const vec3& cam_up = camera.up;
 	const vec3 y_up = {0, 1, 0};
 	quat = quat_create();
@@ -378,6 +380,8 @@ void CameraControlsGL::pan(float x, float y, float z) {
 	vec3_normalize(cam_dir, cam_dir);
 
 	// get right vector
+	// JS uses `camera.up || [0, 1, 0]` defensively. CameraGL::up is always initialized to
+	// {0, 1, 0}, so the fallback can never trigger — direct use is equivalent.
 	vec3& cam_right = _cache_cam_right;
 	const vec3& cam_up_vec = camera.up;
 	vec3_cross(cam_right, cam_dir, cam_up_vec);

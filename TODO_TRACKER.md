@@ -1,47 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/486 verified (0%)** — ✅ = Verified, ⬜ = Pending
-
-<!-- ─── src/js/3D/WMOShaderMapper.cpp ──────────────────────────────────────────── -->
-
-- [ ] 95. [WMOShaderMapper.cpp] `WMOPixelShader::MapObjParallax` renamed to `MapObjParallax_PS` without explanatory comment
-  - **JS Source**: `src/js/3D/WMOShaderMapper.js` line 35
-  - **Status**: Pending
-  - **Details**: JS defines `WMOPixelShader.MapObjParallax = 19`. C++ renames it `MapObjParallax_PS = 19` because `WMOVertexShader` already defines `MapObjParallax = 8` in the same namespace and the names would collide. The numeric value and all map usages are correct, but neither `WMOShaderMapper.h` nor `.cpp` contains a comment explaining why the name differs from the JS original. A future developer searching for `MapObjParallax` in the pixel shader enum will not find it.
-
-<!-- ─── src/js/3D/camera/CameraControlsGL.cpp ──────────────────────────────────── -->
-
-- [ ] 96. [CameraControlsGL.cpp] `camera.up` fallback `|| [0, 1, 0]` not mirrored in constructor or `pan()`
-  - **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 180, 356
-  - **Status**: Pending
-  - **Details**: JS computes `const cam_up = camera.up || [0, 1, 0]` in both the constructor and `pan()`. C++ uses `camera.up` directly with no fallback. Since `CameraGL::up` is always initialized to `{0, 1, 0}`, the fallback is never triggered and the behavior is functionally equivalent. The defensive JS pattern is not mirrored — worth a comment explaining the omission.
-
-- [ ] 97. [CameraControlsGL.cpp] `on_mouse_down()` returns `bool` (always `true`) instead of `void`
-  - **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 223–240
-  - **Status**: Pending
-  - **Details**: JS `on_mouse_down` is implicitly void. C++ returns `bool` and always returns `true`, regardless of which button was pressed. This is a deliberate GLFW adaptation to allow callers to suppress further event processing. The code comment (line 259) explains this. Noted as a deviation from the JS signature.
-
-- [ ] 98. [CameraControlsGL.cpp] quaternion dot-product fallback `|| [0, 0, 0, 1]` not mirrored in `update()`
-  - **JS Source**: `src/js/3D/camera/CameraControlsGL.js` line 417
-  - **Status**: Pending
-  - **Details**: JS uses `this.camera.quaternion || [0, 0, 0, 1]` as the right-hand operand in `quat_dot`. C++ uses `camera.quaternion` directly. Since `CameraGL::quaternion` is always initialized to `{0, 0, 0, 1}`, behavior is equivalent. Defensive null-guard not mirrored.
-
-<!-- ─── src/js/3D/camera/CharacterCameraControlsGL.cpp ──────────────────────────── -->
-
-- [ ] 99. [CharacterCameraControlsGL.cpp] `on_mouse_wheel()` returns `true` on deltaY==0 early-exit path instead of `void`
-  - **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` lines 132–148
-  - **Status**: Pending
-  - **Details**: JS `on_mouse_wheel` is void and uses `return;` for the deltaY==0 early exit. C++ returns `true` on that path (and on all other paths), which correctly matches JS's unconditional `preventDefault`/`stopPropagation`. Intentional GLFW adaptation; noted as a deviation from the JS signature.
-
-- [ ] 100. [CharacterCameraControlsGL.cpp] `dispose()` does not remove mousedown/wheel listeners from `dom_element`
-  - **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` lines 170–175
-  - **Status**: Pending
-  - **Details**: JS `dispose()` removes four listeners: `dom_element` mousedown and wheel, plus `document` mousemove and mouseup. C++ `dispose()` only sets `is_rotating = false` and `is_panning = false`. The mousedown and wheel handlers remain active if the caller keeps forwarding events. Acceptable GLFW adaptation (documented in source comments), but dispose() is semantically incomplete compared to JS.
-
-- [ ] 101. [CharacterCameraControlsGL.cpp] `update()` empty body missing `// no-op for compatibility` comment
-  - **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` lines 166–168
-  - **Status**: Pending
-  - **Details**: JS `update()` has an explanatory comment `// no-op for compatibility`. C++ `update()` is an empty body with no comment. Minor documentation omission; no functional impact.
+> **Progress: 0/479 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/js/3D/exporters/ADTExporter.cpp ────────────────────────────────────── -->
 
