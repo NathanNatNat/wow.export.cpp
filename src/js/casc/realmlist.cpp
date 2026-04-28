@@ -13,14 +13,11 @@
 
 #include <nlohmann/json.hpp>
 
-#include <filesystem>
 #include <fstream>
 #include <format>
 #include <string>
 #include <stdexcept>
 #include <future>
-#include <charconv>
-#include <cmath>
 
 namespace {
 
@@ -53,53 +50,6 @@ void parseRealmList(const nlohmann::json& data) {
 	core::view->realmList = std::move(realms);
 }
 
-std::string jsStringCoerce(const nlohmann::json* value) {
-	if (value == nullptr)
-		return "undefined";
-
-	if (value->is_null())
-		return "null";
-	if (value->is_string())
-		return value->get<std::string>();
-	if (value->is_boolean())
-		return value->get<bool>() ? "true" : "false";
-	if (value->is_number_integer())
-		return std::to_string(value->get<long long>());
-	if (value->is_number_unsigned())
-		return std::to_string(value->get<unsigned long long>());
-	if (value->is_number_float())
-	{
-		const double v = value->get<double>();
-		if (std::isnan(v))
-			return "NaN";
-		if (!std::isfinite(v))
-			return v < 0 ? "-Infinity" : "Infinity";
-		if (v == 0.0)
-			return "0";
-
-		char buf[128];
-		auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), v, std::chars_format::general);
-		if (ec == std::errc())
-			return std::string(buf, ptr);
-
-		return value->dump();
-	}
-	if (value->is_array()) {
-		std::string out;
-		bool first = true;
-		for (const auto& elem : *value) {
-			if (!first)
-				out += ",";
-			first = false;
-			if (!elem.is_null())
-				out += jsStringCoerce(&elem);
-		}
-		return out;
-	}
-
-	return "[object Object]";
-}
-
 } // anonymous namespace
 
 namespace casc {
@@ -108,10 +58,10 @@ namespace realmlist {
 void load() {
 	logging::write("Loading realmlist...");
 
-	const nlohmann::json* realmListURL = nullptr;
-	if (core::view->config.contains("realmListURL"))
-		realmListURL = &core::view->config["realmListURL"];
-	const std::string url = jsStringCoerce(realmListURL);
+	if (!core::view->config.contains("realmListURL") || !core::view->config["realmListURL"].is_string())
+		throw std::runtime_error("Missing/malformed realmListURL in configuration!");
+
+	const std::string url = core::view->config["realmListURL"].get<std::string>();
 
 	// Try loading cached realmlist from disk.
 	try {
