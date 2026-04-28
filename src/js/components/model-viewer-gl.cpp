@@ -425,6 +425,11 @@ static void render_scene(State& state, Context& context) {
 
 	// apply model rotation if speed is non-zero (non-character mode)
 	// JS: if (rotation_speed !== 0 && activeRenderer && activeRenderer.setTransform && !this.use_character_controls)
+	//
+	// C++ extension: JS auto-rotation only routes through `activeRenderer.setTransform`
+	// (M2 only). C++ adds an `else if` branch using `context.setActiveModelTransform`
+	// when `activeRenderer` is null, to support WMO/M3 models that have no
+	// `activeRenderer` equivalent in this port.
 	const double rotation_speed = core::view->modelViewerRotationSpeed;
 	if (rotation_speed != 0 && activeRenderer && !state.use_character_controls) {
 		state.model_rotation_y += static_cast<float>(rotation_speed) * deltaTime;
@@ -635,7 +640,14 @@ void recreate_controls(State& state, Context& context) {
 
 		state.use_character_controls = true;
 
-		// Update context outputs
+		// Update context outputs (JS: this.context.controls = this.controls).
+		// JS deviation: JS uses a single polymorphic `context.controls` pointer.
+		// C++ splits this into typed pointers `controls_orbit` (CameraControlsGL)
+		// and `controls_character` (CharacterCameraControlsGL) because C++ has no
+		// duck-typing. Only one is non-null at any time; the active mode determines
+		// which. External callers (e.g. `tab_characters.cpp`) must check the
+		// appropriate typed pointer. See header for the unified `controls_update`
+		// callback that abstracts over both.
 		context.controls_character = state.char_controls.get();
 		context.controls_orbit = nullptr;
 		context.controls_update = [&state]() {
@@ -650,7 +662,9 @@ void recreate_controls(State& state, Context& context) {
 
 		state.use_character_controls = false;
 
-		// Update context outputs
+		// Update context outputs (JS: this.context.controls = this.controls).
+		// JS deviation: see character-controls branch above for rationale on the
+		// `controls_orbit` / `controls_character` split.
 		context.controls_orbit = state.orbit_controls.get();
 		context.controls_character = nullptr;
 		context.controls_update = [&state]() {
@@ -678,6 +692,12 @@ static void setup_character_watchers(State& state, Context& context) {
 	if (!context.useCharacterControls)
 		return;
 
+	// JS deviation: JS uses Vue's `$watch` for immediate reactive callbacks on
+	// config changes (e.g. `core.view.$watch('config.chrUse3DCamera', ...)`).
+	// C++ has no Vue runtime; instead each watcher records its previous value
+	// and is polled per-frame in `poll_watchers`, comparing prev vs current.
+	// This introduces a one-frame latency between config change and callback
+	// invocation, which is acceptable for camera/control mode toggles.
 	state.watchers.push_back(State::BoolWatcher{
 		.get = []() { return core::view->config.value("chrUse3DCamera", true); },
 		.callback = [&state, &context]() { recreate_controls(state, context); },
@@ -697,6 +717,11 @@ static void setup_character_watchers(State& state, Context& context) {
 	});
 }
 
+// JS deviation: JS uses Vue's `$watch` for immediate reactive callbacks on
+// config changes. C++ has no Vue runtime; instead each watcher records its
+// previous value and is polled per-frame here, comparing prev vs current.
+// This introduces a one-frame latency between config change and callback
+// invocation, which is acceptable for camera/control mode toggles.
 static void poll_watchers(State& state) {
 	for (auto& watcher : state.watchers) {
 		const bool value = watcher.get ? watcher.get() : watcher.previous;

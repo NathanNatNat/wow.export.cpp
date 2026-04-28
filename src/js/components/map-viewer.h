@@ -228,10 +228,12 @@ void loadTile(MapViewerState& state, const TileQueueNode& tile, const TileLoader
 
 /**
  * Set the map to a sensible default position. Centers the view on the
- * middle of available tiles in the mask.
+ * middle of available tiles in the mask. Also calls render() on every
+ * code path (matching JS lines 421–462) so callers do not need to invoke
+ * it separately.
  */
 void setToDefaultPosition(MapViewerState& state, int tileSize_prop, int gridSize,
-                          const std::vector<int>& mask);
+                          const std::vector<int>& mask, const TileLoader& loader);
 
 /**
  * Calculate optimal canvas dimensions based on tile size and zoom levels.

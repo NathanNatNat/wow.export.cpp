@@ -803,28 +803,26 @@ void renderStatusBar(const std::string& unittype,
 	if (state.lastSelectionCount > 0)
 		statusText += " (" + std::to_string(state.lastSelectionCount) + " selected)";
 
-	// CSS: .list-container .list-status { background: #1f1f20; height: 27px;
-	//      border-bottom-right-radius: 10px; border-bottom-left-radius: 10px;
-	//      font-weight: bold; padding-left: 10px; padding-top: 3px; }
-	{
-		const ImVec2 pos = ImGui::GetCursorScreenPos();
-		const float statusW = ImGui::GetContentRegionAvail().x;
-		const float statusH = 27.0f;
-		ImDrawList* dl = ImGui::GetWindowDrawList();
-		dl->AddRectFilled(pos, ImVec2(pos.x + statusW, pos.y + statusH),
-						  IM_COL32(31, 31, 32, 255), 10.0f,
-						  ImDrawFlags_RoundCornersBottom);
+	// JS rendered <div class="list-status"> with CSS:
+	//   background: #1f1f20; height: 27px;
+	//   border-bottom-right-radius: 10px; border-bottom-left-radius: 10px;
+	//   font-weight: bold; padding-left: 10px; padding-top: 3px;
+	// The explicit colored rounded background was dropped per CLAUDE.md Visual
+	// Fidelity rules (exact CSS colors are not required); the status text and
+	// quick filters render on the default window background. Padding/cursor
+	// offsets are preserved to keep layout consistent.
+	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f);
+	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3.0f);
 
-		// Render bold status text with padding.
-		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f);
-		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3.0f);
-	}
+	// JS deviation: CSS `.list-status { font-weight: bold }` is not replicated
+	// — only one font is loaded; per CLAUDE.md Visual Fidelity rules, exact
+	// font weights need not match.
 	ImGui::TextUnformatted(statusText.c_str());
 
 	// Quick filters.
 	// CSS: .quick-filters a { color: #57afe2; } — inactive link color (FONT_ALT)
 	// CSS: .quick-filters a.active { color: #ffffff; font-weight: bold; } — active link color
-	// CSS: .quick-filters a:hover { text-decoration: underline; } — hover underline (not supported in Dear ImGui)
+	// CSS: .quick-filters a:hover { text-decoration: underline; } — hover underline.
 	// Use transparent-background clickable text to approximate CSS <a> link appearance.
 	if (!quickfilters.empty()) {
 		ImGui::SameLine();
@@ -848,6 +846,19 @@ void renderStatusBar(const std::string& unittype,
 			                      ImGuiSelectableFlags_None,
 			                      ImVec2(ImGui::CalcTextSize(upperExt.c_str()).x, 0.0f)))
 				applyQuickFilter(ext, state);
+
+			// CSS hover underline (`text-decoration: underline`) has no native
+			// Dear ImGui equivalent, so draw a thin line along the bottom of
+			// the item rect when hovered. Uses the same link color as the text.
+			if (ImGui::IsItemHovered()) {
+				const ImVec2 itemMin = ImGui::GetItemRectMin();
+				const ImVec2 itemMax = ImGui::GetItemRectMax();
+				ImDrawList* dl = ImGui::GetWindowDrawList();
+				const ImU32 underlineColor = ImGui::GetColorU32(linkColor);
+				dl->AddLine(ImVec2(itemMin.x, itemMax.y - 1.0f),
+				            ImVec2(itemMax.x, itemMax.y - 1.0f),
+				            underlineColor, 1.0f);
+			}
 			ImGui::PopStyleColor();
 
 			if (qi < quickfilters.size() - 1) {

@@ -68,14 +68,19 @@ static void select(int optionIndex, MenuButtonState& state,
 static void drawArrowButton(float width, bool hoveredOrOpen, bool disabled) {
 	if (hoveredOrOpen)
 		ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
-	ImGui::Button("##arrow", ImVec2(width, 0.0f));
+	// Use a "v" glyph as the button label so the down-arrow is rendered by
+	// the native ImGui text path rather than a raw ImDrawList::AddTriangleFilled
+	// call (CLAUDE.md: prefer native widgets over raw ImDrawList).
+	ImGui::Button("v##arrow", ImVec2(width, 0.0f));
 	if (hoveredOrOpen)
 		ImGui::PopStyleColor();
 
 	const ImVec2 arrowMin = ImGui::GetItemRectMin();
 	const ImVec2 arrowMax = ImGui::GetItemRectMax();
-	const ImVec2 arrowCenter((arrowMin.x + arrowMax.x) * 0.5f, (arrowMin.y + arrowMax.y) * 0.5f);
 
+	// 1px vertical divider between the main button and the arrow button.
+	// This is a custom decorative effect with no native equivalent, so it
+	// remains a direct ImDrawList::AddLine call (allowed per CLAUDE.md).
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	drawList->AddLine(
 		ImVec2(arrowMin.x, arrowMin.y),
@@ -84,15 +89,7 @@ static void drawArrowButton(float width, bool hoveredOrOpen, bool disabled) {
 		1.0f
 	);
 
-	const float halfWidth = 5.0f;
-	const float halfHeight = 2.5f;
-	const ImU32 arrowColor = disabled ? ImGui::GetColorU32(ImGuiCol_TextDisabled) : ImGui::GetColorU32(ImGuiCol_Text);
-	drawList->AddTriangleFilled(
-		ImVec2(arrowCenter.x - halfWidth, arrowCenter.y - halfHeight),
-		ImVec2(arrowCenter.x + halfWidth, arrowCenter.y - halfHeight),
-		ImVec2(arrowCenter.x, arrowCenter.y + halfHeight),
-		arrowColor
-	);
+	(void)disabled; // disabled tinting is handled by ImGui::BeginDisabled in the caller.
 }
 
 /**
@@ -137,7 +134,11 @@ void render(const char* id, const std::vector<MenuOption>& options,
 
 	if (ImGui::Button(displayLabel.c_str(), ImVec2(buttonWidth, 0.0f))) {
 		if (dropdown) {
-			if (!disabled)
+			// JS openMenu (lines 37-40): this.open = !this.open && !this.disabled
+			// — toggles the menu closed if already open. ImGui's click-outside
+			// handling auto-closes the popup before this click is delivered, so
+			// the toggle behavior collapses to: only re-open if it wasn't open.
+			if (!disabled && !popupOpen)
 				ImGui::OpenPopup(popupId.c_str());
 		} else if (onClick) {
 			onClick();
@@ -152,7 +153,11 @@ void render(const char* id, const std::vector<MenuOption>& options,
 	drawArrowButton(arrowWidth, hoveredButtonGroup, disabled);
 	if (!disabled && ImGui::IsItemHovered())
 		ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-	if (!disabled && ImGui::IsItemClicked())
+	// JS openMenu toggle semantics — only open if not already open. The popup
+	// is auto-closed by ImGui when the user clicks outside it (i.e., on this
+	// arrow), so omitting OpenPopup when popupOpen is true preserves the JS
+	// `this.open = !this.open` toggle-close behavior.
+	if (!disabled && !popupOpen && ImGui::IsItemClicked())
 		ImGui::OpenPopup(popupId.c_str());
 
 	if (disabled)
@@ -175,7 +180,6 @@ void render(const char* id, const std::vector<MenuOption>& options,
 
 	if (ImGui::BeginPopup(popupId.c_str(), ImGuiWindowFlags_NoNav)) {
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 8.0f));
-		ImDrawList* drawList = ImGui::GetWindowDrawList();
 
 		for (size_t i = 0; i < options.size(); ++i) {
 			const std::string& optLabel = options[i].label.empty() ? options[i].value : options[i].label;
@@ -184,14 +188,10 @@ void render(const char* id, const std::vector<MenuOption>& options,
 				ImGui::CloseCurrentPopup();
 			}
 
-			if (i + 1 < options.size()) {
-				const ImVec2 separatorPos = ImGui::GetCursorScreenPos();
-				drawList->AddLine(
-					separatorPos,
-					ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, separatorPos.y),
-					ImGui::GetColorU32(ImGuiCol_Separator)
-				);
-			}
+			// Use the native ImGui separator widget between options
+			// (CLAUDE.md: prefer native widgets over raw ImDrawList).
+			if (i + 1 < options.size())
+				ImGui::Separator();
 		}
 
 		ImGui::PopStyleVar();

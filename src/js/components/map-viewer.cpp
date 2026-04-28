@@ -104,6 +104,12 @@ void clearTileState() {
  * while the event loop handles repaints. In C++, loading is synchronous, so we
  * limit to a few tiles per frame to avoid freezing the UI during map panning.
  */
+// JS deviation (TODO 306): JS drains the queue while
+//   `state.activeTileRequests < state.maxConcurrentTiles` (up to 4 concurrent
+//   in-flight Promise-based async requests). C++ tile loading is synchronous,
+//   so concurrency is meaningless; instead we cap the number of tiles
+//   processed per frame at MAX_TILES_PER_FRAME (3) to keep the UI responsive
+//   during map panning. Behaviorally similar throttling, different mechanism.
 static constexpr int MAX_TILES_PER_FRAME = 3;
 
 void checkTileQueue(MapViewerState& state, const TileLoader& loader) {
@@ -201,6 +207,16 @@ bool tileHasUnexpectedTransparency(float drawX, float drawY, int tileSize) {
 	// In JS this reads Canvas 2D pixel data via getImageData().
 	// The original JS code samples 9 points (corners, edge centers, center)
 	// and checks the alpha channel for 0.
+	//
+	// JS deviation (TODO 307): JS clamps the sample rectangle to the canvas
+	//   via `ctx.getImageData(left, top, width, height)` where left/top/right/bottom
+	//   are clipped to [0, canvas.width/height]. It therefore checks only the
+	//   on-screen sub-region of the tile. C++ samples the full cached tile
+	//   pixel data from `tilePixelCache[index]` (the entire stored tile, not
+	//   the clipped portion). For tiles partially off-canvas the sample
+	//   positions differ — acceptable because this function is a heuristic
+	//   used to detect missing/transparent tiles, not a correctness-critical
+	//   check.
 
 	// Derive tile grid coordinates from draw position
 	const int tileX = static_cast<int>(std::floor((drawX - s_state.offsetX) / static_cast<float>(tileSize)));
@@ -371,9 +387,13 @@ void loadTile(MapViewerState& state, const TileQueueNode& tile, const TileLoader
 /**
  * Set the map to a sensible default position. Centers the view on the
  * middle of available tiles in the mask.
+ *
+ * Matches JS map-viewer.js lines 421–462: both the bounding-box code path
+ * and the grid-center fallback call `this.render()` before returning, so
+ * callers do not need to invoke render() separately. (TODO 308 fix.)
  */
 void setToDefaultPosition(MapViewerState& state, int tileSize_prop, int gridSize,
-                          const std::vector<int>& mask) {
+                          const std::vector<int>& mask, const TileLoader& loader) {
 	const int grid_size = effectiveGridSize(gridSize);
 	const int tileSize = static_cast<int>(std::floor(static_cast<float>(tileSize_prop) / static_cast<float>(s_state.zoomFactor)));
 	const int maxTileSize = tileSize_prop;
@@ -403,6 +423,7 @@ void setToDefaultPosition(MapViewerState& state, int tileSize_prop, int gridSize
 
 			s_state.offsetX = (state.viewportWidth / 2.0f) + static_cast<float>(maxTileSize) - (center_x * static_cast<float>(tileSize));
 			s_state.offsetY = (state.viewportHeight / 2.0f) + static_cast<float>(maxTileSize) - (center_y * static_cast<float>(tileSize));
+			render(state, tileSize_prop, gridSize, mask, loader);
 			return;
 		}
 	}
@@ -411,6 +432,7 @@ void setToDefaultPosition(MapViewerState& state, int tileSize_prop, int gridSize
 	const float center = static_cast<float>(grid_size) / 2.0f;
 	s_state.offsetX = (state.viewportWidth / 2.0f) + static_cast<float>(maxTileSize) - (center * static_cast<float>(tileSize));
 	s_state.offsetY = (state.viewportHeight / 2.0f) + static_cast<float>(maxTileSize) - (center * static_cast<float>(tileSize));
+	render(state, tileSize_prop, gridSize, mask, loader);
 }
 
 
@@ -498,14 +520,18 @@ void renderWithDoubleBuffer(MapViewerState& state, float canvasW, float canvasH,
 	const int grid_size = effectiveGridSize(gridSize);
 
 	// Calculate the offset delta from last render.
-	// JS uses deltaX/deltaY for pixel-level canvas blitting (lines 560–565):
-	//   doubleCtx.clearRect(0, 0, canvasSize.width, canvasSize.height);
-	//   doubleCtx.drawImage(canvas, deltaX, deltaY);
-	// In C++/ImGui, tile rendering is done via GL textures rather than canvas pixel
-	// blitting, so the double-buffer optimization does not shift existing pixels.
-	// Instead, we track which tiles are rendered (via the rendered set) and only
-	// queue missing tiles. The visual result is identical — already-loaded tiles
-	// are repositioned by the offset change and newly-visible tiles are queued.
+	// JS deviation (TODO 309): JS double-buffer blit-back step (map-viewer.js
+	//   lines 554–627) replaces the full canvas pixels each frame:
+	//     doubleCtx.clearRect(0, 0, canvasSize.width, canvasSize.height);
+	//     doubleCtx.drawImage(canvas, deltaX, deltaY);
+	//     ...
+	//     ctx.clearRect(0, 0, canvas.width, canvas.height);
+	//     ctx.drawImage(state.doubleBuffer, 0, 0);
+	//   C++ uses GL textures with offset-based positioning instead — already-
+	//   loaded tiles are repositioned by the new offset and newly-visible tiles
+	//   are queued. The intermediate `deltaX`/`deltaY` are computed but unused
+	//   (kept for parity with the JS structure and to ease future re-port if
+	//   pixel-level blitting is ever reintroduced).
 	[[maybe_unused]] const float deltaX = s_state.offsetX - s_state.prevOffsetX;
 	[[maybe_unused]] const float deltaY = s_state.offsetY - s_state.prevOffsetY;
 
@@ -574,8 +600,8 @@ void renderWithDoubleBuffer(MapViewerState& state, float canvasW, float canvasH,
 	}
 
 	// Copy double-buffer back to main canvas
-	// In JS, this clears the main canvas and draws the double-buffer
-	// via ctx.clearRect() + ctx.drawImage(state.doubleBuffer, 0, 0).
+	// (See JS deviation note at top of this function — no pixel-level
+	//  blit is performed in C++; GL textures are repositioned by offset.)
 }
 
 /**
@@ -1238,7 +1264,13 @@ void renderWidget(const char* id,
 		state.prevMap = mapId;
 		// Reset the cache.
 		clearTileState();
-		// Trigger default position after viewport is measured
+		// Trigger default position after viewport is measured.
+		// JS deviation (TODO 310): JS `map` watcher (lines 143–150) invokes
+		//   `setToDefaultPosition()` immediately because Vue has already
+		//   measured DOM size. C++ defers via `state.initialized = false`
+		//   until ImGui has reported `viewportWidth > 0` next frame,
+		//   introducing a one-frame delay before default positioning is
+		//   applied.
 		state.initialized = false;
 	}
 
@@ -1258,9 +1290,10 @@ void renderWidget(const char* id,
 	if (!state.initialized && mapId != -1 && state.viewportWidth > 0.0f && state.viewportHeight > 0.0f) {
 		state.initialized = true;
 		// Set the map position to a default position.
-		// This will trigger a re-render for us too.
-		setToDefaultPosition(state, tileSize_prop, gridSize, mask);
-		render(state, tileSize_prop, gridSize, mask, loader);
+		// This will trigger a re-render for us too — setToDefaultPosition
+		// internally calls render() on every code path (matching JS
+		// lines 421–462), so no separate render() call is needed here.
+		setToDefaultPosition(state, tileSize_prop, gridSize, mask, loader);
 	}
 
 	// <div class="info">
