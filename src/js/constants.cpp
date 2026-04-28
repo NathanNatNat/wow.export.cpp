@@ -177,7 +177,9 @@ void init() {
 	// JS: CONFIG.USER_PATH = path.join(DATA_PATH, 'config.json')
 	s_config_user_path = s_data_dir / "config.json";
 
-	// JS: UPDATE.DIRECTORY = path.join(INSTALL_PATH, '.update')
+	// JS: UPDATE_ROOT = INSTALL_PATH on non-macOS; UPDATE.DIRECTORY = path.join(UPDATE_ROOT, '.update')
+	// Deviation: JS on macOS resolves 4 levels up from nw.__dirname for the portable-app root.
+	// C++ has no macOS support; ROOT equals INSTALL_PATH on all supported platforms.
 	s_update_directory = s_install_path / ".update";
 #ifdef _WIN32
 	s_update_helper = "updater.exe";
@@ -225,6 +227,7 @@ namespace BLENDER {
 }
 
 namespace UPDATE {
+	const fs::path& ROOT() { return s_install_path; }
 	const fs::path& DIRECTORY() { return s_update_directory; }
 	const std::string& HELPER() { return s_update_helper; }
 }

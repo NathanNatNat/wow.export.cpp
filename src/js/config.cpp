@@ -74,6 +74,8 @@ static void doSave() {
 
 /**
  * Load configuration from disk.
+ * Deviation: JS load() is async and awaits all file reads. C++ is synchronous
+ * and blocks the calling thread during file I/O.
  */
 void load() {
 	auto defaultResult = generics::readJSON(constants::CONFIG::DEFAULT_PATH(), true);
@@ -83,13 +85,10 @@ void load() {
 	try {
 		auto userResult = generics::readJSON(constants::CONFIG::USER_PATH());
 		userConfig = userResult.value_or(nlohmann::json::object());
-	} catch (const std::exception& e) {
-		// Check for permission-denied errors (EPERM equivalent).
-		std::string msg = e.what();
-		if (msg.find("permission") != std::string::npos ||
-		    msg.find("EPERM") != std::string::npos ||
-		    msg.find("Permission denied") != std::string::npos ||
-		    msg.find("Access is denied") != std::string::npos) {
+	} catch (const std::runtime_error& e) {
+		// JS: if (e.code === 'EPERM') — generics::readJSON throws std::runtime_error
+		// with prefix "Permission denied: " when the file exists but cannot be opened.
+		if (std::string_view(e.what()).starts_with("Permission denied")) {
 			logging::write("Failed to load user config due to restricted permissions (EPERM)");
 			core::setToast("info",
 				"Restricted permissions detected. Restart wow.export.cpp using \"Run as Administrator\".",
@@ -107,8 +106,9 @@ void load() {
 	copyConfig(userConfig, mergedConfig);
 
 	core::view->config = mergedConfig;
-	// Note: Vue $watch is replaced by explicit save() calls from the UI layer.
-	// In ImGui, config changes trigger config::save() directly.
+	// Deviation: JS registers core.view.$watch('config', () => save(), { deep: true })
+	// so any config mutation auto-saves. C++ has no watcher; UI components that change
+	// config must explicitly call config::save() or changes will be silently lost.
 }
 
 /**
