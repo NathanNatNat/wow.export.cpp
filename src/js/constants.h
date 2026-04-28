@@ -62,9 +62,10 @@ inline constexpr std::string_view VERSION = "0.1.0";
 inline constexpr std::string_view FLAVOUR = WOW_EXPORT_PLATFORM "-" WOW_EXPORT_ARCH "-" WOW_EXPORT_BUILD_TYPE;
 
 // Build GUID (JS: nw.App.manifest.guid).
-// In the JS version this is a unique build identifier per session.
-// Generated at runtime as a UUID v4 string.
-const std::string& BUILD_GUID();
+// Fixed at build time, identical across all runs of the same build — matching the JS
+// version where guid is baked into the NW.js manifest. Must NOT change between launches;
+// only change between releases so checkForUpdates() only triggers on genuine updates.
+inline constexpr std::string_view BUILD_GUID = "3f6a2b1c-8e47-4d9a-b531-7c2e9f4a8d6b";
 
 // Filter used to filter out WMO LOD files.
 const std::regex& LISTFILE_MODEL_FILTER();

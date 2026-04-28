@@ -46,13 +46,22 @@ static nlohmann::json updateManifest;
 // Forward declaration (internal helper, not exported).
 static void launchUpdater();
 
-/**
- * Helper to replicate Node.js util.format() behavior: replaces the first
- * occurrence of %s in `fmt` with `arg`.
- */
+// Replicates Node.js util.format() behavior: replaces ALL occurrences of %s
+// in `fmt` with successive values from `args` (updater.js lines 25, 113).
+static std::string utilFormat(std::string fmt, const std::vector<std::string>& args) {
+	size_t argIdx = 0;
+	size_t pos = 0;
+	while (argIdx < args.size() && (pos = fmt.find("%s", pos)) != std::string::npos) {
+		fmt.replace(pos, 2, args[argIdx]);
+		pos += args[argIdx].size();
+		++argIdx;
+	}
+	return fmt;
+}
+
 static std::string utilFormat(const std::string& fmt, const std::string& arg) {
 	std::string result = fmt;
-	auto pos = result.find("%s");
+	const auto pos = result.find("%s");
 	if (pos != std::string::npos)
 		result.replace(pos, 2, arg);
 	return result;
@@ -83,7 +92,7 @@ bool checkForUpdates() {
 			throw std::runtime_error("Update manifest does not contain a valid contents list");
 
 		const std::string remoteGuid = manifest["guid"].get<std::string>();
-		const std::string localGuid(constants::BUILD_GUID());
+		const std::string_view localGuid = constants::BUILD_GUID;
 
 		if (remoteGuid != localGuid) {
 			updateManifest = std::move(manifest);
@@ -103,20 +112,24 @@ bool checkForUpdates() {
  * Apply an outstanding update.
  * JS: applyUpdate()
  *
- * Deviation from JS: JS applyUpdate/launchUpdater are async with await at each
- * step (updater.js lines 50, 61, 79, 103-104, 119-124). C++ executes the same
- * logical sequence synchronously with blocking calls. This is the standard
- * JS async → C++ synchronous mapping — the step ordering and error handling
- * are identical, only the execution model differs (no event loop yielding).
+ * Deviation from JS (TODO entry 77): JS applyUpdate/launchUpdater are async and yield
+ * at every await (updater.js lines 50, 61, 79, 103-104, 119-124), keeping the UI
+ * responsive. C++ runs all file-stat, hash, directory-create, and HTTP-download
+ * operations synchronously on the calling thread. Call from a background thread to
+ * avoid freezing the UI.
  */
 void applyUpdate() {
 	// Collect entries from the manifest contents object.
+	// permissions field: JS reads node.meta.permissions from the manifest (updater.js line 120)
+	// and passes it to downloadFile() so Linux executables get the right mode (e.g. 0755).
+	// Default to 0600 matching the JS generics.downloadFile default (generics.js line 218).
 	struct FileNode {
 		std::string file;
 		int64_t size;
 		std::string hash;
 		int64_t compSize;
 		int64_t ofs;
+		int permissions = 0600;
 	};
 
 	const auto& contents = updateManifest["contents"];
@@ -140,6 +153,8 @@ void applyUpdate() {
 		const std::string metaHash = meta["hash"].get<std::string>();
 		const int64_t metaCompSize = meta["compSize"].get<int64_t>();
 		const int64_t metaOfs = meta["ofs"].get<int64_t>();
+		// JS: node.meta.permissions — updater.js line 120. Default 0600 matches JS generics default.
+		const int metaPermissions = meta.contains("permissions") ? meta["permissions"].get<int>() : 0600;
 
 		try {
 			logging::write(std::format("Verifying local file: {}", file));
@@ -148,7 +163,7 @@ void applyUpdate() {
 			// If the file size is different, skip hashing and just mark for update.
 			if (fileSize != metaSize) {
 				logging::write(std::format("Marking {} for update due to size mismatch ({} != {})", file, fileSize, metaSize));
-				requiredFiles.push_back({file, metaSize, metaHash, metaCompSize, metaOfs});
+				requiredFiles.push_back({file, metaSize, metaHash, metaCompSize, metaOfs, metaPermissions});
 				continue;
 			}
 
@@ -159,7 +174,7 @@ void applyUpdate() {
 
 			if (localHash != metaHash) {
 				logging::write(std::format("Marking {} for update due to hash mismatch ({} != {})", file, localHash, metaHash));
-				requiredFiles.push_back({file, metaSize, metaHash, metaCompSize, metaOfs});
+				requiredFiles.push_back({file, metaSize, metaHash, metaCompSize, metaOfs, metaPermissions});
 				continue;
 			}
 
@@ -167,7 +182,7 @@ void applyUpdate() {
 		} catch (const std::exception& e) {
 			// Error thrown, likely due to file not existing.
 			logging::write(std::format("Marking {} for update due to local error: {}", file, e.what()));
-			requiredFiles.push_back({file, metaSize, metaHash, metaCompSize, metaOfs});
+			requiredFiles.push_back({file, metaSize, metaHash, metaCompSize, metaOfs, metaPermissions});
 		}
 	}
 
@@ -201,7 +216,9 @@ void applyUpdate() {
 		logging::write(std::format("Downloading {} to {}", node.file, localFile.string()));
 
 		core::progressLoadingScreen(std::format("{} / {} ({})", j + 1, n, downloadSize));
-		generics::downloadFile(remoteEndpoint, localFile.string(), node.ofs, node.compSize, true);
+		// JS: generics.downloadFile(remoteEndpoint, localFile, node.meta.ofs, node.meta.compSize, true, node.meta.permissions)
+		// updater.js line 120 — pass permissions so Linux executables get the correct file mode.
+		generics::downloadFile(remoteEndpoint, localFile.string(), node.ofs, node.compSize, true, node.permissions);
 	}
 
 	core::view->loadingTitle = "Restarting application...";
@@ -330,6 +347,9 @@ static void launchUpdater() {
 #endif
 
 		logging::write("Exiting main process to allow update...");
+		// JS: process.exit() — updater.js line 162.
+		// std::exit(0) bypasses stack destructors but invokes atexit/static destructors.
+		// This matches process.exit() semantics in Node.js. Intentional — the app is terminating.
 		std::exit(0);
 	} catch (const std::exception& e) {
 		logging::write(std::format("Failed to restart for update: {}", e.what()));

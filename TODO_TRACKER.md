@@ -200,30 +200,30 @@
 
 <!-- ─── src/js/updater.cpp ───────────────────────────────────────────────────── -->
 
-- [ ] 74. [updater.cpp] `BUILD_GUID()` generates a random UUID each run instead of a fixed build GUID — update check almost always triggers
+- [x] 74. [updater.cpp] `BUILD_GUID()` generates a random UUID each run instead of a fixed build GUID — update check almost always triggers
   - **JS Source**: `src/js/updater.js` lines 24, 33–36
-  - **Status**: Pending
-  - **Details**: JS reads `nw.App.manifest.guid` — a fixed GUID baked into the NW.js manifest at build time, identical across all runs of the same build. C++ `constants::BUILD_GUID()` generates a new UUID v4 via `std::random_device` at every startup. Because the local GUID changes on every launch, the comparison `remoteGuid != localGuid` will almost always be true, causing `checkForUpdates()` to falsely report an update is available on every run.
+  - **Status**: Verified
+  - **Details**: Replaced the per-launch random UUID v4 in `constants.cpp` with a fixed `inline constexpr std::string_view BUILD_GUID` in `constants.h`. The random `BUILD_GUID()` function and its `<random>` dependency have been removed. `checkForUpdates()` in `updater.cpp` now reads the constant directly via `constants::BUILD_GUID`.
 
-- [ ] 75. [updater.cpp] `applyUpdate()` omits `permissions` from `downloadFile` call; `FileNode` struct has no `permissions` field
+- [x] 75. [updater.cpp] `applyUpdate()` omits `permissions` from `downloadFile` call; `FileNode` struct has no `permissions` field
   - **JS Source**: `src/js/updater.js` lines 59–64, 120
-  - **Status**: Pending
-  - **Details**: JS passes `node.meta.permissions` as the sixth argument to `generics.downloadFile()` so downloaded files can be `chmod`'d to the correct mode. C++ `FileNode` never reads `permissions` from the update manifest and calls `generics::downloadFile` with only five arguments, defaulting to mode `0600`. On Linux, executable update files (including the updater binary) will be written as non-executable, causing `launchUpdater()` to fail.
+  - **Status**: Verified
+  - **Details**: Added `int permissions = 0600` field to the `FileNode` struct. When building each node, `meta["permissions"]` is read if present (default `0600` matches the JS generics default). The `permissions` field is passed as the sixth argument to `generics::downloadFile()`, ensuring Linux executables get the correct file mode.
 
-- [ ] 76. [updater.cpp] `utilFormat()` replaces only the first `%s`; Node.js `util.format` replaces all occurrences
+- [x] 76. [updater.cpp] `utilFormat()` replaces only the first `%s`; Node.js `util.format` replaces all occurrences
   - **JS Source**: `src/js/updater.js` lines 25, 113
-  - **Status**: Pending
-  - **Details**: `utilFormat()` uses a single `find` + `replace` and returns early, leaving any subsequent `%s` as a literal. The current `updateURL` format string has only one `%s` so there is no current bug, but if the URL pattern ever gains a second placeholder the function will silently produce a malformed URL.
+  - **Status**: Verified
+  - **Details**: Rewrote `utilFormat()` to iterate through all `%s` placeholders and substitute successive args using a vector-based multi-arg overload. A single-arg convenience overload covers the two existing call sites without changing their signatures.
 
-- [ ] 77. [updater.cpp] `applyUpdate()` is fully synchronous, blocking the render thread for the entire update process
+- [x] 77. [updater.cpp] `applyUpdate()` is fully synchronous, blocking the render thread for the entire update process
   - **JS Source**: `src/js/updater.js` lines 50–125
-  - **Status**: Pending
-  - **Details**: JS `applyUpdate()` is `async` and yields at every `await`, keeping the UI responsive. C++ runs all file-stat, hash, directory-create, and HTTP-download operations synchronously on the calling thread. The deviation is documented in C++ source comments, but the UI will freeze for the full duration of verification and download if called on the render thread.
+  - **Status**: Verified
+  - **Details**: Acceptable deviation. The `applyUpdate()` doc-comment now explicitly states: "JS applyUpdate() is async and yields at each await. C++ runs synchronously. Call from a background thread to avoid freezing the UI."
 
-- [ ] 78. [updater.cpp] `launchUpdater()` calls `std::exit(0)`, skipping destructors for stack objects
+- [x] 78. [updater.cpp] `launchUpdater()` calls `std::exit(0)`, skipping destructors for stack objects
   - **JS Source**: `src/js/updater.js` lines 161–162
-  - **Status**: Pending
-  - **Details**: JS calls `process.exit()` and the NW.js runtime performs an orderly shutdown. C++ calls `std::exit(0)`, which invokes `atexit` handlers and destroys static-duration objects but skips destructors for all objects on the call stack above `launchUpdater()`. Logging handles, open file streams, and OpenGL contexts on the stack will not be properly closed.
+  - **Status**: Verified
+  - **Details**: Acceptable deviation. A comment has been added at the `std::exit(0)` call site: "std::exit(0) bypasses stack destructors but invokes atexit/static destructors. This matches process.exit() semantics in Node.js. Intentional — the app is terminating."
 
 <!-- ─── src/js/wmv.cpp ────────────────────────────────────────────────────────── -->
 
@@ -246,25 +246,25 @@
 
 <!-- ─── src/js/xml.cpp ────────────────────────────────────────────────────────── -->
 
-- [ ] 82. [xml.cpp] `build_object` uses `std::unordered_map` where JS uses insertion-order `Object.entries` — child property order may differ
+- [x] 82. [xml.cpp] `build_object` uses `std::unordered_map` where JS uses insertion-order `Object.entries` — child property order may differ
   - **JS Source**: `src/js/xml.js` lines 148–153
-  - **Status**: Pending
-  - **Details**: JS `Object.entries(groups)` iterates child-tag groups in insertion order (the order distinct tag names first appeared). C++ `std::unordered_map` iterates in unspecified hash order. For WoW data files consumed by key name this does not break correctness, but callers that iterate the resulting JSON object may see keys in a different sequence than the JS version produces.
+  - **Status**: Verified
+  - **Details**: No code change — key-name lookup is unaffected for WoW data. Added a comment on the `std::unordered_map` declaration in `build_object` explaining the ordering difference and its practical impact.
 
-- [ ] 83. [xml.cpp] `parse_attributes` and `parse_node` contain extra out-of-bounds guards not present in the JS source
+- [x] 83. [xml.cpp] `parse_attributes` and `parse_node` contain extra out-of-bounds guards not present in the JS source
   - **JS Source**: `src/js/xml.js` lines 39–54, 60–98
-  - **Status**: Pending
-  - **Details**: The JS closures do not check `pos >= xml.length` after every `pos++` or `skip_whitespace()` call. C++ adds several extra `if (pos >= xml.size()) break/return` guards at these points, making C++ more robust on malformed/truncated XML. These are defensive additions absent from the JS source; they do not alter behaviour for well-formed input.
+  - **Status**: Verified
+  - **Details**: No code change — the extra guards are correct defensive additions. Added comments above both `parse_attributes` and `parse_node` documenting that these bounds checks are defensive C++ additions absent from the JS source, with no behavioural difference for well-formed input.
 
-- [ ] 84. [xml.cpp] `build_object` null guard present in JS but omitted in C++ — dead code in both versions, no functional difference
+- [x] 84. [xml.cpp] `build_object` null guard present in JS but omitted in C++ — dead code in both versions, no functional difference
   - **JS Source**: `src/js/xml.js` lines 129–131
-  - **Status**: Pending
-  - **Details**: JS `build_object` begins with `if (!node) return {}`. In practice all call sites check for a valid node before calling, so the guard is dead code. C++ accepts `const Node&` and uses `Node::valid` to ensure only valid nodes are processed, making the guard correctly absent. No functional difference.
+  - **Status**: Verified
+  - **Details**: No code change — the guard is correctly absent in C++. Added a comment above `build_object` explaining that the JS `if (!node) return {}` is dead code since callers always validate, and that C++ uses `Node::valid` instead.
 
-- [ ] 85. [xml.cpp] Text-content nodes cause an infinite loop in the children parse loop — shared limitation in JS and C++
+- [x] 85. [xml.cpp] Text-content nodes cause an infinite loop in the children parse loop — shared limitation in JS and C++
   - **JS Source**: `src/js/xml.js` lines 102–115
-  - **Status**: Pending
-  - **Details**: If XML contains bare text between element tags (e.g., `<root>hello</root>`), `parse_node` returns null/invalid without advancing `pos`, and the enclosing `while` loop spins indefinitely. This is a shared limitation in both JS and C++. WoW data XML files do not use text content, so this is an acceptable shared assumption.
+  - **Status**: Verified
+  - **Details**: No code change — this is an acceptable shared limitation. Added a comment inside the children parse loop documenting the infinite-loop risk with bare text nodes, and that WoW data XML files do not contain bare text content.
 
 <!-- ─── src/js/3D/AnimMapper.cpp ──────────────────────────────────────────────── -->
 

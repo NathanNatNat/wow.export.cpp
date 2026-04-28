@@ -215,7 +215,7 @@ return;
 // Use build manifest constants for generator string, matching JS:
 // util.format('wow.export v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid)
 const std::string generator = std::format("wow.export.cpp v{} {} [{}]",
-	constants::VERSION, constants::FLAVOUR, constants::BUILD_GUID());
+	constants::VERSION, constants::FLAVOUR, constants::BUILD_GUID);
 json root = {
 {"asset", {
 {"version", "2.0"},

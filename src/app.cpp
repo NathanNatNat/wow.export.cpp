@@ -381,7 +381,7 @@ static void renderCrashScreen() {
 	ImGui::SameLine();
 	ImGui::TextDisabled("%s", std::string(constants::FLAVOUR).c_str());
 	ImGui::SameLine();
-	ImGui::TextDisabled("[%s]", constants::BUILD_GUID().c_str());
+	ImGui::TextDisabled("[%s]", constants::BUILD_GUID.data());
 
 	// Display our error code/text.
 	// CSS: #crash-screen-text { font-weight: normal; font-size: 20px; margin: 20px 0; }
@@ -2390,7 +2390,7 @@ int main(int argc, char* argv[]) {
 
 	// Log some basic information for potential diagnostics.
 	logging::write(std::format("wow.export.cpp has started v{} {} [{}]",
-		constants::VERSION, constants::FLAVOUR, constants::BUILD_GUID()));
+		constants::VERSION, constants::FLAVOUR, constants::BUILD_GUID));
 	logging::write(std::format("Host {} ({}), CPU {} ({} cores), Memory {} / {}",
 		getPlatformName(), getArchName(), getCPUModel(), getCPUCoreCount(),
 		generics::filesize(static_cast<double>(getFreeMemory())),
