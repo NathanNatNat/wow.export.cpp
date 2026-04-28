@@ -1500,6 +1500,9 @@ static void setActiveModule(const std::string& module_name) {
 	modules::setActive(module_name);
 }
 
+// JS uses opt.action?.handler (handler is nested in an 'action' sub-object on each option).
+// C++'s ContextMenuOption struct flattens this: handler is directly on the struct.
+// Same semantics, different structure.
 static void handleContextMenuClick(const modules::ContextMenuOption& opt) {
 	if (opt.handler)
 		opt.handler();
@@ -1525,8 +1528,9 @@ static void setSelectedCDN(const nlohmann::json& region) {
 /**
  * Emit an event using the global event emitter.
  * JS equivalent: click(tag, event, ...params) — checks disabled before emitting.
- * In ImGui, disabled state is handled by BeginDisabled()/EndDisabled() so
- * the disabled parameter is provided for API fidelity but is rarely needed.
+ * JS checks event.target.classList.contains('disabled') at the DOM level.
+ * C++ receives a pre-computed bool from the ImGui caller instead (BeginDisabled
+ * suppresses interaction, so callers pass the disabled state directly).
  * @param {string} tag
  * @param {bool} disabled  If true, skip the emit (mirrors JS disabled check).
  */
@@ -1676,6 +1680,15 @@ static std::vector<nlohmann::json> textureRibbonDisplay() {
 	return std::vector<nlohmann::json>(
 		stack.begin() + startIndex,
 		stack.begin() + endIndex);
+}
+
+/**
+ * Switches to the textures tab and filters for the given file.
+ * JS equivalent: goToTexture(fileDataID) method on the Vue app instance.
+ * @param {number} fileDataID
+ */
+static void goToTexture(uint32_t fileDataID) {
+	tab_textures::goToTexture(fileDataID);
 }
 
 } // namespace app
@@ -2347,7 +2360,10 @@ int main(int argc, char* argv[]) {
 	initAppShellTextures();
 
 
-	// Initialize Vue equivalent: create AppState and assign to core::view.
+	// JS uses Vue.createApp({ data: () => core.makeNewView(), created() { core.view = this; } })
+	// for reactive binding with created/mounted lifecycle hooks that fire after the reactive proxy
+	// is set up. C++ uses a static struct assigned directly to core::view before modules register —
+	// no reactivity system is needed since ImGui redraws from live state every frame.
 	static AppState appState = core::makeNewView();
 	core::view = &appState;
 
@@ -2471,6 +2487,20 @@ int main(int argc, char* argv[]) {
 
 	// Set source select as the currently active interface screen.
 	modules::setActive("source_select");
+
+	// Load what's new HTML on app start.
+	// JS: app.js lines 708-716
+	{
+		std::filesystem::path whatsNewPath = constants::SRC_DIR() / "whats-new.html";
+		std::ifstream whatsNewFile(whatsNewPath);
+		if (whatsNewFile.is_open()) {
+			std::string html((std::istreambuf_iterator<char>(whatsNewFile)),
+			                  std::istreambuf_iterator<char>());
+			core::view->whatsNewHTML = std::move(html);
+		} else {
+			logging::write(std::format("failed to load whats-new.html: {}", whatsNewPath.string()));
+		}
+	}
 
 	// Initialize watch state trackers to current values.
 	prevLoadPct = core::view->loadPct;
