@@ -13,9 +13,6 @@ License: MIT
 #include <algorithm>
 #include <fstream>
 #include <array>
-#include <random>
-#include <chrono>
-#include <thread>
 #include <format>
 
 #include <zlib.h>
@@ -181,20 +178,6 @@ result.push_back(static_cast<uint8_t>((val >> bits) & 0xff));
 return result;
 }
 
-// JS Buffer.allocUnsafe() leaves the buffer with whatever garbage was in memory (true uninitialized).
-// C++ fills with pseudo-random bytes for determinism; the result is still non-zero "unsafe" data.
-void fill_unsafe_bytes(std::vector<uint8_t>& bytes) {
-	const uint64_t now = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
-	const uint64_t tid = std::hash<std::thread::id>{}(std::this_thread::get_id());
-	uint64_t state = now ^ (tid << 1) ^ static_cast<uint64_t>(bytes.size() * 0x9E3779B97F4A7C15ULL);
-
-	for (auto& b : bytes) {
-		state ^= (state << 13);
-		state ^= (state >> 7);
-		state ^= (state << 17);
-		b = static_cast<uint8_t>(state & 0xFF);
-	}
-}
 
 std::string bytes_to_hex_string(const uint8_t* data, size_t length) {
 	constexpr char hex_chars[] = "0123456789abcdef";
@@ -402,8 +385,6 @@ _ofs += N; \
 
 BufferWrapper BufferWrapper::alloc(size_t length, bool secure) {
 std::vector<uint8_t> buf(length, 0);
-if (!secure)
-	fill_unsafe_bytes(buf);
 return BufferWrapper(std::move(buf));
 }
 
@@ -1145,9 +1126,6 @@ if (capacity == byteLength())
 return;
 
 std::vector<uint8_t> buf(capacity, 0);
-if (!secure)
-	fill_unsafe_bytes(buf);
-
 size_t copyLen = std::min(capacity, byteLength());
 std::memcpy(buf.data(), _buf.data(), copyLen);
 _buf = std::move(buf);
