@@ -370,6 +370,8 @@ UVBounds ADTExporter::calculateUVBounds(const ADTLoader& rootAdt, float firstChu
 				continue;
 
 			const auto& chunk = rootAdt.chunks[ci];
+			if (chunk.vertices.empty())
+				continue;
 
 			const float chunkX = chunk.position[0];
 			const float chunkY = chunk.position[1];
@@ -1051,6 +1053,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 
 					if (src_w != quality || src_h != quality) {
 						std::vector<uint8_t> resized(quality * quality * 4);
+						// JS uses canvas ctx.drawImage (browser bilinear/bicubic); stb linear differs slightly.
 						stbir_resize_uint8_linear(
 							raw_pixels.data(), src_w, src_h, src_w * 4,
 							resized.data(), quality, quality, quality * 4,
@@ -1725,6 +1728,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 		for (size_t chunkIndex = 0; chunkIndex < rootAdt.liquidChunks.size(); chunkIndex++) {
 			const auto& chunk = rootAdt.liquidChunks[chunkIndex];
 
+			// JS passes the chunk through verbatim if !chunk || !chunk.instances; LiquidChunk is a value type so we approximate via empty-instances => null.
 			if (chunk.instances.empty()) {
 				enhancedLiquidChunks.push_back(nullptr);
 				continue;
@@ -1844,6 +1848,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 					foliageJSON = std::make_unique<JSONWriter>(foliageDir / (std::to_string(layer.effectID) + ".json"));
 
 					// Serialize groundEffectTexture data record fields at root level.
+					// JS assigns foliageJSON.data = groundEffectTexture so JSON.stringify emits all fields; per-variant addProperty here may differ on numeric formatting.
 					for (const auto& [key, val] : *groundEffectTexture) {
 						std::visit([&](const auto& v) {
 							foliageJSON->addProperty(key, v);
