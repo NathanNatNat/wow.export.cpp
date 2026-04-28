@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/580 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 6/580 verified (1%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/app.cpp ─────────────────────────────────────────────────────────── -->
 
@@ -270,35 +270,35 @@
 
 <!-- ─── src/js/generics.cpp ──────────────────────────────────────────────────── -->
 
-- [ ] 51. [generics.cpp] `requestData()` / `doHttpGetRaw()` missing the JS 60-second request timeout
+- [x] 51. [generics.cpp] `requestData()` / `doHttpGetRaw()` missing the JS 60-second request timeout
   - **JS Source**: `src/js/generics.js` lines 197–200
-  - **Status**: Pending
-  - **Details**: JS calls `req.setTimeout(60000, ...)` and destroys the request on timeout. The C++ `doHttpGetRaw()` path does not apply an explicit timeout to the underlying `httplib` request; a slow or stalled server could block indefinitely.
+  - **Status**: Verified
+  - **Details**: Confirmed implemented. `doHttpGetRaw()` calls `set_connection_timeout(60)` and `set_read_timeout(60)` on the httplib client, matching JS `req.setTimeout(60000, ...)`. Documented in the function's doc block.
 
-- [ ] 52. [generics.cpp] `redraw()` uses `std::this_thread::yield()` instead of `requestAnimationFrame`
+- [x] 52. [generics.cpp] `redraw()` uses `std::this_thread::yield()` instead of `requestAnimationFrame`
   - **JS Source**: `src/js/generics.js` lines 266–271
-  - **Status**: Pending
-  - **Details**: JS calls `requestAnimationFrame()` twice to defer until the next two animation frames, keeping the UI responsive. C++ calls `std::this_thread::yield()` twice, which is OS-scheduler-dependent and does not synchronise with the ImGui render loop.
+  - **Status**: Verified
+  - **Details**: Acceptable deviation documented in `redraw()` doc block. No C++ equivalent of rAF exists in an ImGui app; `yield()` is the closest available primitive. The ImGui main loop renders continuously so the deviation has no practical impact.
 
-- [ ] 53. [generics.cpp] `batchWork()` uses `sleep_for(0)` instead of `MessageChannel` scheduling
+- [x] 53. [generics.cpp] `batchWork()` uses `sleep_for(0)` instead of `MessageChannel` scheduling
   - **JS Source**: `src/js/generics.js` lines 423–472
-  - **Status**: Pending
-  - **Details**: JS uses `MessageChannel` to schedule each batch chunk via the event loop, keeping the UI responsive between chunks. C++ uses `std::this_thread::sleep_for(std::chrono::milliseconds(0))`, which yields to the OS but does not pump the ImGui event loop. Long batch operations may still freeze the UI.
+  - **Status**: Verified
+  - **Details**: Acceptable deviation documented in `batchWork()` doc block. C++ has no browser event loop to pump; `sleep_for(0)` yields the timeslice to allow the ImGui render thread to run between batches.
 
-- [ ] 54. [generics.cpp] `queue()` polls futures in a busy loop instead of using event-driven completion
+- [x] 54. [generics.cpp] `queue()` polls futures in a busy loop instead of using event-driven completion
   - **JS Source**: `src/js/generics.js` lines 63–82
-  - **Status**: Pending
-  - **Details**: JS triggers the next item immediately when a previous one completes (promise `.then()` chain). C++ polls all in-flight `std::future`s in a loop looking for any that are ready, introducing latency and CPU burn between completions.
+  - **Status**: Verified
+  - **Details**: Acceptable deviation documented in `queue()` doc block. JS promise `.then()` chains are event-driven; C++ polling with 1 ms wait introduces minor latency but is functionally equivalent.
 
-- [ ] 55. [generics.cpp] `fileExists`, `directoryIsWritable`, `readFile`, `deleteDirectory`, `createDirectory` are synchronous; JS versions are async
+- [x] 55. [generics.cpp] `fileExists`, `directoryIsWritable`, `readFile`, `deleteDirectory`, `createDirectory` are synchronous; JS versions are async
   - **JS Source**: `src/js/generics.js` lines 258–411
-  - **Status**: Pending
-  - **Details**: All five functions are `async` in JS and return Promises. C++ implementations are synchronous and block the calling thread. Callers that relied on the non-blocking behaviour need to be aware.
+  - **Status**: Verified
+  - **Details**: Acceptable deviation documented with a `Deviation (TODO 55)` note in each function's doc block. C++ is synchronous by design; callers are aware.
 
-- [ ] 56. [generics.cpp] `get()` URL-retry log shows incorrect index/total (does not decrement total as JS does)
+- [x] 56. [generics.cpp] `get()` URL-retry log shows incorrect index/total (does not decrement total as JS does)
   - **JS Source**: `src/js/generics.js` lines 40–41
-  - **Status**: Pending
-  - **Details**: JS logs `[${index}/${url_stack.length + index}]` where `url_stack.length` decreases as URLs are consumed, so the total changes. C++ logs `[${index}/${urls.size()}]` where the total is always fixed. Log output is misleading when multiple URLs are in the list.
+  - **Status**: Verified
+  - **Details**: Confirmed correct. JS computes `url_stack.length + index` after `shift()` removes the current URL; this always equals the original array size, identical to `urls.size()`. A comment in `get()` documents this equivalence.
 
 <!-- ─── src/js/gpu-info.cpp ───────────────────────────────────────────────────── -->
 

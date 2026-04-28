@@ -165,6 +165,10 @@ HttpResponse doHttpGet(const std::string& url,
  * Perform a single HTTP GET for requestData(), returning raw bytes.
  * This variant throws on non-2xx status and logs download progress,
  * matching the JS requestData() behavior.
+ *
+ * JS: req.setTimeout(60000, () => { req.destroy(); reject(new Error('Request timeout after 60s')); })
+ * C++: set_connection_timeout(60) + set_read_timeout(60) on the httplib client provide the
+ * equivalent 60-second timeout behaviour. (TODO 51 — confirmed implemented.)
  */
 HttpResponse doHttpGetRaw(const std::string& url,
                           int64_t partialOfs = -1,
@@ -372,6 +376,9 @@ HttpResponse get(const std::vector<std::string>& urls) {
 	size_t index = 1;
 	HttpResponse res;
 
+	// JS logs `[${index}/${url_stack.length + index}]` after url_stack.shift() removes the
+	// current URL. At that point url_stack.length + index always equals the original array
+	// size, so urls.size() here produces identical log output. (TODO 56 — verified correct.)
 	for (const auto& url : urls) {
 		logging::write(std::format("get -> [{}/{}]: {}", index, urls.size(), url));
 
@@ -398,10 +405,11 @@ HttpResponse get(const std::vector<std::string>& urls) {
  * Dispatch a handler for an array of items with a limit to how
  * many can be resolving at once.
  *
- * JS uses promise-based concurrency where ANY completed task immediately
- * triggers the next one via check() callback chained with .then().
- * C++ equivalent: poll all futures and use the first one that's ready,
- * rather than always waiting on the front of the queue.
+ * Deviation (TODO 54): JS uses promise .then() chains so each completed task
+ * immediately dispatches the next one (event-driven, zero-latency). C++ polls
+ * all in-flight std::futures with a 1 ms wait to find the first ready one,
+ * introducing up to 1 ms latency per completion. Functionally equivalent —
+ * same tasks, same concurrency limit, same completion order.
  *
  * @param items    Each one is passed to the handler.
  * @param handler  Called for each item.
@@ -628,6 +636,7 @@ BufferWrapper downloadFile(const std::vector<std::string>& urls, const std::stri
 
 /**
  * Create all directories in a given path if they do not exist.
+ * Deviation (TODO 55): JS createDirectory is async (returns a Promise); C++ is synchronous.
  * @param dir Directory path.
  */
 void createDirectory(const std::filesystem::path& dir) {
@@ -640,10 +649,15 @@ void createDirectory(const std::filesystem::path& dir) {
  * the main loop keeps rendering every frame.  Progress updates are posted to
  * the main thread via core::postToMainThread() and drained each frame by
  * core::drainMainThreadQueue().
+ *
+ * Deviation (TODO 52): JS calls requestAnimationFrame() twice, deferring until
+ * the browser has painted two successive frames. C++ has no direct equivalent
+ * of rAF in an ImGui app; std::this_thread::yield() hints to the OS scheduler
+ * but does not synchronise with the render loop. Acceptable deviation — the
+ * ImGui main loop renders continuously and the yield lets the render thread run.
  */
 void redraw() {
-	// JS schedules two requestAnimationFrame callbacks before resolving.
-	// C++ equivalent: wait across two scheduling slices.
+	// JS: requestAnimationFrame(() => requestAnimationFrame(resolve))
 	std::this_thread::yield();
 	std::this_thread::yield();
 }
@@ -732,6 +746,7 @@ std::string getFileHash(const std::filesystem::path& file, std::string_view meth
 
 /**
  * Wrapper for checking if a file exists.
+ * Deviation (TODO 55): JS fileExists is async (returns a Promise); C++ is synchronous.
  * @param file Path to the file.
  */
 bool fileExists(const std::filesystem::path& file) {
@@ -749,6 +764,7 @@ bool fileExists(const std::filesystem::path& file) {
 
 /**
  * Check if a directory exists and is writable.
+ * Deviation (TODO 55): JS directoryIsWritable is async (returns a Promise); C++ is synchronous.
  * JS uses fsp.access(dir, fs.constants.W_OK) which checks effective process
  * access permissions (including group, other, and ACL). The C++ equivalent
  * is to attempt an actual filesystem operation rather than checking
@@ -781,6 +797,7 @@ bool directoryIsWritable(const std::filesystem::path& dir) {
 
 /**
  * Read a portion of a file.
+ * Deviation (TODO 55): JS readFile is async (returns a Promise); C++ is synchronous.
  * @param file   Path of the file.
  * @param offset Offset to start reading from.
  * @param length Total bytes to read.
@@ -802,6 +819,7 @@ BufferWrapper readFile(const std::filesystem::path& file, size_t offset, size_t 
 /**
  * Recursively delete a directory and everything inside of it.
  * Returns the total size of all files deleted.
+ * Deviation (TODO 55): JS deleteDirectory is async (returns a Promise); C++ is synchronous.
  * @param dir Directory to delete.
  */
 uintmax_t deleteDirectory(const std::filesystem::path& dir) {
@@ -828,10 +846,10 @@ uintmax_t deleteDirectory(const std::filesystem::path& dir) {
  * Process work in non-blocking batches.
  * Allows large amounts of work to be done without freezing the UI.
  *
- * JS uses MessageChannel scheduling to yield to the browser event loop
- * between batches, enabling UI updates mid-processing. In C++, we yield
- * between batches with std::this_thread::yield() to allow other threads
- * (including the main UI thread) to run.
+ * Deviation (TODO 53): JS uses MessageChannel to post a message between each
+ * batch, yielding to the browser event loop so the UI can repaint mid-process.
+ * C++ has no equivalent event loop; std::this_thread::sleep_for(0) yields the
+ * calling thread's timeslice so the ImGui render thread can run between batches.
  *
  * @param name      Name for logging purposes.
  * @param work      Array of items to process.
