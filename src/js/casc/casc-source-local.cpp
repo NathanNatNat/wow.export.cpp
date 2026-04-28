@@ -247,6 +247,7 @@ std::vector<ProductEntry> CASCLocal::getProductList() {
  * @param buildIndex
  */
 void CASCLocal::load(int buildIndex) {
+	// C++ deviation: ensures encryption keys are available before decryption (JS load() does not call this).
 	tact_keys::waitForLoad();
 
 	build = builds[buildIndex];
@@ -439,7 +440,7 @@ void CASCLocal::loadRoot() {
  */
 void CASCLocal::initializeRemoteCASC() {
 	const std::string regionTag = core::view->selectedCDNRegion.at("tag").get<std::string>();
-	remote = std::make_unique<CASCRemote>(regionTag);
+	auto remote = std::make_unique<CASCRemote>(regionTag);
 	remote->init();
 
 	// JS: const buildIndex = remote.builds.findIndex(build => build.Product === this.build.Product);
@@ -455,6 +456,10 @@ void CASCLocal::initializeRemoteCASC() {
 	}
 
 	remote->preload(buildIndex, cache);
+
+	// Match JS: only assign this.remote after preload() succeeds, so a failed preload
+	// does not leave the instance with a partially-initialized remote member.
+	this->remote = std::move(remote);
 }
 
 /**
