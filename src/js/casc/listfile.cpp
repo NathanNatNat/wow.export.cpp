@@ -132,9 +132,16 @@ static std::shared_future<bool> makeReadySharedFuture(bool value) {
 // --- Internal: listfile_check_cache_expiry ---
 static bool listfile_check_cache_expiry(int64_t last_modified) {
 	if (last_modified > 0) {
+		// JS: `Number(core.view.config.listfileCacheRefresh) || 0`
+		// — non-numeric/null values coerce to 0. Mirror with try/catch fallback.
 		int64_t ttl = 0;
-		if (core::view->config.contains("listfileCacheRefresh"))
-			ttl = core::view->config["listfileCacheRefresh"].get<int64_t>();
+		if (core::view->config.contains("listfileCacheRefresh")) {
+			try {
+				ttl = core::view->config["listfileCacheRefresh"].get<int64_t>();
+			} catch (const nlohmann::json::type_error&) {
+				ttl = 0;
+			}
+		}
 
 		ttl *= 24LL * 60 * 60 * 1000;
 
@@ -711,11 +718,16 @@ bool preload() {
 }
 
 std::shared_future<bool> prepareListfileAsync() {
-	if (is_preloaded)
-		return makeReadySharedFuture(true);
-
 	{
+		// Read both `is_preloaded` and `preload_future` under the mutex.
+		// Avoids a TOCTOU race where another thread could set `is_preloaded`
+		// between the lock-free check and the mutex acquisition. JS is
+		// single-threaded and has no equivalent race.
 		std::lock_guard<std::mutex> guard(preload_mutex);
+
+		if (is_preloaded)
+			return makeReadySharedFuture(true);
+
 		if (preload_future.has_value()) {
 			logging::write("Waiting for listfile preload to complete...");
 			return *preload_future;
@@ -858,6 +870,8 @@ std::vector<std::string> getFilenamesByExtension(const std::vector<ExtFilter>& e
 	if (is_binary_mode) {
 		for (const auto& [fileDataID, offset] : binary_id_to_offset) {
 			auto pf_it = binary_id_to_pf_index.find(fileDataID);
+			if (pf_it == binary_id_to_pf_index.end())
+				continue;
 			const std::string fn = binary_read_string_at_offset(pf_it->second, offset);
 			for (const auto& ext : exts) {
 				if (ext.has_exclusion && ext.exclusion_regex) {
