@@ -299,8 +299,11 @@ void WDCReader::preload() {
  * @param foreignKeyValue The FK value to search for.
  */
 std::vector<DataRecord> WDCReader::getRelationRows(uint32_t foreignKeyValue) {
-	if (!isLoaded)
-		throw std::runtime_error("Attempted to query relationship data before table was loaded.");
+	if (!isLoaded) {
+		const std::string tableName = std::filesystem::path(fileName).stem().string();
+		throw std::runtime_error(
+			"Table must be loaded before calling getRelationRows. Use db2.preload." + tableName + "() first.");
+	}
 
 	if (!rows.has_value()) {
 		const std::string tableName = std::filesystem::path(fileName).stem().string();

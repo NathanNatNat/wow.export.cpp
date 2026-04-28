@@ -47,6 +47,11 @@ db::WDCReader& getTable(const std::string& table_name);
  *
  * JS equivalent: db2.preload[table_name]()
  *
+ * Necessary adaptation: JS preload_proxy returns an `async () => ...` which
+ * yields a Promise<wrapper>. C++ has no implicit Promise; this function blocks
+ * the calling thread until parse + preload complete. Callers needing
+ * non-blocking behaviour must wrap the call in std::async / std::jthread.
+ *
  * @param table_name DB2 table name (e.g. "TextureFileData").
  * @returns Reference to the cached WDCReader.
  */

@@ -44,7 +44,7 @@ static std::optional<std::string> build_stack_trace(const char* function_name, c
 
 static std::string selected_file;
 
-static std::optional<int> selected_file_data_id;
+static std::optional<uint32_t> selected_file_data_id;
 
 static const std::map<std::string, db::SchemaField>* selected_file_schema = nullptr;
 
@@ -710,7 +710,7 @@ static void export_db2() {
 			return;
 		}
 
-		data_exporter::exportRawDB2(selected_file, static_cast<uint32_t>(*selected_file_data_id), core::view->casc);
+		data_exporter::exportRawDB2(selected_file, *selected_file_data_id, core::view->casc);
 		return;
 	}
 
@@ -731,7 +731,7 @@ static void export_db2() {
 			if (!file_data_id_opt.has_value())
 				throw std::runtime_error("No file data ID found for table " + table_name);
 
-			data_exporter::exportRawDB2(table_name, static_cast<uint32_t>(*file_data_id_opt),
+			data_exporter::exportRawDB2(table_name, *file_data_id_opt,
 				nullptr, &helper, &export_paths);
 		} catch (const std::exception& e) {
 			helper.mark(table_name + ".db2", false, e.what(), build_stack_trace("export_db2", e));

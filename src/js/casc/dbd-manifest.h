@@ -5,6 +5,7 @@
  */
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -28,14 +29,14 @@ bool prepareManifest();
  * @param id
  * @returns table name or std::nullopt
  */
-std::optional<std::string> getByID(int id);
+std::optional<std::string> getByID(uint32_t id);
 
 /**
  * get filedataid by table name
  * @param table_name
  * @returns filedataid or std::nullopt
  */
-std::optional<int> getByTableName(const std::string& table_name);
+std::optional<uint32_t> getByTableName(const std::string& table_name);
 
 /**
  * get all table names

@@ -224,7 +224,7 @@ BLTEReader CASC::getFileByName(const std::string& fileName, bool partialDecrypt,
 			std::string table_name = fileName.substr(14, fileName.length() - 14 - 4);
 			auto dbdId = dbd_manifest::getByTableName(table_name);
 			if (dbdId.has_value())
-				fileDataID = static_cast<uint32_t>(dbdId.value());
+				fileDataID = dbdId.value();
 		}
 
 		// fallback to listfile
@@ -298,7 +298,7 @@ BufferWrapper CASC::getVirtualFileByName(const std::string& fileName, bool suppr
 			std::string table_name = fileName.substr(14, fileName.length() - 14 - 4);
 			auto dbdId = dbd_manifest::getByTableName(table_name);
 			if (dbdId.has_value())
-				fileDataID = static_cast<uint32_t>(dbdId.value());
+				fileDataID = dbdId.value();
 		}
 
 		// fallback to listfile

@@ -22,6 +22,18 @@ namespace db2 {
  * to auto-parse the reader on first use. In C++, we achieve this by wrapping
  * the reader with a mutex-protected parse-once guard.
  *
+ * Necessary adaptation: the JS Proxy defers parsing until the first method
+ * is invoked on the wrapper. C++ has no equivalent transparent intercept, so
+ * getTable() triggers ensureParsed() before returning the WDCReader&.
+ * std::call_once deduplicates so the parse cost is paid exactly once per
+ * table, identical to the JS observable behaviour after first method call.
+ *
+ * Two separate once_flags (parseFlag, preloadFlag) are intentional:
+ * ensurePreloaded() invokes ensureParsed() inside its own call_once lambda,
+ * which cannot deadlock because the two flags are independent. This permits
+ * a caller to call ensureParsed() first (lazy path) and ensurePreloaded()
+ * later (eager path) without re-parsing.
+ *
  * The JS Proxy also enforces that getRelationRows() requires preload() to have
  * been called. In C++, WDCReader::getRelationRows() enforces the same preload
  * requirement and throws with a matching message.

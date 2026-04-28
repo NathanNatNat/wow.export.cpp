@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/375 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/367 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/js/3D/exporters/ADTExporter.cpp ────────────────────────────────────── -->
 
@@ -249,50 +249,6 @@
   - **JS Source**: `src/js/3D/writers/STLWriter.js` lines 101–125
   - **Status**: Pending
   - **Details**: `calculate_normal` is an internal helper called only from `write()`. C++ header declares it `public`. Should be `private` to match JS intent (instance method not intended for external use).
-
-<!-- ─── src/js/casc/db2.cpp ──────────────────────────────── -->
-
-- [ ] 250. [db2.cpp] `getTable()` eagerly parses on every call; JS Proxy only parses on first method invocation
-  - **JS Source**: `src/js/casc/db2.js` lines 58–67
-  - **Status**: Pending
-  - **Details**: JS `db2.SomeTable` returns a Proxy without parsing; parsing begins only when a method is called. C++ `getTable()` calls `entry_ptr->ensureParsed()` immediately before returning. Even unused table references trigger parsing. `std::call_once` ensures parse runs only once but it is initiated earlier than in JS.
-
-- [ ] 251. [db2.cpp] JS `preload_proxy` returns an `async` function (Promise); C++ `preloadTable()` is synchronous/blocking
-  - **JS Source**: `src/js/casc/db2.js` lines 10–35
-  - **Status**: Pending
-  - **Details**: JS `db2.preload.SomeTable` returns `async () => { ... }` — calling it returns a `Promise<wrapper>`. C++ `preloadTable()` blocks until parse + preload complete. Callers requiring async preloading must manually wrap `preloadTable()` in `std::async`. Necessary adaptation.
-
-- [ ] 252. [db2.cpp] JS `create_wrapper` enforces `getRelationRows` requires preload; C++ delegates to WDCReader
-  - **JS Source**: `src/js/casc/db2.js` lines 46–55
-  - **Status**: Pending
-  - **Details**: JS Proxy intercepts `getRelationRows` and throws with a detailed message if not preloaded. C++ code comment states "WDCReader::getRelationRows() enforces the same preload requirement." Verify against `WDCReader.cpp` that the error messages match. If they differ, callers relying on error text for diagnostics will see different output.
-
-- [ ] 253. [db2.cpp] `CacheEntry::ensureParsed` / `ensurePreloaded` `once_flag` interaction — note only
-  - **JS Source**: `src/js/casc/db2.js` lines 19–23
-  - **Status**: Pending
-  - **Details**: `ensurePreloaded()` calls `ensureParsed()` inside its `call_once` lambda. The interaction of two separate `once_flag`s is correct. This note documents the pattern for future maintainers — no bug exists.
-
-<!-- ─── src/js/casc/dbd-manifest.cpp ──────────────────────────────── -->
-
-- [ ] 254. [dbd-manifest.cpp] `prepareManifest()` is synchronous/blocking; JS original is `async` returning `Promise<boolean>`
-  - **JS Source**: `src/js/casc/dbd-manifest.js` lines 50–59
-  - **Status**: Pending
-  - **Details**: JS `async prepareManifest()` is awaited by callers. C++ returns `bool` synchronously, blocking the calling thread until `preload_promise->wait()` completes. Callers requiring non-blocking behaviour must run on a background thread. Necessary adaptation documented in the file.
-
-- [ ] 255. [dbd-manifest.cpp] `jsonTruthy()` helper is over-engineered for the actual manifest data format
-  - **JS Source**: `src/js/casc/dbd-manifest.js` line 31
-  - **Status**: Pending
-  - **Details**: JS `if (entry.tableName && entry.db2FileDataID)` is a simple truthy check. C++ `jsonTruthy()` replicates full JS truthiness semantics for float/int/bool/string/object. Manifest data always has string `tableName` and integer `db2FileDataID`. The boolean/float/object branches are dead code adding unnecessary complexity. A simpler check would be more correct for the expected data format.
-
-- [ ] 256. [dbd-manifest.cpp] `table_to_id` and `id_to_table` use `int` — may overflow for large FileDataIDs
-  - **JS Source**: `src/js/casc/dbd-manifest.js` lines 32–34
-  - **Status**: Pending
-  - **Details**: Maps `table_to_id` and `id_to_table` use `int` as the key/value type. WoW FileDataIDs are 32-bit unsigned integers. IDs above 2,147,483,647 (0x7FFFFFFF) would overflow a signed `int`. Should use `uint32_t` or `int64_t` to match JS number semantics.
-
-- [ ] 257. [dbd-manifest.cpp] Pre-existing `TODO 191` and `TODO 192` comments already implemented in code — stale
-  - **JS Source**: `src/js/casc/dbd-manifest.js` lines 10–13
-  - **Status**: Pending
-  - **Details**: C++ file contains `// TODO 191:` and `// TODO 192:` comments describing threading concerns. The code already implements `std::atomic<bool>` (for TODO 191) and `std::call_once` (for TODO 192) as the solutions. The TODO comments say what needs to be done but the code already does it. They are stale and should be removed or converted to completion notes.
 
 <!-- ─── src/js/casc/export-helper.cpp ──────────────────────────────── -->
 
