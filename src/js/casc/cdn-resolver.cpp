@@ -198,6 +198,11 @@ void _resolveRegionProduct(const std::string& region, const std::string& product
 void startPreResolution(const std::string& region, const std::string& product) {
 	logging::write(std::format("Starting CDN pre-resolution for region: {}", region));
 
+	// Guards backgroundFutures. Safe: std::async dispatches the lambda on a
+	// new thread, so it won't deadlock on the cacheMutex acquired inside
+	// _resolveRegionProduct -> getBestHost.
+	std::lock_guard lock(cacheMutex);
+
 	// Remove completed futures to prevent unbounded growth.
 	backgroundFutures.erase(
 		std::remove_if(backgroundFutures.begin(), backgroundFutures.end(),
@@ -309,18 +314,6 @@ std::vector<std::string> getRankedHosts(const std::string& region, const std::un
 	for (const auto& h : rankedHosts)
 		result.push_back(h.host + serverConfig.at("Path") + "/");
 	return result;
-}
-
-std::future<std::string> getBestHostAsync(const std::string& region, const std::unordered_map<std::string, std::string>& serverConfig) {
-	return std::async(std::launch::async, [region, serverConfig]() {
-		return getBestHost(region, serverConfig);
-	});
-}
-
-std::future<std::vector<std::string>> getRankedHostsAsync(const std::string& region, const std::unordered_map<std::string, std::string>& serverConfig) {
-	return std::async(std::launch::async, [region, serverConfig]() {
-		return getRankedHosts(region, serverConfig);
-	});
 }
 
 void markHostFailed(const std::string& host) {
