@@ -46,6 +46,8 @@ WMORendererGL::WMORendererGL(BufferWrapper& data, uint32_t fileID, gl::GLContext
 	model_matrix = WMO_IDENTITY_MAT4;
 }
 
+// C++ extension: JS only has the (data, fileID, ctx, useRibbon) form.
+// Resolves fileID from listfile so the rest of the loader path is identical.
 WMORendererGL::WMORendererGL(BufferWrapper& data, const std::string& fileName, gl::GLContext& gl_context, bool useRibbon)
 	: data_ptr(&data)
 	, fileID(casc::listfile::getByFilename(fileName).value_or(0))
@@ -85,6 +87,10 @@ std::vector<nlohmann::json>& WMORendererGL::get_wmo_sets_view() {
 // -----------------------------------------------------------------------
 
 void WMORendererGL::load() {
+	// JS load() and its sub-methods (_load_textures, _load_groups, loadDoodadSet,
+	// updateSets) are async/await; C++ runs them synchronously on the calling
+	// thread. Doodad-set loading invoked from updateSets() during render() may
+	// stall a frame for large WMOs.
 	// JS accesses core.view.casc directly; auto-resolve when setCASCSource() was not called.
 	if (!casc_source_ && core::view && core::view->casc)
 		casc_source_ = core::view->casc;

@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/423 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/418 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/js/3D/exporters/ADTExporter.cpp ────────────────────────────────────── -->
 
@@ -103,33 +103,6 @@
   - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` line 548
   - **Status**: Pending
   - **Details**: JS: `this.filePath.replace('.wmo', '_NNN.wmo')` — `String.prototype.replace` with a string argument replaces the first occurrence only. C++ uses `rfind(".wmo")` which finds the last occurrence. For paths where `.wmo` appears only once the result is identical, but paths with `.wmo` in a directory name would produce different results.
-
-<!-- ─── src/js/3D/renderers/WMORendererGL.cpp ──────────────────────────────── -->
-
-- [ ] 176. [WMORendererGL.cpp] `load()` and all sub-methods synchronous in C++; JS uses `async/await` throughout
-  - **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 81–111
-  - **Status**: Pending
-  - **Details**: JS `load()`, `_load_textures()`, `_load_groups()`, `loadDoodadSet()`, and `updateSets()` are all async. C++ versions are synchronous. Doodad set loading runs on the render thread and may cause frame stalls for large WMOs.
-
-- [ ] 177. [WMORendererGL.cpp] Vue `$watch` replaced by per-frame polling for groups, sets, and wireframe
-  - **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 105–107
-  - **Status**: Pending
-  - **Details**: Necessary adaptation (no reactive framework in C++). Polling in `render()` via `prev_group_checked` / `prev_set_checked` vectors. Functionally equivalent.
-
-- [ ] 178. [WMORendererGL.cpp] C++ constructor adds `fileName`-based overload not present in JS
-  - **JS Source**: `src/js/3D/renderers/WMORendererGL.js`
-  - **Status**: Pending
-  - **Details**: JS constructor takes `(data, fileID, gl_context, useRibbon)`. C++ adds a second constructor taking `const std::string& fileName`. This is a C++ extension — not a deviation from JS semantics (both resolve to the same loading path).
-
-- [ ] 179. [WMORendererGL.cpp] `isClassic` detection: JS uses `!!wmo.textureNames`; C++ uses `wmo->hasMotxChunk`
-  - **JS Source**: `src/js/3D/renderers/WMORendererGL.js` line 126
-  - **Status**: Pending
-  - **Details**: JS checks `const isClassic = !!wmo.textureNames` (truthy for non-null object). C++ checks `const bool isClassic = wmo->hasMotxChunk`. Edge cases where `hasMotxChunk` is not set correctly in `WMOLoader::parse_MOTX()` would cause classic WMO texture name resolution to fail. Verify `WMOLoader::hasMotxChunk` semantics match JS truthy behaviour (see also entry 148).
-
-- [ ] 180. [WMORendererGL.cpp] `dispose()` explicit clear differs from JS `splice(0)` array-reference semantics
-  - **JS Source**: `src/js/3D/renderers/WMORendererGL.js` lines 666–667
-  - **Status**: Pending
-  - **Details**: JS `this.groupArray.splice(0)` / `this.setArray.splice(0)` clears the shared array reference. C++ explicitly calls `.clear()` on both local and view arrays. Necessary adaptation (C++ value semantics vs JS reference semantics); functionally equivalent.
 
 <!-- ─── src/js/3D/writers/CSVWriter.cpp ──────────────────────────────── -->
 
