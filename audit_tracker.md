@@ -179,13 +179,13 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 173. `src/js/modules/tab_textures.cpp`
 - [x] 174. `src/js/modules/tab_videos.cpp`
 - [x] 175. `src/js/modules/tab_zones.cpp`
-- [ ] 176. `src/js/mpq/bitstream.cpp`
-- [ ] 177. `src/js/mpq/build-version.cpp`
-- [ ] 178. `src/js/mpq/bzip2.cpp`
-- [ ] 179. `src/js/mpq/huffman.cpp`
-- [ ] 180. `src/js/mpq/mpq-install.cpp`
-- [ ] 181. `src/js/mpq/mpq.cpp`
-- [ ] 182. `src/js/mpq/pkware.cpp`
+- [x] 176. `src/js/mpq/bitstream.cpp`
+- [x] 177. `src/js/mpq/build-version.cpp`
+- [x] 178. `src/js/mpq/bzip2.cpp`
+- [x] 179. `src/js/mpq/huffman.cpp`
+- [x] 180. `src/js/mpq/mpq-install.cpp`
+- [x] 181. `src/js/mpq/mpq.cpp`
+- [x] 182. `src/js/mpq/pkware.cpp`
 - [x] 183. `src/js/ui/audio-helper.cpp`
 - [x] 184. `src/js/ui/char-texture-overlay.cpp`
 - [x] 185. `src/js/ui/character-appearance.cpp`
