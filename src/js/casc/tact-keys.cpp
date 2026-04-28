@@ -241,23 +241,16 @@ std::future<void> loadAsync() {
 	int remoteAdded = 0;
 
 	for (const auto& line : lines) {
-		// TODO 205: Match JS `line.split(' ')` which splits on every space.
-		// JS checks `parts.length !== 2` — lines with 0, 1, or 3+ space-separated
-		// parts are skipped. The C++ now counts parts by splitting on spaces.
 		auto spacePos = line.find(' ');
 		if (spacePos == std::string_view::npos)
 			continue;
 
-		std::string_view keyName = line.substr(0, spacePos);
+		std::string_view keyName = trim(line.substr(0, spacePos));
 		std::string_view key = line.substr(spacePos + 1);
 
-		// JS split(' ') would produce 3+ parts if there are additional spaces.
-		// Reject if key portion contains any spaces (i.e., more than 2 parts).
 		if (key.find(' ') != std::string_view::npos)
 			continue;
 
-		// JS trims the parts
-		keyName = trim(keyName);
 		key = trim(key);
 
 		if (validateKeyPair(keyName, key)) {
