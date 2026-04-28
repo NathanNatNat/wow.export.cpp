@@ -25,6 +25,16 @@
  * array. The C++ equivalent stores item IDs (ItemEntry::id) which provide
  * the same stable identity semantics across filter changes.
  */
+
+/*
+ * Notes on JS deviations preserved for fidelity:
+ *   - itemlistbox.js declares `'includefilecount'` in its props array (line 19) but
+ *     the template (line 342) gates the status bar only on `unittype`, never on
+ *     `includefilecount`. The prop is dead code in JS; not implemented in C++.
+ *   - itemlistbox.js declares `emits: ['update:selection', 'equip']` (line 20),
+ *     but the template emits `'options'` too (line 338). The C++ port mirrors the
+ *     rendered template behavior (Options button + onOptions callback).
+ */
 namespace itemlistbox {
 
 /**

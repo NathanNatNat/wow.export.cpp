@@ -77,8 +77,10 @@ static float itemWeight(const std::vector<ItemEntry>& filteredItems) {
  */
 static void resize(float containerHeight, float scrollerHeight, ItemListboxState& state) {
 	state.scroll = (containerHeight - scrollerHeight) * state.scrollRel;
-	// CSS: #tab-items #listbox-items .item { height: 46px; }
-	state.slotCount = static_cast<int>(std::floor(containerHeight / 46.0f));
+	// JS itemlistbox.js:155 — `Math.floor(clientHeight / 26)`. JS hard-codes 26
+	// even though CSS row height is 46px (matches base listbox slot constant).
+	// Preserved for fidelity.
+	state.slotCount = static_cast<int>(std::floor(containerHeight / 26.0f));
 }
 
 /**
@@ -532,6 +534,18 @@ void render(const char* id,
 	//         <li @click.self="$emit('options', item)">Options</li>
 	//     </ul>
 	// </div>
+
+	// Reserve horizontal space on the right for the trailing widgets on each row:
+	// "(NNNNNN)" id text + Equip button + Options button + the SameLine spacings
+	// between them. Computed once per frame from the active style so the row
+	// layout adapts to font/padding changes instead of relying on a magic number.
+	const ImVec2 framePad = ImGui::GetStyle().FramePadding;
+	const float spacing = ImGui::GetStyle().ItemSpacing.x;
+	const float equipBtnW = ImGui::CalcTextSize("Equip").x + framePad.x * 2.0f;
+	const float optionsBtnW = ImGui::CalcTextSize("Options").x + framePad.x * 2.0f;
+	const float idTextW = 60.0f; // approx width for "(NNNNNN)"
+	const float reservedRight = equipBtnW + optionsBtnW + idTextW + spacing * 4.0f;
+
 	for (int i = startIdx; i < endIdx; ++i) {
 		const ItemEntry& item = filteredItems[static_cast<size_t>(i)];
 		const bool itemSelected = isSelected(selection, item.id);
@@ -566,26 +580,21 @@ void render(const char* id,
 		// Clicking the row selects the item.
 		// Build display text: "Name" (quality colored) + " (ID)" (grey, smaller — CSS .item-id { color: grey; font-size: 0.8em; })
 		if (ImGui::Selectable("##item_sel", itemSelected, ImGuiSelectableFlags_None,
-		                      ImVec2(availSize.x - 120.0f, 0.0f))) {
+		                      ImVec2(availSize.x - reservedRight, 0.0f))) {
 			selectItem(i, io.KeyCtrl, io.KeyShift, filteredItems, selection, single, state, onSelectionChanged);
 		}
 		// Render name and ID on top of the selectable at the same line.
 		ImGui::SameLine(0.0f, 0.0f);
-		ImGui::SetCursorPosX(ImGui::GetCursorPosX() - (availSize.x - 120.0f));
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() - (availSize.x - reservedRight));
 		ImGui::Text("%s", item.name.c_str());
 		ImGui::PopStyleColor();
 
-		// Item ID: <span class="item-id">({{ item.id }})</span> — grey, font-size: 0.8em
+		// Item ID: <span class="item-id">({{ item.id }})</span> — grey.
+		// Per CLAUDE.md visual-fidelity rule, exact font size (CSS 0.8em) is not
+		// replicated; ImGui default font size is used.
 		ImGui::SameLine(0.0f, 4.0f);
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(128/255.0f, 128/255.0f, 128/255.0f, 1.0f)); // grey
-		{
-			const float origScale = ImGui::GetFont()->Scale;
-			ImGui::GetFont()->Scale *= 0.8f;
-			ImGui::PushFont(ImGui::GetFont());
-			ImGui::Text("(%d)", item.id);
-			ImGui::GetFont()->Scale = origScale;
-			ImGui::PopFont();
-		}
+		ImGui::Text("(%d)", item.id);
 		ImGui::PopStyleColor();
 
 		// Item buttons (<ul class="item-buttons">).
