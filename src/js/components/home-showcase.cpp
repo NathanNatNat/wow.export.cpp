@@ -19,7 +19,10 @@
 //       <a data-kb-link="KB011">Feedback</a>
 //     </div>
 //
-//   Data: showcase entries loaded from showcase.json; one chosen randomly at startup.
+//   Data: showcase entries loaded from showcase.json. HomeShowcaseState.index defaults
+//         to -1 (no current showcase). JS data() picks a random index at startup via
+//         get_random_index(); the C++ port leaves randomization to callers — they must
+//         set state.index explicitly (e.g. via refresh(state)) before rendering.
 //   BASE_LAYERS: [{ image: './images/logo.png', size: '50px', position: 'bottom 10px right 10px' }]
 //   background_style: CSS background-image compositing of BASE_LAYERS + current.layers.
 //   Video: autoplay/loop/muted <video> element (not implemented).
