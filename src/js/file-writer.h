@@ -55,8 +55,6 @@ public:
 	void close();
 
 private:
-	void _drain();
-
 	std::ofstream stream;
 	bool closed = false;
 	// std::mutex is not movable; wrap in unique_ptr so FileWriter remains movable
