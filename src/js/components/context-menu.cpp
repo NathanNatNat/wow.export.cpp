@@ -52,6 +52,11 @@ void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
 	const bool nodeActive = !node.is_null() && !(node.is_boolean() && !node.get<bool>());
 
 	// Watch: when node transitions from inactive to active, reposition.
+	// JS uses this.$nextTick(() => this.reposition()) so the call runs after
+	// the DOM update for the new node; structurally that's a deferred call,
+	// but in practice JS also calls reposition() synchronously from mounted()
+	// (the component is recreated on each open via v-if), so the visible
+	// behaviour is identical to the synchronous call we make here.
 	if (nodeActive && !state.prevNodeActive) {
 		reposition(state);
 	}
@@ -90,9 +95,13 @@ void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
 	std::string windowName = std::string("##context_menu_") + id;
 	if (ImGui::Begin(windowName.c_str(), nullptr, windowFlags)) {
 		// <div class="context-menu-zone"></div>
-		// JS uses an absolutely positioned child with ±20px bounds to extend hover area.
-		// We replicate this by inflating close-on-mouseleave bounds by 20px on each side.
-		constexpr float contextMenuZonePadding = 20.0f;
+		// CSS: .context-menu-zone { position: absolute; left: -20px; top: -20px;
+		//                           bottom: -20px; right: -20px; z-index: -1; }
+		// Per-side values mirror the CSS even though all four are currently equal.
+		constexpr float contextMenuZonePaddingLeft = 20.0f;
+		constexpr float contextMenuZonePaddingTop = 20.0f;
+		constexpr float contextMenuZonePaddingRight = 20.0f;
+		constexpr float contextMenuZonePaddingBottom = 20.0f;
 
 		// Render menu content via the callback (equivalent of <slot v-bind:node="node">).
 		if (contentCallback) {
@@ -102,8 +111,10 @@ void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
 		// @click="$emit('close')" — close on any click within the menu.
 		// This catches clicks on non-Selectable elements (text, separators, etc.)
 		// which individual Selectable items would not handle.
+		// JS @click fires for any mouse button, so we mirror that by checking
+		// left/right/middle.
 		if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
-		    ImGui::IsMouseClicked(0)) {
+		    (ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1) || ImGui::IsMouseClicked(2))) {
 			if (onClose)
 				onClose();
 		}
@@ -112,10 +123,10 @@ void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
 		const ImVec2 mousePos = ImGui::GetIO().MousePos;
 		ImVec2 zoneMin = ImGui::GetWindowPos();
 		ImVec2 zoneMax = ImVec2(zoneMin.x + ImGui::GetWindowSize().x, zoneMin.y + ImGui::GetWindowSize().y);
-		zoneMin.x -= contextMenuZonePadding;
-		zoneMin.y -= contextMenuZonePadding;
-		zoneMax.x += contextMenuZonePadding;
-		zoneMax.y += contextMenuZonePadding;
+		zoneMin.x -= contextMenuZonePaddingLeft;
+		zoneMin.y -= contextMenuZonePaddingTop;
+		zoneMax.x += contextMenuZonePaddingRight;
+		zoneMax.y += contextMenuZonePaddingBottom;
 		const bool isInHoverZone = mousePos.x >= zoneMin.x && mousePos.x <= zoneMax.x &&
 		                           mousePos.y >= zoneMin.y && mousePos.y <= zoneMax.y;
 		if (!isInHoverZone) {
