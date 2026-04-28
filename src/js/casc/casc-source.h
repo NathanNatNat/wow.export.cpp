@@ -89,11 +89,11 @@ public:
 
 	/**
 	 * Obtain a file by it's fileDataID as a BLTE reader.
-	 * Sub-classes should override to provide JS-equivalent file reader behavior.
+	 * Sub-classes must override to provide JS-equivalent file reader behavior.
 	 */
 	virtual BLTEReader getFileAsBLTE(uint32_t fileDataID, bool partialDecrypt = false,
 		bool suppressLog = false, bool supportFallback = true,
-		bool forceFallback = false, const std::string& contentKey = "");
+		bool forceFallback = false, const std::string& contentKey = "") = 0;
 
 	/**
 	 * @param contentKey
