@@ -67,7 +67,7 @@ public:
 		uint32_t imageWidth;
 		uint32_t imageHeight;
 		uint32_t tileSize;
-		uint32_t expectedTiles;
+		uint64_t expectedTiles; // JS uses 64-bit Number; uint32_t overflows for large tile grids
 		double sparseRatio;
 	};
 
@@ -99,9 +99,9 @@ private:
 	uint32_t tileSize;
 	uint32_t tileCols;
 	uint32_t tileRows;
-	// JS equivalent uses Map() which preserves insertion order. std::map
-	// sorts by key, but the rendering is position-based (pixelX/pixelY) so
-	// the iteration order doesn't affect the final image. Using std::map
-	// for deterministic output.
+	// JS uses Map() (insertion-ordered); C++ uses std::map (lexicographic).
+	// For fully-opaque tiles this is irrelevant. For semi-transparent overlapping
+	// tiles, Porter-Duff blending is order-dependent and may differ from JS.
+	// WoW map tiles are typically fully opaque.
 	std::map<std::string, Tile> tiles;
 };

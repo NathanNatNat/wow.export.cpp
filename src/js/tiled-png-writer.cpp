@@ -10,7 +10,6 @@
 #include <cstddef>
 #include <format>
 #include <future>
-#include <thread>
 
 /**
  * Construct a new TiledPNGWriter instance.
@@ -107,34 +106,26 @@ void TiledPNGWriter::_writeTileToPixelData(const Tile& tile, std::vector<uint8_t
 
 /**
  * Write this PNG to a file.
+ * Callers MUST retain the returned future and call .get() to observe write errors.
  */
 std::shared_future<void> TiledPNGWriter::write(const std::filesystem::path& file) {
 	BufferWrapper buffer = getBuffer();
-	auto promise = std::make_shared<std::promise<void>>();
-	std::shared_future<void> result = promise->get_future().share();
-
-	std::thread([promise, file, buffer = std::move(buffer)]() mutable {
-		try {
-			buffer.writeToFile(file);
-			promise->set_value();
-		} catch (...) {
-			promise->set_exception(std::current_exception());
-		}
-	}).detach();
-
-	return result;
+	return std::async(std::launch::async, [buffer = std::move(buffer), file]() mutable {
+		buffer.writeToFile(file);
+	}).share();
 }
 
 /**
  * Get information about the tiles that will be included.
  */
 TiledPNGWriter::Stats TiledPNGWriter::getStats() const {
+	const uint64_t expected = static_cast<uint64_t>(tileCols) * tileRows;
 	return {
 		.totalTiles = tiles.size(),
 		.imageWidth = width,
 		.imageHeight = height,
 		.tileSize = tileSize,
-		.expectedTiles = tileCols * tileRows,
-		.sparseRatio = static_cast<double>(tiles.size()) / (static_cast<double>(tileCols) * tileRows)
+		.expectedTiles = expected,
+		.sparseRatio = static_cast<double>(tiles.size()) / static_cast<double>(expected)
 	};
 }

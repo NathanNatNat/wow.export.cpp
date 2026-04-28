@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 6/541 verified (1%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 21/541 verified (4%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/js/core.cpp ──────────────────────────────────────────────────────── -->
 
@@ -183,20 +183,20 @@
 
 <!-- ─── src/js/tiled-png-writer.cpp ──────────────────────────────────────────── -->
 
-- [ ] 71. [tiled-png-writer.cpp] `write()` uses detached thread; exceptions silently lost if caller discards future
+- [x] 71. [tiled-png-writer.cpp] `write()` uses detached thread; exceptions silently lost if caller discards future
   - **JS Source**: `src/js/tiled-png-writer.js` lines 123–125
-  - **Status**: Pending
-  - **Details**: JS `write()` is `async` and propagates write errors to the awaiting caller. C++ spawns a detached `std::thread` and returns a `std::shared_future<void>`. If the caller discards the future, any exception thrown by `buffer.writeToFile` is silently lost. Callers must call `.get()` to observe errors. Verify all call sites retain the future.
+  - **Status**: Verified
+  - **Details**: Both call sites in `tab_maps.cpp` (lines 1025, 1318) retain the future and call `.get()`, so no exceptions are lost. Added doc comment to `write()`: "Callers must retain the returned future and call .get() to observe exceptions."
 
-- [ ] 72. [tiled-png-writer.cpp] `std::map` lexicographic order differs from JS `Map` insertion order — breaks Porter-Duff alpha blending for overlapping tiles
+- [x] 72. [tiled-png-writer.cpp] `std::map` lexicographic order differs from JS `Map` insertion order — breaks Porter-Duff alpha blending for overlapping tiles
   - **JS Source**: `src/js/tiled-png-writer.js` lines 25, 58–59
-  - **Status**: Pending
-  - **Details**: JS `this.tiles` is a `Map()` (insertion-ordered). C++ uses `std::map<std::string, Tile>` (lexicographic key order on `"tileX,tileY"` strings). For fully-opaque pixels the order is irrelevant, but for semi-transparent overlapping tiles the Porter-Duff "over" composite is order-dependent and the two implementations may produce different pixel outputs. The existing header comment notes the deviation but omits the alpha-blending caveat.
+  - **Status**: Verified
+  - **Details**: Updated the `tiles` map comment per TODO instructions: notes insertion-order vs lexicographic difference, Porter-Duff order-dependence for semi-transparent tiles, and that WoW map tiles are typically fully opaque. The alpha-blending path exists but no code change was needed — no clear bug.
 
-- [ ] 73. [tiled-png-writer.cpp] `getStats()` `expectedTiles` field uses `uint32_t` — can overflow on large images
+- [x] 73. [tiled-png-writer.cpp] `getStats()` `expectedTiles` field uses `uint32_t` — can overflow on large images
   - **JS Source**: `src/js/tiled-png-writer.js` lines 131–140
-  - **Status**: Pending
-  - **Details**: JS computes `this.tileCols * this.tileRows` as a 64-bit Number. C++ computes the same product as `uint32_t * uint32_t`, which overflows silently for large tile grids (e.g., 65536×65536 tiles). `Stats::expectedTiles` should be `size_t` or `uint64_t`.
+  - **Status**: Verified
+  - **Details**: Changed `Stats::expectedTiles` from `uint32_t` to `uint64_t`. Updated `getStats()` to compute `static_cast<uint64_t>(tileCols) * tileRows`. No callers read `expectedTiles` directly; `sparseRatio` computation updated to use the wider type.
 
 <!-- ─── src/js/updater.cpp ───────────────────────────────────────────────────── -->
 
@@ -227,22 +227,22 @@
 
 <!-- ─── src/js/wmv.cpp ────────────────────────────────────────────────────────── -->
 
-- [ ] 79. [wmv.cpp] `get_legacy_value` comment conflates null-path and non-numeric-string path without explaining the `-1` / unsigned wrap-around sentinel
+- [x] 79. [wmv.cpp] `get_legacy_value` comment conflates null-path and non-numeric-string path without explaining the `-1` / unsigned wrap-around sentinel
   - **JS Source**: `src/js/wmv.js` lines 87–91
-  - **Status**: Pending
-  - **Details**: JS `parseInt(val ?? '0')` returns `NaN` for non-numeric strings; C++ returns `-1` as a sentinel. The downstream consumer in `tab_characters.cpp` guards with `static_cast<size_t>(value) < choices->size()`, so `-1` wraps to `SIZE_MAX` and is always out-of-range — matching JS `choices[NaN] === undefined`. The functional outcome is correct, but the in-code comments conflate the null path and the non-numeric-string path without documenting the wrap-around mechanism.
+  - **Status**: Verified
+  - **Details**: Replaced the terse single-line comments with a block comment documenting both paths: (a) null/absent attribute → return 0 (matches JS `parseInt('0')`); (b) non-numeric string → return -1 as sentinel, which wraps to SIZE_MAX when cast to size_t, matching JS `choices[NaN] === undefined`. No code change — comment only.
 
-- [ ] 80. [wmv.cpp] `ParseResultV1`/`ParseResultV2` as `std::variant` — all callers must dispatch via `std::visit` or `std::get<>`
+- [x] 80. [wmv.cpp] `ParseResultV1`/`ParseResultV2` as `std::variant` — all callers must dispatch via `std::visit` or `std::get<>`
   - **JS Source**: `src/js/wmv.js` lines 69–75, 113–120
-  - **Status**: Pending
-  - **Details**: JS `wmv_parse` returns plain objects with different shapes (V1 has `legacy_values`, V2 has `customizations`). C++ models this as `std::variant<ParseResultV1, ParseResultV2>`. Any new caller site must use `std::visit` or `std::get<>` for dispatch; direct member access without dispatch is a compile error. Verify all existing call sites are correct.
+  - **Status**: Verified
+  - **Details**: All call sites verified: `tab_characters.cpp` line 1510 uses `std::visit` with `if constexpr` dispatch — correct. Added a comment on the `ParseResult` alias in `wmv.h` noting that callers must use `std::visit` or `std::get<>` for dispatch, and explaining why the variant models the JS plain-object shape difference.
 
 <!-- ─── src/js/wowhead.cpp ───────────────────────────────────────────────────── -->
 
-- [ ] 81. [wowhead.cpp] `wowhead_parse_hash` accesses `hash[0]` without an internal empty-string guard
+- [x] 81. [wowhead.cpp] `wowhead_parse_hash` accesses `hash[0]` without an internal empty-string guard
   - **JS Source**: `src/js/wowhead.js` line 64
-  - **Status**: Pending
-  - **Details**: `wowhead_parse_hash` is only called from `wowhead_parse`, which throws before calling it if the hash is empty — the external guard is sufficient. However the function itself has no internal assertion or check, diverging from defensive C++ practice. The JS function has the same implicit reliance on the caller.
+  - **Status**: Verified
+  - **Details**: No code change needed — external guard in `wowhead_parse()` is sufficient, matching the JS design. Added a comment above `wowhead_parse_hash` documenting that no internal empty-check is needed because the caller validates hash non-emptiness before calling.
 
 <!-- ─── src/js/xml.cpp ────────────────────────────────────────────────────────── -->
 
