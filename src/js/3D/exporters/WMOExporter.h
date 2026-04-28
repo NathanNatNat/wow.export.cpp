@@ -151,17 +151,10 @@ public:
 	 */
 	static void clearCache();
 
-	/**
-	 * Load the WMO data. Must be called before export methods.
-	 * Exposes WMO loading for callers that need access to doodad set names.
-	 */
+	// C++-only UI-layer convenience method (no JS counterpart): exposes WMO loading for callers that need access to doodad set names.
 	void loadWMO();
 
-	/**
-	 * Get the doodad set names from the loaded WMO.
-	 * Must call loadWMO() first.
-	 * @returns Vector of doodad set name strings.
-	 */
+	// C++-only UI-layer convenience method (no JS counterpart): returns the doodad set names from the loaded WMO.
 	std::vector<std::string> getDoodadSetNames() const;
 
 private:

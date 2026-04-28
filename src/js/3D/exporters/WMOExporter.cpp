@@ -911,6 +911,7 @@ void WMOExporter::exportAsOBJ(const std::filesystem::path& out, casc::ExportHelp
 					gj["renderBatches"] = rbArr;
 				}
 				gj["vertexColours"] = nlohmann::json(grp->vertexColours);
+				gj["colors2"] = nlohmann::json(grp->colors2);
 				// JS: liquid: group.liquid — undefined when MLIQ absent, omitted from JSON
 				if (grp->hasLiquid)
 					gj["liquid"] = liquidToJson(grp->liquid);
@@ -958,6 +959,7 @@ void WMOExporter::exportAsOBJ(const std::filesystem::path& out, casc::ExportHelp
 						materialTextures.push_back(material.runtimeData[0]);
 				} else if (pixelShader == 20) {
 					materialTextures.push_back(material.color3);
+					materialTextures.push_back(material.flags3);
 					for (const auto rtdTexture : material.runtimeData)
 						materialTextures.push_back(rtdTexture);
 				}
@@ -1472,6 +1474,7 @@ void WMOExporter::exportGroupsAsSeparateOBJ(const std::filesystem::path& out, ca
 					gj["renderBatches"] = rbArr;
 				}
 				gj["vertexColours"] = nlohmann::json(grp->vertexColours);
+				gj["colors2"] = nlohmann::json(grp->colors2);
 				// JS: liquid: group.liquid — undefined when MLIQ absent, omitted from JSON
 				if (grp->hasLiquid)
 					gj["liquid"] = liquidToJson(grp->liquid);
@@ -1537,8 +1540,15 @@ void WMOExporter::exportGroupsAsSeparateOBJ(const std::filesystem::path& out, ca
 
 		{
 			nlohmann::json matsArr = nlohmann::json::array();
-			for (const auto& mat : wmo->materials)
-				matsArr.push_back(materialToJson(mat));
+			for (const auto& mat : wmo->materials) {
+				auto matJson = materialToJson(mat);
+				auto shaderIt = wmo_shader_mapper::WMOShaderMap.find(static_cast<int>(mat.shader));
+				if (shaderIt != wmo_shader_mapper::WMOShaderMap.end()) {
+					matJson["vertexShader"] = static_cast<int>(shaderIt->second.VertexShader);
+					matJson["pixelShader"] = static_cast<int>(shaderIt->second.PixelShader);
+				}
+				matsArr.push_back(matJson);
+			}
 			json.addProperty("materials", matsArr);
 		}
 
@@ -1747,10 +1757,12 @@ void WMOExporter::clearCache() {
 	doodadCache.clear();
 }
 
+// C++-only UI-layer convenience method (no JS counterpart).
 void WMOExporter::loadWMO() {
 	wmo->load();
 }
 
+// C++-only UI-layer convenience method (no JS counterpart).
 std::vector<std::string> WMOExporter::getDoodadSetNames() const {
 	std::vector<std::string> names;
 	for (const auto& s : wmo->doodadSets)
