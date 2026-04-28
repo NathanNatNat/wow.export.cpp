@@ -92,9 +92,9 @@ public:
 	 * JS equivalent: BlobPolyfill.prototype.slice(start, end, type)
 	 *
 	 * @param start Start byte offset (default 0).
-	 * @param end End byte offset (default: blob size). Uses std::optional
-	 *            to match JS behavior where `end || this._buffer.length`
-	 *            treats 0 the same as undefined.
+	 * @param end End byte offset (default: blob size). Uses std::optional so
+	 *            absent (nullopt) means "use full length"; explicit 0 is used
+	 *            as-is (returns an empty blob for slice(x, 0) when x >= 0).
 	 * @param type MIME type for the new blob (default: empty string).
 	 */
 	BlobPolyfill slice(std::size_t start = 0,

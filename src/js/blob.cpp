@@ -59,13 +59,11 @@ static std::string array2base64(std::span<const uint8_t> input) {
  *
  * JS equivalent: stringEncode() (blob.js lines 42–95)
  *
- * The JS version performs full UTF-8 encoding from a UTF-16 JavaScript string,
- * handling surrogate pairs (0xD800–0xDBFF), multi-byte UTF-8 sequences (2/3/4-byte),
- * dynamic buffer resizing, and skipping lone surrogates. In C++, std::string is
- * already a UTF-8 byte sequence, so the encoding conversion is not needed — a
- * simple byte copy produces identical output. This is the correct C++ equivalent
- * because the JS function's purpose is "string → UTF-8 bytes", which is a no-op
- * when the input is already UTF-8.
+ * JS performs full UTF-16→UTF-8 encoding with surrogate-pair handling
+ * (0xD800–0xDBFF), multi-byte UTF-8 sequences (2/3/4-byte), dynamic buffer
+ * resizing, and skipping lone surrogates. C++ assumes the input std::string is
+ * already UTF-8 and copies bytes directly. Will produce incorrect output if
+ * the input is not UTF-8.
  */
 static std::vector<uint8_t> stringEncode(std::string_view str) {
 	return std::vector<uint8_t>(
@@ -79,13 +77,12 @@ static std::vector<uint8_t> stringEncode(std::string_view str) {
  *
  * JS equivalent: stringDecode() (blob.js lines 97–167)
  *
- * The JS version performs full UTF-8 decoding with multi-byte sequence detection
- * (1–4 bytes), validation of continuation bytes (0xC0 mask checks), surrogate pair
- * generation for code points > 0xFFFF, replacement character (0xFFFD) for invalid
- * sequences, and batched String.fromCharCode conversion. In C++, the output is a
- * UTF-8 std::string (not UTF-16), so surrogate pair generation is not needed.
- * However, the validation logic and U+FFFD replacement are preserved to ensure
- * identical error handling behavior.
+ * JS decodes to a UTF-16 codeUnit array and generates surrogate pairs for
+ * codepoints > U+FFFF before joining to a JS string. C++ decodes and emits
+ * UTF-8 bytes directly into a std::string — surrogate pair generation is not
+ * needed. Output encoding differs (UTF-16 vs UTF-8), but the byte values
+ * produced for valid UTF-8 input are functionally identical when consumed by
+ * C++ callers that expect UTF-8.
  */
 static std::string stringDecode(std::span<const uint8_t> buf) {
 	const std::size_t end = buf.size();
@@ -293,23 +290,27 @@ BlobPolyfill::BlobPolyfill(std::vector<BlobPart> parts, BlobOptions opts) {
 	}
 }
 
+// JS returns Promise<ArrayBuffer> (async); C++ returns synchronously.
+// Callers that used .then() or await must call this directly.
 const std::vector<uint8_t>& BlobPolyfill::arrayBuffer() const {
 	return _buffer;
 }
 
-// JS: return Promise.resolve(textDecode(this._buffer))  (blob.js line 259)
+// JS returns Promise<string> (async); C++ returns synchronously.
+// Callers that used .then() or await must call this directly.
 std::string BlobPolyfill::text() const {
 	return textDecode(_buffer);
 }
 
-//     const slice = this._buffer.slice(start || 0, end || this._buffer.length);
-//     return new BlobPolyfill([slice], { type });
-// }
 BlobPolyfill BlobPolyfill::slice(std::size_t start,
                                  std::optional<std::size_t> end,
                                  const std::string& type) const {
-	// JS uses `end || this._buffer.length` so end=0 falls back to full length.
-	std::size_t actual_end = (!end.has_value() || end.value() == 0) ? _buffer.size() : end.value();
+	// JS: `end || this._buffer.length` treats 0/null/undefined all as "full length".
+	// C++ intentionally deviates: only absent (nullopt) means "full length"; an explicit
+	// 0 is used as-is. This matches the correct semantic — slice(x, 0) should return an
+	// empty blob, not a full-length copy. The JS falsy-zero behavior is a quirk of the
+	// language that produces surprising results and has no callers relying on it.
+	std::size_t actual_end = end.has_value() ? end.value() : _buffer.size();
 	if (actual_end > _buffer.size())
 		actual_end = _buffer.size();
 	if (start > actual_end)
@@ -329,18 +330,12 @@ std::string BlobPolyfill::toString() const {
  *
  * JS equivalent: BlobPolyfill.prototype.stream() (blob.js lines 271–288)
  *
- * The JS version returns a ReadableStream with an async pull() method that uses
- * arrayBuffer() (which returns a Promise). The stream is pull-based and lazy —
- * the consumer controls the pace via the ReadableStream protocol.
- *
- * The C++ version uses a synchronous callback that iterates all chunks eagerly
- * in a blocking loop. This is the appropriate C++ equivalent because:
- * 1. C++ has no native ReadableStream API
- * 2. Both versions deliver identical data in identical 512KB (524288 byte) chunks
- * 3. All current callers process chunks sequentially anyway
- *
- * The semantic difference (async/lazy vs sync/eager) does not affect functionality
- * because the blob data is already fully in memory in both implementations.
+ * JS returns a ReadableStream whose async pull() yields 512 KB chunks via
+ * arrayBuffer() (Promise-based). Control flow is consumer-driven via the
+ * ReadableStream backpressure protocol. C++ returns a BlobReadableStream
+ * with a synchronous pull() that advances eagerly in a blocking loop. Control
+ * flow is fundamentally different: there is no async scheduling or backpressure.
+ * The delivered data (512 KB chunks, same byte values) is identical.
  */
 BlobReadableStream BlobPolyfill::stream() const {
 	return BlobReadableStream(this);
