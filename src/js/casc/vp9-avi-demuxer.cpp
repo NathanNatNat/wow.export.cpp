@@ -70,9 +70,7 @@ std::optional<VP9Config> VP9AVIDemuxer::parse_header() {
 	return config;
 }
 
-int64_t VP9AVIDemuxer::find_chunk(const std::vector<uint8_t>& data, const char fourcc[4]) {
-	// TODO 207: Match JS loop bound `i < length - 4` (not `i + 3 < size`).
-	// JS uses the stricter bound to avoid reading too close to the buffer end.
+int64_t VP9AVIDemuxer::find_chunk(const std::vector<uint8_t>& data, const char (&fourcc)[5]) {
 	if (data.size() < 4)
 		return -1;
 	for (size_t i = 0; i + 4 < data.size(); i++) {
@@ -85,6 +83,11 @@ int64_t VP9AVIDemuxer::find_chunk(const std::vector<uint8_t>& data, const char f
 	return -1;
 }
 
+// Deviation from JS: the original is an `async*` generator consumed via `for await`.
+// C++ has no direct equivalent, and the underlying BLTEStreamReader::streamBlocks is
+// already exposed as a synchronous callback in this port, so we invert control: callers
+// pass a callback invoked once per frame in the same order JS would `yield`. Streaming
+// semantics, ordering, and FrameInfo payloads are identical — only consumption shape differs.
 void VP9AVIDemuxer::extract_frames(const std::function<void(const FrameInfo&)>& callback) {
 	int64_t timestamp = 0;
 	const int64_t frame_duration = static_cast<int64_t>(1000000.0 / frame_rate); // microseconds

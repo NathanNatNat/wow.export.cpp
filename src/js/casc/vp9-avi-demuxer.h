@@ -54,10 +54,10 @@ public:
 	/**
 	 * Find chunk by fourCC identifier in AVI data.
 	 * @param data AVI data buffer.
-	 * @param fourcc Four-character code to search for.
+	 * @param fourcc Four-character code (null-terminated string literal) to search for.
 	 * @returns Offset of chunk, or -1 if not found.
 	 */
-	int64_t find_chunk(const std::vector<uint8_t>& data, const char fourcc[4]);
+	int64_t find_chunk(const std::vector<uint8_t>& data, const char (&fourcc)[5]);
 
 	/**
 	 * Extract video frames from stream blocks.
