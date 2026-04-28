@@ -5,6 +5,7 @@
  */
 #pragma once
 
+#include <functional>
 #include <string>
 
 /**
@@ -17,7 +18,7 @@
  * wow::equip_item() on selection.
  *
  * Usage:
- *   Call item_picker_modal::open(slot_id, slot_filter) to open.
+ *   Call item_picker_modal::open(slot_id, slot_filter, on_open_items_tab) to open.
  *   Call item_picker_modal::render() once per frame inside the ImGui frame.
  *   The modal closes itself on item selection or Cancel/Escape.
  */
@@ -26,10 +27,13 @@ namespace item_picker_modal {
 /**
  * Open the item picker modal for a given equipment slot.
  *
- * @param slot_id     Equipment slot ID (JS: slot_id prop).
- * @param slot_filter Label for type pre-filtering (JS: slot_filter prop, e.g. "Shoulder").
+ * @param slot_id           Equipment slot ID (JS: slot_id prop).
+ * @param slot_filter       Label for type pre-filtering (JS: slot_filter prop, e.g. "Shoulder").
+ * @param on_open_items_tab Callback invoked when the user clicks "Search in Items Tab"
+ *                          (JS: emits 'open-items-tab' — parent listens and switches tab).
  */
-void open(int slot_id, const std::string& slot_filter = "");
+void open(int slot_id, const std::string& slot_filter = "",
+          std::function<void()> on_open_items_tab = {});
 
 /**
  * Render the item picker modal. Must be called every frame.

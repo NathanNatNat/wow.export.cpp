@@ -9,12 +9,12 @@
 #include "../icon-render.h"
 #include "../modules/tab_items.h"
 #include "../wow/equip-item.h"
-#include "../modules.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cstring>
 #include <format>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -60,6 +60,18 @@ static std::string s_slot_filter;
 static char s_filter_buf[256] = {};
 static int  s_scroll_offset   = 0;
 
+// JS: data() { is_loading, load_error }
+// The C++ port has no async loader to invoke — DBItemList equivalent
+// (tab_items::getAllItems()) is populated synchronously by tab_items::mounted()
+// at app startup. s_is_loading mirrors the JS pre-load state until
+// getAllItems() returns non-null; s_load_error is kept for parity but is
+// effectively never set in C++ (no failure path).
+static bool s_is_loading = false;
+static bool s_load_error = false;
+
+// JS: emits ['open-items-tab'] — invoked when "Search in Items Tab" is clicked.
+static std::function<void()> s_on_open_items_tab;
+
 // Set when open() is called — forces rebuild on next render.
 static bool s_just_opened = false;
 
@@ -83,7 +95,18 @@ static void rebuild_filtered(const tab_items::ItemData* items_ptr, size_t items_
 	}
 
 	// JS: filtered_items — filter by filter_text (case-insensitive substring)
+	// JS: const text = this.filter_text.trim().toLowerCase();
 	std::string filter_lower(s_filter_buf);
+	{
+		static constexpr const char* WS = " \t\n\r\f\v";
+		const auto first = filter_lower.find_first_not_of(WS);
+		if (first == std::string::npos) {
+			filter_lower.clear();
+		} else {
+			const auto last = filter_lower.find_last_not_of(WS);
+			filter_lower = filter_lower.substr(first, last - first + 1);
+		}
+	}
 	std::transform(filter_lower.begin(), filter_lower.end(), filter_lower.begin(),
 	               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
@@ -119,16 +142,22 @@ static void close_modal() {
 
 // --- Public API ---
 
-void open(int slot_id, const std::string& slot_filter) {
-	s_is_open     = true;
-	s_slot_id     = slot_id;
-	s_slot_filter = slot_filter;
-	s_just_opened = true;
+void open(int slot_id, const std::string& slot_filter,
+          std::function<void()> on_open_items_tab) {
+	s_is_open           = true;
+	s_slot_id           = slot_id;
+	s_slot_filter       = slot_filter;
+	s_on_open_items_tab = std::move(on_open_items_tab);
+	s_just_opened       = true;
 	// JS: watch slot_id handler resets filter + scroll
 	std::memset(s_filter_buf, 0, sizeof(s_filter_buf));
 	s_scroll_offset = 0;
 	s_last_filter   = "";
 	s_last_slot_id  = -1;
+	// JS: data() initialises is_loading/load_error to false; reset on open
+	// so each new open starts clean. (No async loader is invoked in C++.)
+	s_is_loading = false;
+	s_load_error = false;
 }
 
 bool is_open() {
@@ -138,6 +167,15 @@ bool is_open() {
 void render() {
 	if (!s_is_open)
 		return;
+
+	// JS: <div class="item-picker-overlay"> — full-viewport semi-transparent backdrop
+	// behind the modal. Drawn into the background draw list so it sits beneath the
+	// popup but above all other UI while the modal is open.
+	const ImGuiViewport* vp = ImGui::GetMainViewport();
+	ImGui::GetBackgroundDrawList()->AddRectFilled(
+		vp->Pos,
+		ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y),
+		IM_COL32(0, 0, 0, 128));
 
 	if (s_just_opened) {
 		ImGui::OpenPopup("Select Item##item-picker-modal");
@@ -166,6 +204,20 @@ void render() {
 	const std::vector<tab_items::ItemData>* all_items = tab_items::getAllItems();
 	const tab_items::ItemData* items_ptr   = all_items ? all_items->data() : nullptr;
 	size_t                     items_count = all_items ? all_items->size() : 0;
+
+	// JS: watch slot_id { if (this.all_items.length === 0) { this.is_loading = true;
+	//     try { await DBItemList.initialize(); } catch { this.load_error = true; }
+	//     this.is_loading = false; } }
+	// In the C++ port there is no async loader to invoke — DBItemList equivalent is
+	// populated synchronously by tab_items::mounted() at app startup. We mirror the
+	// JS state machine by tracking the items_ptr null→non-null transition. s_load_error
+	// is kept for parity but is never set in C++ (no failure path exists).
+	if (!items_ptr) {
+		if (!s_load_error)
+			s_is_loading = true;
+	} else {
+		s_is_loading = false;
+	}
 
 	// JS: computed filtered_items re-evaluates when filter_text or slot_id changes.
 	bool filter_changed = (std::strcmp(s_filter_buf, s_last_filter.c_str()) != 0);
@@ -210,8 +262,13 @@ void render() {
 	ImGui::BeginChild("##item-list", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2.0f - 8.0f),
 	                   ImGuiChildFlags_Borders);
 
-	if (!items_ptr) {
+	// JS: <div v-if="is_loading">Loading items...</div>
+	//     <div v-else-if="load_error">Failed to load items.</div>
+	//     <div v-else>... v-if="!is_loading && filtered_items.length === 0">No items found.</div></div>
+	if (s_is_loading) {
 		ImGui::TextUnformatted("Loading items...");
+	} else if (s_load_error) {
+		ImGui::TextUnformatted("Failed to load items.");
 	} else if (result_count == 0) {
 		ImGui::TextUnformatted("No items found.");
 	} else {
@@ -232,6 +289,16 @@ void render() {
 			const auto* item = s_filtered_items[static_cast<size_t>(i)];
 			int quality = item->quality;
 			bool has_color = (quality >= 0 && quality < static_cast<int>(std::size(quality_colors)));
+
+			// JS: <div :class="['item-icon', 'icon-' + item.icon]"></div>
+			// Render the icon to the left of the name once its texture finishes loading
+			// (loadIcon() was already issued for this item above).
+			const uint32_t iconTex = icon_render::getIconTexture(item->icon);
+			if (iconTex != 0) {
+				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(iconTex)),
+				             ImVec2(24.0f, 24.0f));
+				ImGui::SameLine();
+			}
 
 			if (has_color)
 				ImGui::PushStyleColor(ImGuiCol_Text, quality_colors[quality]);
@@ -267,8 +334,12 @@ void render() {
 	ImGui::EndChild();
 
 	// JS: <span @click="open_items_tab">Search in Items Tab</span>  <button @click="$emit('close')">Cancel</button>
+	// JS: open_items_tab() { this.$emit('open-items-tab'); }
+	// The parent component listens for the event and switches the active tab.
+	// In the C++ port the equivalent is a caller-supplied callback registered via open().
 	if (ImGui::SmallButton("Search in Items Tab")) {
-		modules::set_active("tab_items");
+		if (s_on_open_items_tab)
+			s_on_open_items_tab();
 		close_modal();
 		ImGui::EndPopup();
 		return;
@@ -281,6 +352,9 @@ void render() {
 	}
 
 	// JS: on_key(e) { if (e.key === 'Escape') this.$emit('close'); }
+	// JS adds a global document-level keydown listener. In ImGui this redundancy
+	// is benign — `BeginPopupModal(&modal_open)` above already auto-closes the
+	// modal on Escape via the p_open mechanism. Kept for parity / defensive close.
 	if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 		close_modal();
 		ImGui::EndPopup();
