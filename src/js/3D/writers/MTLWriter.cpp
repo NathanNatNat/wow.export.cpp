@@ -15,10 +15,13 @@ void MTLWriter::addMaterial(const std::string& name, const std::string& file) {
 	materials.push_back({ name, file });
 }
 
+// JS defines `get isEmpty()` as a property getter; C++ uses a regular method
+// (no getter syntax). Functionally equivalent — callers must use parentheses.
 bool MTLWriter::isEmpty() const {
 	return materials.empty();
 }
 
+// JS write() is async (uses await for I/O). C++ runs synchronously by design.
 void MTLWriter::write(bool overwrite) {
 	// Don't bother writing an empty material library.
 	if (isEmpty())
@@ -40,7 +43,9 @@ void MTLWriter::write(bool overwrite) {
 
 		std::string materialFile = material.file;
 		if (useAbsolute)
-			materialFile = std::filesystem::weakly_canonical(mtlDir / materialFile).string();
+			// Match JS path.resolve() (lexical only, no filesystem access).
+			// weakly_canonical would resolve symlinks and require IO — JS does neither.
+			materialFile = (mtlDir / materialFile).lexically_normal().string();
 
 		writer.writeLine("map_Kd " + materialFile);
 	}

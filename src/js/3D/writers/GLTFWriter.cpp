@@ -18,10 +18,31 @@ License: MIT
 #include <format>
 #include <algorithm>
 #include <array>
+#include <unordered_map>
 
 // Use ordered_json to preserve property insertion order, matching JS JSON.stringify()
 // which outputs keys in insertion order. Standard nlohmann::json uses alphabetical ordering.
 using json = nlohmann::ordered_json;
+
+// JS-Map equivalent: iteration in insertion order, O(1) lookup by key.
+// Used to replace std::map (alphabetical) where insertion order is observable.
+template<typename K, typename V>
+class InsertionOrderedMap {
+	std::vector<std::pair<K, V>> data_;
+	std::unordered_map<K, size_t> index_;
+public:
+	void emplace(K key, V value) {
+		index_[key] = data_.size();
+		data_.emplace_back(std::move(key), std::move(value));
+	}
+	V& at(const K& key) { return data_[index_.at(key)].second; }
+	const V& at(const K& key) const { return data_[index_.at(key)].second; }
+	bool empty() const { return data_.empty(); }
+	auto begin() { return data_.begin(); }
+	auto end() { return data_.end(); }
+	auto begin() const { return data_.begin(); }
+	auto end() const { return data_.end(); }
+};
 
 // See https://gist.github.com/mhenry07/e31d8c94db91fb823f2eed2fc1b43f15
 static constexpr int GLTF_ARRAY_BUFFER = 0x8892;
@@ -198,6 +219,8 @@ void GLTFWriter::addEquipmentModel(const GLTFEquipmentModel& equip) {
 equipment_models.push_back(equip);
 }
 
+// JS write() is async (uses await for I/O). C++ runs synchronously by design;
+// the codebase converts JS async I/O to blocking std::filesystem / FileWriter calls.
 void GLTFWriter::write(bool overwrite, const std::string& format) {
 const std::filesystem::path outGLTF = casc::ExportHelper::replaceExtension(out.string(), format == "glb" ? ".glb" : ".gltf");
 const std::filesystem::path outBIN = casc::ExportHelper::replaceExtension(out.string(), ".bin");
@@ -214,6 +237,7 @@ return;
 
 // Use build manifest constants for generator string, matching JS:
 // util.format('wow.export v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid)
+// Per CLAUDE.md, user-facing text says "wow.export.cpp" (intentional deviation from JS).
 const std::string generator = std::format("wow.export.cpp v{} {} [{}]",
 	constants::VERSION, constants::FLAVOUR, constants::BUILD_GUID);
 json root = {
@@ -316,7 +340,8 @@ const auto& bones_ref = this->bones;
 int idx_inv_bind = -1;
 int idx_bone_joints = -1;
 int idx_bone_weights = -1;
-std::map<std::string, BufferWrapper> animationBufferMap;
+// Insertion-ordered to match JS Map iteration order during GLB animation packing.
+InsertionOrderedMap<std::string, BufferWrapper> animationBufferMap;
 
 if (!bones_ref.empty()) {
 idx_bone_joints = add_buffered_accessor({
@@ -361,7 +386,8 @@ size_t skeleton_idx = add_scene_node({
 
 std::map<int, size_t> bone_lookup_map;
 
-std::map<std::string, int> animation_buffer_lookup_map;
+// Lookup-only (no iteration that depends on order); unordered_map is sufficient.
+std::unordered_map<std::string, int> animation_buffer_lookup_map;
 
 if (core::view->config.value("modelsExportAnimations", false)) {
 for (size_t animationIndex = 0; animationIndex < animations.size(); animationIndex++) {
@@ -906,7 +932,9 @@ root["materials"] = json::array();
 }
 
 std::map<std::string, int> materialMap;
-struct TextureBufferView { BufferWrapper buffer; };
+// fileDataID mirrors JS structure {fileDataID, buffer}; not currently consulted at
+// the iteration site (images are matched by index) but preserved for fidelity.
+struct TextureBufferView { uint32_t fileDataID; BufferWrapper buffer; };
 std::vector<TextureBufferView> texture_buffer_views;
 
 for (const auto& [texKey, texFile] : textures) {
@@ -916,7 +944,9 @@ const int materialIndex = static_cast<int>(root["materials"].size());
 
 if (format == "glb" && texture_buffers.count(texKey)) {
 // glb mode with embedded textures: use bufferView reference
-texture_buffer_views.push_back({texture_buffers.at(texKey)});
+uint32_t fileDataID = 0;
+try { fileDataID = static_cast<uint32_t>(std::stoul(texKey)); } catch (...) {}
+texture_buffer_views.push_back({fileDataID, texture_buffers.at(texKey)});
 root["images"].push_back({
 {"bufferView", -1},
 {"mimeType", "image/png"}
@@ -969,12 +999,6 @@ mesh_component_meta[i] = {
 byte_length,
 component_type
 };
-}
-
-for (auto& uv : uvs) {
-// Flip UVs on Y axis.
-for (size_t i = 0; i < uv.size(); i += 2)
-uv[i + 1] = (uv[i + 1] - 1) * -1;
 }
 
 std::vector<BufferWrapper> bins;
@@ -1227,13 +1251,6 @@ bins.push_back(std::move(buffer));
 
 // write equipment UVs
 if (!equip.uv.empty()) {
-// flip UVs on Y axis
-std::vector<float> flipped_uv(equip.uv.size());
-for (size_t i = 0; i < equip.uv.size(); i += 2) {
-flipped_uv[i] = equip.uv[i];
-flipped_uv[i + 1] = (equip.uv[i + 1] - 1) * -1;
-}
-
 const int eq_uv_accessor = static_cast<int>(root["accessors"].size());
 const int eq_uv_bufview = static_cast<int>(root["bufferViews"].size());
 eq_prim_attribs["TEXCOORD_0"] = eq_uv_accessor;
@@ -1249,7 +1266,7 @@ root["accessors"].push_back({
 {"bufferView", eq_uv_bufview},
 {"byteOffset", 0},
 {"componentType", GLTF_FLOAT},
-{"count", static_cast<int>(flipped_uv.size() / 2)},
+{"count", static_cast<int>(equip.uv.size() / 2)},
 {"type", "VEC2"}
 });
 
@@ -1259,7 +1276,7 @@ const size_t padding = misalignment > 0 ? component_size - misalignment : 0;
 bin_ofs += padding;
 
 root["bufferViews"][eq_uv_bufview]["byteOffset"] = bin_ofs;
-const size_t buffer_length = flipped_uv.size() * component_size;
+const size_t buffer_length = equip.uv.size() * component_size;
 root["bufferViews"][eq_uv_bufview]["byteLength"] = buffer_length;
 bin_ofs += buffer_length;
 
@@ -1267,7 +1284,7 @@ BufferWrapper buffer = BufferWrapper::alloc(buffer_length + padding, true);
 if (padding > 0)
 buffer.fill(0, padding);
 
-for (const auto uv : flipped_uv)
+for (const auto uv : equip.uv)
 buffer.writeFloatLE(uv);
 
 bins.push_back(std::move(buffer));

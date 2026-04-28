@@ -51,20 +51,21 @@ public:
 	void appendGeometry(const std::vector<float>& verts, const std::vector<float>& normals);
 
 	/**
-	 * Calculate normal from three vertices using cross product.
-	 */
-	std::array<float, 3> calculate_normal(
-		float v1x, float v1y, float v1z,
-		float v2x, float v2y, float v2z,
-		float v3x, float v3y, float v3z) const;
-
-	/**
 	 * Write the STL file in binary format.
 	 * @param overwrite Whether to overwrite existing files.
 	 */
 	void write(bool overwrite = true);
 
 private:
+	/**
+	 * Calculate normal from three vertices using cross product.
+	 * Internal helper used only from write(); not part of the public API.
+	 */
+	std::array<float, 3> calculate_normal(
+		float v1x, float v1y, float v1z,
+		float v2x, float v2y, float v2z,
+		float v3x, float v3y, float v3z) const;
+
 	struct Mesh {
 		std::string name;
 		std::vector<uint32_t> triangles;

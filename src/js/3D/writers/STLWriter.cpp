@@ -74,6 +74,7 @@ std::array<float, 3> STLWriter::calculate_normal(
 	return { nx, ny, nz };
 }
 
+// JS write() is async (uses await for I/O). C++ runs synchronously by design.
 void STLWriter::write(bool overwrite) {
 	if (!overwrite && generics::fileExists(out))
 		return;
@@ -90,6 +91,7 @@ void STLWriter::write(bool overwrite) {
 	BufferWrapper buffer = BufferWrapper::alloc(buffer_size, true);
 
 	// write header (80 bytes)
+	// Per CLAUDE.md, user-facing text says "wow.export.cpp" (intentional deviation from JS).
 	const std::string header = "Exported using wow.export.cpp v" + std::string(constants::VERSION);
 	const size_t header_len = std::min(header.size(), static_cast<size_t>(80));
 	buffer.writeBuffer(std::span<const uint8_t>(

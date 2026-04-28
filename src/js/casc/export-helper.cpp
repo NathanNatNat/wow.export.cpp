@@ -12,6 +12,7 @@
 #include <format>
 #include <algorithm>
 #include <cctype>
+#include <iostream>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -297,9 +298,10 @@ void ExportHelper::mark(const std::string& item, bool state, const std::string& 
 		succeeded++;
 	} else {
 		logging::write(std::format("Failed to export {} ({})", item, error));
-		
+
+		// JS uses console.log() (stdout) for the stack trace, bypassing the log file.
 		if (stackTrace.has_value())
-			logging::write(stackTrace.value());
+			std::cout << stackTrace.value() << '\n';
 	}
 
 	updateCurrentTask();

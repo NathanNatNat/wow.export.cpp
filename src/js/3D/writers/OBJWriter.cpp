@@ -17,14 +17,17 @@
 /**
  * Convert float to string with minimal representation (no trailing zeros),
  * matching JS Number.toString() behavior.
+ *
+ * std::to_chars with default chars_format produces the shortest decimal that
+ * round-trips back to the same float — equivalent to JS Number.prototype.toString
+ * (Grisu/Ryu). %.17g would always emit up to 17 digits, producing larger files.
  */
 static std::string float_to_string(float val) {
-	// Use snprintf with enough precision to round-trip
 	std::array<char, 32> buf;
-	int len = std::snprintf(buf.data(), buf.size(), "%.17g", static_cast<double>(val));
-	if (len <= 0 || static_cast<size_t>(len) >= buf.size())
+	auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), val);
+	if (ec != std::errc())
 		return std::to_string(val);
-	return std::string(buf.data(), len);
+	return std::string(buf.data(), ptr - buf.data());
 }
 
 OBJWriter::OBJWriter(const std::filesystem::path& out)
@@ -82,6 +85,7 @@ void OBJWriter::appendGeometry(const std::vector<float>& verts, const std::vecto
 	}
 }
 
+// JS write() is async (uses await for I/O). C++ runs synchronously by design.
 void OBJWriter::write(bool overwrite) {
 	// If overwriting is disabled, check file existence.
 	if (!overwrite && generics::fileExists(out))

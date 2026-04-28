@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <cstdint>
 #include <filesystem>
 
@@ -170,6 +171,10 @@ private:
 	std::vector<float> inverseBindMatrices;
 	std::vector<GLTFAnimation> animations;
 
+	// JS uses Map (insertion order); std::map sorts alphabetically. The API accepts
+	// std::map from upstream callers (see TODO_TRACKER #189 — full insertion-order
+	// propagation requires changing exportTextures() and three exporter files).
+	// Alphabetical ordering is consistent across runs, just different from JS.
 	std::map<std::string, GLTFTextureEntry> textures;
 	std::map<std::string, BufferWrapper> texture_buffers;
 	std::vector<GLTFMesh> meshes;

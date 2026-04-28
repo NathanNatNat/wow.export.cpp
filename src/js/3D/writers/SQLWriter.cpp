@@ -21,6 +21,8 @@ void SQLWriter::setIncludeDDL(bool include) {
 	include_ddl = include;
 }
 
+// JS exposes `addField(...fields)` as a single variadic. C++ splits this into
+// two overloads — a single-string and a vector form — to mirror the same usage.
 void SQLWriter::addField(const std::string& field) {
 	fields.push_back(field);
 }
@@ -125,6 +127,8 @@ std::string SQLWriter::fieldTypeToSQL(const db::SchemaField& field_type, const s
 	}
 }
 
+// Output ends with a single trailing "\n" after ");\n" — matches JS
+// `lines.join('\n')` with a trailing empty string element (verified analytically).
 std::string SQLWriter::generateDDL() const {
 	if (!schema || fields.empty())
 		return "";
@@ -215,6 +219,7 @@ std::string SQLWriter::toSQL() const {
 	return result;
 }
 
+// JS write() is async (uses await for I/O). C++ runs synchronously by design.
 void SQLWriter::write(bool overwrite) {
 	if (rows.empty())
 		return;
