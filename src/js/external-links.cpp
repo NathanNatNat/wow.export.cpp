@@ -6,7 +6,6 @@
 #include "external-links.h"
 
 #include <format>
-#include <cstdlib>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -14,6 +13,9 @@
 #endif
 #include <windows.h>
 #include <shellapi.h>
+#else
+#include <unistd.h>
+#include <sys/types.h>
 #endif
 
 namespace ExternalLinks {
@@ -45,8 +47,16 @@ void open(const std::string& link) {
 	MultiByteToWideChar(CP_UTF8, 0, url.c_str(), -1, wurl.data(), required);
 	ShellExecuteW(nullptr, L"open", wurl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #else
-	std::string cmd = "xdg-open \"" + url + "\" &";
-	std::system(cmd.c_str());
+	// Use fork+execlp to pass the URL as a direct argument to xdg-open, avoiding
+	// shell expansion entirely. std::system() with string concatenation is unsafe
+	// because a URL containing `"`, backticks, or `$()` can inject shell commands.
+	// JS equivalent: nw.Shell.openExternal(link) — which is also injection-safe.
+	pid_t pid = fork();
+	if (pid == 0) {
+		execlp("xdg-open", "xdg-open", url.c_str(), nullptr);
+		_exit(127); // exec failed
+	}
+	// Parent: child runs independently, no need to waitpid
 #endif
 }
 
@@ -54,6 +64,10 @@ void wowHead_viewItem(int itemID) {
 	open(std::format(WOWHEAD_ITEM, itemID));
 }
 
+// renderLink() is an intentional ImGui-specific addition with no JS equivalent.
+// In the JS app, clickable links are handled by a global DOM click handler in
+// app.js that opens any element with a `data-external` attribute. Dear ImGui has
+// no DOM, so each call site must invoke this function explicitly instead.
 void renderLink(const char* link, const char* label, const ImVec4* color) {
 	if (color)
 		ImGui::PushStyleColor(ImGuiCol_Text, *color);

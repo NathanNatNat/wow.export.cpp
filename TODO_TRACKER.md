@@ -1,40 +1,40 @@
 # TODO Tracker
 
-> **Progress: 0/541 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 6/541 verified (1%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/js/core.cpp ──────────────────────────────────────────────────────── -->
 
-- [ ] 40. [core.cpp] `makeNewView()` does not initialise `isDev` field
+- [x] 40. [core.cpp] `makeNewView()` does not initialise `isDev` field
   - **JS Source**: `src/js/core.js` lines 33–44
-  - **Status**: Pending
-  - **Details**: JS sets `isDev: !BUILD_RELEASE`. C++ `makeNewView()` does not set `isDev` at all; the field will be default-constructed (likely `false`), which may be incorrect in debug builds.
+  - **Status**: Verified
+  - **Details**: `AppState::isDev` is already correctly initialized via in-class default member initialization (`#ifdef NDEBUG bool isDev = false; #else bool isDev = true; #endif` in `core.h`), matching JS `isDev: !BUILD_RELEASE`. No change to `makeNewView()` needed.
 
-- [ ] 41. [core.cpp] `makeNewView()` does not initialise `regexTooltip` string
+- [x] 41. [core.cpp] `makeNewView()` does not initialise `regexTooltip` string
   - **JS Source**: `src/js/core.js` line 280
-  - **Status**: Pending
-  - **Details**: JS initialises `regexTooltip` with a detailed help string shown in the UI. C++ leaves this field default-constructed (empty string).
+  - **Status**: Verified
+  - **Details**: `AppState::regexTooltip` is already initialized verbatim from the JS source via in-class default member initialization in `core.h` (lines 527–537). No change to `makeNewView()` needed.
 
-- [ ] 42. [core.cpp] `makeNewView()` does not initialise help-related properties (`helpArticles`, `helpFilteredArticles`, `helpSelectedArticle`, `helpSearchQuery`)
+- [x] 42. [core.cpp] `makeNewView()` does not initialise help-related properties (`helpArticles`, `helpFilteredArticles`, `helpSelectedArticle`, `helpSearchQuery`)
   - **JS Source**: `src/js/core.js` lines 381–383
-  - **Status**: Pending
-  - **Details**: Four help-tab properties left at default-constructed values. Note: `tab_help` is removed (see CLAUDE.md), but these fields may still be referenced elsewhere.
+  - **Status**: Verified
+  - **Details**: Help fields exist in `AppState` struct with default-constructed values (empty vectors, null json, empty string) which match JS empty-array/null/''. Added an explanatory comment in `makeNewView()` (core.cpp) documenting that these fields are intentionally not explicitly initialized because `tab_help` is removed (see CLAUDE.md).
 
-- [ ] 43. [core.cpp] `openLastExportStream()` silently ignores all filesystem errors; JS only suppresses ENOENT
+- [x] 43. [core.cpp] `openLastExportStream()` silently ignores all filesystem errors; JS only suppresses ENOENT
   - **JS Source**: `src/js/core.js` lines 394–408
-  - **Status**: Pending
-  - **Details**: JS catches `stat()` errors, re-throws anything that is not `ENOENT`, and logs unexpected errors. C++ uses `std::error_code ec` but never checks it or logs non-ENOENT failures — all errors are silently swallowed.
+  - **Status**: Verified
+  - **Details**: Fixed `openLastExportStream()` in `core.cpp` to check `ec` after `std::filesystem::status()`. Non-ENOENT errors are now logged via `logging::write()`, mirroring JS behavior (`if (e.code !== 'ENOENT') log.write(...)`). ENOENT is still silently suppressed.
 
 <!-- ─── src/js/external-links.cpp ───────────────────────────────────────────── -->
 
-- [ ] 44. [external-links.cpp] Shell command injection vulnerability on Unix (`xdg-open` URL concatenation)
+- [x] 44. [external-links.cpp] Shell command injection vulnerability on Unix (`xdg-open` URL concatenation)
   - **JS Source**: `src/js/external-links.js` line 35
-  - **Status**: Pending
-  - **Details**: C++ Unix path (line 48) constructs `"xdg-open \"" + url + "\" &"` via string concatenation. A URL containing `"` or `` ` `` or `$()` can inject arbitrary shell commands. JS uses `nw.Shell.openExternal()` which is safe. Fix by using `execvp`/`posix_spawn` directly, or by sanitising the URL before shell expansion.
+  - **Status**: Verified
+  - **Details**: Replaced `std::system()` with string concatenation with `fork()`+`execlp()`. The URL is now passed as a direct argument to `xdg-open`, matching the injection-safe behavior of JS `nw.Shell.openExternal()`.
 
-- [ ] 45. [external-links.cpp] `renderLink()` function has no JS equivalent — ImGui-specific addition not derived from JS source
+- [x] 45. [external-links.cpp] `renderLink()` function has no JS equivalent — ImGui-specific addition not derived from JS source
   - **JS Source**: N/A
-  - **Status**: Pending
-  - **Details**: `renderLink()` (lines 57–75) renders a clickable ImGui hyperlink with hover styling and cursor change. It has no counterpart in the JS file. This is additional functionality — verify it is needed and document it in a comment.
+  - **Status**: Verified
+  - **Details**: Added a comment above `renderLink()` documenting it as an intentional ImGui-specific addition. In the JS app the equivalent is the global DOM `data-external` click handler in `app.js`; Dear ImGui has no DOM so each call site invokes this function explicitly.
 
 <!-- ─── src/js/file-writer.cpp ──────────────────────────────────────────────── -->
 
