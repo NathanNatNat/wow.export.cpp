@@ -210,8 +210,6 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 			ImGui::SetNextWindowSize(ImVec2(inputWidth, 0.0f), ImGuiCond_Always);
 
 			ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.208f, 0.208f, 0.208f, 1.0f));
 			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
 			ImGuiWindowFlags dropdownFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
@@ -225,7 +223,6 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 				                                ImGui::GetWindowPos().y + ImGui::GetWindowSize().y + 1.0f);
 				ImGui::GetBackgroundDrawList()->AddRectFilled(shadowMin, shadowMax, IM_COL32(0, 0, 0, 96));
 
-				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(15.0f, 10.0f));
 				for (size_t i = 0; i < matches.size(); ++i) {
 					const auto* item = matches[i];
 					const std::string label = item->value("label", std::string(""));
@@ -240,7 +237,6 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 						dl->AddLine(p, ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, p.y), ImGui::GetColorU32(ImGuiCol_Separator));
 					}
 				}
-				ImGui::PopStyleVar();
 
 				if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None)) {
 					dropdownHovered = true;
@@ -250,7 +246,7 @@ void render(const char* id, const nlohmann::json& value, const std::vector<nlohm
 			ImGui::End();
 
 			ImGui::PopStyleVar(2);
-			ImGui::PopStyleColor(3);
+			ImGui::PopStyleColor();
 		}
 	}
 
