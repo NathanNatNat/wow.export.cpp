@@ -57,7 +57,7 @@ static constexpr std::array<ShaderEntry, 36> SHADER_ARRAY = {{
 	{"Combiners_Opaque",                         "Diffuse_T1",             "T1",       "T1"       },
 	{"Combiners_Mod_Mod2x",                      "Diffuse_EdgeFade_T1_T2", "T1_T2",    "T1_T2"    },
 	{"Combiners_Mod",                            "Diffuse_EdgeFade_T1",    "T1_T2",    "T1_T2"    },
-	{"Combiners_Mod_Mod",                        "Diffuse_EdgeFade_T1_T2", "T1_T2",    "T1_T2"    },
+	{"Combiners_Mod_Mod_Depth",                  "Diffuse_EdgeFade_T1_T2", "T1_T2",    "T1_T2"    },
 }};
 
 
@@ -102,6 +102,7 @@ std::optional<std::string> getVertexShader(int textureCount, int shaderID) {
 			}
 		}
 	}
+	return std::nullopt;
 }
 
 /**
@@ -153,6 +154,7 @@ std::optional<std::string> getPixelShader(int textureCount, int shaderID) {
 			}
 		}
 	}
+	return std::nullopt;
 }
 
 /**
@@ -173,6 +175,7 @@ std::optional<std::string> getHullShader(int textureCount, int shaderID) {
 		else
 			return "T1_T2";
 	}
+	return std::nullopt;
 }
 
 /**
@@ -193,6 +196,7 @@ std::optional<std::string> getDomainShader(int textureCount, int shaderID) {
 		else
 			return "T1_T2";
 	}
+	return std::nullopt;
 }
 
 } // namespace shader_mapper
