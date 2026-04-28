@@ -1,40 +1,245 @@
 # TODO Tracker
 
-> **Progress: 21/541 verified (4%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 6/580 verified (1%)** — ✅ = Verified, ⬜ = Pending
+
+<!-- ─── src/app.cpp ─────────────────────────────────────────────────────────── -->
+
+- [ ] 1. [app.cpp] `goToTexture()` function missing from C++ port
+  - **JS Source**: `src/app.js` lines 418–434
+  - **Status**: Pending
+  - **Details**: The `goToTexture(fileDataId)` method is entirely absent. It switches to the textures tab, clears the current selection, and applies a file-ID regex filter. Must be added to app.cpp and wired to every call site.
+
+- [ ] 2. [app.cpp] `whatsNewHTML` content not loaded on startup
+  - **JS Source**: `src/app.js` lines 708–716
+  - **Status**: Pending
+  - **Details**: JS reads `whats-new.html` and stores its content in `core.view.whatsNewHTML` for display in the home tab. C++ does nothing here. Blocked on tab_home being a stub (see CLAUDE.md intentional stubs), but the load path itself is absent.
+
+- [ ] 3. [app.cpp] `handleContextMenuClick` missing `.action` wrapper / optional-chaining logic
+  - **JS Source**: `src/app.js` lines 318–323
+  - **Status**: Pending
+  - **Details**: JS checks `opt.action?.handler` (optional chaining through an `action` wrapper object). C++ checks `opt.handler` directly, missing the intermediate `.action` property layer.
+
+- [ ] 4. [app.cpp] `click()` checks DOM classList for disabled state; C++ uses a boolean parameter instead
+  - **JS Source**: `src/app.js` lines 369–372
+  - **Status**: Pending
+  - **Details**: JS inspects `event.target.classList.contains('disabled')` at the call site. C++ receives a pre-computed boolean. Ensure all callers pass the correct value and the semantics are preserved end-to-end.
+
+- [ ] 5. [app.cpp] Drag-enter / drag-leave `fileDropPrompt` overlay not implementable in GLFW
+  - **JS Source**: `src/app.js` lines 589–657
+  - **Status**: Pending
+  - **Details**: JS shows a `fileDropPrompt` overlay while a file is dragged over the window using `window.ondragenter`, `window.ondragleave`, and a `dropStack` counter. GLFW provides no drag-over events, so only the actual `glfw_drop_callback` (drop) is implemented. The visual drag-over prompt is missing. Document this in a code comment and track here.
+
+- [ ] 6. [app.cpp] Vue reactive `AppState` init replaced with static struct; `created` lifecycle hook absent
+  - **JS Source**: `src/app.js` lines 142–147
+  - **Status**: Pending
+  - **Details**: JS uses `Vue.createApp({ data: () => core.makeNewView(), created() { core.view = this; } })`. C++ creates a static `AppState` and assigns it to `core::view` before modules register. Any code relying on Vue's reactivity lifecycle (`mounted`, `created` ordering) is structurally different.
+
+<!-- ─── src/js/blob.cpp ──────────────────────────────────────────────────────── -->
+
+- [ ] 7. [blob.cpp] `arrayBuffer()` and `text()` are synchronous; JS versions return Promises
+  - **JS Source**: `src/js/blob.js` lines 254–260
+  - **Status**: Pending
+  - **Details**: JS returns `Promise.resolve(...)` for both methods. C++ returns values synchronously. Callers that use `.then()` / `await` must be aware of this semantic change.
+
+- [ ] 8. [blob.cpp] `stream()` returns synchronous callback-based `BlobReadableStream`; JS returns async `ReadableStream`
+  - **JS Source**: `src/js/blob.js` lines 271–288
+  - **Status**: Pending
+  - **Details**: JS `stream()` yields 512 KB chunks via an async pull() on a ReadableStream. C++ returns a `BlobReadableStream` with synchronous pull(). Control flow is fundamentally different. Documented in C++ comments but callers need adapting.
+
+- [ ] 9. [blob.cpp] `stringEncode()` does a byte copy instead of UTF-16→UTF-8 transcoding
+  - **JS Source**: `src/js/blob.js` lines 42–95
+  - **Status**: Pending
+  - **Details**: JS performs full UTF-16→UTF-8 encoding with surrogate-pair handling and dynamic buffer resizing. C++ assumes the input `std::string` is already UTF-8 and copies bytes directly. Will produce incorrect output if the input is not UTF-8.
+
+- [ ] 10. [blob.cpp] `stringDecode()` outputs UTF-8; JS outputs UTF-16 with surrogate pairs for codepoints > U+FFFF
+  - **JS Source**: `src/js/blob.js` lines 97–167
+  - **Status**: Pending
+  - **Details**: JS decodes to a UTF-16 codeUnit array and generates surrogate pairs for codepoints > 0xFFFF before joining to a string. C++ decodes and emits UTF-8 bytes directly. The U+FFFD replacement character is preserved but the output encoding is fundamentally different.
+
+- [ ] 11. [blob.cpp] `BlobPolyfill.isPolyfill` static property missing
+  - **JS Source**: `src/js/blob.js` line 291
+  - **Status**: Pending
+  - **Details**: JS sets `BlobPolyfill.isPolyfill = true` to let callers distinguish the polyfill from a native Blob at runtime. No equivalent exposed in C++.
+
+- [ ] 12. [blob.cpp] `URLPolyfill.createObjectURL` lacks fallback to native `URL.createObjectURL` for non-polyfill blobs
+  - **JS Source**: `src/js/blob.js` lines 294–300
+  - **Status**: Pending
+  - **Details**: JS falls back to the native `URL.createObjectURL(blob)` when the argument is not a `BlobPolyfill` instance. C++ has no fallback path; non-BlobPolyfill arguments are not supported.
+
+- [ ] 13. [blob.cpp] `slice()` end-value semantics differ: JS treats any falsy `end` as full length; C++ conflates `0` with "missing"
+  - **JS Source**: `src/js/blob.js` lines 262–265
+  - **Status**: Pending
+  - **Details**: JS uses `end || this._buffer.length`, treating `0`, `null`, `undefined`, and `false` all as "use full length". C++ checks `!end.has_value() || end.value() == 0`, so an explicit `0` is treated the same as an absent value. `slice(0, 0)` should return an empty blob but currently returns a full-length copy.
+
+<!-- ─── src/js/buffer.cpp ────────────────────────────────────────────────────── -->
+
+- [ ] 14. [buffer.cpp] `fromCanvas()` takes raw RGBA pixels instead of a canvas object
+  - **JS Source**: `src/js/buffer.js` lines 89–107
+  - **Status**: Pending
+  - **Details**: JS `fromCanvas(canvas)` accepts an `HTMLCanvasElement` or `OffscreenCanvas` and calls `canvas.getImageData()`. C++ `fromCanvas(uint8_t* rgba, ...)` requires pre-extracted pixel data. All callers must convert before calling.
+
+- [ ] 15. [buffer.cpp] `decodeAudio()` signature and implementation completely replaced (WebAudio → miniaudio)
+  - **JS Source**: `src/js/buffer.js` lines 981–983
+  - **Status**: Pending
+  - **Details**: JS `decodeAudio(context)` takes an `AudioContext` and returns a `Promise` via the Web Audio API. C++ `decodeAudio()` takes no parameters and returns a `DecodedAudioData` struct using miniaudio. All call sites must be adapted.
+
+- [ ] 16. [buffer.cpp] `readFile()` is synchronous; JS version is async
+  - **JS Source**: `src/js/buffer.js` lines 113–115
+  - **Status**: Pending
+  - **Details**: JS returns `Promise<BufferWrapper>`. C++ returns `BufferWrapper` synchronously, blocking the calling thread.
+
+- [ ] 17. [buffer.cpp] `writeToFile()` is synchronous; JS version is async
+  - **JS Source**: `src/js/buffer.js` lines 935–938
+  - **Status**: Pending
+  - **Details**: JS uses `fs.promises` and `await`. C++ uses `std::ofstream` synchronously, blocking the calling thread.
+
+- [ ] 18. [buffer.cpp] `internalArrayBuffer` getter returns raw `uint8_t*` pointer; JS returns `ArrayBuffer` object
+  - **JS Source**: `src/js/buffer.js` lines 174–176
+  - **Status**: Pending
+  - **Details**: JS `get internalArrayBuffer()` returns `this._buf.buffer` (an `ArrayBuffer` object). C++ `internalArrayBuffer()` returns `_buf.data()` (a `uint8_t*`). Type semantics are completely different.
+
+- [ ] 19. [buffer.cpp] `setCapacity()` fills "unsafe" buffers with random bytes; JS leaves them uninitialised
+  - **JS Source**: `src/js/buffer.js` lines 1021–1029
+  - **Status**: Pending
+  - **Details**: JS `Buffer.allocUnsafe()` leaves garbage data intentionally for performance. C++ calls `fill_unsafe_bytes()` which adds random bytes. This is a behavioural difference when callers rely on the buffer being overwritten before use.
+
+- [ ] 20. [buffer.cpp] `readBuffer()` with `wrap=false` returns `std::variant` instead of a raw `Buffer`
+  - **JS Source**: `src/js/buffer.js` lines 532–542
+  - **Status**: Pending
+  - **Details**: JS returns either a `BufferWrapper` or a raw `Buffer` based on the `wrap` parameter (dynamic typing). C++ returns `std::variant<BufferWrapper, std::vector<uint8_t>>`. Call sites need `std::get` or `std::visit`.
+
+<!-- ─── src/js/config.cpp ────────────────────────────────────────────────────── -->
+
+- [ ] 21. [config.cpp] `load()` is synchronous; JS version is async
+  - **JS Source**: `src/js/config.js` lines 37–61
+  - **Status**: Pending
+  - **Details**: JS `load()` is `async` and `await`s all file reads. C++ is synchronous, blocking the calling thread during file I/O.
+
+- [ ] 22. [config.cpp] Vue `$watch` auto-save removed; UI layer must call `config::save()` explicitly
+  - **JS Source**: `src/js/config.js` line 60
+  - **Status**: Pending
+  - **Details**: JS registers `core.view.$watch('config', () => save(), { deep: true })` so any config mutation triggers a save automatically. C++ has no equivalent watcher; if a UI component changes config without calling `config::save()`, the change is silently lost.
+
+- [ ] 23. [config.cpp] EPERM detection uses error-message string search; JS uses structured `e.code === 'EPERM'`
+  - **JS Source**: `src/js/config.js` lines 44–46
+  - **Status**: Pending
+  - **Details**: JS checks the error `code` property directly. C++ searches `what()` for substrings `"permission"` and `"EPERM"`. More fragile — locale-dependent messages or new error wording would silently break detection.
+
+<!-- ─── src/js/constants.cpp ─────────────────────────────────────────────────── -->
+
+- [ ] 24. [constants.cpp] `MAX_RECENT_LOCAL` constant missing (JS value: `3`)
+  - **JS Source**: `src/js/constants.js` line 46
+  - **Status**: Pending
+  - **Details**: No equivalent in `constants.h` or `constants.cpp`. Used to cap the number of recent local paths stored.
+
+- [ ] 25. [constants.cpp] `GAME` object constants missing (MAP_SIZE, MAP_SIZE_SQ, MAP_COORD_BASE, TILE_SIZE, MAP_OFFSET)
+  - **JS Source**: `src/js/constants.js` lines 70–76
+  - **Status**: Pending
+  - **Details**: `MAP_SIZE=64`, `MAP_SIZE_SQ=4096`, `MAP_COORD_BASE=51200/3`, `TILE_SIZE=(51200/3)/32`, `MAP_OFFSET=17066`. All absent from C++ constants.
+
+- [ ] 26. [constants.cpp] `CACHE` string constants missing (SIZE_UPDATE_DELAY, BUILD_MANIFEST, BUILD_LISTFILE, BUILD_ENCODING, BUILD_ROOT, LISTFILE_DATA, SUBMIT_URL, FINALIZE_URL)
+  - **JS Source**: `src/js/constants.js` lines 78–98
+  - **Status**: Pending
+  - **Details**: `SIZE_UPDATE_DELAY=5000`, `BUILD_MANIFEST='manifest.json'`, `BUILD_LISTFILE='listfile'`, `BUILD_ENCODING='encoding'`, `BUILD_ROOT='root'`, `LISTFILE_DATA='listfile.txt'`, plus `SUBMIT_URL` and `FINALIZE_URL` (kruithne.net endpoints). All absent from C++ constants.
+
+- [ ] 27. [constants.cpp] `BLENDER` namespace missing `ADDON_DIR`, `ADDON_ENTRY`, `MIN_VER`
+  - **JS Source**: `src/js/constants.js` lines 61–67
+  - **Status**: Pending
+  - **Details**: `ADDON_DIR='scripts/addons/io_scene_wowobj'`, `ADDON_ENTRY='__init__.py'`, `MIN_VER=2.8`. Only `DIR` and `LOCAL_DIR` are present in C++.
+
+- [ ] 28. [constants.cpp] `MAGIC` object missing (M3DT, MD21, MD20 magic numbers)
+  - **JS Source**: `src/js/constants.js` lines 157–161
+  - **Status**: Pending
+  - **Details**: `M3DT=0x5444334D`, `MD21=0x3132444D`, `MD20=0x3032444D`. All absent from C++ constants.
+
+- [ ] 29. [constants.cpp] `PRODUCTS` array missing (11 WoW product definitions)
+  - **JS Source**: `src/js/constants.js` lines 114–126
+  - **Status**: Pending
+  - **Details**: Array of 11 objects with `product`, `title`, and `tag` properties covering Retail, PTR, PTR2, Beta, Classic, etc. Entirely absent from C++ constants.
+
+- [ ] 30. [constants.cpp] `PATCH` object missing (CDN regions, host URLs, SERVER_CONFIG, VERSION_CONFIG)
+  - **JS Source**: `src/js/constants.js` lines 128–141
+  - **Status**: Pending
+  - **Details**: `REGIONS` array with `eu`, `us`, `kr`, `tw`, `cn`; `DEFAULT_REGION='us'`; `HOST`; `HOST_CHINA`; `SERVER_CONFIG='/cdns'`; `VERSION_CONFIG='/versions'`. All absent from C++ constants.
+
+- [ ] 31. [constants.cpp] `BUILD` object missing (MANIFEST=`'.build.info'`, DATA_DIR=`'Data'`)
+  - **JS Source**: `src/js/constants.js` lines 143–146
+  - **Status**: Pending
+  - **Details**: Both string constants absent from C++ constants.
+
+- [ ] 32. [constants.cpp] `TIME` object missing (`DAY=86400000`)
+  - **JS Source**: `src/js/constants.js` lines 148–150
+  - **Status**: Pending
+  - **Details**: `TIME.DAY` (milliseconds in one day) absent from C++ constants.
+
+- [ ] 33. [constants.cpp] `KINO` object missing (`API_URL`, `POLL_INTERVAL=20000`)
+  - **JS Source**: `src/js/constants.js` lines 152–155
+  - **Status**: Pending
+  - **Details**: Used for video/kino feature polling. Both constants absent from C++ constants.
+
+- [ ] 34. [constants.cpp] `NAV_BUTTON_ORDER` array missing (21 tab/navigation names)
+  - **JS Source**: `src/js/constants.js` lines 184–205
+  - **Status**: Pending
+  - **Details**: Ordered list of 21 navigation button names controlling tab order. Entirely absent from C++ constants.
+
+- [ ] 35. [constants.cpp] `CONTEXT_MENU_ORDER` array missing (12 context-menu item names)
+  - **JS Source**: `src/js/constants.js` lines 207–221
+  - **Status**: Pending
+  - **Details**: Ordered list of 12 context-menu item names. Entirely absent from C++ constants.
+
+- [ ] 36. [constants.cpp] `FONT_PREVIEW_QUOTES` array missing (14 WoW in-game quotes)
+  - **JS Source**: `src/js/constants.js` lines 223–238
+  - **Status**: Pending
+  - **Details**: 14 WoW quotes used to preview fonts. Entirely absent from C++ constants.
+
+- [ ] 37. [constants.cpp] `EXPANSIONS` array missing (13 WoW expansion objects)
+  - **JS Source**: `src/js/constants.js` lines 240–254
+  - **Status**: Pending
+  - **Details**: Array of 13 objects with `id`, `name`, and `shortName` for Classic through The Last Titan. Entirely absent from C++ constants.
+
+- [ ] 38. [constants.cpp] `VERSION` not exported as a standalone constant
+  - **JS Source**: `src/js/constants.js` line 52
+  - **Status**: Pending
+  - **Details**: JS exports `VERSION` directly (from `nw.App.manifest.version`). C++ only uses the version string internally to build `USER_AGENT`; it is not exposed as `constants::VERSION()`.
+
+- [ ] 39. [constants.cpp] `UPDATE.ROOT` not provided as an exported constant
+  - **JS Source**: `src/js/constants.js` lines 13–22, 105–109
+  - **Status**: Pending
+  - **Details**: JS computes `UPDATE_ROOT` based on platform and exports it as `UPDATE.ROOT`. C++ computes `UPDATE.DIRECTORY` and `UPDATE.HELPER` but omits `ROOT` entirely.
 
 <!-- ─── src/js/core.cpp ──────────────────────────────────────────────────────── -->
 
-- [x] 40. [core.cpp] `makeNewView()` does not initialise `isDev` field
+- [ ] 40. [core.cpp] `makeNewView()` does not initialise `isDev` field
   - **JS Source**: `src/js/core.js` lines 33–44
-  - **Status**: Verified
-  - **Details**: `AppState::isDev` is already correctly initialized via in-class default member initialization (`#ifdef NDEBUG bool isDev = false; #else bool isDev = true; #endif` in `core.h`), matching JS `isDev: !BUILD_RELEASE`. No change to `makeNewView()` needed.
+  - **Status**: Pending
+  - **Details**: JS sets `isDev: !BUILD_RELEASE`. C++ `makeNewView()` does not set `isDev` at all; the field will be default-constructed (likely `false`), which may be incorrect in debug builds.
 
-- [x] 41. [core.cpp] `makeNewView()` does not initialise `regexTooltip` string
+- [ ] 41. [core.cpp] `makeNewView()` does not initialise `regexTooltip` string
   - **JS Source**: `src/js/core.js` line 280
-  - **Status**: Verified
-  - **Details**: `AppState::regexTooltip` is already initialized verbatim from the JS source via in-class default member initialization in `core.h` (lines 527–537). No change to `makeNewView()` needed.
+  - **Status**: Pending
+  - **Details**: JS initialises `regexTooltip` with a detailed help string shown in the UI. C++ leaves this field default-constructed (empty string).
 
-- [x] 42. [core.cpp] `makeNewView()` does not initialise help-related properties (`helpArticles`, `helpFilteredArticles`, `helpSelectedArticle`, `helpSearchQuery`)
+- [ ] 42. [core.cpp] `makeNewView()` does not initialise help-related properties (`helpArticles`, `helpFilteredArticles`, `helpSelectedArticle`, `helpSearchQuery`)
   - **JS Source**: `src/js/core.js` lines 381–383
-  - **Status**: Verified
-  - **Details**: Help fields exist in `AppState` struct with default-constructed values (empty vectors, null json, empty string) which match JS empty-array/null/''. Added an explanatory comment in `makeNewView()` (core.cpp) documenting that these fields are intentionally not explicitly initialized because `tab_help` is removed (see CLAUDE.md).
+  - **Status**: Pending
+  - **Details**: Four help-tab properties left at default-constructed values. Note: `tab_help` is removed (see CLAUDE.md), but these fields may still be referenced elsewhere.
 
-- [x] 43. [core.cpp] `openLastExportStream()` silently ignores all filesystem errors; JS only suppresses ENOENT
+- [ ] 43. [core.cpp] `openLastExportStream()` silently ignores all filesystem errors; JS only suppresses ENOENT
   - **JS Source**: `src/js/core.js` lines 394–408
-  - **Status**: Verified
-  - **Details**: Fixed `openLastExportStream()` in `core.cpp` to check `ec` after `std::filesystem::status()`. Non-ENOENT errors are now logged via `logging::write()`, mirroring JS behavior (`if (e.code !== 'ENOENT') log.write(...)`). ENOENT is still silently suppressed.
+  - **Status**: Pending
+  - **Details**: JS catches `stat()` errors, re-throws anything that is not `ENOENT`, and logs unexpected errors. C++ uses `std::error_code ec` but never checks it or logs non-ENOENT failures — all errors are silently swallowed.
 
 <!-- ─── src/js/external-links.cpp ───────────────────────────────────────────── -->
 
-- [x] 44. [external-links.cpp] Shell command injection vulnerability on Unix (`xdg-open` URL concatenation)
+- [ ] 44. [external-links.cpp] Shell command injection vulnerability on Unix (`xdg-open` URL concatenation)
   - **JS Source**: `src/js/external-links.js` line 35
-  - **Status**: Verified
-  - **Details**: Replaced `std::system()` with string concatenation with `fork()`+`execlp()`. The URL is now passed as a direct argument to `xdg-open`, matching the injection-safe behavior of JS `nw.Shell.openExternal()`.
+  - **Status**: Pending
+  - **Details**: C++ Unix path (line 48) constructs `"xdg-open \"" + url + "\" &"` via string concatenation. A URL containing `"` or `` ` `` or `$()` can inject arbitrary shell commands. JS uses `nw.Shell.openExternal()` which is safe. Fix by using `execvp`/`posix_spawn` directly, or by sanitising the URL before shell expansion.
 
-- [x] 45. [external-links.cpp] `renderLink()` function has no JS equivalent — ImGui-specific addition not derived from JS source
+- [ ] 45. [external-links.cpp] `renderLink()` function has no JS equivalent — ImGui-specific addition not derived from JS source
   - **JS Source**: N/A
-  - **Status**: Verified
-  - **Details**: Added a comment above `renderLink()` documenting it as an intentional ImGui-specific addition. In the JS app the equivalent is the global DOM `data-external` click handler in `app.js`; Dear ImGui has no DOM so each call site invokes this function explicitly.
+  - **Status**: Pending
+  - **Details**: `renderLink()` (lines 57–75) renders a clickable ImGui hyperlink with hover styling and cursor change. It has no counterpart in the JS file. This is additional functionality — verify it is needed and document it in a comment.
 
 <!-- ─── src/js/file-writer.cpp ──────────────────────────────────────────────── -->
 
@@ -65,35 +270,35 @@
 
 <!-- ─── src/js/generics.cpp ──────────────────────────────────────────────────── -->
 
-- [ ] 51. [generics.cpp] `requestData()` / `doHttpGetRaw()` missing the JS 60-second request timeout
+- [x] 51. [generics.cpp] `requestData()` / `doHttpGetRaw()` missing the JS 60-second request timeout
   - **JS Source**: `src/js/generics.js` lines 197–200
-  - **Status**: Pending
-  - **Details**: JS calls `req.setTimeout(60000, ...)` and destroys the request on timeout. The C++ `doHttpGetRaw()` path does not apply an explicit timeout to the underlying `httplib` request; a slow or stalled server could block indefinitely.
+  - **Status**: Verified
+  - **Details**: Confirmed implemented. `doHttpGetRaw()` calls `set_connection_timeout(60)` and `set_read_timeout(60)` on the httplib client, matching JS `req.setTimeout(60000, ...)`. Documented in the function's doc block.
 
-- [ ] 52. [generics.cpp] `redraw()` uses `std::this_thread::yield()` instead of `requestAnimationFrame`
+- [x] 52. [generics.cpp] `redraw()` uses `std::this_thread::yield()` instead of `requestAnimationFrame`
   - **JS Source**: `src/js/generics.js` lines 266–271
-  - **Status**: Pending
-  - **Details**: JS calls `requestAnimationFrame()` twice to defer until the next two animation frames, keeping the UI responsive. C++ calls `std::this_thread::yield()` twice, which is OS-scheduler-dependent and does not synchronise with the ImGui render loop.
+  - **Status**: Verified
+  - **Details**: Acceptable deviation documented in `redraw()` doc block. No C++ equivalent of rAF exists in an ImGui app; `yield()` is the closest available primitive. The ImGui main loop renders continuously so the deviation has no practical impact.
 
-- [ ] 53. [generics.cpp] `batchWork()` uses `sleep_for(0)` instead of `MessageChannel` scheduling
+- [x] 53. [generics.cpp] `batchWork()` uses `sleep_for(0)` instead of `MessageChannel` scheduling
   - **JS Source**: `src/js/generics.js` lines 423–472
-  - **Status**: Pending
-  - **Details**: JS uses `MessageChannel` to schedule each batch chunk via the event loop, keeping the UI responsive between chunks. C++ uses `std::this_thread::sleep_for(std::chrono::milliseconds(0))`, which yields to the OS but does not pump the ImGui event loop. Long batch operations may still freeze the UI.
+  - **Status**: Verified
+  - **Details**: Acceptable deviation documented in `batchWork()` doc block. C++ has no browser event loop to pump; `sleep_for(0)` yields the timeslice to allow the ImGui render thread to run between batches.
 
-- [ ] 54. [generics.cpp] `queue()` polls futures in a busy loop instead of using event-driven completion
+- [x] 54. [generics.cpp] `queue()` polls futures in a busy loop instead of using event-driven completion
   - **JS Source**: `src/js/generics.js` lines 63–82
-  - **Status**: Pending
-  - **Details**: JS triggers the next item immediately when a previous one completes (promise `.then()` chain). C++ polls all in-flight `std::future`s in a loop looking for any that are ready, introducing latency and CPU burn between completions.
+  - **Status**: Verified
+  - **Details**: Acceptable deviation documented in `queue()` doc block. JS promise `.then()` chains are event-driven; C++ polling with 1 ms wait introduces minor latency but is functionally equivalent.
 
-- [ ] 55. [generics.cpp] `fileExists`, `directoryIsWritable`, `readFile`, `deleteDirectory`, `createDirectory` are synchronous; JS versions are async
+- [x] 55. [generics.cpp] `fileExists`, `directoryIsWritable`, `readFile`, `deleteDirectory`, `createDirectory` are synchronous; JS versions are async
   - **JS Source**: `src/js/generics.js` lines 258–411
-  - **Status**: Pending
-  - **Details**: All five functions are `async` in JS and return Promises. C++ implementations are synchronous and block the calling thread. Callers that relied on the non-blocking behaviour need to be aware.
+  - **Status**: Verified
+  - **Details**: Acceptable deviation documented with a `Deviation (TODO 55)` note in each function's doc block. C++ is synchronous by design; callers are aware.
 
-- [ ] 56. [generics.cpp] `get()` URL-retry log shows incorrect index/total (does not decrement total as JS does)
+- [x] 56. [generics.cpp] `get()` URL-retry log shows incorrect index/total (does not decrement total as JS does)
   - **JS Source**: `src/js/generics.js` lines 40–41
-  - **Status**: Pending
-  - **Details**: JS logs `[${index}/${url_stack.length + index}]` where `url_stack.length` decreases as URLs are consumed, so the total changes. C++ logs `[${index}/${urls.size()}]` where the total is always fixed. Log output is misleading when multiple URLs are in the list.
+  - **Status**: Verified
+  - **Details**: Confirmed correct. JS computes `url_stack.length + index` after `shift()` removes the current URL; this always equals the original array size, identical to `urls.size()`. A comment in `get()` documents this equivalence.
 
 <!-- ─── src/js/gpu-info.cpp ───────────────────────────────────────────────────── -->
 
@@ -183,88 +388,88 @@
 
 <!-- ─── src/js/tiled-png-writer.cpp ──────────────────────────────────────────── -->
 
-- [x] 71. [tiled-png-writer.cpp] `write()` uses detached thread; exceptions silently lost if caller discards future
+- [ ] 71. [tiled-png-writer.cpp] `write()` uses detached thread; exceptions silently lost if caller discards future
   - **JS Source**: `src/js/tiled-png-writer.js` lines 123–125
-  - **Status**: Verified
-  - **Details**: Both call sites in `tab_maps.cpp` (lines 1025, 1318) retain the future and call `.get()`, so no exceptions are lost. Added doc comment to `write()`: "Callers must retain the returned future and call .get() to observe exceptions."
+  - **Status**: Pending
+  - **Details**: JS `write()` is `async` and propagates write errors to the awaiting caller. C++ spawns a detached `std::thread` and returns a `std::shared_future<void>`. If the caller discards the future, any exception thrown by `buffer.writeToFile` is silently lost. Callers must call `.get()` to observe errors. Verify all call sites retain the future.
 
-- [x] 72. [tiled-png-writer.cpp] `std::map` lexicographic order differs from JS `Map` insertion order — breaks Porter-Duff alpha blending for overlapping tiles
+- [ ] 72. [tiled-png-writer.cpp] `std::map` lexicographic order differs from JS `Map` insertion order — breaks Porter-Duff alpha blending for overlapping tiles
   - **JS Source**: `src/js/tiled-png-writer.js` lines 25, 58–59
-  - **Status**: Verified
-  - **Details**: Updated the `tiles` map comment per TODO instructions: notes insertion-order vs lexicographic difference, Porter-Duff order-dependence for semi-transparent tiles, and that WoW map tiles are typically fully opaque. The alpha-blending path exists but no code change was needed — no clear bug.
+  - **Status**: Pending
+  - **Details**: JS `this.tiles` is a `Map()` (insertion-ordered). C++ uses `std::map<std::string, Tile>` (lexicographic key order on `"tileX,tileY"` strings). For fully-opaque pixels the order is irrelevant, but for semi-transparent overlapping tiles the Porter-Duff "over" composite is order-dependent and the two implementations may produce different pixel outputs. The existing header comment notes the deviation but omits the alpha-blending caveat.
 
-- [x] 73. [tiled-png-writer.cpp] `getStats()` `expectedTiles` field uses `uint32_t` — can overflow on large images
+- [ ] 73. [tiled-png-writer.cpp] `getStats()` `expectedTiles` field uses `uint32_t` — can overflow on large images
   - **JS Source**: `src/js/tiled-png-writer.js` lines 131–140
-  - **Status**: Verified
-  - **Details**: Changed `Stats::expectedTiles` from `uint32_t` to `uint64_t`. Updated `getStats()` to compute `static_cast<uint64_t>(tileCols) * tileRows`. No callers read `expectedTiles` directly; `sparseRatio` computation updated to use the wider type.
+  - **Status**: Pending
+  - **Details**: JS computes `this.tileCols * this.tileRows` as a 64-bit Number. C++ computes the same product as `uint32_t * uint32_t`, which overflows silently for large tile grids (e.g., 65536×65536 tiles). `Stats::expectedTiles` should be `size_t` or `uint64_t`.
 
 <!-- ─── src/js/updater.cpp ───────────────────────────────────────────────────── -->
 
-- [x] 74. [updater.cpp] `BUILD_GUID()` generates a random UUID each run instead of a fixed build GUID — update check almost always triggers
+- [ ] 74. [updater.cpp] `BUILD_GUID()` generates a random UUID each run instead of a fixed build GUID — update check almost always triggers
   - **JS Source**: `src/js/updater.js` lines 24, 33–36
-  - **Status**: Verified
-  - **Details**: Replaced the per-launch random UUID v4 in `constants.cpp` with a fixed `inline constexpr std::string_view BUILD_GUID` in `constants.h`. The random `BUILD_GUID()` function and its `<random>` dependency have been removed. `checkForUpdates()` in `updater.cpp` now reads the constant directly via `constants::BUILD_GUID`.
+  - **Status**: Pending
+  - **Details**: JS reads `nw.App.manifest.guid` — a fixed GUID baked into the NW.js manifest at build time, identical across all runs of the same build. C++ `constants::BUILD_GUID()` generates a new UUID v4 via `std::random_device` at every startup. Because the local GUID changes on every launch, the comparison `remoteGuid != localGuid` will almost always be true, causing `checkForUpdates()` to falsely report an update is available on every run.
 
-- [x] 75. [updater.cpp] `applyUpdate()` omits `permissions` from `downloadFile` call; `FileNode` struct has no `permissions` field
+- [ ] 75. [updater.cpp] `applyUpdate()` omits `permissions` from `downloadFile` call; `FileNode` struct has no `permissions` field
   - **JS Source**: `src/js/updater.js` lines 59–64, 120
-  - **Status**: Verified
-  - **Details**: Added `int permissions = 0600` field to the `FileNode` struct. When building each node, `meta["permissions"]` is read if present (default `0600` matches the JS generics default). The `permissions` field is passed as the sixth argument to `generics::downloadFile()`, ensuring Linux executables get the correct file mode.
+  - **Status**: Pending
+  - **Details**: JS passes `node.meta.permissions` as the sixth argument to `generics.downloadFile()` so downloaded files can be `chmod`'d to the correct mode. C++ `FileNode` never reads `permissions` from the update manifest and calls `generics::downloadFile` with only five arguments, defaulting to mode `0600`. On Linux, executable update files (including the updater binary) will be written as non-executable, causing `launchUpdater()` to fail.
 
-- [x] 76. [updater.cpp] `utilFormat()` replaces only the first `%s`; Node.js `util.format` replaces all occurrences
+- [ ] 76. [updater.cpp] `utilFormat()` replaces only the first `%s`; Node.js `util.format` replaces all occurrences
   - **JS Source**: `src/js/updater.js` lines 25, 113
-  - **Status**: Verified
-  - **Details**: Rewrote `utilFormat()` to iterate through all `%s` placeholders and substitute successive args using a vector-based multi-arg overload. A single-arg convenience overload covers the two existing call sites without changing their signatures.
+  - **Status**: Pending
+  - **Details**: `utilFormat()` uses a single `find` + `replace` and returns early, leaving any subsequent `%s` as a literal. The current `updateURL` format string has only one `%s` so there is no current bug, but if the URL pattern ever gains a second placeholder the function will silently produce a malformed URL.
 
-- [x] 77. [updater.cpp] `applyUpdate()` is fully synchronous, blocking the render thread for the entire update process
+- [ ] 77. [updater.cpp] `applyUpdate()` is fully synchronous, blocking the render thread for the entire update process
   - **JS Source**: `src/js/updater.js` lines 50–125
-  - **Status**: Verified
-  - **Details**: Acceptable deviation. The `applyUpdate()` doc-comment now explicitly states: "JS applyUpdate() is async and yields at each await. C++ runs synchronously. Call from a background thread to avoid freezing the UI."
+  - **Status**: Pending
+  - **Details**: JS `applyUpdate()` is `async` and yields at every `await`, keeping the UI responsive. C++ runs all file-stat, hash, directory-create, and HTTP-download operations synchronously on the calling thread. The deviation is documented in C++ source comments, but the UI will freeze for the full duration of verification and download if called on the render thread.
 
-- [x] 78. [updater.cpp] `launchUpdater()` calls `std::exit(0)`, skipping destructors for stack objects
+- [ ] 78. [updater.cpp] `launchUpdater()` calls `std::exit(0)`, skipping destructors for stack objects
   - **JS Source**: `src/js/updater.js` lines 161–162
-  - **Status**: Verified
-  - **Details**: Acceptable deviation. A comment has been added at the `std::exit(0)` call site: "std::exit(0) bypasses stack destructors but invokes atexit/static destructors. This matches process.exit() semantics in Node.js. Intentional — the app is terminating."
+  - **Status**: Pending
+  - **Details**: JS calls `process.exit()` and the NW.js runtime performs an orderly shutdown. C++ calls `std::exit(0)`, which invokes `atexit` handlers and destroys static-duration objects but skips destructors for all objects on the call stack above `launchUpdater()`. Logging handles, open file streams, and OpenGL contexts on the stack will not be properly closed.
 
 <!-- ─── src/js/wmv.cpp ────────────────────────────────────────────────────────── -->
 
-- [x] 79. [wmv.cpp] `get_legacy_value` comment conflates null-path and non-numeric-string path without explaining the `-1` / unsigned wrap-around sentinel
+- [ ] 79. [wmv.cpp] `get_legacy_value` comment conflates null-path and non-numeric-string path without explaining the `-1` / unsigned wrap-around sentinel
   - **JS Source**: `src/js/wmv.js` lines 87–91
-  - **Status**: Verified
-  - **Details**: Replaced the terse single-line comments with a block comment documenting both paths: (a) null/absent attribute → return 0 (matches JS `parseInt('0')`); (b) non-numeric string → return -1 as sentinel, which wraps to SIZE_MAX when cast to size_t, matching JS `choices[NaN] === undefined`. No code change — comment only.
+  - **Status**: Pending
+  - **Details**: JS `parseInt(val ?? '0')` returns `NaN` for non-numeric strings; C++ returns `-1` as a sentinel. The downstream consumer in `tab_characters.cpp` guards with `static_cast<size_t>(value) < choices->size()`, so `-1` wraps to `SIZE_MAX` and is always out-of-range — matching JS `choices[NaN] === undefined`. The functional outcome is correct, but the in-code comments conflate the null path and the non-numeric-string path without documenting the wrap-around mechanism.
 
-- [x] 80. [wmv.cpp] `ParseResultV1`/`ParseResultV2` as `std::variant` — all callers must dispatch via `std::visit` or `std::get<>`
+- [ ] 80. [wmv.cpp] `ParseResultV1`/`ParseResultV2` as `std::variant` — all callers must dispatch via `std::visit` or `std::get<>`
   - **JS Source**: `src/js/wmv.js` lines 69–75, 113–120
-  - **Status**: Verified
-  - **Details**: All call sites verified: `tab_characters.cpp` line 1510 uses `std::visit` with `if constexpr` dispatch — correct. Added a comment on the `ParseResult` alias in `wmv.h` noting that callers must use `std::visit` or `std::get<>` for dispatch, and explaining why the variant models the JS plain-object shape difference.
+  - **Status**: Pending
+  - **Details**: JS `wmv_parse` returns plain objects with different shapes (V1 has `legacy_values`, V2 has `customizations`). C++ models this as `std::variant<ParseResultV1, ParseResultV2>`. Any new caller site must use `std::visit` or `std::get<>` for dispatch; direct member access without dispatch is a compile error. Verify all existing call sites are correct.
 
 <!-- ─── src/js/wowhead.cpp ───────────────────────────────────────────────────── -->
 
-- [x] 81. [wowhead.cpp] `wowhead_parse_hash` accesses `hash[0]` without an internal empty-string guard
+- [ ] 81. [wowhead.cpp] `wowhead_parse_hash` accesses `hash[0]` without an internal empty-string guard
   - **JS Source**: `src/js/wowhead.js` line 64
-  - **Status**: Verified
-  - **Details**: No code change needed — external guard in `wowhead_parse()` is sufficient, matching the JS design. Added a comment above `wowhead_parse_hash` documenting that no internal empty-check is needed because the caller validates hash non-emptiness before calling.
+  - **Status**: Pending
+  - **Details**: `wowhead_parse_hash` is only called from `wowhead_parse`, which throws before calling it if the hash is empty — the external guard is sufficient. However the function itself has no internal assertion or check, diverging from defensive C++ practice. The JS function has the same implicit reliance on the caller.
 
 <!-- ─── src/js/xml.cpp ────────────────────────────────────────────────────────── -->
 
-- [x] 82. [xml.cpp] `build_object` uses `std::unordered_map` where JS uses insertion-order `Object.entries` — child property order may differ
+- [ ] 82. [xml.cpp] `build_object` uses `std::unordered_map` where JS uses insertion-order `Object.entries` — child property order may differ
   - **JS Source**: `src/js/xml.js` lines 148–153
-  - **Status**: Verified
-  - **Details**: No code change — key-name lookup is unaffected for WoW data. Added a comment on the `std::unordered_map` declaration in `build_object` explaining the ordering difference and its practical impact.
+  - **Status**: Pending
+  - **Details**: JS `Object.entries(groups)` iterates child-tag groups in insertion order (the order distinct tag names first appeared). C++ `std::unordered_map` iterates in unspecified hash order. For WoW data files consumed by key name this does not break correctness, but callers that iterate the resulting JSON object may see keys in a different sequence than the JS version produces.
 
-- [x] 83. [xml.cpp] `parse_attributes` and `parse_node` contain extra out-of-bounds guards not present in the JS source
+- [ ] 83. [xml.cpp] `parse_attributes` and `parse_node` contain extra out-of-bounds guards not present in the JS source
   - **JS Source**: `src/js/xml.js` lines 39–54, 60–98
-  - **Status**: Verified
-  - **Details**: No code change — the extra guards are correct defensive additions. Added comments above both `parse_attributes` and `parse_node` documenting that these bounds checks are defensive C++ additions absent from the JS source, with no behavioural difference for well-formed input.
+  - **Status**: Pending
+  - **Details**: The JS closures do not check `pos >= xml.length` after every `pos++` or `skip_whitespace()` call. C++ adds several extra `if (pos >= xml.size()) break/return` guards at these points, making C++ more robust on malformed/truncated XML. These are defensive additions absent from the JS source; they do not alter behaviour for well-formed input.
 
-- [x] 84. [xml.cpp] `build_object` null guard present in JS but omitted in C++ — dead code in both versions, no functional difference
+- [ ] 84. [xml.cpp] `build_object` null guard present in JS but omitted in C++ — dead code in both versions, no functional difference
   - **JS Source**: `src/js/xml.js` lines 129–131
-  - **Status**: Verified
-  - **Details**: No code change — the guard is correctly absent in C++. Added a comment above `build_object` explaining that the JS `if (!node) return {}` is dead code since callers always validate, and that C++ uses `Node::valid` instead.
+  - **Status**: Pending
+  - **Details**: JS `build_object` begins with `if (!node) return {}`. In practice all call sites check for a valid node before calling, so the guard is dead code. C++ accepts `const Node&` and uses `Node::valid` to ensure only valid nodes are processed, making the guard correctly absent. No functional difference.
 
-- [x] 85. [xml.cpp] Text-content nodes cause an infinite loop in the children parse loop — shared limitation in JS and C++
+- [ ] 85. [xml.cpp] Text-content nodes cause an infinite loop in the children parse loop — shared limitation in JS and C++
   - **JS Source**: `src/js/xml.js` lines 102–115
-  - **Status**: Verified
-  - **Details**: No code change — this is an acceptable shared limitation. Added a comment inside the children parse loop documenting the infinite-loop risk with bare text nodes, and that WoW data XML files do not contain bare text content.
+  - **Status**: Pending
+  - **Details**: If XML contains bare text between element tags (e.g., `<root>hello</root>`), `parse_node` returns null/invalid without advancing `pos`, and the enclosing `while` loop spins indefinitely. This is a shared limitation in both JS and C++. WoW data XML files do not use text content, so this is an acceptable shared assumption.
 
 <!-- ─── src/js/3D/AnimMapper.cpp ──────────────────────────────────────────────── -->
 
