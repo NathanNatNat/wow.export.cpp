@@ -60,8 +60,11 @@ public:
 
 	void set_wireframe_index_buffer(const uint16_t* data, size_t count,
 	                                GLenum usage = GL_STATIC_DRAW);
+	void set_wireframe_index_buffer(const uint32_t* data, size_t count,
+	                                GLenum usage = GL_STATIC_DRAW);
 
 	static std::vector<uint16_t> triangles_to_lines(const uint16_t* indices, size_t count);
+	static std::vector<uint32_t> triangles_to_lines(const uint32_t* indices, size_t count);
 
 	void setup_m2_vertex_format();
 	void setup_m2_separate_buffers(GLuint pos_buffer, GLuint norm_buffer,

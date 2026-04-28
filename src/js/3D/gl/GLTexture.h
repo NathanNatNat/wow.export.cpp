@@ -27,7 +27,7 @@ struct TextureOptions {
 	GLenum min_filter = GL_LINEAR;
 	GLenum mag_filter = GL_LINEAR;
 	bool generate_mipmaps = false;
-	bool flip_y = true; // match JS UNPACK_FLIP_Y_WEBGL behaviour
+	bool flip_y = false; // JS does not set UNPACK_FLIP_Y_WEBGL — never flips Y in set_rgba/set_canvas
 };
 
 /**
@@ -62,7 +62,19 @@ public:
 	void set_rgba(const uint8_t* pixels, int width, int height,
 	              const TextureOptions& options = {});
 
-	// (Browser API systemic translation — no HTML canvas in desktop GL)
+	/**
+	 * Set texture from canvas-equivalent pixel data.
+	 *
+	 * JS signature: `set_canvas(canvas, options)` accepts an HTMLCanvasElement
+	 * directly (the WebGL `texImage2D` overload extracts pixels from the DOM
+	 * element). Desktop OpenGL has no HTML canvas, so the C++ port adapts the
+	 * signature to take raw RGBA pixel bytes plus explicit width/height. The
+	 * caller is responsible for rasterising/copying canvas-equivalent content
+	 * into the byte buffer before invoking this function.
+	 *
+	 * Internally this delegates to `set_rgba` after forcing `has_alpha = true`
+	 * (the JS `set_canvas` always sets `this.has_alpha = true`).
+	 */
 	void set_canvas(const uint8_t* pixels, int width, int height,
 	                const TextureOptions& options = {});
 

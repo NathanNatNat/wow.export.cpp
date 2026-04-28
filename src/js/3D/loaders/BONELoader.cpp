@@ -45,6 +45,10 @@ void BONELoader::parse_chunk_bida(uint32_t chunkSize) {
 }
 
 void BONELoader::parse_chunk_bomt(uint32_t chunkSize) {
+	// JS uses floating-point division here; if `chunkSize` is not a multiple of 64,
+	// JS would throw `RangeError` from `new Array(nonInteger)`. C++ uses `uint32_t`
+	// integer division which truncates silently. Well-formed BONE files always have
+	// `chunkSize` as a multiple of 64, so this divergence has no real-world impact.
 	const uint32_t amount = (chunkSize / 16) / 4;
 	this->boneOffsetMatrices.resize(amount);
 	for (uint32_t i = 0; i < amount; i++) {

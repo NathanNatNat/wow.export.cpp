@@ -31,8 +31,10 @@ void GLTexture::set_rgba(const uint8_t* pixels, int w, int h,
 
 	glBindTexture(GL_TEXTURE_2D, texture);
 
-	// flip Y to match Three.js / WebGL UNPACK_FLIP_Y_WEBGL behaviour.
-	// Desktop GL has no UNPACK_FLIP_Y state, so we flip the rows manually.
+	// Optional vertical flip. JS does NOT call gl.pixelStorei(UNPACK_FLIP_Y_WEBGL, true)
+	// in either set_rgba or set_canvas, so the default (`flip_y = false`) matches JS.
+	// Desktop GL has no UNPACK_FLIP_Y state, so when flipping is explicitly requested
+	// we copy the rows manually.
 	if (options.flip_y && pixels) {
 		const size_t row_bytes = static_cast<size_t>(w) * 4;
 		std::vector<uint8_t> flipped(static_cast<size_t>(w) * h * 4);

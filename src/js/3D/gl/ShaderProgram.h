@@ -33,6 +33,25 @@ public:
 
 	GLint get_uniform_location(const std::string& name);
 	GLuint get_uniform_block_index(const std::string& name);
+	/**
+	 * Query a parameter for an active uniform block.
+	 *
+	 * Adaptation from JS: WebGL2's gl.getActiveUniformBlockParameter returns
+	 * mixed types depending on @p pname — a `GLboolean`/`GLint` scalar for most
+	 * pnames, but a `Uint32Array` for `GL_UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES`.
+	 * This C++ wrapper only returns a single GLint, which is sufficient for the
+	 * scalar pnames (e.g. `GL_UNIFORM_BLOCK_DATA_SIZE`,
+	 * `GL_UNIFORM_BLOCK_ACTIVE_UNIFORMS`,
+	 * `GL_UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER`, etc.).
+	 *
+	 * For `GL_UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES` (which yields an array of
+	 * uniform indices), callers must bypass this wrapper and call
+	 * `glGetActiveUniformBlockiv` directly with a sufficiently sized
+	 * `GLint[]` buffer (size obtained via
+	 * `GL_UNIFORM_BLOCK_ACTIVE_UNIFORMS`).
+	 *
+	 * JS source: src/js/3D/gl/ShaderProgram.js lines 122–127.
+	 */
 	GLint get_uniform_block_param(const std::string& name, GLenum pname);
 	std::vector<GLint> get_active_uniform_offsets(const std::vector<std::string>& names);
 	void bind_uniform_block(const std::string& name, GLuint binding_point);
@@ -43,17 +62,53 @@ public:
 	void set_uniform_3f(const std::string& name, float x, float y, float z);
 	void set_uniform_4f(const std::string& name, float x, float y,
 	                    float z, float w);
-	// Adaptation: JS WebGL2 gl.uniform3fv/4fv/uniformMatrix4fv infer array
-	// length from the typed array automatically; OpenGL glUniform*fv requires
-	// an explicit element count. count defaults to 1 for the single-value case.
+	/**
+	 * Upload one or more vec3 uniforms.
+	 *
+	 * Adaptation from JS: WebGL2's `gl.uniform3fv(loc, value)` infers the
+	 * element count from the typed array's length. The desktop-OpenGL
+	 * `glUniform3fv(loc, count, value)` requires the count to be supplied
+	 * explicitly. Callers must pass @p count = number of vec3 elements in
+	 * @p value (defaults to 1 for the common single-vector case). Passing
+	 * an array of multiple vectors without updating @p count will silently
+	 * upload only the first vector.
+	 *
+	 * JS source: src/js/3D/gl/ShaderProgram.js lines 204–208.
+	 */
 	void set_uniform_3fv(const std::string& name, const float* value,
 	                     GLsizei count = 1);
+	/**
+	 * Upload one or more vec4 uniforms.
+	 *
+	 * Adaptation from JS: WebGL2's `gl.uniform4fv(loc, value)` infers the
+	 * element count from the typed array's length. The desktop-OpenGL
+	 * `glUniform4fv(loc, count, value)` requires the count to be supplied
+	 * explicitly. Callers must pass @p count = number of vec4 elements in
+	 * @p value (defaults to 1 for the common single-vector case). Passing
+	 * an array of multiple vectors without updating @p count will silently
+	 * upload only the first vector.
+	 *
+	 * JS source: src/js/3D/gl/ShaderProgram.js lines 213–218.
+	 */
 	void set_uniform_4fv(const std::string& name, const float* value,
 	                     GLsizei count = 1);
 	void set_uniform_mat3(const std::string& name, bool transpose,
 	                      const float* value);
 	void set_uniform_mat4(const std::string& name, bool transpose,
 	                      const float* value);
+	/**
+	 * Upload one or more mat4 uniforms as a contiguous array.
+	 *
+	 * Adaptation from JS: WebGL2's `gl.uniformMatrix4fv(loc, transpose, value)`
+	 * infers the matrix count from the typed array's length (length / 16).
+	 * The desktop-OpenGL `glUniformMatrix4fv(loc, count, transpose, value)`
+	 * requires @p count to be supplied explicitly. Callers must pass
+	 * @p count = number of mat4 elements in @p value (defaults to 1 for the
+	 * single-matrix case). Passing an array of multiple matrices without
+	 * updating @p count will silently upload only the first matrix.
+	 *
+	 * JS source: src/js/3D/gl/ShaderProgram.js lines 247–251.
+	 */
 	void set_uniform_mat4_array(const std::string& name, bool transpose,
 	                            const float* value, GLsizei count = 1);
 

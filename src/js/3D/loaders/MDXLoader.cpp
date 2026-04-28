@@ -74,9 +74,20 @@ void MDXLoader::load() {
 	}
 
 	// Build the nodes lookup from final containers (pointers are now stable).
-	// In JS this was done incrementally in _read_node, but in C++ the objects
-	// are moved into their vectors after _read_node returns, so we must
-	// register them after all parsing is complete.
+	//
+	// JS reference: src/js/3D/loaders/MDXLoader.js lines 208-210, where
+	// `_read_node` immediately stored `this.nodes[node.objectId] = node`
+	// (a live JS object reference) inside the inner loop as each node was
+	// parsed.
+	//
+	// Necessary C++ adaptation: we cannot register pointers/references into
+	// the per-type vectors (bones, helpers, attachments, ...) while those
+	// vectors are still being grown. A subsequent `push_back` may reallocate
+	// the vector's storage and invalidate every previously stored pointer,
+	// leaving `this->nodes` dangling. We therefore defer node registration
+	// until after every chunk handler has fully populated its container, so
+	// the addresses we capture below are stable for the lifetime of the
+	// loader.
 	this->nodes.clear();
 	auto registerNode = [this](MDXNode& node) {
 		if (node.objectId.has_value()) {
@@ -414,8 +425,14 @@ void MDXLoader::parse_ATCH() {
 		attachment.visibility = 1.0f;
 
 		// check for KVIS
-		// Note: Original JS had readUInt32LE(-4) which is a bug (RangeError).
-		// Fixed to use saved attachmentSize.
+		// Intentional divergence from JS to fix a JS bug.
+		// JS reference: src/js/3D/loaders/MDXLoader.js line 404 reads
+		//   if (this.data.offset < startPos + this.data.readUInt32LE(-4)) { ... }
+		// `readUInt32LE(-4)` passes a negative offset to Node's Buffer API,
+		// which throws RangeError at runtime, so the JS code path is broken.
+		// The intent (recoverable from context) is to compare against the
+		// per-entry size word that was read at the top of the loop; we keep
+		// that value in `attachmentSize` and use it directly.
 		if (this->data.offset() < startPos + attachmentSize) {
 			const std::string keyword = this->_read_keyword();
 			if (keyword == "KVIS")

@@ -101,20 +101,20 @@ struct CAaBB {
 std::vector<std::vector<M2Value>> read_m2_array_array(
 	BufferWrapper& data, uint32_t ofs, M2DataType dataType,
 	bool useAnims = false,
-	std::map<uint32_t, BufferWrapper*> animFiles = {},
+	const std::map<uint32_t, BufferWrapper*>& animFiles = {},
 	const std::vector<M2Sequence>* sequences = nullptr);
 
 M2ArrayArrayResult read_m2_array_array_with_offsets(
 	BufferWrapper& data, uint32_t ofs, M2DataType dataType,
 	bool useAnims = false,
-	std::map<uint32_t, BufferWrapper*> animFiles = {},
+	const std::map<uint32_t, BufferWrapper*>& animFiles = {},
 	const std::vector<M2Sequence>* sequences = nullptr);
 
 // See https://wowdev.wiki/M2#Standard_animation_block
 M2Track read_m2_track(
 	BufferWrapper& data, uint32_t ofs, M2DataType dataType,
 	bool useAnims = false,
-	std::map<uint32_t, BufferWrapper*> animFiles = {},
+	const std::map<uint32_t, BufferWrapper*>& animFiles = {},
 	bool storeOffsets = false,
 	const std::vector<M2Sequence>* sequences = nullptr);
 

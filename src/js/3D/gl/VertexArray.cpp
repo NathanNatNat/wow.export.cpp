@@ -105,7 +105,7 @@ void VertexArray::setup_m2_vertex_format() {
 	glVertexAttribPointer(AttributeLocation::TEXCOORD, 2, GL_FLOAT,
 	                      GL_FALSE, stride, reinterpret_cast<const void*>(32));
 
-	// texcoord2: vec2 at offset 40 (y-flipped for OpenGL bottom-left origin)
+	// texcoord2: vec2 at offset 40
 	glEnableVertexAttribArray(AttributeLocation::TEXCOORD2);
 	glVertexAttribPointer(AttributeLocation::TEXCOORD2, 2, GL_FLOAT,
 	                      GL_FALSE, stride, reinterpret_cast<const void*>(40));
@@ -267,11 +267,37 @@ void VertexArray::set_wireframe_index_buffer(const uint16_t* data, size_t count,
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
 }
 
+void VertexArray::set_wireframe_index_buffer(const uint32_t* data, size_t count, GLenum usage) {
+	if (!wireframe_ebo)
+		glGenBuffers(1, &wireframe_ebo);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wireframe_ebo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+	             static_cast<GLsizeiptr>(count * sizeof(uint32_t)),
+	             data, usage);
+
+	// restore triangle EBO in VAO state
+	if (ebo)
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+}
+
 std::vector<uint16_t> VertexArray::triangles_to_lines(const uint16_t* indices, size_t count) {
 	std::vector<uint16_t> lines(count * 2);
 	size_t j = 0;
 	for (size_t i = 0; i < count; i += 3) {
 		const uint16_t a = indices[i], b = indices[i + 1], c = indices[i + 2];
+		lines[j++] = a; lines[j++] = b;
+		lines[j++] = b; lines[j++] = c;
+		lines[j++] = c; lines[j++] = a;
+	}
+	return lines;
+}
+
+std::vector<uint32_t> VertexArray::triangles_to_lines(const uint32_t* indices, size_t count) {
+	std::vector<uint32_t> lines(count * 2);
+	size_t j = 0;
+	for (size_t i = 0; i < count; i += 3) {
+		const uint32_t a = indices[i], b = indices[i + 1], c = indices[i + 2];
 		lines[j++] = a; lines[j++] = b;
 		lines[j++] = b; lines[j++] = c;
 		lines[j++] = c; lines[j++] = a;

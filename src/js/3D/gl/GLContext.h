@@ -58,6 +58,20 @@ enum BlendMode : int {
  * HTML canvas.  In the C++ desktop build the OpenGL 4.6 core context is
  * created by GLFW before this object is constructed, so the constructor
  * simply initialises GL state and queries capabilities.
+ *
+ * C++-only additions (absent from the JS source):
+ *  - `invalidate_cache()` — forces all cached GL state to be reapplied on
+ *    the next call.  Required because Dear ImGui's OpenGL3 backend mutates
+ *    GL state (program, VAO, blend, depth, textures, etc.) behind the
+ *    cache's back when it renders, so the cache must be invalidated before
+ *    subsequent rendering to avoid stale-state mismatches.  The JS version
+ *    has no analogous problem because the original NW.js front-end does
+ *    not share a GL context with an external immediate-mode UI.
+ *  - `unbind_vao(GLuint vao)` — used by `VertexArray::dispose()` to clear
+ *    the cached current-VAO entry when the VAO it tracked is destroyed,
+ *    keeping the VAO state cache consistent across object lifetimes.  The
+ *    JS source relies on garbage collection and never needs an explicit
+ *    cache-invalidating unbind.
  */
 class GLContext {
 public:
@@ -81,6 +95,11 @@ public:
 
 	void use_program(GLuint program);
 	void bind_vao(GLuint vao);
+	/**
+	 * Clear the cached current-VAO entry when @p vao is destroyed.
+	 * C++-only helper used by `VertexArray::dispose()` to keep the VAO
+	 * state cache consistent across object lifetimes.  No JS counterpart.
+	 */
 	void unbind_vao(GLuint vao);
 	void active_texture(int unit);
 	void bind_texture(int unit, GLuint texture, GLenum target = GL_TEXTURE_2D);
@@ -91,7 +110,9 @@ public:
 	/**
 	 * Invalidate all cached GL state.  Call this before rendering when an
 	 * external system (e.g. ImGui's OpenGL backend) may have modified GL
-	 * state behind the cache's back.
+	 * state behind the cache's back.  C++-only — the JS source has no
+	 * analogous method because the original NW.js UI does not share its
+	 * GL context with an external immediate-mode renderer.
 	 */
 	void invalidate_cache();
 

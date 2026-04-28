@@ -282,8 +282,8 @@ void ADTLoader::handle_root_MH2O(BufferWrapper& data, uint32_t chunkSize) {
 		}
 	}
 
+	// std::set yields sorted iteration; no further sort needed.
 	std::vector<uint32_t> sortedOffsets(dataOffsets.begin(), dataOffsets.end());
-	std::sort(sortedOffsets.begin(), sortedOffsets.end());
 
 	for (int i = 0; i < 256; i++) {
 		const auto& header = chunkHeaders[i];
@@ -518,6 +518,11 @@ void ADTLoader::handle_texmcnk_MCLY(ADTTexChunk& chunk, BufferWrapper& data, uin
 
 // MCAL
 void ADTLoader::handle_texmcnk_MCAL(ADTTexChunk& chunk, BufferWrapper& data, uint32_t chunkSize, WDTLoader* wdt) {
+	// JS dereferences `root.flags` directly; a null root would throw a TypeError.
+	// Mirror that error semantic here rather than silently falling through to the 2048-byte path.
+	if (wdt == nullptr)
+		throw std::runtime_error("ADTLoader::handle_texmcnk_MCAL: WDT root required");
+
 	const size_t layerCount = chunk.layers.size();
 	chunk.alphaLayers.resize(layerCount);
 	chunk.alphaLayers[0].assign(64 * 64, 255);
@@ -566,7 +571,7 @@ void ADTLoader::handle_texmcnk_MCAL(ADTTexChunk& chunk, BufferWrapper& data, uin
 			ofs += inOfs;
 			if (outOfs != 4096)
 				throw std::runtime_error("Broken ADT.");
-		} else if (wdt && (wdt->flags & 0x4 || wdt->flags & 0x80)) {
+		} else if (wdt->flags & 0x4 || wdt->flags & 0x80) {
 			// Uncompressed (4096)
 			chunk.alphaLayers[i] = data.readUInt8(4096);
 			ofs += 4096;

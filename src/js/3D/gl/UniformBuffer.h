@@ -84,6 +84,28 @@ public:
 
 private:
 	GLContext& ctx_;
+	/**
+	 * CPU-side shadow copy of the GPU uniform buffer contents.
+	 *
+	 * Encapsulation deviation from JS: the original
+	 * `src/js/3D/gl/UniformBuffer.js` (lines 20–22) exposes three public
+	 * properties over a shared ArrayBuffer:
+	 *   - `view`       : DataView          (byte/typed reads + writes)
+	 *   - `float_view` : Float32Array      (typed float access)
+	 *   - `int_view`   : Int32Array        (typed int access)
+	 *
+	 * In C++ the backing storage is a single private `std::vector<uint8_t>`
+	 * (`data_`) and all writes flow through the typed setter methods
+	 * (`set_float`, `set_int`, `set_vec*`, `set_ivec4`, `set_mat4`,
+	 * `set_mat4_array`, `set_float_array`, `set_vec4_array`).  A read-only
+	 * span is exposed via `get_float32_view` for the one JS call site that
+	 * needs direct float access (callers must invoke `upload_range` after
+	 * mutating it, since dirty tracking is bypassed).
+	 *
+	 * Any future port of code that direct-accesses the JS view properties
+	 * (e.g. `ubo.float_view[i] = x`, `ubo.view.setFloat32(...)`) must be
+	 * rewritten to use the typed setters above.
+	 */
 	std::vector<uint8_t> data_;
 };
 

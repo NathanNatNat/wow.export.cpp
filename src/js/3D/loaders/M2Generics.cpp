@@ -69,7 +69,7 @@ static uint32_t value_size(M2DataType dataType) {
 static std::vector<std::vector<M2Value>> read_m2_array_array_internal(
 	BufferWrapper& data, uint32_t ofs, M2DataType dataType,
 	bool useAnims,
-	std::map<uint32_t, BufferWrapper*>& animFiles,
+	const std::map<uint32_t, BufferWrapper*>& animFiles,
 	bool storeOffsets,
 	const std::vector<M2Sequence>* sequences,
 	std::vector<M2ArrayOffset>* outOffsets)
@@ -104,10 +104,15 @@ static std::vector<std::vector<M2Value>> read_m2_array_array_internal(
 		arr[i].resize(subArrCount);
 		for (uint32_t j = 0; j < subArrCount; j++) {
 			if (useAnims && animFiles.count(i)) {
-				auto* animBuf = animFiles[i];
+				auto* animBuf = animFiles.at(i);
 				const uint32_t elemSize = value_size(dataType);
-				animBuf->seek(subArrOfs + (j * elemSize));
-				arr[i][j] = read_value(*animBuf, dataType, "Unhandled");
+				if (elemSize == 0) {
+					// Match JS: throw "Unhandled data type" immediately, before any seek.
+					arr[i][j] = read_value(*animBuf, dataType, "Unhandled"); // throws
+				} else {
+					animBuf->seek(subArrOfs + (j * elemSize));
+					arr[i][j] = read_value(*animBuf, dataType, "Unhandled");
+				}
 			} else {
 				arr[i][j] = read_value(data, dataType);
 			}
@@ -124,7 +129,7 @@ static std::vector<std::vector<M2Value>> read_m2_array_array_internal(
 std::vector<std::vector<M2Value>> read_m2_array_array(
 	BufferWrapper& data, uint32_t ofs, M2DataType dataType,
 	bool useAnims,
-	std::map<uint32_t, BufferWrapper*> animFiles,
+	const std::map<uint32_t, BufferWrapper*>& animFiles,
 	const std::vector<M2Sequence>* sequences)
 {
 	return read_m2_array_array_internal(data, ofs, dataType, useAnims, animFiles, false, sequences, nullptr);
@@ -133,7 +138,7 @@ std::vector<std::vector<M2Value>> read_m2_array_array(
 M2ArrayArrayResult read_m2_array_array_with_offsets(
 	BufferWrapper& data, uint32_t ofs, M2DataType dataType,
 	bool useAnims,
-	std::map<uint32_t, BufferWrapper*> animFiles,
+	const std::map<uint32_t, BufferWrapper*>& animFiles,
 	const std::vector<M2Sequence>* sequences)
 {
 	M2ArrayArrayResult result;
@@ -145,10 +150,12 @@ M2ArrayArrayResult read_m2_array_array_with_offsets(
 M2Track read_m2_track(
 	BufferWrapper& data, uint32_t ofs, M2DataType dataType,
 	bool useAnims,
-	std::map<uint32_t, BufferWrapper*> animFiles,
+	const std::map<uint32_t, BufferWrapper*>& animFiles,
 	bool storeOffsets,
 	const std::vector<M2Sequence>* sequences)
 {
+	static const std::map<uint32_t, BufferWrapper*> empty_anim_files{};
+
 	const uint16_t interpolation = data.readUInt16LE();
 	const uint16_t globalSeq = data.readUInt16LE();
 
@@ -169,10 +176,8 @@ M2Track read_m2_track(
 		values = std::move(valResult.arr);
 		valueOffsets = std::move(valResult.offsets);
 	} else {
-		std::map<uint32_t, BufferWrapper*> emptyMap;
-		timestamps = read_m2_array_array(data, ofs, M2DataType::uint32, false, std::move(emptyMap), sequences);
-		std::map<uint32_t, BufferWrapper*> emptyMap2;
-		values = read_m2_array_array(data, ofs, dataType, false, std::move(emptyMap2), sequences);
+		timestamps = read_m2_array_array(data, ofs, M2DataType::uint32, false, empty_anim_files, sequences);
+		values = read_m2_array_array(data, ofs, dataType, false, empty_anim_files, sequences);
 	}
 
 	return M2Track(globalSeq, interpolation,
