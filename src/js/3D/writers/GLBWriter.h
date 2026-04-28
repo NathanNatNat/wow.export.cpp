@@ -27,5 +27,5 @@ public:
 
 private:
 	std::string json_string;
-	BufferWrapper& bin_buffer;
+	BufferWrapper& bin_buffer; // Deviation: stored by reference (JS uses value semantics); GLBWriter must not outlive the BufferWrapper passed to its constructor.
 };
