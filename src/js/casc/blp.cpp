@@ -98,9 +98,10 @@ BLPImage::BLPImage(BufferWrapper data)
 }
 
 // Deviation: JS toCanvas() and drawToCanvas() create/draw on HTML <canvas> elements
-// (browser-specific). In C++, toPNG() and direct pixel buffer writing (toBuffer,
-// toUInt8Array) replace this functionality. getDataURL() calls toPNG() then
-// BufferWrapper::getDataURL() to produce an equivalent data URL.
+// (browser-specific) and are intentionally absent from this C++ port — there is
+// no DOM canvas to draw onto. Their pixel-decoding role is replaced by toPNG()
+// and direct pixel buffer writing (toBuffer, toUInt8Array). getDataURL() calls
+// toPNG() then BufferWrapper::getDataURL() to produce an equivalent data URL.
 std::string BLPImage::getDataURL(uint8_t mask, int mipmap) {
 	BufferWrapper pngBuf = toPNG(mask, mipmap);
 	return pngBuf.getDataURL();
@@ -285,6 +286,9 @@ BufferWrapper BLPImage::_getCompressed(uint8_t* canvasData, uint8_t mask) {
 			// C++ produces 32 — same here. But for (c+d)=123: JS rounds 61.5 to 62
 			// (even), C++ gives 61. For `/3` e.g. 155/3=51.67: JS rounds to 52, C++
 			// gives 51. Difference is at most 1 LSB and is visually imperceptible.
+			// Note: the same truncation-vs-rounding distinction applies to the DXT5
+			// alpha-interpolation below, where JS uses explicit `| 0` truncation —
+			// matching C++ integer division — so DXT5 alpha values agree exactly.
 			for (int i = 0; i < 3; i++) {
 				int c = colours[i];
 				int d = colours[i + 4];
