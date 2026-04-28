@@ -9,7 +9,6 @@
 #include <string>
 #include <string_view>
 #include <filesystem>
-#include <future>
 #include <mutex>
 #include <memory>
 
@@ -25,6 +24,9 @@ public:
 	 * Construct a new FileWriter instance.
 	 * @param file Path to the file to write.
 	 * @param encoding Encoding hint (unused in C++ — streams write raw bytes).
+	 *
+	 * If the path is a directory (EISDIR in JS), removes it and retries.
+	 * Throws std::runtime_error if the stream cannot be opened.
 	 */
 	FileWriter(const std::filesystem::path& file, std::string_view encoding = "utf8");
 
@@ -37,9 +39,14 @@ public:
 	/**
 	 * Write a line to the file.
 	 * @param line The line to write (newline appended automatically).
-	 * @returns Shared future that resolves when the write operation completes.
+	 *
+	 * JS: async — suspends the caller only when Node stream signals backpressure.
+	 * C++: std::ofstream has no backpressure concept; each write is synchronous
+	 * under a mutex. This is a known deviation: writes never suspend the caller,
+	 * but data is always flushed to the OS buffer before returning — equivalent
+	 * behaviour for all callers in practice.
 	 */
-	std::shared_future<void> writeLine(std::string_view line);
+	void writeLine(std::string_view line);
 
 	/**
 	 * Close the file stream.
@@ -51,8 +58,8 @@ private:
 	void _drain();
 
 	std::ofstream stream;
-	bool blocked;
 	bool closed = false;
-	std::shared_future<void> resolver;
-	std::shared_ptr<std::mutex> write_mutex;
+	// std::mutex is not movable; wrap in unique_ptr so FileWriter remains movable
+	// (needed when returning FileWriter by value from openLastExportStream()).
+	std::unique_ptr<std::mutex> write_mutex;
 };

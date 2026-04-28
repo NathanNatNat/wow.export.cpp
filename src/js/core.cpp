@@ -290,6 +290,11 @@ AppState makeNewView() {
 		{ "Export DB2 (Raw)", "DB2" }
 	};
 
+	// JS source lines 380-383 (helpArticles, helpFilteredArticles, helpSelectedArticle,
+	// helpSearchQuery): tab_help is removed from this C++ project (see CLAUDE.md).
+	// The fields remain in AppState with default-constructed values (empty/null)
+	// so any remaining references compile without error.
+
 	return state;
 }
 
@@ -297,12 +302,18 @@ AppState makeNewView() {
  * Open a stream to the last export file.
  * If the path is a directory (left over from a previous interrupted export),
  * remove it recursively before opening.
+ * JS equivalent: openLastExportStream() in core.js lines 394-408.
  */
 FileWriter openLastExportStream() {
 	const auto& path = constants::LAST_EXPORT();
 	std::error_code ec;
 	auto status = std::filesystem::status(path, ec);
-	if (!ec && std::filesystem::is_directory(status)) {
+	if (ec) {
+		// ENOENT is expected if the file doesn't exist yet -- suppress silently.
+		// All other errors are logged, mirroring JS: if (e.code !== 'ENOENT') log.write(...)
+		if (ec != std::errc::no_such_file_or_directory)
+			logging::write("failed to stat last_export: {}", ec.message());
+	} else if (std::filesystem::is_directory(status)) {
 		logging::write("last_export path is a directory, removing it");
 		std::filesystem::remove_all(path, ec);
 	}
