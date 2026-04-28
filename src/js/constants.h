@@ -122,6 +122,7 @@ namespace BLENDER {
 }
 
 namespace UPDATE {
+	const std::filesystem::path& ROOT(); // Root path for update file resolution (JS: UPDATE_ROOT).
 	const std::filesystem::path& DIRECTORY();
 	const std::string& HELPER(); // Path to update helper application.
 }
