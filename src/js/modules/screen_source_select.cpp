@@ -15,7 +15,6 @@
 #include "../casc/casc-source-remote.h"
 #include "../casc/cdn-resolver.h"
 #include "../mpq/mpq-install.h"
-#include "../components/file-field.h"
 #include "../workers/cache-collector.h"
 #include "../external-links.h"
 #include "../config.h"
@@ -37,6 +36,7 @@
 
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <portable-file-dialogs.h>
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 #include <webp/decode.h>
@@ -164,8 +164,8 @@ enum class SourceType { None, Local, Remote };
 static SourceType active_source_type = SourceType::None;
 
 // JS uses NW.js <input nwdirectory> elements with value-reset/click patterns for
-// directory selection. C++ uses native file dialogs via file_field::openDirectoryDialog()
-// which is functionally equivalent (the reset/reselection behavior is handled natively).
+// directory selection. C++ uses native file dialogs via pfd::select_folder() which is
+// functionally equivalent (the reset/reselection behavior is handled natively).
 
 // JS source-open and build-load paths are async/await methods; C++ uses std::jthread +
 // core::postToMainThread() to achieve the same non-blocking behavior with identical
@@ -592,7 +592,7 @@ static void click_source_local() {
 	if (core::view->isBusy)
 		return;
 
-	std::string selected = file_field::openDirectoryDialog();
+	std::string selected = pfd::select_folder("Select Directory").result();
 	if (!selected.empty())
 		open_local_install(selected);
 }
@@ -663,7 +663,7 @@ static void click_source_legacy() {
 	if (core::view->isBusy)
 		return;
 
-	std::string selected = file_field::openDirectoryDialog();
+	std::string selected = pfd::select_folder("Select Directory").result();
 	if (!selected.empty())
 		open_legacy_install(selected);
 }
@@ -751,8 +751,8 @@ void mounted() {
 	if (!core::view->config.contains("recentLegacy") || !core::view->config["recentLegacy"].is_array())
 		core::view->config["recentLegacy"] = nlohmann::json::array();
 
-	// In ImGui, file selectors are triggered via file_field::openDirectoryDialog()
-	// instead of NW.js <input type="file" nwdirectory>.
+	// In ImGui, file selectors are triggered via pfd::select_folder() instead of
+	// NW.js <input type="file" nwdirectory>.
 
 	// init cdn pings.
 	init_cdn_pings();

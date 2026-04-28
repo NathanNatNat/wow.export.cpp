@@ -23,7 +23,6 @@ License: MIT
 #include "../casc/export-helper.h"
 #include "../casc/listfile.h"
 #include "../casc/realmlist.h"
-#include "../components/file-field.h"
 #include "../components/combobox.h"
 #include "../ui/char-texture-overlay.h"
 #include "../ui/character-appearance.h"
@@ -2209,7 +2208,8 @@ std::string thumb_data = capture_character_thumbnail();
 if (!thumb_data.empty())
 data["thumb"] = thumb_data;
 
-std::string file_path = file_field::saveFileDialog("character.json", "JSON Files", "*.json");
+std::vector<std::string> filters = { "JSON Files", "*.json" };
+std::string file_path = pfd::save_file("Save File", "character.json", filters).result();
 if (file_path.empty())
 return;
 
@@ -2246,7 +2246,8 @@ core::setToast("error", std::format("Failed to read character: {}", e.what()), {
 return;
 }
 
-std::string file_path = file_field::saveFileDialog(name + ".json", "JSON Files", "*.json");
+std::vector<std::string> filters = { "JSON Files", "*.json" };
+std::string file_path = pfd::save_file("Save File", name + ".json", filters).result();
 if (file_path.empty())
 return;
 
@@ -2264,7 +2265,9 @@ static void import_json_character(bool save_to_my_characters) {
 namespace fs = std::filesystem;
 auto& view = *core::view;
 
-std::string file_path = file_field::openFileDialog("JSON Files", "*.json");
+std::vector<std::string> filters = { "JSON Files", "*.json" };
+auto open_result = pfd::open_file("Open File", "", filters).result();
+std::string file_path = open_result.empty() ? "" : open_result[0];
 if (file_path.empty())
 return;
 

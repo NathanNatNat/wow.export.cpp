@@ -14,9 +14,6 @@
  * JS equivalent: Vue component with props: ['modelValue', 'placeholder'],
  * emits: ['update:modelValue']. Renders a text input that opens a native
  * directory picker dialog when focused/clicked.
- *
- * - Windows: IFileOpenDialog (COM)
- * - Linux: zenity or kdialog via popen
  */
 namespace file_field {
 
@@ -28,37 +25,6 @@ struct FileFieldState {
 	std::string inputBuffer;
 	bool bufferInitialized = false;
 };
-
-/**
- * Open a native directory picker dialog.
- * Returns the selected directory path, or empty string if cancelled.
- *
- * Equivalent to the JS file input with nwdirectory attribute.
- */
-std::string openDirectoryDialog();
-
-/**
- * Open a native file open dialog.
- * Returns the selected file path, or empty string if cancelled.
- *
- * @param filter_desc  Description for the file filter (e.g., "JSON Files").
- * @param filter_ext   Extension filter (e.g., "*.json"). Empty for all files.
- * @param default_dir  Default directory to open. Empty for system default.
- */
-std::string openFileDialog(const std::string& filter_desc = "", const std::string& filter_ext = "",
-                           const std::string& default_dir = "");
-
-/**
- * Open a native file save dialog.
- * Returns the selected file path, or empty string if cancelled.
- *
- * @param default_name Default file name (e.g., "character.json").
- * @param filter_desc  Description for the file filter (e.g., "JSON Files").
- * @param filter_ext   Extension filter (e.g., "*.json"). Empty for all files.
- * @param default_dir  Default directory to open. Empty for system default.
- */
-std::string saveFileDialog(const std::string& default_name = "", const std::string& filter_desc = "",
-                           const std::string& filter_ext = "", const std::string& default_dir = "");
 
 /**
  * Render a file/directory field using ImGui.

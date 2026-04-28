@@ -26,53 +26,8 @@ namespace file_field {
  * Used to remove internal references to file node.
  */
 
-/**
- * Open a native directory picker dialog.
- * Returns the selected directory path, or empty string if cancelled.
- * Uses portable-file-dialogs — no system dependency on zenity or COM/IFileDialog.
- * Equivalent to the JS file input with nwdirectory attribute.
- */
-std::string openDirectoryDialog() {
-	return pfd::select_folder("Select Directory").result();
-}
-
-/**
- * Open a native file open dialog.
- * Returns the selected file path, or empty string if cancelled.
- * Uses portable-file-dialogs — no system dependency on zenity or COM/IFileDialog.
- */
-std::string openFileDialog(const std::string& filter_desc, const std::string& filter_ext,
-                           const std::string& default_dir) {
-	std::vector<std::string> filters;
-	if (!filter_desc.empty() && !filter_ext.empty()) {
-		filters.push_back(filter_desc);
-		filters.push_back(filter_ext);
-	}
-	auto result = pfd::open_file("Open File", default_dir, filters).result();
-	return result.empty() ? "" : result[0];
-}
-
-/**
- * Open a native file save dialog.
- * Returns the selected file path, or empty string if cancelled.
- * Uses portable-file-dialogs — no system dependency on zenity or COM/IFileDialog.
- */
-std::string saveFileDialog(const std::string& default_name, const std::string& filter_desc,
-                           const std::string& filter_ext, const std::string& default_dir) {
-	std::vector<std::string> filters;
-	if (!filter_desc.empty() && !filter_ext.empty()) {
-		filters.push_back(filter_desc);
-		filters.push_back(filter_ext);
-	}
-	std::string default_path = default_dir;
-	if (!default_path.empty() && !default_name.empty())
-		default_path += "/" + default_name;
-	else if (!default_name.empty())
-		default_path = default_name;
-	return pfd::save_file("Save File", default_path, filters).result();
-}
 static void openDialog(FileFieldState& state, const std::function<void(const std::string&)>& onChange) {
-	std::string selected = openDirectoryDialog();
+	std::string selected = pfd::select_folder("Select Directory").result();
 	if (!selected.empty()) {
 		state.inputBuffer = selected;
 		if (onChange)
@@ -97,7 +52,7 @@ void render(const char* id, const std::string& modelValue, const char* placehold
 		state.bufferInitialized = true;
 	}
 
-	ImGui::SetNextItemWidth(-40.0f);
+	ImGui::SetNextItemWidth(-1.0f);
 
 	// Text input — @input="$emit('update:modelValue', $event.target.value)"
 	if (ImGui::InputText("##filefield", &state.inputBuffer[0], state.inputBuffer.capacity() + 1,
@@ -115,6 +70,10 @@ void render(const char* id, const std::string& modelValue, const char* placehold
 			onChange(state.inputBuffer);
 	}
 
+	// @focus="openDialog" — fire on the rising-edge frame the input becomes active.
+	if (ImGui::IsItemActivated())
+		openDialog(state, onChange);
+
 	// Show placeholder when empty and not focused.
 	if (state.inputBuffer.empty() && !ImGui::IsItemActive() && placeholder) {
 		const ImVec2 textPos = ImGui::GetItemRectMin();
@@ -123,12 +82,6 @@ void render(const char* id, const std::string& modelValue, const char* placehold
 			ImGui::GetColorU32(ImGuiCol_TextDisabled),
 			placeholder
 		);
-	}
-
-	// Browse button — @focus="openDialog"
-	ImGui::SameLine();
-	if (ImGui::Button("...", ImVec2(30.0f, 0.0f))) {
-		openDialog(state, onChange);
 	}
 
 	ImGui::PopID();
