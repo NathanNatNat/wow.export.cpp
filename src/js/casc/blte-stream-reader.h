@@ -122,7 +122,8 @@ private:
 	BlockFetcherAsync blockFetcherAsync;
 	bool partialDecrypt;
 
-	// FIFO block cache: unordered_map for O(1) lookup, deque for insertion order.
+	// FIFO block cache: unordered_map for O(1) lookup, deque preserves JS `Map` insertion order
+	// (JS evicts via `blockCache.keys().next().value`, which yields the oldest insertion).
 	std::unordered_map<size_t, BufferWrapper> blockCache;
 	std::deque<size_t> cacheOrder;
 	size_t maxCacheSize = 10;
