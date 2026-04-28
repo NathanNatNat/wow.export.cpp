@@ -91,6 +91,7 @@ gltf.setNormalArray(m3->normals);
 // gltf.setBoneIndexArray(m3->boneIndices)
 
 gltf.addUVArray(m3->uv);
+// JS uses `this.m3.uv1 !== undefined`; M3Loader normalises absent uv1 to an empty vector, so empty() is the equivalent presence check.
 if (core::view->config.value("modelsExportUV2", false) && !m3->uv1.empty())
 gltf.addUVArray(m3->uv1);
 
@@ -160,6 +161,7 @@ obj.setVertArray(m3->vertices);
 obj.setNormalArray(m3->normals);
 obj.addUVArray(m3->uv);
 
+// JS uses `this.m3.uv1 !== undefined`; M3Loader normalises absent uv1 to an empty vector, so empty() is the equivalent presence check.
 if (core::view->config.value("modelsExportUV2", false) && !m3->uv1.empty())
 obj.addUVArray(m3->uv1);
 
@@ -305,6 +307,7 @@ JSONWriter manifest(manifestFile);
 manifest.addProperty("fileDataID", fileDataID);
 
 // Write the M3 file with no conversion.
+// JS: `await this.m3.data.writeToFile(out)`; M3Loader holds `data` privately, but it is the same buffer that was passed in here.
 data.writeToFile(out);
 if (fileManifest)
 fileManifest->push_back({ "M3", fileDataID, out });
