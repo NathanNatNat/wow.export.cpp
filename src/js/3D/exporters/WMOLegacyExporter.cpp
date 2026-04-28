@@ -701,7 +701,7 @@ void WMOLegacyExporter::exportRaw(
 			std::ostringstream oss;
 			oss << std::setfill('0') << std::setw(3) << i;
 			std::string groupFileName = filePath;
-			auto wmoPos = groupFileName.rfind(".wmo");
+			auto wmoPos = groupFileName.find(".wmo");
 			if (wmoPos != std::string::npos)
 				groupFileName = groupFileName.substr(0, wmoPos) + "_" + oss.str() + ".wmo";
 
