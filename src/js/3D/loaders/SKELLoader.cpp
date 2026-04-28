@@ -299,6 +299,10 @@ void SKELLoader::parse_chunk_bfid(uint32_t chunkSize) {
 	this->boneFileIDs = this->data.readUInt32LE(chunkSize / 4);
 }
 
+// JS counterpart is `async` and `await`s every CASC fetch and ANIMLoader.load()
+// call, yielding to the event loop between I/O steps. C++ runs synchronously —
+// callers must invoke this off the UI thread to avoid stalling the application
+// during skeleton animation loading.
 bool SKELLoader::loadAnimsForIndex(uint32_t animation_index) {
 	if (this->animFiles.count(animation_index))
 		return true;
@@ -419,6 +423,8 @@ void SKELLoader::_patch_bone_animation(uint32_t animIndex) {
 	}
 }
 
+// See loadAnimsForIndex above: JS is async, C++ is synchronous. Run off the
+// UI thread to avoid blocking during CASC fetches and ANIMLoader.load().
 void SKELLoader::loadAnims(bool load_all) {
 	if (!load_all)
 		return;
@@ -450,7 +456,7 @@ void SKELLoader::loadAnims(bool load_all) {
 
 				logging::write(std::format("Loading .anim file for animation: {} ({}) - {}", entry.animID, get_anim_name(entry.animID), entry.subAnimID));
 
-			try {
+				try {
 					BufferWrapper animData = core::view->casc->getVirtualFileByID(fileDataID);
 					auto ownedBuf = std::make_unique<BufferWrapper>(std::move(animData));
 					BufferWrapper* bufPtr = ownedBuf.get();

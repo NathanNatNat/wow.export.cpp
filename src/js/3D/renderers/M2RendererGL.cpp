@@ -1051,6 +1051,9 @@ global_seq_times.assign(gl_loops->size(), 0.0f);
 // stopAnimation
 // -----------------------------------------------------------------------
 
+// JS sets `this.current_animation = null`, `this.anim_index = null`, etc.
+// C++ uses int sentinel `-1` because the fields are `int`, not nullable —
+// every consumer treats `-1` as "no animation" identically to JS null.
 void M2RendererGL::stopAnimation() {
 animation_time = 0;
 animation_paused = false;

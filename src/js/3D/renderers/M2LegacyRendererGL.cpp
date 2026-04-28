@@ -342,6 +342,10 @@ void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& textu
 // loadSkin
 // -----------------------------------------------------------------------
 
+// JS counterpart calls `_create_bones_ubo()` here to allocate a GPU bone
+// buffer. C++ stores `bone_matrices` in CPU memory only — bone skinning is
+// disabled for legacy M2 models until the animation system is fixed (see
+// the `u_bone_count = 0` stub in render() further below).
 void M2LegacyRendererGL::loadSkin(int index) {
 	_dispose_skin();
 

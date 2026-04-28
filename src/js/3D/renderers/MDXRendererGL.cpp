@@ -372,20 +372,14 @@ void MDXRendererGL::_build_geometry() {
 			normals[i * 3 + 2] = -geoset.normals[i * 3 + 1];
 		}
 
-		// uvs (flip v)
 		// JS: `const uvs = geoset.tVertices[0] || new Float32Array(vertCount * 2);`
-		// The fallback creates a zero-filled UV array of correct size.
-		std::vector<float> flippedUvs;
+		// The fallback creates a zero-filled UV array of correct size. JS does
+		// NOT flip the v-coordinate — pass UVs through verbatim.
+		std::vector<float> uvs;
 		if (!geoset.tVertices.empty() && !geoset.tVertices[0].empty()) {
-			const std::vector<float>& uvs = geoset.tVertices[0];
-			flippedUvs.resize(uvs.size());
-			for (size_t i = 0; i < vertCount; i++) {
-				flippedUvs[i * 2] = uvs[i * 2];
-				flippedUvs[i * 2 + 1] = 1.0f - uvs[i * 2 + 1];
-			}
+			uvs = geoset.tVertices[0];
 		} else {
-			// Fallback: zero-filled UV array (matches JS Float32Array default)
-			flippedUvs.resize(vertCount * 2, 0.0f);
+			uvs.resize(vertCount * 2, 0.0f);
 		}
 
 		// create VAO
@@ -410,7 +404,7 @@ void MDXRendererGL::_build_geometry() {
 		GLuint uvo;
 		glGenBuffers(1, &uvo);
 		glBindBuffer(GL_ARRAY_BUFFER, uvo);
-		glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(flippedUvs.size() * sizeof(float)), flippedUvs.data(), GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(uvs.size() * sizeof(float)), uvs.data(), GL_STATIC_DRAW);
 		buffers.push_back(uvo);
 
 		// bone index/weight (mdx uses group-based skinning, simplified for now)

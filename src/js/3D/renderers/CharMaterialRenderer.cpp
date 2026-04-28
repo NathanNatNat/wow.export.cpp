@@ -67,6 +67,10 @@ CharMaterialRenderer::CharMaterialRenderer(int textureLayer, int width, int heig
 
 /**
  * Initialize the CharMaterialRenderer.
+ *
+ * JS counterpart is `async init()` and returns a Promise. C++ has no
+ * Promise system — return type is `void`. compileShaders() and reset()
+ * are both synchronous so no Promise behaviour is lost.
  */
 void CharMaterialRenderer::init() {
 	compileShaders();
@@ -168,6 +172,10 @@ void CharMaterialRenderer::setTextureTarget(
 	target.filename = filename;
 
 	textureTargets.push_back(std::move(target));
+
+	// JS setTextureTarget ends with `await this.update();` — the FBO must be
+	// re-rendered after a new target is added so the change is visible.
+	this->update();
 }
 
 void CharMaterialRenderer::setTextureTarget(
@@ -218,6 +226,10 @@ void CharMaterialRenderer::setTextureTarget(
 	target.filename = filename;
 
 	textureTargets.push_back(std::move(target));
+
+	// JS setTextureTarget ends with `await this.update();` — the FBO must be
+	// re-rendered after a new target is added so the change is visible.
+	this->update();
 }
 
 /**

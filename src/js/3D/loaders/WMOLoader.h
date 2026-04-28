@@ -144,6 +144,12 @@ public:
 	bool loaded = false;
 	bool renderingOnly = false;
 
+	// JS uses `if (!this.groups)` to detect "MOHD never parsed" (root WMO
+	// asked for a group). C++ std::vector::empty() is also true when
+	// groupCount == 0, which would erroneously trip on a valid zero-group
+	// WMO. Track MOHD parse separately to mirror JS truthy semantics.
+	bool groupsInitialized = false;
+
 	uint32_t fileDataID = 0;
 	std::string fileName;
 

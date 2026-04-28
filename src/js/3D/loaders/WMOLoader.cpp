@@ -114,7 +114,11 @@ void WMOLoader::load() {
  * Get a group from this WMO.
  */
 WMOLoader& WMOLoader::getGroup(uint32_t index) {
-	if (this->groups.empty())
+	// JS: if (!this.groups) — checks that the groups property was ever set (by MOHD).
+	// C++ uses groupsInitialized to distinguish "MOHD not yet parsed" (root WMO)
+	// from "groupCount == 0" (MOHD parsed but zero groups). An empty array [] is
+	// truthy in JS so !this.groups is false even when groupCount == 0.
+	if (!this->groupsInitialized)
 		throw std::runtime_error("Attempted to obtain group from a root WMO.");
 
 	if (index < this->groups.size() && this->groups[index] != nullptr)
@@ -212,6 +216,7 @@ void WMOLoader::parse_MOHD(BufferWrapper& data) {
 	this->lodCount = data.readUInt16LE();
 
 	this->groups.resize(this->groupCount, nullptr);
+	this->groupsInitialized = true;
 }
 
 // MOTX (Textures) [Classic, WMO Root]
