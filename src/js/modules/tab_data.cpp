@@ -341,22 +341,33 @@ void render() {
 			rows_str.push_back(std::move(str_row));
 		}
 
-		// Convert selection indices from json to int array.
-		std::vector<int> sel_indices;
-		for (const auto& s : view.selectionDataTable)
-			sel_indices.push_back(s.get<int>());
+		// Convert selection rows from json arrays to vector<string> rows.
+		// JS stores row references in selectionDataTable; we mirror that by
+		// storing each row's full content (vector of cell strings).
+		std::vector<std::vector<std::string>> sel_rows;
+		for (const auto& s : view.selectionDataTable) {
+			if (!s.is_array()) continue;
+			std::vector<std::string> row;
+			for (const auto& v : s)
+				row.push_back(v.is_string() ? v.get<std::string>() : v.dump());
+			sel_rows.push_back(std::move(row));
+		}
 
 		data_table::render("##DataTable", headers_str, rows_str,
 			view.userInputFilterDataTable,
 			view.config.value("regexFilters", false),
-			sel_indices,
+			sel_rows,
 			view.config.value("dataCopyHeader", false),
 			selected_file.empty() ? "unknown_table" : selected_file,
 			data_table_state,
-			[&](const std::vector<int>& new_sel) {
+			[&](const std::vector<std::vector<std::string>>& new_sel) {
 				view.selectionDataTable.clear();
-				for (int idx : new_sel)
-					view.selectionDataTable.push_back(idx);
+				for (const auto& row : new_sel) {
+					nlohmann::json row_json = nlohmann::json::array();
+					for (const auto& v : row)
+						row_json.push_back(v);
+					view.selectionDataTable.push_back(std::move(row_json));
+				}
 			},
 			[&](const data_table::ContextMenuEvent& ev) {
 				nlohmann::json node;
@@ -482,6 +493,20 @@ static std::vector<std::vector<std::string>> getDisplayRows(
 
 // --- Export methods ---
 
+// Helper: convert selectionDataTable (json array of row arrays) to vector<vector<string>>.
+static std::vector<std::vector<std::string>> selection_rows_from_json() {
+	const auto& view = *core::view;
+	std::vector<std::vector<std::string>> sel_rows;
+	for (const auto& s : view.selectionDataTable) {
+		if (!s.is_array()) continue;
+		std::vector<std::string> row;
+		for (const auto& v : s)
+			row.push_back(v.is_string() ? v.get<std::string>() : v.dump());
+		sel_rows.push_back(std::move(row));
+	}
+	return sel_rows;
+}
+
 static void copy_rows_csv() {
 	const auto& view = *core::view;
 	const size_t count = view.selectionDataTable.size();
@@ -493,12 +518,9 @@ static void copy_rows_csv() {
 		headers.push_back(h.get<std::string>());
 
 	const auto sorted_rows = getDisplayRows(headers);
+	const auto sel_rows = selection_rows_from_json();
 
-	std::vector<int> sel_indices;
-	for (const auto& s : view.selectionDataTable)
-		sel_indices.push_back(s.get<int>());
-
-	std::string csv = data_table::getSelectedRowsAsCSV(headers, sorted_rows, sel_indices,
+	std::string csv = data_table::getSelectedRowsAsCSV(headers, sorted_rows, sel_rows,
 		view.config.value("dataCopyHeader", false));
 
 	ImGui::SetClipboardText(csv.c_str());
@@ -516,12 +538,9 @@ static void copy_rows_sql() {
 		headers.push_back(h.get<std::string>());
 
 	const auto sorted_rows = getDisplayRows(headers);
+	const auto sel_rows = selection_rows_from_json();
 
-	std::vector<int> sel_indices;
-	for (const auto& s : view.selectionDataTable)
-		sel_indices.push_back(s.get<int>());
-
-	std::string sql = data_table::getSelectedRowsAsSQL(headers, sorted_rows, sel_indices,
+	std::string sql = data_table::getSelectedRowsAsSQL(headers, sorted_rows, sel_rows,
 		selected_file.empty() ? "unknown_table" : selected_file);
 
 	ImGui::SetClipboardText(sql.c_str());
@@ -572,11 +591,13 @@ static void export_csv() {
 				return;
 			}
 
-			const auto sorted_rows = getDisplayRows(headers);
-			for (const auto& row_index_json : selection) {
-				const int row_index = row_index_json.get<int>();
-				if (row_index >= 0 && row_index < static_cast<int>(sorted_rows.size()))
-					rows_to_export.push_back(sorted_rows[static_cast<size_t>(row_index)]);
+			// Selection now holds row content directly — no index lookup needed.
+			for (const auto& row_json : selection) {
+				if (!row_json.is_array()) continue;
+				std::vector<std::string> row;
+				for (const auto& v : row_json)
+					row.push_back(v.is_string() ? v.get<std::string>() : v.dump());
+				rows_to_export.push_back(std::move(row));
 			}
 
 			if (rows_to_export.empty()) {
@@ -650,11 +671,13 @@ static void export_sql() {
 				return;
 			}
 
-			const auto sorted_rows = getDisplayRows(headers);
-			for (const auto& row_index_json : selection) {
-				const int row_index = row_index_json.get<int>();
-				if (row_index >= 0 && row_index < static_cast<int>(sorted_rows.size()))
-					rows_to_export.push_back(sorted_rows[static_cast<size_t>(row_index)]);
+			// Selection now holds row content directly — no index lookup needed.
+			for (const auto& row_json : selection) {
+				if (!row_json.is_array()) continue;
+				std::vector<std::string> row;
+				for (const auto& v : row_json)
+					row.push_back(v.is_string() ? v.get<std::string>() : v.dump());
+				rows_to_export.push_back(std::move(row));
 			}
 
 			if (rows_to_export.empty()) {

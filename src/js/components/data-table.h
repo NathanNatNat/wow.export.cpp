@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 #include <functional>
-#include <unordered_map>
 
 /**
  * Data table component (ImGui immediate-mode equivalent).
@@ -52,31 +51,17 @@ struct ContextMenuEvent {
 struct DataTableState {
 	float scroll = 0.0f;
 	float scrollRel = 0.0f;
-	bool isScrolling = false;
-	float horizontalScroll = 0.0f;
-	float horizontalScrollRel = 0.0f;
-	bool isHorizontalScrolling = false;
 	int slotCount = 1;
 	int lastSelectItem = -1;  // -1 = null equivalent
-	std::vector<float> columnWidths;
-	std::unordered_map<std::string, float> manuallyResizedColumns;
-	bool isResizing = false;
-	int resizeColumnIndex = -1;
-	float resizeStartX = 0.0f;
-	float resizeStartWidth = 0.0f;
-	bool isOverResizeZone = false;
-	int resizeZoneColumnIndex = -1;
 	int sortColumn = -1;
 	SortDirection sortDirection = SortDirection::Off;
-	float targetHorizontalScroll = 0.0f;
-	float targetColumnWidth = 0.0f;
-	int forceHorizontalUpdate = 0;
 
-	// Mouse drag tracking (equivalent to JS instance vars set in startMouse/startHorizontalMouse).
-	float scrollStartY = 0.0f;
-	float scrollStart = 0.0f;
-	float horizontalScrollStartX = 0.0f;
-	float horizontalScrollStart = 0.0f;
+	// Cache of last-frame container size — only call resize() when this changes,
+	// matching JS ResizeObserver semantics. Calling resize() every frame causes
+	// floating-point scroll drift (TODO entry 280).
+	float lastResizeWidth = -1.0f;
+	float lastResizeHeight = -1.0f;
+	int lastResizeSortedCount = -1;
 
 	// Change-detection for watchers.
 	std::vector<std::string> prevHeaders;
@@ -87,10 +72,6 @@ struct DataTableState {
 	// size or base pointer (e.g., editing cell content).
 	size_t rowsVersion = 0;
 	size_t prevRowsVersion = 0;
-
-	// Cached sorted/filtered items (recomputed each frame).
-	// These are indices into the original rows array for filtered items,
-	// or row data for sorted items.
 };
 
 /**
@@ -101,7 +82,8 @@ struct DataTableState {
  * @param rows           2D array of row data (each row is a vector of string cell values).
  * @param filter         Current filter string (empty = no filter).
  * @param regex          Whether to use regex matching for the filter.
- * @param selection      Currently selected row indices (into sortedItems).
+ * @param selection      Currently selected rows (each entry is a row's full content,
+ *                       matching JS reference identity by storing row data directly).
  * @param copyheader     Whether to include headers when copying as CSV.
  * @param tablename      Table name used for SQL export.
  * @param state          Persistent state across frames.
@@ -115,39 +97,41 @@ void render(const char* id,
             const std::vector<std::vector<std::string>>& rows,
             const std::string& filter,
             bool regex,
-            const std::vector<int>& selection,
+            const std::vector<std::vector<std::string>>& selection,
             bool copyheader,
             const std::string& tablename,
             DataTableState& state,
-            const std::function<void(const std::vector<int>&)>& onSelectionChanged,
+            const std::function<void(const std::vector<std::vector<std::string>>&)>& onSelectionChanged,
             const std::function<void(const ContextMenuEvent&)>& onContextMenu,
             const std::function<void()>& onCopy,
             const std::function<void(const std::string&)>& onFilterChanged);
 
 /**
  * Get selected rows as CSV string.
+ * Selected rows are sorted by their position within sortedItems (the displayed order).
  * @param headers      Column header names.
- * @param sortedItems  The sorted rows data.
- * @param selection    Currently selected row indices.
+ * @param sortedItems  The sorted rows data (used to determine display order).
+ * @param selection    Currently selected rows (full row contents).
  * @param copyheader   Whether to include headers in the CSV.
  * @returns CSV formatted string.
  */
 std::string getSelectedRowsAsCSV(const std::vector<std::string>& headers,
                                   const std::vector<std::vector<std::string>>& sortedItems,
-                                  const std::vector<int>& selection,
+                                  const std::vector<std::vector<std::string>>& selection,
                                   bool copyheader);
 
 /**
  * Get selected rows as SQL INSERT statements.
+ * Selected rows are sorted by their position within sortedItems (the displayed order).
  * @param headers      Column header names.
- * @param sortedItems  The sorted rows data.
- * @param selection    Currently selected row indices.
+ * @param sortedItems  The sorted rows data (used to determine display order).
+ * @param selection    Currently selected rows (full row contents).
  * @param tablename    Table name for the INSERT statements.
  * @returns SQL formatted string.
  */
 std::string getSelectedRowsAsSQL(const std::vector<std::string>& headers,
                                   const std::vector<std::vector<std::string>>& sortedItems,
-                                  const std::vector<int>& selection,
+                                  const std::vector<std::vector<std::string>>& selection,
                                   const std::string& tablename);
 
 /**

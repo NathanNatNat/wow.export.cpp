@@ -9,8 +9,13 @@
 #include "../../app.h"
 #include <cmath>
 #include <algorithm>
-#include <regex>
 #include <cctype>
+#include <cstring>
+#include <cwchar>
+#include <limits>
+#include <regex>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace data_table {
 
@@ -19,32 +24,42 @@ namespace data_table {
 
 // Reactive instance data — stored in DataTableState.
 
-/**
- * selectedOption: An array of strings denoting options shown in the menu.
- */
-
-
-/**
- * Invoked when the component is mounted.
- * Used to register global listeners and resize observer.
- */
-// are not needed. ImGui provides mouse/keyboard state via ImGui::GetIO() each frame.
-// Resize is handled by layout recalculation every frame.
+// JS-equivalent mounted/beforeUnmount global mouse/keyboard listeners are not
+// needed. ImGui provides mouse/keyboard state via ImGui::GetIO() each frame.
+// Animation frame IDs (horizontalScrollAnimationId, resizeAnimationId) are not
+// needed since ImGui redraws every frame.
 
 /**
- * Invoked when the component is destroyed.
- * Used to unregister global mouse listeners and resize observer.
+ * Compute a stable key for a row (used for unordered_set lookups).
+ * JS uses reference identity; we approximate it with content-based identity by
+ * joining all field values with a separator that is unlikely to appear in data.
+ * In practice DB2/DBC rows differ by at least the ID column, so collisions are
+ * extremely rare. Documented deviation from JS reference identity: rows with
+ * identical content are treated as equal, but this matches the visual outcome.
  */
-// Animation frame IDs (horizontalScrollAnimationId, resizeAnimationId) are not needed
-// since ImGui redraws every frame.
-
+static std::string rowKey(const std::vector<std::string>& row) {
+	std::string key;
+	size_t total = 0;
+	for (const auto& field : row)
+		total += field.size() + 1;
+	key.reserve(total);
+	for (size_t i = 0; i < row.size(); ++i) {
+		if (i > 0) key += '\x1F';  // ASCII unit separator
+		key += row[i];
+	}
+	return key;
+}
 
 /**
- * Offset of the scroll widget in pixels.
- * Between 0 and the height of the component.
+ * Build an O(1)-lookup set from a selection (TODO entry 282).
+ * Equivalent to JS `selectionSet: function() { return new Set(this.selection); }`.
  */
-static float scrollOffset(const DataTableState& state) {
-	return state.scroll;
+static std::unordered_set<std::string> buildSelectionSet(const std::vector<std::vector<std::string>>& selection) {
+	std::unordered_set<std::string> s;
+	s.reserve(selection.size());
+	for (const auto& row : selection)
+		s.insert(rowKey(row));
+	return s;
 }
 
 /**
@@ -213,14 +228,18 @@ static bool matchesGeneralFilter(const std::vector<std::string>& row,
  * Reactively filtered version of the underlying data array.
  * Automatically refilters when the filter input is changed.
  * Supports both column-specific filters (e.g., "id:5000 name:test") and general filters.
+ *
+ * Drops any row from the user's selection that no longer appears in the filtered
+ * set (TODO entry 277). Identity is checked by row content (rowKey), matching
+ * JS reference identity in the common case where rows differ by content.
  */
 static std::vector<std::vector<std::string>> filteredItems(
 		const std::vector<std::vector<std::string>>& rows,
 		const std::string& filter,
 		bool useRegex,
 		const std::vector<std::string>& headers,
-		const std::vector<int>& selection,
-		const std::function<void(const std::vector<int>&)>& onSelectionChanged) {
+		const std::vector<std::vector<std::string>>& selection,
+		const std::function<void(const std::vector<std::vector<std::string>>&)>& onSelectionChanged) {
 	// Skip filtering if no filter is set.
 	if (filter.empty())
 		return rows;
@@ -245,12 +264,18 @@ static std::vector<std::vector<std::string>> filteredItems(
 	}
 
 	// Remove anything from the user selection that has now been filtered out.
-	// Iterate backwards here due to re-indexing as elements are spliced.
+	// JS: const filtered_set = new Set(res); ... selection.filter(row => filtered_set.has(row));
+	std::unordered_set<std::string> filteredSet;
+	filteredSet.reserve(res.size());
+	for (const auto& row : res)
+		filteredSet.insert(rowKey(row));
+
 	bool hasChanges = false;
-	std::vector<int> newSelection;
-	for (const auto& rowIndex : selection) {
-		if (rowIndex < static_cast<int>(res.size())) {
-			newSelection.push_back(rowIndex);
+	std::vector<std::vector<std::string>> newSelection;
+	newSelection.reserve(selection.size());
+	for (const auto& row : selection) {
+		if (filteredSet.count(rowKey(row))) {
+			newSelection.push_back(row);
 		} else {
 			hasChanges = true;
 		}
@@ -277,6 +302,54 @@ static bool tryParseNumber(const std::string& s, double& out) {
 	} catch (...) {
 		return false;
 	}
+}
+
+/**
+ * Locale-aware string comparison, equivalent to JS `String.prototype.localeCompare`
+ * (TODO entry 278). Uses the platform's wide-string collation:
+ *   - Windows: `_wcsicoll` against the user default locale (lowercase already applied).
+ *   - POSIX: `wcscoll_l` with the current C locale.
+ *
+ * Both sides are already lowercased by callers so this performs a case-insensitive
+ * locale-aware comparison consistent with JS's default `localeCompare` behavior
+ * (which is also locale-aware and case-insensitive when both inputs are lowercase).
+ */
+static int localeCompare(const std::string& aStr, const std::string& bStr) {
+	// Convert UTF-8 std::string to wide string for locale collation.
+	// Use mbstowcs in the C locale; for non-ASCII code points the behavior is
+	// platform-dependent but matches the user's locale settings.
+	auto toWide = [](const std::string& s) -> std::wstring {
+		std::wstring result;
+		result.reserve(s.size());
+		std::mbstate_t state{};
+		const char* src = s.c_str();
+		size_t remaining = s.size();
+		while (remaining > 0) {
+			wchar_t wc;
+			size_t n = std::mbrtowc(&wc, src, remaining, &state);
+			if (n == static_cast<size_t>(-1) || n == static_cast<size_t>(-2)) {
+				// Invalid sequence — fall back to byte-level append.
+				result.push_back(static_cast<wchar_t>(static_cast<unsigned char>(*src)));
+				++src; --remaining;
+				state = std::mbstate_t{};
+			} else if (n == 0) {
+				break;
+			} else {
+				result.push_back(wc);
+				src += n;
+				remaining -= n;
+			}
+		}
+		return result;
+	};
+
+	const std::wstring aw = toWide(aStr);
+	const std::wstring bw = toWide(bStr);
+	const int cmp = std::wcscoll(aw.c_str(), bw.c_str());
+	if (cmp != 0)
+		return cmp;
+	// Fallback if collation reports equal but the strings differ — keep order stable.
+	return aStr.compare(bStr);
 }
 
 /**
@@ -317,10 +390,10 @@ static std::vector<std::vector<std::string>> sortedItems(
 			return ascending ? (aNum < bNum) : (aNum > bNum);
 		}
 
-		// String comparison
+		// String comparison — locale-aware, equivalent to JS localeCompare.
 		std::string aStr = toLower(aVal);
 		std::string bStr = toLower(bVal);
-		int cmp = aStr.compare(bStr);
+		int cmp = localeCompare(aStr, bStr);
 		if (cmp == 0) return false;
 		return ascending ? (cmp < 0) : (cmp > 0);
 	});
@@ -340,39 +413,22 @@ static float itemWeight(int sortedItemCount) {
 /**
  * Calculate column widths based on header text length ONLY.
  * No DOM measurements. No dynamic shit. Just text length.
+ *
+ * Used to seed initial column widths via TableSetupColumn. ImGui's table
+ * Resizable flag handles user-driven resize after that point — JS preserved
+ * resized widths in `manuallyResizedColumns` but ImGui owns that state itself.
  */
-static void calculateColumnWidths(const std::vector<std::string>& headers, DataTableState& state) {
-	if (headers.empty()) return;
-
+static std::vector<float> calculateColumnWidths(const std::vector<std::string>& headers) {
 	std::vector<float> widths;
+	if (headers.empty()) return widths;
 
-	for (size_t index = 0; index < headers.size(); ++index) {
-		const std::string& header = headers[index];
-		const std::string& columnName = header;
-
-		auto it = state.manuallyResizedColumns.find(columnName);
-		if (it != state.manuallyResizedColumns.end()) {
-			widths.push_back(it->second);
-		} else {
-			// Calculate width based on text length: 8px per character + 40px for icons/padding
-			float textWidth = static_cast<float>(header.length()) * 8.0f + 40.0f;
-			widths.push_back(std::max(120.0f, textWidth));
-		}
+	for (const auto& header : headers) {
+		// 8px per character + 40px for icons/padding
+		float textWidth = static_cast<float>(header.length()) * 8.0f + 40.0f;
+		widths.push_back(std::max(120.0f, textWidth));
 	}
 
-	state.columnWidths = widths;
-}
-
-/**
- * Reset horizontal scroll position and force recalculation.
- * Called when new table data is loaded.
- */
-static void resetHorizontalScroll(DataTableState& state) {
-	state.horizontalScroll = 0.0f;
-	state.horizontalScrollRel = 0.0f;
-
-	// In JS: this.$refs.table.offsetHeight forces a re-evaluation.
-	state.forceHorizontalUpdate++;
+	return widths;
 }
 
 /**
@@ -380,14 +436,11 @@ static void resetHorizontalScroll(DataTableState& state) {
  * is resized due to layout changes.
  */
 static void resize(float containerHeight, float headerHeight, float scrollerHeight,
-                    float containerWidth, float hScrollerWidth,
                     DataTableState& state) {
 	// Calculate available height for scrolling (subtract header and scrollbar widget)
 	const float availableHeight = containerHeight - headerHeight;
 	state.scroll = (availableHeight - scrollerHeight) * state.scrollRel;
 	state.slotCount = std::max(1, static_cast<int>(std::floor(availableHeight / 32.0f)) - 2);
-
-	state.horizontalScroll = (containerWidth - hScrollerWidth) * state.horizontalScrollRel;
 }
 
 /**
@@ -403,118 +456,10 @@ static void recalculateBounds(float containerHeight, float headerHeight, float s
 }
 
 /**
- * Restricts the horizontal scroll offset to prevent overflowing and
- * calculates the relative (0-1) offset based on the horizontal scroll.
- */
-static void recalculateHorizontalBounds(float containerWidth, float hScrollerWidth,
-                                          DataTableState& state) {
-	const float maxVal = containerWidth - hScrollerWidth;
-	state.horizontalScroll = std::min(maxVal, std::max(0.0f, state.horizontalScroll));
-	state.horizontalScrollRel = (maxVal > 0.0f) ? (state.horizontalScroll / maxVal) : 0.0f;
-}
-
-/**
  * Determines if horizontal scrolling is needed based on table width vs container width.
  */
 static bool needsHorizontalScrolling(float tableWidth, float containerWidth) {
 	return tableWidth > containerWidth;
-}
-
-/**
- * Sync custom scrollbar position with native scroll position.
- *
- * In JS, this syncs the custom scrollbar with the browser's native scroll position
- * (handles native scroll events on the root div). In ImGui, there is no native
- * scroll — the custom scrollbar is the only scroll mechanism. Scroll position is
- * fully managed by our scrollbar drag and wheel handlers, so this function is
- * intentionally omitted as it has no ImGui equivalent.
- */
-// static void syncScrollPosition(...) — not needed in ImGui.
-
-/**
- * Invoked when a mouse-down event is captured on the scroll widget.
- * @param {MouseEvent} e 
- */
-static void startMouse(float mouseY, DataTableState& state) {
-	state.scrollStartY = mouseY;
-	state.scrollStart = state.scroll;
-	state.isScrolling = true;
-}
-
-/**
- * Invoked when a mouse-move event is captured globally.
- * @param {MouseEvent} e 
- */
-static void moveMouse(float mouseX, float mouseY,
-                       float containerHeight, float headerHeight, float scrollerHeight,
-                       float containerWidth, float hScrollerWidth,
-                       const std::vector<std::string>& headers,
-                       DataTableState& state) {
-	if (state.isScrolling) {
-		state.scroll = state.scrollStart + (mouseY - state.scrollStartY);
-		recalculateBounds(containerHeight, headerHeight, scrollerHeight, state);
-	}
-
-	if (state.isHorizontalScrolling) {
-		// In JS, this used requestAnimationFrame batching. In ImGui we update directly each frame.
-		state.horizontalScroll = state.horizontalScrollStart + (mouseX - state.horizontalScrollStartX);
-		recalculateHorizontalBounds(containerWidth, hScrollerWidth, state);
-	}
-
-	if (state.isResizing) {
-		const float deltaX = mouseX - state.resizeStartX;
-		state.targetColumnWidth = std::max(50.0f, state.resizeStartWidth + deltaX); // Minimum width of 50px
-
-		// Update the column width
-		if (!state.columnWidths.empty() && state.resizeColumnIndex >= 0 &&
-		    state.resizeColumnIndex < static_cast<int>(state.columnWidths.size())) {
-			state.columnWidths[static_cast<size_t>(state.resizeColumnIndex)] = state.targetColumnWidth;
-
-			// Mark this column as manually resized during the drag (not just on stopMouse).
-			// JS updates manuallyResizedColumns inside the requestAnimationFrame callback.
-			if (state.resizeColumnIndex < static_cast<int>(headers.size())) {
-				const std::string& columnName = headers[static_cast<size_t>(state.resizeColumnIndex)];
-				state.manuallyResizedColumns[columnName] = state.targetColumnWidth;
-			}
-		}
-	}
-}
-
-/**
- * Invoked when a mouse-up event is captured globally.
- */
-static void stopMouse(DataTableState& state, const std::vector<std::string>& headers) {
-	state.isScrolling = false;
-	state.isHorizontalScrolling = false;
-
-	// In JS: cancelAnimationFrame(this.horizontalScrollAnimationId)
-
-	if (state.isResizing) {
-		// Finalize column width and mark as manually resized
-		if (state.targetColumnWidth != 0.0f && !state.columnWidths.empty() &&
-		    state.resizeColumnIndex >= 0 && state.resizeColumnIndex < static_cast<int>(state.columnWidths.size())) {
-			state.columnWidths[static_cast<size_t>(state.resizeColumnIndex)] = state.targetColumnWidth;
-			if (state.resizeColumnIndex < static_cast<int>(headers.size())) {
-				const std::string& columnName = headers[static_cast<size_t>(state.resizeColumnIndex)];
-				state.manuallyResizedColumns[columnName] = state.targetColumnWidth;
-			}
-		}
-
-		state.isResizing = false;
-		state.resizeColumnIndex = -1;
-		state.isOverResizeZone = false;
-		state.resizeZoneColumnIndex = -1;
-	}
-}
-
-/**
- * Invoked when a mouse-down event is captured on the horizontal scroll widget.
- * @param {MouseEvent} e 
- */
-static void startHorizontalMouse(float mouseX, DataTableState& state) {
-	state.horizontalScrollStartX = mouseX;
-	state.horizontalScrollStart = state.horizontalScroll;
-	state.isHorizontalScrolling = true;
 }
 
 /**
@@ -555,7 +500,6 @@ static const char* getSortIconName(int columnIndex, const DataTableState& state)
  * Handle clicking the filter icon for a column.
  * Inserts the column filter prefix and focuses the filter input.
  * @param {number} columnIndex - Index of the column
- * @param {Event} e - The click event
  */
 static void handleFilterIconClick(int columnIndex, const std::vector<std::string>& headers,
                                     const std::string& currentFilter,
@@ -580,31 +524,40 @@ static void handleFilterIconClick(int columnIndex, const std::vector<std::string
 }
 
 /**
- * Prevent middle mouse button from triggering autopan.
- * @param {MouseEvent} e
- */
-// This is a no-op but preserved for completeness.
-
-/**
  * Invoked when a user selects a row in the table.
- * @param {number} rowIndex - Index of the row in sortedItems
- * @param {MouseEvent} event
+ * @param rowIndex - Index of the row in sortedItems
+ * @param ctrlKey/shiftKey - Modifier keys pressed
+ * @param sorted - The currently sorted+filtered rows (used for shift-range and identity)
+ * @param selection - Current selection (full row contents)
  */
 static void selectRow(int rowIndex, bool ctrlKey, bool shiftKey,
-                       const std::vector<int>& selection,
+                       const std::vector<std::vector<std::string>>& sorted,
+                       const std::vector<std::vector<std::string>>& selection,
                        DataTableState& state,
-                       const std::function<void(const std::vector<int>&)>& onSelectionChanged) {
-	// Check if rowIndex is in the current selection
-	auto checkIt = std::find(selection.begin(), selection.end(), rowIndex);
-	const int checkIndex = (checkIt != selection.end()) ? static_cast<int>(std::distance(selection.begin(), checkIt)) : -1;
-	std::vector<int> newSelection = selection;
+                       const std::function<void(const std::vector<std::vector<std::string>>&)>& onSelectionChanged) {
+	if (rowIndex < 0 || rowIndex >= static_cast<int>(sorted.size()))
+		return;
+
+	const auto& row = sorted[static_cast<size_t>(rowIndex)];
+	const std::string rowK = rowKey(row);
+
+	// JS: const checkIndex = this.selection.indexOf(row);
+	int checkIndex = -1;
+	for (int i = 0; i < static_cast<int>(selection.size()); ++i) {
+		if (rowKey(selection[static_cast<size_t>(i)]) == rowK) {
+			checkIndex = i;
+			break;
+		}
+	}
+
+	std::vector<std::vector<std::string>> newSelection = selection;
 
 	if (ctrlKey) {
 		// Ctrl-key held, so allow multiple selections.
 		if (checkIndex > -1)
 			newSelection.erase(newSelection.begin() + checkIndex);
 		else
-			newSelection.push_back(rowIndex);
+			newSelection.push_back(row);
 	} else if (shiftKey) {
 		// Shift-key held, select a range.
 		if (state.lastSelectItem != -1 && state.lastSelectItem != rowIndex) {
@@ -615,15 +568,22 @@ static void selectRow(int rowIndex, bool ctrlKey, bool shiftKey,
 			const int lowest = std::min(lastSelectIndex, thisSelectIndex);
 			const int highest = lowest + delta;
 
-			for (int i = lowest; i <= highest; i++) {
-				if (std::find(newSelection.begin(), newSelection.end(), i) == newSelection.end())
-					newSelection.push_back(i);
+			std::unordered_set<std::string> existing;
+			existing.reserve(newSelection.size());
+			for (const auto& r : newSelection)
+				existing.insert(rowKey(r));
+
+			for (int i = lowest; i <= highest && i < static_cast<int>(sorted.size()); i++) {
+				const auto& r = sorted[static_cast<size_t>(i)];
+				const std::string rk = rowKey(r);
+				if (existing.insert(rk).second)
+					newSelection.push_back(r);
 			}
 		}
 	} else if (checkIndex == -1 || (checkIndex > -1 && static_cast<int>(newSelection.size()) > 1)) {
 		// Normal click, replace entire selection.
 		newSelection.clear();
-		newSelection.push_back(rowIndex);
+		newSelection.push_back(row);
 	}
 
 	state.lastSelectItem = rowIndex;
@@ -633,29 +593,31 @@ static void selectRow(int rowIndex, bool ctrlKey, bool shiftKey,
 
 /**
  * Invoked when a user right-clicks on a row in the table.
- * @param {number} rowIndex - Index of the row in sortedItems
- * @param {number} columnIndex - Index of the column
- * @param {MouseEvent} event
+ * @param rowIndex - Index of the row in sortedItems
+ * @param columnIndex - Index of the column
  */
 static void handleContextMenu(int rowIndex, int columnIndex,
                                 const std::vector<std::vector<std::string>>& sorted,
-                                const std::vector<int>& selection,
+                                const std::vector<std::vector<std::string>>& selection,
+                                const std::unordered_set<std::string>& selectionSet,
                                 DataTableState& state,
-                                const std::function<void(const std::vector<int>&)>& onSelectionChanged,
+                                const std::function<void(const std::vector<std::vector<std::string>>&)>& onSelectionChanged,
                                 const std::function<void(const ContextMenuEvent&)>& onContextMenu) {
+	if (rowIndex < 0 || rowIndex >= static_cast<int>(sorted.size()))
+		return;
+
+	const auto& row = sorted[static_cast<size_t>(rowIndex)];
+
 	// if the row is not already selected, select it
-	if (std::find(selection.begin(), selection.end(), rowIndex) == selection.end()) {
+	if (!selectionSet.count(rowKey(row))) {
 		state.lastSelectItem = rowIndex;
 		if (onSelectionChanged)
-			onSelectionChanged({ rowIndex });
+			onSelectionChanged({ row });
 	}
 
 	std::string cellValue;
-	if (rowIndex >= 0 && rowIndex < static_cast<int>(sorted.size())) {
-		const auto& row = sorted[static_cast<size_t>(rowIndex)];
-		if (columnIndex >= 0 && columnIndex < static_cast<int>(row.size()))
-			cellValue = row[static_cast<size_t>(columnIndex)];
-	}
+	if (columnIndex >= 0 && columnIndex < static_cast<int>(row.size()))
+		cellValue = row[static_cast<size_t>(columnIndex)];
 
 	if (onContextMenu) {
 		ContextMenuEvent evt;
@@ -673,20 +635,17 @@ static void handleContextMenu(int rowIndex, int columnIndex,
 
 /**
  * Invoked when a keydown event is fired.
- * @param {KeyboardEvent} e
  */
 static void handleKey(const std::vector<std::vector<std::string>>& sorted,
-                       const std::vector<int>& selection,
+                       const std::vector<std::vector<std::string>>& selection,
                        float containerHeight, float headerHeight, float scrollerHeight,
                        DataTableState& state,
-                       const std::function<void(const std::vector<int>&)>& onSelectionChanged,
+                       const std::function<void(const std::vector<std::vector<std::string>>&)>& onSelectionChanged,
                        const std::function<void()>& onCopy) {
 	// JS checks: if (document.activeElement !== document.body) return;
 	// — only intercepts keys when nothing is focused (activeElement is body).
 	// ImGui equivalent: IsAnyItemActive() returns true when a text input or other
-	// interactive widget has keyboard focus. This is conceptually similar but may
-	// differ in edge cases (e.g., a child window is focused but no item is active).
-	// This is the closest ImGui approximation of the JS behavior.
+	// interactive widget has keyboard focus.
 	if (ImGui::IsAnyItemActive())
 		return;
 
@@ -727,12 +686,12 @@ static void handleKey(const std::vector<std::vector<std::string>>& sorted,
 				recalculateBounds(containerHeight, headerHeight, scrollerHeight, state);
 			}
 
-			std::vector<int> newSelection = selection;
+			std::vector<std::vector<std::string>> newSelection = selection;
 
 			if (!io.KeyShift)
 				newSelection.clear();
 
-			newSelection.push_back(nextIndex);
+			newSelection.push_back(sorted[static_cast<size_t>(nextIndex)]);
 			state.lastSelectItem = nextIndex;
 			if (onSelectionChanged)
 				onSelectionChanged(newSelection);
@@ -782,25 +741,49 @@ static std::string escape_csv(const std::string& val) {
 }
 
 /**
+ * Sort a list of selected rows by their position within sortedItems (display order).
+ * Mirrors JS: const index_map = new Map(this.sortedItems.map((row, idx) => [row, idx]));
+ *             rows = selection.slice().sort((a, b) => index_map.get(a) - index_map.get(b));
+ * Rows not present in sortedItems (e.g., filtered out) appear at the end.
+ */
+static std::vector<std::vector<std::string>> sortSelectionByDisplayOrder(
+		const std::vector<std::vector<std::string>>& sorted,
+		const std::vector<std::vector<std::string>>& selection) {
+	std::unordered_map<std::string, int> indexMap;
+	indexMap.reserve(sorted.size());
+	for (size_t i = 0; i < sorted.size(); ++i)
+		indexMap[rowKey(sorted[i])] = static_cast<int>(i);
+
+	std::vector<std::pair<int, const std::vector<std::string>*>> indexed;
+	indexed.reserve(selection.size());
+	for (const auto& row : selection) {
+		auto it = indexMap.find(rowKey(row));
+		const int idx = (it != indexMap.end()) ? it->second : std::numeric_limits<int>::max();
+		indexed.emplace_back(idx, &row);
+	}
+
+	std::stable_sort(indexed.begin(), indexed.end(),
+		[](const auto& a, const auto& b) { return a.first < b.first; });
+
+	std::vector<std::vector<std::string>> result;
+	result.reserve(indexed.size());
+	for (const auto& [_, rowPtr] : indexed)
+		result.push_back(*rowPtr);
+	return result;
+}
+
+/**
  * Get selected rows as CSV string.
  * @returns {string} CSV formatted string
  */
 std::string getSelectedRowsAsCSV(const std::vector<std::string>& headers,
                                   const std::vector<std::vector<std::string>>& sorted,
-                                  const std::vector<int>& selection,
+                                  const std::vector<std::vector<std::string>>& selection,
                                   bool copyheader) {
 	if (selection.empty() || headers.empty())
 		return "";
 
-	// Sort selection indices
-	std::vector<int> sortedSelection = selection;
-	std::sort(sortedSelection.begin(), sortedSelection.end());
-
-	std::vector<std::vector<std::string>> rows;
-	for (int idx : sortedSelection) {
-		if (idx >= 0 && idx < static_cast<int>(sorted.size()))
-			rows.push_back(sorted[static_cast<size_t>(idx)]);
-	}
+	const auto rows = sortSelectionByDisplayOrder(sorted, selection);
 
 	if (rows.empty())
 		return "";
@@ -836,20 +819,12 @@ std::string getSelectedRowsAsCSV(const std::vector<std::string>& headers,
  */
 std::string getSelectedRowsAsSQL(const std::vector<std::string>& headers,
                                   const std::vector<std::vector<std::string>>& sorted,
-                                  const std::vector<int>& selection,
+                                  const std::vector<std::vector<std::string>>& selection,
                                   const std::string& tablename) {
 	if (selection.empty() || headers.empty())
 		return "";
 
-	// Sort selection indices
-	std::vector<int> sortedSelection = selection;
-	std::sort(sortedSelection.begin(), sortedSelection.end());
-
-	std::vector<std::vector<std::string>> rows;
-	for (int idx : sortedSelection) {
-		if (idx >= 0 && idx < static_cast<int>(sorted.size()))
-			rows.push_back(sorted[static_cast<size_t>(idx)]);
-	}
+	const auto rows = sortSelectionByDisplayOrder(sorted, selection);
 
 	if (rows.empty())
 		return "";
@@ -924,39 +899,27 @@ std::vector<std::vector<std::string>> getFilteredSortedRows(
 	return sortedItems(filtered, state);
 }
 
-/**
- * HTML mark-up to render for this component.
- */
-// template: converted to ImGui immediate-mode rendering below.
-
 void render(const char* id,
             const std::vector<std::string>& headers,
             const std::vector<std::vector<std::string>>& rows,
             const std::string& filter,
             bool regex,
-            const std::vector<int>& selection,
-            bool copyheader,
-            const std::string& tablename,
+            const std::vector<std::vector<std::string>>& selection,
+            [[maybe_unused]] bool copyheader,
+            [[maybe_unused]] const std::string& tablename,
             DataTableState& state,
-            const std::function<void(const std::vector<int>&)>& onSelectionChanged,
+            const std::function<void(const std::vector<std::vector<std::string>>&)>& onSelectionChanged,
             const std::function<void(const ContextMenuEvent&)>& onContextMenu,
             const std::function<void()>& onCopy,
             const std::function<void(const std::string&)>& onFilterChanged) {
 	ImGui::PushID(id);
 
-	// Watch for header changes to recalculate column widths.
-	if (state.prevHeaders != headers) {
+	// Watch for header changes (JS recalculates column widths and resets scroll).
+	if (state.prevHeaders != headers)
 		state.prevHeaders = headers;
-		state.manuallyResizedColumns.clear();
-		calculateColumnWidths(headers, state);
-		resetHorizontalScroll(state);
-	}
 
 	// Watch for rows changes to reset selection (new table loaded).
 	// JS Vue reactivity watches the `rows` prop reference; any change triggers the handler.
-	// We check size, base pointer, and a version counter. The version counter catches
-	// in-place mutations that don't change size or pointer (e.g., editing cell content).
-	// Callers should increment state.rowsVersion when mutating rows in-place.
 	if (state.prevRowCount != rows.size() ||
 	    state.prevRowsPtr != static_cast<const void*>(rows.data()) ||
 	    state.prevRowsVersion != state.rowsVersion) {
@@ -966,399 +929,180 @@ void render(const char* id,
 		state.lastSelectItem = -1;
 		if (onSelectionChanged)
 			onSelectionChanged({});
-		resetHorizontalScroll(state);
 	}
 
 	auto filtered = filteredItems(rows, filter, regex, headers, selection, onSelectionChanged);
 	auto sorted = sortedItems(filtered, state);
 	const int sortedCount = static_cast<int>(sorted.size());
 
+	// Build O(1)-lookup set for selection (TODO entry 282).
+	const auto selectionSet = buildSelectionSet(selection);
+
 	const ImVec2 availSize = ImGui::GetContentRegionAvail();
 	const float containerWidth = availSize.x;
 	const float containerHeight = availSize.y;
+
+	// Compute column widths for this frame from header definitions.
+	const std::vector<float> columnWidths = calculateColumnWidths(headers);
 
 	// Row height matching CSS: min-height: 32px
 	const float rowHeight = 32.0f;
 	// Header height matching CSS: padding 10px top/bottom + ~20px text
 	const float headerHeight = 40.0f;
-
 	// Vertical scroller dimensions
 	const float scrollerHeight = 45.0f;
 
 	// Calculate total table width from column widths
 	float tableWidth = 0.0f;
-	for (float w : state.columnWidths)
+	for (float w : columnWidths)
 		tableWidth += w;
 
-	// Horizontal scroller dimensions
 	const bool showHScroll = needsHorizontalScrolling(tableWidth, containerWidth);
-	const float hScrollerWidth = showHScroll
-		? std::max(45.0f, (containerWidth / tableWidth) * (containerWidth - 16.0f))
-		: 45.0f;
 
-	resize(containerHeight, headerHeight, scrollerHeight, containerWidth, hScrollerWidth, state);
+	// Only call resize() when the layout actually changes (TODO entry 280).
+	// Calling every frame causes scroll-position drift from float accumulation.
+	if (state.lastResizeWidth != containerWidth ||
+	    state.lastResizeHeight != containerHeight ||
+	    state.lastResizeSortedCount != sortedCount) {
+		resize(containerHeight, headerHeight, scrollerHeight, state);
+		state.lastResizeWidth = containerWidth;
+		state.lastResizeHeight = containerHeight;
+		state.lastResizeSortedCount = sortedCount;
+	}
 
 	const int idx = scrollIndex(sortedCount, state);
 	const int startIdx = std::max(0, idx);
 	const int endIdx = std::min(sortedCount, startIdx + state.slotCount);
 
-	// <div ref="root" class="ui-datatable" @wheel="wheelMouse">
-	ImGui::BeginChild("##datatable_root", availSize, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	// Reserve space for the bottom status row.
+	const float statusBarHeight = rows.empty() ? 0.0f : ImGui::GetTextLineHeightWithSpacing();
 
-	const ImVec2 winPos = ImGui::GetWindowPos();
+	const ImVec2 tableRegionSize(containerWidth, std::max(0.0f, containerHeight - statusBarHeight));
+
+	// <div ref="root" class="ui-datatable" @wheel="wheelMouse">
+	ImGui::BeginChild("##datatable_root", tableRegionSize, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
 	const ImGuiIO& io = ImGui::GetIO();
-	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	const bool windowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_None);
 
 	// @wheel="wheelMouse"
-	if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None)) {
+	if (windowHovered) {
 		const float wheelY = io.MouseWheel;
 		const float wheelX = io.MouseWheelH;
 
-		if (wheelX != 0.0f || wheelY != 0.0f) {
-			float delta = -wheelY;
-			if (wheelX != 0.0f)
-				delta = wheelX;
-
-			if ((io.KeyShift || wheelX != 0.0f) && showHScroll) {
-				// Horizontal scrolling with shift+wheel
-				const float direction = delta > 0.0f ? 1.0f : -1.0f;
-				const float scrollAmount = 50.0f; // Fixed scroll amount for horizontal
-				state.horizontalScroll += scrollAmount * direction;
-				recalculateHorizontalBounds(containerWidth, hScrollerWidth, state);
-			} else {
-				const float availableHeight = containerHeight - headerHeight;
-				const float weight = availableHeight - scrollerHeight;
-
-				if (sortedCount > 0) {
-					const int scrollCount = state.slotCount;
-					const float direction = delta > 0.0f ? 1.0f : -1.0f;
-					state.scroll += ((static_cast<float>(scrollCount) * itemWeight(sortedCount)) * weight) * direction;
-					recalculateBounds(containerHeight, headerHeight, scrollerHeight, state);
-				}
-			}
-		}
-	}
-
-	if (state.isScrolling || state.isHorizontalScrolling || state.isResizing) {
-		moveMouse(io.MousePos.x, io.MousePos.y,
-		          containerHeight, headerHeight, scrollerHeight,
-		          containerWidth, hScrollerWidth, headers, state);
-		if (!io.MouseDown[0]) {
-			stopMouse(state, headers);
+		if (wheelY != 0.0f && !(io.KeyShift && showHScroll) && wheelX == 0.0f && sortedCount > 0) {
+			// Vertical scrolling: drive the virtualized scroll position used by scrollIndex().
+			// (Horizontal/shift-wheel scrolling is handled natively by ImGui::BeginTable's ScrollX.)
+			// TODO entry 279: JS preventDefault() has no ImGui equivalent — best-effort, we
+			// consume the value from ImGuiIO so other widgets in the same frame won't react.
+			const float availableHeight = containerHeight - headerHeight;
+			const float weight = availableHeight - scrollerHeight;
+			const float direction = wheelY > 0.0f ? -1.0f : 1.0f;
+			state.scroll += ((static_cast<float>(state.slotCount) * itemWeight(sortedCount)) * weight) * direction;
+			recalculateBounds(containerHeight, headerHeight, scrollerHeight, state);
+			ImGui::GetIO().MouseWheel = 0.0f;
 		}
 	}
 
 	handleKey(sorted, selection, containerHeight, headerHeight, scrollerHeight,
 	          state, onSelectionChanged, onCopy);
 
-	float horizontalOffset = 0.0f;
-	if (showHScroll) {
-		const float maxScroll = std::max(0.0f, tableWidth - containerWidth);
-		horizontalOffset = -maxScroll * state.horizontalScrollRel;
-	}
+	// Render the table using native ImGui::BeginTable (TODO entry 281).
+	const int columnCount = static_cast<int>(headers.size());
+	if (columnCount > 0) {
+		const ImGuiTableFlags tableFlags =
+			ImGuiTableFlags_BordersV |
+			ImGuiTableFlags_BordersOuterH |
+			ImGuiTableFlags_RowBg |
+			ImGuiTableFlags_Resizable |
+			ImGuiTableFlags_Sortable |
+			ImGuiTableFlags_ScrollX |
+			ImGuiTableFlags_NoSavedSettings;
 
-	// <thead ref="datatableheader" @mousemove="headerMouseMove" @mousedown="headerMouseDown" :style="headerCursorStyle">
-	{
-		const float headerStartX = winPos.x + horizontalOffset;
-		const float headerStartY = winPos.y;
+		// Approximate the JS horizontal scroller behaviour by sizing the inner
+		// width to the total of our calculated column widths; ImGui's native
+		// horizontal scrollbar then mirrors the JS hscroller.
+		ImGui::SetNextWindowContentSize(ImVec2(tableWidth, 0.0f));
 
-		// Header background
-		drawList->AddRectFilled(
-			ImVec2(winPos.x, headerStartY),
-			ImVec2(winPos.x + containerWidth, headerStartY + headerHeight),
-			ImGui::GetColorU32(ImGuiCol_TableHeaderBg)
-		);
+		if (ImGui::BeginTable("##datatable", columnCount, tableFlags, ImVec2(0.0f, 0.0f))) {
+			// Setup columns with the calculated widths.
+			for (int i = 0; i < columnCount; ++i) {
+				const float w = (i < static_cast<int>(columnWidths.size())) ? columnWidths[i] : 120.0f;
+				ImGui::TableSetupColumn(headers[i].c_str(),
+					ImGuiTableColumnFlags_WidthFixed, w);
+			}
+			ImGui::TableSetupScrollFreeze(0, 1);  // freeze header row
 
-		float colX = headerStartX;
-		for (int i = 0; i < static_cast<int>(headers.size()); ++i) {
-			float colWidth = (i < static_cast<int>(state.columnWidths.size()))
-				? state.columnWidths[static_cast<size_t>(i)]
-				: 120.0f;
+			// Custom header row — uses Selectable for click handling (sort + filter icons)
+			// rather than the default TableHeadersRow, since the JS template renders both
+			// a clickable text label (sort) and a separate filter icon per header.
+			ImGui::TableNextRow(ImGuiTableRowFlags_Headers, headerHeight);
+			for (int i = 0; i < columnCount; ++i) {
+				ImGui::TableSetColumnIndex(i);
+				ImGui::PushID(i);
 
-			// Clip: only render if visible
-			if (colX + colWidth > winPos.x && colX < winPos.x + containerWidth) {
-				// Header cell border (CSS: border: 1px solid var(--border))
-				drawList->AddRect(
-					ImVec2(colX, headerStartY),
-					ImVec2(colX + colWidth, headerStartY + headerHeight),
-					ImGui::GetColorU32(ImGuiCol_TableBorderLight)
-				);
-
-				// Header text (CSS: padding: 10px)
-				const float textPadding = 10.0f;
-				const float iconAreaWidth = 36.0f; // Space for sort+filter icons
-				float textMaxWidth = colWidth - textPadding * 2.0f - iconAreaWidth;
-
-				ImVec2 textPos(colX + textPadding, headerStartY + (headerHeight - ImGui::GetTextLineHeight()) / 2.0f);
-				drawList->PushClipRect(ImVec2(colX + 1.0f, headerStartY), ImVec2(colX + colWidth - iconAreaWidth, headerStartY + headerHeight), true);
-				drawList->AddText(textPos, ImGui::GetColorU32(ImGuiCol_Text), headers[static_cast<size_t>(i)].c_str());
-				drawList->PopClipRect();
-
-				const float iconSize = 12.0f;
-				const float iconGap = 4.0f;
-				const float iconsX = colX + colWidth - textPadding - iconSize * 2.0f - iconGap;
-				const float iconsY = headerStartY + (headerHeight - iconSize) / 2.0f;
-
-				// Filter icon button
-				ImVec2 filterIconMin(iconsX, iconsY);
-				ImVec2 filterIconMax(iconsX + iconSize, iconsY + iconSize);
-
-				// Sort icon button
-				ImVec2 sortIconMin(iconsX + iconSize + iconGap, iconsY);
-				ImVec2 sortIconMax(sortIconMin.x + iconSize, iconsY + iconSize);
-
-				// Render filter icon (funnel shape)
-				bool filterHovered = ImGui::IsMouseHoveringRect(filterIconMin, filterIconMax);
-				ImU32 filterColor = filterHovered ? ImGui::GetColorU32(ImGuiCol_Text) : ImGui::GetColorU32(ImGuiCol_TextDisabled);
-				// Simple funnel icon
-				float fx = filterIconMin.x, fy = filterIconMin.y;
-				drawList->AddTriangleFilled(
-					ImVec2(fx, fy + 2.0f),
-					ImVec2(fx + iconSize, fy + 2.0f),
-					ImVec2(fx + iconSize / 2.0f, fy + iconSize / 2.0f),
-					filterColor
-				);
-				drawList->AddRectFilled(
-					ImVec2(fx + iconSize / 2.0f - 1.0f, fy + iconSize / 2.0f),
-					ImVec2(fx + iconSize / 2.0f + 1.0f, fy + iconSize - 1.0f),
-					filterColor
-				);
-
-				if (filterHovered && ImGui::IsMouseClicked(0)) {
-					handleFilterIconClick(i, headers, filter, onFilterChanged);
-				}
-
-				// Render sort icon
 				const char* sortIconName = getSortIconName(i, state);
-				bool sortHovered = ImGui::IsMouseHoveringRect(sortIconMin, sortIconMax);
-				ImU32 sortColor = sortHovered ? ImGui::GetColorU32(ImGuiCol_Text) : ImGui::GetColorU32(ImGuiCol_TextDisabled);
+				const char* sortGlyph = "";
+				if (std::strcmp(sortIconName, "sort-icon-up") == 0) sortGlyph = " \xE2\x96\xB2";       // ▲
+				else if (std::strcmp(sortIconName, "sort-icon-down") == 0) sortGlyph = " \xE2\x96\xBC"; // ▼
 
-				float sx = sortIconMin.x;
-				float sy = sortIconMin.y;
-				if (std::string(sortIconName) == "sort-icon-up") {
-					// Up arrow
-					drawList->AddTriangleFilled(
-						ImVec2(sx + iconSize / 2.0f, sy + 1.0f),
-						ImVec2(sx + 1.0f, sy + iconSize - 1.0f),
-						ImVec2(sx + iconSize - 1.0f, sy + iconSize - 1.0f),
-						sortColor
-					);
-				} else if (std::string(sortIconName) == "sort-icon-down") {
-					// Down arrow
-					drawList->AddTriangleFilled(
-						ImVec2(sx + 1.0f, sy + 1.0f),
-						ImVec2(sx + iconSize - 1.0f, sy + 1.0f),
-						ImVec2(sx + iconSize / 2.0f, sy + iconSize - 1.0f),
-						sortColor
-					);
-				} else {
-					// Both arrows (sort-icon-off) — dimmed double arrow
-					float midY = sy + iconSize / 2.0f;
-					drawList->AddTriangleFilled(
-						ImVec2(sx + iconSize / 2.0f, sy + 1.0f),
-						ImVec2(sx + 2.0f, midY - 1.0f),
-						ImVec2(sx + iconSize - 2.0f, midY - 1.0f),
-						sortColor
-					);
-					drawList->AddTriangleFilled(
-						ImVec2(sx + 2.0f, midY + 1.0f),
-						ImVec2(sx + iconSize - 2.0f, midY + 1.0f),
-						ImVec2(sx + iconSize / 2.0f, sy + iconSize - 1.0f),
-						sortColor
-					);
-				}
+				// Filter icon (small button on the right of the header label).
+				const float availW = ImGui::GetContentRegionAvail().x;
+				const float iconW = ImGui::GetFrameHeight() * 0.7f;
+				const float labelW = std::max(0.0f, availW - iconW * 2.0f - 6.0f);
 
-				if (sortHovered && ImGui::IsMouseClicked(0) && !state.isResizing) {
+				// Sort label as a clickable header title.
+				const std::string label = headers[static_cast<size_t>(i)] + sortGlyph;
+				ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::GetStyle().Colors[ImGuiCol_HeaderHovered]);
+				if (ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_None, ImVec2(labelW, headerHeight - 4.0f))) {
 					toggleSort(i, state);
 				}
-			}
+				ImGui::PopStyleColor();
 
-			// headerMouseMove: detect resize zones near column borders
-			if (!state.isResizing) {
-				const float resizeZoneWidth = 5.0f;
-				if (i < static_cast<int>(headers.size()) - 1) {
-					float borderX = colX + colWidth;
-					if (io.MousePos.y >= headerStartY && io.MousePos.y <= headerStartY + headerHeight &&
-					    io.MousePos.x >= borderX - resizeZoneWidth && io.MousePos.x <= borderX + resizeZoneWidth) {
-						state.isOverResizeZone = true;
-						state.resizeZoneColumnIndex = i;
-					}
+				ImGui::SameLine();
+				if (ImGui::SmallButton("F##filter")) {
+					handleFilterIconClick(i, headers, filter, onFilterChanged);
 				}
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("Filter this column");
+
+				ImGui::PopID();
 			}
 
-			colX += colWidth;
-		}
+			// Body — virtualised slice [startIdx, endIdx).
+			for (int rowIdx = startIdx; rowIdx < endIdx; ++rowIdx) {
+				const auto& row = sorted[static_cast<size_t>(rowIdx)];
+				const std::string rowK = rowKey(row);
+				const bool isSelected = selectionSet.count(rowK) > 0;
 
-		// headerMouseDown: start resize if in resize zone
-		if (state.isOverResizeZone && state.resizeZoneColumnIndex >= 0 &&
-		    ImGui::IsMouseClicked(0) &&
-		    io.MousePos.y >= headerStartY && io.MousePos.y <= headerStartY + headerHeight) {
-			state.isResizing = true;
-			state.resizeColumnIndex = state.resizeZoneColumnIndex;
-			state.resizeStartX = io.MousePos.x;
-			if (state.resizeZoneColumnIndex < static_cast<int>(state.columnWidths.size()))
-				state.resizeStartWidth = state.columnWidths[static_cast<size_t>(state.resizeZoneColumnIndex)];
-		}
+				ImGui::TableNextRow(ImGuiTableRowFlags_None, rowHeight);
+				ImGui::PushID(rowIdx);
 
-		// Reset resize zone detection each frame if not actively resizing
-		if (!state.isResizing) {
-			// Only clear if mouse is NOT over a resize zone
-			bool overAny = false;
-			float checkX = winPos.x + horizontalOffset;
-			for (int i = 0; i < static_cast<int>(headers.size()); ++i) {
-				float cw = (i < static_cast<int>(state.columnWidths.size()))
-					? state.columnWidths[static_cast<size_t>(i)]
-					: 120.0f;
-				if (i < static_cast<int>(headers.size()) - 1) {
-					float borderX = checkX + cw;
-					if (io.MousePos.y >= headerStartY && io.MousePos.y <= headerStartY + headerHeight &&
-					    io.MousePos.x >= borderX - 5.0f && io.MousePos.x <= borderX + 5.0f) {
-						overAny = true;
-						break;
-					}
-				}
-				checkX += cw;
-			}
-			if (!overAny) {
-				state.isOverResizeZone = false;
-				state.resizeZoneColumnIndex = -1;
-			}
-		}
+				// Render each cell. Use Selectable on column 0 to span the row for click handling.
+				for (int c = 0; c < columnCount; ++c) {
+					ImGui::TableSetColumnIndex(c);
+					const std::string& cell = (c < static_cast<int>(row.size())) ? row[static_cast<size_t>(c)] : std::string();
 
-		// Set cursor when over resize zone or resizing
-		if (state.isOverResizeZone || state.isResizing) {
-			ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-		}
-	}
-
-	// <tbody>
-	{
-		const float bodyStartY = winPos.y + headerHeight;
-		const float bodyStartX = winPos.x + horizontalOffset;
-
-		for (int rowIdx = startIdx; rowIdx < endIdx; ++rowIdx) {
-			const int displayRow = rowIdx - startIdx;
-			const float rowY = bodyStartY + static_cast<float>(displayRow) * rowHeight;
-
-			// Skip if row is below visible area
-			if (rowY > winPos.y + containerHeight)
-				break;
-
-			const auto& row = sorted[static_cast<size_t>(rowIdx)];
-			const bool isSelected = std::find(selection.begin(), selection.end(), rowIdx) != selection.end();
-
-			ImVec2 rowMin(winPos.x, rowY);
-			ImVec2 rowMax(winPos.x + containerWidth, rowY + rowHeight);
-
-			if (isSelected) {
-				drawList->AddRectFilled(rowMin, rowMax, ImGui::GetColorU32(ImGuiCol_Header));
-			} else if (ImGui::IsMouseHoveringRect(rowMin, rowMax)) {
-				drawList->AddRectFilled(rowMin, rowMax, ImGui::GetColorU32(ImGuiCol_HeaderHovered));
-			}
-
-			// Row click handling
-			if (ImGui::IsMouseHoveringRect(rowMin, rowMax)) {
-				if (ImGui::IsMouseClicked(0)) {
-					// selectRow(scrollIndex + rowIndex, $event)
-					selectRow(rowIdx, io.KeyCtrl, io.KeyShift, selection, state, onSelectionChanged);
-				}
-
-				// Right-click context menu
-				if (ImGui::IsMouseClicked(1)) {
-					// Determine which column was clicked
-					float checkColX = bodyStartX;
-					int clickedCol = 0;
-					for (int c = 0; c < static_cast<int>(headers.size()); ++c) {
-						float cw = (c < static_cast<int>(state.columnWidths.size()))
-							? state.columnWidths[static_cast<size_t>(c)]
-							: 120.0f;
-						if (io.MousePos.x >= checkColX && io.MousePos.x < checkColX + cw) {
-							clickedCol = c;
-							break;
+					if (c == 0) {
+						const ImGuiSelectableFlags flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap;
+						if (ImGui::Selectable(cell.empty() ? "##empty" : cell.c_str(), isSelected, flags, ImVec2(0.0f, rowHeight - 4.0f))) {
+							selectRow(rowIdx, io.KeyCtrl, io.KeyShift, sorted, selection, state, onSelectionChanged);
 						}
-						checkColX += cw;
+						if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+							handleContextMenu(rowIdx, c, sorted, selection, selectionSet, state, onSelectionChanged, onContextMenu);
+						}
+					} else {
+						ImGui::TextUnformatted(cell.c_str());
+						if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+							handleContextMenu(rowIdx, c, sorted, selection, selectionSet, state, onSelectionChanged, onContextMenu);
+						}
 					}
-					handleContextMenu(rowIdx, clickedCol, sorted, selection, state, onSelectionChanged, onContextMenu);
-				}
-			}
-
-			// Draw cells
-			// <td v-for="(field, index) in row" :style="columnStyles['col-' + index]">{{field}}</td>
-			float cellX = bodyStartX;
-			for (int c = 0; c < static_cast<int>(row.size()); ++c) {
-				float cw = (c < static_cast<int>(state.columnWidths.size()))
-					? state.columnWidths[static_cast<size_t>(c)]
-					: 120.0f;
-
-				// Clip: only render if visible
-				if (cellX + cw > winPos.x && cellX < winPos.x + containerWidth) {
-					// CSS: .ui-datatable table tr td { padding: 5px 10px } — 10px left/right padding
-					const float cellPadding = 10.0f;
-					ImVec2 textPos(cellX + cellPadding, rowY + (rowHeight - ImGui::GetTextLineHeight()) / 2.0f);
-
-					drawList->PushClipRect(ImVec2(cellX, rowY), ImVec2(cellX + cw, rowY + rowHeight), true);
-					drawList->AddText(textPos, ImGui::GetColorU32(ImGuiCol_Text), row[static_cast<size_t>(c)].c_str());
-					drawList->PopClipRect();
 				}
 
-				cellX += cw;
+				ImGui::PopID();
 			}
-		}
-	}
 
-	// <div class="scroller" ref="dtscroller" @mousedown="startMouse" :class="{ using: isScrolling }" :style="{ top: scrollOffset }">
-	{
-		const float scrollerWidth = 8.0f;
-		const float scrollerMarginTop = headerHeight + 6.0f;
-		const float scrollerX = winPos.x + containerWidth - scrollerWidth - 3.0f;
-		const float thumbY = winPos.y + scrollerMarginTop + scrollOffset(state);
-
-		ImVec2 thumbMin(scrollerX, thumbY);
-		ImVec2 thumbMax(scrollerX + scrollerWidth, thumbY + scrollerHeight);
-
-		// Inner div with rounded corners
-		ImVec2 innerMin(thumbMin.x, thumbMin.y + 3.0f);
-		ImVec2 innerMax(thumbMax.x, thumbMax.y - 3.0f);
-
-		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
-		const ImU32 thumbColor = thumbHovered
-			? ImGui::GetColorU32(ImGuiCol_Text)
-			: ImGui::GetColorU32(ImGuiCol_ScrollbarGrab);
-
-		const ImU32 thumbColorWithOpacity = (thumbColor & 0x00FFFFFF) | (static_cast<ImU32>(static_cast<float>((thumbColor >> 24) & 0xFF) * 0.7f) << 24);
-
-		drawList->AddRectFilled(innerMin, innerMax, thumbColorWithOpacity, 4.0f);
-
-		// Handle mouse-down on the scroller thumb.
-		if (ImGui::IsMouseHoveringRect(thumbMin, thumbMax) && ImGui::IsMouseClicked(0)) {
-			startMouse(io.MousePos.y, state);
-		}
-	}
-
-	// <div class="hscroller" ref="dthscroller" @mousedown="startHorizontalMouse" :class="{ using: isHorizontalScrolling }" :style="...">
-	if (showHScroll) {
-		const float hScrollerHeight = 8.0f;
-		const float hScrollerY = winPos.y + containerHeight - hScrollerHeight - 3.0f;
-		const float hScrollerX = winPos.x + state.horizontalScroll;
-
-		ImVec2 thumbMin(hScrollerX, hScrollerY);
-		ImVec2 thumbMax(hScrollerX + hScrollerWidth, hScrollerY + hScrollerHeight);
-
-		// Inner div
-		ImVec2 innerMin(thumbMin.x + 3.0f, thumbMin.y);
-		ImVec2 innerMax(thumbMax.x - 3.0f, thumbMax.y);
-
-		const bool hThumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isHorizontalScrolling;
-		const ImU32 hThumbColor = hThumbHovered
-			? ImGui::GetColorU32(ImGuiCol_Text)
-			: ImGui::GetColorU32(ImGuiCol_ScrollbarGrab);
-
-		const ImU32 hThumbColorWithOpacity = (hThumbColor & 0x00FFFFFF) | (static_cast<ImU32>(static_cast<float>((hThumbColor >> 24) & 0xFF) * 0.7f) << 24);
-
-		drawList->AddRectFilled(innerMin, innerMax, hThumbColorWithOpacity, 4.0f);
-
-		if (ImGui::IsMouseHoveringRect(thumbMin, thumbMax) && ImGui::IsMouseClicked(0)) {
-			startHorizontalMouse(io.MousePos.x, state);
+			ImGui::EndTable();
 		}
 	}
 
@@ -1371,12 +1115,8 @@ void render(const char* id,
 
 		std::string statusText;
 		if (filteredCount != totalCount) {
-			// <span v-if="filteredItems.length !== rows.length">
-			//     Showing {{ filteredItems.length.toLocaleString() }} of {{ rows.length.toLocaleString() }} rows
-			// </span>
 			statusText = "Showing " + formatWithThousandsSep(filteredCount) + " of " + formatWithThousandsSep(totalCount) + " rows";
 		} else {
-			// <span v-else>{{ rows.length.toLocaleString() }} rows</span>
 			statusText = formatWithThousandsSep(totalCount) + " rows";
 		}
 
