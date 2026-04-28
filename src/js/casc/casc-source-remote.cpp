@@ -365,6 +365,8 @@ void CASCRemote::preload(int buildIndex, BuildCache* sharedCache) {
  * @param buildIndex
  */
 void CASCRemote::load(int buildIndex) {
+	// C++ deviation: ensures encryption keys are available before decryption
+	// (JS load() does not call this; the JS app loads tact keys earlier in app boot).
 	tact_keys::waitForLoad();
 
 	core::showLoadingScreen(12);
