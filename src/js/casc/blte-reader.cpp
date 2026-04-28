@@ -287,8 +287,7 @@ void BLTEReader::writeToFile(const std::filesystem::path& file) {
 }
 
 const std::string& BLTEReader::getDataURL() {
-	// JS: if (!this.dataURL) { this.processAllBlocks(); return super.getDataURL(); }
-	// else return this.dataURL;
+	// JS: if (!this.dataURL) compute and cache; otherwise return cached.
 	if (hasDataURL())
 		return BufferWrapper::getDataURL();
 
