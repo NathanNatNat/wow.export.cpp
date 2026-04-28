@@ -354,15 +354,22 @@ std::optional<PlatformGPUInfo> get_macos_gpu_info() {
 		std::string output = exec_cmd("system_profiler SPDisplaysDataType");
 		PlatformGPUInfo result;
 
+		// JS: match[1].trim() — trim whitespace from regex capture group
+		auto trim = [](std::string s) {
+			s.erase(0, s.find_first_not_of(" \t\r\n"));
+			s.erase(s.find_last_not_of(" \t\r\n") + 1);
+			return s;
+		};
+
 		std::smatch match;
 		if (std::regex_search(output, match, std::regex(R"(Chipset Model: (.+))")))
-			result.name = match[1].str();
+			result.name = trim(match[1].str());
 
 		if (std::regex_search(output, match, std::regex(R"(VRAM \([^)]+\): (.+))")))
-			result.vram = match[1].str();
+			result.vram = trim(match[1].str());
 
 		if (std::regex_search(output, match, std::regex(R"(Metal.*: (.+))")))
-			result.driver = "Metal " + match[1].str();
+			result.driver = "Metal " + trim(match[1].str());
 
 		return result;
 	} catch (const std::exception& e) {
@@ -499,7 +506,7 @@ std::string format_extensions(const std::vector<std::string>& extensions) {
  * @returns Formatted compact string.
  */
 std::string format_caps(const GLCaps& caps) {
-	std::string viewport = std::to_string(caps.max_viewport[0]) + "," + std::to_string(caps.max_viewport[1]);
+	std::string viewport = std::to_string(caps.max_viewport[0]) + "x" + std::to_string(caps.max_viewport[1]);
 
 	return std::format("tex:{} cube:{} varyings:{} uniforms:{}v/{}f attribs:{} texunits:{}/{} rb:{} vp:{}",
 		caps.max_tex_size,

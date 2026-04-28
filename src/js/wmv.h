@@ -42,6 +42,10 @@ struct ParseResultV1 {
 	std::string model_path;
 };
 
+// JS wmv_parse() returns plain objects whose shape differs between v1 and v2
+// (v1 has legacy_values; v2 has customizations). C++ models this as a variant.
+// Callers must use std::visit or std::get<> for dispatch — direct member access
+// without dispatch is a compile error.
 using ParseResult = std::variant<ParseResultV1, ParseResultV2>;
 
 /**

@@ -1194,7 +1194,7 @@ if (mime_type == "image/webp") {
 } else {
 	PNGWriter png(static_cast<uint32_t>(map_info.width), static_cast<uint32_t>(map_info.height));
 	std::memcpy(png.getPixelData().data(), pixels.data(), pixels.size());
-	png.write(export_path);
+	png.write(export_path).get();
 }
 
 helper.mark((fs::path("zones") / filename).string(), true);

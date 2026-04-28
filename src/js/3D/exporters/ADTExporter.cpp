@@ -868,7 +868,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 							const std::string imageSuffix = imageIndex == 0 ? "" : "_" + std::to_string(imageIndex);
 							const fs::path tilePath = dir / ("tex_" + chunkPrefix + imageSuffix + ".png");
 
-							pngWriter.write(tilePath);
+							pngWriter.write(tilePath).get();
 						}
 
 						// Create JSON metadata with image/channel mapping
@@ -1022,7 +1022,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 						// save the combined image
 						const std::string imageSuffix = imageIndex == 0 ? "" : "_" + std::to_string(imageIndex);
 						const fs::path mergedPath = dir / ("tex_" + tileID + imageSuffix + ".png");
-						pngWriter.write(mergedPath);
+						pngWriter.write(mergedPath).get();
 					}
 
 					// write json metadata
@@ -1058,7 +1058,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 						PNGWriter png(static_cast<uint32_t>(quality), static_cast<uint32_t>(quality));
 						auto& pd = png.getPixelData();
 						std::memcpy(pd.data(), resized.data(), resized.size());
-						png.write(tileOutPath);
+						png.write(tileOutPath).get();
 					} else {
 						blp.saveToPNG(tileOutPath, 0b0111);
 					}
@@ -1357,7 +1357,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 											chunkPixelData[dstIdx + 3] = fboPixels[srcIdx + 3];
 										}
 									}
-									chunkPng.write(chunkTilePath);
+									chunkPng.write(chunkTilePath).get();
 								}
 							} else {
 								// Store as part of a larger composite.
@@ -1393,7 +1393,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 						PNGWriter compositePng(compositeSize, compositeSize);
 						auto& compositePx = compositePng.getPixelData();
 						std::copy(compositeBuffer.begin(), compositeBuffer.end(), compositePx.begin());
-						compositePng.write(dir / ("tex_" + tileID + ".png"));
+						compositePng.write(dir / ("tex_" + tileID + ".png")).get();
 					}
 
 					// Clear buffers.

@@ -8,7 +8,6 @@
 #include <cstdlib>
 #include <cmath>
 #include <limits>
-#include <thread>
 #include <future>
 
 namespace {
@@ -277,22 +276,15 @@ BufferWrapper PNGWriter::getBuffer() {
 
 /**
  * Write this PNG to a file.
+ * JS: async write(file) — src/js/png-writer.js lines 247-249.
+ *
+ * Callers MUST retain the returned future and call .get() to observe write errors.
  *
  * @param file Path to write the PNG file to.
  */
 std::shared_future<void> PNGWriter::write(const std::filesystem::path& file) {
 	BufferWrapper buffer = getBuffer();
-	auto promise = std::make_shared<std::promise<void>>();
-	std::shared_future<void> result = promise->get_future().share();
-
-	std::thread([promise, file, buffer = std::move(buffer)]() mutable {
-		try {
-			buffer.writeToFile(file);
-			promise->set_value();
-		} catch (...) {
-			promise->set_exception(std::current_exception());
-		}
-	}).detach();
-
-	return result;
+	return std::async(std::launch::async, [buffer = std::move(buffer), file]() mutable {
+		buffer.writeToFile(file);
+	}).share();
 }

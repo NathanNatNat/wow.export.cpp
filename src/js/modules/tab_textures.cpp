@@ -447,7 +447,7 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 				PNGWriter png(static_cast<uint32_t>(region.width), static_cast<uint32_t>(region.height));
 				std::memcpy(png.getPixelData().data(), cropped.data(), cropped.size());
 				generics::createDirectory(std::filesystem::path(export_path).parent_path());
-				png.write(export_path);
+				png.write(export_path).get();
 			}
 
 			helper.mark(export_file_name, true);

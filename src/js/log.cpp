@@ -181,7 +181,10 @@ void write(std::string_view message) {
 		}
 	}
 
+#ifndef NDEBUG
+	// JS: if (!BUILD_RELEASE) console.log(line) — suppress stdout in release builds.
 	std::fputs(line.c_str(), stdout);
+#endif
 }
 
 /**

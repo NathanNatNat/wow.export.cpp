@@ -220,6 +220,9 @@ static void wrap_module(ModuleDef& mod) {
 
 	// wrap initialize() with idempotency guard, error handling, and activated() retry
 	// JS equivalent: wraps methods.initialize with try/catch/finally
+	// JS wraps module init in an async function allowing await inside initialize().
+	// C++ calls synchronously; modules that need async startup must block internally
+	// (e.g., via std::future or std::condition_variable).
 	if (mod.initialize) {
 		auto original_initialize = mod.initialize;
 
@@ -600,9 +603,9 @@ void reload_module(const std::string& module_key) {
 		active_module = nullptr;
 	}
 
-	// invalidate component cache so they're re-required on next access
-	// preserve excluded components (stateful 3D viewers)
-	// Components are statically linked. This is a no-op.
+	// JS hot-reloads modules by invalidating require.cache and re-requiring.
+	// C++ components are statically linked — hot-reloading is not possible
+	// without a dynamic module system. This function is intentionally a no-op.
 
 	unregister_nav_button(module_key);
 	unregister_context_menu_option(module_key);

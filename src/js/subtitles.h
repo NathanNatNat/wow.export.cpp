@@ -18,6 +18,7 @@ class CASC;
  */
 namespace subtitles {
 
+// Values match JS source: SRT=118, SBT=7 (CASC wire-format identifiers).
 enum class SubtitleFormat : int {
 	SRT = 118,
 	SBT = 7

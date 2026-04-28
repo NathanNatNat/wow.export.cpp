@@ -337,10 +337,11 @@ std::string get_subtitles_vtt_from_text(std::string_view text, SubtitleFormat fo
 	std::string str(text);
 
 	// JS: if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-	// UTF-8 representation of U+FEFF is EF BB BF.
-	if (str.rfind("\xEF\xBB\xBF", 0) == 0) {
+	// JS checks for U+FEFF as a UTF-16 code point (JS string internals are UTF-16).
+	// C++ checks for the 3-byte UTF-8 BOM \xEF\xBB\xBF. The C++ check is more
+	// appropriate for the UTF-8 byte stream we read.
+	if (str.rfind("\xEF\xBB\xBF", 0) == 0)
 		str = str.substr(3);
-	}
 
 	std::string srt;
 	if (format == SubtitleFormat::SBT)
@@ -355,6 +356,8 @@ std::string get_subtitles_vtt(casc::CASC* casc, uint32_t file_data_id, SubtitleF
 	if (casc == nullptr)
 		throw std::runtime_error("casc is null");
 
+	// JS uses casc.getFile(id); C++ uses getVirtualFileByID(id) — both resolve a
+	// CASC file by data ID and return a buffer of the decoded file contents.
 	BufferWrapper data = casc->getVirtualFileByID(file_data_id);
 	std::string text = data.readString();
 	return get_subtitles_vtt_from_text(text, format);

@@ -263,6 +263,9 @@ static ParseResult parse_legacy(const std::vector<std::string>& segments, int ve
 	return result;
 }
 
+// No internal empty-check needed — caller wowhead_parse() validates hash is
+// non-empty before calling (throws if extract_hash_from_url returns empty).
+// The JS source has the same implicit reliance on the caller (wowhead.js line 64).
 static ParseResult wowhead_parse_hash(const std::string& hash) {
 	int version = charset_index(hash[0]);
 	std::string decompressed = decompress_zeros(std::string_view(hash).substr(1));
