@@ -11,6 +11,8 @@
 #include <regex>
 #include <functional>
 
+#include "../core.h"
+
 namespace listbox_maps {
 
 /**
@@ -92,6 +94,9 @@ void render(const char* id,
 		state.prevExpansionFilter = expansionFilter;
 		state.base.scroll = 0.0f;
 		state.base.scrollRel = 0.0f;
+		// JS: this.recalculateBounds() — flush cleared scroll position to storage
+		if (!persistscrollkey.empty())
+			core::saveScrollPosition(persistscrollkey, 0.0, 0);
 	}
 
 	// JS: let res = this.itemList (resolves override first, then expansion filter).
