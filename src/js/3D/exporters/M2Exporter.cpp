@@ -292,6 +292,9 @@ M2ExportTextureResult M2Exporter::exportTextures(const std::filesystem::path& ou
 casc::ExportHelper* helper, bool fullTexPaths, bool glbMode)
 {
 const auto& config = core::view->config;
+// JS validTextures is a Map keyed by numeric fileDataID for regular textures and "data-N" strings
+// for data textures. C++ uses string keys throughout (regular keys are std::to_string(fileDataID))
+// for type uniformity; downstream consumers stringify their lookups accordingly.
 M2ExportTextureResult result;
 
 if (!config.value("modelsExportTextures", false))
@@ -342,6 +345,7 @@ logging::write(std::format("Failed to export data texture {} for M2: {}", textur
 textureIndex++;
 }
 
+textureIndex = 0;
 for (auto& texture : m2->textures) {
 // Abort if the export has been cancelled.
 if (helper && helper->isCancelled())
@@ -357,7 +361,9 @@ if (textureType > 0) {
 uint32_t targetFileDataID = 0;
 
 if (dataTextures.count(textureType)) {
-// Not a fileDataID, but a data texture.
+// Not a fileDataID, but a data texture. JS backward-patches
+// texture.fileDataID = 'data-' + textureType; C++ Texture::fileDataID is uint32_t
+// so consumers locate data textures via the validTextures "data-N" key directly.
 isDataTexture = true;
 } else if (textureType >= 11 && textureType < 14) {
 // Creature textures.
@@ -681,9 +687,10 @@ auto& equipM2 = *renderer->m2;
 equipM2.load().get();
 
 // JS: const skin = await m2.getSkin(0); if (!skin) return;
-if (equipM2.getSkinList().empty())
+Skin* equipSkinPtr = equipM2.getSkin(0).get();
+if (!equipSkinPtr)
 	return;
-auto& equipSkin = *equipM2.getSkin(0).get();
+auto& equipSkin = *equipSkinPtr;
 
 auto slotNameOpt = wow::get_slot_name(slot_id);
 std::string slot_name = slotNameOpt.has_value() ? std::string(slotNameOpt.value()) : std::format("Slot{}", slot_id);
@@ -831,9 +838,10 @@ auto& equipM2 = *renderer->m2;
 equipM2.load().get();
 
 // JS: const skin = await m2.getSkin(0); if (!skin) return;
-if (equipM2.getSkinList().empty())
+Skin* equipSkinPtr = equipM2.getSkin(0).get();
+if (!equipSkinPtr)
 	return;
-auto& equipSkin = *equipM2.getSkin(0).get();
+auto& equipSkin = *equipSkinPtr;
 
 // build UV arrays
 std::vector<std::vector<float>> uvArrays;
@@ -967,9 +975,10 @@ auto& equipM2 = *renderer->m2;
 equipM2.load().get();
 
 // JS: const skin = await m2.getSkin(0); if (!skin) return;
-if (equipM2.getSkinList().empty())
+Skin* equipSkinPtr = equipM2.getSkin(0).get();
+if (!equipSkinPtr)
 	return;
-auto& equipSkin = *equipM2.getSkin(0).get();
+auto& equipSkin = *equipSkinPtr;
 
 // append geometry to STL
 stl.appendGeometry(vertices, normals);
