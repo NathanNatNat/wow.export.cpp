@@ -195,7 +195,7 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 189. `src/js/ui/texture-exporter.cpp`
 - [x] 190. `src/js/ui/texture-ribbon.cpp`
 - [x] 191. `src/js/ui/uv-drawer.cpp`
-- [ ] 192. `src/js/workers/cache-collector.cpp`
-- [ ] 193. `src/js/wow/equip-item.cpp`
-- [ ] 194. `src/js/wow/EquipmentSlots.cpp`
-- [ ] 195. `src/js/wow/ItemSlot.cpp`
+- [x] 192. `src/js/workers/cache-collector.cpp`
+- [x] 193. `src/js/wow/equip-item.cpp`
+- [x] 194. `src/js/wow/EquipmentSlots.cpp`
+- [x] 195. `src/js/wow/ItemSlot.cpp`
