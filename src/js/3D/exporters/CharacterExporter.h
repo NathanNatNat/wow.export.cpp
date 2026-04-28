@@ -18,7 +18,7 @@ class M2RendererGL;
  */
 struct EquipmentRendererEntry {
 	M2RendererGL* renderer = nullptr;
-	uint32_t attachment_id = 0;
+	std::optional<uint32_t> attachment_id;
 	bool is_collection_style = false;
 };
 

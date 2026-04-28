@@ -2541,7 +2541,8 @@ if (apply_pose) {
 		for (auto& ri : entry.renderers) {
 			EquipmentRendererEntry e;
 			e.renderer = ri.renderer.get();
-			e.attachment_id = ri.attachment_id;
+			if (ri.attachment_id >= 0)
+				e.attachment_id = static_cast<uint32_t>(ri.attachment_id);
 			e.is_collection_style = ri.is_collection_style;
 			s.renderers.push_back(e);
 		}
@@ -2632,7 +2633,8 @@ for (auto& [chr_model_texture_target, chr_material] : chr_materials) {
 		for (auto& ri : entry.renderers) {
 			EquipmentRendererEntry e;
 			e.renderer = ri.renderer.get();
-			e.attachment_id = ri.attachment_id;
+			if (ri.attachment_id >= 0)
+				e.attachment_id = static_cast<uint32_t>(ri.attachment_id);
 			e.is_collection_style = ri.is_collection_style;
 			s.renderers.push_back(e);
 		}
