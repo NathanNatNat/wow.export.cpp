@@ -4,6 +4,10 @@
 	License: MIT
  */
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "screen_source_select.h"
 #include "../log.h"
 #include "../core.h"
