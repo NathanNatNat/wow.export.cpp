@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/69 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/54 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/js/modules/font_helpers.cpp ──────────────────────────────────── -->
 
@@ -15,11 +15,6 @@
   - **Details**: After injecting the CSS `@font-face` rule, the JS awaits `document.fonts.load('16px "' + font_id + '"')` (line 124) and then checks `document.fonts.check('16px "' + font_id + '"')` (line 125). If the check returns false, the style node is removed from the DOM and an error is thrown (lines 127–130). The C++ implementation calls `io.Fonts->AddFontFromMemoryTTF(...)` and checks for a null return (line 171), but there is no equivalent to the post-load verification step. If ImGui accepts the font data but it is internally corrupt or unusable, the C++ will not detect this and will not clean up, whereas the JS would detect it and throw. This is a minor error-recovery gap.
 
 <!-- ─── src/js/modules/legacy_tab_audio.cpp ──────────────────────────────── -->
-
-- [ ] 388. [legacy_tab_audio.cpp] `export_sounds` passes only message+function to `helper.mark()`, not the full stack trace
-  - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 189
-  - **Status**: Pending
-  - **Details**: JS calls `helper.mark(export_file_name, false, e.message, e.stack)` where `e.stack` is the full JavaScript stack trace string. C++ calls `helper.mark(export_file_name, false, e.what(), build_stack_trace("export_sounds", e))` where `build_stack_trace` (lines 33–35) returns only `"export_sounds: <exception message>"`. The C++ never captures a real C++ stack trace (e.g., via `std::stacktrace` from C++23 or a platform API). The export helper's `mark()` function receives a weaker error context string than the JS version provides to users in the export report.
 
 - [ ] 389. [legacy_tab_audio.cpp] Animated music icon uses `ImDrawList::AddText` raw draw call instead of a native ImGui widget
   - **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 216–216 (template `sound-player-anim` div)
@@ -68,37 +63,12 @@
   - **Status**: Pending
   - **Details**: `multiButtonSegment()` renders button backgrounds and text via `ImGui::GetWindowDrawList()->AddRectFilled(...)` and `->AddText(...)`. CLAUDE.md explicitly prohibits raw `ImDrawList` calls for anything a native widget handles, and buttons/text are natively handled by ImGui. The segmented button should be implemented using native `ImGui::Button` or styled `ImGui::Selectable` widgets with `ImGui::SameLine()`, without any `ImDrawList` calls.
 
-- [ ] 409. [screen_settings.cpp] JS handle_apply() checks cfg.exportDirectory.length === 0; C++ checks !cfg.contains() OR .empty()
-  - **JS Source**: `src/js/modules/screen_settings.js` lines 426–427
-  - **Status**: Pending
-  - **Details**: The JS check is `cfg.exportDirectory.length === 0` — it directly accesses the field and would throw a JS error if the field is missing. The C++ uses `!cfg.contains("exportDirectory") || cfg["exportDirectory"].get<std::string>().empty()` which is more defensive and handles a missing key gracefully. This is a minor deviation but makes the C++ more robust than the JS original.
-
-- [ ] 412. [screen_settings.cpp] set_selected_cdn (in screen_source_select) calls config::save() — JS does not
-  - **JS Source**: `src/js/modules/screen_source_select.js` lines 78–83
-  - **Status**: Pending
-  - **Details**: This finding belongs to screen_source_select.cpp (see below), but is noted here because the save call pattern appears in both files. The settings screen's `handle_apply()` correctly saves. No additional issue here beyond the note above.
-
-- [ ] 415. [screen_settings.cpp] CASC Locale MenuButton: JS uses availableLocale.flags object; C++ uses locale_flags::entries
-  - **JS Source**: `src/js/modules/screen_settings.js` lines 381–392
-  - **Status**: Pending
-  - **Details**: The JS `available_locale_keys` computed property iterates `Object.keys(this.$core.view.availableLocale.flags)` and the `selected_locale_key` iterates `Object.entries(this.$core.view.availableLocale.flags)`. The C++ uses `casc::locale_flags::entries` directly (a static array). This is a valid architectural change since the JS `availableLocale.flags` is populated from the same source data. Functionally equivalent if `locale_flags::entries` matches the runtime locale list, but the JS version was dynamic (loaded at runtime), while the C++ version is compile-time static. This may be a deviation if locales need to be filtered at runtime.
-
-- [ ] 416. [screen_settings.cpp] Locale MenuButton wrapper div has width: 150px in JS; C++ does not constrain width
-  - **JS Source**: `src/js/modules/screen_settings.js` line 149
-  - **Status**: Pending
-  - **Details**: The JS wraps the locale MenuButton in `<div style="width: 150px">`. The C++ renders the MenuButton without constraining its width to 150px. This is a minor visual layout deviation.
-
 <!-- ─── src/js/modules/screen_source_select.cpp ───────────────────────────── -->
 
 - [ ] 417. [screen_source_select.cpp] set_selected_cdn calls config::save() which is not present in JS
   - **JS Source**: `src/js/modules/screen_source_select.js` lines 78–83
   - **Status**: Pending
   - **Details**: The JS `set_selected_cdn()` sets `this.$core.view.config.sourceSelectUserRegion = region.tag` but does NOT call `save()`. The C++ explicitly calls `config::save()` after updating the value. This means the CDN region preference is persisted to disk on every CDN region change in C++ but not in the JS original (which relies on the user's explicit Apply/save flow).
-
-- [ ] 418. [screen_source_select.cpp] Build button disabled visual state not applied when isBusy
-  - **JS Source**: `src/js/modules/screen_source_select.js` line 61
-  - **Status**: Pending
-  - **Details**: The JS build buttons use `:class="[..., { disabled: $core.view.isBusy }]"` which applies CSS styling to show the button as visually disabled when busy. The C++ only checks `!core::view->isBusy` before calling `click_source_build()` in the click handler, but does not apply any visual disabled styling (no `ImGui::BeginDisabled()`/`EndDisabled()` around the build buttons). Users receive no visual feedback that the button is inactive while busy.
 
 - [ ] 423. [screen_source_select.cpp] open_legacy_install runs synchronously in C++; JS is async with await
   - **JS Source**: `src/js/modules/screen_source_select.js` lines 169–204
@@ -215,42 +185,19 @@
   - **Status**: Pending
   - **Details**: JS uses `<component :is="$components.Listboxb" :items="creatureViewerSkins" v-model:selection="creatureViewerSkinsSelection" :single="true">`. The C++ renders a plain `ImGui::Selectable` loop for skins (lines ~2218–2235). The JS `Listboxb` is a scrollable, filterable listbox. The C++ version lacks scrolling/filtering on the skins list.
 
-- [ ] 467. [tab_creatures.cpp] Missing tooltip text on Preview checkboxes in sidebar
-  - **JS Source**: `src/js/modules/tab_creatures.js` lines 1055–1080
-  - **Status**: Pending
-  - **Details**: The JS template includes `title` attributes on each checkbox in the Preview sidebar section (e.g. "Automatically preview a creature when selecting it", "Automatically adjust camera when selecting a new creature", etc.). The C++ sidebar (lines ~2103–2139) does not call `ImGui::SetTooltip()` after most of the Preview checkboxes, missing the tooltip text that was present in the original JS.
-
 - [ ] 468. [tab_creatures.cpp] localeCompare sort vs simple lowercase string sort
   - **JS Source**: `src/js/modules/tab_creatures.js` lines 1169–1173
   - **Status**: Pending
   - **Details**: JS sorts creature entries with `localeCompare()` which is a Unicode-aware, locale-sensitive comparison. The C++ uses simple `<` operator on lowercase strings (line ~1553), which is not locale-aware. For non-ASCII creature names this could produce different sort order.
 
 <!-- ─── src/js/modules/tab_data.cpp ───────────────────────────────────────── -->
-
-- [ ] 470. [tab_data.cpp] Listbox is missing :copydir / copydir binding
-  - **JS Source**: `src/js/modules/tab_data.js` lines 97–99
-  - **Status**: Pending
-  - **Details**: The JS template passes `:copydir="$core.view.config.copyFileDirectories"` to the Listbox for the DB2 list. The C++ `listbox::render()` call (line ~274) does not pass a `copydir` equivalent. The C++ listbox function signature may not have this parameter, but the config value `copyFileDirectories` should still be wired if the listbox supports it.
+<!-- No issues found -->
 
 <!-- ─── src/js/modules/tab_decor.cpp ──────────────────────────────────────── -->
 <!-- No issues found -->
 
 <!-- ─── src/js/modules/tab_fonts.cpp ──────────────────────────────────────── -->
-
-- [ ] 481. [tab_fonts.cpp] Font glyph grid renders as character grid in ImGui but JS uses a DOM-based grid element
-  - **JS Source**: `src/js/modules/tab_fonts.js` lines 64–66, 153–165
-  - **Status**: Pending
-  - **Details**: In JS, the glyph grid is a DOM element (`.font-character-grid`) and `detect_glyphs_async(font_id, grid_element, on_glyph_click)` inserts individual character `<div>` elements into the DOM. The C++ (lines ~308–346) renders an ImGui child window with `ImGui::Selectable` cells for each detected codepoint. This is a valid C++ equivalent of the JS DOM approach, but the visual appearance and interaction (hover tooltip, click behaviour, wrapping) may differ from the original. The wrapping logic is manually implemented in C++.
-
-- [ ] 483. [tab_fonts.cpp] Export button uses app::theme::BeginDisabledButton/EndDisabledButton instead of standard ImGui::BeginDisabled
-  - **JS Source**: `src/js/modules/tab_fonts.js` line 72
-  - **Status**: Pending
-  - **Details**: JS renders `<input type="button" :class="{ disabled: isBusy }">`. C++ uses `app::theme::BeginDisabledButton()` / `EndDisabledButton()` (lines ~380–384). According to CLAUDE.md, `app::theme` color constants and `applyTheme()` should be progressively removed. `app::theme::BeginDisabledButton` should be replaced with `ImGui::BeginDisabled(busy)` / `ImGui::EndDisabled()`.
-
-- [ ] 484. [tab_fonts.cpp] fontPreviewText placeholder tooltip only shows on empty InputTextMultiline
-  - **JS Source**: `src/js/modules/tab_fonts.js` lines 67–68
-  - **Status**: Pending
-  - **Details**: In JS, the textarea has a `:placeholder` attribute that shows when the field is empty. In C++ (lines ~372–373), `ImGui::SetItemTooltip()` is used to show the placeholder as a tooltip when the field is empty (`if (view.fontPreviewText.empty())`). The tooltip only appears on hover, not as a persistent placeholder text inside the input box. This is a visual difference from the JS (placeholder text vs hover tooltip).
+<!-- No issues found -->
 
 <!-- ─── src/js/modules/tab_install.cpp ────────────────────────────────────── -->
 
@@ -319,25 +266,10 @@
   - **Status**: Pending
   - **Details**: The JS template passes `:includefilecount="true"` on the Listbox for tab-raw. The C++ `listbox::render` call (lines 328–354) does not set an equivalent `includefilecount` argument. If `listbox::render` supports this parameter it should be set to `true`.
 
-- [ ] 530. [tab_text.cpp] `pump_text_export` calls `helper.mark(export_file_name, false, e.what())` omitting the stack trace; JS calls `helper.mark(export_file_name, false, e.message, e.stack)` with both message and stack
-  - **JS Source**: `src/js/modules/tab_text.js` line 116
-  - **Status**: Pending
-  - **Details**: The C++ version omits the stack trace argument. The JS passes `e.stack` as a fourth argument to `helper.mark`. Should be passed to match JS fidelity (C++ `ExportHelper::mark` accepts an optional stack trace parameter).
-
-- [ ] 532. [tab_text.cpp] Text tab listbox missing `:includefilecount="true"` — JS passes it but C++ `listbox::render` call does not
-  - **JS Source**: `src/js/modules/tab_text.js` line 21
-  - **Status**: Pending
-  - **Details**: Same issue as tab_raw — JS passes `:includefilecount="true"` which should be reflected in C++ if the parameter is supported.
-
 - [ ] 533. [tab_textures.cpp] `remove_override_textures` action is missing — JS template shows a toast with a "Remove" span calling `remove_override_textures()` when `overrideTextureList.length > 0`; no equivalent action exists in C++
   - **JS Source**: `src/js/modules/tab_textures.js` lines 284–288, 366–368
   - **Status**: Pending
   - **Details**: The JS template shows a progress-styled toast (`<div id="toast" v-if="!$core.view.toast && $core.view.overrideTextureList.length > 0" class="progress">`) with the override texture name and a "Remove" clickable span (`<span @click.self="remove_override_textures">Remove</span>`). The C++ comment (lines 603–606) says this is rendered in `renderAppShell`, but no C++ equivalent of `remove_override_textures()` is exposed or wired up. This functionality appears to be missing.
-
-- [ ] 534. [tab_textures.cpp] Textures listbox missing `:includefilecount="true"` — JS passes it but C++ `listbox::render` call does not
-  - **JS Source**: `src/js/modules/tab_textures.js` line 291
-  - **Status**: Pending
-  - **Details**: Same issue as tab_raw and tab_text.
 
 - [ ] 535. [tab_textures.cpp] `export_textures()` passes a JSON object `{fileName: file}` for drop-handler path but a raw int JSON for single-file path — JS passes raw integer in both cases (`textureExporter.exportFiles([selected_file_data_id])`)
   - **JS Source**: `src/js/modules/tab_textures.js` lines 372–378
@@ -348,11 +280,6 @@
   - **JS Source**: `src/js/modules/tab_videos.js` lines 504–506
   - **Status**: Pending
   - **Details**: C++ export controls (lines 1167–1189) render a plain "Export Selected" button with no format dropdown. The user has no UI way to change the export format within the tab. This is a layout deviation — `menu_button::render` should be used here as in other tabs.
-
-- [ ] 537. [tab_videos.cpp] Videos listbox missing `:includefilecount="true"` — JS passes it but C++ `listbox::render` call does not
-  - **JS Source**: `src/js/modules/tab_videos.js` line 479
-  - **Status**: Pending
-  - **Details**: Same issue as other list tabs.
 
 - [ ] 538. [tab_videos.cpp] `trigger_kino_processing` runs synchronously on the main thread blocking the UI; JS runs it as an async function, yielding between each fetch
   - **JS Source**: `src/js/modules/tab_videos.js` lines 380–464

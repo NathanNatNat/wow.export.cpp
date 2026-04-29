@@ -2105,38 +2105,45 @@ void render() {
 				bool auto_preview = view.config.value("creatureAutoPreview", false);
 				if (ImGui::Checkbox("Auto Preview##creature", &auto_preview))
 					view.config["creatureAutoPreview"] = auto_preview;
+				ImGui::SetItemTooltip("Automatically preview a creature when selecting it");
 			}
 
 			ImGui::Checkbox("Auto Camera##creature", &view.creatureViewerAutoAdjust);
+			ImGui::SetItemTooltip("Automatically adjust camera when selecting a new creature");
 
 			{
 				bool show_grid = view.config.value("modelViewerShowGrid", false);
 				if (ImGui::Checkbox("Show Grid##creature", &show_grid))
 					view.config["modelViewerShowGrid"] = show_grid;
+				ImGui::SetItemTooltip("Show a grid in the 3D viewport");
 			}
 
 			{
 				bool wireframe = view.config.value("modelViewerWireframe", false);
 				if (ImGui::Checkbox("Show Wireframe##creature", &wireframe))
 					view.config["modelViewerWireframe"] = wireframe;
+				ImGui::SetItemTooltip("Render the preview model as a wireframe");
 			}
 
 			{
 				bool show_bones = view.config.value("modelViewerShowBones", false);
 				if (ImGui::Checkbox("Show Bones##creature", &show_bones))
 					view.config["modelViewerShowBones"] = show_bones;
+				ImGui::SetItemTooltip("Show the model's bone structure");
 			}
 
 			{
 				bool show_textures = view.config.value("modelViewerShowTextures", true);
 				if (ImGui::Checkbox("Show Textures##creature", &show_textures))
 					view.config["modelViewerShowTextures"] = show_textures;
+				ImGui::SetItemTooltip("Show model textures in the preview pane");
 			}
 
 			{
 				bool show_bg = view.config.value("modelViewerShowBackground", false);
 				if (ImGui::Checkbox("Show Background##creature", &show_bg))
 					view.config["modelViewerShowBackground"] = show_bg;
+				ImGui::SetItemTooltip("Show a background color in the 3D viewport");
 			}
 
 			ImGui::SeparatorText("Export");

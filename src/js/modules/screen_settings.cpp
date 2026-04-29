@@ -373,6 +373,8 @@ void render() {
 		for (const auto& key : keys)
 			locale_options.push_back({ key, key });
 
+		// JS: <div style="width: 150px"> wraps the locale MenuButton.
+		ImGui::SetNextItemWidth(150.0f);
 		menu_button::render("##LocaleMenuButton", locale_options,
 			current_key, false, true, locale_menu_state,
 			[&](const std::string& val) {

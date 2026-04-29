@@ -1162,6 +1162,9 @@ void render() {
 
 				ImGui::SetCursorPos(ImVec2(cell_x, cell_y));
 				std::string btn_id = std::format("##build_btn_{}", i);
+				// JS: :class="[..., { disabled: $core.view.isBusy }]" — visually dim and block clicks while busy.
+				const bool build_busy = core::view->isBusy;
+				if (build_busy) ImGui::BeginDisabled();
 				bool btn_clicked = ImGui::InvisibleButton(btn_id.c_str(), ImVec2(btn_min_width, btn_h));
 				bool btn_hovered = ImGui::IsItemHovered();
 
@@ -1192,6 +1195,8 @@ void render() {
 				float text_x_off = btn_min.x + 50.0f;
 				float text_y_off = btn_min.y + (btn_h - 16.0f) * 0.5f;
 				draw->AddText(ImGui::GetFont(), 16.0f, ImVec2(text_x_off, text_y_off), text_color, label.c_str());
+
+				if (build_busy) ImGui::EndDisabled();
 
 				if (btn_clicked && !core::view->isBusy)
 					click_source_build(buildIndex);

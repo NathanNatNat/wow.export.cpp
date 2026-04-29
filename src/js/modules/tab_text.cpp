@@ -327,7 +327,10 @@ static void pump_text_export() {
 
 		helper.mark(export_file_name, true);
 	} catch (const std::exception& e) {
-		helper.mark(export_file_name, false, e.what());
+		// JS: helper.mark(export_file_name, false, e.message, e.stack)
+		// C++23 has no portable JS-stack equivalent; pass a synthesised trace string.
+		helper.mark(export_file_name, false, e.what(),
+			std::string("pump_text_export: ") + e.what());
 	}
 }
 

@@ -380,10 +380,10 @@ void render() {
 	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
 	if (app::layout::BeginPreviewControls("fonts-preview-controls", regions)) {
 		const bool busy = view.isBusy > 0;
-		if (busy) app::theme::BeginDisabledButton();
+		if (busy) ImGui::BeginDisabled();
 		if (ImGui::Button("Export Selected"))
 			export_fonts();
-		if (busy) app::theme::EndDisabledButton();
+		if (busy) ImGui::EndDisabled();
 	}
 	app::layout::EndPreviewControls();
 
