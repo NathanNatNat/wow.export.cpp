@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/253 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 2/253 verified (1%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/js/db/DBDParser.cpp ─────────────────────────────── -->
 
@@ -27,15 +27,15 @@
 
 <!-- ─── src/js/db/caches/DBCharacterCustomization.cpp ─────────────────────────────── -->
 
-- [ ] 331. [DBCharacterCustomization.cpp] `chr_cust_mat_map` is keyed by `materialID` (the lookup key) instead of `mat_row.ID` (the row's own ID field)
+- [x] 331. [DBCharacterCustomization.cpp] `chr_cust_mat_map` is keyed by `materialID` (the lookup key) instead of `mat_row.ID` (the row's own ID field)
   - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` line 102
-  - **Status**: Pending
-  - **Details**: JS keys `chr_cust_mat_map` by `mat_row.ID`, the row's own `ID` field from the `ChrCustomizationMaterial` DB2 table: `chr_cust_mat_map.set(mat_row.ID, {...})`. The C++ uses `materialID` (the value from `ChrCustomizationMaterialID` in the element row): `chr_cust_mat_map[materialID] = mat_info`. Since the row is retrieved via `getRow(materialID)`, the row's own `ID` should equal `materialID` for direct (non-copy-table) rows. However, if the row was accessed via the copy table (JS `getRow` sets `tempCopy.ID = recordID` which would be the destination copy ID), the row's `ID` field would differ from the original source `materialID`. This is an edge case but represents a semantic deviation from the JS source.
+  - **Status**: ✅ Verified
+  - **Details**: Fixed. The C++ now reads the row's own `ID` field from the `ChrCustomizationMaterial` row returned by `getRow(materialID)` and keys `chr_cust_mat_map` by that value (matching JS `mat_row.ID`). For copy-table destination rows where `WDCReader` sets `tempCopy.ID = recordID`, this differs from the lookup `materialID`, preserving JS semantics. A comment was added next to the new key derivation explaining the distinction.
 
-- [ ] 332. [DBCharacterCustomization.cpp] `ensureInitialized()` uses a synchronous blocking pattern with mutex instead of the JS async promise-caching pattern
+- [x] 332. [DBCharacterCustomization.cpp] `ensureInitialized()` uses a synchronous blocking pattern with mutex instead of the JS async promise-caching pattern
   - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 39–48
-  - **Status**: Pending
-  - **Details**: The JS uses a promise-caching pattern: if `init_promise` is set, it `await`s the same promise, ensuring all concurrent async callers share a single initialization pass. The C++ uses `is_initializing` with a `std::condition_variable` wait. Both achieve the same goal of single-initialization with concurrent waiter support. The C++ also runs `_initialize()` synchronously on the calling thread (blocking), whereas JS runs it asynchronously. This is an intentional C++ adaptation since `std::async`/`std::future` equivalents are not used here. The functional behavior is preserved. No fix required, but worth noting as a structural deviation.
+  - **Status**: ✅ Verified
+  - **Details**: Documented as an intentional C++ adaptation. A header comment was added above `ensureInitialized()` explaining that the C++ uses `is_initializing` plus a `std::condition_variable` (synchronous on the calling thread) to provide the same single-initialization-with-concurrent-waiters guarantee that JS provides via a cached `init_promise`. Functional behavior is preserved; only the async wrapping differs.
 
 <!-- ─── src/js/db/caches/DBComponentModelFileData.cpp ─────────────────────────────── -->
 

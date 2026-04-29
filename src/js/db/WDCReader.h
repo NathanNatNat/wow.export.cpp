@@ -220,6 +220,13 @@ public:
 	// Ordered list of schema keys to preserve insertion order
 	std::vector<std::string> schemaOrder;
 	bool isLoaded = false;
+	// Deviation from JS: JS initialises `idField` and `idFieldIndex` to `null`. C++ uses
+	// `std::optional<std::string>` for `idField` (empty == null) but `idFieldIndex` is a
+	// plain `uint16_t` defaulting to 0, which is indistinguishable from a valid index of
+	// 0 before loading. In practice both are only consulted after loading begins (the
+	// public `getIDIndex()` guards on `isLoaded`, and `_readRecordFromSection` is invoked
+	// internally only after `parse()` has assigned `idFieldIndex` from the header), so
+	// the uninitialised value is never observed.
 	std::optional<std::string> idField;
 	uint16_t idFieldIndex = 0;
 	std::unordered_map<uint32_t, std::vector<uint32_t>> relationshipLookup;

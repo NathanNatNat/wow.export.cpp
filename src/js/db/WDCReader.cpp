@@ -299,17 +299,8 @@ void WDCReader::preload() {
  * @param foreignKeyValue The FK value to search for.
  */
 std::vector<DataRecord> WDCReader::getRelationRows(uint32_t foreignKeyValue) {
-	if (!isLoaded) {
-		const std::string tableName = std::filesystem::path(fileName).stem().string();
-		throw std::runtime_error(
-			"Table must be loaded before calling getRelationRows. Use db2.preload." + tableName + "() first.");
-	}
-
-	if (!rows.has_value()) {
-		const std::string tableName = std::filesystem::path(fileName).stem().string();
-		throw std::runtime_error(
-			"Table must be preloaded before calling getRelationRows. Use db2.preload." + tableName + "() first.");
-	}
+	if (!isLoaded)
+		throw std::runtime_error("Attempted to query relationship data before table was loaded.");
 
 	auto lookupIt = relationshipLookup.find(foreignKeyValue);
 	if (lookupIt == relationshipLookup.end() || lookupIt->second.empty())
@@ -1148,6 +1139,12 @@ std::optional<DataRecord> WDCReader::_readRecordFromSection(size_t sectionIndex,
 				if (recordFieldInfo.fieldCompression == CompressionType::BitpackedIndexedArray) {
 					uint32_t arrSize = recordFieldInfo.fieldCompressionPacking[2];
 					std::vector<uint64_t> arr(arrSize);
+					// Deviation from JS: JS performs this index arithmetic with BigInt
+					// (`bitpackedValue * BigInt(arrSize) + BigInt(i)`), which has
+					// arbitrary precision. The C++ port uses uint64_t multiplication,
+					// which could in theory overflow for pathologically large values.
+					// In practice DB2 pallet data indices are well below uint32_t bounds,
+					// so overflow is not reachable with valid input.
 					for (uint32_t i = 0; i < arrSize; i++)
 						arr[i] = palletData[fieldIndex][static_cast<size_t>(bitpackedValue * arrSize + i)];
 					out[prop] = std::move(arr);
@@ -1297,6 +1294,12 @@ std::future<std::optional<DataRecord>> WDCReader::getRowAsync(std::string record
 	return std::async(std::launch::async, [this, recordID = std::move(recordID)]() { return getRow(recordID); });
 }
 
+// Deviation from JS: getAllRowsAsync() is a C++-only addition (JS is single-threaded).
+// It returns the result by value rather than by reference because the synchronous
+// getAllRows() may write to the member `transientRows` when no preload() has occurred,
+// and exposing that reference across thread boundaries would not be thread-safe. Callers
+// concerned about concurrency should call preload() (or preloadAsync()) first so that
+// subsequent getAllRows()/getAllRowsAsync() calls only read the immutable `rows` cache.
 std::future<std::map<uint32_t, DataRecord>> WDCReader::getAllRowsAsync() {
 	return std::async(std::launch::async, [this]() { return getAllRows(); });
 }
