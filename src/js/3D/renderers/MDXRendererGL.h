@@ -20,6 +20,7 @@
 #include "../gl/GLTexture.h"
 #include "../gl/VertexArray.h"
 #include "../gl/ShaderProgram.h"
+#include "renderer_utils.h"
 
 class BufferWrapper;
 
@@ -125,7 +126,9 @@ private:
 	std::unique_ptr<gl::GLTexture> default_texture;
 	std::vector<GLuint> buffers;
 	std::vector<MDXDrawCall> draw_calls;
-	GLuint bone_ssbo = 0; // SSBO for bone matrices (avoids uniform register limits)
+	// Bone matrices live in a UBO bound to the `VsBoneUbo` block at binding 0,
+	// matching the JS `create_bones_ubo` layout.
+	renderer_utils::BonesUbo bones_ubo;
 
 	// animation state (node-based skeleton)
 	std::vector<MDXNode*> nodes;        // flattened non-null nodes

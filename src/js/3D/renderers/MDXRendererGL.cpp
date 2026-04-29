@@ -211,8 +211,9 @@ void MDXRendererGL::load() {
 
 	shader = MDXRendererGL::load_shaders(ctx);
 
-	// create bone SSBO (avoids uniform register limits for bone matrices)
-	glGenBuffers(1, &bone_ssbo);
+	// allocate bone UBO and bind `VsBoneUbo` to binding point 0. node_matrices
+	// will be uploaded into it each frame in render() below.
+	bones_ubo = renderer_utils::create_bones_ubo(*shader, ctx, 0);
 
 	_create_default_texture();
 	_load_textures();
@@ -868,15 +869,15 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 	float time_sec = std::chrono::duration<float>(std::chrono::steady_clock::now() - MDX_PERFORMANCE_BASELINE).count();
 	shader->set_uniform_1f("u_time", time_sec);
 
-	// bone matrices (mdx uses node-based skeleton) — upload via SSBO
+	// bone matrices (mdx uses node-based skeleton) — upload via UBO
 	shader->set_uniform_1i("u_bone_count", !nodes.empty() ? static_cast<int>(nodes.size()) : 0);
-	if (!nodes.empty() && !node_matrices.empty() && bone_ssbo) {
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, bone_ssbo);
-		glBufferData(GL_SHADER_STORAGE_BUFFER,
-			static_cast<GLsizeiptr>(node_matrices.size() * sizeof(float)),
-			node_matrices.data(), GL_DYNAMIC_DRAW);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, bone_ssbo);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	if (!nodes.empty() && !node_matrices.empty() && bones_ubo.ubo) {
+		const std::size_t count = std::min(nodes.size(), bones_ubo.max_bones);
+		bones_ubo.ubo->set_mat4_array(
+			static_cast<std::size_t>(bones_ubo.matrix_offset),
+			node_matrices.data(), count);
+		bones_ubo.ubo->upload();
+		bones_ubo.ubo->bind(0);
 	}
 
 	shader->set_uniform_mat4("u_tex_matrix1", false, MDX_IDENTITY_MAT4.data());
@@ -999,10 +1000,10 @@ void MDXRendererGL::dispose() {
 	for (auto buf : buffers)
 		glDeleteBuffers(1, &buf);
 
-	// dispose bone SSBO
-	if (bone_ssbo) {
-		glDeleteBuffers(1, &bone_ssbo);
-		bone_ssbo = 0;
+	// dispose bone UBO
+	if (bones_ubo.ubo) {
+		bones_ubo.ubo->dispose();
+		bones_ubo.ubo.reset();
 	}
 
 	for (auto& [key, tex] : textures)

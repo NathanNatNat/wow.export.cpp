@@ -17,6 +17,7 @@
 #include "../gl/GLTexture.h"
 #include "../gl/VertexArray.h"
 #include "../gl/ShaderProgram.h"
+#include "renderer_utils.h"
 
 class BufferWrapper;
 
@@ -85,7 +86,9 @@ private:
 	std::vector<GLuint> buffers;
 	std::vector<M3DrawCall> draw_calls;
 	std::unique_ptr<gl::GLTexture> default_texture;
-	GLuint bone_ssbo = 0; // SSBO for bone matrices (avoids uniform register limits)
+	// M3 has no skeleton — a single identity bone matrix is uploaded each
+	// frame to the `VsBoneUbo` block at binding point 0.
+	renderer_utils::BonesUbo bones_ubo;
 
 	// transforms
 	std::array<float, 16> model_matrix;

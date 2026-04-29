@@ -518,8 +518,9 @@ return as_async_compat([this]() {
 	// load shader program
 	shader = M2RendererGL::load_shaders(ctx);
 
-	// create bone SSBO (avoids uniform register limits for bone matrices)
-	glGenBuffers(1, &bone_ssbo);
+	// allocate bone UBO and bind `VsBoneUbo` to binding point 0 (matches JS
+	// `create_bones_ubo` in renderer_utils.js).
+	bones_ubo = renderer_utils::create_bones_ubo(*shader, ctx, bones_count());
 
 	// create texture transform matrices
 	_create_tex_matrices();
@@ -1931,15 +1932,15 @@ shader->set_uniform_3f("u_view_up", 0, 1, 0);
 float time_sec = std::chrono::duration<float>(std::chrono::steady_clock::now() - M2_PERFORMANCE_BASELINE).count();
 shader->set_uniform_1f("u_time", time_sec);
 
-// bone matrices — upload via SSBO
+// bone matrices — upload via UBO bound to `VsBoneUbo` at binding 0.
 shader->set_uniform_1i("u_bone_count", static_cast<int>(bones_count()));
-if (has_bones() && !bone_matrices.empty() && bone_ssbo) {
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, bone_ssbo);
-	glBufferData(GL_SHADER_STORAGE_BUFFER,
-		static_cast<GLsizeiptr>(bones_count() * 16 * sizeof(float)),
-		bone_matrices.data(), GL_DYNAMIC_DRAW);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, bone_ssbo);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+if (has_bones() && !bone_matrices.empty() && bones_ubo.ubo) {
+	const std::size_t count = std::min(bones_count(), bones_ubo.max_bones);
+	bones_ubo.ubo->set_mat4_array(
+		static_cast<std::size_t>(bones_ubo.matrix_offset),
+		bone_matrices.data(), count);
+	bones_ubo.ubo->upload();
+	bones_ubo.ubo->bind(0);
 }
 
 // lighting - transform light direction to view space
@@ -2446,10 +2447,10 @@ void M2RendererGL::dispose() {
 
 _dispose_skin();
 
-// dispose bone SSBO
-if (bone_ssbo) {
-	glDeleteBuffers(1, &bone_ssbo);
-	bone_ssbo = 0;
+// dispose bone UBO
+if (bones_ubo.ubo) {
+	bones_ubo.ubo->dispose();
+	bones_ubo.ubo.reset();
 }
 
 // dispose textures

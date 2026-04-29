@@ -54,8 +54,9 @@ void M3RendererGL::load() {
 
 	shader = M3RendererGL::load_shaders(ctx);
 
-	// create bone SSBO (avoids uniform register limits for bone matrices)
-	glGenBuffers(1, &bone_ssbo);
+	// allocate bone UBO and bind `VsBoneUbo` to binding point 0. M3 only ever
+	// uses one identity matrix at slot 0 (see render() below).
+	bones_ubo = renderer_utils::create_bones_ubo(*shader, ctx, 1);
 
 	_create_default_texture();
 
@@ -266,15 +267,14 @@ void M3RendererGL::render(const float* view_matrix, const float* projection_matr
 	).count();
 	shader->set_uniform_1f("u_time", time);
 
-	// set identity bone matrix for bone 0 (M3 has no skeleton) — upload via SSBO
+	// set identity bone matrix for bone 0 (M3 has no skeleton) — upload via UBO
 	shader->set_uniform_1i("u_bone_count", 1);
-	if (bone_ssbo) {
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, bone_ssbo);
-		glBufferData(GL_SHADER_STORAGE_BUFFER,
-			static_cast<GLsizeiptr>(16 * sizeof(float)),
-			M3_IDENTITY_MAT4.data(), GL_DYNAMIC_DRAW);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, bone_ssbo);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	if (bones_ubo.ubo) {
+		bones_ubo.ubo->set_mat4(
+			static_cast<std::size_t>(bones_ubo.matrix_offset),
+			M3_IDENTITY_MAT4.data());
+		bones_ubo.ubo->upload();
+		bones_ubo.ubo->bind(0);
 	}
 
 	// texture matrix defaults
@@ -371,10 +371,10 @@ void M3RendererGL::_dispose_geometry() {
 void M3RendererGL::dispose() {
 	_dispose_geometry();
 
-	// dispose bone SSBO
-	if (bone_ssbo) {
-		glDeleteBuffers(1, &bone_ssbo);
-		bone_ssbo = 0;
+	// dispose bone UBO
+	if (bones_ubo.ubo) {
+		bones_ubo.ubo->dispose();
+		bones_ubo.ubo.reset();
 	}
 
 	if (default_texture) {
