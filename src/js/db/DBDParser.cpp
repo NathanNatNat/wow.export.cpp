@@ -207,6 +207,8 @@ void DBDParser::parse(BufferWrapper& data) {
 		if (!trimmed.empty()) {
 			chunk.push_back(line);
 		} else {
+			// JS calls parseChunk on every empty line, even when chunk is empty
+			// (consecutive blank lines push empty DBDEntry objects into entries).
 			parseChunk(chunk);
 			chunk.clear();
 		}
@@ -225,6 +227,9 @@ void DBDParser::parse(BufferWrapper& data) {
  * @param chunk Lines of the chunk
  */
 void DBDParser::parseChunk(std::vector<std::string>& chunk) {
+	// Match JS semantics: when chunk is empty, chunk[0] is undefined (!= 'COLUMNS'),
+	// so we fall into the else branch and push an empty DBDEntry. These empty
+	// entries are harmless (they never match anything in isValidFor()).
 	if (!chunk.empty() && chunk[0] == "COLUMNS") {
 		parseColumnChunk(chunk);
 	} else {
@@ -306,16 +311,30 @@ void DBDParser::parseChunk(std::vector<std::string>& chunk) {
 				DBDField field(fieldName, fieldType);
 
 				// Parse annotations, (eg 'id,noninline,relation').
+				// Split by comma for exact token matching (JS uses Array.includes,
+				// not substring search — see `validid` vs `id` collision).
 				if (fieldMatch[2].matched) {
-					const std::string annotations = fieldMatch[2].str();
+					const std::string annotationsStr = fieldMatch[2].str();
+					std::vector<std::string> annotations;
+					size_t aStart = 0;
+					size_t aPos = 0;
+					while ((aPos = annotationsStr.find(',', aStart)) != std::string::npos) {
+						annotations.push_back(annotationsStr.substr(aStart, aPos - aStart));
+						aStart = aPos + 1;
+					}
+					annotations.push_back(annotationsStr.substr(aStart));
 
-					if (annotations.find("id") != std::string::npos)
+					auto contains = [&](const std::string& needle) {
+						return std::find(annotations.begin(), annotations.end(), needle) != annotations.end();
+					};
+
+					if (contains("id"))
 						field.isID = true;
 
-					if (annotations.find("noninline") != std::string::npos)
+					if (contains("noninline"))
 						field.isInline = false;
 
-					if (annotations.find("relation") != std::string::npos)
+					if (contains("relation"))
 						field.isRelation = true;
 				}
 
@@ -369,9 +388,11 @@ void DBDParser::parseColumnChunk(std::vector<std::string>& chunk) {
 			//const std::string columnForeignKey = match[2].str(); // <TableName::ColumnName> or empty
 			std::string columnName = match[3].str(); // Field_6_0_1_18179_000?
 
-			// Remove trailing '?' character.
-			if (!columnName.empty() && columnName.back() == '?')
-				columnName.pop_back();
+			// Remove the first '?' character (mirrors JS String.prototype.replace
+			// with a string argument, which replaces only the first occurrence).
+			const size_t qpos = columnName.find('?');
+			if (qpos != std::string::npos)
+				columnName.erase(qpos, 1);
 
 			// TODO: Support foreign key support.
 
