@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 30/195 audited (15%)**
+**Progress: 40/195 audited (21%)**
 
 - [x] 1. `src/app.cpp` — ⚠️ 5 findings
 - [x] 2. `src/js/blob.cpp` — ⚠️ 5 findings
@@ -34,16 +34,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 28. `src/js/3D/GeosetMapper.cpp` — ⚠️ 1 findings
 - [x] 29. `src/js/3D/ShaderMapper.cpp` — ✅ audited
 - [x] 30. `src/js/3D/Shaders.cpp` — ⚠️ 3 findings
-- [ ] 31. `src/js/3D/Skin.cpp`
-- [ ] 32. `src/js/3D/Texture.cpp`
-- [ ] 33. `src/js/3D/WMOShaderMapper.cpp`
-- [ ] 34. `src/js/3D/camera/CameraControlsGL.cpp`
-- [ ] 35. `src/js/3D/camera/CharacterCameraControlsGL.cpp`
-- [ ] 36. `src/js/3D/exporters/ADTExporter.cpp`
-- [ ] 37. `src/js/3D/exporters/CharacterExporter.cpp`
-- [ ] 38. `src/js/3D/exporters/M2Exporter.cpp`
-- [ ] 39. `src/js/3D/exporters/M2LegacyExporter.cpp`
-- [ ] 40. `src/js/3D/exporters/M3Exporter.cpp`
+- [x] 31. `src/js/3D/Skin.cpp` — ✅ audited
+- [x] 32. `src/js/3D/Texture.cpp` — ⚠️ 1 findings
+- [x] 33. `src/js/3D/WMOShaderMapper.cpp` — ✅ audited
+- [x] 34. `src/js/3D/camera/CameraControlsGL.cpp` — ⚠️ 1 findings
+- [x] 35. `src/js/3D/camera/CharacterCameraControlsGL.cpp` — ✅ audited
+- [x] 36. `src/js/3D/exporters/ADTExporter.cpp` — ⚠️ 7 findings
+- [x] 37. `src/js/3D/exporters/CharacterExporter.cpp` — ✅ audited
+- [x] 38. `src/js/3D/exporters/M2Exporter.cpp` — ⚠️ 5 findings
+- [x] 39. `src/js/3D/exporters/M2LegacyExporter.cpp` — ⚠️ 5 findings
+- [x] 40. `src/js/3D/exporters/M3Exporter.cpp` — ⚠️ 3 findings
 - [ ] 41. `src/js/3D/exporters/WMOExporter.cpp`
 - [ ] 42. `src/js/3D/exporters/WMOLegacyExporter.cpp`
 - [ ] 43. `src/js/3D/gl/GLContext.cpp`

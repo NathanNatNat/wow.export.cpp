@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/60 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/82 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
   - **JS Source**: `src/app.js` lines 589–624, 649–657
@@ -242,3 +242,91 @@
   - **JS Source**: `src/js/3D/Shaders.js` lines 56–72
   - **Status**: Pending
   - **Details**: JS `create_program` does not install any cleanup hook on the returned ShaderProgram — the caller is responsible for calling `unregister()` explicitly. C++ (`src/js/3D/Shaders.cpp` lines 80–84) sets `program->_unregister_fn = [name](auto* p) { unregister(p); };` so destruction of the ShaderProgram automatically de-registers it from `active_programs`. This is an EXTRA behaviour (no JS analogue) added to compensate for split-ownership (see finding 59), but it changes observable lifecycle semantics: in JS a program retained only by `active_programs` survives indefinitely; in C++ destroying the caller's `unique_ptr` triggers automatic de-registration. The two together effectively reverse JS's "registered programs are pinned" contract.
+- [ ] 61. [Texture.cpp] `getTextureFile()` calls `casc->getVirtualFileByID()` instead of the JS-equivalent `casc.getFile()`.
+  - **JS Source**: `src/js/3D/Texture.js` lines 32–41
+  - **Status**: Pending
+  - **Details**: JS calls `await core.view.casc.getFile(this.fileDataID)`, where `getFile` is overridden by `CASCLocal`/`CASCRemote` to return the BLTE-decoded data (a BufferWrapper). The C++ port instead invokes `core::view->casc->getVirtualFileByID(this->fileDataID)`. In this codebase, the C++ `CASC::getFile` returns only an encoding key string (see `casc-source-local.h:55–57`), so a literal port is not viable; however, this is a deviation from the JS source structure and should at minimum be documented in a code comment. JS `getFile` in CASCRemote takes `partialDecrypt=false, suppressLog=false, supportFallback=true, forceFallback=false`, which `getVirtualFileByID` may or may not match — verify equivalence (BLTE decoding, partial-decrypt defaults, suppressLog, fallback handling).
+- [ ] 62. [CameraControlsGL.cpp] `dispose()` additionally resets `state` to `STATE_NONE`, an extra side effect not present in the JS source.
+  - **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 218–221
+  - **Status**: Pending
+  - **Details**: JS `dispose()` only removes the two document-level listeners (`mousemove`, `mouseup`) and leaves all instance state untouched, so a controller disposed during an active drag retains its `state` value. The C++ port (`CameraControlsGL.cpp:226–234`) instead clears `state = STATE_NONE`. The accompanying comment acknowledges this is an additional change beyond the JS behaviour. While likely a benign safeguard given the GLFW input-forwarding model, it is a behavioural deviation from the literal JS port. Either remove the assignment to mirror JS exactly or keep it as a documented intentional deviation.
+- [ ] 63. [ADTExporter.cpp] High-quality bake path uses persistent FBO and pixel-level 180° rotation instead of JS rotateCanvas + OffscreenCanvas composite.
+  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 891–1161
+  - **Status**: Pending
+  - **Details**: JS creates a `glCanvas` per export and uses two OffscreenCanvas objects (rotateCanvas + composite) with `ctx.rotate(Math.PI)` and `drawImage`. C++ (`ADTExporter.cpp:1071–1407`) instead uses an offscreen FBO (`initFBO`/`readFBOPixels`) and rotates by index swap when copying pixels. While the geometric result is the same 180° rotation, JS uses canvas bilinear/bicubic resampling on `drawImage` for scaling, whereas C++ does a plain index swap. Composite blits in JS may produce slightly different edge behaviour than the per-pixel C++ copy.
+- [ ] 64. [ADTExporter.cpp] `quality<=512` minimap rescale uses stb_image_resize linear filter where JS uses canvas drawImage.
+  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 861–890
+  - **Status**: Pending
+  - **Details**: JS path scales the BLP via `ctx.scale(scale, scale); ctx.drawImage(canvas, 0, 0)`, which uses the browser's canvas resampling (typically bilinear+box smoothing). C++ uses `stbir_resize_uint8_linear` with `STBIR_RGBA` (`ADTExporter.cpp:1057`). Output PNGs will be near-identical at 1:1 but differ slightly when scaling. Comment in code already acknowledges this.
+- [ ] 65. [ADTExporter.cpp] `saveRawLayerTexture` lambda has `void` return; JS lambda returns the relative file path.
+  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1164–1190
+  - **Status**: Pending
+  - **Details**: JS returns the relative texFile (posix-converted if `usePosix`), but the JS callers at lines 1193–1198 ignore the return value. Functionally identical due to caller behaviour, but the lambda's signature deviates from the JS version. Cosmetic — no behaviour change unless a future caller starts using the return value.
+- [ ] 66. [ADTExporter.cpp] `exportObjects` scaleFactor for ADTGameObject branch incorrectly maps an explicit scale of 0 to 1.0.
+  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1270
+  - **Status**: Pending
+  - **Details**: JS uses `ScaleFactor: model.scale !== undefined ? model.scale / 1024 : 1`. C++ at `ADTExporter.cpp:1527` uses `model.scale != 0.0f ? model.scale / 1024.0f : 1.0f`. This treats 0 as "absent" because the struct's default is 0.0f. JS only uses `1` when `model.scale === undefined`; an explicit `0` would yield `0/1024 = 0`. To match, ADTGameObject needs an `optional<float>` for scale (or a separate `hasScale` flag) so the C++ can distinguish present-but-zero from absent.
+- [ ] 67. [ADTExporter.cpp] WMO export hardcodes `useADTSets = false`, disabling the doodad-set-from-ADT branch entirely.
+  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1300–1351
+  - **Status**: Pending
+  - **Details**: C++ at `ADTExporter.cpp:1585` sets `const bool useADTSets = false;` with a comment claiming `model & 0x80` is always 0 in JS. While that is technically correct for JS where `model` is an object (ToInt32 of an object yields 0), the C++ port should evaluate the equivalent bit on the binary `worldModels` data — `model.flags & 0x80` would be the proper port for JS-fidelity-via-the-actual-binary-flag. The doodad-set-from-ADT branch (lines 1645–1646, 1654–1656) is currently dead code in C++.
+- [ ] 68. [ADTExporter.cpp] Liquid export pushes `nullptr` for chunks with no instances, losing the original chunk fields.
+  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1409–1411
+  - **Status**: Pending
+  - **Details**: JS does `if (!chunk || !chunk.instances) return chunk;` which preserves the original chunk object (including `attributes`) when there are no instances. C++ at `ADTExporter.cpp:1733` pushes `nullptr` instead, dropping the chunk's `attributes` field. Should serialise the empty chunk's `attributes` and an empty `instances` array, or omit the entry entirely if the JS chunk would actually be falsy.
+- [ ] 69. [ADTExporter.cpp] Foliage JSON `foliageJSON.data = groundEffectTexture` is approximated by per-field addProperty calls.
+  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1474–1479
+  - **Status**: Pending
+  - **Details**: JS sets `foliageJSON.data = groundEffectTexture`, which makes `JSON.stringify` emit the entire DB row at the JSON root in insertion order. C++ enumerates fields and calls `addProperty(key, val)` (lines 1852–1856). Comment in code acknowledges this may differ in numeric formatting. Order of keys in the resulting JSON also depends on `unordered_map` iteration order, while JS preserves insertion order — possible cosmetic/output-stability deviation.
+- [ ] 70. [M2Exporter.cpp] `exportRaw` parent-skeleton bones gated on the wrong config flag.
+  - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 1098–1163
+  - **Status**: Pending
+  - **Details**: JS exports parent-skeleton `.bone` files when `config.modelsExportBone && parentSkel.boneFileIDs` is true (line 1143), regardless of `config.modelsExportAnim`. The JS bone block sits OUTSIDE the `if (config.modelsExportAnim)` wrapper. C++ at `M2Exporter.cpp:1568–1591` places the parent-skeleton bone export INSIDE the `if (config.value("modelsExportAnim", false))` block that opens at :1535 and closes around :1592, so C++ skips parent-skel bones whenever `modelsExportAnim` is false. Users who enable bones-only export without animations will silently lose parent-skel bone files.
+- [ ] 71. [M2Exporter.cpp] `addURITexture` API and base64 decoding diverge from JS.
+  - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59–61, 111
+  - **Status**: Pending
+  - **Details**: JS `addURITexture(out, dataURI)` stores a base64 data URI string; `exportTextures` later strips the `data:...,` prefix and decodes via `BufferWrapper.fromBase64()` at line 111. C++ `addURITexture(uint32_t textureType, BufferWrapper pngData)` requires the caller to pre-decode and skips the data-URI parsing. Behaviour of the export pipeline matches once the buffer is in `dataTextures`, but the public API contract differs and the JS regex strip is not preserved anywhere in C++.
+- [ ] 72. [M2Exporter.cpp] `exportTextures` data-texture path does not back-patch `texture.fileDataID`.
+  - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 153–168
+  - **Status**: Pending
+  - **Details**: When `textureType` matches a `dataTextures` entry, JS sets `targetFileDataID = 'data-' + textureType` and back-patches `texture.fileDataID = targetFileDataID` (line 167) so that the meta-JSON exporter (`exportAsOBJ` lines 800–810) emits the `'data-N'` string in `m2.textures[i].fileDataID`. C++ `M2Exporter.cpp:360–385` sets `isDataTexture = true` and skips the back-patch (Texture::fileDataID is `uint32_t`, cannot hold a string). Result: meta JSON `textures[i].fileDataID` differs from JS for data-texture rows.
+- [ ] 73. [M2Exporter.cpp] `exportTextures` cancellation returns a partial result struct instead of `undefined`.
+  - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 142–143
+  - **Status**: Pending
+  - **Details**: When `helper.isCancelled()` fires mid-loop in JS `exportTextures`, the function does `return;` (returns `undefined`). C++ `M2Exporter.cpp:349–352` returns the partial `M2ExportTextureResult` struct. The behavioural difference is small (callers proceed with empty maps instead of dereferencing `undefined`), but technically deviates from JS — JS callers iterating the result would have thrown.
+- [ ] 74. [M2Exporter.cpp] `exportTextures` early-return shape ignores glbMode.
+  - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 95–96
+  - **Status**: Pending
+  - **Details**: When `!modelsExportTextures`, JS returns `glbMode ? { validTextures, texture_buffers, files_to_cleanup } : validTextures` — the shape changes between glbMode and non-glbMode. C++ `M2Exporter.cpp:300–301` always returns a single empty `M2ExportTextureResult` struct. Functionally equivalent because all C++ callers go through the struct, but the JS-shape distinction is lost.
+- [ ] 75. [M2LegacyExporter.cpp] matName extension stripping uses generic `stem()` instead of `.blp`-only removal.
+  - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` line 94
+  - **Status**: Pending
+  - **Details**: JS computes `matName = 'mat_' + path.basename(texturePath.toLowerCase(), '.blp')` — strips only the `.blp` suffix and keeps any other extension intact. C++ uses `std::filesystem::path(lowerTexPath).stem().string()` (`M2LegacyExporter.cpp:130–133`) which strips whatever extension is present. For non-`.blp` paths the matName differs (any other extension is stripped where JS would keep it).
+- [ ] 76. [M2LegacyExporter.cpp] exportM2Meta subMesh JSON drops loader-exposed fields beyond hardcoded list.
+  - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 206–210
+  - **Status**: Pending
+  - **Details**: JS uses `Object.assign({enabled: subMeshEnabled}, skin.subMeshes[i])` which copies every own property of the subMesh object. C++ at `M2LegacyExporter.cpp:261–282` rebuilds the JSON manually and includes only 13 hardcoded fields (submeshID, level, vertexStart, vertexCount, triangleStart, triangleCount, boneCount, boneStart, boneInfluences, centerBoneIndex, centerPosition, sortCenterPosition, sortRadius). Any additional properties exposed by the loader are silently dropped from the meta JSON.
+- [ ] 77. [M2LegacyExporter.cpp] exportM2Meta textures JSON emits explicit null instead of omitting fileNameExternal/mtlName.
+  - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 229–234
+  - **Status**: Pending
+  - **Details**: JS sets `fileNameExternal` and `mtlName` to `textureEntry?.matPathRelative` / `textureEntry?.matName`, which is `undefined` when the entry is missing — `JSON.stringify` omits undefined values entirely. C++ at `M2LegacyExporter.cpp:285–307` explicitly writes `nullptr`/`null` for both fields. Output JSON now contains `"fileNameExternal": null, "mtlName": null` keys that the JS version did not produce.
+- [ ] 78. [M2LegacyExporter.cpp] exportM2Meta materials/textureUnits/boundingBox/collisionBox JSON drops loader-exposed fields.
+  - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 244, 248, 250, 254
+  - **Status**: Pending
+  - **Details**: JS calls `json.addProperty('materials', this.m2.materials)`, `'boundingBox', this.m2.boundingBox`, `'collisionBox', this.m2.collisionBox`, and `'textureUnits', skin.textureUnits` — serialising whatever properties the loader has on those objects. C++ manually rebuilds each object with a hardcoded subset (materials → flags, blendingMode only; bounding/collisionBox → min, max only; textureUnits → 13 listed fields) at `M2LegacyExporter.cpp:310–365`. Any extra fields the loader exposes are dropped from the meta JSON output.
+- [ ] 79. [M2LegacyExporter.cpp] exportAsOBJ/STL throw `runtime_error` on null skin where JS would crash naturally.
+  - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 129, 268
+  - **Status**: Pending
+  - **Details**: JS code is `const skin = await this.m2.getSkin(0)` followed by direct property access — if `getSkin` returned null/undefined, JS would crash with a TypeError on `skin.subMeshes`. C++ at `M2LegacyExporter.cpp:174–175, 385–386` explicitly checks the pointer and throws `std::runtime_error("Failed to load legacy skin 0")` instead. Added defensive behaviour not in the original; only matters in the failure path but is a deviation.
+- [ ] 80. [M3Exporter.cpp] `addURITexture` accepts `BufferWrapper pngData` and stores a `BufferWrapper` instead of the JS `dataURI` string.
+  - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 49–51
+  - **Status**: Pending
+  - **Details**: JS signature is `async addURITexture(out, dataURI)` and stores the `dataURI` string in `this.dataTextures` (`Map<string, string>`). C++ signature is `addURITexture(const std::string& out, BufferWrapper pngData)` storing into `map<std::string, BufferWrapper>` (`M3Exporter.h:59,110`). Callers passing a data-URI string will not compile, and any consumer reading `dataTextures` will receive raw bytes instead of a `data:image/png;base64,...` string. Either revert the parameter/storage type to `std::string` to match JS, or document why a binary buffer is correct for this port and update all call sites accordingly.
+- [ ] 81. [M3Exporter.cpp] OBJ texture-manifest push reads the map value as a plain path string instead of `texInfo.matPath`.
+  - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 145–147
+  - **Status**: Pending
+  - **Details**: JS iterates `validTextures` as `[texFileDataID, texInfo]` and pushes `file: texInfo.matPath` — i.e. the value is an object containing at least a `matPath` field. C++ at `M3Exporter.cpp:170–174` declares the value as `std::string` and uses it directly as the path. `exportTextures` currently returns an empty map in both JS and C++ so this branch is never exercised, but once `exportTextures` is implemented the C++ map shape and JS object shape will diverge. Consider modelling the value as a struct with at least `matPath` for forward compatibility.
+- [ ] 82. [M3Exporter.cpp] `exportAsGLTF` reshapes the texture map to `map<string, GLTFTextureEntry>` instead of passing the raw `<id, path>` map.
+  - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 91–92
+  - **Status**: Pending
+  - **Details**: JS passes `validTextures` (a `Map<number, string>`) directly to `gltf.setTextureMap(textureMap)`. C++ at `M3Exporter.cpp:101–104` stringifies the numeric key and wraps each path in a `GLTFTextureEntry{path, ""}` adapter. Because `exportTextures` is presently a stub, the conversion is currently a no-op, but the conversion shape (string keys, second `""` field) needs verification against `GLTFWriter::setTextureMap`'s contract once M3 texture export is implemented to ensure parity with JS callers.
