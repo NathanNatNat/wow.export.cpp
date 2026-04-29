@@ -68,45 +68,45 @@ void initializeCreatureData() {
 	try {
 		logging::write("Loading creature textures...");
 
-	std::unordered_map<uint32_t, std::vector<uint32_t>> creatureGeosetMap;
+		std::unordered_map<uint32_t, std::vector<uint32_t>> creatureGeosetMap;
 
-	// CreatureDisplayInfoID => Array of geosets to enable which should only be used if CreatureModelData.CreatureDisplayInfoGeosetData != 0
-	auto geosetRows = casc::db2::preloadTable("CreatureDisplayInfoGeosetData").getAllRows();
-	for (const auto& [_geosetId, geosetRow] : geosetRows) {
-		(void)_geosetId;
-		uint32_t creatureDisplayInfoID = fieldToUint32(geosetRow.at("CreatureDisplayInfoID"));
-		uint32_t geosetIndex = fieldToUint32(geosetRow.at("GeosetIndex"));
-		uint32_t geosetValue = fieldToUint32(geosetRow.at("GeosetValue"));
+		// CreatureDisplayInfoID => Array of geosets to enable which should only be used if CreatureModelData.CreatureDisplayInfoGeosetData != 0
+		auto geosetRows = casc::db2::preloadTable("CreatureDisplayInfoGeosetData").getAllRows();
+		for (const auto& [_geosetId, geosetRow] : geosetRows) {
+			(void)_geosetId;
+			uint32_t creatureDisplayInfoID = fieldToUint32(geosetRow.at("CreatureDisplayInfoID"));
+			uint32_t geosetIndex = fieldToUint32(geosetRow.at("GeosetIndex"));
+			uint32_t geosetValue = fieldToUint32(geosetRow.at("GeosetValue"));
 
-		creatureGeosetMap[creatureDisplayInfoID].push_back((geosetIndex + 1) * 100 + geosetValue);
-	}
-
-	std::unordered_map<uint32_t, std::vector<uint32_t>> modelIDToDisplayInfoMap;
-
-	// Map all available texture fileDataIDs to model IDs.
-	auto displayRows = casc::db2::preloadTable("CreatureDisplayInfo").getAllRows();
-	for (const auto& [displayID, displayRow] : displayRows) {
-		uint32_t modelID = fieldToUint32(displayRow.at("ModelID"));
-		uint32_t extendedDisplayInfoID = fieldToUint32(displayRow.at("ExtendedDisplayInfoID"));
-
-		auto allTextures = fieldToUint32Vec(displayRow.at("TextureVariationFileDataID"));
-		std::vector<uint32_t> textures;
-		for (auto t : allTextures) {
-			if (t > 0)
-				textures.push_back(t);
+			creatureGeosetMap[creatureDisplayInfoID].push_back((geosetIndex + 1) * 100 + geosetValue);
 		}
 
-		CreatureDisplayInfo info;
-		info.ID = displayID;
-		info.modelID = modelID;
-		info.extendedDisplayInfoID = extendedDisplayInfoID;
-		info.textures = std::move(textures);
-		creatureDisplayInfoMap.emplace(displayID, std::move(info));
+		std::unordered_map<uint32_t, std::vector<uint32_t>> modelIDToDisplayInfoMap;
 
-		modelIDToDisplayInfoMap[modelID].push_back(displayID);
-	}
+		// Map all available texture fileDataIDs to model IDs.
+		auto displayRows = casc::db2::preloadTable("CreatureDisplayInfo").getAllRows();
+		for (const auto& [displayID, displayRow] : displayRows) {
+			uint32_t modelID = fieldToUint32(displayRow.at("ModelID"));
+			uint32_t extendedDisplayInfoID = fieldToUint32(displayRow.at("ExtendedDisplayInfoID"));
 
-	auto modelRows = casc::db2::preloadTable("CreatureModelData").getAllRows();
+			auto allTextures = fieldToUint32Vec(displayRow.at("TextureVariationFileDataID"));
+			std::vector<uint32_t> textures;
+			for (auto t : allTextures) {
+				if (t > 0)
+					textures.push_back(t);
+			}
+
+			CreatureDisplayInfo info;
+			info.ID = displayID;
+			info.modelID = modelID;
+			info.extendedDisplayInfoID = extendedDisplayInfoID;
+			info.textures = std::move(textures);
+			creatureDisplayInfoMap.emplace(displayID, std::move(info));
+
+			modelIDToDisplayInfoMap[modelID].push_back(displayID);
+		}
+
+		auto modelRows = casc::db2::preloadTable("CreatureModelData").getAllRows();
 		for (const auto& [modelID, modelRow] : modelRows) {
 			uint32_t fileDataID = fieldToUint32(modelRow.at("FileDataID"));
 			modelDataIDToFileDataID.emplace(modelID, fileDataID);

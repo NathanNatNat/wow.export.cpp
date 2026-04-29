@@ -22,6 +22,8 @@ static uint32_t fieldToUint32(const db::FieldValue& val) {
 		return static_cast<uint32_t>(*p);
 	if (auto* p = std::get_if<uint64_t>(&val))
 		return static_cast<uint32_t>(*p);
+	if (auto* p = std::get_if<float>(&val))
+		return static_cast<uint32_t>(*p);
 	return 0;
 }
 

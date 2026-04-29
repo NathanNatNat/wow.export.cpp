@@ -46,7 +46,8 @@ void initialize_categories() {
 		CategoryInfo info;
 		info.id = id;
 
-		std::string name = fieldToString(row.at("Name_lang"));
+		auto nameIt = row.find("Name_lang");
+		std::string name = (nameIt != row.end()) ? fieldToString(nameIt->second) : std::string{};
 		info.name = name.empty() ? std::format("Category {}", id) : std::move(name);
 
 		auto oiIt = row.find("OrderIndex");
@@ -60,7 +61,8 @@ void initialize_categories() {
 		SubcategoryInfo info;
 		info.id = id;
 
-		std::string name = fieldToString(row.at("Name_lang"));
+		auto nameIt = row.find("Name_lang");
+		std::string name = (nameIt != row.end()) ? fieldToString(nameIt->second) : std::string{};
 		info.name = name.empty() ? std::format("Subcategory {}", id) : std::move(name);
 
 		auto catIt = row.find("DecorCategoryID");

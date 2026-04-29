@@ -229,8 +229,11 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
  * @returns Pointer to vector of displays, or nullptr if not found.
  */
 const std::vector<LegacyCreatureDisplay>* getCreatureDisplaysByPath(const std::string& model_path) {
-	// normalize path: lowercase, forward slashes, strip MPQ prefix
-	std::string normalized = normalizePath(model_path);
+	// normalize path: lowercase, forward slashes
+	std::string normalized = model_path;
+	std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+		[](unsigned char c) { return std::tolower(c); });
+	std::replace(normalized.begin(), normalized.end(), '\\', '/');
 
 	// strip MPQ archive prefix if present (e.g., "data/model.mpq/creature/...")
 	static const std::regex mpq_regex(R"(\.mpq[/\\](.+))", std::regex::icase);
@@ -238,12 +241,9 @@ const std::vector<LegacyCreatureDisplay>* getCreatureDisplaysByPath(const std::s
 	if (std::regex_search(normalized, match, mpq_regex))
 		normalized = match[1].str();
 
-	// convert .mdl/.mdx to .m2 (already done in normalizePath but be safe)
-	if (normalized.size() >= 4) {
-		std::string ext = normalized.substr(normalized.size() - 4);
-		if (ext == ".mdl" || ext == ".mdx")
-			normalized = normalized.substr(0, normalized.size() - 4) + ".m2";
-	}
+	// JS lookup converts only .mdx -> .m2 (not .mdl)
+	if (normalized.size() >= 4 && normalized.substr(normalized.size() - 4) == ".mdx")
+		normalized = normalized.substr(0, normalized.size() - 4) + ".m2";
 
 	auto it = creatureDisplays.find(normalized);
 	if (it != creatureDisplays.end())
