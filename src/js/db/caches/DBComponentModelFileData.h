@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <vector>
 #include <optional>
-#include <future>
 
 namespace db::caches::DBComponentModelFileData {
 
@@ -28,7 +27,6 @@ struct PositionResult {
  * Initialize ComponentModelFileData from DB2.
  */
 void initialize();
-std::future<void> initializeAsync();
 
 /**
  * Filter a list of FileDataIDs to find the best match for race/gender.
