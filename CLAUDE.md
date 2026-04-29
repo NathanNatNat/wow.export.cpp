@@ -126,6 +126,14 @@ Most dependencies are git submodules in `extern/`. CMake manages them automatica
 
 ## Fidelity Rules
 
+### Protected Files
+The following files **must not be deleted, renamed, or moved** under any circumstances unless the user explicitly requests it. Do not delete them as part of "cleanup" commits, do not delete them when their contents appear obsolete, and do not delete them when their stated purpose seems "complete":
+- **`audit_tracker.md`** — Historical audit log. Persistent reference, not a transient working file.
+- **`TODO_TRACKER.md`** — Active TODO log.
+- **`UI_REFERENCE.md`** — UI layout reference.
+
+If you believe one of these files should be removed, **ask first**. Do not act unilaterally.
+
 ### Intentional Stubs
 The following files are intentionally left as documented stubs and do **not** need to be implemented:
 - **`src/js/components/home-showcase.cpp`** — `render()` is a no-op. The JS component renders a rotating image showcase with background-layer compositing, optional video playback, and Refresh/Feedback links. The full JS template is documented in the file header.
