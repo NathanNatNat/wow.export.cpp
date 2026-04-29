@@ -869,13 +869,17 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 	float time_sec = std::chrono::duration<float>(std::chrono::steady_clock::now() - MDX_PERFORMANCE_BASELINE).count();
 	shader->set_uniform_1f("u_time", time_sec);
 
-	// bone matrices (mdx uses node-based skeleton) — upload via UBO
-	shader->set_uniform_1i("u_bone_count", !nodes.empty() ? static_cast<int>(nodes.size()) : 0);
-	if (!nodes.empty() && !node_matrices.empty() && bones_ubo.ubo) {
-		const std::size_t count = std::min(nodes.size(), bones_ubo.max_bones);
+	// bone matrices (mdx uses node-based skeleton) — upload via UBO.
+	// Clamp to UBO capacity so the shader never indexes past `MAX_BONES`
+	// (matches upstream "Fixed the Dracthyr crash issue", commit 055fafdf).
+	const std::size_t node_count = (!nodes.empty() && bones_ubo.ubo)
+		? std::min(nodes.size(), bones_ubo.max_bones)
+		: 0;
+	shader->set_uniform_1i("u_bone_count", static_cast<int>(node_count));
+	if (node_count > 0 && !node_matrices.empty()) {
 		bones_ubo.ubo->set_mat4_array(
 			static_cast<std::size_t>(bones_ubo.matrix_offset),
-			node_matrices.data(), count);
+			node_matrices.data(), node_count);
 		bones_ubo.ubo->upload();
 		bones_ubo.ubo->bind(0);
 	}

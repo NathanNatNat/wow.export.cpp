@@ -97,7 +97,7 @@ static const std::unordered_map<std::string_view, int> PIXEL_SHADER_IDS = {
 };
 
 // must match MAX_BONES in m2.vertex.shader
-static constexpr int MAX_BONES = 220;
+static constexpr int MAX_BONES = 256;
 
 // M2 blend mode index → EGX blend mode (GLContext::BlendMode)
 static constexpr std::array<int, 8> M2BLEND_TO_EGX = {
@@ -1933,12 +1933,16 @@ float time_sec = std::chrono::duration<float>(std::chrono::steady_clock::now() -
 shader->set_uniform_1f("u_time", time_sec);
 
 // bone matrices — upload via UBO bound to `VsBoneUbo` at binding 0.
-shader->set_uniform_1i("u_bone_count", static_cast<int>(bones_count()));
-if (has_bones() && !bone_matrices.empty() && bones_ubo.ubo) {
-	const std::size_t count = std::min(bones_count(), bones_ubo.max_bones);
+// Clamp to UBO capacity so the shader never indexes past `MAX_BONES`
+// (matches upstream "Fixed the Dracthyr crash issue", commit 055fafdf).
+const std::size_t bone_count = (has_bones() && bones_ubo.ubo)
+	? std::min(bones_count(), bones_ubo.max_bones)
+	: 0;
+shader->set_uniform_1i("u_bone_count", static_cast<int>(bone_count));
+if (bone_count > 0 && !bone_matrices.empty()) {
 	bones_ubo.ubo->set_mat4_array(
 		static_cast<std::size_t>(bones_ubo.matrix_offset),
-		bone_matrices.data(), count);
+		bone_matrices.data(), bone_count);
 	bones_ubo.ubo->upload();
 	bones_ubo.ubo->bind(0);
 }
