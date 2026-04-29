@@ -212,7 +212,9 @@ static void equip_set(const nlohmann::json& set) {
 		auto slot_id_opt = db::caches::DBItems::getItemSlotId(item_id);
 
 		if (slot_id_opt.has_value()) {
-			view.chrEquippedItems[std::to_string(slot_id_opt.value())] = item_id;
+			const std::string slot_key = std::to_string(slot_id_opt.value());
+			view.chrEquippedItems[slot_key] = item_id;
+			view.chrEquippedItemSkins.erase(slot_key);
 			equipped_count++;
 		}
 	}

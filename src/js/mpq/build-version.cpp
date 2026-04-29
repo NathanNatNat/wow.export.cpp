@@ -25,7 +25,7 @@ namespace fs = std::filesystem;
 static const std::unordered_map<std::string, std::string> EXPANSION_BUILDS = {
 	{ "wotlk", "3.3.5.12340" },
 	{ "tbc", "2.4.3.8606" },
-	{ "vanilla", "1.12.1.5875" }
+	{ "vanilla", DEFAULT_BUILD }
 };
 
 static constexpr uint32_t VS_FIXEDFILEINFO_SIGNATURE = 0xFEEF04BD;
@@ -195,7 +195,7 @@ std::string detect_build_version(const std::string& directory, const std::vector
 	// fallback: infer from mpq files
 	const std::string expansion = infer_expansion_from_mpqs(mpq_files);
 	const auto it = EXPANSION_BUILDS.find(expansion);
-	const std::string& build = (it != EXPANSION_BUILDS.end()) ? it->second : "1.12.1.5875";
+	const std::string build = (it != EXPANSION_BUILDS.end()) ? it->second : std::string{DEFAULT_BUILD};
 	logging::write(std::format("Inferred {} expansion from MPQ files, using build {}", expansion, build));
 	return build;
 }

@@ -2349,15 +2349,6 @@ view.chrSavedCharactersScreen = false;
 view.chrEquippedItems = import_equipment;
 view.chrEquippedItemSkins = import_equipment_skins;
 
-if (data.contains("guild_tabard")) {
-const auto& gt = data["guild_tabard"];
-view.chrGuildTabardConfig.background = gt.value("background", 0);
-view.chrGuildTabardConfig.border_style = gt.value("border_style", 0);
-view.chrGuildTabardConfig.border_color = gt.value("border_color", 0);
-view.chrGuildTabardConfig.emblem_design = gt.value("emblem_design", 0);
-view.chrGuildTabardConfig.emblem_color = gt.value("emblem_color", 0);
-}
-
 view.chrImportChoices.clear();
 if (data.contains("choices") && data["choices"].is_array())
 view.chrImportChoices = data["choices"].get<std::vector<nlohmann::json>>();

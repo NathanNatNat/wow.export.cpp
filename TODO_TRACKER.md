@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/115 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/69 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/js/modules/font_helpers.cpp ──────────────────────────────────── -->
 
@@ -9,20 +9,10 @@
   - **Status**: Pending
   - **Details**: The JS `check_glyph_support(ctx, font_family, char)` works by rendering the character twice to an off-screen canvas — once with a fallback font (`32px monospace`) and once with the target font — and comparing the total alpha channel sum of the two renders (lines 38–53). A character is considered supported if the rendered output differs from the fallback. This approach detects whether the *target font* actually has a glyph for the codepoint, even when the font is not loaded into ImGui. The C++ implementation (font_helpers.cpp lines 54–63) instead calls `ImFont::FindGlyphNoFallback()` on an already-loaded ImGui font. These are not equivalent: the JS detects support in *any* font family loaded in the browser, while the C++ detects support only in an *already-loaded ImGui font*. For glyphs that exist in the OS font but were not baked into the ImGui atlas (e.g., because the atlas only baked a subset of codepoints), the C++ will incorrectly report the glyph as not supported. This is an unavoidable architectural difference between browser/DOM and ImGui, but the deviation should be documented.
 
-- [ ] 384. [font_helpers.cpp] `detect_glyphs_async` signature differs from JS — `grid_element` parameter replaced with `GlyphDetectionState&`
-  - **JS Source**: `src/js/modules/font_helpers.js` lines 56–106
-  - **Status**: Pending
-  - **Details**: JS signature is `detect_glyphs_async(font_family, grid_element, on_glyph_click, on_complete)`. The second parameter `grid_element` is a DOM element that the function populates with `<span>` cells for each detected glyph. In the C++ port, this DOM manipulation is replaced by storing detected codepoints into `GlyphDetectionState::detected_codepoints` and deferring UI rendering to the caller. The JS builds the UI incrementally inside the async batch loop (creating DOM nodes immediately when each glyph is found). The C++ collects all codepoints first, then lets the caller iterate `detected_codepoints` during the ImGui render loop. This means the C++ port does not populate the glyph grid incrementally during detection — the grid only appears after `state.complete == true`, rather than growing batch-by-batch as in JS. Callers that rely on incremental grid population will see a different UX.
-
 - [ ] 385. [font_helpers.cpp] `inject_font_face` — missing font load verification equivalent to JS `document.fonts.load` + `document.fonts.check`
   - **JS Source**: `src/js/modules/font_helpers.js` lines 113–133
   - **Status**: Pending
   - **Details**: After injecting the CSS `@font-face` rule, the JS awaits `document.fonts.load('16px "' + font_id + '"')` (line 124) and then checks `document.fonts.check('16px "' + font_id + '"')` (line 125). If the check returns false, the style node is removed from the DOM and an error is thrown (lines 127–130). The C++ implementation calls `io.Fonts->AddFontFromMemoryTTF(...)` and checks for a null return (line 171), but there is no equivalent to the post-load verification step. If ImGui accepts the font data but it is internally corrupt or unusable, the C++ will not detect this and will not clean up, whereas the JS would detect it and throw. This is a minor error-recovery gap.
-
-- [ ] 387. [font_helpers.cpp] `get_detection_canvas()` helper and `glyph_detection_canvas`/`glyph_detection_ctx` state have no C++ equivalent
-  - **JS Source**: `src/js/modules/font_helpers.js` lines 15–28
-  - **Status**: Pending
-  - **Details**: The JS maintains a singleton off-screen canvas (`glyph_detection_canvas`) and its 2D context (`glyph_detection_ctx`) for pixel-level glyph detection. The `get_detection_canvas()` helper lazily creates this canvas on first use. The C++ omits this entirely because it replaced the canvas-based detection with an ImGui atlas lookup. This is an expected consequence of the `check_glyph_support` deviation documented in finding 5, but the absence of any canvas state is explicitly noted here for completeness.
 
 <!-- ─── src/js/modules/legacy_tab_audio.cpp ──────────────────────────────── -->
 
@@ -36,10 +26,6 @@
   - **Status**: Pending
   - **Details**: The JS template renders `<div id="sound-player-anim" :style="{ 'animation-play-state': ... }">` — a CSS-animated element. The C++ replacement (lines 440–449) uses `ImGui::GetWindowDrawList()->AddText(iconFont, animSize, pos, ...)` which is a raw `ImDrawList` call. Per CLAUDE.md, `ImDrawList` calls should be reserved exclusively for effects with no native equivalent such as image rotation, multi-colour gradient fills, or custom OpenGL overlays. A pulsating text icon does not fall into any of those categories; `ImGui::Text` with a scaled font (via `ImGui::PushFont`/`ImGui::PopFont` or by setting the font size) would be a closer match using a native widget approach. The current use of `AddText` violates the ImGui rendering guideline.
 
-- [ ] 392. [legacy_tab_audio.cpp] Sound player UI renders seek/title/duration on one `ImGui::Text` line rather than in three separate labelled spans
-  - **JS Source**: `src/js/modules/legacy_tab_audio.js` lines 219–221 (template)
-  - **Status**: Pending
-  - **Details**: JS template renders three separate `<span>` elements: one for seek time (left-aligned), one for the track title (centre, with class `title`), and one for duration (right-aligned), all within a flex-row `#sound-player-info` div. The C++ renders all three concatenated in a single `ImGui::Text("%s  %s  %s", ...)` call (line 460). The layout is compressed onto one line with no alignment differentiation between the three fields. The JS gives the title a `class="title"` style (typically larger/bolder text and centred within the flex row). The C++ does not replicate the three-column flex alignment or the title styling. This is a UI layout deviation.
 <!-- ─── src/js/modules/legacy_tab_data.cpp ──────────────────────────────── -->
 <!-- No issues found -->
 
@@ -56,12 +42,7 @@
 <!-- No issues found -->
 
 <!-- ─── src/js/modules/module_test_a.cpp ──────────────────────────────────── -->
-
-- [ ] 403. [module_test_a.cpp] counter reset in mounted() is an addition not present in JS mounted()
-  - **JS Source**: `src/js/modules/module_test_a.js` lines 27–29
-  - **Status**: Pending
-  - **Details**: The JS `mounted()` only calls `console.log('module_test_a mounted')`. The C++ `mounted()` additionally resets `counter = 0`. The justification (data() returns fresh state on each Vue mount) is architecturally valid, but it is a behavioural addition not explicitly present in the JS `mounted()` body. Document as an intentional port decision.
-
+<!-- No issues found -->
 
 <!-- ─── src/js/modules/module_test_b.cpp ──────────────────────────────────── -->
 
@@ -74,12 +55,6 @@
   - **JS Source**: `src/js/modules/module_test_b.js` lines 6 (v-model="message")
   - **Status**: Pending
   - **Details**: The call `ImGui::InputText("##message", message.data(), message.capacity() + 1, ...)` passes `capacity()+1` as the buffer size, but `std::string::capacity()` does not guarantee space for a null terminator beyond capacity bytes — writing `capacity()+1` characters would overflow the string's internal buffer. The standard pattern is to ensure the string is resized to at least 1 byte (so `data()` is valid), reserve extra capacity, and use `capacity()` (not `capacity()+1`) as the size argument, or alternatively use `message.size() + 1` with a fixed reserved capacity. The reserve(256) before the call only happens if `capacity() < 256`, so on a fresh "Hello Thrall" string this is fine, but the `capacity()+1` buffer-size argument is still technically incorrect.
-
-- [ ] 406. [module_test_b.cpp] counter reset in mounted() is an addition not present in JS mounted() (same as module_test_a)
-  - **JS Source**: `src/js/modules/module_test_b.js` lines 36–38
-  - **Status**: Pending
-  - **Details**: Same pattern as module_test_a: JS `mounted()` only logs. C++ `mounted()` also resets `message = "Hello Thrall"`. The justification (data() returns fresh state on each mount) is valid and mirrors the pattern in module_test_a, but should be documented as intentional.
-
 
 <!-- ─── src/js/modules/screen_settings.cpp ────────────────────────────────── -->
 
@@ -113,7 +88,6 @@
   - **Status**: Pending
   - **Details**: The JS wraps the locale MenuButton in `<div style="width: 150px">`. The C++ renders the MenuButton without constraining its width to 150px. This is a minor visual layout deviation.
 
-
 <!-- ─── src/js/modules/screen_source_select.cpp ───────────────────────────── -->
 
 - [ ] 417. [screen_source_select.cpp] set_selected_cdn calls config::save() which is not present in JS
@@ -125,11 +99,6 @@
   - **JS Source**: `src/js/modules/screen_source_select.js` line 61
   - **Status**: Pending
   - **Details**: The JS build buttons use `:class="[..., { disabled: $core.view.isBusy }]"` which applies CSS styling to show the button as visually disabled when busy. The C++ only checks `!core::view->isBusy` before calling `click_source_build()` in the click handler, but does not apply any visual disabled styling (no `ImGui::BeginDisabled()`/`EndDisabled()` around the build buttons). Users receive no visual feedback that the button is inactive while busy.
-
-- [ ] 419. [screen_source_select.cpp] init_cdn_pings: JS updates cdnRegions array reactively after each ping; C++ only updates individual region delay
-  - **JS Source**: `src/js/modules/screen_source_select.js` lines 227–232
-  - **Status**: Pending
-  - **Details**: In the JS, after each ping resolves, it does `this.$core.view.cdnRegions = [...regions]` (spread to create a new array reference, triggering Vue reactivity). The C++ posts only `regions[index]["delay"] = delay` to the main thread. Since C++ is not Vue-reactive, this is intentional — the ImGui render loop will pick up the change naturally. No functional issue, but worth noting as a documented deviation.
 
 - [ ] 423. [screen_source_select.cpp] open_legacy_install runs synchronously in C++; JS is async with await
   - **JS Source**: `src/js/modules/screen_source_select.js` lines 169–204
@@ -156,23 +125,8 @@
   - **Status**: Pending
   - **Details**: Build selection buttons in the build-select view are rendered entirely via raw ImDrawList calls (`AddRectFilled`, `AddText`, `AddImage`, `drawDashedRoundedRect`). CLAUDE.md says native ImGui widgets should be used for button/text rendering. Only the dashed rounded rect outline itself is a legitimate ImDrawList use; the button background, text label, and image should use native `ImGui::ImageButton`, `ImGui::Button`, or `ImGui::Selectable` widgets.
 
-
 <!-- ─── src/js/modules/tab_audio.cpp ──────────────────────────────────────── -->
-
-- [ ] 428. [tab_audio.cpp] load_track async flow differs: JS uses RAII busy lock, C++ defers it outside async task
-  - **JS Source**: `src/js/modules/tab_audio.js` lines 47–85
-  - **Status**: Pending
-  - **Details**: In the JS `load_track`, `using _lock = core.create_busy_lock()` holds the busy lock for the full async call including the CASC read and post-processing. In the C++ implementation, the `BusyLock` is created in `PendingAudioLoad.busy_lock` at dispatch time but is released via `pending_audio_load.reset()` after the async result is processed, which matches the intent. However, if the load is cancelled via `pending_audio_load.reset()` (in `unload_track` or a new `load_track` call), the busy lock is released without the toast being hidden or `soundPlayerDuration` being reset. The JS flow is a single async function where cancellation isn't possible mid-flight; the C++ cancellation path may leave the UI in a stale "progress" state.
-
-- [ ] 431. [tab_audio.cpp] export_sounds: C++ processes one file per frame (pump), JS processes all files in a loop
-  - **JS Source**: `src/js/modules/tab_audio.js` lines 122–180
-  - **Status**: Pending
-  - **Details**: JS `export_sounds` is a single async function that iterates all files with `for...of`, checking `helper.isCancelled()` each iteration. The C++ implementation uses a per-frame pump (`pump_audio_export`) that processes one file per frame. This is an intentional C++ adaptation for non-blocking rendering. However the JS version calls `export_data = await core.view.casc.getFile(...)` for `.unk_sound` files to detect type, then potentially changes `file_name`, then calls `getFileByName(file_name)` again if the data was already fetched. The C++ version calls `getVirtualFileByName(file_name)` once for the unk_sound file detection and then conditionally again for export — this matches the JS logic correctly.
-
-- [ ] 433. [tab_audio.cpp] Volume slider display format uses "Vol: %.0f%%" but JS uses a plain slider with no format string
-  - **JS Source**: `src/js/modules/tab_audio.js` lines 213–215
-  - **Status**: Pending
-  - **Details**: The JS volume slider (`<component :is="$components.Slider" id="slider-volume" v-model="$core.view.config.soundPlayerVolume">`) has no explicit label. The C++ renders `ImGui::SliderFloat("##VolumeSlider", &vol, 0.0f, 1.0f, "Vol: %.0f%%")`. The `Vol: %.0f%%` format string will display the raw float 0–1 value multiplied by nothing (it won't display as a percentage automatically — `%.0f` on a value of `0.5` gives "Vol: 0%", not "Vol: 50%"). The slider value is in range 0–1, so the format string is incorrect — it would need `(vol * 100)` to display percentage properly.
+<!-- No issues found -->
 
 <!-- ─── src/js/modules/tab_blender.cpp ────────────────────────────────────── -->
 <!-- No issues found -->
@@ -194,11 +148,6 @@
   - **Status**: Pending
   - **Details**: JS export calls `DBItemModels.getItemDisplay(geom.item_id, char_info?.raceID, char_info?.genderIndex, geom.modifier_id)`. The C++ export at line ~2561 calls `db::caches::DBItemModels::getItemDisplay(geom.item_id, static_cast<int>(char_info->raceID), char_info->genderIndex)` — `modifier_id` (the 4th argument) is not passed in the C++ version. This means item skin/appearance modifier is not applied when getting item display data for export, potentially using the wrong textures for skinned items.
 
-- [ ] 449. [tab_characters.cpp] import_json_character: "load directly into viewer" path missing guild_tabard config application
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 1656–1675
-  - **Status**: Pending
-  - **Details**: JS `import_json_character` "load directly into viewer" path (line 1656–1675) does NOT apply guild_tabard config — it only applies equipment, equipment_skins, choices, model_id and race_id. The C++ implementation at line ~2342 applies `guild_tabard` config in the "load directly into viewer" branch. This is a deviation from the JS behavior: the JS does not restore guild tabard when loading a character JSON directly; the C++ does. This is likely a bug in the C++ (extra behavior not present in JS).
-
 - [ ] 450. [tab_characters.cpp] mounted: JS shows 10 loading steps; C++ shows 8
   - **JS Source**: `src/js/modules/tab_characters.js` line 2706
   - **Status**: Pending
@@ -208,16 +157,6 @@
   - **JS Source**: `src/js/modules/tab_characters.js` line 2759
   - **Status**: Pending
   - **Details**: JS: `await DBItemList.initialize((msg) => this.$core.progressLoadingScreen(msg))` — initializes a separate `DBItemList` cache with a progress callback. The C++ mounted does not appear to call any equivalent `DBItemList::initialize()` or `DBItemList::ensureInitialized()`. This means item list data used for the item picker may not be loaded, or it is initialized elsewhere. This needs verification.
-
-- [ ] 452. [tab_characters.cpp] mounted: C++ sets chrModelViewerContext as a JSON object; JS sets it as a typed object
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 2766–2774
-  - **Status**: Pending
-  - **Details**: JS mounted sets `state.chrModelViewerContext = { gl_context: null, controls: null, useCharacterControls: true, fitCamera: null, getActiveRenderer: () => ..., getEquipmentRenderers: () => ..., getCollectionRenderers: () => ... }`. The C++ sets `state.chrModelViewerContext = nlohmann::json{...}` as a JSON object, which cannot store C++ function references. The actual function callbacks are wired via `viewer_context` (a `model_viewer_gl::Context` struct), not via the JSON object. This is an architectural deviation but appears intentional and necessary.
-
-- [ ] 453. [tab_characters.cpp] render(): outside-click handler to close import panel is incomplete
-  - **JS Source**: `src/js/modules/tab_characters.js` lines 2833–2849
-  - **Status**: Pending
-  - **Details**: The JS click handler closes `characterImportMode` when clicking outside both the import panel AND the BNet/Wowhead buttons. The C++ at lines ~2973–2977 only closes when `!ImGui::IsAnyItemHovered()`, which is a crude approximation. It will close the panel even when clicking on the import panel itself (since `IsAnyItemHovered` checks hovered items, not the panel). The exact JS behavior cannot be fully replicated with ImGui because ImGui doesn't have DOM hit-testing. This is a known ImGui limitation but the current implementation is overly aggressive.
 
 - [ ] 454. [tab_characters.cpp] render(): color picker popup uses a single shared popup ID "##chr_color_popup" for all options
   - **JS Source**: `src/js/modules/tab_characters.js` lines 2143–2161
@@ -254,18 +193,7 @@
   - **Status**: Pending
   - **Details**: See finding above — JS shows 10 steps, C++ shows 8. This causes the loading screen to complete at a different visual percentage. Separate from the "DBItemList not initialized" finding.
 
-
 <!-- ─── src/js/modules/tab_creatures.cpp ──────────────────────────────────── -->
-
-- [ ] 461. [tab_creatures.cpp] export_files: mark_name not used as export mark for standard creature export
-  - **JS Source**: `src/js/modules/tab_creatures.js` lines 954–971
-  - **Status**: Pending
-  - **Details**: In the JS, `export_model()` returns `mark_name` and `helper.mark(mark_name, true)` is called with that value. In the C++ `export_files()` (line ~1399), `model_viewer_utils::export_model(opts)` return value is stored in `mark_name`, but `helper.mark(creature_name, true)` is called instead of `helper.mark(mark_name, true)`. This means the mark label always uses `creature_name` instead of the actual exported file path/name returned by `export_model`, deviating from JS behaviour.
-
-- [ ] 462. [tab_creatures.cpp] Missing export_paths.writeLine for PNG/CLIPBOARD export path
-  - **JS Source**: `src/js/modules/tab_creatures.js` lines 738–748
-  - **Status**: Pending
-  - **Details**: In the JS, after the PNG/CLIPBOARD export branch completes, `export_paths?.close()` is called. In the C++ (line ~1110), `export_paths.close()` is **not** called after the early return from the PNG/CLIPBOARD branch. This means the export stream may not be properly closed when using those formats.
 
 - [ ] 463. [tab_creatures.cpp] Geosets sidebar uses raw ImGui checkboxes instead of Checkboxlist component
   - **JS Source**: `src/js/modules/tab_creatures.js` lines 1108–1114
@@ -304,22 +232,8 @@
   - **Status**: Pending
   - **Details**: The JS template passes `:copydir="$core.view.config.copyFileDirectories"` to the Listbox for the DB2 list. The C++ `listbox::render()` call (line ~274) does not pass a `copydir` equivalent. The C++ listbox function signature may not have this parameter, but the config value `copyFileDirectories` should still be wired if the listbox supports it.
 
-- [ ] 472. [tab_data.cpp] export_csv single-table: rows_to_export uses all_rows directly, not filtered/selected rows
-  - **JS Source**: `src/js/modules/tab_data.js` lines 217–229
-  - **Status**: Pending
-  - **Details**: In the JS `export_csv()`, when exporting a single table in non-export-all mode, `rows_to_export = [...selection]` which is the actual selected row **data** (the selection in the DataTable component is the selected row values, not indices). In the C++ `export_csv()` single-table branch (line ~574), the selection holds row **indices** into the sorted display rows, which are then looked up. This is architecturally different but should produce equivalent results. However, it warrants verification that indices match the displayed rows correctly (sorted + filtered).
-
 <!-- ─── src/js/modules/tab_decor.cpp ──────────────────────────────────────── -->
-
-- [ ] 474. [tab_decor.cpp] Listbox unittype is "decor item" in C++ but "item" in JS template
-  - **JS Source**: `src/js/modules/tab_decor.js` line 233
-  - **Status**: Pending
-  - **Details**: In JS, the Listbox has `unittype="item"`. In C++ (line ~775) `listbox::render()` is called with `"decor item"` as the unittype. This causes different wording in file-count displays like "X items" vs "X decor items".
-
-- [ ] 475. [tab_decor.cpp] toggle_category_group differs from JS: JS delegates to setDecorCategoryGroup, C++ implements inline
-  - **JS Source**: `src/js/modules/tab_decor.js` lines 513–516
-  - **Status**: Pending
-  - **Details**: In JS, `toggle_category_group(group)` calls `this.$core.view.setDecorCategoryGroup(group.id, !all_checked)` which is a view method that presumably updates the whole group including the Uncategorized synthetic entry. In C++, it directly toggles `sub->checked` on pointers into `category_mask`. This is functionally equivalent for non-Uncategorized groups, but the Uncategorized group's single entry (`[uncategorized]`) is also handled correctly via the pointer. Functionally equivalent but the indirection via `setDecorCategoryGroup` is lost.
+<!-- No issues found -->
 
 <!-- ─── src/js/modules/tab_fonts.cpp ──────────────────────────────────────── -->
 
@@ -338,17 +252,6 @@
   - **Status**: Pending
   - **Details**: In JS, the textarea has a `:placeholder` attribute that shows when the field is empty. In C++ (lines ~372–373), `ImGui::SetItemTooltip()` is used to show the placeholder as a tooltip when the field is empty (`if (view.fontPreviewText.empty())`). The tooltip only appears on hover, not as a persistent placeholder text inside the input box. This is a visual difference from the JS (placeholder text vs hover tooltip).
 
-- [ ] 485. [tab_fonts.cpp] Missing context menu in filter bar for Regex tooltip
-  - **JS Source**: `src/js/modules/tab_fonts.js` lines 59–61
-  - **Status**: Pending
-  - **Details**: The JS template includes `<div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>` in the filter bar. The C++ filter bar (lines ~295–303) renders `ImGui::TextUnformatted("Regex Enabled")` but does NOT call `ImGui::SetTooltip()` with `view.regexTooltip` after it. The tooltip text is missing from the regex-enabled indicator in the font filter bar.
-
-- [ ] 486. [tab_fonts.cpp] export_fonts: JS exports synchronously in a loop, C++ uses async one-per-frame pump
-  - **JS Source**: `src/js/modules/tab_fonts.js` lines 102–146
-  - **Status**: Pending
-  - **Details**: JS processes all selected fonts in a single async loop per click. The C++ uses a `PendingFontExport` queue that processes one file per `render()` frame call (line ~402–453). This is a C++ architectural adaptation to avoid blocking the main thread. Functionally it should produce the same results — files are exported in order, cancellation is checked, helper.finish() is called. The `isCancelled()` check in JS uses `return` to exit the function; C++ uses `reset()` and returns from `pump_font_export()`. These are functionally equivalent. No correctness issue, this deviation is intentional.
-
-
 <!-- ─── src/js/modules/tab_install.cpp ────────────────────────────────────── -->
 
 - [ ] 487. [tab_install.cpp] Missing listbox::renderStatusBar calls — includefilecount status bar absent from both views
@@ -356,32 +259,11 @@
   - **Status**: Pending
   - **Details**: Both Listbox components in the JS template use `:includefilecount="true"` — one with `unittype="install file"` (main manifest view) and one with `unittype="string"` (string viewer). In the C++ port, `listbox::render()` does not internally render the status bar; it must be called separately via `listbox::renderStatusBar()`. The `tab_install.cpp` render function never calls `listbox::renderStatusBar()` for either listbox. This means the file count status bar ("N install files found.") is entirely absent from the Install Manifest tab in both views. Compare with other tabs that correctly call `listbox::renderStatusBar()` after each listbox (e.g., `tab_audio.cpp` line 553, `tab_fonts.cpp` line 289). The status bar should be added after `ImGui::EndChild()` for each list container, before the tray section.
 
-
 <!-- ─── src/js/modules/tab_item_sets.cpp ──────────────────────────────────── -->
-
-- [ ] 488. [tab_item_sets.cpp] equip_set does not clear chrEquippedItemSkins for each equipped slot
-  - **JS Source**: `src/js/modules/tab_item_sets.js` lines 99–115
-  - **Status**: Pending
-  - **Details**: The JS `equip_set` method explicitly deletes the skin override for each equipped slot: `delete this.$core.view.chrEquippedItemSkins[slot_id]` (line 103) for each item equipped. The C++ `equip_set` (tab_item_sets.cpp lines 209–218) only sets `view.chrEquippedItems[std::to_string(slot_id_opt.value())] = item_id` but never clears `chrEquippedItemSkins` for those slots. This means when a set is equipped, any existing skin customization for those slots persists, causing incorrect rendering in the character preview (old skin override takes precedence over the newly equipped set item). The fix is to also erase the slot from `chrEquippedItemSkins` after setting the equipped item, as done in `equip-item.cpp` lines 54–55.
-
+<!-- No issues found -->
 
 <!-- ─── src/js/modules/tab_items.cpp ──────────────────────────────────────── -->
-
-- [ ] 489. [tab_items.cpp] view_item_models uses inline logic instead of DBItemList.getItemModels
-  - **JS Source**: `src/js/modules/tab_items.js` lines 37–45
-  - **Status**: Pending
-  - **Details**: JS `view_item_models` calls `DBItemList.getItemModels(item)` which returns a ready-made list. The C++ version reimplements the lookup inline (iterating `DBModelFileData::getModelFileDataID`). This is functionally equivalent but any logic differences inside `DBItemList.getItemModels` could cause divergence. The JS version also produces a flat string list (just the `entry [fdid]` format strings), whereas the C++ version adds them in the same way. This is a structural deviation worth noting, but appears functionally equivalent provided `DBModelFileData` mirrors the JS cache.
-
-- [ ] 490. [tab_items.cpp] view_item_textures uses inline logic instead of DBItemList.getItemTextures
-  - **JS Source**: `src/js/modules/tab_items.js` lines 47–55
-  - **Status**: Pending
-  - **Details**: JS `view_item_textures` calls `await DBItemList.getItemTextures(item)`. C++ reimplements it inline. Same concern as view_item_models above.
-
-- [ ] 495. [tab_items.cpp] Missing DBItemList abstraction layer — items loading is reimplemented directly
-  - **JS Source**: `src/js/modules/tab_items.js` lines 1–3 (imports DBItemList)
-  - **Status**: Pending
-  - **Details**: The JS uses a `DBItemList` module (`../db/caches/DBItemList`) that abstracts item loading and retrieval. The C++ does not have a corresponding `DBItemList` class — all its logic is inlined in `initialize_items()`. This is a structural difference. Functionally it must be verified that all the logic from `DBItemList.initialize()`, `DBItemList.loadShowAllItems()`, `DBItemList.getItems()`, `DBItemList.getItemModels()`, and `DBItemList.getItemTextures()` is covered by the C++ implementation. The initialize_items() function appears to cover the initialize/loadShowAllItems paths, but getItemModels/getItemTextures are inlined in the view helpers.
-
+<!-- No issues found -->
 
 <!-- ─── src/js/modules/tab_maps.cpp ───────────────────────────────────────── -->
 
@@ -390,30 +272,10 @@
   - **Status**: Pending
   - **Details**: JS checks `if (!selected_wdt || !selected_wdt.worldModelPlacement)` (falsy check). C++ checks `if (!selected_wdt || (!selected_wdt->hasWorldModelPlacement && selected_wdt->worldModel.empty()))`. This is a more permissive condition — if the WDT has a `worldModel` string but no placement, the C++ will proceed while the JS would throw. This deviation means the C++ will attempt to export even when JS would reject it, potentially hitting different errors downstream.
 
-- [ ] 497. [tab_maps.cpp] export_map_wmo_minimap missing isCancelled check in tile loop
-  - **JS Source**: `src/js/modules/tab_maps.js` lines 712–742
-  - **Status**: Pending
-  - **Details**: JS checks `if (helper.isCancelled()) break;` inside the `for...of tiles_by_coord` loop. The C++ does NOT check `helper.isCancelled()` inside the tile composition loop in `export_map_wmo_minimap`. This means cancellation during WMO minimap export is not honoured in C++ whereas it is in JS.
-
 - [ ] 498. [tab_maps.cpp] initialize() posts maps to main thread but JS sets mapViewerMaps directly and hides loading screen after
   - **JS Source**: `src/js/modules/tab_maps.js` lines 938–978
   - **Status**: Pending
   - **Details**: JS sets `this.$core.view.mapViewerMaps = maps` synchronously after the loop, then calls `this.$core.hideLoadingScreen()`. C++ uses `core::postToMainThread` to set `mapViewerMaps` and sets `tab_initialized = true`, but calls `core::hideLoadingScreen()` BEFORE `postToMainThread` returns. This means the loading screen may hide before `mapViewerMaps` is updated, which could cause a brief display of an empty map list if the render loop runs between the hide and the main-thread post.
-
-- [ ] 499. [tab_maps.cpp] mounted() does not call initialize() — uses lazy init in render()
-  - **JS Source**: `src/js/modules/tab_maps.js` lines 1132–1146
-  - **Status**: Pending
-  - **Details**: JS `mounted()` calls `await this.initialize()`. C++ `mounted()` sets `tab_initialized = false` and the actual initialization is triggered lazily inside `render()`. This is a conscious structural change for threading reasons, and is functionally acceptable, but represents a deviation from the original structure.
-
-- [ ] 500. [tab_maps.cpp] WMO minimap tile export uses nearest-neighbor sampling instead of drawImage (canvas bilinear)
-  - **JS Source**: `src/js/modules/tab_maps.js` lines 716–736
-  - **Status**: Pending
-  - **Details**: In `export_map_wmo_minimap`, JS uses `ctx.drawImage(canvas, ...)` which performs bilinear interpolation. The C++ uses nearest-neighbor integer division `int src_x = (std::min)(static_cast<int>(px * tw / output_tile_size), ...)`. For the WMO minimap tile export specifically (not preview), this is less accurate than canvas bilinear. The preview path (`load_wmo_minimap_tile`) uses proper bilinear blitting, but the export path uses nearest-neighbor. Minor visual quality difference.
-
-- [ ] 501. [tab_maps.cpp] export_selected_map (OBJ) does not cancel loop on isCancelled
-  - **JS Source**: `src/js/modules/tab_maps.js` lines 790–820
-  - **Status**: Pending
-  - **Details**: In the JS OBJ export loop, `if (helper.isCancelled()) break;` is checked at the top of each iteration. The C++ async pump-based approach checks `if (helper.isCancelled())` at the start of `pump_map_export()`, which correctly handles cancellation. This appears fine.
 
 <!-- ─── src/js/modules/tab_models_legacy.cpp ──────────────────────────────── -->
 
@@ -432,11 +294,6 @@
   - **Status**: Pending
   - **Details**: The JS runs all initialization in `mounted()` with async/await on the loading screen. The C++ runs everything in `mounted()` synchronously on the main thread. This blocks the main thread during model list building and creature data loading. It should run on a background thread like other tabs (e.g. tab_maps uses a background thread). The loading screen display may not render correctly if the main thread is blocked.
 
-- [ ] 520. [tab_models_legacy.cpp] JS WMO Export uses setGroupMask with the raw view array; C++ converts to WMOGroupMaskEntry vector
-  - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 256–259
-  - **Status**: Pending
-  - **Details**: JS passes `core.view.modelViewerWMOGroups` directly to `exporter.setGroupMask()`. C++ converts it to a `std::vector<WMOGroupMaskEntry>`. This is necessary due to type differences and appears functionally correct, assuming the exporter processes the mask the same way.
-
 - [ ] 521. [tab_models_legacy.cpp] step_animation for MDX does not call renderer's step_animation_frame
   - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 462–471
   - **Status**: Pending
@@ -446,11 +303,6 @@
   - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 473–480
   - **Status**: Pending
   - **Details**: JS `seek_animation` calls `renderer.set_animation_frame?.(parseInt(frame))` for both M2 and MDX. C++ `seek_animation` calls `active_renderer_m2->set_animation_frame(frame)` for M2 but for MDX only sets `view.legacyModelViewerAnimFrame = frame` without calling the MDX renderer. Animation frame seeking is broken for MDX models.
-
-- [ ] 523. [tab_models_legacy.cpp] Sidebar missing "Show Bones" checkbox — C++ incorrectly omits it vs modern tab
-  - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 376–399
-  - **Status**: Pending
-  - **Details**: The JS legacy sidebar does NOT include "Show Bones" checkbox (consistent with modern tab_models.js which also lacks it). C++ legacy sidebar also omits it (correct), but C++ modern tab adds it. Noted for cross-reference with the tab_models finding above.
 
 - [ ] 525. [tab_models_legacy.cpp] export_paths not closed in export_files PNG/CLIPBOARD path
   - **JS Source**: `src/js/modules/tab_models_legacy.js` line 322
@@ -471,11 +323,6 @@
   - **JS Source**: `src/js/modules/tab_text.js` line 116
   - **Status**: Pending
   - **Details**: The C++ version omits the stack trace argument. The JS passes `e.stack` as a fourth argument to `helper.mark`. Should be passed to match JS fidelity (C++ `ExportHelper::mark` accepts an optional stack trace parameter).
-
-- [ ] 531. [tab_text.cpp] C++ `render()` adds a status bar (`BeginStatusBar`/`EndStatusBar`) not present in the JS template
-  - **JS Source**: `src/js/modules/tab_text.js` lines 18–44
-  - **Status**: Pending
-  - **Details**: The JS template has no status bar element. The C++ adds one (lines 207–210). Acceptable if status bars are a framework-level addition to all list tabs, but it deviates from the JS template structure.
 
 - [ ] 532. [tab_text.cpp] Text tab listbox missing `:includefilecount="true"` — JS passes it but C++ `listbox::render` call does not
   - **JS Source**: `src/js/modules/tab_text.js` line 21
@@ -512,25 +359,10 @@
   - **Status**: Pending
   - **Details**: The C++ version will freeze the UI for the duration of kino processing. JS awaits each fetch asynchronously. Should be moved to a background thread or pumped per-frame.
 
-- [ ] 539. [tab_videos.cpp] `export_mp4` calls `generics::get(*mp4_url)` without a User-Agent header; JS sends `{ 'User-Agent': constants.USER_AGENT }` in the download fetch
-  - **JS Source**: `src/js/modules/tab_videos.js` lines 627–629
-  - **Status**: Pending
-  - **Details**: The C++ MP4 download omits the User-Agent header that JS sends. `generics::get` should be checked/configured to set User-Agent to match JS behavior and avoid server rejections.
-
 - [ ] 540. [tab_videos.cpp] `get_mp4_url` is a blocking `while(true)` poll loop running on the calling thread; when called from `export_mp4()` on the main thread this freezes the UI until the MP4 is ready
   - **JS Source**: `src/js/modules/tab_videos.js` lines 347–375
   - **Status**: Pending
   - **Details**: JS uses tail-recursive async calls with `setTimeout` delays. C++ blocks the calling thread. Export should be moved off the main thread.
-
-- [ ] 541. [tab_videos.cpp] In-app video playback is replaced by opening an external player via `core::openInExplorer(url)` — JS plays video directly in an embedded `<video>` element with subtitle track, play/pause controls, and `onended`/`onerror` callbacks
-  - **JS Source**: `src/js/modules/tab_videos.js` lines 219–276
-  - **Status**: Pending
-  - **Details**: Major intentional deviation documented in code comments (lines 306–311). No in-app video playback exists in C++. The preview area shows "Video opened in external player". Known limitation.
-
-- [ ] 542. [tab_zones.cpp] Zones filter input uses `ImGui::InputText` without a placeholder hint; JS template uses `placeholder="Filter zones..."`
-  - **JS Source**: `src/js/modules/tab_zones.js` line 325
-  - **Status**: Pending
-  - **Details**: C++ line 998 calls `ImGui::InputText("##FilterZones", ...)`. Should be `ImGui::InputTextWithHint("##FilterZones", "Filter zones...", ...)` to match the JS placeholder text.
 
 - [ ] 543. [tab_zones.cpp] Zones listbox missing `:includefilecount="true"` — JS passes it but C++ `listbox_zones::render` call does not
   - **JS Source**: `src/js/modules/tab_zones.js` line 315
@@ -542,40 +374,10 @@
   - **Status**: Pending
   - **Details**: For zones with many tiles, C++ will freeze the UI briefly. Should be moved to a background thread with progress reporting.
 
-- [ ] 546. [build-version.cpp] `DEFAULT_BUILD` constant from JS is not exposed in C++
-  - **JS Source**: `src/js/mpq/build-version.js` lines 10, 159–162
-  - **Status**: Pending
-  - **Details**: JS exports `DEFAULT_BUILD = '1.12.1.5875'`. The C++ implementation does not declare this constant in `build-version.h`; the fallback value is hardcoded inline in `detect_build_version`. Any consumer that needs `DEFAULT_BUILD` by name has no access to it.
-
-- [ ] 547. [bzip2.cpp] `N_ITERS` and `NUM_OVERSHOOT_BYTES` constants are commented out
-  - **JS Source**: `src/js/mpq/bzip2.js` lines 51–53
-  - **Status**: Pending
-  - **Details**: JS defines `const N_ITERS = 4` and `const NUM_OVERSHOOT_BYTES = 20`. The C++ file comments both out. Neither is used in the decompression logic in JS or C++, but they should be present as uncommented constants to match the JS source faithfully.
-
-- [ ] 548. [mpq-install.cpp] `_scan_mpq_files` is not recursive; JS version recurses into subdirectories
-  - **JS Source**: `src/js/mpq/mpq-install.js` lines 25–41
-  - **Status**: Pending
-  - **Details**: JS `_scan_mpq_files` recursively calls itself for subdirectories, finding MPQ files anywhere under the install root. C++ uses `fs::directory_iterator` which is non-recursive and only scans the top-level directory. MPQ files in subdirectories are silently missed. Should use `fs::recursive_directory_iterator` or implement recursive descent mirroring the JS.
-
-- [ ] 549. [mpq-install.cpp] `getFilesByExtension` and `getAllFiles` return results in non-deterministic order
-  - **JS Source**: `src/js/mpq/mpq-install.js` lines 87–120
-  - **Status**: Pending
-  - **Details**: JS iterates a `Map` in deterministic insertion order (archives loaded in sorted path order). C++ iterates an `std::unordered_map` in unspecified order. Callers that depend on a stable ordering will observe different results.
-
-- [ ] 550. [audio-helper.cpp] `set_volume` is a no-op before `init()` and does not persist the value, but the JS does not persist it either — however the C++ `volume` field defaults to `1.0f` at construction, which slightly diverges from JS where there is no stored "pending volume" concept at all.
-  - **JS Source**: `src/js/ui/audio-helper.js` lines 136–139
-  - **Status**: Pending
-  - **Details**: JS `set_volume` is guarded by `if (this.gain)` and writes directly to the gain node; there is no local storage of the volume before `init()`. The C++ early-returns before setting `this->volume` when `!engine`, which matches the JS no-op behaviour, but the constructor initialises `volume = 1.0f` and `play()` passes that pre-stored value to the new sound — meaning a volume set before `init()` is silently ignored, whereas in JS no such "pending value" field exists at all. This is a low-risk deviation but worth noting.
-
 - [ ] 551. [audio-helper.cpp] `get_position` calculation differs from JS in how it computes elapsed time.
   - **JS Source**: `src/js/ui/audio-helper.js` lines 115–130
   - **Status**: Pending
   - **Details**: The JS computes `elapsed = context.currentTime - this.start_time` (wall-clock elapsed since `source.start()` was called), then `position = this.start_offset + elapsed`. The C++ uses `ma_sound_get_cursor_in_seconds()`, which returns the cursor relative to the seek point set in the decoder (i.e. it already accounts for `start_offset`). The C++ then adds `start_offset` again: `position = start_offset + cursor`. If `cursor` includes the decoded offset (i.e. reflects absolute playback from byte 0 of the stream), the result is correct; but if `ma_sound_get_cursor_in_seconds` returns elapsed-since-seek, the position is `start_offset` doubled. Needs verification that miniaudio returns an absolute stream cursor rather than elapsed-since-seek.
-
-- [ ] 553. [char-texture-overlay.cpp] `ensureActiveLayerAttached` deferred callback has incorrect logic.
-  - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 63–71
-  - **Status**: Pending
-  - **Details**: The JS `ensure_active_layer_attached` uses `process.nextTick` to re-attach the active canvas to the `#chr-texture-preview` DOM element if it is not already a child. It does NOT modify `active_layer`. The C++ deferred callback instead checks if `active_layer` is absent from `layers` and resets it to `layers.back()` or `0`. This is a different semantic: the C++ is doing a consistency repair, not a DOM re-attach. In the ImGui context there is no DOM to attach to, so the JS intent cannot be replicated exactly, but the current C++ logic is wrong in a different way — it would clear a valid `active_layer` if it somehow got removed from the list, rather than doing anything display-related.
 
 - [ ] 554. [character-appearance.cpp] `apply_customization_textures` omits `update()` call after each material `reset()`.
   - **JS Source**: `src/js/ui/character-appearance.js` lines 66–69
@@ -597,42 +399,7 @@
   - **Status**: Pending
   - **Details**: The JS calls `chr_material.setTextureTarget(chr_cust_mat, char_component_texture_section, chr_model_material, chr_model_texture_layer, true)` passing the full `chr_model_texture_layer` object (which includes `BlendMode`). The C++ passes `{ 0, 0, 0, static_cast<int>(get_field_int(*chr_model_texture_layer, "BlendMode")) }` as a simplified struct with a fixed layout. This may or may not match the expected fields in the C++ `setTextureTarget` signature — the order and meaning of the initialiser fields must be verified against `CharMaterialRenderer::setTextureTarget`.
 
-- [ ] 564. [texture-exporter.cpp] `exportFiles` catch block uses `fileName` instead of `markFileName` for error marking
-  - **JS Source**: `src/js/ui/texture-exporter.js` lines 177
-  - **Status**: Pending
-  - **Details**: JS `catch (e)` block calls `helper.mark(markFileName, false, e.message, e.stack)` — `markFileName` may have been rewritten with `.webp`/`.png` extension during the try block. C++ uses `fileName` (unchanged original name) because the updated `markFileName` (which is `exportFileName` in C++) is not accessible in the catch scope. This is a scope difference that changes which name is reported on error when format is WEBP or PNG.
-
 - [ ] 573. [cache-collector.cpp] `parse_url` drops the query string from URLs
   - **JS Source**: `src/js/workers/cache-collector.js` lines 19–44
   - **Status**: Pending
   - **Details**: JS `https_request` passes `parsed.pathname + parsed.search` as the request path (line 25), which includes any query-string parameters. The C++ `parse_url` (cache-collector.cpp lines 157–188) only captures the path up to the first `/`, losing everything after `?`. URLs passed to the worker that include query parameters would produce incorrect HTTP requests.
-
-- [ ] 574. [cache-collector.cpp] No top-level entry point equivalent to `collect().catch(...)`
-  - **JS Source**: `src/js/workers/cache-collector.js` line 431
-  - **Status**: Pending
-  - **Details**: The JS file auto-invokes `collect().catch(err => log(\`fatal: ${err.message}\`))` at module load time. The C++ exposes `collect()` as a library function, so the caller is responsible for invoking it; the top-level invocation and the fatal-error log path are not replicated inside the translation unit itself. This is an architectural difference (worker thread vs library call) but worth documenting for completeness.
-
-- [ ] 576. [equip-item.cpp] Vue reactivity spread assignments omitted — architectural deviation from JS
-  - **JS Source**: `src/js/wow/equip-item.js` lines 26–27
-  - **Status**: Pending
-  - **Details**: JS reassigns `core.view.chrEquippedItems = { ...core.view.chrEquippedItems }` and `core.view.chrEquippedItemSkins = { ...core.view.chrEquippedItemSkins }` after mutation to trigger Vue.js reactive updates (lines 26–27). C++ has no reactive data-binding framework, so these reassignments are omitted. If the C++ view system gains a notification/dirty-flag mechanism for equipped-item changes, this code path will need to be revisited.
-
-- [ ] 577. [equip-item.cpp] "other slot empty" check uses stricter null-only test vs JS falsy check
-  - **JS Source**: `src/js/wow/equip-item.js` line 15
-  - **Status**: Pending
-  - **Details**: JS checks `!core.view.chrEquippedItems[other]` (line 15), which is falsy for `undefined`, `null`, `0`, `false`, and `""`. The C++ equivalent (equip-item.cpp lines 42–45) checks `.is_null()` and `.contains()` only, treating JSON `0`, `false`, or `""` as truthy (slot occupied). In practice this is unlikely to cause a difference since item IDs are always positive integers, but it is a semantic deviation from the JS behaviour.
-
-- [ ] 578. [equip-item.cpp] Function signature differs from JS — takes separate `item_id`/`item_name` instead of an item object
-  - **JS Source**: `src/js/wow/equip-item.js` lines 4–5
-  - **Status**: Pending
-  - **Details**: JS `equip_item(core, item, pending_slot)` receives `item.id` and `item.name` from the item object (lines 5–6, 30). C++ `equip_item(uint32_t item_id, const std::string& item_name, int pending_slot)` accepts them as separate arguments (equip-item.cpp line 21). While functionally equivalent if callers pass the correct values, the signature change must be verified against all call sites to ensure no data is lost or mismatched.
-
-- [ ] 579. [EquipmentSlots.cpp] `filter_name` field added to all `EQUIPMENT_SLOTS` entries — JS only defines it on shoulder entries
-  - **JS Source**: `src/js/wow/EquipmentSlots.js` lines 11–27
-  - **Status**: Pending
-  - **Details**: In the JS `EQUIPMENT_SLOTS` array, only the two shoulder entries carry a `filter_name` property (lines 14–15); all other entries have `filter_name` as `undefined`. The C++ `EquipmentSlotEntry` struct (EquipmentSlots.h line 26) defines `filter_name` for every slot, with non-shoulder slots echoing their display name. The existing C++ usage in `tab_characters.cpp` (lines 3994, 4002) checks `filter_name.empty() ? slot.name : slot.filter_name`, which replicates the JS `filter_name ?? slot.name` pattern correctly. However, any future code that checks whether `filter_name` is *different from* the display name (to identify shoulder-class slots) would behave differently between JS and C++, since non-shoulder slots in JS have no `filter_name` at all while C++ always has it equal to `name`.
-
-- [ ] 580. [EquipmentSlots.cpp] `get_slot_id_for_inventory_type` / `get_slot_id_for_wmv_slot` return `std::nullopt` on miss vs JS `null`
-  - **JS Source**: `src/js/wow/EquipmentSlots.js` lines 157–159, 161–163
-  - **Status**: Pending
-  - **Details**: JS functions return `null` (via `?? null`) when the key is not found. C++ returns `std::optional` with `std::nullopt`. Callers in C++ must use `.has_value()` / `.value()` checks; any caller that was ported expecting a raw int without optional handling would silently fail. This is a standard C++ idiom translation but is flagged because callers must be verified.

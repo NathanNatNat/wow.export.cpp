@@ -969,6 +969,7 @@ tiles_by_coord.size(), canvas_width, canvas_height));
 TiledPNGWriter writer(canvas_width, canvas_height, output_tile_size);
 
 for (const auto& [coord_key, tile_list] : tiles_by_coord) {
+	if (helper.isCancelled()) break;
 	// Parse coord key "x,y"
 	auto comma = coord_key.find(',');
 	if (comma == std::string::npos) continue;

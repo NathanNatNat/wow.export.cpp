@@ -1107,6 +1107,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 			core::setToast("error", "The selected export option only works for model previews. Preview something first!", {}, -1);
 		}
 
+		export_paths.close();
 		return;
 	}
 
@@ -1398,7 +1399,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 			opts.active_renderer = is_active ? active_renderer_result.m2.get() : nullptr;
 			std::string mark_name = model_viewer_utils::export_model(opts);
 
-			helper.mark(creature_name, true);
+			helper.mark(mark_name, true);
 		} catch (const std::exception& e) {
 			helper.mark(creature_name, false, e.what());
 		}

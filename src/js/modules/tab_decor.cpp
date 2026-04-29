@@ -772,7 +772,7 @@ void render() {
 			copy_mode,
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
-			"decor item", // unittype
+			"item",   // unittype
 			nullptr,  // overrideItems
 			false,    // disable
 			"decor",  // persistscrollkey
@@ -793,7 +793,7 @@ void render() {
 
 	// --- Status bar ---
 	if (app::layout::BeginStatusBar("decor-status", regions)) {
-		listbox::renderStatusBar("decor item", {}, listbox_decor_state);
+		listbox::renderStatusBar("item", {}, listbox_decor_state);
 	}
 	app::layout::EndStatusBar();
 

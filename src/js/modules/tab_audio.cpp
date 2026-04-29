@@ -622,7 +622,7 @@ void render() {
 
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		float vol = view.config.value("soundPlayerVolume", 1.0f);
-		if (ImGui::SliderFloat("##VolumeSlider", &vol, 0.0f, 1.0f, "Vol: %.0f%%")) {
+		if (ImGui::SliderFloat("##VolumeSlider", &vol, 0.0f, 1.0f, "")) {
 			view.config["soundPlayerVolume"] = vol;
 		}
 	}

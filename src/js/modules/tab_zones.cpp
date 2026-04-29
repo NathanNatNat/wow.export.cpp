@@ -995,7 +995,7 @@ context_menu::render(
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterZones.c_str(), sizeof(filter_buf) - 1);
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-		if (ImGui::InputText("##FilterZones", filter_buf, sizeof(filter_buf)))
+		if (ImGui::InputTextWithHint("##FilterZones", "Filter zones...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterZones = filter_buf;
 	}
 	ImGui::EndChild();

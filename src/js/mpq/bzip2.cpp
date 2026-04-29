@@ -57,9 +57,9 @@ static constexpr int RUNA = 0;
 static constexpr int RUNB = 1;
 static constexpr int N_GROUPS = 6;
 static constexpr int G_SIZE = 50;
-// static constexpr int N_ITERS = 4;
+[[maybe_unused]] static constexpr int N_ITERS = 4;
 static constexpr int MAX_SELECTORS = 2 + (900000 / G_SIZE);
-// static constexpr int NUM_OVERSHOOT_BYTES = 20;
+[[maybe_unused]] static constexpr int NUM_OVERSHOOT_BYTES = 20;
 
 static constexpr std::array<uint32_t, 256> CRC32_TABLE = {{
 	0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475005,
