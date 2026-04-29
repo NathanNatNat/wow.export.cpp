@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/126 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/129 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
   - **JS Source**: `src/app.js` lines 589–624, 649–657
@@ -506,3 +506,15 @@
   - **JS Source**: `src/js/casc/db2.js` lines 51–52
   - **Status**: Pending
   - **Details**: The JS db2 Proxy wrapper has a two-part guard for getRelationRows: (1) `!reader_target.isLoaded` throws "Table must be loaded", and (2) `reader_target.rows === null` throws "Table must be preloaded". The C++ WDCReader::getRelationRows() only enforces the isLoaded check (WDCReader.cpp:302–303). The rows-null check (ensuring preload() was called) is absent from both the db2 layer and WDCReader. Since getRelationRows() uses relationshipLookup (not rows), this is a developer-facing error message quality gap rather than a functional bug. To match JS behaviour, db2::getTable() or WDCReader::getRelationRows() should check if preload() was called and throw a descriptive error if not.
+- [ ] 127. [context-menu.cpp] Click-to-close handler checks all mouse buttons instead of just left-click
+  - **JS Source**: `src/js/components/context-menu.js` line 54
+  - **Status**: Pending
+  - **Details**: Vue's `@click` (without `.right` or `.middle` modifiers) only fires on left mouse button clicks. The C++ (lines 116-118) checks `ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1) || ImGui::IsMouseClicked(2)`, closing the menu on left, right, or middle click. The C++ comment at line 115 incorrectly states "JS @click fires for any mouse button." To match JS, only check `ImGui::IsMouseClicked(0)`.
+- [ ] 128. [item-picker-modal.cpp] open_items_tab erroneously closes the modal
+  - **JS Source**: `src/js/components/item-picker-modal.js` lines 143–145
+  - **Status**: Pending
+  - **Details**: JS `open_items_tab()` only emits `'open-items-tab'` without closing the modal — the parent component decides whether to close it. C++ (lines 340-346) calls `s_on_open_items_tab()` and then immediately calls `close_modal()`, forcing the modal closed. This removes the parent's ability to decide and changes user-visible behavior: clicking "Search in Items Tab" always dismisses the modal in C++ but not in JS.
+- [ ] 129. [item-picker-modal.cpp] Missing click-outside-to-close on overlay backdrop
+  - **JS Source**: `src/js/components/item-picker-modal.js` line 161
+  - **Status**: Pending
+  - **Details**: JS has `@click.self="$emit('close')"` on the overlay div, allowing users to close the modal by clicking the semi-transparent backdrop outside the modal content. C++ (lines 174-178) draws a backdrop rectangle but has no click detection on it. `BeginPopupModal` does not support click-outside-to-close natively. Users must use Cancel, Escape, or the X button to close. This is a missing interaction path.
