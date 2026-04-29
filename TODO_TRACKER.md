@@ -1,23 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/260 verified (0%)** — ✅ = Verified, ⬜ = Pending
-
-<!-- ─── src/js/db/DBCReader.cpp ───────────────────────────────────────── -->
-
-- [ ] 321. [DBCReader.cpp] `loadSchema()` bypasses CASC BuildCache; should use `getActiveCascCache()` like `WDCReader.cpp`
-  - **JS Source**: `src/js/db/DBCReader.js` lines 177–194
-  - **Status**: Pending
-  - **Details**: JS `loadSchema()` uses `core.view.casc?.cache` (a `BuildCache` object) with `cache.getFile()` / `cache.storeFile()` for DBD caching with null-safe fallback. C++ always uses `std::filesystem` directly. `WDCReader.cpp` correctly implements `getActiveCascCache()` with proper fallback — `DBCReader.cpp` should use the same pattern.
-
-- [ ] 322. [DBCReader.cpp] `_read_field()` missing `FieldType::Int64` and `FieldType::UInt64` switch cases
-  - **JS Source**: `src/js/db/DBCReader.js` lines 390–408
-  - **Status**: Pending
-  - **Details**: `convert_dbd_to_schema_type` can return `FieldType::Int64` and `FieldType::UInt64` for 64-bit fields. Neither JS nor C++ handles these in `_read_field` — both fall through to `readUInt32LE()` default, silently truncating 64-bit values. The cases should be handled or explicitly documented.
-
-- [ ] 323. [DBCReader.cpp] `_read_field_array()` silently drops fields of unexpected variant type
-  - **JS Source**: `src/js/db/DBCReader.js` lines 417–423
-  - **Status**: Pending
-  - **Details**: In `_read_record`, when the post-processing loop encounters a `vector<FieldValue>` whose first element holds none of the four checked types, the field is silently omitted from `out`. JS always stores the array regardless. An `else` fallback should store an empty or raw vector to match JS behavior.
+> **Progress: 0/253 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/js/db/DBDParser.cpp ─────────────────────────────── -->
 
@@ -40,26 +23,7 @@
 <!-- No issues found -->
 
 <!-- ─── src/js/db/WDCReader.cpp ─────────────────────────────── -->
-
-- [ ] 327. [WDCReader.cpp] `getRelationRows()` incorrectly requires preload; JS does not
-  - **JS Source**: `src/js/db/WDCReader.js` lines 216–234
-  - **Status**: Pending
-  - **Details**: The JS `getRelationRows()` only requires the table to be loaded (`isLoaded`). It reads each record directly via `_readRecord()` without requiring `preload()`. The C++ version at lines 305–309 throws a `std::runtime_error` if `rows` is not preloaded: `"Table must be preloaded before calling getRelationRows. Use db2.preload.<TableName>() first."` This is a behavioral deviation — callers that call `getRelationRows()` without first calling `preload()` will work in JS but throw in C++. The JS comment `Required for getRelationRows() to work properly` appears to be advisory; it does not enforce it. The C++ should remove the preload requirement and instead call `_readRecord()` directly for each record ID in the lookup, matching JS behavior.
-
-- [ ] 328. [WDCReader.cpp] `getAllRowsAsync()` returns `std::map` by value instead of by reference, inconsistent with `getAllRows()` which returns a const reference
-  - **JS Source**: `src/js/db/WDCReader.js` lines 141–193
-  - **Status**: Pending
-  - **Details**: The synchronous `getAllRows()` returns `const std::map<uint32_t, DataRecord>&` — a reference to either `rows` or `transientRows`. The async version `getAllRowsAsync()` at line 1297–1299 returns `std::future<std::map<uint32_t, DataRecord>>` (by value, making a copy). While making a copy is safe, there is a subtle threading issue: if `preload()` has not been called, `getAllRows()` fills `transientRows` (a member variable) and returns a reference to it. A concurrent call to `getAllRowsAsync()` could race with `getAllRows()` filling `transientRows` from another thread. The JS original is single-threaded so this risk does not exist in JS. The async methods are C++-only additions, but the `transientRows` approach is not thread-safe.
-
-- [ ] 329. [WDCReader.cpp] `idFieldIndex` is initialized to `0` instead of `null`; `idField` is `optional<string>` instead of `null` — minor behavioral difference in unloaded state
-  - **JS Source**: `src/js/db/WDCReader.js` lines 79–80
-  - **Status**: Pending
-  - **Details**: The JS constructor sets `this.idField = null` and `this.idFieldIndex = null`. The C++ has `idFieldIndex = 0` (uint16_t) and `idField` as `std::optional<std::string>` (empty). The value `0` for `idFieldIndex` before loading is indistinguishable from a valid index of `0`, whereas JS `null` is clearly uninitialized. The `getIDIndex()` method in both JS and C++ guards with `isLoaded`, so callers should not access these before loading. However, the C++ `_readRecordFromSection` references `idFieldIndex` at line 1269 without checking `isLoaded` (it is called internally after loading starts), so the uninitialized `0` is never used incorrectly in practice. This is a low-severity deviation.
-
-- [ ] 330. [WDCReader.cpp] BitpackedIndexedArray index arithmetic uses integer multiplication instead of BigInt, potential overflow for large `bitpackedValue`
-  - **JS Source**: `src/js/db/WDCReader.js` lines 820–822
-  - **Status**: Pending
-  - **Details**: The JS computes the pallet data index as `bitpackedValue * BigInt(recordFieldInfo.fieldCompressionPacking[2]) + BigInt(i)` using BigInt arithmetic which is arbitrary-precision and cannot overflow. The C++ computes `static_cast<size_t>(bitpackedValue * arrSize + i)` at line 1149 where `bitpackedValue` is `uint64_t` and `arrSize` is `uint32_t`. The multiplication `bitpackedValue * arrSize` is done in uint64_t, which could theoretically overflow for pathologically large values, though in practice DB2 pallet data indices are small. This is a theoretical deviation.
+<!-- No outstanding issues -->
 
 <!-- ─── src/js/db/caches/DBCharacterCustomization.cpp ─────────────────────────────── -->
 

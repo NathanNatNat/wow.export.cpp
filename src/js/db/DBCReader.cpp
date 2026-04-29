@@ -14,6 +14,10 @@
 #include "../buffer.h"
 #include "../casc/export-helper.h"
 #include "../casc/dbd-manifest.h"
+#include "../casc/casc-source.h"
+#include "../casc/casc-source-local.h"
+#include "../casc/casc-source-remote.h"
+#include "../casc/build-cache.h"
 
 #include <cstdint>
 #include <algorithm>
@@ -26,6 +30,23 @@
 namespace db {
 
 static constexpr uint32_t DBC_MAGIC = 0x43424457; // 'WDBC'
+
+/**
+ * Returns the BuildCache attached to the active CASC source, if any.
+ * JS equivalent: core.view.casc?.cache (null-safe optional chaining).
+ */
+static casc::BuildCache* getActiveCascCache() {
+	if (!core::view || !core::view->casc)
+		return nullptr;
+
+	if (auto* local = dynamic_cast<casc::CASCLocal*>(core::view->casc))
+		return local->cache;
+
+	if (auto* remote = dynamic_cast<casc::CASCRemote*>(core::view->casc))
+		return remote->cache;
+
+	return nullptr;
+}
 
 /**
  * Returns the schema type symbol for a DBD field.
@@ -180,15 +201,24 @@ void DBCReader::loadSchema() {
 	const DBDEntry* structure = nullptr;
 	logging::write("Loading table definitions " + dbd_name + " (" + build_id + ")...");
 
-	// check cached dbd (use lowercase for cache key consistency)
+	// check cached dbd through active CASC cache (JS: core.view.casc?.cache; cache.getFile)
+	// use lowercase for cache key consistency
 	std::string cache_key = dbd_name;
 	std::transform(cache_key.begin(), cache_key.end(), cache_key.begin(),
 		[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
 	std::unique_ptr<DBDParser> dbdParser;
 	std::filesystem::path dbdCachePath = constants::CACHE::DIR_DBD() / cache_key;
+	casc::BuildCache* cache = getActiveCascCache();
 
-	if (std::filesystem::exists(dbdCachePath)) {
+	if (cache != nullptr) {
+		auto cachedRaw = cache->getFile(cache_key, constants::CACHE::DIR_DBD().string());
+		if (cachedRaw.has_value()) {
+			dbdParser = std::make_unique<DBDParser>(cachedRaw.value());
+			structure = dbdParser->getStructure(build_id);
+		}
+	} else if (std::filesystem::exists(dbdCachePath)) {
+		// fallback when no active CASC source is available (e.g. cold startup)
 		BufferWrapper raw_dbd = BufferWrapper::readFile(dbdCachePath);
 		dbdParser = std::make_unique<DBDParser>(raw_dbd);
 		structure = dbdParser->getStructure(build_id);
@@ -215,9 +245,13 @@ void DBCReader::loadSchema() {
 			logging::write("No cached DBD or no matching structure, downloading from " + dbd_url);
 			BufferWrapper raw_dbd = generics::downloadFile({ dbd_url, dbd_url_fallback });
 
-			// Store to cache
-			std::filesystem::create_directories(constants::CACHE::DIR_DBD());
-			raw_dbd.writeToFile(dbdCachePath);
+			// Store to cache (JS: cache.storeFile with null-safe fallback)
+			if (cache != nullptr) {
+				cache->storeFile(cache_key, raw_dbd, constants::CACHE::DIR_DBD().string());
+			} else {
+				std::filesystem::create_directories(constants::CACHE::DIR_DBD());
+				raw_dbd.writeToFile(dbdCachePath);
+			}
 
 			dbdParser = std::make_unique<DBDParser>(raw_dbd);
 			structure = dbdParser->getStructure(build_id);
@@ -436,6 +470,11 @@ std::optional<DataRecord> DBCReader::_read_record(int index) {
 					for (auto& v : values)
 						arr.push_back(std::get<uint64_t>(v));
 					out[name] = std::move(arr);
+				} else {
+					// Fallback: FieldValue may grow new alternatives in the future; never
+					// silently drop the field (JS always stores the array). Match the
+					// empty-array branch so the field remains present in the record.
+					out[name] = std::vector<int64_t>{};
 				}
 			} else {
 				out[name] = std::vector<int64_t>{};
@@ -471,6 +510,12 @@ FieldValue DBCReader::_read_field(FieldType field_type) {
 		case FieldType::UInt16: return static_cast<uint64_t>(data->readUInt16LE());
 		case FieldType::Int32: return static_cast<int64_t>(data->readInt32LE());
 		case FieldType::UInt32: return static_cast<uint64_t>(data->readUInt32LE());
+		// Deviation from JS: convert_dbd_to_schema_type can yield Int64/UInt64 for 64-bit
+		// fields (size:64 in DBD). JS DBCReader silently falls through to readUInt32LE,
+		// truncating the value. We instead read the full 64 bits to preserve fidelity to
+		// the underlying DBC data.
+		case FieldType::Int64: return data->readInt64LE();
+		case FieldType::UInt64: return data->readUInt64LE();
 		case FieldType::Float: return data->readFloatLE();
 
 		default:
