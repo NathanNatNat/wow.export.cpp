@@ -556,13 +556,19 @@ void render() {
 
 	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("sounds-filter", regions)) {
-		if (view.config.value("regexFilters", false))
+		// JS: <div class="regex-info" v-if="config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
+		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+			ImGui::SameLine();
+		}
 
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterSounds.c_str(), sizeof(filter_buf) - 1);
-		if (ImGui::InputText("##FilterSounds", filter_buf, sizeof(filter_buf)))
+		// JS: placeholder="Filter sound files..."
+		if (ImGui::InputTextWithHint("##FilterSounds", "Filter sound files...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterSounds = filter_buf;
 	}
 	app::layout::EndFilterBar();

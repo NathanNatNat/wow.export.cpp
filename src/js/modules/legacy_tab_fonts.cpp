@@ -222,16 +222,15 @@ void render() {
 				std::string plural = count > 1 ? "s" : "";
 				bool hasFileDataIDs = node.value("hasFileDataIDs", false);
 
+				// JS template (legacy_tab_fonts.js lines 64–68) only exposes three context-menu
+				// items: copy file path(s), copy export path(s), open export directory.
 				if (ImGui::Selectable(std::format("Copy file path{}", plural).c_str()))
 					listbox_context::copy_file_paths(sel);
-				if (hasFileDataIDs && ImGui::Selectable(std::format("Copy file path{} (listfile format)", plural).c_str()))
-					listbox_context::copy_listfile_format(sel);
-				if (hasFileDataIDs && ImGui::Selectable(std::format("Copy file data ID{}", plural).c_str()))
-					listbox_context::copy_file_data_ids(sel);
 				if (ImGui::Selectable(std::format("Copy export path{}", plural).c_str()))
 					listbox_context::copy_export_paths(sel);
 				if (ImGui::Selectable("Open export directory"))
 					listbox_context::open_export_directory(sel);
+				(void)hasFileDataIDs;
 			}
 		);
 	}
@@ -245,13 +244,19 @@ void render() {
 
 	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("legacy-fonts-filter", regions)) {
-		if (view.config.value("regexFilters", false))
+		// JS: <div class="regex-info" v-if="config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
+		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+			ImGui::SameLine();
+		}
 
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterFonts.c_str(), sizeof(filter_buf) - 1);
-		if (ImGui::InputText("##FilterFonts", filter_buf, sizeof(filter_buf)))
+		// JS: placeholder="Filter fonts..."
+		if (ImGui::InputTextWithHint("##FilterFonts", "Filter fonts...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterFonts = filter_buf;
 	}
 	app::layout::EndFilterBar();
@@ -342,10 +347,10 @@ void render() {
 	//     <input type="button" value="Export Selected" @click="export_fonts" :class="{ disabled: isBusy }"/>
 	if (app::layout::BeginPreviewControls("legacy-fonts-preview-controls", regions)) {
 		const bool busy = view.isBusy > 0;
-		if (busy) app::theme::BeginDisabledButton();
+		if (busy) ImGui::BeginDisabled();
 		if (ImGui::Button("Export Selected"))
 			export_fonts();
-		if (busy) app::theme::EndDisabledButton();
+		if (busy) ImGui::EndDisabled();
 	}
 	app::layout::EndPreviewControls();
 

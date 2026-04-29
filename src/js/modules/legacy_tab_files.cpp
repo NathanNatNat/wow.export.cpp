@@ -198,11 +198,23 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
+	// --- Status bar (file count) ---
+	// JS Listbox prop :includefilecount="true" with unittype="file".
+	if (app::layout::BeginStatusBar("legacy-files-status", regions)) {
+		listbox::renderStatusBar("file", {}, listbox_state);
+	}
+	app::layout::EndStatusBar();
+
 	// --- Filter bar (row 2, col 1) ---
 	// JS: <div id="tab-legacy-files-tray"><div class="filter">...</div>...
 	if (app::layout::BeginFilterBar("legacy-files-filter", regions)) {
-		if (view.config.value("regexFilters", false))
+		// JS: <div class="regex-info" v-if="config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
+		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+			ImGui::SameLine();
+		}
 
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[256] = {};

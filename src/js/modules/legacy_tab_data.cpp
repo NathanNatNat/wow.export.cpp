@@ -289,10 +289,10 @@ void render() {
 			listbox::CopyMode::Default,
 			view.config.value("pasteSelection", false),          // pasteselection (JS: config.pasteSelection)
 			view.config.value("removePathSpacesCopy", false),    // copytrimwhitespace (JS: config.removePathSpacesCopy)
-			"dbc file", // unittype
+			"",      // unittype — JS uses :includefilecount="false", so suppress count text
 			nullptr, // overrideItems
 			false,   // disable
-			"dbc",   // persistscrollkey
+			"",      // persistscrollkey — JS template does not set persistscrollkey
 			{},      // quickfilters
 			true,    // nocopy
 			listbox_dbc_state,
@@ -306,11 +306,7 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
-	// --- Status bar ---
-	if (app::layout::BeginStatusBar("dbc-status", regions)) {
-		listbox::renderStatusBar("table", {}, listbox_dbc_state);
-	}
-	app::layout::EndStatusBar();
+	// JS uses :includefilecount="false" on this Listbox, so no status bar / file count is shown.
 
 	// --- Filter bar (row 2, col 1) ---
 	// JS: <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
@@ -421,6 +417,9 @@ void render() {
 			bool copy_header = view.config.value("dataCopyHeader", false);
 			if (ImGui::Checkbox("Copy Header", &copy_header))
 				view.config["dataCopyHeader"] = copy_header;
+			// JS: title="Include header row when copying"
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Include header row when copying");
 			ImGui::SameLine();
 		}
 
@@ -428,12 +427,18 @@ void render() {
 			bool create_table_val = view.config.value("dataSQLCreateTable", false);
 			if (ImGui::Checkbox("Create Table", &create_table_val))
 				view.config["dataSQLCreateTable"] = create_table_val;
+			// JS: title="Include DROP/CREATE TABLE statements"
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Include DROP/CREATE TABLE statements");
 			ImGui::SameLine();
 		}
 
 		bool export_all = view.config.value("dataExportAll", false);
 		if (ImGui::Checkbox("Export all rows", &export_all))
 			view.config["dataExportAll"] = export_all;
+		// JS: title="Export all rows"
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("Export all rows");
 	}
 	app::layout::EndPreviewContainer();
 
