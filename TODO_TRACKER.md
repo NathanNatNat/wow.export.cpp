@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/97 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/106 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
   - **JS Source**: `src/app.js` lines 589–624, 649–657
@@ -390,3 +390,39 @@
   - **JS Source**: `src/js/3D/gl/UniformBuffer.js` lines 152–158
   - **Status**: Pending
   - **Details**: JS `set_float_array(offset, values)` derives the element count from `values.length`. C++ at `UniformBuffer.cpp:102-106` requires the caller to pass an explicit `count` argument (header line 45) because `const float*` has no length. Behaviorally identical when callers pass the correct count, but a JS-verbatim port (`set_float_array(offset, arr)` without count) will fail to compile or silently use a default. Cosmetic API divergence; consider a `std::span<const float>` overload to preserve the JS shape.
+- [ ] 98. [MDXLoader.cpp] Intentional divergence in `parse_ATCH` reads KVIS data that the JS code path silently skips.
+  - **JS Source**: `src/js/3D/loaders/MDXLoader.js` lines 387–412 (especially line 404)
+  - **Status**: Pending
+  - **Details**: JS `ATCH` handler at line 404 uses `this.data.readUInt32LE(-4)` to gate the KVIS check. With `count=-4`, `_readInt` (buffer.js:1094) returns an empty array `[]`; in the expression `startPos + this.data.readUInt32LE(-4)`, JS coerces `[]` to `0`, so the comparison `this.data.offset < startPos + 0` is always false (offset has advanced since startPos). The JS KVIS branch is therefore dead code — JS never reads `attachment.visibilityAnim`. The C++ version at lines 428–440 deliberately substitutes `attachmentSize` (the per-entry size word) so that KVIS is actually parsed, which changes the resulting `attachment.visibilityAnim` for any file with KVIS data. The deviation is documented in the comment, but per project conventions deviations are "strongly discouraged" and should be limited to genuine impossibilities. A faithful port would replicate JS behavior (i.e. effectively skip the KVIS branch).
+- [ ] 99. [MDXLoader.cpp] Node-to-`nodes[objectId]` registration order differs from JS when multiple node kinds share an objectId.
+  - **JS Source**: `src/js/3D/loaders/MDXLoader.js` lines 208–210 (inside `_read_node`) and 53–56 (post-load pivot loop)
+  - **Status**: Pending
+  - **Details**: JS performs `this.nodes[node.objectId] = node` at the end of `_read_node`, so registration order follows the order in which chunks appear in the file (e.g. if `HELP` precedes `BONE`, helper-node registrations happen before bone-node registrations and bone wins on collision). The C++ port (cpp:91–108) instead defers all node registration to the end of `load()` and iterates a fixed order: `bones, helpers, attachments, eventObjects, hitTestShapes, particleEmitters, particleEmitters2, lights, ribbonEmitters`. This means C++ always lets `ribbonEmitters` win an objectId collision regardless of file order, whereas JS gives the win to the chunk that appears latest in the file. The deferral is justified by C++ pointer-invalidation, but the iteration order itself is a behavioural change. Either iterate `_read_node` calls in the order their parent chunks were dispatched, or document the divergence in `TODO_TRACKER.md`.
+- [ ] 100. [SKELLoader.cpp] `loadAnimsForIndex` swallows CASC/ANIMLoader exceptions instead of propagating.
+  - **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 308–347
+  - **Status**: Pending
+  - **Details**: JS `loadAnimsForIndex` is `async` and lets exceptions from `await core.view.casc.getFile(fileDataID)` and `await loader.load(true)` propagate to the caller as a rejected Promise. The C++ port (SKELLoader.cpp:333–361) wraps the entire load in `try { ... } catch (const std::exception& e) { logging::write(...); return false; }`. Errors that would surface to (and possibly fail) the caller in JS are silently logged and reported as a generic load failure in C++. Callers that distinguish "no anim entry matched" (false) from "anim load errored" (rejection) lose that signal.
+- [ ] 101. [SKELLoader.cpp] `loadAnims` swallows CASC/ANIMLoader exceptions instead of propagating.
+  - **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 407–454
+  - **Status**: Pending
+  - **Details**: JS `loadAnims` propagates any rejection from `await core.view.casc.getFile(fileDataID)` or `await loader.load(true)`, aborting the remaining iterations and surfacing the error to the caller. The C++ port (SKELLoader.cpp:459–484) wraps each per-entry load in `try { ... } catch (const std::exception& e) { logging::write(...); }`, then continues with the next animation entry. This changes failure semantics: a CASC/parse error now produces only a log line and an incomplete `animFiles` map, whereas JS would reject the Promise and skip the remaining work entirely.
+- [ ] 102. [WMOLegacyLoader.cpp] `getGroup` creates child loader with `fileName` set, JS passes `undefined`.
+  - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 144–148
+  - **Status**: Pending
+  - **Details**: JS does `new WMOLegacyLoader(data, undefined, this.renderingOnly)` — the recursive group loader is created with NO fileID/fileName, leaving `this.fileDataID` and `this.fileName` unset on the child. C++ at cpp:205 calls `std::make_unique<WMOLegacyLoader>(*ownedBuf, groupPath, this->renderingOnly)` which sets `fileName = groupPath` and looks up `fileDataID` via `listfile::getByFilename`. Any consumer that reads `group.fileName` / `group.fileDataID` to detect "this is a child group loader" sees populated values in C++ vs unset in JS. Behaviorally significant for sentinel-style checks.
+- [ ] 103. [WMOLegacyLoader.cpp] `getGroup` group-filename construction differs from JS `String.replace` semantics.
+  - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` line 138
+  - **Status**: Pending
+  - **Details**: JS does `this.fileName.replace('.wmo', '_' + index.toString().padStart(3, '0') + '.wmo')` — case-sensitive, replaces the FIRST `.wmo` anywhere in the string. C++ at cpp:188-194 only replaces if the LAST 4 characters (case-insensitively) are `.wmo`; otherwise leaves `groupPath` empty and throws "Cannot determine group filename...". Differences: (a) JS would still match a non-trailing `.wmo` (e.g. mid-path) while C++ would not; (b) C++ accepts uppercase/mixed-case extensions while JS requires exact lowercase; (c) error message and code path differ when no `.wmo` is present. JS would actually return the unchanged filename (no match → no replacement → still tries to load the same filename), whereas C++ throws. Functional fork on inputs whose extension casing or position differs from the standard pattern.
+- [ ] 104. [WMOLegacyLoader.cpp] Constructor `fileID=0` skips listfile lookup; JS treats `0` as a valid numeric ID.
+  - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 22–30
+  - **Status**: Pending
+  - **Details**: JS `if (fileID !== undefined)` accepts `0` as a valid numeric fileID and resolves `this.fileName = listfile.getByID(0)`. The C++ uint32_t-overload constructor at cpp:65-71 uses `if (fileID != 0)` as the gate, so an explicit `fileID = 0` skips the lookup entirely. Edge case (fileDataID 0 is not a real WoW asset) but produces different `fileName` resolution behavior at the boundary. Also note: there is no constructor matching JS's "no fileID at all" case distinctly — JS leaves both fields undefined; the C++ default-arg approach conflates "no argument" with "explicit 0" by the same path.
+- [ ] 105. [WMOLoader.cpp] `getGroup()` filename fallback uses `rfind(".wmo")` instead of JS `.replace('.wmo', ...)` first-occurrence semantics.
+  - **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 75–78
+  - **Status**: Pending
+  - **Details**: JS `String.prototype.replace(needle, replacement)` (with a string needle) replaces the **first** occurrence. The C++ port (cpp:135–139) calls `groupFileName.rfind(".wmo")` which locates the **last** occurrence. For typical paths like `world/wmo/foo.wmo` only one match exists so they coincide, but any filename whose directory portion contains `.wmo` (e.g. `mymod.wmo/file.wmo`) would diverge: JS replaces the first `.wmo`, C++ replaces the last. To exactly match JS, use `find(".wmo")` rather than `rfind(".wmo")`.
+- [ ] 106. [WMOLoader.cpp] Constructor distinguishes "fileID provided" via `fileID != 0` rather than tracking presence, dropping the JS `fileID === 0` edge case.
+  - **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 18–32
+  - **Status**: Pending
+  - **Details**: JS uses `if (fileID !== undefined)`, so an explicit numeric `0` would still go down the numeric branch (setting `this.fileDataID = 0` and `this.fileName = listfile.getByID(0)`). The C++ `WMOLoader(BufferWrapper&, uint32_t fileID = 0, bool)` overload (cpp:69–75) treats `0` as "no fileID provided" and skips the listfile lookup entirely. fileDataID 0 is never a valid asset, so this difference is harmless in practice, but it is a structural deviation from JS semantics. If exact parity is desired, use a `std::optional<uint32_t>` parameter or a separate "has fileID" flag.

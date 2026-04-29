@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 50/195 audited (26%)**
+**Progress: 60/195 audited (31%)**
 
 - [x] 1. `src/app.cpp` — ⚠️ 5 findings
 - [x] 2. `src/js/blob.cpp` — ⚠️ 5 findings
@@ -54,16 +54,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 48. `src/js/3D/loaders/ADTLoader.cpp` — ✅ audited
 - [x] 49. `src/js/3D/loaders/ANIMLoader.cpp` — ✅ audited
 - [x] 50. `src/js/3D/loaders/BONELoader.cpp` — ✅ audited
-- [ ] 51. `src/js/3D/loaders/LoaderGenerics.cpp`
-- [ ] 52. `src/js/3D/loaders/M2Generics.cpp`
-- [ ] 53. `src/js/3D/loaders/M2LegacyLoader.cpp`
-- [ ] 54. `src/js/3D/loaders/M2Loader.cpp`
-- [ ] 55. `src/js/3D/loaders/M3Loader.cpp`
-- [ ] 56. `src/js/3D/loaders/MDXLoader.cpp`
-- [ ] 57. `src/js/3D/loaders/SKELLoader.cpp`
-- [ ] 58. `src/js/3D/loaders/WDTLoader.cpp`
-- [ ] 59. `src/js/3D/loaders/WMOLegacyLoader.cpp`
-- [ ] 60. `src/js/3D/loaders/WMOLoader.cpp`
+- [x] 51. `src/js/3D/loaders/LoaderGenerics.cpp` — ✅ audited
+- [x] 52. `src/js/3D/loaders/M2Generics.cpp` — ✅ audited
+- [x] 53. `src/js/3D/loaders/M2LegacyLoader.cpp` — ✅ audited
+- [x] 54. `src/js/3D/loaders/M2Loader.cpp` — ✅ audited
+- [x] 55. `src/js/3D/loaders/M3Loader.cpp` — ✅ audited
+- [x] 56. `src/js/3D/loaders/MDXLoader.cpp` — ⚠️ 2 findings
+- [x] 57. `src/js/3D/loaders/SKELLoader.cpp` — ⚠️ 2 findings
+- [x] 58. `src/js/3D/loaders/WDTLoader.cpp` — ✅ audited
+- [x] 59. `src/js/3D/loaders/WMOLegacyLoader.cpp` — ⚠️ 3 findings
+- [x] 60. `src/js/3D/loaders/WMOLoader.cpp` — ⚠️ 2 findings
 - [ ] 61. `src/js/3D/renderers/CharMaterialRenderer.cpp`
 - [ ] 62. `src/js/3D/renderers/GridRenderer.cpp`
 - [ ] 63. `src/js/3D/renderers/M2LegacyRendererGL.cpp`
