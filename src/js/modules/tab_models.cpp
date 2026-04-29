@@ -55,6 +55,9 @@ static std::optional<std::string> build_stack_trace(const char* function_name, c
 
 // --- File-local state ---
 
+// JS uses one unified `active_skins` Map keyed by skin_name, storing either a
+// CreatureDisplayInfo or an ItemDisplay. C++ splits by source type to avoid a
+// std::variant; lookups must check both maps (see handle_skins_selection_change).
 static std::map<std::string, db::caches::DBCreatures::CreatureDisplayInfo> active_skins_creature;
 static std::map<std::string, db::caches::DBItemDisplays::ItemDisplay> active_skins_item;
 
@@ -299,6 +302,8 @@ static void pump_preview_model_task() {
 
 			std::vector<nlohmann::json> skin_list;
 			std::string model_name = casc::listfile::getByID(task.file_data_id).value_or("");
+			// JS: `path.basename(model_name, 'm2')` — strips trailing "m2" only when
+			// the full string ends with it. The compare() check below matches that.
 			{
 				auto pos = model_name.rfind('/');
 				if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
@@ -327,6 +332,9 @@ static void pump_preview_model_task() {
 							skin_name = skin_name.substr(0, skin_name.size() - 4);
 					}
 					clean_skin_name = skin_name;
+					// JS: `skin_name.replace(model_name, '').replace('_', '')` —
+					// String.replace replaces only the first occurrence. find()+erase
+					// gives the same first-occurrence-only behaviour.
 					auto found = clean_skin_name.find(model_name);
 					if (found != std::string::npos)
 						clean_skin_name.erase(found, model_name.size());
@@ -341,6 +349,7 @@ static void pump_preview_model_task() {
 					clean_skin_name = "base";
 
 				if (display.extraGeosets.has_value() && !display.extraGeosets->empty()) {
+					// JS: `skin_name += display.extraGeosets.join(',')`.
 					std::string geo_str;
 					for (size_t g = 0; g < display.extraGeosets->size(); ++g) {
 						if (g > 0) geo_str += ',';
@@ -745,6 +754,8 @@ static void pump_export_task() {
 		helper.start();
 
 	if (helper.isCancelled()) {
+		// Match JS: `helper.finish()` runs after the loop regardless of cancel state.
+		helper.finish();
 		finish_pending_export_task();
 		return;
 	}
@@ -891,7 +902,11 @@ void render() {
 		}
 	}
 
-	// Watch: selectionModels → auto-preview if modelsAutoPreview
+	// Watch: selectionModels → auto-preview if modelsAutoPreview.
+	// JS: `if (!this._tab_initialized) return;` — `_tab_initialized` is set by the
+	// tab's initialize() chain. C++ uses the equivalent `is_initialized` flag set
+	// at the end of initialize(). `view.isBusy` is a bool in JS but an integer
+	// busy-lock counter in C++ (see core::view::isBusy), so we compare to 0.
 	{
 		if (view.selectionModels != prev_selection_models) {
 			prev_selection_models = view.selectionModels;
@@ -962,6 +977,9 @@ void render() {
 				}
 			);
 
+			// JS uses the shared `<ContextMenu>` Vue component with `@close` to clear
+			// `contextMenus.nodeListbox`. ImGui's BeginPopup auto-dismisses on click
+			// outside, which is functionally equivalent.
 			if (!view.contextMenus.nodeListbox.is_null()) {
 				if (ImGui::BeginPopup("ModelsListboxContextMenu")) {
 					const auto& node = view.contextMenus.nodeListbox;

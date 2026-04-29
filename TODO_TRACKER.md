@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/240 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/221 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 <!-- ─── src/js/db/caches/DBCreatureList.cpp ─────────────────────────────── -->
 
@@ -225,23 +225,6 @@
 
 <!-- ─── src/js/db/caches/DBTextureFileData.cpp ────────────────────────────── -->
 <!-- No issues found -->
-
-<!-- ─── src/js/hashing/xxhash64.cpp ──────────────────────────────────────── -->
-
-- [ ] 380. [xxhash64.cpp] `check_glyph_support` note: `update()` memory lazy-init differs but is harmless — actual issue is JS `toUTF8Array` vs C++ raw-byte treatment of `std::string_view`
-  - **JS Source**: `src/js/hashing/xxhash64.js` lines 20–39
-  - **Status**: Pending
-  - **Details**: The JS `update()` method converts a JS string argument via `toUTF8Array(input)`, which performs a full Unicode-aware UTF-16 → UTF-8 transcoding (handling surrogate pairs at lines 33–36). The C++ `update(std::string_view)` overload (xxhash64.cpp line 153–156) reinterprets the string view's bytes directly without any transcoding. In practice C++ string literals and `std::string` values are already UTF-8, so for typical WoW file paths the results are identical. However, if a caller passes a string containing non-ASCII characters that were originally represented as UTF-16 in the JS layer (e.g., Korean or Chinese locale display names), the hash computed by C++ would differ from the hash computed by JS. This is a latent interoperability hazard that should be documented.
-
-- [ ] 381. [xxhash64.cpp] `digest()` — JS BigInt arithmetic applies `& MASK_64` after every multiply/add; C++ relies on `uint64_t` natural overflow
-  - **JS Source**: `src/js/hashing/xxhash64.js` lines 201–284
-  - **Status**: Pending
-  - **Details**: The JS implementation uses native BigInt and explicitly truncates to 64 bits after every operation via `& MASK_64` (e.g., lines 213–239). C++ uses `uint64_t` arithmetic which wraps naturally at 2^64. For the same operations on 64-bit unsigned integers this produces identical bit patterns, so the hashes are functionally equivalent. No code change is needed, but this should be explicitly noted in a comment in xxhash64.cpp to explain the equivalence, as it is a non-obvious deviation from the JS source.
-
-- [ ] 382. [xxhash64.cpp] `update()` large-block loop entry condition differs in form from JS
-  - **JS Source**: `src/js/hashing/xxhash64.js` line 161
-  - **Status**: Pending
-  - **Details**: JS uses `if (p <= bEnd - 32)` (line 161) as the guard before the main 32-byte block loop. C++ uses `if (p + 32 <= bEnd)` (line 113). Both expressions are mathematically equivalent for non-negative values and produce the same result. However, the JS form is the authoritative guard and the C++ form deviates in style from the source. More importantly, the JS condition is `<=` (enters loop when exactly 32 bytes remain), and the C++ condition `p + 32 <= bEnd` also enters when exactly 32 bytes remain. These are identical. The deviation is purely cosmetic but worth noting for line-by-line fidelity audits.
 
 <!-- ─── src/js/modules/font_helpers.cpp ──────────────────────────────────── -->
 
@@ -916,59 +899,6 @@
   - **Details**: Lines 140–189 of tab_maps.cpp — the field helper functions (`fieldToUint32`, `fieldToInt32`, `fieldToFloat`, `fieldToString`, `fieldToFloatVec`) have all their function bodies without proper indentation. The code is syntactically correct but inconsistently formatted compared to the rest of the file. Not a functional issue.
 
 
-<!-- ─── src/js/modules/tab_models.cpp ─────────────────────────────────────── -->
-
-- [ ] 505. [tab_models.cpp] active_skins unified Map split into two separate maps (creature vs item)
-  - **JS Source**: `src/js/modules/tab_models.js` lines 18, 52–58, 136
-  - **Status**: Pending
-  - **Details**: JS uses a single `active_skins` Map that stores display info regardless of source (creature or item). C++ splits into `active_skins_creature` and `active_skins_item`. The JS `get_model_displays` merges creature and item displays into one array and all are stored in the same map. The C++ split is functional but requires care in the watch handler to try both maps. The current C++ `handle_skins_selection_change` does try both maps. Minor structural deviation.
-
-- [ ] 506. [tab_models.cpp] JS skin_name uses path.basename stripping .blp; C++ reimplements basename logic manually
-  - **JS Source**: `src/js/modules/tab_models.js` lines 107–128
-  - **Status**: Pending
-  - **Details**: JS uses `path.basename(skin_name, '.blp')` and `path.basename(model_name, 'm2')`. C++ manually strips path components and extensions. The C++ strips `.m2` by checking if the string ends with `"m2"` (2 chars) — but JS strips extension `'m2'` with `path.basename(model_name, 'm2')` which removes the `m2` suffix even if there's no dot before it. The C++ checks `model_name.compare(model_name.size() - 2, 2, "m2") == 0` which would match `somefilem2` (no dot). The intent is to strip `.m2` and `m2` both. Minor edge case difference.
-
-- [ ] 507. [tab_models.cpp] JS clean_skin_name uses replace() for first occurrence only; C++ uses find+erase
-  - **JS Source**: `src/js/modules/tab_models.js` line 119
-  - **Status**: Pending
-  - **Details**: JS: `clean_skin_name = skin_name.replace(model_name, '').replace('_', '')`. `String.replace()` replaces only the first occurrence. C++ uses `clean_skin_name.find(model_name)` + `erase` and then `clean_skin_name.find('_')` + `erase`. This matches first-occurrence-only behaviour. Appears equivalent.
-
-- [ ] 508. [tab_models.cpp] skin extraGeosets joined differently: JS uses .join(','), C++ builds manually
-  - **JS Source**: `src/js/modules/tab_models.js` lines 127–128
-  - **Status**: Pending
-  - **Details**: JS: `skin_name += display.extraGeosets.join(',')`. C++ builds manually with a loop and comma separator. Functionally equivalent.
-
-- [ ] 509. [tab_models.cpp] Missing "Show Bones" checkbox in JS — C++ adds it
-  - **JS Source**: `src/js/modules/tab_models.js` lines 357–399
-  - **Status**: Pending
-  - **Details**: The JS template sidebar does NOT include a "Show Bones" checkbox. The C++ adds `ImGui::Checkbox("Show Bones", ...)` (line 1499). This is an addition not present in the original JS. Per fidelity rules this should not exist unless it was intentionally added as a C++-specific enhancement. However it controls `config.modelViewerShowBones` which may be used in the renderer, so it may be a genuine new feature. This should be documented.
-
-- [ ] 510. [tab_models.cpp] JS isBusy is a boolean; C++ treats isBusy as integer (> 0)
-  - **JS Source**: `src/js/modules/tab_models.js` line 355
-  - **Status**: Pending
-  - **Details**: JS passes `:disabled="$core.view.isBusy"` (boolean). C++ uses `view.isBusy > 0` (integer count). This is an architectural difference in the busy-lock system. It doesn't affect functionality here but is a structural deviation.
-
-- [ ] 511. [tab_models.cpp] JS selectionModels watch checks `!this._tab_initialized`; C++ checks `is_initialized`
-  - **JS Source**: `src/js/modules/tab_models.js` lines 639–649
-  - **Status**: Pending
-  - **Details**: JS guards with `if (!this._tab_initialized) return;`. C++ uses `if (is_initialized && ...)`. The JS `_tab_initialized` flag is never explicitly set to true in the JS shown — it appears to be set elsewhere. C++ uses `is_initialized` which is set to true in the `postToMainThread` lambda at the end of `initialize()`. Functionally equivalent in effect.
-
-- [ ] 512. [tab_models.cpp] Context menu uses BeginPopup/MenuItem instead of ContextMenu component — different dismissal behaviour
-  - **JS Source**: `src/js/modules/tab_models.js` lines 288–294
-  - **Status**: Pending
-  - **Details**: The JS uses the shared ContextMenu component with `@close="$core.view.contextMenus.nodeListbox = null"` to dismiss when clicked outside. The C++ uses `ImGui::BeginPopup("ModelsListboxContextMenu")` which is opened via `ImGui::OpenPopup` in the listbox callback. This diverges from the shared `context-menu.h` component used by other tabs. The popup auto-dismisses on click-outside in ImGui, so functionally similar, but the exact trigger mechanism differs.
-
-- [ ] 513. [tab_models.cpp] JS modelsAutoPreview auto-preview fires only when _tab_initialized; C++ fires on any is_initialized true
-  - **JS Source**: `src/js/modules/tab_models.js` line 641
-  - **Status**: Pending
-  - **Details**: In JS the `selectionModels` watch exits early if `!this._tab_initialized`. This flag is not set in the shown JS. In C++ `is_initialized` is set true in `initialize()`. If `selectionModels` changes during loading, the C++ may attempt preview while the JS would skip it. Minor edge case.
-
-- [ ] 514. [tab_models.cpp] export_files does not call helper.finish() after finish_pending_export_task in certain paths
-  - **JS Source**: `src/js/modules/tab_models.js` lines 199–276
-  - **Status**: Pending
-  - **Details**: In JS `export_files`, after the loop `helper.finish()` is always called before `export_paths?.close()`. In C++ `pump_export_task()`, when the task is cancelled, `finish_pending_export_task()` is called WITHOUT calling `helper.finish()`. JS always calls `helper.finish()` regardless of cancellation state. This may cause the export helper to not properly mark the operation as completed when cancelled.
-
-
 <!-- ─── src/js/modules/tab_models_legacy.cpp ──────────────────────────────── -->
 
 - [ ] 515. [tab_models_legacy.cpp] PNG/CLIPBOARD export path uses different logic than JS
@@ -1185,36 +1115,6 @@
   - **JS Source**: `src/js/ui/character-appearance.js` lines 164
   - **Status**: Pending
   - **Details**: The JS calls `chr_material.setTextureTarget(chr_cust_mat, char_component_texture_section, chr_model_material, chr_model_texture_layer, true)` passing the full `chr_model_texture_layer` object (which includes `BlendMode`). The C++ passes `{ 0, 0, 0, static_cast<int>(get_field_int(*chr_model_texture_layer, "BlendMode")) }` as a simplified struct with a fixed layout. This may or may not match the expected fields in the C++ `setTextureTarget` signature — the order and meaning of the initialiser fields must be verified against `CharMaterialRenderer::setTextureTarget`.
-
-- [ ] 558. [model-viewer-utils.cpp] `export_preview` has an extra `export_paths` parameter not present in the JS signature
-  - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 277–308
-  - **Status**: Pending
-  - **Details**: JS `export_preview` is `(core, format, canvas, export_name, export_subdir = '')`. C++ signature is `export_preview(format, ctx, export_name, export_subdir, export_paths)`. The C++ adds `export_paths` as an explicit parameter (JS uses a locally-opened stream). This changes the call convention and caller interface, though the behaviour is equivalent.
-
-- [ ] 559. [model-viewer-utils.cpp] `initialize_uv_layers` accepts only `M2RendererGL*` but JS accepts any renderer with a `getUVLayers` method
-  - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 107–118
-  - **Status**: Pending
-  - **Details**: JS `initialize_uv_layers(state, renderer)` calls `renderer.getUVLayers` and works with M2, M3, or WMO renderers. C++ `initialize_uv_layers(ViewStateProxy&, M2RendererGL*)` only accepts an M2 renderer pointer. M3 and WMO renderers will never populate UV layers in C++ even if they would in JS.
-
-- [ ] 560. [model-viewer-utils.cpp] `toggle_uv_layer` accepts only `M2RendererGL*` but JS accepts any renderer with `getUVLayers`
-  - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 126–152
-  - **Status**: Pending
-  - **Details**: Same issue as `initialize_uv_layers`. JS toggles UV overlay for any renderer type; C++ restricts to M2 only, so WMO/M3 UV overlays will not work.
-
-- [ ] 561. [model-viewer-utils.cpp] `export_preview` captures the GL framebuffer via `glReadPixels` instead of reading from an HTML Canvas
-  - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 280
-  - **Status**: Pending
-  - **Details**: JS uses `BufferWrapper.fromCanvas(canvas, 'image/png')` to capture from an HTML Canvas. C++ reads from the OpenGL framebuffer with `glReadPixels`. This is a necessary C++-specific adaptation since there is no HTML canvas, but means the captured image depends on what is bound to the current GL framebuffer at call time, not a specific canvas element.
-
-- [ ] 562. [model-viewer-utils.cpp] `create_view_state` does not take a `core` parameter (JS takes `(core, prefix)`)
-  - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 510–535
-  - **Status**: Pending
-  - **Details**: JS `create_view_state(core, prefix)` takes an explicit `core` reference. C++ uses the global `core::view`. This is a reasonable adaptation but changes the API signature and couples the function to the global state singleton.
-
-- [ ] 563. [model-viewer-utils.cpp] `handle_animation_change` calls `renderer->playAnimation(m2_index).get()` (blocking) instead of awaiting asynchronously
-  - **JS Source**: `src/js/ui/model-viewer-utils.js` lines 262
-  - **Status**: Pending
-  - **Details**: JS uses `await renderer.playAnimation(anim_info.m2Index)`. C++ calls `.get()` on the future, blocking the calling thread. If playAnimation is long-running, this will block the render thread. The semantic effect is the same but the async model differs.
 
 - [ ] 564. [texture-exporter.cpp] `exportFiles` catch block uses `fileName` instead of `markFileName` for error marking
   - **JS Source**: `src/js/ui/texture-exporter.js` lines 177

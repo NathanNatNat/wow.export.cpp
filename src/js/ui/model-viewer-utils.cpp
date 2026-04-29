@@ -287,6 +287,10 @@ void clear_texture_preview(ViewStateProxy& state) {
 /**
  * Initialize UV layers from active M2 renderer.
  * If renderer is nullptr, UV layers are cleared.
+ *
+ * JS duck-types on `renderer.getUVLayers`. C++ types this as `M2RendererGL*`
+ * because M3/WMO renderers do not currently expose getUVLayers; callers should
+ * pass nullptr for those types to get the empty-layers behaviour.
  */
 void initialize_uv_layers(ViewStateProxy& state, M2RendererGL* renderer) {
 	if (!renderer || !state.uvLayers) {
@@ -306,6 +310,8 @@ void initialize_uv_layers(ViewStateProxy& state, M2RendererGL* renderer) {
 
 /**
  * Toggle UV layer visibility and update UV overlay.
+ *
+ * Same M2-only typing as initialize_uv_layers (M3/WMO are nullptr).
  */
 void toggle_uv_layer(ViewStateProxy& state, M2RendererGL* renderer, const std::string& layer_name) {
 	if (!state.uvLayers)
@@ -510,6 +516,8 @@ void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
 		const int m2_index = (*it).value("m2Index", -1);
 		if (m2_index >= 0) {
 			logging::write(std::format("Playing animation {} at M2 index {}", *selected_animation_id, m2_index));
+			// JS: `await renderer.playAnimation(...)`. We block here intentionally —
+			// animation switches must be serialised relative to the GL render thread.
 			renderer->playAnimation(m2_index).get();
 
 			if (state.animFrameCount)
@@ -520,6 +528,13 @@ void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
 
 /**
  * Export 3D preview as PNG (to disk) or to clipboard.
+ *
+ * JS signature: `export_preview(core, format, canvas, export_name, export_subdir)`.
+ * C++ deviations:
+ *   - `canvas` is replaced by reading the bound GL framebuffer with glReadPixels
+ *     (no HTML canvas exists in the C++ build).
+ *   - `export_paths` is hoisted as an explicit parameter so the caller can
+ *     share an already-open stream; JS opens one locally in `export_files`.
  */
 bool export_preview(const std::string& format, gl::GLContext& ctx,
 	const std::string& export_name, const std::string& export_subdir,
@@ -819,6 +834,9 @@ AnimationMethods create_animation_methods(
 	return AnimationMethods(std::move(get_renderer), std::move(get_state));
 }
 
+// JS: `create_view_state(core, prefix)`. C++ drops the `core` parameter and
+// reads from the global `core::view` singleton; the field-name mapping is the
+// same in both versions.
 ViewStateProxy create_view_state(const std::string& prefix) {
 	ViewStateProxy proxy;
 	AppState* s = core::view;
