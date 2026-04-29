@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/129 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/131 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
   - **JS Source**: `src/app.js` lines 589–624, 649–657
@@ -518,3 +518,11 @@
   - **JS Source**: `src/js/components/item-picker-modal.js` line 161
   - **Status**: Pending
   - **Details**: JS has `@click.self="$emit('close')"` on the overlay div, allowing users to close the modal by clicking the semi-transparent backdrop outside the modal content. C++ (lines 174-178) draws a backdrop rectangle but has no click detection on it. `BeginPopupModal` does not support click-outside-to-close natively. Users must use Cancel, Escape, or the X button to close. This is a missing interaction path.
+- [ ] 130. [DBCReader.cpp] loadSchema() has filesystem fallback cache paths not present in JS
+  - **JS Source**: `src/js/db/DBCReader.js` lines 176–199
+  - **Status**: Pending
+  - **Details**: JS only accesses cache via `core.view.casc?.cache`. C++ (lines 220-225) adds a fallback that reads DBD files directly from the filesystem path `DIR_DBD / cache_key` when no CASC source is available. C++ (lines 250-253) also writes downloaded DBD files to disk when cache is nullptr. These extra paths deviate from the JS behavior.
+- [ ] 131. [DBCReader.cpp] _read_field() reads 8 bytes for Int64/UInt64 vs JS reading 4 bytes
+  - **JS Source**: `src/js/db/DBCReader.js` lines 389–408
+  - **Status**: Pending
+  - **Details**: JS _read_field has no explicit Int64/UInt64 cases — those field types fall through to the default case which calls readUInt32LE() (4 bytes). C++ (lines 513-518) explicitly handles Int64 with readInt64LE() and UInt64 with readUInt64LE() (8 bytes each). This is documented with a comment in the C++ code. While DBC files (pre-Cata) are unlikely to have 64-bit fields, the difference could cause record offset misalignment if such a field is encountered.
