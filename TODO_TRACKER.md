@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/106 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/123 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
   - **JS Source**: `src/app.js` lines 589–624, 649–657
@@ -426,3 +426,71 @@
   - **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 18–32
   - **Status**: Pending
   - **Details**: JS uses `if (fileID !== undefined)`, so an explicit numeric `0` would still go down the numeric branch (setting `this.fileDataID = 0` and `this.fileName = listfile.getByID(0)`). The C++ `WMOLoader(BufferWrapper&, uint32_t fileID = 0, bool)` overload (cpp:69–75) treats `0` as "no fileID provided" and skips the listfile lookup entirely. fileDataID 0 is never a valid asset, so this difference is harmless in practice, but it is a structural deviation from JS semantics. If exact parity is desired, use a `std::optional<uint32_t>` parameter or a separate "has fileID" flag.
+- [ ] 107. [M2LegacyRendererGL.cpp] _load_textures calls setSlotFileLegacy instead of setSlotFile
+  - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` line 241
+  - **Status**: Pending
+  - **Details**: JS calls `textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID)` for normal texture loading. C++ line 263 calls `texture_ribbon::setSlotFileLegacy(ribbonSlot, fileName, syncID)` instead. `setSlotFileLegacy` is only used in JS at line 295 for creature skins via `applyCreatureSkin`. The two functions may have different behavior; C++ should call `setSlotFile` here to match JS.
+- [ ] 108. [M2LegacyRendererGL.cpp] UV2 y-flip omitted in loadSkin vertex buffer construction
+  - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 358–359
+  - **Status**: Pending
+  - **Details**: JS explicitly flips the uv2 v-coordinate for OpenGL bottom-left origin: `1 - m2.uv2[uv_idx + 1]`. C++ lines 397–401 copies uv2 directly with a comment stating "already y-flipped by loader." If the M2LegacyLoader does not perform this flip, textures using the second UV set will appear vertically inverted. This needs verification against M2LegacyLoader to confirm the loader actually pre-flips.
+- [ ] 109. [M2LegacyRendererGL.cpp] _create_bones_ubo method missing entirely — UBO never created or bound
+  - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 389, 474–477, 1020
+  - **Status**: Pending
+  - **Details**: JS defines `_create_bones_ubo()` (line 474–477) which calls `create_bones_ubo(this.shader, this.gl, this.ctx, this.ubos, bone_count)` from renderer_utils. This is called in `loadSkin()` at line 389, and `this.ubos[0].ubo.bind(0)` is called in `render()` at line 1020. The C++ has no `_create_bones_ubo` method, never populates the ubos vector, and never binds a UBO in render. While bone skinning is disabled (`u_bone_count = 0`), the UBO binding may still be required by the shader. When bone animation is eventually enabled, this entire UBO pipeline will need to be implemented.
+- [ ] 110. [M2LegacyRendererGL.cpp] render() sets extra u_has_tex_matrix1/u_has_tex_matrix2 uniforms not in JS
+  - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 956–957
+  - **Status**: Pending
+  - **Details**: JS only sets `u_tex_matrix1` and `u_tex_matrix2` to identity matrices. C++ lines 1213–1214 additionally set `u_has_tex_matrix1 = 0` and `u_has_tex_matrix2 = 0` which are integer uniforms not present in the JS render path. If the shader checks these flags, this could cause the shader to skip texture matrix application entirely, differing from JS where the shader always receives and applies the identity matrices without a guard flag.
+- [ ] 111. [M2RendererGL.cpp] Bones UBO created too early in load() — before skeleton is loaded, so bones_count() is 0
+  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 406–439, 567
+  - **Status**: Pending
+  - **Details**: JS calls `_create_bones_ubo()` inside `loadSkin()` (line 567), after `_create_skeleton()` has set up bone data. C++ calls `renderer_utils::create_bones_ubo()` in `load()` at line 523, before `_create_skeleton()` runs (which happens inside `loadSkin()`). At that point `bones_count()` returns 0, so the UBO is sized for 0 bones. The UBO is never re-created after skeleton loading. This means bone animation may fail or produce incorrect results for models with skeletons.
+- [ ] 112. [M2RendererGL.cpp] Missing u_ambient_color and u_diffuse_color uniform calls in render()
+  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1512–1513
+  - **Status**: Pending
+  - **Details**: JS render() sets `u_ambient_color` to (0.5, 0.5, 0.5) and `u_diffuse_color` to (0.7, 0.7, 0.7) via `shader.set_uniform_3f`. C++ render() (around line 1956) sets `u_apply_lighting` and `u_light_dir` but omits both `u_ambient_color` and `u_diffuse_color`. If the shader uses these uniforms, lighting will be incorrect (uniforms default to 0 unless set elsewhere).
+- [ ] 113. [M2RendererGL.cpp] childSkelLoader conditionally stored only when childAnimKeys is non-empty
+  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 697–705
+  - **Status**: Pending
+  - **Details**: JS unconditionally stores the child skeleton when `parent_skel_file_id > 0` (line 699: `this.childSkelLoader = skel`). C++ only stores it when `childAnimKeys` is non-empty (line 909: `if (!child_anim_keys.empty())`). If a child skeleton has no .anim file entries but still provides animation data in its bones, it will be silently discarded in C++.
+- [ ] 114. [M2RendererGL.cpp] _dispose_skin does not dispose bone UBOs, unlike JS
+  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1914–1922
+  - **Status**: Pending
+  - **Details**: JS `_dispose_skin()` iterates over `this.ubos` and calls `ubo.ubo.dispose()` then clears the array (lines 1918–1921). C++ `_dispose_skin()` does not touch the bones UBO at all — it only disposes it in `dispose()`. Since JS `loadSkin()` creates the bones UBO and `_dispose_skin()` is called at the start of each `loadSkin()`, the JS version properly cleans up old UBOs before creating new ones. In C++, the UBO is created once in `load()` and never recreated, so this could leak if loadSkin is called multiple times.
+- [ ] 115. [M3RendererGL.cpp] Missing _create_bones_ubo() method — bones UBO creation moved from loadLOD() to load()
+  - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 79–81, 147
+  - **Status**: Pending
+  - **Details**: JS defines `_create_bones_ubo()` as a separate method (lines 79–81) called from inside `loadLOD()` (line 147). Every `loadLOD()` call recreates the bones UBO and pushes it onto `this.ubos`. C++ has no `_create_bones_ubo()` method and instead creates the bones UBO once in `load()` (line 59), before `loadLOD()` is ever called. If `loadLOD()` were called multiple times (e.g., to switch LOD levels), JS would create a new UBO each time while C++ would reuse the same one.
+- [ ] 116. [M3RendererGL.cpp] UBO disposal missing from _dispose_geometry() — JS disposes all UBOs, C++ does not
+  - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 310–311, 316
+  - **Status**: Pending
+  - **Details**: JS `_dispose_geometry()` iterates `this.ubos` and disposes each UBO, then clears `this.ubos = []`. C++ `_dispose_geometry()` (lines 355–365) has no UBO disposal — it only disposes VAOs and GL buffers. The `bones_ubo` is only disposed in the final `dispose()`. If `loadLOD()` is called multiple times, JS properly cleans up old UBOs via `_dispose_geometry()` at the start of each `loadLOD()` call, but C++ would not.
+- [ ] 117. [M3RendererGL.cpp] UBO bind(0) not called per draw call in render loop
+  - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` line 292
+  - **Status**: Pending
+  - **Details**: JS calls `ubo.ubo.bind(0)` inside the draw call loop (line 292), re-binding the UBO before each draw call. C++ calls `bones_ubo.ubo->bind(0)` once before the loop (line 277), outside the draw call iteration. For a single UBO this likely produces the same result, but it deviates from the JS structure and could break if future code adds intervening UBO binds.
+- [ ] 118. [M3RendererGL.cpp] Extra uniforms u_has_tex_matrix1/u_has_tex_matrix2 set but not in JS
+  - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 243–244
+  - **Status**: Pending
+  - **Details**: C++ lines 281–282 set `u_has_tex_matrix1` and `u_has_tex_matrix2` to 0 before setting the tex matrix uniforms. JS only sets `u_tex_matrix1` and `u_tex_matrix2` (lines 243–244) and does not set any `u_has_tex_matrix*` uniforms. While setting them to 0 is likely harmless (disables tex matrix transforms), it is a deviation from the JS source.
+- [ ] 119. [M3RendererGL.cpp] load() execution order differs from JS — bones UBO created before default texture
+  - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 59–71
+  - **Status**: Pending
+  - **Details**: JS `load()` order: (1) create M3Loader, (2) load it, (3) load shaders, (4) `_create_default_texture()`, (5) `loadLOD(0)` which internally calls `_create_bones_ubo()`. C++ `load()` order (lines 51–67): (1) create M3Loader, (2) load it, (3) load shaders, (4) `create_bones_ubo()`, (5) `_create_default_texture()`, (6) `loadLOD(0)`. The bones UBO is created before the default texture in C++ but after it in JS, and before `loadLOD()` rather than inside it.
+- [ ] 120. [MDXRendererGL.cpp] stopAnimation resets ALL bone matrices to identity, but JS only resets bone 0
+  - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 429–431
+  - **Status**: Pending
+  - **Details**: JS `this.node_matrices.set(IDENTITY_MAT4)` with no offset only copies the 16-element identity into positions [0..15], leaving bones 1..N with their last animation values. C++ (lines 522–526) loops through ALL bone slots, resetting every one to identity. This changes the visual result when stopping animation on multi-bone models — JS leaves residual transforms on non-root bones, while C++ cleanly resets all bones.
+- [ ] 121. [MDXRendererGL.cpp] Bone UBO creation timing differs: C++ creates UBO before skeleton/geometry, JS creates it inside _build_geometry after skeleton
+  - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 189–199, 262–265, 291
+  - **Status**: Pending
+  - **Details**: JS `load()` calls `_create_default_texture`, `_load_textures`, `_create_skeleton`, then `_build_geometry` (which internally calls `_create_bones_ubo` at line 291, passing `this.nodes.length` as bone count). C++ `load()` (lines 208–246) calls `renderer_utils::create_bones_ubo(*shader, ctx, 0)` at line 217 BEFORE `_create_skeleton` and `_build_geometry`, always passing bone_count=0. The JS initializes the correct number of identity matrices, C++ initializes zero.
+- [ ] 122. [MDXRendererGL.cpp] Missing per-draw-call UBO bind inside render loop
+  - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 758
+  - **Status**: Pending
+  - **Details**: JS calls `ubo.ubo.bind(0)` inside each draw call iteration (line 758, before `dc.vao.bind()`). C++ binds the UBO only once at line 968 (before the draw call loop begins) and does not re-bind it per draw call. Since nothing unbinds the UBO between draw calls in practice this is likely functionally equivalent, but it deviates from the JS structure.
+- [ ] 123. [MDXRendererGL.cpp] _create_skeleton allocates node_matrices when nodes are empty, JS does not
+  - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 270–273
+  - **Status**: Pending
+  - **Details**: JS `_create_skeleton` when nodes array is empty/falsy sets `this.nodes = null` and returns immediately without touching `node_matrices`. C++ (lines 324–328) clears `nodes` AND resizes `node_matrices` to 16 floats (one identity matrix). This extra allocation has no JS counterpart and could cause subtle differences in code that checks whether node_matrices is populated.
