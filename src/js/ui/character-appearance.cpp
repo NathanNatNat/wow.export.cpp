@@ -108,8 +108,10 @@ std::optional<uint32_t> apply_customization_textures(
 	casc::BLPImage* baked_npc_blp)
 {
 	// reset all existing materials
-	for (auto& [type, chr_material] : chr_materials)
+	for (auto& [type, chr_material] : chr_materials) {
 		chr_material->reset();
+		chr_material->update();
+	}
 
 	std::optional<uint32_t> baked_npc_texture_type;
 
@@ -165,9 +167,20 @@ std::optional<uint32_t> apply_customization_textures(
 				{
 					static_cast<int>(get_field_int(*chr_model_material, "TextureType")),
 					static_cast<int>(get_field_int(*chr_model_material, "Width")),
-					static_cast<int>(get_field_int(*chr_model_material, "Height"))
+					static_cast<int>(get_field_int(*chr_model_material, "Height")),
+					static_cast<int>(get_field_int(*chr_model_material, "Flags")),
+					static_cast<int>(get_field_int(*chr_model_material, "Unk"))
 				},
-				{ 0 },
+				// JS passes { BlendMode: 0, TextureType: texture_type, ChrModelTextureTargetID: [0, 0] }.
+				// C++ TextureLayerInput is { TextureType, Layer, Flags, BlendMode, ... }; the
+				// ChrModelTextureTargetID field has no equivalent on the struct, the JS object
+				// only sets BlendMode and TextureType so the remaining fields default to 0.
+				{
+					static_cast<int>(texture_type),                                    // TextureType
+					0,                                                                 // Layer
+					0,                                                                 // Flags
+					0                                                                  // BlendMode
+				},
 				true,                                                                  // useAlpha
 				baked_npc_blp                                                          // blpOverride
 			);
@@ -202,8 +215,6 @@ std::optional<uint32_t> apply_customization_textures(
 				continue;
 
 			const uint32_t chr_model_texture_target = chr_cust_mat->ChrModelTextureTargetID;
-			if (!chr_cust_mat->FileDataID.has_value())
-				continue;
 
 			const db::DataRecord* chr_model_texture_layer = db::caches::DBCharacterCustomization::get_model_texture_layer(layout_id, chr_model_texture_target);
 			if (!chr_model_texture_layer)
@@ -265,7 +276,7 @@ std::optional<uint32_t> apply_customization_textures(
 
 			chr_material->setTextureTarget(
 				{
-					*chr_cust_mat->FileDataID,
+					chr_cust_mat->FileDataID.value_or(0),
 					static_cast<int>(chr_cust_mat->ChrModelTextureTargetID)
 				},
 				{
@@ -278,9 +289,21 @@ std::optional<uint32_t> apply_customization_textures(
 				{
 					static_cast<int>(get_field_int(*chr_model_material, "TextureType")),
 					static_cast<int>(get_field_int(*chr_model_material, "Width")),
-					static_cast<int>(get_field_int(*chr_model_material, "Height"))
+					static_cast<int>(get_field_int(*chr_model_material, "Height")),
+					static_cast<int>(get_field_int(*chr_model_material, "Flags")),
+					static_cast<int>(get_field_int(*chr_model_material, "Unk"))
 				},
-				{ 0, 0, 0, static_cast<int>(get_field_int(*chr_model_texture_layer, "BlendMode")) },
+				// JS passes the full chr_model_texture_layer object. C++ TextureLayerInput
+				// fields are { TextureType, Layer, Flags, BlendMode, TextureSectionTypeBitMask,
+				// TextureSectionTypeBitMask2 } in that exact declaration order.
+				{
+					static_cast<int>(get_field_int(*chr_model_texture_layer, "TextureType")),
+					static_cast<int>(get_field_int(*chr_model_texture_layer, "Layer")),
+					static_cast<int>(get_field_int(*chr_model_texture_layer, "Flags")),
+					static_cast<int>(get_field_int(*chr_model_texture_layer, "BlendMode")),
+					static_cast<int>(get_field_int(*chr_model_texture_layer, "TextureSectionTypeBitMask")),
+					static_cast<int>(get_field_int(*chr_model_texture_layer, "TextureSectionTypeBitMask2"))
+				},
 				true
 			);
 		}

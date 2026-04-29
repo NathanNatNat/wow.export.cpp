@@ -500,13 +500,12 @@ void mounted() {
 		},
 		[](const std::vector<std::string>& files) {
 			// JS: process: files => textureExporter.exportFiles(files, true)
+			// JS passes the raw file-path strings directly; texture_exporter::exportFiles
+			// (via getFileInfoPair) accepts JSON strings for path-based entries.
 			std::vector<nlohmann::json> entries;
 			entries.reserve(files.size());
-			for (const auto& file : files) {
-				nlohmann::json entry;
-				entry["fileName"] = file;
-				entries.push_back(std::move(entry));
-			}
+			for (const auto& file : files)
+				entries.push_back(file);
 			texture_exporter::exportFiles(entries, core::view->casc, nullptr, true);
 		}
 	});
@@ -879,12 +878,21 @@ void export_textures() {
 	if (!user_selection.empty()) {
 		texture_exporter::exportFiles(user_selection);
 	} else if (selected_file_data_id > 0) {
+		// JS: textureExporter.exportFiles([selected_file_data_id]) — raw integer.
 		std::vector<nlohmann::json> files;
 		files.push_back(selected_file_data_id);
 		texture_exporter::exportFiles(files);
 	} else {
 		core::setToast("info", "You didn't select any files to export; you should do that first.");
 	}
+}
+
+void remove_override_textures() {
+	// JS: this.$core.view.removeOverrideTextures()
+	if (!core::view)
+		return;
+	core::view->overrideTextureList.clear();
+	core::view->overrideTextureName.clear();
 }
 
 void export_atlas_regions() {

@@ -27,10 +27,12 @@ License: MIT
 
 #include <webp/encode.h>
 
+#include <atomic>
 #include <cstring>
 #include <format>
 #include <filesystem>
 #include <algorithm>
+#include <mutex>
 #include <optional>
 #include <thread>
 #include <unordered_map>
@@ -177,6 +179,21 @@ static listbox_zones::ListboxZonesState listbox_zones_state;
 // Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
+
+// --- Background zone-map loading (TODO 544) ---
+// JS `load_zone_map` is async and yields the event loop between tile reads.
+// In C++ we run the heavy CPU/CASC work on a background thread so the UI does
+// not freeze during tile loading. Coordination:
+//   * `s_zone_load_in_flight` is true while a worker thread is rendering.
+//   * `s_pending_zone_id` / `s_pending_phase_id` hold a queued request when
+//     the user changes selection mid-render. The most recent request wins.
+//   * The worker writes into `core::view->zoneMapPixels/Width/Height` while
+//     `core::view->zoneMapTexID` is left untouched until the upload runs on
+//     the main thread, so the previous texture remains displayable.
+static std::atomic<bool> s_zone_load_in_flight{ false };
+static std::mutex s_pending_mutex;
+static std::optional<int> s_pending_zone_id;
+static std::optional<int> s_pending_phase_id;
 
 // --- Internal functions ---
 
@@ -622,20 +639,67 @@ static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const
 	logging::write(std::format("rendered {}/{} overlay tiles successfully", successful, sorted_tiles.size()));
 }
 
-static void load_zone_map(int zone_id, std::optional<int> phase_id = std::nullopt) {
-try {
-const auto result = render_zone_to_canvas(zone_id, phase_id);
-// Upload the composited pixel buffer to a GL texture for ImGui::Image display.
-if (!core::view->zoneMapPixels.empty() && core::view->zoneMapWidth > 0 && core::view->zoneMapHeight > 0) {
-	core::view->zoneMapTexID = upload_rgba_to_gl(
-		core::view->zoneMapPixels.data(),
-		core::view->zoneMapWidth, core::view->zoneMapHeight,
-		core::view->zoneMapTexID);
+// Forward declaration so runZoneLoadWorker() can re-invoke load_zone_map
+// after a completed render flushes any pending request.
+static void load_zone_map(int zone_id, std::optional<int> phase_id = std::nullopt);
+
+// Run a single zone-map render on a background worker thread, then post the
+// GL upload back to the main thread (OpenGL state is main-thread only). When
+// the render finishes, drain any pending request that arrived mid-flight.
+static void runZoneLoadWorker(int zone_id, std::optional<int> phase_id) {
+	std::thread([zone_id, phase_id]() {
+		try {
+			render_zone_to_canvas(zone_id, phase_id);
+		} catch (const std::exception& e) {
+			logging::write(std::format("failed to render zone map: {}", e.what()));
+			core::postToMainThread([msg = std::string(e.what())]() {
+				core::setToast("error", std::format("Failed to load map data: {}", msg));
+			});
+		}
+
+		// Upload the composited pixel buffer to a GL texture on the main
+		// thread so the new map appears in the preview, then drain any
+		// queued request that arrived while we were rendering.
+		core::postToMainThread([]() {
+			auto& view = *core::view;
+			if (!view.zoneMapPixels.empty() && view.zoneMapWidth > 0 && view.zoneMapHeight > 0) {
+				view.zoneMapTexID = upload_rgba_to_gl(
+					view.zoneMapPixels.data(),
+					view.zoneMapWidth, view.zoneMapHeight,
+					view.zoneMapTexID);
+			}
+
+			s_zone_load_in_flight.store(false, std::memory_order_release);
+
+			std::optional<int> next_zone, next_phase;
+			{
+				std::lock_guard<std::mutex> lock(s_pending_mutex);
+				next_zone = s_pending_zone_id;
+				next_phase = s_pending_phase_id;
+				s_pending_zone_id.reset();
+				s_pending_phase_id.reset();
+			}
+			if (next_zone.has_value())
+				load_zone_map(*next_zone, next_phase);
+		});
+	}).detach();
 }
-} catch (const std::exception& e) {
-logging::write(std::format("failed to render zone map: {}", e.what()));
-core::setToast("error", std::format("Failed to load map data: {}", e.what()));
-}
+
+static void load_zone_map(int zone_id, std::optional<int> phase_id) {
+	// JS load_zone_map is awaited from watch handlers; in C++ we run the
+	// rendering on a worker thread so the UI keeps animating. If a previous
+	// load is still running, queue the latest request — the running worker
+	// will pick it up when it finishes (the most recent zone wins).
+	bool expected = false;
+	if (!s_zone_load_in_flight.compare_exchange_strong(expected, true,
+		std::memory_order_acq_rel)) {
+		std::lock_guard<std::mutex> lock(s_pending_mutex);
+		s_pending_zone_id = zone_id;
+		s_pending_phase_id = phase_id;
+		return;
+	}
+
+	runZoneLoadWorker(zone_id, phase_id);
 }
 
 // --- Public API ---
@@ -823,6 +887,7 @@ float expansionRowH = ImGui::GetCursorPosY() - tabOrigin.y;
 
 // Calculate remaining space for the list-tab grid (rows 2 + 3).
 constexpr float FILTER_BAR_H = app::layout::FILTER_BAR_HEIGHT; // 60px
+constexpr float STATUS_BAR_H = 27.0f; // matches CalcListTabRegions() in app.cpp
 const float contentH = tabAvail.y - expansionRowH;
 
 constexpr float COL_RATIO = 1.5f / 3.5f;
@@ -833,13 +898,18 @@ const float topRowH = contentH - FILTER_BAR_H;
 
 const float rowYStart = tabOrigin.y + expansionRowH;
 
+// JS template uses :includefilecount="true" on the zones listbox (TODO 543);
+// the C++ status bar lives in a 27px strip between the listbox and the
+// filter bar, populated via listbox::renderStatusBar() below.
+const float listInnerW = leftColW - app::layout::LIST_MARGIN_LEFT - app::layout::LIST_MARGIN_RIGHT;
+const float listInnerH = topRowH - app::layout::LIST_MARGIN_TOP - STATUS_BAR_H;
+
 // --- Left panel: Zone listbox (row 2, col 1) ---
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + app::layout::LIST_MARGIN_LEFT,
 	                           rowYStart + app::layout::LIST_MARGIN_TOP));
 	ImGui::BeginChild("zones-list-container",
-		ImVec2(leftColW - app::layout::LIST_MARGIN_LEFT - app::layout::LIST_MARGIN_RIGHT,
-		       topRowH - app::layout::LIST_MARGIN_TOP));
+		ImVec2(listInnerW, listInnerH));
 
 	// Convert json items to string array.
 	const auto& zone_strings = core::cached_json_strings(view.zoneViewerZones, s_items_cache, s_items_cache_size);
@@ -887,6 +957,17 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 	ImGui::EndChild(); // zones-list-container
 }
 
+// --- Status bar (TODO 543: equivalent of JS :includefilecount="true") ---
+{
+	ImGui::SetCursorPos(ImVec2(tabOrigin.x + app::layout::LIST_MARGIN_LEFT,
+	                           rowYStart + app::layout::LIST_MARGIN_TOP + listInnerH));
+	ImGui::BeginChild("zones-status",
+		ImVec2(listInnerW, STATUS_BAR_H), ImGuiChildFlags_None,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	listbox::renderStatusBar("zone", {}, listbox_zones_state.base);
+	ImGui::EndChild();
+}
+
 // Context menu.
 context_menu::render(
 	"ctx-zone",
@@ -925,7 +1006,14 @@ context_menu::render(
 		       tabAvail.y - FILTER_BAR_H - app::layout::PREVIEW_MARGIN_TOP),
 		ImGuiChildFlags_Borders);
 
-	if (view.zoneMapTexID != 0 && view.zoneMapWidth > 0 && view.zoneMapHeight > 0) {
+	// While a background load is rendering into view.zoneMapPixels/Width/
+	// Height (TODO 544), skip ImGui::Image — the texID still points at the
+	// previous texture but the dimensions are mid-write. Show a placeholder
+	// so the user knows a load is in progress.
+	const bool zone_loading = s_zone_load_in_flight.load(std::memory_order_acquire);
+	if (zone_loading) {
+		ImGui::TextUnformatted("Loading zone map...");
+	} else if (view.zoneMapTexID != 0 && view.zoneMapWidth > 0 && view.zoneMapHeight > 0) {
 		// Fit zone map into available area while preserving aspect ratio.
 		const ImVec2 avail = ImGui::GetContentRegionAvail();
 		const float tex_w = static_cast<float>(view.zoneMapWidth);

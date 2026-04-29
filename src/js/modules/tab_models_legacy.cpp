@@ -41,6 +41,7 @@
 #include <memory>
 #include <regex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <imgui.h>
@@ -79,6 +80,7 @@ static std::vector<nlohmann::json> prev_skins_selection;
 static bool _was_paused_before_scrub = false;
 
 static bool is_initialized = false;
+static bool is_initializing = false;
 
 static listbox::ListboxState listbox_legacy_models_state;
 
@@ -385,7 +387,8 @@ static void step_animation(int delta) {
 		active_renderer_m2->step_animation_frame(delta);
 		view.legacyModelViewerAnimFrame = active_renderer_m2->get_animation_frame();
 	} else if (active_renderer_mdx) {
-		view.legacyModelViewerAnimFrame = 0;
+		active_renderer_mdx->step_animation_frame(delta);
+		view.legacyModelViewerAnimFrame = active_renderer_mdx->get_animation_frame();
 	}
 }
 
@@ -399,6 +402,7 @@ static void seek_animation(int frame) {
 		active_renderer_m2->set_animation_frame(frame);
 		view.legacyModelViewerAnimFrame = frame;
 	} else if (active_renderer_mdx) {
+		active_renderer_mdx->set_animation_frame(frame);
 		view.legacyModelViewerAnimFrame = frame;
 	}
 }
@@ -435,7 +439,10 @@ void registerTab() {
 	modules::register_nav_button("tab_models_legacy", "Models", "cube.svg", install_type::MPQ);
 }
 
-void mounted() {
+// Background initializer — mirrors the JS `mounted()` body but runs off the
+// main thread so the loading screen can render while the MPQ is scanned and
+// creature data is loaded. Compare with tab_maps' `initialize()`.
+static void initialize() {
 	auto& view = *core::view;
 
 	core::showLoadingScreen(3);
@@ -461,9 +468,6 @@ void mounted() {
 		}
 
 		std::sort(model_files.begin(), model_files.end());
-		view.listfileLegacyModels.clear();
-		for (const auto& f : model_files)
-			view.listfileLegacyModels.push_back(f);
 
 		core::progressLoadingScreen("Loading creature skin data...");
 
@@ -477,65 +481,83 @@ void mounted() {
 
 		core::progressLoadingScreen("Initializing 3D preview...");
 
-		//     this.$core.view.legacyModelViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
-		if (view.legacyModelViewerContext.is_null()) {
-			view.legacyModelViewerContext = nlohmann::json::object();
+		// Publish results on the main thread to avoid racing with the renderer.
+		core::postToMainThread([model_files = std::move(model_files)]() mutable {
+			auto& v = *core::view;
 
-			// Wire model viewer context callbacks.
-			// Legacy renderers are not M2RendererGL; getActiveRenderer returns nullptr.
-			// renderActiveModel handles all legacy renderer types.
-			viewer_context.renderActiveModel = [](const float* view_mat, const float* proj_mat) {
-				if (active_renderer_m2)
-					active_renderer_m2->render(view_mat, proj_mat);
-				else if (active_renderer_mdx)
-					active_renderer_mdx->render(view_mat, proj_mat);
-				else if (active_renderer_wmo)
-					active_renderer_wmo->render(view_mat, proj_mat);
-			};
-			viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
-														const std::array<float, 3>& rot,
-														const std::array<float, 3>& scale) {
-				if (active_renderer_m2)
-					active_renderer_m2->setTransform(pos, rot, scale);
-				else if (active_renderer_mdx)
-					active_renderer_mdx->setTransform(pos, rot, scale);
-				else if (active_renderer_wmo)
-					active_renderer_wmo->setTransform(pos, rot, scale);
-			};
-			viewer_context.getActiveBoundingBox = []() -> std::optional<model_viewer_gl::BoundingBox> {
-				if (active_renderer_m2) {
-					auto bb = active_renderer_m2->getBoundingBox();
-					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
-				} else if (active_renderer_mdx) {
-					auto bb = active_renderer_mdx->getBoundingBox();
-					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
-				} else if (active_renderer_wmo) {
-					auto bb = active_renderer_wmo->getBoundingBox();
-					if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
-				}
-				return std::nullopt;
-			};
-		}
+			v.listfileLegacyModels.clear();
+			for (const auto& f : model_files)
+				v.listfileLegacyModels.push_back(f);
+
+			//     this.$core.view.legacyModelViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
+			if (v.legacyModelViewerContext.is_null()) {
+				v.legacyModelViewerContext = nlohmann::json::object();
+
+				// Wire model viewer context callbacks.
+				// Legacy renderers are not M2RendererGL; getActiveRenderer returns nullptr.
+				// renderActiveModel handles all legacy renderer types.
+				viewer_context.renderActiveModel = [](const float* view_mat, const float* proj_mat) {
+					if (active_renderer_m2)
+						active_renderer_m2->render(view_mat, proj_mat);
+					else if (active_renderer_mdx)
+						active_renderer_mdx->render(view_mat, proj_mat);
+					else if (active_renderer_wmo)
+						active_renderer_wmo->render(view_mat, proj_mat);
+				};
+				viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
+															const std::array<float, 3>& rot,
+															const std::array<float, 3>& scale) {
+					if (active_renderer_m2)
+						active_renderer_m2->setTransform(pos, rot, scale);
+					else if (active_renderer_mdx)
+						active_renderer_mdx->setTransform(pos, rot, scale);
+					else if (active_renderer_wmo)
+						active_renderer_wmo->setTransform(pos, rot, scale);
+				};
+				viewer_context.getActiveBoundingBox = []() -> std::optional<model_viewer_gl::BoundingBox> {
+					if (active_renderer_m2) {
+						auto bb = active_renderer_m2->getBoundingBox();
+						if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+					} else if (active_renderer_mdx) {
+						auto bb = active_renderer_mdx->getBoundingBox();
+						if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+					} else if (active_renderer_wmo) {
+						auto bb = active_renderer_wmo->getBoundingBox();
+						if (bb) return model_viewer_gl::BoundingBox{ bb->min, bb->max };
+					}
+					return std::nullopt;
+				};
+			}
+
+			// Initialize change-detection state for watches.
+			if (v.legacyModelViewerAnimSelection.is_string())
+				prev_anim_selection = v.legacyModelViewerAnimSelection.get<std::string>();
+			else
+				prev_anim_selection.clear();
+
+			prev_selection_legacy_models = v.selectionLegacyModels;
+			prev_skins_selection = v.legacyModelViewerSkinsSelection;
+
+			is_initialized = true;
+			is_initializing = false;
+		});
 
 		core::hideLoadingScreen();
 	} catch (const std::exception& error) {
 		core::hideLoadingScreen();
 		logging::write(std::format("Failed to initialize legacy models tab: {}", error.what()));
 		core::setToast("error", "Failed to initialize legacy models tab. Check the log for details.");
+		core::postToMainThread([]() { is_initializing = false; });
 	}
+}
 
-	// Initialize change-detection state for watches.
-
-	if (view.legacyModelViewerAnimSelection.is_string())
-		prev_anim_selection = view.legacyModelViewerAnimSelection.get<std::string>();
-	else
-		prev_anim_selection.clear();
-
-	prev_selection_legacy_models = view.selectionLegacyModels;
-
-	prev_skins_selection = view.legacyModelViewerSkinsSelection;
-
-	is_initialized = true;
+void mounted() {
+	// JS runs initialization synchronously inside `mounted()`. C++ launches the
+	// heavy work on a background thread (lazy init in render()) so the loading
+	// screen actually renders during MPQ scan + creature data loading. Mirrors
+	// the pattern used by tab_maps.
+	is_initialized = false;
+	is_initializing = false;
 }
 
 // --- Async export (one-file-per-frame, follows tab_models pattern) ---
@@ -573,33 +595,31 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 
 	std::string format = view.config.value("exportLegacyModelFormat", std::string("OBJ"));
 
+	// JS opens `export_paths` at the top of `export_files` regardless of format
+	// (line 192) and always calls `export_paths?.close()` at the end (line 321).
+	std::optional<FileWriter> export_paths_writer;
+	export_paths_writer.emplace(core::openLastExportStream());
+
 	if (format == "PNG" || format == "CLIPBOARD") {
-		// Single operation — no loop needed.
 		if (!active_path.empty()) {
 			gl::GLContext* gl_ctx = viewer_context.gl_context;
 			if (gl_ctx && viewer_state.fbo != 0) {
-				std::optional<FileWriter> export_paths_writer;
-				if (format == "PNG")
-					export_paths_writer.emplace(core::openLastExportStream());
 				glBindFramebuffer(GL_FRAMEBUFFER, viewer_state.fbo);
 				model_viewer_utils::export_preview(format, *gl_ctx, active_path, "",
-					export_paths_writer.has_value() ? &export_paths_writer.value() : nullptr);
+					&export_paths_writer.value());
 				glBindFramebuffer(GL_FRAMEBUFFER, 0);
-				if (export_paths_writer.has_value())
-					export_paths_writer->close();
 			}
 		} else {
 			core::setToast("error", "The selected export option only works for model previews. Preview something first!", {}, -1);
 		}
-		return;
-	}
-
-	if (format == "OBJ" || format == "STL" || format == "RAW") {
+	} else if (format == "OBJ" || format == "STL" || format == "RAW") {
+		// Hand the writer off to the async task; pump_legacy_export closes it
+		// when the task retires (see finalize_pending_legacy_export).
 		PendingLegacyExport task;
 		task.files = files;
 		task.format = format;
 		task.export_id = export_id;
-		task.export_paths_writer.emplace(core::openLastExportStream());
+		task.export_paths_writer = std::move(export_paths_writer);
 		task.manifest = {
 			{"type", "LEGACY_MODELS"},
 			{"exportID", export_id},
@@ -608,9 +628,23 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 		};
 		task.helper.emplace(static_cast<int>(files.size()), "model");
 		pending_legacy_export = std::move(task);
+		return;
 	} else {
 		core::setToast("error", "Export format not yet implemented for legacy models: " + format, {}, -1);
 	}
+
+	// JS line 321: every non-async-task path closes export_paths before returning.
+	if (export_paths_writer.has_value())
+		export_paths_writer->close();
+}
+
+// Mirrors JS `export_paths?.close()` (line 321) — flush before destruction so
+// writes are guaranteed durable regardless of which exit path retires the task.
+static void finalize_pending_legacy_export() {
+	auto& task = *pending_legacy_export;
+	if (task.export_paths_writer.has_value())
+		task.export_paths_writer->close();
+	pending_legacy_export.reset();
 }
 
 static void pump_legacy_export() {
@@ -628,13 +662,13 @@ static void pump_legacy_export() {
 	}
 
 	if (helper.isCancelled()) {
-		pending_legacy_export.reset();
+		finalize_pending_legacy_export();
 		return;
 	}
 
 	if (task.next_index >= task.files.size()) {
 		helper.finish();
-		pending_legacy_export.reset();
+		finalize_pending_legacy_export();
 		return;
 	}
 
@@ -771,6 +805,13 @@ void render() {
 	pump_legacy_preview();
 	pump_legacy_export();
 
+	// Lazy initialization on background thread so the loading screen is visible.
+	// Mirrors tab_maps' pattern (JS runs initialization in `mounted()` directly,
+	// but on the C++ main thread that would block the loading screen redraw).
+	if (!is_initialized && !is_initializing) {
+		is_initializing = true;
+		std::thread(initialize).detach();
+	}
 	if (!is_initialized)
 		return;
 

@@ -136,6 +136,13 @@ static void pump_detect_task() {
 		BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
 
 		for (const auto& check : constants::FILE_IDENTIFIERS) {
+			// JS `check.match` is either a string OR an array of strings (e.g. mp3 has 4 alternatives).
+			// JS Buffer.startsWith() handles both cases internally (buffer.js lines 592–604):
+			// when given an array it returns true if any pattern matches.
+			// The C++ port models this as a fixed `matches[]` array with `match_count`:
+			// `match_count == 1` mirrors JS string-match, `match_count > 1` mirrors JS array-match.
+			// Both forms are exercised in practice (see constants.cpp FILE_IDENTIFIERS) and
+			// behave identically to JS — this is not an over-match deviation.
 			std::vector<std::string_view> patterns(check.matches.begin(), check.matches.begin() + std::min(static_cast<size_t>(check.match_count), check.matches.size()));
 			if (data.startsWith(patterns)) {
 				task.extension_map[file_data_id] = std::string(check.ext);
@@ -299,13 +306,14 @@ void render() {
 	const ImVec2 avail = ImGui::GetContentRegionAvail();
 	const ImVec2 cursor = ImGui::GetCursorPos();
 	constexpr float FILTER_H = app::layout::FILTER_BAR_HEIGHT; // 60px
+	constexpr float STATUS_H = 27.0f; // matches CalcListTabRegions statusBarH
 	constexpr float MARGIN = 10.0f;
 
 	// --- List container (row 1, single column) ---
 	const float listTopM = 20.0f;
 	const float listLeftM = 20.0f;
 	const float listRightM = 10.0f;
-	const float topH = avail.y - FILTER_H;
+	const float topH = avail.y - FILTER_H - STATUS_H;
 
 	ImGui::SetCursorPos(ImVec2(cursor.x + listLeftM, cursor.y + listTopM));
 	ImGui::BeginChild("raw-list-container",
@@ -383,8 +391,17 @@ void render() {
 	}
 	ImGui::EndChild();
 
+	// --- Status bar (file count) ---
+	// JS Listbox prop :includefilecount="true" with unittype="file".
+	ImGui::SetCursorPos(ImVec2(cursor.x + listLeftM, cursor.y + topH));
+	ImGui::BeginChild("raw-status",
+		ImVec2(avail.x - listLeftM - listRightM, STATUS_H), ImGuiChildFlags_None,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	listbox::renderStatusBar("file", {}, listbox_state);
+	ImGui::EndChild();
+
 	// --- Tray (row 2) ---
-	ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + topH));
+	ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + topH + STATUS_H));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(MARGIN, 0.0f));
 	ImGui::BeginChild("raw-tray", ImVec2(avail.x, FILTER_H), ImGuiChildFlags_None,
 		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);

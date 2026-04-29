@@ -896,7 +896,7 @@ casc::ExportHelper helper(1, "WMO");
 helper.start();
 
 try {
-if (!selected_wdt || (!selected_wdt->hasWorldModelPlacement && selected_wdt->worldModel.empty()))
+if (!selected_wdt || !selected_wdt->hasWorldModelPlacement)
 throw std::runtime_error("map does not contain a world model.");
 
 const auto& placement = selected_wdt->worldModelPlacement;
@@ -1575,8 +1575,8 @@ core::postToMainThread([maps = std::move(maps)]() mutable {
 		core::view->mapViewerMaps.push_back(m);
 	tab_initialized = true;
 	tab_initializing = false;
+	core::hideLoadingScreen();
 });
-core::hideLoadingScreen();
 }
 
 void mounted() {

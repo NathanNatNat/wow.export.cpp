@@ -20,6 +20,7 @@
 #include "../ui/listbox-context.h"
 #include "../components/listbox.h"
 #include "../components/context-menu.h"
+#include "../components/menu-button.h"
 #include "../install-type.h"
 #include "../modules.h"
 #include "../../app.h"
@@ -90,7 +91,8 @@ static std::atomic<bool> poll_active{false};
 
 static std::atomic<bool> poll_cancelled{false};
 
-static bool kino_processing_cancelled = false;
+static std::atomic<bool> kino_processing_cancelled{false};
+static std::atomic<bool> kino_processing_active{false};
 
 // Background thread for stream_video HTTP + polling (replaces JS async/await).
 static std::unique_ptr<std::jthread> stream_worker_thread;
@@ -100,6 +102,13 @@ static std::mutex stream_result_mutex;
 static bool prev_video_player_show_subtitles = false;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
+static menu_button::MenuButtonState menu_button_videos_state;
+
+// Background workers for long-running async work (kino processing, exports).
+// JS runs these as `async` functions; in C++ we use std::jthread to avoid blocking
+// the UI thread on HTTP polling. Thread handles persist so they can be joined / replaced.
+static std::unique_ptr<std::jthread> kino_processing_thread;
+static std::unique_ptr<std::jthread> export_selected_thread;
 
 // Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
@@ -585,81 +594,109 @@ static void trigger_kino_processing() {
 		return;
 	}
 
-	kino_processing_cancelled = false;
-	const size_t total = video_file_data_ids->size();
-	size_t processed = 0;
-	size_t errors = 0;
+	// Don't start a second pass while one is in flight.
+	if (kino_processing_active.load())
+		return;
 
-	logging::write(std::format("kino_processing: starting processing of {} videos", total));
+	kino_processing_cancelled.store(false);
+	kino_processing_active.store(true);
 
-	// JS: cancel_processing is a named function referenced by both the Cancel button and
-	// the toast-cancelled event. In C++ kino_processing runs synchronously on the main thread,
-	// so neither callback can fire mid-loop — but we replicate the JS API contract structurally.
-	auto cancel_processing = [&]() {
-		kino_processing_cancelled = true;
-		logging::write(std::format("kino_processing: cancelled by user at {}/{}", processed, total));
-		core::setToast("info", std::format("Video processing cancelled. Processed {}/{} videos.", processed, total));
-	};
+	logging::write(std::format("kino_processing: starting processing of {} videos", video_file_data_ids->size()));
 
-	auto update_toast = [&]() {
-		if (kino_processing_cancelled)
-			return;
+	// JS `trigger_kino_processing` is `async` and `await`s each fetch; the UI keeps responding.
+	// Run the entire loop on a background thread so HTTP polling does not freeze the C++ UI.
+	// Toast updates and the toast-cancelled handler are routed back to the main thread via postToMainThread.
+	kino_processing_thread.reset();
+	kino_processing_thread = std::make_unique<std::jthread>([fdids = *video_file_data_ids]() {
+		const size_t total = fdids.size();
+		// Atomic counters because the toast lambda runs on the main thread while we mutate here.
+		std::atomic<size_t> processed{0};
+		std::atomic<size_t> errors{0};
 
-		const std::string msg = std::format("Processing videos: {}/{} ({} errors)", processed, total, errors);
-		// JS: core.setToast('progress', msg, { 'Cancel': cancel_processing }, -1, true)
-		core::setToast("progress", msg, { {"Cancel", cancel_processing} }, -1, true);
-	};
+		auto update_toast = [&processed, &errors, total]() {
+			if (kino_processing_cancelled.load())
+				return;
 
-	size_t cancel_listener_id = core::events.once("toast-cancelled", cancel_processing);
+			const size_t p = processed.load();
+			const size_t e = errors.load();
+			core::postToMainThread([p, e, total]() {
+				if (kino_processing_cancelled.load())
+					return;
+				const std::string msg = std::format("Processing videos: {}/{} ({} errors)", p, total, e);
+				// JS: core.setToast('progress', msg, { 'Cancel': cancel_processing }, -1, true)
+				// The cancel handler simply flips the shared cancelled flag.
+				core::setToast("progress", msg, { {"Cancel", []() {
+					kino_processing_cancelled.store(true);
+					logging::write("kino_processing: cancelled by user");
+				}} }, -1, true);
+			});
+		};
 
-	update_toast();
+		// JS: core.events.once('toast-cancelled', cancel_processing)
+		size_t cancel_listener_id = core::events.once("toast-cancelled", []() {
+			kino_processing_cancelled.store(true);
+			logging::write("kino_processing: cancelled by user (toast-cancelled)");
+		});
 
-	for (const uint32_t file_data_id : *video_file_data_ids) {
-		if (kino_processing_cancelled)
-			break;
+		update_toast();
 
-		try {
-			const auto build_result = build_payload(file_data_id);
-			if (!build_result.has_value()) {
-				logging::write(std::format("kino_processing: failed to build payload for fdid {}", file_data_id));
-				errors++;
-				processed++;
-				update_toast();
-				continue;
-			}
+		for (const uint32_t file_data_id : fdids) {
+			if (kino_processing_cancelled.load())
+				break;
 
-			const auto& payload = build_result->payload;
-
-			// poll until we get 200 or error
-			bool done = false;
-			while (!done && !kino_processing_cancelled) {
-				auto [status, data] = kino_post(payload);
-
-				if (status == 200) {
-					done = true;
-				} else if (status == 202) {
-					std::this_thread::sleep_for(std::chrono::milliseconds(constants::KINO::POLL_INTERVAL));
-				} else {
-					logging::write(std::format("kino_processing: unexpected status {} for fdid {}", status, file_data_id));
-					errors++;
-					done = true;
+			try {
+				const auto build_result = build_payload(file_data_id);
+				if (!build_result.has_value()) {
+					logging::write(std::format("kino_processing: failed to build payload for fdid {}", file_data_id));
+					errors.fetch_add(1);
+					processed.fetch_add(1);
+					update_toast();
+					continue;
 				}
+
+				const auto& payload = build_result->payload;
+
+				// poll until we get 200 or error
+				bool done = false;
+				while (!done && !kino_processing_cancelled.load()) {
+					auto [status, data] = kino_post(payload);
+
+					if (status == 200) {
+						done = true;
+					} else if (status == 202) {
+						std::this_thread::sleep_for(std::chrono::milliseconds(constants::KINO::POLL_INTERVAL));
+					} else {
+						logging::write(std::format("kino_processing: unexpected status {} for fdid {}", status, file_data_id));
+						errors.fetch_add(1);
+						done = true;
+					}
+				}
+			} catch (const std::exception& e) {
+				logging::write(std::format("kino_processing: error processing fdid {}: {}", file_data_id, e.what()));
+				errors.fetch_add(1);
 			}
-		} catch (const std::exception& e) {
-			logging::write(std::format("kino_processing: error processing fdid {}: {}", file_data_id, e.what()));
-			errors++;
+
+			processed.fetch_add(1);
+			update_toast();
 		}
 
-		processed++;
-		update_toast();
-	}
+		core::events.off("toast-cancelled", cancel_listener_id);
 
-	core::events.off("toast-cancelled", cancel_listener_id);
+		const size_t final_processed = processed.load();
+		const size_t final_errors = errors.load();
+		const bool was_cancelled = kino_processing_cancelled.load();
 
-	if (!kino_processing_cancelled) {
-		logging::write(std::format("kino_processing: completed {}/{} videos with {} errors", processed, total, errors));
-		core::setToast("success", std::format("Video processing complete. {}/{} videos, {} errors.", processed, total, errors));
-	}
+		core::postToMainThread([final_processed, total, final_errors, was_cancelled]() {
+			if (was_cancelled) {
+				core::setToast("info", std::format("Video processing cancelled. Processed {}/{} videos.", final_processed, total));
+			} else {
+				logging::write(std::format("kino_processing: completed {}/{} videos with {} errors", final_processed, total, final_errors));
+				core::setToast("success", std::format("Video processing complete. {}/{} videos, {} errors.", final_processed, total, final_errors));
+			}
+		});
+
+		kino_processing_active.store(false);
+	});
 }
 
 // expose to window in dev mode
@@ -1181,11 +1218,20 @@ void render() {
 		ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x - 200.0f, 0));
 		ImGui::SameLine();
 
-		const bool busy = view.isBusy > 0;
-		if (busy) app::theme::BeginDisabledButton();
-		if (ImGui::Button("Export Selected"))
-			export_selected();
-		if (busy) app::theme::EndDisabledButton();
+		// JS: <MenuButton :options="menuButtonVideos" :default="config.exportVideoFormat"
+		//                 @change="config.exportVideoFormat = $event" :disabled="isBusy"
+		//                 @click="export_selected">
+		{
+			const bool busy = view.isBusy > 0;
+			std::vector<menu_button::MenuOption> mb_options;
+			for (const auto& opt : view.menuButtonVideos)
+				mb_options.push_back({ opt.label, opt.value });
+			menu_button::render("##MenuButtonVideos", mb_options,
+				view.config.value("exportVideoFormat", std::string("AVI")),
+				busy, false, menu_button_videos_state,
+				[&](const std::string& val) { view.config["exportVideoFormat"] = val; },
+				[]() { export_selected(); });
+		}
 	}
 	app::layout::EndPreviewControls();
 
@@ -1215,15 +1261,22 @@ void preview_video() {
 void export_selected() {
 	const std::string format = core::view->config.value("exportVideoFormat", std::string("AVI"));
 
-	if (format == "MP4") {
-		export_mp4();
-	} else if (format == "AVI") {
-		export_avi();
-	} else if (format == "MP3") {
-		export_mp3();
-	} else if (format == "SUBTITLES") {
-		export_subtitles();
-	}
+	// JS `export_selected` is `async`; each export awaits per-file fetches, keeping the UI alive.
+	// In C++ the export work (especially MP4 via `get_mp4_url`'s polling loop) is blocking, so
+	// dispatch onto a background thread. ExportHelper handles isBusy and toast updates which are
+	// safe to call from a worker thread (they post UI updates internally).
+	export_selected_thread.reset();
+	export_selected_thread = std::make_unique<std::jthread>([format]() {
+		if (format == "MP4") {
+			export_mp4();
+		} else if (format == "AVI") {
+			export_avi();
+		} else if (format == "MP3") {
+			export_mp3();
+		} else if (format == "SUBTITLES") {
+			export_subtitles();
+		}
+	});
 }
 
 } // namespace tab_videos

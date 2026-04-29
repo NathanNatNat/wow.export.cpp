@@ -243,9 +243,21 @@ double AudioPlayer::get_position() {
 		return 0;
 
 	if (is_playing && sound) {
+		// JS: const elapsed = this.context.currentTime - this.start_time;
+		//     const position = this.start_offset + elapsed;
+		// JS adds start_offset because Web Audio's `elapsed` is wall-clock time
+		// since `source.start()` was called (i.e. elapsed-since-seek).
+		//
+		// miniaudio is different: ma_sound_get_cursor_in_seconds() returns the
+		// absolute cursor of the underlying data source — i.e. frames since the
+		// beginning of the decoded stream (frame 0). Seeking the decoder via
+		// ma_decoder_seek_to_pcm_frame() sets readPointerInPCMFrames to the
+		// seek target, and playback increments it from there. The cursor
+		// therefore already includes the seek offset, so we must NOT add
+		// start_offset again — doing so would double-count it.
 		float cursor = 0.0f;
 		ma_sound_get_cursor_in_seconds(sound, &cursor);
-		double position = start_offset + static_cast<double>(cursor);
+		double position = static_cast<double>(cursor);
 
 		if (loop && duration_cache > 0.0)
 			return std::fmod(position, duration_cache);

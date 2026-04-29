@@ -20,6 +20,8 @@
 #include "../modules.h"
 #include "../ui/listbox-context.h"
 #include "../components/listbox.h"
+#include "../components/checkboxlist.h"
+#include "../components/listboxb.h"
 #include "../ui/texture-ribbon.h"
 #include "../ui/texture-exporter.h"
 #include "../ui/model-viewer-utils.h"
@@ -158,6 +160,13 @@ static bool is_initializing = false;
 
 static listbox::ListboxState listbox_creatures_state;
 static menu_button::MenuButtonState menu_button_creatures_state;
+
+// Component states for CheckboxList and ListboxB sidebar widgets.
+static checkboxlist::CheckboxListState checkboxlist_creature_equipment_state;
+static checkboxlist::CheckboxListState checkboxlist_creature_geosets_state;
+static checkboxlist::CheckboxListState checkboxlist_creature_wmo_groups_state;
+static checkboxlist::CheckboxListState checkboxlist_creature_wmo_sets_state;
+static listboxb::ListboxBState listboxb_creature_skins_state;
 
 // Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
@@ -1551,6 +1560,11 @@ static void initialize() {
 		// toLowerCase equivalent
 		std::transform(name_a.begin(), name_a.end(), name_a.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		std::transform(name_b.begin(), name_b.end(), name_b.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		// DEVIATION: JS uses `localeCompare` (Unicode-aware, locale-sensitive ICU collation). The C++ port
+		// performs a byte-wise comparison on lowercased UTF-8 strings, which matches JS for ASCII names but
+		// may diverge for non-ASCII characters (accents, scripts). A faithful port would require ICU or
+		// equivalent collation data, which is not currently a project dependency. Creature names in WoW
+		// data are predominantly ASCII, so this is a corner-case difference.
 		return name_a < name_b;
 	});
 
@@ -2178,14 +2192,10 @@ void render() {
 			}
 
 			if (view.creatureViewerActiveType == "m2") {
+				// <Checkboxlist :items="creatureViewerEquipment"/>
 				if (!view.creatureViewerEquipment.empty()) {
 					ImGui::SeparatorText("Equipment");
-					for (auto& item : view.creatureViewerEquipment) {
-						bool checked = item.value("checked", true);
-						std::string label = item.value("label", "");
-						if (ImGui::Checkbox(label.c_str(), &checked))
-							item["checked"] = checked;
-					}
+					checkboxlist::render("##CreatureEquipment", view.creatureViewerEquipment, checkboxlist_creature_equipment_state);
 					//     <a @click="setAllCreatureEquipment(true)">Enable All</a> / <a @click="setAllCreatureEquipment(false)">Disable All</a>
 					if (ImGui::SmallButton("Enable All##creature-equip")) {
 						for (auto& item : view.creatureViewerEquipment)
@@ -2200,15 +2210,10 @@ void render() {
 					}
 				}
 
+				// <Checkboxlist :items="creatureViewerGeosets"/>
 				if (!view.creatureViewerGeosets.empty()) {
 					ImGui::SeparatorText("Geosets");
-					for (auto& item : view.creatureViewerGeosets) {
-						bool checked = item.value("checked", false);
-						std::string label = item.value("label", std::to_string(item.value("id", 0)));
-						std::string checkbox_id = label + "##creature-geoset-" + std::to_string(item.value("id", 0));
-						if (ImGui::Checkbox(checkbox_id.c_str(), &checked))
-							item["checked"] = checked;
-					}
+					checkboxlist::render("##CreatureGeosets", view.creatureViewerGeosets, checkboxlist_creature_geosets_state);
 					if (ImGui::SmallButton("Enable All##creature-geosets")) {
 						for (auto& item : view.creatureViewerGeosets)
 							item["checked"] = true;
@@ -2222,36 +2227,46 @@ void render() {
 					}
 				}
 
+				// <Listboxb :items="creatureViewerSkins" v-model:selection="creatureViewerSkinsSelection" :single="true"/>
 				bool show_textures = view.config.value("modelsExportTextures", true);
 				if (show_textures && !view.creatureViewerSkins.empty()) {
 					ImGui::SeparatorText("Skins");
-					for (size_t i = 0; i < view.creatureViewerSkins.size(); i++) {
-						const auto& skin = view.creatureViewerSkins[i];
-						std::string skin_label = skin.value("label", "");
-						std::string skin_id = skin.value("id", "");
-						bool is_selected = false;
-						for (const auto& sel : view.creatureViewerSkinsSelection) {
-							if (sel.value("id", "") == skin_id) {
-								is_selected = true;
+
+					std::vector<listboxb::ListboxBItem> skin_items;
+					skin_items.reserve(view.creatureViewerSkins.size());
+					for (const auto& skin : view.creatureViewerSkins)
+						skin_items.push_back({ skin.value("label", std::string("")) });
+
+					std::vector<int> sel_indices;
+					for (const auto& sel : view.creatureViewerSkinsSelection) {
+						std::string sel_id = sel.value("id", std::string(""));
+						for (size_t i = 0; i < view.creatureViewerSkins.size(); ++i) {
+							if (view.creatureViewerSkins[i].value("id", std::string("")) == sel_id) {
+								sel_indices.push_back(static_cast<int>(i));
 								break;
 							}
 						}
-						if (ImGui::Selectable(skin_label.c_str(), is_selected)) {
-							view.creatureViewerSkinsSelection.clear();
-							view.creatureViewerSkinsSelection.push_back(skin);
-						}
 					}
+
+					float constrainedHeight = 156.0f;
+					ImGui::BeginChild("##CreatureSkinsListWrapper", ImVec2(0.0f, constrainedHeight), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+					listboxb::render("##CreatureSkins", skin_items, sel_indices, true, true, false,
+						listboxb_creature_skins_state,
+						[&](const std::vector<int>& new_sel) {
+							view.creatureViewerSkinsSelection.clear();
+							for (int idx : new_sel) {
+								if (idx >= 0 && idx < static_cast<int>(view.creatureViewerSkins.size()))
+									view.creatureViewerSkinsSelection.push_back(view.creatureViewerSkins[idx]);
+							}
+						});
+					ImGui::EndChild();
 				}
 			}
 
 			if (view.creatureViewerActiveType == "wmo") {
+				// <Checkboxlist :items="creatureViewerWMOGroups"/>
 				ImGui::SeparatorText("WMO Groups");
-				for (auto& item : view.creatureViewerWMOGroups) {
-					bool checked = item.value("checked", false);
-					std::string label = item.value("label", "");
-					if (ImGui::Checkbox(label.c_str(), &checked))
-						item["checked"] = checked;
-				}
+				checkboxlist::render("##CreatureWMOGroups", view.creatureViewerWMOGroups, checkboxlist_creature_wmo_groups_state);
 				if (ImGui::SmallButton("Enable All##creature-wmo-groups")) {
 					for (auto& item : view.creatureViewerWMOGroups)
 						item["checked"] = true;
@@ -2264,13 +2279,9 @@ void render() {
 						item["checked"] = false;
 				}
 
+				// <Checkboxlist :items="creatureViewerWMOSets"/>
 				ImGui::SeparatorText("Doodad Sets");
-				for (auto& item : view.creatureViewerWMOSets) {
-					bool checked = item.value("checked", false);
-					std::string label = item.value("label", "");
-					if (ImGui::Checkbox(label.c_str(), &checked))
-						item["checked"] = checked;
-				}
+				checkboxlist::render("##CreatureWMOSets", view.creatureViewerWMOSets, checkboxlist_creature_wmo_sets_state);
 			}
 		}
 		app::layout::EndSidebar();

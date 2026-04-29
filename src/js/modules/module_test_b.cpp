@@ -20,11 +20,13 @@ namespace module_test_b {
 // ImGui resize callback to match JS unlimited string behavior.
 static std::string message = "Hello Thrall";
 
-// ImGui InputText resize callback for std::string
+// ImGui InputText resize callback for std::string.
+// Standard pattern: resize the backing string to data->BufSize (the requested
+// capacity) and re-point data->Buf at the (possibly relocated) buffer.
 static int inputTextResizeCallback(ImGuiInputTextCallbackData* data) {
 	if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
 		std::string* str = static_cast<std::string*>(data->UserData);
-		str->resize(data->BufTextLen);
+		str->resize(static_cast<size_t>(data->BufSize));
 		data->Buf = str->data();
 	}
 	return 0;
@@ -35,10 +37,6 @@ void render() {
 	ImGui::Separator();
 
 	ImGui::Text("Message: %s", message.c_str());
-
-	// Ensure buffer has capacity for editing
-	if (message.capacity() < 256)
-		message.reserve(256);
 
 	ImGui::InputText("##message", message.data(), message.capacity() + 1,
 	                 ImGuiInputTextFlags_CallbackResize, inputTextResizeCallback, &message);

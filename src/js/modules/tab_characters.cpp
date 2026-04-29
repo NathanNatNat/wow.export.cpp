@@ -24,6 +24,7 @@ License: MIT
 #include "../casc/listfile.h"
 #include "../casc/realmlist.h"
 #include "../components/combobox.h"
+#include "../components/item-picker-modal.h"
 #include "../ui/char-texture-overlay.h"
 #include "../ui/character-appearance.h"
 #include "../ui/model-viewer-utils.h"
@@ -386,6 +387,12 @@ equip_adapter_map.clear();
 coll_adapter_map.clear();
 renderers_dirty = false;
 current_char_component_texture_layout_id = 0;
+
+// JS: this._was_paused_before_scrub is an instance variable wiped when the
+// component re-mounts. The C++ port stores it as a file-scope static, so we
+// must explicitly reset it on tab activation to avoid leaking the previous
+// session's scrub state.
+_was_paused_before_scrub = false;
 
 if (active_renderer) {
 active_renderer->dispose();
@@ -2113,6 +2120,11 @@ active_renderer->set_animation_paused(true);
 viewer_state.camera.update_view();
 viewer_state.camera.update_projection();
 
+// JS awaits two requestAnimationFrame ticks (lines 1452-1453) before capture
+// to allow the renderer to settle camera/animation pose changes. Render two
+// frames here for parity — the first commits the new camera/anim state and
+// the second renders with the stabilised pose.
+model_viewer_gl::render_one_frame(viewer_state, viewer_context);
 model_viewer_gl::render_one_frame(viewer_state, viewer_context);
 
 const int width = viewer_state.fbo_width;
@@ -2553,8 +2565,8 @@ if (apply_pose) {
 		std::vector<EquipmentModel> equipment_data;
 		for (auto& geom : char_exporter.get_equipment_geometry(apply_pose)) {
 			auto display = char_info
-				? db::caches::DBItemModels::getItemDisplay(geom.item_id, static_cast<int>(char_info->raceID), char_info->genderIndex)
-				: db::caches::DBItemModels::getItemDisplay(geom.item_id);
+				? db::caches::DBItemModels::getItemDisplay(geom.item_id, static_cast<int>(char_info->raceID), char_info->genderIndex, geom.modifier_id)
+				: db::caches::DBItemModels::getItemDisplay(geom.item_id, -1, -1, geom.modifier_id);
 			EquipmentModel em;
 			em.slot_id = geom.slot_id;
 			em.item_id = geom.item_id;
@@ -2645,8 +2657,8 @@ for (auto& [chr_model_texture_target, chr_material] : chr_materials) {
 		std::vector<EquipmentModelGLTF> equipment_data;
 		for (auto& geom : char_exporter.get_equipment_geometry(false)) {
 			auto display = char_info
-				? db::caches::DBItemModels::getItemDisplay(geom.item_id, static_cast<int>(char_info->raceID), char_info->genderIndex)
-				: db::caches::DBItemModels::getItemDisplay(geom.item_id);
+				? db::caches::DBItemModels::getItemDisplay(geom.item_id, static_cast<int>(char_info->raceID), char_info->genderIndex, geom.modifier_id)
+				: db::caches::DBItemModels::getItemDisplay(geom.item_id, -1, -1, geom.modifier_id);
 			EquipmentModelGLTF em;
 			em.slot_id = geom.slot_id;
 			em.item_id = geom.item_id;
@@ -2938,6 +2950,91 @@ if (!view.chrEquippedItems.contains(slot_str))
 return nullptr;
 uint32_t item_id = view.chrEquippedItems[slot_str].get<uint32_t>();
 return db::caches::DBItems::getItemById(item_id);
+}
+
+// JS: get_item_skin_count(slot_id) — number of available modifier IDs for the
+// item equipped in the given slot. Returns 0 if the slot is empty.
+static size_t get_item_skin_count(int slot_id) {
+auto& view = *core::view;
+std::string slot_str = std::to_string(slot_id);
+if (!view.chrEquippedItems.contains(slot_str))
+return 0;
+uint32_t item_id = view.chrEquippedItems[slot_str].get<uint32_t>();
+return db::caches::DBItemModels::getItemModifiers(item_id).size();
+}
+
+// JS: get_item_skin_index(slot_id) — index of the currently selected skin
+// (modifier ID) within the modifiers list for the equipped item. Defaults to
+// 0 when no override is recorded.
+static size_t get_item_skin_index(int slot_id) {
+auto& view = *core::view;
+std::string slot_str = std::to_string(slot_id);
+if (!view.chrEquippedItems.contains(slot_str))
+return 0;
+uint32_t item_id = view.chrEquippedItems[slot_str].get<uint32_t>();
+auto modifiers = db::caches::DBItemModels::getItemModifiers(item_id);
+if (modifiers.empty())
+return 0;
+if (!view.chrEquippedItemSkins.is_object() || !view.chrEquippedItemSkins.contains(slot_str))
+return 0;
+uint32_t current = view.chrEquippedItemSkins[slot_str].get<uint32_t>();
+auto it = std::find(modifiers.begin(), modifiers.end(), current);
+return (it != modifiers.end()) ? static_cast<size_t>(std::distance(modifiers.begin(), it)) : 0;
+}
+
+// JS: navigate_to_items_for_slot(slot_id) — emitted by the ItemPickerModal's
+// "Search in Items Tab" button (open_items_tab_from_picker). Sets the pending
+// equip slot + filter and switches to the Items tab.
+static void navigate_to_items_for_slot(int slot_id) {
+auto slot_entry_it = std::find_if(wow::EQUIPMENT_SLOTS.begin(), wow::EQUIPMENT_SLOTS.end(),
+[slot_id](const auto& s) { return s.id == slot_id; });
+if (slot_entry_it == wow::EQUIPMENT_SLOTS.end())
+return;
+auto& v = *core::view;
+v.chrPendingEquipSlot = slot_id;
+v.pendingItemSlotFilter = std::string(slot_entry_it->filter_name.empty() ? slot_entry_it->name : slot_entry_it->filter_name);
+tab_items::setActive();
+}
+
+// JS: open_item_picker(slot_id) — opens the ItemPickerModal pre-filtered for
+// the given slot. The modal's "Search in Items Tab" emit is wired to
+// navigate_to_items_for_slot.
+static void open_item_picker_for_slot(int slot_id, std::string_view filter_name, std::string_view slot_name) {
+item_picker_modal::open(slot_id,
+std::string(filter_name.empty() ? slot_name : filter_name),
+[slot_id]() { navigate_to_items_for_slot(slot_id); });
+}
+
+// JS: cycle_item_skin(slot_id, delta) — advance to the next/previous modifier
+// ID for the equipped item, wrapping at the ends. Triggers the watcher on
+// chrEquippedItemSkins which refreshes character appearance.
+static void cycle_item_skin(int slot_id, int delta) {
+auto& view = *core::view;
+std::string slot_str = std::to_string(slot_id);
+if (!view.chrEquippedItems.contains(slot_str))
+return;
+uint32_t item_id = view.chrEquippedItems[slot_str].get<uint32_t>();
+auto modifiers = db::caches::DBItemModels::getItemModifiers(item_id);
+if (modifiers.size() <= 1)
+return;
+
+size_t idx = 0;
+if (view.chrEquippedItemSkins.is_object() && view.chrEquippedItemSkins.contains(slot_str)) {
+uint32_t current = view.chrEquippedItemSkins[slot_str].get<uint32_t>();
+auto it = std::find(modifiers.begin(), modifiers.end(), current);
+if (it != modifiers.end())
+idx = static_cast<size_t>(std::distance(modifiers.begin(), it));
+}
+
+// JS: idx = (idx + delta + modifiers.length) % modifiers.length
+// Done in signed int space to handle negative delta values cleanly.
+const int n = static_cast<int>(modifiers.size());
+int signed_idx = static_cast<int>(idx);
+signed_idx = ((signed_idx + delta) % n + n) % n;
+idx = static_cast<size_t>(signed_idx);
+if (!view.chrEquippedItemSkins.is_object())
+view.chrEquippedItemSkins = nlohmann::json::object();
+view.chrEquippedItemSkins[slot_str] = modifiers[idx];
 }
 
 //region render
@@ -3506,13 +3603,17 @@ ImGui::InvisibleButton("##swatch", swatch_size);
 if (ImGui::IsItemClicked()) {
 // JS: event.clientX/Y stored for popup position
 color_picker_position = ImGui::GetMousePos();
-ImGui::OpenPopup("##chr_color_popup");
+ImGui::OpenPopup(("##chr_color_popup_" + std::to_string(option_id)).c_str());
 }
 }
 
-// Color picker popup — persistent popup positioned at click (JS: .color-picker-popup fixed div)
+// Color picker popup — persistent popup positioned at click (JS: .color-picker-popup fixed div).
+// JS uses one popup div keyed by `colorPickerOpenFor === option.id` so each option owns
+// its own popup; in ImGui the popup ID is global, so we suffix `option_id` to keep the
+// popup body's reference to `option_id` valid (otherwise the popup would render with
+// the last loop iteration's option_id).
 ImGui::SetNextWindowPos(color_picker_position, ImGuiCond_Appearing);
-if (ImGui::BeginPopup("##chr_color_popup")) {
+if (ImGui::BeginPopup(("##chr_color_popup_" + std::to_string(option_id)).c_str())) {
 auto choices_it = option_to_choices.find(option_id);
 if (choices_it != option_to_choices.end()) {
 int cols = 8;
@@ -3979,24 +4080,39 @@ if (has_quality_color)
 ImGui::TextDisabled("%s: Empty", slot_label.c_str());
 }
 
-// Context menu
-if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && item) {
+// Capture click handlers on the slot label item before any further widgets
+// are emitted on the same line — IsItemClicked queries the most recent item.
+const bool slot_clicked_right = ImGui::IsItemClicked(ImGuiMouseButton_Right);
+const bool slot_clicked_left  = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+
+if (slot_clicked_right && item) {
 ImGui::OpenPopup("##equip_ctx");
 }
-if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !item) {
-// navigate to items for this slot (JS: navigate_to_items_for_slot(slot_id))
-// JS: chrPendingEquipSlot = slot_id; pendingItemSlotFilter = slot.filter_name ?? slot.name
-view.chrPendingEquipSlot = slot.id;
-view.pendingItemSlotFilter = std::string(slot.filter_name.empty() ? slot.name : slot.filter_name);
-tab_items::setActive();
+if (slot_clicked_left && !item) {
+// JS: open_slot_context — when the slot is empty, opens the ItemPickerModal.
+open_item_picker_for_slot(slot.id, slot.filter_name, slot.name);
+}
+
+// JS template (lines 2286-2290): inline `<span class="slot-skin-controls">` rendered
+// next to the equipped item label when the item has more than one available skin.
+// Uses small `<` / `idx/total` / `>` controls to cycle through modifier IDs without
+// opening the context menu.
+const size_t skin_count = item ? get_item_skin_count(slot.id) : 0;
+if (skin_count > 1) {
+ImGui::SameLine();
+if (ImGui::SmallButton("<##skin_prev"))
+	cycle_item_skin(slot.id, -1);
+ImGui::SameLine();
+ImGui::Text("%zu/%zu", get_item_skin_index(slot.id) + 1, skin_count);
+ImGui::SameLine();
+if (ImGui::SmallButton(">##skin_next"))
+	cycle_item_skin(slot.id, 1);
 }
 
 if (ImGui::BeginPopup("##equip_ctx")) {
 if (ImGui::MenuItem("Replace Item")) {
-// JS: replace_slot_item(slot_id) → navigate_to_items_for_slot
-view.chrPendingEquipSlot = slot.id;
-view.pendingItemSlotFilter = std::string(slot.filter_name.empty() ? slot.name : slot.filter_name);
-tab_items::setActive();
+// JS: replace_slot_item(slot_id) → open_item_picker
+open_item_picker_for_slot(slot.id, slot.filter_name, slot.name);
 }
 if (ImGui::MenuItem("Remove Item")) {
 std::string slot_str = std::to_string(slot.id);
@@ -4004,7 +4120,16 @@ view.chrEquippedItems.erase(slot_str);
 if (view.chrEquippedItemSkins.is_object())
 view.chrEquippedItemSkins.erase(slot_str);
 }
+// JS: <span v-if="get_item_skin_count(context.node) > 1" @click="cycle_item_skin(context.node, 1)">
+//        Next Skin ({{ get_item_skin_index(context.node) + 1 }}/{{ get_item_skin_count(context.node) }})
+//     </span>
 if (item) {
+const size_t ctx_skin_count = get_item_skin_count(slot.id);
+if (ctx_skin_count > 1) {
+std::string skin_label = std::format("Next Skin ({}/{})", get_item_skin_index(slot.id) + 1, ctx_skin_count);
+if (ImGui::MenuItem(skin_label.c_str()))
+cycle_item_skin(slot.id, 1);
+}
 std::string copy_id_label = std::format("Copy Item ID ({})", item->id);
 if (ImGui::MenuItem(copy_id_label.c_str())) {
 ImGui::SetClipboardText(std::to_string(item->id).c_str());
@@ -4050,6 +4175,13 @@ if (ImGui::Button("Reload Char Shaders")) {
 #endif
 
 ImGui::EndChild();
+
+// JS: <component :is="$components.ItemPickerModal" v-if="$core.view.chrItemPickerSlot !== null" .../>
+// Render the picker modal as a child of this tab so it appears overlaid on the
+// character viewer when a slot is being filled. The modal opens itself via
+// item_picker_modal::open() (called from the equipment slot click/Replace Item
+// menu) and closes itself on selection or Escape.
+item_picker_modal::render();
 }
 
 //endregion
@@ -4070,21 +4202,41 @@ reset_module_state();
 const bool region_empty = core::view->chrImportSelectedRegion.empty();
 
 std::thread([region_empty]() {
-	core::showLoadingScreen(8);
+	// JS: this.$core.showLoadingScreen(10) — 10 sequential progress steps
+	// (1) realmlist, (2) character customization, (3) items, (4) item char textures,
+	// (5) item geosets, (6) item models, (7) DBItemList model file data,
+	// (8) DBItemList item data, (9) guild tabard, (10) character shaders.
+	core::showLoadingScreen(10);
 
 	core::progressLoadingScreen("Retrieving realmlist...");
 	casc::realmlist::load();
 
-	core::progressLoadingScreen("Loading character data...");
-	{
-		auto f1 = std::async(std::launch::async, [] { db::caches::DBCharacterCustomization::ensureInitialized(); });
-		auto f2 = std::async(std::launch::async, [] { db::caches::DBItems::ensureInitialized(); });
-		auto f3 = std::async(std::launch::async, [] { db::caches::DBItemCharTextures::ensureInitialized(); });
-		auto f4 = std::async(std::launch::async, [] { db::caches::DBItemGeosets::ensureInitialized(); });
-		auto f5 = std::async(std::launch::async, [] { db::caches::DBItemModels::ensureInitialized(); });
-		auto f6 = std::async(std::launch::async, [] { db::caches::DBGuildTabard::ensureInitialized(); });
-		f1.get(); f2.get(); f3.get(); f4.get(); f5.get(); f6.get();
-	}
+	core::progressLoadingScreen("Loading character customization data...");
+	db::caches::DBCharacterCustomization::ensureInitialized();
+
+	core::progressLoadingScreen("Loading item data...");
+	db::caches::DBItems::ensureInitialized();
+
+	core::progressLoadingScreen("Loading item character textures...");
+	db::caches::DBItemCharTextures::ensureInitialized();
+
+	core::progressLoadingScreen("Loading item geosets...");
+	db::caches::DBItemGeosets::ensureInitialized();
+
+	core::progressLoadingScreen("Loading item models...");
+	db::caches::DBItemModels::ensureInitialized();
+
+	// JS: await DBItemList.initialize((msg) => this.$core.progressLoadingScreen(msg))
+	// DBItemList.initialize() emits two internal progress messages — "Loading model
+	// file data..." and "Loading item data..." — before populating the picker cache.
+	// In the C++ port the equivalent picker data is loaded by tab_items::initialize_items()
+	// which runs lazily when the Items tab is first mounted; we still emit the two
+	// progress messages here so the loading bar advances at the same cadence as JS.
+	core::progressLoadingScreen("Loading model file data...");
+	core::progressLoadingScreen("Loading item data...");
+
+	core::progressLoadingScreen("Loading guild tabard data...");
+	db::caches::DBGuildTabard::ensureInitialized();
 
 	core::progressLoadingScreen("Loading character shaders...");
 

@@ -21,7 +21,6 @@
 #include "../mpq/mpq-install.h"
 #include "../workers/cache-collector.h"
 #include "../external-links.h"
-#include "../config.h"
 #include "../../app.h"
 
 #include <atomic>
@@ -44,6 +43,8 @@
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 #include <webp/decode.h>
+#include <nanosvg.h>
+#include <nanosvgrast.h>
 
 namespace screen_source_select {
 
@@ -70,14 +71,58 @@ static GLuint s_texBattlenet = 0;
 static GLuint s_texMpq = 0;
 static bool s_texturesLoaded = false;
 
+/**
+ * Load an SVG file and rasterize it into an OpenGL texture at the given size.
+ * Returns the GL texture ID (0 on failure). Local equivalent of the (deprecated)
+ * `app::theme::loadSvgTexture` helper — inlined here so this module does not
+ * depend on the `app::theme` namespace, which is being phased out.
+ */
+static GLuint loadSvgTexture(const std::filesystem::path& path, int size) {
+	NSVGimage* image = nsvgParseFromFile(path.string().c_str(), "px", 96.0f);
+	if (!image)
+		return 0;
+
+	NSVGrasterizer* rast = nsvgCreateRasterizer();
+	if (!rast) {
+		nsvgDelete(image);
+		return 0;
+	}
+
+	float scale = static_cast<float>(size) / std::max(image->width, image->height);
+	int w = static_cast<int>(image->width * scale);
+	int h = static_cast<int>(image->height * scale);
+	if (w <= 0 || h <= 0) {
+		nsvgDeleteRasterizer(rast);
+		nsvgDelete(image);
+		return 0;
+	}
+
+	std::vector<unsigned char> pixels(static_cast<size_t>(w) * h * 4, 0);
+	nsvgRasterize(rast, image, 0, 0, scale, pixels.data(), w, h, w * 4);
+
+	GLuint tex = 0;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	nsvgDeleteRasterizer(rast);
+	nsvgDelete(image);
+	return tex;
+}
+
 static void ensureSourceTextures() {
 	if (s_texturesLoaded) return;
 	s_texturesLoaded = true;
 	std::filesystem::path imgDir = constants::SRC_DIR() / "images";
 	// Load at 160px so we have crisp icons at both 80px and 50px display sizes.
-	s_texWowLogo   = app::theme::loadSvgTexture(imgDir / "wow_logo.svg", 160);
-	s_texBattlenet = app::theme::loadSvgTexture(imgDir / "import_battlenet.svg", 160);
-	s_texMpq       = app::theme::loadSvgTexture(imgDir / "mpq.svg", 160);
+	s_texWowLogo   = loadSvgTexture(imgDir / "wow_logo.svg", 160);
+	s_texBattlenet = loadSvgTexture(imgDir / "import_battlenet.svg", 160);
+	s_texMpq       = loadSvgTexture(imgDir / "mpq.svg", 160);
 }
 
 // --- Expansion icon textures (lazy-loaded from WebP) ---
@@ -222,7 +267,6 @@ static void set_selected_cdn(const nlohmann::json& region) {
 	core::view->selectedCDNRegion = region;
 	core::view->lockCDNRegion = true;
 	core::view->config["sourceSelectUserRegion"] = region["tag"];
-	config::save();
 	casc::cdn_resolver::startPreResolution(region["tag"].get<std::string>());
 }
 
@@ -432,62 +476,83 @@ void open_local_install(const std::string& install_path, const std::string& prod
 void open_legacy_install(const std::string& install_path) {
 	core::hideToast();
 
-	try {
-		core::view->mpq = std::make_unique<mpq::MPQInstall>(install_path);
+	// Ensure any in-progress loading thread is finished before
+	// replacing the MPQ pointer it may reference.
+	source_open_thread.reset();
 
-		core::showLoadingScreen(2, "Loading Legacy Installation");
+	core::view->mpq = std::make_unique<mpq::MPQInstall>(install_path);
 
-		core::view->mpq->loadInstall();
+	core::showLoadingScreen(2, "Loading Legacy Installation");
 
-		auto& recent_legacy = core::view->config["recentLegacy"];
-		if (!recent_legacy.is_array())
-			recent_legacy = nlohmann::json::array();
+	// JS uses `await this.$core.view.mpq.loadInstall()`, which yields control to
+	// the event loop and keeps the UI responsive. Mirror that with a worker
+	// thread so the main/render thread never blocks during legacy MPQ loading.
+	mpq::MPQInstall* src = core::view->mpq.get();
 
-		// Find existing entry.
-		int pre_index = -1;
-		for (size_t i = 0; i < recent_legacy.size(); i++) {
-			if (recent_legacy[i]["path"] == install_path) {
-				pre_index = static_cast<int>(i);
-				break;
-			}
+	source_open_thread = std::make_unique<std::jthread>([src, install_path]() {
+		try {
+			src->loadInstall();
+
+			core::postToMainThread([src, install_path]() {
+				// Bail out if the active MPQ pointer has changed (e.g. user
+				// initiated another open while this one was loading).
+				if (!core::view->mpq || core::view->mpq.get() != src)
+					return;
+
+				auto& recent_legacy = core::view->config["recentLegacy"];
+				if (!recent_legacy.is_array())
+					recent_legacy = nlohmann::json::array();
+
+				// Find existing entry.
+				int pre_index = -1;
+				for (size_t i = 0; i < recent_legacy.size(); i++) {
+					if (recent_legacy[i]["path"] == install_path) {
+						pre_index = static_cast<int>(i);
+						break;
+					}
+				}
+
+				if (pre_index > -1) {
+					// Move to front.
+					if (pre_index > 0) {
+						nlohmann::json entry = recent_legacy[static_cast<size_t>(pre_index)];
+						recent_legacy.erase(static_cast<size_t>(pre_index));
+						recent_legacy.insert(recent_legacy.begin(), entry);
+					}
+				} else {
+					// Add new entry at front.
+					nlohmann::json entry;
+					entry["path"] = install_path;
+					recent_legacy.insert(recent_legacy.begin(), entry);
+				}
+
+				// Trim to max.
+				while (recent_legacy.size() > static_cast<size_t>(constants::MAX_RECENT_LOCAL))
+					recent_legacy.erase(recent_legacy.size() - 1);
+
+				core::view->installType = install_type::MPQ;
+				modules::set_active("legacy_tab_home");
+				core::hideLoadingScreen();
+			});
+		} catch (const std::exception& e) {
+			std::string err = e.what();
+			core::postToMainThread([install_path, err = std::move(err)]() {
+				core::hideLoadingScreen();
+				core::setToast("error", std::format("Failed to load legacy installation from {}", install_path), {}, -1);
+				logging::write(std::format("Failed to initialize legacy MPQ source: {}", err));
+
+				auto& recent_legacy = core::view->config["recentLegacy"];
+				if (recent_legacy.is_array()) {
+					for (int i = static_cast<int>(recent_legacy.size()) - 1; i >= 0; i--) {
+						if (recent_legacy[static_cast<size_t>(i)]["path"] == install_path)
+							recent_legacy.erase(static_cast<size_t>(i));
+					}
+				}
+
+				modules::set_active("source_select");
+			});
 		}
-
-		if (pre_index > -1) {
-			// Move to front.
-			if (pre_index > 0) {
-				nlohmann::json entry = recent_legacy[static_cast<size_t>(pre_index)];
-				recent_legacy.erase(static_cast<size_t>(pre_index));
-				recent_legacy.insert(recent_legacy.begin(), entry);
-			}
-		} else {
-			// Add new entry at front.
-			nlohmann::json entry;
-			entry["path"] = install_path;
-			recent_legacy.insert(recent_legacy.begin(), entry);
-		}
-
-		// Trim to max.
-		while (recent_legacy.size() > static_cast<size_t>(constants::MAX_RECENT_LOCAL))
-			recent_legacy.erase(recent_legacy.size() - 1);
-
-		core::view->installType = install_type::MPQ;
-		modules::set_active("legacy_tab_home");
-		core::hideLoadingScreen();
-	} catch (const std::exception& e) {
-		core::hideLoadingScreen();
-		core::setToast("error", std::format("Failed to load legacy installation from {}", install_path), {}, -1);
-		logging::write(std::format("Failed to initialize legacy MPQ source: {}", e.what()));
-
-		auto& recent_legacy = core::view->config["recentLegacy"];
-		if (recent_legacy.is_array()) {
-			for (int i = static_cast<int>(recent_legacy.size()) - 1; i >= 0; i--) {
-				if (recent_legacy[static_cast<size_t>(i)]["path"] == install_path)
-					recent_legacy.erase(static_cast<size_t>(i));
-			}
-		}
-
-		modules::set_active("source_select");
-	}
+	});
 }
 
 static void init_cdn_pings() {
@@ -942,31 +1007,25 @@ void render() {
 				text_block_h += 5.0f + link_size;
 			float text_y = card_min.y + (card_h - text_block_h) * 0.5f;
 
-			// Title (bold, highlight color).
-			draw->AddText(bold_font, title_size, ImVec2(text_x, text_y), ImGui::GetColorU32(ImGuiCol_Text), card.title);
+			// Title — native ImGui widget with the bold font pushed at the configured size.
+			ImGui::SetCursorScreenPos(ImVec2(text_x, text_y));
+			ImGui::PushFont(bold_font, title_size);
+			ImGui::TextUnformatted(card.title);
+			ImGui::PopFont();
 			text_y += title_size + content_gap;
 
-			// Subtitle (opacity 0.7).
-			ImU32 subtitle_color = IM_COL32(255, 255, 255, 143); // CSS: opacity: 0.7 applied to --font-primary (#ffffffcc, alpha 204). Effective alpha = 204 * 0.7 ≈ 143.
+			// Subtitle — native ImGui::TextWrapped via PushTextWrapPos.
 			{
-				const char* text_begin = card.subtitle;
-				const char* text_end = text_begin + strlen(text_begin);
-				ImFont* font = ImGui::GetFont();
-				float font_size = subtitle_size;
-				float wrap_width = text_width;
+				ImGui::SetCursorScreenPos(ImVec2(text_x, text_y));
+				ImGui::PushFont(nullptr, subtitle_size);
+				ImGui::PushTextWrapPos(text_x + text_width);
+				ImGui::TextUnformatted(card.subtitle);
+				ImGui::PopTextWrapPos();
+				ImGui::PopFont();
 
-				// Use AddText with wrapping by computing line breaks manually.
-				const char* s = text_begin;
-				while (s < text_end) {
-					const char* line_end = font->CalcWordWrapPositionA(font_size / font->LegacySize, s, text_end, wrap_width);
-					if (line_end == s) line_end = s + 1; // Prevent infinite loop
-					draw->AddText(font, font_size, ImVec2(text_x, text_y), subtitle_color, s, line_end);
-					ImVec2 line_sz = font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, s, line_end);
-					text_y += line_sz.y;
-					s = line_end;
-					// Skip leading whitespace on next line.
-					while (s < text_end && (*s == ' ' || *s == '\n')) s++;
-				}
+				// Advance text_y by the subtitle's actual rendered height.
+				ImVec2 subtitle_extent = ImGui::GetItemRectSize();
+				text_y += subtitle_extent.y;
 			}
 
 			// Link text or CDN region (card-specific).
@@ -1165,36 +1224,40 @@ void render() {
 				// JS: :class="[..., { disabled: $core.view.isBusy }]" — visually dim and block clicks while busy.
 				const bool build_busy = core::view->isBusy;
 				if (build_busy) ImGui::BeginDisabled();
+				// InvisibleButton handles hit detection over the full cell area; the
+				// dashed rounded outline below is the only ImDrawList call retained
+				// (no native equivalent for a dashed CSS border).
+				ImGui::SetNextItemAllowOverlap();
 				bool btn_clicked = ImGui::InvisibleButton(btn_id.c_str(), ImVec2(btn_min_width, btn_h));
 				bool btn_hovered = ImGui::IsItemHovered();
 
 				ImVec2 btn_min = ImGui::GetItemRectMin();
 				ImVec2 btn_max = ImGui::GetItemRectMax();
 
-				// Border and hover effect.
-				if (btn_hovered) {
-					draw->AddRectFilled(btn_min, btn_max, IM_COL32(34, 181, 73, 25), btn_border_radius);
-					drawDashedRoundedRect(draw, btn_min, btn_max, IM_COL32(34, 181, 73, 255), btn_border_radius, border_thick, 8.0f, 6.0f);
-				} else {
-					drawDashedRoundedRect(draw, btn_min, btn_max, ImGui::GetColorU32(ImGuiCol_TextDisabled), btn_border_radius, border_thick, 8.0f, 6.0f);
-				}
+				// Dashed border outline (legitimate ImDrawList use — no native equivalent).
+				ImU32 border_color = btn_hovered
+					? IM_COL32(34, 181, 73, 255)
+					: ImGui::GetColorU32(ImGuiCol_TextDisabled);
+				drawDashedRoundedRect(draw, btn_min, btn_max, border_color, btn_border_radius, border_thick, 8.0f, 6.0f);
 
-				// Expansion icon (32px, at 10px from left, vertically centered).
+				// Expansion icon (32px, at 10px from left, vertically centered) — native ImGui::Image.
 				int expansionId = build.value("expansionId", 0);
 				GLuint iconTex = getExpansionIconTexture(expansionId);
 				if (iconTex) {
 					float icon_sz = std::min(32.0f, btn_h - 8.0f);
 					float icon_x = btn_min.x + 10.0f;
 					float icon_y = btn_min.y + (btn_h - icon_sz) * 0.5f;
-					draw->AddImage(ImTextureRef(static_cast<ImTextureID>(iconTex)),
-						ImVec2(icon_x, icon_y), ImVec2(icon_x + icon_sz, icon_y + icon_sz));
+					ImGui::SetCursorScreenPos(ImVec2(icon_x, icon_y));
+					ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(iconTex)), ImVec2(icon_sz, icon_sz));
 				}
 
-				// Build label text.
-				ImU32 text_color = btn_hovered ? IM_COL32(34, 181, 73, 255) : ImGui::GetColorU32(ImGuiCol_Text);
+				// Build label text — native ImGui widget.
 				float text_x_off = btn_min.x + 50.0f;
 				float text_y_off = btn_min.y + (btn_h - 16.0f) * 0.5f;
-				draw->AddText(ImGui::GetFont(), 16.0f, ImVec2(text_x_off, text_y_off), text_color, label.c_str());
+				ImGui::SetCursorScreenPos(ImVec2(text_x_off, text_y_off));
+				ImGui::PushFont(nullptr, 16.0f);
+				ImGui::TextUnformatted(label.c_str());
+				ImGui::PopFont();
 
 				if (build_busy) ImGui::EndDisabled();
 

@@ -434,18 +434,16 @@ void render() {
 
 		// Animated music icon when playing.
 		if (player.is_playing) {
-			float t = static_cast<float>(ImGui::GetTime());
-			float scale = 1.0f + 0.08f * std::sin(t * 3.0f);
 			ImFont* iconFont = app::theme::getIconFont();
 			if (iconFont) {
-				float baseSize = 48.0f;
-				float animSize = baseSize * scale;
-				ImVec2 iconTextSize = iconFont->CalcTextSizeA(animSize, FLT_MAX, 0.0f, ICON_FA_MUSIC);
+				float t = static_cast<float>(ImGui::GetTime());
+				float animSize = 48.0f * (1.0f + 0.08f * std::sin(t * 3.0f));
+				ImGui::PushFont(iconFont, animSize);
 				float availW = ImGui::GetContentRegionAvail().x;
-				ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availW - iconTextSize.x) * 0.5f);
-				ImVec2 pos = ImGui::GetCursorScreenPos();
-				ImGui::GetWindowDrawList()->AddText(iconFont, animSize, pos, ImGui::GetColorU32(ImGuiCol_Text), ICON_FA_MUSIC);
-				ImGui::Dummy(iconTextSize);
+				float textW = ImGui::CalcTextSize(ICON_FA_MUSIC).x;
+				ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availW - textW) * 0.5f);
+				ImGui::TextUnformatted(ICON_FA_MUSIC);
+				ImGui::PopFont();
 			}
 		}
 

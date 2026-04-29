@@ -109,6 +109,15 @@ public:
 	// Animation pause control — matches the JS optional-call pattern (renderer.set_animation_paused?.(paused)).
 	void set_animation_paused(bool paused) { animation_paused = paused; }
 
+	// Frame-based animation controls (extension to JS — JS MDXRendererGL has no
+	// step_animation_frame/set_animation_frame/get_animation_frame, so JS
+	// optional-chains them to a no-op. Implemented here so the legacy models
+	// tab can share a uniform call pattern with M2LegacyRendererGL.)
+	int  get_animation_frame_count();
+	int  get_animation_frame();
+	void set_animation_frame(int frame);
+	void step_animation_frame(int delta);
+
 	// Public state (matches JS properties)
 	std::unique_ptr<MDXLoader> mdx;
 	std::unique_ptr<gl::ShaderProgram> shader;

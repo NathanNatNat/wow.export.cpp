@@ -377,6 +377,7 @@ void render() {
 	const ImVec2 cursor = ImGui::GetCursorPos();
 	constexpr float FILTER_H = app::layout::FILTER_BAR_HEIGHT; // 60px
 	constexpr float SIDEBAR_W = app::layout::SIDEBAR_WIDTH;    // 210px
+	constexpr float STATUS_H = 27.0f;                          // listbox status bar height
 
 	const float gridW = avail.x - SIDEBAR_W;
 	const float topH = avail.y - FILTER_H;
@@ -391,7 +392,7 @@ void render() {
 
 		ImGui::SetCursorPos(ImVec2(cursor.x + listLeftM, cursor.y + listTopM));
 		ImGui::BeginChild("install-list-container",
-			ImVec2(gridW - listLeftM - listRightM, topH - listTopM));
+			ImVec2(gridW - listLeftM - listRightM, topH - listTopM - STATUS_H));
 		{
 			const auto& items_str = core::cached_json_strings(view.listfileInstall, s_items_cache, s_items_cache_size);
 
@@ -433,6 +434,15 @@ void render() {
 				nullptr  // no context menu
 			);
 		}
+		ImGui::EndChild();
+
+		// --- Status bar (file count) ---
+		// JS Listbox prop :includefilecount="true" with unittype="install file".
+		ImGui::SetCursorPos(ImVec2(cursor.x + listLeftM, cursor.y + topH - STATUS_H));
+		ImGui::BeginChild("install-status", ImVec2(gridW - listLeftM - listRightM, STATUS_H),
+			ImGuiChildFlags_None,
+			ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		listbox::renderStatusBar("install file", {}, listbox_install_state);
 		ImGui::EndChild();
 
 		// --- Tray (row 2, col 1) ---
@@ -513,7 +523,7 @@ void render() {
 
 		ImGui::SetCursorPos(ImVec2(cursor.x + listLeftM, cursor.y + listTopM));
 		ImGui::BeginChild("install-strings-list-container",
-			ImVec2(gridW - listLeftM - listRightM, topH - listTopM));
+			ImVec2(gridW - listLeftM - listRightM, topH - listTopM - STATUS_H));
 		{
 			std::vector<std::string> selection_str;
 			for (const auto& s : view.selectionInstallStrings)
@@ -553,6 +563,15 @@ void render() {
 				nullptr  // no context menu
 			);
 		}
+		ImGui::EndChild();
+
+		// --- Status bar (file count) ---
+		// JS Listbox prop :includefilecount="true" with unittype="string".
+		ImGui::SetCursorPos(ImVec2(cursor.x + listLeftM, cursor.y + topH - STATUS_H));
+		ImGui::BeginChild("install-strings-status", ImVec2(gridW - listLeftM - listRightM, STATUS_H),
+			ImGuiChildFlags_None,
+			ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		listbox::renderStatusBar("string", {}, listbox_install_strings_state);
 		ImGui::EndChild();
 
 		// --- Tray (row 2, col 1) ---

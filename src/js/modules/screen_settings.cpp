@@ -27,8 +27,6 @@
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 
-#include "../../app.h"
-
 namespace screen_settings {
 
 // --- File-local state ---
@@ -41,49 +39,26 @@ static file_field::FileFieldState char_save_dir_state;
 static menu_button::MenuButtonState locale_menu_state;
 
 /**
- * Render a settings section heading: bold font at 18px, with 20px top spacing.
- * CSS: #config > div h1 { font-size: 18px; font-weight: bold (browser default for h1) }
- * CSS: #config > div { padding-top: 20px }
+ * Render a settings section heading. JS equivalent: <h1>label</h1> inside a
+ * config <div>. Uses native ImGui::SeparatorText for layout-fidelity heading
+ * (default appearance — pixel styling intentionally not replicated).
  */
 static void SectionHeading(const char* label) {
 	ImGui::Dummy(ImVec2(0.0f, 20.0f));
-	ImFont* bold = app::theme::getBoldFont();
-	ImGui::PushFont(bold, 18.0f);
-	ImGui::TextUnformatted(label);
-	ImGui::PopFont();
+	ImGui::SeparatorText(label);
 }
 
 /**
- * Render a single segment of a .ui-multi-button bar.
- * Uses InvisibleButton for hit detection + manual drawing for correct per-corner rounding.
- * CSS: .ui-multi-button li { background: var(--form-button-base); padding: 10px; display: inline-block }
- * CSS: .ui-multi-button li:hover, .selected { background: var(--form-button-hover) }
- * CSS: first-child { border-radius: 5px on left corners }, last-child { right corners }
+ * Render a single segment of a .ui-multi-button bar using native ImGui::Button.
+ * JS equivalent: <li :class="{ selected: ... }" @click.stop="...">label</li>
+ *                inside <ul class="ui-multi-button">.
  */
-static bool multiButtonSegment(int idx, const char* label, bool selected, bool is_first, bool is_last) {
-	ImGui::PushID(idx);
-	const float pad_x = 10.0f, pad_y = 10.0f;
-	ImVec2 label_size = ImGui::CalcTextSize(label);
-	ImVec2 size(label_size.x + pad_x * 2.0f, label_size.y + pad_y * 2.0f);
-
-	bool clicked = ImGui::InvisibleButton("##seg", size);
-	bool hovered = ImGui::IsItemHovered();
-
-	ImU32 bg = (selected || hovered) ? ImGui::GetColorU32(ImGuiCol_ButtonHovered) : ImGui::GetColorU32(ImGuiCol_Button);
-
-	constexpr float r = 5.0f;
-	ImDrawFlags flags = ImDrawFlags_RoundCornersNone;
-	if (is_first && is_last)  flags = ImDrawFlags_RoundCornersAll;
-	else if (is_first)        flags = ImDrawFlags_RoundCornersLeft;
-	else if (is_last)         flags = ImDrawFlags_RoundCornersRight;
-
-	ImVec2 p0 = ImGui::GetItemRectMin();
-	ImVec2 p1 = ImGui::GetItemRectMax();
-	ImGui::GetWindowDrawList()->AddRectFilled(p0, p1, bg, r, flags);
-	ImGui::GetWindowDrawList()->AddText(ImVec2(p0.x + pad_x, p0.y + pad_y),
-		ImGui::GetColorU32(ImGuiCol_Text), label);
-
-	ImGui::PopID();
+static bool multiButtonSegment(const char* label, bool selected) {
+	if (selected)
+		ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+	bool clicked = ImGui::Button(label);
+	if (selected)
+		ImGui::PopStyleColor();
 	return clicked;
 }
 
@@ -325,7 +300,7 @@ void render() {
 		ImGui::PushID("##PathFormat");
 		for (int i = 0; i < 2; i++) {
 			if (i > 0) ImGui::SameLine(0, 1.0f);
-			if (multiButtonSegment(i, opts[i], path_fmt == vals[i], i == 0, i == 1))
+			if (multiButtonSegment(opts[i], path_fmt == vals[i]))
 				cfg["pathFormat"] = vals[i];
 		}
 		ImGui::PopID();
@@ -425,13 +400,13 @@ void render() {
 		bool foliage_meta = cfg.value("exportFoliageMeta", false);
 
 		ImGui::PushID("##ExportMeta");
-		if (multiButtonSegment(0, "M2",      m2_meta,      true,  false)) cfg["exportM2Meta"]      = !m2_meta;
+		if (multiButtonSegment("M2",      m2_meta))      cfg["exportM2Meta"]      = !m2_meta;
 		ImGui::SameLine(0, 1.0f);
-		if (multiButtonSegment(1, "WMO",     wmo_meta,     false, false)) cfg["exportWMOMeta"]     = !wmo_meta;
+		if (multiButtonSegment("WMO",     wmo_meta))     cfg["exportWMOMeta"]     = !wmo_meta;
 		ImGui::SameLine(0, 1.0f);
-		if (multiButtonSegment(2, "BLP",     blp_meta,     false, false)) cfg["exportBLPMeta"]     = !blp_meta;
+		if (multiButtonSegment("BLP",     blp_meta))     cfg["exportBLPMeta"]     = !blp_meta;
 		ImGui::SameLine(0, 1.0f);
-		if (multiButtonSegment(3, "Foliage", foliage_meta, false, true))  cfg["exportFoliageMeta"] = !foliage_meta;
+		if (multiButtonSegment("Foliage", foliage_meta)) cfg["exportFoliageMeta"] = !foliage_meta;
 		ImGui::PopID();
 	}
 
@@ -489,7 +464,7 @@ void render() {
 		ImGui::PushID("##CopyMode");
 		for (int i = 0; i < 3; i++) {
 			if (i > 0) ImGui::SameLine(0, 1.0f);
-			if (multiButtonSegment(i, opts[i], copy_mode == vals[i], i == 0, i == 2))
+			if (multiButtonSegment(opts[i], copy_mode == vals[i]))
 				cfg["copyMode"] = vals[i];
 		}
 		ImGui::PopID();

@@ -163,12 +163,26 @@ static ParsedURL parse_url(const std::string& url) {
 		result.scheme = url.substr(0, scheme_end);
 		auto rest = url.substr(scheme_end + 3);
 
-		// Extract host:port/path
-		auto path_start = rest.find('/');
+		// Strip the URL fragment ('#...') — JS `parsed.pathname + parsed.search`
+		// excludes `parsed.hash`, so we drop it before further parsing.
+		auto frag = rest.find('#');
+		if (frag != std::string::npos)
+			rest = rest.substr(0, frag);
+
+		// The host portion ends at the first '/' (start of path) or '?' (start
+		// of query when no path is present). Capturing both ensures the query
+		// string is preserved even when the URL has no path component (e.g.
+		// "https://example.com?foo=1" → path "/?foo=1").
+		auto path_start = rest.find_first_of("/?");
 		std::string host_port;
 		if (path_start != std::string::npos) {
 			host_port = rest.substr(0, path_start);
-			result.path = rest.substr(path_start);
+			// JS `parsed.pathname + parsed.search`: pathname is "/" when the
+			// URL has no path, so prepend '/' if the remainder begins with '?'.
+			if (rest[path_start] == '?')
+				result.path = "/" + rest.substr(path_start);
+			else
+				result.path = rest.substr(path_start);
 		} else {
 			host_port = rest;
 			result.path = "/";

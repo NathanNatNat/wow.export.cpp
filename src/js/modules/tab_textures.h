@@ -58,6 +58,12 @@ void previewTextureByID(uint32_t file_data_id, const std::string& texture = "");
 void export_textures();
 
 /**
+ * Clear the override texture filter (used by the toast "Remove" action).
+ * JS equivalent: methods.remove_override_textures() → this.$core.view.removeOverrideTextures()
+ */
+void remove_override_textures();
+
+/**
  * Export atlas regions of the currently previewed texture.
  * JS equivalent: methods.export_atlas_regions()
  */

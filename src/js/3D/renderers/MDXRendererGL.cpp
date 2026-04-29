@@ -527,6 +527,90 @@ void MDXRendererGL::stopAnimation() {
 }
 
 // -----------------------------------------------------------------------
+// get_animation_frame_count
+//
+// Returns the integer frame count for the current sequence, derived from
+// its duration (interval[1] - interval[0], in milliseconds). Mirrors the
+// 60 fps assumption used by M2LegacyRendererGL::get_animation_frame_count.
+// -----------------------------------------------------------------------
+
+int MDXRendererGL::get_animation_frame_count() {
+	if (current_animation < 0 || !mdx)
+		return 1;
+
+	if (current_animation >= static_cast<int>(mdx->sequences.size()))
+		return 1;
+
+	const auto& seq = mdx->sequences[static_cast<size_t>(current_animation)];
+	const float duration_ms = static_cast<float>(seq.interval[1]) - static_cast<float>(seq.interval[0]);
+	if (duration_ms <= 0)
+		return 1;
+
+	return std::max(1, static_cast<int>(std::floor((duration_ms / 1000.0f) * 60.0f)));
+}
+
+// -----------------------------------------------------------------------
+// get_animation_frame
+// -----------------------------------------------------------------------
+
+int MDXRendererGL::get_animation_frame() {
+	if (current_animation < 0 || !mdx)
+		return 0;
+
+	if (current_animation >= static_cast<int>(mdx->sequences.size()))
+		return 0;
+
+	const auto& seq = mdx->sequences[static_cast<size_t>(current_animation)];
+	const float duration_ms = static_cast<float>(seq.interval[1]) - static_cast<float>(seq.interval[0]);
+	if (duration_ms <= 0)
+		return 0;
+
+	return static_cast<int>(std::floor((animation_time / duration_ms) * static_cast<float>(get_animation_frame_count())));
+}
+
+// -----------------------------------------------------------------------
+// set_animation_frame
+// -----------------------------------------------------------------------
+
+void MDXRendererGL::set_animation_frame(int frame) {
+	if (current_animation < 0 || !mdx)
+		return;
+
+	if (current_animation >= static_cast<int>(mdx->sequences.size()))
+		return;
+
+	const int frame_count = get_animation_frame_count();
+	if (frame_count <= 0)
+		return;
+
+	const auto& seq = mdx->sequences[static_cast<size_t>(current_animation)];
+	const float duration_ms = static_cast<float>(seq.interval[1]) - static_cast<float>(seq.interval[0]);
+	animation_time = (static_cast<float>(frame) / static_cast<float>(frame_count)) * duration_ms;
+
+	// Mirror updateAnimation's guard — only refresh node matrices when the
+	// skeleton is actually loaded.
+	if (!nodes.empty())
+		_update_node_matrices();
+}
+
+// -----------------------------------------------------------------------
+// step_animation_frame
+// -----------------------------------------------------------------------
+
+void MDXRendererGL::step_animation_frame(int delta) {
+	const int frame = get_animation_frame();
+	const int frame_count = get_animation_frame_count();
+	int new_frame = frame + delta;
+
+	if (new_frame < 0)
+		new_frame = frame_count - 1;
+	else if (new_frame >= frame_count)
+		new_frame = 0;
+
+	set_animation_frame(new_frame);
+}
+
+// -----------------------------------------------------------------------
 // updateAnimation
 // -----------------------------------------------------------------------
 
