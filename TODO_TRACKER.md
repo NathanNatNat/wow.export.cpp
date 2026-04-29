@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/123 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/125 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
   - **JS Source**: `src/app.js` lines 589–624, 649–657
@@ -494,3 +494,11 @@
   - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 270–273
   - **Status**: Pending
   - **Details**: JS `_create_skeleton` when nodes array is empty/falsy sets `this.nodes = null` and returns immediately without touching `node_matrices`. C++ (lines 324–328) clears `nodes` AND resizes `node_matrices` to 16 floats (one identity matrix). This extra allocation has no JS counterpart and could cause subtle differences in code that checks whether node_matrices is populated.
+- [ ] 124. [GLTFWriter.cpp] Animation channel target node index deviates from JS — C++ uses actual_node_idx, JS uses nodeIndex + 1
+  - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 620–628, 757–765, 887–895
+  - **Status**: Pending
+  - **Details**: The JS code always uses `nodeIndex + 1` for animation channel targets (translation line 624, rotation line 761, scale line 891). This is correct when bone prefix mode is enabled (two nodes pushed per bone) but is a bug when prefix mode is disabled (only one node pushed, so nodeIndex+1 points to the wrong node). The C++ uses `actual_node_idx` (lines 676, 798, 917) which correctly points to the bone node regardless of prefix mode. This is a behavioural improvement over the JS, but it deviates from strict fidelity. The JS bug only manifests when `modelsExportWithBonePrefix` is false AND `modelsExportAnimations` is true simultaneously.
+- [ ] 125. [JSONWriter.cpp] BigInt serialization replacer not ported — callers must pre-convert large integers
+  - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40–43
+  - **Status**: Pending
+  - **Details**: The JS `JSON.stringify` uses a custom replacer function that converts BigInt values to strings (since JS cannot serialize BigInt by default). The C++ version uses plain `data.dump(1, '\t')` without special handling. A comment in the C++ notes that nlohmann::json handles integers up to uint64_t natively and that values exceeding uint64_t must be pre-converted by callers. This shifts the serialization responsibility to callers rather than handling it at the writer level. If a caller passes a value exceeding uint64_t without pre-converting, it would be silently truncated or cause an error rather than being string-serialized.
