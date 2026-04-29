@@ -1,6 +1,4 @@
-#version 300 es
-precision highp float;
-precision highp int;
+#version 430 core
 
 // inputs from vertex shader
 in vec2 v_texcoord;

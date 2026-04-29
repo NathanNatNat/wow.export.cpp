@@ -1,6 +1,4 @@
-#version 300 es
-precision highp float;
-precision highp int;
+#version 430 core
 
 // vertex attributes
 layout(location = 0) in vec3 a_position;
@@ -17,12 +15,13 @@ uniform mat4 u_model_matrix;
 uniform vec3 u_view_up;
 uniform float u_time;
 
-// bone matrices (max 256 bones)
-uniform int u_bone_count;
-#define MAX_BONES 256
-uniform VsBoneUbo {
-	mat4 u_bone_matrices[MAX_BONES];
+// bone matrices — stored in an SSBO to avoid uniform register limits.
+// Upstream JS uses a UBO (WebGL2 has no SSBO); on desktop OpenGL 4.3 we use
+// SSBO because uniform mat4[256] alone exhausts the 1024-vec4 NVIDIA cap.
+layout(std430, binding = 0) readonly buffer BoneMatrices {
+	mat4 u_bone_matrices[];
 };
+uniform int u_bone_count;
 // texture transform matrices
 uniform mat4 u_tex_matrix1;
 uniform mat4 u_tex_matrix2;
