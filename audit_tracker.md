@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 10/195 audited (5%)**
+**Progress: 20/195 audited (10%)**
 
 - [x] 1. `src/app.cpp` — ⚠️ 5 findings
 - [x] 2. `src/js/blob.cpp` — ⚠️ 5 findings
@@ -14,16 +14,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 8. `src/js/external-links.cpp` — ⚠️ 1 findings
 - [x] 9. `src/js/file-writer.cpp` — ⚠️ 3 findings
 - [x] 10. `src/js/generics.cpp` — ⚠️ 4 findings
-- [ ] 11. `src/js/gpu-info.cpp`
-- [ ] 12. `src/js/icon-render.cpp`
-- [ ] 13. `src/js/install-type.cpp`
-- [ ] 14. `src/js/log.cpp`
-- [ ] 15. `src/js/mmap.cpp`
-- [ ] 16. `src/js/modules.cpp`
-- [ ] 17. `src/js/MultiMap.cpp`
-- [ ] 18. `src/js/png-writer.cpp`
-- [ ] 19. `src/js/stb-impl.cpp`
-- [ ] 20. `src/js/subtitles.cpp`
+- [x] 11. `src/js/gpu-info.cpp` — ⚠️ 1 findings
+- [x] 12. `src/js/icon-render.cpp` — ⚠️ 2 findings
+- [x] 13. `src/js/install-type.cpp` — ✅ audited
+- [x] 14. `src/js/log.cpp` — ⚠️ 6 findings
+- [x] 15. `src/js/mmap.cpp` — ⚠️ 1 findings
+- [x] 16. `src/js/modules.cpp` — ⚠️ 8 findings
+- [x] 17. `src/js/MultiMap.cpp` — ✅ audited
+- [x] 18. `src/js/png-writer.cpp` — ⚠️ 1 findings
+- [x] 19. `src/js/stb-impl.cpp` — ✅ audited
+- [x] 20. `src/js/subtitles.cpp` — ⚠️ 3 findings
 - [ ] 21. `src/js/tiled-png-writer.cpp`
 - [ ] 22. `src/js/updater.cpp`
 - [ ] 23. `src/js/wmv.cpp`
