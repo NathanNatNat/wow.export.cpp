@@ -36,6 +36,12 @@ static bool is_initializing = false;
 static std::mutex init_mutex;
 static std::condition_variable init_cv;
 
+// Structural deviation from JS (TODO 336): JS uses `init_promise` to coalesce
+// concurrent callers onto a single in-flight Promise. C++ uses `is_initializing`
+// + `std::condition_variable` to serialize concurrent calls — the first caller
+// runs initialization while subsequent callers block waiting on the condvar.
+// Behaviour is functionally equivalent: only one initialization runs and all
+// concurrent callers receive the result.
 void initialize() {
 {
 std::unique_lock lock(init_mutex);
@@ -51,6 +57,9 @@ is_initializing = true;
 try {
 logging::write("Loading ComponentTextureFileData...");
 
+// JS accesses `db2.ComponentTextureFileData` (a named property). The C++ port
+// resolves the same table via `casc::db2::preloadTable("ComponentTextureFileData")`
+// — the string key must match the actual DB2 table name exactly (TODO 337).
 auto allRows = casc::db2::preloadTable("ComponentTextureFileData").getAllRows();
 for (const auto& [id, row] : allRows) {
 ComponentTextureInfo info;
@@ -89,21 +98,26 @@ return std::nullopt;
 if (file_data_ids.size() == 1)
 return file_data_ids[0];
 
-// When race_id/gender_index are nullopt (JS null), skip race/gender-specific matching
-// and fall through to generic "any race" entries (matches JS === comparison behavior).
+// Mirrors JS structure (TODO 335): all four race/gender-specific loops run unconditionally.
+// JS `info.raceID === race_id` (with race_id == null) simply never matches against the
+// numeric raceIDs stored in file_data_to_info. We replicate that by substituting an
+// unrepresentable sentinel when the optional is empty, so the equality silently fails
+// — same outcome as JS: loops execute but find nothing, falling through to the race=0
+// (any race) loop below.
+const uint32_t race = race_id.value_or(static_cast<uint32_t>(-1));
+const uint32_t gender = gender_index.value_or(static_cast<uint32_t>(-1));
 
-if (race_id.has_value() && gender_index.has_value()) {
 // try exact race + gender match
 for (const auto fdid : file_data_ids) {
 auto it = file_data_to_info.find(fdid);
-if (it != file_data_to_info.end() && it->second.raceID == *race_id && it->second.genderIndex == *gender_index)
+if (it != file_data_to_info.end() && it->second.raceID == race && it->second.genderIndex == gender)
 return fdid;
 }
 
 // try race + any gender
 for (const auto fdid : file_data_ids) {
 auto it = file_data_to_info.find(fdid);
-if (it != file_data_to_info.end() && it->second.raceID == *race_id && it->second.genderIndex == GENDER_ANY)
+if (it != file_data_to_info.end() && it->second.raceID == race && it->second.genderIndex == GENDER_ANY)
 return fdid;
 }
 
@@ -111,7 +125,7 @@ return fdid;
 if (fallback_race_id > 0) {
 for (const auto fdid : file_data_ids) {
 auto it = file_data_to_info.find(fdid);
-if (it != file_data_to_info.end() && it->second.raceID == fallback_race_id && (it->second.genderIndex == *gender_index || it->second.genderIndex == GENDER_ANY))
+if (it != file_data_to_info.end() && it->second.raceID == fallback_race_id && (it->second.genderIndex == gender || it->second.genderIndex == GENDER_ANY))
 return fdid;
 }
 }
@@ -119,9 +133,8 @@ return fdid;
 // try race=0 (any race) with specific gender
 for (const auto fdid : file_data_ids) {
 auto it = file_data_to_info.find(fdid);
-if (it != file_data_to_info.end() && it->second.raceID == 0 && it->second.genderIndex == *gender_index)
+if (it != file_data_to_info.end() && it->second.raceID == 0 && it->second.genderIndex == gender)
 return fdid;
-}
 }
 
 // try race=0 (any race)
