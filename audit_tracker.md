@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 40/195 audited (21%)**
+**Progress: 50/195 audited (26%)**
 
 - [x] 1. `src/app.cpp` — ⚠️ 5 findings
 - [x] 2. `src/js/blob.cpp` — ⚠️ 5 findings
@@ -44,16 +44,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 38. `src/js/3D/exporters/M2Exporter.cpp` — ⚠️ 5 findings
 - [x] 39. `src/js/3D/exporters/M2LegacyExporter.cpp` — ⚠️ 5 findings
 - [x] 40. `src/js/3D/exporters/M3Exporter.cpp` — ⚠️ 3 findings
-- [ ] 41. `src/js/3D/exporters/WMOExporter.cpp`
-- [ ] 42. `src/js/3D/exporters/WMOLegacyExporter.cpp`
-- [ ] 43. `src/js/3D/gl/GLContext.cpp`
-- [ ] 44. `src/js/3D/gl/GLTexture.cpp`
-- [ ] 45. `src/js/3D/gl/ShaderProgram.cpp`
-- [ ] 46. `src/js/3D/gl/UniformBuffer.cpp`
-- [ ] 47. `src/js/3D/gl/VertexArray.cpp`
-- [ ] 48. `src/js/3D/loaders/ADTLoader.cpp`
-- [ ] 49. `src/js/3D/loaders/ANIMLoader.cpp`
-- [ ] 50. `src/js/3D/loaders/BONELoader.cpp`
+- [x] 41. `src/js/3D/exporters/WMOExporter.cpp` — ⚠️ 5 findings
+- [x] 42. `src/js/3D/exporters/WMOLegacyExporter.cpp` — ⚠️ 3 findings
+- [x] 43. `src/js/3D/gl/GLContext.cpp` — ⚠️ 1 findings
+- [x] 44. `src/js/3D/gl/GLTexture.cpp` — ⚠️ 2 findings
+- [x] 45. `src/js/3D/gl/ShaderProgram.cpp` — ⚠️ 3 findings
+- [x] 46. `src/js/3D/gl/UniformBuffer.cpp` — ⚠️ 1 findings
+- [x] 47. `src/js/3D/gl/VertexArray.cpp` — ✅ audited
+- [x] 48. `src/js/3D/loaders/ADTLoader.cpp` — ✅ audited
+- [x] 49. `src/js/3D/loaders/ANIMLoader.cpp` — ✅ audited
+- [x] 50. `src/js/3D/loaders/BONELoader.cpp` — ✅ audited
 - [ ] 51. `src/js/3D/loaders/LoaderGenerics.cpp`
 - [ ] 52. `src/js/3D/loaders/M2Generics.cpp`
 - [ ] 53. `src/js/3D/loaders/M2LegacyLoader.cpp`

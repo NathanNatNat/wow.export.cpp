@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/82 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/97 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
   - **JS Source**: `src/app.js` lines 589–624, 649–657
@@ -330,3 +330,63 @@
   - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 91–92
   - **Status**: Pending
   - **Details**: JS passes `validTextures` (a `Map<number, string>`) directly to `gltf.setTextureMap(textureMap)`. C++ at `M3Exporter.cpp:101–104` stringifies the numeric key and wraps each path in a `GLTFTextureEntry{path, ""}` adapter. Because `exportTextures` is presently a stub, the conversion is currently a no-op, but the conversion shape (string keys, second `""` field) needs verification against `GLTFWriter::setTextureMap`'s contract once M3 texture export is implemented to ensure parity with JS callers.
+- [ ] 83. [WMOExporter.cpp] exportRaw groupID resolution diverges from JS `??` semantics for value 0.
+  - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 1266–1270
+  - **Status**: Pending
+  - **Details**: JS uses `this.wmo.groupIDs?.[groupOffset] ?? listfile.getByFilename(groupName)` so when `groupIDs[offset]` is `0` (defined-but-falsy) it falls through to `listfile.getByFilename`. C++ at `WMOExporter.cpp:1644–1652` treats any in-bounds index as resolved (`groupIDResolved=true`) regardless of the value, so a 0 entry causes the group to be skipped at line 1655 instead of looking up by filename. WMOs that legitimately store 0 in `groupIDs` (e.g. classic builds backfilled with placeholders) will lose group-file export coverage in C++.
+- [ ] 84. [WMOExporter.cpp] meta JSON `groupNames` ordering may differ from JS `Object.values()` insertion order.
+  - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 738, 1193
+  - **Status**: Pending
+  - **Details**: JS emits `Object.values(wmo.groupNames)` whose order is the Map/Object insertion order from `WMOLoader`. C++ at `WMOExporter.cpp:924–928` and `1488–1491` iterates `wmo->groupNames` directly; if the underlying container is `std::unordered_map` (or `std::map` keyed by offset), the resulting `groupNames` array in the meta JSON is sorted by hash/offset rather than insertion order, causing a JSON-level diff vs JS for the same WMO. Verify the container type; if it is not insertion-ordered, store names in a parallel `std::vector` to preserve order.
+- [ ] 85. [WMOExporter.cpp] exportTextures `formatUnknownFile` call signature differs from JS.
+  - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 158–160
+  - **Status**: Pending
+  - **Details**: JS calls `listfile.formatUnknownFile(texFile)` (single-arg) where `texFile` already has the form `<id>.<ext>`. C++ at `WMOExporter.cpp:321` calls `casc::listfile::formatUnknownFile(texFileDataID, raw ? ".blp" : ".png")` (two-arg form). The output should be identical for normal IDs but the divergent call shape is a porting-fidelity issue and could drift if the helper's two-arg behaviour ever differs (e.g. unknowns/zero-padding). Match the single-arg JS form by passing the already-built `texFile` string.
+- [ ] 86. [WMOExporter.cpp] exportRaw uses `data.byteLength()==0` instead of an "is data set" check.
+  - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 1223–1231
+  - **Status**: Pending
+  - **Details**: JS checks `this.wmo.data === undefined` to decide between fetching from CASC and writing the cached buffer. C++ at `WMOExporter.cpp:1596` uses `data.byteLength() == 0`, which conflates "no data passed" with "explicitly zero-length data". Add a "has data" flag or use `std::optional<BufferWrapper>` so a legitimately empty buffer is written through instead of being silently re-fetched.
+- [ ] 87. [WMOExporter.cpp] exportAsGLTF empty-UV branch defensively allocates `uv_maps[0]`; JS does not.
+  - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 316–321
+  - **Status**: Pending
+  - **Details**: JS writes to `uv_maps[0][uv_ofs + i] = 0` without first creating `uv_maps[0]`, which throws if no prior group provided UVs (latent JS bug). C++ at `WMOExporter.cpp:481–483` silently allocates `uv_maps[0]` filled with zero. This is technically a deviation from JS behaviour even though it "fixes" a JS crash — document it as an intentional improvement or replicate the JS crash path so behaviour is identical.
+- [ ] 88. [WMOLegacyExporter.cpp] CSV doodad placement values use `std::to_string(float)` instead of JS-compatible shortest round-trip formatting.
+  - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 322–333
+  - **Status**: Pending
+  - **Details**: JS `csv.addRow` writes raw `Number` values that are stringified via JS `Number.prototype.toString` (shortest round-trippable representation, e.g. `12.3456`). The C++ port at `WMOLegacyExporter.cpp:390-397` calls `std::to_string` on each `float`/`double`, which produces a fixed-precision string with trailing zeros (e.g. `12.345600`). This produces CSV output that is byte-different from the JS version for every doodad position/rotation/scale field. Use a JS-compatible float-to-string formatter (e.g. ryu / `std::format("{}", v)` with `{:g}`) to restore identical CSV output.
+- [ ] 89. [WMOLegacyExporter.cpp] `useAbsolute` model path uses `std::filesystem::absolute` instead of JS `path.resolve` (no normalization of `..`/`.`).
+  - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 316–317
+  - **Status**: Pending
+  - **Details**: JS uses `path.resolve(outDir, modelPath)` which produces a normalized absolute path (collapsing `..` and `.` segments). The C++ port at `WMOLegacyExporter.cpp:381-383` uses `std::filesystem::absolute(outDir / modelPath)`, which only joins and converts to absolute without normalization. When `modelPath` contains `..` segments (common when `m2Path` lives in a sibling export directory), the CSV `ModelFile` value may contain unresolved relative segments where JS would have collapsed them. Switch to `std::filesystem::weakly_canonical` (or manual lexical normalization) so that the absolute path matches JS's normalized form.
+- [ ] 90. [WMOLegacyExporter.cpp] doodad-cache and texture-dedupe lowercase comparisons are ASCII-only (`std::tolower`) instead of full-Unicode like JS `String.prototype.toLowerCase`.
+  - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 299, 310, 507, 510
+  - **Status**: Pending
+  - **Details**: JS uses `fileName.toLowerCase()` and `texturePath.toLowerCase()` which is locale/Unicode-aware. The C++ helper `toLower` at `WMOLegacyExporter.cpp:40-45` calls `std::tolower` per-byte, which only handles ASCII. WoW asset paths are typically ASCII so this rarely matters, but any non-ASCII chars in a path would cause the C++ port to treat case-equivalent paths as distinct (causing duplicate exports / cache misses). Use a UTF-8-aware lowercase routine to fully match JS behaviour.
+- [ ] 91. [GLContext.cpp] `ext_float_texture` is hard-coded to `true` instead of probing the actual GL capability.
+  - **JS Source**: `src/js/3D/gl/GLContext.js` lines 61–62
+  - **Status**: Pending
+  - **Details**: JS calls `gl.getExtension('EXT_color_buffer_float')` and stores the resulting object (or null) in `this.ext_float_texture`. The C++ port at `GLContext.cpp:42` unconditionally sets `ext_float_texture = true` with the comment "float textures (core in GL 3.0+)". While float textures themselves are core in GL 3.0+, `EXT_color_buffer_float` specifically exposes float color-buffer rendering (FBO color attachment with float formats), which is core in GL 3.0 desktop but is not equivalent to "always true" — any consumer reading this flag for capability gating now sees a value that was not actually probed. To match JS fidelity the flag should be derived from the extension enumeration loop in `_init_extensions()` (e.g. check for `GL_ARB_color_buffer_float` / verify GL major version) rather than hard-coded.
+- [ ] 92. [GLTexture.cpp] Remove unused `flip_y` option and manual row-flip path from `set_rgba`.
+  - **JS Source**: `src/js/3D/gl/GLTexture.js` lines 34–50
+  - **Status**: Pending
+  - **Details**: JS `set_rgba` performs a single `gl.texImage2D` upload with no Y-flip (WebGL only flips when `gl.pixelStorei(UNPACK_FLIP_Y_WEBGL, true)` is set, which this class never does). The C++ port at `GLTexture.cpp:38-51` adds an EXTRA `flip_y` option (declared in `GLTexture.h:30`) that, when true, allocates a heap buffer and copies rows in reverse to flip the texture vertically before upload. No JS code path equivalent exists. The header comment at `GLTexture.cpp:34-37` acknowledges JS never flips Y, yet the option is still exposed and callable. Remove the `flip_y` field from `TextureOptions` and the entire `if (options.flip_y && pixels)` branch so the C++ matches JS exactly: a single straight-through `glTexImage2D` call.
+- [ ] 93. [GLTexture.cpp] `set_canvas` signature deviates from JS canvas-based overload.
+  - **JS Source**: `src/js/3D/gl/GLTexture.js` lines 52–73
+  - **Status**: Pending
+  - **Details**: JS `set_canvas(canvas, options)` accepts an `HTMLCanvasElement` and calls the WebGL `texImage2D(target, level, internalformat, format, type, source)` overload that extracts pixels from the DOM element directly, then independently runs its own `bindTexture` / `_apply_wrap` / `_apply_filter` / optional `generateMipmap` sequence. The C++ port at `GLTexture.cpp:62-67` instead takes raw `(pixels, w, h, options)` and forwards to `set_rgba`. The deviation is documented in `GLTexture.h:65-77`, but: (a) callers must rasterise canvas-equivalent content into RGBA bytes themselves (no-op for now since nothing in the C++ port currently calls `set_canvas` with HTML-canvas semantics), and (b) the delegation through `set_rgba` causes `set_canvas` to inherit the spurious `flip_y` path. Track here so that, when a real "canvas" producer is wired up (e.g. an offscreen ImGui-rendered surface or a 2D rasteriser), this method is revisited and the behavioural divergence resolved.
+- [ ] 94. [ShaderProgram.cpp] `_compile` early-return path explicitly deletes the successfully-compiled shader where JS leaks it.
+  - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 35–36
+  - **Status**: Pending
+  - **Details**: JS `_compile` returns early without freeing either shader when one fails to compile, which leaks the successfully-compiled GPU shader (the per-shader deleter only runs on the side that compiled). The C++ port at `ShaderProgram.cpp:30-39` explicitly deletes both shaders before returning. While this is a fix for a real JS leak, it is a behavioural deviation from the JS code path; either document it as an intentional improvement (with a comment matching the leak fix to a CLAUDE.md exception) or restore the JS-faithful early return so the port matches the source line-for-line.
+- [ ] 95. [ShaderProgram.cpp] `get_uniform_block_param` returns `-1` instead of JS `null` for `INVALID_INDEX`.
+  - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 122–127
+  - **Status**: Pending
+  - **Details**: JS returns `null` when the named block resolves to `GL_INVALID_INDEX`. C++ at `ShaderProgram.cpp:117-118` returns `-1` (a valid `GLint`). Callers cannot distinguish "block missing" from a legitimate `-1` return value. Change the return type to `std::optional<GLint>` (matching the JS `null` semantics) or guarantee the function is only called for known-valid blocks.
+- [ ] 96. [ShaderProgram.cpp] `set_uniform_3fv` / `set_uniform_4fv` / `set_uniform_mat4_array` add an explicit `count` parameter not present in JS.
+  - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 204–208, 214–218, 247–251
+  - **Status**: Pending
+  - **Details**: JS infers count from `values.length` (e.g. `gl.uniform3fv(loc, values)`). C++ at `ShaderProgram.h:65–113` requires the caller to pass an explicit `count` (defaulted to 1) since `const float*` has no length. Documented adaptation; behaviorally identical when callers pass the correct count, but the API contract differs from JS, and callers porting from JS verbatim will silently get `count=1` regardless of the source array length. Consider an `std::span<const float>` overload to preserve the JS shape.
+- [ ] 97. [UniformBuffer.cpp] `set_float_array` requires explicit `count` parameter where JS infers from `values.length`.
+  - **JS Source**: `src/js/3D/gl/UniformBuffer.js` lines 152–158
+  - **Status**: Pending
+  - **Details**: JS `set_float_array(offset, values)` derives the element count from `values.length`. C++ at `UniformBuffer.cpp:102-106` requires the caller to pass an explicit `count` argument (header line 45) because `const float*` has no length. Behaviorally identical when callers pass the correct count, but a JS-verbatim port (`set_float_array(offset, arr)` without count) will fail to compile or silently use a default. Cosmetic API divergence; consider a `std::span<const float>` overload to preserve the JS shape.
