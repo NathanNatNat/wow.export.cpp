@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 80/195 audited (41%)**
+**Progress: 90/195 audited (46%)**
 
 - [x] 1. `src/app.cpp` — ⚠️ 5 findings
 - [x] 2. `src/js/blob.cpp` — ⚠️ 5 findings
@@ -84,16 +84,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 78. `src/js/3D/writers/STLWriter.cpp` — ✅ audited
 - [x] 79. `src/js/casc/blp.cpp` — ✅ audited
 - [x] 80. `src/js/casc/blte-reader.cpp` — ✅ audited
-- [ ] 81. `src/js/casc/blte-stream-reader.cpp`
-- [ ] 82. `src/js/casc/build-cache.cpp`
-- [ ] 83. `src/js/casc/casc-source-local.cpp`
-- [ ] 84. `src/js/casc/casc-source-remote.cpp`
-- [ ] 85. `src/js/casc/casc-source.cpp`
-- [ ] 86. `src/js/casc/cdn-config.cpp`
-- [ ] 87. `src/js/casc/cdn-resolver.cpp`
-- [ ] 88. `src/js/casc/content-flags.cpp`
-- [ ] 89. `src/js/casc/db2.cpp`
-- [ ] 90. `src/js/casc/dbd-manifest.cpp`
+- [x] 81. `src/js/casc/blte-stream-reader.cpp` — ✅ audited
+- [x] 82. `src/js/casc/build-cache.cpp` — ✅ audited
+- [x] 83. `src/js/casc/casc-source-local.cpp` — ✅ audited
+- [x] 84. `src/js/casc/casc-source-remote.cpp` — ✅ audited
+- [x] 85. `src/js/casc/casc-source.cpp` — ✅ audited
+- [x] 86. `src/js/casc/cdn-config.cpp` — ✅ audited
+- [x] 87. `src/js/casc/cdn-resolver.cpp` — ✅ audited
+- [x] 88. `src/js/casc/content-flags.cpp` — ✅ audited
+- [x] 89. `src/js/casc/db2.cpp` — ⚠️ 1 findings
+- [x] 90. `src/js/casc/dbd-manifest.cpp` — ✅ audited
 - [ ] 91. `src/js/casc/export-helper.cpp`
 - [ ] 92. `src/js/casc/install-manifest.cpp`
 - [ ] 93. `src/js/casc/jenkins96.cpp`

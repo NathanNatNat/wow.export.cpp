@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/125 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/126 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
   - **JS Source**: `src/app.js` lines 589–624, 649–657
@@ -502,3 +502,7 @@
   - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40–43
   - **Status**: Pending
   - **Details**: The JS `JSON.stringify` uses a custom replacer function that converts BigInt values to strings (since JS cannot serialize BigInt by default). The C++ version uses plain `data.dump(1, '\t')` without special handling. A comment in the C++ notes that nlohmann::json handles integers up to uint64_t natively and that values exceeding uint64_t must be pre-converted by callers. This shifts the serialization responsibility to callers rather than handling it at the writer level. If a caller passes a value exceeding uint64_t without pre-converting, it would be silently truncated or cause an error rather than being string-serialized.
+- [ ] 126. [db2.cpp] Missing "rows === null" (preload) guard on getRelationRows from JS db2 Proxy wrapper
+  - **JS Source**: `src/js/casc/db2.js` lines 51–52
+  - **Status**: Pending
+  - **Details**: The JS db2 Proxy wrapper has a two-part guard for getRelationRows: (1) `!reader_target.isLoaded` throws "Table must be loaded", and (2) `reader_target.rows === null` throws "Table must be preloaded". The C++ WDCReader::getRelationRows() only enforces the isLoaded check (WDCReader.cpp:302–303). The rows-null check (ensuring preload() was called) is absent from both the db2 layer and WDCReader. Since getRelationRows() uses relationshipLookup (not rows), this is a developer-facing error message quality gap rather than a functional bug. To match JS behaviour, db2::getTable() or WDCReader::getRelationRows() should check if preload() was called and throw a descriptive error if not.
