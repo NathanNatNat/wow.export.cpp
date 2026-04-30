@@ -2215,7 +2215,7 @@ static void checkWatchers(GLFWwindow* window) {
 	}
 
 	// watch activeModule and close context menus when it changes
-	// JS: app.js lines 556-563 — dynamically iterates all contextMenu entries.
+	// JS: app.js lines 556-563
 	if (core::view->activeModule != prevActiveModule) {
 		prevActiveModule = core::view->activeModule;
 		core::view->contextMenus.resetAll();

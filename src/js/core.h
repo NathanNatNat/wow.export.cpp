@@ -170,15 +170,7 @@ struct ContextMenus {
 	bool stateModelExport = false;     // State controller for the model export menu.
 	bool stateCDNRegion = false;       // State controller for the CDN region selection menu.
 
-	/**
-	 * Reset all context menu state.
-	 * JS equivalent (app.js lines 556-563):
-	 *   for (const [key, value] of Object.entries(contextMenus)) {
-	 *       if (value === true) contextMenus[key] = false;
-	 *       else if (value !== false) contextMenus[key] = null;
-	 *   }
-	 * Boolean fields are set to false, json fields are set to nullptr (null).
-	 */
+	// JS: app.js lines 556-563 — bool fields → false, json fields → null.
 	void resetAll() {
 		stateNavExtra = false;
 		stateModelExport = false;

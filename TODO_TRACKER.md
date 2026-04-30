@@ -1,11 +1,7 @@
 # TODO Tracker
 
-> **Progress: 0/165 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/164 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
-- [ ] 3. [app.cpp] activeModule watcher uses indiscriminate resetAll() instead of the JS per-entry true→false / else→null logic.
-  - **JS Source**: `src/app.js` lines 556–564
-  - **Status**: Pending
-  - **Details**: JS iterates contextMenus entries: `value === true` becomes `false`, anything else (and not `false`) becomes `null`. C++ checkWatchers (app.cpp:2058–2063) calls `core::view->contextMenus.resetAll()` which does not preserve the JS's three-state distinction. Whether this changes behaviour depends on `ContextMenus::resetAll()`, but the literal JS semantics (preserving `false` while nulling out non-true non-false values) is not preserved.
 - [ ] 4. [app.cpp] reloadStylesheet does not actually reload styling — it re-applies the static ImGui dark theme.
   - **JS Source**: `src/app.js` lines 160–164
   - **Status**: Pending
