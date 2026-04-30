@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 180/195 audited (92%)**
+**Progress: 190/195 audited (97%)**
 
 - [x] 1. `src/app.cpp` — ⚠️ 5 findings
 - [x] 2. `src/js/blob.cpp` — ⚠️ 5 findings
@@ -184,16 +184,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 178. `src/js/mpq/bzip2.cpp` — ✅ audited
 - [x] 179. `src/js/mpq/huffman.cpp` — ✅ audited
 - [x] 180. `src/js/mpq/mpq-install.cpp` — ⚠️ 1 finding
-- [ ] 181. `src/js/mpq/mpq.cpp`
-- [ ] 182. `src/js/mpq/pkware.cpp`
-- [ ] 183. `src/js/ui/audio-helper.cpp`
-- [ ] 184. `src/js/ui/char-texture-overlay.cpp`
-- [ ] 185. `src/js/ui/character-appearance.cpp`
-- [ ] 186. `src/js/ui/data-exporter.cpp`
-- [ ] 187. `src/js/ui/listbox-context.cpp`
-- [ ] 188. `src/js/ui/model-viewer-utils.cpp`
-- [ ] 189. `src/js/ui/texture-exporter.cpp`
-- [ ] 190. `src/js/ui/texture-ribbon.cpp`
+- [x] 181. `src/js/mpq/mpq.cpp` — ✅ audited
+- [x] 182. `src/js/mpq/pkware.cpp` — ✅ audited
+- [x] 183. `src/js/ui/audio-helper.cpp` — ⚠️ 2 findings
+- [x] 184. `src/js/ui/char-texture-overlay.cpp` — ⚠️ 2 findings
+- [x] 185. `src/js/ui/character-appearance.cpp` — ✅ audited
+- [x] 186. `src/js/ui/data-exporter.cpp` — ✅ audited
+- [x] 187. `src/js/ui/listbox-context.cpp` — ✅ audited
+- [x] 188. `src/js/ui/model-viewer-utils.cpp` — ✅ audited
+- [x] 189. `src/js/ui/texture-exporter.cpp` — ✅ audited
+- [x] 190. `src/js/ui/texture-ribbon.cpp` — ✅ audited
 - [ ] 191. `src/js/ui/uv-drawer.cpp`
 - [ ] 192. `src/js/workers/cache-collector.cpp`
 - [ ] 193. `src/js/wow/equip-item.cpp`
