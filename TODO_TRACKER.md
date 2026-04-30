@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/132 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/135 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
   - **JS Source**: `src/app.js` lines 589–624, 649–657
@@ -530,3 +530,15 @@
   - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 128–130
   - **Status**: Pending
   - **Details**: JS stores the raw return from `getFileDataIDByDisplayID` (which may be `undefined`) into `chr_model_id_to_file_data_id`. The C++ (line 189) uses `.value_or(0)`, converting "no value" into 0. Downstream, `get_model_file_data_id` (JS line 226 / C++ line 359) returns this value — JS returns `undefined` for unknown displays, C++ returns `std::optional(0)`. Callers checking `has_value()` vs checking for `undefined` would behave differently. FileDataID 0 is generally treated as invalid in WoW data so the practical impact is low, but the semantics diverge from the JS original. The fix would be to store `std::optional<uint32_t>` in `chr_model_id_to_file_data_id` and propagate `nullopt` when `getFileDataIDByDisplayID` returns `nullopt`.
+- [ ] 133. [DBItemDisplays.cpp] Extra `getTexturesByDisplayId` function not present in JS source
+  - **JS Source**: `src/js/db/caches/DBItemDisplays.js` (no counterpart)
+  - **Status**: Pending
+  - **Details**: The C++ file adds a `getTexturesByDisplayId` function (cpp lines 117–119, header line 35) that has no counterpart in the JS source. It delegates directly to `DBItemDisplayInfoModelMatRes::getItemDisplayIdTextureFileIds`. This adds API surface that doesn't exist in the original module and deviates from the JS module's exported interface.
+- [ ] 134. [DBItemGeosets.cpp] `getDisplayId` missing `modifier_id` parameter
+  - **JS Source**: `src/js/db/caches/DBItemGeosets.js` lines 277–279
+  - **Status**: Pending
+  - **Details**: The JS function `get_display_id(item_id, modifier_id)` accepts an optional `modifier_id` parameter and forwards it to `resolve_display_id`. The C++ function `getDisplayId(uint32_t item_id)` (cpp lines 279–281, header line 110) only accepts `item_id` and always calls `resolve_display_id(item_id)` with the default value (-1), meaning it never uses a specific modifier. The sister files DBItemModels and DBItemCharTextures both correctly include the `modifier_id` parameter in their `getDisplayId` functions. Fix: add `int modifier_id = -1` parameter to both the header declaration and implementation, and forward it to `resolve_display_id`.
+- [ ] 135. [DBItemModels.cpp] `getItemModels` missing `modifier_id` parameter
+  - **JS Source**: `src/js/db/caches/DBItemModels.js` lines 141–142
+  - **Status**: Pending
+  - **Details**: The JS function `get_item_models(item_id, modifier_id)` accepts an optional `modifier_id` and forwards it to `resolve_display_id`. The C++ version `getItemModels(uint32_t item_id)` (header line 37, cpp line 253) only accepts `item_id` and calls `resolve_display_id(item_id)` without any modifier. This means the C++ version always uses the default modifier resolution (prefer 0, then lowest). Any caller needing models for a specific modifier cannot use this function. Fix: add `int modifier_id = -1` parameter and forward it to `resolve_display_id`.
