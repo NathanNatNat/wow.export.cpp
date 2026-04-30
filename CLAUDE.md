@@ -149,6 +149,9 @@ The following files have been deliberately removed from the C++ build and do **n
 
 These removals also entailed: unregistering both modules from `modules.cpp`; removing `"tab_help"` and `"tab_changelog"` from `CONTEXT_MENU_ORDER` in `constants.h` (size reduced 12→10); removing the help-button click handler from `app.cpp`. See TODO entry 604 for restoration instructions.
 
+### Removed Features
+- **"Reload Styling" context menu option** — Removed. JS original: `src/app.js` lines 160–164, registered at line 550. The JS version hot-reloads CSS `<link>` tags with cache-busting query strings — a dev tool with no C++ equivalent since ImGui has no external stylesheets. Entailed: removing the `reloadStylesheet()` function from `app.cpp`, the `"reload-style"` registration, and `"reload-style"` from `CONTEXT_MENU_ORDER` in `constants.h` (size reduced 10→9).
+
 ### General Conversion Fidelity
 - Conversions must be fully comprehensive — every function, method, constant, code path, and UI element from the JS source must be ported.
 - The C++ conversion must be functionally and visually identical to the original JavaScript code. Nothing may be left as a permanent stub or silently omitted.

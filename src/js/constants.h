@@ -222,7 +222,7 @@ inline constexpr std::array<std::string_view, 20> NAV_BUTTON_ORDER = {{
 	"legacy_tab_files"
 }};
 
-inline constexpr std::array<std::string_view, 10> CONTEXT_MENU_ORDER = {{
+inline constexpr std::array<std::string_view, 9> CONTEXT_MENU_ORDER = {{
 	"tab_blender",
 	"runtime-log",
 	"tab_raw",
@@ -230,7 +230,6 @@ inline constexpr std::array<std::string_view, 10> CONTEXT_MENU_ORDER = {{
 	"settings",
 	"restart",
 	"reload-shaders",
-	"reload-style",
 	"reload-active",
 	"reload-all"
 }};

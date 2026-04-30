@@ -1,11 +1,7 @@
 # TODO Tracker
 
-> **Progress: 0/164 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/163 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
-- [ ] 4. [app.cpp] reloadStylesheet does not actually reload styling — it re-applies the static ImGui dark theme.
-  - **JS Source**: `src/app.js` lines 160–164
-  - **Status**: Pending
-  - **Details**: JS rewrites every `<link rel=stylesheet>` href with a cache-busting `?v=Date.now()` query so updated CSS files are picked up without restarting. C++ (app.cpp:1344–1346) just calls `ImGui::StyleColorsDark()`, which is a no-op for theming changes since C++ has no equivalent reloadable stylesheet. As a result, the "Reload Styling" context menu option (registered at 2386) is effectively inert. Per CLAUDE.md visual-fidelity rules this is acceptable, but it deviates from the JS dev-tool intent.
 - [ ] 5. [app.cpp] No global click delegate for [data-external] and [data-kb-link] elements.
   - **JS Source**: `src/app.js` lines 116–131
   - **Status**: Pending

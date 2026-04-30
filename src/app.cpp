@@ -1340,14 +1340,6 @@ static void openRuntimeLog() {
 }
 
 /**
- * Reloads all stylesheets in the document.
- * JS equivalent: reloads <link> tags. C++ equivalent: re-applies the
- */
-static void reloadStylesheet() {
-	ImGui::StyleColorsDark();
-}
-
-/**
  * Reload the currently active module.
  */
 static void reloadActiveModule() {
@@ -2559,7 +2551,6 @@ int main(int argc, char* argv[]) {
 	// Note: "Settings" / "Manage Settings" is registered by screen_settings module, not here.
 	modules::registerContextMenuOption("runtime-log", "Open Runtime Log", "timeline.svg", []() { logging::openRuntimeLog(); });
 	modules::registerContextMenuOption("restart", "Restart wow.export.cpp", "arrow-rotate-left.svg", []() { app::restartApplication(); });
-	modules::registerContextMenuOption("reload-style", "Reload Styling", "palette.svg", []() { app::reloadStylesheet(); }, true);
 	modules::registerContextMenuOption("reload-shaders", "Reload Shaders", "cube.svg", []() { shaders::reload_all(); }, true);
 	modules::registerContextMenuOption("reload-active", "Reload Active Module", "gear.svg", []() { modules::reloadActiveModule(); }, true);
 	modules::registerContextMenuOption("reload-all", "Reload All Modules", "gear.svg", []() { modules::reloadAllModules(); }, true);
