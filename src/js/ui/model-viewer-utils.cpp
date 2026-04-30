@@ -528,13 +528,6 @@ void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
 
 /**
  * Export 3D preview as PNG (to disk) or to clipboard.
- *
- * JS signature: `export_preview(core, format, canvas, export_name, export_subdir)`.
- * C++ deviations:
- *   - `canvas` is replaced by reading the bound GL framebuffer with glReadPixels
- *     (no HTML canvas exists in the C++ build).
- *   - `export_paths` is hoisted as an explicit parameter so the caller can
- *     share an already-open stream; JS opens one locally in `export_files`.
  */
 bool export_preview(const std::string& format, gl::GLContext& ctx,
 	const std::string& export_name, const std::string& export_subdir,

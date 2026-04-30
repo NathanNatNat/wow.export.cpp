@@ -15,12 +15,6 @@ namespace slider {
 // props: ['modelValue']
 // emits: ['update:modelValue']
 
-// JS deviation: JS implements a fully custom slider (lines 41-99 of slider.js)
-// with `mousedown`/`mousemove`/`mouseup` document listeners, a fill bar, and a
-// draggable handle. C++ replaces all of that with native `ImGui::SliderFloat`,
-// which handles drag/click/keyboard input internally. Per CLAUDE.md Visual
-// Fidelity rules, exact appearance need not match — only the value-in-[0,1]
-// semantic is preserved.
 void render(const char* id, float value,
             const std::function<void(float)>& onChange) {
 	ImGui::PushID(id);

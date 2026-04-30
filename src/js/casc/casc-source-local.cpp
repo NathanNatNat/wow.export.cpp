@@ -247,7 +247,6 @@ std::vector<ProductEntry> CASCLocal::getProductList() {
  * @param buildIndex
  */
 void CASCLocal::load(int buildIndex) {
-	// C++ deviation: ensures encryption keys are available before decryption (JS load() does not call this).
 	tact_keys::waitForLoad();
 
 	build = builds[buildIndex];

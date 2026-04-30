@@ -106,10 +106,6 @@ public:
 	std::vector<uint32_t> mapSizes;
 	int mapCount = 0;
 
-	// Deviation: JS sets `this.dataURL = null` as a cache field but `getDataURL()`
-	// never writes to it (every call regenerates the PNG). The JS code lets
-	// callers cache, not the method itself, so the dead field is omitted here.
-
 	/**
 	 * Get the scaled width of the image (after mipmap scaling).
 	 * Matches JS `blp.scaledWidth`.

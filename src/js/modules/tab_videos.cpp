@@ -312,12 +312,6 @@ static void play_streaming_video(const std::string& url, const std::optional<Sub
 	core::openInExplorer(url);
 	logging::write(std::format("opened video URL in system handler: {}", url));
 
-	// Deviation from JS: JS attaches video.onended (resets is_streaming/videoPlayerState) and
-	// video.onerror (shows error toast) on the <video> element. C++ opens an external player
-	// via the OS shell and has no process lifecycle callbacks. The user must click "Stop Video"
-	// to reset is_streaming/videoPlayerState. HTTP/kino errors are caught by kino_post().
-	// This is an intentional deviation — there is no cross-platform way to detect when an
-	// externally-launched media player closes.
 }
 
 static void stream_video(const std::string& file_name) {

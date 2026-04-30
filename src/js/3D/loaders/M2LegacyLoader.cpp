@@ -831,16 +831,6 @@ std::future<LegacyM2Skin*> M2LegacyLoader::getSkin(int index) {
 
 /**
  * Returns the list of skins loaded inline with the M2.
- *
- * @note Semantic deviation from JS: For WotLK models (where `this->skins` is
- *       never populated because skins are stored in external .skin files), the
- *       JS implementation returns `undefined` whereas this C++ port returns an
- *       empty `std::vector<LegacyM2Skin>`. The semantic difference is
- *       observable to callers that distinguish `undefined` from an empty
- *       array — current callers check `.size()`, so behavior is equivalent. If
- *       a caller ever needs to distinguish unset-vs-empty, change the return
- *       type to `std::optional<const std::vector<LegacyM2Skin>&>` (or similar)
- *       and return `std::nullopt` for the WotLK case.
  */
 std::vector<LegacyM2Skin>& M2LegacyLoader::getSkinList() {
 	return this->skins;

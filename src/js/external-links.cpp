@@ -64,10 +64,6 @@ void wowHead_viewItem(int itemID) {
 	open(std::format(WOWHEAD_ITEM, itemID));
 }
 
-// renderLink() is an intentional ImGui-specific addition with no JS equivalent.
-// In the JS app, clickable links are handled by a global DOM click handler in
-// app.js that opens any element with a `data-external` attribute. Dear ImGui has
-// no DOM, so each call site must invoke this function explicitly instead.
 void renderLink(const char* link, const char* label, const ImVec4* color) {
 	if (color)
 		ImGui::PushStyleColor(ImGuiCol_Text, *color);

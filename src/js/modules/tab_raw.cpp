@@ -105,9 +105,6 @@ static void pump_detect_task() {
 		if (!task.extension_map.empty()) {
 			std::vector<std::pair<uint32_t, std::string>> entries(task.extension_map.begin(), task.extension_map.end());
 			casc::listfile::ingestIdentifiedFiles(entries);
-			// JS bug: is_dirty was never set to true here, causing compute_raw_files() to
-			// return early without refreshing the list after new files were identified.
-			// C++ intentionally deviates from JS to fix this so the list actually updates.
 			is_dirty = true;
 			compute_raw_files();
 
@@ -142,7 +139,6 @@ static void pump_detect_task() {
 			// The C++ port models this as a fixed `matches[]` array with `match_count`:
 			// `match_count == 1` mirrors JS string-match, `match_count > 1` mirrors JS array-match.
 			// Both forms are exercised in practice (see constants.cpp FILE_IDENTIFIERS) and
-			// behave identically to JS — this is not an over-match deviation.
 			std::vector<std::string_view> patterns(check.matches.begin(), check.matches.begin() + std::min(static_cast<size_t>(check.match_count), check.matches.size()));
 			if (data.startsWith(patterns)) {
 				task.extension_map[file_data_id] = std::string(check.ext);

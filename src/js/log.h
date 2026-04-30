@@ -86,9 +86,5 @@ void openRuntimeLog();
  * Attempts to return the contents of the runtime log.
  * This is defined as a global as it is requested during
  * an application crash where modules may not be loaded.
- *
- * Deviation from JS: JS declares this as async (returns a Promise);
- * C++ reads synchronously. This is intentional — during a crash the
- * event loop may be unavailable, so blocking I/O is more reliable.
  */
 std::string getErrorDump();

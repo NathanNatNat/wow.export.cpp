@@ -240,16 +240,6 @@ void M3Loader::parseBufferChunk(uint32_t chunkSize, uint32_t chunkID, uint32_t p
 /**
  * Read a typed buffer chunk and return it as a vector of floats.
  *
- * @note Structural divergence from the original JS source. The JS implementation
- *       (`M3Loader.js` lines 239–258) defines a single `ReadBufferAsFormat` that
- *       returns a mixed-type `Array` — floats for the `1F32`/`2F32`/`3F32`/`4F32`
- *       formats and uint16s for the `1U16` format. Because C++ requires statically
- *       typed return values, that function is split into two variants here:
- *       this float-returning overload, and `ReadBufferAsFormatU16` for the
- *       uint16 format. Each variant throws if it is called with a format that
- *       does not match its return type. Functionally equivalent to the JS
- *       original; structurally divergent.
- *
  * @param format    Format identifier (e.g. "1F32", "2F32", "3F32", "4F32").
  * @param chunkSize Size of the sub-chunk in bytes.
  * @return Vector of floats decoded from the buffer.
@@ -272,9 +262,6 @@ std::vector<float> M3Loader::ReadBufferAsFormat(const std::string& format, uint3
 
 /**
  * Read a typed buffer chunk and return it as a vector of uint16s.
- *
- * @note See `ReadBufferAsFormat` above for the structural-divergence rationale.
- *       This is the uint16-returning half of the JS `ReadBufferAsFormat` split.
  *
  * @param format    Format identifier (currently only "1U16").
  * @param chunkSize Size of the sub-chunk in bytes.

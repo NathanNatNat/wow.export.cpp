@@ -255,11 +255,6 @@ void flush() {
  * Attempts to return the contents of the runtime log.
  * This is defined as a global as it is requested during
  * an application crash where modules may not be loaded.
- *
- * Deviation from JS: JS declares getErrorDump as async (log.js lines 102-108),
- * returning a Promise<string>. C++ reads the file synchronously and returns
- * std::string directly. This is intentional — during a crash the event loop
- * may be unavailable, so blocking I/O is more reliable for diagnostics.
  */
 std::string getErrorDump() {
 	try {

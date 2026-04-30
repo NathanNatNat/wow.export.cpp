@@ -405,12 +405,6 @@ HttpResponse get(const std::vector<std::string>& urls) {
  * Dispatch a handler for an array of items with a limit to how
  * many can be resolving at once.
  *
- * Deviation (TODO 54): JS uses promise .then() chains so each completed task
- * immediately dispatches the next one (event-driven, zero-latency). C++ polls
- * all in-flight std::futures with a 1 ms wait to find the first ready one,
- * introducing up to 1 ms latency per completion. Functionally equivalent —
- * same tasks, same concurrency limit, same completion order.
- *
  * @param items    Each one is passed to the handler.
  * @param handler  Called for each item.
  * @param limit    This many will be resolving at any given time.
@@ -634,7 +628,6 @@ BufferWrapper downloadFile(const std::vector<std::string>& urls, const std::stri
 
 /**
  * Create all directories in a given path if they do not exist.
- * Deviation (TODO 55): JS createDirectory is async (returns a Promise); C++ is synchronous.
  * @param dir Directory path.
  */
 void createDirectory(const std::filesystem::path& dir) {
@@ -643,19 +636,8 @@ void createDirectory(const std::filesystem::path& dir) {
 
 /**
  * Returns after a redraw.
- * JS uses requestAnimationFrame to yield until the next frame paints.
- * the main loop keeps rendering every frame.  Progress updates are posted to
- * the main thread via core::postToMainThread() and drained each frame by
- * core::drainMainThreadQueue().
- *
- * Deviation (TODO 52): JS calls requestAnimationFrame() twice, deferring until
- * the browser has painted two successive frames. C++ has no direct equivalent
- * of rAF in an ImGui app; std::this_thread::yield() hints to the OS scheduler
- * but does not synchronise with the render loop. Acceptable deviation — the
- * ImGui main loop renders continuously and the yield lets the render thread run.
  */
 void redraw() {
-	// JS: requestAnimationFrame(() => requestAnimationFrame(resolve))
 	std::this_thread::yield();
 	std::this_thread::yield();
 }
@@ -744,7 +726,6 @@ std::string getFileHash(const std::filesystem::path& file, std::string_view meth
 
 /**
  * Wrapper for checking if a file exists.
- * Deviation (TODO 55): JS fileExists is async (returns a Promise); C++ is synchronous.
  * @param file Path to the file.
  */
 bool fileExists(const std::filesystem::path& file) {
@@ -762,11 +743,6 @@ bool fileExists(const std::filesystem::path& file) {
 
 /**
  * Check if a directory exists and is writable.
- * Deviation (TODO 55): JS directoryIsWritable is async (returns a Promise); C++ is synchronous.
- * JS uses fsp.access(dir, fs.constants.W_OK) which checks effective process
- * access permissions (including group, other, and ACL). The C++ equivalent
- * is to attempt an actual filesystem operation rather than checking
- * permission bits, which correctly handles all access control mechanisms.
  * @param dir Path to the directory.
  */
 bool directoryIsWritable(const std::filesystem::path& dir) {
@@ -795,7 +771,6 @@ bool directoryIsWritable(const std::filesystem::path& dir) {
 
 /**
  * Read a portion of a file.
- * Deviation (TODO 55): JS readFile is async (returns a Promise); C++ is synchronous.
  * @param file   Path of the file.
  * @param offset Offset to start reading from.
  * @param length Total bytes to read.
@@ -817,7 +792,6 @@ BufferWrapper readFile(const std::filesystem::path& file, size_t offset, size_t 
 /**
  * Recursively delete a directory and everything inside of it.
  * Returns the total size of all files deleted.
- * Deviation (TODO 55): JS deleteDirectory is async (returns a Promise); C++ is synchronous.
  * @param dir Directory to delete.
  */
 uintmax_t deleteDirectory(const std::filesystem::path& dir) {
@@ -843,11 +817,6 @@ uintmax_t deleteDirectory(const std::filesystem::path& dir) {
 /**
  * Process work in non-blocking batches.
  * Allows large amounts of work to be done without freezing the UI.
- *
- * Deviation (TODO 53): JS uses MessageChannel to post a message between each
- * batch, yielding to the browser event loop so the UI can repaint mid-process.
- * C++ has no equivalent event loop; std::this_thread::sleep_for(0) yields the
- * calling thread's timeslice so the ImGui render thread can run between batches.
  *
  * @param name      Name for logging purposes.
  * @param work      Array of items to process.

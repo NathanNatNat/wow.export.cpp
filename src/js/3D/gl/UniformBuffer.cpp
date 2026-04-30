@@ -11,27 +11,6 @@
 
 namespace gl {
 
-/*
- * Endianness deviation from JS source (`src/js/3D/gl/UniformBuffer.js`):
- *
- * The JS implementation writes scalar values via DataView with the
- * little-endian flag explicitly set, e.g.:
- *     this.view.setFloat32(offset, value, true);   // line 51
- *     this.view.setInt32  (offset, value, true);   // line 60
- *     this.view.setFloat32(offset + 4, y, true);   // lines 70–71, 82–84,
- *                                                  //       96–99
- *     this.view.setInt32  (offset + 4, y, true);   // lines 111–114
- *
- * The C++ port below uses `std::memcpy`, which writes the value in the
- * host's native byte order.  Per CLAUDE.md the only supported platforms
- * are Windows x64 (MSVC) and Linux x64 (GCC); both are little-endian, so
- * the on-buffer byte layout is identical to the JS DataView output and
- * the GPU receives the same bytes.  This is a documented platform
- * assumption — porting to a big-endian target would require switching
- * these writes to explicit little-endian byte writes (or a byte-swap on
- * `memcpy`) to preserve JS-equivalent behaviour.
- */
-
 UniformBuffer::UniformBuffer(GLContext& ctx, size_t sz, GLenum usg)
 	: ctx_(ctx), size(sz), usage(usg), data_(sz, 0) {
 	glGenBuffers(1, &buffer);

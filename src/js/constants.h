@@ -103,8 +103,6 @@ namespace CACHE {
 	const std::filesystem::path& STATE_FILE();
 }
 
-// Deviation: JS uses `INSTALL_PATH/src/default_config.jsonc`. C++ uses
-// `<install>/data/default_config.jsonc` to match the C++ resource layout.
 namespace CONFIG {
 	const std::filesystem::path& DEFAULT_PATH(); // Path of default configuration file.
 	const std::filesystem::path& USER_PATH(); // Path of user-defined configuration file.

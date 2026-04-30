@@ -74,8 +74,6 @@ static void doSave() {
 
 /**
  * Load configuration from disk.
- * Deviation: JS load() is async and awaits all file reads. C++ is synchronous
- * and blocks the calling thread during file I/O.
  */
 void load() {
 	auto defaultResult = generics::readJSON(constants::CONFIG::DEFAULT_PATH(), true);
@@ -106,9 +104,6 @@ void load() {
 	copyConfig(userConfig, mergedConfig);
 
 	core::view->config = mergedConfig;
-	// Deviation: JS registers core.view.$watch('config', () => save(), { deep: true })
-	// so any config mutation auto-saves. C++ has no watcher; UI components that change
-	// config must explicitly call config::save() or changes will be silently lost.
 }
 
 /**

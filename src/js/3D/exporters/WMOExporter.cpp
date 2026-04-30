@@ -1757,12 +1757,10 @@ void WMOExporter::clearCache() {
 	doodadCache.clear();
 }
 
-// C++-only UI-layer convenience method (no JS counterpart).
 void WMOExporter::loadWMO() {
 	wmo->load();
 }
 
-// C++-only UI-layer convenience method (no JS counterpart).
 std::vector<std::string> WMOExporter::getDoodadSetNames() const {
 	std::vector<std::string> names;
 	for (const auto& s : wmo->doodadSets)

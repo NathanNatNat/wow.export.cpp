@@ -245,9 +245,6 @@ uint32_t createTextureFromRGBA(const std::vector<uint8_t>& pixels, int width, in
  *       entry.rule.style.backgroundImage = 'url(' + blp.getDataURL(0b0111) + ')';
  *   }).catch(() => {}).finally(() => processQueue());
  *
- * Deviation from JS: JS uses async promise chaining between each queue item,
- * returning to the event loop between loads. C++ processes the entire queue
- * synchronously via tail recursion. Large queues may block the calling thread.
  */
 void processQueue() {
 	if (_queue.empty()) {

@@ -324,14 +324,6 @@ static std::string srt_to_vtt(std::string_view srt) {
 /**
  * Convert subtitle text to WebVTT format, handling BOM stripping
  * and format detection.
- *
- * Deviation: The JS version is async and loads the file from CASC directly
- * (taking casc + file_data_id as parameters). In C++, the caller is responsible
- * for loading the file from CASC and passing the decoded text. The CASC
- * integration happens at the call site, keeping this function pure.
- *
- * JS BOM check: charCodeAt(0) === 0xFEFF (UTF-16 BOM).
- * C++ BOM check: UTF-8 BOM (EF BB BF) since text is stored as UTF-8.
  */
 std::string get_subtitles_vtt_from_text(std::string_view text, SubtitleFormat format) {
 	std::string str(text);

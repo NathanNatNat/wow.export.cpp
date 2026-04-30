@@ -510,10 +510,6 @@ FieldValue DBCReader::_read_field(FieldType field_type) {
 		case FieldType::UInt16: return static_cast<uint64_t>(data->readUInt16LE());
 		case FieldType::Int32: return static_cast<int64_t>(data->readInt32LE());
 		case FieldType::UInt32: return static_cast<uint64_t>(data->readUInt32LE());
-		// Deviation from JS: convert_dbd_to_schema_type can yield Int64/UInt64 for 64-bit
-		// fields (size:64 in DBD). JS DBCReader silently falls through to readUInt32LE,
-		// truncating the value. We instead read the full 64 bits to preserve fidelity to
-		// the underlying DBC data.
 		case FieldType::Int64: return data->readInt64LE();
 		case FieldType::UInt64: return data->readUInt64LE();
 		case FieldType::Float: return data->readFloatLE();

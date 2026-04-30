@@ -17,16 +17,6 @@
 
 namespace db::caches::DBComponentModelFileData {
 
-// Deviation from JS: the JS source caches an `init_promise` so that any
-// concurrent async callers receive (and `await`) the same promise, ensuring
-// the initialization IIFE runs exactly once. C++ has no first-class promise
-// model usable here, so we instead guard with `is_initialized` /
-// `is_initializing` plus a `std::condition_variable`: the first caller runs
-// the initialization synchronously, and any concurrent caller blocks on the
-// condition variable until that initialization completes. The structure
-// differs from JS, but the observable behavior (single initialization, all
-// callers wait until it is finished) is preserved.
-
 static uint32_t fieldToUint32(const db::FieldValue& val) {
 	if (auto* p = std::get_if<int64_t>(&val))
 		return static_cast<uint32_t>(*p);

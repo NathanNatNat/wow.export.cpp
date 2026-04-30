@@ -519,10 +519,6 @@ void CASC::parseEncodingFile(BufferWrapper data, const std::string& hash) {
 		const size_t pageStart = pagesStart + (static_cast<size_t>(cKeyPageSize) * i);
 		encoding.seek(pageStart);
 
-		// Deviation: The original JS source has a bug here, comparing against
-		// `pageStart + pagesStart` instead of `pageStart + cKeyPageSize`. This
-		// C++ port uses the correct page-size bound so each page terminates at
-		// the proper page boundary rather than at an unrelated absolute offset.
 		while (encoding.offset() < (pageStart + static_cast<size_t>(cKeyPageSize))) {
 			const uint8_t keysCount = encoding.readUInt8();
 			if (keysCount == 0)

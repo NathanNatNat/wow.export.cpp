@@ -814,9 +814,6 @@ void renderStatusBar(const std::string& unittype,
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f);
 	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3.0f);
 
-	// JS deviation: CSS `.list-status { font-weight: bold }` is not replicated
-	// — only one font is loaded; per CLAUDE.md Visual Fidelity rules, exact
-	// font weights need not match.
 	ImGui::TextUnformatted(statusText.c_str());
 
 	// Quick filters.

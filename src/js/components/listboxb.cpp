@@ -27,11 +27,6 @@ namespace listboxb {
  * Reactive instance data.
  */
 // data: scroll, scrollRel, isScrolling, slotCount, lastSelectItem — stored in ListboxBState
-// JS deviation: JS stores actual item objects in `selection` and `lastSelectItem` and uses
-// `.indexOf(item)` for reference equality. C++ stores integer indices because there is no
-// equivalent of JS reference-equality for arbitrary item objects; this index-based contract
-// is exposed publicly, so all callers (and shift-range/selectItem logic) work with indices.
-
 /**
  * Invoked when the component is mounted.
  * Used to register global listeners and resize observer.
@@ -164,18 +159,11 @@ static void handleKey(const std::vector<ListboxBItem>& items, const std::vector<
 		return;
 
 	// User hasn't selected anything in the listbox yet.
-	// JS deviation: JS uses `if (!this.lastSelectItem)`, which is also true for index 0
-	// (`!0 === true`) and silently blocks arrow-key navigation when item 0 was last selected.
-	// C++ uses `< 0` against the sentinel so navigation works correctly at index 0.
 	if (state.lastSelectItem < 0)
 		return;
 
 	if (ImGui::IsKeyPressed(ImGuiKey_C) && io.KeyCtrl) {
 		// Copy selection to clipboard.
-		// JS deviation: JS does `this.selection.join('\n')` on item objects, which produces
-		// `[object Object]` per item (item objects have no custom `toString`). C++ deliberately
-		// looks up each selected index and copies `items[idx].label` because that is what users
-		// actually want — the JS behavior is effectively a bug.
 		std::string clipText;
 		for (size_t i = 0; i < selection.size(); ++i) {
 			if (i > 0) clipText += '\n';

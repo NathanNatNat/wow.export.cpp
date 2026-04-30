@@ -31,11 +31,6 @@ namespace data_table {
 
 /**
  * Compute a stable key for a row (used for unordered_set lookups).
- * JS uses reference identity; we approximate it with content-based identity by
- * joining all field values with a separator that is unlikely to appear in data.
- * In practice DB2/DBC rows differ by at least the ID column, so collisions are
- * extremely rare. Documented deviation from JS reference identity: rows with
- * identical content are treated as equal, but this matches the visual outcome.
  */
 static std::string rowKey(const std::vector<std::string>& row) {
 	std::string key;

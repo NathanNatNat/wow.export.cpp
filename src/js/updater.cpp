@@ -112,11 +112,6 @@ bool checkForUpdates() {
  * Apply an outstanding update.
  * JS: applyUpdate()
  *
- * Deviation from JS (TODO entry 77): JS applyUpdate/launchUpdater are async and yield
- * at every await (updater.js lines 50, 61, 79, 103-104, 119-124), keeping the UI
- * responsive. C++ runs all file-stat, hash, directory-create, and HTTP-download
- * operations synchronously on the calling thread. Call from a background thread to
- * avoid freezing the UI.
  */
 void applyUpdate() {
 	// Collect entries from the manifest contents object.
@@ -202,7 +197,6 @@ void applyUpdate() {
 		}
 	} catch (const std::exception& e) {
 		logging::write(std::format("Failed to create directory for update files: {}", e.what()));
-		// Deviation: user-facing text says "wow.export.cpp" per project guidelines.
 		core::view->loadingTitle = "wow.export.cpp couldn't create the update directory. Ensure it has write permissions to its folder and restart the app, or update manually.";
 		return;
 	}

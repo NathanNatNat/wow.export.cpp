@@ -1033,9 +1033,6 @@ void BufferWrapper::writeBuffer(std::span<const uint8_t> buf, size_t copyLength)
 if (copyLength == 0)
 copyLength = buf.size();
 else if (buf.size() <= copyLength) {
-// NOTE: Matches JS bug — original JS creates `new Error(...)` without `throw`,
-// so the error is silently discarded. We replicate the same no-op behavior here.
-// (JS source: buffer.js line 917)
 }
 
 _checkBounds(copyLength);

@@ -36,12 +36,6 @@ static bool is_initializing = false;
 static std::mutex init_mutex;
 static std::condition_variable init_cv;
 
-// Structural deviation from JS (TODO 336): JS uses `init_promise` to coalesce
-// concurrent callers onto a single in-flight Promise. C++ uses `is_initializing`
-// + `std::condition_variable` to serialize concurrent calls — the first caller
-// runs initialization while subsequent callers block waiting on the condvar.
-// Behaviour is functionally equivalent: only one initialization runs and all
-// concurrent callers receive the result.
 void initialize() {
 {
 std::unique_lock lock(init_mutex);

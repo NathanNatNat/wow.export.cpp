@@ -237,7 +237,6 @@ return;
 
 // Use build manifest constants for generator string, matching JS:
 // util.format('wow.export v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid)
-// Per CLAUDE.md, user-facing text says "wow.export.cpp" (intentional deviation from JS).
 const std::string generator = std::format("wow.export.cpp v{} {} [{}]",
 	constants::VERSION, constants::FLAVOUR, constants::BUILD_GUID);
 json root = {

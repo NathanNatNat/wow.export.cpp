@@ -97,11 +97,6 @@ BLPImage::BLPImage(BufferWrapper data)
 	}
 }
 
-// Deviation: JS toCanvas() and drawToCanvas() create/draw on HTML <canvas> elements
-// (browser-specific) and are intentionally absent from this C++ port — there is
-// no DOM canvas to draw onto. Their pixel-decoding role is replaced by toPNG()
-// and direct pixel buffer writing (toBuffer, toUInt8Array). getDataURL() calls
-// toPNG() then BufferWrapper::getDataURL() to produce an equivalent data URL.
 std::string BLPImage::getDataURL(uint8_t mask, int mipmap) {
 	BufferWrapper pngBuf = toPNG(mask, mipmap);
 	return pngBuf.getDataURL();
@@ -199,8 +194,6 @@ BufferWrapper BLPImage::toBuffer(int mipmap, uint8_t mask) {
 		case 1: return _getUncompressed(nullptr, mask);
 		case 2: return _getCompressed(nullptr, mask);
 		case 3: return _marshalBGRA(nullptr, mask);
-		// Deviation: JS has no default case (returns undefined for unknown encodings).
-		// C++ returns an empty BufferWrapper for type safety.
 		default: return BufferWrapper();
 	}
 }
@@ -231,9 +224,6 @@ uint8_t BLPImage::_getAlpha(int index) const {
 			return (byte & (0x01 << (index % 8))) == 0 ? 0x00 : 0xFF;
 
 		case 4:
-			// Deviation: JS `index / 2` produces a float (e.g. 3/2=1.5), causing
-			// rawData[1.5] to return undefined for odd indices, yielding incorrect
-			// alpha of 0. C++ integer division floors correctly, fixing this JS bug.
 			byte = rawData_[scaledLength_ + (index / 2)];
 			return static_cast<uint8_t>((index % 2 == 0) ? ((byte & 0x0F) << 4) : (byte & 0xF0));
 
@@ -263,9 +253,6 @@ BufferWrapper BLPImage::_getCompressed(uint8_t* canvasData, uint8_t mask) {
 		for (uint32_t x = 0, sw = scaledWidth_; x < sw; x += 4) {
 			int blockPos = 0;
 
-			// Deviation: JS uses strict equality (=== pos) to skip only when pos
-			// exactly equals rawData length. C++ uses >= for safety, which also
-			// handles the case where pos exceeds rawData size (defensive guard).
 			if (static_cast<size_t>(pos) >= rawData_.size())
 				continue;
 
@@ -279,16 +266,6 @@ BufferWrapper BLPImage::_getCompressed(uint8_t* canvasData, uint8_t mask) {
 			uint16_t a = unpackColour(rawData_, colourIndex, 0, colours, 0);
 			uint16_t b = unpackColour(rawData_, colourIndex, 2, colours, 4);
 
-			// Deviation: JS stores float64 values in a plain Array and later writes them
-			// to a Uint8ClampedArray (canvas ImageData), which applies ToUint8Clamp
-			// (round-half-to-even). C++ uses integer division (truncates toward zero).
-			// For `/2` with an odd sum, e.g. (c+d)=65, JS rounds 32.5 to 32 (even),
-			// C++ produces 32 — same here. But for (c+d)=123: JS rounds 61.5 to 62
-			// (even), C++ gives 61. For `/3` e.g. 155/3=51.67: JS rounds to 52, C++
-			// gives 51. Difference is at most 1 LSB and is visually imperceptible.
-			// Note: the same truncation-vs-rounding distinction applies to the DXT5
-			// alpha-interpolation below, where JS uses explicit `| 0` truncation —
-			// matching C++ integer division — so DXT5 alpha values agree exactly.
 			for (int i = 0; i < 3; i++) {
 				int c = colours[i];
 				int d = colours[i + 4];

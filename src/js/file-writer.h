@@ -39,12 +39,6 @@ public:
 	/**
 	 * Write a line to the file.
 	 * @param line The line to write (newline appended automatically).
-	 *
-	 * JS: async — suspends the caller only when Node stream signals backpressure.
-	 * C++: std::ofstream has no backpressure concept; each write is synchronous
-	 * under a mutex. This is a known deviation: writes never suspend the caller,
-	 * but data is always flushed to the OS buffer before returning — equivalent
-	 * behaviour for all callers in practice.
 	 */
 	void writeLine(std::string_view line);
 

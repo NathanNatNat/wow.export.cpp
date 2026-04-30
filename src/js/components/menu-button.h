@@ -54,11 +54,6 @@ struct MenuButtonState {
  */
 void render(const char* id, const std::vector<MenuOption>& options,
             const std::string& defaultVal, bool disabled, bool dropdown,
-            // JS deviation: C++-only extension. JS `props` are
-            // `['options', 'default', 'disabled', 'dropdown']` — no `upward`.
-            // The no-upward overload (below) preserves the JS contract; this
-            // overload supports popup-above-button positioning needed by some
-            // C++ call sites.
             bool upward,
             MenuButtonState& state,
             const std::function<void(const std::string&)>& onChange,

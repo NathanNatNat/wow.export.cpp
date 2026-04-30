@@ -1560,11 +1560,6 @@ static void initialize() {
 		// toLowerCase equivalent
 		std::transform(name_a.begin(), name_a.end(), name_a.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		std::transform(name_b.begin(), name_b.end(), name_b.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-		// DEVIATION: JS uses `localeCompare` (Unicode-aware, locale-sensitive ICU collation). The C++ port
-		// performs a byte-wise comparison on lowercased UTF-8 strings, which matches JS for ASCII names but
-		// may diverge for non-ASCII characters (accents, scripts). A faithful port would require ICU or
-		// equivalent collation data, which is not currently a project dependency. Creature names in WoW
-		// data are predominantly ASCII, so this is a corner-case difference.
 		return name_a < name_b;
 	});
 

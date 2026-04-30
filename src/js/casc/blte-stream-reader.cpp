@@ -157,15 +157,10 @@ BufferWrapper BLTEStreamReader::_decryptBlock(BufferWrapper& data, size_t index)
 	return instance.process(encData);
 }
 
-// Deviation: JS uses the Web Streams API ReadableStream with controller.error()/controller.close()
-// signalling. C++ exposes a simpler pull/cancel object — errors propagate as exceptions and the
-// end-of-stream is indicated by pull() returning std::nullopt.
 BLTEStreamReader::ReadableStream BLTEStreamReader::createReadableStream() {
 	return ReadableStream(this);
 }
 
-// Deviation: JS uses an `async *` generator (yields each block). C++ uses a callback because
-// C++20 coroutines are not used in this codebase.
 void BLTEStreamReader::streamBlocks(const std::function<void(BufferWrapper&)>& callback) {
 	streamBlocksAsync(callback).get();
 }

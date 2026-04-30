@@ -424,15 +424,6 @@ void MDXLoader::parse_ATCH() {
 		attachment.path = this->_read_string(FILE_NAME_LENGTH);
 		attachment.visibility = 1.0f;
 
-		// check for KVIS
-		// Intentional divergence from JS to fix a JS bug.
-		// JS reference: src/js/3D/loaders/MDXLoader.js line 404 reads
-		//   if (this.data.offset < startPos + this.data.readUInt32LE(-4)) { ... }
-		// `readUInt32LE(-4)` passes a negative offset to Node's Buffer API,
-		// which throws RangeError at runtime, so the JS code path is broken.
-		// The intent (recoverable from context) is to compare against the
-		// per-entry size word that was read at the top of the loop; we keep
-		// that value in `attachmentSize` and use it directly.
 		if (this->data.offset() < startPos + attachmentSize) {
 			const std::string keyword = this->_read_keyword();
 			if (keyword == "KVIS")

@@ -129,28 +129,26 @@ Most dependencies are git submodules in `extern/`. CMake manages them automatica
 ### Protected Files
 The following files **must not be deleted, renamed, or moved** under any circumstances unless the user explicitly requests it. Do not delete them as part of "cleanup" commits, do not delete them when their contents appear obsolete, and do not delete them when their stated purpose seems "complete":
 - **`audit_tracker.md`** — Historical audit log. Persistent reference, not a transient working file.
+- **`DEVIATIONS.md`** — JS-to-C++ deviation log. Must be updated whenever a deviation is introduced or resolved.
 - **`TODO_TRACKER.md`** — Active TODO log.
 - **`UI_REFERENCE.md`** — UI layout reference.
 
 If you believe one of these files should be removed, **ask first**. Do not act unilaterally.
 
 ### Intentional Stubs
-The following files are intentionally left as documented stubs and do **not** need to be implemented:
-- **`src/js/components/home-showcase.cpp`** — `render()` is a no-op. The JS component renders a rotating image showcase with background-layer compositing, optional video playback, and Refresh/Feedback links. The full JS template is documented in the file header.
-- **`src/js/modules/tab_home.cpp`** — `renderHomeLayout()` is a no-op. The JS template renders a two-column grid: HomeShowcase on the left, whatsNewHTML panel on the right, and Discord/GitHub/Patreon help-button cards at the bottom. The full JS layout is documented in the file header.
-
-Do **not** add TODO entries for these files. Do **not** implement them unless explicitly asked.
+The following files are intentionally left as no-op stubs. Do **not** add TODO entries for them. Do **not** implement them unless explicitly asked. See [`DEVIATIONS.md`](DEVIATIONS.md) entries S1–S2 for details on what the JS originals do.
+- **`src/js/components/home-showcase.cpp`**
+- **`src/js/modules/tab_home.cpp`**
 
 ### Removed Files
-The following files have been deliberately removed from the C++ build and do **not** need to be re-added unless explicitly asked:
-- **`src/js/modules/tab_help.cpp`** / **`tab_help.h`** — Removed. JS original: `src/js/modules/tab_help.js`. Rendered a searchable knowledge-base article browser backed by a markdown viewer.
-- **`src/js/modules/tab_changelog.cpp`** / **`tab_changelog.h`** — Removed. JS original: `src/js/modules/tab_changelog.js`. Rendered the app changelog as scrollable markdown.
-- **`src/js/components/markdown-content.cpp`** / **`markdown-content.h`** — Removed. JS original: `src/js/components/markdown-content.js`. Shared ImGui markdown renderer used by tab_help and tab_changelog.
-
-These removals also entailed: unregistering both modules from `modules.cpp`; removing `"tab_help"` and `"tab_changelog"` from `CONTEXT_MENU_ORDER` in `constants.h` (size reduced 12→10); removing the help-button click handler from `app.cpp`. See TODO entry 604 for restoration instructions.
+The following files have been deliberately removed from the C++ build. Do **not** re-add unless explicitly asked. See [`DEVIATIONS.md`](DEVIATIONS.md) entries R2–R4 for details and TODO entry 604 for restoration instructions.
+- **`src/js/modules/tab_help.cpp`** / **`tab_help.h`**
+- **`src/js/modules/tab_changelog.cpp`** / **`tab_changelog.h`**
+- **`src/js/components/markdown-content.cpp`** / **`markdown-content.h`**
 
 ### Removed Features
-- **"Reload Styling" context menu option** — Removed. JS original: `src/app.js` lines 160–164, registered at line 550. The JS version hot-reloads CSS `<link>` tags with cache-busting query strings — a dev tool with no C++ equivalent since ImGui has no external stylesheets. Entailed: removing the `reloadStylesheet()` function from `app.cpp`, the `"reload-style"` registration, and `"reload-style"` from `CONTEXT_MENU_ORDER` in `constants.h` (size reduced 10→9).
+The following features have been deliberately removed. Do **not** re-add unless explicitly asked. See [`DEVIATIONS.md`](DEVIATIONS.md) entry R1 for details.
+- **"Reload Styling" context menu option**
 
 ### General Conversion Fidelity
 - Conversions must be fully comprehensive — every function, method, constant, code path, and UI element from the JS source must be ported.
@@ -158,7 +156,8 @@ These removals also entailed: unregistering both modules from `modules.cpp`; rem
 - The intentional stubs listed under **Intentional Stubs** above are exceptions to this rule.
 - Always do a thorough comparison against the original JS source when making changes or reviewing code.
 - **Existing C++ code is not assumed correct.** Much of the codebase has already been converted, but previous conversions may contain errors, omissions, or deviations from the original JS source. When working on any file, always verify the existing C++ code against the original JS and fix any issues found.
-- Deviations from the original JS source are strongly discouraged. Only deviate when a direct port is genuinely impossible in C++. In such cases, document the deviation with a comment explaining why it was necessary and how it differs from the original JS behavior.
+- Deviations from the original JS source are strongly discouraged. Only deviate when a direct port is genuinely impossible in C++. In such cases, document the deviation in [`DEVIATIONS.md`](DEVIATIONS.md) — **not** in code comments. Every deviation must have an entry in `DEVIATIONS.md` with the C++ file, JS source reference, reason, and impact.
+- **No deviation comments in code.** Do not add inline comments that describe how the C++ code differs from the JS source, explain why a deviation was necessary, reference JS behaviour, or document JS bugs being fixed/replicated. All such documentation belongs exclusively in [`DEVIATIONS.md`](DEVIATIONS.md). The C++ source should read as clean code with no JS comparison commentary.
 - Things that cannot be completed immediately should be documented in `TODO_TRACKER.md`. Do not let documentation overhead block forward progress — implement what you can, then document what remains.
 
 ### Visual Fidelity
@@ -169,7 +168,7 @@ These removals also entailed: unregistering both modules from `modules.cpp`; rem
 - The **exact colors, shadows, gradients, fonts, and pixel-level styling** of the JS app do **not** need to be replicated. Use ImGui's default rendering and standard widget appearance throughout. The goal is a clean, natively-styled ImGui application that is easy to theme later — not a CSS replica.
 - Do **not** add `PushStyleColor`/`PushStyleVar`/`ImDrawList` calls solely to match specific CSS values from `app.css`. Remove existing ones progressively as files are touched.
 - [`UI_REFERENCE.md`](UI_REFERENCE.md) is useful for understanding the **layout structure** (what controls exist, in what order) but should **not** be used as a color or style target.
-- If a **layout element** cannot be replicated in Dear ImGui, document the deviation in a code comment and in `TODO_TRACKER.md`.
+- If a **layout element** cannot be replicated in Dear ImGui, document the deviation in [`DEVIATIONS.md`](DEVIATIONS.md) and in `TODO_TRACKER.md`.
 
 ### TODO_TRACKER.md Format
 Entries are **numbered sequentially** and **ordered by number** (no section headers). When adding a new entry, increment from the last existing number and append at the end:

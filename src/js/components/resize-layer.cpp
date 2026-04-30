@@ -41,12 +41,6 @@ void render(const char* id, ResizeLayerState& state,
 	if (currentWidthInt != prevWidthInt) {
 		state.prevWidth = currentWidth;
 		if (onResize)
-			// JS deviation: JS emits `this.$el.clientWidth` which is always an integer
-			// pixel count. C++ passes the raw float from `ImGui::GetContentRegionAvail().x`.
-			// Callers that need integer semantics should `static_cast<int>` the value
-			// (which is already done internally for the change-detection comparison via
-			// `currentWidthInt`); the float is forwarded as-is to preserve sub-pixel
-			// precision in case any callee wants it.
 			onResize(currentWidth);
 	}
 

@@ -331,11 +331,6 @@ BusyLock create_busy_lock() {
 /**
  * Show loading screen with specified number of progress steps.
  * Thread-safe: posts UI state changes to the main-thread queue.
- *
- * Deviation from JS: In JS, showLoadingScreen() sets state synchronously
- * on the current event loop turn. In C++, we post to the main-thread queue
- * because this may be called from a background thread. This introduces a
- * one-frame delay, which is a necessary platform adaptation for thread safety.
  */
 void showLoadingScreen(int segments, const std::string& title) {
 	loading_progress_segments = segments;
@@ -351,12 +346,6 @@ void showLoadingScreen(int segments, const std::string& title) {
 /**
  * Advance loading screen progress by one step.
  * Thread-safe: posts UI state changes to the main-thread queue.
- *
- * Deviation from JS: JS calls `await generics.redraw()` to force an immediate
- * UI repaint so progress is visible. In C++/ImGui, repaint happens on every
- * frame tick in the main loop. The postToMainThread() ensures state is updated
- * before the next frame renders, but there is no explicit forced redraw.
- * This is a necessary platform adaptation (ImGui is immediate-mode).
  */
 void progressLoadingScreen(const std::string& text) {
 	loading_progress_value++;
