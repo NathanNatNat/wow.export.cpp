@@ -931,3 +931,13 @@ C++ additions with no JS counterpart.
 - **JS Source**: `src/js/modules/tab_decor.js` lines 497-506
 - **Reason**: JS `return entry` passes non-string entries through unchanged. In practice, `selectionDecor` only ever contains formatted display strings; the non-string fallback is dead code. C++ correctly processes string entries and skips the unreachable non-string path.
 - **Impact**: None — dead code path in both JS and C++.
+
+### DG4. [tab_maps.cpp] collect_game_objects uses std::vector instead of Set
+- **JS Source**: `src/js/modules/tab_maps.js` lines 127-144
+- **Reason**: JS stores game objects in `Map<number, Set>` where `Set` provides reference-identity uniqueness. C++ uses `std::unordered_map<uint32_t, std::vector<db::DataRecord>>`. `DataRecord` is a `std::map<std::string, FieldValue>` with no `std::hash` specialisation, so `std::unordered_set` cannot be used. JS `Set` deduplicates by reference identity (not value equality), and DB2 rows are iterated once with no duplicates, so the vector is functionally equivalent.
+- **Impact**: None in practice — DB2 rows are unique objects from `getAllRows()`.
+
+### DG5. [tab_models_legacy.cpp] Missing stack trace log line in preview_model error handler
+- **JS Source**: `src/js/modules/tab_models_legacy.js` lines 186-187
+- **Reason**: JS logs `e.stack` as a second line after the error message. C++ exceptions do not carry stack traces without a third-party library (e.g. Boost.Stacktrace). Adding such a dependency is not justified for a single log line.
+- **Impact**: Slightly less diagnostic information on preview failure in C++. The error message itself is still logged.

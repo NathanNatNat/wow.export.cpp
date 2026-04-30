@@ -853,6 +853,7 @@ void render() {
 								view.legacyModelViewerAnimFrameCount = active_renderer_m2->get_animation_frame_count();
 							} else if (active_renderer_mdx) {
 								active_renderer_mdx->playAnimation(m2_index);
+								view.legacyModelViewerAnimFrameCount = active_renderer_mdx->get_animation_frame_count();
 							}
 						}
 					}

@@ -1,47 +1,7 @@
 # TODO Tracker
 
-> **Progress: 0/15 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/5 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
-- [ ] 131. [tab_fonts.cpp] Filter input missing placeholder text "Filter fonts..."
-  - **JS Source**: `src/js/modules/tab_fonts.js` line 61
-  - **Status**: Pending
-  - **Details**: The JS template uses `placeholder="Filter fonts..."` on the filter input. The C++ code at line 304 uses `ImGui::InputText("##FilterFonts", ...)` without any hint text. Other tabs in the codebase correctly use `ImGui::InputTextWithHint`. Fix: replace `ImGui::InputText` with `ImGui::InputTextWithHint` and pass "Filter fonts..." as the hint.
-- [ ] 132. [tab_fonts.cpp] Export path dir check `dir == "."` does not match Node.js path.dirname behavior
-  - **JS Source**: `src/js/modules/tab_fonts.js` lines 124–126
-  - **Status**: Pending
-  - **Details**: JS `path.dirname("test.ttf")` returns "." for bare filenames. C++ `std::filesystem::path("test.ttf").parent_path().string()` returns "" (empty string). The C++ check at line 439 `dir == "."` would never match for bare filenames. Fix (as already done in tab_raw.cpp): use `dir.empty() || dir == "."`.
-- [ ] 133. [tab_maps.cpp] export_map_wmo_minimap tile compositing ignores draw offsets
-  - **JS Source**: `src/js/modules/tab_maps.js` lines 723–733
-  - **Status**: Pending
-  - **Details**: JS uses `ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, draw_x, draw_y, draw_width, draw_height)` which positions each tile at its drawX/drawY offset within the grid cell and scales it to draw_width/draw_height. The C++ (lines 989–1014) samples directly from the BLP without any draw offset, meaning all tiles in a grid cell are drawn at (0,0) rather than at their correct sub-pixel position. The `tile.drawX` and `tile.drawY` values are completely ignored during export compositing. This would cause incorrect WMO minimap exports where tiles don't align properly within grid cells.
-- [ ] 134. [tab_maps.cpp] load_wmo_minimap_tile uses blp.width instead of scaledWidth
-  - **JS Source**: `src/js/modules/tab_maps.js` lines 103–104
-  - **Status**: Pending
-  - **Details**: JS does `const canvas = blp.toCanvas(0b1111)` and uses `canvas.width`/`canvas.height` which reflect the decoded/scaled dimensions. The C++ (line 292) uses `blp.width` and `blp.height` directly. If BLP has mipmaps and scaledWidth differs from width, the compositing will sample incorrectly. The terrain tile loader (load_map_tile) correctly uses `blp.getScaledWidth()`/`blp.getScaledHeight()`, so this appears to be an oversight specific to the WMO minimap tile loader.
-- [ ] 135. [tab_maps.cpp] mounted() does not call initialize() — deferred to render()
-  - **JS Source**: `src/js/modules/tab_maps.js` lines 1132–1146
-  - **Status**: Pending
-  - **Details**: JS mounted() calls `await this.initialize()` which loads DB2 tables, builds the map list, and shows/hides loading screens. C++ mounted() (line 1582–1588) only sets state and defers initialization to the first render() call via a lazy-init pattern. The timing differs: JS initializes when the component mounts, while C++ initializes on first render frame. This could cause a brief flash of empty content or different loading screen behavior.
-- [ ] 136. [tab_maps.cpp] collect_game_objects uses std::vector instead of Set for storage
-  - **JS Source**: `src/js/modules/tab_maps.js` lines 127–144
-  - **Status**: Pending
-  - **Details**: JS stores game objects in a `Map<number, Set>` where Set provides reference-identity uniqueness. C++ (line 112) uses `std::unordered_map<uint32_t, std::vector<db::DataRecord>>` — a vector has no uniqueness guarantee. If the same row appears multiple times in getAllRows(), it would be duplicated. Unlikely to cause practical issues since DB2 rows are iterated once, but deviates from JS semantics.
-- [ ] 137. [tab_maps.cpp] export_map_wmo_minimap condition check differs from JS
-  - **JS Source**: `src/js/modules/tab_maps.js` lines 695–697
-  - **Status**: Pending
-  - **Details**: JS checks `if (!selected_wdt || !selected_wdt.worldModelPlacement)` — testing if WDT exists and has a worldModelPlacement property. C++ (line 951) checks `if (!selected_wdt || (!selected_wdt->hasWorldModelPlacement && selected_wdt->worldModel.empty()))` — adding an extra worldModel check. This means the C++ will attempt setup_wmo_minimap even when there's no worldModelPlacement if there IS a worldModel string, which the JS version would not do.
-- [ ] 138. [tab_models.cpp] Drop handler wraps files as JSON objects instead of plain strings
-  - **JS Source**: `src/js/modules/tab_models.js` lines 587, 213
-  - **Status**: Pending
-  - **Details**: In the JS, the drop handler's process callback receives an array of file path strings and passes them directly to export_files(). Inside export_files, the file_entry is used as a plain string for listfile.stripFileEntry(). In the C++ (lines 658–667), the drop handler wraps each file path in a JSON object: `entry["fileName"] = file;` (creating `{"fileName": "path"}`), then passes these objects to export_files(). Inside pump_export_task() (line 775–783), the code attempts `file_entry.get<std::string>()` which will throw because the entry is a JSON object, not a string. Every file dropped onto the models tab would fail to export. Fix: use `entries.push_back(nlohmann::json(file))` instead of wrapping in an object.
-- [ ] 139. [tab_models_legacy.cpp] Missing stack trace log line in preview_model error handler
-  - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 186–187
-  - **Status**: Pending
-  - **Details**: The JS logs two lines on preview failure: `log.write('Failed to load legacy model: %s', e.message)` and `log.write(e.stack)`. The C++ at line 291 only logs the error message, omitting the second log line for the stack trace. While C++ exceptions don't inherently carry stack traces, the JS behaviour of logging two lines is not replicated.
-- [ ] 140. [tab_models_legacy.cpp] MDX animation frame count not set after playAnimation
-  - **JS Source**: `src/js/modules/tab_models_legacy.js` line 562
-  - **Status**: Pending
-  - **Details**: The JS animation watcher sets `legacyModelViewerAnimFrameCount = active_renderer.get_animation_frame_count?.() || 0` after calling playAnimation(), regardless of whether the renderer is M2 or MDX. In C++ at lines 851–856, the M2 path sets `view.legacyModelViewerAnimFrameCount` (line 853) but the MDX path at line 855 only calls playAnimation() without updating the frame count. Animation scrubbing controls would not know the total frame count for MDX models.
 - [ ] 141. [mpq-install.cpp] getFilesByExtension and getAllFiles add std::sort not present in JS
   - **JS Source**: `src/js/mpq/mpq-install.js` lines 87–120
   - **Status**: Pending

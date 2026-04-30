@@ -301,7 +301,7 @@ void render() {
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterFonts.c_str(), sizeof(filter_buf) - 1);
-		if (ImGui::InputText("##FilterFonts", filter_buf, sizeof(filter_buf)))
+		if (ImGui::InputTextWithHint("##FilterFonts", "Filter fonts...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterFonts = filter_buf;
 	}
 	app::layout::EndFilterBar();
@@ -436,7 +436,7 @@ static void pump_font_export() {
 			const std::string ext = fs::path(file_name).extension().string();
 			const std::string dir = fs::path(file_name).parent_path().string();
 			const std::string file_data_id_name = std::to_string(*file_data_id) + ext;
-			export_file_name = dir == "." ? file_data_id_name : (fs::path(dir) / file_data_id_name).string();
+			export_file_name = (dir.empty() || dir == ".") ? file_data_id_name : (fs::path(dir) / file_data_id_name).string();
 		}
 	}
 

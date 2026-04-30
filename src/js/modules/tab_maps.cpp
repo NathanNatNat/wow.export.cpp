@@ -288,13 +288,9 @@ BufferWrapper data = core::view->casc->getVirtualFileByID(tile.fileDataID, true)
 casc::BLPImage blp(data);
 auto rgba = blp.toUInt8Array(0, 0b1111);
 
-uint32_t blp_w = blp.width;
-uint32_t blp_h = blp.height;
+uint32_t blp_w = blp.getScaledWidth();
+uint32_t blp_h = blp.getScaledHeight();
 
-// JS draws each tile via ctx.drawImage(canvas, 0, 0, blp_w, blp_h,
-//   tile.drawX * output_scale, tile.drawY * output_scale,
-//   blp_w * tile.scaleX * output_scale, blp_h * tile.scaleY * output_scale).
-// Replicate destination-rect blit + alpha compositing.
 const float draw_x = tile.drawX * output_scale;
 const float draw_y = tile.drawY * output_scale;
 const float draw_w = blp_w * tile.scaleX * output_scale;
@@ -948,7 +944,7 @@ helper.start();
 
 try {
 if (!current_wmo_minimap) {
-if (!selected_wdt || (!selected_wdt->hasWorldModelPlacement && selected_wdt->worldModel.empty()))
+if (!selected_wdt || !selected_wdt->hasWorldModelPlacement)
 throw std::runtime_error("map does not contain a world model.");
 
 setup_wmo_minimap(*selected_wdt);
@@ -983,13 +979,23 @@ for (const auto& [coord_key, tile_list] : tiles_by_coord) {
 			BufferWrapper tile_data = core::view->casc->getVirtualFileByID(tile.fileDataID, true);
 			casc::BLPImage blp(tile_data);
 			auto rgba = blp.toUInt8Array(0, 0b1111);
-			uint32_t tw = blp.width;
-			uint32_t th = blp.height;
+			uint32_t tw = blp.getScaledWidth();
+			uint32_t th = blp.getScaledHeight();
 
-			for (int py = 0; py < output_tile_size; py++) {
-				for (int px = 0; px < output_tile_size; px++) {
-					int src_x = (std::min)(static_cast<int>(px * tw / output_tile_size), static_cast<int>(tw) - 1);
-					int src_y = (std::min)(static_cast<int>(py * th / output_tile_size), static_cast<int>(th) - 1);
+			const float draw_x = tile.drawX;
+			const float draw_y = tile.drawY;
+			const float draw_w = static_cast<float>(tw) * tile.scaleX;
+			const float draw_h = static_cast<float>(th) * tile.scaleY;
+
+			const int dst_x0 = (std::max)(0, static_cast<int>(std::floor(draw_x)));
+			const int dst_y0 = (std::max)(0, static_cast<int>(std::floor(draw_y)));
+			const int dst_x1 = (std::min)(output_tile_size, static_cast<int>(std::ceil(draw_x + draw_w)));
+			const int dst_y1 = (std::min)(output_tile_size, static_cast<int>(std::ceil(draw_y + draw_h)));
+
+			for (int py = dst_y0; py < dst_y1; py++) {
+				for (int px = dst_x0; px < dst_x1; px++) {
+					int src_x = (std::min)(static_cast<int>((px - draw_x) * tw / draw_w), static_cast<int>(tw) - 1);
+					int src_y = (std::min)(static_cast<int>((py - draw_y) * th / draw_h), static_cast<int>(th) - 1);
 					int src_idx = (src_y * tw + src_x) * 4;
 					int dst_idx = (py * output_tile_size + px) * 4;
 					uint8_t src_a = rgba[src_idx + 3];
@@ -1582,9 +1588,13 @@ core::postToMainThread([maps = std::move(maps)]() mutable {
 void mounted() {
 core::view->mapViewerTileLoader = "terrain";
 
-// Initialize will be called after tab is shown (lazy init in render)
 tab_initialized = false;
 prev_selection_str.clear();
+
+if (!tab_initializing) {
+tab_initializing = true;
+std::thread(initialize).detach();
+}
 }
 
 // --- ImGui render ---
@@ -1599,11 +1609,6 @@ auto& view = *core::view;
 // Poll for pending async export (one tile per frame).
 pump_map_export();
 
-// Lazy initialization on background thread so the loading screen is visible.
-if (!tab_initialized && !tab_initializing) {
-tab_initializing = true;
-std::thread(initialize).detach();
-}
 if (!tab_initialized)
 return;
 
