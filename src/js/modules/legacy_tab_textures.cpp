@@ -143,7 +143,7 @@ static void preview_texture(const std::string& filename) {
 	} catch (const std::exception& e) {
 		logging::write(std::format("failed to preview legacy texture {}: {}", filename, e.what()));
 		core::setToast("error", "unable to preview texture " + filename,
-			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
+			{ {"view log", []() { logging::openRuntimeLog(); }} }, -1);
 	}
 }
 
@@ -294,7 +294,7 @@ void render() {
 			"texture",// unittype
 			nullptr,  // overrideItems
 			false,    // disable
-			"legacy-textures", // persistscrollkey
+			"textures", // persistscrollkey
 			{".blp", ".png", ".jpg"}, // quickfilters
 			false,    // nocopy
 			legacy_tex_listbox_state,

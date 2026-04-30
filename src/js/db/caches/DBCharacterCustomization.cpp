@@ -72,7 +72,7 @@ static std::map<uint32_t, std::vector<OptionEntry>> options_by_chr_model;
 static std::map<uint32_t, std::vector<ChoiceEntry>> option_to_choices;
 static std::vector<uint32_t> default_options;
 
-static std::unordered_map<uint32_t, uint32_t> chr_model_id_to_file_data_id;
+static std::unordered_map<uint32_t, std::optional<uint32_t>> chr_model_id_to_file_data_id;
 static std::unordered_map<uint32_t, uint32_t> chr_model_id_to_texture_layout_id;
 
 static std::map<uint32_t, ChrRaceInfo> chr_race_map_data;
@@ -186,7 +186,7 @@ static void _initialize() {
 	// ChrModel -> FileDataID, texture layout, options, choices
 	for (const auto& [chr_model_id, chr_model_row] : casc::db2::preloadTable("ChrModel").getAllRows()) {
 		uint32_t displayID = fieldToUint32(chr_model_row.at("DisplayID"));
-		uint32_t file_data_id = DBCreatures::getFileDataIDByDisplayID(displayID).value_or(0);
+		std::optional<uint32_t> file_data_id = DBCreatures::getFileDataIDByDisplayID(displayID);
 
 		chr_model_id_to_file_data_id[chr_model_id] = file_data_id;
 		chr_model_id_to_texture_layout_id[chr_model_id] = fieldToUint32(chr_model_row.at("CharComponentTextureLayoutID"));

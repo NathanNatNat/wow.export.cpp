@@ -276,8 +276,8 @@ const GeosetData* getItemGeosetData(uint32_t item_id, int modifier_id) {
 /**
  * Get ItemDisplayInfoID for an item.
  */
-std::optional<uint32_t> getDisplayId(uint32_t item_id) {
-	return resolve_display_id(item_id);
+std::optional<uint32_t> getDisplayId(uint32_t item_id, int modifier_id) {
+	return resolve_display_id(item_id, modifier_id);
 }
 
 /**

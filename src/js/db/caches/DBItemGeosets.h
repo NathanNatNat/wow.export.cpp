@@ -107,7 +107,7 @@ const GeosetData* getItemGeosetData(uint32_t item_id, int modifier_id = -1);
  * @param item_id Item ID.
  * @returns Display ID, or std::nullopt if not found.
  */
-std::optional<uint32_t> getDisplayId(uint32_t item_id);
+std::optional<uint32_t> getDisplayId(uint32_t item_id, int modifier_id = -1);
 
 /**
  * Calculate geoset visibility changes for equipped items.

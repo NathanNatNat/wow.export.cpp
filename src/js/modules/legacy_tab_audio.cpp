@@ -368,10 +368,10 @@ void render() {
 			copy_mode,
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
-			"sound", // unittype
+			"sound file", // unittype
 			nullptr, // overrideItems
 			false,   // disable
-			"legacy-sounds", // persistscrollkey
+			"sounds", // persistscrollkey
 			{},      // quickfilters
 			false,   // nocopy
 			listbox_state,
@@ -412,7 +412,7 @@ void render() {
 
 	// --- Status bar ---
 	if (app::layout::BeginStatusBar("legacy-sounds-status", regions)) {
-		listbox::renderStatusBar("sound", {}, listbox_state);
+		listbox::renderStatusBar("sound file", {}, listbox_state);
 	}
 	app::layout::EndStatusBar();
 

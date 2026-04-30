@@ -34,7 +34,7 @@ void ensureInitialized();
  * @param item_id Item ID.
  * @returns Vector of model file data IDs, or std::nullopt if not found.
  */
-std::optional<std::vector<uint32_t>> getItemModels(uint32_t item_id);
+std::optional<std::vector<uint32_t>> getItemModels(uint32_t item_id, int modifier_id = -1);
 
 // Shoulder position filter for getItemDisplay (matches JS 'left'/'right'/undefined)
 enum class ShoulderPos { None = 0, Left = 1, Right = 2 };

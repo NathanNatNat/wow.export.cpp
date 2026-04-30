@@ -1,47 +1,7 @@
 # TODO Tracker
 
-> **Progress: 0/38 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/28 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
-- [ ] 108. [DBCReader.cpp] loadSchema() has filesystem fallback cache paths not present in JS
-  - **JS Source**: `src/js/db/DBCReader.js` lines 176–199
-  - **Status**: Pending
-  - **Details**: JS only accesses cache via `core.view.casc?.cache`. C++ (lines 220-225) adds a fallback that reads DBD files directly from the filesystem path `DIR_DBD / cache_key` when no CASC source is available. C++ (lines 250-253) also writes downloaded DBD files to disk when cache is nullptr. These extra paths deviate from the JS behavior.
-- [ ] 109. [DBCReader.cpp] _read_field() reads 8 bytes for Int64/UInt64 vs JS reading 4 bytes
-  - **JS Source**: `src/js/db/DBCReader.js` lines 389–408
-  - **Status**: Pending
-  - **Details**: JS _read_field has no explicit Int64/UInt64 cases — those field types fall through to the default case which calls readUInt32LE() (4 bytes). C++ (lines 513-518) explicitly handles Int64 with readInt64LE() and UInt64 with readUInt64LE() (8 bytes each). This is documented with a comment in the C++ code. While DBC files (pre-Cata) are unlikely to have 64-bit fields, the difference could cause record offset misalignment if such a field is encountered.
-- [ ] 110. [DBCharacterCustomization.cpp] getFileDataIDByDisplayID result mapped to 0 instead of preserving "absent" semantics
-  - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 128–130
-  - **Status**: Pending
-  - **Details**: JS stores the raw return from `getFileDataIDByDisplayID` (which may be `undefined`) into `chr_model_id_to_file_data_id`. The C++ (line 189) uses `.value_or(0)`, converting "no value" into 0. Downstream, `get_model_file_data_id` (JS line 226 / C++ line 359) returns this value — JS returns `undefined` for unknown displays, C++ returns `std::optional(0)`. Callers checking `has_value()` vs checking for `undefined` would behave differently. FileDataID 0 is generally treated as invalid in WoW data so the practical impact is low, but the semantics diverge from the JS original. The fix would be to store `std::optional<uint32_t>` in `chr_model_id_to_file_data_id` and propagate `nullopt` when `getFileDataIDByDisplayID` returns `nullopt`.
-- [ ] 111. [DBItemDisplays.cpp] Extra `getTexturesByDisplayId` function not present in JS source
-  - **JS Source**: `src/js/db/caches/DBItemDisplays.js` (no counterpart)
-  - **Status**: Pending
-  - **Details**: The C++ file adds a `getTexturesByDisplayId` function (cpp lines 117–119, header line 35) that has no counterpart in the JS source. It delegates directly to `DBItemDisplayInfoModelMatRes::getItemDisplayIdTextureFileIds`. This adds API surface that doesn't exist in the original module and deviates from the JS module's exported interface.
-- [ ] 112. [DBItemGeosets.cpp] `getDisplayId` missing `modifier_id` parameter
-  - **JS Source**: `src/js/db/caches/DBItemGeosets.js` lines 277–279
-  - **Status**: Pending
-  - **Details**: The JS function `get_display_id(item_id, modifier_id)` accepts an optional `modifier_id` parameter and forwards it to `resolve_display_id`. The C++ function `getDisplayId(uint32_t item_id)` (cpp lines 279–281, header line 110) only accepts `item_id` and always calls `resolve_display_id(item_id)` with the default value (-1), meaning it never uses a specific modifier. The sister files DBItemModels and DBItemCharTextures both correctly include the `modifier_id` parameter in their `getDisplayId` functions. Fix: add `int modifier_id = -1` parameter to both the header declaration and implementation, and forward it to `resolve_display_id`.
-- [ ] 113. [DBItemModels.cpp] `getItemModels` missing `modifier_id` parameter
-  - **JS Source**: `src/js/db/caches/DBItemModels.js` lines 141–142
-  - **Status**: Pending
-  - **Details**: The JS function `get_item_models(item_id, modifier_id)` accepts an optional `modifier_id` and forwards it to `resolve_display_id`. The C++ version `getItemModels(uint32_t item_id)` (header line 37, cpp line 253) only accepts `item_id` and calls `resolve_display_id(item_id)` without any modifier. This means the C++ version always uses the default modifier resolution (prefer 0, then lowest). Any caller needing models for a specific modifier cannot use this function. Fix: add `int modifier_id = -1` parameter and forward it to `resolve_display_id`.
-- [ ] 114. [legacy_tab_audio.cpp] unittype is "sound" instead of "sound file"
-  - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 204
-  - **Status**: Pending
-  - **Details**: JS template specifies `unittype="sound file"`, which produces status bar text like "42 sound files found." The C++ (line 371 and line 415) uses `"sound"` instead, producing "42 sounds found." Fix: change the unittype string to `"sound file"` in both the listbox render call and the status bar render call.
-- [ ] 115. [legacy_tab_audio.cpp] persistscrollkey is "legacy-sounds" instead of "sounds"
-  - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 204
-  - **Status**: Pending
-  - **Details**: JS template specifies `persistscrollkey="sounds"`. The C++ (line 374) uses `"legacy-sounds"` instead. Scroll position persistence uses a different key name, so scroll positions won't match the JS behavior. Fix: change the persistscrollkey string to `"sounds"`.
-- [ ] 116. [legacy_tab_textures.cpp] persistscrollkey is "legacy-textures" instead of "textures"
-  - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 117
-  - **Status**: Pending
-  - **Details**: JS template specifies `persistscrollkey="textures"`. The C++ (line 297) uses `"legacy-textures"` instead. Scroll position persistence uses a different key name, so scroll positions won't match the JS behavior. Fix: change the persistscrollkey string to `"textures"`.
-- [ ] 117. [legacy_tab_textures.cpp] Toast "View Log" button text uses different casing than JS "view log"
-  - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 68
-  - **Status**: Pending
-  - **Details**: JS uses `'view log'` (all lowercase) for the toast button text. The C++ (line 146) uses `"View Log"` (title case). User-facing text should match the original JS exactly. Fix: change `"View Log"` to `"view log"`.
 - [ ] 118. [module_test_b.cpp] isBusy display shows boolean text instead of numeric counter value
   - **JS Source**: `src/js/modules/module_test_b.js` line 9
   - **Status**: Pending

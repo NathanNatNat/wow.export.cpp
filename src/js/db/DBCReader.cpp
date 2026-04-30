@@ -208,7 +208,6 @@ void DBCReader::loadSchema() {
 		[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
 	std::unique_ptr<DBDParser> dbdParser;
-	std::filesystem::path dbdCachePath = constants::CACHE::DIR_DBD() / cache_key;
 	casc::BuildCache* cache = getActiveCascCache();
 
 	if (cache != nullptr) {
@@ -217,11 +216,6 @@ void DBCReader::loadSchema() {
 			dbdParser = std::make_unique<DBDParser>(cachedRaw.value());
 			structure = dbdParser->getStructure(build_id);
 		}
-	} else if (std::filesystem::exists(dbdCachePath)) {
-		// fallback when no active CASC source is available (e.g. cold startup)
-		BufferWrapper raw_dbd = BufferWrapper::readFile(dbdCachePath);
-		dbdParser = std::make_unique<DBDParser>(raw_dbd);
-		structure = dbdParser->getStructure(build_id);
 	}
 
 	// download if not cached or structure not found
@@ -248,9 +242,6 @@ void DBCReader::loadSchema() {
 			// Store to cache (JS: cache.storeFile with null-safe fallback)
 			if (cache != nullptr) {
 				cache->storeFile(cache_key, raw_dbd, constants::CACHE::DIR_DBD().string());
-			} else {
-				std::filesystem::create_directories(constants::CACHE::DIR_DBD());
-				raw_dbd.writeToFile(dbdCachePath);
 			}
 
 			dbdParser = std::make_unique<DBDParser>(raw_dbd);
@@ -510,8 +501,6 @@ FieldValue DBCReader::_read_field(FieldType field_type) {
 		case FieldType::UInt16: return static_cast<uint64_t>(data->readUInt16LE());
 		case FieldType::Int32: return static_cast<int64_t>(data->readInt32LE());
 		case FieldType::UInt32: return static_cast<uint64_t>(data->readUInt32LE());
-		case FieldType::Int64: return data->readInt64LE();
-		case FieldType::UInt64: return data->readUInt64LE();
 		case FieldType::Float: return data->readFloatLE();
 
 		default:

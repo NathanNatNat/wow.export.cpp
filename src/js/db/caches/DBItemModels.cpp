@@ -250,8 +250,8 @@ static std::optional<uint32_t> resolve_display_id(uint32_t item_id, int modifier
 /**
  * Get model file data IDs for an item (first option per model resource).
  */
-std::optional<std::vector<uint32_t>> getItemModels(uint32_t item_id) {
-	auto disp_id = resolve_display_id(item_id);
+std::optional<std::vector<uint32_t>> getItemModels(uint32_t item_id, int modifier_id) {
+	auto disp_id = resolve_display_id(item_id, modifier_id);
 	if (!disp_id)
 		return std::nullopt;
 
