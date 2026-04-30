@@ -11,6 +11,8 @@
 #include <windows.h>
 #include <dwmapi.h>
 #include <shobjidl.h>
+#include <shellapi.h>
+#include <ole2.h>
 #else
 #include <unistd.h>
 #endif
@@ -1999,16 +2001,12 @@ static nlohmann::json prevActiveModule;
 
 #ifdef _WIN32
 static ITaskbarList3* s_taskbar = nullptr;
-static bool s_com_initialized = false;
 
 static void initTaskbarProgress() {
-	if (SUCCEEDED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED))) {
-		s_com_initialized = true;
-		CoCreateInstance(CLSID_TaskbarList, nullptr, CLSCTX_INPROC_SERVER,
-			IID_ITaskbarList3, reinterpret_cast<void**>(&s_taskbar));
-		if (s_taskbar)
-			s_taskbar->HrInit();
-	}
+	CoCreateInstance(CLSID_TaskbarList, nullptr, CLSCTX_INPROC_SERVER,
+		IID_ITaskbarList3, reinterpret_cast<void**>(&s_taskbar));
+	if (s_taskbar)
+		s_taskbar->HrInit();
 }
 
 static void setTaskbarProgress(GLFWwindow* window, double val) {
@@ -2026,6 +2024,167 @@ static void setTaskbarProgress(GLFWwindow* window, double val) {
 		s_taskbar->SetProgressValue(hwnd, static_cast<ULONGLONG>(val * 10000), 10000);
 	}
 }
+
+static std::vector<std::string> extractFilePathsFromDataObject(IDataObject* pDataObj) {
+	std::vector<std::string> paths;
+	FORMATETC fmt = { CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+	STGMEDIUM stg = {};
+	if (FAILED(pDataObj->GetData(&fmt, &stg)))
+		return paths;
+
+	HDROP hDrop = static_cast<HDROP>(GlobalLock(stg.hGlobal));
+	if (hDrop) {
+		UINT count = DragQueryFileW(hDrop, 0xFFFFFFFF, nullptr, 0);
+		paths.reserve(count);
+		for (UINT i = 0; i < count; ++i) {
+			UINT len = DragQueryFileW(hDrop, i, nullptr, 0);
+			if (len == 0)
+				continue;
+			std::wstring wpath(len, L'\0');
+			DragQueryFileW(hDrop, i, wpath.data(), len + 1);
+			int utf8len = WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+			if (utf8len > 0) {
+				std::string utf8(utf8len - 1, '\0');
+				WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), -1, utf8.data(), utf8len, nullptr, nullptr);
+				paths.push_back(std::move(utf8));
+			}
+		}
+		GlobalUnlock(stg.hGlobal);
+	}
+	ReleaseStgMedium(&stg);
+	return paths;
+}
+
+// IDropTarget implementation for Win32 drag-enter/drag-leave/drop support.
+// JS: window.ondragenter, window.ondragleave, window.ondrop (app.js lines 589-657)
+class WinDropTarget : public IDropTarget {
+	LONG m_refCount = 1;
+	int m_dropStack = 0;
+
+public:
+	HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
+		if (riid == IID_IUnknown || riid == IID_IDropTarget) {
+			*ppv = static_cast<IDropTarget*>(this);
+			AddRef();
+			return S_OK;
+		}
+		*ppv = nullptr;
+		return E_NOINTERFACE;
+	}
+
+	ULONG STDMETHODCALLTYPE AddRef() override { return InterlockedIncrement(&m_refCount); }
+	ULONG STDMETHODCALLTYPE Release() override {
+		LONG ref = InterlockedDecrement(&m_refCount);
+		if (ref == 0)
+			delete this;
+		return ref;
+	}
+
+	// JS: window.ondragenter (app.js lines 590-624)
+	HRESULT STDMETHODCALLTYPE DragEnter(IDataObject* pDataObj, DWORD /*grfKeyState*/,
+		POINTL /*pt*/, DWORD* pdwEffect) override {
+		if (!core::view) {
+			*pdwEffect = DROPEFFECT_NONE;
+			return S_OK;
+		}
+
+		if (core::view->isBusy) {
+			*pdwEffect = DROPEFFECT_NONE;
+			return S_OK;
+		}
+
+		m_dropStack++;
+
+		// Already showing a prompt — don't re-process.
+		if (!core::view->fileDropPrompt.is_null()) {
+			*pdwEffect = DROPEFFECT_COPY;
+			return S_OK;
+		}
+
+		auto files = extractFilePathsFromDataObject(pDataObj);
+		if (!files.empty()) {
+			const DropHandler* handler = core::getDropHandler(files[0]);
+			if (handler) {
+				int count = 0;
+				for (const auto& file : files) {
+					std::string lower = file;
+					std::transform(lower.begin(), lower.end(), lower.begin(),
+						[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+					for (const auto& ext : handler->ext) {
+						if (lower.size() >= ext.size() &&
+							lower.compare(lower.size() - ext.size(), ext.size(), ext) == 0) {
+							count++;
+							break;
+						}
+					}
+				}
+				if (count > 0 && handler->prompt)
+					core::view->fileDropPrompt = handler->prompt(count);
+			} else {
+				core::view->fileDropPrompt = "That file cannot be converted.";
+			}
+		}
+
+		*pdwEffect = DROPEFFECT_COPY;
+		return S_OK;
+	}
+
+	HRESULT STDMETHODCALLTYPE DragOver(DWORD /*grfKeyState*/, POINTL /*pt*/,
+		DWORD* pdwEffect) override {
+		*pdwEffect = DROPEFFECT_COPY;
+		return S_OK;
+	}
+
+	// JS: window.ondragleave (app.js lines 649-657)
+	HRESULT STDMETHODCALLTYPE DragLeave() override {
+		m_dropStack--;
+		if (m_dropStack == 0 && core::view)
+			core::view->fileDropPrompt = nullptr;
+		return S_OK;
+	}
+
+	// JS: window.ondrop (app.js lines 626-647)
+	HRESULT STDMETHODCALLTYPE Drop(IDataObject* pDataObj, DWORD /*grfKeyState*/,
+		POINTL /*pt*/, DWORD* pdwEffect) override {
+		m_dropStack = 0;
+
+		if (core::view)
+			core::view->fileDropPrompt = nullptr;
+
+		if (!core::view || core::view->isBusy) {
+			*pdwEffect = DROPEFFECT_NONE;
+			return S_OK;
+		}
+
+		auto files = extractFilePathsFromDataObject(pDataObj);
+		if (!files.empty()) {
+			const DropHandler* handler = core::getDropHandler(files[0]);
+			if (handler) {
+				std::vector<std::string> include;
+				for (const auto& file : files) {
+					std::string lower = file;
+					std::transform(lower.begin(), lower.end(), lower.begin(),
+						[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+					for (const auto& ext : handler->ext) {
+						if (lower.size() >= ext.size() &&
+							lower.compare(lower.size() - ext.size(), ext.size(), ext) == 0) {
+							include.push_back(file);
+							break;
+						}
+					}
+				}
+				if (!include.empty() && handler->process)
+					handler->process(include);
+			}
+		}
+
+		*pdwEffect = DROPEFFECT_COPY;
+		return S_OK;
+	}
+};
+
+static WinDropTarget* s_dropTarget = nullptr;
+static bool s_ole_initialized = false;
 #endif
 
 static void checkWatchers(GLFWwindow* window) {
@@ -2290,6 +2449,11 @@ int main(int argc, char* argv[]) {
 	glfwSwapInterval(1);
 
 #ifdef _WIN32
+	// OLE initialization (superset of COM) — required for IDropTarget drag-drop
+	// and also provides COM for ITaskbarList3.
+	if (SUCCEEDED(OleInitialize(nullptr)))
+		s_ole_initialized = true;
+
 	// Apply dark title bar to match the app's dark theme.
 	// NW.js/Chromium does this automatically; GLFW windows default to the
 	// OS light theme, making the title bar appear white/light gray.
@@ -2309,6 +2473,18 @@ int main(int argc, char* argv[]) {
 	initTaskbarProgress();
 	// JS: win.setProgressBar(-1); // Reset taskbar progress in-case it's stuck.
 	setTaskbarProgress(window, -1);
+
+	// Register IDropTarget for drag-enter/drag-leave/drop support.
+	// JS: window.ondragenter, window.ondragleave, window.ondrop (app.js lines 589-657)
+	// GLFW only supports glfwSetDropCallback (the "drop" event) — it cannot detect
+	// drag-enter or drag-leave. Registering a COM IDropTarget on the HWND provides
+	// full drag-drop lifecycle events so the fileDropPrompt overlay works during hover.
+	{
+		HWND hwnd = glfwGetWin32Window(window);
+		DragAcceptFiles(hwnd, FALSE);
+		s_dropTarget = new WinDropTarget();
+		RegisterDragDrop(hwnd, s_dropTarget);
+	}
 #endif
 
 	// Load OpenGL function pointers via GLAD2.
@@ -2422,20 +2598,13 @@ int main(int argc, char* argv[]) {
 	casc::listfile::preloadAsync();
 	casc::dbd_manifest::preload();
 
-	// Set-up proper drag/drop handlers.
+	// Set-up drag/drop handlers.
 	// JS: window.ondragenter, window.ondrop, window.ondragleave (app.js lines 589-660)
-	// JS uses a dropStack counter to track nested dragenter/dragleave events and
-	// shows a fileDropPrompt overlay (e.g. "Export N files as ...") while the user
-	// is hovering files over the window, before they release (drop).
-	//
-	// GLFW platform limitation: GLFW only provides glfwSetDropCallback (fires on
-	// actual file drop). There are no drag-enter or drag-leave callbacks. This
-	// means the proactive file-drop prompt overlay cannot be shown during drag-over.
-	// Implementing this would require platform-specific native APIs:
-	//   - Windows: COM IDropTarget (DragEnter/DragOver/DragLeave/Drop)
-	//   - Linux: X11 XDnD protocol or Wayland data-device events
-	// The drop itself (ondrop handler) is fully ported in glfw_drop_callback.
+	// Windows: Full drag-enter/drag-leave/drop via COM IDropTarget (registered above).
+	// Linux: GLFW drop callback only — no drag-enter/drag-leave (would need X11 XDnD).
+#ifndef _WIN32
 	glfwSetDropCallback(window, glfw_drop_callback);
+#endif
 
 	loadCacheSize();
 
@@ -2640,12 +2809,21 @@ int main(int argc, char* argv[]) {
 	s_navIconTextures.clear();
 
 #ifdef _WIN32
+	{
+		HWND hwnd = glfwGetWin32Window(window);
+		if (hwnd)
+			RevokeDragDrop(hwnd);
+	}
+	if (s_dropTarget) {
+		s_dropTarget->Release();
+		s_dropTarget = nullptr;
+	}
 	if (s_taskbar) {
 		s_taskbar->Release();
 		s_taskbar = nullptr;
 	}
-	if (s_com_initialized)
-		CoUninitialize();
+	if (s_ole_initialized)
+		OleUninitialize();
 #endif
 
 	ImGui_ImplOpenGL3_Shutdown();

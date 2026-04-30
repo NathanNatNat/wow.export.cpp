@@ -1,11 +1,7 @@
 # TODO Tracker
 
-> **Progress: 0/167 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/166 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
-- [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
-  - **JS Source**: `src/app.js` lines 589–624, 649–657
-  - **Status**: Pending
-  - **Details**: JS installs `window.ondragenter` and `window.ondragleave` to track a `dropStack` counter and set `core.view.fileDropPrompt` to a handler-supplied message (e.g. "Export N files as ...") while the user hovers files over the window. The fileDropPrompt overlay is rendered in C++ (renderAppShell lines 1055–1108) but the C++ port only registers `glfwSetDropCallback` (the "drop" event), so `fileDropPrompt` is set to nullptr on drop and never set during hover. Comment at app.cpp:2425–2437 acknowledges this as a GLFW API limitation; restoration would require Win32 IDropTarget / X11 XDnD. Net effect: users get no visual feedback while dragging files.
 - [ ] 2. [app.cpp] Auto-updater branch is permanently disabled instead of being conditional on BUILD_RELEASE && !DISABLE_AUTO_UPDATE.
   - **JS Source**: `src/app.js` lines 688–705
   - **Status**: Pending
