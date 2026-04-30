@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 120/195 audited (62%)**
+**Progress: 130/195 audited (67%)**
 
 - [x] 1. `src/app.cpp` — ⚠️ 5 findings
 - [x] 2. `src/js/blob.cpp` — ⚠️ 5 findings
@@ -124,16 +124,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 118. `src/js/components/slider.cpp` — ✅ audited
 - [x] 119. `src/js/db/CompressionType.cpp` — ✅ audited
 - [x] 120. `src/js/db/DBCReader.cpp` — ⚠️ 2 findings
-- [ ] 121. `src/js/db/DBDParser.cpp`
-- [ ] 122. `src/js/db/FieldType.cpp`
-- [ ] 123. `src/js/db/WDCReader.cpp`
-- [ ] 124. `src/js/db/caches/DBCharacterCustomization.cpp`
-- [ ] 125. `src/js/db/caches/DBComponentModelFileData.cpp`
-- [ ] 126. `src/js/db/caches/DBComponentTextureFileData.cpp`
-- [ ] 127. `src/js/db/caches/DBCreatureDisplayExtra.cpp`
-- [ ] 128. `src/js/db/caches/DBCreatureList.cpp`
-- [ ] 129. `src/js/db/caches/DBCreatures.cpp`
-- [ ] 130. `src/js/db/caches/DBCreaturesLegacy.cpp`
+- [x] 121. `src/js/db/DBDParser.cpp` — ✅ audited
+- [x] 122. `src/js/db/FieldType.cpp` — ✅ audited
+- [x] 123. `src/js/db/WDCReader.cpp` — ✅ audited
+- [x] 124. `src/js/db/caches/DBCharacterCustomization.cpp` — ⚠️ 1 findings
+- [x] 125. `src/js/db/caches/DBComponentModelFileData.cpp` — ✅ audited
+- [x] 126. `src/js/db/caches/DBComponentTextureFileData.cpp` — ✅ audited
+- [x] 127. `src/js/db/caches/DBCreatureDisplayExtra.cpp` — ✅ audited
+- [x] 128. `src/js/db/caches/DBCreatureList.cpp` — ✅ audited
+- [x] 129. `src/js/db/caches/DBCreatures.cpp` — ✅ audited
+- [x] 130. `src/js/db/caches/DBCreaturesLegacy.cpp` — ✅ audited
 - [ ] 131. `src/js/db/caches/DBDecor.cpp`
 - [ ] 132. `src/js/db/caches/DBDecorCategories.cpp`
 - [ ] 133. `src/js/db/caches/DBGuildTabard.cpp`

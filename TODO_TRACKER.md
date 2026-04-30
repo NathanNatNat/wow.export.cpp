@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/131 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/132 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
   - **JS Source**: `src/app.js` lines 589–624, 649–657
@@ -526,3 +526,7 @@
   - **JS Source**: `src/js/db/DBCReader.js` lines 389–408
   - **Status**: Pending
   - **Details**: JS _read_field has no explicit Int64/UInt64 cases — those field types fall through to the default case which calls readUInt32LE() (4 bytes). C++ (lines 513-518) explicitly handles Int64 with readInt64LE() and UInt64 with readUInt64LE() (8 bytes each). This is documented with a comment in the C++ code. While DBC files (pre-Cata) are unlikely to have 64-bit fields, the difference could cause record offset misalignment if such a field is encountered.
+- [ ] 132. [DBCharacterCustomization.cpp] getFileDataIDByDisplayID result mapped to 0 instead of preserving "absent" semantics
+  - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 128–130
+  - **Status**: Pending
+  - **Details**: JS stores the raw return from `getFileDataIDByDisplayID` (which may be `undefined`) into `chr_model_id_to_file_data_id`. The C++ (line 189) uses `.value_or(0)`, converting "no value" into 0. Downstream, `get_model_file_data_id` (JS line 226 / C++ line 359) returns this value — JS returns `undefined` for unknown displays, C++ returns `std::optional(0)`. Callers checking `has_value()` vs checking for `undefined` would behave differently. FileDataID 0 is generally treated as invalid in WoW data so the practical impact is low, but the semantics diverge from the JS original. The fix would be to store `std::optional<uint32_t>` in `chr_model_id_to_file_data_id` and propagate `nullopt` when `getFileDataIDByDisplayID` returns `nullopt`.
