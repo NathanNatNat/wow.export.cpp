@@ -136,7 +136,7 @@ void init() {
 	// Use INSTALL_PATH/src when available (matching JS), fall back to
 	// WOW_EXPORT_SOURCE_DIR/src for development builds run from the build tree.
 	auto installSrc = s_install_path / "src";
-	if (fs::exists(installSrc))
+	if (fs::exists(installSrc / "fonts"))
 		s_src_dir = installSrc;
 	else
 		s_src_dir = fs::path(WOW_EXPORT_SOURCE_DIR) / "src";
