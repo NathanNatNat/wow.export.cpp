@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/162 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/163 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
   - **JS Source**: `src/app.js` lines 589–624, 649–657
@@ -650,3 +650,7 @@
   - **JS Source**: `src/js/modules/tab_models_legacy.js` line 562
   - **Status**: Pending
   - **Details**: The JS animation watcher sets `legacyModelViewerAnimFrameCount = active_renderer.get_animation_frame_count?.() || 0` after calling playAnimation(), regardless of whether the renderer is M2 or MDX. In C++ at lines 851–856, the M2 path sets `view.legacyModelViewerAnimFrameCount` (line 853) but the MDX path at line 855 only calls playAnimation() without updating the frame count. Animation scrubbing controls would not know the total frame count for MDX models.
+- [ ] 163. [mpq-install.cpp] getFilesByExtension and getAllFiles add std::sort not present in JS
+  - **JS Source**: `src/js/mpq/mpq-install.js` lines 87–120
+  - **Status**: Pending
+  - **Details**: JS `getFilesByExtension` (lines 87–97) and `getAllFiles` (lines 99–120) iterate the `listfile` Map and return results in insertion order (archive processing order). The C++ versions (lines 104–120 and 122–144) add `std::sort(results.begin(), results.end())` before returning, which changes the output to alphabetical order. This could affect callers that depend on the original archive-processing order. The underlying `std::unordered_map` already iterates in undefined order (unlike JS Map's insertion order), but the extra sort is an explicit deviation from JS semantics.
