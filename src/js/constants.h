@@ -119,12 +119,6 @@ namespace BLENDER {
 	inline constexpr double MIN_VER = 2.8; // Minimum version supported by our add-on.
 }
 
-namespace UPDATE {
-	const std::filesystem::path& ROOT(); // Root path for update file resolution (JS: UPDATE_ROOT).
-	const std::filesystem::path& DIRECTORY();
-	const std::string& HELPER(); // Path to update helper application.
-}
-
 // product: Internal product ID.
 // title: Label as it appears on the Battle.net launcher.
 // tag: Specific version tag.

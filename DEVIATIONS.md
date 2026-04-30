@@ -25,18 +25,18 @@ These features have been deliberately removed from the C++ port with no equivale
 
 ### R2. tab_help module
 - **JS Source**: `src/js/modules/tab_help.js`
-- **Reason**: Rendered a searchable knowledge-base article browser backed by a markdown viewer. Requires a full markdown rendering pipeline not yet available in ImGui.
-- **Impact**: Help tab is absent from the C++ app. See TODO entry 604 for restoration instructions.
+- **Reason**: Deliberately excluded — not wanted in the C++ port.
+- **Impact**: Help tab is absent from the C++ app.
 
 ### R3. tab_changelog module
 - **JS Source**: `src/js/modules/tab_changelog.js`
-- **Reason**: Rendered the app changelog as scrollable markdown. Same markdown dependency as tab_help.
-- **Impact**: Changelog tab is absent from the C++ app. See TODO entry 604 for restoration instructions.
+- **Reason**: Deliberately excluded — not wanted in the C++ port.
+- **Impact**: Changelog tab is absent from the C++ app.
 
 ### R4. markdown-content component
 - **JS Source**: `src/js/components/markdown-content.js`
-- **Reason**: Shared ImGui markdown renderer used by tab_help and tab_changelog. Removed when those modules were removed.
-- **Impact**: No standalone impact — only consumed by removed modules.
+- **Reason**: Deliberately excluded — not wanted in the C++ port. Only consumed by the removed tab_help and tab_changelog modules.
+- **Impact**: No standalone impact.
 
 ## Intentional Stubs
 
@@ -44,22 +44,22 @@ These files are intentionally left as no-ops and do not need implementation.
 
 ### S1. home-showcase.cpp
 - **JS Source**: `src/js/components/home-showcase.js`
-- **Reason**: JS renders a rotating image showcase with background-layer compositing, optional video playback, and Refresh/Feedback links. Complex visual feature with no functional impact on export workflows.
+- **Reason**: Deliberately excluded — not wanted in the C++ port.
 - **Impact**: Home tab shows no showcase content.
 
 ### S2. tab_home.cpp
 - **JS Source**: `src/js/modules/tab_home.js`
-- **Reason**: JS renders a two-column grid: HomeShowcase on the left, whatsNewHTML panel on the right, and Discord/GitHub/Patreon help-button cards at the bottom.
+- **Reason**: Intentionally blank — content not wanted in the C++ port.
 - **Impact**: Home tab layout is empty.
 
 ## Async/Sync Conversions
 
 JS async/await patterns converted to synchronous C++ calls. The standard JS-to-C++ mapping is async->sync, but these specific cases have observable timing differences.
 
-### A1. [updater.cpp] applyUpdate and launchUpdater are fully synchronous
-- **JS Source**: `src/js/updater.js` lines 50, 58-94, 113-124, 130-167
-- **Reason**: JS awaits at every step (progressLoadingScreen, fsp.stat, getFileHash, createDirectory, directoryIsWritable, downloadFile, launchUpdater). C++ runs all operations synchronously on the calling thread.
-- **Impact**: Callers must dispatch via a background thread to avoid freezing the UI. The function signature does not enforce this. (TODO 54)
+### A1. [updater.cpp] Auto-updater removed
+- **JS Source**: `src/js/updater.js`
+- **Reason**: Deliberately excluded — not wanted in the C++ port.
+- **Impact**: Application does not check for or apply updates.
 
 ### A2. [tiled-png-writer.cpp] write() returns immediately via shared_future
 - **JS Source**: `src/js/tiled-png-writer.js` lines 123-125

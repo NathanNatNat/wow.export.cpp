@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/120 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 2/120 verified (2%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 48. [subtitles.cpp] parse_sbt_timestamp uses a strict integer parser; JS parseInt + NaN propagation produces different malformed-input behaviour.
   - **JS Source**: `src/js/subtitles.js` lines 8–22
@@ -22,14 +22,14 @@
   - **JS Source**: `src/js/tiled-png-writer.js` lines 25, 58–59
   - **Status**: Pending
   - **Details**: JS uses `new Map()` and iterates via `for (const tile of this.tiles.values())` (line 58), which yields tiles in **insertion order**. C++ uses `std::map<std::string, Tile>` (`src/js/tiled-png-writer.h` line 106) keyed by `"x,y"` strings, iterated via range-for (cpp line 49), which yields tiles in **lexicographic key order**. The Porter-Duff "over" compositing applied in `_writeTileToPixelData` (cpp lines 93–102 / js lines 105–114) is **non-commutative** when tiles overlap with non-zero/non-one alpha values: the blended output for the same set of tiles will differ between the two implementations whenever (a) two or more tiles overlap on a pixel and (b) at least one of them has an alpha in (0,1). The header comment at lines 102–105 acknowledges this and rationalises it ("WoW map tiles are typically fully opaque"), but the deviation must still be tracked. Restoring fidelity requires either an insertion-ordered container (e.g. `std::vector<Tile>` with auxiliary lookup, or `std::map` keyed by an insertion counter) or replacing the key with a sortable composite that matches insertion order.
-- [ ] 53. [updater.cpp] `nw.App.manifest.flavour` and `nw.App.manifest.guid` replaced by build-time `constants::FLAVOUR` / `constants::BUILD_GUID`.
-  - **JS Source**: `src/js/updater.js` lines 24–25, 33, 35
-  - **Status**: Pending
-  - **Details**: JS reads `nw.App.manifest.flavour` (line 25) and `nw.App.manifest.guid` (lines 24, 33, 35) at runtime, so the manifest can be updated by NW.js between launches. The C++ port (`src/js/updater.cpp` line 83 uses `constants::FLAVOUR`; line 95 uses `constants::BUILD_GUID`) reads compile-time constants baked into the binary. A comment at lines 75–78 documents the deviation. Functional impact: any deployment that updates `package.json` without rebuilding the binary will see the C++ version compare against a stale GUID/flavour. This is the same family of issue as TODO 18 (VERSION constant).
-- [ ] 54. [updater.cpp] `applyUpdate` and `launchUpdater` are fully synchronous — no per-await UI yielding.
-  - **JS Source**: `src/js/updater.js` lines 50, 58–94, 113–124, 130–167
-  - **Status**: Pending
-  - **Details**: JS `applyUpdate` is `async` and awaits at every step (`progressLoadingScreen` at line 61/119, `fsp.stat` at 68, `getFileHash` at 79, `createDirectory` at 103, `directoryIsWritable` at 104, `downloadFile` at 120, `launchUpdater` at 124), keeping the UI thread responsive between each operation. C++ `applyUpdate` (`src/js/updater.cpp` lines 121–226) and `launchUpdater` (lines 232–362) are plain synchronous functions; every `progressLoadingScreen` call, file stat, hash computation, and HTTP download blocks the calling thread. The comment at lines 115–119 acknowledges this and instructs callers to dispatch via a background thread, but the function signature does not enforce that. Any caller that invokes `applyUpdate()` from the UI thread will freeze the UI until update completion (potentially many minutes for a multi-GB download).
+- [x] 53. [updater.cpp] Updater deliberately excluded — module removed entirely.
+  - **JS Source**: `src/js/updater.js`
+  - **Status**: Resolved — intentional exclusion, not a TODO.
+  - **Details**: Updater module deliberately excluded from the C++ port. See DEVIATIONS.md entry A1.
+- [x] 54. [updater.cpp] Updater deliberately excluded — module removed entirely.
+  - **JS Source**: `src/js/updater.js`
+  - **Status**: Resolved — intentional exclusion, not a TODO.
+  - **Details**: Updater module deliberately excluded from the C++ port. See DEVIATIONS.md entry A1.
 - [ ] 55. [wmv.cpp] `parse_legacy` legacy_values fallback returns -1 sentinel where JS produces NaN.
   - **JS Source**: `src/js/wmv.js` lines 87–92
   - **Status**: Pending

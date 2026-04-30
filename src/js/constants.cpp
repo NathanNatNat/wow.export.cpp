@@ -116,9 +116,6 @@ namespace {
 	fs::path s_config_default_path;
 	fs::path s_config_user_path;
 
-	fs::path s_update_directory;
-	std::string s_update_helper;
-
 	fs::path s_blender_dir;
 	fs::path s_blender_local_dir;
 
@@ -180,13 +177,6 @@ void init() {
 	// JS: CONFIG.USER_PATH = path.join(DATA_PATH, 'config.json')
 	s_config_user_path = s_data_dir / "config.json";
 
-	s_update_directory = s_install_path / ".update";
-#ifdef _WIN32
-	s_update_helper = "updater.exe";
-#else
-	s_update_helper = "updater";
-#endif
-
 	s_blender_dir = getBlenderBaseDir();
 	s_blender_local_dir = s_install_path / "addon" / "io_scene_wowobj";
 
@@ -224,12 +214,6 @@ namespace CONFIG {
 namespace BLENDER {
 	const fs::path& DIR() { return s_blender_dir; }
 	const fs::path& LOCAL_DIR() { return s_blender_local_dir; }
-}
-
-namespace UPDATE {
-	const fs::path& ROOT() { return s_install_path; }
-	const fs::path& DIRECTORY() { return s_update_directory; }
-	const std::string& HELPER() { return s_update_helper; }
 }
 
 const std::string& USER_AGENT() { return s_user_agent; }

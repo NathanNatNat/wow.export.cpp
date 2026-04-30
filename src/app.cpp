@@ -72,7 +72,6 @@
 #include "js/modules/tab_textures.h"
 #include "js/modules/tab_items.h"
 #include "js/modules/tab_blender.h"
-#include "js/updater.h"
 #include "js/external-links.h"
 
 // BUILD_RELEASE is defined by CMake only for Release builds (matching JS bundler
@@ -84,7 +83,6 @@ static constexpr bool IS_RELEASE_BUILD = false;
 #endif
 
 // check for --disable-auto-update flag
-static bool DISABLE_AUTO_UPDATE = false;
 
 /**
  * crash() is used to inform the user that the application has exploded.
@@ -2379,12 +2377,6 @@ void app::layout::EndSidebar() {
 
 
 int main(int argc, char* argv[]) {
-	// check for --disable-auto-update flag
-	for (int i = 1; i < argc; ++i) {
-		if (std::string_view(argv[i]) == "--disable-auto-update")
-			DISABLE_AUTO_UPDATE = true;
-	}
-
 	// Initialize runtime paths (INSTALL_PATH, DATA_DIR, LOG_DIR, etc.)
 	constants::init();
 
@@ -2610,26 +2602,7 @@ int main(int argc, char* argv[]) {
 	// waitForLoad() is called at the start of each CASC load() before file access begins.
 	casc::tact_keys::loadBackground();
 
-	// Auto-updater logic.
-	// JS: app.js lines 688-705
-	if (IS_RELEASE_BUILD && !DISABLE_AUTO_UPDATE) {
-		core::showLoadingScreen(1, "Checking for updates...");
-
-		std::thread([]{
-			bool updateAvailable = updater::checkForUpdates();
-			core::postToMainThread([updateAvailable]{
-				if (updateAvailable) {
-					updater::applyUpdate();
-				} else {
-					core::hideLoadingScreen();
-					modules::setActive("source_select");
-					tab_blender::checkLocalVersion();
-				}
-			});
-		}).detach();
-	} else {
-		tab_blender::checkLocalVersion();
-	}
+	tab_blender::checkLocalVersion();
 
 	// Set source select as the currently active interface screen.
 	modules::setActive("source_select");

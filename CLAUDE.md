@@ -141,14 +141,17 @@ The following files are intentionally left as no-op stubs. Do **not** add TODO e
 - **`src/js/modules/tab_home.cpp`**
 
 ### Removed Files
-The following files have been deliberately removed from the C++ build. Do **not** re-add unless explicitly asked. See [`DEVIATIONS.md`](DEVIATIONS.md) entries R2–R4 for details and TODO entry 604 for restoration instructions.
+The following files have been deliberately removed from the C++ build. Do **not** re-add unless explicitly asked. Do **not** add TODO entries for them. See [`DEVIATIONS.md`](DEVIATIONS.md) entries R2–R4, A1, and S1 for details.
 - **`src/js/modules/tab_help.cpp`** / **`tab_help.h`**
 - **`src/js/modules/tab_changelog.cpp`** / **`tab_changelog.h`**
 - **`src/js/components/markdown-content.cpp`** / **`markdown-content.h`**
+- **`src/js/components/home-showcase.cpp`** / **`home-showcase.h`**
+- **`src/js/updater.cpp`** / **`updater.h`**
 
 ### Removed Features
-The following features have been deliberately removed. Do **not** re-add unless explicitly asked. See [`DEVIATIONS.md`](DEVIATIONS.md) entry R1 for details.
+The following features have been deliberately removed. Do **not** re-add unless explicitly asked. Do **not** add TODO entries for them. See [`DEVIATIONS.md`](DEVIATIONS.md) entries R1 and A1 for details.
 - **"Reload Styling" context menu option**
+- **Auto-updater** (check for updates, download, and launch updater helper)
 
 ### General Conversion Fidelity
 - Conversions must be fully comprehensive — every function, method, constant, code path, and UI element from the JS source must be ported.
@@ -159,6 +162,7 @@ The following features have been deliberately removed. Do **not** re-add unless 
 - Deviations from the original JS source are strongly discouraged. Only deviate when a direct port is genuinely impossible in C++. In such cases, document the deviation in [`DEVIATIONS.md`](DEVIATIONS.md) — **not** in code comments. Every deviation must have an entry in `DEVIATIONS.md` with the C++ file, JS source reference, reason, and impact.
 - **No deviation comments in code.** Do not add inline comments that describe how the C++ code differs from the JS source, explain why a deviation was necessary, reference JS behaviour, or document JS bugs being fixed/replicated. All such documentation belongs exclusively in [`DEVIATIONS.md`](DEVIATIONS.md). The C++ source should read as clean code with no JS comparison commentary.
 - Things that cannot be completed immediately should be documented in `TODO_TRACKER.md`. Do not let documentation overhead block forward progress — implement what you can, then document what remains.
+- **No TODO entries for intentional deviations.** Items listed under Intentional Stubs, Removed Files, or Removed Features are deliberate decisions, not outstanding work. Do not create TODO entries to implement, restore, or revisit them.
 
 ### Visual Fidelity
 
