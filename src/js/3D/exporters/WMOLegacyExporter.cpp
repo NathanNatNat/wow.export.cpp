@@ -379,7 +379,7 @@ void WMOLegacyExporter::exportAsOBJ(
 						std::filesystem::path(m2Path), outDir).string();
 
 					if (useAbsolute)
-						modelPath = std::filesystem::absolute(
+						modelPath = std::filesystem::weakly_canonical(
 							std::filesystem::path(outDir) / modelPath).string();
 
 					if (usePosix)
@@ -387,14 +387,14 @@ void WMOLegacyExporter::exportAsOBJ(
 
 					csv.addRow({
 						{ "ModelFile", modelPath },
-						{ "PositionX", std::to_string(doodad.position[0]) },
-						{ "PositionY", std::to_string(doodad.position[1]) },
-						{ "PositionZ", std::to_string(doodad.position[2]) },
-						{ "RotationW", std::to_string(doodad.rotation[3]) },
-						{ "RotationX", std::to_string(doodad.rotation[0]) },
-						{ "RotationY", std::to_string(doodad.rotation[1]) },
-						{ "RotationZ", std::to_string(doodad.rotation[2]) },
-						{ "ScaleFactor", std::to_string(doodad.scale) },
+						{ "PositionX", std::format("{:g}", doodad.position[0]) },
+						{ "PositionY", std::format("{:g}", doodad.position[1]) },
+						{ "PositionZ", std::format("{:g}", doodad.position[2]) },
+						{ "RotationW", std::format("{:g}", doodad.rotation[3]) },
+						{ "RotationX", std::format("{:g}", doodad.rotation[0]) },
+						{ "RotationY", std::format("{:g}", doodad.rotation[1]) },
+						{ "RotationZ", std::format("{:g}", doodad.rotation[2]) },
+						{ "ScaleFactor", std::format("{:g}", doodad.scale) },
 						{ "DoodadSet", set.name }
 					});
 				} catch (const std::exception& e) {

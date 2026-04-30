@@ -27,7 +27,6 @@ struct TextureOptions {
 	GLenum min_filter = GL_LINEAR;
 	GLenum mag_filter = GL_LINEAR;
 	bool generate_mipmaps = false;
-	bool flip_y = false; // JS does not set UNPACK_FLIP_Y_WEBGL — never flips Y in set_rgba/set_canvas
 };
 
 /**

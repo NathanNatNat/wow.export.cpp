@@ -9,7 +9,6 @@
 #include "casc/blp.h"
 
 #include <algorithm>
-#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -31,24 +30,8 @@ void GLTexture::set_rgba(const uint8_t* pixels, int w, int h,
 
 	glBindTexture(GL_TEXTURE_2D, texture);
 
-	// Optional vertical flip. JS does NOT call gl.pixelStorei(UNPACK_FLIP_Y_WEBGL, true)
-	// in either set_rgba or set_canvas, so the default (`flip_y = false`) matches JS.
-	// Desktop GL has no UNPACK_FLIP_Y state, so when flipping is explicitly requested
-	// we copy the rows manually.
-	if (options.flip_y && pixels) {
-		const size_t row_bytes = static_cast<size_t>(w) * 4;
-		std::vector<uint8_t> flipped(static_cast<size_t>(w) * h * 4);
-		for (int row = 0; row < h; ++row) {
-			std::memcpy(flipped.data() + row * row_bytes,
-			            pixels + (h - 1 - row) * row_bytes,
-			            row_bytes);
-		}
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0,
-		             GL_RGBA, GL_UNSIGNED_BYTE, flipped.data());
-	} else {
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0,
-		             GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-	}
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0,
+	             GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
 	_apply_wrap(options.wrap_s, options.wrap_t);
 	_apply_filter(options.min_filter, options.mag_filter);

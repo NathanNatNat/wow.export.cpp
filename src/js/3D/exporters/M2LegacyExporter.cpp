@@ -127,7 +127,10 @@ std::map<std::string, TextureExportInfo> M2LegacyExporter::exportTextures(
 			// legacy mpq exports always use flat textures alongside model for compatibility
 			std::filesystem::path texPath = outDir / texFile;
 
-			std::string matName = "mat_" + std::filesystem::path(lowerTexPath).stem().string();
+			std::string baseName = std::filesystem::path(lowerTexPath).filename().string();
+			if (baseName.size() > 4 && baseName.substr(baseName.size() - 4) == ".blp")
+				baseName = baseName.substr(0, baseName.size() - 4);
+			std::string matName = "mat_" + baseName;
 			if (config.value("removePathSpaces", false)) {
 				std::erase_if(matName, [](char c) { return std::isspace(static_cast<unsigned char>(c)); });
 			}
@@ -299,9 +302,6 @@ void M2LegacyExporter::exportAsOBJ(
 			if (texInfoIt != validTextures.end()) {
 				texObj["fileNameExternal"] = texInfoIt->second.matPathRelative;
 				texObj["mtlName"] = texInfoIt->second.matName;
-			} else {
-				texObj["fileNameExternal"] = nullptr;
-				texObj["mtlName"] = nullptr;
 			}
 			textures.push_back(texObj);
 		}

@@ -92,8 +92,8 @@ JS `Map`/`Object` preserve insertion order; C++ `std::unordered_map`/`std::map` 
 
 ### O4. [WMOExporter.cpp] groupNames ordering may differ
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 738, 1193
-- **Reason**: JS `Object.values(wmo.groupNames)` yields insertion order. C++ container may iterate differently.
-- **Impact**: Meta JSON `groupNames` array order may differ. (TODO 62)
+- **Reason**: JS `Object.values(wmo.groupNames)` yields insertion order. C++ `std::map<uint32_t, std::string>` iterates in ascending key order.
+- **Impact**: Meta JSON `groupNames` array order may differ.
 
 ### O5. [ADTExporter.cpp] foliage JSON key order
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1474-1479
@@ -103,7 +103,7 @@ JS `Map`/`Object` preserve insertion order; C++ `std::unordered_map`/`std::map` 
 ### O6. [mpq-install.cpp] getFilesByExtension and getAllFiles add std::sort
 - **JS Source**: `src/js/mpq/mpq-install.js` lines 87-120
 - **Reason**: JS returns results in Map insertion order (archive processing order). C++ adds `std::sort` producing alphabetical order.
-- **Impact**: Callers that depend on archive-processing order see different results. (TODO 141)
+- **Impact**: Callers that depend on archive-processing order see different results.
 
 ## Data Type / Sentinel Value Differences
 
@@ -132,12 +132,12 @@ JS dynamic types (NaN, undefined, null) don't map 1:1 to C++ static types.
 ### D5. [M2Exporter.cpp] data-texture fileDataID not back-patched
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 153-168
 - **Reason**: JS back-patches `texture.fileDataID = 'data-' + textureType` (string). C++ `Texture::fileDataID` is `uint32_t`, cannot hold a string.
-- **Impact**: Meta JSON `textures[i].fileDataID` differs for data-texture rows. (TODO 50)
+- **Impact**: Meta JSON `textures[i].fileDataID` differs for data-texture rows.
 
 ### D6. [DBCharacterCustomization.cpp] getFileDataIDByDisplayID maps nullopt to 0
 - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 128-130
 - **Reason**: JS stores raw `undefined` from lookup. C++ uses `.value_or(0)`, converting no-value to 0.
-- **Impact**: Downstream callers see `std::optional(0)` instead of `nullopt`. FileDataID 0 is generally invalid so practical impact is low. (TODO 110)
+- **Impact**: Downstream callers see `std::optional(0)` instead of `nullopt`. FileDataID 0 is generally invalid so practical impact is low.
 
 ## API Signature Differences
 
@@ -146,41 +146,36 @@ C++ function signatures that differ from the JS originals.
 ### P1. [M2Exporter.cpp] addURITexture takes BufferWrapper instead of dataURI string
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59-61, 111
 - **Reason**: C++ caller pre-decodes; JS stores base64 data URI string and decodes at export time.
-- **Impact**: API contract differs. JS regex strip of data-URI prefix is not preserved. (TODO 49)
+- **Impact**: API contract differs. JS regex strip of data-URI prefix is not preserved.
 
 ### P2. [M3Exporter.cpp] addURITexture stores BufferWrapper instead of dataURI string
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 49-51
 - **Reason**: Same as P1 — C++ uses raw bytes instead of base64 string.
-- **Impact**: Consumers reading `dataTextures` receive raw bytes instead of data URI. (TODO 58)
+- **Impact**: Consumers reading `dataTextures` receive raw bytes instead of data URI.
 
 ### P3. [ShaderProgram.cpp] set_uniform_3fv/4fv/mat4_array add explicit count parameter
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 204-208, 214-218, 247-251
 - **Reason**: JS infers count from `values.length`. C++ `const float*` has no length — callers must pass count.
-- **Impact**: Default count=1 if callers don't specify. API contract differs. (TODO 74)
+- **Impact**: Default count=1 if callers don't specify. API contract differs.
 
 ### P4. [UniformBuffer.cpp] set_float_array requires explicit count
 - **JS Source**: `src/js/3D/gl/UniformBuffer.js` lines 152-158
 - **Reason**: Same as P3 — `const float*` has no length.
-- **Impact**: Same as P3. (TODO 75)
+- **Impact**: Same as P3.
 
 ### P5. [DBItemGeosets.cpp] getDisplayId missing modifier_id parameter
 - **JS Source**: `src/js/db/caches/DBItemGeosets.js` lines 277-279
 - **Reason**: Omission — JS accepts optional `modifier_id`, C++ only accepts `item_id`.
-- **Impact**: C++ always uses default modifier resolution. (TODO 112)
+- **Impact**: C++ always uses default modifier resolution.
 
 ### P6. [DBItemModels.cpp] getItemModels missing modifier_id parameter
 - **JS Source**: `src/js/db/caches/DBItemModels.js` lines 141-142
 - **Reason**: Same omission as P5.
-- **Impact**: C++ always uses default modifier resolution. (TODO 113)
+- **Impact**: C++ always uses default modifier resolution.
 
 ## File Path / String Processing
 
 Differences in how file paths and strings are processed.
-
-### F1. [M2LegacyExporter.cpp] matName uses stem() instead of .blp-only removal
-- **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` line 94
-- **Reason**: JS `path.basename(texturePath, '.blp')` strips only `.blp`. C++ `stem()` strips any extension.
-- **Impact**: Non-.blp paths get different matNames. (TODO 53)
 
 ### F2. [WMOLegacyLoader.cpp] getGroup uses rfind (case-insensitive) instead of first-occurrence replace
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` line 138
@@ -192,15 +187,10 @@ Differences in how file paths and strings are processed.
 - **Reason**: JS `replace` targets first occurrence. C++ `rfind` targets last occurrence.
 - **Impact**: Paths with multiple `.wmo` segments would diverge. (TODO 83)
 
-### F4. [WMOLegacyExporter.cpp] absolute() without normalization vs path.resolve()
-- **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 316-317
-- **Reason**: JS `path.resolve` normalizes `..`/`.` segments. C++ `std::filesystem::absolute` does not.
-- **Impact**: CSV ModelFile values may contain unresolved relative segments. (TODO 67)
-
 ### F5. [WMOLegacyExporter.cpp] ASCII-only tolower instead of Unicode toLowerCase
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 299, 310, 507, 510
 - **Reason**: C++ `std::tolower` only handles ASCII bytes. JS `toLowerCase()` is Unicode-aware.
-- **Impact**: Non-ASCII characters in paths would cause cache misses / duplicate exports. (TODO 68)
+- **Impact**: Non-ASCII characters in paths would cause cache misses / duplicate exports. WoW asset paths are ASCII so practical impact is negligible.
 
 ### F6. [tab_audio.cpp] parent_path() returns "" instead of "." for bare filenames
 - **JS Source**: `src/js/modules/tab_audio.js` lines 155-158
@@ -228,18 +218,13 @@ WebGL/Canvas APIs mapped to OpenGL/FBO equivalents.
 
 ### G3. [GLContext.cpp] ext_float_texture hard-coded to true
 - **JS Source**: `src/js/3D/gl/GLContext.js` lines 61-62
-- **Reason**: JS probes `gl.getExtension('EXT_color_buffer_float')`. C++ assumes true since float textures are core in GL 3.0+.
-- **Impact**: Flag is not actually probed. Could be incorrect on unusual GL implementations. (TODO 69)
+- **Reason**: JS probes `gl.getExtension('EXT_color_buffer_float')`. C++ assumes true since float textures are core in desktop GL 3.0+.
+- **Impact**: Flag is not actually probed. Correct for all supported platforms (Windows/Linux x64 with GL 4.3+).
 
-### G4. [GLTexture.cpp] Extra flip_y option not in JS
-- **JS Source**: `src/js/3D/gl/GLTexture.js` lines 34-50
-- **Reason**: Added to compensate for OpenGL vs WebGL coordinate conventions. JS never flips Y.
-- **Impact**: Extra code path and option with no JS equivalent. (TODO 70)
-
-### G5. [GLTexture.cpp] set_canvas takes raw pixels instead of HTMLCanvasElement
+### G4. [GLTexture.cpp] set_canvas takes raw pixels instead of HTMLCanvasElement
 - **JS Source**: `src/js/3D/gl/GLTexture.js` lines 52-73
 - **Reason**: No HTMLCanvasElement in C++. Takes `(pixels, w, h, options)` and forwards to set_rgba.
-- **Impact**: Callers must rasterize content to RGBA bytes themselves. (TODO 71)
+- **Impact**: Callers must rasterize content to RGBA bytes themselves.
 
 ## UBO / Bone Animation
 
@@ -304,15 +289,15 @@ Bone Uniform Buffer Object creation and binding order differences.
 
 Export pipeline structural deviations.
 
-### E1. [M2Exporter.cpp] exportRaw parent-skeleton bones gated on wrong config flag
-- **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 1098-1163
-- **Reason**: C++ places parent-skel bone export inside `modelsExportAnim` block. JS has it outside.
-- **Impact**: Bones-only export without animations silently loses parent-skel bone files. (TODO 48)
-
 ### E2. [M2Exporter.cpp] cancellation returns partial struct instead of undefined
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 142-143
 - **Reason**: C++ returns partial `M2ExportTextureResult`. JS returns `undefined`.
-- **Impact**: Callers proceed with empty maps instead of dereferencing undefined. (TODO 51)
+- **Impact**: Callers proceed with empty maps instead of dereferencing undefined.
+
+### E2a. [M2Exporter.cpp] exportTextures early-return always returns same struct shape
+- **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 95-96
+- **Reason**: JS returns `glbMode ? { validTextures, texture_buffers, files_to_cleanup } : validTextures` — shape changes by mode. C++ always returns a single `M2ExportTextureResult` struct.
+- **Impact**: Functionally equivalent since all C++ callers access fields through the struct uniformly.
 
 ### E3. [ADTExporter.cpp] useADTSets hardcoded to false
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1300-1351
@@ -324,25 +309,10 @@ Export pipeline structural deviations.
 - **Reason**: JS preserves the chunk object (including attributes). C++ pushes nullptr.
 - **Impact**: Chunk's `attributes` field is lost.
 
-### E5. [WMOExporter.cpp] groupID=0 treated as "no fileID"
-- **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 1266-1270
-- **Reason**: JS `??` operator falls through on 0. C++ treats any in-bounds index as resolved.
-- **Impact**: WMOs with 0 in groupIDs lose group-file export coverage. (TODO 61)
-
-### E6. [M2LegacyExporter.cpp] subMesh JSON drops fields beyond hardcoded list
+### E5. [M2LegacyExporter.cpp] subMesh JSON drops fields beyond hardcoded list
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 206-210
 - **Reason**: JS `Object.assign` copies all properties. C++ manually lists 13 fields.
-- **Impact**: Additional loader properties silently dropped from meta JSON. (TODO 54)
-
-### E7. [M2LegacyExporter.cpp] textures JSON emits explicit null instead of omitting
-- **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 229-234
-- **Reason**: JS `undefined` is omitted by `JSON.stringify`. C++ explicitly writes `null`.
-- **Impact**: Output JSON has extra `null` keys that JS would not produce. (TODO 55)
-
-### E8. [WMOLegacyExporter.cpp] CSV float formatting uses std::to_string
-- **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 322-333
-- **Reason**: JS `Number.toString` produces shortest round-trip representation. C++ `std::to_string(float)` produces fixed precision with trailing zeros.
-- **Impact**: CSV output is byte-different for every float field. (TODO 66)
+- **Impact**: Additional loader properties silently dropped from meta JSON.
 
 ## Loader / Parser Differences
 
@@ -420,12 +390,12 @@ Export pipeline structural deviations.
 ### X2. [M2LegacyExporter.cpp] exportAsOBJ/STL throw explicit error on null skin
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 129, 268
 - **Reason**: JS would crash with TypeError on property access. C++ throws descriptive `runtime_error`.
-- **Impact**: Different error type/message in failure path. (TODO 57)
+- **Impact**: Different error type/message in failure path.
 
 ### X3. [WMOExporter.cpp] empty-UV branch defensively allocates uv_maps[0]
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 316-321
 - **Reason**: JS `splice(-1, 1)` on missing canvas removes last element (latent bug). C++ handles missing entry gracefully.
-- **Impact**: Intentional fix — JS would crash, C++ allocates zeros. (TODO 65)
+- **Impact**: Intentional fix — JS would crash, C++ allocates zeros.
 
 ### X4. [context-menu.cpp] Click-to-close checks all mouse buttons
 - **JS Source**: `src/js/components/context-menu.js` line 54
@@ -636,7 +606,7 @@ Export pipeline structural deviations.
 ### Z25. [M2LegacyRendererGL.cpp] materials/textureUnits/boundingBox JSON drops fields
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 244, 248, 250, 254
 - **Reason**: C++ rebuilds with hardcoded subset instead of serializing all properties.
-- **Impact**: Extra fields from loader dropped from meta JSON. (TODO 56)
+- **Impact**: Extra fields from loader dropped from meta JSON.
 
 ### Z26. [MDXRendererGL.cpp] Missing per-draw-call UBO bind
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 758
@@ -656,22 +626,22 @@ Export pipeline structural deviations.
 ### Z29. [WMOExporter.cpp] formatUnknownFile call signature differs
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 158-160
 - **Reason**: JS uses single-arg form. C++ uses two-arg form with separate ID and extension.
-- **Impact**: Could drift if helper's two-arg behaviour differs. (TODO 63)
+- **Impact**: Could drift if helper's two-arg behaviour differs.
 
 ### Z30. [WMOExporter.cpp] exportRaw uses byteLength()==0 instead of "is data set" check
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 1223-1231
 - **Reason**: JS checks `this.wmo.data === undefined`. C++ checks `data.byteLength() == 0`.
-- **Impact**: Conflates "no data" with "empty data". (TODO 64)
+- **Impact**: Conflates "no data" with "empty data".
 
 ### Z31. [M3Exporter.cpp] OBJ texture-manifest reads value as string
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 145-147
 - **Reason**: JS value is object with `matPath` field. C++ value is plain string.
-- **Impact**: Will diverge once exportTextures is implemented. (TODO 59)
+- **Impact**: Will diverge once exportTextures is implemented.
 
 ### Z32. [M3Exporter.cpp] exportAsGLTF reshapes texture map
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 91-92
 - **Reason**: C++ stringifies numeric key and wraps in `GLTFTextureEntry` adapter.
-- **Impact**: Conversion shape needs verification once M3 texture export is implemented. (TODO 60)
+- **Impact**: Conversion shape needs verification once M3 texture export is implemented.
 
 ### Z33. [M3RendererGL.cpp] load() execution order differs
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 59-71
