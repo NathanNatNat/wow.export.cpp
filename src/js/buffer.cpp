@@ -455,6 +455,20 @@ throw std::runtime_error("fromCanvas: PNG encoding failed");
 return BufferWrapper(std::move(pngBuf));
 }
 
+if (mimeType == "image/jpeg" || mimeType == "image/jpg") {
+	std::vector<uint8_t> jpgBuf;
+	auto writeFunc = [](void* context, void* data, int size) {
+		auto* vec = static_cast<std::vector<uint8_t>*>(context);
+		auto* bytes = static_cast<const uint8_t*>(data);
+		vec->insert(vec->end(), bytes, bytes + size);
+	};
+	int ret = stbi_write_jpg_to_func(writeFunc, &jpgBuf, width, height, 4, rgba, quality);
+	if (ret == 0)
+		throw std::runtime_error("fromCanvas: JPEG encoding failed");
+
+	return BufferWrapper(std::move(jpgBuf));
+}
+
 throw std::runtime_error("fromCanvas: unsupported mimeType '" + std::string(mimeType) + "'");
 }
 
@@ -854,7 +868,11 @@ _checkBounds(length);
 const uint8_t* ptr = _buf.data() + _ofs;
 std::string str;
 
-if (encoding == "utf8" || encoding == "utf-8" || encoding == "ascii" || encoding == "latin1" || encoding == "binary") {
+if (encoding == "ascii") {
+	str.resize(length);
+	for (size_t i = 0; i < length; ++i)
+		str[i] = static_cast<char>(ptr[i] & 0x7F);
+} else if (encoding == "utf8" || encoding == "utf-8" || encoding == "latin1" || encoding == "binary") {
 	str.assign(reinterpret_cast<const char*>(ptr), length);
 } else if (encoding == "base64") {
 	str = base64_encode(ptr, length);
@@ -1075,7 +1093,7 @@ return -1;
 
 const std::string& BufferWrapper::getDataURL() {
 if (!dataURL)
-dataURL = URLPolyfill::createObjectURL(_buf, "application/octet-stream");
+dataURL = URLPolyfill::createObjectURL(_buf, "");
 
 return *dataURL;
 }

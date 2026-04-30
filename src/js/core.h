@@ -507,6 +507,8 @@ struct AppState {
 	nlohmann::json chrEquippedItemSkins = nlohmann::json::object();
 	GuildTabardConfig chrGuildTabardConfig;
 	nlohmann::json chrEquipmentSlotContext;
+	std::optional<int> chrItemPickerSlot;
+	std::optional<std::string> chrItemPickerFilter;
 	bool chrSavedCharactersScreen = false;
 	std::vector<nlohmann::json> chrSavedCharacters;
 	bool chrSaveCharacterPrompt = false;

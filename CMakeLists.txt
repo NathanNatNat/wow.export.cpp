@@ -405,9 +405,12 @@ endif()
 # etc.) directly from the source tree at INSTALL_PATH/src/.  A compile-time
 # definition tells constants.cpp where the source tree is located so that no
 # post-build copy step is needed.
+set(WOW_EXPORT_VERSION "0.1.0" CACHE STRING "Application version string")
+
 target_compile_definitions(wow_export_cpp PRIVATE
     WOW_EXPORT_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     WOW_EXPORT_BUILD_TYPE="$<LOWER_CASE:$<CONFIG>>"
+    WOW_EXPORT_VERSION="${WOW_EXPORT_VERSION}"
 )
 
 # ── Converted source files (added incrementally) ───────────────

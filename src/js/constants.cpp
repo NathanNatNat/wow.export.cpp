@@ -136,8 +136,13 @@ void init() {
 	s_data_dir = getUserDataPath();
 
 	// JS: Resources are at INSTALL_PATH/src/ (shaders, images, fonts, etc.)
-	// In C++, WOW_EXPORT_SOURCE_DIR is set by CMake to CMAKE_SOURCE_DIR.
-	s_src_dir = fs::path(WOW_EXPORT_SOURCE_DIR) / "src";
+	// Use INSTALL_PATH/src when available (matching JS), fall back to
+	// WOW_EXPORT_SOURCE_DIR/src for development builds run from the build tree.
+	auto installSrc = s_install_path / "src";
+	if (fs::exists(installSrc))
+		s_src_dir = installSrc;
+	else
+		s_src_dir = fs::path(WOW_EXPORT_SOURCE_DIR) / "src";
 
 	// JS: RUNTIME_LOG = path.join(DATA_PATH, 'runtime.log')
 	s_log_dir = s_data_dir;
