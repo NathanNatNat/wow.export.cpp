@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 140/195 audited (72%)**
+**Progress: 150/195 audited (77%)**
 
 - [x] 1. `src/app.cpp` — ⚠️ 5 findings
 - [x] 2. `src/js/blob.cpp` — ⚠️ 5 findings
@@ -144,16 +144,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 138. `src/js/db/caches/DBItemModels.cpp` — ⚠️ 1 findings
 - [x] 139. `src/js/db/caches/DBItems.cpp` — ✅ audited
 - [x] 140. `src/js/db/caches/DBModelFileData.cpp` — ✅ audited
-- [ ] 141. `src/js/db/caches/DBNpcEquipment.cpp`
-- [ ] 142. `src/js/db/caches/DBTextureFileData.cpp`
-- [ ] 143. `src/js/hashing/xxhash64.cpp`
-- [ ] 144. `src/js/modules/font_helpers.cpp`
-- [ ] 145. `src/js/modules/legacy_tab_audio.cpp`
-- [ ] 146. `src/js/modules/legacy_tab_data.cpp`
-- [ ] 147. `src/js/modules/legacy_tab_files.cpp`
-- [ ] 148. `src/js/modules/legacy_tab_fonts.cpp`
-- [ ] 149. `src/js/modules/legacy_tab_home.cpp`
-- [ ] 150. `src/js/modules/legacy_tab_textures.cpp`
+- [x] 141. `src/js/db/caches/DBNpcEquipment.cpp` — ✅ audited
+- [x] 142. `src/js/db/caches/DBTextureFileData.cpp` — ✅ audited
+- [x] 143. `src/js/hashing/xxhash64.cpp` — ✅ audited
+- [x] 144. `src/js/modules/font_helpers.cpp` — ✅ audited
+- [x] 145. `src/js/modules/legacy_tab_audio.cpp` — ⚠️ 2 findings
+- [x] 146. `src/js/modules/legacy_tab_data.cpp` — ✅ audited
+- [x] 147. `src/js/modules/legacy_tab_files.cpp` — ✅ audited
+- [x] 148. `src/js/modules/legacy_tab_fonts.cpp` — ✅ audited
+- [x] 149. `src/js/modules/legacy_tab_home.cpp` — ✅ audited
+- [x] 150. `src/js/modules/legacy_tab_textures.cpp` — ⚠️ 2 findings
 - [ ] 151. `src/js/modules/module_test_a.cpp`
 - [ ] 152. `src/js/modules/module_test_b.cpp`
 - [ ] 153. `src/js/modules/screen_settings.cpp`

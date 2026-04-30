@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/135 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/139 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
   - **JS Source**: `src/app.js` lines 589–624, 649–657
@@ -542,3 +542,19 @@
   - **JS Source**: `src/js/db/caches/DBItemModels.js` lines 141–142
   - **Status**: Pending
   - **Details**: The JS function `get_item_models(item_id, modifier_id)` accepts an optional `modifier_id` and forwards it to `resolve_display_id`. The C++ version `getItemModels(uint32_t item_id)` (header line 37, cpp line 253) only accepts `item_id` and calls `resolve_display_id(item_id)` without any modifier. This means the C++ version always uses the default modifier resolution (prefer 0, then lowest). Any caller needing models for a specific modifier cannot use this function. Fix: add `int modifier_id = -1` parameter and forward it to `resolve_display_id`.
+- [ ] 136. [legacy_tab_audio.cpp] unittype is "sound" instead of "sound file"
+  - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 204
+  - **Status**: Pending
+  - **Details**: JS template specifies `unittype="sound file"`, which produces status bar text like "42 sound files found." The C++ (line 371 and line 415) uses `"sound"` instead, producing "42 sounds found." Fix: change the unittype string to `"sound file"` in both the listbox render call and the status bar render call.
+- [ ] 137. [legacy_tab_audio.cpp] persistscrollkey is "legacy-sounds" instead of "sounds"
+  - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 204
+  - **Status**: Pending
+  - **Details**: JS template specifies `persistscrollkey="sounds"`. The C++ (line 374) uses `"legacy-sounds"` instead. Scroll position persistence uses a different key name, so scroll positions won't match the JS behavior. Fix: change the persistscrollkey string to `"sounds"`.
+- [ ] 138. [legacy_tab_textures.cpp] persistscrollkey is "legacy-textures" instead of "textures"
+  - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 117
+  - **Status**: Pending
+  - **Details**: JS template specifies `persistscrollkey="textures"`. The C++ (line 297) uses `"legacy-textures"` instead. Scroll position persistence uses a different key name, so scroll positions won't match the JS behavior. Fix: change the persistscrollkey string to `"textures"`.
+- [ ] 139. [legacy_tab_textures.cpp] Toast "View Log" button text uses different casing than JS "view log"
+  - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 68
+  - **Status**: Pending
+  - **Details**: JS uses `'view log'` (all lowercase) for the toast button text. The C++ (line 146) uses `"View Log"` (title case). User-facing text should match the original JS exactly. Fix: change `"View Log"` to `"view log"`.
