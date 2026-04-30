@@ -168,15 +168,14 @@ void render() {
 	if (!s_is_open)
 		return;
 
-	// JS: <div class="item-picker-overlay"> — full-viewport semi-transparent backdrop
-	// behind the modal. Drawn into the background draw list so it sits beneath the
-	// popup but above all other UI while the modal is open.
+	// JS: <div class="item-picker-overlay" @click.self="$emit('close')">
 	const ImGuiViewport* vp = ImGui::GetMainViewport();
 	ImGui::GetBackgroundDrawList()->AddRectFilled(
 		vp->Pos,
 		ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y),
 		IM_COL32(0, 0, 0, 128));
 
+	bool was_just_opened = s_just_opened;
 	if (s_just_opened) {
 		ImGui::OpenPopup("Select Item##item-picker-modal");
 		s_just_opened = false;
@@ -196,6 +195,14 @@ void render() {
 
 	if (!modal_open) {
 		s_is_open = false;
+		ImGui::EndPopup();
+		return;
+	}
+
+	// JS: @click.self="$emit('close')" — close when clicking the backdrop
+	if (!was_just_opened && ImGui::IsMouseClicked(0) &&
+	    !ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows)) {
+		close_modal();
 		ImGui::EndPopup();
 		return;
 	}
@@ -333,16 +340,10 @@ void render() {
 
 	ImGui::EndChild();
 
-	// JS: <span @click="open_items_tab">Search in Items Tab</span>  <button @click="$emit('close')">Cancel</button>
 	// JS: open_items_tab() { this.$emit('open-items-tab'); }
-	// The parent component listens for the event and switches the active tab.
-	// In the C++ port the equivalent is a caller-supplied callback registered via open().
 	if (ImGui::SmallButton("Search in Items Tab")) {
 		if (s_on_open_items_tab)
 			s_on_open_items_tab();
-		close_modal();
-		ImGui::EndPopup();
-		return;
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Cancel")) {

@@ -352,20 +352,17 @@ Export pipeline structural deviations.
 - **Reason**: JS `splice(-1, 1)` on missing canvas removes last element (latent bug). C++ handles missing entry gracefully.
 - **Impact**: Intentional fix — JS would crash, C++ allocates zeros.
 
-### X4. [context-menu.cpp] Click-to-close checks all mouse buttons
+### ~~X4. [context-menu.cpp] Click-to-close checks all mouse buttons~~ RESOLVED
 - **JS Source**: `src/js/components/context-menu.js` line 54
-- **Reason**: Vue `@click` only fires on left button. C++ checks left, right, and middle.
-- **Impact**: Right/middle click closes menu in C++ but not in JS. (TODO 105)
+- **Reason**: Fixed — now only checks left-click, matching Vue `@click` behaviour.
 
-### X5. [item-picker-modal.cpp] open_items_tab erroneously closes modal
+### ~~X5. [item-picker-modal.cpp] open_items_tab erroneously closes modal~~ RESOLVED
 - **JS Source**: `src/js/components/item-picker-modal.js` lines 143-145
-- **Reason**: JS only emits event. C++ emits event AND calls close_modal().
-- **Impact**: "Search in Items Tab" always dismisses modal in C++, not in JS. (TODO 106)
+- **Reason**: Fixed — removed erroneous close_modal() call; now only emits event like JS.
 
-### X6. [item-picker-modal.cpp] Missing click-outside-to-close on backdrop
+### ~~X6. [item-picker-modal.cpp] Missing click-outside-to-close on backdrop~~ RESOLVED
 - **JS Source**: `src/js/components/item-picker-modal.js` line 161
-- **Reason**: `BeginPopupModal` doesn't support click-outside-to-close natively.
-- **Impact**: Users must use Cancel/Escape/X instead of clicking backdrop. (TODO 107)
+- **Reason**: Fixed — added manual click-outside detection on the backdrop overlay.
 
 ### X7. [char-texture-overlay.cpp] remove() handles missing elements differently
 - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 46-61
@@ -416,10 +413,9 @@ Export pipeline structural deviations.
 - **Reason**: C++ adds fallback that reads/writes DBD files from filesystem when no CASC source available.
 - **Impact**: Extra code paths not in JS. (TODO 108)
 
-### DB2. [db2.cpp] Missing "rows === null" preload guard
+### ~~DB2. [db2.cpp] Missing "rows === null" preload guard~~ RESOLVED
 - **JS Source**: `src/js/db/db2.js` lines 51-52
-- **Reason**: C++ only enforces isLoaded check, not rows-null check.
-- **Impact**: Developer-facing error message quality gap. (TODO 104)
+- **Reason**: Fixed — added rows.has_value() check in WDCReader::getRelationRows().
 
 ### DB3. [DBItemDisplays.cpp] Extra getTexturesByDisplayId function
 - **JS Source**: `src/js/db/caches/DBItemDisplays.js` (no counterpart)
@@ -451,12 +447,12 @@ Export pipeline structural deviations.
 ### Z5. [GLTFWriter.cpp] Animation channel target uses actual_node_idx instead of nodeIndex+1
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 620-628, 757-765, 887-895
 - **Reason**: JS always uses `nodeIndex + 1` which is a bug when bone prefix mode is disabled. C++ uses correct `actual_node_idx`.
-- **Impact**: Intentional bug fix. Only manifests when `modelsExportWithBonePrefix=false` AND `modelsExportAnimations=true`. (TODO 102)
+- **Impact**: Intentional bug fix. Only manifests when `modelsExportWithBonePrefix=false` AND `modelsExportAnimations=true`.
 
 ### Z6. [JSONWriter.cpp] BigInt serialization replacer not ported
 - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40-43
 - **Reason**: nlohmann::json handles integers up to uint64_t natively. Values exceeding uint64_t must be pre-converted by callers.
-- **Impact**: Shifts serialization responsibility to callers. (TODO 103)
+- **Impact**: Shifts serialization responsibility to callers.
 
 ### Z7. [tab_maps.cpp] export_map_wmo_minimap tile compositing ignores draw offsets
 - **JS Source**: `src/js/modules/tab_maps.js` lines 723-733

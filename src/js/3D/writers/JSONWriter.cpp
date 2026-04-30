@@ -22,9 +22,6 @@ void JSONWriter::write(bool overwrite) {
 
 	generics::createDirectory(out.parent_path());
 	FileWriter writer(out);
-	// nlohmann::json handles integers up to uint64_t natively. Values exceeding
-	// uint64_t (JS BigInt above 2^64) must be pre-converted to strings by callers
-	// — there is no BigInt type in C++.
 	writer.writeLine(data.dump(1, '\t'));
 	writer.close();
 }

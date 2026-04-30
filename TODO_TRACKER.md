@@ -1,31 +1,7 @@
 # TODO Tracker
 
-> **Progress: 0/44 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/38 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
-- [ ] 102. [GLTFWriter.cpp] Animation channel target node index deviates from JS — C++ uses actual_node_idx, JS uses nodeIndex + 1
-  - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 620–628, 757–765, 887–895
-  - **Status**: Pending
-  - **Details**: The JS code always uses `nodeIndex + 1` for animation channel targets (translation line 624, rotation line 761, scale line 891). This is correct when bone prefix mode is enabled (two nodes pushed per bone) but is a bug when prefix mode is disabled (only one node pushed, so nodeIndex+1 points to the wrong node). The C++ uses `actual_node_idx` (lines 676, 798, 917) which correctly points to the bone node regardless of prefix mode. This is a behavioural improvement over the JS, but it deviates from strict fidelity. The JS bug only manifests when `modelsExportWithBonePrefix` is false AND `modelsExportAnimations` is true simultaneously.
-- [ ] 103. [JSONWriter.cpp] BigInt serialization replacer not ported — callers must pre-convert large integers
-  - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40–43
-  - **Status**: Pending
-  - **Details**: The JS `JSON.stringify` uses a custom replacer function that converts BigInt values to strings (since JS cannot serialize BigInt by default). The C++ version uses plain `data.dump(1, '\t')` without special handling. A comment in the C++ notes that nlohmann::json handles integers up to uint64_t natively and that values exceeding uint64_t must be pre-converted by callers. This shifts the serialization responsibility to callers rather than handling it at the writer level. If a caller passes a value exceeding uint64_t without pre-converting, it would be silently truncated or cause an error rather than being string-serialized.
-- [ ] 104. [db2.cpp] Missing "rows === null" (preload) guard on getRelationRows from JS db2 Proxy wrapper
-  - **JS Source**: `src/js/casc/db2.js` lines 51–52
-  - **Status**: Pending
-  - **Details**: The JS db2 Proxy wrapper has a two-part guard for getRelationRows: (1) `!reader_target.isLoaded` throws "Table must be loaded", and (2) `reader_target.rows === null` throws "Table must be preloaded". The C++ WDCReader::getRelationRows() only enforces the isLoaded check (WDCReader.cpp:302–303). The rows-null check (ensuring preload() was called) is absent from both the db2 layer and WDCReader. Since getRelationRows() uses relationshipLookup (not rows), this is a developer-facing error message quality gap rather than a functional bug. To match JS behaviour, db2::getTable() or WDCReader::getRelationRows() should check if preload() was called and throw a descriptive error if not.
-- [ ] 105. [context-menu.cpp] Click-to-close handler checks all mouse buttons instead of just left-click
-  - **JS Source**: `src/js/components/context-menu.js` line 54
-  - **Status**: Pending
-  - **Details**: Vue's `@click` (without `.right` or `.middle` modifiers) only fires on left mouse button clicks. The C++ (lines 116-118) checks `ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1) || ImGui::IsMouseClicked(2)`, closing the menu on left, right, or middle click. The C++ comment at line 115 incorrectly states "JS @click fires for any mouse button." To match JS, only check `ImGui::IsMouseClicked(0)`.
-- [ ] 106. [item-picker-modal.cpp] open_items_tab erroneously closes the modal
-  - **JS Source**: `src/js/components/item-picker-modal.js` lines 143–145
-  - **Status**: Pending
-  - **Details**: JS `open_items_tab()` only emits `'open-items-tab'` without closing the modal — the parent component decides whether to close it. C++ (lines 340-346) calls `s_on_open_items_tab()` and then immediately calls `close_modal()`, forcing the modal closed. This removes the parent's ability to decide and changes user-visible behavior: clicking "Search in Items Tab" always dismisses the modal in C++ but not in JS.
-- [ ] 107. [item-picker-modal.cpp] Missing click-outside-to-close on overlay backdrop
-  - **JS Source**: `src/js/components/item-picker-modal.js` line 161
-  - **Status**: Pending
-  - **Details**: JS has `@click.self="$emit('close')"` on the overlay div, allowing users to close the modal by clicking the semi-transparent backdrop outside the modal content. C++ (lines 174-178) draws a backdrop rectangle but has no click detection on it. `BeginPopupModal` does not support click-outside-to-close natively. Users must use Cancel, Escape, or the X button to close. This is a missing interaction path.
 - [ ] 108. [DBCReader.cpp] loadSchema() has filesystem fallback cache paths not present in JS
   - **JS Source**: `src/js/db/DBCReader.js` lines 176–199
   - **Status**: Pending

@@ -108,13 +108,9 @@ void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
 			contentCallback(node);
 		}
 
-		// @click="$emit('close')" — close on any click within the menu.
-		// This catches clicks on non-Selectable elements (text, separators, etc.)
-		// which individual Selectable items would not handle.
-		// JS @click fires for any mouse button, so we mirror that by checking
-		// left/right/middle.
+		// @click="$emit('close')" — close on left-click within the menu.
 		if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
-		    (ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1) || ImGui::IsMouseClicked(2))) {
+		    ImGui::IsMouseClicked(0)) {
 			if (onClose)
 				onClose();
 		}
