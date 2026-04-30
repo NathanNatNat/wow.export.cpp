@@ -184,8 +184,8 @@ Differences in how file paths and strings are processed.
 
 ### F6. [tab_audio.cpp] parent_path() returns "" instead of "." for bare filenames
 - **JS Source**: `src/js/modules/tab_audio.js` lines 155-158
-- **Reason**: Node.js `path.dirname("file.ogg")` returns `"."`. C++ `parent_path()` returns `""`.
-- **Impact**: Export paths for bare filenames could get a leading separator. (TODO 121)
+- **Reason**: Node.js `path.dirname("file.ogg")` returns `"."`. C++ `parent_path()` returns `""`. C++ code checks both `dir.empty()` and `dir == "."` to handle both cases.
+- **Impact**: None — both code paths produce the same result after the fix.
 
 ### F7. [tab_fonts.cpp] Same parent_path() vs dirname() mismatch
 - **JS Source**: `src/js/modules/tab_fonts.js` lines 124-126
@@ -907,3 +907,27 @@ C++ additions with no JS counterpart.
 - **JS Source**: Various — updater.js, STLWriter.js, GLTFWriter.js
 - **Reason**: Per project guidelines, user-facing text says "wow.export.cpp".
 - **Impact**: Intentional branding change.
+
+## Log Output
+
+### L1. [tab_blender.cpp] checkLocalVersion() logs error string instead of "[object Object]" for unparseable Blender addon version
+- **JS Source**: `src/js/modules/tab_blender.js` line 161
+- **Reason**: JS `%s` on an error object produces `"[object Object]"`. C++ logs the actual error string (e.g. `"file_not_found"`), which is more informative.
+- **Impact**: Log output differs but is strictly more useful in C++.
+
+## Defensive Guards
+
+### DG1. [tab_decor.cpp] Null-guard on GL context before create_renderer
+- **JS Source**: `src/js/modules/tab_decor.js` lines 73-74
+- **Reason**: JS uses optional chaining (`?.gl_context`) and passes possibly-null to `create_renderer`. C++ `create_renderer` takes `gl::GLContext&` (reference), so null would crash. Guard with error toast is necessary.
+- **Impact**: C++ shows error toast and returns early when GL context is unavailable; JS would pass null and potentially create a broken renderer.
+
+### DG2. [tab_decor.cpp] fitCamera called synchronously instead of deferred via requestAnimationFrame
+- **JS Source**: `src/js/modules/tab_decor.js` line 112
+- **Reason**: JS `requestAnimationFrame()` defers to the next browser animation frame. ImGui is immediate-mode — calling synchronously is equivalent since the renderer picks up state changes on the next frame automatically.
+- **Impact**: None in practice — timing difference is functionally equivalent in ImGui.
+
+### DG3. [tab_decor.cpp] export_decor skips non-string selection entries
+- **JS Source**: `src/js/modules/tab_decor.js` lines 497-506
+- **Reason**: JS `return entry` passes non-string entries through unchanged. In practice, `selectionDecor` only ever contains formatted display strings; the non-string fallback is dead code. C++ correctly processes string entries and skips the unreachable non-string path.
+- **Impact**: None — dead code path in both JS and C++.

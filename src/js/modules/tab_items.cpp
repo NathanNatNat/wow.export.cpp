@@ -571,6 +571,16 @@ void setActive() {
 	modules::set_active("tab_items");
 }
 
+void applySlotFilter(const std::string& filter) {
+	if (!type_mask_entries.empty()) {
+		for (auto& entry : type_mask_entries)
+			entry.checked = (entry.label == filter);
+		apply_filters();
+	} else {
+		core::view->pendingItemSlotFilter = filter;
+	}
+}
+
 void render() {
 	auto& view = *core::view;
 

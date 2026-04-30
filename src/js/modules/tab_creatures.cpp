@@ -952,7 +952,8 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 			active_renderer_result = model_viewer_utils::create_renderer(
 				file, model_type, *gl_ctx,
 				view.config.value("modelViewerShowTextures", true),
-				file_data_id
+				file_data_id,
+				file_name
 			);
 
 			if (model_type == model_viewer_utils::ModelType::M2)
@@ -1353,9 +1354,11 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 
 					std::string mark_file_name = casc::ExportHelper::getRelativeExport(final_path);
 
-					if (format == "OBJ" || format == "STL") {
-						exporter.exportAsOBJ(final_path, (format == "STL"), &helper, &file_manifest);
-					} else {
+					if (format == "OBJ")
+						exporter.exportAsOBJ(final_path, false, &helper, &file_manifest);
+					else if (format == "STL")
+						exporter.exportAsSTL(final_path, false, &helper, &file_manifest);
+					else {
 						std::string fmt_lower = format;
 						std::transform(fmt_lower.begin(), fmt_lower.end(), fmt_lower.begin(), ::tolower);
 						exporter.exportAsGLTF(final_path, &helper, fmt_lower);
@@ -1388,6 +1391,8 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 			std::string export_path = casc::ExportHelper::getExportPath("creatures/" + creature_name + file_ext);
 			const bool is_active = (file_data_id == active_file_data_id);
 
+			std::vector<nlohmann::json> json_file_manifest;
+
 			model_viewer_utils::ExportModelOptions opts;
 			opts.data = &data;
 			opts.file_data_id = file_data_id;
@@ -1396,6 +1401,8 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 			opts.export_path = export_path;
 			opts.helper = &helper;
 			opts.casc = casc;
+			opts.file_manifest = &json_file_manifest;
+			opts.export_paths = &export_paths;
 			nlohmann::json variant_textures_json = nlohmann::json::array();
 			if (is_active) {
 				for (uint32_t tid : selected_variant_texture_ids)

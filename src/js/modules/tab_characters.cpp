@@ -1040,9 +1040,6 @@ if (file_data_id == 0 || active_model == file_data_id)
 return;
 
 auto& view = *core::view;
-if (view.chrModelLoading)
-return;
-
 view.chrModelLoading = true;
 logging::write(std::format("Loading character model {}", file_data_id));
 
@@ -1131,7 +1128,7 @@ view.chrModelViewerAnims = model_viewer_utils::extract_animations(*active_render
 
 const bool has_content = !active_renderer->get_draw_calls().empty();
 if (!has_content)
-core::setToast("info", "This model has no visible geometry.", {}, 4000);
+core::setToast("info", std::format("The model {} doesn't have any 3D data associated with it.", file_data_id), {}, 4000);
 
 // refresh appearance after model is fully loaded
 refresh_character_appearance();
@@ -2992,7 +2989,8 @@ if (slot_entry_it == wow::EQUIPMENT_SLOTS.end())
 return;
 auto& v = *core::view;
 v.chrPendingEquipSlot = slot_id;
-v.pendingItemSlotFilter = std::string(slot_entry_it->filter_name.empty() ? slot_entry_it->name : slot_entry_it->filter_name);
+std::string filter = std::string(slot_entry_it->filter_name.empty() ? slot_entry_it->name : slot_entry_it->filter_name);
+tab_items::applySlotFilter(filter);
 tab_items::setActive();
 }
 

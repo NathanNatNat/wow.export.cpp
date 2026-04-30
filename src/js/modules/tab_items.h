@@ -72,6 +72,8 @@ struct ItemData {
 	int inventoryType = 0;
 };
 
+void applySlotFilter(const std::string& filter);
+
 /**
  * Returns all loaded items (unfiltered). Used by item-picker-modal.
  * JS equivalent: DBItemList.getItems() in item-picker-modal.js.

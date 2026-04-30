@@ -268,7 +268,7 @@ void checkLocalVersion() {
 		latestAddonVersion.version,
 		blenderAddonVersion.error.empty() ? blenderAddonVersion.version : blenderAddonVersion.error));
 
-	if (latestAddonVersion.version > blenderAddonVersion.version) {
+	if (blenderAddonVersion.error.empty() && latestAddonVersion.version > blenderAddonVersion.version) {
 		logging::write("Prompting user for Blender add-on update...");
 		core::setToast("info", "A newer version of the Blender add-on is available for you.", {
 			{"Install", []() { modules::setActive("tab_blender"); }},

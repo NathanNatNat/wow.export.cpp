@@ -43,8 +43,7 @@ void render() {
 
 	// JS: {{ $core.view.isDev }} — Vue renders boolean as "true"/"false"
 	ImGui::Text("Dev Mode: %s", core::view->isDev ? "true" : "false");
-	// JS: {{ $core.view.isBusy }} — Vue renders boolean as "true"/"false"
-	ImGui::Text("Busy State: %s", core::view->isBusy ? "true" : "false");
+	ImGui::Text("Busy State: %d", core::view->isBusy);
 	// JS: {{ $core.view.casc !== null }} — Vue renders boolean as "true"/"false"
 	ImGui::Text("CASC Loaded: %s", core::view->casc != nullptr ? "true" : "false");
 
