@@ -224,12 +224,6 @@ void CameraControlsGL::init() {
 }
 
 void CameraControlsGL::dispose() {
-	// JS dispose() only removes the two document-level listeners (mousemove, mouseup).
-	// The dom_element listeners (contextmenu, mousedown, wheel, keydown) are NOT removed —
-	// they remain attached to the element for its lifetime.
-	//
-	// In C++/GLFW the caller must stop forwarding events to this instance.
-	// We reset state here so that any stale forwarded events are ignored.
 	state = STATE_NONE;
 }
 

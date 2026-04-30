@@ -212,14 +212,6 @@ ParseResultV1 wmv_parse_v1(const nlohmann::json& data) {
 	auto get_legacy_value = [&](const std::string& key) -> int {
 		const auto& val = safe_navigate(char_details, { key, "@_value" });
 
-		// Two distinct paths, both returning a safe sentinel:
-		// (a) Attribute absent / null: JS evaluates parseInt(undefined ?? '0') = parseInt('0') = 0.
-		//     C++ returns 0 directly — same result.
-		// (b) Attribute present but non-numeric: JS parseInt("abc") returns NaN; C++ returns -1.
-		//     Downstream consumer (tab_characters.cpp) guards with
-		//       static_cast<size_t>(value) < choices->size()
-		//     Casting -1 to size_t yields SIZE_MAX, which is always out-of-range — matching
-		//     JS where choices[NaN] === undefined, which the consumer also treats as out-of-range.
 		if (val.is_null())
 			return 0;
 		auto parsed = safe_parse_int(val);

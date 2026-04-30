@@ -92,8 +92,6 @@ std::unique_ptr<gl::ShaderProgram> create_program(gl::GLContext& ctx, const std:
 	// track for hot-reload
 	program->_shader_name = name;
 
-	// Caller must call dispose() before destroying the returned unique_ptr;
-	// raw pointer stored here becomes dangling otherwise (reload_all() would crash).
 	active_programs[name].insert(program.get());
 
 	return program;

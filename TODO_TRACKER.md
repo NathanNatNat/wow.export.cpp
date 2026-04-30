@@ -1,484 +1,396 @@
 # TODO Tracker
 
-> **Progress: 2/120 verified (2%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/98 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
-- [ ] 48. [subtitles.cpp] parse_sbt_timestamp uses a strict integer parser; JS parseInt + NaN propagation produces different malformed-input behaviour.
-  - **JS Source**: `src/js/subtitles.js` lines 8–22
-  - **Status**: Pending
-  - **Details**: JS `parse_sbt_timestamp` calls `parseInt(parts[N], 10)`, which parses leading digits and ignores trailing non-numeric characters and returns `NaN` only when the leading character is non-numeric. The C++ helper `parse_sbt_int_js` (`src/js/subtitles.cpp` lines 21–42) returns `std::nullopt` whenever it encounters a non-digit, and `parse_sbt_timestamp` (lines 63–64) returns 0 if any component fails. JS `NaN` arithmetic propagates: a single `NaN` yields `NaN + NaN = NaN`, ultimately producing a `NaN` timestamp rather than 0. Additionally, JS `parseInt` returns 0 for `"00"` but `NaN` for empty strings — the C++ helper returns `nullopt` for empty strings, mapping to 0, which differs from JS's `NaN` propagation through the whole expression.
-- [ ] 49. [subtitles.cpp] BOM check uses raw 3-byte UTF-8 BOM check rather than the JS `charCodeAt(0) === 0xFEFF` form.
-  - **JS Source**: `src/js/subtitles.js` lines 177–178
-  - **Status**: Pending
-  - **Details**: JS `text.charCodeAt(0) === 0xFEFF` checks the first UTF-16 code unit of the decoded JS string. After `data.readString(undefined, 'utf8')` decodes the file as UTF-8, a leading UTF-8 BOM (EF BB BF) decodes to a single U+FEFF code point, so `charCodeAt(0)` returns 0xFEFF and `text.slice(1)` strips that one code point. The C++ implementation at `src/js/subtitles.cpp` lines 343–344 checks for the literal 3-byte UTF-8 BOM and strips 3 bytes. This is functionally equivalent for UTF-8 input. Documented as a deviation in the comment at lines 333–342, but per the project's fidelity rules deviations should only occur when "a direct port is genuinely impossible" — here the C++ result happens to match, so the deviation framing in the comment is misleading rather than functionally wrong.
-- [ ] 50. [subtitles.cpp] get_subtitles_vtt uses getVirtualFileByID and exposes get_subtitles_vtt_from_text as an EXTRA public symbol.
-  - **JS Source**: `src/js/subtitles.js` lines 172–187
-  - **Status**: Pending
-  - **Details**: JS `get_subtitles_vtt` is `async`, takes `(casc, file_data_id, format)`, calls `await casc.getFile(file_data_id)`, then `data.readString(undefined, 'utf8')`. C++ (`src/js/subtitles.cpp` lines 355–364) is synchronous, takes `(casc::CASC* casc, uint32_t file_data_id, SubtitleFormat format)`, calls `casc->getVirtualFileByID(file_data_id)` (not `getFile`), and calls `data.readString()` with no arguments (JS explicitly requests UTF-8). The sync-vs-async difference is the standard JS→C++ mapping. Two real deviations: (1) the C++ throws `std::runtime_error("casc is null")` on null `casc` (lines 356–357), which has no JS counterpart — JS would throw `TypeError` on the `.getFile` call, behaviourally similar but not identical; (2) `getVirtualFileByID` may resolve files differently than `casc.getFile` if it adds virtual-path resolution. Also `get_subtitles_vtt_from_text` is exposed as a public symbol in the header (line 44) but JS only exports `SUBTITLE_FORMAT` and `get_subtitles_vtt` (lines 189–192) — an EXTRA public symbol with no JS counterpart.
-- [ ] 51. [tiled-png-writer.cpp] `write()` does not await completion — returns a `shared_future<void>` immediately rather than blocking like JS `await`.
-  - **JS Source**: `src/js/tiled-png-writer.js` lines 123–125
-  - **Status**: Pending
-  - **Details**: JS `async write(file) { return await this.getBuffer().writeToFile(file); }` awaits the file write before resolving its returned promise, so any caller using `await tiledWriter.write(path)` is guaranteed the file is fully on disk (and any I/O error has thrown) before the next statement runs. The C++ port (`src/js/tiled-png-writer.cpp` lines 111–116) launches the write on `std::async(std::launch::async, ...)` and returns a `std::shared_future<void>` immediately; the file write proceeds on a background thread. Callers must explicitly call `.get()` to observe completion or errors. This is the same divergence already tracked for png-writer (TODO 47) and breaks the JS guarantee that `await write(...)` synchronises with file completion — call sites that mirror the JS pattern of `tiledWriter.write(path);` and continue will race with the writer thread and silently drop write errors.
-- [ ] 52. [tiled-png-writer.cpp] `tiles` map is `std::map` (lexicographic) instead of JS `Map` (insertion-ordered) — Porter-Duff blend output is order-dependent.
-  - **JS Source**: `src/js/tiled-png-writer.js` lines 25, 58–59
-  - **Status**: Pending
-  - **Details**: JS uses `new Map()` and iterates via `for (const tile of this.tiles.values())` (line 58), which yields tiles in **insertion order**. C++ uses `std::map<std::string, Tile>` (`src/js/tiled-png-writer.h` line 106) keyed by `"x,y"` strings, iterated via range-for (cpp line 49), which yields tiles in **lexicographic key order**. The Porter-Duff "over" compositing applied in `_writeTileToPixelData` (cpp lines 93–102 / js lines 105–114) is **non-commutative** when tiles overlap with non-zero/non-one alpha values: the blended output for the same set of tiles will differ between the two implementations whenever (a) two or more tiles overlap on a pixel and (b) at least one of them has an alpha in (0,1). The header comment at lines 102–105 acknowledges this and rationalises it ("WoW map tiles are typically fully opaque"), but the deviation must still be tracked. Restoring fidelity requires either an insertion-ordered container (e.g. `std::vector<Tile>` with auxiliary lookup, or `std::map` keyed by an insertion counter) or replacing the key with a sortable composite that matches insertion order.
-- [x] 53. [updater.cpp] Updater deliberately excluded — module removed entirely.
-  - **JS Source**: `src/js/updater.js`
-  - **Status**: Resolved — intentional exclusion, not a TODO.
-  - **Details**: Updater module deliberately excluded from the C++ port. See DEVIATIONS.md entry A1.
-- [x] 54. [updater.cpp] Updater deliberately excluded — module removed entirely.
-  - **JS Source**: `src/js/updater.js`
-  - **Status**: Resolved — intentional exclusion, not a TODO.
-  - **Details**: Updater module deliberately excluded from the C++ port. See DEVIATIONS.md entry A1.
-- [ ] 55. [wmv.cpp] `parse_legacy` legacy_values fallback returns -1 sentinel where JS produces NaN.
-  - **JS Source**: `src/js/wmv.js` lines 87–92
-  - **Status**: Pending
-  - **Details**: JS `wmv_parse_v1` builds `legacy_values` with `parseInt(char_details?.<key>?.['@_value'] ?? '0')` (lines 87–91). When the attribute exists but is non-numeric (e.g. `@_value="abc"`), `parseInt` returns `NaN`; when absent, the `?? '0'` fallback yields `parseInt('0') = 0`. The C++ helper `get_legacy_value` (`src/js/wmv.cpp` lines 212–227) returns `0` when the navigated value is null, but returns `-1` (via `value_or(-1)` on `safe_parse_int`'s `optional`) when the value exists but is non-numeric. Downstream in `tab_characters.cpp`, `static_cast<size_t>(-1) < choices->size()` is generally false (SIZE_MAX), so the practical effect — "no choice picked" — matches JS's `choices[NaN] === undefined`. But the sentinel value itself differs: any caller that inspects the int directly (e.g. logs it, persists it, compares with -1) will see different values between JS and C++.
-- [ ] 56. [xml.cpp] `build_object` uses `std::unordered_map` for child grouping — JSON output key order differs from JS insertion order.
-  - **JS Source**: `src/js/xml.js` lines 138–153
-  - **Status**: Pending
-  - **Details**: JS `build_object` uses a plain object literal `groups = {}` and pushes children with `groups[child.tag].push(child)` (line 144), then iterates `Object.entries(groups)` (line 148) which yields entries in insertion order — the order tags first appeared in the parsed XML. C++ (`src/js/xml.cpp` line 193) uses `std::unordered_map<std::string, std::vector<Node>> groups`, whose iteration order is hash-based. When entries are written into the output `nlohmann::json` object (which preserves insertion order), the resulting JSON object's key sequence matches hash order, not first-occurrence order. Any consumer that iterates the parsed XML JSON expecting tag-first-appearance order (or compares against a known-good JSON dump) will see different key sequences than JS. The comment at lines 190–192 acknowledges the deviation but understates the impact — JSON serialization order IS observable.
-- [ ] 57. [GeosetMapper.cpp] `map()` async signature dropped; C++ exposes synchronous `void map()`.
-  - **JS Source**: `src/js/3D/GeosetMapper.js` lines 79–84
-  - **Status**: Pending
-  - **Details**: JS declares `const map = async (geosets) => { ... }` (line 79). The body contains no `await`, so the function returns a resolved Promise immediately, but `await module.map(geosets)` from any JS caller is part of the observable contract. C++ (`src/js/3D/GeosetMapper.cpp` line 87, header line 33) declares `void map(std::vector<Geoset>& geosets)` — synchronous and untyped. Functionally identical for the current single C++ caller, but the API contract diverges from JS. If the JS standard for this codebase is "all async functions remain async (return future/promise) in C++" (cf. TODO 47), this should match; otherwise it should at least be documented.
-- [ ] 58. [Shaders.cpp] `active_programs` is `std::unordered_map` instead of JS insertion-ordered `Map`; `reload_all` recompile order differs.
-  - **JS Source**: `src/js/3D/Shaders.js` lines 26, 100–122
-  - **Status**: Pending
-  - **Details**: JS declares `const active_programs = new Map()` (line 26), and `reload_all()` iterates `for (const [name, programs] of active_programs)` (line 100) in insertion order. C++ (`src/js/3D/Shaders.cpp` line 36) uses `std::unordered_map<std::string, std::unordered_set<gl::ShaderProgram*>>`, and the loop at cpp line 130 visits names in hash order. Recompile order is observable through the log lines emitted on success/failure (`logging::write` at lines 142, 147), which interleave per-shader names; the order of those log lines will not match the JS reference. If multiple shaders share state during reload (e.g. error counters compared in order), the divergence could also affect failure attribution. Replace with `std::map<std::string, ...>` (sorted) only if alphabetical iteration is acceptable; for true insertion-order parity, use a hash map plus an insertion-order vector of keys.
-- [ ] 59. [Shaders.cpp] `create_program` splits ownership: returns `unique_ptr` while storing a raw pointer in `active_programs` — dangling-pointer risk.
-  - **JS Source**: `src/js/3D/Shaders.js` lines 56–72
-  - **Status**: Pending
-  - **Details**: JS `create_program` constructs a new `ShaderProgram`, registers it in `active_programs` (line 67), and returns the same JS object reference; the JS GC keeps it alive as long as either the caller or `active_programs` holds it. C++ (`src/js/3D/Shaders.cpp` lines 78–100) returns a `std::unique_ptr<gl::ShaderProgram>` to the caller while storing `program.get()` (raw pointer) in `active_programs` (line 97). When the caller's `unique_ptr` goes out of scope, the program is destroyed but the raw pointer in `active_programs` becomes dangling — `reload_all` (line 130) will then dereference freed memory unless the caller manually calls `unregister()` first. The comment at lines 95–96 documents the footgun. JS has no equivalent risk because of garbage collection.
-- [ ] 60. [Shaders.cpp] `create_program` installs a `_unregister_fn` callback on the ShaderProgram with no JS counterpart.
-  - **JS Source**: `src/js/3D/Shaders.js` lines 56–72
-  - **Status**: Pending
-  - **Details**: JS `create_program` does not install any cleanup hook on the returned ShaderProgram — the caller is responsible for calling `unregister()` explicitly. C++ (`src/js/3D/Shaders.cpp` lines 80–84) sets `program->_unregister_fn = [name](auto* p) { unregister(p); };` so destruction of the ShaderProgram automatically de-registers it from `active_programs`. This is an EXTRA behaviour (no JS analogue) added to compensate for split-ownership (see finding 59), but it changes observable lifecycle semantics: in JS a program retained only by `active_programs` survives indefinitely; in C++ destroying the caller's `unique_ptr` triggers automatic de-registration. The two together effectively reverse JS's "registered programs are pinned" contract.
-- [ ] 61. [Texture.cpp] `getTextureFile()` calls `casc->getVirtualFileByID()` instead of the JS-equivalent `casc.getFile()`.
-  - **JS Source**: `src/js/3D/Texture.js` lines 32–41
-  - **Status**: Pending
-  - **Details**: JS calls `await core.view.casc.getFile(this.fileDataID)`, where `getFile` is overridden by `CASCLocal`/`CASCRemote` to return the BLTE-decoded data (a BufferWrapper). The C++ port instead invokes `core::view->casc->getVirtualFileByID(this->fileDataID)`. In this codebase, the C++ `CASC::getFile` returns only an encoding key string (see `casc-source-local.h:55–57`), so a literal port is not viable; however, this is a deviation from the JS source structure and should at minimum be documented in a code comment. JS `getFile` in CASCRemote takes `partialDecrypt=false, suppressLog=false, supportFallback=true, forceFallback=false`, which `getVirtualFileByID` may or may not match — verify equivalence (BLTE decoding, partial-decrypt defaults, suppressLog, fallback handling).
-- [ ] 62. [CameraControlsGL.cpp] `dispose()` additionally resets `state` to `STATE_NONE`, an extra side effect not present in the JS source.
-  - **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 218–221
-  - **Status**: Pending
-  - **Details**: JS `dispose()` only removes the two document-level listeners (`mousemove`, `mouseup`) and leaves all instance state untouched, so a controller disposed during an active drag retains its `state` value. The C++ port (`CameraControlsGL.cpp:226–234`) instead clears `state = STATE_NONE`. The accompanying comment acknowledges this is an additional change beyond the JS behaviour. While likely a benign safeguard given the GLFW input-forwarding model, it is a behavioural deviation from the literal JS port. Either remove the assignment to mirror JS exactly or keep it as a documented intentional deviation.
-- [ ] 63. [ADTExporter.cpp] High-quality bake path uses persistent FBO and pixel-level 180° rotation instead of JS rotateCanvas + OffscreenCanvas composite.
-  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 891–1161
-  - **Status**: Pending
-  - **Details**: JS creates a `glCanvas` per export and uses two OffscreenCanvas objects (rotateCanvas + composite) with `ctx.rotate(Math.PI)` and `drawImage`. C++ (`ADTExporter.cpp:1071–1407`) instead uses an offscreen FBO (`initFBO`/`readFBOPixels`) and rotates by index swap when copying pixels. While the geometric result is the same 180° rotation, JS uses canvas bilinear/bicubic resampling on `drawImage` for scaling, whereas C++ does a plain index swap. Composite blits in JS may produce slightly different edge behaviour than the per-pixel C++ copy.
-- [ ] 64. [ADTExporter.cpp] `quality<=512` minimap rescale uses stb_image_resize linear filter where JS uses canvas drawImage.
-  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 861–890
-  - **Status**: Pending
-  - **Details**: JS path scales the BLP via `ctx.scale(scale, scale); ctx.drawImage(canvas, 0, 0)`, which uses the browser's canvas resampling (typically bilinear+box smoothing). C++ uses `stbir_resize_uint8_linear` with `STBIR_RGBA` (`ADTExporter.cpp:1057`). Output PNGs will be near-identical at 1:1 but differ slightly when scaling. Comment in code already acknowledges this.
-- [ ] 65. [ADTExporter.cpp] `saveRawLayerTexture` lambda has `void` return; JS lambda returns the relative file path.
-  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1164–1190
-  - **Status**: Pending
-  - **Details**: JS returns the relative texFile (posix-converted if `usePosix`), but the JS callers at lines 1193–1198 ignore the return value. Functionally identical due to caller behaviour, but the lambda's signature deviates from the JS version. Cosmetic — no behaviour change unless a future caller starts using the return value.
-- [ ] 66. [ADTExporter.cpp] `exportObjects` scaleFactor for ADTGameObject branch incorrectly maps an explicit scale of 0 to 1.0.
-  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1270
-  - **Status**: Pending
-  - **Details**: JS uses `ScaleFactor: model.scale !== undefined ? model.scale / 1024 : 1`. C++ at `ADTExporter.cpp:1527` uses `model.scale != 0.0f ? model.scale / 1024.0f : 1.0f`. This treats 0 as "absent" because the struct's default is 0.0f. JS only uses `1` when `model.scale === undefined`; an explicit `0` would yield `0/1024 = 0`. To match, ADTGameObject needs an `optional<float>` for scale (or a separate `hasScale` flag) so the C++ can distinguish present-but-zero from absent.
-- [ ] 67. [ADTExporter.cpp] WMO export hardcodes `useADTSets = false`, disabling the doodad-set-from-ADT branch entirely.
-  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1300–1351
-  - **Status**: Pending
-  - **Details**: C++ at `ADTExporter.cpp:1585` sets `const bool useADTSets = false;` with a comment claiming `model & 0x80` is always 0 in JS. While that is technically correct for JS where `model` is an object (ToInt32 of an object yields 0), the C++ port should evaluate the equivalent bit on the binary `worldModels` data — `model.flags & 0x80` would be the proper port for JS-fidelity-via-the-actual-binary-flag. The doodad-set-from-ADT branch (lines 1645–1646, 1654–1656) is currently dead code in C++.
-- [ ] 68. [ADTExporter.cpp] Liquid export pushes `nullptr` for chunks with no instances, losing the original chunk fields.
-  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1409–1411
-  - **Status**: Pending
-  - **Details**: JS does `if (!chunk || !chunk.instances) return chunk;` which preserves the original chunk object (including `attributes`) when there are no instances. C++ at `ADTExporter.cpp:1733` pushes `nullptr` instead, dropping the chunk's `attributes` field. Should serialise the empty chunk's `attributes` and an empty `instances` array, or omit the entry entirely if the JS chunk would actually be falsy.
-- [ ] 69. [ADTExporter.cpp] Foliage JSON `foliageJSON.data = groundEffectTexture` is approximated by per-field addProperty calls.
-  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1474–1479
-  - **Status**: Pending
-  - **Details**: JS sets `foliageJSON.data = groundEffectTexture`, which makes `JSON.stringify` emit the entire DB row at the JSON root in insertion order. C++ enumerates fields and calls `addProperty(key, val)` (lines 1852–1856). Comment in code acknowledges this may differ in numeric formatting. Order of keys in the resulting JSON also depends on `unordered_map` iteration order, while JS preserves insertion order — possible cosmetic/output-stability deviation.
-- [ ] 70. [M2Exporter.cpp] `exportRaw` parent-skeleton bones gated on the wrong config flag.
+- [ ] 48. [M2Exporter.cpp] `exportRaw` parent-skeleton bones gated on the wrong config flag.
   - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 1098–1163
   - **Status**: Pending
   - **Details**: JS exports parent-skeleton `.bone` files when `config.modelsExportBone && parentSkel.boneFileIDs` is true (line 1143), regardless of `config.modelsExportAnim`. The JS bone block sits OUTSIDE the `if (config.modelsExportAnim)` wrapper. C++ at `M2Exporter.cpp:1568–1591` places the parent-skeleton bone export INSIDE the `if (config.value("modelsExportAnim", false))` block that opens at :1535 and closes around :1592, so C++ skips parent-skel bones whenever `modelsExportAnim` is false. Users who enable bones-only export without animations will silently lose parent-skel bone files.
-- [ ] 71. [M2Exporter.cpp] `addURITexture` API and base64 decoding diverge from JS.
+- [ ] 49. [M2Exporter.cpp] `addURITexture` API and base64 decoding diverge from JS.
   - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59–61, 111
   - **Status**: Pending
   - **Details**: JS `addURITexture(out, dataURI)` stores a base64 data URI string; `exportTextures` later strips the `data:...,` prefix and decodes via `BufferWrapper.fromBase64()` at line 111. C++ `addURITexture(uint32_t textureType, BufferWrapper pngData)` requires the caller to pre-decode and skips the data-URI parsing. Behaviour of the export pipeline matches once the buffer is in `dataTextures`, but the public API contract differs and the JS regex strip is not preserved anywhere in C++.
-- [ ] 72. [M2Exporter.cpp] `exportTextures` data-texture path does not back-patch `texture.fileDataID`.
+- [ ] 50. [M2Exporter.cpp] `exportTextures` data-texture path does not back-patch `texture.fileDataID`.
   - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 153–168
   - **Status**: Pending
   - **Details**: When `textureType` matches a `dataTextures` entry, JS sets `targetFileDataID = 'data-' + textureType` and back-patches `texture.fileDataID = targetFileDataID` (line 167) so that the meta-JSON exporter (`exportAsOBJ` lines 800–810) emits the `'data-N'` string in `m2.textures[i].fileDataID`. C++ `M2Exporter.cpp:360–385` sets `isDataTexture = true` and skips the back-patch (Texture::fileDataID is `uint32_t`, cannot hold a string). Result: meta JSON `textures[i].fileDataID` differs from JS for data-texture rows.
-- [ ] 73. [M2Exporter.cpp] `exportTextures` cancellation returns a partial result struct instead of `undefined`.
+- [ ] 51. [M2Exporter.cpp] `exportTextures` cancellation returns a partial result struct instead of `undefined`.
   - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 142–143
   - **Status**: Pending
   - **Details**: When `helper.isCancelled()` fires mid-loop in JS `exportTextures`, the function does `return;` (returns `undefined`). C++ `M2Exporter.cpp:349–352` returns the partial `M2ExportTextureResult` struct. The behavioural difference is small (callers proceed with empty maps instead of dereferencing `undefined`), but technically deviates from JS — JS callers iterating the result would have thrown.
-- [ ] 74. [M2Exporter.cpp] `exportTextures` early-return shape ignores glbMode.
+- [ ] 52. [M2Exporter.cpp] `exportTextures` early-return shape ignores glbMode.
   - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 95–96
   - **Status**: Pending
   - **Details**: When `!modelsExportTextures`, JS returns `glbMode ? { validTextures, texture_buffers, files_to_cleanup } : validTextures` — the shape changes between glbMode and non-glbMode. C++ `M2Exporter.cpp:300–301` always returns a single empty `M2ExportTextureResult` struct. Functionally equivalent because all C++ callers go through the struct, but the JS-shape distinction is lost.
-- [ ] 75. [M2LegacyExporter.cpp] matName extension stripping uses generic `stem()` instead of `.blp`-only removal.
+- [ ] 53. [M2LegacyExporter.cpp] matName extension stripping uses generic `stem()` instead of `.blp`-only removal.
   - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` line 94
   - **Status**: Pending
   - **Details**: JS computes `matName = 'mat_' + path.basename(texturePath.toLowerCase(), '.blp')` — strips only the `.blp` suffix and keeps any other extension intact. C++ uses `std::filesystem::path(lowerTexPath).stem().string()` (`M2LegacyExporter.cpp:130–133`) which strips whatever extension is present. For non-`.blp` paths the matName differs (any other extension is stripped where JS would keep it).
-- [ ] 76. [M2LegacyExporter.cpp] exportM2Meta subMesh JSON drops loader-exposed fields beyond hardcoded list.
+- [ ] 54. [M2LegacyExporter.cpp] exportM2Meta subMesh JSON drops loader-exposed fields beyond hardcoded list.
   - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 206–210
   - **Status**: Pending
   - **Details**: JS uses `Object.assign({enabled: subMeshEnabled}, skin.subMeshes[i])` which copies every own property of the subMesh object. C++ at `M2LegacyExporter.cpp:261–282` rebuilds the JSON manually and includes only 13 hardcoded fields (submeshID, level, vertexStart, vertexCount, triangleStart, triangleCount, boneCount, boneStart, boneInfluences, centerBoneIndex, centerPosition, sortCenterPosition, sortRadius). Any additional properties exposed by the loader are silently dropped from the meta JSON.
-- [ ] 77. [M2LegacyExporter.cpp] exportM2Meta textures JSON emits explicit null instead of omitting fileNameExternal/mtlName.
+- [ ] 55. [M2LegacyExporter.cpp] exportM2Meta textures JSON emits explicit null instead of omitting fileNameExternal/mtlName.
   - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 229–234
   - **Status**: Pending
   - **Details**: JS sets `fileNameExternal` and `mtlName` to `textureEntry?.matPathRelative` / `textureEntry?.matName`, which is `undefined` when the entry is missing — `JSON.stringify` omits undefined values entirely. C++ at `M2LegacyExporter.cpp:285–307` explicitly writes `nullptr`/`null` for both fields. Output JSON now contains `"fileNameExternal": null, "mtlName": null` keys that the JS version did not produce.
-- [ ] 78. [M2LegacyExporter.cpp] exportM2Meta materials/textureUnits/boundingBox/collisionBox JSON drops loader-exposed fields.
+- [ ] 56. [M2LegacyExporter.cpp] exportM2Meta materials/textureUnits/boundingBox/collisionBox JSON drops loader-exposed fields.
   - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 244, 248, 250, 254
   - **Status**: Pending
   - **Details**: JS calls `json.addProperty('materials', this.m2.materials)`, `'boundingBox', this.m2.boundingBox`, `'collisionBox', this.m2.collisionBox`, and `'textureUnits', skin.textureUnits` — serialising whatever properties the loader has on those objects. C++ manually rebuilds each object with a hardcoded subset (materials → flags, blendingMode only; bounding/collisionBox → min, max only; textureUnits → 13 listed fields) at `M2LegacyExporter.cpp:310–365`. Any extra fields the loader exposes are dropped from the meta JSON output.
-- [ ] 79. [M2LegacyExporter.cpp] exportAsOBJ/STL throw `runtime_error` on null skin where JS would crash naturally.
+- [ ] 57. [M2LegacyExporter.cpp] exportAsOBJ/STL throw `runtime_error` on null skin where JS would crash naturally.
   - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 129, 268
   - **Status**: Pending
   - **Details**: JS code is `const skin = await this.m2.getSkin(0)` followed by direct property access — if `getSkin` returned null/undefined, JS would crash with a TypeError on `skin.subMeshes`. C++ at `M2LegacyExporter.cpp:174–175, 385–386` explicitly checks the pointer and throws `std::runtime_error("Failed to load legacy skin 0")` instead. Added defensive behaviour not in the original; only matters in the failure path but is a deviation.
-- [ ] 80. [M3Exporter.cpp] `addURITexture` accepts `BufferWrapper pngData` and stores a `BufferWrapper` instead of the JS `dataURI` string.
+- [ ] 58. [M3Exporter.cpp] `addURITexture` accepts `BufferWrapper pngData` and stores a `BufferWrapper` instead of the JS `dataURI` string.
   - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 49–51
   - **Status**: Pending
   - **Details**: JS signature is `async addURITexture(out, dataURI)` and stores the `dataURI` string in `this.dataTextures` (`Map<string, string>`). C++ signature is `addURITexture(const std::string& out, BufferWrapper pngData)` storing into `map<std::string, BufferWrapper>` (`M3Exporter.h:59,110`). Callers passing a data-URI string will not compile, and any consumer reading `dataTextures` will receive raw bytes instead of a `data:image/png;base64,...` string. Either revert the parameter/storage type to `std::string` to match JS, or document why a binary buffer is correct for this port and update all call sites accordingly.
-- [ ] 81. [M3Exporter.cpp] OBJ texture-manifest push reads the map value as a plain path string instead of `texInfo.matPath`.
+- [ ] 59. [M3Exporter.cpp] OBJ texture-manifest push reads the map value as a plain path string instead of `texInfo.matPath`.
   - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 145–147
   - **Status**: Pending
   - **Details**: JS iterates `validTextures` as `[texFileDataID, texInfo]` and pushes `file: texInfo.matPath` — i.e. the value is an object containing at least a `matPath` field. C++ at `M3Exporter.cpp:170–174` declares the value as `std::string` and uses it directly as the path. `exportTextures` currently returns an empty map in both JS and C++ so this branch is never exercised, but once `exportTextures` is implemented the C++ map shape and JS object shape will diverge. Consider modelling the value as a struct with at least `matPath` for forward compatibility.
-- [ ] 82. [M3Exporter.cpp] `exportAsGLTF` reshapes the texture map to `map<string, GLTFTextureEntry>` instead of passing the raw `<id, path>` map.
+- [ ] 60. [M3Exporter.cpp] `exportAsGLTF` reshapes the texture map to `map<string, GLTFTextureEntry>` instead of passing the raw `<id, path>` map.
   - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 91–92
   - **Status**: Pending
   - **Details**: JS passes `validTextures` (a `Map<number, string>`) directly to `gltf.setTextureMap(textureMap)`. C++ at `M3Exporter.cpp:101–104` stringifies the numeric key and wraps each path in a `GLTFTextureEntry{path, ""}` adapter. Because `exportTextures` is presently a stub, the conversion is currently a no-op, but the conversion shape (string keys, second `""` field) needs verification against `GLTFWriter::setTextureMap`'s contract once M3 texture export is implemented to ensure parity with JS callers.
-- [ ] 83. [WMOExporter.cpp] exportRaw groupID resolution diverges from JS `??` semantics for value 0.
+- [ ] 61. [WMOExporter.cpp] exportRaw groupID resolution diverges from JS `??` semantics for value 0.
   - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 1266–1270
   - **Status**: Pending
   - **Details**: JS uses `this.wmo.groupIDs?.[groupOffset] ?? listfile.getByFilename(groupName)` so when `groupIDs[offset]` is `0` (defined-but-falsy) it falls through to `listfile.getByFilename`. C++ at `WMOExporter.cpp:1644–1652` treats any in-bounds index as resolved (`groupIDResolved=true`) regardless of the value, so a 0 entry causes the group to be skipped at line 1655 instead of looking up by filename. WMOs that legitimately store 0 in `groupIDs` (e.g. classic builds backfilled with placeholders) will lose group-file export coverage in C++.
-- [ ] 84. [WMOExporter.cpp] meta JSON `groupNames` ordering may differ from JS `Object.values()` insertion order.
+- [ ] 62. [WMOExporter.cpp] meta JSON `groupNames` ordering may differ from JS `Object.values()` insertion order.
   - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 738, 1193
   - **Status**: Pending
   - **Details**: JS emits `Object.values(wmo.groupNames)` whose order is the Map/Object insertion order from `WMOLoader`. C++ at `WMOExporter.cpp:924–928` and `1488–1491` iterates `wmo->groupNames` directly; if the underlying container is `std::unordered_map` (or `std::map` keyed by offset), the resulting `groupNames` array in the meta JSON is sorted by hash/offset rather than insertion order, causing a JSON-level diff vs JS for the same WMO. Verify the container type; if it is not insertion-ordered, store names in a parallel `std::vector` to preserve order.
-- [ ] 85. [WMOExporter.cpp] exportTextures `formatUnknownFile` call signature differs from JS.
+- [ ] 63. [WMOExporter.cpp] exportTextures `formatUnknownFile` call signature differs from JS.
   - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 158–160
   - **Status**: Pending
   - **Details**: JS calls `listfile.formatUnknownFile(texFile)` (single-arg) where `texFile` already has the form `<id>.<ext>`. C++ at `WMOExporter.cpp:321` calls `casc::listfile::formatUnknownFile(texFileDataID, raw ? ".blp" : ".png")` (two-arg form). The output should be identical for normal IDs but the divergent call shape is a porting-fidelity issue and could drift if the helper's two-arg behaviour ever differs (e.g. unknowns/zero-padding). Match the single-arg JS form by passing the already-built `texFile` string.
-- [ ] 86. [WMOExporter.cpp] exportRaw uses `data.byteLength()==0` instead of an "is data set" check.
+- [ ] 64. [WMOExporter.cpp] exportRaw uses `data.byteLength()==0` instead of an "is data set" check.
   - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 1223–1231
   - **Status**: Pending
   - **Details**: JS checks `this.wmo.data === undefined` to decide between fetching from CASC and writing the cached buffer. C++ at `WMOExporter.cpp:1596` uses `data.byteLength() == 0`, which conflates "no data passed" with "explicitly zero-length data". Add a "has data" flag or use `std::optional<BufferWrapper>` so a legitimately empty buffer is written through instead of being silently re-fetched.
-- [ ] 87. [WMOExporter.cpp] exportAsGLTF empty-UV branch defensively allocates `uv_maps[0]`; JS does not.
+- [ ] 65. [WMOExporter.cpp] exportAsGLTF empty-UV branch defensively allocates `uv_maps[0]`; JS does not.
   - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 316–321
   - **Status**: Pending
   - **Details**: JS writes to `uv_maps[0][uv_ofs + i] = 0` without first creating `uv_maps[0]`, which throws if no prior group provided UVs (latent JS bug). C++ at `WMOExporter.cpp:481–483` silently allocates `uv_maps[0]` filled with zero. This is technically a deviation from JS behaviour even though it "fixes" a JS crash — document it as an intentional improvement or replicate the JS crash path so behaviour is identical.
-- [ ] 88. [WMOLegacyExporter.cpp] CSV doodad placement values use `std::to_string(float)` instead of JS-compatible shortest round-trip formatting.
+- [ ] 66. [WMOLegacyExporter.cpp] CSV doodad placement values use `std::to_string(float)` instead of JS-compatible shortest round-trip formatting.
   - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 322–333
   - **Status**: Pending
   - **Details**: JS `csv.addRow` writes raw `Number` values that are stringified via JS `Number.prototype.toString` (shortest round-trippable representation, e.g. `12.3456`). The C++ port at `WMOLegacyExporter.cpp:390-397` calls `std::to_string` on each `float`/`double`, which produces a fixed-precision string with trailing zeros (e.g. `12.345600`). This produces CSV output that is byte-different from the JS version for every doodad position/rotation/scale field. Use a JS-compatible float-to-string formatter (e.g. ryu / `std::format("{}", v)` with `{:g}`) to restore identical CSV output.
-- [ ] 89. [WMOLegacyExporter.cpp] `useAbsolute` model path uses `std::filesystem::absolute` instead of JS `path.resolve` (no normalization of `..`/`.`).
+- [ ] 67. [WMOLegacyExporter.cpp] `useAbsolute` model path uses `std::filesystem::absolute` instead of JS `path.resolve` (no normalization of `..`/`.`).
   - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 316–317
   - **Status**: Pending
   - **Details**: JS uses `path.resolve(outDir, modelPath)` which produces a normalized absolute path (collapsing `..` and `.` segments). The C++ port at `WMOLegacyExporter.cpp:381-383` uses `std::filesystem::absolute(outDir / modelPath)`, which only joins and converts to absolute without normalization. When `modelPath` contains `..` segments (common when `m2Path` lives in a sibling export directory), the CSV `ModelFile` value may contain unresolved relative segments where JS would have collapsed them. Switch to `std::filesystem::weakly_canonical` (or manual lexical normalization) so that the absolute path matches JS's normalized form.
-- [ ] 90. [WMOLegacyExporter.cpp] doodad-cache and texture-dedupe lowercase comparisons are ASCII-only (`std::tolower`) instead of full-Unicode like JS `String.prototype.toLowerCase`.
+- [ ] 68. [WMOLegacyExporter.cpp] doodad-cache and texture-dedupe lowercase comparisons are ASCII-only (`std::tolower`) instead of full-Unicode like JS `String.prototype.toLowerCase`.
   - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 299, 310, 507, 510
   - **Status**: Pending
   - **Details**: JS uses `fileName.toLowerCase()` and `texturePath.toLowerCase()` which is locale/Unicode-aware. The C++ helper `toLower` at `WMOLegacyExporter.cpp:40-45` calls `std::tolower` per-byte, which only handles ASCII. WoW asset paths are typically ASCII so this rarely matters, but any non-ASCII chars in a path would cause the C++ port to treat case-equivalent paths as distinct (causing duplicate exports / cache misses). Use a UTF-8-aware lowercase routine to fully match JS behaviour.
-- [ ] 91. [GLContext.cpp] `ext_float_texture` is hard-coded to `true` instead of probing the actual GL capability.
+- [ ] 69. [GLContext.cpp] `ext_float_texture` is hard-coded to `true` instead of probing the actual GL capability.
   - **JS Source**: `src/js/3D/gl/GLContext.js` lines 61–62
   - **Status**: Pending
   - **Details**: JS calls `gl.getExtension('EXT_color_buffer_float')` and stores the resulting object (or null) in `this.ext_float_texture`. The C++ port at `GLContext.cpp:42` unconditionally sets `ext_float_texture = true` with the comment "float textures (core in GL 3.0+)". While float textures themselves are core in GL 3.0+, `EXT_color_buffer_float` specifically exposes float color-buffer rendering (FBO color attachment with float formats), which is core in GL 3.0 desktop but is not equivalent to "always true" — any consumer reading this flag for capability gating now sees a value that was not actually probed. To match JS fidelity the flag should be derived from the extension enumeration loop in `_init_extensions()` (e.g. check for `GL_ARB_color_buffer_float` / verify GL major version) rather than hard-coded.
-- [ ] 92. [GLTexture.cpp] Remove unused `flip_y` option and manual row-flip path from `set_rgba`.
+- [ ] 70. [GLTexture.cpp] Remove unused `flip_y` option and manual row-flip path from `set_rgba`.
   - **JS Source**: `src/js/3D/gl/GLTexture.js` lines 34–50
   - **Status**: Pending
   - **Details**: JS `set_rgba` performs a single `gl.texImage2D` upload with no Y-flip (WebGL only flips when `gl.pixelStorei(UNPACK_FLIP_Y_WEBGL, true)` is set, which this class never does). The C++ port at `GLTexture.cpp:38-51` adds an EXTRA `flip_y` option (declared in `GLTexture.h:30`) that, when true, allocates a heap buffer and copies rows in reverse to flip the texture vertically before upload. No JS code path equivalent exists. The header comment at `GLTexture.cpp:34-37` acknowledges JS never flips Y, yet the option is still exposed and callable. Remove the `flip_y` field from `TextureOptions` and the entire `if (options.flip_y && pixels)` branch so the C++ matches JS exactly: a single straight-through `glTexImage2D` call.
-- [ ] 93. [GLTexture.cpp] `set_canvas` signature deviates from JS canvas-based overload.
+- [ ] 71. [GLTexture.cpp] `set_canvas` signature deviates from JS canvas-based overload.
   - **JS Source**: `src/js/3D/gl/GLTexture.js` lines 52–73
   - **Status**: Pending
   - **Details**: JS `set_canvas(canvas, options)` accepts an `HTMLCanvasElement` and calls the WebGL `texImage2D(target, level, internalformat, format, type, source)` overload that extracts pixels from the DOM element directly, then independently runs its own `bindTexture` / `_apply_wrap` / `_apply_filter` / optional `generateMipmap` sequence. The C++ port at `GLTexture.cpp:62-67` instead takes raw `(pixels, w, h, options)` and forwards to `set_rgba`. The deviation is documented in `GLTexture.h:65-77`, but: (a) callers must rasterise canvas-equivalent content into RGBA bytes themselves (no-op for now since nothing in the C++ port currently calls `set_canvas` with HTML-canvas semantics), and (b) the delegation through `set_rgba` causes `set_canvas` to inherit the spurious `flip_y` path. Track here so that, when a real "canvas" producer is wired up (e.g. an offscreen ImGui-rendered surface or a 2D rasteriser), this method is revisited and the behavioural divergence resolved.
-- [ ] 94. [ShaderProgram.cpp] `_compile` early-return path explicitly deletes the successfully-compiled shader where JS leaks it.
+- [ ] 72. [ShaderProgram.cpp] `_compile` early-return path explicitly deletes the successfully-compiled shader where JS leaks it.
   - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 35–36
   - **Status**: Pending
   - **Details**: JS `_compile` returns early without freeing either shader when one fails to compile, which leaks the successfully-compiled GPU shader (the per-shader deleter only runs on the side that compiled). The C++ port at `ShaderProgram.cpp:30-39` explicitly deletes both shaders before returning. While this is a fix for a real JS leak, it is a behavioural deviation from the JS code path; either document it as an intentional improvement (with a comment matching the leak fix to a CLAUDE.md exception) or restore the JS-faithful early return so the port matches the source line-for-line.
-- [ ] 95. [ShaderProgram.cpp] `get_uniform_block_param` returns `-1` instead of JS `null` for `INVALID_INDEX`.
+- [ ] 73. [ShaderProgram.cpp] `get_uniform_block_param` returns `-1` instead of JS `null` for `INVALID_INDEX`.
   - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 122–127
   - **Status**: Pending
   - **Details**: JS returns `null` when the named block resolves to `GL_INVALID_INDEX`. C++ at `ShaderProgram.cpp:117-118` returns `-1` (a valid `GLint`). Callers cannot distinguish "block missing" from a legitimate `-1` return value. Change the return type to `std::optional<GLint>` (matching the JS `null` semantics) or guarantee the function is only called for known-valid blocks.
-- [ ] 96. [ShaderProgram.cpp] `set_uniform_3fv` / `set_uniform_4fv` / `set_uniform_mat4_array` add an explicit `count` parameter not present in JS.
+- [ ] 74. [ShaderProgram.cpp] `set_uniform_3fv` / `set_uniform_4fv` / `set_uniform_mat4_array` add an explicit `count` parameter not present in JS.
   - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 204–208, 214–218, 247–251
   - **Status**: Pending
   - **Details**: JS infers count from `values.length` (e.g. `gl.uniform3fv(loc, values)`). C++ at `ShaderProgram.h:65–113` requires the caller to pass an explicit `count` (defaulted to 1) since `const float*` has no length. Documented adaptation; behaviorally identical when callers pass the correct count, but the API contract differs from JS, and callers porting from JS verbatim will silently get `count=1` regardless of the source array length. Consider an `std::span<const float>` overload to preserve the JS shape.
-- [ ] 97. [UniformBuffer.cpp] `set_float_array` requires explicit `count` parameter where JS infers from `values.length`.
+- [ ] 75. [UniformBuffer.cpp] `set_float_array` requires explicit `count` parameter where JS infers from `values.length`.
   - **JS Source**: `src/js/3D/gl/UniformBuffer.js` lines 152–158
   - **Status**: Pending
   - **Details**: JS `set_float_array(offset, values)` derives the element count from `values.length`. C++ at `UniformBuffer.cpp:102-106` requires the caller to pass an explicit `count` argument (header line 45) because `const float*` has no length. Behaviorally identical when callers pass the correct count, but a JS-verbatim port (`set_float_array(offset, arr)` without count) will fail to compile or silently use a default. Cosmetic API divergence; consider a `std::span<const float>` overload to preserve the JS shape.
-- [ ] 98. [MDXLoader.cpp] Intentional divergence in `parse_ATCH` reads KVIS data that the JS code path silently skips.
+- [ ] 76. [MDXLoader.cpp] Intentional divergence in `parse_ATCH` reads KVIS data that the JS code path silently skips.
   - **JS Source**: `src/js/3D/loaders/MDXLoader.js` lines 387–412 (especially line 404)
   - **Status**: Pending
   - **Details**: JS `ATCH` handler at line 404 uses `this.data.readUInt32LE(-4)` to gate the KVIS check. With `count=-4`, `_readInt` (buffer.js:1094) returns an empty array `[]`; in the expression `startPos + this.data.readUInt32LE(-4)`, JS coerces `[]` to `0`, so the comparison `this.data.offset < startPos + 0` is always false (offset has advanced since startPos). The JS KVIS branch is therefore dead code — JS never reads `attachment.visibilityAnim`. The C++ version at lines 428–440 deliberately substitutes `attachmentSize` (the per-entry size word) so that KVIS is actually parsed, which changes the resulting `attachment.visibilityAnim` for any file with KVIS data. The deviation is documented in the comment, but per project conventions deviations are "strongly discouraged" and should be limited to genuine impossibilities. A faithful port would replicate JS behavior (i.e. effectively skip the KVIS branch).
-- [ ] 99. [MDXLoader.cpp] Node-to-`nodes[objectId]` registration order differs from JS when multiple node kinds share an objectId.
+- [ ] 77. [MDXLoader.cpp] Node-to-`nodes[objectId]` registration order differs from JS when multiple node kinds share an objectId.
   - **JS Source**: `src/js/3D/loaders/MDXLoader.js` lines 208–210 (inside `_read_node`) and 53–56 (post-load pivot loop)
   - **Status**: Pending
   - **Details**: JS performs `this.nodes[node.objectId] = node` at the end of `_read_node`, so registration order follows the order in which chunks appear in the file (e.g. if `HELP` precedes `BONE`, helper-node registrations happen before bone-node registrations and bone wins on collision). The C++ port (cpp:91–108) instead defers all node registration to the end of `load()` and iterates a fixed order: `bones, helpers, attachments, eventObjects, hitTestShapes, particleEmitters, particleEmitters2, lights, ribbonEmitters`. This means C++ always lets `ribbonEmitters` win an objectId collision regardless of file order, whereas JS gives the win to the chunk that appears latest in the file. The deferral is justified by C++ pointer-invalidation, but the iteration order itself is a behavioural change. Either iterate `_read_node` calls in the order their parent chunks were dispatched, or document the divergence in `TODO_TRACKER.md`.
-- [ ] 100. [SKELLoader.cpp] `loadAnimsForIndex` swallows CASC/ANIMLoader exceptions instead of propagating.
+- [ ] 78. [SKELLoader.cpp] `loadAnimsForIndex` swallows CASC/ANIMLoader exceptions instead of propagating.
   - **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 308–347
   - **Status**: Pending
   - **Details**: JS `loadAnimsForIndex` is `async` and lets exceptions from `await core.view.casc.getFile(fileDataID)` and `await loader.load(true)` propagate to the caller as a rejected Promise. The C++ port (SKELLoader.cpp:333–361) wraps the entire load in `try { ... } catch (const std::exception& e) { logging::write(...); return false; }`. Errors that would surface to (and possibly fail) the caller in JS are silently logged and reported as a generic load failure in C++. Callers that distinguish "no anim entry matched" (false) from "anim load errored" (rejection) lose that signal.
-- [ ] 101. [SKELLoader.cpp] `loadAnims` swallows CASC/ANIMLoader exceptions instead of propagating.
+- [ ] 79. [SKELLoader.cpp] `loadAnims` swallows CASC/ANIMLoader exceptions instead of propagating.
   - **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 407–454
   - **Status**: Pending
   - **Details**: JS `loadAnims` propagates any rejection from `await core.view.casc.getFile(fileDataID)` or `await loader.load(true)`, aborting the remaining iterations and surfacing the error to the caller. The C++ port (SKELLoader.cpp:459–484) wraps each per-entry load in `try { ... } catch (const std::exception& e) { logging::write(...); }`, then continues with the next animation entry. This changes failure semantics: a CASC/parse error now produces only a log line and an incomplete `animFiles` map, whereas JS would reject the Promise and skip the remaining work entirely.
-- [ ] 102. [WMOLegacyLoader.cpp] `getGroup` creates child loader with `fileName` set, JS passes `undefined`.
+- [ ] 80. [WMOLegacyLoader.cpp] `getGroup` creates child loader with `fileName` set, JS passes `undefined`.
   - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 144–148
   - **Status**: Pending
   - **Details**: JS does `new WMOLegacyLoader(data, undefined, this.renderingOnly)` — the recursive group loader is created with NO fileID/fileName, leaving `this.fileDataID` and `this.fileName` unset on the child. C++ at cpp:205 calls `std::make_unique<WMOLegacyLoader>(*ownedBuf, groupPath, this->renderingOnly)` which sets `fileName = groupPath` and looks up `fileDataID` via `listfile::getByFilename`. Any consumer that reads `group.fileName` / `group.fileDataID` to detect "this is a child group loader" sees populated values in C++ vs unset in JS. Behaviorally significant for sentinel-style checks.
-- [ ] 103. [WMOLegacyLoader.cpp] `getGroup` group-filename construction differs from JS `String.replace` semantics.
+- [ ] 81. [WMOLegacyLoader.cpp] `getGroup` group-filename construction differs from JS `String.replace` semantics.
   - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` line 138
   - **Status**: Pending
   - **Details**: JS does `this.fileName.replace('.wmo', '_' + index.toString().padStart(3, '0') + '.wmo')` — case-sensitive, replaces the FIRST `.wmo` anywhere in the string. C++ at cpp:188-194 only replaces if the LAST 4 characters (case-insensitively) are `.wmo`; otherwise leaves `groupPath` empty and throws "Cannot determine group filename...". Differences: (a) JS would still match a non-trailing `.wmo` (e.g. mid-path) while C++ would not; (b) C++ accepts uppercase/mixed-case extensions while JS requires exact lowercase; (c) error message and code path differ when no `.wmo` is present. JS would actually return the unchanged filename (no match → no replacement → still tries to load the same filename), whereas C++ throws. Functional fork on inputs whose extension casing or position differs from the standard pattern.
-- [ ] 104. [WMOLegacyLoader.cpp] Constructor `fileID=0` skips listfile lookup; JS treats `0` as a valid numeric ID.
+- [ ] 82. [WMOLegacyLoader.cpp] Constructor `fileID=0` skips listfile lookup; JS treats `0` as a valid numeric ID.
   - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 22–30
   - **Status**: Pending
   - **Details**: JS `if (fileID !== undefined)` accepts `0` as a valid numeric fileID and resolves `this.fileName = listfile.getByID(0)`. The C++ uint32_t-overload constructor at cpp:65-71 uses `if (fileID != 0)` as the gate, so an explicit `fileID = 0` skips the lookup entirely. Edge case (fileDataID 0 is not a real WoW asset) but produces different `fileName` resolution behavior at the boundary. Also note: there is no constructor matching JS's "no fileID at all" case distinctly — JS leaves both fields undefined; the C++ default-arg approach conflates "no argument" with "explicit 0" by the same path.
-- [ ] 105. [WMOLoader.cpp] `getGroup()` filename fallback uses `rfind(".wmo")` instead of JS `.replace('.wmo', ...)` first-occurrence semantics.
+- [ ] 83. [WMOLoader.cpp] `getGroup()` filename fallback uses `rfind(".wmo")` instead of JS `.replace('.wmo', ...)` first-occurrence semantics.
   - **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 75–78
   - **Status**: Pending
   - **Details**: JS `String.prototype.replace(needle, replacement)` (with a string needle) replaces the **first** occurrence. The C++ port (cpp:135–139) calls `groupFileName.rfind(".wmo")` which locates the **last** occurrence. For typical paths like `world/wmo/foo.wmo` only one match exists so they coincide, but any filename whose directory portion contains `.wmo` (e.g. `mymod.wmo/file.wmo`) would diverge: JS replaces the first `.wmo`, C++ replaces the last. To exactly match JS, use `find(".wmo")` rather than `rfind(".wmo")`.
-- [ ] 106. [WMOLoader.cpp] Constructor distinguishes "fileID provided" via `fileID != 0` rather than tracking presence, dropping the JS `fileID === 0` edge case.
+- [ ] 84. [WMOLoader.cpp] Constructor distinguishes "fileID provided" via `fileID != 0` rather than tracking presence, dropping the JS `fileID === 0` edge case.
   - **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 18–32
   - **Status**: Pending
   - **Details**: JS uses `if (fileID !== undefined)`, so an explicit numeric `0` would still go down the numeric branch (setting `this.fileDataID = 0` and `this.fileName = listfile.getByID(0)`). The C++ `WMOLoader(BufferWrapper&, uint32_t fileID = 0, bool)` overload (cpp:69–75) treats `0` as "no fileID provided" and skips the listfile lookup entirely. fileDataID 0 is never a valid asset, so this difference is harmless in practice, but it is a structural deviation from JS semantics. If exact parity is desired, use a `std::optional<uint32_t>` parameter or a separate "has fileID" flag.
-- [ ] 107. [M2LegacyRendererGL.cpp] _load_textures calls setSlotFileLegacy instead of setSlotFile
+- [ ] 85. [M2LegacyRendererGL.cpp] _load_textures calls setSlotFileLegacy instead of setSlotFile
   - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` line 241
   - **Status**: Pending
   - **Details**: JS calls `textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID)` for normal texture loading. C++ line 263 calls `texture_ribbon::setSlotFileLegacy(ribbonSlot, fileName, syncID)` instead. `setSlotFileLegacy` is only used in JS at line 295 for creature skins via `applyCreatureSkin`. The two functions may have different behavior; C++ should call `setSlotFile` here to match JS.
-- [ ] 108. [M2LegacyRendererGL.cpp] UV2 y-flip omitted in loadSkin vertex buffer construction
+- [ ] 86. [M2LegacyRendererGL.cpp] UV2 y-flip omitted in loadSkin vertex buffer construction
   - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 358–359
   - **Status**: Pending
   - **Details**: JS explicitly flips the uv2 v-coordinate for OpenGL bottom-left origin: `1 - m2.uv2[uv_idx + 1]`. C++ lines 397–401 copies uv2 directly with a comment stating "already y-flipped by loader." If the M2LegacyLoader does not perform this flip, textures using the second UV set will appear vertically inverted. This needs verification against M2LegacyLoader to confirm the loader actually pre-flips.
-- [ ] 109. [M2LegacyRendererGL.cpp] _create_bones_ubo method missing entirely — UBO never created or bound
+- [ ] 87. [M2LegacyRendererGL.cpp] _create_bones_ubo method missing entirely — UBO never created or bound
   - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 389, 474–477, 1020
   - **Status**: Pending
   - **Details**: JS defines `_create_bones_ubo()` (line 474–477) which calls `create_bones_ubo(this.shader, this.gl, this.ctx, this.ubos, bone_count)` from renderer_utils. This is called in `loadSkin()` at line 389, and `this.ubos[0].ubo.bind(0)` is called in `render()` at line 1020. The C++ has no `_create_bones_ubo` method, never populates the ubos vector, and never binds a UBO in render. While bone skinning is disabled (`u_bone_count = 0`), the UBO binding may still be required by the shader. When bone animation is eventually enabled, this entire UBO pipeline will need to be implemented.
-- [ ] 110. [M2LegacyRendererGL.cpp] render() sets extra u_has_tex_matrix1/u_has_tex_matrix2 uniforms not in JS
+- [ ] 88. [M2LegacyRendererGL.cpp] render() sets extra u_has_tex_matrix1/u_has_tex_matrix2 uniforms not in JS
   - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 956–957
   - **Status**: Pending
   - **Details**: JS only sets `u_tex_matrix1` and `u_tex_matrix2` to identity matrices. C++ lines 1213–1214 additionally set `u_has_tex_matrix1 = 0` and `u_has_tex_matrix2 = 0` which are integer uniforms not present in the JS render path. If the shader checks these flags, this could cause the shader to skip texture matrix application entirely, differing from JS where the shader always receives and applies the identity matrices without a guard flag.
-- [ ] 111. [M2RendererGL.cpp] Bones UBO created too early in load() — before skeleton is loaded, so bones_count() is 0
+- [ ] 89. [M2RendererGL.cpp] Bones UBO created too early in load() — before skeleton is loaded, so bones_count() is 0
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 406–439, 567
   - **Status**: Pending
   - **Details**: JS calls `_create_bones_ubo()` inside `loadSkin()` (line 567), after `_create_skeleton()` has set up bone data. C++ calls `renderer_utils::create_bones_ubo()` in `load()` at line 523, before `_create_skeleton()` runs (which happens inside `loadSkin()`). At that point `bones_count()` returns 0, so the UBO is sized for 0 bones. The UBO is never re-created after skeleton loading. This means bone animation may fail or produce incorrect results for models with skeletons.
-- [ ] 112. [M2RendererGL.cpp] Missing u_ambient_color and u_diffuse_color uniform calls in render()
+- [ ] 90. [M2RendererGL.cpp] Missing u_ambient_color and u_diffuse_color uniform calls in render()
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1512–1513
   - **Status**: Pending
   - **Details**: JS render() sets `u_ambient_color` to (0.5, 0.5, 0.5) and `u_diffuse_color` to (0.7, 0.7, 0.7) via `shader.set_uniform_3f`. C++ render() (around line 1956) sets `u_apply_lighting` and `u_light_dir` but omits both `u_ambient_color` and `u_diffuse_color`. If the shader uses these uniforms, lighting will be incorrect (uniforms default to 0 unless set elsewhere).
-- [ ] 113. [M2RendererGL.cpp] childSkelLoader conditionally stored only when childAnimKeys is non-empty
+- [ ] 91. [M2RendererGL.cpp] childSkelLoader conditionally stored only when childAnimKeys is non-empty
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 697–705
   - **Status**: Pending
   - **Details**: JS unconditionally stores the child skeleton when `parent_skel_file_id > 0` (line 699: `this.childSkelLoader = skel`). C++ only stores it when `childAnimKeys` is non-empty (line 909: `if (!child_anim_keys.empty())`). If a child skeleton has no .anim file entries but still provides animation data in its bones, it will be silently discarded in C++.
-- [ ] 114. [M2RendererGL.cpp] _dispose_skin does not dispose bone UBOs, unlike JS
+- [ ] 92. [M2RendererGL.cpp] _dispose_skin does not dispose bone UBOs, unlike JS
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1914–1922
   - **Status**: Pending
   - **Details**: JS `_dispose_skin()` iterates over `this.ubos` and calls `ubo.ubo.dispose()` then clears the array (lines 1918–1921). C++ `_dispose_skin()` does not touch the bones UBO at all — it only disposes it in `dispose()`. Since JS `loadSkin()` creates the bones UBO and `_dispose_skin()` is called at the start of each `loadSkin()`, the JS version properly cleans up old UBOs before creating new ones. In C++, the UBO is created once in `load()` and never recreated, so this could leak if loadSkin is called multiple times.
-- [ ] 115. [M3RendererGL.cpp] Missing _create_bones_ubo() method — bones UBO creation moved from loadLOD() to load()
+- [ ] 93. [M3RendererGL.cpp] Missing _create_bones_ubo() method — bones UBO creation moved from loadLOD() to load()
   - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 79–81, 147
   - **Status**: Pending
   - **Details**: JS defines `_create_bones_ubo()` as a separate method (lines 79–81) called from inside `loadLOD()` (line 147). Every `loadLOD()` call recreates the bones UBO and pushes it onto `this.ubos`. C++ has no `_create_bones_ubo()` method and instead creates the bones UBO once in `load()` (line 59), before `loadLOD()` is ever called. If `loadLOD()` were called multiple times (e.g., to switch LOD levels), JS would create a new UBO each time while C++ would reuse the same one.
-- [ ] 116. [M3RendererGL.cpp] UBO disposal missing from _dispose_geometry() — JS disposes all UBOs, C++ does not
+- [ ] 94. [M3RendererGL.cpp] UBO disposal missing from _dispose_geometry() — JS disposes all UBOs, C++ does not
   - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 310–311, 316
   - **Status**: Pending
   - **Details**: JS `_dispose_geometry()` iterates `this.ubos` and disposes each UBO, then clears `this.ubos = []`. C++ `_dispose_geometry()` (lines 355–365) has no UBO disposal — it only disposes VAOs and GL buffers. The `bones_ubo` is only disposed in the final `dispose()`. If `loadLOD()` is called multiple times, JS properly cleans up old UBOs via `_dispose_geometry()` at the start of each `loadLOD()` call, but C++ would not.
-- [ ] 117. [M3RendererGL.cpp] UBO bind(0) not called per draw call in render loop
+- [ ] 95. [M3RendererGL.cpp] UBO bind(0) not called per draw call in render loop
   - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` line 292
   - **Status**: Pending
   - **Details**: JS calls `ubo.ubo.bind(0)` inside the draw call loop (line 292), re-binding the UBO before each draw call. C++ calls `bones_ubo.ubo->bind(0)` once before the loop (line 277), outside the draw call iteration. For a single UBO this likely produces the same result, but it deviates from the JS structure and could break if future code adds intervening UBO binds.
-- [ ] 118. [M3RendererGL.cpp] Extra uniforms u_has_tex_matrix1/u_has_tex_matrix2 set but not in JS
+- [ ] 96. [M3RendererGL.cpp] Extra uniforms u_has_tex_matrix1/u_has_tex_matrix2 set but not in JS
   - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 243–244
   - **Status**: Pending
   - **Details**: C++ lines 281–282 set `u_has_tex_matrix1` and `u_has_tex_matrix2` to 0 before setting the tex matrix uniforms. JS only sets `u_tex_matrix1` and `u_tex_matrix2` (lines 243–244) and does not set any `u_has_tex_matrix*` uniforms. While setting them to 0 is likely harmless (disables tex matrix transforms), it is a deviation from the JS source.
-- [ ] 119. [M3RendererGL.cpp] load() execution order differs from JS — bones UBO created before default texture
+- [ ] 97. [M3RendererGL.cpp] load() execution order differs from JS — bones UBO created before default texture
   - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 59–71
   - **Status**: Pending
   - **Details**: JS `load()` order: (1) create M3Loader, (2) load it, (3) load shaders, (4) `_create_default_texture()`, (5) `loadLOD(0)` which internally calls `_create_bones_ubo()`. C++ `load()` order (lines 51–67): (1) create M3Loader, (2) load it, (3) load shaders, (4) `create_bones_ubo()`, (5) `_create_default_texture()`, (6) `loadLOD(0)`. The bones UBO is created before the default texture in C++ but after it in JS, and before `loadLOD()` rather than inside it.
-- [ ] 120. [MDXRendererGL.cpp] stopAnimation resets ALL bone matrices to identity, but JS only resets bone 0
+- [ ] 98. [MDXRendererGL.cpp] stopAnimation resets ALL bone matrices to identity, but JS only resets bone 0
   - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 429–431
   - **Status**: Pending
   - **Details**: JS `this.node_matrices.set(IDENTITY_MAT4)` with no offset only copies the 16-element identity into positions [0..15], leaving bones 1..N with their last animation values. C++ (lines 522–526) loops through ALL bone slots, resetting every one to identity. This changes the visual result when stopping animation on multi-bone models — JS leaves residual transforms on non-root bones, while C++ cleanly resets all bones.
-- [ ] 121. [MDXRendererGL.cpp] Bone UBO creation timing differs: C++ creates UBO before skeleton/geometry, JS creates it inside _build_geometry after skeleton
+- [ ] 99. [MDXRendererGL.cpp] Bone UBO creation timing differs: C++ creates UBO before skeleton/geometry, JS creates it inside _build_geometry after skeleton
   - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 189–199, 262–265, 291
   - **Status**: Pending
   - **Details**: JS `load()` calls `_create_default_texture`, `_load_textures`, `_create_skeleton`, then `_build_geometry` (which internally calls `_create_bones_ubo` at line 291, passing `this.nodes.length` as bone count). C++ `load()` (lines 208–246) calls `renderer_utils::create_bones_ubo(*shader, ctx, 0)` at line 217 BEFORE `_create_skeleton` and `_build_geometry`, always passing bone_count=0. The JS initializes the correct number of identity matrices, C++ initializes zero.
-- [ ] 122. [MDXRendererGL.cpp] Missing per-draw-call UBO bind inside render loop
+- [ ] 100. [MDXRendererGL.cpp] Missing per-draw-call UBO bind inside render loop
   - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 758
   - **Status**: Pending
   - **Details**: JS calls `ubo.ubo.bind(0)` inside each draw call iteration (line 758, before `dc.vao.bind()`). C++ binds the UBO only once at line 968 (before the draw call loop begins) and does not re-bind it per draw call. Since nothing unbinds the UBO between draw calls in practice this is likely functionally equivalent, but it deviates from the JS structure.
-- [ ] 123. [MDXRendererGL.cpp] _create_skeleton allocates node_matrices when nodes are empty, JS does not
+- [ ] 101. [MDXRendererGL.cpp] _create_skeleton allocates node_matrices when nodes are empty, JS does not
   - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 270–273
   - **Status**: Pending
   - **Details**: JS `_create_skeleton` when nodes array is empty/falsy sets `this.nodes = null` and returns immediately without touching `node_matrices`. C++ (lines 324–328) clears `nodes` AND resizes `node_matrices` to 16 floats (one identity matrix). This extra allocation has no JS counterpart and could cause subtle differences in code that checks whether node_matrices is populated.
-- [ ] 124. [GLTFWriter.cpp] Animation channel target node index deviates from JS — C++ uses actual_node_idx, JS uses nodeIndex + 1
+- [ ] 102. [GLTFWriter.cpp] Animation channel target node index deviates from JS — C++ uses actual_node_idx, JS uses nodeIndex + 1
   - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 620–628, 757–765, 887–895
   - **Status**: Pending
   - **Details**: The JS code always uses `nodeIndex + 1` for animation channel targets (translation line 624, rotation line 761, scale line 891). This is correct when bone prefix mode is enabled (two nodes pushed per bone) but is a bug when prefix mode is disabled (only one node pushed, so nodeIndex+1 points to the wrong node). The C++ uses `actual_node_idx` (lines 676, 798, 917) which correctly points to the bone node regardless of prefix mode. This is a behavioural improvement over the JS, but it deviates from strict fidelity. The JS bug only manifests when `modelsExportWithBonePrefix` is false AND `modelsExportAnimations` is true simultaneously.
-- [ ] 125. [JSONWriter.cpp] BigInt serialization replacer not ported — callers must pre-convert large integers
+- [ ] 103. [JSONWriter.cpp] BigInt serialization replacer not ported — callers must pre-convert large integers
   - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40–43
   - **Status**: Pending
   - **Details**: The JS `JSON.stringify` uses a custom replacer function that converts BigInt values to strings (since JS cannot serialize BigInt by default). The C++ version uses plain `data.dump(1, '\t')` without special handling. A comment in the C++ notes that nlohmann::json handles integers up to uint64_t natively and that values exceeding uint64_t must be pre-converted by callers. This shifts the serialization responsibility to callers rather than handling it at the writer level. If a caller passes a value exceeding uint64_t without pre-converting, it would be silently truncated or cause an error rather than being string-serialized.
-- [ ] 126. [db2.cpp] Missing "rows === null" (preload) guard on getRelationRows from JS db2 Proxy wrapper
+- [ ] 104. [db2.cpp] Missing "rows === null" (preload) guard on getRelationRows from JS db2 Proxy wrapper
   - **JS Source**: `src/js/casc/db2.js` lines 51–52
   - **Status**: Pending
   - **Details**: The JS db2 Proxy wrapper has a two-part guard for getRelationRows: (1) `!reader_target.isLoaded` throws "Table must be loaded", and (2) `reader_target.rows === null` throws "Table must be preloaded". The C++ WDCReader::getRelationRows() only enforces the isLoaded check (WDCReader.cpp:302–303). The rows-null check (ensuring preload() was called) is absent from both the db2 layer and WDCReader. Since getRelationRows() uses relationshipLookup (not rows), this is a developer-facing error message quality gap rather than a functional bug. To match JS behaviour, db2::getTable() or WDCReader::getRelationRows() should check if preload() was called and throw a descriptive error if not.
-- [ ] 127. [context-menu.cpp] Click-to-close handler checks all mouse buttons instead of just left-click
+- [ ] 105. [context-menu.cpp] Click-to-close handler checks all mouse buttons instead of just left-click
   - **JS Source**: `src/js/components/context-menu.js` line 54
   - **Status**: Pending
   - **Details**: Vue's `@click` (without `.right` or `.middle` modifiers) only fires on left mouse button clicks. The C++ (lines 116-118) checks `ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1) || ImGui::IsMouseClicked(2)`, closing the menu on left, right, or middle click. The C++ comment at line 115 incorrectly states "JS @click fires for any mouse button." To match JS, only check `ImGui::IsMouseClicked(0)`.
-- [ ] 128. [item-picker-modal.cpp] open_items_tab erroneously closes the modal
+- [ ] 106. [item-picker-modal.cpp] open_items_tab erroneously closes the modal
   - **JS Source**: `src/js/components/item-picker-modal.js` lines 143–145
   - **Status**: Pending
   - **Details**: JS `open_items_tab()` only emits `'open-items-tab'` without closing the modal — the parent component decides whether to close it. C++ (lines 340-346) calls `s_on_open_items_tab()` and then immediately calls `close_modal()`, forcing the modal closed. This removes the parent's ability to decide and changes user-visible behavior: clicking "Search in Items Tab" always dismisses the modal in C++ but not in JS.
-- [ ] 129. [item-picker-modal.cpp] Missing click-outside-to-close on overlay backdrop
+- [ ] 107. [item-picker-modal.cpp] Missing click-outside-to-close on overlay backdrop
   - **JS Source**: `src/js/components/item-picker-modal.js` line 161
   - **Status**: Pending
   - **Details**: JS has `@click.self="$emit('close')"` on the overlay div, allowing users to close the modal by clicking the semi-transparent backdrop outside the modal content. C++ (lines 174-178) draws a backdrop rectangle but has no click detection on it. `BeginPopupModal` does not support click-outside-to-close natively. Users must use Cancel, Escape, or the X button to close. This is a missing interaction path.
-- [ ] 130. [DBCReader.cpp] loadSchema() has filesystem fallback cache paths not present in JS
+- [ ] 108. [DBCReader.cpp] loadSchema() has filesystem fallback cache paths not present in JS
   - **JS Source**: `src/js/db/DBCReader.js` lines 176–199
   - **Status**: Pending
   - **Details**: JS only accesses cache via `core.view.casc?.cache`. C++ (lines 220-225) adds a fallback that reads DBD files directly from the filesystem path `DIR_DBD / cache_key` when no CASC source is available. C++ (lines 250-253) also writes downloaded DBD files to disk when cache is nullptr. These extra paths deviate from the JS behavior.
-- [ ] 131. [DBCReader.cpp] _read_field() reads 8 bytes for Int64/UInt64 vs JS reading 4 bytes
+- [ ] 109. [DBCReader.cpp] _read_field() reads 8 bytes for Int64/UInt64 vs JS reading 4 bytes
   - **JS Source**: `src/js/db/DBCReader.js` lines 389–408
   - **Status**: Pending
   - **Details**: JS _read_field has no explicit Int64/UInt64 cases — those field types fall through to the default case which calls readUInt32LE() (4 bytes). C++ (lines 513-518) explicitly handles Int64 with readInt64LE() and UInt64 with readUInt64LE() (8 bytes each). This is documented with a comment in the C++ code. While DBC files (pre-Cata) are unlikely to have 64-bit fields, the difference could cause record offset misalignment if such a field is encountered.
-- [ ] 132. [DBCharacterCustomization.cpp] getFileDataIDByDisplayID result mapped to 0 instead of preserving "absent" semantics
+- [ ] 110. [DBCharacterCustomization.cpp] getFileDataIDByDisplayID result mapped to 0 instead of preserving "absent" semantics
   - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 128–130
   - **Status**: Pending
   - **Details**: JS stores the raw return from `getFileDataIDByDisplayID` (which may be `undefined`) into `chr_model_id_to_file_data_id`. The C++ (line 189) uses `.value_or(0)`, converting "no value" into 0. Downstream, `get_model_file_data_id` (JS line 226 / C++ line 359) returns this value — JS returns `undefined` for unknown displays, C++ returns `std::optional(0)`. Callers checking `has_value()` vs checking for `undefined` would behave differently. FileDataID 0 is generally treated as invalid in WoW data so the practical impact is low, but the semantics diverge from the JS original. The fix would be to store `std::optional<uint32_t>` in `chr_model_id_to_file_data_id` and propagate `nullopt` when `getFileDataIDByDisplayID` returns `nullopt`.
-- [ ] 133. [DBItemDisplays.cpp] Extra `getTexturesByDisplayId` function not present in JS source
+- [ ] 111. [DBItemDisplays.cpp] Extra `getTexturesByDisplayId` function not present in JS source
   - **JS Source**: `src/js/db/caches/DBItemDisplays.js` (no counterpart)
   - **Status**: Pending
   - **Details**: The C++ file adds a `getTexturesByDisplayId` function (cpp lines 117–119, header line 35) that has no counterpart in the JS source. It delegates directly to `DBItemDisplayInfoModelMatRes::getItemDisplayIdTextureFileIds`. This adds API surface that doesn't exist in the original module and deviates from the JS module's exported interface.
-- [ ] 134. [DBItemGeosets.cpp] `getDisplayId` missing `modifier_id` parameter
+- [ ] 112. [DBItemGeosets.cpp] `getDisplayId` missing `modifier_id` parameter
   - **JS Source**: `src/js/db/caches/DBItemGeosets.js` lines 277–279
   - **Status**: Pending
   - **Details**: The JS function `get_display_id(item_id, modifier_id)` accepts an optional `modifier_id` parameter and forwards it to `resolve_display_id`. The C++ function `getDisplayId(uint32_t item_id)` (cpp lines 279–281, header line 110) only accepts `item_id` and always calls `resolve_display_id(item_id)` with the default value (-1), meaning it never uses a specific modifier. The sister files DBItemModels and DBItemCharTextures both correctly include the `modifier_id` parameter in their `getDisplayId` functions. Fix: add `int modifier_id = -1` parameter to both the header declaration and implementation, and forward it to `resolve_display_id`.
-- [ ] 135. [DBItemModels.cpp] `getItemModels` missing `modifier_id` parameter
+- [ ] 113. [DBItemModels.cpp] `getItemModels` missing `modifier_id` parameter
   - **JS Source**: `src/js/db/caches/DBItemModels.js` lines 141–142
   - **Status**: Pending
   - **Details**: The JS function `get_item_models(item_id, modifier_id)` accepts an optional `modifier_id` and forwards it to `resolve_display_id`. The C++ version `getItemModels(uint32_t item_id)` (header line 37, cpp line 253) only accepts `item_id` and calls `resolve_display_id(item_id)` without any modifier. This means the C++ version always uses the default modifier resolution (prefer 0, then lowest). Any caller needing models for a specific modifier cannot use this function. Fix: add `int modifier_id = -1` parameter and forward it to `resolve_display_id`.
-- [ ] 136. [legacy_tab_audio.cpp] unittype is "sound" instead of "sound file"
+- [ ] 114. [legacy_tab_audio.cpp] unittype is "sound" instead of "sound file"
   - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 204
   - **Status**: Pending
   - **Details**: JS template specifies `unittype="sound file"`, which produces status bar text like "42 sound files found." The C++ (line 371 and line 415) uses `"sound"` instead, producing "42 sounds found." Fix: change the unittype string to `"sound file"` in both the listbox render call and the status bar render call.
-- [ ] 137. [legacy_tab_audio.cpp] persistscrollkey is "legacy-sounds" instead of "sounds"
+- [ ] 115. [legacy_tab_audio.cpp] persistscrollkey is "legacy-sounds" instead of "sounds"
   - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 204
   - **Status**: Pending
   - **Details**: JS template specifies `persistscrollkey="sounds"`. The C++ (line 374) uses `"legacy-sounds"` instead. Scroll position persistence uses a different key name, so scroll positions won't match the JS behavior. Fix: change the persistscrollkey string to `"sounds"`.
-- [ ] 138. [legacy_tab_textures.cpp] persistscrollkey is "legacy-textures" instead of "textures"
+- [ ] 116. [legacy_tab_textures.cpp] persistscrollkey is "legacy-textures" instead of "textures"
   - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 117
   - **Status**: Pending
   - **Details**: JS template specifies `persistscrollkey="textures"`. The C++ (line 297) uses `"legacy-textures"` instead. Scroll position persistence uses a different key name, so scroll positions won't match the JS behavior. Fix: change the persistscrollkey string to `"textures"`.
-- [ ] 139. [legacy_tab_textures.cpp] Toast "View Log" button text uses different casing than JS "view log"
+- [ ] 117. [legacy_tab_textures.cpp] Toast "View Log" button text uses different casing than JS "view log"
   - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 68
   - **Status**: Pending
   - **Details**: JS uses `'view log'` (all lowercase) for the toast button text. The C++ (line 146) uses `"View Log"` (title case). User-facing text should match the original JS exactly. Fix: change `"View Log"` to `"view log"`.
-- [ ] 140. [module_test_b.cpp] isBusy display shows boolean text instead of numeric counter value
+- [ ] 118. [module_test_b.cpp] isBusy display shows boolean text instead of numeric counter value
   - **JS Source**: `src/js/modules/module_test_b.js` line 9
   - **Status**: Pending
   - **Details**: JS template `{{ $core.view.isBusy }}` renders the numeric counter value (0, 1, 2, etc.) since isBusy is an integer counter. C++ line 47 renders `"true"/"false"` via `core::view->isBusy ? "true" : "false"`. Should display the numeric value like `ImGui::Text("Busy State: %d", core::view->isBusy)` to match JS behavior.
-- [ ] 141. [tab_blender.cpp] checkLocalVersion() log output differs for error case when installed addon version can't be parsed
+- [ ] 119. [tab_blender.cpp] checkLocalVersion() log output differs for error case when installed addon version can't be parsed
   - **JS Source**: `src/js/modules/tab_blender.js` line 161
   - **Status**: Pending
   - **Details**: JS logs `log.write('Latest add-on version: %s, Blender add-on version: %s', latest_addon_version, blender_addon_version)` — when `blender_addon_version` is an error object, JS `%s` renders it as `"[object Object]"`. C++ line 268 renders the error string (e.g. `"file_not_found"`) instead. Minor log output difference but not functionally identical to the JS.
-- [ ] 142. [tab_blender.cpp] checkLocalVersion() version comparison behaves differently when installed addon version can't be parsed
+- [ ] 120. [tab_blender.cpp] checkLocalVersion() version comparison behaves differently when installed addon version can't be parsed
   - **JS Source**: `src/js/modules/tab_blender.js` line 163
   - **Status**: Pending
   - **Details**: JS compares `latest_addon_version > blender_addon_version` where `blender_addon_version` may be an error object. JS comparison between a version string and an object yields `NaN > NaN = false`, so the update toast is NOT shown when the installed version can't be read. C++ line 271 compares `latestAddonVersion.version > blenderAddonVersion.version` where the error case has `.version = ""`, making `"1.2.3" > ""` = true, so the update toast IS shown. The C++ code will prompt for update when the JS would not (in the error path).
-- [ ] 143. [tab_audio.cpp] parent_path() returns empty string for bare filenames, not "." like Node.js path.dirname()
+- [ ] 121. [tab_audio.cpp] parent_path() returns empty string for bare filenames, not "." like Node.js path.dirname()
   - **JS Source**: `src/js/modules/tab_audio.js` lines 155–158
   - **Status**: Pending
   - **Details**: The JS code uses `path.dirname(file_name)` which returns `"."` for a bare filename (no directory component), then checks `dir === '.'`. The C++ code at line 290 uses `fs::path(file_name).parent_path().string()` which returns `""` (empty string) for a bare filename, then checks `dir == "."` at line 292. For bare filenames (e.g. `"12345.ogg"`) the C++ condition `dir == "."` will be false, causing it to try `(fs::path("") / file_data_id_name).string()` instead of just returning `file_data_id_name`. This could produce incorrect export paths with a leading separator. Fix: change the check to `dir.empty() || dir == "."`.
-- [ ] 144. [tab_characters.cpp] Toast message text differs from JS in load_character_model
+- [ ] 122. [tab_characters.cpp] Toast message text differs from JS in load_character_model
   - **JS Source**: `src/js/modules/tab_characters.js` line 781
   - **Status**: Pending
   - **Details**: JS uses `util.format('The model %s doesn\'t have any 3D data associated with it.', file_data_id)` which includes the file data ID in the message. C++ line 1134 uses `"This model has no visible geometry."` which is different wording and omits the file data ID. User-facing text should match the original JS for fidelity.
-- [ ] 145. [tab_characters.cpp] Extra re-entry guard in load_character_model not present in JS
+- [ ] 123. [tab_characters.cpp] Extra re-entry guard in load_character_model not present in JS
   - **JS Source**: `src/js/modules/tab_characters.js` lines 718–720
   - **Status**: Pending
   - **Details**: C++ `load_character_model` at line 1043 adds an extra guard `if (view.chrModelLoading) return;` that the JS does not have. The JS only checks `if (!file_data_id || active_model === file_data_id)`. While defensive for the C++ async pump pattern, this could cause behavioral differences: if `load_character_model` is called while another model is already loading (e.g. from `apply_import_data` which sets `chrModelLoading = true` before calling this), the C++ would silently skip the load while the JS would proceed.
-- [ ] 146. [tab_characters.cpp] navigate_to_items_for_slot skips itemViewerTypeMask checkbox update
+- [ ] 124. [tab_characters.cpp] navigate_to_items_for_slot skips itemViewerTypeMask checkbox update
   - **JS Source**: `src/js/modules/tab_characters.js` lines 2499–2516
   - **Status**: Pending
   - **Details**: JS checks if `itemViewerTypeMask` is already populated and, if so, directly sets the `checked` property on matching items to pre-select the filter before switching to the Items tab. C++ at lines 2988–2997 always just sets `pendingItemSlotFilter` without checking or setting `itemViewerTypeMask`. If the Items tab was previously loaded and its type mask filter is already populated, the C++ won't directly toggle the filter checkboxes — it relies entirely on `pendingItemSlotFilter` being consumed by tab_items.
-- [ ] 147. [tab_creatures.cpp] Missing file_name parameter in create_renderer() call for standard creature preview
+- [ ] 125. [tab_creatures.cpp] Missing file_name parameter in create_renderer() call for standard creature preview
   - **JS Source**: `src/js/modules/tab_creatures.js` line 652
   - **Status**: Pending
   - **Details**: JS passes `file_name` as the 5th argument to `create_renderer()`. C++ at lines 952–956 computes `file_name` (lines 941–943) but only passes `file_data_id` as the 5th arg, leaving the `file_name` parameter at its default empty string. This could cause WMO creatures to fail loading group files since the WMO renderer may need the base file name to locate them. Fix: add `file_name` as the 6th argument to the `create_renderer` call.
-- [ ] 148. [tab_creatures.cpp] Missing export_paths and file_manifest in ExportModelOptions for standard creature exports
+- [ ] 126. [tab_creatures.cpp] Missing export_paths and file_manifest in ExportModelOptions for standard creature exports
   - **JS Source**: `src/js/modules/tab_creatures.js` lines 954–969
   - **Status**: Pending
   - **Details**: JS passes both `file_manifest` and `export_paths` to `modelViewerUtils.export_model()` for standard (non-character-model) creature exports. C++ at lines 1391–1409 constructs `ExportModelOptions` but does not set `opts.file_manifest` or `opts.export_paths`, leaving them as nullptr. Standard creature exports won't have their paths written to the export stream file and file manifests won't be populated. Fix: add `opts.file_manifest = &file_manifest;` and `opts.export_paths = &export_paths;` before the `export_model` call.
-- [ ] 149. [tab_creatures.cpp] OBJ/STL export for character-model creatures uses combined function instead of separate calls
+- [ ] 127. [tab_creatures.cpp] OBJ/STL export for character-model creatures uses combined function instead of separate calls
   - **JS Source**: `src/js/modules/tab_creatures.js` lines 922–927
   - **Status**: Pending
   - **Details**: JS has separate export calls: `exporter.exportAsOBJ()` for OBJ and `exporter.exportAsSTL()` for STL. C++ at lines 1356–1358 uses a single `exporter.exportAsOBJ(final_path, (format == "STL"), &helper, &file_manifest)` for both, passing a boolean to switch between OBJ and STL mode. This is a structural deviation — functionally identical only if the C++ `M2Exporter::exportAsOBJ` with `true` correctly produces STL output.
-- [ ] 150. [tab_decor.cpp] Extra null-guard on GL context not present in JS
+- [ ] 128. [tab_decor.cpp] Extra null-guard on GL context not present in JS
   - **JS Source**: `src/js/modules/tab_decor.js` lines 73–74
   - **Status**: Pending
   - **Details**: JS reads gl_context via optional chaining (`core.view.decorViewerContext?.gl_context`) and passes it (possibly null/undefined) to create_renderer. The C++ (lines 160–164) adds a hard guard that shows an error toast and returns early when gl_context is null. This means the C++ will refuse to preview a model if the GL context is unavailable, whereas the JS would pass null and potentially create a renderer without GL. Behavioural deviation from the JS.
-- [ ] 151. [tab_decor.cpp] fitCamera called synchronously instead of deferred via requestAnimationFrame
+- [ ] 129. [tab_decor.cpp] fitCamera called synchronously instead of deferred via requestAnimationFrame
   - **JS Source**: `src/js/modules/tab_decor.js` line 112
   - **Status**: Pending
   - **Details**: JS uses `requestAnimationFrame(() => core.view.decorViewerContext?.fitCamera?.())` to defer the camera fit to the next animation frame. C++ line 221 calls `viewer_context.fitCamera()` synchronously. In an ImGui context this is likely fine since the renderer will pick it up on the next frame anyway, but the timing differs from JS behavior.
-- [ ] 152. [tab_decor.cpp] export_decor skips non-string selection entries
+- [ ] 130. [tab_decor.cpp] export_decor skips non-string selection entries
   - **JS Source**: `src/js/modules/tab_decor.js` lines 497–506
   - **Status**: Pending
   - **Details**: JS export_decor maps over user_selection and for string entries extracts the ID, but for non-string entries it passes them through as-is (line 504: `return entry`). The C++ version (lines 589–599) only processes `entry.is_string()` entries, silently skipping any object-type entries. If selectionDecor ever contains object entries (not just strings), the C++ would miss them. Deviates from the JS fallback path.
-- [ ] 153. [tab_fonts.cpp] Filter input missing placeholder text "Filter fonts..."
+- [ ] 131. [tab_fonts.cpp] Filter input missing placeholder text "Filter fonts..."
   - **JS Source**: `src/js/modules/tab_fonts.js` line 61
   - **Status**: Pending
   - **Details**: The JS template uses `placeholder="Filter fonts..."` on the filter input. The C++ code at line 304 uses `ImGui::InputText("##FilterFonts", ...)` without any hint text. Other tabs in the codebase correctly use `ImGui::InputTextWithHint`. Fix: replace `ImGui::InputText` with `ImGui::InputTextWithHint` and pass "Filter fonts..." as the hint.
-- [ ] 154. [tab_fonts.cpp] Export path dir check `dir == "."` does not match Node.js path.dirname behavior
+- [ ] 132. [tab_fonts.cpp] Export path dir check `dir == "."` does not match Node.js path.dirname behavior
   - **JS Source**: `src/js/modules/tab_fonts.js` lines 124–126
   - **Status**: Pending
   - **Details**: JS `path.dirname("test.ttf")` returns "." for bare filenames. C++ `std::filesystem::path("test.ttf").parent_path().string()` returns "" (empty string). The C++ check at line 439 `dir == "."` would never match for bare filenames. Fix (as already done in tab_raw.cpp): use `dir.empty() || dir == "."`.
-- [ ] 155. [tab_maps.cpp] export_map_wmo_minimap tile compositing ignores draw offsets
+- [ ] 133. [tab_maps.cpp] export_map_wmo_minimap tile compositing ignores draw offsets
   - **JS Source**: `src/js/modules/tab_maps.js` lines 723–733
   - **Status**: Pending
   - **Details**: JS uses `ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, draw_x, draw_y, draw_width, draw_height)` which positions each tile at its drawX/drawY offset within the grid cell and scales it to draw_width/draw_height. The C++ (lines 989–1014) samples directly from the BLP without any draw offset, meaning all tiles in a grid cell are drawn at (0,0) rather than at their correct sub-pixel position. The `tile.drawX` and `tile.drawY` values are completely ignored during export compositing. This would cause incorrect WMO minimap exports where tiles don't align properly within grid cells.
-- [ ] 156. [tab_maps.cpp] load_wmo_minimap_tile uses blp.width instead of scaledWidth
+- [ ] 134. [tab_maps.cpp] load_wmo_minimap_tile uses blp.width instead of scaledWidth
   - **JS Source**: `src/js/modules/tab_maps.js` lines 103–104
   - **Status**: Pending
   - **Details**: JS does `const canvas = blp.toCanvas(0b1111)` and uses `canvas.width`/`canvas.height` which reflect the decoded/scaled dimensions. The C++ (line 292) uses `blp.width` and `blp.height` directly. If BLP has mipmaps and scaledWidth differs from width, the compositing will sample incorrectly. The terrain tile loader (load_map_tile) correctly uses `blp.getScaledWidth()`/`blp.getScaledHeight()`, so this appears to be an oversight specific to the WMO minimap tile loader.
-- [ ] 157. [tab_maps.cpp] mounted() does not call initialize() — deferred to render()
+- [ ] 135. [tab_maps.cpp] mounted() does not call initialize() — deferred to render()
   - **JS Source**: `src/js/modules/tab_maps.js` lines 1132–1146
   - **Status**: Pending
   - **Details**: JS mounted() calls `await this.initialize()` which loads DB2 tables, builds the map list, and shows/hides loading screens. C++ mounted() (line 1582–1588) only sets state and defers initialization to the first render() call via a lazy-init pattern. The timing differs: JS initializes when the component mounts, while C++ initializes on first render frame. This could cause a brief flash of empty content or different loading screen behavior.
-- [ ] 158. [tab_maps.cpp] collect_game_objects uses std::vector instead of Set for storage
+- [ ] 136. [tab_maps.cpp] collect_game_objects uses std::vector instead of Set for storage
   - **JS Source**: `src/js/modules/tab_maps.js` lines 127–144
   - **Status**: Pending
   - **Details**: JS stores game objects in a `Map<number, Set>` where Set provides reference-identity uniqueness. C++ (line 112) uses `std::unordered_map<uint32_t, std::vector<db::DataRecord>>` — a vector has no uniqueness guarantee. If the same row appears multiple times in getAllRows(), it would be duplicated. Unlikely to cause practical issues since DB2 rows are iterated once, but deviates from JS semantics.
-- [ ] 159. [tab_maps.cpp] export_map_wmo_minimap condition check differs from JS
+- [ ] 137. [tab_maps.cpp] export_map_wmo_minimap condition check differs from JS
   - **JS Source**: `src/js/modules/tab_maps.js` lines 695–697
   - **Status**: Pending
   - **Details**: JS checks `if (!selected_wdt || !selected_wdt.worldModelPlacement)` — testing if WDT exists and has a worldModelPlacement property. C++ (line 951) checks `if (!selected_wdt || (!selected_wdt->hasWorldModelPlacement && selected_wdt->worldModel.empty()))` — adding an extra worldModel check. This means the C++ will attempt setup_wmo_minimap even when there's no worldModelPlacement if there IS a worldModel string, which the JS version would not do.
-- [ ] 160. [tab_models.cpp] Drop handler wraps files as JSON objects instead of plain strings
+- [ ] 138. [tab_models.cpp] Drop handler wraps files as JSON objects instead of plain strings
   - **JS Source**: `src/js/modules/tab_models.js` lines 587, 213
   - **Status**: Pending
   - **Details**: In the JS, the drop handler's process callback receives an array of file path strings and passes them directly to export_files(). Inside export_files, the file_entry is used as a plain string for listfile.stripFileEntry(). In the C++ (lines 658–667), the drop handler wraps each file path in a JSON object: `entry["fileName"] = file;` (creating `{"fileName": "path"}`), then passes these objects to export_files(). Inside pump_export_task() (line 775–783), the code attempts `file_entry.get<std::string>()` which will throw because the entry is a JSON object, not a string. Every file dropped onto the models tab would fail to export. Fix: use `entries.push_back(nlohmann::json(file))` instead of wrapping in an object.
-- [ ] 161. [tab_models_legacy.cpp] Missing stack trace log line in preview_model error handler
+- [ ] 139. [tab_models_legacy.cpp] Missing stack trace log line in preview_model error handler
   - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 186–187
   - **Status**: Pending
   - **Details**: The JS logs two lines on preview failure: `log.write('Failed to load legacy model: %s', e.message)` and `log.write(e.stack)`. The C++ at line 291 only logs the error message, omitting the second log line for the stack trace. While C++ exceptions don't inherently carry stack traces, the JS behaviour of logging two lines is not replicated.
-- [ ] 162. [tab_models_legacy.cpp] MDX animation frame count not set after playAnimation
+- [ ] 140. [tab_models_legacy.cpp] MDX animation frame count not set after playAnimation
   - **JS Source**: `src/js/modules/tab_models_legacy.js` line 562
   - **Status**: Pending
   - **Details**: The JS animation watcher sets `legacyModelViewerAnimFrameCount = active_renderer.get_animation_frame_count?.() || 0` after calling playAnimation(), regardless of whether the renderer is M2 or MDX. In C++ at lines 851–856, the M2 path sets `view.legacyModelViewerAnimFrameCount` (line 853) but the MDX path at line 855 only calls playAnimation() without updating the frame count. Animation scrubbing controls would not know the total frame count for MDX models.
-- [ ] 163. [mpq-install.cpp] getFilesByExtension and getAllFiles add std::sort not present in JS
+- [ ] 141. [mpq-install.cpp] getFilesByExtension and getAllFiles add std::sort not present in JS
   - **JS Source**: `src/js/mpq/mpq-install.js` lines 87–120
   - **Status**: Pending
   - **Details**: JS `getFilesByExtension` (lines 87–97) and `getAllFiles` (lines 99–120) iterate the `listfile` Map and return results in insertion order (archive processing order). The C++ versions (lines 104–120 and 122–144) add `std::sort(results.begin(), results.end())` before returning, which changes the output to alphabetical order. This could affect callers that depend on the original archive-processing order. The underlying `std::unordered_map` already iterates in undefined order (unlike JS Map's insertion order), but the extra sort is an explicit deviation from JS semantics.
-- [ ] 164. [audio-helper.cpp] onended callback does not clean up sound/decoder objects
+- [ ] 142. [audio-helper.cpp] onended callback does not clean up sound/decoder objects
   - **JS Source**: `src/js/ui/audio-helper.js` lines 57–67
   - **Status**: Pending
   - **Details**: JS sets `this.source = null` on natural playback end (line 62), which prevents `stop_source()` from trying to stop an already-ended source. C++ (lines 178–191) sets `is_playing = false` and `start_offset = 0` but does NOT uninit/delete the sound or decoder objects. They remain allocated until the next `play()` call triggers `stop_source()` cleanup. This is a resource deviation — after natural playback ends, sound/decoder remain allocated in C++ while JS nulls the source immediately.
-- [ ] 165. [audio-helper.cpp] load() does not propagate decode failure to caller
+- [ ] 143. [audio-helper.cpp] load() does not propagate decode failure to caller
   - **JS Source**: `src/js/ui/audio-helper.js` lines 31–35
   - **Status**: Pending
   - **Details**: JS `await this.context.decodeAudioData(array_buffer)` rejects the promise if decoding fails, propagating the error to the caller. C++ (lines 117–125) silently continues if `ma_decoder_init_memory` fails — `duration_cache` is set to 0.0 and the raw audio_data is returned. The caller has no way to know decoding failed. Audio data is stored but will fail to play later with no error feedback.
-- [ ] 166. [char-texture-overlay.cpp] remove() handles missing elements differently than JS
+- [ ] 144. [char-texture-overlay.cpp] remove() handles missing elements differently than JS
   - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 46–61
   - **Status**: Pending
   - **Details**: JS `layers.splice(layers.indexOf(canvas), 1)` — when canvas is not in the array, `indexOf` returns -1, and `splice(-1, 1)` removes the last element. C++ (lines 83–85) uses `std::find` and only erases if found — if the textureID is not in layers, nothing is removed. The C++ behavior is arguably more correct, but it is a behavioral deviation from JS: calling `remove()` with a non-existent element silently removes the last layer in JS but does nothing in C++.
-- [ ] 167. [char-texture-overlay.cpp] ensureActiveLayerAttached() has different semantics than JS DOM re-attachment
+- [ ] 145. [char-texture-overlay.cpp] ensureActiveLayerAttached() has different semantics than JS DOM re-attachment
   - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 63–71
   - **Status**: Pending
   - **Details**: JS checks if `active_layer.parentNode !== element` (DOM detachment) and re-appends the active layer to the overlay DOM element. C++ (lines 98–106) checks if `active_layer` is still in the `layers` vector; if not, resets to `layers.back()` or 0. The JS version never changes the active layer — it only ensures it's visually attached. The C++ version can change the active layer to a different one if the current one is no longer in the vector. Different semantics: JS preserves active layer identity, C++ validates membership and may substitute.

@@ -64,12 +64,12 @@ JS async/await patterns converted to synchronous C++ calls. The standard JS-to-C
 ### A2. [tiled-png-writer.cpp] write() returns immediately via shared_future
 - **JS Source**: `src/js/tiled-png-writer.js` lines 123-125
 - **Reason**: JS `await tiledWriter.write(path)` guarantees file is on disk before continuing. C++ launches write on `std::async` and returns a `shared_future<void>` immediately.
-- **Impact**: Callers must call `.get()` to observe completion or errors. Race condition if callers don't await. (TODO 51)
+- **Impact**: Callers must call `.get()` to observe completion or errors. Race condition if callers don't await.
 
 ### A3. [GeosetMapper.cpp] map() async signature dropped
 - **JS Source**: `src/js/3D/GeosetMapper.js` lines 79-84
 - **Reason**: JS declares `async map()` but body contains no `await`. C++ drops the async wrapper since it's unnecessary.
-- **Impact**: None in practice — JS function was already synchronous in behaviour. (TODO 57)
+- **Impact**: None in practice — JS function was already synchronous in behaviour.
 
 ## Container Ordering
 
@@ -78,32 +78,32 @@ JS `Map`/`Object` preserve insertion order; C++ `std::unordered_map`/`std::map` 
 ### O1. [tiled-png-writer.cpp] tiles map uses std::map (lexicographic order)
 - **JS Source**: `src/js/tiled-png-writer.js` lines 25, 58-59
 - **Reason**: JS `Map` iterates in insertion order. C++ `std::map<std::string, Tile>` iterates in lexicographic key order.
-- **Impact**: Porter-Duff blend output differs when tiles overlap with partial alpha. (TODO 52)
+- **Impact**: Porter-Duff blend output differs when tiles overlap with partial alpha.
 
 ### O2. [xml.cpp] build_object uses std::unordered_map for child grouping
 - **JS Source**: `src/js/xml.js` lines 138-153
 - **Reason**: JS `Object.entries(groups)` yields insertion order. C++ `std::unordered_map` iterates in hash order.
-- **Impact**: JSON output key sequence differs from JS for the same XML input. (TODO 56)
+- **Impact**: JSON output key sequence differs from JS for the same XML input.
 
 ### O3. [Shaders.cpp] active_programs is std::unordered_map
 - **JS Source**: `src/js/3D/Shaders.js` lines 26, 100-122
 - **Reason**: JS `Map` insertion order. C++ `std::unordered_map` hash order.
-- **Impact**: reload_all recompile order and log line order differ from JS. (TODO 58)
+- **Impact**: reload_all recompile order and log line order differ from JS.
 
 ### O4. [WMOExporter.cpp] groupNames ordering may differ
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 738, 1193
 - **Reason**: JS `Object.values(wmo.groupNames)` yields insertion order. C++ container may iterate differently.
-- **Impact**: Meta JSON `groupNames` array order may differ. (TODO 84)
+- **Impact**: Meta JSON `groupNames` array order may differ. (TODO 62)
 
 ### O5. [ADTExporter.cpp] foliage JSON key order
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1474-1479
 - **Reason**: JS `JSON.stringify` emits the entire DB row in insertion order. C++ enumerates fields via `unordered_map`.
-- **Impact**: JSON key ordering differs. (TODO 69)
+- **Impact**: JSON key ordering differs.
 
 ### O6. [mpq-install.cpp] getFilesByExtension and getAllFiles add std::sort
 - **JS Source**: `src/js/mpq/mpq-install.js` lines 87-120
 - **Reason**: JS returns results in Map insertion order (archive processing order). C++ adds `std::sort` producing alphabetical order.
-- **Impact**: Callers that depend on archive-processing order see different results. (TODO 163)
+- **Impact**: Callers that depend on archive-processing order see different results. (TODO 141)
 
 ## Data Type / Sentinel Value Differences
 
@@ -112,32 +112,32 @@ JS dynamic types (NaN, undefined, null) don't map 1:1 to C++ static types.
 ### D1. [subtitles.cpp] parse_sbt_timestamp returns 0 instead of NaN for malformed input
 - **JS Source**: `src/js/subtitles.js` lines 8-22
 - **Reason**: JS `parseInt` returns `NaN` which propagates through arithmetic. C++ returns `std::nullopt` mapped to 0.
-- **Impact**: Malformed timestamps produce 0 in C++ vs NaN in JS. (TODO 48)
+- **Impact**: Malformed timestamps produce 0 in C++ vs NaN in JS.
 
 ### D2. [wmv.cpp] parse_legacy returns -1 sentinel instead of NaN
 - **JS Source**: `src/js/wmv.js` lines 87-92
 - **Reason**: JS `parseInt("abc")` returns NaN. C++ `safe_parse_int` returns `std::nullopt`, mapped to -1 via `value_or(-1)`.
-- **Impact**: Callers inspecting the int directly see -1 vs NaN. Practical effect is similar (no choice picked). (TODO 55)
+- **Impact**: Callers inspecting the int directly see -1 vs NaN. Practical effect is similar (no choice picked).
 
 ### D3. [ShaderProgram.cpp] get_uniform_block_param returns -1 instead of null
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 122-127
 - **Reason**: JS returns `null` for `INVALID_INDEX`. C++ returns `-1` (valid GLint).
-- **Impact**: Callers cannot distinguish "block missing" from legitimate -1. (TODO 95)
+- **Impact**: Callers cannot distinguish "block missing" from legitimate -1. (TODO 73)
 
 ### D4. [ADTExporter.cpp] scale 0 maps to 1.0 instead of preserving 0
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1270
 - **Reason**: JS uses `model.scale !== undefined ? model.scale / 1024 : 1`. C++ uses `model.scale != 0.0f` as the gate, conflating absent with zero.
-- **Impact**: Explicit scale 0 yields 0/1024=0 in JS but 1.0 in C++. (TODO 66)
+- **Impact**: Explicit scale 0 yields 0/1024=0 in JS but 1.0 in C++.
 
 ### D5. [M2Exporter.cpp] data-texture fileDataID not back-patched
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 153-168
 - **Reason**: JS back-patches `texture.fileDataID = 'data-' + textureType` (string). C++ `Texture::fileDataID` is `uint32_t`, cannot hold a string.
-- **Impact**: Meta JSON `textures[i].fileDataID` differs for data-texture rows. (TODO 72)
+- **Impact**: Meta JSON `textures[i].fileDataID` differs for data-texture rows. (TODO 50)
 
 ### D6. [DBCharacterCustomization.cpp] getFileDataIDByDisplayID maps nullopt to 0
 - **JS Source**: `src/js/db/caches/DBCharacterCustomization.js` lines 128-130
 - **Reason**: JS stores raw `undefined` from lookup. C++ uses `.value_or(0)`, converting no-value to 0.
-- **Impact**: Downstream callers see `std::optional(0)` instead of `nullopt`. FileDataID 0 is generally invalid so practical impact is low. (TODO 132)
+- **Impact**: Downstream callers see `std::optional(0)` instead of `nullopt`. FileDataID 0 is generally invalid so practical impact is low. (TODO 110)
 
 ## API Signature Differences
 
@@ -146,32 +146,32 @@ C++ function signatures that differ from the JS originals.
 ### P1. [M2Exporter.cpp] addURITexture takes BufferWrapper instead of dataURI string
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 59-61, 111
 - **Reason**: C++ caller pre-decodes; JS stores base64 data URI string and decodes at export time.
-- **Impact**: API contract differs. JS regex strip of data-URI prefix is not preserved. (TODO 71)
+- **Impact**: API contract differs. JS regex strip of data-URI prefix is not preserved. (TODO 49)
 
 ### P2. [M3Exporter.cpp] addURITexture stores BufferWrapper instead of dataURI string
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 49-51
 - **Reason**: Same as P1 — C++ uses raw bytes instead of base64 string.
-- **Impact**: Consumers reading `dataTextures` receive raw bytes instead of data URI. (TODO 80)
+- **Impact**: Consumers reading `dataTextures` receive raw bytes instead of data URI. (TODO 58)
 
 ### P3. [ShaderProgram.cpp] set_uniform_3fv/4fv/mat4_array add explicit count parameter
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 204-208, 214-218, 247-251
 - **Reason**: JS infers count from `values.length`. C++ `const float*` has no length — callers must pass count.
-- **Impact**: Default count=1 if callers don't specify. API contract differs. (TODO 96)
+- **Impact**: Default count=1 if callers don't specify. API contract differs. (TODO 74)
 
 ### P4. [UniformBuffer.cpp] set_float_array requires explicit count
 - **JS Source**: `src/js/3D/gl/UniformBuffer.js` lines 152-158
 - **Reason**: Same as P3 — `const float*` has no length.
-- **Impact**: Same as P3. (TODO 97)
+- **Impact**: Same as P3. (TODO 75)
 
 ### P5. [DBItemGeosets.cpp] getDisplayId missing modifier_id parameter
 - **JS Source**: `src/js/db/caches/DBItemGeosets.js` lines 277-279
 - **Reason**: Omission — JS accepts optional `modifier_id`, C++ only accepts `item_id`.
-- **Impact**: C++ always uses default modifier resolution. (TODO 134)
+- **Impact**: C++ always uses default modifier resolution. (TODO 112)
 
 ### P6. [DBItemModels.cpp] getItemModels missing modifier_id parameter
 - **JS Source**: `src/js/db/caches/DBItemModels.js` lines 141-142
 - **Reason**: Same omission as P5.
-- **Impact**: C++ always uses default modifier resolution. (TODO 135)
+- **Impact**: C++ always uses default modifier resolution. (TODO 113)
 
 ## File Path / String Processing
 
@@ -180,37 +180,37 @@ Differences in how file paths and strings are processed.
 ### F1. [M2LegacyExporter.cpp] matName uses stem() instead of .blp-only removal
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` line 94
 - **Reason**: JS `path.basename(texturePath, '.blp')` strips only `.blp`. C++ `stem()` strips any extension.
-- **Impact**: Non-.blp paths get different matNames. (TODO 75)
+- **Impact**: Non-.blp paths get different matNames. (TODO 53)
 
 ### F2. [WMOLegacyLoader.cpp] getGroup uses rfind (case-insensitive) instead of first-occurrence replace
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` line 138
 - **Reason**: JS `String.replace('.wmo', ...)` is case-sensitive, replaces first occurrence. C++ checks last 4 chars case-insensitively.
-- **Impact**: Different behaviour for mid-path `.wmo` and uppercase extensions. (TODO 103)
+- **Impact**: Different behaviour for mid-path `.wmo` and uppercase extensions. (TODO 81)
 
 ### F3. [WMOLoader.cpp] getGroup uses rfind(".wmo") instead of find(".wmo")
 - **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 75-78
 - **Reason**: JS `replace` targets first occurrence. C++ `rfind` targets last occurrence.
-- **Impact**: Paths with multiple `.wmo` segments would diverge. (TODO 105)
+- **Impact**: Paths with multiple `.wmo` segments would diverge. (TODO 83)
 
 ### F4. [WMOLegacyExporter.cpp] absolute() without normalization vs path.resolve()
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 316-317
 - **Reason**: JS `path.resolve` normalizes `..`/`.` segments. C++ `std::filesystem::absolute` does not.
-- **Impact**: CSV ModelFile values may contain unresolved relative segments. (TODO 89)
+- **Impact**: CSV ModelFile values may contain unresolved relative segments. (TODO 67)
 
 ### F5. [WMOLegacyExporter.cpp] ASCII-only tolower instead of Unicode toLowerCase
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 299, 310, 507, 510
 - **Reason**: C++ `std::tolower` only handles ASCII bytes. JS `toLowerCase()` is Unicode-aware.
-- **Impact**: Non-ASCII characters in paths would cause cache misses / duplicate exports. (TODO 90)
+- **Impact**: Non-ASCII characters in paths would cause cache misses / duplicate exports. (TODO 68)
 
 ### F6. [tab_audio.cpp] parent_path() returns "" instead of "." for bare filenames
 - **JS Source**: `src/js/modules/tab_audio.js` lines 155-158
 - **Reason**: Node.js `path.dirname("file.ogg")` returns `"."`. C++ `parent_path()` returns `""`.
-- **Impact**: Export paths for bare filenames could get a leading separator. (TODO 143)
+- **Impact**: Export paths for bare filenames could get a leading separator. (TODO 121)
 
 ### F7. [tab_fonts.cpp] Same parent_path() vs dirname() mismatch
 - **JS Source**: `src/js/modules/tab_fonts.js` lines 124-126
 - **Reason**: Same as F6.
-- **Impact**: Same as F6. (TODO 154)
+- **Impact**: Same as F6. (TODO 132)
 
 ## Rendering / Canvas Operations
 
@@ -219,27 +219,27 @@ WebGL/Canvas APIs mapped to OpenGL/FBO equivalents.
 ### G1. [ADTExporter.cpp] FBO + pixel rotation instead of canvas rotate+composite
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 891-1161
 - **Reason**: No HTML Canvas in C++. Uses offscreen FBO with index-swap rotation.
-- **Impact**: JS canvas bilinear resampling on drawImage vs C++ plain index swap. Slight edge differences. (TODO 63)
+- **Impact**: JS canvas bilinear resampling on drawImage vs C++ plain index swap. Slight edge differences.
 
 ### G2. [ADTExporter.cpp] stb_image_resize instead of canvas drawImage
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 861-890
 - **Reason**: No HTML Canvas. Uses `stbir_resize_uint8_linear`.
-- **Impact**: Slightly different interpolation results. (TODO 64)
+- **Impact**: Slightly different interpolation results.
 
 ### G3. [GLContext.cpp] ext_float_texture hard-coded to true
 - **JS Source**: `src/js/3D/gl/GLContext.js` lines 61-62
 - **Reason**: JS probes `gl.getExtension('EXT_color_buffer_float')`. C++ assumes true since float textures are core in GL 3.0+.
-- **Impact**: Flag is not actually probed. Could be incorrect on unusual GL implementations. (TODO 91)
+- **Impact**: Flag is not actually probed. Could be incorrect on unusual GL implementations. (TODO 69)
 
 ### G4. [GLTexture.cpp] Extra flip_y option not in JS
 - **JS Source**: `src/js/3D/gl/GLTexture.js` lines 34-50
 - **Reason**: Added to compensate for OpenGL vs WebGL coordinate conventions. JS never flips Y.
-- **Impact**: Extra code path and option with no JS equivalent. (TODO 92)
+- **Impact**: Extra code path and option with no JS equivalent. (TODO 70)
 
 ### G5. [GLTexture.cpp] set_canvas takes raw pixels instead of HTMLCanvasElement
 - **JS Source**: `src/js/3D/gl/GLTexture.js` lines 52-73
 - **Reason**: No HTMLCanvasElement in C++. Takes `(pixels, w, h, options)` and forwards to set_rgba.
-- **Impact**: Callers must rasterize content to RGBA bytes themselves. (TODO 93)
+- **Impact**: Callers must rasterize content to RGBA bytes themselves. (TODO 71)
 
 ## UBO / Bone Animation
 
@@ -248,57 +248,57 @@ Bone Uniform Buffer Object creation and binding order differences.
 ### B1. [M2LegacyRendererGL.cpp] _create_bones_ubo method missing entirely
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 389, 474-477, 1020
 - **Reason**: UBO pipeline not yet implemented in C++ for legacy renderer.
-- **Impact**: Bone animation will not work until implemented. (TODO 109)
+- **Impact**: Bone animation will not work until implemented. (TODO 87)
 
 ### B2. [M2RendererGL.cpp] Bones UBO created before skeleton is loaded
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 406-439, 567
 - **Reason**: C++ creates UBO in `load()` before `_create_skeleton()`. JS creates it in `loadSkin()` after skeleton setup.
-- **Impact**: UBO sized for 0 bones. Bone animation may fail. (TODO 111)
+- **Impact**: UBO sized for 0 bones. Bone animation may fail. (TODO 89)
 
 ### B3. [M3RendererGL.cpp] _create_bones_ubo moved from loadLOD() to load()
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 79-81, 147
 - **Reason**: C++ creates UBO once in `load()`. JS creates it per-`loadLOD()` call.
-- **Impact**: Switching LOD levels won't recreate the UBO. (TODO 115)
+- **Impact**: Switching LOD levels won't recreate the UBO. (TODO 93)
 
 ### B4. [MDXRendererGL.cpp] Bone UBO created before skeleton/geometry
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 189-199, 262-265, 291
 - **Reason**: C++ creates UBO in `load()` before skeleton. JS creates it inside `_build_geometry` after skeleton.
-- **Impact**: UBO always sized for 0 bones. (TODO 121)
+- **Impact**: UBO always sized for 0 bones. (TODO 99)
 
 ### B5. [M2LegacyRendererGL.cpp] Extra u_has_tex_matrix uniforms
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 956-957
 - **Reason**: C++ sets `u_has_tex_matrix1/2 = 0` which JS does not set at all.
-- **Impact**: Shader may skip texture matrix application. (TODO 110)
+- **Impact**: Shader may skip texture matrix application. (TODO 88)
 
 ### B6. [M3RendererGL.cpp] Extra u_has_tex_matrix uniforms
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 243-244
 - **Reason**: Same as B5.
-- **Impact**: Same as B5. (TODO 118)
+- **Impact**: Same as B5. (TODO 96)
 
 ### B7. [M2RendererGL.cpp] Missing u_ambient_color and u_diffuse_color uniforms
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1512-1513
 - **Reason**: C++ render() omits both uniform calls.
-- **Impact**: Lighting will be incorrect if shader uses these uniforms. (TODO 112)
+- **Impact**: Lighting will be incorrect if shader uses these uniforms. (TODO 90)
 
 ### B8. [M3RendererGL.cpp] UBO bind(0) not called per draw call
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` line 292
 - **Reason**: C++ binds UBO once before loop. JS rebinds per draw call.
-- **Impact**: Could break with intervening UBO binds. (TODO 117)
+- **Impact**: Could break with intervening UBO binds. (TODO 95)
 
 ### B9. [MDXRendererGL.cpp] stopAnimation resets ALL bones instead of just bone 0
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 429-431
 - **Reason**: JS `set(IDENTITY_MAT4)` with no offset only writes 16 floats (bone 0). C++ loops all bones.
-- **Impact**: Different visual result when stopping animation on multi-bone models. (TODO 120)
+- **Impact**: Different visual result when stopping animation on multi-bone models. (TODO 98)
 
 ### B10. [M2RendererGL.cpp] _dispose_skin does not dispose bone UBOs
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1914-1922
 - **Reason**: C++ only disposes UBO in final `dispose()`, not in `_dispose_skin()`.
-- **Impact**: Old UBOs not cleaned up if loadSkin called multiple times. (TODO 114)
+- **Impact**: Old UBOs not cleaned up if loadSkin called multiple times. (TODO 92)
 
 ### B11. [M3RendererGL.cpp] UBO disposal missing from _dispose_geometry
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 310-311, 316
 - **Reason**: C++ `_dispose_geometry()` has no UBO disposal.
-- **Impact**: Same as B10. (TODO 116)
+- **Impact**: Same as B10. (TODO 94)
 
 ## Exporter Structure Differences
 
@@ -307,381 +307,381 @@ Export pipeline structural deviations.
 ### E1. [M2Exporter.cpp] exportRaw parent-skeleton bones gated on wrong config flag
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 1098-1163
 - **Reason**: C++ places parent-skel bone export inside `modelsExportAnim` block. JS has it outside.
-- **Impact**: Bones-only export without animations silently loses parent-skel bone files. (TODO 70)
+- **Impact**: Bones-only export without animations silently loses parent-skel bone files. (TODO 48)
 
 ### E2. [M2Exporter.cpp] cancellation returns partial struct instead of undefined
 - **JS Source**: `src/js/3D/exporters/M2Exporter.js` lines 142-143
 - **Reason**: C++ returns partial `M2ExportTextureResult`. JS returns `undefined`.
-- **Impact**: Callers proceed with empty maps instead of dereferencing undefined. (TODO 73)
+- **Impact**: Callers proceed with empty maps instead of dereferencing undefined. (TODO 51)
 
 ### E3. [ADTExporter.cpp] useADTSets hardcoded to false
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1300-1351
 - **Reason**: C++ hardcodes `false`. JS evaluates `model & 0x80` (always 0 for JS objects, but should check binary flag).
-- **Impact**: Doodad-set-from-ADT branch is dead code. (TODO 67)
+- **Impact**: Doodad-set-from-ADT branch is dead code.
 
 ### E4. [ADTExporter.cpp] Liquid export pushes nullptr for chunks with no instances
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1409-1411
 - **Reason**: JS preserves the chunk object (including attributes). C++ pushes nullptr.
-- **Impact**: Chunk's `attributes` field is lost. (TODO 68)
+- **Impact**: Chunk's `attributes` field is lost.
 
 ### E5. [WMOExporter.cpp] groupID=0 treated as "no fileID"
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 1266-1270
 - **Reason**: JS `??` operator falls through on 0. C++ treats any in-bounds index as resolved.
-- **Impact**: WMOs with 0 in groupIDs lose group-file export coverage. (TODO 83)
+- **Impact**: WMOs with 0 in groupIDs lose group-file export coverage. (TODO 61)
 
 ### E6. [M2LegacyExporter.cpp] subMesh JSON drops fields beyond hardcoded list
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 206-210
 - **Reason**: JS `Object.assign` copies all properties. C++ manually lists 13 fields.
-- **Impact**: Additional loader properties silently dropped from meta JSON. (TODO 76)
+- **Impact**: Additional loader properties silently dropped from meta JSON. (TODO 54)
 
 ### E7. [M2LegacyExporter.cpp] textures JSON emits explicit null instead of omitting
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 229-234
 - **Reason**: JS `undefined` is omitted by `JSON.stringify`. C++ explicitly writes `null`.
-- **Impact**: Output JSON has extra `null` keys that JS would not produce. (TODO 77)
+- **Impact**: Output JSON has extra `null` keys that JS would not produce. (TODO 55)
 
 ### E8. [WMOLegacyExporter.cpp] CSV float formatting uses std::to_string
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 322-333
 - **Reason**: JS `Number.toString` produces shortest round-trip representation. C++ `std::to_string(float)` produces fixed precision with trailing zeros.
-- **Impact**: CSV output is byte-different for every float field. (TODO 88)
+- **Impact**: CSV output is byte-different for every float field. (TODO 66)
 
 ## Loader / Parser Differences
 
 ### L1. [MDXLoader.cpp] parse_ATCH reads KVIS data that JS skips
 - **JS Source**: `src/js/3D/loaders/MDXLoader.js` lines 387-412
 - **Reason**: JS has a bug where `readUInt32LE(-4)` makes the KVIS branch dead code. C++ deliberately reads KVIS.
-- **Impact**: `attachment.visibilityAnim` is populated in C++ but always empty in JS. Intentional improvement. (TODO 98)
+- **Impact**: `attachment.visibilityAnim` is populated in C++ but always empty in JS. Intentional improvement. (TODO 76)
 
 ### L2. [MDXLoader.cpp] Node-to-nodes registration order differs
 - **JS Source**: `src/js/3D/loaders/MDXLoader.js` lines 208-210, 53-56
 - **Reason**: JS registers in chunk-appearance order. C++ defers to end of `load()` with fixed iteration order.
-- **Impact**: Different node wins on objectId collision. (TODO 99)
+- **Impact**: Different node wins on objectId collision. (TODO 77)
 
 ### L3. [SKELLoader.cpp] loadAnimsForIndex swallows exceptions
 - **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 308-347
 - **Reason**: C++ wraps in try/catch and logs. JS propagates rejection.
-- **Impact**: Callers lose error signal, see generic false instead of specific error. (TODO 100)
+- **Impact**: Callers lose error signal, see generic false instead of specific error. (TODO 78)
 
 ### L4. [SKELLoader.cpp] loadAnims swallows exceptions
 - **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 407-454
 - **Reason**: Same as L3 — continues on error instead of aborting.
-- **Impact**: Incomplete animFiles map with only a log line. (TODO 101)
+- **Impact**: Incomplete animFiles map with only a log line. (TODO 79)
 
 ### L5. [WMOLegacyLoader.cpp] getGroup creates child with fileName set
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 144-148
 - **Reason**: JS passes `undefined` for fileName on child loaders. C++ sets `fileName = groupPath`.
-- **Impact**: Sentinel-style checks on child loaders see different values. (TODO 102)
+- **Impact**: Sentinel-style checks on child loaders see different values. (TODO 80)
 
 ### L6. [WMOLegacyLoader.cpp] fileID=0 skips listfile lookup
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 22-30
 - **Reason**: JS `fileID !== undefined` accepts 0. C++ `fileID != 0` rejects 0.
-- **Impact**: Different fileName resolution for fileDataID 0 (not a real WoW asset). (TODO 104)
+- **Impact**: Different fileName resolution for fileDataID 0 (not a real WoW asset). (TODO 82)
 
 ### L7. [WMOLoader.cpp] Same fileID=0 deviation
 - **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 18-32
 - **Reason**: Same as L6.
-- **Impact**: Same as L6. (TODO 106)
+- **Impact**: Same as L6. (TODO 84)
 
 ### L8. [DBCReader.cpp] _read_field reads 8 bytes for Int64/UInt64
 - **JS Source**: `src/js/db/DBCReader.js` lines 389-408
 - **Reason**: JS has no Int64/UInt64 case — falls through to default (4 bytes). C++ explicitly handles 8-byte reads.
-- **Impact**: Record offset misalignment if 64-bit field encountered in DBC. Intentional improvement. (TODO 131)
+- **Impact**: Record offset misalignment if 64-bit field encountered in DBC. Intentional improvement. (TODO 109)
 
 ## Ownership / Lifecycle
 
 ### M1. [Shaders.cpp] create_program splits ownership (unique_ptr + raw pointer)
 - **JS Source**: `src/js/3D/Shaders.js` lines 56-72
 - **Reason**: JS GC keeps the program alive as long as any reference holds it. C++ unique_ptr transfers ownership to caller while raw pointer stays in active_programs.
-- **Impact**: Dangling pointer risk if caller's unique_ptr goes out of scope before unregister. (TODO 59)
+- **Impact**: Dangling pointer risk if caller's unique_ptr goes out of scope before unregister.
 
 ### M2. [Shaders.cpp] create_program installs _unregister_fn callback
 - **JS Source**: `src/js/3D/Shaders.js` lines 56-72
 - **Reason**: Added to compensate for M1's split ownership. No JS equivalent.
-- **Impact**: Destroying unique_ptr auto-deregisters. JS pinned programs survive indefinitely. (TODO 60)
+- **Impact**: Destroying unique_ptr auto-deregisters. JS pinned programs survive indefinitely.
 
 ### M3. [audio-helper.cpp] onended callback doesn't clean up sound/decoder objects
 - **JS Source**: `src/js/ui/audio-helper.js` lines 57-67
 - **Reason**: JS nulls source immediately. C++ leaves sound/decoder allocated until next play().
-- **Impact**: Resource deviation after natural playback end. (TODO 164)
+- **Impact**: Resource deviation after natural playback end. (TODO 142)
 
 ## Configuration / Manifest
 
 ### C1. [updater.cpp] Build-time constants instead of runtime manifest
 - **JS Source**: `src/js/updater.js` lines 24-25, 33, 35
 - **Reason**: JS reads `nw.App.manifest.flavour`/`guid` at runtime. C++ uses compile-time constants.
-- **Impact**: Stale GUID/flavour if manifest changes without rebuild. (TODO 53)
+- **Impact**: Stale GUID/flavour if manifest changes without rebuild.
 
 ## Control Flow / Error Handling
 
 ### X1. [ShaderProgram.cpp] _compile deletes successfully-compiled shader on error
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 35-36
 - **Reason**: JS leaks the successful shader on compile failure. C++ explicitly deletes both.
-- **Impact**: Intentional fix for a JS leak — behavioural deviation in failure path. (TODO 94)
+- **Impact**: Intentional fix for a JS leak — behavioural deviation in failure path. (TODO 72)
 
 ### X2. [M2LegacyExporter.cpp] exportAsOBJ/STL throw explicit error on null skin
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 129, 268
 - **Reason**: JS would crash with TypeError on property access. C++ throws descriptive `runtime_error`.
-- **Impact**: Different error type/message in failure path. (TODO 79)
+- **Impact**: Different error type/message in failure path. (TODO 57)
 
 ### X3. [WMOExporter.cpp] empty-UV branch defensively allocates uv_maps[0]
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 316-321
 - **Reason**: JS `splice(-1, 1)` on missing canvas removes last element (latent bug). C++ handles missing entry gracefully.
-- **Impact**: Intentional fix — JS would crash, C++ allocates zeros. (TODO 87)
+- **Impact**: Intentional fix — JS would crash, C++ allocates zeros. (TODO 65)
 
 ### X4. [context-menu.cpp] Click-to-close checks all mouse buttons
 - **JS Source**: `src/js/components/context-menu.js` line 54
 - **Reason**: Vue `@click` only fires on left button. C++ checks left, right, and middle.
-- **Impact**: Right/middle click closes menu in C++ but not in JS. (TODO 127)
+- **Impact**: Right/middle click closes menu in C++ but not in JS. (TODO 105)
 
 ### X5. [item-picker-modal.cpp] open_items_tab erroneously closes modal
 - **JS Source**: `src/js/components/item-picker-modal.js` lines 143-145
 - **Reason**: JS only emits event. C++ emits event AND calls close_modal().
-- **Impact**: "Search in Items Tab" always dismisses modal in C++, not in JS. (TODO 128)
+- **Impact**: "Search in Items Tab" always dismisses modal in C++, not in JS. (TODO 106)
 
 ### X6. [item-picker-modal.cpp] Missing click-outside-to-close on backdrop
 - **JS Source**: `src/js/components/item-picker-modal.js` line 161
 - **Reason**: `BeginPopupModal` doesn't support click-outside-to-close natively.
-- **Impact**: Users must use Cancel/Escape/X instead of clicking backdrop. (TODO 129)
+- **Impact**: Users must use Cancel/Escape/X instead of clicking backdrop. (TODO 107)
 
 ### X7. [char-texture-overlay.cpp] remove() handles missing elements differently
 - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 46-61
 - **Reason**: JS `splice(-1, 1)` removes last element on missing. C++ does nothing.
-- **Impact**: C++ is arguably more correct but differs from JS. (TODO 166)
+- **Impact**: C++ is arguably more correct but differs from JS. (TODO 144)
 
 ### X8. [M2RendererGL.cpp] childSkelLoader only stored when childAnimKeys non-empty
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 697-705
 - **Reason**: JS unconditionally stores child skeleton. C++ gates on non-empty anim keys.
-- **Impact**: Child skeletons with bones but no .anim entries silently discarded. (TODO 113)
+- **Impact**: Child skeletons with bones but no .anim entries silently discarded. (TODO 91)
 
 ### X9. [MDXRendererGL.cpp] _create_skeleton allocates node_matrices when nodes empty
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 270-273
 - **Reason**: JS sets `nodes = null` and returns. C++ clears nodes AND resizes node_matrices to 16 floats.
-- **Impact**: Extra allocation with no JS counterpart. (TODO 123)
+- **Impact**: Extra allocation with no JS counterpart. (TODO 101)
 
 ## UI Text / String Differences
 
 ### T1. [legacy_tab_audio.cpp] unittype is "sound" instead of "sound file"
 - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 204
 - **Reason**: Omission.
-- **Impact**: Status bar shows "42 sounds found" instead of "42 sound files found". (TODO 136)
+- **Impact**: Status bar shows "42 sounds found" instead of "42 sound files found". (TODO 114)
 
 ### T2. [legacy_tab_audio.cpp] persistscrollkey is "legacy-sounds" instead of "sounds"
 - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 204
 - **Reason**: Renamed, possibly intentionally for disambiguation.
-- **Impact**: Scroll positions use different key. (TODO 137)
+- **Impact**: Scroll positions use different key. (TODO 115)
 
 ### T3. [legacy_tab_textures.cpp] persistscrollkey is "legacy-textures" instead of "textures"
 - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 117
 - **Reason**: Same as T2.
-- **Impact**: Scroll positions use different key. (TODO 138)
+- **Impact**: Scroll positions use different key. (TODO 116)
 
 ### T4. [legacy_tab_textures.cpp] Toast button "View Log" instead of "view log"
 - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 68
 - **Reason**: Casing difference.
-- **Impact**: Button text differs. (TODO 139)
+- **Impact**: Button text differs. (TODO 117)
 
 ### T5. [module_test_b.cpp] isBusy shows boolean text instead of numeric counter
 - **JS Source**: `src/js/modules/module_test_b.js` line 9
 - **Reason**: C++ renders bool string. JS renders integer counter value.
-- **Impact**: Debug display shows "true"/"false" instead of 0/1/2. (TODO 140)
+- **Impact**: Debug display shows "true"/"false" instead of 0/1/2. (TODO 118)
 
 ### T6. [tab_characters.cpp] Toast message text differs
 - **JS Source**: `src/js/modules/tab_characters.js` line 781
 - **Reason**: Different wording and omits file data ID.
-- **Impact**: User sees different error message. (TODO 144)
+- **Impact**: User sees different error message. (TODO 122)
 
 ### T7. [tab_fonts.cpp] Missing "Filter fonts..." placeholder text
 - **JS Source**: `src/js/modules/tab_fonts.js` line 61
 - **Reason**: Uses `InputText` instead of `InputTextWithHint`.
-- **Impact**: No placeholder shown in empty filter box. (TODO 153)
+- **Impact**: No placeholder shown in empty filter box. (TODO 131)
 
 ## Database / Caching
 
 ### DB1. [DBCReader.cpp] loadSchema() has filesystem fallback cache paths
 - **JS Source**: `src/js/db/DBCReader.js` lines 176-199
 - **Reason**: C++ adds fallback that reads/writes DBD files from filesystem when no CASC source available.
-- **Impact**: Extra code paths not in JS. (TODO 130)
+- **Impact**: Extra code paths not in JS. (TODO 108)
 
 ### DB2. [db2.cpp] Missing "rows === null" preload guard
 - **JS Source**: `src/js/db/db2.js` lines 51-52
 - **Reason**: C++ only enforces isLoaded check, not rows-null check.
-- **Impact**: Developer-facing error message quality gap. (TODO 126)
+- **Impact**: Developer-facing error message quality gap. (TODO 104)
 
 ### DB3. [DBItemDisplays.cpp] Extra getTexturesByDisplayId function
 - **JS Source**: `src/js/db/caches/DBItemDisplays.js` (no counterpart)
 - **Reason**: C++ adds API surface not in JS original.
-- **Impact**: Extra exported function. (TODO 133)
+- **Impact**: Extra exported function. (TODO 111)
 
 ## Miscellaneous
 
 ### Z1. [subtitles.cpp] BOM check uses raw 3-byte UTF-8 check
 - **JS Source**: `src/js/subtitles.js` lines 177-178
 - **Reason**: JS checks decoded UTF-16 code unit `0xFEFF`. C++ checks literal 3-byte UTF-8 BOM (EF BB BF).
-- **Impact**: Functionally equivalent for UTF-8 input. (TODO 49)
+- **Impact**: Functionally equivalent for UTF-8 input.
 
 ### Z2. [subtitles.cpp] get_subtitles_vtt exposes extra public symbol
 - **JS Source**: `src/js/subtitles.js` lines 172-187
 - **Reason**: `get_subtitles_vtt_from_text` is exposed in C++ header but not exported in JS.
-- **Impact**: Extra API surface. (TODO 50)
+- **Impact**: Extra API surface.
 
 ### Z3. [Texture.cpp] getTextureFile calls getVirtualFileByID instead of getFile
 - **JS Source**: `src/js/3D/Texture.js` lines 32-41
 - **Reason**: C++ `CASC::getFile` returns encoding key string, not decoded data. `getVirtualFileByID` returns decoded data.
-- **Impact**: Structural deviation; verify BLTE decoding, partial-decrypt defaults, fallback handling match. (TODO 61)
+- **Impact**: Structural deviation; verify BLTE decoding, partial-decrypt defaults, fallback handling match.
 
 ### Z4. [CameraControlsGL.cpp] dispose() resets state to STATE_NONE
 - **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 218-221
 - **Reason**: Extra safeguard not in JS. JS leaves state untouched on dispose.
-- **Impact**: Benign — controller disposed during drag retains state in JS, resets in C++. (TODO 62)
+- **Impact**: Benign — controller disposed during drag retains state in JS, resets in C++.
 
 ### Z5. [GLTFWriter.cpp] Animation channel target uses actual_node_idx instead of nodeIndex+1
 - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 620-628, 757-765, 887-895
 - **Reason**: JS always uses `nodeIndex + 1` which is a bug when bone prefix mode is disabled. C++ uses correct `actual_node_idx`.
-- **Impact**: Intentional bug fix. Only manifests when `modelsExportWithBonePrefix=false` AND `modelsExportAnimations=true`. (TODO 124)
+- **Impact**: Intentional bug fix. Only manifests when `modelsExportWithBonePrefix=false` AND `modelsExportAnimations=true`. (TODO 102)
 
 ### Z6. [JSONWriter.cpp] BigInt serialization replacer not ported
 - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40-43
 - **Reason**: nlohmann::json handles integers up to uint64_t natively. Values exceeding uint64_t must be pre-converted by callers.
-- **Impact**: Shifts serialization responsibility to callers. (TODO 125)
+- **Impact**: Shifts serialization responsibility to callers. (TODO 103)
 
 ### Z7. [tab_maps.cpp] export_map_wmo_minimap tile compositing ignores draw offsets
 - **JS Source**: `src/js/modules/tab_maps.js` lines 723-733
 - **Reason**: JS uses `ctx.drawImage` with draw_x/draw_y offsets. C++ samples directly without offsets.
-- **Impact**: Tiles drawn at (0,0) instead of correct position. Incorrect WMO minimap exports. (TODO 155)
+- **Impact**: Tiles drawn at (0,0) instead of correct position. Incorrect WMO minimap exports. (TODO 133)
 
 ### Z8. [tab_maps.cpp] load_wmo_minimap_tile uses blp.width instead of scaledWidth
 - **JS Source**: `src/js/modules/tab_maps.js` lines 103-104
 - **Reason**: C++ uses `blp.width`. JS uses decoded canvas width which may differ from raw BLP width.
-- **Impact**: Compositing may sample incorrectly if mipmapped. (TODO 156)
+- **Impact**: Compositing may sample incorrectly if mipmapped. (TODO 134)
 
 ### Z9. [tab_maps.cpp] mounted() defers initialization to render()
 - **JS Source**: `src/js/modules/tab_maps.js` lines 1132-1146
 - **Reason**: ImGui has no equivalent of Vue `mounted()` lifecycle hook. Lazy-init on first render.
-- **Impact**: Timing difference. Brief flash of empty content possible. (TODO 157)
+- **Impact**: Timing difference. Brief flash of empty content possible. (TODO 135)
 
 ### Z10. [tab_maps.cpp] collect_game_objects uses vector instead of Set
 - **JS Source**: `src/js/modules/tab_maps.js` lines 127-144
 - **Reason**: `std::vector` has no uniqueness guarantee unlike JS `Set`.
-- **Impact**: Duplicate rows possible (unlikely in practice). (TODO 158)
+- **Impact**: Duplicate rows possible (unlikely in practice). (TODO 136)
 
 ### Z11. [tab_maps.cpp] export_map_wmo_minimap condition differs
 - **JS Source**: `src/js/modules/tab_maps.js` lines 695-697
 - **Reason**: C++ adds extra `worldModel.empty()` check not in JS.
-- **Impact**: C++ may attempt setup_wmo_minimap when JS would not. (TODO 159)
+- **Impact**: C++ may attempt setup_wmo_minimap when JS would not. (TODO 137)
 
 ### Z12. [tab_models.cpp] Drop handler wraps files as JSON objects instead of strings
 - **JS Source**: `src/js/modules/tab_models.js` lines 587, 213
 - **Reason**: C++ wraps paths in `{"fileName": path}` objects. JS passes plain strings.
-- **Impact**: Every dropped file fails to export — `file_entry.get<std::string>()` throws on object. (TODO 160)
+- **Impact**: Every dropped file fails to export — `file_entry.get<std::string>()` throws on object. (TODO 138)
 
 ### Z13. [tab_characters.cpp] Extra re-entry guard in load_character_model
 - **JS Source**: `src/js/modules/tab_characters.js` lines 718-720
 - **Reason**: C++ adds `if (view.chrModelLoading) return;` guard not in JS.
-- **Impact**: Could silently skip loads when another model is already loading. (TODO 145)
+- **Impact**: Could silently skip loads when another model is already loading. (TODO 123)
 
 ### Z14. [tab_characters.cpp] navigate_to_items_for_slot skips checkbox update
 - **JS Source**: `src/js/modules/tab_characters.js` lines 2499-2516
 - **Reason**: C++ relies on `pendingItemSlotFilter` instead of directly toggling checkboxes.
-- **Impact**: Previously loaded Items tab filter may not update. (TODO 146)
+- **Impact**: Previously loaded Items tab filter may not update. (TODO 124)
 
 ### Z15. [tab_creatures.cpp] Missing file_name parameter in create_renderer
 - **JS Source**: `src/js/modules/tab_creatures.js` line 652
 - **Reason**: C++ passes `file_data_id` but omits `file_name` as 6th argument.
-- **Impact**: WMO creatures may fail to load group files. (TODO 147)
+- **Impact**: WMO creatures may fail to load group files. (TODO 125)
 
 ### Z16. [tab_creatures.cpp] Missing export_paths and file_manifest
 - **JS Source**: `src/js/modules/tab_creatures.js` lines 954-969
 - **Reason**: C++ doesn't set `opts.file_manifest` or `opts.export_paths`.
-- **Impact**: Standard creature exports won't have paths in export stream. (TODO 148)
+- **Impact**: Standard creature exports won't have paths in export stream. (TODO 126)
 
 ### Z17. [tab_creatures.cpp] OBJ/STL uses combined function instead of separate calls
 - **JS Source**: `src/js/modules/tab_creatures.js` lines 922-927
 - **Reason**: C++ uses single `exportAsOBJ(path, isST=true)` instead of `exportAsSTL()`.
-- **Impact**: Structural deviation. Functionally identical if combined function is correct. (TODO 149)
+- **Impact**: Structural deviation. Functionally identical if combined function is correct. (TODO 127)
 
 ### Z18. [tab_decor.cpp] Extra null-guard on GL context
 - **JS Source**: `src/js/modules/tab_decor.js` lines 73-74
 - **Reason**: C++ shows error toast and returns early when gl_context is null. JS would pass null through.
-- **Impact**: C++ refuses preview without GL context. (TODO 150)
+- **Impact**: C++ refuses preview without GL context. (TODO 128)
 
 ### Z19. [tab_decor.cpp] fitCamera called synchronously
 - **JS Source**: `src/js/modules/tab_decor.js` line 112
 - **Reason**: JS uses `requestAnimationFrame`. No equivalent in ImGui — called synchronously.
-- **Impact**: Timing difference, likely benign. (TODO 151)
+- **Impact**: Timing difference, likely benign. (TODO 129)
 
 ### Z20. [tab_decor.cpp] export_decor skips non-string selection entries
 - **JS Source**: `src/js/modules/tab_decor.js` lines 497-506
 - **Reason**: JS passes non-string entries through. C++ silently skips them.
-- **Impact**: Object-type selection entries would be missed. (TODO 152)
+- **Impact**: Object-type selection entries would be missed. (TODO 130)
 
 ### Z21. [tab_blender.cpp] checkLocalVersion log output differs
 - **JS Source**: `src/js/modules/tab_blender.js` line 161
 - **Reason**: JS renders error object as `[object Object]`. C++ renders error string.
-- **Impact**: Log output differs in error case. (TODO 141)
+- **Impact**: Log output differs in error case. (TODO 119)
 
 ### Z22. [tab_blender.cpp] checkLocalVersion comparison differs in error case
 - **JS Source**: `src/js/modules/tab_blender.js` line 163
 - **Reason**: JS `NaN > NaN = false` → no update toast. C++ `"1.2.3" > "" = true` → shows update toast.
-- **Impact**: C++ prompts for update when installed version can't be read; JS does not. (TODO 142)
+- **Impact**: C++ prompts for update when installed version can't be read; JS does not. (TODO 120)
 
 ### Z23. [M2LegacyRendererGL.cpp] _load_textures calls setSlotFileLegacy instead of setSlotFile
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` line 241
 - **Reason**: Wrong function called.
-- **Impact**: The two functions may have different behavior. (TODO 107)
+- **Impact**: The two functions may have different behavior. (TODO 85)
 
 ### Z24. [M2LegacyRendererGL.cpp] UV2 y-flip omitted
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 358-359
 - **Reason**: C++ comment claims "already y-flipped by loader." Needs verification.
-- **Impact**: Second UV set textures may appear vertically inverted if loader doesn't pre-flip. (TODO 108)
+- **Impact**: Second UV set textures may appear vertically inverted if loader doesn't pre-flip. (TODO 86)
 
 ### Z25. [M2LegacyRendererGL.cpp] materials/textureUnits/boundingBox JSON drops fields
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 244, 248, 250, 254
 - **Reason**: C++ rebuilds with hardcoded subset instead of serializing all properties.
-- **Impact**: Extra fields from loader dropped from meta JSON. (TODO 78)
+- **Impact**: Extra fields from loader dropped from meta JSON. (TODO 56)
 
 ### Z26. [MDXRendererGL.cpp] Missing per-draw-call UBO bind
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 758
 - **Reason**: C++ binds once before loop. JS rebinds per draw call.
-- **Impact**: Likely functionally equivalent but deviates from JS structure. (TODO 122)
+- **Impact**: Likely functionally equivalent but deviates from JS structure. (TODO 100)
 
 ### Z27. [char-texture-overlay.cpp] ensureActiveLayerAttached has different semantics
 - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 63-71
 - **Reason**: JS re-appends active layer to DOM. C++ validates membership and may substitute active layer.
-- **Impact**: JS preserves active layer identity. C++ may change it. (TODO 167)
+- **Impact**: JS preserves active layer identity. C++ may change it. (TODO 145)
 
 ### Z28. [audio-helper.cpp] load() doesn't propagate decode failure
 - **JS Source**: `src/js/ui/audio-helper.js` lines 31-35
 - **Reason**: JS rejects promise on decode failure. C++ continues silently with duration 0.
-- **Impact**: Caller has no way to know decoding failed. (TODO 165)
+- **Impact**: Caller has no way to know decoding failed. (TODO 143)
 
 ### Z29. [WMOExporter.cpp] formatUnknownFile call signature differs
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 158-160
 - **Reason**: JS uses single-arg form. C++ uses two-arg form with separate ID and extension.
-- **Impact**: Could drift if helper's two-arg behaviour differs. (TODO 85)
+- **Impact**: Could drift if helper's two-arg behaviour differs. (TODO 63)
 
 ### Z30. [WMOExporter.cpp] exportRaw uses byteLength()==0 instead of "is data set" check
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 1223-1231
 - **Reason**: JS checks `this.wmo.data === undefined`. C++ checks `data.byteLength() == 0`.
-- **Impact**: Conflates "no data" with "empty data". (TODO 86)
+- **Impact**: Conflates "no data" with "empty data". (TODO 64)
 
 ### Z31. [M3Exporter.cpp] OBJ texture-manifest reads value as string
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 145-147
 - **Reason**: JS value is object with `matPath` field. C++ value is plain string.
-- **Impact**: Will diverge once exportTextures is implemented. (TODO 81)
+- **Impact**: Will diverge once exportTextures is implemented. (TODO 59)
 
 ### Z32. [M3Exporter.cpp] exportAsGLTF reshapes texture map
 - **JS Source**: `src/js/3D/exporters/M3Exporter.js` lines 91-92
 - **Reason**: C++ stringifies numeric key and wraps in `GLTFTextureEntry` adapter.
-- **Impact**: Conversion shape needs verification once M3 texture export is implemented. (TODO 82)
+- **Impact**: Conversion shape needs verification once M3 texture export is implemented. (TODO 60)
 
 ### Z33. [M3RendererGL.cpp] load() execution order differs
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 59-71
 - **Reason**: C++ creates bones UBO before default texture. JS creates default texture first.
-- **Impact**: Initialization order deviation. (TODO 119)
+- **Impact**: Initialization order deviation. (TODO 97)
 
 ### Z34. [ADTExporter.cpp] saveRawLayerTexture returns void instead of path
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1164-1190
 - **Reason**: JS returns relative path. C++ returns void. Callers ignore return value in JS.
-- **Impact**: Cosmetic — no behaviour change unless future caller uses return value. (TODO 65)
+- **Impact**: Cosmetic — no behaviour change unless future caller uses return value.
 
 ## Platform Adaptations
 
@@ -690,22 +690,22 @@ Deviations that are inherent to the C++/ImGui platform and apply broadly across 
 ### PA1. [generics.cpp] queue() uses polling futures instead of promise .then() chains
 - **JS Source**: `src/js/generics.js` — queue() function
 - **Reason**: JS uses promise `.then()` chains for zero-latency event-driven dispatch. C++ polls `std::futures` with a 1ms wait to find the first ready one.
-- **Impact**: Up to 1ms latency per completion. Same tasks, concurrency limit, and completion order. (TODO 54)
+- **Impact**: Up to 1ms latency per completion. Same tasks, concurrency limit, and completion order.
 
 ### PA2. [generics.cpp] Async file operations converted to synchronous
 - **JS Source**: `src/js/generics.js` — createDirectory, fileExists, directoryIsWritable, readFile, deleteDirectory
 - **Reason**: JS versions are async (return Promises). C++ uses synchronous `std::filesystem` calls.
-- **Impact**: Blocking calls on the calling thread. Standard JS-to-C++ async mapping. (TODO 55)
+- **Impact**: Blocking calls on the calling thread. Standard JS-to-C++ async mapping.
 
 ### PA3. [generics.cpp] redraw() uses thread yield instead of requestAnimationFrame
 - **JS Source**: `src/js/generics.js` — redraw()
 - **Reason**: JS calls `requestAnimationFrame()` twice to defer until the browser paints two frames. C++ has no rAF equivalent in ImGui; uses `std::this_thread::yield()`.
-- **Impact**: No synchronization with the render loop. ImGui renders continuously so yield is sufficient. (TODO 52)
+- **Impact**: No synchronization with the render loop. ImGui renders continuously so yield is sufficient.
 
 ### PA4. [generics.cpp] batchWork uses sleep_for instead of MessageChannel
 - **JS Source**: `src/js/generics.js` — batchWork()
 - **Reason**: JS uses MessageChannel to post between batches, yielding to the browser event loop. C++ uses `sleep_for(0)` to yield the thread's timeslice.
-- **Impact**: Different yielding mechanism between batches. (TODO 53)
+- **Impact**: Different yielding mechanism between batches.
 
 ### PA5. [core.cpp] showLoadingScreen posts to main thread queue
 - **JS Source**: `src/js/core.js` — showLoadingScreen()
@@ -769,22 +769,22 @@ Deviations that are inherent to the C++/ImGui platform and apply broadly across 
 
 ### PA17. [map-viewer.cpp] Tile loading limited per frame instead of async concurrency
 - **JS Source**: `src/js/components/map-viewer.js`
-- **Reason**: JS loads tiles asynchronously (Promises, up to 4 concurrent). C++ tile loading is synchronous, so caps tiles processed per frame at 3. (TODO 306)
+- **Reason**: JS loads tiles asynchronously (Promises, up to 4 concurrent). C++ tile loading is synchronous, so caps tiles processed per frame at 3. (TODO 284)
 - **Impact**: Same throttling effect, different mechanism.
 
 ### PA18. [map-viewer.cpp] tileHasUnexpectedTransparency samples full tile, not clipped portion
 - **JS Source**: `src/js/components/map-viewer.js`
-- **Reason**: JS clamps sample rectangle to canvas via getImageData(). C++ samples full cached tile pixel data. (TODO 307)
+- **Reason**: JS clamps sample rectangle to canvas via getImageData(). C++ samples full cached tile pixel data. (TODO 285)
 - **Impact**: Different sample positions for partially off-canvas tiles. Acceptable — function is a heuristic.
 
 ### PA19. [map-viewer.cpp] GL textures with offset positioning instead of double-buffer blit
 - **JS Source**: `src/js/components/map-viewer.js` lines 554-627
-- **Reason**: JS uses canvas clearRect/drawImage for double-buffer blit. C++ uses GL textures repositioned by offset. (TODO 309)
+- **Reason**: JS uses canvas clearRect/drawImage for double-buffer blit. C++ uses GL textures repositioned by offset. (TODO 287)
 - **Impact**: Different rendering mechanism, same visual result.
 
 ### PA20. [map-viewer.cpp] Map watcher defers default position to next frame
 - **JS Source**: `src/js/components/map-viewer.js` lines 143-150
-- **Reason**: JS invokes setToDefaultPosition() immediately (Vue has measured DOM). C++ defers via `initialized = false` until ImGui reports viewport width > 0. (TODO 310)
+- **Reason**: JS invokes setToDefaultPosition() immediately (Vue has measured DOM). C++ defers via `initialized = false` until ImGui reports viewport width > 0. (TODO 288)
 - **Impact**: One-frame delay before default positioning is applied.
 
 ### PA21. [slider.cpp] Native ImGui::SliderFloat replaces custom slider
@@ -819,7 +819,7 @@ Deviations that are inherent to the C++/ImGui platform and apply broadly across 
 
 ### PA27. [DBComponentTextureFileData.cpp] condition_variable instead of init_promise
 - **JS Source**: `src/js/db/caches/DBComponentTextureFileData.js`
-- **Reason**: JS caches an `init_promise` for coalescing concurrent callers. C++ uses `is_initializing` + `std::condition_variable`. (TODO 336)
+- **Reason**: JS caches an `init_promise` for coalescing concurrent callers. C++ uses `is_initializing` + `std::condition_variable`. (TODO 314)
 - **Impact**: Same behaviour — single initialization, all callers wait.
 
 ### PA28. [DBComponentModelFileData.cpp] condition_variable instead of init_promise

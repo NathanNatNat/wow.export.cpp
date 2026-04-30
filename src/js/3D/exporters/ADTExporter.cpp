@@ -1053,8 +1053,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 
 					if (src_w != quality || src_h != quality) {
 						std::vector<uint8_t> resized(quality * quality * 4);
-						// JS uses canvas ctx.drawImage (browser bilinear/bicubic); stb linear differs slightly.
-						stbir_resize_uint8_linear(
+							stbir_resize_uint8_linear(
 							raw_pixels.data(), src_w, src_h, src_w * 4,
 							resized.data(), quality, quality, quality * 4,
 							STBIR_RGBA);
@@ -1072,10 +1071,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				const bool hasHeightTexturing = (wdt->flags & 0x80) == 0x80;
 				const fs::path tileOutPath = dir / ("tex_" + tileID + ".png");
 
-				// GL bake composite buffer — uses std::vector<uint8_t> in place of the JS
-				// OffscreenCanvas.  Each chunk is rendered to the FBO, read back with
-				// readFBOPixels, rotated 180° and blitted into compositeBuffer, then the
-				// completed composite is written as PNG via PNGWriter.
 				std::vector<uint8_t> compositeBuffer;
 				int compositeSize = 0;
 				if (!isSplittingTextures) {
@@ -1098,7 +1093,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 
 					helper->setCurrentTaskName("Tile " + tileID + ", building texture arrays");
 
-					// collect unique texture ids for arrays (preserve insertion order like JS Set)
 					std::vector<uint32_t> unique_diffuse_ids;
 					{
 						std::unordered_set<uint32_t> seen;
@@ -1326,7 +1320,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 							GLuint indexBuffer;
 							glGenBuffers(1, &indexBuffer);
 							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
-							// JS uses new Uint16Array(indices) + gl.UNSIGNED_SHORT. Convert uint32 → uint16.
 							std::vector<uint16_t> bakeIndices16(bakeIndices.begin(), bakeIndices.end());
 							glBufferData(GL_ELEMENT_ARRAY_BUFFER, bakeIndices16.size() * sizeof(uint16_t), bakeIndices16.data(), GL_STATIC_DRAW);
 							glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(bakeIndices16.size()), GL_UNSIGNED_SHORT, nullptr);
@@ -1522,8 +1515,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 							if (model.Rotation.size() >= 4) {
 								rotX = model.Rotation[0]; rotY = model.Rotation[1]; rotZ = model.Rotation[2]; rotW = model.Rotation[3];
 							}
-							// ADTGameObject.scale defaults to 0.0f when absent (JS: model.scale === undefined).
-							// JS: model.scale !== undefined ? model.scale / 1024 : 1
 							scaleFactor = model.scale != 0.0f ? model.scale / 1024.0f : 1.0f;
 							modelId = model.uniqueId;
 						} else {
@@ -1580,8 +1571,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				int worldModelIndex = 0;
 				const bool usingNames = !objAdt.wmoNames.empty();
 				for (const auto& model : objAdt.worldModels) {
-					// JS does `model & 0x80` which bitwise-ANDs the object itself,
-					// always producing 0 (ToInt32(object) == 0). Match that behavior.
 					const bool useADTSets = false;
 					helper->setCurrentTaskValue(worldModelIndex++);
 
@@ -1728,7 +1717,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 		for (size_t chunkIndex = 0; chunkIndex < rootAdt.liquidChunks.size(); chunkIndex++) {
 			const auto& chunk = rootAdt.liquidChunks[chunkIndex];
 
-			// JS passes the chunk through verbatim if !chunk || !chunk.instances; LiquidChunk is a value type so we approximate via empty-instances => null.
 			if (chunk.instances.empty()) {
 				enhancedLiquidChunks.push_back(nullptr);
 				continue;
@@ -1752,10 +1740,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				const float worldZ = chunkX2 - (centerY * static_cast<float>(UNIT_SIZE));
 
 				nlohmann::json inst;
-				// JS uses {...instance, worldPosition, terrainChunkPosition} (spread operator).
-				// C++ explicitly enumerates all fields of LiquidInstance and LiquidVertexData
-				// to produce identical JSON output. If new fields are added to these structs,
-				// they must also be added here to maintain fidelity with the JS spread behavior.
 				inst["chunkIndex"] = instance.chunkIndex;
 				inst["instanceIndex"] = instance.instanceIndex;
 				inst["liquidType"] = instance.liquidType;
@@ -1787,8 +1771,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 			}
 
 			enhancedChunk["instances"] = enhancedInstances;
-			// JS uses {...chunk, instances: enhancedInstances} (spread operator).
-			// LiquidChunk has only 'attributes' and 'instances'; both are serialized here.
 			nlohmann::json attrs;
 			attrs["fishable"] = chunk.attributes.fishable;
 			attrs["deep"] = chunk.attributes.deep;
@@ -1847,8 +1829,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				if (config.value("exportFoliageMeta", false) && foliageEffectCache.find(layer.effectID) == foliageEffectCache.end()) {
 					foliageJSON = std::make_unique<JSONWriter>(foliageDir / (std::to_string(layer.effectID) + ".json"));
 
-					// Serialize groundEffectTexture data record fields at root level.
-					// JS assigns foliageJSON.data = groundEffectTexture so JSON.stringify emits all fields; per-variant addProperty here may differ on numeric formatting.
 					for (const auto& [key, val] : *groundEffectTexture) {
 						std::visit([&](const auto& v) {
 							foliageJSON->addProperty(key, v);

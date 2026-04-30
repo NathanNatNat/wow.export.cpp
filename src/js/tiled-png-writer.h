@@ -99,9 +99,5 @@ private:
 	uint32_t tileSize;
 	uint32_t tileCols;
 	uint32_t tileRows;
-	// JS uses Map() (insertion-ordered); C++ uses std::map (lexicographic).
-	// For fully-opaque tiles this is irrelevant. For semi-transparent overlapping
-	// tiles, Porter-Duff blending is order-dependent and may differ from JS.
-	// WoW map tiles are typically fully opaque.
 	std::map<std::string, Tile> tiles;
 };

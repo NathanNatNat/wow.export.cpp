@@ -186,10 +186,6 @@ struct Parser {
 		if (node.children.empty())
 			return obj;
 
-		// group children by tag name
-		// JS Object.entries(groups) iterates in insertion order; std::unordered_map
-		// iterates in hash order. Key-name lookup is unaffected; callers that iterate
-		// expecting a specific key sequence may see different ordering than the JS version.
 		std::unordered_map<std::string, std::vector<const Node*>> groups;
 
 		for (const auto& child : node.children) {
