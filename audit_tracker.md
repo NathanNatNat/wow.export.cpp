@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 160/195 audited (82%)**
+**Progress: 170/195 audited (87%)**
 
 - [x] 1. `src/app.cpp` — ⚠️ 5 findings
 - [x] 2. `src/js/blob.cpp` — ⚠️ 5 findings
@@ -164,16 +164,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 158. `src/js/modules/tab_characters.cpp` — ⚠️ 3 findings
 - [x] 159. `src/js/modules/tab_creatures.cpp` — ⚠️ 3 findings
 - [x] 160. `src/js/modules/tab_data.cpp` — ✅ audited
-- [ ] 161. `src/js/modules/tab_decor.cpp`
-- [ ] 162. `src/js/modules/tab_fonts.cpp`
-- [ ] 163. `src/js/modules/tab_help.cpp`
-- [ ] 164. `src/js/modules/tab_home.cpp`
-- [ ] 165. `src/js/modules/tab_install.cpp`
-- [ ] 166. `src/js/modules/tab_item_sets.cpp`
-- [ ] 167. `src/js/modules/tab_items.cpp`
-- [ ] 168. `src/js/modules/tab_maps.cpp`
-- [ ] 169. `src/js/modules/tab_models.cpp`
-- [ ] 170. `src/js/modules/tab_models_legacy.cpp`
+- [x] 161. `src/js/modules/tab_decor.cpp` — ⚠️ 3 findings
+- [x] 162. `src/js/modules/tab_fonts.cpp` — ⚠️ 2 findings
+- [x] 163. `src/js/modules/tab_help.cpp` — ✅ audited (deliberately removed per CLAUDE.md)
+- [x] 164. `src/js/modules/tab_home.cpp` — ✅ audited (intentional stub per CLAUDE.md)
+- [x] 165. `src/js/modules/tab_install.cpp` — ✅ audited
+- [x] 166. `src/js/modules/tab_item_sets.cpp` — ✅ audited
+- [x] 167. `src/js/modules/tab_items.cpp` — ✅ audited
+- [x] 168. `src/js/modules/tab_maps.cpp` — ⚠️ 5 findings
+- [x] 169. `src/js/modules/tab_models.cpp` — ⚠️ 1 finding
+- [x] 170. `src/js/modules/tab_models_legacy.cpp` — ⚠️ 2 findings
 - [ ] 171. `src/js/modules/tab_raw.cpp`
 - [ ] 172. `src/js/modules/tab_text.cpp`
 - [ ] 173. `src/js/modules/tab_textures.cpp`
