@@ -164,7 +164,7 @@ constexpr int QUEUE_LIMIT = 20;
  */
 struct QueueEntry {
 	uint32_t fileDataID;
-	std::weak_ptr<struct IconRule> rule;
+	std::shared_ptr<struct IconRule> rule;
 };
 
 /**
@@ -261,7 +261,7 @@ void processQueue() {
 	_queue.pop_back();
 
 	try {
-		auto rule = entry.rule.lock();
+		const auto& rule = entry.rule;
 		if (rule) {
 			BufferWrapper data = core::view->casc->getVirtualFileByID(entry.fileDataID, true);
 			casc::BLPImage blp(std::move(data));
@@ -303,13 +303,7 @@ void queueItem(uint32_t fileDataID, const std::shared_ptr<IconRule>& rule) {
 		// Since we're dropping the entry, we need to make sure to remove the icon itself.
 		QueueEntry removed = _queue.front();
 		_queue.erase(_queue.begin());
-		if (auto removedRule = removed.rule.lock())
-			removeRule(removedRule);
-		else {
-			const auto it = _rulesByFileDataID.find(removed.fileDataID);
-			if (it != _rulesByFileDataID.end())
-				removeRule(it->second);
-		}
+		removeRule(removed.rule);
 	}
 
 	if (!_loading)

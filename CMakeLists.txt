@@ -411,6 +411,7 @@ target_compile_definitions(wow_export_cpp PRIVATE
     WOW_EXPORT_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     WOW_EXPORT_BUILD_TYPE="$<LOWER_CASE:$<CONFIG>>"
     WOW_EXPORT_VERSION="${WOW_EXPORT_VERSION}"
+    $<$<CONFIG:Release>:BUILD_RELEASE>
 )
 
 # ── Converted source files (added incrementally) ───────────────

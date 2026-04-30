@@ -15,6 +15,8 @@
 #include <cstdio>
 #include <mutex>
 #include <iterator>
+#include <cerrno>
+#include <cstring>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -181,7 +183,7 @@ void write(std::string_view message) {
 		}
 	}
 
-#ifndef NDEBUG
+#ifndef BUILD_RELEASE
 	// JS: if (!BUILD_RELEASE) console.log(line) — suppress stdout in release builds.
 	std::fputs(line.c_str(), stdout);
 #endif
@@ -263,7 +265,7 @@ std::string getErrorDump() {
 	try {
 		std::ifstream file(constants::RUNTIME_LOG());
 		if (!file)
-			return "Unable to obtain runtime log: file could not be opened";
+			return std::string("Unable to obtain runtime log: ") + std::strerror(errno);
 
 		return std::string(
 			std::istreambuf_iterator<char>(file),

@@ -84,7 +84,7 @@ static ModuleDef* active_module = nullptr;
 static std::vector<NavButton> sorted_nav_buttons;
 static std::vector<ContextMenuOption> sorted_context_menu_options;
 
-#ifdef NDEBUG
+#ifdef BUILD_RELEASE
 static constexpr bool IS_BUNDLED = true;
 #else
 static constexpr bool IS_BUNDLED = false;
@@ -241,10 +241,14 @@ static void wrap_module(ModuleDef& mod) {
 				core::setToast("error", std::format("Failed to initialize {} tab. Check the log for details.", display_label),
 				               { {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 				go_to_landing();
+			} catch (...) {
+				core::hideLoadingScreen();
+				logging::write(std::format("Failed to initialize {} tab: unknown exception", display_label));
+				core::setToast("error", std::format("Failed to initialize {} tab. Check the log for details.", display_label),
+				               { {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
+				go_to_landing();
 			}
 
-			// JS equivalent of `finally { this._tab_initializing = false; }`
-			// Always reset even if an exception was caught above.
 			mod._tab_initializing = false;
 		};
 
@@ -322,23 +326,10 @@ void unregister_context_menu_option(const std::string& id) {
 void registerContextMenuOption(const std::string& id, const std::string& label,
                                const std::string& icon, std::function<void()> action,
                                bool dev_only) {
-	// JS equivalent: register_static_context_menu_option(id, label, icon, action, dev_only)
-	// calls register_context_menu_option(id, label, icon, { handler: action, dev_only })
-	ContextMenuOption option;
-	option.id = id;
-	option.label = label;
-	option.icon = icon;
-	option.handler = action;
-	option.dev_only = dev_only;
-
+	register_context_menu_option(id, label, icon, action);
 	auto it = find_in_vec(context_menu_vec, id);
 	if (it != context_menu_vec.end())
-		it->second = option;
-	else
-		context_menu_vec.emplace_back(id, option);
-
-	update_context_menu_options();
-	logging::write(std::format("registered context menu option: {}", id));
+		it->second.dev_only = dev_only;
 }
 
 void register_components() {
@@ -615,7 +606,7 @@ void reload_module(const std::string& module_key) {
 	it->second._tab_initializing = false;
 	wrap_module(it->second);
 
-	logging::write(std::format("reloaded module: {}", module_key));
+	logging::write(std::format("reset module state: {} (full reload not available in compiled build)", module_key));
 
 	if (was_active)
 		set_active(module_key);

@@ -75,14 +75,12 @@
 #include "js/updater.h"
 #include "js/external-links.h"
 
-// BUILD_RELEASE will be set by the bundler during production builds allowing us
-// to discern a production build. For debugging builds, process.env.BUILD_RELEASE
-// will be undefined. Any code that only runs when BUILD_RELEASE is false will
-// be removed as dead-code during compile.
-#ifdef NDEBUG
-static constexpr bool BUILD_RELEASE = true;
+// BUILD_RELEASE is defined by CMake only for Release builds (matching JS bundler
+// behavior where process.env.BUILD_RELEASE is set only for production).
+#ifdef BUILD_RELEASE
+static constexpr bool IS_RELEASE_BUILD = true;
 #else
-static constexpr bool BUILD_RELEASE = false;
+static constexpr bool IS_RELEASE_BUILD = false;
 #endif
 
 // check for --disable-auto-update flag
@@ -2614,7 +2612,7 @@ int main(int argc, char* argv[]) {
 
 	// Auto-updater logic.
 	// JS: app.js lines 688-705
-	if (BUILD_RELEASE && !DISABLE_AUTO_UPDATE) {
+	if (IS_RELEASE_BUILD && !DISABLE_AUTO_UPDATE) {
 		core::showLoadingScreen(1, "Checking for updates...");
 
 		std::thread([]{
@@ -2668,7 +2666,7 @@ int main(int argc, char* argv[]) {
 			// Debugging reloader.
 			// JS: window.addEventListener('keyup', e => { if (e.code === 'F5') chrome.runtime.reload(); });
 			// Uses edge detection: fires once when the key transitions from pressed to released.
-			if (!BUILD_RELEASE) {
+			if (!IS_RELEASE_BUILD) {
 				static bool f5WasPressed = false;
 				bool f5IsPressed = glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS;
 				if (!f5IsPressed && f5WasPressed) {
