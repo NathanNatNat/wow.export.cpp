@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 150/195 audited (77%)**
+**Progress: 160/195 audited (82%)**
 
 - [x] 1. `src/app.cpp` — ⚠️ 5 findings
 - [x] 2. `src/js/blob.cpp` — ⚠️ 5 findings
@@ -154,16 +154,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 148. `src/js/modules/legacy_tab_fonts.cpp` — ✅ audited
 - [x] 149. `src/js/modules/legacy_tab_home.cpp` — ✅ audited
 - [x] 150. `src/js/modules/legacy_tab_textures.cpp` — ⚠️ 2 findings
-- [ ] 151. `src/js/modules/module_test_a.cpp`
-- [ ] 152. `src/js/modules/module_test_b.cpp`
-- [ ] 153. `src/js/modules/screen_settings.cpp`
-- [ ] 154. `src/js/modules/screen_source_select.cpp`
-- [ ] 155. `src/js/modules/tab_audio.cpp`
-- [ ] 156. `src/js/modules/tab_blender.cpp`
-- [ ] 157. `src/js/modules/tab_changelog.cpp`
-- [ ] 158. `src/js/modules/tab_characters.cpp`
-- [ ] 159. `src/js/modules/tab_creatures.cpp`
-- [ ] 160. `src/js/modules/tab_data.cpp`
+- [x] 151. `src/js/modules/module_test_a.cpp` — ✅ audited
+- [x] 152. `src/js/modules/module_test_b.cpp` — ⚠️ 1 finding
+- [x] 153. `src/js/modules/screen_settings.cpp` — ✅ audited
+- [x] 154. `src/js/modules/screen_source_select.cpp` — ✅ audited
+- [x] 155. `src/js/modules/tab_audio.cpp` — ⚠️ 1 finding
+- [x] 156. `src/js/modules/tab_blender.cpp` — ⚠️ 2 findings
+- [x] 157. `src/js/modules/tab_changelog.cpp` — ✅ audited (deliberately removed per CLAUDE.md)
+- [x] 158. `src/js/modules/tab_characters.cpp` — ⚠️ 3 findings
+- [x] 159. `src/js/modules/tab_creatures.cpp` — ⚠️ 3 findings
+- [x] 160. `src/js/modules/tab_data.cpp` — ✅ audited
 - [ ] 161. `src/js/modules/tab_decor.cpp`
 - [ ] 162. `src/js/modules/tab_fonts.cpp`
 - [ ] 163. `src/js/modules/tab_help.cpp`

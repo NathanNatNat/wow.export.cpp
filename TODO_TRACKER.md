@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/139 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/149 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [app.cpp] Drag-enter / drag-leave handlers not implemented; fileDropPrompt overlay never appears during drag-over.
   - **JS Source**: `src/app.js` lines 589–624, 649–657
@@ -558,3 +558,43 @@
   - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 68
   - **Status**: Pending
   - **Details**: JS uses `'view log'` (all lowercase) for the toast button text. The C++ (line 146) uses `"View Log"` (title case). User-facing text should match the original JS exactly. Fix: change `"View Log"` to `"view log"`.
+- [ ] 140. [module_test_b.cpp] isBusy display shows boolean text instead of numeric counter value
+  - **JS Source**: `src/js/modules/module_test_b.js` line 9
+  - **Status**: Pending
+  - **Details**: JS template `{{ $core.view.isBusy }}` renders the numeric counter value (0, 1, 2, etc.) since isBusy is an integer counter. C++ line 47 renders `"true"/"false"` via `core::view->isBusy ? "true" : "false"`. Should display the numeric value like `ImGui::Text("Busy State: %d", core::view->isBusy)` to match JS behavior.
+- [ ] 141. [tab_blender.cpp] checkLocalVersion() log output differs for error case when installed addon version can't be parsed
+  - **JS Source**: `src/js/modules/tab_blender.js` line 161
+  - **Status**: Pending
+  - **Details**: JS logs `log.write('Latest add-on version: %s, Blender add-on version: %s', latest_addon_version, blender_addon_version)` — when `blender_addon_version` is an error object, JS `%s` renders it as `"[object Object]"`. C++ line 268 renders the error string (e.g. `"file_not_found"`) instead. Minor log output difference but not functionally identical to the JS.
+- [ ] 142. [tab_blender.cpp] checkLocalVersion() version comparison behaves differently when installed addon version can't be parsed
+  - **JS Source**: `src/js/modules/tab_blender.js` line 163
+  - **Status**: Pending
+  - **Details**: JS compares `latest_addon_version > blender_addon_version` where `blender_addon_version` may be an error object. JS comparison between a version string and an object yields `NaN > NaN = false`, so the update toast is NOT shown when the installed version can't be read. C++ line 271 compares `latestAddonVersion.version > blenderAddonVersion.version` where the error case has `.version = ""`, making `"1.2.3" > ""` = true, so the update toast IS shown. The C++ code will prompt for update when the JS would not (in the error path).
+- [ ] 143. [tab_audio.cpp] parent_path() returns empty string for bare filenames, not "." like Node.js path.dirname()
+  - **JS Source**: `src/js/modules/tab_audio.js` lines 155–158
+  - **Status**: Pending
+  - **Details**: The JS code uses `path.dirname(file_name)` which returns `"."` for a bare filename (no directory component), then checks `dir === '.'`. The C++ code at line 290 uses `fs::path(file_name).parent_path().string()` which returns `""` (empty string) for a bare filename, then checks `dir == "."` at line 292. For bare filenames (e.g. `"12345.ogg"`) the C++ condition `dir == "."` will be false, causing it to try `(fs::path("") / file_data_id_name).string()` instead of just returning `file_data_id_name`. This could produce incorrect export paths with a leading separator. Fix: change the check to `dir.empty() || dir == "."`.
+- [ ] 144. [tab_characters.cpp] Toast message text differs from JS in load_character_model
+  - **JS Source**: `src/js/modules/tab_characters.js` line 781
+  - **Status**: Pending
+  - **Details**: JS uses `util.format('The model %s doesn\'t have any 3D data associated with it.', file_data_id)` which includes the file data ID in the message. C++ line 1134 uses `"This model has no visible geometry."` which is different wording and omits the file data ID. User-facing text should match the original JS for fidelity.
+- [ ] 145. [tab_characters.cpp] Extra re-entry guard in load_character_model not present in JS
+  - **JS Source**: `src/js/modules/tab_characters.js` lines 718–720
+  - **Status**: Pending
+  - **Details**: C++ `load_character_model` at line 1043 adds an extra guard `if (view.chrModelLoading) return;` that the JS does not have. The JS only checks `if (!file_data_id || active_model === file_data_id)`. While defensive for the C++ async pump pattern, this could cause behavioral differences: if `load_character_model` is called while another model is already loading (e.g. from `apply_import_data` which sets `chrModelLoading = true` before calling this), the C++ would silently skip the load while the JS would proceed.
+- [ ] 146. [tab_characters.cpp] navigate_to_items_for_slot skips itemViewerTypeMask checkbox update
+  - **JS Source**: `src/js/modules/tab_characters.js` lines 2499–2516
+  - **Status**: Pending
+  - **Details**: JS checks if `itemViewerTypeMask` is already populated and, if so, directly sets the `checked` property on matching items to pre-select the filter before switching to the Items tab. C++ at lines 2988–2997 always just sets `pendingItemSlotFilter` without checking or setting `itemViewerTypeMask`. If the Items tab was previously loaded and its type mask filter is already populated, the C++ won't directly toggle the filter checkboxes — it relies entirely on `pendingItemSlotFilter` being consumed by tab_items.
+- [ ] 147. [tab_creatures.cpp] Missing file_name parameter in create_renderer() call for standard creature preview
+  - **JS Source**: `src/js/modules/tab_creatures.js` line 652
+  - **Status**: Pending
+  - **Details**: JS passes `file_name` as the 5th argument to `create_renderer()`. C++ at lines 952–956 computes `file_name` (lines 941–943) but only passes `file_data_id` as the 5th arg, leaving the `file_name` parameter at its default empty string. This could cause WMO creatures to fail loading group files since the WMO renderer may need the base file name to locate them. Fix: add `file_name` as the 6th argument to the `create_renderer` call.
+- [ ] 148. [tab_creatures.cpp] Missing export_paths and file_manifest in ExportModelOptions for standard creature exports
+  - **JS Source**: `src/js/modules/tab_creatures.js` lines 954–969
+  - **Status**: Pending
+  - **Details**: JS passes both `file_manifest` and `export_paths` to `modelViewerUtils.export_model()` for standard (non-character-model) creature exports. C++ at lines 1391–1409 constructs `ExportModelOptions` but does not set `opts.file_manifest` or `opts.export_paths`, leaving them as nullptr. Standard creature exports won't have their paths written to the export stream file and file manifests won't be populated. Fix: add `opts.file_manifest = &file_manifest;` and `opts.export_paths = &export_paths;` before the `export_model` call.
+- [ ] 149. [tab_creatures.cpp] OBJ/STL export for character-model creatures uses combined function instead of separate calls
+  - **JS Source**: `src/js/modules/tab_creatures.js` lines 922–927
+  - **Status**: Pending
+  - **Details**: JS has separate export calls: `exporter.exportAsOBJ()` for OBJ and `exporter.exportAsSTL()` for STL. C++ at lines 1356–1358 uses a single `exporter.exportAsOBJ(final_path, (format == "STL"), &helper, &file_manifest)` for both, passing a boolean to switch between OBJ and STL mode. This is a structural deviation — functionally identical only if the C++ `M2Exporter::exportAsOBJ` with `true` correctly produces STL output.
