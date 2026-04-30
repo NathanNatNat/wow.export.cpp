@@ -323,7 +323,6 @@ void MDXRendererGL::_create_skeleton() {
 
 	if (src_nodes.empty()) {
 		nodes.clear();
-		node_matrices.resize(16);
 		return;
 	}
 
@@ -519,10 +518,8 @@ void MDXRendererGL::stopAnimation() {
 	animation_time = 0;
 	animation_paused = false;
 
-	if (!nodes.empty()) {
-		const int maxId = static_cast<int>((node_matrices.size() / 16)) - 1;
-		for (int i = 0; i <= maxId; i++)
-			std::copy(MDX_IDENTITY_MAT4.begin(), MDX_IDENTITY_MAT4.end(), node_matrices.begin() + static_cast<ptrdiff_t>(i) * 16);
+	if (!nodes.empty() && node_matrices.size() >= 16) {
+		std::copy(MDX_IDENTITY_MAT4.begin(), MDX_IDENTITY_MAT4.end(), node_matrices.begin());
 	}
 }
 

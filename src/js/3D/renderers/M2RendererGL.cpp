@@ -905,15 +905,12 @@ return as_async_compat([this]() {
 					}
 				}
 
-				// store child skeleton for animations that need it
+				skel_buffers_.push_back(std::move(skel_buf));
+				childSkelLoader = std::move(skel);
 				if (!child_anim_keys.empty()) {
-					skel_buffers_.push_back(std::move(skel_buf));
-					childSkelLoader = std::move(skel);
 					childAnimKeys = std::move(child_anim_keys);
 				}
 
-				// don't merge child AFIDs into parent - they use incompatible bone offsets
-				// parent skeleton handles its own animations, child handles its own
 				skel_buffers_.push_back(std::move(parent_buf));
 				skelLoader = std::move(parent_skel);
 				bones_skel = &skelLoader->bones;
@@ -1954,6 +1951,8 @@ const float light_view_y = view_matrix[1] * lx + view_matrix[5] * ly + view_matr
 const float light_view_z = view_matrix[2] * lx + view_matrix[6] * ly + view_matrix[10] * lz;
 
 shader->set_uniform_1i("u_apply_lighting", 1);
+shader->set_uniform_3f("u_ambient_color", 0.5f, 0.5f, 0.5f);
+shader->set_uniform_3f("u_diffuse_color", 0.7f, 0.7f, 0.7f);
 shader->set_uniform_3f("u_light_dir", light_view_x, light_view_y, light_view_z);
 
 // wireframe

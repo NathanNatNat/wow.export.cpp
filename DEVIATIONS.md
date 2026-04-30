@@ -122,7 +122,7 @@ JS dynamic types (NaN, undefined, null) don't map 1:1 to C++ static types.
 ### D3. [ShaderProgram.cpp] get_uniform_block_param returns -1 instead of null
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 122-127
 - **Reason**: JS returns `null` for `INVALID_INDEX`. C++ returns `-1` (valid GLint).
-- **Impact**: Callers cannot distinguish "block missing" from legitimate -1. (TODO 73)
+- **Impact**: Callers cannot distinguish "block missing" from legitimate -1.
 
 ### D4. [ADTExporter.cpp] scale 0 maps to 1.0 instead of preserving 0
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1270
@@ -177,16 +177,6 @@ C++ function signatures that differ from the JS originals.
 
 Differences in how file paths and strings are processed.
 
-### F2. [WMOLegacyLoader.cpp] getGroup uses rfind (case-insensitive) instead of first-occurrence replace
-- **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` line 138
-- **Reason**: JS `String.replace('.wmo', ...)` is case-sensitive, replaces first occurrence. C++ checks last 4 chars case-insensitively.
-- **Impact**: Different behaviour for mid-path `.wmo` and uppercase extensions. (TODO 81)
-
-### F3. [WMOLoader.cpp] getGroup uses rfind(".wmo") instead of find(".wmo")
-- **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 75-78
-- **Reason**: JS `replace` targets first occurrence. C++ `rfind` targets last occurrence.
-- **Impact**: Paths with multiple `.wmo` segments would diverge. (TODO 83)
-
 ### F5. [WMOLegacyExporter.cpp] ASCII-only tolower instead of Unicode toLowerCase
 - **JS Source**: `src/js/3D/exporters/WMOLegacyExporter.js` lines 299, 310, 507, 510
 - **Reason**: C++ `std::tolower` only handles ASCII bytes. JS `toLowerCase()` is Unicode-aware.
@@ -233,57 +223,37 @@ Bone Uniform Buffer Object creation and binding order differences.
 ### B1. [M2LegacyRendererGL.cpp] _create_bones_ubo method missing entirely
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 389, 474-477, 1020
 - **Reason**: UBO pipeline not yet implemented in C++ for legacy renderer.
-- **Impact**: Bone animation will not work until implemented. (TODO 87)
+- **Impact**: Bone animation will not work until implemented.
 
 ### B2. [M2RendererGL.cpp] Bones UBO created before skeleton is loaded
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 406-439, 567
 - **Reason**: C++ creates UBO in `load()` before `_create_skeleton()`. JS creates it in `loadSkin()` after skeleton setup.
-- **Impact**: UBO sized for 0 bones. Bone animation may fail. (TODO 89)
+- **Impact**: UBO sized for 0 bones. Bone animation may fail.
 
 ### B3. [M3RendererGL.cpp] _create_bones_ubo moved from loadLOD() to load()
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 79-81, 147
 - **Reason**: C++ creates UBO once in `load()`. JS creates it per-`loadLOD()` call.
-- **Impact**: Switching LOD levels won't recreate the UBO. (TODO 93)
+- **Impact**: Switching LOD levels won't recreate the UBO.
 
 ### B4. [MDXRendererGL.cpp] Bone UBO created before skeleton/geometry
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 189-199, 262-265, 291
 - **Reason**: C++ creates UBO in `load()` before skeleton. JS creates it inside `_build_geometry` after skeleton.
-- **Impact**: UBO always sized for 0 bones. (TODO 99)
-
-### B5. [M2LegacyRendererGL.cpp] Extra u_has_tex_matrix uniforms
-- **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 956-957
-- **Reason**: C++ sets `u_has_tex_matrix1/2 = 0` which JS does not set at all.
-- **Impact**: Shader may skip texture matrix application. (TODO 88)
-
-### B6. [M3RendererGL.cpp] Extra u_has_tex_matrix uniforms
-- **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 243-244
-- **Reason**: Same as B5.
-- **Impact**: Same as B5. (TODO 96)
-
-### B7. [M2RendererGL.cpp] Missing u_ambient_color and u_diffuse_color uniforms
-- **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1512-1513
-- **Reason**: C++ render() omits both uniform calls.
-- **Impact**: Lighting will be incorrect if shader uses these uniforms. (TODO 90)
+- **Impact**: UBO always sized for 0 bones.
 
 ### B8. [M3RendererGL.cpp] UBO bind(0) not called per draw call
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` line 292
 - **Reason**: C++ binds UBO once before loop. JS rebinds per draw call.
-- **Impact**: Could break with intervening UBO binds. (TODO 95)
-
-### B9. [MDXRendererGL.cpp] stopAnimation resets ALL bones instead of just bone 0
-- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 429-431
-- **Reason**: JS `set(IDENTITY_MAT4)` with no offset only writes 16 floats (bone 0). C++ loops all bones.
-- **Impact**: Different visual result when stopping animation on multi-bone models. (TODO 98)
+- **Impact**: Could break with intervening UBO binds.
 
 ### B10. [M2RendererGL.cpp] _dispose_skin does not dispose bone UBOs
 - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1914-1922
 - **Reason**: C++ only disposes UBO in final `dispose()`, not in `_dispose_skin()`.
-- **Impact**: Old UBOs not cleaned up if loadSkin called multiple times. (TODO 92)
+- **Impact**: Old UBOs not cleaned up if loadSkin called multiple times.
 
 ### B11. [M3RendererGL.cpp] UBO disposal missing from _dispose_geometry
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 310-311, 316
 - **Reason**: C++ `_dispose_geometry()` has no UBO disposal.
-- **Impact**: Same as B10. (TODO 94)
+- **Impact**: Same as B10.
 
 ## Exporter Structure Differences
 
@@ -319,37 +289,22 @@ Export pipeline structural deviations.
 ### L1. [MDXLoader.cpp] parse_ATCH reads KVIS data that JS skips
 - **JS Source**: `src/js/3D/loaders/MDXLoader.js` lines 387-412
 - **Reason**: JS has a bug where `readUInt32LE(-4)` makes the KVIS branch dead code. C++ deliberately reads KVIS.
-- **Impact**: `attachment.visibilityAnim` is populated in C++ but always empty in JS. Intentional improvement. (TODO 76)
+- **Impact**: `attachment.visibilityAnim` is populated in C++ but always empty in JS. Intentional improvement.
 
 ### L2. [MDXLoader.cpp] Node-to-nodes registration order differs
 - **JS Source**: `src/js/3D/loaders/MDXLoader.js` lines 208-210, 53-56
 - **Reason**: JS registers in chunk-appearance order. C++ defers to end of `load()` with fixed iteration order.
-- **Impact**: Different node wins on objectId collision. (TODO 77)
-
-### L3. [SKELLoader.cpp] loadAnimsForIndex swallows exceptions
-- **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 308-347
-- **Reason**: C++ wraps in try/catch and logs. JS propagates rejection.
-- **Impact**: Callers lose error signal, see generic false instead of specific error. (TODO 78)
-
-### L4. [SKELLoader.cpp] loadAnims swallows exceptions
-- **JS Source**: `src/js/3D/loaders/SKELLoader.js` lines 407-454
-- **Reason**: Same as L3 — continues on error instead of aborting.
-- **Impact**: Incomplete animFiles map with only a log line. (TODO 79)
-
-### L5. [WMOLegacyLoader.cpp] getGroup creates child with fileName set
-- **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 144-148
-- **Reason**: JS passes `undefined` for fileName on child loaders. C++ sets `fileName = groupPath`.
-- **Impact**: Sentinel-style checks on child loaders see different values. (TODO 80)
+- **Impact**: Different node wins on objectId collision.
 
 ### L6. [WMOLegacyLoader.cpp] fileID=0 skips listfile lookup
 - **JS Source**: `src/js/3D/loaders/WMOLegacyLoader.js` lines 22-30
 - **Reason**: JS `fileID !== undefined` accepts 0. C++ `fileID != 0` rejects 0.
-- **Impact**: Different fileName resolution for fileDataID 0 (not a real WoW asset). (TODO 82)
+- **Impact**: Different fileName resolution for fileDataID 0 (not a real WoW asset).
 
 ### L7. [WMOLoader.cpp] Same fileID=0 deviation
 - **JS Source**: `src/js/3D/loaders/WMOLoader.js` lines 18-32
 - **Reason**: Same as L6.
-- **Impact**: Same as L6. (TODO 84)
+- **Impact**: Same as L6.
 
 ### L8. [DBCReader.cpp] _read_field reads 8 bytes for Int64/UInt64
 - **JS Source**: `src/js/db/DBCReader.js` lines 389-408
@@ -385,7 +340,7 @@ Export pipeline structural deviations.
 ### X1. [ShaderProgram.cpp] _compile deletes successfully-compiled shader on error
 - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 35-36
 - **Reason**: JS leaks the successful shader on compile failure. C++ explicitly deletes both.
-- **Impact**: Intentional fix for a JS leak — behavioural deviation in failure path. (TODO 72)
+- **Impact**: Intentional fix for a JS leak — behavioural deviation in failure path.
 
 ### X2. [M2LegacyExporter.cpp] exportAsOBJ/STL throw explicit error on null skin
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 129, 268
@@ -416,16 +371,6 @@ Export pipeline structural deviations.
 - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 46-61
 - **Reason**: JS `splice(-1, 1)` removes last element on missing. C++ does nothing.
 - **Impact**: C++ is arguably more correct but differs from JS. (TODO 144)
-
-### X8. [M2RendererGL.cpp] childSkelLoader only stored when childAnimKeys non-empty
-- **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 697-705
-- **Reason**: JS unconditionally stores child skeleton. C++ gates on non-empty anim keys.
-- **Impact**: Child skeletons with bones but no .anim entries silently discarded. (TODO 91)
-
-### X9. [MDXRendererGL.cpp] _create_skeleton allocates node_matrices when nodes empty
-- **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` lines 270-273
-- **Reason**: JS sets `nodes = null` and returns. C++ clears nodes AND resizes node_matrices to 16 floats.
-- **Impact**: Extra allocation with no JS counterpart. (TODO 101)
 
 ## UI Text / String Differences
 
@@ -595,13 +540,8 @@ Export pipeline structural deviations.
 
 ### Z23. [M2LegacyRendererGL.cpp] _load_textures calls setSlotFileLegacy instead of setSlotFile
 - **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` line 241
-- **Reason**: Wrong function called.
-- **Impact**: The two functions may have different behavior. (TODO 85)
-
-### Z24. [M2LegacyRendererGL.cpp] UV2 y-flip omitted
-- **JS Source**: `src/js/3D/renderers/M2LegacyRendererGL.js` lines 358-359
-- **Reason**: C++ comment claims "already y-flipped by loader." Needs verification.
-- **Impact**: Second UV set textures may appear vertically inverted if loader doesn't pre-flip. (TODO 86)
+- **Reason**: C++ splits JS's dynamically-typed `setSlotFile` into two functions: `setSlotFile(uint32_t)` for CASC fileDataIDs and `setSlotFileLegacy(string)` for MPQ file paths. Legacy renderer uses string paths, so `setSlotFileLegacy` is the correct C++ adaptation.
+- **Impact**: Functionally identical — same slot data stored.
 
 ### Z25. [M2LegacyRendererGL.cpp] materials/textureUnits/boundingBox JSON drops fields
 - **JS Source**: `src/js/3D/exporters/M2LegacyExporter.js` lines 244, 248, 250, 254
@@ -611,7 +551,7 @@ Export pipeline structural deviations.
 ### Z26. [MDXRendererGL.cpp] Missing per-draw-call UBO bind
 - **JS Source**: `src/js/3D/renderers/MDXRendererGL.js` line 758
 - **Reason**: C++ binds once before loop. JS rebinds per draw call.
-- **Impact**: Likely functionally equivalent but deviates from JS structure. (TODO 100)
+- **Impact**: Likely functionally equivalent but deviates from JS structure.
 
 ### Z27. [char-texture-overlay.cpp] ensureActiveLayerAttached has different semantics
 - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 63-71
@@ -646,7 +586,7 @@ Export pipeline structural deviations.
 ### Z33. [M3RendererGL.cpp] load() execution order differs
 - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 59-71
 - **Reason**: C++ creates bones UBO before default texture. JS creates default texture first.
-- **Impact**: Initialization order deviation. (TODO 97)
+- **Impact**: Initialization order deviation.
 
 ### Z34. [ADTExporter.cpp] saveRawLayerTexture returns void instead of path
 - **JS Source**: `src/js/3D/exporters/ADTExporter.js` lines 1164-1190

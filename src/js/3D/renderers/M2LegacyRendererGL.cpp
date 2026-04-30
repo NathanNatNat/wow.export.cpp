@@ -394,11 +394,11 @@ void M2LegacyRendererGL::loadSkin(int index) {
 		std::memcpy(&vertex_data[offset + 32], &m2->uv[uv_idx], sizeof(float));
 		std::memcpy(&vertex_data[offset + 36], &m2->uv[uv_idx + 1], sizeof(float));
 
-		// texcoord2 (already y-flipped by loader)
-		// Note: M2LegacyLoader pre-flips uv2, so copy directly without re-flipping
+		// texcoord2
 		if (!m2->uv2.empty() && uv_idx + 1 < m2->uv2.size()) {
 			std::memcpy(&vertex_data[offset + 40], &m2->uv2[uv_idx], sizeof(float));
-			std::memcpy(&vertex_data[offset + 44], &m2->uv2[uv_idx + 1], sizeof(float));
+			const float uv2_y = 1.0f - m2->uv2[uv_idx + 1];
+			std::memcpy(&vertex_data[offset + 44], &uv2_y, sizeof(float));
 		} else {
 			const float zero = 0.0f;
 			std::memcpy(&vertex_data[offset + 40], &zero, sizeof(float));
@@ -1210,8 +1210,6 @@ void M2LegacyRendererGL::render(const float* view_matrix, const float* projectio
 	// bone skinning disabled for legacy models until animation system is fixed
 	shader->set_uniform_1i("u_bone_count", 0);
 
-	shader->set_uniform_1i("u_has_tex_matrix1", 0);
-	shader->set_uniform_1i("u_has_tex_matrix2", 0);
 	shader->set_uniform_mat4("u_tex_matrix1", false, IDENTITY_MAT4.data());
 	shader->set_uniform_mat4("u_tex_matrix2", false, IDENTITY_MAT4.data());
 

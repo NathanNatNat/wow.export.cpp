@@ -132,7 +132,7 @@ WMOLoader& WMOLoader::getGroup(uint32_t index) {
 	} else if (!this->fileName.empty()) {
 		// Filename-based fallback: replace .wmo with _NNN.wmo
 		std::string groupFileName = this->fileName;
-		auto dotPos = groupFileName.rfind(".wmo");
+		auto dotPos = groupFileName.find(".wmo");
 		if (dotPos != std::string::npos) {
 			std::string suffix = "_" + std::format("{:03}", index) + ".wmo";
 			groupFileName.replace(dotPos, 4, suffix);

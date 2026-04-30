@@ -183,14 +183,11 @@ WMOLegacyLoader& WMOLegacyLoader::getGroup(uint32_t index) {
 	// Construct group file path: rootname_NNN.wmo
 	std::string groupPath;
 	if (!this->fileName.empty()) {
-		std::string base = this->fileName;
-		// Case-insensitive search for .wmo extension (check last 4 chars)
-		if (base.size() >= 4) {
-			std::string ext = base.substr(base.size() - 4);
-			std::transform(ext.begin(), ext.end(), ext.begin(),
-				[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-			if (ext == ".wmo")
-				groupPath = base.substr(0, base.size() - 4) + "_" + std::format("{:03}", index) + ".wmo";
+		groupPath = this->fileName;
+		auto dotPos = groupPath.find(".wmo");
+		if (dotPos != std::string::npos) {
+			std::string suffix = "_" + std::format("{:03}", index) + ".wmo";
+			groupPath.replace(dotPos, 4, suffix);
 		}
 	}
 
@@ -202,7 +199,7 @@ WMOLegacyLoader& WMOLegacyLoader::getGroup(uint32_t index) {
 		throw std::runtime_error("WMO group file not found in MPQ: " + groupPath);
 
 	auto ownedBuf = std::make_unique<BufferWrapper>(std::move(fileData.value()));
-	auto group = std::make_unique<WMOLegacyLoader>(*ownedBuf, groupPath, this->renderingOnly);
+	auto group = std::make_unique<WMOLegacyLoader>(*ownedBuf, 0u, this->renderingOnly);
 	// JS: group.version = this.version; — pre-seed version from parent before loading.
 	// The group MVER chunk will override this, but pre-seeding ensures correct
 	// parsing behavior for files where MVER may be absent.

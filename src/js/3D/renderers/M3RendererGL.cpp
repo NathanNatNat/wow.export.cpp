@@ -278,8 +278,6 @@ void M3RendererGL::render(const float* view_matrix, const float* projection_matr
 	}
 
 	// texture matrix defaults
-	shader->set_uniform_1i("u_has_tex_matrix1", 0);
-	shader->set_uniform_1i("u_has_tex_matrix2", 0);
 	shader->set_uniform_mat4("u_tex_matrix1", false, M3_IDENTITY_MAT4.data());
 	shader->set_uniform_mat4("u_tex_matrix2", false, M3_IDENTITY_MAT4.data());
 
