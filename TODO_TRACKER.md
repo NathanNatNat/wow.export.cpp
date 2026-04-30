@@ -1,11 +1,7 @@
 # TODO Tracker
 
-> **Progress: 0/166 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/165 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
-- [ ] 2. [app.cpp] Auto-updater branch is permanently disabled instead of being conditional on BUILD_RELEASE && !DISABLE_AUTO_UPDATE.
-  - **JS Source**: `src/app.js` lines 688–705
-  - **Status**: Pending
-  - **Details**: JS runs `updater.checkForUpdates()`, applying an update or hiding the loading screen + setting source_select active + checking blender on the result. C++ (app.cpp:2455–2486) has the entire `if (BUILD_RELEASE && !DISABLE_AUTO_UPDATE)` block commented out, then unconditionally calls `tab_blender::checkLocalVersion()` and `modules::setActive("source_select")` regardless of build flavour. Documented as deviation in comments, but functionally release builds never check for updates and never display the "Checking for updates..." loading screen.
 - [ ] 3. [app.cpp] activeModule watcher uses indiscriminate resetAll() instead of the JS per-entry true→false / else→null logic.
   - **JS Source**: `src/app.js` lines 556–564
   - **Status**: Pending

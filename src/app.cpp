@@ -2623,36 +2623,24 @@ int main(int argc, char* argv[]) {
 
 	// Auto-updater logic.
 	// JS: app.js lines 688-705
-	// The updater module is ported (src/js/updater.cpp) but disabled for now
-	// until the update server infrastructure is ready and tested end-to-end.
-	// When enabling, uncomment the if-block and ensure updater::checkForUpdates()
-	// runs on a background thread (it does synchronous HTTP) with the result
-	// posted back via core::postToMainThread().
-	//
-	// if (BUILD_RELEASE && !DISABLE_AUTO_UPDATE) {
-	//     core::showLoadingScreen(1, "Checking for updates...");
-	//     std::thread([]{
-	//         bool updateAvailable = updater::checkForUpdates();
-	//         core::postToMainThread([updateAvailable]{
-	//             if (updateAvailable) {
-	//                 updater::applyUpdate();
-	//             } else {
-	//                 core::hideLoadingScreen();
-	//                 modules::setActive("source_select");
-	//                 // No update available, start checking Blender add-on.
-	//                 tab_blender::checkLocalVersion();
-	//             }
-	//         });
-	//     }).detach();
-	// } else {
-	//     // debug mode or auto-update disabled, skip to blender add-on check
-	//     tab_blender::checkLocalVersion();
-	// }
+	if (BUILD_RELEASE && !DISABLE_AUTO_UPDATE) {
+		core::showLoadingScreen(1, "Checking for updates...");
 
-	// Since the updater is disabled, we follow the else branch unconditionally:
-	// debug mode or auto-update disabled, skip to blender add-on check.
-	// JS: app.js line 704
-	tab_blender::checkLocalVersion();
+		std::thread([]{
+			bool updateAvailable = updater::checkForUpdates();
+			core::postToMainThread([updateAvailable]{
+				if (updateAvailable) {
+					updater::applyUpdate();
+				} else {
+					core::hideLoadingScreen();
+					modules::setActive("source_select");
+					tab_blender::checkLocalVersion();
+				}
+			});
+		}).detach();
+	} else {
+		tab_blender::checkLocalVersion();
+	}
 
 	// Set source select as the currently active interface screen.
 	modules::setActive("source_select");
