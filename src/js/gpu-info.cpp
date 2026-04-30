@@ -429,7 +429,7 @@ std::string format_extensions(const std::vector<std::string>& extensions) {
 		} else if (ext.find("depth") != std::string::npos) {
 			std::string name = ext;
 			if (name.rfind("WEBGL_", 0) == 0)
-				name = name.substr(7);
+				name = name.substr(6);
 			else if (name.rfind("EXT_", 0) == 0)
 				name = name.substr(4);
 			depth.push_back(name);

@@ -1,47 +1,7 @@
 # TODO Tracker
 
-> **Progress: 0/147 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/137 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
-- [ ] 21. [external-links.cpp] renderLink() uses raw ImDrawList::AddText / AddLine for the hover effect, violating the CLAUDE.md ImGui rendering rule.
-  - **JS Source**: `src/js/external-links.js` (no JS counterpart — JS uses a global DOM `data-external` click handler in `app.js` lines ~115–131)
-  - **Status**: Pending
-  - **Details**: The C++ port adds a helper `renderLink()` (cpp lines 71–89, header line 73) to replace the missing DOM click handler. Inside, on hover it calls `ImDrawList::AddText` and `ImDrawList::AddLine` to redraw the label in white and draw an underline. CLAUDE.md's "ImGui rendering" convention explicitly reserves `ImDrawList` for "image rotation, multi-colour gradient fills, and custom OpenGL overlays" and forbids it "for anything a native widget handles." A hover-styled link can be done with native ImGui (e.g. `PushStyleColor(ImGuiCol_Text, ...)` around `TextUnformatted`). The JS original simply calls `nw.Shell.openExternal` with no custom hover styling — there is no need to draw a hover underline at all to be JS-faithful. Functionality (clicking calls `open(link)`) is correct; the deviation is purely in the hover visual treatment.
-- [ ] 22. [file-writer.cpp] Constructor `encoding` parameter is silently ignored (`std::string_view /*encoding*/`).
-  - **JS Source**: `src/js/file-writer.js` lines 14–24
-  - **Status**: Pending
-  - **Details**: JS passes `encoding` through to `fs.createWriteStream(file, { flags: 'w', encoding })`, which controls how JS strings are encoded to bytes (utf8, utf16le, ascii, latin1, etc.). The C++ port discards this parameter and always writes raw `char` bytes via `std::ofstream`, so any caller that relies on a non-utf8 encoding (e.g. UTF-16LE for a tool that consumes BOM'd output) will receive wrong bytes. The encoding hint must actually be honoured (e.g. by transcoding `line` inside `writeLine` based on the stored encoding) or the C++ API should at minimum reject non-utf8 encodings rather than silently write raw bytes.
-- [ ] 23. [file-writer.cpp] `writeLine` is fully synchronous; backpressure (`blocked`/`resolver`/`_drain`) is not implemented.
-  - **JS Source**: `src/js/file-writer.js` lines 26–48
-  - **Status**: Pending
-  - **Details**: JS `writeLine` is `async`: when a previous write returned `false` (Node stream backpressure), the next call awaits a Promise that resolves when the underlying stream emits `'drain'`. The C++ port has no `blocked`/`resolver` state, no `_drain` helper, and `writeLine` returns `void` rather than a future, so it cannot suspend the caller. Documented as a deviation in the header but still a behavioural divergence — JS callers that `await writeLine` in tight loops yield to the event loop and let other tasks run; the C++ equivalent monopolises the calling thread until the OS buffer accepts the write. To preserve fidelity, `writeLine` should return a `std::future<void>` (or equivalent) that completes immediately when the write succeeds and only suspends when the stream is saturated.
-- [ ] 24. [file-writer.cpp] EISDIR retry path uses `is_directory` heuristic instead of error-code dispatch.
-  - **JS Source**: `src/js/file-writer.js` lines 15–24
-  - **Status**: Pending
-  - **Details**: JS catches the open error and branches strictly on `e.code === 'EISDIR'` — only directories trigger the recursive-remove + retry; everything else rethrows. C++ instead opens, checks `!stream.is_open()`, then asks `std::filesystem::is_directory(file)`. This works for the common case but diverges in edge cases: (a) if `is_directory` returns false for a non-EISDIR open failure (permissions, sharing violation, ENOENT on a parent), C++ throws a generic `std::runtime_error("failed to open file for writing: …")` rather than letting the underlying error propagate with its original code/message; (b) if the path becomes a directory between two checks, behaviour can race. The C++ thrown error also loses the original errno information that JS preserves (`e.code`, `e.message`). Consider opening with `errno` capture (or `std::error_code` overload) and dispatching on `std::errc::is_a_directory` to mirror JS exactly.
-- [ ] 25. [generics.cpp] downloadFile() skips chmod entirely on Windows.
-  - **JS Source**: `src/js/generics.js` lines 218–252
-  - **Status**: Pending
-  - **Details**: JS calls `fsp.chmod(out, mode)` unconditionally on every platform. On Windows, Node's fs.chmod still maps the user-write bit to the file's read-only attribute (e.g. mode `0o400` makes the file read-only). The C++ implementation guards the chmod call with `#ifndef _WIN32` (lines 622–624 of generics.cpp), so on Windows the `mode` argument is silently ignored after being masked at line 607. Any caller relying on `0o400`/`0o444` to set a read-only file on Windows will see different behaviour between JS and C++.
-- [ ] 26. [generics.cpp] filesize() with NaN input returns the literal string "NaN" instead of the original input.
-  - **JS Source**: `src/js/generics.js` lines 281–283
-  - **Status**: Pending
-  - **Details**: JS returns the original input value when `isNaN(input)` is true (e.g. `filesize("foo")` returns `"foo"`, `filesize(NaN)` returns the NaN value itself). C++ (lines 670–672 of generics.cpp) returns the literal string `"NaN"`. Any UI code that pipes an unparsable value through `filesize` will display `"NaN"` in C++ vs the original token in JS.
-- [ ] 27. [generics.cpp] getFileHash() supports only "hex" and "base64" encodings; throws on any other value.
-  - **JS Source**: `src/js/generics.js` lines 332–340
-  - **Status**: Pending
-  - **Details**: The JS implementation forwards `encoding` directly to `crypto.Hash.digest()`, which accepts every Node BufferEncoding value plus undefined (returns a Buffer). The C++ port (lines 327–341 of generics.cpp / `computeFileHash` helper) hard-codes a switch on `"hex"` and `"base64"` only and throws for anything else. The current call sites only pass `"hex"`, but the public API surface is a behavioural deviation that will silently regress if a future caller uses any other encoding.
-- [ ] 28. [generics.cpp] requestData() 60-second timeout is split per-phase instead of an overall request timeout.
-  - **JS Source**: `src/js/generics.js` lines 197–200
-  - **Status**: Pending
-  - **Details**: JS arms a single 60-second `req.setTimeout` that, on any 60s of inactivity, destroys the request and rejects with `'Request timeout after 60s'`. The C++ port (`doHttpGetRaw`, lines 213–222 of generics.cpp) sets `set_connection_timeout(60)` AND `set_read_timeout(60)` on the httplib client. These are per-phase: a request can spend 60s connecting and an additional 60s on each read without tripping the timeout, so the upper bound is significantly higher than 60s end-to-end. Also, on timeout cpp-httplib returns a generic error rather than `'Request timeout after 60s'`. The file's own comment on line 169–171 acknowledges this and points at TODO 51, so the deviation is known but not yet rectified.
-- [ ] 29. [gpu-info.cpp] format_extensions strips 7 chars instead of 6 when removing the "WEBGL_" prefix from depth extensions.
-  - **JS Source**: `src/js/gpu-info.js` line 250
-  - **Status**: Pending
-  - **Details**: JS line 250 does `ext.replace('WEBGL_', '')` for extensions containing `"depth"`, removing the 6-character prefix `WEBGL_`. The C++ port at `src/js/gpu-info.cpp` line 432 calls `name = name.substr(7)`, stripping 7 characters instead of 6. For example, the WebGL extension `WEBGL_depth_texture` becomes `depth_texture` in JS but `epth_texture` in the C++ output. The matching `EXT_` branch on line 434 correctly uses `substr(4)` (since `EXT_` is 4 chars), and the compressed/float categories use the correct lengths (25, 24, 12, 19, 17), so the issue is confined to the `WEBGL_` case in the depth category at gpu-info.cpp:432.
-- [ ] 30. [icon-render.cpp] processQueue is fully synchronous and recursive instead of async/promise-chained — blocks the calling thread.
-  - **JS Source**: `src/js/icon-render.js` lines 48–65
-  - **Status**: Pending
-  - **Details**: JS processQueue pops one entry, awaits `core.view.casc.getFile()` asynchronously, then calls `processQueue()` in `.finally()` so control returns to the event loop between every icon load, keeping the UI responsive. C++ processQueue at `src/js/icon-render.cpp` lines 252–289 calls `getVirtualFileByID` synchronously, decodes the BLP, uploads a GL texture, and recurses on the same stack via the unconditional call at line 288. With `QUEUE_LIMIT=20` up to 20 sequential synchronous CASC reads + BLP decodes + glTexImage2D calls happen on the calling thread before `loadIcon()` returns. The deviation is documented in the comment at lines 234–251 but is still a real behavioural divergence — large icon list refreshes can stall the UI thread, whereas the JS version yielded between each load. To match JS semantics this should be dispatched onto a worker thread (e.g. `std::async` or a coroutine) with the GL upload posted back to the render thread.
 - [ ] 31. [icon-render.cpp] queueItem fallback path on expired weak_ptr has no JS counterpart.
   - **JS Source**: `src/js/icon-render.js` lines 77–91
   - **Status**: Pending

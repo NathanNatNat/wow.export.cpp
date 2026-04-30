@@ -619,9 +619,7 @@ BufferWrapper downloadFile(const std::vector<std::string>& urls, const std::stri
 			if (!out.empty()) {
 				createDirectory(std::filesystem::path(out).parent_path());
 				wrapped.writeToFile(out);
-#ifndef _WIN32
-				::chmod(out.c_str(), static_cast<mode_t>(mode));
-#endif
+				std::filesystem::permissions(out, static_cast<std::filesystem::perms>(mode));
 			}
 
 			return wrapped;

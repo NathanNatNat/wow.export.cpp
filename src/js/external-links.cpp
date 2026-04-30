@@ -75,14 +75,8 @@ void renderLink(const char* link, const char* label, const ImVec4* color) {
 	if (color)
 		ImGui::PopStyleColor();
 
-	if (ImGui::IsItemHovered()) {
+	if (ImGui::IsItemHovered())
 		ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-		ImVec2 item_min = ImGui::GetItemRectMin();
-		ImVec2 item_max = ImGui::GetItemRectMax();
-		ImDrawList* draw = ImGui::GetWindowDrawList();
-		draw->AddText(item_min, IM_COL32(255, 255, 255, 255), label);
-		draw->AddLine(ImVec2(item_min.x, item_max.y), ImVec2(item_max.x, item_max.y), IM_COL32(255, 255, 255, 255), 1.0f);
-	}
 
 	if (ImGui::IsItemClicked())
 		open(link);
