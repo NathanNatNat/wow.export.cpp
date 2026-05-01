@@ -4,6 +4,3 @@
 	License: MIT
  */
 #include "CompressionType.h"
-
-// CompressionType is fully defined as an enum in the header.
-// This .cpp exists to match the original JS file structure.
