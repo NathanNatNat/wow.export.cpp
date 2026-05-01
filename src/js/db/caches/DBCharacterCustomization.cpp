@@ -164,9 +164,6 @@ static void _initialize() {
 				auto tfd_it = tfd_map.find(matResID);
 				if (tfd_it != tfd_map.end())
 					mat_info.FileDataID = tfd_it->second;
-				// JS keys this map by `mat_row.ID` (the row's own ID field), which differs
-				// from the lookup `materialID` for copy-table destination rows where
-				// WDCReader sets `tempCopy.ID = recordID` to the destination copy ID.
 				uint32_t mat_row_id = fieldToUint32(mat_row.at("ID"));
 				chr_cust_mat_map[mat_row_id] = mat_info;
 			}
@@ -321,14 +318,6 @@ static void _initialize() {
 	init_cv.notify_all();
 }
 
-// Intentional C++ adaptation of the JS promise-caching pattern in
-// `src/js/db/caches/DBCharacterCustomization.js` (lines 39–48). The JS uses
-// `init_promise` so concurrent async callers share a single initialization pass;
-// the C++ achieves the same single-initialization-with-concurrent-waiters
-// guarantee via `is_initializing` plus a `std::condition_variable`. One
-// structural difference: the C++ runs `_initialize()` synchronously on the
-// calling thread (no `std::async`/`std::future` wrapping), whereas JS runs it
-// asynchronously. Functional behavior is preserved.
 void ensureInitialized() {
 	{
 		std::unique_lock lock(init_mutex);
