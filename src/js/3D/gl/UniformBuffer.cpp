@@ -66,7 +66,6 @@ void UniformBuffer::set_ivec4(size_t offset, int32_t x, int32_t y,
 }
 
 void UniformBuffer::set_mat4(size_t offset, const float* matrix) {
-	// 16 floats = 64 bytes
 	std::memcpy(data_.data() + offset, matrix, 16 * sizeof(float));
 	dirty = true;
 }

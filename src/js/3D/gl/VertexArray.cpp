@@ -73,8 +73,6 @@ void VertexArray::set_attribute_i(GLuint location, GLint size, GLenum type,
 }
 
 void VertexArray::setup_m2_vertex_format() {
-	// layout: position(3f) + normal(3f) + bone_indices(4ub) + bone_weights(4ub) + uv1(2f) + uv2(2f)
-	// stride = 48 bytes
 	constexpr GLsizei stride = 48;
 
 	bind();
