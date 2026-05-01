@@ -1,8 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
- */
 #include "renderer_utils.h"
 
 #include <array>
@@ -48,4 +43,4 @@ BonesUbo create_bones_ubo(gl::ShaderProgram& shader, gl::GLContext& ctx,
 	return result;
 }
 
-} // namespace renderer_utils
+}

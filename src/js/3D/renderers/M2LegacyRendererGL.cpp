@@ -24,10 +24,6 @@
 #include <functional>
 #include <optional>
 
-// -----------------------------------------------------------------------
-// Free-function math helpers (matching JS module-level functions exactly)
-// -----------------------------------------------------------------------
-
 static void mat4_multiply(float* out, const float* a, const float* b) {
 	const float a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
 	const float a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
@@ -133,8 +129,6 @@ static void quat_slerp(float* out, float ax, float ay, float az, float aw, float
 	out[3] = scale0 * aw + scale1 * bw;
 }
 
-// -----------------------------------------------------------------------
-// -----------------------------------------------------------------------
 static float track_value_to_float(const LegacyTrackValue& v) {
 	if (auto* val = std::get_if<uint8_t>(&v))
 		return static_cast<float>(*val);
@@ -152,10 +146,6 @@ static const std::vector<float>& track_value_to_vec(const LegacyTrackValue& v) {
 	return empty;
 }
 
-// -----------------------------------------------------------------------
-// Constructor
-// -----------------------------------------------------------------------
-
 M2LegacyRendererGL::M2LegacyRendererGL(BufferWrapper& data, gl::GLContext& gl_context, bool reactive, bool useRibbon)
 	: data_ptr(&data)
 	, ctx(gl_context)
@@ -166,18 +156,15 @@ M2LegacyRendererGL::M2LegacyRendererGL(BufferWrapper& data, gl::GLContext& gl_co
 	syncID = -1;
 
 	// rendering state
-	// vaos, textures, default_texture, buffers, draw_calls: default constructed
 
 	// animation state
 	bones = nullptr;
-	// bone_matrices: default constructed
-	current_animation = -1; // null equivalent
+	current_animation = -1;
 	animation_time = 0;
 	animation_paused = false;
 
 	// reactive state
 	geosetKey = "modelViewerGeosets";
-	// geosetArray: default constructed
 
 	// transforms
 	std::copy(IDENTITY_MAT4.begin(), IDENTITY_MAT4.end(), model_matrix.begin());
@@ -186,20 +173,11 @@ M2LegacyRendererGL::M2LegacyRendererGL(BufferWrapper& data, gl::GLContext& gl_co
 	scale_val = {1, 1, 1};
 
 	// material data
-	// material_props: default constructed
 }
-
-// -----------------------------------------------------------------------
-// static load_shaders
-// -----------------------------------------------------------------------
 
 std::unique_ptr<gl::ShaderProgram> M2LegacyRendererGL::load_shaders(gl::GLContext& ctx) {
 	return shaders::create_program(ctx, "m2");
 }
-
-// -----------------------------------------------------------------------
-// load
-// -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::load() {
 	m2 = std::make_unique<M2LegacyLoader>(*data_ptr);
@@ -214,9 +192,6 @@ void M2LegacyRendererGL::load() {
 		loadSkin(0);
 
 		if (reactive) {
-			// JS: this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true })
-			// JS: this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true })
-			// C++: initialize polling baseline after loadSkin() populates core::view->modelViewerGeosets
 			auto& geosets = core::view->modelViewerGeosets;
 			watcher_geoset_checked.resize(geosets.size());
 			for (size_t i = 0; i < geosets.size(); i++)
@@ -228,10 +203,6 @@ void M2LegacyRendererGL::load() {
 	data_ptr = nullptr;
 }
 
-// -----------------------------------------------------------------------
-// _create_default_texture
-// -----------------------------------------------------------------------
-
 void M2LegacyRendererGL::_create_default_texture() {
 	const uint8_t pixels[4] = {87, 175, 226, 255};
 	default_texture = std::make_unique<gl::GLTexture>(ctx);
@@ -239,10 +210,6 @@ void M2LegacyRendererGL::_create_default_texture() {
 	opts.has_alpha = false;
 	default_texture->set_rgba(pixels, 1, 1, opts);
 }
-
-// -----------------------------------------------------------------------
-// _load_textures
-// -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::_load_textures() {
 	auto& tex_list = m2->textures;
@@ -263,7 +230,6 @@ void M2LegacyRendererGL::_load_textures() {
 				texture_ribbon::setSlotFileLegacy(ribbonSlot, fileName, syncID);
 
 			try {
-				// MPQ file access — get texture file data
 				std::optional<BufferWrapper> file_data;
 				if (mpq) {
 					auto raw = mpq->getFile(fileName);
@@ -288,10 +254,6 @@ void M2LegacyRendererGL::_load_textures() {
 		}
 	}
 }
-
-// -----------------------------------------------------------------------
-// applyCreatureSkin
-// -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& texture_paths) {
 	mpq::MPQInstall* mpq = core::view->mpq.get();
@@ -323,6 +285,7 @@ void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& textu
 						gl_tex->set_blp(blp, blp_flags);
 						textures[static_cast<int>(i)] = std::move(gl_tex);
 
+						// update texture ribbon
 						if (useRibbon) {
 							texture_ribbon::setSlotFileLegacy(static_cast<int>(i), texture_path, syncID);
 							texture_ribbon::setSlotSrc(static_cast<int>(i), blp.getDataURL(0b0111), syncID);
@@ -338,14 +301,6 @@ void M2LegacyRendererGL::applyCreatureSkin(const std::vector<std::string>& textu
 	}
 }
 
-// -----------------------------------------------------------------------
-// loadSkin
-// -----------------------------------------------------------------------
-
-// JS counterpart calls `_create_bones_ubo()` here to allocate a GPU bone
-// buffer. C++ stores `bone_matrices` in CPU memory only — bone skinning is
-// disabled for legacy M2 models until the animation system is fixed (see
-// the `u_bone_count = 0` stub in render() further below).
 void M2LegacyRendererGL::loadSkin(int index) {
 	_dispose_skin();
 
@@ -538,12 +493,10 @@ void M2LegacyRendererGL::loadSkin(int index) {
 		}
 		geoset_mapper::map(mapper_geosets);
 
-		// update labels back
 		for (size_t i = 0; i < mapper_geosets.size() && i < geosetArray.size(); i++) {
 			geosetArray[i].label = mapper_geosets[i].label;
 		}
 
-		// update core state labels too
 		for (size_t i = 0; i < mapper_geosets.size() && i < geosets.size(); i++) {
 			geosets[i]["label"] = mapper_geosets[i].label;
 		}
@@ -551,10 +504,6 @@ void M2LegacyRendererGL::loadSkin(int index) {
 
 	updateGeosets();
 }
-
-// -----------------------------------------------------------------------
-// _create_skeleton
-// -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::_create_skeleton() {
 	auto& bone_data = m2->bones;
@@ -572,18 +521,10 @@ void M2LegacyRendererGL::_create_skeleton() {
 		std::copy(IDENTITY_MAT4.begin(), IDENTITY_MAT4.end(), bone_matrices.begin() + static_cast<ptrdiff_t>(i * 16));
 }
 
-// -----------------------------------------------------------------------
-// playAnimation
-// -----------------------------------------------------------------------
-
 void M2LegacyRendererGL::playAnimation(int index) {
 	current_animation = index;
 	animation_time = 0;
 }
-
-// -----------------------------------------------------------------------
-// stopAnimation
-// -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::stopAnimation() {
 	animation_time = 0;
@@ -593,13 +534,9 @@ void M2LegacyRendererGL::stopAnimation() {
 	if (bones) {
 		current_animation = 0;
 		_update_bone_matrices();
-		current_animation = -1; // null
+		current_animation = -1;
 	}
 }
-
-// -----------------------------------------------------------------------
-// updateAnimation
-// -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::updateAnimation(float delta_time) {
 	if (current_animation < 0 || !bones)
@@ -620,10 +557,6 @@ void M2LegacyRendererGL::updateAnimation(float delta_time) {
 	_update_bone_matrices();
 }
 
-// -----------------------------------------------------------------------
-// get_animation_duration
-// -----------------------------------------------------------------------
-
 float M2LegacyRendererGL::get_animation_duration() {
 	if (current_animation < 0)
 		return 0;
@@ -635,18 +568,10 @@ float M2LegacyRendererGL::get_animation_duration() {
 	return static_cast<float>(anim.duration) / 1000.0f;
 }
 
-// -----------------------------------------------------------------------
-// get_animation_frame_count
-// -----------------------------------------------------------------------
-
 int M2LegacyRendererGL::get_animation_frame_count() {
 	const float duration = get_animation_duration();
 	return std::max(1, static_cast<int>(std::floor(duration * 60)));
 }
-
-// -----------------------------------------------------------------------
-// get_animation_frame
-// -----------------------------------------------------------------------
 
 int M2LegacyRendererGL::get_animation_frame() {
 	const float duration = get_animation_duration();
@@ -655,10 +580,6 @@ int M2LegacyRendererGL::get_animation_frame() {
 
 	return static_cast<int>(std::floor((animation_time / duration) * static_cast<float>(get_animation_frame_count())));
 }
-
-// -----------------------------------------------------------------------
-// set_animation_frame
-// -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::set_animation_frame(int frame) {
 	const int frame_count = get_animation_frame_count();
@@ -670,17 +591,9 @@ void M2LegacyRendererGL::set_animation_frame(int frame) {
 	_update_bone_matrices();
 }
 
-// -----------------------------------------------------------------------
-// set_animation_paused
-// -----------------------------------------------------------------------
-
 void M2LegacyRendererGL::set_animation_paused(bool paused) {
 	animation_paused = paused;
 }
-
-// -----------------------------------------------------------------------
-// step_animation_frame
-// -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::step_animation_frame(int delta) {
 	const int frame = get_animation_frame();
@@ -694,10 +607,6 @@ void M2LegacyRendererGL::step_animation_frame(int delta) {
 
 	set_animation_frame(new_frame);
 }
-
-// -----------------------------------------------------------------------
-// _update_bone_matrices
-// -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::_update_bone_matrices() {
 	const float time_ms = animation_time * 1000.0f;
@@ -723,7 +632,6 @@ void M2LegacyRendererGL::_update_bone_matrices() {
 
 	std::vector<bool> calculated(bone_count, false);
 
-	// Recursive bone calculation (using a lambda with capture for recursion)
 	std::function<void(size_t)> calc_bone = [&](size_t idx) {
 		if (calculated[idx])
 			return;
@@ -843,11 +751,7 @@ void M2LegacyRendererGL::_update_bone_matrices() {
 		calc_bone(i);
 }
 
-// -----------------------------------------------------------------------
-// _sample_legacy_vec3
 // legacy single-timeline sampling: uses ranges array to find keyframes within animation bounds
-// -----------------------------------------------------------------------
-
 std::array<float, 3> M2LegacyRendererGL::_sample_legacy_vec3(const LegacyM2Track& track, float time_ms, uint32_t anim_start, uint32_t anim_end, const std::array<float, 3>& default_value) {
 	const auto& timestamps = track.flatTimestamps;
 	const auto& values = track.flatValues;
@@ -860,8 +764,6 @@ std::array<float, 3> M2LegacyRendererGL::_sample_legacy_vec3(const LegacyM2Track
 	const float abs_time = static_cast<float>(anim_start) + time_ms;
 
 	// find keyframes within this animation's range
-	// size_t start_idx = 0;
-	// size_t end_idx = timestamps.size() - 1;
 
 	// use ranges if available to narrow search
 	if (!ranges.empty()) {
@@ -911,10 +813,6 @@ std::array<float, 3> M2LegacyRendererGL::_sample_legacy_vec3(const LegacyM2Track
 	return default_value;
 }
 
-// -----------------------------------------------------------------------
-// _sample_legacy_quat
-// -----------------------------------------------------------------------
-
 std::array<float, 4> M2LegacyRendererGL::_sample_legacy_quat(const LegacyM2Track& track, float time_ms, uint32_t anim_start, uint32_t anim_end) {
 	const auto& timestamps = track.flatTimestamps;
 	const auto& values = track.flatValues;
@@ -962,11 +860,7 @@ std::array<float, 4> M2LegacyRendererGL::_sample_legacy_quat(const LegacyM2Track
 	return {0, 0, 0, 1};
 }
 
-// -----------------------------------------------------------------------
-// _sample_vec3
 // per-animation timeline sampling (wotlk)
-// -----------------------------------------------------------------------
-
 std::array<float, 3> M2LegacyRendererGL::_sample_vec3(const std::vector<LegacyTrackValue>& timestamps, const std::vector<LegacyTrackValue>& values, float time_ms, const std::array<float, 3>& default_value) {
 	if (timestamps.empty())
 		return default_value;
@@ -1011,10 +905,6 @@ std::array<float, 3> M2LegacyRendererGL::_sample_vec3(const std::vector<LegacyTr
 	return default_value;
 }
 
-// -----------------------------------------------------------------------
-// _sample_quat
-// -----------------------------------------------------------------------
-
 std::array<float, 4> M2LegacyRendererGL::_sample_quat(const std::vector<LegacyTrackValue>& timestamps, const std::vector<LegacyTrackValue>& values, float time_ms) {
 	if (timestamps.empty())
 		return {0, 0, 0, 1};
@@ -1057,17 +947,10 @@ std::array<float, 4> M2LegacyRendererGL::_sample_quat(const std::vector<LegacyTr
 	return {0, 0, 0, 1};
 }
 
-// -----------------------------------------------------------------------
-// updateGeosets
-// -----------------------------------------------------------------------
-
 void M2LegacyRendererGL::updateGeosets() {
 	if (!reactive || draw_calls.empty())
 		return;
 
-	// JS: this.geosetArray is the same reference as core.view[this.geosetKey].
-	// C++: read checked state from core::view->modelViewerGeosets (the UI-facing array) and
-	//      sync it back into geosetArray so both stay in agreement.
 	auto& geosets = core::view->modelViewerGeosets;
 	const bool has_view_geosets = !geosets.empty();
 	const size_t source_size = has_view_geosets ? geosets.size() : geosetArray.size();
@@ -1085,20 +968,12 @@ void M2LegacyRendererGL::updateGeosets() {
 	}
 }
 
-// -----------------------------------------------------------------------
-// setTransform
-// -----------------------------------------------------------------------
-
 void M2LegacyRendererGL::setTransform(const std::array<float, 3>& position, const std::array<float, 3>& rotation, const std::array<float, 3>& scale) {
 	this->position = position;
 	this->rotation = rotation;
 	this->scale_val = scale;
 	_update_model_matrix();
 }
-
-// -----------------------------------------------------------------------
-// setTransformQuat
-// -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::setTransformQuat(const std::array<float, 3>& position, const std::array<float, 4>& quat, const std::array<float, 3>& scale) {
 	const float px = position[0], py = position[1], pz = position[2];
@@ -1128,10 +1003,6 @@ void M2LegacyRendererGL::setTransformQuat(const std::array<float, 3>& position, 
 	m[14] = pz;
 	m[15] = 1;
 }
-
-// -----------------------------------------------------------------------
-// _update_model_matrix
-// -----------------------------------------------------------------------
 
 void M2LegacyRendererGL::_update_model_matrix() {
 	auto& m = model_matrix;
@@ -1164,15 +1035,10 @@ void M2LegacyRendererGL::_update_model_matrix() {
 	m[15] = 1;
 }
 
-// -----------------------------------------------------------------------
-// render
-// -----------------------------------------------------------------------
-
 void M2LegacyRendererGL::render(const float* view_matrix, const float* projection_matrix) {
 	if (!shader || draw_calls.empty())
 		return;
 
-	// JS: geosetWatcher — poll core::view->modelViewerGeosets for checked state changes
 	if (reactive) {
 		auto& geosets = core::view->modelViewerGeosets;
 		bool geosets_changed = !watcher_state_initialized || geosets.size() != watcher_geoset_checked.size();
@@ -1235,7 +1101,6 @@ void M2LegacyRendererGL::render(const float* view_matrix, const float* projectio
 
 	shader->set_uniform_3f("u_tex_sample_alpha", 1, 1, 1);
 
-	// sort draw calls: opaque first, then transparent
 	std::vector<const M2LegacyDrawCall*> sorted_calls;
 	sorted_calls.reserve(draw_calls.size());
 	for (const auto& dc : draw_calls)
@@ -1309,10 +1174,6 @@ void M2LegacyRendererGL::render(const float* view_matrix, const float* projectio
 	ctx.set_cull_face(false);
 }
 
-// -----------------------------------------------------------------------
-// getBoundingBox
-// -----------------------------------------------------------------------
-
 std::optional<M2LegacyRendererGL::BoundingBoxResult> M2LegacyRendererGL::getBoundingBox() {
 	if (!m2 || m2->boundingBox.min.empty())
 		return std::nullopt;
@@ -1326,18 +1187,12 @@ std::optional<M2LegacyRendererGL::BoundingBoxResult> M2LegacyRendererGL::getBoun
 	return result;
 }
 
-// -----------------------------------------------------------------------
-// _dispose_skin
-// -----------------------------------------------------------------------
-
 void M2LegacyRendererGL::_dispose_skin() {
 	for (auto& vao : vaos)
 		vao->dispose();
 
 	vaos.clear();
 
-	// Delete GPU buffer objects (WebGL GC handles this automatically;
-	// in desktop GL we must free explicitly).
 	if (!buffers.empty())
 		glDeleteBuffers(static_cast<GLsizei>(buffers.size()), buffers.data());
 	buffers.clear();
@@ -1348,13 +1203,7 @@ void M2LegacyRendererGL::_dispose_skin() {
 		geosetArray.clear();
 }
 
-// -----------------------------------------------------------------------
-// dispose
-// -----------------------------------------------------------------------
-
 void M2LegacyRendererGL::dispose() {
-	// JS: this.geosetWatcher?.(); this.wireframeWatcher?.();
-	// C++ equivalent: clear polling watcher state so it cannot fire after disposal.
 	watcher_geoset_checked.clear();
 	watcher_state_initialized = false;
 

@@ -12,7 +12,6 @@
 CSVWriter::CSVWriter(const std::filesystem::path& out)
 	: out(out) {}
 
-// Replaces JS variadic addField(...fields); single-string and vector overloads cover the same call sites.
 void CSVWriter::addField(const std::string& field) {
 	fields.push_back(field);
 }
@@ -26,14 +25,12 @@ void CSVWriter::addRow(const std::unordered_map<std::string, std::string>& row) 
 }
 
 std::string CSVWriter::escapeCSVField(const std::string& value) const {
-	// JS checks value === null || value === undefined; the row map stores plain strings, so callers must pre-convert nulls to "".
 	if (value.empty())
 		return "";
 
 	if (value.find(';') != std::string::npos ||
 		value.find('"') != std::string::npos ||
 		value.find('\n') != std::string::npos) {
-		// Escape double quotes by doubling them
 		std::string escaped;
 		escaped.reserve(value.size() + 2);
 		escaped += '"';
@@ -50,7 +47,6 @@ std::string CSVWriter::escapeCSVField(const std::string& value) const {
 	return value;
 }
 
-// JS original is async (returns a Promise); C++ port is synchronous and blocks the calling thread.
 void CSVWriter::write(bool overwrite /* = true */) {
 	// Don't bother writing an empty CSV file.
 	if (rows.empty())

@@ -29,10 +29,7 @@ License: MIT
 #include <optional>
 #include <unordered_map>
 
-// -----------------------------------------------------------------------
 // vertex shader name to ID mapping (matches vertex shader switch cases)
-// -----------------------------------------------------------------------
-
 static const std::unordered_map<std::string_view, int> VERTEX_SHADER_IDS = {
 {"Diffuse_T1", 0},
 {"Diffuse_Env", 1},
@@ -99,16 +96,15 @@ static const std::unordered_map<std::string_view, int> PIXEL_SHADER_IDS = {
 // must match MAX_BONES in m2.vertex.shader
 static constexpr int MAX_BONES = 256;
 
-// M2 blend mode index → EGX blend mode (GLContext::BlendMode)
 static constexpr std::array<int, 8> M2BLEND_TO_EGX = {
-	gl::BlendMode::OPAQUE,       // M2 blend 0
-	gl::BlendMode::ALPHA_KEY,    // M2 blend 1
-	gl::BlendMode::ALPHA,        // M2 blend 2
-	gl::BlendMode::NO_ALPHA_ADD, // M2 blend 3
-	gl::BlendMode::ADD,          // M2 blend 4
-	gl::BlendMode::MOD,          // M2 blend 5
-	gl::BlendMode::MOD2X,        // M2 blend 6
-	gl::BlendMode::BLEND_ADD     // M2 blend 7
+	gl::BlendMode::OPAQUE,
+	gl::BlendMode::ALPHA_KEY,
+	gl::BlendMode::ALPHA,
+	gl::BlendMode::NO_ALPHA_ADD,
+	gl::BlendMode::ADD,
+	gl::BlendMode::MOD,
+	gl::BlendMode::MOD2X,
+	gl::BlendMode::BLEND_ADD
 };
 
 // identity matrix
@@ -132,10 +128,6 @@ static std::future<void> as_async_compat(Fn&& fn) {
 	}
 	return p.get_future();
 }
-
-// -----------------------------------------------------------------------
-// Free-function math helpers (matching JS module-level functions exactly)
-// -----------------------------------------------------------------------
 
 static void mat4_multiply(float* out, const float* a, const float* b) {
 const float a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
@@ -278,11 +270,6 @@ out[2] = scale0 * az + scale1 * bz;
 out[3] = scale0 * aw + scale1 * bw;
 }
 
-// -----------------------------------------------------------------------
-// Helpers to extract typed data from M2Value variant
-// -----------------------------------------------------------------------
-
-// Extract uint32_t timestamp from M2Value (timestamps are stored as uint32_t)
 static uint32_t m2value_to_uint32(const M2Value& v) {
 if (auto* val = std::get_if<uint32_t>(&v))
 return *val;
@@ -293,19 +280,12 @@ return static_cast<uint32_t>(*val);
 return 0;
 }
 
-// Extract float3/float4 from M2Value (values are stored as std::vector<float>)
 static const std::vector<float>& m2value_to_vec(const M2Value& v) {
 static const std::vector<float> empty;
 if (auto* val = std::get_if<std::vector<float>>(&v))
 return *val;
 return empty;
 }
-
-// -----------------------------------------------------------------------
-// Template: bone matrix calculation shared between M2Bone and SKELBone sources
-// Both structs have identical fields (parentBone, pivot, boneID, M2Track fields)
-// Templated on both structural (hierarchy/pivot) and animation (track data) bone types
-// -----------------------------------------------------------------------
 
 template<typename StructuralBoneT, typename AnimBoneT>
 static void calc_all_bones(
@@ -445,10 +425,6 @@ for (size_t i = 0; i < bone_count; i++)
 calc_bone(i);
 }
 
-// -----------------------------------------------------------------------
-// Constructor
-// -----------------------------------------------------------------------
-
 M2RendererGL::M2RendererGL(BufferWrapper& data, gl::GLContext& gl_context, bool reactive, bool useRibbon)
 : data_ptr(&data)
 , ctx(gl_context)
@@ -458,16 +434,12 @@ M2RendererGL::M2RendererGL(BufferWrapper& data, gl::GLContext& gl_context, bool 
 m2 = nullptr;
 syncID = -1;
 
-// rendering state: vaos, textures, default_texture, buffers, draw_calls, indices_data default constructed
-
-// skeleton: skelLoader, childSkelLoader, childAnimKeys default constructed
-
 // animation state
 bones_m2 = nullptr;
 bones_skel = nullptr;
 current_anim_from_skel = false;
 current_anim_from_child = false;
-current_animation = -1; // null equivalent
+current_animation = -1;
 current_anim_index = -1;
 animation_time = 0;
 animation_paused = false;
@@ -490,24 +462,14 @@ position_ = {0, 0, 0};
 rotation_ = {0, 0, 0};
 scale_ = {1, 1, 1};
 
-// material data: material_props, shader_map default constructed
 }
-
-// -----------------------------------------------------------------------
-// static load_shaders
-// -----------------------------------------------------------------------
 
 std::unique_ptr<gl::ShaderProgram> M2RendererGL::load_shaders(gl::GLContext& ctx) {
 return shaders::create_program(ctx, "m2");
 }
 
-// -----------------------------------------------------------------------
-// load
-// -----------------------------------------------------------------------
-
 std::future<void> M2RendererGL::load() {
 return as_async_compat([this]() {
-	// JS accesses core.view.casc directly; auto-resolve when setCASCSource() was not called.
 	if (!casc_source_ && core::view && core::view->casc)
 		casc_source_ = core::view->casc;
 
@@ -518,8 +480,6 @@ return as_async_compat([this]() {
 	// load shader program
 	shader = M2RendererGL::load_shaders(ctx);
 
-	// allocate bone UBO and bind `VsBoneUbo` to binding point 0 (matches JS
-	// `create_bones_ubo` in renderer_utils.js).
 	bones_ubo = renderer_utils::create_bones_ubo(*shader, ctx, bones_count());
 
 	// create texture transform matrices
@@ -568,10 +528,6 @@ return as_async_compat([this]() {
 });
 }
 
-// -----------------------------------------------------------------------
-// _create_default_texture
-// -----------------------------------------------------------------------
-
 void M2RendererGL::_create_default_texture() {
 const uint8_t pixels[4] = {87, 175, 226, 255}; // 0x57afe2 blue
 default_texture = std::make_unique<gl::GLTexture>(ctx);
@@ -579,10 +535,6 @@ gl::TextureOptions opts;
 opts.has_alpha = false;
 default_texture->set_rgba(pixels, 1, 1, opts);
 }
-
-// -----------------------------------------------------------------------
-// _load_textures
-// -----------------------------------------------------------------------
 
 std::future<void> M2RendererGL::_load_textures() {
 return as_async_compat([this]() {
@@ -620,10 +572,6 @@ logging::write(std::format("Failed to load texture {}: {}", texture.fileDataID, 
 });
 }
 
-// -----------------------------------------------------------------------
-// loadSkin
-// -----------------------------------------------------------------------
-
 std::future<void> M2RendererGL::loadSkin(int index) {
 return as_async_compat([this, index]() {
 _dispose_skin();
@@ -634,7 +582,7 @@ auto& skin = *m2->getSkin(static_cast<uint32_t>(index)).get();
 _create_skeleton().get();
 
 // build interleaved vertex buffer
-// format: position(3f) + normal(3f) + bone_idx(4ub) + bone_weight(4ub) + uv1(2f) + uv2(2f) = 48 bytes
+// format: position(3f) + normal(3f) + bone_idx(4ub) + bone_weight(4ub) + uv(2f) + uv(2f) = 48 bytes
 const size_t vertex_count = m2->vertices.size() / 3;
 const size_t stride = 48;
 std::vector<uint8_t> vertex_data(vertex_count * stride);
@@ -667,7 +615,7 @@ vertex_data[offset + 29] = m2->boneWeights[bone_idx + 1];
 vertex_data[offset + 30] = m2->boneWeights[bone_idx + 2];
 vertex_data[offset + 31] = m2->boneWeights[bone_idx + 3];
 
-// texcoord1
+// texcoord
 std::memcpy(&vertex_data[offset + 32], &m2->uv[uv_idx], sizeof(float));
 std::memcpy(&vertex_data[offset + 36], &m2->uv[uv_idx + 1], sizeof(float));
 
@@ -704,7 +652,7 @@ vao->ebo = ebo;
 // set up vertex attributes
 vao->setup_m2_vertex_format();
 
-// wireframe index buffer (line pairs from triangles)
+// wireframe index buffer
 {
 const auto wireframe_data = gl::VertexArray::triangles_to_lines(indices_data.data(), indices_data.size());
 vao->set_wireframe_index_buffer(wireframe_data.data(), wireframe_data.size());
@@ -723,7 +671,6 @@ draw_calls.clear();
 for (size_t i = 0; i < skin.subMeshes.size(); i++) {
 const auto& submesh = skin.subMeshes[i];
 
-// find texture unit matching this submesh
 const TextureUnit* tex_unit = nullptr;
 for (const auto& tu : skin.textureUnits) {
 if (tu.skinSectionIndex == static_cast<uint16_t>(i)) {
@@ -758,7 +705,6 @@ if (combo_idx < m2->textureCombos.size())
 tex_indices[j] = static_cast<int>(m2->textureCombos[combo_idx]);
 }
 
-// get vertex shader ID
 const auto vs_name = shader_mapper::getVertexShader(tex_unit->textureCount, tex_unit->shaderID);
 if (vs_name.has_value()) {
 auto it = VERTEX_SHADER_IDS.find(vs_name.value());
@@ -766,7 +712,6 @@ if (it != VERTEX_SHADER_IDS.end())
 vertex_shader = it->second;
 }
 
-// get pixel shader ID
 const auto ps_name = shader_mapper::getPixelShader(tex_unit->textureCount, tex_unit->shaderID);
 if (ps_name.has_value()) {
 auto it = PIXEL_SHADER_IDS.find(ps_name.value());
@@ -776,7 +721,6 @@ pixel_shader = it->second;
 
 if (tex_unit->materialIndex < m2->materials.size()) {
 const auto& mat = m2->materials[tex_unit->materialIndex];
-// apply M2 blend mode index → EGX blend mode mapping
 if (mat.blendingMode < static_cast<uint16_t>(M2BLEND_TO_EGX.size()))
 blend_mode = M2BLEND_TO_EGX[mat.blendingMode];
 else
@@ -785,7 +729,6 @@ flags = mat.flags;
 material_props[tex_indices[0]] = { blend_mode, flags };
 }
 
-// texture transform combo indices
 if (tex_unit->textureTransformComboIndex < m2->textureTransformsLookup.size()) {
 const int idx0 = m2->textureTransformsLookup[tex_unit->textureTransformComboIndex];
 if (idx0 >= 0 && static_cast<size_t>(idx0) < m2->textureTransforms.size())
@@ -797,7 +740,6 @@ if (idx1 >= 0 && static_cast<size_t>(idx1) < m2->textureTransforms.size())
 tex_mtx_idxs[1] = idx1;
 }
 
-// texture weight combo index
 if (tex_unit->textureWeightComboIndex < m2->transparencyLookup.size()) {
 const int idx = m2->transparencyLookup[tex_unit->textureWeightComboIndex];
 if (idx >= 0 && static_cast<size_t>(idx) < m2->textureWeights.size())
@@ -857,7 +799,6 @@ geoset_mapper::map(mapper_geosets);
 for (size_t i = 0; i < mapper_geosets.size() && i < geosetArray.size(); i++)
 geosetArray[i].label = mapper_geosets[i].label;
 
-// JS: core.view[this.geosetKey] = this.geosetArray — copy full mapped array into view.
 auto& geosets = _get_geoset_view();
 geosets.clear();
 for (const auto& entry : geosetArray) {
@@ -873,13 +814,8 @@ updateGeosets();
 });
 }
 
-// -----------------------------------------------------------------------
-// _create_skeleton
-// -----------------------------------------------------------------------
-
 std::future<void> M2RendererGL::_create_skeleton() {
 return as_async_compat([this]() {
-	// reset bone pointers
 	bones_m2 = nullptr;
 	bones_skel = nullptr;
 
@@ -895,8 +831,6 @@ return as_async_compat([this]() {
 				auto parent_skel = std::make_unique<SKELLoader>(*parent_buf);
 				parent_skel->load();
 
-				// track which animations come from child vs parent
-				// child skeleton's .anim files have different data layouts than parent's bone offsets expect
 				std::set<std::string> child_anim_keys;
 				for (const auto& entry : skel->animFileIDs) {
 					if (entry.fileDataID > 0) {
@@ -924,7 +858,6 @@ return as_async_compat([this]() {
 		}
 	}
 
-	// fall back to m2->bones if no skel loaded
 	if (!bones_skel && !m2->bones.empty())
 		bones_m2 = &m2->bones;
 
@@ -936,7 +869,6 @@ return as_async_compat([this]() {
 
 	bone_matrices.resize(bc * 16);
 
-	// initialize to identity
 	for (size_t i = 0; i < bc; i++) {
 		std::copy(M2_IDENTITY_MAT4.begin(), M2_IDENTITY_MAT4.end(),
 			bone_matrices.begin() + static_cast<ptrdiff_t>(i * 16));
@@ -962,20 +894,14 @@ return as_async_compat([this]() {
 });
 }
 
-// -----------------------------------------------------------------------
-// playAnimation
-// -----------------------------------------------------------------------
-
 std::future<void> M2RendererGL::playAnimation(int index) {
 return as_async_compat([this, index]() {
-// determine animation source: default to skelLoader or m2
 bool use_skel = (skelLoader != nullptr);
 bool use_child = false;
 int anim_index = index;
 
-// check if this animation should come from child skeleton
+// child skel is authoritative; try it first, fall back to parent
 if (childSkelLoader && !childAnimKeys.empty()) {
-// access primary source animations (M2Animation and SKELAnimation have same layout)
 if (use_skel) {
 if (index >= 0 && static_cast<size_t>(index) < skelLoader->animations.size()) {
 const auto& anim = skelLoader->animations[static_cast<size_t>(index)];
@@ -1033,7 +959,6 @@ current_anim_index = anim_index;
 current_animation = index;
 animation_time = 0;
 
-// reset global sequence times from the animation source's globalLoops
 const std::vector<int32_t>* gl_loops = nullptr;
 if (use_child && childSkelLoader)
 gl_loops = &childSkelLoader->globalLoops;
@@ -1045,13 +970,6 @@ global_seq_times.assign(gl_loops->size(), 0.0f);
 });
 }
 
-// -----------------------------------------------------------------------
-// stopAnimation
-// -----------------------------------------------------------------------
-
-// JS sets `this.current_animation = null`, `this.anim_index = null`, etc.
-// C++ uses int sentinel `-1` because the fields are `int`, not nullable —
-// every consumer treats `-1` as "no animation" identically to JS null.
 void M2RendererGL::stopAnimation() {
 animation_time = 0;
 animation_paused = false;
@@ -1070,16 +988,12 @@ _update_tex_matrices();
 _update_submesh_colors();
 _update_tex_weights();
 
-current_animation = -1; // null
+current_animation = -1;
 current_anim_index = -1;
 current_anim_from_skel = false;
 current_anim_from_child = false;
 }
 }
-
-// -----------------------------------------------------------------------
-// _get_anim_duration_ms: helper to get duration from current anim source
-// -----------------------------------------------------------------------
 
 uint32_t M2RendererGL::_get_anim_duration_ms() const {
 if (current_animation < 0 || current_anim_index < 0)
@@ -1099,22 +1013,15 @@ return m2->animations[static_cast<size_t>(current_anim_index)].duration;
 }
 }
 
-// -----------------------------------------------------------------------
-// updateAnimation
-// -----------------------------------------------------------------------
-
 void M2RendererGL::updateAnimation(float delta_time) {
 if (current_animation < 0 || !has_bones())
 return;
 
-// JS does NOT return early for zero-duration animations — it still calls
-// _update_bone_matrices(). Match that behavior.
 const uint32_t duration_ms = _get_anim_duration_ms();
 
 if (!animation_paused) {
 animation_time += delta_time;
 
-// advance global sequence timers
 const std::vector<int32_t>* gl_loops = nullptr;
 if (current_anim_from_child && childSkelLoader)
 gl_loops = &childSkelLoader->globalLoops;
@@ -1136,16 +1043,12 @@ const float duration_sec = static_cast<float>(duration_ms) / 1000.0f;
 if (duration_sec > 0)
 animation_time = std::fmod(animation_time, duration_sec);
 
-// update bone matrices and animated tracks
+// update bone matrices
 _update_bone_matrices();
 _update_tex_matrices();
 _update_submesh_colors();
 _update_tex_weights();
 }
-
-// -----------------------------------------------------------------------
-// get_animation_duration
-// -----------------------------------------------------------------------
 
 float M2RendererGL::get_animation_duration() {
 if (current_animation < 0)
@@ -1154,19 +1057,11 @@ return 0;
 return static_cast<float>(_get_anim_duration_ms()) / 1000.0f;
 }
 
-// -----------------------------------------------------------------------
-// get_animation_frame_count
-// -----------------------------------------------------------------------
-
 int M2RendererGL::get_animation_frame_count() {
 const float duration = get_animation_duration();
 // 60 fps
 return std::max(1, static_cast<int>(std::floor(duration * 60)));
 }
-
-// -----------------------------------------------------------------------
-// get_animation_frame
-// -----------------------------------------------------------------------
 
 int M2RendererGL::get_animation_frame() {
 const float duration = get_animation_duration();
@@ -1175,10 +1070,6 @@ return 0;
 
 return static_cast<int>(std::floor((animation_time / duration) * static_cast<float>(get_animation_frame_count())));
 }
-
-// -----------------------------------------------------------------------
-// set_animation_frame
-// -----------------------------------------------------------------------
 
 void M2RendererGL::set_animation_frame(int frame) {
 const int frame_count = get_animation_frame_count();
@@ -1193,17 +1084,9 @@ _update_submesh_colors();
 _update_tex_weights();
 }
 
-// -----------------------------------------------------------------------
-// set_animation_paused
-// -----------------------------------------------------------------------
-
 void M2RendererGL::set_animation_paused(bool paused) {
 animation_paused = paused;
 }
-
-// -----------------------------------------------------------------------
-// step_animation_frame
-// -----------------------------------------------------------------------
 
 void M2RendererGL::step_animation_frame(int delta) {
 const int frame = get_animation_frame();
@@ -1218,23 +1101,17 @@ new_frame = 0;
 set_animation_frame(new_frame);
 }
 
-// -----------------------------------------------------------------------
-// _update_bone_matrices
-// -----------------------------------------------------------------------
-
 void M2RendererGL::_update_bone_matrices() {
 if (!has_bones())
 return;
 
 const float time_ms = animation_time * 1000.0f; // convert to milliseconds for raw tracks
-// use the correct animation index for the skeleton we're reading from
 const int anim_idx = current_anim_index >= 0 ? current_anim_index : current_animation;
 
 // hand grip: use HandsClosed animation for finger bones
 const bool close_r = close_right_hand && hands_closed_anim_idx >= 0;
 const bool close_l = close_left_hand && hands_closed_anim_idx >= 0;
 
-// build sampling function wrappers
 auto sample_vec3 = [this](const std::vector<M2Value>& ts, const std::vector<M2Value>& vals, float t_ms, const std::array<float,3>& def) -> std::array<float,3> {
 return _sample_raw_vec3(ts, vals, t_ms, def);
 };
@@ -1242,9 +1119,6 @@ auto sample_quat = [this](const std::vector<M2Value>& ts, const std::vector<M2Va
 return _sample_raw_quat(ts, vals, t_ms);
 };
 
-// use the correct skeleton's bones for animation data
-// child animations need child's bones which have correct offsets
-// dispatch on all (structural_type, anim_type) combinations
 if (current_anim_from_child && childSkelLoader) {
 if (bones_skel)
 calc_all_bones(*bones_skel, childSkelLoader->bones, anim_idx, time_ms,
@@ -1260,7 +1134,6 @@ else if (bones_m2)
 calc_all_bones(*bones_m2, skelLoader->bones, anim_idx, time_ms,
 hands_closed_anim_idx, close_r, close_l, bone_matrices, sample_vec3, sample_quat);
 } else {
-// animation tracks come from m2->bones (M2Bone)
 if (bones_skel)
 calc_all_bones(*bones_skel, m2->bones, anim_idx, time_ms,
 hands_closed_anim_idx, close_r, close_l, bone_matrices, sample_vec3, sample_quat);
@@ -1269,10 +1142,6 @@ calc_all_bones(*bones_m2, m2->bones, anim_idx, time_ms,
 hands_closed_anim_idx, close_r, close_l, bone_matrices, sample_vec3, sample_quat);
 }
 }
-
-// -----------------------------------------------------------------------
-// _create_tex_matrices
-// -----------------------------------------------------------------------
 
 void M2RendererGL::_create_tex_matrices() {
 const auto& tt = m2->textureTransforms;
@@ -1285,11 +1154,6 @@ std::copy(M2_IDENTITY_MAT4.begin(), M2_IDENTITY_MAT4.end(),
 tex_matrices.begin() + static_cast<ptrdiff_t>(i * 16));
 }
 }
-
-// -----------------------------------------------------------------------
-// _find_time_index: binary search for largest i where times[i] <= currtime.
-// Returns SIZE_MAX for empty input (guards prevent that case in callers).
-// -----------------------------------------------------------------------
 
 size_t M2RendererGL::_find_time_index(float currtime, const std::vector<M2Value>& times) {
 if (times.size() > 1) {
@@ -1310,11 +1174,6 @@ return 0;
 }
 return SIZE_MAX;
 }
-
-// -----------------------------------------------------------------------
-// _animate_track_vec4: sample a float3/float4 track at the current time.
-// Returns std::array<float,4> (float3 tracks leave extra elements from def).
-// -----------------------------------------------------------------------
 
 std::array<float, 4> M2RendererGL::_animate_track_vec4(
 const M2Track& animblock,
@@ -1368,10 +1227,6 @@ return lerpfunc(v1, v2, std::min((at - t1) / dt, 1.0f));
 return extract_vec4(0);
 }
 }
-
-// -----------------------------------------------------------------------
-// _animate_track_scalar: sample an int16 scalar track at the current time.
-// -----------------------------------------------------------------------
 
 float M2RendererGL::_animate_track_scalar(
 const M2Track& animblock,
@@ -1427,10 +1282,6 @@ return lerpfunc(v1, v2, std::min((at - t1) / dt, 1.0f));
 return extract_scalar(0);
 }
 }
-
-// -----------------------------------------------------------------------
-// _update_tex_matrices
-// -----------------------------------------------------------------------
 
 void M2RendererGL::_update_tex_matrices() {
 if (tex_matrices.empty() || current_animation < 0)
@@ -1492,10 +1343,6 @@ tex_matrices.begin() + static_cast<ptrdiff_t>(i * 16));
 }
 }
 
-// -----------------------------------------------------------------------
-// _update_submesh_colors
-// -----------------------------------------------------------------------
-
 void M2RendererGL::_update_submesh_colors() {
 if (current_animation < 0) return;
 
@@ -1521,10 +1368,6 @@ submesh_colors[i*4 + 3] = alpha_raw / 32768.0f;
 }
 }
 
-// -----------------------------------------------------------------------
-// _update_tex_weights
-// -----------------------------------------------------------------------
-
 void M2RendererGL::_update_tex_weights() {
 if (current_animation < 0) return;
 
@@ -1541,12 +1384,6 @@ const float w_raw = _animate_track_scalar(m2->textureWeights[i], 32767.0f,
 tex_weights[i] = w_raw / 32768.0f;
 }
 }
-
-// -----------------------------------------------------------------------
-// _sample_raw_vec3
-// M2 modern format: direct per-animation keyframe arrays (M2Value variant)
-// timestamps[i] = uint32_t ms, values[i] = std::vector<float> (3 elements)
-// -----------------------------------------------------------------------
 
 std::array<float, 3> M2RendererGL::_sample_raw_vec3(
 const std::vector<M2Value>& timestamps,
@@ -1571,7 +1408,6 @@ return {v[0], v[1], v[2]};
 return default_value;
 }
 
-// binary search for keyframe
 const size_t frame = _find_time_index(time_ms, timestamps);
 
 const float t0 = static_cast<float>(m2value_to_uint32(timestamps[frame]));
@@ -1592,10 +1428,6 @@ lerp(v0[2], v1[2], alpha)
 
 return default_value;
 }
-
-// -----------------------------------------------------------------------
-// _sample_raw_quat
-// -----------------------------------------------------------------------
 
 std::array<float, 4> M2RendererGL::_sample_raw_quat(
 const std::vector<M2Value>& timestamps,
@@ -1619,7 +1451,6 @@ return {v[0], v[1], v[2], v[3]};
 return {0, 0, 0, 1};
 }
 
-// binary search for keyframe
 const size_t frame = _find_time_index(time_ms, timestamps);
 
 const float t0 = static_cast<float>(m2value_to_uint32(timestamps[frame]));
@@ -1639,13 +1470,7 @@ return out;
 return {0, 0, 0, 1};
 }
 
-// -----------------------------------------------------------------------
-// buildBoneRemapTable
-// -----------------------------------------------------------------------
-
 void M2RendererGL::buildBoneRemapTable(const std::vector<M2Bone>& char_bones) {
-// JS uses this.bones which can be either m2 bones or skel bones (whatever
-// _create_skeleton() assigned). Use whichever bone source is available.
 if (!has_bones() || char_bones.empty()) {
 bone_remap_table.clear();
 use_external_bones = false;
@@ -1656,8 +1481,6 @@ const float epsilon = 0.0001f;
 const size_t bc = bones_count();
 bone_remap_table.resize(bc);
 
-// Helper to access bone fields from whichever source is available.
-// M2Bone and SKELBone are structurally identical.
 auto get_bone_pivot = [&](size_t idx) -> const std::vector<float>& {
 if (bones_m2) return (*bones_m2)[idx].pivot;
 return (*bones_skel)[idx].pivot;
@@ -1719,10 +1542,6 @@ bone_remap_table[i] = static_cast<int16_t>(found >= 0 ? found : static_cast<int>
 use_external_bones = true;
 }
 
-// -----------------------------------------------------------------------
-// applyExternalBoneMatrices
-// -----------------------------------------------------------------------
-
 void M2RendererGL::applyExternalBoneMatrices(const float* char_bone_matrices, size_t matrix_count) {
 if (bone_remap_table.empty() || bone_matrices.empty() || !char_bone_matrices)
 return;
@@ -1736,10 +1555,6 @@ if (char_offset + 16 <= matrix_count)
 std::memcpy(&bone_matrices[local_offset], &char_bone_matrices[char_offset], 16 * sizeof(float));
 }
 }
-
-// -----------------------------------------------------------------------
-// setGeosetGroupDisplay
-// -----------------------------------------------------------------------
 
 void M2RendererGL::setGeosetGroupDisplay(int group, int value) {
 if (draw_calls.empty())
@@ -1764,18 +1579,10 @@ draw_calls[i].visible = (submesh_id == target_id);
 }
 }
 
-// -----------------------------------------------------------------------
-// hideAllGeosets
-// -----------------------------------------------------------------------
-
 void M2RendererGL::hideAllGeosets() {
 for (auto& dc : draw_calls)
 dc.visible = false;
 }
-
-// -----------------------------------------------------------------------
-// updateGeosets
-// -----------------------------------------------------------------------
 
 void M2RendererGL::updateGeosets() {
 if (!reactive || geosetArray.empty() || draw_calls.empty())
@@ -1788,17 +1595,9 @@ for (size_t i = 0; i < count; i++) {
 }
 }
 
-// -----------------------------------------------------------------------
-// updateWireframe
-// -----------------------------------------------------------------------
-
 void M2RendererGL::updateWireframe() {
 // handled in render()
 }
-
-// -----------------------------------------------------------------------
-// setTransform
-// -----------------------------------------------------------------------
 
 void M2RendererGL::setTransform(const std::array<float, 3>& position, const std::array<float, 3>& rotation, const std::array<float, 3>& scale) {
 this->position_ = position;
@@ -1807,37 +1606,20 @@ this->scale_ = scale;
 _update_model_matrix();
 }
 
-// -----------------------------------------------------------------------
-// setTransformQuat
-// -----------------------------------------------------------------------
-
 void M2RendererGL::setTransformQuat(const std::array<float, 3>& position, const std::array<float, 4>& quat, const std::array<float, 3>& scale) {
 mat4_from_quat_trs(model_matrix.data(), position.data(), quat.data(), scale.data());
 }
 
-// -----------------------------------------------------------------------
-// setTransformMatrix
-// -----------------------------------------------------------------------
-
 void M2RendererGL::setTransformMatrix(const float* matrix) {
 std::memcpy(model_matrix.data(), matrix, 16 * sizeof(float));
 }
-
-// -----------------------------------------------------------------------
-// setHandGrip
-// -----------------------------------------------------------------------
 
 void M2RendererGL::setHandGrip(bool close_right, bool close_left) {
 close_right_hand = close_right;
 close_left_hand = close_left;
 }
 
-// -----------------------------------------------------------------------
-// _update_model_matrix
-// -----------------------------------------------------------------------
-
 void M2RendererGL::_update_model_matrix() {
-// build model matrix from position/rotation/scale (TRS order)
 auto& m = model_matrix;
 const float px = position_[0], py = position_[1], pz = position_[2];
 const float rx = rotation_[0], ry = rotation_[1], rz = rotation_[2];
@@ -1872,10 +1654,6 @@ m[13] = py;
 m[14] = pz;
 m[15] = 1;
 }
-
-// -----------------------------------------------------------------------
-// render
-// -----------------------------------------------------------------------
 
 void M2RendererGL::render(const float* view_matrix, const float* projection_matrix) {
 if (!shader || draw_calls.empty())
@@ -1929,9 +1707,6 @@ shader->set_uniform_3f("u_view_up", 0, 1, 0);
 float time_sec = std::chrono::duration<float>(std::chrono::steady_clock::now() - M2_PERFORMANCE_BASELINE).count();
 shader->set_uniform_1f("u_time", time_sec);
 
-// bone matrices — upload via UBO bound to `VsBoneUbo` at binding 0.
-// Clamp to UBO capacity so the shader never indexes past `MAX_BONES`
-// (matches upstream "Fixed the Dracthyr crash issue", commit 055fafdf).
 const std::size_t bone_count = (has_bones() && bones_ubo.ubo)
 	? std::min(bones_count(), bones_ubo.max_bones)
 	: 0;
@@ -1971,7 +1746,6 @@ shader->set_uniform_1i("u_texture4", 3);
 // default texture weights
 shader->set_uniform_3f("u_tex_sample_alpha", 1, 1, 1);
 
-// sort draw calls by blend mode (opaque first, then transparent)
 std::vector<const M2DrawCall*> sorted_calls;
 sorted_calls.reserve(draw_calls.size());
 for (const auto& dc : draw_calls)
@@ -1994,7 +1768,6 @@ shader->set_uniform_1i("u_vertex_shader", dc->vertex_shader);
 shader->set_uniform_1i("u_pixel_shader", dc->pixel_shader);
 shader->set_uniform_1i("u_blend_mode", dc->blend_mode);
 
-// per-draw-call texture matrices
 {
 const int tmi0 = dc->tex_matrix_idxs[0];
 const int tmi1 = dc->tex_matrix_idxs[1];
@@ -2006,7 +1779,6 @@ shader->set_uniform_mat4("u_tex_matrix1", false, tm1);
 shader->set_uniform_mat4("u_tex_matrix2", false, tm2);
 }
 
-// per-draw-call mesh color and alpha
 {
 float cr = 1, cg = 1, cb = 1, ca = 1;
 if (dc->color_idx != -1 && dc->color_idx * 4 + 4 <= static_cast<int>(submesh_colors.size())) {
@@ -2081,13 +1853,8 @@ ctx.set_depth_write(true);
 ctx.set_cull_face(false);
 }
 
-// -----------------------------------------------------------------------
-// overrideTextureType
-// -----------------------------------------------------------------------
-
 std::future<void> M2RendererGL::overrideTextureType(uint32_t type, uint32_t fileDataID) {
 return as_async_compat([this, type, fileDataID]() {
-// JS accesses core.view.casc directly; auto-resolve if not set.
 if (!casc_source_ && core::view && core::view->casc)
 	casc_source_ = core::view->casc;
 if (!casc_source_)
@@ -2125,11 +1892,6 @@ logging::write(std::format("Failed to override texture: {}", e.what()));
 });
 }
 
-// -----------------------------------------------------------------------
-// overrideTextureTypeWithCanvas
-// (Browser API systemic translation — no HTML canvas in desktop GL)
-// -----------------------------------------------------------------------
-
 std::future<void> M2RendererGL::overrideTextureTypeWithCanvas(uint32_t type, const uint8_t* pixels, int width, int height) {
 return as_async_compat([this, type, pixels, width, height]() {
 const auto& textureTypes = m2->textureTypes;
@@ -2155,10 +1917,6 @@ textures[static_cast<int>(i)] = std::move(gl_tex);
 }
 });
 }
-
-// -----------------------------------------------------------------------
-// overrideTextureTypeWithPixels
-// -----------------------------------------------------------------------
 
 std::future<void> M2RendererGL::overrideTextureTypeWithPixels(uint32_t type, int width, int height, const uint8_t* pixels) {
 return as_async_compat([this, type, width, height, pixels]() {
@@ -2186,10 +1944,6 @@ textures[static_cast<int>(i)] = std::move(gl_tex);
 });
 }
 
-// -----------------------------------------------------------------------
-// applyReplaceableTextures
-// -----------------------------------------------------------------------
-
 std::future<void> M2RendererGL::applyReplaceableTextures(const M2DisplayInfo& displays) {
 return as_async_compat([this, displays]() {
 for (size_t i = 0; i < m2->textureTypes.size(); i++) {
@@ -2207,10 +1961,6 @@ overrideTextureType(textureType, displays.textures[slot]).get();
 });
 }
 
-// -----------------------------------------------------------------------
-// getUVLayers
-// -----------------------------------------------------------------------
-
 M2RendererGL::UVLayerResult M2RendererGL::getUVLayers() {
 if (!m2 || indices_data.empty())
 return {};
@@ -2221,7 +1971,7 @@ result.indices = &indices_data;
 {
 UVLayer layer;
 layer.name = "UV1";
-layer.data = m2->uv; // copy
+layer.data = m2->uv;
 layer.active = false;
 result.layers.push_back(std::move(layer));
 }
@@ -2229,17 +1979,13 @@ result.layers.push_back(std::move(layer));
 if (!m2->uv2.empty()) {
 UVLayer layer;
 layer.name = "UV2";
-layer.data = m2->uv2; // copy
+layer.data = m2->uv2;
 layer.active = false;
 result.layers.push_back(std::move(layer));
 }
 
 return result;
 }
-
-// -----------------------------------------------------------------------
-// getBakedGeometry
-// -----------------------------------------------------------------------
 
 std::optional<M2RendererGL::BakedGeometry> M2RendererGL::getBakedGeometry() {
 if (!m2)
@@ -2331,10 +2077,6 @@ result.normals[v_idx + 2] = out_nz;
 return result;
 }
 
-// -----------------------------------------------------------------------
-// getAttachmentTransform
-// -----------------------------------------------------------------------
-
 std::optional<std::array<float, 16>> M2RendererGL::getAttachmentTransform(uint32_t attachmentId) {
 if (!m2)
 return std::nullopt;
@@ -2342,8 +2084,6 @@ return std::nullopt;
 // try m2 first, then skelLoader (modern character models use .skel files)
 const M2Attachment* attachment = m2->getAttachmentById(attachmentId);
 if (!attachment && skelLoader) {
-// SKELAttachment has identical layout to M2Attachment — safe reinterpret_cast
-// (systemic translation: both structs are layout-identical by design)
 const auto* skel_att = skelLoader->getAttachmentById(attachmentId);
 attachment = reinterpret_cast<const M2Attachment*>(skel_att);
 }
@@ -2351,8 +2091,6 @@ attachment = reinterpret_cast<const M2Attachment*>(skel_att);
 if (!attachment)
 return std::nullopt;
 
-// JS: bone_idx is a plain number, checked with `if (bone_idx < 0 || !this.bone_matrices)`.
-// Use int16_t to detect negative sentinel values (e.g., -1 = 0xFFFF in uint16_t).
 const int16_t bone_idx = static_cast<int16_t>(attachment->bone);
 if (bone_idx < 0 || bone_matrices.empty())
 return std::nullopt;
@@ -2390,10 +2128,6 @@ mat4_multiply(final_result.data(), model_matrix.data(), result.data());
 return final_result;
 }
 
-// -----------------------------------------------------------------------
-// getBoundingBox
-// -----------------------------------------------------------------------
-
 std::optional<M2RendererGL::BoundingBoxResult> M2RendererGL::getBoundingBox() {
 if (!m2 || m2->boundingBox.min.empty() || m2->boundingBox.max.empty())
 return std::nullopt;
@@ -2409,19 +2143,12 @@ result.max = {src_max[0], src_max[2], -src_min[1]};
 return result;
 }
 
-// -----------------------------------------------------------------------
-// _dispose_skin
-// -----------------------------------------------------------------------
-
 void M2RendererGL::_dispose_skin() {
-// vao.dispose() handles vbo/ebo deletion
 for (auto& vao : vaos)
 vao->dispose();
 
 vaos.clear();
 
-// Delete GPU buffer objects (WebGL GC handles this automatically;
-// in desktop GL we must free explicitly).
 if (!buffers.empty())
 glDeleteBuffers(static_cast<GLsizei>(buffers.size()), buffers.data());
 buffers.clear();
@@ -2432,10 +2159,6 @@ indices_data.clear();
 if (!geosetArray.empty())
 geosetArray.clear();
 }
-
-// -----------------------------------------------------------------------
-// dispose
-// -----------------------------------------------------------------------
 
 void M2RendererGL::dispose() {
 	if (geosetWatcher)
@@ -2450,7 +2173,6 @@ void M2RendererGL::dispose() {
 
 _dispose_skin();
 
-// dispose bone UBO
 if (bones_ubo.ubo) {
 	bones_ubo.ubo->dispose();
 	bones_ubo.ubo.reset();
@@ -2473,11 +2195,6 @@ watcher_show_bones = false;
 watcher_state_initialized = false;
 }
 
-// -----------------------------------------------------------------------
-// _get_geoset_view — resolve geosetKey to the corresponding view vector
-// JS equivalent: core.view[this.geosetKey]
-// -----------------------------------------------------------------------
-
 std::vector<nlohmann::json>& M2RendererGL::_get_geoset_view() {
 	if (geosetKey == "creatureViewerGeosets")
 		return core::view->creatureViewerGeosets;
@@ -2485,6 +2202,5 @@ std::vector<nlohmann::json>& M2RendererGL::_get_geoset_view() {
 		return core::view->decorViewerGeosets;
 	if (geosetKey == "chrCustGeosets")
 		return core::view->chrCustGeosets;
-	// default
 	return core::view->modelViewerGeosets;
 }

@@ -23,10 +23,6 @@ static constexpr std::array<float, 16> M3_IDENTITY_MAT4 = {
 	0, 0, 0, 1
 };
 
-// -----------------------------------------------------------------------
-// M3RendererGL constructor
-// -----------------------------------------------------------------------
-
 M3RendererGL::M3RendererGL(BufferWrapper& data, gl::GLContext& gl_context, bool reactive, bool useRibbon)
 	: data_ptr(&data)
 	, ctx(gl_context)
@@ -36,17 +32,9 @@ M3RendererGL::M3RendererGL(BufferWrapper& data, gl::GLContext& gl_context, bool 
 	model_matrix = M3_IDENTITY_MAT4;
 }
 
-// -----------------------------------------------------------------------
-// load_shaders
-// -----------------------------------------------------------------------
-
 std::unique_ptr<gl::ShaderProgram> M3RendererGL::load_shaders(gl::GLContext& ctx) {
 	return shaders::create_program(ctx, "m2");
 }
-
-// -----------------------------------------------------------------------
-// load
-// -----------------------------------------------------------------------
 
 void M3RendererGL::load() {
 	m3 = std::make_unique<M3Loader>(*data_ptr);
@@ -54,8 +42,6 @@ void M3RendererGL::load() {
 
 	shader = M3RendererGL::load_shaders(ctx);
 
-	// allocate bone UBO and bind `VsBoneUbo` to binding point 0. M3 only ever
-	// uses one identity matrix at slot 0 (see render() below).
 	bones_ubo = renderer_utils::create_bones_ubo(*shader, ctx, 1);
 
 	_create_default_texture();
@@ -66,10 +52,6 @@ void M3RendererGL::load() {
 	data_ptr = nullptr;
 }
 
-// -----------------------------------------------------------------------
-// _create_default_texture
-// -----------------------------------------------------------------------
-
 void M3RendererGL::_create_default_texture() {
 	const uint8_t pixels[] = {87, 175, 226, 255}; // 0x57afe2 blue
 	default_texture = std::make_unique<gl::GLTexture>(ctx);
@@ -77,10 +59,6 @@ void M3RendererGL::_create_default_texture() {
 	opts.has_alpha = false;
 	default_texture->set_rgba(pixels, 1, 1, opts);
 }
-
-// -----------------------------------------------------------------------
-// loadLOD
-// -----------------------------------------------------------------------
 
 void M3RendererGL::loadLOD(int index) {
 	_dispose_geometry();
@@ -193,30 +171,15 @@ void M3RendererGL::loadLOD(int index) {
 	}
 }
 
-// -----------------------------------------------------------------------
-// updateGeosets
-// -----------------------------------------------------------------------
-
 void M3RendererGL::updateGeosets() {
 	// no geoset management for M3
 }
-
-// -----------------------------------------------------------------------
-// updateWireframe
-// -----------------------------------------------------------------------
 
 void M3RendererGL::updateWireframe() {
 	// handled in render()
 }
 
-// -----------------------------------------------------------------------
-// getBoundingBox
-// -----------------------------------------------------------------------
-
 std::optional<M3RendererGL::BoundingBoxResult> M3RendererGL::getBoundingBox() {
-	// JS checks `!this.m3.vertices` — an empty array [] is truthy in JS,
-	// so it passes the guard and returns {min: [Inf,Inf,Inf], max: [-Inf,-Inf,-Inf]}.
-	// Match that behavior: only check for null m3, not empty vertices.
 	if (!m3)
 		return std::nullopt;
 
@@ -241,10 +204,6 @@ std::optional<M3RendererGL::BoundingBoxResult> M3RendererGL::getBoundingBox() {
 	return bb;
 }
 
-// -----------------------------------------------------------------------
-// render
-// -----------------------------------------------------------------------
-
 void M3RendererGL::render(const float* view_matrix, const float* projection_matrix) {
 	if (!shader || draw_calls.empty())
 		return;
@@ -259,15 +218,13 @@ void M3RendererGL::render(const float* view_matrix, const float* projection_matr
 	shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
 	shader->set_uniform_3f("u_view_up", 0, 1, 0);
 
-	// JS: performance.now() * 0.001 — seconds since page load.
-	// Use static start time for small-valued monotonic floats, avoiding epoch precision loss.
 	static const auto s_render_start = std::chrono::steady_clock::now();
 	const float time = std::chrono::duration<float>(
 		std::chrono::steady_clock::now() - s_render_start
 	).count();
 	shader->set_uniform_1f("u_time", time);
 
-	// set identity bone matrix for bone 0 (M3 has no skeleton) — upload via UBO
+	// set identity bone matrix for bone 0 (M3 has no skeleton)
 	shader->set_uniform_1i("u_bone_count", 1);
 	if (bones_ubo.ubo) {
 		bones_ubo.ubo->set_mat4(
@@ -346,10 +303,6 @@ void M3RendererGL::render(const float* view_matrix, const float* projection_matr
 	ctx.set_cull_face(false);
 }
 
-// -----------------------------------------------------------------------
-// _dispose_geometry
-// -----------------------------------------------------------------------
-
 void M3RendererGL::_dispose_geometry() {
 	for (auto& vao : vaos)
 		vao->dispose();
@@ -362,14 +315,9 @@ void M3RendererGL::_dispose_geometry() {
 	draw_calls.clear();
 }
 
-// -----------------------------------------------------------------------
-// dispose
-// -----------------------------------------------------------------------
-
 void M3RendererGL::dispose() {
 	_dispose_geometry();
 
-	// dispose bone UBO
 	if (bones_ubo.ubo) {
 		bones_ubo.ubo->dispose();
 		bones_ubo.ubo.reset();

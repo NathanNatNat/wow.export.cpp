@@ -32,10 +32,6 @@ static constexpr std::array<float, 16> WMO_IDENTITY_MAT4 = {
 	0, 0, 0, 1
 };
 
-// -----------------------------------------------------------------------
-// constructor
-// -----------------------------------------------------------------------
-
 WMORendererGL::WMORendererGL(BufferWrapper& data, uint32_t fileID, gl::GLContext& gl_context, bool useRibbon)
 	: data_ptr(&data)
 	, fileID(fileID)
@@ -46,8 +42,6 @@ WMORendererGL::WMORendererGL(BufferWrapper& data, uint32_t fileID, gl::GLContext
 	model_matrix = WMO_IDENTITY_MAT4;
 }
 
-// C++ extension: JS only has the (data, fileID, ctx, useRibbon) form.
-// Resolves fileID from listfile so the rest of the loader path is identical.
 WMORendererGL::WMORendererGL(BufferWrapper& data, const std::string& fileName, gl::GLContext& gl_context, bool useRibbon)
 	: data_ptr(&data)
 	, fileID(casc::listfile::getByFilename(fileName).value_or(0))
@@ -58,17 +52,9 @@ WMORendererGL::WMORendererGL(BufferWrapper& data, const std::string& fileName, g
 	model_matrix = WMO_IDENTITY_MAT4;
 }
 
-// -----------------------------------------------------------------------
-// load_shaders
-// -----------------------------------------------------------------------
-
 std::unique_ptr<gl::ShaderProgram> WMORendererGL::load_shaders(gl::GLContext& ctx) {
 	return shaders::create_program(ctx, "wmo");
 }
-
-// -----------------------------------------------------------------------
-// get_wmo_groups_view / get_wmo_sets_view
-// -----------------------------------------------------------------------
 
 std::vector<nlohmann::json>& WMORendererGL::get_wmo_groups_view() {
 	if (wmoGroupKey == "creatureViewerWMOGroups") return core::view->creatureViewerWMOGroups;
@@ -82,16 +68,7 @@ std::vector<nlohmann::json>& WMORendererGL::get_wmo_sets_view() {
 	return core::view->modelViewerWMOSets;
 }
 
-// -----------------------------------------------------------------------
-// load
-// -----------------------------------------------------------------------
-
 void WMORendererGL::load() {
-	// JS load() and its sub-methods (_load_textures, _load_groups, loadDoodadSet,
-	// updateSets) are async/await; C++ runs them synchronously on the calling
-	// thread. Doodad-set loading invoked from updateSets() during render() may
-	// stall a frame for large WMOs.
-	// JS accesses core.view.casc directly; auto-resolve when setCASCSource() was not called.
 	if (!casc_source_ && core::view && core::view->casc)
 		casc_source_ = core::view->casc;
 
@@ -118,9 +95,6 @@ void WMORendererGL::load() {
 	_setup_doodad_sets();
 
 	// setup reactive controls
-	// NOTE: JS assigns by reference: view[key] = this.groupArray.
-	// C++ copies by value. The polling mechanism in render() syncs changes from
-	// view→renderer. For renderer→view sync, we re-assign after modifications.
 	get_wmo_groups_view() = groupArray;
 	get_wmo_sets_view() = setArray;
 	{
@@ -139,10 +113,6 @@ void WMORendererGL::load() {
 	data_ptr = nullptr;
 }
 
-// -----------------------------------------------------------------------
-// _create_default_texture
-// -----------------------------------------------------------------------
-
 void WMORendererGL::_create_default_texture() {
 	const uint8_t pixels[] = {87, 175, 226, 255};
 	default_texture = std::make_unique<gl::GLTexture>(ctx);
@@ -151,24 +121,17 @@ void WMORendererGL::_create_default_texture() {
 	default_texture->set_rgba(pixels, 1, 1, opts);
 }
 
-// -----------------------------------------------------------------------
-// _load_textures
-// -----------------------------------------------------------------------
-
 void WMORendererGL::_load_textures() {
 	const auto& materials = wmo->materials;
 
 	if (useRibbon)
 		syncID = texture_ribbon::reset();
 
-	// JS: `!!wmo.textureNames` — truthy even for an empty MOTX chunk (empty object {} is truthy in JS).
-	// C++: use hasMotxChunk flag set in WMOLoader::parse_MOTX() to match JS semantics exactly.
 	const bool isClassic = wmo->hasMotxChunk;
 
 	for (size_t i = 0; i < materials.size(); i++) {
 		const auto& material = materials[i];
 
-		// resolve pixel shader for this material
 		int pixelShader = wmo_shader_mapper::MapObjDiffuse;
 		{
 			auto it = wmo_shader_mapper::WMOShaderMap.find(static_cast<int>(material.shader));
@@ -207,7 +170,6 @@ void WMORendererGL::_load_textures() {
 			if (!material.runtimeData.empty())
 				textureFileDataIDs.push_back(material.runtimeData[0]);
 		} else if (pixelShader == wmo_shader_mapper::MapObjDFShader) {
-			// DF shader with extra runtimeData textures
 			textureFileDataIDs.push_back(material.color3);
 			textureFileDataIDs.push_back(material.flags3);
 			for (const uint32_t rtd : material.runtimeData)
@@ -232,7 +194,6 @@ void WMORendererGL::_load_textures() {
 				Texture texture(material.flags, textureFileDataID);
 				auto data = texture.getTextureFile();
 				if (!data.has_value()) {
-					// JS: would throw and be caught, logging the error.
 					logging::write(std::format("Failed to load WMO texture {}: getTextureFile returned null", textureFileDataID));
 					continue;
 				}
@@ -260,10 +221,6 @@ void WMORendererGL::_load_textures() {
 		}
 	}
 }
-
-// -----------------------------------------------------------------------
-// _load_groups
-// -----------------------------------------------------------------------
 
 void WMORendererGL::_load_groups() {
 	for (uint32_t i = 0; i < wmo->groupCount; i++) {
@@ -414,7 +371,6 @@ void WMORendererGL::_load_groups() {
 			grp.visible = true;
 			grp.index = i;
 
-			// group label from MOGN
 			std::string label;
 			{
 				auto it = wmo->groupNames.find(group.nameOfs);
@@ -437,10 +393,6 @@ void WMORendererGL::_load_groups() {
 	}
 }
 
-// -----------------------------------------------------------------------
-// _setup_doodad_sets
-// -----------------------------------------------------------------------
-
 void WMORendererGL::_setup_doodad_sets() {
 	const size_t setCount = wmo->doodadSets.size();
 	doodadSets.resize(setCount, std::nullopt);
@@ -453,10 +405,6 @@ void WMORendererGL::_setup_doodad_sets() {
 		setArray.push_back(setEntry);
 	}
 }
-
-// -----------------------------------------------------------------------
-// loadDoodadSet
-// -----------------------------------------------------------------------
 
 /**
  * Load a doodad set
@@ -555,19 +503,11 @@ void WMORendererGL::loadDoodadSet(uint32_t index) {
 	core::hideToast();
 }
 
-// -----------------------------------------------------------------------
-// updateGroups
-// -----------------------------------------------------------------------
-
 void WMORendererGL::updateGroups() {
 	const auto& groups_view = get_wmo_groups_view();
 	for (size_t i = 0; i < groups.size() && i < groups_view.size(); i++)
 		groups[i].visible = groups_view[i].value("checked", true);
 }
-
-// -----------------------------------------------------------------------
-// updateSets
-// -----------------------------------------------------------------------
 
 void WMORendererGL::updateSets() {
 	if (!wmo)
@@ -584,17 +524,9 @@ void WMORendererGL::updateSets() {
 	}
 }
 
-// -----------------------------------------------------------------------
-// updateWireframe
-// -----------------------------------------------------------------------
-
 void WMORendererGL::updateWireframe() {
 	// handled in render()
 }
-
-// -----------------------------------------------------------------------
-// setTransform
-// -----------------------------------------------------------------------
 
 /**
  * Set model transformation
@@ -610,10 +542,6 @@ void WMORendererGL::setTransform(const std::array<float, 3>& position,
 	scale_ = scale;
 	_update_model_matrix();
 }
-
-// -----------------------------------------------------------------------
-// _update_model_matrix
-// -----------------------------------------------------------------------
 
 void WMORendererGL::_update_model_matrix() {
 	// build model matrix from position/rotation/scale (TRS order)
@@ -652,10 +580,6 @@ void WMORendererGL::_update_model_matrix() {
 	m[15] = 1;
 }
 
-// -----------------------------------------------------------------------
-// render
-// -----------------------------------------------------------------------
-
 /**
  * Render the model
  * @param view_matrix
@@ -665,10 +589,6 @@ void WMORendererGL::render(const float* view_matrix, const float* projection_mat
 	if (!shader)
 		return;
 
-	// NOTE: JS uses Vue $watch for reactive updates (groupWatcher, setWatcher,
-	// wireframeWatcher). C++ replaces this with per-frame polling that compares
-	// prev_group_checked/prev_set_checked. This is an architectural difference
-	// inherent to porting from a reactive framework — functionally equivalent.
 	{
 		const auto& gv = get_wmo_groups_view();
 		bool groups_changed = gv.size() != prev_group_checked.size();
@@ -801,10 +721,6 @@ void WMORendererGL::render(const float* view_matrix, const float* projection_mat
 	}
 }
 
-// -----------------------------------------------------------------------
-// updateAnimation
-// -----------------------------------------------------------------------
-
 void WMORendererGL::updateAnimation(float delta_time) {
 	// update doodad animations
 	for (auto& ds : doodadSets) {
@@ -812,15 +728,10 @@ void WMORendererGL::updateAnimation(float delta_time) {
 			continue;
 
 		for (auto& doodad : ds->renderers)
-			// JS: doodad.renderer.updateAnimation?.(delta_time) — optional chaining
 			if (doodad.renderer)
 				doodad.renderer->updateAnimation(delta_time);
 	}
 }
-
-// -----------------------------------------------------------------------
-// getBoundingBox
-// -----------------------------------------------------------------------
 
 /**
  * Get model bounding box (converted from WoW Z-up to OpenGL Y-up)
@@ -843,10 +754,6 @@ std::optional<WMORendererGL::BoundingBoxResult> WMORendererGL::getBoundingBox() 
 	bb.max = {src_max[0], src_max[2], -src_min[1]};
 	return bb;
 }
-
-// -----------------------------------------------------------------------
-// dispose
-// -----------------------------------------------------------------------
 
 void WMORendererGL::dispose() {
 	// unregister watchers
@@ -880,9 +787,7 @@ void WMORendererGL::dispose() {
 	m2_renderers.clear();
 	m2_data_buffers_.clear();
 
-	// clear arrays — JS: this.groupArray.splice(0) / this.setArray.splice(0)
-	// In JS, splice(0) clears the shared array (same reference as view), so view is also cleared.
-	// In C++, we must explicitly clear both local and view copies.
+	// clear arrays
 	groupArray.clear();
 	setArray.clear();
 	get_wmo_groups_view().clear();

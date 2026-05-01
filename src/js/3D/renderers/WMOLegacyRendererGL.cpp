@@ -22,10 +22,7 @@
 #include <cstring>
 #include <format>
 
-// -----------------------------------------------------------------------
-// legacy WMO shaders — simpler than modern WMO shaders
-// -----------------------------------------------------------------------
-
+// legacy wmo shaders are simpler
 struct WMOLegacyShaderEntry {
 	int VertexShader;
 	int PixelShader;
@@ -55,10 +52,6 @@ static constexpr std::array<float, 16> WMO_LEGACY_IDENTITY_MAT4 = {
 	0, 0, 0, 1
 };
 
-// -----------------------------------------------------------------------
-// constructor
-// -----------------------------------------------------------------------
-
 WMOLegacyRendererGL::WMOLegacyRendererGL(BufferWrapper& data, uint32_t fileID, gl::GLContext& gl_context, bool useRibbon)
 	: data_ptr(&data)
 	, fileID(fileID)
@@ -78,17 +71,9 @@ WMOLegacyRendererGL::WMOLegacyRendererGL(BufferWrapper& data, const std::string&
 	model_matrix = WMO_LEGACY_IDENTITY_MAT4;
 }
 
-// -----------------------------------------------------------------------
-// load_shaders
-// -----------------------------------------------------------------------
-
 std::unique_ptr<gl::ShaderProgram> WMOLegacyRendererGL::load_shaders(gl::GLContext& ctx) {
 	return shaders::create_program(ctx, "wmo");
 }
-
-// -----------------------------------------------------------------------
-// load
-// -----------------------------------------------------------------------
 
 void WMOLegacyRendererGL::load() {
 	if (!fileName.empty())
@@ -121,10 +106,6 @@ void WMOLegacyRendererGL::load() {
 	data_ptr = nullptr;
 }
 
-// -----------------------------------------------------------------------
-// _create_default_texture
-// -----------------------------------------------------------------------
-
 void WMOLegacyRendererGL::_create_default_texture() {
 	const uint8_t pixels[] = {87, 175, 226, 255};
 	default_texture = std::make_unique<gl::GLTexture>(ctx);
@@ -133,17 +114,13 @@ void WMOLegacyRendererGL::_create_default_texture() {
 	default_texture->set_rgba(pixels, 1, 1, opts);
 }
 
-// -----------------------------------------------------------------------
-// _load_textures
-// -----------------------------------------------------------------------
-
 void WMOLegacyRendererGL::_load_textures() {
 	const auto& materials = wmo->materials;
 
 	if (useRibbon)
 		syncID = texture_ribbon::reset();
 
-	// legacy wmos use texture names directly from MOTX
+	// legacy wmos use texture names directly
 	const auto& textureNames = wmo->textureNames;
 
 	mpq::MPQInstall* mpq = core::view->mpq.get();
@@ -174,13 +151,9 @@ void WMOLegacyRendererGL::_load_textures() {
 			int ribbonSlot = useRibbon ? texture_ribbon::addSlot() : -1;
 
 			if (ribbonSlot >= 0)
-				// JS: textureRibbon.setSlotFile(ribbonSlot, textureName, this.syncID)
-				// C++ uses setSlotFileLegacy for string paths (legacy WMO format).
 				texture_ribbon::setSlotFileLegacy(ribbonSlot, textureName, syncID);
 
 			try {
-				// JS: mpq.getFile(textureName) throws if mpq is null, caught by catch.
-				// C++ adds explicit guard — log warning instead of silently skipping.
 				if (!mpq) {
 					logging::write(std::format("Cannot load legacy WMO texture {}: MPQ source is null", textureName));
 					continue;
@@ -190,8 +163,6 @@ void WMOLegacyRendererGL::_load_textures() {
 				if (file_data.has_value()) {
 					casc::BLPImage blp(BufferWrapper(std::move(file_data.value())));
 					auto gl_tex = std::make_unique<gl::GLTexture>(ctx);
-					// JS: explicitly computes wrap_s/wrap_t from material flags 0x40/0x80.
-					// set_blp defaults use 0x1/0x2 (M2 convention). Override for WMO flags.
 					gl::BLPTextureFlags blp_flags;
 					blp_flags.flags = material.flags;
 					blp_flags.wrap_s = !(material.flags & 0x40);  // 0x40 = clamp
@@ -208,10 +179,6 @@ void WMOLegacyRendererGL::_load_textures() {
 		}
 	}
 }
-
-// -----------------------------------------------------------------------
-// _load_groups
-// -----------------------------------------------------------------------
 
 void WMOLegacyRendererGL::_load_groups() {
 	for (uint32_t i = 0; i < wmo->groupCount; i++) {
@@ -265,7 +232,7 @@ void WMOLegacyRendererGL::_load_groups() {
 				buffers.push_back(cbo);
 			}
 
-			// index buffer (managed by vao->dispose())
+			// index buffer
 			GLuint ebo;
 			glGenBuffers(1, &ebo);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
@@ -305,7 +272,6 @@ void WMOLegacyRendererGL::_load_groups() {
 			grp.visible = true;
 			grp.index = i;
 
-			// group label from MOGN
 			std::string label;
 			{
 				auto it = wmo->groupNames.find(group.nameOfs);
@@ -328,10 +294,6 @@ void WMOLegacyRendererGL::_load_groups() {
 	}
 }
 
-// -----------------------------------------------------------------------
-// _setup_doodad_sets
-// -----------------------------------------------------------------------
-
 void WMOLegacyRendererGL::_setup_doodad_sets() {
 	if (wmo->doodadSets.empty())
 		return;
@@ -347,10 +309,6 @@ void WMOLegacyRendererGL::_setup_doodad_sets() {
 		setArray.push_back(setEntry);
 	}
 }
-
-// -----------------------------------------------------------------------
-// loadDoodadSet
-// -----------------------------------------------------------------------
 
 void WMOLegacyRendererGL::loadDoodadSet(uint32_t index) {
 	if (index >= wmo->doodadSets.size())
@@ -373,9 +331,6 @@ void WMOLegacyRendererGL::loadDoodadSet(uint32_t index) {
 	mpq::MPQInstall* mpq = core::view->mpq.get();
 
 	for (uint32_t i = 0; i < count; i++) {
-		// NOTE: JS does not guard against out-of-bounds — accessing wmo.doodads[outOfRange]
-		// returns undefined, and subsequent property access throws, caught by catch.
-		// C++ adds explicit bounds check to prevent undefined behavior (deliberate improvement).
 		if (firstIndex + i >= wmo->doodads.size())
 			continue;
 
@@ -416,7 +371,6 @@ void WMOLegacyRendererGL::loadDoodadSet(uint32_t index) {
 			if (renderer) {
 				WMOLegacyDoodadInstance inst;
 				inst.renderer = renderer;
-				// apply doodad transform (convert WoW coords to OpenGL)
 				inst.position = {
 					(doodad.position.size() > 0) ? doodad.position[0] : 0.0f,
 					(doodad.position.size() > 2) ? doodad.position[2] : 0.0f,
@@ -442,13 +396,7 @@ void WMOLegacyRendererGL::loadDoodadSet(uint32_t index) {
 	core::hideToast();
 }
 
-// -----------------------------------------------------------------------
-// updateGroups
-// -----------------------------------------------------------------------
-
 void WMOLegacyRendererGL::updateGroups() {
-	// JS: this.groupArray === view.modelViewerWMOGroups (shared reference).
-	// C++: view state is a separate copy; read from view to reflect UI-driven changes.
 	if (!core::view)
 		return;
 	const auto& gv = core::view->modelViewerWMOGroups;
@@ -456,16 +404,10 @@ void WMOLegacyRendererGL::updateGroups() {
 		groups[i].visible = gv[i].value("checked", true);
 }
 
-// -----------------------------------------------------------------------
-// updateSets
-// -----------------------------------------------------------------------
-
 void WMOLegacyRendererGL::updateSets() {
 	if (!wmo || !core::view)
 		return;
 
-	// JS: this.setArray === view.modelViewerWMOSets (shared reference).
-	// C++: view state is a separate copy; read from view to reflect UI-driven changes.
 	const auto& sv = core::view->modelViewerWMOSets;
 	for (size_t i = 0; i < sv.size(); i++) {
 		const bool state = sv[i].value("checked", false);
@@ -477,10 +419,6 @@ void WMOLegacyRendererGL::updateSets() {
 	}
 }
 
-// -----------------------------------------------------------------------
-// setTransform
-// -----------------------------------------------------------------------
-
 void WMOLegacyRendererGL::setTransform(const std::array<float, 3>& position,
                                         const std::array<float, 3>& rotation,
                                         const std::array<float, 3>& scale) {
@@ -489,10 +427,6 @@ void WMOLegacyRendererGL::setTransform(const std::array<float, 3>& position,
 	scale_ = scale;
 	_update_model_matrix();
 }
-
-// -----------------------------------------------------------------------
-// _update_model_matrix
-// -----------------------------------------------------------------------
 
 void WMOLegacyRendererGL::_update_model_matrix() {
 	auto& m = model_matrix;
@@ -525,18 +459,10 @@ void WMOLegacyRendererGL::_update_model_matrix() {
 	m[15] = 1;
 }
 
-// -----------------------------------------------------------------------
-// render
-// -----------------------------------------------------------------------
-
 void WMOLegacyRendererGL::render(const float* view_matrix, const float* projection_matrix) {
 	if (!shader)
 		return;
 
-	// NOTE: JS uses Vue $watch for reactive updates (groupWatcher, setWatcher,
-	// wireframeWatcher). C++ replaces this with per-frame polling that compares
-	// prev_group_checked/prev_set_checked. This is an architectural difference
-	// inherent to porting from a reactive framework — functionally equivalent.
 	{
 		const auto& gv = core::view->modelViewerWMOGroups;
 		bool groups_changed = gv.size() != prev_group_checked.size();
@@ -664,25 +590,16 @@ void WMOLegacyRendererGL::render(const float* view_matrix, const float* projecti
 	}
 }
 
-// -----------------------------------------------------------------------
-// updateAnimation
-// -----------------------------------------------------------------------
-
 void WMOLegacyRendererGL::updateAnimation(float delta_time) {
 	for (auto& ds : doodadSets) {
 		if (!ds.has_value() || !ds->visible)
 			continue;
 
 		for (auto& doodad : ds->renderers)
-			// JS: doodad.renderer.updateAnimation?.(delta_time) — optional chaining
 			if (doodad.renderer)
 				doodad.renderer->updateAnimation(delta_time);
 	}
 }
-
-// -----------------------------------------------------------------------
-// getBoundingBox
-// -----------------------------------------------------------------------
 
 std::optional<WMOLegacyRendererGL::BoundingBoxResult> WMOLegacyRendererGL::getBoundingBox() {
 	if (!wmo)
@@ -700,13 +617,7 @@ std::optional<WMOLegacyRendererGL::BoundingBoxResult> WMOLegacyRendererGL::getBo
 	return bb;
 }
 
-// -----------------------------------------------------------------------
-// dispose
-// -----------------------------------------------------------------------
-
 void WMOLegacyRendererGL::dispose() {
-	// JS: this.groupWatcher?.(), this.setWatcher?.(), this.wireframeWatcher?.()
-	// C++ uses polling instead of Vue watchers — clearing prev_ vectors is sufficient.
 	prev_group_checked.clear();
 	prev_set_checked.clear();
 
@@ -732,9 +643,6 @@ void WMOLegacyRendererGL::dispose() {
 
 	m2_renderers.clear();
 
-	// JS: this.groupArray.splice(0) / this.setArray.splice(0).
-	// In JS, groupArray/setArray are the same reference as view.modelViewerWMOGroups/Sets,
-	// so splice(0) also empties the view property. C++ must explicitly clear view state.
 	groupArray.clear();
 	setArray.clear();
 	if (core::view) {

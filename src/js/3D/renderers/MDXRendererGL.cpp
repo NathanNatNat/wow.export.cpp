@@ -22,10 +22,6 @@
 #include <format>
 #include <set>
 
-// -----------------------------------------------------------------------
-// Free-function math helpers (matching JS module-level functions exactly)
-// -----------------------------------------------------------------------
-
 static void mat4_multiply(float* out, const float* a, const float* b) {
 	const float a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
 	const float a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
@@ -128,16 +124,12 @@ static void quat_slerp(float* out, float ax, float ay, float az, float aw, float
 	out[3] = scale0 * aw + scale1 * bw;
 }
 
-// JS: performance.now() baseline — initialized at module load time (same as JS page load)
 static const auto MDX_PERFORMANCE_BASELINE = std::chrono::steady_clock::now();
 
-// -----------------------------------------------------------------------
-// -----------------------------------------------------------------------
 static std::array<float, 3> anim_value_to_vec3(const MDXAnimValue& val) {
 	if (const auto* vec = std::get_if<std::vector<float>>(&val)) {
 		if (vec->size() >= 3)
 			return {(*vec)[0], (*vec)[1], (*vec)[2]};
-		// scalar broadcast
 		const float f = vec->empty() ? 0.0f : (*vec)[0];
 		return {f, f, f};
 	}
@@ -159,10 +151,6 @@ static std::array<float, 4> anim_value_to_vec4(const MDXAnimValue& val) {
 	return {0, 0, 0, 1};
 }
 
-// -----------------------------------------------------------------------
-// Constructor
-// -----------------------------------------------------------------------
-
 MDXRendererGL::MDXRendererGL(BufferWrapper& data, gl::GLContext& gl_context, bool reactive, bool useRibbon)
 	: data_ptr(&data)
 	, ctx(gl_context)
@@ -172,19 +160,15 @@ MDXRendererGL::MDXRendererGL(BufferWrapper& data, gl::GLContext& gl_context, boo
 	mdx = nullptr;
 	syncID = -1;
 
-	// rendering state
-	// vaos, textures, default_texture, buffers, draw_calls: default constructed
+	// rendering
 
-	// animation state
-	// nodes: default constructed (empty)
-	// node_matrices: default constructed (empty)
-	current_animation = -1; // null equivalent
+	// animation
+	current_animation = -1;
 	animation_time = 0;
 	animation_paused = false;
 
-	// reactive state
+	// reactive
 	geosetKey = "modelViewerGeosets";
-	// geosetArray: default constructed
 
 	// transforms
 	std::copy(MDX_IDENTITY_MAT4.begin(), MDX_IDENTITY_MAT4.end(), model_matrix.begin());
@@ -193,17 +177,9 @@ MDXRendererGL::MDXRendererGL(BufferWrapper& data, gl::GLContext& gl_context, boo
 	scale_val = {1, 1, 1};
 }
 
-// -----------------------------------------------------------------------
-// static load_shaders
-// -----------------------------------------------------------------------
-
 std::unique_ptr<gl::ShaderProgram> MDXRendererGL::load_shaders(gl::GLContext& ctx) {
 	return shaders::create_program(ctx, "m2");
 }
-
-// -----------------------------------------------------------------------
-// load
-// -----------------------------------------------------------------------
 
 void MDXRendererGL::load() {
 	mdx = std::make_unique<MDXLoader>(*data_ptr);
@@ -211,8 +187,6 @@ void MDXRendererGL::load() {
 
 	shader = MDXRendererGL::load_shaders(ctx);
 
-	// allocate bone UBO and bind `VsBoneUbo` to binding point 0. node_matrices
-	// will be uploaded into it each frame in render() below.
 	bones_ubo = renderer_utils::create_bones_ubo(*shader, ctx, 0);
 
 	_create_default_texture();
@@ -220,10 +194,7 @@ void MDXRendererGL::load() {
 	_create_skeleton();
 	_build_geometry();
 
-	// JS: `if (this.reactive && this.geosetArray)` — geosetArray is always truthy (even empty).
-	// In C++, always enter when reactive is true, matching JS behavior.
 	if (reactive) {
-		// JS: core.view[this.geosetKey] = this.geosetArray
 		core::view->modelViewerGeosets.clear();
 		for (const auto& entry : geosetArray) {
 			nlohmann::json j;
@@ -232,9 +203,6 @@ void MDXRendererGL::load() {
 			j["id"] = entry.id;
 			core::view->modelViewerGeosets.push_back(j);
 		}
-		// JS: this.geosetWatcher = core.view.$watch(this.geosetKey, () => this.updateGeosets(), { deep: true })
-		// JS: this.wireframeWatcher = core.view.$watch('config.modelViewerWireframe', () => {}, { deep: true })
-		// C++: initialize polling baseline after populating core::view->modelViewerGeosets
 		auto& geosets = core::view->modelViewerGeosets;
 		watcher_geoset_checked.resize(geosets.size());
 		for (size_t i = 0; i < geosets.size(); i++)
@@ -245,10 +213,6 @@ void MDXRendererGL::load() {
 	data_ptr = nullptr;
 }
 
-// -----------------------------------------------------------------------
-// _create_default_texture
-// -----------------------------------------------------------------------
-
 void MDXRendererGL::_create_default_texture() {
 	const uint8_t pixels[4] = {87, 175, 226, 255};
 	default_texture = std::make_unique<gl::GLTexture>(ctx);
@@ -256,10 +220,6 @@ void MDXRendererGL::_create_default_texture() {
 	opts.has_alpha = false;
 	default_texture->set_rgba(pixels, 1, 1, opts);
 }
-
-// -----------------------------------------------------------------------
-// _load_textures
-// -----------------------------------------------------------------------
 
 void MDXRendererGL::_load_textures() {
 	auto& tex_list = mdx->textures;
@@ -276,13 +236,9 @@ void MDXRendererGL::_load_textures() {
 		const std::string& fileName = texture.image;
 		if (!fileName.empty()) {
 			if (ribbonSlot >= 0)
-				// JS: textureRibbon.setSlotFile(ribbonSlot, fileName, this.syncID)
-				// C++ uses setSlotFileLegacy for string paths (MDX/legacy format).
-				// JS has a single function accepting both strings and numbers.
 				texture_ribbon::setSlotFileLegacy(ribbonSlot, fileName, syncID);
 
 			try {
-				// MPQ file access — get texture file data from MPQ archive
 				if (!mpq)
 					continue;
 
@@ -314,10 +270,6 @@ void MDXRendererGL::_load_textures() {
 	}
 }
 
-// -----------------------------------------------------------------------
-// _create_skeleton
-// -----------------------------------------------------------------------
-
 void MDXRendererGL::_create_skeleton() {
 	const auto& src_nodes = mdx->nodes;
 
@@ -327,9 +279,6 @@ void MDXRendererGL::_create_skeleton() {
 	}
 
 	// flatten nodes array (may have gaps)
-	// NOTE: JS uses plain number objectId — undefined values would produce NaN
-	// in matrix calculations. C++ uses std::optional<int> and skips undefined nodes,
-	// which is a deliberate improvement over JS behavior.
 	nodes.clear();
 	int maxId = 0;
 	for (size_t i = 0; i < src_nodes.size(); i++) {
@@ -344,10 +293,6 @@ void MDXRendererGL::_create_skeleton() {
 	for (int i = 0; i <= maxId; i++)
 		std::copy(MDX_IDENTITY_MAT4.begin(), MDX_IDENTITY_MAT4.end(), node_matrices.begin() + static_cast<ptrdiff_t>(i) * 16);
 }
-
-// -----------------------------------------------------------------------
-// _build_geometry
-// -----------------------------------------------------------------------
 
 void MDXRendererGL::_build_geometry() {
 	if (reactive)
@@ -372,9 +317,6 @@ void MDXRendererGL::_build_geometry() {
 			normals[i * 3 + 2] = -geoset.normals[i * 3 + 1];
 		}
 
-		// JS: `const uvs = geoset.tVertices[0] || new Float32Array(vertCount * 2);`
-		// The fallback creates a zero-filled UV array of correct size. JS does
-		// NOT flip the v-coordinate — pass UVs through verbatim.
 		std::vector<float> uvs;
 		if (!geoset.tVertices.empty() && !geoset.tVertices[0].empty()) {
 			uvs = geoset.tVertices[0];
@@ -463,7 +405,7 @@ void MDXRendererGL::_build_geometry() {
 		vao->setup_m2_separate_buffers(vbo, nbo, uvo, bibo, bwbo);
 
 		// material/texture
-		int textureId = -1;  // -1 = null
+		int textureId = -1;
 		int blendMode = 0;
 		bool twoSided = false;
 
@@ -500,21 +442,13 @@ void MDXRendererGL::_build_geometry() {
 	}
 }
 
-// -----------------------------------------------------------------------
-// playAnimation
-// -----------------------------------------------------------------------
-
 void MDXRendererGL::playAnimation(int index) {
 	current_animation = index;
 	animation_time = 0;
 }
 
-// -----------------------------------------------------------------------
-// stopAnimation
-// -----------------------------------------------------------------------
-
 void MDXRendererGL::stopAnimation() {
-	current_animation = -1; // null
+	current_animation = -1;
 	animation_time = 0;
 	animation_paused = false;
 
@@ -522,14 +456,6 @@ void MDXRendererGL::stopAnimation() {
 		std::copy(MDX_IDENTITY_MAT4.begin(), MDX_IDENTITY_MAT4.end(), node_matrices.begin());
 	}
 }
-
-// -----------------------------------------------------------------------
-// get_animation_frame_count
-//
-// Returns the integer frame count for the current sequence, derived from
-// its duration (interval[1] - interval[0], in milliseconds). Mirrors the
-// 60 fps assumption used by M2LegacyRendererGL::get_animation_frame_count.
-// -----------------------------------------------------------------------
 
 int MDXRendererGL::get_animation_frame_count() {
 	if (current_animation < 0 || !mdx)
@@ -546,10 +472,6 @@ int MDXRendererGL::get_animation_frame_count() {
 	return std::max(1, static_cast<int>(std::floor((duration_ms / 1000.0f) * 60.0f)));
 }
 
-// -----------------------------------------------------------------------
-// get_animation_frame
-// -----------------------------------------------------------------------
-
 int MDXRendererGL::get_animation_frame() {
 	if (current_animation < 0 || !mdx)
 		return 0;
@@ -564,10 +486,6 @@ int MDXRendererGL::get_animation_frame() {
 
 	return static_cast<int>(std::floor((animation_time / duration_ms) * static_cast<float>(get_animation_frame_count())));
 }
-
-// -----------------------------------------------------------------------
-// set_animation_frame
-// -----------------------------------------------------------------------
 
 void MDXRendererGL::set_animation_frame(int frame) {
 	if (current_animation < 0 || !mdx)
@@ -584,15 +502,9 @@ void MDXRendererGL::set_animation_frame(int frame) {
 	const float duration_ms = static_cast<float>(seq.interval[1]) - static_cast<float>(seq.interval[0]);
 	animation_time = (static_cast<float>(frame) / static_cast<float>(frame_count)) * duration_ms;
 
-	// Mirror updateAnimation's guard — only refresh node matrices when the
-	// skeleton is actually loaded.
 	if (!nodes.empty())
 		_update_node_matrices();
 }
-
-// -----------------------------------------------------------------------
-// step_animation_frame
-// -----------------------------------------------------------------------
 
 void MDXRendererGL::step_animation_frame(int delta) {
 	const int frame = get_animation_frame();
@@ -606,10 +518,6 @@ void MDXRendererGL::step_animation_frame(int delta) {
 
 	set_animation_frame(new_frame);
 }
-
-// -----------------------------------------------------------------------
-// updateAnimation
-// -----------------------------------------------------------------------
 
 void MDXRendererGL::updateAnimation(float delta_time) {
 	if (current_animation < 0 || nodes.empty())
@@ -633,10 +541,6 @@ void MDXRendererGL::updateAnimation(float delta_time) {
 	_update_node_matrices();
 }
 
-// -----------------------------------------------------------------------
-// _update_node_matrices
-// -----------------------------------------------------------------------
-
 void MDXRendererGL::_update_node_matrices() {
 	const float frame = static_cast<float>(mdx->sequences[static_cast<size_t>(current_animation)].interval[0]) + animation_time;
 
@@ -650,7 +554,6 @@ void MDXRendererGL::_update_node_matrices() {
 
 	std::set<int> calculated;
 
-	// recursive node calculator (lambda with capture)
 	std::function<void(MDXNode*)> calc_node = [&](MDXNode* node) {
 		if (!node || !node->objectId.has_value())
 			return;
@@ -729,10 +632,6 @@ void MDXRendererGL::_update_node_matrices() {
 		calc_node(node);
 }
 
-// -----------------------------------------------------------------------
-// _sample_vec3
-// -----------------------------------------------------------------------
-
 std::array<float, 3> MDXRendererGL::_sample_vec3(const MDXAnimVector& track, float frame) {
 	const auto& keys = track.keys;
 	if (keys.empty())
@@ -768,10 +667,6 @@ std::array<float, 3> MDXRendererGL::_sample_vec3(const MDXAnimVector& track, flo
 	};
 }
 
-// -----------------------------------------------------------------------
-// _sample_quat
-// -----------------------------------------------------------------------
-
 std::array<float, 4> MDXRendererGL::_sample_quat(const MDXAnimVector& track, float frame) {
 	const auto& keys = track.keys;
 	if (keys.empty())
@@ -803,17 +698,10 @@ std::array<float, 4> MDXRendererGL::_sample_quat(const MDXAnimVector& track, flo
 	return out;
 }
 
-// -----------------------------------------------------------------------
-// updateGeosets
-// -----------------------------------------------------------------------
-
 void MDXRendererGL::updateGeosets() {
 	if (!reactive || draw_calls.empty())
 		return;
 
-	// JS: this.geosetArray is the same reference as core.view[this.geosetKey].
-	// C++: read checked state from core::view->modelViewerGeosets (the UI-facing array) and
-	//      sync it back into geosetArray so both stay in agreement.
 	auto& geosets = core::view->modelViewerGeosets;
 	const bool has_view_geosets = !geosets.empty();
 	const size_t source_size = has_view_geosets ? geosets.size() : geosetArray.size();
@@ -828,20 +716,12 @@ void MDXRendererGL::updateGeosets() {
 	}
 }
 
-// -----------------------------------------------------------------------
-// setTransform
-// -----------------------------------------------------------------------
-
 void MDXRendererGL::setTransform(const std::array<float, 3>& position, const std::array<float, 3>& rotation, const std::array<float, 3>& scale) {
 	this->position = position;
 	this->rotation = rotation;
 	this->scale_val = scale;
 	_update_model_matrix();
 }
-
-// -----------------------------------------------------------------------
-// setTransformQuat
-// -----------------------------------------------------------------------
 
 void MDXRendererGL::setTransformQuat(const std::array<float, 3>& position, const std::array<float, 4>& quat, const std::array<float, 3>& scale) {
 	const float px = position[0], py = position[1], pz = position[2];
@@ -871,10 +751,6 @@ void MDXRendererGL::setTransformQuat(const std::array<float, 3>& position, const
 	m[14] = pz;
 	m[15] = 1;
 }
-
-// -----------------------------------------------------------------------
-// _update_model_matrix
-// -----------------------------------------------------------------------
 
 void MDXRendererGL::_update_model_matrix() {
 	auto& m = model_matrix;
@@ -907,15 +783,10 @@ void MDXRendererGL::_update_model_matrix() {
 	m[15] = 1;
 }
 
-// -----------------------------------------------------------------------
-// render
-// -----------------------------------------------------------------------
-
 void MDXRendererGL::render(const float* view_matrix, const float* projection_matrix) {
 	if (!shader || draw_calls.empty())
 		return;
 
-	// JS: geosetWatcher — poll core::view->modelViewerGeosets for checked state changes
 	if (reactive) {
 		auto& geosets = core::view->modelViewerGeosets;
 		bool geosets_changed = !watcher_state_initialized || geosets.size() != watcher_geoset_checked.size();
@@ -945,14 +816,10 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 	shader->set_uniform_mat4("u_model_matrix", false, model_matrix.data());
 	shader->set_uniform_3f("u_view_up", 0, 1, 0);
 
-	// JS: performance.now() * 0.001 — seconds since page load.
-	// C++: use module-level baseline (initialized at startup) matching JS performance.now() semantics.
 	float time_sec = std::chrono::duration<float>(std::chrono::steady_clock::now() - MDX_PERFORMANCE_BASELINE).count();
 	shader->set_uniform_1f("u_time", time_sec);
 
-	// bone matrices (mdx uses node-based skeleton) — upload via UBO.
-	// Clamp to UBO capacity so the shader never indexes past `MAX_BONES`
-	// (matches upstream "Fixed the Dracthyr crash issue", commit 055fafdf).
+	// bone matrices (mdx uses node-based skeleton)
 	const std::size_t node_count = (!nodes.empty() && bones_ubo.ubo)
 		? std::min(nodes.size(), bones_ubo.max_bones)
 		: 0;
@@ -1014,7 +881,7 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 			ctx.set_cull_mode(GL_BACK);
 		}
 
-		// bind texture — JS unconditionally binds (guaranteed non-null via fallback)
+		// bind texture
 		gl::GLTexture* texture = nullptr;
 		if (dc.textureId >= 0) {
 			auto it = textures.find(dc.textureId);
@@ -1050,10 +917,6 @@ void MDXRendererGL::render(const float* view_matrix, const float* projection_mat
 	ctx.set_cull_face(false);
 }
 
-// -----------------------------------------------------------------------
-// getBoundingBox
-// -----------------------------------------------------------------------
-
 std::optional<MDXRendererGL::BoundingBoxResult> MDXRendererGL::getBoundingBox() {
 	if (!mdx)
 		return std::nullopt;
@@ -1069,13 +932,7 @@ std::optional<MDXRendererGL::BoundingBoxResult> MDXRendererGL::getBoundingBox() 
 	return result;
 }
 
-// -----------------------------------------------------------------------
-// dispose
-// -----------------------------------------------------------------------
-
 void MDXRendererGL::dispose() {
-	// JS: this.geosetWatcher?.() and this.wireframeWatcher?.()
-	// C++: reset polling state (equivalent of unregistering the Vue watchers)
 	watcher_geoset_checked.clear();
 	watcher_state_initialized = false;
 
@@ -1085,7 +942,6 @@ void MDXRendererGL::dispose() {
 	for (auto buf : buffers)
 		glDeleteBuffers(1, &buf);
 
-	// dispose bone UBO
 	if (bones_ubo.ubo) {
 		bones_ubo.ubo->dispose();
 		bones_ubo.ubo.reset();

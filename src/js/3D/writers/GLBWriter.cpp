@@ -16,7 +16,7 @@ namespace {
 	// chunk types
 	constexpr uint32_t CHUNK_TYPE_JSON = 0x4E4F534A;
 	constexpr uint32_t CHUNK_TYPE_BIN = 0x004E4942;
-} // anonymous namespace
+}
 
 GLBWriter::GLBWriter(const std::string& json_string, BufferWrapper& bin_buffer)
 	: json_string(json_string), bin_buffer(bin_buffer) {}
