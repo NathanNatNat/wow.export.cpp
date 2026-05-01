@@ -16,8 +16,6 @@
 /**
  * Sparse PNG writer that can stitch together tiles without loading
  * the entire image into memory at once.
- *
- * JS equivalent: class TiledPNGWriter — module.exports = TiledPNGWriter
  */
 class TiledPNGWriter {
 public:
@@ -67,7 +65,7 @@ public:
 		uint32_t imageWidth;
 		uint32_t imageHeight;
 		uint32_t tileSize;
-		uint64_t expectedTiles; // JS uses 64-bit Number; uint32_t overflows for large tile grids
+		uint64_t expectedTiles;
 		double sparseRatio;
 	};
 

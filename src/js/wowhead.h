@@ -28,10 +28,6 @@ struct ParseResult {
 	std::unordered_map<int, int> equipment;
 };
 
-/**
- * Parse a Wowhead dressing-room URL into character data.
- * Throws std::runtime_error if the URL does not contain a valid hash.
- */
 ParseResult wowhead_parse(const std::string& url);
 
 } // namespace wowhead

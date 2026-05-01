@@ -16,9 +16,6 @@ class ShaderProgram;
 
 namespace shaders {
 
-/**
- * Shader manifest entry.
- */
 struct ShaderManifestEntry {
 	std::string vert;
 	std::string frag;
@@ -26,13 +23,9 @@ struct ShaderManifestEntry {
 
 /**
  * Shader manifest — maps shader names to vertex/fragment file names.
- * JS equivalent: const SHADER_MANIFEST = { ... }; module.exports = { SHADER_MANIFEST, ... }
  */
 extern const std::unordered_map<std::string, ShaderManifestEntry> SHADER_MANIFEST;
 
-/**
- * Shader source pair.
- */
 struct ShaderSource {
 	std::string vert;
 	std::string frag;
