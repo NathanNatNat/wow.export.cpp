@@ -74,11 +74,6 @@ MmapObject& MmapObject::operator=(MmapObject&& other) noexcept {
 	return *this;
 }
 
-/**
- * Map a file into memory.
- * @param path Path to the file to map.
- * @returns true on success, false on failure.
- */
 bool MmapObject::map(const std::filesystem::path& path) {
 	if (isMapped)
 		unmap();
@@ -111,8 +106,6 @@ bool MmapObject::map(const std::filesystem::path& path) {
 	size = static_cast<size_t>(fileSize.QuadPart);
 
 	if (size == 0) {
-		// JS wrapper does not reject empty files. Keep the file handle open so
-		// unmap() can close it, and treat this as a successful zero-length map.
 		data = nullptr;
 		mappingHandle = nullptr;
 		isMapped = true;
@@ -163,8 +156,6 @@ bool MmapObject::map(const std::filesystem::path& path) {
 	size = static_cast<size_t>(st.st_size);
 
 	if (size == 0) {
-		// JS wrapper does not reject empty files. Keep fd open so unmap() can
-		// close it, and treat this as a successful zero-length map.
 		data = nullptr;
 		isMapped = true;
 		lastError.clear();
@@ -185,9 +176,6 @@ bool MmapObject::map(const std::filesystem::path& path) {
 	return true;
 }
 
-/**
- * Unmap the memory-mapped file, releasing resources.
- */
 void MmapObject::unmap() {
 	if (!isMapped)
 		return;
@@ -227,11 +215,11 @@ namespace {
 std::mutex s_mutex;
 std::set<MmapObject*> virtual_files;
 
-} // anonymous namespace
+}
 
 /**
- * Create a memory-mapped file object and track it for cleanup.
- * @returns Pointer to the new MmapObject.
+ * create memory-mapped file object and track it for cleanup.
+ * @returns {object} mmap object
  */
 MmapObject* create_virtual_file() {
 	auto* mmap_obj = new MmapObject();
@@ -243,8 +231,8 @@ MmapObject* create_virtual_file() {
 }
 
 /**
- * Release all tracked memory-mapped files.
- * Swallows errors to ensure all files are attempted.
+ * release all tracked memory-mapped files.
+ * swallows errors to ensure all files are attempted.
  */
 void release_virtual_files() {
 	try {
@@ -270,4 +258,4 @@ void release_virtual_files() {
 	}
 }
 
-} // namespace mmap_util
+}

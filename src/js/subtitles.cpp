@@ -42,7 +42,6 @@ static std::optional<int> parse_sbt_int_js(std::string_view sv) {
 }
 
 static int64_t parse_sbt_timestamp(std::string_view timestamp) {
-	// Split by ':'
 	std::vector<std::string_view> parts;
 	std::size_t start = 0;
 	for (std::size_t i = 0; i <= timestamp.size(); i++) {
@@ -108,7 +107,6 @@ static std::string format_vtt_timestamp(int64_t ms) {
 }
 
 static int64_t parse_srt_timestamp(std::string_view timestamp) {
-	// Match pattern: HH:MM:SS,mmm
 	std::regex re(R"((\d{2}):(\d{2}):(\d{2}),(\d{3}))");
 	std::string ts_str(timestamp);
 	std::smatch match;
@@ -124,9 +122,6 @@ static int64_t parse_srt_timestamp(std::string_view timestamp) {
 	return static_cast<int64_t>(hours * 3600 + minutes * 60 + seconds) * 1000 + millis;
 }
 
-/**
- * Split a string by \r?\n into lines.
- */
 static std::vector<std::string> split_lines(std::string_view text) {
 	std::vector<std::string> lines;
 	std::size_t start = 0;
@@ -134,7 +129,6 @@ static std::vector<std::string> split_lines(std::string_view text) {
 	for (std::size_t i = 0; i < text.size(); i++) {
 		if (text[i] == '\n') {
 			std::size_t end = i;
-			// Strip \r before \n
 			if (end > start && text[end - 1] == '\r')
 				end--;
 			lines.emplace_back(text.substr(start, end - start));
@@ -142,16 +136,12 @@ static std::vector<std::string> split_lines(std::string_view text) {
 		}
 	}
 
-	// Last line (no trailing newline)
 	if (start <= text.size())
 		lines.emplace_back(text.substr(start));
 
 	return lines;
 }
 
-/**
- * Trim whitespace from both ends of a string.
- */
 static std::string trim(std::string_view sv) {
 	std::size_t start = 0;
 	while (start < sv.size() && (sv[start] == ' ' || sv[start] == '\t' || sv[start] == '\r' || sv[start] == '\n'))
@@ -164,9 +154,6 @@ static std::string trim(std::string_view sv) {
 	return std::string(sv.substr(start, end - start));
 }
 
-/**
- * Check if a string consists entirely of digits.
- */
 static bool is_all_digits(const std::string& s) {
 	if (s.empty())
 		return false;
@@ -238,7 +225,7 @@ static std::string sbt_to_srt(std::string_view sbt) {
 	std::string result;
 	std::size_t total_size = 0;
 	for (const auto& line : srt_lines)
-		total_size += line.size() + 1; // +1 for '\n'
+		total_size += line.size() + 1;
 	result.reserve(total_size);
 
 	for (std::size_t i = 0; i < srt_lines.size(); i++) {
@@ -309,7 +296,7 @@ static std::string srt_to_vtt(std::string_view srt) {
 	std::string result;
 	std::size_t total_size = 0;
 	for (const auto& line : vtt_lines)
-		total_size += line.size() + 1; // +1 for '\n'
+		total_size += line.size() + 1;
 	result.reserve(total_size);
 
 	for (std::size_t i = 0; i < vtt_lines.size(); i++) {
@@ -321,10 +308,6 @@ static std::string srt_to_vtt(std::string_view srt) {
 	return result;
 }
 
-/**
- * Convert subtitle text to WebVTT format, handling BOM stripping
- * and format detection.
- */
 std::string get_subtitles_vtt_from_text(std::string_view text, SubtitleFormat format) {
 	std::string str(text);
 
@@ -349,4 +332,4 @@ std::string get_subtitles_vtt(casc::CASC* casc, uint32_t file_data_id, SubtitleF
 	return get_subtitles_vtt_from_text(text, format);
 }
 
-} // namespace subtitles
+}

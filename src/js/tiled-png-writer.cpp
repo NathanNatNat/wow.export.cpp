@@ -106,7 +106,6 @@ void TiledPNGWriter::_writeTileToPixelData(const Tile& tile, std::vector<uint8_t
 
 /**
  * Write this PNG to a file.
- * Callers MUST retain the returned future and call .get() to observe write errors.
  */
 std::shared_future<void> TiledPNGWriter::write(const std::filesystem::path& file) {
 	BufferWrapper buffer = getBuffer();

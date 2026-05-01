@@ -34,9 +34,6 @@
 
 namespace {
 
-/**
- * GPU capabilities structure.
- */
 struct GLCaps {
 	int max_tex_size = 0;
 	int max_cube_size = 0;
@@ -51,9 +48,6 @@ struct GLCaps {
 	std::array<int, 2> max_viewport = {0, 0};
 };
 
-/**
- * OpenGL info result structure.
- */
 struct GLInfo {
 	std::string vendor;
 	std::string renderer;
@@ -62,9 +56,6 @@ struct GLInfo {
 	std::string error;
 };
 
-/**
- * Platform GPU info structure.
- */
 struct PlatformGPUInfo {
 	std::string name = "Unknown";
 	std::string vram = "Unknown";
@@ -73,12 +64,10 @@ struct PlatformGPUInfo {
 
 /**
  * Execute a shell command and return stdout.
- * JS: exec(cmd, { timeout: 5000 }, callback) — kills child after 5 seconds.
  * @param cmd Command to execute.
  * @returns Trimmed stdout output.
  */
 std::string exec_cmd(const std::string& cmd) {
-	// JS uses { timeout: 5000 } and terminates the child process on timeout.
 	std::string result;
 #ifdef _WIN32
 	SECURITY_ATTRIBUTES sa{};
@@ -134,7 +123,6 @@ std::string exec_cmd(const std::string& cmd) {
 	if (exitCode != 0)
 		throw std::runtime_error("Command failed with exit code " + std::to_string(exitCode));
 #else
-	// Wrap command with timeout(1) to enforce 5-second limit, matching JS behavior
 	std::string timed_cmd = "timeout 5 " + cmd;
 	FILE* pipe = popen(timed_cmd.c_str(), "r");
 	if (!pipe)
@@ -149,7 +137,6 @@ std::string exec_cmd(const std::string& cmd) {
 		throw std::runtime_error("Command failed with exit code " + std::to_string(status));
 #endif
 
-	// trim whitespace
 	auto start = result.find_first_not_of(" \t\n\r");
 	auto end = result.find_last_not_of(" \t\n\r");
 	if (start == std::string::npos)
@@ -171,13 +158,9 @@ std::string format_vram(int64_t bytes) {
 
 /**
  * Get GPU renderer/vendor info and capabilities via OpenGL.
- * Returns std::nullopt if no GL context is available (equivalent to JS returning null).
- * Returns GLInfo with error field set if an exception occurs (equivalent to JS { error: msg }).
- * Returns full GLInfo on success (equivalent to JS { vendor, renderer, caps, extensions }).
+ * @returns {object | null}
  */
 std::optional<GLInfo> get_gl_info() {
-	// Check if GL functions are available (context was created)
-	// JS: const gl = canvas.getContext('webgl'); if (!gl) return null;
 	if (!glGetString) {
 		return std::nullopt;
 	}
@@ -185,7 +168,7 @@ std::optional<GLInfo> get_gl_info() {
 	GLInfo result;
 
 	try {
-		// capability limits — using VECTORS (not COMPONENTS) to match JS WebGL queries
+		// capability limits
 		glGetIntegerv(GL_MAX_TEXTURE_SIZE, &result.caps.max_tex_size);
 		glGetIntegerv(GL_MAX_CUBE_MAP_TEXTURE_SIZE, &result.caps.max_cube_size);
 		glGetIntegerv(GL_MAX_VARYING_VECTORS, &result.caps.max_varyings);
@@ -209,8 +192,7 @@ std::optional<GLInfo> get_gl_info() {
 				result.extensions.emplace_back(ext);
 		}
 
-		// JS checks for WEBGL_debug_renderer_info extension to get vendor/renderer.
-		// In native OpenGL, GL_VENDOR and GL_RENDERER are always available.
+		// vendor/renderer
 		const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
 		const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
 		if (vendor)
@@ -240,7 +222,6 @@ int64_t get_windows_registry_vram() {
 			"Select-Object -First 1\""
 		);
 
-		// trim and parse
 		auto start = output.find_first_not_of(" \t\n\r");
 		auto end = output.find_last_not_of(" \t\n\r");
 		if (start != std::string::npos) {
@@ -257,9 +238,7 @@ int64_t get_windows_registry_vram() {
 }
 
 /**
- * Get GPU info on Windows via PowerShell CIM.
- * Replaces WMIC which was removed in Windows 11 24H2.
- * JS equivalent: Get-CimInstance Win32_VideoController | ConvertTo-Json
+ * Get GPU info on Windows via PowerShell/CIM.
  * @returns PlatformGPUInfo or std::nullopt on failure.
  */
 std::optional<PlatformGPUInfo> get_windows_gpu_info() {
@@ -273,7 +252,7 @@ std::optional<PlatformGPUInfo> get_windows_gpu_info() {
 
 		int64_t adapter_ram = gpu.value("AdapterRAM", int64_t{0});
 
-		// CIM AdapterRAM is 32-bit, try registry for accurate value on >4GB GPUs
+		// WMI AdapterRAM is 32-bit, try registry for accurate value on >4GB GPUs
 		int64_t registry_vram = get_windows_registry_vram();
 		if (registry_vram > 0)
 			adapter_ram = registry_vram;
@@ -354,7 +333,6 @@ std::optional<PlatformGPUInfo> get_macos_gpu_info() {
 		std::string output = exec_cmd("system_profiler SPDisplaysDataType");
 		PlatformGPUInfo result;
 
-		// JS: match[1].trim() — trim whitespace from regex capture group
 		auto trim = [](std::string s) {
 			s.erase(0, s.find_first_not_of(" \t\r\n"));
 			s.erase(s.find_last_not_of(" \t\r\n") + 1);
@@ -537,12 +515,9 @@ void log_gpu_info() {
 	}
 
 	// log everything together
-	// JS: if (webgl?.error) ... else if (webgl) ... else ... "GPU: WebGL unavailable"
 	if (!gl.has_value()) {
-		// JS: webgl === null — no GL context
 		logging::write("GPU: WebGL unavailable");
 	} else if (!gl->error.empty()) {
-		// JS: webgl.error — exception occurred
 		logging::write(std::format("GPU: WebGL query failed: {}", gl->error));
 	} else {
 		if (!gl->renderer.empty())

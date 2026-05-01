@@ -18,15 +18,11 @@
 
 #include <glad/gl.h>
 
-// stb_image.h is included without STB_IMAGE_IMPLEMENTATION here.
-// The implementation macro is defined in a dedicated translation unit
-// (stb-impl.cpp) to avoid linker errors if multiple files include stb_image.h.
 #include <stb_image.h>
 
 namespace {
 
-// inv_misc_questionmark — default placeholder icon (embedded JPEG bytes).
-// clang-format off
+// inv_misc_questionmark
 const uint8_t DEFAULT_ICON_JPEG[] = {
 	0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48,
 	0x00, 0x48, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43, 0x00, 0x05, 0x03, 0x04, 0x04, 0x04, 0x03, 0x05,
@@ -115,17 +111,12 @@ const uint8_t DEFAULT_ICON_JPEG[] = {
 	0x4A, 0xBD, 0x2D, 0x59, 0x46, 0x8F, 0x24, 0x8B, 0x1C, 0x6A, 0xCE, 0xEC, 0x40, 0x55, 0x51, 0xB2,
 	0x49, 0xF6, 0x14, 0xA5, 0x2A, 0x28, 0xBF, 0xFF, 0xD9
 };
-// clang-format on
 
 constexpr size_t DEFAULT_ICON_JPEG_SIZE = sizeof(DEFAULT_ICON_JPEG);
 
 uint32_t _defaultTexture = 0;
 bool _defaultTextureInit = false;
 
-/**
- * Lazily create the default placeholder icon texture from the embedded JPEG data.
- * Must be called when an OpenGL context is active.
- */
 uint32_t getDefaultTexture() {
 	if (_defaultTextureInit)
 		return _defaultTexture;
@@ -158,26 +149,17 @@ uint32_t getDefaultTexture() {
 
 constexpr int QUEUE_LIMIT = 20;
 
-/**
- * Queue entry for icon loading.
- * In JS, this held { fileDataID, rule } where rule was a CSSStyleRule.
- */
 struct QueueEntry {
 	uint32_t fileDataID;
 	std::shared_ptr<struct IconRule> rule;
 };
 
-/**
- * JS stylesheet rule analogue used by the C++ renderer.
- * selector maps to ".icon-<id>" and backgroundImage maps to texture.
- */
 struct IconRule {
 	std::string selector;
 	uint32_t fileDataID = 0;
 	uint32_t texture = 0;
 };
 
-// Dynamic rule store and lookup by fileDataID.
 std::vector<std::shared_ptr<IconRule>> _rules;
 std::unordered_map<uint32_t, std::shared_ptr<IconRule>> _rulesByFileDataID;
 
@@ -185,10 +167,9 @@ bool _loading = false;
 std::vector<QueueEntry> _queue;
 
 /**
- * Returns true if a given icon has been registered in the cache.
- * JS equivalent: iconRuleExists(selector) — checked if a CSS rule existed.
- * @param fileDataID The icon's file data ID.
- * @returns true if the icon is already registered.
+ * Returns true if a given rule exists in the dynamic stylesheet.
+ * @param {string} selector
+ * @returns {boolean}
  */
 bool iconRuleExists(const std::string& selector) {
 	return std::any_of(_rules.begin(), _rules.end(), [&](const std::shared_ptr<IconRule>& rule) {
@@ -196,11 +177,6 @@ bool iconRuleExists(const std::string& selector) {
 	});
 }
 
-/**
- * Remove a registered icon from the cache.
- * JS equivalent: removeRule(rule) — removed a CSS rule from the stylesheet.
- * @param rule Rule to remove.
- */
 void removeRule(const std::shared_ptr<IconRule>& rule) {
 	if (!rule)
 		return;
@@ -231,21 +207,6 @@ uint32_t createTextureFromRGBA(const std::vector<uint8_t>& pixels, int width, in
 	return tex;
 }
 
-/**
- * Process the next item in the icon loading queue.
- *
- * JS equivalent: processQueue() — async recursive function that processes
- * one item at a time via promise chaining (.then/.catch/.finally(() => processQueue())),
- * returning to the event loop between items.
- *
- * In the original JS:
- *   const entry = _queue.pop();
- *   core.view.casc.getFile(entry.fileDataID).then(data => {
- *       const blp = new BLPFile(data);
- *       entry.rule.style.backgroundImage = 'url(' + blp.getDataURL(0b0111) + ')';
- *   }).catch(() => {}).finally(() => processQueue());
- *
- */
 void processQueue() {
 	if (_queue.empty()) {
 		_loading = false;
@@ -278,18 +239,12 @@ void processQueue() {
 			}
 		}
 	} catch (...) {
-		// Icon failed to load. Keep placeholder texture.
+		// Icon failed to load. Keep the rule and leave it empty.
 	}
 
-	// finally(() => processQueue())
 	processQueue();
 }
 
-/**
- * Queue an icon for loading.
- * JS equivalent: queueItem(fileDataID, rule) — rule was a CSSStyleRule.
- * @param fileDataID The icon's file data ID.
- */
 void queueItem(uint32_t fileDataID, const std::shared_ptr<IconRule>& rule) {
 	_queue.push_back({fileDataID, rule});
 
@@ -297,7 +252,7 @@ void queueItem(uint32_t fileDataID, const std::shared_ptr<IconRule>& rule) {
 	// since we want to prioritize the most recently requested icons, as they're
 	// most likely the ones the user can see.
 	if (static_cast<int>(_queue.size()) > QUEUE_LIMIT) {
-		// Since we're dropping the entry, we need to make sure to remove the icon itself.
+		// Since we're dropping the rule, we need to make sure to remove the rule itself.
 		QueueEntry removed = _queue.front();
 		_queue.erase(_queue.begin());
 		removeRule(removed.rule);
@@ -307,7 +262,7 @@ void queueItem(uint32_t fileDataID, const std::shared_ptr<IconRule>& rule) {
 		processQueue();
 }
 
-} // anonymous namespace
+}
 
 namespace icon_render {
 
@@ -328,19 +283,6 @@ void loadIcon(uint32_t fileDataID) {
 	}
 }
 
-/**
- * Get the OpenGL texture handle for a loaded icon.
- *
- * This function does not exist in the original JS source. The JS module
- * only exported { loadIcon }. In JS, icons were rendered via CSS
- * background-image on dynamic stylesheet rules. In C++ with Dear ImGui,
- * we need direct access to the GL texture handle for rendering. This
- * function is a necessary C++ addition for the OpenGL-based rendering
- * approach, replacing the CSS-based icon display mechanism.
- *
- * @param fileDataID The CASC file data ID for the icon.
- * @returns OpenGL texture handle, or 0 if unavailable.
- */
 uint32_t getIconTexture(uint32_t fileDataID) {
 	auto it = _rulesByFileDataID.find(fileDataID);
 	if (it != _rulesByFileDataID.end() && it->second)
@@ -348,4 +290,4 @@ uint32_t getIconTexture(uint32_t fileDataID) {
 	return 0;
 }
 
-} // namespace icon_render
+}

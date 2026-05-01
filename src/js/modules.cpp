@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
- */
-
 #include "modules.h"
 #include "log.h"
 #include "install-type.h"
@@ -19,7 +13,6 @@
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 
-// Module headers
 #include "modules/screen_source_select.h"
 #include "modules/screen_settings.h"
 #include "modules/module_test_a.h"
@@ -52,26 +45,17 @@
 
 namespace modules {
 
-// --- File-local state ---
-
-// Module registry — uses a vector of pairs to preserve insertion order,
-// matching JS plain object iteration order (ES2015 spec for string keys).
 static std::vector<std::pair<std::string, ModuleDef>> module_registry;
 
-// Helper: find a module by name in the insertion-ordered registry.
 static auto find_module(const std::string& name) {
 	return std::find_if(module_registry.begin(), module_registry.end(),
 		[&name](const auto& entry) { return entry.first == name; });
 }
 
-// Nav buttons and context menu options use vectors of pairs to preserve
-// insertion order, matching JS Map iteration order (ES2015+).
-// (TODO #67: std::map sorted by key, losing JS insertion-order semantics.)
 static std::vector<std::pair<std::string, NavButton>> nav_button_vec;
 
 static std::vector<std::pair<std::string, ContextMenuOption>> context_menu_vec;
 
-// Helper: find entry in an insertion-ordered vector of pairs.
 template<typename T>
 static auto find_in_vec(std::vector<std::pair<std::string, T>>& vec, const std::string& key) {
 	return std::find_if(vec.begin(), vec.end(),
@@ -80,7 +64,6 @@ static auto find_in_vec(std::vector<std::pair<std::string, T>>& vec, const std::
 
 static ModuleDef* active_module = nullptr;
 
-// Cached sorted vectors for external access
 static std::vector<NavButton> sorted_nav_buttons;
 static std::vector<ContextMenuOption> sorted_context_menu_options;
 
@@ -102,8 +85,6 @@ static void update_nav_buttons() {
 	for (const auto& [name, button] : nav_button_vec)
 		buttons.push_back(button);
 
-	// JS Array.from(map.values()).sort(...) — stable sort preserving insertion
-	// order for items not in the order array (both idx == -1 → return 0).
 	std::stable_sort(buttons.begin(), buttons.end(), [&order](const NavButton& a, const NavButton& b) {
 		int idx_a = -1, idx_b = -1;
 
@@ -118,10 +99,10 @@ static void update_nav_buttons() {
 			return false;
 
 		if (idx_a == -1)
-			return false; // a goes after b
+			return false;
 
 		if (idx_b == -1)
-			return true;  // a goes before b
+			return true;
 
 		return idx_a < idx_b;
 	});
@@ -149,8 +130,6 @@ static void update_context_menu_options() {
 	for (const auto& [id, option] : context_menu_vec)
 		options.push_back(option);
 
-	// JS Array.from(map.values()).sort(...) — stable sort preserving insertion
-	// order for items not in the order array.
 	std::stable_sort(options.begin(), options.end(), [&order](const ContextMenuOption& a, const ContextMenuOption& b) {
 		int idx_a = -1, idx_b = -1;
 
@@ -184,45 +163,23 @@ static void update_context_menu_options() {
 			j["label"] = opt.label;
 			j["icon"] = opt.icon;
 			j["dev_only"] = opt.dev_only;
-			// JS stores the full option object including `action` in the view.
-			// C++ omits the handler from JSON (not serializable); the actual
-			// handler is accessible via getContextMenuOptions() which returns
-			// the C++ structs with handler function pointers.
 			core::view->modContextMenuOptions.push_back(j);
 		}
 	}
 }
 
-// wrap_module:
-// JS equivalent: wrap_module(module_name, module_def) — wraps the module's
-// register(), initialize(), and activated() functions with error handling
-// and idempotency guards.
-//
-// JS register_context:
-// In JS, the register() function receives a `register_context` object with
-// `registerNavButton(label, icon, install_types)` and `registerContextMenuOption(label, icon)`.
-// The context captures `display_label` from the nav button label. In C++, modules call
-// register_nav_button() and register_context_menu_option() directly, so the register_context
-// is implicit. display_label is updated from the nav button label after registration.
 static void wrap_module(ModuleDef& mod) {
 	std::string display_label = mod.name;
 
 	if (mod.registerModule) {
-		// The registerModule function for tabs calls register_nav_button internally.
 		mod.registerModule();
 
-		// JS: display_label = label (captured from registerNavButton callback).
-		// Look up the nav button label to update display_label for error messages.
 		auto it = find_in_vec(nav_button_vec, mod.name);
 		if (it != nav_button_vec.end())
 			display_label = it->second.label;
 	}
 
 	// wrap initialize() with idempotency guard, error handling, and activated() retry
-	// JS equivalent: wraps methods.initialize with try/catch/finally
-	// JS wraps module init in an async function allowing await inside initialize().
-	// C++ calls synchronously; modules that need async startup must block internally
-	// (e.g., via std::future or std::condition_variable).
 	if (mod.initialize) {
 		auto original_initialize = mod.initialize;
 
@@ -252,8 +209,6 @@ static void wrap_module(ModuleDef& mod) {
 			mod._tab_initializing = false;
 		};
 
-		// JS equivalent (lines 244-251): wrap activated() so initialize() is
-		// retried before calling original activated.
 		auto original_activated = mod.activated;
 		mod.activated = [&mod, original_activated]() {
 			if (!mod._tab_initialized && !mod._tab_initializing)
@@ -265,8 +220,6 @@ static void wrap_module(ModuleDef& mod) {
 	}
 }
 
-// --- Public API ---
-
 void register_nav_button(const std::string& module_name, const std::string& label,
                          const std::string& icon, uint32_t install_types) {
 	NavButton button;
@@ -275,7 +228,6 @@ void register_nav_button(const std::string& module_name, const std::string& labe
 	button.icon = icon;
 	button.installTypes = install_types;
 
-	// Update existing or insert new (preserving insertion order for new entries)
 	auto it = find_in_vec(nav_button_vec, module_name);
 	if (it != nav_button_vec.end())
 		it->second = button;
@@ -303,7 +255,6 @@ void register_context_menu_option(const std::string& id, const std::string& labe
 	option.icon = icon;
 	option.handler = action;
 
-	// Update existing or insert new (preserving insertion order for new entries)
 	auto it = find_in_vec(context_menu_vec, id);
 	if (it != context_menu_vec.end())
 		it->second = option;
@@ -333,19 +284,11 @@ void registerContextMenuOption(const std::string& id, const std::string& label,
 }
 
 void register_components() {
-	// No dynamic component registration is needed.
 	logging::write("components loaded (C++: statically linked via headers)");
 }
 
 void initialize() {
 	logging::write("initializing modules");
-
-	//         modules[name] = wrap_module(name, Vue.markRaw(module_def));
-
-	// Register all modules with their function pointers.
-	// The order matches the JS MODULES object.
-
-	// their module headers have not been created yet. They need to be ported.
 
 	auto add_module = [](const std::string& name,
 	                     std::function<void()> render_fn,
@@ -506,11 +449,9 @@ void initialize() {
 		[]() { tab_models_legacy::mounted(); },
 		[]() { tab_models_legacy::registerTab(); });
 
-	// Wrap all modules (call register, set up initialize guard)
 	for (auto& [name, mod] : module_registry)
 		wrap_module(mod);
 
-	// Build the module name list for logging (in insertion order)
 	std::string module_names;
 	for (const auto& [name, mod] : module_registry) {
 		if (!module_names.empty())
@@ -541,10 +482,6 @@ void set_active(const std::string& module_key) {
 
 			logging::write(std::format("set active module: {}", module_key));
 
-			// JS equivalent: Vue triggers activated() lifecycle hook on the
-			// keep-alive component. The wrapped activated() calls initialize()
-			// on first activation (with idempotency guard), then calls the
-			// original activated() if present.
 			if (it->second.activated)
 				it->second.activated();
 		}
@@ -564,12 +501,10 @@ void go_to_landing() {
 		set_active("tab_home");
 }
 
-// JS equivalent: proxy get 'setActive' => () => set_active(module_name)
 void ModuleDef::setActive() {
 	modules::set_active(name);
 }
 
-// JS equivalent: proxy get 'reload' => () => reload_module(module_name)
 void ModuleDef::reload() {
 	modules::reload_module(name);
 }
@@ -594,14 +529,9 @@ void reload_module(const std::string& module_key) {
 		active_module = nullptr;
 	}
 
-	// JS hot-reloads modules by invalidating require.cache and re-requiring.
-	// C++ components are statically linked — hot-reloading is not possible
-	// without a dynamic module system. This function is intentionally a no-op.
-
 	unregister_nav_button(module_key);
 	unregister_context_menu_option(module_key);
 
-	// Re-wrapping the existing module definition instead.
 	it->second._tab_initialized = false;
 	it->second._tab_initializing = false;
 	wrap_module(it->second);
@@ -639,7 +569,6 @@ void reloadAllModules() {
 		core::view->activeModule = nullptr;
 	active_module = nullptr;
 
-	// Collect module keys
 	std::vector<std::string> module_keys;
 	for (const auto& [name, mod] : module_registry)
 		module_keys.push_back(name);
@@ -649,14 +578,12 @@ void reloadAllModules() {
 		unregister_context_menu_option(module_key);
 	}
 
-	// Re-wrapping all existing module definitions instead.
 	for (auto& [name, mod] : module_registry) {
 		mod._tab_initialized = false;
 		mod._tab_initializing = false;
 		wrap_module(mod);
 	}
 
-	// Build the module name list for logging
 	std::string module_names;
 	for (const auto& [name, mod] : module_registry) {
 		if (!module_names.empty())

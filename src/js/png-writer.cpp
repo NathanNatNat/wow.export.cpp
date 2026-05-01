@@ -172,11 +172,11 @@ constexpr size_t NUM_FILTERS = 5;
 
 /**
  * Apply adaptive filtering to image data.
- * @param data          Raw pixel data.
- * @param width         Image width in pixels.
- * @param height        Image height in pixels.
- * @param bytesPerPixel Bytes per pixel.
- * @returns Filtered buffer ready for deflation.
+ * @param {Buffer} data
+ * @param {number} width
+ * @param {number} height
+ * @param {number} bytesPerPixel
+ * @returns {Buffer}
  */
 std::vector<uint8_t> filter(const uint8_t* data, uint32_t width, uint32_t height, uint32_t bytesPerPixel) {
 	size_t byteWidth = static_cast<size_t>(width) * bytesPerPixel;
@@ -207,12 +207,12 @@ std::vector<uint8_t> filter(const uint8_t* data, uint32_t width, uint32_t height
 	return raw;
 }
 
-} // anonymous namespace
+}
 
 /**
  * Construct a new PNGWriter instance.
- * @param width  Image width in pixels.
- * @param height Image height in pixels.
+ * @param {number} width
+ * @param {number} height
  */
 PNGWriter::PNGWriter(uint32_t width, uint32_t height)
 	: width(width),
@@ -230,8 +230,7 @@ std::vector<uint8_t>& PNGWriter::getPixelData() {
 }
 
 /**
- * Encode the image data as a PNG and return it in a BufferWrapper.
- * @returns BufferWrapper containing the complete PNG file.
+ * @returns {BufferWrapper}
  */
 BufferWrapper PNGWriter::getBuffer() {
 	BufferWrapper filtered(filter(data.data(), width, height, bytesPerPixel));
@@ -276,11 +275,7 @@ BufferWrapper PNGWriter::getBuffer() {
 
 /**
  * Write this PNG to a file.
- * JS: async write(file) — src/js/png-writer.js lines 247-249.
- *
- * Callers MUST retain the returned future and call .get() to observe write errors.
- *
- * @param file Path to write the PNG file to.
+ * @param {string} file
  */
 std::shared_future<void> PNGWriter::write(const std::filesystem::path& file) {
 	BufferWrapper buffer = getBuffer();
