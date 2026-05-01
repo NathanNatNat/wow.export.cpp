@@ -23,9 +23,6 @@ M2Track::M2Track(uint16_t globalSeq, uint16_t interpolation,
 	  valueOffsets(std::move(valueOffsets)) {
 }
 
-/**
- * Read a single M2 value element from a BufferWrapper.
- */
 static M2Value read_value(BufferWrapper& buf, M2DataType dataType, const char* errorPrefix = "Unknown") {
 	switch (dataType) {
 		case M2DataType::uint32:
@@ -50,9 +47,6 @@ static M2Value read_value(BufferWrapper& buf, M2DataType dataType, const char* e
 	}
 }
 
-/**
- * Get the byte size of a single element for a given data type.
- */
 static uint32_t value_size(M2DataType dataType) {
 	switch (dataType) {
 		case M2DataType::uint32:  return 4;
@@ -107,8 +101,7 @@ static std::vector<std::vector<M2Value>> read_m2_array_array_internal(
 				auto* animBuf = animFiles.at(i);
 				const uint32_t elemSize = value_size(dataType);
 				if (elemSize == 0) {
-					// Match JS: throw "Unhandled data type" immediately, before any seek.
-					arr[i][j] = read_value(*animBuf, dataType, "Unhandled"); // throws
+					arr[i][j] = read_value(*animBuf, dataType, "Unhandled");
 				} else {
 					animBuf->seek(subArrOfs + (j * elemSize));
 					arr[i][j] = read_value(*animBuf, dataType, "Unhandled");
