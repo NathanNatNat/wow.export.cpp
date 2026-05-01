@@ -13,19 +13,6 @@
 
 namespace file_field {
 
-// props: ['modelValue', 'placeholder']
-// emits: ['update:modelValue']
-
-/**
- * Invoked when the component is mounted.
- * Used to create an internal file node.
- */
-
-/**
- * Invoked when this component is unmounted.
- * Used to remove internal references to file node.
- */
-
 static void openDialog(FileFieldState& state, const std::function<void(const std::string&)>& onChange) {
 	std::string selected = pfd::select_folder("Select Directory").result();
 	if (!selected.empty()) {
@@ -38,15 +25,10 @@ static void openDialog(FileFieldState& state, const std::function<void(const std
 /**
  * HTML mark-up to render for this component.
  */
-// template: `<input type="text" :value="modelValue" :placeholder="placeholder"
-//            @focus="openDialog" @input="$emit('update:modelValue', $event.target.value)"/>`
-// Converted to ImGui below.
-
 void render(const char* id, const std::string& modelValue, const char* placeholder,
             FileFieldState& state, const std::function<void(const std::string&)>& onChange) {
 	ImGui::PushID(id);
 
-	// Sync internal buffer with external value when not actively editing.
 	if (!state.bufferInitialized || state.inputBuffer != modelValue) {
 		state.inputBuffer = modelValue;
 		state.bufferInitialized = true;
@@ -54,7 +36,6 @@ void render(const char* id, const std::string& modelValue, const char* placehold
 
 	ImGui::SetNextItemWidth(-1.0f);
 
-	// Text input — @input="$emit('update:modelValue', $event.target.value)"
 	if (ImGui::InputText("##filefield", &state.inputBuffer[0], state.inputBuffer.capacity() + 1,
 	                     ImGuiInputTextFlags_CallbackResize,
 	                     [](ImGuiInputTextCallbackData* data) -> int {
@@ -70,11 +51,9 @@ void render(const char* id, const std::string& modelValue, const char* placehold
 			onChange(state.inputBuffer);
 	}
 
-	// @focus="openDialog" — fire on the rising-edge frame the input becomes active.
 	if (ImGui::IsItemActivated())
 		openDialog(state, onChange);
 
-	// Show placeholder when empty and not focused.
 	if (state.inputBuffer.empty() && !ImGui::IsItemActive() && placeholder) {
 		const ImVec2 textPos = ImGui::GetItemRectMin();
 		ImGui::GetWindowDrawList()->AddText(

@@ -27,13 +27,10 @@ namespace itemlistbox {
  * includefilecount: If true, includes a file counter on the component.
  * unittype: Unit name for what the listbox contains. Used with includefilecount.
  */
-// props: ['items', 'filter', 'selection', 'single', 'keyinput', 'regex', 'includefilecount', 'unittype']
-// emits: ['update:selection', 'equip', 'options']
 
 /**
  * Reactive instance data.
  */
-// data: scroll, scrollRel, isScrolling, slotCount, lastSelectItem — stored in ItemListboxState
 
 /**
  * Invoked when the component is mounted.
@@ -77,9 +74,6 @@ static float itemWeight(const std::vector<ItemEntry>& filteredItems) {
  */
 static void resize(float containerHeight, float scrollerHeight, ItemListboxState& state) {
 	state.scroll = (containerHeight - scrollerHeight) * state.scrollRel;
-	// JS itemlistbox.js:155 — `Math.floor(clientHeight / 26)`. JS hard-codes 26
-	// even though CSS row height is 46px (matches base listbox slot constant).
-	// Preserved for fidelity.
 	state.slotCount = static_cast<int>(std::floor(containerHeight / 26.0f));
 }
 
@@ -137,18 +131,10 @@ static void wheelMouse(float wheelDelta, float containerHeight, float scrollerHe
 	}
 }
 
-/**
- * Helper: check if an item ID is in the selection vector.
- * JS equivalent: this.selection.includes(item) — uses object identity.
- */
 static bool isSelected(const std::vector<int>& selection, int itemId) {
 	return std::find(selection.begin(), selection.end(), itemId) != selection.end();
 }
 
-/**
- * Helper: find position of an item ID in the selection vector, or -1.
- * JS equivalent: this.selection.indexOf(item) — uses object identity.
- */
 static int selectionIndexOf(const std::vector<int>& selection, int itemId) {
 	auto it = std::find(selection.begin(), selection.end(), itemId);
 	if (it != selection.end())
@@ -156,10 +142,6 @@ static int selectionIndexOf(const std::vector<int>& selection, int itemId) {
 	return -1;
 }
 
-/**
- * Helper: find the index of an item with a given ID in the items vector, or -1.
- * JS equivalent: this.filteredItems.indexOf(item) — finds position by identity.
- */
 static int indexOfItemById(const std::vector<ItemEntry>& items, int itemId) {
 	for (size_t i = 0; i < items.size(); ++i) {
 		if (items[i].id == itemId)
@@ -168,9 +150,6 @@ static int indexOfItemById(const std::vector<ItemEntry>& items, int itemId) {
 	return -1;
 }
 
-/**
- * Convert a string to lowercase.
- */
 static std::string toLower(const std::string& s) {
 	std::string result = s;
 	std::transform(result.begin(), result.end(), result.begin(),
@@ -178,9 +157,6 @@ static std::string toLower(const std::string& s) {
 	return result;
 }
 
-/**
- * Trim whitespace from both ends of a string.
- */
 static std::string trim(const std::string& s) {
 	auto start = s.find_first_not_of(" \t\n\r\f\v");
 	if (start == std::string::npos)
@@ -227,8 +203,6 @@ static std::vector<ItemEntry> computeFilteredItems(const std::vector<ItemEntry>&
 		}
 	}
 
-	// Prune selection: remove any selected item IDs that are no longer in the filtered result.
-	// In JS, selection stores item objects and checks by reference identity.
 	bool hasChanges = false;
 	std::vector<int> newSelection;
 	for (int selectedId : selection) {
@@ -385,34 +359,24 @@ static void selectItem(int itemIndex, bool ctrlKey, bool shiftKey,
 		onSelectionChanged(newSelection);
 }
 
-/**
- * Get ImGui color for item quality.
- * Maps WoW item quality values to standard color scheme.
- */
 static ImVec4 getQualityColor(int quality) {
-	// Exact CSS hex values from app.css .item-quality-N classes.
 	switch (quality) {
-		case 0: return ImVec4(157/255.0f, 157/255.0f, 157/255.0f, 1.0f); // Poor (#9d9d9d)
-		case 1: return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);                   // Common (#ffffff)
-		case 2: return ImVec4(30/255.0f, 1.0f, 0.0f, 1.0f);              // Uncommon (#1eff00)
-		case 3: return ImVec4(0.0f, 112/255.0f, 221/255.0f, 1.0f);       // Rare (#0070dd)
-		case 4: return ImVec4(163/255.0f, 53/255.0f, 238/255.0f, 1.0f);  // Epic (#a335ee)
-		case 5: return ImVec4(1.0f, 128/255.0f, 0.0f, 1.0f);             // Legendary (#ff8000)
-		case 6: return ImVec4(230/255.0f, 204/255.0f, 128/255.0f, 1.0f); // Artifact (#e6cc80)
+		case 0: return ImVec4(157/255.0f, 157/255.0f, 157/255.0f, 1.0f);
+		case 1: return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+		case 2: return ImVec4(30/255.0f, 1.0f, 0.0f, 1.0f);
+		case 3: return ImVec4(0.0f, 112/255.0f, 221/255.0f, 1.0f);
+		case 4: return ImVec4(163/255.0f, 53/255.0f, 238/255.0f, 1.0f);
+		case 5: return ImVec4(1.0f, 128/255.0f, 0.0f, 1.0f);
+		case 6: return ImVec4(230/255.0f, 204/255.0f, 128/255.0f, 1.0f);
 		case 7: // fallthrough
-		case 8: return ImVec4(0.0f, 204/255.0f, 1.0f, 1.0f);             // Heirloom/Mythic (#00ccff)
-		default: return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);                  // Default (white)
+		case 8: return ImVec4(0.0f, 204/255.0f, 1.0f, 1.0f);
+		default: return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 }
 
 /**
- * watch: displayItems — load icons for visible items.
- */
-
-/**
  * HTML mark-up to render for this component.
  */
-// template: converted to ImGui immediate-mode rendering below.
 
 void render(const char* id,
             const std::vector<ItemEntry>& items,
@@ -428,7 +392,6 @@ void render(const char* id,
             const std::function<void(const ItemEntry&)>& onOptions) {
 	ImGui::PushID(id);
 
-	// Compute filtered items — only when inputs have actually changed.
 	{
 		const ItemEntry* curData = items.empty() ? nullptr : items.data();
 		const bool needRecompute = !state.filteredItemsCacheValid
@@ -448,12 +411,9 @@ void render(const char* id,
 	}
 	const std::vector<ItemEntry>& filteredItems = state.cachedFilteredItems;
 
-	// Get the available content region as the container dimensions.
 	const ImVec2 availSize = ImGui::GetContentRegionAvail();
 	const float containerHeight = availSize.y;
 
-	// The scroller thumb height is proportional to visible vs total items.
-	// CSS: #tab-items #listbox-items .item { height: 46px; font-size: 1.2em; }
 	const float itemHeightVal = 46.0f;
 	const int totalItems = static_cast<int>(filteredItems.size());
 	const float scrollerHeight = (totalItems > 0)
@@ -462,19 +422,13 @@ void render(const char* id,
 
 	resize(containerHeight, scrollerHeight, state);
 
-	// Compute display range.
 	const int idx = scrollIndex(filteredItems, state);
 	const int startIdx = std::max(0, idx);
 	const int endIdx = std::min(totalItems, startIdx + state.slotCount);
 
-	// Begin a child region to contain the list.
-	// <div ref="root" class="ui-listbox" @wheel="wheelMouse">
-	// CSS: .ui-listbox { border: 1px solid var(--border); box-shadow: black 0 0 3px 0px; }
-	// Box-shadow cannot be replicated in Dear ImGui; border is provided by ImGuiChildFlags_Borders.
 	ImGui::BeginChild("##itemlistbox_container", availSize, ImGuiChildFlags_Borders,
 	                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-	// Handle mouse wheel on the container.
 	if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None)) {
 		const float wheel = ImGui::GetIO().MouseWheel;
 		if (wheel != 0.0f) {
@@ -482,7 +436,6 @@ void render(const char* id,
 		}
 	}
 
-	// Handle global mouse move/up for scrollbar dragging.
 	const ImGuiIO& io = ImGui::GetIO();
 	if (state.isScrolling) {
 		moveMouse(io.MousePos.y, containerHeight, scrollerHeight, state);
@@ -491,14 +444,11 @@ void render(const char* id,
 		}
 	}
 
-	// Handle keyboard input.
 	if (keyinput) {
 		handleKey(filteredItems, selection, single, state, onSelectionChanged,
 		          containerHeight, scrollerHeight);
 	}
 
-	// Draw the scrollbar on the right side.
-	// <div class="scroller" ref="scroller" @mousedown="startMouse" :class="{ using: isScrolling }" :style="{ top: scrollOffset }"><div></div></div>
 	{
 		const ImVec2 winPos = ImGui::GetWindowPos();
 		const float scrollbarWidth = 8.0f;
@@ -507,11 +457,9 @@ void render(const char* id,
 
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-		// Scroller thumb.
 		const ImVec2 thumbMin(scrollbarX, thumbY);
 		const ImVec2 thumbMax(scrollbarX + scrollbarWidth, thumbY + scrollerHeight);
 
-		// Determine if mouse is over the thumb for hover effect.
 		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
 		const ImU32 thumbColor = thumbHovered
 			? ImGui::GetColorU32(ImGuiCol_Text)
@@ -519,44 +467,27 @@ void render(const char* id,
 
 		drawList->AddRectFilled(thumbMin, thumbMax, thumbColor, 4.0f);
 
-		// Handle mouse-down on the scroller thumb.
 		if (ImGui::IsMouseHoveringRect(thumbMin, thumbMax) && ImGui::IsMouseClicked(0)) {
 			startMouse(io.MousePos.y, state);
 		}
 	}
 
-	// Render visible items.
-	// <div v-for="(item, i) in displayItems" class="item" @click="selectItem(item, $event)" :class="{ selected: selection.includes(item) }">
-	//     <div :class="['item-icon', 'icon-' + item.icon ]"></div>
-	//     <div :class="['item-name', 'item-quality-' + item.quality]">{{ item.name }} <span class="item-id">({{ item.id }})</span></div>
-	//     <ul class="item-buttons">
-	//         <li @click.self="$emit('equip', item)">Equip</li>
-	//         <li @click.self="$emit('options', item)">Options</li>
-	//     </ul>
-	// </div>
-
-	// Reserve horizontal space on the right for the trailing widgets on each row:
-	// "(NNNNNN)" id text + Equip button + Options button + the SameLine spacings
-	// between them. Computed once per frame from the active style so the row
-	// layout adapts to font/padding changes instead of relying on a magic number.
 	const ImVec2 framePad = ImGui::GetStyle().FramePadding;
 	const float spacing = ImGui::GetStyle().ItemSpacing.x;
 	const float equipBtnW = ImGui::CalcTextSize("Equip").x + framePad.x * 2.0f;
 	const float optionsBtnW = ImGui::CalcTextSize("Options").x + framePad.x * 2.0f;
-	const float idTextW = 60.0f; // approx width for "(NNNNNN)"
+	const float idTextW = 60.0f;
 	const float reservedRight = equipBtnW + optionsBtnW + idTextW + spacing * 4.0f;
 
 	for (int i = startIdx; i < endIdx; ++i) {
 		const ItemEntry& item = filteredItems[static_cast<size_t>(i)];
 		const bool itemSelected = isSelected(selection, item.id);
 
-		// watch: displayItems — load icons for visible items.
 		icon_render::loadIcon(item.icon);
 
 
 		ImGui::PushID(i);
 
-		// Item icon (<div :class="['item-icon', 'icon-' + item.icon ]"></div>).
 		const uint32_t iconTex = icon_render::getIconTexture(item.icon);
 		if (iconTex != 0) {
 			const ImVec2 iconPos = ImGui::GetCursorScreenPos();
@@ -565,7 +496,6 @@ void render(const char* id,
 			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(iconTex)),
 			             ImVec2(ICON_SIZE, ICON_SIZE));
 
-			// Draw 1px border on top of the icon matching CSS border: 1px solid #8a8a8a.
 			const ImVec2 borderMin(iconPos.x - 1.0f, iconPos.y - 1.0f);
 			const ImVec2 borderMax(iconPos.x + ICON_SIZE + 1.0f, iconPos.y + ICON_SIZE + 1.0f);
 			ImGui::GetWindowDrawList()->AddRect(borderMin, borderMax, IM_COL32(138, 138, 138, 255));
@@ -573,39 +503,29 @@ void render(const char* id,
 			ImGui::SameLine(0.0f, 10.0f);
 		}
 
-		// Item name with quality color (<div :class="['item-name', 'item-quality-' + item.quality]">).
 		const ImVec4 qualColor = getQualityColor(item.quality);
 		ImGui::PushStyleColor(ImGuiCol_Text, qualColor);
 
-		// Clicking the row selects the item.
-		// Build display text: "Name" (quality colored) + " (ID)" (grey, smaller — CSS .item-id { color: grey; font-size: 0.8em; })
 		if (ImGui::Selectable("##item_sel", itemSelected, ImGuiSelectableFlags_None,
 		                      ImVec2(availSize.x - reservedRight, 0.0f))) {
 			selectItem(i, io.KeyCtrl, io.KeyShift, filteredItems, selection, single, state, onSelectionChanged);
 		}
-		// Render name and ID on top of the selectable at the same line.
 		ImGui::SameLine(0.0f, 0.0f);
 		ImGui::SetCursorPosX(ImGui::GetCursorPosX() - (availSize.x - reservedRight));
 		ImGui::Text("%s", item.name.c_str());
 		ImGui::PopStyleColor();
 
-		// Item ID: <span class="item-id">({{ item.id }})</span> — grey.
-		// Per CLAUDE.md visual-fidelity rule, exact font size (CSS 0.8em) is not
-		// replicated; ImGui default font size is used.
 		ImGui::SameLine(0.0f, 4.0f);
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(128/255.0f, 128/255.0f, 128/255.0f, 1.0f)); // grey
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(128/255.0f, 128/255.0f, 128/255.0f, 1.0f));
 		ImGui::Text("(%d)", item.id);
 		ImGui::PopStyleColor();
 
-		// Item buttons (<ul class="item-buttons">).
 		ImGui::SameLine();
-		// <li @click.self="$emit('equip', item)">Equip</li>
 		if (ImGui::SmallButton("Equip")) {
 			if (onEquip)
 				onEquip(item);
 		}
 		ImGui::SameLine();
-		// <li @click.self="$emit('options', item)">Options</li>
 		if (ImGui::SmallButton("Options")) {
 			if (onOptions)
 				onOptions(item);
@@ -616,7 +536,6 @@ void render(const char* id,
 
 	ImGui::EndChild();
 
-	// <div class="list-status" v-if="unittype">{{ filteredItems.length }} {{ unittype + (filteredItems.length != 1 ? 's' : '') }} found. {{ selection.length > 0 ? ' (' + selection.length + ' selected)' : '' }}</div>
 	if (!unittype.empty()) {
 		std::string statusText = std::to_string(filteredItems.size()) + " " + unittype;
 		if (filteredItems.size() != 1)

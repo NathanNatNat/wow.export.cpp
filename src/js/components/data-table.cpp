@@ -19,16 +19,6 @@
 
 namespace data_table {
 
-// props: ['headers', 'rows', 'filter', 'regex', 'selection', 'copyheader', 'tablename']
-// emits: ['update:selection', 'contextmenu', 'copy']
-
-// Reactive instance data — stored in DataTableState.
-
-// JS-equivalent mounted/beforeUnmount global mouse/keyboard listeners are not
-// needed. ImGui provides mouse/keyboard state via ImGui::GetIO() each frame.
-// Animation frame IDs (horizontalScrollAnimationId, resizeAnimationId) are not
-// needed since ImGui redraws every frame.
-
 /**
  * Compute a stable key for a row (used for unordered_set lookups).
  */
@@ -39,16 +29,12 @@ static std::string rowKey(const std::vector<std::string>& row) {
 		total += field.size() + 1;
 	key.reserve(total);
 	for (size_t i = 0; i < row.size(); ++i) {
-		if (i > 0) key += '\x1F';  // ASCII unit separator
+		if (i > 0) key += '\x1F';
 		key += row[i];
 	}
 	return key;
 }
 
-/**
- * Build an O(1)-lookup set from a selection (TODO entry 282).
- * Equivalent to JS `selectionSet: function() { return new Set(this.selection); }`.
- */
 static std::unordered_set<std::string> buildSelectionSet(const std::vector<std::vector<std::string>>& selection) {
 	std::unordered_set<std::string> s;
 	s.reserve(selection.size());
@@ -69,7 +55,6 @@ static int scrollIndex(int sortedItemCount, const DataTableState& state) {
 /**
  * Parse filter input to extract column-specific filters and general filter.
  * @param filterInput - The filter input string
- * @param headers - Column header names
  * @returns Pair of (columnFilters map, generalFilter string)
  */
 static std::pair<std::unordered_map<int, std::string>, std::string> parseFilterInput(
@@ -94,7 +79,6 @@ static std::pair<std::unordered_map<int, std::string>, std::string> parseFilterI
 			std::string columnName = part.substr(0, colonIndex);
 			std::string filterValue = part.substr(colonIndex + 1);
 
-			// Convert column name to lowercase for comparison
 			std::string columnNameLower = columnName;
 			std::transform(columnNameLower.begin(), columnNameLower.end(), columnNameLower.begin(),
 			               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -124,7 +108,6 @@ static std::pair<std::unordered_map<int, std::string>, std::string> parseFilterI
 		generalFilter += part;
 	}
 
-	// Trim general filter
 	while (!generalFilter.empty() && generalFilter.back() == ' ')
 		generalFilter.pop_back();
 	while (!generalFilter.empty() && generalFilter.front() == ' ')
@@ -133,9 +116,6 @@ static std::pair<std::unordered_map<int, std::string>, std::string> parseFilterI
 	return { columnFilters, generalFilter };
 }
 
-/**
- * Helper: convert a string to lowercase.
- */
 static std::string toLower(const std::string& s) {
 	std::string result = s;
 	std::transform(result.begin(), result.end(), result.begin(),
@@ -223,10 +203,6 @@ static bool matchesGeneralFilter(const std::vector<std::string>& row,
  * Reactively filtered version of the underlying data array.
  * Automatically refilters when the filter input is changed.
  * Supports both column-specific filters (e.g., "id:5000 name:test") and general filters.
- *
- * Drops any row from the user's selection that no longer appears in the filtered
- * set (TODO entry 277). Identity is checked by row content (rowKey), matching
- * JS reference identity in the common case where rows differ by content.
  */
 static std::vector<std::vector<std::string>> filteredItems(
 		const std::vector<std::vector<std::string>>& rows,
@@ -259,7 +235,6 @@ static std::vector<std::vector<std::string>> filteredItems(
 	}
 
 	// Remove anything from the user selection that has now been filtered out.
-	// JS: const filtered_set = new Set(res); ... selection.filter(row => filtered_set.has(row));
 	std::unordered_set<std::string> filteredSet;
 	filteredSet.reserve(res.size());
 	for (const auto& row : res)
@@ -282,37 +257,18 @@ static std::vector<std::vector<std::string>> filteredItems(
 	return res;
 }
 
-/**
- * Helper: try to parse a string as a double. Returns success and the value.
- * Matches JS Number() semantics: Number("") === 0 (treated as numeric).
- */
 static bool tryParseNumber(const std::string& s, double& out) {
-	// JS: Number("") === 0, !isNaN(0) is true — empty string is treated as 0.
 	if (s.empty()) { out = 0.0; return true; }
 	try {
 		size_t pos = 0;
 		out = std::stod(s, &pos);
-		// Ensure the entire string was consumed (like JS !isNaN(Number(val)))
 		return pos == s.size();
 	} catch (...) {
 		return false;
 	}
 }
 
-/**
- * Locale-aware string comparison, equivalent to JS `String.prototype.localeCompare`
- * (TODO entry 278). Uses the platform's wide-string collation:
- *   - Windows: `_wcsicoll` against the user default locale (lowercase already applied).
- *   - POSIX: `wcscoll_l` with the current C locale.
- *
- * Both sides are already lowercased by callers so this performs a case-insensitive
- * locale-aware comparison consistent with JS's default `localeCompare` behavior
- * (which is also locale-aware and case-insensitive when both inputs are lowercase).
- */
 static int localeCompare(const std::string& aStr, const std::string& bStr) {
-	// Convert UTF-8 std::string to wide string for locale collation.
-	// Use mbstowcs in the C locale; for non-ASCII code points the behavior is
-	// platform-dependent but matches the user's locale settings.
 	auto toWide = [](const std::string& s) -> std::wstring {
 		std::wstring result;
 		result.reserve(s.size());
@@ -323,7 +279,6 @@ static int localeCompare(const std::string& aStr, const std::string& bStr) {
 			wchar_t wc;
 			size_t n = std::mbrtowc(&wc, src, remaining, &state);
 			if (n == static_cast<size_t>(-1) || n == static_cast<size_t>(-2)) {
-				// Invalid sequence — fall back to byte-level append.
 				result.push_back(static_cast<wchar_t>(static_cast<unsigned char>(*src)));
 				++src; --remaining;
 				state = std::mbstate_t{};
@@ -343,7 +298,6 @@ static int localeCompare(const std::string& aStr, const std::string& bStr) {
 	const int cmp = std::wcscoll(aw.c_str(), bw.c_str());
 	if (cmp != 0)
 		return cmp;
-	// Fallback if collation reports equal but the strings differ — keep order stable.
 	return aStr.compare(bStr);
 }
 
@@ -361,10 +315,8 @@ static std::vector<std::vector<std::string>> sortedItems(
 	const int columnIndex = state.sortColumn;
 	const bool ascending = (state.sortDirection == SortDirection::Asc);
 
-	// JS uses Array.prototype.sort() which is stable (TimSort in modern engines).
-	// Use std::stable_sort to match JS behavior for rows with equal sort keys.
 	std::stable_sort(sorted.begin(), sorted.end(), [columnIndex, ascending](const std::vector<std::string>& a, const std::vector<std::string>& b) {
-		// Handle null/undefined values (empty strings as null equivalent)
+		// Handle null/undefined values
 		const bool aEmpty = (columnIndex >= static_cast<int>(a.size()));
 		const bool bEmpty = (columnIndex >= static_cast<int>(b.size()));
 		const std::string& aVal = aEmpty ? std::string() : a[static_cast<size_t>(columnIndex)];
@@ -385,7 +337,7 @@ static std::vector<std::vector<std::string>> sortedItems(
 			return ascending ? (aNum < bNum) : (aNum > bNum);
 		}
 
-		// String comparison — locale-aware, equivalent to JS localeCompare.
+		// String comparison
 		std::string aStr = toLower(aVal);
 		std::string bStr = toLower(bVal);
 		int cmp = localeCompare(aStr, bStr);
@@ -408,10 +360,6 @@ static float itemWeight(int sortedItemCount) {
 /**
  * Calculate column widths based on header text length ONLY.
  * No DOM measurements. No dynamic shit. Just text length.
- *
- * Used to seed initial column widths via TableSetupColumn. ImGui's table
- * Resizable flag handles user-driven resize after that point — JS preserved
- * resized widths in `manuallyResizedColumns` but ImGui owns that state itself.
  */
 static std::vector<float> calculateColumnWidths(const std::vector<std::string>& headers) {
 	std::vector<float> widths;
@@ -494,7 +442,7 @@ static const char* getSortIconName(int columnIndex, const DataTableState& state)
 /**
  * Handle clicking the filter icon for a column.
  * Inserts the column filter prefix and focuses the filter input.
- * @param {number} columnIndex - Index of the column
+ * @param columnIndex - Index of the column
  */
 static void handleFilterIconClick(int columnIndex, const std::vector<std::string>& headers,
                                     const std::string& currentFilter,
@@ -513,17 +461,11 @@ static void handleFilterIconClick(int columnIndex, const std::vector<std::string
 
 	if (onFilterChanged)
 		onFilterChanged(newFilter);
-
-	// In JS: this.$nextTick(() => { filterInput.focus(); filterInput.setSelectionRange(...) });
-	// The caller should set focus to the filter input if desired.
 }
 
 /**
  * Invoked when a user selects a row in the table.
  * @param rowIndex - Index of the row in sortedItems
- * @param ctrlKey/shiftKey - Modifier keys pressed
- * @param sorted - The currently sorted+filtered rows (used for shift-range and identity)
- * @param selection - Current selection (full row contents)
  */
 static void selectRow(int rowIndex, bool ctrlKey, bool shiftKey,
                        const std::vector<std::vector<std::string>>& sorted,
@@ -536,7 +478,6 @@ static void selectRow(int rowIndex, bool ctrlKey, bool shiftKey,
 	const auto& row = sorted[static_cast<size_t>(rowIndex)];
 	const std::string rowK = rowKey(row);
 
-	// JS: const checkIndex = this.selection.indexOf(row);
 	int checkIndex = -1;
 	for (int i = 0; i < static_cast<int>(selection.size()); ++i) {
 		if (rowKey(selection[static_cast<size_t>(i)]) == rowK) {
@@ -620,7 +561,6 @@ static void handleContextMenu(int rowIndex, int columnIndex,
 		evt.columnIndex = columnIndex;
 		evt.cellValue = cellValue;
 		evt.selectedCount = std::max(1, static_cast<int>(selection.size()));
-		// Include mouse position data (equivalent to the JS `event` object).
 		const ImGuiIO& io = ImGui::GetIO();
 		evt.mouseX = io.MousePos.x;
 		evt.mouseY = io.MousePos.y;
@@ -637,10 +577,8 @@ static void handleKey(const std::vector<std::vector<std::string>>& sorted,
                        DataTableState& state,
                        const std::function<void(const std::vector<std::vector<std::string>>&)>& onSelectionChanged,
                        const std::function<void()>& onCopy) {
-	// JS checks: if (document.activeElement !== document.body) return;
-	// — only intercepts keys when nothing is focused (activeElement is body).
-	// ImGui equivalent: IsAnyItemActive() returns true when a text input or other
-	// interactive widget has keyboard focus.
+	// If document.activeElement is the document body, then we can safely assume
+	// the user is not focusing anything, and can intercept keyboard input.
 	if (ImGui::IsAnyItemActive())
 		return;
 
@@ -694,10 +632,6 @@ static void handleKey(const std::vector<std::vector<std::string>>& sorted,
 	}
 }
 
-/**
- * Helper: format a number with thousands separators.
- * Equivalent to JS .toLocaleString() for integers.
- */
 static std::string formatWithThousandsSep(int value) {
 	std::string str = std::to_string(value);
 	if (str.size() <= 3)
@@ -714,9 +648,6 @@ static std::string formatWithThousandsSep(int value) {
 	return result;
 }
 
-/**
- * Helper: escape a value for CSV.
- */
 static std::string escape_csv(const std::string& val) {
 	if (val.find(',') != std::string::npos || val.find('"') != std::string::npos ||
 	    val.find('\n') != std::string::npos || val.find('\r') != std::string::npos) {
@@ -735,12 +666,6 @@ static std::string escape_csv(const std::string& val) {
 	return val;
 }
 
-/**
- * Sort a list of selected rows by their position within sortedItems (display order).
- * Mirrors JS: const index_map = new Map(this.sortedItems.map((row, idx) => [row, idx]));
- *             rows = selection.slice().sort((a, b) => index_map.get(a) - index_map.get(b));
- * Rows not present in sortedItems (e.g., filtered out) appear at the end.
- */
 static std::vector<std::vector<std::string>> sortSelectionByDisplayOrder(
 		const std::vector<std::vector<std::string>>& sorted,
 		const std::vector<std::vector<std::string>>& selection) {
@@ -801,7 +726,6 @@ std::string getSelectedRowsAsCSV(const std::vector<std::string>& headers,
 		result += '\n';
 	}
 
-	// Remove trailing newline
 	if (!result.empty() && result.back() == '\n')
 		result.pop_back();
 
@@ -839,11 +763,6 @@ std::string getSelectedRowsAsSQL(const std::vector<std::string>& headers,
 	};
 
 	auto escape_value = [](const std::string& val) -> std::string {
-		// JS: only returns 'NULL' for null/undefined; empty string "" is escaped as ''.
-		// In C++, row data is always std::string so there's no null/undefined distinction.
-		// An empty string should be escaped as '' (not NULL).
-
-		// Check if numeric
 		if (!val.empty()) {
 			double num = 0.0;
 			if (tryParseNumber(val, num))
@@ -909,12 +828,9 @@ void render(const char* id,
             const std::function<void(const std::string&)>& onFilterChanged) {
 	ImGui::PushID(id);
 
-	// Watch for header changes (JS recalculates column widths and resets scroll).
 	if (state.prevHeaders != headers)
 		state.prevHeaders = headers;
 
-	// Watch for rows changes to reset selection (new table loaded).
-	// JS Vue reactivity watches the `rows` prop reference; any change triggers the handler.
 	if (state.prevRowCount != rows.size() ||
 	    state.prevRowsPtr != static_cast<const void*>(rows.data()) ||
 	    state.prevRowsVersion != state.rowsVersion) {
@@ -930,32 +846,24 @@ void render(const char* id,
 	auto sorted = sortedItems(filtered, state);
 	const int sortedCount = static_cast<int>(sorted.size());
 
-	// Build O(1)-lookup set for selection (TODO entry 282).
 	const auto selectionSet = buildSelectionSet(selection);
 
 	const ImVec2 availSize = ImGui::GetContentRegionAvail();
 	const float containerWidth = availSize.x;
 	const float containerHeight = availSize.y;
 
-	// Compute column widths for this frame from header definitions.
 	const std::vector<float> columnWidths = calculateColumnWidths(headers);
 
-	// Row height matching CSS: min-height: 32px
 	const float rowHeight = 32.0f;
-	// Header height matching CSS: padding 10px top/bottom + ~20px text
 	const float headerHeight = 40.0f;
-	// Vertical scroller dimensions
 	const float scrollerHeight = 45.0f;
 
-	// Calculate total table width from column widths
 	float tableWidth = 0.0f;
 	for (float w : columnWidths)
 		tableWidth += w;
 
 	const bool showHScroll = needsHorizontalScrolling(tableWidth, containerWidth);
 
-	// Only call resize() when the layout actually changes (TODO entry 280).
-	// Calling every frame causes scroll-position drift from float accumulation.
 	if (state.lastResizeWidth != containerWidth ||
 	    state.lastResizeHeight != containerHeight ||
 	    state.lastResizeSortedCount != sortedCount) {
@@ -969,27 +877,20 @@ void render(const char* id,
 	const int startIdx = std::max(0, idx);
 	const int endIdx = std::min(sortedCount, startIdx + state.slotCount);
 
-	// Reserve space for the bottom status row.
 	const float statusBarHeight = rows.empty() ? 0.0f : ImGui::GetTextLineHeightWithSpacing();
 
 	const ImVec2 tableRegionSize(containerWidth, std::max(0.0f, containerHeight - statusBarHeight));
 
-	// <div ref="root" class="ui-datatable" @wheel="wheelMouse">
 	ImGui::BeginChild("##datatable_root", tableRegionSize, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 	const ImGuiIO& io = ImGui::GetIO();
 	const bool windowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_None);
 
-	// @wheel="wheelMouse"
 	if (windowHovered) {
 		const float wheelY = io.MouseWheel;
 		const float wheelX = io.MouseWheelH;
 
 		if (wheelY != 0.0f && !(io.KeyShift && showHScroll) && wheelX == 0.0f && sortedCount > 0) {
-			// Vertical scrolling: drive the virtualized scroll position used by scrollIndex().
-			// (Horizontal/shift-wheel scrolling is handled natively by ImGui::BeginTable's ScrollX.)
-			// TODO entry 279: JS preventDefault() has no ImGui equivalent — best-effort, we
-			// consume the value from ImGuiIO so other widgets in the same frame won't react.
 			const float availableHeight = containerHeight - headerHeight;
 			const float weight = availableHeight - scrollerHeight;
 			const float direction = wheelY > 0.0f ? -1.0f : 1.0f;
@@ -1002,7 +903,6 @@ void render(const char* id,
 	handleKey(sorted, selection, containerHeight, headerHeight, scrollerHeight,
 	          state, onSelectionChanged, onCopy);
 
-	// Render the table using native ImGui::BeginTable (TODO entry 281).
 	const int columnCount = static_cast<int>(headers.size());
 	if (columnCount > 0) {
 		const ImGuiTableFlags tableFlags =
@@ -1014,23 +914,15 @@ void render(const char* id,
 			ImGuiTableFlags_ScrollX |
 			ImGuiTableFlags_NoSavedSettings;
 
-		// Approximate the JS horizontal scroller behaviour by sizing the inner
-		// width to the total of our calculated column widths; ImGui's native
-		// horizontal scrollbar then mirrors the JS hscroller.
 		ImGui::SetNextWindowContentSize(ImVec2(tableWidth, 0.0f));
 
 		if (ImGui::BeginTable("##datatable", columnCount, tableFlags, ImVec2(0.0f, 0.0f))) {
-			// Setup columns with the calculated widths.
 			for (int i = 0; i < columnCount; ++i) {
 				const float w = (i < static_cast<int>(columnWidths.size())) ? columnWidths[i] : 120.0f;
 				ImGui::TableSetupColumn(headers[i].c_str(),
 					ImGuiTableColumnFlags_WidthFixed, w);
 			}
-			ImGui::TableSetupScrollFreeze(0, 1);  // freeze header row
-
-			// Custom header row — uses Selectable for click handling (sort + filter icons)
-			// rather than the default TableHeadersRow, since the JS template renders both
-			// a clickable text label (sort) and a separate filter icon per header.
+			ImGui::TableSetupScrollFreeze(0, 1);
 			ImGui::TableNextRow(ImGuiTableRowFlags_Headers, headerHeight);
 			for (int i = 0; i < columnCount; ++i) {
 				ImGui::TableSetColumnIndex(i);
@@ -1038,15 +930,13 @@ void render(const char* id,
 
 				const char* sortIconName = getSortIconName(i, state);
 				const char* sortGlyph = "";
-				if (std::strcmp(sortIconName, "sort-icon-up") == 0) sortGlyph = " \xE2\x96\xB2";       // ▲
-				else if (std::strcmp(sortIconName, "sort-icon-down") == 0) sortGlyph = " \xE2\x96\xBC"; // ▼
+				if (std::strcmp(sortIconName, "sort-icon-up") == 0) sortGlyph = " \xE2\x96\xB2";
+				else if (std::strcmp(sortIconName, "sort-icon-down") == 0) sortGlyph = " \xE2\x96\xBC";
 
-				// Filter icon (small button on the right of the header label).
 				const float availW = ImGui::GetContentRegionAvail().x;
 				const float iconW = ImGui::GetFrameHeight() * 0.7f;
 				const float labelW = std::max(0.0f, availW - iconW * 2.0f - 6.0f);
 
-				// Sort label as a clickable header title.
 				const std::string label = headers[static_cast<size_t>(i)] + sortGlyph;
 				ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::GetStyle().Colors[ImGuiCol_HeaderHovered]);
 				if (ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_None, ImVec2(labelW, headerHeight - 4.0f))) {
@@ -1064,7 +954,6 @@ void render(const char* id,
 				ImGui::PopID();
 			}
 
-			// Body — virtualised slice [startIdx, endIdx).
 			for (int rowIdx = startIdx; rowIdx < endIdx; ++rowIdx) {
 				const auto& row = sorted[static_cast<size_t>(rowIdx)];
 				const std::string rowK = rowKey(row);
@@ -1073,7 +962,6 @@ void render(const char* id,
 				ImGui::TableNextRow(ImGuiTableRowFlags_None, rowHeight);
 				ImGui::PushID(rowIdx);
 
-				// Render each cell. Use Selectable on column 0 to span the row for click handling.
 				for (int c = 0; c < columnCount; ++c) {
 					ImGui::TableSetColumnIndex(c);
 					const std::string& cell = (c < static_cast<int>(row.size())) ? row[static_cast<size_t>(c)] : std::string();
@@ -1103,7 +991,6 @@ void render(const char* id,
 
 	ImGui::EndChild();
 
-	// <div class="list-status" v-if="rows && rows.length > 0">
 	if (!rows.empty()) {
 		const int filteredCount = static_cast<int>(filtered.size());
 		const int totalCount = static_cast<int>(rows.size());

@@ -21,27 +21,11 @@ namespace listbox_maps {
  * Additional props:
  * expansionFilter: Reactive value for filtering by expansion ID (-1 for all, 0+ for specific expansion)
  */
-// props: [...listboxComponent.props, 'expansionFilter']
-// emits: listboxComponent.emits
-
-// data: same as listboxComponent.data — stored in ListboxMapsState.base
-
-// mounted: same as listboxComponent.mounted
-// beforeUnmount: same as listboxComponent.beforeUnmount
-
-// watch: expansionFilter — resets scroll on change (handled below)
-// All other watches inherited from listboxComponent.watch
-
-// computed: scrollOffset, scrollIndex, itemList, displayItems, itemWeight — inherited from listboxComponent
 
 /**
  * Reactively filtered version of the underlying data array.
  * Applies both text filtering and expansion filtering.
- *
- * This overrides listboxComponent.computed.filteredItems to add
- * expansion-based filtering before the text filter.
  */
-// by pre-filtering items before passing to the base listbox render.
 
 static std::vector<std::string> filterByExpansion(const std::vector<std::string>& items, int expansionFilter) {
 	if (expansionFilter == -1)
@@ -65,9 +49,6 @@ static std::vector<std::string> filterByExpansion(const std::vector<std::string>
 	return filtered;
 }
 
-// methods: inherited from listboxComponent.methods
-// template: inherited from listboxComponent.template
-
 void render(const char* id,
             const std::vector<std::string>& items,
             const std::string& filter,
@@ -89,22 +70,17 @@ void render(const char* id,
             const std::function<void(const std::vector<std::string>&)>& onSelectionChanged,
             const std::function<void(const listbox::ContextMenuEvent&)>& onContextMenu) {
 
-	// watch: expansionFilter — reset scroll on change.
 	if (expansionFilter != state.prevExpansionFilter) {
 		state.prevExpansionFilter = expansionFilter;
 		state.base.scroll = 0.0f;
 		state.base.scrollRel = 0.0f;
-		// JS: this.recalculateBounds() — flush cleared scroll position to storage
 		if (!persistscrollkey.empty())
 			core::saveScrollPosition(persistscrollkey, 0.0, 0);
 	}
 
-	// JS: let res = this.itemList (resolves override first, then expansion filter).
-	// Resolve override before expansion filtering to match JS order of operations.
 	const auto& resolvedItems = (overrideItems != nullptr && !overrideItems->empty())
 		? *overrideItems : items;
 
-	// Pre-filter resolved items by expansion — only when inputs change.
 	{
 		const std::string* curData = resolvedItems.empty() ? nullptr : resolvedItems.data();
 		const bool needRecompute =
@@ -121,8 +97,6 @@ void render(const char* id,
 	}
 	const std::vector<std::string>& expansionFiltered = state.cachedExpansionFiltered;
 
-	// Delegate to the base listbox render with expansion-filtered items (no override,
-	// since we already resolved it above).
 	listbox::render(id, expansionFiltered, filter, selection, single, keyinput, regex,
 	                copymode, pasteselection, copytrimwhitespace, unittype, nullptr,
 	                disable, persistscrollkey, quickfilters, nocopy, state.base,

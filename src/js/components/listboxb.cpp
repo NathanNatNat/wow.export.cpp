@@ -20,22 +20,6 @@ namespace listboxb {
  * keyinput: If true, listbox registers for keyboard input.
  * disable: If provided, used as reactive disable flag.
  */
-// props: ['items', 'selection', 'single', 'keyinput', 'disable']
-// emits: ['update:selection']
-
-/**
- * Reactive instance data.
- */
-// data: scroll, scrollRel, isScrolling, slotCount, lastSelectItem — stored in ListboxBState
-/**
- * Invoked when the component is mounted.
- * Used to register global listeners and resize observer.
- */
-
-/**
- * Invoked when the component is destroyed.
- * Used to unregister global mouse listeners and resize observer.
- */
 
 /**
  * Offset of the scroll widget in pixels.
@@ -126,16 +110,10 @@ static void wheelMouse(float wheelDelta, float containerHeight, float scrollerHe
 	}
 }
 
-/**
- * Helper: check if an index is in the selection vector.
- */
 static bool isSelected(const std::vector<int>& selection, int index) {
 	return std::find(selection.begin(), selection.end(), index) != selection.end();
 }
 
-/**
- * Helper: find position of an index in the selection vector, or -1.
- */
 static int selectionIndexOf(const std::vector<int>& selection, int index) {
 	auto it = std::find(selection.begin(), selection.end(), index);
 	if (it != selection.end())
@@ -273,8 +251,6 @@ static void selectItem(int itemIndex, bool ctrlKey, bool shiftKey,
 /**
  * HTML mark-up to render for this component.
  */
-// template: converted to ImGui immediate-mode rendering below.
-
 void render(const char* id, const std::vector<ListboxBItem>& items,
             const std::vector<int>& selection, bool single, bool keyinput, bool disable,
             ListboxBState& state,
@@ -300,9 +276,6 @@ void render(const char* id, const std::vector<ListboxBItem>& items,
 	const int endIdx = std::min(totalItems, startIdx + state.slotCount);
 
 	// Begin a child region to contain the list.
-	// <div class="ui-listbox" @wheel="wheelMouse">
-	// CSS: .ui-listbox { border: 1px solid var(--border); box-shadow: black 0 0 3px 0px; }
-	// ImGuiChildFlags_Borders draws the CSS border. Box-shadow cannot be replicated in Dear ImGui.
 	ImGui::BeginChild("##listboxb_container", availSize, ImGuiChildFlags_Borders,
 	                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
@@ -330,7 +303,6 @@ void render(const char* id, const std::vector<ListboxBItem>& items,
 	}
 
 	// Draw the scrollbar on the right side.
-	// <div class="scroller" ref="scroller" @mousedown="startMouse" :class="{ using: isScrolling }" :style="{ top: scrollOffset }"><div></div></div>
 	{
 		const ImVec2 winPos = ImGui::GetWindowPos();
 		const float scrollbarWidth = 8.0f;
@@ -344,9 +316,6 @@ void render(const char* id, const std::vector<ListboxBItem>& items,
 		const ImVec2 thumbMax(scrollbarX + scrollbarWidth, thumbY + scrollerHeight);
 
 		// Determine if mouse is over the thumb for hover effect.
-		// CSS: .scroller > div { background: var(--border); }
-		// CSS: .scroller:hover > div, .scroller.using > div { background: var(--font-highlight); }
-		// CSS: .scroller { opacity: 0.7; }
 		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
 		const ImU32 baseColor = thumbHovered
 			? ImGui::GetColorU32(ImGuiCol_Text)
@@ -363,18 +332,12 @@ void render(const char* id, const std::vector<ListboxBItem>& items,
 	}
 
 	// Render visible items.
-	// <div v-for="(item, i) in displayItems" class="item" @click="selectItem(item, $event)" :class="{ selected: selection.includes(item) }">
-	//     <span class="sub sub-0">{{ item.label }}</span>
-	// </div>
-
 	for (int i = startIdx; i < endIdx; ++i) {
 		const ListboxBItem& item = items[static_cast<size_t>(i)];
 		const bool itemSelected = isSelected(selection, i);
 
 		ImGui::PushID(i);
 
-		// <span class="sub sub-0">{{ item.label }}</span>
-		// Clicking the row selects the item.
 		if (ImGui::Selectable(item.label.c_str(), itemSelected, ImGuiSelectableFlags_None,
 		                      ImVec2(availSize.x - 10.0f, 0.0f))) {
 			selectItem(i, io.KeyCtrl, io.KeyShift, items, selection, single, disable, state, onSelectionChanged);

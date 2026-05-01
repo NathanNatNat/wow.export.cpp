@@ -13,15 +13,10 @@
 namespace context_menu {
 
 // Keep a global track of the client mouse position.
-// each frame, so we read it directly instead of tracking via a global listener.
-// window.addEventListener('mousemove', event => { ... });
 
 /**
  * node: Object which this context menu represents.
  */
-// props: ['node']
-
-// data: positionX, positionY, isLow, isLeft — stored in ContextMenuState
 
 void reposition(ContextMenuState& state) {
 	const ImGuiIO& io = ImGui::GetIO();
@@ -31,48 +26,24 @@ void reposition(ContextMenuState& state) {
 	state.isLeft = state.positionX > io.DisplaySize.x / 2.0f;
 }
 
-// watch: node — change detection handled in render() via prevNodeActive.
-
-// mounted: Initial position in case the menu renders immediately, but primary
+// Initial position in case the menu renders immediately, but primary
 // positioning occurs when `node` flips truthy (on open).
-
-// template: converted to ImGui immediate-mode rendering below.
-// <div class="context-menu" v-if="node !== null && node !== false"
-//      :class="{ low: isLow, left: isLeft }"
-//      :style="{ top: positionY + 'px', left: positionX + 'px' }"
-//      @mouseleave="$emit('close')" @click="$emit('close')">
-//     <div class="context-menu-zone"></div>
-//     <slot v-bind:node="node"></slot>
-// </div>
 
 void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
             const std::function<void()>& onClose,
             const std::function<void(const nlohmann::json&)>& contentCallback) {
-	// Determine if node is "active" (not null and not false).
 	const bool nodeActive = !node.is_null() && !(node.is_boolean() && !node.get<bool>());
 
-	// Watch: when node transitions from inactive to active, reposition.
-	// JS uses this.$nextTick(() => this.reposition()) so the call runs after
-	// the DOM update for the new node; structurally that's a deferred call,
-	// but in practice JS also calls reposition() synchronously from mounted()
-	// (the component is recreated on each open via v-if), so the visible
-	// behaviour is identical to the synchronous call we make here.
 	if (nodeActive && !state.prevNodeActive) {
 		reposition(state);
 	}
 	state.prevNodeActive = nodeActive;
 
-	// v-if="node !== null && node !== false"
 	if (!nodeActive)
 		return;
 
 	ImGui::PushID(id);
 
-	// Position the popup window.
-	// :class="{ low: isLow, left: isLeft }" — adjust anchor point.
-	// Default: top-left corner at mouse position.
-	// low: anchor from bottom instead of top.
-	// left: anchor from right instead of left.
 	ImVec2 windowPos(state.positionX, state.positionY);
 	ImVec2 windowPivot(0.0f, 0.0f);
 
@@ -82,7 +53,6 @@ void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
 		windowPivot.y = 1.0f;
 
 	ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always, windowPivot);
-	// CSS: .context-menu { background: #232323; border: 1px solid var(--border); box-shadow: black 0 0 3px 0; }
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 
@@ -91,31 +61,23 @@ void render(const char* id, const nlohmann::json& node, ContextMenuState& state,
 	                                ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
 	                                ImGuiWindowFlags_NoMove;
 
-	// Use unique window name per id to avoid collision between multiple instances.
 	std::string windowName = std::string("##context_menu_") + id;
 	if (ImGui::Begin(windowName.c_str(), nullptr, windowFlags)) {
-		// <div class="context-menu-zone"></div>
-		// CSS: .context-menu-zone { position: absolute; left: -20px; top: -20px;
-		//                           bottom: -20px; right: -20px; z-index: -1; }
-		// Per-side values mirror the CSS even though all four are currently equal.
 		constexpr float contextMenuZonePaddingLeft = 20.0f;
 		constexpr float contextMenuZonePaddingTop = 20.0f;
 		constexpr float contextMenuZonePaddingRight = 20.0f;
 		constexpr float contextMenuZonePaddingBottom = 20.0f;
 
-		// Render menu content via the callback (equivalent of <slot v-bind:node="node">).
 		if (contentCallback) {
 			contentCallback(node);
 		}
 
-		// @click="$emit('close')" — close on left-click within the menu.
 		if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
 		    ImGui::IsMouseClicked(0)) {
 			if (onClose)
 				onClose();
 		}
 
-		// @mouseleave="$emit('close')" — close when mouse leaves the menu + hover buffer zone.
 		const ImVec2 mousePos = ImGui::GetIO().MousePos;
 		ImVec2 zoneMin = ImGui::GetWindowPos();
 		ImVec2 zoneMax = ImVec2(zoneMin.x + ImGui::GetWindowSize().x, zoneMin.y + ImGui::GetWindowSize().y);

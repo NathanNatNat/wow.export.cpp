@@ -47,14 +47,10 @@ static std::string fid_filter(const std::string& e) {
  * persistscrollkey: If provided, enables scroll position persistence with this key.
  * quickfilters: Array of file extensions for quick filter links (e.g., ['m2', 'wmo']).
  */
-// props: ['items', 'filter', 'selection', 'single', 'keyinput', 'regex', 'copymode', 'pasteselection', 'copytrimwhitespace', 'includefilecount', 'unittype', 'override', 'disable', 'persistscrollkey', 'quickfilters', 'nocopy']
-// emits: ['update:selection', 'update:filter', 'contextmenu']
 
 /**
  * Reactive instance data.
  */
-// data: scroll, scrollRel, isScrolling, slotCount, lastSelectItem, debouncedFilter,
-//       filterTimeout, scrollPositionRestored, activeQuickFilter — stored in ListboxState
 
 /**
  * Invoked when the component is mounted.
@@ -65,7 +61,6 @@ static std::string fid_filter(const std::string& e) {
  * Invoked when the component is activated (keep-alive).
  * Registers keyboard and paste listeners.
  */
-// whether render() is called each frame.
 
 /**
  * Invoked when the component is deactivated (keep-alive).
@@ -76,7 +71,6 @@ static std::string fid_filter(const std::string& e) {
  * Invoked when the component is destroyed.
  * Used to unregister global mouse listeners and resize observer.
  */
-// Scroll position saving is done each frame when persistscrollkey is set.
 
 /**
  * Offset of the scroll widget in pixels.
@@ -192,7 +186,6 @@ static void handlePaste(bool disable, bool pasteselection,
 	std::istringstream stream(text);
 	std::string line;
 	while (std::getline(stream, line)) {
-		// Remove trailing \r if present.
 		if (!line.empty() && line.back() == '\r')
 			line.pop_back();
 		if (std::find(sourceItems.begin(), sourceItems.end(), line) != sourceItems.end())
@@ -226,16 +219,10 @@ static void wheelMouse(float wheelDelta, float containerHeight, float scrollerHe
 	}
 }
 
-/**
- * Helper: check if a string is in a vector.
- */
 static bool isSelected(const std::vector<std::string>& selection, const std::string& item) {
 	return std::find(selection.begin(), selection.end(), item) != selection.end();
 }
 
-/**
- * Helper: find index of string in vector, or -1.
- */
 static int indexOf(const std::vector<std::string>& vec, const std::string& item) {
 	auto it = std::find(vec.begin(), vec.end(), item);
 	if (it != vec.end())
@@ -243,9 +230,6 @@ static int indexOf(const std::vector<std::string>& vec, const std::string& item)
 	return -1;
 }
 
-/**
- * Remove all whitespace from a string.
- */
 static std::string removeWhitespace(const std::string& s) {
 	std::string result;
 	result.reserve(s.size());
@@ -256,9 +240,6 @@ static std::string removeWhitespace(const std::string& s) {
 	return result;
 }
 
-/**
- * Convert a string to lowercase.
- */
 static std::string toLower(const std::string& s) {
 	std::string result = s;
 	std::transform(result.begin(), result.end(), result.begin(),
@@ -266,9 +247,6 @@ static std::string toLower(const std::string& s) {
 	return result;
 }
 
-/**
- * Trim whitespace from both ends of a string.
- */
 static std::string trim(const std::string& s) {
 	auto start = s.find_first_not_of(" \t\n\r\f\v");
 	if (start == std::string::npos)
@@ -476,7 +454,6 @@ static void handleContextMenu(const std::string& item,
 }
 
 /**
- * Compute the filtered items list.
  * Reactively filtered version of the underlying data array.
  * Uses debounced filter to prevent UI stuttering on large datasets.
  */
@@ -491,7 +468,6 @@ static std::vector<std::string> computeFilteredItems(
 	std::vector<std::string> res;
 	res.reserve(sourceItems.size());
 
-	// Start with all items.
 	for (const auto& item : sourceItems)
 		res.push_back(item);
 
@@ -534,11 +510,9 @@ static std::vector<std::string> computeFilteredItems(
 			}
 			res = std::move(filtered);
 		} catch (const std::regex_error&) {
-			// Regex compilation failed, skip quick filtering.
 		}
 	}
 
-	// Prune selection to only include items still in filtered results.
 	bool hasChanges = false;
 	std::vector<std::string> newSelection;
 	for (const auto& item : selection) {
@@ -558,7 +532,6 @@ static std::vector<std::string> computeFilteredItems(
 /**
  * HTML mark-up to render for this component.
  */
-// template: converted to ImGui immediate-mode rendering below.
 
 void render(const char* id,
             const std::vector<std::string>& items,
@@ -581,13 +554,11 @@ void render(const char* id,
             const std::function<void(const ContextMenuEvent&)>& onContextMenu) {
 	ImGui::PushID(id);
 
-	// --- watch: filter (debounce) ---
 	if (filter != state.prevFilter) {
 		state.prevFilter = filter;
 		state.filterTimeoutStart = std::chrono::steady_clock::now();
 	}
 
-	// Process debounce timeout.
 	if (state.filterTimeoutStart.has_value()) {
 		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::steady_clock::now() - *state.filterTimeoutStart).count();
@@ -597,16 +568,13 @@ void render(const char* id,
 		}
 	}
 
-	// Initialize debounced filter on first frame.
 	if (!state.initialized) {
 		state.debouncedFilter = filter;
 		state.initialized = true;
 	}
 
-	// Get the active item list (override or items).
 	const auto& sourceItems = itemList(items, overrideItems);
 
-	// Compute filtered items — only when inputs have actually changed.
 	{
 		const std::string* curData = sourceItems.empty() ? nullptr : sourceItems.data();
 		const bool needRecompute = !state.filteredItemsCacheValid
@@ -630,7 +598,6 @@ void render(const char* id,
 	}
 	const std::vector<std::string>& filteredItems = state.cachedFilteredItems;
 
-	// --- mounted/watch: persistscrollkey scroll position restoration ---
 	if (!persistscrollkey.empty() && !filteredItems.empty() && !state.scrollPositionRestored) {
 		auto saved_state = core::getScrollPosition(persistscrollkey);
 		if (saved_state.has_value()) {
@@ -639,11 +606,9 @@ void render(const char* id,
 		}
 	}
 
-	// Get the available content region as the container dimensions.
 	const ImVec2 availSize = ImGui::GetContentRegionAvail();
 	const float containerHeight = availSize.y;
 
-	// The scroller thumb height is proportional to visible vs total items.
 	const float itemHeight = 26.0f;
 	const int totalItems = static_cast<int>(filteredItems.size());
 	const float scrollerHeight = (totalItems > 0)
@@ -652,19 +617,13 @@ void render(const char* id,
 
 	resize(containerHeight, scrollerHeight, state);
 
-	// Compute display range.
 	const int idx = scrollIndex(filteredItems, state);
 	const int startIdx = std::max(0, idx);
 	const int endIdx = std::min(totalItems, startIdx + state.slotCount);
 
-	// Begin a child region to contain the list.
-	// <div ref="root" class="ui-listbox" @wheel="wheelMouse">
-	// CSS: .ui-listbox { border: 1px solid var(--border); box-shadow: black 0 0 3px 0px; }
-	// ImGuiChildFlags_Borders draws the CSS border. Box-shadow cannot be replicated in Dear ImGui.
 	ImGui::BeginChild("##listbox_container", ImVec2(availSize.x, containerHeight), ImGuiChildFlags_Borders,
 	                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-	// Handle mouse wheel on the container.
 	if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None)) {
 		const float wheel = ImGui::GetIO().MouseWheel;
 		if (wheel != 0.0f) {
@@ -672,7 +631,6 @@ void render(const char* id,
 		}
 	}
 
-	// Handle global mouse move/up for scrollbar dragging.
 	const ImGuiIO& io = ImGui::GetIO();
 	if (state.isScrolling) {
 		moveMouse(io.MousePos.y, containerHeight, scrollerHeight, state, persistscrollkey, filteredItems);
@@ -681,20 +639,16 @@ void render(const char* id,
 		}
 	}
 
-	// Handle paste (Ctrl+V).
 	if (pasteselection && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V)) {
 		handlePaste(disable, pasteselection, sourceItems, selection, onSelectionChanged);
 	}
 
-	// Handle keyboard input.
 	if (keyinput) {
 		handleKey(filteredItems, selection, single, disable, nocopy, copymode,
 		          copytrimwhitespace, state, onSelectionChanged,
 		          containerHeight, scrollerHeight, persistscrollkey);
 	}
 
-	// Draw the scrollbar on the right side.
-	// <div class="scroller" ref="scroller" @mousedown="startMouse" :class="{ using: isScrolling }" :style="{ top: scrollOffset }"><div></div></div>
 	{
 		const ImVec2 winPos = ImGui::GetWindowPos();
 		const float scrollbarWidth = 8.0f;
@@ -703,14 +657,9 @@ void render(const char* id,
 
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-		// Scroller thumb.
 		const ImVec2 thumbMin(scrollbarX, thumbY);
 		const ImVec2 thumbMax(scrollbarX + scrollbarWidth, thumbY + scrollerHeight);
 
-		// Determine if mouse is over the thumb for hover effect.
-		// CSS: .scroller > div { background: var(--border); }
-		// CSS: .scroller:hover > div, .scroller.using > div { background: var(--font-highlight); }
-		// CSS: .scroller { opacity: 0.7; }
 		const bool thumbHovered = ImGui::IsMouseHoveringRect(thumbMin, thumbMax) || state.isScrolling;
 		const ImU32 baseColor = thumbHovered
 			? ImGui::GetColorU32(ImGuiCol_Text)
@@ -720,16 +669,10 @@ void render(const char* id,
 
 		drawList->AddRectFilled(thumbMin, thumbMax, thumbColor, 4.0f);
 
-		// Handle mouse-down on the scroller thumb.
 		if (ImGui::IsMouseHoveringRect(thumbMin, thumbMax) && ImGui::IsMouseClicked(0)) {
 			startMouse(io.MousePos.y, state);
 		}
 	}
-
-	// Render visible items.
-	// <div v-for="(item, i) in displayItems" class="item" @click="selectItem(item, $event)" @contextmenu="handleContextMenu(item, $event)" :class="{ selected: selection.includes(item) }">
-	//     <span v-for="(sub, si) in item.split('\\31')" :class="'sub sub-' + si" :data-item="sub">{{ sub }}</span>
-	// </div>
 
 	for (int i = startIdx; i < endIdx; ++i) {
 		const std::string& item = filteredItems[static_cast<size_t>(i)];
@@ -737,11 +680,6 @@ void render(const char* id,
 
 		ImGui::PushID(i);
 
-		// Split item by '\x19' (character 0x19, used as sub-field separator).
-		// <span v-for="(sub, si) in item.split('\\31')" :class="'sub sub-' + si" :data-item="sub">{{ sub }}</span>
-		// Note: JS '\\31' is octal for char 0x19 (ASCII 25).
-		// Each sub-field is rendered in a separate CSS span; C++ concatenates with spaces
-		// (Dear ImGui cannot render styled sub-spans inline). Known visual approximation.
 		std::string displayText;
 		{
 			size_t pos = 0;
@@ -757,14 +695,12 @@ void render(const char* id,
 			displayText += item.substr(pos);
 		}
 
-		// Clicking the row selects the item; right-clicking opens context menu.
 		if (ImGui::Selectable(displayText.c_str(), itemSelected, ImGuiSelectableFlags_None,
 		                      ImVec2(availSize.x - 10.0f, 0.0f))) {
 			selectItem(item, io.KeyCtrl, io.KeyShift, filteredItems, selection,
 			           single, disable, state, onSelectionChanged);
 		}
 
-		// Context menu on right-click.
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
 			const ImVec2 mousePos = ImGui::GetMousePos();
 			handleContextMenu(item, selection, disable, state, onSelectionChanged, onContextMenu,
@@ -776,7 +712,6 @@ void render(const char* id,
 
 	ImGui::EndChild();
 
-	// Cache counts for external status bar rendering.
 	state.lastFilteredCount = static_cast<int>(filteredItems.size());
 	state.lastSelectionCount = static_cast<int>(selection.size());
 
@@ -803,24 +738,11 @@ void renderStatusBar(const std::string& unittype,
 	if (state.lastSelectionCount > 0)
 		statusText += " (" + std::to_string(state.lastSelectionCount) + " selected)";
 
-	// JS rendered <div class="list-status"> with CSS:
-	//   background: #1f1f20; height: 27px;
-	//   border-bottom-right-radius: 10px; border-bottom-left-radius: 10px;
-	//   font-weight: bold; padding-left: 10px; padding-top: 3px;
-	// The explicit colored rounded background was dropped per CLAUDE.md Visual
-	// Fidelity rules (exact CSS colors are not required); the status text and
-	// quick filters render on the default window background. Padding/cursor
-	// offsets are preserved to keep layout consistent.
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f);
 	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3.0f);
 
 	ImGui::TextUnformatted(statusText.c_str());
 
-	// Quick filters.
-	// CSS: .quick-filters a { color: #57afe2; } — inactive link color (FONT_ALT)
-	// CSS: .quick-filters a.active { color: #ffffff; font-weight: bold; } — active link color
-	// CSS: .quick-filters a:hover { text-decoration: underline; } — hover underline.
-	// Use transparent-background clickable text to approximate CSS <a> link appearance.
 	if (!quickfilters.empty()) {
 		ImGui::SameLine();
 		ImGui::Text("Quick filter:");
@@ -832,7 +754,6 @@ void renderStatusBar(const std::string& unittype,
 						   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
 
 			const bool isActive = (state.activeQuickFilter == ext);
-			// Inactive: #57afe2 (font-alt). Active: #ffffff (font-highlight / white).
 			const ImVec4 linkColor = isActive
 				? ImVec4(1.0f, 1.0f, 1.0f, 1.0f)
 				: ImVec4(87.0f/255.0f, 175.0f/255.0f, 226.0f/255.0f, 1.0f);
@@ -844,9 +765,6 @@ void renderStatusBar(const std::string& unittype,
 			                      ImVec2(ImGui::CalcTextSize(upperExt.c_str()).x, 0.0f)))
 				applyQuickFilter(ext, state);
 
-			// CSS hover underline (`text-decoration: underline`) has no native
-			// Dear ImGui equivalent, so draw a thin line along the bottom of
-			// the item rect when hovered. Uses the same link color as the text.
 			if (ImGui::IsItemHovered()) {
 				const ImVec2 itemMin = ImGui::GetItemRectMin();
 				const ImVec2 itemMax = ImGui::GetItemRectMax();
