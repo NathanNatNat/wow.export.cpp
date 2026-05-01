@@ -201,9 +201,6 @@ void fit_camera_for_character(const BoundingBox* /*bounding_box*/, PerspectiveCa
 
 	camera.lookAt(target_x, target_y, target_z);
 
-	// JS takes a single duck-typed `controls` parameter and updates only that one.
-	// C++ splits into two typed pointers. Only the active one (non-null) should be updated.
-	// The caller passes the appropriate controls; typically only one is non-null.
 	if (char_controls) {
 		char_controls->target[0] = target_x;
 		char_controls->target[1] = target_y;
@@ -220,41 +217,33 @@ void fit_camera_for_character(const BoundingBox* /*bounding_box*/, PerspectiveCa
 }
 
 
-// via ImGui::Image. These helpers manage FBO lifecycle.
-
 static void create_fbo(State& state, int width, int height) {
-	// Clean up existing FBO
 	if (state.fbo != 0) {
 		glDeleteFramebuffers(1, &state.fbo);
 		glDeleteTextures(1, &state.color_texture);
 		glDeleteRenderbuffers(1, &state.depth_rbo);
 	}
 
-	// Create color texture
 	glGenTextures(1, &state.color_texture);
 	glBindTexture(GL_TEXTURE_2D, state.color_texture);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	// Create depth/stencil renderbuffer
 	glGenRenderbuffers(1, &state.depth_rbo);
 	glBindRenderbuffer(GL_RENDERBUFFER, state.depth_rbo);
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
 
-	// Create FBO
 	glGenFramebuffers(1, &state.fbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, state.fbo);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, state.color_texture, 0);
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, state.depth_rbo);
 
-	// Verify completeness
 	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	if (status != GL_FRAMEBUFFER_COMPLETE) {
 		spdlog::error("model-viewer-gl: FBO not complete, status={}", status);
 	}
 
-	// Unbind
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	state.fbo_width = width;
@@ -275,28 +264,23 @@ static void destroy_fbo(State& state) {
 }
 
 
-// Sync PerspectiveCamera position → CameraGL adapter (before orbit controls update)
 static void sync_camera_to_gl(State& state) {
 	state.camera_gl.position = state.camera.position;
 	state.camera_gl.up = state.camera.up;
 	state.camera_gl.fov = state.camera.fov;
 }
 
-// Sync PerspectiveCamera position → CharacterCameraGL adapter (before char controls update)
 static void sync_camera_to_char_gl(State& state) {
 	state.char_camera_gl.position = state.camera.position;
 }
 
-// Set up the CameraGL adapter lookAt callback to sync back to PerspectiveCamera
 static void setup_camera_gl_callbacks(State& state) {
 	state.camera_gl.lookAt = [&state](float x, float y, float z) {
-		// Controls modified camera_gl.position, sync it back to PerspectiveCamera
 		state.camera.position = state.camera_gl.position;
 		state.camera.lookAt(x, y, z);
 	};
 
 	state.char_camera_gl.lookAt = [&state](float x, float y, float z) {
-		// Controls modified char_camera_gl.position, sync it back
 		state.camera.position = state.char_camera_gl.position;
 		state.camera.lookAt(x, y, z);
 	};
@@ -307,27 +291,14 @@ static void setup_camera_gl_callbacks(State& state) {
 }
 
 
-// mouse and keyboard events. In C++/ImGui, we query ImGui::GetIO() and forward
-// events to the camera controls. This handles the equivalent of:
-//   canvas.addEventListener('mousedown', ...)
-//   document.addEventListener('mousemove', ...)
-//   document.addEventListener('mouseup', ...)
-//   canvas.addEventListener('wheel', ...)
-//   document.addEventListener('keydown', ...)
-// Handlers return bool to indicate event consumption (JS preventDefault/stopPropagation).
-// Consumed wheel events zero io.MouseWheel to prevent parent window scrolling (stopPropagation).
 static void handle_input(State& state) {
 	ImGuiIO& io = ImGui::GetIO();
 	const bool is_hovered = ImGui::IsItemHovered();
 
-	// Mouse position relative to widget
 	ImVec2 widget_pos = ImGui::GetItemRectMin();
 	int mouse_x = static_cast<int>(io.MousePos.x - widget_pos.x);
 	int mouse_y = static_cast<int>(io.MousePos.y - widget_pos.y);
 
-	// Mouse wheel (canvas-level in JS)
-	// JS: on_mouse_wheel calls preventDefault() + stopPropagation() when consumed.
-	// stopPropagation equivalent: zero io.MouseWheel to prevent ImGui parent scroll.
 	if (is_hovered && io.MouseWheel != 0.0f) {
 		bool consumed = false;
 		if (state.use_character_controls && state.char_controls) {
@@ -336,10 +307,9 @@ static void handle_input(State& state) {
 			consumed = state.orbit_controls->on_mouse_wheel(-io.MouseWheel * 100.0f);
 		}
 		if (consumed)
-			io.MouseWheel = 0.0f;  // stopPropagation: prevent parent window from scrolling
+			io.MouseWheel = 0.0f;
 	}
 
-	// Mouse down (canvas-level in JS)
 	for (int btn = 0; btn < 3; btn++) {
 		if (is_hovered && ImGui::IsMouseClicked(btn)) {
 			if (state.use_character_controls && state.char_controls) {
@@ -351,7 +321,6 @@ static void handle_input(State& state) {
 		}
 	}
 
-	// Key down — on_key_down returns true only for handled keys (JS preventDefault)
 	if (state.orbit_controls && !state.use_character_controls) {
 		for (int key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_NamedKey_END; key++) {
 			if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(key))) {
@@ -360,7 +329,6 @@ static void handle_input(State& state) {
 		}
 	}
 
-	// Mouse move (always forward, regardless of hover, since panning may extend outside)
 	if (io.MouseDelta.x != 0 || io.MouseDelta.y != 0) {
 		if (state.use_character_controls && state.char_controls) {
 			state.char_controls->on_mouse_move(mouse_x, mouse_y);
@@ -369,7 +337,6 @@ static void handle_input(State& state) {
 		}
 	}
 
-	// Mouse up (document-level in JS)
 	for (int btn = 0; btn < 3; btn++) {
 		if (ImGui::IsMouseReleased(btn)) {
 			if (state.use_character_controls && state.char_controls) {
@@ -382,15 +349,10 @@ static void handle_input(State& state) {
 }
 
 
-/**
- * Render the 3D scene to the FBO.
- * JS equivalent: the render() method of the Vue component.
- */
 static void render_scene(State& state, Context& context) {
 	if (!state.isRendering || !state.gl_context)
 		return;
 
-	// Calculate delta time
 	float currentTime = static_cast<float>(ImGui::GetTime());
 	if (state.lastTime < 0)
 		state.lastTime = currentTime;
@@ -399,16 +361,12 @@ static void render_scene(State& state, Context& context) {
 	state.lastTime = currentTime;
 
 	// update animation
-	// JS: if (activeRenderer && activeRenderer.updateAnimation) — duck-typed check.
-	// In C++, M2RendererGL always has updateAnimation, so a null check suffices.
 	M2RendererGL* activeRenderer = context.getActiveRenderer ? context.getActiveRenderer() : nullptr;
 
 	if (activeRenderer) {
 		activeRenderer->updateAnimation(deltaTime);
 
 		// update frame counter in view (throttled to ~15fps for UI updates)
-		// JS: if (activeRenderer.get_animation_frame && !activeRenderer.animation_paused)
-		// In C++, M2RendererGL always has these methods, so null check on activeRenderer suffices.
 		if (!activeRenderer->is_animation_paused()) {
 			state.frameUpdateCounter = (state.frameUpdateCounter) + 1;
 			if (state.frameUpdateCounter >= 4) {
@@ -424,12 +382,6 @@ static void render_scene(State& state, Context& context) {
 	}
 
 	// apply model rotation if speed is non-zero (non-character mode)
-	// JS: if (rotation_speed !== 0 && activeRenderer && activeRenderer.setTransform && !this.use_character_controls)
-	//
-	// C++ extension: JS auto-rotation only routes through `activeRenderer.setTransform`
-	// (M2 only). C++ adds an `else if` branch using `context.setActiveModelTransform`
-	// when `activeRenderer` is null, to support WMO/M3 models that have no
-	// `activeRenderer` equivalent in this port.
 	const double rotation_speed = core::view->modelViewerRotationSpeed;
 	if (rotation_speed != 0 && activeRenderer && !state.use_character_controls) {
 		state.model_rotation_y += static_cast<float>(rotation_speed) * deltaTime;
@@ -447,17 +399,12 @@ static void render_scene(State& state, Context& context) {
 		);
 	}
 
-	// update controls (JS: this.controls.update())
+	// update controls
 	if (context.controls_update)
 		context.controls_update();
 
-	// Bind FBO for 3D rendering
 	glBindFramebuffer(GL_FRAMEBUFFER, state.fbo);
 
-	// ImGui's OpenGL3 backend modifies GL state (program, VAO, textures,
-	// blend, depth, etc.) between frames without going through our GLContext
-	// cache.  Invalidate the cache so all subsequent set_*/bind_* calls
-	// actually issue the real GL commands.
 	state.gl_context->invalidate_cache();
 
 	state.gl_context->set_viewport(state.fbo_width, state.fbo_height);
@@ -494,8 +441,6 @@ static void render_scene(State& state, Context& context) {
 	auto* equipment_renderers = context.getEquipmentRenderers ? context.getEquipmentRenderers() : nullptr;
 
 	// determine hand grip state based on equipped weapons
-	// JS: if (activeRenderer && equipment_renderers && activeRenderer.setHandGrip)
-	// In C++, M2RendererGL always has setHandGrip, so null check on activeRenderer suffices.
 	if (activeRenderer && equipment_renderers) {
 		bool close_right = false;
 		bool close_left = false;
@@ -538,7 +483,6 @@ static void render_scene(State& state, Context& context) {
 	}
 
 	// render model
-	// JS: if (activeRenderer && activeRenderer.render) activeRenderer.render(...)
 	if (activeRenderer) {
 		activeRenderer->render(view_mat, proj_mat);
 	} else if (context.renderActiveModel) {
@@ -603,13 +547,11 @@ static void render_scene(State& state, Context& context) {
 		}
 	}
 
-	// Unbind FBO
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 
 void recreate_controls(State& state, Context& context) {
-	// Dispose existing controls
 	if (state.orbit_controls) {
 		state.orbit_controls->dispose();
 		state.orbit_controls.reset();
@@ -624,7 +566,6 @@ void recreate_controls(State& state, Context& context) {
 		: true;
 
 	if (context.useCharacterControls && !use_3d_camera) {
-		// Character camera controls
 		sync_camera_to_char_gl(state);
 		state.char_controls = std::make_unique<CharacterCameraControlsGL>(state.char_camera_gl, state.char_dom_element);
 
@@ -648,7 +589,6 @@ void recreate_controls(State& state, Context& context) {
 				state.char_controls->update();
 		};
 	} else {
-		// Orbit camera controls
 		sync_camera_to_gl(state);
 		state.orbit_controls = std::make_unique<CameraControlsGL>(state.camera_gl, state.dom_element);
 
@@ -712,9 +652,6 @@ static void poll_watchers(State& state) {
 }
 
 void fit_camera(State& state, Context& context) {
-	// JS: const active_renderer = this.context.getActiveRenderer?.();
-	//     if (!active_renderer || !active_renderer.getBoundingBox) return;
-	//     const bounding_box = active_renderer.getBoundingBox();
 	M2RendererGL* active_renderer = context.getActiveRenderer ? context.getActiveRenderer() : nullptr;
 	std::optional<BoundingBox> bounding_box;
 
@@ -742,24 +679,15 @@ void fit_camera(State& state, Context& context) {
 
 
 void init(State& state, Context& context) {
-	// JS: this.gl_context = new GLContext(canvas, { antialias: true, alpha: true, preserveDrawingBuffer: true });
-	// In desktop OpenGL, these WebGL context options map as follows:
-	// - antialias: Multisampling is not needed since we render to an FBO (can add MSAA FBO if needed).
-	// - alpha: The FBO color attachment uses GL_RGBA8, which includes alpha.
-	// - preserveDrawingBuffer: Not applicable — desktop GL framebuffers are always preserved.
 	state.gl_context = std::make_unique<gl::GLContext>();
 
 	// store context for renderers
 	context.gl_context = state.gl_context.get();
 
-	// create camera (already default-constructed in State)
-	// (State default-initializes camera with these values)
-
 	// model rotation
 	state.model_rotation_y = 0;
 	state.use_character_controls = false;
 
-	// Set up camera adapter callbacks
 	setup_camera_gl_callbacks(state);
 
 	// create controls
@@ -778,7 +706,6 @@ void init(State& state, Context& context) {
 	setup_character_watchers(state, context);
 
 	// start render loop
-	// isRendering controls whether render_scene() executes.
 	state.isRendering = true;
 
 	state.initialized = true;
@@ -812,7 +739,6 @@ void dispose(State& state) {
 	}
 
 
-	// Destroy FBO
 	destroy_fbo(state);
 	state.watchers.clear();
 
@@ -831,18 +757,11 @@ void renderWidget(const char* id, State& state, Context& context) {
 		return;
 	}
 
-	// Initialize if needed
 	if (!state.initialized) {
 		init(state, context);
 	}
 
 	// resize handler
-	// JS: canvas.width = width * window.devicePixelRatio (lines 482–483).
-	// In desktop OpenGL, ImGui::GetContentRegionAvail() already returns dimensions
-	// in framebuffer pixels (accounting for DPI scaling done by GLFW). The FBO is
-	// sized to match these pixel dimensions, providing full-resolution rendering.
-	// If GLFW content scale != 1.0 in the future, this should be revisited to
-	// multiply by the content scale factor (equivalent of devicePixelRatio).
 	if (state.fbo_width != width || state.fbo_height != height) {
 		create_fbo(state, width, height);
 
@@ -851,29 +770,21 @@ void renderWidget(const char* id, State& state, Context& context) {
 		state.camera.aspect = static_cast<float>(width) / static_cast<float>(height);
 		state.camera.update_projection();
 
-		// Update dom element dimensions for controls
 		state.dom_element.clientWidth = width;
 		state.dom_element.clientHeight = height;
 		state.char_dom_element.clientWidth = width;
 		state.char_dom_element.clientHeight = height;
 	}
 
-	// JS parity: execute mounted character-mode watchers.
 	poll_watchers(state);
 
-	// Render 3D scene to FBO
 	render_scene(state, context);
 
-	// Display FBO as ImGui image (UV flipped for OpenGL → ImGui coordinate convention)
 	ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(state.color_texture)),
 	             ImVec2(static_cast<float>(width), static_cast<float>(height)),
 	             ImVec2(0, 1), ImVec2(1, 0));
 
-	// Handle input (mouse/keyboard → camera controls)
 	handle_input(state);
-
-	// renderWidget is called each frame by the parent tab, which is equivalent
-	// to requestAnimationFrame in the JS version.
 
 	ImGui::PopID();
 }
