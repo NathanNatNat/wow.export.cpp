@@ -18,7 +18,7 @@ GLContext::GLContext() {
 }
 
 void GLContext::_init_extensions() {
-	// compressed texture formats — check for S3TC extension availability
+	// compressed texture formats
 	int num_extensions = 0;
 	glGetIntegerv(GL_NUM_EXTENSIONS, &num_extensions);
 
@@ -34,11 +34,11 @@ void GLContext::_init_extensions() {
 			ext_aniso = true;
 	}
 
-	// anisotropic filtering — query max if extension is present
+	// anisotropic filtering
 	if (ext_aniso)
 		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &max_anisotropy);
 
-	// float textures (core in GL 3.0+)
+	// float textures
 	ext_float_texture = true;
 }
 
@@ -302,13 +302,10 @@ void GLContext::draw_arrays(GLenum mode, GLint first, GLsizei count) {
 }
 
 void GLContext::dispose() {
-	// context is automatically cleaned up when the GLFW window is destroyed
+	// context is automatically cleaned up when canvas is removed
 }
 
 void GLContext::invalidate_cache() {
-	// Reset all cached state so subsequent set_*() / bind_*() calls always
-	// issue the real GL commands.  This is necessary after an external system
-	// (e.g. ImGui's OpenGL3 backend) has modified GL state behind our back.
 	_depth_test = false;
 	_depth_write = true;
 	_depth_func = GL_LEQUAL;
@@ -320,7 +317,7 @@ void GLContext::invalidate_cache() {
 	_current_program = 0;
 	_current_vao = 0;
 	_bound_textures.fill(0);
-	_active_texture_unit = -1; // force re-issue of glActiveTexture
+	_active_texture_unit = -1;
 }
 
 } // namespace gl
