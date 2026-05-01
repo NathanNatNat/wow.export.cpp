@@ -27,9 +27,6 @@ bool isSaving = false;
 std::mutex keyRingMutex;
 std::mutex saveMutex;
 
-/**
- * Convert a string to lowercase in-place.
- */
 std::string toLower(std::string_view sv) {
 	std::string s(sv);
 	std::transform(s.begin(), s.end(), s.begin(),
@@ -102,9 +99,6 @@ void save() {
 	}
 }
 
-/**
- * Split a string by a delimiter into parts.
- */
 std::vector<std::string_view> splitLines(std::string_view data) {
 	std::vector<std::string_view> lines;
 	std::size_t start = 0;
@@ -126,9 +120,6 @@ std::vector<std::string_view> splitLines(std::string_view data) {
 	return lines;
 }
 
-/**
- * Trim whitespace from a string_view.
- */
 std::string_view trim(std::string_view sv) {
 	while (!sv.empty() && std::isspace(static_cast<unsigned char>(sv.front())))
 		sv.remove_prefix(1);
