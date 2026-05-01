@@ -57,8 +57,6 @@ dataTextures.emplace(out, std::move(pngData));
 std::map<uint32_t, std::string> M3Exporter::exportTextures(const std::filesystem::path& out, bool raw,
 MTLWriter* mtl, casc::ExportHelper* helper, bool fullTexPaths)
 {
-// Note: The original JS M3Exporter.exportTextures() also returns an empty map.
-// M3 texture export is not yet implemented in the upstream JS source.
 const std::map<uint32_t, std::string> validTextures;
 return validTextures;
 }
@@ -91,13 +89,11 @@ gltf.setNormalArray(m3->normals);
 // gltf.setBoneIndexArray(m3->boneIndices)
 
 gltf.addUVArray(m3->uv);
-// JS uses `this.m3.uv1 !== undefined`; M3Loader normalises absent uv1 to an empty vector, so empty() is the equivalent presence check.
 if (core::view->config.value("modelsExportUV2", false) && !m3->uv1.empty())
 gltf.addUVArray(m3->uv1);
 
 const auto outDir = out.parent_path();
 auto textureMap = exportTextures(outDir, false, nullptr, helper, true);
-// JS: gltf.setTextureMap(textureMap) — convert map<uint32_t, string> to string-keyed GLTFTextureEntry map
 std::map<std::string, GLTFTextureEntry> gltfTexMap;
 for (const auto& [key, path] : textureMap)
 	gltfTexMap[std::to_string(key)] = { path, "" };
@@ -111,8 +107,6 @@ continue;
 for (size_t geosetIndex = m3->geosetCountPerLOD * lodIndex;
      geosetIndex < (m3->geosetCountPerLOD * (lodIndex + 1)); geosetIndex++) {
 const auto& geoset = m3->geosets[geosetIndex];
-
-// Read geoset name from string block (save/restore position to avoid state mutation)
 std::string geosetName;
 if (m3->stringBlock && geoset.nameCharCount > 0) {
 const auto savedPos = m3->stringBlock->offset();
@@ -162,7 +156,6 @@ obj.setVertArray(m3->vertices);
 obj.setNormalArray(m3->normals);
 obj.addUVArray(m3->uv);
 
-// JS uses `this.m3.uv1 !== undefined`; M3Loader normalises absent uv1 to an empty vector, so empty() is the equivalent presence check.
 if (core::view->config.value("modelsExportUV2", false) && !m3->uv1.empty())
 obj.addUVArray(m3->uv1);
 
@@ -178,7 +171,6 @@ fileManifest->push_back({ "PNG", texFileDataID, std::filesystem::path(matPath) }
 if (helper && helper->isCancelled())
 return;
 
-// Faces
 const int index = 0;
 for (size_t lodIndex = 0; lodIndex < m3->lodLevels.size(); lodIndex++) {
 if (static_cast<int>(lodIndex) != index)
@@ -187,8 +179,6 @@ continue;
 for (size_t geosetIndex = m3->geosetCountPerLOD * lodIndex;
      geosetIndex < (m3->geosetCountPerLOD * (lodIndex + 1)); geosetIndex++) {
 const auto& geoset = m3->geosets[geosetIndex];
-
-// Read geoset name from string block (save/restore position to avoid state mutation)
 std::string geosetName;
 if (m3->stringBlock && geoset.nameCharCount > 0) {
 const auto savedPos = m3->stringBlock->offset();
@@ -256,7 +246,6 @@ stl.setNormalArray(m3->normals);
 if (helper && helper->isCancelled())
 return;
 
-// faces
 const int index = 0;
 for (size_t lodIndex = 0; lodIndex < m3->lodLevels.size(); lodIndex++) {
 if (static_cast<int>(lodIndex) != index)
@@ -265,8 +254,6 @@ continue;
 for (size_t geosetIndex = m3->geosetCountPerLOD * lodIndex;
      geosetIndex < (m3->geosetCountPerLOD * (lodIndex + 1)); geosetIndex++) {
 const auto& geoset = m3->geosets[geosetIndex];
-
-// Read geoset name from string block (save/restore position to avoid state mutation)
 std::string geosetName;
 if (m3->stringBlock && geoset.nameCharCount > 0) {
 const auto savedPos = m3->stringBlock->offset();
@@ -308,7 +295,6 @@ JSONWriter manifest(manifestFile);
 manifest.addProperty("fileDataID", fileDataID);
 
 // Write the M3 file with no conversion.
-// JS: `await this.m3.data.writeToFile(out)`; M3Loader holds `data` privately, but it is the same buffer that was passed in here.
 data.writeToFile(out);
 if (fileManifest)
 fileManifest->push_back({ "M3", fileDataID, out });

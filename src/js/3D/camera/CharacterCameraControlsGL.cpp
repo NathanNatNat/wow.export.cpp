@@ -24,18 +24,6 @@ CharacterCameraControlsGL::CharacterCameraControlsGL(CameraGL& camera,
 	  is_panning(false),
 	  prev_mouse_x(0),
 	  prev_mouse_y(0) {
-	// JS constructor stores four handler refs and registers three dom_element listeners:
-	//   dom_element: mousedown → on_mouse_down, wheel → on_mouse_wheel,
-	//                contextmenu → e.preventDefault()
-	// mousemove / mouseup are NOT registered here — they are added dynamically
-	// inside on_mouse_down() and removed inside on_mouse_up().
-	//
-	// In C++/GLFW there is no DOM event system. The caller is responsible for
-	// forwarding all input to the on_* methods. GLFW has no context menu,
-	// so contextmenu prevention is unnecessary. The dynamic add/remove of
-	// mousemove/mouseup listeners is represented here by the is_rotating /
-	// is_panning flags: move/up events are only processed when those flags are set,
-	// which is exactly when JS would have the document listeners attached.
 }
 
 bool CharacterCameraControlsGL::on_mouse_down(int button, int clientX, int clientY) {
@@ -43,19 +31,12 @@ bool CharacterCameraControlsGL::on_mouse_down(int button, int clientX, int clien
 		is_rotating = true;
 		prev_mouse_x = clientX;
 
-		// JS: document.addEventListener('mousemove', ...) / ('mouseup', ...)
-		// In C++/GLFW the caller always forwards move/up; is_rotating flag acts as the gate.
-
-		// JS: e.preventDefault() — prevents text selection / focus steal.
 		return true;
 	} else if (button == 2) {
 		is_panning = true;
 		prev_mouse_x = clientX;
 		prev_mouse_y = clientY;
 
-		// JS: document.addEventListener('mousemove', ...) / ('mouseup', ...) — same as above.
-
-		// JS: e.preventDefault()
 		return true;
 	}
 
@@ -72,7 +53,6 @@ bool CharacterCameraControlsGL::on_mouse_move(int clientX, int clientY) {
 		if (on_model_rotate)
 			on_model_rotate(model_rotation_y);
 
-		// JS: e.preventDefault() — prevents text selection during rotate.
 		return true;
 	} else if (is_panning) {
 		const int delta_x = clientX - prev_mouse_x;
@@ -119,10 +99,8 @@ bool CharacterCameraControlsGL::on_mouse_move(int clientX, int clientY) {
 		target[1] += offset_y;
 		target[2] += offset_z;
 
-		// JS calls camera.lookAt() unconditionally here (line 112).
 		camera.lookAt(target[0], target[1], target[2]);
 
-		// JS: e.preventDefault() — prevents text selection during pan.
 		return true;
 	}
 
@@ -132,21 +110,12 @@ bool CharacterCameraControlsGL::on_mouse_move(int clientX, int clientY) {
 void CharacterCameraControlsGL::on_mouse_up(int button) {
 	if (button == 0) {
 		is_rotating = false;
-
-		// JS: document.removeEventListener('mousemove', ...) / ('mouseup', ...)
-		// In C++/GLFW, is_rotating = false is the equivalent gate: move/up events
-		// forwarded by the caller will be no-ops until the next mouse-down.
 	} else if (button == 2) {
 		is_panning = false;
-
-		// Same as above — is_panning = false gates further move/up processing.
 	}
 }
 
 bool CharacterCameraControlsGL::on_mouse_wheel(float deltaY) {
-	// JS: e.preventDefault(); e.stopPropagation(); — called unconditionally before any logic.
-	// stopPropagation is handled by the caller zeroing io.MouseWheel when we return true.
-
 	const float px = camera.position[0], py = camera.position[1], pz = camera.position[2];
 	const float tx = target[0], ty = target[1], tz = target[2];
 
@@ -159,7 +128,7 @@ bool CharacterCameraControlsGL::on_mouse_wheel(float deltaY) {
 	else if (deltaY > 0)
 		zoom_amount = -current_distance * (1.0f - ZOOM_SCALE);
 	else
-		return true;  // JS called preventDefault/stopPropagation before this return
+		return true;
 
 	const float new_distance = current_distance - zoom_amount;
 
@@ -173,11 +142,10 @@ bool CharacterCameraControlsGL::on_mouse_wheel(float deltaY) {
 		camera.position[1] -= dir_y * zoom_amount;
 		camera.position[2] -= dir_z * zoom_amount;
 
-		// JS calls camera.update_view() unconditionally here (line 162).
 		camera.update_view();
 	}
 
-	return true;  // always consumed — JS called preventDefault/stopPropagation unconditionally
+	return true;
 }
 
 void CharacterCameraControlsGL::update() {
@@ -185,12 +153,6 @@ void CharacterCameraControlsGL::update() {
 }
 
 void CharacterCameraControlsGL::dispose() {
-	// JS dispose() removes four event listeners:
-	//   dom_element: mousedown, wheel
-	//   document:    mousemove, mouseup (which were added dynamically in on_mouse_down)
-	// In C++/GLFW, the caller must stop forwarding input events to this instance.
-	// Resetting is_rotating/is_panning to false ensures any stale forwarded move/up
-	// events are no-ops, mirroring the effect of removing the document listeners.
 	is_rotating = false;
 	is_panning = false;
 }

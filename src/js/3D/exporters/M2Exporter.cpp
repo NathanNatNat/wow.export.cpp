@@ -292,9 +292,6 @@ M2ExportTextureResult M2Exporter::exportTextures(const std::filesystem::path& ou
 casc::ExportHelper* helper, bool fullTexPaths, bool glbMode)
 {
 const auto& config = core::view->config;
-// JS validTextures is a Map keyed by numeric fileDataID for regular textures and "data-N" strings
-// for data textures. C++ uses string keys throughout (regular keys are std::to_string(fileDataID))
-// for type uniformity; downstream consumers stringify their lookups accordingly.
 M2ExportTextureResult result;
 
 if (!config.value("modelsExportTextures", false))
@@ -313,8 +310,6 @@ try {
 std::string texFile = "data-" + std::to_string(textureName) + ".png";
 auto texPath = out / texFile;
 const std::string matName = "mat_" + std::to_string(textureName);
-// In JS, dataTexture is a base64 data URI that gets decoded via
-// BufferWrapper.fromBase64(). In C++, addURITexture stores pre-decoded PNG data directly.
 auto dataCopy = dataTexture;
 
 if (glbMode) {
@@ -686,7 +681,6 @@ return;
 auto& equipM2 = *renderer->m2;
 equipM2.load().get();
 
-// JS: const skin = await m2.getSkin(0); if (!skin) return;
 Skin* equipSkinPtr = equipM2.getSkin(0).get();
 if (!equipSkinPtr)
 	return;
@@ -837,7 +831,6 @@ return;
 auto& equipM2 = *renderer->m2;
 equipM2.load().get();
 
-// JS: const skin = await m2.getSkin(0); if (!skin) return;
 Skin* equipSkinPtr = equipM2.getSkin(0).get();
 if (!equipSkinPtr)
 	return;
@@ -974,7 +967,6 @@ return;
 auto& equipM2 = *renderer->m2;
 equipM2.load().get();
 
-// JS: const skin = await m2.getSkin(0); if (!skin) return;
 Skin* equipSkinPtr = equipM2.getSkin(0).get();
 if (!equipSkinPtr)
 	return;
@@ -1049,7 +1041,6 @@ auto texResult = exportTextures(outDir, false, &mtl, helper);
 auto& validTextures = texResult.validTextures;
 for (const auto& [texKey, texInfo] : validTextures) {
 if (fileManifest) {
-// JS: texFileDataID is a number for regular textures, "data-X" string for data textures.
 uint32_t texID = 0;
 bool is_numeric = false;
 try { texID = std::stoul(texKey); is_numeric = true; } catch (...) {}
@@ -1134,11 +1125,8 @@ auto textureIt = validTextures.find(std::to_string(texture.fileDataID));
 nlohmann::json texObj;
 texObj["fileDataID"] = texture.fileDataID;
 texObj["flags"] = texture.flags;
-// JS Object.assign also spreads texture.fileName if set
 if (!texture.fileName.empty())
 	texObj["fileName"] = texture.fileName;
-// JS: listfile.getByID() returns undefined when not found;
-// use null in JSON to match JS behavior instead of empty string.
 {
 	auto internalName = casc::listfile::getByID(texture.fileDataID).value_or("");
 	if (!internalName.empty())

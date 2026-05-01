@@ -7,7 +7,6 @@
 
 #include <glad/gl.h>
 
-// stb_image_resize2 implementation is emitted in stb-impl.cpp to avoid ODR violations.
 #include <stb_image_resize2.h>
 
 #include <cmath>
@@ -49,7 +48,6 @@
 #include "M2Exporter.h"
 #include "WMOExporter.h"
 
-// Resolve incomplete types from M2Exporter/WMOExporter dependencies.
 #include "../loaders/M2Loader.h"
 #include "../loaders/M3Loader.h"
 #include "../loaders/WMOLoader.h"
@@ -434,7 +432,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 	} else {
 		auto wdtFile = casc->getVirtualFileByName(prefix + ".wdt");
 
-		// Write the raw WDT file before moving data into the cache entry.
 		if (isRawExport)
 			wdtFile.writeToFile(dir / (mapDir + ".wdt"));
 
@@ -719,7 +716,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				const auto& heightIDs = texAdt.heightTextureFileDataIDs;
 				const auto& texParams = texAdt.texParams;
 
-				// Lambda to save a layer texture (diffuse or height) and return relative path.
 				auto saveLayerTexture = [&](uint32_t fileDataID) -> std::string {
 					auto blpData = casc->getVirtualFileByID(fileDataID);
 					casc::BLPImage blp(std::move(blpData));
@@ -745,7 +741,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 					return usePosix ? casc::ExportHelper::win32ToPosix(texFileStr) : texFileStr;
 				};
 
-				// JSON material info struct for layer metadata.
 				struct AlphaMapMaterial {
 					float scale = 1.0f;
 					uint32_t fileDataID = 0;
@@ -1081,7 +1076,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				if (isSplittingTextures || config.value("overwriteFiles", true) || !generics::fileExists(tileOutPath)) {
 					// Create new GL context and compile shaders.
 					if (!glInitialized) {
-						// Assumes a GL context is already current (set up by the main app).
 						compileShaders(!hasHeightTexturing);
 						glInitialized = true;
 					}
@@ -1332,7 +1326,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 
 							glDeleteBuffers(1, &indexBuffer);
 
-							// applied by flipping the pixel data during the copy.
 							auto fboPixels = readFBOPixels(tileSize, tileSize);
 
 							if (isSplittingTextures) {
@@ -1340,7 +1333,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 								const fs::path chunkTilePath = dir / ("tex_" + tileID + "_" + std::to_string(bakeChunkID++) + ".png");
 
 								if (config.value("overwriteFiles", true) || !generics::fileExists(chunkTilePath)) {
-									// Rotate 180 degrees (flip both axes)
 									PNGWriter chunkPng(tileSize, tileSize);
 									auto& chunkPixelData = chunkPng.getPixelData();
 									for (int py = 0; py < tileSize; py++) {
@@ -1357,14 +1349,12 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 								}
 							} else {
 								// Store as part of a larger composite.
-								// Rotate 180 and place into the composite at correct position.
 								const int cxPos = bakeChunkIndex % 16;
 								const int cyPos = bakeChunkIndex / 16;
 
 								for (int py = 0; py < tileSize; py++) {
 									for (int px = 0; px < tileSize; px++) {
 										const int srcIdx = (py * tileSize + px) * 4;
-										// 180 degree rotation
 										const int rotPx = tileSize - 1 - px;
 										const int rotPy = tileSize - 1 - py;
 										const int dstX = cxPos * tileSize + rotPx;
@@ -1443,7 +1433,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 			CSVWriter csv(csvPath);
 			csv.addField({"ModelFile", "PositionX", "PositionY", "PositionZ", "RotationX", "RotationY", "RotationZ", "RotationW", "ScaleFactor", "ModelId", "Type", "FileDataID", "DoodadSetIndexes", "DoodadSetNames"});
 
-			// Lambda to export M2 objects (doodads or game objects).
 			auto exportObjects = [&](const std::string& exportType, const auto& objects, const std::string& csvName) {
 				const size_t nObjects = objects.size();
 				logging::write(std::format("Exporting {} {} for ADT...", nObjects, exportType));
@@ -1524,9 +1513,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 							if (model.rotation.size() >= 4) {
 								rotX = model.rotation[0]; rotY = model.rotation[1]; rotZ = model.rotation[2]; rotW = model.rotation[3];
 							}
-							// Binary ADT models (ADTModelEntry/ADTWorldModelEntry) always have scale read from
-							// the file. JS: model.scale !== undefined is always true here, so use scale / 1024
-							// unconditionally (a scale of 0 in the binary produces 0.0 scale, matching JS).
 							scaleFactor = static_cast<float>(model.scale) / 1024.0f;
 							modelId = model.uniqueId;
 						}
@@ -1610,7 +1596,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 						else
 							doodadSets = { model.doodadSet };
 
-						// Build a cache ID string.
 						std::string doodadSetsStr;
 						for (size_t i = 0; i < doodadSets.size(); i++) {
 							if (i > 0) doodadSetsStr += ",";
@@ -1624,11 +1609,9 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 
 							wmoLoader.loadWMO();
 
-							// Cache doodad set names.
 							setNameCache[fileDataID] = wmoLoader.getDoodadSetNames();
 
 							if (config.value("mapsIncludeWMOSets", false)) {
-								// Build a mask with set 0 always checked, plus the relevant doodad sets.
 								size_t maxSetIndex = 0;
 								if (useADTSets) {
 									for (const auto& setIndex : objAdt.doodadSets)
@@ -1669,7 +1652,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 						if (usePosix)
 							modelFile = casc::ExportHelper::win32ToPosix(modelFile);
 
-						// Build doodad set names string.
 						std::string doodadSetNamesStr;
 						for (size_t i = 0; i < doodadSets.size(); i++) {
 							if (i > 0) doodadSetNamesStr += ",";
@@ -1754,7 +1736,6 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 				inst["offsetVertexData"] = instance.offsetVertexData;
 				inst["bitmap"] = instance.bitmap;
 
-				// Serialize vertexData sub-object.
 				nlohmann::json vd;
 				vd["height"] = instance.vertexData.height;
 				vd["depth"] = instance.vertexData.depth;

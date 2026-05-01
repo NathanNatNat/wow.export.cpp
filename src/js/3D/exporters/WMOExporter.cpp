@@ -36,9 +36,6 @@
 namespace {
 	std::unordered_set<uint32_t> doodadCache;
 
-	// -----------------------------------------------------------------------
-	// nlohmann::json serialization helpers for WMO structs (meta export)
-	// -----------------------------------------------------------------------
 	nlohmann::json fogEntryToJson(const WMOFogEntry& e) {
 		return { {"end", e.end}, {"startScalar", e.startScalar}, {"color", e.color} };
 	}
@@ -146,7 +143,6 @@ namespace {
 		return { {"flags", m.flags}, {"materialID", m.materialID} };
 	}
 
-	// Build group mask set from user-facing mask
 	std::set<uint32_t> buildGroupMaskSet(const std::vector<WMOExportGroupMask>& groupMask) {
 		std::set<uint32_t> mask;
 		for (const auto& group : groupMask) {
@@ -165,7 +161,7 @@ namespace {
 		}
 		return result;
 	}
-} // anonymous namespace
+}
 
 /**
  * Construct a new WMOExporter instance.
@@ -300,7 +296,6 @@ WMOExportTextureResult WMOExporter::exportTextures(const std::filesystem::path& 
 				if (!fileName.empty()) {
 					std::filesystem::path fnPath(fileName);
 					std::string baseName = fnPath.stem().string();
-					// Convert to lowercase
 					std::transform(baseName.begin(), baseName.end(), baseName.begin(),
 						[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 					matName = "mat_" + baseName;
@@ -402,7 +397,6 @@ void WMOExporter::exportAsGLTF(const std::filesystem::path& out, casc::ExportHel
 	if (helper->isCancelled())
 		return;
 
-	// Build GLTF texture lookup (string-keyed to match GLTFWriter API)
 	std::map<std::string, GLTFTextureEntry> gltfTextureMap;
 	for (const auto& [fid, texInfo] : texMaps.textureMap)
 		gltfTextureMap[std::to_string(fid)] = { texInfo.matPathRelative, texInfo.matName };
@@ -480,7 +474,6 @@ void WMOExporter::exportAsGLTF(const std::filesystem::path& out, casc::ExportHel
 			// No UVs available for the mesh, zero fill.
 			if (uv_maps.empty())
 				uv_maps.resize(1, std::vector<float>(nInd * 2, 0.0f));
-			// Already zero-filled by default
 		}
 
 		std::string groupName;
@@ -913,7 +906,6 @@ void WMOExporter::exportAsOBJ(const std::filesystem::path& out, casc::ExportHelp
 				}
 				gj["vertexColours"] = nlohmann::json(grp->vertexColours);
 				gj["colors2"] = nlohmann::json(grp->colors2);
-				// JS: liquid: group.liquid — undefined when MLIQ absent, omitted from JSON
 				if (grp->hasLiquid)
 					gj["liquid"] = liquidToJson(grp->liquid);
 
@@ -944,7 +936,6 @@ void WMOExporter::exportAsOBJ(const std::filesystem::path& out, casc::ExportHelp
 			for (const auto& material : wmo->materials) {
 				std::vector<uint32_t> materialTextures = { material.texture1, material.texture2, material.texture3 };
 
-				// Look up vertex/pixel shader from the shader map
 				int vertexShader = -1;
 				int pixelShader = -1;
 				auto shaderIt = wmo_shader_mapper::WMOShaderMap.find(static_cast<int>(material.shader));
@@ -994,7 +985,6 @@ void WMOExporter::exportAsOBJ(const std::filesystem::path& out, casc::ExportHelp
 			nlohmann::json matsArr = nlohmann::json::array();
 			for (const auto& mat : wmo->materials) {
 				auto matJson = materialToJson(mat);
-				// Add vertex/pixel shader from shader map
 				auto shaderIt = wmo_shader_mapper::WMOShaderMap.find(static_cast<int>(mat.shader));
 				if (shaderIt != wmo_shader_mapper::WMOShaderMap.end()) {
 					matJson["vertexShader"] = static_cast<int>(shaderIt->second.VertexShader);
@@ -1477,7 +1467,6 @@ void WMOExporter::exportGroupsAsSeparateOBJ(const std::filesystem::path& out, ca
 				}
 				gj["vertexColours"] = nlohmann::json(grp->vertexColours);
 				gj["colors2"] = nlohmann::json(grp->colors2);
-				// JS: liquid: group.liquid — undefined when MLIQ absent, omitted from JSON
 				if (grp->hasLiquid)
 					gj["liquid"] = liquidToJson(grp->liquid);
 
