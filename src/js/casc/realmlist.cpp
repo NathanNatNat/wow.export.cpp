@@ -21,10 +21,6 @@
 
 namespace {
 
-/**
- * Parse a realm list JSON object and populate core::view->realmList.
- * @param data JSON object keyed by region tag, each containing a "realms" array.
- */
 void parseRealmList(const nlohmann::json& data) {
 	nlohmann::json realms = nlohmann::json::object();
 
