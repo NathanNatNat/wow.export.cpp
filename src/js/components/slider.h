@@ -7,13 +7,6 @@
 
 #include <functional>
 
-/**
- * Slider component (ImGui immediate-mode equivalent).
- *
- * JS equivalent: Vue component with props: ['modelValue'],
- * emits: ['update:modelValue']. Renders a horizontal slider with a
- * draggable handle and clickable track, value between 0 and 1.
- */
 namespace slider {
 
 /**

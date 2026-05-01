@@ -12,9 +12,6 @@ namespace slider {
 /**
  * value: Slider value between 0 and 1.
  */
-// props: ['modelValue']
-// emits: ['update:modelValue']
-
 void render(const char* id, float value,
             const std::function<void(float)>& onChange) {
 	ImGui::PushID(id);
