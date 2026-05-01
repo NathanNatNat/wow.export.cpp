@@ -12,20 +12,17 @@ namespace casc {
 std::vector<std::unordered_map<std::string, std::string>> parseVersionConfig(std::string_view data) {
 	std::vector<std::unordered_map<std::string, std::string>> entries;
 
-	// Split input into lines (handles \r\n and \n).
 	std::vector<std::string_view> lines;
 	std::size_t start = 0;
 	for (std::size_t i = 0; i < data.size(); i++) {
 		if (data[i] == '\n') {
 			std::string_view line = data.substr(start, i - start);
-			// Strip trailing \r if present.
 			if (!line.empty() && line.back() == '\r')
 				line.remove_suffix(1);
 			lines.push_back(line);
 			start = i + 1;
 		}
 	}
-	// Handle last line (no trailing newline).
 	if (start <= data.size()) {
 		std::string_view line = data.substr(start);
 		if (!line.empty() && line.back() == '\r')
@@ -50,7 +47,6 @@ std::vector<std::unordered_map<std::string, std::string>> parseVersionConfig(std
 
 			std::string_view header = header_line.substr(pos, pipe - pos);
 
-			// Split by '!' and take first part.
 			std::size_t bang = header.find('!');
 			if (bang != std::string_view::npos)
 				header = header.substr(0, bang);
@@ -71,7 +67,6 @@ std::vector<std::unordered_map<std::string, std::string>> parseVersionConfig(std
 		std::string_view entry = lines[li];
 
 		// Skip empty lines/comments.
-		// Trim whitespace for the empty check (matches JS String.trim()).
 		std::string_view trimmed = entry;
 		while (!trimmed.empty() && std::isspace(static_cast<unsigned char>(trimmed.front())))
 			trimmed.remove_prefix(1);
