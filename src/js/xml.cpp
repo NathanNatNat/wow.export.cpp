@@ -32,10 +32,6 @@ struct Parser {
 		return std::string(xml.substr(start, pos - start));
 	}
 
-	// Additional bounds checks vs JS source — defensive additions for
-	// malformed/truncated XML; no behavioural difference for well-formed input.
-	// JS parse_attributes() does not check pos >= xml.length after skip_whitespace()
-	// or after pos++ inside the '=' branch (xml.js lines 39–54).
 	nlohmann::json parse_attributes() {
 		nlohmann::json attrs = nlohmann::json::object();
 
@@ -96,9 +92,6 @@ struct Parser {
 		bool valid = false;
 	};
 
-	// Additional bounds checks vs JS source — defensive additions for
-	// malformed/truncated XML; no behavioural difference for well-formed input.
-	// JS parse_node() does not check pos >= xml.length after pos++ (xml.js lines 60–98).
 	Node parse_node() {
 		skip_whitespace();
 
@@ -154,11 +147,6 @@ struct Parser {
 			if (xml[pos] == '<' && pos + 1 < xml.size() && xml[pos + 1] == '/')
 				break;
 
-			// Shared limitation with JS (xml.js lines 102–115): if XML contains bare
-			// text between elements (e.g. <root>hello</root>), parse_node() returns
-			// invalid without advancing pos, causing an infinite loop here.
-			// WoW data XML files do not contain bare text content, so this is an
-			// acceptable shared assumption between JS and C++.
 			Node child = parse_node();
 			if (child.valid)
 				children.push_back(std::move(child));
@@ -176,10 +164,6 @@ struct Parser {
 		return { tag_name, attrs, std::move(children), false, true };
 	}
 
-	// JS build_object begins with: if (!node) return {}  (xml.js lines 129–131).
-	// That guard is dead code in JS — all call sites check for a valid node first.
-	// C++ accepts const Node& and the parse loop only passes nodes with valid=true,
-	// so the null guard is correctly absent here.
 	nlohmann::json build_object(const Node& node) {
 		nlohmann::json obj = node.attrs;
 
@@ -221,7 +205,7 @@ struct Parser {
 	}
 };
 
-} // anonymous namespace
+}
 
 nlohmann::json parse_xml(std::string_view xml) {
 	Parser parser{ xml, 0 };

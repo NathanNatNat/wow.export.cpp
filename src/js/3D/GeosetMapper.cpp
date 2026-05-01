@@ -90,4 +90,4 @@ void map(std::vector<Geoset>& geosets) {
 	}
 }
 
-} // namespace geoset_mapper
+}

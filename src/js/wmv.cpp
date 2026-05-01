@@ -21,8 +21,6 @@ namespace wmv {
 
 namespace {
 
-// Safely parse an int from a JSON value (string or number).
-// Returns std::nullopt if the value is null, missing, or not parseable (equivalent to JS isNaN).
 std::optional<int> safe_parse_int(const nlohmann::json& val) {
 	if (val.is_null())
 		return std::nullopt;
@@ -43,7 +41,6 @@ std::optional<int> safe_parse_int(const nlohmann::json& val) {
 	return std::nullopt;
 }
 
-// Safely navigate a JSON path, returning null json if any key is missing.
 const nlohmann::json& safe_at(const nlohmann::json& j, const std::string& key) {
 	static const nlohmann::json null_json;
 	if (j.is_object() && j.contains(key))
@@ -51,7 +48,6 @@ const nlohmann::json& safe_at(const nlohmann::json& j, const std::string& key) {
 	return null_json;
 }
 
-// Extract a nested JSON value using chained keys, returning null json if any key is missing.
 const nlohmann::json& safe_navigate(const nlohmann::json& j, std::initializer_list<std::string> keys) {
 	static const nlohmann::json null_json;
 	const nlohmann::json* current = &j;
@@ -98,13 +94,11 @@ RaceGender extract_race_gender_from_path(const std::string& model_path) {
 		// todo: 36, MagharOrc
 	};
 
-	// lowercase and replace backslashes with forward slashes
 	std::string path_lower = model_path;
 	std::transform(path_lower.begin(), path_lower.end(), path_lower.begin(),
 		[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 	std::replace(path_lower.begin(), path_lower.end(), '\\', '/');
 
-	// split by '/'
 	std::vector<std::string> parts;
 	std::istringstream stream(path_lower);
 	std::string part;
@@ -131,7 +125,6 @@ RaceGender extract_race_gender_from_path(const std::string& model_path) {
 	return { race.value(), gender.value() };
 }
 
-// Normalize an item list from JSON: if it's an array, return it; if it's a single object, wrap it.
 std::vector<nlohmann::json> normalize_array(const nlohmann::json& val) {
 	if (val.is_array())
 		return val.get<std::vector<nlohmann::json>>();
@@ -139,7 +132,6 @@ std::vector<nlohmann::json> normalize_array(const nlohmann::json& val) {
 		return { val };
 }
 
-// Parse the equipment node common to both v1 and v2.
 std::unordered_map<int, int> parse_equipment(const nlohmann::json& data) {
 	std::unordered_map<int, int> equipment;
 
@@ -237,7 +229,7 @@ ParseResultV1 wmv_parse_v1(const nlohmann::json& data) {
 	};
 }
 
-} // anonymous namespace
+}
 
 ParseResult wmv_parse(std::string_view xml_str) {
 	auto parsed = parse_xml(xml_str);
@@ -256,4 +248,4 @@ ParseResult wmv_parse(std::string_view xml_str) {
 		throw std::runtime_error(std::format("unsupported .chr version: {}", version));
 }
 
-} // namespace wmv
+}

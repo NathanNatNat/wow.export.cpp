@@ -76,7 +76,6 @@ const ShaderSource& get_source(const std::string& name) {
  * @returns Pointer to a ShaderProgram
  */
 std::unique_ptr<gl::ShaderProgram> create_program(gl::GLContext& ctx, const std::string& name) {
-	// Wire up the unregister callback on first use
 	if (!gl::ShaderProgram::_unregister_fn) {
 		gl::ShaderProgram::_unregister_fn = [](gl::ShaderProgram* p) {
 			shaders::unregister(p);
@@ -172,4 +171,4 @@ size_t get_total_program_count() {
 	return count;
 }
 
-} // namespace shaders
+}

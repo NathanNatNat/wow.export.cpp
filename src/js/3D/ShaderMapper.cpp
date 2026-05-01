@@ -199,4 +199,4 @@ std::optional<std::string> getDomainShader(int textureCount, int shaderID) {
 	return std::nullopt;
 }
 
-} // namespace shader_mapper
+}
