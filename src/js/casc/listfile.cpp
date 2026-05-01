@@ -45,7 +45,6 @@ namespace BIN_LF_COMPONENTS {
 	static constexpr std::string_view PF_FONTS = "listfile-pf-fonts.dat";
 }
 
-// All component file names in order (for iteration)
 static constexpr std::array<std::string_view, 9> BIN_LF_COMPONENT_VALUES = {
 	BIN_LF_COMPONENTS::ID_INDEX,
 	BIN_LF_COMPONENTS::STRINGS,
@@ -74,7 +73,6 @@ static mmap_util::MmapObject* binary_tree_nodes_mmap = nullptr;
 
 static bool is_binary_mode = false;
 
-// In binary mode: Map<uint32_t, string>. In legacy mode: vector<uint32_t>.
 static std::unordered_map<uint32_t, std::string> preload_textures_map;
 static std::unordered_map<uint32_t, std::string> preload_sounds_map;
 static std::unordered_map<uint32_t, std::string> preload_text_map;
@@ -96,7 +94,6 @@ static bool is_preloaded = false;
 static std::optional<std::shared_future<bool>> preload_future;
 static std::mutex preload_mutex;
 
-// --- Internal helper: getFileDataIDsByExtension (legacy mode) ---
 static std::vector<uint32_t> getFileDataIDsByExtension(const std::vector<ExtFilter>& exts, std::string_view name) {
 	std::vector<uint32_t> entries;
 
@@ -129,11 +126,8 @@ static std::shared_future<bool> makeReadySharedFuture(bool value) {
 	return promise.get_future().share();
 }
 
-// --- Internal: listfile_check_cache_expiry ---
 static bool listfile_check_cache_expiry(int64_t last_modified) {
 	if (last_modified > 0) {
-		// JS: `Number(core.view.config.listfileCacheRefresh) || 0`
-		// — non-numeric/null values coerce to 0. Mirror with try/catch fallback.
 		int64_t ttl = 0;
 		if (core::view->config.contains("listfileCacheRefresh")) {
 			try {
@@ -166,11 +160,9 @@ static bool listfile_check_cache_expiry(int64_t last_modified) {
 	return true;
 }
 
-// --- Helper: get file last modified time in milliseconds ---
 static int64_t getFileLastModifiedMs(const fs::path& file_path) {
 	try {
 		auto ftime = fs::last_write_time(file_path);
-		// Convert file_time to system_clock then to epoch ms
 		auto sctp = std::chrono::clock_cast<std::chrono::system_clock>(ftime);
 		return std::chrono::duration_cast<std::chrono::milliseconds>(
 			sctp.time_since_epoch()).count();
@@ -179,7 +171,6 @@ static int64_t getFileLastModifiedMs(const fs::path& file_path) {
 	}
 }
 
-// --- Internal: binary_read_string_at_offset ---
 static std::string binary_read_string_at_offset(uint8_t pf_index, uint32_t offset) {
 	const auto* mmap_obj = binary_strings_mmap[pf_index];
 	const auto* data = static_cast<const uint8_t*>(mmap_obj->data);
@@ -191,7 +182,6 @@ static std::string binary_read_string_at_offset(uint8_t pf_index, uint32_t offse
 	return std::string(reinterpret_cast<const char*>(data + offset), end - offset);
 }
 
-// --- Internal: listfile_binary_find_component_child ---
 static int32_t listfile_binary_find_component_child(uint32_t node_ofs, std::string_view component_name) {
 	const uint64_t target_hash = hashing::XXH64::hash(component_name);
 
@@ -233,7 +223,6 @@ static int32_t listfile_binary_find_component_child(uint32_t node_ofs, std::stri
 	return -1;
 }
 
-// --- Internal: listfile_binary_find_file ---
 static std::optional<uint32_t> listfile_binary_find_file(uint32_t node_ofs, std::string_view filename) {
 	const auto* node_data = static_cast<const uint8_t*>(binary_tree_nodes_mmap->data);
 	const auto* base = node_data + node_ofs;
@@ -301,7 +290,6 @@ static std::optional<uint32_t> listfile_binary_find_file(uint32_t node_ofs, std:
 	return std::nullopt;
 }
 
-// --- Internal: listfile_binary_lookup_filename ---
 static std::optional<uint32_t> listfile_binary_lookup_filename(const std::string& filename) {
 	auto it = legacy_name_lookup.find(filename);
 	if (it != legacy_name_lookup.end())
@@ -332,7 +320,6 @@ static std::optional<uint32_t> listfile_binary_lookup_filename(const std::string
 	return listfile_binary_find_file(node_ofs, components.back());
 }
 
-// --- Internal: listfile_preload_binary ---
 static bool listfile_preload_binary() {
 	try {
 		logging::write("Downloading binary listfile format...");
@@ -359,7 +346,6 @@ static bool listfile_preload_binary() {
 			bool download_failed = false;
 
 			for (const auto& file : BIN_LF_COMPONENT_VALUES) {
-				// Replace first %s with the file name
 				std::string file_url = bin_url;
 				auto pct_pos = file_url.find("%s");
 				if (pct_pos != std::string::npos)
@@ -420,19 +406,18 @@ static bool listfile_preload_binary() {
 		preload_fonts_order.clear();
 
 		// null = skip preloading (videos loaded dynamically from MovieVariation)
-		// Index: 0=null(strings), 1=models, 2=textures, 3=sounds, 4=null(videos), 5=text, 6=fonts
 		struct PreloadContainer {
 			std::unordered_map<uint32_t, std::string>* map;
 			std::vector<uint32_t>* order;
 		};
 		std::array<PreloadContainer, 7> pf_preload_map = {{
-			{nullptr, nullptr},                            // 0: STRINGS (main)
-			{&preload_models_map, &preload_models_order}, // 1: PF_MODELS
-			{&preload_textures_map, &preload_textures_order}, // 2: PF_TEXTURES
-			{&preload_sounds_map, &preload_sounds_order}, // 3: PF_SOUNDS
-			{nullptr, nullptr},                            // 4: PF_VIDEOS (skip)
-			{&preload_text_map, &preload_text_order},     // 5: PF_TEXT
-			{&preload_fonts_map, &preload_fonts_order}    // 6: PF_FONTS
+			{nullptr, nullptr},
+			{&preload_models_map, &preload_models_order},
+			{&preload_textures_map, &preload_textures_order},
+			{&preload_sounds_map, &preload_sounds_order},
+			{nullptr, nullptr},
+			{&preload_text_map, &preload_text_order},
+			{&preload_fonts_map, &preload_fonts_order}
 		}};
 
 		constexpr std::array<std::string_view, 7> pf_files = {
@@ -535,7 +520,6 @@ static bool listfile_preload_binary() {
 	}
 }
 
-// --- Internal: listfile_preload_legacy ---
 static bool listfile_preload_legacy() {
 	try {
 		std::string url;
@@ -619,7 +603,6 @@ static bool listfile_preload_legacy() {
 					return;
 				}
 
-				// Ensure exactly 2 tokens (no more semicolons)
 				if (line.find(';', semicolon_pos + 1) != std::string::npos) {
 					logging::write("Invalid listfile line (token count): " + line);
 					return;
@@ -638,8 +621,6 @@ static bool listfile_preload_legacy() {
 				std::transform(fileName.begin(), fileName.end(), fileName.begin(),
 					[](unsigned char c) { return std::tolower(c); });
 
-				// TODO 197: Use operator[] instead of emplace() to match JS Map.set()
-				// which overwrites existing entries with the same key.
 				preloadedIdLookup[fileDataID] = fileName;
 				preloadedNameLookup[fileName] = fileDataID;
 			}, 1000);
@@ -675,7 +656,6 @@ static bool listfile_preload_legacy() {
 	}
 }
 
-// --- Internal: listfile_preload ---
 static bool listfile_preload_impl() {
 	is_preloaded = false;
 	logging::write("Preloading master listfile...");
@@ -719,10 +699,6 @@ bool preload() {
 
 std::shared_future<bool> prepareListfileAsync() {
 	{
-		// Read both `is_preloaded` and `preload_future` under the mutex.
-		// Avoids a TOCTOU race where another thread could set `is_preloaded`
-		// between the lock-free check and the mutex acquisition. JS is
-		// single-threaded and has no equivalent race.
 		std::lock_guard<std::mutex> guard(preload_mutex);
 
 		if (is_preloaded)
@@ -742,14 +718,12 @@ bool prepareListfile() {
 	return prepareListfileAsync().get();
 }
 
-// --- Internal: loadIDTable ---
 static size_t loadIDTable(const std::unordered_set<uint32_t>& ids, const std::string& ext) {
 	size_t loadCount = 0;
 
 	for (uint32_t fileDataID : ids) {
 		if (!existsByID(fileDataID)) {
 			std::string fileName = "unknown/" + std::to_string(fileDataID) + ext;
-			// TODO 197: Use operator[] to match JS Map.set() overwrite semantics.
 			legacy_id_lookup[fileDataID] = fileName;
 			legacy_name_lookup[fileName] = fileDataID;
 			loadCount++;
@@ -774,9 +748,6 @@ std::future<size_t> loadUnknownTexturesAsync() {
 }
 
 size_t loadUnknownModels() {
-	// TODO 198: JS calls DBModelFileData.getFileDataIDs() directly without explicit
-	// initialization. Removed the extra initializeModelFileData() call that had no
-	// JS equivalent.
 	const auto& ids = db::caches::DBModelFileData::getFileDataIDs();
 	size_t unkM2 = loadIDTable(ids, ".m2");
 	logging::write(std::format("Added {} unknown M2 models from ModelFileData to listfile", unkM2));
@@ -856,8 +827,6 @@ std::optional<uint32_t> getByFilename(const std::string& filename) {
 			lookup = it->second;
 	}
 
-	//     return getByFilename(ExportHelper.replaceExtension(filename, '.m2'));
-	// Note: JS checks 'mdx' without dot (matches any suffix ending in 'mdx').
 	if (!lookup.has_value() && (lower.ends_with(".mdl") || lower.ends_with("mdx")))
 		return getByFilename(ExportHelper::replaceExtension(lower, ".m2"));
 
@@ -943,7 +912,6 @@ std::optional<int> applyPreload(const std::unordered_set<uint32_t>& rootEntries)
 		if (!is_binary_mode) {
 			for (const auto& [fileDataID, fileName] : preloadedIdLookup) {
 				if (rootEntries.contains(fileDataID)) {
-					// TODO 197: Use operator[] to match JS Map.set() overwrite semantics.
 					legacy_id_lookup[fileDataID] = fileName;
 					legacy_name_lookup[fileName] = fileDataID;
 					valid_entries++;
@@ -1067,16 +1035,11 @@ std::vector<FilteredEntry> getFilteredEntries(const std::regex& search) {
 	return getFilteredEntriesImpl(nullptr, &search);
 }
 
-// TODO 200: Use std::optional to distinguish between "no filter" (nullopt = include everything)
-// and "empty filter" (empty vector = match nothing), matching JS's undefined vs [].
 std::vector<std::string> renderListfile(const std::optional<std::vector<uint32_t>>& file_data_ids,
                                          bool include_main_index) {
 	std::vector<std::string> result;
-	// has_id_filter is true when file_data_ids is provided (even if empty)
 	const bool has_id_filter = file_data_ids.has_value();
 
-	// Build the filter set once and reuse across both binary and legacy paths.
-	// seen_ids tracks which filtered IDs were resolved (for the unknown-append pass).
 	std::unordered_set<uint32_t> id_set;
 	std::unordered_set<uint32_t> seen_ids;
 	if (has_id_filter)
@@ -1113,8 +1076,6 @@ std::vector<std::string> renderListfile(const std::optional<std::vector<uint32_t
 		}
 	}
 
-	// JS: `file_data_ids === undefined` means no filter — include all legacy entries.
-	// JS: `file_data_ids = []` means empty filter — include nothing from legacy lookups.
 	if (!has_id_filter) {
 		for (const auto& [file_data_id, fn] : legacy_id_lookup) {
 			result.push_back(fn + " [" + std::to_string(file_data_id) + "]");
@@ -1158,7 +1119,6 @@ ParsedEntry parseFileEntry(const std::string& entry) {
 	ParsedEntry result;
 	result.file_path = stripFileEntry(entry);
 
-	// TODO 204: Make regex static const to avoid recompiling on every call.
 	static const std::regex fid_regex(R"(\[(\d+)\]$)");
 	std::smatch match;
 	if (std::regex_search(entry, match, fid_regex))
@@ -1178,7 +1138,6 @@ bool isLoaded() {
 void ingestIdentifiedFiles(const std::vector<std::pair<uint32_t, std::string>>& entries) {
 	for (const auto& [fileDataID, ext] : entries) {
 		std::string fileName = "unknown/" + std::to_string(fileDataID) + ext;
-		// TODO 197: Use operator[] to match JS Map.set() overwrite semantics.
 		legacy_id_lookup[fileDataID] = fileName;
 		legacy_name_lookup[fileName] = fileDataID;
 	}
