@@ -18,7 +18,6 @@ namespace {
 	uint32_t readU32LE(const uint8_t* p) {
 		uint32_t val;
 		std::memcpy(&val, p, sizeof(val));
-		// Assuming little-endian (x86/x64 only)
 		return val;
 	}
 
@@ -31,8 +30,6 @@ VP9AVIDemuxer::VP9AVIDemuxer(BLTEStreamReader& stream_reader)
 	: reader(stream_reader), config(std::nullopt), frame_rate(30.0) { // default, will parse from avih chunk
 }
 
-// TODO 208: Return std::optional<VP9Config> to match JS's nullable return
-// (JS returns `null` when strf chunk is missing).
 std::optional<VP9Config> VP9AVIDemuxer::parse_header() {
 	BufferWrapper first_block = reader.getBlock(0);
 	const std::vector<uint8_t>& data = first_block.raw();
@@ -66,7 +63,6 @@ std::optional<VP9Config> VP9AVIDemuxer::parse_header() {
 		};
 	}
 
-	// Return std::nullopt when strf chunk is not found (matching JS `return this.config` where config starts as null)
 	return config;
 }
 
