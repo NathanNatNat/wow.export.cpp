@@ -11,9 +11,6 @@
 #include <array>
 #include <utility>
 
-/**
- * CASC Locale Flags
- */
 namespace casc::locale_flags {
 
 struct LocaleEntry {
@@ -38,10 +35,6 @@ constexpr uint32_t ptBR  = 0x4000;
 constexpr uint32_t itIT  = 0x8000;
 constexpr uint32_t ptPT  = 0x10000;
 
-/**
- * Array of all locale entries with their flag values and display names.
- * Mirrors the JS `flags` and `names` objects combined.
- */
 constexpr std::array<LocaleEntry, 13> entries = {{
 	{ "enUS", enUS, "American English [enUS]" },
 	{ "koKR", koKR, "\xed\x95\x9c\xea\xb5\xad\xec\x96\xb4 [koKR]" },
@@ -60,11 +53,6 @@ constexpr std::array<LocaleEntry, 13> entries = {{
 	{ "ptPT", ptPT, "Portugu\xc3\xaas (Europeu) [ptPT]" },
 }};
 
-/**
- * Get the flag value for a locale ID string.
- * @param id Locale identifier (e.g., "enUS")
- * @return Flag value, or 0 if not found
- */
 constexpr uint32_t getFlag(std::string_view id) {
 	for (const auto& entry : entries)
 		if (entry.id == id)
@@ -72,11 +60,6 @@ constexpr uint32_t getFlag(std::string_view id) {
 	return 0;
 }
 
-/**
- * Get the display name for a locale ID string.
- * @param id Locale identifier (e.g., "enUS")
- * @return Display name, or empty string_view if not found
- */
 constexpr std::string_view getName(std::string_view id) {
 	for (const auto& entry : entries)
 		if (entry.id == id)
