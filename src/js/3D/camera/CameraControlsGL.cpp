@@ -185,8 +185,6 @@ CameraControlsGL::CameraControlsGL(CameraGL& camera, DomElementGL& dom_element)
 	offset = vec3_create();
 
 	// quaternion to rotate to y-up space
-	// JS uses `camera.up || [0, 1, 0]` defensively. CameraGL::up is always initialized to
-	// {0, 1, 0}, so the fallback can never trigger here — direct use is equivalent.
 	const vec3& cam_up = camera.up;
 	const vec3 y_up = {0, 1, 0};
 	quat = quat_create();
@@ -206,17 +204,6 @@ CameraControlsGL::CameraControlsGL(CameraGL& camera, DomElementGL& dom_element)
 }
 
 void CameraControlsGL::init() {
-	// JS init() registers six event listeners on dom_element / document:
-	//   dom_element: contextmenu (preventDefault), mousedown, wheel, keydown
-	//   document:    mousemove (stored as move_listener), mouseup (stored as up_listener)
-	// It also sets dom_element.tabIndex = 0 if it was -1, then calls update().
-	//
-	// In C++/GLFW there is no DOM event system. The caller is responsible for
-	// forwarding input to on_mouse_down/move/up/wheel/key_down at the appropriate
-	// times. contextmenu prevention is unnecessary (GLFW has no context menu).
-	// document-level move/up forwarding is handled by model-viewer-gl handle_input()
-	// which always forwards move/up regardless of hover, matching JS document listeners.
-
 	if (dom_element.tabIndex == -1)
 		dom_element.tabIndex = 0;
 
@@ -229,11 +216,6 @@ void CameraControlsGL::dispose() {
 
 bool CameraControlsGL::on_mouse_down(int button, int clientX, int clientY,
                                       bool ctrlKey, bool metaKey, bool shiftKey) {
-	// JS: event.preventDefault() — unconditional; prevents text selection / focus steal.
-	// C++/GLFW equivalent: not applicable (no DOM default behaviors to suppress).
-
-	// JS: this.dom_element.focus ? this.dom_element.focus() : window.focus()
-	// Falls back to window.focus() when the element has no own focus method.
 	if (dom_element.focus)
 		dom_element.focus();
 	else if (dom_element.window_focus)
@@ -252,16 +234,12 @@ bool CameraControlsGL::on_mouse_down(int button, int clientX, int clientY,
 		state = STATE_PANNING;
 	}
 
-	// JS called preventDefault() → return true so the caller can suppress further processing.
 	return true;
 }
 
 bool CameraControlsGL::on_mouse_wheel(float deltaY) {
 	if (state != STATE_NONE && state != STATE_ROTATING)
-		return false;  // JS: early return before preventDefault — not consumed
-
-	// JS: event.preventDefault(); event.stopPropagation();
-	// stopPropagation is handled by the caller zeroing io.MouseWheel when we return true.
+		return false;
 
 	if (deltaY < 0)
 		dolly_out(ZOOM_SCALE);
@@ -269,15 +247,12 @@ bool CameraControlsGL::on_mouse_wheel(float deltaY) {
 		dolly_in(ZOOM_SCALE);
 
 	update();
-	return true;  // consumed — caller should suppress wheel propagation
+	return true;
 }
 
 bool CameraControlsGL::on_mouse_move(int clientX, int clientY) {
 	if (state == STATE_NONE)
-		return false;  // JS: early return before preventDefault — not consumed
-
-	// JS: event.preventDefault() — prevents text selection during drag.
-	// C++/GLFW equivalent: not applicable; return true so caller knows event was consumed.
+		return false;
 
 	if (state == STATE_ROTATING) {
 		vec3_set(transform_end, static_cast<float>(clientX), static_cast<float>(clientY), 0);
@@ -313,13 +288,13 @@ bool CameraControlsGL::on_mouse_move(int clientX, int clientY) {
 		update();
 	}
 
-	return true;  // JS called preventDefault() for any active state
+	return true;
 }
 
 float CameraControlsGL::get_pan_scale() {
 	const float height = static_cast<float>(dom_element.clientHeight > 0 ? dom_element.clientHeight : 1);
 	const float distance = spherical.radius;
-	const float fov = camera.fov != 0.0f ? camera.fov : 50.0f; // JS: this.camera.fov || 50
+	const float fov = camera.fov != 0.0f ? camera.fov : 50.0f;
 	const float v_fov = fov * static_cast<float>(std::numbers::pi) / 180.0f;
 	return (2.0f * std::tan(v_fov / 2.0f) * distance) / height;
 }
@@ -344,9 +319,8 @@ bool CameraControlsGL::on_key_down(int keyCode, bool shiftKey, bool altKey) {
 	else if (keyCode == KEY_E)
 		pan(0, 0, -key_speed);
 	else
-		return false;  // unhandled key — JS: early return before preventDefault
+		return false;
 
-	// JS: event.preventDefault() — prevents browser default key actions (e.g. W scrolling page).
 	update();
 	return true;
 }
@@ -374,8 +348,6 @@ void CameraControlsGL::pan(float x, float y, float z) {
 	vec3_normalize(cam_dir, cam_dir);
 
 	// get right vector
-	// JS uses `camera.up || [0, 1, 0]` defensively. CameraGL::up is always initialized to
-	// {0, 1, 0}, so the fallback can never trigger — direct use is equivalent.
 	vec3& cam_right = _cache_cam_right;
 	const vec3& cam_up_vec = camera.up;
 	vec3_cross(cam_right, cam_dir, cam_up_vec);
@@ -429,7 +401,6 @@ bool CameraControlsGL::update() {
 	vec3_apply_quat(offset, offset, quat_inverse);
 
 	vec3_add(camera.position, target, offset);
-	// JS calls camera.lookAt() unconditionally (line 408).
 	camera.lookAt(target[0], target[1], target[2]);
 
 	spherical_delta.theta = 0;
@@ -438,11 +409,6 @@ bool CameraControlsGL::update() {
 
 	scale = 1.0f;
 
-	// JS: this.camera.quaternion || [0, 0, 0, 1] — fallback if quaternion is falsy.
-	// In C++, camera.quaternion is always initialized (non-optional), so the fallback
-	// is inherently satisfied. The conditional copy below matches JS lines 419–420:
-	// JS only copies quaternion if this.camera.quaternion is truthy.
-	// Since C++ quaternion is always valid, unconditional copy is functionally equivalent.
 	if (vec3_distance_squared(last_position, camera.position) > EPS ||
 		8.0f * (1.0f - quat_dot(last_quaternion, camera.quaternion)) > EPS) {
 		vec3_copy(last_position, camera.position);
