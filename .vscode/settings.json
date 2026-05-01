@@ -3,6 +3,7 @@
     "cmake.useCMakePresets": "always",
     "cmake.options.statusBarVisibility": "visible",
     "cmake.buildBeforeRun": true,
+    "cmake.launchTarget": "wow_export_cpp",
 
     // IntelliSense: use the compile_commands.json from the Debug build
     "C_Cpp.default.compileCommands": "${workspaceFolder}/out/build/windows-msvc-debug/compile_commands.json",
