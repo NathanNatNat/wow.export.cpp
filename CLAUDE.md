@@ -61,22 +61,22 @@ The build must compile without errors before any task is considered done.
 
 Most dependencies are git submodules in `extern/`. CMake manages them automatically — do not introduce system-installed libraries.
 
-| Purpose | Library |
-|---------|---------|
-| Windowing | GLFW |
-| UI | Dear ImGui (docking branch; multiviewport enabled, docking disabled for now) |
-| Rendering | OpenGL 4.3 core via GLAD2 (sources regenerated every build via `python -m glad` from `extern/glad/`; not pre-committed) |
-| Math | GLM |
-| JSON | nlohmann/json |
-| Logging | spdlog |
-| HTTP / HTTPS | cpp-httplib (HTTPS enabled via OpenSSL) |
+| Purpose      | Library                                                                                                                       |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| Windowing    | GLFW                                                                                                                          |
+| UI           | Dear ImGui (docking branch; multiviewport enabled, docking disabled for now)                                                  |
+| Rendering    | OpenGL 4.3 core via GLAD2 (sources regenerated every build via `python -m glad` from `extern/glad/`; not pre-committed)       |
+| Math         | GLM                                                                                                                           |
+| JSON         | nlohmann/json                                                                                                                 |
+| Logging      | spdlog                                                                                                                        |
+| HTTP / HTTPS | cpp-httplib (HTTPS enabled via OpenSSL)                                                                                       |
 | TLS / Crypto | OpenSSL (prebuilt x64 DLLs in `extern/openssl-prebuilt/`; provides HTTPS for cpp-httplib and hash APIs via `<openssl/evp.h>`) |
-| Compression | zlib |
-| Archive I/O | minizip-ng (ZIP read/write — C++ equivalent of JS adm-zip) |
-| Image I/O | stb_image / stb_image_write, libwebp, nanosvg |
-| Audio | miniaudio |
-| File Dialogs | portable-file-dialogs (cross-platform native open/save/folder dialogs) |
-| Threading | `std::jthread`, `std::async` (standard library) |
+| Compression  | zlib                                                                                                                          |
+| Archive I/O  | minizip-ng (ZIP read/write — C++ equivalent of JS adm-zip)                                                                    |
+| Image I/O    | stb_image / stb_image_write, libwebp, nanosvg                                                                                 |
+| Audio        | miniaudio                                                                                                                     |
+| File Dialogs | portable-file-dialogs (cross-platform native open/save/folder dialogs)                                                        |
+| Threading    | `std::jthread`, `std::async` (standard library)                                                                               |
 
 ## Reference Sources
 - **JS source files** in `src/js/` are the authoritative reference for all conversions. Always open the corresponding `.js` file when working on any `.cpp` file.
@@ -84,6 +84,14 @@ Most dependencies are git submodules in `extern/`. CMake manages them automatica
 - Upstream JS repo (historical reference only): **https://github.com/Kruithne/wow.export**
 - This C++ port: **https://github.com/NathanNatNat/wow.export.cpp**
 - **UI reference screenshots**: [`UI_REFERENCE.md`](UI_REFERENCE.md) — always compare against these when making UI changes.
+
+## Git & Remote Repository Rules
+
+**ABSOLUTE PROHIBITION:** Never open a pull request, push commits, or take any git action against any repository other than **https://github.com/NathanNatNat/wow.export.cpp**. This includes — but is not limited to — the upstream JS repo at `https://github.com/Kruithne/wow.export`.
+
+- Do **not** run `gh pr create`, `git push`, or any equivalent command targeting any remote other than `NathanNatNat/wow.export.cpp`.
+- Do **not** push or open PRs to `NathanNatNat/wow.export.cpp` without explicit instruction from the user.
+- This rule has no exceptions.
 
 ## C++ Conventions
 - **Naming & formatting** — Mirror the naming conventions and formatting of the original JS source (e.g. `camelCase` functions/variables, `PascalCase` classes). Do not invent a new style.
@@ -96,33 +104,33 @@ Most dependencies are git submodules in `extern/`. CMake manages them automatica
 
 ### JS → C++ Idiom Mapping
 
-| JS Idiom | C++ Equivalent |
-|----------|----------------|
-| `null` / `undefined` | `std::nullopt` (`std::optional<T>`), `nullptr` (pointers) |
-| Closures / callbacks | Lambdas (`auto fn = [&]() { ... };`) |
-| `class` / prototype chains | C++ classes |
-| `Buffer` | `std::vector<uint8_t>` |
-| `Map` / `Set` | `std::unordered_map` / `std::unordered_set` |
-| Template literals | `std::format` (C++23) |
-| `JSON.parse` / `JSON.stringify` | `nlohmann::json::parse` / `.dump()` |
-| `Array` | `std::vector` |
-| `typeof` / `instanceof` | `std::holds_alternative`, `dynamic_cast`, or compile-time checks |
-| `try`/`catch`/`finally` | `try`/`catch` + RAII for cleanup |
-| Spread operator (`...args`) | Parameter packs or `std::initializer_list` |
+| JS Idiom                        | C++ Equivalent                                                   |
+| ------------------------------- | ---------------------------------------------------------------- |
+| `null` / `undefined`            | `std::nullopt` (`std::optional<T>`), `nullptr` (pointers)        |
+| Closures / callbacks            | Lambdas (`auto fn = [&]() { ... };`)                             |
+| `class` / prototype chains      | C++ classes                                                      |
+| `Buffer`                        | `std::vector<uint8_t>`                                           |
+| `Map` / `Set`                   | `std::unordered_map` / `std::unordered_set`                      |
+| Template literals               | `std::format` (C++23)                                            |
+| `JSON.parse` / `JSON.stringify` | `nlohmann::json::parse` / `.dump()`                              |
+| `Array`                         | `std::vector`                                                    |
+| `typeof` / `instanceof`         | `std::holds_alternative`, `dynamic_cast`, or compile-time checks |
+| `try`/`catch`/`finally`         | `try`/`catch` + RAII for cleanup                                 |
+| Spread operator (`...args`)     | Parameter packs or `std::initializer_list`                       |
 
 ### Node.js API → C++ Library Mapping
 
-| Node.js Module | C++ Replacement |
-|----------------|-----------------|
-| `fs` | `std::filesystem`, standard file I/O |
-| `path` | `std::filesystem::path` |
-| `http` / `https` | cpp-httplib (with OpenSSL for HTTPS) |
-| `zlib` | zlib |
-| `crypto` | OpenSSL EVP API (`<openssl/evp.h>` — `EVP_MD_CTX_new`, `EVP_DigestUpdate`, etc.) |
-| `events` (EventEmitter) | Custom callback/signal mechanism preserving identical behavior |
-| `child_process` | `std::system`, platform process APIs |
-| `os` | `std::filesystem`, platform APIs |
-| `url` | Manual parsing or a lightweight utility |
+| Node.js Module          | C++ Replacement                                                                  |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| `fs`                    | `std::filesystem`, standard file I/O                                             |
+| `path`                  | `std::filesystem::path`                                                          |
+| `http` / `https`        | cpp-httplib (with OpenSSL for HTTPS)                                             |
+| `zlib`                  | zlib                                                                             |
+| `crypto`                | OpenSSL EVP API (`<openssl/evp.h>` — `EVP_MD_CTX_new`, `EVP_DigestUpdate`, etc.) |
+| `events` (EventEmitter) | Custom callback/signal mechanism preserving identical behavior                   |
+| `child_process`         | `std::system`, platform process APIs                                             |
+| `os`                    | `std::filesystem`, platform APIs                                                 |
+| `url`                   | Manual parsing or a lightweight utility                                          |
 
 ## Fidelity Rules
 
