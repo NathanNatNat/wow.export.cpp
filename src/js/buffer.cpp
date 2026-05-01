@@ -30,7 +30,6 @@ License: MIT
 #endif
 #include <miniaudio.h>
 
-// stb_image_write for PNG encoding in fromPixelData
 #ifndef STB_IMAGE_WRITE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #endif
@@ -98,7 +97,6 @@ if constexpr (LE) write_uint_le<N>(p, val);
 else write_uint_be<N>(p, val);
 }
 
-// Variable-length read helpers (runtime byte length)
 uint64_t read_var_uint_le(const uint8_t* p, size_t n) {
 uint64_t val = 0;
 for (size_t i = 0; i < n; i++)
@@ -334,10 +332,6 @@ return result;
 
 } // anonymous namespace
 
-// =====================================================================
-// Macros for repetitive fixed-width read/write definitions
-// =====================================================================
-
 #define IMPL_READ_U(RetType, Name, N, LE) \
 RetType BufferWrapper::Name() { \
 _checkBounds(N); \
@@ -379,10 +373,6 @@ write_uint<N, LE>(_buf.data() + _ofs, static_cast<uint64_t>(value)); \
 _ofs += N; \
 }
 
-// =====================================================================
-// Static factory methods
-// =====================================================================
-
 BufferWrapper BufferWrapper::alloc(size_t length, bool secure) {
 std::vector<uint8_t> buf(length, 0);
 return BufferWrapper(std::move(buf));
@@ -416,7 +406,6 @@ return BufferWrapper(std::move(combined));
 BufferWrapper BufferWrapper::fromCanvas(const uint8_t* rgba, int width, int height,
                                         std::string_view mimeType, int quality) {
 if (mimeType == "image/webp" && quality == 100) {
-// Lossless WebP encoding — matches JS webp.encode(imageData, { lossless: true })
 uint8_t* output = nullptr;
 size_t outputSize = WebPEncodeLosslessRGBA(rgba, width, height, width * 4, &output);
 if (outputSize == 0 || output == nullptr)
@@ -428,7 +417,6 @@ return BufferWrapper(std::move(buf));
 }
 
 if (mimeType == "image/webp") {
-// Lossy WebP encoding
 uint8_t* output = nullptr;
 size_t outputSize = WebPEncodeRGBA(rgba, width, height, width * 4,
                                     static_cast<float>(quality), &output);
@@ -441,7 +429,6 @@ return BufferWrapper(std::move(buf));
 }
 
 if (mimeType == "image/png") {
-// PNG encoding via stb_image_write to memory
 std::vector<uint8_t> pngBuf;
 auto writeFunc = [](void* context, void* data, int size) {
 auto* vec = static_cast<std::vector<uint8_t>*>(context);
@@ -500,10 +487,6 @@ wrapper._mmapSize = size;
 return wrapper;
 }
 
-// =====================================================================
-// Constructors / destructor
-// =====================================================================
-
 BufferWrapper::BufferWrapper() : _ofs(0) {}
 
 BufferWrapper::BufferWrapper(std::vector<uint8_t> buf)
@@ -535,10 +518,6 @@ return *this;
 
 BufferWrapper::~BufferWrapper() = default;
 
-// =====================================================================
-// Property getters
-// =====================================================================
-
 size_t BufferWrapper::byteLength() const {
 return _buf.size();
 }
@@ -563,10 +542,6 @@ const uint8_t* BufferWrapper::internalArrayBuffer() const {
 return _buf.data();
 }
 
-// =====================================================================
-// Position methods
-// =====================================================================
-
 void BufferWrapper::seek(int64_t ofs) {
 int64_t pos = ofs < 0 ? static_cast<int64_t>(byteLength()) + ofs : ofs;
 if (pos < 0 || static_cast<size_t>(pos) > byteLength())
@@ -584,10 +559,6 @@ throw std::runtime_error("move() offset out of bounds " + std::to_string(ofs) +
 
 _ofs = static_cast<size_t>(pos);
 }
-
-// =====================================================================
-// Variable-length integer reads
-// =====================================================================
 
 int64_t BufferWrapper::readIntLE(size_t byteLength) {
 _checkBounds(byteLength);
@@ -659,70 +630,38 @@ _ofs += byteLength;
 return values;
 }
 
-// =====================================================================
-// Fixed-width integer reads — 8-bit
-// =====================================================================
-
 IMPL_READ_S(int8_t,  readInt8,  1, true)
 IMPL_READ_U(uint8_t, readUInt8, 1, true)
-
-// =====================================================================
-// Fixed-width integer reads — 16-bit
-// =====================================================================
 
 IMPL_READ_S(int16_t,  readInt16LE,  2, true)
 IMPL_READ_U(uint16_t, readUInt16LE, 2, true)
 IMPL_READ_S(int16_t,  readInt16BE,  2, false)
 IMPL_READ_U(uint16_t, readUInt16BE, 2, false)
 
-// =====================================================================
-// Fixed-width integer reads — 24-bit
-// =====================================================================
-
 IMPL_READ_S(int32_t,  readInt24LE,  3, true)
 IMPL_READ_U(uint32_t, readUInt24LE, 3, true)
 IMPL_READ_S(int32_t,  readInt24BE,  3, false)
 IMPL_READ_U(uint32_t, readUInt24BE, 3, false)
-
-// =====================================================================
-// Fixed-width integer reads — 32-bit
-// =====================================================================
 
 IMPL_READ_S(int32_t,  readInt32LE,  4, true)
 IMPL_READ_U(uint32_t, readUInt32LE, 4, true)
 IMPL_READ_S(int32_t,  readInt32BE,  4, false)
 IMPL_READ_U(uint32_t, readUInt32BE, 4, false)
 
-// =====================================================================
-// Fixed-width integer reads — 40-bit
-// =====================================================================
-
 IMPL_READ_S(int64_t,  readInt40LE,  5, true)
 IMPL_READ_U(uint64_t, readUInt40LE, 5, true)
 IMPL_READ_S(int64_t,  readInt40BE,  5, false)
 IMPL_READ_U(uint64_t, readUInt40BE, 5, false)
-
-// =====================================================================
-// Fixed-width integer reads — 48-bit
-// =====================================================================
 
 IMPL_READ_S(int64_t,  readInt48LE,  6, true)
 IMPL_READ_U(uint64_t, readUInt48LE, 6, true)
 IMPL_READ_S(int64_t,  readInt48BE,  6, false)
 IMPL_READ_U(uint64_t, readUInt48BE, 6, false)
 
-// =====================================================================
-// Fixed-width integer reads — 64-bit
-// =====================================================================
-
 IMPL_READ_S(int64_t,  readInt64LE,  8, true)
 IMPL_READ_U(uint64_t, readUInt64LE, 8, true)
 IMPL_READ_S(int64_t,  readInt64BE,  8, false)
 IMPL_READ_U(uint64_t, readUInt64BE, 8, false)
-
-// =====================================================================
-// Float / double reads
-// =====================================================================
 
 float BufferWrapper::readFloatLE() {
 _checkBounds(4);
@@ -803,10 +742,6 @@ std::memcpy(&values[i], &bits, sizeof(double));
 }
 return values;
 }
-
-// =====================================================================
-// String / buffer reads
-// =====================================================================
 
 std::string BufferWrapper::readHexString(size_t length) {
 _checkBounds(length);
@@ -957,10 +892,6 @@ std::memset(_buf.data() + _ofs, value, length);
 _ofs += length;
 }
 
-// =====================================================================
-// Write methods — integers
-// =====================================================================
-
 IMPL_WRITE_INT(int8_t,   writeInt8,       1, true)
 IMPL_WRITE_INT(uint8_t,  writeUInt8,      1, true)
 
@@ -1010,10 +941,6 @@ write_uint_be<4>(_buf.data() + _ofs, bits);
 _ofs += 4;
 }
 
-// =====================================================================
-// Write methods — buffer
-// =====================================================================
-
 void BufferWrapper::writeBuffer(BufferWrapper& buf, size_t copyLength) {
 size_t startIndex = buf.offset();
 
@@ -1052,10 +979,6 @@ if (!ofs)
 throw std::runtime_error("Failed to write file: " + file.string());
 }
 
-// =====================================================================
-// Search
-// =====================================================================
-
 int64_t BufferWrapper::indexOfChar(char ch) {
 return indexOf(static_cast<uint8_t>(ch), _ofs);
 }
@@ -1083,10 +1006,6 @@ return static_cast<int64_t>(mark);
 seek(static_cast<int64_t>(resetPos));
 return -1;
 }
-
-// =====================================================================
-// Utility
-// =====================================================================
 
 const std::string& BufferWrapper::getDataURL() {
 if (!dataURL)
@@ -1177,7 +1096,6 @@ if (_mmap) {
 #ifdef _WIN32
 UnmapViewOfFile(_mmap);
 #else
-// Use stored mapping size to ensure correct munmap() even after setCapacity().
 munmap(_mmap, _mmapSize);
 #endif
 _mmap = nullptr;
@@ -1189,17 +1107,12 @@ BufferWrapper BufferWrapper::deflate() const {
 return BufferWrapper(zlib_deflate(_buf.data(), _buf.size()));
 }
 
-// =====================================================================
-// Private
-// =====================================================================
-
 void BufferWrapper::_checkBounds(size_t length) {
 if (remainingBytes() < length)
 throw std::runtime_error("Buffer operation out-of-bounds: " +
 std::to_string(length) + " > " + std::to_string(remainingBytes()));
 }
 
-// Cleanup macros — not needed outside this translation unit.
 #undef IMPL_READ_U
 #undef IMPL_READ_S
 #undef IMPL_WRITE_INT
