@@ -13,8 +13,6 @@
 
 namespace casc {
 
-// --- Exception classes ---
-
 EncryptionError::EncryptionError(const std::string& key)
 	: std::runtime_error("[BLTE] Missing decryption key " + key), key(key)
 {
@@ -24,8 +22,6 @@ BLTEIntegrityError::BLTEIntegrityError(const std::string& expected, const std::s
 	: std::runtime_error(std::format("[BLTE] Invalid block data hash. Expected {}, got {}!", expected, actual))
 {
 }
-
-// --- BLTEReader static methods ---
 
 bool BLTEReader::check(BufferWrapper& data) {
 	if (data.byteLength() < 4)
@@ -119,8 +115,6 @@ BLTEMetadata BLTEReader::parseBLTEHeader(BufferWrapper& buf, const std::string& 
 	};
 }
 
-// --- BLTEReader constructor ---
-
 BLTEReader::BLTEReader(BufferWrapper buf, const std::string& hash, bool partialDecrypt)
 	: BufferWrapper(), _blte(std::move(buf)), partialDecrypt(partialDecrypt)
 {
@@ -129,8 +123,6 @@ BLTEReader::BLTEReader(BufferWrapper buf, const std::string& hash, bool partialD
 
 	setCapacity(metadata.totalSize, true);
 }
-
-// --- BLTEReader instance methods ---
 
 void BLTEReader::_checkBounds(size_t length) {
 	BufferWrapper::_checkBounds(length);
@@ -188,8 +180,6 @@ void BLTEReader::_handleBlock(BufferWrapper& block, size_t blockEnd, size_t inde
 				_handleBlock(decrypted, decrypted.byteLength(), index);
 			} catch (const EncryptionError&) {
 				// Partial decryption allows us to leave zeroed data.
-				// JS: this._ofs += this.blocks[index].DecompSize
-				// C++ move() adds to offset, equivalent to direct _ofs increment.
 				if (partialDecrypt)
 					move(static_cast<int64_t>(blocks[index].DecompSize));
 				else
@@ -235,7 +225,6 @@ BufferWrapper BLTEReader::_decryptBlock(BufferWrapper& data, size_t blockEnd, si
 	for (uint8_t i = 0; i < keyNameSize; i++)
 		keyNameBytes[i] = data.readHexString(1);
 
-	// Reverse and join to form key name (little-endian to big-endian).
 	std::string keyName;
 	for (auto it = keyNameBytes.rbegin(); it != keyNameBytes.rend(); ++it)
 		keyName += *it;
@@ -287,7 +276,6 @@ void BLTEReader::writeToFile(const std::filesystem::path& file) {
 }
 
 const std::string& BLTEReader::getDataURL() {
-	// JS: if (!this.dataURL) compute and cache; otherwise return cached.
 	if (hasDataURL())
 		return BufferWrapper::getDataURL();
 

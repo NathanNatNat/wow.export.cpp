@@ -21,8 +21,6 @@ void SQLWriter::setIncludeDDL(bool include) {
 	include_ddl = include;
 }
 
-// JS exposes `addField(...fields)` as a single variadic. C++ splits this into
-// two overloads — a single-string and a vector form — to mirror the same usage.
 void SQLWriter::addField(const std::string& field) {
 	fields.push_back(field);
 }
@@ -42,8 +40,6 @@ std::string SQLWriter::escapeSQLValue(const SQLValue& value) const {
 	const std::string& str_value = *value;
 
 	// numeric values don't need quotes
-	// Match JS isNaN() behavior: supports integers, decimals, scientific notation (1e5),
-	// and hexadecimal (0xFF). JS isNaN() coerces the value and returns false if numeric.
 	const std::string trimmed = [&]() {
 		size_t start = str_value.find_first_not_of(" \t");
 		if (start == std::string::npos) return std::string();
@@ -52,8 +48,6 @@ std::string SQLWriter::escapeSQLValue(const SQLValue& value) const {
 	}();
 
 	if (!trimmed.empty()) {
-		// Use strtod for numeric detection, which handles integers, decimals,
-		// scientific notation (1e5, 1.2e-3), and hexadecimal (0xFF) — matching JS isNaN() coercion.
 		char* endptr = nullptr;
 		std::strtod(trimmed.c_str(), &endptr);
 		if (endptr == trimmed.c_str() + trimmed.size())
@@ -89,7 +83,6 @@ std::string SQLWriter::escapeIdentifier(const std::string& name) const {
 }
 
 std::string SQLWriter::fieldTypeToSQL(const db::SchemaField& field_type, const std::string& field_name) const {
-	// Check if it's an array type [FieldType, arrayLength]
 	if (std::holds_alternative<std::pair<db::FieldType, int>>(field_type)) {
 		// arrays stored as TEXT (JSON or comma-separated)
 		return "TEXT";
@@ -127,8 +120,6 @@ std::string SQLWriter::fieldTypeToSQL(const db::SchemaField& field_type, const s
 	}
 }
 
-// Output ends with a single trailing "\n" after ");\n" — matches JS
-// `lines.join('\n')` with a trailing empty string element (verified analytically).
 std::string SQLWriter::generateDDL() const {
 	if (!schema || fields.empty())
 		return "";
@@ -145,9 +136,6 @@ std::string SQLWriter::generateDDL() const {
 	for (const auto& field : fields) {
 		auto it = schema->find(field);
 
-		// JS does schema.get(field) which returns undefined for missing fields.
-		// fieldTypeToSQL(undefined) falls through switch to default: 'TEXT'.
-		// Match this behavior by using TEXT for fields not in the schema.
 		const std::string sql_type = (it != schema->end()) ? fieldTypeToSQL(it->second, field) : "TEXT";
 		const std::string escaped_field = escapeIdentifier(field);
 
@@ -166,7 +154,6 @@ std::string SQLWriter::generateDDL() const {
 		column_defs.push_back("\tPRIMARY KEY (" + primary_key + ")");
 
 	result += "CREATE TABLE " + escaped_table + " (\n";
-	// Join with ',\n' to match JS: column_defs.join(',\n')
 	for (size_t i = 0; i < column_defs.size(); i++) {
 		if (i > 0)
 			result += ",\n";
@@ -219,7 +206,6 @@ std::string SQLWriter::toSQL() const {
 	return result;
 }
 
-// JS write() is async (uses await for I/O). C++ runs synchronously by design.
 void SQLWriter::write(bool overwrite) {
 	if (rows.empty())
 		return;

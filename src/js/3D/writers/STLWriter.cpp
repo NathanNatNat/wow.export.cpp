@@ -74,7 +74,6 @@ std::array<float, 3> STLWriter::calculate_normal(
 	return { nx, ny, nz };
 }
 
-// JS write() is async (uses await for I/O). C++ runs synchronously by design.
 void STLWriter::write(bool overwrite) {
 	if (!overwrite && generics::fileExists(out))
 		return;

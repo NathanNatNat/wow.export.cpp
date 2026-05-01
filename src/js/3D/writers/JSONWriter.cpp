@@ -14,7 +14,6 @@ void JSONWriter::addProperty(const std::string& name, const nlohmann::json& data
 	this->data[name] = data;
 }
 
-// JS write() is async (uses await for I/O). C++ runs synchronously by design.
 void JSONWriter::write(bool overwrite) {
 	// If overwriting is disabled, check file existence.
 	if (!overwrite && generics::fileExists(out))

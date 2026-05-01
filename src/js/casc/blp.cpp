@@ -137,7 +137,6 @@ BufferWrapper BLPImage::toWebP(uint8_t mask, int mipmap, int quality) {
 	size_t outputSize = 0;
 
 	if (quality == 100) {
-		// Lossless encoding.
 		outputSize = WebPEncodeLosslessRGBA(
 			pixelData.data(),
 			static_cast<int>(scaledWidth_),
@@ -146,7 +145,6 @@ BufferWrapper BLPImage::toWebP(uint8_t mask, int mipmap, int quality) {
 			&output
 		);
 	} else {
-		// Lossy encoding.
 		outputSize = WebPEncodeRGBA(
 			pixelData.data(),
 			static_cast<int>(scaledWidth_),
@@ -160,7 +158,6 @@ BufferWrapper BLPImage::toWebP(uint8_t mask, int mipmap, int quality) {
 	if (outputSize == 0 || output == nullptr)
 		throw std::runtime_error("WebP encoding failed");
 
-	// Copy into a BufferWrapper and free the WebP-allocated memory.
 	BufferWrapper result = BufferWrapper::from(std::span<const uint8_t>(output, outputSize));
 	WebPFree(output);
 

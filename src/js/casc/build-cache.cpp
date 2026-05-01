@@ -27,22 +27,16 @@ namespace fs = std::filesystem;
 
 namespace casc {
 
-// Module-level state: cache integrity hash map.
 static nlohmann::json cacheIntegrity;
 static bool cacheIntegrityLoaded = false;
 static std::mutex cacheIntegrityMutex;
 static std::condition_variable cacheIntegrityCV;
 
-/**
- * Returns the current timestamp in milliseconds since epoch (Date.now() equivalent).
- */
 static int64_t dateNow() {
 	return std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::system_clock::now().time_since_epoch()
 	).count();
 }
-
-// -- BuildCache --
 
 BuildCache::BuildCache(const std::string& key)
 	: key(key)
@@ -85,8 +79,6 @@ std::optional<BufferWrapper> BuildCache::getFile(const std::string& file, const 
 
 		std::unique_lock<std::mutex> lock(cacheIntegrityMutex);
 
-		// JS: if (!cacheIntegrity) await cacheIntegrityReady();
-		// Wait for cache integrity to be loaded instead of rejecting immediately.
 		if (!cacheIntegrityLoaded) {
 			logging::write("Cache integrity is not ready, waiting!");
 			cacheIntegrityCV.wait(lock, [] { return cacheIntegrityLoaded; });
@@ -139,8 +131,6 @@ void BuildCache::storeFile(const std::string& file, BufferWrapper& data, const s
 	{
 		std::unique_lock<std::mutex> lock(cacheIntegrityMutex);
 
-		// JS: if (!cacheIntegrity) await cacheIntegrityReady();
-		// Wait for cache integrity to be loaded instead of initializing empty.
 		if (!cacheIntegrityLoaded) {
 			logging::write("Cache integrity is not ready, waiting!");
 			cacheIntegrityCV.wait(lock, [] { return cacheIntegrityLoaded; });
@@ -188,8 +178,6 @@ std::future<void> BuildCache::saveManifestAsync() {
 	return std::async(std::launch::async, [this]() { saveManifest(); });
 }
 
-// -- Module initialization --
-
 void initBuildCacheSystem() {
 	try {
 		auto integrity = generics::readJSON(constants::CACHE::INTEGRITY_FILE(), false);
@@ -211,8 +199,6 @@ void initBuildCacheSystem() {
 	cacheIntegrityCV.notify_all();
 	core::events.emit("cache-integrity-ready");
 }
-
-// -- Event handlers --
 
 void registerBuildCacheEvents() {
 	// Invoked when the user requests a cache purge.

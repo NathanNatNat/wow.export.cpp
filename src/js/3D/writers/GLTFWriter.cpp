@@ -20,12 +20,8 @@ License: MIT
 #include <array>
 #include <unordered_map>
 
-// Use ordered_json to preserve property insertion order, matching JS JSON.stringify()
-// which outputs keys in insertion order. Standard nlohmann::json uses alphabetical ordering.
 using json = nlohmann::ordered_json;
 
-// JS-Map equivalent: iteration in insertion order, O(1) lookup by key.
-// Used to replace std::map (alphabetical) where insertion order is observable.
 template<typename K, typename V>
 class InsertionOrderedMap {
 	std::vector<std::pair<K, V>> data_;
@@ -126,11 +122,6 @@ void GLTFWriter::setTextureBuffers(std::map<std::string, BufferWrapper> texture_
 this->texture_buffers = std::move(texture_buffers);
 }
 
-/**
- * Add a single texture buffer for embedding in GLB.
- * @param key
- * @param buffer
- */
 void GLTFWriter::addTextureBuffer(std::string key, BufferWrapper buffer) {
 texture_buffers.emplace(std::move(key), std::move(buffer));
 }
@@ -219,8 +210,6 @@ void GLTFWriter::addEquipmentModel(const GLTFEquipmentModel& equip) {
 equipment_models.push_back(equip);
 }
 
-// JS write() is async (uses await for I/O). C++ runs synchronously by design;
-// the codebase converts JS async I/O to blocking std::filesystem / FileWriter calls.
 void GLTFWriter::write(bool overwrite, const std::string& format) {
 const std::filesystem::path outGLTF = casc::ExportHelper::replaceExtension(out.string(), format == "glb" ? ".glb" : ".gltf");
 const std::filesystem::path outBIN = casc::ExportHelper::replaceExtension(out.string(), ".bin");
@@ -235,8 +224,6 @@ return;
 if (!overwrite && format == "gltf" && generics::fileExists(outBIN))
 return;
 
-// Use build manifest constants for generator string, matching JS:
-// util.format('wow.export v%s %s [%s]', manifest.version, manifest.flavour, manifest.guid)
 const std::string generator = std::format("wow.export.cpp v{} {} [{}]",
 	constants::VERSION, constants::FLAVOUR, constants::BUILD_GUID);
 json root = {
@@ -339,7 +326,6 @@ const auto& bones_ref = this->bones;
 int idx_inv_bind = -1;
 int idx_bone_joints = -1;
 int idx_bone_weights = -1;
-// Insertion-ordered to match JS Map iteration order during GLB animation packing.
 InsertionOrderedMap<std::string, BufferWrapper> animationBufferMap;
 
 if (!bones_ref.empty()) {
@@ -385,7 +371,6 @@ size_t skeleton_idx = add_scene_node({
 
 std::map<int, size_t> bone_lookup_map;
 
-// Lookup-only (no iteration that depends on order); unordered_map is sufficient.
 std::unordered_map<std::string, int> animation_buffer_lookup_map;
 
 if (core::view->config.value("modelsExportAnimations", false)) {
@@ -469,7 +454,6 @@ root["animations"].push_back({
 }
 
 // Add bone nodes.
-// JS reads modelsExportWithBonePrefix once outside the loop (const at line 460 of GLTFWriter.js).
 const bool usePrefix = core::view->config.value("modelsExportWithBonePrefix", false);
 
 for (size_t bi = 0; bi < bones_ref.size(); bi++) {
@@ -931,8 +915,6 @@ root["materials"] = json::array();
 }
 
 std::map<std::string, int> materialMap;
-// fileDataID mirrors JS structure {fileDataID, buffer}; not currently consulted at
-// the iteration site (images are matched by index) but preserved for fidelity.
 struct TextureBufferView { uint32_t fileDataID; BufferWrapper buffer; };
 std::vector<TextureBufferView> texture_buffer_views;
 
@@ -1516,8 +1498,6 @@ glb_buffer.writeToFile(outGLTF);
 } else {
 // gltf mode: write separate json and bin files
 root["buffers"][0]["uri"] = outBIN.filename().string();
-// Use binary mode to prevent platform-specific line ending translation,
-// matching JS writeFile('utf8') which writes raw bytes.
 std::ofstream ofs(outGLTF, std::ios::binary);
 if (!ofs)
 	throw std::runtime_error("Failed to open file for writing: " + outGLTF.string());

@@ -62,7 +62,6 @@ std::future<BufferWrapper> BLTEStreamReader::getBlockAsync(size_t blockIndex) {
 
 		BufferWrapper decoded = _decodeBlockAsync(std::move(rawBlock), blockIndex).get();
 
-		// Cache management: store decoded block and track insertion order.
 		blockCache.emplace(blockIndex, decoded);
 		cacheOrder.push_back(blockIndex);
 
@@ -123,7 +122,6 @@ BufferWrapper BLTEStreamReader::_decryptBlock(BufferWrapper& data, size_t index)
 	for (uint8_t i = 0; i < keyNameSize; i++)
 		keyNameBytes[i] = data.readHexString(1);
 
-	// Reverse and join to form key name (little-endian to big-endian).
 	std::string keyName;
 	for (auto it = keyNameBytes.rbegin(); it != keyNameBytes.rend(); ++it)
 		keyName += *it;
