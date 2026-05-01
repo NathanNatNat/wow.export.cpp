@@ -136,12 +136,12 @@ The following files **must not be deleted, renamed, or moved** under any circums
 If you believe one of these files should be removed, **ask first**. Do not act unilaterally.
 
 ### Intentional Stubs
-The following files are intentionally left as no-op stubs. Do **not** add TODO entries for them. Do **not** implement them unless explicitly asked. See [`DEVIATIONS.md`](DEVIATIONS.md) entries S1–S2 for details on what the JS originals do.
+The following files are intentionally left as no-op stubs. Do **not** add TODO entries for them. Do **not** implement them unless explicitly asked. See the "Intentionally Removed" section in [`DEVIATIONS.md`](DEVIATIONS.md) for details on what the JS originals do.
 - **`src/js/components/home-showcase.cpp`**
 - **`src/js/modules/tab_home.cpp`**
 
 ### Removed Files
-The following files have been deliberately removed from the C++ build. Do **not** re-add unless explicitly asked. Do **not** add TODO entries for them. See [`DEVIATIONS.md`](DEVIATIONS.md) entries R2–R4, A1, and S1 for details.
+The following files have been deliberately removed from the C++ build. Do **not** re-add unless explicitly asked. Do **not** add TODO entries for them. See the "Intentionally Removed" section in [`DEVIATIONS.md`](DEVIATIONS.md) for details.
 - **`src/js/modules/tab_help.cpp`** / **`tab_help.h`**
 - **`src/js/modules/tab_changelog.cpp`** / **`tab_changelog.h`**
 - **`src/js/components/markdown-content.cpp`** / **`markdown-content.h`**
@@ -149,7 +149,7 @@ The following files have been deliberately removed from the C++ build. Do **not*
 - **`src/js/updater.cpp`** / **`updater.h`**
 
 ### Removed Features
-The following features have been deliberately removed. Do **not** re-add unless explicitly asked. Do **not** add TODO entries for them. See [`DEVIATIONS.md`](DEVIATIONS.md) entries R1 and A1 for details.
+The following features have been deliberately removed. Do **not** re-add unless explicitly asked. Do **not** add TODO entries for them. See the "Intentionally Removed" section in [`DEVIATIONS.md`](DEVIATIONS.md) for details.
 - **"Reload Styling" context menu option**
 - **Auto-updater** (check for updates, download, and launch updater helper)
 
