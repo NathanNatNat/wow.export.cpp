@@ -14,9 +14,6 @@ namespace {
 constexpr std::array<uint32_t, 4> SIGMA_32 = { 0x61707865, 0x3320646e, 0x79622d32, 0x6b206574 };
 constexpr std::array<uint32_t, 4> SIGMA_16 = { 0x61707865, 0x3120646e, 0x79622d36, 0x6b206574 };
 
-/**
- * Parse a hex character to its numeric value.
- */
 inline uint8_t hexCharToNibble(char c) {
 	if (c >= '0' && c <= '9') return static_cast<uint8_t>(c - '0');
 	if (c >= 'a' && c <= 'f') return static_cast<uint8_t>(c - 'a' + 10);
@@ -24,9 +21,6 @@ inline uint8_t hexCharToNibble(char c) {
 	throw std::runtime_error("Invalid hex character");
 }
 
-/**
- * Parse a hex string into a byte vector.
- */
 std::vector<uint8_t> hexToBytes(std::string_view hex) {
 	std::vector<uint8_t> bytes;
 	bytes.reserve(hex.size() / 2);
@@ -35,9 +29,6 @@ std::vector<uint8_t> hexToBytes(std::string_view hex) {
 	return bytes;
 }
 
-/**
- * Rotate left for uint32_t (replaces JS (u << n) | (u >>> (32 - n))).
- */
 inline uint32_t rotl32(uint32_t v, int n) {
 	return (v << n) | (v >> (32 - n));
 }
