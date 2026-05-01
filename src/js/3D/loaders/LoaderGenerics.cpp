@@ -9,11 +9,8 @@
 
 /**
  * Process a null-terminated string block.
- *
- * @param data       Source buffer to read the chunk from.
- * @param chunkSize  Size of the string block in bytes.
- * @return           Map of byte-offset within the chunk to the null-terminated string
- *                   beginning at that offset.
+ * @param data
+ * @param chunkSize
  */
 std::map<uint32_t, std::string> ReadStringBlock(BufferWrapper& data, uint32_t chunkSize) {
 	BufferWrapper chunk = data.readBuffer(chunkSize, false);
@@ -29,7 +26,6 @@ std::map<uint32_t, std::string> ReadStringBlock(BufferWrapper& data, uint32_t ch
 				continue;
 			}
 
-			// Extract string from readOfs to i, stripping any embedded nulls.
 			std::string str(reinterpret_cast<const char*>(raw.data() + readOfs), i - readOfs);
 			std::erase(str, '\0');
 			entries[readOfs] = std::move(str);
