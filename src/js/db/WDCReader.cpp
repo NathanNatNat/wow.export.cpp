@@ -332,7 +332,6 @@ std::vector<DataRecord> WDCReader::getRelationRows(std::string_view foreignKeyVa
  * @param layoutHash The layout hash string.
  */
 void WDCReader::loadSchema(const std::string& layoutHash) {
-	// Access the active CASC source for build info.
 	auto* casc = core::view->casc;
 	const std::string buildID = casc ? casc->getBuildName() : "";
 
@@ -343,7 +342,6 @@ void WDCReader::loadSchema(const std::string& layoutHash) {
 	const DBDEntry* structure = nullptr;
 	logging::write("Loading table definitions " + dbdName + " (" + buildID + " " + layoutHash + ")...");
 
-	// check cached dbd through active CASC cache (JS: casc.cache.getFile)
 	std::filesystem::path dbdCachePath = constants::CACHE::DIR_DBD() / dbdName;
 	std::unique_ptr<DBDParser> dbdParser;
 	casc::BuildCache* cache = getActiveCascCache();
@@ -365,7 +363,6 @@ void WDCReader::loadSchema(const std::string& layoutHash) {
 		const std::string configDbdURL = core::view->config.value("dbdURL", "");
 		const std::string configDbdFallbackURL = core::view->config.value("dbdFallbackURL", "");
 
-		// Format URLs with table name replacing %s
 		auto formatURL = [](const std::string& tmpl, const std::string& name) -> std::string {
 			std::string result = tmpl;
 			auto pos = result.find("%s");
@@ -381,7 +378,6 @@ void WDCReader::loadSchema(const std::string& layoutHash) {
 			logging::write("No cached DBD, downloading new from " + dbd_url);
 			BufferWrapper rawDbd = generics::downloadFile({ dbd_url, dbd_url_fallback });
 
-			// Store to cache (JS: casc.cache.storeFile)
 			if (cache != nullptr) {
 				cache->storeFile(dbdName, rawDbd, constants::CACHE::DIR_DBD().string());
 			} else {
@@ -435,7 +431,6 @@ uint16_t WDCReader::getIDIndex() const {
 void WDCReader::parse() {
 	logging::write("Loading DB file " + fileName + " from CASC");
 
-	// In JS: const data = await core.view.casc.getVirtualFileByName(this.fileName, false);
 	dataOwner = std::make_unique<BufferWrapper>(core::view->casc->getVirtualFileByName(fileName, false));
 	data = dataOwner.get();
 	auto& dataRef = *data;
@@ -467,7 +462,6 @@ void WDCReader::parse() {
 	dataRef.move(4); // stringTableSize
 	dataRef.move(4); // tableHash
 
-	// const layoutHash = data.readUInt8(4).reverse().map(e => e.toString(16).padStart(2, '0')).join('').toUpperCase();
 	auto layoutHashBytes = dataRef.readUInt8(4);
 	std::reverse(layoutHashBytes.begin(), layoutHashBytes.end());
 	std::ostringstream layoutHashStream;
@@ -524,7 +518,6 @@ void WDCReader::parse() {
 	}
 
 	// fields[header.total_field_count]
-	// Read but not stored (matches JS behavior where fields[] is local-only)
 	for (uint32_t i = 0; i < totalFieldCount; i++) {
 		dataRef.readInt16LE();  // size
 		dataRef.readUInt16LE(); // position
@@ -893,7 +886,6 @@ std::optional<DataRecord> WDCReader::_readRecordFromSection(size_t sectionIndex,
 	for (const auto& prop : schemaOrder) {
 		const auto& type = schema.at(prop);
 
-		// Check if this is a Relation field
 		if (auto* ft = std::get_if<FieldType>(&type)) {
 			if (*ft == FieldType::Relation) {
 				auto relIt = section.relationshipMap.find(static_cast<uint32_t>(recordIndex));
@@ -1155,7 +1147,6 @@ std::optional<DataRecord> WDCReader::_readRecordFromSection(size_t sectionIndex,
 				}
 
 				if (recordFieldInfo.fieldCompression == CompressionType::BitpackedSigned) {
-					// JS uses BigInt.asIntN(fieldSizeBits, bitpackedValue). Clamp to 64-bit host integer width.
 					if (fieldSizeBits == 0) {
 						out[prop] = static_cast<int64_t>(0);
 					} else if (fieldSizeBits >= 64) {
@@ -1200,10 +1191,6 @@ std::optional<DataRecord> WDCReader::_readRecordFromSection(size_t sectionIndex,
 				}
 			} else {
 				uint32_t arrCount = recordFieldInfo.fieldCompressionPacking[2];
-				// Get the array and reinterpret each element into the proper variant type.
-				// Compressed arrays are initially stored as vector<uint64_t> but must be
-				// converted to the correct type (vector<int64_t>, vector<float>, etc.)
-				// to match what uncompressed reads produce.
 				if (auto* uArr = std::get_if<std::vector<uint64_t>>(&out[prop])) {
 					switch (fieldType) {
 						case FieldType::String:
@@ -1243,7 +1230,6 @@ std::optional<DataRecord> WDCReader::_readRecordFromSection(size_t sectionIndex,
 						}
 
 						default: {
-							// UInt8, UInt16, UInt32, UInt64 — reinterpret in-place (already vector<uint64_t>)
 							for (uint32_t i = 0; i < arrCount && i < uArr->size(); i++) {
 								castBuffer->seek(0);
 								castBuffer->writeBigUInt64LE((*uArr)[i]);
