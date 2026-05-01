@@ -30,7 +30,6 @@
 namespace casc {
 
 namespace {
-// Helper to dump a string map as JSON (matches JS log.write('%o', obj) behavior).
 std::string dumpMap(const std::unordered_map<std::string, std::string>& m) {
 	nlohmann::json j;
 	for (const auto& [k, v] : m)
@@ -50,8 +49,6 @@ std::string dumpMaps(const std::vector<std::unordered_map<std::string, std::stri
 }
 } // anonymous namespace
 
-// EMPTY_HASH is already defined in blte-reader.h as casc::EMPTY_HASH
-
 CASCRemote::CASCRemote(const std::string& region)
 	: CASC(true), region(region)
 {
@@ -63,7 +60,6 @@ CASCRemote::CASCRemote(const std::string& region)
 void CASCRemote::init() {
 	logging::write("Initializing remote CASC source (" + region + ")");
 
-	// Use printf-style %s replacement to match JS util.format(constants.PATCH.HOST, region).
 	std::string host_fmt(constants::PATCH::HOST);
 	auto pos = host_fmt.find("%s");
 	if (pos != std::string::npos)
@@ -74,7 +70,7 @@ void CASCRemote::init() {
 
 	builds.clear();
 
-	// Collect version configs for all products in parallel.
+	// Collect version configs for all products.
 	using ConfigResult = std::vector<std::unordered_map<std::string, std::string>>;
 	std::vector<std::future<ConfigResult>> futures;
 	futures.reserve(constants::PRODUCTS.size());
@@ -84,18 +80,16 @@ void CASCRemote::init() {
 			return getVersionConfig(product);
 		}));
 
-	// Collect results after all futures complete (matching Promise.allSettled semantics).
+	// Iterate through successful requests and extract product config for our region.
 	for (auto& fut : futures) {
 		try {
 			auto config = fut.get();
 
-			// .find() returns undefined if no match — we push empty map as equivalent.
 			auto it = std::find_if(config.begin(), config.end(), [this](const auto& entry) {
 				return entry.count("Region") && entry.at("Region") == region;
 			});
 			builds.push_back(it != config.end() ? *it : std::unordered_map<std::string, std::string>{});
 		} catch (const std::exception& e) {
-			// Only fulfilled results contribute to the builds array.
 		}
 	}
 
@@ -267,7 +261,6 @@ BLTEStreamReader CASCRemote::getFileStream(uint32_t fileDataID, bool partialDecr
 	auto metadata = BLTEReader::parseBLTEHeader(headerData, encodingKey, false);
 
 	// create block fetcher function
-	// Capture needed data by value for the lambda
 	const bool hasArchive = (archIt != archives.end());
 	const std::string archiveKey = hasArchive ? archIt->second.key : "";
 
@@ -311,7 +304,6 @@ std::vector<ProductEntry> CASCRemote::getProductList() {
 		if (versionIt == entry.end() || productIt == entry.end())
 			continue;
 
-		// Find matching product definition.
 		std::string_view title;
 		for (const auto& p : constants::PRODUCTS) {
 			if (p.product == productIt->second) {
@@ -322,7 +314,6 @@ std::vector<ProductEntry> CASCRemote::getProductList() {
 
 		const std::string label = std::format("{} {}", title, versionIt->second);
 
-		// Extract expansion ID from version string.
 		std::regex versionRegex("^(\\d+)\\.");
 		std::smatch match;
 		const std::string& versionName = versionIt->second;
@@ -386,7 +377,6 @@ void CASCRemote::load(int buildIndex) {
  * Download and parse the encoding file.
  */
 void CASCRemote::loadEncoding() {
-	// Split encoding keys by space — second key is the encoding key.
 	const std::string& encStr = buildConfig["encoding"];
 	std::string encKey;
 	{
@@ -463,7 +453,6 @@ void CASCRemote::loadRoot() {
  */
 void CASCRemote::loadArchives() {
 	// Download archive indexes.
-	// Split archive keys by space.
 	const std::string& archivesStr = cdnConfig["archives"];
 	std::vector<std::string> archiveKeys;
 	{
@@ -546,7 +535,6 @@ void CASCRemote::parseArchiveIndex(const std::string& key) {
 
 	data.seek(0); // Reset position.
 
-	// Parse entries into a local vector to avoid contention on the shared map.
 	std::vector<std::pair<std::string, ArchiveEntry>> localEntries;
 	localEntries.reserve(count);
 
@@ -560,7 +548,6 @@ void CASCRemote::parseArchiveIndex(const std::string& key) {
 		localEntries.emplace_back(std::move(hash), ArchiveEntry{ key, data.readInt32BE(), data.readInt32BE() });
 	}
 
-	// Merge local entries into the shared archives map under lock.
 	{
 		std::lock_guard<std::mutex> lock(archivesMutex);
 		for (auto& [hash, entry] : localEntries)
@@ -585,7 +572,6 @@ BufferWrapper CASCRemote::getDataFile(const std::string& file) {
  * @returns BufferWrapper
  */
 BufferWrapper CASCRemote::getDataFilePartial(const std::string& file, int64_t ofs, int64_t len) {
-	// JS passes null for output path (don't write to disk); C++ uses "" which has the same effect.
 	return generics::downloadFile(host + "data/" + file, "", ofs, len);
 }
 

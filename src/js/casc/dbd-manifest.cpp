@@ -24,18 +24,14 @@
 
 namespace {
 
-// is_preloaded must be atomic since it is written from the async worker thread
-// and read from the calling thread (prepareManifest).
 std::atomic<bool> is_preloaded{false};
 std::optional<std::shared_future<void>> preload_promise;
 std::unordered_map<std::string, uint32_t> table_to_id;
 std::unordered_map<uint32_t, std::string> id_to_table;
 std::mutex manifest_mutex;
-// std::call_once protects preload() from concurrent calls. In JS this was safe
-// implicitly because JS is single-threaded; in C++ we need explicit protection.
 std::once_flag preload_once_flag;
 
-} // anonymous namespace
+}
 
 namespace casc {
 namespace dbd_manifest {
@@ -62,9 +58,6 @@ void preload() {
 						const auto& tn = entry["tableName"];
 						const auto& fid = entry["db2FileDataID"];
 
-						// Manifest data shape: tableName is always a non-empty string,
-						// db2FileDataID is always a non-zero unsigned integer. Mirrors
-						// JS `if (entry.tableName && entry.db2FileDataID)`.
 						if (!tn.is_string() || tn.get<std::string>().empty())
 							continue;
 						if (!fid.is_number_integer() || fid.get<int64_t>() == 0)
@@ -89,13 +82,7 @@ void preload() {
 
 /**
  * prepare the manifest for use, awaiting preload if necessary
- *
- * Necessary adaptation: JS prepareManifest is `async` and returns
- * Promise<boolean>. C++ has no implicit Promise; this function blocks the
- * calling thread until preload_promise resolves. Callers needing non-blocking
- * behaviour must run on a background thread.
- *
- * @returns true always, matching JS's Promise<boolean>
+ * @returns {Promise<boolean>}
  */
 bool prepareManifest() {
 	if (is_preloaded.load())
@@ -110,8 +97,8 @@ bool prepareManifest() {
 
 /**
  * get table name by filedataid
- * @param id
- * @returns table name or std::nullopt
+ * @param {number} id
+ * @returns {string|undefined}
  */
 std::optional<std::string> getByID(uint32_t id) {
 	std::lock_guard<std::mutex> lock(manifest_mutex);
@@ -123,8 +110,8 @@ std::optional<std::string> getByID(uint32_t id) {
 
 /**
  * get filedataid by table name
- * @param table_name
- * @returns filedataid or std::nullopt
+ * @param {string} table_name
+ * @returns {number|undefined}
  */
 std::optional<uint32_t> getByTableName(const std::string& table_name) {
 	std::lock_guard<std::mutex> lock(manifest_mutex);
@@ -136,7 +123,7 @@ std::optional<uint32_t> getByTableName(const std::string& table_name) {
 
 /**
  * get all table names
- * @returns sorted vector of table names
+ * @returns {string[]}
  */
 std::vector<std::string> getAllTableNames() {
 	std::lock_guard<std::mutex> lock(manifest_mutex);
@@ -148,5 +135,5 @@ std::vector<std::string> getAllTableNames() {
 	return names;
 }
 
-} // namespace dbd_manifest
-} // namespace casc
+}
+}

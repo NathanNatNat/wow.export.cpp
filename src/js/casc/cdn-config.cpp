@@ -14,13 +14,7 @@ namespace {
 
 const std::regex KEY_VAR_PATTERN(R"(([^\s]+)\s?=\s?(.*))");
 
-/**
- * Convert a config key such as 'encoding-sizes' to 'encodingSizes'.
- * This helps keep things consistent when accessing key properties.
- * @param key
- */
 std::string normalizeKey(const std::string& key) {
-	// Split by '-'.
 	std::vector<std::string> keyParts;
 	std::size_t start = 0;
 	for (std::size_t i = 0; i <= key.size(); i++) {
@@ -54,7 +48,6 @@ namespace casc {
 std::unordered_map<std::string, std::string> parseCDNConfig(std::string_view data) {
 	std::unordered_map<std::string, std::string> entries;
 
-	// Split input into lines (handles \r\n and \n).
 	std::vector<std::string_view> lines;
 	std::size_t start = 0;
 	for (std::size_t i = 0; i < data.size(); i++) {
@@ -66,7 +59,6 @@ std::unordered_map<std::string, std::string> parseCDNConfig(std::string_view dat
 			start = i + 1;
 		}
 	}
-	// Handle last line (no trailing newline).
 	if (start <= data.size()) {
 		std::string_view line = data.substr(start);
 		if (!line.empty() && line.back() == '\r')

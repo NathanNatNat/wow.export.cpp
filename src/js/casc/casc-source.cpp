@@ -28,7 +28,6 @@ CASC::CASC(bool isRemote)
 	: isRemote(isRemote)
 {
 	// Listen for configuration changes to cascLocale.
-	// The JS $watch with immediate:true is equivalent to reading the value now.
 	const auto& configJson = core::view->config;
 	if (configJson.contains("cascLocale")) {
 		auto& localeVal = configJson["cascLocale"];
@@ -42,7 +41,6 @@ CASC::CASC(bool isRemote)
 		locale = locale_flags::enUS;
 	}
 
-	// Register a config watch event to update locale on change.
 	unhookConfigId = core::events.on("config-change", [this]() {
 		const auto& cfg = core::view->config;
 		if (cfg.contains("cascLocale")) {
@@ -91,7 +89,6 @@ std::vector<uint32_t> CASC::getValidRootEntries() {
 InstallManifest CASC::getInstallManifest() {
 	const auto& installStr = buildConfig.at("install");
 
-	// Split install keys by space.
 	std::vector<std::string> installKeys;
 	{
 		std::istringstream iss(installStr);
@@ -100,14 +97,11 @@ InstallManifest CASC::getInstallManifest() {
 			installKeys.push_back(token);
 	}
 
-	// JS: installKey = installKeys.length === 1 ? this.encodingKeys.get(installKeys[0]) : installKeys[1]
-	// If encodingKeys.get() returns undefined, installKey becomes undefined — propagate failure.
 	std::string installKey;
 	if (installKeys.size() == 1) {
 		auto it = encodingKeys.find(installKeys[0]);
 		if (it != encodingKeys.end())
 			installKey = it->second;
-		// else: installKey stays empty (equivalent to JS undefined) — will propagate downstream
 	} else {
 		installKey = installKeys[1];
 	}
@@ -337,7 +331,6 @@ void CASC::prepareDBDManifest() {
 void CASC::loadListfile(const std::string& buildKey) {
 	core::progressLoadingScreen("Loading listfiles");
 
-	// Build a set of valid root entry file data IDs for applyPreload.
 	std::unordered_set<uint32_t> rootEntryIds;
 	rootEntryIds.reserve(rootEntries.size());
 	for (const auto& [fileDataID, _entry] : rootEntries)
@@ -611,18 +604,10 @@ void CASC::cleanup() {
 	core::events.off("config-change", unhookConfigId);
 }
 
-/**
- * Format a CDN key for use in CDN requests.
- * 49299eae4e3a195953764bb4adb3c91f -> 49/29/49299eae4e3a195953764bb4adb3c91f
- * @param key
- */
 std::string CASC::formatCDNKey(const std::string& key) {
 	return key.substr(0, 2) + "/" + key.substr(2, 2) + "/" + key;
 }
 
-/**
- * Default implementations that throw — subclasses must override.
- */
 BufferWrapper CASC::getDataFile(const std::string& /*file*/) {
 	throw std::runtime_error("getDataFile not implemented in base CASC class");
 }

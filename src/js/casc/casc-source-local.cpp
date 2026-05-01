@@ -36,7 +36,6 @@ namespace fs = std::filesystem;
 namespace casc {
 
 namespace {
-// Helper to dump a string map as JSON (matches JS log.write('%o', obj) behavior).
 std::string dumpMap(const std::unordered_map<std::string, std::string>& m) {
 	nlohmann::json j;
 	for (const auto& [k, v] : m)
@@ -71,7 +70,6 @@ void CASCLocal::init() {
 
 	const auto buildInfo = fs::path(dir) / std::string(constants::BUILD::MANIFEST);
 
-	// Read build info file.
 	std::ifstream ifs(buildInfo);
 	if (!ifs.is_open())
 		throw std::runtime_error("Failed to open build info: " + buildInfo.string());
@@ -212,7 +210,6 @@ std::vector<ProductEntry> CASCLocal::getProductList() {
 		if (productIt == entry.end() || versionIt == entry.end())
 			continue;
 
-		// Find matching product definition.
 		std::string_view title;
 		for (const auto& p : constants::PRODUCTS) {
 			if (p.product == productIt->second) {
@@ -222,13 +219,11 @@ std::vector<ProductEntry> CASCLocal::getProductList() {
 		}
 
 		std::string branchStr = entry.at("Branch");
-		// Convert to uppercase.
 		for (auto& c : branchStr)
 			c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 
 		const std::string label = std::format("{} ({}) {}", title, branchStr, versionIt->second);
 
-		// Extract expansion ID from version string.
 		std::regex versionRegex("^(\\d+)\\.");
 		std::smatch match;
 		const std::string& version = versionIt->second;
@@ -292,12 +287,11 @@ void CASCLocal::loadConfigs() {
 			auto patchPos = buildName.find("patch");
 			if (patchPos != std::string::npos) {
 				std::string buildNumber = buildName.substr(0, patchPos);
-				// Remove "WOW-" prefix
 				auto wowPos = buildNumber.find("WOW-");
 				if (wowPos != std::string::npos)
 					buildNumber = buildNumber.substr(wowPos + 4);
 
-				std::string patchPart = buildName.substr(patchPos + 5); // skip "patch"
+				std::string patchPart = buildName.substr(patchPos + 5);
 				auto underscorePos = patchPart.find('_');
 				if (underscorePos != std::string::npos)
 					patchPart = patchPart.substr(0, underscorePos);
@@ -397,7 +391,6 @@ void CASCLocal::loadEncoding() {
 	// Parse encoding file.
 	logging::timeLog();
 
-	// Split encoding keys by space.
 	const std::string& encStr = buildConfig["encoding"];
 	std::string encKey;
 	{
@@ -442,9 +435,6 @@ void CASCLocal::initializeRemoteCASC() {
 	auto remote = std::make_unique<CASCRemote>(regionTag);
 	remote->init();
 
-	// JS: const buildIndex = remote.builds.findIndex(build => build.Product === this.build.Product);
-	// JS calls preload(buildIndex, ...) unconditionally — if buildIndex is -1, preload will
-	// receive an invalid index (matching JS behavior where it would cause an error).
 	int buildIndex = -1;
 	const std::string& product = build["Product"];
 	for (size_t i = 0; i < remote->builds.size(); i++) {
@@ -456,8 +446,6 @@ void CASCLocal::initializeRemoteCASC() {
 
 	remote->preload(buildIndex, cache);
 
-	// Match JS: only assign this.remote after preload() succeeds, so a failed preload
-	// does not leave the instance with a partially-initialized remote member.
 	this->remote = std::move(remote);
 }
 
@@ -569,7 +557,7 @@ std::string CASCLocal::formatConfigPath(const std::string& key) {
 /**
  * Format a CDN key for use in local file reading.
  * Path separators used by this method are platform specific.
- * 49299eae4e3a195953764bb4adb3c91f -> 49/29/49299eae4e3a195953764bb4adb3c91f (or 49\29\... on Windows)
+ * 49299eae4e3a195953764bb4adb3c91f -> 49\29\49299eae4e3a195953764bb4adb3c91f
  * @param key
  */
 std::string CASCLocal::formatCDNKey(const std::string& key) {
@@ -609,7 +597,7 @@ std::string CASCLocal::_ensureFileInCache(const std::string& encodingKey, uint32
 
 /**
  * Get encoding info for a file by fileDataID for CDN streaming.
- * Returns FileEncodingInfo or std::nullopt.
+ * Returns { enc: string, arc?: { key: string, ofs: number, len: number } }
  * Initializes remote CASC if needed to get archive info for the server.
  * @param fileDataID
  */
@@ -633,7 +621,7 @@ std::optional<FileEncodingInfo> CASCLocal::getFileEncodingInfo(uint32_t fileData
 
 /**
  * Get the current build ID.
- * @returns build name string
+ * @returns {string}
  */
 std::string CASCLocal::getBuildName() {
 	auto it = build.find("Version");
@@ -642,7 +630,7 @@ std::string CASCLocal::getBuildName() {
 
 /**
  * Returns the build configuration key.
- * @returns build key string
+ * @returns {string}
  */
 std::string CASCLocal::getBuildKey() {
 	auto it = build.find("BuildKey");

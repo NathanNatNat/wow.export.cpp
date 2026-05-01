@@ -26,27 +26,18 @@ namespace cdn_resolver {
 
 namespace {
 
-/**
- * Manages CDN host resolution with intelligent pre-caching for performance.
- * Maintains a cache of regionTag + hostKey => bestHost mappings.
- */
-
 struct CacheEntry {
 	std::shared_future<std::vector<HostResult>> future;
 	std::optional<HostResult> bestHost;
 	std::vector<HostResult> rankedHosts;
 };
 
-// Map of cacheKey -> { future, bestHost, rankedHosts }
-// cacheKey = region + '|' + hosts + '|' + fallback to handle different products with different hosts
 std::mutex cacheMutex;
 std::unordered_map<std::string, CacheEntry> resolutionCache;
 
 // Track hosts that have failed to respond properly (e.g., censored responses)
 std::unordered_set<std::string> failedHosts;
 
-// Background futures for pre-resolution (replaces jthread vector to avoid unbounded growth).
-// std::shared_future can be safely overwritten — previous futures complete independently.
 std::vector<std::shared_future<void>> backgroundFutures;
 
 /**
@@ -105,7 +96,6 @@ std::vector<HostResult> _resolveHosts(const std::string& region, const std::unor
 		}
 	}
 
-	// Snapshot failed hosts under lock
 	std::unordered_set<std::string> currentFailed;
 	{
 		std::lock_guard lock(cacheMutex);
@@ -136,7 +126,6 @@ std::vector<HostResult> _resolveHosts(const std::string& region, const std::unor
 		}));
 	}
 
-	// Wait for all pings to complete (equivalent to Promise.allSettled)
 	for (auto& f : hostPings)
 		f.get();
 
@@ -162,7 +151,6 @@ void _resolveRegionProduct(const std::string& region, const std::string& product
 		if (region == "cn") {
 			host = std::string(constants::PATCH::HOST_CHINA);
 		} else {
-			// Use constants::PATCH::HOST with printf-style %s substitution (matching JS util.format)
 			std::string host_fmt(constants::PATCH::HOST);
 			auto pos = host_fmt.find("%s");
 			if (pos != std::string::npos)
@@ -198,12 +186,8 @@ void _resolveRegionProduct(const std::string& region, const std::string& product
 void startPreResolution(const std::string& region, const std::string& product) {
 	logging::write(std::format("Starting CDN pre-resolution for region: {}", region));
 
-	// Guards backgroundFutures. Safe: std::async dispatches the lambda on a
-	// new thread, so it won't deadlock on the cacheMutex acquired inside
-	// _resolveRegionProduct -> getBestHost.
 	std::lock_guard lock(cacheMutex);
 
-	// Remove completed futures to prevent unbounded growth.
 	backgroundFutures.erase(
 		std::remove_if(backgroundFutures.begin(), backgroundFutures.end(),
 			[](const std::shared_future<void>& f) {
@@ -252,7 +236,6 @@ std::string getBestHost(const std::string& region, const std::unordered_map<std:
 
 	auto rankedHosts = existingFuture.get();
 
-	// JS always updates the cache after awaiting the promise (not guarded by isNewResolution).
 	{
 		std::lock_guard lock(cacheMutex);
 		auto& entry = resolutionCache[cacheKey];
@@ -302,7 +285,6 @@ std::vector<std::string> getRankedHosts(const std::string& region, const std::un
 
 	auto rankedHosts = existingFuture.get();
 
-	// JS always updates the cache after awaiting the promise (not guarded by isNewResolution).
 	{
 		std::lock_guard lock(cacheMutex);
 		auto& entry = resolutionCache[cacheKey];

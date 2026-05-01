@@ -45,7 +45,6 @@ std::string ExportHelper::getExportPath(const std::string& file) {
 /**
  * Returns a relative path from the export directory to the given file.
  * @param file
- * @returns relative path string
  */
 std::string ExportHelper::getRelativeExport(const std::string& file) {
 	return fs::relative(fs::path(file), fs::path(core::view->config.value("exportDirectory", ""))).string();
@@ -55,7 +54,6 @@ std::string ExportHelper::getRelativeExport(const std::string& file) {
  * Takes the directory from fileA and combines it with the basename of fileB.
  * @param fileA
  * @param fileB
- * @returns combined path string
  */
 std::string ExportHelper::replaceFile(const std::string& fileA, const std::string& fileB) {
 	return (fs::path(fileA).parent_path() / fs::path(fileB).filename()).string();
@@ -65,7 +63,6 @@ std::string ExportHelper::replaceFile(const std::string& fileA, const std::strin
  * Replace an extension on a file path with another.
  * @param file
  * @param ext
- * @returns path with replaced extension
  */
 std::string ExportHelper::replaceExtension(const std::string& file, const std::string& ext) {
 	return (fs::path(file).parent_path() / (fs::path(file).stem().string() + ext)).string();
@@ -75,7 +72,6 @@ std::string ExportHelper::replaceExtension(const std::string& file, const std::s
  * Replace the base name of a file path, keeping the directory and extension.
  * @param filePath
  * @param fileName
- * @returns path with replaced base name
  */
 std::string ExportHelper::replaceBaseName(const std::string& filePath, const std::string& fileName) {
 	return (fs::path(filePath).parent_path() / (fileName + fs::path(filePath).extension().string())).string();
@@ -84,10 +80,10 @@ std::string ExportHelper::replaceBaseName(const std::string& filePath, const std
 /**
  * Converts a win32 compatible path to a POSIX compatible path.
  * @param str
- * @returns POSIX path string
  */
 std::string ExportHelper::win32ToPosix(std::string str) {
-	// Simply convert slashes like a cave-person and call it a day.
+	// path module does not expose any decent conversion API, so simply
+	// convert slashes like a cave-person and call it a day.
 	std::replace(str.begin(), str.end(), '\\', '/');
 	return str;
 }
@@ -95,7 +91,6 @@ std::string ExportHelper::win32ToPosix(std::string str) {
 /**
  * Sanitize a string for use as a file name by removing invalid characters.
  * @param str
- * @returns sanitized string
  */
 std::string ExportHelper::sanitizeFilename(std::string str) {
 	std::erase_if(str, [](char c) {
@@ -140,7 +135,7 @@ ExportHelper::ExportHelper(int count, const std::string& unit)
 
 /**
  * How many items have failed to export.
- * @returns failure count
+ * @returns {number}
  */
 int ExportHelper::failed() const {
 	return count - succeeded;
@@ -148,7 +143,6 @@ int ExportHelper::failed() const {
 
 /**
  * Get the unit name formatted depending on plurality.
- * @returns unit name, pluralized if count > 1
  */
 std::string ExportHelper::unitFormatted() const {
 	return count > 1 ? unit + "s" : unit;
@@ -178,7 +172,7 @@ void ExportHelper::start() {
 /**
  * Returns true if the current export is cancelled. Also calls this->finish()
  * as we can assume the export will now stop.
- * @returns true if cancelled
+ * @returns {boolean}
  */
 bool ExportHelper::isCancelled() {
 	if (core::view->exportCancelled) {
@@ -299,7 +293,6 @@ void ExportHelper::mark(const std::string& item, bool state, const std::string& 
 	} else {
 		logging::write(std::format("Failed to export {} ({})", item, error));
 
-		// JS uses console.log() (stdout) for the stack trace, bypassing the log file.
 		if (stackTrace.has_value())
 			std::cout << stackTrace.value() << '\n';
 	}

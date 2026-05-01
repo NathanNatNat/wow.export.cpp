@@ -1,8 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
- */
 #include "install-manifest.h"
 #include "../buffer.h"
 
@@ -11,7 +6,7 @@
 
 namespace {
 constexpr uint16_t INSTALL_SIG = 0x4E49; // IN
-} // anonymous namespace
+}
 
 namespace casc {
 
@@ -43,7 +38,6 @@ void InstallManifest::parse(BufferWrapper& data) {
 		files[i].name = data.readNullTerminatedString();
 		files[i].hash = data.readHexString(hashSize);
 		files[i].size = data.readUInt32BE();
-		// files[i].tags is default-constructed as empty vector.
 	}
 
 	// Pre-compute tags.
@@ -62,4 +56,4 @@ void InstallManifest::parse(BufferWrapper& data) {
 	}
 }
 
-} // namespace casc
+}
