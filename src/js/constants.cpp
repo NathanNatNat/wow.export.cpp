@@ -7,8 +7,6 @@
 // This file defines constants used throughout the application.
 #include "constants.h"
 
-// WOW_EXPORT_SOURCE_DIR is injected by CMake (target_compile_definitions).
-// Provide a fallback so IntelliSense and non-CMake tooling don't report errors.
 #ifndef WOW_EXPORT_SOURCE_DIR
 #define WOW_EXPORT_SOURCE_DIR "."
 #endif
@@ -59,8 +57,6 @@ static fs::path getBlenderBaseDir() {
 		return fs::path(appdata) / "Blender Foundation" / "Blender";
 	return {};
 #else
-	// macOS case intentionally omitted — project scope is Windows and Linux only.
-	// JS equivalent: case 'darwin': return path.join(home_dir, 'Library', 'Application Support', 'Blender');
 	const char* home = std::getenv("HOME");
 	if (home)
 		return fs::path(home) / ".config" / "blender";
@@ -69,17 +65,11 @@ static fs::path getBlenderBaseDir() {
 }
 
 
-// Returns the OS-specific user-data directory, equivalent to nw.App.dataPath.
-// Intentionally shares the original wow.export data directory so caches,
-// config and listfiles are reused between the JS and C++ versions.
-// Windows: %LOCALAPPDATA%/wow.export/User Data/Default
-// Linux:   $XDG_DATA_HOME/wow.export/User Data/Default  (or ~/.local/share/wow.export/User Data/Default)
 static fs::path getUserDataPath() {
 #ifdef _WIN32
 	const char* localAppData = std::getenv("LOCALAPPDATA");
 	if (localAppData && localAppData[0])
 		return fs::path(localAppData) / "wow.export" / "User Data" / "Default";
-	// Fallback: use exe directory
 	return getExecutablePath().parent_path() / "data";
 #else
 	const char* xdgData = std::getenv("XDG_DATA_HOME");
@@ -124,39 +114,25 @@ namespace {
 
 
 void init() {
-	// JS: const INSTALL_PATH = path.dirname(process.execPath);
-	// macOS is not supported in the C++ port — only Windows and Linux.
 	s_install_path = getExecutablePath().parent_path();
 
-	// JS: const DATA_PATH = nw.App.dataPath;
-	// OS-specific user-data directory for caches, config, logs, etc.
 	s_data_dir = getUserDataPath();
 
-	// JS: Resources are at INSTALL_PATH/src/ (shaders, images, fonts, etc.)
-	// Use INSTALL_PATH/src when available (matching JS), fall back to
-	// WOW_EXPORT_SOURCE_DIR/src for development builds run from the build tree.
 	auto installSrc = s_install_path / "src";
 	if (fs::exists(installSrc / "fonts"))
 		s_src_dir = installSrc;
 	else
 		s_src_dir = fs::path(WOW_EXPORT_SOURCE_DIR) / "src";
 
-	// JS: RUNTIME_LOG = path.join(DATA_PATH, 'runtime.log')
 	s_log_dir = s_data_dir;
 
-	// Ensure data directory exists before any module attempts to write to it.
 	fs::create_directories(s_data_dir);
 
-	// Compute derived paths.
-	// JS: path.join(DATA_PATH, 'runtime.log')
 	s_runtime_log = s_data_dir / "runtime.log";
-	// JS: path.join(DATA_PATH, 'last_export')
 	s_last_export = s_data_dir / "last_export";
 
-	// JS: path.join(INSTALL_PATH, 'src', 'shaders')
 	s_shader_path = s_src_dir / "shaders";
 
-	// JS: Cache paths are under DATA_PATH/casc/
 	s_cache_dir = s_data_dir / "casc";
 	s_cache_size = s_cache_dir / "cachesize";
 	s_cache_integrity_file = s_cache_dir / "cacheintegrity";
@@ -165,16 +141,11 @@ void init() {
 	s_cache_dir_data = s_cache_dir / "data";
 	s_cache_dir_dbd = s_cache_dir / "dbd";
 	s_cache_dir_listfile = s_cache_dir / "listfile";
-	// JS: path.join(DATA_PATH, 'tact.json')
 	s_cache_tact_keys = s_data_dir / "tact.json";
-	// JS: path.join(DATA_PATH, 'realmlist.json')
 	s_cache_realmlist = s_data_dir / "realmlist.json";
-	// JS: path.join(DATA_PATH, 'cache_state.json')
 	s_cache_state_file = s_data_dir / "cache_state.json";
 
-	// JS: CONFIG.DEFAULT_PATH = path.join(INSTALL_PATH, 'src', 'default_config.jsonc')
 	s_config_default_path = s_src_dir / "default_config.jsonc";
-	// JS: CONFIG.USER_PATH = path.join(DATA_PATH, 'config.json')
 	s_config_user_path = s_data_dir / "config.json";
 
 	s_blender_dir = getBlenderBaseDir();
@@ -237,7 +208,6 @@ const std::array<FileIdentifier, 17> FILE_IDENTIFIERS = {{
 	{ {{"MD21"sv}}, 1, ".m2" },
 	{ {{"M3DT"sv}}, 1, ".m3" },
 	{ {{"SKIN"sv}}, 1, ".skin" },
-	// String concatenation required: \x00B would parse 'B' as hex digit (0x0B) in C++.
 	{ {{"\x01\x00\x00\x00""BIDA"sv}}, 1, ".bone" },
 	{ {{"SYHP\x02\x00\x00\x00"sv}}, 1, ".phys" },
 	{ {{"HSXG"sv}}, 1, ".bls" },

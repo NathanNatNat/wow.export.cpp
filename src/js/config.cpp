@@ -45,9 +45,6 @@ static void doSave() {
 	nlohmann::json configSave = nlohmann::json::object();
 	for (auto it = core::view->config.begin(); it != core::view->config.end(); ++it) {
 		// Only persist configuration values that do not match defaults.
-		// JS uses strict reference equality (===), which always fails for arrays
-		// since copyConfig clones them with value.slice(0). To match JS behavior,
-		// always persist array values regardless of whether they match defaults.
 		if (!it.value().is_array() && defaultConfig.contains(it.key()) && defaultConfig[it.key()] == it.value())
 			continue;
 
@@ -84,8 +81,6 @@ void load() {
 		auto userResult = generics::readJSON(constants::CONFIG::USER_PATH());
 		userConfig = userResult.value_or(nlohmann::json::object());
 	} catch (const std::runtime_error& e) {
-		// JS: if (e.code === 'EPERM') — generics::readJSON throws std::runtime_error
-		// with prefix "Permission denied: " when the file exists but cannot be opened.
 		if (std::string_view(e.what()).starts_with("Permission denied")) {
 			logging::write("Failed to load user config due to restricted permissions (EPERM)");
 			core::setToast("info",
@@ -118,15 +113,12 @@ void resetToDefault(const std::string& key) {
  * Reset all configuration to default.
  */
 void resetAllToDefault() {
-	// Use JSON parse/dump to ensure deep non-referenced clone.
+	// Use JSON parse/stringify to ensure deep non-referenced clone.
 	core::view->config = nlohmann::json::parse(defaultConfig.dump());
 }
 
 /**
  * Mark configuration for saving.
- * JS uses setImmediate(doSave) to defer execution to the next event-loop tick.
- * C++ uses core::postToMainThread(doSave) to defer to the next frame, matching
- * the JS deferred behavior without blocking the caller.
  */
 void save() {
 	if (!isSaving) {

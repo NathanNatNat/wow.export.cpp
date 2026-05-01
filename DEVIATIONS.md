@@ -122,9 +122,69 @@ Cases where C++ intentionally deviates to fix a JS bug or improve behaviour.
 - **Reason**: JS always uses `nodeIndex + 1` which is a bug when bone prefix mode is disabled. C++ uses correct `actual_node_idx`.
 - **Impact**: Intentional bug fix. Only manifests when `modelsExportWithBonePrefix=false` AND `modelsExportAnimations=true`.
 
+### [blob.cpp] slice() treats explicit 0 as empty range instead of full length
+- **JS Source**: `src/js/blob.js` line 263
+- **Reason**: JS `end || this._buffer.length` treats `0`, `null`, and `undefined` all as "use full length" due to JS falsy coercion. C++ uses `std::optional<std::size_t>` so only absent (`std::nullopt`) maps to full length; an explicit `0` is used as-is, correctly returning an empty blob.
+- **Impact**: `slice(x, 0)` returns an empty blob in C++ but a full-length copy in JS. No callers rely on the JS falsy-zero behaviour.
+
 ## Platform Adaptations
 
 Deviations that are inherent to the C++/ImGui platform and apply broadly across the codebase.
+
+### [app.cpp] IDropTarget instead of window.ondragenter / ondragleave / ondrop
+- **JS Source**: `src/app.js` lines 589–657
+- **Reason**: GLFW only exposes a file-drop callback (`glfwSetDropCallback`) — it cannot detect drag-enter or drag-leave events. On Windows, a COM `IDropTarget` is registered on the HWND to provide the full drag-drop lifecycle so the `fileDropPrompt` overlay works during hover. On Linux, only the GLFW drop callback is used; drag-enter and drag-leave are unavailable without X11 XDnD integration.
+- **Impact**: On Windows, behaviour is fully equivalent to JS. On Linux, `fileDropPrompt` is never shown during drag hover — it only resets on drop.
+
+### [app.cpp] ContextMenuOption struct flattens JS opt.action.handler
+- **JS Source**: `src/app.js` line 319
+- **Reason**: JS `handleContextMenuClick` reads `opt.action?.handler` where `handler` is nested inside an `action` sub-object. C++ `ContextMenuOption` stores `handler` directly on the struct (no nested `action` object).
+- **Impact**: Same semantics. Structural difference only.
+
+### [app.cpp] click() receives pre-computed disabled bool instead of DOM event
+- **JS Source**: `src/app.js` lines 369–372
+- **Reason**: JS `click(tag, event, ...params)` reads `event.target.classList.contains('disabled')` from the DOM event. ImGui's `BeginDisabled` suppresses all interaction so callers pass the disabled state as a plain bool.
+- **Impact**: Same guard — emit is skipped when disabled. Different source of the disabled flag.
+
+### [app.cpp] activeModule watcher uses per-frame polling instead of Vue $watch
+- **JS Source**: `src/app.js` lines 555–564
+- **Reason**: Vue `$watch('activeModule', ...)` fires immediately on mutation. C++ records `prevActiveModule` and compares it each frame in `checkWatchers()`.
+- **Impact**: Context menus are closed one frame after `activeModule` changes instead of synchronously.
+
+### [app.cpp] ScaleAllSizes() not called — no global 1.5× UI scale
+- **JS Source**: `src/app.js` lines 519–543
+- **Reason**: JS applies `scale(scale_w, scale_h)` as a CSS transform but does not apply a global 1.5× multiplier to widget sizes. C++ does not call `ImGui::GetStyle().ScaleAllSizes()`, matching JS behaviour.
+- **Impact**: Widget sizes match the original JS CSS definitions. No global scale multiplier.
+
+### [app.cpp] DPI and CSS scaling emulated via io.DisplaySize / io.DisplayFramebufferScale
+- **JS Source**: `src/app.js` lines 519–543
+- **Reason**: JS applies `transform: scale(scale_w, scale_h)` as an anisotropic CSS transform when the window is smaller than the design thresholds (1120×700). C++ replicates this by overriding `io.DisplaySize` to the CSS-equivalent logical size (clamped to at least 1120×700) and adjusting `io.DisplayFramebufferScale` so the GL viewport maps the logical area to the actual framebuffer. Mouse coordinates are remapped from screen space to logical space accordingly.
+- **Impact**: Same scaling behaviour for sub-threshold windows. Different implementation mechanism.
+
+### [app.cpp] Main-thread task queue instead of JS event loop / microtask queue
+- **JS Source**: `src/app.js` (implicit — JS event loop handles all async callbacks)
+- **Reason**: JS background work resolves via the event loop / Promise microtask queue on the main thread. C++ has no event loop; background threads post callbacks to `core::postToMainThread()` which are drained each frame via `core::drainMainThreadQueue()`.
+- **Impact**: Callbacks are processed at the start of each render frame rather than asynchronously on the microtask queue. Up to one-frame latency.
+
+### [app.cpp] F5 reload uses key-release edge detection instead of keyup event
+- **JS Source**: `src/app.js` lines 64–68
+- **Reason**: JS uses `window.addEventListener('keyup', ...)` which fires exactly once per key release. GLFW provides `glfwGetKey()` which returns current key state; C++ detects the transition from pressed to released by storing the previous state.
+- **Impact**: Same one-shot reload behaviour. Different mechanism.
+
+### [app.cpp] tact-keys loaded on background thread instead of unawaited tactKeys.load()
+- **JS Source**: `src/app.js` line 685
+- **Reason**: JS calls `tactKeys.load()` without `await` so the source-select screen appears immediately while keys download in the background. C++ calls `casc::tact_keys::loadBackground()` which starts a background thread; `waitForLoad()` is called at the start of each CASC load before file access begins.
+- **Impact**: Same non-blocking startup behaviour.
+
+### [app.cpp] Log directory separate from data directory
+- **JS Source**: `src/app.js` line 571
+- **Reason**: JS logs `INSTALL_PATH` and `DATA_PATH` in one line. C++ additionally logs `LOG_DIR` because log files are stored in a separate directory from app data.
+- **Impact**: One extra line in the runtime log.
+
+### [app.cpp] AppState struct assigned directly instead of Vue.createApp reactive proxy
+- **JS Source**: `src/app.js` lines 142–148
+- **Reason**: JS uses `Vue.createApp({ data: () => core.makeNewView(), created() { core.view = this; } })` to create a reactive proxy with `created()`/`mounted()` lifecycle hooks. C++ has no reactivity system — a plain `AppState` struct is constructed and its address assigned to `core::view` before any module registers. ImGui redraws from live state every frame so no reactivity is needed.
+- **Impact**: No reactive watchers. State changes are not propagated via Vue's dependency-tracking system.
 
 ### [generics.cpp] queue() uses polling futures instead of promise .then() chains
 - **JS Source**: `src/js/generics.js` — queue() function
@@ -165,6 +225,21 @@ Deviations that are inherent to the C++/ImGui platform and apply broadly across 
 - **JS Source**: `src/js/config.js` — load() registers `core.view.$watch('config', ...)`
 - **Reason**: C++ has no Vue-style reactive watcher. UI components that change config must explicitly call `config::save()`.
 - **Impact**: Config changes can be silently lost if save() is not called.
+
+### [config.cpp] doSave() always persists array values regardless of default match
+- **JS Source**: `src/js/config.js` — doSave() line 100
+- **Reason**: JS uses strict reference equality (`===`) to compare values against defaults. Since `copyConfig()` clones arrays with `value.slice(0)`, array references never match defaults and arrays are always persisted. C++ replicates this by skipping the equality check for arrays entirely.
+- **Impact**: Array config values are always written to the user config file, matching JS behaviour.
+
+### [config.cpp] load() detects EPERM via exception message prefix instead of error code
+- **JS Source**: `src/js/config.js` — load() line 44
+- **Reason**: JS checks `e.code === 'EPERM'`. `generics::readJSON` throws `std::runtime_error` with a `"Permission denied: "` prefix when the file exists but cannot be opened; there is no `.code` field on C++ exceptions.
+- **Impact**: Same EPERM handling logic, different detection mechanism.
+
+### [config.cpp] save() defers doSave via postToMainThread instead of setImmediate
+- **JS Source**: `src/js/config.js` — save() line 86
+- **Reason**: JS uses `setImmediate(doSave)` to defer to the next event-loop tick. C++ uses `core::postToMainThread(doSave)` to defer to the next frame — the closest equivalent in an ImGui application.
+- **Impact**: doSave runs on the next render frame rather than the next event-loop tick. Behaviour is otherwise identical.
 
 ### [log.h/log.cpp] getErrorDump is synchronous
 - **JS Source**: `src/js/log.js` lines 102-108
@@ -269,6 +344,11 @@ Deviations that are inherent to the C++/ImGui platform and apply broadly across 
 ### [constants.cpp] No macOS UPDATE_ROOT resolution
 - **JS Source**: `src/js/constants.js`
 - **Reason**: JS on macOS resolves 4 levels up from nw.__dirname for the portable-app root. C++ has no macOS support; ROOT equals INSTALL_PATH on all platforms.
+- **Impact**: No macOS support — documented platform constraint.
+
+### [constants.cpp] macOS Blender base directory omitted from getBlenderBaseDir()
+- **JS Source**: `src/js/constants.js` lines 26–39 (`case 'darwin':`)
+- **Reason**: JS has a `darwin` case returning `~/Library/Application Support/Blender`. C++ targets Windows and Linux only; the macOS branch is absent.
 - **Impact**: No macOS support — documented platform constraint.
 
 ### [tiled-png-writer.cpp] write() returns immediately via shared_future
@@ -861,6 +941,46 @@ C++ additions with no JS counterpart.
 - **JS Source**: `src/js/modules/tab_models_legacy.js` lines 186-187
 - **Reason**: JS logs `e.stack` as a second line after the error message. C++ exceptions do not carry stack traces without a third-party library (e.g. Boost.Stacktrace). Adding such a dependency is not justified for a single log line.
 - **Impact**: Slightly less diagnostic information on preview failure in C++. The error message itself is still logged.
+
+### [blob.cpp] stringEncode assumes UTF-8 input instead of performing UTF-16→UTF-8 conversion
+- **JS Source**: `src/js/blob.js` lines 42–95
+- **Reason**: JS `stringEncode` operates on JS strings (internally UTF-16), iterates code units, handles surrogate pairs, and produces UTF-8 bytes with dynamic buffer resizing. C++ `std::string` is already UTF-8, so the function copies bytes directly without conversion.
+- **Impact**: Produces incorrect output if the input string is not valid UTF-8. In practice all C++ callers supply UTF-8 strings so behaviour is identical.
+
+### [blob.cpp] stringDecode emits UTF-8 instead of UTF-16 code units
+- **JS Source**: `src/js/blob.js` lines 97–167
+- **Reason**: JS `stringDecode` decodes to a UTF-16 code-unit array and generates surrogate pairs for code points above U+FFFF before joining with `String.fromCharCode`. C++ decodes valid UTF-8 sequences and re-encodes them as UTF-8 bytes in a `std::string`, so surrogate-pair generation is not needed.
+- **Impact**: Output encoding differs (UTF-8 vs UTF-16), but byte values for valid UTF-8 input are functionally identical when consumed by C++ callers that expect UTF-8.
+
+### [blob.cpp] textEncode/textDecode always use direct conversion instead of conditional TextEncoder/TextDecoder
+- **JS Source**: `src/js/blob.js` lines 169–173
+- **Reason**: JS conditionally selects the native `TextEncoder`/`TextDecoder` API when available, falling back to `stringEncode`/`stringDecode`. C++ has no native TextEncoder/TextDecoder API, so `stringEncode`/`stringDecode` are used unconditionally.
+- **Impact**: Both the native and polyfill paths produce identical UTF-8 output, so this is functionally equivalent.
+
+### [blob.cpp] arrayBuffer() returns synchronously instead of Promise<ArrayBuffer>
+- **JS Source**: `src/js/blob.js` lines 254–256
+- **Reason**: JS `arrayBuffer()` returns `Promise.resolve(this._buffer.buffer || this._buffer)`. C++ returns the buffer directly — no Promise equivalent exists.
+- **Impact**: Callers that used `.then()` or `await` must call this method directly.
+
+### [blob.cpp] text() returns synchronously instead of Promise<string>
+- **JS Source**: `src/js/blob.js` lines 258–260
+- **Reason**: JS `text()` returns `Promise.resolve(textDecode(this._buffer))`. C++ returns the decoded string directly.
+- **Impact**: Callers that used `.then()` or `await` must call this method directly.
+
+### [blob.cpp] stream() returns synchronous BlobReadableStream instead of async ReadableStream
+- **JS Source**: `src/js/blob.js` lines 271–288
+- **Reason**: JS returns a `ReadableStream` whose async `pull()` yields 512 KB chunks via `arrayBuffer()` (Promise-based) with backpressure. C++ returns a `BlobReadableStream` with a synchronous `pull()` that advances in a blocking loop. There is no async scheduling or backpressure.
+- **Impact**: Delivered data (512 KB chunks, same byte values) is identical; control flow is fundamentally different.
+
+### [blob.cpp] createObjectURL has no native URL fallback path
+- **JS Source**: `src/js/blob.js` lines 294–299
+- **Reason**: JS falls back to `URL.createObjectURL(blob)` when the blob is not a `BlobPolyfill` instance. C++ has no native `URL.createObjectURL` API and all blobs are `BlobPolyfill` instances, so no fallback is needed. The function signature enforces this at compile time.
+- **Impact**: Non-BlobPolyfill blobs cannot be passed; the fallback path is absent.
+
+### [blob.cpp] revokeObjectURL cannot call native URL.revokeObjectURL for non-data URLs
+- **JS Source**: `src/js/blob.js` lines 302–306
+- **Reason**: JS calls `URL.revokeObjectURL(url)` for non-data URLs to free native object URL resources. C++ has no native URL object store, so non-data URLs are removed from the C++ registry instead.
+- **Impact**: Non-data URLs created outside the C++ registry cannot be revoked; no native resources are freed.
 
 ## Resolved Deviations
 
