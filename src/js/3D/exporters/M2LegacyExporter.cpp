@@ -179,6 +179,7 @@ void M2LegacyExporter::exportAsOBJ(
 	auto& skin = *skin_ptr;
 
 	OBJWriter obj(out);
+	obj.flip_uvs = true;
 	auto mtlPath = casc::ExportHelper::replaceExtension(out.string(), ".mtl");
 	MTLWriter mtl(mtlPath);
 

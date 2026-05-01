@@ -149,6 +149,7 @@ m3->load();
 const auto& config = core::view->config;
 
 OBJWriter obj(out);
+obj.flip_uvs = true;
 auto mtlPath = casc::ExportHelper::replaceExtension(out.string(), ".mtl");
 MTLWriter mtl(mtlPath);
 

@@ -97,4 +97,7 @@ private:
 
 	// track vertex offsets for appending additional models
 	size_t vertex_offset;
+
+public:
+	bool flip_uvs = false;
 };

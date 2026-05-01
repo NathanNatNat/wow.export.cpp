@@ -158,7 +158,8 @@ void OBJWriter::write(bool overwrite) {
 					if (uvIndex == 0)
 						uvMap[j] = u++;
 
-					writer.writeLine(prefix + " " + float_to_string(uv[i]) + " " + float_to_string(1.0f - uv[i + 1]));
+					const float v = flip_uvs ? (1.0f - uv[i + 1]) : uv[i + 1];
+					writer.writeLine(prefix + " " + float_to_string(uv[i]) + " " + float_to_string(v));
 				}
 			}
 		}

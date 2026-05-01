@@ -534,6 +534,7 @@ void WMOExporter::exportAsOBJ(const std::filesystem::path& out, casc::ExportHelp
 
 	const auto& config = core::view->config;
 	OBJWriter obj(out);
+	obj.flip_uvs = true;
 	const std::filesystem::path mtlPath(casc::ExportHelper::replaceExtension(out.string(), ".mtl"));
 	MTLWriter mtl(mtlPath);
 
@@ -1201,6 +1202,7 @@ void WMOExporter::exportGroupsAsSeparateOBJ(const std::filesystem::path& out, ca
 		const std::filesystem::path groupOut = outDir / groupFileName;
 
 		OBJWriter obj(groupOut);
+		obj.flip_uvs = true;
 		obj.setName(groupFileName);
 
 		logging::write(std::format("exporting wmo group {}: {}", groupName, groupOut.string()));

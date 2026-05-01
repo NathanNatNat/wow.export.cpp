@@ -1024,6 +1024,7 @@ const bool exportMeta = config.value("exportM2Meta", false);
 const bool exportBones = config.value("exportM2Bones", false);
 
 OBJWriter obj(out);
+obj.flip_uvs = true;
 auto mtlPath = casc::ExportHelper::replaceExtension(out.string(), ".mtl");
 MTLWriter mtl(mtlPath);
 
