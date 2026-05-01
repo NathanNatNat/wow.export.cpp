@@ -7,8 +7,6 @@
 
 namespace db {
 
-// JS exports each field symbol from module body; mirror that explicit export
-// surface in this translation unit with named constants bound to enum values.
 [[maybe_unused]] constexpr FieldType String = FieldType::String;
 [[maybe_unused]] constexpr FieldType Int8 = FieldType::Int8;
 [[maybe_unused]] constexpr FieldType UInt8 = FieldType::UInt8;
