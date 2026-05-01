@@ -15,29 +15,24 @@
 #include <set>
 #include <stdexcept>
 
-// Chunk IDs — Root
 static constexpr uint32_t CHUNK_MVER = 0x4D564552;
 static constexpr uint32_t CHUNK_MCNK = 0x4D434E4B;
 static constexpr uint32_t CHUNK_MH2O = 0x4D48324F;
 static constexpr uint32_t CHUNK_MHDR = 0x4D484452;
 
-// Sub-chunk IDs — Root MCNK
 static constexpr uint32_t CHUNK_MCVT = 0x4D435654;
 static constexpr uint32_t CHUNK_MCCV = 0x4D434356;
 static constexpr uint32_t CHUNK_MCNR = 0x4D434E52;
 static constexpr uint32_t CHUNK_MCBB = 0x4D434242;
 
-// Chunk IDs — Tex
 static constexpr uint32_t CHUNK_MTEX = 0x4D544558;
 static constexpr uint32_t CHUNK_MTXP = 0x4D545850;
 static constexpr uint32_t CHUNK_MHID = 0x4D484944;
 static constexpr uint32_t CHUNK_MDID = 0x4D444944;
 
-// Sub-chunk IDs — Tex MCNK
 static constexpr uint32_t CHUNK_MCLY = 0x4D434C59;
 static constexpr uint32_t CHUNK_MCAL = 0x4D43414C;
 
-// Chunk IDs — Obj
 static constexpr uint32_t CHUNK_MMDX = 0x4D4D4458;
 static constexpr uint32_t CHUNK_MMID = 0x4D4D4944;
 static constexpr uint32_t CHUNK_MWMO = 0x4D574D4F;
@@ -83,9 +78,6 @@ void ADTLoader::loadTex(WDTLoader& wdt) {
 	this->_load_tex();
 }
 
-/**
- * Load the ADT file as root, parsing it.
- */
 void ADTLoader::_load_root() {
 	while (this->data.remainingBytes() > 0) {
 		const uint32_t chunkID = this->data.readUInt32LE();
@@ -104,9 +96,6 @@ void ADTLoader::_load_root() {
 	}
 }
 
-/**
- * Load the ADT file as object, parsing it.
- */
 void ADTLoader::_load_obj() {
 	while (this->data.remainingBytes() > 0) {
 		const uint32_t chunkID = this->data.readUInt32LE();
@@ -129,9 +118,6 @@ void ADTLoader::_load_obj() {
 	}
 }
 
-/**
- * Load the ADT file as texture, parsing it.
- */
 void ADTLoader::_load_tex() {
 	while (this->data.remainingBytes() > 0) {
 		const uint32_t chunkID = this->data.readUInt32LE();
@@ -151,10 +137,6 @@ void ADTLoader::_load_tex() {
 		this->data.seek(nextChunkPos);
 	}
 }
-
-// -----------------------------------------------------------------------
-// Root chunk handlers
-// -----------------------------------------------------------------------
 
 // MVER (Version)
 void ADTLoader::handle_root_MVER(BufferWrapper& data) {
@@ -282,7 +264,6 @@ void ADTLoader::handle_root_MH2O(BufferWrapper& data, uint32_t chunkSize) {
 		}
 	}
 
-	// std::set yields sorted iteration; no further sort needed.
 	std::vector<uint32_t> sortedOffsets(dataOffsets.begin(), dataOffsets.end());
 
 	for (int i = 0; i < 256; i++) {
@@ -313,7 +294,6 @@ void ADTLoader::handle_root_MH2O(BufferWrapper& data, uint32_t chunkSize) {
 		} else if (instance->offsetVertexData > 0) {
 			const int vertexCount = (instance->width + 1) * (instance->height + 1);
 
-			// Find the index in sorted offsets
 			auto it = std::find(sortedOffsets.begin(), sortedOffsets.end(), instance->offsetVertexData);
 			size_t offsetIndex = static_cast<size_t>(std::distance(sortedOffsets.begin(), it));
 			uint32_t dataSize;
@@ -384,10 +364,6 @@ void ADTLoader::handle_root_MHDR(BufferWrapper& data) {
 	this->header.unk = data.readUInt32LE(4);
 }
 
-// -----------------------------------------------------------------------
-// Root MCNK sub-chunk handlers
-// -----------------------------------------------------------------------
-
 // MCVT (vertices)
 void ADTLoader::handle_mcnk_MCVT(ADTChunk& chunk, BufferWrapper& data) {
 	chunk.vertices = data.readFloatLE(145);
@@ -433,10 +409,6 @@ void ADTLoader::handle_mcnk_MCBB(ADTChunk& chunk, BufferWrapper& data, uint32_t 
 		};
 	}
 }
-
-// -----------------------------------------------------------------------
-// Tex chunk handlers
-// -----------------------------------------------------------------------
 
 // MVER (Version)
 void ADTLoader::handle_tex_MVER(BufferWrapper& data) {
@@ -496,10 +468,6 @@ void ADTLoader::handle_tex_MDID(BufferWrapper& data, uint32_t chunkSize) {
 	this->diffuseTextureFileDataIDs = data.readUInt32LE(chunkSize / 4);
 }
 
-// -----------------------------------------------------------------------
-// Tex MCNK sub-chunk handlers
-// -----------------------------------------------------------------------
-
 // MCLY
 void ADTLoader::handle_texmcnk_MCLY(ADTTexChunk& chunk, BufferWrapper& data, uint32_t chunkSize) {
 	const uint32_t count = chunkSize / 16;
@@ -518,8 +486,6 @@ void ADTLoader::handle_texmcnk_MCLY(ADTTexChunk& chunk, BufferWrapper& data, uin
 
 // MCAL
 void ADTLoader::handle_texmcnk_MCAL(ADTTexChunk& chunk, BufferWrapper& data, uint32_t chunkSize, WDTLoader* wdt) {
-	// JS dereferences `root.flags` directly; a null root would throw a TypeError.
-	// Mirror that error semantic here rather than silently falling through to the 2048-byte path.
 	if (wdt == nullptr)
 		throw std::runtime_error("ADTLoader::handle_texmcnk_MCAL: WDT root required");
 
@@ -589,10 +555,6 @@ void ADTLoader::handle_texmcnk_MCAL(ADTTexChunk& chunk, BufferWrapper& data, uin
 		}
 	}
 }
-
-// -----------------------------------------------------------------------
-// Obj chunk handlers
-// -----------------------------------------------------------------------
 
 // MVER (Version)
 void ADTLoader::handle_obj_MVER(BufferWrapper& data) {
