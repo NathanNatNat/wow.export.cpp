@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
-*/
-
 #include "GridRenderer.h"
 #include "../gl/GLContext.h"
 #include "../gl/ShaderProgram.h"
@@ -11,9 +5,6 @@
 #include <cmath>
 #include <vector>
 
-// JS shader uses `#version 300 es` (WebGL2 / GLSL ES 3.00). Desktop OpenGL 4.3
-// core profile expects `#version 430 core`; functionally equivalent for this
-// shader (no ES-specific extensions used).
 static const char* GRID_VERT_SHADER = R"(#version 430 core
 
 layout(location = 0) in vec3 a_position;

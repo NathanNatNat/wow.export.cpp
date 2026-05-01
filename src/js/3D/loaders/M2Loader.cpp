@@ -1,9 +1,3 @@
-/*!
-wow.export (https://github.com/Kruithne/wow.export)
-Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
-License: MIT
- */
-
 #include "M2Loader.h"
 #include "M2Generics.h"
 #include "ANIMLoader.h"
@@ -29,9 +23,6 @@ M2Loader::M2Loader(BufferWrapper& data)
 : isLoaded(false), data(data) {
 }
 
-/**
- * Load the M2 model.
- */
 std::future<void> M2Loader::load() {
 return std::async(std::launch::deferred, [this]() {
 // Prevent multiple loading of the same M2.
@@ -60,9 +51,6 @@ this->isLoaded = true;
 });
 }
 
-/**
- * Get a skin at a given index from this->skins.
- */
 std::future<Skin*> M2Loader::getSkin(uint32_t index) {
 return std::async(std::launch::deferred, [this, index]() -> Skin* {
 Skin& skin = this->skins[index];
@@ -73,17 +61,10 @@ return &skin;
 });
 }
 
-/**
- * Returns the internal array of Skin objects.
- * Note: Unlike getSkin(), this does not load any of the skins.
- */
 std::vector<Skin>& M2Loader::getSkinList() {
 return this->skins;
 }
 
-/**
- * Load and apply .anim files to loaded M2 model.
- */
 std::future<void> M2Loader::loadAnims(bool load_all) {
 return std::async(std::launch::deferred, [this, load_all]() {
 if (!load_all)
@@ -125,7 +106,6 @@ bool animIsChunked = (this->flags & 0x200000) == 0x200000 || this->skeletonFileI
 auto loader = std::make_unique<ANIMLoader>(*bufPtr);
 loader->load(animIsChunked);
 
-// Select the correct parsed data from the ANIMLoader.
 if (!loader->skeletonBoneData.empty()) {
 auto parsedBuf = std::make_unique<BufferWrapper>(std::move(loader->skeletonBoneData));
 BufferWrapper* parsedPtr = parsedBuf.get();
@@ -149,9 +129,6 @@ logging::write("Failed to load .anim file for animation: " + std::to_string(anim
 });
 }
 
-/**
- * Load .anim file for a specific animation index (lazy loading).
- */
 std::future<bool> M2Loader::loadAnimsForIndex(uint32_t animationIndex) {
 return std::async(std::launch::deferred, [this, animationIndex]() -> bool {
 // check if already loaded
@@ -227,9 +204,6 @@ return false;
 });
 }
 
-/**
- * Patch bone animation data for a specific animation index.
- */
 void M2Loader::_patch_bone_animation(uint32_t animIndex) {
 auto it = this->animFiles.find(animIndex);
 if (it == this->animFiles.end() || !it->second || this->bones.empty())
@@ -286,9 +260,6 @@ v[1] = dz;
 }
 }
 
-/**
- * Parse SFID chunk for skin file data IDs.
- */
 void M2Loader::parseChunk_SFID(uint32_t chunkSize) {
 if (!this->md21Parsed)
 throw std::runtime_error("Cannot parse SFID chunk in M2 before MD21 chunk!");
@@ -305,9 +276,6 @@ for (uint32_t i = 0; i < lodSkinCount; i++)
 this->lodSkins.emplace_back(this->data.readUInt32LE());
 }
 
-/**
- * Parse TXID chunk for texture file data IDs.
- */
 void M2Loader::parseChunk_TXID() {
 if (!this->md21Parsed)
 throw std::runtime_error("Cannot parse TXID chunk in M2 before MD21 chunk!");
@@ -316,23 +284,14 @@ for (size_t i = 0; i < this->textures.size(); i++)
 this->textures[i].fileDataID = this->data.readUInt32LE();
 }
 
-/**
- * Parse SKID chunk for .skel file data ID.
- */
 void M2Loader::parseChunk_SKID() {
 this->skeletonFileID = this->data.readUInt32LE();
 }
 
-/**
- * Parse BFID chunk for .bone file data IDs.
- */
 void M2Loader::parseChunk_BFID(uint32_t chunkSize) {
 this->boneFileIDs = this->data.readUInt32LE(chunkSize / 4);
 }
 
-/**
- * Parse AFID chunk for animation file data IDs.
- */
 void M2Loader::parseChunk_AFID(uint32_t chunkSize) {
 const uint32_t entryCount = chunkSize / 8;
 this->animFileIDs.resize(entryCount);
@@ -345,9 +304,6 @@ entry.fileDataID = this->data.readUInt32LE();
 }
 }
 
-/**
- * Parse MD21 chunk.
- */
 std::future<void> M2Loader::parseChunk_MD21() {
 return std::async(std::launch::deferred, [this]() {
 const uint32_t ofs = static_cast<uint32_t>(this->data.offset());
@@ -394,7 +350,6 @@ d.seek(boneOfs + ofs);
 
 this->md21Ofs = ofs;
 
-// Build M2Sequence vector from animations for read_m2_track
 std::vector<M2Sequence> sequences(this->animations.size());
 for (size_t i = 0; i < this->animations.size(); i++)
 sequences[i] = { this->animations[i].flags };
@@ -472,9 +427,6 @@ this->bones[i] = std::move(bone);
 d.seek(base);
 }
 
-/**
- * Parse collision data from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_collision(uint32_t ofs) {
 // Parse collision boxes before the full collision chunk.
 this->boundingBox = read_caa_bb(this->data);
@@ -520,9 +472,6 @@ this->collisionNormals[index + 1] = this->data.readFloatLE();
 this->data.seek(base);
 }
 
-/**
- * Parse attachments data from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_attachments(uint32_t ofs) {
 const uint32_t attachmentCount = this->data.readUInt32LE();
 const uint32_t attachmentOffset = this->data.readUInt32LE();
@@ -530,11 +479,11 @@ const uint32_t attachmentOffset = this->data.readUInt32LE();
 const size_t base = this->data.offset();
 this->data.seek(attachmentOffset + ofs);
 
-// Build sequences for read_m2_track
 std::vector<M2Sequence> sequences(this->animations.size());
 for (size_t i = 0; i < this->animations.size(); i++)
 sequences[i] = { this->animations[i].flags };
 
+std::map<uint32_t, BufferWrapper*> emptyAnimFiles;
 this->attachments.resize(attachmentCount);
 for (uint32_t i = 0; i < attachmentCount; i++) {
 M2Attachment& att = this->attachments[i];
@@ -542,16 +491,12 @@ att.id = this->data.readUInt32LE();
 att.bone = this->data.readUInt16LE();
 att.unknown = this->data.readUInt16LE();
 att.position = this->data.readFloatLE(3);
-std::map<uint32_t, BufferWrapper*> emptyAnimFiles;
 att.animateAttached = read_m2_track(this->data, this->md21Ofs, M2DataType::uint8, false, emptyAnimFiles, false, &sequences);
 }
 
 this->data.seek(base);
 }
 
-/**
- * Parse attachment lookup table from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_attachmentLookup(uint32_t ofs) {
 const uint32_t lookupCount = this->data.readUInt32LE();
 const uint32_t lookupOfs = this->data.readUInt32LE();
@@ -564,9 +509,6 @@ this->attachmentLookup = this->data.readInt16LE(lookupCount);
 this->data.seek(base);
 }
 
-/**
- * Get attachment by attachment ID (e.g., 11 for helmet).
- */
 const M2Attachment* M2Loader::getAttachmentById(uint32_t attachmentId) const {
 if (this->attachmentLookup.empty() || attachmentId >= this->attachmentLookup.size())
 return nullptr;
@@ -578,9 +520,6 @@ return nullptr;
 return &this->attachments[static_cast<size_t>(index)];
 }
 
-/**
- * Parse replaceable texture lookups from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_replaceableTextureLookup(uint32_t ofs) {
 const uint32_t lookupCount = this->data.readUInt32LE();
 const uint32_t lookupOfs = this->data.readUInt32LE();
@@ -593,9 +532,6 @@ this->replaceableTextureLookup = this->data.readInt16LE(lookupCount);
 this->data.seek(base);
 }
 
-/**
- * Parse material meta-data from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_materials(uint32_t ofs) {
 const uint32_t materialCount = this->data.readUInt32LE();
 const uint32_t materialOfs = this->data.readUInt32LE();
@@ -612,9 +548,6 @@ this->materials[i].blendingMode = this->data.readUInt16LE();
 this->data.seek(base);
 }
 
-/**
- * Parse the model name from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_modelName(uint32_t ofs) {
 const uint32_t modelNameLength = this->data.readUInt32LE();
 const uint32_t modelNameOfs = this->data.readUInt32LE();
@@ -623,16 +556,12 @@ const size_t base = this->data.offset();
 this->data.seek(modelNameOfs + ofs);
 
 // Always followed by single 0x0 character, -1 to trim).
-// Guard against modelNameLength == 0 to avoid uint32_t underflow (0 - 1 = 0xFFFFFFFF).
 this->data.seek(modelNameOfs + ofs);
 this->name = this->data.readString(modelNameLength > 0 ? modelNameLength - 1 : 0);
 
 this->data.seek(base);
 }
 
-/**
- * Parse vertices from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_vertices(uint32_t ofs) {
 const uint32_t verticesCount = this->data.readUInt32LE();
 const uint32_t verticesOfs = this->data.readUInt32LE();
@@ -673,9 +602,6 @@ this->uv2[i * 2 + 1] = this->data.readFloatLE();
 this->data.seek(base);
 }
 
-/**
- * Parse texture transformation definitions from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_textureTransforms(uint32_t ofs) {
 const uint32_t transformCount = this->data.readUInt32LE();
 const uint32_t transformOfs = this->data.readUInt32LE();
@@ -683,14 +609,13 @@ const uint32_t transformOfs = this->data.readUInt32LE();
 const size_t base = this->data.offset();
 this->data.seek(transformOfs + ofs);
 
-// Build sequences for read_m2_track
 std::vector<M2Sequence> sequences(this->animations.size());
 for (size_t i = 0; i < this->animations.size(); i++)
 sequences[i] = { this->animations[i].flags };
 
+std::map<uint32_t, BufferWrapper*> emptyAnimFiles;
 this->textureTransforms.resize(transformCount);
 for (uint32_t i = 0; i < transformCount; i++) {
-std::map<uint32_t, BufferWrapper*> emptyAnimFiles;
 this->textureTransforms[i].translation = read_m2_track(this->data, this->md21Ofs, M2DataType::float3, false, emptyAnimFiles, false, &sequences);
 this->textureTransforms[i].rotation = read_m2_track(this->data, this->md21Ofs, M2DataType::float4, false, emptyAnimFiles, false, &sequences);
 this->textureTransforms[i].scaling = read_m2_track(this->data, this->md21Ofs, M2DataType::float3, false, emptyAnimFiles, false, &sequences);
@@ -699,9 +624,6 @@ this->textureTransforms[i].scaling = read_m2_track(this->data, this->md21Ofs, M2
 this->data.seek(base);
 }
 
-/**
- * Parse texture transform lookup table from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_textureTransformLookup(uint32_t ofs) {
 const uint32_t entryCount = this->data.readUInt32LE();
 const uint32_t entryOfs = this->data.readUInt32LE();
@@ -716,9 +638,6 @@ this->textureTransformsLookup[i] = this->data.readUInt16LE();
 this->data.seek(base);
 }
 
-/**
- * Parse transparency lookup table from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_transparencyLookup(uint32_t ofs) {
 const uint32_t entryCount = this->data.readUInt32LE();
 const uint32_t entryOfs = this->data.readUInt32LE();
@@ -733,9 +652,6 @@ this->transparencyLookup[i] = this->data.readUInt16LE();
 this->data.seek(base);
 }
 
-/**
- * Parse global transparency weights from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_textureWeights(uint32_t ofs) {
 const uint32_t weightCount = this->data.readUInt32LE();
 const uint32_t weightOfs = this->data.readUInt32LE();
@@ -743,23 +659,18 @@ const uint32_t weightOfs = this->data.readUInt32LE();
 const size_t base = this->data.offset();
 this->data.seek(weightOfs + ofs);
 
-// Build sequences for read_m2_track
 std::vector<M2Sequence> sequences(this->animations.size());
 for (size_t i = 0; i < this->animations.size(); i++)
 sequences[i] = { this->animations[i].flags };
 
-this->textureWeights.resize(weightCount);
-for (uint32_t i = 0; i < weightCount; i++) {
 std::map<uint32_t, BufferWrapper*> emptyAnimFiles;
+this->textureWeights.resize(weightCount);
+for (uint32_t i = 0; i < weightCount; i++)
 this->textureWeights[i] = read_m2_track(this->data, this->md21Ofs, M2DataType::int16, false, emptyAnimFiles, false, &sequences);
-}
 
 this->data.seek(base);
 }
 
-/**
- * Parse color/transparency data from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_colors(uint32_t ofs) {
 const uint32_t colorsCount = this->data.readUInt32LE();
 const uint32_t colorsOfs = this->data.readUInt32LE();
@@ -767,14 +678,13 @@ const uint32_t colorsOfs = this->data.readUInt32LE();
 const size_t base = this->data.offset();
 this->data.seek(colorsOfs + ofs);
 
-// Build sequences for read_m2_track
 std::vector<M2Sequence> sequences(this->animations.size());
 for (size_t i = 0; i < this->animations.size(); i++)
 sequences[i] = { this->animations[i].flags };
 
+std::map<uint32_t, BufferWrapper*> emptyAnimFiles;
 this->colors.resize(colorsCount);
 for (uint32_t i = 0; i < colorsCount; i++) {
-std::map<uint32_t, BufferWrapper*> emptyAnimFiles;
 this->colors[i].color = read_m2_track(this->data, this->md21Ofs, M2DataType::float3, false, emptyAnimFiles, false, &sequences);
 this->colors[i].alpha = read_m2_track(this->data, this->md21Ofs, M2DataType::int16, false, emptyAnimFiles, false, &sequences);
 }
@@ -782,9 +692,6 @@ this->colors[i].alpha = read_m2_track(this->data, this->md21Ofs, M2DataType::int
 this->data.seek(base);
 }
 
-/**
- * Parse textures from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_textures(uint32_t ofs) {
 const uint32_t texturesCount = this->data.readUInt32LE();
 const uint32_t texturesOfs = this->data.readUInt32LE();
@@ -810,7 +717,6 @@ const size_t pos = this->data.offset();
 
 this->data.seek(nameOfs);
 std::string fileName = this->data.readString(nameLength);
-// JS calls fileName.replace('\0', '') without assignment, so fileName is left unchanged.
 
 if (!fileName.empty())
 texture.setFileName(fileName);
@@ -824,9 +730,6 @@ this->textures.push_back(std::move(texture));
 this->data.seek(base);
 }
 
-/**
- * Parse texture combos from an MD21 chunk.
- */
 void M2Loader::parseChunk_MD21_textureCombos(uint32_t ofs) {
 const uint32_t textureComboCount = this->data.readUInt32LE();
 const uint32_t textureComboOfs = this->data.readUInt32LE();
@@ -837,9 +740,6 @@ this->textureCombos = this->data.readUInt16LE(textureComboCount);
 this->data.seek(base);
 }
 
-/**
- * Parse animations.
- */
 void M2Loader::parseChunk_MD21_animations(uint32_t ofs) {
 const uint32_t animationCount = this->data.readUInt32LE();
 const uint32_t animationOfs = this->data.readUInt32LE();
@@ -871,9 +771,6 @@ anim.aliasNext = this->data.readUInt16LE();
 this->data.seek(base);
 }
 
-/**
- * Parse animation lookup.
- */
 void M2Loader::parseChunk_MD21_animationLookup(uint32_t ofs) {
 const uint32_t animationLookupCount = this->data.readUInt32LE();
 const uint32_t animationLookupOfs = this->data.readUInt32LE();
@@ -886,9 +783,6 @@ this->animationLookup = this->data.readInt16LE(animationLookupCount);
 this->data.seek(base);
 }
 
-/**
- * Parse global loops.
- */
 void M2Loader::parseChunk_MD21_globalLoops(uint32_t ofs) {
 const uint32_t globalLoopCount = this->data.readUInt32LE();
 const uint32_t globalLoopOfs = this->data.readUInt32LE();

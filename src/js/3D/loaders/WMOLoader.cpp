@@ -15,7 +15,6 @@
 #include <format>
 #include <stdexcept>
 
-// Chunk IDs
 static constexpr uint32_t CHUNK_MVER = 0x4D564552;
 static constexpr uint32_t CHUNK_MOHD = 0x4D4F4844;
 static constexpr uint32_t CHUNK_MOTX = 0x4D4F5458;
@@ -43,9 +42,6 @@ static constexpr uint32_t CHUNK_MOBA = 0x4D4F4241;
 static constexpr uint32_t CHUNK_MOPY = 0x4D4F5059;
 static constexpr uint32_t CHUNK_MOC2 = 0x4D4F4332;
 
-/**
- * Optional chunks that are not required for rendering.
- */
 static constexpr uint32_t WMO_OPTIONAL_CHUNKS[] = {
 	CHUNK_MLIQ,  // MLIQ (Liquid)
 	CHUNK_MFOG,  // MFOG (Fog)
@@ -63,9 +59,6 @@ bool WMOLoader::isOptionalChunk(uint32_t chunkID) {
 	return false;
 }
 
-/**
- * Construct a new WMOLoader instance with numeric fileDataID.
- */
 WMOLoader::WMOLoader(BufferWrapper& data, uint32_t fileID, bool renderingOnly)
 	: loaded(false), renderingOnly(renderingOnly), data(&data) {
 	if (fileID != 0) {
@@ -74,9 +67,6 @@ WMOLoader::WMOLoader(BufferWrapper& data, uint32_t fileID, bool renderingOnly)
 	}
 }
 
-/**
- * Construct a new WMOLoader instance with string fileName.
- */
 WMOLoader::WMOLoader(BufferWrapper& data, const std::string& fileName, bool renderingOnly)
 	: loaded(false), renderingOnly(renderingOnly), data(&data) {
 	this->fileName = fileName;
@@ -114,23 +104,16 @@ void WMOLoader::load() {
  * Get a group from this WMO.
  */
 WMOLoader& WMOLoader::getGroup(uint32_t index) {
-	// JS: if (!this.groups) — checks that the groups property was ever set (by MOHD).
-	// C++ uses groupsInitialized to distinguish "MOHD not yet parsed" (root WMO)
-	// from "groupCount == 0" (MOHD parsed but zero groups). An empty array [] is
-	// truthy in JS so !this.groups is false even when groupCount == 0.
 	if (!this->groupsInitialized)
 		throw std::runtime_error("Attempted to obtain group from a root WMO.");
 
 	if (index < this->groups.size() && this->groups[index] != nullptr)
 		return *this->groups[index];
 
-	// JS: if (this.groupIDs) data = await casc.getFile(this.groupIDs[index]);
-	//     else data = await casc.getFileByName(this.fileName.replace('.wmo', '_XXX.wmo'));
 	BufferWrapper groupData;
 	if (!this->groupIDs.empty() && index < this->groupIDs.size()) {
 		groupData = core::view->casc->getVirtualFileByID(this->groupIDs[index]);
 	} else if (!this->fileName.empty()) {
-		// Filename-based fallback: replace .wmo with _NNN.wmo
 		std::string groupFileName = this->fileName;
 		auto dotPos = groupFileName.find(".wmo");
 		if (dotPos != std::string::npos) {
@@ -143,12 +126,9 @@ WMOLoader& WMOLoader::getGroup(uint32_t index) {
 	}
 
 	auto ownedBuf = std::make_unique<BufferWrapper>(std::move(groupData));
-	// JS: new WMOLoader(data, undefined, this.renderingOnly) — group WMO has no fileID/fileName.
-	// Pass 0 (C++ sentinel for undefined) to match JS behavior.
 	auto group = std::make_unique<WMOLoader>(*ownedBuf, static_cast<uint32_t>(0), this->renderingOnly);
 	group->load();
 
-	// Ensure groups vector is large enough
 	if (this->groups.size() <= index)
 		this->groups.resize(index + 1, nullptr);
 
@@ -221,8 +201,6 @@ void WMOLoader::parse_MOHD(BufferWrapper& data) {
 
 // MOTX (Textures) [Classic, WMO Root]
 void WMOLoader::parse_MOTX(BufferWrapper& data, uint32_t chunkSize) {
-	// JS: `!!wmo.textureNames` is truthy even for an empty MOTX chunk ({} is truthy).
-	// Track presence of the chunk so isClassic matches JS behaviour.
 	this->hasMotxChunk = true;
 	this->textureNames = ReadStringBlock(data, chunkSize);
 }
@@ -330,7 +308,6 @@ void WMOLoader::parse_MODS(BufferWrapper& data, uint32_t chunkSize) {
 	for (uint32_t i = 0; i < count; i++) {
 		WMODoodadSet& set = this->doodadSets[i];
 		std::string raw = data.readString(20);
-		// Remove null characters
 		raw.erase(std::remove(raw.begin(), raw.end(), '\0'), raw.end());
 		set.name = raw;
 		set.firstInstanceIndex = data.readUInt32LE();
@@ -350,10 +327,8 @@ void WMOLoader::parse_MODN(BufferWrapper& data, uint32_t chunkSize) {
 
 	// Doodads are still reference as MDX in Classic doodad names, replace them with m2.
 	for (auto& [ofs, file] : this->doodadNames) {
-		// toLowerCase
 		std::transform(file.begin(), file.end(), file.begin(),
 			[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-		// replace .mdx with .m2
 		auto pos = file.find(".mdx");
 		if (pos != std::string::npos)
 			file.replace(pos, 4, ".m2");

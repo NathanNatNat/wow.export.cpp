@@ -15,7 +15,6 @@
 #include <format>
 #include <stdexcept>
 
-// Chunk IDs
 static constexpr uint32_t CHUNK_MVER = 0x4D564552;
 static constexpr uint32_t CHUNK_MOHD = 0x4D4F4844;
 static constexpr uint32_t CHUNK_MOTX = 0x4D4F5458;
@@ -43,7 +42,7 @@ static constexpr uint32_t CHUNK_MOBA = 0x4D4F4241;
 static constexpr uint32_t CHUNK_MOPY = 0x4D4F5059;
 static constexpr uint32_t CHUNK_MOC2 = 0x4D4F4332;
 static constexpr uint32_t CHUNK_MOMO = 0x4F4D4F4D;
-static constexpr uint32_t CHUNK_MOGP_ALPHA = 0x5047474D; // alpha-format MOGP identifier
+static constexpr uint32_t CHUNK_MOGP_ALPHA = 0x5047474D;
 
 static constexpr uint32_t LEGACY_OPTIONAL_CHUNKS[] = {
 	CHUNK_MLIQ,  // MLIQ (Liquid)
@@ -157,10 +156,6 @@ void WMOLegacyLoader::_parse_alpha_group(BufferWrapper& data, uint32_t chunkSize
 }
 
 WMOLegacyLoader& WMOLegacyLoader::getGroup(uint32_t index) {
-	// JS: if (!this.groups) — checks that the groups property was ever set (by MOHD).
-	// C++ uses groupsInitialized to distinguish "MOHD not yet parsed" (root WMO)
-	// from "groupCount == 0" (MOHD parsed but zero groups). An empty array [] is
-	// truthy in JS so !this.groups is false even when groupCount == 0.
 	if (!this->groupsInitialized)
 		throw std::runtime_error("Attempted to obtain group from a root WMO.");
 
@@ -180,7 +175,6 @@ WMOLegacyLoader& WMOLegacyLoader::getGroup(uint32_t index) {
 	if (!core::view || !core::view->mpq)
 		throw std::runtime_error("MPQ install not available for group loading");
 
-	// Construct group file path: rootname_NNN.wmo
 	std::string groupPath;
 	if (!this->fileName.empty()) {
 		groupPath = this->fileName;
@@ -200,13 +194,9 @@ WMOLegacyLoader& WMOLegacyLoader::getGroup(uint32_t index) {
 
 	auto ownedBuf = std::make_unique<BufferWrapper>(std::move(fileData.value()));
 	auto group = std::make_unique<WMOLegacyLoader>(*ownedBuf, 0u, this->renderingOnly);
-	// JS: group.version = this.version; — pre-seed version from parent before loading.
-	// The group MVER chunk will override this, but pre-seeding ensures correct
-	// parsing behavior for files where MVER may be absent.
 	group->version = this->version;
 	group->load();
 
-	// Ensure groups vector is large enough
 	if (this->groups.size() <= index)
 		this->groups.resize(index + 1, nullptr);
 
@@ -292,7 +282,6 @@ void WMOLegacyLoader::parse_MOHD(BufferWrapper& data, uint32_t chunkSize) {
 	}
 
 	this->groups.resize(this->groupCount, nullptr);
-	// JS: this.groups = new Array(this.groupCount) — marks groups as initialized (even for 0).
 	this->groupsInitialized = true;
 }
 

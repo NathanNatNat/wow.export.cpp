@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
- */
-
 #include "WDTLoader.h"
 #include "../../buffer.h"
 #include "../../constants.h"
@@ -11,7 +5,6 @@
 static constexpr int MAP_SIZE = constants::GAME::MAP_SIZE;
 static constexpr int MAP_SIZE_SQ = constants::GAME::MAP_SIZE_SQ;
 
-// Chunk IDs
 static constexpr uint32_t CHUNK_MPHD = 0x4D504844;
 static constexpr uint32_t CHUNK_MAIN = 0x4D41494E;
 static constexpr uint32_t CHUNK_MAID = 0x4D414944;
@@ -93,8 +86,6 @@ void WDTLoader::parse_chunk_maid(BufferWrapper& data) {
 // MWMO (World WMO)
 void WDTLoader::parse_chunk_mwmo(BufferWrapper& data, uint32_t chunkSize) {
 	std::string raw = data.readString(chunkSize);
-	// JS: data.readString(chunkSize).replace('\0', '') — removes only the FIRST null byte.
-	// String.prototype.replace() with a string pattern replaces the first occurrence only.
 	auto null_pos = raw.find('\0');
 	if (null_pos != std::string::npos)
 		raw.erase(null_pos, 1);

@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
-*/
-
 #include "MDXLoader.h"
 #include "../../buffer.h"
 
@@ -73,21 +67,6 @@ void MDXLoader::load() {
 		data.seek(nextChunkPos);
 	}
 
-	// Build the nodes lookup from final containers (pointers are now stable).
-	//
-	// JS reference: src/js/3D/loaders/MDXLoader.js lines 208-210, where
-	// `_read_node` immediately stored `this.nodes[node.objectId] = node`
-	// (a live JS object reference) inside the inner loop as each node was
-	// parsed.
-	//
-	// Necessary C++ adaptation: we cannot register pointers/references into
-	// the per-type vectors (bones, helpers, attachments, ...) while those
-	// vectors are still being grown. A subsequent `push_back` may reallocate
-	// the vector's storage and invalidate every previously stored pointer,
-	// leaving `this->nodes` dangling. We therefore defer node registration
-	// until after every chunk handler has fully populated its container, so
-	// the addresses we capture below are stable for the lifetime of the
-	// loader.
 	this->nodes.clear();
 	auto registerNode = [this](MDXNode& node) {
 		if (node.objectId.has_value()) {
@@ -244,10 +223,6 @@ void MDXLoader::_read_node(MDXNode& node) {
 	}
 
 }
-
-// -----------------------------------------------------------------------
-// Chunk handlers
-// -----------------------------------------------------------------------
 
 void MDXLoader::parse_VERS() {
 	this->version = this->data.readUInt32LE();
@@ -747,10 +722,7 @@ void MDXLoader::parse_RIBB() {
 	}
 }
 
-// -----------------------------------------------------------------------
 // geoset parsing
-// -----------------------------------------------------------------------
-
 void MDXLoader::_parse_geosets_v1300() {
 	const uint32_t count = this->data.readUInt32LE();
 
@@ -889,7 +861,6 @@ void MDXLoader::_parse_geosets_v1500() {
 			geoset.tVertices[0][j * 2 + 1] = uv[1];
 			this->data.move(8); // unused
 
-			// Find index or add new entry
 			auto it = std::find(boneLookup.begin(), boneLookup.end(), boneIndices);
 			int idx;
 			if (it == boneLookup.end()) {
@@ -901,15 +872,12 @@ void MDXLoader::_parse_geosets_v1500() {
 			geoset.vertexGroup[j] = static_cast<uint8_t>(idx);
 		}
 
-		// geoset.groups = boneLookup.map(b => b.replace(/(,0)+$/, '').split(',').map(Number));
 		geoset.groups.clear();
 		for (const std::string& b : boneLookup) {
-			// Remove trailing ",0" sequences
 			std::string trimmed = b;
 			while (trimmed.size() >= 2 && trimmed.substr(trimmed.size() - 2) == ",0")
 				trimmed = trimmed.substr(0, trimmed.size() - 2);
 
-			// Split by ',' and convert to numbers
 			std::vector<int32_t> group;
 			std::istringstream ss(trimmed);
 			std::string token;

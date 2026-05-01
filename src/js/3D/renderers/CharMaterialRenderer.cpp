@@ -1,9 +1,3 @@
-/*!
-wow.export (https://github.com/Kruithne/wow.export)
-Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
-License: MIT
-*/
-
 #include "CharMaterialRenderer.h"
 #include "../../casc/blp.h"
 #include "../../core.h"
@@ -33,15 +27,12 @@ static const float UV_BUFFER_DATA[] = {
 CharMaterialRenderer::CharMaterialRenderer(int textureLayer, int width, int height)
 	: width_(width), height_(height)
 {
-	// VAO is required in OpenGL 4.6 core profile (no default VAO exists).
 	glGenVertexArrays(1, &vao_);
 	glBindVertexArray(vao_);
 
-	// Create FBO for offscreen rendering (replaces JS canvas + WebGL context)
 	glGenFramebuffers(1, &fbo_);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
 
-	// Color attachment
 	glGenTextures(1, &fbo_texture_);
 	glBindTexture(GL_TEXTURE_2D, fbo_texture_);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width_, height_, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
@@ -49,7 +40,6 @@ CharMaterialRenderer::CharMaterialRenderer(int textureLayer, int width, int heig
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fbo_texture_, 0);
 
-	// Depth attachment
 	glGenRenderbuffers(1, &fbo_depth_);
 	glBindRenderbuffer(GL_RENDERBUFFER, fbo_depth_);
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width_, height_);
@@ -61,16 +51,11 @@ CharMaterialRenderer::CharMaterialRenderer(int textureLayer, int width, int heig
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	// character texture overlay so the user can cycle through them.
 	char_texture_overlay::add(fbo_texture_);
 }
 
 /**
  * Initialize the CharMaterialRenderer.
- *
- * JS counterpart is `async init()` and returns a Promise. C++ has no
- * Promise system — return type is `void`. compileShaders() and reset()
- * are both synchronous so no Promise behaviour is lost.
  */
 void CharMaterialRenderer::init() {
 	compileShaders();
@@ -78,8 +63,8 @@ void CharMaterialRenderer::init() {
 }
 
 /**
- * Get raw pixel data from the framebuffer.
- * Returns vector of RGBA pixels, with y-axis flipped.
+ * Get raw pixel data from WebGL framebuffer.
+ * Returns Uint8Array of RGBA pixels, avoiding canvas alpha premultiplication.
  */
 std::vector<uint8_t> CharMaterialRenderer::getRawPixels() {
 	std::vector<uint8_t> pixels(width_ * height_ * 4);
@@ -173,8 +158,6 @@ void CharMaterialRenderer::setTextureTarget(
 
 	textureTargets.push_back(std::move(target));
 
-	// JS setTextureTarget ends with `await this.update();` — the FBO must be
-	// re-rendered after a new target is added so the change is visible.
 	this->update();
 }
 
@@ -198,9 +181,6 @@ void CharMaterialRenderer::setTextureTarget(
 		textureID = loadTexture(chr_cust_mat.FileDataID, useAlpha);
 	}
 
-	// Build target using full objects — preserves all JS object fields so nothing is dropped.
-	// JS pushes: { id, section: charComponentTextureSection, material: chrModelMaterial,
-	//              textureLayer: chrModelTextureLayer, custMaterial, textureID, filename }
 	CharTextureTarget target;
 	target.id = chr_cust_mat.ChrModelTextureTargetID;
 	target.section.SectionType = char_component_texture_section.SectionType;
@@ -227,23 +207,15 @@ void CharMaterialRenderer::setTextureTarget(
 
 	textureTargets.push_back(std::move(target));
 
-	// JS setTextureTarget ends with `await this.update();` — the FBO must be
-	// re-rendered after a new target is added so the change is visible.
 	this->update();
 }
 
 /**
  * Disposes of all the things
- * JS calls gl.getExtension('WEBGL_lose_context').loseContext() to invalidate all
- * WebGL resources at once. Desktop GL has no equivalent; instead we explicitly
- * delete every GL object in reverse-creation order (textures → program → FBO → VAO).
- * The order and completeness verified against the JS dispose() method.
  */
 void CharMaterialRenderer::dispose() {
 	unbindAllTextures();
 
-	// Delete all loaded layer textures.
-	// associated resources; in desktop GL we must free them explicitly.
 	for (auto& target : textureTargets) {
 		if (target.textureID) {
 			glDeleteTextures(1, &target.textureID);
@@ -259,10 +231,8 @@ void CharMaterialRenderer::dispose() {
 
 	clearCanvas();
 
-	// destroying the FBO resources.
 	char_texture_overlay::remove(fbo_texture_);
 
-	// Delete FBO resources (replaces JS overlay.remove + WEBGL_lose_context)
 	if (fbo_texture_) {
 		glDeleteTextures(1, &fbo_texture_);
 		fbo_texture_ = 0;
@@ -290,7 +260,6 @@ void CharMaterialRenderer::dispose() {
  * @param useAlpha
  */
 GLuint CharMaterialRenderer::loadTexture(uint32_t fileDataID, bool useAlpha) {
-	// Auto-resolve CASC source (mirrors M2RendererGL / WMORendererGL pattern).
 	if (!casc_source_ && core::view && core::view->casc)
 		casc_source_ = core::view->casc;
 
@@ -300,7 +269,6 @@ GLuint CharMaterialRenderer::loadTexture(uint32_t fileDataID, bool useAlpha) {
 	GLuint texture;
 	glGenTextures(1, &texture);
 
-	// core.view.casc is the active CASC source — use getVirtualFileByID to get file data.
 	BufferWrapper fileData = casc_source_->getVirtualFileByID(fileDataID);
 	casc::BLPImage blp(std::move(fileData));
 
@@ -350,9 +318,6 @@ void CharMaterialRenderer::unbindAllTextures() {
 
 /**
  * Clear the canvas, resetting it to black.
- * JS operates on the current WebGL framebuffer (the canvas) without explicit
- * bind/unbind. In C++, we save/restore the previous FBO binding so clearCanvas()
- * is transparent to callers that already have an FBO bound.
  */
 void CharMaterialRenderer::clearCanvas() {
 	if (!fbo_)
@@ -428,7 +393,6 @@ void CharMaterialRenderer::compileShaders() {
 		throw std::runtime_error("Failed to link shader program");
 	}
 
-	// Shaders can be detached/deleted after linking
 	glDeleteShader(vertShader);
 	glDeleteShader(fragShader);
 
@@ -448,7 +412,6 @@ void CharMaterialRenderer::update() {
 	if (!fbo_)
 		return;
 
-	// Save current framebuffer and VAO bindings, then bind ours
 	GLint prevFBO = 0;
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
 	GLint prevVAO = 0;
@@ -571,9 +534,7 @@ void CharMaterialRenderer::update() {
 			glBindTexture(GL_TEXTURE_2D, canvasTexture);
 
 			if (layer.material.Width == layer.section.Width && layer.material.Height == layer.section.Height) {
-				// Just copy the canvas (read from FBO and upload).
-				// (canvas is top-down, textures are bottom-up). glReadPixels
-				// returns bottom-up data, so we must flip to match JS behavior.
+				// Just copy the canvas
 				std::vector<uint8_t> canvasPixels(width_ * height_ * 4);
 				glReadPixels(0, 0, width_, height_, GL_RGBA, GL_UNSIGNED_BYTE, canvasPixels.data());
 
@@ -608,24 +569,19 @@ void CharMaterialRenderer::update() {
 			glUniform1i(baseTextureLocation, 1);
 		}
 
-		// Draw — matches JS: gl.drawArrays is a single call AFTER the blend-mode 4/6/7
-		// if block, not inside it. Both blend paths share the same draw call.
+		// Draw
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 
-		// Clean up canvas texture if it was created for blend modes 4/6/7.
-		// JS relies on loseContext() to free resources; desktop GL must free explicitly.
 		if (canvasTexture) {
 			glActiveTexture(GL_TEXTURE1);
 			glBindTexture(GL_TEXTURE_2D, 0);
 			glDeleteTextures(1, &canvasTexture);
 		}
 
-		// Clean up per-layer buffers
 		glDeleteBuffers(1, &vBuffer);
 		glDeleteBuffers(1, &uvBuffer);
 	}
 
-	// Restore previous framebuffer and VAO
 	glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFBO));
 	glBindVertexArray(static_cast<GLuint>(prevVAO));
 }

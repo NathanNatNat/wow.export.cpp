@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
- */
-
 #include "SKELLoader.h"
 #include "M2Generics.h"
 #include "ANIMLoader.h"
@@ -81,7 +75,6 @@ void SKELLoader::parse_chunk_skb1() {
 	const size_t base_ofs = d.offset();
 	d.seek(chunk_ofs + bone_ofs);
 
-	// Build M2Sequence vector from animations for read_m2_track
 	std::vector<M2Sequence> sequences(this->animations.size());
 	for (size_t i = 0; i < this->animations.size(); i++)
 		sequences[i] = { this->animations[i].flags };
@@ -232,7 +225,6 @@ void SKELLoader::parse_chunk_ska1() {
 	const uint32_t attachmentLookupCount = this->data.readUInt32LE();
 	const uint32_t attachmentLookupOfs = this->data.readUInt32LE();
 
-	// Build sequences for read_m2_track
 	std::vector<M2Sequence> sequences(this->animations.size());
 	for (size_t i = 0; i < this->animations.size(); i++)
 		sequences[i] = { this->animations[i].flags };

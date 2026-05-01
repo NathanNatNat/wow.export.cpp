@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
-*/
-
 #include "M2LegacyLoader.h"
 #include "../Texture.h"
 #include "../../buffer.h"
@@ -13,17 +7,10 @@
 #include <future>
 #include <stdexcept>
 
-/**
- * Construct a new M2LegacyLoader instance.
- * @param data
- */
 M2LegacyLoader::M2LegacyLoader(BufferWrapper& data)
 	: data(data) {
 }
 
-/**
- * Load the M2 model.
- */
 std::future<void> M2LegacyLoader::load() {
 	return std::async(std::launch::deferred, [this]() {
 		if (this->isLoaded)
@@ -523,7 +510,6 @@ void M2LegacyLoader::_parse_textures(uint32_t ofs) {
 			data.seek(nameOfs + ofs);
 
 			std::string fileName = data.readString(nameLength);
-			// Remove null terminators
 			std::erase(fileName, '\0');
 
 			if (!fileName.empty())
@@ -829,9 +815,6 @@ std::future<LegacyM2Skin*> M2LegacyLoader::getSkin(int index) {
 	});
 }
 
-/**
- * Returns the list of skins loaded inline with the M2.
- */
 std::vector<LegacyM2Skin>& M2LegacyLoader::getSkinList() {
 	return this->skins;
 }

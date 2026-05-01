@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
-	License: MIT
- */
-
 #include "M3Loader.h"
 #include "../../buffer.h"
 #include "../../log.h"
@@ -41,18 +35,10 @@ static constexpr uint32_t CHUNK_M3ST = 0x54534D33; // 'M3ST'
 static constexpr uint32_t CHUNK_M3VS = 0x53564D33; // 'M3VS'
 static constexpr uint32_t CHUNK_M3PT = 0x54504D33; // 'M3PT'
 
-/**
- * Construct a new M3Loader instance.
- * @param data
- */
 M3Loader::M3Loader(BufferWrapper& data)
 	: data(data) {
 }
 
-/**
- * Convert a chunk ID to a string.
- * @param chunkID
- */
 std::string M3Loader::fourCCToString(uint32_t chunkID) {
 	char chars[4];
 	chars[0] = static_cast<char>(chunkID & 0xFF);
@@ -62,9 +48,6 @@ std::string M3Loader::fourCCToString(uint32_t chunkID) {
 	return std::string(chars, 4);
 }
 
-/**
- * Load the M3 model.
- */
 void M3Loader::load() {
 	// Prevent multiple loading of the same M3.
 	if (this->isLoaded)
@@ -98,18 +81,10 @@ void M3Loader::load() {
 	this->isLoaded = true;
 }
 
-/**
- * Parse M3DT chunk.
- * @param chunkSize Size of the chunk.
- */
 void M3Loader::parseChunk_M3DT(uint32_t chunkSize) {
 	this->data.move(chunkSize); // TODO: Skip the chunk data for now.
 }
 
-/**
- * Parse MES3 chunk.
- * @param chunkSize Size of the chunk.
- */
 void M3Loader::parseChunk_MES3(uint32_t chunkSize) {
 	const size_t endPos = this->data.offset() + chunkSize;
 
@@ -154,13 +129,6 @@ void M3Loader::parseChunk_MES3(uint32_t chunkSize) {
 	}
 }
 
-/**
- * Parse a buffer chunk.
- * @param chunkSize Size of the chunk.
- * @param chunkID ID of the chunk.
- * @param propertyA Property A of the chunk (dynamic data per chunk type).
- * @param propertyB Property B of the chunk (dynamic data per chunk type).
- */
 void M3Loader::parseBufferChunk(uint32_t chunkSize, uint32_t chunkID, uint32_t propertyA, uint32_t propertyB) {
 	const std::string chunkName = fourCCToString(chunkID);
 	const std::string format = fourCCToString(propertyA);
@@ -237,14 +205,6 @@ void M3Loader::parseBufferChunk(uint32_t chunkSize, uint32_t chunkID, uint32_t p
 	}
 }
 
-/**
- * Read a typed buffer chunk and return it as a vector of floats.
- *
- * @param format    Format identifier (e.g. "1F32", "2F32", "3F32", "4F32").
- * @param chunkSize Size of the sub-chunk in bytes.
- * @return Vector of floats decoded from the buffer.
- * @throws std::runtime_error if `format` is not a supported float format.
- */
 std::vector<float> M3Loader::ReadBufferAsFormat(const std::string& format, uint32_t chunkSize) {
 	// TODO: Surely we can just read the data directly into their respective typed arrays? Unless we need to do coordinate conversion...
 
@@ -260,14 +220,6 @@ std::vector<float> M3Loader::ReadBufferAsFormat(const std::string& format, uint3
 	throw std::runtime_error(std::format("Unsupported format {}", format));
 }
 
-/**
- * Read a typed buffer chunk and return it as a vector of uint16s.
- *
- * @param format    Format identifier (currently only "1U16").
- * @param chunkSize Size of the sub-chunk in bytes.
- * @return Vector of uint16s decoded from the buffer.
- * @throws std::runtime_error if `format` is not a supported uint16 format.
- */
 std::vector<uint16_t> M3Loader::ReadBufferAsFormatU16(const std::string& format, uint32_t chunkSize) {
 	if (format == "1U16") {
 		const uint32_t u16Count = chunkSize / 2;
@@ -281,19 +233,11 @@ std::vector<uint16_t> M3Loader::ReadBufferAsFormatU16(const std::string& format,
 	throw std::runtime_error(std::format("Unsupported format {}", format));
 }
 
-/**
- * Parse VSTR sub-chunk.
- * @param chunkSize Size of the sub-chunk.
- */
 void M3Loader::parseSubChunk_VSTR(uint32_t chunkSize) {
 	this->ownedStringBlock = std::make_unique<BufferWrapper>(this->data.readBuffer(chunkSize, false));
 	this->stringBlock = this->ownedStringBlock.get();
 }
 
-/**
- * Parse VGEO sub-chunk.
- * @param numGeosets Number of geosets.
- */
 void M3Loader::parseSubChunk_VGEO(uint32_t numGeosets) {
 	this->geosets.resize(numGeosets);
 	for (uint32_t i = 0; i < numGeosets; i++) {
@@ -311,11 +255,6 @@ void M3Loader::parseSubChunk_VGEO(uint32_t numGeosets) {
 	}
 }
 
-/**
- * Parse LODS sub-chunk.
- * @param numLODs Number of LODs.
- * @param numGeosetsPerLOD Number of geosets per LOD.
- */
 void M3Loader::parseSubChunk_LODS(uint32_t numLODs, uint32_t numGeosetsPerLOD) {
 	this->lodCount = numLODs;
 	this->geosetCountPerLOD = numGeosetsPerLOD;
@@ -328,10 +267,6 @@ void M3Loader::parseSubChunk_LODS(uint32_t numLODs, uint32_t numGeosetsPerLOD) {
 	}
 }
 
-/**
- * Parse RBAT sub-chunk.
- * @param numBatches Number of batches.
- */
 void M3Loader::parseSubChunk_RBAT(uint32_t numBatches) {
 	this->renderBatches.resize(numBatches);
 	for (uint32_t i = 0; i < numBatches; i++) {
@@ -344,18 +279,10 @@ void M3Loader::parseSubChunk_RBAT(uint32_t numBatches) {
 	}
 }
 
-/**
- * Parse M3SI chunk.
- * @param chunkSize Size of the chunk.
- */
 void M3Loader::parseChunk_M3SI(uint32_t chunkSize) {
 	this->data.move(chunkSize); // TODO: Skip the chunk data for now.
 }
 
-/**
- * Parse M3CL chunk.
- * @param chunkSize Size of the chunk.
- */
 void M3Loader::parseChunk_M3CL(uint32_t chunkSize) {
 	this->data.move(chunkSize); // TODO: Skip the chunk data for now.
 }
