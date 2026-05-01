@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>, Marlamin <marlamin@marlamin.com>
-	License: MIT
- */
-
 #include "WMOShaderMapper.h"
 
 namespace wmo_shader_mapper {
@@ -35,4 +29,4 @@ const std::unordered_map<int, WMOShaderEntry> WMOShaderMap = {
 	{DF_MoreTexture_Unknown,  {MapObjDiffuse_T1,          MapObjDFShader}}
 };
 
-} // namespace wmo_shader_mapper
+}
