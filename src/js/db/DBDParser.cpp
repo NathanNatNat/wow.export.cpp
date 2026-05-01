@@ -199,7 +199,6 @@ void DBDParser::parse(BufferWrapper& data) {
 	// Separate the file into chunks separated by empty lines.
 	std::vector<std::string> chunk;
 	for (const auto& line : lines) {
-		// Trim the line to check for emptiness.
 		std::string trimmed = line;
 		trimmed.erase(0, trimmed.find_first_not_of(" \t\r\n"));
 		trimmed.erase(trimmed.find_last_not_of(" \t\r\n") + 1);
@@ -207,8 +206,6 @@ void DBDParser::parse(BufferWrapper& data) {
 		if (!trimmed.empty()) {
 			chunk.push_back(line);
 		} else {
-			// JS calls parseChunk on every empty line, even when chunk is empty
-			// (consecutive blank lines push empty DBDEntry objects into entries).
 			parseChunk(chunk);
 			chunk.clear();
 		}
@@ -227,9 +224,6 @@ void DBDParser::parse(BufferWrapper& data) {
  * @param chunk Lines of the chunk
  */
 void DBDParser::parseChunk(std::vector<std::string>& chunk) {
-	// Match JS semantics: when chunk is empty, chunk[0] is undefined (!= 'COLUMNS'),
-	// so we fall into the else branch and push an empty DBDEntry. These empty
-	// entries are harmless (they never match anything in isValidFor()).
 	if (!chunk.empty() && chunk[0] == "COLUMNS") {
 		parseColumnChunk(chunk);
 	} else {
@@ -243,7 +237,6 @@ void DBDParser::parseChunk(std::vector<std::string>& chunk) {
 				// BUILD 1.13.6.36231, 1.13.6.36310
 				const std::string& buildList = buildMatch[1].str();
 
-				// Split by comma.
 				std::vector<std::string> builds;
 				size_t start = 0;
 				size_t pos = 0;
@@ -255,7 +248,6 @@ void DBDParser::parseChunk(std::vector<std::string>& chunk) {
 
 				for (const auto& build : builds) {
 					std::smatch buildRange;
-					// Trim whitespace.
 					std::string trimmedBuild = build;
 					trimmedBuild.erase(0, trimmedBuild.find_first_not_of(" \t"));
 					trimmedBuild.erase(trimmedBuild.find_last_not_of(" \t") + 1);
@@ -279,7 +271,6 @@ void DBDParser::parseChunk(std::vector<std::string>& chunk) {
 				// LAYOUT 0E84A21C, 35353535
 				const std::string& hashList = layoutMatch[1].str();
 
-				// Split by comma and trim.
 				std::vector<std::string> hashes;
 				size_t start = 0;
 				size_t pos = 0;
@@ -311,8 +302,6 @@ void DBDParser::parseChunk(std::vector<std::string>& chunk) {
 				DBDField field(fieldName, fieldType);
 
 				// Parse annotations, (eg 'id,noninline,relation').
-				// Split by comma for exact token matching (JS uses Array.includes,
-				// not substring search — see `validid` vs `id` collision).
 				if (fieldMatch[2].matched) {
 					const std::string annotationsStr = fieldMatch[2].str();
 					std::vector<std::string> annotations;
@@ -348,7 +337,6 @@ void DBDParser::parseChunk(std::vector<std::string>& chunk) {
 						int dataSize = std::stoi(fieldMatch[6].str());
 						field.size = dataSize;
 					} catch (...) {
-						// isNaN equivalent — ignore parse failures.
 					}
 				}
 
@@ -358,7 +346,6 @@ void DBDParser::parseChunk(std::vector<std::string>& chunk) {
 						int arrayLength = std::stoi(fieldMatch[8].str());
 						field.arrayLength = arrayLength;
 					} catch (...) {
-						// isNaN equivalent — ignore parse failures.
 					}
 				}
 
@@ -378,18 +365,16 @@ void DBDParser::parseColumnChunk(std::vector<std::string>& chunk) {
 	if (chunk.empty())
 		throw std::runtime_error("Invalid DBD: Missing column definitions.");
 
-	// Remove the COLUMNS header (equivalent to chunk.shift()).
+	// Remove the COLUMNS header.
 	chunk.erase(chunk.begin());
 
 	for (const auto& entry : chunk) {
 		std::smatch match;
 		if (std::regex_search(entry, match, PATTERN_COLUMN)) {
 			const std::string columnType = match[1].str(); // int|float|locstring|string
-			//const std::string columnForeignKey = match[2].str(); // <TableName::ColumnName> or empty
+			//const std::string columnForeignKey = match[2].str(); // <TableName::ColumnName> or undefined
 			std::string columnName = match[3].str(); // Field_6_0_1_18179_000?
 
-			// Remove the first '?' character (mirrors JS String.prototype.replace
-			// with a string argument, which replaces only the first occurrence).
 			const size_t qpos = columnName.find('?');
 			if (qpos != std::string::npos)
 				columnName.erase(qpos, 1);
