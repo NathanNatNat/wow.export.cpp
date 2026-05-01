@@ -18,36 +18,19 @@
 
 class BufferWrapper;
 
-/**
- * Generic utility functions.
- *
- * JS equivalent: module.exports = { getJSON, readJSON, parseJSON, filesize,
- *     getFileHash, createDirectory, downloadFile, ping, get, queue,
- *     redraw, fileExists, directoryIsWritable, readFile, deleteDirectory,
- *     formatPlaybackSeconds, batchWork }
- */
 namespace generics {
 
-/**
- * HTTP response structure — C++ equivalent of the JS fetch Response object.
- */
 struct HttpResponse {
 	int status = 0;
 	std::string statusText;
 	std::vector<uint8_t> body;
 	std::unordered_map<std::string, std::string> headers;
-	bool ok = false; // true if status is 200–299
+	bool ok = false;
 
 	std::string text() const;
 	nlohmann::json json() const;
 };
 
-/**
- * Async wrapper for HTTP GET.
- * Supports URL fallback chains (tries each URL in order).
- * @param url Single URL or list of fallback URLs.
- * @returns Fetch-style response object.
- */
 HttpResponse get(const std::string& url);
 HttpResponse get(const std::vector<std::string>& urls);
 
@@ -177,8 +160,6 @@ std::string formatPlaybackSeconds(double seconds);
 
 /**
  * Returns after a redraw.
- * Uses two cooperative scheduling yields, matching JS's double
- * requestAnimationFrame ordering guarantee.
  */
 void redraw();
 

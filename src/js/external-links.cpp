@@ -47,16 +47,11 @@ void open(const std::string& link) {
 	MultiByteToWideChar(CP_UTF8, 0, url.c_str(), -1, wurl.data(), required);
 	ShellExecuteW(nullptr, L"open", wurl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #else
-	// Use fork+execlp to pass the URL as a direct argument to xdg-open, avoiding
-	// shell expansion entirely. std::system() with string concatenation is unsafe
-	// because a URL containing `"`, backticks, or `$()` can inject shell commands.
-	// JS equivalent: nw.Shell.openExternal(link) — which is also injection-safe.
 	pid_t pid = fork();
 	if (pid == 0) {
 		execlp("xdg-open", "xdg-open", url.c_str(), nullptr);
-		_exit(127); // exec failed
+		_exit(127);
 	}
-	// Parent: child runs independently, no need to waitpid
 #endif
 }
 

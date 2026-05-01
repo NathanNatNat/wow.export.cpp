@@ -33,79 +33,19 @@ namespace mpq {
 	class MPQInstall;
 }
 
-/**
- * EventEmitter — C++ equivalent of Node.js EventEmitter.
- * Provides on(event, callback), emit(event, args...), off(event, callback) semantics.
- */
 class EventEmitter {
 public:
 	using Callback = std::function<void()>;
 	using ArgCallback = std::function<void(const std::any&)>;
 
-	/**
-	 * Set the maximum number of listeners per event.
-	 */
 	void setMaxListeners(int max);
-
-	/**
-	 * Register an event listener (no arguments).
-	 * @param event Event name.
-	 * @param callback Callback to invoke.
-	 * @returns Listener ID for removal.
-	 */
 	size_t on(const std::string& event, Callback callback);
-
-	/**
-	 * Register an event listener that receives a typed argument.
-	 * @param event Event name.
-	 * @param callback Callback to invoke with the emitted argument.
-	 * @returns Listener ID for removal.
-	 */
 	size_t on(const std::string& event, ArgCallback callback);
-
-	/**
-	 * Register an event listener that fires only once (no arguments).
-	 * The listener is automatically removed after the first invocation.
-	 * @param event Event name.
-	 * @param callback Callback to invoke.
-	 * @returns Listener ID for removal.
-	 */
 	size_t once(const std::string& event, Callback callback);
-
-	/**
-	 * Register an event listener that fires only once and receives a typed argument.
-	 * The listener is automatically removed after the first invocation.
-	 * @param event Event name.
-	 * @param callback Callback to invoke with the emitted argument.
-	 * @returns Listener ID for removal.
-	 */
 	size_t once(const std::string& event, ArgCallback callback);
-
-	/**
-	 * Remove an event listener by ID.
-	 * @param event Event name.
-	 * @param id Listener ID returned by on().
-	 */
 	void off(const std::string& event, size_t id);
-
-	/**
-	 * Emit an event, invoking all registered listeners (no arguments).
-	 * @param event Event name.
-	 */
 	void emit(const std::string& event);
-
-	/**
-	 * Emit an event with a typed argument, invoking all registered listeners.
-	 * ArgCallback listeners receive the argument; Callback listeners ignore it.
-	 * @param event Event name.
-	 * @param arg Argument to pass to ArgCallback listeners.
-	 */
 	void emit(const std::string& event, const std::any& arg);
-
-	/**
-	 * Remove all listeners for an event.
-	 * @param event Event name.
-	 */
 	void removeAllListeners(const std::string& event);
 
 private:
@@ -122,43 +62,28 @@ private:
 	std::unordered_map<std::string, std::vector<Listener>> listeners;
 };
 
-/**
- * Toast notification data.
- */
-/**
- * A single toast action button (label + callback).
- */
 struct ToastAction {
 	std::string label;
 	std::function<void()> callback;
 };
 
 struct Toast {
-	std::string type;      // 'error', 'info', 'success', 'progress'
+	std::string type;
 	std::string message;
-	std::vector<ToastAction> actions; // Action buttons with callbacks.
+	std::vector<ToastAction> actions;
 	bool closable = true;
 };
 
-/**
- * Menu button option (label + value pair).
- */
 struct MenuOption {
 	std::string label;
 	std::string value;
 };
 
-/**
- * Menu button option with integer value.
- */
 struct MenuOptionInt {
 	std::string label;
 	int value;
 };
 
-/**
- * Context menu state nodes.
- */
 struct ContextMenus {
 	nlohmann::json nodeTextureRibbon;  // Context menu node for the texture ribbon.
 	nlohmann::json nodeItem;           // Context menu node for the items listfile.
@@ -170,7 +95,6 @@ struct ContextMenus {
 	bool stateModelExport = false;     // State controller for the model export menu.
 	bool stateCDNRegion = false;       // State controller for the CDN region selection menu.
 
-	// JS: app.js lines 556-563 — bool fields → false, json fields → null.
 	void resetAll() {
 		stateNavExtra = false;
 		stateModelExport = false;
@@ -184,9 +108,6 @@ struct ContextMenus {
 	}
 };
 
-/**
- * Guild tabard configuration.
- */
 struct GuildTabardConfig {
 	int background = 0;
 	int border_style = 0;
@@ -195,40 +116,25 @@ struct GuildTabardConfig {
 	int emblem_color = 0;
 };
 
-/**
- * Color picker position.
- */
 struct ColorPickerPosition {
 	int x = 0;
 	int y = 0;
 };
 
-/**
- * Scroll position state for listbox components.
- */
 struct ScrollPosition {
 	double scrollRel = 0;
 	int scrollIndex = 0;
 	int64_t timestamp = 0;
 };
 
-/**
- * Drop handler for drag/drop file support.
- */
 struct DropHandler {
 	std::vector<std::string> ext;
 	std::function<std::string(int)> prompt;
 	std::function<void(const std::vector<std::string>&)> process;
 };
 
-/**
- * AppState — Central application state struct.
- * Since ImGui is immediate-mode, state changes are reflected
- * automatically on the next frame — no "reactivity" system needed.
- *
- */
 struct AppState {
-	~AppState();                                 // Defined in core.cpp (needs complete mpq::MPQInstall).
+	~AppState();
 	AppState() = default;
 	AppState(AppState&&) = default;
 	AppState& operator=(AppState&&) = default;
@@ -253,7 +159,7 @@ struct AppState {
 	nlohmann::json availableRemoteBuilds;        // Remote builds to display during source select.
 	bool sourceSelectShowBuildSelect = false;    // Controls whether build select is shown.
 	casc::CASC* casc = nullptr;                  // Active CASC instance.
-	std::unique_ptr<mpq::MPQInstall> mpq;        // Active MPQ install instance.
+	std::unique_ptr<mpq::MPQInstall> mpq;
 	int64_t cacheSize = 0;                       // Active size of the user cache.
 	std::string userInputTactKey;                // Value of manual tact key field.
 	std::string userInputTactKeyName;            // Value of manual tact key name field.
@@ -324,11 +230,6 @@ struct AppState {
 	std::vector<nlohmann::json> installTags;
 	std::vector<nlohmann::json> tableBrowserHeaders;
 	std::vector<nlohmann::json> tableBrowserRows;
-	// availableLocale is the casc::locale_flags::entries array (compile-time constant).
-	// JS equivalent: `availableLocale: Locale` on makeNewView().
-	// In C++ this is accessed directly via casc::locale_flags::entries instead of
-	// being stored as a field. Any JS code using `view.availableLocale` maps to
-	// casc::locale_flags::entries in C++.
 	nlohmann::json fileDropPrompt;
 	std::string whatsNewHTML;
 	std::string textViewerSelectedText;
@@ -412,7 +313,6 @@ struct AppState {
 	std::vector<nlohmann::json> textureAtlasOverlayRegions;
 	int textureAtlasOverlayWidth = 0;
 	int textureAtlasOverlayHeight = 0;
-	// itemViewerTypeMask is above with the other masks
 	int modelTexturePreviewWidth = 256;
 	int modelTexturePreviewHeight = 256;
 	std::string modelTexturePreviewURL;
@@ -430,8 +330,8 @@ struct AppState {
 	std::string overrideModelName;
 	std::vector<nlohmann::json> overrideTextureList;
 	std::string overrideTextureName;
-	std::string pendingItemSlotFilter;             // Pending item slot filter from character tab.
-	int chrPendingEquipSlot = 0;                   // Pending equip slot ID set by character tab navigation (0 = none). JS: chrPendingEquipSlot
+	std::string pendingItemSlotFilter;
+	int chrPendingEquipSlot = 0;                   // Slot ID pending equip from character tab navigation
 	std::vector<nlohmann::json> mapViewerMaps;
 	std::vector<nlohmann::json> zoneViewerZones;
 	std::vector<nlohmann::json> zonePhases;
@@ -500,7 +400,7 @@ struct AppState {
 	nlohmann::json chrPendingThumbnail;
 	nlohmann::json realmList = nlohmann::json::object();
 	bool exportCancelled = false;
-	bool isXmas = false; // Set at runtime based on current month.
+	bool isXmas = false;
 	std::shared_ptr<casc::BLPImage> chrCustBakedNPCTexture;
 	std::string regexTooltip =
 		".* - Matches anything\n"
@@ -532,12 +432,6 @@ struct AppState {
 	std::string helpSearchQuery;
 };
 
-/**
- * BusyLock — RAII busy lock that increments isBusy on creation
- * and decrements on destruction. Use as a local variable.
- *
- * JS equivalent: create_busy_lock() with Symbol.dispose
- */
 class BusyLock {
 public:
 	explicit BusyLock(AppState& state);
@@ -552,138 +446,29 @@ private:
 	AppState* state;
 };
 
-/**
- * Core module — global event dispatcher and application state management.
- *
- * JS equivalent: module.exports = { events, view, makeNewView, create_busy_lock,
- *     showLoadingScreen, progressLoadingScreen, hideLoadingScreen,
- *     setToast, hideToast, openExportDirectory, registerDropHandler,
- *     getDropHandler, openLastExportStream, saveScrollPosition, getScrollPosition }
- */
 namespace core {
 
-/// Global event emitter.
 extern EventEmitter events;
-
-/// Reference to the main application state (initially nullptr, set after init).
 extern AppState* view;
 
-/**
- * Create a new AppState with default values.
- * @returns A fresh AppState instance.
- */
 AppState makeNewView();
-
-/**
- * Creates an RAII busy lock that increments isBusy on creation and
- * decrements on destruction.
- * @returns BusyLock that decrements on scope exit.
- */
 BusyLock create_busy_lock();
-
-/**
- * Show loading screen with specified number of progress steps.
- * @param segments Number of progress steps.
- * @param title    Loading screen title.
- */
 void showLoadingScreen(int segments = 1, const std::string& title = "Loading, please wait...");
-
-/**
- * Advance loading screen progress by one step.
- * @param text Progress text to display.
- */
 void progressLoadingScreen(const std::string& text = "");
-
-/**
- * Hide loading screen.
- */
 void hideLoadingScreen();
-
-/**
- * Display a toast message.
- * @param toastType 'error', 'info', 'success', 'progress'
- * @param message   Toast message text.
- * @param actions   Optional action buttons (label + callback pairs).
- * @param ttl       Time in milliseconds before removing the toast (-1 = persistent).
- * @param closable  If true, toast can manually be closed.
- */
 void setToast(const std::string& toastType, const std::string& message,
               const std::vector<ToastAction>& actions = {}, int ttl = 10000, bool closable = true);
-
-/**
- * Hide the currently active toast prompt.
- * @param userCancel True if the user manually dismissed the toast.
- */
 void hideToast(bool userCancel = false);
-
-/**
- * Open user-configured export directory with OS default.
- */
 void openExportDirectory();
-
-/**
- * Open a file or directory with the OS default application/explorer.
- * @param path Path to open.
- */
 void openInExplorer(const std::string& path);
-
-/**
- * Register a handler for file drops.
- * @param handler Drop handler to register.
- */
 void registerDropHandler(DropHandler handler);
-
-/**
- * Get a drop handler for the given file path.
- * @param file File path to match against registered handlers.
- * @returns Pointer to matching handler, or nullptr if none found.
- */
 const DropHandler* getDropHandler(const std::string& file);
-
-/**
- * Open a stream to the last export file.
- * @returns FileWriter instance.
- */
 FileWriter openLastExportStream();
-
-/**
- * Save scroll position for a listbox with the given key.
- * @param key         Unique identifier for the listbox.
- * @param scrollRel   Relative scroll position (0-1).
- * @param scrollIndex Current scroll index.
- */
 void saveScrollPosition(const std::string& key, double scrollRel, int scrollIndex);
-
-/**
- * Get saved scroll position for a listbox with the given key.
- * @param key Unique identifier for the listbox.
- * @returns Saved scroll state, or std::nullopt if not found.
- */
 std::optional<ScrollPosition> getScrollPosition(const std::string& key);
-
-/**
- * Post a task to be executed on the main thread.
- * Thread-safe: may be called from any thread.
- * Tasks are drained once per frame by the main loop via drainMainThreadQueue().
- */
 void postToMainThread(std::function<void()> task);
-
-/**
- * Drain and execute all tasks posted via postToMainThread().
- * Must be called from the main thread (once per frame in the main loop).
- */
 void drainMainThreadQueue();
 
-/**
- * Return a cached std::vector<std::string> built from a JSON vector.
- * Only rebuilds when the source vector's size changes (O(1) check on hot path).
- * Use a per-caller pair of (cache, cached_size) as persistent state.
- *
- * @param arr         Source vector of nlohmann::json string elements.
- * @param cache       Persistent cache vector (modified in-place when stale).
- * @param cached_size Persistent size of last build (initialize to ~size_t(0)).
- * @returns           Const reference to the (possibly freshly rebuilt) cache.
- */
 inline const std::vector<std::string>& cached_json_strings(
 	const std::vector<nlohmann::json>& arr,
 	std::vector<std::string>& cache,

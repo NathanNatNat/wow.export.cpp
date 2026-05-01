@@ -7,9 +7,6 @@
 
 #include <array>
 
-/**
- * CRC32 lookup table, computed at compile time.
- */
 static constexpr std::array<uint32_t, 256> makeTable() {
 	std::array<uint32_t, 256> t{};
 	for (uint32_t i = 0; i < 256; i++) {

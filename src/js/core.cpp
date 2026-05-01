@@ -31,7 +31,6 @@
 #include <thread>
 
 
-// Out-of-line destructor: unique_ptr<mpq::MPQInstall> requires complete type.
 AppState::~AppState() = default;
 
 
@@ -88,7 +87,6 @@ void EventEmitter::emitImpl(const std::string& event, const std::any* arg) {
 	if (it == listeners.end())
 		return;
 
-	// Copy the vector in case listeners modify it during iteration.
 	auto callbacks = it->second;
 	for (const auto& listener : callbacks) {
 		std::visit([arg](const auto& cb) {
@@ -163,22 +161,15 @@ static std::vector<DropHandler> dropHandlers;
 static std::unordered_map<std::string, ScrollPosition> scrollPositions;
 
 // internal progress state for loading screen api
-// These are written by showLoadingScreen / progressLoadingScreen which
-// run on the CASC loading background thread.  Using atomics for formal
-// correctness (no concurrent writers, but the main thread could
-// theoretically call showLoadingScreen for a different purpose).
 static std::atomic<int> loading_progress_segments{1};
 static std::atomic<int> loading_progress_value{0};
 
-// Thread-safe queue for posting work from background threads to the
-// main thread.  The main loop drains this once per frame.
 static std::mutex s_mainQueueMutex;
 static std::vector<std::function<void()>> s_mainQueue;
 
 AppState makeNewView() {
 	AppState state;
 
-	// Determine if it's December (month 11 in JS Date, month 12 in std::tm).
 	const auto now = std::chrono::system_clock::now();
 	const auto time = std::chrono::system_clock::to_time_t(now);
 	std::tm tm_buf;
@@ -187,9 +178,8 @@ AppState makeNewView() {
 #else
 	localtime_r(&time, &tm_buf);
 #endif
-	state.isXmas = (tm_buf.tm_mon == 11); // tm_mon is 0-based, December = 11
+	state.isXmas = (tm_buf.tm_mon == 11);
 
-	// Initialize menu button arrays matching JS source exactly.
 	state.menuButtonTextures = {
 		{ "Export as PNG", "PNG" },
 		{ "Export as WebP", "WEBP" },
@@ -290,27 +280,15 @@ AppState makeNewView() {
 		{ "Export DB2 (Raw)", "DB2" }
 	};
 
-	// JS source lines 380-383 (helpArticles, helpFilteredArticles, helpSelectedArticle,
-	// helpSearchQuery): tab_help is removed from this C++ project (see CLAUDE.md).
-	// The fields remain in AppState with default-constructed values (empty/null)
-	// so any remaining references compile without error.
-
 	return state;
 }
 
-/**
- * Open a stream to the last export file.
- * If the path is a directory (left over from a previous interrupted export),
- * remove it recursively before opening.
- * JS equivalent: openLastExportStream() in core.js lines 394-408.
- */
 FileWriter openLastExportStream() {
 	const auto& path = constants::LAST_EXPORT();
 	std::error_code ec;
 	auto status = std::filesystem::status(path, ec);
 	if (ec) {
-		// ENOENT is expected if the file doesn't exist yet -- suppress silently.
-		// All other errors are logged, mirroring JS: if (e.code !== 'ENOENT') log.write(...)
+		// ENOENT is expected if the file doesn't exist yet
 		if (ec != std::errc::no_such_file_or_directory)
 			logging::write("failed to stat last_export: {}", ec.message());
 	} else if (std::filesystem::is_directory(status)) {
@@ -320,18 +298,10 @@ FileWriter openLastExportStream() {
 	return FileWriter(path, "utf8");
 }
 
-/**
- * Creates an RAII busy lock that increments isBusy on creation and
- * decrements on destruction.
- */
 BusyLock create_busy_lock() {
 	return BusyLock(*view);
 }
 
-/**
- * Show loading screen with specified number of progress steps.
- * Thread-safe: posts UI state changes to the main-thread queue.
- */
 void showLoadingScreen(int segments, const std::string& title) {
 	loading_progress_segments = segments;
 	loading_progress_value = 0;
@@ -343,10 +313,6 @@ void showLoadingScreen(int segments, const std::string& title) {
 	});
 }
 
-/**
- * Advance loading screen progress by one step.
- * Thread-safe: posts UI state changes to the main-thread queue.
- */
 void progressLoadingScreen(const std::string& text) {
 	loading_progress_value++;
 	double newPct = std::min(
@@ -360,10 +326,6 @@ void progressLoadingScreen(const std::string& text) {
 	});
 }
 
-/**
- * Hide loading screen.
- * Thread-safe: posts UI state changes to the main-thread queue.
- */
 void hideLoadingScreen() {
 	postToMainThread([]() {
 		view->loadPct = -1;
@@ -377,8 +339,6 @@ void hideLoadingScreen() {
  */
 void hideToast(bool userCancel) {
 	// Cancel outstanding toast expiry timer.
-	// In JS this calls clearTimeout(toastTimer). Here we reset the flag
-	// so the polling in drainMainThreadQueue() won't fire hideToast again.
 	toastTimer = -1;
 
 	view->toast = std::nullopt;
@@ -409,28 +369,18 @@ void setToast(const std::string& toastType, const std::string& message,
 	}
 }
 
-/**
- * Open user-configured export directory with OS default.
- * JS equivalent: nw.Shell.openItem(core.view.config.exportDirectory)
- */
 void openExportDirectory() {
 	const std::string exportDir = view->config.value("exportDirectory", "");
 	openInExplorer(exportDir);
 }
 
-/**
- * Open a file or directory with the OS default application/explorer.
- * JS equivalent: nw.Shell.openItem(path)
- */
 void openInExplorer(const std::string& path) {
 #ifdef _WIN32
-	// Convert UTF-8 to UTF-16 for Windows API (nw.Shell.openItem handles this internally).
 	int wlen = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
 	std::wstring wpath(wlen, L'\0');
 	MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wpath.data(), wlen);
 	ShellExecuteW(nullptr, L"open", wpath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #else
-	// Single-quote escape for shell safety. Replace ' with '\'' inside a single-quoted string.
 	std::string escaped;
 	escaped.reserve(path.size() + 2);
 	escaped.push_back('\'');
@@ -446,9 +396,6 @@ void openInExplorer(const std::string& path) {
 #endif
 }
 
-/**
- * Register a handler for file drops.
- */
 void registerDropHandler(DropHandler handler) {
 	// Ensure the extensions are all lower-case.
 	for (auto& ext : handler.ext)
@@ -458,9 +405,6 @@ void registerDropHandler(DropHandler handler) {
 	dropHandlers.push_back(std::move(handler));
 }
 
-/**
- * Get a drop handler for the given file path.
- */
 const DropHandler* getDropHandler(const std::string& file) {
 	std::string lowerFile = file;
 	std::transform(lowerFile.begin(), lowerFile.end(), lowerFile.begin(),
@@ -509,18 +453,11 @@ std::optional<ScrollPosition> getScrollPosition(const std::string& key) {
 	return it->second;
 }
 
-/**
- * Post a task to be executed on the main thread.
- */
 void postToMainThread(std::function<void()> task) {
 	std::lock_guard lock(s_mainQueueMutex);
 	s_mainQueue.push_back(std::move(task));
 }
 
-/**
- * Drain and execute all tasks posted via postToMainThread().
- * Also checks toast TTL for auto-dismiss (JS: setTimeout(hideToast, ttl)).
- */
 void drainMainThreadQueue() {
 	std::vector<std::function<void()>> tasks;
 	{
@@ -530,7 +467,6 @@ void drainMainThreadQueue() {
 	for (auto& task : tasks)
 		task();
 
-	// Poll toast expiry — equivalent to JS setTimeout(hideToast, ttl).
 	if (toastTimer > -1 && std::chrono::steady_clock::now() >= toastExpiry) {
 		hideToast();
 	}

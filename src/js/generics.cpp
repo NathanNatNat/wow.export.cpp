@@ -44,9 +44,6 @@ constexpr const char* JEDEC[] = {
 	"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"
 };
 
-/**
- * Parse a URL into scheme, host, port and path components.
- */
 struct ParsedURL {
 	std::string scheme;
 	std::string host;
@@ -86,12 +83,6 @@ ParsedURL parseURL(const std::string& url) {
 	return result;
 }
 
-/**
- * Perform a single HTTP GET request and return the full response.
- * Handles HTTPS vs HTTP via cpp-httplib.
- * Unlike the previous version, this does NOT throw on non-2xx status,
- * matching JS fetch() behavior where non-ok responses are returned.
- */
 HttpResponse doHttpGet(const std::string& url,
                       int64_t partialOfs = -1,
                       int64_t partialLen = -1,
@@ -161,15 +152,6 @@ HttpResponse doHttpGet(const std::string& url,
 	return response;
 }
 
-/**
- * Perform a single HTTP GET for requestData(), returning raw bytes.
- * This variant throws on non-2xx status and logs download progress,
- * matching the JS requestData() behavior.
- *
- * JS: req.setTimeout(60000, () => { req.destroy(); reject(new Error('Request timeout after 60s')); })
- * C++: set_connection_timeout(60) + set_read_timeout(60) on the httplib client provide the
- * equivalent 60-second timeout behaviour. (TODO 51 — confirmed implemented.)
- */
 HttpResponse doHttpGetRaw(const std::string& url,
                           int64_t partialOfs = -1,
                           int64_t partialLen = -1) {
@@ -182,7 +164,6 @@ HttpResponse doHttpGetRaw(const std::string& url,
 		headers.emplace("Range", std::format("bytes={}-{}", partialOfs, partialOfs + partialLen - 1));
 	}
 
-	// Track download progress matching JS behavior
 	int64_t totalSize = 0;
 	int64_t downloaded = 0;
 	int last_logged_pct = 0;
@@ -203,7 +184,7 @@ HttpResponse doHttpGetRaw(const std::string& url,
 				last_logged_pct = pct_threshold;
 			}
 		}
-		return true; // continue download
+		return true;
 	};
 
 	httplib::Result res;
@@ -236,9 +217,6 @@ HttpResponse doHttpGetRaw(const std::string& url,
 	return response;
 }
 
-/**
- * Inflate (decompress) zlib data.
- */
 std::vector<uint8_t> inflateData(const std::vector<uint8_t>& input) {
 	z_stream strm{};
 	strm.next_in = const_cast<uint8_t*>(input.data());
@@ -269,12 +247,6 @@ std::vector<uint8_t> inflateData(const std::vector<uint8_t>& input) {
 	return output;
 }
 
-/**
- * Compute hash of a file using streaming mbedTLS MD API.
- * JS: fs.createReadStream(file) piped to crypto.createHash().
- * C++ feeds the file in 64KB chunks to EVP_DigestUpdate(), so the entire
- * file is never loaded into memory — identical streaming semantics to JS.
- */
 std::string computeFileHash(const std::filesystem::path& file,
                             std::string_view method,
                             std::string_view encoding) {
@@ -368,7 +340,6 @@ HttpResponse get(const std::string& url) {
 /**
  * Async wrapper for HTTP GET.
  * Supports URL fallback chains (tries each URL in order).
- * JS: returns a Response object.
  * @param urls List of fallback URLs.
  * @returns Fetch-style response object.
  */
@@ -376,15 +347,11 @@ HttpResponse get(const std::vector<std::string>& urls) {
 	size_t index = 1;
 	HttpResponse res;
 
-	// JS logs `[${index}/${url_stack.length + index}]` after url_stack.shift() removes the
-	// current URL. At that point url_stack.length + index always equals the original array
-	// size, so urls.size() here produces identical log output. (TODO 56 — verified correct.)
 	for (const auto& url : urls) {
 		logging::write(std::format("get -> [{}/{}]: {}", index, urls.size(), url));
 
 		try {
 			res = doHttpGet(url);
-			// Log with actual status code, matching JS: `get -> [${index++}][${res.status}] ${url}`
 			logging::write(std::format("get -> [{}][{}] {}", index, res.status, url));
 			index++;
 
@@ -393,7 +360,7 @@ HttpResponse get(const std::vector<std::string>& urls) {
 		} catch (const std::exception& error) {
 			logging::write(std::format("fetch failed {}: {}", url, error.what()));
 			index++;
-			if (index > urls.size()) // last URL failed with network/timeout error
+			if (index > urls.size())
 				throw;
 		}
 	}
@@ -413,7 +380,7 @@ template <typename T>
 void queue(const std::vector<T>& items,
            const std::function<void(const T&)>& handler,
            size_t limit) {
-	size_t maxConcurrent = limit + 1; // JS check() pre-increment causes limit+1 concurrency.
+	size_t maxConcurrent = limit + 1;
 	size_t index = 0;
 	size_t complete = 0;
 	std::vector<std::future<void>> futures;
@@ -426,14 +393,12 @@ void queue(const std::vector<T>& items,
 			index++;
 		}
 
-		// Wait for ANY future to complete (not just front), matching JS behavior
-		// where any completed task immediately triggers the next one.
 		if (!futures.empty()) {
 			bool found = false;
 			while (!found) {
 				for (size_t i = 0; i < futures.size(); ++i) {
 					if (futures[i].wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) {
-						futures[i].get(); // may rethrow
+						futures[i].get();
 						futures.erase(futures.begin() + static_cast<std::ptrdiff_t>(i));
 						complete++;
 						found = true;
@@ -441,7 +406,6 @@ void queue(const std::vector<T>& items,
 					}
 				}
 				if (!found) {
-					// Brief sleep to avoid busy-spinning
 					std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				}
 			}
@@ -482,9 +446,6 @@ std::optional<nlohmann::json> parseJSON(std::string_view data) {
  * @param url URL to fetch JSON from.
  */
 nlohmann::json getJSON(const std::string& url) {
-	// JS: const res = await get(url);
-	//     if (!res.ok) throw new Error(`Unable to request JSON from end-point. HTTP ${res.status} ${res.statusText}`);
-	//     return res.json();
 	auto response = get(url);
 	if (!response.ok)
 		throw std::runtime_error(std::format("Unable to request JSON from end-point. HTTP {} {}", response.status, response.statusText));
@@ -502,11 +463,6 @@ std::optional<nlohmann::json> readJSON(const std::filesystem::path& file, bool i
 	try {
 		std::ifstream ifs(file);
 		if (!ifs.is_open()) {
-			// JS: if (e.code === 'EPERM') throw e;
-			// Check effective access by trying to open — if the file exists but
-			// we can't open it, treat it as a permission error and rethrow.
-			// This correctly handles group/other/ACL/SELinux permissions, unlike
-			// the previous approach that only checked owner_read bits.
 			std::error_code ec;
 			if (std::filesystem::exists(file, ec) && !ec)
 				throw std::runtime_error("Permission denied: " + file.string());
@@ -521,7 +477,6 @@ std::optional<nlohmann::json> readJSON(const std::filesystem::path& file, bool i
 			std::string filtered;
 
 			while (std::getline(stream, line)) {
-				// Remove trailing \r if present
 				if (!line.empty() && line.back() == '\r')
 					line.pop_back();
 
@@ -534,26 +489,17 @@ std::optional<nlohmann::json> readJSON(const std::filesystem::path& file, bool i
 
 		return nlohmann::json::parse(raw);
 	} catch (const std::runtime_error&) {
-		throw; // Re-throw permission errors
+		throw;
 	} catch (const std::exception&) {
 		return std::nullopt;
 	}
 }
 
-/**
- * Request data from a URL with optional partial content (Range header).
- * Handles redirects (301/302) and logs download progress.
- * @param url        URL to request data from.
- * @param partialOfs Partial content start offset (-1 to disable).
- * @param partialLen Partial content length (-1 to disable).
- * @returns Raw response body.
- */
 static std::vector<uint8_t> requestData(const std::string& url, int64_t partialOfs, int64_t partialLen) {
 	logging::write(std::format("Requesting data from {} (offset: {}, length: {})", url, partialOfs, partialLen));
 
 	auto response = doHttpGetRaw(url, partialOfs, partialLen);
 
-	// Manual 301/302 redirect handling to mirror JS requestData().
 	if (response.status == 301 || response.status == 302) {
 		auto locationIt = response.headers.find("Location");
 		if (locationIt == response.headers.end())
@@ -677,17 +623,14 @@ std::string filesize(double input) {
 		double val = input / std::pow(2.0, exponent * 10);
 
 		if (exponent > 0) {
-			// Format with 2 decimal places, then strip trailing zeros
-			// to match JS: Number(val.toFixed(2)) — e.g. 1.00 → "1", 1.50 → "1.5"
 			std::ostringstream oss;
 			oss << std::fixed << std::setprecision(2) << val;
 			valueStr = oss.str();
 
-			// Strip trailing zeros after decimal point
 			if (valueStr.find('.') != std::string::npos) {
 				size_t lastNonZero = valueStr.find_last_not_of('0');
 				if (lastNonZero != std::string::npos && valueStr[lastNonZero] == '.')
-					valueStr.erase(lastNonZero); // Remove decimal point too
+					valueStr.erase(lastNonZero);
 				else
 					valueStr.erase(lastNonZero + 1);
 			}
@@ -697,7 +640,6 @@ std::string filesize(double input) {
 			valueStr = oss.str();
 		}
 
-		// Check if rounded value equals 1024 and bump exponent
 		double parsed = std::stod(valueStr);
 		if (parsed == 1024.0 && exponent < 8) {
 			valueStr = "1";
@@ -730,7 +672,6 @@ std::string getFileHash(const std::filesystem::path& file, std::string_view meth
  */
 bool fileExists(const std::filesystem::path& file) {
 	try {
-		// Match JS fsp.access(file): existence + accessibility.
 		if (!std::filesystem::exists(file))
 			return false;
 
@@ -751,7 +692,6 @@ bool directoryIsWritable(const std::filesystem::path& dir) {
 			return false;
 
 #ifdef _WIN32
-		// On Windows, try to create and immediately remove a temporary file
 		auto testPath = dir / ".wow_export_cpp_write_test";
 		std::ofstream ofs(testPath, std::ios::out | std::ios::trunc);
 		if (!ofs.is_open())
@@ -760,8 +700,6 @@ bool directoryIsWritable(const std::filesystem::path& dir) {
 		std::filesystem::remove(testPath);
 		return true;
 #else
-		// On POSIX, use access() with W_OK which checks effective permissions
-		// including group, other, and ACL — matching JS fs.constants.W_OK
 		return access(dir.c_str(), W_OK) == 0;
 #endif
 	} catch (const std::exception&) {
@@ -849,7 +787,6 @@ void batchWork(std::string_view name,
 			lastProgressPercent = progressPercent;
 		}
 
-		// MessageChannel-like cooperative scheduling between batches.
 		if (index < total)
 			std::this_thread::sleep_for(std::chrono::milliseconds(0));
 	}
@@ -876,10 +813,6 @@ std::string formatPlaybackSeconds(double seconds) {
 	    << ':' << std::setfill('0') << std::setw(2) << secs;
 	return oss.str();
 }
-
-// Explicit template instantiations for common types
-// These allow the templates to be used from other translation units.
-// Additional instantiations can be added as needed.
 
 template void batchWork<std::string>(std::string_view, const std::vector<std::string>&,
 	const std::function<void(const std::string&, size_t)>&, size_t);
