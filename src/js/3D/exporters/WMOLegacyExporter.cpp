@@ -104,7 +104,6 @@ WMOTextureExportResult WMOLegacyExporter::exportTextures(
 		const uint32_t materialTextures[] = { material.texture1, material.texture2, material.texture3 };
 
 		for (const auto materialTexture : materialTextures) {
-			// Do not skip materialTexture == 0 here — MOTX offset 0 is a valid texture entry.
 			auto texNameIt = wmo->textureNames.find(materialTexture);
 			if (texNameIt == wmo->textureNames.end() || texNameIt->second.empty())
 				continue;
@@ -272,7 +271,6 @@ void WMOLegacyExporter::exportAsOBJ(
 				for (size_t j = 0; j < uvCount; j++)
 					uvArrays[i][uvsOfs + j] = (j < uv.size()) ? uv[j] : 0.0f;
 			}
-			// else: already initialized to 0.0f
 		}
 
 		auto groupNameIt = wmo->groupNames.find(group->nameOfs);
@@ -449,13 +447,11 @@ void WMOLegacyExporter::exportAsOBJ(
 		json.addProperty("boundingBox2", nlohmann::json(wmo->boundingBox2));
 		json.addProperty("flags", wmo->flags);
 
-		// groupNames: Object.values(wmo.groupNames)
 		nlohmann::json groupNamesArr = nlohmann::json::array();
 		for (const auto& [key, val] : wmo->groupNames)
 			groupNamesArr.push_back(val);
 		json.addProperty("groupNames", groupNamesArr);
 
-		// groupInfo
 		nlohmann::json groupInfoArr = nlohmann::json::array();
 		for (const auto& gi : wmo->groupInfo) {
 			nlohmann::json giObj;
@@ -467,7 +463,6 @@ void WMOLegacyExporter::exportAsOBJ(
 		}
 		json.addProperty("groupInfo", groupInfoArr);
 
-		// materials
 		nlohmann::json materialsArr = nlohmann::json::array();
 		for (const auto& mat : wmo->materials) {
 			nlohmann::json matObj;
@@ -488,7 +483,6 @@ void WMOLegacyExporter::exportAsOBJ(
 		}
 		json.addProperty("materials", materialsArr);
 
-		// doodadSets
 		nlohmann::json doodadSetsArr = nlohmann::json::array();
 		for (const auto& ds : wmo->doodadSets) {
 			nlohmann::json dsObj;
@@ -500,7 +494,6 @@ void WMOLegacyExporter::exportAsOBJ(
 		}
 		json.addProperty("doodadSets", doodadSetsArr);
 
-		// doodads
 		nlohmann::json doodadsArr = nlohmann::json::array();
 		for (const auto& dd : wmo->doodads) {
 			nlohmann::json ddObj;
@@ -698,7 +691,6 @@ void WMOLegacyExporter::exportRaw(
 			if (helper && helper->isCancelled())
 				return;
 
-			// Replace .wmo with _NNN.wmo
 			std::ostringstream oss;
 			oss << std::setfill('0') << std::setw(3) << i;
 			std::string groupFileName = filePath;
