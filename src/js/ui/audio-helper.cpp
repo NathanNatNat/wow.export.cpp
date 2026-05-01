@@ -15,6 +15,7 @@
 #undef MINIAUDIO_IMPLEMENTATION
 
 #include "audio-helper.h"
+#include "../core.h"
 
 #include <algorithm>
 #include <cstring>
@@ -116,13 +117,14 @@ const std::vector<uint8_t>& AudioPlayer::load(const std::vector<uint8_t>& data) 
 	// Create a decoder to determine duration.
 	ma_decoder_config decoderConfig = ma_decoder_config_init_default();
 	ma_decoder tempDecoder;
-	if (ma_decoder_init_memory(audio_data.data(), audio_data.size(), &decoderConfig, &tempDecoder) == MA_SUCCESS) {
-		ma_uint64 frameCount = 0;
-		ma_decoder_get_length_in_pcm_frames(&tempDecoder, &frameCount);
-		if (frameCount > 0 && tempDecoder.outputSampleRate > 0)
-			duration_cache = static_cast<double>(frameCount) / static_cast<double>(tempDecoder.outputSampleRate);
-		ma_decoder_uninit(&tempDecoder);
-	}
+	if (ma_decoder_init_memory(audio_data.data(), audio_data.size(), &decoderConfig, &tempDecoder) != MA_SUCCESS)
+		throw std::runtime_error("Failed to decode audio data");
+
+	ma_uint64 frameCount = 0;
+	ma_decoder_get_length_in_pcm_frames(&tempDecoder, &frameCount);
+	if (frameCount > 0 && tempDecoder.outputSampleRate > 0)
+		duration_cache = static_cast<double>(frameCount) / static_cast<double>(tempDecoder.outputSampleRate);
+	ma_decoder_uninit(&tempDecoder);
 
 	return audio_data;
 }
@@ -185,8 +187,12 @@ void AudioPlayer::play(double from_offset) {
 			self->is_playing = false;
 			self->start_offset = 0.0;
 
-			if (self->on_ended)
-				self->on_ended();
+			core::postToMainThread([self]() {
+				self->stop_source();
+
+				if (self->on_ended)
+					self->on_ended();
+			});
 		}
 	}, this);
 

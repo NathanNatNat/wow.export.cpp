@@ -115,7 +115,6 @@ std::vector<std::string> MPQInstall::getFilesByExtension(const std::string& exte
 		}
 	}
 
-	std::sort(results.begin(), results.end());
 	return results;
 }
 
@@ -139,7 +138,6 @@ std::vector<std::string> MPQInstall::getAllFiles() const {
 		results.push_back(data.mpq_name + "\\" + filename);
 	}
 
-	std::sort(results.begin(), results.end());
 	return results;
 }
 

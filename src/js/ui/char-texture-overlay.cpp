@@ -97,12 +97,6 @@ void remove(uint32_t textureID) {
 
 void ensureActiveLayerAttached() {
 	register_event_hooks();
-
-	// JS uses process.nextTick(). Mirror that with main-thread deferral.
-	core::postToMainThread([]() {
-		if (active_layer != 0 && std::find(layers.begin(), layers.end(), active_layer) == layers.end())
-			active_layer = layers.empty() ? 0 : layers.back();
-	});
 }
 
 uint32_t getActiveLayer() {

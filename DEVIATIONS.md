@@ -100,10 +100,6 @@ JS `Map`/`Object` preserve insertion order; C++ `std::unordered_map`/`std::map` 
 - **Reason**: JS `JSON.stringify` emits the entire DB row in insertion order. C++ enumerates fields via `unordered_map`.
 - **Impact**: JSON key ordering differs.
 
-### O6. [mpq-install.cpp] getFilesByExtension and getAllFiles add std::sort
-- **JS Source**: `src/js/mpq/mpq-install.js` lines 87-120
-- **Reason**: JS returns results in Map insertion order (archive processing order). C++ adds `std::sort` producing alphabetical order.
-- **Impact**: Callers that depend on archive-processing order see different results.
 
 ## Data Type / Sentinel Value Differences
 
@@ -323,10 +319,6 @@ Export pipeline structural deviations.
 - **Reason**: Added to compensate for M1's split ownership. No JS equivalent.
 - **Impact**: Destroying unique_ptr auto-deregisters. JS pinned programs survive indefinitely.
 
-### M3. [audio-helper.cpp] onended callback doesn't clean up sound/decoder objects
-- **JS Source**: `src/js/ui/audio-helper.js` lines 57-67
-- **Reason**: JS nulls source immediately. C++ leaves sound/decoder allocated until next play().
-- **Impact**: Resource deviation after natural playback end. (TODO 142)
 
 ## Configuration / Manifest
 
@@ -364,10 +356,10 @@ Export pipeline structural deviations.
 - **JS Source**: `src/js/components/item-picker-modal.js` line 161
 - **Reason**: Fixed — added manual click-outside detection on the backdrop overlay.
 
-### X7. [char-texture-overlay.cpp] remove() handles missing elements differently
+### X7. [char-texture-overlay.cpp] remove() handles missing elements differently (Accepted)
 - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 46-61
-- **Reason**: JS `splice(-1, 1)` removes last element on missing. C++ does nothing.
-- **Impact**: C++ is arguably more correct but differs from JS. (TODO 144)
+- **Reason**: JS `splice(indexOf(canvas), 1)` with a missing canvas yields `splice(-1, 1)`, which removes the last element — an unintentional JS quirk. C++ uses `std::find` and only erases if found, which is the correct behaviour.
+- **Impact**: Removing a non-existent element is a no-op in C++ vs removing the last layer in JS. Accepted as the C++ behaviour is correct.
 
 ## UI Text / String Differences
 
@@ -549,15 +541,11 @@ Export pipeline structural deviations.
 - **Reason**: C++ binds once before loop. JS rebinds per draw call.
 - **Impact**: Likely functionally equivalent but deviates from JS structure.
 
-### Z27. [char-texture-overlay.cpp] ensureActiveLayerAttached has different semantics
+### Z27. [char-texture-overlay.cpp] ensureActiveLayerAttached is a no-op (Accepted)
 - **JS Source**: `src/js/ui/char-texture-overlay.js` lines 63-71
-- **Reason**: JS re-appends active layer to DOM. C++ validates membership and may substitute active layer.
-- **Impact**: JS preserves active layer identity. C++ may change it. (TODO 145)
+- **Reason**: JS re-appends the active layer canvas to the DOM overlay element if detached. ImGui has no DOM parent/child attachment concept — textures are rendered explicitly, not by being children of a container. The function is a no-op in C++.
+- **Impact**: Active layer identity is preserved (matching JS). No membership validation or substitution occurs.
 
-### Z28. [audio-helper.cpp] load() doesn't propagate decode failure
-- **JS Source**: `src/js/ui/audio-helper.js` lines 31-35
-- **Reason**: JS rejects promise on decode failure. C++ continues silently with duration 0.
-- **Impact**: Caller has no way to know decoding failed. (TODO 143)
 
 ### Z29. [WMOExporter.cpp] formatUnknownFile call signature differs
 - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 158-160
