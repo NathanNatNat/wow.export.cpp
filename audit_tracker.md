@@ -4,198 +4,198 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 
 **Progress: 195/195 audited (100%)**
 
-- [x] 1. `src/app.cpp` — ⚠️ 5 findings
-- [x] 2. `src/js/blob.cpp` — ⚠️ 5 findings
-- [x] 3. `src/js/buffer.cpp` — ⚠️ 5 findings
-- [x] 4. `src/js/config.cpp` — ⚠️ 2 findings
-- [x] 5. `src/js/constants.cpp` — ⚠️ 2 findings
-- [x] 6. `src/js/core.cpp` — ⚠️ 1 findings
-- [x] 7. `src/js/crc32.cpp` — ✅ audited
-- [x] 8. `src/js/external-links.cpp` — ⚠️ 1 findings
-- [x] 9. `src/js/file-writer.cpp` — ⚠️ 3 findings
-- [x] 10. `src/js/generics.cpp` — ⚠️ 4 findings
-- [x] 11. `src/js/gpu-info.cpp` — ⚠️ 1 findings
-- [x] 12. `src/js/icon-render.cpp` — ⚠️ 2 findings
-- [x] 13. `src/js/install-type.cpp` — ✅ audited
-- [x] 14. `src/js/log.cpp` — ⚠️ 6 findings
-- [x] 15. `src/js/mmap.cpp` — ⚠️ 1 findings
-- [x] 16. `src/js/modules.cpp` — ⚠️ 8 findings
-- [x] 17. `src/js/MultiMap.cpp` — ✅ audited
-- [x] 18. `src/js/png-writer.cpp` — ⚠️ 1 findings
-- [x] 19. `src/js/stb-impl.cpp` — ✅ audited
-- [x] 20. `src/js/subtitles.cpp` — ⚠️ 3 findings
-- [x] 21. `src/js/tiled-png-writer.cpp` — ⚠️ 2 findings
-- [x] 22. `src/js/updater.cpp` — ⚠️ 2 findings
-- [x] 23. `src/js/wmv.cpp` — ⚠️ 1 findings
-- [x] 24. `src/js/wowhead.cpp` — ✅ audited
-- [x] 25. `src/js/xml.cpp` — ⚠️ 1 findings
-- [x] 26. `src/js/3D/AnimMapper.cpp` — ✅ audited
-- [x] 27. `src/js/3D/BoneMapper.cpp` — ✅ audited
-- [x] 28. `src/js/3D/GeosetMapper.cpp` — ⚠️ 1 findings
-- [x] 29. `src/js/3D/ShaderMapper.cpp` — ✅ audited
-- [x] 30. `src/js/3D/Shaders.cpp` — ⚠️ 3 findings
-- [x] 31. `src/js/3D/Skin.cpp` — ✅ audited
-- [x] 32. `src/js/3D/Texture.cpp` — ⚠️ 1 findings
-- [x] 33. `src/js/3D/WMOShaderMapper.cpp` — ✅ audited
-- [x] 34. `src/js/3D/camera/CameraControlsGL.cpp` — ⚠️ 1 findings
-- [x] 35. `src/js/3D/camera/CharacterCameraControlsGL.cpp` — ✅ audited
-- [x] 36. `src/js/3D/exporters/ADTExporter.cpp` — ⚠️ 7 findings
-- [x] 37. `src/js/3D/exporters/CharacterExporter.cpp` — ✅ audited
-- [x] 38. `src/js/3D/exporters/M2Exporter.cpp` — ⚠️ 5 findings
-- [x] 39. `src/js/3D/exporters/M2LegacyExporter.cpp` — ⚠️ 5 findings
-- [x] 40. `src/js/3D/exporters/M3Exporter.cpp` — ⚠️ 3 findings
-- [x] 41. `src/js/3D/exporters/WMOExporter.cpp` — ⚠️ 5 findings
-- [x] 42. `src/js/3D/exporters/WMOLegacyExporter.cpp` — ⚠️ 3 findings
-- [x] 43. `src/js/3D/gl/GLContext.cpp` — ⚠️ 1 findings
-- [x] 44. `src/js/3D/gl/GLTexture.cpp` — ⚠️ 2 findings
-- [x] 45. `src/js/3D/gl/ShaderProgram.cpp` — ⚠️ 3 findings
-- [x] 46. `src/js/3D/gl/UniformBuffer.cpp` — ⚠️ 1 findings
-- [x] 47. `src/js/3D/gl/VertexArray.cpp` — ✅ audited
-- [x] 48. `src/js/3D/loaders/ADTLoader.cpp` — ✅ audited
-- [x] 49. `src/js/3D/loaders/ANIMLoader.cpp` — ✅ audited
-- [x] 50. `src/js/3D/loaders/BONELoader.cpp` — ✅ audited
-- [x] 51. `src/js/3D/loaders/LoaderGenerics.cpp` — ✅ audited
-- [x] 52. `src/js/3D/loaders/M2Generics.cpp` — ✅ audited
-- [x] 53. `src/js/3D/loaders/M2LegacyLoader.cpp` — ✅ audited
-- [x] 54. `src/js/3D/loaders/M2Loader.cpp` — ✅ audited
-- [x] 55. `src/js/3D/loaders/M3Loader.cpp` — ✅ audited
-- [x] 56. `src/js/3D/loaders/MDXLoader.cpp` — ⚠️ 2 findings
-- [x] 57. `src/js/3D/loaders/SKELLoader.cpp` — ⚠️ 2 findings
-- [x] 58. `src/js/3D/loaders/WDTLoader.cpp` — ✅ audited
-- [x] 59. `src/js/3D/loaders/WMOLegacyLoader.cpp` — ⚠️ 3 findings
-- [x] 60. `src/js/3D/loaders/WMOLoader.cpp` — ⚠️ 2 findings
-- [x] 61. `src/js/3D/renderers/CharMaterialRenderer.cpp` — ✅ audited
-- [x] 62. `src/js/3D/renderers/GridRenderer.cpp` — ✅ audited
-- [x] 63. `src/js/3D/renderers/M2LegacyRendererGL.cpp` — ⚠️ 4 findings
-- [x] 64. `src/js/3D/renderers/M2RendererGL.cpp` — ⚠️ 4 findings
-- [x] 65. `src/js/3D/renderers/M3RendererGL.cpp` — ⚠️ 5 findings
-- [x] 66. `src/js/3D/renderers/MDXRendererGL.cpp` — ⚠️ 4 findings
-- [x] 67. `src/js/3D/renderers/renderer_utils.cpp` — ✅ audited
-- [x] 68. `src/js/3D/renderers/ShadowPlaneRenderer.cpp` — ✅ audited
-- [x] 69. `src/js/3D/renderers/WMOLegacyRendererGL.cpp` — ✅ audited
-- [x] 70. `src/js/3D/renderers/WMORendererGL.cpp` — ✅ audited
-- [x] 71. `src/js/3D/writers/CSVWriter.cpp` — ✅ audited
-- [x] 72. `src/js/3D/writers/GLBWriter.cpp` — ✅ audited
-- [x] 73. `src/js/3D/writers/GLTFWriter.cpp` — ⚠️ 1 findings
-- [x] 74. `src/js/3D/writers/JSONWriter.cpp` — ⚠️ 1 findings
-- [x] 75. `src/js/3D/writers/MTLWriter.cpp` — ✅ audited
-- [x] 76. `src/js/3D/writers/OBJWriter.cpp` — ✅ audited
-- [x] 77. `src/js/3D/writers/SQLWriter.cpp` — ✅ audited
-- [x] 78. `src/js/3D/writers/STLWriter.cpp` — ✅ audited
-- [x] 79. `src/js/casc/blp.cpp` — ✅ audited
-- [x] 80. `src/js/casc/blte-reader.cpp` — ✅ audited
-- [x] 81. `src/js/casc/blte-stream-reader.cpp` — ✅ audited
-- [x] 82. `src/js/casc/build-cache.cpp` — ✅ audited
-- [x] 83. `src/js/casc/casc-source-local.cpp` — ✅ audited
-- [x] 84. `src/js/casc/casc-source-remote.cpp` — ✅ audited
-- [x] 85. `src/js/casc/casc-source.cpp` — ✅ audited
-- [x] 86. `src/js/casc/cdn-config.cpp` — ✅ audited
-- [x] 87. `src/js/casc/cdn-resolver.cpp` — ✅ audited
-- [x] 88. `src/js/casc/content-flags.cpp` — ✅ audited
-- [x] 89. `src/js/casc/db2.cpp` — ⚠️ 1 findings
-- [x] 90. `src/js/casc/dbd-manifest.cpp` — ✅ audited
-- [x] 91. `src/js/casc/export-helper.cpp` — ✅ audited
-- [x] 92. `src/js/casc/install-manifest.cpp` — ✅ audited
-- [x] 93. `src/js/casc/jenkins96.cpp` — ✅ audited
-- [x] 94. `src/js/casc/listfile.cpp` — ✅ audited
-- [x] 95. `src/js/casc/locale-flags.cpp` — ✅ audited
-- [x] 96. `src/js/casc/realmlist.cpp` — ✅ audited
-- [x] 97. `src/js/casc/salsa20.cpp` — ✅ audited
-- [x] 98. `src/js/casc/tact-keys.cpp` — ✅ audited
-- [x] 99. `src/js/casc/version-config.cpp` — ✅ audited
-- [x] 100. `src/js/casc/vp9-avi-demuxer.cpp` — ✅ audited
-- [x] 101. `src/js/components/checkboxlist.cpp` — ✅ audited
-- [x] 102. `src/js/components/combobox.cpp` — ✅ audited
-- [x] 103. `src/js/components/context-menu.cpp` — ⚠️ 1 findings
-- [x] 104. `src/js/components/data-table.cpp` — ✅ audited
-- [x] 105. `src/js/components/file-field.cpp` — ✅ audited
-- [x] 106. `src/js/components/home-showcase.cpp` — ✅ audited
-- [x] 107. `src/js/components/item-picker-modal.cpp` — ⚠️ 2 findings
-- [x] 108. `src/js/components/itemlistbox.cpp` — ✅ audited
-- [x] 109. `src/js/components/listbox-maps.cpp` — ✅ audited
-- [x] 110. `src/js/components/listbox-zones.cpp` — ✅ audited
-- [x] 111. `src/js/components/listbox.cpp` — ✅ audited
-- [x] 112. `src/js/components/listboxb.cpp` — ✅ audited
-- [x] 113. `src/js/components/map-viewer.cpp` — ✅ audited
-- [x] 114. `src/js/components/markdown-content.cpp` — ✅ audited
-- [x] 115. `src/js/components/menu-button.cpp` — ✅ audited
-- [x] 116. `src/js/components/model-viewer-gl.cpp` — ✅ audited
-- [x] 117. `src/js/components/resize-layer.cpp` — ✅ audited
-- [x] 118. `src/js/components/slider.cpp` — ✅ audited
-- [x] 119. `src/js/db/CompressionType.cpp` — ✅ audited
-- [x] 120. `src/js/db/DBCReader.cpp` — ⚠️ 2 findings
-- [x] 121. `src/js/db/DBDParser.cpp` — ✅ audited
-- [x] 122. `src/js/db/FieldType.cpp` — ✅ audited
-- [x] 123. `src/js/db/WDCReader.cpp` — ✅ audited
-- [x] 124. `src/js/db/caches/DBCharacterCustomization.cpp` — ⚠️ 1 findings
-- [x] 125. `src/js/db/caches/DBComponentModelFileData.cpp` — ✅ audited
-- [x] 126. `src/js/db/caches/DBComponentTextureFileData.cpp` — ✅ audited
-- [x] 127. `src/js/db/caches/DBCreatureDisplayExtra.cpp` — ✅ audited
-- [x] 128. `src/js/db/caches/DBCreatureList.cpp` — ✅ audited
-- [x] 129. `src/js/db/caches/DBCreatures.cpp` — ✅ audited
-- [x] 130. `src/js/db/caches/DBCreaturesLegacy.cpp` — ✅ audited
-- [x] 131. `src/js/db/caches/DBDecor.cpp` — ✅ audited
-- [x] 132. `src/js/db/caches/DBDecorCategories.cpp` — ✅ audited
-- [x] 133. `src/js/db/caches/DBGuildTabard.cpp` — ✅ audited
-- [x] 134. `src/js/db/caches/DBItemCharTextures.cpp` — ✅ audited
-- [x] 135. `src/js/db/caches/DBItemDisplayInfoModelMatRes.cpp` — ✅ audited
-- [x] 136. `src/js/db/caches/DBItemDisplays.cpp` — ⚠️ 1 findings
-- [x] 137. `src/js/db/caches/DBItemGeosets.cpp` — ⚠️ 1 findings
-- [x] 138. `src/js/db/caches/DBItemModels.cpp` — ⚠️ 1 findings
-- [x] 139. `src/js/db/caches/DBItems.cpp` — ✅ audited
-- [x] 140. `src/js/db/caches/DBModelFileData.cpp` — ✅ audited
-- [x] 141. `src/js/db/caches/DBNpcEquipment.cpp` — ✅ audited
-- [x] 142. `src/js/db/caches/DBTextureFileData.cpp` — ✅ audited
-- [x] 143. `src/js/hashing/xxhash64.cpp` — ✅ audited
-- [x] 144. `src/js/modules/font_helpers.cpp` — ✅ audited
-- [x] 145. `src/js/modules/legacy_tab_audio.cpp` — ⚠️ 2 findings
-- [x] 146. `src/js/modules/legacy_tab_data.cpp` — ✅ audited
-- [x] 147. `src/js/modules/legacy_tab_files.cpp` — ✅ audited
-- [x] 148. `src/js/modules/legacy_tab_fonts.cpp` — ✅ audited
-- [x] 149. `src/js/modules/legacy_tab_home.cpp` — ✅ audited
-- [x] 150. `src/js/modules/legacy_tab_textures.cpp` — ⚠️ 2 findings
-- [x] 151. `src/js/modules/module_test_a.cpp` — ✅ audited
-- [x] 152. `src/js/modules/module_test_b.cpp` — ⚠️ 1 finding
-- [x] 153. `src/js/modules/screen_settings.cpp` — ✅ audited
-- [x] 154. `src/js/modules/screen_source_select.cpp` — ✅ audited
-- [x] 155. `src/js/modules/tab_audio.cpp` — ⚠️ 1 finding
-- [x] 156. `src/js/modules/tab_blender.cpp` — ⚠️ 2 findings
-- [x] 157. `src/js/modules/tab_changelog.cpp` — ✅ audited (deliberately removed per CLAUDE.md)
-- [x] 158. `src/js/modules/tab_characters.cpp` — ⚠️ 3 findings
-- [x] 159. `src/js/modules/tab_creatures.cpp` — ⚠️ 3 findings
-- [x] 160. `src/js/modules/tab_data.cpp` — ✅ audited
-- [x] 161. `src/js/modules/tab_decor.cpp` — ⚠️ 3 findings
-- [x] 162. `src/js/modules/tab_fonts.cpp` — ⚠️ 2 findings
-- [x] 163. `src/js/modules/tab_help.cpp` — ✅ audited (deliberately removed per CLAUDE.md)
-- [x] 164. `src/js/modules/tab_home.cpp` — ✅ audited (intentional stub per CLAUDE.md)
-- [x] 165. `src/js/modules/tab_install.cpp` — ✅ audited
-- [x] 166. `src/js/modules/tab_item_sets.cpp` — ✅ audited
-- [x] 167. `src/js/modules/tab_items.cpp` — ✅ audited
-- [x] 168. `src/js/modules/tab_maps.cpp` — ⚠️ 5 findings
-- [x] 169. `src/js/modules/tab_models.cpp` — ⚠️ 1 finding
-- [x] 170. `src/js/modules/tab_models_legacy.cpp` — ⚠️ 2 findings
-- [x] 171. `src/js/modules/tab_raw.cpp` — ✅ audited
-- [x] 172. `src/js/modules/tab_text.cpp` — ✅ audited
-- [x] 173. `src/js/modules/tab_textures.cpp` — ✅ audited
-- [x] 174. `src/js/modules/tab_videos.cpp` — ✅ audited
-- [x] 175. `src/js/modules/tab_zones.cpp` — ✅ audited
-- [x] 176. `src/js/mpq/bitstream.cpp` — ✅ audited
-- [x] 177. `src/js/mpq/build-version.cpp` — ✅ audited
-- [x] 178. `src/js/mpq/bzip2.cpp` — ✅ audited
-- [x] 179. `src/js/mpq/huffman.cpp` — ✅ audited
-- [x] 180. `src/js/mpq/mpq-install.cpp` — ⚠️ 1 finding
-- [x] 181. `src/js/mpq/mpq.cpp` — ✅ audited
-- [x] 182. `src/js/mpq/pkware.cpp` — ✅ audited
-- [x] 183. `src/js/ui/audio-helper.cpp` — ⚠️ 2 findings
-- [x] 184. `src/js/ui/char-texture-overlay.cpp` — ⚠️ 2 findings
-- [x] 185. `src/js/ui/character-appearance.cpp` — ✅ audited
-- [x] 186. `src/js/ui/data-exporter.cpp` — ✅ audited
-- [x] 187. `src/js/ui/listbox-context.cpp` — ✅ audited
-- [x] 188. `src/js/ui/model-viewer-utils.cpp` — ✅ audited
-- [x] 189. `src/js/ui/texture-exporter.cpp` — ✅ audited
-- [x] 190. `src/js/ui/texture-ribbon.cpp` — ✅ audited
-- [x] 191. `src/js/ui/uv-drawer.cpp` — ✅ audited
-- [x] 192. `src/js/workers/cache-collector.cpp` — ✅ audited
-- [x] 193. `src/js/wow/equip-item.cpp` — ✅ audited
-- [x] 194. `src/js/wow/EquipmentSlots.cpp` — ✅ audited
-- [x] 195. `src/js/wow/ItemSlot.cpp` — ✅ audited
+- [x] 1. `src/app.cpp`
+- [x] 2. `src/js/blob.cpp`
+- [x] 3. `src/js/buffer.cpp`
+- [x] 4. `src/js/config.cpp`
+- [x] 5. `src/js/constants.cpp`
+- [x] 6. `src/js/core.cpp`
+- [x] 7. `src/js/crc32.cpp`
+- [x] 8. `src/js/external-links.cpp`
+- [x] 9. `src/js/file-writer.cpp`
+- [x] 10. `src/js/generics.cpp`
+- [x] 11. `src/js/gpu-info.cpp`
+- [x] 12. `src/js/icon-render.cpp`
+- [x] 13. `src/js/install-type.cpp`
+- [x] 14. `src/js/log.cpp`
+- [x] 15. `src/js/mmap.cpp`
+- [x] 16. `src/js/modules.cpp`
+- [x] 17. `src/js/MultiMap.cpp`
+- [x] 18. `src/js/png-writer.cpp`
+- [x] 19. `src/js/stb-impl.cpp`
+- [x] 20. `src/js/subtitles.cpp`
+- [x] 21. `src/js/tiled-png-writer.cpp`
+- [x] 22. `src/js/updater.cpp`
+- [x] 23. `src/js/wmv.cpp`
+- [x] 24. `src/js/wowhead.cpp`
+- [x] 25. `src/js/xml.cpp`
+- [x] 26. `src/js/3D/AnimMapper.cpp`
+- [x] 27. `src/js/3D/BoneMapper.cpp`
+- [x] 28. `src/js/3D/GeosetMapper.cpp`
+- [x] 29. `src/js/3D/ShaderMapper.cpp`
+- [x] 30. `src/js/3D/Shaders.cpp`
+- [x] 31. `src/js/3D/Skin.cpp`
+- [x] 32. `src/js/3D/Texture.cpp`
+- [x] 33. `src/js/3D/WMOShaderMapper.cpp`
+- [x] 34. `src/js/3D/camera/CameraControlsGL.cpp`
+- [x] 35. `src/js/3D/camera/CharacterCameraControlsGL.cpp`
+- [x] 36. `src/js/3D/exporters/ADTExporter.cpp`
+- [x] 37. `src/js/3D/exporters/CharacterExporter.cpp`
+- [x] 38. `src/js/3D/exporters/M2Exporter.cpp`
+- [x] 39. `src/js/3D/exporters/M2LegacyExporter.cpp`
+- [x] 40. `src/js/3D/exporters/M3Exporter.cpp`
+- [x] 41. `src/js/3D/exporters/WMOExporter.cpp`
+- [x] 42. `src/js/3D/exporters/WMOLegacyExporter.cpp`
+- [x] 43. `src/js/3D/gl/GLContext.cpp`
+- [x] 44. `src/js/3D/gl/GLTexture.cpp`
+- [x] 45. `src/js/3D/gl/ShaderProgram.cpp`
+- [x] 46. `src/js/3D/gl/UniformBuffer.cpp`
+- [x] 47. `src/js/3D/gl/VertexArray.cpp`
+- [x] 48. `src/js/3D/loaders/ADTLoader.cpp`
+- [x] 49. `src/js/3D/loaders/ANIMLoader.cpp`
+- [x] 50. `src/js/3D/loaders/BONELoader.cpp`
+- [x] 51. `src/js/3D/loaders/LoaderGenerics.cpp`
+- [x] 52. `src/js/3D/loaders/M2Generics.cpp`
+- [x] 53. `src/js/3D/loaders/M2LegacyLoader.cpp`
+- [x] 54. `src/js/3D/loaders/M2Loader.cpp`
+- [x] 55. `src/js/3D/loaders/M3Loader.cpp`
+- [x] 56. `src/js/3D/loaders/MDXLoader.cpp`
+- [x] 57. `src/js/3D/loaders/SKELLoader.cpp`
+- [x] 58. `src/js/3D/loaders/WDTLoader.cpp`
+- [x] 59. `src/js/3D/loaders/WMOLegacyLoader.cpp`
+- [x] 60. `src/js/3D/loaders/WMOLoader.cpp`
+- [x] 61. `src/js/3D/renderers/CharMaterialRenderer.cpp`
+- [x] 62. `src/js/3D/renderers/GridRenderer.cpp`
+- [x] 63. `src/js/3D/renderers/M2LegacyRendererGL.cpp`
+- [x] 64. `src/js/3D/renderers/M2RendererGL.cpp`
+- [x] 65. `src/js/3D/renderers/M3RendererGL.cpp`
+- [x] 66. `src/js/3D/renderers/MDXRendererGL.cpp`
+- [x] 67. `src/js/3D/renderers/renderer_utils.cpp`
+- [x] 68. `src/js/3D/renderers/ShadowPlaneRenderer.cpp`
+- [x] 69. `src/js/3D/renderers/WMOLegacyRendererGL.cpp`
+- [x] 70. `src/js/3D/renderers/WMORendererGL.cpp`
+- [x] 71. `src/js/3D/writers/CSVWriter.cpp`
+- [x] 72. `src/js/3D/writers/GLBWriter.cpp`
+- [x] 73. `src/js/3D/writers/GLTFWriter.cpp`
+- [x] 74. `src/js/3D/writers/JSONWriter.cpp`
+- [x] 75. `src/js/3D/writers/MTLWriter.cpp`
+- [x] 76. `src/js/3D/writers/OBJWriter.cpp`
+- [x] 77. `src/js/3D/writers/SQLWriter.cpp`
+- [x] 78. `src/js/3D/writers/STLWriter.cpp`
+- [x] 79. `src/js/casc/blp.cpp`
+- [x] 80. `src/js/casc/blte-reader.cpp`
+- [x] 81. `src/js/casc/blte-stream-reader.cpp`
+- [x] 82. `src/js/casc/build-cache.cpp`
+- [x] 83. `src/js/casc/casc-source-local.cpp`
+- [x] 84. `src/js/casc/casc-source-remote.cpp`
+- [x] 85. `src/js/casc/casc-source.cpp`
+- [x] 86. `src/js/casc/cdn-config.cpp`
+- [x] 87. `src/js/casc/cdn-resolver.cpp`
+- [x] 88. `src/js/casc/content-flags.cpp`
+- [x] 89. `src/js/casc/db2.cpp`
+- [x] 90. `src/js/casc/dbd-manifest.cpp`
+- [x] 91. `src/js/casc/export-helper.cpp`
+- [x] 92. `src/js/casc/install-manifest.cpp`
+- [x] 93. `src/js/casc/jenkins96.cpp`
+- [x] 94. `src/js/casc/listfile.cpp`
+- [x] 95. `src/js/casc/locale-flags.cpp`
+- [x] 96. `src/js/casc/realmlist.cpp`
+- [x] 97. `src/js/casc/salsa20.cpp`
+- [x] 98. `src/js/casc/tact-keys.cpp`
+- [x] 99. `src/js/casc/version-config.cpp`
+- [x] 100. `src/js/casc/vp9-avi-demuxer.cpp`
+- [x] 101. `src/js/components/checkboxlist.cpp`
+- [x] 102. `src/js/components/combobox.cpp`
+- [x] 103. `src/js/components/context-menu.cpp`
+- [x] 104. `src/js/components/data-table.cpp`
+- [x] 105. `src/js/components/file-field.cpp`
+- [x] 106. `src/js/components/home-showcase.cpp`
+- [x] 107. `src/js/components/item-picker-modal.cpp`
+- [x] 108. `src/js/components/itemlistbox.cpp`
+- [x] 109. `src/js/components/listbox-maps.cpp`
+- [x] 110. `src/js/components/listbox-zones.cpp`
+- [x] 111. `src/js/components/listbox.cpp`
+- [x] 112. `src/js/components/listboxb.cpp`
+- [x] 113. `src/js/components/map-viewer.cpp`
+- [x] 114. `src/js/components/markdown-content.cpp`
+- [x] 115. `src/js/components/menu-button.cpp`
+- [x] 116. `src/js/components/model-viewer-gl.cpp`
+- [x] 117. `src/js/components/resize-layer.cpp`
+- [x] 118. `src/js/components/slider.cpp`
+- [x] 119. `src/js/db/CompressionType.cpp`
+- [x] 120. `src/js/db/DBCReader.cpp`
+- [x] 121. `src/js/db/DBDParser.cpp`
+- [x] 122. `src/js/db/FieldType.cpp`
+- [x] 123. `src/js/db/WDCReader.cpp`
+- [x] 124. `src/js/db/caches/DBCharacterCustomization.cpp`
+- [x] 125. `src/js/db/caches/DBComponentModelFileData.cpp`
+- [x] 126. `src/js/db/caches/DBComponentTextureFileData.cpp`
+- [x] 127. `src/js/db/caches/DBCreatureDisplayExtra.cpp`
+- [x] 128. `src/js/db/caches/DBCreatureList.cpp`
+- [x] 129. `src/js/db/caches/DBCreatures.cpp`
+- [x] 130. `src/js/db/caches/DBCreaturesLegacy.cpp`
+- [x] 131. `src/js/db/caches/DBDecor.cpp`
+- [x] 132. `src/js/db/caches/DBDecorCategories.cpp`
+- [x] 133. `src/js/db/caches/DBGuildTabard.cpp`
+- [x] 134. `src/js/db/caches/DBItemCharTextures.cpp`
+- [x] 135. `src/js/db/caches/DBItemDisplayInfoModelMatRes.cpp`
+- [x] 136. `src/js/db/caches/DBItemDisplays.cpp`
+- [x] 137. `src/js/db/caches/DBItemGeosets.cpp`
+- [x] 138. `src/js/db/caches/DBItemModels.cpp`
+- [x] 139. `src/js/db/caches/DBItems.cpp`
+- [x] 140. `src/js/db/caches/DBModelFileData.cpp`
+- [x] 141. `src/js/db/caches/DBNpcEquipment.cpp`
+- [x] 142. `src/js/db/caches/DBTextureFileData.cpp`
+- [x] 143. `src/js/hashing/xxhash64.cpp`
+- [x] 144. `src/js/modules/font_helpers.cpp`
+- [x] 145. `src/js/modules/legacy_tab_audio.cpp`
+- [x] 146. `src/js/modules/legacy_tab_data.cpp`
+- [x] 147. `src/js/modules/legacy_tab_files.cpp`
+- [x] 148. `src/js/modules/legacy_tab_fonts.cpp`
+- [x] 149. `src/js/modules/legacy_tab_home.cpp`
+- [x] 150. `src/js/modules/legacy_tab_textures.cpp`
+- [x] 151. `src/js/modules/module_test_a.cpp`
+- [x] 152. `src/js/modules/module_test_b.cpp`
+- [x] 153. `src/js/modules/screen_settings.cpp`
+- [x] 154. `src/js/modules/screen_source_select.cpp`
+- [x] 155. `src/js/modules/tab_audio.cpp`
+- [x] 156. `src/js/modules/tab_blender.cpp`
+- [x] 157. `src/js/modules/tab_changelog.cpp`
+- [x] 158. `src/js/modules/tab_characters.cpp`
+- [x] 159. `src/js/modules/tab_creatures.cpp`
+- [x] 160. `src/js/modules/tab_data.cpp`
+- [x] 161. `src/js/modules/tab_decor.cpp`
+- [x] 162. `src/js/modules/tab_fonts.cpp`
+- [x] 163. `src/js/modules/tab_help.cpp`
+- [x] 164. `src/js/modules/tab_home.cpp`
+- [x] 165. `src/js/modules/tab_install.cpp`
+- [x] 166. `src/js/modules/tab_item_sets.cpp`
+- [x] 167. `src/js/modules/tab_items.cpp`
+- [x] 168. `src/js/modules/tab_maps.cpp`
+- [x] 169. `src/js/modules/tab_models.cpp`
+- [x] 170. `src/js/modules/tab_models_legacy.cpp`
+- [x] 171. `src/js/modules/tab_raw.cpp`
+- [x] 172. `src/js/modules/tab_text.cpp`
+- [x] 173. `src/js/modules/tab_textures.cpp`
+- [x] 174. `src/js/modules/tab_videos.cpp`
+- [x] 175. `src/js/modules/tab_zones.cpp`
+- [x] 176. `src/js/mpq/bitstream.cpp`
+- [x] 177. `src/js/mpq/build-version.cpp`
+- [x] 178. `src/js/mpq/bzip2.cpp`
+- [x] 179. `src/js/mpq/huffman.cpp`
+- [x] 180. `src/js/mpq/mpq-install.cpp`
+- [x] 181. `src/js/mpq/mpq.cpp`
+- [x] 182. `src/js/mpq/pkware.cpp`
+- [x] 183. `src/js/ui/audio-helper.cpp`
+- [x] 184. `src/js/ui/char-texture-overlay.cpp`
+- [x] 185. `src/js/ui/character-appearance.cpp`
+- [x] 186. `src/js/ui/data-exporter.cpp`
+- [x] 187. `src/js/ui/listbox-context.cpp`
+- [x] 188. `src/js/ui/model-viewer-utils.cpp`
+- [x] 189. `src/js/ui/texture-exporter.cpp`
+- [x] 190. `src/js/ui/texture-ribbon.cpp`
+- [x] 191. `src/js/ui/uv-drawer.cpp`
+- [x] 192. `src/js/workers/cache-collector.cpp`
+- [x] 193. `src/js/wow/equip-item.cpp`
+- [x] 194. `src/js/wow/EquipmentSlots.cpp`
+- [x] 195. `src/js/wow/ItemSlot.cpp`
