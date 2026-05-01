@@ -31,10 +31,6 @@ namespace db {
 
 static constexpr uint32_t DBC_MAGIC = 0x43424457; // 'WDBC'
 
-/**
- * Returns the BuildCache attached to the active CASC source, if any.
- * JS equivalent: core.view.casc?.cache (null-safe optional chaining).
- */
 static casc::BuildCache* getActiveCascCache() {
 	if (!core::view || !core::view->casc)
 		return nullptr;
@@ -143,7 +139,6 @@ std::map<uint32_t, DataRecord> DBCReader::getAllRows() {
 		auto record = _read_record(static_cast<int>(i));
 		if (record.has_value()) {
 			uint32_t id = i;
-			// record.ID ?? i
 			auto idIt = record.value().find("ID");
 			if (idIt != record.value().end()) {
 				if (auto* p = std::get_if<int64_t>(&idIt->second))
@@ -201,8 +196,7 @@ void DBCReader::loadSchema() {
 	const DBDEntry* structure = nullptr;
 	logging::write("Loading table definitions " + dbd_name + " (" + build_id + ")...");
 
-	// check cached dbd through active CASC cache (JS: core.view.casc?.cache; cache.getFile)
-	// use lowercase for cache key consistency
+	// check cached dbd (use lowercase for cache key consistency)
 	std::string cache_key = dbd_name;
 	std::transform(cache_key.begin(), cache_key.end(), cache_key.begin(),
 		[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -223,7 +217,6 @@ void DBCReader::loadSchema() {
 		const std::string configDbdURL = core::view->config.value("dbdURL", "");
 		const std::string configDbdFallbackURL = core::view->config.value("dbdFallbackURL", "");
 
-		// Format URLs with table name replacing %s
 		auto formatURL = [](const std::string& tmpl, const std::string& name) -> std::string {
 			std::string result = tmpl;
 			auto pos = result.find("%s");
@@ -239,7 +232,6 @@ void DBCReader::loadSchema() {
 			logging::write("No cached DBD or no matching structure, downloading from " + dbd_url);
 			BufferWrapper raw_dbd = generics::downloadFile({ dbd_url, dbd_url_fallback });
 
-			// Store to cache (JS: cache.storeFile with null-safe fallback)
 			if (cache != nullptr) {
 				cache->storeFile(cache_key, raw_dbd, constants::CACHE::DIR_DBD().string());
 			}
@@ -433,10 +425,7 @@ std::optional<DataRecord> DBCReader::_read_record(int index) {
 			field_index += locstring_field_count;
 		} else if (array_length > -1) {
 			auto values = _read_field_array(field_type, array_length);
-			// Convert vector<FieldValue> to the appropriate array FieldValue variant
-			// We need to check the type and build the appropriate vector
 			if (!values.empty()) {
-				// Check the type of the first element to determine array type
 				if (std::holds_alternative<std::string>(values[0])) {
 					std::vector<std::string> arr;
 					arr.reserve(values.size());
@@ -462,9 +451,6 @@ std::optional<DataRecord> DBCReader::_read_record(int index) {
 						arr.push_back(std::get<uint64_t>(v));
 					out[name] = std::move(arr);
 				} else {
-					// Fallback: FieldValue may grow new alternatives in the future; never
-					// silently drop the field (JS always stores the array). Match the
-					// empty-array branch so the field remains present in the record.
 					out[name] = std::vector<int64_t>{};
 				}
 			} else {
