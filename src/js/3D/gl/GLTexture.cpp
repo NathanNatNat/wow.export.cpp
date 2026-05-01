@@ -40,8 +40,6 @@ void GLTexture::set_rgba(const uint8_t* pixels, int w, int h,
 		glGenerateMipmap(GL_TEXTURE_2D);
 }
 
-// via texImage2D(... canvas).  In desktop C++ there is no canvas, so the
-// caller supplies pixel data + dimensions directly.
 void GLTexture::set_canvas(const uint8_t* pixels, int w, int h,
                             const TextureOptions& options) {
 	TextureOptions opts = options;
