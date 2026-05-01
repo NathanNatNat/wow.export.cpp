@@ -36,8 +36,6 @@ std::string toLower(std::string_view sv) {
 
 /**
  * Validate a keyName/key pair.
- * @param keyName
- * @param key
  */
 bool validateKeyPair(std::string_view keyName, std::string_view key) {
 	if (keyName.length() != 16)
