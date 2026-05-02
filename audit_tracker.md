@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 10/188 audited (5%)**
+**Progress: 20/188 audited (11%)**
 
 - [x] 1. `src/app.cpp` — ✅ audited
 - [x] 2. `src/js/blob.cpp` — ✅ audited
@@ -14,16 +14,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 8. `src/js/external-links.cpp` — ✅ audited
 - [x] 9. `src/js/file-writer.cpp` — ✅ audited
 - [x] 10. `src/js/generics.cpp` — ✅ audited
-- [ ] 11. `src/js/gpu-info.cpp`
-- [ ] 12. `src/js/icon-render.cpp`
-- [ ] 13. `src/js/install-type.cpp`
-- [ ] 14. `src/js/log.cpp`
-- [ ] 15. `src/js/mmap.cpp`
-- [ ] 16. `src/js/modules.cpp`
-- [ ] 17. `src/js/MultiMap.cpp`
-- [ ] 18. `src/js/png-writer.cpp`
-- [ ] 19. `src/js/subtitles.cpp`
-- [ ] 20. `src/js/tiled-png-writer.cpp`
+- [x] 11. `src/js/gpu-info.cpp` — ✅ audited
+- [x] 12. `src/js/icon-render.cpp` — ✅ audited
+- [x] 13. `src/js/install-type.cpp` — ✅ audited
+- [x] 14. `src/js/log.cpp` — ✅ audited
+- [x] 15. `src/js/mmap.cpp` — ✅ audited
+- [x] 16. `src/js/modules.cpp` — ✅ audited
+- [x] 17. `src/js/MultiMap.cpp` — ✅ audited
+- [x] 18. `src/js/png-writer.cpp` — ✅ audited
+- [x] 19. `src/js/subtitles.cpp` — ✅ audited
+- [x] 20. `src/js/tiled-png-writer.cpp` — ✅ audited
 - [ ] 21. `src/js/wmv.cpp`
 - [ ] 22. `src/js/wowhead.cpp`
 - [ ] 23. `src/js/xml.cpp`
