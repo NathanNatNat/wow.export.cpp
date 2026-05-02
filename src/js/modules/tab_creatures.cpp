@@ -66,8 +66,6 @@
 
 namespace tab_creatures {
 
-// --- File-local structures ---
-
 struct EquipmentModelEntry {
 	struct RendererInfo {
 		std::unique_ptr<M2RendererGL> renderer;
@@ -97,8 +95,6 @@ struct SlotGeosetMapping {
 	int group_index;
 	int char_geoset;
 };
-
-// --- File-local state ---
 
 static std::map<std::string, db::caches::DBCreatures::CreatureDisplayInfo> active_skins;
 
@@ -143,13 +139,10 @@ static const std::unordered_map<int, std::vector<SlotGeosetMapping>> SLOT_TO_GEO
 	{ 15, { { 0, CG::CLOAK } } }
 };
 
-// View state proxy (created once in mounted()).
 static model_viewer_utils::ViewStateProxy view_state;
 
-// Animation methods helper.
 static std::unique_ptr<model_viewer_utils::AnimationMethods> anim_methods;
 
-// Change-detection for watches (replaces Vue $watch).
 static std::vector<nlohmann::json> prev_skins_selection;
 static std::optional<std::string> prev_anim_selection;
 static std::vector<nlohmann::json> prev_selection_creatures;
@@ -161,27 +154,21 @@ static bool is_initializing = false;
 static listbox::ListboxState listbox_creatures_state;
 static menu_button::MenuButtonState menu_button_creatures_state;
 
-// Component states for CheckboxList and ListboxB sidebar widgets.
 static checkboxlist::CheckboxListState checkboxlist_creature_equipment_state;
 static checkboxlist::CheckboxListState checkboxlist_creature_geosets_state;
 static checkboxlist::CheckboxListState checkboxlist_creature_wmo_groups_state;
 static checkboxlist::CheckboxListState checkboxlist_creature_wmo_sets_state;
 static listboxb::ListboxBState listboxb_creature_skins_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 
-// Model viewer GL state/context (replaces Vue <ModelViewerGL :context="creatureViewerContext"/>).
 static model_viewer_gl::State viewer_state;
 static model_viewer_gl::Context viewer_context;
 
-// Adapter maps for model-viewer-gl equipment/collection renderer callbacks.
-// These hold non-owning pointers into equipment_model_renderers/collection_model_renderers.
 static std::unordered_map<int, model_viewer_gl::EquipmentSlotRenderers> equip_adapter_map;
 static std::unordered_map<int, model_viewer_gl::CollectionSlotRenderers> coll_adapter_map;
 
-// Rebuild adapter maps from owned equipment/collection renderer storage.
 static void rebuild_renderer_adapter_maps() {
 	equip_adapter_map.clear();
 	for (auto& [slot_id, entry] : equipment_model_renderers) {
@@ -203,8 +190,6 @@ static void rebuild_renderer_adapter_maps() {
 		coll_adapter_map[slot_id] = std::move(slot);
 	}
 }
-
-// --- Internal helpers ---
 
 static M2RendererGL* get_active_m2_renderer() {
 	return active_renderer_result.m2.get();
@@ -631,7 +616,6 @@ static void apply_creature_equipment_models() {
 					BufferWrapper file = core::view->casc->getVirtualFileByID(fdid);
 					auto renderer = std::make_unique<M2RendererGL>(file, *gl_ctx, false, false);
 					renderer->load().get();
-					//     await renderer.applyReplaceableTextures({ textures: [display.textures[i]] });
 					if (!display->textures.empty() && display->textures.size() > i) {
 						M2DisplayInfo disp_info;
 						disp_info.textures = { display->textures[i] };
@@ -738,7 +722,6 @@ static void refresh_creature_equipment() {
 		return;
 
 	const auto& customization_choices_raw = db::caches::DBCreatureDisplayExtra::get_customization_choices(display_info->extendedDisplayInfoID);
-	// Convert to JSON array for character_appearance API
 	std::vector<nlohmann::json> customization_choices;
 	for (const auto& choice : customization_choices_raw) {
 		nlohmann::json j;
@@ -895,7 +878,6 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 
 			if (creature_equipment.has_value()) {
 				creature_equipment_checklist = build_equipment_checklist(*creature_equipment);
-				// update view
 				view.creatureViewerEquipment.clear();
 				for (const auto& item : creature_equipment_checklist) {
 					nlohmann::json j;
@@ -963,7 +945,6 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 				active_renderer_result.wmo->setWmoSetKey("creatureViewerWMOSets");
 			}
 
-			// load renderer
 			if (active_renderer_result.m2)
 				active_renderer_result.m2->load().get();
 			else if (active_renderer_result.m3)
@@ -976,14 +957,11 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 
 				std::vector<nlohmann::json> skin_list;
 				std::string model_name = casc::listfile::getByID(file_data_id).value_or("");
-				// JS: path.basename(model_name, 'm2') — strips path and removes the 'm2' suffix
-				// (without the dot), leaving a trailing dot. E.g. "path/creature.m2" -> "creature."
 				{
 					auto pos = model_name.rfind('/');
 					if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
 					pos = model_name.rfind('\\');
 					if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
-					// Strip 'm2' suffix (not '.m2'), leaving the trailing dot
 					if (model_name.size() >= 2 && model_name.substr(model_name.size() - 2) == "m2")
 						model_name = model_name.substr(0, model_name.size() - 2);
 				}
@@ -997,7 +975,6 @@ static void preview_creature(const db::caches::DBCreatureList::CreatureEntry& cr
 					std::string clean_skin_name;
 					std::string skin_name = casc::listfile::getByID(texture).value_or("");
 					if (!skin_name.empty()) {
-						// basename + strip .blp
 						{
 							auto pos = skin_name.rfind('/');
 							if (pos != std::string::npos) skin_name = skin_name.substr(pos + 1);
@@ -1374,7 +1351,6 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 			continue;
 		}
 
-		// standard creature export
 		uint32_t file_data_id = db::caches::DBCreatures::getFileDataIDByDisplayID(creature->displayID).value_or(0);
 		if (file_data_id == 0) {
 			helper.mark(creature_name, false, "No model data found");
@@ -1424,8 +1400,6 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 	helper.finish();
 	export_paths.close();
 }
-
-// --- Vue methods converted to static functions ---
 
 static void handle_listbox_context(const std::vector<std::string>& selection) {
 	listbox_context::handle_context_menu(selection);
@@ -1521,10 +1495,6 @@ static void export_creatures() {
 	export_files(creature_items);
 }
 
-// Animation methods: toggle_animation_pause, step_animation, seek_animation, start_scrub, end_scrub
-// are delegated to anim_methods (created via model_viewer_utils::create_animation_methods).
-
-// --- initialize ---
 static void initialize() {
 	core::showLoadingScreen(8);
 
@@ -1564,7 +1534,6 @@ static void initialize() {
 		static const std::regex id_suffix(R"(\s+\[\d+\]$)");
 		std::string name_a = std::regex_replace(a.get<std::string>(), id_suffix, "");
 		std::string name_b = std::regex_replace(b.get<std::string>(), id_suffix, "");
-		// toLowerCase equivalent
 		std::transform(name_a.begin(), name_a.end(), name_a.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		std::transform(name_b.begin(), name_b.end(), name_b.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		return name_a < name_b;
@@ -1621,8 +1590,6 @@ static void initialize() {
 	core::hideLoadingScreen();
 }
 
-// --- Public API ---
-
 void registerTab() {
 	modules::register_nav_button("tab_creatures", "Creatures", "nessy.svg", install_type::CASC);
 }
@@ -1633,7 +1600,6 @@ void mounted() {
 
 	view_state = model_viewer_utils::create_view_state("creature");
 
-	// Create animation methods helper.
 	anim_methods = std::make_unique<model_viewer_utils::AnimationMethods>(
 		get_active_m2_renderer,
 		get_view_state_ptr
@@ -1659,8 +1625,6 @@ void mounted() {
 		model_viewer_utils::toggle_uv_layer(view_state, get_active_m2_renderer(), layer_name);
 	}));
 
-	// Launch heavy DB initialization on background thread so the loading screen is visible.
-	// is_initialized and is_initializing are set in initialize()'s postToMainThread lambda.
 	std::thread(initialize).detach();
 }
 
@@ -1675,7 +1639,6 @@ void render() {
 		return;
 
 
-	// Watch: creatureViewerSkinsSelection → apply skin textures/geosets
 	{
 		if (view.creatureViewerSkinsSelection != prev_skins_selection) {
 			prev_skins_selection = view.creatureViewerSkinsSelection;
@@ -1728,7 +1691,6 @@ void render() {
 		}
 	}
 
-	// Watch: creatureViewerAnimSelection → handle_animation_change
 	{
 		std::optional<std::string> current_anim;
 		if (view.creatureViewerAnimSelection.is_string())
@@ -1747,7 +1709,6 @@ void render() {
 		}
 	}
 
-	// Watch: selectionCreatures → auto-preview if creatureAutoPreview
 	{
 		if (view.selectionCreatures != prev_selection_creatures) {
 			prev_selection_creatures = view.selectionCreatures;
@@ -1771,7 +1732,6 @@ void render() {
 		}
 	}
 
-	// Watch: creatureViewerEquipment (deep) → refresh_creature_equipment
 	{
 		bool equipment_changed = false;
 		if (prev_equipment_checked.size() == view.creatureViewerEquipment.size()) {
@@ -1791,7 +1751,6 @@ void render() {
 			for (const auto& item : view.creatureViewerEquipment)
 				prev_equipment_checked.push_back(item.value("checked", true));
 
-			// Sync checklist state back from view
 			for (size_t i = 0; i < view.creatureViewerEquipment.size() && i < creature_equipment_checklist.size(); ++i)
 				creature_equipment_checklist[i].checked = view.creatureViewerEquipment[i].value("checked", true);
 
@@ -1804,8 +1763,6 @@ void render() {
 	if (app::layout::BeginTab("tab-creatures")) {
 		auto regions = app::layout::CalcListTabRegions(true);
 
-		// --- Left panel: List container (row 1, col 1) ---
-		//     <Listbox v-model:selection="selectionCreatures" ... @contextmenu="handle_listbox_context" />
 		if (app::layout::BeginListContainer("creatures-list-container", regions)) {
 			const auto& items_str = core::cached_json_strings(view.listfileCreatures, s_items_cache, s_items_cache_size);
 
@@ -1850,7 +1807,6 @@ void render() {
 		}
 		app::layout::EndListContainer();
 
-		// Creature listbox context menu — Copy name(s) / Copy ID(s).
 		if (!view.contextMenus.nodeListbox.is_null()) {
 			if (ImGui::BeginPopup("CreaturesListboxContextMenu")) {
 				const auto& node = view.contextMenus.nodeListbox;
@@ -1870,13 +1826,11 @@ void render() {
 			}
 		}
 
-		// --- Status bar ---
 		if (app::layout::BeginStatusBar("creatures-status", regions)) {
 			listbox::renderStatusBar("creature", {}, listbox_creatures_state);
 		}
 		app::layout::EndStatusBar();
 
-		// --- Filter bar (row 2, col 1) ---
 		if (app::layout::BeginFilterBar("creatures-filter", regions)) {
 			if (view.config.value("regexFilters", false)) {
 				ImGui::TextUnformatted("Regex Enabled");
@@ -1892,10 +1846,8 @@ void render() {
 		}
 		app::layout::EndFilterBar();
 
-		// --- Middle panel: Preview container (row 1, col 2) ---
 		if (app::layout::BeginPreviewContainer("creatures-preview-container", regions)) {
 			if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
-				// Texture ribbon slot rendering with pagination
 				float ribbon_width = ImGui::GetContentRegionAvail().x;
 				texture_ribbon::onResize(static_cast<int>(ribbon_width));
 
@@ -1903,14 +1855,12 @@ void render() {
 					? static_cast<int>(std::ceil(static_cast<double>(view.textureRibbonStack.size()) / view.textureRibbonSlotCount))
 					: 0;
 
-				// Prev button
 				if (view.textureRibbonPage > 0) {
 					if (ImGui::SmallButton("<##ribbon_prev"))
 						view.textureRibbonPage--;
 					ImGui::SameLine();
 				}
 
-				// Visible slots
 				int startIndex = view.textureRibbonPage * view.textureRibbonSlotCount;
 				int endIndex = (std::min)(startIndex + view.textureRibbonSlotCount, static_cast<int>(view.textureRibbonStack.size()));
 
@@ -1938,7 +1888,6 @@ void render() {
 					ImGui::SameLine();
 				}
 
-				// Next button
 				if (view.textureRibbonPage < maxPages - 1) {
 					if (ImGui::SmallButton(">##ribbon_next"))
 						view.textureRibbonPage++;
@@ -2079,7 +2028,6 @@ void render() {
 
 					ImGui::SameLine();
 
-					//     <input type="range" min="0" :max="animFrameCount - 1" :value="animFrame" @input="seek_animation" />
 					int frame = view.creatureViewerAnimFrame;
 					int max_frame = view.creatureViewerAnimFrameCount > 0 ? view.creatureViewerAnimFrameCount - 1 : 0;
 
@@ -2099,8 +2047,6 @@ void render() {
 		}
 		app::layout::EndPreviewContainer();
 
-		// --- Bottom: Export controls (row 2, col 2) ---
-		//     <component :is="$components.MenuButton" :options="menuButtonCreatures" :default="config.exportCreatureFormat" @change="..." @click="export_creatures">
 		if (app::layout::BeginPreviewControls("creatures-preview-controls", regions)) {
 			std::vector<menu_button::MenuOption> mb_options;
 			for (const auto& opt : view.menuButtonCreatures)
@@ -2113,7 +2059,6 @@ void render() {
 		}
 		app::layout::EndPreviewControls();
 
-		// --- Right panel: Sidebar (col 3, spanning both rows) ---
 		if (app::layout::BeginSidebar("creatures-sidebar", regions)) {
 			ImGui::SeparatorText("Preview");
 
@@ -2194,11 +2139,9 @@ void render() {
 			}
 
 			if (view.creatureViewerActiveType == "m2") {
-				// <Checkboxlist :items="creatureViewerEquipment"/>
 				if (!view.creatureViewerEquipment.empty()) {
 					ImGui::SeparatorText("Equipment");
 					checkboxlist::render("##CreatureEquipment", view.creatureViewerEquipment, checkboxlist_creature_equipment_state);
-					//     <a @click="setAllCreatureEquipment(true)">Enable All</a> / <a @click="setAllCreatureEquipment(false)">Disable All</a>
 					if (ImGui::SmallButton("Enable All##creature-equip")) {
 						for (auto& item : view.creatureViewerEquipment)
 							item["checked"] = true;
@@ -2212,7 +2155,6 @@ void render() {
 					}
 				}
 
-				// <Checkboxlist :items="creatureViewerGeosets"/>
 				if (!view.creatureViewerGeosets.empty()) {
 					ImGui::SeparatorText("Geosets");
 					checkboxlist::render("##CreatureGeosets", view.creatureViewerGeosets, checkboxlist_creature_geosets_state);
@@ -2229,7 +2171,6 @@ void render() {
 					}
 				}
 
-				// <Listboxb :items="creatureViewerSkins" v-model:selection="creatureViewerSkinsSelection" :single="true"/>
 				bool show_textures = view.config.value("modelsExportTextures", true);
 				if (show_textures && !view.creatureViewerSkins.empty()) {
 					ImGui::SeparatorText("Skins");
@@ -2266,7 +2207,6 @@ void render() {
 			}
 
 			if (view.creatureViewerActiveType == "wmo") {
-				// <Checkboxlist :items="creatureViewerWMOGroups"/>
 				ImGui::SeparatorText("WMO Groups");
 				checkboxlist::render("##CreatureWMOGroups", view.creatureViewerWMOGroups, checkboxlist_creature_wmo_groups_state);
 				if (ImGui::SmallButton("Enable All##creature-wmo-groups")) {
@@ -2281,7 +2221,6 @@ void render() {
 						item["checked"] = false;
 				}
 
-				// <Checkboxlist :items="creatureViewerWMOSets"/>
 				ImGui::SeparatorText("Doodad Sets");
 				checkboxlist::render("##CreatureWMOSets", view.creatureViewerWMOSets, checkboxlist_creature_wmo_sets_state);
 			}

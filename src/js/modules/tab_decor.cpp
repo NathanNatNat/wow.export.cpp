@@ -50,11 +50,7 @@ static std::optional<std::string> build_stack_trace(const char* function_name, c
 	return std::format("{}: {}", function_name, e.what());
 }
 
-// --- File-local constants ---
-
 static constexpr int UNCATEGORIZED_ID = -1;
-
-// --- File-local structures ---
 
 struct DecorEntry {
 	std::string display;
@@ -75,8 +71,6 @@ struct CategoryGroup {
 	std::vector<CategoryMaskEntry*> subcategories;
 };
 
-// --- File-local state ---
-
 static model_viewer_utils::RendererResult active_renderer_result;
 
 static uint32_t active_file_data_id = 0;
@@ -85,19 +79,15 @@ static const db::caches::DBDecor::DecorItem* active_decor_item = nullptr;
 
 static std::vector<DecorEntry> all_decor_entries;
 
-// Category mask and groups (module-local, replaces core.view.decorCategoryMask / decorCategoryGroups).
 static std::vector<CategoryMaskEntry> category_mask;
 static std::vector<CategoryGroup> category_groups;
 
-// Change-detection for watches (replaces Vue $watch).
 static std::vector<bool> prev_category_mask_checked;
 static std::optional<std::string> prev_anim_selection;
 static std::vector<nlohmann::json> prev_selection_decor;
 
-// View state proxy (created once in mounted()).
 static model_viewer_utils::ViewStateProxy view_state;
 
-// Animation methods helper.
 static std::unique_ptr<model_viewer_utils::AnimationMethods> anim_methods;
 
 static bool is_initialized = false;
@@ -105,7 +95,6 @@ static bool is_initializing = false;
 
 static listbox::ListboxState listbox_decor_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 static checkboxlist::CheckboxListState checkboxlist_decor_geosets_state;
@@ -113,16 +102,11 @@ static checkboxlist::CheckboxListState checkboxlist_decor_wmo_groups_state;
 static checkboxlist::CheckboxListState checkboxlist_decor_wmo_sets_state;
 static menu_button::MenuButtonState menu_button_decor_state;
 
-// Scrub state: saved paused state across slider drag frames (JS start_scrub / end_scrub).
 static bool s_scrub_was_paused = false;
 static bool s_was_scrubbing = false;
 
-// Model viewer GL state/context (replaces Vue <ModelViewerGL :context="decorViewerContext"/>).
 static model_viewer_gl::State viewer_state;
 static model_viewer_gl::Context viewer_context;
-
-// --- Internal helpers ---
-
 
 static M2RendererGL* get_active_m2_renderer() {
 	return active_renderer_result.m2.get();
@@ -132,7 +116,6 @@ static model_viewer_utils::ViewStateProxy* get_view_state_ptr() {
 	return &view_state;
 }
 
-// --- preview_decor ---
 static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 	auto _lock = core::create_busy_lock();
 	core::setToast("progress", std::format("Loading {}, please wait...", decor_item.name), {}, -1, false);
@@ -231,7 +214,6 @@ static void preview_decor(const db::caches::DBDecor::DecorItem& decor_item) {
 	}
 }
 
-// --- export_files ---
 static void export_files(const std::vector<const db::caches::DBDecor::DecorItem*>& entries, [[maybe_unused]] int export_id = -1) {
 	auto& view = *core::view;
 
@@ -312,7 +294,6 @@ static void export_files(const std::vector<const db::caches::DBDecor::DecorItem*
 	export_paths.close();
 }
 
-// --- apply_filters ---
 static void apply_filters() {
 	auto& view = *core::view;
 
@@ -348,7 +329,6 @@ static void apply_filters() {
 	view.listfileDecor = std::move(filtered);
 }
 
-// --- initialize ---
 static void initialize() {
 	core::showLoadingScreen(3);
 
@@ -382,7 +362,6 @@ static void initialize() {
 		return name_a < name_b;
 	});
 
-	// --- build category groups and mask ---
 	const auto& categories = db::caches::DBDecorCategories::get_all_categories();
 	const auto& subcategories = db::caches::DBDecorCategories::get_all_subcategories();
 
@@ -422,8 +401,6 @@ static void initialize() {
 			category_mask.push_back(std::move(entry));
 		}
 
-		// Build pointers after all entries for this group are added.
-		// We fix up pointers after the loop since push_back may invalidate them.
 		category_groups.push_back(std::move(group));
 	}
 
@@ -442,7 +419,6 @@ static void initialize() {
 		category_groups.push_back(std::move(uncategorized_group));
 	}
 
-	// Fix up group subcategory pointers now that category_mask is stable.
 	{
 		size_t mask_idx = 0;
 		for (auto& group : category_groups) {
@@ -454,12 +430,9 @@ static void initialize() {
 		}
 	}
 
-	// Category mask/groups are stored module-locally and synced to view as JSON in apply_filters.
-
 	core::postToMainThread([]() {
 		apply_filters();
 
-		//     this.$core.view.decorViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
 		if (core::view->decorViewerContext.is_null()) {
 			core::view->decorViewerContext = nlohmann::json::object();
 
@@ -502,8 +475,6 @@ static void initialize() {
 	});
 	core::hideLoadingScreen();
 }
-
-// --- methods ---
 
 static void handle_listbox_context(const std::vector<std::string>& selection) {
 	listbox_context::handle_context_menu(selection);
@@ -602,8 +573,6 @@ static void export_decor() {
 	export_files(decor_items);
 }
 
-// (Handled inline via ImGui::Checkbox — toggling .checked directly.)
-
 static void toggle_category_group(CategoryGroup& group) {
 	bool all_checked = true;
 	for (const auto* sub : group.subcategories) {
@@ -618,11 +587,6 @@ static void toggle_category_group(CategoryGroup& group) {
 		sub->checked = new_state;
 }
 
-// Animation methods: toggle_animation_pause, step_animation, seek_animation, start_scrub, end_scrub
-// are delegated to anim_methods (created via model_viewer_utils::create_animation_methods).
-
-// --- Public API ---
-
 void registerTab() {
 	modules::register_nav_button("tab_decor", "Decor", "house.svg", install_type::CASC);
 }
@@ -633,7 +597,6 @@ void mounted() {
 
 	view_state = model_viewer_utils::create_view_state("decor");
 
-	// Create animation methods helper.
 	anim_methods = std::make_unique<model_viewer_utils::AnimationMethods>(
 		get_active_m2_renderer,
 		get_view_state_ptr
@@ -652,8 +615,6 @@ void mounted() {
 		model_viewer_utils::toggle_uv_layer(view_state, get_active_m2_renderer(), layer_name);
 	}));
 
-	// Launch heavy DB initialization on background thread so the loading screen is visible.
-	// prev_category_mask_checked, is_initialized, and is_initializing are set in initialize()'s postToMainThread lambda.
 	std::thread(initialize).detach();
 }
 
@@ -674,7 +635,6 @@ void render() {
 		return;
 
 
-	// Watch: decorCategoryMask (deep) → apply_filters
 	{
 		bool mask_changed = false;
 		if (prev_category_mask_checked.size() == category_mask.size()) {
@@ -696,7 +656,6 @@ void render() {
 		}
 	}
 
-	// Watch: decorViewerAnimSelection → handle_animation_change
 	{
 		std::optional<std::string> current_anim;
 		if (view.decorViewerAnimSelection.is_string())
@@ -715,7 +674,6 @@ void render() {
 		}
 	}
 
-	// Watch: selectionDecor → auto-preview if decorAutoPreview
 	{
 		if (view.selectionDecor != prev_selection_decor) {
 			prev_selection_decor = view.selectionDecor;
@@ -744,9 +702,6 @@ void render() {
 
 	auto regions = app::layout::CalcListTabRegions(true);
 
-	// --- Left panel: List container (row 1, col 1) ---
-	//     <Listbox v-model:selection="selectionDecor" v-model:filter="userInputFilterDecor"
-	//         :items="listfileDecor" ... @contextmenu="handle_listbox_context" />
 	if (app::layout::BeginListContainer("decor-list-container", regions)) {
 		const auto& items_str = core::cached_json_strings(view.listfileDecor, s_items_cache, s_items_cache_size);
 
@@ -791,13 +746,11 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
-	// --- Status bar ---
 	if (app::layout::BeginStatusBar("decor-status", regions)) {
 		listbox::renderStatusBar("item", {}, listbox_decor_state);
 	}
 	app::layout::EndStatusBar();
 
-	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("decor-filter", regions)) {
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
@@ -813,11 +766,9 @@ void render() {
 	}
 	app::layout::EndFilterBar();
 
-	// --- Middle panel: Preview container (row 1, col 2) ---
 	if (app::layout::BeginPreviewContainer("decor-preview-container", regions)) {
 
 	if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
-		// Texture ribbon slot rendering with pagination
 		float ribbon_width = ImGui::GetContentRegionAvail().x;
 		texture_ribbon::onResize(static_cast<int>(ribbon_width));
 
@@ -825,14 +776,12 @@ void render() {
 			? static_cast<int>(std::ceil(static_cast<double>(view.textureRibbonStack.size()) / view.textureRibbonSlotCount))
 			: 0;
 
-		// Prev button
 		if (view.textureRibbonPage > 0) {
 			if (ImGui::SmallButton("<##ribbon_prev"))
 				view.textureRibbonPage--;
 			ImGui::SameLine();
 		}
 
-		// Visible slots
 		int startIndex = view.textureRibbonPage * view.textureRibbonSlotCount;
 		int endIndex = (std::min)(startIndex + view.textureRibbonSlotCount, static_cast<int>(view.textureRibbonStack.size()));
 
@@ -860,7 +809,6 @@ void render() {
 			ImGui::SameLine();
 		}
 
-		// Next button
 		if (view.textureRibbonPage < maxPages - 1) {
 			if (ImGui::SmallButton(">##ribbon_next"))
 				view.textureRibbonPage++;
@@ -903,7 +851,6 @@ void render() {
 		if (ImGui::Button("Close Preview"))
 			view.decorTexturePreviewURL.clear();
 
-		// Texture preview image rendering via ImGui::Image.
 		if (view.decorTexturePreviewTexID != 0) {
 			const ImVec2 avail = ImGui::GetContentRegionAvail();
 			const float tex_w = static_cast<float>(view.decorTexturePreviewWidth);
@@ -914,7 +861,6 @@ void render() {
 			const ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
 			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.decorTexturePreviewTexID)), img_size);
 
-			// UV overlay on top of texture preview.
 			if (view.decorTexturePreviewUVTexID != 0 && !view.decorTexturePreviewUVOverlay.empty()) {
 				ImGui::SetCursorScreenPos(cursor_pos);
 				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.decorTexturePreviewUVTexID)), img_size);
@@ -958,8 +904,6 @@ void render() {
 	}
 
 	if (!view.decorViewerAnims.empty() && view.decorTexturePreviewURL.empty()) {
-		//     <option v-for="animation in decorViewerAnims" :key="animation.id" :value="animation.id">{{ animation.label }}</option>
-		// </select>
 		std::string current_label = "No Animation";
 		std::string current_id;
 		if (view.decorViewerAnimSelection.is_string())
@@ -1008,9 +952,6 @@ void render() {
 
 			ImGui::SameLine();
 
-			//     <input type="range" min="0" :max="decorViewerAnimFrameCount - 1" :value="decorViewerAnimFrame" @input="seek_animation($event.target.value)"/>
-			//     <div class="anim-frame-display">{{ decorViewerAnimFrame }}</div>
-			// </div>
 			int frame = view.decorViewerAnimFrame;
 			int max_frame = std::max(view.decorViewerAnimFrameCount - 1, 0);
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 60.0f);
@@ -1038,9 +979,6 @@ void render() {
 	}
 	app::layout::EndPreviewContainer();
 
-	// --- Bottom: Export controls (row 2, col 2) ---
-	//     <MenuButton :options="menuButtonDecor" :default="config.exportDecorFormat" ... @click="export_decor"/>
-	// </div>
 	if (app::layout::BeginPreviewControls("decor-preview-controls", regions)) {
 		std::vector<menu_button::MenuOption> mb_options;
 		for (const auto& opt : view.menuButtonDecor)
@@ -1053,20 +991,16 @@ void render() {
 	}
 	app::layout::EndPreviewControls();
 
-	// --- Right panel: Sidebar (col 3, spanning both rows) ---
 	if (app::layout::BeginSidebar("decor-sidebar", regions)) {
 
 	ImGui::SeparatorText("Categories");
 
-	//     <div v-for="group in decorCategoryGroups" :key="group.id">
 	ImGui::BeginChild("decor-category-list", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.4f), ImGuiChildFlags_Borders);
 	for (auto& group : category_groups) {
 		bool node_open = ImGui::TreeNodeEx(group.name.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
-		// JS: clicking the category name calls toggle_category_group(group).
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
 			toggle_category_group(group);
 		if (node_open) {
-			//     <div v-for="sub in group.subcategories" :key="sub.subcategoryID" ...>
 			for (auto* sub : group.subcategories) {
 				ImGui::Checkbox(sub->label.c_str(), &sub->checked);
 			}
@@ -1076,8 +1010,6 @@ void render() {
 	}
 	ImGui::EndChild(); // decor-category-list
 
-	//     <a @click="$core.view.setAllDecorCategories(true)">Enable All</a>
-	//     / <a @click="$core.view.setAllDecorCategories(false)">Disable All</a>
 	if (ImGui::SmallButton("Enable All##decor-cats")) {
 		for (auto& entry : category_mask)
 			entry.checked = true;
@@ -1092,9 +1024,6 @@ void render() {
 
 	ImGui::SeparatorText("Preview");
 
-	//     <input type="checkbox" v-model="config.decorAutoPreview"/>
-	//     <span>Auto Preview</span>
-	// </label>
 	{
 		bool auto_preview = view.config.value("decorAutoPreview", false);
 		if (ImGui::Checkbox("Auto Preview##decor", &auto_preview))
@@ -1156,7 +1085,6 @@ void render() {
 		}
 	}
 
-	//     <input type="checkbox" v-model="config.modelsExportAnimations"/><span>Export animations</span></label>
 	{
 		const std::string export_format = view.config.value("exportDecorFormat", std::string("OBJ"));
 		if (export_format == "GLTF" && view.decorViewerActiveType == "m2") {
@@ -1167,10 +1095,6 @@ void render() {
 		}
 	}
 
-	//     <span class="header">Geosets</span>
-	//     <Checkboxlist :items="decorViewerGeosets"/>
-	//     <div class="list-toggles">Enable All / Disable All</div>
-	// </template>
 	if (view.decorViewerActiveType == "m2") {
 		ImGui::SeparatorText("Geosets");
 
@@ -1189,12 +1113,6 @@ void render() {
 		}
 	}
 
-	//     <span class="header">WMO Groups</span>
-	//     <Checkboxlist :items="decorViewerWMOGroups"/>
-	//     Enable All / Disable All
-	//     <span class="header">Doodad Sets</span>
-	//     <Checkboxlist :items="decorViewerWMOSets"/>
-	// </template>
 	if (view.decorViewerActiveType == "wmo") {
 		ImGui::SeparatorText("WMO Groups");
 
@@ -1220,10 +1138,6 @@ void render() {
 	}
 	app::layout::EndSidebar();
 
-	// --- Listbox context menu popup ---
-	//     <span @click.self="copy_decor_names(...)">Copy name(s)</span>
-	//     <span @click.self="copy_file_data_ids(...)">Copy file data ID(s)</span>
-	// </ContextMenu>
 	if (!view.contextMenus.nodeListbox.is_null()) {
 		if (ImGui::BeginPopup("DecorListboxContextMenu")) {
 			const auto& node = view.contextMenus.nodeListbox;

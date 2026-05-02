@@ -40,8 +40,6 @@ static std::optional<std::string> build_stack_trace(const char* function_name, c
 	return std::format("{}: {}", function_name, e.what());
 }
 
-// --- File-local state ---
-
 static std::unique_ptr<casc::InstallManifest> manifest;
 
 static constexpr int MIN_STRING_LENGTH = 4;
@@ -49,11 +47,8 @@ static constexpr int MIN_STRING_LENGTH = 4;
 static listbox::ListboxState listbox_install_state;
 static listbox::ListboxState listbox_install_strings_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
-
-// --- Internal functions ---
 
 /**
  * extract printable strings from binary data.
@@ -123,8 +118,6 @@ static void update_install_listfile() {
 	view.listfileInstall = std::move(filtered);
 }
 
-// --- Async export (one-file-per-frame, follows tab_models pattern) ---
-
 struct PendingInstallExport {
 	std::vector<nlohmann::json> files;
 	size_t next_index = 0;
@@ -155,11 +148,8 @@ static void pump_install_export() {
 		return;
 	}
 
-	// Process one file per frame.
 	const auto& sel_entry = task.files[task.next_index++];
 	std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
-
-	// Find the file in the manifest.
 	const casc::InstallFile* file = nullptr;
 	for (const auto& f : manifest->files) {
 		if (f.name == file_name) {
@@ -207,8 +197,6 @@ static void export_install_files() {
 	task.helper.emplace(static_cast<int>(user_selection.size()), "file");
 	pending_install_export = std::move(task);
 }
-
-// --- Async view strings (background CASC fetch) ---
 
 struct PendingViewStrings {
 	std::string file_name;
@@ -263,7 +251,6 @@ static void view_strings_impl() {
 
 	const std::string file_name = casc::listfile::stripFileEntry(user_selection[0].get<std::string>());
 
-	// Find file in manifest.
 	const casc::InstallFile* file = nullptr;
 	for (const auto& f : manifest->files) {
 		if (f.name == file_name) {
@@ -337,8 +324,6 @@ static void back_to_manifest_impl() {
 	view.userInputFilterInstallStrings.clear();
 }
 
-// --- Public API ---
-
 void registerTab() {
 	modules::register_context_menu_option("tab_install", "Browse Install Manifest", "clipboard-list.svg",
 		[]() { modules::set_active("tab_install"); });
@@ -367,7 +352,6 @@ void mounted() {
 void render() {
 	auto& view = *core::view;
 
-	// Poll for pending async tasks (one file per frame).
 	pump_install_export();
 	pump_view_strings();
 
@@ -383,9 +367,6 @@ void render() {
 	const float topH = avail.y - FILTER_H;
 
 	if (!view.installStringsView) {
-		// Main manifest view.
-
-		// --- List container (row 1, col 1) ---
 		constexpr float listTopM = app::layout::LIST_MARGIN_TOP;     // 20px
 		constexpr float listLeftM = app::layout::LIST_MARGIN_LEFT;   // 20px
 		constexpr float listRightM = app::layout::LIST_MARGIN_RIGHT; // 10px
@@ -400,7 +381,6 @@ void render() {
 			for (const auto& s : view.selectionInstall)
 				selection_str.push_back(s.get<std::string>());
 
-			// JS: :copymode="config.copyMode" :pasteselection="config.pasteSelection" :copytrimwhitespace="config.removePathSpacesCopy"
 			listbox::CopyMode copy_mode_install = listbox::CopyMode::Default;
 			{
 				const std::string cm = view.config.value("copyMode", std::string("Default"));
@@ -436,8 +416,6 @@ void render() {
 		}
 		ImGui::EndChild();
 
-		// --- Status bar (file count) ---
-		// JS Listbox prop :includefilecount="true" with unittype="install file".
 		ImGui::SetCursorPos(ImVec2(cursor.x + listLeftM, cursor.y + topH - STATUS_H));
 		ImGui::BeginChild("install-status", ImVec2(gridW - listLeftM - listRightM, STATUS_H),
 			ImGuiChildFlags_None,
@@ -445,19 +423,16 @@ void render() {
 		listbox::renderStatusBar("install file", {}, listbox_install_state);
 		ImGui::EndChild();
 
-		// --- Tray (row 2, col 1) ---
 		constexpr float TRAY_M = 10.0f;
 		ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + topH));
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(TRAY_M, 0.0f));
 		ImGui::BeginChild("install-tray", ImVec2(gridW, FILTER_H), ImGuiChildFlags_None,
 			ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-		// Vertically center content.
 		float padY = (FILTER_H - ImGui::GetFrameHeight()) * 0.5f;
 		if (padY > 0.0f)
 			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
 
-		// JS: <div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
 			if (ImGui::IsItemHovered())
@@ -467,7 +442,6 @@ void render() {
 
 		const bool busy = view.isBusy > 0;
 
-		// Calculate button widths so filter gets remaining space.
 		float btnStringsW = ImGui::CalcTextSize("View Strings").x + ImGui::GetStyle().FramePadding.x * 2;
 		float btnExportW = ImGui::CalcTextSize("Export Selected").x + ImGui::GetStyle().FramePadding.x * 2;
 		float buttonsW = 5.0f + btnStringsW + 5.0f + btnExportW;
@@ -477,7 +451,6 @@ void render() {
 		ImGui::SetNextItemWidth(filterW);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterInstall.c_str(), sizeof(filter_buf) - 1);
-		// JS: placeholder="Filter install files..."
 		if (ImGui::InputTextWithHint("##FilterInstall", "Filter install files...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterInstall = filter_buf;
 
@@ -493,7 +466,6 @@ void render() {
 		ImGui::EndChild();
 		ImGui::PopStyleVar(); // WindowPadding
 
-		// --- Sidebar (col 2, spanning both rows) ---
 		constexpr float sidebarTopM = app::layout::SIDEBAR_MARGIN_TOP;     // 20px
 		constexpr float sidebarPadR = app::layout::SIDEBAR_PADDING_RIGHT;  // 20px
 		ImGui::SetCursorPos(ImVec2(cursor.x + gridW, cursor.y + sidebarTopM));
@@ -514,9 +486,6 @@ void render() {
 		ImGui::EndChild();
 
 	} else {
-		// String viewer.
-
-		// --- List container (row 1, col 1) ---
 		constexpr float listTopM = app::layout::LIST_MARGIN_TOP;
 		constexpr float listLeftM = app::layout::LIST_MARGIN_LEFT;
 		constexpr float listRightM = app::layout::LIST_MARGIN_RIGHT;
@@ -529,7 +498,6 @@ void render() {
 			for (const auto& s : view.selectionInstallStrings)
 				selection_str.push_back(s.get<std::string>());
 
-			// JS: :copymode="$core.view.config.copyMode" — strings tray inherits same copyMode
 			listbox::CopyMode copy_mode_strings = listbox::CopyMode::Default;
 			{
 				const std::string cm = view.config.value("copyMode", std::string("Default"));
@@ -565,8 +533,6 @@ void render() {
 		}
 		ImGui::EndChild();
 
-		// --- Status bar (file count) ---
-		// JS Listbox prop :includefilecount="true" with unittype="string".
 		ImGui::SetCursorPos(ImVec2(cursor.x + listLeftM, cursor.y + topH - STATUS_H));
 		ImGui::BeginChild("install-strings-status", ImVec2(gridW - listLeftM - listRightM, STATUS_H),
 			ImGuiChildFlags_None,
@@ -574,7 +540,6 @@ void render() {
 		listbox::renderStatusBar("string", {}, listbox_install_strings_state);
 		ImGui::EndChild();
 
-		// --- Tray (row 2, col 1) ---
 		constexpr float TRAY_M = 10.0f;
 		ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + topH));
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(TRAY_M, 0.0f));
@@ -585,7 +550,6 @@ void render() {
 		if (padY > 0.0f)
 			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
 
-		// JS: <div class="regex-info" v-if="$core.view.config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
 			if (ImGui::IsItemHovered())
@@ -604,7 +568,6 @@ void render() {
 		ImGui::SetNextItemWidth(filterW);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterInstallStrings.c_str(), sizeof(filter_buf) - 1);
-		// JS: placeholder="Filter strings..."
 		if (ImGui::InputTextWithHint("##FilterInstallStrings", "Filter strings...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterInstallStrings = filter_buf;
 
@@ -618,9 +581,8 @@ void render() {
 		if (busy) ImGui::EndDisabled();
 
 		ImGui::EndChild();
-		ImGui::PopStyleVar(); // WindowPadding
+		ImGui::PopStyleVar();
 
-		// --- Sidebar: strings info (col 2, spanning both rows) ---
 		constexpr float sidebarTopM = app::layout::SIDEBAR_MARGIN_TOP;
 		constexpr float sidebarPadR = app::layout::SIDEBAR_PADDING_RIGHT;
 		ImGui::SetCursorPos(ImVec2(cursor.x + gridW, cursor.y + sidebarTopM));

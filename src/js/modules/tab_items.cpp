@@ -37,8 +37,6 @@
 
 namespace tab_items {
 
-// --- File-local structures ---
-
 struct Item {
 	uint32_t id = 0;
 	std::string name;
@@ -69,8 +67,6 @@ struct QualityMaskEntry {
 	std::string label;
 	bool checked = false;
 };
-
-// --- File-local constants ---
 
 static const std::vector<int> ITEM_SLOTS_IGNORED = { 0, 18, 11, 12, 24, 25, 27, 28 };
 
@@ -115,8 +111,6 @@ static const SlotMergedEntry ITEM_SLOTS_MERGED[] = {
 	{ "Tabard",    { 19 } }
 };
 
-// --- File-local helper ---
-
 static uint32_t fieldToUint32(const db::FieldValue& val) {
 	if (auto* p = std::get_if<int64_t>(&val))
 		return static_cast<uint32_t>(*p);
@@ -151,18 +145,12 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 	return {};
 }
 
-// --- File-local state ---
-
 static std::vector<Item> items;
-static std::vector<ItemData> all_item_data_cache; // mirrors items; rebuilt in initialize_items()
+static std::vector<ItemData> all_item_data_cache;
 
-// (JS stores these on core.view but they are objects with {label, checked};
-//  core.h declares them as std::vector<int> which is insufficient, so we keep
-//  the real state here and sync back as needed.)
 static std::vector<TypeMaskEntry> type_mask_entries;
 static std::vector<QualityMaskEntry> quality_mask_entries;
 
-// Change-detection for watches (replaces Vue $watch).
 static std::vector<bool> prev_type_mask_checked;
 static std::vector<bool> prev_quality_mask_checked;
 
@@ -171,16 +159,12 @@ static bool is_mounting = false;
 static context_menu::ContextMenuState context_menu_item_state;
 static itemlistbox::ItemListboxState itemlistbox_items_state;
 
-// Cached ItemEntry vector — only rebuilt when the source JSON changes.
 static std::vector<itemlistbox::ItemEntry> s_item_entries_cache;
 static size_t s_item_entries_cache_size = ~size_t(0);
-
-// --- Internal functions ---
 
 static void view_item_models(const Item& item) {
 	modules::set_active("tab_models");
 
-	// JS uses Set which preserves insertion order; use vector with uniqueness check.
 	std::vector<std::string> list;
 
 	for (const uint32_t model_id : item.models) {
@@ -215,7 +199,6 @@ static void view_item_textures(const Item& item) {
 	modules::set_active("tab_textures");
 	db::caches::DBTextureFileData::ensureInitialized();
 
-	// JS uses Set which preserves insertion order; use vector with uniqueness check.
 	std::vector<std::string> list;
 
 	for (const uint32_t texture_id : item.textures) {
@@ -257,7 +240,6 @@ static void initialize_items() {
 
 	auto item_sparse_rows = casc::db2::preloadTable("ItemSparse").getAllRows();
 
-	//         appearance_map.set(row.ItemID, row.ItemAppearanceID);
 	std::unordered_map<uint32_t, uint32_t> appearance_map;
 	for (const auto& [_id, row] : casc::db2::preloadTable("ItemModifiedAppearance").getAllRows()) {
 		uint32_t itemID = fieldToUint32(row.at("ItemID"));
@@ -265,7 +247,6 @@ static void initialize_items() {
 		appearance_map[itemID] = itemAppearanceID;
 	}
 
-	//         material_map.set(row.ItemDisplayInfoID, row.MaterialResourcesID);
 	MultiMap<uint32_t, uint32_t> material_map;
 	for (const auto& [_id, row] : casc::db2::preloadTable("ItemDisplayInfoMaterialRes").getAllRows()) {
 		uint32_t displayInfoID = fieldToUint32(row.at("ItemDisplayInfoID"));
@@ -326,7 +307,6 @@ static void initialize_items() {
 				}
 			}
 
-			//         Array.isArray(material_res) ? materials.push(...material_res) : materials.push(material_res);
 			const auto* material_res = material_map.get(displayInfoID);
 			if (material_res) {
 				if (auto* single = std::get_if<uint32_t>(material_res)) {
@@ -358,12 +338,10 @@ static void initialize_items() {
 			if (item_sparse_rows.contains(item_id))
 				continue;
 
-			// For items only in the Item table (not ItemSparse), create with minimal data.
 			Item new_item;
 			new_item.id = item_id;
 			new_item.inventoryType = inventoryType;
 
-			// Item table may not have Display_lang; use name from DBItems cache or generate.
 			const auto* cached_info = db::caches::DBItems::getItemById(item_id);
 			if (cached_info && !cached_info->name.empty())
 				new_item.name = cached_info->name;
@@ -381,7 +359,6 @@ static void initialize_items() {
 
 	logging::write(std::format("Loaded {} items", items.size()));
 
-	// Build the ItemData cache for item-picker-modal (mirrors items vector).
 	all_item_data_cache.clear();
 	all_item_data_cache.reserve(items.size());
 	for (const auto& item : items) {
@@ -447,7 +424,6 @@ static void apply_filters() {
 	view.config["itemViewerEnabledQualities"] = quality_mask;
 }
 
-// Looks up an Item by id from the module-local items vector.
 static const Item* find_item_by_id(uint32_t item_id) {
 	for (const auto& item : items) {
 		if (item.id == item_id)
@@ -455,8 +431,6 @@ static const Item* find_item_by_id(uint32_t item_id) {
 	}
 	return nullptr;
 }
-
-// --- methods ---
 
 static void copy_to_clipboard(const std::string& value) {
 	ImGui::SetClipboardText(value.c_str());
@@ -476,8 +450,6 @@ static void equip_item(const nlohmann::json& item_json) {
 	if (!wow::equip_item(item_id, item_name, pending_slot))
 		core::setToast("info", "This item cannot be equipped.", {}, 2000);
 }
-
-// --- Public API ---
 
 void registerTab() {
 	modules::register_nav_button("tab_items", "Items", "sword.svg", install_type::CASC);
@@ -522,9 +494,6 @@ void mounted() {
 
 			nlohmann::json enabled_qualities_json = view.config.value("itemViewerEnabledQualities", nlohmann::json());
 
-			//         id: q.id, label: q.label,
-			//         checked: enabled_qualities === undefined || enabled_qualities.includes(q.id)
-			//     }));
 			quality_mask_entries.clear();
 			for (const auto& q : ITEM_QUALITIES) {
 				QualityMaskEntry entry;
@@ -546,7 +515,6 @@ void mounted() {
 				quality_mask_entries.push_back(std::move(entry));
 			}
 
-			// Store initial state for change-detection (replaces Vue $watch).
 			prev_type_mask_checked.clear();
 			for (const auto& e : type_mask_entries)
 				prev_type_mask_checked.push_back(e.checked);
@@ -555,8 +523,6 @@ void mounted() {
 			for (const auto& e : quality_mask_entries)
 				prev_quality_mask_checked.push_back(e.checked);
 
-			// Initial filter application.
-			// (Vue watches fire immediately on assignment — replicate by calling apply_filters.)
 			apply_filters();
 
 			is_initialized = true;
@@ -587,7 +553,6 @@ void render() {
 	if (!is_initialized)
 		return;
 
-	// --- Change-detection for type and quality mask watches ---
 	{
 		bool type_changed = false;
 		if (prev_type_mask_checked.size() == type_mask_entries.size()) {
@@ -626,11 +591,8 @@ void render() {
 		}
 	}
 
-	// --- Template rendering ---
-
 	if (app::layout::BeginTab("tab-items")) {
 
-	// Calculate layout manually since items uses 1fr auto (not standard 2-col list-tab).
 	const ImVec2 avail = ImGui::GetContentRegionAvail();
 	const ImVec2 cursor = ImGui::GetCursorPos();
 
@@ -640,15 +602,12 @@ void render() {
 	const float listW = avail.x - SIDEBAR_W;
 	const float topH = avail.y - FILTER_H;
 
-	// --- List container (row 1, col 1) ---
-	//     <Itemlistbox id="listbox-items" ... @options="contextMenus.nodeItem = $event" @equip="equip_item">
 	ImGui::SetCursorPos(ImVec2(cursor.x + app::layout::LIST_MARGIN_LEFT,
 	                           cursor.y + app::layout::LIST_MARGIN_TOP));
 	ImGui::BeginChild("items-list-container",
 		ImVec2(listW - app::layout::LIST_MARGIN_LEFT - app::layout::LIST_MARGIN_RIGHT,
 		       topH - app::layout::LIST_MARGIN_TOP));
 	{
-		// Convert json items to ItemEntry array — only when the source changes.
 		if (view.listfileItems.size() != s_item_entries_cache_size) {
 			s_item_entries_cache_size = view.listfileItems.size();
 			s_item_entries_cache.clear();
@@ -665,7 +624,6 @@ void render() {
 		}
 		const auto& item_entries = s_item_entries_cache;
 
-		// Build selection as item IDs.
 		std::vector<int> sel_ids;
 		for (const auto& sel : view.selectionItems)
 			sel_ids.push_back(sel.value("id", 0));
@@ -687,7 +645,6 @@ void render() {
 				}
 			},
 			[&](const itemlistbox::ItemEntry& item) {
-				// @equip — find matching json and call equip_item
 				for (const auto& j : view.listfileItems) {
 					if (j.value("id", 0) == item.id) {
 						equip_item(j);
@@ -696,7 +653,6 @@ void render() {
 				}
 			},
 			[&](const itemlistbox::ItemEntry& item) {
-				// @options — set context menu node
 				for (const auto& j : view.listfileItems) {
 					if (j.value("id", 0) == item.id) {
 						view.contextMenus.nodeItem = j;
@@ -707,24 +663,16 @@ void render() {
 	}
 	ImGui::EndChild();
 
-	// --- Sidebar (col 2, spanning both rows) ---
 	ImGui::SetCursorPos(ImVec2(cursor.x + listW,
 	                           cursor.y + app::layout::SIDEBAR_MARGIN_TOP));
 	ImGui::BeginChild("items-sidebar",
 		ImVec2(SIDEBAR_W - app::layout::SIDEBAR_PADDING_RIGHT,
 		       avail.y - app::layout::SIDEBAR_MARGIN_TOP));
 
-	// JS: <span class="header">Item Types</span>
 	ImGui::TextUnformatted("Item Types");
 
-	//     <div v-for="item in $core.view.itemViewerTypeMask" class="sidebar-checklist-item"
-	//          :class="{ selected: item.checked }" @click="toggle_checklist_item(item)">
-	//         <input type="checkbox" v-model="item.checked" @click.stop/>
-	//         <span>{{ item.label }}</span>
-	//     </div>
 	for (auto& entry : type_mask_entries) {
 		ImVec2 pos = ImGui::GetCursorPos();
-		// Full-width selectable provides .selected-class highlight and whole-row click.
 		bool row_toggled = ImGui::Selectable(
 			std::format("##rowtype_{}", entry.label).c_str(),
 			entry.checked, ImGuiSelectableFlags_AllowOverlap);
@@ -734,7 +682,6 @@ void render() {
 			entry.checked = !entry.checked;
 	}
 
-	//     <a @click="setAllItemTypes(true)">Enable All</a> / <a @click="setAllItemTypes(false)">Disable All</a>
 	if (ImGui::SmallButton("Enable All##types")) {
 		for (auto& entry : type_mask_entries)
 			entry.checked = true;
@@ -749,24 +696,17 @@ void render() {
 
 	ImGui::Spacing();
 
-	// JS: <span class="header">Quality</span>
 	ImGui::TextUnformatted("Quality");
 
-	//     <div v-for="item in $core.view.itemViewerQualityMask" class="sidebar-checklist-item"
-	//          :class="{ selected: item.checked }" @click="toggle_checklist_item(item)">
-	//         <input type="checkbox" v-model="item.checked" :class="'quality-' + item.id" @click.stop/>
-	//         <span>{{ item.label }}</span>
-	//     </div>
-	// WoW quality colors — applied to both the checkmark and the label text.
 	static const ImVec4 quality_colors[] = {
-		ImVec4(0.62f, 0.62f, 0.62f, 1.0f), // 0 = Poor (grey)
-		ImVec4(1.00f, 1.00f, 1.00f, 1.0f), // 1 = Common (white)
-		ImVec4(0.12f, 1.00f, 0.00f, 1.0f), // 2 = Uncommon (green)
-		ImVec4(0.00f, 0.44f, 0.87f, 1.0f), // 3 = Rare (blue)
-		ImVec4(0.64f, 0.21f, 0.93f, 1.0f), // 4 = Epic (purple)
-		ImVec4(1.00f, 0.50f, 0.00f, 1.0f), // 5 = Legendary (orange)
-		ImVec4(0.90f, 0.80f, 0.50f, 1.0f), // 6 = Artifact (gold)
-		ImVec4(0.00f, 0.80f, 1.00f, 1.0f), // 7 = Heirloom (cyan)
+		ImVec4(0.62f, 0.62f, 0.62f, 1.0f),
+		ImVec4(1.00f, 1.00f, 1.00f, 1.0f),
+		ImVec4(0.12f, 1.00f, 0.00f, 1.0f),
+		ImVec4(0.00f, 0.44f, 0.87f, 1.0f),
+		ImVec4(0.64f, 0.21f, 0.93f, 1.0f),
+		ImVec4(1.00f, 0.50f, 0.00f, 1.0f),
+		ImVec4(0.90f, 0.80f, 0.50f, 1.0f),
+		ImVec4(0.00f, 0.80f, 1.00f, 1.0f),
 	};
 
 	for (auto& entry : quality_mask_entries) {
@@ -791,7 +731,6 @@ void render() {
 			entry.checked = !entry.checked;
 	}
 
-	//     <a @click="setAllItemQualities(true)">Enable All</a> / <a @click="setAllItemQualities(false)">Disable All</a>
 	if (ImGui::SmallButton("Enable All##qualities")) {
 		for (auto& entry : quality_mask_entries)
 			entry.checked = true;
@@ -806,21 +745,16 @@ void render() {
 
 	ImGui::EndChild(); // items-sidebar
 
-	// --- Filter bar (row 2, col 1) ---
-	//     <div class="regex-info" v-if="$core.view.config.regexFilters" ...>Regex Enabled</div>
-	//     <input type="text" v-model="$core.view.userInputFilterItems" placeholder="Filter items..."/>
 	ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + topH));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f, 0.0f));
 	ImGui::BeginChild("items-filter", ImVec2(listW, FILTER_H), ImGuiChildFlags_None,
 		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 	{
-		// Vertically center the filter input.
 		float itemH = ImGui::GetFrameHeight();
 		float padY = (FILTER_H - itemH) * 0.5f;
 		if (padY > 0.0f)
 			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
 
-		// <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
 			if (ImGui::IsItemHovered())
@@ -828,7 +762,6 @@ void render() {
 			ImGui::SameLine();
 		}
 
-		// <input type="text" v-model="userInputFilterItems" placeholder="Filter items..."/>
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterItems.c_str(), sizeof(filter_buf) - 1);
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
@@ -836,17 +769,11 @@ void render() {
 			view.userInputFilterItems = filter_buf;
 	}
 	ImGui::EndChild();
-	ImGui::PopStyleVar(); // WindowPadding
+	ImGui::PopStyleVar();
 
 	} // if BeginTab
 	app::layout::EndTab();
 
-	// --- Context menu ---
-	//     <span v-if="context.node.modelCount > 0" @click.self="view_models(context.node)">View related models ({{ context.node.modelCount }})</span>
-	//     <span v-if="context.node.textureCount > 0" @click.self="view_textures(context.node)">View related textures ({{ context.node.textureCount }})</span>
-	//     <span @click.self="copy_to_clipboard(context.node.name)">Copy item name to clipboard</span>
-	//     <span @click.self="copy_to_clipboard(context.node.id)">Copy item ID to clipboard</span>
-	//     <span @click.self="view_on_wowhead(context.node.id)">View item on Wowhead (web)</span>
 	context_menu::render(
 		"ctx-item",
 		view.contextMenus.nodeItem,

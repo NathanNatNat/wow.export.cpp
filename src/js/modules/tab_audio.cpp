@@ -41,8 +41,6 @@ static std::optional<std::string> build_stack_trace(const char* function_name, c
 	return std::format("{}: {}", function_name, e.what());
 }
 
-// --- File-local state ---
-
 static std::string selected_file;
 
 static std::optional<uint32_t> selected_file_data_id;
@@ -52,25 +50,20 @@ static bool seek_loop_active = false;
 
 static AudioPlayer player;
 
-// Change-detection for config watches and selection.
 static float prev_sound_player_volume = -1.0f;
 static bool prev_sound_player_loop = false;
 static std::string prev_selection_first;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 
-// CSS: #sound-player-anim — 14-frame horizontal sprite strip, 309×397px per frame, 0.7s cycle.
 static GLuint s_audiobox_tex = 0;
 static constexpr int AUDIOBOX_FRAMES = 14;
 static constexpr float AUDIOBOX_FRAME_W = 309.0f;
 static constexpr float AUDIOBOX_FRAME_H = 397.0f;
 static constexpr float AUDIOBOX_ANIM_DURATION = 0.7f;
-
-// --- Internal functions ---
 
 static void update_seek() {
 	if (!player.is_playing) {
@@ -82,8 +75,6 @@ static void update_seek() {
 	if (duration > 0)
 		core::view->soundPlayerSeek = player.get_position() / duration;
 
-	// In ImGui, the seek update happens every frame via render(), not via requestAnimationFrame.
-	// seek_loop_active remains true to keep updating.
 }
 
 static void start_seek_loop() {
@@ -96,8 +87,6 @@ static void start_seek_loop() {
 static void stop_seek_loop() {
 	seek_loop_active = false;
 }
-
-// --- Async audio loading (follows tab_models pattern) ---
 
 struct PendingAudioLoad {
 	std::string file_name;
@@ -144,7 +133,7 @@ static bool load_track() {
 	}
 
 	pending_audio_load = std::move(task);
-	return false; // Not loaded yet; pump will handle it.
+	return false;
 }
 
 static void pump_audio_load() {
@@ -173,7 +162,6 @@ static void pump_audio_load() {
 		core::view->soundPlayerDuration = player.get_duration();
 		core::hideToast();
 
-		// Auto-play if requested (from play_track).
 		if (should_play) {
 			player.play();
 			core::view->soundPlayerState = true;
@@ -227,8 +215,6 @@ static void pause_track() {
 	core::view->soundPlayerState = false;
 }
 
-// --- Async export (one-file-per-frame, follows tab_models pattern) ---
-
 struct PendingAudioExport {
 	std::vector<nlohmann::json> files;
 	size_t next_index = 0;
@@ -259,7 +245,6 @@ static void pump_audio_export() {
 		return;
 	}
 
-	// Process one file per frame.
 	const auto& sel_entry = task.files[task.next_index++];
 	bool has_export_data = false;
 	std::vector<uint8_t> export_data;
@@ -332,7 +317,6 @@ static void export_sounds() {
 	pending_audio_export = std::move(task);
 }
 
-// --- Helper: format seconds as MM:SS ---
 static std::string format_time(double seconds) {
 	if (seconds <= 0)
 		return "00:00";
@@ -343,12 +327,9 @@ static std::string format_time(double seconds) {
 	return std::format("{:02d}:{:02d}", minutes, secs);
 }
 
-// --- Public API ---
-
 void registerTab() {
 	modules::register_nav_button("tab_audio", "Audio", "music.svg", install_type::CASC);
 
-	// Load the audiobox sprite sheet on first registration.
 	if (!s_audiobox_tex)
 		s_audiobox_tex = app::theme::loadImageTexture(constants::SRC_DIR() / "images" / "audiobox.png");
 }
@@ -425,12 +406,8 @@ void mounted() {
 void render() {
 	auto& view = *core::view;
 
-	// Poll for pending async audio load completion.
 	pump_audio_load();
-	// Poll for pending async audio export (one file per frame).
 	pump_audio_export();
-
-	// --- Change-detection for config watches ---
 
 	const float current_volume = view.config.value("soundPlayerVolume", 1.0f);
 	if (current_volume != prev_sound_player_volume) {
@@ -444,7 +421,6 @@ void render() {
 		prev_sound_player_loop = current_loop;
 	}
 
-	// --- Change-detection for selection (equivalent to watch on selectionSounds) ---
 	if (!view.selectionSounds.empty()) {
 		const auto entry = casc::listfile::parseFileEntry(view.selectionSounds[0].get<std::string>());
 		if (view.isBusy == 0 && !entry.file_path.empty() && entry.file_path != selected_file) {
@@ -462,19 +438,13 @@ void render() {
 		}
 	}
 
-	// --- Seek loop update (runs every frame while playing) ---
 	if (seek_loop_active)
 		update_seek();
-
-	// --- Template rendering ---
 
 	if (app::layout::BeginTab("tab-audio")) {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
-	// --- Left panel: List container (row 1, col 1) ---
-	//     <Listbox v-model:selection="selectionSounds" :items="listfileSounds" ...>
-	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	if (app::layout::BeginListContainer("sounds-list-container", regions)) {
 		// Convert JSON items/selection to string vectors.
 		const auto& items_str = core::cached_json_strings(view.listfileSounds, s_items_cache, s_items_cache_size);
@@ -501,7 +471,7 @@ void render() {
 			copy_mode,
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
-			"sound file", // unittype — JS: unittype="sound file"
+			"sound file",
 			nullptr, // overrideItems
 			false,   // disable
 			"sounds", // persistscrollkey
@@ -518,7 +488,6 @@ void render() {
 			}
 		);
 
-		// Context menu for generic listbox.
 		context_menu::render(
 			"ctx-sounds",
 			view.contextMenus.nodeListbox,
@@ -548,15 +517,12 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
-	// --- Status bar ---
 	if (app::layout::BeginStatusBar("sounds-status", regions)) {
 		listbox::renderStatusBar("sound file", view.audioQuickFilters, listbox_state);
 	}
 	app::layout::EndStatusBar();
 
-	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("sounds-filter", regions)) {
-		// JS: <div class="regex-info" v-if="config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
 			if (ImGui::IsItemHovered())
@@ -573,11 +539,8 @@ void render() {
 	}
 	app::layout::EndFilterBar();
 
-	// --- Right panel: Preview container (row 1, col 2) ---
 	if (app::layout::BeginPreviewContainer("sounds-preview-container", regions)) {
 
-		// CSS: #sound-player-anim — audiobox sprite strip animated at 14 fps / 0.7s cycle.
-		// Plays when soundPlayerState is true; shows frame 0 when paused.
 		if (s_audiobox_tex) {
 			int frame = 0;
 			if (view.soundPlayerState) {
@@ -612,9 +575,6 @@ void render() {
 				player.seek(duration * seek_val);
 		}
 
-		//     <input type="button" :class="{ isPlaying: !soundPlayerState }" @click="toggle_playback"/>
-		//     <Slider id="slider-volume" v-model="config.soundPlayerVolume">
-		// </div>
 		if (ImGui::Button(view.soundPlayerState ? "Pause" : "Play"))
 			toggle_playback();
 
@@ -628,8 +588,6 @@ void render() {
 	}
 	app::layout::EndPreviewContainer();
 
-	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
-	// JS: div.preview-controls — Loop, Autoplay, Export Selected
 	if (app::layout::BeginPreviewControls("sounds-preview-controls", regions)) {
 		bool loop_val = view.config.value("soundPlayerLoop", false);
 		if (ImGui::Checkbox("Loop", &loop_val))

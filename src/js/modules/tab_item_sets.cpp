@@ -28,8 +28,6 @@
 
 namespace tab_item_sets {
 
-// --- File-local structures ---
-
 struct ItemSet {
 	uint32_t id = 0;
 	std::string name;
@@ -41,8 +39,6 @@ struct ItemSet {
 		return std::format("{} ({})", name, id);
 	}
 };
-
-// --- File-local helpers ---
 
 static uint32_t fieldToUint32(const db::FieldValue& val) {
 	if (auto* p = std::get_if<int64_t>(&val))
@@ -75,7 +71,6 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 			result.push_back(static_cast<uint32_t>(v));
 		return result;
 	}
-	// Handle single-value fields — JS always treats ItemID as an array.
 	if (auto* p = std::get_if<int64_t>(&val))
 		return { static_cast<uint32_t>(*p) };
 	if (auto* p = std::get_if<uint64_t>(&val))
@@ -83,19 +78,14 @@ static std::vector<uint32_t> fieldToUint32Vec(const db::FieldValue& val) {
 	return {};
 }
 
-// --- File-local state ---
-
 static std::vector<ItemSet> item_sets;
 
 static bool is_initialized = false;
 static bool is_mounting = false;
 static itemlistbox::ItemListboxState itemlistbox_item_sets_state;
 
-// Cached ItemEntry vector — only rebuilt when the source JSON changes.
 static std::vector<itemlistbox::ItemEntry> s_item_entries_cache;
 static size_t s_item_entries_cache_size = ~size_t(0);
-
-// --- Internal functions ---
 
 static void initialize_item_sets() {
 	item_sets.clear();
@@ -103,7 +93,6 @@ static void initialize_item_sets() {
 	core::progressLoadingScreen("Loading item data...");
 	db::caches::DBItems::ensureInitialized();
 
-	//         appearance_map.set(row.ItemID, row.ItemAppearanceID);
 	core::progressLoadingScreen("Loading item appearance data...");
 	std::unordered_map<uint32_t, uint32_t> appearance_map;
 	for (const auto& [_id, row] : casc::db2::preloadTable("ItemModifiedAppearance").getAllRows()) {
@@ -188,7 +177,6 @@ static void apply_filter() {
 		j["icon"] = set.icon;
 		j["quality"] = set.quality;
 
-		// Store item_ids as JSON array for equip_set to use.
 		j["item_ids"] = nlohmann::json::array();
 		for (uint32_t id : set.item_ids)
 			j["item_ids"].push_back(id);
@@ -226,8 +214,6 @@ static void equip_set(const nlohmann::json& set) {
 	}
 }
 
-// --- Public API ---
-
 void registerTab() {
 	modules::register_nav_button("tab_item_sets", "Item Sets", "armour.svg", install_type::CASC);
 }
@@ -257,16 +243,9 @@ void render() {
 	if (!is_initialized)
 		return;
 
-	// --- Template rendering ---
-
-	//     <div class="list-container list-container-full">
-	//         <Itemlistbox id="listbox-item-sets" v-model:selection="$core.view.selectionItemSets"
-	//          :items="$core.view.listfileItemSets" :filter="$core.view.userInputFilterItemSets"
-	//          :keyinput="true" :includefilecount="true" unittype="set" @equip="equip_set">
 	ImGui::BeginChild("item-sets-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
 
 	{
-		// Convert json items to ItemEntry array — only when the source changes.
 		if (view.listfileItemSets.size() != s_item_entries_cache_size) {
 			s_item_entries_cache_size = view.listfileItemSets.size();
 			s_item_entries_cache.clear();
@@ -283,7 +262,6 @@ void render() {
 		}
 		const auto& item_entries = s_item_entries_cache;
 
-		// Build selection as item IDs.
 		std::vector<int> sel_ids;
 		for (const auto& sel : view.selectionItemSets)
 			sel_ids.push_back(sel.value("id", 0));
@@ -305,7 +283,6 @@ void render() {
 				}
 			},
 			[&](const itemlistbox::ItemEntry& item) {
-				// @equip — find matching json and call equip_set
 				for (const auto& j : view.listfileItemSets) {
 					if (j.value("id", 0) == item.id) {
 						equip_set(j);
@@ -318,8 +295,6 @@ void render() {
 
 	ImGui::EndChild(); // item-sets-list-container
 
-	// <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
-	// <input type="text" v-model="userInputFilterItemSets" placeholder="Filter item sets..."/>
 	bool regexEnabled = view.config.value("regexFilters", false);
 	float inputWidth = ImGui::GetContentRegionAvail().x;
 	if (regexEnabled) {

@@ -25,12 +25,8 @@
 
 namespace tab_blender {
 
-// --- Internal constants (JS equivalents) ---
-
 static const std::regex PATTERN_ADDON_VER(R"('version': \((\d+), (\d+), (\d+)\),)");
 static const std::regex PATTERN_BLENDER_VER(R"(\d+\.\d+\w?)");
-
-// --- Internal functions ---
 
 struct ManifestResult {
 	std::string version;
@@ -87,10 +83,8 @@ static std::vector<std::string> get_blender_installations() {
 	return installs;
 }
 
-// --- Async install (background thread for file copies) ---
-
 struct PendingBlenderInstall {
-	std::future<std::string> result_future; // returns success message or throws
+	std::future<std::string> result_future;
 	std::unique_ptr<BusyLock> busy_lock;
 };
 
@@ -174,8 +168,6 @@ static void open_addon_directory() {
 	core::openInExplorer(constants::BLENDER::LOCAL_DIR().string());
 }
 
-// --- Public API ---
-
 void registerTab() {
 	modules::register_context_menu_option("tab_blender", "Install Blender Add-on", "../images/blender.png");
 }
@@ -223,7 +215,6 @@ void checkLocalVersion() {
 		return;
 	}
 
-	// JS: log.write('Available Blender installations: %s', versions.length > 0 ? versions.join(', ') : 'None');
 	std::string versionsStr;
 	for (const auto& v : versions) {
 		if (!versionsStr.empty())
@@ -232,12 +223,10 @@ void checkLocalVersion() {
 	}
 	logging::write(std::format("Available Blender installations: {}", versionsStr.empty() ? "None" : versionsStr));
 
-	// JS: const blender_version = versions.sort().pop();
 	auto sortedVersions = versions;
 	std::sort(sortedVersions.begin(), sortedVersions.end());
 	const std::string blenderVersion = sortedVersions.back();
 
-	// JS: if (blender_version < constants.BLENDER.MIN_VER)
 	double verNum = 0;
 	try { verNum = std::stod(blenderVersion); } catch (...) {}
 	if (verNum < constants::BLENDER::MIN_VER) {
@@ -272,7 +261,7 @@ void checkLocalVersion() {
 		logging::write("Prompting user for Blender add-on update...");
 		core::setToast("info", "A newer version of the Blender add-on is available for you.", {
 			{"Install", []() { modules::setActive("tab_blender"); }},
-			{"Maybe Later", []() { /* dismiss */ }}
+			{"Maybe Later", []() {}}
 		}, -1, false);
 	}
 }

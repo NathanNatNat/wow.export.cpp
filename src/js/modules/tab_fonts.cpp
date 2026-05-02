@@ -36,13 +36,10 @@ static std::optional<std::string> build_stack_trace(const char* function_name, c
 	return std::format("{}: {}", function_name, e.what());
 }
 
-// --- File-local state ---
-
 static std::unordered_map<std::string, void*> loaded_fonts;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 
@@ -50,7 +47,6 @@ static std::string get_font_id(uint32_t file_data_id) {
 	return "font_id_" + std::to_string(file_data_id);
 }
 
-// Synchronous load_font for cached fonts (returns immediately if cached).
 static void* load_font_cached(const std::string& file_name) {
 	auto file_data_id = casc::listfile::getByFilename(file_name);
 	if (!file_data_id)
@@ -64,9 +60,6 @@ static void* load_font_cached(const std::string& file_name) {
 	return nullptr;
 }
 
-// --- Async font loading (follows tab_models pattern) ---
-
-// Glyph detection state for current font (declared early for pump_font_load).
 static font_helpers::GlyphDetectionState glyph_state;
 
 struct PendingFontLoad {
@@ -80,7 +73,6 @@ struct PendingFontLoad {
 static std::optional<PendingFontLoad> pending_font_load;
 
 static void load_font_async(const std::string& file_name) {
-	// Cancel any pending font load.
 	pending_font_load.reset();
 
 	auto file_data_id = casc::listfile::getByFilename(file_name);
@@ -89,10 +81,9 @@ static void load_font_async(const std::string& file_name) {
 
 	const std::string font_id = get_font_id(*file_data_id);
 
-	// If already cached, skip async load.
 	auto it = loaded_fonts.find(font_id);
 	if (it != loaded_fonts.end())
-		return; // Already loaded; render() will use the cached version.
+		return;
 
 	auto* casc = core::view->casc;
 	if (!casc)
@@ -126,7 +117,6 @@ static void pump_font_load() {
 			loaded_fonts[task.font_id] = font;
 			logging::write(std::format("loaded font {} as {}", task.file_name, task.font_id));
 
-			// Set up font preview and glyph detection now that the font is loaded.
 			auto& view = *core::view;
 			view.fontPreviewFontFamily = task.font_id;
 			font_helpers::detect_glyphs_async(
@@ -143,10 +133,7 @@ static void pump_font_load() {
 	pending_font_load.reset();
 }
 
-// Change-detection for selectionFonts.
 static std::string prev_selection_first;
-
-// --- Public API ---
 
 void registerTab() {
 	modules::register_nav_button("tab_fonts", "Fonts", "font.svg", install_type::CASC);
@@ -159,27 +146,21 @@ void mounted() {
 	view.fontPreviewText.clear();
 	view.fontPreviewFontFamily.clear();
 
-	// Change-detection is handled in render() by comparing selectionFonts[0] each frame.
 }
 
-// Forward declaration for pump_font_export (defined after render).
 static void pump_font_export();
 
 void render() {
 	auto& view = *core::view;
 
-	// Poll for pending async font load completion.
 	pump_font_load();
-	// Poll for pending async font export (one file per frame).
 	pump_font_export();
 
-	// --- Change-detection for selection (equivalent to watch on selectionFonts) ---
 	if (!view.selectionFonts.empty()) {
 		const std::string first = casc::listfile::stripFileEntry(view.selectionFonts[0].get<std::string>());
 		if (!first.empty() && view.isBusy == 0 && first != prev_selection_first) {
 			void* font = load_font_cached(first);
 			if (font) {
-				// Font already cached — use it directly.
 				view.fontPreviewFontFamily = get_font_id(*casc::listfile::getByFilename(first));
 				font_helpers::detect_glyphs_async(
 					font,
@@ -187,16 +168,13 @@ void render() {
 					[&view](const std::string& ch) { view.fontPreviewText += ch; }
 				);
 			} else {
-				// Need to load from CASC — do it asynchronously.
 				load_font_async(first);
 			}
 			prev_selection_first = first;
 		}
 	}
 
-	// Process glyph detection batch each frame.
 	if (!glyph_state.complete && !glyph_state.cancelled) {
-		// Get the loaded font pointer for the current font family.
 		void* font = nullptr;
 		auto it = loaded_fonts.find(view.fontPreviewFontFamily);
 		if (it != loaded_fonts.end())
@@ -210,9 +188,7 @@ void render() {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
-	// --- Left panel: List container (row 1, col 1) ---
 	if (app::layout::BeginListContainer("fonts-list-container", regions)) {
-		// Convert JSON items/selection to string vectors.
 		const auto& items_str = core::cached_json_strings(view.listfileFonts, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
@@ -254,7 +230,6 @@ void render() {
 			}
 		);
 
-		// Context menu for generic listbox.
 		context_menu::render(
 			"ctx-fonts",
 			view.contextMenus.nodeListbox,
@@ -284,13 +259,11 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
-	// --- Status bar ---
 	if (app::layout::BeginStatusBar("fonts-status", regions)) {
 		listbox::renderStatusBar("font", {}, listbox_state);
 	}
 	app::layout::EndStatusBar();
 
-	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("fonts-filter", regions)) {
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
@@ -306,14 +279,10 @@ void render() {
 	}
 	app::layout::EndFilterBar();
 
-	// --- Right panel: Preview container (row 1, col 2) ---
 	if (app::layout::BeginPreviewContainer("fonts-preview-container", regions)) {
-		// Glyph grid.
-		// CSS: .font-character-grid { bottom: 140px; } — fills all space except bottom 140px for preview input.
 		const float gridHeight = std::max(50.0f, ImGui::GetContentRegionAvail().y - 140.0f);
 		ImGui::BeginChild("font-character-grid", ImVec2(0, gridHeight), ImGuiChildFlags_Borders);
 
-		// Set 2px spacing to match CSS: flex-wrap: wrap; gap: 2px
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 2.0f));
 		float avail_width = ImGui::GetContentRegionAvail().x;
 		float cursor_x = 0.0f;
@@ -322,9 +291,6 @@ void render() {
 			char utf8_buf[5] = {};
 			ImTextCharToUtf8(utf8_buf, static_cast<unsigned int>(codepoint));
 
-			// Each glyph cell is a small selectable button.
-			// CSS: .font-glyph-cell { width: 32px; height: 32px; background: var(--background-alt); border-radius: 3px; }
-			// CSS: .font-glyph-cell:hover { background: var(--font-alt); }
 			ImGui::PushID(static_cast<int>(codepoint));
 			if (ImGui::Selectable(utf8_buf, false, 0, ImVec2(32, 32))) {
 				font_helpers::trigger_glyph_click(glyph_state, codepoint);
@@ -336,7 +302,6 @@ void render() {
 			}
 			ImGui::PopID();
 
-			// Manual wrap: continue on same line if next button fits.
 			cursor_x += 32.0f + 2.0f;
 			if (cursor_x + 32.0f <= avail_width) {
 				ImGui::SameLine();
@@ -348,12 +313,8 @@ void render() {
 		ImGui::PopStyleVar();
 		ImGui::EndChild();
 
-		// Font preview text input.
-		// CSS: .font-preview-input { height: 120px; font-size: 32px; background: var(--background-dark); border: 1px solid var(--border); }
 		const float previewInputHeight = std::min(120.0f, ImGui::GetContentRegionAvail().y);
 
-		// JS: <textarea :style="{ fontFamily: $core.view.fontPreviewFontFamily }">
-		// Push the loaded ImGui font so the preview textarea renders in the selected WoW font.
 		void* preview_font = nullptr;
 		{
 			auto fit = loaded_fonts.find(view.fontPreviewFontFamily);
@@ -377,7 +338,6 @@ void render() {
 	}
 	app::layout::EndPreviewContainer();
 
-	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
 	if (app::layout::BeginPreviewControls("fonts-preview-controls", regions)) {
 		const bool busy = view.isBusy > 0;
 		if (busy) ImGui::BeginDisabled();
@@ -390,8 +350,6 @@ void render() {
 	} // if BeginTab
 	app::layout::EndTab();
 }
-
-// --- Async export (one-file-per-frame, follows tab_models pattern) ---
 
 struct PendingFontExport {
 	std::vector<nlohmann::json> files;
@@ -423,7 +381,6 @@ static void pump_font_export() {
 		return;
 	}
 
-	// Process one file per frame.
 	const auto& sel_entry = task.files[task.next_index++];
 	std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
 	std::string export_file_name = file_name;

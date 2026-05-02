@@ -40,8 +40,6 @@ static std::optional<std::string> build_stack_trace(const char* function_name, c
 	return std::format("{}: {}", function_name, e.what());
 }
 
-// --- File-local state ---
-
 static std::string selected_file;
 
 static std::optional<uint32_t> selected_file_data_id;
@@ -55,16 +53,12 @@ static data_table::DataTableState data_table_state;
 static context_menu::ContextMenuState data_table_ctx_state;
 static menu_button::MenuButtonState menu_button_data_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 
-// --- Forward declarations ---
 static void copy_rows_csv();
 static void copy_rows_sql();
 static void copy_cell(const nlohmann::json& value);
-
-// --- Internal functions ---
 
 static void initialize_available_tables() {
 	auto& view = *core::view;
@@ -137,7 +131,6 @@ static ParseTableResult parse_table(const std::string& table_name) {
 
 	const auto& schema = db2_reader.schema;
 	std::vector<std::string> all_headers;
-	// Use schemaOrder to preserve insertion order (matches JS Map iteration order).
 	for (const auto& key : db2_reader.schemaOrder)
 		all_headers.push_back(key);
 
@@ -204,13 +197,10 @@ static void load_table(const std::string& table_name) {
 		selected_file = table_name;
 		selected_file_schema = result.schema;
 	} catch (const std::exception& e) {
-		// JS: core.setToast('error', ..., { 'View Log': () => log.openRuntimeLog() }, -1)
 		core::setToast("error", "Unable to open DB2 file " + table_name, casc::ExportHelper::TOAST_OPT_LOG, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
 	}
 }
-
-// --- Public API ---
 
 void registerTab() {
 	modules::register_nav_button("tab_data", "Data", "database.svg", install_type::CASC);
@@ -238,15 +228,11 @@ void mounted() {
 		}).detach();
 	}
 
-	// Change-detection is handled in render() by comparing against selected_file each frame.
 }
 
 void render() {
 	auto& view = *core::view;
 
-	// --- Change-detection for selection (equivalent to $watch('selectionDB2s') in JS) ---
-	// JS: if (!core.view.isBusy && last && selected_file !== last)
-	// selected_file is only updated inside load_table() on success, so failed loads can be retried.
 	if (!view.selectionDB2s.empty()) {
 		const std::string last = view.selectionDB2s.back().get<std::string>();
 		if (view.isBusy == 0 && !last.empty() && last != selected_file) {
@@ -255,15 +241,10 @@ void render() {
 		}
 	}
 
-	// --- Template rendering ---
-
 	if (app::layout::BeginTab("tab-data")) {
 
 	auto regions = app::layout::CalcListTabRegions(false, 1.0f / 7.0f);
 
-	// --- Left panel: List container (row 1, col 1) ---
-	//     <Listbox v-model:selection="selectionDB2s" :items="dbdManifest" ...>
-	// </div>
 	if (app::layout::BeginListContainer("db2-list-container", regions)) {
 		const auto& items_str = core::cached_json_strings(view.dbdManifest, s_items_cache, s_items_cache_size);
 
@@ -299,15 +280,12 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
-	// --- Status bar ---
 	if (app::layout::BeginStatusBar("db2-status", regions)) {
 		listbox::renderStatusBar("table", {}, listbox_db2_state);
 	}
 	app::layout::EndStatusBar();
 
-	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("db2-filter", regions)) {
-		// <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
 			if (ImGui::IsItemHovered())
@@ -322,17 +300,11 @@ void render() {
 	}
 	app::layout::EndFilterBar();
 
-	// --- Right panel: Preview container (row 1, col 2) ---
-	//     <DataTable ref="dataTable" :headers="tableBrowserHeaders" :rows="tableBrowserRows" ...>
-	//     <ContextMenu :node="contextMenus.nodeDataTable" ...>
-	// </div>
 	if (app::layout::BeginPreviewContainer("data-table-container", regions)) {
-		// Convert json headers to string array.
 		std::vector<std::string> headers_str;
 		for (const auto& h : view.tableBrowserHeaders)
 			headers_str.push_back(h.get<std::string>());
 
-		// Convert json rows to string 2D array.
 		std::vector<std::vector<std::string>> rows_str;
 		for (const auto& row : view.tableBrowserRows) {
 			std::vector<std::string> str_row;
@@ -341,9 +313,6 @@ void render() {
 			rows_str.push_back(std::move(str_row));
 		}
 
-		// Convert selection rows from json arrays to vector<string> rows.
-		// JS stores row references in selectionDataTable; we mirror that by
-		// storing each row's full content (vector of cell strings).
 		std::vector<std::vector<std::string>> sel_rows;
 		for (const auto& s : view.selectionDataTable) {
 			if (!s.is_array()) continue;
@@ -376,17 +345,11 @@ void render() {
 				node["cellValue"] = ev.cellValue;
 				node["selectedCount"] = ev.selectedCount;
 				view.contextMenus.nodeDataTable = node;
-				// Open the popup immediately on right-click (JS: ContextMenu opens on @contextmenu).
 				ImGui::OpenPopup("##DataTableContextMenu");
 			},
 			[&]() { copy_rows_csv(); },
 			nullptr);
 
-		// Context menu for data table.
-		// JS: <ContextMenu :node="contextMenus.nodeDataTable" @close="contextMenus.nodeDataTable = null">
-		//       <span @click.self="copy_rows_csv">Copy {{ selectedCount }} row{{ ... }} as CSV</span>
-		//       <span @click.self="copy_rows_sql">Copy {{ selectedCount }} row{{ ... }} as SQL</span>
-		//       <span @click.self="copy_cell(cellValue)">Copy cell contents</span>
 		if (ImGui::BeginPopup("##DataTableContextMenu")) {
 			if (!view.contextMenus.nodeDataTable.is_null()) {
 				const int selected_count = view.contextMenus.nodeDataTable.value("selectedCount", 0);
@@ -403,11 +366,9 @@ void render() {
 			}
 			ImGui::EndPopup();
 		} else if (!view.contextMenus.nodeDataTable.is_null()) {
-			// @close event: clear nodeDataTable when popup closes (JS: @close="nodeDataTable = null").
 			view.contextMenus.nodeDataTable = nullptr;
 		}
 
-		// Options row.
 		const std::string export_format = view.config.value("exportDataFormat", std::string("CSV"));
 
 		if (export_format == "CSV") {
@@ -430,10 +391,7 @@ void render() {
 	}
 	app::layout::EndPreviewContainer();
 
-	// --- Bottom: Preview controls (row 2, col 2) ---
-	//     <input> filter + <MenuButton> export
 	if (app::layout::BeginPreviewControls("data-preview-controls", regions)) {
-		// <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
 			if (ImGui::IsItemHovered())
@@ -466,8 +424,6 @@ void render() {
 	app::layout::EndTab();
 }
 
-// --- Helpers ---
-
 static std::vector<std::vector<std::string>> jsonRowsToStrings(const nlohmann::json& rows_json) {
 	std::vector<std::vector<std::string>> result;
 	result.reserve(rows_json.size());
@@ -491,9 +447,6 @@ static std::vector<std::vector<std::string>> getDisplayRows(
 		data_table_state);
 }
 
-// --- Export methods ---
-
-// Helper: convert selectionDataTable (json array of row arrays) to vector<vector<string>>.
 static std::vector<std::vector<std::string>> selection_rows_from_json() {
 	const auto& view = *core::view;
 	std::vector<std::vector<std::string>> sel_rows;
@@ -551,9 +504,6 @@ static void copy_cell(const nlohmann::json& value) {
 	if (value.is_null())
 		return;
 
-	// JS: nw.Clipboard.get().set(String(value), 'text')
-	// String(value) for strings produces unquoted output — use get<std::string>() for strings,
-	// dump() for all other types (numbers, arrays, objects, booleans).
 	const std::string text = value.is_string() ? value.get<std::string>() : value.dump();
 	ImGui::SetClipboardText(text.c_str());
 }
@@ -591,7 +541,6 @@ static void export_csv() {
 				return;
 			}
 
-			// Selection now holds row content directly — no index lookup needed.
 			for (const auto& row_json : selection) {
 				if (!row_json.is_array()) continue;
 				std::vector<std::string> row;
@@ -671,7 +620,6 @@ static void export_sql() {
 				return;
 			}
 
-			// Selection now holds row content directly — no index lookup needed.
 			for (const auto& row_json : selection) {
 				if (!row_json.is_array()) continue;
 				std::vector<std::string> row;

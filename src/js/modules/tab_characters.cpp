@@ -73,10 +73,8 @@ License: MIT
 
 namespace tab_characters {
 
-// --- Namespace alias for CG geoset group constants ---
 namespace CG = db::caches::DBItemGeosets::CG;
 
-// --- File-local structures ---
 
 struct EquipmentModelEntry {
 struct RendererInfo {
@@ -105,7 +103,7 @@ int slot_id = 0;
 uint32_t item_id = 0;
 int modifier_id = -1;
 uint32_t file_data_id = 0;
-int attachment_id = -1;   // -1 for collection models
+int attachment_id = -1;
 bool is_collection = false;
 size_t model_idx = 0;
 std::vector<uint32_t> textures;
@@ -119,7 +117,6 @@ int group_index;
 int char_geoset;
 };
 
-// --- CG alias + SLOT_TO_GEOSET_GROUPS ---
 
 static const std::unordered_map<int, std::vector<SlotGeosetMapping>> SLOT_TO_GEOSET_GROUPS = {
 { 1,  {{ 0, CG::HELM }, { 1, CG::SKULL }} },
@@ -143,7 +140,6 @@ float tgt_x, tgt_y, tgt_z;
 float rot;
 };
 
-// race_id -> { gender_index -> preset }
 static const std::unordered_map<int, std::unordered_map<int, ThumbnailPreset>> THUMBNAIL_PRESETS = {
 { 1,  {{ 0, { 0.008f, 1.787f, 0.813f, 0.008f, 1.714f, 0.444f, -1.711f }}, { 1, {-0.014f, 1.664f, 0.736f, -0.014f, 1.610f, 0.464f, -1.711f }}} },
 { 2,  {{ 0, {-0.008f, 1.797f, 1.293f, -0.008f, 1.630f, 0.460f, -1.666f }}, { 1, { 0.036f, 1.869f, 0.550f, 0.036f, 1.842f, 0.418f, -1.836f }}} },
@@ -178,11 +174,9 @@ static const std::unordered_map<int, std::unordered_map<int, ThumbnailPreset>> T
 { 86, {{ 0, { 0.003f, 2.222f, 0.639f, 0.003f, 2.165f, 0.353f, -1.571f }}, { 1, { 0.006f, 2.078f, 0.637f, 0.006f, 2.027f, 0.381f, -1.571f }}} }
 };
 
-// --- File-local state ---
 
 static std::map<std::string, nlohmann::json> active_skins;
 
-// GL context is managed by model_viewer_gl::State; use viewer_context.gl_context to access it.
 
 static std::unique_ptr<M2RendererGL> active_renderer;
 static uint32_t active_model = 0;
@@ -205,11 +199,9 @@ static bool is_mounting = false;
 static std::optional<PendingModelLoadTask> pending_model_load_task;
 static std::vector<PendingEquipmentLoadEntry> pending_equipment_entries;
 
-// Animation state proxy for model_viewer_utils
 static model_viewer_utils::ViewStateProxy view_state;
 static std::unique_ptr<model_viewer_utils::AnimationMethods> anim_methods;
 
-// Change-detection variables (Vue watch equivalents)
 static std::vector<nlohmann::json> prev_race_selection;
 static std::vector<nlohmann::json> prev_model_selection;
 static std::vector<nlohmann::json> prev_option_selection;
@@ -225,27 +217,17 @@ static std::string prev_chr_import_region;
 static bool prev_chr_import_classic_realms = false;
 static bool pending_model_load = false;
 
-// Scrubber state for animation controls
 static bool _was_paused_before_scrub = false;
 
-// Thumbnail texture cache: character id → GLuint
-// Loaded on first render from the .png file saved alongside the character JSON.
 static std::unordered_map<std::string, GLuint> thumbnail_textures;
 
-// Model viewer GL state/context (replaces Vue <ModelViewerGL :context="chrModelViewerContext"/>).
 static model_viewer_gl::State viewer_state;
 static model_viewer_gl::Context viewer_context;
 
-// Adapter maps for model-viewer-gl equipment/collection renderer callbacks.
-// These hold non-owning pointers into equipment_model_renderers/collection_model_renderers.
-// JS equivalent: context.getEquipmentRenderers / context.getCollectionRenderers
 static std::unordered_map<int, model_viewer_gl::EquipmentSlotRenderers> equip_adapter_map;
 static std::unordered_map<int, model_viewer_gl::CollectionSlotRenderers> coll_adapter_map;
 static bool renderers_dirty = false;
 
-// Rebuild adapter maps from owned equipment/collection renderer storage.
-// Only rebuilds when renderers_dirty is true; both callbacks share the flag so the
-// rebuild happens at most once per frame even when both are called.
 static void rebuild_renderer_adapter_maps() {
 	if (!renderers_dirty)
 		return;
@@ -271,7 +253,6 @@ static void rebuild_renderer_adapter_maps() {
 	}
 }
 
-// ComboBox state for realm selector.
 static combobox::ComboBoxState realm_combobox_state;
 
 static const std::vector<std::string> base_regions = { "us", "eu", "kr", "tw" };
@@ -279,8 +260,8 @@ static const std::vector<std::string> base_regions = { "us", "eu", "kr", "tw" };
 struct TabardOptionDef {
 std::string key;
 std::string label;
-std::string type; // "value" or "color"
-std::string colors; // getter method name for color maps
+std::string type;
+std::string colors;
 };
 
 static const std::vector<TabardOptionDef> tabard_options = {
@@ -291,7 +272,6 @@ static const std::vector<TabardOptionDef> tabard_options = {
 { "emblem_color", "Emblem Color", "color", "getEmblemColors" }
 };
 
-// --- Forward declarations of file-local functions ---
 static void refresh_character_appearance();
 static bool check_cond_model_swap();
 static void update_geosets();
@@ -334,7 +314,6 @@ static const db::caches::DBCharacterCustomization::ChoiceEntry* get_selected_cho
 static std::string get_saved_characters_dir();
 static void update_realm_list();
 
-// --- Utility: race/gender ---
 
 struct RaceGender {
 uint32_t raceID;
@@ -373,7 +352,6 @@ return RaceGender{ race_id, static_cast<int>(sex) };
 return std::nullopt;
 }
 
-// --- reset_module_state ---
 
 static void reset_module_state() {
 pending_model_load = false;
@@ -388,10 +366,6 @@ coll_adapter_map.clear();
 renderers_dirty = false;
 current_char_component_texture_layout_id = 0;
 
-// JS: this._was_paused_before_scrub is an instance variable wiped when the
-// component re-mounts. The C++ port stores it as a file-scope static, so we
-// must explicitly reset it on tab activation to avoid leaking the previous
-// session's scrub state.
 _was_paused_before_scrub = false;
 
 if (active_renderer) {
@@ -400,7 +374,6 @@ active_renderer.reset();
 }
 active_model = 0;
 
-// release cached thumbnail GL textures
 for (auto& [id, tex] : thumbnail_textures) {
 	if (tex != 0)
 		glDeleteTextures(1, &tex);
@@ -470,7 +443,6 @@ character_appearance::apply_customization_geosets(geosets, view.chrCustActiveCho
 const auto& equipped_items = view.chrEquippedItems;
 const auto& item_skins = view.chrEquippedItemSkins;
 if (equipped_items.is_object() && !equipped_items.empty()) {
-// build int -> uint32_t map for DBItemGeosets
 std::unordered_map<int, uint32_t> equipped_map;
 for (auto& [slot_str, item_val] : equipped_items.items()) {
 int slot_id = std::stoi(slot_str);
@@ -565,25 +537,17 @@ view.chrCustBakedNPCTexture.get()
 );
 
 // step 4: apply equipment textures
-// Uses same pattern as tab_creatures: section_by_type from get_texture_sections(),
-// layers_by_section from get_model_texture_layer_map(), then for each equipped item:
-//   - getItemTextures() for texture components
-//   - get_model_material() for target material info
-//   - CharMaterialRenderer.setTextureTarget() to composite
-// Guild tabard: getBackgroundFDID/getEmblemFDID/getBorderFDID for custom composition.
 const auto& equipped_items = view.chrEquippedItems;
 if (equipped_items.is_object() && !equipped_items.empty()) {
 auto char_info = get_current_race_gender();
 const auto* sections = db::caches::DBCharacterCustomization::get_texture_sections(current_char_component_texture_layout_id);
 if (sections) {
-// Build section_by_type map
 std::unordered_map<int, const db::DataRecord*> section_by_type;
 for (const auto& section : *sections) {
 int section_type = static_cast<int>(std::get<int64_t>(section.at("SectionType")));
 section_by_type[section_type] = &section;
 }
 
-// Build texture layer maps
 const auto& texture_layer_map = db::caches::DBCharacterCustomization::get_model_texture_layer_map();
 const db::DataRecord* base_layer = nullptr;
 std::string layout_prefix = std::to_string(current_char_component_texture_layout_id) + "-";
@@ -621,7 +585,6 @@ layers_by_section[section_type] = base_layer;
 }
 }
 
-// Apply item textures for each equipped slot
 const auto& item_skins = view.chrEquippedItemSkins;
 for (auto& [slot_str, item_val] : equipped_items.items()) {
 int slot_id = std::stoi(slot_str);
@@ -694,7 +657,7 @@ int tier = db::caches::DBGuildTabard::getTabardTier(tabard_item_id);
 const auto& config = view.chrGuildTabardConfig;
 int TABARD_LAYER = wow::get_slot_layer(19);
 
-const int components[] = { 3, 4 }; // TORSO_UPPER, TORSO_LOWER
+const int components[] = { 3, 4 };
 
 struct TabardLayerInfo {
 uint32_t fdid;
@@ -808,7 +771,6 @@ renderers_dirty = true;
 }
 }
 
-// Rebuild adapter maps after any disposals
 rebuild_renderer_adapter_maps();
 
 if (!equipped_items.is_object())
@@ -821,12 +783,10 @@ for (auto& [slot_str, item_val] : equipped_items.items()) {
 int slot_id = std::stoi(slot_str);
 uint32_t item_id = item_val.get<uint32_t>();
 
-// get modifier_id for this slot
 int modifier_id = -1;
 if (item_skins.is_object() && item_skins.contains(slot_str))
 modifier_id = item_skins[slot_str].get<int>();
 
-// check if already loaded (item_id + modifier_id must match)
 auto existing_eq_it = equipment_model_renderers.find(slot_id);
 auto existing_col_it = collection_model_renderers.find(slot_id);
 bool eq_ok = (existing_eq_it != equipment_model_renderers.end() &&
@@ -839,7 +799,6 @@ bool col_ok = (existing_col_it == collection_model_renderers.end()) ||
 if (eq_ok && col_ok)
 continue;
 
-// skip if already pending
 bool already_pending = std::any_of(pending_equipment_entries.begin(), pending_equipment_entries.end(),
 [slot_id, item_id, modifier_id](const PendingEquipmentLoadEntry& e) {
 return e.slot_id == slot_id && e.item_id == item_id && e.modifier_id == modifier_id;
@@ -847,7 +806,6 @@ return e.slot_id == slot_id && e.item_id == item_id && e.modifier_id == modifier
 if (already_pending)
 continue;
 
-// dispose old renderers if item/skin changed
 if (existing_eq_it != equipment_model_renderers.end()) {
 for (auto& ri : existing_eq_it->second.renderers)
 ri.renderer->dispose();
@@ -865,7 +823,6 @@ auto char_info = get_current_race_gender();
 int race_id = char_info ? static_cast<int>(char_info->raceID) : -1;
 int gender_idx = char_info ? char_info->genderIndex : -1;
 
-// select only the matching shoulder side for shoulder-style items (SHOULDER_SLOT_L=3, SHOULDER_SLOT_R=30)
 db::caches::DBItemModels::ShoulderPos shoulder_pos = db::caches::DBItemModels::ShoulderPos::None;
 if (slot_id == 3) shoulder_pos = db::caches::DBItemModels::ShoulderPos::Left;
 else if (slot_id == 30) shoulder_pos = db::caches::DBItemModels::ShoulderPos::Right;
@@ -884,7 +841,6 @@ attachment_ids = { wow::ATTACHMENT_ID::HAND_LEFT };
 
 size_t attachment_model_count = (std::min)(display->models.size(), attachment_ids.size());
 
-// Queue async CASC reads for attachment models
 for (size_t i = 0; i < attachment_model_count; i++) {
 uint32_t file_data_id = display->models[i];
 PendingEquipmentLoadEntry entry;
@@ -902,7 +858,6 @@ return casc->getVirtualFileByID(file_data_id);
 pending_equipment_entries.push_back(std::move(entry));
 }
 
-// Queue async CASC reads for collection models
 for (size_t i = attachment_model_count; i < display->models.size(); i++) {
 uint32_t file_data_id = display->models[i];
 PendingEquipmentLoadEntry entry;
@@ -923,7 +878,6 @@ pending_equipment_entries.push_back(std::move(entry));
 }
 }
 
-// Called every frame; completes equipment model GL work for ready async CASC reads.
 static void pump_equipment_task() {
 if (pending_equipment_entries.empty())
 return;
@@ -939,13 +893,11 @@ continue;
 
 auto& entry = *it;
 
-// Discard if slot no longer has this item+modifier or GL context lost
 std::string slot_str_check = std::to_string(entry.slot_id);
 bool slot_current = view.chrEquippedItems.is_object() &&
 view.chrEquippedItems.contains(slot_str_check) &&
 view.chrEquippedItems[slot_str_check].get<uint32_t>() == entry.item_id;
 if (slot_current && entry.modifier_id >= 0) {
-// also check modifier matches
 int current_modifier = -1;
 if (view.chrEquippedItemSkins.is_object() && view.chrEquippedItemSkins.contains(slot_str_check))
 current_modifier = view.chrEquippedItemSkins[slot_str_check].get<int>();
@@ -961,7 +913,6 @@ try {
 BufferWrapper file = entry.file_future.get();
 
 if (!entry.is_collection) {
-// Attachment model
 auto renderer = std::make_unique<M2RendererGL>(file, *viewer_context.gl_context, false, false);
 renderer->load().get();
 
@@ -981,7 +932,6 @@ renderers_dirty = true;
 logging::write(std::format("Loaded attachment model {} for slot {} attachment {} (item {})",
 	entry.file_data_id, entry.slot_id, entry.attachment_id, entry.item_id));
 } else {
-// Collection model
 auto renderer = std::make_unique<M2RendererGL>(file, *viewer_context.gl_context, false, false);
 renderer->load().get();
 
@@ -1033,8 +983,6 @@ rebuild_renderer_adapter_maps();
 
 //region models
 
-// JS: async load_character_model(core, file_data_id)
-// Starts an async CASC read; pump_model_load_task() completes the GL work each frame.
 static void load_character_model(uint32_t file_data_id) {
 if (file_data_id == 0 || active_model == file_data_id)
 return;
@@ -1049,7 +997,6 @@ view.modelViewerSkinsSelection.clear();
 view.chrModelViewerAnims.clear();
 view.chrModelViewerAnimSelection = nlohmann::json();
 
-// Dispose existing GL resources synchronously (must be main thread).
 if (active_renderer) {
 active_renderer->dispose();
 active_renderer.reset();
@@ -1061,7 +1008,6 @@ dispose_skinned_models();
 dispose_equipment_models();
 dispose_collection_models();
 
-// Kick off async CASC file read; GL work runs in pump_model_load_task() each frame.
 auto* casc = view.casc;
 PendingModelLoadTask task;
 task.file_data_id = file_data_id;
@@ -1071,7 +1017,6 @@ return casc->getVirtualFileByID(file_data_id);
 pending_model_load_task = std::move(task);
 }
 
-// Called every frame from render(); completes the model load once the CASC read is done.
 static void pump_model_load_task() {
 if (!pending_model_load_task.has_value())
 return;
@@ -1103,7 +1048,6 @@ active_renderer->setGeosetKey("chrCustGeosets");
 active_renderer->load().get();
 fit_camera();
 
-// trigger on_model_rotate callback (JS: controls.on_model_rotate(controls.model_rotation_y))
 if (viewer_context.controls_character && viewer_context.controls_character->on_model_rotate)
 	viewer_context.controls_character->on_model_rotate(viewer_context.controls_character->model_rotation_y);
 
@@ -1112,7 +1056,6 @@ active_model = file_data_id;
 // populate animation list
 view.chrModelViewerAnims = model_viewer_utils::extract_animations(*active_renderer);
 
-// auto-select stand animation (id 0.0) matching JS: anim_list.find(anim => anim.id === '0.0')
 {
 	bool found_stand = false;
 	for (const auto& anim : view.chrModelViewerAnims) {
@@ -1151,7 +1094,6 @@ skinned_model_meshes.clear();
 }
 
 static void dispose_equipment_models() {
-// Discard pending async reads so the pump won't create renderers for disposed slots.
 pending_equipment_entries.clear();
 for (auto& [_, entry] : equipment_model_renderers) {
 for (auto& ri : entry.renderers)
@@ -1237,7 +1179,6 @@ selection_index = 0;
 
 if (!view.chrCustModels.empty()) {
 view.chrCustModelSelection = { view.chrCustModels[selection_index] };
-// Advance prev so the model watcher does not fire in the same frame; set flag to trigger load next frame.
 prev_model_selection = view.chrCustModelSelection;
 pending_model_load = true;
 }
@@ -1263,13 +1204,10 @@ const auto* available_options = db::caches::DBCharacterCustomization::get_option
 if (!available_options)
 return;
 
-// update texture layout for the new model
 current_char_component_texture_layout_id = db::caches::DBCharacterCustomization::get_texture_layout_id(selected_id).value_or(0);
 
-// clear materials for new model
 clear_materials();
 
-// update customization options list
 state.chrCustOptions.clear();
 state.chrCustOptionSelection.clear();
 state.chrCustActiveChoices.clear();
@@ -1277,7 +1215,6 @@ state.chrCustActiveChoices.clear();
 const auto& option_to_choices = db::caches::DBCharacterCustomization::get_option_to_choices_map();
 const auto& default_option_ids = db::caches::DBCharacterCustomization::get_default_options();
 
-// use imported choices if available and we're loading the target model, otherwise use defaults
 if (!state.chrImportChoices.empty() && static_cast<uint32_t>(state.chrImportTargetModelID) == selected_id) {
 state.chrCustActiveChoices = state.chrImportChoices;
 state.chrImportChoices.clear();
@@ -1306,7 +1243,6 @@ state.chrCustOptions.push_back(nlohmann::json{
 if (!state.chrCustOptions.empty())
 state.chrCustOptionSelection = { state.chrCustOptions[0] };
 
-// load the model
 uint32_t file_data_id = db::caches::DBCharacterCustomization::get_model_file_data_id(selected_id).value_or(0);
 default_model_file_data_id = file_data_id;
 load_character_model(file_data_id);
@@ -1352,7 +1288,6 @@ return;
 
 uint32_t option_id = state.chrCustOptionSelection[0].value("id", 0u);
 
-// find existing or add new
 bool found = false;
 for (auto& ac : state.chrCustActiveChoices) {
 if (ac.value("optionID", 0u) == option_id) {
@@ -1428,7 +1363,6 @@ std::string character_label = std::format("{} ({}-{})", character_name, effectiv
 
 std::string armory_url = view.config.value("armoryURL", "");
 
-// URL-encode helper (JS: encodeURIComponent)
 auto url_encode = [](const std::string& s) -> std::string {
 	std::string encoded;
 	encoded.reserve(s.size() * 3);
@@ -1441,14 +1375,11 @@ auto url_encode = [](const std::string& s) -> std::string {
 	return encoded;
 };
 
-// URL template uses %s placeholders for region, realm, character.
-// JS: encodeURIComponent(character_name.toLowerCase())
 std::string name_lower = character_name;
 std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(), ::tolower);
 std::string encoded_region = url_encode(effective_region);
 std::string encoded_realm = url_encode(realm_value);
 std::string encoded_name = url_encode(name_lower);
-// Simple %s substitution matching util.format behavior.
 std::string url = armory_url;
 auto replace_first = [](std::string& str, const std::string& from, const std::string& to) {
 	size_t pos = str.find(from);
@@ -1461,7 +1392,6 @@ replace_first(url, "%s", encoded_name);
 
 logging::write(std::format("Retrieving character data for {} from {}", character_label, url));
 
-// JS: const res = await generics.get(url); if (res.ok) { ... } else { status 404 vs other }
 generics::HttpResponse res = generics::get(url);
 if (res.ok) {
 	try {
@@ -1482,7 +1412,6 @@ view.chrModelLoading = false;
 }
 
 static void import_wmv_character() {
-// JS: creates file input, reads .chr file, calls wmv_parse(), then apply_import_data()
 auto& view = *core::view;
 
 std::string last_path = view.config.value("lastWMVImportPath", std::string(""));
@@ -1496,7 +1425,6 @@ if (result.empty())
 
 std::string file_path = result[0];
 
-// persist last import directory (JS: core.view.config.lastWMVImportPath = path.dirname(file_path))
 namespace fs = std::filesystem;
 view.config["lastWMVImportPath"] = fs::path(file_path).parent_path().string();
 
@@ -1508,13 +1436,11 @@ try {
 
 	wmv::ParseResult parsed = wmv::wmv_parse(content);
 
-	// Convert wmv::ParseResult → nlohmann::json for apply_import_data("wmv")
 	nlohmann::json wmv_data;
 	std::visit([&](auto&& result) {
 		using T = std::decay_t<decltype(result)>;
 		wmv_data["race"] = result.race;
 		wmv_data["gender"] = result.gender;
-		// equipment: convert unordered_map<int,int> to JSON object {"slot": item_id}
 		nlohmann::json equip = nlohmann::json::object();
 		for (const auto& [slot, item_id] : result.equipment)
 			equip[std::to_string(slot)] = item_id;
@@ -1528,7 +1454,6 @@ try {
 				{ "facial_hair", result.legacy_values.facial_hair }
 			};
 		} else {
-			// V2: customizations array of {option_id, choice_id}
 			nlohmann::json custs = nlohmann::json::array();
 			for (const auto& c : result.customizations)
 				custs.push_back({ {"option_id", c.option_id}, {"choice_id", c.choice_id} });
@@ -1546,7 +1471,6 @@ view.chrModelLoading = false;
 }
 
 static void import_wowhead_character() {
-// JS: validates URL contains 'dressing-room', calls wowhead_parse(), then apply_import_data()
 auto& view = *core::view;
 view.characterImportMode = "none";
 view.chrModelLoading = true;
@@ -1562,16 +1486,13 @@ if (wowhead_url.empty() || wowhead_url.find("dressing-room") == std::string::npo
 try {
 	wowhead::ParseResult parsed = wowhead::wowhead_parse(wowhead_url);
 
-	// Convert wowhead::ParseResult → nlohmann::json for apply_import_data("wowhead")
 	nlohmann::json wowhead_data;
 	wowhead_data["race"] = parsed.race;
 	wowhead_data["gender"] = parsed.gender;
-	// customizations: vector<int> of choice IDs
 	nlohmann::json custs = nlohmann::json::array();
 	for (int choice_id : parsed.customizations)
 		custs.push_back(choice_id);
 	wowhead_data["customizations"] = custs;
-	// equipment: convert unordered_map<int,int>
 	nlohmann::json equip = nlohmann::json::object();
 	for (const auto& [slot, item_id] : parsed.equipment)
 		equip[std::to_string(slot)] = item_id;
@@ -1825,7 +1746,6 @@ uint32_t chr_model_id = *chr_model_id_opt;
 view.chrImportChrModelID = chr_model_id;
 view.chrImportTargetModelID = chr_model_id;
 
-// find the race entry in chrCustRaces
 for (const auto& race : view.chrCustRaces) {
 if (race.value("id", 0u) == race_id) {
 view.chrCustRaceSelection = { race };
@@ -1836,7 +1756,6 @@ break;
 update_model_selection();
 }
 } catch (...) {
-// ensure we always clear importing flag
 }
 
 is_importing = false;
@@ -1863,7 +1782,6 @@ static std::string get_saved_characters_dir() {
 auto& view = *core::view;
 std::string custom_path = view.config.value("characterExportPath", "");
 if (!custom_path.empty()) {
-// trim
 auto start = custom_path.find_first_not_of(" \t");
 auto end = custom_path.find_last_not_of(" \t");
 if (start != std::string::npos)
@@ -1898,9 +1816,8 @@ std::string file_name = entry.path().filename().string();
 if (file_name.size() < 5 || file_name.substr(file_name.size() - 5) != ".json")
 continue;
 
-// match pattern: name-XXXXX.json
 std::string base = file_name.substr(0, file_name.size() - 5);
-if (base.size() < 7) // at least "x-12345"
+if (base.size() < 7)
 continue;
 
 size_t dash_pos = base.rfind('-');
@@ -1999,7 +1916,6 @@ logging::write(std::format("failed to delete character json: {}", ec.message()))
 
 fs::remove(thumb_path, ec); // thumbnail may not exist
 
-// remove from list
 auto& chars = view.chrSavedCharacters;
 chars.erase(std::remove_if(chars.begin(), chars.end(),
 [&id](const nlohmann::json& c) { return c.value("id", "") == id; }),
@@ -2076,7 +1992,6 @@ auto& view = *core::view;
 if (!active_renderer)
 return "";
 
-// Get race/gender preset for camera positioning.
 auto race_gender = get_current_race_gender();
 const ThumbnailPreset* preset = nullptr;
 if (race_gender) {
@@ -2117,10 +2032,6 @@ active_renderer->set_animation_paused(true);
 viewer_state.camera.update_view();
 viewer_state.camera.update_projection();
 
-// JS awaits two requestAnimationFrame ticks (lines 1452-1453) before capture
-// to allow the renderer to settle camera/animation pose changes. Render two
-// frames here for parity — the first commits the new camera/anim state and
-// the second renders with the stabilised pose.
 model_viewer_gl::render_one_frame(viewer_state, viewer_context);
 model_viewer_gl::render_one_frame(viewer_state, viewer_context);
 
@@ -2337,7 +2248,6 @@ out << save_data.dump(1, '\t');
 // save thumbnail if provided
 if (data.contains("thumb") && data["thumb"].is_string()) {
 std::string thumb_str = data["thumb"].get<std::string>();
-// strip data URI prefix if present: "data:image/png;base64,"
 size_t comma_pos = thumb_str.find(',');
 if (comma_pos != std::string::npos)
 thumb_str = thumb_str.substr(comma_pos + 1);
@@ -2465,7 +2375,6 @@ if (active_model != 0) {
 gl::GLContext* gl_ctx = viewer_context.gl_context;
 if (gl_ctx && viewer_state.fbo != 0) {
 std::string file_name = casc::listfile::getByID(active_model).value_or("");
-// Bind the model viewer FBO so export_preview can read its pixels
 glBindFramebuffer(GL_FRAMEBUFFER, viewer_state.fbo);
 model_viewer_utils::export_preview(format, *gl_ctx, file_name);
 glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -2502,7 +2411,6 @@ std::string export_path = casc::ExportHelper::getExportPath(mark_file_name);
 BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
 M2Exporter exporter(std::move(data), {}, file_data_id, core::view->casc);
 
-// add chr_materials URI textures (JS: for (const [type, mat] of chr_materials) exporter.addURITexture(type, mat.getURI()))
 for (auto& [chr_model_texture_target, chr_material] : chr_materials) {
 	if (chr_material) {
 		auto pixels = chr_material->getRawPixels();
@@ -2513,7 +2421,6 @@ for (auto& [chr_model_texture_target, chr_material] : chr_materials) {
 	}
 }
 
-// apply geoset mask (JS: exporter.setGeosetMask(core.view.chrCustGeosets))
 {
 	std::vector<M2ExportGeosetMask> geoset_mask;
 	for (const auto& g : view.chrCustGeosets) {
@@ -2524,7 +2431,6 @@ for (auto& [chr_model_texture_target, chr_material] : chr_materials) {
 	exporter.setGeosetMask(std::move(geoset_mask));
 }
 
-// apply posed geometry if configured (JS: if (apply_pose) { const baked = active_renderer.getBakedGeometry(); })
 bool apply_pose = view.config.value("chrExportApplyPose", false);
 if (apply_pose) {
 	auto baked = active_renderer->getBakedGeometry();
@@ -2532,7 +2438,6 @@ if (apply_pose) {
 		exporter.setPosedGeometry(std::move(baked->vertices), std::move(baked->normals));
 }
 
-// collect equipment models for export via CharacterExporter
 {
 	std::map<int, EquipmentSlotEntry> equip_slots;
 	for (auto& [slot_id, entry] : equipment_model_renderers) {
@@ -2595,14 +2500,12 @@ return;
 
 helper.mark(mark_file_name, true);
 } else {
-// GLTF/GLB
 std::string mark_file_name = casc::ExportHelper::replaceExtension(file_name, ".gltf");
 std::string export_path = casc::ExportHelper::getExportPath(mark_file_name);
 
 BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
 M2Exporter exporter(std::move(data), {}, file_data_id, core::view->casc);
 
-// add chr_materials URI textures
 for (auto& [chr_model_texture_target, chr_material] : chr_materials) {
 	if (chr_material) {
 		auto pixels = chr_material->getRawPixels();
@@ -2613,7 +2516,6 @@ for (auto& [chr_model_texture_target, chr_material] : chr_materials) {
 	}
 }
 
-// apply geoset mask
 {
 	std::vector<M2ExportGeosetMask> geoset_mask;
 	for (const auto& g : view.chrCustGeosets) {
@@ -2624,7 +2526,6 @@ for (auto& [chr_model_texture_target, chr_material] : chr_materials) {
 	exporter.setGeosetMask(std::move(geoset_mask));
 }
 
-// collect equipment models for GLTF export (with bone data; no pose - let armature handle it)
 {
 	std::map<int, EquipmentSlotEntry> equip_slots;
 	for (auto& [slot_id, entry] : equipment_model_renderers) {
@@ -2675,7 +2576,6 @@ for (auto& [chr_model_texture_target, chr_material] : chr_materials) {
 	}
 }
 
-// JS: format.toLowerCase()
 std::string format_lower = format;
 std::transform(format_lower.begin(), format_lower.end(), format_lower.begin(), ::tolower);
 exporter.exportAsGLTF(export_path, &helper, format_lower);
@@ -2706,7 +2606,6 @@ return;
 auto export_paths = core::openLastExportStream();
 core::setToast("progress", "exporting texture, hold on...", {}, -1, false);
 
-//       if (material.getCanvas() === active_canvas) { ... }
 uint32_t texture_type = 0;
 CharMaterialRenderer* chr_material = nullptr;
 for (auto& [type, material] : chr_materials) {
@@ -2733,7 +2632,6 @@ std::string texture_file_name = (fs::path(dir_name) / (base_name + "_texture_" +
 std::string export_path = casc::ExportHelper::getExportPath(texture_file_name);
 std::string out_dir = fs::path(export_path).parent_path().string();
 
-// Ensure the output directory exists.
 generics::createDirectory(out_dir);
 
 auto pixels = chr_material->getRawPixels();
@@ -2772,10 +2670,9 @@ uint8_t b = unsigned_val & 0xFF;
 return std::format("rgb({}, {}, {})", r, g, b);
 }
 
-// Convert color int to ImGui ImU32 (ABGR)
 static ImU32 int_to_imgui_color(uint32_t value) {
 if (value == 0)
-return IM_COL32(0, 0, 0, 0); // transparent
+return IM_COL32(0, 0, 0, 0);
 
 uint8_t r = (value >> 16) & 0xFF;
 uint8_t g = (value >> 8) & 0xFF;
@@ -2845,7 +2742,6 @@ state.chrImportSelectedRealm = nullptr;
 
 //endregion
 
-//region tabard helpers
 
 static bool is_guild_tabard_equipped() {
 auto& view = *core::view;
@@ -2930,15 +2826,12 @@ return IM_COL32(0, 0, 0, 0);
 return IM_COL32(it->second.r, it->second.g, it->second.b, 255);
 }
 
-// get_tabard_color_list_for_key(key)
 static const std::map<uint32_t, db::caches::DBGuildTabard::ColorRGB>* get_tabard_color_list_for_key(const std::string& key) {
 if (key == "background") return &db::caches::DBGuildTabard::getBackgroundColors();
 if (key == "border_color") return &db::caches::DBGuildTabard::getBorderColors();
 if (key == "emblem_color") return &db::caches::DBGuildTabard::getEmblemColors();
 return nullptr;
 }
-
-//endregion
 
 static const db::caches::DBItems::ItemInfo* get_equipped_item(int slot_id) {
 auto& view = *core::view;
@@ -2949,8 +2842,6 @@ uint32_t item_id = view.chrEquippedItems[slot_str].get<uint32_t>();
 return db::caches::DBItems::getItemById(item_id);
 }
 
-// JS: get_item_skin_count(slot_id) — number of available modifier IDs for the
-// item equipped in the given slot. Returns 0 if the slot is empty.
 static size_t get_item_skin_count(int slot_id) {
 auto& view = *core::view;
 std::string slot_str = std::to_string(slot_id);
@@ -2960,9 +2851,6 @@ uint32_t item_id = view.chrEquippedItems[slot_str].get<uint32_t>();
 return db::caches::DBItemModels::getItemModifiers(item_id).size();
 }
 
-// JS: get_item_skin_index(slot_id) — index of the currently selected skin
-// (modifier ID) within the modifiers list for the equipped item. Defaults to
-// 0 when no override is recorded.
 static size_t get_item_skin_index(int slot_id) {
 auto& view = *core::view;
 std::string slot_str = std::to_string(slot_id);
@@ -2979,9 +2867,6 @@ auto it = std::find(modifiers.begin(), modifiers.end(), current);
 return (it != modifiers.end()) ? static_cast<size_t>(std::distance(modifiers.begin(), it)) : 0;
 }
 
-// JS: navigate_to_items_for_slot(slot_id) — emitted by the ItemPickerModal's
-// "Search in Items Tab" button (open_items_tab_from_picker). Sets the pending
-// equip slot + filter and switches to the Items tab.
 static void navigate_to_items_for_slot(int slot_id) {
 auto slot_entry_it = std::find_if(wow::EQUIPMENT_SLOTS.begin(), wow::EQUIPMENT_SLOTS.end(),
 [slot_id](const auto& s) { return s.id == slot_id; });
@@ -2994,18 +2879,12 @@ tab_items::applySlotFilter(filter);
 tab_items::setActive();
 }
 
-// JS: open_item_picker(slot_id) — opens the ItemPickerModal pre-filtered for
-// the given slot. The modal's "Search in Items Tab" emit is wired to
-// navigate_to_items_for_slot.
 static void open_item_picker_for_slot(int slot_id, std::string_view filter_name, std::string_view slot_name) {
 item_picker_modal::open(slot_id,
 std::string(filter_name.empty() ? slot_name : filter_name),
 [slot_id]() { navigate_to_items_for_slot(slot_id); });
 }
 
-// JS: cycle_item_skin(slot_id, delta) — advance to the next/previous modifier
-// ID for the equipped item, wrapping at the ends. Triggers the watcher on
-// chrEquippedItemSkins which refreshes character appearance.
 static void cycle_item_skin(int slot_id, int delta) {
 auto& view = *core::view;
 std::string slot_str = std::to_string(slot_id);
@@ -3024,8 +2903,6 @@ if (it != modifiers.end())
 idx = static_cast<size_t>(std::distance(modifiers.begin(), it));
 }
 
-// JS: idx = (idx + delta + modifiers.length) % modifiers.length
-// Done in signed int space to handle negative delta values cleanly.
 const int n = static_cast<int>(modifiers.size());
 int signed_idx = static_cast<int>(idx);
 signed_idx = ((signed_idx + delta) % n + n) % n;
@@ -3035,9 +2912,7 @@ view.chrEquippedItemSkins = nlohmann::json::object();
 view.chrEquippedItemSkins[slot_str] = modifiers[idx];
 }
 
-//region render
 
-// Color picker state (color_picker_open_for removed — ImGui BeginPopup manages popup lifetime)
 static ImVec2 color_picker_position;
 static std::string character_import_mode = "none";
 
@@ -3052,75 +2927,56 @@ if (is_mounting)
 auto& view = *core::view;
 const auto& option_to_choices = db::caches::DBCharacterCustomization::get_option_to_choices_map();
 
-// Poll async model load each frame (JS: await-based async load)
 pump_model_load_task();
 
-// Poll async equipment model CASC reads (JS: await-based async update_equipment_models)
 pump_equipment_task();
 
-// --- Outside-click handler for import panels ---
-// JS: document.addEventListener('click', ...) that closes import panel when clicking outside.
-// Color picker popups are managed by ImGui::BeginPopup/EndPopup and need no manual tracking.
 if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-	// Close import panel if clicking outside any import-related widget
-	// (JS: if (!import_panel && !bnet_button && !wowhead_button && !wmv_button) characterImportMode = 'none')
 	if (character_import_mode != "none" && !ImGui::IsAnyItemHovered())
 		character_import_mode = "none";
 }
 
-// --- Change detection (Vue watch equivalents) ---
 
-// Deferred model load: update_chr_model_list sets pending_model_load after a race change so that
-// the model-selection watcher and race watcher don't both fire in the same render frame (JS Vue
-// watchers run across separate microtask ticks).
 if (pending_model_load && viewer_context.gl_context != nullptr && !view.chrModelLoading) {
 pending_model_load = false;
 update_model_selection();
 }
 
-// watch chrCustRaceSelection
 if (view.chrCustRaceSelection != prev_race_selection && !view.chrModelLoading) {
 prev_race_selection = view.chrCustRaceSelection;
-update_chr_model_list(); // advances prev_model_selection + sets pending_model_load
+update_chr_model_list();
 }
 
-// watch chrCustModelSelection (deep) — handles user-initiated changes only (race-change is deferred above)
 if (view.chrCustModelSelection != prev_model_selection && viewer_context.gl_context != nullptr && !view.chrModelLoading) {
 prev_model_selection = view.chrCustModelSelection;
 update_model_selection();
 }
 
-// watch chrCustOptionSelection (deep)
 if (view.chrCustOptionSelection != prev_option_selection) {
 prev_option_selection = view.chrCustOptionSelection;
 update_customization_type();
 }
 
-// watch chrCustChoiceSelection (deep)
 if (view.chrCustChoiceSelection != prev_choice_selection) {
 prev_choice_selection = view.chrCustChoiceSelection;
 update_customization_choice();
 }
 
-// watch chrCustActiveChoices (deep)
 if (view.chrCustActiveChoices != prev_active_choices) {
 prev_active_choices = view.chrCustActiveChoices;
 refresh_character_appearance();
 }
 
-// watch chrEquippedItems (deep)
 if (view.chrEquippedItems != prev_equipped_items) {
 prev_equipped_items = view.chrEquippedItems;
 refresh_character_appearance();
 }
 
-// watch chrEquippedItemSkins (deep)
 if (view.chrEquippedItemSkins != prev_equipped_item_skins) {
 prev_equipped_item_skins = view.chrEquippedItemSkins;
 refresh_character_appearance();
 }
 
-// watch chrGuildTabardConfig
 {
 nlohmann::json current_tabard = nlohmann::json{
 { "background", view.chrGuildTabardConfig.background },
@@ -3135,13 +2991,11 @@ refresh_character_appearance();
 }
 }
 
-// watch config.chrIncludeBaseClothing
 if (view.config.value("chrIncludeBaseClothing", true) != prev_include_base_clothing) {
 prev_include_base_clothing = view.config.value("chrIncludeBaseClothing", true);
 refresh_character_appearance();
 }
 
-// watch chrImportSelectedRegion / chrImportClassicRealms
 {
 std::string cur_region = view.chrImportSelectedRegion;
 bool cur_classic = view.chrImportClassicRealms;
@@ -3152,7 +3006,6 @@ update_realm_list();
 }
 }
 
-// watch chrModelViewerAnimSelection
 {
 std::optional<std::string> current_anim;
 if (view.chrModelViewerAnimSelection.is_string())
@@ -3171,13 +3024,10 @@ current_anim
 }
 }
 
-// --- Saved Characters Screen ---
-// JS: .saved-characters-grid — CSS grid of card tiles with thumbnail, overlaid action buttons, name below.
 if (view.chrSavedCharactersScreen) {
 ImGui::Text("My Characters");
 ImGui::Separator();
 
-// Grid layout: fit as many CARD_W-wide cards as possible in the available width.
 constexpr float CARD_W = 120.0f;
 constexpr float CARD_H = 140.0f;
 constexpr float CARD_PAD = 8.0f;
@@ -3195,7 +3045,6 @@ if (static_cast<int>(i) % num_cols != 0)
 ImGui::PushID(static_cast<int>(i));
 ImGui::BeginGroup();
 
-// Lazy-load thumbnail texture
 GLuint thumb_tex = 0;
 if (!id.empty()) {
 	auto it = thumbnail_textures.find(id);
@@ -3223,7 +3072,6 @@ if (!id.empty()) {
 	}
 }
 
-// Thumbnail — click loads the character (JS: @click="on_load_character(character)")
 bool card_clicked = false;
 ImVec2 thumb_cursor_min;
 if (thumb_tex != 0) {
@@ -3236,7 +3084,6 @@ if (thumb_tex != 0) {
 } else {
 	thumb_cursor_min = ImGui::GetCursorScreenPos();
 	card_clicked = ImGui::Button(("##noThumb_" + id).c_str(), ImVec2(CARD_W, CARD_H));
-	// Draw character initial as placeholder
 	ImVec2 c = ImVec2(thumb_cursor_min.x + CARD_W * 0.5f, thumb_cursor_min.y + CARD_H * 0.5f);
 	ImGui::GetWindowDrawList()->AddText(
 		ImVec2(c.x - 4.0f, c.y - 8.0f), IM_COL32(200, 200, 200, 200),
@@ -3246,14 +3093,11 @@ if (thumb_tex != 0) {
 if (card_clicked)
 	load_character(character);
 
-// Overlaid Export / Delete icon buttons in top-right of thumbnail
-// JS: .saved-character-actions with saved-char-export-btn / saved-char-delete-btn
 {
 	ImVec2 after_thumb = ImGui::GetCursorScreenPos();
 	const float btn_sz = 20.0f;
 	const float margin = 3.0f;
 
-	// Export button (top-right corner)
 	ImGui::SetCursorScreenPos(ImVec2(
 		thumb_cursor_min.x + CARD_W - btn_sz - margin,
 		thumb_cursor_min.y + margin
@@ -3266,7 +3110,6 @@ if (card_clicked)
 	ImGui::PopFont();
 	if (ImGui::IsItemHovered()) ImGui::SetTooltip("Export Character");
 
-	// Delete button (below export button)
 	ImGui::SetCursorScreenPos(ImVec2(
 		thumb_cursor_min.x + CARD_W - btn_sz - margin,
 		thumb_cursor_min.y + btn_sz + margin * 2.0f
@@ -3282,7 +3125,6 @@ if (card_clicked)
 	ImGui::SetCursorScreenPos(after_thumb);
 }
 
-// Character name below thumbnail (JS: .saved-character-name)
 ImGui::SetNextItemWidth(CARD_W);
 ImGui::TextUnformatted(name.c_str());
 
@@ -3293,7 +3135,7 @@ ImGui::PopID();
 ImGui::Separator();
 
 if (ImGui::Button("Save Character")) {
-view.chrPendingThumbnail = capture_character_thumbnail();  // returns std::string, auto-converts to json
+view.chrPendingThumbnail = capture_character_thumbnail();
 view.chrSaveCharacterName = "";
 view.chrSaveCharacterPrompt = true;
 }
@@ -3306,7 +3148,6 @@ ImGui::SameLine();
 if (ImGui::Button("Back"))
 view.chrSavedCharactersScreen = false;
 
-// Save prompt modal
 if (view.chrSaveCharacterPrompt) {
 ImGui::OpenPopup("Save Character##popup");
 if (ImGui::BeginPopupModal("Save Character##popup", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -3334,13 +3175,10 @@ ImGui::EndPopup();
 }
 }
 
-return; // don't render main UI when saved characters screen is active
+return;
 }
 
-// --- Main Character Viewer ---
 
-// Import buttons row  (.character-bnet-button / -wmv- / -wowhead- / -save- brand colors from app.css)
-// JS: icon-only ui-image-button elements with CSS background-image; C++ uses FA icon font glyphs.
 {
 if (ImGui::Button("My Characters")) {
 load_saved_characters();
@@ -3349,7 +3187,6 @@ view.chrSavedCharactersScreen = true;
 ImGui::SameLine();
 ImGui::PushFont(app::theme::getIconFont());
 if (ImGui::Button(ICON_FA_FLOPPY_DISK "##chr_quick_save")) {
-// JS: character-quick-save-button (icon-only)
 view.chrPendingThumbnail = capture_character_thumbnail();
 view.chrSaveCharacterName = "";
 view.chrSaveCharacterPrompt = true;
@@ -3390,12 +3227,10 @@ if (ImGui::Button("WMV"))
 import_wmv_character();
 }
 
-// Battle.net import panel
 if (character_import_mode == "BNET") {
 ImGui::Separator();
 ImGui::Text("Character Import");
 
-// Region buttons
 for (size_t i = 0; i < base_regions.size(); i++) {
 if (i > 0) ImGui::SameLine();
 bool selected = (view.chrImportSelectedRegion == base_regions[i]);
@@ -3411,12 +3246,10 @@ if (selected) ImGui::PopStyleColor();
 
 ImGui::Checkbox("Classic Realms", &view.chrImportClassicRealms);
 
-// Character name
 static char chr_name_buf[256] = {};
 ImGui::InputText("Character Name##bnet", chr_name_buf, sizeof(chr_name_buf));
 view.chrImportChrName = chr_name_buf;
 
-// Realm combo
 if (!view.chrImportRealms.empty()) {
 combobox::render("##RealmCombo", view.chrImportSelectedRealm, view.chrImportRealms,
 	"Select Realm", 10, realm_combobox_state,
@@ -3433,7 +3266,6 @@ import_character();
 ImGui::Separator();
 }
 
-// Wowhead import panel
 if (character_import_mode == "WHEAD") {
 ImGui::Separator();
 ImGui::Text("Wowhead Import");
@@ -3448,18 +3280,15 @@ import_wowhead_character();
 ImGui::Separator();
 }
 
-// --- Three-panel layout: left (customization) | center (preview) | right (equipment) ---
 
 float available_width = ImGui::GetContentRegionAvail().x;
 float left_width = 250.0f;
 float right_width = 250.0f;
 float center_width = available_width - left_width - right_width - 20.0f;
 
-// LEFT PANEL - Race/body/customization
 ImGui::BeginChild("##chr_left_panel", ImVec2(left_width, -1), ImGuiChildFlags_Borders);
 {
 if (!view.chrShowGeosetControl) {
-// Race selector
 {
 std::string race_label = "None";
 if (!view.chrCustRaceSelection.empty())
@@ -3497,7 +3326,6 @@ ImGui::EndCombo();
 }
 }
 
-// Body type selector
 {
 std::string body_label = "None";
 if (!view.chrCustModelSelection.empty())
@@ -3518,7 +3346,6 @@ ImGui::EndCombo();
 }
 }
 
-// Customization options
 for (const auto& option : view.chrCustOptions) {
 uint32_t option_id = option.value("id", 0u);
 std::string option_label = option.value("label", "");
@@ -3527,7 +3354,6 @@ bool is_color = option.value("is_color_swatch", false);
 ImGui::PushID(static_cast<int>(option_id));
 
 if (!is_color) {
-// Regular dropdown
 auto choices_it = option_to_choices.find(option_id);
 std::string current_choice_label = "None";
 
@@ -3562,13 +3388,11 @@ ImGui::SetItemDefaultFocus();
 ImGui::EndCombo();
 }
 } else {
-// Color swatch picker
 const auto* sel_choice = get_selected_choice(option_id);
 
 ImGui::Text("%s:", option_label.c_str());
 ImGui::SameLine();
 
-// Draw the selected swatch
 if (sel_choice) {
 ImU32 col0 = int_to_imgui_color(sel_choice->swatch_color_0);
 ImU32 col1 = int_to_imgui_color(sel_choice->swatch_color_1);
@@ -3577,7 +3401,6 @@ ImVec2 swatch_size(20, 20);
 ImVec2 cursor = ImGui::GetCursorScreenPos();
 
 if (sel_choice->swatch_color_0 == 0 && sel_choice->swatch_color_1 == 0) {
-// "none" swatch
 ImGui::GetWindowDrawList()->AddRectFilled(cursor,
 ImVec2(cursor.x + swatch_size.x, cursor.y + swatch_size.y),
 IM_COL32(60, 60, 60, 255));
@@ -3585,31 +3408,23 @@ ImGui::GetWindowDrawList()->AddLine(cursor,
 ImVec2(cursor.x + swatch_size.x, cursor.y + swatch_size.y),
 IM_COL32(200, 200, 200, 255));
 } else if (sel_choice->swatch_color_1 != 0) {
-// dual swatch
 ImGui::GetWindowDrawList()->AddRectFilled(cursor,
 ImVec2(cursor.x + swatch_size.x / 2, cursor.y + swatch_size.y), col0);
 ImGui::GetWindowDrawList()->AddRectFilled(
 ImVec2(cursor.x + swatch_size.x / 2, cursor.y),
 ImVec2(cursor.x + swatch_size.x, cursor.y + swatch_size.y), col1);
 } else {
-// single swatch
 ImGui::GetWindowDrawList()->AddRectFilled(cursor,
 ImVec2(cursor.x + swatch_size.x, cursor.y + swatch_size.y), col0);
 }
 
 ImGui::InvisibleButton("##swatch", swatch_size);
 if (ImGui::IsItemClicked()) {
-// JS: event.clientX/Y stored for popup position
 color_picker_position = ImGui::GetMousePos();
 ImGui::OpenPopup(("##chr_color_popup_" + std::to_string(option_id)).c_str());
 }
 }
 
-// Color picker popup — persistent popup positioned at click (JS: .color-picker-popup fixed div).
-// JS uses one popup div keyed by `colorPickerOpenFor === option.id` so each option owns
-// its own popup; in ImGui the popup ID is global, so we suffix `option_id` to keep the
-// popup body's reference to `option_id` valid (otherwise the popup would render with
-// the last loop iteration's option_id).
 ImGui::SetNextWindowPos(color_picker_position, ImGuiCond_Appearing);
 if (ImGui::BeginPopup(("##chr_color_popup_" + std::to_string(option_id)).c_str())) {
 auto choices_it = option_to_choices.find(option_id);
@@ -3640,7 +3455,6 @@ ImGui::GetWindowDrawList()->AddRectFilled(cursor,
 ImVec2(cursor.x + swatch_sz.x, cursor.y + swatch_sz.y), c0);
 }
 
-// Highlight selected
 uint32_t active_cid = 0;
 for (const auto& ac : view.chrCustActiveChoices) {
 if (ac.value("optionID", 0u) == option_id) {
@@ -3670,7 +3484,6 @@ ImGui::EndPopup();
 ImGui::PopID();
 }
 
-// Underwear toggle
 {
 bool show_underwear = view.config.value("chrIncludeBaseClothing", true);
 std::string underwear_label = show_underwear ? "Visible" : "Hidden";
@@ -3683,7 +3496,6 @@ ImGui::EndCombo();
 }
 }
 } else {
-// Geoset control mode
 ImGui::Text("Geoset Control");
 ImGui::Separator();
 
@@ -3697,7 +3509,6 @@ if (ImGui::Checkbox(label.c_str(), &checked))
 geoset["checked"] = checked;
 }
 
-//     <a @click="set_all_geosets(true)">Enable All</a> / <a @click="set_all_geosets(false)">Disable All</a>
 if (ImGui::Button("Enable All")) {
 for (auto& g : view.chrCustGeosets)
 if (g.value("id", 0) != 0) g["checked"] = true;
@@ -3727,27 +3538,21 @@ ImGui::EndChild();
 
 ImGui::SameLine();
 
-// CENTER PANEL - 3D preview and export
 ImGui::BeginChild("##chr_center_panel", ImVec2(center_width, -1), ImGuiChildFlags_Borders);
 {
-// Loading spinner — JS: <div class="chr-model-loading-spinner"> animated via CSS
 if (view.chrModelLoading) {
 static const char* spinner_frames = "|/-\\";
 int spinner_idx = static_cast<int>(ImGui::GetTime() * 8.0) % 4;
 ImGui::Text("Loading model... %c", spinner_frames[spinner_idx]);
 }
 
-// 3D model viewer
 if (view.chrModelViewerContext.is_object()) {
 model_viewer_gl::renderWidget("##chr_model_viewer", viewer_state, viewer_context);
 
-// Animation controls overlay — JS: .preview-dropdown-overlay absolutely positioned over preview
-// Rendered after renderWidget() so they appear on top of the 3D viewport.
 if (!view.chrModelViewerAnims.empty()) {
 	ImVec2 viewer_min = ImGui::GetItemRectMin();
 	ImVec2 after_cursor = ImGui::GetCursorScreenPos();
 
-	// Overlay at top-left of the 3D viewport
 	ImGui::SetCursorScreenPos(ImVec2(viewer_min.x + 4.0f, viewer_min.y + 4.0f));
 
 	std::string current_anim_label = "No Animation";
@@ -3819,12 +3624,10 @@ if (!view.chrModelViewerAnims.empty()) {
 		}
 	}
 
-	// Restore cursor so subsequent content (separator, export tabs) flows correctly.
 	ImGui::SetCursorScreenPos(after_cursor);
 }
 }
 
-// Remove baked texture button
 if (view.chrCustBakedNPCTexture) {
 if (ImGui::Button("Remove Baked Texture")) {
 view.chrCustBakedNPCTexture.reset();
@@ -3834,8 +3637,7 @@ refresh_character_appearance();
 
 ImGui::Separator();
 
-// Export tabs — styled to match CSS .tab-control
-static int export_tab = 0; // 0=Export, 1=Textures, 2=Settings
+static int export_tab = 0;
 
 {
 const char* tab_labels[] = { "Export", "Textures", "Settings" };
@@ -3858,7 +3660,6 @@ for (int i = 0; i < 3; i++) {
 }
 
 if (export_tab == 0) {
-// Export panel
 std::string format = view.config.value("exportCharacterFormat", "GLTF");
 
 if (format == "GLTF" || format == "GLB") {
@@ -3873,7 +3674,6 @@ if (ImGui::Checkbox("Apply pose##chr", &apply_pose))
 view.config["chrExportApplyPose"] = apply_pose;
 }
 
-// Format selector + export button
 const char* formats[] = { "OBJ", "STL", "GLTF", "GLB", "PNG", "CLIPBOARD" };
 int current_format_idx = 0;
 for (int i = 0; i < 6; i++) {
@@ -3888,8 +3688,6 @@ if (ImGui::Button("Export##chr_do") && !view.chrModelLoading)
 export_char_model();
 
 } else if (export_tab == 1) {
-// Texture preview panel
-// JS: <CharTextureOverlay /> renders canvases; in C++ we render the active overlay texture via ImGui::Image
 uint32_t overlay_tex = char_texture_overlay::getActiveLayer();
 if (overlay_tex != 0) {
 	ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -3918,7 +3716,6 @@ core::events.emit("click-chr-next-overlay");
 }
 
 } else if (export_tab == 2) {
-// Settings panel
 bool render_shadow = view.config.value("chrRenderShadow", false);
 if (ImGui::Checkbox("Render shadow##chr", &render_shadow))
 view.config["chrRenderShadow"] = render_shadow;
@@ -3945,10 +3742,8 @@ ImGui::EndChild();
 
 ImGui::SameLine();
 
-// RIGHT PANEL - Equipment and tabard
 ImGui::BeginChild("##chr_right_panel", ImVec2(right_width, -1), ImGuiChildFlags_Borders);
 {
-// Guild Tabard panel
 if (is_guild_tabard_equipped()) {
 ImGui::Text("Guild Tabard");
 ImGui::Separator();
@@ -3957,7 +3752,6 @@ for (const auto& opt : tabard_options) {
 ImGui::PushID(opt.key.c_str());
 
 if (opt.type == "value") {
-// Numeric value with arrows
 auto& cfg = view.chrGuildTabardConfig;
 int value = 0;
 if (opt.key == "background") value = cfg.background;
@@ -3977,7 +3771,6 @@ if (ImGui::ArrowButton("##right", ImGuiDir_Right))
 adjust_tabard_config(opt.key, 1);
 
 } else {
-// Color swatch
 ImGui::Text("%s:", opt.label.c_str());
 ImGui::SameLine();
 
@@ -4040,7 +3833,6 @@ ImGui::PopID();
 ImGui::Separator();
 }
 
-// Equipment list
 ImGui::Text("Equipment");
 ImGui::Separator();
 
@@ -4053,16 +3845,15 @@ std::string slot_label = slot_name_opt.has_value() ? std::string(slot_name_opt.v
 const auto* item = get_equipped_item(slot.id);
 
 if (item) {
-// apply quality color (JS: item-quality-X CSS class)
 static const ImVec4 quality_colors[] = {
-	ImVec4(0.62f, 0.62f, 0.62f, 1.0f), // 0 = Poor (grey)
-	ImVec4(1.00f, 1.00f, 1.00f, 1.0f), // 1 = Common (white)
-	ImVec4(0.12f, 1.00f, 0.00f, 1.0f), // 2 = Uncommon (green)
-	ImVec4(0.00f, 0.44f, 0.87f, 1.0f), // 3 = Rare (blue)
-	ImVec4(0.64f, 0.21f, 0.93f, 1.0f), // 4 = Epic (purple)
-	ImVec4(1.00f, 0.50f, 0.00f, 1.0f), // 5 = Legendary (orange)
-	ImVec4(0.90f, 0.80f, 0.50f, 1.0f), // 6 = Artifact (gold)
-	ImVec4(0.00f, 0.80f, 1.00f, 1.0f), // 7 = Heirloom (cyan)
+	ImVec4(0.62f, 0.62f, 0.62f, 1.0f),
+	ImVec4(1.00f, 1.00f, 1.00f, 1.0f),
+	ImVec4(0.12f, 1.00f, 0.00f, 1.0f),
+	ImVec4(0.00f, 0.44f, 0.87f, 1.0f),
+	ImVec4(0.64f, 0.21f, 0.93f, 1.0f),
+	ImVec4(1.00f, 0.50f, 0.00f, 1.0f),
+	ImVec4(0.90f, 0.80f, 0.50f, 1.0f),
+	ImVec4(0.00f, 0.80f, 1.00f, 1.0f),
 };
 int quality = static_cast<int>(item->quality);
 bool has_quality_color = (quality >= 0 && quality < static_cast<int>(std::size(quality_colors)));
@@ -4078,8 +3869,6 @@ if (has_quality_color)
 ImGui::TextDisabled("%s: Empty", slot_label.c_str());
 }
 
-// Capture click handlers on the slot label item before any further widgets
-// are emitted on the same line — IsItemClicked queries the most recent item.
 const bool slot_clicked_right = ImGui::IsItemClicked(ImGuiMouseButton_Right);
 const bool slot_clicked_left  = ImGui::IsItemClicked(ImGuiMouseButton_Left);
 
@@ -4087,14 +3876,9 @@ if (slot_clicked_right && item) {
 ImGui::OpenPopup("##equip_ctx");
 }
 if (slot_clicked_left && !item) {
-// JS: open_slot_context — when the slot is empty, opens the ItemPickerModal.
 open_item_picker_for_slot(slot.id, slot.filter_name, slot.name);
 }
 
-// JS template (lines 2286-2290): inline `<span class="slot-skin-controls">` rendered
-// next to the equipped item label when the item has more than one available skin.
-// Uses small `<` / `idx/total` / `>` controls to cycle through modifier IDs without
-// opening the context menu.
 const size_t skin_count = item ? get_item_skin_count(slot.id) : 0;
 if (skin_count > 1) {
 ImGui::SameLine();
@@ -4109,7 +3893,6 @@ if (ImGui::SmallButton(">##skin_next"))
 
 if (ImGui::BeginPopup("##equip_ctx")) {
 if (ImGui::MenuItem("Replace Item")) {
-// JS: replace_slot_item(slot_id) → open_item_picker
 open_item_picker_for_slot(slot.id, slot.filter_name, slot.name);
 }
 if (ImGui::MenuItem("Remove Item")) {
@@ -4118,9 +3901,6 @@ view.chrEquippedItems.erase(slot_str);
 if (view.chrEquippedItemSkins.is_object())
 view.chrEquippedItemSkins.erase(slot_str);
 }
-// JS: <span v-if="get_item_skin_count(context.node) > 1" @click="cycle_item_skin(context.node, 1)">
-//        Next Skin ({{ get_item_skin_index(context.node) + 1 }}/{{ get_item_skin_count(context.node) }})
-//     </span>
 if (item) {
 const size_t ctx_skin_count = get_item_skin_count(slot.id);
 if (ctx_skin_count > 1) {
@@ -4150,8 +3930,6 @@ view.chrEquippedItemSkins = nlohmann::json::object();
 }
 
 #ifndef NDEBUG
-// Debug hooks: JS equivalent of window.loadImportString and window.reloadCharShaders
-// exposed on window in mounted() for developer use in the browser console.
 ImGui::Separator();
 if (ImGui::CollapsingHeader("Debug")) {
 static char debug_import_buf[4096] = {};
@@ -4174,17 +3952,8 @@ if (ImGui::Button("Reload Char Shaders")) {
 
 ImGui::EndChild();
 
-// JS: <component :is="$components.ItemPickerModal" v-if="$core.view.chrItemPickerSlot !== null" .../>
-// Render the picker modal as a child of this tab so it appears overlaid on the
-// character viewer when a slot is being filled. The modal opens itself via
-// item_picker_modal::open() (called from the equipment slot click/Replace Item
-// menu) and closes itself on selection or Escape.
 item_picker_modal::render();
 }
-
-//endregion
-
-//region mounted
 
 /**
  * Initialize the characters tab (load DB caches, realmlist, set up watches).
@@ -4194,16 +3963,11 @@ void mounted() {
 if (is_mounting) return;
 is_mounting = true;
 
-// GL teardown (glDeleteTextures etc.) must run on the main thread.
 reset_module_state();
 
 const bool region_empty = core::view->chrImportSelectedRegion.empty();
 
 std::thread([region_empty]() {
-	// JS: this.$core.showLoadingScreen(10) — 10 sequential progress steps
-	// (1) realmlist, (2) character customization, (3) items, (4) item char textures,
-	// (5) item geosets, (6) item models, (7) DBItemList model file data,
-	// (8) DBItemList item data, (9) guild tabard, (10) character shaders.
 	core::showLoadingScreen(10);
 
 	core::progressLoadingScreen("Retrieving realmlist...");
@@ -4224,12 +3988,6 @@ std::thread([region_empty]() {
 	core::progressLoadingScreen("Loading item models...");
 	db::caches::DBItemModels::ensureInitialized();
 
-	// JS: await DBItemList.initialize((msg) => this.$core.progressLoadingScreen(msg))
-	// DBItemList.initialize() emits two internal progress messages — "Loading model
-	// file data..." and "Loading item data..." — before populating the picker cache.
-	// In the C++ port the equivalent picker data is loaded by tab_items::initialize_items()
-	// which runs lazily when the Items tab is first mounted; we still emit the two
-	// progress messages here so the loading bar advances at the same cadence as JS.
 	core::progressLoadingScreen("Loading model file data...");
 	core::progressLoadingScreen("Loading item data...");
 
@@ -4247,7 +4005,6 @@ std::thread([region_empty]() {
 		else
 			update_realm_list();
 
-		// set up model viewer context
 		state.chrModelViewerContext = nlohmann::json{
 			{ "gl_context", nullptr },
 			{ "controls", nullptr },
@@ -4255,7 +4012,6 @@ std::thread([region_empty]() {
 			{ "fitCamera", nullptr }
 		};
 
-		// Wire model viewer context callbacks (character mode).
 		viewer_context.useCharacterControls = true;
 		viewer_context.getActiveRenderer = []() -> M2RendererGL* {
 			return active_renderer.get();
@@ -4269,7 +4025,6 @@ std::thread([region_empty]() {
 			return coll_adapter_map.empty() ? nullptr : &coll_adapter_map;
 		};
 
-		// Set up animation ViewStateProxy
 		view_state.anims = &state.chrModelViewerAnims;
 		view_state.animSelection = &state.chrModelViewerAnimSelection;
 		view_state.animPaused = &state.chrModelViewerAnimPaused;
@@ -4282,7 +4037,6 @@ std::thread([region_empty]() {
 			[]() -> model_viewer_utils::ViewStateProxy* { return &view_state; }
 		);
 
-		// Initialize change detection state
 		prev_race_selection = state.chrCustRaceSelection;
 		prev_model_selection = state.chrCustModelSelection;
 		prev_option_selection = state.chrCustOptionSelection;
@@ -4306,8 +4060,6 @@ std::thread([region_empty]() {
 	core::hideLoadingScreen();
 }).detach();
 }
-
-//endregion
 
 //region registerTab
 
