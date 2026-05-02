@@ -15,7 +15,6 @@
 #include "../casc/cdn-resolver.h"
 #include "../mpq/mpq-install.h"
 #include "../workers/cache-collector.h"
-#include "../external-links.h"
 #include "../../app.h"
 
 #include <atomic>
@@ -309,8 +308,7 @@ void load_install(int index) {
 					logging::write(std::format("Failed to load CASC: {}", errMsg));
 					core::setToast("error", "Unable to initialize CASC. Try repairing your game installation, or seek support.",
 						{
-							{"View Log", []() { logging::openRuntimeLog(); }},
-							{"Visit Support Discord", []() { ExternalLinks::open("::DISCORD"); }}
+							{"View Log", []() { logging::openRuntimeLog(); }}
 						}, -1);
 					modules::set_active("source_select");
 				});
@@ -334,8 +332,7 @@ void load_install(int index) {
 					logging::write(std::format("Failed to load CASC: {}", errMsg));
 					core::setToast("error", "Unable to initialize CASC. Try repairing your game installation, or seek support.",
 						{
-							{"View Log", []() { logging::openRuntimeLog(); }},
-							{"Visit Support Discord", []() { ExternalLinks::open("::DISCORD"); }}
+							{"View Log", []() { logging::openRuntimeLog(); }}
 						}, -1);
 					modules::set_active("source_select");
 				});

@@ -58,6 +58,11 @@ These files, features, and options have been deliberately removed from the C++ p
 - **Reason**: JS reads `nw.App.manifest.flavour`/`guid` at runtime. C++ uses compile-time constants.
 - **Impact**: Stale GUID/flavour if manifest changes without rebuild.
 
+### [external-links.cpp / app.cpp / screen_source_select.cpp] Static external links removed
+- **JS Source**: `src/js/external-links.js` lines 12–18 (STATIC_LINKS), `src/app.js` lines 457–458 (getExternalLink), footer link rendering, crash screen buttons; `src/js/modules/screen_source_select.js` (Discord toast actions)
+- **Reason**: Deliberately excluded — Website, Discord, Patreon, GitHub, and Issue Tracker links point to the upstream JS project and are not relevant to the C++ port.
+- **Impact**: Footer shows only the copyright notice (no clickable links). Crash screen has no "Report Issue" or "Get Help on Discord" buttons. CASC load error toasts have no "Visit Support Discord" action. The `STATIC_LINKS` map, `resolve()`, `renderLink()`, and `getExternalLink()` are removed. Only the Wowhead item link (`wowHead_viewItem`) is retained.
+
 ### [updater.cpp / STLWriter.cpp / GLTFWriter.cpp] "wow.export.cpp" instead of "wow.export"
 - **JS Source**: Various — updater.js, STLWriter.js, GLTFWriter.js
 - **Reason**: Per project guidelines, user-facing text says "wow.export.cpp".

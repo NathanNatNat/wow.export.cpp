@@ -72,7 +72,6 @@
 #include "js/modules/tab_textures.h"
 #include "js/modules/tab_items.h"
 #include "js/modules/tab_blender.h"
-#include "js/external-links.h"
 
 #ifdef BUILD_RELEASE
 static constexpr bool IS_RELEASE_BUILD = true;
@@ -330,14 +329,6 @@ static void renderCrashScreen() {
 	ImGui::SameLine(0.0f, 5.0f);
 	ImGui::TextWrapped("%s", crashErrorText.c_str());
 	ImGui::Dummy(ImVec2(0.0f, 20.0f));
-
-	if (ImGui::Button("Report Issue"))
-		ExternalLinks::open("::ISSUE_TRACKER");
-	ImGui::SameLine();
-
-	if (ImGui::Button("Get Help on Discord"))
-		ExternalLinks::open("::DISCORD");
-	ImGui::SameLine();
 
 	if (ImGui::Button("Copy Log to Clipboard"))
 		ImGui::SetClipboardText(crashLogDump.c_str());
@@ -630,60 +621,11 @@ static void renderAppShell() {
 			ImGui::GetColorU32(ImGuiCol_Separator), 1.0f);
 
 		{
-			struct FooterLink {
-				const char* label;
-				const char* externalId;
-			};
-			static constexpr FooterLink links[] = {
-				{ "Website", "::WEBSITE" },
-				{ "Discord", "::DISCORD" },
-				{ "Patreon", "::PATREON" },
-				{ "GitHub",  "::GITHUB" }
-			};
-
-			ImFont* bold_font = app::theme::getBoldFont();
-			ImGui::PushFont(bold_font);
-			float total_w = 0;
-			for (int i = 0; i < 4; i++) {
-				total_w += ImGui::CalcTextSize(links[i].label).x;
-				if (i < 3)
-					total_w += ImGui::CalcTextSize(" - ").x;
-			}
-
-			float line_h = ImGui::CalcTextSize("A").y;
-			float links_y = (FOOTER_HEIGHT - line_h * 2 - 4.0f) * 0.5f;
-			float start_x = (vp_size.x - total_w) * 0.5f;
-			ImGui::SetCursorPos(ImVec2(start_x, links_y));
-
-			ImDrawList* footer_draw = ImGui::GetWindowDrawList();
-			for (int i = 0; i < 4; i++) {
-				if (i > 0) {
-					ImGui::SameLine(0, 0);
-					ImGui::TextDisabled(" - ");
-					ImGui::SameLine(0, 0);
-				}
-				ImVec2 lbl_size = ImGui::CalcTextSize(links[i].label);
-				ImGui::InvisibleButton(links[i].externalId, lbl_size);
-				bool link_hovered = ImGui::IsItemHovered();
-				bool link_clicked = ImGui::IsItemClicked();
-				ImVec2 item_min = ImGui::GetItemRectMin();
-				ImVec2 item_max = ImGui::GetItemRectMax();
-				ImU32 link_color = link_hovered ? IM_COL32_WHITE : ImGui::GetColorU32(ImGuiCol_Text);
-				footer_draw->AddText(bold_font, ImGui::GetFontSize(), item_min, link_color, links[i].label);
-				if (link_hovered) {
-					footer_draw->AddLine(ImVec2(item_min.x, item_max.y), item_max, link_color, 1.0f);
-					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-				}
-				if (link_clicked)
-					ExternalLinks::open(links[i].externalId);
-				ImGui::SameLine(0, 0);
-			}
-			ImGui::NewLine();
-			ImGui::PopFont();
-
 			const char* copyright_text = "World of Warcraft and related trademarks are registered trademarks of Blizzard Entertainment whom this application is not affiliated with.";
 			ImVec2 copy_size = ImGui::CalcTextSize(copyright_text);
-			ImGui::SetCursorPos(ImVec2((vp_size.x - copy_size.x) * 0.5f, links_y + line_h + 4.0f));
+			float line_h = ImGui::CalcTextSize("A").y;
+			float copy_y = (FOOTER_HEIGHT - line_h) * 0.5f;
+			ImGui::SetCursorPos(ImVec2((vp_size.x - copy_size.x) * 0.5f, copy_y));
 			ImGui::TextDisabled("%s", copyright_text);
 		}
 
@@ -1413,12 +1355,6 @@ static std::string getExportPath(const std::string& file) {
 	return casc::ExportHelper::getExportPath(file);
 }
 
-/**
- * Returns a reference to the external links module.
- */
-static const std::unordered_map<std::string, std::string>& getExternalLink() {
-	return ExternalLinks::STATIC_LINKS;
-}
 
 
 /**
