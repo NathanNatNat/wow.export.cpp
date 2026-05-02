@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 30/188 audited (16%)**
+**Progress: 45/188 audited (24%)**
 
 - [x] 1. `src/app.cpp` — ✅ audited
 - [x] 2. `src/js/blob.cpp` — ✅ audited
@@ -34,21 +34,21 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 28. `src/js/3D/Shaders.cpp` — ✅ audited
 - [x] 29. `src/js/3D/Skin.cpp` — ✅ audited
 - [x] 30. `src/js/3D/Texture.cpp` — ✅ audited
-- [ ] 31. `src/js/3D/WMOShaderMapper.cpp`
-- [ ] 32. `src/js/3D/camera/CameraControlsGL.cpp`
-- [ ] 33. `src/js/3D/camera/CharacterCameraControlsGL.cpp`
-- [ ] 34. `src/js/3D/exporters/ADTExporter.cpp`
-- [ ] 35. `src/js/3D/exporters/CharacterExporter.cpp`
-- [ ] 36. `src/js/3D/exporters/M2Exporter.cpp`
-- [ ] 37. `src/js/3D/exporters/M2LegacyExporter.cpp`
-- [ ] 38. `src/js/3D/exporters/M3Exporter.cpp`
-- [ ] 39. `src/js/3D/exporters/WMOExporter.cpp`
-- [ ] 40. `src/js/3D/exporters/WMOLegacyExporter.cpp`
-- [ ] 41. `src/js/3D/gl/GLContext.cpp`
-- [ ] 42. `src/js/3D/gl/GLTexture.cpp`
-- [ ] 43. `src/js/3D/gl/ShaderProgram.cpp`
-- [ ] 44. `src/js/3D/gl/UniformBuffer.cpp`
-- [ ] 45. `src/js/3D/gl/VertexArray.cpp`
+- [x] 31. `src/js/3D/WMOShaderMapper.cpp` — ✅ audited
+- [x] 32. `src/js/3D/camera/CameraControlsGL.cpp` — ✅ audited
+- [x] 33. `src/js/3D/camera/CharacterCameraControlsGL.cpp` — ✅ audited
+- [x] 34. `src/js/3D/exporters/ADTExporter.cpp` — ✅ audited
+- [x] 35. `src/js/3D/exporters/CharacterExporter.cpp` — ✅ audited
+- [x] 36. `src/js/3D/exporters/M2Exporter.cpp` — ✅ audited
+- [x] 37. `src/js/3D/exporters/M2LegacyExporter.cpp` — ✅ audited
+- [x] 38. `src/js/3D/exporters/M3Exporter.cpp` — ✅ audited
+- [x] 39. `src/js/3D/exporters/WMOExporter.cpp` — ✅ audited
+- [x] 40. `src/js/3D/exporters/WMOLegacyExporter.cpp` — ✅ audited
+- [x] 41. `src/js/3D/gl/GLContext.cpp` — ✅ audited
+- [x] 42. `src/js/3D/gl/GLTexture.cpp` — ✅ audited
+- [x] 43. `src/js/3D/gl/ShaderProgram.cpp` — ✅ audited
+- [x] 44. `src/js/3D/gl/UniformBuffer.cpp` — ✅ audited
+- [x] 45. `src/js/3D/gl/VertexArray.cpp` — ✅ audited
 - [ ] 46. `src/js/3D/loaders/ADTLoader.cpp`
 - [ ] 47. `src/js/3D/loaders/ANIMLoader.cpp`
 - [ ] 48. `src/js/3D/loaders/BONELoader.cpp`
