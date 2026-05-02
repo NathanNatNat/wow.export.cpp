@@ -37,7 +37,6 @@ ParsedEntry parse_entry(const std::string& entry) {
 
 	std::optional<uint32_t> file_data_id;
 
-	// Match [digits] at end of entry.
 	static const std::regex fid_regex(R"(\[(\d+)\]$)");
 	std::smatch match;
 	if (std::regex_search(entry, match, fid_regex)) {
@@ -72,8 +71,6 @@ std::vector<std::string> get_listfile_entries(const std::vector<std::string>& se
 	result.reserve(selection.size());
 	for (const auto& entry : selection) {
 		auto parsed = parse_entry(entry);
-		// JS: fileDataID ? `${filePath};${fileDataID}` : filePath
-		// JS truthiness: 0 is falsy, so fileDataID==0 outputs just filePath.
 		if (parsed.fileDataID.has_value() && parsed.fileDataID.value() != 0)
 			result.push_back(parsed.filePath + ";" + std::to_string(parsed.fileDataID.value()));
 		else
@@ -193,20 +190,16 @@ void open_export_directory(const std::vector<std::string>& selection) {
 		return;
 
 #ifdef _WIN32
-	// Use MultiByteToWideChar for correct UTF-8 to UTF-16 conversion (not naive byte copy).
 	int wlen = MultiByteToWideChar(CP_UTF8, 0, dir->c_str(), -1, nullptr, 0);
 	std::wstring wpath(wlen, L'\0');
 	MultiByteToWideChar(CP_UTF8, 0, dir->c_str(), -1, wpath.data(), wlen);
 	ShellExecuteW(nullptr, L"open", wpath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #else
-	// Use fork/execvp to avoid command injection from shell metacharacters in dir.
 	pid_t pid = fork();
 	if (pid == 0) {
-		// Child process
 		execlp("xdg-open", "xdg-open", dir->c_str(), nullptr);
-		_exit(127); // exec failed
+		_exit(127);
 	}
-	// Parent: no need to waitpid — child runs independently
 #endif
 }
 

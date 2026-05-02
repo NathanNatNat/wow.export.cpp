@@ -16,9 +16,6 @@
 
 namespace character_appearance {
 
-/**
- * Helper: extract an integer field from a DataRecord variant map.
- */
 static int64_t get_field_int(const db::DataRecord& rec, const std::string& key, int64_t def = 0) {
 	auto it = rec.find(key);
 	if (it == rec.end()) return def;
@@ -171,10 +168,6 @@ std::optional<uint32_t> apply_customization_textures(
 					static_cast<int>(get_field_int(*chr_model_material, "Flags")),
 					static_cast<int>(get_field_int(*chr_model_material, "Unk"))
 				},
-				// JS passes { BlendMode: 0, TextureType: texture_type, ChrModelTextureTargetID: [0, 0] }.
-				// C++ TextureLayerInput is { TextureType, Layer, Flags, BlendMode, ... }; the
-				// ChrModelTextureTargetID field has no equivalent on the struct, the JS object
-				// only sets BlendMode and TextureType so the remaining fields default to 0.
 				{
 					static_cast<int>(texture_type),                                    // TextureType
 					0,                                                                 // Layer
@@ -259,7 +252,6 @@ std::optional<uint32_t> apply_customization_textures(
 				if (sections) {
 					for (const auto& row : *sections) {
 						const int64_t section_type = get_field_int(row, "SectionType");
-						// JS uses 32-bit shift: (1 << section_type)
 						if ((1 << static_cast<int>(section_type)) & static_cast<int>(bit_mask)) {
 							sectionX      = static_cast<int>(get_field_int(row, "X"));
 							sectionY      = static_cast<int>(get_field_int(row, "Y"));
@@ -293,9 +285,6 @@ std::optional<uint32_t> apply_customization_textures(
 					static_cast<int>(get_field_int(*chr_model_material, "Flags")),
 					static_cast<int>(get_field_int(*chr_model_material, "Unk"))
 				},
-				// JS passes the full chr_model_texture_layer object. C++ TextureLayerInput
-				// fields are { TextureType, Layer, Flags, BlendMode, TextureSectionTypeBitMask,
-				// TextureSectionTypeBitMask2 } in that exact declaration order.
 				{
 					static_cast<int>(get_field_int(*chr_model_texture_layer, "TextureType")),
 					static_cast<int>(get_field_int(*chr_model_texture_layer, "Layer")),

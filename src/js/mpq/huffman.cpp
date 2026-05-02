@@ -53,7 +53,6 @@ struct LinkedNode {
 	}
 };
 
-// Node pool to avoid individual heap allocations
 struct NodePool {
 	std::vector<std::unique_ptr<LinkedNode>> nodes;
 

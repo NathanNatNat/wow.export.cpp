@@ -4,8 +4,6 @@
 	License: MIT
 */
 
-// NOMINMAX must be defined before miniaudio includes <windows.h> on MSVC,
-// otherwise the min/max macros conflict with std::min / std::max.
 #ifdef _WIN32
 #define NOMINMAX
 #endif
@@ -21,10 +19,6 @@
 #include <cstring>
 #include <cmath>
 #include <stdexcept>
-
-// -----------------------------------------------------------------------
-// detectFileType — detect audio format from BufferWrapper.
-// -----------------------------------------------------------------------
 
 AudioType detectFileType(const BufferWrapper& data) {
 	const auto& raw = data.raw();
@@ -44,10 +38,6 @@ AudioType detectFileType(const BufferWrapper& data) {
 
 	return AudioType::Unknown;
 }
-
-// -----------------------------------------------------------------------
-// AudioPlayer
-// -----------------------------------------------------------------------
 
 AudioPlayer::AudioPlayer() = default;
 
@@ -110,11 +100,9 @@ void AudioPlayer::init() {
 const std::vector<uint8_t>& AudioPlayer::load(const std::vector<uint8_t>& data) {
 	stop();
 
-	// Keep a copy of the data so the decoder can read from it.
 	audio_data = data;
 	duration_cache = 0.0;
 
-	// Create a decoder to determine duration.
 	ma_decoder_config decoderConfig = ma_decoder_config_init_default();
 	ma_decoder tempDecoder;
 	if (ma_decoder_init_memory(audio_data.data(), audio_data.size(), &decoderConfig, &tempDecoder) != MA_SUCCESS)
@@ -148,7 +136,6 @@ void AudioPlayer::play(double from_offset) {
 	if (from_offset >= 0.0)
 		start_offset = std::max(0.0, std::min(from_offset, duration_cache));
 
-	// Create decoder from memory.
 	decoder = new ma_decoder();
 	ma_decoder_config decoderConfig = ma_decoder_config_init_default();
 	if (ma_decoder_init_memory(audio_data.data(), audio_data.size(), &decoderConfig, decoder) != MA_SUCCESS) {
@@ -157,13 +144,11 @@ void AudioPlayer::play(double from_offset) {
 		return;
 	}
 
-	// Seek to offset if needed.
 	if (start_offset > 0.0 && decoder->outputSampleRate > 0) {
 		ma_uint64 offsetFrames = static_cast<ma_uint64>(start_offset * decoder->outputSampleRate);
 		ma_decoder_seek_to_pcm_frame(decoder, offsetFrames);
 	}
 
-	// Create sound from decoder (data source).
 	sound = new ma_sound();
 	if (ma_sound_init_from_data_source(engine, decoder, 0, nullptr, sound) != MA_SUCCESS) {
 		ma_decoder_uninit(decoder);
@@ -249,18 +234,6 @@ double AudioPlayer::get_position() {
 		return 0;
 
 	if (is_playing && sound) {
-		// JS: const elapsed = this.context.currentTime - this.start_time;
-		//     const position = this.start_offset + elapsed;
-		// JS adds start_offset because Web Audio's `elapsed` is wall-clock time
-		// since `source.start()` was called (i.e. elapsed-since-seek).
-		//
-		// miniaudio is different: ma_sound_get_cursor_in_seconds() returns the
-		// absolute cursor of the underlying data source — i.e. frames since the
-		// beginning of the decoded stream (frame 0). Seeking the decoder via
-		// ma_decoder_seek_to_pcm_frame() sets readPointerInPCMFrames to the
-		// seek target, and playback increments it from there. The cursor
-		// therefore already includes the seek offset, so we must NOT add
-		// start_offset again — doing so would double-count it.
 		float cursor = 0.0f;
 		ma_sound_get_cursor_in_seconds(sound, &cursor);
 		double position = static_cast<double>(cursor);
@@ -283,9 +256,6 @@ bool AudioPlayer::is_loaded() const {
 }
 
 void AudioPlayer::set_volume(float value) {
-	// JS: if (this.gain) this.gain.gain.value = value;
-	// Only apply if engine has been initialized (gain node exists in JS).
-	// Before init(), this is a no-op and the value is not remembered.
 	if (!engine)
 		return;
 

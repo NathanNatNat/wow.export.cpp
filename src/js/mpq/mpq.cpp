@@ -31,7 +31,6 @@
 
 namespace mpq {
 
-// Platform-specific file I/O helpers
 namespace {
 
 int openFileReadOnly(const std::string& path) {
@@ -105,7 +104,6 @@ MPQArchive::MPQArchive(const std::string& filePath)
 		if (listfile_buffer && !listfile_buffer->empty()) {
 			std::string listfile_text(listfile_buffer->begin(), listfile_buffer->end());
 
-			// trim and split on newlines
 			size_t start = 0;
 			while (start < listfile_text.size()) {
 				size_t end = listfile_text.find_first_of("\r\n", start);
@@ -118,7 +116,6 @@ MPQArchive::MPQArchive(const std::string& filePath)
 						files.push_back(std::move(line));
 				}
 
-				// skip consecutive newline chars
 				start = end;
 				while (start < listfile_text.size() && (listfile_text[start] == '\r' || listfile_text[start] == '\n'))
 					start++;
@@ -274,7 +271,6 @@ uint32_t MPQArchive::hash(const std::string& str, HashType hashType) const {
 	uint32_t seed1 = 0x7fed7fed;
 	uint32_t seed2 = 0xeeeeeeee;
 
-	// Convert to uppercase
 	std::string upper = str;
 	std::transform(upper.begin(), upper.end(), upper.begin(),
 	               [](unsigned char c) { return static_cast<char>(std::toupper(c)); });

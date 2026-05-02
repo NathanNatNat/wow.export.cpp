@@ -160,7 +160,6 @@ std::optional<std::vector<uint8_t>> MPQInstall::getFile(const std::string& displ
 
 	// try stripping mpq name prefix (for display paths like "patch.mpq\Creature\...")
 	if (normalized_path.find('\\') != std::string::npos) {
-		// split by backslash
 		std::vector<std::string> parts;
 		size_t start = 0;
 		while (start < normalized_path.size()) {
