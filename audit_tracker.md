@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 20/188 audited (11%)**
+**Progress: 30/188 audited (16%)**
 
 - [x] 1. `src/app.cpp` — ✅ audited
 - [x] 2. `src/js/blob.cpp` — ✅ audited
@@ -24,16 +24,16 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 18. `src/js/png-writer.cpp` — ✅ audited
 - [x] 19. `src/js/subtitles.cpp` — ✅ audited
 - [x] 20. `src/js/tiled-png-writer.cpp` — ✅ audited
-- [ ] 21. `src/js/wmv.cpp`
-- [ ] 22. `src/js/wowhead.cpp`
-- [ ] 23. `src/js/xml.cpp`
-- [ ] 24. `src/js/3D/AnimMapper.cpp`
-- [ ] 25. `src/js/3D/BoneMapper.cpp`
-- [ ] 26. `src/js/3D/GeosetMapper.cpp`
-- [ ] 27. `src/js/3D/ShaderMapper.cpp`
-- [ ] 28. `src/js/3D/Shaders.cpp`
-- [ ] 29. `src/js/3D/Skin.cpp`
-- [ ] 30. `src/js/3D/Texture.cpp`
+- [x] 21. `src/js/wmv.cpp` — ✅ audited
+- [x] 22. `src/js/wowhead.cpp` — ✅ audited
+- [x] 23. `src/js/xml.cpp` — ✅ audited
+- [x] 24. `src/js/3D/AnimMapper.cpp` — ✅ audited
+- [x] 25. `src/js/3D/BoneMapper.cpp` — ✅ audited
+- [x] 26. `src/js/3D/GeosetMapper.cpp` — ✅ audited
+- [x] 27. `src/js/3D/ShaderMapper.cpp` — ✅ audited
+- [x] 28. `src/js/3D/Shaders.cpp` — ✅ audited
+- [x] 29. `src/js/3D/Skin.cpp` — ✅ audited
+- [x] 30. `src/js/3D/Texture.cpp` — ✅ audited
 - [ ] 31. `src/js/3D/WMOShaderMapper.cpp`
 - [ ] 32. `src/js/3D/camera/CameraControlsGL.cpp`
 - [ ] 33. `src/js/3D/camera/CharacterCameraControlsGL.cpp`
