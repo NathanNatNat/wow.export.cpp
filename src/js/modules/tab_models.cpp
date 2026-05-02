@@ -53,11 +53,6 @@ static std::optional<std::string> build_stack_trace(const char* function_name, c
 	return std::format("{}: {}", function_name, e.what());
 }
 
-// --- File-local state ---
-
-// JS uses one unified `active_skins` Map keyed by skin_name, storing either a
-// CreatureDisplayInfo or an ItemDisplay. C++ splits by source type to avoid a
-// std::variant; lookups must check both maps (see handle_skins_selection_change).
 static std::map<std::string, db::caches::DBCreatures::CreatureDisplayInfo> active_skins_creature;
 static std::map<std::string, db::caches::DBItemDisplays::ItemDisplay> active_skins_item;
 
@@ -70,13 +65,10 @@ static model_viewer_utils::RendererResult active_renderer_result;
 
 static std::string active_path;
 
-// View state proxy (created once in mounted()).
 static model_viewer_utils::ViewStateProxy view_state;
 
-// Animation methods helper.
 static std::unique_ptr<model_viewer_utils::AnimationMethods> anim_methods;
 
-// Change-detection for watches (replaces Vue $watch).
 static std::vector<nlohmann::json> prev_skins_selection;
 static std::optional<std::string> prev_anim_selection;
 static std::vector<nlohmann::json> prev_selection_models;
@@ -85,20 +77,17 @@ static bool is_initializing = false;
 
 static listbox::ListboxState listbox_models_state;
 
-// Cached items string vectors — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 static std::vector<std::string> s_override_cache;
 static size_t s_override_cache_size = ~size_t(0);
 
-// Component states for CheckboxList, ListboxB, and MenuButton.
 static checkboxlist::CheckboxListState checkboxlist_geosets_state;
 static checkboxlist::CheckboxListState checkboxlist_wmo_groups_state;
 static checkboxlist::CheckboxListState checkboxlist_wmo_sets_state;
 static listboxb::ListboxBState listboxb_skins_state;
 static menu_button::MenuButtonState menu_button_models_state;
 
-// Model viewer GL state/context (replaces Vue <ModelViewerGL :context="modelViewerContext"/>).
 static model_viewer_gl::State viewer_state;
 static model_viewer_gl::Context viewer_context;
 
@@ -125,8 +114,6 @@ struct PendingExportTask {
 };
 
 static std::optional<PendingExportTask> pending_export_task;
-
-// --- Internal helpers ---
 
 static M2RendererGL* get_active_m2_renderer() {
 	return active_renderer_result.m2.get();
@@ -302,8 +289,6 @@ static void pump_preview_model_task() {
 
 			std::vector<nlohmann::json> skin_list;
 			std::string model_name = casc::listfile::getByID(task.file_data_id).value_or("");
-			// JS: `path.basename(model_name, 'm2')` — strips trailing "m2" only when
-			// the full string ends with it. The compare() check below matches that.
 			{
 				auto pos = model_name.rfind('/');
 				if (pos != std::string::npos) model_name = model_name.substr(pos + 1);
@@ -332,9 +317,6 @@ static void pump_preview_model_task() {
 							skin_name = skin_name.substr(0, skin_name.size() - 4);
 					}
 					clean_skin_name = skin_name;
-					// JS: `skin_name.replace(model_name, '').replace('_', '')` —
-					// String.replace replaces only the first occurrence. find()+erase
-					// gives the same first-occurrence-only behaviour.
 					auto found = clean_skin_name.find(model_name);
 					if (found != std::string::npos)
 						clean_skin_name.erase(found, model_name.size());
@@ -349,7 +331,6 @@ static void pump_preview_model_task() {
 					clean_skin_name = "base";
 
 				if (display.extraGeosets.has_value() && !display.extraGeosets->empty()) {
-					// JS: `skin_name += display.extraGeosets.join(',')`.
 					std::string geo_str;
 					for (size_t g = 0; g < display.extraGeosets->size(); ++g) {
 						if (g > 0) geo_str += ',';
@@ -387,7 +368,6 @@ static void pump_preview_model_task() {
 
 		active_path = task.file_name;
 
-		// JS: const has_content = active_renderer.draw_calls?.length > 0 || active_renderer.groups?.length > 0;
 		bool has_content = false;
 		if (active_renderer_result.m2)
 			has_content = !active_renderer_result.m2->get_draw_calls().empty();
@@ -433,8 +413,6 @@ static std::vector<uint32_t> get_variant_texture_ids(const std::string& file_nam
 	}
 	return {};
 }
-
-// --- Template methods (mapped from Vue methods) ---
 
 static void handle_listbox_context(const std::vector<std::string>& selection) {
 	listbox_context::handle_context_menu(selection);
@@ -517,7 +495,6 @@ static void initialize() {
 	core::progressLoadingScreen("Initializing 3D preview...");
 
 	core::postToMainThread([]() {
-		//     this.$core.view.modelViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
 		if (core::view->modelViewerContext.is_null()) {
 			core::view->modelViewerContext = nlohmann::json::object();
 
@@ -557,7 +534,6 @@ static void initialize() {
 	core::hideLoadingScreen();
 }
 
-// --- Watch handler for modelViewerSkinsSelection ---
 static void handle_skins_selection_change(const std::vector<nlohmann::json>& selection) {
 	auto& view = *core::view;
 
@@ -576,7 +552,6 @@ static void handle_skins_selection_change(const std::vector<nlohmann::json>& sel
 	selected_skin_name = sel_id;
 	has_selected_skin_name = true;
 
-	// Try creature display first, then item display.
 	bool has_extra_geosets = false;
 	std::vector<uint32_t> extra_geosets;
 	std::vector<uint32_t> display_textures;
@@ -606,7 +581,6 @@ static void handle_skins_selection_change(const std::vector<nlohmann::json>& sel
 				geoset["checked"] = false;
 		}
 
-		//         for (const geoset of curr_geosets) { if (geoset.id === extra_geoset) geoset.checked = true; } }
 		for (uint32_t extra_geoset : extra_geosets) {
 			for (auto& geoset : curr_geosets) {
 				if (geoset.value("id", 0u) == extra_geoset)
@@ -614,7 +588,6 @@ static void handle_skins_selection_change(const std::vector<nlohmann::json>& sel
 			}
 		}
 	} else {
-		//         geoset.checked = (id.endsWith('0') || id.endsWith('01')); }
 		for (auto& geoset : curr_geosets) {
 			std::string id_str = std::to_string(geoset.value("id", 0));
 			bool checked = id_str.ends_with("0") || id_str.ends_with("01");
@@ -632,8 +605,6 @@ static void handle_skins_selection_change(const std::vector<nlohmann::json>& sel
 	}
 }
 
-// --- Public API ---
-
 void registerTab() {
 	modules::register_nav_button("tab_models", "Models", "cube.svg", install_type::CASC);
 }
@@ -646,10 +617,6 @@ void mounted() {
 
 	view_state = model_viewer_utils::create_view_state("model");
 
-	//         ext: ['.m2'],
-	//         prompt: count => util.format('Export %d models as %s', count, this.$core.view.config.exportModelFormat),
-	//         process: files => export_files(this.$core, files, true)
-	//     });
 	core::registerDropHandler({
 		{".m2"},
 		[](int count) -> std::string {
@@ -664,13 +631,10 @@ void mounted() {
 		}
 	});
 
-	// Create animation methods helper.
 	anim_methods = std::make_unique<model_viewer_utils::AnimationMethods>(
 		get_active_m2_renderer,
 		get_view_state_ptr
 	);
-
-	// Store initial state for change-detection.
 
 	prev_skins_selection = view.modelViewerSkinsSelection;
 
@@ -686,8 +650,6 @@ void mounted() {
 		model_viewer_utils::toggle_uv_layer(view_state, get_active_m2_renderer(), layer_name);
 	}));
 
-	// Launch heavy DB initialization on background thread so the loading screen is visible.
-	// is_initialized and is_initializing are set in initialize()'s postToMainThread lambda.
 	std::thread(initialize).detach();
 }
 
@@ -750,7 +712,6 @@ static void pump_export_task() {
 		helper.start();
 
 	if (helper.isCancelled()) {
-		// Match JS: `helper.finish()` runs after the loop regardless of cancel state.
 		helper.finish();
 		finish_pending_export_task();
 		return;
@@ -871,7 +832,6 @@ void render() {
 	pump_preview_model_task();
 	pump_export_task();
 
-	// Watch: modelViewerSkinsSelection → apply skin textures and geosets
 	{
 		if (view.modelViewerSkinsSelection != prev_skins_selection) {
 			prev_skins_selection = view.modelViewerSkinsSelection;
@@ -879,7 +839,6 @@ void render() {
 		}
 	}
 
-	// Watch: modelViewerAnimSelection → handle_animation_change
 	{
 		std::optional<std::string> current_anim;
 		if (view.modelViewerAnimSelection.is_string())
@@ -898,11 +857,6 @@ void render() {
 		}
 	}
 
-	// Watch: selectionModels → auto-preview if modelsAutoPreview.
-	// JS: `if (!this._tab_initialized) return;` — `_tab_initialized` is set by the
-	// tab's initialize() chain. C++ uses the equivalent `is_initialized` flag set
-	// at the end of initialize(). `view.isBusy` is a bool in JS but an integer
-	// busy-lock counter in C++ (see core::view::isBusy), so we compare to 0.
 	{
 		if (view.selectionModels != prev_selection_models) {
 			prev_selection_models = view.selectionModels;
@@ -924,10 +878,6 @@ void render() {
 	if (app::layout::BeginTab("tab-models")) {
 		auto regions = app::layout::CalcListTabRegions(true);
 
-		// --- Left panel: List container (row 1, col 1) ---
-		//     <Listbox v-model:selection="selectionModels" v-model:filter="userInputFilterModels"
-		//         :items="listfileModels" :override="overrideModelList" :keyinput="true"
-		//         :regex="config.regexFilters" :copymode="config.copyMode" ... @contextmenu="handle_listbox_context" />
 		if (app::layout::BeginListContainer("models-list-container", regions)) {
 			const auto& items_str = core::cached_json_strings(view.listfileModels, s_items_cache, s_items_cache_size);
 
@@ -942,7 +892,6 @@ void render() {
 				else if (cm == "FID") copy_mode = listbox::CopyMode::FID;
 			}
 
-			// Convert override list (cached — usually empty).
 			const auto& override_str = core::cached_json_strings(view.overrideModelList, s_override_cache, s_override_cache_size);
 
 			listbox::render(
@@ -950,18 +899,18 @@ void render() {
 				items_str,
 				view.userInputFilterModels,
 				selection_str,
-				false,    // single
-				true,     // keyinput
+				false,
+				true,
 				view.config.value("regexFilters", false),
 				copy_mode,
 				view.config.value("pasteSelection", false),
 				view.config.value("removePathSpacesCopy", false),
-				"model",  // unittype
+				"model",
 				view.overrideModelList.empty() ? nullptr : &override_str,
-				false,    // disable
-				"models", // persistscrollkey
-				view.modelQuickFilters,  // quickfilters
-				false,    // nocopy
+				false,
+				"models",
+				view.modelQuickFilters,
+				false,
 				listbox_models_state,
 				[&](const std::vector<std::string>& new_sel) {
 					view.selectionModels.clear();
@@ -973,13 +922,9 @@ void render() {
 				}
 			);
 
-			// JS uses the shared `<ContextMenu>` Vue component with `@close` to clear
-			// `contextMenus.nodeListbox`. ImGui's BeginPopup auto-dismisses on click
-			// outside, which is functionally equivalent.
 			if (!view.contextMenus.nodeListbox.is_null()) {
 				if (ImGui::BeginPopup("ModelsListboxContextMenu")) {
 					const auto& node = view.contextMenus.nodeListbox;
-					// Extract selection from context node
 					std::vector<std::string> sel_strings;
 					if (node.contains("selection") && node["selection"].is_array()) {
 						for (const auto& s : node["selection"]) {
@@ -1025,28 +970,21 @@ void render() {
 		}
 		app::layout::EndListContainer();
 
-		// --- Status bar (between list and filter) ---
 		if (app::layout::BeginStatusBar("models-status", regions)) {
 			listbox::renderStatusBar("model", view.modelQuickFilters, listbox_models_state);
 		}
 		app::layout::EndStatusBar();
 
-		// --- Filter bar (row 2, col 1) ---
 		if (app::layout::BeginFilterBar("models-filter", regions)) {
-			// <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
 			bool regexEnabled = view.config.value("regexFilters", false);
 			float inputWidth = ImGui::GetContentRegionAvail().x;
 			if (regexEnabled) {
-				// Render "Regex Enabled" badge right-aligned.
-				// CSS: .filter > .regex-info { position: absolute; right: 30px; background: var(--border);
-				//       border-radius: 3px; padding: 2px 6px; font-size: 0.8em; }
 				const char* regexLabel = "Regex Enabled";
 				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
 				float badgeWidth = ImGui::CalcTextSize(regexLabel).x + 12.0f;
 				float rightPad = 10.0f;
 				float badgeX = ImGui::GetContentRegionAvail().x - badgeWidth - rightPad;
-				inputWidth = badgeX - 5.0f; // leave gap before badge
-				// Render the badge at the right
+				inputWidth = badgeX - 5.0f;
 				ImGui::SameLine(ImGui::GetCursorPosX() + badgeX);
 				ImGui::SmallButton(regexLabel);
 				if (ImGui::IsItemHovered())
@@ -1063,20 +1001,15 @@ void render() {
 		}
 		app::layout::EndFilterBar();
 
-		// --- Middle panel: Preview container (row 1, col 2) ---
 		if (app::layout::BeginPreviewContainer("models-preview-container", regions)) {
-			// Save the preview container origin and size for absolute overlay positioning.
 			const ImVec2 previewOrigin = ImGui::GetCursorScreenPos();
 			const ImVec2 previewSize = ImGui::GetContentRegionAvail();
 
-			// --- 887: Checkerboard background pattern ---
-			// CSS: .preview-container .preview-background { background-image: linear-gradient(45deg, ...);
-			//       background-size: 30px 30px; border: 1px solid var(--border); box-shadow: black 0 0 3px 0; }
 			{
 				ImDrawList* dl = ImGui::GetWindowDrawList();
-				const float checkSize = 15.0f; // half of 30px background-size
-				const ImU32 colA = IM_COL32(35, 35, 35, 255);  // --trans-check-a (#232323)
-				const ImU32 colB = IM_COL32(40, 40, 40, 255);  // --trans-check-b (#282828)
+				const float checkSize = 15.0f;
+				const ImU32 colA = IM_COL32(35, 35, 35, 255);
+				const ImU32 colB = IM_COL32(40, 40, 40, 255);
 				for (float y = previewOrigin.y; y < previewOrigin.y + previewSize.y; y += checkSize) {
 					for (float x = previewOrigin.x; x < previewOrigin.x + previewSize.x; x += checkSize) {
 						int ix = static_cast<int>((x - previewOrigin.x) / checkSize);
@@ -1088,16 +1021,11 @@ void render() {
 						dl->AddRectFilled(p0, p1, col);
 					}
 				}
-				// Border: 1px solid var(--border)
 				dl->AddRect(previewOrigin, ImVec2(previewOrigin.x + previewSize.x, previewOrigin.y + previewSize.y),
 					ImGui::GetColorU32(ImGuiCol_Border), 0.0f, 0, 1.0f);
 			}
 
-			// Render the texture preview overlay if active (z-index: 1 over 3D viewport).
-			// --- 889, 890, 891: Texture preview with toast, UV overlay, UV layer buttons ---
 			if (!view.modelTexturePreviewURL.empty()) {
-				// CSS: #model-texture-preview { position: absolute; z-index: 1; top: 0; ... }
-				// Use the full preview area for the texture preview.
 				if (view.modelTexturePreviewTexID != 0) {
 					const ImVec2 avail = previewSize;
 					const float tex_w = static_cast<float>(view.modelTexturePreviewWidth);
@@ -1105,30 +1033,23 @@ void render() {
 					const float scale = std::min(avail.x / tex_w, avail.y / tex_h);
 					const ImVec2 img_size(tex_w * scale, tex_h * scale);
 
-					// Center the image in the preview area.
 					const float imgX = previewOrigin.x + (avail.x - img_size.x) * 0.5f;
 					const float imgY = previewOrigin.y + (avail.y - img_size.y) * 0.5f;
 					ImGui::SetCursorScreenPos(ImVec2(imgX, imgY));
 					const ImVec2 imgPos = ImGui::GetCursorScreenPos();
 					ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.modelTexturePreviewTexID)), img_size);
 
-					// --- 891: UV overlay positioned absolute over texture preview ---
 					if (view.modelTexturePreviewUVTexID != 0 && !view.modelTexturePreviewUVOverlay.empty()) {
 						ImGui::SetCursorScreenPos(imgPos);
 						ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.modelTexturePreviewUVTexID)), img_size);
 					}
 
-					// --- 891: UV layer buttons absolute top-left (top: 10px, left: 10px) ---
 					if (!view.modelViewerUVLayers.empty()) {
 						ImGui::SetCursorScreenPos(ImVec2(previewOrigin.x + 10.0f, previewOrigin.y + 10.0f));
 						for (const auto& layer : view.modelViewerUVLayers) {
 							std::string layer_name = layer.value("name", std::string(""));
 							bool is_active = layer.value("active", false);
 
-							// --- 890: UV layer button styling ---
-							// CSS: .uv-layer-button { background: rgba(0,0,0,0.7); border: 1px solid var(--border);
-							//       padding: 5px 10px; font-size: 12px; }
-							// CSS: .uv-layer-button.active { border-color: #00ff00; color: #00ff00; }
 							ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 5.0f));
 							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 							if (is_active)
@@ -1148,10 +1069,6 @@ void render() {
 						view.modelTexturePreviewWidth, view.modelTexturePreviewHeight);
 				}
 
-				// --- 889: "Close Preview" toast overlay ---
-				// CSS: #model-texture-preview-toast { position: absolute; top: 10px; right: 10px;
-				//       background: rgba(0,0,0,0.5); border: 1px solid var(--border); border-radius: 3px;
-				//       padding: 5px 10px; font-size: 12px; cursor: pointer; z-index: 2; }
 				{
 					const char* closeLabel = "Close Preview";
 					ImVec2 textSize = ImGui::CalcTextSize(closeLabel);
@@ -1171,12 +1088,6 @@ void render() {
 					ImGui::PopStyleVar(3);
 				}
 			} else {
-				// No texture preview — render 3D viewport and overlays.
-
-				// --- 888: Background color picker absolute top-right ---
-				// CSS: #background-color-input { position: absolute; top: 10px; right: 10px; width: 24px; height: 24px;
-				//       border: 2px solid var(--border); border-radius: 4px; z-index: 100; }
-				// Render the 3D viewport first, then overlay the color picker.
 				if (!view.modelViewerContext.is_null()) {
 					ImGui::SetCursorScreenPos(previewOrigin);
 					model_viewer_gl::renderWidget("##model_viewer", viewer_state, viewer_context);
@@ -1197,8 +1108,6 @@ void render() {
 					ImGui::PopStyleVar(2);
 				}
 
-				// --- 897: Animation dropdown positioned absolute top-left ---
-				// CSS: .preview-dropdown-overlay { position: absolute; top: 10px; left: 10px; z-index: 1; }
 				if (!view.modelViewerAnims.empty() && view.modelTexturePreviewURL.empty()) {
 					std::string current_label = "No Animation";
 					std::string current_id;
@@ -1212,12 +1121,8 @@ void render() {
 						}
 					}
 
-					// Position at top-left with offset.
 					ImGui::SetCursorScreenPos(ImVec2(previewOrigin.x + 10.0f, previewOrigin.y + 10.0f));
 
-					// CSS: select { background-color: var(--background); color: var(--font-primary);
-					//       border: 1px solid var(--border); border-radius: 3px; padding: 5px 8px;
-					//       font-size: 12px; min-width: 150px; }
 					ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
@@ -1240,31 +1145,23 @@ void render() {
 
 					ImGui::PopStyleVar(3);
 
-					// --- 895, 896: Animation controls ---
 					if (current_id != "none" && !current_id.empty()) {
-						// CSS: .anim-controls { display: flex; ... margin-top: 5px }
-						// CSS: .anim-btn { width: 24px; height: 24px; border: 1px solid var(--border);
-						//       background-color: var(--background); }
 						ImGui::SetCursorScreenPos(ImVec2(previewOrigin.x + 10.0f, ImGui::GetCursorScreenPos().y + 5.0f));
 
 						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 
 						bool anim_paused = view.modelViewerAnimPaused;
 
-						// --- 895: Icon-style buttons ---
-						// Step left: CSS uses arrow-left.svg, we use "<<" (or ◀)
 						if (!anim_paused) ImGui::BeginDisabled();
 						if (ImGui::Button(ICON_FA_ARROW_LEFT "##anim_prev", ImVec2(24.0f, 24.0f)))
 							if (anim_methods) anim_methods->step_animation(-1);
 						if (!anim_paused) ImGui::EndDisabled();
 
 						ImGui::SameLine(0.0f, 2.0f);
-						// Play/Pause: CSS uses play.svg / pause.svg
 						if (ImGui::Button(anim_paused ? ICON_FA_PLAY "##anim_play" : ICON_FA_PAUSE "##anim_pause", ImVec2(24.0f, 24.0f)))
 							if (anim_methods) anim_methods->toggle_animation_pause();
 
 						ImGui::SameLine(0.0f, 2.0f);
-						// Step right: CSS uses arrow-right.svg
 						if (!anim_paused) ImGui::BeginDisabled();
 						if (ImGui::Button(ICON_FA_ARROW_RIGHT "##anim_next", ImVec2(24.0f, 24.0f)))
 							if (anim_methods) anim_methods->step_animation(1);
@@ -1272,12 +1169,6 @@ void render() {
 
 						ImGui::PopStyleVar();
 
-						// --- 896: Animation scrubber ---
-						// CSS: .anim-scrubber input[type="range"] { height: 6px; background: var(--background-dark);
-						//       border: 1px solid var(--border); border-radius: 3px; }
-						// CSS: .anim-scrubber input::-webkit-slider-thumb { width: 14px; height: 14px; }
-						// CSS: .anim-frame-display { min-width: 32px; padding: 2px 4px; background: var(--background-dark);
-						//       border: 1px solid var(--border); border-radius: 3px; font-size: 11px; text-align: center; }
 						ImGui::SameLine(0.0f, 5.0f);
 						int frame = view.modelViewerAnimFrame;
 						int frame_max = view.modelViewerAnimFrameCount > 0 ? view.modelViewerAnimFrameCount - 1 : 0;
@@ -1299,7 +1190,6 @@ void render() {
 						}
 						ImGui::PopStyleVar(4);
 
-						// Frame display
 						ImGui::SameLine(0.0f, 5.0f);
 						ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f));
 						ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
@@ -1313,8 +1203,6 @@ void render() {
 				}
 			}
 
-			// --- 892, 893, 894: Texture ribbon absolute bottom overlay ---
-			// CSS: #texture-ribbon { position: absolute; bottom: 10px; justify-content: center; z-index: 2; }
 			if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
 				float ribbon_width = previewSize.x;
 				texture_ribbon::onResize(static_cast<int>(ribbon_width));
@@ -1323,41 +1211,33 @@ void render() {
 					? static_cast<int>(std::ceil(static_cast<double>(view.textureRibbonStack.size()) / view.textureRibbonSlotCount))
 					: 0;
 
-				// Calculate total ribbon width for centering.
 				int startIndex = view.textureRibbonPage * view.textureRibbonSlotCount;
 				int endIndex = (std::min)(startIndex + view.textureRibbonSlotCount, static_cast<int>(view.textureRibbonStack.size()));
 				int visibleSlots = endIndex - startIndex;
 				bool hasPrev = view.textureRibbonPage > 0;
 				bool hasNext = view.textureRibbonPage < maxPages - 1;
 
-				// --- 893: Slot size is 64px with 5px margin each side ---
 				float slotSize = 64.0f;
-				float slotSpacing = 10.0f;  // 5px margin each side
+				float slotSpacing = 10.0f;
 				float prevNextWidth = 30.0f;
 				float totalRibbonWidth = static_cast<float>(visibleSlots) * (slotSize + slotSpacing)
 					+ (hasPrev ? prevNextWidth : 0.0f) + (hasNext ? prevNextWidth : 0.0f);
 				float ribbonX = previewOrigin.x + (ribbon_width - totalRibbonWidth) * 0.5f;
-				float ribbonY = previewOrigin.y + previewSize.y - slotSize - 20.0f; // bottom: 10px + some padding
+				float ribbonY = previewOrigin.y + previewSize.y - slotSize - 20.0f;
 
 				ImGui::SetCursorScreenPos(ImVec2(ribbonX, ribbonY));
 
-				// --- 894: Prev button with ‹ glyph ---
-				// CSS: #texture-ribbon-prev::before { content: "‹"; font-size: 4em; }
 				if (hasPrev) {
 					if (ImGui::Button("\xe2\x80\xb9##ribbon_prev", ImVec2(prevNextWidth, slotSize)))
 						view.textureRibbonPage--;
 					ImGui::SameLine(0.0f, 0.0f);
 				}
 
-				// --- 893: Texture ribbon slots with border/shadow/background ---
 				for (int si = startIndex; si < endIndex; si++) {
 					auto& slot = view.textureRibbonStack[si];
 					std::string slotDisplayName = slot.value("displayName", std::string(""));
 
 					ImGui::PushID(si);
-					// CSS: #texture-ribbon .slot { width: 64px; height: 64px; margin: 0 5px;
-					//       border: 1px solid var(--border); box-shadow: black 0 0 3px 0;
-					//       background-color: #232323; background-size: contain; }
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 
 					GLuint slotTex = texture_ribbon::getSlotTexture(si);
@@ -1382,13 +1262,11 @@ void render() {
 					ImGui::SameLine(0.0f, slotSpacing);
 				}
 
-				// --- 894: Next button with › glyph ---
 				if (hasNext) {
 					if (ImGui::Button("\xe2\x80\xba##ribbon_next", ImVec2(prevNextWidth, slotSize)))
 						view.textureRibbonPage++;
 				}
 
-				// Texture ribbon context menu (unchanged logic).
 				if (!view.contextMenus.nodeTextureRibbon.is_null()) {
 					if (ImGui::BeginPopup("ModelsTextureRibbonContextMenu")) {
 						const auto& node = view.contextMenus.nodeTextureRibbon;
@@ -1438,15 +1316,10 @@ void render() {
 		}
 		app::layout::EndPreviewContainer();
 
-		// --- Bottom: Export controls (row 2, col 2) ---
-		//     <MenuButton :options="menuButtonModels" :default="config.exportModelFormat"
-		//         @change="config.exportModelFormat = $event" :disabled="isBusy" @click="export_model" class="upward" />
 		if (app::layout::BeginPreviewControls("models-preview-controls", regions)) {
-			// --- 905: Right-align the export button ---
-			// CSS: .preview-controls { display: flex; justify-content: flex-end; margin-right: 20px; }
 			{
 				float buttonWidth = ImGui::GetContentRegionAvail().x;
-				float menuBtnWidth = 200.0f; // approximate width of menu button
+				float menuBtnWidth = 200.0f;
 				float rightMargin = 20.0f;
 				float offsetX = buttonWidth - menuBtnWidth - rightMargin;
 				if (offsetX > 0.0f)
@@ -1455,7 +1328,6 @@ void render() {
 			std::vector<menu_button::MenuOption> mb_options;
 			for (const auto& opt : view.menuButtonModels)
 				mb_options.push_back({ opt.label, opt.value });
-			// --- 906: MenuButton with upward dropdown direction ---
 			menu_button::render("##MenuButtonModels", mb_options,
 				view.config.value("exportModelFormat", std::string("OBJ")),
 				view.isBusy > 0, false, true, menu_button_models_state,
@@ -1464,18 +1336,11 @@ void render() {
 		}
 		app::layout::EndPreviewControls();
 
-		// --- Right panel: Sidebar (col 3, spanning both rows) ---
 		if (app::layout::BeginSidebar("models-sidebar", regions)) {
-			// --- 898: Replace SeparatorText with plain text headers ---
-			// CSS: .sidebar span.header { display: block; margin: 5px 0; }
-			// Just a bold text label with vertical spacing, no horizontal rule.
 			ImGui::Dummy(ImVec2(0.0f, 5.0f));
 			ImGui::TextUnformatted("Preview");
 			ImGui::Dummy(ImVec2(0.0f, 5.0f));
 
-			// --- 899: Sidebar checkbox labels with ~18px checkbox and margin ---
-			// CSS: .ui-checkbox { font-size: 18px; display: flex; margin: 0 15px; }
-			// CSS: .sidebar label span { font-size: 16px; }
 			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5.0f, 4.0f));
 			ImGui::Indent(15.0f);
 			auto show_checkbox_tooltip = [](const char* tooltip) {
@@ -1483,7 +1348,6 @@ void render() {
 					ImGui::SetTooltip("%s", tooltip);
 			};
 
-			//         <input type="checkbox" v-model="config.modelsAutoPreview"/> <span>Auto Preview</span>
 			{
 				bool auto_preview = view.config.value("modelsAutoPreview", false);
 				if (ImGui::Checkbox("Auto Preview", &auto_preview))
@@ -1491,7 +1355,6 @@ void render() {
 				show_checkbox_tooltip("Automatically preview a model when selecting it");
 			}
 
-			//         <input type="checkbox" v-model="modelViewerAutoAdjust"/> <span>Auto Camera</span>
 			ImGui::Checkbox("Auto Camera", &view.modelViewerAutoAdjust);
 			show_checkbox_tooltip("Automatically adjust camera when selecting a new model");
 
@@ -1532,7 +1395,6 @@ void render() {
 
 			ImGui::Unindent(15.0f);
 
-			// --- 898: Export header ---
 			ImGui::Dummy(ImVec2(0.0f, 5.0f));
 			ImGui::TextUnformatted("Export");
 			ImGui::Dummy(ImVec2(0.0f, 5.0f));
@@ -1553,7 +1415,6 @@ void render() {
 				show_checkbox_tooltip("Include alpha channel in exported model textures");
 			}
 
-			//         <input type="checkbox" v-model="config.modelsExportAnimations"/> <span>Export animations</span>
 			std::string export_format = view.config.value("exportModelFormat", std::string("OBJ"));
 			if (export_format == "GLTF" && view.modelViewerActiveType == "m2") {
 				bool export_anims = view.config.value("modelsExportAnimations", false);
@@ -1610,16 +1471,13 @@ void render() {
 			}
 
 			ImGui::Unindent(15.0f);
-			ImGui::PopStyleVar(); // ItemSpacing
+			ImGui::PopStyleVar();
 
 			if (view.modelViewerActiveType == "m2") {
-				// --- 898: Geosets header ---
 				ImGui::Dummy(ImVec2(0.0f, 5.0f));
 				ImGui::TextUnformatted("Geosets");
 				ImGui::Dummy(ImVec2(0.0f, 5.0f));
 
-				// --- 904: Constrain checkboxlist height to 156px ---
-				// CSS: #tab-models #model-sidebar .ui-checkboxlist { height: 156px; }
 				{
 					float constrainedHeight = 156.0f;
 					ImGui::BeginChild("##GeosetListWrapper", ImVec2(0.0f, constrainedHeight), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
@@ -1627,9 +1485,6 @@ void render() {
 					ImGui::EndChild();
 				}
 
-				// --- 900: "Enable All / Disable All" as text links ---
-				// CSS: .list-toggles { font-size: 14px; text-align: center; margin-top: 5px; }
-				// CSS: a { color: var(--font-primary); } a:hover { color: var(--font-highlight); text-decoration: underline; }
 				{
 					ImGui::Dummy(ImVec2(0.0f, 5.0f));
 					float totalWidth = ImGui::CalcTextSize("Enable All").x + ImGui::CalcTextSize(" / ").x + ImGui::CalcTextSize("Disable All").x;
@@ -1664,20 +1519,16 @@ void render() {
 				}
 
 				if (view.config.value("modelsExportTextures", true)) {
-					// --- 898: Skins header ---
 					ImGui::Dummy(ImVec2(0.0f, 5.0f));
 					ImGui::TextUnformatted("Skins");
 					ImGui::Dummy(ImVec2(0.0f, 5.0f));
 
-					// --- 904: Constrain listbox height to 156px ---
 					{
-						// Convert json skins to ListboxBItem array.
 						std::vector<listboxb::ListboxBItem> skin_items;
 						skin_items.reserve(view.modelViewerSkins.size());
 						for (const auto& skin : view.modelViewerSkins)
 							skin_items.push_back({ skin.value("label", std::string("")) });
 
-						// Build selection indices from modelViewerSkinsSelection.
 						std::vector<int> sel_indices;
 						for (const auto& sel : view.modelViewerSkinsSelection) {
 							std::string sel_id = sel.value("id", std::string(""));
@@ -1706,12 +1557,10 @@ void render() {
 			}
 
 			if (view.modelViewerActiveType == "wmo") {
-				// --- 898: WMO Groups header ---
 				ImGui::Dummy(ImVec2(0.0f, 5.0f));
 				ImGui::TextUnformatted("WMO Groups");
 				ImGui::Dummy(ImVec2(0.0f, 5.0f));
 
-				// --- 901, 904: Use Checkboxlist component with 156px height ---
 				{
 					float constrainedHeight = 156.0f;
 					ImGui::BeginChild("##WMOGroupsListWrapper", ImVec2(0.0f, constrainedHeight), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
@@ -1719,7 +1568,6 @@ void render() {
 					ImGui::EndChild();
 				}
 
-				// --- 903, 900: "Enable All / Disable All" as text links ---
 				{
 					ImGui::Dummy(ImVec2(0.0f, 5.0f));
 					float totalWidth = ImGui::CalcTextSize("Enable All").x + ImGui::CalcTextSize(" / ").x + ImGui::CalcTextSize("Disable All").x;
@@ -1753,12 +1601,10 @@ void render() {
 					}
 				}
 
-				// --- 898: Doodad Sets header ---
 				ImGui::Dummy(ImVec2(0.0f, 5.0f));
 				ImGui::TextUnformatted("Doodad Sets");
 				ImGui::Dummy(ImVec2(0.0f, 5.0f));
 
-				// --- 902: Use Checkboxlist component for Doodad Sets ---
 				{
 					float constrainedHeight = 156.0f;
 					ImGui::BeginChild("##WMODoodadSetsListWrapper", ImVec2(0.0f, constrainedHeight), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);

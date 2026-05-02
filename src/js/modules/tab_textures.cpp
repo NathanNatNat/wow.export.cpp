@@ -74,8 +74,6 @@ static std::string fieldToString(const db::FieldValue& val) {
 	return "";
 }
 
-// --- Atlas data structures ---
-
 struct AtlasRegion {
 	std::string name;
 	int width = 0;
@@ -87,10 +85,8 @@ struct AtlasRegion {
 struct AtlasEntry {
 	int width = 0;
 	int height = 0;
-	std::vector<int> regions; // region IDs
+	std::vector<int> regions;
 };
-
-// --- File-local state ---
 
 static std::unordered_map<int, AtlasEntry> texture_atlas_entries;
 
@@ -104,9 +100,6 @@ static bool has_loaded_unknown_textures = false;
 
 static uint32_t selected_file_data_id = 0;
 
-// In ImGui, resize observation is implicit (immediate mode).
-
-// Change-detection for selection and config watches.
 static uint32_t prev_selected_file_data_id = 0;
 static uint8_t prev_export_channel_mask = 0xFF;
 static bool prev_export_texture_alpha = false;
@@ -115,12 +108,11 @@ static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 static menu_button::MenuButtonState menu_button_textures_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 static std::vector<std::string> s_override_cache;
 static size_t s_override_cache_size = ~size_t(0);
-// Deletes the previous texture if old_tex != 0.
+
 static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t old_tex = 0) {
 	if (old_tex != 0) {
 		GLuint old_gl = static_cast<GLuint>(old_tex);
@@ -137,8 +129,6 @@ static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t 
 	glBindTexture(GL_TEXTURE_2D, 0);
 	return static_cast<uint32_t>(tex);
 }
-
-// --- Internal functions ---
 
 static void update_texture_atlas_overlay() {
 	auto atlas_it = texture_atlas_map.find(selected_file_data_id);
@@ -175,8 +165,6 @@ static void update_texture_atlas_overlay() {
 	core::view->textureAtlasOverlayRegions.clear();
 }
 
-// --- Async texture preview (follows tab_models pattern) ---
-
 struct PendingTexturePreview {
 	uint32_t file_data_id = 0;
 	std::string texture_name;
@@ -187,7 +175,6 @@ struct PendingTexturePreview {
 static std::optional<PendingTexturePreview> pending_texture_preview;
 
 static void preview_texture_by_id_impl(uint32_t file_data_id, const std::string& texture_name) {
-	// Cancel any pending preview.
 	pending_texture_preview.reset();
 
 	std::string texture = texture_name;
@@ -233,7 +220,6 @@ static void pump_texture_preview() {
 		core::view->texturePreviewWidth = static_cast<int>(blp.width);
 		core::view->texturePreviewHeight = static_cast<int>(blp.height);
 
-		// Upload BLP as GL texture for ImGui::Image display.
 		std::vector<uint8_t> pixels = blp.toUInt8Array(0, channel_mask);
 		core::view->texturePreviewTexID = upload_rgba_to_gl(
 			pixels.data(), static_cast<int>(blp.width), static_cast<int>(blp.height),
@@ -359,13 +345,6 @@ static void reload_texture_atlas_data() {
 	}
 }
 
-// In ImGui, atlas overlay scaling is handled by the rendering code using available region size.
-// The JS version manipulates DOM element styles; in ImGui this is implicit.
-
-// In ImGui, no ResizeObserver needed; immediate-mode handles this per frame.
-
-// This is inlined into preview_texture_by_id_impl above.
-
 static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 	auto atlas_map_it = texture_atlas_map.find(file_data_id);
 	if (atlas_map_it == texture_atlas_map.end())
@@ -411,7 +390,6 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 			export_file_name = (fs::path(export_dir) / region.name).string();
 			const std::string export_path = casc::ExportHelper::getExportPath(export_file_name + ext);
 
-			// Crop the RGBA data manually.
 			std::vector<uint8_t> cropped(region.width * region.height * 4);
 			for (int y = 0; y < region.height; y++) {
 				const int src_row = (region.top + y) * static_cast<int>(blp_width) * 4;
@@ -468,13 +446,10 @@ static bool is_baked_npc_texture() {
 	if (first.empty())
 		return false;
 
-	// Case-insensitive check for "textures/bakednpctextures/"
 	std::string lower = first;
 	std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 	return lower.starts_with("textures/bakednpctextures/");
 }
-
-// --- Public API ---
 
 void registerTab() {
 	modules::register_nav_button("tab_textures", "Textures", "image.svg", install_type::CASC);
@@ -486,9 +461,6 @@ void mounted() {
 	const bool needs_unknown_textures = view.config.value("enableUnknownFiles", false) && !has_loaded_unknown_textures;
 	const bool needs_atlas_data = !has_loaded_atlas_table && view.config.value("showTextureAtlas", false);
 
-	// In ImGui, overlay listeners are not needed (immediate mode).
-
-	// Store initial config values for change-detection.
 	prev_export_channel_mask = static_cast<uint8_t>(view.config.value("exportChannelMask", 0b1111));
 	prev_export_texture_alpha = view.config.value("exportTextureAlpha", false);
 	prev_show_texture_atlas = view.config.value("showTextureAtlas", false);
@@ -499,9 +471,6 @@ void mounted() {
 			return std::format("Export {} textures as {}", count, core::view->config.value("exportTextureFormat", std::string("PNG")));
 		},
 		[](const std::vector<std::string>& files) {
-			// JS: process: files => textureExporter.exportFiles(files, true)
-			// JS passes the raw file-path strings directly; texture_exporter::exportFiles
-			// (via getFileInfoPair) accepts JSON strings for path-based entries.
 			std::vector<nlohmann::json> entries;
 			entries.reserve(files.size());
 			for (const auto& file : files)
@@ -535,10 +504,9 @@ void mounted() {
 	}
 }
 
-// Render checkerboard behind texture to show transparency.
 static void renderCheckerboard(ImDrawList* dl, ImVec2 pos, ImVec2 size, float cellSize = 8.0f) {
-	const ImU32 colA = IM_COL32(204, 204, 204, 255); // light grey
-	const ImU32 colB = IM_COL32(255, 255, 255, 255); // white
+	const ImU32 colA = IM_COL32(204, 204, 204, 255);
+	const ImU32 colB = IM_COL32(255, 255, 255, 255);
 	for (float y = 0; y < size.y; y += cellSize) {
 		for (float x = 0; x < size.x; x += cellSize) {
 			int ix = static_cast<int>(x / cellSize);
@@ -555,10 +523,7 @@ static void renderCheckerboard(ImDrawList* dl, ImVec2 pos, ImVec2 size, float ce
 void render() {
 	auto& view = *core::view;
 
-	// Poll for pending async texture preview completion.
 	pump_texture_preview();
-
-	// --- Change-detection for config watches ---
 
 	const bool current_export_alpha = view.config.value("exportTextureAlpha", false);
 	if (current_export_alpha != prev_export_texture_alpha) {
@@ -581,7 +546,6 @@ void render() {
 		prev_show_texture_atlas = current_show_atlas;
 	}
 
-	// --- Change-detection for selection (equivalent to watch on selectionTextures) ---
 	if (!view.selectionTextures.empty()) {
 		const std::string first = casc::listfile::stripFileEntry(view.selectionTextures[0].get<std::string>());
 		if (!first.empty() && view.isBusy == 0) {
@@ -594,21 +558,11 @@ void render() {
 		}
 	}
 
-	// --- Template rendering ---
-
 	if (app::layout::BeginTab("tab-textures")) {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
-	// Override texture toast is rendered in the app shell (renderAppShell)
-	// with the same styling as the model override toast bar.
-	// JS: tab_textures.js template lines 284–288.
-
-	// --- Left panel: List container (row 1, col 1) ---
-	//     <Listbox v-model:selection="selectionTextures" :items="listfileTextures" ...>
-	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	if (app::layout::BeginListContainer("textures-list-container", regions)) {
-		// Convert JSON items/selection to string vectors.
 		const auto& items_str = core::cached_json_strings(view.listfileTextures, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
@@ -627,18 +581,18 @@ void render() {
 			items_str,
 			view.userInputFilterTextures,
 			selection_str,
-			false,   // single
-			true,    // keyinput
+			false,
+			true,
 			view.config.value("regexFilters", false),
 			copy_mode,
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
-			"texture", // unittype
+			"texture",
 			view.overrideTextureList.empty() ? nullptr : &core::cached_json_strings(view.overrideTextureList, s_override_cache, s_override_cache_size),
-			false,   // disable
-			"textures", // persistscrollkey
-			{},      // quickfilters
-			false,   // nocopy
+			false,
+			"textures",
+			{},
+			false,
 			listbox_state,
 			[&](const std::vector<std::string>& new_sel) {
 				view.selectionTextures.clear();
@@ -650,7 +604,6 @@ void render() {
 			}
 		);
 
-		// Context menu for generic listbox.
 		context_menu::render(
 			"ctx-textures",
 			view.contextMenus.nodeListbox,
@@ -680,13 +633,11 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
-	// --- Status bar ---
 	if (app::layout::BeginStatusBar("textures-status", regions)) {
 		listbox::renderStatusBar("texture", {}, listbox_state);
 	}
 	app::layout::EndStatusBar();
 
-	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("textures-filter", regions)) {
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
@@ -702,15 +653,10 @@ void render() {
 	}
 	app::layout::EndFilterBar();
 
-	// --- Right panel: Preview container (row 1, col 2) ---
-	//     <div class="preview-info" ...>
-	//     <ul class="preview-channels" ...>
-	//     <div class="preview-background" id="texture-preview" ...>
 	if (app::layout::BeginPreviewContainer("textures-preview-container", regions)) {
 		if (!view.texturePreviewInfo.empty())
 			ImGui::TextUnformatted(view.texturePreviewInfo.c_str());
 
-		// Channel mask toggles.
 		if (!view.texturePreviewURL.empty()) {
 			int mask = view.config.value("exportChannelMask", 0b1111);
 			struct ChannelChip { const char* id; const char* label; int bit; const char* tooltip; };
@@ -738,29 +684,24 @@ void render() {
 		}
 
 		if (view.texturePreviewTexID != 0) {
-			// Fit the texture into the available area while preserving aspect ratio.
-			// JS: max-width/max-height from texture dimensions — never upscale beyond native size.
 			const ImVec2 avail = ImGui::GetContentRegionAvail();
 			const float tex_w = static_cast<float>(view.texturePreviewWidth);
 			const float tex_h = static_cast<float>(view.texturePreviewHeight);
 			const float scale = std::min({avail.x / tex_w, avail.y / tex_h, 1.0f});
 			const ImVec2 img_size(tex_w * scale, tex_h * scale);
 
-			// Draw checkerboard transparency pattern behind texture.
 			const ImVec2 checkerPos = ImGui::GetCursorScreenPos();
 			renderCheckerboard(ImGui::GetWindowDrawList(), checkerPos, img_size);
 
 			const ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
 			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(view.texturePreviewTexID)), img_size);
 
-			// Atlas overlay regions drawn on top of the texture image.
 			if (view.config.value("showTextureAtlas", false) && !view.textureAtlasOverlayRegions.empty()) {
 				ImDrawList* draw_list = ImGui::GetWindowDrawList();
 				for (const auto& region : view.textureAtlasOverlayRegions) {
 					if (!region.contains("name"))
 						continue;
 
-					// Region positions are stored as percentage strings (e.g. "25.5%").
 					auto parse_pct = [](const nlohmann::json& j, const std::string& key) -> float {
 						if (!j.contains(key)) return 0.0f;
 						const std::string s = j[key].get<std::string>();
@@ -805,7 +746,6 @@ void render() {
 	}
 	app::layout::EndPreviewContainer();
 
-	// --- Bottom-right: Preview controls (row 2, col 2) ---
 	if (app::layout::BeginPreviewControls("textures-preview-controls", regions)) {
 		bool show_atlas = view.config.value("showTextureAtlas", false);
 		if (ImGui::Checkbox("Atlas Regions", &show_atlas))
@@ -864,7 +804,7 @@ void render() {
 	}
 	app::layout::EndPreviewControls();
 
-	} // if BeginTab
+	}
 	app::layout::EndTab();
 }
 
@@ -878,7 +818,6 @@ void export_textures() {
 	if (!user_selection.empty()) {
 		texture_exporter::exportFiles(user_selection);
 	} else if (selected_file_data_id > 0) {
-		// JS: textureExporter.exportFiles([selected_file_data_id]) — raw integer.
 		std::vector<nlohmann::json> files;
 		files.push_back(selected_file_data_id);
 		texture_exporter::exportFiles(files);
@@ -888,7 +827,6 @@ void export_textures() {
 }
 
 void remove_override_textures() {
-	// JS: this.$core.view.removeOverrideTextures()
 	if (!core::view)
 		return;
 	core::view->overrideTextureList.clear();
@@ -903,18 +841,14 @@ void goToTexture(uint32_t fileDataID) {
 	auto* view = core::view;
 	modules::setActive("tab_textures");
 
-	// Directly preview the requested file, even if it's not in the listfile.
 	previewTextureByID(fileDataID);
 
-	// Since we're doing a direct preview, we need to reset the users current
-	// selection, so if they hit export, they get the expected result.
 	view->selectionTextures.clear();
 
-	// If the user has fileDataIDs shown, filter by that.
 	if (view->config.contains("regexFilters") && view->config["regexFilters"].get<bool>())
 		view->userInputFilterTextures = "\\[" + std::to_string(fileDataID) + "\\]";
 	else
 		view->userInputFilterTextures = "[" + std::to_string(fileDataID) + "]";
 }
 
-} // namespace tab_textures
+}

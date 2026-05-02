@@ -71,7 +71,6 @@ static std::optional<std::string> build_stack_trace(const char* function_name, c
 	return std::format("{}: {}", function_name, e.what());
 }
 
-/// Compute MD5 hex digest of a string. Matches JS crypto.createHash('md5').update(str).digest('hex').
 static std::string md5_hex(const std::string& input) {
 	EVP_MD_CTX* ctx = EVP_MD_CTX_new();
 	if (!ctx)
@@ -92,13 +91,9 @@ static std::string md5_hex(const std::string& input) {
 	return result;
 }
 
-// --- Constants ---
-
 static constexpr double TILE_SIZE = constants::GAME::TILE_SIZE;
 
 static constexpr int MAP_OFFSET = constants::GAME::MAP_OFFSET;
-
-// --- File-local state ---
 
 static std::optional<int> selected_map_id;
 
@@ -106,7 +101,7 @@ static std::string selected_map_dir;
 static bool has_selected_map_dir = false;
 
 static std::unique_ptr<WDTLoader> selected_wdt;
-static BufferWrapper selected_wdt_data; // Keeps the buffer alive for WDTLoader
+static BufferWrapper selected_wdt_data;
 
 static bool game_objects_db2_loaded = false;
 static std::unordered_map<uint32_t, std::vector<db::DataRecord>> game_objects_db2;
@@ -116,12 +111,10 @@ static std::unordered_map<uint32_t, std::vector<db::DataRecord>> wmo_minimap_tex
 
 static std::optional<WMOMinimapData> current_wmo_minimap;
 
-// Change-detection for watches — store full serialized selection to detect any change.
 static std::string prev_selection_str;
 static bool tab_initialized = false;
 static bool tab_initializing = false;
 
-// Component states
 static listbox_maps::ListboxMapsState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 static map_viewer::MapViewerState map_viewer_state;
@@ -130,11 +123,8 @@ static menu_button::MenuButtonState menu_button_quality_state;
 static menu_button::MenuButtonState menu_button_heightmap_res_state;
 static menu_button::MenuButtonState menu_button_heightmap_depth_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
-
-// --- Field value helpers (same as other tab modules) ---
 
 static uint32_t fieldToUint32(const db::FieldValue& val) {
 return std::visit([](const auto& v) -> uint32_t {
@@ -188,14 +178,11 @@ return {};
 }, val);
 }
 
-// --- Internal functions ---
-
 /**
  * Parse a map entry from the listbox.
  * @param entry
  */
 static MapEntry parse_map_entry(const std::string& entry) {
-// Format: expansion_id \x19 [map_id] \x19 MapName_lang \x19 (Directory)
 std::regex re(R"(\[(\d+)\]\x19([^\x19]+)\x19\(([^)]+)\))");
 std::smatch match;
 if (!std::regex_search(entry, match, re))
@@ -226,14 +213,12 @@ BufferWrapper data = core::view->casc->getVirtualFileByName(tile_path, true);
 casc::BLPImage blp(data);
 auto rgba = blp.toUInt8Array(0, 0b0111);
 
-// JS uses blp.scaledWidth (mipmap-adjusted), not blp.width.
 uint32_t blp_width = blp.getScaledWidth();
 uint32_t blp_height = blp.getScaledHeight();
 
 if (static_cast<int>(blp_width) == size && static_cast<int>(blp_height) == size)
 return rgba;
 
-// Scale using bilinear interpolation, matching JS Canvas 2D drawImage behaviour.
 std::vector<uint8_t> scaled(size * size * 4, 0);
 const float scale_x = static_cast<float>(blp_width) / static_cast<float>(size);
 const float scale_y = static_cast<float>(blp_height) / static_cast<float>(size);
@@ -385,8 +370,6 @@ game_objects_db2[owner_id].push_back(row);
 }
 }
 
-// JS uses a Set for the result, guaranteeing uniqueness.
-// Deduplicate by (FileDataID, Position[0], Position[1]) to match Set semantics.
 struct GameObjectKey {
 uint32_t fid;
 float x, y;
@@ -440,7 +423,6 @@ return result;
  * @param localY
  * @returns interpolated height
  */
-// Extracted as a static helper to avoid MSVC lambda capture issues.
 static int get_vert_idx(int x, int y) {
 int index = 0;
 for (int row = 0; row < y * 2; row++)
@@ -559,8 +541,6 @@ static void export_selected_map_as_raw();
 static void export_selected_map_as_png();
 static void export_selected_map_as_heightmaps();
 
-// --- Context menu methods ---
-
 static void handle_map_context(const listbox::ContextMenuEvent& data) {
 core::view->contextMenus.nodeMap = nlohmann::json{
 {"selection", data.selection},
@@ -635,8 +615,6 @@ std::string cmd = "xdg-open \"" + dir + "\" &";
 #endif
 } catch (...) {}
 }
-
-// --- Map loading ---
 
 static void setup_wmo_minimap(WDTLoader& wdt) {
 try {
@@ -839,7 +817,6 @@ selected_wdt_data = std::move(wdt_data);
 selected_wdt = std::make_unique<WDTLoader>(selected_wdt_data);
 selected_wdt->load();
 
-// JS: if (wdt.worldModelPlacement) — truthy for any non-undefined placement object.
 if (selected_wdt->hasWorldModelPlacement)
 	core::view->mapViewerHasWorldModel = true;
 
@@ -847,7 +824,6 @@ const bool has_terrain = !selected_wdt->tiles.empty() &&
 	std::any_of(selected_wdt->tiles.begin(), selected_wdt->tiles.end(),
 		[](uint32_t t) { return t == 1; });
 
-// JS: wdt.worldModelPlacement !== undefined
 const bool has_global_wmo = selected_wdt->hasWorldModelPlacement;
 
 if (!has_terrain && has_global_wmo) {
@@ -884,8 +860,6 @@ core::view->mapViewerSelectedMap = mapID;
 core::view->mapViewerSelectedDir = mapDir;
 }
 }
-
-// --- Export functions ---
 
 void export_map_wmo() {
 casc::ExportHelper helper(1, "WMO");
@@ -966,13 +940,11 @@ TiledPNGWriter writer(canvas_width, canvas_height, output_tile_size);
 
 for (const auto& [coord_key, tile_list] : tiles_by_coord) {
 	if (helper.isCancelled()) break;
-	// Parse coord key "x,y"
 	auto comma = coord_key.find(',');
 	if (comma == std::string::npos) continue;
 	int tx = std::stoi(coord_key.substr(0, comma));
 	int ty = std::stoi(coord_key.substr(comma + 1));
 
-	// Composite all tiles at this position
 	std::vector<uint8_t> composite(output_tile_size * output_tile_size * 4, 0);
 	for (const auto& tile : tile_list) {
 		try {
@@ -1006,7 +978,6 @@ for (const auto& [coord_key, tile_list] : tiles_by_coord) {
 						composite[dst_idx + 2] = rgba[src_idx + 2];
 						composite[dst_idx + 3] = 255;
 					} else {
-						// Porter-Duff source-over compositing.
 						uint8_t dst_a = composite[dst_idx + 3];
 						uint8_t out_a = static_cast<uint8_t>(src_a + dst_a * (255 - src_a) / 255);
 						if (out_a > 0) {
@@ -1060,8 +1031,6 @@ else if (format == "HEIGHTMAPS")
 export_selected_map_as_heightmaps();
 }
 
-// --- Async map tile export (one-tile-per-frame, follows tab_models pattern) ---
-
 enum class MapExportFormat { OBJ, RAW };
 
 struct PendingMapTileExport {
@@ -1106,7 +1075,6 @@ static void pump_map_export() {
 		return;
 	}
 
-	// Process one tile per frame.
 	int index = task.tile_indices[task.next_index++];
 
 	ADTExporter adt(selected_map_id.value_or(0), selected_map_dir, static_cast<uint32_t>(index));
@@ -1155,7 +1123,6 @@ static void pump_map_export() {
 			helper.mark(task.mark_path, false, e.what(), build_stack_trace("pump_map_export", e));
 		}
 	} else {
-		// RAW format
 		try {
 			auto out = adt.exportTile(task.dir, 0, nullptr, &helper, core::view->casc);
 			if (task.export_paths) task.export_paths->writeLine(out.type + ":" + out.path.string());
@@ -1315,7 +1282,6 @@ if (i > 0) tiles_str += ',';
 tiles_str += std::to_string(sorted_tiles[i]);
 }
 
-// MD5 hash matching JS crypto.createHash('md5')
 std::string tile_hash = md5_hex(tiles_str).substr(0, 8);
 
 const std::string filename = selected_map_dir + "_" + tile_hash + ".png";
@@ -1373,7 +1339,6 @@ core::setToast("progress", "Calculating height range across all tiles...", {}, -
 float global_min_height = (std::numeric_limits<float>::infinity)();
 float global_max_height = -(std::numeric_limits<float>::infinity)();
 
-// First pass: determine global height range
 for (size_t i = 0; i < tile_indices.size(); i++) {
 int tile_index = tile_indices[i];
 uint32_t tile_x = static_cast<uint32_t>(tile_index) / constants::GAME::MAP_SIZE;
@@ -1419,7 +1384,6 @@ core::hideToast();
 casc::ExportHelper helper(static_cast<int>(tile_indices.size()), "heightmap");
 helper.start();
 
-// Second pass: generate heightmap PNGs
 for (size_t i = 0; i < tile_indices.size(); i++) {
 int tile_index = tile_indices[i];
 
@@ -1482,7 +1446,6 @@ pixel_data[pixel_offset + 0] = (gray_value >> 8) & 0xFF;
 pixel_data[pixel_offset + 1] = gray_value & 0xFF;
 }
 } else {
-// 8-bit grayscale (default)
 writer.bytesPerPixel = 1;
 writer.bitDepth = 8;
 writer.colorType = 0;
@@ -1514,8 +1477,6 @@ if (export_paths.isOpen())
 export_paths.close();
 helper.finish();
 }
-
-// --- Tab registration ---
 
 void registerTab() {
 modules::register_nav_button("tab_maps", "Maps", "map.svg", install_type::CASC);
@@ -1597,23 +1558,14 @@ std::thread(initialize).detach();
 }
 }
 
-// --- ImGui render ---
-
-/**
- * Render the maps tab widget using ImGui.
- * Equivalent to the Vue component's template rendering.
- */
 void render() {
 auto& view = *core::view;
 
-// Poll for pending async export (one tile per frame).
 pump_map_export();
 
 if (!tab_initialized)
 return;
 
-// --- Watch: selectionMaps ---
-// Compare full selection to detect any change, matching JS Vue $watch reactive behaviour.
 std::string current_selection_str;
 for (const auto& s : view.selectionMaps) {
 current_selection_str += s.get<std::string>();
@@ -1634,13 +1586,11 @@ load_map(map.id, map.dir);
 }
 }
 
-// --- UI Layout ---
 if (app::layout::BeginTab("tab-maps")) {
 
 const ImVec2 tabAvail = ImGui::GetContentRegionAvail();
 const ImVec2 tabOrigin = ImGui::GetCursorPos();
 
-// --- Row 1: Expansion filter buttons (auto height) ---
 {
 	ImGui::SetCursorPos(tabOrigin);
 	app::theme::renderExpansionFilterButtons(
@@ -1649,11 +1599,9 @@ const ImVec2 tabOrigin = ImGui::GetCursorPos();
 }
 float expansionRowH = ImGui::GetCursorPosY() - tabOrigin.y;
 
-// Calculate remaining space for the list-tab grid (rows 2 + 3).
-constexpr float FILTER_BAR_H = app::layout::FILTER_BAR_HEIGHT; // 60px
+constexpr float FILTER_BAR_H = app::layout::FILTER_BAR_HEIGHT;
 const float contentH = tabAvail.y - expansionRowH;
 
-// --- Calculate grid regions manually for the remaining space ---
 constexpr float SIDEBAR_W = app::layout::SIDEBAR_WIDTH;
 const float gridW = tabAvail.x - SIDEBAR_W;
 const float leftColW = gridW * 0.5f;
@@ -1662,7 +1610,6 @@ const float topRowH = contentH - FILTER_BAR_H;
 
 const float rowYStart = tabOrigin.y + expansionRowH;
 
-// --- Left panel: Map list container (row 2, col 1) ---
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + app::layout::LIST_MARGIN_LEFT,
 	                           rowYStart + app::layout::LIST_MARGIN_TOP));
@@ -1670,15 +1617,12 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 		ImVec2(leftColW - app::layout::LIST_MARGIN_LEFT - app::layout::LIST_MARGIN_RIGHT,
 		       topRowH - app::layout::LIST_MARGIN_TOP));
 
-	// Convert JSON items to string vector for listbox
 	const auto& map_items = core::cached_json_strings(view.mapViewerMaps, s_items_cache, s_items_cache_size);
 
-	// Convert JSON selection to string vector
 	std::vector<std::string> selection_strs;
 	for (const auto& s : view.selectionMaps)
 		selection_strs.push_back(s.get<std::string>());
 
-	// Determine copy mode
 	listbox::CopyMode copy_mode = listbox::CopyMode::Default;
 	std::string copy_mode_str = view.config.value("copyMode", "Default");
 	if (copy_mode_str == "DIR") copy_mode = listbox::CopyMode::DIR;
@@ -1689,18 +1633,18 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 		map_items,
 		view.userInputFilterMaps,
 		selection_strs,
-		true,   // single
-		true,   // keyinput
+		true,
+		true,
 		view.config.value("regexFilters", false),
 		copy_mode,
 		view.config.value("pasteSelection", false),
 		view.config.value("removePathSpacesCopy", false),
-		"map",  // unittype
-		nullptr, // overrideItems
-		false,   // disable
-		"maps",  // persistscrollkey
-		{},      // quickfilters
-		false,   // nocopy
+		"map",
+		nullptr,
+		false,
+		"maps",
+		{},
+		false,
 		view.selectedExpansionFilter,
 		listbox_state,
 		[&](const std::vector<std::string>& new_sel) {
@@ -1713,10 +1657,9 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 		}
 	);
 
-	ImGui::EndChild(); // maps-list-container
+	ImGui::EndChild();
 }
 
-// --- Right panel: Map Viewer (row 1 spanning to row 2, col 2) ---
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + leftColW + app::layout::PREVIEW_MARGIN_LEFT,
 	                           tabOrigin.y + app::layout::PREVIEW_MARGIN_TOP));
@@ -1735,14 +1678,12 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 			return load_map_tile(x, y, size);
 	};
 
-	// Convert mapViewerChunkMask (JSON) to std::vector<int>
 	std::vector<int> mask;
 	if (view.mapViewerChunkMask.is_array()) {
 		for (const auto& v : view.mapViewerChunkMask)
 			mask.push_back(v.get<int>());
 	}
 
-	// Convert mapViewerSelection to std::vector<int>
 	std::vector<int> selection;
 	for (const auto& v : view.mapViewerSelection)
 		selection.push_back(v.get<int>());
@@ -1755,9 +1696,9 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 		"map-viewer",
 		map_viewer_state,
 		tile_loader,
-		512,   // tileSize
+		512,
 		map_id,
-		12,    // zoom
+		12,
 		mask,
 		selection,
 		selectable,
@@ -1769,10 +1710,9 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 		}
 	);
 
-	ImGui::EndChild(); // maps-preview-container
+	ImGui::EndChild();
 }
 
-// --- Filter bar (row 3, col 1) ---
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x, rowYStart + topRowH));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f, 0.0f));
@@ -1799,7 +1739,6 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 	ImGui::PopStyleVar();
 }
 
-// Context menu
 {
 	const auto& node = view.contextMenus.nodeMap;
 	context_menu::render(
@@ -1830,7 +1769,6 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 	);
 }
 
-// --- Preview controls (row 3, col 2) ---
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + leftColW, rowYStart + topRowH));
 	ImGui::BeginChild("maps-preview-controls", ImVec2(rightColW, FILTER_BAR_H), ImGuiChildFlags_None,
@@ -1880,7 +1818,6 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 	ImGui::EndChild();
 }
 
-// --- Sidebar (col 3, spanning all rows) ---
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + gridW,
 	                           tabOrigin.y + app::layout::SIDEBAR_MARGIN_TOP));
@@ -1950,7 +1887,6 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 	if (!maps_export_raw) {
 		ImGui::SeparatorText("Terrain Texture Quality");
 
-		// Texture quality dropdown
 		std::vector<menu_button::MenuOption> quality_options;
 		for (const auto& opt : view.menuButtonTextureQuality)
 			quality_options.push_back({opt.label, std::to_string(opt.value)});
@@ -1972,7 +1908,6 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 
 		ImGui::SeparatorText("Heightmaps");
 
-		// Heightmap resolution dropdown
 		std::vector<menu_button::MenuOption> hm_res_options;
 		for (const auto& opt : view.menuButtonHeightmapResolution)
 			hm_res_options.push_back({opt.label, std::to_string(opt.value)});
@@ -1992,7 +1927,6 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 			nullptr
 		);
 
-		// Heightmap bit depth dropdown
 		std::vector<menu_button::MenuOption> hm_depth_options;
 		for (const auto& opt : view.menuButtonHeightmapBitDepth)
 			hm_depth_options.push_back({opt.label, std::to_string(opt.value)});
@@ -2013,7 +1947,6 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 			nullptr
 		);
 
-		// Custom resolution input
 		if (view.config.value("heightmapResolution", 256) == -1) {
 			ImGui::Spacing();
 			ImGui::Text("Heightmap Resolution");
@@ -2025,11 +1958,11 @@ const float rowYStart = tabOrigin.y + expansionRowH;
 		}
 	}
 
-	ImGui::EndChild(); // maps-sidebar
+	ImGui::EndChild();
 }
 
-} // if BeginTab
+}
 app::layout::EndTab();
 }
 
-} // namespace tab_maps
+}

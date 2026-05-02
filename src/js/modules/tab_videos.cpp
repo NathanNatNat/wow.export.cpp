@@ -70,15 +70,12 @@ static int fieldToInt(const db::FieldValue& val) {
 	return 0;
 }
 
-// --- File-local state ---
-
 static std::optional<std::unordered_map<uint32_t, uint32_t>> movie_variation_map;
 
 static std::optional<std::vector<uint32_t>> video_file_data_ids;
 
 static std::string selected_file;
 
-// Video playback uses Kino server streaming; no local video element in C++.
 static std::string current_video_url;
 
 static bool has_subtitle_track = false;
@@ -94,23 +91,17 @@ static std::atomic<bool> poll_cancelled{false};
 static std::atomic<bool> kino_processing_cancelled{false};
 static std::atomic<bool> kino_processing_active{false};
 
-// Background thread for stream_video HTTP + polling (replaces JS async/await).
 static std::unique_ptr<std::jthread> stream_worker_thread;
 static std::mutex stream_result_mutex;
 
-// Change-detection for selection and config watches.
 static bool prev_video_player_show_subtitles = false;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 static menu_button::MenuButtonState menu_button_videos_state;
 
-// Background workers for long-running async work (kino processing, exports).
-// JS runs these as `async` functions; in C++ we use std::jthread to avoid blocking
-// the UI thread on HTTP polling. Thread handles persist so they can be joined / replaced.
 static std::unique_ptr<std::jthread> kino_processing_thread;
 static std::unique_ptr<std::jthread> export_selected_thread;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 
@@ -119,7 +110,6 @@ struct SubtitleInfo {
 	int format = 0;
 };
 
-// Results from the background streaming thread, consumed on the main thread.
 struct StreamResult {
 	bool success = false;
 	std::string video_url;
@@ -128,22 +118,17 @@ struct StreamResult {
 };
 static std::optional<StreamResult> pending_stream_result;
 
-// --- Movie data struct ---
-
 struct MovieData {
 	uint32_t AudioFileDataID = 0;
 	uint32_t SubtitleFileDataID = 0;
 	int SubtitleFileFormat = 0;
 };
 
-// --- Build payload result ---
-
 struct BuildPayloadResult {
 	nlohmann::json payload;
 	std::optional<SubtitleInfo> subtitle;
 };
 
-// --- Helper: convert FileEncodingInfo to JSON for Kino API ---
 static nlohmann::json encoding_info_to_json(const casc::FileEncodingInfo& info) {
 	nlohmann::json j;
 	j["enc"] = info.enc;
@@ -157,14 +142,10 @@ static nlohmann::json encoding_info_to_json(const casc::FileEncodingInfo& info) 
 	return j;
 }
 
-// --- HTTP helper: POST JSON to Kino API ---
-// Returns (status_code, response_body_json). Throws on connection error.
 static std::pair<int, nlohmann::json> kino_post(const nlohmann::json& payload) {
-	// The JS uses fetch() with POST to constants.KINO.API_URL; C++ uses cpp-httplib.
-	// Parse host and path from the constant at runtime so changes to the constant are reflected.
 	const std::string api_url(constants::KINO::API_URL);
 	std::string_view sv(constants::KINO::API_URL);
-	sv.remove_prefix(8); // strip "https://"
+	sv.remove_prefix(8);
 	const auto slash = sv.find('/');
 	const std::string host(sv.substr(0, slash));
 	const std::string path(sv.substr(slash));
@@ -189,27 +170,20 @@ static std::pair<int, nlohmann::json> kino_post(const nlohmann::json& payload) {
 		try {
 			response_json = nlohmann::json::parse(res->body);
 		} catch (...) {
-			// Body is not JSON, leave as null
 		}
 	}
 
 	return { res->status, response_json };
 }
 
-// --- Internal functions ---
-
 static void stop_video() {
 	poll_cancelled.store(true);
 
 	poll_active = false;
 
-	// Join/reset the background streaming thread so it cannot post results after stop.
-	// JS equivalent: clearTimeout(poll_timer) which fully cancels pending work.
 	if (stream_worker_thread)
 		stream_worker_thread.reset();
 
-	// Video element pause/unload is a browser API; in C++ we reset state.
-	// The video was opened externally via the platform shell; we clear the URL.
 	current_video_url.clear();
 	has_subtitle_track = false;
 	current_subtitle_vtt.clear();
@@ -288,10 +262,6 @@ static std::optional<BuildPayloadResult> build_payload(uint32_t file_data_id) {
 }
 
 static void play_streaming_video(const std::string& url, const std::optional<SubtitleInfo>& subtitle_info) {
-	// The Kino server provides a direct MP4 URL. In C++ there is no built-in video element;
-	// the URL is opened in the system's default media player / browser via the platform shell
-	// (ShellExecuteW on Windows, xdg-open on Linux), matching the NW.js → C++ translation
-	// pattern for browser-specific APIs.
 	current_video_url = url;
 
 	// always load subtitles if available, toggle visibility based on config
@@ -308,7 +278,6 @@ static void play_streaming_video(const std::string& url, const std::optional<Sub
 		}
 	}
 
-	// Open the video URL in the system's default handler (browser/media player).
 	core::openInExplorer(url);
 	logging::write(std::format("opened video URL in system handler: {}", url));
 
@@ -338,21 +307,13 @@ static void stream_video(const std::string& file_name) {
 		return;
 	}
 
-	// Capture payload and subtitle by value for the background thread.
 	nlohmann::json payload = build_result->payload;
 	std::optional<SubtitleInfo> subtitle = build_result->subtitle;
 	logging::write(std::format("sending kino request: {}", payload.dump()));
 
-	// JS shows no toast before the initial HTTP request. Only when a 202 response is received
-	// does it show "Video is being processed, please wait..." (TODO 99: spurious pre-request
-	// "Connecting..." toast removed). The cancellation handler is registered when 202 arrives.
-
-	// Ensure any previous background thread is completed before launching a new one.
 	if (stream_worker_thread)
 		stream_worker_thread.reset();
 
-	// Launch the HTTP request + polling on a background thread so the UI stays responsive.
-	// Results are posted via stream_result_mutex / pending_stream_result and consumed in render().
 	stream_worker_thread = std::make_unique<std::jthread>([payload = std::move(payload),
 	                                                        subtitle = std::move(subtitle),
 	                                                        file_name]() {
@@ -378,9 +339,6 @@ static void stream_video(const std::string& file_name) {
 
 				poll_active = true;
 
-				// JS: core_ref.setToast('progress', 'Video is being processed, please wait...', null, -1, true)
-				// JS: core_ref.events.once('toast-cancelled', cancel_handler)
-				// Post to main thread so we can call setToast and register the cancel handler.
 				core::postToMainThread([]() {
 					if (!poll_cancelled.load()) {
 						core::setToast("progress", "Video is being processed, please wait...", {}, -1, true);
@@ -396,7 +354,6 @@ static void stream_video(const std::string& file_name) {
 
 				bool poll_done = false;
 				while (!poll_done && !poll_cancelled.load()) {
-					// Sleep for poll interval, then retry
 					std::this_thread::sleep_for(std::chrono::milliseconds(constants::KINO::POLL_INTERVAL));
 
 					if (poll_cancelled.load())
@@ -420,7 +377,6 @@ static void stream_video(const std::string& file_name) {
 								throw std::runtime_error("server returned 200 but no url");
 							}
 						} else if (poll_status == 202) {
-							// Still processing — loop continues (matches JS recursive setTimeout).
 							logging::write(std::format("video still processing, polling again in {}ms",
 								constants::KINO::POLL_INTERVAL));
 						} else {
@@ -449,7 +405,6 @@ static void stream_video(const std::string& file_name) {
 	});
 }
 
-// Build the video entry list (safe to call from a background thread — does not touch view state).
 static std::vector<std::string> build_video_entries(bool sort_by_id) {
 	logging::write("loading MovieVariation table...");
 	auto& movie_variation = casc::db2::preloadTable("MovieVariation");
@@ -563,7 +518,6 @@ static std::optional<MovieData> get_movie_data(uint32_t file_data_id) {
 
 static std::optional<std::string> get_mp4_url(const nlohmann::json& payload) {
 
-	// Recursive polling: send request, if 202 wait and retry, if 200 return url.
 	while (true) {
 		auto [status, data] = kino_post(payload);
 
@@ -574,7 +528,6 @@ static std::optional<std::string> get_mp4_url(const nlohmann::json& payload) {
 		} else if (status == 202) {
 			// video queued, wait and retry
 			std::this_thread::sleep_for(std::chrono::milliseconds(constants::KINO::POLL_INTERVAL));
-			// return poll_for_url(); — loop continues
 		} else {
 			return std::nullopt;
 		}
@@ -588,7 +541,6 @@ static void trigger_kino_processing() {
 		return;
 	}
 
-	// Don't start a second pass while one is in flight.
 	if (kino_processing_active.load())
 		return;
 
@@ -597,13 +549,9 @@ static void trigger_kino_processing() {
 
 	logging::write(std::format("kino_processing: starting processing of {} videos", video_file_data_ids->size()));
 
-	// JS `trigger_kino_processing` is `async` and `await`s each fetch; the UI keeps responding.
-	// Run the entire loop on a background thread so HTTP polling does not freeze the C++ UI.
-	// Toast updates and the toast-cancelled handler are routed back to the main thread via postToMainThread.
 	kino_processing_thread.reset();
 	kino_processing_thread = std::make_unique<std::jthread>([fdids = *video_file_data_ids]() {
 		const size_t total = fdids.size();
-		// Atomic counters because the toast lambda runs on the main thread while we mutate here.
 		std::atomic<size_t> processed{0};
 		std::atomic<size_t> errors{0};
 
@@ -617,8 +565,6 @@ static void trigger_kino_processing() {
 				if (kino_processing_cancelled.load())
 					return;
 				const std::string msg = std::format("Processing videos: {}/{} ({} errors)", p, total, e);
-				// JS: core.setToast('progress', msg, { 'Cancel': cancel_processing }, -1, true)
-				// The cancel handler simply flips the shared cancelled flag.
 				core::setToast("progress", msg, { {"Cancel", []() {
 					kino_processing_cancelled.store(true);
 					logging::write("kino_processing: cancelled by user");
@@ -626,7 +572,6 @@ static void trigger_kino_processing() {
 			});
 		};
 
-		// JS: core.events.once('toast-cancelled', cancel_processing)
 		size_t cancel_listener_id = core::events.once("toast-cancelled", []() {
 			kino_processing_cancelled.store(true);
 			logging::write("kino_processing: cancelled by user (toast-cancelled)");
@@ -694,8 +639,6 @@ static void trigger_kino_processing() {
 }
 
 // expose to window in dev mode
-
-// --- Export methods ---
 
 static void export_mp4() {
 	auto& view = *core::view;
@@ -823,7 +766,6 @@ static void export_avi() {
 				try {
 					logging::write("Local cinematic file is corrupted, forcing fallback.");
 
-					// JS: casc.getFileByName(file_name, false, false, true, true) — forceFallback=true
 					casc::BLTEReader fallback_data = core::view->casc->getFileByName(file_name, false, false, true, true);
 					fallback_data.writeToFile(export_path);
 
@@ -960,8 +902,6 @@ static void export_subtitles() {
 	helper.finish();
 }
 
-// --- Public API ---
-
 void registerTab() {
 	modules::register_nav_button("tab_videos", "Videos", "film.svg", install_type::CASC);
 }
@@ -969,7 +909,6 @@ void registerTab() {
 void mounted() {
 	auto& view = *core::view;
 
-	// Store initial config values for change-detection (read before launching thread).
 	prev_video_player_show_subtitles = view.config.value("videoPlayerShowSubtitles", false);
 	const bool sort_by_id = view.config.value("listfileSortByID", false);
 
@@ -993,7 +932,6 @@ void mounted() {
 void render() {
 	auto& view = *core::view;
 
-	// --- Consume results from the background streaming thread (main-thread only) ---
 	{
 		std::lock_guard<std::mutex> lock(stream_result_mutex);
 		if (pending_stream_result.has_value()) {
@@ -1012,7 +950,6 @@ void render() {
 		}
 	}
 
-	// --- Change-detection for selection (equivalent to watch on selectionVideos) ---
 	if (!view.selectionVideos.empty()) {
 		const std::string first = casc::listfile::stripFileEntry(view.selectionVideos[0].get<std::string>());
 		if (view.isBusy == 0 && !first.empty() && selected_file != first) {
@@ -1027,27 +964,17 @@ void render() {
 		}
 	}
 
-	// --- Change-detection for subtitle visibility ---
 	const bool current_show_subtitles = view.config.value("videoPlayerShowSubtitles", false);
 	if (current_show_subtitles != prev_video_player_show_subtitles) {
-		//     current_subtitle_track.track.mode = show ? 'showing' : 'hidden';
-		// Subtitle visibility is applied in the preview rendering below;
-		// the config value is read directly when deciding whether to show subtitles.
 		logging::write(std::format("subtitle visibility changed to: {}", current_show_subtitles ? "showing" : "hidden"));
 		prev_video_player_show_subtitles = current_show_subtitles;
 	}
-
-	// --- Template rendering ---
 
 	if (app::layout::BeginTab("tab-video")) {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
-	// --- Left panel: List container (row 1, col 1) ---
-	//     <Listbox v-model:selection="selectionVideos" :items="listfileVideos" ...>
-	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	if (app::layout::BeginListContainer("videos-list-container", regions)) {
-		// Convert JSON items/selection to string vectors.
 		const auto& items_str = core::cached_json_strings(view.listfileVideos, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
@@ -1066,18 +993,18 @@ void render() {
 			items_str,
 			view.userInputFilterVideos,
 			selection_str,
-			false,   // single
-			true,    // keyinput
+			false,
+			true,
 			view.config.value("regexFilters", false),
 			copy_mode,
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
-			"video", // unittype
-			nullptr, // overrideItems
-			false,   // disable
-			"videos", // persistscrollkey
-			{},      // quickfilters
-			false,   // nocopy
+			"video",
+			nullptr,
+			false,
+			"videos",
+			{},
+			false,
 			listbox_state,
 			[&](const std::vector<std::string>& new_sel) {
 				view.selectionVideos.clear();
@@ -1089,7 +1016,6 @@ void render() {
 			}
 		);
 
-		// Context menu for generic listbox.
 		context_menu::render(
 			"ctx-videos",
 			view.contextMenus.nodeListbox,
@@ -1119,26 +1045,19 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
-	// --- Status bar ---
 	if (app::layout::BeginStatusBar("videos-status", regions)) {
 		listbox::renderStatusBar("video", {}, listbox_state);
 	}
 	app::layout::EndStatusBar();
 
-	// --- Filter bar (row 2, col 1) ---
-	//     <div class="regex-info" v-if="config.regexFilters" ...>Regex Enabled</div>
-	//     <input type="text" v-model="userInputFilterVideos" placeholder="Filter videos..."/>
-	// </div>
 	if (app::layout::BeginFilterBar("videos-filter", regions)) {
 		if (view.config.value("regexFilters", false)) {
-			// JS: <div class="regex-info" :title="$core.view.regexTooltip">Regex Enabled</div>
 			ImGui::TextUnformatted("Regex Enabled");
 			if (ImGui::IsItemHovered() && !view.regexTooltip.empty())
 				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
 			ImGui::SameLine();
 		}
 
-		// JS: placeholder="Filter videos..." — v-model has no character limit; use 4096 to match.
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[4096] = {};
 		std::strncpy(filter_buf, view.userInputFilterVideos.c_str(), sizeof(filter_buf) - 1);
@@ -1147,18 +1066,13 @@ void render() {
 	}
 	app::layout::EndFilterBar();
 
-	// --- Right panel: Preview container (row 1, col 2) ---
-	//     <video ref="video_player" class="preview-background" style="..." controls ...></video>
-	// </div>
 	if (app::layout::BeginPreviewContainer("video-preview-container", regions)) {
-		// This preview area shows the current streaming state and subtitle text.
 		if (is_streaming || view.videoPlayerState) {
 			if (!current_video_url.empty()) {
 				ImGui::TextUnformatted("Video opened in external player");
 				ImGui::Spacing();
 				ImGui::TextWrapped("URL: %s", current_video_url.c_str());
 
-				// Show subtitle text overlay when enabled and available.
 				if (has_subtitle_track && !current_subtitle_vtt.empty() &&
 				    view.config.value("videoPlayerShowSubtitles", false)) {
 					ImGui::Spacing();
@@ -1181,20 +1095,6 @@ void render() {
 	}
 	app::layout::EndPreviewContainer();
 
-	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
-	//     <label class="ui-checkbox">
-	//         <input type="checkbox" v-model="config.videoPlayerAutoPlay"/>
-	//         <span>Autoplay</span>
-	//     </label>
-	//     <label class="ui-checkbox">
-	//         <input type="checkbox" v-model="config.videoPlayerShowSubtitles"/>
-	//         <span>Show Subtitles</span>
-	//     </label>
-	//     <div class="tray"></div>
-	//     <MenuButton :options="menuButtonVideos" :default="config.exportVideoFormat"
-	//         @change="config.exportVideoFormat = $event" :disabled="isBusy"
-	//         @click="export_selected">
-	// </div>
 	if (app::layout::BeginPreviewControls("videos-preview-controls", regions)) {
 		bool autoplay_val = view.config.value("videoPlayerAutoPlay", false);
 		if (ImGui::Checkbox("Autoplay", &autoplay_val))
@@ -1208,13 +1108,9 @@ void render() {
 
 		ImGui::SameLine();
 
-		// Spacer (tray)
 		ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x - 200.0f, 0));
 		ImGui::SameLine();
 
-		// JS: <MenuButton :options="menuButtonVideos" :default="config.exportVideoFormat"
-		//                 @change="config.exportVideoFormat = $event" :disabled="isBusy"
-		//                 @click="export_selected">
 		{
 			const bool busy = view.isBusy > 0;
 			std::vector<menu_button::MenuOption> mb_options;
@@ -1229,7 +1125,7 @@ void render() {
 	}
 	app::layout::EndPreviewControls();
 
-	} // if BeginTab
+	}
 	app::layout::EndTab();
 }
 
@@ -1255,10 +1151,6 @@ void preview_video() {
 void export_selected() {
 	const std::string format = core::view->config.value("exportVideoFormat", std::string("AVI"));
 
-	// JS `export_selected` is `async`; each export awaits per-file fetches, keeping the UI alive.
-	// In C++ the export work (especially MP4 via `get_mp4_url`'s polling loop) is blocking, so
-	// dispatch onto a background thread. ExportHelper handles isBusy and toast updates which are
-	// safe to call from a worker thread (they post UI updates internally).
 	export_selected_thread.reset();
 	export_selected_thread = std::make_unique<std::jthread>([format]() {
 		if (format == "MP4") {
@@ -1273,4 +1165,4 @@ void export_selected() {
 	});
 }
 
-} // namespace tab_videos
+}

@@ -38,20 +38,14 @@ static std::optional<std::string> build_stack_trace(const char* function_name, c
 	return std::format("{}: {}", function_name, e.what());
 }
 
-// --- File-local state ---
-
 static bool is_dirty = true;
 
-// Change-detection for config watches.
 static uint32_t prev_cascLocale = 0;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
-
-// --- Internal functions ---
 
 static void compute_raw_files() {
 	if (!is_dirty)
@@ -83,8 +77,6 @@ static void compute_raw_files() {
 	core::setToast("success", std::format("Found {} files in the game client", view.listfileRaw.size()));
 }
 
-// --- Async detect (follows tab_models pattern) ---
-
 struct PendingDetectTask {
 	std::vector<uint32_t> file_ids;
 	size_t next_index = 0;
@@ -101,7 +93,6 @@ static void pump_detect_task() {
 	auto& task = *pending_detect_task;
 
 	if (task.next_index >= task.file_ids.size()) {
-		// Done detecting — process results.
 		if (!task.extension_map.empty()) {
 			std::vector<std::pair<uint32_t, std::string>> entries(task.extension_map.begin(), task.extension_map.end());
 			casc::listfile::ingestIdentifiedFiles(entries);
@@ -124,7 +115,6 @@ static void pump_detect_task() {
 		return;
 	}
 
-	// Process one file per frame.
 	const uint32_t file_data_id = task.file_ids[task.next_index++];
 	core::setToast("progress", std::format("Identifying file {} ({} / {})",
 		file_data_id, task.next_index, task.file_ids.size()));
@@ -133,12 +123,6 @@ static void pump_detect_task() {
 		BufferWrapper data = core::view->casc->getVirtualFileByID(file_data_id);
 
 		for (const auto& check : constants::FILE_IDENTIFIERS) {
-			// JS `check.match` is either a string OR an array of strings (e.g. mp3 has 4 alternatives).
-			// JS Buffer.startsWith() handles both cases internally (buffer.js lines 592–604):
-			// when given an array it returns true if any pattern matches.
-			// The C++ port models this as a fixed `matches[]` array with `match_count`:
-			// `match_count == 1` mirrors JS string-match, `match_count > 1` mirrors JS array-match.
-			// Both forms are exercised in practice (see constants.cpp FILE_IDENTIFIERS) and
 			std::vector<std::string_view> patterns(check.matches.begin(), check.matches.begin() + std::min(static_cast<size_t>(check.match_count), check.matches.size()));
 			if (data.startsWith(patterns)) {
 				task.extension_map[file_data_id] = std::string(check.ext);
@@ -184,8 +168,6 @@ static void detect_raw_files() {
 	pending_detect_task = std::move(task);
 }
 
-// --- Async export (one-file-per-frame, follows tab_models pattern) ---
-
 struct PendingRawExport {
 	std::vector<nlohmann::json> files;
 	size_t next_index = 0;
@@ -216,7 +198,6 @@ static void pump_raw_export() {
 		return;
 	}
 
-	// Process one file per frame.
 	const auto& sel_entry = task.files[task.next_index++];
 
 	std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
@@ -268,8 +249,6 @@ static void export_raw_files() {
 	pending_raw_export = std::move(task);
 }
 
-// --- Public API ---
-
 void registerTab() {
 	modules::register_context_menu_option("tab_raw", "Browse Raw Client Files", "fish.svg",
 		[]() { modules::set_active("tab_raw"); });
@@ -278,18 +257,15 @@ void registerTab() {
 void mounted() {
 	compute_raw_files();
 
-	// Store initial config value for change-detection in render().
 	prev_cascLocale = core::view->config.value("cascLocale", static_cast<uint32_t>(casc::locale_flags::enUS));
 }
 
 void render() {
 	auto& view = *core::view;
 
-	// Poll for pending async detect/export tasks (one file per frame).
 	pump_detect_task();
 	pump_raw_export();
 
-	// --- Change-detection for cascLocale config (equivalent to watch on config.cascLocale) ---
 	const uint32_t current_cascLocale = view.config.value("cascLocale", static_cast<uint32_t>(casc::locale_flags::enUS));
 	if (current_cascLocale != prev_cascLocale) {
 		is_dirty = true;
@@ -301,11 +277,10 @@ void render() {
 
 	const ImVec2 avail = ImGui::GetContentRegionAvail();
 	const ImVec2 cursor = ImGui::GetCursorPos();
-	constexpr float FILTER_H = app::layout::FILTER_BAR_HEIGHT; // 60px
-	constexpr float STATUS_H = 27.0f; // matches CalcListTabRegions statusBarH
+	constexpr float FILTER_H = app::layout::FILTER_BAR_HEIGHT;
+	constexpr float STATUS_H = 27.0f;
 	constexpr float MARGIN = 10.0f;
 
-	// --- List container (row 1, single column) ---
 	const float listTopM = 20.0f;
 	const float listLeftM = 20.0f;
 	const float listRightM = 10.0f;
@@ -315,7 +290,6 @@ void render() {
 	ImGui::BeginChild("raw-list-container",
 		ImVec2(avail.x - listLeftM - listRightM, topH - listTopM));
 	{
-		// Convert JSON items/selection to string vectors.
 		const auto& items_str = core::cached_json_strings(view.listfileRaw, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
@@ -334,18 +308,18 @@ void render() {
 			items_str,
 			view.userInputFilterRaw,
 			selection_str,
-			false,   // single
-			true,    // keyinput
+			false,
+			true,
 			view.config.value("regexFilters", false),
 			copy_mode,
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
-			"file",  // unittype
-			nullptr, // overrideItems
-			false,   // disable
-			"raw",   // persistscrollkey
-			{},      // quickfilters
-			false,   // nocopy
+			"file",
+			nullptr,
+			false,
+			"raw",
+			{},
+			false,
 			listbox_state,
 			[&](const std::vector<std::string>& new_sel) {
 				view.selectionRaw.clear();
@@ -357,7 +331,6 @@ void render() {
 			}
 		);
 
-		// Context menu for generic listbox.
 		context_menu::render(
 			"ctx-raw",
 			view.contextMenus.nodeListbox,
@@ -387,8 +360,6 @@ void render() {
 	}
 	ImGui::EndChild();
 
-	// --- Status bar (file count) ---
-	// JS Listbox prop :includefilecount="true" with unittype="file".
 	ImGui::SetCursorPos(ImVec2(cursor.x + listLeftM, cursor.y + topH));
 	ImGui::BeginChild("raw-status",
 		ImVec2(avail.x - listLeftM - listRightM, STATUS_H), ImGuiChildFlags_None,
@@ -396,18 +367,15 @@ void render() {
 	listbox::renderStatusBar("file", {}, listbox_state);
 	ImGui::EndChild();
 
-	// --- Tray (row 2) ---
 	ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + topH + STATUS_H));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(MARGIN, 0.0f));
 	ImGui::BeginChild("raw-tray", ImVec2(avail.x, FILTER_H), ImGuiChildFlags_None,
 		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-	// Vertically center content.
 	float padY = (FILTER_H - ImGui::GetFrameHeight()) * 0.5f;
 	if (padY > 0.0f)
 		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padY);
 
-	// JS: <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
 	if (view.config.value("regexFilters", false)) {
 		ImGui::TextUnformatted("Regex Enabled");
 		if (ImGui::IsItemHovered())
@@ -417,7 +385,6 @@ void render() {
 
 	const bool busy = view.isBusy > 0;
 
-	// Calculate button widths to give filter the remaining space.
 	float btnDetectW = ImGui::CalcTextSize("Auto-Detect Selected").x + ImGui::GetStyle().FramePadding.x * 2;
 	float btnExportW = ImGui::CalcTextSize("Export Selected").x + ImGui::GetStyle().FramePadding.x * 2;
 	float buttonsW = btnDetectW + 5.0f + btnExportW + 5.0f;
@@ -427,7 +394,6 @@ void render() {
 	ImGui::SetNextItemWidth(filterW);
 	char filter_buf[256] = {};
 	std::strncpy(filter_buf, view.userInputFilterRaw.c_str(), sizeof(filter_buf) - 1);
-	// JS: placeholder="Filter raw files..."
 	if (ImGui::InputTextWithHint("##FilterRaw", "Filter raw files...", filter_buf, sizeof(filter_buf)))
 		view.userInputFilterRaw = filter_buf;
 
@@ -445,9 +411,9 @@ void render() {
 	if (busy) app::theme::EndDisabledButton();
 
 	ImGui::EndChild();
-	ImGui::PopStyleVar(); // WindowPadding
+	ImGui::PopStyleVar();
 
-	} // if BeginTab
+	}
 	app::layout::EndTab();
 }
 
@@ -459,4 +425,4 @@ void export_raw() {
 	export_raw_files();
 }
 
-} // namespace tab_raw
+}

@@ -58,8 +58,6 @@ static std::optional<std::string> build_stack_trace(const char* function_name, c
 	return std::format("{}: {}", function_name, e.what());
 }
 
-// Upload RGBA pixel data to an OpenGL texture, returning the texture ID.
-// Deletes the previous texture if old_tex != 0.
 static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t old_tex = 0) {
 	if (old_tex != 0) {
 		GLuint old_gl = static_cast<GLuint>(old_tex);
@@ -77,7 +75,6 @@ static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t 
 	return static_cast<uint32_t>(tex);
 }
 
-// Composite BLP tile RGBA pixels onto the zone map pixel buffer at (dest_x, dest_y).
 static void composite_blp_tile(casc::BLPImage& blp, int dest_x, int dest_y, int map_w, int map_h,
 	std::vector<uint8_t>& pixels) {
 	std::vector<uint8_t> tile_pixels = blp.toUInt8Array();
@@ -92,7 +89,6 @@ static void composite_blp_tile(casc::BLPImage& blp, int dest_x, int dest_y, int 
 			if (dx < 0 || dx >= map_w) continue;
 			const size_t src_idx = (static_cast<size_t>(y) * tw + x) * 4;
 			const size_t dst_idx = (static_cast<size_t>(dy) * map_w + dx) * 4;
-			// Simple alpha-over compositing.
 			const uint8_t sa = tile_pixels[src_idx + 3];
 			if (sa == 255) {
 				pixels[dst_idx]     = tile_pixels[src_idx];
@@ -137,11 +133,6 @@ static std::string fieldToString(const db::FieldValue& val) {
 	return "";
 }
 
-// --- File-local structures ---
-
-// The zone entry format is: expansion_id \x19 [zone_id] \x19 area_name \x19 (zone_name)
-// Note: tab_zones.h declares ZoneEntry (id, zone_name, area_name) — ZoneDisplayInfo extends it
-// with the expansion field used for filtering. The header's ZoneEntry is currently unused.
 struct ZoneDisplayInfo {
 int id = 0;
 std::string zone_name;
@@ -149,7 +140,6 @@ std::string area_name;
 int expansion = -1;
 };
 
-// Art style layer combining UiMapArt + UiMapArtStyleLayer
 struct CombinedArtStyle {
 int id = 0;
 int ui_map_art_style_id = 0;
@@ -160,46 +150,25 @@ int tile_width = 0;
 int tile_height = 0;
 };
 
-// --- File-local state ---
-
-// Note: EXPANSION_NAMES was removed — it was dead code (never referenced).
-// The actual expansion rendering uses constants::EXPANSIONS.
-
 static std::optional<int> selected_zone_id;
 
 static std::optional<int> selected_phase_id;
 
-// Change-detection.
 static std::string prev_selection_first;
 static bool prev_show_zone_base_map = true;
 static bool prev_show_zone_overlays = true;
 static context_menu::ContextMenuState context_menu_zone_state;
 static listbox_zones::ListboxZonesState listbox_zones_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 
-// --- Background zone-map loading (TODO 544) ---
-// JS `load_zone_map` is async and yields the event loop between tile reads.
-// In C++ we run the heavy CPU/CASC work on a background thread so the UI does
-// not freeze during tile loading. Coordination:
-//   * `s_zone_load_in_flight` is true while a worker thread is rendering.
-//   * `s_pending_zone_id` / `s_pending_phase_id` hold a queued request when
-//     the user changes selection mid-render. The most recent request wins.
-//   * The worker writes into `core::view->zoneMapPixels/Width/Height` while
-//     `core::view->zoneMapTexID` is left untouched until the upload runs on
-//     the main thread, so the previous texture remains displayable.
 static std::atomic<bool> s_zone_load_in_flight{ false };
 static std::mutex s_pending_mutex;
 static std::optional<int> s_pending_zone_id;
 static std::optional<int> s_pending_phase_id;
 
-// --- Internal functions ---
-
 static ZoneDisplayInfo parse_zone_entry(const std::string& entry) {
-	// Format: expansion_id \x19 [zone_id] \x19 AreaName_lang \x19 (ZoneName)
-	// match[1]=id, match[2]=AreaName_lang→zone_name, match[3]=ZoneName→area_name
 	std::regex re(R"((\d+)\x19\[(\d+)\]\x19([^\x19]+)\x19\(([^)]+)\))");
 	std::smatch match;
 	if (!std::regex_match(entry, match, re)) {
@@ -216,7 +185,6 @@ static ZoneDisplayInfo parse_zone_entry(const std::string& entry) {
 }
 
 static std::optional<int> get_zone_ui_map_id(int zone_id) {
-//     if (assignment.AreaID === zone_id) return assignment.UiMapID; }
 auto& ui_map_assignment = casc::db2::getTable("UiMapAssignment");
 if (!ui_map_assignment.isLoaded)
 	ui_map_assignment.parse();
@@ -281,7 +249,6 @@ auto& ui_map = casc::db2::getTable("UiMap");
 if (!ui_map.isLoaded)
 	ui_map.parse();
 auto ui_map_row_opt = ui_map.getRow(static_cast<uint32_t>(*ui_map_id));
-// JS: if (!map_data) { log.write('UiMap entry not found for ID %d', ui_map_id); throw new Error('UiMap entry not found'); }
 if (!ui_map_row_opt.has_value()) {
 	logging::write(std::format("UiMap entry not found for ID {}", *ui_map_id));
 	throw std::runtime_error("UiMap entry not found");
@@ -300,9 +267,6 @@ for (const auto& [id, row] : ui_map_x_map_art.getAllRows()) {
 	auto phase_it = row.find("PhaseID");
 	int row_phase = (phase_it != row.end()) ? fieldToInt(phase_it->second) : 0;
 
-	// JS: if (phase_id === null || link_entry.PhaseID === phase_id)
-	// When phase_id is null (nullopt), ALL entries are included regardless of phase.
-	// When phase_id is specified, only matching phases are included.
 	if (phase_id.has_value() && row_phase != *phase_id)
 		continue;
 
@@ -330,7 +294,6 @@ for (int linked_art_id : linked_art_ids) {
 		continue;
 	const int art_style_id = fieldToInt(art_style_id_it->second);
 
-	// JS keeps only the LAST matching UiMapArtStyleLayer row.
 	const db::DataRecord* style_layer = nullptr;
 	for (const auto& [layer_id, layer_row] : ui_map_art_style_layer.getAllRows()) {
 		auto sid_it = layer_row.find("UiMapArtStyleID");
@@ -344,7 +307,6 @@ for (int linked_art_id : linked_art_ids) {
 		continue;
 	}
 
-	// JS combined_style spreads ...art_entry, so combined_style.ID = UiMapArt row ID (linked_art_id).
 	CombinedArtStyle style;
 	style.id = linked_art_id;
 	style.ui_map_art_style_id = art_style_id;
@@ -376,43 +338,32 @@ throw std::runtime_error("no art styles found for map");
 logging::write(std::format("found {} art styles for UiMap ID {} (phase {})",
 art_styles.size(), *ui_map_id, phase_id.value_or(-1)));
 
-// Sort by LayerIndex.
 std::sort(art_styles.begin(), art_styles.end(), [](const CombinedArtStyle& a, const CombinedArtStyle& b) {
 return a.layer_index < b.layer_index;
 });
 
 int map_width = 0, map_height = 0;
 
-// JS: ctx.clearRect(0, 0, canvas.width, canvas.height) — always clear at the start of render,
-// even if the first art_style has a non-zero LayerIndex (entry 72).
 if (!core::view->zoneMapPixels.empty())
 	std::fill(core::view->zoneMapPixels.begin(), core::view->zoneMapPixels.end(), 0u);
 
 for (const auto& art_style : art_styles) {
-	// UiMapArtTile is preloaded during initialize(); getRelationRows is called inside render_map_tiles.
-
 	if (art_style.layer_index == 0) {
 		map_width = art_style.layer_width;
 		map_height = art_style.layer_height;
 
-		// Allocate pixel buffer for the zone map composite.
 		core::view->zoneMapWidth = map_width;
 		core::view->zoneMapHeight = map_height;
 		core::view->zoneMapPixels.assign(static_cast<size_t>(map_width) * map_height * 4, 0);
 	}
 
 	if (core::view->config.value("showZoneBaseMap", true)) {
-		// JS groups ALL tiles for this art_style by their LayerIndex, then renders each group in
-		// sorted order. C++ previously passed art_style.layer_index as a filter, rendering only
-		// tiles matching that single layer. Now we replicate the JS tile-by-layer approach (entry 69).
 		auto& ui_map_art_tile = casc::db2::getTable("UiMapArtTile");
 		auto all_tiles = ui_map_art_tile.getRelationRows(art_style.id);
 
 		if (all_tiles.empty()) {
-			// JS: log.write('no tiles found for UiMapArt ID %d', art_style.ID); continue;
 			logging::write(std::format("no tiles found for UiMapArt ID {}", art_style.id));
 		} else {
-			// Group tiles by LayerIndex.
 			std::map<int, std::vector<db::DataRecord>> tiles_by_layer;
 			for (const auto& tile : all_tiles) {
 				auto layer_it = tile.find("LayerIndex");
@@ -420,7 +371,6 @@ for (const auto& art_style : art_styles) {
 				tiles_by_layer[tile_layer].push_back(tile);
 			}
 
-			// Render each layer group in sorted order (JS: layer_indices.sort(...) then forEach).
 			for (const auto& [layer_num, layer_tiles] : tiles_by_layer) {
 				logging::write(std::format("rendering layer {} with {} tiles", layer_num, layer_tiles.size()));
 				render_map_tiles(art_style, layer_num, zone_id, skip_zone_check);
@@ -439,7 +389,6 @@ zone_id, *ui_map_id));
 return { map_width, map_height, *ui_map_id };
 }
 
-// Tile render result for Promise.all equivalent tracking.
 struct TileRenderResult {
 	bool success = false;
 	bool skipped = false;
@@ -447,11 +396,9 @@ struct TileRenderResult {
 };
 
 static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index, int expected_zone_id, bool skip_zone_check = false) {
-	// 1. Get tiles from UiMapArtTile for the given art_style, filtered by layer_index.
 	auto& ui_map_art_tile = casc::db2::getTable("UiMapArtTile");
 	auto all_tiles = ui_map_art_tile.getRelationRows(art_style.id);
 
-	// Filter tiles by LayerIndex
 	std::vector<db::DataRecord> tiles;
 	for (const auto& tile : all_tiles) {
 		auto layer_it = tile.find("LayerIndex");
@@ -466,7 +413,6 @@ static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index,
 		}
 	}
 
-	// 2. Sort tiles by RowIndex, then ColIndex.
 	std::sort(tiles.begin(), tiles.end(), [](const db::DataRecord& a, const db::DataRecord& b) {
 		auto get_int = [](const db::DataRecord& r, const std::string& key) -> int {
 			auto it = r.find(key);
@@ -482,10 +428,8 @@ static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index,
 		return get_int(a, "ColIndex") < get_int(b, "ColIndex");
 	});
 
-	// 3. For each tile, load BLP from CASC and composite
 	int successful = 0;
 	for (const auto& tile : tiles) {
-		// Check if zone changed
 		if (!skip_zone_check && selected_zone_id.has_value() && *selected_zone_id != expected_zone_id)
 			break;
 
@@ -510,21 +454,15 @@ static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index,
 		int pixel_x = col * art_style.tile_width;
 		int pixel_y = row * art_style.tile_height;
 
-		// JS: final_x = pixel_x + (tile.OffsetX || 0); final_y = pixel_y + (tile.OffsetY || 0);
-		// (entry 66/68 — apply OffsetX/OffsetY per tile)
 		int final_x = pixel_x + offset_x;
 		int final_y = pixel_y + offset_y;
 
-		// JS: log.write('rendering tile FileDataID %d at position (%d,%d) -> (%d,%d) [Layer %d]', ...)
-		// (entry 173 — per-tile position logging)
 		logging::write(std::format("rendering tile FileDataID {} at position ({},{}) -> ({},{}) [Layer {}]",
 			file_data_id, col, row, final_x, final_y, layer_index));
 
 		try {
-			// c. Load BLP from CASC via tile.FileDataID
 			BufferWrapper blp_data = core::view->casc->getVirtualFileByID(file_data_id, true);
 			casc::BLPImage blp(blp_data);
-			// Composite BLP tile pixels onto zone map texture at (final_x, final_y).
 			composite_blp_tile(blp, final_x, final_y,
 				core::view->zoneMapWidth, core::view->zoneMapHeight,
 				core::view->zoneMapPixels);
@@ -538,7 +476,6 @@ static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index,
 }
 
 static void render_world_map_overlays(const CombinedArtStyle& art_style, int expected_zone_id, bool skip_zone_check = false) {
-	// 1. Get WorldMapOverlay relation rows for the given art_style.ID
 	auto& world_map_overlay = casc::db2::getTable("WorldMapOverlay");
 	auto overlays = world_map_overlay.getRelationRows(art_style.id);
 
@@ -553,12 +490,10 @@ static void render_world_map_overlays(const CombinedArtStyle& art_style, int exp
 	};
 
 	if (overlays.empty()) {
-		// JS: log.write('no WorldMapOverlay entries found for UiMapArt ID %d', art_style.ID);
 		logging::write(std::format("no WorldMapOverlay entries found for UiMapArt ID {}", art_style.id));
 		return;
 	}
 
-	// 2. For each overlay, get tiles and call render_overlay_tiles
 	for (const auto& overlay : overlays) {
 		int overlay_id = get_field_int(overlay, "ID");
 		int offset_x = get_field_int(overlay, "OffsetX");
@@ -568,7 +503,6 @@ static void render_world_map_overlays(const CombinedArtStyle& art_style, int exp
 		auto overlay_tiles = world_map_overlay_tile.getRelationRows(overlay_id);
 
 		if (overlay_tiles.empty()) {
-			// JS: log.write('no tiles found for WorldMapOverlay ID %d', overlay.ID); continue;
 			logging::write(std::format("no tiles found for WorldMapOverlay ID {}", overlay_id));
 			continue;
 		}
@@ -581,14 +515,12 @@ static void render_world_map_overlays(const CombinedArtStyle& art_style, int exp
 }
 
 static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const CombinedArtStyle& art_style, int overlay_offset_x, int overlay_offset_y, int expected_zone_id, bool skip_zone_check = false) {
-	// Check if zone changed or overlays disabled
 	if (!skip_zone_check && selected_zone_id.has_value() && *selected_zone_id != expected_zone_id)
 		return;
 
 	if (!core::view->config.value("showZoneOverlays", true))
 		return;
 
-	// 1. Sort tiles by RowIndex, then ColIndex.
 	std::vector<db::DataRecord> sorted_tiles(tiles.begin(), tiles.end());
 
 	auto get_field_int = [](const db::DataRecord& r, const std::string& key) -> int {
@@ -607,7 +539,6 @@ static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const
 		return get_field_int(a, "ColIndex") < get_field_int(b, "ColIndex");
 	});
 
-	// 2. For each tile, load BLP from CASC
 	int successful = 0;
 	for (const auto& tile : sorted_tiles) {
 		if (!skip_zone_check && selected_zone_id.has_value() && *selected_zone_id != expected_zone_id)
@@ -623,10 +554,8 @@ static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const
 		int base_y = overlay_offset_y + row * art_style.tile_height;
 
 		try {
-			// b. Load BLP from CASC via tile.FileDataID
 			BufferWrapper blp_data = core::view->casc->getVirtualFileByID(file_data_id, true);
 			casc::BLPImage blp(blp_data);
-			// Composite overlay BLP tile pixels onto zone map texture at (base_x, base_y).
 			composite_blp_tile(blp, base_x, base_y,
 				core::view->zoneMapWidth, core::view->zoneMapHeight,
 				core::view->zoneMapPixels);
@@ -639,13 +568,8 @@ static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const
 	logging::write(std::format("rendered {}/{} overlay tiles successfully", successful, sorted_tiles.size()));
 }
 
-// Forward declaration so runZoneLoadWorker() can re-invoke load_zone_map
-// after a completed render flushes any pending request.
 static void load_zone_map(int zone_id, std::optional<int> phase_id = std::nullopt);
 
-// Run a single zone-map render on a background worker thread, then post the
-// GL upload back to the main thread (OpenGL state is main-thread only). When
-// the render finishes, drain any pending request that arrived mid-flight.
 static void runZoneLoadWorker(int zone_id, std::optional<int> phase_id) {
 	std::thread([zone_id, phase_id]() {
 		try {
@@ -657,9 +581,6 @@ static void runZoneLoadWorker(int zone_id, std::optional<int> phase_id) {
 			});
 		}
 
-		// Upload the composited pixel buffer to a GL texture on the main
-		// thread so the new map appears in the preview, then drain any
-		// queued request that arrived while we were rendering.
 		core::postToMainThread([]() {
 			auto& view = *core::view;
 			if (!view.zoneMapPixels.empty() && view.zoneMapWidth > 0 && view.zoneMapHeight > 0) {
@@ -686,10 +607,6 @@ static void runZoneLoadWorker(int zone_id, std::optional<int> phase_id) {
 }
 
 static void load_zone_map(int zone_id, std::optional<int> phase_id) {
-	// JS load_zone_map is awaited from watch handlers; in C++ we run the
-	// rendering on a worker thread so the UI keeps animating. If a previous
-	// load is still running, queue the latest request — the running worker
-	// will pick it up when it finishes (the most recent zone wins).
 	bool expected = false;
 	if (!s_zone_load_in_flight.compare_exchange_strong(expected, true,
 		std::memory_order_acq_rel)) {
@@ -702,18 +619,14 @@ static void load_zone_map(int zone_id, std::optional<int> phase_id) {
 	runZoneLoadWorker(zone_id, phase_id);
 }
 
-// --- Public API ---
-
 void registerTab() {
 modules::register_nav_button("tab_zones", "Zones", "mountain-castle.svg", install_type::CASC);
 }
 
 void mounted() {
-// Store initial config values for change-detection (fast read, main thread).
 prev_show_zone_base_map = core::view->config.value("showZoneBaseMap", true);
 prev_show_zone_overlays = core::view->config.value("showZoneOverlays", true);
 
-// Launch heavy DB initialization on background thread so the loading screen is visible.
 std::thread([]() {
 	core::showLoadingScreen(3);
 
@@ -795,7 +708,6 @@ static void open_zone_export_directory();
 void render() {
 auto& view = *core::view;
 
-// --- Change-detection for selection (equivalent to watch on selectionZones) ---
 if (!view.selectionZones.empty()) {
 const std::string first = view.selectionZones[0].get<std::string>();
 if (view.isBusy == 0 && !first.empty() && first != prev_selection_first) {
@@ -833,7 +745,6 @@ prev_selection_first = first;
 }
 }
 
-// --- Change-detection for zonePhaseSelection ---
 if (!view.zonePhaseSelection.is_null() && view.zonePhaseSelection.is_number()) {
 int new_phase = view.zonePhaseSelection.get<int>();
 if (selected_zone_id.has_value() && view.isBusy == 0 &&
@@ -845,7 +756,6 @@ load_zone_map(*selected_zone_id, selected_phase_id);
 }
 }
 
-// --- Change-detection for config.showZoneBaseMap ---
 const bool current_show_base_map = view.config.value("showZoneBaseMap", true);
 if (current_show_base_map != prev_show_zone_base_map) {
 if (selected_zone_id.has_value() && view.isBusy == 0) {
@@ -856,7 +766,6 @@ load_zone_map(*selected_zone_id, selected_phase_id);
 prev_show_zone_base_map = current_show_base_map;
 }
 
-// --- Change-detection for config.showZoneOverlays ---
 const bool current_show_overlays = view.config.value("showZoneOverlays", true);
 if (current_show_overlays != prev_show_zone_overlays) {
 if (selected_zone_id.has_value() && view.isBusy == 0) {
@@ -867,16 +776,11 @@ load_zone_map(*selected_zone_id, selected_phase_id);
 prev_show_zone_overlays = current_show_overlays;
 }
 
-// --- Template rendering ---
-
 if (app::layout::BeginTab("tab-zones")) {
 
 const ImVec2 tabAvail = ImGui::GetContentRegionAvail();
 const ImVec2 tabOrigin = ImGui::GetCursorPos();
 
-// --- Row 1: Expansion filter buttons (auto height) ---
-//     <button class="expansion-button show-all" ...>
-//     <button v-for="expansion in $core.view.constants.EXPANSIONS" ...>
 {
 	ImGui::SetCursorPos(tabOrigin);
 	app::theme::renderExpansionFilterButtons(
@@ -885,9 +789,8 @@ const ImVec2 tabOrigin = ImGui::GetCursorPos();
 }
 float expansionRowH = ImGui::GetCursorPosY() - tabOrigin.y;
 
-// Calculate remaining space for the list-tab grid (rows 2 + 3).
-constexpr float FILTER_BAR_H = app::layout::FILTER_BAR_HEIGHT; // 60px
-constexpr float STATUS_BAR_H = 27.0f; // matches CalcListTabRegions() in app.cpp
+constexpr float FILTER_BAR_H = app::layout::FILTER_BAR_HEIGHT;
+constexpr float STATUS_BAR_H = 27.0f;
 const float contentH = tabAvail.y - expansionRowH;
 
 constexpr float COL_RATIO = 1.5f / 3.5f;
@@ -898,23 +801,17 @@ const float topRowH = contentH - FILTER_BAR_H;
 
 const float rowYStart = tabOrigin.y + expansionRowH;
 
-// JS template uses :includefilecount="true" on the zones listbox (TODO 543);
-// the C++ status bar lives in a 27px strip between the listbox and the
-// filter bar, populated via listbox::renderStatusBar() below.
 const float listInnerW = leftColW - app::layout::LIST_MARGIN_LEFT - app::layout::LIST_MARGIN_RIGHT;
 const float listInnerH = topRowH - app::layout::LIST_MARGIN_TOP - STATUS_BAR_H;
 
-// --- Left panel: Zone listbox (row 2, col 1) ---
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + app::layout::LIST_MARGIN_LEFT,
 	                           rowYStart + app::layout::LIST_MARGIN_TOP));
 	ImGui::BeginChild("zones-list-container",
 		ImVec2(listInnerW, listInnerH));
 
-	// Convert json items to string array.
 	const auto& zone_strings = core::cached_json_strings(view.zoneViewerZones, s_items_cache, s_items_cache_size);
 
-	// Build selection as string array.
 	std::vector<std::string> sel_strings;
 	for (const auto& s : view.selectionZones)
 		sel_strings.push_back(s.get<std::string>());
@@ -928,18 +825,18 @@ const float listInnerH = topRowH - app::layout::LIST_MARGIN_TOP - STATUS_BAR_H;
 
 	listbox_zones::render("##ZoneListbox", zone_strings,
 		view.userInputFilterZones, sel_strings,
-		false,   // single
-		true,    // keyinput
+		false,
+		true,
 		view.config.value("regexFilters", false),
 		copy_mode,
 		view.config.value("pasteSelection", false),
 		view.config.value("removePathSpacesCopy", false),
-		"zone",  // unittype
-		nullptr, // overrideItems
-		false,   // disable
-		"zones", // persistscrollkey
-		{},      // quickfilters
-		false,   // nocopy
+		"zone",
+		nullptr,
+		false,
+		"zones",
+		{},
+		false,
 		view.selectedZoneExpansionFilter,
 		listbox_zones_state,
 		[&](const std::vector<std::string>& new_sel) {
@@ -954,10 +851,9 @@ const float listInnerH = topRowH - app::layout::LIST_MARGIN_TOP - STATUS_BAR_H;
 			view.contextMenus.nodeZone = node;
 		});
 
-	ImGui::EndChild(); // zones-list-container
+	ImGui::EndChild();
 }
 
-// --- Status bar (TODO 543: equivalent of JS :includefilecount="true") ---
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + app::layout::LIST_MARGIN_LEFT,
 	                           rowYStart + app::layout::LIST_MARGIN_TOP + listInnerH));
@@ -968,7 +864,6 @@ const float listInnerH = topRowH - app::layout::LIST_MARGIN_TOP - STATUS_BAR_H;
 	ImGui::EndChild();
 }
 
-// Context menu.
 context_menu::render(
 	"ctx-zone",
 	view.contextMenus.nodeZone,
@@ -995,26 +890,18 @@ context_menu::render(
 	}
 );
 
-// --- Right panel: Zone map preview (row 1 spanning to row 2, col 2) ---
-//     <canvas id="zone-canvas"></canvas>
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + leftColW + app::layout::PREVIEW_MARGIN_LEFT,
 	                           tabOrigin.y + app::layout::PREVIEW_MARGIN_TOP));
-	// CSS: .ui-map-viewer { border: 1px solid var(--border); box-shadow: black 0 0 3px 0; }
 	ImGui::BeginChild("zone-canvas-area",
 		ImVec2(rightColW - app::layout::PREVIEW_MARGIN_LEFT - app::layout::PREVIEW_MARGIN_RIGHT,
 		       tabAvail.y - FILTER_BAR_H - app::layout::PREVIEW_MARGIN_TOP),
 		ImGuiChildFlags_Borders);
 
-	// While a background load is rendering into view.zoneMapPixels/Width/
-	// Height (TODO 544), skip ImGui::Image — the texID still points at the
-	// previous texture but the dimensions are mid-write. Show a placeholder
-	// so the user knows a load is in progress.
 	const bool zone_loading = s_zone_load_in_flight.load(std::memory_order_acquire);
 	if (zone_loading) {
 		ImGui::TextUnformatted("Loading zone map...");
 	} else if (view.zoneMapTexID != 0 && view.zoneMapWidth > 0 && view.zoneMapHeight > 0) {
-		// Fit zone map into available area while preserving aspect ratio.
 		const ImVec2 avail = ImGui::GetContentRegionAvail();
 		const float tex_w = static_cast<float>(view.zoneMapWidth);
 		const float tex_h = static_cast<float>(view.zoneMapHeight);
@@ -1025,8 +912,6 @@ context_menu::render(
 		ImGui::TextUnformatted("Select a zone to preview its map");
 	}
 
-	// Phase dropdown overlay — JS: preview-dropdown-overlay div positioned over the zone canvas.
-	// Rendered inside the canvas child so it overlays the map image at the bottom-right corner.
 	if (view.zonePhases.size() > 1) {
 		const ImVec2 canvas_size = ImGui::GetWindowSize();
 		const float combo_w = 140.0f;
@@ -1061,10 +946,9 @@ context_menu::render(
 		}
 	}
 
-	ImGui::EndChild(); // zone-canvas-area
+	ImGui::EndChild();
 }
 
-// --- Filter bar (row 3, col 1) ---
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x, rowYStart + topRowH));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f, 0.0f));
@@ -1090,11 +974,6 @@ context_menu::render(
 	ImGui::PopStyleVar();
 }
 
-// --- Preview controls (row 3, col 2) ---
-//     <label>Show Base Map <input type="checkbox"...></label>
-//     <label>Show Overlays <input type="checkbox"...></label>
-//     <MenuButton ...>Export Map</MenuButton>
-//     <select v-model="zonePhaseSelection">...</select>
 {
 	ImGui::SetCursorPos(ImVec2(tabOrigin.x + leftColW, rowYStart + topRowH));
 	ImGui::BeginChild("zones-preview-controls", ImVec2(rightColW, FILTER_BAR_H), ImGuiChildFlags_None,
@@ -1125,11 +1004,9 @@ context_menu::render(
 	ImGui::EndChild();
 }
 
-} // if BeginTab
+}
 app::layout::EndTab();
 }
-
-// --- Context menu methods ---
 
 static void handle_zone_context(const std::vector<std::string>& selection) {
 	nlohmann::json node;
@@ -1137,7 +1014,6 @@ static void handle_zone_context(const std::vector<std::string>& selection) {
 	node["count"] = static_cast<int>(selection.size());
 	core::view->contextMenus.nodeZone = std::move(node);
 }
-// The methods below implement the clipboard operations identically to JS.
 
 static void copy_zone_names(const std::vector<std::string>& selection) {
 std::string result;
@@ -1224,7 +1100,6 @@ for (char c : s) {
 if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == ' ')
 result += c;
 }
-// Replace whitespace runs with underscore.
 std::string final_result;
 bool last_was_space = false;
 for (char c : result) {
@@ -1298,4 +1173,4 @@ helper.finish();
 }
 
 
-} // namespace tab_zones
+}

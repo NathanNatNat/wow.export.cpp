@@ -30,20 +30,14 @@
 
 namespace tab_text {
 
-// --- File-local state ---
-
 static std::string selected_file;
 
-// Change-detection for selectionText.
 static std::string prev_selection_first;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
-
-// --- Async text preview (follows tab_models pattern) ---
 
 struct PendingTextPreview {
 	std::string file_name;
@@ -54,7 +48,6 @@ struct PendingTextPreview {
 static std::optional<PendingTextPreview> pending_text_preview;
 
 static void preview_text(const std::string& file_name) {
-	// Cancel any pending preview.
 	pending_text_preview.reset();
 
 	auto* casc = core::view->casc;
@@ -87,7 +80,6 @@ static void pump_text_preview() {
 		core::setToast("error", std::format("The text file {} is encrypted with an unknown key ({}).", task.file_name, e.key), {}, -1);
 		logging::write(std::format("Failed to decrypt texture {} ({})", task.file_name, e.key));
 	} catch (const std::exception& e) {
-		// JS: this.$core.setToast('error', 'Unable to preview text file ' + first, { 'View Log': () => log.openRuntimeLog() }, -1);
 		core::setToast("error", "Unable to preview text file " + task.file_name,
 		               { {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open CASC file: {}", e.what()));
@@ -101,21 +93,16 @@ void registerTab() {
 }
 
 void mounted() {
-	// Change-detection is handled in render() by comparing selectionText[0] each frame.
 }
 
-// Forward declaration for pump_text_export (defined after render).
 static void pump_text_export();
 
 void render() {
 	auto& view = *core::view;
 
-	// Poll for pending async text preview completion.
 	pump_text_preview();
-	// Poll for pending async text export (one file per frame).
 	pump_text_export();
 
-	// --- Change-detection for selection preview (equivalent to watch on selectionText) ---
 	if (!view.selectionText.empty()) {
 		const std::string first = casc::listfile::stripFileEntry(view.selectionText[0].get<std::string>());
 		if (view.isBusy == 0 && !first.empty() && first != prev_selection_first) {
@@ -127,11 +114,7 @@ void render() {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
-	// --- Left panel: List container (row 1, col 1) ---
-	//     <Listbox v-model:selection="selectionText" :items="listfileText" ...>
-	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
 	if (app::layout::BeginListContainer("text-list-container", regions)) {
-		// Convert JSON items/selection to string vectors.
 		const auto& items_str = core::cached_json_strings(view.listfileText, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
@@ -150,18 +133,18 @@ void render() {
 			items_str,
 			view.userInputFilterText,
 			selection_str,
-			false,   // single
-			true,    // keyinput
+			false,
+			true,
 			view.config.value("regexFilters", false),
 			copy_mode,
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
-			"text file", // unittype
-			nullptr, // overrideItems
-			false,   // disable
-			"text",  // persistscrollkey
-			view.textQuickFilters, // quickfilters
-			false,   // nocopy
+			"text file",
+			nullptr,
+			false,
+			"text",
+			view.textQuickFilters,
+			false,
 			listbox_state,
 			[&](const std::vector<std::string>& new_sel) {
 				view.selectionText.clear();
@@ -173,7 +156,6 @@ void render() {
 			}
 		);
 
-		// Context menu for generic listbox.
 		context_menu::render(
 			"ctx-text",
 			view.contextMenus.nodeListbox,
@@ -203,16 +185,13 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
-	// --- Status bar ---
 	if (app::layout::BeginStatusBar("text-status", regions)) {
 		listbox::renderStatusBar("text file", view.textQuickFilters, listbox_state);
 	}
 	app::layout::EndStatusBar();
 
-	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("text-filter", regions)) {
 		if (view.config.value("regexFilters", false)) {
-			// JS: <div class="regex-info" :title="$core.view.regexTooltip">Regex Enabled</div>
 			ImGui::TextUnformatted("Regex Enabled");
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
@@ -226,16 +205,10 @@ void render() {
 	}
 	app::layout::EndFilterBar();
 
-	// --- Right panel: Preview container (row 1, col 2) ---
-	//     <div class="preview-background"><pre>{{ textViewerSelectedText }}</pre></div>
 	if (app::layout::BeginPreviewContainer("text-preview-container", regions)) {
-		// CSS: #tab-text .preview-container .preview-background { background: var(--background-dark); }
-		// CSS: #tab-text .preview-container .preview-background pre { overflow: scroll; padding: 15px; }
-		// WindowPadding applies 15px on all four sides, matching CSS padding: 15px.
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(15.0f, 15.0f));
 		ImGui::BeginChild("text-preview-background", ImVec2(0, 0), ImGuiChildFlags_None,
 		                  ImGuiWindowFlags_HorizontalScrollbar);
-		// Pre-formatted text: no wrapping, monospace-style output.
 		ImGui::TextUnformatted(view.textViewerSelectedText.c_str());
 
 		ImGui::EndChild();
@@ -243,7 +216,6 @@ void render() {
 	}
 	app::layout::EndPreviewContainer();
 
-	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
 	if (app::layout::BeginPreviewControls("text-preview-controls", regions)) {
 		if (ImGui::Button("Copy to Clipboard"))
 			copy_text();
@@ -258,7 +230,7 @@ void render() {
 	}
 	app::layout::EndPreviewControls();
 
-	} // if BeginTab
+	}
 	app::layout::EndTab();
 }
 
@@ -266,8 +238,6 @@ void copy_text() {
 	ImGui::SetClipboardText(core::view->textViewerSelectedText.c_str());
 	core::setToast("success", std::format("Copied contents of {} to the clipboard.", selected_file), {}, -1, true);
 }
-
-// --- Async export (one-file-per-frame, follows tab_models pattern) ---
 
 struct PendingTextExport {
 	std::vector<nlohmann::json> files;
@@ -299,7 +269,6 @@ static void pump_text_export() {
 		return;
 	}
 
-	// Process one file per frame.
 	const auto& sel_entry = task.files[task.next_index++];
 	std::string file_name = casc::listfile::stripFileEntry(sel_entry.get<std::string>());
 	std::string export_file_name = file_name;
@@ -327,8 +296,6 @@ static void pump_text_export() {
 
 		helper.mark(export_file_name, true);
 	} catch (const std::exception& e) {
-		// JS: helper.mark(export_file_name, false, e.message, e.stack)
-		// C++23 has no portable JS-stack equivalent; pass a synthesised trace string.
 		helper.mark(export_file_name, false, e.what(),
 			std::string("pump_text_export: ") + e.what());
 	}
@@ -353,4 +320,4 @@ void export_text() {
 	pending_text_export = std::move(task);
 }
 
-} // namespace tab_text
+}

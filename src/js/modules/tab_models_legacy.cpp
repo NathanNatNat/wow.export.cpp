@@ -49,8 +49,6 @@
 
 namespace tab_models_legacy {
 
-// --- File-local constants ---
-
 static constexpr uint32_t MAGIC_MD20 = 0x3032444D;
 
 static constexpr uint32_t MAGIC_MDLX = 0x584C444D;
@@ -62,8 +60,6 @@ enum class LegacyModelType {
 	WMO
 };
 
-// --- File-local state ---
-
 static std::unique_ptr<M2LegacyRendererGL> active_renderer_m2;
 static std::unique_ptr<WMOLegacyRendererGL> active_renderer_wmo;
 static std::unique_ptr<MDXRendererGL> active_renderer_mdx;
@@ -73,7 +69,6 @@ static std::string active_path;
 
 static std::map<std::string, db::caches::DBCreaturesLegacy::LegacyCreatureDisplay> active_skins;
 
-// Change-detection for watches.
 static std::string prev_anim_selection;
 static std::vector<nlohmann::json> prev_selection_legacy_models;
 static std::vector<nlohmann::json> prev_skins_selection;
@@ -84,36 +79,28 @@ static bool is_initializing = false;
 
 static listbox::ListboxState listbox_legacy_models_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 
-// Component states for CheckboxList, ListboxB, and MenuButton.
 static checkboxlist::CheckboxListState checkboxlist_legacy_geosets_state;
 static checkboxlist::CheckboxListState checkboxlist_legacy_wmo_groups_state;
 static checkboxlist::CheckboxListState checkboxlist_legacy_wmo_sets_state;
 static listboxb::ListboxBState listboxb_legacy_skins_state;
 static menu_button::MenuButtonState menu_button_legacy_models_state;
 
-// Model viewer GL state/context (replaces Vue <ModelViewerGL :context="legacyModelViewerContext"/>).
 static model_viewer_gl::State viewer_state;
 static model_viewer_gl::Context viewer_context;
-
-// --- Internal helpers ---
 
 static void clear_texture_preview() {
 	core::view->legacyModelTexturePreviewURL.clear();
 }
 
-// Dispose active renderer.
 static void dispose_active_renderer() {
 	active_renderer_m2.reset();
 	active_renderer_wmo.reset();
 	active_renderer_mdx.reset();
 	active_renderer_type = LegacyModelType::Unknown;
 }
-
-// --- Async preview model (background MPQ fetch, GL setup on main thread) ---
 
 struct PendingLegacyPreview {
 	std::string file_name;
@@ -131,7 +118,6 @@ static void pump_legacy_preview() {
 	if (task.file_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
 		return;
 
-	// File data is ready — process on main thread (GL operations).
 	const std::string file_name = task.file_name;
 	auto& view = *core::view;
 
@@ -295,7 +281,6 @@ static void pump_legacy_preview() {
 }
 
 static void preview_model(const std::string& file_name) {
-	// Cancel any pending preview.
 	pending_legacy_preview.reset();
 
 	core::setToast("progress", std::format("Loading {}, please wait...", file_name), {}, -1, false);
@@ -327,10 +312,8 @@ static void preview_model(const std::string& file_name) {
 	pending_legacy_preview = std::move(task);
 }
 
-// --- Template methods (mapped from Vue methods) ---
-
 static void handle_listbox_context(const std::vector<std::string>& selection) {
-	listbox_context::handle_context_menu(selection, true /* isLegacy */);
+	listbox_context::handle_context_menu(selection, true);
 }
 
 static void copy_file_paths(const std::vector<std::string>& selection) {
@@ -433,15 +416,10 @@ static void end_scrub() {
 	}
 }
 
-// --- Public API ---
-
 void registerTab() {
 	modules::register_nav_button("tab_models_legacy", "Models", "cube.svg", install_type::MPQ);
 }
 
-// Background initializer — mirrors the JS `mounted()` body but runs off the
-// main thread so the loading screen can render while the MPQ is scanned and
-// creature data is loaded. Compare with tab_maps' `initialize()`.
 static void initialize() {
 	auto& view = *core::view;
 
@@ -453,7 +431,6 @@ static void initialize() {
 		mpq::MPQInstall* mpq = view.mpq.get();
 		const auto all_files = mpq->getAllFiles();
 
-		// Filters: .m2, .mdx, .wmo (excluding WMO group files via LISTFILE_MODEL_FILTER)
 		std::vector<std::string> model_files;
 		for (const auto& f : all_files) {
 			std::string lower = f;
@@ -481,7 +458,6 @@ static void initialize() {
 
 		core::progressLoadingScreen("Initializing 3D preview...");
 
-		// Publish results on the main thread to avoid racing with the renderer.
 		core::postToMainThread([model_files = std::move(model_files)]() mutable {
 			auto& v = *core::view;
 
@@ -489,13 +465,9 @@ static void initialize() {
 			for (const auto& f : model_files)
 				v.listfileLegacyModels.push_back(f);
 
-			//     this.$core.view.legacyModelViewerContext = Object.seal({ getActiveRenderer: () => active_renderer, gl_context: null, fitCamera: null });
 			if (v.legacyModelViewerContext.is_null()) {
 				v.legacyModelViewerContext = nlohmann::json::object();
 
-				// Wire model viewer context callbacks.
-				// Legacy renderers are not M2RendererGL; getActiveRenderer returns nullptr.
-				// renderActiveModel handles all legacy renderer types.
 				viewer_context.renderActiveModel = [](const float* view_mat, const float* proj_mat) {
 					if (active_renderer_m2)
 						active_renderer_m2->render(view_mat, proj_mat);
@@ -529,7 +501,6 @@ static void initialize() {
 				};
 			}
 
-			// Initialize change-detection state for watches.
 			if (v.legacyModelViewerAnimSelection.is_string())
 				prev_anim_selection = v.legacyModelViewerAnimSelection.get<std::string>();
 			else
@@ -552,15 +523,9 @@ static void initialize() {
 }
 
 void mounted() {
-	// JS runs initialization synchronously inside `mounted()`. C++ launches the
-	// heavy work on a background thread (lazy init in render()) so the loading
-	// screen actually renders during MPQ scan + creature data loading. Mirrors
-	// the pattern used by tab_maps.
 	is_initialized = false;
 	is_initializing = false;
 }
-
-// --- Async export (one-file-per-frame, follows tab_models pattern) ---
 
 struct PendingLegacyExport {
 	std::vector<nlohmann::json> files;
@@ -584,7 +549,6 @@ static void show_tooltip_if_hovered(const char* text) {
 		ImGui::SetTooltip("%s", text);
 }
 
-// Forward declaration
 static void pump_legacy_export();
 
 void export_files(const std::vector<nlohmann::json>& files, int export_id) {
@@ -595,8 +559,6 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 
 	std::string format = view.config.value("exportLegacyModelFormat", std::string("OBJ"));
 
-	// JS opens `export_paths` at the top of `export_files` regardless of format
-	// (line 192) and always calls `export_paths?.close()` at the end (line 321).
 	std::optional<FileWriter> export_paths_writer;
 	export_paths_writer.emplace(core::openLastExportStream());
 
@@ -613,8 +575,6 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 			core::setToast("error", "The selected export option only works for model previews. Preview something first!", {}, -1);
 		}
 	} else if (format == "OBJ" || format == "STL" || format == "RAW") {
-		// Hand the writer off to the async task; pump_legacy_export closes it
-		// when the task retires (see finalize_pending_legacy_export).
 		PendingLegacyExport task;
 		task.files = files;
 		task.format = format;
@@ -633,13 +593,10 @@ void export_files(const std::vector<nlohmann::json>& files, int export_id) {
 		core::setToast("error", "Export format not yet implemented for legacy models: " + format, {}, -1);
 	}
 
-	// JS line 321: every non-async-task path closes export_paths before returning.
 	if (export_paths_writer.has_value())
 		export_paths_writer->close();
 }
 
-// Mirrors JS `export_paths?.close()` (line 321) — flush before destruction so
-// writes are guaranteed durable regardless of which exit path retires the task.
 static void finalize_pending_legacy_export() {
 	auto& task = *pending_legacy_export;
 	if (task.export_paths_writer.has_value())
@@ -672,7 +629,6 @@ static void pump_legacy_export() {
 		return;
 	}
 
-	// Process one file per frame.
 	const auto& file_entry_json = task.files[task.next_index++];
 	FileWriter* export_paths = task.export_paths_writer.has_value() ? &task.export_paths_writer.value() : nullptr;
 	mpq::MPQInstall* mpq = view.mpq.get();
@@ -801,13 +757,9 @@ std::variant<std::monostate, M2LegacyRendererGL*, MDXRendererGL*, WMOLegacyRende
 void render() {
 	auto& view = *core::view;
 
-	// Poll for pending async preview/export.
 	pump_legacy_preview();
 	pump_legacy_export();
 
-	// Lazy initialization on background thread so the loading screen is visible.
-	// Mirrors tab_maps' pattern (JS runs initialization in `mounted()` directly,
-	// but on the C++ main thread that would block the loading screen redraw).
 	if (!is_initialized && !is_initializing) {
 		is_initializing = true;
 		std::thread(initialize).detach();
@@ -816,7 +768,6 @@ void render() {
 		return;
 
 
-	// Watch: legacyModelViewerAnimSelection → play animation
 	{
 		std::string current_anim;
 		if (view.legacyModelViewerAnimSelection.is_string())
@@ -862,7 +813,6 @@ void render() {
 		}
 	}
 
-	// Watch: selectionLegacyModels → auto-preview if legacyModelsAutoPreview
 	{
 		if (view.selectionLegacyModels != prev_selection_legacy_models) {
 			prev_selection_legacy_models = view.selectionLegacyModels;
@@ -880,7 +830,6 @@ void render() {
 		}
 	}
 
-	// Watch: legacyModelViewerSkinsSelection → apply creature skin
 	{
 		if (view.legacyModelViewerSkinsSelection != prev_skins_selection) {
 			prev_skins_selection = view.legacyModelViewerSkinsSelection;
@@ -904,10 +853,6 @@ void render() {
 	if (app::layout::BeginTab("tab-models-legacy")) {
 		auto regions = app::layout::CalcListTabRegions(true);
 
-		// --- Left panel: List container (row 1, col 1) ---
-		//     <Listbox v-model:selection="selectionLegacyModels" v-model:filter="userInputFilterLegacyModels"
-		//         :items="listfileLegacyModels" :keyinput="true" :regex="config.regexFilters" ...
-		//         @contextmenu="handle_listbox_context" />
 		if (app::layout::BeginListContainer("legacy-models-list-container", regions)) {
 			const auto& items_str = core::cached_json_strings(view.listfileLegacyModels, s_items_cache, s_items_cache_size);
 
@@ -920,8 +865,8 @@ void render() {
 				items_str,
 				view.userInputFilterLegacyModels,
 				selection_str,
-				false,    // single
-				true,     // keyinput
+				false,
+				true,
 				view.config.value("regexFilters", false),
 				[&]() {
 					std::string cm = view.config.value("copyMode", std::string("Default"));
@@ -933,12 +878,12 @@ void render() {
 				}(),
 				view.config.value("pasteSelection", false),
 				view.config.value("removePathSpacesCopy", false),
-				"model",  // unittype
-				nullptr,  // overrideItems
-				false,    // disable
-				"legacy-models", // persistscrollkey
+				"model",
+				nullptr,
+				false,
+				"legacy-models",
 				view.legacyModelQuickFilters,
-				false,    // nocopy
+				false,
 				listbox_legacy_models_state,
 				[&](const std::vector<std::string>& new_sel) {
 					view.selectionLegacyModels.clear();
@@ -983,13 +928,11 @@ void render() {
 		}
 		app::layout::EndListContainer();
 
-		// --- Status bar ---
 		if (app::layout::BeginStatusBar("legacy-models-status", regions)) {
 			listbox::renderStatusBar("model", {}, listbox_legacy_models_state);
 		}
 		app::layout::EndStatusBar();
 
-		// --- Filter bar (row 2, col 1) ---
 		if (app::layout::BeginFilterBar("legacy-models-filter", regions)) {
 			bool regexEnabled = view.config.value("regexFilters", false);
 			float inputWidth = ImGui::GetContentRegionAvail().x;
@@ -1016,11 +959,8 @@ void render() {
 		}
 		app::layout::EndFilterBar();
 
-		// --- Middle panel: Preview container (row 1, col 2) ---
 		if (app::layout::BeginPreviewContainer("legacy-models-preview-container", regions)) {
-			//         v-if="config.modelViewerShowTextures && textureRibbonStack.length > 0">
 			if (view.config.value("modelViewerShowTextures", true) && !view.textureRibbonStack.empty()) {
-				// Texture ribbon slot rendering with pagination (no context menu for legacy)
 				float ribbon_width = ImGui::GetContentRegionAvail().x;
 				texture_ribbon::onResize(static_cast<int>(ribbon_width));
 
@@ -1028,14 +968,12 @@ void render() {
 					? static_cast<int>(std::ceil(static_cast<double>(view.textureRibbonStack.size()) / view.textureRibbonSlotCount))
 					: 0;
 
-				// Prev button
 				if (view.textureRibbonPage > 0) {
 					if (ImGui::SmallButton("<##ribbon_prev"))
 						view.textureRibbonPage--;
 					ImGui::SameLine();
 				}
 
-				// Visible slots
 				int startIndex = view.textureRibbonPage * view.textureRibbonSlotCount;
 				int endIndex = (std::min)(startIndex + view.textureRibbonSlotCount, static_cast<int>(view.textureRibbonStack.size()));
 
@@ -1058,14 +996,12 @@ void render() {
 					ImGui::SameLine();
 				}
 
-				// Next button
 				if (view.textureRibbonPage < maxPages - 1) {
 					if (ImGui::SmallButton(">##ribbon_next"))
 						view.textureRibbonPage++;
 				} else {
 					ImGui::NewLine();
 				}
-				// Note: Legacy texture ribbon does NOT have a context menu (unlike modern models tab).
 			}
 
 			if (view.config.value("modelViewerShowBackground", false)) {
@@ -1081,20 +1017,13 @@ void render() {
 				model_viewer_gl::renderWidget("##legacy_model_viewer", viewer_state, viewer_context);
 			}
 
-			//     <div v-if="legacyModelViewerAnims && legacyModelViewerAnims.length > 0" class="preview-dropdown-overlay"> ... -->
-			// The animation controls exist in the code but are not rendered in the template.
 			/*
 			if (!view.legacyModelViewerAnims.empty()) {
-				// Animation dropdown and controls — disabled in original JS.
-				// See the commented-out template block in the original source.
 			}
 			*/
 		}
 		app::layout::EndPreviewContainer();
 
-		// --- Bottom: Export controls (row 2, col 2) ---
-		//     <MenuButton :options="menuButtonLegacyModels" :default="config.exportLegacyModelFormat"
-		//         @change="config.exportLegacyModelFormat = $event" :disabled="isBusy" @click="export_model" />
 		if (app::layout::BeginPreviewControls("legacy-models-preview-controls", regions)) {
 			std::vector<menu_button::MenuOption> mb_options;
 			for (const auto& opt : view.menuButtonLegacyModels)
@@ -1107,7 +1036,6 @@ void render() {
 		}
 		app::layout::EndPreviewControls();
 
-		// --- Right panel: Sidebar (col 3, spanning both rows) ---
 		if (app::layout::BeginSidebar("legacy-models-sidebar", regions)) {
 			ImGui::SeparatorText("Preview");
 
@@ -1153,13 +1081,11 @@ void render() {
 				ImGui::SeparatorText("Skins");
 
 				{
-					// Convert json skins to ListboxBItem array.
 					std::vector<listboxb::ListboxBItem> skin_items;
 					skin_items.reserve(view.legacyModelViewerSkins.size());
 					for (const auto& skin : view.legacyModelViewerSkins)
 						skin_items.push_back({ skin.value("label", std::string("")) });
 
-					// Build selection indices from legacyModelViewerSkinsSelection.
 					std::vector<int> sel_indices;
 					for (const auto& sel : view.legacyModelViewerSkinsSelection) {
 						std::string sel_id = sel.value("id", std::string(""));

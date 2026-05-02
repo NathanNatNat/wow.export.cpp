@@ -76,9 +76,6 @@ static std::string find_version_in_buffer(const std::vector<uint8_t>& buf) {
 
 	size_t pos = 0;
 	while (pos < buf.size() - 52) {
-		// Search the entire remaining buffer; parse_vs_fixed_file_info validates
-		// that at least 52 bytes remain from the match position.
-		// JS: buf.indexOf(sig_bytes, pos) searches all remaining bytes.
 		auto it = std::search(buf.begin() + pos, buf.end(),
 		                      sig_bytes.begin(), sig_bytes.end());
 		if (it == buf.end())
@@ -200,4 +197,4 @@ std::string detect_build_version(const std::string& directory, const std::vector
 	return build;
 }
 
-} // namespace mpq
+}
