@@ -60,8 +60,6 @@ void initialize() {
 		ItemInfo info;
 		info.id = item_id;
 
-		// JS: item_row.Display_lang ?? 'Unknown item #' + item_id
-		// ?? only falls through on null/undefined, not empty string
 		auto nameIt = item_row.find("Display_lang");
 		if (nameIt != item_row.end())
 			info.name = fieldToString(nameIt->second);

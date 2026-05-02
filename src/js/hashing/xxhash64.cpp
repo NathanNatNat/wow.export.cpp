@@ -61,9 +61,6 @@ XXH64& XXH64::init(uint64_t seed) {
 	return *this;
 }
 
-// JS uses BigInt with `& MASK_64` after every operation; this C++ implementation
-// relies on natural `uint64_t` wraparound at 2^64, which produces identical bit
-// patterns for all the multiplies, adds, shifts and rotates used here.
 XXH64& XXH64::update(std::span<const uint8_t> input) {
 	std::size_t p = 0;
 	const std::size_t len = input.size();
@@ -113,7 +110,6 @@ XXH64& XXH64::update(std::span<const uint8_t> input) {
 		memsize_ = 0;
 	}
 
-	// JS form: `if (p <= bEnd - 32)` — equivalent for non-negative sizes.
 	if (p + 32 <= bEnd) {
 		const std::size_t limit = bEnd - 32;
 
@@ -154,10 +150,6 @@ XXH64& XXH64::update(std::span<const uint8_t> input) {
 	return *this;
 }
 
-// JS `update(string)` runs `toUTF8Array` (UTF-16 → UTF-8 transcoding incl.
-// surrogate pairs) before hashing. This overload reinterprets the bytes
-// directly, which is correct for already-UTF-8 input (the typical WoW path
-// case) but would diverge for raw UTF-16 input — callers should pass UTF-8.
 XXH64& XXH64::update(std::string_view input) {
 	return update(std::span<const uint8_t>(
 		reinterpret_cast<const uint8_t*>(input.data()), input.size()));

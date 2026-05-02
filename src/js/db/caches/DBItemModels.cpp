@@ -73,7 +73,6 @@ static std::unordered_map<uint32_t, InternalDisplayData> display_to_data;
 
 static bool is_initialized = false;
 
-// Helper: resolve models from internal data with optional race/gender/shoulder filtering
 static ItemDisplayData resolveDisplayData(uint32_t display_id, const InternalDisplayData& data, int race_id, int gender_index, ShoulderPos shoulder_pos = ShoulderPos::None) {
 	ItemDisplayData result;
 	result.ID = display_id;
