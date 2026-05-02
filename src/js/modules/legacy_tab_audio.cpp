@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
- */
-
 #include "legacy_tab_audio.h"
 #include "../log.h"
 #include "../core.h"
@@ -34,26 +28,20 @@ static std::optional<std::string> build_stack_trace(const char* function_name, c
 	return std::format("{}: {}", function_name, e.what());
 }
 
-// --- File-local state ---
-
 static std::string selected_file;
 
 static bool seek_loop_active = false;
 
 static AudioPlayer player;
 
-// Change-detection for config watches and selection.
 static float prev_sound_player_volume = -1.0f;
 static bool prev_sound_player_loop = false;
 static std::string prev_selection_first;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
-
-// --- Internal functions ---
 
 static void update_seek() {
 	if (!player.is_playing) {
@@ -64,9 +52,6 @@ static void update_seek() {
 	const double duration = player.get_duration();
 	if (duration > 0)
 		core::view->soundPlayerSeek = player.get_position() / duration;
-
-	// In ImGui, the seek update happens every frame via render(), not via requestAnimationFrame.
-	// seek_loop_active remains true to keep updating.
 }
 
 static void start_seek_loop() {
@@ -141,7 +126,6 @@ static void unload_track() {
 }
 
 static void play_track() {
-	// JS checks !player.buffer (i.e. not loaded), not duration.
 	if (!player.is_loaded()) {
 		if (selected_file.empty()) {
 			core::setToast("info", "You need to select an audio track first!", {}, -1, true);
@@ -252,7 +236,6 @@ static void export_sounds() {
 	helper.finish();
 }
 
-// --- Helper: format seconds as MM:SS ---
 static std::string format_time(double seconds) {
 	if (seconds <= 0)
 		return "00:00";
@@ -262,8 +245,6 @@ static std::string format_time(double seconds) {
 	const int secs = total_seconds % 60;
 	return std::format("{:02d}:{:02d}", minutes, secs);
 }
-
-// --- Public API ---
 
 void registerTab() {
 	modules::register_nav_button("legacy_tab_audio", "Audio", "music.svg", install_type::MPQ);
@@ -297,8 +278,6 @@ void mounted() {
 void render() {
 	auto& view = *core::view;
 
-	// --- Change-detection for config watches ---
-
 	const float current_volume = view.config.value("soundPlayerVolume", 1.0f);
 	if (current_volume != prev_sound_player_volume) {
 		player.set_volume(current_volume);
@@ -311,7 +290,6 @@ void render() {
 		prev_sound_player_loop = current_loop;
 	}
 
-	// --- Change-detection for selection (equivalent to watch on selectionSounds) ---
 	if (!view.selectionSounds.empty()) {
 		const std::string first = view.selectionSounds[0].get<std::string>();
 		if (view.isBusy == 0 && !first.empty() && first != prev_selection_first) {
@@ -328,22 +306,14 @@ void render() {
 		}
 	}
 
-	// --- Seek loop update (runs every frame while playing) ---
 	if (seek_loop_active)
 		update_seek();
-
-	// --- Template rendering ---
 
 	if (app::layout::BeginTab("tab-legacy-audio")) {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
-	// --- Left panel: List container (row 1, col 1) ---
-	//     <Listbox v-model:selection="selectionSounds" :items="listfileSounds" ...>
-	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
-	//       copy_file_paths, copy_export_paths, open_export_directory
 	if (app::layout::BeginListContainer("legacy-sounds-list-container", regions)) {
-		// Convert JSON items/selection to string vectors.
 		const auto& items_str = core::cached_json_strings(view.listfileSounds, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
@@ -362,18 +332,18 @@ void render() {
 			items_str,
 			view.userInputFilterSounds,
 			selection_str,
-			false,   // single
-			true,    // keyinput
+			false,
+			true,
 			view.config.value("regexFilters", false),
 			copy_mode,
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
-			"sound file", // unittype
-			nullptr, // overrideItems
-			false,   // disable
-			"sounds", // persistscrollkey
-			{},      // quickfilters
-			false,   // nocopy
+			"sound file",
+			nullptr,
+			false,
+			"sounds",
+			{},
+			false,
 			listbox_state,
 			[&](const std::vector<std::string>& new_sel) {
 				view.selectionSounds.clear();
@@ -385,7 +355,6 @@ void render() {
 			}
 		);
 
-		// Context menu for generic listbox.
 		context_menu::render(
 			"ctx-legacy-sounds",
 			view.contextMenus.nodeListbox,
@@ -410,13 +379,11 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
-	// --- Status bar ---
 	if (app::layout::BeginStatusBar("legacy-sounds-status", regions)) {
 		listbox::renderStatusBar("sound file", {}, listbox_state);
 	}
 	app::layout::EndStatusBar();
 
-	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("legacy-sounds-filter", regions)) {
 		if (view.config.value("regexFilters", false))
 			ImGui::TextUnformatted("Regex Enabled");
@@ -429,10 +396,8 @@ void render() {
 	}
 	app::layout::EndFilterBar();
 
-	// --- Right panel: Preview container (row 1, col 2) ---
 	if (app::layout::BeginPreviewContainer("legacy-sounds-preview-container", regions)) {
 
-		// Animated music icon when playing.
 		if (player.is_playing) {
 			ImFont* iconFont = app::theme::getIconFont();
 			if (iconFont) {
@@ -449,10 +414,6 @@ void render() {
 
 		ImGui::Spacing();
 
-		//     <span>{{ $core.view.soundPlayerSeekFormatted }}</span>
-		//     <span class="title">{{ $core.view.soundPlayerTitle }}</span>
-		//     <span>{{ $core.view.soundPlayerDurationFormatted }}</span>
-		// </div>
 		const std::string seek_formatted = format_time(view.soundPlayerSeek * view.soundPlayerDuration);
 		const std::string duration_formatted = format_time(view.soundPlayerDuration);
 		ImGui::Text("%s  %s  %s", seek_formatted.c_str(), view.soundPlayerTitle.c_str(), duration_formatted.c_str());
@@ -466,9 +427,6 @@ void render() {
 				player.seek(duration * seek_val);
 		}
 
-		//     <input type="button" :class="{ isPlaying: !soundPlayerState }" @click="toggle_playback"/>
-		//     <Slider id="slider-volume" v-model="config.soundPlayerVolume">
-		// </div>
 		if (ImGui::Button(view.soundPlayerState ? "Pause" : "Play"))
 			toggle_playback();
 
@@ -483,8 +441,6 @@ void render() {
 	}
 	app::layout::EndPreviewContainer();
 
-	// --- Bottom-right: Preview controls / export (row 2, col 2) ---
-	// JS: div.preview-controls — Loop, Autoplay, Export Selected
 	if (app::layout::BeginPreviewControls("legacy-sounds-preview-controls", regions)) {
 		bool loop_val = view.config.value("soundPlayerLoop", false);
 		if (ImGui::Checkbox("Loop##legacy", &loop_val))
@@ -502,7 +458,7 @@ void render() {
 	}
 	app::layout::EndPreviewControls();
 
-	} // if BeginTab
+	}
 	app::layout::EndTab();
 }
 
@@ -517,4 +473,4 @@ void export_selected() {
 	export_sounds();
 }
 
-} // namespace legacy_tab_audio
+}

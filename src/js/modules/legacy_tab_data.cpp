@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
- */
-
 #include "legacy_tab_data.h"
 #include "../log.h"
 #include "../core.h"
@@ -32,13 +26,10 @@
 
 namespace legacy_tab_data {
 
-// --- File-local state ---
-
 static std::string selected_file;
 
 static std::string selected_file_path;
 
-// Stored as a copy (not a pointer) because the DBCReader is a local variable in load_table().
 static std::map<std::string, db::DBCSchemaField> selected_file_schema;
 
 static std::vector<std::string> dbc_listfile;
@@ -54,12 +45,9 @@ static data_table::DataTableState legacy_data_table_state;
 static context_menu::ContextMenuState legacy_data_table_ctx_state;
 static menu_button::MenuButtonState legacy_menu_button_data_state;
 
-// --- Forward declarations ---
 static void copy_rows_csv();
 static void copy_rows_sql();
 static void copy_cell(const std::string& value);
-
-// --- Internal functions ---
 
 static void initialize_dbc_listfile() {
 	if (!dbc_listfile.empty())
@@ -93,8 +81,6 @@ static void initialize_dbc_listfile() {
 	logging::write(std::format("initialized {} dbc files from mpq archives", dbc_listfile.size()));
 }
 
-// Returns true on success. On failure selected_file is NOT updated so the
-// Vue-equivalent watch (selected_file comparison) can permit a retry on re-selection.
 static bool load_table(const std::string& table_name) {
 	auto& view = *core::view;
 
@@ -228,8 +214,6 @@ static std::string get_build_version() {
 	return mpq ? mpq->build_id : "1.12.1.5875";
 }
 
-// --- Public API ---
-
 void registerTab() {
 	modules::register_nav_button("legacy_tab_data", "Data", "database.svg", install_type::MPQ);
 }
@@ -249,30 +233,21 @@ void mounted() {
 		core::setToast("error", "Failed to load DBC files. Check the log for details.");
 	}
 
-	// Change-detection is handled in render() by comparing selectionDB2s[0] against selected_file.
 }
 
 void render() {
 	auto& view = *core::view;
 
-	// --- Change-detection for selection (equivalent to $watch('selectionDB2s') in JS) ---
-	// JS: if (!core.view.isBusy && first && selected_file !== first)
-	// selected_file is only updated inside load_table() on success, so failed loads can be retried.
 	if (!view.selectionDB2s.empty()) {
 		const std::string first = view.selectionDB2s[0].get<std::string>();
 		if (view.isBusy == 0 && !first.empty() && first != selected_file)
 			load_table(first);
 	}
 
-	// --- Template rendering ---
-
 	if (app::layout::BeginTab("tab-legacy-data")) {
 
 	auto regions = app::layout::CalcListTabRegions(false, 1.0f / 7.0f);
 
-	// --- Left panel: List container (row 1, col 1) ---
-	//     <Listbox v-model:selection="selectionDB2s" :items="dbcListfile" :filter="userInputFilterDB2s" ...>
-	// </div>
 	if (app::layout::BeginListContainer("dbc-list-container", regions)) {
 		std::vector<std::string> selection_str;
 		for (const auto& s : view.selectionDB2s)
@@ -283,34 +258,29 @@ void render() {
 			local_dbc_listfile,
 			view.userInputFilterDB2s,
 			selection_str,
-			true,    // single
-			true,    // keyinput
+			true,
+			true,
 			view.config.value("regexFilters", false),
 			listbox::CopyMode::Default,
-			view.config.value("pasteSelection", false),          // pasteselection (JS: config.pasteSelection)
-			view.config.value("removePathSpacesCopy", false),    // copytrimwhitespace (JS: config.removePathSpacesCopy)
-			"",      // unittype — JS uses :includefilecount="false", so suppress count text
-			nullptr, // overrideItems
-			false,   // disable
-			"",      // persistscrollkey — JS template does not set persistscrollkey
-			{},      // quickfilters
-			true,    // nocopy
+			view.config.value("pasteSelection", false),
+			view.config.value("removePathSpacesCopy", false),
+			"",
+			nullptr,
+			false,
+			"",
+			{},
+			true,
 			listbox_dbc_state,
 			[&](const std::vector<std::string>& new_sel) {
 				view.selectionDB2s.clear();
 				for (const auto& s : new_sel)
 					view.selectionDB2s.push_back(s);
 			},
-			nullptr  // no context menu
+			nullptr
 		);
 	}
 	app::layout::EndListContainer();
 
-	// JS uses :includefilecount="false" on this Listbox, so no status bar / file count is shown.
-
-	// --- Filter bar (row 2, col 1) ---
-	// JS: <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
-	//     <input type="text" v-model="userInputFilterDB2s" placeholder="Filter DBCs.."/>
 	if (app::layout::BeginFilterBar("dbc-filter", regions)) {
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
@@ -326,18 +296,11 @@ void render() {
 	}
 	app::layout::EndFilterBar();
 
-	// --- Right panel: Preview container (row 1, col 2) ---
-	//     <DataTable ref="dataTable" :headers="tableBrowserHeaders" :rows="tableBrowserRows" ...>
-	//     <ContextMenu :node="contextMenus.nodeDataTable" ...>
-	//       copy_rows_csv, copy_rows_sql, copy_cell
-	// </div>
 	if (app::layout::BeginPreviewContainer("legacy-data-table-container", regions)) {
-		// Convert json headers to string array.
 		std::vector<std::string> headers_str;
 		for (const auto& h : view.tableBrowserHeaders)
 			headers_str.push_back(h.get<std::string>());
 
-		// Convert json rows to string 2D array.
 		std::vector<std::vector<std::string>> rows_str;
 		for (const auto& row : view.tableBrowserRows) {
 			std::vector<std::string> str_row;
@@ -346,7 +309,6 @@ void render() {
 			rows_str.push_back(std::move(str_row));
 		}
 
-		// Convert selection rows from json arrays to vector<string> rows.
 		std::vector<std::vector<std::string>> sel_rows;
 		for (const auto& s : view.selectionDataTable) {
 			if (!s.is_array()) continue;
@@ -379,14 +341,11 @@ void render() {
 				node["cellValue"] = ev.cellValue;
 				node["selectedCount"] = ev.selectedCount;
 				view.contextMenus.nodeDataTable = node;
-				// Open the popup immediately on right-click (JS: ContextMenu opens on @contextmenu).
 				ImGui::OpenPopup("##LegacyDataTableContextMenu");
 			},
 			[&]() { copy_rows_csv(); },
 			nullptr);
 
-		// Context menu for data table.
-		// JS: <ContextMenu :node="contextMenus.nodeDataTable" @close="contextMenus.nodeDataTable = null">
 		if (ImGui::BeginPopup("##LegacyDataTableContextMenu")) {
 			if (!view.contextMenus.nodeDataTable.is_null()) {
 				const int selected_count = view.contextMenus.nodeDataTable.value("selectedCount", 0);
@@ -406,18 +365,15 @@ void render() {
 			}
 			ImGui::EndPopup();
 		} else if (!view.contextMenus.nodeDataTable.is_null()) {
-			// @close event: clear nodeDataTable when popup closes (JS: @close="nodeDataTable = null").
 			view.contextMenus.nodeDataTable = nullptr;
 		}
 
-		// Options row.
 		const std::string export_format = view.config.value("exportDataFormat", std::string("CSV"));
 
 		if (export_format == "CSV") {
 			bool copy_header = view.config.value("dataCopyHeader", false);
 			if (ImGui::Checkbox("Copy Header", &copy_header))
 				view.config["dataCopyHeader"] = copy_header;
-			// JS: title="Include header row when copying"
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip("Include header row when copying");
 			ImGui::SameLine();
@@ -427,7 +383,6 @@ void render() {
 			bool create_table_val = view.config.value("dataSQLCreateTable", false);
 			if (ImGui::Checkbox("Create Table", &create_table_val))
 				view.config["dataSQLCreateTable"] = create_table_val;
-			// JS: title="Include DROP/CREATE TABLE statements"
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip("Include DROP/CREATE TABLE statements");
 			ImGui::SameLine();
@@ -436,15 +391,11 @@ void render() {
 		bool export_all = view.config.value("dataExportAll", false);
 		if (ImGui::Checkbox("Export all rows", &export_all))
 			view.config["dataExportAll"] = export_all;
-		// JS: title="Export all rows"
 		if (ImGui::IsItemHovered())
 			ImGui::SetTooltip("Export all rows");
 	}
 	app::layout::EndPreviewContainer();
 
-	// --- Bottom: Preview controls (row 2, col 2) ---
-	// JS: <div class="regex-info" v-if="config.regexFilters" :title="regexTooltip">Regex Enabled</div>
-	//     <input type="text" v-model="userInputFilterDataTable" placeholder="Filter data table rows..."/>
 	if (app::layout::BeginPreviewControls("legacy-data-preview-controls", regions)) {
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
@@ -460,7 +411,6 @@ void render() {
 		ImGui::SameLine();
 
 		{
-			// JS menuButtonDataLegacy: CSV, SQL, DBC (Raw).
 			static const std::vector<menu_button::MenuOption> legacy_data_opts = {
 				{ "Export as CSV", "CSV" },
 				{ "Export as SQL", "SQL" },
@@ -480,8 +430,6 @@ void render() {
 	}
 	app::layout::EndTab();
 }
-
-// --- Helpers ---
 
 static std::vector<std::vector<std::string>> jsonRowsToStrings(const nlohmann::json& rows_json) {
 	std::vector<std::vector<std::string>> result;
@@ -506,9 +454,6 @@ static std::vector<std::vector<std::string>> getDisplayRows(
 		legacy_data_table_state);
 }
 
-// --- Copy methods (context menu) ---
-
-// Helper: convert selectionDataTable (json array of row arrays) to vector<vector<string>>.
 static std::vector<std::vector<std::string>> selection_rows_from_json() {
 	const auto& view = *core::view;
 	std::vector<std::vector<std::string>> sel_rows;
@@ -563,11 +508,8 @@ static void copy_rows_sql() {
 }
 
 static void copy_cell(const std::string& value) {
-	// JS: if (value === null || value === undefined) return; — copies empty strings.
 	ImGui::SetClipboardText(value.c_str());
 }
-
-// --- Export methods ---
 
 static void export_csv() {
 	auto& view = *core::view;
@@ -594,7 +536,6 @@ static void export_csv() {
 			return;
 		}
 
-		// Selection now holds row content directly — no index lookup needed.
 		for (const auto& row_json : selection) {
 			if (!row_json.is_array()) continue;
 			std::vector<std::string> row;
@@ -637,7 +578,6 @@ static void export_sql() {
 			return;
 		}
 
-		// Selection now holds row content directly — no index lookup needed.
 		for (const auto& row_json : selection) {
 			if (!row_json.is_array()) continue;
 			std::vector<std::string> row;
@@ -654,7 +594,6 @@ static void export_sql() {
 
 	const bool create_table = view.config.value("dataSQLCreateTable", false);
 
-	// Convert DBC schema (map<string, DBCSchemaField>) to WDC schema (map<string, SchemaField>).
 	std::map<std::string, db::SchemaField> converted_schema;
 	for (const auto& [name, field] : selected_file_schema) {
 		if (field.array_length > 0)
@@ -688,4 +627,4 @@ void export_data() {
 		export_dbc();
 }
 
-} // namespace legacy_tab_data
+}

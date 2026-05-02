@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
- */
-
 #include "legacy_tab_fonts.h"
 #include "font_helpers.h"
 #include "../log.h"
@@ -29,19 +23,14 @@
 
 namespace legacy_tab_fonts {
 
-// --- File-local state ---
-
 static std::unordered_map<std::string, void*> loaded_fonts;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 
 static std::string get_font_id(const std::string& file_name) {
-	// Use uint32_t for the computation to avoid signed overflow UB,
-	// then cast to int32_t at the end to match JS `| 0` (ToInt32) semantics.
 	uint32_t hash = 0;
 	for (char c : file_name)
 		hash = (hash << 5) - hash + static_cast<unsigned char>(c);
@@ -81,13 +70,9 @@ static void* load_font(const std::string& file_name) {
 	}
 }
 
-// Glyph detection state for current font.
 static font_helpers::GlyphDetectionState glyph_state;
 
-// Change-detection for selectionFonts.
 static std::string prev_selection_first;
-
-// --- Internal functions ---
 
 static void load_font_list() {
 	auto& view = *core::view;
@@ -106,8 +91,6 @@ static void load_font_list() {
 	}
 }
 
-// --- Public API ---
-
 void registerTab() {
 	modules::register_nav_button("legacy_tab_fonts", "Fonts", "font.svg", install_type::MPQ);
 }
@@ -120,14 +103,11 @@ void mounted() {
 	view.fontPreviewPlaceholder = font_helpers::get_random_quote();
 	view.fontPreviewText.clear();
 	view.fontPreviewFontFamily.clear();
-
-	// Change-detection is handled in render() by comparing selectionFonts[0] each frame.
 }
 
 void render() {
 	auto& view = *core::view;
 
-	// --- Change-detection for selection (equivalent to watch on selectionFonts) ---
 	if (!view.selectionFonts.empty()) {
 		const std::string first = view.selectionFonts[0].get<std::string>();
 		if (!first.empty() && view.isBusy == 0 && first != prev_selection_first) {
@@ -144,9 +124,7 @@ void render() {
 		}
 	}
 
-	// Process glyph detection batch each frame.
 	if (!glyph_state.complete && !glyph_state.cancelled) {
-		// Get the loaded font pointer for the current font family.
 		void* font = nullptr;
 		auto it = loaded_fonts.find(view.fontPreviewFontFamily);
 		if (it != loaded_fonts.end())
@@ -160,12 +138,7 @@ void render() {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
-	// --- Left panel: List container (row 1, col 1) ---
-	//     <Listbox v-model:selection="selectionFonts" :items="listfileFonts" ...>
-	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
-	//       copy_file_paths, copy_export_paths, open_export_directory
 	if (app::layout::BeginListContainer("legacy-fonts-list-container", regions)) {
-		// Convert JSON items/selection to string vectors.
 		const auto& items_str = core::cached_json_strings(view.listfileFonts, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
@@ -184,18 +157,18 @@ void render() {
 			items_str,
 			view.userInputFilterFonts,
 			selection_str,
-			false,   // single
-			true,    // keyinput
+			false,
+			true,
 			view.config.value("regexFilters", false),
 			copy_mode,
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
-			"font",  // unittype
-			nullptr, // overrideItems
-			false,   // disable
-			"legacy-fonts", // persistscrollkey
-			{},      // quickfilters
-			false,   // nocopy
+			"font",
+			nullptr,
+			false,
+			"legacy-fonts",
+			{},
+			false,
 			listbox_state,
 			[&](const std::vector<std::string>& new_sel) {
 				view.selectionFonts.clear();
@@ -207,7 +180,6 @@ void render() {
 			}
 		);
 
-		// Context menu for generic listbox.
 		context_menu::render(
 			"ctx-legacy-fonts",
 			view.contextMenus.nodeListbox,
@@ -222,8 +194,6 @@ void render() {
 				std::string plural = count > 1 ? "s" : "";
 				bool hasFileDataIDs = node.value("hasFileDataIDs", false);
 
-				// JS template (legacy_tab_fonts.js lines 64–68) only exposes three context-menu
-				// items: copy file path(s), copy export path(s), open export directory.
 				if (ImGui::Selectable(std::format("Copy file path{}", plural).c_str()))
 					listbox_context::copy_file_paths(sel);
 				if (ImGui::Selectable(std::format("Copy export path{}", plural).c_str()))
@@ -236,15 +206,12 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
-	// --- Status bar ---
 	if (app::layout::BeginStatusBar("legacy-fonts-status", regions)) {
 		listbox::renderStatusBar("font", {}, listbox_state);
 	}
 	app::layout::EndStatusBar();
 
-	// --- Filter bar (row 2, col 1) ---
 	if (app::layout::BeginFilterBar("legacy-fonts-filter", regions)) {
-		// JS: <div class="regex-info" v-if="config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
 			if (ImGui::IsItemHovered())
@@ -255,16 +222,12 @@ void render() {
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 		char filter_buf[256] = {};
 		std::strncpy(filter_buf, view.userInputFilterFonts.c_str(), sizeof(filter_buf) - 1);
-		// JS: placeholder="Filter fonts..."
 		if (ImGui::InputTextWithHint("##FilterFonts", "Filter fonts...", filter_buf, sizeof(filter_buf)))
 			view.userInputFilterFonts = filter_buf;
 	}
 	app::layout::EndFilterBar();
 
-	// --- Right panel: Preview container (row 1, col 2) ---
 	if (app::layout::BeginPreviewContainer("legacy-fonts-preview-container", regions)) {
-		// Resolve the currently loaded ImGui font for rendering glyphs and preview.
-		// JS: cell.style.fontFamily = '"${font_family}", monospace' and textarea fontFamily binding.
 		void* active_font = nullptr;
 		{
 			auto fit = loaded_fonts.find(view.fontPreviewFontFamily);
@@ -272,15 +235,12 @@ void render() {
 				active_font = fit->second;
 		}
 
-		// Glyph grid.
 		ImGui::BeginChild("font-character-grid", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.5f), ImGuiChildFlags_Borders);
 
-		// Set 2px spacing to match CSS: flex-wrap: wrap; gap: 2px
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 2.0f));
 		float avail_width = ImGui::GetContentRegionAvail().x;
 		float cursor_x = 0.0f;
 
-		// JS: cell.style.fontFamily = '"${font_family}", monospace' — glyphs display in loaded font.
 		if (active_font)
 			ImGui::PushFont(static_cast<ImFont*>(active_font));
 
@@ -288,8 +248,6 @@ void render() {
 			char utf8_buf[5] = {};
 			ImTextCharToUtf8(utf8_buf, static_cast<unsigned int>(codepoint));
 
-			// Each glyph cell is a small selectable button.
-			// CSS: .font-glyph-cell { width: 32px; height: 32px; }
 			ImGui::PushID(static_cast<int>(codepoint));
 			if (ImGui::Selectable(utf8_buf, false, 0, ImVec2(32, 32))) {
 				font_helpers::trigger_glyph_click(glyph_state, codepoint);
@@ -301,7 +259,6 @@ void render() {
 			}
 			ImGui::PopID();
 
-			// Manual wrap: continue on same line if next button fits.
 			cursor_x += 32.0f + 2.0f;
 			if (cursor_x + 32.0f <= avail_width) {
 				ImGui::SameLine();
@@ -317,8 +274,6 @@ void render() {
 		ImGui::PopStyleVar();
 		ImGui::EndChild();
 
-		// Font preview text input.
-		// JS: <textarea :style="{ fontFamily: $core.view.fontPreviewFontFamily }"> — render in loaded font.
 		if (active_font)
 			ImGui::PushFont(static_cast<ImFont*>(active_font));
 
@@ -331,8 +286,6 @@ void render() {
 		if (active_font)
 			ImGui::PopFont();
 
-		// JS: <textarea :placeholder="fontPreviewPlaceholder"> — show placeholder inside empty input.
-		// ImGui InputTextMultiline has no built-in placeholder, so draw it manually.
 		if (view.fontPreviewText.empty() && !ImGui::IsItemActive()) {
 			const ImVec2 min = ImGui::GetItemRectMin();
 			ImGui::GetWindowDrawList()->AddText(
@@ -343,8 +296,6 @@ void render() {
 	}
 	app::layout::EndPreviewContainer();
 
-	// --- Bottom-right: Preview controls (row 2, col 2) ---
-	//     <input type="button" value="Export Selected" @click="export_fonts" :class="{ disabled: isBusy }"/>
 	if (app::layout::BeginPreviewControls("legacy-fonts-preview-controls", regions)) {
 		const bool busy = view.isBusy > 0;
 		if (busy) ImGui::BeginDisabled();
@@ -354,7 +305,7 @@ void render() {
 	}
 	app::layout::EndPreviewControls();
 
-	} // if BeginTab
+	}
 	app::layout::EndTab();
 }
 
@@ -414,4 +365,4 @@ void export_fonts() {
 	}
 }
 
-} // namespace legacy_tab_fonts
+}

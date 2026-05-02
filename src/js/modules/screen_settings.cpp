@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
- */
-
 #include "screen_settings.h"
 #include "../modules.h"
 #include "tab_characters.h"
@@ -29,30 +23,17 @@
 
 namespace screen_settings {
 
-// --- File-local state ---
-
 static std::optional<nlohmann::json> default_config;
 
-// FileField widget states for directory pickers.
 static file_field::FileFieldState export_dir_state;
 static file_field::FileFieldState char_save_dir_state;
 static menu_button::MenuButtonState locale_menu_state;
 
-/**
- * Render a settings section heading. JS equivalent: <h1>label</h1> inside a
- * config <div>. Uses native ImGui::SeparatorText for layout-fidelity heading
- * (default appearance — pixel styling intentionally not replicated).
- */
 static void SectionHeading(const char* label) {
 	ImGui::Dummy(ImVec2(0.0f, 20.0f));
 	ImGui::SeparatorText(label);
 }
 
-/**
- * Render a single segment of a .ui-multi-button bar using native ImGui::Button.
- * JS equivalent: <li :class="{ selected: ... }" @click.stop="...">label</li>
- *                inside <ul class="ui-multi-button">.
- */
 static bool multiButtonSegment(const char* label, bool selected) {
 	if (selected)
 		ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
@@ -62,18 +43,12 @@ static bool multiButtonSegment(const char* label, bool selected) {
 	return clicked;
 }
 
-// --- Forward declarations ---
 static void handle_cache_clear();
 static void handle_tact_key();
 void handle_discard();
 void handle_apply();
 void handle_reset();
 
-/**
- * Helper for config-bound text inputs.
- * Uses a static buffer + prev-value tracker to avoid overwriting user input each frame.
- * Only syncs the buffer from config when the config value changes externally.
- */
 struct ConfigTextState {
 	char buf[1024] = {};
 	std::string prev;
@@ -96,7 +71,6 @@ static bool configTextInput(const char* id, ConfigTextState& state, nlohmann::js
 	return false;
 }
 
-// Config text states for each text input in settings.
 static ConfigTextState cdn_fallback_state;
 static ConfigTextState tact_url_state;
 static ConfigTextState tact_fallback_url_state;
@@ -109,8 +83,6 @@ static ConfigTextState dbd_url_state;
 static ConfigTextState dbd_fb_url_state;
 static ConfigTextState dbdf_url_state;
 static ConfigTextState dbdf_fb_url_state;
-
-// --- Internal functions ---
 
 static nlohmann::json load_default_config() {
 	if (!default_config.has_value()) {
@@ -139,7 +111,6 @@ static std::string cache_size_formatted() {
 	return generics::filesize(static_cast<double>(core::view->cacheSize));
 }
 
-// Returns the locale ID strings from locale_flags::entries.
 static std::vector<std::string> available_locale_keys() {
 	std::vector<std::string> keys;
 	for (const auto& entry : casc::locale_flags::entries)
@@ -160,8 +131,6 @@ static void go_home() {
 	modules::go_to_landing();
 }
 
-// --- Public functions ---
-
 void registerScreen() {
 	modules::registerContextMenuOption("settings", "Manage Settings", "gear.svg",
 		[]() { modules::set_active("settings"); });
@@ -170,7 +139,6 @@ void registerScreen() {
 void mounted() {
 	core::view->configEdit = core::view->config;
 
-	// Reset FileField states.
 	export_dir_state = file_field::FileFieldState{};
 	char_save_dir_state = file_field::FileFieldState{};
 }
@@ -179,17 +147,13 @@ void render() {
 	auto& view = *core::view;
 	auto& cfg = view.configEdit;
 
-	// CSS: #config-wrapper fills the entire screen. #config has flex: 1 filling available width.
 	const float availW = ImGui::GetContentRegionAvail().x;
 	ImGui::BeginChild("settings-content", ImVec2(availW, 0));
 
-	// CSS: #config > div { padding: 20px; padding-bottom: 0 }
-	// Apply 20px left/right padding by offsetting the scroll child.
 	const float pad = 20.0f;
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
 	ImGui::BeginChild("##config-scroll", ImVec2(-pad, -ImGui::GetFrameHeightWithSpacing() * 2));
 
-	// CSS: #config.toastgap { margin-top: 20px } — extra top space when toast is visible.
 	if (core::view->toast.has_value())
 		ImGui::Dummy(ImVec2(0.0f, 20.0f));
 
@@ -214,7 +178,6 @@ void render() {
 	SectionHeading("Scroll Speed");
 	ImGui::TextWrapped("How many lines at a time you scroll down in the results view (leave at 0 for default scroll amount)");
 	{
-		// CSS: input[type=number] { width: 50px } — no spin buttons (CSS hides them).
 		int scroll_speed = cfg.value("scrollSpeed", 2);
 		ImGui::SetNextItemWidth(80.0f);
 		if (ImGui::InputScalar("##ScrollSpeed", ImGuiDataType_S32, &scroll_speed, nullptr, nullptr))
@@ -292,7 +255,6 @@ void render() {
 
 	SectionHeading("Path Separator Format");
 	ImGui::TextWrapped("Sets the path separator format used in exported files.");
-	// CSS: .ui-multi-button — green segmented toggle buttons (radio: only one selected at a time).
 	{
 		std::string path_fmt = cfg.value("pathFormat", std::string("win32"));
 		const char* opts[] = { "Windows", "POSIX" };
@@ -338,7 +300,6 @@ void render() {
 	SectionHeading("CASC Locale");
 	ImGui::TextWrapped("Which locale to use for file reading. This only affects game files.");
 	ImGui::TextWrapped("This should match the locale of your client when using local installations.");
-	// CSS: #config > div .spaced { margin: 10px } — MenuButton has class="spaced" in JS.
 	ImGui::Dummy(ImVec2(0.0f, 10.0f));
 	{
 		auto keys = available_locale_keys();
@@ -348,7 +309,6 @@ void render() {
 		for (const auto& key : keys)
 			locale_options.push_back({ key, key });
 
-		// JS: <div style="width: 150px"> wraps the locale MenuButton.
 		ImGui::SetNextItemWidth(150.0f);
 		menu_button::render("##LocaleMenuButton", locale_options,
 			current_key, false, true, locale_menu_state,
@@ -363,7 +323,6 @@ void render() {
 	SectionHeading("WebP Quality");
 	ImGui::TextWrapped("Quality setting for WebP exports. Range is 1-100 (100 is lossless)");
 	{
-		// CSS: input[type=number] { width: 50px } — no spin buttons.
 		int val = cfg.value("exportWebPQuality", 75);
 		ImGui::SetNextItemWidth(80.0f);
 		if (ImGui::InputScalar("##WebPQuality", ImGuiDataType_S32, &val, nullptr, nullptr)) {
@@ -392,7 +351,6 @@ void render() {
 
 	SectionHeading("Export Meta Data");
 	ImGui::TextWrapped("If enabled, verbose data will be exported for enabled formats into relative .json files.");
-	// CSS: .ui-multi-button — each button independently toggleable (not mutually exclusive).
 	{
 		bool m2_meta      = cfg.value("exportM2Meta",      false);
 		bool wmo_meta     = cfg.value("exportWMOMeta",     false);
@@ -456,7 +414,6 @@ void render() {
 	ImGui::TextWrapped("By default, using CTRL + C on a file list will copy the full entry to your clipboard.");
 	ImGui::TextWrapped("Setting this to Directory will instead only copy the directory of the given entry.");
 	ImGui::TextWrapped("Setting this to FileDataID will instead only copy the FID of the entry (must have FIDs enabled).");
-	// CSS: .ui-multi-button — green segmented toggle buttons (radio: only one selected at a time).
 	{
 		std::string copy_mode = cfg.value("copyMode", std::string("FULL"));
 		const char* opts[] = { "Full", "Directory", "FileDataID" };
@@ -505,7 +462,6 @@ void render() {
 	SectionHeading("Cache Expiry");
 	ImGui::TextWrapped("After how many days of inactivity is cached data deleted. Setting to zero disables cache clean-up (not recommended).");
 	{
-		// CSS: input[type=number] { width: 50px } — no spin buttons.
 		int val = cfg.value("cacheExpiry", 168);
 		ImGui::SetNextItemWidth(80.0f);
 		if (ImGui::InputScalar("##CacheExpiry", ImGuiDataType_S32, &val, nullptr, nullptr))
@@ -515,13 +471,11 @@ void render() {
 	SectionHeading("CDN Fallback Hosts");
 	ImGui::TextWrapped("Comma-separated list of additional CDN hostnames to try when official CDN servers are unavailable or slow.");
 	ImGui::TextWrapped("These are pinged alongside official servers and used based on speed and availability.");
-	// CSS: input[type=text].long { width: 600px }
 	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##CDNFallbackHosts", cdn_fallback_state, cfg, "cdnFallbackHosts");
 
 	SectionHeading("Manually Clear Cache (Requires Restart)");
 	ImGui::TextWrapped("While housekeeping on the cache is mostly automatic, sometimes clearing manually can resolve issues.");
-	// CSS: #config > div .spaced { margin: 10px } — the button has class="spaced" in JS.
 	{
 		bool busy = view.isBusy;
 		if (busy) ImGui::BeginDisabled();
@@ -535,7 +489,6 @@ void render() {
 
 	SectionHeading("Encryption Keys");
 	ImGui::TextWrapped("Remote URL used to update keys for encrypted files.");
-	// JS: <p>Primary <input type="text" class="long" .../></p> — label and input inline on same line.
 	ImGui::Text("Primary"); ImGui::SameLine();
 	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##TactKeysURL", tact_url_state, cfg, "tactKeysURL");
@@ -546,8 +499,6 @@ void render() {
 	SectionHeading("Add Encryption Key");
 	ImGui::TextWrapped("Manually add a BLTE encryption key.");
 	{
-		// JS: maxlength="16" / maxlength="32"; placeholder text from JS template.
-		// JS width="140" / width="280" — these are HTML attributes applied as pixel widths in NW.js.
 		static char key_name_buf[17] = {};
 		static char key_val_buf[33]  = {};
 		ImGui::SetNextItemWidth(140.0f);
@@ -567,7 +518,6 @@ void render() {
 
 	SectionHeading("Realm List Source");
 	ImGui::TextWrapped("Remote URL used for retrieving the realm list. (Must use same format)");
-	// JS: <p><input type="text" class="long" .../></p> — input alone in paragraph (no inline label).
 	ImGui::SetNextItemWidth(600.0f);
 	configTextInput("##RealmListURL", realm_url_state, cfg, "realmListURL");
 
@@ -601,7 +551,6 @@ void render() {
 	SectionHeading("Listfile Update Frequency");
 	ImGui::TextWrapped("How often (in days) the listfile is updated. Set to zero to always re-download the listfile.");
 	{
-		// CSS: input[type=number] { width: 50px } — no spin buttons.
 		int val = cfg.value("listfileCacheRefresh", 168);
 		ImGui::SetNextItemWidth(80.0f);
 		if (ImGui::InputScalar("##ListfileCacheRefresh", ImGuiDataType_S32, &val, nullptr, nullptr))
@@ -634,10 +583,8 @@ void render() {
 			cfg["allowCacheCollection"] = val;
 	}
 
-	ImGui::EndChild(); // config-scroll
+	ImGui::EndChild();
 
-	// CSS: #config-buttons { display: flex; flex-direction: row-reverse; padding: 15px 0;
-	//                         border-top: 1px solid var(--border); background: var(--background); }
 	ImGui::Spacing();
 	{
 		ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -647,8 +594,6 @@ void render() {
 	}
 	ImGui::Dummy(ImVec2(0.0f, 15.0f));
 
-	// CSS: #config-buttons #config-reset { margin-left: 20px } — Reset sits at far left.
-	// CSS: #config-buttons input { margin-right: 20px } — Apply/Discard sit at far right with 20px margin.
 	bool busy = view.isBusy;
 	if (busy) ImGui::BeginDisabled();
 
@@ -657,7 +602,6 @@ void render() {
 		handle_reset();
 
 	{
-		// Position Apply and Discard at the right with 20px right margin.
 		const float right_margin = 20.0f;
 		const float spacing      = ImGui::GetStyle().ItemSpacing.x;
 		const float apply_w      = ImGui::CalcTextSize("Apply").x   + ImGui::GetStyle().FramePadding.x * 2;
@@ -676,7 +620,7 @@ void render() {
 
 	ImGui::Dummy(ImVec2(0.0f, 15.0f));
 
-	ImGui::EndChild(); // settings-content
+	ImGui::EndChild();
 }
 
 static void handle_cache_clear() {
@@ -765,7 +709,7 @@ void handle_apply() {
 	}
 
 	core::view->config = cfg;
-	config::save();  // Persist to disk — JS equivalent: Vue $watch triggers save() on config change.
+	config::save();
 
 	go_home();
 
@@ -780,4 +724,4 @@ void handle_reset() {
 	core::view->configEdit = nlohmann::json::parse(defaults.dump());
 }
 
-} // namespace screen_settings
+}

@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
- */
-
 #include "legacy_tab_textures.h"
 #include "../log.h"
 #include "../core.h"
@@ -30,7 +24,6 @@
 
 namespace legacy_tab_textures {
 
-// Upload RGBA pixel data to an OpenGL texture, returning the texture ID.
 static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t old_tex = 0) {
 	if (old_tex != 0) {
 		GLuint old_gl = static_cast<GLuint>(old_tex);
@@ -48,11 +41,8 @@ static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t 
 	return static_cast<uint32_t>(tex);
 }
 
-// --- File-local state ---
-
 static std::string selected_file;
 
-// Change-detection for selection and config watches.
 static std::string prev_selection_first;
 static uint8_t prev_export_channel_mask = 0xFF;
 
@@ -60,18 +50,13 @@ static listbox::ListboxState legacy_tex_listbox_state;
 static context_menu::ContextMenuState legacy_tex_ctx_state;
 static menu_button::MenuButtonState legacy_tex_menu_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 
-// --- Forward declarations ---
 static void handle_listbox_context(const nlohmann::json& data);
-
-// --- Internal functions ---
 
 static void preview_texture(const std::string& filename) {
 	auto& view = *core::view;
-	// Get extension.
 	auto dot_pos = filename.rfind('.');
 	std::string ext;
 	if (dot_pos != std::string::npos) {
@@ -114,13 +99,11 @@ static void preview_texture(const std::string& filename) {
 
 			view.texturePreviewInfo = std::format("{}x{} ({})", blp.width, blp.height, info);
 
-			// Upload BLP as GL texture for ImGui::Image display.
 			std::vector<uint8_t> pixels = blp.toUInt8Array(0, mask);
 			view.texturePreviewTexID = upload_rgba_to_gl(
 				pixels.data(), static_cast<int>(blp.width), static_cast<int>(blp.height),
 				view.texturePreviewTexID);
 		} else if (ext == ".png" || ext == ".jpg") {
-			// Use stb_image to decode and detect dimensions.
 			int img_w = 0, img_h = 0, img_channels = 0;
 			unsigned char* pixels = stbi_load_from_memory(
 				data->data(), static_cast<int>(data->size()),
@@ -170,7 +153,6 @@ static void refresh_blp_preview() {
 			uint8_t mask = static_cast<uint8_t>(core::view->config.value("exportChannelMask", 0b1111));
 			core::view->texturePreviewURL = blp.getDataURL(mask);
 
-			// Re-upload GL texture with updated channel mask.
 			std::vector<uint8_t> pixels = blp.toUInt8Array(0, mask);
 			core::view->texturePreviewTexID = upload_rgba_to_gl(
 				pixels.data(), static_cast<int>(blp.width), static_cast<int>(blp.height),
@@ -203,8 +185,6 @@ static void load_texture_list() {
 	}
 }
 
-// --- Public functions ---
-
 void registerTab() {
 	modules::register_nav_button("legacy_tab_textures", "Textures", "image.svg", install_type::MPQ);
 }
@@ -212,15 +192,13 @@ void registerTab() {
 void mounted() {
 	load_texture_list();
 
-	// Initialize change-detection state.
 	prev_selection_first.clear();
 	prev_export_channel_mask = static_cast<uint8_t>(core::view->config.value("exportChannelMask", 0b1111));
 }
 
-// Render checkerboard behind texture to show transparency.
 static void renderCheckerboard(ImDrawList* dl, ImVec2 pos, ImVec2 size, float cellSize = 8.0f) {
-	const ImU32 colA = IM_COL32(204, 204, 204, 255); // light grey
-	const ImU32 colB = IM_COL32(255, 255, 255, 255); // white
+	const ImU32 colA = IM_COL32(204, 204, 204, 255);
+	const ImU32 colB = IM_COL32(255, 255, 255, 255);
 	for (float y = 0; y < size.y; y += cellSize) {
 		for (float x = 0; x < size.x; x += cellSize) {
 			int ix = static_cast<int>(x / cellSize);
@@ -235,7 +213,6 @@ static void renderCheckerboard(ImDrawList* dl, ImVec2 pos, ImVec2 size, float ce
 }
 
 void render() {
-	// --- Change-detection for selectionTextures watch ---
 	{
 		std::string current_first;
 		if (!core::view->selectionTextures.empty())
@@ -250,7 +227,6 @@ void render() {
 		}
 	}
 
-	// --- Change-detection for config.exportChannelMask watch ---
 	{
 		uint8_t current_mask = static_cast<uint8_t>(core::view->config.value("exportChannelMask", 0b1111));
 		if (current_mask != prev_export_channel_mask) {
@@ -260,28 +236,23 @@ void render() {
 		}
 	}
 
-	// --- Template rendering ---
 	auto& view = *core::view;
 
 	if (app::layout::BeginTab("legacy-tab-textures")) {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
-	// --- Left panel: List container (row 1, col 1) ---
-	//   Listbox with selectionTextures, listfileTextures, filter, context menu
 	if (app::layout::BeginListContainer("legacy-tex-list", regions)) {
-		// Convert json items to string array.
 		const auto& tex_strings = core::cached_json_strings(view.listfileTextures, s_items_cache, s_items_cache_size);
 
-		// Build selection as string array.
 		std::vector<std::string> sel_strings;
 		for (const auto& s : view.selectionTextures)
 			sel_strings.push_back(s.get<std::string>());
 
 		listbox::render("##LegacyTexListbox", tex_strings,
 			view.userInputFilterTextures, sel_strings,
-			false,    // single
-			true,     // keyinput
+			false,
+			true,
 			view.config.value("regexFilters", false),
 			[&]() -> listbox::CopyMode {
 				std::string cm = view.config.value("copyMode", std::string("Default"));
@@ -291,12 +262,12 @@ void render() {
 			}(),
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
-			"texture",// unittype
-			nullptr,  // overrideItems
-			false,    // disable
-			"textures", // persistscrollkey
-			{".blp", ".png", ".jpg"}, // quickfilters
-			false,    // nocopy
+			"texture",
+			nullptr,
+			false,
+			"textures",
+			{".blp", ".png", ".jpg"},
+			false,
 			legacy_tex_listbox_state,
 			[&](const std::vector<std::string>& new_sel) {
 				view.selectionTextures.clear();
@@ -312,7 +283,6 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
-	// Context menu — JS: <ContextMenu :node="contextMenus.nodeListbox" ...>
 	context_menu::render(
 		"ctx-legacy-textures",
 		view.contextMenus.nodeListbox,
@@ -335,14 +305,11 @@ void render() {
 		}
 	);
 
-	// --- Status bar ---
 	if (app::layout::BeginStatusBar("legacy-tex-status", regions)) {
 		listbox::renderStatusBar("texture", {".blp", ".png", ".jpg"}, legacy_tex_listbox_state);
 	}
 	app::layout::EndStatusBar();
 
-	// --- Filter bar (row 2, col 1) ---
-	//   Regex info + filter input
 	if (app::layout::BeginFilterBar("legacy-tex-filter", regions)) {
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
@@ -359,14 +326,10 @@ void render() {
 	}
 	app::layout::EndFilterBar();
 
-	// --- Right panel: Preview container (row 1, col 2) ---
-	//   Preview info, channel mask toggles (R/G/B/A), texture preview image
 	if (app::layout::BeginPreviewContainer("legacy-tex-preview", regions)) {
-		// Texture preview info.
 		if (!view.texturePreviewInfo.empty())
 			ImGui::Text("%s", view.texturePreviewInfo.c_str());
 
-		// Channel mask toggles (R/G/B/A) — JS: v-if="texturePreviewURL.length > 0"
 		if (!view.texturePreviewURL.empty()) {
 			int mask = static_cast<int>(view.config.value("exportChannelMask", 0b1111));
 			struct ChannelChip { const char* id; const char* label; int bit; const char* tooltip; };
@@ -393,17 +356,14 @@ void render() {
 			ImGui::NewLine();
 		}
 
-		// Texture preview image display.
 		if (view.texturePreviewTexID != 0) {
 			const ImVec2 avail = ImGui::GetContentRegionAvail();
 			const float tex_w = static_cast<float>(view.texturePreviewWidth);
 			const float tex_h = static_cast<float>(view.texturePreviewHeight);
 			if (tex_w > 0 && tex_h > 0) {
-				// JS: max-width/max-height from texture dimensions — never upscale beyond native size.
 				const float scale = std::min({avail.x / tex_w, avail.y / tex_h, 1.0f});
 				const ImVec2 img_size(tex_w * scale, tex_h * scale);
 
-				// Draw checkerboard transparency pattern behind texture.
 				const ImVec2 checkerPos = ImGui::GetCursorScreenPos();
 				renderCheckerboard(ImGui::GetWindowDrawList(), checkerPos, img_size);
 
@@ -415,8 +375,6 @@ void render() {
 	}
 	app::layout::EndPreviewContainer();
 
-	// --- Bottom-right: Preview controls (row 2, col 2) ---
-	//   MenuButton for export format + export action
 	if (app::layout::BeginPreviewControls("legacy-tex-controls", regions)) {
 		std::vector<menu_button::MenuOption> tex_options;
 		for (const auto& opt : view.menuButtonTextures)
@@ -429,7 +387,7 @@ void render() {
 	}
 	app::layout::EndPreviewControls();
 
-	} // if BeginTab
+	}
 	app::layout::EndTab();
 }
 
@@ -456,8 +414,7 @@ void export_textures() {
 		return;
 	}
 
-	// For legacy MPQ textures: casc=nullptr, mpq=source, isLocal=true
 	texture_exporter::exportFiles(selected, nullptr, core::view->mpq.get(), true, -1);
 }
 
-} // namespace legacy_tab_textures
+}

@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
- */
-
 #include "legacy_tab_files.h"
 #include "../log.h"
 #include "../core.h"
@@ -25,17 +19,12 @@
 
 namespace legacy_tab_files {
 
-// --- File-local state ---
-
 static bool files_loaded = false;
 static listbox::ListboxState listbox_state;
 static context_menu::ContextMenuState context_menu_state;
 
-// Cached items string vector — only rebuilt when the source JSON changes.
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
-
-// --- Internal functions ---
 
 static void load_files() {
 	auto& view = *core::view;
@@ -108,8 +97,6 @@ static void export_files() {
 	}
 }
 
-// --- Public API ---
-
 void registerTab() {
 	modules::register_nav_button("legacy_tab_files", "Files", "file-lines.svg", install_type::MPQ);
 }
@@ -121,17 +108,11 @@ void mounted() {
 void render() {
 	auto& view = *core::view;
 
-	// JS template: <div class="tab list-tab" id="legacy-tab-files">
 	if (app::layout::BeginTab("tab-legacy-files")) {
 
 	auto regions = app::layout::CalcListTabRegions(false);
 
-	// --- List container (row 1) ---
-	//     <Listbox v-model:selection="selectionRaw" :items="listfileRaw" ...>
-	//     <ContextMenu :node="contextMenus.nodeListbox" ...>
-	//       copy_file_paths, copy_export_paths, open_export_directory
 	if (app::layout::BeginListContainer("legacy-files-list-container", regions)) {
-		// Convert JSON items/selection to string vectors.
 		const auto& items_str = core::cached_json_strings(view.listfileRaw, s_items_cache, s_items_cache_size);
 
 		std::vector<std::string> selection_str;
@@ -150,18 +131,18 @@ void render() {
 			items_str,
 			view.userInputFilterRaw,
 			selection_str,
-			false,   // single
-			true,    // keyinput
+			false,
+			true,
 			view.config.value("regexFilters", false),
 			copy_mode,
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
-			"file",  // unittype
-			nullptr, // overrideItems
-			false,   // disable
-			"legacy-files", // persistscrollkey
-			{},      // quickfilters
-			false,   // nocopy
+			"file",
+			nullptr,
+			false,
+			"legacy-files",
+			{},
+			false,
 			listbox_state,
 			[&](const std::vector<std::string>& new_sel) {
 				view.selectionRaw.clear();
@@ -173,7 +154,6 @@ void render() {
 			}
 		);
 
-		// Context menu — matches JS: copy file paths, copy export paths, open export directory.
 		context_menu::render(
 			"ctx-legacy-files",
 			view.contextMenus.nodeListbox,
@@ -198,17 +178,12 @@ void render() {
 	}
 	app::layout::EndListContainer();
 
-	// --- Status bar (file count) ---
-	// JS Listbox prop :includefilecount="true" with unittype="file".
 	if (app::layout::BeginStatusBar("legacy-files-status", regions)) {
 		listbox::renderStatusBar("file", {}, listbox_state);
 	}
 	app::layout::EndStatusBar();
 
-	// --- Filter bar (row 2, col 1) ---
-	// JS: <div id="tab-legacy-files-tray"><div class="filter">...</div>...
 	if (app::layout::BeginFilterBar("legacy-files-filter", regions)) {
-		// JS: <div class="regex-info" v-if="config.regexFilters" :title="$core.view.regexTooltip">Regex Enabled</div>
 		if (view.config.value("regexFilters", false)) {
 			ImGui::TextUnformatted("Regex Enabled");
 			if (ImGui::IsItemHovered())
@@ -224,8 +199,6 @@ void render() {
 	}
 	app::layout::EndFilterBar();
 
-	// --- Preview controls (row 2, col 2) — Export Selected button ---
-	// JS: <input type="button" value="Export Selected" :class="{ disabled: $core.view.isBusy || ... }"/>
 	if (app::layout::BeginPreviewControls("legacy-files-preview-controls", regions)) {
 		const bool disabled = view.isBusy > 0 || view.selectionRaw.empty();
 		if (disabled) ImGui::BeginDisabled();
@@ -235,7 +208,7 @@ void render() {
 	}
 	app::layout::EndPreviewControls();
 
-	} // if BeginTab
+	}
 	app::layout::EndTab();
 }
 
@@ -243,4 +216,4 @@ void export_selected() {
 	export_files();
 }
 
-} // namespace legacy_tab_files
+}

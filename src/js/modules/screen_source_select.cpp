@@ -1,8 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
- */
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -48,10 +43,8 @@
 
 namespace screen_source_select {
 
-// --- Per-card border hover animation state ---
 static float s_cardBorderAnim[3] = { 0.0f, 0.0f, 0.0f };
 
-// Linearly interpolate between two ImU32 colors.
 static ImU32 lerpColor(ImU32 a, ImU32 b, float t) {
 	int ra = (a >> IM_COL32_R_SHIFT) & 0xFF, ga = (a >> IM_COL32_G_SHIFT) & 0xFF;
 	int ba2 = (a >> IM_COL32_B_SHIFT) & 0xFF, aa = (a >> IM_COL32_A_SHIFT) & 0xFF;
@@ -65,18 +58,11 @@ static ImU32 lerpColor(ImU32 a, ImU32 b, float t) {
 	);
 }
 
-// --- Source icon SVG textures (lazy-loaded) ---
 static GLuint s_texWowLogo = 0;
 static GLuint s_texBattlenet = 0;
 static GLuint s_texMpq = 0;
 static bool s_texturesLoaded = false;
 
-/**
- * Load an SVG file and rasterize it into an OpenGL texture at the given size.
- * Returns the GL texture ID (0 on failure). Local equivalent of the (deprecated)
- * `app::theme::loadSvgTexture` helper — inlined here so this module does not
- * depend on the `app::theme` namespace, which is being phased out.
- */
 static GLuint loadSvgTexture(const std::filesystem::path& path, int size) {
 	NSVGimage* image = nsvgParseFromFile(path.string().c_str(), "px", 96.0f);
 	if (!image)
@@ -119,14 +105,11 @@ static void ensureSourceTextures() {
 	if (s_texturesLoaded) return;
 	s_texturesLoaded = true;
 	std::filesystem::path imgDir = constants::SRC_DIR() / "images";
-	// Load at 160px so we have crisp icons at both 80px and 50px display sizes.
 	s_texWowLogo   = loadSvgTexture(imgDir / "wow_logo.svg", 160);
 	s_texBattlenet = loadSvgTexture(imgDir / "import_battlenet.svg", 160);
 	s_texMpq       = loadSvgTexture(imgDir / "mpq.svg", 160);
 }
 
-// --- Expansion icon textures (lazy-loaded from WebP) ---
-// Maps expansionId (0..12) to icon_*.webp filenames.
 static constexpr std::array<const char*, 13> EXPANSION_ICON_FILES = {{
 	"icon_classic.webp",
 	"icon_tbc.webp",
@@ -145,12 +128,7 @@ static constexpr std::array<const char*, 13> EXPANSION_ICON_FILES = {{
 
 static std::unordered_map<int, GLuint> s_expansionIconTextures;
 
-/**
- * Load a WebP image from disk into an OpenGL texture.
- * Returns the GL texture ID (0 on failure).
- */
 static GLuint loadWebpTexture(const std::filesystem::path& path) {
-	// Read file into memory.
 	std::ifstream file(path, std::ios::binary | std::ios::ate);
 	if (!file.is_open())
 		return 0;
@@ -164,7 +142,6 @@ static GLuint loadWebpTexture(const std::filesystem::path& path) {
 	file.read(reinterpret_cast<char*>(fileData.data()), fileSize);
 	file.close();
 
-	// Decode WebP to RGBA.
 	int w = 0, h = 0;
 	uint8_t* pixels = WebPDecodeRGBA(fileData.data(), fileData.size(), &w, &h);
 	if (!pixels)
@@ -184,9 +161,6 @@ static GLuint loadWebpTexture(const std::filesystem::path& path) {
 	return tex;
 }
 
-/**
- * Get or load an expansion icon texture by expansion ID.
- */
 static GLuint getExpansionIconTexture(int expansionId) {
 	if (expansionId < 0 || expansionId >= static_cast<int>(EXPANSION_ICON_FILES.size()))
 		return 0;
@@ -203,36 +177,18 @@ static GLuint getExpansionIconTexture(int expansionId) {
 	return tex;
 }
 
-// --- File-local state ---
-
 static std::unique_ptr<casc::CASCLocal> casc_local_source;
 static std::unique_ptr<casc::CASCRemote> casc_remote_source;
 
-// Track which type is active.
 enum class SourceType { None, Local, Remote };
 static SourceType active_source_type = SourceType::None;
 
-// JS uses NW.js <input nwdirectory> elements with value-reset/click patterns for
-// directory selection. C++ uses native file dialogs via pfd::select_folder() which is
-// functionally equivalent (the reset/reselection behavior is handled natively).
-
-// JS source-open and build-load paths are async/await methods; C++ uses std::jthread +
-// core::postToMainThread() to achieve the same non-blocking behavior with identical
-// error propagation and UI flow.
-
-// Background thread for cache collection (replaces JS Worker).
 static std::unique_ptr<std::jthread> cache_worker_thread;
 
-// Background thread for CASC loading (prevents main-thread blocking).
 static std::unique_ptr<std::jthread> casc_load_thread;
-// Background thread for source open/init operations (mirrors JS async methods).
 static std::unique_ptr<std::jthread> source_open_thread;
 static std::unique_ptr<std::jthread> cdn_ping_thread;
 
-/**
- * Generate a random UUID v4 string.
- * JS equivalent: crypto.randomUUID()
- */
 static std::string generate_uuid() {
 	thread_local std::random_device rd;
 	thread_local std::mt19937_64 gen(rd());
@@ -241,7 +197,6 @@ static std::string generate_uuid() {
 	uint64_t a = dist(gen);
 	uint64_t b = dist(gen);
 
-	// Set UUID version 4 bits.
 	a = (a & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;
 	b = (b & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;
 
@@ -252,8 +207,6 @@ static std::string generate_uuid() {
 		static_cast<uint16_t>(b >> 48),
 		b & 0x0000FFFFFFFFFFFFULL);
 }
-
-// --- Internal functions ---
 
 static std::string get_product_tag(const std::string& product) {
 	for (const auto& entry : constants::PRODUCTS) {
@@ -283,7 +236,6 @@ void load_install(int index) {
 		const auto& build = casc_local_source->builds[static_cast<size_t>(index)];
 		std::string product = build.at("Product");
 
-		// Find existing entry.
 		int pre_index = -1;
 		for (size_t i = 0; i < recent_local.size(); i++) {
 			if (recent_local[i]["path"] == install_path && recent_local[i]["product"] == product) {
@@ -293,40 +245,32 @@ void load_install(int index) {
 		}
 
 		if (pre_index > -1) {
-			// Move to front.
 			if (pre_index > 0) {
 				nlohmann::json entry = recent_local[static_cast<size_t>(pre_index)];
 				recent_local.erase(static_cast<size_t>(pre_index));
 				recent_local.insert(recent_local.begin(), entry);
 			}
 		} else {
-			// Add new entry at front.
 			nlohmann::json entry;
 			entry["path"] = install_path;
 			entry["product"] = product;
 			recent_local.insert(recent_local.begin(), entry);
 		}
 
-		// Trim to max.
 		while (recent_local.size() > static_cast<size_t>(constants::MAX_RECENT_LOCAL))
 			recent_local.erase(recent_local.size() - 1);
 	}
 
-	// Stop any previous CASC load thread before starting a new one.
 	casc_load_thread.reset();
 
 	if (active_source_type == SourceType::Local && casc_local_source) {
-		// Capture raw pointer — the unique_ptr remains alive for the
-		// lifetime of the source_select module, which outlives the thread.
 		casc::CASCLocal* src = casc_local_source.get();
 
 		casc_load_thread = std::make_unique<std::jthread>([src, index]() {
 			try {
 				src->load(index);
 
-				// Post all completion actions to the main thread.
 				core::postToMainThread([src]() {
-					// Synchronize CASC result back to main thread.
 					core::view->casc = src;
 
 					if (core::view->config.value("allowCacheCollection", false)) {
@@ -343,7 +287,6 @@ void load_install(int index) {
 						wconfig.user_agent = constants::USER_AGENT();
 						wconfig.state_path = constants::CACHE::STATE_FILE();
 
-						// Stop any previous cache worker.
 						cache_worker_thread.reset();
 
 						cache_worker_thread = std::make_unique<std::jthread>([cfg = std::move(wconfig)]() {
@@ -381,7 +324,6 @@ void load_install(int index) {
 				src->load(index);
 
 				core::postToMainThread([src]() {
-					// Synchronize CASC result back to main thread.
 					core::view->casc = src;
 					core::view->installType = install_type::CASC;
 					modules::set_active("tab_home");
@@ -405,8 +347,6 @@ void load_install(int index) {
 void open_local_install(const std::string& install_path, const std::string& product) {
 	core::hideToast();
 
-	// Ensure any in-progress CASC loading thread is finished before
-	// replacing the source pointers it may reference.
 	casc_load_thread.reset();
 	source_open_thread.reset();
 
@@ -476,17 +416,12 @@ void open_local_install(const std::string& install_path, const std::string& prod
 void open_legacy_install(const std::string& install_path) {
 	core::hideToast();
 
-	// Ensure any in-progress loading thread is finished before
-	// replacing the MPQ pointer it may reference.
 	source_open_thread.reset();
 
 	core::view->mpq = std::make_unique<mpq::MPQInstall>(install_path);
 
 	core::showLoadingScreen(2, "Loading Legacy Installation");
 
-	// JS uses `await this.$core.view.mpq.loadInstall()`, which yields control to
-	// the event loop and keeps the UI responsive. Mirror that with a worker
-	// thread so the main/render thread never blocks during legacy MPQ loading.
 	mpq::MPQInstall* src = core::view->mpq.get();
 
 	source_open_thread = std::make_unique<std::jthread>([src, install_path]() {
@@ -494,8 +429,6 @@ void open_legacy_install(const std::string& install_path) {
 			src->loadInstall();
 
 			core::postToMainThread([src, install_path]() {
-				// Bail out if the active MPQ pointer has changed (e.g. user
-				// initiated another open while this one was loading).
 				if (!core::view->mpq || core::view->mpq.get() != src)
 					return;
 
@@ -503,7 +436,6 @@ void open_legacy_install(const std::string& install_path) {
 				if (!recent_legacy.is_array())
 					recent_legacy = nlohmann::json::array();
 
-				// Find existing entry.
 				int pre_index = -1;
 				for (size_t i = 0; i < recent_legacy.size(); i++) {
 					if (recent_legacy[i]["path"] == install_path) {
@@ -513,20 +445,17 @@ void open_legacy_install(const std::string& install_path) {
 				}
 
 				if (pre_index > -1) {
-					// Move to front.
 					if (pre_index > 0) {
 						nlohmann::json entry = recent_legacy[static_cast<size_t>(pre_index)];
 						recent_legacy.erase(static_cast<size_t>(pre_index));
 						recent_legacy.insert(recent_legacy.begin(), entry);
 					}
 				} else {
-					// Add new entry at front.
 					nlohmann::json entry;
 					entry["path"] = install_path;
 					recent_legacy.insert(recent_legacy.begin(), entry);
 				}
 
-				// Trim to max.
 				while (recent_legacy.size() > static_cast<size_t>(constants::MAX_RECENT_LOCAL))
 					recent_legacy.erase(recent_legacy.size() - 1);
 
@@ -571,8 +500,6 @@ static void init_cdn_pings() {
 		if (region.tag == "cn") {
 			cdn_url = std::string(constants::PATCH::HOST_CHINA);
 		} else {
-			// JS: util.format(constants.PATCH.HOST, region.tag)
-			// HOST is "https://%s.version.battle.net/" — replace %s with region tag.
 			std::string host_template(constants::PATCH::HOST);
 			auto pos = host_template.find("%s");
 			if (pos != std::string::npos)
@@ -595,7 +522,6 @@ static void init_cdn_pings() {
 		}
 	}
 
-	// Build a list of (index, url) pairs to ping — captured by value for async tasks.
 	struct PingTarget { size_t index; std::string url; };
 	std::vector<PingTarget> targets;
 	for (size_t i = 0; i < regions.size(); i++)
@@ -627,7 +553,6 @@ static void init_cdn_pings() {
 			try {
 				task.get();
 			} catch (...) {
-				// per-ping task already logs and posts delay fallback.
 			}
 		}
 
@@ -677,8 +602,6 @@ static void click_source_remote() {
 	if (core::view->isBusy)
 		return;
 
-	// Ensure any in-progress CASC loading thread is finished before
-	// replacing the source pointers it may reference.
 	casc_load_thread.reset();
 	source_open_thread.reset();
 
@@ -757,28 +680,16 @@ static void click_return_to_source_select() {
 	core::view->sourceSelectShowBuildSelect = false;
 }
 
-// --- Public functions ---
-
-/**
- * Draw a dashed rounded rectangle outline using line segments.
- * Approximates a CSS "border: 3px dashed" with border-radius by walking
- * the rectangle perimeter with dash/gap segments.
- */
 static void drawDashedRoundedRect(ImDrawList* draw, ImVec2 p_min, ImVec2 p_max, ImU32 color, float rounding, float thickness, float dash_len, float gap_len) {
-	// Generate the path for a rounded rectangle, then walk it with dashes.
-
-	// Build polyline points for the rounded rect using ImGui's path API.
 	draw->PathClear();
 	draw->PathRect(p_min, p_max, rounding, 0);
-	// Retrieve the path points, copy them, then clear.
 	std::vector<ImVec2> pts(draw->_Path.Data, draw->_Path.Data + draw->_Path.Size);
 	draw->PathClear();
 
 	if (pts.size() < 2) return;
 
-	// Walk the polyline with dash/gap
 	float accumulated = 0.0f;
-	bool drawing = true; // start with a dash
+	bool drawing = true;
 	for (size_t i = 0; i < pts.size(); ++i) {
 		size_t next = (i + 1) % pts.size();
 		ImVec2 a = pts[i];
@@ -811,32 +722,22 @@ static void drawDashedRoundedRect(ImDrawList* draw, ImVec2 p_min, ImVec2 p_max, 
 }
 
 void mounted() {
-	// init recent local/legacy arrays if needed.
-	//     this.$core.view.config.recentLocal = [];
 	if (!core::view->config.contains("recentLocal") || !core::view->config["recentLocal"].is_array())
 		core::view->config["recentLocal"] = nlohmann::json::array();
 
-	//     this.$core.view.config.recentLegacy = [];
 	if (!core::view->config.contains("recentLegacy") || !core::view->config["recentLegacy"].is_array())
 		core::view->config["recentLegacy"] = nlohmann::json::array();
 
-	// In ImGui, file selectors are triggered via pfd::select_folder() instead of
-	// NW.js <input type="file" nwdirectory>.
-
-	// init cdn pings.
 	init_cdn_pings();
 }
 
 void render() {
-	// Ensure source icon textures are loaded.
 	ensureSourceTextures();
 
-	// --- Responsiveness: CSS @media (max-height: N px) breakpoints ---
-	// Use viewport height (matches CSS media-query semantics), not content window height.
 	ImVec2 content_size = ImGui::GetContentRegionAvail();
 	float vp_height = ImGui::GetMainViewport()->WorkSize.y;
-	bool compact = (vp_height <= 799.0f); // CSS: @media (max-height: 799px) — compress source-select icons/gaps
-	bool build_compact = (vp_height <= 849.0f); // CSS: @media (max-height: 849px) — row-wrap build-select buttons
+	bool compact = (vp_height <= 799.0f);
+	bool build_compact = (vp_height <= 849.0f);
 
 	float card_width    = 700.0f;
 	float card_min_h    = compact ? 60.0f : 120.0f;
@@ -854,26 +755,20 @@ void render() {
 	ImFont* bold_font = app::theme::getBoldFont();
 	ImDrawList* draw = ImGui::GetWindowDrawList();
 
-	// --- Template rendering ---
 	if (!core::view->sourceSelectShowBuildSelect) {
-		// Count number of cards (always 3: local, remote, legacy).
 		const int num_cards = 3;
 
-		// Pre-calculate card heights for centering.
-		// We'll compute each card's actual height based on content.
 		struct CardInfo {
 			GLuint icon_tex;
 			const char* title;
 			const char* subtitle;
 			std::string link_text;
 			bool has_link;
-			int card_id; // 0=local, 1=remote, 2=legacy
+			int card_id;
 		};
 
-		// Prepare card data
 		CardInfo cards[3];
 
-		// Local
 		cards[0].icon_tex = s_texWowLogo;
 		cards[0].title = "Open Local Installation (Recommended)";
 		cards[0].subtitle = "Explore a locally installed World of Warcraft installation on your machine";
@@ -889,14 +784,12 @@ void render() {
 			cards[0].has_link = true;
 		}
 
-		// Remote
 		cards[1].icon_tex = s_texBattlenet;
 		cards[1].title = "Use Battle.net CDN";
 		cards[1].subtitle = "Explore available builds without installation directly from the Battle.net servers";
 		cards[1].has_link = false;
 		cards[1].card_id = 1;
 
-		// Legacy
 		cards[2].icon_tex = s_texMpq;
 		cards[2].title = "Open Legacy Installation";
 		cards[2].subtitle = "Explore a legacy MPQ-based installation on your machine";
@@ -910,20 +803,17 @@ void render() {
 			cards[2].has_link = true;
 		}
 
-		// Calculate card heights.
 		auto calcCardHeight = [&](const CardInfo& card) -> float {
 			float text_width = card_width - card_pad_x * 2 - icon_size - card_gap;
 			if (text_width < 100.0f) text_width = 100.0f;
 
-			float h = card_padding * 2; // top + bottom padding
-			h += title_size;           // title line
+			float h = card_padding * 2;
+			h += title_size;
 			h += content_gap;
 
-			// Subtitle: may wrap
 			ImVec2 subtitle_sz = ImGui::CalcTextSize(card.subtitle, nullptr, false, text_width);
 			h += subtitle_sz.y;
 
-			// Link or CDN region line
 			if (card.has_link || card.card_id == 1) {
 				h += 5.0f;
 				h += link_size;
@@ -938,13 +828,11 @@ void render() {
 			card_heights[i] = calcCardHeight(cards[i]);
 			total_height += card_heights[i];
 		}
-		total_height += card_gap * (num_cards - 1); // gaps between cards
+		total_height += card_gap * (num_cards - 1);
 
-		// Center vertically.
 		float start_y = ImGui::GetCursorPosY() + (content_size.y - total_height) * 0.5f;
 		if (start_y < ImGui::GetCursorPosY()) start_y = ImGui::GetCursorPosY();
 
-		// Center horizontally.
 		float start_x = ImGui::GetCursorPosX() + (content_size.x - card_width) * 0.5f;
 		if (start_x < ImGui::GetCursorPosX()) start_x = ImGui::GetCursorPosX();
 
@@ -954,27 +842,21 @@ void render() {
 			const auto& card = cards[ci];
 			float card_h = card_heights[ci];
 
-			// Position an invisible button covering the card area for click detection.
-			// SetNextItemAllowOverlap lets the link sub-buttons submitted later claim
-			// hover/click priority over this card button within their own rects.
 			ImGui::SetCursorPos(ImVec2(start_x, cur_y));
 			std::string btn_id = std::format("##source_card_{}", ci);
 			ImGui::SetNextItemAllowOverlap();
 			bool clicked = ImGui::InvisibleButton(btn_id.c_str(), ImVec2(card_width, card_h));
 			bool hovered = ImGui::IsItemHovered();
 
-			// CSS: cursor: pointer on card divs
 			if (hovered)
 				ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 
-			// Get absolute screen coordinates for drawing.
 			ImVec2 card_min = ImGui::GetItemRectMin();
 			ImVec2 card_max = ImGui::GetItemRectMax();
 
-			// Animate border color with 0.2s transition (CSS: transition: border-color 0.2s).
 			float& anim = s_cardBorderAnim[ci];
 			float dt = ImGui::GetIO().DeltaTime;
-			float anim_speed = 1.0f / 0.2f; // 0.2 seconds
+			float anim_speed = 1.0f / 0.2f;
 			if (hovered)
 				anim = std::min(anim + dt * anim_speed, 1.0f);
 			else
@@ -982,7 +864,6 @@ void render() {
 			ImU32 border_color = lerpColor(ImGui::GetColorU32(ImGuiCol_TextDisabled), ImGui::GetColorU32(ImGuiCol_Text), anim);
 			drawDashedRoundedRect(draw, card_min, card_max, border_color, border_radius, border_thick, 8.0f, 6.0f);
 
-			// Draw icon.
 			float icon_y = card_min.y + (card_h - icon_size) * 0.5f;
 			float icon_x = card_min.x + card_pad_x;
 			if (card.icon_tex) {
@@ -991,13 +872,10 @@ void render() {
 					ImVec2(icon_x + icon_size, icon_y + icon_size));
 			}
 
-			// Draw text content.
 			float text_x = icon_x + icon_size + card_gap;
 			float text_width = card_max.x - card_pad_x - text_x;
 			if (text_width < 50.0f) text_width = 50.0f;
 
-			// CSS: align-items: center — vertically center text block within card.
-			// Compute total text block height to center it.
 			float text_block_h = title_size + content_gap;
 			{
 				ImVec2 subtitle_sz = ImGui::CalcTextSize(card.subtitle, nullptr, false, text_width);
@@ -1007,14 +885,12 @@ void render() {
 				text_block_h += 5.0f + link_size;
 			float text_y = card_min.y + (card_h - text_block_h) * 0.5f;
 
-			// Title — native ImGui widget with the bold font pushed at the configured size.
 			ImGui::SetCursorScreenPos(ImVec2(text_x, text_y));
 			ImGui::PushFont(bold_font, title_size);
 			ImGui::TextUnformatted(card.title);
 			ImGui::PopFont();
 			text_y += title_size + content_gap;
 
-			// Subtitle — native ImGui::TextWrapped via PushTextWrapPos.
 			{
 				ImGui::SetCursorScreenPos(ImVec2(text_x, text_y));
 				ImGui::PushFont(nullptr, subtitle_size);
@@ -1023,25 +899,20 @@ void render() {
 				ImGui::PopTextWrapPos();
 				ImGui::PopFont();
 
-				// Advance text_y by the subtitle's actual rendered height.
 				ImVec2 subtitle_extent = ImGui::GetItemRectSize();
 				text_y += subtitle_extent.y;
 			}
 
-			// Link text or CDN region (card-specific).
 			if (card.card_id == 0 && card.has_link) {
-				// "Last Opened: path (tag)" — clickable link
 				text_y += 5.0f;
 				std::string label_prefix = "Last Opened: ";
 				ImVec2 prefix_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, label_prefix.c_str());
 				draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), ImGui::GetColorU32(ImGuiCol_Text), label_prefix.c_str());
 
-				// Clickable link part.
 				std::string link_part = card.link_text.substr(label_prefix.size());
 				ImVec2 link_pos(text_x + prefix_sz.x, text_y);
 				ImVec2 link_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, link_part.c_str());
 
-				// Create an invisible button over the link text.
 				ImGui::SetCursorScreenPos(link_pos);
 				std::string link_id = std::format("##recent_local_link_{}", ci);
 				if (ImGui::InvisibleButton(link_id.c_str(), link_sz)) {
@@ -1054,14 +925,12 @@ void render() {
 				ImU32 link_color = link_hovered ? IM_COL32(159, 241, 161, 255) : IM_COL32(87, 175, 226, 255);
 				draw->AddText(ImGui::GetFont(), link_size, link_pos, link_color, link_part.c_str());
 			} else if (card.card_id == 1) {
-				// CDN region: "Region: NAME (Change)" with context menu.
 				text_y += 5.0f;
 				if (!core::view->selectedCDNRegion.is_null()) {
 					std::string region_label = std::format("Region: {} ", core::view->selectedCDNRegion.value("name", std::string("...")));
 					ImVec2 region_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, region_label.c_str());
 					draw->AddText(ImGui::GetFont(), link_size, ImVec2(text_x, text_y), ImGui::GetColorU32(ImGuiCol_Text), region_label.c_str());
 
-					// "(Change)" link
 					const char* change_text = "(Change)";
 					ImVec2 change_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, change_text);
 					ImVec2 change_pos(text_x + region_sz.x, text_y);
@@ -1075,7 +944,6 @@ void render() {
 					draw->AddText(ImGui::GetFont(), link_size, change_pos, change_color, change_text);
 				}
 
-				// CDN region context menu popup.
 				ImGui::SetNextWindowSize(ImVec2(260.0f, 0.0f), ImGuiCond_Always);
 				if (ImGui::BeginPopup("##cdn_region_menu")) {
 					ImDrawList* popup_draw = ImGui::GetWindowDrawList();
@@ -1083,11 +951,9 @@ void render() {
 						std::string name = region.value("name", std::string("Unknown"));
 						int64_t delay = region.value("delay", static_cast<int64_t>(-1));
 
-						// Render region name as selectable item.
 						if (ImGui::Selectable(std::format("##cdn_region_{}", name).c_str(), false, 0, ImVec2(0, 0))) {
 							set_selected_cdn(region);
 						}
-						// Custom render: region name at normal opacity, delay at 0.7 opacity + 12px font.
 						ImVec2 item_min = ImGui::GetItemRectMin();
 						ImVec2 item_max = ImGui::GetItemRectMax();
 						float item_h = item_max.y - item_min.y;
@@ -1095,16 +961,14 @@ void render() {
 						float normal_size = ImGui::GetFontSize();
 						float delay_font_size = 12.0f;
 
-						// Draw region name.
 						ImVec2 name_sz = font->CalcTextSizeA(normal_size, FLT_MAX, 0.0f, name.c_str());
 						float text_center_y = item_min.y + (item_h - name_sz.y) * 0.5f;
 						popup_draw->AddText(font, normal_size, ImVec2(item_min.x, text_center_y),
 							ImGui::GetColorU32(ImGuiCol_Text), name.c_str());
 
-						// Draw delay string with reduced opacity and smaller font.
 						if (!region["delay"].is_null()) {
 							std::string delay_text = delay >= 0 ? std::format(" {}ms", delay) : " N/A";
-							ImU32 delay_color = IM_COL32(255, 255, 255, 143); // opacity: 0.7 * --font-primary alpha
+							ImU32 delay_color = IM_COL32(255, 255, 255, 143);
 							ImVec2 delay_sz = font->CalcTextSizeA(delay_font_size, FLT_MAX, 0.0f, delay_text.c_str());
 							float delay_y = item_min.y + (item_h - delay_sz.y) * 0.5f;
 							popup_draw->AddText(font, delay_font_size, ImVec2(item_min.x + name_sz.x, delay_y),
@@ -1114,7 +978,6 @@ void render() {
 					ImGui::EndPopup();
 				}
 			} else if (card.card_id == 2 && card.has_link) {
-				// Legacy "Last Opened: path" — clickable link
 				text_y += 5.0f;
 				std::string label_prefix = "Last Opened: ";
 				ImVec2 prefix_sz = ImGui::GetFont()->CalcTextSizeA(link_size, FLT_MAX, 0.0f, label_prefix.c_str());
@@ -1137,7 +1000,6 @@ void render() {
 				draw->AddText(ImGui::GetFont(), link_size, link_pos, link_color_l, link_part.c_str());
 			}
 
-			// Handle card click (only if not clicking a sub-element link).
 			if (clicked) {
 				switch (card.card_id) {
 					case 0: click_source_local(); break;
@@ -1149,12 +1011,6 @@ void render() {
 			cur_y += card_h + card_gap;
 		}
 	} else {
-		//   <div class="build-select-content">
-		//     <div class="build-select-title">Select Build</div>
-		//     <div class="build-select-buttons">
-		//       For each build: expansion-icon button with build.label
-		//     <span @click="click_return_to_source_select" class="link">Return to Installations</span>
-
 		const auto& builds = !core::view->availableLocalBuilds.is_null()
 			? core::view->availableLocalBuilds
 			: core::view->availableRemoteBuilds;
@@ -1163,8 +1019,6 @@ void render() {
 		if (!builds.is_null() && builds.is_array())
 			build_count = static_cast<int>(builds.size());
 
-		// CSS: @media (max-height: 849px) — row-wrap layout; otherwise column layout.
-		// build_compact is derived from vp_height above.
 		float btn_height = 50.0f;
 		float btn_gap = 10.0f;
 		float title_h = 28.0f;
@@ -1173,7 +1027,6 @@ void render() {
 		float return_h = 16.0f;
 		float btn_border_radius = 10.0f;
 
-		// In row-wrap mode buttons are smaller and arranged in a wrapping grid.
 		float btn_min_width = build_compact ? 200.0f : 450.0f;
 		float btn_h = build_compact ? 40.0f : btn_height;
 		float row_gap = btn_gap;
@@ -1189,7 +1042,6 @@ void render() {
 
 		float cur_y = start_y;
 
-		// Title: "Select Build"
 		ImGui::SetCursorPos(ImVec2(start_x, cur_y));
 		ImGui::Dummy(ImVec2(grid_width, title_h));
 		{
@@ -1201,7 +1053,6 @@ void render() {
 		}
 		cur_y += title_h + title_mb;
 
-		// Build buttons (column layout or row-wrap at small heights).
 		if (!builds.is_null() && builds.is_array()) {
 			for (size_t i = 0; i < builds.size(); ++i) {
 				const auto& build = builds[i];
@@ -1221,12 +1072,8 @@ void render() {
 
 				ImGui::SetCursorPos(ImVec2(cell_x, cell_y));
 				std::string btn_id = std::format("##build_btn_{}", i);
-				// JS: :class="[..., { disabled: $core.view.isBusy }]" — visually dim and block clicks while busy.
 				const bool build_busy = core::view->isBusy;
 				if (build_busy) ImGui::BeginDisabled();
-				// InvisibleButton handles hit detection over the full cell area; the
-				// dashed rounded outline below is the only ImDrawList call retained
-				// (no native equivalent for a dashed CSS border).
 				ImGui::SetNextItemAllowOverlap();
 				bool btn_clicked = ImGui::InvisibleButton(btn_id.c_str(), ImVec2(btn_min_width, btn_h));
 				bool btn_hovered = ImGui::IsItemHovered();
@@ -1234,13 +1081,11 @@ void render() {
 				ImVec2 btn_min = ImGui::GetItemRectMin();
 				ImVec2 btn_max = ImGui::GetItemRectMax();
 
-				// Dashed border outline (legitimate ImDrawList use — no native equivalent).
 				ImU32 border_color = btn_hovered
 					? IM_COL32(34, 181, 73, 255)
 					: ImGui::GetColorU32(ImGuiCol_TextDisabled);
 				drawDashedRoundedRect(draw, btn_min, btn_max, border_color, btn_border_radius, border_thick, 8.0f, 6.0f);
 
-				// Expansion icon (32px, at 10px from left, vertically centered) — native ImGui::Image.
 				int expansionId = build.value("expansionId", 0);
 				GLuint iconTex = getExpansionIconTexture(expansionId);
 				if (iconTex) {
@@ -1251,7 +1096,6 @@ void render() {
 					ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(iconTex)), ImVec2(icon_sz, icon_sz));
 				}
 
-				// Build label text — native ImGui widget.
 				float text_x_off = btn_min.x + 50.0f;
 				float text_y_off = btn_min.y + (btn_h - 16.0f) * 0.5f;
 				ImGui::SetCursorScreenPos(ImVec2(text_x_off, text_y_off));
@@ -1271,7 +1115,6 @@ void render() {
 				cur_y += rows * (btn_h + row_gap) - row_gap;
 		}
 
-		// "Return to Installations" link.
 		cur_y += return_mt;
 		{
 			const char* return_text = "Return to Installations";
@@ -1289,4 +1132,4 @@ void render() {
 	}
 }
 
-} // namespace screen_source_select
+}
