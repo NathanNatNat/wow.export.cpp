@@ -80,19 +80,10 @@ void initializeDecorData() {
 	isInitialized = true;
 }
 
-/**
- * Get all decor items.
- * @returns Reference to the decor items map.
- */
 const std::unordered_map<uint32_t, DecorItem>& getAllDecorItems() {
 	return decorItems;
 }
 
-/**
- * Get a decor item by ID.
- * @param id Decor item ID.
- * @returns Pointer to DecorItem, or nullptr if not found.
- */
 const DecorItem* getDecorItemByID(uint32_t id) {
 	auto it = decorItems.find(id);
 	if (it != decorItems.end())
@@ -100,11 +91,6 @@ const DecorItem* getDecorItemByID(uint32_t id) {
 	return nullptr;
 }
 
-/**
- * Get a decor item by model file data ID.
- * @param fileDataID Model file data ID.
- * @returns Pointer to DecorItem, or nullptr if not found.
- */
 const DecorItem* getDecorItemByModelFileDataID(uint32_t fileDataID) {
 	for (const auto& [_id, item] : decorItems) {
 		(void)_id;

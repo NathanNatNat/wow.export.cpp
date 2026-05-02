@@ -39,10 +39,10 @@ static int fieldToInt(const db::FieldValue& val) {
 	return 0;
 }
 
-// maps ItemID -> Map<modifier_id, ItemDisplayInfoID>
+// maps ItemID -> Map<ItemAppearanceModifierID, ItemDisplayInfoID>
 static std::unordered_map<uint32_t, std::map<uint32_t, uint32_t>> item_to_display_ids;
 
-// maps ItemDisplayInfoID -> array of { section, materialResourcesID }
+// maps ItemDisplayInfoID -> array of { componentSection, materialResourcesID }
 struct ComponentEntry {
 	int section;
 	uint32_t materialResourcesID;
@@ -79,7 +79,6 @@ void initialize() {
 		appearance_to_display[id] = displayID;
 	}
 
-	// map item id -> modifier_id -> display id
 	for (const auto& [item_id, modifiers] : appearance_map) {
 		for (const auto& [modifier_id, appearance_id] : modifiers) {
 			auto it = appearance_to_display.find(appearance_id);
@@ -108,9 +107,6 @@ void ensureInitialized() {
 		initialize();
 }
 
-/**
- * Get character texture components directly by ItemDisplayInfoID.
- */
 std::optional<std::vector<TextureComponent>> getTexturesByDisplayId(uint32_t display_id, int race_id, int gender_index) {
 	auto comp_it = display_to_component_textures.find(display_id);
 	if (comp_it == display_to_component_textures.end())
@@ -120,7 +116,6 @@ std::optional<std::vector<TextureComponent>> getTexturesByDisplayId(uint32_t dis
 	for (const auto& component : comp_it->second) {
 		const auto* file_data_ids = DBTextureFileData::getTextureFDIDsByMatID(component.materialResourcesID);
 		if (file_data_ids && !file_data_ids->empty()) {
-			// Pass std::nullopt for "no preference" (matches JS null), not 0
 			std::optional<uint32_t> opt_race = (race_id >= 0) ? std::optional<uint32_t>(static_cast<uint32_t>(race_id)) : std::nullopt;
 			std::optional<uint32_t> opt_gender = (gender_index >= 0) ? std::optional<uint32_t>(static_cast<uint32_t>(gender_index)) : std::nullopt;
 			auto bestFileDataID = DBComponentTextureFileData::getTextureForRaceGender(
@@ -141,9 +136,6 @@ std::optional<std::vector<TextureComponent>> getTexturesByDisplayId(uint32_t dis
 	return result;
 }
 
-/**
- * Resolve display ID for an item with optional modifier.
- */
 static std::optional<uint32_t> resolve_display_id(uint32_t item_id, int modifier_id = -1) {
 	auto mods_it = item_to_display_ids.find(item_id);
 	if (mods_it == item_to_display_ids.end())
@@ -157,7 +149,6 @@ static std::optional<uint32_t> resolve_display_id(uint32_t item_id, int modifier
 		return std::nullopt;
 	}
 
-	// default: prefer modifier 0, else lowest available
 	auto it0 = modifiers.find(0);
 	if (it0 != modifiers.end())
 		return it0->second;
@@ -166,9 +157,6 @@ static std::optional<uint32_t> resolve_display_id(uint32_t item_id, int modifier
 	return std::nullopt;
 }
 
-/**
- * Get character texture components for an item.
- */
 std::optional<std::vector<TextureComponent>> getItemTextures(uint32_t item_id, int race_id, int gender_index, int modifier_id) {
 	auto disp_id = resolve_display_id(item_id, modifier_id);
 	if (!disp_id)
@@ -177,9 +165,6 @@ std::optional<std::vector<TextureComponent>> getItemTextures(uint32_t item_id, i
 	return getTexturesByDisplayId(*disp_id, race_id, gender_index);
 }
 
-/**
- * Get ItemDisplayInfoID for an item.
- */
 std::optional<uint32_t> getDisplayId(uint32_t item_id, int modifier_id) {
 	return resolve_display_id(item_id, modifier_id);
 }

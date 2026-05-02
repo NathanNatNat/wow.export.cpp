@@ -35,7 +35,6 @@ static bool is_initializing = false;
 static std::mutex init_mutex;
 static std::condition_variable init_cv;
 
-// Returned by get_customization_choices() for missing keys — see note there.
 static const std::vector<CustomizationOption> empty_options;
 
 static void _initialize() {
@@ -53,8 +52,6 @@ static void _initialize() {
 	}
 
 	auto optionRows = casc::db2::preloadTable("CreatureDisplayInfoOption").getAllRows();
-	// JS uses `.values()` to iterate row values only; getAllRows() here returns
-	// a key/value map, so we discard the key to match.
 	for (const auto& [_optId, row] : optionRows) {
 		(void)_optId;
 		uint32_t extra_id = fieldToUint32(row.at("CreatureDisplayInfoExtraID"));
@@ -103,8 +100,6 @@ std::future<void> ensureInitializedAsync() {
 	return std::async(std::launch::async, [] { ensureInitialized(); });
 }
 
-// JS returns `undefined` for missing keys; the C++ equivalent is `nullptr`.
-// Callers must null-check the returned pointer.
 const ExtraInfo* get_extra(uint32_t id) {
 	auto it = extra_map.find(id);
 	if (it != extra_map.end())
@@ -112,9 +107,6 @@ const ExtraInfo* get_extra(uint32_t id) {
 	return nullptr;
 }
 
-// JS `option_map.get(extra_id) ?? []` allocates a fresh array per missing-key
-// call; we return a const reference to a shared empty vector to avoid that.
-// Callers must treat the result as a view and not retain it across mutations.
 const std::vector<CustomizationOption>& get_customization_choices(uint32_t extra_id) {
 	auto it = option_map.find(extra_id);
 	if (it != option_map.end())

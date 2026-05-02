@@ -97,8 +97,6 @@ void initialize_categories() {
 			continue;
 		uint32_t sub_id = fieldToUint32(subIt->second);
 
-		// JS: if (decor_id === undefined || sub_id === undefined) continue;
-		// Skip only if field was not found (0 is a valid ID)
 		if (!decor_id_found)
 			continue;
 
@@ -125,4 +123,4 @@ const std::unordered_set<uint32_t>* get_subcategories_for_decor(uint32_t decor_i
 	return nullptr;
 }
 
-} // namespace db::caches::DBDecorCategories
+}

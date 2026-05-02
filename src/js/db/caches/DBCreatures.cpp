@@ -155,11 +155,6 @@ std::future<void> initializeCreatureDataAsync() {
 	return std::async(std::launch::async, [] { initializeCreatureData(); });
 }
 
-/**
- * Gets creature skins from a given file data ID.
- * @param fileDataID File data ID.
- * @returns Pointer to vector of displays, or nullptr if not found.
- */
 const std::vector<std::reference_wrapper<const CreatureDisplayInfo>>* getCreatureDisplaysByFileDataID(uint32_t fileDataID) {
 	auto it = creatureDisplays.find(fileDataID);
 	if (it != creatureDisplays.end())
@@ -184,9 +179,6 @@ const CreatureDisplayInfo* getDisplayInfo(uint32_t displayID) {
 	return nullptr;
 }
 
-/**
- * Gets the file data ID for a given CreatureModelData ID.
- */
 std::optional<uint32_t> getFileDataIDByModelDataID(uint32_t modelDataID) {
 	auto it = modelDataIDToFileDataID.find(modelDataID);
 	if (it != modelDataIDToFileDataID.end())

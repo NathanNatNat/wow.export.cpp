@@ -47,7 +47,7 @@ static std::unordered_map<std::string, uint32_t> border_map;
 // component-emblemID-color -> FileDataID
 static std::unordered_map<std::string, uint32_t> emblem_map;
 
-// color_id -> { r, g, b }  (std::map preserves ascending-ID iteration order, matching JS Map insertion order)
+// color_id -> { r, g, b }
 static std::map<uint32_t, ColorRGB> background_colors_map;
 static std::map<uint32_t, ColorRGB> border_colors_map;
 static std::map<uint32_t, ColorRGB> emblem_colors_map;

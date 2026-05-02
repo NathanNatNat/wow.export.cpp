@@ -51,9 +51,6 @@ is_initializing = true;
 try {
 logging::write("Loading ComponentTextureFileData...");
 
-// JS accesses `db2.ComponentTextureFileData` (a named property). The C++ port
-// resolves the same table via `casc::db2::preloadTable("ComponentTextureFileData")`
-// — the string key must match the actual DB2 table name exactly (TODO 337).
 auto allRows = casc::db2::preloadTable("ComponentTextureFileData").getAllRows();
 for (const auto& [id, row] : allRows) {
 ComponentTextureInfo info;
@@ -92,12 +89,6 @@ return std::nullopt;
 if (file_data_ids.size() == 1)
 return file_data_ids[0];
 
-// Mirrors JS structure (TODO 335): all four race/gender-specific loops run unconditionally.
-// JS `info.raceID === race_id` (with race_id == null) simply never matches against the
-// numeric raceIDs stored in file_data_to_info. We replicate that by substituting an
-// unrepresentable sentinel when the optional is empty, so the equality silently fails
-// — same outcome as JS: loops execute but find nothing, falling through to the race=0
-// (any race) loop below.
 const uint32_t race = race_id.value_or(static_cast<uint32_t>(-1));
 const uint32_t gender = gender_index.value_or(static_cast<uint32_t>(-1));
 

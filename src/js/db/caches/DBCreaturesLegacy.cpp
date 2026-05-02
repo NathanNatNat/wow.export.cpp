@@ -42,14 +42,12 @@ static std::vector<std::string> fieldToStringVec(const db::FieldValue& val) {
 static std::unordered_map<std::string, std::vector<LegacyCreatureDisplay>> creatureDisplays;
 static bool isInitialized = false;
 
-// Helper: normalize path (lowercase, forward slashes, .mdl/.mdx to .m2)
 static std::string normalizePath(const std::string& path) {
 	std::string normalized = path;
 	std::transform(normalized.begin(), normalized.end(), normalized.begin(),
 		[](unsigned char c) { return std::tolower(c); });
 	std::replace(normalized.begin(), normalized.end(), '\\', '/');
 
-	// Convert .mdl/.mdx to .m2
 	if (normalized.size() >= 4) {
 		std::string ext = normalized.substr(normalized.size() - 4);
 		if (ext == ".mdl" || ext == ".mdx")
@@ -59,7 +57,6 @@ static std::string normalizePath(const std::string& path) {
 	return normalized;
 }
 
-// Helper: get directory part of path
 static std::string getDirectory(const std::string& path) {
 	auto pos = path.find_last_of('/');
 	if (pos != std::string::npos)
@@ -67,11 +64,6 @@ static std::string getDirectory(const std::string& path) {
 	return "";
 }
 
-/**
- * Initialize legacy creature display data from DBC files.
- * @param getFile Function to get file data from MPQ.
- * @param build_id Build identifier string.
- */
 void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string&)> getFile, const std::string& build_id) {
 	if (isInitialized)
 		return;
@@ -112,7 +104,7 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
 			}
 
 			if (!model_path.empty()) {
-				// normalize: lowercase, convert .mdx to .m2
+				// normalize: lowercase, convert .mdl/.mdx to .m2
 				std::string normalized = normalizePath(model_path);
 				model_id_to_path.emplace(id, std::move(normalized));
 			}
@@ -156,8 +148,6 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
 			// get texture variation strings (3 slots)
 			std::string tex1, tex2, tex3;
 
-			// JS: tex1 = row.TextureVariation?.[0] ?? row.Skin1 ?? row.field_6 ?? ''
-			// ?? only falls through on null/undefined, not on empty string
 			bool tex1_found = false, tex2_found = false, tex3_found = false;
 
 			auto tvIt = row.find("TextureVariation");
@@ -168,7 +158,6 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
 				if (texVec.size() > 2) { tex3 = texVec[2]; tex3_found = true; }
 			}
 
-			// Fallback field names (only if field was not found, matching JS ?? semantics)
 			if (!tex1_found) {
 				auto it2 = row.find("Skin1");
 				if (it2 != row.end()) { tex1 = fieldToString(it2->second); tex1_found = true; }
@@ -219,17 +208,10 @@ void initializeCreatureData(std::function<std::vector<uint8_t>(const std::string
 		isInitialized = true;
 	} catch (const std::exception& e) {
 		logging::write(std::format("Failed to load legacy creature data: {}", e.what()));
-		// Note: JS also logs e.stack here, but C++ exceptions do not carry stack traces by default
 	}
 }
 
-/**
- * Get all available creature display variations for a model path.
- * @param model_path The M2 model path (can include MPQ prefix).
- * @returns Pointer to vector of displays, or nullptr if not found.
- */
 const std::vector<LegacyCreatureDisplay>* getCreatureDisplaysByPath(const std::string& model_path) {
-	// normalize path: lowercase, forward slashes
 	std::string normalized = model_path;
 	std::transform(normalized.begin(), normalized.end(), normalized.begin(),
 		[](unsigned char c) { return std::tolower(c); });
@@ -241,7 +223,6 @@ const std::vector<LegacyCreatureDisplay>* getCreatureDisplaysByPath(const std::s
 	if (std::regex_search(normalized, match, mpq_regex))
 		normalized = match[1].str();
 
-	// JS lookup converts only .mdx -> .m2 (not .mdl)
 	if (normalized.size() >= 4 && normalized.substr(normalized.size() - 4) == ".mdx")
 		normalized = normalized.substr(0, normalized.size() - 4) + ".m2";
 
