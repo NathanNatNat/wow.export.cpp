@@ -38,16 +38,12 @@ static void drawLinePath(std::vector<uint8_t>& pixels, int width, int height,
 	}
 }
 
-/**
- * Generate an RGBA pixel buffer containing UV wireframe lines.
- */
 std::vector<uint8_t> generateUVLayerPixels(
 	const std::vector<float>& uvCoords,
 	int textureWidth,
 	int textureHeight,
 	const std::vector<uint16_t>& indices)
 {
-	// Allocate RGBA buffer initialized to transparent black.
 	std::vector<uint8_t> pixels(static_cast<size_t>(textureWidth) * textureHeight * 4, 0);
 
 	for (size_t i = 0; i + 2 < indices.size(); i += 3) {
@@ -55,13 +51,9 @@ std::vector<uint8_t> generateUVLayerPixels(
 		const size_t idx2 = static_cast<size_t>(indices[i + 1]) * 2;
 		const size_t idx3 = static_cast<size_t>(indices[i + 2]) * 2;
 
-		// Bounds check: ensure all UV coordinate indices are within range.
-		// JS accessing out-of-bounds returns undefined→NaN (safe, no lines drawn).
-		// C++ out-of-bounds access is undefined behavior — skip this triangle.
 		if (idx1 + 1 >= uvCoords.size() || idx2 + 1 >= uvCoords.size() || idx3 + 1 >= uvCoords.size())
 			continue;
 
-		// Convert UV (0-1) to pixel coordinates, flipping V.
 		const float u1 = uvCoords[idx1] * static_cast<float>(textureWidth);
 		const float v1 = (1.0f - uvCoords[idx1 + 1]) * static_cast<float>(textureHeight);
 		const float u2 = uvCoords[idx2] * static_cast<float>(textureWidth);
@@ -90,4 +82,4 @@ std::string generateUVLayerDataURL(
 	return "data:image/png;base64," + buf.toBase64();
 }
 
-} // namespace uv_drawer
+}

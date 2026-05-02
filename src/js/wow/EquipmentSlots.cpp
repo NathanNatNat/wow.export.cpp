@@ -124,4 +124,4 @@ int get_slot_layer(int slot_id) {
 	return 10;
 }
 
-} // namespace wow
+}

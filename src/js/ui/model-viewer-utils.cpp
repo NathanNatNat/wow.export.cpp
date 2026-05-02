@@ -53,10 +53,6 @@ namespace model_viewer_utils {
 
 namespace fs = std::filesystem;
 
-/**
- * Copy PNG image data to the system clipboard.
- * JS equivalent: nw.Clipboard.get().set(buf.toBase64(), 'png', true)
- */
 static void copyPNGToClipboard(const BufferWrapper& png) {
 #ifdef _WIN32
 	int w = 0, h = 0, channels = 0;
@@ -192,8 +188,7 @@ void AnimationMethods::end_scrub() {
 
 
 /**
- * Detect model type from file data magic.
- * @param data Model file data (seek position is restored).
+ * Detect model type from file data.
  */
 ModelType detect_model_type(BufferWrapper& data) {
 	const uint32_t magic = data.readUInt32LE();
@@ -209,7 +204,7 @@ ModelType detect_model_type(BufferWrapper& data) {
 }
 
 /**
- * Detect model type from file name extension.
+ * Detect model type from file name.
  */
 ModelType detect_model_type_by_name(const std::string& file_name) {
 	const std::string lower = [&] {
@@ -231,7 +226,7 @@ ModelType detect_model_type_by_name(const std::string& file_name) {
 }
 
 /**
- * Get canonical file extension for a model type.
+ * Get file extension for model type.
  */
 std::string get_model_extension(ModelType model_type) {
 	if (model_type == ModelType::M2)
@@ -241,10 +236,6 @@ std::string get_model_extension(ModelType model_type) {
 	return ".wmo";
 }
 
-/**
- * Upload RGBA pixel data to an OpenGL texture, returning the texture ID.
- * Deletes the previous texture if old_tex != 0.
- */
 static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t old_tex = 0) {
 	if (old_tex != 0) {
 		GLuint old_gl = static_cast<GLuint>(old_tex);
@@ -262,9 +253,6 @@ static uint32_t upload_rgba_to_gl(const uint8_t* pixels, int w, int h, uint32_t 
 	return static_cast<uint32_t>(tex);
 }
 
-/**
- * Delete an OpenGL texture and reset the ID to 0.
- */
 static void delete_gl_texture(uint32_t& tex_id) {
 	if (tex_id != 0) {
 		GLuint gl_tex = static_cast<GLuint>(tex_id);
@@ -274,7 +262,7 @@ static void delete_gl_texture(uint32_t& tex_id) {
 }
 
 /**
- * Clear texture preview state (URL, UV overlay, UV layers).
+ * Clear texture preview state.
  */
 void clear_texture_preview(ViewStateProxy& state) {
 	if (state.texturePreviewURL)       *state.texturePreviewURL       = "";
@@ -285,12 +273,7 @@ void clear_texture_preview(ViewStateProxy& state) {
 }
 
 /**
- * Initialize UV layers from active M2 renderer.
- * If renderer is nullptr, UV layers are cleared.
- *
- * JS duck-types on `renderer.getUVLayers`. C++ types this as `M2RendererGL*`
- * because M3/WMO renderers do not currently expose getUVLayers; callers should
- * pass nullptr for those types to get the empty-layers behaviour.
+ * Initialize UV layers from active renderer.
  */
 void initialize_uv_layers(ViewStateProxy& state, M2RendererGL* renderer) {
 	if (!renderer || !state.uvLayers) {
@@ -309,9 +292,7 @@ void initialize_uv_layers(ViewStateProxy& state, M2RendererGL* renderer) {
 }
 
 /**
- * Toggle UV layer visibility and update UV overlay.
- *
- * Same M2-only typing as initialize_uv_layers (M3/WMO are nullptr).
+ * Toggle UV layer visibility.
  */
 void toggle_uv_layer(ViewStateProxy& state, M2RendererGL* renderer, const std::string& layer_name) {
 	if (!state.uvLayers)
@@ -319,13 +300,11 @@ void toggle_uv_layer(ViewStateProxy& state, M2RendererGL* renderer, const std::s
 
 	auto& uv_layers = *state.uvLayers;
 
-	// Find the requested layer
 	auto it = std::find_if(uv_layers.begin(), uv_layers.end(),
 		[&](const nlohmann::json& l) { return l.value("name", "") == layer_name; });
 	if (it == uv_layers.end())
 		return;
 
-	// Set all layers inactive, then activate the selected one
 	for (auto& l : uv_layers)
 		l["active"] = false;
 	(*it)["active"] = true;
@@ -353,7 +332,6 @@ void toggle_uv_layer(ViewStateProxy& state, M2RendererGL* renderer, const std::s
 		const std::vector<uint8_t> pixels = uv_drawer::generateUVLayerPixels(
 			layer_data, tw, th, *uv_layer_data.indices);
 
-		// Upload UV overlay pixels to GL texture for ImGui::Image display.
 		if (state.texturePreviewUVTexID) {
 			*state.texturePreviewUVTexID = upload_rgba_to_gl(
 				pixels.data(), tw, th, *state.texturePreviewUVTexID);
@@ -388,7 +366,6 @@ void preview_texture_by_id(ViewStateProxy& state, M2RendererGL* renderer,
 		if (state.texturePreviewHeight)    *state.texturePreviewHeight = static_cast<int>(blp.height);
 		if (state.texturePreviewName)      *state.texturePreviewName   = name;
 
-		// Upload BLP as GL texture for ImGui::Image display.
 		if (state.texturePreviewTexID) {
 			std::vector<uint8_t> pixels = blp.toUInt8Array(0, mask);
 			*state.texturePreviewTexID = upload_rgba_to_gl(
@@ -436,15 +413,12 @@ RendererResult create_renderer(BufferWrapper& data, ModelType model_type,
 }
 
 /**
- * Extract animation list from M2 renderer (using skelLoader or m2 animations).
- * JS uses Math.floor(animation.id) — this is a no-op because animation.id is uint16_t
- * in C++ (always integral). std::to_string(uint16_t) produces identical output.
+ * Extract animation list from renderer.
  */
 std::vector<nlohmann::json> extract_animations(const M2RendererGL& renderer) {
 	std::vector<nlohmann::json> anim_list;
 	anim_list.push_back({{"id", "none"}, {"label", "No Animation"}, {"m2Index", -1}});
 
-	// Use skelLoader animations if available, otherwise fall back to m2 animations
 	const SKELLoader* skel = renderer.getSkelLoader();
 	if (skel) {
 		for (size_t i = 0; i < skel->animations.size(); i++) {
@@ -483,9 +457,6 @@ std::vector<nlohmann::json> extract_animations(const M2RendererGL& renderer) {
 void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
 	const std::optional<std::string>& selected_animation_id)
 {
-	// JS: if (!renderer || !renderer.playAnimation) — checks method existence.
-	// C++: M2RendererGL always has playAnimation, so null check suffices.
-	// Non-M2 renderers (WMO, M3) would be passed as nullptr.
 	if (!renderer)
 		return;
 
@@ -494,7 +465,6 @@ void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
 	if (state.animFrame)     *state.animFrame     = 0;
 	if (state.animFrameCount) *state.animFrameCount = 0;
 
-	// JS: if (selected_animation_id === null || selected_animation_id === undefined) return;
 	if (!selected_animation_id.has_value())
 		return;
 
@@ -516,8 +486,6 @@ void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
 		const int m2_index = (*it).value("m2Index", -1);
 		if (m2_index >= 0) {
 			logging::write(std::format("Playing animation {} at M2 index {}", *selected_animation_id, m2_index));
-			// JS: `await renderer.playAnimation(...)`. We block here intentionally —
-			// animation switches must be serialised relative to the GL render thread.
 			renderer->playAnimation(m2_index).get();
 
 			if (state.animFrameCount)
@@ -527,7 +495,7 @@ void handle_animation_change(M2RendererGL* renderer, ViewStateProxy& state,
 }
 
 /**
- * Export 3D preview as PNG (to disk) or to clipboard.
+ * Export 3D preview as PNG or to clipboard.
  */
 bool export_preview(const std::string& format, gl::GLContext& ctx,
 	const std::string& export_name, const std::string& export_subdir,
@@ -535,7 +503,6 @@ bool export_preview(const std::string& format, gl::GLContext& ctx,
 {
 	core::setToast("progress", "Saving preview, hold on...", {}, -1, false);
 
-	// Capture current OpenGL framebuffer
 	const int width  = ctx.viewport_width;
 	const int height = ctx.viewport_height;
 
@@ -544,7 +511,6 @@ bool export_preview(const std::string& format, gl::GLContext& ctx,
 	pixels.resize(static_cast<size_t>(width * height * 4));
 	glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 
-	// Flip Y-axis (OpenGL bottom-left → image top-left)
 	const int row_stride = width * 4;
 	for (int y = 0; y < height / 2; y++) {
 		uint8_t* top    = pixels.data() + y * row_stride;
@@ -603,7 +569,6 @@ std::string export_model(const ExportModelOptions& options) {
 	casc::CASC*         casc      = options.casc;
 	FileWriter*         ep        = options.export_paths;
 
-	// Determine model type
 	ModelType model_type = detect_model_type_by_name(file_name);
 	if (model_type == ModelType::Unknown)
 		model_type = detect_model_type(data);
@@ -611,7 +576,6 @@ std::string export_model(const ExportModelOptions& options) {
 	std::string final_export_path = options.export_path;
 	std::string mark_file_name = casc::ExportHelper::getRelativeExport(final_export_path);
 
-	// Helper: convert JSON geoset_mask to M2ExportGeosetMask vector
 	auto make_m2_geoset_mask = [&]() -> std::vector<M2ExportGeosetMask> {
 		std::vector<M2ExportGeosetMask> mask;
 		if (options.geoset_mask) {
@@ -624,7 +588,6 @@ std::string export_model(const ExportModelOptions& options) {
 		return mask;
 	};
 
-	// Helper: convert JSON wmo_group_mask to WMOExportGroupMask vector
 	auto make_wmo_group_mask = [&]() -> std::vector<WMOExportGroupMask> {
 		std::vector<WMOExportGroupMask> mask;
 		if (options.wmo_group_mask) {
@@ -639,7 +602,6 @@ std::string export_model(const ExportModelOptions& options) {
 		return mask;
 	};
 
-	// Helper: convert JSON wmo_set_mask to WMOExportDoodadSetMask vector
 	auto make_wmo_set_mask = [&]() -> std::vector<WMOExportDoodadSetMask> {
 		std::vector<WMOExportDoodadSetMask> mask;
 		if (options.wmo_set_mask) {
@@ -652,7 +614,6 @@ std::string export_model(const ExportModelOptions& options) {
 		return mask;
 	};
 
-	// Helper: convert JSON variant_textures to vector<uint32_t>
 	auto make_variant_textures = [&]() -> std::vector<uint32_t> {
 		std::vector<uint32_t> vt;
 		for (const auto& v : options.variant_textures) {
@@ -662,7 +623,6 @@ std::string export_model(const ExportModelOptions& options) {
 		return vt;
 	};
 
-	// Helper: append manifest entries to generic file_manifest
 	auto append_m2_manifest = [&](const std::vector<M2ExportFileManifest>& typed) {
 		if (options.file_manifest) {
 			for (const auto& entry : typed) {
@@ -756,7 +716,6 @@ std::string export_model(const ExportModelOptions& options) {
 				if (ep) ep->writeLine("M2_STL:" + final_export_path);
 				append_m2_manifest(typed_manifest);
 			} else {
-				// GLTF or GLB
 				exporter.exportAsGLTF(fs::path(final_export_path), helper, [&] {
 					std::string f = format; std::transform(f.begin(), f.end(), f.begin(), ::tolower); return f;
 				}());
@@ -782,7 +741,6 @@ std::string export_model(const ExportModelOptions& options) {
 				if (ep) ep->writeLine("M3_" + format + ":" + final_export_path);
 			}
 		} else {
-			// WMO
 			WMOExporter exporter(data, file_name, casc);
 
 			if (options.wmo_group_mask)
@@ -827,9 +785,9 @@ AnimationMethods create_animation_methods(
 	return AnimationMethods(std::move(get_renderer), std::move(get_state));
 }
 
-// JS: `create_view_state(core, prefix)`. C++ drops the `core` parameter and
-// reads from the global `core::view` singleton; the field-name mapping is the
-// same in both versions.
+/**
+ * Create a view state proxy for a model viewer tab.
+ */
 ViewStateProxy create_view_state(const std::string& prefix) {
 	ViewStateProxy proxy;
 	AppState* s = core::view;

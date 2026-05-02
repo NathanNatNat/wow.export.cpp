@@ -157,28 +157,19 @@ struct ParsedURL {
 static ParsedURL parse_url(const std::string& url) {
 	ParsedURL result;
 
-	// Extract scheme
 	auto scheme_end = url.find("://");
 	if (scheme_end != std::string::npos) {
 		result.scheme = url.substr(0, scheme_end);
 		auto rest = url.substr(scheme_end + 3);
 
-		// Strip the URL fragment ('#...') — JS `parsed.pathname + parsed.search`
-		// excludes `parsed.hash`, so we drop it before further parsing.
 		auto frag = rest.find('#');
 		if (frag != std::string::npos)
 			rest = rest.substr(0, frag);
 
-		// The host portion ends at the first '/' (start of path) or '?' (start
-		// of query when no path is present). Capturing both ensures the query
-		// string is preserved even when the URL has no path component (e.g.
-		// "https://example.com?foo=1" → path "/?foo=1").
 		auto path_start = rest.find_first_of("/?");
 		std::string host_port;
 		if (path_start != std::string::npos) {
 			host_port = rest.substr(0, path_start);
-			// JS `parsed.pathname + parsed.search`: pathname is "/" when the
-			// URL has no path, so prepend '/' if the remainder begins with '?'.
 			if (rest[path_start] == '?')
 				result.path = "/" + rest.substr(path_start);
 			else
@@ -225,9 +216,6 @@ HttpResponse https_request(const std::string& url,
                            const std::vector<uint8_t>& body) {
 	auto parsed = parse_url(url);
 
-	// Extract Content-Type from headers (if present) so it can be passed as
-	// the dedicated content_type argument to httplib::Post(). The JS code
-	// passes all headers including Content-Type directly to the request.
 	httplib::Headers hdr;
 	std::string content_type;
 	for (const auto& [key, value] : headers) {
@@ -257,7 +245,6 @@ HttpResponse https_request(const std::string& url,
 			res = cli.Get(parsed.path, hdr);
 	}
 
-	// JS: req.on('error', reject) — reject the promise on connection errors.
 	if (!res)
 		throw std::runtime_error(httplib::to_string(res.error()));
 
@@ -273,7 +260,6 @@ JsonPostResponse json_post(const std::string& url, const nlohmann::json& payload
 	std::string body = payload.dump();
 	std::vector<uint8_t> bodyBytes(body.begin(), body.end());
 
-	// JS: json_post calls https_request() with method/headers/body.
 	std::unordered_map<std::string, std::string> headers;
 	headers["Content-Type"] = "application/json";
 	headers["User-Agent"] = user_agent;
@@ -336,7 +322,6 @@ void upload_chunks(const std::string& url, const std::vector<uint8_t>& buffer) {
 		std::vector<uint8_t> body_bytes = build_multipart(boundary, chunk, offset);
 
 		std::string content_type = std::format("multipart/form-data; boundary={}", boundary);
-		// JS: upload_chunks calls https_request() with method/headers/body.
 		std::unordered_map<std::string, std::string> headers;
 		headers["Content-Type"] = content_type;
 		headers["Content-Length"] = std::to_string(body_bytes.size());
@@ -351,13 +336,11 @@ void upload_chunks(const std::string& url, const std::vector<uint8_t>& buffer) {
 std::vector<std::unordered_map<std::string, std::string>> parse_build_info(const std::string& text) {
 	auto lines = split(text, '\n');
 
-	// filter empty lines
 	std::erase_if(lines, [](const std::string& line) { return line.empty(); });
 
 	if (lines.size() < 2)
 		return {};
 
-	// Parse headers: each header is "Name!Type:Size" — we only want the Name part
 	auto header_parts = split(lines[0], '|');
 	std::vector<std::string> headers;
 	headers.reserve(header_parts.size());
@@ -647,7 +630,6 @@ void collect(const WorkerConfig& config, const LogCallback& log) {
 		if (builds.empty())
 			return;
 
-		// Scan root for flavor directories (directories named _*_)
 		struct FlavorDir {
 			std::string dir;
 			std::string product;
@@ -712,7 +694,6 @@ void collect(const WorkerConfig& config, const LogCallback& log) {
 			if (cache_files.empty())
 				continue;
 
-			// Extract version info
 			auto version_it = build_row->find("Version");
 			std::string version = (version_it != build_row->end()) ? version_it->second : "";
 			std::regex version_re("^(.+)\\.(\\d+)$");

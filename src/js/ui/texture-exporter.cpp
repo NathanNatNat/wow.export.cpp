@@ -35,27 +35,16 @@ namespace texture_exporter {
 
 namespace fs = std::filesystem;
 
-/**
- * Copy PNG image data to the system clipboard.
- * JS equivalent: nw.Clipboard.get().set(png.toBase64(), 'png', true)
- *
- * On Windows, decodes the PNG to RGBA pixels and places a CF_DIB on the clipboard.
- * On Linux, pipes the raw PNG data to xclip -selection clipboard -target image/png.
- * Falls back to copying the base64-encoded text if platform clipboard fails.
- */
 static void copyPNGToClipboard(const BufferWrapper& png) {
 #ifdef _WIN32
-	// Decode PNG → RGBA pixels using stb_image.
 	int w = 0, h = 0, channels = 0;
 	const auto* pngData = png.internalArrayBuffer();
 	unsigned char* pixels = stbi_load_from_memory(pngData, static_cast<int>(png.byteLength()), &w, &h, &channels, 4);
 	if (!pixels) {
-		// Fallback to text clipboard if decode fails.
 		ImGui::SetClipboardText(png.toBase64().c_str());
 		return;
 	}
 
-	// Build a CF_DIB (BITMAPINFOHEADER + pixel data in bottom-up BGR order).
 	const int stride = w * 4;
 	const size_t pixelBytes = static_cast<size_t>(h) * stride;
 	const size_t dibSize = sizeof(BITMAPINFOHEADER) + pixelBytes;
@@ -72,20 +61,19 @@ static void copyPNGToClipboard(const BufferWrapper& png) {
 	std::memset(bmi, 0, sizeof(BITMAPINFOHEADER));
 	bmi->biSize = sizeof(BITMAPINFOHEADER);
 	bmi->biWidth = w;
-	bmi->biHeight = h;  // positive = bottom-up
+	bmi->biHeight = h;
 	bmi->biPlanes = 1;
 	bmi->biBitCount = 32;
 	bmi->biCompression = BI_RGB;
 
-	// Convert RGBA top-down to BGRA bottom-up.
 	auto* dst = reinterpret_cast<uint8_t*>(mem) + sizeof(BITMAPINFOHEADER);
 	for (int row = 0; row < h; ++row) {
 		const uint8_t* src = pixels + static_cast<size_t>(h - 1 - row) * stride;
 		for (int col = 0; col < w; ++col) {
-			dst[col * 4 + 0] = src[col * 4 + 2]; // B
-			dst[col * 4 + 1] = src[col * 4 + 1]; // G
-			dst[col * 4 + 2] = src[col * 4 + 0]; // R
-			dst[col * 4 + 3] = src[col * 4 + 3]; // A
+			dst[col * 4 + 0] = src[col * 4 + 2];
+			dst[col * 4 + 1] = src[col * 4 + 1];
+			dst[col * 4 + 2] = src[col * 4 + 0];
+			dst[col * 4 + 3] = src[col * 4 + 3];
 		}
 		dst += stride;
 	}
@@ -96,29 +84,23 @@ static void copyPNGToClipboard(const BufferWrapper& png) {
 	if (OpenClipboard(nullptr)) {
 		EmptyClipboard();
 		if (!SetClipboardData(CF_DIB, hMem))
-			GlobalFree(hMem);  // only free on failure; clipboard owns hMem on success
+			GlobalFree(hMem);
 		CloseClipboard();
 	} else {
 		GlobalFree(hMem);
 		ImGui::SetClipboardText(png.toBase64().c_str());
 	}
 #else
-	// Linux: pipe PNG data to xclip.
 	FILE* proc = popen("xclip -selection clipboard -target image/png 2>/dev/null", "w");
 	if (proc) {
 		std::fwrite(png.internalArrayBuffer(), 1, png.byteLength(), proc);
 		pclose(proc);
 	} else {
-		// Fallback to text clipboard if xclip is unavailable.
 		ImGui::SetClipboardText(png.toBase64().c_str());
 	}
 #endif
 }
 
-/**
- * Case-insensitive check whether a filename ends with a given extension.
- * JS equivalent: fileName.toLowerCase().endsWith(ext)
- */
 static bool endsWithCI(const std::string& str, const std::string& suffix) {
 	if (suffix.size() > str.size())
 		return false;
@@ -126,11 +108,6 @@ static bool endsWithCI(const std::string& str, const std::string& suffix) {
 		[](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); });
 }
 
-/**
- * Extract the file extension from a filename (from the last '.' to end), lowercased.
- * JS equivalent: fileName.slice(fileName.lastIndexOf('.')).toLowerCase()
- * Returns empty string if no '.' is found.
- */
 static std::string getExtensionLower(const std::string& fileName) {
 	const auto dotPos = fileName.rfind('.');
 	if (dotPos == std::string::npos)
@@ -143,8 +120,6 @@ static std::string getExtensionLower(const std::string& fileName) {
 
 /**
  * Retrieve the fileDataID and fileName for a given fileDataID or fileName.
- * @param input nlohmann::json value — either a number (fileDataID) or a string.
- * @returns FileInfoPair with fileName and optional fileDataID.
  */
 FileInfoPair getFileInfoPair(const nlohmann::json& input) {
 	FileInfoPair pair;
@@ -165,11 +140,6 @@ FileInfoPair getFileInfoPair(const nlohmann::json& input) {
 
 /**
  * Export BLP metadata to a JSON file alongside the texture.
- * @param blp          The BLP image instance.
- * @param exportPath   Export path of the image file.
- * @param overwrite    Whether to overwrite existing files.
- * @param manifest     Export manifest accumulator (succeeded array).
- * @param fileDataID   The file data ID.
  */
 static void exportBLPMetadata(casc::BLPImage& blp, const std::string& exportPath,
 	bool overwrite, nlohmann::json& manifest, std::optional<uint32_t> fileDataID)
@@ -193,11 +163,6 @@ static void exportBLPMetadata(casc::BLPImage& blp, const std::string& exportPath
 
 /**
  * Export texture files to the configured format.
- * @param files    Array of fileDataIDs (json::number) or file paths (json::string).
- * @param casc     CASC source (may be nullptr if mpq or isLocal).
- * @param mpq      MPQ install (non-null implies isMPQ mode).
- * @param isLocal  If true, files are local filesystem paths.
- * @param exportID Export ID for tracking.
  */
 void exportFiles(
 	const std::vector<nlohmann::json>& files,
@@ -227,7 +192,6 @@ void exportFiles(
 		casc::BLPImage blp(std::move(data));
 		const BufferWrapper png = blp.toPNG(mask);
 
-		// JS: clipboard.set(png.toBase64(), 'png', true) — copies actual PNG image data.
 		copyPNGToClipboard(png);
 
 		logging::write(std::format("Copied texture to clipboard ({})", fileName));
@@ -265,7 +229,6 @@ void exportFiles(
 
 			// Use fileDataID as filename if exportNamedFiles is disabled
 			if (!isLocal && !core::view->config.value("exportNamedFiles", true) && fileDataID) {
-				// JS: fileName.toLowerCase().endsWith('.blp') — fully case-insensitive
 				const std::string ext = endsWithCI(fileName, ".blp") ? ".blp" : ".png";
 				const fs::path namePath(fileName);
 				const std::string fileDataIDName = std::to_string(*fileDataID) + ext;
@@ -298,7 +261,6 @@ void exportFiles(
 					data = casc->getVirtualFileByID(*fileDataID);
 				}
 
-				// Determine file extension — JS: fileName.slice(fileName.lastIndexOf('.')).toLowerCase()
 				const std::string file_ext = getExtensionLower(fileName);
 				const bool is_png = (file_ext == ".png");
 				const bool is_jpg = (file_ext == ".jpg");
@@ -341,9 +303,6 @@ void exportFiles(
 			if (fileDataID) entry["fileDataID"] = *fileDataID;
 			manifest["succeeded"].push_back(std::move(entry));
 		} catch (const std::exception& e) {
-			// JS uses a block-scoped let markFileName in try and references it here.
-			// Keep failure marking on the original fileName path when try-scope name is unavailable.
-			// C++ std::exception has no .stack equivalent; pass std::nullopt for stackTrace.
 			helper.mark(fileName, false, e.what(), std::nullopt);
 			nlohmann::json entry = {{"type", format}};
 			if (fileDataID) entry["fileDataID"] = *fileDataID;
@@ -357,8 +316,6 @@ void exportFiles(
 
 /**
  * Export a single texture by fileDataID.
- * @param fileDataID The file data ID of the texture to export.
- * @param casc       CASC source.
  */
 void exportSingleTexture(uint32_t fileDataID, casc::CASC* casc) {
 	exportFiles({nlohmann::json(fileDataID)}, casc, nullptr, false);

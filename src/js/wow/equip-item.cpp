@@ -1,9 +1,3 @@
-/*!
-	wow.export (https://github.com/Kruithne/wow.export)
-	Authors: Kruithne <kruithne@gmail.com>
-	License: MIT
- */
-
 #include "equip-item.h"
 #include "EquipmentSlots.h"
 #include "../core.h"
@@ -14,10 +8,6 @@
 
 namespace wow {
 
-/**
- * Equip an item onto the character.
- * JS equivalent: equip_item(core, item, pending_slot) in wow/equip-item.js.
- */
 bool equip_item(uint32_t item_id, const std::string& item_name, int pending_slot) {
 	auto slot_id_opt = db::caches::DBItems::getItemSlotId(item_id);
 	if (!slot_id_opt.has_value())
@@ -26,9 +16,6 @@ bool equip_item(uint32_t item_id, const std::string& item_name, int pending_slot
 	int slot_id = slot_id_opt.value();
 	auto& view = *core::view;
 
-	// Shoulder items can go into either shoulder slot (L or R).
-	// If pending_slot specifies a shoulder, use that; otherwise default to L.
-	// Also fill the other shoulder if it's currently empty (JS: slot_ids).
 	std::vector<int> slot_ids;
 	if (slot_id == SHOULDER_SLOT_L) {
 		int target = (pending_slot == SHOULDER_SLOT_L || pending_slot == SHOULDER_SLOT_R)
@@ -55,8 +42,6 @@ bool equip_item(uint32_t item_id, const std::string& item_name, int pending_slot
 			view.chrEquippedItemSkins.erase(sid_str);
 	}
 
-	// When filling both shoulders, use the base inventory-type slot name ("Shoulder (L)")
-	// rather than the target slot, to match JS behavior.
 	int name_slot = (slot_ids.size() == 1) ? slot_ids[0] : slot_id;
 	auto slot_name_opt = get_slot_name(name_slot);
 	std::string slot_name = slot_name_opt.has_value() ? std::string(slot_name_opt.value()) : "Unknown";
@@ -67,4 +52,4 @@ bool equip_item(uint32_t item_id, const std::string& item_name, int pending_slot
 	return true;
 }
 
-} // namespace wow
+}

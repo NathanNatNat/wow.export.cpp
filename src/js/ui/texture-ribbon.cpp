@@ -22,7 +22,6 @@ namespace texture_ribbon {
 static int _syncID = 0;
 
 static std::unordered_map<int, GLuint> s_slotTextures;
-// detect when a slot's src has changed and re-upload.
 static std::unordered_map<int, std::string> s_slotSrcCache;
 
 /**
@@ -98,8 +97,8 @@ void setSlotFileLegacy(int slotIndex, const std::string& filePath, int syncID) {
 
 /**
  * Set the render source for a given ribbon slot.
- * @param slotIndex 
- * @param src 
+ * @param slotIndex
+ * @param src
  * @param syncID
  */
 void setSlotSrc(int slotIndex, const std::string& src, int syncID) {
@@ -132,9 +131,6 @@ int addSlot() {
 	return slotIndex;
 }
 
-/**
- * Delete all cached slot textures.
- */
 void clearSlotTextures() {
 	for (auto& [idx, tex] : s_slotTextures) {
 		if (tex != 0)
@@ -144,9 +140,6 @@ void clearSlotTextures() {
 	s_slotSrcCache.clear();
 }
 
-/**
- * Get or create an OpenGL texture for the given ribbon slot.
- */
 GLuint getSlotTexture(int slotIndex) {
 	if (!core::view)
 		return 0;
@@ -160,13 +153,11 @@ GLuint getSlotTexture(int slotIndex) {
 	if (src.empty())
 		return 0;
 
-	// Check if we already have a cached texture for this slot with the same src.
 	auto texIt = s_slotTextures.find(slotIndex);
 	auto srcIt = s_slotSrcCache.find(slotIndex);
 	if (texIt != s_slotTextures.end() && srcIt != s_slotSrcCache.end() && srcIt->second == src)
 		return texIt->second;
 
-	// src changed or new slot — delete old texture if any.
 	if (texIt != s_slotTextures.end() && texIt->second != 0)
 		glDeleteTextures(1, &texIt->second);
 
@@ -180,8 +171,6 @@ GLuint getSlotTexture(int slotIndex) {
 		}
 		pngBuf = BufferWrapper::from(blob->arrayBuffer());
 	} else {
-		// Strip the data-URL header to get the base64 payload.
-		// Format: "data:<mime>;base64,<payload>"
 		std::string_view sv(src);
 		auto commaPos = sv.find(',');
 		if (commaPos == std::string_view::npos) {
@@ -191,7 +180,6 @@ GLuint getSlotTexture(int slotIndex) {
 		}
 		std::string_view b64 = sv.substr(commaPos + 1);
 
-		// Decode base64 → PNG bytes.
 		pngBuf = BufferWrapper::fromBase64(b64);
 	}
 
@@ -201,7 +189,6 @@ GLuint getSlotTexture(int slotIndex) {
 		return 0;
 	}
 
-	// Decode PNG → RGBA pixels via stb_image.
 	int w = 0, h = 0, channels = 0;
 	unsigned char* pixels = stbi_load_from_memory(
 		pngBuf.raw().data(), static_cast<int>(pngBuf.byteLength()),
@@ -212,7 +199,6 @@ GLuint getSlotTexture(int slotIndex) {
 		return 0;
 	}
 
-	// Upload to GL texture.
 	GLuint tex = 0;
 	glGenTextures(1, &tex);
 	glBindTexture(GL_TEXTURE_2D, tex);
