@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 75/188 audited (40%)**
+**Progress: 90/188 audited (48%)**
 
 - [x] 1. `src/app.cpp` — ✅ audited
 - [x] 2. `src/js/blob.cpp` — ✅ audited
@@ -79,21 +79,21 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 73. `src/js/3D/writers/MTLWriter.cpp` — ✅ audited
 - [x] 74. `src/js/3D/writers/OBJWriter.cpp` — ✅ audited
 - [x] 75. `src/js/3D/writers/SQLWriter.cpp` — ✅ audited
-- [ ] 76. `src/js/3D/writers/STLWriter.cpp`
-- [ ] 77. `src/js/casc/blp.cpp`
-- [ ] 78. `src/js/casc/blte-reader.cpp`
-- [ ] 79. `src/js/casc/blte-stream-reader.cpp`
-- [ ] 80. `src/js/casc/build-cache.cpp`
-- [ ] 81. `src/js/casc/casc-source-local.cpp`
-- [ ] 82. `src/js/casc/casc-source-remote.cpp`
-- [ ] 83. `src/js/casc/casc-source.cpp`
-- [ ] 84. `src/js/casc/cdn-config.cpp`
-- [ ] 85. `src/js/casc/cdn-resolver.cpp`
-- [ ] 86. `src/js/casc/content-flags.cpp`
-- [ ] 87. `src/js/casc/db2.cpp`
-- [ ] 88. `src/js/casc/dbd-manifest.cpp`
-- [ ] 89. `src/js/casc/export-helper.cpp`
-- [ ] 90. `src/js/casc/install-manifest.cpp`
+- [x] 76. `src/js/3D/writers/STLWriter.cpp` — ✅ audited
+- [x] 77. `src/js/casc/blp.cpp` — ✅ audited
+- [x] 78. `src/js/casc/blte-reader.cpp` — ✅ audited
+- [x] 79. `src/js/casc/blte-stream-reader.cpp` — ✅ audited
+- [x] 80. `src/js/casc/build-cache.cpp` — ✅ audited
+- [x] 81. `src/js/casc/casc-source-local.cpp` — ✅ audited
+- [x] 82. `src/js/casc/casc-source-remote.cpp` — ✅ audited
+- [x] 83. `src/js/casc/casc-source.cpp` — ⚠️ 1 finding
+- [x] 84. `src/js/casc/cdn-config.cpp` — ✅ audited
+- [x] 85. `src/js/casc/cdn-resolver.cpp` — ✅ audited
+- [x] 86. `src/js/casc/content-flags.cpp` — ✅ audited
+- [x] 87. `src/js/casc/db2.cpp` — ✅ audited
+- [x] 88. `src/js/casc/dbd-manifest.cpp` — ✅ audited
+- [x] 89. `src/js/casc/export-helper.cpp` — ✅ audited
+- [x] 90. `src/js/casc/install-manifest.cpp` — ✅ audited
 - [ ] 91. `src/js/casc/jenkins96.cpp`
 - [ ] 92. `src/js/casc/listfile.cpp`
 - [ ] 93. `src/js/casc/locale-flags.cpp`

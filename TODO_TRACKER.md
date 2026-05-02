@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/9 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/10 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [config.cpp] Missing automatic config save watcher — config changes outside settings screen are not persisted
   - **JS Source**: `src/js/config.js` lines 59–60
@@ -38,3 +38,7 @@
   - **JS Source**: `src/js/3D/writers/GLTFWriter.js` lines 621, 761, 891
   - **Status**: Pending
   - **Details**: JS animation channels always use `nodeIndex + 1` as the target node, regardless of prefix mode. When `modelsExportWithBonePrefix` is true, `nodeIndex + 1` correctly points to the bone node (prefix is at nodeIndex). When false, `nodeIndex + 1` points one past the bone node — this appears to be a JS bug. C++ (lines 659, 781, 901) uses `actual_node_idx` which correctly targets the bone node in both cases. This is a deliberate deviation that fixes a likely JS bug and should be documented in DEVIATIONS.md.
+- [ ] 10. [casc-source.cpp] parseEncodingFile page boundary condition differs from JS — likely JS bug fix, needs DEVIATIONS.md entry
+  - **JS Source**: `src/js/casc/casc-source.js` line 470
+  - **Status**: Pending
+  - **Details**: JS uses `while (encoding.offset < (pageStart + pagesStart))` as the inner loop bound when iterating encoding pages. `pagesStart` is the byte offset where all pages begin (after spec block + hash pages), not the page size. The correct bound should be `pageStart + cKeyPageSize` to stay within a single page. C++ (line 515) correctly uses `encoding.offset() < (pageStart + static_cast<size_t>(cKeyPageSize))`. The JS bound evaluates to `pagesStart + cKeyPageSize*i + pagesStart = 2*pagesStart + cKeyPageSize*i`, which can read past or under a page boundary depending on whether pagesStart is larger or smaller than cKeyPageSize. This is almost certainly a JS bug (other CASC parsers use pageSize as the bound). Should be documented in DEVIATIONS.md as a deliberate fix.
