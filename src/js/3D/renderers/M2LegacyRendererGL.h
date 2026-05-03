@@ -20,6 +20,7 @@
 #include "../gl/GLTexture.h"
 #include "../gl/VertexArray.h"
 #include "../gl/ShaderProgram.h"
+#include "renderer_utils.h"
 
 // m2 version constants
 static constexpr uint32_t M2_LEGACY_VER_WOTLK = 264;
@@ -155,6 +156,7 @@ private:
 	std::unique_ptr<gl::GLTexture> default_texture;
 	std::vector<GLuint> buffers;
 	std::vector<M2LegacyDrawCall> draw_calls;
+	renderer_utils::BonesUbo bones_ubo;
 
 	// animation state
 	std::vector<LegacyM2Bone>* bones = nullptr;

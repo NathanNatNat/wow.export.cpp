@@ -180,7 +180,7 @@ void M3RendererGL::updateWireframe() {
 }
 
 std::optional<M3RendererGL::BoundingBoxResult> M3RendererGL::getBoundingBox() {
-	if (!m3)
+	if (!m3 || m3->vertices.empty())
 		return std::nullopt;
 
 	const auto& verts = m3->vertices;
@@ -306,6 +306,11 @@ void M3RendererGL::render(const float* view_matrix, const float* projection_matr
 void M3RendererGL::_dispose_geometry() {
 	for (auto& vao : vaos)
 		vao->dispose();
+
+	if (bones_ubo.ubo) {
+		bones_ubo.ubo->dispose();
+		bones_ubo.ubo.reset();
+	}
 
 	for (GLuint buf : buffers)
 		glDeleteBuffers(1, &buf);

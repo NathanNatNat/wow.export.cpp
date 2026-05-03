@@ -1272,6 +1272,7 @@ static void setSelectedCDN(const nlohmann::json& region) {
 	core::view->selectedCDNRegion = region;
 	core::view->lockCDNRegion = true;
 	core::view->config["sourceSelectUserRegion"] = region.value("tag", "");
+	config::save();
 	casc::cdn_resolver::startPreResolution(region.value("tag", ""));
 }
 
@@ -2197,10 +2198,12 @@ int main(int argc, char* argv[]) {
 		core::view->config["exportDirectory"].get<std::string>().empty()) {
 		std::string defaultExportDir = (getHomeDir() / "wow.export").string();
 		core::view->config["exportDirectory"] = defaultExportDir;
+		config::save();
 		logging::write(std::format("No export directory set, setting to {}", defaultExportDir));
 	} else if (!core::view->config.contains("exportDirectory")) {
 		std::string defaultExportDir = (getHomeDir() / "wow.export").string();
 		core::view->config["exportDirectory"] = defaultExportDir;
+		config::save();
 		logging::write(std::format("No export directory set, setting to {}", defaultExportDir));
 	}
 

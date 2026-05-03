@@ -105,8 +105,10 @@ void load() {
  * Reset a configuration key to default.
  */
 void resetToDefault(const std::string& key) {
-	if (defaultConfig.contains(key))
+	if (defaultConfig.contains(key)) {
 		core::view->config[key] = defaultConfig[key];
+		save();
+	}
 }
 
 /**
@@ -115,6 +117,7 @@ void resetToDefault(const std::string& key) {
 void resetAllToDefault() {
 	// Use JSON parse/stringify to ensure deep non-referenced clone.
 	core::view->config = nlohmann::json::parse(defaultConfig.dump());
+	save();
 }
 
 /**

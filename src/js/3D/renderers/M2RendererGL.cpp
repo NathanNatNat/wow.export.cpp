@@ -2147,6 +2147,11 @@ void M2RendererGL::_dispose_skin() {
 for (auto& vao : vaos)
 vao->dispose();
 
+if (bones_ubo.ubo) {
+	bones_ubo.ubo->dispose();
+	bones_ubo.ubo.reset();
+}
+
 vaos.clear();
 
 if (!buffers.empty())

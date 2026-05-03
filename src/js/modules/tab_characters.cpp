@@ -39,6 +39,7 @@ License: MIT
 #include "../db/caches/DBItemCharTextures.h"
 #include "../db/caches/DBItemGeosets.h"
 #include "../db/caches/DBItemModels.h"
+#include "../db/caches/DBModelFileData.h"
 #include "../db/caches/DBGuildTabard.h"
 #include "../casc/db2.h"
 #include "../db/WDCReader.h"
@@ -916,9 +917,9 @@ if (!entry.is_collection) {
 auto renderer = std::make_unique<M2RendererGL>(file, *viewer_context.gl_context, false, false);
 renderer->load().get();
 
-if (!entry.textures.empty() && entry.model_idx < entry.textures.size()) {
+if (!entry.textures.empty()) {
 	M2DisplayInfo dinfo;
-	dinfo.textures = { entry.textures[entry.model_idx] };
+	dinfo.textures = entry.textures;
 	renderer->applyReplaceableTextures(dinfo).get();
 }
 
@@ -950,13 +951,9 @@ if (slot_geosets && !entry.attachment_geoset_group.empty()) {
 }
 
 if (!entry.textures.empty()) {
-	size_t texture_idx = (entry.model_idx < entry.textures.size()) ? entry.model_idx : 0;
-	uint32_t texture_fdid = entry.textures[texture_idx];
-	if (texture_fdid != 0) {
-		M2DisplayInfo dinfo;
-		dinfo.textures = { texture_fdid };
-		renderer->applyReplaceableTextures(dinfo).get();
-	}
+	M2DisplayInfo dinfo;
+	dinfo.textures = entry.textures;
+	renderer->applyReplaceableTextures(dinfo).get();
 }
 
 collection_model_renderers[entry.slot_id].item_id = entry.item_id;
@@ -3989,7 +3986,7 @@ std::thread([region_empty]() {
 	db::caches::DBItemModels::ensureInitialized();
 
 	core::progressLoadingScreen("Loading model file data...");
-	core::progressLoadingScreen("Loading item data...");
+	db::caches::DBModelFileData::initializeModelFileData();
 
 	core::progressLoadingScreen("Loading guild tabard data...");
 	db::caches::DBGuildTabard::ensureInitialized();

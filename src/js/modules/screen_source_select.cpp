@@ -6,6 +6,7 @@
 #include "screen_source_select.h"
 #include "../log.h"
 #include "../core.h"
+#include "../config.h"
 #include "../constants.h"
 #include "../generics.h"
 #include "../install-type.h"
@@ -219,6 +220,7 @@ static void set_selected_cdn(const nlohmann::json& region) {
 	core::view->selectedCDNRegion = region;
 	core::view->lockCDNRegion = true;
 	core::view->config["sourceSelectUserRegion"] = region["tag"];
+	config::save();
 	casc::cdn_resolver::startPreResolution(region["tag"].get<std::string>());
 }
 
@@ -258,6 +260,8 @@ void load_install(int index) {
 
 		while (recent_local.size() > static_cast<size_t>(constants::MAX_RECENT_LOCAL))
 			recent_local.erase(recent_local.size() - 1);
+
+		config::save();
 	}
 
 	casc_load_thread.reset();
@@ -276,6 +280,7 @@ void load_install(int index) {
 						if (!core::view->config.contains("machineId") || !core::view->config["machineId"].is_string()
 							|| core::view->config["machineId"].get<std::string>().empty()) {
 							core::view->config["machineId"] = generate_uuid();
+							config::save();
 						}
 
 						cache_collector::WorkerConfig wconfig;
@@ -348,8 +353,10 @@ void open_local_install(const std::string& install_path, const std::string& prod
 	source_open_thread.reset();
 
 	auto& recent_local = core::view->config["recentLocal"];
-	if (!recent_local.is_array())
+	if (!recent_local.is_array()) {
 		recent_local = nlohmann::json::array();
+		config::save();
+	}
 
 	casc_local_source = std::make_unique<casc::CASCLocal>(install_path);
 	casc_remote_source.reset();
@@ -404,6 +411,7 @@ void open_local_install(const std::string& install_path, const std::string& prod
 						if (entry["path"] == install_path && (product.empty() || entry.value("product", "") == product))
 							recent_local.erase(static_cast<size_t>(i));
 					}
+					config::save();
 				}
 			});
 		}
@@ -430,8 +438,10 @@ void open_legacy_install(const std::string& install_path) {
 					return;
 
 				auto& recent_legacy = core::view->config["recentLegacy"];
-				if (!recent_legacy.is_array())
+				if (!recent_legacy.is_array()) {
 					recent_legacy = nlohmann::json::array();
+					config::save();
+				}
 
 				int pre_index = -1;
 				for (size_t i = 0; i < recent_legacy.size(); i++) {
@@ -456,6 +466,8 @@ void open_legacy_install(const std::string& install_path) {
 				while (recent_legacy.size() > static_cast<size_t>(constants::MAX_RECENT_LOCAL))
 					recent_legacy.erase(recent_legacy.size() - 1);
 
+				config::save();
+
 				core::view->installType = install_type::MPQ;
 				modules::set_active("legacy_tab_home");
 				core::hideLoadingScreen();
@@ -473,6 +485,7 @@ void open_legacy_install(const std::string& install_path) {
 						if (recent_legacy[static_cast<size_t>(i)]["path"] == install_path)
 							recent_legacy.erase(static_cast<size_t>(i));
 					}
+					config::save();
 				}
 
 				modules::set_active("source_select");
@@ -719,11 +732,19 @@ static void drawDashedRoundedRect(ImDrawList* draw, ImVec2 p_min, ImVec2 p_max, 
 }
 
 void mounted() {
-	if (!core::view->config.contains("recentLocal") || !core::view->config["recentLocal"].is_array())
+	bool config_changed = false;
+	if (!core::view->config.contains("recentLocal") || !core::view->config["recentLocal"].is_array()) {
 		core::view->config["recentLocal"] = nlohmann::json::array();
+		config_changed = true;
+	}
 
-	if (!core::view->config.contains("recentLegacy") || !core::view->config["recentLegacy"].is_array())
+	if (!core::view->config.contains("recentLegacy") || !core::view->config["recentLegacy"].is_array()) {
 		core::view->config["recentLegacy"] = nlohmann::json::array();
+		config_changed = true;
+	}
+
+	if (config_changed)
+		config::save();
 
 	init_cdn_pings();
 }

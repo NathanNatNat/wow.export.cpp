@@ -331,7 +331,7 @@ struct AppState {
 	std::vector<nlohmann::json> overrideTextureList;
 	std::string overrideTextureName;
 	std::string pendingItemSlotFilter;
-	int chrPendingEquipSlot = 0;                   // Slot ID pending equip from character tab navigation
+	std::optional<int> chrPendingEquipSlot;         // Slot ID pending equip from character tab navigation
 	std::vector<nlohmann::json> mapViewerMaps;
 	std::vector<nlohmann::json> zoneViewerZones;
 	std::vector<nlohmann::json> zonePhases;

@@ -187,8 +187,6 @@ void MDXRendererGL::load() {
 
 	shader = MDXRendererGL::load_shaders(ctx);
 
-	bones_ubo = renderer_utils::create_bones_ubo(*shader, ctx, 0);
-
 	_create_default_texture();
 	_load_textures();
 	_create_skeleton();
@@ -297,6 +295,8 @@ void MDXRendererGL::_create_skeleton() {
 void MDXRendererGL::_build_geometry() {
 	if (reactive)
 		geosetArray.clear();
+
+	bones_ubo = renderer_utils::create_bones_ubo(*shader, ctx, nodes.size());
 
 	for (size_t g = 0; g < mdx->geosets.size(); g++) {
 		const auto& geoset = mdx->geosets[g];

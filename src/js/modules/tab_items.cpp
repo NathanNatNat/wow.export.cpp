@@ -444,8 +444,8 @@ static void equip_item(const nlohmann::json& item_json) {
 	uint32_t item_id    = item_json.value("id", 0u);
 	std::string item_name = item_json.value("name", std::string("Unknown"));
 
-	int pending_slot = core::view->chrPendingEquipSlot;
-	core::view->chrPendingEquipSlot = 0;
+	int pending_slot = core::view->chrPendingEquipSlot.value_or(-1);
+	core::view->chrPendingEquipSlot = std::nullopt;
 
 	if (!wow::equip_item(item_id, item_name, pending_slot))
 		core::setToast("info", "This item cannot be equipped.", {}, 2000);

@@ -703,7 +703,7 @@ static void export_db2() {
 				throw std::runtime_error("No file data ID found for table " + table_name);
 
 			data_exporter::exportRawDB2(table_name, *file_data_id_opt,
-				nullptr, &helper, &export_paths);
+				core::view->casc, &helper, &export_paths);
 		} catch (const std::exception& e) {
 			helper.mark(table_name + ".db2", false, e.what(), build_stack_trace("export_db2", e));
 			logging::write(std::format("Failed to export DB2 {}: {}", table_name, e.what()));

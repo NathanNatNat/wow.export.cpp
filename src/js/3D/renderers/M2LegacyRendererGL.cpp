@@ -311,6 +311,8 @@ void M2LegacyRendererGL::loadSkin(int index) {
 
 	_create_skeleton();
 
+	bones_ubo = renderer_utils::create_bones_ubo(*shader, ctx, bones ? bones->size() : 0);
+
 	// build interleaved vertex buffer
 	// format: position(3f) + normal(3f) + bone_idx(4ub) + bone_weight(4ub) + uv(2f) + uv2(2f) = 48 bytes
 	const size_t vertex_count = m2->vertices.size() / 3;
@@ -1101,6 +1103,9 @@ void M2LegacyRendererGL::render(const float* view_matrix, const float* projectio
 
 	shader->set_uniform_3f("u_tex_sample_alpha", 1, 1, 1);
 
+	if (bones_ubo.ubo)
+		bones_ubo.ubo->bind(0);
+
 	std::vector<const M2LegacyDrawCall*> sorted_calls;
 	sorted_calls.reserve(draw_calls.size());
 	for (const auto& dc : draw_calls)
@@ -1190,6 +1195,11 @@ std::optional<M2LegacyRendererGL::BoundingBoxResult> M2LegacyRendererGL::getBoun
 void M2LegacyRendererGL::_dispose_skin() {
 	for (auto& vao : vaos)
 		vao->dispose();
+
+	if (bones_ubo.ubo) {
+		bones_ubo.ubo->dispose();
+		bones_ubo.ubo.reset();
+	}
 
 	vaos.clear();
 
