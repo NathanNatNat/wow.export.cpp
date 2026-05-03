@@ -158,7 +158,7 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 152. `src/js/modules/tab_blender.cpp` — ✅ audited
 - [x] 153. `src/js/modules/tab_characters.cpp` — ⚠️ 2 findings
 - [x] 154. `src/js/modules/tab_creatures.cpp` — ✅ audited
-- [x] 155. `src/js/modules/tab_data.cpp` — ✅ audited
+- [x] 155. `src/js/modules/tab_data.cpp` — ⚠️ 1 finding
 - [x] 156. `src/js/modules/tab_decor.cpp` — ✅ audited
 - [x] 157. `src/js/modules/tab_fonts.cpp` — ✅ audited
 - [x] 158. `src/js/modules/tab_install.cpp` — ✅ audited
@@ -168,7 +168,7 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 162. `src/js/modules/tab_models.cpp` — ✅ audited
 - [x] 163. `src/js/modules/tab_models_legacy.cpp` — ✅ audited
 - [x] 164. `src/js/modules/tab_raw.cpp` — ✅ audited
-- [x] 165. `src/js/modules/tab_text.cpp` — ✅ audited
+- [x] 165. `src/js/modules/tab_text.cpp` — ⚠️ 1 finding
 - [ ] 166. `src/js/modules/tab_textures.cpp`
 - [ ] 167. `src/js/modules/tab_videos.cpp`
 - [ ] 168. `src/js/modules/tab_zones.cpp`

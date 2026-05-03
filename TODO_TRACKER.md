@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/12 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/14 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [config.cpp] Missing automatic config save watcher — config changes outside settings screen are not persisted
   - **JS Source**: `src/js/config.js` lines 59–60
@@ -50,3 +50,11 @@
   - **JS Source**: `src/js/modules/tab_characters.js` line 2759
   - **Status**: Pending
   - **Details**: The JS mounted() calls `await DBItemList.initialize(...)` which initializes the DBItemList cache used by the item picker and item tab for searching/filtering items. The C++ mounted() at lines 3962–4061 does not call any DBItemList initialization. Without this initialization, item search features dependent on DBItemList may not work correctly when accessed from the characters tab.
+- [ ] 13. [tab_data.cpp] export_db2() multi-table path passes nullptr for casc parameter, causing null pointer dereference
+  - **JS Source**: `src/js/modules/tab_data.js` lines 352–356
+  - **Status**: Pending
+  - **Details**: Line 705–706 passes `nullptr` as the `casc` argument to `data_exporter::exportRawDB2()`. The function dereferences `casc` to call `casc->getVirtualFileByID(fileDataID, true)`. The single-table path at line 684 correctly passes `core::view->casc`. The multi-table path should do the same.
+- [ ] 14. [tab_text.cpp] exportNamedFiles branch `dir == "."` check missing empty string case
+  - **JS Source**: `src/js/modules/tab_text.js` line 101
+  - **Status**: Pending
+  - **Details**: `std::filesystem::path::parent_path()` returns `""` (not `"."`) for files without a directory component. The condition on line 284 should be `(dir.empty() || dir == ".")` to match JS `path.dirname()` which returns `"."`. Other tabs (tab_audio, tab_fonts, tab_raw) already use the correct pattern.
