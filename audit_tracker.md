@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 45/188 audited (24%)**
+**Progress: 60/188 audited (32%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -49,21 +49,21 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 43. `src/js/3D/gl/ShaderProgram.cpp`
 - [x] 44. `src/js/3D/gl/UniformBuffer.cpp`
 - [x] 45. `src/js/3D/gl/VertexArray.cpp`
-- [ ] 46. `src/js/3D/loaders/ADTLoader.cpp`
-- [ ] 47. `src/js/3D/loaders/ANIMLoader.cpp`
-- [ ] 48. `src/js/3D/loaders/BONELoader.cpp`
-- [ ] 49. `src/js/3D/loaders/LoaderGenerics.cpp`
-- [ ] 50. `src/js/3D/loaders/M2Generics.cpp`
-- [ ] 51. `src/js/3D/loaders/M2LegacyLoader.cpp`
-- [ ] 52. `src/js/3D/loaders/M2Loader.cpp`
-- [ ] 53. `src/js/3D/loaders/M3Loader.cpp`
-- [ ] 54. `src/js/3D/loaders/MDXLoader.cpp`
-- [ ] 55. `src/js/3D/loaders/SKELLoader.cpp`
-- [ ] 56. `src/js/3D/loaders/WDTLoader.cpp`
-- [ ] 57. `src/js/3D/loaders/WMOLegacyLoader.cpp`
-- [ ] 58. `src/js/3D/loaders/WMOLoader.cpp`
-- [ ] 59. `src/js/3D/renderers/CharMaterialRenderer.cpp`
-- [ ] 60. `src/js/3D/renderers/GridRenderer.cpp`
+- [x] 46. `src/js/3D/loaders/ADTLoader.cpp`
+- [x] 47. `src/js/3D/loaders/ANIMLoader.cpp`
+- [x] 48. `src/js/3D/loaders/BONELoader.cpp`
+- [x] 49. `src/js/3D/loaders/LoaderGenerics.cpp`
+- [x] 50. `src/js/3D/loaders/M2Generics.cpp`
+- [x] 51. `src/js/3D/loaders/M2LegacyLoader.cpp`
+- [x] 52. `src/js/3D/loaders/M2Loader.cpp`
+- [x] 53. `src/js/3D/loaders/M3Loader.cpp`
+- [x] 54. `src/js/3D/loaders/MDXLoader.cpp`
+- [x] 55. `src/js/3D/loaders/SKELLoader.cpp`
+- [x] 56. `src/js/3D/loaders/WDTLoader.cpp`
+- [x] 57. `src/js/3D/loaders/WMOLegacyLoader.cpp`
+- [x] 58. `src/js/3D/loaders/WMOLoader.cpp`
+- [x] 59. `src/js/3D/renderers/CharMaterialRenderer.cpp`
+- [x] 60. `src/js/3D/renderers/GridRenderer.cpp`
 - [ ] 61. `src/js/3D/renderers/M2LegacyRendererGL.cpp`
 - [ ] 62. `src/js/3D/renderers/M2RendererGL.cpp`
 - [ ] 63. `src/js/3D/renderers/M3RendererGL.cpp`
