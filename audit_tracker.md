@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 150/188 audited (80%)**
+**Progress: 165/188 audited (88%)**
 
 - [x] 1. `src/app.cpp` — ✅ audited
 - [x] 2. `src/js/blob.cpp` — ✅ audited
@@ -154,21 +154,21 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 148. `src/js/modules/module_test_b.cpp` — ✅ audited
 - [x] 149. `src/js/modules/screen_settings.cpp` — ✅ audited
 - [x] 150. `src/js/modules/screen_source_select.cpp` — ✅ audited
-- [ ] 151. `src/js/modules/tab_audio.cpp`
-- [ ] 152. `src/js/modules/tab_blender.cpp`
-- [ ] 153. `src/js/modules/tab_characters.cpp`
-- [ ] 154. `src/js/modules/tab_creatures.cpp`
-- [ ] 155. `src/js/modules/tab_data.cpp`
-- [ ] 156. `src/js/modules/tab_decor.cpp`
-- [ ] 157. `src/js/modules/tab_fonts.cpp`
-- [ ] 158. `src/js/modules/tab_install.cpp`
-- [ ] 159. `src/js/modules/tab_item_sets.cpp`
-- [ ] 160. `src/js/modules/tab_items.cpp`
-- [ ] 161. `src/js/modules/tab_maps.cpp`
-- [ ] 162. `src/js/modules/tab_models.cpp`
-- [ ] 163. `src/js/modules/tab_models_legacy.cpp`
-- [ ] 164. `src/js/modules/tab_raw.cpp`
-- [ ] 165. `src/js/modules/tab_text.cpp`
+- [x] 151. `src/js/modules/tab_audio.cpp` — ✅ audited
+- [x] 152. `src/js/modules/tab_blender.cpp` — ✅ audited
+- [x] 153. `src/js/modules/tab_characters.cpp` — ⚠️ 2 findings
+- [x] 154. `src/js/modules/tab_creatures.cpp` — ✅ audited
+- [x] 155. `src/js/modules/tab_data.cpp` — ✅ audited
+- [x] 156. `src/js/modules/tab_decor.cpp` — ✅ audited
+- [x] 157. `src/js/modules/tab_fonts.cpp` — ✅ audited
+- [x] 158. `src/js/modules/tab_install.cpp` — ✅ audited
+- [x] 159. `src/js/modules/tab_item_sets.cpp` — ✅ audited
+- [x] 160. `src/js/modules/tab_items.cpp` — ✅ audited
+- [x] 161. `src/js/modules/tab_maps.cpp` — ✅ audited
+- [x] 162. `src/js/modules/tab_models.cpp` — ✅ audited
+- [x] 163. `src/js/modules/tab_models_legacy.cpp` — ✅ audited
+- [x] 164. `src/js/modules/tab_raw.cpp` — ✅ audited
+- [x] 165. `src/js/modules/tab_text.cpp` — ✅ audited
 - [ ] 166. `src/js/modules/tab_textures.cpp`
 - [ ] 167. `src/js/modules/tab_videos.cpp`
 - [ ] 168. `src/js/modules/tab_zones.cpp`

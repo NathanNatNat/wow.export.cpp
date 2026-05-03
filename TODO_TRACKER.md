@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/10 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/12 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [config.cpp] Missing automatic config save watcher — config changes outside settings screen are not persisted
   - **JS Source**: `src/js/config.js` lines 59–60
@@ -42,3 +42,11 @@
   - **JS Source**: `src/js/casc/casc-source.js` line 470
   - **Status**: Pending
   - **Details**: JS uses `while (encoding.offset < (pageStart + pagesStart))` as the inner loop bound when iterating encoding pages. `pagesStart` is the byte offset where all pages begin (after spec block + hash pages), not the page size. The correct bound should be `pageStart + cKeyPageSize` to stay within a single page. C++ (line 515) correctly uses `encoding.offset() < (pageStart + static_cast<size_t>(cKeyPageSize))`. The JS bound evaluates to `pagesStart + cKeyPageSize*i + pagesStart = 2*pagesStart + cKeyPageSize*i`, which can read past or under a page boundary depending on whether pagesStart is larger or smaller than cKeyPageSize. This is almost certainly a JS bug (other CASC parsers use pageSize as the bound). Should be documented in DEVIATIONS.md as a deliberate fix.
+- [ ] 11. [tab_characters.cpp] Equipment model texture application passes single texture instead of full array
+  - **JS Source**: `src/js/modules/tab_characters.js` lines 656–657, 699–700
+  - **Status**: Pending
+  - **Details**: The JS passes the entire `display.textures` array to `renderer.applyReplaceableTextures()` for both attachment and collection equipment models. The C++ (lines 919–922 for attachment, 952–958 for collection) only passes a single texture element selected by `entry.model_idx`. This means equipment models with multiple replaceable texture slots will only get one texture applied, potentially causing missing or incorrect textures on equipment.
+- [ ] 12. [tab_characters.cpp] DBItemList.initialize() missing from mounted() lifecycle
+  - **JS Source**: `src/js/modules/tab_characters.js` line 2759
+  - **Status**: Pending
+  - **Details**: The JS mounted() calls `await DBItemList.initialize(...)` which initializes the DBItemList cache used by the item picker and item tab for searching/filtering items. The C++ mounted() at lines 3962–4061 does not call any DBItemList initialization. Without this initialization, item search features dependent on DBItemList may not work correctly when accessed from the characters tab.
