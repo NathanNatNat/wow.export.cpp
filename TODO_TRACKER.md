@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/28 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/29 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -141,3 +141,8 @@
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` line 423
   - **Status**: Pending
   - **Details**: JS initializes `this.submesh_colors = new Float32Array(this.m2.colors.length * 4)` which zero-fills. C++ (M2RendererGL.cpp L495) uses `submesh_colors.assign(m2->colors.size() * 4, 1.0f)` which fills with 1.0. Before any animation plays, submeshes with a valid `color_idx` will have RGBA=(0,0,0,0) in JS (invisible, skipped by `alpha <= 0` check) but RGBA=(1,1,1,1) in C++ (fully visible). This is a visual difference in the initial render state before `playAnimation` or `stopAnimation` is called. Fix: change to `submesh_colors.assign(m2->colors.size() * 4, 0.0f)`.
+
+- [ ] 29. [file-writer.cpp] FileWriter opens in text mode, producing `\r\n` line endings on Windows
+  - **JS Source**: `src/js/file-writer.js` line 38
+  - **Status**: Pending
+  - **Details**: C++ `FileWriter` (file-writer.cpp L12) opens with `std::ios::out | std::ios::trunc` (no `std::ios::binary`). On Windows, `std::ofstream` in text mode translates every `\n` to `\r\n`. JS `fs.createWriteStream` does NOT do line-ending translation — `line + '\n'` always produces a literal `\n` (0x0A) on all platforms. This affects all files written via FileWriter: CSV (CSVWriter), SQL (SQLWriter), JSON (JSONWriter), OBJ (OBJWriter), and MTL (MTLWriter). Every exported file from these writers will have `\r\n` on Windows in C++ vs `\n` in JS. Fix: add `std::ios::binary` to the open flags at file-writer.cpp L12 and L18.
