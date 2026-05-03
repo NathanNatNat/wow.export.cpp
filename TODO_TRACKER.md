@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/9 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/10 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -46,3 +46,8 @@
   - **JS Source**: `src/js/app.js` lines 500–503
   - **Status**: Pending
   - **Details**: JS `win.setProgressBar(val)` shows a full progress bar when `val` is 1.0 and only hides it when `val < 0`. C++ (app.cpp `setTaskbarProgress`) uses `if (val < 0 || val >= 1.0)` to set `TBPF_NOPROGRESS`, which hides the taskbar progress at both negative values AND when progress reaches exactly 1.0 (100%). The bar briefly disappears at completion rather than showing full.
+
+- [ ] 10. [modules.cpp] `wrap_module` initialize wrapper lacks JS `finally` semantics for `_tab_initializing` reset
+  - **JS Source**: `src/js/modules.js` lines 227–244
+  - **Status**: Pending
+  - **Details**: JS uses `try { ... } catch { ... } finally { this._tab_initializing = false; }` which guarantees `_tab_initializing` is reset even if the catch block itself throws. C++ (modules.cpp L186–210) places `mod._tab_initializing = false;` after the try-catch block. If any function in the catch handlers throws (e.g. `go_to_landing()` → `set_active()` → `activated()` throwing), the statement is skipped and `_tab_initializing` stays `true` permanently, blocking any future initialization attempts for that module. Fix: use RAII scope guard or restructure to guarantee the reset.
