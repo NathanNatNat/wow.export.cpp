@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 60/188 audited (32%)**
+**Progress: 75/188 audited (40%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -64,21 +64,21 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 58. `src/js/3D/loaders/WMOLoader.cpp`
 - [x] 59. `src/js/3D/renderers/CharMaterialRenderer.cpp`
 - [x] 60. `src/js/3D/renderers/GridRenderer.cpp`
-- [ ] 61. `src/js/3D/renderers/M2LegacyRendererGL.cpp`
-- [ ] 62. `src/js/3D/renderers/M2RendererGL.cpp`
-- [ ] 63. `src/js/3D/renderers/M3RendererGL.cpp`
-- [ ] 64. `src/js/3D/renderers/MDXRendererGL.cpp`
-- [ ] 65. `src/js/3D/renderers/renderer_utils.cpp`
-- [ ] 66. `src/js/3D/renderers/ShadowPlaneRenderer.cpp`
-- [ ] 67. `src/js/3D/renderers/WMOLegacyRendererGL.cpp`
-- [ ] 68. `src/js/3D/renderers/WMORendererGL.cpp`
-- [ ] 69. `src/js/3D/writers/CSVWriter.cpp`
-- [ ] 70. `src/js/3D/writers/GLBWriter.cpp`
-- [ ] 71. `src/js/3D/writers/GLTFWriter.cpp`
-- [ ] 72. `src/js/3D/writers/JSONWriter.cpp`
-- [ ] 73. `src/js/3D/writers/MTLWriter.cpp`
-- [ ] 74. `src/js/3D/writers/OBJWriter.cpp`
-- [ ] 75. `src/js/3D/writers/SQLWriter.cpp`
+- [x] 61. `src/js/3D/renderers/M2LegacyRendererGL.cpp`
+- [x] 62. `src/js/3D/renderers/M2RendererGL.cpp`
+- [x] 63. `src/js/3D/renderers/M3RendererGL.cpp`
+- [x] 64. `src/js/3D/renderers/MDXRendererGL.cpp`
+- [x] 65. `src/js/3D/renderers/renderer_utils.cpp`
+- [x] 66. `src/js/3D/renderers/ShadowPlaneRenderer.cpp`
+- [x] 67. `src/js/3D/renderers/WMOLegacyRendererGL.cpp`
+- [x] 68. `src/js/3D/renderers/WMORendererGL.cpp`
+- [x] 69. `src/js/3D/writers/CSVWriter.cpp`
+- [x] 70. `src/js/3D/writers/GLBWriter.cpp`
+- [x] 71. `src/js/3D/writers/GLTFWriter.cpp`
+- [x] 72. `src/js/3D/writers/JSONWriter.cpp`
+- [x] 73. `src/js/3D/writers/MTLWriter.cpp`
+- [x] 74. `src/js/3D/writers/OBJWriter.cpp`
+- [x] 75. `src/js/3D/writers/SQLWriter.cpp`
 - [ ] 76. `src/js/3D/writers/STLWriter.cpp`
 - [ ] 77. `src/js/casc/blp.cpp`
 - [ ] 78. `src/js/casc/blte-reader.cpp`

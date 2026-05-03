@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/21 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/25 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -106,3 +106,23 @@
   - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 611–619 and 1082–1091
   - **Status**: Pending
   - **Details**: In `exportAsOBJ` (WMOExporter.cpp L783–790) and `exportGroupsAsSeparateOBJ` (L1354–1361), doodad CSV position/rotation/scale float values are written via `std::to_string()`, which produces fixed-point notation with 6 decimal places (e.g. `"1.000000"`, `"0.000000"`). JS passes raw numbers to the CSV writer, which uses JavaScript's `Number.toString()` producing minimal notation (e.g. `"1"`, `"0"`). The WMOLegacyExporter C++ correctly uses `std::format("{:g}", ...)` to match JS. The retail WMOExporter should do the same for byte-identical CSV output.
+
+- [ ] 22. [M2RendererGL.cpp] bones_ubo created before skeleton is loaded with bone_count=0
+  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 567, 730–733
+  - **Status**: Pending
+  - **Details**: JS calls `_create_bones_ubo()` from inside `loadSkin()` (line 567) after `_create_skeleton()` (line 491), so the UBO is allocated with the correct bone count and pre-filled with identity matrices. C++ (M2RendererGL.cpp L483) calls `renderer_utils::create_bones_ubo(*shader, ctx, bones_count())` in `load()` before `loadSkin()` is called. At this point `bones_count()` returns 0 because `_create_skeleton()` hasn't executed yet. The UBO itself has full capacity (based on shader block size), but 0 identity matrices are pre-filled. If any render occurs before the first bone matrix update, the UBO contains uninitialized data instead of identity matrices.
+
+- [ ] 23. [M2RendererGL.cpp] Unsafe reinterpret_cast of SKELAttachment to M2Attachment in getAttachmentTransform
+  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1856–1858
+  - **Status**: Pending
+  - **Details**: JS `getAttachmentTransform` uses duck typing — `this.skelLoader.getAttachmentById()` returns an object with the same shape as M2 attachments (bone, position). C++ (M2RendererGL.cpp L2087–2088) uses `reinterpret_cast<const M2Attachment*>(skel_att)` to convert a `SKELAttachment*` to `M2Attachment*`. This is undefined behavior if the struct layouts differ. Should use a proper conversion or a common interface/struct.
+
+- [ ] 24. [M3RendererGL.cpp] Double dispose of bones_ubo in dispose()
+  - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 307–329
+  - **Status**: Pending
+  - **Details**: C++ `dispose()` (M3RendererGL.cpp L323–335) calls `_dispose_geometry()` which disposes `bones_ubo` at lines 310–313, then `dispose()` itself disposes `bones_ubo` again at lines 326–329. The null guard prevents a crash, but this is redundant code not present in JS. JS `dispose()` only calls `_dispose_geometry()` (which handles ubos) then handles `default_texture`. The second dispose in C++ should be removed.
+
+- [ ] 25. [JSONWriter.cpp] Missing BigInt serialization handling in write()
+  - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40–43
+  - **Status**: Pending
+  - **Details**: JS `write()` uses `JSON.stringify` with a custom replacer that converts `BigInt` values to strings: `typeof value === 'bigint' ? value.toString() : value`. C++ (JSONWriter.cpp L24) uses `data.dump(1, '\t')` with no equivalent handling. nlohmann::json stores large integers as `int64_t`/`uint64_t` and serializes them as numbers. If any caller stores values that were `BigInt` in JS, the C++ output would contain numeric integers where JS output contained quoted strings. The JS code explicitly handles this case, suggesting BigInt values do occur in practice.
