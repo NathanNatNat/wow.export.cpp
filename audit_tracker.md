@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 105/188 audited (56%)**
+**Progress: 120/188 audited (64%)**
 
 - [x] 1. `src/app.cpp` — ✅ audited
 - [x] 2. `src/js/blob.cpp` — ✅ audited
@@ -109,21 +109,21 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 103. `src/js/components/file-field.cpp` — ✅ audited
 - [x] 104. `src/js/components/item-picker-modal.cpp` — ✅ audited
 - [x] 105. `src/js/components/itemlistbox.cpp` — ✅ audited
-- [ ] 106. `src/js/components/listbox-maps.cpp`
-- [ ] 107. `src/js/components/listbox-zones.cpp`
-- [ ] 108. `src/js/components/listbox.cpp`
-- [ ] 109. `src/js/components/listboxb.cpp`
-- [ ] 110. `src/js/components/map-viewer.cpp`
-- [ ] 111. `src/js/components/menu-button.cpp`
-- [ ] 112. `src/js/components/model-viewer-gl.cpp`
-- [ ] 113. `src/js/components/resize-layer.cpp`
-- [ ] 114. `src/js/components/slider.cpp`
-- [ ] 115. `src/js/db/CompressionType.cpp`
-- [ ] 116. `src/js/db/DBCReader.cpp`
-- [ ] 117. `src/js/db/DBDParser.cpp`
-- [ ] 118. `src/js/db/FieldType.cpp`
-- [ ] 119. `src/js/db/WDCReader.cpp`
-- [ ] 120. `src/js/db/caches/DBCharacterCustomization.cpp`
+- [x] 106. `src/js/components/listbox-maps.cpp` — ✅ audited
+- [x] 107. `src/js/components/listbox-zones.cpp` — ✅ audited
+- [x] 108. `src/js/components/listbox.cpp` — ✅ audited
+- [x] 109. `src/js/components/listboxb.cpp` — ✅ audited
+- [x] 110. `src/js/components/map-viewer.cpp` — ✅ audited
+- [x] 111. `src/js/components/menu-button.cpp` — ✅ audited
+- [x] 112. `src/js/components/model-viewer-gl.cpp` — ✅ audited
+- [x] 113. `src/js/components/resize-layer.cpp` — ✅ audited
+- [x] 114. `src/js/components/slider.cpp` — ✅ audited
+- [x] 115. `src/js/db/CompressionType.cpp` — ✅ audited
+- [x] 116. `src/js/db/DBCReader.cpp` — ✅ audited
+- [x] 117. `src/js/db/DBDParser.cpp` — ✅ audited
+- [x] 118. `src/js/db/FieldType.cpp` — ✅ audited
+- [x] 119. `src/js/db/WDCReader.cpp` — ✅ audited
+- [x] 120. `src/js/db/caches/DBCharacterCustomization.cpp` — ✅ audited
 - [ ] 121. `src/js/db/caches/DBComponentModelFileData.cpp`
 - [ ] 122. `src/js/db/caches/DBComponentTextureFileData.cpp`
 - [ ] 123. `src/js/db/caches/DBCreatureDisplayExtra.cpp`
