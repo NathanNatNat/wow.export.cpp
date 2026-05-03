@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 180/188 audited (96%)**
+**Progress: 188/188 audited (100%)**
 
 - [x] 1. `src/app.cpp` — ✅ audited
 - [x] 2. `src/js/blob.cpp` — ✅ audited
@@ -184,11 +184,11 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 178. `src/js/ui/character-appearance.cpp` — ✅ audited
 - [x] 179. `src/js/ui/data-exporter.cpp` — ✅ audited
 - [x] 180. `src/js/ui/listbox-context.cpp` — ✅ audited
-- [ ] 181. `src/js/ui/model-viewer-utils.cpp`
-- [ ] 182. `src/js/ui/texture-exporter.cpp`
-- [ ] 183. `src/js/ui/texture-ribbon.cpp`
-- [ ] 184. `src/js/ui/uv-drawer.cpp`
-- [ ] 185. `src/js/workers/cache-collector.cpp`
-- [ ] 186. `src/js/wow/equip-item.cpp`
-- [ ] 187. `src/js/wow/EquipmentSlots.cpp`
-- [ ] 188. `src/js/wow/ItemSlot.cpp`
+- [x] 181. `src/js/ui/model-viewer-utils.cpp` — ✅ audited
+- [x] 182. `src/js/ui/texture-exporter.cpp` — ✅ audited
+- [x] 183. `src/js/ui/texture-ribbon.cpp` — ✅ audited
+- [x] 184. `src/js/ui/uv-drawer.cpp` — ✅ audited
+- [x] 185. `src/js/workers/cache-collector.cpp` — ✅ audited
+- [x] 186. `src/js/wow/equip-item.cpp` — ✅ audited
+- [x] 187. `src/js/wow/EquipmentSlots.cpp` — ✅ audited
+- [x] 188. `src/js/wow/ItemSlot.cpp` — ✅ audited
