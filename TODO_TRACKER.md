@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/26 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/28 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -131,3 +131,13 @@
   - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 59–71, 79–81, 147
   - **Status**: Pending
   - **Details**: JS calls `_create_bones_ubo()` inside `loadLOD()` at line 147, after `_dispose_geometry()` at line 84, so the UBO is always valid after loading. C++ creates `bones_ubo` in `load()` at line 45, then calls `loadLOD(0)` at line 50. Inside `loadLOD()`, `_dispose_geometry()` at line 64 destroys the bones_ubo (lines 310–313) and never recreates it. After `load()` completes, `bones_ubo.ubo` is null. In `render()`, the `if (bones_ubo.ubo)` check at line 229 fails, so the identity bone matrix is never uploaded or bound. The shader receives `u_bone_count = 1` but has no UBO data, causing undefined rendering for all M3 models. Fix: move the `bones_ubo` creation from `load()` into `loadLOD()` after `_dispose_geometry()`, matching JS placement.
+
+- [ ] 27. [M2RendererGL.cpp] `applyExternalBoneMatrices` bounds check compares float-offset against bone-count
+  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` line 1345
+  - **Status**: Pending
+  - **Details**: JS checks `if (char_offset + 16 <= char_bone_matrices.length)` where `char_offset = char_idx * 16` (float index) and `.length` is the total float count (e.g., 1600 for 100 bones). C++ (M2RendererGL.cpp L1554) checks `if (char_offset + 16 <= matrix_count)` where `matrix_count` is passed as `vector.size() / 16` (bone count, e.g., 100) from call sites at model-viewer-gl.cpp L507/L539 and CharacterExporter.cpp L313. This compares a float-offset (e.g., 1584 for bone 99) against a bone count (100), so `1584 + 16 <= 100` is always false for any bone index > ~5. All external bone matrix copies beyond the first few bones silently fail, breaking collection model rigging. Fix: callers should pass `char_bone_matrices.size()` (float count) instead of `char_bone_matrices.size() / 16`.
+
+- [ ] 28. [M2RendererGL.cpp] `submesh_colors` initialized to 1.0 instead of 0.0
+  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` line 423
+  - **Status**: Pending
+  - **Details**: JS initializes `this.submesh_colors = new Float32Array(this.m2.colors.length * 4)` which zero-fills. C++ (M2RendererGL.cpp L495) uses `submesh_colors.assign(m2->colors.size() * 4, 1.0f)` which fills with 1.0. Before any animation plays, submeshes with a valid `color_idx` will have RGBA=(0,0,0,0) in JS (invisible, skipped by `alpha <= 0` check) but RGBA=(1,1,1,1) in C++ (fully visible). This is a visual difference in the initial render state before `playAnimation` or `stopAnimation` is called. Fix: change to `submesh_colors.assign(m2->colors.size() * 4, 0.0f)`.
