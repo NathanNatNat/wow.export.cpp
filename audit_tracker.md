@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 135/188 audited (72%)**
+**Progress: 150/188 audited (80%)**
 
 - [x] 1. `src/app.cpp` — ✅ audited
 - [x] 2. `src/js/blob.cpp` — ✅ audited
@@ -139,21 +139,21 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 133. `src/js/db/caches/DBItemGeosets.cpp` — ✅ audited
 - [x] 134. `src/js/db/caches/DBItemModels.cpp` — ✅ audited
 - [x] 135. `src/js/db/caches/DBItems.cpp` — ✅ audited
-- [ ] 136. `src/js/db/caches/DBModelFileData.cpp`
-- [ ] 137. `src/js/db/caches/DBNpcEquipment.cpp`
-- [ ] 138. `src/js/db/caches/DBTextureFileData.cpp`
-- [ ] 139. `src/js/hashing/xxhash64.cpp`
-- [ ] 140. `src/js/modules/font_helpers.cpp`
-- [ ] 141. `src/js/modules/legacy_tab_audio.cpp`
-- [ ] 142. `src/js/modules/legacy_tab_data.cpp`
-- [ ] 143. `src/js/modules/legacy_tab_files.cpp`
-- [ ] 144. `src/js/modules/legacy_tab_fonts.cpp`
-- [ ] 145. `src/js/modules/legacy_tab_home.cpp`
-- [ ] 146. `src/js/modules/legacy_tab_textures.cpp`
-- [ ] 147. `src/js/modules/module_test_a.cpp`
-- [ ] 148. `src/js/modules/module_test_b.cpp`
-- [ ] 149. `src/js/modules/screen_settings.cpp`
-- [ ] 150. `src/js/modules/screen_source_select.cpp`
+- [x] 136. `src/js/db/caches/DBModelFileData.cpp` — ✅ audited
+- [x] 137. `src/js/db/caches/DBNpcEquipment.cpp` — ✅ audited
+- [x] 138. `src/js/db/caches/DBTextureFileData.cpp` — ✅ audited
+- [x] 139. `src/js/hashing/xxhash64.cpp` — ✅ audited
+- [x] 140. `src/js/modules/font_helpers.cpp` — ✅ audited
+- [x] 141. `src/js/modules/legacy_tab_audio.cpp` — ✅ audited
+- [x] 142. `src/js/modules/legacy_tab_data.cpp` — ✅ audited
+- [x] 143. `src/js/modules/legacy_tab_files.cpp` — ✅ audited
+- [x] 144. `src/js/modules/legacy_tab_fonts.cpp` — ✅ audited
+- [x] 145. `src/js/modules/legacy_tab_home.cpp` — ✅ audited
+- [x] 146. `src/js/modules/legacy_tab_textures.cpp` — ✅ audited
+- [x] 147. `src/js/modules/module_test_a.cpp` — ✅ audited
+- [x] 148. `src/js/modules/module_test_b.cpp` — ✅ audited
+- [x] 149. `src/js/modules/screen_settings.cpp` — ✅ audited
+- [x] 150. `src/js/modules/screen_source_select.cpp` — ✅ audited
 - [ ] 151. `src/js/modules/tab_audio.cpp`
 - [ ] 152. `src/js/modules/tab_blender.cpp`
 - [ ] 153. `src/js/modules/tab_characters.cpp`
