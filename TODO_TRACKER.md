@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/7 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/9 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -36,3 +36,13 @@
   - **JS Source**: `src/js/generics.js` lines 346–353
   - **Status**: Pending
   - **Details**: JS uses `fsp.access(file)` which checks only that the file exists (F_OK). C++ (generics.cpp L673–683) additionally opens the file with `std::ifstream` to verify it is readable. A file that exists but lacks read permission returns `true` in JS but `false` in C++. This could cause the C++ version to re-download cached files that exist but have unusual permissions.
+
+- [ ] 8. [log.cpp] Log file opened in truncate mode instead of append mode
+  - **JS Source**: `src/js/log.js` line 111
+  - **Status**: Pending
+  - **Details**: JS opens the runtime log with `fs.createWriteStream(constants.RUNTIME_LOG, { flags: 'a', encoding: 'utf8' })` — append mode. C++ (log.cpp `ensureStreamOpen()`) opens with default `std::ofstream` which is `std::ios::out | std::ios::trunc` — truncate mode. This means C++ wipes the log file on each launch while JS preserves entries from prior sessions.
+
+- [ ] 9. [app.cpp] `setTaskbarProgress` hides progress bar at 100% instead of showing it full
+  - **JS Source**: `src/js/app.js` lines 500–503
+  - **Status**: Pending
+  - **Details**: JS `win.setProgressBar(val)` shows a full progress bar when `val` is 1.0 and only hides it when `val < 0`. C++ (app.cpp `setTaskbarProgress`) uses `if (val < 0 || val >= 1.0)` to set `TBPF_NOPROGRESS`, which hides the taskbar progress at both negative values AND when progress reaches exactly 1.0 (100%). The bar briefly disappears at completion rather than showing full.
