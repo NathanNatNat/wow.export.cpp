@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/30 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/33 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -151,3 +151,18 @@
   - **JS Source**: `src/js/casc/blp.js` line 294
   - **Status**: Pending
   - **Details**: JS `_getAlpha` case 4 reads `this.rawData[this.scaledLength + (index / 2)]`. In JS, `index / 2` for odd indices produces a float (e.g. `3/2 = 1.5`). Accessing a JS Array with a float index returns `undefined`, and `undefined & 0xF0` evaluates to `0`. So for odd-indexed pixels with alphaDepth=4, JS returns alpha=0. C++ (blp.cpp L224) uses `rawData_[scaledLength_ + (index / 2)]` where integer division truncates (e.g. `3/2 = 1`), reading the correct byte and returning the actual high-nibble alpha value. The JS code has a bug (should use `Math.floor(index / 2)` like case 1 does), but per CLAUDE.md the C++ must reproduce the JS behavior. For odd pixels with alphaDepth=4, JS produces alpha=0 while C++ produces the correct alpha. Fix: for odd indices, return 0 to match JS, or use a float division that truncates the array index to reproduce the `undefined` access.
+
+- [ ] 31. [item-picker-modal.cpp] Missing item database initialization when items are not yet loaded
+  - **JS Source**: `src/js/components/item-picker-modal.js` lines 107–119
+  - **Status**: Pending
+  - **Details**: JS `slot_id` watch handler checks `this.all_items.length === 0` and if true, calls `await DBItemList.initialize()` to trigger asynchronous loading of the item database, setting `is_loading`/`load_error`/`items_loaded` appropriately. C++ `render()` (item-picker-modal.cpp L183–192) checks `tab_items::getAllItems()` and sets `s_is_loading = true` if null, but never triggers any initialization or loading. If the item database hasn't been loaded elsewhere before the modal opens, C++ displays "Loading items..." indefinitely while JS would actively load the data. Fix: call the item database initialization (equivalent to `DBItemList.initialize()`) from `open()` or `render()` when items are not yet available.
+
+- [ ] 32. [tact-keys.cpp] Cache iteration aborts on first non-string JSON value instead of skipping individually
+  - **JS Source**: `src/js/casc/tact-keys.js` lines 73–80
+  - **Status**: Pending
+  - **Details**: JS iterates `Object.entries(tactKeys)` and calls `validateKeyPair(keyName, key)` for each entry. If `key` is a non-string (e.g. a number), `key.length` is `undefined`, validation fails, the entry is skipped with a log message, and iteration continues to the next entry. C++ (tact-keys.cpp L204) calls `it.value().get<std::string>()` which throws `nlohmann::json::type_error` for non-string values. The exception is caught by the outer `catch (...)` at L217, aborting the entire cache loading loop. Keys processed before the non-string entry are kept, but all subsequent entries (even valid ones) are never loaded. Fix: wrap the individual `get<std::string>()` call in a try-catch within the loop body and continue on failure, matching JS per-entry skip behavior.
+
+- [ ] 33. [itemlistbox.cpp] `handleKey` arrow-down with filtered-out `lastSelectItem` does nothing instead of selecting first item
+  - **JS Source**: `src/js/components/itemlistbox.js` lines 237–240
+  - **Status**: Pending
+  - **Details**: When a previously selected item is removed by filtering, JS `this.filteredItems.indexOf(this.lastSelectItem)` returns -1. For arrow-down, `nextIndex = -1 + 1 = 0`, and `this.filteredItems[0]` returns the first visible item, which is then selected. C++ (itemlistbox.cpp L269–271) has an early-return guard `if (lastSelectIndex < 0) return;` that prevents any action when the last-selected item is no longer in the filtered list. This means arrow-down does nothing in C++ while JS selects the first item. The JS behavior is a side effect of `indexOf` returning -1, but per CLAUDE.md rules the C++ must reproduce it. Fix: remove the `if (lastSelectIndex < 0) return;` guard, or special-case arrow-down when lastSelectIndex is -1 to select index 0.
