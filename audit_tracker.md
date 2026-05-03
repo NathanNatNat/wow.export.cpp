@@ -2,23 +2,23 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 0/188 audited (0%)**
+**Progress: 15/188 audited (8%)**
 
-- [ ] 1. `src/app.cpp`
-- [ ] 2. `src/js/blob.cpp`
-- [ ] 3. `src/js/buffer.cpp`
-- [ ] 4. `src/js/config.cpp`
-- [ ] 5. `src/js/constants.cpp`
-- [ ] 6. `src/js/core.cpp`
-- [ ] 7. `src/js/crc32.cpp`
-- [ ] 8. `src/js/external-links.cpp`
-- [ ] 9. `src/js/file-writer.cpp`
-- [ ] 10. `src/js/generics.cpp`
-- [ ] 11. `src/js/gpu-info.cpp`
-- [ ] 12. `src/js/icon-render.cpp`
-- [ ] 13. `src/js/install-type.cpp`
-- [ ] 14. `src/js/log.cpp`
-- [ ] 15. `src/js/mmap.cpp`
+- [x] 1. `src/app.cpp`
+- [x] 2. `src/js/blob.cpp`
+- [x] 3. `src/js/buffer.cpp`
+- [x] 4. `src/js/config.cpp`
+- [x] 5. `src/js/constants.cpp`
+- [x] 6. `src/js/core.cpp`
+- [x] 7. `src/js/crc32.cpp`
+- [x] 8. `src/js/external-links.cpp`
+- [x] 9. `src/js/file-writer.cpp`
+- [x] 10. `src/js/generics.cpp`
+- [x] 11. `src/js/gpu-info.cpp`
+- [x] 12. `src/js/icon-render.cpp`
+- [x] 13. `src/js/install-type.cpp`
+- [x] 14. `src/js/log.cpp`
+- [x] 15. `src/js/mmap.cpp`
 - [ ] 16. `src/js/modules.cpp`
 - [ ] 17. `src/js/MultiMap.cpp`
 - [ ] 18. `src/js/png-writer.cpp`
