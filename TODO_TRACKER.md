@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/36 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/39 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -181,3 +181,18 @@
   - **JS Source**: `src/js/components/menu-button.js` lines 38–39
   - **Status**: Pending
   - **Details**: JS `openMenu` uses `this.open = !this.open && !this.disabled` — clicking the dropdown button while the menu is already open sets `open = false` (since `!this.open` is `false`), closing the menu. C++ (menu-button.cpp L119–121) checks `if (!disabled && !popupOpen) ImGui::OpenPopup(...)` — when the popup IS already open, it does nothing (no open call), but when the user clicks the button, ImGui closes the popup (click outside) and then immediately reopens it via the button click handler. The net effect is the menu stays open instead of toggling closed. Fix: add a toggle check — if popup is already open, call `ImGui::CloseCurrentPopup()` instead of opening.
+
+- [ ] 37. [model-viewer-gl.cpp] `chrUse3DCamera` config fallback default is `true` but should be `false`
+  - **JS Source**: `src/js/components/model-viewer-gl.js` line 375; `src/default_config.jsonc` line 81
+  - **Status**: Pending
+  - **Details**: JS accesses `core.view.config.chrUse3DCamera` directly — when the key is missing, this returns `undefined` (falsy). `default_config.jsonc` explicitly sets it to `false`. C++ (model-viewer-gl.cpp L565, L625, L627) uses `core::view->config.value("chrUse3DCamera", true)`, providing `true` as the fallback. If the config JSON doesn't contain the key, C++ enables 3D camera by default while JS does not. Fix: change the fallback from `true` to `false` in all three locations.
+
+- [ ] 38. [model-viewer-gl.cpp] `chrRenderShadow` config fallback default is `false` but should be `true`
+  - **JS Source**: `src/js/components/model-viewer-gl.js` line 403; `src/default_config.jsonc` line 80
+  - **Status**: Pending
+  - **Details**: `default_config.jsonc` sets `chrRenderShadow` to `true`. C++ (model-viewer-gl.cpp L612, L631, L633) uses `core::view->config.value("chrRenderShadow", false)`, providing `false` as the fallback. If the config key is missing, C++ hides the character shadow by default while JS shows it. Fix: change the fallback from `false` to `true` in all three locations.
+
+- [ ] 39. [model-viewer-gl.cpp] Background color config fallbacks use `#343a40` instead of `#000000`
+  - **JS Source**: `src/js/components/model-viewer-gl.js` lines 255–256; `src/default_config.jsonc` lines 64, 83
+  - **Status**: Pending
+  - **Details**: `default_config.jsonc` sets both `modelViewerBackgroundColor` and `chrBackgroundColor` to `"#000000"`. C++ (model-viewer-gl.cpp L418–419) uses `"#343a40"` as the fallback for both keys. If the config JSON is missing these keys, C++ uses a dark grey background instead of black. Fix: change both fallbacks from `"#343a40"` to `"#000000"`.
