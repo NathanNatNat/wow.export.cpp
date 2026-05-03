@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/19 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/20 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -96,3 +96,8 @@
   - **JS Source**: `src/js/3D/gl/VertexArray.js` lines 312–334
   - **Status**: Pending
   - **Details**: C++ `dispose()` (VertexArray.cpp L317) calls `ctx_.unbind_vao(vao)` before deleting the VAO. The JS version directly calls `gl.deleteVertexArray(this.vao)` with no unbind step. This is extra behavior not present in the JS source — likely a defensive measure for desktop OpenGL, but a deviation.
+
+- [ ] 20. [ADTExporter.cpp] Doodad CSV `RotationW` field writes `"0.000000"` instead of empty string for M2 models
+  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1269
+  - **Status**: Pending
+  - **Details**: For M2 doodad models, `model.rotation` is a 3-element array (Euler angles). JS `model.Rotation?.[3] ?? model.rotation[3]` evaluates to `undefined` since neither `Rotation[3]` nor `rotation[3]` exists on a 3-element array. The JS CSVWriter converts `undefined` to an empty string `""`. C++ (ADTExporter.cpp L1496–1514) initializes `rotW = 0.0f` and writes `"0.000000"` to the CSV. The output differs: JS produces an empty field, C++ produces `"0.000000"`.
