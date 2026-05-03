@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/29 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/30 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -146,3 +146,8 @@
   - **JS Source**: `src/js/file-writer.js` line 38
   - **Status**: Pending
   - **Details**: C++ `FileWriter` (file-writer.cpp L12) opens with `std::ios::out | std::ios::trunc` (no `std::ios::binary`). On Windows, `std::ofstream` in text mode translates every `\n` to `\r\n`. JS `fs.createWriteStream` does NOT do line-ending translation — `line + '\n'` always produces a literal `\n` (0x0A) on all platforms. This affects all files written via FileWriter: CSV (CSVWriter), SQL (SQLWriter), JSON (JSONWriter), OBJ (OBJWriter), and MTL (MTLWriter). Every exported file from these writers will have `\r\n` on Windows in C++ vs `\n` in JS. Fix: add `std::ios::binary` to the open flags at file-writer.cpp L12 and L18.
+
+- [ ] 30. [blp.cpp] `_getAlpha` case 4 (alphaDepth=4) uses integer division instead of reproducing JS float-division bug
+  - **JS Source**: `src/js/casc/blp.js` line 294
+  - **Status**: Pending
+  - **Details**: JS `_getAlpha` case 4 reads `this.rawData[this.scaledLength + (index / 2)]`. In JS, `index / 2` for odd indices produces a float (e.g. `3/2 = 1.5`). Accessing a JS Array with a float index returns `undefined`, and `undefined & 0xF0` evaluates to `0`. So for odd-indexed pixels with alphaDepth=4, JS returns alpha=0. C++ (blp.cpp L224) uses `rawData_[scaledLength_ + (index / 2)]` where integer division truncates (e.g. `3/2 = 1`), reading the correct byte and returning the actual high-nibble alpha value. The JS code has a bug (should use `Math.floor(index / 2)` like case 1 does), but per CLAUDE.md the C++ must reproduce the JS behavior. For odd pixels with alphaDepth=4, JS produces alpha=0 while C++ produces the correct alpha. Fix: for odd indices, return 0 to match JS, or use a float division that truncates the array index to reproduce the `undefined` access.
