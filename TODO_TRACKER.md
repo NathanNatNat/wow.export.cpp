@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/33 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/36 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -166,3 +166,18 @@
   - **JS Source**: `src/js/components/itemlistbox.js` lines 237–240
   - **Status**: Pending
   - **Details**: When a previously selected item is removed by filtering, JS `this.filteredItems.indexOf(this.lastSelectItem)` returns -1. For arrow-down, `nextIndex = -1 + 1 = 0`, and `this.filteredItems[0]` returns the first visible item, which is then selected. C++ (itemlistbox.cpp L269–271) has an early-return guard `if (lastSelectIndex < 0) return;` that prevents any action when the last-selected item is no longer in the filtered list. This means arrow-down does nothing in C++ while JS selects the first item. The JS behavior is a side effect of `indexOf` returning -1, but per CLAUDE.md rules the C++ must reproduce it. Fix: remove the `if (lastSelectIndex < 0) return;` guard, or special-case arrow-down when lastSelectIndex is -1 to select index 0.
+
+- [ ] 34. [WDCReader.cpp] `getRelationRows` has extra preload precondition not present in JS
+  - **JS Source**: `src/js/db/WDCReader.js` lines 216–234
+  - **Status**: Pending
+  - **Details**: JS `getRelationRows` only checks `this.isLoaded` before reading records via `this._readRecord(recordID)`. C++ (WDCReader.cpp L305–306) adds an extra guard `if (!rows.has_value()) throw "Table must be preloaded..."` that the JS does not have. JS callers can call `getRelationRows` without first calling `preload()` — the function will lazily read records. C++ callers that skip `preload()` will get an exception. Fix: remove the `rows.has_value()` check and read records via `_readRecord` like JS does.
+
+- [ ] 35. [map-viewer.cpp] `render()` missing `this.map === null` early return guard
+  - **JS Source**: `src/js/components/map-viewer.js` lines 490–491
+  - **Status**: Pending
+  - **Details**: JS `render()` starts with `if (this.map === null) return;` to skip all rendering when no map is selected. C++ `render()` (map-viewer.cpp L394–438) has no equivalent guard. While `renderWidget()` gates `renderTiles`/`renderOverlay` behind `if (mapId != -1)` at L1200, internal callers like `setToDefaultPosition`, `handleMouseMove`, and `setMapPosition` call `render()` directly without the guard, allowing tile queueing/loading to proceed with no active map. Fix: add `if (mapId == -1) return;` or equivalent at the start of `render()`.
+
+- [ ] 36. [menu-button.cpp] Dropdown re-click does not toggle menu closed like JS
+  - **JS Source**: `src/js/components/menu-button.js` lines 38–39
+  - **Status**: Pending
+  - **Details**: JS `openMenu` uses `this.open = !this.open && !this.disabled` — clicking the dropdown button while the menu is already open sets `open = false` (since `!this.open` is `false`), closing the menu. C++ (menu-button.cpp L119–121) checks `if (!disabled && !popupOpen) ImGui::OpenPopup(...)` — when the popup IS already open, it does nothing (no open call), but when the user clicks the button, ImGui closes the popup (click outside) and then immediately reopens it via the button click handler. The net effect is the menu stays open instead of toggling closed. Fix: add a toggle check — if popup is already open, call `ImGui::CloseCurrentPopup()` instead of opening.
