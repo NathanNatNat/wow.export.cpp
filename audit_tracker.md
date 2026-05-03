@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 165/188 audited (88%)**
+**Progress: 180/188 audited (96%)**
 
 - [x] 1. `src/app.cpp` — ✅ audited
 - [x] 2. `src/js/blob.cpp` — ✅ audited
@@ -169,21 +169,21 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 163. `src/js/modules/tab_models_legacy.cpp` — ✅ audited
 - [x] 164. `src/js/modules/tab_raw.cpp` — ✅ audited
 - [x] 165. `src/js/modules/tab_text.cpp` — ⚠️ 1 finding
-- [ ] 166. `src/js/modules/tab_textures.cpp`
-- [ ] 167. `src/js/modules/tab_videos.cpp`
-- [ ] 168. `src/js/modules/tab_zones.cpp`
-- [ ] 169. `src/js/mpq/bitstream.cpp`
-- [ ] 170. `src/js/mpq/build-version.cpp`
-- [ ] 171. `src/js/mpq/bzip2.cpp`
-- [ ] 172. `src/js/mpq/huffman.cpp`
-- [ ] 173. `src/js/mpq/mpq-install.cpp`
-- [ ] 174. `src/js/mpq/mpq.cpp`
-- [ ] 175. `src/js/mpq/pkware.cpp`
-- [ ] 176. `src/js/ui/audio-helper.cpp`
-- [ ] 177. `src/js/ui/char-texture-overlay.cpp`
-- [ ] 178. `src/js/ui/character-appearance.cpp`
-- [ ] 179. `src/js/ui/data-exporter.cpp`
-- [ ] 180. `src/js/ui/listbox-context.cpp`
+- [x] 166. `src/js/modules/tab_textures.cpp` — ✅ audited
+- [x] 167. `src/js/modules/tab_videos.cpp` — ✅ audited
+- [x] 168. `src/js/modules/tab_zones.cpp` — ✅ audited
+- [x] 169. `src/js/mpq/bitstream.cpp` — ✅ audited
+- [x] 170. `src/js/mpq/build-version.cpp` — ✅ audited
+- [x] 171. `src/js/mpq/bzip2.cpp` — ✅ audited
+- [x] 172. `src/js/mpq/huffman.cpp` — ✅ audited
+- [x] 173. `src/js/mpq/mpq-install.cpp` — ✅ audited
+- [x] 174. `src/js/mpq/mpq.cpp` — ✅ audited
+- [x] 175. `src/js/mpq/pkware.cpp` — ✅ audited
+- [x] 176. `src/js/ui/audio-helper.cpp` — ✅ audited
+- [x] 177. `src/js/ui/char-texture-overlay.cpp` — ✅ audited
+- [x] 178. `src/js/ui/character-appearance.cpp` — ✅ audited
+- [x] 179. `src/js/ui/data-exporter.cpp` — ✅ audited
+- [x] 180. `src/js/ui/listbox-context.cpp` — ✅ audited
 - [ ] 181. `src/js/ui/model-viewer-utils.cpp`
 - [ ] 182. `src/js/ui/texture-exporter.cpp`
 - [ ] 183. `src/js/ui/texture-ribbon.cpp`
