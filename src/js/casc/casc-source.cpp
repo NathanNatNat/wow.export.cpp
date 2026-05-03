@@ -512,7 +512,7 @@ void CASC::parseEncodingFile(BufferWrapper data, const std::string& hash) {
 		const size_t pageStart = pagesStart + (static_cast<size_t>(cKeyPageSize) * i);
 		encoding.seek(pageStart);
 
-		while (encoding.offset() < (pageStart + static_cast<size_t>(cKeyPageSize))) {
+		while (encoding.offset() < (pageStart + pagesStart)) {
 			const uint8_t keysCount = encoding.readUInt8();
 			if (keysCount == 0)
 				break;

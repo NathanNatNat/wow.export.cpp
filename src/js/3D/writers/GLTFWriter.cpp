@@ -504,17 +504,14 @@ bone.pivot[2] - parent_pos[2]
 };
 }
 
-size_t actual_node_idx;
 if (usePrefix) {
 nodes.push_back(prefix_node);
-actual_node_idx = nodes.size();
+bone_lookup_map[static_cast<int>(bi)] = nodes.size();
 nodes.push_back(node);
 } else {
-actual_node_idx = nodes.size();
+bone_lookup_map[static_cast<int>(bi)] = nodes.size();
 nodes.push_back(node);
 }
-
-bone_lookup_map[static_cast<int>(bi)] = actual_node_idx;
 
 auto mat = vec3_to_mat4x4(bone.pivot);
 inverseBindMatrices.insert(inverseBindMatrices.end(), mat.begin(), mat.end());
@@ -656,7 +653,7 @@ root["accessors"].back()["count"] = static_cast<int>(bone.translation.values[i].
 root["animations"][i]["channels"].push_back({
 {"sampler", static_cast<int>(root["animations"][i]["samplers"].size() - 1)},
 {"target", {
-{"node", static_cast<int>(actual_node_idx)},
+{"node", static_cast<int>(nodeIndex + 1)},
 {"path", "translation"}
 }}
 });
@@ -778,7 +775,7 @@ root["accessors"].back()["count"] = static_cast<int>(bone.rotation.values[i].siz
 root["animations"][i]["channels"].push_back({
 {"sampler", static_cast<int>(root["animations"][i]["samplers"].size() - 1)},
 {"target", {
-{"node", static_cast<int>(actual_node_idx)},
+{"node", static_cast<int>(nodeIndex + 1)},
 {"path", "rotation"}
 }}
 });
@@ -897,7 +894,7 @@ root["accessors"].back()["count"] = static_cast<int>(bone.scale.values[i].size()
 root["animations"][i]["channels"].push_back({
 {"sampler", static_cast<int>(root["animations"][i]["samplers"].size() - 1)},
 {"target", {
-{"node", static_cast<int>(actual_node_idx)},
+{"node", static_cast<int>(nodeIndex + 1)},
 {"path", "scale"}
 }}
 });
