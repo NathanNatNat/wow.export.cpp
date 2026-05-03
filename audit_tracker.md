@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 30/188 audited (16%)**
+**Progress: 45/188 audited (24%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -34,21 +34,21 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 28. `src/js/3D/Shaders.cpp`
 - [x] 29. `src/js/3D/Skin.cpp`
 - [x] 30. `src/js/3D/Texture.cpp`
-- [ ] 31. `src/js/3D/WMOShaderMapper.cpp`
-- [ ] 32. `src/js/3D/camera/CameraControlsGL.cpp`
-- [ ] 33. `src/js/3D/camera/CharacterCameraControlsGL.cpp`
-- [ ] 34. `src/js/3D/exporters/ADTExporter.cpp`
-- [ ] 35. `src/js/3D/exporters/CharacterExporter.cpp`
-- [ ] 36. `src/js/3D/exporters/M2Exporter.cpp`
-- [ ] 37. `src/js/3D/exporters/M2LegacyExporter.cpp`
-- [ ] 38. `src/js/3D/exporters/M3Exporter.cpp`
-- [ ] 39. `src/js/3D/exporters/WMOExporter.cpp`
-- [ ] 40. `src/js/3D/exporters/WMOLegacyExporter.cpp`
-- [ ] 41. `src/js/3D/gl/GLContext.cpp`
-- [ ] 42. `src/js/3D/gl/GLTexture.cpp`
-- [ ] 43. `src/js/3D/gl/ShaderProgram.cpp`
-- [ ] 44. `src/js/3D/gl/UniformBuffer.cpp`
-- [ ] 45. `src/js/3D/gl/VertexArray.cpp`
+- [x] 31. `src/js/3D/WMOShaderMapper.cpp`
+- [x] 32. `src/js/3D/camera/CameraControlsGL.cpp`
+- [x] 33. `src/js/3D/camera/CharacterCameraControlsGL.cpp`
+- [x] 34. `src/js/3D/exporters/ADTExporter.cpp`
+- [x] 35. `src/js/3D/exporters/CharacterExporter.cpp`
+- [x] 36. `src/js/3D/exporters/M2Exporter.cpp`
+- [x] 37. `src/js/3D/exporters/M2LegacyExporter.cpp`
+- [x] 38. `src/js/3D/exporters/M3Exporter.cpp`
+- [x] 39. `src/js/3D/exporters/WMOExporter.cpp`
+- [x] 40. `src/js/3D/exporters/WMOLegacyExporter.cpp`
+- [x] 41. `src/js/3D/gl/GLContext.cpp`
+- [x] 42. `src/js/3D/gl/GLTexture.cpp`
+- [x] 43. `src/js/3D/gl/ShaderProgram.cpp`
+- [x] 44. `src/js/3D/gl/UniformBuffer.cpp`
+- [x] 45. `src/js/3D/gl/VertexArray.cpp`
 - [ ] 46. `src/js/3D/loaders/ADTLoader.cpp`
 - [ ] 47. `src/js/3D/loaders/ANIMLoader.cpp`
 - [ ] 48. `src/js/3D/loaders/BONELoader.cpp`

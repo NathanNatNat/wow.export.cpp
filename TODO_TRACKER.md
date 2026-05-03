@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/10 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/19 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -51,3 +51,48 @@
   - **JS Source**: `src/js/modules.js` lines 227–244
   - **Status**: Pending
   - **Details**: JS uses `try { ... } catch { ... } finally { this._tab_initializing = false; }` which guarantees `_tab_initializing` is reset even if the catch block itself throws. C++ (modules.cpp L186–210) places `mod._tab_initializing = false;` after the try-catch block. If any function in the catch handlers throws (e.g. `go_to_landing()` → `set_active()` → `activated()` throwing), the statement is skipped and `_tab_initializing` stays `true` permanently, blocking any future initialization attempts for that module. Fix: use RAII scope guard or restructure to guarantee the reset.
+
+- [ ] 11. [WMOShaderMapper.h] Inline deviation comment and missing DEVIATIONS.md entry for `MapObjParallax_PS` rename
+  - **JS Source**: `src/js/3D/WMOShaderMapper.js` line 35
+  - **Status**: Pending
+  - **Details**: The C++ `WMOPixelShader` enum renames `MapObjParallax` to `MapObjParallax_PS` to avoid a name collision with `WMOVertexShader::MapObjParallax`. This is a legitimate deviation, but: (1) WMOShaderMapper.h lines 47-48 contain an inline comment explaining the rename, which violates the "No deviation comments in code" rule — documentation belongs in DEVIATIONS.md. (2) DEVIATIONS.md has no entry for this rename.
+
+- [ ] 12. [CameraControlsGL.cpp] `on_mouse_down()` always returns `true` even when no button condition matches
+  - **JS Source**: `src/js/3D/camera/CameraControlsGL.js` lines 223–239
+  - **Status**: Pending
+  - **Details**: JS `on_mouse_down(event)` has no explicit return when no `if` branch is entered (e.g. an unrecognized button), effectively returning `undefined`. The C++ version (CameraControlsGL.cpp L237) unconditionally returns `true` at the end of the function, signaling the event was consumed even when no action was taken. Should return `false` in the fallthrough case.
+
+- [ ] 13. [CharacterCameraControlsGL.cpp] `on_mouse_wheel()` returns `true` when `deltaY == 0`
+  - **JS Source**: `src/js/3D/camera/CharacterCameraControlsGL.js` lines 132–164
+  - **Status**: Pending
+  - **Details**: JS `on_mouse_wheel(e)` executes a bare `return;` (line 148) when `deltaY` is 0, effectively returning `undefined` (not consumed). The C++ version (CharacterCameraControlsGL.cpp L131) returns `true` for this case, incorrectly signaling the event was consumed when nothing happened.
+
+- [ ] 14. [ADTExporter.cpp] Game object `scale == 0` produces 1.0 instead of 0.0
+  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1270
+  - **Status**: Pending
+  - **Details**: JS uses `model.scale !== undefined ? model.scale / 1024 : 1` — any defined value including 0 yields `0/1024 = 0.0`. C++ (ADTExporter.cpp L1507) uses `model.scale != 0.0f ? model.scale / 1024.0f : 1.0f`, which treats 0 as undefined and defaults to 1.0. A game object with explicit scale=0 would export with wrong scale.
+
+- [ ] 15. [ADTExporter.cpp] `useADTSets` hardcoded to `false` instead of checking bit 0x80
+  - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1301
+  - **Status**: Pending
+  - **Details**: JS computes `const useADTSets = model & 0x80;` to check if the WMO model entry has the ADT-doodad-set flag. C++ (ADTExporter.cpp L1560) hardcodes `const bool useADTSets = false;`, completely disabling ADT-level doodad set selection for WMO models. This affects which doodad sets are exported alongside WMO models on map tiles.
+
+- [ ] 16. [WMOExporter.cpp] `exportGroupsAsSeparateOBJ` meta JSON adds extra shader fields not in JS
+  - **JS Source**: `src/js/3D/exporters/WMOExporter.js` line 1198
+  - **Status**: Pending
+  - **Details**: JS `exportGroupsAsSeparateOBJ` writes `json.addProperty('materials', wmo.materials)` which serializes raw materials without `vertexShader`/`pixelShader` fields. The C++ version (WMOExporter.cpp L1532–1544) adds `vertexShader` and `pixelShader` to each material entry via the shader mapper. The shader mapper mutation at JS lines 708–709 only occurs in the `exportAsOBJ` path, which has not executed when `split_groups=true`. The C++ output for split-group meta JSON contains extra fields.
+
+- [ ] 17. [ShaderProgram.cpp] `_compile` cleans up leaked shader on failure, deviating from JS
+  - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 29–55
+  - **Status**: Pending
+  - **Details**: When one shader compiles successfully and the other fails, JS (lines 35–36) simply returns without cleaning up the successfully compiled shader (a resource leak). C++ (ShaderProgram.cpp L30–36) deletes both shaders before returning. While the C++ behavior is better, it fixes a JS bug rather than reproducing it — per CLAUDE.md rules, JS behavior should be reproduced exactly unless impossible.
+
+- [ ] 18. [ShaderProgram.cpp] `get_uniform_block_param` returns -1 instead of null-equivalent
+  - **JS Source**: `src/js/3D/gl/ShaderProgram.js` lines 122–127
+  - **Status**: Pending
+  - **Details**: JS returns `null` when the uniform block index is `INVALID_INDEX`. C++ (ShaderProgram.cpp L115) returns `-1`. The sentinel value differs. In practice callers compare against expected values so this is unlikely to cause issues, but it is a behavioral difference.
+
+- [ ] 19. [VertexArray.cpp] `dispose()` calls `unbind_vao` before deleting VAO, not present in JS
+  - **JS Source**: `src/js/3D/gl/VertexArray.js` lines 312–334
+  - **Status**: Pending
+  - **Details**: C++ `dispose()` (VertexArray.cpp L317) calls `ctx_.unbind_vao(vao)` before deleting the VAO. The JS version directly calls `gl.deleteVertexArray(this.vao)` with no unbind step. This is extra behavior not present in the JS source — likely a defensive measure for desktop OpenGL, but a deviation.
