@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/20 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/21 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -101,3 +101,8 @@
   - **JS Source**: `src/js/3D/exporters/ADTExporter.js` line 1269
   - **Status**: Pending
   - **Details**: For M2 doodad models, `model.rotation` is a 3-element array (Euler angles). JS `model.Rotation?.[3] ?? model.rotation[3]` evaluates to `undefined` since neither `Rotation[3]` nor `rotation[3]` exists on a 3-element array. The JS CSVWriter converts `undefined` to an empty string `""`. C++ (ADTExporter.cpp L1496–1514) initializes `rotW = 0.0f` and writes `"0.000000"` to the CSV. The output differs: JS produces an empty field, C++ produces `"0.000000"`.
+
+- [ ] 21. [WMOExporter.cpp] CSV float values use `std::to_string()` producing verbose 6-decimal notation instead of JS minimal notation
+  - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 611–619 and 1082–1091
+  - **Status**: Pending
+  - **Details**: In `exportAsOBJ` (WMOExporter.cpp L783–790) and `exportGroupsAsSeparateOBJ` (L1354–1361), doodad CSV position/rotation/scale float values are written via `std::to_string()`, which produces fixed-point notation with 6 decimal places (e.g. `"1.000000"`, `"0.000000"`). JS passes raw numbers to the CSV writer, which uses JavaScript's `Number.toString()` producing minimal notation (e.g. `"1"`, `"0"`). The WMOLegacyExporter C++ correctly uses `std::format("{:g}", ...)` to match JS. The retail WMOExporter should do the same for byte-identical CSV output.
