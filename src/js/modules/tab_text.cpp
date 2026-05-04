@@ -42,7 +42,6 @@ static size_t s_items_cache_size = ~size_t(0);
 struct PendingTextPreview {
 	std::string file_name;
 	std::future<BufferWrapper> file_future;
-	std::unique_ptr<BusyLock> busy_lock;
 };
 
 static std::optional<PendingTextPreview> pending_text_preview;
@@ -56,7 +55,6 @@ static void preview_text(const std::string& file_name) {
 
 	PendingTextPreview task;
 	task.file_name = file_name;
-	task.busy_lock = std::make_unique<BusyLock>(core::create_busy_lock());
 	task.file_future = std::async(std::launch::async, [casc, file_name]() {
 		return casc->getVirtualFileByName(file_name);
 	});

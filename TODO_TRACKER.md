@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 50/98 verified (51%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 60/98 verified (61%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -252,54 +252,54 @@
   - **Status**: Verified — fixed; added IsItemHovered/SetTooltip and SameLine to match sibling legacy tabs
   - **Details**: JS filter bar `<div class="regex-info" v-if="..." :title="$core.view.regexTooltip">Regex Enabled</div>` has a tooltip on hover (`:title`) and is displayed inline with the filter input. C++ (legacy_tab_audio.cpp L388–389) only has `ImGui::TextUnformatted("Regex Enabled")` with no tooltip and no `ImGui::SameLine()`. All three sibling legacy tabs (files L187–192, fonts L215–220, data L285–290) correctly include both `ImGui::SetTooltip` on hover and `ImGui::SameLine()`. Fix: add `if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", view.regexTooltip.c_str()); ImGui::SameLine();` after the TextUnformatted call.
 
-- [ ] 51. [legacy_tab_audio.cpp] `format_time()` uses truncation instead of JS `Math.round` for seconds
+- [x] 51. [legacy_tab_audio.cpp] `format_time()` uses truncation instead of JS `Math.round` for seconds
   - **JS Source**: `src/js/generics.js` line 484
-  - **Status**: Pending
+  - **Status**: Verified — fixed; removed local `format_time()` and replaced calls with `generics::formatPlaybackSeconds()`
   - **Details**: JS `formatPlaybackSeconds` (generics.js L484) computes seconds as `Math.round(seconds % 60)` which rounds to the nearest integer. C++ (legacy_tab_audio.cpp L243) uses `static_cast<int>(seconds)` which truncates (floors). For 59.7 seconds, JS produces `":60"` while C++ produces `":59"`. The C++ codebase already has a shared `generics::formatPlaybackSeconds()` (generics.cpp L809) that correctly uses `std::round`, but the legacy audio tab uses a local `format_time()` function with truncation instead. Fix: replace the local `format_time()` with calls to `generics::formatPlaybackSeconds()`.
 
-- [ ] 52. [legacy_tab_data.cpp] MenuButton missing `upward=true` parameter
+- [x] 52. [legacy_tab_data.cpp] MenuButton missing `upward=true` parameter
   - **JS Source**: `src/js/modules/legacy_tab_data.js` line 164
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `true` for `upward` parameter to `menu_button::render` call
   - **Details**: JS MenuButton has `class="upward"` which makes the dropdown open upward (important since it's in the bottom tray). C++ (legacy_tab_data.cpp L421–425) calls the `menu_button::render` overload without the `upward` parameter, defaulting to `false` (downward). The full overload with explicit `upward` is available (menu-button.h L55–60). Fix: use the full render overload and pass `true` for the `upward` parameter.
 
-- [ ] 53. [legacy_tab_data.cpp] `load_table` catch block missing stack trace log line
+- [x] 53. [legacy_tab_data.cpp] `load_table` catch block missing stack trace log line
   - **JS Source**: `src/js/modules/legacy_tab_data.js` lines 112–113
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added second `logging::write` call logging the exception message, matching JS two-line pattern
   - **Details**: JS `load_table` catch block has two log calls: `log.write('Failed to open DBC file: %s', e.message)` and `log.write('%o', e.stack)`. C++ (legacy_tab_data.cpp L207) only logs the error message, omitting the stack trace entirely. While C++ exceptions lack a `.stack` property, the second log line should still be present — either logging a placeholder or using platform-specific stack capture. Fix: add a second `logging::write` call after L207 to log the exception context, matching the JS two-line pattern.
 
-- [ ] 54. [legacy_tab_textures.cpp] Listbox and status bar add quickfilters not present in JS
+- [x] 54. [legacy_tab_textures.cpp] Listbox and status bar add quickfilters not present in JS
   - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 117
-  - **Status**: Pending
+  - **Status**: Verified — fixed; changed both quickfilter vectors from `{".blp", ".png", ".jpg"}` to `{}` in `listbox::render()` and `listbox::renderStatusBar()`
   - **Details**: JS Listbox for the legacy textures tab has no quickfilters prop — no quick filter links appear in the status bar. C++ (legacy_tab_textures.cpp L269) passes `{".blp", ".png", ".jpg"}` as quickfilters to `listbox::render()`, and L309 passes the same to `listbox::renderStatusBar()`. This adds "Quick filter: BLP / PNG / JPG" links to the status bar that are absent from the original JS application. Fix: change both to empty vectors `{}` to match JS.
 
-- [ ] 55. [tab_characters.cpp] Missing DBItemList initialization — item picker may be empty
+- [x] 55. [tab_characters.cpp] Missing DBItemList initialization — item picker may be empty
   - **JS Source**: `src/js/modules/tab_characters.js` line 2759
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `tab_items::mounted()` call after DBModelFileData init, matching JS `DBItemList.initialize()` placement
   - **Details**: JS calls `await DBItemList.initialize(...)` in the characters tab's `initialize()` method, ensuring the full item list is available for the item picker modal. The C++ `mounted()` (tab_characters.cpp ~L3967–3994) initializes DBItems, DBItemCharTextures, DBItemGeosets, DBItemModels, DBModelFileData, and DBGuildTabard but never initializes the item list data that `tab_items::getAllItems()` returns. The item picker modal calls `tab_items::getAllItems()` (item-picker-modal.cpp L183) which returns nullptr if the Items tab hasn't been visited yet. Fix: call the equivalent of `tab_items` item list initialization during characters tab setup.
 
-- [ ] 56. [tab_characters.cpp] Left-click on equipped slot does not open context menu
+- [x] 56. [tab_characters.cpp] Left-click on equipped slot does not open context menu
   - **JS Source**: `src/js/modules/tab_characters.js` lines 2489–2497
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `(slot_clicked_left && item)` to the context menu open condition
   - **Details**: JS `open_slot_context()` is bound to both `@click` and `@contextmenu.prevent` on equipment slots. For equipped items (item_id truthy), it sets `chrEquipmentSlotContext = slot_id` which opens a context menu. Both left-click and right-click trigger this. C++ (tab_characters.cpp L3869–3877) only opens the context menu popup on right-click (`ImGuiMouseButton_Right`). Left-click on an equipped slot does nothing. Left-click on an empty slot correctly opens the item picker. Fix: add `|| (slot_clicked_left && item)` to the context menu open condition.
 
-- [ ] 57. [tab_maps.cpp] `collect_game_objects()` adds value-based deduplication not in JS
+- [x] 57. [tab_maps.cpp] `collect_game_objects()` adds value-based deduplication not in JS
   - **JS Source**: `src/js/modules/tab_maps.js` lines 125–156
-  - **Status**: Pending
+  - **Status**: Verified — fixed; removed `GameObjectKey`, `GameObjectKeyHash`, and `seen` set; objects now added directly to result vector
   - **Details**: JS uses a `Set` which deduplicates by object identity (reference equality). Since each row from `getAllRows()` is a unique object reference, no actual value-based deduplication occurs — all matching objects are included. C++ (tab_maps.cpp L373–416) adds a `GameObjectKey { FileDataID, x, y }` with an `unordered_set` to skip objects sharing the same FileDataID and position. This could cause the C++ version to export fewer game objects than the JS. Fix: remove the `GameObjectKey`/`seen` set and add all matching objects directly to the result vector.
 
-- [ ] 58. [tab_text.cpp] BusyLock during text preview not present in JS
+- [x] 58. [tab_text.cpp] BusyLock during text preview not present in JS
   - **JS Source**: `src/js/modules/tab_text.js` lines 124–143
-  - **Status**: Pending
+  - **Status**: Verified — fixed; removed `busy_lock` member from `PendingTextPreview` and the `create_busy_lock()` call
   - **Details**: JS `mounted()` watcher checks `!this.$core.view.isBusy` before starting a preview load, but does NOT increment `isBusy` itself. C++ `preview_text()` (tab_text.cpp L59) creates a `BusyLock` via `core::create_busy_lock()` stored in `PendingTextPreview.busy_lock`, which increments `isBusy` until the preview completes. This prevents the user from clicking "Export Selected" while a text file preview is loading — behavior the JS allows. Fix: remove the `busy_lock` member from `PendingTextPreview` and the `create_busy_lock()` call at L59.
 
-- [ ] 59. [tab_audio.cpp] `format_time()` truncates seconds instead of rounding
+- [x] 59. [tab_audio.cpp] `format_time()` truncates seconds instead of rounding
   - **JS Source**: `src/js/modules/tab_audio.js` lines 207–209 (computed properties using `generics.formatPlaybackSeconds`)
-  - **Status**: Pending
+  - **Status**: Verified — fixed; removed local `format_time()` and replaced calls with `generics::formatPlaybackSeconds()`
   - **Details**: JS uses `generics.formatPlaybackSeconds()` which calls `Math.round(seconds % 60)` for the seconds component. C++ tab_audio.cpp defines a local `format_time()` (L320–328) that uses `static_cast<int>(seconds)` which truncates instead of rounding. The C++ already has a correct `generics::formatPlaybackSeconds()` (generics.cpp L804) using `std::round`. Fix: replace the local `format_time()` calls with `generics::formatPlaybackSeconds()`.
 
-- [ ] 60. [tab_data.cpp] Status bar unit type is "table" instead of "db2 file"
+- [x] 60. [tab_data.cpp] Status bar unit type is "table" instead of "db2 file"
   - **JS Source**: `src/js/modules/tab_data.js` line 99
-  - **Status**: Pending
+  - **Status**: Verified — fixed; changed `"table"` to `"db2 file"` in `listbox::renderStatusBar()` call
   - **Details**: JS Listbox has `unittype="db2 file"` which produces a status bar reading "X db2 files found". C++ (tab_data.cpp L284) calls `listbox::renderStatusBar("table", {}, listbox_db2_state)` producing "X tables found". Fix: change `"table"` to `"db2 file"`.
 
 - [ ] 61. [tab_fonts.cpp] Glyph grid not rendered in loaded font

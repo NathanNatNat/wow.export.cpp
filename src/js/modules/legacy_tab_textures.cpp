@@ -266,7 +266,7 @@ void render() {
 			nullptr,
 			false,
 			"textures",
-			{".blp", ".png", ".jpg"},
+			{},
 			false,
 			legacy_tex_listbox_state,
 			[&](const std::vector<std::string>& new_sel) {
@@ -306,7 +306,7 @@ void render() {
 	);
 
 	if (app::layout::BeginStatusBar("legacy-tex-status", regions)) {
-		listbox::renderStatusBar("texture", {".blp", ".png", ".jpg"}, legacy_tex_listbox_state);
+		listbox::renderStatusBar("texture", {}, legacy_tex_listbox_state);
 	}
 	app::layout::EndStatusBar();
 

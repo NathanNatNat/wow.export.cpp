@@ -281,7 +281,7 @@ void render() {
 	app::layout::EndListContainer();
 
 	if (app::layout::BeginStatusBar("db2-status", regions)) {
-		listbox::renderStatusBar("table", {}, listbox_db2_state);
+		listbox::renderStatusBar("db2 file", {}, listbox_db2_state);
 	}
 	app::layout::EndStatusBar();
 

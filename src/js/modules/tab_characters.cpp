@@ -3869,7 +3869,7 @@ ImGui::TextDisabled("%s: Empty", slot_label.c_str());
 const bool slot_clicked_right = ImGui::IsItemClicked(ImGuiMouseButton_Right);
 const bool slot_clicked_left  = ImGui::IsItemClicked(ImGuiMouseButton_Left);
 
-if (slot_clicked_right && item) {
+if ((slot_clicked_right && item) || (slot_clicked_left && item)) {
 ImGui::OpenPopup("##equip_ctx");
 }
 if (slot_clicked_left && !item) {
@@ -3987,6 +3987,8 @@ std::thread([region_empty]() {
 
 	core::progressLoadingScreen("Loading model file data...");
 	db::caches::DBModelFileData::initializeModelFileData();
+
+	tab_items::mounted();
 
 	core::progressLoadingScreen("Loading guild tabard data...");
 	db::caches::DBGuildTabard::ensureInitialized();

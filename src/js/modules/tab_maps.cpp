@@ -370,20 +370,6 @@ game_objects_db2[owner_id].push_back(row);
 }
 }
 
-struct GameObjectKey {
-uint32_t fid;
-float x, y;
-bool operator==(const GameObjectKey& o) const { return fid == o.fid && x == o.x && y == o.y; }
-};
-struct GameObjectKeyHash {
-size_t operator()(const GameObjectKey& k) const {
-size_t h = std::hash<uint32_t>{}(k.fid);
-h ^= std::hash<float>{}(k.x) + 0x9e3779b9 + (h << 6) + (h >> 2);
-h ^= std::hash<float>{}(k.y) + 0x9e3779b9 + (h << 6) + (h >> 2);
-return h;
-}
-};
-std::unordered_set<GameObjectKey, GameObjectKeyHash> seen;
 std::vector<ADTGameObject> result;
 auto it = game_objects_db2.find(mapID);
 if (it != game_objects_db2.end()) {
@@ -404,10 +390,6 @@ go.Rotation = fieldToFloatVec(rot_it->second);
 if (scale_it != obj.end())
 go.scale = fieldToFloat(scale_it->second);
 
-GameObjectKey key{ go.FileDataID,
-go.Position.size() > 0 ? go.Position[0] : 0.0f,
-go.Position.size() > 1 ? go.Position[1] : 0.0f };
-if (seen.insert(key).second)
 result.push_back(go);
 }
 }

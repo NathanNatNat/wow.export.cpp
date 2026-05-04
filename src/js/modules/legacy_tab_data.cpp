@@ -205,6 +205,7 @@ static bool load_table(const std::string& table_name) {
 		core::setToast("error", "Unable to open DBC file " + table_name,
 			{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 		logging::write(std::format("Failed to open DBC file: {}", e.what()));
+		logging::write(std::format("{}", e.what()));
 		return false;
 	}
 }
@@ -425,7 +426,7 @@ void render() {
 			const bool no_headers = view.tableBrowserHeaders.empty();
 			menu_button::render("##MenuButtonDataLegacy", legacy_data_opts,
 				view.config.value("exportDataFormat", std::string("CSV")),
-				busy || no_headers, false, legacy_menu_button_data_state,
+				busy || no_headers, false, true, legacy_menu_button_data_state,
 				[&](const std::string& val) { view.config["exportDataFormat"] = val; },
 				[&]() { export_data(); });
 		}

@@ -317,16 +317,6 @@ static void export_sounds() {
 	pending_audio_export = std::move(task);
 }
 
-static std::string format_time(double seconds) {
-	if (seconds <= 0)
-		return "00:00";
-
-	const int total_seconds = static_cast<int>(seconds);
-	const int minutes = total_seconds / 60;
-	const int secs = total_seconds % 60;
-	return std::format("{:02d}:{:02d}", minutes, secs);
-}
-
 void registerTab() {
 	modules::register_nav_button("tab_audio", "Audio", "music.svg", install_type::CASC);
 
@@ -562,8 +552,8 @@ void render() {
 
 		ImGui::Spacing();
 
-		const std::string seek_formatted = format_time(view.soundPlayerSeek * view.soundPlayerDuration);
-		const std::string duration_formatted = format_time(view.soundPlayerDuration);
+		const std::string seek_formatted = generics::formatPlaybackSeconds(view.soundPlayerSeek * view.soundPlayerDuration);
+		const std::string duration_formatted = generics::formatPlaybackSeconds(view.soundPlayerDuration);
 		ImGui::Text("%s  %s  %s", seek_formatted.c_str(), view.soundPlayerTitle.c_str(), duration_formatted.c_str());
 
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
