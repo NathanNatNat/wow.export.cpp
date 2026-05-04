@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/66 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/71 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -331,3 +331,28 @@
   - **JS Source**: `src/js/modules/tab_creatures.js` lines 933, 973
   - **Status**: Pending
   - **Details**: Both catch blocks in `export_files` (tab_creatures.cpp L1348 and L1396) pass only `e.what()` to `helper.mark()` without a stack trace: `helper.mark(creature_name, false, e.what())`. JS passes both `e.message` and `e.stack` as separate arguments. Other tabs (tab_decor L289, tab_models L811) correctly pass `build_stack_trace("export_files", e)` as the 4th argument. The tab_creatures file is also missing the `build_stack_trace` helper entirely. Fix: add `build_stack_trace` and update both catch blocks to `helper.mark(creature_name, false, e.what(), build_stack_trace("export_files", e))`.
+
+- [ ] 67. [tab_maps.cpp] Game objects filter uses swapped tile_x/tile_y for bounds calculation
+  - **JS Source**: `src/js/modules/tab_maps.js` lines 799–802
+  - **Status**: Pending
+  - **Details**: JS uses `adt.tileX` (= tileIndex % MAP_SIZE, the column) for `start_x` and `adt.tileY` (= tileIndex / MAP_SIZE, the row) for `start_y`. C++ `pump_map_export()` at L1083–1090 defines `tile_x = index / MAP_SIZE` (row) and `tile_y = index % MAP_SIZE` (col), then uses `tile_x` for `start_x` and `tile_y` for `start_y`. This swaps the x/y axes, causing game objects to be filtered against the wrong tile region. Fix: swap the definitions so `tile_x = index % MAP_SIZE` and `tile_y = index / MAP_SIZE`, OR rename them to match the ADTExporter semantics and swap their usage in the bounds calculation.
+
+- [ ] 68. [tab_maps.cpp] `extract_height_data_from_tile` builds wrong ADT file path due to parameter order
+  - **JS Source**: `src/js/modules/tab_maps.js` lines 209–210
+  - **Status**: Pending
+  - **Details**: JS builds `tile_prefix = prefix + '_' + adt.tileY + '_' + adt.tileX` where tileY = index/MAP_SIZE (row) and tileX = index%MAP_SIZE (col), producing `prefix_row_col.adt`. C++ (L480) builds `tile_prefix = prefix + '_' + tile_y + '_' + tile_x` where the parameters received are tile_x = index/MAP_SIZE (row) and tile_y = index%MAP_SIZE (col) from the call sites (L1348, L1400). This produces `prefix_col_row.adt` instead of `prefix_row_col.adt`, referencing non-existent files. Fix: change L480 to `prefix + '_' + std::to_string(tile_x) + '_' + std::to_string(tile_y)` (since tile_x=row comes first in the WoW file naming convention), which matches the JS's `tileY + '_' + tileX` order.
+
+- [ ] 69. [tab_blender.cpp] `parse_manifest_version` preserves leading zeros in version components
+  - **JS Source**: `src/js/modules/tab_blender.js` line 18
+  - **Status**: Pending
+  - **Details**: JS uses `util.format('%d.%d.%d', match[1], match[2], match[3])` where `%d` coerces captured regex groups to integers, stripping leading zeros (e.g., "01","02","03" → "1.2.3"). C++ (tab_blender.cpp L49) uses `std::format("{}.{}.{}", match[1].str(), match[2].str(), match[3].str())` which preserves raw capture strings (→ "01.02.03"). This could cause the version comparison `latestAddonVersion.version > blenderAddonVersion.version` to produce wrong results if versions contain leading zeros. Fix: use `std::stoi` on each capture group.
+
+- [ ] 70. [tab_blender.cpp] `std::stod` parses trailing-alpha Blender versions differently from JS `Number()`
+  - **JS Source**: `src/js/modules/tab_blender.js` lines 91, 139
+  - **Status**: Pending
+  - **Details**: The `PATTERN_BLENDER_VER` regex matches versions like "3.0a" (trailing `\w?`). In JS, `"3.0a" >= 2.8` coerces the string via `Number("3.0a")` → `NaN`, and `NaN >= 2.8` is `false`, so alpha/beta builds are skipped. In C++ (tab_blender.cpp L133, L231), `std::stod("3.0a")` successfully parses "3.0" (stops at 'a'), yielding 3.0, and `3.0 >= 2.8` is `true`, so alpha builds are included in the addon installation. Fix: after `std::stod`, verify the entire string was consumed by checking the `pos` output parameter equals the string length, and skip the version if it wasn't.
+
+- [ ] 71. [tab_creatures.cpp, tab_decor.cpp] Sorting uses byte-comparison instead of locale-aware `localeCompare`
+  - **JS Source**: `src/js/modules/tab_creatures.js` line 1170, `src/js/modules/tab_decor.js` line 404
+  - **Status**: Pending
+  - **Details**: JS uses `name_a.localeCompare(name_b)` for sorting creature/decor lists, which is locale-aware and correctly handles accented characters (e.g., "Élan" sorts near "Elan"). C++ (tab_creatures.cpp L1539, tab_decor.cpp L361) uses `name_a < name_b` after `tolower`, which is a byte-by-byte comparison where accented UTF-8 characters sort after all ASCII. WoW creature/decor names frequently include non-ASCII characters. Fix: use a locale-aware comparison or ICU collation.
