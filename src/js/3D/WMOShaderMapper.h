@@ -10,8 +10,8 @@
 
 namespace wmo_shader_mapper {
 
-enum WMOVertexShader : int {
-	WMOVertexShader_None = -1,
+enum class WMOVertexShader : int {
+	None = -1,
 	MapObjDiffuse_T1 = 0,
 	MapObjDiffuse_T1_Refl = 1,
 	MapObjDiffuse_T1_Env_T2 = 2,
@@ -23,8 +23,8 @@ enum WMOVertexShader : int {
 	MapObjParallax = 8
 };
 
-enum WMOPixelShader : int {
-	WMOPixelShader_None = -1,
+enum class WMOPixelShader : int {
+	None = -1,
 	MapObjDiffuse = 0,
 	MapObjSpecular = 1,
 	MapObjMetal = 2,
@@ -44,11 +44,11 @@ enum WMOPixelShader : int {
 	MapObjTwoLayerDiffuseMod2xNA = 16,
 	MapObjTwoLayerDiffuseAlpha = 17,
 	MapObjLod = 18,
-	MapObjParallax_PS = 19,
+	MapObjParallax = 19,
 	MapObjDFShader = 20
 };
 
-enum MOMTShader : int {
+enum class MOMTShader : int {
 	Diffuse = 0,
 	Specular = 1,
 	Metal = 2,

@@ -54,7 +54,7 @@
 
 - [x] 11. [WMOShaderMapper.h] Inline deviation comment and missing DEVIATIONS.md entry for `MapObjParallax_PS` rename
   - **JS Source**: `src/js/3D/WMOShaderMapper.js` line 35
-  - **Status**: Verified — inline comment removed, DEVIATIONS.md entry added under "C++ Language / Architecture Limitations"
+  - **Status**: Verified — deviation eliminated; switched to `enum class` so both enums can use `MapObjParallax` without collision, matching JS exactly. Inline comment removed, no DEVIATIONS.md entry needed.
   - **Details**: The C++ `WMOPixelShader` enum renames `MapObjParallax` to `MapObjParallax_PS` to avoid a name collision with `WMOVertexShader::MapObjParallax`. This is a legitimate deviation, but: (1) WMOShaderMapper.h lines 47-48 contain an inline comment explaining the rename, which violates the "No deviation comments in code" rule — documentation belongs in DEVIATIONS.md. (2) DEVIATIONS.md has no entry for this rename.
 
 - [x] 12. [CameraControlsGL.cpp] `on_mouse_down()` always returns `true` even when no button condition matches

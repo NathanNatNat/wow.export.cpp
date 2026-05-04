@@ -74,10 +74,6 @@ These files, features, and options have been deliberately removed from the C++ p
 
 These deviations exist because a direct port is not possible due to fundamental differences between JavaScript and C++.
 
-### [WMOShaderMapper.h] `MapObjParallax` pixel shader renamed to `MapObjParallax_PS`
-- **JS Source**: `src/js/3D/WMOShaderMapper.js` line 35
-- **Reason**: C++ enums `WMOVertexShader` and `WMOPixelShader` share a namespace. JS uses separate objects (`WMOVertexShader` and `WMOPixelShader`) that can both have a `MapObjParallax` key without conflict. In C++, the unscoped enum values would collide. The pixel shader variant is suffixed `_PS` to disambiguate. Numeric value (19) is unchanged.
-- **Impact**: No functional difference — code that maps shader IDs uses the numeric value, which is preserved.
 
 ### [core.cpp] `progressLoadingScreen()` does not await redraw
 - **JS Source**: `src/js/core.js` lines 442–450

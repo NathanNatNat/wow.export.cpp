@@ -38,8 +38,8 @@ struct WMODrawCall {
 	uint32_t blendMode = 0;
 	uint32_t material_id = 0;
 	wmo_shader_mapper::WMOShaderEntry shader = {
-		wmo_shader_mapper::MapObjDiffuse_T1,
-		wmo_shader_mapper::MapObjDiffuse
+		wmo_shader_mapper::WMOVertexShader::MapObjDiffuse_T1,
+		wmo_shader_mapper::WMOPixelShader::MapObjDiffuse
 	};
 };
 

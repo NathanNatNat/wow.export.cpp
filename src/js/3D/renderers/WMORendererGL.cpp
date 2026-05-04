@@ -132,7 +132,7 @@ void WMORendererGL::_load_textures() {
 	for (size_t i = 0; i < materials.size(); i++) {
 		const auto& material = materials[i];
 
-		int pixelShader = wmo_shader_mapper::MapObjDiffuse;
+		int pixelShader = static_cast<int>(wmo_shader_mapper::WMOPixelShader::MapObjDiffuse);
 		{
 			auto it = wmo_shader_mapper::WMOShaderMap.find(static_cast<int>(material.shader));
 			if (it != wmo_shader_mapper::WMOShaderMap.end())
@@ -140,7 +140,7 @@ void WMORendererGL::_load_textures() {
 		}
 
 		// Don't load LOD textures
-		if (pixelShader == wmo_shader_mapper::MapObjLod)
+		if (pixelShader == static_cast<int>(wmo_shader_mapper::WMOPixelShader::MapObjLod))
 			continue;
 
 		std::vector<uint32_t> textureFileDataIDs;
@@ -163,13 +163,13 @@ void WMORendererGL::_load_textures() {
 			textureFileDataIDs.push_back(material.texture3);
 		}
 
-		if (pixelShader == wmo_shader_mapper::MapObjParallax_PS) {
+		if (pixelShader == static_cast<int>(wmo_shader_mapper::WMOPixelShader::MapObjParallax)) {
 			// MapObjParallax
 			textureFileDataIDs.push_back(material.color2);
 			textureFileDataIDs.push_back(material.flags3);
 			if (!material.runtimeData.empty())
 				textureFileDataIDs.push_back(material.runtimeData[0]);
-		} else if (pixelShader == wmo_shader_mapper::MapObjDFShader) {
+		} else if (pixelShader == static_cast<int>(wmo_shader_mapper::WMOPixelShader::MapObjDFShader)) {
 			textureFileDataIDs.push_back(material.color3);
 			textureFileDataIDs.push_back(material.flags3);
 			for (const uint32_t rtd : material.runtimeData)
@@ -350,8 +350,8 @@ void WMORendererGL::_load_groups() {
 				const uint32_t blend_mode = (matID < wmo->materials.size()) ? wmo->materials[matID].blendMode : 0;
 
 				wmo_shader_mapper::WMOShaderEntry sh_entry = {
-					wmo_shader_mapper::MapObjDiffuse_T1,
-					wmo_shader_mapper::MapObjDiffuse
+					wmo_shader_mapper::WMOVertexShader::MapObjDiffuse_T1,
+					wmo_shader_mapper::WMOPixelShader::MapObjDiffuse
 				};
 				{
 					auto it = wmo_shader_mapper::WMOShaderMap.find(static_cast<int>(shader_id));
