@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/54 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/58 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -271,3 +271,23 @@
   - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 117
   - **Status**: Pending
   - **Details**: JS Listbox for the legacy textures tab has no quickfilters prop — no quick filter links appear in the status bar. C++ (legacy_tab_textures.cpp L269) passes `{".blp", ".png", ".jpg"}` as quickfilters to `listbox::render()`, and L309 passes the same to `listbox::renderStatusBar()`. This adds "Quick filter: BLP / PNG / JPG" links to the status bar that are absent from the original JS application. Fix: change both to empty vectors `{}` to match JS.
+
+- [ ] 55. [tab_characters.cpp] Missing DBItemList initialization — item picker may be empty
+  - **JS Source**: `src/js/modules/tab_characters.js` line 2759
+  - **Status**: Pending
+  - **Details**: JS calls `await DBItemList.initialize(...)` in the characters tab's `initialize()` method, ensuring the full item list is available for the item picker modal. The C++ `mounted()` (tab_characters.cpp ~L3967–3994) initializes DBItems, DBItemCharTextures, DBItemGeosets, DBItemModels, DBModelFileData, and DBGuildTabard but never initializes the item list data that `tab_items::getAllItems()` returns. The item picker modal calls `tab_items::getAllItems()` (item-picker-modal.cpp L183) which returns nullptr if the Items tab hasn't been visited yet. Fix: call the equivalent of `tab_items` item list initialization during characters tab setup.
+
+- [ ] 56. [tab_characters.cpp] Left-click on equipped slot does not open context menu
+  - **JS Source**: `src/js/modules/tab_characters.js` lines 2489–2497
+  - **Status**: Pending
+  - **Details**: JS `open_slot_context()` is bound to both `@click` and `@contextmenu.prevent` on equipment slots. For equipped items (item_id truthy), it sets `chrEquipmentSlotContext = slot_id` which opens a context menu. Both left-click and right-click trigger this. C++ (tab_characters.cpp L3869–3877) only opens the context menu popup on right-click (`ImGuiMouseButton_Right`). Left-click on an equipped slot does nothing. Left-click on an empty slot correctly opens the item picker. Fix: add `|| (slot_clicked_left && item)` to the context menu open condition.
+
+- [ ] 57. [tab_maps.cpp] `collect_game_objects()` adds value-based deduplication not in JS
+  - **JS Source**: `src/js/modules/tab_maps.js` lines 125–156
+  - **Status**: Pending
+  - **Details**: JS uses a `Set` which deduplicates by object identity (reference equality). Since each row from `getAllRows()` is a unique object reference, no actual value-based deduplication occurs — all matching objects are included. C++ (tab_maps.cpp L373–416) adds a `GameObjectKey { FileDataID, x, y }` with an `unordered_set` to skip objects sharing the same FileDataID and position. This could cause the C++ version to export fewer game objects than the JS. Fix: remove the `GameObjectKey`/`seen` set and add all matching objects directly to the result vector.
+
+- [ ] 58. [tab_text.cpp] BusyLock during text preview not present in JS
+  - **JS Source**: `src/js/modules/tab_text.js` lines 124–143
+  - **Status**: Pending
+  - **Details**: JS `mounted()` watcher checks `!this.$core.view.isBusy` before starting a preview load, but does NOT increment `isBusy` itself. C++ `preview_text()` (tab_text.cpp L59) creates a `BusyLock` via `core::create_busy_lock()` stored in `PendingTextPreview.busy_lock`, which increments `isBusy` until the preview completes. This prevents the user from clicking "Export Selected" while a text file preview is loading — behavior the JS allows. Fix: remove the `busy_lock` member from `PendingTextPreview` and the `create_busy_lock()` call at L59.
