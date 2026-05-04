@@ -63,6 +63,7 @@ static bool s_just_opened = false;
 
 static std::string s_last_filter;
 static int         s_last_slot_id = -1;
+static const tab_items::ItemData* s_last_items_ptr = nullptr;
 static std::vector<const tab_items::ItemData*> s_filtered_items;
 
 static constexpr int PAGE_SIZE = 10;
@@ -129,8 +130,9 @@ void open(int slot_id, const std::string& slot_filter,
 	s_just_opened       = true;
 	std::memset(s_filter_buf, 0, sizeof(s_filter_buf));
 	s_scroll_offset = 0;
-	s_last_filter   = "";
-	s_last_slot_id  = -1;
+	s_last_filter    = "";
+	s_last_slot_id   = -1;
+	s_last_items_ptr = nullptr;
 	s_is_loading = false;
 	s_load_error = false;
 }
@@ -195,13 +197,15 @@ void render() {
 
 	bool filter_changed = (std::strcmp(s_filter_buf, s_last_filter.c_str()) != 0);
 	bool slot_changed   = (s_slot_id != s_last_slot_id);
+	bool data_changed   = (items_ptr != s_last_items_ptr);
 
-	if (filter_changed || slot_changed) {
+	if (filter_changed || slot_changed || data_changed) {
 		if (filter_changed)
 			s_scroll_offset = 0;
 		rebuild_filtered(items_ptr, items_count);
-		s_last_filter  = s_filter_buf;
-		s_last_slot_id = s_slot_id;
+		s_last_filter    = s_filter_buf;
+		s_last_slot_id   = s_slot_id;
+		s_last_items_ptr = items_ptr;
 	}
 
 	int result_count = static_cast<int>(s_filtered_items.size());

@@ -504,7 +504,7 @@ void render(const char* id,
 		const ImVec4 qualColor = getQualityColor(item.quality);
 		ImGui::PushStyleColor(ImGuiCol_Text, qualColor);
 
-		if (ImGui::Selectable("##item_sel", itemSelected, ImGuiSelectableFlags_None,
+		if (ImGui::Selectable("##item_sel", itemSelected, ImGuiSelectableFlags_AllowOverlap,
 		                      ImVec2(availSize.x - reservedRight, 0.0f))) {
 			selectItem(i, io.KeyCtrl, io.KeyShift, filteredItems, selection, single, state, onSelectionChanged);
 		}
