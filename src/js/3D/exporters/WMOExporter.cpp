@@ -1531,15 +1531,8 @@ void WMOExporter::exportGroupsAsSeparateOBJ(const std::filesystem::path& out, ca
 
 		{
 			nlohmann::json matsArr = nlohmann::json::array();
-			for (const auto& mat : wmo->materials) {
-				auto matJson = materialToJson(mat);
-				auto shaderIt = wmo_shader_mapper::WMOShaderMap.find(static_cast<int>(mat.shader));
-				if (shaderIt != wmo_shader_mapper::WMOShaderMap.end()) {
-					matJson["vertexShader"] = static_cast<int>(shaderIt->second.VertexShader);
-					matJson["pixelShader"] = static_cast<int>(shaderIt->second.PixelShader);
-				}
-				matsArr.push_back(matJson);
-			}
+			for (const auto& mat : wmo->materials)
+				matsArr.push_back(materialToJson(mat));
 			json.addProperty("materials", matsArr);
 		}
 

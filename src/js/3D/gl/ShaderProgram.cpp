@@ -9,6 +9,7 @@
 #include "log.h"
 
 #include <format>
+#include <optional>
 
 namespace gl {
 
@@ -27,13 +28,8 @@ void ShaderProgram::_compile(const std::string& vert_source,
 	GLuint vert_shader = _compile_shader(GL_VERTEX_SHADER, vert_source);
 	GLuint frag_shader = _compile_shader(GL_FRAGMENT_SHADER, frag_source);
 
-	if (!vert_shader || !frag_shader) {
-		if (vert_shader)
-			glDeleteShader(vert_shader);
-		if (frag_shader)
-			glDeleteShader(frag_shader);
+	if (!vert_shader || !frag_shader)
 		return;
-	}
 
 	GLuint prog = glCreateProgram();
 	glAttachShader(prog, vert_shader);
@@ -109,10 +105,10 @@ GLuint ShaderProgram::get_uniform_block_index(const std::string& name) {
 	return index;
 }
 
-GLint ShaderProgram::get_uniform_block_param(const std::string& name, GLenum pname) {
+std::optional<GLint> ShaderProgram::get_uniform_block_param(const std::string& name, GLenum pname) {
 	GLuint index = get_uniform_block_index(name);
 	if (index == GL_INVALID_INDEX)
-		return -1;
+		return std::nullopt;
 
 	GLint result = 0;
 	glGetActiveUniformBlockiv(program, index, pname, &result);

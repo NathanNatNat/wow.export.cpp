@@ -128,7 +128,7 @@ bool CharacterCameraControlsGL::on_mouse_wheel(float deltaY) {
 	else if (deltaY > 0)
 		zoom_amount = -current_distance * (1.0f - ZOOM_SCALE);
 	else
-		return true;
+		return false;
 
 	const float new_distance = current_distance - zoom_amount;
 

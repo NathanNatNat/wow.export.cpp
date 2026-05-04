@@ -314,7 +314,6 @@ void VertexArray::draw(GLenum mode, GLsizei count, GLsizei offset) {
 
 void VertexArray::dispose() {
 	if (vao) {
-		ctx_.unbind_vao(vao);
 		glDeleteVertexArrays(1, &vao);
 		vao = 0;
 	}

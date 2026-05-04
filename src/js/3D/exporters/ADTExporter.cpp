@@ -15,6 +15,7 @@
 #include <format>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -1493,7 +1494,8 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 
 						// Get position/rotation/scale.
 						float posX = 0, posY = 0, posZ = 0;
-						float rotX = 0, rotY = 0, rotZ = 0, rotW = 0;
+						float rotX = 0, rotY = 0, rotZ = 0;
+						std::optional<float> rotW;
 						float scaleFactor = 1.0f;
 						uint32_t modelId = 0;
 
@@ -1504,7 +1506,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 							if (model.Rotation.size() >= 4) {
 								rotX = model.Rotation[0]; rotY = model.Rotation[1]; rotZ = model.Rotation[2]; rotW = model.Rotation[3];
 							}
-							scaleFactor = model.scale != 0.0f ? model.scale / 1024.0f : 1.0f;
+							scaleFactor = model.scale / 1024.0f;
 							modelId = model.uniqueId;
 						} else {
 							if (model.position.size() >= 3) {
@@ -1525,7 +1527,7 @@ ADTExportResult ADTExporter::exportTile(const fs::path& dir, int quality,
 							{ "RotationX", std::to_string(rotX) },
 							{ "RotationY", std::to_string(rotY) },
 							{ "RotationZ", std::to_string(rotZ) },
-							{ "RotationW", std::to_string(rotW) },
+							{ "RotationW", rotW.has_value() ? std::to_string(*rotW) : "" },
 							{ "ScaleFactor", std::to_string(scaleFactor) },
 							{ "ModelId", std::to_string(modelId) },
 							{ "Type", csvName },

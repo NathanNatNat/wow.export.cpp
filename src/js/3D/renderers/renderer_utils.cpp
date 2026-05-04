@@ -20,7 +20,7 @@ BonesUbo create_bones_ubo(gl::ShaderProgram& shader, gl::GLContext& ctx,
 	shader.bind_uniform_block("VsBoneUbo", 0);
 
 	const GLint ubo_size = shader.get_uniform_block_param(
-		"VsBoneUbo", GL_UNIFORM_BLOCK_DATA_SIZE);
+		"VsBoneUbo", GL_UNIFORM_BLOCK_DATA_SIZE).value_or(0);
 
 	const auto offsets = shader.get_active_uniform_offsets({"u_bone_matrices"});
 	const GLint matrix_offset = offsets.empty() ? 0 : offsets[0];

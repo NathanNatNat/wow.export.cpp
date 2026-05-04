@@ -8,6 +8,7 @@
 #include <glad/gl.h>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -52,7 +53,7 @@ public:
 	 *
 	 * JS source: src/js/3D/gl/ShaderProgram.js lines 122–127.
 	 */
-	GLint get_uniform_block_param(const std::string& name, GLenum pname);
+	std::optional<GLint> get_uniform_block_param(const std::string& name, GLenum pname);
 	std::vector<GLint> get_active_uniform_offsets(const std::vector<std::string>& names);
 	void bind_uniform_block(const std::string& name, GLuint binding_point);
 

@@ -234,7 +234,7 @@ bool CameraControlsGL::on_mouse_down(int button, int clientX, int clientY,
 		state = STATE_PANNING;
 	}
 
-	return true;
+	return false;
 }
 
 bool CameraControlsGL::on_mouse_wheel(float deltaY) {
