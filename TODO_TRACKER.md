@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/81 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/86 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -406,3 +406,28 @@
   - **JS Source**: `src/js/modules/tab_zones.js` line 462–463
   - **Status**: Pending
   - **Details**: JS captures `const phase_id = selected_phase_id;` once per zone entry at the start of processing. Both `render_zone_to_canvas(export_canvas, zone.id, phase_id, ...)` (line 466) and `phase_suffix` construction (line 477) use this captured local variable, ensuring consistency. C++ (tab_zones.cpp L1089, L1120–1121) reads `selected_phase_id` directly at each use point. If the user changes the phase selector in the UI between the render call and filename construction (possible since export runs on the main thread), the rendered content and filename could reference different phases. Fix: capture `const auto phase_id = selected_phase_id;` at the start of each zone's export loop iteration and use the local copy throughout.
+
+- [ ] 82. [tab_textures.cpp] `export_texture_atlas_regions_impl` WebP quality value misinterpreted — all atlas WebP exports use lossless
+  - **JS Source**: `src/js/modules/tab_textures.js` lines 227–228; `src/js/buffer.js` line 90
+  - **Status**: Pending
+  - **Details**: C++ (tab_textures.cpp L369) reads `exportWebPQuality` as a float with fallback `0.9f`, but `default_config.jsonc` stores it as integer `90`. When nlohmann::json converts integer `90` to float, it becomes `90.0f`. At L405, `int webp_quality = static_cast<int>(quality * 100.0f)` produces `9000`. The lossless check `webp_quality >= 100` (L406) is always true for any config value >= 1, so ALL atlas region WebP exports use lossless encoding instead of lossy. JS `BufferWrapper.fromCanvas` (buffer.js L90) reads quality as `0.0–1.0` range and passes it directly to the canvas `toBlob` API. Fix: read the config value as integer (`config.value("exportWebPQuality", 90)`), use it directly as the WebP quality (0–100 range), and trigger lossless only when quality == 100.
+
+- [ ] 83. [tab_textures.cpp] `export_textures` does not pass CASC source to `texture_exporter::exportFiles`
+  - **JS Source**: `src/js/modules/tab_textures.js` lines 371–376
+  - **Status**: Pending
+  - **Details**: JS `export_textures` calls `textureExporter.exportFiles(selected)` which internally accesses `core.view.casc`. C++ (tab_textures.cpp L819, L823) calls `texture_exporter::exportFiles(user_selection)` and `texture_exporter::exportFiles(files)` without a `casc` parameter. The `exportFiles` function signature requires an explicit CASC pointer, and when it defaults to `nullptr`, the CASC file fetching gate `casc && fileDataID` fails, producing empty buffers and broken exports. The drop handler at L478 correctly passes `core::view->casc`. Fix: pass `core::view->casc` as the second argument in both calls at L819 and L823.
+
+- [ ] 84. [tab_textures.cpp] `apply_baked_npc_texture` silently ignores failed file data ID lookup
+  - **JS Source**: `src/js/modules/tab_textures.js` lines 421–432
+  - **Status**: Pending
+  - **Details**: JS calls `listfile.getByFilename(first)` then `casc.getFile(file_data_id)`. If `getByFilename` returns `undefined`, `getFile(undefined)` throws, and the catch block shows an error toast ("failed to load baked npc texture") with a "view log" action. C++ (tab_textures.cpp L765–766) checks `if (file_data_id_opt.has_value())` and skips the entire block if the lookup fails — no error toast, no log message. The user clicks "Apply to Character", sees the progress toast, and then nothing happens. Fix: add an else branch that shows the error toast and logs the failure.
+
+- [ ] 85. [tab_videos.cpp] `stream_video` missing try/catch around `build_payload` on main thread
+  - **JS Source**: `src/js/modules/tab_videos.js` lines 119–216
+  - **Status**: Pending
+  - **Details**: JS wraps the entire `stream_video` body (including `stop_video`, state reset, `build_payload`, initial kino request) in a single try/catch (lines 119–216). If any step throws, the outer catch resets `is_streaming = false` and `videoPlayerState = false`, shows "Failed to stream video" error toast, and logs the error + stack trace. C++ (tab_videos.cpp L286–312) calls `stop_video()`, `build_payload()`, and state setup on the main thread without try/catch. Only the worker thread body (L317–405) has error handling. If `build_payload` throws (e.g., CASC not available, DB2 parse failure), `is_streaming` remains `true` and `videoPlayerState` remains `true`, leaving the UI in a stuck "streaming" state with no error feedback. Fix: wrap lines 297–312 in a try/catch that resets state and shows an error toast.
+
+- [ ] 86. [tab_zones.cpp] `render_map_tiles` drops tiles with missing `LayerIndex` field
+  - **JS Source**: `src/js/modules/tab_zones.js` lines 126–133
+  - **Status**: Pending
+  - **Details**: JS groups tiles by layer using `tile.LayerIndex || 0`, defaulting missing/undefined `LayerIndex` to 0, so those tiles appear in layer 0 and are rendered. C++ `render_map_tiles` (tab_zones.cpp L402–414) re-fetches tiles and filters by `LayerIndex`. When a tile has no `LayerIndex` field, `tile.find("LayerIndex")` returns `end()`, and the tile is excluded entirely — it never reaches the `tile_layer == layer_index` comparison. Note: the C++ `render_zone_to_canvas` (L369–370) correctly defaults missing `LayerIndex` to 0 during grouping, but this grouping result is discarded because `render_map_tiles` re-fetches from DB2. Fix: either pass the pre-grouped tiles to `render_map_tiles` (matching JS), or add a `LayerIndex` default of 0 when the field is missing in the filter at L404.
