@@ -1332,7 +1332,7 @@ void render() {
 				dl->AddText(ImVec2(cx, text_y), IM_COL32(255, 255, 255, 255), time_buf);
 				cx += ImGui::CalcTextSize(time_buf).x + pad * 2;
 
-				float seek_end = bar_max.x - pad - 50.0f;
+				float seek_end = bar_max.x - pad;
 				float seek_w = seek_end - cx;
 				if (seek_w > 20.0f && duration > 0.0) {
 					float fill = static_cast<float>(time_pos / duration);
@@ -1351,6 +1351,8 @@ void render() {
 						mpv_set_property(mpv_ctx, "time-pos", MPV_FORMAT_DOUBLE, &new_pos);
 					}
 				}
+
+
 
 				ImGui::Dummy(avail);
 			} else if (poll_active) {

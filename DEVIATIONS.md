@@ -18,6 +18,11 @@ Each entry includes the C++ file, the JS source reference, a description of the 
 
 These files, features, and options have been deliberately removed from the C++ port with no equivalent.
 
+### [tab_videos.cpp] Video player fullscreen button removed
+- **JS Source**: `src/js/modules/tab_videos.js` line 493 (`<video>` element `controls` attribute provides native fullscreen)
+- **Reason**: Deliberately excluded — not wanted in the C++ port.
+- **Impact**: Video player has no fullscreen toggle.
+
 ### "Reload Styling" context menu option
 - **JS Source**: `src/app.js` lines 160-164, registered at line 550
 - **Reason**: JS hot-reloads CSS `<link>` tags with cache-busting query strings — a dev tool with no C++ equivalent since ImGui has no external stylesheets.
