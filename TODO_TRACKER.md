@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/96 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/98 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -481,3 +481,13 @@
   - **JS Source**: `src/js/modules/tab_zones.js` lines 275–288
   - **Status**: Pending
   - **Details**: JS `load_zone_map` wraps `render_zone_to_canvas` in try/catch. On error, the catch shows a toast but does NOT update the canvas — the canvas remains in its cleared state (from `clearRect` at line 59). C++ `runZoneLoadWorker` (tab_zones.cpp L573–606) has a try/catch at L576, but the `core::postToMainThread` at L584 that uploads `zoneMapPixels` to a GL texture runs unconditionally AFTER both the try and catch blocks. If `render_zone_to_canvas` throws, the upload still executes, displaying stale or partially-rendered pixel data. This is distinct from #93 (clear timing) — even with #93 fixed, the upload would still show a blank texture on error instead of preserving the previous valid image. Fix: track success with a `bool` flag and make the texture upload conditional on success.
+
+- [ ] 97. [texture-exporter.cpp] Catch block uses `fileName` instead of `markFileName` — different error-reporting name
+  - **JS Source**: `src/js/ui/texture-exporter.js` lines 176–179
+  - **Status**: Pending
+  - **Details**: JS catch block (line 177) calls `helper.mark(markFileName, false, e.message, e.stack)` where `markFileName` is the extension-modified filename (e.g., with `.png` or `.webp` extension). However, `markFileName` is declared with `let` inside the `try` block (line 124), making it block-scoped and inaccessible from the `catch` — this is a latent JS bug that would produce a ReferenceError if the catch path ever executes. C++ (texture-exporter.cpp L306) uses `fileName` (the original unmodified filename), which is always in scope and makes error handling functional. To match the intended JS behavior (not the actual crash behavior), move `markFileName` declaration before the `try` block so it's accessible in `catch`, and use it in the `helper.mark` call.
+
+- [ ] 98. [equip-item.cpp] Missing falsy check for slot_id == 0 (non-equippable items)
+  - **JS Source**: `src/js/wow/equip-item.js` lines 5–7
+  - **Status**: Pending
+  - **Details**: JS `if (!slot_id) return false;` uses JavaScript falsy semantics: both `undefined` (item not in DB) and `0` (non-equippable inventory type) cause an early return. C++ (equip-item.cpp L12–13) uses `if (!slot_id_opt.has_value()) return false;` which only catches missing items, not inventory type 0. Items with inventory type 0 ("Non-equippable") would incorrectly pass through, be assigned to slot 0, and show a toast "Equipped X to Unknown slot." Fix: add `if (slot_id == 0) return false;` after extracting the optional value.
