@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/44 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/47 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -221,3 +221,18 @@
   - **JS Source**: `src/js/modules/legacy_tab_fonts.js` lines 12–15
   - **Status**: Pending
   - **Details**: JS `get_font_id` computes `hash = ((hash << 5) - hash + charCode) | 0` (signed 32-bit coercion) then returns `'font_legacy_' + Math.abs(hash)`. `Math.abs(-2147483648)` safely returns `2147483648` (float64). C++ (legacy_tab_fonts.cpp L38) does `std::to_string(std::abs(static_cast<int32_t>(hash)))`. If `hash` is exactly `0x80000000`, `static_cast<int32_t>` gives `INT32_MIN` and `std::abs(INT32_MIN)` is undefined behavior in C++ (positive value overflows int32_t). On most implementations it returns `-2147483648`, producing `"font_legacy_-2147483648"` instead of JS's `"font_legacy_2147483648"`. Fix: use `static_cast<int64_t>(static_cast<int32_t>(hash))` before `std::abs`, or special-case `0x80000000`.
+
+- [ ] 45. [screen_settings.cpp] "Add Encryption Key" input buffers cleared unconditionally after handle_tact_key()
+  - **JS Source**: `src/js/modules/screen_settings.js` lines 295–297, 401–405
+  - **Status**: Pending
+  - **Details**: JS `handle_tact_key()` does not clear the `userInputTactKeyName` or `userInputTactKey` view properties after calling `tactKeys.addKey()`. On success or failure, the text inputs retain their values, allowing the user to correct and retry on failure. C++ (screen_settings.cpp L514–515) unconditionally sets `key_name_buf[0] = '\0'` and `key_val_buf[0] = '\0'` after `handle_tact_key()`, clearing both fields regardless of whether the key was successfully added. On failure, the user loses their input and must re-enter both the key name and key value. Fix: only clear the buffers when `addKey` returns true (success), not on failure.
+
+- [ ] 46. [screen_source_select.cpp] Folder dialog titles are generic instead of matching JS descriptive titles
+  - **JS Source**: `src/js/modules/screen_source_select.js` lines 329–336
+  - **Status**: Pending
+  - **Details**: JS sets descriptive directory dialog titles: "Select World of Warcraft Installation" for local CASC (line 330) and "Select Legacy MPQ Installation" for legacy (line 336). C++ (screen_source_select.cpp L599, L668) uses the generic title "Select Directory" for both `pfd::select_folder()` calls. Fix: change local to `pfd::select_folder("Select World of Warcraft Installation")` and legacy to `pfd::select_folder("Select Legacy MPQ Installation")`.
+
+- [ ] 47. [legacy_tab_data.cpp] DBC listbox missing `unittype` and status bar
+  - **JS Source**: `src/js/modules/legacy_tab_data.js` line 131
+  - **Status**: Pending
+  - **Details**: JS DBC listbox sets `unittype="dbc file"` which enables the status bar text showing the number of DBC files found. C++ (legacy_tab_data.cpp L267) passes `""` for the unittype parameter, suppressing the status text. Additionally, unlike every other legacy tab (audio, files, fonts, textures) which all have an explicit `app::layout::BeginStatusBar` / `listbox::renderStatusBar` block, `legacy_tab_data` has none for the DBC listbox (between EndListContainer at L282 and BeginFilterBar at L284). Fix: change unittype from `""` to `"dbc file"` at L267, and add a status bar block between L282 and L284.
