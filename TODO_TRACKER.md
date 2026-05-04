@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/89 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/93 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -446,3 +446,23 @@
   - **JS Source**: `src/js/ui/audio-helper.js` line 166; `src/js/buffer.js` lines 592–603
   - **Status**: Pending
   - **Details**: JS calls `data.startsWith(['ID3', '\xFF\xFB', '\xFF\xF3', '\xFF\xF2'])`. The `BufferWrapper.startsWith(array)` method (buffer.js L592–603) calls `this.seek(0)` once, then iterates each entry calling `readString(entry.length)` which advances the internal read position. The second entry (`\xFF\xFB`) is checked at offset 3 (after `'ID3'` was read), the third at offset 5, the fourth at offset 7 — NOT from position 0. Files starting with MP3 sync bytes (`\xFF\xFB`, `\xFF\xF3`, `\xFF\xF2`) would be detected as `AUDIO_TYPE_UNKNOWN` in JS. C++ (audio-helper.cpp L29–37) checks ALL prefixes from offset 0 using `std::memcmp(raw.data(), ...)`, so MP3 files without an ID3 tag ARE correctly detected. The C++ is more correct but deviates from JS. Per project rules, JS bugs should be reproduced unless impossible in C++.
+
+- [ ] 90. [tab_videos.cpp] `mounted()` initialization thread has no error handling — will crash on exception
+  - **JS Source**: `src/js/modules/tab_videos.js` lines 535–539
+  - **Status**: Pending
+  - **Details**: JS `initialize()` is async — if `load_video_listfile()` throws, the promise rejects, the loading screen stays visible, but the application continues running. C++ (tab_videos.cpp L915–929) runs initialization in a detached `std::thread` with no try/catch. If `build_video_entries()` throws (e.g., DB2 table missing, CASC unavailable), the exception propagates out of the thread function, which calls `std::terminate()` and crashes the application. Additionally, `core::hideLoadingScreen()` is never called, leaving the loading overlay stuck. Fix: wrap the thread body in try/catch, call `core::hideLoadingScreen()` in the catch, and show an error toast.
+
+- [ ] 91. [tab_zones.cpp] `export_zone_map` renders into shared preview pixel buffer instead of a separate buffer
+  - **JS Source**: `src/js/modules/tab_zones.js` line 461
+  - **Status**: Pending
+  - **Details**: JS creates a fresh off-screen canvas per zone via `document.createElement('canvas')` (line 461) and passes it to `render_zone_to_canvas`. The preview canvas is untouched during export. C++ `export_zone_map` (tab_zones.cpp L1089) calls `render_zone_to_canvas` which writes directly into `core::view->zoneMapPixels` — the same buffer used for the live preview. During multi-zone export, the preview updates to show each zone being exported, and after export the preview shows the last exported zone rather than the originally selected zone. Fix: allocate a temporary pixel buffer for export rendering instead of writing to the shared preview buffer.
+
+- [ ] 92. [tab_zones.cpp] Phase selector dropdown positioned at bottom-right instead of top-left
+  - **JS Source**: `src/js/modules/tab_zones.js` lines 341–345; `src/app.css` lines 3534–3538
+  - **Status**: Pending
+  - **Details**: JS CSS `.preview-dropdown-overlay` positions the phase dropdown at `position: absolute; top: 10px; left: 10px` — top-left corner of the preview area. C++ (tab_zones.cpp L916–920) calculates position as `ImVec2(canvas_size.x - combo_w - pad, canvas_size.y - combo_h - pad)` — bottom-right corner. Per CLAUDE.md layout fidelity rules, every panel and control must be positioned correctly. Fix: change the position calculation to place the combo at the top-left: `ImVec2(pad, pad)`.
+
+- [ ] 93. [tab_zones.cpp] `render_zone_to_canvas` clears pixel buffer too late, showing stale preview on error
+  - **JS Source**: `src/js/modules/tab_zones.js` line 59
+  - **Status**: Pending
+  - **Details**: JS clears the canvas immediately at the start of `render_zone_to_canvas` (line 59: `ctx.clearRect(0, 0, canvas.width, canvas.height)`), before any DB lookups. If a subsequent lookup throws, the canvas is blank. C++ (tab_zones.cpp L347–348) clears `zoneMapPixels` only after all validation (ui_map_id lookup, ui_map row fetch, art_styles construction). If any of those throw, the old zone's pixel data remains, and `runZoneLoadWorker` (L584–591) uploads the stale data to the GL texture. The user sees the previous zone's map with an error toast overlay. Fix: move the pixel buffer clear to the very start of `render_zone_to_canvas`, before the `get_zone_ui_map_id` call.
