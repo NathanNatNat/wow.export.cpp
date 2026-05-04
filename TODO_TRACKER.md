@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/49 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/52 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -246,3 +246,18 @@
   - **JS Source**: `src/js/modules/screen_source_select.js` lines 239–248
   - **Status**: Pending
   - **Details**: In the CDN fastest-region selection loop (after all pings), JS sets `let selected_region = this.$core.view.selectedCDNRegion` which is a reference to the original default region object. The loop compares each `region.delay < selected_region.delay` but does NOT update `selected_region` — so every region is compared against the original default's delay. If US=100ms, EU=50ms, KR=75ms: EU (50<100) sets selectedCDNRegion=EU, then KR (75<100) overwrites to KR. The last region below the default wins. C++ (screen_source_select.cpp L588) adds `selected_region = region` which updates the local tracker, so it finds the absolute lowest delay (EU=50ms wins). While C++ behavior is arguably better, it deviates from JS. Note: this is currently unreachable due to TODO #41 (delay stays null), but would matter once #41 is fixed. Fix: remove line 588 (`selected_region = region;`) to match JS behavior.
+
+- [ ] 50. [legacy_tab_audio.cpp] Filter bar "Regex Enabled" missing tooltip and SameLine
+  - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 212
+  - **Status**: Pending
+  - **Details**: JS filter bar `<div class="regex-info" v-if="..." :title="$core.view.regexTooltip">Regex Enabled</div>` has a tooltip on hover (`:title`) and is displayed inline with the filter input. C++ (legacy_tab_audio.cpp L388–389) only has `ImGui::TextUnformatted("Regex Enabled")` with no tooltip and no `ImGui::SameLine()`. All three sibling legacy tabs (files L187–192, fonts L215–220, data L285–290) correctly include both `ImGui::SetTooltip` on hover and `ImGui::SameLine()`. Fix: add `if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", view.regexTooltip.c_str()); ImGui::SameLine();` after the TextUnformatted call.
+
+- [ ] 51. [legacy_tab_audio.cpp] `format_time()` uses truncation instead of JS `Math.round` for seconds
+  - **JS Source**: `src/js/generics.js` line 484
+  - **Status**: Pending
+  - **Details**: JS `formatPlaybackSeconds` (generics.js L484) computes seconds as `Math.round(seconds % 60)` which rounds to the nearest integer. C++ (legacy_tab_audio.cpp L243) uses `static_cast<int>(seconds)` which truncates (floors). For 59.7 seconds, JS produces `":60"` while C++ produces `":59"`. The C++ codebase already has a shared `generics::formatPlaybackSeconds()` (generics.cpp L809) that correctly uses `std::round`, but the legacy audio tab uses a local `format_time()` function with truncation instead. Fix: replace the local `format_time()` with calls to `generics::formatPlaybackSeconds()`.
+
+- [ ] 52. [legacy_tab_data.cpp] MenuButton missing `upward=true` parameter
+  - **JS Source**: `src/js/modules/legacy_tab_data.js` line 164
+  - **Status**: Pending
+  - **Details**: JS MenuButton has `class="upward"` which makes the dropdown open upward (important since it's in the bottom tray). C++ (legacy_tab_data.cpp L421–425) calls the `menu_button::render` overload without the `upward` parameter, defaulting to `false` (downward). The full overload with explicit `upward` is available (menu-button.h L55–60). Fix: use the full render overload and pass `true` for the `upward` parameter.
