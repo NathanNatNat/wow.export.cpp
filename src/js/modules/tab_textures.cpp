@@ -366,7 +366,7 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 	const std::string format = core::view->config.value("exportTextureFormat", std::string("PNG"));
 	const std::string ext = format == "WEBP" ? ".webp" : ".png";
 	const std::string mime_type = format == "WEBP" ? "image/webp" : "image/png";
-	const float quality = core::view->config.value("exportWebPQuality", 0.9f);
+	const int quality = core::view->config.value("exportWebPQuality", 90);
 
 	try {
 		BufferWrapper file_data_buf = core::view->casc->getVirtualFileByID(file_data_id);
@@ -390,27 +390,29 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 			export_file_name = (fs::path(export_dir) / region.name).string();
 			const std::string export_path = casc::ExportHelper::getExportPath(export_file_name + ext);
 
-			std::vector<uint8_t> cropped(region.width * region.height * 4);
+			std::vector<uint8_t> cropped(region.width * region.height * 4, 0);
 			for (int y = 0; y < region.height; y++) {
+				if (region.top + y >= static_cast<int>(blp_height))
+					break;
 				const int src_row = (region.top + y) * static_cast<int>(blp_width) * 4;
 				const int src_offset = src_row + region.left * 4;
 				const int dst_offset = y * region.width * 4;
-				if (src_offset + region.width * 4 <= static_cast<int>(rgba_data.size()))
-					std::memcpy(cropped.data() + dst_offset, rgba_data.data() + src_offset, region.width * 4);
+				const int copy_width = std::min(region.width, static_cast<int>(blp_width) - region.left);
+				if (copy_width > 0 && src_offset + copy_width * 4 <= static_cast<int>(rgba_data.size()))
+					std::memcpy(cropped.data() + dst_offset, rgba_data.data() + src_offset, copy_width * 4);
 			}
 
 			if (mime_type == "image/webp") {
 				uint8_t* output = nullptr;
 				size_t outputSize = 0;
-				int webp_quality = static_cast<int>(quality * 100.0f);
-				if (webp_quality >= 100) {
+				if (quality >= 100) {
 					outputSize = WebPEncodeLosslessRGBA(
 						cropped.data(), region.width, region.height,
 						region.width * 4, &output);
 				} else {
 					outputSize = WebPEncodeRGBA(
 						cropped.data(), region.width, region.height,
-						region.width * 4, static_cast<float>(webp_quality), &output);
+						region.width * 4, static_cast<float>(quality), &output);
 				}
 				if (outputSize > 0 && output) {
 					BufferWrapper webpBuf = BufferWrapper::from(std::span<const uint8_t>(output, outputSize));
@@ -776,6 +778,10 @@ void render() {
 						core::view->chrCustBakedNPCTexture = std::make_shared<casc::BLPImage>(std::move(file));
 						core::setToast("success", "baked npc texture applied to character", {}, 3000);
 						logging::write(std::format("applied baked npc texture {} to character", first));
+					} else {
+						core::setToast("error", "failed to load baked npc texture",
+							{ {"view log", []() { logging::openRuntimeLog(); }} }, -1);
+						logging::write(std::format("failed to load baked npc texture: file not found in listfile: {}", first));
 					}
 				} catch (const std::exception& e) {
 					core::setToast("error", "failed to load baked npc texture",
@@ -824,11 +830,11 @@ void export_textures() {
 	auto& view = *core::view;
 	const auto& user_selection = view.selectionTextures;
 	if (!user_selection.empty()) {
-		texture_exporter::exportFiles(user_selection);
+		texture_exporter::exportFiles(user_selection, view.casc);
 	} else if (selected_file_data_id > 0) {
 		std::vector<nlohmann::json> files;
 		files.push_back(selected_file_data_id);
-		texture_exporter::exportFiles(files);
+		texture_exporter::exportFiles(files, view.casc);
 	} else {
 		core::setToast("info", "You didn't select any files to export; you should do that first.");
 	}

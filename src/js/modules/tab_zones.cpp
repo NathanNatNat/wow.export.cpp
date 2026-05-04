@@ -402,16 +402,17 @@ static void render_map_tiles(const CombinedArtStyle& art_style, int layer_index,
 
 	std::vector<db::DataRecord> tiles;
 	for (const auto& tile : all_tiles) {
+		int tile_layer = 0;
 		auto layer_it = tile.find("LayerIndex");
 		if (layer_it != tile.end()) {
-			int tile_layer = std::visit([](const auto& v) -> int {
+			tile_layer = std::visit([](const auto& v) -> int {
 				using T = std::decay_t<decltype(v)>;
 				if constexpr (std::is_arithmetic_v<T>) return static_cast<int>(v);
 				return 0;
 			}, layer_it->second);
-			if (tile_layer == layer_index)
-				tiles.push_back(tile);
 		}
+		if (tile_layer == layer_index)
+			tiles.push_back(tile);
 	}
 
 	std::sort(tiles.begin(), tiles.end(), [](const db::DataRecord& a, const db::DataRecord& b) {
@@ -1083,11 +1084,12 @@ return;
 
 try {
 const auto zone = parse_zone_entry(zone_entry.get<std::string>());
+const auto phase_id = selected_phase_id;
 
 logging::write(std::format("exporting zone map: {} ({}) phase {}",
-zone.zone_name, zone.id, selected_phase_id.value_or(-1)));
+zone.zone_name, zone.id, phase_id.value_or(-1)));
 
-const auto map_info = render_zone_to_canvas(zone.id, selected_phase_id, true);
+const auto map_info = render_zone_to_canvas(zone.id, phase_id, true);
 
 if (map_info.width == 0 || map_info.height == 0) {
 logging::write(std::format("no map data available for zone {}, skipping", zone.id));
@@ -1118,8 +1120,8 @@ return final_result;
 
 const std::string normalized_zone_name = sanitize(zone.zone_name);
 const std::string normalized_area_name = sanitize(zone.area_name);
-const std::string phase_suffix = (selected_phase_id.has_value() && *selected_phase_id != 0)
-? std::format("_Phase{}", *selected_phase_id) : "";
+const std::string phase_suffix = (phase_id.has_value() && *phase_id != 0)
+? std::format("_Phase{}", *phase_id) : "";
 
 namespace fs = std::filesystem;
 const std::string filename = std::format("Zone_{}_{}_{}{}{}",
@@ -1134,8 +1136,7 @@ generics::createDirectory(fs::path(export_path).parent_path());
 const auto& pixels = view.zoneMapPixels;
 
 if (mime_type == "image/webp") {
-	const float webp_quality_val = view.config.value("exportWebPQuality", 0.9f);
-	int webp_quality = static_cast<int>(webp_quality_val * 100.0f);
+	const int webp_quality = view.config.value("exportWebPQuality", 90);
 	uint8_t* output = nullptr;
 	size_t outputSize = 0;
 	if (webp_quality >= 100) {

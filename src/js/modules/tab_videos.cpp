@@ -416,20 +416,29 @@ static void stream_video(const std::string& file_name) {
 	const uint32_t file_data_id = *file_data_id_opt;
 	logging::write(std::format("stream_video called for: {} (fdid: {})", file_name, file_data_id));
 
-	stop_video();
-	poll_cancelled.store(false);
-	is_streaming = true;
-	core::view->videoPlayerState = true;
+	try {
+		stop_video();
+		poll_cancelled.store(false);
+		is_streaming = true;
+		core::view->videoPlayerState = true;
 
-	if (stream_worker_thread) {
-		stream_worker_thread->request_stop();
-		if (stream_worker_thread->joinable())
-			stream_worker_thread->detach();
-		stream_worker_thread.reset();
+		if (stream_worker_thread) {
+			stream_worker_thread->request_stop();
+			if (stream_worker_thread->joinable())
+				stream_worker_thread->detach();
+			stream_worker_thread.reset();
+		}
+	} catch (const std::exception& e) {
+		is_streaming = false;
+		core::view->videoPlayerState = false;
+		core::setToast("error", "Failed to stream video");
+		logging::write(std::format("failed to stream video {}: {}", file_name, e.what()));
+		return;
 	}
 
 	stream_worker_thread = std::make_unique<std::jthread>([file_data_id,
 	                                                        file_name]() {
+		try {
 		const auto build_result = build_payload(file_data_id);
 		if (!build_result.has_value()) {
 			core::postToMainThread([]() {
@@ -443,7 +452,7 @@ static void stream_video(const std::string& file_name) {
 		nlohmann::json payload = build_result->payload;
 		std::optional<SubtitleInfo> subtitle = build_result->subtitle;
 		logging::write(std::format("sending kino request: {}", payload.dump()));
-		try {
+
 			auto [status, data] = kino_post(payload);
 
 			if (poll_cancelled.load())
@@ -1052,18 +1061,29 @@ void mounted() {
 	view.isBusy++;
 
 	std::thread([sort_by_id]() {
-		auto entries = build_video_entries(sort_by_id);
+		try {
+			auto entries = build_video_entries(sort_by_id);
 
-		core::postToMainThread([entries = std::move(entries)]() mutable {
-			core::view->listfileVideos.clear();
-			core::view->listfileVideos.reserve(entries.size());
-			for (auto& e : entries)
-				core::view->listfileVideos.push_back(std::move(e));
+			core::postToMainThread([entries = std::move(entries)]() mutable {
+				core::view->listfileVideos.clear();
+				core::view->listfileVideos.reserve(entries.size());
+				for (auto& e : entries)
+					core::view->listfileVideos.push_back(std::move(e));
 
-			core::view->loadPct = -1;
-			core::view->isLoading = false;
-			core::view->isBusy--;
-		});
+				core::view->loadPct = -1;
+				core::view->isLoading = false;
+				core::view->isBusy--;
+			});
+		} catch (const std::exception& e) {
+			logging::write(std::format("failed to load video metadata: {}", e.what()));
+			core::postToMainThread([]() {
+				core::view->loadPct = -1;
+				core::view->isLoading = false;
+				core::view->isBusy--;
+				core::setToast("error", "Failed to load video metadata",
+					{ {"view log", []() { logging::openRuntimeLog(); }} }, -1);
+			});
+		}
 	}).detach();
 }
 

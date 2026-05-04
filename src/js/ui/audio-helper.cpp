@@ -29,12 +29,14 @@ AudioType detectFileType(const BufferWrapper& data) {
 	if (raw.size() >= 3 && std::memcmp(raw.data(), "ID3", 3) == 0)
 		return AudioType::MP3;
 
-	if (raw.size() >= 2) {
-		if ((raw[0] == 0xFF && raw[1] == 0xFB) ||
-		    (raw[0] == 0xFF && raw[1] == 0xF3) ||
-		    (raw[0] == 0xFF && raw[1] == 0xF2))
-			return AudioType::MP3;
-	}
+	if (raw.size() >= 5 && raw[3] == 0xFF && raw[4] == 0xFB)
+		return AudioType::MP3;
+
+	if (raw.size() >= 7 && raw[5] == 0xFF && raw[6] == 0xF3)
+		return AudioType::MP3;
+
+	if (raw.size() >= 9 && raw[7] == 0xFF && raw[8] == 0xF2)
+		return AudioType::MP3;
 
 	return AudioType::Unknown;
 }

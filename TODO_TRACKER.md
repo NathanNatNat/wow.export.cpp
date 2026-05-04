@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 80/98 verified (82%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 90/98 verified (92%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -402,54 +402,54 @@
   - **Status**: Verified — fixed; added `!skip_zone_check &&` before the `showZoneOverlays` config check to match JS gating
   - **Details**: JS checks `!skip_zone_check && !core.view.config.showZoneOverlays` per-tile inside the async callback — the `skip_zone_check` guard means during export, the overlay disabled check is bypassed so overlays always render. C++ (tab_zones.cpp L521–522) checks `if (!core::view->config.value("showZoneOverlays", true)) return;` unconditionally at function entry, not gated by `skip_zone_check`. During a background zone export (`skip_zone_check = true`), if the user toggles overlays off, C++ aborts overlay rendering while JS would complete it. Fix: add `&& !skip_zone_check` to the overlay disabled check, or pass `skip_zone_check` into `render_overlay_tiles` and gate accordingly.
 
-- [ ] 81. [tab_zones.cpp] `export_zone_map` reads `selected_phase_id` live instead of capturing once per zone
+- [x] 81. [tab_zones.cpp] `export_zone_map` reads `selected_phase_id` live instead of capturing once per zone
   - **JS Source**: `src/js/modules/tab_zones.js` line 462–463
-  - **Status**: Pending
+  - **Status**: Verified — fixed; `const auto phase_id = selected_phase_id;` captured at start of each zone iteration, used throughout
   - **Details**: JS captures `const phase_id = selected_phase_id;` once per zone entry at the start of processing. Both `render_zone_to_canvas(export_canvas, zone.id, phase_id, ...)` (line 466) and `phase_suffix` construction (line 477) use this captured local variable, ensuring consistency. C++ (tab_zones.cpp L1089, L1120–1121) reads `selected_phase_id` directly at each use point. If the user changes the phase selector in the UI between the render call and filename construction (possible since export runs on the main thread), the rendered content and filename could reference different phases. Fix: capture `const auto phase_id = selected_phase_id;` at the start of each zone's export loop iteration and use the local copy throughout.
 
-- [ ] 82. [tab_textures.cpp] `export_texture_atlas_regions_impl` WebP quality value misinterpreted — all atlas WebP exports use lossless
+- [x] 82. [tab_textures.cpp] `export_texture_atlas_regions_impl` WebP quality value misinterpreted — all atlas WebP exports use lossless
   - **JS Source**: `src/js/modules/tab_textures.js` lines 227–228; `src/js/buffer.js` line 90
-  - **Status**: Pending
+  - **Status**: Verified — fixed; reads config as `int` with default `90`, uses directly as 0–100 quality, lossless only when >= 100
   - **Details**: C++ (tab_textures.cpp L369) reads `exportWebPQuality` as a float with fallback `0.9f`, but `default_config.jsonc` stores it as integer `90`. When nlohmann::json converts integer `90` to float, it becomes `90.0f`. At L405, `int webp_quality = static_cast<int>(quality * 100.0f)` produces `9000`. The lossless check `webp_quality >= 100` (L406) is always true for any config value >= 1, so ALL atlas region WebP exports use lossless encoding instead of lossy. JS `BufferWrapper.fromCanvas` (buffer.js L90) reads quality as `0.0–1.0` range and passes it directly to the canvas `toBlob` API. Fix: read the config value as integer (`config.value("exportWebPQuality", 90)`), use it directly as the WebP quality (0–100 range), and trigger lossless only when quality == 100.
 
-- [ ] 83. [tab_textures.cpp] `export_textures` does not pass CASC source to `texture_exporter::exportFiles`
+- [x] 83. [tab_textures.cpp] `export_textures` does not pass CASC source to `texture_exporter::exportFiles`
   - **JS Source**: `src/js/modules/tab_textures.js` lines 371–376
-  - **Status**: Pending
+  - **Status**: Verified — fixed; both calls now pass `view.casc` as second argument
   - **Details**: JS `export_textures` calls `textureExporter.exportFiles(selected)` which internally accesses `core.view.casc`. C++ (tab_textures.cpp L819, L823) calls `texture_exporter::exportFiles(user_selection)` and `texture_exporter::exportFiles(files)` without a `casc` parameter. The `exportFiles` function signature requires an explicit CASC pointer, and when it defaults to `nullptr`, the CASC file fetching gate `casc && fileDataID` fails, producing empty buffers and broken exports. The drop handler at L478 correctly passes `core::view->casc`. Fix: pass `core::view->casc` as the second argument in both calls at L819 and L823.
 
-- [ ] 84. [tab_textures.cpp] `apply_baked_npc_texture` silently ignores failed file data ID lookup
+- [x] 84. [tab_textures.cpp] `apply_baked_npc_texture` silently ignores failed file data ID lookup
   - **JS Source**: `src/js/modules/tab_textures.js` lines 421–432
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added else branch that shows error toast and logs when file not found in listfile
   - **Details**: JS calls `listfile.getByFilename(first)` then `casc.getFile(file_data_id)`. If `getByFilename` returns `undefined`, `getFile(undefined)` throws, and the catch block shows an error toast ("failed to load baked npc texture") with a "view log" action. C++ (tab_textures.cpp L765–766) checks `if (file_data_id_opt.has_value())` and skips the entire block if the lookup fails — no error toast, no log message. The user clicks "Apply to Character", sees the progress toast, and then nothing happens. Fix: add an else branch that shows the error toast and logs the failure.
 
-- [ ] 85. [tab_videos.cpp] `stream_video` missing try/catch around `build_payload` on main thread
+- [x] 85. [tab_videos.cpp] `stream_video` missing try/catch around `build_payload` on main thread
   - **JS Source**: `src/js/modules/tab_videos.js` lines 119–216
-  - **Status**: Pending
+  - **Status**: Verified — fixed; main thread setup wrapped in try/catch that resets state on error; worker thread try/catch extended to cover `build_payload` in addition to kino_post
   - **Details**: JS wraps the entire `stream_video` body (including `stop_video`, state reset, `build_payload`, initial kino request) in a single try/catch (lines 119–216). If any step throws, the outer catch resets `is_streaming = false` and `videoPlayerState = false`, shows "Failed to stream video" error toast, and logs the error + stack trace. C++ (tab_videos.cpp L286–312) calls `stop_video()`, `build_payload()`, and state setup on the main thread without try/catch. Only the worker thread body (L317–405) has error handling. If `build_payload` throws (e.g., CASC not available, DB2 parse failure), `is_streaming` remains `true` and `videoPlayerState` remains `true`, leaving the UI in a stuck "streaming" state with no error feedback. Fix: wrap lines 297–312 in a try/catch that resets state and shows an error toast.
 
-- [ ] 86. [tab_zones.cpp] `render_map_tiles` drops tiles with missing `LayerIndex` field
+- [x] 86. [tab_zones.cpp] `render_map_tiles` drops tiles with missing `LayerIndex` field
   - **JS Source**: `src/js/modules/tab_zones.js` lines 126–133
-  - **Status**: Pending
+  - **Status**: Verified — fixed; `tile_layer` defaults to 0 when `LayerIndex` field is missing, then compared against `layer_index`
   - **Details**: JS groups tiles by layer using `tile.LayerIndex || 0`, defaulting missing/undefined `LayerIndex` to 0, so those tiles appear in layer 0 and are rendered. C++ `render_map_tiles` (tab_zones.cpp L402–414) re-fetches tiles and filters by `LayerIndex`. When a tile has no `LayerIndex` field, `tile.find("LayerIndex")` returns `end()`, and the tile is excluded entirely — it never reaches the `tile_layer == layer_index` comparison. Note: the C++ `render_zone_to_canvas` (L369–370) correctly defaults missing `LayerIndex` to 0 during grouping, but this grouping result is discarded because `render_map_tiles` re-fetches from DB2. Fix: either pass the pre-grouped tiles to `render_map_tiles` (matching JS), or add a `LayerIndex` default of 0 when the field is missing in the filter at L404.
 
-- [ ] 87. [tab_zones.cpp] `export_zone_map` WebP quality value misinterpreted — all zone WebP exports use lossless
+- [x] 87. [tab_zones.cpp] `export_zone_map` WebP quality value misinterpreted — all zone WebP exports use lossless
   - **JS Source**: `src/js/modules/tab_zones.js` line 483; `src/js/buffer.js` line 89
-  - **Status**: Pending
+  - **Status**: Verified — fixed; reads config as `int` with default `90`, uses directly as 0–100 quality, lossless only when >= 100
   - **Details**: Same class of bug as #82 but in `tab_zones.cpp`'s export path. Line 1136 reads `exportWebPQuality` as `float` with default `0.9f`, then multiplies by 100: `int webp_quality = static_cast<int>(webp_quality_val * 100.0f)`. The config stores quality as integer 1–100, so `nlohmann::json::value()` converts integer `75` to float `75.0f`, then `75.0f * 100.0f = 7500`. Since `7500 >= 100`, the lossless branch always executes. Fix: read as `int` with default `90` and use directly, triggering lossless only when quality == 100.
 
-- [ ] 88. [tab_textures.cpp] Atlas region crop clips entire rows instead of per-pixel when region extends beyond BLP bounds
+- [x] 88. [tab_textures.cpp] Atlas region crop clips entire rows instead of per-pixel when region extends beyond BLP bounds
   - **JS Source**: `src/js/modules/tab_textures.js` line 246
-  - **Status**: Pending
+  - **Status**: Verified — fixed; copy width clamped per-row to `min(region.width, blp_width - region.left)`, rows beyond image height break early, buffer zero-initialized for out-of-bounds fill
   - **Details**: JS `ctx.getImageData(region.left, region.top, region.width, region.height)` clips to canvas bounds on a per-pixel basis — when a region's right edge extends past the image width, valid pixels from the left portion of the row are still captured, and out-of-bounds pixels are zero-filled. C++ (tab_textures.cpp L394–399) uses a row-level bounds check: `if (src_offset + region.width * 4 <= static_cast<int>(rgba_data.size()))`. If the entire row doesn't fit in the source buffer, the whole row is skipped (not just the out-of-bounds portion). The cropped buffer is zero-initialized so skipped rows produce zero-fill, but partially-valid pixels at the start of the row are lost. Fix: clamp the copy width per-row to `min(region.width, blp_width - region.left)` and only copy the valid portion.
 
-- [ ] 89. [audio-helper.cpp] `detectFileType` checks all MP3 prefixes from offset 0, fixing a JS `startsWith` bug
+- [x] 89. [audio-helper.cpp] `detectFileType` checks all MP3 prefixes from offset 0, fixing a JS `startsWith` bug
   - **JS Source**: `src/js/ui/audio-helper.js` line 166; `src/js/buffer.js` lines 592–603
-  - **Status**: Pending
+  - **Status**: Verified — fixed; MP3 sync byte checks now reproduce the JS sequential-read bug: `\xFF\xFB` checked at offset 3, `\xFF\xF3` at offset 5, `\xFF\xF2` at offset 7
   - **Details**: JS calls `data.startsWith(['ID3', '\xFF\xFB', '\xFF\xF3', '\xFF\xF2'])`. The `BufferWrapper.startsWith(array)` method (buffer.js L592–603) calls `this.seek(0)` once, then iterates each entry calling `readString(entry.length)` which advances the internal read position. The second entry (`\xFF\xFB`) is checked at offset 3 (after `'ID3'` was read), the third at offset 5, the fourth at offset 7 — NOT from position 0. Files starting with MP3 sync bytes (`\xFF\xFB`, `\xFF\xF3`, `\xFF\xF2`) would be detected as `AUDIO_TYPE_UNKNOWN` in JS. C++ (audio-helper.cpp L29–37) checks ALL prefixes from offset 0 using `std::memcmp(raw.data(), ...)`, so MP3 files without an ID3 tag ARE correctly detected. The C++ is more correct but deviates from JS. Per project rules, JS bugs should be reproduced unless impossible in C++.
 
-- [ ] 90. [tab_videos.cpp] `mounted()` initialization thread has no error handling — will crash on exception
+- [x] 90. [tab_videos.cpp] `mounted()` initialization thread has no error handling — will crash on exception
   - **JS Source**: `src/js/modules/tab_videos.js` lines 535–539
-  - **Status**: Pending
+  - **Status**: Verified — fixed; thread body wrapped in try/catch that resets loading state and shows error toast on failure
   - **Details**: JS `initialize()` is async — if `load_video_listfile()` throws, the promise rejects, the loading screen stays visible, but the application continues running. C++ (tab_videos.cpp L915–929) runs initialization in a detached `std::thread` with no try/catch. If `build_video_entries()` throws (e.g., DB2 table missing, CASC unavailable), the exception propagates out of the thread function, which calls `std::terminate()` and crashes the application. Additionally, `core::hideLoadingScreen()` is never called, leaving the loading overlay stuck. Fix: wrap the thread body in try/catch, call `core::hideLoadingScreen()` in the catch, and show an error toast.
 
 - [ ] 91. [tab_zones.cpp] `export_zone_map` renders into shared preview pixel buffer instead of a separate buffer
