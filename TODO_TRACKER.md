@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 30/98 verified (31%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 40/98 verified (41%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -152,54 +152,54 @@
   - **Status**: Verified — fixed; odd indices now return 0 immediately, reproducing JS behavior where float array index returns `undefined` and `undefined & 0xF0` evaluates to 0
   - **Details**: JS `_getAlpha` case 4 reads `this.rawData[this.scaledLength + (index / 2)]`. In JS, `index / 2` for odd indices produces a float (e.g. `3/2 = 1.5`). Accessing a JS Array with a float index returns `undefined`, and `undefined & 0xF0` evaluates to `0`. So for odd-indexed pixels with alphaDepth=4, JS returns alpha=0. C++ (blp.cpp L224) uses `rawData_[scaledLength_ + (index / 2)]` where integer division truncates (e.g. `3/2 = 1`), reading the correct byte and returning the actual high-nibble alpha value. The JS code has a bug (should use `Math.floor(index / 2)` like case 1 does), but per CLAUDE.md the C++ must reproduce the JS behavior. For odd pixels with alphaDepth=4, JS produces alpha=0 while C++ produces the correct alpha. Fix: for odd indices, return 0 to match JS, or use a float division that truncates the array index to reproduce the `undefined` access.
 
-- [ ] 31. [item-picker-modal.cpp] Missing item database initialization when items are not yet loaded
+- [x] 31. [item-picker-modal.cpp] Missing item database initialization when items are not yet loaded
   - **JS Source**: `src/js/components/item-picker-modal.js` lines 107–119
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `tab_items::mounted()` call when items are null (guarded by re-entrance check inside `mounted()`)
   - **Details**: JS `slot_id` watch handler checks `this.all_items.length === 0` and if true, calls `await DBItemList.initialize()` to trigger asynchronous loading of the item database, setting `is_loading`/`load_error`/`items_loaded` appropriately. C++ `render()` (item-picker-modal.cpp L183–192) checks `tab_items::getAllItems()` and sets `s_is_loading = true` if null, but never triggers any initialization or loading. If the item database hasn't been loaded elsewhere before the modal opens, C++ displays "Loading items..." indefinitely while JS would actively load the data. Fix: call the item database initialization (equivalent to `DBItemList.initialize()`) from `open()` or `render()` when items are not yet available.
 
-- [ ] 32. [tact-keys.cpp] Cache iteration aborts on first non-string JSON value instead of skipping individually
+- [x] 32. [tact-keys.cpp] Cache iteration aborts on first non-string JSON value instead of skipping individually
   - **JS Source**: `src/js/casc/tact-keys.js` lines 73–80
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `is_string()` check before `get<std::string>()` with log-and-continue on non-string values
   - **Details**: JS iterates `Object.entries(tactKeys)` and calls `validateKeyPair(keyName, key)` for each entry. If `key` is a non-string (e.g. a number), `key.length` is `undefined`, validation fails, the entry is skipped with a log message, and iteration continues to the next entry. C++ (tact-keys.cpp L204) calls `it.value().get<std::string>()` which throws `nlohmann::json::type_error` for non-string values. The exception is caught by the outer `catch (...)` at L217, aborting the entire cache loading loop. Keys processed before the non-string entry are kept, but all subsequent entries (even valid ones) are never loaded. Fix: wrap the individual `get<std::string>()` call in a try-catch within the loop body and continue on failure, matching JS per-entry skip behavior.
 
-- [ ] 33. [itemlistbox.cpp] `handleKey` arrow-down with filtered-out `lastSelectItem` does nothing instead of selecting first item
+- [x] 33. [itemlistbox.cpp] `handleKey` arrow-down with filtered-out `lastSelectItem` does nothing instead of selecting first item
   - **JS Source**: `src/js/components/itemlistbox.js` lines 237–240
-  - **Status**: Pending
+  - **Status**: Verified — fixed; removed `if (lastSelectIndex < 0) return;` guard so arrow-down with index -1 computes nextIndex=0, matching JS behavior
   - **Details**: When a previously selected item is removed by filtering, JS `this.filteredItems.indexOf(this.lastSelectItem)` returns -1. For arrow-down, `nextIndex = -1 + 1 = 0`, and `this.filteredItems[0]` returns the first visible item, which is then selected. C++ (itemlistbox.cpp L269–271) has an early-return guard `if (lastSelectIndex < 0) return;` that prevents any action when the last-selected item is no longer in the filtered list. This means arrow-down does nothing in C++ while JS selects the first item. The JS behavior is a side effect of `indexOf` returning -1, but per CLAUDE.md rules the C++ must reproduce it. Fix: remove the `if (lastSelectIndex < 0) return;` guard, or special-case arrow-down when lastSelectIndex is -1 to select index 0.
 
-- [ ] 34. [WDCReader.cpp] `getRelationRows` has extra preload precondition not present in JS
+- [x] 34. [WDCReader.cpp] `getRelationRows` has extra preload precondition not present in JS
   - **JS Source**: `src/js/db/WDCReader.js` lines 216–234
-  - **Status**: Pending
+  - **Status**: Verified — fixed; removed the `rows.has_value()` precondition check, matching JS which only checks `isLoaded`
   - **Details**: JS `getRelationRows` only checks `this.isLoaded` before reading records via `this._readRecord(recordID)`. C++ (WDCReader.cpp L305–306) adds an extra guard `if (!rows.has_value()) throw "Table must be preloaded..."` that the JS does not have. JS callers can call `getRelationRows` without first calling `preload()` — the function will lazily read records. C++ callers that skip `preload()` will get an exception. Fix: remove the `rows.has_value()` check and read records via `_readRecord` like JS does.
 
-- [ ] 35. [map-viewer.cpp] `render()` missing `this.map === null` early return guard
+- [x] 35. [map-viewer.cpp] `render()` missing `this.map === null` early return guard
   - **JS Source**: `src/js/components/map-viewer.js` lines 490–491
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `if (state.prevMap == -1) return;` guard at the start of `render()`
   - **Details**: JS `render()` starts with `if (this.map === null) return;` to skip all rendering when no map is selected. C++ `render()` (map-viewer.cpp L394–438) has no equivalent guard. While `renderWidget()` gates `renderTiles`/`renderOverlay` behind `if (mapId != -1)` at L1200, internal callers like `setToDefaultPosition`, `handleMouseMove`, and `setMapPosition` call `render()` directly without the guard, allowing tile queueing/loading to proceed with no active map. Fix: add `if (mapId == -1) return;` or equivalent at the start of `render()`.
 
-- [ ] 36. [menu-button.cpp] Dropdown re-click does not toggle menu closed like JS
+- [x] 36. [menu-button.cpp] Dropdown re-click does not toggle menu closed like JS
   - **JS Source**: `src/js/components/menu-button.js` lines 38–39
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `!state.open` check (previous-frame popup state) to both button and arrow click handlers, preventing re-open on the frame after click-close
   - **Details**: JS `openMenu` uses `this.open = !this.open && !this.disabled` — clicking the dropdown button while the menu is already open sets `open = false` (since `!this.open` is `false`), closing the menu. C++ (menu-button.cpp L119–121) checks `if (!disabled && !popupOpen) ImGui::OpenPopup(...)` — when the popup IS already open, it does nothing (no open call), but when the user clicks the button, ImGui closes the popup (click outside) and then immediately reopens it via the button click handler. The net effect is the menu stays open instead of toggling closed. Fix: add a toggle check — if popup is already open, call `ImGui::CloseCurrentPopup()` instead of opening.
 
-- [ ] 37. [model-viewer-gl.cpp] `chrUse3DCamera` config fallback default is `true` but should be `false`
+- [x] 37. [model-viewer-gl.cpp] `chrUse3DCamera` config fallback default is `true` but should be `false`
   - **JS Source**: `src/js/components/model-viewer-gl.js` line 375; `src/default_config.jsonc` line 81
-  - **Status**: Pending
+  - **Status**: Verified — fixed; changed all three `chrUse3DCamera` fallbacks from `true` to `false`
   - **Details**: JS accesses `core.view.config.chrUse3DCamera` directly — when the key is missing, this returns `undefined` (falsy). `default_config.jsonc` explicitly sets it to `false`. C++ (model-viewer-gl.cpp L565, L625, L627) uses `core::view->config.value("chrUse3DCamera", true)`, providing `true` as the fallback. If the config JSON doesn't contain the key, C++ enables 3D camera by default while JS does not. Fix: change the fallback from `true` to `false` in all three locations.
 
-- [ ] 38. [model-viewer-gl.cpp] `chrRenderShadow` config fallback default is `false` but should be `true`
+- [x] 38. [model-viewer-gl.cpp] `chrRenderShadow` config fallback default is `false` but should be `true`
   - **JS Source**: `src/js/components/model-viewer-gl.js` line 403; `src/default_config.jsonc` line 80
-  - **Status**: Pending
+  - **Status**: Verified — fixed; changed all three `chrRenderShadow` fallbacks from `false` to `true`
   - **Details**: `default_config.jsonc` sets `chrRenderShadow` to `true`. C++ (model-viewer-gl.cpp L612, L631, L633) uses `core::view->config.value("chrRenderShadow", false)`, providing `false` as the fallback. If the config key is missing, C++ hides the character shadow by default while JS shows it. Fix: change the fallback from `false` to `true` in all three locations.
 
-- [ ] 39. [model-viewer-gl.cpp] Background color config fallbacks use `#343a40` instead of `#000000`
+- [x] 39. [model-viewer-gl.cpp] Background color config fallbacks use `#343a40` instead of `#000000`
   - **JS Source**: `src/js/components/model-viewer-gl.js` lines 255–256; `src/default_config.jsonc` lines 64, 83
-  - **Status**: Pending
+  - **Status**: Verified — fixed; changed both background color fallbacks from `"#343a40"` to `"#000000"`
   - **Details**: `default_config.jsonc` sets both `modelViewerBackgroundColor` and `chrBackgroundColor` to `"#000000"`. C++ (model-viewer-gl.cpp L418–419) uses `"#343a40"` as the fallback for both keys. If the config JSON is missing these keys, C++ uses a dark grey background instead of black. Fix: change both fallbacks from `"#343a40"` to `"#000000"`.
 
-- [ ] 40. [legacy_tab_textures.cpp] `export_textures` passes `isLocal=true` instead of `false`
+- [x] 40. [legacy_tab_textures.cpp] `export_textures` passes `isLocal=true` instead of `false`
   - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 170
-  - **Status**: Pending
+  - **Status**: Verified — fixed; changed `isLocal` from `true` to `false` in `exportFiles()` call
   - **Details**: JS calls `textureExporter.exportFiles(selected, false, -1, true)` — `isLocal=false`, `exportID=-1`, `isMPQ=true`. C++ (legacy_tab_textures.cpp L417) calls `texture_exporter::exportFiles(selected, nullptr, core::view->mpq.get(), true, -1)` — `isLocal=true`, `exportID=-1`. The `true` for `isLocal` causes three problems: (1) line 209 forces `overwriteFiles=true` regardless of user config, (2) line 231 skips `exportNamedFiles` renaming, (3) line 241 uses the raw MPQ filename as the export path without prepending the configured export directory. Fix: change `true` to `false` at legacy_tab_textures.cpp L417.
 
 - [ ] 41. [screen_source_select.cpp] CDN auto-selection for fastest region never works

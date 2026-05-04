@@ -185,8 +185,10 @@ void render() {
 	size_t                     items_count = all_items ? all_items->size() : 0;
 
 	if (!items_ptr) {
-		if (!s_load_error)
+		if (!s_load_error) {
 			s_is_loading = true;
+			tab_items::mounted();
+		}
 	} else {
 		s_is_loading = false;
 	}

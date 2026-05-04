@@ -267,8 +267,6 @@ static void handleKey(const std::vector<ItemEntry>& filteredItems, const std::ve
 
 			// Move/expand selection one.
 			const int lastSelectIndex = indexOfItemById(filteredItems, state.lastSelectItem);
-			if (lastSelectIndex < 0)
-				return;
 
 			const int nextIndex = lastSelectIndex + delta;
 			if (nextIndex >= 0 && nextIndex < static_cast<int>(filteredItems.size())) {

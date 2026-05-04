@@ -393,7 +393,8 @@ std::pair<float, float> calculateCanvasSize(const MapViewerState& state, int til
  */
 void render(MapViewerState& state, int tileSize_prop, int gridSize,
             const std::vector<int>& mask, const TileLoader& loader) {
-	// If no map has been selected, do not render.
+	if (state.prevMap == -1)
+		return;
 
 	// Calculate optimal canvas size
 	auto [canvasW, canvasH] = calculateCanvasSize(state, tileSize_prop);

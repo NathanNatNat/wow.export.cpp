@@ -415,8 +415,8 @@ static void render_scene(State& state, Context& context) {
 		? core::view->config.value("chrShowBackground", false)
 		: core::view->config.value("modelViewerShowBackground", false);
 	const std::string bg_color = is_chr
-		? core::view->config.value("chrBackgroundColor", std::string("#343a40"))
-		: core::view->config.value("modelViewerBackgroundColor", std::string("#343a40"));
+		? core::view->config.value("chrBackgroundColor", std::string("#000000"))
+		: core::view->config.value("modelViewerBackgroundColor", std::string("#000000"));
 
 	if (show_bg) {
 		const auto [r, g, b] = parse_hex_color(bg_color);
@@ -562,7 +562,7 @@ void recreate_controls(State& state, Context& context) {
 	}
 
 	const bool use_3d_camera = context.useCharacterControls
-		? core::view->config.value("chrUse3DCamera", true)
+		? core::view->config.value("chrUse3DCamera", false)
 		: true;
 
 	if (context.useCharacterControls && !use_3d_camera) {
@@ -609,7 +609,7 @@ void update_shadow_visibility(State& state, const Context& context) {
 		return;
 
 	const bool should_show = context.useCharacterControls &&
-		core::view->config.value("chrRenderShadow", false) &&
+		core::view->config.value("chrRenderShadow", true) &&
 		!core::view->chrModelLoading;
 
 	state.shadow_renderer->visible = should_show;
@@ -622,15 +622,15 @@ static void setup_character_watchers(State& state, Context& context) {
 		return;
 
 	state.watchers.push_back(State::BoolWatcher{
-		.get = []() { return core::view->config.value("chrUse3DCamera", true); },
+		.get = []() { return core::view->config.value("chrUse3DCamera", false); },
 		.callback = [&state, &context]() { recreate_controls(state, context); },
-		.previous = core::view->config.value("chrUse3DCamera", true)
+		.previous = core::view->config.value("chrUse3DCamera", false)
 	});
 
 	state.watchers.push_back(State::BoolWatcher{
-		.get = []() { return core::view->config.value("chrRenderShadow", false); },
+		.get = []() { return core::view->config.value("chrRenderShadow", true); },
 		.callback = [&state, &context]() { update_shadow_visibility(state, context); },
-		.previous = core::view->config.value("chrRenderShadow", false)
+		.previous = core::view->config.value("chrRenderShadow", true)
 	});
 
 	state.watchers.push_back(State::BoolWatcher{

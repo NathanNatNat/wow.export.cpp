@@ -117,7 +117,7 @@ void render(const char* id, const std::vector<MenuOption>& options,
 
 	if (ImGui::Button(displayLabel.c_str(), ImVec2(buttonWidth, 0.0f))) {
 		if (dropdown) {
-			if (!disabled && !popupOpen)
+			if (!disabled && !popupOpen && !state.open)
 				ImGui::OpenPopup(popupId.c_str());
 		} else if (onClick) {
 			onClick();
@@ -131,7 +131,7 @@ void render(const char* id, const std::vector<MenuOption>& options,
 	drawArrowButton(arrowWidth, hoveredButtonGroup, disabled);
 	if (!disabled && ImGui::IsItemHovered())
 		ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-	if (!disabled && !popupOpen && ImGui::IsItemClicked())
+	if (!disabled && !popupOpen && !state.open && ImGui::IsItemClicked())
 		ImGui::OpenPopup(popupId.c_str());
 
 	if (disabled)

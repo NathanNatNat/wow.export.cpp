@@ -414,7 +414,7 @@ void export_textures() {
 		return;
 	}
 
-	texture_exporter::exportFiles(selected, nullptr, core::view->mpq.get(), true, -1);
+	texture_exporter::exportFiles(selected, nullptr, core::view->mpq.get(), false, -1);
 }
 
 }

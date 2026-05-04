@@ -201,6 +201,12 @@ std::future<void> loadAsync() {
 			int added = 0;
 			for (auto it = tactKeys.begin(); it != tactKeys.end(); ++it) {
 				const std::string& keyName = it.key();
+
+				if (!it.value().is_string()) {
+					logging::write(std::format("Skipping invalid tact key from cache: {} -> {}", keyName, it.value().dump()));
+					continue;
+				}
+
 				const std::string key = it.value().get<std::string>();
 
 				if (validateKeyPair(keyName, key)) {

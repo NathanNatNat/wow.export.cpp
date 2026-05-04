@@ -302,9 +302,6 @@ std::vector<DataRecord> WDCReader::getRelationRows(uint32_t foreignKeyValue) {
 	if (!isLoaded)
 		throw std::runtime_error("Attempted to query relationship data before table was loaded.");
 
-	if (!rows.has_value())
-		throw std::runtime_error("Table must be preloaded before calling getRelationRows.");
-
 	auto lookupIt = relationshipLookup.find(foreignKeyValue);
 	if (lookupIt == relationshipLookup.end() || lookupIt->second.empty())
 		return {};
