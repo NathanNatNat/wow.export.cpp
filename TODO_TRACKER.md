@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/93 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/96 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -466,3 +466,18 @@
   - **JS Source**: `src/js/modules/tab_zones.js` line 59
   - **Status**: Pending
   - **Details**: JS clears the canvas immediately at the start of `render_zone_to_canvas` (line 59: `ctx.clearRect(0, 0, canvas.width, canvas.height)`), before any DB lookups. If a subsequent lookup throws, the canvas is blank. C++ (tab_zones.cpp L347–348) clears `zoneMapPixels` only after all validation (ui_map_id lookup, ui_map row fetch, art_styles construction). If any of those throw, the old zone's pixel data remains, and `runZoneLoadWorker` (L584–591) uploads the stale data to the GL texture. The user sees the previous zone's map with an error toast overlay. Fix: move the pixel buffer clear to the very start of `render_zone_to_canvas`, before the `get_zone_ui_map_id` call.
+
+- [ ] 94. [tab_textures.cpp] `export_texture_atlas_regions_impl` silently skips missing region IDs instead of aborting
+  - **JS Source**: `src/js/modules/tab_textures.js` lines 241–261
+  - **Status**: Pending
+  - **Details**: JS `texture_atlas_regions.get(region_id)` returns `undefined` when a region ID from `atlas.regions` doesn't exist in the regions map. Accessing `.name` on `undefined` throws a TypeError, which is caught by the outer `catch(e)` at line 260, calling `helper.mark(export_file_name, false, e.message, e.stack)` and terminating the loop. The entire atlas export aborts at the first missing region and reports the failure. C++ (tab_textures.cpp L383–385) checks `if (region_it == texture_atlas_regions.end()) continue;` and silently skips the missing region, continuing to export remaining regions. This produces a partial export with no error report instead of failing on the first missing region. Fix: remove the `continue` and let the code proceed to access region data, which would throw (or explicitly throw/mark-fail to match JS abort behavior).
+
+- [ ] 95. [tab_textures.cpp] Selection watcher silently ignores failed `getByFilename` lookup
+  - **JS Source**: `src/js/modules/tab_textures.js` lines 449–451
+  - **Status**: Pending
+  - **Details**: JS calls `listfile.getByFilename(first)` which may return `undefined`. When it does, `preview_texture_by_id(core, undefined)` is called, which fails inside the try/catch and shows an error toast to the user ("Unable to preview texture ..."). C++ (tab_textures.cpp L553–558) wraps the preview call in `if (file_data_id_opt.has_value())`, silently doing nothing when the filename is not found. The user selects a file, nothing happens, no feedback. Same class of issue as #84 but in the selection watcher code path. Fix: remove the `has_value()` guard or add an else branch that shows an error toast.
+
+- [ ] 96. [tab_zones.cpp] `runZoneLoadWorker` unconditionally uploads texture after render failure
+  - **JS Source**: `src/js/modules/tab_zones.js` lines 275–288
+  - **Status**: Pending
+  - **Details**: JS `load_zone_map` wraps `render_zone_to_canvas` in try/catch. On error, the catch shows a toast but does NOT update the canvas — the canvas remains in its cleared state (from `clearRect` at line 59). C++ `runZoneLoadWorker` (tab_zones.cpp L573–606) has a try/catch at L576, but the `core::postToMainThread` at L584 that uploads `zoneMapPixels` to a GL texture runs unconditionally AFTER both the try and catch blocks. If `render_zone_to_canvas` throws, the upload still executes, displaying stale or partially-rendered pixel data. This is distinct from #93 (clear timing) — even with #93 fixed, the upload would still show a blank texture on error instead of preserving the previous valid image. Fix: track success with a `bool` flag and make the texture upload conditional on success.
